@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>血統ベクトル空間マップ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700&family=Noto+Sans+JP:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0c10;
+  --surface: #12151c;
+  --border: #1e2330;
+  --text: #e8eaf0;
+  --text-dim: #8890a0;
+  --accent: #ff6b35;
+  --accent2: #00d4aa;
+  --ss: #e63946;
+  --kk: #457b9d;
+  --rb: #2a9d8f;
+  --nd: #e9c46a;
+  --dh: #f4a261;
+  --sw: #264653;
+  --sc: #a8dadc;
+  --mp: #6d6875;
+  --ap: #b5838d;
+  --dp: #ffb4a2;
+  --other: #606060;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;overflow:hidden;height:100vh}
+h1{font-family:'Shippori Mincho',serif;font-size:1.4rem;font-weight:700;letter-spacing:0.05em;color:var(--accent)}
+.layout{display:grid;grid-template-columns:280px 1fr 300px;height:100vh;gap:0}
+.panel{background:var(--surface);border-right:1px solid var(--border);padding:16px;overflow-y:auto}
+.panel-right{border-right:none;border-left:1px solid var(--border)}
+.panel h2{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--text-dim);margin:16px 0 8px;font-weight:600}
+.panel h2:first-child{margin-top:0}
+.color-mode-btn{display:block;width:100%;padding:8px 12px;margin:3px 0;background:transparent;border:1px solid var(--border);color:var(--text);font-size:0.8rem;cursor:pointer;text-align:left;border-radius:4px;transition:all .15s}
+.color-mode-btn:hover{border-color:var(--accent);color:var(--accent)}
+.color-mode-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:0.75rem;margin:3px 0;color:var(--text-dim)}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+canvas{display:block;background:var(--bg)}
+.tooltip{position:fixed;pointer-events:none;background:rgba(18,21,28,.95);border:1px solid var(--accent);border-radius:6px;padding:12px 16px;font-size:0.8rem;line-height:1.5;max-width:320px;display:none;z-index:100;backdrop-filter:blur(8px)}
+.tooltip .name{font-family:'Shippori Mincho',serif;font-size:1rem;font-weight:700;color:var(--accent);margin-bottom:6px}
+.tooltip .line-tag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:0.7rem;margin-bottom:6px;font-weight:600}
+.tooltip .stats{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px}
+.tooltip .stat-label{color:var(--text-dim);font-size:0.7rem}
+.tooltip .stat-value{color:var(--text);font-weight:600;font-size:0.75rem}
+.similar-list{margin-top:12px}
+.similar-item{display:flex;justify-content:space-between;padding:6px 10px;margin:2px 0;background:rgba(255,255,255,.03);border-radius:4px;font-size:0.75rem;cursor:pointer;transition:all .15s}
+.similar-item:hover{background:rgba(255,107,53,.1);color:var(--accent)}
+.similar-score{color:var(--accent2);font-weight:600}
+.selected-sire{font-family:'Shippori Mincho',serif;font-size:1.1rem;font-weight:700;color:var(--accent);margin-bottom:8px}
+.dist-bar{height:6px;background:var(--border);border-radius:3px;margin:2px 0 6px;overflow:hidden;display:flex}
+.dist-bar span{height:100%;transition:width .3s}
+.search-box{width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:0.85rem;margin:8px 0;outline:none}
+.search-box:focus{border-color:var(--accent)}
+.search-results{max-height:200px;overflow-y:auto}
+.search-result{padding:6px 10px;cursor:pointer;font-size:0.8rem;border-radius:3px;transition:background .15s}
+.search-result:hover{background:rgba(255,107,53,.15);color:var(--accent)}
+.header-bar{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--surface)}
+.header-bar .info{font-size:0.75rem;color:var(--text-dim)}
+.zoom-controls{display:flex;gap:4px}
+.zoom-btn{width:32px;height:32px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;border-radius:4px;font-size:1rem;display:flex;align-items:center;justify-content:center}
+.zoom-btn:hover{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="panel" id="left-panel">
+    <h1>血統ベクトル空間</h1>
+    <p style="font-size:.7rem;color:var(--text-dim);margin:4px 0 12px">PCA 2D Embedding / 100 Stallions</p>
+    <h2>Color Mode</h2>
+    <div id="color-modes"></div>
+    <h2>Legend</h2>
+    <div id="legend"></div>
+    <h2>Search</h2>
+    <input type="text" class="search-box" id="search" placeholder="種牡馬名で検索...">
+    <div class="search-results" id="search-results"></div>
+  </div>
+  <div style="display:flex;flex-direction:column;overflow:hidden">
+    <div class="header-bar">
+      <div class="info" id="info-text">100 stallions mapped</div>
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoom-in">+</button>
+        <button class="zoom-btn" id="zoom-out">−</button>
+        <button class="zoom-btn" id="zoom-reset">⟳</button>
+      </div>
+    </div>
+    <canvas id="chart"></canvas>
+  </div>
+  <div class="panel panel-right" id="right-panel">
+    <h2>Selected Stallion</h2>
+    <div id="detail-content"><p style="color:var(--text-dim);font-size:.8rem">クリックで種牡馬を選択</p></div>
+  </div>
+</div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+const DATA=[{"name":"Into Mischief","x":-0.6783,"y":-3.2624,"sire_line":"ストームキャット系","n_runners":22,"avg_distance":1200.0,"top3_rate":0.2727,"win_rate":0.0909,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":1.0,"mile_rate":0.0,"middle_rate":0.0,"long_rate":0.0,"turf_rate":0.0909,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"アジアエクスプレス","x":-1.2923,"y":-0.2958,"sire_line":"その他","n_runners":55,"avg_distance":1520.0,"top3_rate":0.1818,"win_rate":0.0909,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.4,"mile_rate":0.2,"middle_rate":0.4,"long_rate":0.0,"turf_rate":0.0909,"dirt_rate":0.0,"turf_top3":0.4,"dirt_top3":0.0},{"name":"アドマイヤマーズ","x":-0.5168,"y":1.3724,"sire_line":"サンデーサイレンス系","n_runners":64,"avg_distance":1768.0,"top3_rate":0.1719,"win_rate":0.0781,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.2105,"mile_rate":0.1579,"middle_rate":0.5263,"long_rate":0.1053,"turf_rate":0.2969,"dirt_rate":0.0,"turf_top3":0.1579,"dirt_top3":0.0},{"name":"アニマルキングダムAnimal Kingdom(米)","x":1.571,"y":-2.2837,"sire_line":"デピュティミニスター系","n_runners":28,"avg_distance":1896.0,"top3_rate":0.3214,"win_rate":0.1071,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.125,"mile_rate":0.25,"middle_rate":0.5,"long_rate":0.125,"turf_rate":0.25,"dirt_rate":0.0357,"turf_top3":0.2857,"dirt_top3":0.0},{"name":"アメリカンペイトリオット","x":-1.5623,"y":0.3138,"sire_line":"ミスタープロスペクター系","n_runners":71,"avg_distance":1827.0,"top3_rate":0.1549,"win_rate":0.0282,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.1765,"mile_rate":0.2353,"middle_rate":0.4118,"long_rate":0.1765,"turf_rate":0.2394,"dirt_rate":0.0,"turf_top3":0.1765,"dirt_top3":0.0},{"name":"アルアイン","x":0.0654,"y":2.2373,"sire_line":"サンデーサイレンス系","n_runners":59,"avg_distance":1872.0,"top3_rate":0.1695,"win_rate":0.0339,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.1875,"mile_rate":0.125,"middle_rate":0.5625,"long_rate":0.125,"turf_rate":0.2712,"dirt_rate":0.0,"turf_top3":0.3125,"dirt_top3":0.0},{"name":"イスラボニータ","x":0.9132,"y":-0.626,"sire_line":"サンデーサイレンス系","n_runners":94,"avg_distance":1682.0,"top3_rate":0.266,"win_rate":0.0745,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.3,"mile_rate":0.2,"middle_rate":0.4333,"long_rate":0.0667,"turf_rate":0.3085,"dirt_rate":0.0106,"turf_top3":0.2069,"dirt_top3":0.0},{"name":"インディチャンプ","x":0.7489,"y":-2.0593,"sire_line":"サンデーサイレンス系","n_runners":31,"avg_distance":1575.0,"top3_rate":0.3871,"win_rate":0.129,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.375,"mile_rate":0.25,"middle_rate":0.375,"long_rate":0.0,"turf_rate":0.2581,"dirt_rate":0.0,"turf_top3":0.375,"dirt_top3":0.0},{"name":"ウインブライト","x":-1.4144,"y":3.7797,"sire_line":"サンデーサイレンス系","n_runners":44,"avg_distance":1813.0,"top3_rate":0.1136,"win_rate":0.0,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.087,"mile_rate":0.2174,"middle_rate":0.6522,"long_rate":0.0435,"turf_rate":0.5227,"dirt_rate":0.0,"turf_top3":0.087,"dirt_top3":0.0},{"name":"エイシンヒカリ","x":-0.9945,"y":1.4796,"sire_line":"サンデーサイレンス系","n_runners":31,"avg_distance":2020.0,"top3_rate":0.1935,"win_rate":0.0,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.3846,"mile_rate":0.0769,"middle_rate":0.2308,"long_rate":0.3077,"turf_rate":0.3871,"dirt_rate":0.0323,"turf_top3":0.25,"dirt_top3":0.0},{"name":"エイシンフラッシュ","x":-1.6455,"y":2.3744,"sire_line":"サンデーサイレンス系","n_runners":24,"avg_distance":1867.0,"top3_rate":0.1667,"win_rate":0.0833,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.2222,"middle_rate":0.7778,"long_rate":0.0,"turf_rate":0.375,"dirt_rate":0.0,"turf_top3":0.1111,"dirt_top3":0.0},{"name":"エスポワールシチー","x":-1.5664,"y":-3.2845,"sire_line":"サンデーサイレンス系","n_runners":38,"avg_distance":2880.0,"top3_rate":0.2895,"win_rate":0.1842,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.0,"middle_rate":0.0,"long_rate":1.0,"turf_rate":0.0,"dirt_rate":0.0263,"turf_top3":0.0,"dirt_top3":0.0},{"name":"エピファネイア","x":4.504,"y":0.5843,"sire_line":"ロベルト系","n_runners":190,"avg_distance":1938.0,"top3_rate":0.3158,"win_rate":0.1,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.04,"mile_rate":0.21,"middle_rate":0.61,"long_rate":0.14,"turf_rate":0.5105,"dirt_rate":0.0158,"turf_top3":0.3196,"dirt_top3":0.0},{"name":"オルフェーヴル","x":1.5272,"y":1.3322,"sire_line":"サンデーサイレンス系","n_runners":95,"avg_distance":1953.0,"top3_rate":0.2316,"win_rate":0.1158,"mstn_c":0.05,"mstn_t":0.95,"sprint_rate":0.1143,"mile_rate":0.1429,"middle_rate":0.5429,"long_rate":0.2,"turf_rate":0.3684,"dirt_rate":0.0,"turf_top3":0.2286,"dirt_top3":0.0},{"name":"カリフォルニアクロームCalifornia Chrome(米)","x":0.517,"y":-0.6874,"sire_line":"ミスタープロスペクター系","n_runners":64,"avg_distance":1855.0,"top3_rate":0.2344,"win_rate":0.0781,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.2727,"middle_rate":0.7273,"long_rate":0.0,"turf_rate":0.1719,"dirt_rate":0.0,"turf_top3":0.0909,"dirt_top3":0.0},{"name":"カレンブラックヒル","x":-2.0632,"y":0.4759,"sire_line":"ミスタープロスペクター系","n_runners":37,"avg_distance":1947.0,"top3_rate":0.1081,"win_rate":0.0811,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.1667,"mile_rate":0.1667,"middle_rate":0.5,"long_rate":0.1667,"turf_rate":0.1351,"dirt_rate":0.027,"turf_top3":0.2,"dirt_top3":0.0},{"name":"キズナ","x":5.5398,"y":0.1933,"sire_line":"サンデーサイレンス系","n_runners":212,"avg_distance":2016.0,"top3_rate":0.316,"win_rate":0.1274,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.0118,"mile_rate":0.1647,"middle_rate":0.6471,"long_rate":0.1765,"turf_rate":0.3915,"dirt_rate":0.0094,"turf_top3":0.3494,"dirt_top3":0.0},{"name":"キセキ","x":-2.2322,"y":1.8766,"sire_line":"キングカメハメハ系","n_runners":31,"avg_distance":1933.0,"top3_rate":0.129,"win_rate":0.0,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.1111,"mile_rate":0.0,"middle_rate":0.7778,"long_rate":0.1111,"turf_rate":0.2903,"dirt_rate":0.0,"turf_top3":0.1111,"dirt_top3":0.0},{"name":"キタサンブラック","x":8.05,"y":-0.0084,"sire_line":"サンデーサイレンス系","n_runners":151,"avg_distance":2058.0,"top3_rate":0.351,"win_rate":0.1457,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.0541,"mile_rate":0.1351,"middle_rate":0.5811,"long_rate":0.2297,"turf_rate":0.4503,"dirt_rate":0.0397,"turf_top3":0.3088,"dirt_top3":0.6667},{"name":"キングカメハメハ","x":-0.5046,"y":2.162,"sire_line":"キングカメハメハ系","n_runners":38,"avg_distance":2119.0,"top3_rate":0.2105,"win_rate":0.0526,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.0476,"mile_rate":0.0,"middle_rate":0.619,"long_rate":0.3333,"turf_rate":0.5263,"dirt_rate":0.0263,"turf_top3":0.2,"dirt_top3":0.0},{"name":"キンシャサノキセキ","x":2.2289,"y":-1.1032,"sire_line":"サンデーサイレンス系","n_runners":38,"avg_distance":2206.0,"top3_rate":0.3158,"win_rate":0.1579,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.25,"mile_rate":0.0,"middle_rate":0.375,"long_rate":0.375,"turf_rate":0.1316,"dirt_rate":0.0789,"turf_top3":0.4,"dirt_top3":0.0},{"name":"クリソベリル","x":-0.1285,"y":-3.4265,"sire_line":"サンデーサイレンス系","n_runners":70,"avg_distance":1800.0,"top3_rate":0.2571,"win_rate":0.1,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.0,"middle_rate":0.0,"long_rate":0.0,"turf_rate":0.0,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"グレーターロンドン","x":-0.6545,"y":1.4556,"sire_line":"サンデーサイレンス系","n_runners":37,"avg_distance":1738.0,"top3_rate":0.2162,"win_rate":0.027,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.3333,"mile_rate":0.0833,"middle_rate":0.5,"long_rate":0.0833,"turf_rate":0.3243,"dirt_rate":0.0,"turf_top3":0.1667,"dirt_top3":0.0},{"name":"コパノリッキー","x":-1.1904,"y":0.162,"sire_line":"サンデーサイレンス系","n_runners":52,"avg_distance":1917.0,"top3_rate":0.1923,"win_rate":0.0769,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.3333,"middle_rate":0.5,"long_rate":0.1667,"turf_rate":0.1154,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"コントレイル","x":0.6434,"y":1.4689,"sire_line":"サンデーサイレンス系","n_runners":87,"avg_distance":1849.0,"top3_rate":0.1954,"win_rate":0.046,"mstn_c":0.15,"mstn_t":0.85,"sprint_rate":0.0444,"mile_rate":0.2,"middle_rate":0.7556,"long_rate":0.0,"turf_rate":0.5172,"dirt_rate":0.0,"turf_top3":0.1778,"dirt_top3":0.0},{"name":"ゴールドシップ","x":-0.1005,"y":4.3352,"sire_line":"サンデーサイレンス系","n_runners":149,"avg_distance":2200.0,"top3_rate":0.1745,"win_rate":0.0134,"mstn_c":0.05,"mstn_t":0.95,"sprint_rate":0.0103,"mile_rate":0.0412,"middle_rate":0.5258,"long_rate":0.4227,"turf_rate":0.6242,"dirt_rate":0.0268,"turf_top3":0.1935,"dirt_top3":0.0},{"name":"ゴールドドリーム","x":-0.7733,"y":-3.1625,"sire_line":"サンデーサイレンス系","n_runners":69,"avg_distance":1800.0,"top3_rate":0.2899,"win_rate":0.0725,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.0,"middle_rate":0.0,"long_rate":0.0,"turf_rate":0.0,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"サトノアラジン","x":0.1064,"y":0.5454,"sire_line":"サンデーサイレンス系","n_runners":78,"avg_distance":1747.0,"top3_rate":0.2051,"win_rate":0.0641,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0952,"mile_rate":0.4762,"middle_rate":0.3333,"long_rate":0.0952,"turf_rate":0.2436,"dirt_rate":0.0256,"turf_top3":0.2105,"dirt_top3":0.0},{"name":"サトノクラウン","x":-0.3206,"y":1.289,"sire_line":"ノーザンダンサー系","n_runners":56,"avg_distance":2047.0,"top3_rate":0.2321,"win_rate":0.0893,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.125,"mile_rate":0.0417,"middle_rate":0.5417,"long_rate":0.2917,"turf_rate":0.4107,"dirt_rate":0.0179,"turf_top3":0.1739,"dirt_top3":0.0},{"name":"サトノダイヤモンド","x":0.4931,"y":1.8887,"sire_line":"サンデーサイレンス系","n_runners":119,"avg_distance":2073.0,"top3_rate":0.2017,"win_rate":0.0756,"mstn_c":0.1,"mstn_t":0.9,"sprint_rate":0.0652,"mile_rate":0.1304,"middle_rate":0.5,"long_rate":0.3043,"turf_rate":0.3529,"dirt_rate":0.0336,"turf_top3":0.119,"dirt_top3":0.0},{"name":"サンダースノーThunder Snow(愛)","x":-1.2945,"y":0.4659,"sire_line":"サドラーズウェルズ系","n_runners":56,"avg_distance":1467.0,"top3_rate":0.1964,"win_rate":0.0893,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.5,"mile_rate":0.1667,"middle_rate":0.3333,"long_rate":0.0,"turf_rate":0.1071,"dirt_rate":0.0,"turf_top3":0.1667,"dirt_top3":0.0},{"name":"サートゥルナーリア","x":2.0709,"y":-0.3082,"sire_line":"キングカメハメハ系","n_runners":118,"avg_distance":1828.0,"top3_rate":0.2712,"win_rate":0.1102,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.0698,"mile_rate":0.2558,"middle_rate":0.6279,"long_rate":0.0465,"turf_rate":0.3644,"dirt_rate":0.0,"turf_top3":0.2093,"dirt_top3":0.0},{"name":"シスキンSiskin(米)","x":0.782,"y":-0.7173,"sire_line":"デインヒル系","n_runners":32,"avg_distance":1680.0,"top3_rate":0.3125,"win_rate":0.0312,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.1333,"mile_rate":0.3333,"middle_rate":0.5333,"long_rate":0.0,"turf_rate":0.4688,"dirt_rate":0.0,"turf_top3":0.2,"dirt_top3":0.0},{"name":"シニスターミニスターSinister Minister(米)","x":0.0742,"y":-2.6587,"sire_line":"エーピーインディ系","n_runners":125,"avg_distance":2880.0,"top3_rate":0.272,"win_rate":0.096,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.0,"middle_rate":0.0,"long_rate":1.0,"turf_rate":0.0,"dirt_rate":0.008,"turf_top3":0.0,"dirt_top3":0.0},{"name":"シャンハイボビーShanghai Bobby(米)","x":-1.893,"y":-2.3291,"sire_line":"ストームキャット系","n_runners":66,"avg_distance":1863.0,"top3_rate":0.197,"win_rate":0.0303,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.2,"mile_rate":0.4,"middle_rate":0.1,"long_rate":0.3,"turf_rate":0.1364,"dirt_rate":0.0152,"turf_top3":0.1111,"dirt_top3":0.0},{"name":"シュヴァルグラン","x":-2.9297,"y":1.907,"sire_line":"サンデーサイレンス系","n_runners":29,"avg_distance":1828.0,"top3_rate":0.1379,"win_rate":0.0,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.2,"mile_rate":0.1,"middle_rate":0.5,"long_rate":0.2,"turf_rate":0.3103,"dirt_rate":0.0345,"turf_top3":0.1111,"dirt_top3":0.0},{"name":"シルバーステート","x":3.7901,"y":0.5136,"sire_line":"サンデーサイレンス系","n_runners":171,"avg_distance":1849.0,"top3_rate":0.2749,"win_rate":0.1287,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.1176,"mile_rate":0.25,"middle_rate":0.5147,"long_rate":0.1176,"turf_rate":0.3684,"dirt_rate":0.0292,"turf_top3":0.3016,"dirt_top3":0.4},{"name":"ジャスタウェイ","x":3.0389,"y":0.8693,"sire_line":"サンデーサイレンス系","n_runners":74,"avg_distance":1982.0,"top3_rate":0.2838,"win_rate":0.0946,"mstn_c":0.05,"mstn_t":0.95,"sprint_rate":0.0476,"mile_rate":0.3333,"middle_rate":0.381,"long_rate":0.2381,"turf_rate":0.2703,"dirt_rate":0.0135,"turf_top3":0.3,"dirt_top3":0.0},{"name":"スクリーンヒーロー","x":2.9524,"y":1.3255,"sire_line":"ロベルト系","n_runners":46,"avg_distance":1991.0,"top3_rate":0.3696,"win_rate":0.1522,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.1176,"mile_rate":0.0,"middle_rate":0.7059,"long_rate":0.1765,"turf_rate":0.3478,"dirt_rate":0.0217,"turf_top3":0.375,"dirt_top3":0.0},{"name":"ストロングリターン","x":-4.0992,"y":1.7071,"sire_line":"サンデーサイレンス系","n_runners":24,"avg_distance":1882.0,"top3_rate":0.125,"win_rate":0.0417,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.375,"mile_rate":0.125,"middle_rate":0.25,"long_rate":0.25,"turf_rate":0.2917,"dirt_rate":0.0417,"turf_top3":0.0,"dirt_top3":0.0},{"name":"スワーヴリチャード","x":1.3131,"y":2.3914,"sire_line":"サンデーサイレンス系","n_runners":70,"avg_distance":1863.0,"top3_rate":0.2429,"win_rate":0.0286,"mstn_c":0.1,"mstn_t":0.9,"sprint_rate":0.1481,"mile_rate":0.1481,"middle_rate":0.5926,"long_rate":0.1111,"turf_rate":0.3857,"dirt_rate":0.0,"turf_top3":0.2593,"dirt_top3":0.0},{"name":"タリスマニックTalismanic(英)","x":0.6117,"y":-0.4291,"sire_line":"デインヒル系","n_runners":34,"avg_distance":1821.0,"top3_rate":0.3235,"win_rate":0.0882,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.5556,"mile_rate":0.0,"middle_rate":0.2222,"long_rate":0.2222,"turf_rate":0.2353,"dirt_rate":0.0294,"turf_top3":0.375,"dirt_top3":0.0},{"name":"タワーオブロンドン","x":-1.1452,"y":-0.6405,"sire_line":"サンデーサイレンス系","n_runners":61,"avg_distance":1638.0,"top3_rate":0.1967,"win_rate":0.0328,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.5714,"mile_rate":0.2143,"middle_rate":0.0,"long_rate":0.2143,"turf_rate":0.1803,"dirt_rate":0.0492,"turf_top3":0.0909,"dirt_top3":0.0},{"name":"ダイワメジャー","x":1.0608,"y":0.735,"sire_line":"サンデーサイレンス系","n_runners":65,"avg_distance":1557.0,"top3_rate":0.2462,"win_rate":0.0769,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.4333,"mile_rate":0.2667,"middle_rate":0.2333,"long_rate":0.0667,"turf_rate":0.4615,"dirt_rate":0.0,"turf_top3":0.2667,"dirt_top3":0.0},{"name":"ダノンキングリー","x":-3.4262,"y":1.8661,"sire_line":"サンデーサイレンス系","n_runners":22,"avg_distance":1700.0,"top3_rate":0.0909,"win_rate":0.0455,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.5,"middle_rate":0.5,"long_rate":0.0,"turf_rate":0.2727,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ダノンスマッシュ","x":-3.8344,"y":-1.4028,"sire_line":"サンデーサイレンス系","n_runners":46,"avg_distance":1543.0,"top3_rate":0.1739,"win_rate":0.0217,"mstn_c":0.8,"mstn_t":0.2,"sprint_rate":0.1429,"mile_rate":0.5714,"middle_rate":0.2857,"long_rate":0.0,"turf_rate":0.1522,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ダノンバラード","x":-0.3454,"y":2.5675,"sire_line":"サンデーサイレンス系","n_runners":72,"avg_distance":2089.0,"top3_rate":0.1944,"win_rate":0.0556,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.027,"mile_rate":0.0811,"middle_rate":0.6486,"long_rate":0.2432,"turf_rate":0.4583,"dirt_rate":0.0556,"turf_top3":0.1515,"dirt_top3":0.0},{"name":"ダノンプレミアム","x":-1.2062,"y":-0.4454,"sire_line":"サンデーサイレンス系","n_runners":59,"avg_distance":1600.0,"top3_rate":0.1864,"win_rate":0.0678,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.2,"mile_rate":0.4667,"middle_rate":0.3333,"long_rate":0.0,"turf_rate":0.2542,"dirt_rate":0.0,"turf_top3":0.1333,"dirt_top3":0.0},{"name":"ダノンレジェンド","x":-0.6895,"y":-6.4427,"sire_line":"デピュティミニスター系","n_runners":49,"avg_distance":1200.0,"top3_rate":0.3469,"win_rate":0.1633,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":1.0,"mile_rate":0.0,"middle_rate":0.0,"long_rate":0.0,"turf_rate":0.0204,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ディスクリートキャットDiscreet Cat(米)","x":-0.4123,"y":-2.7678,"sire_line":"ストームキャット系","n_runners":60,"avg_distance":1311.0,"top3_rate":0.25,"win_rate":0.0667,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.5556,"mile_rate":0.4444,"middle_rate":0.0,"long_rate":0.0,"turf_rate":0.15,"dirt_rate":0.0,"turf_top3":0.2222,"dirt_top3":0.0},{"name":"ディープインパクト","x":4.8882,"y":3.3361,"sire_line":"サンデーサイレンス系","n_runners":44,"avg_distance":2014.0,"top3_rate":0.3636,"win_rate":0.0909,"mstn_c":0.0,"mstn_t":1.0,"sprint_rate":0.08,"mile_rate":0.12,"middle_rate":0.52,"long_rate":0.28,"turf_rate":0.5227,"dirt_rate":0.0455,"turf_top3":0.3913,"dirt_top3":0.0},{"name":"ディープブリランテ","x":-1.3783,"y":1.7136,"sire_line":"サンデーサイレンス系","n_runners":32,"avg_distance":2250.0,"top3_rate":0.1875,"win_rate":0.0,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.1429,"middle_rate":0.4286,"long_rate":0.4286,"turf_rate":0.1562,"dirt_rate":0.0625,"turf_top3":0.2,"dirt_top3":0.0},{"name":"ディーマジェスティ","x":-1.0417,"y":0.898,"sire_line":"サンデーサイレンス系","n_runners":42,"avg_distance":1967.0,"top3_rate":0.2381,"win_rate":0.0952,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.3077,"middle_rate":0.5385,"long_rate":0.1538,"turf_rate":0.2857,"dirt_rate":0.0238,"turf_top3":0.1667,"dirt_top3":0.0},{"name":"デクラレーションオブウォー","x":-0.6949,"y":-0.5591,"sire_line":"ノーザンダンサー系","n_runners":73,"avg_distance":2162.0,"top3_rate":0.1918,"win_rate":0.1096,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.1667,"mile_rate":0.1667,"middle_rate":0.3333,"long_rate":0.3333,"turf_rate":0.1644,"dirt_rate":0.0,"turf_top3":0.3333,"dirt_top3":0.0},{"name":"トーセンラー","x":-1.1412,"y":2.0398,"sire_line":"サンデーサイレンス系","n_runners":30,"avg_distance":1997.0,"top3_rate":0.2333,"win_rate":0.1,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.25,"mile_rate":0.0833,"middle_rate":0.3333,"long_rate":0.3333,"turf_rate":0.3333,"dirt_rate":0.0667,"turf_top3":0.2,"dirt_top3":0.0},{"name":"ドゥラメンテ","x":3.2315,"y":0.8764,"sire_line":"キングカメハメハ系","n_runners":95,"avg_distance":2148.0,"top3_rate":0.2947,"win_rate":0.0842,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.0,"mile_rate":0.075,"middle_rate":0.65,"long_rate":0.275,"turf_rate":0.4,"dirt_rate":0.0211,"turf_top3":0.2895,"dirt_top3":0.0},{"name":"ドレフォンDrefong(米)","x":4.3869,"y":-2.0987,"sire_line":"ミスタープロスペクター系","n_runners":199,"avg_distance":2030.0,"top3_rate":0.3116,"win_rate":0.0905,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.2069,"mile_rate":0.1724,"middle_rate":0.3103,"long_rate":0.3103,"turf_rate":0.1106,"dirt_rate":0.0352,"turf_top3":0.3636,"dirt_top3":0.2857},{"name":"ナダルNadal(米)","x":1.7933,"y":-4.848,"sire_line":"ストームキャット系","n_runners":63,"avg_distance":1800.0,"top3_rate":0.381,"win_rate":0.127,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.0,"middle_rate":0.0,"long_rate":0.0,"turf_rate":0.0,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ニューイヤーズデイ","x":-0.2142,"y":-2.2051,"sire_line":"ミスタープロスペクター系","n_runners":80,"avg_distance":1810.0,"top3_rate":0.25,"win_rate":0.1,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.25,"mile_rate":0.375,"middle_rate":0.125,"long_rate":0.25,"turf_rate":0.0875,"dirt_rate":0.0125,"turf_top3":0.1429,"dirt_top3":0.0},{"name":"ノーブルミッションNoble Mission(英)","x":-5.8055,"y":0.0028,"sire_line":"デインヒル系","n_runners":22,"avg_distance":1560.0,"top3_rate":0.0,"win_rate":0.0,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.2,"mile_rate":0.6,"middle_rate":0.2,"long_rate":0.0,"turf_rate":0.2273,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ハーツクライ","x":3.2849,"y":3.2377,"sire_line":"サンデーサイレンス系","n_runners":83,"avg_distance":2212.0,"top3_rate":0.3012,"win_rate":0.0843,"mstn_c":0.0,"mstn_t":1.0,"sprint_rate":0.0408,"mile_rate":0.0612,"middle_rate":0.5306,"long_rate":0.3673,"turf_rate":0.5181,"dirt_rate":0.0723,"turf_top3":0.2326,"dirt_top3":0.1667},{"name":"ハービンジャーHarbinger(英)","x":2.7604,"y":0.8159,"sire_line":"デインヒル系","n_runners":74,"avg_distance":1893.0,"top3_rate":0.3243,"win_rate":0.0676,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0909,"mile_rate":0.1515,"middle_rate":0.6364,"long_rate":0.1212,"turf_rate":0.4324,"dirt_rate":0.0135,"turf_top3":0.375,"dirt_top3":0.0},{"name":"バゴBago(仏)","x":0.8641,"y":2.321,"sire_line":"サドラーズウェルズ系","n_runners":26,"avg_distance":2207.0,"top3_rate":0.2308,"win_rate":0.1538,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.0909,"middle_rate":0.5455,"long_rate":0.3636,"turf_rate":0.3846,"dirt_rate":0.0385,"turf_top3":0.2,"dirt_top3":0.0},{"name":"パイロPyro(米)","x":0.8338,"y":-2.8758,"sire_line":"エーピーインディ系","n_runners":79,"avg_distance":2130.0,"top3_rate":0.3165,"win_rate":0.1013,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.5,"middle_rate":0.0,"long_rate":0.5,"turf_rate":0.0253,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ビッグアーサー","x":-0.0816,"y":-0.636,"sire_line":"サンデーサイレンス系","n_runners":74,"avg_distance":1300.0,"top3_rate":0.2027,"win_rate":0.0676,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.6429,"mile_rate":0.3214,"middle_rate":0.0357,"long_rate":0.0,"turf_rate":0.3784,"dirt_rate":0.0,"turf_top3":0.2857,"dirt_top3":0.0},{"name":"ビーチパトロールBeach Patrol(米)","x":-0.736,"y":3.1998,"sire_line":"エーピーインディ系","n_runners":24,"avg_distance":2176.0,"top3_rate":0.1667,"win_rate":0.0833,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.0,"middle_rate":0.7273,"long_rate":0.2727,"turf_rate":0.4167,"dirt_rate":0.0417,"turf_top3":0.2,"dirt_top3":0.0},{"name":"ファインニードル","x":1.2243,"y":-2.2807,"sire_line":"サンデーサイレンス系","n_runners":49,"avg_distance":1255.0,"top3_rate":0.2857,"win_rate":0.1429,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.7273,"mile_rate":0.2727,"middle_rate":0.0,"long_rate":0.0,"turf_rate":0.2245,"dirt_rate":0.0,"turf_top3":0.4545,"dirt_top3":0.0},{"name":"フィエールマン","x":-1.852,"y":3.3292,"sire_line":"サンデーサイレンス系","n_runners":45,"avg_distance":1942.0,"top3_rate":0.1333,"win_rate":0.0444,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.08,"mile_rate":0.12,"middle_rate":0.68,"long_rate":0.12,"turf_rate":0.5333,"dirt_rate":0.0222,"turf_top3":0.1667,"dirt_top3":0.0},{"name":"フィレンツェファイア","x":-2.9536,"y":-1.0777,"sire_line":"サンデーサイレンス系","n_runners":34,"avg_distance":1400.0,"top3_rate":0.1471,"win_rate":0.0588,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.5,"mile_rate":0.25,"middle_rate":0.25,"long_rate":0.0,"turf_rate":0.1176,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"フォーウィールドライブFour Wheel Drive(米)","x":-1.2329,"y":-0.8698,"sire_line":"ストームキャット系","n_runners":50,"avg_distance":1608.0,"top3_rate":0.2,"win_rate":0.1,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.5,"mile_rate":0.125,"middle_rate":0.25,"long_rate":0.125,"turf_rate":0.16,"dirt_rate":0.0,"turf_top3":0.375,"dirt_top3":0.0},{"name":"ブラックタイド","x":4.34,"y":2.3614,"sire_line":"サンデーサイレンス系","n_runners":36,"avg_distance":2303.0,"top3_rate":0.3611,"win_rate":0.1667,"mstn_c":0.05,"mstn_t":0.95,"sprint_rate":0.0,"mile_rate":0.0,"middle_rate":0.619,"long_rate":0.381,"turf_rate":0.5278,"dirt_rate":0.0556,"turf_top3":0.4737,"dirt_top3":0.0},{"name":"ブリックスアンドモルタルBricks and Mortar(米)","x":1.3926,"y":-0.7323,"sire_line":"ストームキャット系","n_runners":124,"avg_distance":1907.0,"top3_rate":0.2419,"win_rate":0.0726,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.1053,"mile_rate":0.1579,"middle_rate":0.6053,"long_rate":0.1316,"turf_rate":0.2903,"dirt_rate":0.0161,"turf_top3":0.1944,"dirt_top3":0.0},{"name":"ヘニーヒューズHenny Hughes(米)","x":1.2801,"y":-3.6653,"sire_line":"ストームキャット系","n_runners":71,"avg_distance":2080.0,"top3_rate":0.3521,"win_rate":0.1268,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.25,"mile_rate":0.25,"middle_rate":0.0,"long_rate":0.5,"turf_rate":0.0563,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ベンバトルBenbatl(英)","x":-1.9864,"y":3.6011,"sire_line":"サドラーズウェルズ系","n_runners":33,"avg_distance":1847.0,"top3_rate":0.1515,"win_rate":0.0303,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0588,"mile_rate":0.1176,"middle_rate":0.8235,"long_rate":0.0,"turf_rate":0.5152,"dirt_rate":0.0,"turf_top3":0.1176,"dirt_top3":0.0},{"name":"ホッコータルマエ","x":-0.4098,"y":-2.2407,"sire_line":"キングカメハメハ系","n_runners":93,"avg_distance":2883.0,"top3_rate":0.2258,"win_rate":0.0753,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.0,"mile_rate":0.0,"middle_rate":0.0,"long_rate":1.0,"turf_rate":0.0323,"dirt_rate":0.043,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ポエティックフレアPoetic Flare(愛)","x":1.7551,"y":-1.042,"sire_line":"デインヒル系","n_runners":21,"avg_distance":1714.0,"top3_rate":0.381,"win_rate":0.1429,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.4286,"middle_rate":0.5714,"long_rate":0.0,"turf_rate":0.3333,"dirt_rate":0.0,"turf_top3":0.2857,"dirt_top3":0.0},{"name":"マインドユアビスケッツMind Your Biscuits(米)","x":-1.3188,"y":-0.5229,"sire_line":"ストームキャット系","n_runners":86,"avg_distance":2287.0,"top3_rate":0.1512,"win_rate":0.0581,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0833,"mile_rate":0.0,"middle_rate":0.5,"long_rate":0.4167,"turf_rate":0.1163,"dirt_rate":0.0233,"turf_top3":0.1,"dirt_top3":0.0},{"name":"マクフィMakfi(英)","x":-2.7666,"y":-0.821,"sire_line":"デインヒル系","n_runners":61,"avg_distance":1638.0,"top3_rate":0.1475,"win_rate":0.0492,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.4167,"mile_rate":0.1667,"middle_rate":0.3333,"long_rate":0.0833,"turf_rate":0.1967,"dirt_rate":0.0,"turf_top3":0.0833,"dirt_top3":0.0},{"name":"マジェスティックウォリアーMajestic Warrior(米)","x":-4.5981,"y":0.2373,"sire_line":"エーピーインディ系","n_runners":71,"avg_distance":3002.0,"top3_rate":0.0563,"win_rate":0.0282,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.0,"middle_rate":0.0,"long_rate":1.0,"turf_rate":0.0282,"dirt_rate":0.0282,"turf_top3":0.0,"dirt_top3":0.0},{"name":"マテラスカイ","x":-3.3821,"y":-1.1396,"sire_line":"サンデーサイレンス系","n_runners":32,"avg_distance":1600.0,"top3_rate":0.2188,"win_rate":0.0938,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.6667,"middle_rate":0.3333,"long_rate":0.0,"turf_rate":0.0938,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ミスターメロディ","x":-1.8837,"y":-1.4747,"sire_line":"サンデーサイレンス系","n_runners":40,"avg_distance":1378.0,"top3_rate":0.175,"win_rate":0.075,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.4444,"mile_rate":0.5556,"middle_rate":0.0,"long_rate":0.0,"turf_rate":0.225,"dirt_rate":0.0,"turf_top3":0.1111,"dirt_top3":0.0},{"name":"ミスチヴィアスアレックスMischevious Alex(米)","x":-2.7947,"y":-2.8834,"sire_line":"ストームキャット系","n_runners":39,"avg_distance":1200.0,"top3_rate":0.2308,"win_rate":0.0513,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":1.0,"mile_rate":0.0,"middle_rate":0.0,"long_rate":0.0,"turf_rate":0.0513,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ミッキーアイル","x":0.7796,"y":-1.9237,"sire_line":"サンデーサイレンス系","n_runners":92,"avg_distance":1608.0,"top3_rate":0.25,"win_rate":0.0543,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.3462,"mile_rate":0.3462,"middle_rate":0.1538,"long_rate":0.1538,"turf_rate":0.2826,"dirt_rate":0.0,"turf_top3":0.1923,"dirt_top3":0.0},{"name":"モズアスコット","x":1.8801,"y":-1.7698,"sire_line":"サンデーサイレンス系","n_runners":82,"avg_distance":1522.0,"top3_rate":0.2927,"win_rate":0.0976,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.2222,"mile_rate":0.5556,"middle_rate":0.2222,"long_rate":0.0,"turf_rate":0.2195,"dirt_rate":0.0,"turf_top3":0.2222,"dirt_top3":0.0},{"name":"モーニン","x":-3.9458,"y":0.0987,"sire_line":"その他","n_runners":48,"avg_distance":1800.0,"top3_rate":0.125,"win_rate":0.0,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.5,"middle_rate":0.5,"long_rate":0.0,"turf_rate":0.0417,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"モーリス","x":2.406,"y":-0.1814,"sire_line":"ロベルト系","n_runners":141,"avg_distance":1735.0,"top3_rate":0.234,"win_rate":0.078,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.2766,"mile_rate":0.1915,"middle_rate":0.4468,"long_rate":0.0851,"turf_rate":0.3191,"dirt_rate":0.0142,"turf_top3":0.2444,"dirt_top3":0.0},{"name":"ラブリーデイ","x":0.0789,"y":0.3953,"sire_line":"サンデーサイレンス系","n_runners":35,"avg_distance":1851.0,"top3_rate":0.2286,"win_rate":0.0857,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.2,"mile_rate":0.2667,"middle_rate":0.4,"long_rate":0.1333,"turf_rate":0.3714,"dirt_rate":0.0571,"turf_top3":0.1538,"dirt_top3":0.0},{"name":"リアルインパクト","x":-2.6768,"y":0.8138,"sire_line":"サンデーサイレンス系","n_runners":31,"avg_distance":1972.0,"top3_rate":0.1613,"win_rate":0.0645,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.3333,"mile_rate":0.0,"middle_rate":0.3333,"long_rate":0.3333,"turf_rate":0.1613,"dirt_rate":0.0323,"turf_top3":0.4,"dirt_top3":0.0},{"name":"リアルスティール","x":1.9807,"y":1.6642,"sire_line":"サンデーサイレンス系","n_runners":138,"avg_distance":1901.0,"top3_rate":0.2246,"win_rate":0.0652,"mstn_c":0.3,"mstn_t":0.7,"sprint_rate":0.037,"mile_rate":0.1667,"middle_rate":0.6852,"long_rate":0.1111,"turf_rate":0.3913,"dirt_rate":0.0,"turf_top3":0.2407,"dirt_top3":0.0},{"name":"リオンディーズ","x":2.6214,"y":-0.6436,"sire_line":"サンデーサイレンス系","n_runners":147,"avg_distance":1820.0,"top3_rate":0.2585,"win_rate":0.102,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.1579,"mile_rate":0.1842,"middle_rate":0.5526,"long_rate":0.1053,"turf_rate":0.2449,"dirt_rate":0.0136,"turf_top3":0.2778,"dirt_top3":0.0},{"name":"ルヴァンスレーヴ","x":2.0895,"y":-2.9578,"sire_line":"サンデーサイレンス系","n_runners":106,"avg_distance":1700.0,"top3_rate":0.3491,"win_rate":0.1415,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.5,"middle_rate":0.5,"long_rate":0.0,"turf_rate":0.0189,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ルーラーシップ","x":1.5296,"y":1.9296,"sire_line":"キングカメハメハ系","n_runners":124,"avg_distance":1933.0,"top3_rate":0.2097,"win_rate":0.0726,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.0444,"mile_rate":0.1556,"middle_rate":0.6222,"long_rate":0.1778,"turf_rate":0.3629,"dirt_rate":0.0,"turf_top3":0.2667,"dirt_top3":0.0},{"name":"レイデオロ","x":5.7483,"y":0.7915,"sire_line":"キングカメハメハ系","n_runners":125,"avg_distance":2045.0,"top3_rate":0.328,"win_rate":0.12,"mstn_c":0.5,"mstn_t":0.5,"sprint_rate":0.0149,"mile_rate":0.0896,"middle_rate":0.6418,"long_rate":0.2537,"turf_rate":0.536,"dirt_rate":0.0,"turf_top3":0.3284,"dirt_top3":0.0},{"name":"レッドファルクス","x":-1.5439,"y":-0.647,"sire_line":"サンデーサイレンス系","n_runners":38,"avg_distance":1558.0,"top3_rate":0.2368,"win_rate":0.1316,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.5,"mile_rate":0.25,"middle_rate":0.125,"long_rate":0.125,"turf_rate":0.2105,"dirt_rate":0.0,"turf_top3":0.125,"dirt_top3":0.0},{"name":"ロゴタイプ","x":-5.6407,"y":0.9084,"sire_line":"サンデーサイレンス系","n_runners":27,"avg_distance":1906.0,"top3_rate":0.0741,"win_rate":0.037,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.125,"mile_rate":0.5,"middle_rate":0.125,"long_rate":0.25,"turf_rate":0.2222,"dirt_rate":0.0741,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ロジャーバローズ","x":0.7749,"y":2.9464,"sire_line":"サンデーサイレンス系","n_runners":38,"avg_distance":1779.0,"top3_rate":0.2105,"win_rate":0.0526,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.2143,"mile_rate":0.0714,"middle_rate":0.6429,"long_rate":0.0714,"turf_rate":0.3684,"dirt_rate":0.0,"turf_top3":0.3571,"dirt_top3":0.0},{"name":"ロージズインメイRoses in May(米)","x":-2.7215,"y":0.258,"sire_line":"エーピーインディ系","n_runners":26,"avg_distance":2900.0,"top3_rate":0.2308,"win_rate":0.0385,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.0,"mile_rate":0.0,"middle_rate":0.0,"long_rate":1.0,"turf_rate":0.0769,"dirt_rate":0.0769,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ロードカナロア","x":2.8595,"y":-2.6441,"sire_line":"キングカメハメハ系","n_runners":221,"avg_distance":1667.0,"top3_rate":0.3167,"win_rate":0.0995,"mstn_c":1.0,"mstn_t":0.0,"sprint_rate":0.3175,"mile_rate":0.2698,"middle_rate":0.3175,"long_rate":0.0952,"turf_rate":0.276,"dirt_rate":0.009,"turf_top3":0.2787,"dirt_top3":0.0},{"name":"ヴァンゴッホ","x":-3.2706,"y":-2.8642,"sire_line":"デインヒル系","n_runners":29,"avg_distance":1300.0,"top3_rate":0.1724,"win_rate":0.0345,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.5,"mile_rate":0.5,"middle_rate":0.0,"long_rate":0.0,"turf_rate":0.069,"dirt_rate":0.0,"turf_top3":0.0,"dirt_top3":0.0},{"name":"ヴィクトワールピサ","x":-2.4008,"y":2.4947,"sire_line":"サンデーサイレンス系","n_runners":33,"avg_distance":2382.0,"top3_rate":0.1515,"win_rate":0.0303,"mstn_c":0.4,"mstn_t":0.6,"sprint_rate":0.2143,"mile_rate":0.0714,"middle_rate":0.1429,"long_rate":0.5714,"turf_rate":0.2727,"dirt_rate":0.1515,"turf_top3":0.3333,"dirt_top3":0.0}];
+const SIM={"Into Mischief":[["ミスチヴィアスアレックスMischevious Alex(米)",0.7089],["クリソベリル",0.4503],["ディスクリートキャットDiscreet Cat(米)",0.4463],["フォーウィールドライブFour Wheel Drive(米)",0.4409],["ヴァンゴッホ",0.3569],["ヘニーヒューズHenny Hughes(米)",0.348],["ナダルNadal(米)",0.3012],["フィレンツェファイア",0.2922]],"アジアエクスプレス":[["モーニン",0.8156],["アドマイヤマーズ",0.2276],["ノーブルミッションNoble Mission(英)",0.1689],["シュヴァルグラン",0.1629],["Into Mischief",0.156],["ディスクリートキャットDiscreet Cat(米)",0.1253],["サトノアラジン",0.1167],["レッドファルクス",0.1145]],"アドマイヤマーズ":[["コパノリッキー",0.5456],["アルアイン",0.5426],["ウインブライト",0.4465],["サトノアラジン",0.4408],["エイシンフラッシュ",0.424],["リアルスティール",0.4212],["ラブリーデイ",0.4152],["グレーターロンドン",0.3512]],"アニマルキングダムAnimal Kingdom(米)":[["ダノンレジェンド",0.4995],["キンシャサノキセキ",0.2899],["インディチャンプ",0.2387],["ルヴァンスレーヴ",0.2095],["シスキンSiskin(米)",0.1929],["ナダルNadal(米)",0.1776],["ポエティックフレアPoetic Flare(愛)",0.1752],["エピファネイア",0.1461]],"アメリカンペイトリオット":[["カレンブラックヒル",0.6081],["ニューイヤーズデイ",0.5737],["カリフォルニアクロームCalifornia Chrome(米)",0.4496],["キセキ",0.2931],["ダノンキングリー",0.2592],["ドレフォンDrefong(米)",0.2552],["エイシンヒカリ",0.2103],["ロジャーバローズ",0.2062]],"アルアイン":[["ロジャーバローズ",0.6041],["ウインブライト",0.5996],["アドマイヤマーズ",0.5426],["グレーターロンドン",0.4562],["サトノアラジン",0.4549],["スワーヴリチャード",0.4306],["リアルスティール",0.4258],["コントレイル",0.3981]],"イスラボニータ":[["ダイワメジャー",0.5811],["ビッグアーサー",0.5295],["ロードカナロア",0.4158],["ファインニードル",0.4096],["リオンディーズ",0.368],["ドレフォンDrefong(米)",0.3224],["リアルインパクト",0.3014],["ミッキーアイル",0.292]],"インディチャンプ":[["レッドファルクス",0.5089],["シスキンSiskin(米)",0.3566],["キンシャサノキセキ",0.337],["ルヴァンスレーヴ",0.3301],["クリソベリル",0.3296],["ダノンレジェンド",0.3087],["スクリーンヒーロー",0.2756],["ファインニードル",0.272]],"ウインブライト":[["ダノンキングリー",0.6128],["アルアイン",0.5996],["グレーターロンドン",0.5839],["フィエールマン",0.5178],["ゴールドシップ",0.4602],["コパノリッキー",0.4513],["アドマイヤマーズ",0.4465],["エイシンフラッシュ",0.4398]],"エイシンヒカリ":[["タワーオブロンドン",0.5118],["ストロングリターン",0.4807],["ロジャーバローズ",0.4718],["グレーターロンドン",0.4536],["ミッキーアイル",0.335],["コントレイル",0.3153],["ヴィクトワールピサ",0.3015],["フィレンツェファイア",0.2907]],"エイシンフラッシュ":[["ディーマジェスティ",0.4639],["ウインブライト",0.4398],["フィエールマン",0.4343],["アドマイヤマーズ",0.424],["アルアイン",0.362],["ロゴタイプ",0.3606],["コパノリッキー",0.3315],["ポエティックフレアPoetic Flare(愛)",0.3117]],"エスポワールシチー":[["ホッコータルマエ",0.5341],["ゴールドドリーム",0.4472],["ダノンレジェンド",0.3741],["マテラスカイ",0.3694],["シニスターミニスターSinister Minister(米)",0.3624],["ロージズインメイRoses in May(米)",0.3253],["ディーマジェスティ",0.2976],["リアルインパクト",0.2776]],"エピファネイア":[["モーリス",0.7425],["スクリーンヒーロー",0.6501],["ドゥラメンテ",0.3617],["ハービンジャーHarbinger(英)",0.3414],["キズナ",0.3285],["ディープインパクト",0.2717],["レイデオロ",0.2711],["サートゥルナーリア",0.2611]],"オルフェーヴル":[["ブラックタイド",0.701],["スワーヴリチャード",0.6456],["サトノダイヤモンド",0.5796],["ディープインパクト",0.5707],["ジャスタウェイ",0.5387],["ハーツクライ",0.51],["コントレイル",0.4779],["ゴールドシップ",0.4699]],"カリフォルニアクロームCalifornia Chrome(米)":[["ニューイヤーズデイ",0.722],["カレンブラックヒル",0.6262],["アメリカンペイトリオット",0.4496],["ラブリーデイ",0.3301],["ポエティックフレアPoetic Flare(愛)",0.3078],["モズアスコット",0.2929],["ドレフォンDrefong(米)",0.2754],["リアルスティール",0.2519]],"カレンブラックヒル":[["カリフォルニアクロームCalifornia Chrome(米)",0.6262],["アメリカンペイトリオット",0.6081],["ニューイヤーズデイ",0.5414],["ロゴタイプ",0.2787],["ダノンキングリー",0.2782],["エイシンフラッシュ",0.2595],["ノーブルミッションNoble Mission(英)",0.1984],["マジェスティックウォリアーMajestic Warrior(米)",0.198]],"キズナ":[["レイデオロ",0.6245],["キタサンブラック",0.5943],["リオンディーズ",0.5281],["シルバーステート",0.4107],["ブリックスアンドモルタルBricks and Mortar(米)",0.3872],["ディープインパクト",0.3518],["ドゥラメンテ",0.3421],["リアルスティール",0.332]],"キセキ":[["キングカメハメハ",0.5013],["ルーラーシップ",0.4903],["フィレンツェファイア",0.3715],["ウインブライト",0.3517],["ダノンキングリー",0.3428],["フィエールマン",0.3317],["アメリカンペイトリオット",0.2931],["アルアイン",0.2783]],"キタサンブラック":[["レイデオロ",0.6196],["キズナ",0.5943],["シルバーステート",0.5504],["ドレフォンDrefong(米)",0.4798],["ハーツクライ",0.3203],["ジャスタウェイ",0.2524],["ドゥラメンテ",0.2469],["ブラックタイド",0.2443]],"キングカメハメハ":[["ルーラーシップ",0.5951],["サートゥルナーリア",0.5021],["キセキ",0.5013],["ビーチパトロールBeach Patrol(米)",0.4532],["ヴィクトワールピサ",0.3153],["ドゥラメンテ",0.3092],["ホッコータルマエ",0.2889],["シュヴァルグラン",0.2846]],"キンシャサノキセキ":[["ラブリーデイ",0.4642],["インディチャンプ",0.337],["アニマルキングダムAnimal Kingdom(米)",0.2899],["ヘニーヒューズHenny Hughes(米)",0.2362],["ヴィクトワールピサ",0.2334],["ディープインパクト",0.2289],["ナダルNadal(米)",0.2272],["レッドファルクス",0.2089]],"クリソベリル":[["ゴールドドリーム",0.719],["ルヴァンスレーヴ",0.5228],["ナダルNadal(米)",0.4735],["Into Mischief",0.4503],["フィレンツェファイア",0.388],["ヴァンゴッホ",0.3835],["コントレイル",0.354],["ミッキーアイル",0.3386]],"グレーターロンドン":[["ウインブライト",0.5839],["アルアイン",0.4562],["エイシンヒカリ",0.4536],["フィエールマン",0.44],["ロジャーバローズ",0.419],["ダノンキングリー",0.3864],["ディープブリランテ",0.3837],["アドマイヤマーズ",0.3512]],"コパノリッキー":[["アドマイヤマーズ",0.5456],["ダノンスマッシュ",0.4576],["ウインブライト",0.4513],["ラブリーデイ",0.4377],["ダノンキングリー",0.4013],["サトノアラジン",0.3798],["ディーマジェスティ",0.3614],["モズアスコット",0.356]],"コントレイル":[["リアルスティール",0.56],["オルフェーヴル",0.4779],["スワーヴリチャード",0.4391],["サトノダイヤモンド",0.4007],["アルアイン",0.3981],["サトノアラジン",0.3882],["フィレンツェファイア",0.3798],["クリソベリル",0.354]],"ゴールドシップ":[["サトノダイヤモンド",0.7228],["ハーツクライ",0.6827],["スワーヴリチャード",0.5765],["ダノンバラード",0.5602],["ディープインパクト",0.4954],["オルフェーヴル",0.4699],["ウインブライト",0.4602],["フィエールマン",0.4365]],"ゴールドドリーム":[["クリソベリル",0.719],["ナダルNadal(米)",0.5985],["エスポワールシチー",0.4472],["ルヴァンスレーヴ",0.382],["ダノンプレミアム",0.3598],["ミスターメロディ",0.3351],["ダノンレジェンド",0.3034],["インディチャンプ",0.2621]],"サトノアラジン":[["アルアイン",0.4549],["リアルスティール",0.4494],["アドマイヤマーズ",0.4408],["モズアスコット",0.3913],["コントレイル",0.3882],["ラブリーデイ",0.3817],["コパノリッキー",0.3798],["ノーブルミッションNoble Mission(英)",0.2767]],"サトノクラウン":[["デクラレーションオブウォー",0.702],["ダノンバラード",0.3595],["ストロングリターン",0.2428],["ゴールドシップ",0.2239],["トーセンラー",0.1879],["ダイワメジャー",0.1821],["フィエールマン",0.1816],["ブラックタイド",0.1605]],"サトノダイヤモンド":[["ゴールドシップ",0.7228],["ハーツクライ",0.6486],["ジャスタウェイ",0.5899],["オルフェーヴル",0.5796],["スワーヴリチャード",0.5542],["ディープインパクト",0.5152],["ブラックタイド",0.4113],["コントレイル",0.4007]],"サンダースノーThunder Snow(愛)":[["ベンバトルBenbatl(英)",0.6901],["バゴBago(仏)",0.5006],["トーセンラー",0.2322],["ストロングリターン",0.1934],["ファインニードル",0.1655],["タワーオブロンドン",0.1625],["フォーウィールドライブFour Wheel Drive(米)",0.1545],["ビッグアーサー",0.1535]],"サートゥルナーリア":[["ルーラーシップ",0.5861],["ドゥラメンテ",0.5718],["キングカメハメハ",0.5021],["ロードカナロア",0.495],["レイデオロ",0.4821],["モズアスコット",0.3316],["ポエティックフレアPoetic Flare(愛)",0.2981],["ハービンジャーHarbinger(英)",0.2912]],"シスキンSiskin(米)":[["ハービンジャーHarbinger(英)",0.4961],["ヴァンゴッホ",0.4772],["ポエティックフレアPoetic Flare(愛)",0.4082],["インディチャンプ",0.3566],["コントレイル",0.2791],["マクフィMakfi(英)",0.2306],["リアルスティール",0.2101],["ノーブルミッションNoble Mission(英)",0.2036]],"シニスターミニスターSinister Minister(米)":[["パイロPyro(米)",0.6349],["マジェスティックウォリアーMajestic Warrior(米)",0.5575],["ホッコータルマエ",0.5561],["ロージズインメイRoses in May(米)",0.5461],["ヘニーヒューズHenny Hughes(米)",0.3668],["エスポワールシチー",0.3624],["ビーチパトロールBeach Patrol(米)",0.2962],["ナダルNadal(米)",0.2297]],"シャンハイボビーShanghai Bobby(米)":[["フォーウィールドライブFour Wheel Drive(米)",0.5315],["ディスクリートキャットDiscreet Cat(米)",0.5241],["ブリックスアンドモルタルBricks and Mortar(米)",0.4513],["ミスチヴィアスアレックスMischevious Alex(米)",0.4417],["ヘニーヒューズHenny Hughes(米)",0.3884],["ヴァンゴッホ",0.3784],["マインドユアビスケッツMind Your Biscuits(米)",0.3419],["ホッコータルマエ",0.2791]],"シュヴァルグラン":[["ストロングリターン",0.6513],["ロゴタイプ",0.5711],["ヴィクトワールピサ",0.5267],["ディープブリランテ",0.5006],["ノーブルミッションNoble Mission(英)",0.4972],["フィエールマン",0.4604],["ウインブライト",0.3968],["ラブリーデイ",0.3636]],"シルバーステート":[["キタサンブラック",0.5504],["リオンディーズ",0.5133],["ドレフォンDrefong(米)",0.4798],["キズナ",0.4107],["ブリックスアンドモルタルBricks and Mortar(米)",0.3687],["ハーツクライ",0.2686],["ブラックタイド",0.2523],["ジャスタウェイ",0.2243]],"ジャスタウェイ":[["サトノダイヤモンド",0.5899],["オルフェーヴル",0.5387],["ハーツクライ",0.5228],["ブラックタイド",0.4927],["ディープインパクト",0.4407],["リアルスティール",0.3829],["リオンディーズ",0.3749],["モズアスコット",0.3672]],"スクリーンヒーロー":[["エピファネイア",0.6501],["モーリス",0.5694],["ディーマジェスティ",0.2985],["インディチャンプ",0.2756],["ポエティックフレアPoetic Flare(愛)",0.2695],["エイシンフラッシュ",0.2543],["ハービンジャーHarbinger(英)",0.221],["アルアイン",0.2074]],"ストロングリターン":[["ロゴタイプ",0.666],["シュヴァルグラン",0.6513],["フィエールマン",0.5445],["タワーオブロンドン",0.5016],["エイシンヒカリ",0.4807],["ヴィクトワールピサ",0.4583],["ノーブルミッションNoble Mission(英)",0.4305],["マジェスティックウォリアーMajestic Warrior(米)",0.4236]],"スワーヴリチャード":[["オルフェーヴル",0.6456],["ディープインパクト",0.6453],["ゴールドシップ",0.5765],["サトノダイヤモンド",0.5542],["ハーツクライ",0.5368],["ロジャーバローズ",0.4619],["ブラックタイド",0.4426],["コントレイル",0.4391]],"タリスマニックTalismanic(英)":[["マクフィMakfi(英)",0.4843],["ポエティックフレアPoetic Flare(愛)",0.4511],["ファインニードル",0.42],["ダイワメジャー",0.3802],["ハービンジャーHarbinger(英)",0.3477],["ビッグアーサー",0.2917],["ロードカナロア",0.217],["モーリス",0.1986]],"タワーオブロンドン":[["エイシンヒカリ",0.5118],["ストロングリターン",0.5016],["ミッキーアイル",0.4732],["ビッグアーサー",0.4714],["ファインニードル",0.3724],["ダイワメジャー",0.3373],["ヴィクトワールピサ",0.3015],["シュヴァルグラン",0.2968]],"ダイワメジャー":[["ビッグアーサー",0.6527],["イスラボニータ",0.5811],["ロジャーバローズ",0.4658],["ファインニードル",0.4582],["ロードカナロア",0.3985],["タリスマニックTalismanic(英)",0.3802],["タワーオブロンドン",0.3373],["ミッキーアイル",0.2813]],"ダノンキングリー":[["ウインブライト",0.6128],["ダノンスマッシュ",0.4524],["フィエールマン",0.4052],["ディーマジェスティ",0.4042],["コパノリッキー",0.4013],["グレーターロンドン",0.3864],["マテラスカイ",0.3765],["フィレンツェファイア",0.3716]],"ダノンスマッシュ":[["マテラスカイ",0.509],["ディーマジェスティ",0.489],["コパノリッキー",0.4576],["ダノンキングリー",0.4524],["ミスターメロディ",0.4035],["レッドファルクス",0.3854],["ノーブルミッションNoble Mission(英)",0.3476],["ヴァンゴッホ",0.3203]],"ダノンバラード":[["フィエールマン",0.5877],["ゴールドシップ",0.5602],["トーセンラー",0.462],["ストロングリターン",0.4206],["ブラックタイド",0.4041],["ディープブリランテ",0.3767],["サトノクラウン",0.3595],["シュヴァルグラン",0.3533]],"ダノンプレミアム":[["フィレンツェファイア",0.6035],["ミスターメロディ",0.4442],["リアルインパクト",0.4089],["ゴールドドリーム",0.3598],["ダノンキングリー",0.3379],["ディーマジェスティ",0.3013],["ノーブルミッションNoble Mission(英)",0.301],["イスラボニータ",0.2912]],"ダノンレジェンド":[["アニマルキングダムAnimal Kingdom(米)",0.4995],["エスポワールシチー",0.3741],["インディチャンプ",0.3087],["ゴールドドリーム",0.3034],["ミスチヴィアスアレックスMischevious Alex(米)",0.2945],["ディスクリートキャットDiscreet Cat(米)",0.2423],["ナダルNadal(米)",0.2105],["ファインニードル",0.2081]],"ディスクリートキャットDiscreet Cat(米)":[["ヘニーヒューズHenny Hughes(米)",0.5536],["シャンハイボビーShanghai Bobby(米)",0.5241],["ミスチヴィアスアレックスMischevious Alex(米)",0.5114],["ファインニードル",0.4745],["フォーウィールドライブFour Wheel Drive(米)",0.4731],["Into Mischief",0.4463],["ビッグアーサー",0.3709],["ナダルNadal(米)",0.3478]],"ディープインパクト":[["ハーツクライ",0.7312],["スワーヴリチャード",0.6453],["オルフェーヴル",0.5707],["ブラックタイド",0.5547],["サトノダイヤモンド",0.5152],["ゴールドシップ",0.4954],["ジャスタウェイ",0.4407],["リアルスティール",0.4102]],"ディープブリランテ":[["シュヴァルグラン",0.5006],["ヴィクトワールピサ",0.436],["グレーターロンドン",0.3837],["ダノンバラード",0.3767],["ウインブライト",0.3681],["ロージズインメイRoses in May(米)",0.3427],["リアルインパクト",0.3277],["ラブリーデイ",0.3234]],"ディーマジェスティ":[["レッドファルクス",0.5275],["ダノンスマッシュ",0.489],["トーセンラー",0.4724],["エイシンフラッシュ",0.4639],["リアルインパクト",0.4634],["ダノンキングリー",0.4042],["コパノリッキー",0.3614],["フィエールマン",0.3573]],"デクラレーションオブウォー":[["サトノクラウン",0.702],["フォーウィールドライブFour Wheel Drive(米)",0.1187],["インディチャンプ",0.1022],["アジアエクスプレス",0.0921],["エスポワールシチー",0.0853],["カレンブラックヒル",0.0668],["ニューイヤーズデイ",0.0629],["マジェスティックウォリアーMajestic Warrior(米)",0.0622]],"トーセンラー":[["リアルインパクト",0.6204],["ディーマジェスティ",0.4724],["ダノンバラード",0.462],["フィエールマン",0.4279],["ヴィクトワールピサ",0.3853],["ハーツクライ",0.3225],["ブラックタイド",0.3199],["ディープブリランテ",0.2848]],"ドゥラメンテ":[["ルーラーシップ",0.7792],["サートゥルナーリア",0.5718],["レイデオロ",0.5313],["ロードカナロア",0.4868],["エピファネイア",0.3617],["キズナ",0.3421],["ディープインパクト",0.3336],["ブリックスアンドモルタルBricks and Mortar(米)",0.3197]],"ドレフォンDrefong(米)":[["シルバーステート",0.4798],["キタサンブラック",0.4798],["リオンディーズ",0.4744],["ニューイヤーズデイ",0.4099],["イスラボニータ",0.3224],["ジャスタウェイ",0.3124],["ロードカナロア",0.2962],["カリフォルニアクロームCalifornia Chrome(米)",0.2754]],"ナダルNadal(米)":[["ヘニーヒューズHenny Hughes(米)",0.7613],["ゴールドドリーム",0.5985],["クリソベリル",0.4735],["ルヴァンスレーヴ",0.4438],["ポエティックフレアPoetic Flare(愛)",0.4102],["パイロPyro(米)",0.3886],["ディスクリートキャットDiscreet Cat(米)",0.3478],["Into Mischief",0.3012]],"ニューイヤーズデイ":[["カリフォルニアクロームCalifornia Chrome(米)",0.722],["アメリカンペイトリオット",0.5737],["カレンブラックヒル",0.5414],["ドレフォンDrefong(米)",0.4099],["モズアスコット",0.2727],["ルヴァンスレーヴ",0.2545],["パイロPyro(米)",0.2336],["ヘニーヒューズHenny Hughes(米)",0.2124]],"ノーブルミッションNoble Mission(英)":[["ヴァンゴッホ",0.6168],["マクフィMakfi(英)",0.5989],["シュヴァルグラン",0.4972],["ロゴタイプ",0.4967],["ストロングリターン",0.4305],["モーニン",0.4081],["ダノンキングリー",0.3641],["ダノンスマッシュ",0.3476]],"ハーツクライ":[["ディープインパクト",0.7312],["ゴールドシップ",0.6827],["サトノダイヤモンド",0.6486],["ブラックタイド",0.5882],["スワーヴリチャード",0.5368],["ジャスタウェイ",0.5228],["オルフェーヴル",0.51],["トーセンラー",0.3225]],"ハービンジャーHarbinger(英)":[["シスキンSiskin(米)",0.4961],["タリスマニックTalismanic(英)",0.3477],["エピファネイア",0.3414],["ポエティックフレアPoetic Flare(愛)",0.3357],["ディープインパクト",0.3027],["サートゥルナーリア",0.2912],["ハーツクライ",0.2828],["イスラボニータ",0.2713]],"バゴBago(仏)":[["ベンバトルBenbatl(英)",0.576],["サンダースノーThunder Snow(愛)",0.5006],["ビーチパトロールBeach Patrol(米)",0.2399],["エイシンヒカリ",0.2297],["ロジャーバローズ",0.2233],["ラブリーデイ",0.2203],["リアルスティール",0.1489],["コントレイル",0.1466]],"パイロPyro(米)":[["シニスターミニスターSinister Minister(米)",0.6349],["ヘニーヒューズHenny Hughes(米)",0.4588],["ルヴァンスレーヴ",0.4183],["ナダルNadal(米)",0.3886],["マジェスティックウォリアーMajestic Warrior(米)",0.3433],["ロージズインメイRoses in May(米)",0.3244],["ビーチパトロールBeach Patrol(米)",0.2734],["ミッキーアイル",0.2405]],"ビッグアーサー":[["ファインニードル",0.6564],["ダイワメジャー",0.6527],["イスラボニータ",0.5295],["タワーオブロンドン",0.4714],["ミッキーアイル",0.4595],["ディスクリートキャットDiscreet Cat(米)",0.3709],["タリスマニックTalismanic(英)",0.2917],["ダノンプレミアム",0.2748]],"ビーチパトロールBeach Patrol(米)":[["キングカメハメハ",0.4532],["ロージズインメイRoses in May(米)",0.4509],["ウインブライト",0.4267],["マジェスティックウォリアーMajestic Warrior(米)",0.4026],["ヴィクトワールピサ",0.3435],["シニスターミニスターSinister Minister(米)",0.2962],["エイシンフラッシュ",0.2845],["パイロPyro(米)",0.2734]],"ファインニードル":[["ビッグアーサー",0.6564],["ディスクリートキャットDiscreet Cat(米)",0.4745],["ダイワメジャー",0.4582],["タリスマニックTalismanic(英)",0.42],["イスラボニータ",0.4096],["タワーオブロンドン",0.3724],["ミッキーアイル",0.3608],["ロードカナロア",0.3149]],"フィエールマン":[["ダノンバラード",0.5877],["ストロングリターン",0.5445],["ウインブライト",0.5178],["ロジャーバローズ",0.5147],["シュヴァルグラン",0.4604],["グレーターロンドン",0.44],["ゴールドシップ",0.4365],["エイシンフラッシュ",0.4343]],"フィレンツェファイア":[["ダノンプレミアム",0.6035],["ミスチヴィアスアレックスMischevious Alex(米)",0.5195],["ヴァンゴッホ",0.4907],["リアルインパクト",0.3894],["クリソベリル",0.388],["コントレイル",0.3798],["ダノンキングリー",0.3716],["キセキ",0.3715]],"フォーウィールドライブFour Wheel Drive(米)":[["ミスチヴィアスアレックスMischevious Alex(米)",0.6674],["シャンハイボビーShanghai Bobby(米)",0.5315],["ディスクリートキャットDiscreet Cat(米)",0.4731],["Into Mischief",0.4409],["ファインニードル",0.2457],["フィレンツェファイア",0.2305],["ブリックスアンドモルタルBricks and Mortar(米)",0.2284],["ロジャーバローズ",0.2018]],"ブラックタイド":[["オルフェーヴル",0.701],["ハーツクライ",0.5882],["ディープインパクト",0.5547],["ジャスタウェイ",0.4927],["スワーヴリチャード",0.4426],["サトノダイヤモンド",0.4113],["ダノンバラード",0.4041],["ゴールドシップ",0.3953]],"ブリックスアンドモルタルBricks and Mortar(米)":[["マインドユアビスケッツMind Your Biscuits(米)",0.4745],["シャンハイボビーShanghai Bobby(米)",0.4513],["キズナ",0.3872],["シルバーステート",0.3687],["ホッコータルマエ",0.3398],["ドゥラメンテ",0.3197],["リオンディーズ",0.2497],["フォーウィールドライブFour Wheel Drive(米)",0.2284]],"ヘニーヒューズHenny Hughes(米)":[["ナダルNadal(米)",0.7613],["ディスクリートキャットDiscreet Cat(米)",0.5536],["ルヴァンスレーヴ",0.474],["パイロPyro(米)",0.4588],["シャンハイボビーShanghai Bobby(米)",0.3884],["シニスターミニスターSinister Minister(米)",0.3668],["Into Mischief",0.348],["マインドユアビスケッツMind Your Biscuits(米)",0.3184]],"ベンバトルBenbatl(英)":[["サンダースノーThunder Snow(愛)",0.6901],["バゴBago(仏)",0.576],["フィエールマン",0.4258],["ウインブライト",0.3327],["ダノンキングリー",0.2934],["シュヴァルグラン",0.2832],["エイシンフラッシュ",0.2631],["キセキ",0.2586]],"ホッコータルマエ":[["シニスターミニスターSinister Minister(米)",0.5561],["エスポワールシチー",0.5341],["マインドユアビスケッツMind Your Biscuits(米)",0.3443],["マジェスティックウォリアーMajestic Warrior(米)",0.344],["ブリックスアンドモルタルBricks and Mortar(米)",0.3398],["ドゥラメンテ",0.31],["ロードカナロア",0.3044],["キングカメハメハ",0.2889]],"ポエティックフレアPoetic Flare(愛)":[["タリスマニックTalismanic(英)",0.4511],["ナダルNadal(米)",0.4102],["シスキンSiskin(米)",0.4082],["ハービンジャーHarbinger(英)",0.3357],["エイシンフラッシュ",0.3117],["カリフォルニアクロームCalifornia Chrome(米)",0.3078],["モズアスコット",0.3062],["サートゥルナーリア",0.2981]],"マインドユアビスケッツMind Your Biscuits(米)":[["ブリックスアンドモルタルBricks and Mortar(米)",0.4745],["ホッコータルマエ",0.3443],["マジェスティックウォリアーMajestic Warrior(米)",0.343],["シャンハイボビーShanghai Bobby(米)",0.3419],["リアルインパクト",0.3412],["ヘニーヒューズHenny Hughes(米)",0.3184],["ディスクリートキャットDiscreet Cat(米)",0.2981],["ミスチヴィアスアレックスMischevious Alex(米)",0.2613]],"マクフィMakfi(英)":[["ノーブルミッションNoble Mission(英)",0.5989],["タリスマニックTalismanic(英)",0.4843],["ヴァンゴッホ",0.4839],["ストロングリターン",0.3507],["ロゴタイプ",0.2997],["マテラスカイ",0.2478],["シャンハイボビーShanghai Bobby(米)",0.2397],["シスキンSiskin(米)",0.2306]],"マジェスティックウォリアーMajestic Warrior(米)":[["ロージズインメイRoses in May(米)",0.7585],["シニスターミニスターSinister Minister(米)",0.5575],["ストロングリターン",0.4236],["ビーチパトロールBeach Patrol(米)",0.4026],["ロゴタイプ",0.3749],["ホッコータルマエ",0.344],["パイロPyro(米)",0.3433],["マインドユアビスケッツMind Your Biscuits(米)",0.343]],"マテラスカイ":[["ロゴタイプ",0.5375],["ダノンスマッシュ",0.509],["ミスターメロディ",0.4276],["ダノンキングリー",0.3765],["エスポワールシチー",0.3694],["ストロングリターン",0.3122],["ディーマジェスティ",0.2713],["ノーブルミッションNoble Mission(英)",0.2702]],"ミスターメロディ":[["ロゴタイプ",0.4676],["レッドファルクス",0.4487],["ダノンプレミアム",0.4442],["マテラスカイ",0.4276],["ヴァンゴッホ",0.4193],["ダノンスマッシュ",0.4035],["モズアスコット",0.393],["ダノンキングリー",0.353]],"ミスチヴィアスアレックスMischevious Alex(米)":[["Into Mischief",0.7089],["フォーウィールドライブFour Wheel Drive(米)",0.6674],["フィレンツェファイア",0.5195],["ディスクリートキャットDiscreet Cat(米)",0.5114],["シャンハイボビーShanghai Bobby(米)",0.4417],["ヴァンゴッホ",0.3973],["ダノンレジェンド",0.2945],["ヘニーヒューズHenny Hughes(米)",0.2877]],"ミッキーアイル":[["モズアスコット",0.5289],["ルヴァンスレーヴ",0.4899],["タワーオブロンドン",0.4732],["ビッグアーサー",0.4595],["ファインニードル",0.3608],["クリソベリル",0.3386],["エイシンヒカリ",0.335],["ロードカナロア",0.2998]],"モズアスコット":[["リアルスティール",0.5454],["ミッキーアイル",0.5289],["ルヴァンスレーヴ",0.526],["ラブリーデイ",0.4792],["ミスターメロディ",0.393],["サトノアラジン",0.3913],["リオンディーズ",0.3675],["ジャスタウェイ",0.3672]],"モーニン":[["アジアエクスプレス",0.8156],["ノーブルミッションNoble Mission(英)",0.4081],["ダノンキングリー",0.3077],["シュヴァルグラン",0.2751],["ダノンスマッシュ",0.2748],["ロゴタイプ",0.2248],["ベンバトルBenbatl(英)",0.1949],["キセキ",0.1853]],"モーリス":[["エピファネイア",0.7425],["スクリーンヒーロー",0.5694],["ロードカナロア",0.2953],["ファインニードル",0.2366],["ダイワメジャー",0.229],["ドレフォンDrefong(米)",0.2216],["サートゥルナーリア",0.208],["ミッキーアイル",0.2058]],"ラブリーデイ":[["モズアスコット",0.4792],["キンシャサノキセキ",0.4642],["コパノリッキー",0.4377],["アドマイヤマーズ",0.4152],["サトノアラジン",0.3817],["シュヴァルグラン",0.3636],["ヴィクトワールピサ",0.3534],["カリフォルニアクロームCalifornia Chrome(米)",0.3301]],"リアルインパクト":[["トーセンラー",0.6204],["ディーマジェスティ",0.4634],["ダノンプレミアム",0.4089],["フィレンツェファイア",0.3894],["ダノンキングリー",0.3708],["マインドユアビスケッツMind Your Biscuits(米)",0.3412],["マジェスティックウォリアーMajestic Warrior(米)",0.3323],["ディープブリランテ",0.3277]],"リアルスティール":[["コントレイル",0.56],["モズアスコット",0.5454],["サトノアラジン",0.4494],["リオンディーズ",0.4389],["アルアイン",0.4258],["アドマイヤマーズ",0.4212],["ディープインパクト",0.4102],["サトノダイヤモンド",0.3928]],"リオンディーズ":[["キズナ",0.5281],["シルバーステート",0.5133],["ドレフォンDrefong(米)",0.4744],["リアルスティール",0.4389],["ジャスタウェイ",0.3749],["イスラボニータ",0.368],["モズアスコット",0.3675],["ロードカナロア",0.2829]],"ルヴァンスレーヴ":[["モズアスコット",0.526],["クリソベリル",0.5228],["ミッキーアイル",0.4899],["ヘニーヒューズHenny Hughes(米)",0.474],["ナダルNadal(米)",0.4438],["パイロPyro(米)",0.4183],["ゴールドドリーム",0.382],["インディチャンプ",0.3301]],"ルーラーシップ":[["ドゥラメンテ",0.7792],["キングカメハメハ",0.5951],["サートゥルナーリア",0.5861],["ロードカナロア",0.5004],["キセキ",0.4903],["レイデオロ",0.4214],["ロジャーバローズ",0.3125],["ホッコータルマエ",0.2741]],"レイデオロ":[["キズナ",0.6245],["キタサンブラック",0.6196],["ドゥラメンテ",0.5313],["サートゥルナーリア",0.4821],["ルーラーシップ",0.4214],["ロードカナロア",0.3471],["エピファネイア",0.2711],["ハービンジャーHarbinger(英)",0.2667]],"レッドファルクス":[["ディーマジェスティ",0.5275],["インディチャンプ",0.5089],["ミスターメロディ",0.4487],["ダノンスマッシュ",0.3854],["ダノンキングリー",0.3378],["グレーターロンドン",0.3073],["リアルインパクト",0.2743],["ミスチヴィアスアレックスMischevious Alex(米)",0.2732]],"ロゴタイプ":[["ストロングリターン",0.666],["シュヴァルグラン",0.5711],["ヴィクトワールピサ",0.5381],["マテラスカイ",0.5375],["ノーブルミッションNoble Mission(英)",0.4967],["ミスターメロディ",0.4676],["マジェスティックウォリアーMajestic Warrior(米)",0.3749],["ダノンキングリー",0.3625]],"ロジャーバローズ":[["アルアイン",0.6041],["フィエールマン",0.5147],["エイシンヒカリ",0.4718],["ダイワメジャー",0.4658],["スワーヴリチャード",0.4619],["グレーターロンドン",0.419],["ディープインパクト",0.3506],["ルーラーシップ",0.3125]],"ロージズインメイRoses in May(米)":[["マジェスティックウォリアーMajestic Warrior(米)",0.7585],["シニスターミニスターSinister Minister(米)",0.5461],["ビーチパトロールBeach Patrol(米)",0.4509],["ヴィクトワールピサ",0.3978],["ディープブリランテ",0.3427],["エスポワールシチー",0.3253],["パイロPyro(米)",0.3244],["ホッコータルマエ",0.2766]],"ロードカナロア":[["ルーラーシップ",0.5004],["サートゥルナーリア",0.495],["ドゥラメンテ",0.4868],["イスラボニータ",0.4158],["ダイワメジャー",0.3985],["レイデオロ",0.3471],["ファインニードル",0.3149],["ホッコータルマエ",0.3044]],"ヴァンゴッホ":[["ノーブルミッションNoble Mission(英)",0.6168],["フィレンツェファイア",0.4907],["マクフィMakfi(英)",0.4839],["シスキンSiskin(米)",0.4772],["ミスターメロディ",0.4193],["ミスチヴィアスアレックスMischevious Alex(米)",0.3973],["クリソベリル",0.3835],["シャンハイボビーShanghai Bobby(米)",0.3784]],"ヴィクトワールピサ":[["ロゴタイプ",0.5381],["シュヴァルグラン",0.5267],["ストロングリターン",0.4583],["ディープブリランテ",0.436],["ロージズインメイRoses in May(米)",0.3978],["トーセンラー",0.3853],["ラブリーデイ",0.3534],["ビーチパトロールBeach Patrol(米)",0.3435]]};
+
+const LINE_COLORS={
+  "サンデーサイレンス系":"#e63946",
+  "キングカメハメハ系":"#457b9d",
+  "ロベルト系":"#2a9d8f",
+  "ノーザンダンサー系":"#e9c46a",
+  "デインヒル系":"#f4a261",
+  "サドラーズウェルズ系":"#264653",
+  "ストームキャット系":"#a8dadc",
+  "ミスタープロスペクター系":"#6d6875",
+  "エーピーインディ系":"#b5838d",
+  "デピュティミニスター系":"#ffb4a2",
+  "その他":"#606060",
+  "不明":"#404040"
+};
+
+const COLOR_MODES=[
+  {id:"sire_line",label:"系統別",fn:d=>LINE_COLORS[d.sire_line]||"#606060"},
+  {id:"distance",label:"距離適性",fn:d=>{
+    const s=d.sprint_rate,m=d.mile_rate,md=d.middle_rate,l=d.long_rate;
+    const r=Math.round(255*s+200*m+100*md),g=Math.round(100*s+200*m+255*md+180*l),b=Math.round(50*s+100*m+150*md+255*l);
+    return `rgb(${Math.min(r,255)},${Math.min(g,255)},${Math.min(b,255)})`;
+  }},
+  {id:"surface",label:"馬場適性 (芝/ダート)",fn:d=>{
+    const t=d.turf_rate,dt=d.dirt_rate;
+    if(t>0.4)return "#2ecc71";
+    if(dt>0.05)return "#e67e22";
+    if(t>0.2)return "#82e0aa";
+    return "#aab7b8";
+  }},
+  {id:"top3",label:"複勝率",fn:d=>{
+    const v=d.top3_rate;
+    const r=Math.round(255*(1-v)+50*v),g=Math.round(80*(1-v)+220*v),b=Math.round(80*(1-v)+100*v);
+    return `rgb(${r},${g},${b})`;
+  }},
+  {id:"mstn",label:"ミオスタチン型",fn:d=>{
+    if(d.mstn_c>=0.8)return "#ff4757";
+    if(d.mstn_c>=0.4)return "#ffa502";
+    if(d.mstn_t>=0.8)return "#3742fa";
+    return "#a4b0be";
+  }},
+  {id:"runners",label:"出走頭数",fn:d=>{
+    const v=Math.min(d.n_runners/250,1);
+    return `rgb(${Math.round(40+200*v)},${Math.round(60+150*v)},${Math.round(120+100*v)})`;
+  }}
+];
+
+let currentMode="sire_line";
+let selected=null;
+let hovered=null;
+let offsetX=0,offsetY=0,scale=1;
+let dragging=false,dragStartX=0,dragStartY=0;
+const canvas=document.getElementById("chart");
+const ctx=canvas.getContext("2d");
+const tooltip=document.getElementById("tooltip");
+
+function resize(){
+  const rect=canvas.parentElement.getBoundingClientRect();
+  canvas.width=rect.width*devicePixelRatio;
+  canvas.height=(rect.height-44)*devicePixelRatio;
+  canvas.style.width=rect.width+"px";
+  canvas.style.height=(rect.height-44)+"px";
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  draw();
+}
+window.addEventListener("resize",resize);
+
+function getColorFn(){return COLOR_MODES.find(m=>m.id===currentMode).fn}
+
+function worldToScreen(wx,wy){
+  const cw=canvas.width/devicePixelRatio,ch=canvas.height/devicePixelRatio;
+  const xs=DATA.map(d=>d.x),ys=DATA.map(d=>d.y);
+  const xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);
+  const pad=60;
+  const sx=(wx-xmin)/(xmax-xmin)*(cw-2*pad)+pad;
+  const sy=(1-(wy-ymin)/(ymax-ymin))*(ch-2*pad)+pad;
+  return [(sx+offsetX)*scale+cw*(1-scale)/2,(sy+offsetY)*scale+ch*(1-scale)/2];
+}
+
+function screenToWorld(px,py){
+  const cw=canvas.width/devicePixelRatio,ch=canvas.height/devicePixelRatio;
+  const xs=DATA.map(d=>d.x),ys=DATA.map(d=>d.y);
+  const xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);
+  const pad=60;
+  const sx=(px-cw*(1-scale)/2)/scale-offsetX;
+  const sy=(py-ch*(1-scale)/2)/scale-offsetY;
+  const wx=(sx-pad)/(cw-2*pad)*(xmax-xmin)+xmin;
+  const wy=(1-(sy-pad)/(ch-2*pad))*(ymax-ymin)+ymin;
+  return [wx,wy];
+}
+
+function draw(){
+  const cw=canvas.width/devicePixelRatio,ch=canvas.height/devicePixelRatio;
+  ctx.clearRect(0,0,cw,ch);
+  const colorFn=getColorFn();
+
+  if(selected&&SIM[selected]){
+    const simList=SIM[selected];
+    const selData=DATA.find(d=>d.name===selected);
+    if(selData){
+      const[sx,sy]=worldToScreen(selData.x,selData.y);
+      simList.forEach(([name,score])=>{
+        const other=DATA.find(d=>d.name===name);
+        if(other){
+          const[ox,oy]=worldToScreen(other.x,other.y);
+          ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ox,oy);
+          ctx.strokeStyle=`rgba(255,107,53,${score*0.5})`;
+          ctx.lineWidth=score*3;ctx.stroke();
+        }
+      });
+    }
+  }
+
+  DATA.forEach(d=>{
+    const[px,py]=worldToScreen(d.x,d.y);
+    const r=Math.max(4,Math.min(12,Math.sqrt(d.n_runners)*0.8));
+    const isSelected=d.name===selected;
+    const isHovered=d.name===hovered;
+    const isSimilar=selected&&SIM[selected]&&SIM[selected].some(([n])=>n===d.name);
+
+    ctx.beginPath();
+    ctx.arc(px,py,isSelected?r+4:isHovered?r+2:r,0,Math.PI*2);
+
+    if(selected&&!isSelected&&!isSimilar){
+      ctx.fillStyle=colorFn(d).replace("rgb","rgba").replace(")",",0.15)");
+    }else{
+      ctx.fillStyle=colorFn(d);
+    }
+    ctx.fill();
+
+    if(isSelected){
+      ctx.strokeStyle="#fff";ctx.lineWidth=2.5;ctx.stroke();
+      ctx.beginPath();ctx.arc(px,py,r+8,0,Math.PI*2);
+      ctx.strokeStyle="rgba(255,107,53,0.4)";ctx.lineWidth=1;ctx.stroke();
+    }else if(isHovered){
+      ctx.strokeStyle="rgba(255,255,255,0.6)";ctx.lineWidth=1.5;ctx.stroke();
+    }
+
+    const showLabel=isSelected||isHovered||isSimilar||d.n_runners>100||scale>1.5;
+    if(showLabel){
+      ctx.font=`${isSelected?'bold ':''}${isSelected?'12':'10'}px 'Noto Sans JP',sans-serif`;
+      ctx.fillStyle=isSelected?"#fff":isSimilar?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)";
+      ctx.textAlign="center";
+      const label=d.name.length>10?d.name.slice(0,10)+"…":d.name;
+      ctx.fillText(label,px,py-r-5);
+    }
+  });
+}
+
+function findNearest(mx,my){
+  let best=null,bestDist=Infinity;
+  DATA.forEach(d=>{
+    const[px,py]=worldToScreen(d.x,d.y);
+    const dist=Math.hypot(px-mx,py-my);
+    if(dist<bestDist){bestDist=dist;best=d}
+  });
+  return bestDist<20?best:null;
+}
+
+canvas.addEventListener("mousemove",e=>{
+  if(dragging){
+    offsetX+=(e.movementX)/scale;
+    offsetY+=(e.movementY)/scale;
+    draw();return;
+  }
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const d=findNearest(mx,my);
+  hovered=d?d.name:null;
+  canvas.style.cursor=d?"pointer":"grab";
+  draw();
+  if(d){
+    showTooltip(d,e.clientX,e.clientY);
+  }else{
+    tooltip.style.display="none";
+  }
+});
+
+canvas.addEventListener("mousedown",e=>{
+  dragging=true;dragStartX=e.clientX;dragStartY=e.clientY;
+  canvas.style.cursor="grabbing";
+});
+canvas.addEventListener("mouseup",e=>{
+  const moved=Math.hypot(e.clientX-dragStartX,e.clientY-dragStartY);
+  dragging=false;
+  canvas.style.cursor="grab";
+  if(moved<5){
+    const rect=canvas.getBoundingClientRect();
+    const d=findNearest(e.clientX-rect.left,e.clientY-rect.top);
+    if(d){selectSire(d.name)}
+  }
+});
+canvas.addEventListener("mouseleave",()=>{dragging=false;hovered=null;tooltip.style.display="none";draw()});
+
+canvas.addEventListener("wheel",e=>{
+  e.preventDefault();
+  const delta=e.deltaY>0?0.9:1.1;
+  scale=Math.max(0.3,Math.min(8,scale*delta));
+  draw();
+},{passive:false});
+
+document.getElementById("zoom-in").onclick=()=>{scale=Math.min(8,scale*1.3);draw()};
+document.getElementById("zoom-out").onclick=()=>{scale=Math.max(0.3,scale/1.3);draw()};
+document.getElementById("zoom-reset").onclick=()=>{scale=1;offsetX=0;offsetY=0;draw()};
+
+function showTooltip(d,cx,cy){
+  const mstnLabel=d.mstn_c>=0.8?"CC型":d.mstn_c>=0.4?"CT型":d.mstn_t>=0.8?"TT型":"推定中";
+  tooltip.innerHTML=`
+    <div class="name">${d.name}</div>
+    <span class="line-tag" style="background:${LINE_COLORS[d.sire_line]||'#606060'};color:#fff">${d.sire_line}</span>
+    <div class="stats">
+      <span class="stat-label">出走数</span><span class="stat-value">${d.n_runners}</span>
+      <span class="stat-label">複勝率</span><span class="stat-value">${(d.top3_rate*100).toFixed(1)}%</span>
+      <span class="stat-label">勝率</span><span class="stat-value">${(d.win_rate*100).toFixed(1)}%</span>
+      <span class="stat-label">MSTN</span><span class="stat-value">${mstnLabel}</span>
+      <span class="stat-label">スプリント</span><span class="stat-value">${(d.sprint_rate*100).toFixed(0)}%</span>
+      <span class="stat-label">マイル</span><span class="stat-value">${(d.mile_rate*100).toFixed(0)}%</span>
+      <span class="stat-label">中距離</span><span class="stat-value">${(d.middle_rate*100).toFixed(0)}%</span>
+      <span class="stat-label">長距離</span><span class="stat-value">${(d.long_rate*100).toFixed(0)}%</span>
+      <span class="stat-label">芝率</span><span class="stat-value">${(d.turf_rate*100).toFixed(0)}%</span>
+      <span class="stat-label">ダ率</span><span class="stat-value">${(d.dirt_rate*100).toFixed(0)}%</span>
+    </div>`;
+  tooltip.style.display="block";
+  const tw=tooltip.offsetWidth,th=tooltip.offsetHeight;
+  tooltip.style.left=Math.min(cx+12,window.innerWidth-tw-8)+"px";
+  tooltip.style.top=Math.min(cy+12,window.innerHeight-th-8)+"px";
+}
+
+function selectSire(name){
+  selected=name;
+  const d=DATA.find(x=>x.name===name);
+  if(!d)return;
+  draw();
+  const sim=SIM[name]||[];
+  const mstnLabel=d.mstn_c>=0.8?"CC型 (スプリンター)":d.mstn_c>=0.4?"CT型 (マイラー)":d.mstn_t>=0.8?"TT型 (中長距離)":"推定中";
+  const panel=document.getElementById("detail-content");
+  panel.innerHTML=`
+    <div class="selected-sire">${name}</div>
+    <span class="line-tag" style="background:${LINE_COLORS[d.sire_line]||'#606060'};color:#fff;display:inline-block;padding:2px 8px;border-radius:3px;font-size:.7rem;margin-bottom:12px">${d.sire_line}</span>
+    <div style="margin:8px 0">
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:2px">
+        <span style="color:var(--text-dim)">出走頭数</span><span style="font-weight:600">${d.n_runners}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:2px">
+        <span style="color:var(--text-dim)">複勝率</span><span style="font-weight:600;color:var(--accent2)">${(d.top3_rate*100).toFixed(1)}%</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:2px">
+        <span style="color:var(--text-dim)">勝率</span><span style="font-weight:600">${(d.win_rate*100).toFixed(1)}%</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:2px">
+        <span style="color:var(--text-dim)">MSTN型</span><span style="font-weight:600">${mstnLabel}</span>
+      </div>
+    </div>
+    <h2 style="margin-top:16px">距離分布</h2>
+    <div class="dist-bar">
+      <span style="width:${d.sprint_rate*100}%;background:#e63946" title="Sprint ${(d.sprint_rate*100).toFixed(0)}%"></span>
+      <span style="width:${d.mile_rate*100}%;background:#f4a261" title="Mile ${(d.mile_rate*100).toFixed(0)}%"></span>
+      <span style="width:${d.middle_rate*100}%;background:#2a9d8f" title="Middle ${(d.middle_rate*100).toFixed(0)}%"></span>
+      <span style="width:${d.long_rate*100}%;background:#264653" title="Long ${(d.long_rate*100).toFixed(0)}%"></span>
+    </div>
+    <div style="display:flex;gap:8px;font-size:.65rem;color:var(--text-dim);margin-bottom:12px">
+      <span><span style="color:#e63946">■</span> Sprint ${(d.sprint_rate*100).toFixed(0)}%</span>
+      <span><span style="color:#f4a261">■</span> Mile ${(d.mile_rate*100).toFixed(0)}%</span>
+      <span><span style="color:#2a9d8f">■</span> Middle ${(d.middle_rate*100).toFixed(0)}%</span>
+      <span><span style="color:#264653">■</span> Long ${(d.long_rate*100).toFixed(0)}%</span>
+    </div>
+    <h2 style="margin-top:8px">馬場適性</h2>
+    <div style="display:flex;gap:16px;font-size:.75rem;margin:4px 0 12px">
+      <div><span style="color:var(--text-dim)">芝</span> <span style="font-weight:600;color:#2ecc71">${(d.turf_rate*100).toFixed(0)}%</span>
+      <span style="color:var(--text-dim);font-size:.65rem">(TOP3: ${(d.turf_top3*100).toFixed(0)}%)</span></div>
+      <div><span style="color:var(--text-dim)">ダ</span> <span style="font-weight:600;color:#e67e22">${(d.dirt_rate*100).toFixed(0)}%</span></div>
+    </div>
+    <h2>類似種牡馬 (Top 8)</h2>
+    <div class="similar-list">${sim.map(([n,s])=>`
+      <div class="similar-item" onclick="selectSire('${n.replace(/'/g,"\\'")}')">
+        <span>${n.length>16?n.slice(0,16)+'…':n}</span>
+        <span class="similar-score">${(s*100).toFixed(1)}%</span>
+      </div>`).join("")}
+    </div>`;
+}
+
+function initColorModes(){
+  const container=document.getElementById("color-modes");
+  COLOR_MODES.forEach(m=>{
+    const btn=document.createElement("button");
+    btn.className="color-mode-btn"+(m.id===currentMode?" active":"");
+    btn.textContent=m.label;
+    btn.onclick=()=>{
+      currentMode=m.id;
+      container.querySelectorAll(".color-mode-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      updateLegend();
+      draw();
+    };
+    container.appendChild(btn);
+  });
+}
+
+function updateLegend(){
+  const container=document.getElementById("legend");
+  container.innerHTML="";
+  if(currentMode==="sire_line"){
+    Object.entries(LINE_COLORS).forEach(([name,color])=>{
+      const count=DATA.filter(d=>d.sire_line===name).length;
+      if(count===0)return;
+      container.innerHTML+=`<div class="legend-item"><div class="legend-dot" style="background:${color}"></div>${name} (${count})</div>`;
+    });
+  }else if(currentMode==="distance"){
+    container.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(255,100,50)"></div>スプリンター</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(200,200,100)"></div>マイラー</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(100,255,150)"></div>中距離</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(50,180,255)"></div>ステイヤー</div>`;
+  }else if(currentMode==="surface"){
+    container.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:#2ecc71"></div>芝主体 (>40%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#82e0aa"></div>芝寄り (20-40%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e67e22"></div>ダート寄り</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#aab7b8"></div>バランス</div>`;
+  }else if(currentMode==="top3"){
+    container.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(50,220,100)"></div>高複勝率 (>30%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(150,150,90)"></div>中程度 (~20%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(255,80,80)"></div>低複勝率 (<15%)</div>`;
+  }else if(currentMode==="mstn"){
+    container.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:#ff4757"></div>CC型 (スプリント)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ffa502"></div>CT型 (マイル~中距離)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3742fa"></div>TT型 (中~長距離)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#a4b0be"></div>推定中</div>`;
+  }else if(currentMode==="runners"){
+    container.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(240,210,220)"></div>多頭数 (>200)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(140,130,170)"></div>中程度 (~100)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(40,60,120)"></div>少頭数 (<30)</div>`;
+  }
+}
+
+const searchInput=document.getElementById("search");
+const searchResults=document.getElementById("search-results");
+searchInput.addEventListener("input",()=>{
+  const q=searchInput.value.toLowerCase();
+  if(!q){searchResults.innerHTML="";return}
+  const matches=DATA.filter(d=>d.name.toLowerCase().includes(q)).slice(0,10);
+  searchResults.innerHTML=matches.map(d=>`<div class="search-result" onclick="selectSire('${d.name.replace(/'/g,"\\'")}');document.getElementById('search').value=''">${d.name}</div>`).join("");
+});
+
+initColorModes();
+updateLegend();
+resize();
+</script>
+</body>
+</html>

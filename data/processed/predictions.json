@@ -1,0 +1,673 @@
+{
+  "model_evaluation": {
+    "accuracy": 0.875,
+    "f1_score": 0.6633,
+    "roc_auc": 0.8868,
+    "val_size": 536,
+    "positive_rate": 0.2239
+  },
+  "feature_importance": {
+    "odds": 755,
+    "log_odds": 401,
+    "prize_per_race": 213,
+    "career_top3": 207,
+    "weight_distance_ratio": 114,
+    "trainer_encoded": 96,
+    "weight": 92,
+    "career_starts": 92,
+    "win_rate": 91,
+    "top3_rate": 80
+  },
+  "mlflow_run_id": "6119e837d76a4d79b59db3fd4673429c",
+  "races": [
+    {
+      "race_id": 202603220001,
+      "race_name": "第22回京都記念",
+      "date": "2026-03-22",
+      "racecourse": "京都",
+      "distance": 1900,
+      "surface": "ダート",
+      "grade": "G1",
+      "predictions": [
+        {
+          "predicted_rank": 1,
+          "horse_number": 11,
+          "horse_name": "ジオグリフライト",
+          "jockey": "池添謙一",
+          "odds": 7.1,
+          "top3_probability": 94.9,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 2,
+          "horse_number": 2,
+          "horse_name": "シュネルマイスター二世",
+          "jockey": "戸崎圭太",
+          "odds": 5.8,
+          "top3_probability": 94.2,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 3,
+          "horse_number": 10,
+          "horse_name": "ドゥラエレーデ",
+          "jockey": "三浦皇成",
+          "odds": 3.7,
+          "top3_probability": 93.8,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 4,
+          "horse_number": 8,
+          "horse_name": "オニャンコポン二世",
+          "jockey": "福永祐一",
+          "odds": 7.1,
+          "top3_probability": 93.2,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 5,
+          "horse_number": 3,
+          "horse_name": "トウショウファルコ",
+          "jockey": "石橋脩",
+          "odds": 2.0,
+          "top3_probability": 93.0,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 6,
+          "horse_number": 5,
+          "horse_name": "スタニングローズ二世",
+          "jockey": "松山弘平",
+          "odds": 4.0,
+          "top3_probability": 92.9,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 7,
+          "horse_number": 12,
+          "horse_name": "クロノジェネシスⅡ",
+          "jockey": "松山弘平",
+          "odds": 9.3,
+          "top3_probability": 54.4,
+          "recommendation": "▲ 単穴"
+        },
+        {
+          "predicted_rank": 8,
+          "horse_number": 7,
+          "horse_name": "アルファネクスト",
+          "jockey": "横山武史",
+          "odds": 10.6,
+          "top3_probability": 38.7,
+          "recommendation": "△ 連下"
+        },
+        {
+          "predicted_rank": 9,
+          "horse_number": 6,
+          "horse_name": "マイティウインド",
+          "jockey": "浜中俊",
+          "odds": 10.6,
+          "top3_probability": 38.0,
+          "recommendation": "△ 連下"
+        },
+        {
+          "predicted_rank": 10,
+          "horse_number": 4,
+          "horse_name": "ウインマリリン",
+          "jockey": "三浦皇成",
+          "odds": 13.2,
+          "top3_probability": 24.5,
+          "recommendation": "☆ 穴馬"
+        },
+        {
+          "predicted_rank": 11,
+          "horse_number": 9,
+          "horse_name": "アカイイト二世",
+          "jockey": "田辺裕信",
+          "odds": 21.7,
+          "top3_probability": 13.0,
+          "recommendation": "☆ 穴馬"
+        },
+        {
+          "predicted_rank": 12,
+          "horse_number": 1,
+          "horse_name": "ソールオリエンス",
+          "jockey": "田辺裕信",
+          "odds": 49.9,
+          "top3_probability": 4.2,
+          "recommendation": "☆ 穴馬"
+        }
+      ]
+    },
+    {
+      "race_id": 202603230002,
+      "race_name": "第25回函館特別",
+      "date": "2026-03-23",
+      "racecourse": "函館",
+      "distance": 1200,
+      "surface": "芝",
+      "grade": "OP",
+      "predictions": [
+        {
+          "predicted_rank": 1,
+          "horse_number": 7,
+          "horse_name": "メイケイエール",
+          "jockey": "C.ルメール",
+          "odds": 5.8,
+          "top3_probability": 94.8,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 2,
+          "horse_number": 9,
+          "horse_name": "ヴェラアズール二世",
+          "jockey": "M.デムーロ",
+          "odds": 1.1,
+          "top3_probability": 94.4,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 3,
+          "horse_number": 3,
+          "horse_name": "タイトルホルダー二世",
+          "jockey": "武豊",
+          "odds": 6.0,
+          "top3_probability": 94.0,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 4,
+          "horse_number": 10,
+          "horse_name": "ガイアフォース",
+          "jockey": "石橋脩",
+          "odds": 2.8,
+          "top3_probability": 93.4,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 5,
+          "horse_number": 5,
+          "horse_name": "キラーアビリティⅡ",
+          "jockey": "福永祐一",
+          "odds": 2.0,
+          "top3_probability": 93.1,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 6,
+          "horse_number": 4,
+          "horse_name": "アーモンドフラッシュ",
+          "jockey": "田辺裕信",
+          "odds": 12.5,
+          "top3_probability": 40.4,
+          "recommendation": "▲ 単穴"
+        },
+        {
+          "predicted_rank": 7,
+          "horse_number": 1,
+          "horse_name": "プラダリアスター",
+          "jockey": "三浦皇成",
+          "odds": 13.1,
+          "top3_probability": 31.5,
+          "recommendation": "△ 連下"
+        },
+        {
+          "predicted_rank": 8,
+          "horse_number": 8,
+          "horse_name": "ディープスカイ",
+          "jockey": "M.デムーロ",
+          "odds": 15.7,
+          "top3_probability": 24.0,
+          "recommendation": "☆ 穴馬"
+        },
+        {
+          "predicted_rank": 9,
+          "horse_number": 2,
+          "horse_name": "レッドベルオーブ",
+          "jockey": "坂井瑠星",
+          "odds": 18.4,
+          "top3_probability": 20.8,
+          "recommendation": "☆ 穴馬"
+        },
+        {
+          "predicted_rank": 10,
+          "horse_number": 6,
+          "horse_name": "トウショウファルコ",
+          "jockey": "M.デムーロ",
+          "odds": 32.4,
+          "top3_probability": 6.3,
+          "recommendation": "☆ 穴馬"
+        }
+      ]
+    },
+    {
+      "race_id": 202603220003,
+      "race_name": "第13回中京特別",
+      "date": "2026-03-22",
+      "racecourse": "中京",
+      "distance": 2000,
+      "surface": "芝",
+      "grade": "3勝",
+      "predictions": [
+        {
+          "predicted_rank": 1,
+          "horse_number": 9,
+          "horse_name": "リバティゴールド",
+          "jockey": "M.デムーロ",
+          "odds": 3.4,
+          "top3_probability": 93.4,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 2,
+          "horse_number": 7,
+          "horse_name": "タイトルホルダー二世",
+          "jockey": "福永祐一",
+          "odds": 1.5,
+          "top3_probability": 92.9,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 3,
+          "horse_number": 13,
+          "horse_name": "スタニングローズ二世",
+          "jockey": "坂井瑠星",
+          "odds": 8.8,
+          "top3_probability": 71.3,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 4,
+          "horse_number": 1,
+          "horse_name": "プラダリアスター",
+          "jockey": "横山武史",
+          "odds": 8.0,
+          "top3_probability": 68.1,
+          "recommendation": "○ 対抗"
+        },
+        {
+          "predicted_rank": 5,
+          "horse_number": 3,
+          "horse_name": "ガイアフォース",
+          "jockey": "田辺裕信",
+          "odds": 9.0,
+          "top3_probability": 60.3,
+          "recommendation": "○ 対抗"
+        },
+        {
+          "predicted_rank": 6,
+          "horse_number": 6,
+          "horse_name": "ウインマリリン",
+          "jockey": "横山武史",
+          "odds": 8.1,
+          "top3_probability": 57.8,
+          "recommendation": "○ 対抗"
+        },
+        {
+          "predicted_rank": 7,
+          "horse_number": 5,
+          "horse_name": "ブレイブジェネシス",
+          "jockey": "M.デムーロ",
+          "odds": 7.9,
+          "top3_probability": 56.2,
+          "recommendation": "○ 対抗"
+        },
+        {
+          "predicted_rank": 8,
+          "horse_number": 14,
+          "horse_name": "ソールオリエンス",
+          "jockey": "坂井瑠星",
+          "odds": 13.6,
+          "top3_probability": 45.7,
+          "recommendation": "▲ 単穴"
+        },
+        {
+          "predicted_rank": 9,
+          "horse_number": 8,
+          "horse_name": "コントレイルスター",
+          "jockey": "池添謙一",
+          "odds": 19.5,
+          "top3_probability": 14.7,
+          "recommendation": "☆ 穴馬"
+        },
+        {
+          "predicted_rank": 10,
+          "horse_number": 2,
+          "horse_name": "エフフォーリアネクスト",
+          "jockey": "田辺裕信",
+          "odds": 25.3,
+          "top3_probability": 9.7,
+          "recommendation": "☆ 穴馬"
+        },
+        {
+          "predicted_rank": 11,
+          "horse_number": 10,
+          "horse_name": "アルファネクスト",
+          "jockey": "三浦皇成",
+          "odds": 27.6,
+          "top3_probability": 5.5,
+          "recommendation": "☆ 穴馬"
+        },
+        {
+          "predicted_rank": 12,
+          "horse_number": 11,
+          "horse_name": "ソダシスプリング",
+          "jockey": "岩田望来",
+          "odds": 29.0,
+          "top3_probability": 5.3,
+          "recommendation": "☆ 穴馬"
+        },
+        {
+          "predicted_rank": 13,
+          "horse_number": 12,
+          "horse_name": "カフェファラオ二世",
+          "jockey": "福永祐一",
+          "odds": 34.4,
+          "top3_probability": 5.2,
+          "recommendation": "☆ 穴馬"
+        },
+        {
+          "predicted_rank": 14,
+          "horse_number": 4,
+          "horse_name": "キングスレイン",
+          "jockey": "三浦皇成",
+          "odds": 31.9,
+          "top3_probability": 4.8,
+          "recommendation": "☆ 穴馬"
+        }
+      ]
+    },
+    {
+      "race_id": 202603230004,
+      "race_name": "第4回阪神特別",
+      "date": "2026-03-23",
+      "racecourse": "阪神",
+      "distance": 1800,
+      "surface": "芝",
+      "grade": "G3",
+      "predictions": [
+        {
+          "predicted_rank": 1,
+          "horse_number": 6,
+          "horse_name": "アーモンドフラッシュ",
+          "jockey": "横山武史",
+          "odds": 2.0,
+          "top3_probability": 94.5,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 2,
+          "horse_number": 8,
+          "horse_name": "マイティウインド",
+          "jockey": "松山弘平",
+          "odds": 5.5,
+          "top3_probability": 94.2,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 3,
+          "horse_number": 9,
+          "horse_name": "キラーアビリティⅡ",
+          "jockey": "岩田望来",
+          "odds": 6.8,
+          "top3_probability": 93.9,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 4,
+          "horse_number": 4,
+          "horse_name": "ジェラルディーナ",
+          "jockey": "浜中俊",
+          "odds": 1.1,
+          "top3_probability": 93.6,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 5,
+          "horse_number": 18,
+          "horse_name": "ナミュールスター",
+          "jockey": "石橋脩",
+          "odds": 4.9,
+          "top3_probability": 93.5,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 6,
+          "horse_number": 2,
+          "horse_name": "カフェファラオ二世",
+          "jockey": "川田将雅",
+          "odds": 1.7,
+          "top3_probability": 93.3,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 7,
+          "horse_number": 13,
+          "horse_name": "コントレイルスター",
+          "jockey": "武豊",
+          "odds": 2.4,
+          "top3_probability": 93.2,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 8,
+          "horse_number": 11,
+          "horse_name": "ソールオリエンス",
+          "jockey": "岩田望来",
+          "odds": 1.1,
+          "top3_probability": 93.2,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 9,
+          "horse_number": 7,
+          "horse_name": "アカイイト二世",
+          "jockey": "M.デムーロ",
+          "odds": 2.4,
+          "top3_probability": 93.2,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 10,
+          "horse_number": 5,
+          "horse_name": "プラダリアスター",
+          "jockey": "C.ルメール",
+          "odds": 8.3,
+          "top3_probability": 73.4,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 11,
+          "horse_number": 16,
+          "horse_name": "デアリングタクト二世",
+          "jockey": "C.ルメール",
+          "odds": 9.8,
+          "top3_probability": 64.2,
+          "recommendation": "○ 対抗"
+        },
+        {
+          "predicted_rank": 12,
+          "horse_number": 12,
+          "horse_name": "ジャスティンロック",
+          "jockey": "石橋脩",
+          "odds": 8.4,
+          "top3_probability": 59.6,
+          "recommendation": "○ 対抗"
+        },
+        {
+          "predicted_rank": 13,
+          "horse_number": 14,
+          "horse_name": "ヴェラアズール二世",
+          "jockey": "福永祐一",
+          "odds": 10.2,
+          "top3_probability": 48.5,
+          "recommendation": "▲ 単穴"
+        },
+        {
+          "predicted_rank": 14,
+          "horse_number": 10,
+          "horse_name": "クロノジェネシスⅡ",
+          "jockey": "武豊",
+          "odds": 11.7,
+          "top3_probability": 47.2,
+          "recommendation": "▲ 単穴"
+        },
+        {
+          "predicted_rank": 15,
+          "horse_number": 15,
+          "horse_name": "ジオグリフライト",
+          "jockey": "武豊",
+          "odds": 12.2,
+          "top3_probability": 43.8,
+          "recommendation": "▲ 単穴"
+        },
+        {
+          "predicted_rank": 16,
+          "horse_number": 3,
+          "horse_name": "ディープスカイ",
+          "jockey": "石橋脩",
+          "odds": 11.0,
+          "top3_probability": 43.1,
+          "recommendation": "▲ 単穴"
+        },
+        {
+          "predicted_rank": 17,
+          "horse_number": 17,
+          "horse_name": "グランアレグリアⅡ",
+          "jockey": "横山武史",
+          "odds": 16.1,
+          "top3_probability": 28.4,
+          "recommendation": "△ 連下"
+        },
+        {
+          "predicted_rank": 18,
+          "horse_number": 1,
+          "horse_name": "サンデーブレイク",
+          "jockey": "田辺裕信",
+          "odds": 18.1,
+          "top3_probability": 16.8,
+          "recommendation": "☆ 穴馬"
+        }
+      ]
+    },
+    {
+      "race_id": 202603220005,
+      "race_name": "第4回札幌記念",
+      "date": "2026-03-22",
+      "racecourse": "札幌",
+      "distance": 1500,
+      "surface": "芝",
+      "grade": "G1",
+      "predictions": [
+        {
+          "predicted_rank": 1,
+          "horse_number": 5,
+          "horse_name": "シュネルマイスター二世",
+          "jockey": "三浦皇成",
+          "odds": 1.1,
+          "top3_probability": 95.5,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 2,
+          "horse_number": 8,
+          "horse_name": "ドウデュースジュニア",
+          "jockey": "福永祐一",
+          "odds": 4.5,
+          "top3_probability": 95.0,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 3,
+          "horse_number": 10,
+          "horse_name": "プラダリアスター",
+          "jockey": "田辺裕信",
+          "odds": 1.1,
+          "top3_probability": 94.9,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 4,
+          "horse_number": 9,
+          "horse_name": "ウインマリリン",
+          "jockey": "浜中俊",
+          "odds": 1.1,
+          "top3_probability": 94.2,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 5,
+          "horse_number": 2,
+          "horse_name": "サンデーブレイク",
+          "jockey": "C.ルメール",
+          "odds": 6.8,
+          "top3_probability": 94.1,
+          "recommendation": "◎ 本命"
+        },
+        {
+          "predicted_rank": 6,
+          "horse_number": 3,
+          "horse_name": "マイティウインド",
+          "jockey": "横山武史",
+          "odds": 7.9,
+          "top3_probability": 62.1,
+          "recommendation": "○ 対抗"
+        },
+        {
+          "predicted_rank": 7,
+          "horse_number": 7,
+          "horse_name": "リバティアイランドⅡ",
+          "jockey": "岩田望来",
+          "odds": 11.6,
+          "top3_probability": 36.3,
+          "recommendation": "△ 連下"
+        },
+        {
+          "predicted_rank": 8,
+          "horse_number": 6,
+          "horse_name": "キタサンミラクル",
+          "jockey": "池添謙一",
+          "odds": 12.7,
+          "top3_probability": 35.4,
+          "recommendation": "△ 連下"
+        },
+        {
+          "predicted_rank": 9,
+          "horse_number": 4,
+          "horse_name": "ジオグリフライト",
+          "jockey": "田辺裕信",
+          "odds": 12.5,
+          "top3_probability": 33.0,
+          "recommendation": "△ 連下"
+        },
+        {
+          "predicted_rank": 10,
+          "horse_number": 12,
+          "horse_name": "アスクビクターモア二世",
+          "jockey": "松山弘平",
+          "odds": 14.0,
+          "top3_probability": 29.1,
+          "recommendation": "△ 連下"
+        },
+        {
+          "predicted_rank": 11,
+          "horse_number": 1,
+          "horse_name": "グランアレグリアⅡ",
+          "jockey": "三浦皇成",
+          "odds": 17.4,
+          "top3_probability": 16.4,
+          "recommendation": "☆ 穴馬"
+        },
+        {
+          "predicted_rank": 12,
+          "horse_number": 11,
+          "horse_name": "タスティエーラ二世",
+          "jockey": "C.ルメール",
+          "odds": 30.8,
+          "top3_probability": 7.6,
+          "recommendation": "☆ 穴馬"
+        }
+      ]
+    }
+  ]
+}

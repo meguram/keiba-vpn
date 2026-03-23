@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>血統 × 距離適性 | ML-AutoPilot Keiba</title>
+<style>
+:root {
+  --bg: #0a0e17; --surface: #131926; --surface2: #1a2235; --surface3: #212d42;
+  --border: #243049; --text: #c8d6e5; --text-dim: #6b7d95; --text-bright: #edf2f7;
+  --accent: #a78bfa; --accent-dim: rgba(167,139,250,0.15);
+  --blue: #3b82f6; --green: #22c55e; --yellow: #f59e0b; --red: #ef4444;
+  --cyan: #06b6d4; --pink: #ec4899;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Inter',-apple-system,'Segoe UI',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+.top-bar {
+  display:flex; align-items:center; gap:16px; padding:16px 24px;
+  border-bottom:1px solid var(--border); background:var(--surface);
+}
+.top-bar a { color:var(--text-dim); font-size:13px; text-decoration:none; }
+.top-bar a:hover { color:var(--accent); }
+.top-bar h1 { font-size:20px; font-weight:700; flex:1; }
+
+.container { max-width:1600px; margin:0 auto; padding:20px 24px; }
+
+.controls {
+  display:flex; flex-wrap:wrap; gap:12px; align-items:end;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:16px 20px; margin-bottom:20px;
+}
+.ctrl-field { display:flex; flex-direction:column; gap:4px; }
+.ctrl-field label { font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; font-weight:500; }
+.ctrl-field input, .ctrl-field select {
+  background:var(--surface2); border:1px solid var(--border); border-radius:6px;
+  color:var(--text); padding:7px 12px; font-size:13px;
+}
+.ctrl-field input:focus, .ctrl-field select:focus { outline:none; border-color:var(--accent); }
+.btn {
+  background:var(--accent); color:#fff; border:none; border-radius:8px;
+  padding:9px 20px; font-size:13px; font-weight:600; cursor:pointer; transition:opacity .15s;
+}
+.btn:hover { opacity:.85; }
+.btn:disabled { opacity:.4; cursor:not-allowed; }
+.btn-outline {
+  background:transparent; border:1px solid var(--border); color:var(--text);
+  border-radius:8px; padding:8px 16px; font-size:12px; cursor:pointer;
+}
+.btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+.btn-outline.active { border-color:var(--accent); background:var(--accent-dim); color:var(--accent); }
+
+.status-bar {
+  display:flex; align-items:center; gap:10px; padding:8px 16px;
+  background:var(--surface2); border-radius:8px; margin-bottom:20px; font-size:13px;
+}
+.status-bar .spinner {
+  width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--accent);
+  border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+.hidden { display:none !important; }
+
+.tabs { display:flex; gap:4px; margin-bottom:20px; overflow-x:auto; }
+.tab {
+  padding:8px 18px; border-radius:8px 8px 0 0; font-size:13px; font-weight:500;
+  cursor:pointer; background:var(--surface); border:1px solid var(--border); border-bottom:none;
+  color:var(--text-dim); white-space:nowrap; transition:all .15s;
+}
+.tab:hover { color:var(--text); }
+.tab.active { background:var(--surface2); color:var(--accent); border-color:var(--accent); }
+
+.panel {
+  background:var(--surface); border:1px solid var(--border); border-radius:0 12px 12px 12px;
+  padding:20px; min-height:400px;
+}
+
+.stats-row { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:20px; }
+.stat-box {
+  background:var(--surface2); border-radius:10px; padding:14px 18px; flex:1; min-width:130px;
+}
+.stat-box .lbl { font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:2px; }
+.stat-box .val { font-size:20px; font-weight:700; }
+
+/* Heatmap */
+.heatmap-grid { overflow-x:auto; }
+table.hm { border-collapse:collapse; font-size:12px; width:100%; }
+table.hm th { padding:8px 6px; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--border); text-align:center; position:sticky; top:0; background:var(--surface); z-index:1; }
+table.hm th:first-child { text-align:left; min-width:120px; }
+table.hm td { padding:6px; text-align:center; border-bottom:1px solid rgba(36,48,73,0.3); }
+table.hm td:first-child { text-align:left; font-weight:600; font-size:12px; white-space:nowrap; }
+.cell { display:inline-block; min-width:52px; padding:3px 6px; border-radius:4px; font-weight:600; font-size:11px; }
+
+/* Similarity matrix */
+.sim-table { border-collapse:collapse; font-size:12px; }
+.sim-table th { padding:10px; font-size:11px; color:var(--text-dim); border-bottom:1px solid var(--border); }
+.sim-table td { padding:10px 14px; text-align:center; font-weight:600; font-size:13px; }
+
+/* Cluster */
+.cluster-card {
+  background:var(--surface2); border-radius:10px; padding:16px; margin-bottom:12px;
+}
+.cluster-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.cluster-badge {
+  font-size:11px; font-weight:700; padding:3px 10px; border-radius:12px;
+  background:var(--accent-dim); color:var(--accent);
+}
+.profile-bar-row { display:flex; align-items:center; gap:8px; margin:3px 0; }
+.profile-bar-row .plbl { font-size:11px; color:var(--text-dim); min-width:140px; }
+.profile-bar-bg { flex:1; height:14px; background:var(--surface3); border-radius:3px; overflow:hidden; }
+.profile-bar-fill { height:100%; border-radius:3px; transition:width .4s; }
+.profile-bar-row .pval { font-size:11px; min-width:44px; text-align:right; }
+
+/* Best dist table */
+table.dt { width:100%; border-collapse:collapse; font-size:13px; }
+table.dt th { text-align:left; font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; padding:8px; border-bottom:1px solid var(--border); }
+table.dt td { padding:8px; border-bottom:1px solid rgba(36,48,73,0.3); }
+table.dt tr:hover { background:rgba(167,139,250,0.04); }
+
+/* Predictive Power */
+.pp-card { display:flex; flex-direction:column; align-items:center; background:var(--surface2); border-radius:10px; padding:16px; min-width:140px; }
+.pp-auc { font-size:28px; font-weight:700; }
+.pp-label { font-size:11px; color:var(--text-dim); margin-top:4px; text-align:center; }
+.pp-n { font-size:10px; color:var(--text-dim); }
+
+.empty { text-align:center; padding:60px 20px; color:var(--text-dim); font-size:14px; }
+
+@media (max-width:900px) {
+  .stats-row { flex-direction:column; }
+  .controls { flex-direction:column; }
+}
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+<div class="top-bar">
+  <h1>🧬 血統 × 距離適性 研究</h1>
+</div>
+
+<div class="container">
+  <!-- Controls -->
+  <div class="controls">
+    <div class="ctrl-field">
+      <label>データソース</label>
+      <select id="source">
+        <option value="gcs" selected>GCS (レース結果)</option>
+        <option value="csv">CSV (特徴量ファイル)</option>
+      </select>
+    </div>
+    <div class="ctrl-field">
+      <label>対象年度 (カンマ区切り / 空=全年)</label>
+      <input id="years" type="text" placeholder="2020,2021,2022,2023,2024,2025" style="min-width:280px">
+    </div>
+    <button class="btn" id="btnRun" onclick="runAnalysis()">分析実行</button>
+    <button class="btn-outline" id="btnLoad" onclick="loadExisting()">既存結果を表示</button>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar hidden" id="statusBar">
+    <div class="spinner" id="statusSpinner"></div>
+    <span id="statusText">分析実行中...</span>
+  </div>
+
+  <!-- Summary stats -->
+  <div class="stats-row hidden" id="statsRow">
+    <div class="stat-box"><div class="lbl">出走データ</div><div class="val" id="stRecords">-</div></div>
+    <div class="stat-box"><div class="lbl">種牡馬数</div><div class="val" id="stSires">-</div></div>
+    <div class="stat-box"><div class="lbl">母父数</div><div class="val" id="stDamSires">-</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs hidden" id="tabsRow">
+    <div class="tab active" data-tab="heatmap">距離×複勝率</div>
+    <div class="tab" data-tab="bestdist">ベスト距離</div>
+    <div class="tab" data-tab="similarity">血統類似度</div>
+    <div class="tab" data-tab="clusters">クラスタ分析</div>
+    <div class="tab" data-tab="predictive">予測寄与度</div>
+  </div>
+
+  <!-- Panels -->
+  <div id="panels" class="hidden">
+    <div class="panel" id="panel-heatmap"></div>
+    <div class="panel hidden" id="panel-bestdist"></div>
+    <div class="panel hidden" id="panel-similarity"></div>
+    <div class="panel hidden" id="panel-clusters"></div>
+    <div class="panel hidden" id="panel-predictive"></div>
+  </div>
+
+  <div class="empty" id="emptyState">
+    <p style="font-size:32px;margin-bottom:12px">🧬</p>
+    <p>「分析実行」で新しい分析を開始するか、<br>「既存結果を表示」で前回の結果を表示します。</p>
+  </div>
+</div>
+
+<script>
+const DIST_LABELS = {
+  sprint: '短距離 (〜1400m)', mile: 'マイル (1400〜1800m)',
+  intermediate: '中距離 (1800〜2200m)', long: '長距離 (2200〜2800m)',
+  extended: '超長距離 (2800m〜)',
+};
+const DIST_COLORS = {
+  sprint:'#ef4444', mile:'#f59e0b', intermediate:'#3b82f6', long:'#22c55e', extended:'#a78bfa',
+};
+
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.add('hidden'));
+  document.getElementById('panel-' + t.dataset.tab).classList.remove('hidden');
+}));
+
+async function runAnalysis() {
+  const btn = document.getElementById('btnRun');
+  btn.disabled = true;
+
+  const yearsInput = document.getElementById('years').value.trim();
+  const years = yearsInput ? yearsInput.split(',').map(y => y.trim()).filter(Boolean) : null;
+  const source = document.getElementById('source').value;
+
+  showStatus('分析を開始中...');
+
+  try {
+    const resp = await fetch('/api/bloodline/analyze', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ years, source }),
+    });
+    const data = await resp.json();
+    if (data.status === 'already_running') {
+      showStatus('既に分析が実行中です。完了を待っています...');
+    } else {
+      showStatus('分析実行中... (数分かかる場合があります)');
+    }
+
+    await pollStatus();
+  } catch(e) {
+    showStatus('エラー: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function pollStatus() {
+  const maxWait = 600;
+  const start = Date.now();
+
+  while ((Date.now() - start) / 1000 < maxWait) {
+    await sleep(3000);
+    try {
+      const resp = await fetch('/api/bloodline/status');
+      const s = await resp.json();
+
+      if (!s.running) {
+        if (s.error) {
+          showStatus('分析エラー: ' + s.error, true);
+          return;
+        }
+        hideStatus();
+        if (s.result) showSummary(s.result);
+        await loadAllData();
+        return;
+      }
+
+      const elapsed = Math.round((Date.now() - start) / 1000);
+      showStatus(`分析実行中... (${elapsed}秒経過)`);
+    } catch(e) {
+      // retry
+    }
+  }
+  showStatus('タイムアウト: 分析が長時間かかっています', true);
+}
+
+async function loadExisting() {
+  showStatus('既存データを読み込み中...');
+  try {
+    const resp = await fetch('/api/bloodline/status');
+    const s = await resp.json();
+    if (s.result) showSummary(s.result);
+    await loadAllData();
+    hideStatus();
+  } catch(e) {
+    showStatus('データの読み込みに失敗しました', true);
+  }
+}
+
+function showSummary(result) {
+  document.getElementById('statsRow').classList.remove('hidden');
+  document.getElementById('stRecords').textContent = (result.n_records || 0).toLocaleString();
+  document.getElementById('stSires').textContent = (result.n_sires || 0).toLocaleString();
+  document.getElementById('stDamSires').textContent = (result.n_dam_sires || 0).toLocaleString();
+}
+
+async function loadAllData() {
+  document.getElementById('emptyState').classList.add('hidden');
+  document.getElementById('tabsRow').classList.remove('hidden');
+  document.getElementById('panels').classList.remove('hidden');
+
+  await Promise.all([
+    loadHeatmap(), loadBestDist(), loadSimilarity(),
+    loadClusters(), loadPredictive(),
+  ]);
+}
+
+// ── Heatmap ──
+async function loadHeatmap() {
+  const panel = document.getElementById('panel-heatmap');
+  try {
+    const resp = await fetch('/api/bloodline/data/sire_distance');
+    const data = await resp.json();
+    if (data.error) { panel.innerHTML = `<div class="empty">${data.error}</div>`; return; }
+
+    const cols = data.columns.filter(c => c !== '');
+    const catCols = cols.filter(c => c in DIST_LABELS || ['sprint','mile','intermediate','long','extended'].includes(c));
+    const sireCol = cols.find(c => !['sprint','mile','intermediate','long','extended'].includes(c)) || '';
+
+    let html = '<h3 style="margin-bottom:12px">種牡馬 × 距離カテゴリ 複勝率</h3>';
+    html += '<div class="heatmap-grid"><table class="hm"><thead><tr><th>種牡馬</th>';
+    for (const c of ['sprint','mile','intermediate','long','extended']) {
+      if (catCols.includes(c) || data.rows[0]?.[c] !== undefined) {
+        html += `<th>${DIST_LABELS[c] || c}</th>`;
+      }
+    }
+    html += '</tr></thead><tbody>';
+
+    for (const row of data.rows.slice(0, 40)) {
+      const sire = row[sireCol] || row[''] || Object.values(row)[0];
+      html += `<tr><td>${sire}</td>`;
+      for (const c of ['sprint','mile','intermediate','long','extended']) {
+        const v = parseFloat(row[c]);
+        if (isNaN(v)) { html += '<td>-</td>'; continue; }
+        const pct = (v * 100).toFixed(1);
+        const cls = pct >= 35 ? 'color:var(--green)' : (pct >= 25 ? 'color:var(--yellow)' : 'color:var(--red)');
+        const bg = pct >= 35 ? 'rgba(34,197,94,0.12)' : (pct >= 25 ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.08)');
+        html += `<td><span class="cell" style="${cls};background:${bg}">${pct}%</span></td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+    panel.innerHTML = html;
+  } catch(e) { panel.innerHTML = `<div class="empty">ヒートマップデータを読み込めません</div>`; }
+}
+
+// ── Best Distance ──
+async function loadBestDist() {
+  const panel = document.getElementById('panel-bestdist');
+  try {
+    const resp = await fetch('/api/bloodline/data/best_distance');
+    const data = await resp.json();
+    if (data.error) { panel.innerHTML = `<div class="empty">${data.error}</div>`; return; }
+
+    let html = '<h3 style="margin-bottom:12px">種牡馬ベスト距離推定 (加重平均)</h3>';
+    html += '<table class="dt"><thead><tr><th>#</th><th>種牡馬</th><th>出走数</th><th>複勝率</th><th>勝率</th><th>ベスト距離</th><th>距離帯</th><th>適性バー</th></tr></thead><tbody>';
+
+    const rows = data.rows.slice(0, 60);
+    const maxRuns = Math.max(...rows.map(r => parseInt(r.total_runs) || 0));
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const runs = parseInt(r.total_runs) || 0;
+      const t3 = (parseFloat(r.top3_rate) * 100).toFixed(1);
+      const wr = (parseFloat(r.win_rate) * 100).toFixed(1);
+      const bd = parseInt(r.best_distance) || 0;
+      const bcat = r.best_dist_cat || '';
+      const barW = runs / maxRuns * 100;
+      const catColor = DIST_COLORS[bcat] || 'var(--accent)';
+
+      html += `<tr>
+        <td style="color:var(--text-dim)">${i+1}</td>
+        <td><strong>${r.sire}</strong></td>
+        <td>${runs.toLocaleString()}</td>
+        <td style="color:${parseFloat(t3)>=30?'var(--green)':'var(--text)'}">${t3}%</td>
+        <td>${wr}%</td>
+        <td style="font-weight:600">${bd.toLocaleString()}m</td>
+        <td><span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${catColor}22;color:${catColor}">${DIST_LABELS[bcat]||bcat}</span></td>
+        <td style="min-width:100px"><div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden"><div style="height:100%;width:${barW}%;background:${catColor};border-radius:4px"></div></div></td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    panel.innerHTML = html;
+  } catch(e) { panel.innerHTML = `<div class="empty">ベスト距離データを読み込めません</div>`; }
+}
+
+// ── Similarity ──
+async function loadSimilarity() {
+  const panel = document.getElementById('panel-similarity');
+  try {
+    const resp = await fetch('/api/bloodline/data/similarity');
+    const data = await resp.json();
+    if (data.error) { panel.innerHTML = `<div class="empty">${data.error}</div>`; return; }
+
+    const cols = data.columns.filter(c => c !== '');
+    let html = '<h3 style="margin-bottom:4px">距離カテゴリ間 血統類似度 (コサイン類似度)</h3>';
+    html += '<p style="color:var(--text-dim);font-size:12px;margin-bottom:16px">1.0 に近いほど、同じ血統の馬が活躍する距離帯。隣接距離帯の類似性が高ければ、適性は連続的。</p>';
+    html += '<table class="sim-table"><thead><tr><th></th>';
+    for (const c of cols) html += `<th>${DIST_LABELS[c]||c}</th>`;
+    html += '</tr></thead><tbody>';
+
+    for (const row of data.rows) {
+      const label = row[''] || Object.values(row)[0];
+      html += `<tr><th style="text-align:left;font-weight:600;padding:10px">${DIST_LABELS[label]||label}</th>`;
+      for (const c of cols) {
+        const v = parseFloat(row[c]);
+        const color = v >= 0.95 ? 'var(--green)' : (v >= 0.85 ? 'var(--yellow)' : (v >= 0.7 ? 'var(--cyan)' : 'var(--text-dim)'));
+        const bg = v >= 0.95 ? 'rgba(34,197,94,0.08)' : (v >= 0.85 ? 'rgba(245,158,11,0.06)' : 'transparent');
+        html += `<td style="color:${color};background:${bg};font-weight:600">${isNaN(v)?'-':v.toFixed(3)}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    panel.innerHTML = html;
+  } catch(e) { panel.innerHTML = `<div class="empty">類似度データを読み込めません</div>`; }
+}
+
+// ── Clusters ──
+async function loadClusters() {
+  const panel = document.getElementById('panel-clusters');
+  try {
+    const resp = await fetch('/api/bloodline/data/cluster_summary');
+    const data = await resp.json();
+    if (data.error) { panel.innerHTML = `<div class="empty">${data.error}</div>`; return; }
+
+    let html = '<h3 style="margin-bottom:4px">種牡馬クラスタリング (距離適性プロファイル)</h3>';
+    html += '<p style="color:var(--text-dim);font-size:12px;margin-bottom:16px">距離カテゴリ別の複勝率ベクトルで K-means クラスタリング。各クラスタのプロファイルと所属種牡馬数を表示。</p>';
+
+    const distKeys = ['sprint','mile','intermediate','long','extended'];
+
+    for (const row of data.rows) {
+      const clId = row[''] || row.cluster || '?';
+      const clName = row.cluster_name || '';
+      const nSires = parseInt(row.n_sires) || 0;
+      const vals = {};
+      let maxVal = 0;
+      for (const k of distKeys) {
+        const v = parseFloat(row[k]) || 0;
+        vals[k] = v;
+        if (v > maxVal) maxVal = v;
+      }
+
+      html += `<div class="cluster-card">`;
+      html += `<div class="cluster-header"><span class="cluster-badge">Cluster ${clId}</span><strong>${clName}</strong><span style="color:var(--text-dim);font-size:12px">(${nSires} 種牡馬)</span></div>`;
+      for (const k of distKeys) {
+        const v = vals[k];
+        const pct = (v * 100).toFixed(1);
+        const w = maxVal > 0 ? (v / maxVal * 100) : 0;
+        const color = DIST_COLORS[k] || 'var(--accent)';
+        html += `<div class="profile-bar-row">
+          <span class="plbl">${DIST_LABELS[k]||k}</span>
+          <div class="profile-bar-bg"><div class="profile-bar-fill" style="width:${w}%;background:${color}"></div></div>
+          <span class="pval">${pct}%</span>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Also load individual sires
+    const siresResp = await fetch('/api/bloodline/data/clusters');
+    const siresData = await siresResp.json();
+    if (!siresData.error && siresData.rows) {
+      html += '<h3 style="margin-top:20px;margin-bottom:12px">クラスタ別 種牡馬一覧 (上位)</h3>';
+      html += '<table class="dt"><thead><tr><th>クラスタ</th><th>種牡馬</th>';
+      for (const k of distKeys) html += `<th>${DIST_LABELS[k]?.split('(')[0]?.trim()||k}</th>`;
+      html += '</tr></thead><tbody>';
+      for (const row of siresData.rows.slice(0, 80)) {
+        const sire = row[''] || row.sire || Object.values(row)[0];
+        const cl = row.cluster || '?';
+        const clName = row.cluster_name || '';
+        html += `<tr><td><span class="cluster-badge" style="font-size:10px">${cl}</span></td><td><strong>${sire}</strong></td>`;
+        for (const k of distKeys) {
+          const v = parseFloat(row[k]);
+          const pct = isNaN(v) ? '-' : (v * 100).toFixed(1) + '%';
+          html += `<td style="font-size:12px">${pct}</td>`;
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+    }
+
+    panel.innerHTML = html;
+  } catch(e) { panel.innerHTML = `<div class="empty">クラスタデータを読み込めません</div>`; }
+}
+
+// ── Predictive Power ──
+async function loadPredictive() {
+  const panel = document.getElementById('panel-predictive');
+  try {
+    const resp = await fetch('/api/bloodline/data/predictive_power');
+    const data = await resp.json();
+    if (data.error) { panel.innerHTML = `<div class="empty">${data.error}</div>`; return; }
+
+    let html = '<h3 style="margin-bottom:4px">血統特徴量の予測寄与度</h3>';
+    html += '<p style="color:var(--text-dim);font-size:12px;margin-bottom:16px">血統情報のみ (sire_enc, dam_sire_enc, distance) で複勝を予測した際の AUC。0.50 = ランダム、0.55+ で有意な予測力。</p>';
+
+    html += '<div class="stats-row">';
+    const order = ['sprint','mile','intermediate','long','extended','all'];
+    for (const cat of order) {
+      const info = data[cat];
+      if (!info) continue;
+      const label = cat === 'all' ? '全体' : (DIST_LABELS[cat] || cat);
+      const auc = info.auc || 0;
+      const n = info.n_samples || 0;
+      const color = auc >= 0.58 ? 'var(--green)' : (auc >= 0.53 ? 'var(--yellow)' : 'var(--red)');
+      html += `<div class="pp-card">
+        <div class="pp-auc" style="color:${color}">${auc.toFixed(4)}</div>
+        <div class="pp-label">${label}</div>
+        <div class="pp-n">n=${n.toLocaleString()}</div>
+      </div>`;
+    }
+    html += '</div>';
+
+    html += '<h3 style="margin-top:24px;margin-bottom:12px">特徴量重要度 (距離帯別)</h3>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">';
+    for (const cat of order) {
+      const info = data[cat];
+      if (!info || !info.feature_importance) continue;
+      const label = cat === 'all' ? '全体' : (DIST_LABELS[cat] || cat);
+      const fi = info.feature_importance;
+      const maxImp = Math.max(...Object.values(fi));
+
+      html += `<div style="background:var(--surface2);border-radius:8px;padding:14px">`;
+      html += `<div style="font-size:12px;font-weight:600;margin-bottom:8px">${label}</div>`;
+      for (const [feat, imp] of Object.entries(fi).sort((a,b) => b[1]-a[1])) {
+        const w = maxImp > 0 ? (imp / maxImp * 100) : 0;
+        html += `<div class="profile-bar-row">
+          <span class="plbl" style="min-width:110px;font-size:11px">${feat}</span>
+          <div class="profile-bar-bg"><div class="profile-bar-fill" style="width:${w}%;background:var(--accent)"></div></div>
+          <span class="pval" style="font-size:10px">${imp.toFixed(0)}</span>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    html += '<div style="margin-top:20px;padding:16px;background:var(--surface2);border-radius:8px;font-size:13px;line-height:1.8">';
+    html += '<strong style="color:var(--accent)">考察・示唆</strong><ul style="padding-left:20px;margin-top:8px">';
+    html += '<li>AUC が特定距離帯で高い → その距離帯では血統が重要な予測因子</li>';
+    html += '<li>sire_enc の重要度が高い → 父系の影響が大きい</li>';
+    html += '<li>dam_sire_enc の重要度が高い → 母系 (母父) の影響が大きい</li>';
+    html += '<li>distance の重要度が高い → 距離×血統の交互作用が存在する</li>';
+    html += '</ul></div>';
+
+    panel.innerHTML = html;
+  } catch(e) { panel.innerHTML = `<div class="empty">予測寄与度データを読み込めません</div>`; }
+}
+
+// ── Helpers ──
+function showStatus(msg, isError) {
+  const bar = document.getElementById('statusBar');
+  const spinner = document.getElementById('statusSpinner');
+  const text = document.getElementById('statusText');
+  bar.classList.remove('hidden');
+  text.textContent = msg;
+  text.style.color = isError ? 'var(--red)' : 'var(--text)';
+  spinner.style.display = isError ? 'none' : 'block';
+}
+function hideStatus() { document.getElementById('statusBar').classList.add('hidden'); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>

@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ML-AutoPilot Keiba</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;600;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #06080f;
+    --surface: #0d1117;
+    --surface2: #161b22;
+    --surface3: #1c2333;
+    --border: #21262d;
+    --border-hover: #363d47;
+    --text: #c9d1d9;
+    --text-dim: #6e7681;
+    --text-bright: #f0f6fc;
+    --accent: #58a6ff;
+    --accent-dim: rgba(88,166,255,0.12);
+    --purple: #bc8cff;
+    --purple-dim: rgba(188,140,255,0.12);
+    --green: #3fb950;
+    --green-dim: rgba(63,185,80,0.12);
+    --orange: #d29922;
+    --orange-dim: rgba(210,153,34,0.12);
+    --red: #f85149;
+    --pink: #f778ba;
+    --pink-dim: rgba(247,120,186,0.12);
+    --cyan: #39d2c0;
+    --cyan-dim: rgba(57,210,192,0.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Noto Sans JP', -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .hero {
+    position: relative;
+    padding: 40px 40px 32px;
+    text-align: center;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 50% 0%, rgba(88,166,255,0.07) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 30% at 20% 80%, rgba(188,140,255,0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 30% at 80% 80%, rgba(57,210,192,0.05) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .hero h1 {
+    font-size: 42px;
+    font-weight: 800;
+    color: var(--text-bright);
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+    position: relative;
+  }
+  .hero h1 .icon { font-size: 38px; margin-right: 8px; vertical-align: middle; }
+  .hero h1 .accent { color: var(--accent); }
+  .hero .subtitle {
+    font-size: 15px;
+    color: var(--text-dim);
+    font-weight: 300;
+    letter-spacing: 2px;
+    margin-bottom: 28px;
+    position: relative;
+  }
+  .hero .status-row {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    position: relative;
+  }
+  .status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .status-chip .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .status-chip .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-chip .dot.orange { background: var(--orange); }
+  .status-chip .dot.red { background: var(--red); }
+
+  .main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 32px 60px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    padding-left: 4px;
+  }
+
+  .nav-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+
+  .nav-card {
+    display: block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 28px 24px;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .nav-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--card-accent, var(--accent));
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .nav-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  .nav-card:hover::before { opacity: 1; }
+
+  .nav-card .card-icon {
+    font-size: 32px;
+    margin-bottom: 14px;
+    display: block;
+    filter: saturate(0.9);
+  }
+  .nav-card .card-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav-card .card-title .arrow {
+    opacity: 0;
+    transition: all 0.2s;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+  .nav-card:hover .card-title .arrow { opacity: 1; transform: translateX(3px); }
+  .nav-card .card-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.7;
+    margin-bottom: 12px;
+  }
+  .nav-card .card-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .nav-card .tag {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--surface2);
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid var(--border);
+  }
+  .nav-card .card-badge {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  .quick-jump {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 48px;
+  }
+  .quick-jump h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-bright);
+    margin-bottom: 12px;
+  }
+  .quick-jump .jump-form {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .quick-jump input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    color: var(--text-bright);
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    width: 220px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .quick-jump input:focus { border-color: var(--accent); }
+  .quick-jump input::placeholder { color: var(--text-dim); }
+  .quick-jump button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .quick-jump button:hover { opacity: 0.85; }
+  .quick-jump .jump-hint {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-left: 8px;
+  }
+
+  .api-section {
+    margin-bottom: 48px;
+  }
+  .api-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+  }
+  .api-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    transition: border-color 0.15s;
+    text-decoration: none;
+    color: inherit;
+  }
+  .api-item:hover { border-color: var(--border-hover); }
+  .api-method {
+    font-size: 10px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 2px 7px;
+    border-radius: 4px;
+    min-width: 38px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .api-method.get { background: var(--green-dim); color: var(--green); }
+  .api-method.post { background: var(--orange-dim); color: var(--orange); }
+  .api-path {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    flex: 1;
+  }
+  .api-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+  }
+
+  footer {
+    text-align: center;
+    padding: 24px;
+    font-size: 12px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 720px) {
+    .hero { padding: 40px 20px 24px; }
+    .hero h1 { font-size: 28px; }
+    .main { padding: 0 16px 40px; }
+    .nav-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+
+<div class="hero">
+  <h1><span class="icon">🏇</span> ML-<span class="accent">AutoPilot</span> Keiba</h1>
+  <p class="subtitle">MULTI-AGENT HORSE RACING AI PREDICTION SYSTEM</p>
+  <div class="status-row" id="statusRow">
+    <span class="status-chip"><span class="dot" id="gcsStatus"></span> <span id="gcsLabel">GCS</span></span>
+    <span class="status-chip"><span class="dot" id="serverStatus"></span> <span id="serverLabel">Server</span></span>
+    <span class="status-chip" id="raceDateChip" style="display:none"><span class="dot green"></span> <span id="raceInfo"></span></span>
+  </div>
+</div>
+
+<div class="main">
+
+  {% if is_dev_check(request) %}
+  <div class="section-label">📍 クイックジャンプ</div>
+  <div class="quick-jump">
+    <h3>🔍 レースID / 日付で直接移動</h3>
+    <div class="jump-form">
+      <input type="text" id="jumpInput" placeholder="例: 202606020609 or 20260315"
+             onkeydown="if(event.key==='Enter')jump()">
+      <button onclick="jump()">移動</button>
+      <span class="jump-hint">レースID (12桁) → レース詳細 / 日付 (8桁) → モニターボード</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="section-label">🧭 メインページ</div>
+  <div class="nav-grid">
+
+    <a class="nav-card" href="/tracking-difficulty" style="--card-accent: var(--orange)">
+      <span class="card-icon">📊</span>
+      <div class="card-title">追走難度分析 <span class="arrow">→</span></div>
+      <div class="card-desc">
+        ゲート位置・隣枠の馬の傾向・脚質構成から各馬のポジション取得容易度を推定。MLモデルによるスコアリング。
+      </div>
+      <div class="card-tags">
+        <span class="tag">ゲート分析</span>
+        <span class="tag">脚質</span>
+        <span class="tag">隣枠影響</span>
+        <span class="tag">ML</span>
+      </div>
+      <span class="card-badge" style="background:var(--orange-dim);color:var(--orange)">PREDICT</span>
+    </a>
+
+    <a class="nav-card" href="/bloodline" style="--card-accent: var(--purple)">
+      <span class="card-icon">🧬</span>
+      <div class="card-title">血統 × 距離適性 研究 <span class="arrow">→</span></div>
+      <div class="card-desc">
+        種牡馬・母父の血統構成が距離適性にどう影響するかを統計的に分析。ヒートマップ・クラスタリング・類似度マトリクスで可視化。
+      </div>
+      <div class="card-tags">
+        <span class="tag">種牡馬</span>
+        <span class="tag">母父</span>
+        <span class="tag">距離適性</span>
+        <span class="tag">クラスタ</span>
+      </div>
+      <span class="card-badge" style="background:rgba(167,139,250,0.15);color:#a78bfa">RESEARCH</span>
+    </a>
+
+    <a class="nav-card" href="/course-bloodline" style="--card-accent: var(--cyan)">
+      <span class="card-icon">🏟️</span>
+      <div class="card-title">コース特性 × 血統適性 <span class="arrow">→</span></div>
+      <div class="card-desc">
+        JRA全10場の物理特性 (坂・直線長・回り) をドメインナレッジ化し、血統グループの成績との相関を分析。最適コース条件を推定。
+      </div>
+      <div class="card-tags">
+        <span class="tag">競馬場</span>
+        <span class="tag">坂・直線</span>
+        <span class="tag">コース適性</span>
+        <span class="tag">最適条件</span>
+      </div>
+      <span class="card-badge" style="background:rgba(6,182,212,0.15);color:#06b6d4">RESEARCH</span>
+    </a>
+
+    <a class="nav-card" href="#" onclick="event.preventDefault();document.getElementById('jumpInput').focus()" style="--card-accent: var(--orange)">
+      <span class="card-icon">🏁</span>
+      <div class="card-title">レース詳細 & AI予測 <span class="arrow">→</span></div>
+      <div class="card-desc">
+        個別レースの出馬表・結果・オッズ・馬情報を表示。「AI予測」タブで特徴量ベースの予測ランキング・推奨印 (◎○▲△☆) を確認。
+      </div>
+      <div class="card-tags">
+        <span class="tag">出馬表</span>
+        <span class="tag">オッズ</span>
+        <span class="tag">AI予測</span>
+        <span class="tag">◎○▲△☆</span>
+      </div>
+      <span class="card-badge" style="background:var(--orange-dim);color:var(--orange)">PREDICT</span>
+    </a>
+
+  </div>
+
+  {% if is_dev_check(request) %}
+  <div class="section-label">🔗 最近のレース日</div>
+  <div id="recentDates" class="nav-grid" style="margin-bottom:48px">
+    <div style="color:var(--text-dim);font-size:13px;padding:16px">読み込み中...</div>
+  </div>
+
+  <div class="section-label">⚙️ API エンドポイント</div>
+  <div class="api-section">
+    <div class="api-grid" id="apiGrid">
+
+      <a class="api-item" href="/api/scrape-status?date=20260315" target="_blank">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/api/scrape-status</span>
+        <span class="api-desc">取得状況</span>
+      </a>
+      <a class="api-item" href="/api/scrape-dates?raw_keys=1" target="_blank">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/api/scrape-dates?raw_keys=1</span>
+        <span class="api-desc">日付キー全件（バッチ用）</span>
+      </a>
+      <a class="api-item" href="/api/scrape-jobs" target="_blank">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/api/scrape-jobs</span>
+        <span class="api-desc">ジョブ状況</span>
+      </a>
+      <a class="api-item" href="#" onclick="fetch('/api/odds/train',{method:'POST'}).then(r=>r.json()).then(d=>alert(JSON.stringify(d)));return false;">
+        <span class="api-method post">POST</span>
+        <span class="api-path">/api/odds/train</span>
+        <span class="api-desc">オッズ予測モデル学習</span>
+      </a>
+      <a class="api-item" href="/api/odds/train/status" target="_blank">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/api/odds/train/status</span>
+        <span class="api-desc">オッズ学習状態</span>
+      </a>
+      <a class="api-item" href="#" onclick="runSimulation();return false;">
+        <span class="api-method post">POST</span>
+        <span class="api-path">/api/simulation/run</span>
+        <span class="api-desc">バランス最適化</span>
+      </a>
+      <a class="api-item" href="/api/simulation/params" target="_blank">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/api/simulation/params</span>
+        <span class="api-desc">最適化結果</span>
+      </a>
+      <a class="api-item" href="/api/structure-status" target="_blank">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/api/structure-status</span>
+        <span class="api-desc">構造チェック</span>
+      </a>
+      <a class="api-item" href="/api/structure-fingerprints" target="_blank">
+        <span class="api-method get">GET</span>
+        <span class="api-path">/api/structure-fingerprints</span>
+        <span class="api-desc">FP情報</span>
+      </a>
+      <div class="api-item" style="cursor:default">
+        <span class="api-method post">POST</span>
+        <span class="api-path">/api/scrape-trigger</span>
+        <span class="api-desc">スクレイプ</span>
+      </div>
+      <div class="api-item" style="cursor:default">
+        <span class="api-method post">POST</span>
+        <span class="api-path">/api/structure-check</span>
+        <span class="api-desc">構造チェック実行</span>
+      </div>
+
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<footer>
+  ML-AutoPilot Keiba &mdash; Multi-Agent AI Prediction System &mdash;
+  データソース: <a href="https://db.netkeiba.com/" target="_blank">netkeiba.com</a>
+</footer>
+
+<script>
+
+async function runSimulation() {
+  if (!confirm('バックテストシミュレーションを開始しますか？（数分かかる場合があります）')) return;
+  try {
+    const r = await fetch('/api/simulation/run', { method: 'POST' });
+    const d = await r.json();
+    if (d.status === 'started') {
+      alert('シミュレーション開始しました。完了後は /api/simulation/params で結果を確認できます。');
+      pollSimulation();
+    } else {
+      alert(JSON.stringify(d));
+    }
+  } catch (e) { alert('エラー: ' + e.message); }
+}
+
+async function pollSimulation() {
+  for (let i = 0; i < 120; i++) {
+    await new Promise(r => setTimeout(r, 5000));
+    try {
+      const r = await fetch('/api/simulation/status');
+      const d = await r.json();
+      if (!d.running) {
+        if (d.result) {
+          alert(`最適化完了！\nROI: ${d.result.roi}\n的中率: ${(d.result.hit_rate * 100).toFixed(1)}%\nα: ${d.result.prob_weight}\n対象: ${d.result.n_races}レース`);
+        } else if (d.error) {
+          alert('シミュレーション失敗: ' + d.error);
+        }
+        return;
+      }
+    } catch (e) { /* retry */ }
+  }
+}
+
+/* ── クイックジャンプ ── */
+
+function jump() {
+  const v = document.getElementById('jumpInput').value.trim();
+  if (!v) return;
+  if (v.length === 8 && /^\d{8}$/.test(v)) {
+    window.location.href = `/monitor?date=${v}`;
+  } else if (v.length >= 10 && /^\d+$/.test(v)) {
+    window.location.href = `/race/${v}`;
+  } else {
+    window.location.href = `/monitor?date=${v.replace(/[^0-9]/g, '')}`;
+  }
+}
+
+async function checkStatus() {
+  const gcsEl = document.getElementById('gcsStatus');
+  const gcsLabel = document.getElementById('gcsLabel');
+  const serverEl = document.getElementById('serverStatus');
+  const serverLabel = document.getElementById('serverLabel');
+
+  serverEl.className = 'dot green';
+  serverLabel.textContent = 'Server OK';
+
+  try {
+    const res = await fetch('/api/scrape-dates', { cache: 'no-store' });
+    const data = await res.json();
+    const dates = data.dates || [];
+
+    if (data.gcs_enabled !== undefined) {
+      if (data.gcs_enabled) {
+        gcsEl.className = 'dot green';
+        gcsLabel.textContent = 'GCS 接続中';
+      } else {
+        gcsEl.className = 'dot orange';
+        gcsLabel.textContent = 'GCS 未接続';
+      }
+    }
+
+    if (dates.length > 0) {
+      const chip = document.getElementById('raceDateChip');
+      chip.style.display = 'inline-flex';
+      document.getElementById('raceInfo').textContent = `${dates.length}日分のデータ`;
+      renderRecentDates(dates);
+    } else {
+      document.getElementById('recentDates').innerHTML =
+        '<div style="color:var(--text-dim);font-size:13px;padding:16px">レース日データがまだありません</div>';
+    }
+  } catch {
+    gcsEl.className = 'dot red';
+    gcsLabel.textContent = 'GCS ?';
+  }
+}
+
+function renderRecentDates(dates) {
+  const container = document.getElementById('recentDates');
+  const recent = dates.slice(0, 8);
+  container.innerHTML = recent.map(d => {
+    const y = d.slice(0,4), m = d.slice(4,6), day = d.slice(6,8);
+    const dt = new Date(+y, +m - 1, +day);
+    const weekday = ['日','月','火','水','木','金','土'][dt.getDay()];
+    const weekColor = dt.getDay() === 0 ? 'var(--red)' : dt.getDay() === 6 ? 'var(--accent)' : 'var(--text-dim)';
+    return `<a class="nav-card" href="/monitor?date=${d}" style="--card-accent:var(--accent);padding:20px 24px">
+      <div class="card-title" style="margin-bottom:4px">
+        📅 ${y}/${m}/${day}
+        <span style="font-size:13px;color:${weekColor};font-weight:700">(${weekday})</span>
+        <span class="arrow">→</span>
+      </div>
+      <div class="card-desc" style="margin-bottom:0">モニタリングボードで確認</div>
+    </a>`;
+  }).join('');
+}
+
+checkStatus();
+</script>
+</body>
+</html>

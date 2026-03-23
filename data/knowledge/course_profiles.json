@@ -1,0 +1,921 @@
+{
+  "_description": "JRA全10場のコース物理特性ドメインナレッジ。芝種の季節変動、仮柵位置、枠順バイアス、初角までの距離を含む。",
+  "_sources": [
+    "JRA公式サイト コース紹介・コース図",
+    "netkeiba.com コースデータ",
+    "競馬場施設概要 (JRA発行)",
+    "JRA仮柵位置情報",
+    "枠順別成績データ (2015-2025)"
+  ],
+  "_first_corner_distance_guide": {
+    "description": "初角までの距離 = スタート地点から最初のコーナー入口までの距離。枠順バイアスの最大の決定要因。",
+    "thresholds": {
+      "very_short": "~250m: 外枠は致命的に不利。内枠先行が圧倒的有利。ポジション取りが全て。",
+      "short": "250~400m: 内枠有利。外枠は距離ロスが生じやすい。先行馬が有利。",
+      "medium": "400~550m: やや内枠有利だが、外枠でも十分にポジション取り可能。",
+      "long": "550~700m: ほぼフラット。枠順の影響は小さい。",
+      "very_long": "700m~: 枠順の影響はほとんどない。脚質と能力が純粋に問われる。"
+    },
+    "note": "小回りコースでは初角までの距離が短いほど内枠有利度が高まる。大回りコースでは距離が長くても直線で吸収される。"
+  },
+  "_trait_scales": {
+    "stamina_demand": "0-10: コース全体のスタミナ要求度 (坂+距離+コーナー数)",
+    "power_demand": "0-10: パワー型血統の有利度 (坂の急さ+芝の重さ)",
+    "speed_sustain": "0-10: スピード持続力の要求度 (直線の短さ+小回り度)",
+    "acceleration": "0-10: 瞬発力・末脚の要求度 (直線の長さ+下り坂)",
+    "agility": "0-10: 器用さの要求度 (小回り+コーナーのきつさ)",
+    "track_bias_inner": "0-10: 内枠有利度 (仮柵Aコース基準)",
+    "front_runner_advantage": "0-10: 逃げ・先行有利度"
+  },
+
+  "_grass_type_guide": {
+    "洋芝": "ケンタッキーブルーグラス等。葉が密で根が深く、パワーが必要。北海道 (札幌・函館) で通年使用。クッション性が高く時計がかかる。",
+    "野芝": "日本在来種。夏に青々と繁茂し冬に枯れる。軽くスピードが出やすい。高速馬場になりやすい。",
+    "オーバーシード": "冬に枯れる野芝の上にイタリアンライグラス等を重ね播き。野芝単体より重く、洋芝ほどではない中間的な馬場。春先は根付きが浅くパワー不要、秋〜冬は深く根付きパワーが要る。",
+    "エクイターフ": "京都競馬場改修 (2023) で導入。洋芝ベースの高耐久ターフ。従来の野芝+オーバーシードより均一で、やや洋芝寄りの特性。"
+  },
+
+  "_rail_position_guide": {
+    "A": "最内仮柵位置。コース幅が最も広く使える。開催初週は芝が新鮮で高速馬場になりやすい。内枠・先行有利のバイアスが最も強い。",
+    "B": "仮柵を内側から約3m外へ移動。Aで荒れた内側を避ける。やや内〜フラットなバイアス。",
+    "C": "仮柵を内側から約6m外へ移動。内の荒れが進んだ開催後半に使用。外差しが利きやすくなる。",
+    "D": "仮柵を内側から約9m外へ移動。一部の競馬場で使用。内は完全に荒れており外枠有利になることも。"
+  },
+
+  "venues": {
+    "01": {
+      "name": "札幌",
+      "name_en": "Sapporo",
+      "region": "北海道",
+      "direction": "右回り",
+      "turf_circumference_m": 1640,
+      "turf_straight_m": 266,
+      "turf_width_m": 25,
+      "dirt_circumference_m": 1487,
+      "dirt_straight_m": 264,
+      "has_slope": false,
+      "slope_height_m": 0.0,
+      "slope_type": "平坦",
+      "course_shape": "小回り",
+      "corner_tightness": "きつい",
+      "available_turf_distances": [1000, 1200, 1500, 1800, 2000, 2600],
+      "available_dirt_distances": [1000, 1700, 2400],
+
+      "grass_info": {
+        "base_type": "洋芝",
+        "seasonal_variation": false,
+        "detail": "通年洋芝 (ケンタッキーブルーグラス主体)。オーバーシードなし。夏開催のみのため芝の状態は比較的良好。",
+        "opening_months": [7, 8, 9],
+        "power_modifier_by_month": {
+          "7": 1.2, "8": 1.25, "9": 1.3
+        },
+        "note": "開催が進むと洋芝が傷み、よりパワーが要る。8月後半以降は特に重くなる。"
+      },
+
+      "rail_positions": {
+        "available": ["A", "B"],
+        "typical_schedule": [
+          {"weeks": "1-2週", "position": "A", "note": "内枠先行有利"},
+          {"weeks": "3-4週", "position": "B", "note": "やや外差し利く"}
+        ],
+        "inner_width_m": {"A": 0, "B": 3}
+      },
+
+      "draw_bias": {
+        "turf_1000": {"first_corner_m": 200, "start_pos": "向正面奥", "corners": 2, "inner_1_4": 1.20, "middle_5_8": 1.0, "outer_9_plus": 0.80, "note": "初角200mで超短い。内枠絶対有利"},
+        "turf_1200": {"first_corner_m": 440, "start_pos": "向正面直線", "corners": 2, "inner_1_4": 1.15, "middle_5_8": 1.0, "outer_9_plus": 0.85, "note": "初角440m。内枠有利だがやや余裕あり"},
+        "turf_1500": {"first_corner_m": 240, "start_pos": "2角付近ポケット", "corners": 4, "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角240mと短い。コーナー4回で内枠有利"},
+        "turf_1800": {"first_corner_m": 440, "start_pos": "正面スタンド前", "corners": 2, "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角440m。比較的フラット"},
+        "turf_2000": {"first_corner_m": 640, "start_pos": "4角付近", "corners": 2, "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角640mで余裕あり。ほぼフラット"},
+        "turf_2600": {"first_corner_m": 240, "start_pos": "2角付近ポケット", "corners": 6, "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角は短いがスタミナ勝負で枠順影響小"}
+      },
+
+      "characteristics": [
+        "洋芝でパワーが要る (開催後半はさらに重くなる)",
+        "直線が短く先行有利",
+        "小回りで器用さが必要",
+        "平坦だがスタミナ消耗は洋芝で補われる"
+      ],
+      "traits": {
+        "stamina_demand": 4,
+        "power_demand": 7,
+        "speed_sustain": 7,
+        "acceleration": 3,
+        "agility": 8,
+        "track_bias_inner": 7,
+        "front_runner_advantage": 8
+      },
+      "bloodline_tendency": {
+        "favored_types": ["パワー型", "先行持続型"],
+        "unfavored_types": ["末脚特化型"],
+        "grass_specific": "洋芝適性が最重要。ノーザンダンサー系、特にハービンジャー・ルーラーシップが好成績。",
+        "note": "洋芝のパワー要求が高く、直線が短いため差し馬には厳しい。"
+      }
+    },
+
+    "02": {
+      "name": "函館",
+      "name_en": "Hakodate",
+      "region": "北海道",
+      "direction": "右回り",
+      "turf_circumference_m": 1626,
+      "turf_straight_m": 262,
+      "turf_width_m": 24,
+      "dirt_circumference_m": 1476,
+      "dirt_straight_m": 260,
+      "has_slope": false,
+      "slope_height_m": 0.0,
+      "slope_type": "平坦",
+      "course_shape": "小回り",
+      "corner_tightness": "非常にきつい",
+      "available_turf_distances": [1000, 1200, 1800, 2000, 2600],
+      "available_dirt_distances": [1000, 1700, 2400],
+
+      "grass_info": {
+        "base_type": "洋芝",
+        "seasonal_variation": false,
+        "detail": "通年洋芝。JRA最小コースで芝の消耗が激しい。開催後半は馬場が荒れやすく、さらにパワーが必要になる。",
+        "opening_months": [6, 7, 8],
+        "power_modifier_by_month": {
+          "6": 1.2, "7": 1.3, "8": 1.35
+        },
+        "note": "開催2週目以降は内の芝がかなり傷む。函館記念 (7月) の頃はパワー全開。"
+      },
+
+      "rail_positions": {
+        "available": ["A", "B"],
+        "typical_schedule": [
+          {"weeks": "1週", "position": "A", "note": "新鮮な内、圧倒的内枠有利"},
+          {"weeks": "2-4週", "position": "B", "note": "内の荒れを回避、やや外差し利く"}
+        ],
+        "inner_width_m": {"A": 0, "B": 3}
+      },
+
+      "draw_bias": {
+        "turf_1000": {"first_corner_m": 180, "start_pos": "向正面奥", "corners": 2, "inner_1_4": 1.20, "middle_5_8": 1.0, "outer_9_plus": 0.80, "note": "JRA最短クラスの初角180m。内枠絶対有利"},
+        "turf_1200": {"first_corner_m": 420, "start_pos": "向正面直線", "corners": 2, "inner_1_4": 1.15, "middle_5_8": 1.0, "outer_9_plus": 0.85, "note": "初角420m。内枠有利"},
+        "turf_1800": {"first_corner_m": 420, "start_pos": "正面スタンド前", "corners": 2, "inner_1_4": 1.05, "middle_5_8": 1.05, "outer_9_plus": 0.90, "note": "初角420m。やや内〜中枠有利"},
+        "turf_2000": {"first_corner_m": 620, "start_pos": "4角付近", "corners": 2, "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角620mで余裕あり。フラット"},
+        "turf_2600": {"first_corner_m": 220, "start_pos": "2角付近ポケット", "corners": 6, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "スタミナ勝負。枠順影響なし"}
+      },
+
+      "characteristics": [
+        "JRA最小コース、洋芝の消耗が最も激しい",
+        "最も小回りで器用さが最重要",
+        "逃げ・先行が圧倒的有利",
+        "開催後半は馬場悪化でパワー要求が急上昇"
+      ],
+      "traits": {
+        "stamina_demand": 3,
+        "power_demand": 8,
+        "speed_sustain": 8,
+        "acceleration": 2,
+        "agility": 9,
+        "track_bias_inner": 8,
+        "front_runner_advantage": 9
+      },
+      "bloodline_tendency": {
+        "favored_types": ["パワー型", "先行持続型", "小回り巧者"],
+        "unfavored_types": ["大トビ型", "末脚特化型"],
+        "grass_specific": "洋芝適性+小回り適性の両立が必要。開催後半はダート寄りのパワー血統が台頭。",
+        "note": "最もコンパクトなコースで器用さが最重要。欧州血統が活躍しやすい。"
+      }
+    },
+
+    "03": {
+      "name": "福島",
+      "name_en": "Fukushima",
+      "region": "東北",
+      "direction": "右回り",
+      "turf_circumference_m": 1600,
+      "turf_straight_m": 292,
+      "turf_width_m": 25,
+      "dirt_circumference_m": 1445,
+      "dirt_straight_m": 296,
+      "has_slope": false,
+      "slope_height_m": 0.6,
+      "slope_type": "緩やか",
+      "course_shape": "小回り",
+      "corner_tightness": "きつい",
+      "available_turf_distances": [1000, 1200, 1700, 1800, 2000, 2600],
+      "available_dirt_distances": [1000, 1150, 1700, 2400],
+
+      "grass_info": {
+        "base_type": "野芝",
+        "seasonal_variation": true,
+        "schedule": [
+          {"months": [4, 5, 6, 7], "type": "野芝", "condition": "春〜夏は野芝が繁茂。高速馬場になりやすい。スピード勝負。"},
+          {"months": [10, 11], "type": "オーバーシード (イタリアンライグラス)", "condition": "秋はオーバーシードが定着途中。やや重くなり始める。"},
+          {"months": [2, 3], "type": "オーバーシード", "condition": "冬〜春先はオーバーシードが主体。根付きが浅く滑りやすい。時計がかかる。"}
+        ],
+        "detail": "春夏は野芝の高速馬場、秋〜冬はオーバーシードで時計がかかる。同じ福島でも季節で全く違うコース。",
+        "opening_months": [4, 6, 7, 10, 11],
+        "power_modifier_by_month": {
+          "4": 0.95, "6": 0.90, "7": 0.95, "10": 1.05, "11": 1.10
+        },
+        "note": "夏の福島は高速馬場でスピード型が有利。秋の福島はオーバーシードでパワー型寄りに変化。"
+      },
+
+      "rail_positions": {
+        "available": ["A", "B", "C"],
+        "typical_schedule": [
+          {"weeks": "1-2週", "position": "A", "note": "内枠先行有利。フレッシュな芝。"},
+          {"weeks": "3-4週", "position": "B", "note": "やや外差し利く"},
+          {"weeks": "5週以降", "position": "C", "note": "内が荒れて外差し傾向"}
+        ],
+        "inner_width_m": {"A": 0, "B": 3, "C": 6}
+      },
+
+      "draw_bias": {
+        "turf_1200": {"first_corner_m": 300, "start_pos": "向正面直線", "corners": 2, "inner_1_4": 1.15, "middle_5_8": 1.0, "outer_9_plus": 0.85, "note": "初角300mで短い。内枠先行が有利"},
+        "turf_1700": {"first_corner_m": 200, "start_pos": "2角付近", "corners": 4, "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角200mで非常に短い。コーナー4回"},
+        "turf_1800": {"first_corner_m": 300, "start_pos": "正面スタンド前", "corners": 2, "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角300m。やや内枠有利"},
+        "turf_2000": {"first_corner_m": 500, "start_pos": "正面奥ポケット", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角500m。フラット"},
+        "turf_2600": {"first_corner_m": 200, "start_pos": "3角奥ポケット", "corners": 6, "inner_1_4": 0.95, "middle_5_8": 1.0, "outer_9_plus": 1.05, "note": "初角短いが超長距離。スタミナ優先"}
+      },
+
+      "characteristics": [
+        "季節で芝質が大きく変わる (夏=高速野芝、秋=重いオーバーシード)",
+        "小回りだが直線はやや長め",
+        "開催後半は馬場が荒れて外差し傾向",
+        "内回り中心でペースが速くなりやすい"
+      ],
+      "traits": {
+        "stamina_demand": 4,
+        "power_demand": 4,
+        "speed_sustain": 7,
+        "acceleration": 4,
+        "agility": 7,
+        "track_bias_inner": 6,
+        "front_runner_advantage": 7
+      },
+      "bloodline_tendency": {
+        "favored_types": ["スピード持続型", "先行型"],
+        "unfavored_types": ["大跳び長距離型"],
+        "grass_specific": "夏はスピード血統、秋はパワー血統と季節で求められる適性が変わる。",
+        "note": "小回りでペースが速くなりやすい。スピードの持続力が問われるコース。"
+      }
+    },
+
+    "04": {
+      "name": "新潟",
+      "name_en": "Niigata",
+      "region": "甲信越",
+      "direction": "左回り",
+      "turf_circumference_m": 2223,
+      "turf_straight_m": 659,
+      "turf_width_m": 28,
+      "dirt_circumference_m": 1623,
+      "dirt_straight_m": 354,
+      "has_slope": false,
+      "slope_height_m": 0.0,
+      "slope_type": "平坦",
+      "course_shape": "大回り",
+      "corner_tightness": "緩い",
+      "available_turf_distances": [1000, 1200, 1400, 1600, 1800, 2000, 2200],
+      "available_dirt_distances": [1200, 1800],
+
+      "grass_info": {
+        "base_type": "野芝",
+        "seasonal_variation": true,
+        "schedule": [
+          {"months": [5, 6, 7, 8], "type": "野芝", "condition": "夏は野芝がフル。JRA屈指の高速馬場。瞬発力勝負。"},
+          {"months": [9, 10], "type": "野芝 (やや荒れ)", "condition": "秋は開催が長引くと芝が傷む。内回りは荒れやすい。"},
+          {"months": [4], "type": "オーバーシード → 野芝移行期", "condition": "春先はオーバーシードが残り、やや時計がかかる。"}
+        ],
+        "detail": "夏の新潟は超高速馬場。直線1000mは純粋なスピード+瞬発力勝負。外回り659mの直線はサンデー系の独壇場。",
+        "opening_months": [5, 7, 8, 10],
+        "power_modifier_by_month": {
+          "5": 0.95, "7": 0.85, "8": 0.90, "10": 1.0
+        },
+        "note": "夏の高速馬場は洋芝コースと真逆の特性。瞬発力がすべて。"
+      },
+
+      "rail_positions": {
+        "available": ["A", "B", "C", "D"],
+        "typical_schedule": [
+          {"weeks": "1-2週", "position": "A", "note": "高速馬場。内枠やや有利"},
+          {"weeks": "3-4週", "position": "B", "note": "フラット〜やや外差し"},
+          {"weeks": "5-6週", "position": "C", "note": "外差し優勢"},
+          {"weeks": "7週以降", "position": "D", "note": "内完全に荒れ。外枠有利になることも"}
+        ],
+        "inner_width_m": {"A": 0, "B": 3, "C": 6, "D": 9}
+      },
+
+      "draw_bias": {
+        "turf_1000_straight": {"first_corner_m": null, "start_pos": "直線コース", "corners": 0, "inner_1_4": 0.85, "middle_5_8": 1.05, "outer_9_plus": 1.10, "note": "コーナーなし。外枠有利 (内にヨレる馬に巻き込まれない)"},
+        "turf_1200": {"first_corner_m": 500, "start_pos": "向正面直線", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角500m。大回りで枠順影響なし"},
+        "turf_1400_ext": {"first_corner_m": 720, "start_pos": "向正面奥", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "外回り。初角720mで十分。フラット"},
+        "turf_1600_ext": {"first_corner_m": 940, "start_pos": "2角付近", "corners": 2, "inner_1_4": 0.95, "middle_5_8": 1.0, "outer_9_plus": 1.05, "note": "外回り。初角940mで極めて長い。外枠でもロスなし"},
+        "turf_1800": {"first_corner_m": 540, "start_pos": "正面スタンド前", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角540m。フラット"},
+        "turf_2000_ext": {"first_corner_m": 1000, "start_pos": "正面直線奥", "corners": 2, "inner_1_4": 0.95, "middle_5_8": 1.05, "outer_9_plus": 1.0, "note": "外回り。初角1000m。JRA最長級で枠順影響なし"},
+        "turf_2200": {"first_corner_m": 550, "start_pos": "2角ポケット", "corners": 4, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角550m。フラット"}
+      },
+
+      "characteristics": [
+        "JRA最長の直線659m (外回り) — 末脚の切れ味が最も活きる",
+        "直線1000m芝コース (唯一) — 外枠有利の特殊なバイアス",
+        "完全平坦で瞬発力勝負",
+        "夏は超高速馬場、秋は開催が進むと内が荒れる",
+        "仮柵がA→D と大きく動き、バイアスが劇的に変化"
+      ],
+      "traits": {
+        "stamina_demand": 3,
+        "power_demand": 2,
+        "speed_sustain": 4,
+        "acceleration": 10,
+        "agility": 2,
+        "track_bias_inner": 3,
+        "front_runner_advantage": 3
+      },
+      "bloodline_tendency": {
+        "favored_types": ["瞬発力型", "末脚型", "大トビ型"],
+        "unfavored_types": ["パワー型", "小回り巧者"],
+        "grass_specific": "夏の高速野芝ではサンデーサイレンス系の切れ味が圧倒的。直線1000mはスプリント血統の中でも瞬発力に秀でた血統が有利。",
+        "note": "JRA最長の直線で末脚が最も活きるコース。サンデーサイレンス系など瞬発力に優れた血統が圧倒的有利。"
+      }
+    },
+
+    "05": {
+      "name": "東京",
+      "name_en": "Tokyo",
+      "region": "関東",
+      "direction": "左回り",
+      "turf_circumference_m": 2083,
+      "turf_straight_m": 526,
+      "turf_width_m": 28,
+      "dirt_circumference_m": 1899,
+      "dirt_straight_m": 501,
+      "has_slope": true,
+      "slope_height_m": 2.1,
+      "slope_type": "緩やかな上り坂",
+      "course_shape": "大回り",
+      "corner_tightness": "緩い",
+      "available_turf_distances": [1400, 1600, 1800, 2000, 2300, 2400, 2500, 3400],
+      "available_dirt_distances": [1300, 1400, 1600, 2100, 2400],
+
+      "grass_info": {
+        "base_type": "野芝",
+        "seasonal_variation": true,
+        "schedule": [
+          {"months": [1, 2], "type": "オーバーシード", "condition": "冬の東京開催。オーバーシードが主体。やや時計がかかり、パワー型にもチャンス。"},
+          {"months": [4, 5, 6], "type": "野芝 + オーバーシード混在", "condition": "春の東京。ダービー週は最高の馬場。オーバーシードから野芝への移行期で適度なクッション。"},
+          {"months": [10, 11], "type": "野芝", "condition": "秋の東京。野芝が充実した高速馬場。天皇賞(秋)・JCは超高速になることも。"}
+        ],
+        "detail": "日本ダービー・天皇賞(秋)・ジャパンカップの舞台。春は混合芝で万能型、秋は高速野芝で瞬発力型が有利。",
+        "opening_months": [1, 2, 4, 5, 6, 10, 11],
+        "power_modifier_by_month": {
+          "1": 1.10, "2": 1.15, "4": 1.0, "5": 0.95, "6": 0.95, "10": 0.90, "11": 0.90
+        },
+        "note": "春 (4-6月) と秋 (10-11月) で馬場の質感が異なる。冬 (1-2月) はさらに異なる。"
+      },
+
+      "rail_positions": {
+        "available": ["A", "B", "C", "D"],
+        "typical_schedule": [
+          {"weeks": "開催1-2週", "position": "A", "note": "フレッシュ。やや内枠有利"},
+          {"weeks": "開催3-4週", "position": "B", "note": "フラット〜やや外差し"},
+          {"weeks": "開催5-6週", "position": "C", "note": "外差し優勢"},
+          {"weeks": "開催7週以降", "position": "D", "note": "内完全荒れ。外枠・差し馬有利"}
+        ],
+        "inner_width_m": {"A": 0, "B": 3, "C": 7, "D": 10},
+        "note": "東京は開催が長いためA→Dまで大きく変化。秋天・JC時のCやDコースでは外差し脚質が台頭。"
+      },
+
+      "draw_bias": {
+        "turf_1400": {"first_corner_m": 344, "start_pos": "向正面2角寄り", "corners": 2, "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角344mでやや短い。内枠有利"},
+        "turf_1600": {"first_corner_m": 540, "start_pos": "向正面中央", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角540mで十分。非常にフラット"},
+        "turf_1800": {"first_corner_m": 326, "start_pos": "正面スタンド前", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角326mだが大回りで吸収。フラット"},
+        "turf_2000": {"first_corner_m": 526, "start_pos": "正面直線奥", "corners": 2, "inner_1_4": 0.95, "middle_5_8": 1.05, "outer_9_plus": 1.0, "note": "初角526m。やや中枠有利"},
+        "turf_2300": {"first_corner_m": 326, "start_pos": "正面スタンド前", "corners": 4, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角326m。長距離でフラット"},
+        "turf_2400": {"first_corner_m": 526, "start_pos": "正面直線奥", "corners": 2, "inner_1_4": 0.95, "middle_5_8": 1.0, "outer_9_plus": 1.05, "note": "初角526m。ダービー・JC。外枠もロスなし"},
+        "turf_2500": {"first_corner_m": 426, "start_pos": "正面スタンド手前", "corners": 4, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角426m。目黒記念。フラット"},
+        "turf_3400": {"first_corner_m": 326, "start_pos": "正面スタンド前", "corners": 6, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "超長距離。スタミナが枠順を凌駕"},
+        "dirt_1300": {"first_corner_m": 300, "start_pos": "向正面", "corners": 2, "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角300m。やや内枠有利"},
+        "dirt_1600": {"first_corner_m": 500, "start_pos": "向正面中央", "corners": 2, "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角500mだが砂を被る内枠不利もあり。フェブラリーS"},
+        "dirt_2100": {"first_corner_m": 500, "start_pos": "正面直線芝スタート", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "芝スタート→ダート合流。フラット"}
+      },
+
+      "characteristics": [
+        "日本ダービー・天皇賞(秋)・JCの舞台",
+        "直線526m+緩やかな坂 — 総合力が問われる",
+        "冬 (オーバーシード) と秋 (高速野芝) で全く違う馬場",
+        "仮柵がA→Dで大きく変化、開催後半は外差し傾向",
+        "スタミナ+瞬発力の両立が必要"
+      ],
+      "traits": {
+        "stamina_demand": 6,
+        "power_demand": 5,
+        "speed_sustain": 5,
+        "acceleration": 8,
+        "agility": 3,
+        "track_bias_inner": 4,
+        "front_runner_advantage": 4
+      },
+      "bloodline_tendency": {
+        "favored_types": ["総合型", "瞬発力型", "スタミナ型"],
+        "unfavored_types": ["前残り型"],
+        "grass_specific": "秋の高速馬場ではディープインパクト系が無双。冬のオーバーシードではキングカメハメハ系にもチャンス。",
+        "note": "最も総合力が問われるコース。長い直線で末脚が活きるが、坂があるためパワーも必要。"
+      }
+    },
+
+    "06": {
+      "name": "中山",
+      "name_en": "Nakayama",
+      "region": "関東",
+      "direction": "右回り",
+      "turf_circumference_m": 1840,
+      "turf_straight_m": 310,
+      "turf_width_m": 25,
+      "dirt_circumference_m": 1493,
+      "dirt_straight_m": 308,
+      "has_slope": true,
+      "slope_height_m": 2.2,
+      "slope_type": "急坂",
+      "course_shape": "中回り",
+      "corner_tightness": "ややきつい",
+      "available_turf_distances": [1200, 1600, 1800, 2000, 2200, 2500, 3600],
+      "available_dirt_distances": [1200, 1800, 2400, 2500],
+
+      "grass_info": {
+        "base_type": "野芝",
+        "seasonal_variation": true,
+        "schedule": [
+          {"months": [12, 1], "type": "オーバーシード", "condition": "有馬記念・中山金杯の時期。オーバーシードで時計がかかる。パワー+スタミナ勝負。"},
+          {"months": [2, 3], "type": "オーバーシード (劣化)", "condition": "冬場はオーバーシードが傷み馬場悪化。特に内が荒れる。"},
+          {"months": [4], "type": "野芝芽吹き期", "condition": "皐月賞の時期。野芝が芽吹き始めるがまだ薄い。やや時計がかかる。"},
+          {"months": [9, 10, 11], "type": "野芝", "condition": "秋の中山。スプリンターズS・秋の開催。野芝で比較的速い馬場。"}
+        ],
+        "detail": "有馬記念 (12月) はオーバーシードで重い馬場、皐月賞 (4月) は野芝移行期。秋 (9-11月) は野芝で比較的軽い。",
+        "opening_months": [1, 2, 3, 4, 9, 10, 11, 12],
+        "power_modifier_by_month": {
+          "1": 1.20, "2": 1.25, "3": 1.20, "4": 1.10, "9": 1.0, "10": 1.0, "11": 1.05, "12": 1.15
+        },
+        "note": "急坂+冬のオーバーシード = JRA最高のパワー要求。有馬記念はパワー+スタミナの真の適性が問われる。"
+      },
+
+      "rail_positions": {
+        "available": ["A", "B", "C"],
+        "typical_schedule": [
+          {"weeks": "開催1-2週", "position": "A", "note": "内枠先行有利。急坂の影響で前残り傾向"},
+          {"weeks": "開催3-4週", "position": "B", "note": "内荒れ始め。やや差し利く"},
+          {"weeks": "5週以降", "position": "C", "note": "内かなり荒れ。差し・追込有利に"}
+        ],
+        "inner_width_m": {"A": 0, "B": 3, "C": 6},
+        "note": "冬の開催は芝の回復が遅く、開催後半はかなり荒れる。仮柵位置が着順に大きく影響。"
+      },
+
+      "draw_bias": {
+        "turf_1200": {"first_corner_m": 200, "start_pos": "向正面2角寄り", "corners": 2, "inner_1_4": 1.20, "middle_5_8": 1.0, "outer_9_plus": 0.80, "note": "初角200mで超短い。JRA屈指の内枠有利コース"},
+        "turf_1600": {"first_corner_m": 240, "start_pos": "正面スタンド前内回り", "corners": 4, "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角240mで非常に短い。コーナー4回で内枠先行が圧倒的有利"},
+        "turf_1800": {"first_corner_m": 410, "start_pos": "正面スタンド奥", "corners": 2, "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角410m。やや内枠有利"},
+        "turf_2000": {"first_corner_m": 405, "start_pos": "正面スタンド奥内回り", "corners": 4, "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角405m。内回りコーナー4回でやや内枠有利"},
+        "turf_2200": {"first_corner_m": 430, "start_pos": "正面直線外回り", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "外回り。初角430m。フラット"},
+        "turf_2500": {"first_corner_m": 310, "start_pos": "正面スタンド前", "corners": 4, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "有馬記念。初角310mだがスタミナ+パワーが枠順を凌駕"},
+        "turf_3600": {"first_corner_m": 310, "start_pos": "正面スタンド前", "corners": 6, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "超長距離。枠順の影響なし"},
+        "dirt_1200": {"first_corner_m": 300, "start_pos": "向正面", "corners": 2, "inner_1_4": 1.15, "middle_5_8": 1.0, "outer_9_plus": 0.85, "note": "初角300m。内枠有利"},
+        "dirt_1800": {"first_corner_m": 308, "start_pos": "正面スタンド前", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角308m。フラット"}
+      },
+
+      "characteristics": [
+        "ゴール前2.2mの急坂 (JRA最急) — パワーなければ坂で止まる",
+        "有馬記念の舞台。冬のオーバーシード+急坂で最もタフ",
+        "短距離 (1200m) は超内枠有利",
+        "仮柵の位置で内枠バイアスが大きく変動",
+        "皐月賞 (4月) は野芝移行期で独特の馬場"
+      ],
+      "traits": {
+        "stamina_demand": 8,
+        "power_demand": 9,
+        "speed_sustain": 6,
+        "acceleration": 4,
+        "agility": 6,
+        "track_bias_inner": 6,
+        "front_runner_advantage": 6
+      },
+      "bloodline_tendency": {
+        "favored_types": ["パワー型", "スタミナ型", "根幹距離型"],
+        "unfavored_types": ["非力な瞬発力型"],
+        "grass_specific": "冬のオーバーシード+急坂ではステイゴールド系、ハーツクライ系が活躍。秋の野芝では多様な血統にチャンス。",
+        "note": "急坂がすべてを決める。パワーとスタミナがなければ坂で止まる。"
+      }
+    },
+
+    "07": {
+      "name": "中京",
+      "name_en": "Chukyo",
+      "region": "東海",
+      "direction": "左回り",
+      "turf_circumference_m": 1706,
+      "turf_straight_m": 412,
+      "turf_width_m": 25,
+      "dirt_circumference_m": 1530,
+      "dirt_straight_m": 411,
+      "has_slope": true,
+      "slope_height_m": 1.8,
+      "slope_type": "上り坂",
+      "course_shape": "中回り",
+      "corner_tightness": "普通",
+      "available_turf_distances": [1200, 1400, 1600, 2000, 2200],
+      "available_dirt_distances": [1200, 1400, 1800, 1900],
+
+      "grass_info": {
+        "base_type": "野芝",
+        "seasonal_variation": true,
+        "schedule": [
+          {"months": [1, 2, 3], "type": "オーバーシード", "condition": "冬の中京。オーバーシードで時計がかかる。坂の影響が増幅される。"},
+          {"months": [6, 7], "type": "野芝 + オーバーシード残り", "condition": "初夏。野芝が育ち始めるが、まだやや重い。"},
+          {"months": [9, 10, 11, 12], "type": "野芝", "condition": "秋〜初冬。野芝が充実。比較的標準的な馬場。"}
+        ],
+        "detail": "向正面の長い上り坂が特徴。冬のオーバーシード時はこの坂がさらにスタミナを削る。",
+        "opening_months": [1, 3, 6, 7, 9, 12],
+        "power_modifier_by_month": {
+          "1": 1.15, "3": 1.10, "6": 1.0, "7": 0.95, "9": 0.95, "12": 1.10
+        },
+        "note": "冬は坂+オーバーシードでかなりタフ。夏〜秋は比較的走りやすい。"
+      },
+
+      "rail_positions": {
+        "available": ["A", "B", "C"],
+        "typical_schedule": [
+          {"weeks": "開催1-2週", "position": "A", "note": "内枠やや有利"},
+          {"weeks": "開催3-4週", "position": "B", "note": "フラット"},
+          {"weeks": "5週以降", "position": "C", "note": "外差し傾向"}
+        ],
+        "inner_width_m": {"A": 0, "B": 4, "C": 8}
+      },
+
+      "draw_bias": {
+        "turf_1200": {"first_corner_m": 303, "start_pos": "向正面直線", "corners": 2, "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角303m。やや短く内枠有利"},
+        "turf_1400": {"first_corner_m": 453, "start_pos": "向正面奥", "corners": 2, "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角453m。やや内枠有利"},
+        "turf_1600": {"first_corner_m": 400, "start_pos": "2角付近", "corners": 4, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角400m。コーナー4回だが距離で吸収。フラット"},
+        "turf_2000": {"first_corner_m": 412, "start_pos": "正面スタンド前", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.05, "outer_9_plus": 0.95, "note": "初角412m。中枠やや有利"},
+        "turf_2200": {"first_corner_m": 553, "start_pos": "正面直線奥", "corners": 2, "inner_1_4": 0.95, "middle_5_8": 1.0, "outer_9_plus": 1.05, "note": "初角553m。やや外枠有利。スタミナ勝負"},
+        "dirt_1200": {"first_corner_m": 280, "start_pos": "向正面", "corners": 2, "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角280m。内枠有利"},
+        "dirt_1800": {"first_corner_m": 411, "start_pos": "正面スタンド前", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角411m。フラット"},
+        "dirt_1900": {"first_corner_m": 330, "start_pos": "正面直線芝スタート", "corners": 4, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "芝スタート。初角330m。フラット"}
+      },
+
+      "characteristics": [
+        "向正面に長い上り坂 — スタミナ消耗が大きい",
+        "直線412m+坂 — 東京に似た適性だがよりタフ",
+        "冬のオーバーシード+坂で高いパワー要求",
+        "左回りで東京の代替開催地としても使用"
+      ],
+      "traits": {
+        "stamina_demand": 7,
+        "power_demand": 7,
+        "speed_sustain": 5,
+        "acceleration": 6,
+        "agility": 5,
+        "track_bias_inner": 5,
+        "front_runner_advantage": 5
+      },
+      "bloodline_tendency": {
+        "favored_types": ["スタミナ型", "パワー型"],
+        "unfavored_types": ["スピード特化型"],
+        "grass_specific": "冬の中京はオーバーシード+坂でパワー血統が台頭。夏〜秋は東京に似た適性。",
+        "note": "坂が多くスタミナを消耗するコース。東京と適性が似るが、よりパワーが必要。"
+      }
+    },
+
+    "08": {
+      "name": "京都",
+      "name_en": "Kyoto",
+      "region": "近畿",
+      "direction": "右回り",
+      "turf_circumference_m": 1894,
+      "turf_straight_m": 404,
+      "turf_width_m": 27,
+      "dirt_circumference_m": 1608,
+      "dirt_straight_m": 329,
+      "has_slope": true,
+      "slope_height_m": 4.3,
+      "slope_type": "3コーナー下り坂",
+      "course_shape": "大回り",
+      "corner_tightness": "緩い",
+      "available_turf_distances": [1200, 1400, 1600, 1800, 2000, 2200, 2400, 3000, 3200],
+      "available_dirt_distances": [1200, 1400, 1800, 1900, 2000],
+
+      "grass_info": {
+        "base_type": "エクイターフ",
+        "seasonal_variation": true,
+        "schedule": [
+          {"months": [1, 2], "type": "エクイターフ (冬)", "condition": "改修後のエクイターフ。冬でも比較的均一だが、やや時計がかかる。"},
+          {"months": [4, 5], "type": "エクイターフ (春)", "condition": "春の京都。天皇賞(春)・菊花賞のトライアル期。エクイターフが安定。"},
+          {"months": [10, 11], "type": "エクイターフ (秋)", "condition": "秋の京都。菊花賞・エリザベス女王杯。やや高速寄り。"}
+        ],
+        "detail": "2023年改修でエクイターフ (洋芝ベースの高耐久ターフ) を導入。従来の野芝+オーバーシードより均一で耐久性が高い。洋芝寄りだが極端に重くはない。",
+        "opening_months": [1, 2, 4, 5, 10, 11],
+        "power_modifier_by_month": {
+          "1": 1.10, "2": 1.10, "4": 1.0, "5": 0.95, "10": 0.95, "11": 1.0
+        },
+        "note": "改修前 (〜2022) は野芝+オーバーシードで高速馬場。改修後 (2023〜) はエクイターフでやや時計がかかるようになった。淀の下り坂の影響は変わらず。"
+      },
+
+      "rail_positions": {
+        "available": ["A", "B", "C", "D"],
+        "typical_schedule": [
+          {"weeks": "開催1-2週", "position": "A", "note": "内枠やや有利。淀の坂の加速で前残り傾向"},
+          {"weeks": "開催3-4週", "position": "B", "note": "フラット〜やや差し"},
+          {"weeks": "開催5-6週", "position": "C", "note": "差し優勢"},
+          {"weeks": "7週以降", "position": "D", "note": "外差し有利"}
+        ],
+        "inner_width_m": {"A": 0, "B": 3, "C": 6, "D": 9}
+      },
+
+      "draw_bias": {
+        "turf_1200_int": {"first_corner_m": 300, "start_pos": "向正面直線内回り", "corners": 2, "course_type": "内", "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角300m。内回りで内枠有利"},
+        "turf_1400_int": {"first_corner_m": 470, "start_pos": "向正面奥内回り", "corners": 2, "course_type": "内", "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角470m。やや内枠有利"},
+        "turf_1600_ext": {"first_corner_m": 710, "start_pos": "2角奥外回り", "corners": 2, "course_type": "外", "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角710mで非常に長い。マイルCS。完全フラット"},
+        "turf_1800_ext": {"first_corner_m": 570, "start_pos": "正面スタンド前外回り", "corners": 2, "course_type": "外", "inner_1_4": 0.95, "middle_5_8": 1.05, "outer_9_plus": 1.0, "note": "初角570m。外回りで中枠やや有利"},
+        "turf_2000_int": {"first_corner_m": 400, "start_pos": "正面スタンド前内回り", "corners": 4, "course_type": "内", "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角400m。コーナー4回だが距離で吸収。フラット"},
+        "turf_2200_ext": {"first_corner_m": 600, "start_pos": "正面直線奥外回り", "corners": 2, "course_type": "外", "inner_1_4": 0.95, "middle_5_8": 1.0, "outer_9_plus": 1.05, "note": "初角600m。エリザベス女王杯。外枠やや有利"},
+        "turf_2400_ext": {"first_corner_m": 550, "start_pos": "正面スタンド奥外回り", "corners": 4, "course_type": "外", "inner_1_4": 0.95, "middle_5_8": 1.0, "outer_9_plus": 1.05, "note": "初角550m。コーナー4回だが淀の坂の加速で外差し利く"},
+        "turf_3000": {"first_corner_m": 400, "start_pos": "正面スタンド前", "corners": 6, "course_type": "外", "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "菊花賞。初角400mだが超長距離でフラット"},
+        "turf_3200": {"first_corner_m": 400, "start_pos": "正面スタンド前", "corners": 6, "course_type": "外", "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "天皇賞(春)。スタミナが枠順を凌駕"}
+      },
+
+      "characteristics": [
+        "3コーナーに4.3mの下り坂 (淀の坂) — 下りで加速がつく",
+        "改修後はエクイターフ (洋芝ベース) で従来よりやや重い",
+        "下り坂→長い直線で瞬発力が最も活きる",
+        "内回り/外回りで全く異なる適性",
+        "天皇賞(春) 3200mはJRA最長の平地GI"
+      ],
+      "traits": {
+        "stamina_demand": 5,
+        "power_demand": 4,
+        "speed_sustain": 5,
+        "acceleration": 9,
+        "agility": 4,
+        "track_bias_inner": 5,
+        "front_runner_advantage": 4
+      },
+      "bloodline_tendency": {
+        "favored_types": ["瞬発力型", "末脚型", "長距離型"],
+        "unfavored_types": ["パワー型先行馬"],
+        "grass_specific": "改修前はディープインパクト系が圧倒的。改修後 (エクイターフ) ではキタサンブラック系など馬場を問わないタイプにもチャンス。",
+        "note": "淀の下り坂で加速がつくため、末脚の切れ味が最も活きるコース。"
+      }
+    },
+
+    "09": {
+      "name": "阪神",
+      "name_en": "Hanshin",
+      "region": "近畿",
+      "direction": "右回り",
+      "turf_circumference_m": 2089,
+      "turf_straight_m": 474,
+      "turf_width_m": 28,
+      "dirt_circumference_m": 1517,
+      "dirt_straight_m": 352,
+      "has_slope": true,
+      "slope_height_m": 1.8,
+      "slope_type": "急坂",
+      "course_shape": "大回り",
+      "corner_tightness": "緩い",
+      "available_turf_distances": [1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 3000],
+      "available_dirt_distances": [1200, 1400, 1800, 2000],
+
+      "grass_info": {
+        "base_type": "野芝",
+        "seasonal_variation": true,
+        "schedule": [
+          {"months": [12, 1, 2, 3], "type": "オーバーシード", "condition": "冬の阪神。オーバーシードで時計がかかる。坂の影響が増幅。阪神JF・朝日杯はオーバーシード。"},
+          {"months": [4, 6], "type": "野芝 + オーバーシード残り", "condition": "春の阪神。桜花賞(4月)は移行期。宝塚記念(6月)は野芝が育つ。"},
+          {"months": [9, 10, 11], "type": "野芝", "condition": "秋の阪神。野芝の高速馬場。エリザベス女王杯代替開催もここ。"}
+        ],
+        "detail": "冬はオーバーシード+急坂でタフ。宝塚記念 (6月) は梅雨の影響も。秋は比較的走りやすい。",
+        "opening_months": [1, 2, 3, 4, 6, 9, 10, 11, 12],
+        "power_modifier_by_month": {
+          "1": 1.15, "2": 1.20, "3": 1.15, "4": 1.05, "6": 1.0, "9": 0.95, "10": 0.95, "11": 1.0, "12": 1.10
+        },
+        "note": "宝塚記念は梅雨+坂で非常にタフなレースになることが多い。"
+      },
+
+      "rail_positions": {
+        "available": ["A", "B", "C"],
+        "typical_schedule": [
+          {"weeks": "開催1-3週", "position": "A", "note": "内枠やや有利"},
+          {"weeks": "開催4-5週", "position": "B", "note": "フラット"},
+          {"weeks": "6週以降", "position": "C", "note": "外差し傾向"}
+        ],
+        "inner_width_m": {"A": 0, "B": 4, "C": 8}
+      },
+
+      "draw_bias": {
+        "turf_1200_int": {"first_corner_m": 303, "start_pos": "向正面直線内回り", "corners": 2, "course_type": "内", "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角303m。内回りで内枠有利"},
+        "turf_1400_int": {"first_corner_m": 440, "start_pos": "向正面奥内回り", "corners": 2, "course_type": "内", "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角440m。桜花賞。内回りで内枠有利"},
+        "turf_1600_ext": {"first_corner_m": 500, "start_pos": "2角付近外回り", "corners": 2, "course_type": "外", "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角500m。外回りでフラット。朝日杯FS"},
+        "turf_1800_ext": {"first_corner_m": 530, "start_pos": "正面スタンド前外回り", "corners": 2, "course_type": "外", "inner_1_4": 0.95, "middle_5_8": 1.05, "outer_9_plus": 1.0, "note": "初角530m。外回り中枠やや有利"},
+        "turf_2000_int": {"first_corner_m": 440, "start_pos": "正面スタンド前内回り", "corners": 4, "course_type": "内", "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角440m。内回りコーナー4回で内枠やや有利"},
+        "turf_2200_ext": {"first_corner_m": 530, "start_pos": "正面スタンド奥外回り", "corners": 2, "course_type": "外", "inner_1_4": 0.95, "middle_5_8": 1.0, "outer_9_plus": 1.05, "note": "初角530m。宝塚記念。外回りでやや外枠有利"},
+        "turf_2400_ext": {"first_corner_m": 525, "start_pos": "正面直線奥外回り", "corners": 4, "course_type": "外", "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角525m。コーナー4回だが外回りで吸収。フラット"},
+        "turf_2600": {"first_corner_m": 430, "start_pos": "正面スタンド前", "corners": 4, "course_type": "内+外", "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角430m。長距離でフラット"},
+        "turf_3000_ext": {"first_corner_m": 530, "start_pos": "正面スタンド奥外回り", "corners": 4, "course_type": "外", "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角530m。超長距離。枠順影響なし"},
+        "dirt_1200": {"first_corner_m": 260, "start_pos": "向正面", "corners": 2, "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角260m。内枠有利"},
+        "dirt_1400": {"first_corner_m": 352, "start_pos": "向正面奥", "corners": 2, "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角352m。やや内枠有利"},
+        "dirt_1800": {"first_corner_m": 352, "start_pos": "正面スタンド前", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角352m。フラット"},
+        "dirt_2000": {"first_corner_m": 352, "start_pos": "正面直線奥", "corners": 4, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "コーナー4回だがフラット"}
+      },
+
+      "characteristics": [
+        "直線474m+ゴール前急坂 — パワーと瞬発力の両立が必要",
+        "内回り/外回りで全く異なるバイアス",
+        "冬のオーバーシード+坂で中山に次ぐタフさ",
+        "宝塚記念は梅雨+坂で「最もタフなGI」の一つ",
+        "桜花賞 (内回り1600m) は内枠有利の独特なバイアス"
+      ],
+      "traits": {
+        "stamina_demand": 7,
+        "power_demand": 7,
+        "speed_sustain": 5,
+        "acceleration": 7,
+        "agility": 4,
+        "track_bias_inner": 4,
+        "front_runner_advantage": 5
+      },
+      "bloodline_tendency": {
+        "favored_types": ["総合型", "パワー+瞬発力型"],
+        "unfavored_types": ["非力な末脚型"],
+        "grass_specific": "冬はパワー血統、秋は瞬発力血統が有利。宝塚記念はスタミナ+パワーが最重要。",
+        "note": "直線は長いが最後に急坂があるため、瞬発力だけでは足りない。パワーと切れ味の両立が必要。"
+      }
+    },
+
+    "10": {
+      "name": "小倉",
+      "name_en": "Kokura",
+      "region": "九州",
+      "direction": "右回り",
+      "turf_circumference_m": 1615,
+      "turf_straight_m": 293,
+      "turf_width_m": 25,
+      "dirt_circumference_m": 1445,
+      "dirt_straight_m": 291,
+      "has_slope": false,
+      "slope_height_m": 0.3,
+      "slope_type": "ほぼ平坦",
+      "course_shape": "小回り",
+      "corner_tightness": "きつい",
+      "available_turf_distances": [1000, 1200, 1700, 1800, 2000, 2600],
+      "available_dirt_distances": [1000, 1700, 2400],
+
+      "grass_info": {
+        "base_type": "野芝",
+        "seasonal_variation": true,
+        "schedule": [
+          {"months": [2], "type": "オーバーシード", "condition": "小倉大賞典の時期。冬芝でやや重い。"},
+          {"months": [7, 8, 9], "type": "野芝", "condition": "夏の小倉。高速馬場。小倉記念・北九州記念。"},
+          {"months": [1], "type": "オーバーシード", "condition": "冬の小倉。時計がかかる。"}
+        ],
+        "detail": "夏は高速の野芝、冬はオーバーシードで時計がかかる。夏の開催が長いため後半は内が荒れやすい。",
+        "opening_months": [1, 2, 7, 8, 9],
+        "power_modifier_by_month": {
+          "1": 1.10, "2": 1.10, "7": 0.90, "8": 0.90, "9": 0.95
+        },
+        "note": "夏の高速馬場ではスピード血統が圧倒的。冬は少しパワーが要る。"
+      },
+
+      "rail_positions": {
+        "available": ["A", "B", "C"],
+        "typical_schedule": [
+          {"weeks": "1-2週", "position": "A", "note": "内枠先行が圧倒的有利"},
+          {"weeks": "3-4週", "position": "B", "note": "やや外差し利く"},
+          {"weeks": "5週以降", "position": "C", "note": "内荒れて外差し傾向"}
+        ],
+        "inner_width_m": {"A": 0, "B": 3, "C": 6},
+        "note": "夏の開催は連続4週以上になることがあり、Cコースまで使う。後半は外差しが台頭。"
+      },
+
+      "draw_bias": {
+        "turf_1000": {"first_corner_m": 200, "start_pos": "向正面奥", "corners": 2, "inner_1_4": 1.20, "middle_5_8": 1.0, "outer_9_plus": 0.80, "note": "初角200mで極めて短い。内枠絶対有利"},
+        "turf_1200": {"first_corner_m": 380, "start_pos": "向正面直線", "corners": 2, "inner_1_4": 1.15, "middle_5_8": 1.0, "outer_9_plus": 0.85, "note": "初角380m。小回りで内枠有利。北九州記念"},
+        "turf_1700": {"first_corner_m": 180, "start_pos": "2角付近", "corners": 4, "inner_1_4": 1.10, "middle_5_8": 1.0, "outer_9_plus": 0.90, "note": "初角180mで超短い。コーナー4回で内枠圧倒的有利"},
+        "turf_1800": {"first_corner_m": 380, "start_pos": "正面スタンド前", "corners": 2, "inner_1_4": 1.05, "middle_5_8": 1.0, "outer_9_plus": 0.95, "note": "初角380m。やや内枠有利"},
+        "turf_2000": {"first_corner_m": 580, "start_pos": "4角付近", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角580m。小倉記念。フラット"},
+        "turf_2600": {"first_corner_m": 180, "start_pos": "3角奥ポケット", "corners": 6, "inner_1_4": 0.95, "middle_5_8": 1.0, "outer_9_plus": 1.05, "note": "初角短いが超長距離。スタミナ勝負"},
+        "dirt_1000": {"first_corner_m": 200, "start_pos": "向正面奥", "corners": 2, "inner_1_4": 1.15, "middle_5_8": 1.0, "outer_9_plus": 0.85, "note": "初角200m。ダート短距離は内有利"},
+        "dirt_1700": {"first_corner_m": 350, "start_pos": "正面スタンド前", "corners": 2, "inner_1_4": 1.0, "middle_5_8": 1.0, "outer_9_plus": 1.0, "note": "初角350m。フラット"}
+      },
+
+      "characteristics": [
+        "夏は高速野芝でスピード勝負、冬はオーバーシードでやや重い",
+        "小回り平坦で逃げ・先行有利",
+        "直線が短く差し馬に不利",
+        "開催後半は内が荒れて外差し傾向に (仮柵B→C)",
+        "短距離は超内枠有利のバイアス"
+      ],
+      "traits": {
+        "stamina_demand": 3,
+        "power_demand": 3,
+        "speed_sustain": 8,
+        "acceleration": 3,
+        "agility": 8,
+        "track_bias_inner": 7,
+        "front_runner_advantage": 8
+      },
+      "bloodline_tendency": {
+        "favored_types": ["スピード型", "先行持続型", "小回り巧者"],
+        "unfavored_types": ["大トビ型", "スタミナ型"],
+        "grass_specific": "夏の高速馬場ではミスタープロスペクター系のスピードが活きる。冬はやや幅広い血統にチャンス。",
+        "note": "小回り平坦でスピードの持続力が問われる。逃げ・先行が有利で、差し馬には厳しいコース。"
+      }
+    }
+  },
+
+  "surface_modifiers": {
+    "turf_good": {
+      "label": "芝・良",
+      "speed_modifier": 1.0,
+      "stamina_modifier": 1.0,
+      "power_modifier": 1.0,
+      "favors": "瞬発力型"
+    },
+    "turf_slightly_heavy": {
+      "label": "芝・稍重",
+      "speed_modifier": 0.95,
+      "stamina_modifier": 1.1,
+      "power_modifier": 1.15,
+      "favors": "パワー型"
+    },
+    "turf_heavy": {
+      "label": "芝・重",
+      "speed_modifier": 0.85,
+      "stamina_modifier": 1.2,
+      "power_modifier": 1.3,
+      "favors": "パワー+スタミナ型"
+    },
+    "turf_bad": {
+      "label": "芝・不良",
+      "speed_modifier": 0.75,
+      "stamina_modifier": 1.35,
+      "power_modifier": 1.5,
+      "favors": "ダート兼用パワー型"
+    },
+    "dirt_good": {
+      "label": "ダート・良",
+      "speed_modifier": 0.9,
+      "stamina_modifier": 1.1,
+      "power_modifier": 1.3,
+      "favors": "パワー型"
+    },
+    "dirt_heavy": {
+      "label": "ダート・重/不良",
+      "speed_modifier": 0.95,
+      "stamina_modifier": 1.0,
+      "power_modifier": 1.1,
+      "favors": "スピード+パワー型"
+    }
+  },
+
+  "distance_band_characteristics": {
+    "sprint": {
+      "range": [1000, 1400],
+      "label": "短距離",
+      "primary_demand": "スピード",
+      "secondary_demand": "加速力",
+      "key_trait": "ダッシュ力とスピードの持続力",
+      "typical_bloodline": "ミスタープロスペクター系, ストームキャット系",
+      "draw_importance": "非常に高い (特に小回りコース)"
+    },
+    "mile": {
+      "range": [1400, 1800],
+      "label": "マイル",
+      "primary_demand": "スピード+スタミナ",
+      "secondary_demand": "瞬発力",
+      "key_trait": "スピードと瞬発力のバランス",
+      "typical_bloodline": "サンデーサイレンス系, キングカメハメハ系",
+      "draw_importance": "中程度 (コースによる)"
+    },
+    "intermediate": {
+      "range": [1800, 2200],
+      "label": "中距離",
+      "primary_demand": "総合力",
+      "secondary_demand": "スタミナ",
+      "key_trait": "スピード・スタミナ・瞬発力の三拍子",
+      "typical_bloodline": "ディープインパクト系, ハーツクライ系",
+      "draw_importance": "低〜中 (長い距離で吸収される)"
+    },
+    "long": {
+      "range": [2200, 2800],
+      "label": "長距離",
+      "primary_demand": "スタミナ",
+      "secondary_demand": "パワー",
+      "key_trait": "スタミナと精神力",
+      "typical_bloodline": "ステイゴールド系, サドラーズウェルズ系",
+      "draw_importance": "低い"
+    },
+    "extended": {
+      "range": [2800, 9999],
+      "label": "超長距離",
+      "primary_demand": "スタミナ",
+      "secondary_demand": "折り合い",
+      "key_trait": "極限のスタミナと精神的強さ",
+      "typical_bloodline": "欧州ステイヤー系",
+      "draw_importance": "ほぼなし"
+    }
+  }
+}

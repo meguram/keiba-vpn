@@ -1,0 +1,29 @@
+{
+  "sprint": {
+    "auc": 0.8237,
+    "n_samples": 1008,
+    "feature_importance": {
+      "sire_enc": 589.5140532636565,
+      "dam_sire_enc": 1556.960337067296,
+      "distance": 0.0
+    }
+  },
+  "intermediate": {
+    "auc": 0.7681,
+    "n_samples": 142,
+    "feature_importance": {
+      "sire_enc": 24.114110231399536,
+      "dam_sire_enc": 89.01878094673157,
+      "distance": 0.0
+    }
+  },
+  "all": {
+    "auc": 0.8611,
+    "n_samples": 1306,
+    "feature_importance": {
+      "sire_enc": 525.7272138297558,
+      "dam_sire_enc": 1285.541244437079,
+      "distance": 15.40694397687912
+    }
+  }
+}

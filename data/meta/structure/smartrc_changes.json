@@ -1,0 +1,59 @@
+{
+  "category": "smartrc_changes",
+  "timestamp": "2026-03-18T15:56:48.414198",
+  "sample_id": "smartrc_changes",
+  "selector_results": {
+    "id": {
+      "selector": "json_key:id",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "skind": {
+      "selector": "json_key:skind",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "dtime": {
+      "selector": "json_key:dtime",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "target": {
+      "selector": "json_key:target",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "before": {
+      "selector": "json_key:before",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "after": {
+      "selector": "json_key:after",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "reason": {
+      "selector": "json_key:reason",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    }
+  },
+  "row_count": 15,
+  "column_count": 0,
+  "column_classes": []
+}

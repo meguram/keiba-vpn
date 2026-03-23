@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>馬場速度レベリング | ML-AutoPilot Keiba</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #131926;
+    --surface2: #1a2235;
+    --border: #243049;
+    --text: #c8d6e5;
+    --text-dim: #6b7d95;
+    --accent: #3b82f6;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --err: #ef4444;
+    --speed5: #ef4444;
+    --speed4: #f97316;
+    --speed3: #a3a3a3;
+    --speed2: #3b82f6;
+    --speed1: #8b5cf6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh;
+  }
+  .page-header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 20px 32px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  }
+  .page-header h1 { font-size: 18px; font-weight: 600; color: #fff; }
+  .page-header .sub { font-size: 12px; color: var(--text-dim); }
+
+  .controls {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 32px; flex-wrap: wrap;
+  }
+  .btn {
+    border: none; border-radius: 8px; padding: 8px 18px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-outline {
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-outline.active { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.08); }
+
+  select {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 12px; font-size: 13px; outline: none;
+  }
+
+  .job-banner {
+    margin: 0 32px 16px; padding: 14px 18px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; display: none;
+  }
+  .job-banner .title { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 8px; }
+  .job-progress { font-size: 12px; color: var(--text-dim); max-height: 120px; overflow-y: auto; }
+  .job-progress div { padding: 2px 0; }
+  .job-spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid rgba(59,130,246,0.2); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .stats-row {
+    display: flex; gap: 12px; padding: 0 32px 16px; flex-wrap: wrap;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 18px; min-width: 130px;
+  }
+  .stat-card .label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+  .stat-card .value { font-size: 22px; font-weight: 700; color: #fff; }
+
+  .legend-row {
+    display: flex; gap: 16px; padding: 0 32px 16px; flex-wrap: wrap; align-items: center;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-dim);
+  }
+  .legend-dot {
+    width: 10px; height: 10px; border-radius: 3px;
+  }
+
+  .timeline-container {
+    padding: 0 32px 32px;
+  }
+  .date-group {
+    margin-bottom: 6px;
+  }
+  .date-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; cursor: pointer;
+    border-radius: 8px; transition: background 0.15s;
+  }
+  .date-header:hover { background: rgba(59,130,246,0.04); }
+  .date-label { font-size: 14px; font-weight: 600; color: #fff; min-width: 110px; }
+  .date-weekday { font-size: 11px; min-width: 20px; }
+  .date-weekday.sat { color: #60a5fa; }
+  .date-weekday.sun { color: #f87171; }
+
+  .venue-badges { display: flex; gap: 8px; flex: 1; flex-wrap: wrap; }
+  .venue-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 6px; font-size: 12px;
+    border: 1px solid var(--border); background: var(--surface);
+    transition: all 0.15s;
+  }
+  .venue-badge:hover { border-color: rgba(255,255,255,0.1); }
+  .venue-name { font-weight: 600; color: #fff; }
+  .surface-tag {
+    font-size: 10px; font-weight: 700; padding: 1px 5px;
+    border-radius: 3px; letter-spacing: 0.5px;
+  }
+  .surface-tag.turf { background: rgba(34,197,94,0.15); color: #4ade80; }
+  .surface-tag.dirt { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .tsi-value {
+    font-size: 13px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 40px; text-align: right;
+  }
+  .speed-label {
+    font-size: 10.5px; font-weight: 600; padding: 2px 7px;
+    border-radius: 4px;
+  }
+  .speed-5 { color: var(--speed5); background: rgba(239,68,68,0.12); }
+  .speed-4 { color: var(--speed4); background: rgba(249,115,22,0.12); }
+  .speed-3 { color: var(--speed3); background: rgba(163,163,163,0.1); }
+  .speed-2 { color: var(--speed2); background: rgba(59,130,246,0.12); }
+  .speed-1 { color: var(--speed1); background: rgba(139,92,246,0.12); }
+  .sample-count { font-size: 10px; color: var(--text-dim); }
+
+  .detail-panel {
+    margin: 4px 0 10px 128px; padding: 12px 16px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; display: none;
+  }
+  .detail-panel.open { display: block; }
+  .race-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 8px; font-size: 12px; border-radius: 4px;
+    transition: background 0.1s;
+  }
+  .race-row:hover { background: rgba(255,255,255,0.02); }
+  .race-round { font-weight: 600; color: var(--text-dim); min-width: 28px; }
+  .race-dist { color: var(--text-dim); min-width: 50px; }
+  .race-grade { color: var(--accent); min-width: 50px; }
+  .race-time { font-variant-numeric: tabular-nums; min-width: 60px; color: #fff; }
+  .race-baseline { color: var(--text-dim); min-width: 60px; font-variant-numeric: tabular-nums; }
+  .race-z { font-weight: 600; min-width: 55px; text-align: right; font-variant-numeric: tabular-nums; }
+  .race-fadj { color: var(--text-dim); min-width: 55px; text-align: right; font-variant-numeric: tabular-nums; }
+  .race-tsi { font-weight: 700; min-width: 55px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .tsi-bar {
+    width: 80px; height: 8px; background: var(--surface2);
+    border-radius: 4px; overflow: hidden; position: relative;
+  }
+  .tsi-bar-center { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border); }
+  .tsi-bar-fill {
+    position: absolute; top: 0; bottom: 0; border-radius: 4px;
+    transition: all 0.3s;
+  }
+
+  .empty-state {
+    text-align: center; padding: 80px 32px;
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-state p { font-size: 14px; color: var(--text-dim); }
+
+  .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; }
+  .toast {
+    padding: 10px 18px; border-radius: 8px; font-size: 13px;
+    margin-top: 8px; animation: fadeIn 0.2s;
+    border: 1px solid var(--border); background: var(--surface);
+  }
+  .toast.success { border-color: var(--ok); color: var(--ok); }
+  .toast.error { border-color: var(--err); color: var(--err); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .page-header { padding: 16px 20px; }
+    .controls { padding: 12px 20px; flex-wrap: wrap; }
+    .stats-row { padding: 0 20px 12px; }
+    .legend-row { padding: 0 20px 12px; }
+    .timeline-container { padding: 0 20px 24px; }
+    .race-day { padding: 14px 16px; }
+    .race-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  }
+
+  @media (max-width: 480px) {
+    .page-header { padding: 12px 16px; }
+    .page-header h1 { font-size: 16px; }
+    .controls { padding: 10px 16px; }
+    .btn { font-size: 12px; padding: 7px 14px; }
+    select { font-size: 12px; }
+    .stats-row { padding: 0 16px 10px; gap: 8px; }
+    .stat-card { min-width: 110px; padding: 12px 14px; }
+    .stat-card .value { font-size: 18px; }
+    .legend-row { padding: 0 16px 12px; gap: 12px; }
+    .timeline-container { padding: 0 16px 20px; }
+    .race-day { padding: 12px 14px; }
+  }
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+
+<div class="page-header">
+  <div>
+    <h1>馬場速度レベリング</h1>
+    <div class="sub">2着馬走破タイム統計 × 出走馬能力補正 → 日別トラックスピード指数</div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn btn-primary" id="computeBtn" onclick="triggerCompute()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    計算実行
+  </button>
+  <select id="venueFilter" onchange="applyFilters()">
+    <option value="">全競馬場</option>
+  </select>
+  <select id="surfaceFilter" onchange="applyFilters()">
+    <option value="">芝+ダート</option>
+    <option value="芝">芝のみ</option>
+    <option value="ダート">ダートのみ</option>
+  </select>
+  <select id="yearFilter" onchange="applyFilters()">
+    <option value="">全年</option>
+  </select>
+  <div style="margin-left:auto;display:flex;gap:8px">
+    <button class="btn btn-outline" id="viewTimeline" onclick="setView('timeline')">タイムライン</button>
+    <button class="btn btn-outline active" id="viewChart" onclick="setView('chart')">チャート</button>
+  </div>
+</div>
+
+<div class="job-banner" id="jobBanner">
+  <div class="title"><span class="job-spinner"></span> 馬場速度を計算中...</div>
+  <div class="job-progress" id="jobProgress"></div>
+</div>
+
+<div class="stats-row" id="statsRow" style="display:none">
+  <div class="stat-card">
+    <div class="label">分析日数</div>
+    <div class="value" id="statDays">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">分析レース数</div>
+    <div class="value" id="statRaces">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">HSR推定頭数</div>
+    <div class="value" id="statHorses">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">ベースライングループ</div>
+    <div class="value" id="statBaselines">0</div>
+  </div>
+</div>
+
+<div class="legend-row" id="legendRow" style="display:none">
+  <span style="font-size:11px;color:var(--text-dim)">馬場レベル:</span>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--speed5)"></div>超高速</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--speed4)"></div>高速</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--speed3)"></div>標準</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--speed2)"></div>低速</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--speed1)"></div>超低速</div>
+  <span style="font-size:10px;color:var(--text-dim);margin-left:12px">TSI: 負=高速 / 正=低速 / 0=標準 (出走馬レベル補正済み)</span>
+</div>
+
+<div class="timeline-container" id="mainContent">
+  <div class="empty-state" id="emptyState">
+    <div class="icon">⚡</div>
+    <p>馬場速度データがありません。<br>「計算実行」ボタンを押して分析を開始してください。</p>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+const WEEKDAYS = ['日','月','火','水','木','金','土'];
+const SPEED_COLORS = { 5: 'var(--speed5)', 4: 'var(--speed4)', 3: 'var(--speed3)', 2: 'var(--speed2)', 1: 'var(--speed1)' };
+const SPEED_CLASSES = { 5: 'speed-5', 4: 'speed-4', 3: 'speed-3', 2: 'speed-2', 1: 'speed-1' };
+
+let allData = null;
+let currentView = 'chart';
+let openDates = new Set();
+
+function showToast(msg, type = 'info') {
+  const c = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function getWeekday(yyyymmdd) {
+  const y = parseInt(yyyymmdd.slice(0,4));
+  const m = parseInt(yyyymmdd.slice(4,6)) - 1;
+  const d = parseInt(yyyymmdd.slice(6,8));
+  const dt = new Date(y, m, d);
+  return { name: WEEKDAYS[dt.getDay()], day: dt.getDay() };
+}
+
+function fmtDate(d) {
+  return `${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)}`;
+}
+
+function tsiColor(tsi) {
+  if (tsi <= -1.5) return SPEED_COLORS[5];
+  if (tsi <= -0.5) return SPEED_COLORS[4];
+  if (tsi < 0.5) return SPEED_COLORS[3];
+  if (tsi < 1.5) return SPEED_COLORS[2];
+  return SPEED_COLORS[1];
+}
+
+function tsiClass(level) {
+  return SPEED_CLASSES[level] || 'speed-3';
+}
+
+// -- Data loading --
+
+async function init() {
+  const statusRes = await fetch('/api/track-speed/status');
+  const status = await statusRes.json();
+
+  if (status.status === 'running') {
+    pollJob();
+  }
+  if (status.data_available || status.status === 'done') {
+    await loadData();
+  }
+}
+
+async function loadData() {
+  try {
+    const res = await fetch('/api/track-speed');
+    const data = await res.json();
+    if (data.error) {
+      document.getElementById('emptyState').style.display = '';
+      return;
+    }
+    allData = data;
+    populateFilters();
+    updateStats();
+    applyFilters();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function populateFilters() {
+  if (!allData || !allData.daily) return;
+  const venues = new Set();
+  const years = new Set();
+  for (const [date, venueData] of Object.entries(allData.daily)) {
+    years.add(date.slice(0,4));
+    for (const venue of Object.keys(venueData)) venues.add(venue);
+  }
+
+  const venueSelect = document.getElementById('venueFilter');
+  venueSelect.innerHTML = '<option value="">全競馬場</option>';
+  for (const v of [...venues].sort()) {
+    venueSelect.innerHTML += `<option value="${v}">${v}</option>`;
+  }
+
+  const yearSelect = document.getElementById('yearFilter');
+  yearSelect.innerHTML = '<option value="">全年</option>';
+  for (const y of [...years].sort().reverse()) {
+    yearSelect.innerHTML += `<option value="${y}">${y}年</option>`;
+  }
+}
+
+function updateStats() {
+  if (!allData || !allData.meta) return;
+  const s = allData.meta.stats;
+  if (!s) return;
+  document.getElementById('statsRow').style.display = 'flex';
+  document.getElementById('legendRow').style.display = 'flex';
+  document.getElementById('statDays').textContent = s.days_computed || 0;
+  document.getElementById('statRaces').textContent = s.races_with_z || 0;
+  document.getElementById('statHorses').textContent = s.horses_with_hsr || 0;
+  document.getElementById('statBaselines').textContent = s.baseline_groups || 0;
+}
+
+// -- Filters --
+
+function applyFilters() {
+  if (!allData || !allData.daily) return;
+  const venueF = document.getElementById('venueFilter').value;
+  const surfaceF = document.getElementById('surfaceFilter').value;
+  const yearF = document.getElementById('yearFilter').value;
+
+  const filtered = {};
+  for (const [date, venues] of Object.entries(allData.daily)) {
+    if (yearF && !date.startsWith(yearF)) continue;
+    const filteredVenues = {};
+    for (const [venue, surfaces] of Object.entries(venues)) {
+      if (venueF && venue !== venueF) continue;
+      const filteredSurfaces = {};
+      for (const [surface, data] of Object.entries(surfaces)) {
+        if (surfaceF && surface !== surfaceF) continue;
+        filteredSurfaces[surface] = data;
+      }
+      if (Object.keys(filteredSurfaces).length > 0) {
+        filteredVenues[venue] = filteredSurfaces;
+      }
+    }
+    if (Object.keys(filteredVenues).length > 0) {
+      filtered[date] = filteredVenues;
+    }
+  }
+
+  document.getElementById('emptyState').style.display = Object.keys(filtered).length === 0 ? '' : 'none';
+
+  if (currentView === 'timeline') renderTimeline(filtered);
+  else renderChart(filtered);
+}
+
+// -- Views --
+
+function setView(view) {
+  currentView = view;
+  document.getElementById('viewTimeline').className = 'btn btn-outline' + (view === 'timeline' ? ' active' : '');
+  document.getElementById('viewChart').className = 'btn btn-outline' + (view === 'chart' ? ' active' : '');
+  applyFilters();
+}
+
+// -- Timeline view --
+
+function renderTimeline(data) {
+  const container = document.getElementById('mainContent');
+  const dates = Object.keys(data).sort().reverse();
+  if (dates.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+  for (const date of dates) {
+    const wd = getWeekday(date);
+    const wdCls = wd.day === 0 ? 'sun' : wd.day === 6 ? 'sat' : '';
+    const venues = data[date];
+    const isOpen = openDates.has(date);
+
+    html += `<div class="date-group">`;
+    html += `<div class="date-header" onclick="toggleDate('${date}')">`;
+    html += `<span class="date-label">${fmtDate(date)}</span>`;
+    html += `<span class="date-weekday ${wdCls}">${wd.name}</span>`;
+    html += `<div class="venue-badges">`;
+
+    for (const [venue, surfaces] of Object.entries(venues)) {
+      for (const [surface, info] of Object.entries(surfaces)) {
+        const surfCls = surface === '芝' ? 'turf' : 'dirt';
+        const spdCls = tsiClass(info.level);
+        const tsiStr = info.tsi > 0 ? `+${info.tsi.toFixed(2)}` : info.tsi.toFixed(2);
+        const conditions = (info.track_conditions || []).join('/');
+
+        html += `<div class="venue-badge">`;
+        html += `<span class="venue-name">${venue}</span>`;
+        html += `<span class="surface-tag ${surfCls}">${surface}</span>`;
+        html += `<span class="tsi-value" style="color:${tsiColor(info.tsi)}">${tsiStr}</span>`;
+        html += `<span class="speed-label ${spdCls}">${info.label}</span>`;
+        html += renderTsiBar(info.tsi);
+        html += `<span class="sample-count">${info.sample_size}R</span>`;
+        if (conditions) html += `<span style="font-size:10px;color:var(--text-dim)">${conditions}</span>`;
+        html += `</div>`;
+      }
+    }
+
+    html += `</div></div>`;
+
+    if (isOpen) {
+      html += `<div class="detail-panel open">`;
+      for (const [venue, surfaces] of Object.entries(venues)) {
+        for (const [surface, info] of Object.entries(surfaces)) {
+          if (info.races) {
+            html += `<div style="margin-bottom:8px;font-size:12px;font-weight:600;color:var(--text-dim)">${venue} ${surface}</div>`;
+            html += `<div style="display:flex;gap:8px;margin-bottom:4px;font-size:10px;color:var(--text-dim);padding:0 8px">`;
+            html += `<span style="min-width:28px">R</span><span style="min-width:50px">距離</span>`;
+            html += `<span style="min-width:50px">クラス</span><span style="min-width:60px">2着タイム</span>`;
+            html += `<span style="min-width:60px">ベース</span><span style="min-width:55px;text-align:right">raw z</span>`;
+            html += `<span style="min-width:55px;text-align:right">馬質補正</span><span style="min-width:55px;text-align:right">TSI</span>`;
+            html += `</div>`;
+            for (const race of info.races) {
+              const tColor = tsiColor(race.tsi);
+              html += `<div class="race-row">`;
+              html += `<span class="race-round">${race.round}R</span>`;
+              html += `<span class="race-dist">${race.distance}m</span>`;
+              html += `<span class="race-grade">${race.grade || '-'}</span>`;
+              html += `<span class="race-time">${race.time_2nd}s</span>`;
+              html += `<span class="race-baseline">${race.baseline_mean || '-'}s</span>`;
+              html += `<span class="race-z" style="color:${tsiColor(race.raw_z)}">${race.raw_z > 0 ? '+' : ''}${race.raw_z.toFixed(2)}</span>`;
+              html += `<span class="race-fadj">${race.field_adj > 0 ? '+' : ''}${race.field_adj.toFixed(2)}</span>`;
+              html += `<span class="race-tsi" style="color:${tColor}">${race.tsi > 0 ? '+' : ''}${race.tsi.toFixed(2)}</span>`;
+              html += `</div>`;
+            }
+          }
+        }
+      }
+      html += `</div>`;
+    }
+
+    html += `</div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function renderTsiBar(tsi) {
+  const clamp = Math.max(-2, Math.min(2, tsi));
+  const pct = (clamp / 2) * 50;
+  const left = pct < 0 ? 50 + pct : 50;
+  const width = Math.abs(pct);
+  const color = tsiColor(tsi);
+  return `<div class="tsi-bar">
+    <div class="tsi-bar-center"></div>
+    <div class="tsi-bar-fill" style="left:${left}%;width:${width}%;background:${color}"></div>
+  </div>`;
+}
+
+function toggleDate(date) {
+  if (openDates.has(date)) openDates.delete(date);
+  else openDates.add(date);
+  applyFilters();
+}
+
+// -- Chart view (horizontal bars per date) --
+
+function renderChart(data) {
+  const container = document.getElementById('mainContent');
+  const dates = Object.keys(data).sort().reverse();
+  if (dates.length === 0) { container.innerHTML = ''; return; }
+
+  let html = '<div style="overflow-x:auto">';
+  html += '<table style="width:100%;border-collapse:separate;border-spacing:0;font-size:12px">';
+  html += '<thead><tr style="border-bottom:2px solid var(--border)">';
+  html += '<th style="text-align:left;padding:8px 12px;font-weight:600;color:var(--text-dim);min-width:100px">日付</th>';
+  html += '<th style="text-align:left;padding:8px 12px;font-weight:600;color:var(--text-dim)">競馬場</th>';
+  html += '<th style="text-align:center;padding:8px 12px;font-weight:600;color:var(--text-dim)">コース</th>';
+  html += '<th style="text-align:center;padding:8px 12px;font-weight:600;color:var(--text-dim)">馬場</th>';
+  html += '<th style="text-align:right;padding:8px 12px;font-weight:600;color:var(--text-dim)">TSI</th>';
+  html += '<th style="padding:8px 12px;min-width:140px"></th>';
+  html += '<th style="text-align:center;padding:8px 12px;font-weight:600;color:var(--text-dim)">レベル</th>';
+  html += '<th style="text-align:center;padding:8px 12px;font-weight:600;color:var(--text-dim)">R数</th>';
+  html += '</tr></thead><tbody>';
+
+  let prevDate = '';
+  for (const date of dates) {
+    const wd = getWeekday(date);
+    const wdCls = wd.day === 0 ? 'sun' : wd.day === 6 ? 'sat' : '';
+    const venues = data[date];
+    let first = true;
+
+    for (const [venue, surfaces] of Object.entries(venues)) {
+      for (const [surface, info] of Object.entries(surfaces)) {
+        const surfCls = surface === '芝' ? 'turf' : 'dirt';
+        const spdCls = tsiClass(info.level);
+        const tsiStr = info.tsi > 0 ? `+${info.tsi.toFixed(2)}` : info.tsi.toFixed(2);
+        const conditions = (info.track_conditions || []).join('/');
+        const showDate = date !== prevDate;
+        prevDate = date;
+
+        html += `<tr style="border-bottom:1px solid rgba(36,48,73,0.5)">`;
+        if (showDate) {
+          html += `<td style="padding:8px 12px"><span style="font-weight:600;color:#fff">${fmtDate(date)}</span> <span class="date-weekday ${wdCls}">${wd.name}</span></td>`;
+        } else {
+          html += `<td></td>`;
+        }
+        html += `<td style="padding:8px 12px;font-weight:600;color:#fff">${venue}</td>`;
+        html += `<td style="text-align:center;padding:8px 12px"><span class="surface-tag ${surfCls}">${surface}</span></td>`;
+        html += `<td style="text-align:center;padding:8px 12px;font-size:11px;color:var(--text-dim)">${conditions}</td>`;
+        html += `<td style="text-align:right;padding:8px 12px;font-weight:700;color:${tsiColor(info.tsi)};font-variant-numeric:tabular-nums">${tsiStr}</td>`;
+        html += `<td style="padding:8px 12px">${renderTsiBar(info.tsi)}</td>`;
+        html += `<td style="text-align:center;padding:8px 12px"><span class="speed-label ${spdCls}">${info.label}</span></td>`;
+        html += `<td style="text-align:center;padding:8px 12px;color:var(--text-dim)">${info.sample_size}</td>`;
+        html += `</tr>`;
+      }
+    }
+  }
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+// -- Compute job --
+
+async function triggerCompute() {
+  const btn = document.getElementById('computeBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="job-spinner"></span> 計算中...';
+  showToast('馬場速度計算を開始しました', 'info');
+
+  try {
+    const res = await fetch('/api/track-speed/compute', { method: 'POST' });
+    const data = await res.json();
+    if (data.status === 'already_running') {
+      showToast('既に計算実行中です', 'info');
+    }
+    pollJob();
+  } catch (e) {
+    showToast(`エラー: ${e.message}`, 'error');
+    resetComputeBtn();
+  }
+}
+
+function resetComputeBtn() {
+  const btn = document.getElementById('computeBtn');
+  btn.disabled = false;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> 計算実行';
+}
+
+let _pollTimer = null;
+
+async function pollJob() {
+  const banner = document.getElementById('jobBanner');
+  const progress = document.getElementById('jobProgress');
+  banner.style.display = 'block';
+
+  const poll = async () => {
+    try {
+      const res = await fetch('/api/track-speed/status');
+      const data = await res.json();
+
+      if (data.progress && data.progress.length > 0) {
+        progress.innerHTML = data.progress.map(p => `<div>${p}</div>`).join('');
+        progress.scrollTop = progress.scrollHeight;
+      }
+
+      if (data.status === 'done') {
+        banner.style.display = 'none';
+        resetComputeBtn();
+        showToast('馬場速度計算が完了しました', 'success');
+        await loadData();
+        if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+        return;
+      }
+      if (data.status === 'error') {
+        banner.style.display = 'none';
+        resetComputeBtn();
+        showToast(`計算エラー: ${data.error || '不明'}`, 'error');
+        if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+        return;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(poll, 3000);
+  poll();
+}
+
+init();
+</script>
+</body>
+</html>

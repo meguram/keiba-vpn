@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>血統構造マップ | ML-AutoPilot Keiba</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700&family=Noto+Sans+JP:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0c10;
+  --surface: #12151c;
+  --border: #1e2330;
+  --text: #e8eaf0;
+  --text-dim: #8890a0;
+  --accent: #00d4aa;
+  --accent2: #ff6b35;
+  --ss: #e63946; --kk: #457b9d; --rb: #2a9d8f; --nd: #e9c46a;
+  --dh: #f4a261; --sw: #264653; --sc: #a8dadc; --mp: #6d6875;
+  --ap: #b5838d; --dp: #ffb4a2; --other: #606060;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;overflow:hidden;height:100vh}
+.gnav+.layout{height:calc(100vh - 44px)}
+h1{font-family:'Shippori Mincho',serif;font-size:1.4rem;font-weight:700;letter-spacing:0.05em;color:var(--accent)}
+.layout{display:grid;grid-template-columns:280px 1fr 300px;height:calc(100vh - 44px);gap:0}
+.panel{background:var(--surface);border-right:1px solid var(--border);padding:16px;overflow-y:auto}
+.panel-right{border-right:none;border-left:1px solid var(--border)}
+.panel h2{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--text-dim);margin:16px 0 8px;font-weight:600}
+.panel h2:first-child{margin-top:0}
+.color-mode-btn{display:block;width:100%;padding:8px 12px;margin:3px 0;background:transparent;border:1px solid var(--border);color:var(--text);font-size:0.8rem;cursor:pointer;text-align:left;border-radius:4px;transition:all .15s}
+.color-mode-btn:hover{border-color:var(--accent);color:var(--accent)}
+.color-mode-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:0.75rem;margin:3px 0;color:var(--text-dim)}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+canvas{display:block;background:var(--bg)}
+.tooltip{position:fixed;pointer-events:none;background:rgba(18,21,28,.95);border:1px solid var(--accent);border-radius:6px;padding:12px 16px;font-size:0.8rem;line-height:1.5;max-width:340px;display:none;z-index:100;backdrop-filter:blur(8px)}
+.tooltip .name{font-family:'Shippori Mincho',serif;font-size:1rem;font-weight:700;color:var(--accent);margin-bottom:6px}
+.tooltip .line-tag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:0.7rem;margin-bottom:6px;font-weight:600}
+.tooltip .stats{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px}
+.tooltip .stat-label{color:var(--text-dim);font-size:0.7rem}
+.tooltip .stat-value{color:var(--text);font-weight:600;font-size:0.75rem}
+.similar-list{margin-top:12px}
+.similar-item{display:flex;justify-content:space-between;padding:6px 10px;margin:2px 0;background:rgba(255,255,255,.03);border-radius:4px;font-size:0.75rem;cursor:pointer;transition:all .15s}
+.similar-item:hover{background:rgba(0,212,170,.1);color:var(--accent)}
+.similar-score{color:var(--accent2);font-weight:600}
+.selected-sire{font-family:'Shippori Mincho',serif;font-size:1.1rem;font-weight:700;color:var(--accent);margin-bottom:8px}
+.search-box{width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:0.85rem;margin:8px 0;outline:none}
+.search-box:focus{border-color:var(--accent)}
+.search-results{max-height:200px;overflow-y:auto}
+.search-result{padding:6px 10px;cursor:pointer;font-size:0.8rem;border-radius:3px;transition:background .15s}
+.search-result:hover{background:rgba(0,212,170,.15);color:var(--accent)}
+.header-bar{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--surface)}
+.header-bar .info{font-size:0.75rem;color:var(--text-dim)}
+.zoom-controls{display:flex;gap:4px}
+.zoom-btn{width:32px;height:32px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;border-radius:4px;font-size:1rem;display:flex;align-items:center;justify-content:center}
+.zoom-btn:hover{border-color:var(--accent);color:var(--accent)}
+.inbreed-item{font-size:.7rem;color:var(--text-dim);padding:2px 0}
+.inbreed-cross{color:var(--accent2);font-weight:600}
+.loading{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:1rem}
+.compare-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600;margin-left:4px}
+.compare-badge.perf{background:rgba(255,107,53,.15);color:#ff6b35}
+.compare-badge.ped{background:rgba(0,212,170,.15);color:#00d4aa}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .layout{grid-template-columns:1fr;height:auto}
+  .panel{border-right:none;border-bottom:1px solid var(--border);max-height:none}
+  .panel-right{border-left:none;border-top:1px solid var(--border)}
+  h1{font-size:1.2rem}
+  canvas{height:400px!important}
+}
+@media (max-width: 480px) {
+  .panel{padding:12px}
+  h1{font-size:1rem}
+  h2{font-size:0.7rem}
+  .search-box{font-size:0.8rem}
+  .header-bar{padding:10px 12px;flex-wrap:wrap}
+  .zoom-controls{width:100%;justify-content:center;margin-top:8px}
+  canvas{height:350px!important}
+}
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+<div class="layout">
+  <div class="panel" id="left-panel">
+    <h1>血統構造マップ</h1>
+    <p style="font-size:.7rem;color:var(--text-dim);margin:4px 0 12px">5世代祖先共有 PCA 2D / コサイン類似度</p>
+    <h2>Color Mode</h2>
+    <div id="color-modes"></div>
+    <h2>Legend</h2>
+    <div id="legend"></div>
+    <h2>Search</h2>
+    <input type="text" class="search-box" id="search" placeholder="種牡馬名で検索...">
+    <div class="search-results" id="search-results"></div>
+  </div>
+  <div style="display:flex;flex-direction:column;overflow:hidden">
+    <div class="header-bar">
+      <div class="info" id="info-text">Loading...</div>
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoom-in">+</button>
+        <button class="zoom-btn" id="zoom-out">−</button>
+        <button class="zoom-btn" id="zoom-reset">⟳</button>
+      </div>
+    </div>
+    <canvas id="chart"></canvas>
+  </div>
+  <div class="panel panel-right" id="right-panel">
+    <h2>Selected Stallion</h2>
+    <div id="detail-content"><p style="color:var(--text-dim);font-size:.8rem">クリックで種牡馬を選択</p></div>
+  </div>
+</div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+const LINE_COLORS={
+  "サンデーサイレンス系":"#e63946","キングカメハメハ系":"#457b9d","ロベルト系":"#2a9d8f",
+  "ノーザンダンサー系":"#e9c46a","デインヒル系":"#f4a261","サドラーズウェルズ系":"#264653",
+  "ストームキャット系":"#a8dadc","ミスタープロスペクター系":"#6d6875",
+  "エーピーインディ系":"#b5838d","デピュティミニスター系":"#ffb4a2","その他":"#606060"
+};
+
+let DATA=[], SIM={};
+let currentMode="sire_line", selected=null, hovered=null;
+let offsetX=0, offsetY=0, scale=1, dragging=false, dragStartX=0, dragStartY=0;
+
+const canvas=document.getElementById("chart");
+const ctx=canvas.getContext("2d");
+const tooltip=document.getElementById("tooltip");
+
+const COLOR_MODES=[
+  {id:"sire_line",label:"系統別",fn:d=>LINE_COLORS[d.sire_line]||"#606060"},
+  {id:"inbreeding",label:"インブリード数",fn:d=>{
+    const v=Math.min(d.inbreeding_count/6,1);
+    return `rgb(${Math.round(60+195*v)},${Math.round(180-100*v)},${Math.round(180-130*v)})`;
+  }},
+  {id:"unique",label:"ユニーク祖先数",fn:d=>{
+    const v=Math.min((d.unique_ancestors||30)/50,1);
+    return `rgb(${Math.round(40+200*v)},${Math.round(60+160*v)},${Math.round(120+100*v)})`;
+  }},
+  {id:"progeny",label:"産駒数",fn:d=>{
+    const v=Math.min(d.n_progeny/250,1);
+    return `rgb(${Math.round(40+200*v)},${Math.round(60+150*v)},${Math.round(120+100*v)})`;
+  }}
+];
+
+async function init(){
+  try{
+    const res=await fetch('/api/pedigree-map');
+    const json=await res.json();
+    if(json.error){document.getElementById('info-text').textContent=json.error;return}
+    DATA=json.data||[];
+    SIM=json.similarity||{};
+    document.getElementById('info-text').textContent=`${DATA.length} stallions (5世代祖先共有コサイン類似度)`;
+    initColorModes();updateLegend();resize();
+  }catch(e){document.getElementById('info-text').textContent='データ取得エラー: '+e.message}
+}
+
+function resize(){
+  const rect=canvas.parentElement.getBoundingClientRect();
+  canvas.width=rect.width*devicePixelRatio;
+  canvas.height=(rect.height-44)*devicePixelRatio;
+  canvas.style.width=rect.width+"px";
+  canvas.style.height=(rect.height-44)+"px";
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  draw();
+}
+window.addEventListener("resize",resize);
+
+function getColorFn(){return COLOR_MODES.find(m=>m.id===currentMode).fn}
+
+function worldToScreen(wx,wy){
+  const cw=canvas.width/devicePixelRatio,ch=canvas.height/devicePixelRatio;
+  if(!DATA.length)return[cw/2,ch/2];
+  const xs=DATA.map(d=>d.x),ys=DATA.map(d=>d.y);
+  const xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);
+  const pad=60;
+  const sx=(wx-xmin)/(xmax-xmin||1)*(cw-2*pad)+pad;
+  const sy=(1-(wy-ymin)/(ymax-ymin||1))*(ch-2*pad)+pad;
+  return[(sx+offsetX)*scale+cw*(1-scale)/2,(sy+offsetY)*scale+ch*(1-scale)/2];
+}
+
+function draw(){
+  const cw=canvas.width/devicePixelRatio,ch=canvas.height/devicePixelRatio;
+  ctx.clearRect(0,0,cw,ch);
+  if(!DATA.length)return;
+  const colorFn=getColorFn();
+
+  if(selected&&SIM[selected]){
+    const simList=SIM[selected];
+    const selData=DATA.find(d=>d.name===selected);
+    if(selData){
+      const[sx,sy]=worldToScreen(selData.x,selData.y);
+      simList.forEach(([name,score])=>{
+        const other=DATA.find(d=>d.name===name);
+        if(other){
+          const[ox,oy]=worldToScreen(other.x,other.y);
+          ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ox,oy);
+          ctx.strokeStyle=`rgba(0,212,170,${score*0.6})`;
+          ctx.lineWidth=score*4;ctx.stroke();
+        }
+      });
+    }
+  }
+
+  DATA.forEach(d=>{
+    const[px,py]=worldToScreen(d.x,d.y);
+    const r=Math.max(4,Math.min(12,Math.sqrt(d.n_progeny||20)*0.7));
+    const isSelected=d.name===selected;
+    const isHovered=d.name===hovered;
+    const isSimilar=selected&&SIM[selected]&&SIM[selected].some(([n])=>n===d.name);
+
+    ctx.beginPath();
+    ctx.arc(px,py,isSelected?r+4:isHovered?r+2:r,0,Math.PI*2);
+    if(selected&&!isSelected&&!isSimilar){
+      ctx.fillStyle=colorFn(d).replace("rgb","rgba").replace(")",",0.15)");
+    }else{
+      ctx.fillStyle=colorFn(d);
+    }
+    ctx.fill();
+    if(isSelected){
+      ctx.strokeStyle="#fff";ctx.lineWidth=2.5;ctx.stroke();
+      ctx.beginPath();ctx.arc(px,py,r+8,0,Math.PI*2);
+      ctx.strokeStyle="rgba(0,212,170,0.4)";ctx.lineWidth=1;ctx.stroke();
+    }else if(isHovered){
+      ctx.strokeStyle="rgba(255,255,255,0.6)";ctx.lineWidth=1.5;ctx.stroke();
+    }
+
+    const showLabel=isSelected||isHovered||isSimilar||(d.n_progeny||0)>100||scale>1.5;
+    if(showLabel){
+      ctx.font=`${isSelected?'bold ':''}${isSelected?'12':'10'}px 'Noto Sans JP',sans-serif`;
+      ctx.fillStyle=isSelected?"#fff":isSimilar?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)";
+      ctx.textAlign="center";
+      const label=d.name.length>10?d.name.slice(0,10)+"…":d.name;
+      ctx.fillText(label,px,py-r-5);
+    }
+  });
+}
+
+function findNearest(mx,my){
+  let best=null,bestDist=Infinity;
+  DATA.forEach(d=>{
+    const[px,py]=worldToScreen(d.x,d.y);
+    const dist=Math.hypot(px-mx,py-my);
+    if(dist<bestDist){bestDist=dist;best=d}
+  });
+  return bestDist<20?best:null;
+}
+
+canvas.addEventListener("mousemove",e=>{
+  if(dragging){offsetX+=e.movementX/scale;offsetY+=e.movementY/scale;draw();return}
+  const rect=canvas.getBoundingClientRect();
+  const d=findNearest(e.clientX-rect.left,e.clientY-rect.top);
+  hovered=d?d.name:null;canvas.style.cursor=d?"pointer":"grab";draw();
+  if(d){showTooltip(d,e.clientX,e.clientY)}else{tooltip.style.display="none"}
+});
+canvas.addEventListener("mousedown",e=>{dragging=true;dragStartX=e.clientX;dragStartY=e.clientY;canvas.style.cursor="grabbing"});
+canvas.addEventListener("mouseup",e=>{
+  const moved=Math.hypot(e.clientX-dragStartX,e.clientY-dragStartY);
+  dragging=false;canvas.style.cursor="grab";
+  if(moved<5){const rect=canvas.getBoundingClientRect();const d=findNearest(e.clientX-rect.left,e.clientY-rect.top);if(d)selectSire(d.name)}
+});
+canvas.addEventListener("mouseleave",()=>{dragging=false;hovered=null;tooltip.style.display="none";draw()});
+canvas.addEventListener("wheel",e=>{e.preventDefault();scale=Math.max(0.3,Math.min(8,scale*(e.deltaY>0?0.9:1.1)));draw()},{passive:false});
+
+document.getElementById("zoom-in").onclick=()=>{scale=Math.min(8,scale*1.3);draw()};
+document.getElementById("zoom-out").onclick=()=>{scale=Math.max(0.3,scale/1.3);draw()};
+document.getElementById("zoom-reset").onclick=()=>{scale=1;offsetX=0;offsetY=0;draw()};
+
+function showTooltip(d,cx,cy){
+  tooltip.innerHTML=`
+    <div class="name">${d.name}</div>
+    <span class="line-tag" style="background:${LINE_COLORS[d.sire_line]||'#606060'};color:#fff">${d.sire_line}</span>
+    <div class="stats">
+      <span class="stat-label">産駒数</span><span class="stat-value">${d.n_progeny||'-'}</span>
+      <span class="stat-label">ユニーク祖先</span><span class="stat-value">${d.unique_ancestors||'-'}頭</span>
+      <span class="stat-label">インブリード</span><span class="stat-value">${d.inbreeding_count||0}件</span>
+    </div>`;
+  tooltip.style.display="block";
+  tooltip.style.left=Math.min(cx+12,window.innerWidth-tooltip.offsetWidth-8)+"px";
+  tooltip.style.top=Math.min(cy+12,window.innerHeight-tooltip.offsetHeight-8)+"px";
+}
+
+function selectSire(name){
+  selected=name;
+  const d=DATA.find(x=>x.name===name);
+  if(!d)return;draw();
+  const sim=SIM[name]||[];
+  const panel=document.getElementById("detail-content");
+
+  let inbreedHtml='';
+  if(d.inbreeding&&d.inbreeding.length>0){
+    inbreedHtml='<h2 style="margin-top:12px">インブリード</h2>';
+    d.inbreeding.forEach(ib=>{
+      inbreedHtml+=`<div class="inbreed-item">${ib.ancestor} <span class="inbreed-cross">${ib.cross}</span></div>`;
+    });
+  }
+
+  panel.innerHTML=`
+    <div class="selected-sire">${name}</div>
+    <span class="line-tag" style="background:${LINE_COLORS[d.sire_line]||'#606060'};color:#fff;display:inline-block;padding:2px 8px;border-radius:3px;font-size:.7rem;margin-bottom:12px">${d.sire_line}</span>
+    <div style="margin:8px 0">
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:2px">
+        <span style="color:var(--text-dim)">産駒数</span><span style="font-weight:600">${d.n_progeny||'-'}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:2px">
+        <span style="color:var(--text-dim)">ユニーク祖先</span><span style="font-weight:600;color:var(--accent)">${d.unique_ancestors||'-'}頭 / 62</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:2px">
+        <span style="color:var(--text-dim)">インブリード数</span><span style="font-weight:600">${d.inbreeding_count||0}件</span>
+      </div>
+    </div>
+    ${inbreedHtml}
+    <h2 style="margin-top:16px">血統構造 類似 Top 8</h2>
+    <div class="similar-list">${sim.map(([n,s])=>`
+      <div class="similar-item" onclick="selectSire('${n.replace(/'/g,"\\'")}')">
+        <span>${n.length>16?n.slice(0,16)+'…':n}</span>
+        <span class="similar-score">${(s*100).toFixed(1)}%</span>
+      </div>`).join("")}
+    </div>`;
+}
+
+function initColorModes(){
+  const c=document.getElementById("color-modes");
+  COLOR_MODES.forEach(m=>{
+    const btn=document.createElement("button");
+    btn.className="color-mode-btn"+(m.id===currentMode?" active":"");
+    btn.textContent=m.label;
+    btn.onclick=()=>{currentMode=m.id;c.querySelectorAll(".color-mode-btn").forEach(b=>b.classList.remove("active"));btn.classList.add("active");updateLegend();draw()};
+    c.appendChild(btn);
+  });
+}
+
+function updateLegend(){
+  const c=document.getElementById("legend");c.innerHTML="";
+  if(currentMode==="sire_line"){
+    Object.entries(LINE_COLORS).forEach(([name,color])=>{
+      const count=DATA.filter(d=>d.sire_line===name).length;
+      if(count===0)return;
+      c.innerHTML+=`<div class="legend-item"><div class="legend-dot" style="background:${color}"></div>${name} (${count})</div>`;
+    });
+  }else if(currentMode==="inbreeding"){
+    c.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(255,80,50)"></div>多インブリード (5+)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(160,130,110)"></div>中程度 (2-4)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(60,180,180)"></div>少/無 (0-1)</div>`;
+  }else if(currentMode==="unique"){
+    c.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(240,220,220)"></div>多 (45+)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(140,150,170)"></div>中 (~35)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(40,60,120)"></div>少 (<25)</div>`;
+  }else if(currentMode==="progeny"){
+    c.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(240,210,220)"></div>多頭数 (200+)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(140,130,170)"></div>中程度 (~100)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(40,60,120)"></div>少頭数 (<30)</div>`;
+  }
+}
+
+const searchInput=document.getElementById("search");
+const searchResults=document.getElementById("search-results");
+searchInput.addEventListener("input",()=>{
+  const q=searchInput.value.toLowerCase();
+  if(!q){searchResults.innerHTML="";return}
+  const matches=DATA.filter(d=>d.name.toLowerCase().includes(q)).slice(0,10);
+  searchResults.innerHTML=matches.map(d=>`<div class="search-result" onclick="selectSire('${d.name.replace(/'/g,"\\'")}');document.getElementById('search').value=''">${d.name}</div>`).join("");
+});
+
+init();
+</script>
+</body>
+</html>

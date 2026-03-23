@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>レース詳細 | ML-AutoPilot Keiba</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #131926;
+    --surface2: #1a2235;
+    --border: #243049;
+    --text: #c8d6e5;
+    --text-dim: #6b7d95;
+    --accent: #3b82f6;
+    --ok: #22c55e;
+    --ok-dim: rgba(34,197,94,0.15);
+    --warn: #f59e0b;
+    --warn-dim: rgba(245,158,11,0.12);
+    --err: #ef4444;
+    --gold: #fbbf24;
+    --silver: #94a3b8;
+    --bronze: #d97706;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+  .race-content { padding: 24px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    transition: color 0.15s;
+  }
+  .back-link:hover { color: var(--accent); text-decoration: none; }
+
+  .race-monitor-nav {
+    display: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .race-monitor-nav .sep { color: var(--text-dim); user-select: none; }
+
+  .race-header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 32px;
+    margin-bottom: 24px;
+  }
+  .race-header .top-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .race-header .round-badge {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 800;
+    font-size: 16px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    min-width: 50px;
+    text-align: center;
+  }
+  .race-header .grade-badge {
+    background: var(--warn-dim);
+    color: var(--warn);
+    font-weight: 700;
+    font-size: 13px;
+    padding: 4px 12px;
+    border-radius: 4px;
+  }
+  .race-header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+  .race-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+  .race-meta .tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 12px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+  }
+  .tab {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    background: none;
+    border-top: none; border-left: none; border-right: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .data-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .data-badge {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .data-badge.available { background: var(--ok-dim); color: var(--ok); border-color: rgba(34,197,94,0.3); }
+  .data-badge.unavailable { background: var(--surface2); color: var(--text-dim); }
+
+  table.entries {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 13px;
+  }
+  table.entries thead {
+    background: var(--surface2);
+  }
+  table.entries th {
+    padding: 10px 12px;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.entries th:first-child,
+  table.entries td:first-child { text-align: center; width: 40px; }
+  table.entries td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(36,48,73,0.5);
+    text-align: center;
+    vertical-align: middle;
+  }
+  table.entries tbody tr {
+    transition: background 0.12s;
+  }
+  table.entries tbody tr:hover {
+    background: rgba(59,130,246,0.04);
+  }
+  .horse-name {
+    font-weight: 600;
+    color: #fff;
+    text-align: left !important;
+  }
+  .horse-name a { color: #fff; }
+  .horse-name a:hover { color: var(--accent); }
+  td.left { text-align: left !important; }
+  .jockey, .trainer { font-size: 12px; color: var(--text-dim); }
+
+  .place-1 { color: var(--gold); font-weight: 800; }
+  .place-2 { color: var(--silver); font-weight: 700; }
+  .place-3 { color: var(--bronze); font-weight: 700; }
+
+  .odds-val { font-weight: 600; }
+  .odds-low { color: var(--err); }
+  .odds-mid { color: var(--warn); }
+  .odds-high { color: var(--text-dim); }
+
+  .section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    margin: 32px 0 16px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  table.results {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 13px;
+  }
+  table.results thead { background: var(--surface2); }
+  table.results th {
+    padding: 10px 12px;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.results td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(36,48,73,0.5);
+    text-align: center;
+  }
+  table.results tbody tr:hover { background: rgba(59,130,246,0.04); }
+
+  .payoff-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .payoff-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .payoff-card .type { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+  .payoff-card .numbers { font-size: 13px; color: var(--text); }
+  .payoff-card .amount { font-size: 18px; font-weight: 700; color: var(--warn); }
+
+  .horse-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .horse-card h3 { color: #fff; font-size: 16px; margin-bottom: 8px; }
+  .horse-card .profile { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; }
+  .horse-card .profile dt { color: var(--text-dim); }
+  .horse-card .profile dd { color: var(--text); font-weight: 500; }
+
+  table.past-races {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 12px;
+  }
+  table.past-races th {
+    padding: 6px 8px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  table.past-races td {
+    padding: 6px 8px;
+    text-align: center;
+    border-bottom: 1px solid rgba(36,48,73,0.3);
+  }
+
+  .loading {
+    text-align: center;
+    padding: 60px;
+    color: var(--text-dim);
+    font-size: 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .load-spinner {
+    display: inline-block;
+    width: 24px; height: 24px;
+    border: 3px solid rgba(59,130,246,0.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 12px;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { color: var(--text-dim); font-size: 14px; line-height: 1.8; }
+
+  .netkeiba-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .netkeiba-link:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  /* ── AI 予測タブ ── */
+  .prediction-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .predict-btn {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 28px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .predict-btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(99,102,241,0.3); }
+  .predict-btn:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: none; }
+
+  .model-badge {
+    font-size: 12px;
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-weight: 600;
+  }
+  .model-badge.mlflow { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+  .model-badge.heuristic { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+  .predict-time { font-size: 12px; color: var(--text-dim); }
+
+  table.predictions {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 13px;
+  }
+  table.predictions thead { background: var(--surface2); }
+  table.predictions th {
+    padding: 12px 14px;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.predictions td {
+    padding: 14px;
+    border-bottom: 1px solid rgba(36,48,73,0.5);
+    text-align: center;
+    vertical-align: middle;
+  }
+  table.predictions tbody tr:hover { background: rgba(99,102,241,0.04); }
+  table.predictions tbody tr.rank-1 { background: rgba(251,191,36,0.06); }
+  table.predictions tbody tr.rank-2 { background: rgba(148,163,184,0.04); }
+  table.predictions tbody tr.rank-3 { background: rgba(217,119,6,0.04); }
+
+  .rec-mark {
+    font-size: 20px;
+    font-weight: 900;
+    min-width: 28px;
+    display: inline-block;
+  }
+  .rec-honmei { color: #ef4444; }
+  .rec-taikou { color: #f97316; }
+  .rec-tanana { color: #eab308; }
+  .rec-renka  { color: #22c55e; }
+  .rec-anaba  { color: #3b82f6; }
+
+  .rec-label {
+    font-size: 11px;
+    display: block;
+    margin-top: 2px;
+    opacity: 0.8;
+  }
+
+  .score-bar {
+    display: inline-block;
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    vertical-align: middle;
+    margin-right: 6px;
+    min-width: 4px;
+    transition: width 0.4s ease;
+  }
+  .score-val {
+    font-weight: 700;
+    font-size: 14px;
+    color: #fff;
+  }
+
+  .factor-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: flex-start;
+    max-width: 300px;
+  }
+  .factor-chip {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .factor-chip .fval {
+    font-weight: 700;
+    color: var(--text);
+    margin-left: 3px;
+  }
+
+  .pred-rank-num {
+    font-size: 22px;
+    font-weight: 900;
+    min-width: 30px;
+    display: inline-block;
+  }
+  .pred-rank-1 { color: var(--gold); }
+  .pred-rank-2 { color: var(--silver); }
+  .pred-rank-3 { color: var(--bronze); }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .race-content { padding: 16px; }
+    .race-header { padding: 16px 20px; }
+    .race-header h1 { font-size: 20px; }
+    .race-meta { gap: 10px; }
+    .tabs { padding: 0 12px; }
+    .tab-btn { font-size: 12px; padding: 10px 14px; }
+    table { font-size: 12px; }
+    th, td { padding: 8px 6px; }
+    .horse-card { padding: 14px 16px; }
+    .cards-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 480px) {
+    .race-content { padding: 12px; }
+    .race-header { padding: 12px 16px; }
+    .race-header h1 { font-size: 18px; }
+    .race-header .top-row { flex-wrap: wrap; }
+    .tabs { overflow-x: auto; }
+    .tab-btn { font-size: 11px; padding: 8px 12px; white-space: nowrap; }
+    table { font-size: 11px; }
+    th, td { padding: 6px 4px; }
+    th { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+<div class="race-content">
+
+<div id="raceMonitorNav" class="race-monitor-nav" aria-label="モニターへの導線"></div>
+
+<div id="raceHeader" class="race-header" style="display:none">
+  <div class="top-row">
+    <span class="round-badge" id="roundBadge"></span>
+    <span class="grade-badge" id="gradeBadge" style="display:none"></span>
+    <a id="netkeibaLink" class="netkeiba-link" href="#" target="_blank">🔗 netkeiba</a>
+  </div>
+  <h1 id="raceName"></h1>
+  <div class="race-meta" id="raceMeta"></div>
+</div>
+
+<div class="data-badges" id="dataBadges"></div>
+
+<div class="tabs" id="tabBar">
+  <button class="tab active" data-tab="shutuba">出馬表</button>
+  <button class="tab" data-tab="result">レース結果</button>
+  <button class="tab" data-tab="predict">🤖 AI予測</button>
+  <button class="tab" data-tab="horses">出走馬詳細</button>
+  <button class="tab" data-tab="odds">オッズ</button>
+</div>
+
+<div id="tabShutuba" class="tab-content active"></div>
+<div id="tabResult" class="tab-content"></div>
+<div id="tabPredict" class="tab-content"></div>
+<div id="tabHorses" class="tab-content"></div>
+<div id="tabOdds" class="tab-content"></div>
+
+<div id="loadingState" class="loading">
+  <div class="load-spinner"></div>
+  <p>レースデータを読み込み中...</p>
+</div>
+
+<script>
+const RACE_ID = '{{ race_id }}';
+let raceData = null;
+
+/** 出馬表/結果の date を YYYYMMDD に（モニター ?date= 用） */
+function raceDateToCompact(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  const t = raw.trim();
+  if (/^\d{8}$/.test(t)) return t;
+  let m = t.match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);
+  if (!m) m = t.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if (m) {
+    const y = m[1], mo = m[2].padStart(2, '0'), da = m[3].padStart(2, '0');
+    return y + mo + da;
+  }
+  const m2 = t.match(/(\d{4})(\d{2})(\d{2})/);
+  return m2 ? m2[1] + m2[2] + m2[3] : '';
+}
+
+function renderMonitorNavLinks() {
+  const nav = document.getElementById('raceMonitorNav');
+  if (!nav) return;
+  const d = raceData || {};
+  const compact = raceDateToCompact(d.date || '');
+  let html = '<a class="back-link" href="/monitor">← モニター（全日付一覧）</a>';
+  if (compact) {
+    html += '<span class="sep">|</span>';
+    html += `<a class="back-link" href="/monitor?date=${compact}" title="URL: /monitor?date=${compact}">モニター（この開催日の取得状況）</a>`;
+  } else {
+    html += '<span class="sep">|</span>';
+    html += '<span style="font-size:12px;color:var(--text-dim)">開催日が取れないため日付直リンクは出ません（出馬表・結果取得後に再表示）</span>';
+  }
+  nav.innerHTML = html;
+  nav.style.display = 'flex';
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab' + capitalize(tab.dataset.tab)).classList.add('active');
+  });
+});
+
+function capitalize(s) {
+  const map = { shutuba: 'Shutuba', result: 'Result', predict: 'Predict', horses: 'Horses', odds: 'Odds' };
+  return map[s] || s;
+}
+
+let predictionData = null;
+
+async function loadRace() {
+  try {
+    const res = await fetch(`/api/race/${RACE_ID}`);
+    raceData = await res.json();
+    document.getElementById('loadingState').style.display = 'none';
+    renderHeader();
+    renderMonitorNavLinks();
+    renderDataBadges();
+    renderShutuba();
+    renderResult();
+    renderHorses();
+    renderOdds();
+    loadCachedPrediction();
+  } catch (e) {
+    document.getElementById('loadingState').innerHTML =
+      `<div class="empty-state"><div class="icon">⚠️</div><p>データの読み込みに失敗しました</p>
+       <p style="margin-top:12px"><a class="back-link" href="/monitor" style="display:inline-flex">← モニターへ</a></p></div>`;
+  }
+}
+
+async function loadCachedPrediction() {
+  try {
+    const res = await fetch(`/api/race/${RACE_ID}/predictions`);
+    if (res.ok) {
+      predictionData = await res.json();
+      renderPrediction(predictionData);
+    } else {
+      renderPredictionEmpty();
+    }
+  } catch {
+    renderPredictionEmpty();
+  }
+}
+
+async function runPrediction() {
+  const btn = document.getElementById('predictBtn');
+  const container = document.getElementById('tabPredict');
+  btn.disabled = true;
+  btn.textContent = '⏳ 予測実行中...';
+
+  container.innerHTML = `
+    <div class="prediction-header">
+      <button class="predict-btn" disabled>⏳ 予測実行中...</button>
+    </div>
+    <div class="loading">
+      <div class="load-spinner"></div>
+      <p>特徴量構築 → モデル予測 → 結果生成中...</p>
+      <p style="font-size:12px;color:var(--text-dim);margin-top:8px">データ取得を含むため数十秒かかる場合があります</p>
+    </div>`;
+
+  try {
+    const res = await fetch(`/api/race/${RACE_ID}/predict`, { method: 'POST' });
+    const data = await res.json();
+    if (data.status === 'success') {
+      predictionData = data;
+      renderPrediction(data);
+    } else {
+      container.innerHTML = `
+        <div class="prediction-header">
+          <button class="predict-btn" id="predictBtn" onclick="runPrediction()">🤖 予測を再実行</button>
+        </div>
+        <div class="empty-state">
+          <div class="icon">⚠️</div>
+          <p>予測に失敗しました<br><span style="font-size:12px;color:var(--err)">${data.error || '不明なエラー'}</span></p>
+        </div>`;
+    }
+  } catch (e) {
+    container.innerHTML = `
+      <div class="prediction-header">
+        <button class="predict-btn" id="predictBtn" onclick="runPrediction()">🤖 予測を再実行</button>
+      </div>
+      <div class="empty-state">
+        <div class="icon">⚠️</div>
+        <p>予測実行中にエラーが発生しました<br><span style="font-size:12px;color:var(--err)">${e.message}</span></p>
+      </div>`;
+  }
+}
+
+async function recordOddsSnapshot() {
+  try {
+    const res = await fetch(`/api/odds/snapshot/${RACE_ID}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.status === 'recorded') {
+      alert(`オッズスナップショットを記録しました (${data.n_entries}頭)`);
+      runPrediction();
+    } else {
+      alert(`オッズ記録失敗: ${data.error || '不明なエラー'}`);
+    }
+  } catch (e) {
+    alert(`エラー: ${e.message}`);
+  }
+}
+
+function renderPredictionEmpty() {
+  document.getElementById('tabPredict').innerHTML = `
+    <div class="prediction-header">
+      <button class="predict-btn" id="predictBtn" onclick="runPrediction()">🤖 AI予測を実行</button>
+    </div>
+    <div class="empty-state">
+      <div class="icon">🤖</div>
+      <p>このレースの予測結果はまだありません。<br>
+      「AI予測を実行」ボタンを押すと、<br>
+      出馬表・タイム指数・過去成績などから予測モデルが<br>
+      各馬のスコアと推奨印を算出します。</p>
+    </div>`;
+}
+
+function recClass(rec) {
+  if (rec.includes('◎')) return 'rec-honmei';
+  if (rec.includes('○')) return 'rec-taikou';
+  if (rec.includes('▲')) return 'rec-tanana';
+  if (rec.includes('△')) return 'rec-renka';
+  return 'rec-anaba';
+}
+
+function recMark(rec) {
+  if (rec.includes('◎')) return '◎';
+  if (rec.includes('○')) return '○';
+  if (rec.includes('▲')) return '▲';
+  if (rec.includes('△')) return '△';
+  return '☆';
+}
+
+function renderPrediction(data) {
+  const container = document.getElementById('tabPredict');
+  if (!data || !data.predictions || data.predictions.length === 0) {
+    renderPredictionEmpty();
+    return;
+  }
+
+  const isMlflow = data.model_type === 'mlflow_model';
+  const modelClass = isMlflow ? 'mlflow' : 'heuristic';
+  const modelIcon = isMlflow ? '🧠' : '📊';
+  const maxScore = Math.max(...data.predictions.map(p => p.pred_score));
+
+  const highlightMap = {};
+  (data.feature_highlights || []).forEach(h => {
+    highlightMap[h.horse_number] = h.factors || [];
+  });
+
+  const markMethod = data.mark_method || '';
+  const hasOdds = data.predictions.some(p => p.place_odds_avg);
+
+  const oddsSource = data.predictions[0]?.odds_source || '';
+  const oddsConf = data.predictions[0]?.odds_confidence;
+  const confLabel = oddsConf != null ? `信頼度${(oddsConf*100).toFixed(0)}%` : '';
+  const sourceLabel = oddsSource === 'model' ? '📈 予測オッズ(モデル)'
+    : oddsSource === 'trajectory' ? '📉 予測オッズ(推移)'
+    : oddsSource === 'blend' ? '🔀 予測オッズ(混合)'
+    : oddsSource === 'heuristic' ? '📐 推定オッズ(経験則)'
+    : oddsSource === 'latest_snapshot' ? '📸 直近スナップショット'
+    : oddsSource === 'live' ? '🔴 ライブオッズ' : '';
+
+  let html = `<div class="prediction-header">
+    <button class="predict-btn" id="predictBtn" onclick="runPrediction()">🔄 予測を再実行</button>
+    <button class="predict-btn" style="background:#1e3a5f;margin-left:4px" onclick="recordOddsSnapshot()">📸 オッズ記録</button>
+    <span class="model-badge ${modelClass}">${modelIcon} ${data.model_description || data.model_type}</span>
+    <span class="predict-time">⏱ ${data.elapsed_sec || '?'}秒 / ${data.total_horses || 0}頭</span>
+    ${markMethod ? `<span class="model-badge heuristic" style="margin-left:4px" title="印付け方式">🏷️ ${markMethod}</span>` : ''}
+    ${sourceLabel ? `<span class="model-badge heuristic" style="margin-left:4px;background:rgba(59,130,246,0.12);color:#60a5fa" title="${confLabel}">
+      ${sourceLabel} ${confLabel ? `(${confLabel})` : ''}
+    </span>` : ''}
+    ${data.composite_params ? `<span class="model-badge ${data.composite_params.source === 'simulation' ? 'mlflow' : 'heuristic'}" style="margin-left:4px" title="α=${data.composite_params.prob_weight}">
+      ${data.composite_params.source === 'simulation' ? '🎯 最適化済' : '⚙️ デフォルト'} α=${data.composite_params.prob_weight}
+    </span>` : ''}
+  </div>`;
+
+  html += '<table class="predictions"><thead><tr>';
+  html += '<th>順</th><th>印</th><th>馬番</th><th>馬名</th><th>モデルスコア</th>';
+  if (hasOdds) {
+    html += '<th>予測複勝</th><th>推定確率</th><th>期待値</th><th>総合</th>';
+  }
+  html += '<th>主要指標</th>';
+  html += '</tr></thead><tbody>';
+
+  const sortedPreds = hasOdds
+    ? [...data.predictions].sort((a, b) => (a.composite_rank || a.pred_rank) - (b.composite_rank || b.pred_rank))
+    : data.predictions;
+
+  sortedPreds.forEach((p, idx) => {
+    const displayRank = p.composite_rank || p.pred_rank;
+    const rankClass = displayRank <= 3 ? `rank-${displayRank}` : '';
+    const rankNumClass = displayRank === 1 ? 'pred-rank-1' : displayRank === 2 ? 'pred-rank-2' : displayRank === 3 ? 'pred-rank-3' : '';
+    const barWidth = maxScore > 0 ? Math.max(4, (p.pred_score / maxScore) * 120) : 4;
+    const factors = highlightMap[p.horse_number] || [];
+    const topFactors = factors.slice(0, 4);
+
+    html += `<tr class="${rankClass}">`;
+    html += `<td><span class="pred-rank-num ${rankNumClass}">${displayRank}</span></td>`;
+    html += `<td><span class="rec-mark ${recClass(p.recommendation)}">${recMark(p.recommendation)}</span>
+             <span class="rec-label ${recClass(p.recommendation)}">${p.recommendation.replace(/[◎○▲△☆]\s*/, '')}</span></td>`;
+    html += `<td>${p.horse_number}</td>`;
+    html += `<td class="horse-name"><a href="#horse-${p.horse_id}">${p.horse_name}</a></td>`;
+    html += `<td><span class="score-bar" style="width:${barWidth}px"></span><span class="score-val">${p.pred_score.toFixed(1)}</span></td>`;
+
+    if (hasOdds) {
+      const placeStr = p.place_odds_avg ? `${p.place_odds_min}~${p.place_odds_max}` : '—';
+      const probPct = p.estimated_prob ? (p.estimated_prob * 100).toFixed(0) + '%' : '—';
+      const evStr = p.expected_value != null ? p.expected_value.toFixed(2) : '—';
+      const evColor = p.expected_value >= 1.0 ? 'var(--ok)' : p.expected_value >= 0.7 ? 'var(--warn)' : 'var(--text-dim)';
+      const compStr = p.composite_score ? p.composite_score.toFixed(3) : '—';
+      html += `<td style="font-size:11px">${placeStr}</td>`;
+      html += `<td style="font-size:11px">${probPct}</td>`;
+      html += `<td style="font-size:11px;color:${evColor};font-weight:600">${evStr}</td>`;
+      html += `<td style="font-size:11px">${compStr}</td>`;
+    }
+
+    html += '<td><div class="factor-chips">';
+    topFactors.forEach(f => {
+      html += `<span class="factor-chip">${f.name}<span class="fval">${f.value}</span></span>`;
+    });
+    html += '</div></td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+
+  // オッズ推移セクション
+  html += `<div id="oddsTrajectorySection" style="margin-top:16px">
+    <button class="predict-btn" style="background:#1e3a5f;font-size:12px" onclick="loadOddsHistory()">📈 オッズ推移を表示</button>
+    <div id="oddsChart"></div>
+  </div>`;
+
+  // 実行済みレース結果との比較
+  const result = raceData && raceData.race_result;
+  if (result && result.entries && result.entries.length > 0) {
+    html += renderPredictionAccuracy(data.predictions, result.entries);
+  }
+
+  container.innerHTML = html;
+}
+
+async function loadOddsHistory() {
+  const container = document.getElementById('oddsChart');
+  container.innerHTML = '<div class="loading"><div class="load-spinner"></div></div>';
+  try {
+    const res = await fetch(`/api/odds/history/${RACE_ID}`);
+    const data = await res.json();
+    if (!data.snapshots || data.snapshots.length === 0) {
+      container.innerHTML = '<p style="color:var(--text-dim);font-size:12px;padding:8px">オッズ推移の履歴がありません。「📸 オッズ記録」ボタンで定期的に記録してください。</p>';
+      return;
+    }
+
+    const horses = {};
+    data.snapshots.forEach((snap, si) => {
+      const time = new Date(snap.timestamp * 1000).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+      (snap.entries || []).forEach(e => {
+        const hn = e.horse_number;
+        if (!horses[hn]) horses[hn] = { label: `馬番${hn}`, data: [] };
+        horses[hn].data.push({ x: si, t: time, win: e.win_odds || 0 });
+      });
+    });
+
+    let tbl = `<h3 class="section-title" style="margin-top:12px">📈 オッズ推移 (${data.n_snapshots}回記録)</h3>`;
+    tbl += '<table class="results" style="font-size:11px"><thead><tr><th>馬番</th>';
+    const times = data.snapshots.map((s, i) => new Date(s.timestamp * 1000).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }));
+    times.forEach(t => { tbl += `<th>${t}</th>`; });
+    tbl += '<th>変動</th></tr></thead><tbody>';
+
+    Object.keys(horses).sort((a, b) => Number(a) - Number(b)).forEach(hn => {
+      const h = horses[hn];
+      tbl += `<tr><td><strong>${hn}</strong></td>`;
+      h.data.forEach(d => { tbl += `<td>${d.win ? d.win.toFixed(1) : '—'}</td>`; });
+
+      if (h.data.length >= 2) {
+        const first = h.data[0].win;
+        const last = h.data[h.data.length - 1].win;
+        const diff = last - first;
+        const color = diff < 0 ? 'var(--ok)' : diff > 0 ? 'var(--err)' : 'var(--text-dim)';
+        const arrow = diff < 0 ? '↓' : diff > 0 ? '↑' : '→';
+        tbl += `<td style="color:${color};font-weight:600">${arrow}${Math.abs(diff).toFixed(1)}</td>`;
+      } else {
+        tbl += '<td>—</td>';
+      }
+      tbl += '</tr>';
+    });
+    tbl += '</tbody></table>';
+    container.innerHTML = tbl;
+  } catch (e) {
+    container.innerHTML = `<p style="color:var(--err);font-size:12px">取得失敗: ${e.message}</p>`;
+  }
+}
+
+function renderPredictionAccuracy(predictions, results) {
+  const resultMap = {};
+  results.forEach(r => {
+    const pos = parseInt(r.finish_position || r.position || 99);
+    resultMap[parseInt(r.horse_number || r.number || 0)] = pos;
+  });
+
+  let html = '<h3 class="section-title">📊 予測 vs 実績</h3>';
+  html += '<table class="results"><thead><tr>';
+  html += '<th>予想順</th><th>印</th><th>馬番</th><th>馬名</th><th>スコア</th><th>実際の着順</th><th>判定</th>';
+  html += '</tr></thead><tbody>';
+
+  let hitCount = 0;
+  let top3Hit = 0;
+
+  const sorted = [...predictions].sort((a, b) => (a.composite_rank || a.pred_rank) - (b.composite_rank || b.pred_rank));
+  sorted.forEach(p => {
+    const rank = p.composite_rank || p.pred_rank;
+    const actual = resultMap[p.horse_number];
+    let verdict = '';
+    let verdictStyle = '';
+    if (actual !== undefined) {
+      if (rank <= 3 && actual <= 3) {
+        verdict = '✅ 的中';
+        verdictStyle = 'color:var(--ok);font-weight:700';
+        hitCount++;
+        top3Hit++;
+      } else if (rank <= 5 && actual <= 3) {
+        verdict = '⭕ 惜しい';
+        verdictStyle = 'color:var(--warn);font-weight:600';
+        top3Hit++;
+      } else if (actual <= 3) {
+        verdict = '△ 見逃し';
+        verdictStyle = 'color:var(--text-dim)';
+      } else if (rank <= 3 && actual > 5) {
+        verdict = '❌ 外れ';
+        verdictStyle = 'color:var(--err)';
+      } else {
+        verdict = '—';
+        verdictStyle = 'color:var(--text-dim)';
+      }
+    }
+
+    const placeClass = actual === 1 ? 'place-1' : actual === 2 ? 'place-2' : actual === 3 ? 'place-3' : '';
+    const evStr = p.expected_value != null ? ` (EV: ${p.expected_value.toFixed(2)})` : '';
+
+    html += '<tr>';
+    html += `<td>${rank}</td>`;
+    html += `<td><span class="rec-mark ${recClass(p.recommendation)}">${recMark(p.recommendation)}</span></td>`;
+    html += `<td>${p.horse_number}</td>`;
+    html += `<td class="horse-name">${p.horse_name}</td>`;
+    html += `<td>${p.pred_score.toFixed(1)}${evStr}</td>`;
+    html += `<td class="${placeClass}">${actual !== undefined ? actual : '—'}</td>`;
+    html += `<td style="${verdictStyle}">${verdict}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+
+  html += `<div style="margin-top:12px;padding:12px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px">
+    <strong style="color:#fff">予測精度サマリ:</strong>
+    <span style="margin-left:12px">上位3頭的中: <strong style="color:var(--ok)">${hitCount}/3</strong></span>
+    <span style="margin-left:12px">3着内予測成功: <strong style="color:var(--warn)">${top3Hit}頭</strong></span>
+  </div>`;
+
+  return html;
+}
+
+function renderHeader() {
+  const d = raceData;
+  const header = document.getElementById('raceHeader');
+  header.style.display = 'block';
+
+  document.getElementById('roundBadge').textContent =
+    (d.venue || '') + ' ' + (d.round || '') + 'R';
+  document.getElementById('raceName').textContent = d.race_name || RACE_ID;
+
+  const grade = d.grade || '';
+  const gb = document.getElementById('gradeBadge');
+  if (grade && grade !== '未勝利' && grade !== '新馬') {
+    gb.textContent = grade;
+    gb.style.display = 'inline-block';
+    if (grade === 'G1') gb.style.background = 'rgba(239,68,68,0.2)', gb.style.color = '#ef4444';
+    else if (grade === 'G2') gb.style.background = 'rgba(59,130,246,0.2)', gb.style.color = '#60a5fa';
+    else if (grade === 'G3') gb.style.background = 'rgba(34,197,94,0.2)', gb.style.color = '#22c55e';
+  }
+
+  document.getElementById('netkeibaLink').href = `https://race.netkeiba.com/race/shutuba.html?race_id=${RACE_ID}`;
+
+  const tags = [];
+  if (d.date) tags.push(d.date);
+  if (d.surface) tags.push(`<span class="tag">${d.surface}</span>`);
+  if (d.distance) tags.push(`<span class="tag">${d.distance}m</span>`);
+  if (d.direction) tags.push(`<span class="tag">${d.direction}</span>`);
+  if (d.weather) tags.push(`<span class="tag">☁ ${d.weather}</span>`);
+  if (d.track_condition) tags.push(`<span class="tag">馬場: ${d.track_condition}</span>`);
+  if (d.start_time) tags.push(`<span class="tag">🕐 ${d.start_time}</span>`);
+  document.getElementById('raceMeta').innerHTML = tags.join('');
+}
+
+function renderDataBadges() {
+  const avail = raceData.data_availability || {};
+  const labels = {
+    race_shutuba: '出馬表', race_result: 'レース結果', race_index: 'タイム指数',
+    race_shutuba_past: '馬柱', race_odds: 'オッズ', race_paddock: 'パドック',
+    race_barometer: '偏差値', race_oikiri: '追い切り',
+  };
+  let html = '';
+  for (const [key, label] of Object.entries(labels)) {
+    const a = avail[key] || {};
+    const cls = a.json ? 'available' : 'unavailable';
+    const icon = a.json ? '✓' : '✗';
+    html += `<span class="data-badge ${cls}">${icon} ${label}</span>`;
+  }
+  document.getElementById('dataBadges').innerHTML = html;
+}
+
+function renderShutuba() {
+  const container = document.getElementById('tabShutuba');
+  const card = raceData.race_shutuba;
+  if (!card || !card.entries || card.entries.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>出馬表データがありません</p></div>';
+    return;
+  }
+
+  const odds = raceData.race_odds;
+  const oddsMap = {};
+  if (odds && odds.win) {
+    for (const o of odds.win) {
+      oddsMap[String(o.horse_number || o.number)] = o.odds;
+    }
+  }
+
+  let html = '<table class="entries"><thead><tr>';
+  html += '<th>枠</th><th>馬番</th><th>馬名</th><th>性齢</th><th>斤量</th>';
+  html += '<th>騎手</th><th>調教師</th><th>単勝</th></tr></thead><tbody>';
+
+  card.entries.forEach(e => {
+    const odds_val = oddsMap[String(e.horse_number)] || oddsMap[String(e.number)] || '';
+    const oddsClass = odds_val ? (odds_val < 5 ? 'odds-low' : odds_val < 20 ? 'odds-mid' : 'odds-high') : '';
+    const horseLink = e.horse_id ? `/race/${RACE_ID}#horse-${e.horse_id}` : '#';
+    html += '<tr>';
+    html += `<td>${e.bracket_number || ''}</td>`;
+    html += `<td>${e.horse_number || e.number || ''}</td>`;
+    html += `<td class="horse-name"><a href="#horse-${e.horse_id || ''}">${e.horse_name || ''}</a></td>`;
+    html += `<td>${e.sex || ''}${e.age || ''}</td>`;
+    html += `<td>${e.weight || e.impost || ''}</td>`;
+    html += `<td class="jockey">${e.jockey || ''}</td>`;
+    html += `<td class="trainer">${e.trainer || ''}</td>`;
+    html += `<td class="odds-val ${oddsClass}">${odds_val ? odds_val.toFixed(1) : '—'}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function renderResult() {
+  const container = document.getElementById('tabResult');
+  const result = raceData.race_result;
+  if (!result || !result.entries || result.entries.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">🏁</div><p>レース結果データがありません</p></div>';
+    return;
+  }
+
+  let html = '<table class="results"><thead><tr>';
+  html += '<th>着順</th><th>枠</th><th>馬番</th><th>馬名</th><th>性齢</th>';
+  html += '<th>斤量</th><th>騎手</th><th>タイム</th><th>着差</th><th>人気</th><th>単勝</th>';
+  html += '</tr></thead><tbody>';
+
+  result.entries.forEach(e => {
+    const place = parseInt(e.finish_position || e.position || 99);
+    const placeClass = place === 1 ? 'place-1' : place === 2 ? 'place-2' : place === 3 ? 'place-3' : '';
+    html += '<tr>';
+    html += `<td class="${placeClass}">${e.finish_position || e.position || ''}</td>`;
+    html += `<td>${e.bracket_number || ''}</td>`;
+    html += `<td>${e.horse_number || e.number || ''}</td>`;
+    html += `<td class="horse-name">${e.horse_name || ''}</td>`;
+    html += `<td>${e.sex || ''}${e.age || ''}</td>`;
+    html += `<td>${e.weight || e.impost || ''}</td>`;
+    html += `<td class="jockey">${e.jockey || ''}</td>`;
+    html += `<td>${e.finish_time || ''}</td>`;
+    html += `<td>${e.margin || ''}</td>`;
+    html += `<td>${e.popularity || ''}</td>`;
+    html += `<td>${e.win_odds || ''}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+
+  if (result.payoff) {
+    html += '<h3 class="section-title">払い戻し</h3><div class="payoff-grid">';
+    const payLabels = {
+      tansho: '単勝', fukusho: '複勝', wakuren: '枠連', umaren: '馬連',
+      wide: 'ワイド', umatan: '馬単', trio: '3連複', tierce: '3連単',
+    };
+    for (const [key, label] of Object.entries(payLabels)) {
+      const p = result.payoff[key];
+      if (!p) continue;
+      const items = Array.isArray(p) ? p : [p];
+      items.forEach(item => {
+        const nums = item.numbers || item.combination || '';
+        const amount = item.payout || item.amount || '';
+        html += `<div class="payoff-card">
+          <div class="type">${label}</div>
+          <div class="numbers">${nums}</div>
+          <div class="amount">¥${Number(amount).toLocaleString()}</div>
+        </div>`;
+      });
+    }
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function renderHorses() {
+  const container = document.getElementById('tabHorses');
+  const horses = raceData.horses || {};
+  const card = raceData.race_shutuba;
+
+  if (Object.keys(horses).length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">🐎</div><p>馬情報データがありません</p></div>';
+    return;
+  }
+
+  const entryOrder = card && card.entries
+    ? card.entries.map(e => e.horse_id).filter(Boolean)
+    : Object.keys(horses);
+
+  let html = '';
+  entryOrder.forEach(hid => {
+    const h = horses[hid];
+    if (!h) return;
+    const p = h.profile || h;
+    const races = h.race_history || h.races || [];
+
+    html += `<div class="horse-card" id="horse-${hid}">`;
+    html += `<h3>${p.horse_name || hid}</h3>`;
+    html += '<dl class="profile">';
+    if (p.sex) html += `<dt>性別</dt><dd>${p.sex}</dd>`;
+    if (p.birth_date) html += `<dt>生年月日</dt><dd>${p.birth_date}</dd>`;
+    if (p.trainer) html += `<dt>調教師</dt><dd>${p.trainer}</dd>`;
+    if (p.owner) html += `<dt>馬主</dt><dd>${p.owner}</dd>`;
+    if (p.breeder) html += `<dt>生産者</dt><dd>${p.breeder}</dd>`;
+    if (p.sire) html += `<dt>父</dt><dd>${p.sire}</dd>`;
+    if (p.dam) html += `<dt>母</dt><dd>${p.dam}</dd>`;
+    if (p.dam_sire) html += `<dt>母父</dt><dd>${p.dam_sire}</dd>`;
+    if (p.total_prize) html += `<dt>獲得賞金</dt><dd>${p.total_prize}</dd>`;
+    html += '</dl>';
+
+    if (races.length > 0) {
+      html += '<table class="past-races"><thead><tr>';
+      html += '<th>日付</th><th>場所</th><th>レース名</th><th>着順</th>';
+      html += '<th>距離</th><th>タイム</th><th>馬場</th><th>騎手</th>';
+      html += '</tr></thead><tbody>';
+      races.slice(0, 10).forEach(r => {
+        const place = parseInt(r.finish_position || r.position || 99);
+        const pc = place === 1 ? 'place-1' : place === 2 ? 'place-2' : place === 3 ? 'place-3' : '';
+        html += '<tr>';
+        html += `<td>${r.date || ''}</td>`;
+        html += `<td>${r.venue || ''}</td>`;
+        html += `<td class="left">${r.race_name || ''}</td>`;
+        html += `<td class="${pc}">${r.finish_position || r.position || ''}</td>`;
+        html += `<td>${r.distance || ''}</td>`;
+        html += `<td>${r.finish_time || r.time || ''}</td>`;
+        html += `<td>${r.track_condition || ''}</td>`;
+        html += `<td>${r.jockey || ''}</td>`;
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function renderOdds() {
+  const container = document.getElementById('tabOdds');
+  const odds = raceData.race_odds;
+  if (!odds) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">💰</div><p>オッズデータがありません</p></div>';
+    return;
+  }
+
+  let html = '';
+
+  if (odds.win && odds.win.length > 0) {
+    html += '<h3 class="section-title">単勝オッズ</h3>';
+    html += '<table class="results"><thead><tr><th>馬番</th><th>馬名</th><th>オッズ</th><th>人気</th></tr></thead><tbody>';
+    const sorted = [...odds.win].sort((a, b) => (a.odds || 999) - (b.odds || 999));
+    sorted.forEach((o, i) => {
+      const cls = o.odds < 5 ? 'odds-low' : o.odds < 20 ? 'odds-mid' : 'odds-high';
+      html += '<tr>';
+      html += `<td>${o.horse_number || o.number || ''}</td>`;
+      html += `<td class="horse-name">${o.horse_name || ''}</td>`;
+      html += `<td class="odds-val ${cls}">${o.odds ? o.odds.toFixed(1) : '—'}</td>`;
+      html += `<td>${i + 1}</td>`;
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  if (odds.place && odds.place.length > 0) {
+    html += '<h3 class="section-title">複勝オッズ</h3>';
+    html += '<table class="results"><thead><tr><th>馬番</th><th>馬名</th><th>下限</th><th>上限</th></tr></thead><tbody>';
+    odds.place.forEach(o => {
+      html += '<tr>';
+      html += `<td>${o.horse_number || o.number || ''}</td>`;
+      html += `<td class="horse-name">${o.horse_name || ''}</td>`;
+      html += `<td>${o.odds_min || o.min || '—'}</td>`;
+      html += `<td>${o.odds_max || o.max || '—'}</td>`;
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  container.innerHTML = html || '<div class="empty-state"><div class="icon">💰</div><p>オッズデータがありません</p></div>';
+}
+
+if (location.hash) {
+  setTimeout(() => {
+    const el = document.querySelector(location.hash);
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  }, 500);
+}
+
+loadRace();
+</script>
+</div>
+</body>
+</html>

@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ミオスタチン遺伝子 (MSTN) - Keiba</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#c9d1d9;font-family:'Inter',-apple-system,'Segoe UI',sans-serif;min-height:100vh}
+.main{max-width:1440px;margin:0 auto;padding:20px 24px 60px}
+h1{font-size:22px;font-weight:700;color:#f0f6fc;margin-bottom:4px}
+.subtitle{font-size:13px;color:#8b949e;margin-bottom:24px}
+.subtitle a{color:#58a6ff;text-decoration:none}
+.grid{display:grid;gap:20px}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:960px){.g2,.g3{grid-template-columns:1fr}}
+.card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:20px;overflow:hidden}
+.card-title{font-size:14px;font-weight:600;color:#f0f6fc;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-title .icon{font-size:18px}
+
+.stat-row{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.stat-box{flex:1;min-width:100px;background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:14px 16px;text-align:center}
+.stat-val{font-size:28px;font-weight:700;color:#f0f6fc}
+.stat-label{font-size:11px;color:#8b949e;margin-top:2px}
+
+.legend-row{display:flex;gap:20px;justify-content:center;margin:12px 0;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#8b949e}
+.legend-dot{width:12px;height:12px;border-radius:50%}
+
+.scatter-wrap{position:relative;width:100%;height:500px}
+canvas{width:100%!important;height:100%!important}
+
+.table-wrap{max-height:480px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d #161b22}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{position:sticky;top:0;background:#161b22;color:#8b949e;font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid #21262d;z-index:1;cursor:pointer;user-select:none;white-space:nowrap;transition:color .15s}
+th:hover{color:#c9d1d9}
+th .sort-arrow{display:inline-block;margin-left:4px;font-size:10px;opacity:0.3;transition:opacity .15s}
+th.sort-active .sort-arrow{opacity:1;color:#58a6ff}
+th.sort-asc .sort-arrow::after{content:'▲'}
+th.sort-desc .sort-arrow::after{content:'▼'}
+td{padding:7px 10px;border-bottom:1px solid #21262d20}
+tr:hover td{background:#1c2128}
+.gt-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px;letter-spacing:0.5px}
+.gt-CC{background:#da363440;color:#f85149}
+.gt-CT{background:#d29922a0;color:#e3b341}
+.gt-TT{background:#238636a0;color:#3fb950}
+.conf-badge{font-size:10px;padding:2px 6px;border-radius:3px;font-weight:500}
+.conf-confirmed{background:#238636;color:#fff}
+.conf-highly_likely{background:#1f6feb;color:#fff}
+.conf-estimated{background:#6e7681;color:#c9d1d9}
+.conf-inferred{background:#30363d;color:#8b949e}
+
+.dist-bar{height:6px;border-radius:3px;background:#30363d;position:relative;margin-top:4px}
+.dist-fill{height:100%;border-radius:3px;position:absolute;left:0;top:0}
+
+.predict-form{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+.form-group{display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px}
+.form-group label{font-size:11px;color:#8b949e;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.form-group input,.form-group select{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 12px;color:#c9d1d9;font-size:13px;outline:none}
+.form-group input:focus,.form-group select:focus{border-color:#58a6ff}
+.btn{padding:8px 20px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
+.btn-primary{background:#238636;color:#fff}
+.btn-primary:hover{background:#2ea043}
+.result-area{margin-top:16px;padding:16px;background:#0d1117;border:1px solid #21262d;border-radius:8px;display:none}
+.result-area.show{display:block}
+.prob-bars{display:flex;gap:8px;margin:10px 0}
+.prob-bar{flex:1;text-align:center}
+.prob-bar .bar{height:40px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;transition:.3s}
+.prob-bar .label{font-size:11px;color:#8b949e;margin-top:4px}
+
+.finding-card{background:#0d1117;border-left:3px solid #58a6ff;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:10px}
+.finding-date{font-size:11px;color:#58a6ff;font-weight:600;margin-bottom:4px}
+.finding-text{font-size:13px;color:#c9d1d9;line-height:1.5}
+.finding-impact{font-size:12px;color:#8b949e;margin-top:6px}
+.finding-impact span{display:inline-block;background:#21262d;padding:2px 8px;border-radius:3px;margin:2px 4px 2px 0}
+
+.filter-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.filter-btn{padding:4px 12px;border:1px solid #30363d;border-radius:20px;background:transparent;color:#8b949e;font-size:12px;cursor:pointer;transition:.15s}
+.filter-btn:hover{border-color:#58a6ff;color:#c9d1d9}
+.filter-btn.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
+
+.search-box{width:100%;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 12px;color:#c9d1d9;font-size:13px;outline:none;margin-bottom:14px}
+.search-box:focus{border-color:#58a6ff}
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+<div class="main">
+<h1>ミオスタチン遺伝子 (MSTN) ダッシュボード</h1>
+<p class="subtitle">v2.0.0 | 登録種牡馬 <span id="stallionCount">-</span>頭 | 最終更新 <span id="lastUpdated">-</span></p>
+
+<div class="stat-row" id="statRow"></div>
+
+<div class="grid g2" style="margin-bottom:20px">
+  <div class="card">
+    <div class="card-title"><span class="icon">📊</span>遺伝子型 × 平均勝利距離</div>
+    <div class="legend-row">
+      <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div>CC (スプリント)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e3b341"></div>CT (中距離)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div>TT (長距離)</div>
+    </div>
+    <div class="scatter-wrap"><canvas id="scatterChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="icon">🧬</span>遺伝子型分布</div>
+    <div class="grid g2" style="gap:16px">
+      <div>
+        <div style="font-size:12px;color:#8b949e;text-align:center;margin-bottom:8px">ナレッジベース (n=<span id="kbCount">-</span>)</div>
+        <canvas id="pieKb" style="max-height:200px"></canvas>
+      </div>
+      <div>
+        <div style="font-size:12px;color:#8b949e;text-align:center;margin-bottom:8px">栗東トレセン実測 (n=433)</div>
+        <canvas id="pieRitto" style="max-height:200px"></canvas>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <div style="font-size:12px;color:#8b949e;text-align:center;margin-bottom:8px">オープンクラス</div>
+      <canvas id="pieOpen" style="max-height:160px"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="grid g2" style="margin-bottom:20px">
+  <div class="card">
+    <div class="card-title"><span class="icon">🔬</span>配合シミュレーター</div>
+    <div class="predict-form">
+      <div class="form-group">
+        <label>父 (種牡馬)</label>
+        <input id="predSire" list="stallionList" placeholder="例: キタサンブラック">
+      </div>
+      <div class="form-group">
+        <label>母父</label>
+        <input id="predDamSire" list="stallionList" placeholder="例: ディープインパクト">
+      </div>
+      <div class="form-group" style="max-width:120px">
+        <label>距離 (m)</label>
+        <input id="predDist" type="number" value="2000" step="200" min="800" max="4000">
+      </div>
+      <button class="btn btn-primary" onclick="runPredict()">計算</button>
+    </div>
+    <datalist id="stallionList"></datalist>
+    <div class="result-area" id="predictResult">
+      <div id="predParentInfo" style="font-size:13px;margin-bottom:10px"></div>
+      <div style="font-size:12px;color:#8b949e;margin-bottom:4px">産駒の遺伝子型確率</div>
+      <div class="prob-bars" id="predBars"></div>
+      <div id="predAffinity" style="font-size:13px;margin-top:10px"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="icon">📰</span>最新の発見</div>
+    <div id="findingsArea"></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:20px">
+  <div class="card-title"><span class="icon">🏇</span>種牡馬一覧</div>
+  <input class="search-box" id="searchBox" placeholder="種牡馬名で検索...">
+  <div class="filter-row" id="filterRow">
+    <button class="filter-btn active" data-filter="all">すべて</button>
+    <button class="filter-btn" data-filter="CC">CC</button>
+    <button class="filter-btn" data-filter="CT">CT</button>
+    <button class="filter-btn" data-filter="TT">TT</button>
+    <span style="width:1px;height:20px;background:#30363d;align-self:center"></span>
+    <button class="filter-btn" data-filter="confirmed">確定</button>
+    <button class="filter-btn" data-filter="highly_likely">高確率</button>
+    <button class="filter-btn" data-filter="estimated">推定</button>
+    <button class="filter-btn" data-filter="inferred">推論</button>
+  </div>
+  <div class="table-wrap">
+    <table id="stallionTable">
+      <thead><tr>
+        <th data-sort="name">種牡馬<span class="sort-arrow"></span></th>
+        <th data-sort="name_en">英名<span class="sort-arrow"></span></th>
+        <th data-sort="genotype">型<span class="sort-arrow"></span></th>
+        <th data-sort="confidence">信頼度<span class="sort-arrow"></span></th>
+        <th data-sort="allele_c">C%<span class="sort-arrow"></span></th>
+        <th data-sort="allele_t">T%<span class="sort-arrow"></span></th>
+        <th data-sort="avg_win_dist" class="sort-active sort-asc">平均勝距離<span class="sort-arrow"></span></th>
+        <th data-sort="line">系統<span class="sort-arrow"></span></th>
+        <th>根拠</th>
+      </tr></thead>
+      <tbody id="stallionBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title"><span class="icon">📊</span>系統別遺伝子型分布</div>
+  <div style="height:400px"><canvas id="lineChart"></canvas></div>
+</div>
+</div>
+
+<script>
+const COLORS = {CC:'#f85149', CT:'#e3b341', TT:'#3fb950'};
+const CONF_LABELS = {confirmed:'確定', highly_likely:'高確率', estimated:'推定', inferred:'推論'};
+let kbData = null;
+
+async function init() {
+  const res = await fetch('/api/myostatin');
+  kbData = await res.json();
+  const stallions = kbData.stallions || [];
+  const meta = kbData._meta || {};
+
+  document.getElementById('stallionCount').textContent = stallions.length;
+  document.getElementById('lastUpdated').textContent = meta.last_updated || '-';
+  document.getElementById('kbCount').textContent = stallions.length;
+
+  const counts = {CC:0,CT:0,TT:0};
+  stallions.forEach(s => counts[s.genotype]=(counts[s.genotype]||0)+1);
+
+  document.getElementById('statRow').innerHTML = `
+    <div class="stat-box"><div class="stat-val" style="color:${COLORS.CC}">${counts.CC}</div><div class="stat-label">CC (スプリント)</div></div>
+    <div class="stat-box"><div class="stat-val" style="color:${COLORS.CT}">${counts.CT}</div><div class="stat-label">CT (中距離)</div></div>
+    <div class="stat-box"><div class="stat-val" style="color:${COLORS.TT}">${counts.TT}</div><div class="stat-label">TT (長距離)</div></div>
+    <div class="stat-box"><div class="stat-val">${stallions.length}</div><div class="stat-label">Total</div></div>
+  `;
+
+  buildScatter(stallions);
+  buildPies(counts, kbData.population_statistics);
+  buildTable(stallions);
+  buildFindings(kbData.key_findings || []);
+  buildLineGroupChart(stallions);
+  buildDatalist(stallions);
+}
+
+function buildScatter(stallions) {
+  const datasets = ['CC','CT','TT'].map(gt => ({
+    label: gt,
+    data: stallions.filter(s=>s.genotype===gt).map(s=>({
+      x: s.avg_win_dist,
+      y: s.allele_c,
+      name: s.name,
+      conf: s.confidence,
+    })),
+    backgroundColor: COLORS[gt]+'99',
+    borderColor: COLORS[gt],
+    borderWidth: 1.5,
+    pointRadius: (ctx)=>{
+      const c = ctx.raw?.conf;
+      return c==='confirmed'?10:c==='highly_likely'?8:c==='estimated'?6:5;
+    },
+    pointHoverRadius: 12,
+  }));
+
+  new Chart(document.getElementById('scatterChart'), {
+    type: 'scatter',
+    data: {datasets},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        tooltip:{
+          callbacks:{
+            label: ctx => `${ctx.raw.name} (${ctx.dataset.label}) ${ctx.raw.x}m C=${(ctx.raw.y*100).toFixed(0)}%`
+          }
+        },
+        legend:{display:false}
+      },
+      scales:{
+        x:{title:{display:true,text:'平均勝利距離 (m)',color:'#8b949e'},
+           grid:{color:'#21262d'},ticks:{color:'#8b949e'},min:1000,max:2800},
+        y:{title:{display:true,text:'Cアレル確率',color:'#8b949e'},
+           grid:{color:'#21262d'},ticks:{color:'#8b949e'},min:-0.05,max:1.05}
+      }
+    }
+  });
+}
+
+function buildPies(kbCounts, popStats) {
+  const pieOpts = (title) => ({
+    responsive:true, maintainAspectRatio:true,
+    plugins:{legend:{display:true,position:'bottom',labels:{color:'#8b949e',font:{size:11}}}}
+  });
+  const colors = [COLORS.CC, COLORS.CT, COLORS.TT];
+
+  new Chart(document.getElementById('pieKb'), {
+    type:'doughnut',
+    data:{labels:['CC','CT','TT'],datasets:[{data:[kbCounts.CC,kbCounts.CT,kbCounts.TT],backgroundColor:colors,borderWidth:0}]},
+    options:pieOpts()
+  });
+
+  if(popStats){
+    const all = popStats.all_horses || {};
+    new Chart(document.getElementById('pieRitto'), {
+      type:'doughnut',
+      data:{labels:['CC','CT','TT'],datasets:[{data:[all.CC*100,all.CT*100,all.TT*100],backgroundColor:colors,borderWidth:0}]},
+      options:{...pieOpts(), plugins:{...pieOpts().plugins, tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw.toFixed(1)}%`}}}}
+    });
+    const open = popStats.open_class || {};
+    new Chart(document.getElementById('pieOpen'), {
+      type:'doughnut',
+      data:{labels:['CC','CT','TT'],datasets:[{data:[open.CC*100,open.CT*100,open.TT*100],backgroundColor:colors,borderWidth:0}]},
+      options:{...pieOpts(), plugins:{...pieOpts().plugins, tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw.toFixed(1)}%`}}}}
+    });
+  }
+}
+
+function buildTable(stallions) {
+  const body = document.getElementById('stallionBody');
+  const allData = [...stallions];
+  const CONF_ORDER = {confirmed:0, highly_likely:1, estimated:2, inferred:3};
+  let sortKey = 'avg_win_dist';
+  let sortDir = 'asc';
+
+  function sortData(list) {
+    return [...list].sort((a, b) => {
+      let va = a[sortKey], vb = b[sortKey];
+      if (sortKey === 'confidence') {
+        va = CONF_ORDER[va] ?? 9;
+        vb = CONF_ORDER[vb] ?? 9;
+      }
+      if (typeof va === 'string') va = (va || '').toLowerCase();
+      if (typeof vb === 'string') vb = (vb || '').toLowerCase();
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  function render(list) {
+    body.innerHTML = list.map(s => `<tr data-gt="${s.genotype}" data-conf="${s.confidence}">
+      <td style="font-weight:600;color:#f0f6fc">${s.name}</td>
+      <td style="color:#8b949e">${s.name_en||''}</td>
+      <td><span class="gt-badge gt-${s.genotype}">${s.genotype}</span></td>
+      <td><span class="conf-badge conf-${s.confidence}">${CONF_LABELS[s.confidence]||s.confidence}</span></td>
+      <td style="color:${COLORS.CC}">${(s.allele_c*100).toFixed(0)}%</td>
+      <td style="color:${COLORS.TT}">${(s.allele_t*100).toFixed(0)}%</td>
+      <td>
+        <div style="font-weight:600">${s.avg_win_dist}m</div>
+        <div class="dist-bar" style="width:120px">
+          <div class="dist-fill" style="width:${Math.min((s.avg_win_dist/2800)*100,100)}%;background:${COLORS[s.genotype]}"></div>
+        </div>
+      </td>
+      <td style="font-size:11px;color:#8b949e">${s.line||''}</td>
+      <td style="font-size:11px;color:#6e7681;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(s.source||'').replace(/"/g,'&quot;')}">${s.source||''}</td>
+    </tr>`).join('');
+  }
+
+  function refreshTable() {
+    let list = allData;
+    const q = document.getElementById('searchBox').value.toLowerCase();
+    if (q) list = list.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      (s.name_en||'').toLowerCase().includes(q) ||
+      (s.line||'').toLowerCase().includes(q)
+    );
+    list = applyFilters(list);
+    render(sortData(list));
+  }
+
+  function updateSortUI() {
+    document.querySelectorAll('#stallionTable th[data-sort]').forEach(th => {
+      th.classList.remove('sort-active', 'sort-asc', 'sort-desc');
+      if (th.dataset.sort === sortKey) {
+        th.classList.add('sort-active', 'sort-' + sortDir);
+      }
+    });
+  }
+
+  document.querySelectorAll('#stallionTable th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      if (sortKey === key) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortKey = key;
+        sortDir = (typeof allData[0]?.[key] === 'number') ? 'asc' : 'asc';
+      }
+      updateSortUI();
+      refreshTable();
+    });
+  });
+
+  refreshTable();
+
+  document.getElementById('searchBox').addEventListener('input', () => refreshTable());
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const f = btn.dataset.filter;
+      const grp = ['CC','CT','TT'].includes(f) ? 'gt' : ['confirmed','highly_likely','estimated','inferred'].includes(f) ? 'conf' : 'all';
+
+      if(grp==='all') {
+        document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+      } else {
+        document.querySelector('.filter-btn[data-filter="all"]').classList.remove('active');
+        btn.classList.toggle('active');
+      }
+      refreshTable();
+    });
+  });
+
+  function applyFilters(list) {
+    const activeGt = [...document.querySelectorAll('.filter-btn.active')].map(b=>b.dataset.filter).filter(f=>['CC','CT','TT'].includes(f));
+    const activeConf = [...document.querySelectorAll('.filter-btn.active')].map(b=>b.dataset.filter).filter(f=>['confirmed','highly_likely','estimated','inferred'].includes(f));
+    const isAll = document.querySelector('.filter-btn[data-filter="all"]').classList.contains('active');
+
+    if(isAll) return list;
+    return list.filter(s => {
+      const gtOk = activeGt.length===0 || activeGt.includes(s.genotype);
+      const confOk = activeConf.length===0 || activeConf.includes(s.confidence);
+      return gtOk && confOk;
+    });
+  }
+}
+
+function buildFindings(findings) {
+  const area = document.getElementById('findingsArea');
+  area.innerHTML = findings.map(f => `
+    <div class="finding-card">
+      <div class="finding-date">${f.date}</div>
+      <div class="finding-text">${f.finding}</div>
+      <div class="finding-impact">${(f.impact||[]).map(i=>'<span>'+i+'</span>').join('')}</div>
+    </div>
+  `).join('');
+}
+
+function buildLineGroupChart(stallions) {
+  const lineGroups = {};
+  stallions.forEach(s => {
+    const line = s.line || 'その他';
+    if(!lineGroups[line]) lineGroups[line] = {CC:0,CT:0,TT:0,total:0};
+    lineGroups[line][s.genotype]++;
+    lineGroups[line].total++;
+  });
+
+  const sorted = Object.entries(lineGroups).sort((a,b)=>b[1].total-a[1].total);
+  const labels = sorted.map(([k])=>k);
+
+  new Chart(document.getElementById('lineChart'), {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'CC',data:sorted.map(([,v])=>v.CC),backgroundColor:COLORS.CC+'cc'},
+        {label:'CT',data:sorted.map(([,v])=>v.CT),backgroundColor:COLORS.CT+'cc'},
+        {label:'TT',data:sorted.map(([,v])=>v.TT),backgroundColor:COLORS.TT+'cc'},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#c9d1d9'}}},
+      scales:{
+        x:{stacked:true,grid:{color:'#21262d'},ticks:{color:'#8b949e',font:{size:11},maxRotation:45}},
+        y:{stacked:true,grid:{color:'#21262d'},ticks:{color:'#8b949e'},title:{display:true,text:'頭数',color:'#8b949e'}}
+      }
+    }
+  });
+}
+
+function buildDatalist(stallions) {
+  const dl = document.getElementById('stallionList');
+  dl.innerHTML = stallions.map(s => `<option value="${s.name}">`).join('');
+}
+
+async function runPredict() {
+  const sire = document.getElementById('predSire').value.trim();
+  const ds = document.getElementById('predDamSire').value.trim();
+  const dist = parseInt(document.getElementById('predDist').value) || 0;
+  if(!sire) return;
+
+  const res = await fetch('/api/myostatin/predict', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({sire, dam_sire:ds, distance:dist})
+  });
+  const data = await res.json();
+  const area = document.getElementById('predictResult');
+  area.classList.add('show');
+
+  let parentHtml = '';
+  if(data.sire_info) {
+    parentHtml += `<strong>父 ${data.sire_info.name}</strong>: <span class="gt-badge gt-${data.sire_info.genotype}">${data.sire_info.genotype}</span> `;
+  } else {
+    parentHtml += `<strong>父 ${sire}</strong>: <span style="color:#6e7681">未登録(デフォルト値)</span> `;
+  }
+  if(ds) {
+    if(data.dam_sire_info) {
+      parentHtml += `| <strong>母父 ${data.dam_sire_info.name}</strong>: <span class="gt-badge gt-${data.dam_sire_info.genotype}">${data.dam_sire_info.genotype}</span>`;
+    } else {
+      parentHtml += `| <strong>母父 ${ds}</strong>: <span style="color:#6e7681">未登録</span>`;
+    }
+  }
+  document.getElementById('predParentInfo').innerHTML = parentHtml;
+
+  if(data.offspring) {
+    const o = data.offspring;
+    document.getElementById('predBars').innerHTML = ['CC','CT','TT'].map(gt => {
+      const pct = (o[gt]*100).toFixed(1);
+      return `<div class="prob-bar">
+        <div class="bar" style="background:${COLORS[gt]}40;color:${COLORS[gt]};height:${Math.max(20,o[gt]*120)}px">${pct}%</div>
+        <div class="label">${gt}</div>
+      </div>`;
+    }).join('');
+  }
+
+  if(data.features && dist > 0) {
+    const aff = data.features.mstn_distance_affinity;
+    const si = data.features.mstn_speed_index;
+    const affPct = (aff*100).toFixed(1);
+    const barColor = aff > 0.7 ? '#3fb950' : aff > 0.4 ? '#e3b341' : '#f85149';
+    document.getElementById('predAffinity').innerHTML = `
+      <div style="display:flex;gap:20px;align-items:center">
+        <div>距離適合度 (${dist}m): <strong style="color:${barColor}">${affPct}%</strong></div>
+        <div>スピード指数: <strong>${(si*100).toFixed(0)}</strong>/100</div>
+      </div>
+      <div style="height:8px;background:#21262d;border-radius:4px;margin-top:8px">
+        <div style="width:${affPct}%;height:100%;background:${barColor};border-radius:4px;transition:.3s"></div>
+      </div>
+    `;
+  } else {
+    document.getElementById('predAffinity').innerHTML = '';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

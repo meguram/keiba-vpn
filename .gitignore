@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Environment（秘密情報はコミットしない）
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 実行時・ログ
+*.pid
+.server.log
+*.log
+logs/
+
+# バックアップ・一時
+api/app.py.bak_*
+*.bak
+
+# ML（再生成可）
+catboost_info/
+mlflow_data/
+mlruns/
+
+# スクレイプ・キュー由来の生成物（GCS が正、ローカルは再取得可）
+data/cache/
+data/queue/
+data/local/
+data/meta/status/
+data/meta/disk_l2_weekly_access.json
+data/meta/pedigree_weekly_access.json
+
+# 大容量のローカル専用データ（必要なら個別に追跡）
+data/meta/person/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 資格情報
+*.pem
+credentials.json

@@ -1,0 +1,24 @@
+{
+  "category": "horse_profile",
+  "timestamp": "2026-03-19T09:43:40.512943",
+  "sample_id": "2023103225",
+  "selector_results": {
+    "horse_name": {
+      "selector": "div.horse_title h1",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "prof_table": {
+      "selector": "table.db_prof_table",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    }
+  },
+  "row_count": 0,
+  "column_count": 0,
+  "column_classes": []
+}

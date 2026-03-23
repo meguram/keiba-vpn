@@ -1,0 +1,17 @@
+{
+  "category": "race_odds",
+  "timestamp": "2026-03-19T09:43:30.383766",
+  "sample_id": "202606020601",
+  "selector_results": {
+    "odds_table": {
+      "selector": "table.RaceOdds_HorseList_Table",
+      "matched": true,
+      "index": 0,
+      "element_count": 5,
+      "optional": true
+    }
+  },
+  "row_count": 61,
+  "column_count": 0,
+  "column_classes": []
+}

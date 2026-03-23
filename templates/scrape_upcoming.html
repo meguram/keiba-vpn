@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>未来レーススクレイピング | ML-AutoPilot Keiba</title>
+<style>
+  :root {
+    --bg: #0a0e17; --surface: #131926; --surface2: #1a2235;
+    --border: #243049; --text: #c8d6e5; --text-dim: #6b7d95;
+    --accent: #3b82f6; --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+    --purple: #a78bfa;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
+
+  .page-header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .page-header-left h1 { font-size: 16px; font-weight: 700; color: #fff; }
+  .page-header-left .subtitle { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .page-header-actions {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .btn {
+    background: var(--accent); color: #fff; border: none; padding: 8px 16px;
+    border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;
+    transition: background 0.2s;
+  }
+  .btn:hover { background: #2563eb; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-ok { background: var(--ok); }
+  .btn-ok:hover { background: #16a34a; }
+  .btn-warn { background: var(--warn); }
+  .btn-warn:hover { background: #d97706; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--border); }
+
+  .controls {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 24px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .controls label { font-size: 12px; color: var(--text-dim); }
+  .controls input[type="number"] {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 10px; border-radius: 5px; font-size: 12px; width: 80px;
+  }
+
+  .content { padding: 20px 24px; max-width: 1600px; margin: 0 auto; }
+
+  .summary-cards {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px; margin-bottom: 24px;
+  }
+  .summary-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .summary-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary-value { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .summary-sub { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+  .date-section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px; margin-bottom: 20px;
+  }
+  .date-section-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+  }
+  .date-section-title {
+    font-size: 15px; font-weight: 700; color: #fff;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .date-badge {
+    font-size: 11px; padding: 4px 10px; border-radius: 5px; font-weight: 600;
+    background: rgba(59,130,246,0.15); color: var(--accent);
+  }
+  .date-badge.tomorrow { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .date-badge.today { background: rgba(34,197,94,0.15); color: var(--ok); }
+
+  .race-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+  }
+  .race-card {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px; transition: border-color 0.2s, box-shadow 0.2s;
+    position: relative;
+  }
+  .race-card:hover { border-color: var(--accent); box-shadow: 0 0 20px rgba(59,130,246,0.1); }
+  .race-card-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 10px;
+  }
+  .race-info h4 {
+    font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .race-round {
+    display: inline-block; padding: 2px 7px; border-radius: 4px;
+    background: rgba(167,139,250,0.15); color: var(--purple);
+    font-size: 11px; font-weight: 700;
+  }
+  .race-details {
+    font-size: 11px; color: var(--text-dim); display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .race-detail-item { display: flex; align-items: center; gap: 4px; }
+
+  .status-indicator {
+    width: 10px; height: 10px; border-radius: 50%;
+    animation: pulse-status 2s infinite;
+  }
+  .status-not-scraped { background: var(--text-dim); animation: none; }
+  .status-queued { background: var(--warn); }
+  .status-running { background: var(--accent); }
+  .status-completed { background: var(--ok); animation: none; }
+  .status-failed { background: var(--err); animation: none; }
+  @keyframes pulse-status {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.9); }
+  }
+
+  .race-status {
+    display: flex; flex-direction: column; gap: 4px; align-items: flex-end;
+  }
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 600;
+  }
+  .status-badge.not-scraped { background: rgba(107,125,149,0.15); color: var(--text-dim); }
+  .status-badge.queued { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .status-badge.running { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .status-badge.completed { background: rgba(34,197,94,0.15); color: var(--ok); }
+  .status-badge.failed { background: rgba(239,68,68,0.15); color: var(--err); }
+
+  .race-actions {
+    display: flex; gap: 6px; margin-top: 12px;
+  }
+  .race-btn {
+    flex: 1; padding: 7px 12px; border-radius: 5px; font-size: 11px; font-weight: 600;
+    border: none; cursor: pointer; transition: all 0.2s;
+  }
+  .race-btn-scrape { background: var(--accent); color: #fff; }
+  .race-btn-scrape:hover { background: #2563eb; }
+  .race-btn-scrape:disabled { opacity: 0.5; cursor: not-allowed; }
+  .race-btn-view { background: var(--ok); color: #fff; }
+  .race-btn-view:hover { background: #16a34a; }
+  .race-btn-cancel { background: var(--warn); color: #fff; }
+  .race-btn-cancel:hover { background: #d97706; }
+
+  .progress-bar {
+    height: 4px; background: rgba(36,48,73,0.5); border-radius: 2px;
+    overflow: hidden; margin-top: 8px;
+  }
+  .progress-fill {
+    height: 100%; background: var(--accent); transition: width 0.3s;
+    animation: progress-shimmer 1.5s infinite;
+  }
+  @keyframes progress-shimmer {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+  }
+
+  .empty { text-align: center; padding: 60px 20px; color: var(--text-dim); font-size: 14px; }
+
+  .loading {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 16px; }
+    .race-grid { grid-template-columns: 1fr; }
+    .summary-cards { grid-template-columns: repeat(2, 1fr); }
+    .page-header { padding: 12px 16px; }
+    .controls { padding: 10px 16px; flex-direction: column; align-items: stretch; }
+    .controls > * { width: 100%; }
+  }
+
+  .calendar-fetch-panel {
+    display: none;
+    margin: 0 24px 16px;
+    max-width: 1600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .calendar-fetch-panel.visible { display: block; }
+  .calendar-fetch-panel-inner {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    border-left: 4px solid var(--warn);
+  }
+  .calendar-fetch-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .calendar-fetch-title .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--warn);
+    animation: pulse-status 1.2s ease-in-out infinite;
+  }
+  .calendar-fetch-panel.done .calendar-fetch-title .dot {
+    background: var(--ok);
+    animation: none;
+  }
+  .calendar-fetch-panel.err .calendar-fetch-title .dot {
+    background: var(--err);
+    animation: none;
+  }
+  .calendar-fetch-state {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .calendar-fetch-bar-wrap {
+    height: 6px;
+    background: rgba(36,48,73,0.6);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .calendar-fetch-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--warn), var(--accent));
+    border-radius: 3px;
+    transition: width 0.35s ease;
+  }
+  .calendar-fetch-bar.indeterminate {
+    width: 40% !important;
+    animation: cal-bar-slide 1.2s ease-in-out infinite;
+  }
+  @keyframes cal-bar-slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
+  .calendar-fetch-detail {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .calendar-fetch-meta {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    opacity: 0.85;
+  }
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>未来レーススクレイピング</h1>
+    <div class="subtitle">開催予定レースのデータを自動取得（投入したジョブは <a href="/queue-status" style="color:var(--accent)">アプリ共通のスクレイピングキュー</a> で処理されます）</div>
+  </div>
+  <div class="page-header-actions">
+    <button class="btn btn-secondary" onclick="window.location.href='/queue-status'">
+      📊 スクレイピングキュー
+    </button>
+    <button class="btn btn-warn" onclick="fetchFutureCalendar()" id="fetchCalendarBtn">
+      📅 カレンダー情報取得
+    </button>
+    <button class="btn btn-secondary" onclick="loadRaces()">
+      <span id="refreshIcon">🔄</span> 更新
+    </button>
+    <button class="btn btn-ok" onclick="enqueueUnscrapedInView()" id="enqueueUnscrapedBtn" title="データ未取得・失敗のレースだけキューに載せます（取得済みはスキップ）">
+      📋 未取得をキューに追加
+    </button>
+    <button class="btn btn-secondary" onclick="scrapeAll()" id="scrapeAllBtn" title="未取得・失敗をキュー投入（同上）">
+      🚀 すべて取得
+    </button>
+  </div>
+</div>
+
+<div class="controls">
+  <label>取得期間:</label>
+  <input type="date" id="startDateInput" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:5px;font-size:12px;">
+  <span style="font-size:12px;color:var(--text-dim)">〜</span>
+  <input type="date" id="endDateInput" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:5px;font-size:12px;">
+  <button class="btn" onclick="loadRaces()" style="padding:6px 14px;font-size:11px;margin-left:8px">🔍 表示</button>
+</div>
+
+<div id="calendarFetchPanel" class="calendar-fetch-panel" role="status" aria-live="polite" aria-atomic="true">
+  <div class="calendar-fetch-panel-inner">
+    <div class="calendar-fetch-title">
+      <span class="dot" id="calendarFetchDot"></span>
+      <span>カレンダー情報取得</span>
+    </div>
+    <div id="calendarFetchState" class="calendar-fetch-state">—</div>
+    <div class="calendar-fetch-bar-wrap">
+      <div id="calendarFetchBar" class="calendar-fetch-bar"></div>
+    </div>
+    <div id="calendarFetchDetail" class="calendar-fetch-detail"></div>
+    <div id="calendarFetchMeta" class="calendar-fetch-meta"></div>
+  </div>
+</div>
+
+<div class="content">
+  <div class="summary-cards" id="summaryCards">
+    <div class="summary-card">
+      <div class="summary-label">総レース数</div>
+      <div class="summary-value" style="color:var(--accent)" id="totalRaces">-</div>
+      <div class="summary-sub" id="totalRacesSub">読み込み中...</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">未取得</div>
+      <div class="summary-value" style="color:var(--text-dim)" id="notScraped">-</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">取得中・待機中</div>
+      <div class="summary-value" style="color:var(--warn)" id="inProgress">-</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">完了</div>
+      <div class="summary-value" style="color:var(--ok)" id="completed">-</div>
+    </div>
+  </div>
+
+  <div id="queueInRangePanel" class="date-section" style="display:none;margin-bottom:20px">
+    <div class="date-section-header" style="margin-bottom:10px">
+      <div class="date-section-title">
+        <span>この期間でキューに載っているレース</span>
+        <span style="font-size:12px;color:var(--text-dim)" id="queueInRangeCount"></span>
+      </div>
+      <button type="button" class="btn btn-secondary" onclick="toggleQueueInRange()" style="padding:6px 14px;font-size:11px" id="queueInRangeToggle">一覧を表示</button>
+    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin-bottom:10px">サーバの待機・実行中ジョブのうち、いま表示している開催日のレースだけを列挙します（順序は処理順に近いです）。</p>
+    <div id="queueInRangeList" style="display:none;max-height:220px;overflow:auto;font-size:11px;border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--surface2)"></div>
+  </div>
+
+  <div id="raceSections"></div>
+</div>
+
+<script>
+let _races = [];
+let _queueStatus = {};
+let _scrapedStatus = {};
+let _autoRefreshInterval = null;
+
+async function loadRaces() {
+  const startDate = document.getElementById('startDateInput').value;
+  const endDate = document.getElementById('endDateInput').value;
+
+  if (!startDate || !endDate) {
+    alert('開始日と終了日を選択してください');
+    return;
+  }
+
+  document.getElementById('refreshIcon').textContent = '⏳';
+
+  try {
+    // 未来のレース取得
+    const racesResp = await fetch(`/api/upcoming-races?start_date=${startDate}&end_date=${endDate}`);
+    const racesData = await racesResp.json();
+    _races = racesData.races || [];
+
+    // キューステータス取得
+    const queueResp = await fetch('/api/scrape-queue/status');
+    _queueStatus = await queueResp.json();
+
+    // スクレイピング済み状態を確認
+    if (_races.length > 0) {
+      const raceIds = _races.map(r => r.race_id);
+      const scrapedResp = await fetch('/api/check-scraped-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ race_ids: raceIds })
+      });
+      _scrapedStatus = await scrapedResp.json();
+    }
+
+    renderRaces();
+    document.getElementById('refreshIcon').textContent = '🔄';
+  } catch (e) {
+    console.error('読み込みエラー:', e);
+    document.getElementById('refreshIcon').textContent = '❌';
+  }
+}
+
+/** キュー内ジョブを race_id で引く（待機・実行中は全件 active_jobs、それ以外は直近履歴 jobs） */
+function findJobForRace(raceId) {
+  const active = _queueStatus.active_jobs || [];
+  const j = active.find(x => x.race_id === raceId);
+  if (j) return j;
+  return (_queueStatus.jobs || []).find(x => x.race_id === raceId);
+}
+
+function renderQueueInRangePanel() {
+  const panel = document.getElementById('queueInRangePanel');
+  const countEl = document.getElementById('queueInRangeCount');
+  const listEl = document.getElementById('queueInRangeList');
+  if (!panel || !countEl || !listEl) return;
+
+  const active = _queueStatus.active_jobs || [];
+  const idSet = new Set(_races.map(r => r.race_id));
+  const inRange = active.filter(j => idSet.has(j.race_id));
+
+  if (inRange.length === 0) {
+    panel.style.display = 'none';
+    listEl.innerHTML = '';
+    return;
+  }
+
+  panel.style.display = 'block';
+  countEl.textContent = `（${inRange.length}件）`;
+
+  const rows = inRange.map((j, i) => {
+    const st = j.status === 'running' ? '実行中' : '待機中';
+    const date = j.date && String(j.date).length === 8
+      ? `${j.date.slice(0,4)}/${j.date.slice(4,6)}/${j.date.slice(6,8)}`
+      : (j.date || '—');
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:baseline">
+      <span style="color:var(--warn);font-weight:700;min-width:1.5em">${i + 1}</span>
+      <span style="color:var(--accent)">${escapeHtml(st)}</span>
+      <span>${escapeHtml(date)}</span>
+      <span>${escapeHtml(j.venue || '')}</span>
+      <span>${escapeHtml(String(j.round ?? ''))}R</span>
+      <span style="flex:1;min-width:120px;opacity:0.9">${escapeHtml(j.race_name || '')}</span>
+      <code style="font-size:10px;opacity:0.85">${escapeHtml(j.race_id || '')}</code>
+    </div>`;
+  });
+  listEl.innerHTML = rows.join('');
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+let _queueInRangeOpen = false;
+function toggleQueueInRange() {
+  _queueInRangeOpen = !_queueInRangeOpen;
+  const listEl = document.getElementById('queueInRangeList');
+  const btn = document.getElementById('queueInRangeToggle');
+  if (listEl) listEl.style.display = _queueInRangeOpen ? 'block' : 'none';
+  if (btn) btn.textContent = _queueInRangeOpen ? '一覧を隠す' : '一覧を表示';
+}
+
+function renderRaces() {
+  // サマリー更新
+  const raceIds = _races.map(r => r.race_id);
+
+  let notScraped = 0, inProgress = 0, completed = 0;
+  for (const race of _races) {
+    const job = findJobForRace(race.race_id);
+    const status = getStatus(race, job);
+    if (status === 'not-scraped') notScraped++;
+    else if (status === 'queued' || status === 'running') inProgress++;
+    else if (status === 'completed') completed++;
+  }
+
+  document.getElementById('totalRaces').textContent = _races.length;
+  const sub = document.getElementById('totalRacesSub');
+  if (sub) {
+    if (_races.length === 0) {
+      sub.textContent = '期間を選んで 🔍 表示してください';
+    } else {
+      const active = _queueStatus.active_jobs || [];
+      const idSet = new Set(_races.map(r => r.race_id));
+      const qn = active.filter(j => idSet.has(j.race_id)).length;
+      sub.textContent = qn > 0 ? `この期間でキュー待ち・実行中: ${qn}件` : 'この期間ではキューに載っているレースはありません';
+    }
+  }
+  document.getElementById('notScraped').textContent = notScraped;
+  document.getElementById('inProgress').textContent = inProgress;
+  document.getElementById('completed').textContent = completed;
+
+  renderQueueInRangePanel();
+
+  // 日付ごとにグループ化
+  const byDate = {};
+  for (const race of _races) {
+    if (!byDate[race.date]) byDate[race.date] = [];
+    byDate[race.date].push(race);
+  }
+
+  const sectionsContainer = document.getElementById('raceSections');
+  if (_races.length === 0) {
+    sectionsContainer.innerHTML = '<div class="empty">開催予定のレースがありません</div>';
+    return;
+  }
+
+  let html = '';
+  const sortedDates = Object.keys(byDate).sort();
+
+  for (const date of sortedDates) {
+    const races = byDate[date];
+    const y = date.slice(0,4), m = date.slice(4,6), d = date.slice(6,8);
+    const dateStr = `${y}年${m}月${d}日`;
+
+    const offset = races[0].day_offset || 0;
+    let badgeClass = '';
+    let badgeText = '';
+    if (offset === 0) { badgeClass = 'today'; badgeText = '本日'; }
+    else if (offset === 1) { badgeClass = 'tomorrow'; badgeText = '明日'; }
+    else { badgeText = `${offset}日後`; }
+
+    html += `<div class="date-section">
+      <div class="date-section-header">
+        <div class="date-section-title">
+          <span>${dateStr}</span>
+          <span class="date-badge ${badgeClass}">${badgeText}</span>
+          <span style="font-size:13px;color:var(--text-dim)">${races.length}レース</span>
+        </div>
+        <button class="btn" onclick="scrapeDateAll('${date}')" style="padding:6px 14px;font-size:11px">
+          この日をすべて取得
+        </button>
+      </div>
+      <div class="race-grid">`;
+
+    for (const race of races) {
+      const job = findJobForRace(race.race_id);
+      const status = getStatus(race, job);
+      const statusText = getStatusText(status);
+      const statusClass = status;
+
+      const scraped = _scrapedStatus[race.race_id] || {};
+      const dataTypes = scraped.data_types || [];
+      const dataTypeLabels = {
+        'race_shutuba': '出馬表',
+        'horse_result': '馬情報',
+        'race_odds': 'オッズ',
+        'race_result': '結果'
+      };
+
+      html += `<div class="race-card" id="card-${race.race_id}">
+        <div class="race-card-header">
+          <div class="race-info">
+            <h4>
+              <span class="race-round">${race.round}R</span>
+              ${race.race_name || '(レース名不明)'}
+            </h4>
+            <div class="race-details">
+              <span class="race-detail-item">📍 ${race.venue}</span>
+              <span class="race-detail-item">🏇 ${race.entries_count || '-'}頭</span>`;
+
+      if (status === 'completed' && dataTypes.length > 0) {
+        const labels = dataTypes.map(dt => dataTypeLabels[dt] || dt).join(', ');
+        html += `<span class="race-detail-item" style="color:var(--ok)">✓ ${labels}</span>`;
+      }
+
+      html += `</div>
+          </div>
+          <div class="race-status">
+            <div class="status-badge ${statusClass}">
+              <div class="status-indicator status-${statusClass}"></div>
+              ${statusText}
+            </div>
+          </div>
+        </div>`;
+
+      // 進行状況バー（実行中のみ）
+      if (status === 'running') {
+        html += `<div class="progress-bar"><div class="progress-fill" style="width:60%"></div></div>`;
+      }
+
+      // アクション
+      html += `<div class="race-actions">`;
+
+      if (status === 'not-scraped') {
+        html += `<button class="race-btn race-btn-scrape" onclick="scrapeRace('${race.race_id}', '${race.date}', '${race.venue}', ${race.round}, '${(race.race_name || '').replace(/'/g, "\\'")}')">
+          📥 データ取得
+        </button>`;
+      } else if (status === 'queued') {
+        const pos = getQueuePosition(race.race_id);
+        html += `<button class="race-btn race-btn-cancel" onclick="cancelJob('${race.race_id}')">
+          ⏸️ キャンセル (${pos}番目)
+        </button>`;
+      } else if (status === 'running') {
+        html += `<button class="race-btn race-btn-scrape" disabled>
+          <span class="loading"></span> 取得中...
+        </button>`;
+      } else if (status === 'completed') {
+        html += `<button class="race-btn race-btn-view" onclick="viewRace('${race.race_id}')">
+          📊 分析ページへ
+        </button>`;
+        html += `<button class="race-btn race-btn-scrape" onclick="scrapeRace('${race.race_id}', '${race.date}', '${race.venue}', ${race.round}, '${(race.race_name || '').replace(/'/g, "\\'")}')">
+          🔄 再取得
+        </button>`;
+      } else if (status === 'failed') {
+        html += `<button class="race-btn race-btn-scrape" onclick="scrapeRace('${race.race_id}', '${race.date}', '${race.venue}', ${race.round}, '${(race.race_name || '').replace(/'/g, "\\'")}')">
+          🔄 再試行
+        </button>`;
+      }
+
+      html += `</div></div>`;
+    }
+
+    html += `</div></div>`;
+  }
+
+  sectionsContainer.innerHTML = html;
+}
+
+function getStatus(race, job) {
+  // 実際のデータの存在を優先的にチェック
+  const scraped = _scrapedStatus[race.race_id];
+  if (scraped && scraped.scraped) {
+    return 'completed';
+  }
+
+  // キューのジョブ状態をチェック
+  if (!job) return 'not-scraped';
+
+  // キューにある場合はそのステータスを返す（保存値は pending、UI は queued に揃える）
+  if (job.status === 'running') {
+    return 'running';
+  }
+  if (job.status === 'pending' || job.status === 'queued') {
+    return 'queued';
+  }
+
+  // 失敗している場合
+  if (job.status === 'failed') {
+    return 'failed';
+  }
+
+  // completedだがデータがない場合（まだ保存されていない）
+  if (job.status === 'completed' && (!scraped || !scraped.scraped)) {
+    return 'running'; // 保存処理中と見なす
+  }
+
+  return job.status || 'not-scraped';
+}
+
+function getStatusText(status) {
+  const map = {
+    'not-scraped': '未取得',
+    'queued': '待機中',
+    'running': '取得中',
+    'completed': '完了',
+    'failed': '失敗'
+  };
+  return map[status] || status;
+}
+
+function getQueuePosition(raceId) {
+  const active = _queueStatus.active_jobs || [];
+  const ordered = active.filter(j => j.status === 'pending' || j.status === 'queued' || j.status === 'running');
+  return ordered.findIndex(j => j.race_id === raceId) + 1;
+}
+
+/** 一括取得から除外するか（データ取得済み＝ストレージに中身あり） */
+function isRaceAlreadyScraped(race) {
+  const job = findJobForRace(race.race_id);
+  return getStatus(race, job) === 'completed';
+}
+
+/** キュー投入対象だけ返す（取得完了済みはスキップ） */
+function filterRacesForBatch(races) {
+  return races.filter(r => !isRaceAlreadyScraped(r));
+}
+
+async function scrapeRace(raceId, date, venue, round, raceName) {
+  try {
+    const resp = await fetch('/api/scrape-queue/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        race_id: raceId,
+        date: date,
+        venue: venue,
+        round: round,
+        race_name: raceName,
+        types: ['race_shutuba', 'horse_result', 'race_odds']
+      })
+    });
+    const data = await resp.json();
+    console.log('スクレイピングジョブ追加:', data);
+    await loadRaces();
+  } catch (e) {
+    alert('スクレイピング開始エラー: ' + e.message);
+  }
+}
+
+function formatQueueBatchMessage(result, uiSkipped) {
+  const c = result.new_jobs ?? 0;
+  const r = result.requeued ?? 0;
+  const d = result.already_in_queue ?? 0;
+  const lines = [];
+  if (c > 0 || r > 0) {
+    const bits = [];
+    if (c > 0) bits.push(`新規 ${c}件`);
+    if (r > 0) bits.push(`完了済みから再実行 ${r}件`);
+    lines.push(`${bits.join('、')}をキューに登録しました。`);
+  }
+  if (d > 0) {
+    lines.push(`既に待機中・実行中だった ${d}件は重複登録せずそのままです。`);
+  }
+  if (c === 0 && r === 0 && d === 0) {
+    lines.push('キューへの反映を行いました。');
+  }
+  if (uiSkipped > 0) {
+    lines.push(`（この画面では取得済み ${uiSkipped}件を事前スキップ済み）`);
+  }
+  return lines.join('\n');
+}
+
+async function scrapeDateAll(date) {
+  const dayRaces = _races.filter(r => r.date === date);
+  const toAdd = filterRacesForBatch(dayRaces);
+  const skipped = dayRaces.length - toAdd.length;
+
+  if (toAdd.length === 0) {
+    alert(`この日の ${dayRaces.length} レースは、いずれもデータ取得済みのためスキップしました。`);
+    return;
+  }
+
+  const msg =
+    skipped > 0
+      ? `この日 ${dayRaces.length} レースのうち、未取得は ${toAdd.length} 件です（取得済み ${skipped} 件はスキップ）。\n\nキューに追加しますか？`
+      : `${toAdd.length}レースをすべて取得します。よろしいですか？`;
+  if (!confirm(msg)) return;
+
+  try {
+    const resp = await fetch('/api/scrape-queue/add-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ races: toAdd })
+    });
+
+    const result = await resp.json();
+
+    if (result.status === 'success') {
+      alert(formatQueueBatchMessage(result, skipped));
+      await loadRaces();
+    } else {
+      alert(`エラー: ${result.error || '不明なエラー'}`);
+    }
+  } catch (e) {
+    console.error('一括追加エラー:', e);
+    alert('一括追加に失敗しました: ' + e.message);
+  }
+}
+
+async function enqueueUnscrapedInView() {
+  await submitUnscrapedBatchToQueue(document.getElementById('enqueueUnscrapedBtn'), '📋 未取得をキューに追加');
+}
+
+async function scrapeAll() {
+  await submitUnscrapedBatchToQueue(document.getElementById('scrapeAllBtn'), '🚀 すべて取得');
+}
+
+/** 未取得・失敗など（取得完了のみ除外）をまとめてキューへ */
+async function submitUnscrapedBatchToQueue(btn, defaultLabel) {
+  const toAdd = filterRacesForBatch(_races);
+  const skipped = _races.length - toAdd.length;
+
+  if (toAdd.length === 0) {
+    alert(`表示中の ${_races.length} レースは、いずれもデータ取得済みのためスキップしました。`);
+    return;
+  }
+
+  const msg =
+    skipped > 0
+      ? `表示中 ${_races.length} レースのうち、キュー投入対象は ${toAdd.length} 件です（取得済み ${skipped} 件はスキップ）。\n\nキューに追加しますか？`
+      : `${toAdd.length}レースをキューに追加します。よろしいですか？`;
+  if (!confirm(msg)) return;
+
+  const label = defaultLabel || 'キューに追加';
+  const restore = () => {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = label;
+    }
+  };
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading"></span> 追加中...';
+  }
+
+  try {
+    const resp = await fetch('/api/scrape-queue/add-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ races: toAdd })
+    });
+
+    const result = await resp.json();
+
+    if (result.status === 'success') {
+      const detail = formatQueueBatchMessage(result, skipped);
+      alert(`✓ キュー処理完了\n\n${detail}\n\n下の「キューに載っているレース」またはスクレイピングキュー画面で確認できます。`);
+      _queueInRangeOpen = true;
+      await loadRaces();
+      const listEl = document.getElementById('queueInRangeList');
+      const tgl = document.getElementById('queueInRangeToggle');
+      if (listEl) listEl.style.display = 'block';
+      if (tgl) tgl.textContent = '一覧を隠す';
+    } else {
+      alert(`エラー: ${result.error || '不明なエラー'}`);
+    }
+  } catch (e) {
+    console.error('一括追加エラー:', e);
+    alert('一括追加に失敗しました: ' + e.message);
+  } finally {
+    restore();
+  }
+}
+
+function viewRace(raceId) {
+  window.open(`/tracking-difficulty?race_id=${raceId}`, '_blank');
+}
+
+async function cancelJob(raceId) {
+  // TODO: キャンセル機能の実装
+  alert('キャンセル機能は今後実装予定です');
+}
+
+const _CAL_STATUS_LABEL = {
+  idle: '待機中',
+  starting: '起動中…',
+  scraping_races: 'netkeiba から取得中…',
+  completed: '完了',
+  error: 'エラー',
+};
+
+function setCalendarFetchPanelVisible(visible) {
+  const panel = document.getElementById('calendarFetchPanel');
+  if (!panel) return;
+  panel.classList.toggle('visible', !!visible);
+}
+
+function updateCalendarFetchPanel(status) {
+  const panel = document.getElementById('calendarFetchPanel');
+  const stateEl = document.getElementById('calendarFetchState');
+  const bar = document.getElementById('calendarFetchBar');
+  const detail = document.getElementById('calendarFetchDetail');
+  const meta = document.getElementById('calendarFetchMeta');
+  if (!panel || !stateEl || !bar || !detail) return;
+
+  const prog = status.progress || {};
+  const total = prog.total_days || 0;
+  const done = prog.completed_days || 0;
+  const running = !!status.running;
+  const st = status.status || 'idle';
+
+  panel.classList.remove('done', 'err');
+  if (st === 'completed') panel.classList.add('done');
+  if (st === 'error') panel.classList.add('err');
+
+  stateEl.textContent = _CAL_STATUS_LABEL[st] || st;
+  detail.textContent = prog.message || (running ? '処理しています…' : '');
+
+  let metaParts = [];
+  if (status.range_label) metaParts.push('期間: ' + status.range_label);
+  if (status.started_at_jst) metaParts.push('開始: ' + status.started_at_jst);
+  if (total > 0) metaParts.push(`進捗: ${done} / ${total} 日`);
+  meta.textContent = metaParts.join(' ・ ');
+
+  bar.classList.remove('indeterminate');
+  if (running && total === 0) {
+    bar.classList.add('indeterminate');
+    bar.style.width = '100%';
+  } else if (total > 0) {
+    const pct = Math.min(100, Math.round((done / total) * 100));
+    bar.style.width = pct + '%';
+  } else {
+    bar.style.width = st === 'completed' ? '100%' : '0%';
+  }
+}
+
+let _calendarPollActive = false;
+
+async function fetchFutureCalendar() {
+  const startDate = document.getElementById('startDateInput').value;
+  const endDate = document.getElementById('endDateInput').value;
+
+  if (!startDate || !endDate) {
+    alert('開始日と終了日を選択してください');
+    return;
+  }
+
+  if (!confirm(`${startDate} 〜 ${endDate} の期間のカレンダー情報を取得します。\n\n・netkeiba レーストップ（/top/?kaisai_date=）が AJAX で読み込む race_list と同じ経路で race_id を取得\n・開催日のみ data/local/race_lists/ に保存\n\nよろしいですか？`)) {
+    return;
+  }
+
+  const btn = document.getElementById('fetchCalendarBtn');
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading"></span> 開始要求中…';
+  setCalendarFetchPanelVisible(true);
+  updateCalendarFetchPanel({
+    running: true,
+    status: 'starting',
+    progress: { message: 'サーバにジョブを送信中…', total_days: 0, completed_days: 0 },
+    range_label: `${startDate} 〜 ${endDate}`,
+  });
+
+  try {
+    const resp = await fetch(`/api/fetch-future-calendar?start_date=${startDate}&end_date=${endDate}`, {
+      method: 'POST'
+    });
+
+    const result = await resp.json();
+
+    if (result.status === 'started' || result.status === 'already_running') {
+      btn.innerHTML = '<span class="loading"></span> 取得中…';
+      await pollCalendarFetchStatus(btn, originalText);
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+      setCalendarFetchPanelVisible(false);
+      alert(result.message || '予期しない応答です');
+    }
+  } catch (e) {
+    console.error('カレンダー取得エラー:', e);
+    alert('カレンダー情報取得に失敗しました: ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+    setCalendarFetchPanelVisible(false);
+  }
+}
+
+async function pollCalendarFetchStatus(btn, originalText) {
+  if (_calendarPollActive) return;
+  _calendarPollActive = true;
+
+  const pollIntervalMs = 800;
+  const maxRetries = 900;
+  let settled = false;
+
+  try {
+    for (let retries = 0; retries < maxRetries; retries++) {
+      if (retries > 0) {
+        await new Promise(r => setTimeout(r, pollIntervalMs));
+      }
+
+      try {
+        const statusResp = await fetch('/api/fetch-future-calendar/status');
+        const status = await statusResp.json();
+        updateCalendarFetchPanel(status);
+
+        const prog = status.progress || {};
+        const total = prog.total_days || 0;
+        const done = prog.completed_days || 0;
+        const cur = prog.current_date || '';
+        if (status.running && total > 0) {
+          btn.innerHTML = `<span class="loading"></span> ${done}/${total} ${cur ? '(' + cur + ')' : ''}`;
+        } else if (status.running) {
+          btn.innerHTML = '<span class="loading"></span> 準備中…';
+        }
+
+        if (status.status === 'completed') {
+          settled = true;
+          const result = status.result || {};
+          const totalDays = result.total_days || 0;
+          const totalRaces = result.total_races || 0;
+          alert(`✓ カレンダー情報取得完了\n\n${totalDays}日分を処理し、合計 ${totalRaces} レース分を保存しました（開催日のみファイル出力）。`);
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+          await loadRaces();
+          setTimeout(() => setCalendarFetchPanelVisible(false), 4000);
+          break;
+        }
+
+        if (status.status === 'error') {
+          settled = true;
+          alert(`エラー: ${status.error || '不明なエラー'}`);
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+          break;
+        }
+      } catch (e) {
+        console.error('ステータス取得エラー:', e);
+      }
+    }
+
+    if (!settled) {
+      alert('タイムアウト: カレンダー取得が長時間応答しません。サーバログを確認するか、しばらくしてからステータスを確認してください。');
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  } finally {
+    _calendarPollActive = false;
+  }
+}
+
+async function resumeCalendarFetchPollIfRunning() {
+  try {
+    const statusResp = await fetch('/api/fetch-future-calendar/status');
+    const status = await statusResp.json();
+    if (!status.running) return;
+    const btn = document.getElementById('fetchCalendarBtn');
+    if (!btn) return;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading"></span> 取得中…（再開）';
+    setCalendarFetchPanelVisible(true);
+    updateCalendarFetchPanel(status);
+    await pollCalendarFetchStatus(btn, originalText);
+  } catch (_) { /* ignore */ }
+}
+
+// 日付フィールドの初期化
+function initializeDates() {
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const weekLater = new Date(today);
+  weekLater.setDate(today.getDate() + 7);
+
+  const formatDate = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  document.getElementById('startDateInput').value = formatDate(tomorrow);
+  document.getElementById('endDateInput').value = formatDate(weekLater);
+}
+
+// 初期化
+initializeDates();
+
+// 初回ロード
+loadRaces();
+
+// 別タブで開始したジョブなど、既に実行中なら進捗ポーリングを再開
+resumeCalendarFetchPollIfRunning();
+
+// 5秒ごとに自動更新
+_autoRefreshInterval = setInterval(loadRaces, 5000);
+
+// ページ離脱時にクリア
+window.addEventListener('beforeunload', () => {
+  if (_autoRefreshInterval) clearInterval(_autoRefreshInterval);
+});
+</script>
+</body>
+</html>

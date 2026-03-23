@@ -1,0 +1,5224 @@
+{
+  "meta": {
+    "title": "血統適性プロファイル（note まとめベース）",
+    "source_label": "Pedigree investigation｜めぐめぐ",
+    "source_url": "https://note.com/lopi_1998/n/n7ebbccf54c2b",
+    "version": 2,
+    "disclaimer_ja": "著者の血統観に基づく主観的スコア（-1〜1）。学習データではなくナレッジ特徴量として利用する。",
+    "counts": {
+      "stallions": 233,
+      "broodmare_lines": 19
+    }
+  },
+  "axes": [
+    {
+      "id": "zaitech_stamina",
+      "label_ja": "在来・スタミナ寄り",
+      "hint": "高スタミナ・レースを重ねて上がる・野芝など"
+    },
+    {
+      "id": "us_speed_sustain",
+      "label_ja": "米型スピード持続",
+      "hint": "Hペース・高速芝での持続スピード"
+    },
+    {
+      "id": "eu_burst",
+      "label_ja": "欧州瞬発・切れ",
+      "hint": "中緩み後の加速・欧州型末脚"
+    },
+    {
+      "id": "eu_power_stamina",
+      "label_ja": "欧州パワー・タフ",
+      "hint": "タフ馬場・長く脚を使う持続"
+    },
+    {
+      "id": "aus_flat_outside",
+      "label_ja": "豪型・平坦・外差し",
+      "hint": "平坦・洋芝・上がりのかかる舞台"
+    },
+    {
+      "id": "de_power_inside",
+      "label_ja": "ドイツ型パワー・イン",
+      "hint": "イン差し・高速芝耐性・春のタフ寄り"
+    },
+    {
+      "id": "early_maturity",
+      "label_ja": "早熟",
+      "hint": "2〜3歳で完成度が出やすい"
+    },
+    {
+      "id": "late_maturity",
+      "label_ja": "晩成",
+      "hint": "成長に伴い型が変化・古馬で伸びる"
+    },
+    {
+      "id": "wet_turf",
+      "label_ja": "道悪・重不良",
+      "hint": "渋った芝で打点が上がる"
+    },
+    {
+      "id": "fast_turf",
+      "label_ja": "高速・良芝スピード",
+      "hint": "レコード型・軽い馬場"
+    },
+    {
+      "id": "kyoto_outer",
+      "label_ja": "京都外回り適性",
+      "hint": "外回りの持続＋スピードバランス"
+    },
+    {
+      "id": "kyoto_inner_speed",
+      "label_ja": "京都内・欧州瞬発",
+      "hint": "内回り・秋華賞型のキレ"
+    },
+    {
+      "id": "tokyo_mile_vm",
+      "label_ja": "東京マイル〜中距離",
+      "hint": "VM・中緩み後の瞬発勝負"
+    },
+    {
+      "id": "tokyo_2400_turf",
+      "label_ja": "東京芝2400（オークス質）",
+      "hint": "欧州×持続・パワー芝"
+    },
+    {
+      "id": "dirt_power",
+      "label_ja": "ダート・パワー",
+      "hint": "ダート適性・パワー伝達"
+    },
+    {
+      "id": "straight_flat_speed",
+      "label_ja": "直線平坦・下り助走",
+      "hint": "直線のスピード勝負・下り坂スタート等"
+    },
+    {
+      "id": "stamina_mid",
+      "label_ja": "中距離スタミナ",
+      "hint": "2000〜2500m帯のスタミナ・持続"
+    }
+  ],
+  "aliases": {
+    "Admire Mars": "アドマイヤマーズ",
+    "Black Tide": "ブラックタイド",
+    "Daiwa Major": "ダイワメジャー",
+    "Dance in the Dark": "ダンスインザダーク",
+    "Declaration of War": "デクラレーションオブウォー",
+    "Deep Impact": "ディープインパクト",
+    "Deep Sunday": "サンデーサイレンス",
+    "Drefong": "ドレフォン",
+    "Duramente": "ドゥラメンテ",
+    "Epiphaneia": "エピファネイア",
+    "Fierement": "フィエールマン",
+    "French Deputy": "フレンチデピュティ",
+    "Gold Ship": "ゴールドシップ",
+    "Harbinger": "ハービンジャー",
+    "Heart's Cry": "ハーツクライ",
+    "Indy Champ": "インディチャンプ",
+    "Just a Way": "ジャスタウェイ",
+    "King Kamehameha": "キングカメハメハ",
+    "King's Best": "キングズベスト",
+    "Kitasan Black": "キタサンブラック",
+    "Kizuna": "キズナ",
+    "Kris S.": "Kris S",
+    "Kris. S": "Kris S",
+    "Kurofune": "クロフネ",
+    "Lord Kanaloa": "ロードカナロア",
+    "Maurice": "モーリス",
+    "Orfevre": "オルフェーヴル",
+    "Real Steel": "リアルスティール",
+    "Rulership": "ルーラーシップ",
+    "Sadlers Wells": "Sadler's Wells",
+    "Sadler’s Wells": "Sadler's Wells",
+    "Satono Diamond": "サトノダイヤモンド",
+    "Saturnalia": "サートゥルナーリア",
+    "Siskin": "シスキン",
+    "Special Week": "スペシャルウィーク",
+    "Stay Gold": "ステイゴールド",
+    "Storm cat": "Storm Cat",
+    "Sunday Silence": "サンデーサイレンス",
+    "Swerve Richard": "スワーヴリチャード",
+    "Symboli Kris S": "シンボリクリスエス",
+    "Win Bright": "ウインブライト",
+    "ストームキャット": "Storm Cat"
+  },
+  "stallions": {
+    "Acatenango": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.54,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.34,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.28,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "平坦巧者・急坂苦手・後世に伝えるの記述。"
+    },
+    "Affirmed": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "米ダート中距離・早熟因子の記述。"
+    },
+    "Ahonoora": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧州軽スピード・日本マイル以下保管の記述。"
+    },
+    "Alibhai": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "長距離スタミナ・Dixieland Band クロスで長距離強化の記述。"
+    },
+    "Alleged": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.5,
+        "eu_power_stamina": 0.46,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.55,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Ribot 系欧州パワーの記述。"
+    },
+    "Alzao": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.46,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.36,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.42,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Lyphard×Sir Ivor でパワースピード持続の記述。"
+    },
+    "Anabaa": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "長距離適性・持続ラップスタミナの記述。"
+    },
+    "Aureole": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "気性難・母方で長距離スタミナの記述。"
+    },
+    "Bletchingly": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.3,
+        "aus_flat_outside": 0.52,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.32,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "豪芝短距離・パワー持続短距離の記述。"
+    },
+    "Blushing Groom": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "長く脚を使う・京都外回りの記述。"
+    },
+    "Bold Ruler": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "米快速系（記事では追記・補強因子）。"
+    },
+    "Brigadier Gerard": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧州1600〜2000 スピードの記述。"
+    },
+    "Buckpasser": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.5,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.42,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.38
+      },
+      "summary_ja": "記事では追記参照。"
+    },
+    "Bull Dog": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.46,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.36,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.42,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Nijinsky 母父系でパワー質スピード持続の記述。"
+    },
+    "Busted": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.52,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.35
+      },
+      "summary_ja": "晩成ステイヤー・下り坂・京都長距離の記述。"
+    },
+    "Cadeaux Genereux": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "スタミナ質スピード持続・エタン牝系でスタミナの記述。"
+    },
+    "Caerleon": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.38,
+        "eu_power_stamina": 0.52,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.4
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Cape Cross": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.46,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.36,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.42,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Danzig×Ahonoora バランスの記述。"
+    },
+    "Caro": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "レコード型高速馬場で打点が上がるの記述。"
+    },
+    "Cozzene": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Crimson Satan": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "筋肉量・馬格（スカーレット一族）の記述。"
+    },
+    "Danehill Dancer": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.36,
+        "kyoto_outer": 0.28,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.32,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "デインヒル色・ラスト1F減速展開の記述。"
+    },
+    "Danzig": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.46,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.36,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.42,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "軽スピード＋パワー質スピード持続の記述。"
+    },
+    "Dark Angel": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧州短距離・Night Shift でパワー持続の記述。"
+    },
+    "Darshaan": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.5,
+        "eu_power_stamina": 0.46,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.55,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Mill Reef–Never Bend 欧州瞬発の記述。"
+    },
+    "Delta Judge": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "Alibhai 経由でスタミナ底上げの記述。"
+    },
+    "Dixieland Band": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "スタミナ・急坂・中山の記述。"
+    },
+    "Dominion": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "2歳リーディング色で早期仕上がりの記述。"
+    },
+    "Dr. Fager": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "強スピード因子・米快速の記述。"
+    },
+    "Dubawi": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ドバイ芝・平坦パワー直線の記述。"
+    },
+    "Dynaformer": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.5,
+        "eu_power_stamina": 0.46,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.55,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Roberto×His Majesty でスタミナの記述。"
+    },
+    "Exceed And Excel": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.3,
+        "aus_flat_outside": 0.52,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.32,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "豪短距離・溜めて一脚・外差しキレの記述。"
+    },
+    "Fairy King": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.38,
+        "eu_power_stamina": 0.52,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.4
+      },
+      "summary_ja": "Sadler's Wells 全兄弟・持続・平坦向きの記述。"
+    },
+    "Fappiano": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Francis S.": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "距離融通の記述。"
+    },
+    "Frankel": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "Mossborough で距離融通・母父は欧州短距離質の記述。"
+    },
+    "Galileo": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.38,
+        "eu_power_stamina": 0.52,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.4
+      },
+      "summary_ja": "重い欧州パワー・母父では持続＋道悪瞬発の記述。"
+    },
+    "Giant's Causeway": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.3,
+        "aus_flat_outside": 0.52,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.32,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "Rahy で平坦・コーナリング不器用の記述。"
+    },
+    "Gone West": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ミスプロ×Secretariat・軽スピード持続・加齢で硬さ・持続の記述。"
+    },
+    "Graustark": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "高スタミナ・His Majesty 全兄弟の記述。"
+    },
+    "Green Dancer": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "長距離スタミナ・急坂で落とすタイプの記述。"
+    },
+    "Green Desert": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "日本高速スピード＋持続・Courtly Dee で長距離もの記述。"
+    },
+    "Grey Sovereign": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "母方でスピード増強・春の補助の記述。"
+    },
+    "Hail to Reason": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧州馬場対応の瞬発の記述。"
+    },
+    "Halo": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Herbager": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.4,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.35,
+        "stamina_mid": 0.38
+      },
+      "summary_ja": "Ballade 牝系・平坦UPの記述。"
+    },
+    "High Top": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Dante 直系じりパワーの記述。"
+    },
+    "His Majesty": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "Graustark 全兄弟スタミナの記述。"
+    },
+    "Hyperion": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.52,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.35
+      },
+      "summary_ja": "晩成・スタミナ・クロスで瞬発増の記述。"
+    },
+    "Iffraaj": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧短・芝短パワースピード持続・道悪前傾の記述。"
+    },
+    "In Reality": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "記事では追記・米快速補強。"
+    },
+    "Invincible Spirit": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Green Desert×スタミナ牝系・短距離パワーの記述。"
+    },
+    "Justify": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.52,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.28,
+        "fast_turf": 0.42,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.3,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ストームキャット直系・米欧中間のスピード持続の記述。"
+    },
+    "Kingmambo": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "キンカメにキレを伝える・Monevassia 対比の記述。"
+    },
+    "Konigsstuhl": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.54,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.34,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.28,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ドイツ K ライン・スピード質瞬発の記述。"
+    },
+    "Kris": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Kris S": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "記事表記 Kris. S を統一。"
+    },
+    "Le Fabuleux": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "早熟・2歳完成・反動に注意の記述。"
+    },
+    "Le Havre": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.38,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.52,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "フランス×ドイツで道悪の記述。"
+    },
+    "Lemon Drop Kid": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Lombard": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.54,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.34,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.28,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "パワー系ドイツ・Urban Sea への記述。"
+    },
+    "Lomitas": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.54,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.34,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.28,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Surumu でスピード質ドイツ・欧州瞬発の記述。"
+    },
+    "Lord at War": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Lost Code": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.45,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.38,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.48,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "サンデー×平坦スピード・京都外・香港の記述。"
+    },
+    "Lyphard": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.38,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.52,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "春の Lyphard・道悪・洋芝の記述。"
+    },
+    "Machiavellian": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.38,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.52,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧マイル×ミスプロでタフ瞬発の記述。"
+    },
+    "Mahmoud": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Mill Reef": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.5,
+        "eu_power_stamina": 0.46,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.55,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧州スピード・クロスで長距離もの記述。"
+    },
+    "Miswaki": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ミスパサの軽スピードの記述。"
+    },
+    "Monsun": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.54,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.34,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.28,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ドイツ・直系/母方で瞬発・内差しの記述。"
+    },
+    "More Than Ready": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Halo×Woodman×Nasrullah×Turn-to 快速の記述。"
+    },
+    "Mossborough": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "パワースタミナ・距離融通の記述。"
+    },
+    "Mr. Prospector": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "超高速芝・近年は欧州パワーも必要の記述。"
+    },
+    "Nasrullah": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Night Shift": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.46,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.36,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.42,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Northern Dancer×Chop Chop・Danzig 的パワー持続の記述。"
+    },
+    "Nijinsky": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "京都外回り・パワー質スピード持続の記述。"
+    },
+    "Niniski": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Northern Dancer": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "再加速・長く脚を使うの記述。"
+    },
+    "Noverre": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Le Fabuleux で早期完成・Le Havre 父の記述。"
+    },
+    "Nureyev": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.38,
+        "eu_power_stamina": 0.52,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.4
+      },
+      "summary_ja": "Sadler's Wells / Fairy King と3/4同血の記述。"
+    },
+    "Petingo": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "2歳最優秀牡で早熟血統の記述。"
+    },
+    "Pine Bluff": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "柔らかさ・Almahmoud クロスで早熟の記述。"
+    },
+    "Princely Gift": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "操縦性・反応速度の記述。"
+    },
+    "Princequillo": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Rahy": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.4,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.35,
+        "stamina_mid": 0.38
+      },
+      "summary_ja": "Ballade 要素で平坦パフォの記述。"
+    },
+    "Raise a Native": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "軽スピード補完の記述。"
+    },
+    "Ribot": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.5,
+        "eu_power_stamina": 0.46,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.55,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "スタミナ欧州瞬発・牝系で道悪瞬発の記述。"
+    },
+    "Roberto": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "パワー持続・間接伝達の記述。"
+    },
+    "Rockefella": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "長距離スタミナ・菊花で食い込むの記述。"
+    },
+    "Round Table": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧速芝・日本では短めでパワー持続の記述。"
+    },
+    "Sadler's Wells": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.38,
+        "eu_power_stamina": 0.52,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.4
+      },
+      "summary_ja": "欧州瞬発・日本では軽すぎて寄与率低め・直系はパワー強めの記述。"
+    },
+    "Sanctus": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Sassafras": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "スタミナ・Theatrical 牝は柔らか差しの記述。"
+    },
+    "Sea The Stars": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.38,
+        "eu_power_stamina": 0.52,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.4
+      },
+      "summary_ja": "追記のみ（Urban Sea 系）。"
+    },
+    "Seattle Slew": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Fairy King と相性・軽スピード持続・成長でマイルシフトの記述。"
+    },
+    "Secretariat": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "米快速・牝系で軽スピード持続の記述。"
+    },
+    "Seeking the Gold": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ミスプロ×Buckpasser の記述。"
+    },
+    "Shamardal": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.38,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.52,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "道悪凱旋門で好走産駒・パワー欧州瞬発の記述。"
+    },
+    "Shirley Heights": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧州瞬発・牝系はタフ馬場志向の記述。"
+    },
+    "Sicambre": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "日本長距離・末脚残しの記述。"
+    },
+    "Silver Hawk": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "Roberto 系で持続＞瞬発の記述。"
+    },
+    "Sir Gaylord": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.3,
+        "aus_flat_outside": 0.52,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.32,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "豪型・後半長い脚・パワー持続の記述。"
+    },
+    "Sir Ivor": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.3,
+        "aus_flat_outside": 0.52,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.32,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "Sir Gaylord 直仔・同様の持続イメージ。"
+    },
+    "Sir Tristram": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Siyouni": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Star Kingdom": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.3,
+        "aus_flat_outside": 0.52,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.32,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "豪・2400 前後スタミナ補完の記述。"
+    },
+    "Storm Cat": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.52,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.28,
+        "fast_turf": 0.42,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.3,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "スパートスピード・道悪・欧州と組み合わせの記述。"
+    },
+    "Strawberry Road": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.3,
+        "aus_flat_outside": 0.52,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.32,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "豪 Nijinsky 系・叩いて良化・中距離持続の記述。"
+    },
+    "Surumu": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.54,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.34,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.28,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ドイツ牝系・直系スタミナ母方瞬発の記述。"
+    },
+    "Thatching": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧短・日本では1800 前後限界の記述。"
+    },
+    "The Axe": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "米軽スピードの記述。"
+    },
+    "The Tetrarch": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "芦毛・スピード持続を長く伝えるの記述。"
+    },
+    "Theatrical": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "Sassafras スタミナ・牝は柔らか差しの記述。"
+    },
+    "Tiger Hill": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "Rockefella・Aureole でスタミナの記述。"
+    },
+    "Tiznow": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Tom Fool": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "米快速軽スピードの記述。"
+    },
+    "Top Ville": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧州の中でもスピード寄りの記述。"
+    },
+    "Tourbillon": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "長距離スタミナ・パーソロン系の記述。"
+    },
+    "Tudor Minstrel": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "長距離質スタミナの記述。"
+    },
+    "Turn-to": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Unbridled": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Unbridled's Song": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "Urban Sea": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.54,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.34,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.28,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Lombard→Allegretta パワー・凱旋門の記述。"
+    },
+    "Vaguely Noble": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "逃げ粘着質スピード・スマートファルコン例の記述。"
+    },
+    "Vice Regent": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.48,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.28,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.55,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Deputy Minister 経路の記述。"
+    },
+    "Wild Risk": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "牝系で早熟度が上がるの記述。"
+    },
+    "Woodman": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ミスパサ軽スピードの記述。"
+    },
+    "Zabeel": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.3,
+        "aus_flat_outside": 0.52,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.32,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "中長・外差し・直線スタミナ質の記述。"
+    },
+    "アグネスタキオン": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ロイヤルスキー色で早熟・2歳からの記述。"
+    },
+    "アジアエクスプレス": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.52,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.28,
+        "fast_turf": 0.42,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.3,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ストームキャット直系・前半からの持続勝負。道悪で打点上がりやすい。"
+    },
+    "アドマイヤマーズ": {
+      "axes": {
+        "eu_power_stamina": 0.45,
+        "wet_turf": 0.35,
+        "zaitech_stamina": 0.2
+      },
+      "summary_ja": "Sassafras スタミナ×ダイワでタフ瞬発。野芝率高めの注意。"
+    },
+    "アドマイヤムーン": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.38,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.52,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "道悪適性を高める因子。ファインニードル産駒にも同様の記述。"
+    },
+    "アメリカンペイトリオット": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ミスプロ系統の系譜（記事では産駒例のみ）。"
+    },
+    "アラジ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Noverre と3/4同血・Le Fabuleux で早熟強化の記述。"
+    },
+    "アンバーシャダイ": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "高スタミナ・晩成要素。メジロライアン例。"
+    },
+    "イスラボニータ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "記事では追記のみ。"
+    },
+    "インディチャンプ": {
+      "axes": {
+        "eu_burst": 0.5,
+        "fast_turf": 0.35
+      },
+      "summary_ja": "欧州瞬発＋米快速牝系のハイブリッド。ドンピシャ質で他は惜しい型も。"
+    },
+    "ウインブライト": {
+      "axes": {
+        "eu_power_stamina": 0.45,
+        "wet_turf": 0.4,
+        "us_speed_sustain": 0.35
+      },
+      "summary_ja": "ステゴ産駒のスピード持続×中距離欧州持続。道悪で打点。"
+    },
+    "ウォーエンブレム": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "記事では追記のみ。"
+    },
+    "エタン": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "高い持続力・スタミナ伝達の記述。"
+    },
+    "エピファネイア": {
+      "axes": {
+        "early_maturity": 0.55,
+        "eu_burst": 0.35,
+        "fast_turf": 0.4,
+        "wet_turf": -0.1
+      },
+      "summary_ja": "Le Fabuleux 色で早熟・硬さ。重馬場ではやや落ちやすい傾向の記述。"
+    },
+    "オルフェーヴル": {
+      "axes": {
+        "eu_burst": 0.75,
+        "eu_power_stamina": 0.5,
+        "wet_turf": 0.55,
+        "tokyo_2400_turf": 0.3
+      },
+      "summary_ja": "タフ馬場でパワー質の瞬発。速い上り勝負ではスピード負けしやすい産駒傾向。"
+    },
+    "カラヴァッジオ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.52,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.28,
+        "fast_turf": 0.42,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.3,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "軽い牝系スピード持続×ストームキャット系の記述。"
+    },
+    "カリフォルニアクローム": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.5,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.42,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.38
+      },
+      "summary_ja": "米型スピード持続・Hペース持続の記述。"
+    },
+    "キズナ": {
+      "axes": {
+        "eu_power_stamina": 0.6,
+        "dirt_power": 0.45,
+        "stamina_mid": 0.5
+      },
+      "summary_ja": "Damascus・Mossborough 由来のタフさ。ダート対応産駒も。"
+    },
+    "キタサンブラック": {
+      "axes": {
+        "zaitech_stamina": 0.35,
+        "us_speed_sustain": 0.4,
+        "straight_flat_speed": 0.45,
+        "late_maturity": 0.55,
+        "tokyo_mile_vm": 0.4
+      },
+      "summary_ja": "ディープよりディープ色。2000m以下・中盤から長く脚。米要素の母系でマイル前後が増えやすい。"
+    },
+    "キングカメハメハ": {
+      "axes": {
+        "eu_burst": 0.65,
+        "fast_turf": 0.25,
+        "late_maturity": 0.2
+      },
+      "summary_ja": "スロー上がりのキレ型。有馬はドスロー展開と相性。京都超長距離は相性薄め。"
+    },
+    "キングズベスト": {
+      "axes": {
+        "de_power_inside": 0.55,
+        "eu_power_stamina": 0.5,
+        "us_speed_sustain": 0.35
+      },
+      "summary_ja": "Lombard 系＋ミスプロで欧州パワーとスピードの補完。"
+    },
+    "キングヘイロー": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.36,
+        "kyoto_outer": 0.28,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.32,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Lyphard 系だが Sir Gaylord 4×4 で Sir Ivor 色。緩いコーナーでパフォUPの記述。"
+    },
+    "クロフネ": {
+      "axes": {
+        "us_speed_sustain": 0.5,
+        "eu_power_stamina": 0.35,
+        "dirt_power": 0.55
+      },
+      "summary_ja": "母父クロフネ×父欧州で好走例。サンデー・キンカメ直系で日本スピードに接続。"
+    },
+    "ゴールドアクター": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "ゴールドシップ": {
+      "axes": {
+        "zaitech_stamina": 0.55,
+        "eu_power_stamina": 0.35,
+        "late_maturity": 0.3
+      },
+      "summary_ja": "在来牝系で使って良くなる。母系でスピード補完で芝対応。"
+    },
+    "サクラバクシンオー": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "母サクラハゴロモでスタミナ・短距離全速力型の記述。"
+    },
+    "サトノクラウン": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.38,
+        "eu_power_stamina": 0.52,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.4
+      },
+      "summary_ja": "中距離・欧州気質・使って良くなるの記述。"
+    },
+    "サトノダイヤモンド": {
+      "axes": {
+        "aus_flat_outside": -0.2,
+        "eu_burst": 0.25
+      },
+      "summary_ja": "南米牝系でテンからの高速流れに弱い産駒傾向。"
+    },
+    "サンデーサイレンス": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.45,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.38,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.48,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "瞬発と母方増強・道中スピード補完の記述。"
+    },
+    "サートゥルナーリア": {
+      "axes": {
+        "eu_burst": 0.45,
+        "fast_turf": 0.4,
+        "early_maturity": 0.35
+      },
+      "summary_ja": "スペシャルウィーク型 or ストームキャット×Ribot 型の二極。"
+    },
+    "ザファクター": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.36,
+        "kyoto_outer": 0.28,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.32,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Danzig 直系の記述。"
+    },
+    "シスキン": {
+      "axes": {
+        "tokyo_mile_vm": 0.45,
+        "us_speed_sustain": 0.4
+      },
+      "summary_ja": "芝マイル前後で溜めてTS持続。"
+    },
+    "シャンハイボビー": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.5,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.42,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.38
+      },
+      "summary_ja": "パワー持続・前傾ラップ持続に強い産駒の記述。"
+    },
+    "シンボリクリスエス": {
+      "axes": {
+        "tokyo_mile_vm": 0.45,
+        "fast_turf": 0.4,
+        "us_speed_sustain": 0.35,
+        "late_maturity": 0.4
+      },
+      "summary_ja": "母父シンボリで4-6月東京・京都芝と相性良の記述。成長でマイルシフト。"
+    },
+    "シンボリルドルフ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "シーホーク": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.4,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.35,
+        "stamina_mid": 0.38
+      },
+      "summary_ja": "父 Herbager・Ballade 牝系で平坦パフォUPの記述。"
+    },
+    "ジャスタウェイ": {
+      "axes": {
+        "tokyo_mile_vm": 0.5,
+        "fast_turf": 0.45,
+        "us_speed_sustain": 0.4
+      },
+      "summary_ja": "ストームキャット直系で前半からの持続勝負。渋ると打点向上。"
+    },
+    "ジャッジアンジェルーチ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Bold Ruler の柔らかさでスピード強化の記述。"
+    },
+    "ジャングルポケット": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "高いスタミナ伝達の記述。"
+    },
+    "ジョーカプチーノ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.38,
+        "eu_power_stamina": 0.52,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.4
+      },
+      "summary_ja": "欧州牝系×持続でTS限界も後半長い脚の記述。"
+    },
+    "スクリーンヒーロー": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "母母ダイナアクトレスで野芝・父グラスワンダー中山の記述。"
+    },
+    "ステイゴールド": {
+      "axes": {
+        "zaitech_stamina": 0.45,
+        "eu_burst": 0.35,
+        "stamina_mid": 0.5
+      },
+      "summary_ja": "在来牝系＋長距離スタミナ補強（スペシャルウィーク記述と合わせて持続系）。"
+    },
+    "スニッツェル": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.3,
+        "aus_flat_outside": 0.52,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.32,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "使って良くなる豪州血統の記述。"
+    },
+    "スピードシンボリ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "スペシャルウィーク": {
+      "axes": {
+        "zaitech_stamina": 0.5,
+        "stamina_mid": 0.55,
+        "eu_power_stamina": 0.3
+      },
+      "summary_ja": "在来牝系シラオキ・セントクレスピンで長距離スタミナ。"
+    },
+    "スワーヴリチャード": {
+      "axes": {
+        "early_maturity": 0.6,
+        "eu_burst": 0.45,
+        "wet_turf": 0.25
+      },
+      "summary_ja": "Le Fabuleux で早熟・連対型。使い減りに注意。"
+    },
+    "セントクレスピン": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "父 Aureole・気性難スタミナの記述。"
+    },
+    "タリスマニック": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.38,
+        "eu_power_stamina": 0.52,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.4
+      },
+      "summary_ja": "Sadler's Wells 直系・日本ではダート・道悪芝で瞬発の記述。"
+    },
+    "タワーオブロンドン": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧州スピード・体重で距離帯分岐の記述。"
+    },
+    "ダイワメジャー": {
+      "axes": {
+        "eu_power_stamina": 0.45,
+        "zaitech_stamina": 0.3,
+        "straight_flat_speed": 0.35
+      },
+      "summary_ja": "スカーレット一族の馬格・粘り。平場前残り型が多い。"
+    },
+    "ダンカーク": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.5,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.42,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.38
+      },
+      "summary_ja": "米型スピード持続・前半からの流れの記述。"
+    },
+    "ダンシングブレーヴ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "ダンスインザダーク": {
+      "axes": {
+        "kyoto_inner_speed": 0.45,
+        "stamina_mid": 0.5,
+        "eu_burst": 0.35
+      },
+      "summary_ja": "京都中長・菊花賞好走産駒。天皇賞・春はスタミナ限界の記述も。"
+    },
+    "チチカステナンゴ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.38,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.52,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Grey Sovereign 直系・マイル前後道悪瞬発の記述。"
+    },
+    "ティッカネン": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "テスコボーイ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "ディスクリートキャット": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.52,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.28,
+        "fast_turf": 0.42,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.3,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ストームキャット×スタミナ牝系でHペーススタミナの記述。"
+    },
+    "ディープインパクト": {
+      "axes": {
+        "eu_burst": 0.55,
+        "eu_power_stamina": 0.45,
+        "stamina_mid": 0.5,
+        "straight_flat_speed": 0.6,
+        "kyoto_outer": 0.35,
+        "fast_turf": 0.4,
+        "late_maturity": 0.25
+      },
+      "summary_ja": "中長・直線平坦のスピード勝負に強い産駒が多い。母父だと牝系スタミナが出やすい。"
+    },
+    "ディープブリランテ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.45,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.38,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.48,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "ディープ直系の中長距離イメージ。"
+    },
+    "デインヒル": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.36,
+        "kyoto_outer": 0.28,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.32,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "豪・欧短距離系統の中心。記事内デインヒル節参照。"
+    },
+    "デクラレーションオブウォー": {
+      "axes": {
+        "wet_turf": 0.55,
+        "eu_burst": 0.45,
+        "eu_power_stamina": 0.4
+      },
+      "summary_ja": "ND×Blushing Groom で道悪芝の欧州瞬発。"
+    },
+    "トウカイテイオー": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "トニービン": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "Grey Sovereign・大舞台の横綱競馬で流れ込む型の記述。"
+    },
+    "トライマイベスト": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "ドゥラメンテ": {
+      "axes": {
+        "eu_power_stamina": 0.45,
+        "eu_burst": 0.5,
+        "kyoto_outer": 0.3,
+        "late_maturity": 0.35
+      },
+      "summary_ja": "母方を生かす配合が多い。キンカメ×サンデーで距離伸長の産駒も。"
+    },
+    "ドリームジャーニー": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.45,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.38,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.48,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "オルフェーヴルより欧州瞬発・タフ中緩みの記述。"
+    },
+    "ドレフォン": {
+      "axes": {
+        "eu_burst": 0.55,
+        "us_speed_sustain": 0.35
+      },
+      "summary_ja": "毛色説もあるがストームキャット×母系で瞬発 vs 持続の分岐の記述。"
+    },
+    "ナイスダンサー": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.4,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.35,
+        "stamina_mid": 0.38
+      },
+      "summary_ja": "トウカイナチュラル系の記述。"
+    },
+    "ノヴェリスト": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.54,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.34,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.28,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Monsun×母系でバランス型の記述。"
+    },
+    "ノーアテンション": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "長距離スタミナ・坂苦手の記述。"
+    },
+    "ノーザンテースト": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "Hyperion クロスでスタミナ・瞬発・古馬成長の記述。"
+    },
+    "ハーツクライ": {
+      "axes": {
+        "eu_burst": 0.4,
+        "fast_turf": 0.45,
+        "late_maturity": 0.5,
+        "tokyo_2400_turf": 0.25
+      },
+      "summary_ja": "若い頃は米快速色、加齢で欧州・持続シフト（ドウデュース例）。"
+    },
+    "ハービンジャー": {
+      "axes": {
+        "eu_burst": 0.4,
+        "eu_power_stamina": 0.55,
+        "wet_turf": 0.45,
+        "tokyo_2400_turf": 0.35
+      },
+      "summary_ja": "点火に時間・中間ラップ持続や下りで伸びる。道悪・前傾ラップで打点。"
+    },
+    "パーソロン": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "瞬間加速増強因子の記述。"
+    },
+    "ビッグアーサー": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.38,
+        "eu_power_stamina": 0.52,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.4
+      },
+      "summary_ja": "Kingmambo×Sadler's Wells で短距離欧州脚の記述。"
+    },
+    "ファインニードル": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.38,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.52,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "アドマイヤムーン等により道悪高打点の記述。"
+    },
+    "ファルブラヴ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.38,
+        "eu_power_stamina": 0.52,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.4
+      },
+      "summary_ja": "エリシオと3/4・Fairy King×Slewpy の記述。"
+    },
+    "フィエールマン": {
+      "axes": {
+        "stamina_mid": 0.55,
+        "eu_power_stamina": 0.35,
+        "straight_flat_speed": -0.15
+      },
+      "summary_ja": "急坂は苦手・平坦長めでスタミナ発揮の記述。"
+    },
+    "フォーティナイナー": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.5,
+        "eu_power_stamina": 0.46,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.55,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "母方 Ribot でパワースタミナ・道悪の記述。"
+    },
+    "フジキセキ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "母方 In Reality・Le Fabuleux で早熟の記述。"
+    },
+    "フレンチデピュティ": {
+      "axes": {
+        "us_speed_sustain": 0.55,
+        "dirt_power": 0.45,
+        "eu_power_stamina": 0.3
+      },
+      "summary_ja": "高いスピード持続＋パワー根幹。キンカメとの配合で持続強化。"
+    },
+    "ブライアンズタイム": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "根性スタミナ・急坂・上りのかかる馬場の記述。"
+    },
+    "ブラックタイド": {
+      "axes": {
+        "eu_power_stamina": 0.45,
+        "zaitech_stamina": 0.2
+      },
+      "summary_ja": "ディープ全兄弟で馬格・パワー寄り。"
+    },
+    "ブリックスアンドモルタル": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.52,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.28,
+        "fast_turf": 0.42,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.3,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Giant's Causeway 系・小回り弱めの記述。"
+    },
+    "ヘニーヒューズ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.48,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.28,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.55,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "良ダート vs 凍結剤でパワー不足の記述。"
+    },
+    "マインドユアビスケッツ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.5,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.42,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.38
+      },
+      "summary_ja": "中間緩まない持続ラップ適性の記述。"
+    },
+    "マルゼンスキー": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.22,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.22
+      },
+      "summary_ja": "追記のみ。"
+    },
+    "マンハッタンカフェ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.54,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.34,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.28,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "ドイツ S ライン・春タフ・中京ダートの記述。"
+    },
+    "メジロマックイーン": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "超ステイヤー・牝系にスタミナの記述。"
+    },
+    "メンデス": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Grey Sovereign でフランス寄りスピードの記述。"
+    },
+    "モンジュー": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Top Ville・Grey Sovereign でスピード増強の記述。"
+    },
+    "モーリス": {
+      "axes": {
+        "aus_flat_outside": 0.45,
+        "eu_power_stamina": 0.5,
+        "zaitech_stamina": 0.25,
+        "fast_turf": 0.35
+      },
+      "summary_ja": "持続力・使って良くなる。晴れ芝寄り。豪州血統色と在来牝系の混合イメージ。"
+    },
+    "ラインゴールド": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "重い長距離スタミナ・凱旋門タイプの記述。"
+    },
+    "ラストタイクーン": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.54,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.46,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.42,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "1600〜2000m 高パフォーマンスの記述。"
+    },
+    "ラブリーデイ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.38,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.52,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "欧州スタミナ×ダンスインザダークで道悪瞬発の記述。"
+    },
+    "リアルインパクト": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.45,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.38,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.48,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "ディープ直系・距離で瞬発寄りに振れるの記述。"
+    },
+    "リアルシャダイ": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "ゆっくり追走・長距離で末脚の記述。"
+    },
+    "リアルスティール": {
+      "axes": {
+        "eu_power_stamina": 0.35,
+        "fast_turf": 0.4,
+        "late_maturity": 0.25
+      },
+      "summary_ja": "レーベンスティール等への伝達。中距離欧州持続ベクトル。"
+    },
+    "リオンディーズ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.46,
+        "eu_power_stamina": 0.38,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.52,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "足元・緩むとパフォUPの記述。"
+    },
+    "リマンド": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "スタミナ増強・京都坂・タフ馬場の記述。"
+    },
+    "ルーラーシップ": {
+      "axes": {
+        "eu_power_stamina": 0.5,
+        "us_speed_sustain": 0.35,
+        "tokyo_mile_vm": 0.35
+      },
+      "summary_ja": "トニービン色で持続ラップのキツい流れにも耐える。阪神マイルが庭。"
+    },
+    "ロージズインメイ": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "Speak John で粘り持久力の記述。"
+    },
+    "ロードカナロア": {
+      "axes": {
+        "us_speed_sustain": 0.65,
+        "fast_turf": 0.55,
+        "wet_turf": 0.15
+      },
+      "summary_ja": "良馬場スピード勝負。古馬でストームキャット要素が出て道悪適性が乗る場合も。"
+    },
+    "ワークフォース": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.54,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.34,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.28,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Lombard→Allegretta 系・道悪凱旋門の記述。"
+    },
+    "ヴィクトワールピサ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.45,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.38,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.48,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "Machiavellian・Busted で下り坂適性の記述。"
+    },
+    "第四フロリースカツプ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.44,
+        "eu_burst": 0.34,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.48,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "スピード寄り在来牝系の記述。"
+    }
+  },
+  "broodmare_lines": {
+    "Allegretta": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.54,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.34,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.28,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Lombard ライン・パワー・凱旋門馬券内の記述。"
+    },
+    "Ballade": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.4,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.35,
+        "stamina_mid": 0.38
+      },
+      "summary_ja": "平坦スピード・夏新潟等の記述。"
+    },
+    "Brigid": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "早熟・春安定・快速牝系の記述。"
+    },
+    "Highclere": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "上り坂弱・下り坂強・Hypericum でスタミナの記述。"
+    },
+    "Monevassia": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.46,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.36,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.42,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "キングマンボ姉・Nureyev でパワー持続・キレ負けの記述。"
+    },
+    "My Bupers": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.58,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.52,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.35,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "軽スピード・パワー馬場で落ちる産駒の記述。"
+    },
+    "Pacific Princess": {
+      "axes": {
+        "zaitech_stamina": 0.22,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.54,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.32,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.58
+      },
+      "summary_ja": "Damascus・Mossborough・菊花に強い牝系の記述。"
+    },
+    "ウインドインハーヘア": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.52,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.35
+      },
+      "summary_ja": "溜めればパフォUP・母父ディープで出やすいの記述。"
+    },
+    "クラフテイワイフ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "高速馬場スピード・重い種牡馬でもレコード対応の記述。"
+    },
+    "サクラハゴロモ": {
+      "axes": {
+        "zaitech_stamina": 0.52,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.32,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.52
+      },
+      "summary_ja": "アンバーシャダイ全妹・スタミナ・サクラバクシンオー母の記述。"
+    },
+    "シーザリオ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.36,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.55,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Le Fabuleux で早熟・エピファネイアを裏付けるの記述。"
+    },
+    "スカーレットブーケ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Crimson Satan で筋肉・馬格・前から粘りの記述。"
+    },
+    "ソラリア": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.3,
+        "aus_flat_outside": 0.52,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.32,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "チリ産・平坦適性の記述。"
+    },
+    "ダンシングキイ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "サンデー×でダンスインザ系・京都舞台の記述。"
+    },
+    "ハッピートレイルズ": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "パワー・Aureole でスタミナ・早熟の記述。"
+    },
+    "モシーン": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.3,
+        "aus_flat_outside": 0.52,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.32,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.42
+      },
+      "summary_ja": "豪牝系・使って良くなるの記述。"
+    },
+    "ラスティックベル": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.46,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.36,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.32,
+        "kyoto_outer": 0.42,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "Francis S. で距離・Raise a Native クロスで軽スピードの記述。"
+    },
+    "ワンオブアクライン": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "中京相性・中盤緩みで加速の記述。"
+    },
+    "ヴアインゴールド": {
+      "axes": {
+        "zaitech_stamina": 0.0,
+        "us_speed_sustain": 0.0,
+        "eu_burst": 0.0,
+        "eu_power_stamina": 0.0,
+        "aus_flat_outside": 0.0,
+        "de_power_inside": 0.0,
+        "early_maturity": 0.0,
+        "late_maturity": 0.0,
+        "wet_turf": 0.0,
+        "fast_turf": 0.0,
+        "kyoto_outer": 0.0,
+        "kyoto_inner_speed": 0.0,
+        "tokyo_mile_vm": 0.0,
+        "tokyo_2400_turf": 0.0,
+        "dirt_power": 0.0,
+        "straight_flat_speed": 0.0,
+        "stamina_mid": 0.0
+      },
+      "summary_ja": "平坦・京都外・1200〜1600 で活躍の記述。"
+    }
+  }
+}

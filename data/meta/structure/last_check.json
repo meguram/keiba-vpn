@@ -1,0 +1,13 @@
+{
+  "status": "ok",
+  "timestamp": "2026-03-19T09:44:04.568919",
+  "sample_race_id": "202606020601",
+  "sample_horse_id": "2023103225",
+  "total_categories": 15,
+  "checked": 11,
+  "critical": 0,
+  "warning": 0,
+  "reparsed_categories": [],
+  "report_path": "data/meta/structure/report.md",
+  "severity": "OK"
+}

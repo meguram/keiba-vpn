@@ -1,0 +1,17 @@
+{
+  "category": "horse_ped",
+  "timestamp": "2026-03-19T09:43:43.615078",
+  "sample_id": "2023103225",
+  "selector_results": {
+    "blood_table": {
+      "selector": "table.blood_table",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    }
+  },
+  "row_count": 32,
+  "column_count": 0,
+  "column_classes": []
+}

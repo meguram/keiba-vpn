@@ -1,0 +1,129 @@
+project:
+  name: "ML-AutoPilot Keiba"
+  version: "1.0.0"
+  description: "競馬予測マルチエージェントMLシステム"
+
+# 後方互換性のため既存キーを残しつつ、新セクション data_sources に統合
+data_source:
+  base_url: "https://db.netkeiba.com/"
+  race_url: "https://db.netkeiba.com/race/"
+  horse_url: "https://db.netkeiba.com/horse/"
+  jockey_url: "https://db.netkeiba.com/jockey/"
+  trainer_url: "https://db.netkeiba.com/trainer/"
+  request_interval_sec: 1.0
+
+data_sources:
+  netkeiba:
+    base_url: "https://db.netkeiba.com/"
+    enabled: true
+    urls:
+      race: "https://db.netkeiba.com/race/"
+      horse: "https://db.netkeiba.com/horse/"
+      jockey: "https://db.netkeiba.com/jockey/"
+      trainer: "https://db.netkeiba.com/trainer/"
+    rate_limit:
+      min_interval_sec: 1.0
+      max_interval_sec: 3.0
+      session_request_limit: 500
+      daily_request_limit: 5000
+  smartrc:
+    base_url: "https://www.smartrc.jp/"
+    enabled: true
+    id_protocol: "netkeiba_compatible"
+    rate_limit:
+      min_interval_sec: 2.0
+      max_interval_sec: 5.0
+      session_request_limit: 200
+      daily_request_limit: 1000
+      cooldown_on_limit_sec: 60
+    retry:
+      max_attempts: 3
+      backoff_factor: 2.0
+      retry_on_status: [429, 503]
+    access_policy:
+      respect_robots_txt: true
+      stop_on_block: true
+      log_path: "data/meta/logs/smartrc_access.log"
+
+paths:
+  raw_data: "data/raw"
+  processed_data: "data/processed"
+  mock_data: "data/mock"
+  models: "models"
+  pipelines: "pipelines"
+
+model:
+  task_type: "classification"
+  target_variable: "finish_position_top3"
+  evaluation_metrics:
+    - "accuracy"
+    - "f1_score"
+    - "roc_auc"
+  test_size: 0.2
+  random_state: 42
+  n_optuna_trials: 50
+
+lightgbm:
+  n_optuna_trials: 50
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "keiba-prediction"
+  registered_model_name: "keiba-lgbm"
+  artifact_location: "mlruns"
+
+llm:
+  provider: "openai"
+  model: "gpt-4o-mini"
+  temperature: 0.3
+  max_tokens: 2000
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s [%(name)s] %(levelname)s: %(message)s"
+
+feature_policy:
+  excluded_features:
+    # オッズ関連（情報リーク防止のため除外）
+    - odds
+    - win_odds
+    - place_odds
+    - quinella_odds
+    - wide_odds
+    - trio_odds
+    - trifecta_odds
+    - odds_rank
+    - favorite_rank
+    - popularity
+    - market_odds
+    # 旧来の除外リスト（後方互換性のため維持）
+    - tansho_odds
+    - fukusho_odds
+    - popularity_rank
+    - tan_odds
+    - fuku_odds
+    - wakuren_odds
+    - umaren_odds
+    - umatan_odds
+    - sanren_odds
+  exclusion_reason: 'odds_leakage: オッズ関連特徴量はデータリーケージのリスクがあるため除外。市場の集合知を特徴量とすることでモデルが本質的な予測能力を失う恐れがある。'
+  allowed_market_features:
+    - previous_popularity  # 前走人気順位
+    - smartrc_estimated_popularity  # SmartRC推定人気
+  smartrc_whitelist_features:
+    # SmartRC独自指標（能力・適性指標として明示的に活用許可）
+    - cr_value            # コーナー通過率
+    - first_furlong_time  # テン1F（初速指標）
+    - estimated_popularity  # SmartRC推定人気（独自算出）
+    - smartrc_cr
+    - smartrc_ten1f
+    - smartrc_est_pop
+
+data_policy:
+  use_post_restructure_only: true
+  restructure_cutoff_date: null  # 未定義時は null（後で日付文字列 YYYY-MM-DD を設定）
+  min_required_samples: 1000     # 学習に必要な最低サンプル数の閾値

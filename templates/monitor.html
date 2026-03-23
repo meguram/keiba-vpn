@@ -1,0 +1,2776 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スクレイピング モニタリングボード | ML-AutoPilot Keiba</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #131926;
+    --surface2: #1a2235;
+    --border: #243049;
+    --text: #c8d6e5;
+    --text-dim: #6b7d95;
+    --accent: #3b82f6;
+    --ok: #22c55e;
+    --ok-dim: rgba(34,197,94,0.15);
+    --warn: #f59e0b;
+    --warn-dim: rgba(245,158,11,0.12);
+    --empty: rgba(107,125,149,0.08);
+    --err: #ef4444;
+    --gcs: #a78bfa;
+    --gcs-dim: rgba(167,139,250,0.15);
+    --html-color: #fb923c;
+    --stale: #f472b6;
+    --stale-dim: rgba(244,114,182,0.12);
+    --fresh: #34d399;
+    --fresh-dim: rgba(52,211,153,0.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .header h1 span { color: var(--accent); }
+
+  .date-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .date-form input[type="date"] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 12px;
+    color: #fff;
+    font-size: 14px;
+    width: 170px;
+    outline: none;
+    transition: border-color 0.2s;
+    cursor: pointer;
+    color-scheme: dark;
+  }
+  .date-form input[type="date"]:focus { border-color: var(--accent); }
+  .date-form input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+    cursor: pointer;
+  }
+  .date-form button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .date-form button:hover { opacity: 0.85; }
+
+  .dates-list {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .dates-list .chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .dates-list .chip:hover, .dates-list .chip.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(59,130,246,0.1);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .badge.gcs-on {
+    background: rgba(167,139,250,0.15);
+    color: var(--gcs);
+    border: 1px solid rgba(167,139,250,0.3);
+  }
+  .badge.gcs-off {
+    background: rgba(239,68,68,0.1);
+    color: var(--err);
+    border: 1px solid rgba(239,68,68,0.2);
+  }
+
+  .auto-refresh {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+  .auto-refresh .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--ok);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .progress-bar-wrap {
+    margin: 20px 32px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .progress-text {
+    font-size: 13px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .progress-text strong { color: #fff; font-size: 22px; }
+  .progress-track {
+    flex: 1;
+    height: 8px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--ok));
+    border-radius: 4px;
+    transition: width 0.6s ease;
+  }
+  .progress-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .progress-stats .stat-val { color: #fff; font-weight: 600; }
+
+  .board-container {
+    padding: 20px 32px;
+    overflow-x: auto;
+  }
+  table.monitor {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+  }
+  table.monitor thead th {
+    background: var(--surface);
+    border-bottom: 2px solid var(--border);
+    padding: 10px 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    color: var(--text-dim);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    white-space: nowrap;
+  }
+  table.monitor thead th:first-child {
+    text-align: left;
+    min-width: 200px;
+  }
+  table.monitor tbody tr {
+    transition: background 0.15s;
+  }
+  table.monitor tbody tr:hover {
+    background: rgba(59,130,246,0.06) !important;
+  }
+
+  /* netkeiba準拠グレード背景色 (視覚的にやさしいパステル調) */
+  table.monitor tbody tr.grade-g1 {
+    background: rgba(220, 170, 50, 0.10);
+    border-left: 3px solid #d4a532;
+  }
+  table.monitor tbody tr.grade-g1:hover { background: rgba(220, 170, 50, 0.16) !important; }
+
+  table.monitor tbody tr.grade-g2 {
+    background: rgba(200, 60, 60, 0.07);
+    border-left: 3px solid #c45050;
+  }
+  table.monitor tbody tr.grade-g2:hover { background: rgba(200, 60, 60, 0.12) !important; }
+
+  table.monitor tbody tr.grade-g3 {
+    background: rgba(60, 130, 60, 0.07);
+    border-left: 3px solid #4a9e4a;
+  }
+  table.monitor tbody tr.grade-g3:hover { background: rgba(60, 130, 60, 0.12) !important; }
+
+  table.monitor tbody tr.grade-l {
+    background: rgba(100, 80, 160, 0.06);
+    border-left: 3px solid #7e6cb5;
+  }
+  table.monitor tbody tr.grade-l:hover { background: rgba(100, 80, 160, 0.10) !important; }
+
+  table.monitor tbody tr.grade-op {
+    background: rgba(50, 120, 190, 0.05);
+    border-left: 3px solid #4a8ec2;
+  }
+  table.monitor tbody tr.grade-op:hover { background: rgba(50, 120, 190, 0.09) !important; }
+
+  /* グレードバッジ */
+  .grade-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 4px;
+    vertical-align: middle;
+    line-height: 1.4;
+  }
+  .grade-badge-g1  { background: #d4a532; color: #fff; }
+  .grade-badge-g2  { background: #c45050; color: #fff; }
+  .grade-badge-g3  { background: #4a9e4a; color: #fff; }
+  .grade-badge-l   { background: #7e6cb5; color: #fff; }
+  .grade-badge-op  { background: #4a8ec2; color: #fff; }
+  table.monitor td {
+    padding: 8px 8px;
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+    vertical-align: middle;
+  }
+  table.monitor td:first-child {
+    text-align: left;
+    font-weight: 500;
+  }
+  .race-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .race-round {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 32px;
+    text-align: center;
+  }
+  .race-venue {
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .race-name {
+    font-size: 13px;
+    color: #fff;
+  }
+
+  .cell-ok {
+    background: var(--ok-dim);
+    color: var(--ok);
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .cell-partial {
+    background: var(--warn-dim);
+    color: var(--warn);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .cell-empty {
+    background: var(--empty);
+    color: var(--text-dim);
+    font-size: 18px;
+  }
+  .cell-loading {
+    background: rgba(59,130,246,0.1);
+    color: var(--accent);
+    font-size: 13px;
+  }
+  .cell-sub {
+    font-size: 9px;
+    display: block;
+    margin-top: 1px;
+    opacity: 0.7;
+  }
+  .cell-stale {
+    background: var(--stale-dim);
+    color: var(--stale);
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .cell-na {
+    background: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 3px,
+      rgba(100,100,120,0.07) 3px,
+      rgba(100,100,120,0.07) 6px
+    );
+    color: rgba(140,140,160,0.6);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    cursor: default;
+  }
+  .html-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--html-color);
+    margin-left: 3px;
+    vertical-align: middle;
+  }
+  .fresh-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--fresh);
+    margin-left: 3px;
+    vertical-align: middle;
+  }
+  .stale-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--stale);
+    margin-left: 3px;
+    vertical-align: middle;
+  }
+  .freshness-tag {
+    font-size: 9px;
+    display: block;
+    margin-top: 1px;
+    opacity: 0.8;
+  }
+  .freshness-tag.fresh { color: var(--fresh); }
+  .freshness-tag.stale { color: var(--stale); }
+  td.clickable {
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+  }
+  td.clickable:hover {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    z-index: 1;
+  }
+  td.clickable:active {
+    transform: scale(0.96);
+  }
+  .race-label-btn {
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    background: none;
+    color: inherit;
+    font: inherit;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .race-label-btn:hover {
+    border-color: var(--accent);
+    background: rgba(59,130,246,0.06);
+  }
+  .race-label-btn:active { transform: scale(0.98); }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(59,130,246,0.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+  }
+
+  .toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    animation: slideIn 0.3s ease;
+    max-width: 340px;
+  }
+  .toast.success { border-color: var(--ok); }
+  .toast.error { border-color: var(--err); }
+  .toast.info { border-color: var(--accent); }
+  @keyframes slideIn {
+    from { transform: translateX(100px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  .legend {
+    padding: 12px 32px;
+    display: flex;
+    gap: 24px;
+    font-size: 12px;
+    color: var(--text-dim);
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+  }
+  .legend-dot.ok { background: var(--ok); }
+  .legend-dot.partial { background: var(--warn); }
+  .legend-dot.empty { background: var(--border); }
+  .legend-dot.html {
+    background: var(--html-color);
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--text-dim);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+  .empty-state p { font-size: 14px; line-height: 1.8; }
+
+  .last-update {
+    font-size: 11px;
+    color: var(--text-dim);
+    padding: 8px 32px 24px;
+  }
+
+  .loading-overlay {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    gap: 16px;
+  }
+  .loading-overlay .big-spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(59,130,246,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .loading-overlay .loading-label {
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+  .loading-overlay .loading-elapsed {
+    font-size: 12px;
+    color: var(--text-dim);
+    opacity: 0.6;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .summary-row td {
+    background: var(--surface) !important;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-dim);
+    border-top: 2px solid var(--border);
+  }
+  .summary-row .sum-ok { color: var(--ok); }
+  .summary-row .sum-partial { color: var(--warn); }
+  .summary-row .sum-empty { color: var(--text-dim); }
+
+  .structure-panel {
+    margin: 16px 32px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .structure-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .structure-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .structure-severity {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 4px;
+  }
+  .structure-severity.sev-ok {
+    background: var(--ok-dim);
+    color: var(--ok);
+  }
+  .structure-severity.sev-warning {
+    background: var(--warn-dim);
+    color: var(--warn);
+  }
+  .structure-severity.sev-critical {
+    background: rgba(239,68,68,0.15);
+    color: var(--err);
+  }
+  .structure-severity.sev-none {
+    background: var(--empty);
+    color: var(--text-dim);
+  }
+  .structure-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .structure-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  .structure-card .cat-name {
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .structure-card .selectors {
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .structure-card .sel-ok { color: var(--ok); }
+  .structure-card .sel-warn { color: var(--warn); }
+  .structure-card .sel-fail { color: var(--err); }
+  .structure-card.card-ok { border-color: rgba(34,197,94,0.3); }
+  .structure-card.card-warn { border-color: rgba(245,158,11,0.4); }
+  .structure-card.card-critical { border-color: rgba(239,68,68,0.4); }
+  .structure-meta {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 16px;
+  }
+  .structure-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .structure-actions button {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .structure-actions button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ── 全日付一覧 ── */
+  table.all-dates {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+  }
+  table.all-dates thead th {
+    background: var(--surface);
+    border-bottom: 2px solid var(--border);
+    padding: 10px 12px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    color: var(--text-dim);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  table.all-dates thead th:first-child { text-align: left; min-width: 120px; }
+  table.all-dates tbody tr {
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  table.all-dates tbody tr:hover {
+    background: rgba(59,130,246,0.06);
+  }
+  table.all-dates td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+    vertical-align: middle;
+  }
+  table.all-dates td:first-child { text-align: left; }
+  .date-label {
+    font-weight: 600;
+    color: #fff;
+    font-size: 14px;
+  }
+  .date-weekday {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: 6px;
+  }
+  .date-weekday.sat { color: #60a5fa; }
+  .date-weekday.sun { color: #f87171; }
+  .venue-tag {
+    display: inline-block;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-right: 4px;
+  }
+  .rl-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 108px;
+  }
+  .rl-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .rl-badge.ok { color: var(--ok); border-color: rgba(34,197,94,0.35); background: rgba(34,197,94,0.08); }
+  .rl-badge.warn { color: var(--warn); border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.08); }
+  .rl-badge.none { color: var(--text-dim); border-color: var(--border); opacity: 0.9; }
+  .rl-badge.err { color: var(--err); border-color: rgba(239,68,68,0.35); background: rgba(239,68,68,0.08); }
+  .scrape-btn.tiny {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .pct-bar {
+    width: 60px;
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .pct-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+  .pct-100 { background: var(--ok); }
+  .pct-partial { background: var(--warn); }
+  .pct-0 { background: var(--border); }
+
+  .scrape-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: transparent; color: var(--accent);
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 6px; padding: 5px 12px;
+    font-size: 11.5px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .scrape-btn:hover { background: rgba(59,130,246,0.1); border-color: var(--accent); }
+  .scrape-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .scrape-btn.running {
+    color: var(--warn); border-color: rgba(245,158,11,0.3);
+    animation: pulse-border 1.5s infinite;
+  }
+  .scrape-btn.done { color: var(--ok); border-color: rgba(34,197,94,0.3); }
+  .scrape-btn.error { color: var(--err); border-color: rgba(239,68,68,0.3); }
+
+  .progress-cell { min-width: 160px; }
+  .progress-bar-wrap {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .progress-bar-track {
+    flex: 1; height: 6px; background: rgba(107,125,149,0.15);
+    border-radius: 3px; overflow: hidden; min-width: 80px;
+  }
+  .progress-bar-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+  .progress-bar-fill.pct-100 { background: var(--ok); }
+  .progress-bar-fill.pct-high { background: #34d399; }
+  .progress-bar-fill.pct-mid  { background: var(--warn); }
+  .progress-bar-fill.pct-low  { background: var(--err); }
+  .progress-pct {
+    font-size: 12px; font-weight: 600;
+    min-width: 42px; text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .progress-pct.c100 { color: var(--ok); }
+  .progress-pct.chigh { color: #34d399; }
+  .progress-pct.cmid  { color: var(--warn); }
+  .progress-pct.clow  { color: var(--err); }
+  .progress-detail {
+    font-size: 10px; color: var(--text-dim);
+    margin-top: 2px;
+  }
+  @keyframes pulse-border {
+    0%,100% { border-color: rgba(245,158,11,0.3); }
+    50% { border-color: rgba(245,158,11,0.7); }
+  }
+
+  .job-status-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px; font-size: 12px;
+    border-radius: 6px; margin-top: 4px;
+  }
+  .job-spinner {
+    width: 12px; height: 12px;
+    border: 2px solid rgba(245,158,11,0.2);
+    border-top-color: var(--warn);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .job-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin: 0 32px 16px;
+    overflow: hidden;
+    transition: all 0.3s;
+  }
+  .job-panel-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; cursor: pointer;
+    border-bottom: 1px solid var(--border);
+  }
+  .job-panel-header:hover { background: rgba(59,130,246,0.04); }
+  .job-panel-title { font-size: 13px; font-weight: 600; color: #fff; flex: 1; }
+  .job-counter {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 22px; height: 22px; border-radius: 11px;
+    background: var(--accent); color: #fff;
+    font-size: 11px; font-weight: 700; padding: 0 6px;
+  }
+  .job-counter.idle { background: var(--surface2); color: var(--text-dim); }
+  .job-list { padding: 0; }
+  .job-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 12px;
+    border-bottom: 1px solid rgba(36,48,73,0.5);
+    transition: background 0.15s;
+  }
+  .job-item:last-child { border-bottom: none; }
+  .job-item:hover { background: rgba(59,130,246,0.03); }
+  .job-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .job-dot.queued { background: var(--text-dim); }
+  .job-dot.running { background: var(--warn); animation: pulse 1s infinite; }
+  .job-dot.done { background: var(--ok); }
+  .job-dot.error { background: var(--err); }
+  .job-label { flex: 1; color: var(--text); }
+  .job-elapsed { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+  /* ── 未取得開催日バックログ（優先スクレイプ用） ── */
+  .backlog-panel {
+    margin: 0 32px 20px;
+    background: linear-gradient(165deg, rgba(239,68,68,0.09) 0%, var(--surface) 42%);
+    border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 12px;
+    padding: 18px 20px 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  }
+  .backlog-head {
+    display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 20px;
+    margin-bottom: 14px;
+  }
+  .backlog-title {
+    font-size: 15px; font-weight: 700; color: #fff;
+    letter-spacing: 0.02em;
+  }
+  .backlog-title span { color: #fb7185; }
+  .backlog-meta {
+    font-size: 12px; color: var(--text-dim); line-height: 1.5;
+    flex: 1; min-width: 200px;
+  }
+  .backlog-meta strong { color: var(--warn); font-weight: 700; }
+  .backlog-toolbar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    position: relative;
+    z-index: 2;
+  }
+  .backlog-toolbar label { font-size: 11px; color: var(--text-dim); }
+  .backlog-toolbar select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+    min-width: 148px;
+    position: relative;
+    z-index: 2;
+  }
+  .backlog-toolbar button, .backlog-toolbar a.btn-link {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--accent);
+    border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .backlog-toolbar button.primary {
+    background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.45); color: #fecaca;
+  }
+  .backlog-toolbar button:hover, .backlog-toolbar a.btn-link:hover {
+    border-color: var(--accent); color: #fff;
+  }
+  .backlog-legend {
+    display: flex; flex-wrap: wrap; gap: 14px 20px; font-size: 11px; color: var(--text-dim);
+    margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+  }
+  .backlog-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .bl-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .bl-full { background: linear-gradient(135deg, #22c55e, #16a34a); }
+  .bl-partial { background: linear-gradient(135deg, #f59e0b, #d97706); }
+  .bl-bare { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+  .bl-none { background: var(--surface2); border: 1px solid var(--border); }
+  .bl-nodata { background: rgba(107,125,149,0.12); border: 1px dashed var(--border); }
+  .bl-nojra { background: rgba(100,100,120,0.25); }
+
+  .backlog-heatmap-wrap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .backlog-month {
+    background: rgba(0,0,0,0.15);
+    border-radius: 8px;
+    padding: 10px 10px 12px;
+    border: 1px solid var(--border);
+  }
+  .backlog-month h4 {
+    font-size: 11px; font-weight: 700; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+  .backlog-month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+  }
+  .backlog-dow {
+    font-size: 9px; color: var(--text-dim); text-align: center; padding: 2px 0;
+    opacity: 0.7;
+  }
+  .backlog-cell {
+    aspect-ratio: 1;
+    max-height: 22px;
+    border-radius: 4px;
+    cursor: default;
+    transition: transform 0.12s, box-shadow 0.12s;
+    border: 1px solid transparent;
+  }
+  .backlog-cell.interactive { cursor: pointer; }
+  .backlog-cell.interactive:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 2px var(--accent);
+    z-index: 1;
+  }
+  .backlog-priority h4 {
+    font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 10px;
+  }
+  .backlog-priority table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+  }
+  .backlog-priority th {
+    text-align: left; padding: 8px 10px; color: var(--text-dim);
+    font-weight: 600; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.04em; border-bottom: 1px solid var(--border);
+  }
+  .backlog-priority td { padding: 8px 10px; border-bottom: 1px solid rgba(36,48,73,0.5); vertical-align: middle; }
+  .backlog-priority tr.bl-priority-row { cursor: pointer; }
+  .backlog-priority tr.bl-priority-row:hover td { background: rgba(59,130,246,0.08); }
+  .bl-pct-bar {
+    height: 6px; border-radius: 3px; background: var(--surface2);
+    overflow: hidden; min-width: 80px; max-width: 160px;
+  }
+  .bl-pct-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
+  }
+  .backlog-priority .act-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .backlog-priority .act-btns button {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 4px; padding: 4px 10px; font-size: 11px; cursor: pointer;
+  }
+  .backlog-priority .act-btns button.accent {
+    border-color: var(--accent); color: var(--accent);
+  }
+  .backlog-empty-hint { font-size: 12px; color: var(--ok); padding: 8px 0; }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .container { padding: 16px; }
+    .header { padding: 16px 20px; }
+    .header h1 { font-size: 16px; }
+    .date-form { flex-wrap: wrap; width: 100%; }
+    .date-form input[type="date"] { flex: 1; min-width: 140px; }
+    .dates-list { max-width: 100%; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .race-grid { grid-template-columns: 1fr; }
+    table { font-size: 12px; }
+    th, td { padding: 6px 8px; }
+  }
+
+  @media (max-width: 480px) {
+    .container { padding: 12px; }
+    .header { padding: 12px 16px; flex-direction: column; align-items: flex-start; gap: 12px; }
+    .header h1 { font-size: 14px; }
+    .date-form { width: 100%; }
+    .date-form input[type="date"] { width: 100%; }
+    .date-form button { width: 100%; }
+    .stats-grid { grid-template-columns: 1fr; }
+    .dates-list .chip { font-size: 11px; padding: 4px 8px; }
+    table { font-size: 11px; }
+    th, td { padding: 4px 6px; }
+    th { font-size: 10px; }
+    .backlog-panel { margin: 0 16px 16px; padding: 14px; }
+    .backlog-heatmap-wrap { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+
+<div class="header">
+  <h1>📡 <span>GCS</span> Monitor</h1>
+  <div id="gcsBadge" class="badge gcs-off">☁ GCS —</div>
+  <div class="auto-refresh">
+    <div class="dot"></div>
+    <span>自動更新 <span id="countdown">120</span>s</span>
+  </div>
+</div>
+
+<!-- 未取得が残っている開催日（優先スクレイプ） -->
+<div class="backlog-panel" id="backlogPanel">
+  <div class="backlog-head">
+    <div>
+      <div class="backlog-title">📌 <span>未取得</span>が残る開催日</div>
+      <div class="backlog-meta" id="backlogMeta">
+        レース一覧（race_lists）がある日だけを対象に、JRA 各レースの「出馬表・オッズ・結果・馬成績（代表）」基準で集計しています。<br>
+        <strong>未取得レースが多い日ほど上に表示</strong> — まずはそこから一式取得すると効率的です。
+      </div>
+    </div>
+    <div class="backlog-toolbar">
+      <label for="backlogYearSelect">年</label>
+      <select id="backlogYearSelect" name="backlogYear" title="集計・カレンダー表示の年" aria-label="集計する年">
+        <option value="">直近（読み込み中…）</option>
+      </select>
+      <button type="button" class="primary" id="backlogRefreshBtn" onclick="fetchBacklogSummary()">再集計</button>
+      <a class="btn-link" href="/queue-status" target="_blank" rel="noopener">欠損をキューで補完 →</a>
+    </div>
+  </div>
+  <div class="backlog-legend">
+    <span><i class="bl-dot bl-full"></i> 一式取得済</span>
+    <span><i class="bl-dot bl-partial"></i> 一部未取得</span>
+    <span><i class="bl-dot bl-bare"></i> 全レース未取得</span>
+    <span><i class="bl-dot bl-nojra"></i> JRA レースなし</span>
+    <span><i class="bl-dot bl-nodata"></i> 一覧なし／休み</span>
+  </div>
+  <div id="backlogHeatmap" class="backlog-heatmap-wrap"></div>
+  <div class="backlog-priority" id="backlogPriority"></div>
+</div>
+
+<!-- ジョブステータスパネル -->
+<div class="job-panel" id="jobPanel" style="display:none">
+  <div class="job-panel-header" onclick="toggleJobPanel()">
+    <span class="job-panel-title">スクレイピング ジョブ</span>
+    <span class="job-counter idle" id="jobCounter">0</span>
+  </div>
+  <div class="job-list" id="jobList"></div>
+</div>
+
+<!-- 全日付一覧テーブル -->
+<div class="board-container" id="allDatesContainer">
+  <div class="loading-overlay">
+    <div class="big-spinner"></div>
+    <div class="loading-label">日付一覧を読み込み中...</div>
+  </div>
+</div>
+
+<!-- 個別日付の詳細 (展開時)。直リンク: /monitor?date=YYYYMMDD または ?kaisai_date=（同義）。レース詳細からは /monitor?date=開催日 -->
+<div id="detailSection" style="display:none">
+  <div style="padding:12px 32px 0;display:flex;align-items:center;gap:12px">
+    <button onclick="closeDetail()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer">← 一覧に戻る</button>
+    <h2 id="detailTitle" style="font-size:16px;font-weight:600;color:#fff"></h2>
+    <input type="date" id="dateInput" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:#fff;font-size:14px;width:170px;outline:none;color-scheme:dark;cursor:pointer" onchange="loadDate()">
+  </div>
+</div>
+
+<div class="progress-bar-wrap" id="progressWrap" style="display:none">
+  <div style="display:flex;align-items:center;gap:16px;width:100%">
+    <div style="flex:1">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <div class="progress-text">
+          <strong id="progressPct">0</strong>%
+        </div>
+        <button id="dateAllBtn" onclick="triggerDateAll(false)"
+                style="background:var(--accent);color:#fff;border:none;border-radius:6px;
+                padding:7px 18px;font-size:13px;font-weight:600;cursor:pointer;
+                white-space:nowrap;transition:all 0.15s;display:none">
+          ⚡ 未取得+旧構造データを取得
+        </button>
+        <button id="dateForceBtn" onclick="triggerDateAll(true)"
+                style="background:var(--surface2);color:var(--stale);border:1px solid var(--stale);
+                border-radius:6px;padding:7px 14px;font-size:12px;cursor:pointer;
+                white-space:nowrap;transition:all 0.15s;display:none">
+          🔄 強制全再取得
+        </button>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill" style="width:0%"></div>
+      </div>
+      <div class="progress-stats">
+        <span>レース: <span class="stat-val" id="statRaces">0</span></span>
+        <span>GCS完了: <span class="stat-val" id="statDone">0</span>/<span id="statTotal">0</span></span>
+        <span>構造準拠: <span class="stat-val" id="statFresh" style="color:var(--fresh)">0</span>/<span id="statFreshTotal">0</span></span>
+        <span id="allFreshBadge" style="display:none;padding:2px 8px;border-radius:4px;
+              font-size:11px;font-weight:700;background:var(--fresh-dim);color:var(--fresh);
+              border:1px solid rgba(52,211,153,0.3)">✓ 全データ構造準拠</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="structure-panel" id="structurePanel">
+  <div class="structure-header">
+    <h3>🔍 ページ構造チェック</h3>
+    <span class="structure-severity sev-none" id="structureSeverity">未実行</span>
+    <span class="structure-meta" id="structureMeta"></span>
+    <div class="structure-actions">
+      <button onclick="triggerStructureCheck()" id="structureCheckBtn">手動チェック</button>
+    </div>
+  </div>
+  <div class="structure-grid" id="structureGrid"></div>
+</div>
+
+<div class="legend" id="legendWrap" style="display:none">
+  <div class="legend-item"><div class="legend-dot ok"></div> 現在構造に準拠 (Fresh)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--stale)"></div> 旧構造データ (Stale)</div>
+  <div class="legend-item"><div class="legend-dot partial"></div> 一部取得</div>
+  <div class="legend-item"><div class="legend-dot empty"></div> 未格納</div>
+  <div class="legend-item"><div class="legend-dot html"></div> HTMLアーカイブ有</div>
+</div>
+
+<div class="board-container" id="boardContainer" style="display:none">
+  <div class="empty-state">
+    <div class="icon">📋</div>
+    <p>カレンダーから日付を選択して<br>GCSデータ格納状態を確認</p>
+  </div>
+</div>
+
+<div class="last-update" id="lastUpdate"></div>
+<div class="toast-container" id="toasts"></div>
+
+<script>
+const API_BASE = '';
+let currentDate = '';
+let refreshTimer = null;
+let countdownTimer = null;
+let countdownVal = 120;
+const REFRESH_NORMAL = 120;  // seconds (no active jobs)
+const REFRESH_ACTIVE = 10;   // seconds (scraping in progress)
+let _currentRefreshInterval = REFRESH_NORMAL;
+const loadingCells = new Set();
+let structureVersions = {};
+let viewMode = 'list'; // 'list' or 'detail'
+let _statusCache = {};  // client-side cache {date: data}
+
+function toIso(yyyymmdd) {
+  return yyyymmdd.slice(0,4) + '-' + yyyymmdd.slice(4,6) + '-' + yyyymmdd.slice(6,8);
+}
+function toCompact(iso) {
+  return iso.replace(/-/g, '');
+}
+
+const SOURCE_LABELS = {
+  'race_shutuba':      { label: '出馬表',     icon: '📋', login: false },
+  'race_result':       { label: 'レース結果', icon: '🏁', login: false },
+  'race_index':        { label: 'タイム指数', icon: '⏱',  login: true  },
+  'race_shutuba_past': { label: '馬柱',       icon: '📊', login: false },
+  'race_odds':         { label: 'オッズ',     icon: '💰', login: false },
+  'race_paddock':      { label: 'パドック',   icon: '🐴', login: true  },
+  'race_barometer':    { label: '偏差値',     icon: '📈', login: true  },
+  'race_oikiri':       { label: '追い切り',   icon: '🏃', login: false },
+  'horse_result':      { label: '馬成績',     icon: '🐎', login: false },
+  'horse_pedigree':    { label: '血統',       icon: '🧬', login: false },
+  'smartrc_race':      { label: 'SmartRC',    icon: '📊', login: false },
+};
+
+// dateInput is now inside detailSection
+
+function showToast(msg, type = 'info') {
+  const c = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+
+
+async function triggerDateAll(force = false) {
+  if (!currentDate) return;
+  const cellKey = `${currentDate}:date_all`;
+  if (loadingCells.has(cellKey)) return;
+  loadingCells.add(cellKey);
+
+  const btn = document.getElementById('dateAllBtn');
+  const forceBtn = document.getElementById('dateForceBtn');
+  btn.disabled = true;
+  forceBtn.disabled = true;
+  btn.textContent = '⏳ 取得中...';
+  btn.style.opacity = '0.6';
+  forceBtn.style.opacity = '0.4';
+
+  _dateJobs[currentDate] = { status: 'running', startedAt: Date.now() };
+  _startJobPolling();
+  startAutoRefresh(REFRESH_ACTIVE);
+
+  const modeLabel = force ? '強制全再取得' : '未取得+旧構造データ取得';
+  showToast(`${currentDate} ${modeLabel}を開始...`, 'info');
+
+  try {
+    const res = await fetch(API_BASE + '/api/scrape-trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ race_id: currentDate, category: 'date_all', force }),
+    });
+    const data = await res.json();
+
+    if (data.status === 'already_running') {
+      showToast('この日付は既に取得中です', 'info');
+      _dateJobs[currentDate].jobId = data.job_id;
+    } else if (data.status === 'started') {
+      _dateJobs[currentDate].jobId = data.job_id;
+      pollUntilDone(cellKey, `${currentDate} ${modeLabel}`, data.job_id);
+    }
+  } catch (e) {
+    showToast(`エラー: ${e.message}`, 'error');
+    loadingCells.delete(cellKey);
+    _dateJobs[currentDate] = { status: 'error' };
+    resetDateAllBtn();
+  }
+}
+
+async function triggerScrape(raceId, category, label) {
+  const cellKey = `${raceId}:${category}`;
+  if (loadingCells.has(cellKey)) return;
+  loadingCells.add(cellKey);
+  renderBoard(lastBoardData);
+
+  showToast(`${label} 取得開始...`, 'info');
+
+  try {
+    const res = await fetch(API_BASE + '/api/scrape-trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ race_id: raceId, category }),
+    });
+    const data = await res.json();
+
+    if (data.status === 'already_running') {
+      showToast(`${label} は既に実行中です`, 'info');
+    } else if (data.status === 'started') {
+      pollUntilDone(cellKey, label, data.job_id);
+    }
+  } catch (e) {
+    showToast(`エラー: ${e.message}`, 'error');
+    loadingCells.delete(cellKey);
+    renderBoard(lastBoardData);
+  }
+}
+
+function resetDateAllBtn() {
+  const btn = document.getElementById('dateAllBtn');
+  const forceBtn = document.getElementById('dateForceBtn');
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = '⚡ 未取得+旧構造データを取得';
+    btn.style.opacity = '1';
+  }
+  if (forceBtn) {
+    forceBtn.disabled = false;
+    forceBtn.style.opacity = '1';
+  }
+}
+
+async function pollUntilDone(cellKey, label, jobId) {
+  const poll = async () => {
+    try {
+      const res = await fetch(API_BASE + '/api/scrape-jobs');
+      const data = await res.json();
+      const job = (data.jobs || []).find(j => j.job_id === jobId);
+
+      if (!job || job.status === 'done') {
+        loadingCells.delete(cellKey);
+        showToast(`${label} 取得完了`, 'success');
+        resetDateAllBtn();
+        fetchAndRender();
+        return;
+      }
+      if (job.status === 'error') {
+        loadingCells.delete(cellKey);
+        showToast(`${label} 取得失敗`, 'error');
+        resetDateAllBtn();
+        fetchAndRender();
+        return;
+      }
+      setTimeout(poll, 3000);
+    } catch {
+      setTimeout(poll, 5000);
+    }
+  };
+  setTimeout(poll, 2000);
+}
+
+let lastBoardData = null;
+
+/** race_lists の日付キーから年一覧を作る（バックログAPIより先に実行し、空 select を防ぐ） */
+async function populateBacklogYearSelect() {
+  const sel = document.getElementById('backlogYearSelect');
+  if (!sel) return;
+  const prev = sel.value || '';
+  try {
+    const res = await fetch(API_BASE + '/api/scrape-dates', { cache: 'no-store' });
+    const data = await res.json();
+    const dates = data.dates || [];
+    const years = [...new Set(dates.map(d => String(d).slice(0, 4)))]
+      .filter(y => y.length === 4 && /^\d{4}$/.test(y))
+      .sort((a, b) => b.localeCompare(a));
+    if (!years.length) {
+      sel.innerHTML = '<option value="">直近のみ（race_lists 未登録）</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">直近（最新側まとめ）</option>' +
+      years.map(y => `<option value="${y}">${y}年</option>`).join('');
+    if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  } catch (e) {
+    console.warn('populateBacklogYearSelect:', e);
+    sel.innerHTML = '<option value="">直近（年一覧取得エラー）</option>';
+  }
+}
+
+function _blEsc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function fetchBacklogSummary() {
+  const heat = document.getElementById('backlogHeatmap');
+  const pri = document.getElementById('backlogPriority');
+  const sel = document.getElementById('backlogYearSelect');
+  if (!heat || !pri) return;
+
+  const yearParam = sel && sel.value ? sel.value : '';
+  heat.innerHTML = '<div style="font-size:12px;color:var(--text-dim);padding:14px">集計中…（レース数が多いと数十秒かかることがあります）</div>';
+  pri.innerHTML = '';
+
+  const q = new URLSearchParams({ max_dates: yearParam ? '400' : '280' });
+  if (yearParam) q.set('year', yearParam);
+
+  try {
+    const res = await fetch(API_BASE + '/api/monitor/missing-dates-summary?' + q.toString());
+    const data = await res.json();
+    if (data.error) {
+      heat.innerHTML = `<div style="font-size:12px;color:var(--err);padding:12px">${_blEsc(data.error)}</div>`;
+      if (res.status === 401) {
+        heat.innerHTML += '<div style="font-size:11px;color:var(--text-dim);margin-top:8px">この API は開発者ログインが必要です（/login）。</div>';
+      }
+      return;
+    }
+
+    renderBacklogPanel(data);
+  } catch (e) {
+    heat.innerHTML = `<div style="font-size:12px;color:var(--err);padding:12px">通信エラー: ${_blEsc(e.message)}</div>`;
+  }
+}
+
+function renderBacklogPanel(data) {
+  const m = data.meta || {};
+  const metaEl = document.getElementById('backlogMeta');
+  const sel = document.getElementById('backlogYearSelect');
+  if (metaEl) {
+    metaEl.innerHTML =
+      `対象 <strong>${m.scanned || 0}</strong> 開催日 · 未取得のある日 <strong>${m.days_with_backlog || 0}</strong> 日 · ` +
+      `欠損レース計 <strong>${m.total_missing_races || 0}</strong><br>` +
+      `<span style="opacity:0.88">基準はキュー「欠損補完」と同じ（出馬表・オッズ・結果・代表馬の馬成績）。` +
+      `今日より後の日付は、netkeiba 一覧に重賞・OP・特別等（Icon_GradeType 相当）が載った開催日だけ表示します。` +
+      `優先して取りたい日は下の表またはカレンダーから開いてください。</span>`;
+  }
+
+  const yearVal = sel && sel.value ? parseInt(sel.value, 10) : NaN;
+  let heatYear;
+  if (!isNaN(yearVal) && yearVal > 1900) heatYear = yearVal;
+  else {
+    const ds = data.dates || [];
+    heatYear = ds.length
+      ? Math.max(...ds.map(r => parseInt(r.date.slice(0, 4), 10)))
+      : new Date().getFullYear();
+  }
+
+  const map = Object.fromEntries((data.dates || []).map(r => [r.date, r]));
+  const heat = document.getElementById('backlogHeatmap');
+  if (heat) {
+    heat.innerHTML = renderYearHeatmap(heatYear, map);
+  }
+  const pri = document.getElementById('backlogPriority');
+  if (pri) {
+    pri.innerHTML = renderPriorityTable(data.priority || []);
+  }
+}
+
+function renderYearHeatmap(year, dateMap) {
+  const DOW = ['月', '火', '水', '木', '金', '土', '日'];
+  const MONTH_LABELS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+  let html = `<p style="font-size:11px;color:var(--text-dim);margin:-4px 0 12px;grid-column:1/-1">` +
+    `${year}年カレンダー — 色は JRA レースの取得状況。セルクリックで詳細。灰は race_lists なし等。</p>`;
+  for (let month = 1; month <= 12; month++) {
+    const dim = new Date(year, month, 0).getDate();
+    const first = new Date(year, month - 1, 1);
+    const lead = (first.getDay() + 6) % 7;
+    html += `<div class="backlog-month"><h4>${MONTH_LABELS[month - 1]}</h4><div class="backlog-month-grid">`;
+    for (let i = 0; i < 7; i++) {
+      html += `<div class="backlog-dow">${DOW[i]}</div>`;
+    }
+    for (let i = 0; i < lead; i++) {
+      html += '<div class="backlog-cell" style="visibility:hidden;pointer-events:none"></div>';
+    }
+    for (let day = 1; day <= dim; day++) {
+      const ds = `${year}${String(month).padStart(2, '0')}${String(day).padStart(2, '0')}`;
+      const row = dateMap[ds];
+      let cls = 'backlog-cell bl-nodata';
+      let title = `${ds} · データなし`;
+      let oncl = '';
+      if (row) {
+        oncl = ` onclick="showDetailView('${ds}')"`;
+        const inter = ' interactive';
+        if (row.level === 'full') cls = 'backlog-cell bl-full' + inter;
+        else if (row.level === 'partial') cls = 'backlog-cell bl-partial' + inter;
+        else if (row.level === 'bare') cls = 'backlog-cell bl-bare' + inter;
+        else if (row.level === 'no_jra') cls = 'backlog-cell bl-nojra' + inter;
+        else cls = 'backlog-cell bl-nodata' + inter;
+        const rlNote = row.race_list_exists
+          ? `一覧${row.race_list_row_count != null ? row.race_list_row_count : '—'}件`
+          : '一覧なし';
+        title = `${ds} · ${rlNote} · JRA${row.jra_races}R 欠${row.missing_races}`;
+      }
+      html += `<div class="${cls}" title="${_blEsc(title)}"${oncl}></div>`;
+    }
+    html += '</div></div>';
+  }
+  return html;
+}
+
+function renderPriorityTable(priority) {
+  const rows = (priority || []).filter(r => r.missing_races > 0).slice(0, 20);
+  if (!rows.length) {
+    return '<div class="backlog-empty-hint">この範囲では未取得レースはありません（または JRA 開催なし）。</div>';
+  }
+  let html = '<h4>優先リスト（未取得レース数が多い順）</h4><table><thead><tr>';
+  html += '<th>開催日</th><th>JRA</th><th>未取得</th><th>進捗</th><th>操作</th></tr></thead><tbody>';
+  rows.forEach(r => {
+    const pct = r.pct_complete != null ? r.pct_complete : 0;
+    const ymd = `${r.date.slice(0, 4)}/${r.date.slice(4, 6)}/${r.date.slice(6, 8)}`;
+    html += `<tr class="bl-priority-row" onclick="showDetailView('${r.date}')" title="クリックでこの日のスクレイピング状況を表示">
+      <td><strong>${_blEsc(ymd)}</strong></td>
+      <td>${r.jra_races}</td>
+      <td style="color:var(--err);font-weight:700">${r.missing_races}</td>
+      <td>
+        <div class="bl-pct-bar"><div class="bl-pct-fill" style="width:${pct}%"></div></div>
+        <span style="font-size:10px;color:var(--text-dim)">${pct}%</span>
+      </td>
+      <td class="act-btns" onclick="event.stopPropagation()">
+        <button type="button" onclick="showDetailView('${r.date}')">詳細</button>
+        <button type="button" class="accent" onclick="triggerDateScrape('${r.date}', false)">一式取得</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+const WEEKDAYS = ['日','月','火','水','木','金','土'];
+
+function getWeekday(yyyymmdd) {
+  const y = parseInt(yyyymmdd.slice(0,4));
+  const m = parseInt(yyyymmdd.slice(4,6)) - 1;
+  const d = parseInt(yyyymmdd.slice(6,8));
+  const dt = new Date(y, m, d);
+  return { name: WEEKDAYS[dt.getDay()], day: dt.getDay() };
+}
+
+function _syncMonitorUrl(detailDateOrNull) {
+  try {
+    const u = new URL(window.location.href);
+    if (detailDateOrNull && /^\d{8}$/.test(String(detailDateOrNull))) {
+      u.searchParams.set('date', String(detailDateOrNull));
+    } else {
+      u.searchParams.delete('date');
+      u.searchParams.delete('kaisai_date');
+    }
+    const qs = u.searchParams.toString();
+    history.replaceState(null, '', u.pathname + (qs ? `?${qs}` : ''));
+  } catch (e) { console.warn('monitor url sync', e); }
+}
+
+async function init() {
+  viewMode = 'list';
+  showListView();
+  _syncMonitorUrl(null);
+  const by = document.getElementById('backlogYearSelect');
+  if (by && !by._blChangeBound) {
+    by._blChangeBound = true;
+    by.addEventListener('change', () => fetchBacklogSummary());
+  }
+  await populateBacklogYearSelect();
+  await Promise.all([fetchAllDates(), fetchBacklogSummary()]);
+  _pollJobsOnce();
+  startAutoRefresh();
+}
+
+/** /monitor?date=YYYYMMDD で開いたとき: 詳細を先に出しつつ一覧・欠損パネルも裏で読み込む */
+async function initWithDetailDate(dateStr) {
+  const by = document.getElementById('backlogYearSelect');
+  if (by && !by._blChangeBound) {
+    by._blChangeBound = true;
+    by.addEventListener('change', () => fetchBacklogSummary());
+  }
+  await populateBacklogYearSelect();
+  showDetailView(dateStr);
+  await Promise.all([fetchAllDates(), fetchBacklogSummary()]);
+  _pollJobsOnce();
+  startAutoRefresh();
+}
+
+function _fileQueuePanelItems(qData) {
+  if (!qData || qData.error) return [];
+  return (qData.active_jobs || []).map(j => ({
+    job_id: `fq:${j.job_id}`,
+    race_id: String(j.target_id || j.job_label || ''),
+    category: 'date_all（キュー）',
+    status: j.status === 'pending' ? 'queued' : 'running',
+    started_at: j.started_at
+      ? new Date(j.started_at).getTime() / 1000
+      : (j.queued_at ? new Date(j.queued_at).getTime() / 1000 : Date.now() / 1000),
+    progress: null,
+  }));
+}
+
+function _renderJobPanelFromSources(scrapeJobs, qData) {
+  const fq = _fileQueuePanelItems(qData);
+  const mem = (scrapeJobs || []).filter(j => j.status === 'running' || j.status === 'queued');
+  const merged = [...fq, ...mem];
+  const recent = (scrapeJobs || []).filter(j => j.status === 'done' || j.status === 'error').slice(0, 5);
+  _renderJobPanel([...merged, ...recent]);
+}
+
+function _syncFileQueueDateJobs(qData) {
+  if (!qData || qData.error) return;
+  for (const j of qData.active_jobs || []) {
+    if (j.job_kind !== 'date' || !j.target_id) continue;
+    const tasks = j.tasks || j.types || [];
+    if (!tasks.includes('date_all')) continue;
+    if (j.status !== 'pending' && j.status !== 'running') continue;
+    const d = String(j.target_id);
+    _dateJobs[d] = {
+      status: 'running',
+      source: 'file_queue',
+      queueJobId: j.job_id,
+      startedAt: j.started_at
+        ? new Date(j.started_at).getTime()
+        : (j.queued_at ? new Date(j.queued_at).getTime() : Date.now()),
+    };
+    loadingCells.add(`${d}:date_all`);
+  }
+}
+
+async function _pollJobsOnce() {
+  try {
+    const [res, qRes] = await Promise.all([
+      fetch(API_BASE + '/api/scrape-jobs'),
+      fetch(API_BASE + '/api/scrape-queue/status'),
+    ]);
+    const data = await res.json();
+    const qData = await qRes.json();
+    const jobs = data.jobs || [];
+    _syncFileQueueDateJobs(qData);
+    for (const j of jobs) {
+      if ((j.status === 'running' || j.status === 'queued') && j.category === 'date_all' && j.race_id) {
+        if (_dateJobs[j.race_id] && _dateJobs[j.race_id].source === 'file_queue') continue;
+        _dateJobs[j.race_id] = {
+          status: 'running',
+          source: 'memory',
+          jobId: j.job_id,
+          startedAt: j.started_at ? j.started_at * 1000 : Date.now(),
+        };
+        loadingCells.add(`${j.race_id}:date_all`);
+      }
+      if ((j.status === 'running' || j.status === 'queued') && j.category === 'race_list' && j.race_id) {
+        _raceListJobs[j.race_id] = { status: 'running', jobId: j.job_id, startedAt: j.started_at ? j.started_at * 1000 : Date.now() };
+        loadingCells.add(`${j.race_id}:race_list`);
+      }
+    }
+    _renderJobPanelFromSources(jobs, qData);
+    const needPoll = jobs.some(x => x.status === 'running' || x.status === 'queued')
+      || (qData.active_jobs || []).length > 0;
+    if (needPoll) {
+      renderAllDates(_allDatesData);
+      _startJobPolling();
+    }
+  } catch (e) { console.error(e); }
+}
+
+function showListView() {
+  viewMode = 'list';
+  document.getElementById('allDatesContainer').style.display = '';
+  document.getElementById('detailSection').style.display = 'none';
+  document.getElementById('progressWrap').style.display = 'none';
+  document.getElementById('legendWrap').style.display = 'none';
+  document.getElementById('boardContainer').style.display = 'none';
+}
+
+function showDetailView(date) {
+  viewMode = 'detail';
+  currentDate = date;
+  _syncMonitorUrl(date);
+  lastBoardData = null;
+  document.getElementById('allDatesContainer').style.display = 'none';
+  document.getElementById('detailSection').style.display = '';
+  document.getElementById('boardContainer').style.display = '';
+
+  const wd = getWeekday(date);
+  const formatted = `${date.slice(0,4)}/${date.slice(4,6)}/${date.slice(6,8)} (${wd.name})`;
+  document.getElementById('detailTitle').textContent = formatted;
+  document.getElementById('dateInput').value = toIso(date);
+
+  const cached = _statusCache[date];
+  if (cached) {
+    clearBoardLoading();
+    lastBoardData = cached;
+    structureVersions = cached.structure_versions || {};
+    updateGcsBadge(cached.gcs_enabled);
+    renderProgress(cached);
+    renderBoard(cached);
+    document.getElementById('lastUpdate').textContent =
+      `キャッシュ表示 — 更新中...`;
+  } else {
+    showBoardLoading(`${formatted} のデータを読み込み中...`);
+  }
+  fetchAndRender();
+}
+
+function closeDetail() {
+  _syncMonitorUrl(null);
+  showListView();
+  fetchAllDates();
+}
+
+function loadDate() {
+  const raw = document.getElementById('dateInput').value;
+  if (!raw) return;
+  const d = toCompact(raw);
+  if (d.length !== 8) return;
+  showDetailView(d);
+}
+
+function _hasActiveJobs() {
+  for (const d in _dateJobs) {
+    if (_dateJobs[d].status === 'running') return true;
+  }
+  for (const d in _raceListJobs) {
+    if (_raceListJobs[d].status === 'running') return true;
+  }
+  return loadingCells.size > 0;
+}
+
+function startAutoRefresh(interval) {
+  const secs = interval || (_hasActiveJobs() ? REFRESH_ACTIVE : REFRESH_NORMAL);
+  if (refreshTimer) clearInterval(refreshTimer);
+  if (countdownTimer) clearInterval(countdownTimer);
+  _currentRefreshInterval = secs;
+  countdownVal = secs;
+  document.getElementById('countdown').textContent = countdownVal;
+  countdownTimer = setInterval(() => {
+    countdownVal--;
+    if (countdownVal < 0) countdownVal = _currentRefreshInterval;
+    document.getElementById('countdown').textContent = countdownVal;
+  }, 1000);
+  refreshTimer = setInterval(() => {
+    const newInterval = _hasActiveJobs() ? REFRESH_ACTIVE : REFRESH_NORMAL;
+    if (newInterval !== _currentRefreshInterval) {
+      startAutoRefresh(newInterval);
+      return;
+    }
+    countdownVal = _currentRefreshInterval;
+    if (viewMode === 'list') fetchAllDates();
+    else fetchAndRender();
+  }, secs * 1000);
+}
+
+let _allDatesElapsedTimer = null;
+
+function showAllDatesLoading() {
+  const container = document.getElementById('allDatesContainer');
+  container.innerHTML = `<div class="loading-overlay">
+    <div class="big-spinner"></div>
+    <div class="loading-label">日付一覧を読み込み中...</div>
+    <div class="loading-elapsed" id="allDatesElapsed">0.0s</div>
+  </div>`;
+  const start = performance.now();
+  if (_allDatesElapsedTimer) clearInterval(_allDatesElapsedTimer);
+  _allDatesElapsedTimer = setInterval(() => {
+    const el = document.getElementById('allDatesElapsed');
+    if (el) {
+      const sec = ((performance.now() - start) / 1000).toFixed(1);
+      el.textContent = `${sec}s`;
+    }
+  }, 100);
+}
+
+async function fetchAllDates(opts) {
+  const bust = opts === true || (opts && opts.force);
+  const quiet = opts && opts.quiet;
+  if (!quiet) showAllDatesLoading();
+  try {
+    const url = bust
+      ? API_BASE + '/api/scrape-summary-all?force=1'
+      : API_BASE + '/api/scrape-summary-all';
+    const res = await fetch(url);
+    if (_allDatesElapsedTimer) { clearInterval(_allDatesElapsedTimer); _allDatesElapsedTimer = null; }
+    const data = await res.json();
+    updateGcsBadge(data.gcs_enabled);
+    renderAllDates(data.dates || []);
+    document.getElementById('lastUpdate').textContent =
+      `最終更新: ${new Date().toLocaleTimeString('ja-JP')}`;
+  } catch (e) {
+    if (_allDatesElapsedTimer) { clearInterval(_allDatesElapsedTimer); _allDatesElapsedTimer = null; }
+    console.error('fetchAllDates error:', e);
+    document.getElementById('allDatesContainer').innerHTML =
+      `<div class="empty-state"><div class="icon">⚠️</div>
+       <p>データ取得エラー<br><span style="font-size:12px;color:var(--text-dim)">${e.message}</span></p></div>`;
+  }
+}
+
+let _allDatesData = [];
+let _dateJobs = {};
+let _raceListJobs = {};
+
+function _progressBarHtml(pct) {
+  let fillCls, pctCls;
+  if (pct >= 100) { fillCls = 'pct-100'; pctCls = 'c100'; }
+  else if (pct >= 70) { fillCls = 'pct-high'; pctCls = 'chigh'; }
+  else if (pct >= 30) { fillCls = 'pct-mid'; pctCls = 'cmid'; }
+  else { fillCls = 'pct-low'; pctCls = 'clow'; }
+  return `<div class="progress-bar-wrap">
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill ${fillCls}" style="width:${Math.min(pct,100)}%"></div>
+    </div>
+    <span class="progress-pct ${pctCls}">${pct.toFixed(0)}%</span>
+  </div>`;
+}
+
+function _raceListBadgeAndLabel(d) {
+  const ex = d.race_list_exists === true;
+  const n = d.total_races != null ? d.total_races : 0;
+  const rows = d.race_list_row_count != null ? d.race_list_row_count : 0;
+  if (!ex) {
+    return { cls: 'none', label: '一覧なし' };
+  }
+  if (n > 0) {
+    return { cls: 'ok', label: `JRA ${n}R` };
+  }
+  if (rows > 0) {
+    return { cls: 'warn', label: `JRA0 / ${rows}件` };
+  }
+  return { cls: 'warn', label: '一覧空' };
+}
+
+function _raceListCellInnerHtml(d) {
+  const date = d.date;
+  const { cls, label } = _raceListBadgeAndLabel(d);
+  const jobState = _raceListJobs[date];
+  let btn = '';
+  if (jobState && jobState.status === 'running') {
+    btn = `<button class="scrape-btn tiny running" disabled><span class="job-spinner"></span> 取得中</button>`;
+  } else if (jobState && jobState.status === 'done') {
+    btn = `<button class="scrape-btn tiny done" onclick="event.stopPropagation();triggerRaceListFetch('${date}',true)">✓ 再取得</button>`;
+  } else if (jobState && jobState.status === 'error') {
+    btn = `<button class="scrape-btn tiny error" onclick="event.stopPropagation();triggerRaceListFetch('${date}',false)">✕ 再試行</button>`;
+  } else {
+    const needForce = !!d.race_list_exists;
+    btn = `<button class="scrape-btn tiny" onclick="event.stopPropagation();triggerRaceListFetch('${date}',${needForce})">📋 ${needForce ? '一覧更新' : '一覧取得'}</button>`;
+  }
+  return `<div class="rl-cell" onclick="event.stopPropagation()">
+    <span class="rl-badge ${cls}">${label}</span>
+    ${btn}
+  </div>`;
+}
+
+function renderAllDates(dates) {
+  const container = document.getElementById('allDatesContainer');
+  _allDatesData = dates || [];
+  if (!dates || dates.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <div class="icon">📋</div>
+      <p><code>race_lists</code> にまだ日付がありません。下から開催日を指定して一覧だけ取得できます。</p>
+      <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center">
+        <input type="text" id="allDatesSeedDate" placeholder="YYYYMMDD" maxlength="8" inputmode="numeric"
+          style="width:120px;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:#fff;font-size:13px" />
+        <button type="button" class="primary" onclick="triggerRaceListFetchFromInput()">一覧取得</button>
+      </div></div>`;
+    return;
+  }
+
+  let totalRaces = 0;
+  let totalFilled = 0, totalTotal = 0;
+  dates.forEach(d => {
+    totalRaces += d.total_races;
+    const p = d.progress || {};
+    totalFilled += (p.filled || 0);
+    totalTotal += (p.total || 0);
+  });
+  const overallPct = totalTotal > 0 ? (totalFilled / totalTotal * 100) : 0;
+
+  let html = `<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+    <span style="font-size:15px;font-weight:600;color:#fff">${dates.length} 日付</span>
+    <span style="font-size:13px;color:var(--text-dim)">合計 ${totalRaces} レース</span>
+    <span style="font-size:13px;color:var(--text-dim)">|</span>
+    <span style="font-size:13px;color:var(--text-dim)">全体データ保有率:</span>
+    <span style="display:inline-flex;align-items:center;gap:6px;min-width:120px">
+      ${_progressBarHtml(overallPct)}
+    </span>
+    <span style="font-size:11px;color:var(--text-dim)">(${totalFilled.toLocaleString()}/${totalTotal.toLocaleString()})</span>
+    <span style="flex:1;min-width:8px"></span>
+    <button type="button" class="primary" style="white-space:nowrap;font-size:12px;padding:8px 12px"
+      title="保有率100%未満の開催日を、新しい日付から順に date_all（ファイルキュー）へ投入します"
+      onclick="event.stopPropagation();enqueueIncompleteDatesFromSummary(false)">
+      未完了を新しい順にキュー投入
+    </button>
+    <button type="button" style="white-space:nowrap;font-size:12px;padding:8px 12px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;cursor:pointer"
+      title="サマリキャッシュを捨ててから再集計し、同様にキューへ投入"
+      onclick="event.stopPropagation();enqueueIncompleteDatesFromSummary(true)">
+      （サマリ再計算して投入）
+    </button>
+  </div>`;
+
+  html += '<table class="all-dates"><thead><tr>';
+  html += '<th>日付</th><th>一覧<br><span style="font-weight:500;opacity:0.85">race_lists</span></th><th>開催場</th><th>レース数</th><th>データ保有率</th><th>スクレイピング</th><th></th>';
+  html += '</tr></thead><tbody>';
+
+  dates.forEach(d => {
+    const wd = getWeekday(d.date);
+    const wdCls = wd.day === 0 ? 'sun' : wd.day === 6 ? 'sat' : '';
+    const formatted = `${d.date.slice(0,4)}/${d.date.slice(4,6)}/${d.date.slice(6,8)}`;
+    const venues = (d.venues || []).map(v => `<span class="venue-tag">${v}</span>`).join('');
+
+    const prog = d.progress || {};
+    const pct = prog.pct || 0;
+    const filled = prog.filled || 0;
+    const total = prog.total || 0;
+    const progressHtml = `<div class="progress-cell">
+      ${_progressBarHtml(pct)}
+      <div class="progress-detail">${filled}/${total}</div>
+    </div>`;
+
+    const jobState = _dateJobs[d.date];
+    let scrapeCell = '';
+    if (jobState && jobState.status === 'running') {
+      scrapeCell = `<button class="scrape-btn running" disabled>
+        <span class="job-spinner"></span> 取得中...</button>`;
+    } else if (jobState && jobState.status === 'done') {
+      scrapeCell = `<button class="scrape-btn done" onclick="event.stopPropagation();triggerDateScrape('${d.date}',true)">✓ 完了 (再取得)</button>`;
+    } else if (jobState && jobState.status === 'error') {
+      scrapeCell = `<button class="scrape-btn error" onclick="event.stopPropagation();triggerDateScrape('${d.date}',false)">✕ エラー (再試行)</button>`;
+    } else {
+      scrapeCell = `<button class="scrape-btn" onclick="event.stopPropagation();triggerDateScrape('${d.date}',false)">⚡ 全取得</button>`;
+    }
+
+    html += `<tr onclick="showDetailView('${d.date}')" id="dateRow-${d.date}">`;
+    html += `<td><span class="date-label">${formatted}</span><span class="date-weekday ${wdCls}">${wd.name}</span></td>`;
+    html += `<td>${_raceListCellInnerHtml(d)}</td>`;
+    html += `<td style="text-align:left">${venues || '—'}</td>`;
+    html += `<td>${d.total_races}</td>`;
+    html += `<td>${progressHtml}</td>`;
+    html += `<td onclick="event.stopPropagation()">${scrapeCell}</td>`;
+    html += `<td><span style="font-size:12px;color:var(--accent);cursor:pointer">詳細 →</span></td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+async function enqueueIncompleteDatesFromSummary(forceSummary) {
+  if (!confirm('データ保有率が100%未満の開催日を、新しい日付から順にキューへ投入します。よろしいですか？')) return;
+  showToast(forceSummary ? 'サマリ再計算・キュー投入中…' : 'キュー投入中…', 'info');
+  try {
+    const res = await fetch(API_BASE + '/api/scrape-queue/enqueue-incomplete-dates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        force_summary: forceSummary ? 1 : 0,
+        smart_skip: true,
+      }),
+    });
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    const n = d.enqueued_dates ?? 0;
+    const tot = d.total_incomplete ?? 0;
+    showToast(
+      `投入 ${n} 日付（全${tot}件中・新規${d.created ?? 0} / 待機済${d.duplicate ?? 0} / 再投入${d.requeued ?? 0}）`,
+      'success',
+    );
+    _startJobPolling();
+    void fetchAllDates({ quiet: true });
+  } catch (e) {
+    showToast(`エラー: ${e.message}`, 'error');
+  }
+}
+
+async function triggerDateScrape(date, force) {
+  const cellKey = `${date}:date_all`;
+  if (loadingCells.has(cellKey)) return;
+  loadingCells.add(cellKey);
+  _dateJobs[date] = {
+    status: 'running',
+    source: 'file_queue',
+    startedAt: Date.now(),
+    queueJobId: null,
+  };
+  _renderDateRow(date);
+  _startJobPolling();
+
+  const modeLabel = force ? '強制全再取得（キュー）' : '全データ取得（キュー）';
+  showToast(`${date} ${modeLabel}を投入...`, 'info');
+
+  try {
+    const res = await fetch(API_BASE + '/api/scrape-queue/add-job', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_kind: 'date',
+        target_id: date,
+        tasks: ['date_all'],
+        smart_skip: !force,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    if (data.job_id) {
+      _dateJobs[date].queueJobId = data.job_id;
+    }
+    if (data.action === 'duplicate') {
+      showToast(`${date} は既にキューにあります（順番待ち）`, 'info');
+    } else if (data.action === 'requeued') {
+      showToast(`${date} をキューに再投入しました`, 'info');
+    }
+    void _pollJobsOnce();
+  } catch (e) {
+    showToast(`エラー: ${e.message}`, 'error');
+    loadingCells.delete(cellKey);
+    delete _dateJobs[date];
+    _renderDateRow(date);
+  }
+}
+
+function triggerRaceListFetchFromInput() {
+  const el = document.getElementById('allDatesSeedDate');
+  const raw = el ? String(el.value || '').replace(/\D/g, '') : '';
+  if (raw.length !== 8) {
+    showToast('YYYYMMDD 8桁で入力してください', 'error');
+    return;
+  }
+  triggerRaceListFetch(raw, false);
+}
+
+async function triggerRaceListFetch(date, force) {
+  const cellKey = `${date}:race_list`;
+  if (loadingCells.has(cellKey)) return;
+  loadingCells.add(cellKey);
+  _raceListJobs[date] = { status: 'running', startedAt: Date.now() };
+  _renderRaceListCell(date);
+  _startJobPolling();
+
+  const modeLabel = force ? '一覧を強制再取得' : 'レース一覧取得';
+  showToast(`${date} ${modeLabel}を開始...`, 'info');
+
+  try {
+    const res = await fetch(API_BASE + '/api/scrape-trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ race_id: date, category: 'race_list', force }),
+    });
+    const data = await res.json();
+    if (data.status === 'already_running') {
+      showToast(`${date} の一覧は既に取得中です`, 'info');
+      _raceListJobs[date].jobId = data.job_id;
+    } else if (data.status === 'started' || data.status === 'queued') {
+      _raceListJobs[date].jobId = data.job_id;
+    }
+  } catch (e) {
+    showToast(`エラー: ${e.message}`, 'error');
+    loadingCells.delete(cellKey);
+    _raceListJobs[date] = { status: 'error' };
+    _renderRaceListCell(date);
+  }
+}
+
+function _renderRaceListCell(date) {
+  const row = document.getElementById(`dateRow-${date}`);
+  if (!row) return;
+  const jobState = _raceListJobs[date];
+  const cell = row.querySelector('td:nth-child(2)');
+  if (!cell) return;
+
+  const d = _allDatesData.find(x => x.date === date);
+  if (!d) return;
+
+  const { cls, label } = _raceListBadgeAndLabel(d);
+  let btn = '';
+  if (jobState && jobState.status === 'running') {
+    const elapsed = jobState.startedAt ? ((Date.now() - jobState.startedAt) / 1000).toFixed(0) : '...';
+    btn = `<button class="scrape-btn tiny running" disabled><span class="job-spinner"></span> ${elapsed}s</button>`;
+  } else if (jobState && jobState.status === 'done') {
+    btn = `<button class="scrape-btn tiny done" onclick="event.stopPropagation();triggerRaceListFetch('${date}',true)">✓ 再取得</button>`;
+  } else if (jobState && jobState.status === 'error') {
+    btn = `<button class="scrape-btn tiny error" onclick="event.stopPropagation();triggerRaceListFetch('${date}',false)">✕ 再試行</button>`;
+  } else {
+    const needForce = !!d.race_list_exists;
+    btn = `<button class="scrape-btn tiny" onclick="event.stopPropagation();triggerRaceListFetch('${date}',${needForce})">📋 ${needForce ? '一覧更新' : '一覧取得'}</button>`;
+  }
+  cell.innerHTML = `<div class="rl-cell" onclick="event.stopPropagation()">
+    <span class="rl-badge ${cls}">${label}</span>
+    ${btn}
+  </div>`;
+}
+
+function _renderDateRow(date) {
+  const row = document.getElementById(`dateRow-${date}`);
+  if (!row) return;
+  const jobState = _dateJobs[date];
+  const cell = row.querySelector('td:nth-child(6)');
+  if (!cell) return;
+
+  if (jobState && jobState.status === 'running') {
+    const elapsed = jobState.startedAt ? ((Date.now() - jobState.startedAt) / 1000).toFixed(0) : '...';
+    cell.innerHTML = `<button class="scrape-btn running" disabled>
+      <span class="job-spinner"></span> ${elapsed}s</button>`;
+  } else if (jobState && jobState.status === 'done') {
+    cell.innerHTML = `<button class="scrape-btn done" onclick="event.stopPropagation();triggerDateScrape('${date}',true)">✓ 完了 (再取得)</button>`;
+  } else if (jobState && jobState.status === 'error') {
+    cell.innerHTML = `<button class="scrape-btn error" onclick="event.stopPropagation();triggerDateScrape('${date}',false)">✕ エラー (再試行)</button>`;
+  } else {
+    cell.innerHTML = `<button class="scrape-btn" onclick="event.stopPropagation();triggerDateScrape('${date}',false)">⚡ 全取得</button>`;
+  }
+}
+
+let _jobPollTimer = null;
+
+function _startJobPolling() {
+  if (_jobPollTimer) return;
+  _jobPollTimer = setInterval(_pollJobs, 2000);
+}
+
+function _stopJobPolling() {
+  if (_jobPollTimer) { clearInterval(_jobPollTimer); _jobPollTimer = null; }
+}
+
+async function _pollJobs() {
+  try {
+    const [res, qRes] = await Promise.all([
+      fetch(API_BASE + '/api/scrape-jobs'),
+      fetch(API_BASE + '/api/scrape-queue/status'),
+    ]);
+    const data = await res.json();
+    const qData = await qRes.json();
+    const jobs = data.jobs || [];
+
+    _renderJobPanelFromSources(jobs, qData);
+
+    let anyRunning = false;
+    for (const [date, state] of Object.entries(_dateJobs)) {
+      if (state.status !== 'running') continue;
+
+      if (state.source === 'file_queue') {
+        const byId = qData.job_by_id || {};
+        if (!state.queueJobId) {
+          const hit = (qData.active_jobs || []).find(
+            j => j.job_kind === 'date' && String(j.target_id) === date
+              && (j.tasks || j.types || []).includes('date_all'));
+          if (hit) state.queueJobId = hit.job_id;
+        }
+        if (!state.queueJobId) {
+          anyRunning = true;
+          state.startedAt = state.startedAt || Date.now();
+          _renderDateRow(date);
+          continue;
+        }
+        const qj = byId[state.queueJobId];
+        if (!qj) {
+          anyRunning = true;
+          _renderDateRow(date);
+          continue;
+        }
+        if (qj.status === 'failed') {
+          loadingCells.delete(`${date}:date_all`);
+          _dateJobs[date] = { status: 'error' };
+          showToast(`${date} 取得失敗（キュー）`, 'error');
+          _renderDateRow(date);
+        } else if (qj.status === 'completed') {
+          loadingCells.delete(`${date}:date_all`);
+          _dateJobs[date] = { status: 'done' };
+          showToast(`${date} 取得完了`, 'success');
+          _renderDateRow(date);
+          void fetchAllDates({ force: true, quiet: true });
+        } else {
+          anyRunning = true;
+          state.startedAt = state.startedAt || Date.now();
+          _renderDateRow(date);
+        }
+        continue;
+      }
+
+      if (!state.jobId) {
+        const m = jobs.find(j => j.race_id === date && j.category === 'date_all');
+        if (m) state.jobId = m.job_id;
+      }
+      if (!state.jobId) {
+        anyRunning = true;
+        state.startedAt = state.startedAt || Date.now();
+        _renderDateRow(date);
+        continue;
+      }
+      const job = jobs.find(j => j.job_id === state.jobId);
+      if (job && job.status === 'error') {
+        _dateJobs[date] = { status: 'error' };
+        loadingCells.delete(`${date}:date_all`);
+        showToast(`${date} 取得失敗`, 'error');
+        _renderDateRow(date);
+      } else if (job && job.status === 'done') {
+        _dateJobs[date] = { status: 'done' };
+        loadingCells.delete(`${date}:date_all`);
+        showToast(`${date} 取得完了`, 'success');
+        _renderDateRow(date);
+      } else if (job && (job.status === 'running' || job.status === 'queued')) {
+        state.startedAt = state.startedAt || Date.now();
+        anyRunning = true;
+        _renderDateRow(date);
+      } else if (!job) {
+        _dateJobs[date] = { status: 'done' };
+        loadingCells.delete(`${date}:date_all`);
+        showToast(`${date} 取得完了`, 'success');
+        _renderDateRow(date);
+      }
+    }
+
+    for (const [date, state] of Object.entries(_raceListJobs)) {
+      if (state.status !== 'running') continue;
+      if (!state.jobId) {
+        const m = jobs.find(j => j.race_id === date && j.category === 'race_list');
+        if (m) state.jobId = m.job_id;
+      }
+      if (!state.jobId) {
+        anyRunning = true;
+        state.startedAt = state.startedAt || Date.now();
+        _renderRaceListCell(date);
+        continue;
+      }
+      const job = jobs.find(j => j.job_id === state.jobId);
+      if (job && job.status === 'error') {
+        loadingCells.delete(`${date}:race_list`);
+        _raceListJobs[date] = { status: 'error' };
+        showToast(`${date} 一覧取得失敗`, 'error');
+        _renderRaceListCell(date);
+      } else if (job && job.status === 'done') {
+        loadingCells.delete(`${date}:race_list`);
+        showToast(`${date} 一覧取得完了`, 'success');
+        delete _raceListJobs[date];
+        await fetchAllDates({ force: true, quiet: true });
+        void fetchBacklogSummary();
+        void populateBacklogYearSelect();
+      } else if (job && (job.status === 'running' || job.status === 'queued')) {
+        state.startedAt = state.startedAt || Date.now();
+        anyRunning = true;
+        _renderRaceListCell(date);
+      } else if (!job) {
+        loadingCells.delete(`${date}:race_list`);
+        showToast(`${date} 一覧取得完了`, 'success');
+        delete _raceListJobs[date];
+        await fetchAllDates({ force: true, quiet: true });
+        void fetchBacklogSummary();
+        void populateBacklogYearSelect();
+      }
+    }
+
+    const fqActive = (qData.active_jobs || []).length;
+    if (!anyRunning
+        && !jobs.some(j => j.status === 'running' || j.status === 'queued')
+        && fqActive === 0) {
+      _stopJobPolling();
+    }
+  } catch (e) {
+    console.error('Job polling error:', e);
+  }
+}
+
+function _renderJobPanel(jobs) {
+  const panel = document.getElementById('jobPanel');
+  const counter = document.getElementById('jobCounter');
+  const list = document.getElementById('jobList');
+
+  const active = jobs.filter(j => j.status === 'running' || j.status === 'queued');
+  const recent = jobs.filter(j => j.status === 'done' || j.status === 'error').slice(0, 5);
+  const all = [...active, ...recent];
+
+  if (all.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = '';
+  const runCount = active.length;
+  counter.textContent = runCount || all.length;
+  counter.className = runCount > 0 ? 'job-counter' : 'job-counter idle';
+
+  let html = '';
+  for (const j of all) {
+    const dotCls = j.status || 'queued';
+    const elapsed = j.started_at ? ((Date.now()/1000 - j.started_at) | 0) : 0;
+    let elapsedStr = '';
+    if (j.status === 'running' || j.status === 'queued') {
+      elapsedStr = `${elapsed}s`;
+    } else if (j.finished_at && j.started_at) {
+      elapsedStr = `${((j.finished_at - j.started_at) | 0)}s`;
+    }
+    const statusIcon = j.status === 'running' ? '<span class="job-spinner"></span>' :
+                       j.status === 'done' ? '✓' :
+                       j.status === 'error' ? '✕' : '…';
+
+    let progressHtml = '';
+    const p = j.progress;
+    if (p && p.total > 0 && (j.status === 'running' || j.status === 'queued')) {
+      const pct = Math.round((p.current / p.total) * 100);
+      progressHtml = `<div style="display:flex;align-items:center;gap:6px;margin-left:28px;margin-bottom:4px">
+        <div class="pct-bar" style="width:80px;height:5px">
+          <div class="pct-fill pct-partial" style="width:${pct}%"></div>
+        </div>
+        <span style="font-size:11px;color:var(--text-dim);font-variant-numeric:tabular-nums">${p.current}/${p.total}</span>
+        <span style="font-size:10px;color:var(--text-dim)">${p.current_label || ''}</span>
+      </div>`;
+    }
+
+    html += `<div class="job-item" style="flex-wrap:wrap">
+      <span class="job-dot ${dotCls}"></span>
+      <span class="job-label">${j.race_id || '?'} / ${j.category || '?'}</span>
+      <span class="job-elapsed">${elapsedStr}</span>
+      <span style="font-size:11px;min-width:14px;text-align:center">${statusIcon}</span>
+      ${progressHtml ? `<div style="width:100%">${progressHtml}</div>` : ''}
+    </div>`;
+  }
+  list.innerHTML = html;
+}
+
+function toggleJobPanel() {
+  const list = document.getElementById('jobList');
+  list.style.display = list.style.display === 'none' ? '' : 'none';
+}
+
+let _loadingElapsedTimer = null;
+
+function showBoardLoading(label) {
+  const container = document.getElementById('boardContainer');
+  container.innerHTML = `<div class="loading-overlay">
+    <div class="big-spinner"></div>
+    <div class="loading-label">${label || '読み込み中...'}</div>
+    <div class="loading-elapsed" id="loadingElapsed">0.0s</div>
+  </div>`;
+  const start = performance.now();
+  if (_loadingElapsedTimer) clearInterval(_loadingElapsedTimer);
+  _loadingElapsedTimer = setInterval(() => {
+    const el = document.getElementById('loadingElapsed');
+    if (el) {
+      const sec = ((performance.now() - start) / 1000).toFixed(1);
+      el.textContent = `${sec}s`;
+    }
+  }, 100);
+}
+
+function clearBoardLoading() {
+  if (_loadingElapsedTimer) {
+    clearInterval(_loadingElapsedTimer);
+    _loadingElapsedTimer = null;
+  }
+}
+
+async function fetchAndRender() {
+  if (!currentDate) return;
+
+  // Show cached data immediately while fetching fresh data
+  const cached = _statusCache[currentDate];
+  if (cached && !lastBoardData) {
+    clearBoardLoading();
+    lastBoardData = cached;
+    structureVersions = cached.structure_versions || {};
+    updateGcsBadge(cached.gcs_enabled);
+    renderProgress(cached);
+    renderBoard(cached);
+    document.getElementById('lastUpdate').textContent =
+      `キャッシュ表示 ${new Date().toLocaleTimeString('ja-JP')}`;
+  }
+
+  try {
+    const res = await fetch(API_BASE + `/api/scrape-status?date=${currentDate}`);
+    clearBoardLoading();
+    const data = await res.json();
+    if (data.error) {
+      if (!cached) {
+        document.getElementById('boardContainer').innerHTML =
+          `<div class="empty-state"><div class="icon">⚠️</div><p>${data.error}</p></div>`;
+      }
+      return;
+    }
+    _statusCache[currentDate] = data;
+    lastBoardData = data;
+    structureVersions = data.structure_versions || {};
+    updateGcsBadge(data.gcs_enabled);
+    renderProgress(data);
+    renderBoard(data);
+    document.getElementById('lastUpdate').textContent =
+      `最終更新: ${new Date().toLocaleTimeString('ja-JP')}`;
+  } catch (e) {
+    clearBoardLoading();
+    if (!cached) {
+      console.error('fetch error:', e);
+      document.getElementById('boardContainer').innerHTML =
+        `<div class="empty-state"><div class="icon">⚠️</div>
+         <p>データ取得エラー<br><span style="font-size:12px;color:var(--text-dim)">${e.message}</span></p></div>`;
+    }
+  }
+}
+
+function updateGcsBadge(enabled) {
+  const badge = document.getElementById('gcsBadge');
+  if (enabled) {
+    badge.className = 'badge gcs-on';
+    badge.textContent = '☁ GCS 接続中';
+  } else {
+    badge.className = 'badge gcs-off';
+    badge.textContent = '☁ GCS 未接続';
+  }
+}
+
+function renderProgress(data) {
+  const wrap = document.getElementById('progressWrap');
+  const legend = document.getElementById('legendWrap');
+  const dateAllBtn = document.getElementById('dateAllBtn');
+  const dateForceBtn = document.getElementById('dateForceBtn');
+
+  if (!data.race_list_exists) {
+    wrap.style.display = 'none';
+    legend.style.display = 'none';
+    dateAllBtn.style.display = 'none';
+    dateForceBtn.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'flex';
+  legend.style.display = 'flex';
+  dateAllBtn.style.display = 'inline-block';
+  dateForceBtn.style.display = 'inline-block';
+
+  const p = data.progress;
+  document.getElementById('progressPct').textContent = p.percentage;
+  document.getElementById('progressFill').style.width = p.percentage + '%';
+  document.getElementById('statRaces').textContent = data.total_races;
+  document.getElementById('statDone').textContent = p.completed;
+  document.getElementById('statTotal').textContent = p.total;
+  document.getElementById('statFresh').textContent = p.fresh || 0;
+  document.getElementById('statFreshTotal').textContent = p.total;
+
+  const allFreshBadge = document.getElementById('allFreshBadge');
+  if (data.all_fresh) {
+    allFreshBadge.style.display = 'inline-block';
+    dateAllBtn.textContent = '✓ 全データ構造準拠';
+    dateAllBtn.style.opacity = '0.5';
+    dateAllBtn.disabled = true;
+  } else {
+    allFreshBadge.style.display = 'none';
+    if (!loadingCells.has(`${currentDate}:date_all`)) {
+      dateAllBtn.textContent = '⚡ 未取得+旧構造データを取得';
+      dateAllBtn.style.opacity = '1';
+      dateAllBtn.disabled = false;
+    }
+  }
+
+}
+
+function renderBoard(data) {
+  if (!data) return;
+  const container = document.getElementById('boardContainer');
+  const sourceKeys = data.sources || [];
+
+  if (!data.race_list_exists) {
+    container.innerHTML = `<div class="empty-state">
+      <div class="icon">📋</div>
+      <p>日付 ${currentDate} のレース一覧ファイル（<code>data/local/race_lists/</code>）がありません。<br>
+      <span style="font-size:12px;color:var(--text-dim)">※ 一覧は GCS ではなく API サーバのローカルにのみ保存されます。</span><br>
+      <button onclick="triggerScrape('${currentDate}','race_list','レース一覧')"
+              style="margin-top:12px;background:var(--accent);color:#fff;border:none;
+              border-radius:6px;padding:10px 24px;font-size:14px;cursor:pointer">
+        レース一覧を取得する
+      </button></p></div>`;
+    return;
+  }
+
+  if (!data.races || data.races.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <div class="icon">📋</div>
+      <p>日付 ${currentDate} の一覧には <strong>JRA レースが 0 件</strong>です（開催なし・または一覧未取得）。<br>
+      <span style="font-size:12px;color:var(--text-dim)">キューで date_all が完了しても、netkeiba 側が空ならこの状態のままです。</span></p>
+      <button onclick="triggerScrape('${currentDate}','race_list','レース一覧')"
+              style="margin-top:12px;background:var(--accent);color:#fff;border:none;
+              border-radius:6px;padding:10px 24px;font-size:14px;cursor:pointer">
+        レース一覧を再取得
+      </button></div>`;
+    return;
+  }
+
+  const colCounts = {};
+  sourceKeys.forEach(k => { colCounts[k] = { ok: 0, fresh: 0, stale: 0, partial: 0, empty: 0, na: 0 }; });
+
+  let html = '<table class="monitor"><thead><tr>';
+  html += '<th>レース</th>';
+  sourceKeys.forEach(key => {
+    const info = SOURCE_LABELS[key] || { label: key, icon: '📦', login: false };
+    const lockIcon = info.login ? ' 🔒' : '';
+    html += `<th>${info.icon}${lockIcon}<br>${info.label}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  data.races.forEach(race => {
+    const rid = race.race_id;
+    const s = race.sources;
+    const grade = (race.grade || '').toUpperCase();
+    let rowClass = '';
+    let badgeHtml = '';
+    if (grade === 'G1' || grade === 'G１' || grade === 'GI') {
+      rowClass = 'grade-g1'; badgeHtml = '<span class="grade-badge grade-badge-g1">G1</span>';
+    } else if (grade === 'G2' || grade === 'G２' || grade === 'GII') {
+      rowClass = 'grade-g2'; badgeHtml = '<span class="grade-badge grade-badge-g2">G2</span>';
+    } else if (grade === 'G3' || grade === 'G３' || grade === 'GIII') {
+      rowClass = 'grade-g3'; badgeHtml = '<span class="grade-badge grade-badge-g3">G3</span>';
+    } else if (grade === 'L' || grade.includes('LISTED') || grade.includes('リステッド')) {
+      rowClass = 'grade-l'; badgeHtml = '<span class="grade-badge grade-badge-l">L</span>';
+    } else if (grade === 'OP' || grade === 'オープン' || grade === 'OPEN') {
+      rowClass = 'grade-op'; badgeHtml = '<span class="grade-badge grade-badge-op">OP</span>';
+    }
+    html += `<tr class="${rowClass}">`;
+
+    const raceLabel = race.race_name || rid;
+    html += `<td>
+      <div style="display:flex;align-items:center;gap:6px">
+        <a class="race-label-btn" href="/race/${rid}" title="レース詳細を表示">
+          <span class="race-round">${race.round}R</span>
+          <span class="race-venue">${race.venue}</span>
+          <span class="race-name">${raceLabel}${badgeHtml}</span>
+        </a>
+        <button onclick="event.stopPropagation();triggerScrape('${rid}','all','${race.venue} ${race.round}R 全取得')"
+                title="全データソースを一括取得"
+                style="background:none;border:1px solid var(--border);border-radius:4px;
+                padding:4px 8px;cursor:pointer;color:var(--text-dim);font-size:11px;
+                white-space:nowrap;transition:all 0.15s"
+                onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+                onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'"
+        >⚡全取得</button>
+        <button onclick="event.stopPropagation();window.open('/data-viewer?race_id=${rid}','_blank')"
+                title="生JSONデータを表示"
+                style="background:none;border:1px solid var(--border);border-radius:4px;
+                padding:4px 8px;cursor:pointer;color:var(--text-dim);font-size:11px;
+                white-space:nowrap;transition:all 0.15s"
+                onmouseover="this.style.borderColor='var(--purple)';this.style.color='var(--purple)'"
+                onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'"
+        >📦JSON</button>
+      </div>
+    </td>`;
+
+    sourceKeys.forEach(key => {
+      const val = s[key];
+      const cellKey = `${rid}:${key}`;
+      const isLoading = loadingCells.has(cellKey) || loadingCells.has(`${rid}:all`);
+      const catLabel = (SOURCE_LABELS[key] || {}).label || key;
+      const clickLabel = `${race.venue}${race.round}R ${catLabel}`;
+
+      if (isLoading) {
+        html += `<td class="cell-loading"><span class="spinner"></span></td>`;
+        return;
+      }
+
+      if (key === 'horse_result' || key === 'horse_pedigree') {
+        html += horseCellHtml(val, rid, clickLabel, key);
+        if (val && val.ok && val.fresh) { colCounts[key].ok++; colCounts[key].fresh++; }
+        else if (val && val.ok && !val.fresh) { colCounts[key].ok++; colCounts[key].stale++; }
+        else if (val && val.scraped > 0) colCounts[key].partial++;
+        else colCounts[key].empty++;
+        return;
+      }
+
+      if (!val || typeof val !== 'object') {
+        html += `<td class="cell-empty clickable"
+                     onclick="triggerScrape('${rid}','${key}','${clickLabel}')">—</td>`;
+        colCounts[key].empty++;
+        return;
+      }
+
+      html += sourceCellHtml(val, rid, key, clickLabel);
+      if (val.na && !val.gcs) { colCounts[key].na++; }
+      else if (val.ok && val.fresh) { colCounts[key].ok++; colCounts[key].fresh++; }
+      else if (val.ok && !val.fresh) { colCounts[key].ok++; colCounts[key].stale++; }
+      else colCounts[key].empty++;
+    });
+
+    html += '</tr>';
+  });
+
+  html += '<tr class="summary-row"><td>合計</td>';
+  sourceKeys.forEach(key => {
+    const c = colCounts[key];
+    const applicable = c.ok + c.partial + c.empty;
+    let cls = 'sum-empty';
+    if (applicable === 0 && c.na > 0) cls = 'sum-ok';
+    else if (c.fresh === applicable) cls = 'sum-ok';
+    else if (c.ok === applicable && c.stale > 0) cls = 'sum-partial';
+    else if (c.ok > 0 || c.partial > 0) cls = 'sum-partial';
+    const freshLabel = c.stale > 0 ? `<br><span style="font-size:10px;color:var(--stale)">古:${c.stale}</span>` : '';
+    const naLabel = c.na > 0 ? `<br><span style="font-size:9px;color:rgba(140,140,160,0.6)">N/A:${c.na}</span>` : '';
+    html += `<td class="${cls}">${c.ok}/${applicable}${freshLabel}${naLabel}</td>`;
+  });
+  html += '</tr>';
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function openDataViewer(raceId, category) {
+  window.open(`/data-viewer?race_id=${raceId}&category=${category}`, '_blank');
+}
+
+function sourceCellHtml(info, raceId, category, clickLabel) {
+  const gcs = info.gcs;
+  const hasHtml = info.html;
+  const fresh = info.fresh;
+  const na = info.na || false;
+  const scrapedAt = info.scraped_at_jst || '';
+  const structVer = info.structure_version;
+  const structChanged = info.structure_changed_at || '';
+
+  if (na && !gcs) {
+    return `<td class="cell-na" title="このレースタイプでは対象外">N/A</td>`;
+  }
+
+  const htmlDot = hasHtml ? '<span class="html-dot" title="HTMLアーカイブ有"></span>' : '';
+  const click = `onclick="triggerScrape('${raceId}','${category}','${clickLabel}')"`;
+  const viewClick = `ondblclick="openDataViewer('${raceId}','${category}')"`;
+  const viewTitle = gcs ? ' (ダブルクリックでJSON表示)' : '';
+  const timeTag = scrapedAt ? `<span class="freshness-tag ${fresh ? 'fresh' : 'stale'}">${scrapedAt}</span>` : '';
+  const verTag = structVer != null ? ` [構造v${structVer}]` : '';
+
+  if (gcs && fresh) {
+    return `<td class="cell-ok clickable" ${click} ${viewClick}
+                title="構造準拠${verTag} 取得:${scrapedAt}${viewTitle}">✓${htmlDot}${timeTag}</td>`;
+  }
+  if (gcs && !fresh) {
+    return `<td class="cell-stale clickable" ${click} ${viewClick}
+                title="旧構造${verTag} 取得:${scrapedAt} — クリックで再取得${viewTitle}">⟳${htmlDot}${timeTag}</td>`;
+  }
+  if (hasHtml) {
+    return `<td class="cell-empty clickable" ${click} title="取得: ${clickLabel}">—${htmlDot}</td>`;
+  }
+  return `<td class="cell-empty clickable" ${click} title="取得: ${clickLabel}">—</td>`;
+}
+
+function horseCellHtml(info, raceId, clickLabel, category) {
+  category = category || 'horse_result';
+  const scrapeTarget = category === 'horse_pedigree' ? 'horse_pedigree' : 'horse_result';
+  const click = `onclick="triggerScrape('${raceId}','${scrapeTarget}','${clickLabel}')"`;
+  if (!info) return `<td class="cell-empty clickable" ${click}>—</td>`;
+  const total = info.total || 0;
+  const scraped = info.scraped || 0;
+  const fresh = info.fresh || false;
+  const freshCount = info.fresh_count || 0;
+
+  if (total === 0) return `<td class="cell-empty clickable" ${click} title="出馬表を先に取得">—</td>`;
+  if (scraped >= total && fresh) {
+    return `<td class="cell-ok clickable" ${click} title="全馬 構造準拠">✓<span class="cell-sub">${scraped}/${total}頭</span></td>`;
+  }
+  if (scraped >= total && !fresh) {
+    return `<td class="cell-stale clickable" ${click} title="全馬取得済だが一部旧構造 (準拠:${freshCount}/${total})">⟳<span class="cell-sub">${freshCount}/${total}準拠</span></td>`;
+  }
+  if (scraped > 0) {
+    return `<td class="cell-partial clickable" ${click} title="取得: ${clickLabel}">${scraped}/${total}<span class="cell-sub">取得中</span></td>`;
+  }
+  return `<td class="cell-empty clickable" ${click} title="取得: ${clickLabel}">—<span class="cell-sub">0/${total}</span></td>`;
+}
+
+/* ── 構造チェック ── */
+
+const CATEGORY_LABELS = {
+  race_result: 'レース結果',
+  race_shutuba: '出馬表',
+  race_index: 'タイム指数',
+  race_shutuba_past: '馬柱',
+  race_odds: 'オッズ',
+  race_paddock: 'パドック',
+  race_barometer: '偏差値',
+  race_oikiri: '追い切り',
+  horse_result: '馬成績',
+  horse_pedigree: '血統',
+  horse_profile: '馬プロフィール',
+  horse_ped: '馬血統',
+  horse_result_html: '馬戦績HTML',
+};
+
+async function loadStructureStatus() {
+  try {
+    const res = await fetch(API_BASE + '/api/structure-status');
+    const data = await res.json();
+    renderStructureStatus(data);
+  } catch (e) {
+    console.error('structure status error:', e);
+  }
+  try {
+    const res2 = await fetch(API_BASE + '/api/structure-fingerprints');
+    const fps = await res2.json();
+    renderStructureFingerprints(fps);
+  } catch (e) {
+    console.error('structure fingerprints error:', e);
+  }
+}
+
+function renderStructureStatus(data) {
+  const sevEl = document.getElementById('structureSeverity');
+  const metaEl = document.getElementById('structureMeta');
+
+  if (data.status === 'no_data') {
+    sevEl.className = 'structure-severity sev-none';
+    sevEl.textContent = '未実行';
+    metaEl.innerHTML = '<span>まだ構造チェックが実行されていません</span>';
+    return;
+  }
+
+  const sev = data.severity || 'OK';
+  const cls = sev === 'CRITICAL' ? 'sev-critical' : sev === 'WARNING' ? 'sev-warning' : 'sev-ok';
+  sevEl.className = `structure-severity ${cls}`;
+  sevEl.textContent = sev;
+
+  const ts = data.timestamp ? new Date(data.timestamp).toLocaleString('ja-JP') : '—';
+  let meta = `<span>最終チェック: ${ts}</span>`;
+  meta += `<span>チェック数: ${data.checked || 0}/${data.total_categories || 0}</span>`;
+  if (data.critical > 0) meta += `<span style="color:var(--err)">CRITICAL: ${data.critical}</span>`;
+  if (data.warning > 0) meta += `<span style="color:var(--warn)">WARNING: ${data.warning}</span>`;
+  if (data.reparsed_categories && data.reparsed_categories.length > 0) {
+    meta += `<span style="color:var(--accent)">再パース: ${data.reparsed_categories.length}カテゴリ</span>`;
+  }
+  metaEl.innerHTML = meta;
+}
+
+function renderStructureFingerprints(fps) {
+  const grid = document.getElementById('structureGrid');
+  if (!fps || Object.keys(fps).length === 0) {
+    grid.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">フィンガープリントなし — チェック実行後に表示されます</span>';
+    return;
+  }
+
+  let html = '';
+  for (const [cat, fp] of Object.entries(fps)) {
+    const label = CATEGORY_LABELS[cat] || cat;
+    const selResults = fp.selector_results || {};
+    let allOk = true;
+    let hasWarn = false;
+    const isNotPublished = fp.not_published === true;
+
+    let selHtml = '';
+    if (isNotPublished) {
+      selHtml = '<div class="sel-ok" style="opacity:0.7">⏳ データ未公開 (公開待ち)</div>';
+    } else {
+      for (const [name, probe] of Object.entries(selResults)) {
+        if (!probe.matched && probe.optional) {
+          selHtml += `<div class="sel-ok" style="opacity:0.6">— ${name} (optional)</div>`;
+        } else if (!probe.matched) {
+          selHtml += `<div class="sel-fail">✗ ${name}</div>`;
+          allOk = false;
+        } else if (probe.index > 0 && !probe.optional) {
+          selHtml += `<div class="sel-warn">⚠ ${name} (fallback #${probe.index})</div>`;
+          hasWarn = true;
+        } else {
+          selHtml += `<div class="sel-ok">✓ ${name}</div>`;
+        }
+      }
+    }
+
+    const cardCls = isNotPublished ? 'card-ok' : !allOk ? 'card-critical' : hasWarn ? 'card-warn' : 'card-ok';
+    const ts = fp.timestamp ? new Date(fp.timestamp).toLocaleDateString('ja-JP') : '';
+    const colInfo = fp.column_count > 0 ? ` | cols:${fp.column_count}` : '';
+    const rowInfo = fp.row_count > 0 ? ` | rows:${fp.row_count}` : '';
+
+    const verInfo = structureVersions[cat];
+    const verTag = verInfo ? `v${verInfo.version}` : '—';
+    const verChanged = verInfo?.changed_at
+      ? new Date(verInfo.changed_at).toLocaleDateString('ja-JP')
+      : '';
+
+    html += `<div class="structure-card ${cardCls}">
+      <div class="cat-name">${label} <span style="font-size:10px;font-weight:400;color:var(--accent)">${verTag}</span></div>
+      <div class="selectors">${selHtml}</div>
+      <div style="font-size:10px;color:var(--text-dim);margin-top:4px">${ts}${colInfo}${rowInfo}${verChanged ? ' | 最終変更:'+verChanged : ''}</div>
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+async function triggerStructureCheck() {
+  const btn = document.getElementById('structureCheckBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ チェック中...';
+  showToast('構造チェックを開始...', 'info');
+
+  try {
+    const res = await fetch(API_BASE + '/api/structure-check', { method: 'POST' });
+    const data = await res.json();
+
+    if (data.status === 'already_running') {
+      showToast('構造チェックは既に実行中です', 'info');
+    } else if (data.status === 'started') {
+      pollStructureCheck(data.job_id);
+      return;
+    }
+  } catch (e) {
+    showToast(`エラー: ${e.message}`, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = '手動チェック';
+}
+
+async function pollStructureCheck(jobId) {
+  const poll = async () => {
+    try {
+      const res = await fetch(API_BASE + '/api/scrape-jobs');
+      const data = await res.json();
+      const job = (data.jobs || []).find(j => j.job_id === jobId);
+
+      if (!job || job.status === 'done') {
+        showToast('構造チェック完了', 'success');
+        const btn = document.getElementById('structureCheckBtn');
+        btn.disabled = false;
+        btn.textContent = '手動チェック';
+        loadStructureStatus();
+        return;
+      }
+      if (job.status === 'error') {
+        showToast('構造チェック失敗', 'error');
+        const btn = document.getElementById('structureCheckBtn');
+        btn.disabled = false;
+        btn.textContent = '手動チェック';
+        return;
+      }
+      setTimeout(poll, 3000);
+    } catch {
+      setTimeout(poll, 5000);
+    }
+  };
+  setTimeout(poll, 2000);
+}
+
+loadStructureStatus();
+
+const urlParams = new URLSearchParams(window.location.search);
+const dateParam = urlParams.get('date') || urlParams.get('kaisai_date');
+if (dateParam && /^\d{8}$/.test(dateParam)) {
+  initWithDetailDate(dateParam);
+} else {
+  init();
+}
+</script>
+</body>
+</html>

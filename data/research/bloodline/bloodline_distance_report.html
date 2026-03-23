@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>血統×距離適性 研究レポート</title>
+<style>
+  :root {
+    --bg: #0a0e17; --surface: #131926; --surface2: #1a2235;
+    --border: #243049; --text: #c8d6e5; --text-dim: #6b7d95;
+    --accent: #3b82f6; --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg); color: var(--text); padding: 32px;
+    max-width: 1400px; margin: 0 auto;
+  }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  h2 { font-size: 20px; font-weight: 600; margin: 32px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 16px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px; }
+  .subtitle { font-size: 14px; color: var(--text-dim); margin-bottom: 24px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 20px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; font-size: 11px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 8px; border-bottom: 1px solid var(--border);
+  }
+  td { padding: 8px; border-bottom: 1px solid rgba(36,48,73,0.4); }
+  tr:hover { background: rgba(59,130,246,0.05); }
+  .heat { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 12px; min-width: 48px; text-align: center; }
+  .heat-high { background: rgba(34,197,94,0.2); color: var(--ok); }
+  .heat-mid { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .heat-low { background: rgba(239,68,68,0.12); color: var(--err); }
+  .sim-cell { font-weight: 600; }
+  .stat { display: inline-flex; flex-direction: column; align-items: center; background: var(--surface2); border-radius: 8px; padding: 12px 20px; min-width: 120px; }
+  .stat-val { font-size: 20px; font-weight: 700; }
+  .stat-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .stats-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .bar { height: 16px; border-radius: 4px; background: var(--accent); transition: width 0.3s; }
+  .bar-bg { height: 16px; border-radius: 4px; background: var(--surface2); width: 100%; overflow: hidden; }
+  .cluster-badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 12px;
+    background: rgba(59,130,246,0.15); color: var(--accent);
+  }
+</style>
+</head>
+<body>
+<h1>血統 × 距離適性 研究レポート</h1>
+<p class="subtitle">
+  データ: 1,306 出走 |
+  種牡馬: 194 |
+  母父: 318 |
+  距離帯: 5
+</p>
+
+<h2>1. 種牡馬 × 距離カテゴリ 複勝率ヒートマップ</h2>
+<div class="card">
+<h3>上位50種牡馬 (出走数順)</h3>
+<table>
+<thead><tr><th>種牡馬</th><th>短距離 (〜1400m)</th></tr></thead>
+<tbody>
+<tr><td><strong>ドレフォンDrefong(米)</strong></td><td><span class="heat heat-mid">30.6%</span></td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>2. 種牡馬ベスト距離推定 (TOP30)</h2>
+<div class="card">
+<table>
+<thead><tr><th>種牡馬</th><th>出走数</th><th>複勝率</th><th>ベスト距離</th><th>距離帯</th></tr></thead>
+<tbody>
+<tr><td><strong>ドレフォンDrefong(米)</strong></td><td>41</td><td>34.1%</td><td>455m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>ロードカナロア</strong></td><td>39</td><td>28.2%</td><td>164m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>キズナ</strong></td><td>35</td><td>25.7%</td><td>644m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>エピファネイア</strong></td><td>34</td><td>26.5%</td><td>889m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>サートゥルナーリア</strong></td><td>28</td><td>39.3%</td><td>545m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>リオンディーズ</strong></td><td>26</td><td>19.2%</td><td>360m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>シルバーステート</strong></td><td>24</td><td>12.5%</td><td>667m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>モーリス</strong></td><td>24</td><td>20.8%</td><td>0m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>キタサンブラック</strong></td><td>23</td><td>30.4%</td><td>1,457m</td><td>マイル (1400〜1800m)</td></tr><tr><td><strong>ブリックスアンドモルタルBricks and Mortar(米)</strong></td><td>23</td><td>34.8%</td><td>675m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>コントレイル</strong></td><td>23</td><td>17.4%</td><td>500m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>ゴールドシップ</strong></td><td>23</td><td>17.4%</td><td>2,175m</td><td>中距離 (1800〜2200m)</td></tr><tr><td><strong>シニスターミニスターSinister Minister(米)</strong></td><td>21</td><td>28.6%</td><td>0m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>オルフェーヴル</strong></td><td>21</td><td>28.6%</td><td>333m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>リアルスティール</strong></td><td>21</td><td>9.5%</td><td>1,000m</td><td>短距離 (〜1400m)</td></tr><tr><td><strong>ルヴァンスレーヴ</strong></td><td>20</td><td>25.0%</td><td>0m</td><td>短距離 (〜1400m)</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>3. 距離カテゴリ間 血統類似度</h2>
+<div class="card">
+<h3>コサイン類似度: 複勝種牡馬分布の類似性を測定</h3>
+<p style="color:var(--text-dim);font-size:12px;margin-bottom:12px">
+  値が 1.0 に近いほど、同じ血統の馬が活躍する距離帯。
+</p>
+<table>
+<thead><tr><th></th><th>短距離 (〜1400m)</th><th>マイル (1400〜1800m)</th><th>中距離 (1800〜2200m)</th><th>超長距離 (2800m〜)</th></tr></thead>
+<tbody>
+<tr><td><strong>短距離 (〜1400m)</strong></td><td class="sim-cell" style="color:var(--ok)">1.000</td><td class="sim-cell" style="color:var(--warn)">0.715</td><td class="sim-cell" style="color:var(--ok)">0.992</td><td class="sim-cell" style="color:var(--text-dim)">0.652</td></tr>
+<tr><td><strong>マイル (1400〜1800m)</strong></td><td class="sim-cell" style="color:var(--warn)">0.715</td><td class="sim-cell" style="color:var(--ok)">1.000</td><td class="sim-cell" style="color:var(--warn)">0.775</td><td class="sim-cell" style="color:var(--text-dim)">0.447</td></tr>
+<tr><td><strong>中距離 (1800〜2200m)</strong></td><td class="sim-cell" style="color:var(--ok)">0.992</td><td class="sim-cell" style="color:var(--warn)">0.775</td><td class="sim-cell" style="color:var(--ok)">1.000</td><td class="sim-cell" style="color:var(--text-dim)">0.577</td></tr>
+<tr><td><strong>超長距離 (2800m〜)</strong></td><td class="sim-cell" style="color:var(--text-dim)">0.652</td><td class="sim-cell" style="color:var(--text-dim)">0.447</td><td class="sim-cell" style="color:var(--text-dim)">0.577</td><td class="sim-cell" style="color:var(--ok)">1.000</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>4. 血統クラスタリング</h2>
+<div class="card">
+<h3>種牡馬を距離適性プロファイルで 1 クラスタに分類</h3>
+
+        <div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span class="cluster-badge">Cluster 0</span>
+            <strong>マイル (1400〜1800m)</strong>
+            <span style="color:var(--text-dim);font-size:12px">(1 種牡馬)</span>
+          </div>
+          
+            <div style="display:flex;align-items:center;gap:8px;margin:2px 0">
+              <span style="font-size:11px;min-width:140px;color:var(--text-dim)">短距離 (〜1400m)</span>
+              <div class="bar-bg" style="flex:1"><div class="bar" style="width:30.599999999999998%"></div></div>
+              <span style="font-size:11px;min-width:40px">30.6%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin:2px 0">
+              <span style="font-size:11px;min-width:140px;color:var(--text-dim)">マイル (1400〜1800m)</span>
+              <div class="bar-bg" style="flex:1"><div class="bar" style="width:100.0%"></div></div>
+              <span style="font-size:11px;min-width:40px">100.0%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin:2px 0">
+              <span style="font-size:11px;min-width:140px;color:var(--text-dim)">中距離 (1800〜2200m)</span>
+              <div class="bar-bg" style="flex:1"><div class="bar" style="width:50.0%"></div></div>
+              <span style="font-size:11px;min-width:40px">50.0%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin:2px 0">
+              <span style="font-size:11px;min-width:140px;color:var(--text-dim)">超長距離 (2800m〜)</span>
+              <div class="bar-bg" style="flex:1"><div class="bar" style="width:50.0%"></div></div>
+              <span style="font-size:11px;min-width:40px">50.0%</span>
+            </div>
+        </div>
+</div>
+
+<h2>5. 血統特徴量の予測寄与度</h2>
+<div class="card">
+<h3>血統情報のみ (sire_enc, dam_sire_enc, distance) で複勝を予測した AUC</h3>
+<div class="stats-row">
+<div class="stat"><span class="stat-val" style="color:var(--ok)">0.8237</span><span class="stat-label">短距離 (〜1400m) (n=1,008)</span></div><div class="stat"><span class="stat-val" style="color:var(--ok)">0.7681</span><span class="stat-label">中距離 (1800〜2200m) (n=142)</span></div><div class="stat"><span class="stat-val" style="color:var(--ok)">0.8611</span><span class="stat-label">全体 (n=1,306)</span></div>
+</div>
+<p style="font-size:12px;color:var(--text-dim)">
+  AUC 0.50 = ランダム、0.55+ で血統に有意な予測力あり。
+  距離帯によって血統の寄与度が異なることが確認できれば、距離×血統の交互作用特徴量が有効。
+</p>
+</div>
+
+<h2>6. 考察・示唆</h2>
+<div class="card">
+<ul style="font-size:14px;line-height:1.8;padding-left:20px">
+  <li><strong>血統類似度マトリクス</strong>: 隣接する距離帯ほど血統構成が似る傾向があれば、距離適性は連続的</li>
+  <li><strong>クラスタ分析</strong>: スプリンター血統/ステイヤー血統の明確な分離は、血統特徴量の有効性を裏付ける</li>
+  <li><strong>予測寄与度</strong>: AUC が特定距離帯で高い場合、その距離帯では血統が重要な予測因子</li>
+  <li><strong>実践的示唆</strong>: 父×母父の交互作用特徴量や、距離×血統クラスタの交差特徴量を feature_builder に追加することで精度向上の可能性</li>
+</ul>
+</div>
+
+</body>
+</html>

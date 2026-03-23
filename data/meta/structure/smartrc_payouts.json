@@ -1,0 +1,143 @@
+{
+  "category": "smartrc_payouts",
+  "timestamp": "2026-03-18T15:56:43.856403",
+  "sample_id": "smartrc_payouts",
+  "selector_results": {
+    "rcode": {
+      "selector": "json_key:rcode",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "place": {
+      "selector": "json_key:place",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "rno": {
+      "selector": "json_key:rno",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "entry": {
+      "selector": "json_key:entry",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "range": {
+      "selector": "json_key:range",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "track": {
+      "selector": "json_key:track",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "trackkind": {
+      "selector": "json_key:trackkind",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "ground": {
+      "selector": "json_key:ground",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "weather": {
+      "selector": "json_key:weather",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "pay_tan": {
+      "selector": "json_key:pay_tan",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "pay_fuku": {
+      "selector": "json_key:pay_fuku",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "pay_umaren": {
+      "selector": "json_key:pay_umaren",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "pay_wide": {
+      "selector": "json_key:pay_wide",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "pay_umatan": {
+      "selector": "json_key:pay_umatan",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "pay_3fuku": {
+      "selector": "json_key:pay_3fuku",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "pay_3tan": {
+      "selector": "json_key:pay_3tan",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "urlist": {
+      "selector": "json_key:urlist",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "laptimes": {
+      "selector": "json_key:laptimes",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "positions": {
+      "selector": "json_key:positions",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    }
+  },
+  "row_count": 72,
+  "column_count": 14,
+  "column_classes": []
+}

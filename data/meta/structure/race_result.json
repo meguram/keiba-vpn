@@ -1,0 +1,60 @@
+{
+  "category": "race_result",
+  "timestamp": "2026-03-19T09:43:11.073099",
+  "sample_id": "202606020601",
+  "selector_results": {
+    "result_table": {
+      "selector": "table.race_table_01",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "race_name": {
+      "selector": "dl.racedata h1",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "race_data": {
+      "selector": "dl.racedata dd",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    },
+    "pay_table": {
+      "selector": "table.pay_table_01",
+      "matched": true,
+      "index": 0,
+      "element_count": 2,
+      "optional": false
+    }
+  },
+  "row_count": 17,
+  "column_count": 21,
+  "column_classes": [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    ""
+  ]
+}

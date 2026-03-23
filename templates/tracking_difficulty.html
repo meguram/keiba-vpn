@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>追走難度 | ML-AutoPilot Keiba</title>
+<style>
+  :root {
+    --bg: #0a0e17; --surface: #131926; --surface2: #1a2235;
+    --border: #243049; --text: #c8d6e5; --text-dim: #6b7d95;
+    --accent: #3b82f6; --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+    --purple: #a78bfa; --key: #7dd3fc; --num: #fbbf24;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
+
+  .page-header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .page-header h1 { font-size: 16px; font-weight: 700; color: #fff; }
+  .page-header .subtitle { font-size: 12px; color: var(--text-dim); }
+
+  .controls {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .controls label { font-size: 12px; color: var(--text-dim); }
+  .controls select, .controls input {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 10px; border-radius: 5px; font-size: 12px;
+  }
+  .controls button {
+    background: var(--accent); color: #fff; border: none; padding: 7px 16px;
+    border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: 600;
+  }
+  .controls button:hover { background: #2563eb; }
+  .controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #statusMsg { font-size: 11px; color: var(--text-dim); }
+
+  .content { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+
+  .race-meta {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 18px; margin-bottom: 20px; display: flex; gap: 20px; flex-wrap: wrap;
+    align-items: center;
+  }
+  .race-meta .race-name { font-size: 16px; font-weight: 700; color: #fff; }
+  .race-meta .race-tag {
+    font-size: 11px; padding: 3px 8px; border-radius: 4px;
+    background: rgba(167,139,250,0.15); color: var(--purple); font-weight: 600;
+  }
+
+  /* ── ゲートビジュアライゼーション ── */
+  .gate-viz {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 18px; margin-bottom: 20px; overflow-x: auto;
+  }
+  .gate-viz h3 { font-size: 13px; font-weight: 600; color: var(--purple); margin-bottom: 14px; }
+  .gate-row {
+    display: flex; gap: 4px; align-items: flex-end; justify-content: center;
+    min-height: 180px; padding-bottom: 8px;
+  }
+  .gate-slot {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    min-width: 60px; cursor: pointer; transition: transform 0.2s;
+  }
+  .gate-slot:hover { transform: translateY(-4px); }
+  .gate-bar {
+    width: 40px; border-radius: 6px 6px 0 0; transition: height 0.6s ease;
+    position: relative;
+  }
+  .gate-bar-label {
+    position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; font-weight: 700; white-space: nowrap;
+  }
+  .gate-num {
+    width: 28px; height: 28px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-size: 12px; font-weight: 800;
+  }
+  .gate-name { font-size: 9.5px; color: var(--text-dim); white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; max-width: 60px; text-align: center; }
+  .gate-ease { font-size: 10px; font-weight: 700; }
+
+  /* ── カードグリッド ── */
+  .cards-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px; margin-bottom: 24px;
+  }
+  .td-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .td-card:hover { border-color: var(--accent); box-shadow: 0 0 20px rgba(59,130,246,0.1); }
+  .td-card-header {
+    padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .td-card-num {
+    width: 32px; height: 32px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-size: 14px; font-weight: 800;
+    flex-shrink: 0;
+  }
+  .td-card-info { flex: 1; min-width: 0; }
+  .td-card-name { font-size: 14px; font-weight: 700; color: #fff; }
+  .td-card-style {
+    font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 600;
+    display: inline-block; margin-top: 2px;
+  }
+  .style-nige { background: rgba(239,68,68,0.15); color: var(--err); }
+  .style-senkou { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .style-sashi { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .style-oikomi { background: rgba(167,139,250,0.15); color: var(--purple); }
+
+  .td-ease-badge {
+    font-size: 18px; font-weight: 800; padding: 4px 12px; border-radius: 8px;
+    text-align: center; min-width: 60px; flex-shrink: 0;
+  }
+  .ease-very-easy { background: rgba(34,197,94,0.15); color: var(--ok); }
+  .ease-easy { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .ease-normal { background: rgba(107,125,149,0.1); color: var(--text-dim); }
+  .ease-hard { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .ease-very-hard { background: rgba(239,68,68,0.15); color: var(--err); }
+
+  .td-card-body { padding: 12px 14px; }
+  .td-factor-group { margin-bottom: 10px; }
+  .td-factor-title {
+    font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 5px; display: flex; align-items: center; gap: 6px;
+  }
+  .td-factor-title svg { width: 12px; height: 12px; opacity: 0.6; }
+  .td-factor-row {
+    display: flex; align-items: center; gap: 8px; padding: 3px 0;
+    font-size: 11.5px;
+  }
+  .td-factor-label { color: var(--text-dim); min-width: 80px; }
+  .td-factor-value { font-weight: 600; }
+  .td-bar-container { flex: 1; height: 6px; background: rgba(36,48,73,0.5); border-radius: 3px; overflow: hidden; }
+  .td-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+
+  /* ── サマリーテーブル ── */
+  .summary-section { margin-top: 24px; }
+  .summary-section h3 { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 12px; }
+  .summary-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+    background: var(--surface); border-radius: 8px; overflow: hidden;
+  }
+  .summary-table th {
+    background: var(--surface2); padding: 10px 12px; text-align: left;
+    font-weight: 600; color: var(--text-dim); font-size: 11px;
+    border-bottom: 1px solid var(--border);
+  }
+  .summary-table td {
+    padding: 10px 12px; border-bottom: 1px solid rgba(36,48,73,0.4);
+  }
+  .summary-table tr:hover td { background: rgba(59,130,246,0.04); }
+  .summary-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .waku-1 { background: #f5f5f5; color: #222; }
+  .waku-2 { background: #111; color: #fff; border: 1px solid #555; }
+  .waku-3 { background: #e53935; color: #fff; }
+  .waku-4 { background: #1e88e5; color: #fff; }
+  .waku-5 { background: #fdd835; color: #222; }
+  .waku-6 { background: #43a047; color: #fff; }
+  .waku-7 { background: #f57c00; color: #fff; }
+  .waku-8 { background: #ec407a; color: #fff; }
+
+  .empty { color: var(--text-dim); text-align: center; padding: 60px 20px; font-size: 14px; }
+
+  /* ── ペース分析セクション ── */
+  .pace-section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 18px; margin-bottom: 20px;
+  }
+  .pace-section h3 { font-size: 13px; font-weight: 600; color: var(--purple); margin-bottom: 10px; }
+  .pace-bars { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .pace-item { display: flex; align-items: center; gap: 6px; }
+  .pace-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .pace-label { font-size: 11px; color: var(--text-dim); }
+  .pace-count { font-size: 13px; font-weight: 700; }
+
+  /* ── ペース予想 ── */
+  .pace-prediction {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px; margin-bottom: 20px;
+  }
+  .pace-prediction h3 { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: var(--purple); }
+  .pace-type-badge {
+    display: inline-block; padding: 6px 16px; border-radius: 6px;
+    font-size: 14px; font-weight: 700; margin-right: 10px;
+  }
+  .pace-type-high { background: var(--err); color: #fff; }
+  .pace-type-mid { background: var(--accent); color: #fff; }
+  .pace-type-slow { background: var(--ok); color: #fff; }
+  .pace-meter {
+    height: 12px; background: linear-gradient(90deg, var(--ok) 0%, var(--accent) 50%, var(--err) 100%);
+    border-radius: 6px; position: relative; margin: 14px 0;
+  }
+  .pace-meter-pointer {
+    position: absolute; top: -4px; width: 4px; height: 20px;
+    background: #fff; border: 2px solid var(--border); border-radius: 2px;
+  }
+  .pace-pattern { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+
+  /* ── 位置取り予測 ── */
+  .position-flow {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px; margin-bottom: 20px;
+  }
+  .position-flow h3 { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: var(--key); }
+  .position-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .position-table th { background: rgba(59,130,246,0.08); padding: 8px 6px; text-align: left;
+    font-size: 10px; font-weight: 600; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+  .position-table td { padding: 8px 6px; border-bottom: 1px solid rgba(46,51,72,0.3); }
+  .position-table tr:hover { background: rgba(59,130,246,0.04); }
+  .pos-num { display: inline-block; min-width: 20px; text-align: center;
+    padding: 2px 6px; border-radius: 3px; font-weight: 600; }
+  .pos-arrow { font-size: 10px; color: var(--text-dim); margin: 0 2px; }
+  .flow-badge {
+    display: inline-block; padding: 2px 6px; border-radius: 3px;
+    font-size: 10px; font-weight: 600;
+  }
+  .flow-forward { background: var(--ok); color: #000; }
+  .flow-maintain { background: var(--accent); color: #fff; }
+  .flow-backward { background: var(--warn); color: #000; }
+  .stamina-warn { color: var(--err); font-size: 10px; }
+  .confidence-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .confidence-fill { height: 100%; background: var(--accent); }
+
+  /* ── ラップタイム表示 ── */
+  .lap-times {
+    display: flex; gap: 20px; margin-top: 14px; padding: 12px;
+    background: rgba(59,130,246,0.05); border-radius: 8px;
+  }
+  .lap-time-item { display: flex; flex-direction: column; align-items: center; }
+  .lap-label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+  .lap-value { font-size: 20px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+  .lap-unit { font-size: 12px; color: var(--text-dim); margin-left: 2px; }
+
+  /* ── ポジションマッピング ── */
+  .position-map {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px; margin-bottom: 20px;
+  }
+  .position-map h3 { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: #7dd3fc; }
+  .map-stages {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+  }
+  .map-stage {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 12px; min-height: 520px; min-width: 320px;
+  }
+  .stage-label {
+    font-size: 12px; font-weight: 600; color: var(--text-dim);
+    text-align: center; margin-bottom: 12px; text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .track-container {
+    position: relative; height: 480px;
+    background: linear-gradient(to right,
+      rgba(239,68,68,0.08) 0%,
+      rgba(239,68,68,0.03) 10%,
+      rgba(59,130,246,0.02) 50%,
+      rgba(59,130,246,0.01) 100%);
+    border-radius: 6px; overflow: visible;
+    border-left: 3px solid rgba(239,68,68,0.5);
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+  }
+  .track-rachi {
+    position: absolute; left: 0; width: 3px; height: 100%;
+    background: linear-gradient(to bottom,
+      rgba(239,68,68,0.6) 0%,
+      rgba(239,68,68,0.3) 100%);
+    box-shadow: 0 0 10px rgba(239,68,68,0.3);
+  }
+  .track-rachi::before {
+    content: 'ラチ'; position: absolute; left: 8px; top: 8px;
+    font-size: 10px; color: var(--err); font-weight: 600;
+    writing-mode: vertical-rl;
+  }
+  .track-line {
+    position: absolute; left: 50%; width: 1px; height: 100%;
+    background: rgba(255,255,255,0.05); transform: translateX(-50%);
+  }
+  .horse-marker {
+    position: absolute;
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+    cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    border: 1.5px solid rgba(255,255,255,0.4);
+  }
+  .horse-marker:hover {
+    transform: scale(1.4);
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+    border: 2px solid rgba(255,255,255,0.8);
+  }
+  .horse-marker-group {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .horse-marker.waku-1 { background: #fff; color: #000; }
+  .horse-marker.waku-2 { background: #000; color: #fff; }
+  .horse-marker.waku-3 { background: #e74c3c; color: #fff; }
+  .horse-marker.waku-4 { background: #3498db; color: #fff; }
+  .horse-marker.waku-5 { background: #f1c40f; color: #000; }
+  .horse-marker.waku-6 { background: #2ecc71; color: #fff; }
+  .horse-marker.waku-7 { background: #e67e22; color: #fff; }
+  .horse-marker.waku-8 { background: #ff69b4; color: #fff; }
+  .position-label {
+    position: absolute; right: 8px; font-size: 9px; color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 3px;
+    font-weight: 600; transform: translateY(-50%);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .content { padding: 16px; }
+    .controls { flex-direction: column; align-items: stretch; gap: 8px; }
+    .controls > * { width: 100%; }
+    .controls button { width: 100%; }
+    .cards-grid { grid-template-columns: 1fr; }
+    .gate-viz { overflow-x: scroll; }
+    .gate-row { justify-content: flex-start; min-width: 800px; }
+    .position-table { font-size: 10px; }
+    .position-table th, .position-table td { padding: 6px 4px; }
+  }
+
+  @media (max-width: 480px) {
+    .content { padding: 12px; }
+    .page-header { padding: 12px 16px; }
+    .page-header h1 { font-size: 14px; }
+    .controls { padding: 10px 16px; }
+    .race-meta { padding: 12px 14px; }
+    .race-meta .race-name { font-size: 14px; }
+    .gate-viz { padding: 14px; }
+    .td-card-header { padding: 10px 12px; }
+    .td-card-body { padding: 12px 14px; }
+    .pace-prediction { padding: 14px; }
+    .pace-type-badge { font-size: 12px; padding: 4px 12px; }
+    .lap-times { flex-direction: column; gap: 10px; }
+    .lap-time-item { flex-direction: row; justify-content: space-between; width: 100%; }
+    .lap-value { font-size: 18px; }
+    .position-flow { padding: 14px; }
+    .position-table { font-size: 9px; }
+    .position-table th, .position-table td { padding: 4px 2px; }
+    .pos-num { min-width: 18px; padding: 1px 4px; font-size: 9px; }
+    .flow-badge { font-size: 9px; padding: 1px 4px; }
+    .position-map { padding: 14px; }
+    .map-stages { grid-template-columns: 1fr; gap: 12px; }
+    .map-stage { min-height: 420px; }
+    .track-container { height: 400px; }
+    .horse-marker { width: 22px; height: 22px; font-size: 9px; }
+  }
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+
+<div class="page-header">
+  <div>
+    <h1>追走難度分析</h1>
+    <span class="subtitle">ゲート位置・隣枠・脚質構成から各馬のポジション取得容易度を推定</span>
+  </div>
+</div>
+
+<div class="controls">
+  <label>開催日:</label>
+  <select id="dateSelect" onchange="onDateChange()"><option value="">読み込み中...</option></select>
+  <label>会場:</label>
+  <select id="venueSelect" onchange="onVenueChange()"><option value="">-</option></select>
+  <label>レース:</label>
+  <select id="raceSelect" onchange="onRaceChange()"><option value="">-</option></select>
+  <button id="analyzeBtn" onclick="analyze()" disabled>分析実行</button>
+  <span id="statusMsg"></span>
+</div>
+
+<div class="content" id="mainContent">
+  <div class="empty" id="placeholder">レースを選択して「分析実行」をクリックしてください</div>
+</div>
+
+<script>
+// Version: 2026-03-20-v6 - トラック高さ拡大(480px)、縦間隔拡大(3-97%)、横並び一列方式
+let _allDates = [];
+let _racesForDate = [];
+let _selectedRaceId = '';
+let _dateRaceMap = {}; // 日付ごとのレース情報を保存
+/** 未来マージ後も参照する直近過去の日付一覧（/data-viewer と同じ scrape-dates 由来） */
+let _recentPastDatesForMerge = [];
+
+async function init() {
+  try {
+    await loadAllDates();
+  } catch (e) {
+    console.error('init error:', e);
+  }
+}
+
+async function loadAllDates() {
+  // /data-viewer と同じ GET /api/scrape-dates のみで先に開催日を確定（サーバ 60s キャッシュ共有・体感を揃える）
+  const resp = await fetch('/api/scrape-dates', { cache: 'no-store' });
+  const pastData = await resp.json();
+  const allPastDates = (pastData.dates || []).sort().reverse();
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const recentDates = allPastDates.filter(d => {
+    const dateStr = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+    const dateObj = new Date(dateStr);
+    dateObj.setHours(0, 0, 0, 0);
+    return dateObj < today && dateObj >= thirtyDaysAgo;
+  });
+  _recentPastDatesForMerge = recentDates;
+
+  _dateRaceMap = {};
+  _allDates = [...recentDates];
+
+  const sel = document.getElementById('dateSelect');
+  sel.innerHTML = '<option value="">日付を選択</option>';
+  recentDates.forEach(d => {
+    const label = `${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)}`;
+    sel.innerHTML += `<option value="${d}">${label}</option>`;
+  });
+
+  if (_allDates.length > 0) {
+    sel.value = _allDates[0];
+    await onDateChange();
+  }
+
+  // 未来は netkeiba 系で遅くなりがちなので、開催日の体感を data-viewer に合わせた後から非同期で先頭に追加
+  fetch(`/api/upcoming-races?_=${Date.now()}`)
+    .then(r => r.json())
+    .then(futureData => {
+      const futureRaces = (futureData.races || []).filter(r => r.race_id);
+      const futureDates = [...new Set(futureRaces.map(r => r.date))].sort();
+      futureDates.forEach(date => {
+        _dateRaceMap[date] = {
+          type: 'future',
+          races: futureRaces.filter(r => r.date === date)
+        };
+      });
+      const prev = sel.value;
+      const pastList = _recentPastDatesForMerge;
+      _allDates = [...futureDates, ...pastList];
+      sel.innerHTML = '<option value="">日付を選択</option>';
+      futureDates.forEach(d => {
+        const y = d.slice(0,4), m = d.slice(4,6), day = d.slice(6,8);
+        const raceCount = futureRaces.filter(r => r.date === d).length;
+        const offset = _dateRaceMap[d].races[0]?.day_offset || 0;
+        let label = '';
+        if (offset === 1) label = '🔴 明日';
+        else if (offset === 2) label = '🟡 明後日';
+        else label = `🟢 ${y}/${m}/${day}`;
+        sel.innerHTML += `<option value="${d}">${label} (${raceCount}R)</option>`;
+      });
+      pastList.forEach(d => {
+        const label = `${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)}`;
+        sel.innerHTML += `<option value="${d}">${label}</option>`;
+      });
+      if (_allDates.length === 0) return;
+      if (futureDates.length > 0) {
+        sel.value = futureDates[0];
+        onDateChange();
+      } else if (pastList.includes(prev)) {
+        sel.value = prev;
+      }
+    })
+    .catch(e => console.warn('[loadAllDates] upcoming', e));
+}
+
+async function onDateChange() {
+  const date = document.getElementById('dateSelect').value;
+  if (!date) return;
+
+  try {
+    // 未来のレースかどうかをチェック
+    if (_dateRaceMap[date] && _dateRaceMap[date].type === 'future') {
+      // 未来のレース（すでにロード済み）
+      _racesForDate = _dateRaceMap[date].races;
+      const venues = [...new Set(_racesForDate.map(r => r.venue))];
+      const vsel = document.getElementById('venueSelect');
+      vsel.innerHTML = '<option value="">全会場</option>';
+      for (const v of venues) {
+        vsel.innerHTML += `<option value="${v}">${v}</option>`;
+      }
+      populateRaces();
+    } else {
+      // 過去のレース（APIから取得）
+      const resp = await fetch(`/api/race-list/${date}`);
+      const data = await resp.json();
+      _racesForDate = data.races || [];
+      const venues = data.venues || [];
+      const vsel = document.getElementById('venueSelect');
+      vsel.innerHTML = '<option value="">全会場</option>';
+      for (const v of venues) {
+        vsel.innerHTML += `<option value="${v}">${v}</option>`;
+      }
+      populateRaces();
+    }
+  } catch (e) {
+    console.error('date change error:', e);
+  }
+}
+
+function onVenueChange() { populateRaces(); }
+
+function populateRaces() {
+  const venue = document.getElementById('venueSelect').value;
+  const rsel = document.getElementById('raceSelect');
+  const filtered = venue ? _racesForDate.filter(r => r.venue === venue) : _racesForDate;
+  rsel.innerHTML = '<option value="">レースを選択</option>';
+  for (const r of filtered) {
+    const label = `${r.round}R ${r.race_name || ''} (${r.venue})`;
+    rsel.innerHTML += `<option value="${r.race_id}">${label}</option>`;
+  }
+  document.getElementById('analyzeBtn').disabled = true;
+  _selectedRaceId = '';
+}
+
+function onRaceChange() {
+  _selectedRaceId = document.getElementById('raceSelect').value;
+  document.getElementById('analyzeBtn').disabled = !_selectedRaceId;
+}
+
+async function analyze() {
+  if (!_selectedRaceId) return;
+  const btn = document.getElementById('analyzeBtn');
+  const msg = document.getElementById('statusMsg');
+  btn.disabled = true;
+  msg.textContent = '分析中...';
+
+  try {
+    // 未来のレース（まだスクレイピングされていない可能性）の場合、先にデータ取得
+    const selectedDate = document.getElementById('dateSelect').value;
+    const isFutureRace = _dateRaceMap[selectedDate] && _dateRaceMap[selectedDate].type === 'future';
+
+    if (isFutureRace) {
+      msg.textContent = 'データ取得中...';
+      const raceInfo = _dateRaceMap[selectedDate].races.find(r => r.race_id === _selectedRaceId);
+      if (raceInfo) {
+        // スクレイピングジョブをキューに追加
+        const queueResp = await fetch('/api/scrape-queue/add', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            race_id: _selectedRaceId,
+            date: raceInfo.date,
+            venue: raceInfo.venue,
+            round: raceInfo.round,
+            race_name: raceInfo.race_name,
+            types: ['race_shutuba', 'horse_result', 'race_odds']
+          })
+        });
+        const queueData = await queueResp.json();
+
+        if (queueData.status === 'queued') {
+          msg.textContent = `キュー待ち (${queueData.position}番目)...`;
+          // ポーリングでジョブ完了を待つ
+          await waitForScrapeComplete(_selectedRaceId, msg);
+        } else if (queueData.status === 'running') {
+          msg.textContent = 'データ取得中...';
+          await waitForScrapeComplete(_selectedRaceId, msg);
+        }
+      }
+    }
+
+    msg.textContent = '分析中...';
+    const resp = await fetch(`/api/race/${_selectedRaceId}/tracking-difficulty`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    renderResults(data);
+    msg.textContent = '完了';
+  } catch (e) {
+    msg.textContent = `エラー: ${e.message}`;
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function waitForScrapeComplete(raceId, msgElement) {
+  // 最大5分待機
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 5000)); // 5秒ごとにポーリング
+
+    const statusResp = await fetch('/api/scrape-queue/status');
+    const statusData = await statusResp.json();
+
+    // 該当ジョブを探す
+    const job = statusData.jobs?.find(j => j.race_id === raceId);
+    if (!job) break; // ジョブが見つからない = 完了またはエラー
+
+    if (job.status === 'completed') {
+      msgElement.textContent = 'データ取得完了';
+      break;
+    } else if (job.status === 'failed') {
+      throw new Error(`スクレイピング失敗: ${job.error || '不明'}`);
+    } else if (job.status === 'running') {
+      msgElement.textContent = 'データ取得中...';
+    } else {
+      const pos = statusData.jobs.filter(j => j.status === 'pending').findIndex(j => j.race_id === raceId) + 1;
+      if (pos > 0) {
+        msgElement.textContent = `キュー待ち (${pos}番目)...`;
+      }
+    }
+  }
+}
+
+function easeClass(label) {
+  if (label === '非常に楽') return 'ease-very-easy';
+  if (label === '楽') return 'ease-easy';
+  if (label === '普通') return 'ease-normal';
+  if (label === 'やや困難') return 'ease-hard';
+  return 'ease-very-hard';
+}
+
+function easeColor(pct) {
+  if (pct >= 75) return 'var(--ok)';
+  if (pct >= 60) return 'var(--accent)';
+  if (pct >= 45) return 'var(--text-dim)';
+  if (pct >= 30) return 'var(--warn)';
+  return 'var(--err)';
+}
+
+function styleClass(style) {
+  if (style === '逃げ') return 'style-nige';
+  if (style === '先行') return 'style-senkou';
+  if (style === '差し') return 'style-sashi';
+  return 'style-oikomi';
+}
+
+function wakuClass(bn) {
+  return bn >= 1 && bn <= 8 ? `waku-${bn}` : '';
+}
+
+function renderResults(data) {
+  const main = document.getElementById('mainContent');
+  if (!data.entries || data.entries.length === 0) {
+    main.innerHTML = '<div class="empty">データが不足しています</div>';
+    return;
+  }
+
+  const entries = data.entries;
+  const byHorseNum = [...entries].sort((a, b) => a.horse_number - b.horse_number);
+
+  let html = '';
+
+  // Race meta
+  html += `<div class="race-meta">
+    <span class="race-name">${data.race_name || data.race_id}</span>
+    <span class="race-tag">${data.venue || ''} ${data.surface || ''}${data.distance || ''}m ${data.track_condition || ''}</span>
+    <span class="race-tag">${data.field_size}頭</span>
+  </div>`;
+
+  // Pace prediction
+  const pace = data.pace_prediction || {};
+  const paceType = pace.pace_type || 'ミドル';
+  const paceIndex = pace.pace_index || 50;
+  const pacePattern = pace.predicted_pattern || '';
+  const dist = pace.distribution || {};
+
+  let paceClass = 'pace-type-mid';
+  if (paceType === 'ハイ') paceClass = 'pace-type-high';
+  else if (paceType === 'スロー') paceClass = 'pace-type-slow';
+
+  const lapTimes = pace.lap_times || {};
+  const lap1f = lapTimes.first_1f || 0;
+  const lap3f = lapTimes.first_3f || 0;
+
+  html += `<div class="pace-prediction">
+    <h3>🏁 ペース予想</h3>
+    <div style="margin-bottom:10px">
+      <span class="pace-type-badge ${paceClass}">${paceType}ペース</span>
+      <span style="font-size:13px;color:var(--text-dim)">指数: ${paceIndex.toFixed(1)}</span>
+    </div>
+    <div class="pace-meter">
+      <div class="pace-meter-pointer" style="left:${paceIndex}%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-bottom:10px">
+      <span>スロー</span><span>ミドル</span><span>ハイ</span>
+    </div>
+    <div class="pace-pattern">${pacePattern}</div>
+
+    ${lap1f > 0 ? `
+    <div class="lap-times">
+      <div class="lap-time-item">
+        <div class="lap-label">前半1F (200m)</div>
+        <div class="lap-value">${lap1f.toFixed(1)}<span class="lap-unit">秒</span></div>
+      </div>
+      <div class="lap-time-item">
+        <div class="lap-label">前半3F (600m)</div>
+        <div class="lap-value">${lap3f.toFixed(1)}<span class="lap-unit">秒</span></div>
+      </div>
+    </div>
+    ` : ''}
+
+    <div class="pace-bars" style="margin-top:12px">
+      <div class="pace-item"><span class="pace-dot" style="background:var(--err)"></span>
+        <span class="pace-label">逃げ</span><span class="pace-count">${dist['逃げ'] || 0}</span></div>
+      <div class="pace-item"><span class="pace-dot" style="background:var(--warn)"></span>
+        <span class="pace-label">先行</span><span class="pace-count">${dist['先行'] || 0}</span></div>
+      <div class="pace-item"><span class="pace-dot" style="background:var(--accent)"></span>
+        <span class="pace-label">差し</span><span class="pace-count">${dist['差し'] || 0}</span></div>
+      <div class="pace-item"><span class="pace-dot" style="background:var(--purple)"></span>
+        <span class="pace-label">追込</span><span class="pace-count">${dist['追込'] || 0}</span></div>
+    </div>
+  </div>`;
+
+  // Position flow prediction
+  const posFlow = data.position_flow || [];
+  const fieldSize = data.field_size || entries.length || byHorseNum.length || 18;
+
+  if (posFlow.length > 0) {
+    html += `<div class="position-flow">
+      <h3>🔄 位置取り予測（序盤 → 中盤 → 終盤）</h3>
+      <table class="position-table">
+        <thead><tr>
+          <th>馬番</th><th>馬名</th><th>脚質</th>
+          <th>序盤</th><th></th><th>中盤</th><th></th><th>終盤</th>
+          <th>展開</th><th>信頼度</th>
+        </tr></thead>
+        <tbody>`;
+
+    for (const pf of posFlow) {
+      const pos = pf.positions || {};
+      const early = pos.early?.position || '-';
+      const mid = pos.mid?.position || '-';
+      const late = pos.late?.position || '-';
+      const flow = pf.flow_pattern || '';
+      const conf = pf.confidence || 0;
+      const warn = pf.stamina_concern ? '<span class="stamina-warn">⚠️</span>' : '';
+
+      let flowClass = 'flow-maintain';
+      if (flow.includes('追い込み') || flow.includes('差し')) flowClass = 'flow-forward';
+      else if (flow.includes('後退')) flowClass = 'flow-backward';
+
+      const bn = byHorseNum.find(e => e.horse_number === pf.horse_number)?.bracket_number || 0;
+
+      html += `<tr>
+        <td><span class="${wakuClass(bn)}" style="display:inline-block;width:24px;height:24px;line-height:24px;text-align:center;border-radius:50%;font-weight:700;font-size:11px">${pf.horse_number}</span></td>
+        <td style="font-weight:600;font-size:11px">${pf.horse_name || ''}</td>
+        <td><span class="${styleClass(pf.style || '')}" style="font-size:10px">${pf.style || ''}</span></td>
+        <td><span class="pos-num" style="background:rgba(239,68,68,0.15);color:var(--err)">${early}</span></td>
+        <td><span class="pos-arrow">→</span></td>
+        <td><span class="pos-num" style="background:rgba(59,130,246,0.15);color:var(--accent)">${mid}</span></td>
+        <td><span class="pos-arrow">→</span></td>
+        <td><span class="pos-num" style="background:rgba(34,197,94,0.15);color:var(--ok)">${late}</span></td>
+        <td><span class="flow-badge ${flowClass}">${flow}</span>${warn}</td>
+        <td style="width:60px">
+          <div class="confidence-bar"><div class="confidence-fill" style="width:${conf*100}%"></div></div>
+        </td>
+      </tr>`;
+    }
+
+    html += `</tbody></table></div>`;
+
+    // Position Mapping Visualization
+    html += `<div class="position-map">
+      <h3>📍 ポジションマッピング（序盤 → 中盤 → 終盤）</h3>
+      <div class="map-stages">`;
+
+    // 序盤・中盤・終盤の3つのステージ
+    ['early', 'mid', 'late'].forEach((stage, idx) => {
+      const stageLabels = {early: '序盤 (1-3F)', mid: '中盤 (4-7F)', late: '終盤 (直線)'};
+      html += `<div class="map-stage">
+        <div class="stage-label">${stageLabels[stage]}</div>
+        <div class="track-container" id="track-${stage}">
+          <div class="track-rachi"></div>
+          <div class="track-line"></div>`;
+
+      // 各馬の位置情報を収集
+      const horsesWithPos = posFlow.map(pf => {
+        const pos = pf.positions[stage];
+        if (!pos) return null;
+
+        const bn = byHorseNum.find(e => e.horse_number === pf.horse_number)?.bracket_number || 1;
+        return {
+          horse_number: pf.horse_number,
+          horse_name: pf.horse_name || '',
+          position: pos.position,
+          position_norm: pos.position_norm || 0,
+          bracket_number: bn
+        };
+      }).filter(h => h !== null);
+
+      // 同じ位置の馬をグループ化
+      const positionGroups = {};
+      horsesWithPos.forEach(h => {
+        if (!positionGroups[h.position]) {
+          positionGroups[h.position] = [];
+        }
+        positionGroups[h.position].push(h);
+      });
+
+      // 各グループを横一列に配置（同じ位置の馬は縦位置を完全に揃える）
+      Object.values(positionGroups).forEach(group => {
+        // 枠番順にソート（内枠が先）
+        group.sort((a, b) => a.bracket_number - b.bracket_number);
+
+        const groupSize = group.length;
+        const posNorm = group[0].position_norm;
+        const topPct = posNorm * 94 + 3; // 全員同じ縦位置（3%〜97%の範囲を使用）
+
+        // グループ全体の横幅を計算
+        const markerSize = 24; // px
+        const gap = 4; // px
+        const trackWidth = 280; // px（コンテナの概算幅）
+        const groupWidthPx = groupSize * markerSize + (groupSize - 1) * gap;
+        const groupWidthPct = (groupWidthPx / trackWidth) * 100;
+
+        // グループの開始位置（ラチから少し離れた位置）
+        const baseLeftPct = 8;
+
+        // 各馬を配置
+        group.forEach((horse, idx) => {
+          const offsetPx = idx * (markerSize + gap);
+          const offsetPct = (offsetPx / trackWidth) * 100;
+          const leftPct = baseLeftPct + offsetPct;
+
+          html += `<div class="horse-marker waku-${horse.bracket_number}"
+                        style="top:${topPct}%; left:${leftPct}%; transform: translateY(-50%);"
+                        title="${horse.horse_name} (${horse.position}番手) 枠${horse.bracket_number}"
+                        onclick="scrollToCard('card-${horse.horse_number}')">
+            ${horse.horse_number}
+          </div>`;
+        });
+      });
+
+      // 位置ラベル（1番手、5番手、10番手など）
+      const labelInterval = Math.max(1, Math.floor(fieldSize / 5));
+      for (let p = 1; p <= fieldSize; p += labelInterval) {
+        const posNorm = (p - 1) / Math.max(fieldSize - 1, 1);
+        const topPct = posNorm * 94 + 3;
+        html += `<div class="position-label" style="top:${topPct}%">${p}番手</div>`;
+      }
+
+      html += `</div></div>`;
+    });
+
+    html += `</div></div>`;
+  }
+
+  // Gate visualization
+  html += `<div class="gate-viz"><h3>ゲート配置 × 追走容易度</h3><div class="gate-row">`;
+  for (const e of byHorseNum) {
+    const td = e.tracking_difficulty || {};
+    const pct = td.ease_pct || 50;
+    const barH = Math.max(20, pct * 1.4);
+    const color = easeColor(pct);
+    const bn = e.bracket_number || 0;
+    html += `<div class="gate-slot" onclick="scrollToCard('card-${e.horse_number}')">
+      <div class="gate-bar" style="height:${barH}px;background:${color}20;border:1px solid ${color}">
+        <span class="gate-bar-label" style="color:${color}">${pct.toFixed(0)}</span>
+      </div>
+      <div class="gate-num ${wakuClass(bn)}">${e.horse_number}</div>
+      <div class="gate-name">${e.horse_name || ''}</div>
+      <div class="gate-ease" style="color:${color}">${td.label || '-'}</div>
+    </div>`;
+  }
+  html += `</div></div>`;
+
+  // Cards
+  html += '<div class="cards-grid">';
+  for (const e of entries) {
+    const td = e.tracking_difficulty || {};
+    const prof = e.profile || {};
+    const gate = e.gate_factors || {};
+    const neighbor = e.neighbor_factors || {};
+    const field = e.field_factors || {};
+    const pct = td.ease_pct || 50;
+    const bn = e.bracket_number || 0;
+
+    html += `<div class="td-card" id="card-${e.horse_number}">
+      <div class="td-card-header">
+        <div class="td-card-num ${wakuClass(bn)}">${e.horse_number}</div>
+        <div class="td-card-info">
+          <div class="td-card-name">${e.horse_name || '-'}</div>
+          <span class="td-card-style ${styleClass(prof.style || '差し')}">${prof.style || '-'}</span>
+          <span style="font-size:10px;color:var(--text-dim);margin-left:4px">安定度 ${((prof.stability || 0)*100).toFixed(0)}%</span>
+        </div>
+        <div class="td-ease-badge ${easeClass(td.label || '普通')}">
+          ${pct.toFixed(0)}
+        </div>
+      </div>
+      <div class="td-card-body">
+        <div class="td-factor-group">
+          <div class="td-factor-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            ゲート要因
+          </div>
+          <div class="td-factor-row">
+            <span class="td-factor-label">枠番</span>
+            <span class="td-factor-value">${bn}枠 ${e.horse_number}番</span>
+            <span style="font-size:10px;color:${gate.is_even_gate ? 'var(--ok)' : 'var(--text-dim)'};margin-left:6px">
+              ${gate.is_even_gate ? '偶数枠 ✓' : '奇数枠'}
+            </span>
+          </div>
+          <div class="td-factor-row">
+            <span class="td-factor-label">ゲート位置</span>
+            <span class="td-factor-value">${['内枠','中内枠','中外枠','外枠'][gate.gate_zone || 0]}</span>
+          </div>
+        </div>
+
+        <div class="td-factor-group">
+          <div class="td-factor-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+            隣枠影響
+          </div>
+          <div class="td-factor-row">
+            <span class="td-factor-label">スペース</span>
+            <div class="td-bar-container">
+              <div class="td-bar-fill" style="width:${Math.max(5, (neighbor.space_score + 0.5) * 100)}%;background:${neighbor.space_score > 0 ? 'var(--ok)' : 'var(--warn)'}"></div>
+            </div>
+            <span class="td-factor-value" style="color:${neighbor.space_score > 0 ? 'var(--ok)' : neighbor.space_score < -0.1 ? 'var(--warn)' : 'var(--text)'}">${neighbor.space_score > 0 ? '+' : ''}${(neighbor.space_score * 100).toFixed(0)}%</span>
+          </div>
+          <div class="td-factor-row">
+            <span class="td-factor-label">遅い隣馬</span>
+            <span class="td-factor-value" style="color:${neighbor.slow_neighbors >= 2 ? 'var(--ok)' : neighbor.slow_neighbors === 1 ? 'var(--accent)' : 'var(--text-dim)'}">
+              ${neighbor.slow_neighbors}/2
+              ${neighbor.slow_neighbors >= 2 ? ' ★ 進路確保しやすい' : ''}
+            </span>
+          </div>
+          <div class="td-factor-row">
+            <span class="td-factor-label">速い隣馬</span>
+            <span class="td-factor-value" style="color:${neighbor.fast_neighbors >= 1 ? 'var(--ok)' : 'var(--text-dim)'}">
+              ${neighbor.fast_neighbors}
+              ${neighbor.fast_neighbors >= 1 ? ' ★ 前に引っ張ってもらえる' : ''}
+            </span>
+          </div>
+        </div>
+
+        <div class="td-factor-group">
+          <div class="td-factor-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            競合状況
+          </div>
+          <div class="td-factor-row">
+            <span class="td-factor-label">同脚質馬</span>
+            <span class="td-factor-value" style="color:${field.same_style_count <= 2 ? 'var(--ok)' : field.same_style_count >= 5 ? 'var(--err)' : 'var(--warn)'}">
+              ${field.same_style_count}頭
+              ${field.same_style_count <= 2 ? ' ◎ 競合少' : field.same_style_count >= 5 ? ' △ 激戦' : ''}
+            </span>
+          </div>
+          <div class="td-factor-row">
+            <span class="td-factor-label">ペース圧</span>
+            <div class="td-bar-container">
+              <div class="td-bar-fill" style="width:${Math.min(100, field.pace_pressure * 50)}%;background:${field.pace_pressure > 1.5 ? 'var(--err)' : field.pace_pressure > 1 ? 'var(--warn)' : 'var(--ok)'}"></div>
+            </div>
+            <span class="td-factor-value">${field.pace_pressure?.toFixed(2) || '-'}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+
+  // Summary table
+  html += `<div class="summary-section"><h3>追走難度ランキング</h3>
+  <table class="summary-table"><thead><tr>
+    <th>順位</th><th>枠</th><th>馬番</th><th>馬名</th><th>脚質</th>
+    <th class="num">容易度</th><th>判定</th><th>偶数枠</th><th>遅い隣馬</th><th>速い隣馬</th><th>同脚質</th>
+  </tr></thead><tbody>`;
+  entries.forEach((e, i) => {
+    const td = e.tracking_difficulty || {};
+    const prof = e.profile || {};
+    const gate = e.gate_factors || {};
+    const neighbor = e.neighbor_factors || {};
+    const field = e.field_factors || {};
+    const bn = e.bracket_number || 0;
+    const pct = td.ease_pct || 50;
+    html += `<tr>
+      <td class="num">${i + 1}</td>
+      <td><span class="gate-num ${wakuClass(bn)}" style="width:22px;height:22px;font-size:11px;display:inline-flex">${bn}</span></td>
+      <td class="num">${e.horse_number}</td>
+      <td style="font-weight:600">${e.horse_name || '-'}</td>
+      <td><span class="td-card-style ${styleClass(prof.style || '差し')}" style="font-size:10px">${prof.style || '-'}</span></td>
+      <td class="num" style="color:${easeColor(pct)};font-weight:700">${pct.toFixed(1)}</td>
+      <td><span class="td-ease-badge ${easeClass(td.label || '普通')}" style="font-size:11px;padding:2px 8px">${td.label || '-'}</span></td>
+      <td style="text-align:center">${gate.is_even_gate ? '✓' : '-'}</td>
+      <td class="num">${neighbor.slow_neighbors || 0}/2</td>
+      <td class="num" style="color:${neighbor.fast_neighbors >= 1 ? 'var(--ok)' : 'var(--text-dim)'}">${neighbor.fast_neighbors || 0}</td>
+      <td class="num" style="color:${field.same_style_count <= 2 ? 'var(--ok)' : field.same_style_count >= 5 ? 'var(--err)' : 'var(--warn)'}">
+        ${field.same_style_count || 0}頭</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+
+  main.innerHTML = html;
+}
+
+function scrollToCard(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "category": "race_paddock",
+  "timestamp": "2026-03-19T09:43:33.543845",
+  "sample_id": "202606020601",
+  "selector_results": {
+    "paddock_table": {
+      "selector": "table.Paddock_Table",
+      "matched": true,
+      "index": 0,
+      "element_count": 1,
+      "optional": false
+    }
+  },
+  "row_count": 0,
+  "column_count": 0,
+  "column_classes": []
+}

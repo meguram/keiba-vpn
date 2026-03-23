@@ -1,0 +1,22 @@
+{
+  "raceday-morning": {
+    "last_run": "2026-03-18T22:08:05",
+    "status": "skipped",
+    "reason": "non-race-day"
+  },
+  "raceday-evening": {
+    "last_run": "2026-03-18T22:08:05",
+    "status": "skipped",
+    "reason": "non-race-day"
+  },
+  "weekly-update": {
+    "last_run": "2026-03-18T22:08:05",
+    "status": "skipped",
+    "reason": "not-friday"
+  },
+  "raceday-runner": {
+    "last_run": "2026-03-18T22:52:59",
+    "status": "skipped",
+    "reason": "non-race-day"
+  }
+}

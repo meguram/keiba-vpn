@@ -1,0 +1,4940 @@
+{
+  "year": 2026,
+  "fetched_at": "2026-03-18T21:54:20",
+  "summary": {
+    "total_race_days": 109,
+    "irregular_days": 8,
+    "total_poll_days": 162
+  },
+  "race_days": [
+    {
+      "date": "2026-01-04",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "中山金杯",
+        "京都金杯"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-01-05",
+      "weekday": "月曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": true
+    },
+    {
+      "date": "2026-01-10",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-01-11",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "フェアリーS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-01-12",
+      "weekday": "祝日・月曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "シンザン記念"
+      ],
+      "is_irregular": true
+    },
+    {
+      "date": "2026-01-17",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-01-18",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "京成杯",
+        "日経新春杯"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-01-24",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [
+        "小倉牝馬S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-01-25",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [
+        "アメリカJCC",
+        "プロキオンS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-01-31",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 2,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-02-01",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 2,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [
+        "根岸S",
+        "シルクロードS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-02-07",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 2,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-02-08",
+      "weekday": "日",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": true
+    },
+    {
+      "date": "2026-02-10",
+      "weekday": "火",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 2,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "東京新聞杯",
+        "きさらぎ賞"
+      ],
+      "is_irregular": true
+    },
+    {
+      "date": "2026-02-14",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 2,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [
+        "クイーンC",
+        "小倉ジャンプS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-02-15",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 2,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [
+        "共同通信杯",
+        "京都記念"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-02-21",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 1,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [
+        "ダイヤモンドS",
+        "阪急杯"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-02-22",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 1,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 1,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [
+        "フェブラリーS",
+        "小倉大賞典"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-02-28",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [
+        "オーシャンS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-03-01",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "小倉",
+          "venue_code": "10"
+        }
+      ],
+      "grade_races": [
+        "中山記念",
+        "チューリップ賞"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-03-07",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "中山牝馬S",
+        "フィリーズレビュー"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-03-08",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "弥生賞ディープインパクト記念"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-03-14",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "阪神スプリングジャンプ"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-03-15",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "スプリングS",
+        "金鯱賞"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-03-21",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "フラワーC",
+        "ファルコンS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-03-22",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 1,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "阪神大賞典",
+        "愛知杯"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-03-28",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 2,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "日経賞",
+        "毎日杯"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-03-29",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 2,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "マーチS",
+        "高松宮記念"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-04-04",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 2,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "ダービー卿CT",
+        "チャーチルダウンズＣ"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-04-05",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 2,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "大阪杯"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-04-11",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 2,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "ニュージーランドT",
+        "阪神牝馬S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-04-12",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 2,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "桜花賞"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-04-18",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 2,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "中山グランドジャンプ",
+        "アンタレスS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-04-19",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 2,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "皐月賞",
+        "福島牝馬S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-04-25",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "青葉賞"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-04-26",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "フローラS",
+        "マイラーズC"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-05-02",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "京王杯スプリングC",
+        "ユニコーンＳ"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-05-03",
+      "weekday": "祝日・日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "天皇賞（春）"
+      ],
+      "is_irregular": true
+    },
+    {
+      "date": "2026-05-09",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "エプソムC",
+        "京都新聞杯"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-05-10",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "NHKマイルC"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-05-16",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "京都ハイジャンプ",
+        "新潟大賞典"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-05-17",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "ヴィクトリアマイル"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-05-23",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "平安S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-05-24",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 1,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "オークス"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-05-30",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "葵S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-05-31",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "日本ダービー",
+        "目黒記念"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-06-06",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-06-07",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "安田記念"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-06-13",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [
+        "東京ジャンプS",
+        "函館スプリントS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-06-14",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [
+        "宝塚記念"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-06-20",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-06-21",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [
+        "府中牝馬S",
+        "しらさぎS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-06-27",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "福島",
+          "venue_code": "03"
+        },
+        {
+          "kai": 2,
+          "venue": "小倉",
+          "venue_code": "10"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-06-28",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "福島",
+          "venue_code": "03"
+        },
+        {
+          "kai": 2,
+          "venue": "小倉",
+          "venue_code": "10"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [
+        "ラジオNIKKEI賞",
+        "函館記念"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-07-04",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "福島",
+          "venue_code": "03"
+        },
+        {
+          "kai": 2,
+          "venue": "小倉",
+          "venue_code": "10"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-07-05",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "福島",
+          "venue_code": "03"
+        },
+        {
+          "kai": 2,
+          "venue": "小倉",
+          "venue_code": "10"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [
+        "北九州記念"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-07-11",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "福島",
+          "venue_code": "03"
+        },
+        {
+          "kai": 2,
+          "venue": "小倉",
+          "venue_code": "10"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-07-12",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "福島",
+          "venue_code": "03"
+        },
+        {
+          "kai": 2,
+          "venue": "小倉",
+          "venue_code": "10"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [
+        "七夕賞"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-07-18",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "福島",
+          "venue_code": "03"
+        },
+        {
+          "kai": 2,
+          "venue": "小倉",
+          "venue_code": "10"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-07-19",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "福島",
+          "venue_code": "03"
+        },
+        {
+          "kai": 2,
+          "venue": "小倉",
+          "venue_code": "10"
+        },
+        {
+          "kai": 1,
+          "venue": "函館",
+          "venue_code": "02"
+        }
+      ],
+      "grade_races": [
+        "小倉記念",
+        "函館2歳S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-07-25",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 2,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 1,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-07-26",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 2,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 1,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [
+        "関屋記念",
+        "東海S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-08-01",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 2,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 1,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-08-02",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 2,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 1,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [
+        "アイビスサマーダッシュ",
+        "クイーンS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-08-08",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 2,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 1,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [
+        "エルムS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-08-09",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 2,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 1,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [
+        "レパードS",
+        "CBC賞"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-08-15",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 2,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 1,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [
+        "新潟ジャンプS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-08-16",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 2,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 2,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 1,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [
+        "中京記念",
+        "札幌記念"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-08-22",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 3,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 2,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-08-23",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 3,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 2,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [
+        "新潟2歳S",
+        "キーンランドC"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-08-29",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 3,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 2,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-08-30",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 3,
+          "venue": "新潟",
+          "venue_code": "04"
+        },
+        {
+          "kai": 3,
+          "venue": "中京",
+          "venue_code": "07"
+        },
+        {
+          "kai": 2,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [
+        "新潟記念",
+        "中京2歳S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-09-05",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 4,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 2,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [
+        "京成杯オータムH",
+        "札幌2歳S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-09-06",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 4,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 2,
+          "venue": "札幌",
+          "venue_code": "01"
+        }
+      ],
+      "grade_races": [
+        "紫苑S",
+        "セントウルS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-09-12",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 4,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "チャレンジC"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-09-13",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 4,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "セントライト記念",
+        "ローズS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-09-19",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 4,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "阪神ジャンプS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-09-20",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 4,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "オールカマー"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-09-21",
+      "weekday": "祝日・月曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 4,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "神戸新聞杯"
+      ],
+      "is_irregular": true
+    },
+    {
+      "date": "2026-09-26",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 4,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "シリウスS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-09-27",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 4,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "スプリンターズS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-10-03",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 4,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-10-04",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 4,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "毎日王冠",
+        "京都大賞典"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-10-10",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 4,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "サウジアラビアロイヤルC"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-10-11",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 4,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "アイルランドT"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-10-12",
+      "weekday": "祝日・月曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 4,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "スワンS"
+      ],
+      "is_irregular": true
+    },
+    {
+      "date": "2026-10-17",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 4,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 4,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "富士S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-10-18",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 4,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 4,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "東京ハイジャンプ",
+        "秋華賞"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-10-24",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 4,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 4,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "アルテミスS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-10-25",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 4,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 4,
+          "venue": "新潟",
+          "venue_code": "04"
+        }
+      ],
+      "grade_races": [
+        "菊花賞"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-10-31",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 4,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "ファンタジーS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-11-01",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 4,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 4,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "天皇賞（秋）"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-11-07",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 5,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 3,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "京王杯2歳S",
+        "京都ジャンプＳ"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-11-08",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 5,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 3,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "アルゼンチン共和国杯",
+        "みやこS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-11-14",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 5,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 3,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "武蔵野S",
+        "デイリー杯2歳S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-11-15",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 5,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 3,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "エリザベス女王杯"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-11-21",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "京都",
+          "venue_code": "08"
+        },
+        {
+          "kai": 3,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "福島記念"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-11-22",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 5,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "マイルチャンピオンシップ"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-11-23",
+      "weekday": "祝日・月曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 3,
+          "venue": "福島",
+          "venue_code": "03"
+        }
+      ],
+      "grade_races": [
+        "東京スポーツ杯2歳S"
+      ],
+      "is_irregular": true
+    },
+    {
+      "date": "2026-11-28",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 5,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "京都2歳S"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-11-29",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "東京",
+          "venue_code": "05"
+        },
+        {
+          "kai": 5,
+          "venue": "京都",
+          "venue_code": "08"
+        }
+      ],
+      "grade_races": [
+        "ジャパンカップ",
+        "京阪杯"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-12-05",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 5,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 4,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "ステイヤーズS",
+        "鳴尾記念"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-12-06",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 5,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 4,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "チャンピオンズC"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-12-12",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 5,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 4,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "中日新聞杯"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-12-13",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 5,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 4,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "カペラS",
+        "阪神ジュベナイルフィリーズ"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-12-19",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 5,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 4,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "ターコイズS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-12-20",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 5,
+          "venue": "阪神",
+          "venue_code": "09"
+        },
+        {
+          "kai": 4,
+          "venue": "中京",
+          "venue_code": "07"
+        }
+      ],
+      "grade_races": [
+        "朝日杯フューチュリティS"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-12-26",
+      "weekday": "土曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 5,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "中山大障害",
+        "ホープフルS",
+        "阪神C"
+      ],
+      "is_irregular": false
+    },
+    {
+      "date": "2026-12-27",
+      "weekday": "日曜",
+      "venues": [
+        {
+          "kai": 5,
+          "venue": "中山",
+          "venue_code": "06"
+        },
+        {
+          "kai": 5,
+          "venue": "阪神",
+          "venue_code": "09"
+        }
+      ],
+      "grade_races": [
+        "有馬記念"
+      ],
+      "is_irregular": false
+    }
+  ],
+  "poll_schedule": [
+    {
+      "date": "2026-01-03",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-01-04",
+      "venues": [
+        "中山",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-01-04",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "京都"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-01-05"
+    },
+    {
+      "date": "2026-01-05",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-01-09",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-01-10",
+      "venues": [
+        "中山",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-01-10",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "京都"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-01-11"
+    },
+    {
+      "date": "2026-01-11",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "京都"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-01-12"
+    },
+    {
+      "date": "2026-01-12",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-01-16",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-01-17",
+      "venues": [
+        "中山",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-01-17",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "京都"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-01-18"
+    },
+    {
+      "date": "2026-01-18",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-01-23",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-01-24",
+      "venues": [
+        "中山",
+        "京都",
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-01-24",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "京都",
+        "小倉"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-01-25"
+    },
+    {
+      "date": "2026-01-25",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "京都",
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-01-30",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-01-31",
+      "venues": [
+        "東京",
+        "京都",
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-01-31",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "小倉"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-02-01"
+    },
+    {
+      "date": "2026-02-01",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-02-06",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-02-07",
+      "venues": [
+        "東京",
+        "京都",
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-02-07",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "小倉"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-02-08"
+    },
+    {
+      "date": "2026-02-08",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-02-09",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-02-10",
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-02-10",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-02-13",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-02-14",
+      "venues": [
+        "東京",
+        "京都",
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-02-14",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "小倉"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-02-15"
+    },
+    {
+      "date": "2026-02-15",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-02-20",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-02-21",
+      "venues": [
+        "東京",
+        "阪神",
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-02-21",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "阪神",
+        "小倉"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-02-22"
+    },
+    {
+      "date": "2026-02-22",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "阪神",
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-02-27",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-02-28",
+      "venues": [
+        "中山",
+        "阪神",
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-02-28",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "小倉"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-03-01"
+    },
+    {
+      "date": "2026-03-01",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "小倉"
+      ]
+    },
+    {
+      "date": "2026-03-06",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-03-07",
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-03-07",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-03-08"
+    },
+    {
+      "date": "2026-03-08",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-03-13",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-03-14",
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-03-14",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-03-15"
+    },
+    {
+      "date": "2026-03-15",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-03-20",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-03-21",
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-03-21",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-03-22"
+    },
+    {
+      "date": "2026-03-22",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-03-27",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-03-28",
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-03-28",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-03-29"
+    },
+    {
+      "date": "2026-03-29",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-04-03",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-04-04",
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-04-04",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-04-05"
+    },
+    {
+      "date": "2026-04-05",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-04-10",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-04-11",
+      "venues": [
+        "中山",
+        "阪神",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-04-11",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "福島"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-04-12"
+    },
+    {
+      "date": "2026-04-12",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-04-17",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-04-18",
+      "venues": [
+        "中山",
+        "阪神",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-04-18",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "福島"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-04-19"
+    },
+    {
+      "date": "2026-04-19",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-04-24",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-04-25",
+      "venues": [
+        "東京",
+        "京都",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-04-25",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "福島"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-04-26"
+    },
+    {
+      "date": "2026-04-26",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-05-01",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-05-02",
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-05-02",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-05-03"
+    },
+    {
+      "date": "2026-05-03",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-05-08",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-05-09",
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-05-09",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-05-10"
+    },
+    {
+      "date": "2026-05-10",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-05-15",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-05-16",
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-05-16",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-05-17"
+    },
+    {
+      "date": "2026-05-17",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-05-22",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-05-23",
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-05-23",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-05-24"
+    },
+    {
+      "date": "2026-05-24",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-05-29",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-05-30",
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-05-30",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-05-31"
+    },
+    {
+      "date": "2026-05-31",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-06-05",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-06-06",
+      "venues": [
+        "東京",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-06-06",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "阪神"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-06-07"
+    },
+    {
+      "date": "2026-06-07",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-06-12",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-06-13",
+      "venues": [
+        "東京",
+        "阪神",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-06-13",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "阪神",
+        "函館"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-06-14"
+    },
+    {
+      "date": "2026-06-14",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "阪神",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-06-19",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-06-20",
+      "venues": [
+        "東京",
+        "阪神",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-06-20",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "阪神",
+        "函館"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-06-21"
+    },
+    {
+      "date": "2026-06-21",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "阪神",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-06-26",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-06-27",
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-06-27",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-06-28"
+    },
+    {
+      "date": "2026-06-28",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-07-03",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-07-04",
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-07-04",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-07-05"
+    },
+    {
+      "date": "2026-07-05",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-07-10",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-07-11",
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-07-11",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-07-12"
+    },
+    {
+      "date": "2026-07-12",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-07-17",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-07-18",
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-07-18",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-07-19"
+    },
+    {
+      "date": "2026-07-19",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "福島",
+        "小倉",
+        "函館"
+      ]
+    },
+    {
+      "date": "2026-07-24",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-07-25",
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-07-25",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-07-26"
+    },
+    {
+      "date": "2026-07-26",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-07-31",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-08-01",
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-08-01",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-08-02"
+    },
+    {
+      "date": "2026-08-02",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-08-07",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-08-08",
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-08-08",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-08-09"
+    },
+    {
+      "date": "2026-08-09",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-08-14",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-08-15",
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-08-15",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-08-16"
+    },
+    {
+      "date": "2026-08-16",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-08-21",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-08-22",
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-08-22",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-08-23"
+    },
+    {
+      "date": "2026-08-23",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-08-28",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-08-29",
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-08-29",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-08-30"
+    },
+    {
+      "date": "2026-08-30",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "新潟",
+        "中京",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-09-04",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-09-05",
+      "venues": [
+        "中山",
+        "阪神",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-09-05",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "札幌"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-09-06"
+    },
+    {
+      "date": "2026-09-06",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "札幌"
+      ]
+    },
+    {
+      "date": "2026-09-11",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-09-12",
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-09-12",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-09-13"
+    },
+    {
+      "date": "2026-09-13",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-09-18",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-09-19",
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-09-19",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-09-20"
+    },
+    {
+      "date": "2026-09-20",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-09-21"
+    },
+    {
+      "date": "2026-09-21",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-09-25",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-09-26",
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-09-26",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-09-27"
+    },
+    {
+      "date": "2026-09-27",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-10-02",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-10-03",
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-10-03",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-10-04"
+    },
+    {
+      "date": "2026-10-04",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-10-09",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-10-10",
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-10-10",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-10-11"
+    },
+    {
+      "date": "2026-10-11",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-10-12"
+    },
+    {
+      "date": "2026-10-12",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-10-16",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-10-17",
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-10-17",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-10-18"
+    },
+    {
+      "date": "2026-10-18",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-10-23",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-10-24",
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-10-24",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-10-25"
+    },
+    {
+      "date": "2026-10-25",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "新潟"
+      ]
+    },
+    {
+      "date": "2026-10-30",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-10-31",
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-10-31",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-11-01"
+    },
+    {
+      "date": "2026-11-01",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-11-06",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-11-07",
+      "venues": [
+        "東京",
+        "京都",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-11-07",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "福島"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-11-08"
+    },
+    {
+      "date": "2026-11-08",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-11-13",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-11-14",
+      "venues": [
+        "東京",
+        "京都",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-11-14",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "福島"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-11-15"
+    },
+    {
+      "date": "2026-11-15",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-11-20",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-11-21",
+      "venues": [
+        "京都",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-11-21",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "京都",
+        "福島"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-11-22"
+    },
+    {
+      "date": "2026-11-22",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-11-23"
+    },
+    {
+      "date": "2026-11-23",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "福島"
+      ]
+    },
+    {
+      "date": "2026-11-27",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-11-28",
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-11-28",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-11-29"
+    },
+    {
+      "date": "2026-11-29",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "東京",
+        "京都"
+      ]
+    },
+    {
+      "date": "2026-12-04",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-12-05",
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-12-05",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-12-06"
+    },
+    {
+      "date": "2026-12-06",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-12-11",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-12-12",
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-12-12",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-12-13"
+    },
+    {
+      "date": "2026-12-13",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-12-18",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-12-19",
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-12-19",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-12-20"
+    },
+    {
+      "date": "2026-12-20",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神",
+        "中京"
+      ]
+    },
+    {
+      "date": "2026-12-25",
+      "type": "pre_day",
+      "poll_window": [
+        "10:30",
+        "11:30"
+      ],
+      "race_date": "2026-12-26",
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    },
+    {
+      "date": "2026-12-26",
+      "type": "both",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ],
+      "pre_day_window": [
+        "10:30",
+        "11:30"
+      ],
+      "pre_for": "2026-12-27"
+    },
+    {
+      "date": "2026-12-27",
+      "type": "race_day",
+      "poll_window": [
+        "07:30",
+        "08:30"
+      ],
+      "venues": [
+        "中山",
+        "阪神"
+      ]
+    }
+  ]
+}

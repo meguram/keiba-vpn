@@ -1,0 +1,1883 @@
+{
+  "meta": {
+    "description": "日別馬場速度指数 (Track Speed Index)",
+    "tsi_interpretation": "TSI < 0 → 高速馬場, TSI > 0 → 低速馬場",
+    "levels": {
+      "5": "超高速 (TSI ≤ -1.5)",
+      "4": "高速 (-1.5 < TSI ≤ -0.5)",
+      "3": "標準 (-0.5 < TSI < 0.5)",
+      "2": "低速 (0.5 ≤ TSI < 1.5)",
+      "1": "超低速 (TSI ≥ 1.5)"
+    },
+    "field_strength_correction": "出走馬の能力偏差(HSR)を反復推定し、フィールド強度中央値で各レースのraw z-scoreを補正。高レベルメンバーによる高時計バイアスを除去済み。",
+    "computed_at": "2026-03-19 00:58:42",
+    "stats": {
+      "total_races_loaded": 1068,
+      "races_with_z": 935,
+      "horses_with_hsr": 2071,
+      "baseline_groups": 43,
+      "days_computed": 39,
+      "calibration_turf": -1.403,
+      "calibration_dirt": -2.221
+    }
+  },
+  "daily": {
+    "20200105": {
+      "中山": {
+        "ダート": {
+          "tsi": -0.637,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.335,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": -0.445,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.437,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        }
+      }
+    },
+    "20200106": {
+      "中山": {
+        "ダート": {
+          "tsi": -1.092,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.644,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": 0.625,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.485,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20200111": {
+      "中山": {
+        "ダート": {
+          "tsi": -0.152,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.246,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": 1.299,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 8,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.835,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 3,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        }
+      }
+    },
+    "20200112": {
+      "中山": {
+        "ダート": {
+          "tsi": 0.375,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 8,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.875,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": 0.376,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "稍重"
+          ]
+        },
+        "芝": {
+          "tsi": 1.607,
+          "level": 1,
+          "label": "超低速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20200118": {
+      "中山": {
+        "ダート": {
+          "tsi": 0.703,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "稍重"
+          ]
+        },
+        "芝": {
+          "tsi": 0.689,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "稍重"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": -1.319,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 5,
+          "track_conditions": [
+            "稍重"
+          ]
+        },
+        "芝": {
+          "tsi": 1.327,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 4,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        }
+      },
+      "小倉": {
+        "芝": {
+          "tsi": -0.097,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 12,
+          "track_conditions": [
+            "稍重",
+            "重"
+          ]
+        }
+      }
+    },
+    "20200119": {
+      "中山": {
+        "ダート": {
+          "tsi": 0.385,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "稍重"
+          ]
+        },
+        "芝": {
+          "tsi": 0.323,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "稍重"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": 0.159,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.807,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "小倉": {
+        "芝": {
+          "tsi": 0.379,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 11,
+          "track_conditions": [
+            "重"
+          ]
+        }
+      }
+    },
+    "20210105": {
+      "中京": {
+        "ダート": {
+          "tsi": -2.001,
+          "level": 5,
+          "label": "超高速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.851,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": -0.902,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.748,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20210109": {
+      "中京": {
+        "ダート": {
+          "tsi": -0.327,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 8,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.054,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 0.138,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.215,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20210110": {
+      "中京": {
+        "ダート": {
+          "tsi": 0.084,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.263,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 1.585,
+          "level": 1,
+          "label": "超低速",
+          "sample_size": 8,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.3,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20210116": {
+      "中京": {
+        "ダート": {
+          "tsi": 0.26,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -1.072,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 0.965,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.367,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "小倉": {
+        "芝": {
+          "tsi": -1.038,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 12,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        }
+      }
+    },
+    "20210117": {
+      "中京": {
+        "ダート": {
+          "tsi": -0.569,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -1.404,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 2,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 0.981,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.389,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "小倉": {
+        "ダート": {
+          "tsi": -0.475,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 1,
+          "track_conditions": [
+            "稍重"
+          ]
+        },
+        "芝": {
+          "tsi": 0.288,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 9,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        }
+      }
+    },
+    "20220105": {
+      "中京": {
+        "ダート": {
+          "tsi": -1.143,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.319,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 0.399,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.385,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20220108": {
+      "中京": {
+        "ダート": {
+          "tsi": -0.18,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.018,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": -0.567,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "稍重"
+          ]
+        },
+        "芝": {
+          "tsi": 0.105,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "稍重"
+          ]
+        }
+      }
+    },
+    "20220109": {
+      "中京": {
+        "ダート": {
+          "tsi": 0.571,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.49,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 0.087,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.221,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        }
+      }
+    },
+    "20220115": {
+      "中京": {
+        "ダート": {
+          "tsi": -0.381,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.55,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 1.184,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 8,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.213,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "小倉": {
+        "ダート": {
+          "tsi": -1.97,
+          "level": 5,
+          "label": "超高速",
+          "sample_size": 1,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.487,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 10,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20220116": {
+      "中京": {
+        "ダート": {
+          "tsi": 0.467,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.725,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": -0.094,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.656,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "小倉": {
+        "ダート": {
+          "tsi": -0.669,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 1,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.272,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 9,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20230105": {
+      "中京": {
+        "ダート": {
+          "tsi": 0.411,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.198,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": -1.31,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.224,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20230107": {
+      "中京": {
+        "ダート": {
+          "tsi": 0.631,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.427,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": -0.313,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.0,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20230108": {
+      "中京": {
+        "ダート": {
+          "tsi": 0.212,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.457,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 0.142,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.156,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20230114": {
+      "中京": {
+        "ダート": {
+          "tsi": 0.883,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "重"
+          ]
+        },
+        "芝": {
+          "tsi": 0.593,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "重"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 0.833,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 1.125,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        }
+      },
+      "小倉": {
+        "芝": {
+          "tsi": -0.221,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 11,
+          "track_conditions": [
+            "不良",
+            "重"
+          ]
+        }
+      }
+    },
+    "20230115": {
+      "中京": {
+        "ダート": {
+          "tsi": 0.023,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "稍重"
+          ]
+        },
+        "芝": {
+          "tsi": 0.726,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "稍重",
+            "重"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 0.962,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.304,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "小倉": {
+        "芝": {
+          "tsi": -1.054,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 10,
+          "track_conditions": [
+            "稍重",
+            "重"
+          ]
+        }
+      }
+    },
+    "20240106": {
+      "中山": {
+        "ダート": {
+          "tsi": 0.406,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -1.425,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": -0.614,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.093,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20240107": {
+      "中山": {
+        "ダート": {
+          "tsi": 0.119,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.518,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": 0.181,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.715,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20240113": {
+      "中山": {
+        "ダート": {
+          "tsi": 0.404,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.313,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 9,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": 1.366,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.472,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "小倉": {
+        "ダート": {
+          "tsi": -2.358,
+          "level": 5,
+          "label": "超高速",
+          "sample_size": 1,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.585,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 10,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20240114": {
+      "中山": {
+        "ダート": {
+          "tsi": 1.073,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.075,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": -0.931,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.084,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "小倉": {
+        "ダート": {
+          "tsi": -2.155,
+          "level": 5,
+          "label": "超高速",
+          "sample_size": 1,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.653,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 10,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20240120": {
+      "中山": {
+        "ダート": {
+          "tsi": 0.511,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.22,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": -1.297,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 5,
+          "track_conditions": [
+            "稍重",
+            "重"
+          ]
+        },
+        "芝": {
+          "tsi": 0.142,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 3,
+          "track_conditions": [
+            "稍重",
+            "重"
+          ]
+        }
+      },
+      "小倉": {
+        "ダート": {
+          "tsi": -1.352,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 1,
+          "track_conditions": [
+            "稍重"
+          ]
+        },
+        "芝": {
+          "tsi": -1.12,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 10,
+          "track_conditions": [
+            "稍重"
+          ]
+        }
+      }
+    },
+    "20250105": {
+      "中京": {
+        "ダート": {
+          "tsi": -0.857,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.181,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": -0.221,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.611,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20250106": {
+      "中京": {
+        "ダート": {
+          "tsi": -0.785,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 2.822,
+          "level": 1,
+          "label": "超低速",
+          "sample_size": 2,
+          "track_conditions": [
+            "良",
+            "重"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": -1.638,
+          "level": 5,
+          "label": "超高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.142,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20250111": {
+      "中京": {
+        "ダート": {
+          "tsi": -1.476,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.583,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 0.178,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "稍重"
+          ]
+        },
+        "芝": {
+          "tsi": 0.313,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "稍重",
+            "良"
+          ]
+        }
+      }
+    },
+    "20250112": {
+      "中京": {
+        "ダート": {
+          "tsi": -0.507,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.365,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 0.137,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.111,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20250118": {
+      "中京": {
+        "ダート": {
+          "tsi": -1.294,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.247,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 1.13,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -1.207,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20250119": {
+      "中京": {
+        "ダート": {
+          "tsi": -2.034,
+          "level": 5,
+          "label": "超高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.673,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 1.363,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.173,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20250125": {
+      "中京": {
+        "ダート": {
+          "tsi": -0.103,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.734,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": 0.375,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 1.234,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "小倉": {
+        "芝": {
+          "tsi": -0.432,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 10,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20250412": {
+      "中山": {
+        "芝": {
+          "tsi": -2.532,
+          "level": 5,
+          "label": "超高速",
+          "sample_size": 1,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20260104": {
+      "中山": {
+        "ダート": {
+          "tsi": 0.266,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "稍重"
+          ]
+        },
+        "芝": {
+          "tsi": 1.281,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": 0.668,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.766,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20260110": {
+      "中山": {
+        "ダート": {
+          "tsi": 0.436,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 8,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.225,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": 0.373,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -1.406,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 2,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20260111": {
+      "中山": {
+        "ダート": {
+          "tsi": -0.401,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 7,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.438,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "京都": {
+        "ダート": {
+          "tsi": 1.613,
+          "level": 1,
+          "label": "超低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.111,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 1,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20260314": {
+      "中京": {
+        "ダート": {
+          "tsi": 0.765,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.88,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": -1.817,
+          "level": 5,
+          "label": "超高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": 0.319,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "阪神": {
+        "ダート": {
+          "tsi": 0.983,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.458,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 3,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    },
+    "20260315": {
+      "中京": {
+        "ダート": {
+          "tsi": -1.872,
+          "level": 5,
+          "label": "超高速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.125,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "中山": {
+        "ダート": {
+          "tsi": -0.922,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 6,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -1.034,
+          "level": 4,
+          "label": "高速",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      },
+      "阪神": {
+        "ダート": {
+          "tsi": 0.816,
+          "level": 2,
+          "label": "低速",
+          "sample_size": 5,
+          "track_conditions": [
+            "良"
+          ]
+        },
+        "芝": {
+          "tsi": -0.214,
+          "level": 3,
+          "label": "標準",
+          "sample_size": 4,
+          "track_conditions": [
+            "良"
+          ]
+        }
+      }
+    }
+  }
+}

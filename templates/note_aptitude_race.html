@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>レース適性3Dマップ | ML-AutoPilot Keiba</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0e12;
+    --surface: #141820;
+    --border: #252b36;
+    --text: #e6e9ef;
+    --dim: #7d8698;
+    --accent: #5eead4;
+    --accent2: #f472b6;
+    --warn: #fbbf24;
+    --g0: #5eead4; --g1: #a78bfa; --g2: #fb923c; --g3: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'IBM Plex Sans JP', 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 20px 20px 48px; }
+  h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+  .lead {
+    font-size: 0.8rem;
+    color: var(--dim);
+    line-height: 1.55;
+    max-width: 720px;
+    margin-bottom: 20px;
+  }
+  .lead code { font-size: 0.75em; background: var(--surface); padding: 1px 6px; border-radius: 4px; }
+  .form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  .form-row label { font-size: 0.75rem; color: var(--dim); }
+  .form-row input,
+  .form-row select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-family: inherit;
+  }
+  .form-row input { width: min(320px, 100%); font-family: ui-monospace, monospace; }
+  #dateSelect { min-width: 200px; }
+  #venueSelect { min-width: 100px; }
+  #raceSelect { min-width: min(420px, 100%); max-width: 100%; }
+  .picker-status {
+    font-size: 0.7rem;
+    color: var(--dim);
+    width: 100%;
+    flex-basis: 100%;
+  }
+  .form-row button {
+    background: linear-gradient(135deg, #0d9488, #14b8a6);
+    color: #042f2e;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .form-row button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .err {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #fecaca;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .err.show { display: block; }
+  .meta-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    font-size: 0.78rem;
+    color: var(--dim);
+    margin-bottom: 16px;
+  }
+  .meta-bar strong { color: var(--text); }
+  .viz-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 20px;
+  }
+  .viz-wrap h2 {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--dim);
+    margin-bottom: 10px;
+  }
+  .viz-note { font-size: 0.72rem; color: var(--dim); margin-top: 8px; line-height: 1.45; }
+  .scatter-tap-hint {
+    min-height: 1.4em;
+    font-size: 0.88rem;
+    color: var(--accent);
+    margin-top: 8px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .scatter-tap-hint:empty { display: none; }
+  .scatter-tap-hint:not(:empty) { display: block; }
+  .viz-3d-root {
+    width: 100%;
+    max-width: 640px;
+    min-height: 380px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0a0c10;
+    border: 1px solid var(--border);
+    touch-action: none;
+  }
+  .viz-3d-root canvas {
+    display: block;
+    width: 100% !important;
+    height: auto !important;
+    vertical-align: top;
+  }
+  .viz-3d-hint {
+    font-size: 0.68rem;
+    color: var(--dim);
+    margin-top: 6px;
+    line-height: 1.45;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 10px;
+    font-size: 0.72rem;
+  }
+  .legend span { display: flex; align-items: center; gap: 6px; color: var(--dim); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+  .gcard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.75rem;
+  }
+  .gcard h3 { font-size: 0.7rem; color: var(--dim); margin-bottom: 6px; }
+  .gcard .cent { font-family: ui-monospace, monospace; color: var(--accent); font-size: 0.72rem; }
+  .gcard ul { margin-top: 6px; padding-left: 1em; color: var(--dim); line-height: 1.4; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  th {
+    background: rgba(94, 234, 212, 0.06);
+    color: var(--dim);
+    font-weight: 600;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .num { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 700;
+  }
+  .loading { color: var(--dim); font-size: 0.85rem; padding: 24px; text-align: center; display: none; }
+  .loading.show { display: block; }
+  .scrape-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 10, 14, 0.88);
+    backdrop-filter: blur(5px);
+  }
+  .scrape-overlay.show { display: flex; }
+  .scrape-overlay-inner {
+    max-width: 440px;
+    margin: 16px;
+    padding: 22px 24px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+  .scrape-overlay-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+  .scrape-overlay-msg {
+    font-size: 0.82rem;
+    color: var(--dim);
+    line-height: 1.55;
+    min-height: 2.8em;
+  }
+  .scrape-overlay-sub {
+    margin-top: 14px;
+    font-size: 0.68rem;
+    color: var(--dim);
+    opacity: 0.85;
+    line-height: 1.45;
+    white-space: pre-line;
+    text-align: left;
+    max-height: 11rem;
+    overflow-y: auto;
+  }
+  .scrape-overlay-phase {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin-bottom: 10px;
+    border: 1px solid transparent;
+  }
+  .scrape-phase-storage {
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.35);
+  }
+  .scrape-phase-queue {
+    background: rgba(251, 191, 36, 0.12);
+    color: #fcd34d;
+    border-color: rgba(251, 191, 36, 0.35);
+  }
+  .scrape-phase-scrape {
+    background: rgba(16, 185, 129, 0.14);
+    color: #6ee7b7;
+    border-color: rgba(16, 185, 129, 0.35);
+  }
+  .scrape-phase-done {
+    background: rgba(148, 163, 184, 0.12);
+    color: #cbd5e1;
+    border-color: rgba(148, 163, 184, 0.3);
+  }
+  .scrape-overlay-bar-wrap {
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+    margin: 10px 0 6px;
+  }
+  .scrape-overlay-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    width: 0%;
+    background: linear-gradient(90deg, #0d9488, #5eead4);
+    transition: width 0.28s ease-out;
+  }
+  .scrape-overlay-bar-wrap.indeterminate .scrape-overlay-bar-fill {
+    width: 35%;
+    animation: scrape-bar-indet 1s ease-in-out infinite;
+  }
+  @keyframes scrape-bar-indet {
+    0% { transform: translateX(-100%); opacity: 0.7; }
+    50% { opacity: 1; }
+    100% { transform: translateX(320%); opacity: 0.7; }
+  }
+  .scrape-overlay-stats {
+    font-size: 0.65rem;
+    color: var(--dim);
+    font-family: ui-monospace, monospace;
+    line-height: 1.4;
+    text-align: left;
+    margin-top: 4px;
+    word-break: break-all;
+  }
+  .scrape-overlay-runner-block {
+    display: none;
+    margin-top: 12px;
+    text-align: left;
+  }
+  .scrape-overlay-runner-block.show {
+    display: block;
+  }
+  .scrape-overlay-runner-caption {
+    font-size: 0.72rem;
+    color: #a5b4fc;
+    line-height: 1.45;
+    margin-bottom: 6px;
+  }
+  .scrape-overlay-runner-bar-wrap {
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+  }
+  .scrape-overlay-runner-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    width: 0%;
+    background: linear-gradient(90deg, #6366f1, #a78bfa);
+    transition: width 0.28s ease-out;
+  }
+  .scrape-overlay-pause {
+    display: none;
+    margin-top: 16px;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    border: 1px solid rgba(251, 191, 36, 0.45);
+    background: rgba(251, 191, 36, 0.12);
+    color: #fcd34d;
+  }
+  .scrape-overlay-pause:hover {
+    background: rgba(251, 191, 36, 0.2);
+  }
+  .scrape-overlay.pedigree-pause-active .scrape-overlay-pause {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wrap.fivegen-wait-mode .lead,
+  .wrap.fivegen-wait-mode .form-row,
+  .wrap.fivegen-wait-mode #loading,
+  .wrap.fivegen-wait-mode #main {
+    display: none !important;
+  }
+  .wrap.fivegen-wait-mode .err:not(.show) {
+    display: none !important;
+  }
+  .fivegen-wait-done {
+    display: none;
+    max-width: 42rem;
+    margin: 1.25rem auto 0;
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+    background: rgba(13, 148, 136, 0.12);
+    border: 1px solid rgba(94, 234, 212, 0.25);
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+  .fivegen-wait-done.show {
+    display: block;
+  }
+  .fivegen-wait-done .dim {
+    color: var(--dim);
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+  }
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+<div class="wrap">
+  <h1>レース適性3Dマップ</h1>
+  <p class="lead">
+    <code>sire_aptitude_note.json</code> の血統ブレンドを、<strong>パワー</strong>・<strong>欧州瞬発</strong>・<strong>TS素地</strong>の3軸に射影し、レース内でクラスタ分けした結果を表示します。
+    開催日・会場・レースを選んで「表示」。URL クエリ <code>?race_id=…</code> でも開けます（保存済みレース概要から日付・会場へ同期します）。
+    API: <code>/api/pedigree/race-note-3d</code>（<code>mode=shallow|5gen</code>）／
+    5世代は <code>horse_pedigree_5gen</code> が必要（表示前に <code>race-ensure-5gen</code> で不足分をキュー投入可・要最新サーバ）。<strong>「表示」クリック時</strong>は時間のかかる取得を<strong>別タブ</strong>で行い、このタブは完了待ちになります（取得完了後、別タブは自動で閉じ結果がここに表示されます。URL からの自動表示では同一タブで確認します）。
+    アプリをサブパス配信する場合は、本ページの URL が <code>…/プレフィックス/note-aptitude-race</code> になり <code>…/プレフィックス/api</code> も同じアプリへ届く必要があります。
+    父／母経路の扱いは <code>docs/NOTE_APTITUDE_5GEN.md</code> を参照。
+  </p>
+
+  <div class="form-row">
+    <label for="dateSelect">開催日</label>
+    <select id="dateSelect"><option value="">読み込み中…</option></select>
+    <label for="venueSelect">会場</label>
+    <select id="venueSelect" disabled><option value="">—</option></select>
+    <label for="raceSelect">レース</label>
+    <select id="raceSelect" disabled><option value="">—</option></select>
+    <label for="blendMode">ブレンド</label>
+    <select id="blendMode">
+      <option value="shallow">浅い（父・母父・牝系）</option>
+      <option value="5gen">5世代（＋父／母経路重み・データ無し時は浅い）</option>
+    </select>
+    <button type="button" id="btnLoad" disabled>表示</button>
+    <span class="picker-status" id="pickerStatus"></span>
+  </div>
+  <div class="err" id="errBox"></div>
+  <div class="loading" id="loading">読み込み中…</div>
+
+  <div id="scrapeOverlay" class="scrape-overlay" role="status" aria-live="polite">
+    <div class="scrape-overlay-inner">
+      <div class="scrape-overlay-title">5世代血統データの取得</div>
+      <div class="scrape-overlay-phase scrape-phase-storage" id="scrapeOverlayPhase">準備</div>
+      <div class="scrape-overlay-msg" id="scrapeOverlayMsg">準備中…</div>
+      <div class="scrape-overlay-bar-wrap indeterminate" id="scrapeOverlayBarWrap">
+        <div class="scrape-overlay-bar-fill" id="scrapeOverlayBarFill"></div>
+      </div>
+      <div class="scrape-overlay-runner-block" id="scrapeOverlayRunnerBlock" aria-hidden="true">
+        <div class="scrape-overlay-runner-caption" id="scrapeOverlayRunnerCaption"></div>
+        <div class="scrape-overlay-runner-bar-wrap" id="scrapeOverlayRunnerBarWrap">
+          <div class="scrape-overlay-runner-bar-fill" id="scrapeOverlayRunnerBarFill"></div>
+        </div>
+      </div>
+      <div class="scrape-overlay-stats" id="scrapeOverlayStats"></div>
+      <div class="scrape-overlay-sub" id="scrapeOverlaySub">
+        最優先キューで処理します（通常のスクレイプ待ちより先に実行されます）。ウィンドウを閉じないでください。
+      </div>
+      <button type="button" class="scrape-overlay-pause" id="pedigreePauseBtn">
+        一時停止（キュー待ちを取り下げ）
+      </button>
+    </div>
+  </div>
+
+  <div id="fiveGenWaitDone" class="fivegen-wait-done" aria-live="polite">
+    <p><strong>処理が完了しました。</strong>元のタブに戻ると、続きの表示が進みます。</p>
+    <p class="dim">このタブは閉じて構いません。</p>
+  </div>
+
+  <div id="main" style="display:none">
+    <div class="meta-bar" id="metaBar"></div>
+    <div class="viz-wrap">
+      <h2>3D 散布図（軸: パワー / 欧州瞬発 / TS）</h2>
+      <p class="viz-3d-hint">
+        <strong>X</strong>＝パワー · <strong>Y</strong>＝TS · <strong>Z</strong>＝欧州瞬発。原点付近の色付き矢印は Three.js 標準（<span style="color:#e11">赤+X</span> · <span style="color:#2a2">緑+Y</span> · <span style="color:#44e">青+Z</span>）。
+        左ドラッグで回転、ホイールでズーム、右ドラッグでパン（タッチは1本指回転・ピンチズーム）。
+      </p>
+      <div id="viz3dRoot" class="viz-3d-root" role="img" aria-label="3次元散布図"></div>
+      <p class="scatter-tap-hint" id="scatterTapHint" aria-live="polite"></p>
+      <div class="legend" id="legend"></div>
+      <p class="viz-note">TS は netkeiba のタイム指数ではなく、ナレッジ上の「高速芝・持続・VM型」の合成です。<strong>球をクリック</strong>すると馬名を表示します。</p>
+    </div>
+    <div class="groups" id="groups"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>枠</th>
+          <th>馬番</th>
+          <th>馬名</th>
+          <th>父</th>
+          <th>母父</th>
+          <th>パワー</th>
+          <th>欧州瞬発</th>
+          <th>TS</th>
+          <th>群</th>
+          <th>適用</th>
+          <th>タグ</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+(function () {
+  const SERVER_API_PREFIX = {{ (api_prefix | default('')) | tojson }};
+  function inferApiPrefixFromPath() {
+    try {
+      const path = window.location.pathname || '';
+      const m = path.match(/^(\/.+)\/note-aptitude-race\/?$/);
+      return m ? m[1] : '';
+    } catch (_) {
+      return '';
+    }
+  }
+  const API_PREFIX = String(SERVER_API_PREFIX || inferApiPrefixFromPath() || '').replace(/\/$/, '');
+  function apiUrl(path) {
+    const p = path.startsWith('/') ? path : '/' + path;
+    return (API_PREFIX || '') + p;
+  }
+
+  const GROUP_COLORS = ['var(--g0)', 'var(--g1)', 'var(--g2)', 'var(--g3)'];
+  const HEX = ['#5eead4', '#a78bfa', '#fb923c', '#94a3b8'];
+
+  const $ = (id) => document.getElementById(id);
+  const dateSelect = $('dateSelect');
+  const venueSelect = $('venueSelect');
+  const raceSelect = $('raceSelect');
+  const blendMode = $('blendMode');
+  const btn = $('btnLoad');
+  const pickerStatus = $('pickerStatus');
+  const errBox = $('errBox');
+  const loading = $('loading');
+  const main = $('main');
+  const scrapeOverlay = $('scrapeOverlay');
+  const scrapeOverlayMsg = $('scrapeOverlayMsg');
+  const scrapeOverlayPhase = $('scrapeOverlayPhase');
+  const scrapeOverlayBarWrap = $('scrapeOverlayBarWrap');
+  const scrapeOverlayBarFill = $('scrapeOverlayBarFill');
+  const scrapeOverlayStats = $('scrapeOverlayStats');
+  const scrapeOverlaySub = $('scrapeOverlaySub');
+  const scrapeOverlayRunnerBlock = $('scrapeOverlayRunnerBlock');
+  const scrapeOverlayRunnerCaption = $('scrapeOverlayRunnerCaption');
+  const scrapeOverlayRunnerBarFill = $('scrapeOverlayRunnerBarFill');
+  const pedigreePauseBtn = $('pedigreePauseBtn');
+  const scatterTapHint = $('scatterTapHint');
+  const viz3dRoot = $('viz3dRoot');
+
+  let viz3dDispose = null;
+
+  function formatScatterHorseLabel(h) {
+    if (!h) return '';
+    const name = (h.horse_name || '').trim() || '（馬名なし）';
+    const parts = [];
+    const bn = h.bracket_number;
+    const hn = h.horse_number;
+    if (bn !== undefined && bn !== null && bn !== '' && !Number.isNaN(Number(bn))) parts.push('枠' + bn);
+    if (hn !== undefined && hn !== null && hn !== '' && !Number.isNaN(Number(hn))) parts.push(hn + '番');
+    return parts.length ? parts.join(' ') + ' ' + name : name;
+  }
+
+  /**
+   * Three.js: X=パワー, Y=TS, Z=欧州瞬発。OrbitControls で自由視点。
+   */
+  async function drawScatter3D(horses) {
+    if (!viz3dRoot) return;
+    if (viz3dDispose) {
+      try {
+        viz3dDispose();
+      } catch (_) {}
+      viz3dDispose = null;
+    }
+    if (!horses || !horses.length) {
+      viz3dRoot.innerHTML = '';
+      return;
+    }
+
+    const THREE = await import('https://esm.sh/three@0.160.0');
+    const { OrbitControls } = await import(
+      'https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js'
+    );
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0c10);
+
+    const pw = horses.map(function (h) {
+      return Number(h.power) || 0;
+    });
+    const eu = horses.map(function (h) {
+      return Number(h.eu_burst) || 0;
+    });
+    const ts = horses.map(function (h) {
+      return Number(h.ts) || 0;
+    });
+    const minP = Math.min.apply(null, pw.concat([-0.1]));
+    const maxP = Math.max.apply(null, pw.concat([0.1]));
+    const minE = Math.min.apply(null, eu.concat([-0.1]));
+    const maxE = Math.max.apply(null, eu.concat([0.1]));
+    const minT = Math.min.apply(null, ts.concat([-0.1]));
+    const maxT = Math.max.apply(null, ts.concat([0.1]));
+    const span = 42;
+
+    function toX(p) {
+      const r = maxP - minP || 1;
+      return ((p - minP) / r - 0.5) * 2 * span;
+    }
+    function toY(t) {
+      const r = maxT - minT || 1;
+      return ((t - minT) / r - 0.5) * 2 * span;
+    }
+    function toZ(e) {
+      const r = maxE - minE || 1;
+      return ((e - minE) / r - 0.5) * 2 * span;
+    }
+
+    const meshes = [];
+    horses.forEach(function (h) {
+      const g = Math.min(3, Math.max(0, h.group_id | 0));
+      const col = new THREE.Color(HEX[g] || '#888888');
+      const geom = new THREE.SphereGeometry(1.35, 22, 22);
+      const mat = new THREE.MeshStandardMaterial({
+        color: col,
+        metalness: 0.12,
+        roughness: 0.42,
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.set(
+        toX(Number(h.power) || 0),
+        toY(Number(h.ts) || 0),
+        toZ(Number(h.eu_burst) || 0)
+      );
+      mesh.userData.horse = h;
+      scene.add(mesh);
+      meshes.push(mesh);
+    });
+
+    const grid = new THREE.GridHelper(130, 16, 0x3d4556, 0x252b36);
+    grid.position.y = -span - 3;
+    scene.add(grid);
+
+    const axes = new THREE.AxesHelper(58);
+    scene.add(axes);
+
+    const box = new THREE.Box3();
+    meshes.forEach(function (m) {
+      box.expandByObject(m);
+    });
+    const center = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    box.getCenter(center);
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z, 8);
+    const camDist = maxDim * 1.75;
+
+    const container = viz3dRoot;
+    const width = container.clientWidth || 640;
+    const height = Math.min(420, Math.max(320, Math.round(width * 0.62)));
+
+    const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 5000);
+    camera.position.set(
+      center.x + camDist * 0.82,
+      center.y + camDist * 0.58,
+      center.z + camDist * 0.88
+    );
+    camera.lookAt(center);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(width, height);
+    container.innerHTML = '';
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.target.copy(center);
+    controls.minDistance = maxDim * 0.28;
+    controls.maxDistance = maxDim * 8;
+    controls.update();
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.52));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.58);
+    dir.position.set(35, 55, 28);
+    scene.add(dir);
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let dragStart = null;
+
+    function pickHorse(clientX, clientY) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(meshes, false);
+      return hits.length ? hits[0].object.userData.horse : null;
+    }
+
+    function onPointerDown(ev) {
+      dragStart = { x: ev.clientX, y: ev.clientY };
+    }
+    function onPointerUp(ev) {
+      if (!dragStart) return;
+      var d = Math.hypot(ev.clientX - dragStart.x, ev.clientY - dragStart.y);
+      dragStart = null;
+      if (d > 10) return;
+      var h = pickHorse(ev.clientX, ev.clientY);
+      if (scatterTapHint) scatterTapHint.textContent = h ? formatScatterHorseLabel(h) : '';
+    }
+    function onPointerMove(ev) {
+      var h = pickHorse(ev.clientX, ev.clientY);
+      renderer.domElement.style.cursor = h ? 'pointer' : '';
+    }
+
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('pointerup', onPointerUp);
+    renderer.domElement.addEventListener('pointermove', onPointerMove);
+
+    var raf = 0;
+    function loop() {
+      raf = requestAnimationFrame(loop);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    loop();
+
+    function onResize() {
+      var w = container.clientWidth || 640;
+      var h = Math.min(420, Math.max(320, Math.round(w * 0.62)));
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+    window.addEventListener('resize', onResize);
+
+    viz3dDispose = function () {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onResize);
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      renderer.domElement.removeEventListener('pointerup', onPointerUp);
+      renderer.domElement.removeEventListener('pointermove', onPointerMove);
+      controls.dispose();
+      meshes.forEach(function (m) {
+        m.geometry.dispose();
+        m.material.dispose();
+      });
+      renderer.dispose();
+      if (renderer.domElement.parentNode) renderer.domElement.remove();
+      container.innerHTML = '';
+    };
+  }
+
+  let _pedigreePauseAction = null;
+  function setPedigreePauseHandler(fn) {
+    _pedigreePauseAction = typeof fn === 'function' ? fn : null;
+  }
+  if (pedigreePauseBtn) {
+    pedigreePauseBtn.addEventListener('click', function () {
+      if (_pedigreePauseAction) _pedigreePauseAction();
+    });
+  }
+
+  const PEDIGREE_PHASE_CLASSES = [
+    'scrape-phase-storage',
+    'scrape-phase-queue',
+    'scrape-phase-scrape',
+    'scrape-phase-done',
+  ];
+
+  const params = new URLSearchParams(location.search);
+  const qRid = (params.get('race_id') || '').trim();
+  const qMode = (params.get('mode') || '').toLowerCase();
+  const IS_5GEN_WAIT_PAGE = params.get('5gen_wait') === '1';
+  const Q_5GEN_WAIT_RID = (params.get('race_id') || '').trim();
+  const PREFETCH_MSG_TYPE = 'keiba-note-5gen-prefetch';
+  if (qMode === '5gen' && blendMode) blendMode.value = '5gen';
+
+  let _allDates = [];
+  let _racesForDate = [];
+  let _dateRaceMap = {};
+  let _recentPastDatesForMerge = [];
+
+  function getSelectedRaceId() {
+    return raceSelect ? String(raceSelect.value || '').trim() : '';
+  }
+
+  function clearSelect(sel, placeholderText, placeholderValue) {
+    if (!sel) return;
+    sel.innerHTML = '';
+    const o = document.createElement('option');
+    o.value = placeholderValue != null ? placeholderValue : '';
+    o.textContent = placeholderText;
+    sel.appendChild(o);
+  }
+
+  function addSelectOption(sel, value, text) {
+    if (!sel) return;
+    const o = document.createElement('option');
+    o.value = value;
+    o.textContent = text;
+    sel.appendChild(o);
+  }
+
+  function updateLoadButtonState() {
+    if (btn) btn.disabled = !getSelectedRaceId();
+  }
+
+  async function loadAllDates() {
+    if (pickerStatus) pickerStatus.textContent = '開催日一覧を読み込み中…';
+    // /data-viewer と同じ /api/scrape-dates のみで先に確定（キャッシュ共有・体感を揃える）
+    const resp = await fetch(apiUrl('/api/scrape-dates'), { cache: 'no-store' });
+    const pastData = await resp.json();
+    const allPastDates = (pastData.dates || []).sort().reverse();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const recentDates = allPastDates.filter((d) => {
+      const dateStr = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+      const dateObj = new Date(dateStr);
+      dateObj.setHours(0, 0, 0, 0);
+      return dateObj < today && dateObj >= thirtyDaysAgo;
+    });
+    _recentPastDatesForMerge = recentDates;
+
+    _dateRaceMap = {};
+    _allDates = [...recentDates];
+
+    if (!dateSelect) return;
+    clearSelect(dateSelect, '日付を選択', '');
+    recentDates.forEach((d) => {
+      const label = `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
+      addSelectOption(dateSelect, d, label);
+    });
+
+    if (_allDates.length > 0) {
+      dateSelect.value = _allDates[0];
+      await onDateChange();
+    } else {
+      if (venueSelect) {
+        venueSelect.innerHTML = '<option value="">—</option>';
+        venueSelect.disabled = true;
+      }
+      if (raceSelect) {
+        raceSelect.innerHTML = '<option value="">—</option>';
+        raceSelect.disabled = true;
+      }
+    }
+    if (pickerStatus) pickerStatus.textContent = '';
+
+    fetch(apiUrl('/api/upcoming-races?_=' + Date.now()))
+      .then((r) => r.json())
+      .then((futureData) => {
+        const futureRaces = (futureData.races || []).filter((r) => r.race_id);
+        const futureDates = [...new Set(futureRaces.map((r) => r.date))].sort();
+        futureDates.forEach((date) => {
+          _dateRaceMap[date] = { type: 'future', races: futureRaces.filter((r) => r.date === date) };
+        });
+        const prev = dateSelect.value;
+        const pastList = _recentPastDatesForMerge;
+        _allDates = [...futureDates, ...pastList];
+        clearSelect(dateSelect, '日付を選択', '');
+        futureDates.forEach((d) => {
+          const y = d.slice(0, 4);
+          const m = d.slice(4, 6);
+          const day = d.slice(6, 8);
+          const raceCount = futureRaces.filter((r) => r.date === d).length;
+          const offset = _dateRaceMap[d].races[0]?.day_offset || 0;
+          let label = '';
+          if (offset === 1) label = '明日';
+          else if (offset === 2) label = '明後日';
+          else label = `${y}/${m}/${day}`;
+          addSelectOption(dateSelect, d, `${label} (${raceCount}R)`);
+        });
+        pastList.forEach((d) => {
+          const label = `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
+          addSelectOption(dateSelect, d, label);
+        });
+        if (_allDates.length === 0) return;
+        if (futureDates.length > 0) {
+          dateSelect.value = futureDates[0];
+          onDateChange();
+        } else if (pastList.includes(prev)) {
+          dateSelect.value = prev;
+        }
+      })
+      .catch((e) => console.warn('[loadAllDates] upcoming', e));
+  }
+
+  async function onDateChange() {
+    if (!dateSelect) return;
+    const date = dateSelect.value;
+    if (!date) return;
+    if (pickerStatus) pickerStatus.textContent = 'レース一覧を取得中…';
+    try {
+      if (_dateRaceMap[date] && _dateRaceMap[date].type === 'future') {
+        _racesForDate = _dateRaceMap[date].races;
+        const venues = [...new Set(_racesForDate.map((r) => r.venue))];
+        if (venueSelect) {
+          clearSelect(venueSelect, '全会場', '');
+          venues.forEach((v) => {
+            if (v) addSelectOption(venueSelect, v, v);
+          });
+          venueSelect.disabled = false;
+        }
+        populateRaces();
+      } else {
+        const resp = await fetch(apiUrl('/api/race-list/' + encodeURIComponent(date)));
+        const data = await resp.json();
+        _racesForDate = data.races || [];
+        const venues = data.venues || [];
+        if (venueSelect) {
+          clearSelect(venueSelect, '全会場', '');
+          venues.forEach((v) => {
+            if (v) addSelectOption(venueSelect, v, v);
+          });
+          venueSelect.disabled = false;
+        }
+        populateRaces();
+      }
+    } catch (e) {
+      console.error(e);
+      if (venueSelect) {
+        venueSelect.innerHTML = '<option value="">エラー</option>';
+        venueSelect.disabled = true;
+      }
+      if (raceSelect) {
+        raceSelect.innerHTML = '<option value="">—</option>';
+        raceSelect.disabled = true;
+      }
+    } finally {
+      if (pickerStatus) pickerStatus.textContent = '';
+      updateLoadButtonState();
+    }
+  }
+
+  function onVenueChange() {
+    populateRaces();
+  }
+
+  function populateRaces() {
+    if (!raceSelect || !venueSelect) return;
+    const venue = venueSelect.value;
+    const filtered = venue ? _racesForDate.filter((r) => r.venue === venue) : _racesForDate;
+    clearSelect(raceSelect, 'レースを選択', '');
+    filtered.forEach((r) => {
+      const nm = r.race_name || '';
+      const badge = /\(G[1-3I]\)/.test(nm) ? ' ★' : /\(Jpn[1-3I]\)/.test(nm) ? ' ◆' : '';
+      const label = `${r.round}R ${nm}${badge}` + (venue ? '' : ` (${r.venue || ''})`);
+      const rid = r.race_id || '';
+      if (rid) addSelectOption(raceSelect, rid, label);
+    });
+    raceSelect.disabled = filtered.length === 0;
+    updateLoadButtonState();
+  }
+
+  function onRaceChange() {
+    updateLoadButtonState();
+  }
+
+  /** URL の race_id から開催日・会場・レース欄を合わせる（ブックマーク用） */
+  async function syncPickersFromRaceId(rid) {
+    if (!rid || !dateSelect) return false;
+    try {
+      const res = await fetch(apiUrl('/api/race/' + encodeURIComponent(rid)));
+      if (!res.ok) return false;
+      const data = await res.json();
+      const raw = String(data.date || '').replace(/\D/g, '').slice(0, 8);
+      if (raw.length !== 8) return false;
+      let found = false;
+      for (let i = 0; i < dateSelect.options.length; i++) {
+        if (dateSelect.options[i].value === raw) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        const opt = document.createElement('option');
+        opt.value = raw;
+        opt.textContent = `${raw.slice(0, 4)}/${raw.slice(4, 6)}/${raw.slice(6, 8)}（リンク指定）`;
+        dateSelect.appendChild(opt);
+        _allDates.push(raw);
+      }
+      dateSelect.value = raw;
+      await onDateChange();
+      const ven = String(data.venue || '').trim();
+      if (ven && venueSelect) {
+        let vOk = false;
+        for (let i = 0; i < venueSelect.options.length; i++) {
+          if (venueSelect.options[i].value === ven) {
+            vOk = true;
+            break;
+          }
+        }
+        if (vOk) venueSelect.value = ven;
+        populateRaces();
+      }
+      if (raceSelect) {
+        let rOk = false;
+        for (let i = 0; i < raceSelect.options.length; i++) {
+          if (raceSelect.options[i].value === rid) {
+            rOk = true;
+            break;
+          }
+        }
+        if (rOk) raceSelect.value = rid;
+      }
+      updateLoadButtonState();
+      return getSelectedRaceId() === rid;
+    } catch (e) {
+      console.warn(e);
+      return false;
+    }
+  }
+
+  function showErr(msg) {
+    errBox.textContent = msg || '';
+    errBox.classList.toggle('show', !!msg);
+  }
+
+  function formatPedigreeScanStats(scanStats, planDurationMs) {
+    if (!scanStats || typeof scanStats !== 'object') return '';
+    const parts = [];
+    if (scanStats.prefetch_stage_ja)
+      parts.push('段階: ' + scanStats.prefetch_stage_ja);
+    if (scanStats.tier1_note_stallion_candidates != null)
+      parts.push('第1階層候補 ' + scanStats.tier1_note_stallion_candidates + ' 頭');
+    if (scanStats.tier2_note_stallion_candidates != null)
+      parts.push('第2階層候補 ' + scanStats.tier2_note_stallion_candidates + ' 頭');
+    if (scanStats.storage_loads != null)
+      parts.push('ストレージ読込 ' + scanStats.storage_loads + ' 回');
+    if (scanStats.bfs_visits != null)
+      parts.push('確認ヘッド数 ' + scanStats.bfs_visits);
+    if (scanStats.graph_nodes_seen != null)
+      parts.push('参照ノード ' + scanStats.graph_nodes_seen);
+    if (scanStats.runner_ids_checked != null)
+      parts.push('出走確認 ' + scanStats.runner_ids_checked + ' 頭');
+    if (planDurationMs != null && planDurationMs >= 0)
+      parts.push('計画処理 ' + planDurationMs + 'ms');
+    return parts.join(' · ');
+  }
+
+  /**
+   * @param {object} opts
+   * @param {boolean} [opts.show]
+   * @param {string} [opts.msg]
+   * @param {'storage'|'queue'|'scrape'|'done'} [opts.phase]
+   * @param {string} [opts.phaseText]
+   * @param {string} [opts.sub]
+   * @param {string} [opts.statsText]
+   * @param {number} [opts.progressPct] 0–100 で確定バー。未指定なら不定（indeterminate）
+   * @param {boolean} [opts.indeterminate] true なら progressPct があっても不定バー
+   * @param {boolean} [opts.runnerBarShow] 出走馬（レース全体）プログレスバー
+   * @param {number} [opts.runnerProgressPct] 0–100
+   * @param {string} [opts.runnerBarCaption]
+   */
+  function setPedigreeOverlay(opts) {
+    const o = opts || {};
+    if (o.show === false) {
+      if (scrapeOverlay) scrapeOverlay.classList.remove('show');
+      if (scrapeOverlayMsg) scrapeOverlayMsg.textContent = '';
+      if (scrapeOverlayPhase) {
+        scrapeOverlayPhase.textContent = '準備';
+        scrapeOverlayPhase.classList.remove(...PEDIGREE_PHASE_CLASSES);
+        scrapeOverlayPhase.classList.add('scrape-phase-storage');
+      }
+      if (scrapeOverlayBarWrap) scrapeOverlayBarWrap.classList.add('indeterminate');
+      if (scrapeOverlayBarFill) scrapeOverlayBarFill.style.width = '0%';
+      if (scrapeOverlayStats) scrapeOverlayStats.textContent = '';
+      if (scrapeOverlaySub) scrapeOverlaySub.textContent = '';
+      if (scrapeOverlayRunnerBlock) {
+        scrapeOverlayRunnerBlock.classList.remove('show');
+        scrapeOverlayRunnerBlock.setAttribute('aria-hidden', 'true');
+      }
+      if (scrapeOverlayRunnerCaption) scrapeOverlayRunnerCaption.textContent = '';
+      if (scrapeOverlayRunnerBarFill) scrapeOverlayRunnerBarFill.style.width = '0%';
+      return;
+    }
+    if (scrapeOverlay) scrapeOverlay.classList.add('show');
+    if (o.msg != null && scrapeOverlayMsg) scrapeOverlayMsg.textContent = o.msg;
+    if (scrapeOverlayPhase && o.phaseText != null)
+      scrapeOverlayPhase.textContent = o.phaseText;
+    const kind = o.phase || 'storage';
+    const cls = 'scrape-phase-' + kind;
+    if (scrapeOverlayPhase && PEDIGREE_PHASE_CLASSES.includes(cls)) {
+      scrapeOverlayPhase.classList.remove(...PEDIGREE_PHASE_CLASSES);
+      scrapeOverlayPhase.classList.add(cls);
+    }
+    if (scrapeOverlaySub && o.sub != null) scrapeOverlaySub.textContent = o.sub;
+    if (scrapeOverlayStats)
+      scrapeOverlayStats.textContent = o.statsText != null ? o.statsText : '';
+
+    const useIndeterminate =
+      o.indeterminate === true ||
+      (o.indeterminate !== false && typeof o.progressPct !== 'number');
+    if (scrapeOverlayBarWrap && scrapeOverlayBarFill) {
+      if (useIndeterminate) {
+        scrapeOverlayBarWrap.classList.add('indeterminate');
+        scrapeOverlayBarFill.style.width = '';
+      } else {
+        scrapeOverlayBarWrap.classList.remove('indeterminate');
+        const p = Math.max(0, Math.min(100, Number(o.progressPct) || 0));
+        scrapeOverlayBarFill.style.width = p + '%';
+      }
+    }
+    if (
+      scrapeOverlayRunnerBlock &&
+      scrapeOverlayRunnerCaption &&
+      scrapeOverlayRunnerBarFill
+    ) {
+      if (o.runnerBarShow === true && typeof o.runnerProgressPct === 'number') {
+        scrapeOverlayRunnerBlock.classList.add('show');
+        scrapeOverlayRunnerBlock.setAttribute('aria-hidden', 'false');
+        scrapeOverlayRunnerCaption.textContent = o.runnerBarCaption || '';
+        const rp = Math.max(0, Math.min(100, Number(o.runnerProgressPct) || 0));
+        scrapeOverlayRunnerBarFill.style.width = rp + '%';
+      } else {
+        scrapeOverlayRunnerBlock.classList.remove('show');
+        scrapeOverlayRunnerBlock.setAttribute('aria-hidden', 'true');
+        scrapeOverlayRunnerCaption.textContent = '';
+        scrapeOverlayRunnerBarFill.style.width = '0%';
+      }
+    }
+  }
+
+  /** @param {Record<string, unknown>|null|undefined} obj API の plan / status */
+  function pedigreeRunnerOptsFromApi(obj) {
+    if (!obj || typeof obj !== 'object') return {};
+    const total = Number(obj.runner_count) || 0;
+    if (total <= 0) return {};
+    const pct = Math.max(
+      0,
+      Math.min(100, Number(obj.runner_pedigree_progress_pct) || 0)
+    );
+    return {
+      runnerBarShow: true,
+      runnerProgressPct: pct,
+      runnerBarCaption: String(obj.runner_progress_label_ja || ''),
+    };
+  }
+
+  function sleep(ms, signal) {
+    if (signal && signal.aborted) {
+      return Promise.reject(new DOMException('Aborted', 'AbortError'));
+    }
+    return new Promise(function (resolve, reject) {
+      const t = setTimeout(resolve, ms);
+      if (!signal) return;
+      const onAbort = function () {
+        clearTimeout(t);
+        signal.removeEventListener('abort', onAbort);
+        reject(new DOMException('Aborted', 'AbortError'));
+      };
+      signal.addEventListener('abort', onAbort);
+    });
+  }
+
+  async function callCancelRaceEnsure5gen(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+    try {
+      await fetch(apiUrl('/api/pedigree/race-ensure-5gen/cancel'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sid }),
+      });
+    } catch (_) {}
+  }
+
+  /** @returns パース成功時 { data: object }、失敗時 { data: null, raw: string } */
+  async function tryParseJsonResponse(res) {
+    const text = await res.text();
+    try {
+      return { data: JSON.parse(text) };
+    } catch (_) {
+      return { data: null, raw: text.slice(0, 500) };
+    }
+  }
+
+  function flattenFastApiDetail(detail) {
+    if (detail == null) return '';
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((x) => (x && typeof x === 'object' && x.msg ? x.msg : String(x)))
+        .filter(Boolean)
+        .join('; ');
+    }
+    return String(detail);
+  }
+
+  /** ルート未登録・URL 誤りなどで FastAPI が detail: Not Found を返した場合 */
+  function isHttpRouteNotFound(res, data) {
+    if (res.status !== 404 || data == null) return false;
+    const d = flattenFastApiDetail(data.detail);
+    return d === 'Not Found' || d.includes('Not Found');
+  }
+
+  function build5genWaitUrl(rid) {
+    const u = new URL(location.href);
+    u.searchParams.set('5gen_wait', '1');
+    u.searchParams.set('race_id', rid);
+    u.hash = '';
+    return u.toString();
+  }
+
+  /** @param {string} raceId @param {Window} childWin @param {number} deadlineMs */
+  function waitFor5genChildWindow(raceId, childWin, deadlineMs) {
+    return new Promise(function (resolve, reject) {
+      let settled = false;
+      function cleanup() {
+        window.removeEventListener('message', onMsg);
+        if (pollIv) clearInterval(pollIv);
+        if (toId) clearTimeout(toId);
+      }
+      function finish(fn) {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        fn();
+      }
+      function onMsg(ev) {
+        if (ev.origin !== location.origin) return;
+        const d = ev.data;
+        if (!d || d.type !== PREFETCH_MSG_TYPE) return;
+        if (String(d.race_id || '') !== String(raceId)) return;
+        if (d.ok)
+          finish(function () {
+            try {
+              window.focus();
+            } catch (_) {}
+            resolve({ ok: true, skipped: !!d.skipped });
+          });
+        else
+          finish(function () {
+            try {
+              window.focus();
+            } catch (_) {}
+            resolve({
+              ok: false,
+              error: d.error || '5世代血統の取得に失敗しました',
+              aborted: !!d.aborted,
+            });
+          });
+      }
+      const pollIv = setInterval(function () {
+        try {
+          if (childWin.closed)
+            finish(function () {
+              reject(
+                new Error(
+                  '取得用のタブが閉じられました。完了するまでそのタブを開いたままにしてください。'
+                )
+              );
+            });
+        } catch (_) {}
+      }, 450);
+      const toId = setTimeout(function () {
+        finish(function () {
+          reject(new Error('5世代血統の取得がタイムアウトしました。'));
+        });
+      }, deadlineMs);
+      window.addEventListener('message', onMsg);
+    });
+  }
+
+  /** 5gen: 欠損がなくなるまで ensure → ポーリングを繰り返す（出走馬 → 第1階層種牡馬 → 第2階層）
+   *  @returns {Promise<{ok:true}|{ok:true,skipped:true}|{ok:false,error:string,aborted?:boolean}>}
+   */
+  async function ensureRacePedigree5gen(rid) {
+    const maxRounds = 12;
+    const pollDeadlineMs = 300000;
+    const ac = new AbortController();
+    const signal = ac.signal;
+    let sessionForCancel = '';
+    const doPause = function () {
+      void callCancelRaceEnsure5gen(sessionForCancel);
+      ac.abort();
+    };
+    const abortReturn = function () {
+      setPedigreeOverlay({ show: false });
+      const msg =
+        '5世代血統の取得を一時停止しました。キュー待ちのジョブは取り下げました（実行中の取得は完了するまで続く場合があります）。';
+      showErr(msg);
+      return { ok: false, error: msg, aborted: true };
+    };
+    scrapeOverlay.classList.add('pedigree-pause-active');
+    setPedigreePauseHandler(doPause);
+    try {
+      for (let round = 0; round < maxRounds; round++) {
+        sessionForCancel = '';
+        setPedigreeOverlay({
+          show: true,
+          phase: 'storage',
+          phaseText: 'ストレージ確認',
+          msg:
+            round === 0
+              ? '出走馬の5世代血統データ（horse_pedigree_5gen）を確認しています…'
+              : `再確認中です（${round + 1} / ${maxRounds}）。新たに判明した不足分を取得します…`,
+          sub:
+            'GCS またはローカルから血統データを読み込み、欠損を調べています。この段階では netkeiba へのスクレイピングは行っていません。',
+          statsText: '',
+          indeterminate: true,
+        });
+        let pr;
+        try {
+          pr = await fetch(apiUrl('/api/pedigree/race-ensure-5gen'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ race_id: rid }),
+            signal,
+          });
+        } catch (e) {
+          if (signal.aborted || (e && e.name === 'AbortError')) return abortReturn();
+          throw e;
+        }
+        const parsed = await tryParseJsonResponse(pr);
+        const plan = parsed.data;
+        if (parsed.data == null && parsed.raw != null) {
+          setPedigreeOverlay({ show: false });
+          const msg =
+            'race-ensure-5gen の応答が JSON ではありません（HTTP ' +
+            pr.status +
+            '）。サブパス配信時はページ URL と API のベースパスを確認してください。';
+          showErr(msg);
+          return { ok: false, error: msg };
+        }
+        if (!pr.ok) {
+          if (isHttpRouteNotFound(pr, plan)) {
+            setPedigreeOverlay({ show: false });
+            console.warn(
+              '[note-aptitude-race] POST /api/pedigree/race-ensure-5gen が 404 のためプリフェッチをスキップします。API を最新にし再起動するか、リバプロのパスを確認してください。'
+            );
+            return { ok: true, skipped: true };
+          }
+          setPedigreeOverlay({ show: false });
+          const msg =
+            plan.error ||
+            flattenFastApiDetail(plan.detail) ||
+            '5世代血統の確認に失敗しました';
+          showErr(msg);
+          return { ok: false, error: msg };
+        }
+        const miss = Number(plan.missing_count) || 0;
+        if (miss === 0) {
+          setPedigreeOverlay({ show: false });
+          return { ok: true };
+        }
+        const sid = (plan.session_id || '').trim();
+        const enq = Number(plan.enqueued) || 0;
+        if (!sid || enq === 0) {
+          setPedigreeOverlay({ show: false });
+          const msg =
+            plan.message ||
+            '不足はありますがキューに投入できませんでした。スクレイプキュー設定を確認してください。';
+          showErr(msg);
+          return { ok: false, error: msg };
+        }
+        sessionForCancel = sid;
+        const statsLine = formatPedigreeScanStats(
+          plan.scan_stats,
+          plan.plan_duration_ms
+        );
+        const queueSubParts = [
+          plan.batch_targets_summary_ja,
+          'ワーカーがジョブを取るとフェーズが「スクレイピング中」に変わります。サイトへアクセスしているのはその間だけです。',
+        ].filter(Boolean);
+        setPedigreeOverlay({
+          show: true,
+          phase: 'queue',
+          phaseText: 'キュー',
+          msg:
+            plan.message ||
+            `最優先で ${enq} 件をキューに投入しました。サイトからの取得を待っています…`,
+          sub: queueSubParts.join('\n'),
+          statsText: statsLine,
+          indeterminate: true,
+          ...pedigreeRunnerOptsFromApi(plan),
+        });
+        const t0 = Date.now();
+        while (Date.now() - t0 < pollDeadlineMs) {
+          let sr;
+          try {
+            sr = await fetch(
+              apiUrl('/api/pedigree/race-ensure-5gen/status') +
+                '?session_id=' +
+                encodeURIComponent(sid),
+              { signal }
+            );
+          } catch (e) {
+            if (signal.aborted || (e && e.name === 'AbortError')) return abortReturn();
+            throw e;
+          }
+          const stParsed = await tryParseJsonResponse(sr);
+          const st = stParsed.data;
+          if (stParsed.data == null) {
+            setPedigreeOverlay({ show: false });
+            const msg =
+              '進捗 API の応答が JSON ではありません（HTTP ' + sr.status + '）。';
+            showErr(msg);
+            return { ok: false, error: msg };
+          }
+          if (!sr.ok) {
+            setPedigreeOverlay({ show: false });
+            const msg =
+              st.error || flattenFastApiDetail(st.detail) || '進捗の取得に失敗しました';
+            showErr(msg);
+            return { ok: false, error: msg };
+          }
+          if (st.user_cancelled) return abortReturn();
+          const tot = Number(st.total_jobs) || 0;
+          const done = (Number(st.completed) || 0) + (Number(st.failed) || 0);
+          const label = (st.current_job_label || '').trim();
+          const ph = String(st.phase || '');
+          let badgeKind = 'queue';
+          if (ph === 'scraping') badgeKind = 'scrape';
+          else if (ph === 'complete') badgeKind = 'done';
+          const pollStats = formatPedigreeScanStats(
+            st.scan_stats,
+            st.plan_duration_ms
+          );
+          const pct =
+            tot > 0 ? Math.max(0, Math.min(100, Number(st.progress_pct) || 0)) : null;
+          const stageJa = String(st.prefetch_stage_ja || '').trim();
+          const stagePrefix = stageJa ? `【${stageJa}】` : '';
+          const subLines = [
+            st.current_scrape_display_ja,
+            st.next_pending_display_ja,
+            st.batch_targets_summary_ja,
+            st.phase_detail_ja,
+          ].filter(Boolean);
+          setPedigreeOverlay({
+            show: true,
+            phase: badgeKind,
+            phaseText: st.phase_label_ja || '処理中',
+            msg:
+              tot > 0
+                ? `${stagePrefix}取得中 ${done} / ${tot}${label ? ' — ' + label : ''}`
+                : (stageJa ? `【${stageJa}】` : '') + 'キューを処理しています…',
+            sub: subLines.length ? subLines.join('\n') : '',
+            statsText: pollStats || statsLine,
+            progressPct: typeof pct === 'number' ? pct : undefined,
+            indeterminate: tot === 0 ? true : false,
+            ...pedigreeRunnerOptsFromApi(st),
+          });
+          if (st.all_done) break;
+          try {
+            await sleep(750, signal);
+          } catch (e) {
+            if (signal.aborted || (e && e.name === 'AbortError')) return abortReturn();
+            throw e;
+          }
+        }
+        if (Date.now() - t0 >= pollDeadlineMs) {
+          setPedigreeOverlay({ show: false });
+          const msg =
+            '5世代血統の取得がタイムアウトしました。キューの状態を確認してから再度お試しください。';
+          showErr(msg);
+          return { ok: false, error: msg };
+        }
+      }
+      setPedigreeOverlay({ show: false });
+      const msg =
+        '5世代血統の充足に繰り返し上限に達しました。データ欠損の可能性があります。';
+      showErr(msg);
+      return { ok: false, error: msg };
+    } finally {
+      scrapeOverlay.classList.remove('pedigree-pause-active');
+      setPedigreePauseHandler(null);
+    }
+  }
+
+  function render(data) {
+    showErr('');
+    const mreq = (data.meta && data.meta.blend_mode_requested) || '';
+    $('metaBar').innerHTML = [
+      '<span><strong>race_id</strong> ' + (data.race_id || '') + '</span>',
+      '<span><strong>ソース</strong> ' + (data.source || '—') + '</span>',
+      '<span><strong>距離</strong> ' + (data.distance_m ? data.distance_m + 'm' : '—') + '</span>',
+      '<span><strong>頭数</strong> ' + (data.horses || []).length + '</span>',
+      '<span><strong>ブレンド</strong> ' + mreq + '</span>',
+    ].join('');
+
+    const horses = data.horses || [];
+    if (scatterTapHint) scatterTapHint.textContent = '';
+
+    const leg = $('legend');
+    leg.innerHTML = '';
+    const maxG = Math.max(0, ...horses.map((h) => h.group_id)) + 1;
+    for (let g = 0; g < maxG; g++) {
+      const span = document.createElement('span');
+      span.innerHTML = '<span class="dot" style="background:' + HEX[g % 4] + '"></span> グループ ' + g;
+      leg.appendChild(span);
+    }
+
+    const groupsEl = $('groups');
+    groupsEl.innerHTML = '';
+    (data.groups || []).forEach((gr) => {
+      const c = document.createElement('div');
+      c.className = 'gcard';
+      const cid = gr.group_id;
+      c.innerHTML =
+        '<h3 style="color:' + HEX[cid % 4] + '">グループ ' + cid + '（' + gr.count + '頭）</h3>' +
+        '<div class="cent">P ' + gr.centroid.power + ' · EU ' + gr.centroid.eu_burst + ' · TS ' + gr.centroid.ts + '</div>' +
+        '<ul>' +
+        (gr.horse_names || []).map((n) => '<li>' + escapeHtml(n) + '</li>').join('') +
+        '</ul>';
+      groupsEl.appendChild(c);
+    });
+
+    const tb = $('tbody');
+    tb.innerHTML = '';
+    horses.forEach((h) => {
+      const tr = document.createElement('tr');
+      const g = h.group_id | 0;
+      tr.innerHTML =
+        '<td class="num">' + escapeHtml(String(h.bracket_number || '')) + '</td>' +
+        '<td class="num">' + escapeHtml(String(h.horse_number || '')) + '</td>' +
+        '<td>' + escapeHtml(h.horse_name || '') + '</td>' +
+        '<td>' + escapeHtml(h.sire || '') + '</td>' +
+        '<td>' + escapeHtml(h.dam_sire || '') + '</td>' +
+        '<td class="num">' + fmt(h.power) + '</td>' +
+        '<td class="num">' + fmt(h.eu_burst) + '</td>' +
+        '<td class="num">' + fmt(h.ts) + '</td>' +
+        '<td><span class="pill" style="background:' + HEX[g % 4] + '33;color:' + HEX[g % 4] + '">' + g + '</span></td>' +
+        '<td style="font-size:0.65rem;color:var(--dim)">' +
+        escapeHtml(String(h.blend_mode_used || '')) +
+        (h.pedigree_5gen && h.pedigree_5gen.resolved_ancestors_used != null
+          ? ' <span style="opacity:0.85">(' + h.pedigree_5gen.resolved_ancestors_used + '/' + (h.pedigree_5gen.ancestor_count || '') + '祖)</span>'
+          : '') +
+        '</td>' +
+        '<td style="font-size:0.7rem;color:var(--dim)">' + escapeHtml(h.aptitude_tag || '') + '</td>';
+      tb.appendChild(tr);
+    });
+
+    main.style.display = 'block';
+    requestAnimationFrame(function () {
+      void drawScatter3D(horses).catch(function (e) {
+        console.error(e);
+        if (scatterTapHint)
+          scatterTapHint.textContent =
+            '3D 表示の読み込みに失敗しました（ネットワークまたは esm.sh）。';
+      });
+    });
+  }
+
+  function fmt(x) {
+    const n = Number(x);
+    if (Number.isNaN(n)) return '';
+    return n.toFixed(3);
+  }
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  async function load(opts) {
+    const userClick = !!(opts && opts.userClick);
+    const rid = getSelectedRaceId();
+    if (!rid) {
+      showErr('開催日・会場・レースを選んでから「表示」を押してください。');
+      return;
+    }
+    showErr('');
+    loading.classList.add('show');
+    main.style.display = 'none';
+    btn.disabled = true;
+    try {
+      const mode = blendMode && blendMode.value ? blendMode.value : 'shallow';
+      if (mode === '5gen' && userClick && !IS_5GEN_WAIT_PAGE) {
+        const waitUrl = build5genWaitUrl(rid);
+        const childWin = window.open(waitUrl, '_blank');
+        if (!childWin) {
+          showErr(
+            'ブラウザが新しいタブをブロックしました。このサイトのポップアップを許可してから再度「表示」を押してください。'
+          );
+          return;
+        }
+        const prevLoadingText = loading.textContent;
+        loading.textContent =
+          '別タブで5世代血統を取得しています…（完了するとタブが閉じ、こちらに結果が表示されます）';
+        try {
+          const pr = await waitFor5genChildWindow(rid, childWin, 330000);
+          if (!pr.ok) {
+            showErr(
+              pr.aborted
+                ? pr.error || '別タブで5世代血統の取得を一時停止しました。'
+                : pr.error || '5世代血統の取得に失敗しました'
+            );
+            return;
+          }
+        } catch (e) {
+          showErr(String(e));
+          return;
+        } finally {
+          loading.textContent = prevLoadingText;
+        }
+      } else if (mode === '5gen') {
+        const ens = await ensureRacePedigree5gen(rid);
+        if (!ens.ok) return;
+      }
+      const url =
+        apiUrl('/api/pedigree/race-note-3d') +
+        '?race_id=' +
+        encodeURIComponent(rid) +
+        '&mode=' +
+        encodeURIComponent(mode);
+      const res = await fetch(url);
+      const noteParsed = await tryParseJsonResponse(res);
+      const data = noteParsed.data;
+      if (data == null) {
+        showErr(
+          'race-note-3d の応答が JSON ではありません（HTTP ' +
+            res.status +
+            '）。サブパス配信では …/プレフィックス/note-aptitude-race で開き、同じプレフィックス付きの /…/api がアプリに届くか確認してください。'
+        );
+        return;
+      }
+      if (!res.ok) {
+        const flat = flattenFastApiDetail(data.detail);
+        const msg = data.error || flat || '取得に失敗しました';
+        if (res.status === 404 && (flat === 'Not Found' || msg === 'Not Found')) {
+          showErr(
+            'API が見つかりません（404）。原因の例: (1) リバプロで /api がアプリに渡っていない (2) 古いプロセスのまま起動している (3) ページ URL と API ベースのプレフィックスが不一致。開発者ツールの Network で実際のリクエスト URL を確認してください。'
+          );
+        } else {
+          showErr(msg);
+        }
+        return;
+      }
+      if (!data.horses || !data.horses.length) {
+        showErr(data.error || '出走データがありません。出馬表・結果のスクレイプを先に実行してください。');
+        return;
+      }
+      const u = new URL(location.pathname + location.search, location.origin);
+      u.searchParams.set('race_id', rid);
+      u.searchParams.set('mode', mode);
+      history.replaceState(null, '', u.pathname + '?' + u.searchParams.toString());
+      render(data);
+    } catch (e) {
+      showErr(String(e));
+    } finally {
+      loading.classList.remove('show');
+      setPedigreeOverlay({ show: false });
+      btn.disabled = false;
+    }
+  }
+
+  btn.addEventListener('click', function () {
+    void load({ userClick: true });
+  });
+  if (dateSelect) dateSelect.addEventListener('change', () => { onDateChange(); });
+  if (venueSelect) venueSelect.addEventListener('change', onVenueChange);
+  if (raceSelect) raceSelect.addEventListener('change', onRaceChange);
+
+  (async function bootstrap() {
+    if (IS_5GEN_WAIT_PAGE) {
+      const wrapEl = document.querySelector('.wrap');
+      if (wrapEl) wrapEl.classList.add('fivegen-wait-mode');
+      const h1El = document.querySelector('.wrap h1');
+      if (h1El) h1El.textContent = '5世代血統データの取得（別タブ）';
+      const doneEl = $('fiveGenWaitDone');
+      if (!Q_5GEN_WAIT_RID) {
+        showErr('URL に race_id がありません。元のタブから「表示」を押して開き直してください。');
+        return;
+      }
+      try {
+        const r = await ensureRacePedigree5gen(Q_5GEN_WAIT_RID);
+        const payload = r.ok
+          ? {
+              type: PREFETCH_MSG_TYPE,
+              race_id: Q_5GEN_WAIT_RID,
+              ok: true,
+              skipped: !!r.skipped,
+            }
+          : {
+              type: PREFETCH_MSG_TYPE,
+              race_id: Q_5GEN_WAIT_RID,
+              ok: false,
+              error: r.error || '不明なエラー',
+              aborted: !!r.aborted,
+            };
+        try {
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage(payload, location.origin);
+          }
+        } catch (_) {}
+        setPedigreeOverlay({ show: false });
+        if (r.ok && window.opener) {
+          setTimeout(function () {
+            try {
+              window.close();
+            } catch (_) {}
+            try {
+              if (!window.closed && doneEl) doneEl.classList.add('show');
+            } catch (_) {}
+          }, 450);
+        } else if (r.ok && doneEl) {
+          doneEl.classList.add('show');
+        }
+      } catch (e) {
+        console.error(e);
+        showErr(String(e));
+        try {
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage(
+              {
+                type: PREFETCH_MSG_TYPE,
+                race_id: Q_5GEN_WAIT_RID,
+                ok: false,
+                error: String(e),
+              },
+              location.origin
+            );
+          }
+        } catch (_) {}
+        setPedigreeOverlay({ show: false });
+      }
+      return;
+    }
+
+    try {
+      await loadAllDates();
+      if (qRid) {
+        const ok = await syncPickersFromRaceId(qRid);
+        if (!ok) {
+          showErr(
+            'URL の race_id を開催日・レース欄に合わせられませんでした。手動で日付・会場・レースを選んでください。'
+          );
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      if (pickerStatus) pickerStatus.textContent = '';
+      showErr('開催日一覧の取得に失敗しました。ネットワークまたは API（/api/scrape-dates 等）を確認してください。');
+    }
+    updateLoadButtonState();
+    if (getSelectedRaceId()) void load({ userClick: false });
+  })();
+})();
+</script>
+</body>
+</html>

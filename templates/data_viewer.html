@@ -1,0 +1,2590 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Viewer | ML-AutoPilot Keiba</title>
+<style>
+  :root {
+    --bg: #0a0e17; --surface: #131926; --surface2: #1a2235;
+    --border: #243049; --text: #c8d6e5; --text-dim: #6b7d95;
+    --accent: #3b82f6; --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+    --purple: #a78bfa; --key: #7dd3fc; --str: #86efac; --num: #fbbf24;
+    --bool: #c084fc; --null: #94a3b8;
+    --smartrc: #f472b6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', 'Noto Sans JP', -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+
+  .header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 14px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .header h1 { font-size: 15px; font-weight: 600; color: #fff; white-space: nowrap; }
+  .header .nav { display: flex; gap: 6px; margin-left: auto; }
+  .header .nav a {
+    color: var(--text-dim); text-decoration: none; font-size: 12px;
+    padding: 5px 12px; border-radius: 5px; border: 1px solid var(--border);
+  }
+  .header .nav a:hover { border-color: var(--accent); color: var(--accent); }
+
+  .controls {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  }
+  .controls label { font-size: 12px; color: var(--text-dim); }
+  .controls input, .controls select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 12px; border-radius: 6px; font-size: 13px; font-family: inherit;
+    max-width: 300px;
+  }
+  .controls input:focus, .controls select:focus { outline: none; border-color: var(--accent); }
+  .controls select:disabled { opacity: 0.5; cursor: not-allowed; }
+  .controls button {
+    background: var(--accent); color: #fff; border: none; padding: 6px 16px;
+    border-radius: 5px; cursor: pointer; font-size: 13px; font-family: inherit;
+  }
+  .controls button:hover { opacity: 0.9; }
+
+  .tabs {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 24px; display: flex; gap: 0; overflow-x: auto;
+  }
+  .tab {
+    padding: 10px 16px; font-size: 12px; cursor: pointer; border-bottom: 2px solid transparent;
+    color: var(--text-dim); white-space: nowrap; transition: all 0.15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab.smartrc-tab.active { color: var(--smartrc); border-bottom-color: var(--smartrc); }
+  .tab .badge {
+    display: inline-block; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1px 6px; font-size: 10px; margin-left: 4px;
+  }
+  .tab.has-data .badge { background: rgba(34,197,94,0.15); border-color: var(--ok); color: var(--ok); }
+  .tab.smartrc-tab.has-data .badge { background: rgba(244,114,182,0.15); border-color: var(--smartrc); color: var(--smartrc); }
+  .tab.no-data .badge { background: rgba(107,125,149,0.15); color: var(--text-dim); }
+
+  .content { padding: 16px 24px; }
+  .empty { text-align: center; padding: 60px 20px; color: var(--text-dim); font-size: 14px; }
+
+  .meta {
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 18px; margin-bottom: 14px;
+    font-size: 13px; color: var(--text-dim);
+    display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+    font-family: 'Inter', 'Noto Sans JP', -apple-system, sans-serif;
+  }
+  .meta span { color: var(--text); }
+  .meta .meta-sep { color: var(--border); margin: 0 4px; font-size: 10px; }
+
+  .view-toggle {
+    margin-bottom: 14px; display: flex; gap: 2px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 3px; width: fit-content;
+  }
+  .view-toggle button {
+    background: transparent; border: none; color: var(--text-dim);
+    padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    font-family: inherit; font-weight: 500; transition: all 0.15s;
+  }
+  .view-toggle button:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .view-toggle button.active { background: var(--accent); color: #fff; box-shadow: 0 1px 4px rgba(59,130,246,0.3); }
+
+  .json-view {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px; overflow-x: auto; max-height: calc(100vh - 280px); overflow-y: auto;
+    line-height: 1.7; font-size: 13px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  .jk { color: var(--key); }
+  .js { color: var(--str); }
+  .jn { color: var(--num); }
+  .jb { color: var(--bool); }
+  .jnull { color: var(--null); font-style: italic; }
+  .jbrace { color: var(--text-dim); }
+  .jcomma { color: var(--text-dim); }
+  .collapse-btn {
+    cursor: pointer; user-select: none; color: var(--text-dim);
+    font-size: 11px; margin-left: 4px;
+  }
+  .collapse-btn:hover { color: var(--accent); }
+  .collapsed { display: none; }
+  .collapse-hint { color: var(--text-dim); font-size: 11px; font-style: italic; }
+
+  /* Table view */
+  .table-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    overflow: auto; max-height: calc(100vh - 280px);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  }
+  .data-table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    font-size: 13px; font-family: 'Inter', 'Noto Sans JP', -apple-system, 'Segoe UI', sans-serif;
+  }
+  .data-table th {
+    background: var(--surface2); color: var(--accent); font-weight: 700;
+    padding: 10px 14px; text-align: left;
+    border-bottom: 2px solid var(--border);
+    position: sticky; top: 0; z-index: 2;
+    white-space: nowrap; font-size: 11.5px;
+    vertical-align: middle;
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .data-table th:first-child { border-radius: 10px 0 0 0; }
+  .data-table th:last-child  { border-radius: 0 10px 0 0; }
+  .data-table td {
+    padding: 9px 14px; border-bottom: 1px solid rgba(36,48,73,0.6);
+    white-space: nowrap; max-width: 420px; overflow: hidden; text-overflow: ellipsis;
+    vertical-align: middle; line-height: 1.5;
+  }
+  .data-table td.wrap-cell {
+    white-space: normal; word-break: break-all;
+  }
+  .data-table tbody tr { transition: background 0.12s; }
+  .data-table tbody tr:hover td { background: rgba(59,130,246,0.07); }
+  .data-table tbody tr:nth-child(even) td { background: rgba(26,34,53,0.3); }
+  .data-table tbody tr:nth-child(even):hover td { background: rgba(59,130,246,0.07); }
+  .data-table .num { text-align: right; color: var(--num); font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12.5px; }
+  .data-table .tc  { text-align: center; }
+  .data-table .tr  { text-align: right; }
+  .data-table .str { color: var(--str); }
+  .data-table .dim { color: var(--text-dim); font-size: 12px; }
+  .data-table .tag-cell {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+  }
+  .data-table .tag-ok  { background: rgba(34,197,94,0.12); color: var(--ok); }
+  .data-table .tag-warn { background: rgba(245,158,11,0.12); color: var(--warn); }
+  .data-table .tag-err  { background: rgba(239,68,68,0.12); color: var(--err); }
+  .data-table .tag-accent { background: rgba(59,130,246,0.12); color: var(--accent); }
+  .data-table .tag-purple { background: rgba(167,139,250,0.12); color: var(--purple); }
+
+  .blood-color {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    margin-right: 4px; vertical-align: middle;
+  }
+
+  /* ── 馬柱カード ── */
+  .bashira-grid {
+    display: flex; flex-wrap: nowrap; gap: 0;
+    overflow-x: auto; padding-bottom: 12px;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface);
+  }
+  .bashira-grid::-webkit-scrollbar { height: 6px; }
+  .bashira-grid::-webkit-scrollbar-track { background: transparent; }
+  .bashira-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .bashira-col {
+    width: 142px; min-width: 142px; max-width: 142px; flex-shrink: 0;
+    border-right: 1px solid rgba(36,48,73,0.6);
+    display: flex; flex-direction: column;
+  }
+  .bashira-col:last-child { border-right: none; }
+  .bashira-header {
+    padding: 10px 6px 8px; text-align: center;
+    height: 80px; min-height: 80px; max-height: 80px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border-bottom: 2px solid var(--border); position: sticky; top: 0; z-index: 2;
+    background: var(--surface2);
+    overflow: hidden;
+  }
+  .bashira-waku-bar {
+    height: 3px; margin: -10px -6px 6px;
+    flex-shrink: 0;
+  }
+  .bashira-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%; font-size: 14px; font-weight: 800;
+    margin-bottom: 4px; border: 2px solid rgba(255,255,255,0.15);
+    flex-shrink: 0;
+  }
+  .bashira-nums {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    margin-bottom: 4px; flex-shrink: 0;
+  }
+  .bashira-name {
+    font-size: 11.5px; font-weight: 600; color: #fff; cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 126px; display: block; margin: 0 auto;
+    transition: color 0.15s;
+  }
+  .bashira-name:hover { color: var(--accent); }
+  .bashira-jockey { font-size: 9.5px; color: var(--text-dim); margin-top: 2px; }
+  .bashira-cell {
+    padding: 7px 6px; border-bottom: 1px solid rgba(36,48,73,0.5);
+    font-size: 10.5px; line-height: 1.5;
+    height: 152px; min-height: 152px; max-height: 152px;
+    overflow: hidden;
+    transition: background 0.15s;
+  }
+  .bashira-cell:hover { background: rgba(59,130,246,0.06); }
+  .bashira-cell:nth-child(even) { background: rgba(19,25,38,0.35); }
+  .bashira-cell:nth-child(even):hover { background: rgba(59,130,246,0.08); }
+  .bc-pos {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 6px; font-size: 15px; font-weight: 900;
+    margin-right: 4px; flex-shrink: 0;
+    letter-spacing: -0.5px;
+  }
+  .bc-pos-1 { background: #b8860b; color: #fff; box-shadow: 0 0 8px rgba(234,179,8,0.4); }
+  .bc-pos-2 { background: #6b7280; color: #fff; }
+  .bc-pos-3 { background: #92400e; color: #fbbf24; }
+  .bc-pos-out { background: rgba(107,125,149,0.15); color: #94a3b8; }
+  .bc-venue { color: var(--purple); font-weight: 600; font-size: 11px; }
+  .bc-grade {
+    font-weight: 800; font-size: 9px; padding: 1px 4px; border-radius: 3px;
+    letter-spacing: 0.5px; display: inline-block;
+  }
+  .bc-grade-g1 { background: rgba(234,179,8,0.2); color: #facc15; }
+  .bc-grade-g2 { background: rgba(168,162,158,0.2); color: #d6d3d1; }
+  .bc-grade-g3 { background: rgba(180,83,9,0.2); color: #d97706; }
+  .bc-grade-listed { background: rgba(167,139,250,0.15); color: var(--purple); }
+  .bc-grade-default { background: rgba(107,125,149,0.1); color: var(--text-dim); }
+  .bc-race-name {
+    font-size: 10px; color: var(--text); font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 78px; display: inline-block; vertical-align: middle;
+  }
+  .bc-track { color: var(--text); font-size: 10.5px; }
+  .bc-turf { color: #4ade80; }
+  .bc-dirt { color: #fb923c; }
+  .bc-cond { font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
+  .bc-cond-good { background: rgba(34,197,94,0.12); color: var(--ok); }
+  .bc-cond-slimy { background: rgba(96,165,250,0.12); color: var(--accent); }
+  .bc-cond-bad { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .bc-cond-worst { background: rgba(239,68,68,0.15); color: var(--err); }
+  .bc-time { color: #fff; font-weight: 700; font-size: 12px; letter-spacing: 0.3px; }
+  .bc-detail { color: var(--text-dim); font-size: 9.5px; }
+  .bc-pass { color: var(--key); font-size: 10px; letter-spacing: 0.3px; }
+  .bc-agari { color: var(--num); font-weight: 700; font-size: 10.5px; }
+  .bc-row { display: flex; align-items: center; gap: 3px; margin-bottom: 1px; }
+  .bc-empty {
+    color: var(--text-dim); text-align: center; font-size: 11px;
+    height: 100%; display: flex; align-items: center; justify-content: center;
+  }
+  .bc-separator { border: none; border-top: 1px dashed rgba(36,48,73,0.4); margin: 2px 0; }
+  /* 枠番カラー (JRA公式) */
+  .waku-1 { background: #f5f5f5; color: #222; }
+  .waku-2 { background: #111; color: #fff; border: 1px solid #555; }
+  .waku-3 { background: #e53935; color: #fff; }
+  .waku-4 { background: #1e88e5; color: #fff; }
+  .waku-5 { background: #fdd835; color: #222; }
+  .waku-6 { background: #43a047; color: #fff; }
+  .waku-7 { background: #f57c00; color: #fff; }
+  .waku-8 { background: #ec407a; color: #fff; }
+  .waku-bar-1 { background: #f5f5f5; }
+  .waku-bar-2 { background: #333; }
+  .waku-bar-3 { background: #e53935; }
+  .waku-bar-4 { background: #1e88e5; }
+  .waku-bar-5 { background: #fdd835; }
+  .waku-bar-6 { background: #43a047; }
+  .waku-bar-7 { background: #f57c00; }
+  .waku-bar-8 { background: #ec407a; }
+  .section-title {
+    font-size: 13px; font-weight: 700; color: var(--purple);
+    margin: 20px 0 10px 0; padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Inter', 'Noto Sans JP', -apple-system, sans-serif;
+    letter-spacing: 0.3px;
+  }
+  .section-title:first-child { margin-top: 0; }
+
+  /* Horse link in tables */
+  .horse-link {
+    color: var(--accent); cursor: pointer; text-decoration: none;
+    border-bottom: 1px dotted var(--accent);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .horse-link:hover { color: #60a5fa; border-color: #60a5fa; }
+
+  /* Modal overlay */
+  .horse-modal-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+    display: none; justify-content: center; align-items: flex-start;
+    padding: 30px 20px; overflow-y: auto;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .horse-modal-overlay.visible { opacity: 1; }
+
+  .horse-modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    width: 100%; max-width: 960px; min-height: 400px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    transform: translateY(20px); transition: transform 0.25s ease;
+    display: flex; flex-direction: column;
+  }
+  .horse-modal-overlay.visible .horse-modal { transform: translateY(0); }
+
+  .hm-header {
+    display: flex; align-items: center; gap: 12px; padding: 16px 20px;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .hm-name { font-size: 18px; font-weight: 700; color: #fff; }
+  .hm-name-en { font-size: 12px; color: var(--text-dim); }
+  .hm-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
+  }
+  .hm-badge-sex { background: rgba(167,139,250,0.2); color: var(--purple); }
+  .hm-badge-status { background: rgba(34,197,94,0.15); color: var(--ok); }
+  .hm-close {
+    margin-left: auto; background: none; border: 1px solid var(--border);
+    color: var(--text-dim); width: 32px; height: 32px; border-radius: 6px;
+    cursor: pointer; font-size: 16px; display: flex; align-items: center;
+    justify-content: center; transition: all 0.15s;
+  }
+  .hm-close:hover { border-color: var(--err); color: var(--err); }
+
+  .hm-tabs {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border);
+    padding: 0 20px; flex-shrink: 0; overflow-x: auto;
+  }
+  .hm-tab {
+    padding: 10px 18px; font-size: 12px; cursor: pointer;
+    border-bottom: 2px solid transparent; color: var(--text-dim);
+    white-space: nowrap; transition: all 0.15s; font-family: inherit;
+    background: none; border-top: none; border-left: none; border-right: none;
+  }
+  .hm-tab:hover { color: var(--text); }
+  .hm-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .hm-body {
+    padding: 16px 20px; flex: 1; overflow-y: auto; max-height: calc(100vh - 200px);
+  }
+  .hm-loading {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 200px; color: var(--text-dim); font-size: 13px;
+  }
+  .hm-spinner {
+    width: 20px; height: 20px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: hm-spin 0.6s linear infinite; margin-right: 10px;
+  }
+  @keyframes hm-spin { to { transform: rotate(360deg); } }
+
+  /* Info cards */
+  .hm-info-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px; margin-bottom: 16px;
+  }
+  .hm-info-card {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .hm-info-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 3px; }
+  .hm-info-value { font-size: 14px; color: #fff; font-weight: 600; }
+  .hm-info-value.sm { font-size: 12px; font-weight: 400; color: var(--text); }
+
+  /* Pedigree table */
+  .ped-table {
+    width: 100%; border-collapse: separate; border-spacing: 3px; font-size: 11px;
+  }
+  .ped-table td {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 8px; vertical-align: middle;
+  }
+  .ped-table td.sire-line { border-left: 3px solid var(--accent); }
+  .ped-table td.dam-line { border-left: 3px solid var(--smartrc); }
+  .ped-name { font-weight: 600; color: #fff; font-size: 12px; }
+  .ped-lineage { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .ped-country { font-size: 10px; color: var(--warn); }
+
+  /* Stats bars */
+  .stat-group { margin-bottom: 18px; }
+  .stat-group-title { font-size: 13px; font-weight: 600; color: var(--purple); margin-bottom: 8px; }
+  .stat-row {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12px;
+  }
+  .stat-label { width: 80px; color: var(--text-dim); text-align: right; flex-shrink: 0; }
+  .stat-bar-wrap {
+    flex: 1; height: 18px; background: var(--surface2); border-radius: 4px;
+    overflow: hidden; position: relative;
+  }
+  .stat-bar {
+    height: 100%; border-radius: 4px; transition: width 0.5s ease;
+    min-width: 2px;
+  }
+  .stat-bar.win { background: linear-gradient(90deg, var(--ok), #16a34a); }
+  .stat-bar.top3 { background: linear-gradient(90deg, var(--accent), #2563eb); }
+  .stat-value { width: 110px; font-size: 11px; color: var(--text); flex-shrink: 0; }
+  .stat-pct { color: var(--num); font-weight: 600; }
+
+  /* Race history in modal */
+  .hm-history-table {
+    width: 100%; border-collapse: collapse; font-size: 11px;
+  }
+  .hm-history-table th {
+    background: var(--surface2); color: var(--accent); font-weight: 600;
+    padding: 6px 8px; text-align: left; border-bottom: 2px solid var(--border);
+    position: sticky; top: 0; z-index: 1; white-space: nowrap; font-size: 10px;
+    vertical-align: middle;
+  }
+  .hm-history-table td {
+    padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap;
+    vertical-align: middle;
+  }
+  .hm-history-table .tc { text-align: center; }
+  .hm-history-table .tr { text-align: right; }
+  .hm-history-table .num { text-align: right; font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+  .hm-history-table tr:hover td { background: rgba(59,130,246,0.05); }
+  .pos-1 { color: var(--ok); font-weight: 700; }
+  .pos-2 { color: var(--accent); font-weight: 600; }
+  .pos-3 { color: var(--warn); font-weight: 600; }
+
+  /* Person link */
+  .person-link {
+    color: var(--purple); cursor: pointer; text-decoration: none;
+    border-bottom: 1px dotted var(--purple);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .person-link:hover { color: #c4b5fd; border-color: #c4b5fd; }
+
+  /* Person modal - reuse horse modal structure */
+  .pm-filter-bar {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    padding: 10px 0; margin-bottom: 12px;
+    border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .pm-filter-bar label { color: var(--text-dim); font-size: 10px; }
+  .pm-filter-bar select, .pm-filter-bar input {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: inherit;
+  }
+  .pm-filter-bar select:focus, .pm-filter-bar input:focus {
+    outline: none; border-color: var(--accent);
+  }
+  .pm-filter-bar .reset-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit;
+  }
+  .pm-filter-bar .reset-btn:hover { border-color: var(--err); color: var(--err); }
+
+  /* Yearly chart bars */
+  .yearly-chart { margin-bottom: 16px; }
+  .yearly-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 11px;
+  }
+  .yearly-year { width: 36px; color: var(--text-dim); text-align: right; flex-shrink: 0; }
+  .yearly-bar-wrap {
+    flex: 1; height: 16px; background: var(--surface2); border-radius: 3px;
+    overflow: hidden; display: flex;
+  }
+  .yearly-bar-win { background: var(--ok); height: 100%; }
+  .yearly-bar-2nd { background: var(--accent); height: 100%; }
+  .yearly-bar-3rd { background: var(--warn); height: 100%; }
+  .yearly-detail {
+    width: 160px; flex-shrink: 0; font-size: 10px; color: var(--text-dim);
+  }
+  .yearly-detail .pct { color: var(--num); font-weight: 600; }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .header { padding: 10px 12px; gap: 8px; }
+    .header h1 { font-size: 13px; }
+    .header .nav { gap: 4px; margin-left: 0; width: 100%; overflow-x: auto; }
+    .header .nav a { font-size: 11px; padding: 4px 8px; flex-shrink: 0; }
+
+    .controls { padding: 10px 12px; gap: 6px; }
+    .controls label { font-size: 11px; }
+    .controls input, .controls select {
+      font-size: 12px; padding: 6px 8px; max-width: 100%; min-width: 0; flex: 1;
+    }
+    .controls button { font-size: 12px; padding: 6px 12px; }
+
+    .tabs { padding: 0 8px; }
+    .tab { padding: 8px 10px; font-size: 11px; }
+
+    .content { padding: 10px 8px; }
+
+    .meta { padding: 10px 12px; font-size: 12px; }
+
+    .table-wrap { border-radius: 8px; max-height: calc(100vh - 240px); }
+    .data-table { font-size: 12px; }
+    .data-table th { padding: 7px 8px; font-size: 10px; letter-spacing: 0.2px; }
+    .data-table td { padding: 6px 8px; max-width: 200px; }
+    .data-table .num { font-size: 11.5px; }
+
+    .bashira-col { width: 120px; min-width: 120px; max-width: 120px; }
+    .bashira-header { height: auto; min-height: 70px; max-height: none; padding: 8px 4px 6px; }
+    .bashira-cell { height: auto; min-height: 130px; max-height: none; }
+    .bashira-name { font-size: 10.5px; }
+    .bc-venue { font-size: 9.5px; }
+    .bc-detail { font-size: 9px; }
+    .bc-track { font-size: 9.5px; }
+
+    .json-view { padding: 12px; font-size: 11px; max-height: calc(100vh - 240px); }
+
+    .horse-modal-overlay { padding: 10px 6px; }
+    .horse-modal { max-width: 100%; border-radius: 10px; }
+    .hm-header { padding: 12px 14px; gap: 8px; }
+    .hm-name { font-size: 15px; }
+    .hm-tabs { padding: 0 10px; }
+    .hm-tab { padding: 8px 12px; font-size: 11px; }
+    .hm-body { padding: 12px 10px; max-height: calc(100vh - 160px); }
+    .hm-info-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+    .hm-info-card { padding: 8px 10px; }
+    .hm-info-label { font-size: 9px; }
+    .hm-info-value { font-size: 12px; }
+
+    .hm-history-table { font-size: 10px; }
+    .hm-history-table th { padding: 5px 6px; font-size: 9px; }
+    .hm-history-table td { padding: 4px 6px; }
+
+    .ped-table { font-size: 10px; border-spacing: 2px; }
+    .ped-table td { padding: 4px 6px; }
+    .ped-name { font-size: 10.5px; }
+    .ped-lineage { font-size: 9px; }
+
+    .stat-row { gap: 6px; font-size: 11px; }
+    .stat-label { width: 60px; font-size: 10px; }
+    .stat-value { width: 90px; font-size: 10px; }
+
+    .pm-filter-bar { gap: 4px; font-size: 11px; }
+    .pm-filter-bar select, .pm-filter-bar input { font-size: 10px; padding: 3px 6px; }
+
+    .yearly-row { gap: 4px; font-size: 10px; }
+    .yearly-year { width: 30px; font-size: 10px; }
+    .yearly-detail { width: 120px; font-size: 9px; }
+
+    .section-title { font-size: 12px; }
+    .view-toggle button { padding: 5px 10px; font-size: 11px; }
+  }
+
+  @media (max-width: 480px) {
+    .header { flex-direction: column; align-items: flex-start; padding: 8px 10px; }
+    .header h1 { font-size: 12px; }
+
+    .controls { flex-direction: column; align-items: stretch; padding: 8px 10px; gap: 6px; }
+    .controls input, .controls select { max-width: 100%; }
+
+    .content { padding: 8px 6px; }
+
+    .data-table { font-size: 11px; }
+    .data-table th { padding: 6px 6px; font-size: 9.5px; }
+    .data-table td { padding: 5px 6px; max-width: 150px; }
+    .data-table .num { font-size: 11px; }
+
+    .bashira-col { width: 110px; min-width: 110px; max-width: 110px; }
+    .bashira-header { min-height: 64px; }
+    .bashira-cell { min-height: 120px; }
+    .bashira-name { font-size: 10px; }
+
+    .hm-header { flex-wrap: wrap; padding: 10px 12px; }
+    .hm-name { font-size: 14px; }
+    .hm-body { padding: 10px 8px; }
+    .hm-info-grid { grid-template-columns: repeat(2, 1fr); }
+
+    .meta { font-size: 11px; padding: 8px 10px; }
+    .meta .meta-sep { margin: 0 2px; }
+  }
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+<div class="header">
+  <h1>📦 Data Viewer</h1>
+  <span id="raceLabel" style="font-size:13px;color:var(--accent);font-weight:400"></span>
+</div>
+
+<div class="controls" id="raceSelector">
+  <label>開催日:</label>
+  <select id="dateSelect" onchange="onDateSelectChange()" style="min-width:170px">
+    <option value="">読み込み中...</option>
+  </select>
+  <label>会場:</label>
+  <select id="venueSelect" onchange="onVenueChange()" disabled>
+    <option value="">--</option>
+  </select>
+  <label>レース:</label>
+  <select id="raceSelect" onchange="onRaceSelect()" disabled style="min-width:260px">
+    <option value="">--</option>
+  </select>
+  <button onclick="loadAll()" style="background:var(--purple)">データ表示</button>
+  <span id="loadingDates" style="font-size:11px;color:var(--text-dim);display:none">読み込み中...</span>
+</div>
+<input type="hidden" id="raceIdInput" value="{{ race_id }}">
+<div class="controls" style="border-top:none;padding-top:0">
+  <label>直接入力:</label>
+  <input type="text" id="directIdInput" placeholder="race_id / horse_id" style="width:160px;font-size:11px">
+  <label>Category:</label>
+  <select id="categorySelect" style="font-size:11px">
+    <option value="">-- 選択 --</option>
+    <optgroup label="netkeiba レース">
+      <option value="race_shutuba">出馬表</option>
+      <option value="race_result">レース結果</option>
+      <option value="race_index">タイム指数</option>
+      <option value="race_shutuba_past">馬柱</option>
+      <option value="race_odds">オッズ</option>
+      <option value="race_paddock">パドック</option>
+      <option value="race_barometer">偏差値/走行データ</option>
+      <option value="race_oikiri">追い切り</option>
+      <option value="race_trainer_comment">厩舎コメント</option>
+    </optgroup>
+    <optgroup label="SmartRC">
+      <option value="smartrc_runners">Runners (評価/テン1F/推定人気)</option>
+      <option value="smartrc_horses">Horses (血統/系統/色分け)</option>
+      <option value="smartrc_fullresults">Results (全戦績)</option>
+    </optgroup>
+    <optgroup label="馬">
+      <option value="horse_result" data-key-type="horse">馬情報</option>
+      <option value="horse_ped" data-key-type="horse">血統</option>
+    </optgroup>
+    <optgroup label="予測">
+      <option value="race_predictions">AI予測結果</option>
+    </optgroup>
+  </select>
+  <button onclick="loadDataDirect()" style="font-size:11px">個別取得</button>
+</div>
+
+<div class="tabs" id="tabBar" style="display:none"></div>
+
+<div class="content" id="content">
+  <div class="empty">Race ID を入力してデータを取得してください</div>
+</div>
+
+<div class="horse-modal-overlay" id="personModal" onclick="if(event.target===this)closePersonModal()">
+  <div class="horse-modal">
+    <div class="hm-header" id="pmHeader"></div>
+    <div class="hm-tabs" id="pmTabs"></div>
+    <div class="hm-body" id="pmBody">
+      <div class="hm-loading"><div class="hm-spinner"></div>読み込み中...</div>
+    </div>
+  </div>
+</div>
+
+<div class="horse-modal-overlay" id="horseModal" onclick="if(event.target===this)closeHorseModal()">
+  <div class="horse-modal">
+    <div class="hm-header" id="hmHeader"></div>
+    <div class="hm-tabs" id="hmTabs"></div>
+    <div class="hm-body" id="hmBody">
+      <div class="hm-loading"><div class="hm-spinner"></div>読み込み中...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const RACE_CATEGORIES = [
+  {key:'race_shutuba', label:'出馬表'},
+  {key:'race_result', label:'結果'},
+  {key:'race_index', label:'指数'},
+  {key:'race_shutuba_past', label:'馬柱'},
+  {key:'race_odds', label:'オッズ'},
+  {key:'race_paddock', label:'パドック'},
+  {key:'race_barometer', label:'偏差値'},
+  {key:'race_oikiri', label:'追い切り'},
+  {key:'smartrc_runners', label:'SC:Runners', smartrc: true},
+  {key:'smartrc_horses', label:'SC:Horses', smartrc: true},
+  {key:'smartrc_fullresults', label:'SC:Results', smartrc: true},
+  {key:'race_predictions', label:'AI予測'},
+];
+const CATEGORIES = RACE_CATEGORIES;
+
+let cache = {};
+let activeTab = '';
+let viewMode = {};
+let _bundleHorses = {};
+
+let _allDates = [];
+let _racesForDate = [];
+let _selectedDate = '';
+
+function getParams() {
+  const params = new URLSearchParams(window.location.search);
+  return { race_id: params.get('race_id') || '', category: params.get('category') || '' };
+}
+
+async function init() {
+  const p = getParams();
+
+  document.getElementById('loadingDates').style.display = 'inline';
+  try {
+    const resp = await fetch('/api/scrape-dates', { cache: 'no-store' });
+    const data = await resp.json();
+    _allDates = (data.dates || []).sort().reverse();
+  } catch (e) {
+    console.error('日付一覧取得失敗:', e);
+    _allDates = [];
+  }
+  document.getElementById('loadingDates').style.display = 'none';
+
+  _populateDateSelect();
+
+  if (p.race_id && p.race_id.length >= 10) {
+    document.getElementById('raceIdInput').value = p.race_id;
+    if (p.category) {
+      document.getElementById('categorySelect').value = p.category;
+      loadData();
+    } else {
+      loadAll();
+    }
+    return;
+  }
+
+  if (_allDates.length > 0) {
+    await autoSelectLatestMain();
+  }
+}
+
+function _populateDateSelect() {
+  const sel = document.getElementById('dateSelect');
+  if (!_allDates.length) {
+    sel.innerHTML = '<option value="">日付なし</option>';
+    return;
+  }
+  sel.innerHTML = _allDates.map(d => {
+    return `<option value="${d}">${_fmtDateLabel(d)}</option>`;
+  }).join('');
+}
+
+async function onDateSelectChange() {
+  const date = document.getElementById('dateSelect').value;
+  if (!date) return;
+  _selectedDate = date;
+
+  const races = await _fetchRacesForDate(date);
+  if (!races.length) {
+    document.getElementById('venueSelect').innerHTML = '<option value="">レースなし</option>';
+    document.getElementById('venueSelect').disabled = true;
+    document.getElementById('raceSelect').innerHTML = '<option value="">--</option>';
+    document.getElementById('raceSelect').disabled = true;
+    return;
+  }
+  _populateVenues(races);
+
+  const graded = races.filter(r =>
+    /\(G[1-3I]\)|\(Jpn[1-3I]\)/.test(r.race_name) && r.round >= 10);
+  const main11 = races.filter(r => r.round === 11);
+  const pick = graded.length ? graded[0] : (main11.length ? main11[0] : races[races.length - 1]);
+  document.getElementById('venueSelect').value = pick.venue;
+  onVenueChange();
+  document.getElementById('raceSelect').value = pick.race_id;
+  onRaceSelect();
+}
+
+function _fmtDateLabel(yyyymmdd) {
+  const d = new Date(yyyymmdd.slice(0,4), parseInt(yyyymmdd.slice(4,6))-1, yyyymmdd.slice(6,8));
+  const wday = ['日','月','火','水','木','金','土'][d.getDay()];
+  return `${yyyymmdd.slice(0,4)}/${yyyymmdd.slice(4,6)}/${yyyymmdd.slice(6,8)} (${wday})`;
+}
+
+async function autoSelectLatestMain() {
+  for (const date of _allDates) {
+    document.getElementById('dateSelect').value = date;
+    _selectedDate = date;
+
+    const races = await _fetchRacesForDate(date);
+    if (!races.length) continue;
+
+    _populateVenues(races);
+
+    const graded = races.filter(r =>
+      /\(G[1-3I]\)|\(Jpn[1-3I]\)/.test(r.race_name) && r.round >= 10);
+    const main11 = races.filter(r => r.round === 11);
+    const pick = graded.length ? graded[0] : (main11.length ? main11[0] : races[races.length - 1]);
+
+    document.getElementById('venueSelect').value = pick.venue;
+    onVenueChange();
+    document.getElementById('raceSelect').value = pick.race_id;
+    onRaceSelect();
+    loadAll();
+    return;
+  }
+}
+
+async function _fetchRacesForDate(date) {
+  try {
+    const resp = await fetch(`/api/race-list/${date}`);
+    const data = await resp.json();
+    _racesForDate = data.races || [];
+    return _racesForDate;
+  } catch (e) {
+    console.error('レース一覧取得失敗:', e);
+    _racesForDate = [];
+    return [];
+  }
+}
+
+function _populateVenues(races) {
+  const venues = [...new Set(races.map(r => r.venue).filter(Boolean))].sort();
+  const sel = document.getElementById('venueSelect');
+  sel.innerHTML = '<option value="">全会場</option>' +
+    venues.map(v => `<option value="${v}">${v}</option>`).join('');
+  sel.disabled = false;
+  _populateRaces(races, '');
+}
+
+function _populateRaces(races, venueFilter) {
+  const filtered = venueFilter ? races.filter(r => r.venue === venueFilter) : races;
+  const sel = document.getElementById('raceSelect');
+  sel.innerHTML = filtered.map(r => {
+    const label = `${r.round}R ${r.race_name}`;
+    const badge = /\(G[1-3I]\)/.test(r.race_name) ? ' ★' :
+                  /\(Jpn[1-3I]\)/.test(r.race_name) ? ' ◆' :
+                  /\(([LO]P|リステッド)\)/.test(r.race_name) ? ' ●' : '';
+    const venueTag = venueFilter ? '' : ` [${r.venue}]`;
+    return `<option value="${r.race_id}">${label}${badge}${venueTag}</option>`;
+  }).join('');
+  sel.disabled = false;
+}
+
+function onVenueChange() {
+  const venue = document.getElementById('venueSelect').value;
+  _populateRaces(_racesForDate, venue);
+}
+
+function onRaceSelect() {
+  const raceId = document.getElementById('raceSelect').value;
+  if (raceId) {
+    document.getElementById('raceIdInput').value = raceId;
+  }
+}
+
+function loadDataDirect() {
+  const id = document.getElementById('directIdInput').value.trim();
+  if (!id) return;
+  document.getElementById('raceIdInput').value = id;
+  const cat = document.getElementById('categorySelect').value;
+  if (cat) {
+    loadData();
+  } else {
+    loadAll();
+  }
+}
+
+async function fetchJson(category, raceId) {
+  const cacheKey = `${category}/${raceId}`;
+  if (cache[cacheKey] !== undefined) return cache[cacheKey];
+  try {
+    const resp = await fetch(`/api/data/${category}/${raceId}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      cache[cacheKey] = data;
+      return data;
+    }
+  } catch(e) {}
+  cache[cacheKey] = null;
+  return null;
+}
+
+function resolveKey(cat) {
+  const opt = document.querySelector(`#categorySelect option[value="${cat}"]`);
+  const keyType = opt?.dataset?.keyType || 'race';
+  const raceId = document.getElementById('raceIdInput').value.trim();
+  if (keyType === 'fixed') return opt.dataset.fixedKey || cat;
+  if (keyType === 'date') {
+    const dateMatch = raceId.match(/^(\d{8})/);
+    return dateMatch ? dateMatch[1] : raceId;
+  }
+  return raceId;
+}
+
+async function loadData() {
+  const cat = document.getElementById('categorySelect').value;
+  if (!cat) return;
+  const key = resolveKey(cat);
+  if (!key) return;
+  document.getElementById('tabBar').style.display = 'none';
+  document.getElementById('content').innerHTML = '<div class="empty">読み込み中...</div>';
+  const data = await fetchJson(cat, key);
+  renderSingle(cat, key, data);
+}
+
+function getCurrentRaceLabel() {
+  const sel = document.getElementById('raceSelect');
+  if (sel && sel.selectedIndex >= 0) {
+    return sel.options[sel.selectedIndex].text;
+  }
+  return '';
+}
+
+async function loadAll() {
+  const raceId = document.getElementById('raceIdInput').value.trim();
+  if (!raceId) return;
+  const lbl = getCurrentRaceLabel();
+  const dateLabel = _selectedDate ? _fmtDateLabel(_selectedDate) : '';
+  document.getElementById('raceLabel').textContent =
+    lbl ? `${dateLabel} ${lbl}` : raceId;
+  const t0 = performance.now();
+  document.getElementById('content').innerHTML = '<div class="empty"><div class="hm-spinner" style="display:inline-block;vertical-align:middle;margin-right:8px"></div>データ一括読み込み中...</div>';
+
+  try {
+    const resp = await fetch(`/api/race/${raceId}/bundle`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const bundle = await resp.json();
+    const dt = performance.now() - t0;
+
+    const results = {};
+    for (const c of CATEGORIES) {
+      if (c.key === 'smartrc_runners') {
+        results[c.key] = bundle.smartrc_runners?.length ? {
+          race_id: raceId, source: 'smartrc',
+          runners: bundle.smartrc_runners, _meta: bundle.smartrc_meta || {},
+        } : null;
+      } else if (c.key === 'smartrc_horses') {
+        results[c.key] = Object.keys(bundle.smartrc_horses || {}).length ? {
+          race_id: raceId, source: 'smartrc',
+          horses: bundle.smartrc_horses, _meta: bundle.smartrc_meta || {},
+        } : null;
+      } else if (c.key === 'smartrc_fullresults') {
+        results[c.key] = Object.keys(bundle.smartrc_fullresults || {}).length ? {
+          race_id: raceId, source: 'smartrc',
+          fullresults: bundle.smartrc_fullresults, _meta: bundle.smartrc_meta || {},
+        } : null;
+      } else if (c.key === 'race_predictions') {
+        results[c.key] = null;
+        fetchJson('race_predictions', raceId).then(d => {
+          if (d) { cache[`race_predictions/${raceId}`] = d; }
+        });
+      } else {
+        results[c.key] = bundle[c.key] || null;
+      }
+      if (results[c.key]) cache[`${c.key}/${raceId}`] = results[c.key];
+    }
+
+    _bundleHorses = bundle.horse_results || {};
+    for (const [hid, hr] of Object.entries(_bundleHorses)) {
+      _horseCache[`${hid}/${raceId}`] = _buildHorseDetail(hid, hr, bundle, raceId);
+    }
+
+    console.log(`[bundle] ${dt.toFixed(0)}ms, ${Object.keys(_bundleHorses).length} horses prefetched`);
+    renderTabs(raceId, results);
+
+    requestIdleCallback(() => _prefetchPersonData(raceId, bundle));
+  } catch (e) {
+    console.error('Bundle load failed, falling back to individual loads', e);
+    const results = {};
+    await Promise.all(CATEGORIES.map(async (c) => {
+      results[c.key] = await fetchJson(c.key, raceId);
+    }));
+    renderTabs(raceId, results);
+  }
+}
+
+function _prefetchPersonData(raceId, bundle) {
+  const shutuba = bundle.race_shutuba;
+  if (!shutuba?.entries) return;
+  const persons = new Set();
+  for (const e of shutuba.entries) {
+    if (e.jockey_id) persons.add(`jockey/${e.jockey_id}`);
+    if (e.trainer_id) persons.add(`trainer/${e.trainer_id}`);
+  }
+  let delay = 0;
+  for (const key of persons) {
+    if (_personCache[key]) continue;
+    const [ptype, pid] = key.split('/');
+    setTimeout(() => {
+      if (_personCache[key]) return;
+      fetch(`/api/person/${ptype}/${pid}/stats?race_id=${raceId}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) _personCache[key] = d; })
+        .catch(() => {});
+    }, delay);
+    delay += 200;
+  }
+}
+
+function _buildHorseDetail(hid, hr, bundle, raceId) {
+  const info = {};
+  const raceHistory = hr.race_history || [];
+  for (const [k, v] of Object.entries(hr)) {
+    if (k !== 'race_history') info[k] = v;
+  }
+  const scHorses = bundle.smartrc_horses || {};
+  const scHorse = scHorses[hid] || null;
+  const scFr = (bundle.smartrc_fullresults || {})[hid] || [];
+  const ped = _buildPedigreeClient(hr, scHorse);
+  ped.tail_sire_line = _buildTailSireLineClient(bundle, hid, hr, scHorse);
+  return {
+    horse_id: hid, info, race_history: raceHistory,
+    smartrc_horse: scHorse, smartrc_fullresults: scFr,
+    pedigree: ped,
+    stats: _calcStatsClient(raceHistory),
+  };
+}
+
+function _buildTailSireLineClient(bundle, hid, hr, sc) {
+  const fromB = bundle?.horse_pedigree_tail?.[hid];
+  if (Array.isArray(fromB) && fromB.length === 5) return fromB;
+  const labels = ['父', '母父', '母母父', '母母母父', '母母母母父'];
+  const names = ['', '', '', '', ''];
+  if (sc) {
+    names[0] = sc.f_name || '';
+    names[1] = sc.mf_name || '';
+    names[2] = sc.mmf_name || '';
+  } else if (hr) {
+    names[0] = hr.sire || '';
+    names[1] = hr.dam_sire || '';
+  }
+  return labels.map((label, i) => ({label, name: (names[i] || '').trim()}));
+}
+
+function _buildPedigreeClient(hr, sc) {
+  const ped = {sire: {}, dam: {}};
+  if (sc) {
+    ped.sire = {name:sc.f_name||'', country:sc.f_country||'', ll:sc.f_llcode||'', sl:sc.f_slcode||'', cl:sc.f_clcode||'',
+      sire:{name:sc.ff_name||'', ll:sc.ff_llcode||'', sl:sc.ff_slcode||'', cl:sc.ff_clcode||'',
+        sire:{name:sc.fff_name||''}, dam:{name:sc.ffm_name||''}},
+      dam:{name:sc.fm_name||'', sire:{name:sc.fmf_name||''}, dam:{name:sc.fmm_name||''}}};
+    ped.dam = {name:sc.m_name||'',
+      sire:{name:sc.mf_name||'', ll:sc.mf_llcode||'', sl:sc.mf_slcode||'', cl:sc.mf_clcode||'', country:sc.mf_country||'',
+        sire:{name:sc.mff_name||''}, dam:{name:sc.mfm_name||''}},
+      dam:{name:sc.mm_name||'', sire:{name:sc.mmf_name||''}, dam:{name:sc.mmm_name||''}}};
+  } else if (hr) {
+    ped.sire.name = hr.sire || '';
+    ped.dam.name = hr.dam || '';
+    ped.dam.sire = {name: hr.dam_sire || ''};
+  }
+  return ped;
+}
+
+function _calcStatsClient(records) {
+  if (!records?.length) return {};
+  const total = records.length;
+  const wins = records.filter(r => r.finish_position === 1).length;
+  const t2 = records.filter(r => r.finish_position <= 2).length;
+  const t3 = records.filter(r => r.finish_position <= 3).length;
+  const stats = {
+    overall: {runs:total, wins, top2:t2, top3:t3,
+      win_rate:+(wins/total*100).toFixed(1), top2_rate:+(t2/total*100).toFixed(1), top3_rate:+(t3/total*100).toFixed(1)},
+    by_surface:{}, by_distance:{}, by_venue:{}, by_condition:{}
+  };
+  function add(group, key, pos) {
+    if (!key) return;
+    if (!group[key]) group[key] = [];
+    group[key].push(pos);
+  }
+  for (const r of records) {
+    const pos = r.finish_position;
+    if (typeof pos !== 'number') continue;
+    add(stats.by_surface, r.surface, pos);
+    if (r.distance) add(stats.by_distance, `${Math.floor(r.distance/200)*200}-${Math.floor(r.distance/200)*200+199}m`, pos);
+    const vm = (r.venue||'').match(/(札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)/);
+    if (vm) add(stats.by_venue, vm[1], pos);
+    add(stats.by_condition, r.track_condition, pos);
+  }
+  function summarize(groups) {
+    const out = {};
+    for (const [k, positions] of Object.entries(groups).sort()) {
+      const n = positions.length, w = positions.filter(p=>p===1).length, t = positions.filter(p=>p<=3).length;
+      out[k] = {runs:n, wins:w, top3:t, win_rate:+(w/n*100).toFixed(1), top3_rate:+(t/n*100).toFixed(1), avg_pos:+(positions.reduce((a,b)=>a+b,0)/n).toFixed(1)};
+    }
+    return out;
+  }
+  stats.by_surface = summarize(stats.by_surface);
+  stats.by_distance = summarize(stats.by_distance);
+  stats.by_venue = summarize(stats.by_venue);
+  stats.by_condition = summarize(stats.by_condition);
+  const times = records.map(r=>r.last_3f).filter(t=>t&&t>0);
+  if (times.length) stats.last_3f = {best:Math.min(...times), avg:+(times.reduce((a,b)=>a+b,0)/times.length).toFixed(1), recent3:times.slice(0,3)};
+  return stats;
+}
+
+function renderTabs(raceId, results) {
+  const tabBar = document.getElementById('tabBar');
+  tabBar.style.display = 'flex';
+  let html = '';
+  for (const c of CATEGORIES) {
+    const data = results[c.key];
+    const count = data ? countData(c.key, data) : 0;
+    const cls = (data ? 'has-data' : 'no-data') + (c.smartrc ? ' smartrc-tab' : '');
+    html += `<div class="tab ${cls}" data-cat="${c.key}" onclick="selectTab('${c.key}','${raceId}')">${c.label}<span class="badge">${data ? count : '-'}</span></div>`;
+  }
+  for (const [key, data] of Object.entries(results)) {
+    if (key.startsWith('horse_result/')) {
+      const hid = key.split('/')[1];
+      const cls = data ? 'has-data' : 'no-data';
+      html += `<div class="tab ${cls}" data-cat="${key}" onclick="selectTab('${key}','${raceId}')">馬${hid.slice(-4)}<span class="badge">${data ? '✓' : '-'}</span></div>`;
+    }
+  }
+  tabBar.innerHTML = html;
+  for (const [key, data] of Object.entries(results)) {
+    if (key.includes('/') && !CATEGORIES.find(c => c.key === key)) {
+      cache[key] = data;
+    } else {
+      cache[`${key}/${raceId}`] = data;
+    }
+  }
+  const first = CATEGORIES.find(c => results[c.key]) || CATEGORIES[0];
+  selectTab(first.key, raceId);
+}
+
+function countData(cat, data) {
+  if (cat === 'smartrc_runners') return (data.runners || []).length;
+  if (cat === 'smartrc_horses') return Object.keys(data.horses || {}).length;
+  if (cat === 'smartrc_fullresults') return Object.keys(data.fullresults || {}).length;
+  if (data.entries) return data.entries.length;
+  return Object.keys(data).length;
+}
+
+function selectTab(cat, raceId) {
+  activeTab = cat;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.cat === cat));
+  let data;
+  if (cat.startsWith('horse_result/')) {
+    data = cache[cat];
+  } else {
+    data = cache[`${cat}/${raceId}`];
+  }
+  renderSingle(cat, raceId, data);
+}
+
+function _renderRaceMeta(data) {
+  const fields = [];
+  if (data.race_name) fields.push(`<span style="font-weight:600;color:#fff">${data.race_name}</span>`);
+  if (data.grade) fields.push(`<span style="color:var(--warn)">${data.grade}</span>`);
+  if (data.surface) fields.push(`${data.surface}${data.distance || ''}m`);
+  if (data.direction) fields.push(data.direction);
+  if (data.track_condition) fields.push(`馬場: ${data.track_condition}`);
+  if (data.weather) fields.push(`天候: ${data.weather}`);
+  if (data.venue) fields.push(data.venue);
+  if (data.date) fields.push(data.date);
+  if (data.start_time) fields.push(data.start_time);
+  if (data.field_size) fields.push(`${data.field_size}頭`);
+  return fields.length ? `<div class="meta">${fields.join('<span class="meta-sep">|</span>')}</div>` : '';
+}
+
+function renderSingle(cat, raceId, data) {
+  const content = document.getElementById('content');
+  if (!data) {
+    content.innerHTML = `<div class="empty">データなし: ${cat}/${raceId}</div>`;
+    return;
+  }
+  const mode = viewMode[cat] || (hasTableView(cat) ? 'table' : 'json');
+  viewMode[cat] = mode;
+
+  const parts = [];
+  parts.push(_renderRaceMeta(data));
+
+  if (hasTableView(cat)) {
+    parts.push(`<div class="view-toggle">
+      <button class="${mode==='table'?'active':''}" onclick="setView('${cat}','table','${raceId}')">テーブル</button>
+      <button class="${mode==='json'?'active':''}" onclick="setView('${cat}','json','${raceId}')">JSON</button>
+    </div>`);
+  }
+
+  if (mode === 'table' && hasTableView(cat)) {
+    parts.push(renderTableView(cat, data));
+    content.innerHTML = parts.join('');
+  } else {
+    parts.push('<div class="json-view" id="jsonContainer">読み込み中...</div>');
+    content.innerHTML = parts.join('');
+    requestAnimationFrame(() => {
+      const el = document.getElementById('jsonContainer');
+      if (el) el.innerHTML = syntaxHighlight(data, 0, true);
+    });
+  }
+}
+
+function hasTableView(cat) {
+  return ['smartrc_runners','smartrc_horses','smartrc_fullresults',
+          'race_shutuba','race_result','race_index',
+          'race_shutuba_past','race_odds','race_paddock',
+          'race_oikiri','race_barometer','race_predictions',
+          'race_trainer_comment'].includes(cat);
+}
+
+function setView(cat, mode, raceId) {
+  viewMode[cat] = mode;
+  let data;
+  if (cat.startsWith('horse_result/')) {
+    data = cache[cat];
+  } else {
+    data = cache[`${cat}/${raceId}`];
+  }
+  renderSingle(cat, raceId, data);
+}
+
+// ── Table renderers ──
+
+const SMARTRC_BLOODLINE_COLORS = {
+  '01':'#e74c3c','02':'#3498db','03':'#2ecc71','04':'#f1c40f',
+  '05':'#9b59b6','06':'#e67e22','07':'#1abc9c','08':'#95a5a6',
+  '09':'#e84393','10':'#00cec9','11':'#fd79a8','12':'#6c5ce7',
+};
+
+function renderTableView(cat, data) {
+  if (cat === 'smartrc_runners') return renderRunnersTable(data);
+  if (cat === 'smartrc_horses') return renderHorsesTable(data);
+  if (cat === 'smartrc_fullresults') return renderFullresultsTable(data);
+  if (cat === 'race_shutuba') return renderShutubaTable(data);
+  if (cat === 'race_result') return renderResultTable(data);
+  if (cat === 'race_index') return renderIndexTable(data);
+  if (cat === 'race_shutuba_past') return renderShtubaPastTable(data);
+  if (cat === 'race_odds') return renderOddsTable(data);
+  if (cat === 'race_paddock') return renderPaddockTable(data);
+  if (cat === 'race_oikiri') return renderOikiriTable(data);
+  if (cat === 'race_barometer') return renderBarometerTable(data);
+  if (cat === 'race_predictions') return renderPredictionsTable(data);
+  if (cat === 'race_trainer_comment') return renderTrainerCommentTable(data);
+  return '';
+}
+
+const SEX_MAP = {'1':'牡','2':'牝','3':'セ'};
+const PLACE_MAP = {'01':'札幌','02':'函館','03':'福島','04':'新潟','05':'東京','06':'中山','07':'中京','08':'京都','09':'阪神','10':'小倉'};
+
+function fmtTime(v) {
+  if (!v && v !== 0) return '-';
+  const n = Number(v);
+  if (isNaN(n) || n === 0) return '-';
+  const min = Math.floor(n / 600);
+  const sec = ((n % 600) / 10).toFixed(1);
+  return min > 0 ? `${min}:${sec.padStart(4,'0')}` : sec;
+}
+function fmtDiv10(v) {
+  if (!v && v !== 0) return '-';
+  const n = Number(v);
+  return isNaN(n) || n === 0 ? '-' : (n / 10).toFixed(1);
+}
+
+function renderRunnersTable(data) {
+  const runners = data.runners || [];
+  if (!runners.length) return '<div class="empty">runners データなし</div>';
+
+  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+  html += '<th class="tc">枠</th><th class="tc">番</th><th>馬名</th><th class="tc">性齢</th><th class="tr">斤量</th>';
+  html += '<th>騎手</th><th>調教師</th><th class="tr">CR</th><th class="tr">推定人気</th>';
+  html += '<th class="tr">テン1F</th><th class="tr">単勝</th><th class="tc">過去5走</th>';
+  html += '</tr></thead><tbody>';
+
+  const sorted = [...runners].sort((a,b) => (a.uno||99) - (b.uno||99));
+  for (const r of sorted) {
+    const sex = SEX_MAP[String(r.sex)] || r.sex || '';
+    const age = r.age || '';
+    const futan = r.futan ? fmtDiv10(r.futan) : '-';
+    const cr = r.cr_value?.toString().trim() || '-';
+    const odds = r.odds_tan ? fmtDiv10(r.odds_tan) : '-';
+    const ten1fBest = r.ten1f_best ? fmtDiv10(r.ten1f_best) : '-';
+
+    const past = [];
+    for (let i = 1; i <= 5; i++) {
+      const rank = r[`h${i}_rank`];
+      if (rank !== undefined && rank !== null && rank !== '' && rank !== 0) {
+        past.push(rank);
+      } else {
+        past.push('-');
+      }
+    }
+    const pastStr = past.every(p => p === '-') ? '-' : past.join('-');
+    const hcode = r.hcode || '';
+    const hname = r.hname || '-';
+
+    html += '<tr>';
+    html += `<td class="tc">${r.wno || '-'}</td>`;
+    html += `<td class="tc">${r.uno || '-'}</td>`;
+    html += `<td>${hcode ? `<span class="horse-link" onclick="openHorseModal('${hcode}','${hname}')">${hname}</span>` : hname}</td>`;
+    html += `<td class="tc">${sex}${age}</td>`;
+    html += `<td class="num">${futan}</td>`;
+    const jcode = r.jcode || '';
+    const jname = (r.jname8 || '-').replace(/'/g, "\\'");
+    const tcode = r.tcode || '';
+    const tname = (r.tname8 || '-').replace(/'/g, "\\'");
+    html += `<td>${jcode ? `<span class="person-link" onclick="openPersonModal('jockey','${jcode}','${jname}')">${r.jname8||'-'}</span>` : (r.jname8||'-')}</td>`;
+    html += `<td>${tcode ? `<span class="person-link" onclick="openPersonModal('trainer','${tcode}','${tname}')">${r.tname8||'-'}</span>` : (r.tname8||'-')}</td>`;
+    html += `<td class="num">${cr}</td>`;
+    html += `<td class="num">${r.est_pop || '-'}</td>`;
+    html += `<td class="num">${ten1fBest}</td>`;
+    html += `<td class="num">${odds}</td>`;
+    html += `<td class="dim tc">${pastStr}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function renderHorsesTable(data) {
+  const horses = data.horses || {};
+  const keys = Object.keys(horses);
+  if (!keys.length) return '<div class="empty">horses データなし</div>';
+
+  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+  html += '<th>hcode</th><th>馬名</th><th>色</th><th>父</th><th>母</th><th>母父</th>';
+  html += '<th>父父</th><th>父母</th><th>母父父</th><th>母母</th>';
+  html += '<th>LL系統</th><th>SL系統</th><th>CL系統</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const hcode of keys) {
+    const h = horses[hcode];
+    const colorCode = h.color || '';
+    const bgColor = SMARTRC_BLOODLINE_COLORS[colorCode] || '#666';
+    const hname = h.hname || h.name || '-';
+    const hnameEsc = hname.replace(/'/g, "\\'");
+    html += '<tr>';
+    html += `<td class="dim">${hcode}</td>`;
+    html += `<td><span class="horse-link" onclick="openHorseModal('${hcode}','${hnameEsc}')">${hname}</span></td>`;
+    html += `<td><span class="blood-color" style="background:${bgColor}"></span>${colorCode}</td>`;
+    html += `<td>${h.f_name || '-'}</td>`;
+    html += `<td>${h.m_name || '-'}</td>`;
+    html += `<td>${h.mf_name || '-'}</td>`;
+    html += `<td>${h.ff_name || '-'}</td>`;
+    html += `<td>${h.fm_name || '-'}</td>`;
+    html += `<td>${h.mff_name || '-'}</td>`;
+    html += `<td>${h.mm_name || '-'}</td>`;
+    html += `<td class="dim">${h.f_llcode || '-'}</td>`;
+    html += `<td class="dim">${h.f_slcode || '-'}</td>`;
+    html += `<td class="dim">${h.f_clcode || '-'}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function renderFullresultsTable(data) {
+  const fullresults = data.fullresults || {};
+  const hcodes = Object.keys(fullresults);
+  if (!hcodes.length) return '<div class="empty">fullresults データなし</div>';
+
+  let html = '';
+  for (const hcode of hcodes) {
+    const records = fullresults[hcode];
+    if (!records || !records.length) continue;
+
+    const hname = records[0]?.hname || hcode;
+    const hnameEsc = hname.replace(/'/g, "\\'");
+    html += `<div class="section-title"><span class="horse-link" onclick="openHorseModal('${hcode}','${hnameEsc}')">${hname}</span> (${hcode}) — ${records.length}戦</div>`;
+    html += '<div class="table-wrap" style="margin-bottom:16px"><table class="data-table"><thead><tr>';
+    html += '<th class="tc">日付</th><th>場所</th><th class="tc">R</th><th class="tr">距離</th>';
+    html += '<th class="tc">着</th><th class="tr">タイム</th><th class="tr">テン1F</th><th class="tr">上り3F</th>';
+    html += '<th class="tr">斤量</th><th>騎手</th><th class="tc">頭数</th><th class="tc">人気</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const r of records) {
+      const rank = r.rank ?? r.arrival ?? '-';
+      const rankCls = rank == 1 ? 'color:var(--ok)' : rank == 2 ? 'color:var(--accent)' : rank == 3 ? 'color:var(--warn)' : '';
+      const placeName = PLACE_MAP[String(r.jyocd || r.place)] || r.place || '-';
+      const trackType = String(r.trackkind) === '2' ? 'ダ' : '芝';
+
+      html += '<tr>';
+      html += `<td class="dim tc">${r.rdate || '-'}</td>`;
+      html += `<td>${placeName}</td>`;
+      html += `<td class="tc">${r.racenum || '-'}</td>`;
+      html += `<td class="num">${r.range || '-'}${trackType}</td>`;
+      html += `<td class="tc" style="${rankCls};font-weight:700">${rank}</td>`;
+      html += `<td class="num">${fmtTime(r.stime)}</td>`;
+      html += `<td class="num">${fmtDiv10(r.ten1f)}</td>`;
+      html += `<td class="num">${fmtDiv10(r.furlong3)}</td>`;
+      html += `<td class="num">${fmtDiv10(r.futan)}</td>`;
+      html += `<td>${r.jname8 || '-'}</td>`;
+      html += `<td class="tc">${r.entry || '-'}</td>`;
+      html += `<td class="tc">${r.pop || '-'}</td>`;
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+  }
+  return html || '<div class="empty">fullresults データなし</div>';
+}
+
+function renderShutubaTable(data) {
+  const entries = data.entries || [];
+  if (!entries.length) return '<div class="empty">出馬表データなし</div>';
+  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+  html += '<th class="tc">枠</th><th class="tc">馬番</th><th>馬名</th><th class="tc">性齢</th><th class="tr">斤量</th><th>騎手</th><th>調教師</th>';
+  html += '</tr></thead><tbody>';
+  for (const e of entries) {
+    const w = e.bracket_number ?? e.waku;
+    html += '<tr>';
+    html += `<td class="tc">${_wakuBadge(w)}</td>`;
+    html += `<td class="tc">${_umaBadge(e.horse_number ?? e.umaban, w)}</td>`;
+    html += `<td>${_horseCell(e.horse_id, e.horse_name)}</td>`;
+    html += `<td class="tc">${e.sex_age || ((e.sex||'')+(e.age||''))}</td>`;
+    html += `<td class="num">${e.jockey_weight || e.weight || '-'}</td>`;
+    html += `<td>${_personCell('jockey', e.jockey_id, e.jockey_name||e.jockey)}</td>`;
+    html += `<td>${_personCell('trainer', e.trainer_id, e.trainer_name||e.trainer)}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+const _WAKU_COLORS = {
+  1: {bg:'#f5f5f5', fg:'#222'},
+  2: {bg:'#111',    fg:'#fff', border:'1px solid #555'},
+  3: {bg:'#e53935', fg:'#fff'},
+  4: {bg:'#1e88e5', fg:'#fff'},
+  5: {bg:'#fdd835', fg:'#222'},
+  6: {bg:'#43a047', fg:'#fff'},
+  7: {bg:'#f57c00', fg:'#fff'},
+  8: {bg:'#ec407a', fg:'#fff'},
+};
+function _wakuBadge(waku) {
+  const w = Number(waku);
+  if (!w || w < 1 || w > 8) return `<span style="color:var(--text-dim)">${waku ?? '-'}</span>`;
+  const c = _WAKU_COLORS[w];
+  const bd = c.border ? `;border:${c.border}` : '';
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;font-size:12px;font-weight:800;background:${c.bg};color:${c.fg}${bd}">${w}</span>`;
+}
+function _umaBadge(umaban, waku) {
+  const w = Number(waku);
+  const u = umaban ?? '-';
+  if (!w || w < 1 || w > 8) return `<span style="font-weight:600">${u}</span>`;
+  const c = _WAKU_COLORS[w];
+  const bd = c.border ? `;border:${c.border}` : '';
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;font-size:12px;font-weight:800;background:${c.bg};color:${c.fg}${bd}">${u}</span>`;
+}
+function _bashiraUmaBadge(umaban, waku) {
+  const w = Number(waku);
+  const u = umaban ?? '-';
+  if (!w || w < 1 || w > 8) return `<span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;font-size:15px;font-weight:800;background:var(--surface-alt,#2a2e3a);color:#fff">${u}</span>`;
+  const c = _WAKU_COLORS[w];
+  const bd = c.border ? `;border:${c.border}` : '';
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;font-size:15px;font-weight:800;background:${c.bg};color:${c.fg}${bd}">${u}</span>`;
+}
+
+function _rankBadge(r) {
+  if (!r && r !== 0) return '-';
+  const n = Number(r);
+  const base = 'display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;font-size:14px;font-weight:900;';
+  if (n === 1) return `<span style="${base}background:#b8860b;color:#fff;box-shadow:0 0 8px rgba(234,179,8,0.4)">1</span>`;
+  if (n === 2) return `<span style="${base}background:#6b7280;color:#fff">2</span>`;
+  if (n === 3) return `<span style="${base}background:#92400e;color:#fbbf24">3</span>`;
+  return `<span style="${base}background:rgba(107,125,149,0.15);color:#94a3b8">${r}</span>`;
+}
+function _personCell(type, pid, pname) {
+  const safe = (pname||'-').replace(/'/g, "\\'");
+  return pid ? `<span class="person-link" onclick="openPersonModal('${type}','${pid}','${safe}')">${pname||'-'}</span>` : (pname||'-');
+}
+
+function renderResultTable(data) {
+  const entries = data.entries || [];
+  if (!entries.length) return '<div class="empty">結果データなし</div>';
+  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+  html += '<th class="tc">着</th><th class="tc">枠</th><th class="tc">馬番</th><th>馬名</th><th>騎手</th><th>調教師</th><th class="tr">タイム</th><th class="tr">着差</th><th class="tr">上り3F</th><th class="tc">人気</th><th class="tr">オッズ</th>';
+  html += '</tr></thead><tbody>';
+  for (const e of entries) {
+    const rank = e.finish_position ?? e.rank ?? e.order ?? '-';
+    html += '<tr>';
+    const w = e.bracket_number ?? e.waku;
+    html += `<td class="tc">${_rankBadge(rank)}</td>`;
+    html += `<td class="tc">${_wakuBadge(w)}</td>`;
+    html += `<td class="tc">${_umaBadge(e.horse_number ?? e.umaban, w)}</td>`;
+    html += `<td>${_horseCell(e.horse_id, e.horse_name)}</td>`;
+    html += `<td>${_personCell('jockey', e.jockey_id, e.jockey_name||e.jockey)}</td>`;
+    html += `<td>${_personCell('trainer', e.trainer_id, e.trainer_name||e.trainer)}</td>`;
+    html += `<td class="num">${e.finish_time || e.time || '-'}</td>`;
+    html += `<td class="num">${e.margin || e.diff || '-'}</td>`;
+    html += `<td class="num">${e.last_3f || '-'}</td>`;
+    html += `<td class="tc">${e.popularity || '-'}</td>`;
+    html += `<td class="num">${e.odds || '-'}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  html += _renderLapSection(data);
+  html += _renderPayoffSection(data);
+  return html;
+}
+
+function renderIndexTable(data) {
+  const entries = data.entries || [];
+  if (!entries.length) return '<div class="empty">指数データなし</div>';
+  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+  html += '<th class="tc">馬番</th><th>馬名</th><th class="tr">最高指数</th><th class="tr">平均</th><th class="tr">距離</th><th class="tr">コース</th><th class="tr">近走</th>';
+  html += '</tr></thead><tbody>';
+  for (const e of entries) {
+    const hid = e.horse_id || '';
+    const hname = (e.horse_name || '-').replace(/'/g, "\\'");
+    html += '<tr>';
+    html += `<td class="tc">${e.horse_number ?? e.umaban ?? '-'}</td>`;
+    html += `<td>${hid ? `<span class="horse-link" onclick="openHorseModal('${hid}','${hname}')">${e.horse_name || '-'}</span>` : (e.horse_name || '-')}</td>`;
+    html += `<td class="num">${e.speed_max ?? e.speed_index ?? '-'}</td>`;
+    html += `<td class="num">${e.speed_avg ?? e.adjusted ?? '-'}</td>`;
+    html += `<td class="num">${e.speed_distance ?? '-'}</td>`;
+    html += `<td class="num">${e.speed_course ?? '-'}</td>`;
+    html += `<td class="num">${e.speed_recent ?? '-'}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+// ── 馬柱 (race_shutuba_past) ──
+
+function _parsePastRaw(r) {
+  const raw = r.raw || '';
+  const o = { date: r.date || '', surface: r.surface || '', distance: r.distance || '',
+              time: r.finish_time || '', pos: r.finish_position ?? null };
+  const venueM = raw.match(/^\d{4}\.\d{2}\.\d{2}\s+(\S+)/);
+  o.venue = venueM ? venueM[1] : '';
+  const roundM = raw.match(/^\d{4}\.\d{2}\.\d{2}\s+\S+\s+(\d+)\s+/);
+  o.round = roundM ? roundM[1] : '';
+  const gradeM = raw.match(/\b(GI{1,3}|JpnI{1,3}|重賞|OP|L|1勝|2勝|3勝|新馬|未勝利)\b/);
+  o.grade = gradeM ? gradeM[1] : '';
+  const nameM = raw.match(/^\d{4}\.\d{2}\.\d{2}\s+\S+\s+\d+\s+(\S+)/);
+  o.raceName = nameM ? nameM[1] : '';
+  const condM = raw.match(/(良|稍|重|不)/);
+  o.cond = condM ? condM[1] : '';
+  const fieldM = raw.match(/(\d+)頭/);
+  o.field = fieldM ? fieldM[1] : '';
+  const numM = raw.match(/(\d+)番/);
+  o.num = numM ? numM[1] : '';
+  const popM = raw.match(/(\d+)人/);
+  o.pop = popM ? popM[1] : '';
+  const jkM = raw.match(/(\d+)人\s+(\S+)\s+(\d+\.\d)/);
+  o.jockey = jkM ? jkM[2] : '';
+  o.weight = jkM ? jkM[3] : '';
+  const passM = raw.match(/(\d+(?:-\d+)+)/);
+  o.pass = passM ? passM[1] : '';
+  const agariM = raw.match(/\((\d+\.\d)\)/);
+  o.agari = agariM ? agariM[1] : '';
+  const bwM = raw.match(/(\d{3,4})\(([+-]?\d+)\)/);
+  o.bodyWeight = bwM ? bwM[1] : '';
+  o.bodyDiff = bwM ? bwM[2] : '';
+  if (!o.pos) {
+    const posM = raw.match(/(\d+)着/);
+    o.pos = posM ? parseInt(posM[1]) : null;
+  }
+  return o;
+}
+
+function _getWakuMap(raceId) {
+  const sources = [
+    `race_shutuba/${raceId}`,
+    `race_result/${raceId}`,
+    `race_index/${raceId}`,
+  ];
+  for (const key of sources) {
+    const d = cache[key];
+    if (!d?.entries) continue;
+    const map = {};
+    let found = 0;
+    for (const e of d.entries) {
+      if (e.horse_number != null && e.bracket_number != null) {
+        map[e.horse_number] = e.bracket_number;
+        found++;
+      }
+    }
+    if (found > 0) return map;
+  }
+  return {};
+}
+function _getHorseIdMap(raceId) {
+  const sources = [
+    `race_shutuba/${raceId}`,
+    `race_result/${raceId}`,
+    `race_index/${raceId}`,
+  ];
+  for (const key of sources) {
+    const d = cache[key];
+    if (!d?.entries) continue;
+    const map = {};
+    let found = 0;
+    for (const e of d.entries) {
+      if (e.horse_id && e.horse_number != null && e.bracket_number != null) {
+        map[e.horse_id] = { umaban: e.horse_number, waku: e.bracket_number };
+        found++;
+      }
+    }
+    if (found > 0) return map;
+  }
+  return {};
+}
+
+function _posBadge(pos) {
+  if (pos == null) return '<span class="bc-pos bc-pos-out">-</span>';
+  const cls = pos === 1 ? 'bc-pos-1' : pos === 2 ? 'bc-pos-2' : pos === 3 ? 'bc-pos-3' : 'bc-pos-out';
+  return `<span class="bc-pos ${cls}">${pos}</span>`;
+}
+
+function _condBadge(c) {
+  if (!c) return '';
+  const cls = c === '良' ? 'bc-cond-good' : c === '稍' ? 'bc-cond-slimy' : c === '重' ? 'bc-cond-bad' : 'bc-cond-worst';
+  return `<span class="bc-cond ${cls}">${c}</span>`;
+}
+
+function _gradeBadge(grade) {
+  if (!grade) return '';
+  const g = grade.toUpperCase();
+  let cls = 'bc-grade-default';
+  if (/^GI$|^JPNI$/i.test(grade)) cls = 'bc-grade-g1';
+  else if (/^GII$|^JPNII$/i.test(grade)) cls = 'bc-grade-g2';
+  else if (/^GIII$|^JPNIII$/i.test(grade)) cls = 'bc-grade-g3';
+  else if (/重賞|OP|L/i.test(grade)) cls = 'bc-grade-listed';
+  return `<span class="bc-grade ${cls}">${grade}</span>`;
+}
+
+function _surfaceSpan(surface, dist) {
+  if (!surface && !dist) return '';
+  const cls = surface === '芝' ? 'bc-turf' : surface === 'ダ' ? 'bc-dirt' : '';
+  return `<span class="bc-track ${cls}">${surface || ''}${dist || ''}</span>`;
+}
+
+function renderShtubaPastTable(data) {
+  const entries = data.entries || [];
+  if (!entries.length) return '<div class="empty">馬柱データなし</div>';
+  const maxPast = 5;
+  const raceId = document.getElementById('raceIdInput').value.trim();
+  const hidMap = _getHorseIdMap(raceId);
+  let html = '<div class="bashira-grid">';
+  for (const e of entries) {
+    const hid = e.horse_id || '';
+    const hname = (e.horse_name || '-').replace(/'/g, "\\'");
+    const ref = hidMap[hid];
+    const umaban = ref ? ref.umaban : (e.horse_number || 0);
+    const waku = ref ? ref.waku : (e.bracket_number || 0);
+    const wakuBarCls = waku ? `waku-bar-${waku}` : '';
+    html += '<div class="bashira-col">';
+    html += `<div class="bashira-header">`;
+    html += `<div class="bashira-waku-bar ${wakuBarCls}"></div>`;
+    html += `<div class="bashira-nums">${_bashiraUmaBadge(umaban, waku)}</div>`;
+    if (hid) {
+      html += `<span class="bashira-name" onclick="openHorseModal('${hid}','${hname}')">${e.horse_name || '-'}</span>`;
+    } else {
+      html += `<span class="bashira-name">${e.horse_name || '-'}</span>`;
+    }
+    html += '</div>';
+    const past = e.past_races || [];
+    for (let i = 0; i < maxPast; i++) {
+      if (i < past.length) {
+        const p = _parsePastRaw(past[i]);
+        html += '<div class="bashira-cell">';
+        html += `<div class="bc-row">${_posBadge(p.pos)} <span class="bc-venue">${p.venue}</span>`;
+        if (p.round) html += `<span class="bc-detail">${p.round}R</span>`;
+        html += '</div>';
+        if (p.raceName || p.grade) {
+          html += '<div class="bc-row">';
+          html += _gradeBadge(p.grade);
+          if (p.raceName) html += ` <span class="bc-race-name">${p.raceName}</span>`;
+          html += '</div>';
+        }
+        const dateShort = p.date ? p.date.replace(/^\d{4}\./, '') : '';
+        html += `<div class="bc-row"><span class="bc-detail">${dateShort}</span> `;
+        html += `${_surfaceSpan(p.surface, p.distance)} ${_condBadge(p.cond)}</div>`;
+        html += '<hr class="bc-separator">';
+        html += `<div class="bc-row"><span class="bc-time">${p.time || '-'}</span>`;
+        if (p.agari) html += ` <span class="bc-agari">上${p.agari}</span>`;
+        html += '</div>';
+        if (p.pass) html += `<div class="bc-row"><span class="bc-pass">⇒ ${p.pass}</span></div>`;
+        const meta = [];
+        if (p.pop) meta.push(`${p.pop}人気`);
+        if (p.field) meta.push(`${p.field}頭`);
+        if (meta.length) html += `<div class="bc-row"><span class="bc-detail">${meta.join(' / ')}</span></div>`;
+        if (p.jockey) html += `<div class="bc-row"><span class="bc-detail">${p.jockey} ${p.weight || ''}kg</span></div>`;
+        if (p.bodyWeight) html += `<div class="bc-row"><span class="bc-detail">${p.bodyWeight}kg(${p.bodyDiff})</span></div>`;
+        html += '</div>';
+      } else {
+        html += '<div class="bashira-cell"><span class="bc-empty">—</span></div>';
+      }
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// ── オッズ (race_odds) ──
+
+function renderOddsTable(data) {
+  const entries = data.entries || [];
+  if (!entries.length) return '<div class="empty">オッズデータなし</div>';
+  const raceId = document.getElementById('raceIdInput').value.trim();
+  const wm = _getWakuMap(raceId);
+  const sorted = [...entries].sort((a,b) => (a.popularity||99) - (b.popularity||99));
+  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+  html += '<th class="tc">人気</th><th class="tc">馬番</th><th class="tr">単勝</th><th class="tr">複勝(下限)</th><th class="tr">複勝(上限)</th>';
+  html += '</tr></thead><tbody>';
+  for (const e of sorted) {
+    const pop = e.popularity || '-';
+    const w = wm[e.horse_number] || 0;
+    html += '<tr>';
+    html += `<td class="tc">${_rankBadge(pop)}</td>`;
+    html += `<td class="tc">${_umaBadge(e.horse_number, w)}</td>`;
+    html += `<td class="num" style="font-weight:600">${e.win_odds ?? '-'}</td>`;
+    html += `<td class="num">${e.place_odds_min ?? '-'}</td>`;
+    html += `<td class="num">${e.place_odds_max ?? '-'}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+// ── パドック (race_paddock) ──
+
+function _evalBadge(v) {
+  if (!v || v === '-') return '<span class="dim">-</span>';
+  const cls = (v==='A'||v==='◎') ? 'tag-ok' : (v==='B'||v==='○') ? 'tag-accent' : (v==='C'||v==='▲') ? 'tag-warn' : '';
+  return cls ? `<span class="tag-cell ${cls}">${v}</span>` : v;
+}
+function _horseCell(hid, hname) {
+  const safe = (hname||'-').replace(/'/g, "\\'");
+  return hid ? `<span class="horse-link" onclick="openHorseModal('${hid}','${safe}')">${hname||'-'}</span>` : (hname||'-');
+}
+
+function renderPaddockTable(data) {
+  const entries = data.entries || [];
+  if (!entries.length) return '<div class="empty">パドックデータなし</div>';
+  const raceId = document.getElementById('raceIdInput').value.trim();
+  const wm = _getWakuMap(raceId);
+  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+  html += '<th class="tc">馬番</th><th>馬名</th><th class="tc">評価</th><th>コメント</th>';
+  html += '</tr></thead><tbody>';
+  for (const e of entries) {
+    const w = wm[e.horse_number] || 0;
+    html += '<tr>';
+    html += `<td class="tc">${_umaBadge(e.horse_number, w)}</td>`;
+    html += `<td>${_horseCell(e.horse_id, e.horse_name)}</td>`;
+    html += `<td class="tc">${_evalBadge(e.paddock_rank)}</td>`;
+    html += `<td class="wrap-cell">${e.paddock_comment || '-'}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+// ── 厩舎コメント (race_trainer_comment) ──
+
+function renderTrainerCommentTable(data) {
+  const entries = data.entries || [];
+  if (!entries.length) return '<div class="empty">厩舎コメントデータなし</div>';
+  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+  html += '<th class="tc">枠</th><th class="tc">馬番</th><th>馬名</th><th class="tc">評価</th><th>調教師</th><th>コメント</th>';
+  html += '</tr></thead><tbody>';
+  for (const e of entries) {
+    const w = e.bracket_number;
+    html += '<tr>';
+    html += `<td class="tc">${_wakuBadge(w)}</td>`;
+    html += `<td class="tc">${_umaBadge(e.horse_number, w)}</td>`;
+    html += `<td>${_horseCell(e.horse_id, e.horse_name)}</td>`;
+    html += `<td class="tc">${_evalBadge(e.evaluation)}</td>`;
+    html += `<td>${e.trainer_name || '-'}</td>`;
+    html += `<td class="wrap-cell">${e.comment || '-'}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+// ── 追い切り (race_oikiri) ──
+
+function renderOikiriTable(data) {
+  const entries = data.entries || [];
+  if (!entries.length) return '<div class="empty">追い切りデータなし</div>';
+  const raceId = document.getElementById('raceIdInput').value.trim();
+  const wm = _getWakuMap(raceId);
+  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+  html += '<th class="tc">馬番</th><th>馬名</th><th class="tc">評価</th><th class="tc">日付</th><th>コース</th><th>状態</th><th>騎乗者</th><th>ラップ</th><th>所見</th><th>コメント</th>';
+  html += '</tr></thead><tbody>';
+  for (const e of entries) {
+    const w = wm[e.horse_number] || 0;
+    html += '<tr>';
+    html += `<td class="tc">${_umaBadge(e.horse_number, w)}</td>`;
+    html += `<td>${_horseCell(e.horse_id, e.horse_name)}</td>`;
+    html += `<td class="tc">${_evalBadge(e.evaluation)}</td>`;
+    html += `<td class="dim tc">${e.training_date || '-'}</td>`;
+    html += `<td>${e.course || '-'}</td>`;
+    html += `<td>${e.condition || '-'}</td>`;
+    html += `<td>${e.rider || '-'}</td>`;
+    html += `<td class="dim">${e.lap_times || '-'}</td>`;
+    html += `<td class="wrap-cell">${e.impression || '-'}</td>`;
+    html += `<td class="wrap-cell">${e.comment || '-'}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+// ── 偏差値/走行データ (race_barometer) ──
+
+function renderBarometerTable(data) {
+  const entries = data.entries || [];
+  if (!entries.length) {
+    if (data.barometer || data.deviation) {
+      return _renderGenericTable(data);
+    }
+    return '<div class="empty">偏差値データなし</div>';
+  }
+  return _renderGenericTable(data);
+}
+
+// ── AI予測 (race_predictions) ──
+
+function renderPredictionsTable(data) {
+  const preds = data.predictions || data.entries || [];
+  if (!preds.length) {
+    if (data.top_picks || data.model_name) {
+      return _renderGenericTable(data);
+    }
+    return '<div class="empty">予測データなし</div>';
+  }
+  const sorted = [...preds].sort((a,b) => (a.predicted_rank || a.rank || 99) - (b.predicted_rank || b.rank || 99));
+  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+  html += '<th class="tc">予測順位</th><th class="tc">馬番</th><th>馬名</th><th class="tr">スコア</th><th class="tr">確率</th>';
+  html += '</tr></thead><tbody>';
+  for (const p of sorted) {
+    const rank = p.predicted_rank ?? p.rank ?? '-';
+    html += '<tr>';
+    html += `<td class="tc">${_rankBadge(rank)}</td>`;
+    html += `<td class="tc">${p.horse_number ?? '-'}</td>`;
+    html += `<td>${_horseCell(p.horse_id, p.horse_name)}</td>`;
+    html += `<td class="num">${p.score != null ? p.score.toFixed?.(3) ?? p.score : '-'}</td>`;
+    html += `<td class="num">${p.probability != null ? (p.probability * 100).toFixed(1) + '%' : (p.win_prob != null ? (p.win_prob * 100).toFixed(1) + '%' : '-')}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+// ── 払い戻し・ラップタイム（結果タブ用ヘルパー） ──
+
+function _renderPayoffSection(data) {
+  const payoff = data.payoff;
+  if (!payoff || !Object.keys(payoff).length) return '';
+  const LABELS = {win:'単勝',place:'複勝',exacta:'馬連',quinella:'馬単',
+    wide:'ワイド',trio:'三連複',trifecta:'三連単',bracket_quinella:'枠連'};
+  let html = '<div class="section-title">払い戻し</div><div class="table-wrap" style="margin-bottom:16px"><table class="data-table"><thead><tr><th>式別</th><th class="tc">組合せ</th><th class="tr">払戻金</th><th class="tc">人気</th></tr></thead><tbody>';
+  for (const [key, items] of Object.entries(payoff)) {
+    const label = LABELS[key] || key;
+    const arr = Array.isArray(items) ? items : [items];
+    for (const it of arr) {
+      if (typeof it === 'object') {
+        html += `<tr><td>${label}</td><td class="tc">${it.combination || it.numbers || '-'}</td><td class="num" style="color:var(--warn);font-weight:600">${it.payout ? '¥' + Number(it.payout).toLocaleString() : '-'}</td><td class="tc">${it.popularity || '-'}</td></tr>`;
+      } else {
+        html += `<tr><td>${label}</td><td colspan="3">${it}</td></tr>`;
+      }
+    }
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function _renderLapSection(data) {
+  const laps = data.lap_times;
+  if (!laps?.length) return '';
+  let html = '<div class="section-title">ラップタイム</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">';
+  for (let i = 0; i < laps.length; i++) {
+    const v = typeof laps[i] === 'number' ? laps[i].toFixed(1) : laps[i];
+    const fastest = laps.indexOf(Math.min(...laps.filter(x => typeof x === 'number'))) === i;
+    html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;text-align:center${fastest ? ';border-color:var(--ok);color:var(--ok)' : ''}"><div style="font-size:9px;color:var(--text-dim)">${(i+1)*200}m</div>${v}</div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+// ── 汎用テーブル ──
+
+function _renderGenericTable(data) {
+  const entries = data.entries || [];
+  if (entries.length && typeof entries[0] === 'object') {
+    const keys = Object.keys(entries[0]);
+    const numCols = new Set();
+    for (const k of keys) {
+      if (typeof entries[0][k] === 'number') numCols.add(k);
+    }
+    let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
+    for (const k of keys) html += `<th${numCols.has(k) ? ' class="tr"' : ''}>${k}</th>`;
+    html += '</tr></thead><tbody>';
+    for (const row of entries) {
+      html += '<tr>';
+      for (const k of keys) {
+        const v = row[k];
+        const cls = typeof v === 'number' ? ' class="num"' : '';
+        html += `<td${cls}>${v ?? '-'}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+    return html;
+  }
+  return '<div class="empty">テーブル表示不可</div>';
+}
+
+// ── JSON syntax highlight ──
+
+function syntaxHighlight(obj, depth, open) {
+  if (obj === null) return '<span class="jnull">null</span>';
+  if (typeof obj === 'boolean') return `<span class="jb">${obj}</span>`;
+  if (typeof obj === 'number') return `<span class="jn">${obj}</span>`;
+  if (typeof obj === 'string') {
+    const escaped = obj.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (escaped.length > 120) return `<span class="js">"${escaped.slice(0,120)}…"</span>`;
+    return `<span class="js">"${escaped}"</span>`;
+  }
+  const indent = '  '.repeat(depth);
+  const innerIndent = '  '.repeat(depth + 1);
+  const id = 'n' + Math.random().toString(36).slice(2,8);
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) return '<span class="jbrace">[]</span>';
+    if (obj.length <= 3 && obj.every(v => typeof v !== 'object' || v === null)) {
+      const items = obj.map(v => syntaxHighlight(v, depth+1, false)).join('<span class="jcomma">, </span>');
+      return `<span class="jbrace">[</span>${items}<span class="jbrace">]</span>`;
+    }
+    const autoCollapse = depth >= 2 && obj.length > 5;
+    let html = `<span class="jbrace">[</span>`;
+    html += `<span class="collapse-btn" onclick="toggle('${id}')">${autoCollapse ? '▶' : '▼'} ${obj.length}items</span>`;
+    html += `<div id="${id}" ${autoCollapse ? 'class="collapsed"' : ''}>`;
+    for (let i = 0; i < obj.length; i++) {
+      html += innerIndent + syntaxHighlight(obj[i], depth+1, false);
+      if (i < obj.length - 1) html += '<span class="jcomma">,</span>';
+      html += '\n';
+    }
+    html += indent + `<span class="jbrace">]</span></div>`;
+    if (autoCollapse) html += `<span id="${id}_hint" class="collapse-hint">${obj.length} items...</span>`;
+    return html;
+  }
+  if (typeof obj === 'object') {
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return '<span class="jbrace">{}</span>';
+    const autoCollapse = depth >= 3;
+    let html = `<span class="jbrace">{</span>`;
+    if (keys.length > 2) {
+      html += `<span class="collapse-btn" onclick="toggle('${id}')">${autoCollapse ? '▶' : '▼'}</span>`;
+    }
+    html += `<div id="${id}" ${autoCollapse ? 'class="collapsed"' : ''}>`;
+    for (let i = 0; i < keys.length; i++) {
+      html += innerIndent + `<span class="jk">"${keys[i]}"</span>: `;
+      html += syntaxHighlight(obj[keys[i]], depth+1, false);
+      if (i < keys.length - 1) html += '<span class="jcomma">,</span>';
+      html += '\n';
+    }
+    html += indent + `<span class="jbrace">}</span></div>`;
+    if (autoCollapse) html += `<span id="${id}_hint" class="collapse-hint">{${keys.length} keys}</span>`;
+    return html;
+  }
+  return String(obj);
+}
+
+function toggle(id) {
+  const el = document.getElementById(id);
+  const hint = document.getElementById(id + '_hint');
+  const btn = el.previousElementSibling;
+  if (el.classList.contains('collapsed')) {
+    el.classList.remove('collapsed');
+    if (hint) hint.style.display = 'none';
+    if (btn) btn.textContent = btn.textContent.replace('▶', '▼');
+  } else {
+    el.classList.add('collapsed');
+    if (hint) hint.style.display = '';
+    if (btn) btn.textContent = btn.textContent.replace('▼', '▶');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Horse Detail Modal
+// ═══════════════════════════════════════════════════════
+
+let _horseCache = {};
+let _hmActiveTab = 'info';
+
+function getCurrentRaceId() {
+  return document.getElementById('raceIdInput').value.trim();
+}
+
+async function openHorseModal(horseId, horseName) {
+  const overlay = document.getElementById('horseModal');
+  const header = document.getElementById('hmHeader');
+  const body = document.getElementById('hmBody');
+  _hmActiveTab = 'info';
+  _renderHmTabs();
+
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+  document.body.style.overflow = 'hidden';
+
+  const cacheKey = `${horseId}/${getCurrentRaceId()}`;
+  let data = _horseCache[cacheKey];
+
+  if (data) {
+    _updateHorseHeader(header, data, horseName);
+    _renderHorseDetail(data);
+    return;
+  }
+
+  header.innerHTML = `<div><div class="hm-name">${horseName}</div><div class="hm-name-en">${horseId}</div></div><button class="hm-close" onclick="closeHorseModal()">✕</button>`;
+  body.innerHTML = '<div class="hm-loading"><div class="hm-spinner"></div>読み込み中...</div>';
+
+  try {
+    const raceId = getCurrentRaceId();
+    const resp = await fetch(`/api/horse/${horseId}/detail?race_id=${raceId}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    data = await resp.json();
+    _horseCache[cacheKey] = data;
+    _updateHorseHeader(header, data, horseName);
+    _renderHorseDetail(data);
+  } catch (e) {
+    body.innerHTML = `<div class="empty">データ取得失敗: ${e.message}</div>`;
+  }
+}
+
+function _updateHorseHeader(header, data, fallbackName) {
+  const info = data.info || {};
+  header.innerHTML = `
+    <div>
+      <div class="hm-name">${info.horse_name || fallbackName}
+        ${info.sex ? `<span class="hm-badge hm-badge-sex">${info.sex}${info.age || ''}</span>` : ''}
+        ${info.status ? `<span class="hm-badge hm-badge-status">${info.status}</span>` : ''}
+      </div>
+      <div class="hm-name-en">${info.name_en || ''} ${info.color ? `· ${info.color}` : ''} ${info.birthday ? `· ${info.birthday}` : ''}</div>
+    </div>
+    <button class="hm-close" onclick="closeHorseModal()">✕</button>`;
+}
+
+function closeHorseModal() {
+  const overlay = document.getElementById('horseModal');
+  overlay.classList.remove('visible');
+  setTimeout(() => { overlay.style.display = 'none'; }, 200);
+  document.body.style.overflow = '';
+}
+
+function _renderHmTabs() {
+  const tabs = [
+    {id: 'info', label: '基本情報'},
+    {id: 'history', label: '成績'},
+    {id: 'pedigree', label: '血統'},
+    {id: 'stats', label: '統計'},
+  ];
+  document.getElementById('hmTabs').innerHTML = tabs.map(t =>
+    `<button class="hm-tab${_hmActiveTab === t.id ? ' active' : ''}" onclick="_switchHmTab('${t.id}')">${t.label}</button>`
+  ).join('');
+}
+
+let _lastHorseData = null;
+
+function _renderHorseDetail(data) {
+  _lastHorseData = data;
+  const body = document.getElementById('hmBody');
+  if (_hmActiveTab === 'info') body.innerHTML = _renderHmInfo(data);
+  else if (_hmActiveTab === 'history') body.innerHTML = _renderHmHistory(data);
+  else if (_hmActiveTab === 'pedigree') body.innerHTML = _renderHmPedigree(data);
+  else if (_hmActiveTab === 'stats') body.innerHTML = _renderHmStats(data);
+}
+
+function _switchHmTab(tabId) {
+  _hmActiveTab = tabId;
+  _renderHmTabs();
+  if (_lastHorseData) _renderHorseDetail(_lastHorseData);
+}
+
+// ── Info tab ──
+function _renderHmInfo(data) {
+  const info = data.info || {};
+  const sc = data.smartrc_horse || {};
+  let html = '<div class="hm-info-grid">';
+
+  const fields = [
+    ['馬名', info.horse_name],
+    ['性別 / 年齢', `${info.sex || ''} ${info.age || ''}`],
+    ['毛色', info.color],
+    ['生年月日', info.birthday],
+    ['調教師', info.trainer || sc.tname8],
+    ['馬主', info.owner || sc.owner],
+    ['生産者', info.breeder || sc.producer],
+    ['生産地', info.birthplace || sc.sanchi],
+    ['通算成績', info.career],
+    ['獲得賞金', info.total_earnings ? `${Number(info.total_earnings).toLocaleString()}万円` : '-'],
+    ['父', info.sire || sc.f_name],
+    ['母', info.dam || sc.m_name],
+    ['母父', info.dam_sire || sc.mf_name],
+  ];
+
+  for (const [label, val] of fields) {
+    if (!val && val !== 0) continue;
+    html += `<div class="hm-info-card"><div class="hm-info-label">${label}</div><div class="hm-info-value">${val}</div></div>`;
+  }
+  html += '</div>';
+
+  const wins = info.major_wins?.filter(w => w && w.trim());
+  if (wins?.length) {
+    html += '<div class="section-title">主な勝鞍</div><div style="padding:4px 0;font-size:12px">';
+    for (const w of wins) html += `<div style="margin-bottom:3px;color:var(--warn)">🏆 ${w}</div>`;
+    html += '</div>';
+  }
+
+  return html;
+}
+
+// ── History tab ──
+function _renderHmHistory(data) {
+  const netkeiba = data.race_history || [];
+  const smartrc = data.smartrc_fullresults || [];
+  const useSmartrc = smartrc.length > 0;
+
+  if (!netkeiba.length && !smartrc.length) return '<div class="empty">成績データなし</div>';
+
+  let html = '';
+
+  if (netkeiba.length) {
+    html += `<div class="section-title">netkeiba 戦績 (${netkeiba.length}戦)</div>`;
+    html += '<div class="table-wrap" style="margin-bottom:16px"><table class="hm-history-table"><thead><tr>';
+    html += '<th class="tc">日付</th><th>場所</th><th>レース</th><th class="tr">距離</th><th class="tc">馬場</th><th class="tc">着</th><th class="tr">タイム</th><th class="tr">着差</th><th class="tc">通過</th><th class="tr">上り3F</th><th>騎手</th><th class="tr">斤量</th><th class="tc">人気</th><th class="tr">オッズ</th><th class="tr">馬体重</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const r of netkeiba) {
+      const pos = r.finish_position ?? '-';
+      const posCls = pos == 1 ? 'pos-1' : pos == 2 ? 'pos-2' : pos == 3 ? 'pos-3' : '';
+      html += '<tr>';
+      html += `<td class="dim tc">${r.date || '-'}</td>`;
+      html += `<td>${r.venue || '-'}</td>`;
+      html += `<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${r.race_name || '-'}</td>`;
+      html += `<td class="num">${r.surface || ''}${r.distance || '-'}</td>`;
+      html += `<td class="tc">${r.track_condition || '-'}</td>`;
+      html += `<td class="tc ${posCls}" style="font-weight:700">${pos}</td>`;
+      html += `<td class="num">${r.finish_time || '-'}</td>`;
+      html += `<td class="num">${r.margin || '-'}</td>`;
+      html += `<td class="dim tc">${r.passing_order || '-'}</td>`;
+      html += `<td class="num">${r.last_3f || '-'}</td>`;
+      html += `<td>${r.jockey_name || '-'}</td>`;
+      html += `<td class="num">${r.jockey_weight || '-'}</td>`;
+      html += `<td class="tc">${r.popularity || '-'}</td>`;
+      html += `<td class="num">${r.odds || '-'}</td>`;
+      const wt = r.weight ? `${r.weight}${r.weight_change > 0 ? '(+' + r.weight_change + ')' : r.weight_change < 0 ? '(' + r.weight_change + ')' : '(±0)'}` : '-';
+      html += `<td class="num">${wt}</td>`;
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+  }
+
+  if (useSmartrc) {
+    html += `<div class="section-title" style="color:var(--smartrc)">SmartRC 全戦績 (${smartrc.length}戦)</div>`;
+    html += '<div class="table-wrap"><table class="hm-history-table"><thead><tr>';
+    html += '<th class="tc">日付</th><th>場所</th><th class="tc">R</th><th class="tr">距離</th><th class="tc">着</th><th class="tr">タイム</th><th class="tr">テン1F</th><th class="tr">上り3F</th><th>騎手</th><th class="tr">斤量</th><th class="tc">人気</th><th class="tr">馬体重</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const r of smartrc) {
+      const rank = r.rank ?? r.arrival ?? '-';
+      const posCls = rank == 1 ? 'pos-1' : rank == 2 ? 'pos-2' : rank == 3 ? 'pos-3' : '';
+      const trackType = String(r.trackkind) === '2' ? 'ダ' : '芝';
+      const placeName = PLACE_MAP[String(r.jyocd)] || r.jyocd || '-';
+      const wt = r.weight ? `${r.weight}${r.vary && r.vary !== '000' ? '(' + r.vary.replace(/^\+0*/, '+').replace(/^-0*/, '-') + ')' : ''}` : '-';
+
+      html += '<tr>';
+      html += `<td class="dim tc">${r.year || ''}/${r.monthday?.slice(0,2) || ''}/${r.monthday?.slice(2) || ''}</td>`;
+      html += `<td>${placeName}</td>`;
+      html += `<td class="tc">${r.racenum || '-'}</td>`;
+      html += `<td class="num">${r.range || '-'}${trackType}</td>`;
+      html += `<td class="tc ${posCls}" style="font-weight:700">${rank}</td>`;
+      html += `<td class="num">${fmtTime(r.stime)}</td>`;
+      html += `<td class="num">${fmtDiv10(r.ten1f)}</td>`;
+      html += `<td class="num">${fmtDiv10(r.furlong3)}</td>`;
+      html += `<td>${r.jname8 || '-'}</td>`;
+      html += `<td class="num">${fmtDiv10(r.futan)}</td>`;
+      html += `<td class="tc">${r.pop || '-'}</td>`;
+      html += `<td class="num">${wt}</td>`;
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+  }
+
+  return html;
+}
+
+// ── Pedigree tab ──
+function _tailSireLineFromLegacyPed(ped) {
+  const labels = ['父', '母父', '母母父', '母母母父', '母母母母父'];
+  const sire = ped.sire || {};
+  const dam = ped.dam || {};
+  const ds = dam.sire || {};
+  const dd = dam.dam || {};
+  const names = [
+    sire.name || '',
+    ds.name || '',
+    (dd.sire || {}).name || '',
+    '',
+    '',
+  ];
+  return labels.map((label, i) => ({label, name: (names[i] || '').trim()}));
+}
+
+function _renderHmPedigree(data) {
+  const ped = data.pedigree || {};
+  const sire = ped.sire || {};
+  const dam = ped.dam || {};
+  if (!sire.name && !dam.name) return '<div class="empty">血統データなし</div>';
+
+  const tail = (ped.tail_sire_line && ped.tail_sire_line.length === 5)
+    ? ped.tail_sire_line
+    : _tailSireLineFromLegacyPed(ped);
+
+  let html = '<div class="section-title">血統（5世代）</div>';
+  html += '<div class="hm-info-grid">';
+  for (const row of tail) {
+    const nm = row.name ? row.name : '—';
+    html += `<div class="hm-info-card"><div class="hm-info-label">${row.label}</div><div class="hm-info-value">${nm}</div></div>`;
+  }
+  html += '</div>';
+
+  const sc = data.smartrc_horse;
+  if (sc) {
+    html += '<div class="section-title" style="color:var(--smartrc)">SmartRC 系統情報</div>';
+    html += '<div class="hm-info-grid">';
+    const lineageFields = [
+      ['父 大系統 (LL)', sc.f_llcode], ['父 小系統 (SL)', sc.f_slcode], ['父 系統色 (CL)', sc.f_clcode],
+      ['母父 大系統', sc.mf_llcode], ['母父 小系統', sc.mf_slcode], ['母父 系統色', sc.mf_clcode],
+    ];
+    for (const [label, val] of lineageFields) {
+      if (val) html += `<div class="hm-info-card"><div class="hm-info-label">${label}</div><div class="hm-info-value sm">${val}</div></div>`;
+    }
+    html += '</div>';
+
+    if (sc.idxnum_chuo_all) {
+      html += '<div class="section-title">中央成績 (SmartRC)</div>';
+      html += '<div class="hm-info-grid">';
+      const idxFields = [
+        ['1着', sc.idxnum_chuo_r1], ['2着', sc.idxnum_chuo_r2],
+        ['3着', sc.idxnum_chuo_r3], ['着外', sc.idxnum_chuo_ro], ['全走', sc.idxnum_chuo_all],
+      ];
+      for (const [label, val] of idxFields) {
+        html += `<div class="hm-info-card"><div class="hm-info-label">${label}</div><div class="hm-info-value">${val ?? '-'}</div></div>`;
+      }
+      html += '</div>';
+    }
+  }
+
+  return html;
+}
+
+// ── Stats tab ──
+function _renderHmStats(data) {
+  const stats = data.stats || {};
+  if (!stats.overall) return '<div class="empty">統計データなし (成績なし)</div>';
+
+  let html = '';
+
+  const ov = stats.overall;
+  html += '<div class="stat-group"><div class="stat-group-title">総合成績</div>';
+  html += '<div class="hm-info-grid">';
+  html += `<div class="hm-info-card"><div class="hm-info-label">出走</div><div class="hm-info-value">${ov.runs}戦</div></div>`;
+  html += `<div class="hm-info-card"><div class="hm-info-label">勝利</div><div class="hm-info-value">${ov.wins}勝</div></div>`;
+  html += `<div class="hm-info-card"><div class="hm-info-label">勝率</div><div class="hm-info-value" style="color:var(--ok)">${ov.win_rate}%</div></div>`;
+  html += `<div class="hm-info-card"><div class="hm-info-label">連対率</div><div class="hm-info-value" style="color:var(--accent)">${ov.top2_rate}%</div></div>`;
+  html += `<div class="hm-info-card"><div class="hm-info-label">複勝率</div><div class="hm-info-value" style="color:var(--warn)">${ov.top3_rate}%</div></div>`;
+  html += '</div></div>';
+
+  function renderStatBars(title, groups) {
+    if (!groups || !Object.keys(groups).length) return '';
+    let h = `<div class="stat-group"><div class="stat-group-title">${title}</div>`;
+    for (const [key, s] of Object.entries(groups)) {
+      const maxRate = 100;
+      h += `<div class="stat-row">
+        <div class="stat-label">${key}</div>
+        <div class="stat-bar-wrap">
+          <div class="stat-bar top3" style="width:${s.top3_rate}%"></div>
+        </div>
+        <div class="stat-bar-wrap" style="max-width:80px">
+          <div class="stat-bar win" style="width:${s.win_rate}%"></div>
+        </div>
+        <div class="stat-value">
+          ${s.runs}走 <span class="stat-pct">${s.win_rate}%</span>
+          <span style="color:var(--text-dim)">(${s.wins}-${s.top3 - s.wins}-${s.runs - s.top3})</span>
+          avg:${s.avg_pos}
+        </div>
+      </div>`;
+    }
+    h += '</div>';
+    return h;
+  }
+
+  html += renderStatBars('馬場別', stats.by_surface);
+  html += renderStatBars('距離別', stats.by_distance);
+  html += renderStatBars('競馬場別', stats.by_venue);
+  html += renderStatBars('馬場状態別', stats.by_condition);
+
+  if (stats.last_3f) {
+    html += '<div class="stat-group"><div class="stat-group-title">上り3F</div>';
+    html += '<div class="hm-info-grid">';
+    html += `<div class="hm-info-card"><div class="hm-info-label">ベスト</div><div class="hm-info-value" style="color:var(--ok)">${stats.last_3f.best}</div></div>`;
+    html += `<div class="hm-info-card"><div class="hm-info-label">平均</div><div class="hm-info-value">${stats.last_3f.avg}</div></div>`;
+    html += `<div class="hm-info-card"><div class="hm-info-label">直近3走</div><div class="hm-info-value sm">${stats.last_3f.recent3?.join(' → ') || '-'}</div></div>`;
+    html += '</div></div>';
+  }
+
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════
+//  Person (Jockey / Trainer) Detail Modal
+// ═══════════════════════════════════════════════════════
+
+let _personData = null;
+let _pmActiveTab = 'profile';
+let _pmFilters = {};
+const _personCache = {};
+
+async function openPersonModal(ptype, personId, displayName) {
+  const overlay = document.getElementById('personModal');
+  const header = document.getElementById('pmHeader');
+  const body = document.getElementById('pmBody');
+  const typeLabel = ptype === 'jockey' ? '騎手' : '調教師';
+
+  _pmActiveTab = 'profile';
+  _pmFilters = {};
+  _renderPmTabs();
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+  document.body.style.overflow = 'hidden';
+
+  const cacheKey = `${ptype}/${personId}`;
+  if (_personCache[cacheKey]) {
+    _personData = _personCache[cacheKey];
+    _updatePersonHeader(header, _personData, displayName, typeLabel, ptype);
+    _renderPersonDetail();
+    return;
+  }
+
+  header.innerHTML = `<div><div class="hm-name">${displayName} <span class="hm-badge hm-badge-sex">${typeLabel}</span></div><div class="hm-name-en">${personId}</div></div><button class="hm-close" onclick="closePersonModal()">✕</button>`;
+  body.innerHTML = '<div class="hm-loading"><div class="hm-spinner"></div>読み込み中...</div>';
+
+  try {
+    const raceId = getCurrentRaceId();
+    const resp = await fetch(`/api/person/${ptype}/${personId}/stats?race_id=${raceId}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    _personData = await resp.json();
+    _personCache[cacheKey] = _personData;
+    _updatePersonHeader(header, _personData, displayName, typeLabel, ptype);
+    _renderPersonDetail();
+  } catch (e) {
+    body.innerHTML = `<div class="empty">データ取得失敗: ${e.message}</div>`;
+  }
+}
+
+function _updatePersonHeader(header, data, displayName, typeLabel, ptype) {
+  const name = data.name || displayName;
+  const aff = data.affiliation || '';
+  const ct = data.career_total || {};
+  header.innerHTML = `
+    <div>
+      <div class="hm-name">${name} <span class="hm-badge hm-badge-sex">${typeLabel}</span>
+        ${ct.rides ? `<span class="hm-badge" style="background:rgba(59,130,246,0.15);color:var(--accent)">${ct.rides}${ptype==='jockey'?'騎乗':'出走'} ${ct.wins}勝</span>` : ''}
+      </div>
+      <div class="hm-name-en">${aff} ${data.debut_year || ''}</div>
+    </div>
+    <button class="hm-close" onclick="closePersonModal()">✕</button>`;
+}
+
+function closePersonModal() {
+  const overlay = document.getElementById('personModal');
+  overlay.classList.remove('visible');
+  setTimeout(() => { overlay.style.display = 'none'; }, 200);
+  document.body.style.overflow = '';
+  _personData = null;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('personModal').style.display === 'flex') closePersonModal();
+    else closeHorseModal();
+  }
+});
+
+function _renderPmTabs() {
+  const tabs = [
+    {id: 'profile', label: 'プロフィール'},
+    {id: 'yearly', label: '年度別成績'},
+    {id: 'records', label: '個別成績 (フィルタ)'},
+  ];
+  document.getElementById('pmTabs').innerHTML = tabs.map(t =>
+    `<button class="hm-tab${_pmActiveTab === t.id ? ' active' : ''}" onclick="_switchPmTab('${t.id}')">${t.label}</button>`
+  ).join('');
+}
+
+function _switchPmTab(tabId) {
+  _pmActiveTab = tabId;
+  _renderPmTabs();
+  if (_personData) _renderPersonDetail();
+}
+
+function _renderPersonDetail() {
+  const body = document.getElementById('pmBody');
+  if (_pmActiveTab === 'profile') body.innerHTML = _renderPmProfile();
+  else if (_pmActiveTab === 'yearly') body.innerHTML = _renderPmYearly();
+  else if (_pmActiveTab === 'records') body.innerHTML = _renderPmRecords();
+}
+
+function _renderPmProfile() {
+  const d = _personData;
+  if (!d) return '<div class="empty">データなし</div>';
+  let html = '<div class="hm-info-grid">';
+  const fields = [
+    ['名前', d.name],
+    ['読み', d.name_kana],
+    ['生年月日', d.birthdate],
+    ['出身地', d.birthplace],
+    ['身長/体重', d.physical],
+    ['所属', d.affiliation],
+    ['デビュー', d.debut_year],
+    ['本年勝利', d.current_year_wins_text],
+    ['通算勝利', d.career_wins_text],
+    ['GI勝利', d.g1_wins_text],
+    ['重賞勝利', d.graded_wins_text],
+    ['通算獲得賞金', d.career_earnings_text],
+  ];
+  for (const [label, val] of fields) {
+    if (!val) continue;
+    html += `<div class="hm-info-card"><div class="hm-info-label">${label}</div><div class="hm-info-value sm">${val}</div></div>`;
+  }
+  html += '</div>';
+
+  const ct = d.career_total;
+  if (ct) {
+    html += '<div class="section-title">通算成績</div><div class="hm-info-grid">';
+    const total = ct.rides || (ct.wins + ct.seconds + ct.thirds + ct.others);
+    html += `<div class="hm-info-card"><div class="hm-info-label">${d.type==='jockey'?'騎乗数':'出走数'}</div><div class="hm-info-value">${total?.toLocaleString()}</div></div>`;
+    html += `<div class="hm-info-card"><div class="hm-info-label">勝利</div><div class="hm-info-value">${ct.wins}</div></div>`;
+    html += `<div class="hm-info-card"><div class="hm-info-label">勝率</div><div class="hm-info-value" style="color:var(--ok)">${ct.win_rate || (total ? (ct.wins/total*100).toFixed(1) : 0)}%</div></div>`;
+    html += `<div class="hm-info-card"><div class="hm-info-label">連対率</div><div class="hm-info-value" style="color:var(--accent)">${ct.top2_rate || (total ? ((ct.wins+ct.seconds)/total*100).toFixed(1) : 0)}%</div></div>`;
+    html += `<div class="hm-info-card"><div class="hm-info-label">複勝率</div><div class="hm-info-value" style="color:var(--warn)">${ct.top3_rate || (total ? ((ct.wins+ct.seconds+ct.thirds)/total*100).toFixed(1) : 0)}%</div></div>`;
+    if (ct.earnings) html += `<div class="hm-info-card"><div class="hm-info-label">獲得賞金</div><div class="hm-info-value sm">${ct.earnings}万円</div></div>`;
+    html += '</div>';
+  }
+
+  return html;
+}
+
+function _renderPmYearly() {
+  const ys = _personData?.yearly_stats || [];
+  if (!ys.length) return '<div class="empty">年度別データなし</div>';
+
+  const maxRides = Math.max(...ys.map(y => y.rides || 0));
+
+  let html = '<div class="yearly-chart">';
+  for (const y of ys) {
+    const total = y.rides || 0;
+    if (!total) continue;
+    const wPct = (y.wins / maxRides * 100).toFixed(1);
+    const sPct = (y.seconds / maxRides * 100).toFixed(1);
+    const tPct = (y.thirds / maxRides * 100).toFixed(1);
+    html += `<div class="yearly-row">
+      <div class="yearly-year">${y.year}</div>
+      <div class="yearly-bar-wrap">
+        <div class="yearly-bar-win" style="width:${wPct}%" title="${y.wins}勝"></div>
+        <div class="yearly-bar-2nd" style="width:${sPct}%" title="${y.seconds}2着"></div>
+        <div class="yearly-bar-3rd" style="width:${tPct}%" title="${y.thirds}3着"></div>
+      </div>
+      <div class="yearly-detail">
+        ${total}${_personData.type==='jockey'?'騎':'走'} ${y.wins}-${y.seconds}-${y.thirds}-${y.others}
+        <span class="pct">${y.win_rate || 0}%</span>
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+
+  html += '<div class="table-wrap"><table class="hm-history-table"><thead><tr>';
+  html += '<th class="tc">年度</th><th class="tc">順位</th><th class="tr">1着</th><th class="tr">2着</th><th class="tr">3着</th><th class="tr">着外</th><th class="tr">騎乗数</th><th class="tr">勝率</th><th class="tr">連対率</th><th class="tr">複勝率</th>';
+  if (ys[0]?.earnings) html += '<th class="tr">賞金(万円)</th>';
+  html += '</tr></thead><tbody>';
+  for (const y of ys) {
+    html += '<tr>';
+    html += `<td class="tc">${y.year}</td>`;
+    html += `<td class="tc">${y.rank || '-'}</td>`;
+    html += `<td class="num pos-1">${y.wins}</td>`;
+    html += `<td class="num pos-2">${y.seconds}</td>`;
+    html += `<td class="num pos-3">${y.thirds}</td>`;
+    html += `<td class="num">${y.others}</td>`;
+    html += `<td class="num">${y.rides || 0}</td>`;
+    html += `<td class="num" style="color:var(--ok)">${y.win_rate || 0}%</td>`;
+    html += `<td class="num" style="color:var(--accent)">${y.top2_rate || 0}%</td>`;
+    html += `<td class="num" style="color:var(--warn)">${y.top3_rate || 0}%</td>`;
+    if (y.earnings !== undefined) html += `<td class="num">${y.earnings}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function _renderPmRecords() {
+  const allRecords = _personData?.race_records || [];
+
+  const venues = [...new Set(allRecords.map(r => {
+    const m = (r.venue || '').match(/(札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)/);
+    return m ? m[1] : '';
+  }).filter(Boolean))].sort();
+
+  const surfaces = [...new Set(allRecords.map(r => r.surface).filter(Boolean))].sort();
+  const conditions = [...new Set(allRecords.map(r => r.track_condition).filter(Boolean))].sort();
+
+  let html = '<div class="pm-filter-bar">';
+  html += '<label>馬場</label><select id="pmFilterSurface" onchange="_applyPmFilters()"><option value="">全て</option>';
+  for (const s of surfaces) html += `<option value="${s}" ${_pmFilters.surface===s?'selected':''}>${s}</option>`;
+  html += '</select>';
+  html += '<label>競馬場</label><select id="pmFilterVenue" onchange="_applyPmFilters()"><option value="">全て</option>';
+  for (const v of venues) html += `<option value="${v}" ${_pmFilters.venue===v?'selected':''}>${v}</option>`;
+  html += '</select>';
+  html += '<label>距離</label><select id="pmFilterDist" onchange="_applyPmFilters()"><option value="">全て</option>';
+  for (const d of [1000,1200,1400,1600,1800,2000,2200,2400,2600,3000,3200,3600]) {
+    html += `<option value="${d}" ${_pmFilters.dist==d?'selected':''}>${d}m</option>`;
+  }
+  html += '</select>';
+  html += '<label>馬場状態</label><select id="pmFilterCond" onchange="_applyPmFilters()"><option value="">全て</option>';
+  for (const c of conditions) html += `<option value="${c}" ${_pmFilters.cond===c?'selected':''}>${c}</option>`;
+  html += '</select>';
+  html += `<button class="reset-btn" onclick="_pmFilters={};_renderPersonDetail()">リセット</button>`;
+  html += '</div>';
+
+  const filtered = _filterRecords(allRecords);
+
+  const total = filtered.length;
+  const wins = filtered.filter(r => r.finish_position === 1).length;
+  const top2 = filtered.filter(r => r.finish_position <= 2).length;
+  const top3 = filtered.filter(r => r.finish_position <= 3).length;
+
+  html += '<div class="hm-info-grid" style="margin-bottom:12px">';
+  html += `<div class="hm-info-card"><div class="hm-info-label">対象レース</div><div class="hm-info-value">${total}</div></div>`;
+  html += `<div class="hm-info-card"><div class="hm-info-label">勝利</div><div class="hm-info-value">${wins}</div></div>`;
+  html += `<div class="hm-info-card"><div class="hm-info-label">勝率</div><div class="hm-info-value" style="color:var(--ok)">${total ? (wins/total*100).toFixed(1) : 0}%</div></div>`;
+  html += `<div class="hm-info-card"><div class="hm-info-label">連対率</div><div class="hm-info-value" style="color:var(--accent)">${total ? (top2/total*100).toFixed(1) : 0}%</div></div>`;
+  html += `<div class="hm-info-card"><div class="hm-info-label">複勝率</div><div class="hm-info-value" style="color:var(--warn)">${total ? (top3/total*100).toFixed(1) : 0}%</div></div>`;
+  html += '</div>';
+
+  if (!filtered.length) {
+    html += '<div class="empty">条件に一致するレースなし</div>';
+    return html;
+  }
+
+  html += `<div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">※ このレース出走馬の過去走から集約 (${allRecords.length}件中 ${filtered.length}件表示)</div>`;
+  html += '<div class="table-wrap"><table class="hm-history-table"><thead><tr>';
+  html += '<th class="tc">日付</th><th>場所</th><th>レース</th><th>馬名</th><th class="tr">距離</th><th class="tc">馬場</th><th class="tc">状態</th><th class="tc">着</th><th class="tr">タイム</th><th class="tr">上り3F</th><th class="tc">人気</th><th class="tr">オッズ</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const r of filtered) {
+    const pos = r.finish_position ?? '-';
+    const posCls = pos == 1 ? 'pos-1' : pos == 2 ? 'pos-2' : pos == 3 ? 'pos-3' : '';
+    html += '<tr>';
+    html += `<td class="dim tc">${r.date || '-'}</td>`;
+    html += `<td>${r.venue || '-'}</td>`;
+    html += `<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis">${r.race_name || '-'}</td>`;
+    html += `<td>${r.horse_name || '-'}</td>`;
+    html += `<td class="num">${r.surface||''}${r.distance||'-'}</td>`;
+    html += `<td class="tc">${r.surface || '-'}</td>`;
+    html += `<td class="tc">${r.track_condition || '-'}</td>`;
+    html += `<td class="tc ${posCls}" style="font-weight:700">${pos}</td>`;
+    html += `<td class="num">${r.finish_time || '-'}</td>`;
+    html += `<td class="num">${r.last_3f || '-'}</td>`;
+    html += `<td class="tc">${r.popularity || '-'}</td>`;
+    html += `<td class="num">${r.odds || '-'}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function _applyPmFilters() {
+  _pmFilters.surface = document.getElementById('pmFilterSurface')?.value || '';
+  _pmFilters.venue = document.getElementById('pmFilterVenue')?.value || '';
+  _pmFilters.dist = document.getElementById('pmFilterDist')?.value || '';
+  _pmFilters.cond = document.getElementById('pmFilterCond')?.value || '';
+  _renderPersonDetail();
+}
+
+function _filterRecords(records) {
+  return records.filter(r => {
+    if (_pmFilters.surface && r.surface !== _pmFilters.surface) return false;
+    if (_pmFilters.venue) {
+      const vMatch = (r.venue || '').includes(_pmFilters.venue);
+      if (!vMatch) return false;
+    }
+    if (_pmFilters.dist) {
+      const d = parseInt(_pmFilters.dist);
+      const rd = r.distance || 0;
+      if (Math.abs(rd - d) > 100) return false;
+    }
+    if (_pmFilters.cond && r.track_condition !== _pmFilters.cond) return false;
+    return true;
+  });
+}
+
+init();
+</script>
+</body>
+</html>
