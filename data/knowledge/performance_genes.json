@@ -1,0 +1,295 @@
+{
+  "_meta": {
+    "description": "競走馬の運動パフォーマンス関連遺伝子ナレッジベース（ミオスタチン以外）",
+    "version": "1.0.0",
+    "last_updated": "2026-03-24",
+    "references": [
+      "Andersson LS et al. (2012) Nature 488:642-646 - DMRT3遺伝子と歩様",
+      "Hill EW et al. (2010) PLoS ONE - CYP17A1遺伝子",
+      "McGivney BA et al. (2010) Functional Genomics - PDK4遺伝子",
+      "Gu J et al. (2009) Genomics - COX4I2遺伝子",
+      "Bower MA et al. (2012) PLoS ONE - BIEC2-808543マーカー",
+      "Hill EW et al. (2019) Nature Communications - サラブレッドゲノム研究"
+    ],
+    "scope": "本ナレッジベースはミオスタチン（MSTN）以外の運動能力関連遺伝子を対象とする。MSTNについてはmyostatin_genes.jsonを参照",
+    "update_strategy": "学術論文・遺伝子検査サービスのデータから更新。種牡馬単位の遺伝子型は産駒検査結果や血統推論から推定",
+    "confidence_levels": {
+      "confirmed": "遺伝子検査で確定",
+      "highly_likely": "産駒データや系統から高確率で推定",
+      "estimated": "血統関係から推定",
+      "inferred": "一般的傾向から推論"
+    }
+  },
+
+  "genes": [
+    {
+      "gene_id": "DMRT3",
+      "gene_name": "Doublesex and Mab-3 Related Transcription Factor 3",
+      "chromosome": "ECA23",
+      "function": "脊髄運動ニューロンの発達制御。歩様（ギャロップ vs 速歩・側対歩）に影響",
+      "polymorphism": "SINE insertion (g.22999655C/A)",
+      "alleles": {
+        "A": "Permissive allele - 速歩・側対歩を可能にする（SINE挿入あり）",
+        "C": "Non-permissive allele - ギャロップ特化（野生型、SINE挿入なし）"
+      },
+      "genotypes": {
+        "AA": {
+          "description": "速歩・側対歩馬で高頻度。ギャロップ馬では稀",
+          "performance_impact": "速歩競技で優位。ギャロップ（襲歩）の安定性は低下する可能性",
+          "frequency_thoroughbred": "0.05-0.10",
+          "note": "サラブレッドではほぼ存在しない。スタンダードブレッド等で高頻度"
+        },
+        "CA": {
+          "description": "ヘテロ接合。柔軟な歩様適応",
+          "performance_impact": "中程度の歩様柔軟性。競走馬としての優位性は不明確",
+          "frequency_thoroughbred": "0.15-0.25"
+        },
+        "CC": {
+          "description": "ギャロップ特化型。サラブレッドの主流",
+          "performance_impact": "ギャロップの安定性・効率性。サラブレッド競走に最適",
+          "frequency_thoroughbred": "0.70-0.80",
+          "note": "エリートサラブレッドではほぼ100% CC型"
+        }
+      },
+      "racing_relevance": {
+        "thoroughbred": "サラブレッド（ギャロップ競走）ではCC型が圧倒的優位。CA/AA型は競走成績で劣る傾向",
+        "harness_racing": "繋駕速歩競走（トロッター）ではAA型が必須に近い",
+        "distance_effect": "距離適性への直接的影響は確認されていない。歩様の効率性のみに作用"
+      },
+      "known_stallions": [
+        {
+          "name": "Northern Dancer系主流種牡馬",
+          "genotype": "CC",
+          "confidence": "highly_likely",
+          "note": "エリートサラブレッド種牡馬はほぼ全てCC型"
+        }
+      ]
+    },
+
+    {
+      "gene_id": "PDK4",
+      "gene_name": "Pyruvate Dehydrogenase Kinase 4",
+      "chromosome": "ECA26",
+      "function": "糖代謝と脂肪酸酸化の制御。運動時のエネルギー基質選択に影響",
+      "polymorphism": "g.38973231G/A (intron variant)",
+      "alleles": {
+        "G": "グルコース依存型代謝",
+        "A": "脂肪酸酸化促進型"
+      },
+      "genotypes": {
+        "GG": {
+          "description": "グルコース代謝優位",
+          "performance_impact": "短距離・高強度運動で有利。速筋繊維での速いエネルギー供給",
+          "distance_aptitude": "短距離〜マイル（1000-1600m）",
+          "frequency_thoroughbred": "0.30-0.40"
+        },
+        "GA": {
+          "description": "中間型。柔軟な代謝適応",
+          "performance_impact": "マイル〜中距離。代謝柔軟性が高い",
+          "distance_aptitude": "マイル〜中距離（1400-2000m）",
+          "frequency_thoroughbred": "0.40-0.50"
+        },
+        "AA": {
+          "description": "脂肪酸酸化優位",
+          "performance_impact": "持久力・長距離適性。遅筋繊維での持続的エネルギー供給",
+          "distance_aptitude": "中距離〜長距離（1800m以上）",
+          "frequency_thoroughbred": "0.15-0.30"
+        }
+      },
+      "racing_relevance": {
+        "distance": "長距離レースではAA型がやや優位との報告あり。短距離ではGG型が有利な傾向",
+        "training": "AA型は持久トレーニングへの適応が良い。GG型は瞬発力トレーニング向き",
+        "interaction": "MSTN遺伝子型との相互作用が報告されている（TT+AA = 極端なステイヤー傾向）"
+      },
+      "known_stallions": []
+    },
+
+    {
+      "gene_id": "COX4I2",
+      "gene_name": "Cytochrome c Oxidase Subunit 4 Isoform 2",
+      "chromosome": "ECA15",
+      "function": "ミトコンドリア電子伝達系。酸素利用効率と持久力に影響",
+      "polymorphism": "複数のSNPが報告されているが、主要な機能的多型は不明確",
+      "genotypes": {
+        "high_expression": {
+          "description": "COX4I2高発現型",
+          "performance_impact": "酸素利用効率が高い。持久力向上。高地適応",
+          "distance_aptitude": "中距離〜長距離",
+          "note": "高地トレーニングへの適応が良い"
+        },
+        "low_expression": {
+          "description": "COX4I2低発現型",
+          "performance_impact": "平地での無酸素的エネルギー代謝に依存。瞬発力型",
+          "distance_aptitude": "短距離〜マイル"
+        }
+      },
+      "racing_relevance": {
+        "distance": "発現レベルと距離適性の相関が示唆されているが、遺伝子型との対応は研究段階",
+        "altitude": "高地育成馬では高発現型が有利な可能性",
+        "status": "実用的な遺伝子検査マーカーとしては未確立"
+      },
+      "known_stallions": []
+    },
+
+    {
+      "gene_id": "BIEC2-808543",
+      "gene_name": "Performance-associated SNP marker",
+      "chromosome": "ECA18 (near MSTN locus)",
+      "function": "サラブレッドの競走距離適性に関連するSNPマーカー。機能遺伝子は未特定",
+      "polymorphism": "SNP (single nucleotide polymorphism)",
+      "alleles": {
+        "C": "スピード型アレル",
+        "T": "スタミナ型アレル"
+      },
+      "genotypes": {
+        "CC": {
+          "description": "スプリント型",
+          "performance_impact": "短距離レースで優位",
+          "distance_aptitude": "1000-1400m",
+          "best_distance_peak": "約1200m"
+        },
+        "CT": {
+          "description": "中間型",
+          "performance_impact": "マイル〜中距離",
+          "distance_aptitude": "1400-2000m",
+          "best_distance_peak": "約1600m"
+        },
+        "TT": {
+          "description": "スタミナ型",
+          "performance_impact": "中距離〜長距離レースで優位",
+          "distance_aptitude": "2000m以上",
+          "best_distance_peak": "2400m以上"
+        }
+      },
+      "racing_relevance": {
+        "discovery": "Hill et al. (2010) がサラブレッドの大規模GWAS研究で発見",
+        "correlation": "MSTN遺伝子座近傍に位置し、MSTNとの連鎖不平衡が示唆される",
+        "predictive_power": "単独での予測精度は中程度。MSTNと組み合わせると予測精度向上",
+        "note": "商業的遺伝子検査では MSTN と本マーカーを組み合わせて「スピード指数」を算出することが多い"
+      },
+      "known_stallions": []
+    },
+
+    {
+      "gene_id": "Other_Candidate_Genes",
+      "gene_name": "その他の候補遺伝子群",
+      "note": "以下は研究報告があるが、実用的マーカーとしては未確立",
+      "candidates": [
+        {
+          "gene": "ACTN3",
+          "function": "速筋α-アクチニン3。ヒトでは短距離走者にR/R型が多い",
+          "status": "馬での研究は限定的。R577X多型は馬には存在しない可能性"
+        },
+        {
+          "gene": "CKM",
+          "function": "筋型クレアチンキナーゼ。エネルギー代謝",
+          "status": "ヒトではスポーツパフォーマンスとの関連報告あり。馬では研究中"
+        },
+        {
+          "gene": "PPARGC1A (PGC-1α)",
+          "function": "ミトコンドリア生合成のマスター調節因子。持久力",
+          "status": "馬での多型と競走能力の関連は不明確"
+        },
+        {
+          "gene": "VEGFA",
+          "function": "血管内皮増殖因子。血管新生・酸素供給",
+          "status": "馬での研究は初期段階"
+        }
+      ]
+    }
+  ],
+
+  "gene_interactions": [
+    {
+      "genes": ["MSTN", "PDK4"],
+      "interaction": "TT型（MSTN）+ AA型（PDK4）の組み合わせは極端なステイヤー傾向を示す報告あり",
+      "mechanism": "筋量抑制（MSTN TT）+ 脂肪酸酸化優位（PDK4 AA）= 軽量・高持久力体型"
+    },
+    {
+      "genes": ["MSTN", "BIEC2-808543"],
+      "interaction": "両マーカーは染色体上で近接。連鎖不平衡により同時遺伝する傾向",
+      "mechanism": "MSTN遺伝子座周辺の広範なハプロタイプブロックが距離適性を制御"
+    },
+    {
+      "genes": ["DMRT3", "MSTN"],
+      "interaction": "独立に遺伝。DMRT3は歩様、MSTNは筋量・距離適性を制御",
+      "note": "サラブレッドではDMRT3=CCがほぼ固定されているため、実質的な相互作用は観察されない"
+    }
+  ],
+
+  "practical_applications": {
+    "breeding": {
+      "distance_matching": "MSTN + PDK4の組み合わせで産駒の距離適性を予測",
+      "early_selection": "2歳時の遺伝子型から調教・レース選択を最適化",
+      "mating_decisions": "種牡馬×繁殖牝馬の遺伝子型から産駒の能力分布を推定"
+    },
+    "training": {
+      "individualization": "遺伝子型に応じた調教強度・距離の調整",
+      "injury_prevention": "筋量型（MSTN CC）は筋骨格系負荷が高い → 調教量制限",
+      "optimal_race_distance": "2歳秋までに遺伝子型を確認し、3歳クラシック路線を決定"
+    },
+    "limitations": {
+      "polygenic": "競走能力は多遺伝子形質。単一遺伝子では説明できない",
+      "environment": "調教・栄養・騎乗技術等の環境要因が大きく影響",
+      "penetrance": "同じ遺伝子型でも個体差が大きい。遺伝子型は「傾向」であり「確定」ではない",
+      "rare_variants": "現在のマーカーは一般的な多型のみ。稀な変異は未検出"
+    }
+  },
+
+  "commercial_tests": {
+    "Equinome": {
+      "markers": ["MSTN", "BIEC2-808543", "その他非公開マーカー"],
+      "output": "Distance Index（DI）スコア: 短距離（DI < 1.5）、中距離（1.5-2.0）、長距離（DI > 2.0）",
+      "note": "アイルランド拠点。世界的に最も利用される検査サービス"
+    },
+    "LRC_Japan": {
+      "markers": ["MSTN"],
+      "output": "C:C / C:T / T:T の3分類",
+      "note": "日本の軽種馬登録協会提供。MSTNのみの検査"
+    },
+    "other_services": {
+      "note": "米国・欧州・豪州に複数のサービスあり。検査マーカーは各社で異なる"
+    }
+  },
+
+  "future_directions": {
+    "genomic_selection": "全ゲノム情報を用いた育種価評価（BLUP/GBLUP）の導入",
+    "epigenetics": "DNA メチル化・ヒストン修飾等のエピジェネティクス要因の研究",
+    "multi_omics": "ゲノム・トランスクリプトーム・プロテオーム・メタボロームの統合解析",
+    "gene_editing": "CRISPR等による遺伝子編集技術（倫理的・規制的課題あり）"
+  },
+
+  "ethics_and_regulation": {
+    "racing_rules": "多くの競馬統括機関は遺伝子改変馬の出走を禁止",
+    "breeding_ethics": "自然交配による遺伝子型選択は認められるが、人為的遺伝子編集は禁止",
+    "discrimination": "遺伝子型による馬の差別・市場価値の過度な変動への懸念",
+    "transparency": "遺伝子検査結果の公開・非公開の判断は馬主に委ねられる"
+  },
+
+  "data_sources_for_stallions": {
+    "strategy": "種牡馬の遺伝子型データは以下から収集・推定",
+    "primary": [
+      "一口馬主クラブの産駒遺伝子検査結果公表",
+      "学術論文での個体遺伝子型報告",
+      "商業的遺伝子検査会社のデータベース（非公開が多い）"
+    ],
+    "secondary": [
+      "産駒の遺伝子型分布からの逆算（親は必ず産駒に1アレルを渡す）",
+      "血統系統からの推論（同系統種牡馬の傾向）",
+      "競走成績・産駒傾向からの間接推定"
+    ],
+    "note": "現時点では種牡馬の直接検査データは極めて限定的。今後の情報蓄積が必要"
+  },
+
+  "update_log": [
+    {
+      "date": "2026-03-24",
+      "version": "1.0.0",
+      "changes": [
+        "初版作成。DMRT3, PDK4, COX4I2, BIEC2-808543 の基本情報を登録",
+        "ミオスタチン以外の運動関連遺伝子のナレッジベース確立",
+        "今後、種牡馬個別の遺伝子型データを追加予定"
+      ]
+    }
+  ]
+}

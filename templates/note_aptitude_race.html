@@ -383,19 +383,488 @@
     font-size: 0.8rem;
     margin-top: 0.5rem;
   }
+  .factor-controls {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 18px;
+    overflow: hidden;
+  }
+  .factor-controls summary {
+    padding: 10px 16px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--dim);
+    cursor: pointer;
+    user-select: none;
+  }
+  .factor-controls summary:hover { color: var(--text); }
+  .factor-controls[open] summary { border-bottom: 1px solid var(--border); }
+  .factor-controls-inner { padding: 14px 16px 18px; }
+  .fc-section { margin-bottom: 16px; }
+  .fc-section:last-child { margin-bottom: 0; }
+  .fc-section h3 {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    margin-bottom: 8px;
+  }
+  .fc-axis-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .fc-axis-row label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .fc-axis-row select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-size: 0.78rem;
+    font-family: inherit;
+  }
+  .fc-weights {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 8px 16px;
+  }
+  .fc-weight-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+  }
+  .fc-weight-item label {
+    min-width: 80px;
+    color: var(--dim);
+    font-size: 0.72rem;
+    flex-shrink: 0;
+  }
+  .fc-weight-item input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+    height: 4px;
+  }
+  .fc-weight-item .fc-wval {
+    min-width: 36px;
+    text-align: right;
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+  }
+  .fc-weight-actions {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .fc-btn-reset, .fc-btn-rebuild {
+    background: rgba(94, 234, 212, 0.08);
+    border: 1px solid rgba(94, 234, 212, 0.3);
+    color: var(--accent);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .fc-btn-reset:hover, .fc-btn-rebuild:hover {
+    background: rgba(94, 234, 212, 0.15);
+  }
+  .fc-btn-rebuild {
+    background: rgba(251, 191, 36, 0.08);
+    border-color: rgba(251, 191, 36, 0.3);
+    color: var(--warn);
+  }
+  .fc-btn-rebuild:hover { background: rgba(251, 191, 36, 0.15); }
+  .fc-btn-rebuild:disabled { opacity: 0.4; cursor: not-allowed; }
+  .fc-btn-full {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+  }
+  .fc-btn-full:hover { background: rgba(239, 68, 68, 0.15); }
+  .fc-btn-tune {
+    background: rgba(139, 92, 246, 0.08);
+    border-color: rgba(139, 92, 246, 0.3);
+    color: #8b5cf6;
+  }
+  .fc-btn-tune:hover { background: rgba(139, 92, 246, 0.15); }
+  .fc-tune-result {
+    background: rgba(139, 92, 246, 0.06);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.72rem;
+    margin-top: 6px;
+  }
+  .fc-tune-result strong { color: #a78bfa; }
+  .fc-tune-result .tune-corr { font-size: 1.1rem; font-weight: 700; color: #8b5cf6; }
+  .fc-weight-sum {
+    font-size: 0.68rem;
+    color: var(--dim);
+    font-family: ui-monospace, monospace;
+  }
+  .fc-stats-meta {
+    font-size: 0.72rem;
+    color: var(--dim);
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+  .fc-rebuild-status {
+    font-size: 0.68rem;
+    color: var(--warn);
+    margin-left: 8px;
+  }
+  .horse-detail {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+  }
+  .horse-detail h3 {
+    font-size: 0.85rem;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  /* ── ペディグリーツリー ── */
+  .hd-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 16px;
+    margin-top: 8px;
+  }
+  @media (max-width: 860px) {
+    .hd-layout { grid-template-columns: 1fr; }
+  }
+  .hd-radar-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .hd-radar-col canvas { max-width: 360px; max-height: 360px; }
+  .hd-radar-label {
+    font-size: 0.68rem;
+    color: var(--dim);
+    text-align: center;
+  }
+  .ped-tree { padding: 0; }
+  .ped-tree ul {
+    margin: 0;
+    padding: 0 0 0 22px;
+    list-style: none;
+    position: relative;
+  }
+  .ped-tree > ul { padding-left: 0; }
+  .ped-tree ul::before {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: 0;
+    bottom: 12px;
+    border-left: 1px dashed rgba(94,234,212,0.18);
+  }
+  .ped-tree > ul::before { display: none; }
+  .ped-tree li {
+    position: relative;
+    padding: 4px 0 4px 0;
+  }
+  .ped-tree li::before {
+    content: '';
+    position: absolute;
+    left: -13px;
+    top: 17px;
+    width: 13px;
+    border-top: 1px dashed rgba(94,234,212,0.18);
+  }
+  .ped-tree > ul > li::before { display: none; }
+
+  .ped-pass {
+    display: inline-block;
+    font-size: 0.66rem;
+    color: var(--dim);
+    padding: 2px 6px;
+    opacity: 0.7;
+    font-weight: 500;
+  }
+  .ped-pass::before {
+    content: '○';
+    margin-right: 4px;
+    font-size: 0.5rem;
+    vertical-align: middle;
+    color: rgba(94,234,212,0.35);
+  }
+
+  .ped-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 3px 0;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    max-width: 420px;
+  }
+  .ped-card:hover {
+    border-color: rgba(94,234,212,0.4);
+    box-shadow: 0 0 12px rgba(94,234,212,0.08);
+  }
+  .ped-card.ped-active {
+    border-color: var(--accent);
+    box-shadow: 0 0 16px rgba(94,234,212,0.15);
+  }
+  .ped-card.ped-father {
+    border-left: 3px solid var(--accent);
+  }
+  .ped-card-nodata { opacity: 0.35; cursor: default; }
+
+  .ped-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .ped-card-pos {
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--accent);
+    background: rgba(94,234,212,0.1);
+    border-radius: 4px;
+    padding: 1px 6px;
+    white-space: nowrap;
+  }
+  .ped-card-father .ped-card-pos {
+    background: rgba(94,234,212,0.18);
+  }
+  .ped-card-name {
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: var(--text);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ped-card-wt {
+    font-size: 0.62rem;
+    font-family: ui-monospace, monospace;
+    color: var(--warn);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .ped-card-meta {
+    font-size: 0.6rem;
+    color: var(--dim);
+    font-family: ui-monospace, monospace;
+    margin-bottom: 6px;
+  }
+
+  .ped-heatstrip {
+    display: flex;
+    gap: 2px;
+    height: 14px;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .ped-heatstrip-cell {
+    flex: 1;
+    border-radius: 2px;
+    position: relative;
+  }
+  .ped-heatstrip-cell .ped-hs-tip {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1a1e2e;
+    color: #e2e8f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.58rem;
+    font-family: ui-monospace, monospace;
+    white-space: nowrap;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .ped-heatstrip-cell:hover .ped-hs-tip { display: block; }
+
+  .ped-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 4px;
+  }
+  .ped-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 14px;
+  }
+  .ped-bar-lbl {
+    font-size: 0.58rem;
+    color: var(--dim);
+    width: 42px;
+    text-align: right;
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ped-bar-track {
+    flex: 1;
+    height: 8px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .ped-bar-center {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(255,255,255,0.15);
+  }
+  .ped-bar-fill {
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    border-radius: 3px;
+    transition: width 0.3s, left 0.3s;
+  }
+  .ped-bar-val {
+    font-size: 0.56rem;
+    font-family: ui-monospace, monospace;
+    color: var(--dim);
+    width: 32px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* ── 軸選択バー（全員表示） ── */
+  .axis-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+  }
+  .axis-bar label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--dim);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .axis-bar select {
+    background: var(--bg2);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--fg);
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-size: 0.72rem;
+    font-family: inherit;
+  }
+  .axis-apply-btn {
+    background: rgba(94, 234, 212, 0.10);
+    border: 1px solid rgba(94, 234, 212, 0.35);
+    color: var(--accent);
+    padding: 5px 16px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .axis-apply-btn:hover {
+    background: rgba(94, 234, 212, 0.20);
+  }
+
+  /* ── 比較コントロール ── */
+  .cmp-controls {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+  }
+  .cmp-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .cmp-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .cmp-sel {
+    background: var(--bg2);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--fg);
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-size: 0.70rem;
+    font-family: inherit;
+  }
+  .cmp-reload-btn {
+    background: rgba(245,158,11,0.10);
+    border: 1px solid rgba(245,158,11,0.35);
+    color: #f59e0b;
+    padding: 4px 14px;
+    border-radius: 6px;
+    font-size: 0.70rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .cmp-reload-btn:hover { background: rgba(245,158,11,0.20); }
+  .cmp-reload-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .cmp-toggle { cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .cmp-toggle input { display: none; }
+  .cmp-chip {
+    font-size: 0.68rem;
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid;
+    font-weight: 600;
+    opacity: 0.45;
+    transition: opacity 0.2s;
+  }
+  .cmp-toggle input:checked + .cmp-chip { opacity: 1; }
+  .cmp-chip-same { border-color: #f59e0b; color: #f59e0b; background: rgba(245,158,11,0.08); }
+  .cmp-chip-recent { border-color: #a78bfa; color: #a78bfa; background: rgba(167,139,250,0.08); }
+  .cmp-status { font-size: 0.62rem; color: var(--dim);
+  }
 </style>
 </head>
 <body>
 {% include '_nav.html' %}
 <div class="wrap">
-  <h1>レース適性3Dマップ</h1>
+  <h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">レース適性3Dマップ</h1>
   <p class="lead">
-    <code>sire_aptitude_note.json</code> の血統ブレンドを、<strong>パワー</strong>・<strong>欧州瞬発</strong>・<strong>TS素地</strong>の3軸に射影し、レース内でクラスタ分けした結果を表示します。
-    開催日・会場・レースを選んで「表示」。URL クエリ <code>?race_id=…</code> でも開けます（保存済みレース概要から日付・会場へ同期します）。
-    API: <code>/api/pedigree/race-note-3d</code>（<code>mode=shallow|5gen</code>）／
-    5世代は <code>horse_pedigree_5gen</code> が必要（表示前に <code>race-ensure-5gen</code> で不足分をキュー投入可・要最新サーバ）。<strong>「表示」クリック時</strong>は時間のかかる取得を<strong>別タブ</strong>で行い、このタブは完了待ちになります（取得完了後、別タブは自動で閉じ結果がここに表示されます。URL からの自動表示では同一タブで確認します）。
-    アプリをサブパス配信する場合は、本ページの URL が <code>…/プレフィックス/note-aptitude-race</code> になり <code>…/プレフィックス/api</code> も同じアプリへ届く必要があります。
-    父／母経路の扱いは <code>docs/NOTE_APTITUDE_5GEN.md</code> を参照。
+    実レースデータから集計した<strong>種牡馬因子統計</strong>に基づき、6頭の重要祖先（父・母父母父・母父母母父・母母父・母母母父・母母母母父）の適性を
+    重み付きブレンドして各馬の適性ベクトルを算出します。3D散布図の軸はグラフ下部から自由に切り替えられます。
+    開催日・会場・レースを選んで「表示」を押してください。
   </p>
 
   <div class="form-row">
@@ -405,14 +874,44 @@
     <select id="venueSelect" disabled><option value="">—</option></select>
     <label for="raceSelect">レース</label>
     <select id="raceSelect" disabled><option value="">—</option></select>
-    <label for="blendMode">ブレンド</label>
-    <select id="blendMode">
-      <option value="shallow">浅い（父・母父・牝系）</option>
-      <option value="5gen">5世代（＋父／母経路重み・データ無し時は浅い）</option>
-    </select>
     <button type="button" id="btnLoad" disabled>表示</button>
     <span class="picker-status" id="pickerStatus"></span>
   </div>
+
+  {% if is_dev_check(request) %}
+  <details class="factor-controls" id="factorControls">
+    <summary>開発者ツール</summary>
+    <div class="factor-controls-inner">
+      <div class="fc-section">
+        <h3>祖先の重み</h3>
+        <div class="fc-weights" id="weightSliders"></div>
+        <div class="fc-weight-actions">
+          <button type="button" class="fc-btn-reset" id="btnResetWeights">デフォルトに戻す</button>
+          <span class="fc-weight-sum" id="weightSum"></span>
+        </div>
+      </div>
+      <div class="fc-section">
+        <h3>統計データ</h3>
+        <div class="fc-stats-meta" id="statsMetaInfo">—</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+          <button type="button" class="fc-btn-rebuild" id="btnRebuildFast">高速再計算</button>
+          <button type="button" class="fc-btn-rebuild fc-btn-full" id="btnRebuildFull">フル再計算</button>
+          <span class="fc-rebuild-status" id="rebuildStatus"></span>
+        </div>
+        <p style="font-size:0.68rem;color:var(--dim);margin:0 0 10px">
+          高速: スナップショットから ~10秒 ｜ フル: GCS全件走査 + スナップショット更新 ~5分
+        </p>
+        <h3>ウェイト自動チューニング</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+          <button type="button" class="fc-btn-rebuild fc-btn-tune" id="btnTuneGlobal">グローバル最適化</button>
+          <button type="button" class="fc-btn-rebuild fc-btn-tune" id="btnTuneRace">このレースで最適化</button>
+          <span class="fc-rebuild-status" id="tuneStatus"></span>
+        </div>
+        <div class="fc-tune-result" id="tuneResult" style="display:none"></div>
+      </div>
+    </div>
+  </details>
+  {% endif %}
   <div class="err" id="errBox"></div>
   <div class="loading" id="loading">読み込み中…</div>
 
@@ -448,16 +947,50 @@
   <div id="main" style="display:none">
     <div class="meta-bar" id="metaBar"></div>
     <div class="viz-wrap">
-      <h2>3D 散布図（軸: パワー / 欧州瞬発 / TS）</h2>
-      <p class="viz-3d-hint">
-        <strong>X</strong>＝パワー · <strong>Y</strong>＝TS · <strong>Z</strong>＝欧州瞬発。原点付近の色付き矢印は Three.js 標準（<span style="color:#e11">赤+X</span> · <span style="color:#2a2">緑+Y</span> · <span style="color:#44e">青+Z</span>）。
-        左ドラッグで回転、ホイールでズーム、右ドラッグでパン（タッチは1本指回転・ピンチズーム）。
+      <h2 id="viz3dTitle">3D 散布図</h2>
+      <p class="viz-3d-hint" id="viz3dHint">
+        左ドラッグで回転、ホイールでズーム、右ドラッグでパン。<strong>球をクリック</strong>すると馬名と適性詳細を表示します。
       </p>
       <div id="viz3dRoot" class="viz-3d-root" role="img" aria-label="3次元散布図"></div>
       <p class="scatter-tap-hint" id="scatterTapHint" aria-live="polite"></p>
       <div class="legend" id="legend"></div>
-      <p class="viz-note">TS は netkeiba のタイム指数ではなく、ナレッジ上の「高速芝・持続・VM型」の合成です。<strong>球をクリック</strong>すると馬名を表示します。</p>
+      <div class="axis-bar" id="axisBar">
+        <label>X <select id="axisX2"></select></label>
+        <label>Y <select id="axisY2"></select></label>
+        <label>Z <select id="axisZ2"></select></label>
+        <button type="button" class="axis-apply-btn" id="btnApplyAxes">軸を反映</button>
+      </div>
+      <div class="cmp-controls" id="cmpControls" style="display:none">
+        <div class="cmp-row">
+          <label class="cmp-toggle">
+            <input type="checkbox" id="cmpSameCond" checked>
+            <span class="cmp-chip cmp-chip-same" id="cmpSameLabel">同条件上位</span>
+          </label>
+          <label class="cmp-toggle">
+            <input type="checkbox" id="cmpRecent" checked>
+            <span class="cmp-chip cmp-chip-recent" id="cmpRecentLabel">直近2週間</span>
+          </label>
+          <span class="cmp-status" id="cmpStatus"></span>
+        </div>
+        <div class="cmp-filter-row" id="cmpFilterRow">
+          <select id="cmpSurface" class="cmp-sel">
+            <option value="">芝</option>
+            <option value="芝">芝</option>
+            <option value="ダ">ダート</option>
+          </select>
+          <select id="cmpDistance" class="cmp-sel">
+            <option value="0">距離: レースと同じ</option>
+          </select>
+          <select id="cmpTrackGood" class="cmp-sel">
+            <option value="">馬場: レースと同じ</option>
+            <option value="good">良馬場</option>
+            <option value="bad">良馬場以外</option>
+          </select>
+          <button type="button" class="cmp-reload-btn" id="btnCmpReload">条件で再取得</button>
+        </div>
+      </div>
     </div>
+    <div id="horseDetail" class="horse-detail" style="display:none"></div>
     <div class="groups" id="groups"></div>
     <table>
       <thead>
@@ -465,14 +998,11 @@
           <th>枠</th>
           <th>馬番</th>
           <th>馬名</th>
-          <th>父</th>
-          <th>母父</th>
-          <th>パワー</th>
-          <th>欧州瞬発</th>
-          <th>TS</th>
+          <th id="thAxisX">—</th>
+          <th id="thAxisY">—</th>
+          <th id="thAxisZ">—</th>
           <th>群</th>
-          <th>適用</th>
-          <th>タグ</th>
+          <th>祖先</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
@@ -504,7 +1034,6 @@
   const dateSelect = $('dateSelect');
   const venueSelect = $('venueSelect');
   const raceSelect = $('raceSelect');
-  const blendMode = $('blendMode');
   const btn = $('btnLoad');
   const pickerStatus = $('pickerStatus');
   const errBox = $('errBox');
@@ -537,15 +1066,12 @@
     return parts.length ? parts.join(' ') + ' ' + name : name;
   }
 
-  /**
-   * Three.js: X=パワー, Y=TS, Z=欧州瞬発。OrbitControls で自由視点。
-   */
-  async function drawScatter3D(horses) {
+  let _compareData = null;
+
+  async function drawScatter3D(horses, axX, axY, axZ) {
     if (!viz3dRoot) return;
     if (viz3dDispose) {
-      try {
-        viz3dDispose();
-      } catch (_) {}
+      try { viz3dDispose(); } catch (_) {}
       viz3dDispose = null;
     }
     if (!horses || !horses.length) {
@@ -561,53 +1087,60 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0c10);
 
-    const pw = horses.map(function (h) {
-      return Number(h.power) || 0;
-    });
-    const eu = horses.map(function (h) {
-      return Number(h.eu_burst) || 0;
-    });
-    const ts = horses.map(function (h) {
-      return Number(h.ts) || 0;
-    });
-    const minP = Math.min.apply(null, pw.concat([-0.1]));
-    const maxP = Math.max.apply(null, pw.concat([0.1]));
-    const minE = Math.min.apply(null, eu.concat([-0.1]));
-    const maxE = Math.max.apply(null, eu.concat([0.1]));
-    const minT = Math.min.apply(null, ts.concat([-0.1]));
-    const maxT = Math.max.apply(null, ts.concat([0.1]));
-    const span = 42;
+    const allPts = horses.map(h => (h.factors || {}));
+    const showSame = $('cmpSameCond') && $('cmpSameCond').checked;
+    const showRecent = $('cmpRecent') && $('cmpRecent').checked;
+    const sameHorses = (showSame && _compareData && _compareData.same_condition) ? (_compareData.same_condition.horses || []) : [];
+    const recentHorses = (showRecent && _compareData && _compareData.recent_course) ? (_compareData.recent_course.horses || []) : [];
+    sameHorses.forEach(h => allPts.push(h.factors || {}));
+    recentHorses.forEach(h => allPts.push(h.factors || {}));
 
-    function toX(p) {
-      const r = maxP - minP || 1;
-      return ((p - minP) / r - 0.5) * 2 * span;
-    }
-    function toY(t) {
-      const r = maxT - minT || 1;
-      return ((t - minT) / r - 0.5) * 2 * span;
-    }
-    function toZ(e) {
-      const r = maxE - minE || 1;
-      return ((e - minE) / r - 0.5) * 2 * span;
-    }
+    const vxAll = allPts.map(f => Number(f[axX]) || 0);
+    const vyAll = allPts.map(f => Number(f[axY]) || 0);
+    const vzAll = allPts.map(f => Number(f[axZ]) || 0);
+    const rng = (arr) => {
+      const lo = Math.min(...arr, -0.1);
+      const hi = Math.max(...arr, 0.1);
+      return { lo, hi, d: hi - lo || 1 };
+    };
+    const rx = rng(vxAll), ry = rng(vyAll), rz = rng(vzAll);
+    const span = 42;
+    const toX = v => ((v - rx.lo) / rx.d - 0.5) * 2 * span;
+    const toY = v => ((v - ry.lo) / ry.d - 0.5) * 2 * span;
+    const toZ = v => ((v - rz.lo) / rz.d - 0.5) * 2 * span;
 
     const meshes = [];
-    horses.forEach(function (h) {
+    horses.forEach((h) => {
+      const f = h.factors || {};
       const g = Math.min(3, Math.max(0, h.group_id | 0));
       const col = new THREE.Color(HEX[g] || '#888888');
       const geom = new THREE.SphereGeometry(1.35, 22, 22);
-      const mat = new THREE.MeshStandardMaterial({
-        color: col,
-        metalness: 0.12,
-        roughness: 0.42,
-      });
+      const mat = new THREE.MeshStandardMaterial({ color: col, metalness: 0.12, roughness: 0.42 });
       const mesh = new THREE.Mesh(geom, mat);
-      mesh.position.set(
-        toX(Number(h.power) || 0),
-        toY(Number(h.ts) || 0),
-        toZ(Number(h.eu_burst) || 0)
-      );
+      mesh.position.set(toX(Number(f[axX]) || 0), toY(Number(f[axY]) || 0), toZ(Number(f[axZ]) || 0));
       mesh.userData.horse = h;
+      scene.add(mesh);
+      meshes.push(mesh);
+    });
+
+    sameHorses.forEach(h => {
+      const f = h.factors || {};
+      const geom = new THREE.OctahedronGeometry(1.3);
+      const mat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.2, roughness: 0.3, transparent: true, opacity: 0.7 });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.set(toX(Number(f[axX]) || 0), toY(Number(f[axY]) || 0), toZ(Number(f[axZ]) || 0));
+      mesh.userData.horse = { horse_name: h.horse_name, factors: f, _cmp: 'same', race_date: h.race_date, finish_position: h.finish_position };
+      scene.add(mesh);
+      meshes.push(mesh);
+    });
+
+    recentHorses.forEach(h => {
+      const f = h.factors || {};
+      const geom = new THREE.TetrahedronGeometry(1.2);
+      const mat = new THREE.MeshStandardMaterial({ color: 0xa78bfa, metalness: 0.2, roughness: 0.3, transparent: true, opacity: 0.7 });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.set(toX(Number(f[axX]) || 0), toY(Number(f[axY]) || 0), toZ(Number(f[axZ]) || 0));
+      mesh.userData.horse = { horse_name: h.horse_name, factors: f, _cmp: 'recent', race_date: h.race_date, finish_position: h.finish_position, distance: h.distance };
       scene.add(mesh);
       meshes.push(mesh);
     });
@@ -616,13 +1149,32 @@
     grid.position.y = -span - 3;
     scene.add(grid);
 
+    function makeLabel(text, position, color) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillStyle = color || '#7d8698';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, 128, 42);
+      const tex = new THREE.CanvasTexture(canvas);
+      const sp = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(sp);
+      sprite.scale.set(18, 4.5, 1);
+      sprite.position.copy(position);
+      scene.add(sprite);
+    }
+    const axisLabelMap = {};
+    (_lastData && _lastData.axes || []).forEach(a => { axisLabelMap[a.id] = a.label_ja; });
+    makeLabel(axisLabelMap[axX] || axX, new THREE.Vector3(span + 6, -span - 3, 0), '#ef4444');
+    makeLabel(axisLabelMap[axY] || axY, new THREE.Vector3(0, span + 6, 0), '#22c55e');
+    makeLabel(axisLabelMap[axZ] || axZ, new THREE.Vector3(0, -span - 3, span + 6), '#3b82f6');
+
     const axes = new THREE.AxesHelper(58);
     scene.add(axes);
 
     const box = new THREE.Box3();
-    meshes.forEach(function (m) {
-      box.expandByObject(m);
-    });
+    meshes.forEach(m => box.expandByObject(m));
     const center = new THREE.Vector3();
     const size = new THREE.Vector3();
     box.getCenter(center);
@@ -635,11 +1187,7 @@
     const height = Math.min(420, Math.max(320, Math.round(width * 0.62)));
 
     const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 5000);
-    camera.position.set(
-      center.x + camDist * 0.82,
-      center.y + camDist * 0.58,
-      center.z + camDist * 0.88
-    );
+    camera.position.set(center.x + camDist * 0.82, center.y + camDist * 0.58, center.z + camDist * 0.88);
     camera.lookAt(center);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -673,21 +1221,29 @@
       const hits = raycaster.intersectObjects(meshes, false);
       return hits.length ? hits[0].object.userData.horse : null;
     }
-
-    function onPointerDown(ev) {
-      dragStart = { x: ev.clientX, y: ev.clientY };
-    }
+    function onPointerDown(ev) { dragStart = { x: ev.clientX, y: ev.clientY }; }
     function onPointerUp(ev) {
       if (!dragStart) return;
       var d = Math.hypot(ev.clientX - dragStart.x, ev.clientY - dragStart.y);
       dragStart = null;
       if (d > 10) return;
       var h = pickHorse(ev.clientX, ev.clientY);
-      if (scatterTapHint) scatterTapHint.textContent = h ? formatScatterHorseLabel(h) : '';
+      if (h) {
+        if (h._cmp) {
+          var cmpTag = h._cmp === 'same' ? '【同条件】' : '【直近】';
+          var extra = (h.race_date || '') + ' ' + (h.finish_position || '') + '着';
+          if (h.distance) extra += ' ' + h.distance + 'm';
+          if (scatterTapHint) scatterTapHint.textContent = cmpTag + ' ' + (h.horse_name || '') + ' (' + extra.trim() + ')';
+        } else {
+          if (scatterTapHint) scatterTapHint.textContent = formatScatterHorseLabel(h);
+          showHorseDetail(h);
+        }
+      } else {
+        if (scatterTapHint) scatterTapHint.textContent = '';
+      }
     }
     function onPointerMove(ev) {
-      var h = pickHorse(ev.clientX, ev.clientY);
-      renderer.domElement.style.cursor = h ? 'pointer' : '';
+      renderer.domElement.style.cursor = pickHorse(ev.clientX, ev.clientY) ? 'pointer' : '';
     }
 
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
@@ -718,14 +1274,284 @@
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       controls.dispose();
-      meshes.forEach(function (m) {
-        m.geometry.dispose();
-        m.material.dispose();
-      });
+      meshes.forEach(m => { m.geometry.dispose(); m.material.dispose(); });
       renderer.dispose();
       if (renderer.domElement.parentNode) renderer.domElement.remove();
       container.innerHTML = '';
     };
+  }
+
+  function _hsColor(v) {
+    const t = Math.max(-3, Math.min(3, v));
+    if (t >= 0) {
+      const p = t / 3;
+      const r = Math.round(30 + (94 - 30) * (1 - p));
+      const g = Math.round(41 + (234 - 41) * (1 - p) * 0.5 + 234 * p);
+      const b = Math.round(59 + (212 - 59) * (1 - p) * 0.3 + 212 * p);
+      return `rgb(${r},${Math.min(255, g)},${Math.min(255, b)})`;
+    }
+    const p = Math.abs(t) / 3;
+    return `rgb(${Math.round(107 + 141 * p)},${Math.round(114 - 50 * p)},${Math.round(128 - 15 * p)})`;
+  }
+
+  function _renderAncCard(a, wPct, axisLabelMap, isFather) {
+    if (!a) return '';
+    const noData = !a.found_in_db;
+    const cls = 'ped-card' + (isFather ? ' ped-father' : '') + (noData ? ' ped-card-nodata' : '');
+    const axes = a.axes || {};
+    const keys = Object.keys(axisLabelMap);
+
+    let strip = '<div class="ped-heatstrip">';
+    keys.forEach(k => {
+      const v = axes[k] || 0;
+      const bg = _hsColor(v);
+      const lbl = (axisLabelMap[k] || k).replace(/（.*/, '');
+      strip += '<div class="ped-heatstrip-cell" style="background:' + bg + '">' +
+        '<span class="ped-hs-tip">' + lbl + ' ' + v.toFixed(2) + '</span></div>';
+    });
+    strip += '</div>';
+
+    return '<div class="' + cls + '" data-slot="' + a.slot + '">' +
+      '<div class="ped-card-head">' +
+      '<span class="ped-card-pos">' + escapeHtml(a.label_ja) + '</span>' +
+      '<span class="ped-card-name">' + escapeHtml(a.sire_name || '—') + '</span>' +
+      '<span class="ped-card-wt">' + wPct + '%</span>' +
+      '</div>' +
+      '<div class="ped-card-meta">' + (noData ? 'DB未登録' : a.side + ' n=' + a.sample_size) + '</div>' +
+      strip +
+      '</div>';
+  }
+
+  function _renderTree(ancMap, weightsUsed, axisLabelMap) {
+    function w(slot) { return Math.round((weightsUsed[slot] || 0) * 100); }
+    function card(slot, father) { return _renderAncCard(ancMap[slot], w(slot), axisLabelMap, !!father); }
+    function pass(label) { return '<span class="ped-pass">' + label + '</span>'; }
+
+    return '<div class="ped-tree"><ul>' +
+      '<li>' + card('father', true) + '</li>' +
+      '<li>' + pass('母') +
+        '<ul>' +
+          '<li>' + pass('母父') +
+            '<ul>' +
+              '<li>' + pass('母父母') +
+                '<ul>' +
+                  '<li>' + card('mf_mf') + '</li>' +
+                  '<li>' + pass('母父母母') +
+                    '<ul><li>' + card('mf_mm_f') + '</li></ul>' +
+                  '</li>' +
+                '</ul>' +
+              '</li>' +
+            '</ul>' +
+          '</li>' +
+          '<li>' + pass('母母') +
+            '<ul>' +
+              '<li>' + card('mm_f') + '</li>' +
+              '<li>' + pass('母母母') +
+                '<ul>' +
+                  '<li>' + card('mmm_f') + '</li>' +
+                  '<li>' + pass('母母母母') +
+                    '<ul><li>' + card('mmmm_f') + '</li></ul>' +
+                  '</li>' +
+                '</ul>' +
+              '</li>' +
+            '</ul>' +
+          '</li>' +
+        '</ul>' +
+      '</li>' +
+    '</ul></div>';
+  }
+
+  function _renderBars(axes, axisLabelMap) {
+    const keys = Object.keys(axisLabelMap);
+    let html = '<div class="ped-bars">';
+    keys.forEach(k => {
+      const v = Math.max(-3, Math.min(3, axes[k] || 0));
+      const pct = Math.abs(v) / 3 * 50;
+      const left = v >= 0 ? 50 : (50 - pct);
+      const color = v >= 0 ? 'rgba(94,234,212,0.6)' : 'rgba(248,113,113,0.5)';
+      const lbl = (axisLabelMap[k] || k).replace(/（.*/, '');
+      html += '<div class="ped-bar-row">' +
+        '<span class="ped-bar-lbl">' + lbl + '</span>' +
+        '<div class="ped-bar-track">' +
+          '<div class="ped-bar-center"></div>' +
+          '<div class="ped-bar-fill" style="left:' + left + '%;width:' + pct + '%;background:' + color + '"></div>' +
+        '</div>' +
+        '<span class="ped-bar-val">' + v.toFixed(2) + '</span>' +
+      '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function scrollToDetail() {
+    const el = $('horseDetail');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  let _detailHorse = null;
+  function showHorseDetail(h) {
+    const el = $('horseDetail');
+    if (!el || !h) return;
+    _detailHorse = h;
+    const f = h.factors || {};
+    const ancs = h.ancestors || [];
+    const weightsUsed = h.weights_used || {};
+    const axisLabelMap = {};
+    (_lastData && _lastData.axes || []).forEach(a => { axisLabelMap[a.id] = a.label_ja; });
+
+    const ancMap = {};
+    ancs.forEach(a => { ancMap[a.slot] = a; });
+
+    let html = '<h3>' + escapeHtml(formatScatterHorseLabel(h)) + '</h3>';
+    html += '<div class="hd-layout">';
+    html += '<div class="ped-tree-col">' + _renderTree(ancMap, weightsUsed, axisLabelMap) + '</div>';
+    html += '<div class="hd-radar-col">' +
+      '<canvas id="radarCanvas" width="360" height="360"></canvas>' +
+      '<div class="hd-radar-label" id="radarLabel">ブレンド適性</div>' +
+      '<div id="ancDetailBars" style="width:100%"></div>' +
+    '</div>';
+    html += '</div>';
+    el.innerHTML = html;
+    el.style.display = 'block';
+
+    const rCanvas = $('radarCanvas');
+    if (rCanvas) drawRadar(rCanvas, f, axisLabelMap, null);
+
+    el.querySelectorAll('.ped-card:not(.ped-card-nodata)').forEach(card => {
+      card.addEventListener('click', () => {
+        const slot = card.dataset.slot;
+        const a = ancMap[slot];
+        if (!a) return;
+        el.querySelectorAll('.ped-card').forEach(c => c.classList.remove('ped-active'));
+        const wasActive = card.classList.contains('ped-active');
+        if (!wasActive) {
+          card.classList.add('ped-active');
+          const rCanvas2 = $('radarCanvas');
+          if (rCanvas2) drawRadar(rCanvas2, f, axisLabelMap, a.axes);
+          const lbl = $('radarLabel');
+          if (lbl) lbl.innerHTML = '<strong>' + escapeHtml(a.label_ja) + '</strong> ' + escapeHtml(a.sire_name || '') + ' との比較';
+          const barsEl = $('ancDetailBars');
+          if (barsEl) barsEl.innerHTML = _renderBars(a.axes, axisLabelMap);
+        } else {
+          const rCanvas2 = $('radarCanvas');
+          if (rCanvas2) drawRadar(rCanvas2, f, axisLabelMap, null);
+          const lbl = $('radarLabel');
+          if (lbl) lbl.textContent = 'ブレンド適性';
+          const barsEl = $('ancDetailBars');
+          if (barsEl) barsEl.innerHTML = '';
+        }
+      });
+    });
+  }
+
+  function drawRadar(canvas, factors, labelMap, overlayAxes) {
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    const cx = w / 2, cy = h / 2;
+    const r = Math.min(cx, cy) - 40;
+    const keys = Object.keys(factors);
+    const n = keys.length;
+    if (n < 3) return;
+
+    ctx.clearRect(0, 0, w, h);
+    const angleStep = (2 * Math.PI) / n;
+    const startAngle = -Math.PI / 2;
+
+    for (let ring = 1; ring <= 3; ring++) {
+      const rr = r * ring / 3;
+      ctx.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const a = startAngle + i * angleStep;
+        const px = cx + rr * Math.cos(a);
+        const py = cy + rr * Math.sin(a);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    for (let i = 0; i < n; i++) {
+      const a = startAngle + i * angleStep;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.stroke();
+    }
+
+    if (overlayAxes) {
+      ctx.beginPath();
+      keys.forEach((k, i) => {
+        const v = Math.max(-3, Math.min(3, overlayAxes[k] || 0));
+        const norm = (v + 3) / 6;
+        const a = startAngle + i * angleStep;
+        const px = cx + r * norm * Math.cos(a);
+        const py = cy + r * norm * Math.sin(a);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(251,191,36,0.12)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(251,191,36,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    ctx.beginPath();
+    keys.forEach((k, i) => {
+      const v = Math.max(-3, Math.min(3, factors[k] || 0));
+      const norm = (v + 3) / 6;
+      const a = startAngle + i * angleStep;
+      const px = cx + r * norm * Math.cos(a);
+      const py = cy + r * norm * Math.sin(a);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(94,234,212,0.18)';
+    ctx.fill();
+    ctx.strokeStyle = '#5eead4';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    keys.forEach((k, i) => {
+      const v = Math.max(-3, Math.min(3, factors[k] || 0));
+      const norm = (v + 3) / 6;
+      const a = startAngle + i * angleStep;
+      const px = cx + r * norm * Math.cos(a);
+      const py = cy + r * norm * Math.sin(a);
+      ctx.beginPath();
+      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#5eead4';
+      ctx.fill();
+    });
+
+    if (overlayAxes) {
+      keys.forEach((k, i) => {
+        const v = Math.max(-3, Math.min(3, overlayAxes[k] || 0));
+        const norm = (v + 3) / 6;
+        const a = startAngle + i * angleStep;
+        const px = cx + r * norm * Math.cos(a);
+        const py = cy + r * norm * Math.sin(a);
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(251,191,36,0.8)';
+        ctx.fill();
+      });
+    }
+
+    ctx.fillStyle = '#7d8698';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    keys.forEach((k, i) => {
+      const a = startAngle + i * angleStep;
+      const lx = cx + (r + 22) * Math.cos(a);
+      const ly = cy + (r + 22) * Math.sin(a);
+      const label = (labelMap[k] || k).replace(/（.*/, '');
+      ctx.fillText(label, lx, ly + 4);
+    });
   }
 
   let _pedigreePauseAction = null;
@@ -745,13 +1571,225 @@
     'scrape-phase-done',
   ];
 
+  const ANCESTOR_DEFAULTS = [
+    { key: 'father',   label: '父',       w: 0.30 },
+    { key: 'mf_mf',    label: '母父母父',   w: 0.14 },
+    { key: 'mf_mm_f',  label: '母父母母父', w: 0.14 },
+    { key: 'mm_f',     label: '母母父',     w: 0.14 },
+    { key: 'mmm_f',    label: '母母母父',   w: 0.14 },
+    { key: 'mmmm_f',   label: '母母母母父', w: 0.14 },
+  ];
+  const DEFAULT_AXES_X = 'ts';
+  const DEFAULT_AXES_Y = 'gear_change';
+  const DEFAULT_AXES_Z = 'ts_sustain';
+  const ALL_AXES = [
+    { id: 'ts',             label: 'TS（最高速度）' },
+    { id: 'gear_change',    label: 'ギアチェンジ' },
+    { id: 'ts_sustain',     label: 'TS持続力' },
+    { id: 'wet_turf',       label: '道悪適性' },
+    { id: 'dirt',           label: 'ダート適性' },
+    { id: 'start_speed',    label: 'スタート速度' },
+    { id: 'distance_range', label: '距離適性幅' },
+    { id: 'consistency',    label: '安定性' },
+  ];
+
+  function initFactorControls() {
+    [['axisX2', DEFAULT_AXES_X], ['axisY2', DEFAULT_AXES_Y], ['axisZ2', DEFAULT_AXES_Z]].forEach(([id, def]) => {
+      const sel = $(id);
+      if (!sel) return;
+      sel.innerHTML = '';
+      ALL_AXES.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = a.label;
+        if (a.id === def) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    });
+
+    {% if is_dev_check(request) %}
+    const wc = $('weightSliders');
+    if (wc) {
+      wc.innerHTML = '';
+      ANCESTOR_DEFAULTS.forEach(a => {
+        const div = document.createElement('div');
+        div.className = 'fc-weight-item';
+        div.innerHTML =
+          '<label for="w_' + a.key + '">' + a.label + '</label>' +
+          '<input type="range" id="w_' + a.key + '" min="0" max="100" value="' + Math.round(a.w * 100) + '" step="1">' +
+          '<span class="fc-wval" id="wv_' + a.key + '">' + Math.round(a.w * 100) + '%</span>';
+        wc.appendChild(div);
+        const slider = div.querySelector('input');
+        const valSpan = div.querySelector('.fc-wval');
+        slider.addEventListener('input', () => {
+          valSpan.textContent = slider.value + '%';
+          updateWeightSum();
+        });
+      });
+      updateWeightSum();
+    }
+
+    const resetBtn = $('btnResetWeights');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        ANCESTOR_DEFAULTS.forEach(a => {
+          const sl = $('w_' + a.key);
+          const vl = $('wv_' + a.key);
+          if (sl) { sl.value = Math.round(a.w * 100); }
+          if (vl) { vl.textContent = Math.round(a.w * 100) + '%'; }
+        });
+        updateWeightSum();
+      });
+    }
+
+    async function doRebuild(mode) {
+      const statusEl = $('rebuildStatus');
+      const _fastBtn = $('btnRebuildFast');
+      const _fullBtn = $('btnRebuildFull');
+      if (_fastBtn) _fastBtn.disabled = true;
+      if (_fullBtn) _fullBtn.disabled = true;
+      if (statusEl) statusEl.textContent = (mode === 'full' ? 'フル' : '高速') + '再計算中…';
+      try {
+        const res = await fetch(apiUrl('/api/pedigree/rebuild-sire-factor-stats'), {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({mode}),
+        });
+        const d = await res.json();
+        if (d.error) {
+          if (statusEl) statusEl.textContent = 'エラー: ' + d.error;
+        } else {
+          const meta = d.meta || {};
+          if (statusEl) statusEl.textContent = '完了 (' + (meta.total_sires_filtered || 0) + '種牡馬, ' + (meta.elapsed_sec || 0) + '秒)';
+          if ($('statsMetaInfo')) $('statsMetaInfo').innerHTML =
+            '最終更新: <strong>' + escapeHtml(meta.generated_at || '—') + '</strong> · ' +
+            '種牡馬: ' + (meta.total_sires_filtered || 0) + '頭 · ' +
+            '馬: ' + (meta.horse_count || 0) + '頭 · ' +
+            'モード: ' + (d.mode || mode);
+        }
+      } catch (e) {
+        if (statusEl) statusEl.textContent = 'エラー: ' + e;
+      } finally {
+        if (_fastBtn) _fastBtn.disabled = false;
+        if (_fullBtn) _fullBtn.disabled = false;
+      }
+    }
+    {
+      const fb = $('btnRebuildFast');
+      if (fb) fb.addEventListener('click', () => doRebuild('fast'));
+      const fl = $('btnRebuildFull');
+      if (fl) fl.addEventListener('click', () => {
+        if (!confirm('フル再計算はGCS全件走査を行い、約5分かかります。実行しますか？')) return;
+        doRebuild('full');
+      });
+    }
+
+    async function doTune(scope) {
+      const tuneStatusEl = $('tuneStatus');
+      const tuneResultEl = $('tuneResult');
+      const gBtn = $('btnTuneGlobal');
+      const rBtn = $('btnTuneRace');
+      if (gBtn) gBtn.disabled = true;
+      if (rBtn) rBtn.disabled = true;
+      if (tuneStatusEl) tuneStatusEl.textContent = 'チューニング中…';
+      if (tuneResultEl) tuneResultEl.style.display = 'none';
+      try {
+        const body = scope === 'race' ? {race_id: getSelectedRaceId()} : {};
+        const res = await fetch(apiUrl('/api/pedigree/tune-weights'), {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body),
+        });
+        const d = await res.json();
+        if (d.error) {
+          if (tuneStatusEl) tuneStatusEl.textContent = 'エラー: ' + d.error;
+          return;
+        }
+        if (tuneStatusEl) tuneStatusEl.textContent = '完了 (' + d.elapsed_sec + '秒)';
+        if (tuneResultEl) {
+          let html = '<div><span class="tune-corr">' + (d.correlation || 0).toFixed(4) + '</span> ' +
+            '<small>Spearman相関</small></div>' +
+            '<div style="margin-top:4px"><strong>最適ウェイト:</strong></div>';
+          const ow = d.optimized_weights || {};
+          ANCESTOR_DEFAULTS.forEach(a => {
+            const v = ow[a.key];
+            if (v !== undefined) {
+              html += '<div style="display:flex;justify-content:space-between;font-family:monospace">' +
+                '<span>' + a.label + '</span><span>' + (v * 100).toFixed(1) + '%</span></div>';
+            }
+          });
+          html += '<div style="margin-top:6px"><small>データ: ' +
+            (d.sample_size || 0) + '馬 / ' + (d.total_races || 0) + 'レース (' + d.scope + ')</small></div>';
+          html += '<button type="button" class="fc-btn-rebuild fc-btn-tune" ' +
+            'style="margin-top:8px" id="btnApplyTuned">このウェイトを適用</button>';
+          tuneResultEl.innerHTML = html;
+          tuneResultEl.style.display = 'block';
+          $('btnApplyTuned').addEventListener('click', () => {
+            ANCESTOR_DEFAULTS.forEach(a => {
+              const v = ow[a.key];
+              if (v !== undefined) {
+                const sl = $('w_' + a.key);
+                const vl = $('wv_' + a.key);
+                const pct = Math.round(v * 100);
+                if (sl) sl.value = pct;
+                if (vl) vl.textContent = pct + '%';
+              }
+            });
+            updateWeightSum();
+            load();
+          });
+        }
+      } catch (e) {
+        if (tuneStatusEl) tuneStatusEl.textContent = 'エラー: ' + e;
+      } finally {
+        if (gBtn) gBtn.disabled = false;
+        if (rBtn) rBtn.disabled = false;
+      }
+    }
+    {
+      const tg = $('btnTuneGlobal');
+      if (tg) tg.addEventListener('click', () => doTune('global'));
+      const tr = $('btnTuneRace');
+      if (tr) tr.addEventListener('click', () => doTune('race'));
+    }
+    {% endif %}
+  }
+
+  function updateWeightSum() {
+    let sum = 0;
+    ANCESTOR_DEFAULTS.forEach(a => {
+      const sl = $('w_' + a.key);
+      if (sl) sum += parseInt(sl.value, 10);
+    });
+    const el = $('weightSum');
+    if (el) el.textContent = '合計: ' + sum + '%';
+  }
+
+  function getSelectedWeights() {
+    const w = {};
+    ANCESTOR_DEFAULTS.forEach(a => {
+      const sl = $('w_' + a.key);
+      w[a.key] = sl ? parseInt(sl.value, 10) / 100 : a.w;
+    });
+    return w;
+  }
+
+  function getSelectedAxes() {
+    return {
+      x: ($('axisX2') || {}).value || DEFAULT_AXES_X,
+      y: ($('axisY2') || {}).value || DEFAULT_AXES_Y,
+      z: ($('axisZ2') || {}).value || DEFAULT_AXES_Z,
+    };
+  }
+
+  initFactorControls();
+
   const params = new URLSearchParams(location.search);
   const qRid = (params.get('race_id') || '').trim();
   const qMode = (params.get('mode') || '').toLowerCase();
   const IS_5GEN_WAIT_PAGE = params.get('5gen_wait') === '1';
   const Q_5GEN_WAIT_RID = (params.get('race_id') || '').trim();
   const PREFETCH_MSG_TYPE = 'keiba-note-5gen-prefetch';
-  if (qMode === '5gen' && blendMode) blendMode.value = '5gen';
 
   let _allDates = [];
   let _racesForDate = [];
@@ -1448,23 +2486,165 @@
     }
   }
 
+  let _lastData = null;
+
+  const CMP_DISTANCES = [
+    1000, 1150, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 2000,
+    2100, 2200, 2300, 2400, 2500, 2600, 3000, 3200, 3400, 3600,
+  ];
+
+  function _initCmpFilters() {
+    const dSel = $('cmpDistance');
+    if (!dSel || dSel.options.length > 1) return;
+    CMP_DISTANCES.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = String(d);
+      opt.textContent = d + 'm';
+      dSel.appendChild(opt);
+    });
+  }
+
+  function _setCmpFilterDefaults(cond) {
+    if (!cond) return;
+    const sSel = $('cmpSurface');
+    const dSel = $('cmpDistance');
+    const tSel = $('cmpTrackGood');
+    if (sSel) {
+      const sv = cond.surface || '';
+      sSel.value = sv.includes('芝') ? '芝' : sv.includes('ダ') ? 'ダ' : '';
+    }
+    if (dSel) {
+      const dv = String(cond.distance || 0);
+      for (let i = 0; i < dSel.options.length; i++) {
+        if (dSel.options[i].value === dv) { dSel.value = dv; break; }
+      }
+    }
+    if (tSel) tSel.value = cond.track_good ? 'good' : 'bad';
+  }
+
+  async function _reloadCompareData() {
+    if (!_lastData) return;
+    const rid = getSelectedRaceId();
+    if (!rid) return;
+    const reloadBtn = $('btnCmpReload');
+    const cmpSt = $('cmpStatus');
+    if (reloadBtn) reloadBtn.disabled = true;
+    if (cmpSt) cmpSt.textContent = '比較データ再取得中…';
+
+    const axes = getSelectedAxes();
+    const weights = getSelectedWeights();
+    const qp = new URLSearchParams();
+    qp.set('race_id', rid);
+    qp.set('axis_x', axes.x);
+    qp.set('axis_y', axes.y);
+    qp.set('axis_z', axes.z);
+    ANCESTOR_DEFAULTS.forEach(a => { qp.set('w_' + a.key, String(weights[a.key])); });
+
+    const sSel = $('cmpSurface');
+    const dSel = $('cmpDistance');
+    const tSel = $('cmpTrackGood');
+    if (sSel && sSel.value) qp.set('cmp_surface', sSel.value);
+    if (dSel && dSel.value !== '0') qp.set('cmp_distance', dSel.value);
+    if (tSel && tSel.value) qp.set('cmp_track_good', tSel.value);
+
+    try {
+      const cmpUrl = apiUrl('/api/pedigree/race-note-3d-compare') + '?' + qp.toString();
+      const r = await fetch(cmpUrl);
+      if (r.ok) {
+        _compareData = await r.json();
+        _renderCompareLabels();
+        _redrawWith3D();
+      } else {
+        if (cmpSt) cmpSt.textContent = '取得失敗';
+      }
+    } catch (e) {
+      if (cmpSt) cmpSt.textContent = 'エラー: ' + e;
+    } finally {
+      if (reloadBtn) reloadBtn.disabled = false;
+    }
+  }
+
+  function _renderCompareLabels() {
+    if (!_compareData) return;
+    const sc = _compareData.same_condition || {};
+    const rc = _compareData.recent_course || {};
+    $('cmpSameLabel').textContent = (sc.label || '同条件上位') + '（' + (sc.count || 0) + '頭）';
+    $('cmpRecentLabel').textContent = (rc.label || '直近2週間') + '（' + (rc.count || 0) + '頭）';
+    const cmpSt = $('cmpStatus');
+    const cond = _compareData.condition || {};
+    if (cmpSt) cmpSt.textContent = cond.surface + cond.distance + 'm ' + cond.track_category;
+  }
+
+  function _redrawWith3D() {
+    if (!_lastData) return;
+    const horses = _lastData.horses || [];
+    const axX = _lastData.axis_x || 'ts';
+    const axY = _lastData.axis_y || 'gear_change';
+    const axZ = _lastData.axis_z || 'ts_sustain';
+    void drawScatter3D(horses, axX, axY, axZ).catch(function(e){ console.error(e); });
+  }
+
+  function _updateCompareUI(data) {
+    if (!_compareData) return;
+    const cmpCtrl = $('cmpControls');
+    if (!cmpCtrl) return;
+    cmpCtrl.style.display = 'block';
+
+    _initCmpFilters();
+    _setCmpFilterDefaults(_compareData.condition);
+    _renderCompareLabels();
+
+    function redraw3D() { _redrawWith3D(); }
+    $('cmpSameCond').onchange = redraw3D;
+    $('cmpRecent').onchange = redraw3D;
+
+    const reloadBtn = $('btnCmpReload');
+    if (reloadBtn) reloadBtn.onclick = function() { _reloadCompareData(); };
+
+    redraw3D();
+  }
+
   function render(data) {
     showErr('');
-    const mreq = (data.meta && data.meta.blend_mode_requested) || '';
+    _lastData = data;
+    const axX = data.axis_x || 'ts';
+    const axY = data.axis_y || 'gear_change';
+    const axZ = data.axis_z || 'ts_sustain';
+
+    const axisLabelMap = {};
+    (data.axes || []).forEach(a => { axisLabelMap[a.id] = a.label_ja; });
+    const lx = axisLabelMap[axX] || axX;
+    const ly = axisLabelMap[axY] || axY;
+    const lz = axisLabelMap[axZ] || axZ;
+
     $('metaBar').innerHTML = [
       '<span><strong>race_id</strong> ' + (data.race_id || '') + '</span>',
       '<span><strong>ソース</strong> ' + (data.source || '—') + '</span>',
-      '<span><strong>距離</strong> ' + (data.distance_m ? data.distance_m + 'm' : '—') + '</span>',
       '<span><strong>頭数</strong> ' + (data.horses || []).length + '</span>',
-      '<span><strong>ブレンド</strong> ' + mreq + '</span>',
+      '<span><strong>統計更新</strong> ' + ((data.stats_meta || {}).generated_at || '—') + '</span>',
+      '<span><strong>種牡馬数</strong> ' + ((data.stats_meta || {}).total_sires || '—') + '</span>',
     ].join('');
+
+    $('viz3dTitle').textContent = '3D 散布図（' + lx.replace(/（.*/, '') + ' / ' + ly.replace(/（.*/, '') + ' / ' + lz.replace(/（.*/, '') + '）';
+    $('thAxisX').textContent = lx.replace(/（.*/, '');
+    $('thAxisY').textContent = ly.replace(/（.*/, '');
+    $('thAxisZ').textContent = lz.replace(/（.*/, '');
+
+    if (data.stats_meta && $('statsMetaInfo')) {
+      const sm = data.stats_meta;
+      $('statsMetaInfo').innerHTML =
+        '最終更新: <strong>' + escapeHtml(sm.generated_at || '—') + '</strong> · ' +
+        '種牡馬: ' + (sm.total_sires || 0) + '頭 · ' +
+        '馬: ' + (sm.horse_count || 0) + '頭';
+    }
 
     const horses = data.horses || [];
     if (scatterTapHint) scatterTapHint.textContent = '';
+    $('horseDetail').style.display = 'none';
 
     const leg = $('legend');
     leg.innerHTML = '';
-    const maxG = Math.max(0, ...horses.map((h) => h.group_id)) + 1;
+    const maxG = Math.max(0, ...horses.map(h => h.group_id)) + 1;
     for (let g = 0; g < maxG; g++) {
       const span = document.createElement('span');
       span.innerHTML = '<span class="dot" style="background:' + HEX[g % 4] + '"></span> グループ ' + g;
@@ -1473,51 +2653,54 @@
 
     const groupsEl = $('groups');
     groupsEl.innerHTML = '';
-    (data.groups || []).forEach((gr) => {
+    (data.groups || []).forEach(gr => {
       const c = document.createElement('div');
       c.className = 'gcard';
       const cid = gr.group_id;
+      const cent = gr.centroid || {};
+      const centHtml = [axX, axY, axZ].map(k =>
+        (axisLabelMap[k] || k).replace(/（.*/, '').slice(0, 4) + ' ' + fmt(cent[k])
+      ).join(' · ');
       c.innerHTML =
         '<h3 style="color:' + HEX[cid % 4] + '">グループ ' + cid + '（' + gr.count + '頭）</h3>' +
-        '<div class="cent">P ' + gr.centroid.power + ' · EU ' + gr.centroid.eu_burst + ' · TS ' + gr.centroid.ts + '</div>' +
-        '<ul>' +
-        (gr.horse_names || []).map((n) => '<li>' + escapeHtml(n) + '</li>').join('') +
-        '</ul>';
+        '<div class="cent">' + centHtml + '</div>' +
+        '<ul>' + (gr.horse_names || []).map(n => '<li>' + escapeHtml(n) + '</li>').join('') + '</ul>';
       groupsEl.appendChild(c);
     });
 
     const tb = $('tbody');
     tb.innerHTML = '';
-    horses.forEach((h) => {
+    horses.forEach(h => {
       const tr = document.createElement('tr');
       const g = h.group_id | 0;
+      const f = h.factors || {};
+      const ancSummary = (h.ancestors || []).map(a => {
+        const short = a.label_ja.replace(/母/g, 'M').replace(/父/g, 'F');
+        return short + ':' + escapeHtml((a.sire_name || '?').slice(0, 6));
+      }).join(' ');
       tr.innerHTML =
         '<td class="num">' + escapeHtml(String(h.bracket_number || '')) + '</td>' +
         '<td class="num">' + escapeHtml(String(h.horse_number || '')) + '</td>' +
-        '<td>' + escapeHtml(h.horse_name || '') + '</td>' +
-        '<td>' + escapeHtml(h.sire || '') + '</td>' +
-        '<td>' + escapeHtml(h.dam_sire || '') + '</td>' +
-        '<td class="num">' + fmt(h.power) + '</td>' +
-        '<td class="num">' + fmt(h.eu_burst) + '</td>' +
-        '<td class="num">' + fmt(h.ts) + '</td>' +
+        '<td style="cursor:pointer" class="horse-name-cell">' + escapeHtml(h.horse_name || '') + '</td>' +
+        '<td class="num">' + fmt(f[axX]) + '</td>' +
+        '<td class="num">' + fmt(f[axY]) + '</td>' +
+        '<td class="num">' + fmt(f[axZ]) + '</td>' +
         '<td><span class="pill" style="background:' + HEX[g % 4] + '33;color:' + HEX[g % 4] + '">' + g + '</span></td>' +
-        '<td style="font-size:0.65rem;color:var(--dim)">' +
-        escapeHtml(String(h.blend_mode_used || '')) +
-        (h.pedigree_5gen && h.pedigree_5gen.resolved_ancestors_used != null
-          ? ' <span style="opacity:0.85">(' + h.pedigree_5gen.resolved_ancestors_used + '/' + (h.pedigree_5gen.ancestor_count || '') + '祖)</span>'
-          : '') +
-        '</td>' +
-        '<td style="font-size:0.7rem;color:var(--dim)">' + escapeHtml(h.aptitude_tag || '') + '</td>';
+        '<td class="anc-cell" style="font-size:0.62rem;color:var(--dim);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="' + escapeHtml(ancSummary) + '">' + ancSummary + '</td>';
+      tr.querySelector('.horse-name-cell').addEventListener('click', () => { showHorseDetail(h); scrollToDetail(); });
+      tr.querySelector('.anc-cell').addEventListener('click', () => { showHorseDetail(h); scrollToDetail(); });
       tb.appendChild(tr);
     });
 
+    const cmpCtrl = $('cmpControls');
+    if (cmpCtrl) cmpCtrl.style.display = 'none';
+
     main.style.display = 'block';
     requestAnimationFrame(function () {
-      void drawScatter3D(horses).catch(function (e) {
+      void drawScatter3D(horses, axX, axY, axZ).catch(function (e) {
         console.error(e);
         if (scatterTapHint)
-          scatterTapHint.textContent =
-            '3D 表示の読み込みに失敗しました（ネットワークまたは esm.sh）。';
+          scatterTapHint.textContent = '3D 表示の読み込みに失敗しました。';
       });
     });
   }
@@ -1549,77 +2732,77 @@
     main.style.display = 'none';
     btn.disabled = true;
     try {
-      const mode = blendMode && blendMode.value ? blendMode.value : 'shallow';
-      if (mode === '5gen' && userClick && !IS_5GEN_WAIT_PAGE) {
+      if (userClick && !IS_5GEN_WAIT_PAGE) {
         const waitUrl = build5genWaitUrl(rid);
         const childWin = window.open(waitUrl, '_blank');
-        if (!childWin) {
-          showErr(
-            'ブラウザが新しいタブをブロックしました。このサイトのポップアップを許可してから再度「表示」を押してください。'
-          );
-          return;
-        }
-        const prevLoadingText = loading.textContent;
-        loading.textContent =
-          '別タブで5世代血統を取得しています…（完了するとタブが閉じ、こちらに結果が表示されます）';
-        try {
-          const pr = await waitFor5genChildWindow(rid, childWin, 330000);
-          if (!pr.ok) {
-            showErr(
-              pr.aborted
-                ? pr.error || '別タブで5世代血統の取得を一時停止しました。'
-                : pr.error || '5世代血統の取得に失敗しました'
-            );
+        if (childWin) {
+          const prevLoadingText = loading.textContent;
+          loading.textContent = '別タブで5世代血統を取得しています…';
+          try {
+            const pr = await waitFor5genChildWindow(rid, childWin, 330000);
+            if (!pr.ok) {
+              showErr(pr.error || '5世代血統の取得に失敗しました');
+              return;
+            }
+          } catch (e) {
+            showErr(String(e));
             return;
+          } finally {
+            loading.textContent = prevLoadingText;
           }
-        } catch (e) {
-          showErr(String(e));
-          return;
-        } finally {
-          loading.textContent = prevLoadingText;
+        } else {
+          const ens = await ensureRacePedigree5gen(rid);
+          if (!ens.ok) return;
         }
-      } else if (mode === '5gen') {
+      } else if (!IS_5GEN_WAIT_PAGE) {
         const ens = await ensureRacePedigree5gen(rid);
         if (!ens.ok) return;
       }
-      const url =
-        apiUrl('/api/pedigree/race-note-3d') +
-        '?race_id=' +
-        encodeURIComponent(rid) +
-        '&mode=' +
-        encodeURIComponent(mode);
+
+      const axes = getSelectedAxes();
+      const weights = getSelectedWeights();
+      const qp = new URLSearchParams();
+      qp.set('race_id', rid);
+      qp.set('axis_x', axes.x);
+      qp.set('axis_y', axes.y);
+      qp.set('axis_z', axes.z);
+      ANCESTOR_DEFAULTS.forEach(a => {
+        qp.set('w_' + a.key, String(weights[a.key]));
+      });
+      const url = apiUrl('/api/pedigree/race-note-3d') + '?' + qp.toString();
+      const cmpUrl = apiUrl('/api/pedigree/race-note-3d-compare') + '?' + qp.toString();
       const res = await fetch(url);
       const noteParsed = await tryParseJsonResponse(res);
       const data = noteParsed.data;
       if (data == null) {
-        showErr(
-          'race-note-3d の応答が JSON ではありません（HTTP ' +
-            res.status +
-            '）。サブパス配信では …/プレフィックス/note-aptitude-race で開き、同じプレフィックス付きの /…/api がアプリに届くか確認してください。'
-        );
+        showErr('race-note-3d の応答が JSON ではありません（HTTP ' + res.status + '）。');
         return;
       }
       if (!res.ok) {
         const flat = flattenFastApiDetail(data.detail);
         const msg = data.error || flat || '取得に失敗しました';
-        if (res.status === 404 && (flat === 'Not Found' || msg === 'Not Found')) {
-          showErr(
-            'API が見つかりません（404）。原因の例: (1) リバプロで /api がアプリに渡っていない (2) 古いプロセスのまま起動している (3) ページ URL と API ベースのプレフィックスが不一致。開発者ツールの Network で実際のリクエスト URL を確認してください。'
-          );
-        } else {
-          showErr(msg);
-        }
+        showErr(msg);
         return;
       }
       if (!data.horses || !data.horses.length) {
         showErr(data.error || '出走データがありません。出馬表・結果のスクレイプを先に実行してください。');
         return;
       }
+      _compareData = null;
       const u = new URL(location.pathname + location.search, location.origin);
       u.searchParams.set('race_id', rid);
-      u.searchParams.set('mode', mode);
       history.replaceState(null, '', u.pathname + '?' + u.searchParams.toString());
       render(data);
+
+      const cmpSt = $('cmpStatus');
+      if (cmpSt) cmpSt.textContent = '比較データ読込中…';
+      fetch(cmpUrl).then(r => r.ok ? r.json() : null).then(cmpData => {
+        if (cmpData) {
+          _compareData = cmpData;
+          _updateCompareUI(data);
+        }
+        if (cmpSt) cmpSt.textContent = '';
+      }).catch(() => { if (cmpSt) cmpSt.textContent = ''; });
     } catch (e) {
       showErr(String(e));
     } finally {
@@ -1632,6 +2815,23 @@
   btn.addEventListener('click', function () {
     void load({ userClick: true });
   });
+
+  const btnApplyAxes = $('btnApplyAxes');
+  if (btnApplyAxes) {
+    btnApplyAxes.addEventListener('click', function () {
+      if (!_lastData || !_lastData.horses || !_lastData.horses.length) {
+        void load();
+        return;
+      }
+      const axes = getSelectedAxes();
+      _lastData.axis_x = axes.x;
+      _lastData.axis_y = axes.y;
+      _lastData.axis_z = axes.z;
+      render(_lastData);
+      if (_compareData) _updateCompareUI(_lastData);
+    });
+  }
+
   if (dateSelect) dateSelect.addEventListener('change', () => { onDateChange(); });
   if (venueSelect) venueSelect.addEventListener('change', onVenueChange);
   if (raceSelect) raceSelect.addEventListener('change', onRaceChange);

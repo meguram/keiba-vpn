@@ -1008,7 +1008,7 @@
 {% include '_nav.html' %}
 
 <div class="header">
-  <h1>📡 <span>GCS</span> Monitor</h1>
+  <h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">📡 <span>GCS</span> Monitor</h1>
   <div id="gcsBadge" class="badge gcs-off">☁ GCS —</div>
   <div class="auto-refresh">
     <div class="dot"></div>
@@ -1442,6 +1442,34 @@ function renderYearHeatmap(year, dateMap) {
   return html;
 }
 
+function changeYearMonth() {
+  const yearSel = document.getElementById('yearSelect');
+  const monthSel = document.getElementById('monthSelect');
+
+  if (yearSel) {
+    const newYear = yearSel.value;
+    if (newYear !== _selectedYear) {
+      _selectedYear = newYear;
+      // 年が変わったら、その年の最初の月を選択
+      const yearMonthMap = {};
+      _allDatesData.forEach(d => {
+        const year = d.date.slice(0, 4);
+        const month = d.date.slice(4, 6);
+        if (!yearMonthMap[year]) yearMonthMap[year] = {};
+        if (!yearMonthMap[year][month]) yearMonthMap[year][month] = true;
+      });
+      const months = Object.keys(yearMonthMap[_selectedYear] || {}).sort((a, b) => b.localeCompare(a));
+      _selectedMonth = months[0] || null;
+    } else if (monthSel) {
+      _selectedMonth = monthSel.value;
+    }
+  } else if (monthSel) {
+    _selectedMonth = monthSel.value;
+  }
+
+  renderAllDates(_allDatesData);
+}
+
 function renderPriorityTable(priority) {
   const rows = (priority || []).filter(r => r.missing_races > 0).slice(0, 20);
   if (!rows.length) {
@@ -1787,6 +1815,9 @@ function _raceListCellInnerHtml(d) {
   </div>`;
 }
 
+let _selectedYear = null;
+let _selectedMonth = null;
+
 function renderAllDates(dates) {
   const container = document.getElementById('allDatesContainer');
   _allDatesData = dates || [];
@@ -1802,9 +1833,27 @@ function renderAllDates(dates) {
     return;
   }
 
+  // 年・月のグループ化
+  const yearMonthMap = {};
+  dates.forEach(d => {
+    const year = d.date.slice(0, 4);
+    const month = d.date.slice(4, 6);
+    if (!yearMonthMap[year]) yearMonthMap[year] = {};
+    if (!yearMonthMap[year][month]) yearMonthMap[year][month] = [];
+    yearMonthMap[year][month].push(d);
+  });
+
+  const years = Object.keys(yearMonthMap).sort((a, b) => b.localeCompare(a));
+  if (!_selectedYear || !yearMonthMap[_selectedYear]) _selectedYear = years[0];
+
+  const months = _selectedYear ? Object.keys(yearMonthMap[_selectedYear]).sort((a, b) => b.localeCompare(a)) : [];
+  if (!_selectedMonth || !yearMonthMap[_selectedYear]?.[_selectedMonth]) _selectedMonth = months[0];
+
+  const filteredDates = yearMonthMap[_selectedYear]?.[_selectedMonth] || [];
+
   let totalRaces = 0;
   let totalFilled = 0, totalTotal = 0;
-  dates.forEach(d => {
+  filteredDates.forEach(d => {
     totalRaces += d.total_races;
     const p = d.progress || {};
     totalFilled += (p.filled || 0);
@@ -1813,10 +1862,18 @@ function renderAllDates(dates) {
   const overallPct = totalTotal > 0 ? (totalFilled / totalTotal * 100) : 0;
 
   let html = `<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap">
-    <span style="font-size:15px;font-weight:600;color:#fff">${dates.length} 日付</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <select id="yearSelect" onchange="changeYearMonth()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:#fff;font-size:13px;cursor:pointer">
+        ${years.map(y => `<option value="${y}" ${y === _selectedYear ? 'selected' : ''}>${y}年</option>`).join('')}
+      </select>
+      <select id="monthSelect" onchange="changeYearMonth()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:#fff;font-size:13px;cursor:pointer">
+        ${months.map(m => `<option value="${m}" ${m === _selectedMonth ? 'selected' : ''}>${parseInt(m)}月</option>`).join('')}
+      </select>
+    </div>
+    <span style="font-size:15px;font-weight:600;color:#fff">${filteredDates.length} 日付</span>
     <span style="font-size:13px;color:var(--text-dim)">合計 ${totalRaces} レース</span>
     <span style="font-size:13px;color:var(--text-dim)">|</span>
-    <span style="font-size:13px;color:var(--text-dim)">全体データ保有率:</span>
+    <span style="font-size:13px;color:var(--text-dim)">データ保有率:</span>
     <span style="display:inline-flex;align-items:center;gap:6px;min-width:120px">
       ${_progressBarHtml(overallPct)}
     </span>
@@ -1838,7 +1895,7 @@ function renderAllDates(dates) {
   html += '<th>日付</th><th>一覧<br><span style="font-weight:500;opacity:0.85">race_lists</span></th><th>開催場</th><th>レース数</th><th>データ保有率</th><th>スクレイピング</th><th></th>';
   html += '</tr></thead><tbody>';
 
-  dates.forEach(d => {
+  filteredDates.forEach(d => {
     const wd = getWeekday(d.date);
     const wdCls = wd.day === 0 ? 'sun' : wd.day === 6 ? 'sat' : '';
     const formatted = `${d.date.slice(0,4)}/${d.date.slice(4,6)}/${d.date.slice(6,8)}`;

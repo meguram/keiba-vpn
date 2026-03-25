@@ -56,6 +56,8 @@ keiba-vpn/
 | `/betting` | 馬券最適化 (Kelly Criterion) |
 | `/bloodline` | 血統 × 距離適性研究 |
 | `/course-bloodline` | コース特性 × 血統適性 |
+| `/myostatin` | ミオスタチン遺伝子検索 |
+| `/growth-curve` | 成長曲線（馬体重・パフォーマンス推移） |
 
 ## keiba Agent との連携
 
@@ -71,3 +73,27 @@ python commander.py
 ```
 
 Agent は HTTP API 経由で本サーバーのスクレイピング・パイプラインを制御する。
+
+## 競走馬遺伝子研究
+
+競走馬のパフォーマンスに関連する遺伝子マーカーのナレッジベースを構築。
+
+### 対象遺伝子
+- **MSTN (Myostatin)** - 筋量制御、距離適性（220頭以上の種牡馬データ）
+- **DMRT3** - 歩様遺伝子（ギャロップ vs 速歩）
+- **PDK4** - エネルギー代謝（グルコース vs 脂肪酸酸化）
+- **COX4I2** - ミトコンドリア機能（持久力）
+- **BIEC2-808543** - 距離適性SNPマーカー
+
+### 使用方法
+
+```bash
+# ミオスタチン遺伝子検索
+python3 -m research.myostatin lookup ディープインパクト
+python3 -m research.myostatin predict ディープインパクト キングカメハメハ --distance 2000
+
+# その他のパフォーマンス遺伝子
+python3 -m research.performance_genes combined --mstn CT --pdk4 GA --distance 1800
+```
+
+詳細: [docs/PERFORMANCE_GENES.md](docs/PERFORMANCE_GENES.md)

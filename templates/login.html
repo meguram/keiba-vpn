@@ -25,6 +25,48 @@
     border-radius: 16px; padding: 40px 36px; width: 100%; max-width: 400px;
     box-shadow: 0 8px 40px rgba(0,0,0,0.4);
   }
+  .login-brand-wrap {
+    position: relative;
+    width: 72px; height: 72px;
+    margin: 0 auto 20px;
+  }
+  .login-brand-icon {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    display: block;
+    position: relative;
+    z-index: 1;
+    margin: 4px auto 0;
+    filter: drop-shadow(0 4px 16px rgba(59, 130, 246, 0.4));
+    animation: login-icon-breathe 4s ease-in-out infinite;
+  }
+  .login-brand-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    background: conic-gradient(from 0deg, rgba(59,130,246,0.5), rgba(167,139,250,0.4), rgba(236,72,153,0.3), rgba(59,130,246,0.5)) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: login-ring-spin 10s linear infinite;
+  }
+  .login-brand-glow {
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%);
+    animation: login-glow-pulse 4s ease-in-out infinite;
+  }
+  @keyframes login-icon-breathe {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 4px 16px rgba(59,130,246,0.4)); }
+    50% { transform: scale(1.04); filter: drop-shadow(0 6px 24px rgba(59,130,246,0.6)) drop-shadow(0 0 12px rgba(167,139,250,0.3)); }
+  }
+  @keyframes login-ring-spin { to { transform: rotate(360deg); } }
+  @keyframes login-glow-pulse {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.2); }
+  }
   .login-icon {
     width: 48px; height: 48px; margin: 0 auto 20px;
     background: rgba(59,130,246,0.1); border-radius: 12px;
@@ -81,6 +123,8 @@
     .login-card { padding: 32px 24px; }
     .login-title { font-size: 18px; }
     .login-subtitle { font-size: 12px; }
+    .login-brand-wrap { width: 60px; height: 60px; margin-bottom: 12px; }
+    .login-brand-icon { width: 52px; height: 52px; }
     .login-icon { width: 40px; height: 40px; margin-bottom: 16px; }
     .login-icon svg { width: 20px; height: 20px; }
   }
@@ -91,6 +135,11 @@
 
 <div class="login-container">
   <div class="login-card">
+    <div class="login-brand-wrap">
+      <div class="login-brand-glow"></div>
+      <div class="login-brand-ring"></div>
+      <img src="/data/image/icon.jpg" alt="Meguro" class="login-brand-icon">
+    </div>
     <div class="login-icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>

@@ -1345,6 +1345,72 @@ class ScraperRunner:
         if smartrc_data:
             collected["smartrc"] = smartrc_data
 
+        # ── Phase 2b: 5世代血統 (一度取得済みならスキップ) ──
+        if horse_ids:
+            ped5_fetched = 0
+            ped5_skipped = 0
+            ped5_failed = 0
+            sire_ids: set[str] = set()
+            for hid in horse_ids:
+                ex = self.storage.load("horse_pedigree_5gen", hid)
+                if ex and len((ex.get("ancestors") or [])) >= 5:
+                    ped5_skipped += 1
+                    for a in ex.get("ancestors", []):
+                        if a.get("generation") == 1 and a.get("position") == 0:
+                            sid = a.get("horse_id", "")
+                            if sid:
+                                sire_ids.add(sid)
+                            break
+                    continue
+                try:
+                    _cb("pedigree_5gen",
+                        f"5世代血統 ({ped5_fetched + ped5_failed + 1}/"
+                        f"{len(horse_ids) - ped5_skipped}): {hid}")
+                    rec = self.scrape_horse_pedigree_5gen(hid, skip_existing=False)
+                    ped5_fetched += 1
+                    if rec:
+                        for a in rec.get("ancestors", []):
+                            if a.get("generation") == 1 and a.get("position") == 0:
+                                sid = a.get("horse_id", "")
+                                if sid:
+                                    sire_ids.add(sid)
+                                break
+                except Exception as e:
+                    ped5_failed += 1
+                    logger.debug("5gen取得失敗 [%s]: %s", hid, e)
+            if ped5_fetched > 0 or ped5_failed > 0:
+                logger.info(
+                    "5世代血統(出走馬): %d頭スキップ, %d頭新規取得, %d頭失敗",
+                    ped5_skipped, ped5_fetched, ped5_failed,
+                )
+
+            # ── Phase 2c: 種牡馬の5世代血統 ──
+            sire_ids -= set(horse_ids)
+            if sire_ids:
+                sire_fetched = 0
+                sire_skipped = 0
+                sire_failed = 0
+                sire_list = sorted(sire_ids)
+                for sid in sire_list:
+                    ex = self.storage.load("horse_pedigree_5gen", sid)
+                    if ex and len((ex.get("ancestors") or [])) >= 5:
+                        sire_skipped += 1
+                        continue
+                    try:
+                        _cb("pedigree_5gen_sire",
+                            f"種牡馬5世代血統 ({sire_fetched + sire_failed + 1}/"
+                            f"{len(sire_list) - sire_skipped}): {sid}")
+                        self.scrape_horse_pedigree_5gen(sid, skip_existing=False)
+                        sire_fetched += 1
+                    except Exception as e:
+                        sire_failed += 1
+                        logger.debug("5gen取得失敗(種牡馬) [%s]: %s", sid, e)
+                if sire_fetched > 0 or sire_failed > 0:
+                    logger.info(
+                        "5世代血統(種牡馬): %d頭スキップ, %d頭新規取得, %d頭失敗",
+                        sire_skipped, sire_fetched, sire_failed,
+                    )
+
         # ── サマリー構築 ──
 
         n_card = len((collected.get("race_card") or {}).get("entries", []))

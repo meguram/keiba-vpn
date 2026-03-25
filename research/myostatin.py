@@ -31,7 +31,7 @@ _KB_PATH = Path(__file__).resolve().parent.parent / "data" / "knowledge" / "myos
 
 
 class MyostatinLookup:
-    """ミオスタチン遺伝子ナレッジベースの検索・推論エンジン。"""
+    """競走馬・種牡馬ミオスタチン遺伝子ナレッジベースの検索・推論エンジン。"""
 
     def __init__(self, kb_path: str | Path | None = None):
         self._kb_path = Path(kb_path) if kb_path else _KB_PATH
@@ -56,13 +56,15 @@ class MyostatinLookup:
 
     @property
     def stallion_count(self) -> int:
+        """登録馬数（種牡馬・競走馬）を返す。"""
         return len(self._stallions)
 
     def list_stallions(self) -> list[str]:
+        """登録馬名のリストを返す（種牡馬・競走馬）。"""
         return sorted(self._stallions.keys())
 
     def get_sire_info(self, name: str) -> dict | None:
-        """種牡馬名 (日本語 or 英語) でナレッジベースを検索。"""
+        """馬名（日本語 or 英語）でナレッジベースを検索。種牡馬・競走馬どちらも対象。"""
         if name in self._stallions:
             return self._stallions[name]
         jp_name = self._en_index.get(name.lower())
@@ -72,7 +74,7 @@ class MyostatinLookup:
 
     def get_allele_probs(self, name: str) -> tuple[float, float]:
         """
-        種牡馬のアレル確率 (allele_c, allele_t) を返す。
+        馬のアレル確率 (allele_c, allele_t) を返す。
         KBに未登録の場合は集団デフォルト値を返す。
         """
         info = self.get_sire_info(name)
@@ -183,7 +185,7 @@ class MyostatinLookup:
         return result
 
     def sire_allele_features(self, sire_name: str) -> dict[str, float]:
-        """パイプライン向け: 種牡馬のアレル特徴量を dict で返す。"""
+        """パイプライン向け: 父馬のアレル特徴量を dict で返す。"""
         c, t = self.get_allele_probs(sire_name)
         return {"sire_mstn_c": c, "sire_mstn_t": t}
 
@@ -268,15 +270,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="ミオスタチン遺伝子検索・推論ツール")
     sub = parser.add_subparsers(dest="cmd")
 
-    lookup_p = sub.add_parser("lookup", help="種牡馬の遺伝子型を検索")
-    lookup_p.add_argument("name", help="種牡馬名")
+    lookup_p = sub.add_parser("lookup", help="馬の遺伝子型を検索")
+    lookup_p.add_argument("name", help="馬名（種牡馬・競走馬）")
 
     predict_p = sub.add_parser("predict", help="子馬の遺伝子型確率を推定")
     predict_p.add_argument("sire", help="父名")
     predict_p.add_argument("dam_sire", help="母父名")
     predict_p.add_argument("--distance", type=int, default=0, help="距離(m)")
 
-    sub.add_parser("list", help="登録種牡馬一覧")
+    sub.add_parser("list", help="登録馬一覧（種牡馬・競走馬）")
 
     sub.add_parser("stats", help="ナレッジベース統計")
 
@@ -291,14 +293,14 @@ def main() -> None:
     if args.cmd == "lookup":
         info = mstn.get_sire_info(args.name)
         if info:
-            print(f"種牡馬: {info['name']} ({info.get('name_en', '')})")
+            print(f"馬名: {info['name']} ({info.get('name_en', '')})")
             print(f"遺伝子型: {info.get('genotype', '不明')}")
             print(f"信頼度: {info.get('confidence', '不明')}")
             print(f"アレル確率: C={info.get('allele_c', '?')}, T={info.get('allele_t', '?')}")
             print(f"平均勝距離: {info.get('avg_win_dist', '?')}m")
             print(f"根拠: {info.get('source', '')}")
         else:
-            print(f"'{args.name}' はナレッジベースに未登録です")
+            print(f"'{args.name}' はナレッジベースに未登録です（種牡馬・競走馬データ）")
             c, t = mstn.get_allele_probs(args.name)
             print(f"デフォルト値を適用: C={c}, T={t}")
 
@@ -338,7 +340,7 @@ def main() -> None:
                 conf = info.get("confidence", "unknown")
                 by_type[gt] = by_type.get(gt, 0) + 1
                 by_conf[conf] = by_conf.get(conf, 0) + 1
-        print(f"登録種牡馬数: {mstn.stallion_count}")
+        print(f"登録馬数（種牡馬・競走馬）: {mstn.stallion_count}")
         print("遺伝子型別:")
         for k, v in sorted(by_type.items()):
             print(f"  {k}: {v}頭")

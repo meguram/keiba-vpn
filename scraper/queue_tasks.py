@@ -68,7 +68,7 @@ def normalize_job_for_run(job: dict) -> dict[str, Any]:
 
 
 def _pause():
-    time.sleep(random.uniform(0.4, 1.2))
+    time.sleep(random.uniform(0.3, 0.8))
 
 
 def execute_job(runner: Any, job: dict) -> None:

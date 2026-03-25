@@ -397,15 +397,62 @@ def _horse_ped5_dedupe_key(horse_id: str) -> str:
     return f"horse:{hid}:horse_pedigree_5gen"
 
 
+def _build_pedigree_name_map(storage: Any, runner_ids: list[str]) -> dict[str, str]:
+    """出走馬 + ナレッジ種牡馬(tier1) の horse_pedigree_5gen から horse_id->name マップを構築。"""
+    name_map: dict[str, str] = {}
+
+    def _load_one(hid: str) -> dict | None:
+        try:
+            return storage.load("horse_pedigree_5gen", hid)
+        except Exception:
+            return None
+
+    def _extract_names(recs: list[dict | None]) -> None:
+        for rec in recs:
+            if not rec:
+                continue
+            horse_name = (rec.get("horse_name") or "").strip()
+            horse_id = (rec.get("horse_id") or "").strip()
+            if horse_id and horse_name and horse_id not in name_map:
+                name_map[horse_id] = horse_name
+            for anc in rec.get("ancestors") or []:
+                aid = (anc.get("horse_id") or "").strip()
+                aname = (anc.get("name") or "").strip()
+                if aid and aname and aid not in name_map:
+                    name_map[aid] = aname
+
+    all_ids = list(dict.fromkeys((h or "").strip() for h in runner_ids if (h or "").strip()))
+    if not all_ids:
+        return name_map
+
+    mx = min(_PED5_CLOSURE_MAX_WORKERS, max(4, len(all_ids)))
+    with ThreadPoolExecutor(max_workers=mx) as pool:
+        runner_recs = list(pool.map(_load_one, all_ids))
+    _extract_names(runner_recs)
+
+    tier1_ids = _collect_tier1_note_stallion_ids(storage, all_ids)
+    tier1_to_load = [h for h in tier1_ids if h not in {(r or {}).get("horse_id") for r in runner_recs if r}]
+    if tier1_to_load:
+        mx2 = min(_PED5_CLOSURE_MAX_WORKERS, max(4, len(tier1_to_load)))
+        with ThreadPoolExecutor(max_workers=mx2) as pool:
+            tier1_recs = list(pool.map(_load_one, tier1_to_load))
+        _extract_names(tier1_recs)
+
+    return name_map
+
+
 def _display_label_for_horse(
-    storage: Any, horse_id: str, race_disp_map: dict[str, str]
+    storage: Any, horse_id: str, race_disp_map: dict[str, str],
+    pedigree_name_map: dict[str, str] | None = None,
 ) -> str:
-    """UI 用の短い表示名（出走表があれば枠・番・馬名、なければ horse_result 等）。"""
+    """UI 用の短い表示名（出走表 → horse_result → 血統ancestors → 馬名未取得）。"""
     hid = (horse_id or "").strip()
     if not hid:
         return ""
     if hid in race_disp_map:
         return race_disp_map[hid]
+    if pedigree_name_map and hid in pedigree_name_map:
+        return pedigree_name_map[hid]
     try:
         hr = storage.load("horse_result", hid)
     except Exception:
@@ -413,7 +460,21 @@ def _display_label_for_horse(
     name = (hr.get("horse_name") or "").strip() if isinstance(hr, dict) else ""
     if name:
         return name
-    return "馬名未取得"
+    if pedigree_name_map is None:
+        try:
+            ped = storage.load("horse_pedigree_5gen", hid)
+        except Exception:
+            ped = None
+        if ped:
+            pname = (ped.get("horse_name") or "").strip()
+            if pname:
+                return pname
+            for anc in ped.get("ancestors") or []:
+                if (anc.get("horse_id") or "").strip() == hid:
+                    aname = (anc.get("name") or "").strip()
+                    if aname:
+                        return aname
+    return hid
 
 
 def _summarize_batch_targets_ja(
@@ -421,11 +482,14 @@ def _summarize_batch_targets_ja(
     horse_ids: list[str],
     disp_map: dict[str, str],
     storage: Any | None = None,
+    *,
+    pedigree_name_map: dict[str, str] | None = None,
 ) -> str:
     """UI 用: 本バッチに含まれる馬の短い一覧。"""
     ids = [(h or "").strip() for h in horse_ids if (h or "").strip()]
     if not ids:
         return ""
+    pnm = pedigree_name_map or {}
     stage = (prefetch_stage or "").strip()
     if stage == "runners":
         shown: list[str] = []
@@ -433,9 +497,11 @@ def _summarize_batch_targets_ja(
             if disp_map.get(hid):
                 shown.append(disp_map[hid])
             elif storage is not None:
-                shown.append(_display_label_for_horse(storage, hid, disp_map))
+                shown.append(_display_label_for_horse(storage, hid, disp_map, pnm))
+            elif hid in pnm:
+                shown.append(pnm[hid])
             else:
-                shown.append("馬名未取得")
+                shown.append(hid)
         more = len(ids) - len(shown)
         return (
             "本バッチの出走馬（欠損分・最大10件表示）: "
@@ -445,7 +511,7 @@ def _summarize_batch_targets_ja(
     if storage is not None:
         shown_s: list[str] = []
         for hid in ids[:10]:
-            shown_s.append(_display_label_for_horse(storage, hid, disp_map))
+            shown_s.append(_display_label_for_horse(storage, hid, disp_map, pnm))
         more = len(ids) - len(shown_s)
         return (
             "本バッチの対象（種牡馬・最大10件表示）: "
@@ -559,9 +625,11 @@ def session_progress(session_id: str, storage: Any | None = None) -> dict[str, A
         rid = str(sess.get("race_id") or "").strip()
         stage = str(sess.get("prefetch_stage") or "")
         disp_map = _race_horse_display_map(storage, rid) if rid else {}
+        pnm_cn = sess.get("pedigree_name_map") or {}
         horse_ids_sess_cn = [(h or "").strip() for h in (sess.get("horse_ids") or [])]
         batch_targets_summary_ja = _summarize_batch_targets_ja(
-            stage, horse_ids_sess_cn, disp_map, storage
+            stage, horse_ids_sess_cn, disp_map, storage,
+            pedigree_name_map=pnm_cn,
         )
         total_j = len(sess.get("job_ids") or [])
         q = ScrapeJobQueue()
@@ -642,6 +710,8 @@ def session_progress(session_id: str, storage: Any | None = None) -> dict[str, A
     worker_locked = queue.is_locked()
     progress_pct = 100 if total == 0 else min(100, int(100 * done / total))
 
+    urgent_worker_locked = queue.is_locked_urgent()
+
     phase = "complete"
     phase_label_ja = "完了"
     detail_ja = ""
@@ -649,11 +719,15 @@ def session_progress(session_id: str, storage: Any | None = None) -> dict[str, A
         if running > 0:
             phase = "scraping"
             phase_label_ja = "スクレイピング中"
-            detail_ja = "netkeiba から horse_pedigree_5gen を取得しています（最優先キュー）。"
-        elif worker_locked:
+            lane = "ファストレーン" if urgent_worker_locked else "最優先キュー"
+            detail_ja = f"netkeiba から horse_pedigree_5gen を取得しています（{lane}）。"
+        elif urgent_worker_locked or worker_locked:
             phase = "queued_busy"
             phase_label_ja = "キュー待ち"
-            detail_ja = "ワーカーが他ジョブを処理中です。このあと最優先で実行されます。"
+            if urgent_worker_locked:
+                detail_ja = "ファストレーンワーカーが他の最優先ジョブを処理中です。次に実行されます。"
+            else:
+                detail_ja = "通常ワーカーが他ジョブを処理中です。ファストレーンで割り込み実行を試みています。"
         else:
             phase = "queued_idle"
             phase_label_ja = "キュー待ち"
@@ -662,6 +736,7 @@ def session_progress(session_id: str, storage: Any | None = None) -> dict[str, A
     rid = str(sess.get("race_id") or "").strip()
     stage = str(sess.get("prefetch_stage") or "")
     disp_map = _race_horse_display_map(storage, rid) if rid else {}
+    pnm = sess.get("pedigree_name_map") or {}
     rpm = _race_runner_pedigree_progress(storage, rid) if rid else {}
 
     current_target_horse_id = ""
@@ -671,7 +746,7 @@ def session_progress(session_id: str, storage: Any | None = None) -> dict[str, A
             current_running_job.get("target_id") or ""
         ).strip()
         nm = (
-            _display_label_for_horse(storage, current_target_horse_id, disp_map)
+            _display_label_for_horse(storage, current_target_horse_id, disp_map, pnm)
             if current_target_horse_id
             else ""
         )
@@ -683,11 +758,12 @@ def session_progress(session_id: str, storage: Any | None = None) -> dict[str, A
             current_scrape_display_ja = (
                 f"実行中: {nm}（ナレッジ種牡馬・5世代血統）"
                 if nm
-                else "実行中: ナレッジ種牡馬・5世代血統（馬名未取得）"
+                else ""
             )
 
     batch_targets_summary_ja = _summarize_batch_targets_ja(
-        stage, horse_ids_sess, disp_map, storage
+        stage, horse_ids_sess, disp_map, storage,
+        pedigree_name_map=pnm,
     )
 
     next_pending_display_ja = ""
@@ -703,7 +779,7 @@ def session_progress(session_id: str, storage: Any | None = None) -> dict[str, A
             tid = str(j.get("target_id") or "").strip()
             if not tid:
                 break
-            nm = _display_label_for_horse(storage, tid, disp_map)
+            nm = _display_label_for_horse(storage, tid, disp_map, pnm)
             next_pending_display_ja = f"次に実行予定: {nm}"
             break
 
@@ -717,6 +793,7 @@ def session_progress(session_id: str, storage: Any | None = None) -> dict[str, A
         "running_count": running,
         "current_job_label": current_label,
         "is_running_worker": worker_locked,
+        "is_running_urgent_worker": urgent_worker_locked,
         "horse_ids": sess.get("horse_ids", []),
         "all_done": all_done,
         "updated_at": datetime.now().isoformat(),
@@ -755,6 +832,7 @@ def plan_race_pedigree_prefetch(storage: Any, race_id: str) -> dict[str, Any]:
         "race_id": rid,
         "entry_source": src,
         "runner_count": len(runner_ids),
+        "_runner_ids": runner_ids,
     }
 
     runner_missing, stats_run = horse_ids_missing_pedigree_for_runners(storage, runner_ids)
@@ -834,10 +912,13 @@ def start_race_pedigree_prefetch(storage: Any, race_id: str) -> dict[str, Any]:
     plan = plan_race_pedigree_prefetch(storage, race_id)
     missing = plan.get("missing_horse_ids") or []
     rid_plan = str(plan.get("race_id") or "")
+    runner_ids = plan.pop("_runner_ids", [])
     disp_map = _race_horse_display_map(storage, rid_plan)
+    ped_name_map = _build_pedigree_name_map(storage, runner_ids)
     rpm0 = _race_runner_pedigree_progress(storage, rid_plan)
     batch_targets_summary_ja = _summarize_batch_targets_ja(
-        str(plan.get("prefetch_stage") or ""), missing, disp_map, storage
+        str(plan.get("prefetch_stage") or ""), missing, disp_map, storage,
+        pedigree_name_map=ped_name_map,
     )
     if not missing:
         return {
@@ -862,6 +943,7 @@ def start_race_pedigree_prefetch(storage: Any, race_id: str) -> dict[str, Any]:
         "plan_duration_ms": plan.get("plan_duration_ms"),
         "prefetch_stage": plan.get("prefetch_stage"),
         "prefetch_stage_ja": plan.get("prefetch_stage_ja"),
+        "pedigree_name_map": ped_name_map,
     }
     sid = save_prefetch_session(payload)
     msg = f"最優先で {len(job_ids)} 件をキューに投入しました"

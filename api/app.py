@@ -16,7 +16,7 @@ import time as _time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -279,6 +279,11 @@ async def lifespan(app):
             pass
         _queue_runner_leader_fh = None
 
+    try:
+        _get_storage().flush_weekly_access()
+    except Exception as _e:
+        logger.warning("weekly access flush 失敗: %s", _e)
+
 
 app = FastAPI(title="ML-AutoPilot Keiba", version="3.0.0", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
@@ -311,6 +316,7 @@ def _is_jra_race(race_id: str) -> bool:
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+app.mount("/data/image", StaticFiles(directory=os.path.join(BASE_DIR, "data", "image")), name="data_image")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 templates.env.globals["is_dev_check"] = is_developer
 
@@ -488,8 +494,12 @@ def _disk_cache_cleanup_loop():
     )
     while not _disk_cache_cleanup_stop.is_set():
         try:
-            r = _get_storage().cleanup_disk_cache()
+            st = _get_storage()
+            r = st.cleanup_disk_cache()
             _log.info("disk cache cleanup: %s", r)
+            sn = st.cleanup_snapshot_files(max_age_seconds=86400)
+            if sn:
+                _log.info("snapshot cleanup: removed %d files", sn)
         except Exception as e:
             _log.warning("disk cache cleanup 失敗: %s", e)
         if _disk_cache_cleanup_stop.wait(timeout=interval):
@@ -507,6 +517,18 @@ def _kick_scrape_queue_worker() -> None:
             asyncio.create_task(asyncio.to_thread(q.process_queue))
     except Exception as e:
         logger.warning("キューワーカー起動スキップ: %s", e)
+
+
+def _kick_urgent_worker() -> None:
+    """最優先ジョブ専用のファストレーンワーカーを起動。通常ワーカーと並走可能。"""
+    try:
+        from scraper.job_queue import ScrapeJobQueue
+
+        q = ScrapeJobQueue()
+        if q.has_urgent_pending() and not q.is_locked_urgent():
+            asyncio.create_task(asyncio.to_thread(q.process_queue_urgent))
+    except Exception as e:
+        logger.warning("urgent ワーカー起動スキップ: %s", e)
 
 
 _html_archive_lock = threading.Lock()
@@ -2246,6 +2268,45 @@ def _run_scrape_job(job_id: str, race_id: str, category: str,
                             job["progress"]["current_label"] = entry.get("horse_name", hid)
                             runner.scrape_horse(hid, skip_existing=not force)
                     job["progress"]["current"] = len(entries)
+            elif category in ("horse_pedigree", "horse_pedigree_5gen"):
+                card = runner.storage.load("race_shutuba", race_id)
+                if card:
+                    entries = card.get("entries", [])
+                    sire_ids: set[str] = set()
+                    horse_id_set: set[str] = set()
+                    job["progress"]["total"] = len(entries)
+                    for i, entry in enumerate(entries):
+                        hid = entry.get("horse_id", "")
+                        if hid:
+                            horse_id_set.add(hid)
+                            job["progress"]["current"] = i
+                            job["progress"]["current_label"] = entry.get("horse_name", hid)
+                            try:
+                                rec = runner.scrape_horse_pedigree_5gen(
+                                    hid, skip_existing=True,
+                                )
+                                if rec:
+                                    for a in rec.get("ancestors", []):
+                                        if a.get("generation") == 1 and a.get("position") == 0:
+                                            sid = a.get("horse_id", "")
+                                            if sid:
+                                                sire_ids.add(sid)
+                                            break
+                            except Exception as e:
+                                logger.debug("5gen取得失敗 [%s]: %s", hid, e)
+                    sire_ids -= horse_id_set
+                    sire_list = sorted(sire_ids)
+                    job["progress"]["total"] = len(entries) + len(sire_list)
+                    for j, sid in enumerate(sire_list):
+                        job["progress"]["current"] = len(entries) + j
+                        job["progress"]["current_label"] = f"種牡馬: {sid}"
+                        try:
+                            runner.scrape_horse_pedigree_5gen(
+                                sid, skip_existing=True,
+                            )
+                        except Exception as e:
+                            logger.debug("5gen取得失敗(種牡馬) [%s]: %s", sid, e)
+                    job["progress"]["current"] = len(entries) + len(sire_list)
             elif category == "race_list":
                 runner.scrape_race_list(race_id)
             elif category == "smartrc_race":
@@ -2678,6 +2739,76 @@ async def api_scrape_queue_resume():
             {"error": str(e), "traceback": traceback.format_exc()},
             status_code=500,
         )
+
+
+@app.post("/api/scrape-queue/recover", response_class=JSONResponse)
+async def api_scrape_queue_recover():
+    """キューが止まったときの緊急対応: running状態の孤児ジョブをpendingに戻し、ロックファイルを削除"""
+    try:
+        from scraper.job_queue import ScrapeJobQueue
+        queue = ScrapeJobQueue()
+        requeued = queue.requeue_stale_running_jobs(assume_lock_holder=False)
+        lock_existed = queue.lock_file.exists()
+        lock_removed = False
+        if lock_existed and queue._lock_json_pid_dead_or_invalid():
+            try:
+                queue.lock_file.unlink()
+                lock_removed = True
+            except OSError:
+                pass
+        return JSONResponse({
+            "status": "ok",
+            "requeued_jobs": requeued,
+            "lock_existed": lock_existed,
+            "lock_removed": lock_removed,
+            "message": f"{requeued}件のジョブを待機に戻し、キューを復旧しました"
+        })
+    except Exception as e:
+        import traceback
+        return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+
+
+@app.post("/api/scrape-queue/kick", response_class=JSONResponse)
+async def api_scrape_queue_kick():
+    """待機中のワーカーを即座に起動してキュー処理を開始する"""
+    try:
+        from scraper.job_queue import ScrapeJobQueue
+
+        q = ScrapeJobQueue()
+        status = q.get_status()
+        pending = status["queue"]["pending"]
+        if pending == 0:
+            return JSONResponse({"status": "no_jobs", "message": "処理待ちのジョブがありません"})
+
+        kicked_normal = False
+        kicked_urgent = False
+
+        if not q.is_locked():
+            asyncio.create_task(asyncio.to_thread(q.process_queue))
+            kicked_normal = True
+
+        if q.has_urgent_pending() and not q.is_locked_urgent():
+            asyncio.create_task(asyncio.to_thread(q.process_queue_urgent))
+            kicked_urgent = True
+
+        if not kicked_normal and not kicked_urgent:
+            return JSONResponse({"status": "already_running", "message": "ワーカーは既に実行中です"})
+
+        parts = []
+        if kicked_normal:
+            parts.append("通常ワーカー")
+        if kicked_urgent:
+            parts.append("ファストレーン（最優先）")
+        return JSONResponse({
+            "status": "kicked",
+            "pending_jobs": pending,
+            "kicked_normal": kicked_normal,
+            "kicked_urgent": kicked_urgent,
+            "message": f"{' + '.join(parts)} を起動しました（待機中ジョブ: {pending}件）",
+        })
+    except Exception as e:
+        import traceback
+        return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
 
 
 @app.get("/api/scrape-queue/tasks", response_class=JSONResponse)
@@ -3827,12 +3958,18 @@ async def api_tracking_difficulty(race_id: str):
             or (race_data.get("race_result") or {}).get("entries")
             or []
         )
-        for e in entries:
-            hid = e.get("horse_id", "")
-            if hid:
+        hids = [e.get("horse_id", "") for e in entries if e.get("horse_id")]
+        if hids:
+            from concurrent.futures import ThreadPoolExecutor
+            def _load_hr(hid):
                 hr = storage.load("horse_result", hid)
                 if hr and "race_history" in hr:
-                    horses_data[hid] = hr["race_history"]
+                    return hid, hr["race_history"]
+                return hid, None
+            with ThreadPoolExecutor(max_workers=min(len(hids), 8)) as pool:
+                for hid, hist in pool.map(_load_hr, hids):
+                    if hist is not None:
+                        horses_data[hid] = hist
 
         if not race_data:
             runner = _get_runner()
@@ -5290,37 +5427,42 @@ async def api_pedigree_note_aptitude_table():
 @app.get("/api/pedigree/race-note-3d", response_class=JSONResponse)
 async def api_pedigree_race_note_3d(
     race_id: str = "",
-    distance_m: int = 0,
-    mode: str = "shallow",
+    axis_x: str = "ts",
+    axis_y: str = "gear_change",
+    axis_z: str = "ts_sustain",
+    w_father: float = 0.30,
+    w_mf_mf: float = 0.14,
+    w_mf_mm_f: float = 0.14,
+    w_mm_f: float = 0.14,
+    w_mmm_f: float = 0.14,
+    w_mmmm_f: float = 0.14,
 ):
     """
-    指定 race_id の出走全頭を、sire_aptitude_note の血統ブレンドから
-    3次元（パワー・欧州瞬発・TS素地）に写像し、フィールド内でクラスタ（最大4）分けする。
+    種牡馬因子統計ベースの適性3Dマップ。
 
-    mode: shallow（父・母父・牝系） | 5gen（5世代血統＋父／母経路重み、データ無し時は shallow）
+    6祖先（父・母父母父・母父母母父・母母父・母母母父・母母母母父）の
+    実レースデータ統計を重み付きブレンドし、選択された3軸で散布図を構成。
     """
     rid = (race_id or "").strip()
     if not rid:
         return JSONResponse({"error": "race_id が必要です"}, status_code=400)
     try:
-        from research.note_aptitude_race_map import build_race_note_aptitude_map
+        from research.sire_factor_race_map import build_race_sire_factor_map
 
-        bm = (mode or "shallow").strip().lower()
-        if bm in ("5g", "fivegen", "full"):
-            bm = "5gen"
-        if bm not in ("shallow", "5gen"):
-            return JSONResponse(
-                {"error": "mode は shallow または 5gen です"},
-                status_code=400,
-            )
+        weights = {
+            "father": w_father, "mf_mf": w_mf_mf, "mf_mm_f": w_mf_mm_f,
+            "mm_f": w_mm_f, "mmm_f": w_mmm_f, "mmmm_f": w_mmmm_f,
+        }
 
         storage = _get_storage()
         out = await asyncio.to_thread(
-            build_race_note_aptitude_map,
+            build_race_sire_factor_map,
             storage,
             rid,
-            distance_m=int(distance_m or 0),
-            blend_mode=bm,
+            weights=weights,
+            axis_x=axis_x,
+            axis_y=axis_y,
+            axis_z=axis_z,
         )
         if not out.get("horses"):
             return JSONResponse({
@@ -5328,6 +5470,132 @@ async def api_pedigree_race_note_3d(
                 "error": "出走データがありません。race_shutuba または race_result（＋horse_result）を取得してください。",
             }, status_code=404)
         return JSONResponse(out)
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
+
+
+@app.get("/api/pedigree/race-note-3d-compare", response_class=JSONResponse)
+async def api_pedigree_race_note_3d_compare(
+    race_id: str = "",
+    axis_x: str = "ts",
+    axis_y: str = "gear_change",
+    axis_z: str = "ts_sustain",
+    w_father: float = 0.30,
+    w_mf_mf: float = 0.14,
+    w_mf_mm_f: float = 0.14,
+    w_mm_f: float = 0.14,
+    w_mmm_f: float = 0.14,
+    w_mmmm_f: float = 0.14,
+    same_cond_from: str = "2025-01-01",
+    same_cond_top_n: int = 3,
+    recent_weeks: int = 2,
+    cmp_surface: str = "",
+    cmp_distance: int = 0,
+    cmp_track_good: str = "",
+):
+    """同条件上位馬 + 直近同コースの比較データを返す。"""
+    rid = (race_id or "").strip()
+    if not rid:
+        return JSONResponse({"error": "race_id が必要です"}, status_code=400)
+    try:
+        from research.sire_factor_race_map import build_comparison_data
+
+        weights = {
+            "father": w_father, "mf_mf": w_mf_mf, "mf_mm_f": w_mf_mm_f,
+            "mm_f": w_mm_f, "mmm_f": w_mmm_f, "mmmm_f": w_mmmm_f,
+        }
+        storage = _get_storage()
+        out = await asyncio.to_thread(
+            build_comparison_data,
+            storage, rid,
+            weights=weights,
+            axis_x=axis_x, axis_y=axis_y, axis_z=axis_z,
+            same_cond_from=same_cond_from,
+            same_cond_top_n=same_cond_top_n,
+            recent_weeks=recent_weeks,
+            override_surface=cmp_surface.strip(),
+            override_distance=cmp_distance,
+            override_track_good=cmp_track_good.strip(),
+        )
+        return JSONResponse(out)
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
+
+
+@app.post("/api/pedigree/rebuild-sire-factor-stats", response_class=JSONResponse)
+async def api_rebuild_sire_factor_stats(request: Request):
+    """種牡馬因子統計を再計算する。mode=fast(スナップショット) / full(個別GCS走査+スナップショット更新)。"""
+    if not is_developer(request):
+        return JSONResponse({"error": "開発者ログインが必要です"}, status_code=401)
+    try:
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        mode = body.get("mode", "fast")
+
+        from research.sire_factor_stats import (
+            build_sire_factor_stats,
+            build_sire_factor_stats_fast,
+            build_and_upload_snapshot,
+            invalidate_cache,
+            save_sire_factor_stats,
+        )
+
+        storage = _get_storage()
+
+        def _run():
+            if mode == "full":
+                data = build_sire_factor_stats(storage)
+                save_sire_factor_stats(data, storage=storage)
+                build_and_upload_snapshot(storage)
+            else:
+                data = build_sire_factor_stats_fast(storage)
+                save_sire_factor_stats(data, storage=storage)
+            invalidate_cache()
+            return data.get("meta", {})
+
+        meta = await asyncio.to_thread(_run)
+        return JSONResponse({"status": "ok", "mode": mode, "meta": meta})
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
+
+
+@app.post("/api/pedigree/tune-weights", response_class=JSONResponse)
+async def api_pedigree_tune_weights(request: Request):
+    """ウェイト自動チューニング。scope=global(デフォルト) / race(race_id指定)。"""
+    if not is_developer(request):
+        return JSONResponse({"error": "開発者ログインが必要です"}, status_code=401)
+    try:
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        race_id = body.get("race_id", "")
+
+        from research.sire_factor_aptitude import optimize_weights
+
+        storage = _get_storage()
+        race_ids = [race_id] if race_id else None
+
+        result = await asyncio.to_thread(
+            optimize_weights, storage, race_ids=race_ids
+        )
+        return JSONResponse({"status": "ok", **result})
     except Exception as e:
         import traceback
         return JSONResponse(
@@ -5356,6 +5624,7 @@ async def api_pedigree_race_ensure_5gen(request: Request):
 
         storage = _get_storage()
         out = await asyncio.to_thread(start_race_pedigree_prefetch, storage, rid)
+        _kick_urgent_worker()
         _kick_scrape_queue_worker()
         return JSONResponse(out)
     except Exception as e:
@@ -5449,6 +5718,7 @@ async def api_pedigree_batch_race_ensure_5gen(request: Request):
         if not out.get("ok"):
             return JSONResponse(out, status_code=400)
         if not dry_run:
+            _kick_urgent_worker()
             _kick_scrape_queue_worker()
         return JSONResponse(out)
     except Exception as e:
@@ -6371,3 +6641,629 @@ async def myostatin_predict(request: Request):
         "features": mstn.offspring_features(sire, dam_sire, distance) if dam_sire else None,
     }
     return JSONResponse(result)
+
+
+# ─── 成長曲線ページ ──────────────────────────
+
+
+@app.post("/api/myostatin/recalculate", response_class=JSONResponse)
+async def myostatin_recalculate():
+    """
+    全ての未確定馬のミオスタチン遺伝子型を血統から再計算する。
+    メンデルの法則に基づいてアレル確率を計算し、JSONファイルを更新する。
+    """
+    import json
+    import os
+    from pathlib import Path
+
+    try:
+        # JSONファイルのパス
+        json_path = Path(__file__).parent.parent / "data" / "knowledge" / "myostatin_genes.json"
+
+        # 読み込み
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        # 名前→遺伝子型のマップを作成
+        stallion_map = {}
+        for s in data["stallions"]:
+            stallion_map[s["name"]] = s
+            if s.get("name_en"):
+                stallion_map[s["name_en"]] = s
+
+        def get_alleles(name):
+            """種牡馬のアレル確率を取得"""
+            if name in stallion_map:
+                s = stallion_map[name]
+                return s.get("allele_c", 0.5), s.get("allele_t", 0.5)
+            return 0.5, 0.5  # デフォルト
+
+        def calculate_offspring_genotype(sire_c, sire_t, dam_c, dam_t):
+            """
+            父と母のアレル確率から、子のCC/CT/TT確率を計算
+
+            Args:
+                sire_c: 父がCアレルを渡す確率
+                sire_t: 父がTアレルを渡す確率
+                dam_c: 母がCアレルを渡す確率
+                dam_t: 母がTアレルを渡す確率
+
+            Returns:
+                (allele_c, allele_t, genotype, confidence)
+            """
+            # CC確率 = 父C × 母C
+            prob_cc = sire_c * dam_c
+            # TT確率 = 父T × 母T
+            prob_tt = sire_t * dam_t
+            # CT確率 = 残り
+            prob_ct = 1.0 - prob_cc - prob_tt
+
+            # 子のアレル確率
+            child_c = prob_cc + prob_ct * 0.5
+            child_t = prob_tt + prob_ct * 0.5
+
+            # 遺伝子型を推定
+            if prob_cc > 0.9:
+                genotype = "CC"
+                confidence = "highly_likely"
+            elif prob_tt > 0.9:
+                genotype = "TT"
+                confidence = "highly_likely"
+            elif prob_cc > 0.7:
+                genotype = "C?"
+                confidence = "estimated"
+            elif prob_tt > 0.7:
+                genotype = "?T"
+                confidence = "estimated"
+            elif prob_ct > 0.6:
+                genotype = "CT"
+                confidence = "estimated"
+            elif child_c > 0.6:
+                genotype = "C?"
+                confidence = "estimated"
+            elif child_t > 0.6:
+                genotype = "?T"
+                confidence = "estimated"
+            else:
+                genotype = "??"
+                confidence = "inferred"
+
+            return round(child_c, 3), round(child_t, 3), genotype, confidence
+
+        # 再計算
+        updates = []
+        for i, stallion in enumerate(data["stallions"]):
+            # 確定している場合はスキップ
+            if stallion["confidence"] == "confirmed":
+                continue
+
+            # 父の情報
+            sire_name = stallion.get("sire", "")
+            if not sire_name:
+                continue
+
+            sire_c, sire_t = get_alleles(sire_name)
+
+            # 母父の情報（母のアレル確率の推定に使用）
+            dam_sire_name = stallion.get("dam_sire", "")
+            if dam_sire_name:
+                dam_sire_c, dam_sire_t = get_alleles(dam_sire_name)
+                # 母のアレル確率は母父から推定（簡易版：母父のアレル確率を使用）
+                dam_c, dam_t = dam_sire_c, dam_sire_t
+            else:
+                # 母父不明の場合はデフォルト
+                dam_c, dam_t = 0.5, 0.5
+
+            # 子のアレル確率を計算
+            child_c, child_t, genotype, confidence = calculate_offspring_genotype(
+                sire_c, sire_t, dam_c, dam_t
+            )
+
+            # 既存より確実性が高い場合のみ更新
+            old_gt = stallion.get("genotype", "??")
+            old_conf = stallion.get("confidence", "inferred")
+
+            # 確実性のランク
+            conf_rank = {"confirmed": 4, "highly_likely": 3, "estimated": 2, "inferred": 1}
+            old_rank = conf_rank.get(old_conf, 0)
+            new_rank = conf_rank.get(confidence, 0)
+
+            # より確実な情報の場合、または同等で遺伝子型が変わる場合のみ更新
+            if new_rank >= old_rank:
+                data["stallions"][i]["genotype"] = genotype
+                data["stallions"][i]["confidence"] = confidence
+                data["stallions"][i]["allele_c"] = child_c
+                data["stallions"][i]["allele_t"] = child_t
+
+                reason = f"父{sire_name}(C={sire_c:.2f},T={sire_t:.2f})"
+                if dam_sire_name:
+                    reason += f" × 母父{dam_sire_name}(C={dam_sire_c:.2f},T={dam_sire_t:.2f})"
+
+                data["stallions"][i]["source"] = f"確率計算による推測: {reason}"
+
+                if old_gt != genotype or old_conf != confidence:
+                    updates.append({
+                        "name": stallion["name"],
+                        "old": f"{old_gt} ({old_conf})",
+                        "new": f"{genotype} ({confidence})",
+                        "allele_c": child_c,
+                        "allele_t": child_t
+                    })
+
+        # メタデータを更新
+        data["_meta"]["version"] = "2.3.2"
+        data["_meta"]["last_updated"] = "2026-03-24"
+
+        # 保存
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        return JSONResponse({
+            "success": True,
+            "updated_count": len(updates),
+            "total_stallions": len(data["stallions"]),
+            "updates": updates[:20],  # 最初の20件のみ返す
+            "message": f"{len(updates)}頭の遺伝子型を再計算しました"
+        })
+
+    except Exception as e:
+        import traceback
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }, status_code=500)
+
+
+@app.get("/growth-curve", response_class=HTMLResponse)
+async def growth_curve_page(request: Request):
+    return templates.TemplateResponse(
+        "growth_curve.html",
+        {"request": request, "current_page": "growth_curve"},
+    )
+
+
+def _enrich_race_with_speed_index(
+    race: dict,
+    horse_number: int,
+    storage,
+    queue=None,
+    force_refresh: bool = False
+) -> tuple[dict, bool]:
+    """
+    レースデータにタイム指数を追加する（ない場合はキューに追加）
+
+    Args:
+        race: レースデータ
+        horse_number: 馬番
+        storage: ストレージインスタンス
+        queue: スクレイピングキュー（オプション）
+        force_refresh: 強制的に再スクレイピングするか
+
+    Returns:
+        (タイム指数が追加されたレースデータ, キューに追加したか)
+    """
+    race_id = race.get("race_id")
+    if not race_id:
+        return race, False
+
+    # force_refreshの場合、既存のタイム指数を無視
+    if not force_refresh and (race.get("time_index") or race.get("speed_index")):
+        return race, False
+
+    try:
+        # force_refreshの場合、既存のrace_indexデータを削除
+        if force_refresh:
+            try:
+                import os
+                year = race_id[:4]
+                local_path = os.path.join(storage._local_dir, "race_index", year, f"{race_id}.json")
+                if os.path.exists(local_path):
+                    os.remove(local_path)
+                    logger.info(f"古いrace_indexを削除: {race_id}")
+            except Exception as e:
+                logger.warning(f"race_index削除エラー: {e}")
+
+        # race_indexデータを確認
+        speed_data = storage.load("race_index", race_id)
+
+        # データがない場合はキューに追加
+        if not speed_data:
+            if queue:
+                # スクレイピングキューに追加（最優先）
+                logger.info(f"タイム指数をキューに追加（最優先）: {race_id}")
+                queue.add_job(
+                    kind="race",
+                    target_id=race_id,
+                    task="race_index",
+                    priority=1,  # 最優先
+                    label=f"タイム指数: {race_id}"
+                )
+                return race, True
+            else:
+                logger.warning(f"キューが利用できません。タイム指数のスクレイピングをスキップ: {race_id}")
+                return race, False
+
+        # タイム指数データから該当馬の指数を抽出
+        if speed_data and "entries" in speed_data:
+            for entry in speed_data["entries"]:
+                if entry.get("horse_number") == horse_number:
+                    # タイム指数Mを優先的に取得
+                    time_index = (
+                        entry.get("time_index_m") or
+                        entry.get("speed_max") or
+                        entry.get("speed_avg")
+                    )
+                    if time_index and time_index > 0:
+                        race["time_index"] = time_index
+                        logger.info(f"タイム指数を取得: {race_id} 馬番{horse_number} = {time_index}")
+                    break
+
+    except Exception as e:
+        logger.warning(f"タイム指数取得エラー (race_id={race_id}): {e}")
+
+    return race, False
+
+
+@app.get("/api/growth-curve/{horse_id}", response_class=JSONResponse)
+async def growth_curve_data(
+    horse_id: str,
+    fetch_speed_index: bool = True,
+    force_refresh: bool = False,
+    limit: Optional[int] = None
+):
+    """
+    馬の成長曲線データを返す。
+
+    Args:
+        horse_id: 馬ID
+        fetch_speed_index: タイム指数を取得するか（デフォルト: True）
+        force_refresh: race_indexを強制的に再スクレイピングするか（デフォルト: False）
+        limit: 表示する直近レース数（デフォルト: None = 全て）
+
+    Returns:
+        - horse_name: 馬名
+        - races: 出走履歴（日付、馬体重、着順、レース間隔等）
+        - stats: 統計情報
+    """
+    try:
+        storage = _get_storage()
+
+        # force_refreshの場合、既存のhorse_resultを削除して再スクレイピング
+        if force_refresh:
+            import os
+            year = horse_id[:4]
+            local_path = os.path.join(storage._local_dir, "horse_result", year, f"{horse_id}.json")
+            if os.path.exists(local_path):
+                os.remove(local_path)
+                logger.info(f"古いhorse_resultを削除: {horse_id}")
+
+            # 再スクレイピングを実行
+            logger.info(f"horse_resultを再スクレイピング: {horse_id}")
+            from scraper.run import ScraperRunner
+            runner = ScraperRunner(interval=1.0, auto_login=True)
+            runner.storage = storage
+
+            # ログイン状態を確認
+            if runner.client._logged_in:
+                logger.info(f"✓ ログイン済み")
+            else:
+                logger.warning(f"✗ ログインしていません。タイム指数は取得できません。")
+
+            horse_data = runner.scrape_horse(horse_id, skip_existing=False, with_history=True)
+
+            if not horse_data:
+                return JSONResponse({"error": f"馬ID {horse_id} のスクレイピングに失敗しました"}, status_code=500)
+
+            # タイム指数の取得状況をログ出力
+            if horse_data.get("race_history"):
+                races_with_index = sum(1 for r in horse_data["race_history"] if r.get("time_index", 0) > 0)
+                total_races = len(horse_data["race_history"])
+                logger.info(f"タイム指数取得: {races_with_index}/{total_races}レース")
+
+                # 最初のレースのtime_indexをログ出力（デバッグ用）
+                first_race = horse_data["race_history"][0]
+                logger.info(f"最新レース: {first_race.get('race_name')} - time_index={first_race.get('time_index', 0)}")
+        else:
+            # 通常の取得
+            horse_data = storage.load("horse_result", horse_id)
+            if not horse_data:
+                return JSONResponse({"error": f"馬ID {horse_id} のデータが見つかりません"}, status_code=404)
+
+        horse_name = horse_data.get("horse_name", "不明")
+        results = horse_data.get("race_history", horse_data.get("results", []))
+
+        # タイム指数を補完（必要に応じてキューに追加）
+        scraping_status = {
+            "required_races": 0,
+            "completed_races": 0,
+            "pending_races": 0,
+        }
+
+        # タイム指数のステータス確認
+        if fetch_speed_index:
+            for race in results:
+                if race.get("time_index") and race.get("time_index") > 0:
+                    scraping_status["completed_races"] += 1
+                else:
+                    scraping_status["required_races"] += 1
+
+            # force_refreshの場合は何もしない（horse_result再取得で完了）
+            if not force_refresh and scraping_status["required_races"] > 0:
+                from scraper.job_queue import ScrapeJobQueue
+                from concurrent.futures import ThreadPoolExecutor as _GcPool
+                queue = ScrapeJobQueue()
+
+                need_idx = [
+                    (i, race)
+                    for i, race in enumerate(results)
+                    if (not race.get("time_index") or race.get("time_index") == 0)
+                    and race.get("horse_number") and race.get("race_id")
+                ]
+                if need_idx:
+                    rids = list({r.get("race_id") for _, r in need_idx if r.get("race_id")})
+                    idx_map: dict[str, dict] = {}
+                    def _load_idx(rid):
+                        return rid, storage.load("race_index", rid)
+                    with _GcPool(max_workers=min(len(rids), 8)) as pool:
+                        for rid, data in pool.map(_load_idx, rids):
+                            if data:
+                                idx_map[rid] = data
+
+                    for i, race in need_idx:
+                        race_id = race.get("race_id")
+                        horse_number = race.get("horse_number")
+                        speed_data = idx_map.get(race_id)
+                        if speed_data and "entries" in speed_data:
+                            for entry in speed_data["entries"]:
+                                if entry.get("horse_number") == horse_number:
+                                    ti = (entry.get("time_index_m")
+                                          or entry.get("speed_max")
+                                          or entry.get("speed_avg"))
+                                    if ti and ti > 0:
+                                        race["time_index"] = ti
+                                        results[i] = race
+                                        scraping_status["completed_races"] += 1
+                                        scraping_status["required_races"] -= 1
+                                    break
+                        elif not speed_data and queue:
+                            queue.add_job(
+                                kind="race", target_id=race_id,
+                                task="race_index", priority=1,
+                                label=f"タイム指数: {race_id}")
+                            scraping_status["pending_races"] += 1
+
+        if not results:
+            return JSONResponse({"error": "出走履歴が見つかりません"}, status_code=404)
+
+        # 出走履歴を古い順（昇順）にソート（日付でソート）
+        # レース間隔を正しく計算するため、古い順に処理する
+        results_sorted = sorted(results, key=lambda r: r.get("date", ""), reverse=False)
+
+        # 出走履歴を処理
+        races = []
+        prev_date = None
+        weights = []
+        ranks = []
+
+        for i, race in enumerate(results_sorted):
+            date_str = race.get("date", "")
+            weight = race.get("weight")
+            weight_diff = race.get("weight_change", race.get("weight_diff"))
+
+            # 着順を数値化（finish_positionまたはrank）
+            rank = race.get("finish_position", race.get("rank"))
+            if rank and isinstance(rank, str):
+                try:
+                    rank = int(rank) if rank.isdigit() else None
+                except:
+                    rank = None
+            elif rank == 0 or rank == -1:
+                rank = None
+
+            # レース間隔を計算
+            interval_days = None
+            if prev_date and date_str:
+                try:
+                    from datetime import datetime
+                    curr_date = datetime.strptime(date_str.replace("/", "-"), "%Y-%m-%d")
+                    prev_date_obj = datetime.strptime(prev_date.replace("/", "-"), "%Y-%m-%d")
+                    interval_days = (curr_date - prev_date_obj).days
+                except:
+                    pass
+
+            # タイム指数（簡易版：存在すれば使用）
+            time_index = race.get("time_index") or race.get("speed_index")
+
+            race_info = {
+                "date": date_str,
+                "venue": race.get("venue", ""),
+                "race_name": race.get("race_name", ""),
+                "surface": race.get("surface", ""),
+                "distance": race.get("distance"),
+                "track_condition": race.get("track_condition", ""),
+                "rank": rank,
+                "field_size": race.get("field_size"),
+                "weight": weight,
+                "weight_diff": weight_diff,
+                "weight_change": weight_diff,
+                "interval_days": interval_days,
+                "time": race.get("finish_time", race.get("time", "")),
+                "time_index": time_index,
+            }
+            races.append(race_info)
+
+            if weight:
+                weights.append(weight)
+            if rank:
+                ranks.append(rank)
+
+            prev_date = date_str
+
+        # 統計情報
+        stats = {
+            "horse_name": horse_name,
+            "total_races": len(races),
+            "avg_weight": sum(weights) / len(weights) if weights else 0,
+            "weight_range": [min(weights), max(weights)] if weights else [0, 0],
+            "best_rank": min(ranks) if ranks else None,
+            "avg_rank": sum(ranks) / len(ranks) if ranks else None,
+        }
+
+        # レースを新しい順（降順）に戻す（フロントエンド表示用）
+        races.reverse()
+
+        # 直近N戦に絞り込み
+        if limit and limit > 0:
+            races = races[:limit]
+
+        response = {
+            **stats,
+            "races": races,
+        }
+
+        # スクレイピングステータスを追加（必要な場合のみ）
+        if scraping_status["required_races"] > 0 or scraping_status["pending_races"] > 0:
+            response["scraping_status"] = scraping_status
+
+        return JSONResponse(response)
+
+    except Exception as e:
+        logger.error(f"成長曲線データ取得エラー: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ひらがな/カタカナ変換ユーティリティ
+def _hiragana_to_katakana(text: str) -> str:
+    """ひらがなをカタカナに変換"""
+    result = []
+    for char in text:
+        code = ord(char)
+        if 0x3041 <= code <= 0x3096:  # ひらがな範囲
+            result.append(chr(code + 0x60))  # カタカナに変換
+        else:
+            result.append(char)
+    return ''.join(result)
+
+
+def _katakana_to_hiragana(text: str) -> str:
+    """カタカナをひらがなに変換"""
+    result = []
+    for char in text:
+        code = ord(char)
+        if 0x30A1 <= code <= 0x30F6:  # カタカナ範囲
+            result.append(chr(code - 0x60))  # ひらがなに変換
+        else:
+            result.append(char)
+    return ''.join(result)
+
+
+def _normalize_search_text(text: str) -> list:
+    """検索用に正規化（ひらがな、カタカナ、元の文字列）"""
+    text = text.strip()
+    variants = [text]
+    hiragana = _katakana_to_hiragana(text)
+    katakana = _hiragana_to_katakana(text)
+    if hiragana not in variants:
+        variants.append(hiragana)
+    if katakana not in variants:
+        variants.append(katakana)
+    return variants
+
+
+# 馬名インデックスのキャッシュ
+_horse_name_index = None
+_horse_name_index_lock = threading.Lock()
+
+
+def _load_horse_name_index():
+    """馬名インデックスをロード（キャッシュ付き）"""
+    global _horse_name_index
+
+    if _horse_name_index is not None:
+        return _horse_name_index
+
+    with _horse_name_index_lock:
+        if _horse_name_index is not None:
+            return _horse_name_index
+
+        index_path = os.path.join(BASE_DIR, "data", "knowledge", "horse_name_index.json")
+        if not os.path.exists(index_path):
+            logger.warning(f"馬名インデックスが見つかりません: {index_path}")
+            return {"horses": []}
+
+        try:
+            with open(index_path, 'r', encoding='utf-8') as f:
+                _horse_name_index = json.load(f)
+            logger.info(f"馬名インデックスをロードしました: {_horse_name_index.get('total_horses', 0)}頭")
+            return _horse_name_index
+        except Exception as e:
+            logger.error(f"馬名インデックスのロードに失敗: {e}")
+            return {"horses": []}
+
+
+@app.get("/api/horse-names/search", response_class=JSONResponse)
+async def search_horse_names(q: str = "", limit: int = 20):
+    """
+    馬名を検索して候補を返す。
+
+    Args:
+        q: 検索クエリ（ひらがな、カタカナ、漢字対応）
+        limit: 返す最大件数
+
+    Returns:
+        [{"horse_id": "2019105551", "horse_name": "イクイノックス", "name_en": "Equinox"}, ...]
+    """
+    if not q or len(q) < 1:
+        return JSONResponse({"results": []})
+
+    try:
+        # インデックスをロード
+        index_data = _load_horse_name_index()
+        horses = index_data.get("horses", [])
+
+        if not horses:
+            return JSONResponse({"results": [], "error": "インデックスが空です"})
+
+        # 検索クエリを正規化（ひらがな、カタカナのバリエーション）
+        query_variants = _normalize_search_text(q.lower())
+
+        results = []
+
+        for horse in horses:
+            if len(results) >= limit:
+                break
+
+            horse_name = horse.get("horse_name", "")
+            name_en = horse.get("name_en", "")
+
+            if not horse_name:
+                continue
+
+            # 検索マッチング（部分一致）
+            search_targets = _normalize_search_text(horse_name.lower())
+            if name_en:
+                search_targets.append(name_en.lower())
+
+            # いずれかのバリアントがマッチするか確認
+            matched = False
+            for query_var in query_variants:
+                for target in search_targets:
+                    if query_var in target:
+                        matched = True
+                        break
+                if matched:
+                    break
+
+            if matched:
+                results.append({
+                    "horse_id": horse.get("horse_id"),
+                    "horse_name": horse_name,
+                    "name_en": name_en or "",
+                })
+
+        return JSONResponse({"results": results})
+
+    except Exception as e:
+        logger.error(f"馬名検索エラー: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)

@@ -588,7 +588,7 @@
 <body>
 {% include '_nav.html' %}
 <div class="header">
-  <h1>📦 Data Viewer</h1>
+  <h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">📦 Data Viewer</h1>
   <span id="raceLabel" style="font-size:13px;color:var(--accent);font-weight:400"></span>
 </div>
 
@@ -1840,7 +1840,10 @@ function _renderPayoffSection(data) {
     const arr = Array.isArray(items) ? items : [items];
     for (const it of arr) {
       if (typeof it === 'object') {
-        html += `<tr><td>${label}</td><td class="tc">${it.combination || it.numbers || '-'}</td><td class="num" style="color:var(--warn);font-weight:600">${it.payout ? '¥' + Number(it.payout).toLocaleString() : '-'}</td><td class="tc">${it.popularity || '-'}</td></tr>`;
+        const payVal = (it.payout || '').replace(/,/g, '');
+        const payNum = payVal ? Number(payVal) : NaN;
+        const payStr = !isNaN(payNum) ? '¥' + payNum.toLocaleString() : (it.payout || '-');
+        html += `<tr><td>${label}</td><td class="tc">${it.combination || it.numbers || '-'}</td><td class="num" style="color:var(--warn);font-weight:600">${payStr}</td><td class="tc">${it.popularity || '-'}</td></tr>`;
       } else {
         html += `<tr><td>${label}</td><td colspan="3">${it}</td></tr>`;
       }

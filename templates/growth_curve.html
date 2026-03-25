@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>成長曲線 - Keiba</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#c9d1d9;font-family:'Inter',-apple-system,'Segoe UI',sans-serif;min-height:100vh}
+.main{max-width:1600px;margin:0 auto;padding:20px 24px 60px}
+h1{font-size:22px;font-weight:700;color:#f0f6fc;margin-bottom:4px}
+.subtitle{font-size:13px;color:#8b949e;margin-bottom:24px}
+
+.search-card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:20px;margin-bottom:20px}
+.search-form{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.form-group{display:flex;flex-direction:column;gap:4px;flex:1;min-width:200px}
+.form-group label{font-size:11px;color:#8b949e;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.form-group input,.form-group select{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 12px;color:#c9d1d9;font-size:13px;outline:none}
+.form-group input:focus,.form-group select:focus{border-color:#58a6ff}
+.btn{padding:8px 20px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
+.btn-primary{background:#238636;color:#fff}
+.btn-primary:hover{background:#2ea043}
+.btn-primary:disabled{background:#30363d;color:#6e7681;cursor:not-allowed}
+
+.info-card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:20px;margin-bottom:20px;display:none}
+.info-card.show{display:block}
+.horse-header{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.horse-name{font-size:20px;font-weight:700;color:#f0f6fc}
+.horse-meta{display:flex;gap:12px;font-size:12px;color:#8b949e;flex-wrap:wrap}
+.horse-meta span{background:#0d1117;padding:4px 10px;border-radius:4px}
+
+.chart-container{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:20px;margin-bottom:20px;display:none}
+.chart-container.show{display:block}
+.chart-title{font-size:14px;font-weight:600;color:#f0f6fc;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.chart-wrap{position:relative;height:400px}
+
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:16px}
+.stat-box{background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:12px;text-align:center}
+.stat-value{font-size:24px;font-weight:700;color:#f0f6fc}
+.stat-label{font-size:11px;color:#8b949e;margin-top:4px}
+
+.race-table-container{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:20px;display:none}
+.race-table-container.show{display:block}
+.table-title{font-size:14px;font-weight:600;color:#f0f6fc;margin-bottom:14px}
+.table-wrap{max-height:500px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d #161b22}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{position:sticky;top:0;background:#161b22;color:#8b949e;font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid #21262d;z-index:1}
+td{padding:7px 10px;border-bottom:1px solid #21262d20}
+tr:hover td{background:#1c2128}
+
+.rank-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px;min-width:30px;text-align:center}
+.rank-1{background:#ffd70080;color:#ffd700}
+.rank-2{background:#c0c0c080;color:#c0c0c0}
+.rank-3{background:#cd7f3280;color:#cd7f32}
+.rank-other{background:#30363d;color:#8b949e}
+
+.weight-change{font-size:11px;padding:2px 6px;border-radius:3px}
+.weight-up{background:#23863630;color:#3fb950}
+.weight-down{background:#da363430;color:#f85149}
+.weight-same{color:#6e7681}
+
+.loading{text-align:center;padding:40px;color:#8b949e}
+.error{background:#da363430;border:1px solid #f8514950;color:#f85149;padding:12px 16px;border-radius:6px;margin-top:12px;font-size:13px}
+.status-msg{background:#238636;border:1px solid #2ea04350;color:#3fb950;padding:12px 16px;border-radius:6px;margin-top:12px;font-size:13px}
+.status-msg.warning{background:#f59e0b20;border:1px solid #f59e0b50;color:#f59e0b}
+.status-msg.info{background:#58a6ff20;border:1px solid #58a6ff50;color:#58a6ff}
+
+.back-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #30363d;border-radius:6px;background:#161b22;color:#8b949e;font-size:12px;text-decoration:none;transition:.15s;margin-bottom:12px}
+.back-btn:hover{background:#1c2128;color:#c9d1d9;border-color:#58a6ff}
+.back-btn svg{width:14px;height:14px}
+
+.legend-row{display:flex;gap:16px;justify-content:center;margin:12px 0;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#8b949e}
+.legend-line{width:30px;height:3px;border-radius:2px}
+
+.autocomplete-container{position:relative;flex:1;min-width:200px}
+.autocomplete-dropdown{position:absolute;top:100%;left:0;right:0;background:#0d1117;border:1px solid #30363d;border-top:none;border-radius:0 0 6px 6px;max-height:300px;overflow-y:auto;z-index:1000;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.4)}
+.autocomplete-dropdown.show{display:block}
+.autocomplete-item{padding:8px 12px;cursor:pointer;font-size:13px;color:#c9d1d9;border-bottom:1px solid #21262d20}
+.autocomplete-item:hover,.autocomplete-item.selected{background:#1c2128}
+.autocomplete-item-name{font-weight:500;color:#f0f6fc}
+.autocomplete-item-id{font-size:11px;color:#8b949e;margin-left:8px}
+.autocomplete-loading{padding:12px;text-align:center;color:#8b949e;font-size:12px}
+.autocomplete-empty{padding:12px;text-align:center;color:#6e7681;font-size:12px}
+
+.filter-bar{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px 20px;margin-bottom:20px;display:none}
+.filter-bar.show{display:block}
+.filter-bar-title{font-size:12px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.filter-bar-title svg{width:14px;height:14px}
+.filter-row{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.filter-group{display:flex;align-items:center;gap:8px}
+.filter-group-label{font-size:11px;color:#6e7681;font-weight:600;white-space:nowrap}
+.filter-toggle{display:flex;gap:4px}
+.filter-chip{padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid;transition:all .15s;user-select:none}
+.filter-chip.surface-turf{border-color:hsl(142,50%,35%);color:hsl(142,50%,55%);background:transparent}
+.filter-chip.surface-turf.active{background:hsl(142,50%,35%);color:#fff;box-shadow:0 0 10px hsla(142,60%,40%,.25)}
+.filter-chip.surface-dirt{border-color:hsl(30,45%,35%);color:hsl(30,50%,55%);background:transparent}
+.filter-chip.surface-dirt.active{background:hsl(30,45%,38%);color:#fff;box-shadow:0 0 10px hsla(30,55%,40%,.25)}
+.filter-chip.surface-obs{border-color:hsl(270,40%,38%);color:hsl(270,45%,60%);background:transparent}
+.filter-chip.surface-obs.active{background:hsl(270,40%,38%);color:#fff;box-shadow:0 0 10px hsla(270,50%,45%,.25)}
+.filter-dist{display:flex;align-items:center;gap:6px}
+.filter-dist input{width:70px;background:#0d1117;border:1px solid #30363d;border-radius:5px;padding:5px 8px;color:#c9d1d9;font-size:12px;text-align:center;outline:none}
+.filter-dist input:focus{border-color:#58a6ff}
+.filter-dist span{color:#6e7681;font-size:12px}
+.filter-preset{display:flex;gap:4px;flex-wrap:wrap}
+.filter-preset-btn{padding:3px 10px;border-radius:14px;font-size:10.5px;font-weight:600;cursor:pointer;border:1px solid #30363d;background:transparent;color:#8b949e;transition:all .15s}
+.filter-preset-btn:hover{border-color:#58a6ff;color:#58a6ff}
+.filter-preset-btn.active{background:#58a6ff20;border-color:#58a6ff;color:#58a6ff}
+.filter-summary{font-size:11px;color:#58a6ff;margin-left:auto;white-space:nowrap}
+.filter-reset{font-size:11px;color:#6e7681;cursor:pointer;text-decoration:underline;margin-left:8px;transition:color .15s}
+.filter-reset:hover{color:#f85149}
+@media(max-width:768px){.filter-row{flex-direction:column;align-items:stretch;gap:12px}.filter-summary{margin-left:0;margin-top:4px}}
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+<div class="main">
+<h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">成長曲線</h1>
+<p class="subtitle">馬体重・パフォーマンス・レース間隔の時系列分析</p>
+
+<div class="search-card" id="searchCard">
+  <div class="search-form">
+    <div class="form-group autocomplete-container">
+      <label>馬名または馬ID（netkeiba）</label>
+      <input id="horseInput" type="text" placeholder="馬名で検索（ひらがな可）または馬ID入力" autocomplete="off">
+      <div class="autocomplete-dropdown" id="autocompleteDropdown"></div>
+    </div>
+    <div class="form-group" style="min-width:120px">
+      <label>表示レース数</label>
+      <select id="limitSelect" style="cursor:pointer">
+        <option value="">全て</option>
+        <option value="5">直近5戦</option>
+        <option value="10">直近10戦</option>
+        <option value="20" selected>直近20戦</option>
+        <option value="30">直近30戦</option>
+        <option value="50">直近50戦</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" id="searchBtn" onclick="loadHorseData()">分析</button>
+    <button class="btn btn-primary" id="refreshBtn" onclick="loadHorseData(true)" style="display:none;background:#d29922">最新データ取得</button>
+  </div>
+  <div id="errorMsg"></div>
+  <div id="statusMsg"></div>
+</div>
+
+<div class="info-card" id="infoCard">
+  <a href="#" class="back-btn" onclick="backToSearch(event)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M19 12H5M12 19l-7-7 7-7"/>
+    </svg>
+    検索に戻る
+  </a>
+  <div class="horse-header">
+    <div>
+      <div class="horse-name" id="horseName">-</div>
+      <div class="horse-meta" id="horseMeta"></div>
+    </div>
+  </div>
+  <div class="stats-grid" id="statsGrid"></div>
+</div>
+
+<div class="filter-bar" id="filterBar">
+  <div class="filter-bar-title">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+    フィルター
+    <span class="filter-summary" id="filterSummary"></span>
+    <span class="filter-reset" id="filterReset" onclick="resetFilters()">リセット</span>
+  </div>
+  <div class="filter-row">
+    <div class="filter-group">
+      <span class="filter-group-label">コース</span>
+      <div class="filter-toggle" id="surfaceToggle">
+        <div class="filter-chip surface-turf active" data-surface="芝" onclick="toggleSurface(this)">芝</div>
+        <div class="filter-chip surface-dirt active" data-surface="ダ" onclick="toggleSurface(this)">ダート</div>
+        <div class="filter-chip surface-obs active" data-surface="障" onclick="toggleSurface(this)">障害</div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-group-label">距離</span>
+      <div class="filter-dist">
+        <input type="number" id="distMin" placeholder="下限" step="100" min="0">
+        <span>〜</span>
+        <input type="number" id="distMax" placeholder="上限" step="100" min="0">
+        <span>m</span>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-group-label">プリセット</span>
+      <div class="filter-preset" id="filterPresets"></div>
+    </div>
+  </div>
+</div>
+
+<div class="chart-container" id="weightChart">
+  <div class="chart-title">📊 馬体重 × タイム指数</div>
+  <div class="legend-row">
+    <div class="legend-item"><div class="legend-line" style="background:hsl(142,60%,45%);border-radius:2px;height:10px;width:14px"></div>芝</div>
+    <div class="legend-item"><div class="legend-line" style="background:hsl(30,55%,45%);border-radius:2px;height:10px;width:14px"></div>ダート</div>
+    <div class="legend-item"><div class="legend-line" style="background:hsl(270,50%,45%);border-radius:2px;height:10px;width:14px"></div>障害</div>
+    <div class="legend-item" style="margin-left:8px;padding-left:8px;border-left:1px solid #30363d"><div class="legend-line" style="background:#d29922"></div>タイム指数 (右軸)</div>
+    <div class="legend-item" style="font-size:10px;color:#6e7681">※ 距離が長いほど色が明るい</div>
+  </div>
+  <div class="chart-wrap"><canvas id="weightCanvas"></canvas></div>
+</div>
+
+<div class="chart-container" id="intervalChart">
+  <div class="chart-title">📅 レース間隔 × タイム指数</div>
+  <div class="legend-row">
+    <div class="legend-item"><div class="legend-line" style="background:#8b949e"></div>レース間隔（週）(左軸)</div>
+    <div class="legend-item"><div class="legend-line" style="background:#d29922"></div>タイム指数 (右軸)</div>
+  </div>
+  <div class="chart-wrap"><canvas id="intervalCanvas"></canvas></div>
+</div>
+
+<div class="race-table-container" id="raceTable">
+  <div class="table-title">📋 出走履歴詳細</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>日付</th>
+        <th>競馬場</th>
+        <th>レース名</th>
+        <th>コース</th>
+        <th>着順</th>
+        <th>馬体重</th>
+        <th>増減</th>
+        <th>間隔</th>
+        <th>タイム</th>
+        <th>指数</th>
+      </tr></thead>
+      <tbody id="raceTableBody"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<script>
+let horseData = null;
+let charts = {};
+let autocompleteTimeout = null;
+let selectedHorseId = null;
+let activeFilters = { surfaces: new Set(['芝','ダ','ダート','障','障害']), distMin: null, distMax: null };
+
+function normSurface(s) {
+  if (s === 'ダート') return 'ダ';
+  if (s === '障害') return '障';
+  return s || '';
+}
+
+function getFilteredRaces() {
+  if (!horseData) return [];
+  return horseData.races.filter(r => {
+    const ns = normSurface(r.surface);
+    if (!activeFilters.surfaces.has(ns)) return false;
+    if (activeFilters.distMin != null && r.distance && r.distance < activeFilters.distMin) return false;
+    if (activeFilters.distMax != null && r.distance && r.distance > activeFilters.distMax) return false;
+    return true;
+  });
+}
+
+function toggleSurface(el) {
+  el.classList.toggle('active');
+  rebuildSurfaceFilter();
+  applyFilters();
+}
+
+function rebuildSurfaceFilter() {
+  activeFilters.surfaces.clear();
+  document.querySelectorAll('#surfaceToggle .filter-chip.active').forEach(chip => {
+    const s = chip.dataset.surface;
+    activeFilters.surfaces.add(s);
+    if (s === 'ダ') activeFilters.surfaces.add('ダート');
+    if (s === '障') activeFilters.surfaces.add('障害');
+  });
+}
+
+function applyFilters() {
+  activeFilters.distMin = parseFloat(document.getElementById('distMin').value) || null;
+  activeFilters.distMax = parseFloat(document.getElementById('distMax').value) || null;
+  const filtered = getFilteredRaces();
+  updateFilterSummary(filtered.length, horseData ? horseData.races.length : 0);
+  updatePresetHighlight();
+  const fData = { ...horseData, races: filtered };
+  renderCharts(fData);
+  renderTable(fData);
+  renderFilteredStats(fData);
+}
+
+function updateFilterSummary(shown, total) {
+  const el = document.getElementById('filterSummary');
+  if (shown === total) {
+    el.textContent = '';
+  } else {
+    el.textContent = `${shown}/${total}レース表示中`;
+  }
+}
+
+function resetFilters() {
+  document.querySelectorAll('#surfaceToggle .filter-chip').forEach(c => c.classList.add('active'));
+  document.getElementById('distMin').value = '';
+  document.getElementById('distMax').value = '';
+  rebuildSurfaceFilter();
+  applyFilters();
+}
+
+function buildPresets() {
+  if (!horseData) return;
+  const races = horseData.races;
+  const presetContainer = document.getElementById('filterPresets');
+  const surfDist = {};
+  races.forEach(r => {
+    const ns = normSurface(r.surface);
+    if (!ns) return;
+    const label = ns === 'ダ' ? 'ダート' : ns === '障' ? '障害' : ns;
+    if (!surfDist[ns]) surfDist[ns] = { label, distances: new Set() };
+    if (r.distance) surfDist[ns].distances.add(r.distance);
+  });
+  const presets = [];
+  for (const [key, info] of Object.entries(surfDist)) {
+    presets.push({ label: `${info.label}のみ`, surface: key, distMin: null, distMax: null });
+    const dists = [...info.distances].sort((a, b) => a - b);
+    if (dists.length > 1) {
+      const sprint = dists.filter(d => d <= 1400);
+      const mile = dists.filter(d => d >= 1500 && d <= 1800);
+      const middle = dists.filter(d => d >= 1800 && d <= 2400);
+      const long = dists.filter(d => d >= 2400);
+      if (sprint.length) presets.push({ label: `${info.label}短距離`, surface: key, distMin: 0, distMax: 1400 });
+      if (mile.length) presets.push({ label: `${info.label}マイル`, surface: key, distMin: 1500, distMax: 1800 });
+      if (middle.length && long.length) {
+        presets.push({ label: `${info.label}中長距離`, surface: key, distMin: 1800, distMax: 9999 });
+      } else if (middle.length) {
+        presets.push({ label: `${info.label}中距離`, surface: key, distMin: 1800, distMax: 2400 });
+      }
+    }
+  }
+  presetContainer.innerHTML = presets.map((p, i) => {
+    const surfClass = p.surface === '芝' ? 'surface-turf' : p.surface === 'ダ' ? 'surface-dirt' : 'surface-obs';
+    return `<div class="filter-preset-btn" data-idx="${i}" onclick="applyPreset(${i})"
+      data-surface="${p.surface}" data-dmin="${p.distMin ?? ''}" data-dmax="${p.distMax ?? ''}">${p.label}</div>`;
+  }).join('');
+  window._filterPresets = presets;
+}
+
+function applyPreset(idx) {
+  const p = window._filterPresets[idx];
+  if (!p) return;
+  document.querySelectorAll('#surfaceToggle .filter-chip').forEach(c => {
+    const cs = c.dataset.surface;
+    if (cs === p.surface || (p.surface === 'ダ' && cs === 'ダ') || (p.surface === '障' && cs === '障')) {
+      c.classList.add('active');
+    } else {
+      c.classList.remove('active');
+    }
+  });
+  document.getElementById('distMin').value = p.distMin ?? '';
+  document.getElementById('distMax').value = p.distMax ?? '';
+  rebuildSurfaceFilter();
+  applyFilters();
+}
+
+function updatePresetHighlight() {
+  document.querySelectorAll('.filter-preset-btn').forEach(btn => {
+    const idx = parseInt(btn.dataset.idx);
+    const p = window._filterPresets?.[idx];
+    if (!p) return;
+    const activeSurfs = [...document.querySelectorAll('#surfaceToggle .filter-chip.active')].map(c => c.dataset.surface);
+    const dMin = parseFloat(document.getElementById('distMin').value) || null;
+    const dMax = parseFloat(document.getElementById('distMax').value) || null;
+    const match = activeSurfs.length === 1 && activeSurfs[0] === p.surface
+      && (p.distMin ?? null) === dMin && (p.distMax ?? null) === dMax;
+    btn.classList.toggle('active', match);
+  });
+}
+
+function renderFilteredStats(data) {
+  const races = data.races;
+  const weights = races.filter(r => r.weight).map(r => r.weight);
+  const ranks = races.filter(r => r.rank).map(r => r.rank);
+  const statsGrid = document.getElementById('statsGrid');
+  if (!statsGrid) return;
+  statsGrid.innerHTML = `
+    <div class="stat-box">
+      <div class="stat-value" style="color:#ffd700">${ranks.length ? Math.min(...ranks) : '-'}</div>
+      <div class="stat-label">最高着順</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">${ranks.length ? (ranks.reduce((a,b)=>a+b,0)/ranks.length).toFixed(1) : '-'}</div>
+      <div class="stat-label">平均着順</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">${races.length}</div>
+      <div class="stat-label">表示レース数</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">${weights.length >= 2 ? (Math.max(...weights) - Math.min(...weights)) + 'kg' : '-'}</div>
+      <div class="stat-label">馬体重変動幅</div>
+    </div>
+  `;
+}
+
+// オートコンプリート機能
+async function searchHorseNames(query) {
+  if(!query || query.length < 1) {
+    hideAutocomplete();
+    return;
+  }
+
+  const dropdown = document.getElementById('autocompleteDropdown');
+  dropdown.innerHTML = '<div class="autocomplete-loading">検索中...</div>';
+  dropdown.classList.add('show');
+
+  try {
+    const res = await fetch(`/api/horse-names/search?q=${encodeURIComponent(query)}&limit=20`);
+    if(!res.ok) throw new Error('検索失敗');
+
+    const data = await res.json();
+    const results = data.results || [];
+
+    if(results.length === 0) {
+      dropdown.innerHTML = '<div class="autocomplete-empty">該当する馬が見つかりません</div>';
+    } else {
+      dropdown.innerHTML = results.map((horse, idx) => `
+        <div class="autocomplete-item" data-horse-id="${horse.horse_id}" data-index="${idx}">
+          <span class="autocomplete-item-name">${horse.horse_name}</span>
+          <span class="autocomplete-item-id">${horse.horse_id}</span>
+        </div>
+      `).join('');
+
+      // クリックイベント
+      dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+        item.addEventListener('click', function() {
+          selectHorse(this.dataset.horseId, this.querySelector('.autocomplete-item-name').textContent);
+        });
+      });
+    }
+  } catch(err) {
+    dropdown.innerHTML = '<div class="autocomplete-empty">検索エラー</div>';
+    console.error('Horse search error:', err);
+  }
+}
+
+function selectHorse(horseId, horseName) {
+  selectedHorseId = horseId;
+  document.getElementById('horseInput').value = `${horseName} (${horseId})`;
+  hideAutocomplete();
+}
+
+function hideAutocomplete() {
+  document.getElementById('autocompleteDropdown').classList.remove('show');
+}
+
+// 入力イベント
+document.addEventListener('DOMContentLoaded', function() {
+  const input = document.getElementById('horseInput');
+
+  input.addEventListener('input', function() {
+    clearTimeout(autocompleteTimeout);
+    selectedHorseId = null;  // 入力変更時にリセット
+
+    const query = this.value.trim();
+    if(query.length < 1) {
+      hideAutocomplete();
+      return;
+    }
+
+    // 馬IDの直接入力（数字のみ）をチェック
+    if(/^\d+$/.test(query)) {
+      selectedHorseId = query;
+      hideAutocomplete();
+      return;
+    }
+
+    // 300ms待ってから検索
+    autocompleteTimeout = setTimeout(() => {
+      searchHorseNames(query);
+    }, 300);
+  });
+
+  input.addEventListener('keydown', function(e) {
+    const dropdown = document.getElementById('autocompleteDropdown');
+
+    // Enterキーの処理
+    if(e.key === 'Enter') {
+      if(dropdown.classList.contains('show')) {
+        const items = dropdown.querySelectorAll('.autocomplete-item');
+        const selected = dropdown.querySelector('.autocomplete-item.selected');
+        let currentIndex = selected ? parseInt(selected.dataset.index) : -1;
+
+        if(currentIndex >= 0) {
+          e.preventDefault();
+          items[currentIndex].click();
+          return;
+        }
+      }
+      // オートコンプリートが表示されていない、または選択されていない場合は検索実行
+      e.preventDefault();
+      hideAutocomplete();
+      loadHorseData();
+      return;
+    }
+
+    if(!dropdown.classList.contains('show')) return;
+
+    const items = dropdown.querySelectorAll('.autocomplete-item');
+    const selected = dropdown.querySelector('.autocomplete-item.selected');
+    let currentIndex = selected ? parseInt(selected.dataset.index) : -1;
+
+    if(e.key === 'ArrowDown') {
+      e.preventDefault();
+      currentIndex = Math.min(currentIndex + 1, items.length - 1);
+    } else if(e.key === 'ArrowUp') {
+      e.preventDefault();
+      currentIndex = Math.max(currentIndex - 1, 0);
+    } else if(e.key === 'Escape') {
+      hideAutocomplete();
+      return;
+    } else {
+      return;
+    }
+
+    items.forEach((item, idx) => {
+      if(idx === currentIndex) {
+        item.classList.add('selected');
+        item.scrollIntoView({block: 'nearest'});
+      } else {
+        item.classList.remove('selected');
+      }
+    });
+  });
+
+  // 外部クリックで閉じる
+  document.addEventListener('click', function(e) {
+    if(!e.target.closest('.autocomplete-container')) {
+      hideAutocomplete();
+    }
+  });
+});
+
+async function loadHorseData(forceRefresh = false) {
+  const input = document.getElementById('horseInput').value.trim();
+  if(!input) return;
+
+  // 馬IDを取得（直接入力またはオートコンプリートから選択）
+  let horseId = selectedHorseId;
+  if(!horseId) {
+    // 括弧内の数字を抽出（例: "イクイノックス (2019105551)" -> "2019105551"）
+    const match = input.match(/\((\d+)\)/);
+    if(match) {
+      horseId = match[1];
+    } else if(/^\d+$/.test(input)) {
+      // 数字のみの場合はそのまま馬IDとして使用
+      horseId = input;
+    } else {
+      // 馬名だけが入力された場合、検索APIで馬IDを取得
+      try {
+        const searchRes = await fetch(`/api/horse-names/search?q=${encodeURIComponent(input)}&limit=5`);
+        if(!searchRes.ok) {
+          document.getElementById('errorMsg').innerHTML = '<div class="error">馬の検索に失敗しました</div>';
+          return;
+        }
+        const searchData = await searchRes.json();
+        const results = searchData.results || [];
+
+        if(results.length === 0) {
+          document.getElementById('errorMsg').innerHTML = '<div class="error">該当する馬が見つかりません。馬ID（数字）または正確な馬名を入力してください。</div>';
+          return;
+        }
+
+        // 完全一致を優先、なければ最初の結果を使用
+        const exactMatch = results.find(r => r.horse_name === input);
+        const horse = exactMatch || results[0];
+        horseId = horse.horse_id;
+
+        // 複数候補がある場合は通知
+        if(results.length > 1 && !exactMatch) {
+          document.getElementById('errorMsg').innerHTML =
+            `<div style="background:#8b949e20;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;margin-top:8px;font-size:12px;">
+              「${horse.horse_name}」を表示しています。他に${results.length-1}件の候補があります。
+            </div>`;
+        }
+
+      } catch(err) {
+        document.getElementById('errorMsg').innerHTML = '<div class="error">馬の検索中にエラーが発生しました</div>';
+        console.error('Horse search error:', err);
+        return;
+      }
+    }
+  }
+
+  // URLを更新
+  const limit = document.getElementById('limitSelect').value;
+  const newUrl = new URL(window.location);
+  newUrl.searchParams.set('horse_id', horseId);
+  if(limit) {
+    newUrl.searchParams.set('limit', limit);
+  } else {
+    newUrl.searchParams.delete('limit');
+  }
+  window.history.pushState({}, '', newUrl);
+
+  const btn = document.getElementById('searchBtn');
+  const refreshBtn = document.getElementById('refreshBtn');
+  const errMsg = document.getElementById('errorMsg');
+  const statusMsg = document.getElementById('statusMsg');
+  btn.disabled = true;
+  btn.textContent = forceRefresh ? '最新データ取得中...' : '読込中...';
+  if(refreshBtn) refreshBtn.disabled = true;
+  errMsg.innerHTML = '';
+
+  // 最新データ取得中のメッセージ
+  if(forceRefresh) {
+    statusMsg.innerHTML = '<div class="status-msg info">🔄 最新データをスクレイピング中です。しばらくお待ちください...</div>';
+  } else {
+    statusMsg.innerHTML = '';
+  }
+
+  // カードを非表示
+  document.querySelectorAll('.info-card, .chart-container, .race-table-container').forEach(el => {
+    el.classList.remove('show');
+  });
+
+  try {
+    // URLパラメータを構築
+    const params = new URLSearchParams();
+    if(forceRefresh) params.set('force_refresh', 'true');
+    if(limit) params.set('limit', limit);
+    const apiUrl = `/api/growth-curve/${horseId}${params.toString() ? '?' + params.toString() : ''}`;
+    const res = await fetch(apiUrl);
+    if(!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    const data = await res.json();
+    if(data.error) {
+      throw new Error(data.error);
+    }
+
+    // スクレイピングステータスを表示
+    if(data.scraping_status) {
+      const status = data.scraping_status;
+      let statusHtml = '';
+      if(status.required_races > 0) {
+        statusHtml = `<div class="status-msg info">
+          📊 タイム指数取得中: ${status.completed_races}/${status.required_races}レース完了
+          ${status.pending_races > 0 ? `（${status.pending_races}レースがキューで処理待ち）` : ''}
+        </div>`;
+      } else if(status.completed_races > 0) {
+        statusHtml = `<div class="status-msg">
+          ✓ タイム指数を${status.completed_races}レース分取得しました
+        </div>`;
+      }
+      statusMsg.innerHTML = statusHtml;
+    }
+
+    horseData = data;
+    renderHorseInfo(data);
+    buildPresets();
+    resetFilters();
+
+    // カードを表示
+    document.querySelectorAll('.info-card, .filter-bar, .chart-container, .race-table-container').forEach(el => {
+      el.classList.add('show');
+    });
+
+    // 「最新データ取得」ボタンを表示
+    if(refreshBtn) {
+      refreshBtn.style.display = 'inline-block';
+      refreshBtn.disabled = false;
+    }
+
+    // 強制更新後はメッセージを表示
+    if(forceRefresh) {
+      statusMsg.innerHTML = '<div class="status-msg">✓ 最新データを取得しました</div>';
+    }
+  } catch(err) {
+    errMsg.innerHTML = `<div class="error">エラー: ${err.message}</div>`;
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '分析';
+    if(refreshBtn) refreshBtn.disabled = false;
+  }
+}
+
+function backToSearch(e) {
+  e.preventDefault();
+
+  // URLパラメータをクリア
+  const newUrl = new URL(window.location);
+  newUrl.searchParams.delete('horse_id');
+  newUrl.searchParams.delete('limit');
+  window.history.pushState({}, '', newUrl);
+
+  // 入力フィールドをクリア
+  document.getElementById('horseInput').value = '';
+  selectedHorseId = null;
+
+  // データ表示をクリア
+  document.querySelectorAll('.info-card, .filter-bar, .chart-container, .race-table-container').forEach(el => {
+    el.classList.remove('show');
+  });
+
+  // エラー・ステータスメッセージをクリア
+  document.getElementById('errorMsg').innerHTML = '';
+  document.getElementById('statusMsg').innerHTML = '';
+
+  // 「最新データ取得」ボタンを非表示
+  const refreshBtn = document.getElementById('refreshBtn');
+  if(refreshBtn) refreshBtn.style.display = 'none';
+
+  // 検索フォームにフォーカス
+  document.getElementById('horseInput').focus();
+}
+
+function renderHorseInfo(data) {
+  const {horse_name, total_races, avg_weight, weight_range, best_rank, avg_rank} = data;
+
+  document.getElementById('horseName').textContent = horse_name || '不明';
+
+  const meta = document.getElementById('horseMeta');
+  meta.innerHTML = `
+    <span>総出走: ${total_races}戦</span>
+    <span>平均馬体重: ${avg_weight.toFixed(1)}kg</span>
+    <span>馬体重範囲: ${weight_range[0]}-${weight_range[1]}kg</span>
+  `;
+
+  const stats = document.getElementById('statsGrid');
+  stats.innerHTML = `
+    <div class="stat-box">
+      <div class="stat-value" style="color:#ffd700">${best_rank}</div>
+      <div class="stat-label">最高着順</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">${avg_rank.toFixed(1)}</div>
+      <div class="stat-label">平均着順</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">${total_races}</div>
+      <div class="stat-label">総出走回数</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">${(weight_range[1] - weight_range[0])}kg</div>
+      <div class="stat-label">馬体重変動幅</div>
+    </div>
+  `;
+}
+
+function renderCharts(data) {
+  const races = data.races;
+
+  // 既存チャートを破棄
+  Object.values(charts).forEach(c => c?.destroy());
+  charts = {};
+
+  if (!races || races.length === 0) return;
+
+  const labels = races.map(r => {
+    const raceName = r.race_name || '';
+    const shortName = raceName.replace(/\(.*?\)/g, '').substring(0, 10);
+    const course = [r.surface, r.distance ? r.distance + 'm' : ''].filter(Boolean).join('');
+    return [shortName, course, r.date];
+  });
+
+  // タイム指数 閾値ゾーン描画プラグイン
+  const timeIndexZonePlugin = {
+    id: 'timeIndexZones',
+    beforeDraw(chart) {
+      const y1 = chart.scales.y1;
+      if (!y1) return;
+      const ctx = chart.ctx;
+      const left = chart.chartArea.left;
+      const right = chart.chartArea.right;
+      const bottom = chart.chartArea.bottom;
+
+      const zones = [
+        { from: 100, to: 110, color: 'rgba(34,197,94,0.06)',  label: '100', labelColor: 'rgba(34,197,94,0.35)' },
+        { from: 110, to: 999, color: 'rgba(234,179,8,0.08)',  label: '110', labelColor: 'rgba(234,179,8,0.4)' },
+      ];
+
+      for (const z of zones) {
+        const yTop = y1.getPixelForValue(Math.min(z.to, y1.max));
+        const yBot = y1.getPixelForValue(Math.max(z.from, y1.min));
+        if (yBot <= yTop) continue;
+        ctx.save();
+        ctx.fillStyle = z.color;
+        ctx.fillRect(left, yTop, right - left, yBot - yTop);
+
+        const lineY = yBot;
+        if (lineY >= chart.chartArea.top && lineY <= bottom) {
+          ctx.strokeStyle = z.labelColor;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(left, lineY);
+          ctx.lineTo(right, lineY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = z.labelColor;
+          ctx.font = 'bold 10px Inter, sans-serif';
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(z.label, right - 4, lineY - 3);
+        }
+        ctx.restore();
+      }
+    }
+  };
+
+  // タイム指数の共通レンジ算出（100/110ラインが常に含まれるよう保証）
+  const tiVals = races.map(r => r.time_index).filter(v => v != null && v > 0);
+  const tiRawMin = tiVals.length ? Math.min(...tiVals) : 80;
+  const tiRawMax = tiVals.length ? Math.max(...tiVals) : 100;
+  const tiMin = Math.floor(Math.min(tiRawMin, 95) / 5) * 5 - 5;
+  const tiMax = Math.ceil(Math.max(tiRawMax, 115) / 5) * 5 + 5;
+
+  // 芝/ダ/障害 × 距離 でバー色を決定
+  const SURFACE_PALETTE = {
+    '芝':     { h: 142, s: 60 },
+    'ダ':     { h: 30,  s: 55 },
+    'ダート': { h: 30,  s: 55 },
+    '障':     { h: 270, s: 50 },
+    '障害':   { h: 270, s: 50 },
+  };
+  const distRange = (() => {
+    const ds = races.map(r => r.distance).filter(Boolean);
+    return ds.length ? { min: Math.min(...ds), max: Math.max(...ds) } : { min: 1000, max: 3600 };
+  })();
+  function surfaceBarColor(r, alpha) {
+    const p = SURFACE_PALETTE[r.surface] || { h: 210, s: 40 };
+    const dist = r.distance || 1800;
+    const t = distRange.max > distRange.min
+      ? (dist - distRange.min) / (distRange.max - distRange.min)
+      : 0.5;
+    const lightness = 35 + t * 25;
+    return `hsla(${p.h}, ${p.s}%, ${lightness}%, ${alpha})`;
+  }
+  const weightColors = races.map(r => r.weight ? surfaceBarColor(r, 0.55) : 'rgba(48,54,61,0.25)');
+  const weightBorders = races.map(r => r.weight ? surfaceBarColor(r, 0.85) : 'rgba(48,54,61,0.4)');
+
+  // 馬体重の軸レンジ算出（変動が見えるよう拡大）
+  const wtVals = races.map(r => r.weight).filter(v => v != null && v > 0);
+  const wtMin = wtVals.length ? Math.floor((Math.min(...wtVals) - 6) / 2) * 2 : 400;
+  const wtMax = wtVals.length ? Math.ceil((Math.max(...wtVals) + 10) / 2) * 2 : 520;
+
+  // バー上部に着順を表示するプラグイン
+  const barLabelPlugin = {
+    id: 'barLabel',
+    afterDatasetsDraw(chart) {
+      const meta = chart.getDatasetMeta(0);
+      if (!meta || meta.type !== 'bar') return;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 9px -apple-system, sans-serif';
+      meta.data.forEach((bar, i) => {
+        const r = races[i];
+        if (!r || !r.weight) return;
+        const rankStr = r.rank ? `${r.rank}着` : '';
+        if (rankStr) {
+          const color = r.rank === 1 ? '#ffd700' : r.rank === 2 ? '#c0c0c0' : r.rank === 3 ? '#cd7f32' : '#6e7681';
+          ctx.fillStyle = color;
+          ctx.fillText(rankStr, bar.x, bar.y - 4);
+        }
+      });
+      ctx.restore();
+    }
+  };
+
+  // 馬体重 + タイム指数チャート
+  charts.weight = new Chart(document.getElementById('weightCanvas'), {
+    type: 'bar',
+    plugins: [timeIndexZonePlugin, barLabelPlugin],
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: '馬体重 (kg)',
+          data: races.map(r => r.weight),
+          backgroundColor: weightColors,
+          borderColor: weightBorders,
+          borderWidth: 1.5,
+          borderRadius: 3,
+          borderSkipped: false,
+          yAxisID: 'y',
+          order: 2,
+        },
+        {
+          type: 'line',
+          label: 'タイム指数',
+          data: races.map(r => r.time_index || null),
+          borderColor: '#d29922',
+          backgroundColor: '#d2992220',
+          borderWidth: 2.5,
+          pointBackgroundColor: races.map(r => {
+            if (!r.time_index) return '#d29922';
+            if (r.time_index >= 110) return '#eab308';
+            if (r.time_index >= 100) return '#22c55e';
+            return '#d29922';
+          }),
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.3,
+          fill: false,
+          yAxisID: 'y1',
+          order: 1,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {mode: 'index', intersect: false},
+      plugins: {
+        legend: {display: false},
+        tooltip: {
+          callbacks: {
+            title: ctx => {
+              const r = races[ctx[0].dataIndex];
+              return r.race_name || labels[ctx[0].dataIndex];
+            },
+            afterTitle: ctx => {
+              const r = races[ctx[0].dataIndex];
+              const parts = [r.venue, r.surface, r.distance ? r.distance + 'm' : '', r.track_condition].filter(Boolean);
+              const rank = r.rank ? `${r.rank}着` + (r.field_size ? `/${r.field_size}頭` : '') : '';
+              return parts.join(' ') + (rank ? `  ${rank}` : '');
+            },
+            label: ctx => {
+              const race = races[ctx.dataIndex];
+              if (ctx.dataset.label === '馬体重 (kg)') {
+                let s = `馬体重: ${race.weight || '-'}kg`;
+                if (race.weight_change) s += ` (${race.weight_change > 0 ? '+' : ''}${race.weight_change})`;
+                return s;
+              }
+              return race.time_index ? `タイム指数: ${race.time_index}` : 'タイム指数: -';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {grid: {color: '#21262d'}, ticks: {color: '#8b949e', maxRotation: 45, font: {size: 10}}},
+        y: {
+          type: 'linear',
+          position: 'left',
+          title: {display: true, text: '馬体重 (kg)', color: '#58a6ff'},
+          min: wtMin,
+          max: wtMax,
+          grid: {color: '#21262d'},
+          ticks: {color: '#8b949e'},
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          min: tiMin,
+          max: tiMax,
+          title: {display: true, text: 'タイム指数', color: '#d29922'},
+          grid: {display: false},
+          ticks: {color: '#8b949e'}
+        }
+      }
+    }
+  });
+
+  // レース間隔 × タイム指数チャート
+  charts.interval = new Chart(document.getElementById('intervalCanvas'), {
+    type: 'bar',
+    plugins: [timeIndexZonePlugin],
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'レース間隔 (週)',
+          data: races.map(r => r.interval_days ? r.interval_days / 7 : 0),
+          backgroundColor: races.map(r => {
+            if(!r.interval_days) return '#30363d40';  // 初出走は透明度高め
+            const weeks = r.interval_days / 7;
+            if(weeks < 2) return '#f8514980';  // 短い間隔（2週未満）は赤
+            if(weeks > 13) return '#58a6ff80';  // 長い間隔（13週超）は青
+            return '#8b949e80';  // 通常は灰色
+          }),
+          borderColor: '#8b949e',
+          borderWidth: 1,
+          yAxisID: 'y',
+        },
+        {
+          type: 'line',
+          label: 'タイム指数',
+          data: races.map(r => r.time_index || null),
+          borderColor: '#d29922',
+          backgroundColor: '#d2992230',
+          borderWidth: 2,
+          tension: 0.3,
+          fill: false,
+          yAxisID: 'y1',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {mode: 'index', intersect: false},
+      plugins: {
+        legend: {display: false},
+        tooltip: {
+          callbacks: {
+            title: ctx => {
+              const r = races[ctx[0].dataIndex];
+              return r.race_name || labels[ctx[0].dataIndex];
+            },
+            afterTitle: ctx => {
+              const r = races[ctx[0].dataIndex];
+              const parts = [r.venue, r.surface, r.distance ? r.distance + 'm' : '', r.track_condition].filter(Boolean);
+              const rank = r.rank ? `${r.rank}着` + (r.field_size ? `/${r.field_size}頭` : '') : '';
+              return parts.join(' ') + (rank ? `  ${rank}` : '');
+            },
+            label: ctx => {
+              const race = races[ctx.dataIndex];
+              if(ctx.dataset.label === 'レース間隔 (週)') {
+                if(!race.interval_days) return '初出走';
+                const weeks = race.interval_days / 7;
+                return `間隔: ${weeks.toFixed(1)}週（${race.interval_days}日）`;
+              } else {
+                return race.time_index ? `タイム指数: ${race.time_index}` : 'タイム指数: -';
+              }
+            }
+          }
+        }
+      },
+      scales: {
+        x: {grid: {color: '#21262d'}, ticks: {color: '#8b949e', maxRotation: 45, font: {size: 10}}},
+        y: {
+          type: 'linear',
+          position: 'left',
+          title: {display: true, text: 'レース間隔（週）', color: '#8b949e'},
+          grid: {color: '#21262d'},
+          ticks: {color: '#8b949e'},
+          min: 0,  // マイナス方向に伸ばさない
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          min: tiMin,
+          max: tiMax,
+          title: {display: true, text: 'タイム指数', color: '#d29922'},
+          grid: {display: false},
+          ticks: {color: '#8b949e'}
+        }
+      }
+    }
+  });
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('raceTableBody');
+  const races = data.races;
+
+  tbody.innerHTML = races.map((r, i) => {
+    const rankClass = r.rank === 1 ? 'rank-1' : r.rank === 2 ? 'rank-2' : r.rank === 3 ? 'rank-3' : 'rank-other';
+    const weightDiffClass = r.weight_diff > 0 ? 'weight-up' : r.weight_diff < 0 ? 'weight-down' : 'weight-same';
+    const weightDiffText = r.weight_diff > 0 ? `+${r.weight_diff}` : r.weight_diff || '-';
+    const intervalText = r.interval_days ? `${(r.interval_days/7).toFixed(1)}週` : '初';
+
+    const surfaceColor = r.surface === '芝' ? '#3fb950' : (r.surface === 'ダ' || r.surface === 'ダート') ? '#d29922' : (r.surface === '障' || r.surface === '障害') ? '#a78bfa' : '#8b949e';
+    const courseText = [r.surface, r.distance ? r.distance + 'm' : ''].filter(Boolean).join('') || '-';
+
+    return `<tr>
+      <td style="color:#8b949e">${r.date}</td>
+      <td>${r.venue || '-'}</td>
+      <td style="font-weight:500;color:#c9d1d9">${r.race_name || '-'}</td>
+      <td style="color:${surfaceColor};font-weight:600">${courseText}</td>
+      <td><span class="rank-badge ${rankClass}">${r.rank || '-'}</span></td>
+      <td style="font-weight:600">${r.weight || '-'}kg</td>
+      <td><span class="weight-change ${weightDiffClass}">${weightDiffText}</span></td>
+      <td style="color:#6e7681">${intervalText}</td>
+      <td style="font-family:monospace;font-size:11px">${r.time || '-'}</td>
+      <td style="font-weight:600">${r.time_index?.toFixed(1) || '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// 距離フィルター入力にデバウンスリスナー
+let _distDebounce = null;
+['distMin','distMax'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    clearTimeout(_distDebounce);
+    _distDebounce = setTimeout(() => applyFilters(), 350);
+  });
+});
+
+// URLパラメータから馬IDとlimitを取得して自動検索
+const urlParams = new URLSearchParams(window.location.search);
+const horseIdParam = urlParams.get('horse_id');
+const limitParam = urlParams.get('limit');
+if(limitParam) {
+  document.getElementById('limitSelect').value = limitParam;
+}
+if(horseIdParam) {
+  selectedHorseId = horseIdParam;
+  document.getElementById('horseInput').value = horseIdParam;
+  loadHorseData();
+}
+</script>
+</body>
+</html>

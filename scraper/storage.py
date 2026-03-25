@@ -151,6 +151,10 @@ class HybridStorage:
 
         self._disk_hot_l2_lock = threading.Lock()
         self._disk_hot_l2_state: dict[str, Any] = {}
+        self._disk_hot_l2_dirty_count = 0
+        self._disk_hot_l2_last_persist: float = _time.time()
+        self._DISK_HOT_L2_PERSIST_INTERVAL = 60   # 秒
+        self._DISK_HOT_L2_PERSIST_BATCH = 50      # 変更回数
         self._load_disk_hot_l2_state_initial()
 
     def _iso_week_key(self) -> str:
@@ -238,12 +242,27 @@ class HybridStorage:
             wk = self._iso_week_key()
             if self._disk_hot_l2_state.get("week") != wk:
                 self._disk_hot_l2_state = {"week": wk, "counts": {}}
+                self._disk_hot_l2_dirty_count = 0
             counts: dict[str, Any] = self._disk_hot_l2_state.setdefault("counts", {})
             cat = counts.setdefault(category, {})
             cat[key] = int(cat.get(key, 0)) + 1
             n = int(cat[key])
-            self._persist_disk_hot_l2_state_unlocked()
+            self._disk_hot_l2_dirty_count += 1
+            now = _time.time()
+            if (self._disk_hot_l2_dirty_count >= self._DISK_HOT_L2_PERSIST_BATCH
+                    or (now - self._disk_hot_l2_last_persist) >= self._DISK_HOT_L2_PERSIST_INTERVAL):
+                self._persist_disk_hot_l2_state_unlocked()
+                self._disk_hot_l2_dirty_count = 0
+                self._disk_hot_l2_last_persist = now
             return n
+
+    def flush_weekly_access(self) -> None:
+        """未永続化のアクセスカウントをディスクに書き出す。シャットダウン時に呼ぶ。"""
+        with self._disk_hot_l2_lock:
+            if self._disk_hot_l2_dirty_count > 0:
+                self._persist_disk_hot_l2_state_unlocked()
+                self._disk_hot_l2_dirty_count = 0
+                self._disk_hot_l2_last_persist = _time.time()
 
     def _weekly_disk_l2_maybe_write(
         self, category: str, key: str, data: dict[str, Any]
@@ -475,7 +494,7 @@ class HybridStorage:
             if cached and (_time.time() - cached[0]) < self._mem_cache_ttl:
                 mem = cached[1]
                 if mem is not None and self._is_locally_cached(category):
-                    self._weekly_disk_l2_maybe_write(category, key, mem)
+                    self._bump_disk_hot_l2_access(category, key)
                 return mem
 
         # L2: ローカルディスクキャッシュ
@@ -483,7 +502,7 @@ class HybridStorage:
             local_data = self._read_local_cache(category, key)
             if local_data is not None:
                 self._cache_put(cache_key, local_data)
-                self._weekly_disk_l2_maybe_write(category, key, local_data)
+                self._bump_disk_hot_l2_access(category, key)
                 return local_data
 
         if not self.gcs_enabled or not self._gcs_healthy:
@@ -604,10 +623,13 @@ class HybridStorage:
                 import shutil
                 shutil.rmtree(cache_dir, ignore_errors=True)
 
-    def cleanup_disk_cache(self, *, max_age_seconds: float | None = None) -> dict[str, Any]:
+    def cleanup_disk_cache(self, *, max_age_seconds: float | None = None,
+                           min_weekly_accesses: int | None = None) -> dict[str, Any]:
         """
-        data/cache 配下の *.json のうち、mtime が max_age 秒より古いものを削除。
-        空になったサブディレクトリも削除する（深い階層から）。
+        data/cache 配下のキャッシュファイル削除:
+          1. mtime が max_age 秒より古い
+          2. 週次アクセス回数が min_weekly_accesses 未満
+        空サブディレクトリも削除。
         """
         root = self._base_dir / "data" / "cache"
         out: dict[str, Any] = {
@@ -615,29 +637,65 @@ class HybridStorage:
             "removed_files": 0,
             "removed_bytes": 0,
             "removed_dirs": 0,
+            "evicted_cold": 0,
             "max_age_seconds": None,
+            "min_weekly_accesses": None,
         }
         if not root.exists():
             return out
+
         raw = os.environ.get("DISK_CACHE_CLEANUP_MAX_AGE_SEC", "604800")
         try:
             max_age = float(max_age_seconds if max_age_seconds is not None else raw)
         except (TypeError, ValueError):
             max_age = 604800.0
         out["max_age_seconds"] = max_age
+
+        if min_weekly_accesses is None:
+            try:
+                min_weekly_accesses = int(
+                    os.environ.get("DISK_L2_EVICT_MIN_WEEKLY", "10"))
+            except (TypeError, ValueError):
+                min_weekly_accesses = 10
+        out["min_weekly_accesses"] = min_weekly_accesses
+
+        weekly_counts = self._get_all_weekly_counts()
+
         now = _time.time()
         removed_f = 0
         removed_b = 0
+        evicted_cold = 0
+
         for path in list(root.rglob("*.json")):
+            if "/_blob_list/" in str(path):
+                continue
             try:
-                if now - path.stat().st_mtime <= max_age:
-                    continue
-                sz = path.stat().st_size
-                path.unlink()
-                removed_f += 1
-                removed_b += sz
+                st = path.stat()
             except OSError:
                 continue
+
+            # 古いファイルの削除
+            if now - st.st_mtime > max_age:
+                try:
+                    path.unlink()
+                    removed_f += 1
+                    removed_b += st.st_size
+                except OSError:
+                    pass
+                continue
+
+            # アクセス頻度ベースの削除
+            cat, key = self._parse_cache_path(root, path)
+            if cat and key:
+                count = weekly_counts.get(cat, {}).get(key, 0)
+                if count < min_weekly_accesses:
+                    try:
+                        path.unlink()
+                        evicted_cold += 1
+                        removed_b += st.st_size
+                    except OSError:
+                        pass
+
         removed_d = 0
         if root.exists():
             for dirpath, _dirnames, _filenames in os.walk(str(root), topdown=False):
@@ -648,15 +706,59 @@ class HybridStorage:
                         removed_d += 1
                 except OSError:
                     pass
+
         out["removed_files"] = removed_f
         out["removed_bytes"] = removed_b
         out["removed_dirs"] = removed_d
-        if removed_f or removed_d:
+        out["evicted_cold"] = evicted_cold
+        if removed_f or evicted_cold or removed_d:
             logger.info(
-                "disk cache cleanup: files=%d bytes=%d empty_dirs=%d (max_age=%.0fs)",
-                removed_f, removed_b, removed_d, max_age,
+                "disk cache cleanup: old=%d cold=%d bytes=%d dirs=%d "
+                "(max_age=%.0fs, min_weekly=%d)",
+                removed_f, evicted_cold, removed_b, removed_d,
+                max_age, min_weekly_accesses,
             )
         return out
+
+    def _get_all_weekly_counts(self) -> dict[str, dict[str, int]]:
+        """現在の週次アクセスカウントを返す。"""
+        with self._disk_hot_l2_lock:
+            wk = self._iso_week_key()
+            if self._disk_hot_l2_state.get("week") != wk:
+                return {}
+            return dict(self._disk_hot_l2_state.get("counts", {}))
+
+    @staticmethod
+    def _parse_cache_path(root: Path, path: Path) -> tuple[str, str]:
+        """data/cache/{category}/{prefix}/{key}.json → (category, key)"""
+        try:
+            rel = path.relative_to(root)
+            parts = rel.parts
+            if len(parts) >= 3:
+                return parts[0], path.stem
+            if len(parts) == 2:
+                return parts[0], path.stem
+        except (ValueError, IndexError):
+            pass
+        return "", ""
+
+    def cleanup_snapshot_files(self, max_age_seconds: float = 86400) -> int:
+        """data/research/_*_snapshot_cache.jsonl.gz 等の古いスナップショットを削除。"""
+        patterns = [
+            self._base_dir / "data" / "research" / "_ped_snapshot_cache.jsonl.gz",
+            self._base_dir / "data" / "research" / "_hr_snapshot_cache.jsonl.gz",
+        ]
+        removed = 0
+        now = _time.time()
+        for p in patterns:
+            try:
+                if p.exists() and (now - p.stat().st_mtime) > max_age_seconds:
+                    p.unlink()
+                    removed += 1
+                    logger.info("snapshot cleanup: removed %s", p.name)
+            except OSError:
+                pass
+        return removed
 
     # ── exists ────────────────────────────────────────
 

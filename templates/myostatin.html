@@ -45,11 +45,24 @@ tr:hover td{background:#1c2128}
 .gt-CC{background:#da363440;color:#f85149}
 .gt-CT{background:#d29922a0;color:#e3b341}
 .gt-TT{background:#238636a0;color:#3fb950}
+.gt-blocks{display:flex;gap:3px;align-items:center}
+.gt-block{display:inline-flex;align-items:center;justify-content:center;padding:3px 8px;border-radius:4px;font-weight:700;font-size:11px;letter-spacing:0.5px;min-width:32px}
+.gt-block-CC{background:#da3634;color:#fff}
+.gt-block-CT{background:#d29922;color:#fff}
+.gt-block-TT{background:#238636;color:#fff}
 .conf-badge{font-size:10px;padding:2px 6px;border-radius:3px;font-weight:500}
 .conf-confirmed{background:#238636;color:#fff}
 .conf-highly_likely{background:#1f6feb;color:#fff}
 .conf-estimated{background:#6e7681;color:#c9d1d9}
 .conf-inferred{background:#30363d;color:#8b949e}
+
+.source-details{font-size:11px;color:#6e7681}
+.source-details summary{cursor:pointer;user-select:none;list-style:none;padding:4px 0;color:#58a6ff;transition:color .15s;display:inline-flex;align-items:center;gap:4px}
+.source-details summary::-webkit-details-marker{display:none}
+.source-details summary:hover{color:#79c0ff}
+.source-details summary::before{content:'▶';font-size:9px;transition:transform .15s}
+.source-details[open] summary::before{transform:rotate(90deg)}
+.source-details .source-full{margin-top:6px;padding:8px;background:#0d1117;border-left:2px solid #21262d;border-radius:4px;line-height:1.5;color:#c9d1d9}
 
 .dist-bar{height:6px;border-radius:3px;background:#30363d;position:relative;margin-top:4px}
 .dist-fill{height:100%;border-radius:3px;position:absolute;left:0;top:0}
@@ -87,8 +100,8 @@ tr:hover td{background:#1c2128}
 <body>
 {% include '_nav.html' %}
 <div class="main">
-<h1>ミオスタチン遺伝子 (MSTN) ダッシュボード</h1>
-<p class="subtitle">v2.0.0 | 登録種牡馬 <span id="stallionCount">-</span>頭 | 最終更新 <span id="lastUpdated">-</span></p>
+<h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">ミオスタチン遺伝子 (MSTN) ダッシュボード</h1>
+<p class="subtitle">v2.2.0 | 登録馬 <span id="stallionCount">-</span>頭（種牡馬・競走馬） | 最終更新 <span id="lastUpdated">-</span></p>
 
 <div class="stat-row" id="statRow"></div>
 
@@ -126,7 +139,7 @@ tr:hover td{background:#1c2128}
     <div class="card-title"><span class="icon">🔬</span>配合シミュレーター</div>
     <div class="predict-form">
       <div class="form-group">
-        <label>父 (種牡馬)</label>
+        <label>父</label>
         <input id="predSire" list="stallionList" placeholder="例: キタサンブラック">
       </div>
       <div class="form-group">
@@ -154,8 +167,14 @@ tr:hover td{background:#1c2128}
 </div>
 
 <div class="card" style="margin-bottom:20px">
-  <div class="card-title"><span class="icon">🏇</span>種牡馬一覧</div>
-  <input class="search-box" id="searchBox" placeholder="種牡馬名で検索...">
+  <div class="card-title"><span class="icon">🏇</span>登録馬一覧（種牡馬・競走馬）</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <button class="btn btn-primary" onclick="recalculateMyostatin()" id="recalcBtn" style="font-size:12px;padding:6px 16px">
+      🔄 未確定馬を確率計算で再計算
+    </button>
+    <div id="recalcStatus" style="font-size:12px;color:#8b949e"></div>
+  </div>
+  <input class="search-box" id="searchBox" placeholder="馬名で検索...">
   <div class="filter-row" id="filterRow">
     <button class="filter-btn active" data-filter="all">すべて</button>
     <button class="filter-btn" data-filter="CC">CC</button>
@@ -170,7 +189,7 @@ tr:hover td{background:#1c2128}
   <div class="table-wrap">
     <table id="stallionTable">
       <thead><tr>
-        <th data-sort="name">種牡馬<span class="sort-arrow"></span></th>
+        <th data-sort="name">馬名<span class="sort-arrow"></span></th>
         <th data-sort="name_en">英名<span class="sort-arrow"></span></th>
         <th data-sort="genotype">型<span class="sort-arrow"></span></th>
         <th data-sort="confidence">信頼度<span class="sort-arrow"></span></th>
@@ -295,6 +314,16 @@ function buildPies(kbCounts, popStats) {
   }
 }
 
+function getPossibleGenotypes(genotype) {
+  if (genotype === 'CC') return ['CC'];
+  if (genotype === 'CT') return ['CT'];
+  if (genotype === 'TT') return ['TT'];
+  if (genotype === '?T') return ['CT', 'TT'];
+  if (genotype === 'C?') return ['CC', 'CT'];
+  if (genotype === '??') return ['CC', 'CT', 'TT'];
+  return [genotype];
+}
+
 function buildTable(stallions) {
   const body = document.getElementById('stallionBody');
   const allData = [...stallions];
@@ -318,22 +347,36 @@ function buildTable(stallions) {
   }
 
   function render(list) {
-    body.innerHTML = list.map(s => `<tr data-gt="${s.genotype}" data-conf="${s.confidence}">
-      <td style="font-weight:600;color:#f0f6fc">${s.name}</td>
-      <td style="color:#8b949e">${s.name_en||''}</td>
-      <td><span class="gt-badge gt-${s.genotype}">${s.genotype}</span></td>
-      <td><span class="conf-badge conf-${s.confidence}">${CONF_LABELS[s.confidence]||s.confidence}</span></td>
-      <td style="color:${COLORS.CC}">${(s.allele_c*100).toFixed(0)}%</td>
-      <td style="color:${COLORS.TT}">${(s.allele_t*100).toFixed(0)}%</td>
-      <td>
-        <div style="font-weight:600">${s.avg_win_dist}m</div>
-        <div class="dist-bar" style="width:120px">
-          <div class="dist-fill" style="width:${Math.min((s.avg_win_dist/2800)*100,100)}%;background:${COLORS[s.genotype]}"></div>
-        </div>
-      </td>
-      <td style="font-size:11px;color:#8b949e">${s.line||''}</td>
-      <td style="font-size:11px;color:#6e7681;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(s.source||'').replace(/"/g,'&quot;')}">${s.source||''}</td>
-    </tr>`).join('');
+    body.innerHTML = list.map(s => {
+      const source = s.source || '';
+      const sourcePreview = source.length > 40 ? source.substring(0, 40) + '...' : source;
+      const sourceHtml = source ? `
+        <details class="source-details">
+          <summary>${sourcePreview}</summary>
+          <div class="source-full">${source.replace(/\n/g, '<br>')}</div>
+        </details>
+      ` : '';
+
+      const possibleGTs = getPossibleGenotypes(s.genotype);
+      const gtBlocksHtml = `<div class="gt-blocks">${possibleGTs.map(gt => `<span class="gt-block gt-block-${gt}">${gt}</span>`).join('')}</div>`;
+
+      return `<tr data-gt="${s.genotype}" data-conf="${s.confidence}">
+        <td style="font-weight:600;color:#f0f6fc">${s.name}</td>
+        <td style="color:#8b949e">${s.name_en||''}</td>
+        <td>${gtBlocksHtml}</td>
+        <td><span class="conf-badge conf-${s.confidence}">${CONF_LABELS[s.confidence]||s.confidence}</span></td>
+        <td style="color:${COLORS.CC}">${(s.allele_c*100).toFixed(0)}%</td>
+        <td style="color:${COLORS.TT}">${(s.allele_t*100).toFixed(0)}%</td>
+        <td>
+          <div style="font-weight:600">${s.avg_win_dist}m</div>
+          <div class="dist-bar" style="width:120px">
+            <div class="dist-fill" style="width:${Math.min((s.avg_win_dist/2800)*100,100)}%;background:${COLORS[s.genotype]}"></div>
+          </div>
+        </td>
+        <td style="font-size:11px;color:#8b949e">${s.line||''}</td>
+        <td style="min-width:160px;max-width:320px">${sourceHtml}</td>
+      </tr>`;
+    }).join('');
   }
 
   function refreshTable() {
@@ -471,13 +514,17 @@ async function runPredict() {
 
   let parentHtml = '';
   if(data.sire_info) {
-    parentHtml += `<strong>父 ${data.sire_info.name}</strong>: <span class="gt-badge gt-${data.sire_info.genotype}">${data.sire_info.genotype}</span> `;
+    const sireGTs = getPossibleGenotypes(data.sire_info.genotype);
+    const sireGTHtml = `<span class="gt-blocks">${sireGTs.map(gt => `<span class="gt-block gt-block-${gt}">${gt}</span>`).join('')}</span>`;
+    parentHtml += `<strong>父 ${data.sire_info.name}</strong>: ${sireGTHtml} `;
   } else {
     parentHtml += `<strong>父 ${sire}</strong>: <span style="color:#6e7681">未登録(デフォルト値)</span> `;
   }
   if(ds) {
     if(data.dam_sire_info) {
-      parentHtml += `| <strong>母父 ${data.dam_sire_info.name}</strong>: <span class="gt-badge gt-${data.dam_sire_info.genotype}">${data.dam_sire_info.genotype}</span>`;
+      const damSireGTs = getPossibleGenotypes(data.dam_sire_info.genotype);
+      const damSireGTHtml = `<span class="gt-blocks">${damSireGTs.map(gt => `<span class="gt-block gt-block-${gt}">${gt}</span>`).join('')}</span>`;
+      parentHtml += `| <strong>母父 ${data.dam_sire_info.name}</strong>: ${damSireGTHtml}`;
     } else {
       parentHtml += `| <strong>母父 ${ds}</strong>: <span style="color:#6e7681">未登録</span>`;
     }
@@ -511,6 +558,68 @@ async function runPredict() {
     `;
   } else {
     document.getElementById('predAffinity').innerHTML = '';
+  }
+}
+
+async function recalculateMyostatin() {
+  const btn = document.getElementById('recalcBtn');
+  const status = document.getElementById('recalcStatus');
+
+  btn.disabled = true;
+  btn.textContent = '計算中...';
+  status.textContent = '';
+
+  try {
+    const res = await fetch('/api/myostatin/recalculate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'}
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'サーバーエラー');
+    }
+
+    const data = await res.json();
+
+    if (data.success) {
+      status.innerHTML = `<span style="color:#3fb950">✓ ${data.updated_count}頭を更新しました</span>`;
+
+      // 更新内容を表示
+      if (data.updates && data.updates.length > 0) {
+        const updateList = data.updates.map(u =>
+          `${u.name}: ${u.old} → ${u.new} (C=${u.allele_c}, T=${u.allele_t})`
+        ).join('<br>');
+
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;max-width:700px;max-height:80vh;overflow-y:auto;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.6)';
+        modal.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <h3 style="font-size:16px;color:#f0f6fc">再計算結果 (${data.updated_count}頭更新)</h3>
+            <button onclick="this.parentElement.parentElement.remove();document.getElementById('overlay').remove()" style="background:none;border:none;color:#8b949e;font-size:24px;cursor:pointer;padding:0;width:32px;height:32px">&times;</button>
+          </div>
+          <div style="font-size:12px;color:#c9d1d9;line-height:1.8">${updateList}</div>
+        `;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'overlay';
+        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9998';
+        overlay.onclick = () => { modal.remove(); overlay.remove(); };
+
+        document.body.appendChild(overlay);
+        document.body.appendChild(modal);
+      }
+
+      // データを再読み込み
+      setTimeout(() => init(), 1500);
+    } else {
+      status.innerHTML = `<span style="color:#f85149">✗ エラー: ${data.error || '不明なエラー'}</span>`;
+    }
+  } catch (err) {
+    status.innerHTML = `<span style="color:#f85149">✗ ${err.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 未確定馬を確率計算で再計算';
   }
 }
 

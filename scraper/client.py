@@ -162,10 +162,10 @@ def _env_float(name: str, default: float) -> float:
 
 _THROTTLE_CONFIG: dict[str, dict[str, float]] = {
     "netkeiba": {
-        "min_interval": _env_float("NETKEIBA_THROTTLE_MIN", 3.0),
-        "max_interval": _env_float("NETKEIBA_THROTTLE_MAX", 6.0),
+        "min_interval": _env_float("NETKEIBA_THROTTLE_MIN", 1.8),
+        "max_interval": _env_float("NETKEIBA_THROTTLE_MAX", 3.5),
     },
-    "smartrc": {"min_interval": 3.0, "max_interval": 6.0},
+    "smartrc": {"min_interval": 2.0, "max_interval": 4.0},
 }
 
 _SMARTRC_REQUEST_LIMIT = 200
@@ -175,14 +175,14 @@ _BACKOFF_FACTOR = 2.5
 _BACKOFF_MAX_RETRIES = 3
 
 # バースト制限: 連続 N リクエスト後に追加休止（.env / 環境変数で上書き可）
-_BURST_WINDOW = _env_int("NETKEIBA_BURST_WINDOW", 10)
-_BURST_COOLDOWN_MIN = _env_float("NETKEIBA_BURST_COOLDOWN_MIN", 8.0)
-_BURST_COOLDOWN_MAX = _env_float("NETKEIBA_BURST_COOLDOWN_MAX", 15.0)
+_BURST_WINDOW = _env_int("NETKEIBA_BURST_WINDOW", 18)
+_BURST_COOLDOWN_MIN = _env_float("NETKEIBA_BURST_COOLDOWN_MIN", 5.0)
+_BURST_COOLDOWN_MAX = _env_float("NETKEIBA_BURST_COOLDOWN_MAX", 10.0)
 
 # セッションクールダウン: N リクエストごとに長い休止
-_SESSION_COOLDOWN_INTERVAL = _env_int("NETKEIBA_SESSION_COOLDOWN_INTERVAL", 50)
-_SESSION_COOLDOWN_MIN = _env_float("NETKEIBA_SESSION_COOLDOWN_MIN", 30.0)
-_SESSION_COOLDOWN_MAX = _env_float("NETKEIBA_SESSION_COOLDOWN_MAX", 60.0)
+_SESSION_COOLDOWN_INTERVAL = _env_int("NETKEIBA_SESSION_COOLDOWN_INTERVAL", 75)
+_SESSION_COOLDOWN_MIN = _env_float("NETKEIBA_SESSION_COOLDOWN_MIN", 20.0)
+_SESSION_COOLDOWN_MAX = _env_float("NETKEIBA_SESSION_COOLDOWN_MAX", 35.0)
 
 # セッションリフレッシュ: N リクエストごとに新しいセッション（TLS/接続の張り直し）
 _SESSION_REFRESH_INTERVAL = _env_int("NETKEIBA_SESSION_REFRESH_INTERVAL", 150)

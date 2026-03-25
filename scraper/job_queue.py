@@ -35,6 +35,7 @@ QUEUE_DIR = Path(__file__).parent.parent / "data" / "queue"
 QUEUE_DIR.mkdir(parents=True, exist_ok=True)
 
 LOCK_FILE = QUEUE_DIR / ".scrape.lock"
+LOCK_FILE_URGENT = QUEUE_DIR / ".scrape_urgent.lock"
 QUEUE_FILE = QUEUE_DIR / "scrape_queue.json"
 # 複数 Uvicorn ワーカーが同時に JSON を読み書きすると破損するため、ファイル単位で排他する
 QUEUE_JSON_FLOCK = QUEUE_DIR / ".scrape_queue.flock"
@@ -549,11 +550,16 @@ class ScrapeJobQueue:
 
         jobs = self.load_queue()
         is_running = self.is_locked()
+        is_running_urgent = self.is_locked_urgent()
 
         pending = [j for j in jobs if j.get("status") == "pending"]
         running = [j for j in jobs if j.get("status") == "running"]
         completed = [j for j in jobs if j.get("status") == "completed"]
         failed = [j for j in jobs if j.get("status") == "failed"]
+        urgent_pending = [
+            j for j in pending
+            if int(j.get("priority") or 0) >= PRIORITY_URGENT_PEDIGREE_5GEN
+        ]
 
         current_job = running[0] if running else None
         pending_ordered = self._sorted_pending(jobs)
@@ -569,8 +575,9 @@ class ScrapeJobQueue:
         pause = read_access_pause()
         return {
             "is_running": is_running,
+            "is_running_urgent": is_running_urgent,
             "current_job": current_job,
-            "pending_queue": processing_queue[:200],
+            "pending_queue": processing_queue,
             "active_jobs": active_jobs,
             "transport_pause": {
                 "active": bool(pause.get("active")),
@@ -583,6 +590,7 @@ class ScrapeJobQueue:
                 "completed": len(completed),
                 "failed": len(failed),
                 "total": len(jobs),
+                "urgent_pending": len(urgent_pending),
             },
             "jobs": jobs[-80:],
             "failed_jobs": failed_sorted,
@@ -721,6 +729,137 @@ class ScrapeJobQueue:
             mark_queue_worker_active(False)
             self.release_lock()
 
+    # ── ファストレーン（最優先ジョブ専用ワーカー） ──
+
+    def is_locked_urgent(self) -> bool:
+        lf = LOCK_FILE_URGENT
+        if not lf.exists():
+            return False
+        try:
+            mtime = lf.stat().st_mtime
+            if time.time() - mtime > 600:
+                logger.warning("古い urgent ロックファイルを削除: %s", lf)
+                lf.unlink()
+                return False
+        except Exception:
+            return False
+        try:
+            raw = lf.read_text(encoding="utf-8")
+            data = json.loads(raw)
+            pid = int(data.get("pid") or 0)
+        except Exception:
+            return True
+        if pid <= 0:
+            return True
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            try:
+                lf.unlink()
+            except OSError:
+                pass
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
+
+    def acquire_lock_urgent(self) -> bool:
+        if self.is_locked_urgent():
+            return False
+        try:
+            with open(LOCK_FILE_URGENT, "w") as f:
+                f.write(json.dumps({
+                    "pid": os.getpid(),
+                    "timestamp": time.time(),
+                    "datetime": datetime.now().isoformat(),
+                }))
+            return True
+        except Exception as e:
+            logger.error("urgent ロック取得エラー: %s", e)
+            return False
+
+    def release_lock_urgent(self):
+        try:
+            if LOCK_FILE_URGENT.exists():
+                LOCK_FILE_URGENT.unlink()
+        except Exception as e:
+            logger.error("urgent ロック解放エラー: %s", e)
+
+    def get_next_urgent_job(self) -> dict | None:
+        """priority >= PRIORITY_URGENT_PEDIGREE_5GEN かつ通常ワーカーが実行していないジョブを返す。"""
+        from scraper.scrape_access_pause import read_access_pause
+
+        if read_access_pause().get("active"):
+            return None
+        jobs = self.load_queue()
+        pend = [
+            j for j in jobs
+            if j.get("status") == "pending"
+            and int(j.get("priority") or 0) >= PRIORITY_URGENT_PEDIGREE_5GEN
+        ]
+        pend.sort(key=lambda j: (
+            -int(j.get("priority") or 0),
+            j.get("queued_at") or "",
+        ))
+        return pend[0] if pend else None
+
+    def has_urgent_pending(self) -> bool:
+        jobs = self.load_queue()
+        return any(
+            j.get("status") == "pending"
+            and int(j.get("priority") or 0) >= PRIORITY_URGENT_PEDIGREE_5GEN
+            for j in jobs
+        )
+
+    def process_queue_urgent(self):
+        """最優先ジョブだけを処理するファストレーンワーカー。通常ワーカーと並走可能。"""
+        from scraper.queue_worker_log import ensure_queue_worker_log_handler
+
+        ensure_queue_worker_log_handler()
+
+        if not self.acquire_lock_urgent():
+            logger.info("[fast-lane] 既に urgent ワーカーが実行中です")
+            return
+
+        try:
+            from scraper.scrape_access_pause import is_access_or_transport_error, read_access_pause
+
+            while True:
+                if read_access_pause().get("active"):
+                    logger.info("[fast-lane] アクセス一時停止中のため中断します")
+                    break
+
+                job = self.get_next_urgent_job()
+                if not job:
+                    logger.info("[fast-lane] 最優先キューが空です")
+                    break
+
+                job_id = job["job_id"]
+                label = job.get("job_label") or job.get("target_id") or ""
+                logger.info("[fast-lane] ジョブ開始: %s (%s)", job_id, label)
+                self.update_job_status(job_id, "running")
+
+                try:
+                    self._execute_scraping(job)
+                    self.update_job_status(job_id, "completed")
+                    logger.info("[fast-lane] ジョブ完了: %s", job_id)
+                except Exception as e:
+                    if is_access_or_transport_error(e):
+                        logger.error(
+                            "[fast-lane] アクセス系エラー — 一時停止: %s",
+                            job_id,
+                            exc_info=True,
+                        )
+                        self.pause_queue_for_access_error(str(e))
+                        break
+                    logger.error("[fast-lane] ジョブ失敗: %s - %s", job_id, e, exc_info=True)
+                    self.update_job_status(job_id, "failed", str(e))
+
+        finally:
+            self.release_lock_urgent()
+
     def _execute_scraping(self, job: dict):
         """実際のスクレイピングを実行"""
         from scraper.queue_tasks import execute_job
@@ -728,4 +867,4 @@ class ScrapeJobQueue:
 
         runner = ScraperRunner()
         execute_job(runner, job)
-        time.sleep(1)  # レート制限
+        time.sleep(0.2)  # レート制限

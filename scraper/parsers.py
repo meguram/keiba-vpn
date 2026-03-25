@@ -202,8 +202,8 @@ class RaceResultParser:
 
             entry = {
                 "finish_position": finish_position,
-                "bracket_number": int(safe_text(cols[1]) or 0),
-                "horse_number": int(safe_text(cols[2]) or 0),
+                "bracket_number": self._safe_int(safe_text(cols[1])),
+                "horse_number": self._safe_int(safe_text(cols[2])),
                 "horse_name": horse_name,
                 "horse_id": horse_id,
                 "sex_age": safe_text(cols[4]),
@@ -216,7 +216,7 @@ class RaceResultParser:
                 "passing_order": safe_text(cols[10]) if len(cols) > 10 else "",
                 "last_3f": self._to_float(safe_text(cols[11])) if len(cols) > 11 else 0,
                 "odds": self._to_float(safe_text(cols[12])) if len(cols) > 12 else 0,
-                "popularity": int(safe_text(cols[13]) or 0) if len(cols) > 13 else 0,
+                "popularity": self._safe_int(safe_text(cols[13])) if len(cols) > 13 else 0,
                 "weight": weight,
                 "weight_change": weight_change,
                 "trainer_name": trainer_name,
@@ -225,6 +225,32 @@ class RaceResultParser:
             entries.append(entry)
 
         return entries
+
+    @staticmethod
+    def _split_br(td) -> list[str]:
+        """<br> 区切りのセル内容をリストで返す。
+
+        BeautifulSoup が <br> を入れ子タグとして解釈するケースに対応。
+        例: <td>14<br>12<br>9</br></br></td>
+          → children: NavigableString("14"), Tag(br, children=[12, br(children=[9])])
+        """
+        parts: list[str] = []
+
+        def _walk(node):
+            for child in node.children:
+                if isinstance(child, str):
+                    t = child.strip()
+                    if t:
+                        parts.append(t)
+                elif child.name == "br":
+                    _walk(child)
+                else:
+                    t = child.get_text(strip=True)
+                    if t:
+                        parts.append(t)
+
+        _walk(td)
+        return parts if parts else [safe_text(td)]
 
     def _parse_payoff(self, soup: BeautifulSoup) -> dict:
         payoff = {}
@@ -235,10 +261,24 @@ class RaceResultParser:
                 tds = row.select("td")
                 if th and len(tds) >= 2:
                     bet_type = safe_text(th)
-                    payoff[bet_type] = {
-                        "numbers": safe_text(tds[0]),
-                        "payout": safe_text(tds[1]),
-                    }
+                    nums = self._split_br(tds[0])
+                    pays = self._split_br(tds[1])
+                    pops = self._split_br(tds[2]) if len(tds) >= 3 else []
+                    if len(nums) <= 1:
+                        payoff[bet_type] = {
+                            "numbers": nums[0] if nums else "",
+                            "payout": pays[0] if pays else "",
+                            "popularity": pops[0] if pops else "",
+                        }
+                    else:
+                        payoff[bet_type] = [
+                            {
+                                "numbers": nums[i] if i < len(nums) else "",
+                                "payout": pays[i] if i < len(pays) else "",
+                                "popularity": pops[i] if i < len(pops) else "",
+                            }
+                            for i in range(len(nums))
+                        ]
         return payoff
 
     def _parse_lap(self, soup: BeautifulSoup) -> list[float]:
@@ -297,6 +337,13 @@ class RaceResultParser:
     def _to_float(s: str) -> float:
         nums = extract_numbers(s)
         return float(nums[0]) if nums else 0.0
+
+    @staticmethod
+    def _safe_int(v) -> int:
+        try:
+            return int(float(str(v).replace(",", "")))
+        except (ValueError, TypeError):
+            return 0
 
 
 # ═══════════════════════════════════════════════════════
@@ -763,6 +810,51 @@ class HorseParser:
         if not table:
             return []
 
+        # ヘッダー行から列のインデックスを取得
+        header_row = table.select_one("tr")
+        col_indices = {}
+        if header_row:
+            headers = header_row.select("th")
+
+            # デバッグ用: 全ヘッダーをログ出力
+            import logging
+            logger = logging.getLogger(__name__)
+            header_texts = [safe_text(th) for th in headers]
+            logger.info(f"[HorseParser] テーブルヘッダー ({len(header_texts)}列): {header_texts}")
+
+            for i, th in enumerate(headers):
+                header_text = safe_text(th).strip()
+
+                # 距離、馬場、タイム、馬体重の位置を記録
+                if "距離" in header_text:
+                    col_indices["distance"] = i
+                elif "馬場" in header_text:
+                    col_indices["track_condition"] = i
+                elif "タイム" in header_text and "指数" not in header_text:
+                    col_indices["finish_time"] = i
+                elif "体重" in header_text:
+                    col_indices["weight"] = i
+                    logger.info(f"[HorseParser] ✓ 馬体重列を検出: {i} ({header_text})")
+
+                # タイム指数の検索（複数のパターン）
+                if "タイム指数" in header_text or "タイム\n指数" in header_text:
+                    # 「タイム指数」という明示的な列名
+                    col_indices["time_index"] = i
+                    logger.info(f"[HorseParser] ✓ タイム指数列を検出: {i} ({header_text})")
+                elif header_text == "M" or header_text == "指数M":
+                    # 「M」だけの列名（タイム指数M）
+                    col_indices["time_index"] = i
+                    logger.info(f"[HorseParser] ✓ M列（タイム指数）を検出: {i}")
+                elif "指数" in header_text and "上り" not in header_text and "3F" not in header_text:
+                    # 上り指数でない指数列
+                    if "time_index" not in col_indices:
+                        col_indices["time_index"] = i
+                        logger.info(f"[HorseParser] 指数列を検出: {i} ({header_text})")
+
+            # タイム指数列が検出されない場合は推測しない（誤取得防止）
+            if "time_index" not in col_indices:
+                logger.info(f"[HorseParser] タイム指数列が検出されませんでした（このレースには存在しない可能性）")
+
         rows = table.select("tr")[1:]
         history = []
         for row in rows:
@@ -778,7 +870,13 @@ class HorseParser:
             except ValueError:
                 finish = -1
 
-            wt, wt_chg = parse_weight_change(safe_text(cols[24])) if len(cols) > 24 else (0, 0)
+            # 馬体重（ヘッダーから検出した列、または固定位置）
+            wt, wt_chg = (0, 0)
+            if "weight" in col_indices and len(cols) > col_indices["weight"]:
+                wt, wt_chg = parse_weight_change(safe_text(cols[col_indices["weight"]]))
+            elif len(cols) > 24:
+                # フォールバック: 固定位置（cols[24]）
+                wt, wt_chg = parse_weight_change(safe_text(cols[24]))
 
             dist_text = safe_text(cols[14]) if len(cols) > 14 else ""
             m_dist = re.search(r"(芝|ダ|障)(\d{3,5})", dist_text)
@@ -786,23 +884,37 @@ class HorseParser:
             finish_time_str = safe_text(cols[18]) if len(cols) > 18 else ""
             time_sec = self._time_to_sec(finish_time_str)
 
+            # タイム指数M（ヘッダーから検出した列のみ取得）
+            # タイム指数Mは存在する場合のみ取得（2024年全レース、2023年重賞など）
+            # ヘッダー検出できない場合は固定位置を使わず0とする（誤取得防止）
+            date_str = safe_text(cols[0])
+            time_index = 0
+            
+            if "time_index" in col_indices and len(cols) > col_indices["time_index"]:
+                time_index_text = safe_text(cols[col_indices["time_index"]])
+                try:
+                    time_index = int(time_index_text) if time_index_text.isdigit() else 0
+                except ValueError:
+                    time_index = 0
+
             rec = {
-                "date": safe_text(cols[0]),
+                "date": date_str,
                 "venue": safe_text(cols[1]),
                 "weather": safe_text(cols[2]),
-                "race_round": int(safe_text(cols[3]) or 0),
+                "race_round": self._safe_int(safe_text(cols[3])),
                 "race_name": safe_text(race_link) if race_link else safe_text(cols[4]),
                 "race_id": extract_id_from_url(safe_attr(race_link, "href")) if race_link else "",
-                "field_size": int(safe_text(cols[6]) or 0),
-                "bracket_number": int(safe_text(cols[7]) or 0),
-                "horse_number": int(safe_text(cols[8]) or 0),
+                "field_size": self._safe_int(safe_text(cols[6])),
+                "bracket_number": self._safe_int(safe_text(cols[7])),
+                "horse_number": self._safe_int(safe_text(cols[8])),
                 "odds": self._to_float(safe_text(cols[9])),
-                "popularity": int(safe_text(cols[10]) or 0),
+                "popularity": self._safe_int(safe_text(cols[10])),
                 "finish_position": finish,
                 "jockey_name": safe_text(cols[12]),
                 "jockey_weight": self._to_float(safe_text(cols[13])),
                 "surface": m_dist.group(1) if m_dist else "",
                 "distance": int(m_dist.group(2)) if m_dist else 0,
+                "time_index": time_index,  # タイム指数M
                 "track_condition": safe_text(cols[16]) if len(cols) > 16 else "",
                 "finish_time": finish_time_str,
                 "time_sec": time_sec,
@@ -848,6 +960,13 @@ class HorseParser:
     def _to_float(s: str) -> float:
         nums = extract_numbers(s)
         return float(nums[0]) if nums else 0.0
+
+    @staticmethod
+    def _safe_int(v) -> int:
+        try:
+            return int(float(str(v).replace(",", "")))
+        except (ValueError, TypeError):
+            return 0
 
 
 # ═══════════════════════════════════════════════════════
@@ -973,19 +1092,42 @@ class SpeedIndexParser:
             if not horse_link:
                 continue
 
+            # 過去3走の指数を取得
+            speed_recent = [
+                self._extract_speed(row, "td.sk__index1"),
+                self._extract_speed(row, "td.sk__index2"),
+                self._extract_speed(row, "td.sk__index3"),
+            ]
+
+            # 全てのTxt_Cセルの値を取得（デバッグ用）
+            all_txt_c = []
+            for td in row.select("td.Txt_C"):
+                val = self._extract_speed_from_td(td)
+                if val > 0:
+                    all_txt_c.append(val)
+
+            # タイム指数M: 過去3走の直前のTxt_Cセルと推測
+            time_index_m = 0
+            all_tds = row.select("td")
+            for i, td in enumerate(all_tds):
+                if 'sk__index1' in str(td.get('class', [])):
+                    # sk__index1の1つ前のセルがタイム指数Mの可能性
+                    if i > 0:
+                        prev_td = all_tds[i-1]
+                        time_index_m = self._extract_speed_from_td(prev_td)
+                    break
+
             entry = {
                 "horse_number": self._get_int(row, "td.UmaBan, td[class*='Umaban']"),
                 "horse_name": safe_text(horse_link),
                 "horse_id": extract_id_from_url(safe_attr(horse_link, "href")),
+                "time_index_m": time_index_m,
                 "speed_max": self._extract_speed(row, "td.sk__max_index"),
                 "speed_avg": self._extract_speed(row, "td.sk__average_index"),
                 "speed_distance": self._extract_speed(row, "td.sk__max_distance_index"),
                 "speed_course": self._extract_speed(row, "td.sk__max_course_index"),
-                "speed_recent": [
-                    self._extract_speed(row, "td.sk__index1"),
-                    self._extract_speed(row, "td.sk__index2"),
-                    self._extract_speed(row, "td.sk__index3"),
-                ],
+                "speed_recent": speed_recent,
+                "all_txt_c": all_txt_c,  # デバッグ用: 全てのTxt_Cセルの値
                 "odds": self._get_float(row, "td.sk__odds, td.Odds"),
                 "popularity": self._get_int(row, "td.sk__ninki, td.Ninki"),
             }
@@ -994,22 +1136,37 @@ class SpeedIndexParser:
         return result
 
     @staticmethod
+    def _extract_speed_from_td(td) -> int:
+        """
+        tdエレメントから指数を抽出する
+        """
+        if not td:
+            return 0
+        # hiddenスパンのテキストを除外して取得
+        text_parts = []
+        for content in td.contents:
+            if hasattr(content, 'name'):
+                # タグの場合、Sort_Function_Data_Hiddenは除外
+                if content.name != 'span' or 'Sort_Function_Data_Hidden' not in content.get('class', []):
+                    text_parts.append(content.get_text(strip=True))
+            else:
+                # テキストノードの場合
+                text_parts.append(str(content).strip())
+
+        text = ''.join(text_parts)
+        if text in ("-", "未", "***", ""):
+            return 0
+        nums = extract_numbers(text)
+        return int(float(nums[0])) if nums else 0
+
+    @staticmethod
     def _extract_speed(row, selector: str) -> int:
         """
         タイム指数セルからソート用hidden値を除いた表示値を抽出する。
         <td><span class="Sort_Function_Data_Hidden">1086</span>86</td> → 86
         """
         td = row.select_one(selector)
-        if not td:
-            return 0
-        hidden = td.select_one("span.Sort_Function_Data_Hidden")
-        if hidden:
-            hidden.decompose()
-        text = td.get_text(strip=True)
-        if text in ("-", "未", "***", ""):
-            return 0
-        nums = extract_numbers(text)
-        return int(float(nums[0])) if nums else 0
+        return SpeedIndexParser._extract_speed_from_td(td)
 
     @staticmethod
     def _get_int(row, selector: str) -> int:

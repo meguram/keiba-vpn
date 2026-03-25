@@ -97,6 +97,18 @@
     margin-right: 8px;
   }
   .stop-clear-btn:hover { background: rgba(220, 38, 38, 0.32); border-color: #f87171; }
+  .btn-recover {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(251, 191, 36, 0.5);
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-right: 8px;
+  }
+  .btn-recover:hover { background: rgba(245, 158, 11, 0.35); border-color: #fbbf24; }
 
   .failed-actions-bar {
     display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
@@ -139,7 +151,22 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
   }
-  .worker-text { font-size: 13px; font-weight: 600; }
+  .worker-text { font-size: 13px; font-weight: 600; flex: 1; }
+  .btn-kick-worker {
+    padding: 7px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(34,197,94,0.5);
+    background: rgba(34,197,94,0.15);
+    color: #4ade80;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    display: none;
+  }
+  .btn-kick-worker:hover { background: rgba(34,197,94,0.3); border-color: #4ade80; }
+  .btn-kick-worker:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-kick-worker.show { display: inline-flex; align-items: center; gap: 5px; }
 
   .worker-log-panel {
     background: var(--surface);
@@ -458,12 +485,17 @@
 
 <div class="page-header">
   <div>
-    <h1>スクレイピングキュー</h1>
+    <h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">スクレイピングキュー</h1>
     <div class="subtitle">レース・馬・開催日単位の各種スクレイプを1本のキューで直列処理（未来レース・欠損補完・手動投入・API 共通）。各ブロックは見出しをクリックして折りたたみできます。</div>
   </div>
   <div>
+    <button type="button" class="btn-kick-worker show" id="btnKickWorkerHeader" onclick="kickWorker()" title="待機中のワーカーを即座に起動してキュー処理を開始します" style="display:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      ワーカー起動
+    </button>
     <button type="button" class="stop-clear-btn" onclick="stopAndClearQueue()" title="全ジョブを削除し、一時停止フラグは自動解除します">停止して全消去</button>
     <button class="clear-btn" onclick="clearCompleted()">完了ジョブをクリア</button>
+    <button type="button" class="btn-recover" onclick="recoverQueue()" title="孤児ジョブをpendingに戻し、ロックファイルを削除してキューを復旧">緊急復旧</button>
     <button class="refresh-btn" onclick="loadStatus()">更新</button>
   </div>
 </div>
@@ -677,6 +709,10 @@
   <div class="worker-status" id="workerStatus">
     <div class="worker-indicator worker-idle" id="workerIndicator"></div>
     <div class="worker-text" id="workerText">ワーカー: 待機中</div>
+    <button type="button" class="btn-kick-worker" id="btnKickWorker" onclick="kickWorker()" title="待機中のワーカーを即座に起動してキュー処理を開始します">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      ワーカー起動
+    </button>
   </div>
 
   <div class="worker-log-panel" id="workerLogPanel">
@@ -735,9 +771,9 @@
           <th>#</th>
           <th>状態</th>
           <th>種別</th>
-          <th>ターゲット</th>
           <th>タスク</th>
-          <th>登録時刻</th>
+          <th>件数</th>
+          <th>最初の登録時刻</th>
         </tr>
       </thead>
       <tbody id="pendingTableBody"></tbody>
@@ -1500,6 +1536,8 @@ async function loadStatus() {
     }
 
     // ワーカー（ロックファイル＋ジョブ状態の両方を説明）
+    const urgentLock = !!data.is_running_urgent;
+    const urgentPending = queue.urgent_pending || 0;
     const indicator = document.getElementById('workerIndicator');
     const workerText = document.getElementById('workerText');
     if (accessPaused) {
@@ -1507,14 +1545,27 @@ async function loadStatus() {
       workerText.textContent = 'ワーカー: 一時停止中（再開までキューを進めません）';
     } else if (lockOn && currentJob) {
       indicator.className = 'worker-indicator worker-running';
-      workerText.textContent = 'ワーカー: ロック取得中（レースデータを取得しています）';
+      const urgentTag = urgentLock ? ' ＋ ファストレーン稼働中' : '';
+      workerText.textContent = 'ワーカー: ロック取得中（レースデータを取得しています）' + urgentTag;
     } else if (lockOn && !currentJob) {
       indicator.className = 'worker-indicator worker-running';
       workerText.textContent = 'ワーカー: ロックあり（ジョブ一覧と不整合のときは前回の異常終了の可能性があります）';
+    } else if (urgentLock) {
+      indicator.className = 'worker-indicator worker-running';
+      workerText.textContent = 'ファストレーン: 最優先ジョブを処理中';
     } else {
       indicator.className = 'worker-indicator worker-idle';
       workerText.textContent = 'ワーカー: 待機中（処理可能）';
     }
+
+    const hasPending = (queue.pending || 0) > 0;
+    const canKickNormal = !lockOn && !accessPaused && hasPending;
+    const canKickUrgent = !urgentLock && !accessPaused && urgentPending > 0;
+    const showKick = canKickNormal || canKickUrgent;
+    const kickBtn = document.getElementById('btnKickWorker');
+    const kickBtnH = document.getElementById('btnKickWorkerHeader');
+    if (kickBtn) kickBtn.className = 'btn-kick-worker' + (showKick ? ' show' : '');
+    if (kickBtnH) kickBtnH.style.display = showKick ? '' : 'none';
 
     document.getElementById('runningCount').textContent = queue.running || 0;
     document.getElementById('pendingCount').textContent = queue.pending || 0;
@@ -1553,29 +1604,53 @@ async function loadStatus() {
       if (currentJobFold) currentJobFold.style.display = 'none';
     }
 
-    // 待機キュー
+    // 待機キュー（種別+タスクでグループ化）
     const pendingFold = document.getElementById('pendingFold');
     const pendBody = document.getElementById('pendingTableBody');
     const pendTitle = document.getElementById('pendingQueueTitleCount');
     if (pendingQ.length > 0) {
       if (pendingFold) pendingFold.style.display = '';
       pendTitle.textContent = `（${pendingQ.length}件）`;
-      pendBody.innerHTML = pendingQ.map((job, i) => {
-        const st = job.status === 'running' ? '実行中' : '待機中';
-        const stClass = job.status === 'running' ? 'var(--accent)' : 'var(--warn)';
+
+      // 種別+タスクでグループ化
+      const grouped = new Map();
+      let positionCounter = 0;
+      pendingQ.forEach((job) => {
         const jk = job.job_kind || 'race';
-        const jtid = job.target_id || job.race_id || '—';
-        const ttip = job.job_label || '';
-        return `
+        const tasks = (job.tasks || job.types || []).slice().sort().join(',');
+        const key = `${jk}::${tasks}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            kind: jk,
+            tasks: job.tasks || job.types || [],
+            jobs: [],
+            firstStatus: job.status,
+            firstQueuedAt: job.queued_at,
+            position: positionCounter++,
+          });
+        }
+        grouped.get(key).jobs.push(job);
+      });
+
+      // グループを表示
+      const rows = [];
+      for (const [key, group] of grouped) {
+        const count = group.jobs.length;
+        const st = group.firstStatus === 'running' ? '実行中' : '待機中';
+        const stClass = group.firstStatus === 'running' ? 'var(--accent)' : 'var(--warn)';
+        const tasksDisplay = formatJobTasksDisplay(group.jobs[0]);
+
+        rows.push(`
         <tr>
-          <td style="font-weight:700;color:var(--warn)">${i + 1}</td>
+          <td style="font-weight:700;color:var(--warn)">${group.position + 1}</td>
           <td style="font-weight:600;color:${stClass}">${escapeHtml(st)}</td>
-          <td>${escapeHtml(jk)}</td>
-          <td style="font-size:10px;font-family:monospace;max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(ttip)}">${escapeHtml(jtid)}</td>
-          <td style="font-size:10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(formatJobTasksDisplay(job))}">${escapeHtml(formatJobTasksDisplay(job))}</td>
-          <td style="font-size:10px">${escapeHtml(formatTime(job.queued_at))}</td>
-        </tr>`;
-      }).join('');
+          <td>${escapeHtml(group.kind)}</td>
+          <td style="font-size:10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(tasksDisplay)}">${escapeHtml(tasksDisplay)}</td>
+          <td style="font-weight:700;color:#fff">${count}件</td>
+          <td style="font-size:10px">${escapeHtml(formatTime(group.firstQueuedAt))}</td>
+        </tr>`);
+      }
+      pendBody.innerHTML = rows.join('');
     } else {
       if (pendingFold) pendingFold.style.display = 'none';
       pendTitle.textContent = '';
@@ -1704,6 +1779,58 @@ async function stopAndClearQueue() {
     await loadStatus();
   } catch (e) {
     alert('通信エラー: ' + (e.message || e));
+  }
+}
+
+async function recoverQueue() {
+  if (!confirm('キューが停止している場合の緊急復旧を実行します。\n\n' +
+    '・running状態の孤児ジョブをpendingに戻します\n' +
+    '・デッドプロセスのロックファイルを削除します\n\n' +
+    '実行しますか？')) {
+    return;
+  }
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/recover'), { method: 'POST' });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      alert('失敗: ' + (data.error || resp.statusText || String(resp.status)));
+      return;
+    }
+    const msg = data.message || 'キューを復旧しました';
+    const details = [];
+    if (data.requeued_jobs > 0) details.push(`${data.requeued_jobs}件のジョブを待機に戻しました`);
+    if (data.lock_removed) details.push('ロックファイルを削除しました');
+    alert(msg + (details.length > 0 ? '\n\n' + details.join('\n') : ''));
+    await loadStatus();
+  } catch (e) {
+    alert('通信エラー: ' + (e.message || e));
+  }
+}
+
+async function kickWorker() {
+  const btn = document.getElementById('btnKickWorker');
+  const btnH = document.getElementById('btnKickWorkerHeader');
+  if (btn) btn.disabled = true;
+  if (btnH) btnH.disabled = true;
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/kick'), { method: 'POST' });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      alert('起動失敗: ' + (data.error || resp.statusText || String(resp.status)));
+      return;
+    }
+    if (data.status === 'no_jobs') {
+      alert(data.message || '処理待ちのジョブがありません');
+    } else if (data.status === 'already_running') {
+      alert(data.message || 'ワーカーは既に実行中です');
+    } else {
+      await loadStatus();
+    }
+  } catch (e) {
+    alert('通信エラー: ' + (e.message || e));
+  } finally {
+    if (btn) btn.disabled = false;
+    if (btnH) btnH.disabled = false;
   }
 }
 

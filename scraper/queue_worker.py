@@ -34,8 +34,8 @@ def main():
                 logger.info("未処理ジョブ検出: %s", next_job.get("race_id"))
                 queue.process_queue()
             else:
-                # ジョブがない場合は30秒待機
-                time.sleep(30)
+                # ジョブがない場合は15秒待機
+                time.sleep(15)
 
         except KeyboardInterrupt:
             logger.info("キューワーカー終了")
