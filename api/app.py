@@ -58,15 +58,119 @@ _queue_worker_thread: threading.Thread | None = None
 _queue_worker_stop = threading.Event()
 # マルチワーカー時は flock で1プロセスだけがキューループを回す（JSON 競合防止）
 _queue_runner_leader_fh = None
+_queue_is_leader = False
+
+# ワーカー健康状態（ファイルベースで全プロセスから参照可能）
+_WORKER_HEALTH_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data", "queue", ".worker_health.json",
+)
 
 # ── data/cache 定期クリーンアップ（HybridStorage.cleanup_disk_cache） ──
 _disk_cache_cleanup_thread: threading.Thread | None = None
 _disk_cache_cleanup_stop = threading.Event()
 
 
+_AUTO_RESUME_DELAY = 120  # アクセス一時停止後の自動復帰待機（秒）
+
+
+def _write_worker_health(*, heartbeat: float = 0, error: str = "", error_ts: float = 0, crash_count: int = 0):
+    """ワーカースレッドの状態をファイルに書き込む（リーダーのみ呼ぶ）。"""
+    try:
+        data = {}
+        try:
+            with open(_WORKER_HEALTH_FILE, "r") as f:
+                data = json.loads(f.read())
+        except (OSError, json.JSONDecodeError):
+            pass
+        if heartbeat:
+            data["heartbeat"] = heartbeat
+            data["pid"] = os.getpid()
+        if error:
+            data["last_error"] = error
+            data["last_error_ts"] = error_ts
+        if crash_count:
+            data["crash_count"] = crash_count
+        with open(_WORKER_HEALTH_FILE, "w") as f:
+            f.write(json.dumps(data))
+    except OSError:
+        pass
+
+
+def get_worker_health() -> dict:
+    """ワーカースレッドの健康状態を返す（全プロセスから呼べる）。"""
+    from scraper.job_queue import LOCK_FILE
+    try:
+        with open(_WORKER_HEALTH_FILE, "r") as f:
+            data = json.loads(f.read())
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    hb = data.get("heartbeat", 0)
+    pid = data.get("pid", 0)
+    age = _time.time() - hb if hb > 0 else -1
+
+    alive = False
+    pid_alive = False
+    if pid > 0:
+        try:
+            os.kill(pid, 0)
+            pid_alive = True
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+
+    if pid_alive:
+        if age >= 0 and age < 120:
+            alive = True
+        elif LOCK_FILE.exists():
+            alive = True
+
+    processing = LOCK_FILE.exists() and alive
+
+    return {
+        "alive": alive,
+        "processing": processing,
+        "heartbeat": hb,
+        "heartbeat_age_sec": round(age, 1) if age >= 0 else None,
+        "last_error": data.get("last_error"),
+        "last_error_ts": data.get("last_error_ts"),
+        "crash_count": data.get("crash_count", 0),
+    }
+
+
+def _ensure_worker_thread():
+    """ワーカースレッドが死んでいたら再起動する。リーダーでなくてもリーダー権を奪取して起動する。"""
+    global _queue_worker_thread, _queue_is_leader
+    if _queue_worker_stop.is_set():
+        return
+    if _queue_is_leader:
+        thr = _queue_worker_thread
+        if thr is not None and thr.is_alive():
+            return
+    else:
+        health = get_worker_health()
+        if health.get("alive"):
+            return
+        if not _try_acquire_queue_runner_leader():
+            return
+        _queue_is_leader = True
+        logger.warning("前リーダーが停止したため、このプロセスが新リーダーになります")
+
+    health = get_worker_health()
+    cc = health.get("crash_count", 0) + 1
+    logger.warning(
+        "キューワーカースレッドが停止していたため再起動します (通算クラッシュ: %d)", cc,
+    )
+    _write_worker_health(crash_count=cc)
+    _queue_worker_thread = threading.Thread(
+        target=_queue_worker_loop, daemon=True, name="queue-worker"
+    )
+    _queue_worker_thread.start()
+
+
 def _queue_worker_loop():
-    """スクレイピングキューを処理するワーカー"""
+    """スクレイピングキューを処理するワーカー（クラッシュ耐性強化版）"""
     from scraper.job_queue import ScrapeJobQueue
+    from scraper.scrape_access_pause import read_access_pause, clear_access_pause
 
     _worker_log = logging.getLogger("queue.worker")
     _worker_log.setLevel(logging.INFO)
@@ -78,37 +182,64 @@ def _queue_worker_loop():
 
     queue = ScrapeJobQueue()
 
-    while not _queue_worker_stop.is_set():
-        try:
-            next_job = queue.get_next_job()
-            if not next_job:
-                queue.requeue_stale_running_jobs(assume_lock_holder=False)
-                next_job = queue.get_next_job()
-            if next_job:
-                # 別スレッド（API からの process_queue 等）が .scrape.lock 中だと
-                # process_queue は即 return するため、待機しないと無限ループでログが爆発する
-                if queue.is_locked():
-                    if _queue_worker_stop.wait(timeout=2):
-                        break
-                    continue
-                _worker_log.info(
-                    "ジョブ処理開始: %s",
-                    next_job.get("job_label")
-                    or next_job.get("target_id")
-                    or next_job.get("race_id")
-                    or "?",
-                )
-                queue.process_queue()
-            else:
-                # ジョブがない場合は30秒待機
-                if _queue_worker_stop.wait(timeout=30):
-                    break
-        except Exception as e:
-            _worker_log.error("ワーカーエラー: %s", e, exc_info=True)
-            if _queue_worker_stop.wait(timeout=10):
-                break
+    try:
+        while not _queue_worker_stop.is_set():
+            _write_worker_health(heartbeat=_time.time())
+            try:
+                pause = read_access_pause()
+                if pause.get("active"):
+                    paused_at = pause.get("paused_at", "")
+                    try:
+                        from datetime import datetime as _dt
+                        pt = _dt.fromisoformat(paused_at)
+                        elapsed = (_dt.now() - pt).total_seconds()
+                    except Exception:
+                        elapsed = _AUTO_RESUME_DELAY + 1
 
-    _worker_log.info("スクレイピングキューワーカー終了")
+                    if elapsed >= _AUTO_RESUME_DELAY:
+                        _worker_log.info(
+                            "アクセス一時停止から %.0f秒経過 — 自動復帰します", elapsed)
+                        clear_access_pause()
+                    else:
+                        remain = _AUTO_RESUME_DELAY - elapsed
+                        if _queue_worker_stop.wait(timeout=min(remain, 30)):
+                            break
+                        continue
+
+                queue.requeue_stale_running_jobs(assume_lock_holder=False)
+
+                next_job = queue.get_next_job()
+                if next_job:
+                    if queue.is_locked():
+                        if _queue_worker_stop.wait(timeout=2):
+                            break
+                        continue
+                    _worker_log.info(
+                        "ジョブ処理開始: %s",
+                        next_job.get("job_label")
+                        or next_job.get("target_id")
+                        or next_job.get("race_id")
+                        or "?",
+                    )
+                    queue.process_queue()
+                    invalidate_status_cache()
+                else:
+                    if _queue_worker_stop.wait(timeout=30):
+                        break
+            except Exception as e:
+                msg = f"{type(e).__name__}: {e}"
+                _write_worker_health(error=msg, error_ts=_time.time())
+                _worker_log.error("ワーカーループ内エラー: %s", e, exc_info=True)
+                if _queue_worker_stop.wait(timeout=10):
+                    break
+    except BaseException as e:
+        msg = f"FATAL {type(e).__name__}: {e}"
+        _write_worker_health(error=msg, error_ts=_time.time())
+        _worker_log.critical(
+            "ワーカースレッドが致命的エラーで停止します: %s", e, exc_info=True)
+        raise
+    finally:
+        _worker_log.info("スクレイピングキューワーカー終了")
 
 
 STRUCTURE_CHECK_HOUR_JST = 6
@@ -220,7 +351,9 @@ async def lifespan(app):
     logger.info("data/cache クリーンアップスレッド起動")
 
     # スクレイピングキューワーカー（マルチワーカー時はリーダー1プロセスのみ）
+    global _queue_is_leader
     if _try_acquire_queue_runner_leader():
+        _queue_is_leader = True
         _queue_worker_stop.clear()
         _queue_worker_thread = threading.Thread(
             target=_queue_worker_loop, daemon=True, name="queue-worker"
@@ -228,6 +361,7 @@ async def lifespan(app):
         _queue_worker_thread.start()
         logger.info("スクレイピングキューワーカー起動（当プロセスがリーダー）")
     else:
+        _queue_is_leader = False
         _queue_worker_thread = None
         logger.info("スクレイピングキューワーカーは別ワーカーが担当（スキップ）")
 
@@ -580,13 +714,22 @@ _STEEPLECHASE_PATTERN = _re.compile(r"障害|ジャンプ|ハードル|スティ
 
 _status_cache: dict[str, tuple[float, dict]] = {}
 _status_cache_lock = threading.Lock()
-_STATUS_CACHE_TTL = 300       # fresh: 5 minutes
-_STATUS_CACHE_STALE = 3600    # stale-while-revalidate: return stale up to 1 hour
+_STATUS_CACHE_TTL = 30        # fresh: 30 seconds (active scraping でもリアルタイム反映)
+_STATUS_CACHE_STALE = 300     # stale-while-revalidate: 5 minutes
 _status_bg_refreshing: set[str] = set()
 _status_bg_refreshing_lock = threading.Lock()
 
 _horse_ids_cache: dict[str, list[str]] = {}
 _horse_ids_cache_lock = threading.Lock()
+
+
+def invalidate_status_cache(date: str = ""):
+    """指定日のステータスキャッシュを無効化。空文字なら全日付。"""
+    with _status_cache_lock:
+        if date:
+            _status_cache.pop(date, None)
+        else:
+            _status_cache.clear()
 
 
 def _get_cached_status(date: str) -> tuple[dict | None, bool]:
@@ -2646,16 +2789,14 @@ async def get_scrape_queue_status():
     try:
         from scraper.job_queue import ScrapeJobQueue
 
+        _ensure_worker_thread()
+
         queue = ScrapeJobQueue()
-        # ロック無しで running だけ残る孤児は status 取得時に pending へ戻し、UI とワーカーが復帰できるようにする
         if not queue.is_locked():
-            jobs_preview = queue.load_queue()
-            if any(j.get("status") == "running" for j in jobs_preview) and not any(
-                j.get("status") == "pending" for j in jobs_preview
-            ):
-                queue.requeue_stale_running_jobs(assume_lock_holder=False)
+            queue.requeue_stale_running_jobs(assume_lock_holder=False)
 
         status = queue.get_status()
+        status["worker_health"] = get_worker_health()
 
         # 未リロードの古い job_queue がメモリに残っていると pending_queue / active_jobs が欠落する。
         # フロントが空表示になるのを防ぐため、欠けていれば生キューから必ず付与する。

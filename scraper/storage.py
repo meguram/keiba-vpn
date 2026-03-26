@@ -804,7 +804,7 @@ class HybridStorage:
     _blob_list_cache: dict[str, tuple[float, dict[str, float]]] = {}
     _blob_list_lock = threading.Lock()
     _BLOB_LIST_TTL_PAST = 3600     # 1h — 過去年 (不変)
-    _BLOB_LIST_TTL_CURRENT = 600   # 10min — 当年
+    _BLOB_LIST_TTL_CURRENT = 60    # 1min — 当年 (モニターリアルタイム反映)
 
     def _blob_list_ttl(self, year: str) -> float:
         current_year = datetime.now(JST).strftime("%Y")
@@ -813,7 +813,7 @@ class HybridStorage:
         return self._BLOB_LIST_TTL_CURRENT
 
     _BLOB_DISK_CACHE_TTL_PAST = 3600    # 1h — 過去年の blob リスト (ほぼ不変)
-    _BLOB_DISK_CACHE_TTL_CURRENT = 300  # 5min — 当年の blob リスト
+    _BLOB_DISK_CACHE_TTL_CURRENT = 60   # 1min — 当年の blob リスト
 
     def _blob_disk_cache_path(self, category: str, year: str) -> Path:
         return self._base_dir / "data" / "cache" / "_blob_list" / f"{category}_{year}.json"

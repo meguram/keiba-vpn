@@ -147,6 +147,7 @@
   .worker-running { background: var(--ok); }
   .worker-idle { background: var(--text-dim); animation: none; }
   .worker-paused { background: var(--warn); animation: none; }
+  .worker-dead { background: #ef4444; animation: pulse 0.8s infinite; }
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
@@ -713,6 +714,7 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       ワーカー起動
     </button>
+    <div class="worker-health-detail" id="workerHealthDetail" style="display:none; margin-top:6px; font-size:11px; color:var(--text-dim)"></div>
   </div>
 
   <div class="worker-log-panel" id="workerLogPanel">
@@ -1538,24 +1540,59 @@ async function loadStatus() {
     // ワーカー（ロックファイル＋ジョブ状態の両方を説明）
     const urgentLock = !!data.is_running_urgent;
     const urgentPending = queue.urgent_pending || 0;
+    const wh = data.worker_health || {};
+    const workerAlive = wh.alive !== false;
     const indicator = document.getElementById('workerIndicator');
     const workerText = document.getElementById('workerText');
-    if (accessPaused) {
+    const healthEl = document.getElementById('workerHealthDetail');
+
+    const workerProcessing = wh.processing;
+    if (!workerAlive) {
+      indicator.className = 'worker-indicator worker-dead';
+      workerText.textContent = 'ワーカー: 停止（スレッド異常終了 — 自動再起動を試みます）';
+      workerText.style.color = '#ef4444';
+    } else if (accessPaused) {
       indicator.className = 'worker-indicator worker-paused';
       workerText.textContent = 'ワーカー: 一時停止中（再開までキューを進めません）';
+      workerText.style.color = '';
     } else if (lockOn && currentJob) {
       indicator.className = 'worker-indicator worker-running';
       const urgentTag = urgentLock ? ' ＋ ファストレーン稼働中' : '';
       workerText.textContent = 'ワーカー: ロック取得中（レースデータを取得しています）' + urgentTag;
+      workerText.style.color = '';
     } else if (lockOn && !currentJob) {
       indicator.className = 'worker-indicator worker-running';
       workerText.textContent = 'ワーカー: ロックあり（ジョブ一覧と不整合のときは前回の異常終了の可能性があります）';
+      workerText.style.color = '';
     } else if (urgentLock) {
       indicator.className = 'worker-indicator worker-running';
       workerText.textContent = 'ファストレーン: 最優先ジョブを処理中';
+      workerText.style.color = '';
     } else {
       indicator.className = 'worker-indicator worker-idle';
       workerText.textContent = 'ワーカー: 待機中（処理可能）';
+      workerText.style.color = '';
+    }
+
+    if (healthEl) {
+      const parts = [];
+      if (wh.heartbeat_age_sec != null) {
+        const age = wh.heartbeat_age_sec;
+        parts.push('最終応答: ' + (age < 60 ? Math.round(age) + '秒前' : Math.round(age / 60) + '分前'));
+      }
+      if (wh.crash_count > 0) {
+        parts.push('再起動回数: ' + wh.crash_count);
+      }
+      if (wh.last_error) {
+        const errAge = wh.last_error_ts ? Math.round((Date.now() / 1000 - wh.last_error_ts) / 60) : '?';
+        parts.push('<span style="color:#ef4444">最終エラー (' + errAge + '分前): ' + escapeHtml(wh.last_error).substring(0, 200) + '</span>');
+      }
+      if (parts.length) {
+        healthEl.style.display = '';
+        healthEl.innerHTML = parts.join(' · ');
+      } else {
+        healthEl.style.display = 'none';
+      }
     }
 
     const hasPending = (queue.pending || 0) > 0;

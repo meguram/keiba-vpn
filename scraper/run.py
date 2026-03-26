@@ -456,11 +456,16 @@ class ScraperRunner:
                 return ex
 
         url = self.HORSE_PED_URL.format(horse_id=horse_id)
-        html = self.client.fetch(url)
+        try:
+            html = self.client.fetch(url)
+        except Exception as e:
+            logger.error("取得失敗 [horse_pedigree_5gen/%s]: %s", horse_id, e)
+            return None
         self.archive.save("horse_ped", horse_id, html)
         ancestors = parse_blood_table_5gen(html)
         if len(ancestors) < 5:
-            raise ValueError(f"5世代血統 祖先不足: {len(ancestors)}")
+            logger.warning("5世代血統 祖先不足: %s (%d頭)", horse_id, len(ancestors))
+            return None
         rec = build_pedigree_record(
             horse_id, ancestors, source="queue_horse_pedigree_5gen"
         )

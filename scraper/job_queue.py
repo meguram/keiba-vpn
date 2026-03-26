@@ -14,6 +14,7 @@ import logging
 import os
 import secrets
 import tempfile
+import threading
 import time
 from contextlib import contextmanager
 from datetime import datetime
@@ -111,16 +112,18 @@ class ScrapeJobQueue:
             return False
         return False
 
+    _LOCK_TIMEOUT = 1800  # 30分
+
     def is_locked(self) -> bool:
         """現在スクレイピング処理が実行中かチェック"""
         if not self.lock_file.exists():
             return False
 
-        # ロックファイルのタイムスタンプをチェック（10分以上古い場合は無効化）
         try:
             mtime = self.lock_file.stat().st_mtime
-            if time.time() - mtime > 600:  # 10分
-                logger.warning("古いロックファイルを削除: %s", self.lock_file)
+            if time.time() - mtime > self._LOCK_TIMEOUT:
+                logger.warning("古いロックファイルを削除 (%.0f分超): %s",
+                               self._LOCK_TIMEOUT / 60, self.lock_file)
                 self.lock_file.unlink()
                 return False
         except Exception as e:
@@ -156,6 +159,21 @@ class ScrapeJobQueue:
         except Exception as e:
             logger.error("ロック取得エラー: %s", e)
             return False
+
+    def touch_lock(self):
+        """ロックファイルのmtimeを更新（ハートビート）。長時間ジョブ中にタイムアウト回避。"""
+        try:
+            if self.lock_file.exists():
+                self.lock_file.touch()
+            else:
+                with open(self.lock_file, "w") as f:
+                    f.write(json.dumps({
+                        "pid": os.getpid(),
+                        "timestamp": time.time(),
+                        "datetime": datetime.now().isoformat(),
+                    }))
+        except OSError:
+            pass
 
     def release_lock(self):
         """ロックを解放"""
@@ -520,6 +538,18 @@ class ScrapeJobQueue:
                 break
         self.save_queue(jobs)
 
+    def _requeue_with_retry(self, job_id: str, retry_count: int) -> None:
+        """ジョブを pending に戻し、リトライカウントを記録。"""
+        jobs = self.load_queue()
+        for job in jobs:
+            if job.get("job_id") == job_id:
+                job["status"] = "pending"
+                job["started_at"] = None
+                job["retry_count"] = retry_count
+                job["error"] = None
+                break
+        self.save_queue(jobs)
+
     def pause_queue_for_access_error(self, reason: str) -> int:
         """
         実行中ジョブをすべて pending に戻し、アクセス系一時停止フラグを立てる。
@@ -674,6 +704,18 @@ class ScrapeJobQueue:
         self.save_queue([])
         return n
 
+    def _start_lock_heartbeat(self) -> threading.Event:
+        """ロックファイルのmtimeを定期的に更新するハートビートスレッドを起動。"""
+        stop_evt = threading.Event()
+
+        def _heartbeat():
+            while not stop_evt.wait(timeout=60):
+                self.touch_lock()
+
+        t = threading.Thread(target=_heartbeat, daemon=True, name="lock-heartbeat")
+        t.start()
+        return stop_evt
+
     def process_queue(self):
         """
         キューを処理する（バックグラウンドワーカーから呼ばれる）
@@ -686,6 +728,7 @@ class ScrapeJobQueue:
             logger.info("既にスクレイピング処理が実行中です")
             return
 
+        heartbeat_stop = self._start_lock_heartbeat()
         mark_queue_worker_active(True)
         try:
             self.requeue_stale_running_jobs(assume_lock_holder=True)
@@ -708,6 +751,9 @@ class ScrapeJobQueue:
                 logger.info("ジョブ開始: %s (%s)", job_id, label)
                 self.update_job_status(job_id, "running")
 
+                max_retries = int(job.get("max_retries", 2))
+                retry_count = int(job.get("retry_count", 0))
+
                 try:
                     self._execute_scraping(job)
                     self.update_job_status(job_id, "completed")
@@ -722,10 +768,22 @@ class ScrapeJobQueue:
                         )
                         self.pause_queue_for_access_error(str(e))
                         break
-                    logger.error("ジョブ失敗: %s - %s", job_id, e, exc_info=True)
-                    self.update_job_status(job_id, "failed", str(e))
+
+                    if retry_count < max_retries:
+                        logger.warning(
+                            "ジョブ失敗 (リトライ %d/%d): %s - %s",
+                            retry_count + 1, max_retries, job_id, e,
+                        )
+                        self._requeue_with_retry(job_id, retry_count + 1)
+                        time.sleep(2)
+                    else:
+                        logger.error("ジョブ失敗 (リトライ上限): %s - %s", job_id, e, exc_info=True)
+                        self.update_job_status(job_id, "failed", str(e))
+
+                self.touch_lock()
 
         finally:
+            heartbeat_stop.set()
             mark_queue_worker_active(False)
             self.release_lock()
 
@@ -737,7 +795,7 @@ class ScrapeJobQueue:
             return False
         try:
             mtime = lf.stat().st_mtime
-            if time.time() - mtime > 600:
+            if time.time() - mtime > self._LOCK_TIMEOUT:
                 logger.warning("古い urgent ロックファイルを削除: %s", lf)
                 lf.unlink()
                 return False
@@ -854,8 +912,16 @@ class ScrapeJobQueue:
                         )
                         self.pause_queue_for_access_error(str(e))
                         break
-                    logger.error("[fast-lane] ジョブ失敗: %s - %s", job_id, e, exc_info=True)
-                    self.update_job_status(job_id, "failed", str(e))
+                    retry_count = int(job.get("retry_count", 0))
+                    max_retries = int(job.get("max_retries", 2))
+                    if retry_count < max_retries:
+                        logger.warning("[fast-lane] リトライ %d/%d: %s",
+                                       retry_count + 1, max_retries, job_id)
+                        self._requeue_with_retry(job_id, retry_count + 1)
+                        time.sleep(2)
+                    else:
+                        logger.error("[fast-lane] ジョブ失敗: %s - %s", job_id, e, exc_info=True)
+                        self.update_job_status(job_id, "failed", str(e))
 
         finally:
             self.release_lock_urgent()

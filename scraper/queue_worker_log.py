@@ -29,6 +29,16 @@ def is_queue_worker_active() -> bool:
 
 class _QueueWorkerContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
+        tname = getattr(record, "threadName", "") or ""
+        is_worker_thread = tname == "queue-worker"
+        if is_worker_thread:
+            n = record.name
+            return (
+                n.startswith("scraper")
+                or n.startswith("queue")
+                or n.startswith("urllib3")
+                or n == "requests"
+            )
         if not is_queue_worker_active():
             return False
         n = record.name
