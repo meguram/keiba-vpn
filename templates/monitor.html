@@ -1990,6 +1990,7 @@ async function triggerDateScrape(date, force) {
         target_id: date,
         tasks: ['date_all'],
         smart_skip: !force,
+        overwrite: !!force,
       }),
     });
     const data = await res.json();

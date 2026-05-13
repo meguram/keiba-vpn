@@ -465,10 +465,72 @@ class HybridStorage:
             self._cache_put(f"{category}/{key}", data)
             if gated:
                 self._weekly_disk_l2_maybe_write(category, key, data)
+            self._maybe_write_local_mirror(category, key, data)
         except Exception as e:
             logger.error("GCS save 失敗 [%s/%s]: %s", category, key, e)
             self._mark_gcs_failure()
             raise
+
+    def _local_mirror_path(self, category: str, key: str) -> Path:
+        """
+        GCS ミラーの常設コピー（data/local/mirror/...）。
+        レイアウトは L2 キャッシュと同様に、馬は prefix、レースは年フォルダ。
+        """
+        id_type = self.CATEGORY_MAP.get(category, "race")
+        root = self._base_dir / "data" / "local" / "mirror"
+        if id_type == "other":
+            return root / "others" / category / f"{key}.json"
+        if id_type == "horse":
+            prefix = key[:4] if len(key) >= 4 else "_"
+            return root / category / prefix / f"{key}.json"
+        if id_type == "local_only":
+            return self._local_path(category, key)
+        year = key[:4] if len(key) >= 4 else "_"
+        return root / category / year / f"{key}.json"
+
+    def _maybe_write_local_mirror(
+        self, category: str, key: str, data: dict[str, Any]
+    ) -> None:
+        """local_mirror_config で有効なカテゴリなら、GCS と同形の JSON を data/local/mirror/ に保存。"""
+        if self._is_local_only(category):
+            return
+        try:
+            from scraper import persist_context
+
+            if persist_context.is_skip_local_mirror():
+                return
+        except Exception:
+            pass
+        try:
+            from scraper import local_mirror_config
+
+            cfg = local_mirror_config.get_local_mirror_config(self._base_dir)
+            if not bool(cfg.get("enabled")):
+                return
+            cats = {str(c).strip() for c in (cfg.get("categories") or [])}
+            if str(category) not in cats:
+                return
+        except Exception as e:
+            logger.debug("local mirror config 取得失敗: %s", e)
+            return
+        path = self._local_mirror_path(category, key)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=1)
+            logger.debug("local mirror: %s", path)
+        except Exception as e:
+            logger.warning("local mirror 保存失敗 [%s/%s]: %s", category, key, e)
+
+    def local_mirror_exists(
+        self, category: str, key: str, *, min_bytes: int = 4
+    ) -> bool:
+        """常設ローカルミラーファイルが存在し、一定サイズ以上なら True。"""
+        p = self._local_mirror_path(category, key)
+        try:
+            return p.is_file() and p.stat().st_size >= min_bytes
+        except OSError:
+            return False
 
     def _save_local(self, category: str, key: str, data: dict[str, Any]):
         path = self._local_path(category, key)

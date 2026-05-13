@@ -51,6 +51,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from utils.keiba_logging import script_basic_config
+
 logger = logging.getLogger("scraper.auto_scrape")
 
 LEAD_MINUTES = 15  # 発走何分前にスクレイプするか
@@ -563,10 +565,7 @@ TASKS = {
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    script_basic_config()
 
     parser = argparse.ArgumentParser(description="JRA開催スケジュール連動 自動スクレイピング")
     parser.add_argument("--task", choices=list(TASKS.keys()),

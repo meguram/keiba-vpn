@@ -116,6 +116,7 @@ DEV_ONLY_PAGES: set[str] = {
     "/monitor",
     "/data-viewer",
     "/betting",
+    "/server-logs",
 }
 
 PUBLIC_API_PREFIXES: list[str] = [
@@ -140,6 +141,7 @@ PUBLIC_API_PREFIXES: list[str] = [
 ]
 
 DEV_ONLY_API_PREFIXES: list[str] = [
+    "/api/admin/",
     "/api/monitor/",
     "/api/scrape-trigger",
     "/api/scrape-jobs",

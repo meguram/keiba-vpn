@@ -1,0 +1,974 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>レースパフォーマンス算出システム — 完全版</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f172a;
+    --bg-soft: #111c34;
+    --panel: #15213c;
+    --panel-2: #1b294a;
+    --border: #243358;
+    --text: #e6ecff;
+    --muted: #9aa7c7;
+    --accent: #4f8bff;
+    --accent-2: #7aa9ff;
+    --good: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --chip-bg: #1d2b50;
+    --chip-fg: #cfdcff;
+    --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  /* Sidebar */
+  aside.sidebar {
+    position: sticky; top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border);
+    padding: 28px 22px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 24px;
+  }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #7c5cff);
+    display: grid; place-items: center;
+    font-weight: 700; color: white;
+    box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; letter-spacing: .04em; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted);
+    margin: 16px 0 6px;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  nav.toc a {
+    display: block;
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 8px;
+    margin: 2px 0;
+    border-left: 2px solid transparent;
+  }
+  nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+
+  /* Main */
+  main.content {
+    padding: 48px 56px 96px;
+    max-width: 1100px;
+    width: 100%;
+  }
+  header.hero {
+    padding: 32px 32px 28px;
+    border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(124,92,255,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2);
+    font-size: 12px; letter-spacing: .2em; font-weight: 700;
+    text-transform: uppercase;
+  }
+  header.hero h1 {
+    margin: 8px 0 10px;
+    font-size: 30px; line-height: 1.3;
+  }
+  header.hero p { color: var(--muted); margin: 0; max-width: 760px; }
+  .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .tag {
+    background: var(--chip-bg);
+    color: var(--chip-fg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 11px;
+    letter-spacing: .04em;
+  }
+
+  section.section {
+    margin-top: 40px;
+  }
+  section.section h2 {
+    font-size: 22px;
+    margin: 0 0 6px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  section.section h2 .num {
+    color: var(--accent-2);
+    font-weight: 700;
+    font-size: 14px;
+    font-family: "JetBrains Mono", monospace;
+  }
+  section.section h3 { margin: 20px 0 8px; font-size: 17px; }
+  section.section h4 { margin: 16px 0 6px; font-size: 14px; color: var(--accent-2); }
+  section.section p, section.section li { color: #d8e0f7; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin: 14px 0;
+    box-shadow: var(--shadow);
+  }
+  .card.soft { background: var(--panel-2); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; }
+    main.content { padding: 28px 20px 80px; }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  }
+
+  .metric {
+    background: linear-gradient(180deg, #182747, #131f3c);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .metric .label {
+    color: var(--muted); font-size: 11px;
+    letter-spacing: .1em; text-transform: uppercase; font-weight: 600;
+  }
+  .metric .value {
+    margin-top: 6px;
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 600; font-size: 22px; color: var(--text);
+  }
+  .metric .delta { font-size: 11px; color: var(--good); margin-top: 4px; }
+  .metric.alt .value { color: var(--accent-2); }
+
+  table.table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    background: var(--panel);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  table.table th, table.table td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  table.table th {
+    background: #1a2748;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: .08em;
+  }
+  table.table tr:last-child td { border-bottom: 0; }
+  table.table td.mono, table.table th.mono { font-family: "JetBrains Mono", monospace; }
+  table.table td .ok { color: var(--good); font-weight: 600; }
+  table.table td .ng { color: var(--bad); font-weight: 600; }
+  table.table td .wn { color: var(--warn); font-weight: 600; }
+
+  pre.code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    color: #cfe2ff;
+  }
+  code.inline {
+    background: #1a2748;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1px 6px;
+    font-size: 12.5px;
+    color: #cfe2ff;
+  }
+
+  .pillset { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill {
+    background: var(--chip-bg);
+    border: 1px solid var(--border);
+    color: var(--chip-fg);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .pill.good { border-color: rgba(74,222,128,.5); color: #b6f3cd; }
+  .pill.warn { border-color: rgba(251,191,36,.45); color: #ffe6a8; }
+  .pill.bad  { border-color: rgba(248,113,113,.45); color: #ffc6c6; }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: rgba(79,139,255,.08);
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin: 12px 0;
+  }
+  .callout.warn { border-left-color: var(--warn); background: rgba(251,191,36,.06); }
+  .callout.good { border-left-color: var(--good); background: rgba(74,222,128,.07); }
+  .callout h4 { margin: 0 0 6px; font-size: 13px; color: var(--text); }
+  .callout p { margin: 0; color: #e7eeff; font-size: 13.5px; }
+
+  .mermaid {
+    background: #0b1428;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  ul.clean { padding-left: 20px; }
+  ul.clean li { margin: 4px 0; }
+  ul.bullets { list-style: none; padding: 0; margin: 6px 0; }
+  ul.bullets li {
+    position: relative; padding-left: 18px; margin: 4px 0;
+  }
+  ul.bullets li::before {
+    content: ""; position: absolute; left: 4px; top: 11px;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* Status row */
+  .status {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    margin: 10px 0 4px;
+  }
+  .status .dot {
+    width: 9px; height: 9px; border-radius: 50%; display: inline-block;
+    margin-right: 6px; vertical-align: middle;
+  }
+  .status .dot.good { background: var(--good); }
+  .status .dot.warn { background: var(--warn); }
+  .status .dot.bad  { background: var(--bad); }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 22px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    display: flex; justify-content: space-between;
+  }
+
+  /* Anchor offset */
+  section.section { scroll-margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">RP</div>
+      <div>
+        <div class="title">Race Performance</div>
+        <div class="sub">Rating System / Complete Edition</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <h4>Overview</h4>
+      <a href="#purpose">1. 目的</a>
+      <a href="#policy">2. 基本方針</a>
+      <a href="#architecture">3. システム全体像</a>
+
+      <h4>Indicators</h4>
+      <a href="#outputs">4. 出力指標</a>
+      <a href="#core-time">5. TimeFigure</a>
+      <a href="#core-margin">6. MarginAdjustment</a>
+      <a href="#core-weight">7. WeightAdjustment</a>
+      <a href="#core-track">8. TrackVariant</a>
+      <a href="#core-pace">9. PaceShapeAdjustment</a>
+      <a href="#core-level">10. RaceLevel</a>
+      <a href="#core-final">11. RunPerformance 合成</a>
+
+      <h4>Considerations</h4>
+      <a href="#extra">12. 追加考慮事項</a>
+
+      <h4>Implementation</h4>
+      <a href="#impl">13. 実装戦略</a>
+      <a href="#artifacts">14. 成果物</a>
+
+      <h4>Validation</h4>
+      <a href="#bench">15. 実測ベンチマーク (2025)</a>
+      <a href="#interpret">16. 解釈と改善</a>
+
+      <h4>Operations</h4>
+      <a href="#daily">17. 当日 / 週次運用</a>
+      <a href="#protocol">18. 評価プロトコル</a>
+      <a href="#status">19. 完全版の判断</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">Race Performance Rating System</div>
+      <h1>レースパフォーマンス算出システム — 完全版ドキュメント</h1>
+      <p>
+        異なるレース間で比較可能な、能力・条件・相手関係をならした指標を
+        ロジックベースで算出する仕組みの設計と実装、2025 年データでの実測ベンチマーク、
+        当日 / 週次の運用ルールまでを一枚にまとめたリファレンスです。
+      </p>
+      <div class="hero-tags">
+        <span class="tag">future_horizon_days = 0</span>
+        <span class="tag">race_id 単位蓄積</span>
+        <span class="tag">online-safe / retro-only 分離</span>
+        <span class="tag">LightGBM top1 hit ≈ 23.24%</span>
+        <span class="tag">vs random 約 3.0×</span>
+      </div>
+    </header>
+
+    <!-- 1. Purpose -->
+    <section id="purpose" class="section">
+      <h2><span class="num">01</span> 目的</h2>
+      <p>過去レースごとに、各馬の <code class="inline">そのレースでのパフォーマンス値</code> と、レース自体の <code class="inline">レースレベル</code> を、機械学習モデルの前段で利用できるロジックベースの指標として算出します。</p>
+      <div class="card">
+        <p style="margin-top:0;">単純な着順の置き換えではなく、<b>異なるレース間で比較可能な、能力・条件・相手関係をならした指標</b> を作ることが目的です。</p>
+        <ul class="bullets">
+          <li>同じ <code class="inline">2着</code> でも、相手が強いレースの 2着は高く評価したい</li>
+          <li>同じ <code class="inline">1.0秒差</code> でも、短距離と長距離では意味が違う</li>
+          <li>勝ち馬の <code class="inline">着差</code> は、流して勝っている可能性があるためそのまま能力差と見なさない</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 2. Policy -->
+    <section id="policy" class="section">
+      <h2><span class="num">02</span> 基本方針</h2>
+      <div class="grid-3">
+        <div class="card">
+          <h4>① 指標を分離する</h4>
+          <ul class="bullets">
+            <li><code class="inline">RunPerformance</code> 馬のそのレースでの強さ</li>
+            <li><code class="inline">RaceLevel</code> メンバー水準</li>
+            <li><code class="inline">TrackVariant</code> 馬場・時計の出やすさ</li>
+            <li><code class="inline">PaceDifficulty</code> 展開の歪み</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>② 時点を分ける</h4>
+          <ul class="bullets">
+            <li><code class="inline">RaceLevel_PreRace</code> — 将来リーク無し</li>
+            <li><code class="inline">RaceLevel_Retrospective</code> — 後続戦績まで反映、教師信号精緻化用</li>
+          </ul>
+          <p style="color:var(--muted);margin:8px 0 0;font-size:12.5px;">予測特徴量と過去ラベル品質向上の両用途に対応。</p>
+        </div>
+        <div class="card">
+          <h4>③ 着順だけに頼らない</h4>
+          <p style="margin:6px 0 0;">最終 <code class="inline">RunPerformance</code> は次の 4 ブロックを合成します。</p>
+          <div class="pillset" style="margin-top:8px;">
+            <span class="pill">TimeFigure</span>
+            <span class="pill">MarginAdjustment</span>
+            <span class="pill">WeightAdjustment</span>
+            <span class="pill">RaceLevelAdjustment</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Architecture -->
+    <section id="architecture" class="section">
+      <h2><span class="num">03</span> システム全体像</h2>
+      <div class="mermaid">
+flowchart TD
+    rawRace["RawRaceResult & Card"] --> trackVariant["TrackVariant"]
+    rawRace --> baselineTime["BaselineTimeModel"]
+    rawRace --> paceShape["PaceShapeModel"]
+    rawRace --> preRaceLevel["RaceLevel_PreRace"]
+    rawRace --> retroRaceLevel["RaceLevel_Retrospective"]
+    baselineTime --> timeFigure["TimeFigure"]
+    trackVariant --> timeFigure
+    paceShape --> marginAdj["MarginAdjustment"]
+    preRaceLevel --> runPerf["RunPerformance"]
+    retroRaceLevel -. teacher only .-> runPerf
+    timeFigure --> runPerf
+    marginAdj --> runPerf
+    weightAdj["WeightAdjustment"] --> runPerf
+      </div>
+      <div class="callout">
+        <h4>運用上の重要ポイント</h4>
+        <p>
+          <code class="inline">RaceLevel_Retrospective</code> は future-aware なため、
+          <b>未来予測の特徴量には使わず、過去レースの教師信号 / ラベル品質改善にのみ使う</b>。
+          これにより online-safe 運用と retrospective 分析を両立します。
+        </p>
+      </div>
+    </section>
+
+    <!-- 4. Outputs -->
+    <section id="outputs" class="section">
+      <h2><span class="num">04</span> 出力指標</h2>
+      <h3>4.1 馬ごとの指標</h3>
+      <table class="table">
+        <thead><tr><th>列名</th><th>意味</th><th>性質</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">run_performance_raw</td><td>合成生値</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">run_performance_final</td><td>平滑化・標準化後の最終採用値</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">run_performance_final_std</td><td>条件帯内で再標準化したもの</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">run_performance_final_pct</td><td>条件帯内 percentile</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">time_figure</td><td>走破時計ベース能力値</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">margin_adjusted_figure</td><td>着差・勝ち馬緩め補正</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">weight_adjusted_figure</td><td>斤量補正反映</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">pace_adjusted_figure</td><td>展開補正反映</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">horse_pre_rating_pre_race</td><td>事前能力推定（今回斤量で補正）</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">field_relative_pre_rating</td><td>レース内相対事前能力</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">field_top3_gap</td><td>レース内上位3頭との能力差</td><td><span class="pill good">online-safe</span></td></tr>
+        </tbody>
+      </table>
+      <h3>4.2 レースごとの指標</h3>
+      <table class="table">
+        <thead><tr><th>列名</th><th>意味</th><th>性質</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">race_level_pre_race</td><td>事前情報のみで推定したレースレベル</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">race_level_retrospective</td><td>後年戦績まで反映</td><td><span class="pill warn">retro-only</span></td></tr>
+          <tr><td class="mono">track_variant</td><td>日次×場×サーフェスの馬場差（全期間）</td><td><span class="pill warn">retro-only</span></td></tr>
+          <tr><td class="mono">track_variant_online</td><td>過去日付のみから算出した online-safe 版</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">pace_shape_class</td><td>消耗 / 持続 / 瞬発の展開分類</td><td><span class="pill good">online-safe</span></td></tr>
+          <tr><td class="mono">race_uncertainty</td><td>そのレースの評価信頼度</td><td><span class="pill good">online-safe</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 5. TimeFigure -->
+    <section id="core-time" class="section">
+      <h2><span class="num">05</span> TimeFigure（走破時計ベース能力値）</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>層別キー</h4>
+          <p class="mono" style="margin:0;">venue_code × surface × distance_bucket × class_group × track_condition × venue_era</p>
+        </div>
+        <div class="card">
+          <h4>ベースタイムの作り方</h4>
+          <ul class="bullets">
+            <li>1-3 着平均を基本（極端な外れレースは除外）</li>
+            <li>勝ち馬単独 = 流し勝ち影響、2着単独 = 展開影響を回避</li>
+          </ul>
+        </div>
+      </div>
+      <h4>定義イメージ</h4>
+      <pre class="code">time_figure_base = scale(distance_bucket) * (baseline_time - adjusted_finish_time)
+
+# adjusted_finish_time は track_variant / 斤量 / 当日馬場差を補正した後の走破時計</pre>
+    </section>
+
+    <!-- 6. Margin -->
+    <section id="core-margin" class="section">
+      <h2><span class="num">06</span> MarginAdjustment（着差補正）</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>距離帯別「1ポイント = 何秒」</h4>
+          <table class="table" style="margin:0;">
+            <thead><tr><th>帯</th><th>距離 (m)</th></tr></thead>
+            <tbody>
+              <tr><td>sprint</td><td class="mono">～1400</td></tr>
+              <tr><td>mile</td><td class="mono">1400-1800</td></tr>
+              <tr><td>intermediate</td><td class="mono">1800-2200</td></tr>
+              <tr><td>long</td><td class="mono">2200-2800</td></tr>
+              <tr><td>extended</td><td class="mono">2800+</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h4>勝ち馬の緩め補正</h4>
+          <pre class="code" style="margin:0;">winner: alpha * log1p(margin_seconds / sec_per_point)
+others: margin_seconds / sec_per_point</pre>
+          <p style="color:var(--muted);font-size:12.5px;margin-top:8px;">勝ち馬は <code class="inline">log1p</code> 圧縮、2着以下は線形。</p>
+        </div>
+      </div>
+      <p style="color:var(--muted);font-size:13px;">追加考慮: ハナ／アタマ／クビの秒換算、同着、落馬・競走中止・失格の扱い。</p>
+    </section>
+
+    <!-- 7. Weight -->
+    <section id="core-weight" class="section">
+      <h2><span class="num">07</span> WeightAdjustment（斤量補正）</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>性差吸収の正規化</h4>
+          <table class="table" style="margin:0;">
+            <thead><tr><th>性 / 斤量</th><th>正規化値</th></tr></thead>
+            <tbody>
+              <tr><td>牡 58kg</td><td class="mono">58</td></tr>
+              <tr><td>牝 56kg</td><td class="mono">58</td></tr>
+              <tr><td>牝 54kg</td><td class="mono">56</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h4>距離別 kg→sec 係数（例）</h4>
+          <table class="table" style="margin:0;">
+            <thead><tr><th>距離帯</th><th>sec/kg</th></tr></thead>
+            <tbody>
+              <tr><td>sprint</td><td class="mono">0.14</td></tr>
+              <tr><td>mile</td><td class="mono">0.17</td></tr>
+              <tr><td>intermediate</td><td class="mono">0.20</td></tr>
+              <tr><td>long</td><td class="mono">0.24</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <pre class="code">weight_adjustment_seconds = (normalized_weight - reference_weight_for_race) * kg_to_seconds(distance_band)</pre>
+      <div class="callout good">
+        <h4>標準斤量基準への正規化（実装済み）</h4>
+        <p>
+          過去レースの <code class="inline">run_performance</code> は標準斤量基準で正本保持し、次走で使う
+          <code class="inline">horse_pre_rating_pre_race</code> は今回出走斤量に応じて補正。これにより軽斤量戦での過大評価リスクを抑制。
+        </p>
+      </div>
+    </section>
+
+    <!-- 8. Track -->
+    <section id="core-track" class="section">
+      <h2><span class="num">08</span> TrackVariant（馬場差）</h2>
+      <p>条件別ベースタイムと 1-3 着平均、馬の能力偏差の反復推定で日次馬場差を生成。</p>
+      <div class="grid-2">
+        <div class="card">
+          <h4>retrospective 版</h4>
+          <p style="margin:0;">全期間データで baseline / variant を再構成。EDA や教師ラベル精緻化向け。</p>
+        </div>
+        <div class="card">
+          <h4>online 版（実装済み）</h4>
+          <p style="margin:0;">過去日付のみで baseline と variant を生成する <code class="inline">track_variant_online</code> を保持。週次・当日近似の特徴量にはこちらを使用。</p>
+        </div>
+      </div>
+      <ul class="bullets">
+        <li>同日同場同 surface の前半レースで intraday drift を補正</li>
+        <li>クッション値・含水率は prior として利用</li>
+        <li><code class="inline">track_condition</code> はカテゴリ、<code class="inline">track_variant</code> は連続量で両方保持</li>
+      </ul>
+    </section>
+
+    <!-- 9. Pace -->
+    <section id="core-pace" class="section">
+      <h2><span class="num">09</span> PaceShapeAdjustment（展開補正）</h2>
+      <p>同じ時計・着差でも、展開によって能力評価の意味が変わるため、ペース・展開を分類して補正します。</p>
+      <div class="grid-3">
+        <div class="card"><h4>消耗</h4><p style="margin:0;">ハイペース／持久戦。先行粘りを加点。</p></div>
+        <div class="card"><h4>持続</h4><p style="margin:0;">中間的展開。フラットに評価。</p></div>
+        <div class="card"><h4>瞬発</h4><p style="margin:0;">スロー上がり戦。後方届かずを過剰減点しない。</p></div>
+      </div>
+    </section>
+
+    <!-- 10. Race level -->
+    <section id="core-level" class="section">
+      <h2><span class="num">10</span> RaceLevel（相手レベル）</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>A. race_level_pre_race</h4>
+          <p>レース時点までの情報で算出。</p>
+          <ul class="bullets">
+            <li>出走馬の直近 <code class="inline">run_performance_final</code></li>
+            <li>キャリア勝率 / 複勝率</li>
+            <li>同条件成績、獲得賞金、クラス昇降履歴</li>
+            <li>騎手・厩舎の OOF 強さ</li>
+          </ul>
+          <pre class="code" style="margin-top:8px;">race_level_pre_race
+ = 0.6 * mean(top3 entrant_rating)
+ + 0.4 * mean(all  entrant_rating)</pre>
+        </div>
+        <div class="card">
+          <h4>B. race_level_retrospective</h4>
+          <p>後続戦績まで見て安定化。</p>
+          <ul class="bullets">
+            <li>レース後 180 / 365 / 730 日の獲得賞金</li>
+            <li>重賞出走・好走</li>
+            <li>後続レースの <code class="inline">run_performance_final</code></li>
+            <li>勝ち上がり頭数</li>
+          </ul>
+          <p class="mono" style="color:var(--warn);font-size:12px;margin-top:8px;">future-aware → 学習特徴量には不採用。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11. Compose -->
+    <section id="core-final" class="section">
+      <h2><span class="num">11</span> RunPerformance 合成</h2>
+      <pre class="code">run_performance_raw =
+    a * time_figure
+  + b * margin_adjustment
+  + c * weight_adjustment
+  + d * pace_adjustment
+  + e * race_level_adjustment
+  + f * trouble_adjustment</pre>
+      <ul class="bullets">
+        <li><code class="inline">race_level_adjustment</code>: 弱相手への 2着を減点、強相手への 2着を加点</li>
+        <li><code class="inline">trouble_adjustment</code>: 出遅れ・不利・前壁・直線詰まり等の補正</li>
+      </ul>
+    </section>
+
+    <!-- 12. Extra -->
+    <section id="extra" class="section">
+      <h2><span class="num">12</span> 追加考慮事項</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>不利・ロス補正</h4>
+          <p>通過順・上がり・枠順から proxy を作成可能。</p>
+        </div>
+        <div class="card">
+          <h4>少頭数 / 多頭数</h4>
+          <p><code class="inline">field_size_factor</code> と、小頭数戦での <code class="inline">race_uncertainty</code> 引き上げ。</p>
+        </div>
+        <div class="card">
+          <h4>新馬・未勝利の信頼度</h4>
+          <p>戦績不足時は <code class="inline">race_uncertainty</code> を高く、retrospective で安定化。</p>
+        </div>
+        <div class="card">
+          <h4>年齢・成長曲線</h4>
+          <p>2歳・3歳春は変動が大きく、retrospective 寄せをやや強める。</p>
+        </div>
+        <div class="card">
+          <h4>距離変更・転戦</h4>
+          <p>距離帯変更ペナルティ、surface switch uncertainty。</p>
+        </div>
+        <div class="card">
+          <h4>当日位置取り有利不利</h4>
+          <p>day bias を使って逆風好走を加点。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13. Implementation -->
+    <section id="impl" class="section">
+      <h2><span class="num">13</span> 実装戦略</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>Phase 1 — 基礎指標</h4>
+          <ul class="bullets">
+            <li><code class="inline">track_variant_daily.parquet</code></li>
+            <li><code class="inline">baseline_time_table.parquet</code></li>
+            <li><code class="inline">weight_adjustment_table.parquet</code></li>
+            <li><code class="inline">distance_band_margin_scale.json</code></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Phase 2 — レース単位 performance</h4>
+          <p style="margin:0;">粒度: <code class="inline">race_id + horse_number</code></p>
+          <ul class="bullets">
+            <li>adjusted_finish_time / time_figure</li>
+            <li>margin / weight / pace adjustment</li>
+            <li>run_performance_raw / final / uncertainty</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Phase 3 — レースレベル</h4>
+          <ul class="bullets">
+            <li><code class="inline">race_level_pre_race.parquet</code></li>
+            <li><code class="inline">race_level_retrospective.parquet</code></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Phase 4 — 馬の履歴サマリ</h4>
+          <ul class="bullets">
+            <li>直近 1-5 走の <code class="inline">run_performance_final</code></li>
+            <li>同条件平均 / 強レース好走率 / 弱レース取りこぼし率</li>
+          </ul>
+        </div>
+      </div>
+      <h3>最初の実装優先順</h3>
+      <ol class="clean">
+        <li>ベースタイム</li>
+        <li>track variant</li>
+        <li>距離帯別 margin scale</li>
+        <li>斤量補正</li>
+        <li>run_performance_raw</li>
+        <li>race_level_pre_race</li>
+        <li>race_level_retrospective</li>
+        <li>horse_performance_snapshot</li>
+      </ol>
+    </section>
+
+    <!-- 14. Artifacts -->
+    <section id="artifacts" class="section">
+      <h2><span class="num">14</span> 成果物</h2>
+      <h3>生成コード</h3>
+      <ul class="bullets">
+        <li><code class="inline">pipeline/race_performance.py</code></li>
+        <li><code class="inline">research/evaluate_race_performance_signal.py</code></li>
+      </ul>
+      <h3>保存先</h3>
+      <table class="table">
+        <thead><tr><th>用途</th><th>パス</th></tr></thead>
+        <tbody>
+          <tr><td>レース単位の source of truth</td><td class="mono">data/features/race_performance/races/&lt;year&gt;/&lt;race_id&gt;.json</td></tr>
+          <tr><td>年別詳細</td><td class="mono">data/features/race_performance/&lt;year&gt;.parquet</td></tr>
+          <tr><td>全年スナップショット</td><td class="mono">data/features/snapshots/race_performance_2020_2025.parquet</td></tr>
+          <tr><td>列指向特徴量</td><td class="mono">data/features/columns/*.parquet</td></tr>
+          <tr><td>生成サマリ</td><td class="mono">data/meta/modeling/race_performance_build_summary.json</td></tr>
+          <tr><td>評価結果</td><td class="mono">data/meta/modeling/race_performance_eval.json</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <h4>保持ポリシー</h4>
+        <p>
+          当日 / 週次は <b>race_id 単位</b> で算出 → 年別 Parquet と columns を race store から再構成。
+          標準斤量基準の <code class="inline">run_performance</code> を正本として保持し、今回斤量補正は
+          <code class="inline">horse_pre_rating_pre_race</code> 側で反映。
+        </p>
+      </div>
+    </section>
+
+    <!-- 15. Bench -->
+    <section id="bench" class="section">
+      <h2><span class="num">15</span> 実測ベンチマーク (2025 holdout)</h2>
+      <h3>ランダム基準</h3>
+      <div class="grid-3">
+        <div class="metric">
+          <div class="label">avg field size</div>
+          <div class="value">13.86</div>
+        </div>
+        <div class="metric">
+          <div class="label">random top1 hit</div>
+          <div class="value">0.0766</div>
+        </div>
+        <div class="metric">
+          <div class="label">random top1 → top3</div>
+          <div class="value">0.2299</div>
+        </div>
+      </div>
+
+      <h3>単純ヒューリスティック</h3>
+      <pre class="code">score = 0.45 * perf_avg5 + 0.25 * perf_last1 + 0.15 * perf_same_surface_avg5 + 0.15 * perf_same_distance_avg5</pre>
+      <table class="table">
+        <thead><tr><th>top1_hit_rate</th><th>top1_top3_rate</th><th>ndcg3_win</th><th>ndcg3_top3</th><th>mrr_win</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="mono">0.1166</td><td class="mono">0.2860</td><td class="mono">0.2227</td><td class="mono">0.2822</td><td class="mono">0.2910</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>LightGBM (is_win)</h3>
+      <div class="grid-4">
+        <div class="metric alt"><div class="label">AUC</div><div class="value">0.7197</div></div>
+        <div class="metric alt"><div class="label">LogLoss</div><div class="value">0.2398</div></div>
+        <div class="metric alt"><div class="label">top1 hit</div><div class="value">0.2214</div><div class="delta">vs random ×2.89</div></div>
+        <div class="metric alt"><div class="label">top1→top3</div><div class="value">0.4941</div></div>
+      </div>
+
+      <h3>LightGBM (is_top3) — 最良モデル</h3>
+      <div class="grid-4">
+        <div class="metric"><div class="label">AUC</div><div class="value">0.7154</div></div>
+        <div class="metric"><div class="label">LogLoss</div><div class="value">0.4739</div></div>
+        <div class="metric"><div class="label">top1 hit</div><div class="value">0.2324</div><div class="delta">vs random ×3.03</div></div>
+        <div class="metric"><div class="label">top1→top3</div><div class="value">0.5190</div></div>
+      </div>
+
+      <h3>使用特徴（パフォーマンス由来のみ）</h3>
+      <div class="pillset">
+        <span class="pill">perf_last1</span><span class="pill">perf_last2</span><span class="pill">perf_avg3</span>
+        <span class="pill">perf_avg5</span><span class="pill">perf_avg10</span><span class="pill">perf_best5</span>
+        <span class="pill">perf_std5</span><span class="pill">perf_stdscore_last1</span>
+        <span class="pill">perf_stdscore_avg5</span><span class="pill">perf_pct_last1</span>
+        <span class="pill">perf_pct_avg5</span><span class="pill">time_fig_avg5</span>
+        <span class="pill">margin_fig_avg5</span><span class="pill">pace_fig_avg5</span>
+        <span class="pill">perf_trend_last1_vs_avg5</span>
+        <span class="pill">perf_same_surface_avg5</span><span class="pill">perf_same_distance_avg5</span>
+        <span class="pill">race_level_gap_avg5</span>
+        <span class="pill">horse_pre_rating_pre_race</span>
+        <span class="pill">field_relative_pre_rating</span>
+        <span class="pill">field_top3_gap</span>
+        <span class="pill">n_prev_runs</span>
+      </div>
+    </section>
+
+    <!-- 16. Interpret -->
+    <section id="interpret" class="section">
+      <h2><span class="num">16</span> 解釈と改善ポイント</h2>
+      <div class="callout good">
+        <h4>結論</h4>
+        <p>
+          <code class="inline">run_performance</code> 系の履歴だけで、2025 race-wise top1 的中率を
+          <b>23% 前後</b> まで押し上げ（ランダム基準 7.66% に対して約 <b>3.0×</b>）。
+          しかも <b>future_horizon_days = 0</b> の本番想定ロジックのみで達成しており、
+          単独で有意な予測信号として成立しています。
+        </p>
+      </div>
+
+      <h3>重要特徴量（is_win 上位）</h3>
+      <div class="pillset">
+        <span class="pill good">margin_fig_avg5</span>
+        <span class="pill good">perf_pct_last1</span>
+        <span class="pill good">pace_fig_avg5</span>
+        <span class="pill good">field_top3_gap</span>
+        <span class="pill good">pace_same_distance_avg5</span>
+        <span class="pill good">margin_same_distance_avg5</span>
+        <span class="pill">perf_same_class_avg5</span>
+        <span class="pill">n_prev_runs</span>
+        <span class="pill">perf_same_venue_avg5</span>
+        <span class="pill">perf_same_track_cond_avg5</span>
+      </div>
+
+      <h3>改善サイクル要約</h3>
+      <table class="table">
+        <thead><tr><th>#</th><th>改善内容</th><th>状態</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>distance / surface / field_size の上流補完</td><td><span class="ok">完了</span></td></tr>
+          <tr><td>2</td><td>track_variant の online 化</td><td><span class="ok">完了</span></td></tr>
+          <tr><td>3</td><td>race_level_pre_race の race 内差分化（<code class="inline">field_relative_pre_rating</code> / <code class="inline">field_top3_gap</code>）</td><td><span class="ok">完了</span></td></tr>
+          <tr><td>4</td><td>標準斤量基準への正規化と今回斤量補正</td><td><span class="ok">完了</span></td></tr>
+          <tr><td>5</td><td>条件帯標準化（<code class="inline">_std</code> / <code class="inline">_pct</code>）</td><td><span class="ok">完了</span></td></tr>
+          <tr><td>6</td><td>文脈別履歴集約（same_class / same_venue / same_track_cond / same_surface_distance）</td><td><span class="ok">完了</span></td></tr>
+          <tr><td>7</td><td>pace_same_distance_avg5 / margin_same_distance_avg5 の追加</td><td><span class="ok">完了</span></td></tr>
+          <tr><td>8</td><td>race store を source of truth 化（<code class="inline">--race-ids</code>）</td><td><span class="ok">完了</span></td></tr>
+          <tr><td>9</td><td>future_horizon_days = 0 を運用デフォルト化</td><td><span class="ok">完了</span></td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warn">
+        <h4>頭打ち判断</h4>
+        <p>改善幅は十分に小さくなり、<b>現行スコープでは大きな改善余地は一巡</b>。今後の改善は本ロジック単体ではなく、<code class="inline">horse_pre_race_dataset</code> への安全統合、<code class="inline">pace_shape_class</code> 別履歴集計、多段階パイプラインとの接続といった上流／下流接続の話に移行します。</p>
+      </div>
+    </section>
+
+    <!-- 17. Daily ops -->
+    <section id="daily" class="section">
+      <h2><span class="num">17</span> 当日 / 週次運用</h2>
+      <div class="mermaid">
+flowchart LR
+    A["新レース結果到着"] --> B["race_result / race_shutuba 更新"]
+    B --> C["対象 race_id 抽出"]
+    C --> D["python -m pipeline.race_performance --race-ids ..."]
+    D --> E["data/features/race_performance/races/&lt;year&gt;/&lt;race_id&gt;.json 保存"]
+    E --> F["年別 Parquet 再構成"]
+    F --> G["data/features/columns/*.parquet 再生成"]
+    G --> H["build_summary 更新"]
+      </div>
+      <h3>使えるコマンド</h3>
+      <pre class="code"># 既存ローカルテーブルから自動年検出して全期間ビルド
+python -m pipeline.race_performance --years auto
+
+# 当日 / 週次のレース単位ビルド（推奨）
+python -m pipeline.race_performance \
+    --race-ids 202604110101,202604110102,...
+
+# online-safe デフォルト
+#   future_horizon_days = 0
+#   race_level_retrospective は将来情報を見ない</pre>
+      <div class="grid-2">
+        <div class="card">
+          <h4>2026 以降の即時計算可能</h4>
+          <div class="pillset">
+            <span class="pill good">run_performance_raw</span>
+            <span class="pill good">run_performance_final</span>
+            <span class="pill good">time_figure</span>
+            <span class="pill good">margin_adjusted_figure</span>
+            <span class="pill good">weight_adjusted_figure</span>
+            <span class="pill good">pace_adjusted_figure</span>
+            <span class="pill good">horse_pre_rating_pre_race</span>
+            <span class="pill good">field_relative_pre_rating</span>
+            <span class="pill good">field_top3_gap</span>
+            <span class="pill good">race_level_pre_race</span>
+            <span class="pill good">track_variant_online</span>
+            <span class="pill good">race_uncertainty</span>
+          </div>
+        </div>
+        <div class="card">
+          <h4>即時には未確定</h4>
+          <div class="pillset">
+            <span class="pill warn">race_level_retrospective</span>
+            <span class="pill warn">track_variant (full)</span>
+          </div>
+          <p style="color:var(--muted);font-size:12.5px;margin-top:8px;">future-aware なため、後日再評価される暫定値。後分析・教師ラベル品質改善でのみ使用。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 18. Protocol -->
+    <section id="protocol" class="section">
+      <h2><span class="num">18</span> 推奨評価プロトコル</h2>
+      <ol class="clean">
+        <li><code class="inline">2020-2024</code> を履歴構築・学習用期間とする</li>
+        <li><code class="inline">2025</code> を holdout とする</li>
+        <li>2025 の指標は <code class="inline">future_horizon_days=0</code> で再算出されたものを使う</li>
+        <li><code class="inline">race_level_retrospective</code> は holdout 予測特徴量に入れない</li>
+        <li>本番想定寄与の評価は常に <code class="inline">online_safe</code> 列だけで実施する</li>
+      </ol>
+    </section>
+
+    <!-- 19. Status -->
+    <section id="status" class="section">
+      <h2><span class="num">19</span> 完全版の判断</h2>
+      <div class="status">
+        <span><span class="dot good"></span><b>future_horizon_days = 0</b> の本番想定ロジックで算出可</span>
+        <span><span class="dot good"></span><b>race_id 単位</b> で蓄積可</span>
+        <span><span class="dot good"></span>2025 holdout で <b>有意な予測寄与</b></span>
+        <span><span class="dot good"></span>特徴量として <b>data/features</b> に保持済み</span>
+        <span><span class="dot good"></span>再現可能な評価スクリプトを保持</span>
+      </div>
+      <div class="callout good">
+        <h4>結論</h4>
+        <p>
+          現時点の race performance システムは、本テーマについての <b>現行スコープでの完全版</b> とみなせる。
+          今後はロジック単体の改善ではなく、上流・下流接続（dataset 統合 / pace_shape 履歴 / 多段階パイプライン）に進むのが妥当。
+        </p>
+      </div>
+    </section>
+
+    <footer>
+      <span>Reference: <code class="inline">docs/modeling/race_performance_rating_system.md</code></span>
+      <span>Race Performance Rating System / Complete Edition</span>
+    </footer>
+  </main>
+</div>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#0b1428',
+      primaryColor: '#1d2b50',
+      primaryTextColor: '#e6ecff',
+      primaryBorderColor: '#4f8bff',
+      lineColor: '#7aa9ff',
+      secondaryColor: '#16213f',
+      tertiaryColor: '#15213c',
+      fontFamily: 'JetBrains Mono, Noto Sans JP, sans-serif'
+    }
+  });
+</script>
+</body>
+</html>

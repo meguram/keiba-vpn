@@ -5,7 +5,7 @@ netkeiba.com ページパーサー
 SelectorChain による多段フォールバックで構造変更に対応する。
 
 対応ページ:
-  1. RaceResultParser       - 過去レース結果 (db.netkeiba.com/race/{id}/)
+  1. RaceResultParser       - 過去レース結果 (db.netkeiba.com/race/{id}/) [通過・ラップ等はプレミアム: ログイン必須]
   2. RaceCardParser         - 出馬表 (race.netkeiba.com/race/shutuba.html?race_id={id})
   3. HorseParser            - 馬情報 (db.netkeiba.com/horse/{id}/)
   4. RaceListParser         - 日付別レース一覧 (db.netkeiba.com/race/list/{date}/)
@@ -14,6 +14,7 @@ SelectorChain による多段フォールバックで構造変更に対応する
   7. OddsParser             - オッズ (race.netkeiba.com/odds/index.html?race_id={id})
   8. PaddockParser          - パドック評価 (race.netkeiba.com/race/paddock.html?race_id={id}) [要ログイン]
   9. BarometerParser        - 偏差値バロメーター (race.netkeiba.com/race/barometer.html?race_id={id}) [要ログイン]
+  9b. DbHorseLaptimeTableParser - db 各馬ラップ表 AJAX (ajax_race_result_horse_laptime) [要ログイン・プレミアム]
  10. HorseLapParser         - 馬別ラップ (race.netkeiba.com/race/oikiri.html?race_id={id})
  11. TrainingParser         - 馬別調教タイム (db.netkeiba.com/horse/training.html?id={id}) [要ログイン]
  12. TrainerCommentParser   - 厩舎コメント (race.netkeiba.com/race/comment.html?race_id={id}) [要ログイン]
@@ -101,8 +102,34 @@ class RaceResultParser:
         result["payoff"] = self._parse_payoff(soup)
         result["lap_times"] = self._parse_lap(soup)
         result["pace"] = self._parse_pace(soup, result["lap_times"])
+        result["corner_passing"] = self._parse_corner_passing_order(soup)
 
         return result
+
+    @staticmethod
+    def build_race_result_lap_payload(parsed: dict[str, Any]) -> dict[str, Any]:
+        """race_result と同一 HTML 由来のラップ・コーナー通過・馬別通過/上りを race_result_lap 用にまとめる。
+
+        各馬 200m 毎セクションは AJAX 別取得のため、ScraperRunner が horse_laptime_table を追記する。
+        """
+        rid = parsed.get("race_id") or ""
+        entries = parsed.get("entries") or []
+        return {
+            "race_id": rid,
+            "lap_times": list(parsed.get("lap_times") or []),
+            "pace": dict(parsed.get("pace") or {}),
+            "corner_passing": list(parsed.get("corner_passing") or []),
+            "entries_lap": [
+                {
+                    "horse_number": e.get("horse_number"),
+                    "horse_id": e.get("horse_id"),
+                    "horse_name": e.get("horse_name"),
+                    "passing_order": e.get("passing_order"),
+                    "last_3f": e.get("last_3f"),
+                }
+                for e in entries
+            ],
+        }
 
     def _parse_race_info(self, soup: BeautifulSoup) -> dict:
         info: dict[str, Any] = {}
@@ -156,6 +183,72 @@ class RaceResultParser:
 
         return info
 
+    @staticmethod
+    def _looks_like_passing_order_cell(s: str) -> bool:
+        t = s.strip()
+        if not t or t == "**":
+            return False
+        if not re.search(r"\d", t):
+            return False
+        return bool(re.match(r"^[\d\-]+$", t.replace(" ", "")))
+
+    @classmethod
+    def _entry_column_offsets(cls, cols: list) -> dict[str, int]:
+        """db.netkeiba の指数列拡張表 (通過=14列目付近) と従来の短い表を切り替える。"""
+        n = len(cols)
+        if n >= 19:
+            p = safe_text(cols[14]) if n > 14 else ""
+            if cls._looks_like_passing_order_cell(p):
+                return {
+                    "passing": 14,
+                    "last_3f": 15,
+                    "odds": 16,
+                    "popularity": 17,
+                    "weight_text": 18,
+                }
+        return {
+            "passing": 10,
+            "last_3f": 11,
+            "odds": 12,
+            "popularity": 13,
+            "weight_text": 14,
+        }
+
+    def _parse_corner_passing_order(self, soup: BeautifulSoup) -> list[dict[str, Any]]:
+        """result_table_02 の「Nコーナー通過順」ブロック（レース単位）。"""
+        out: list[dict[str, Any]] = []
+        for table in soup.select("table.result_table_02"):
+            if table.select_one("td.race_lap_cell"):
+                continue
+            for row in table.select("tr"):
+                th = row.select_one("th")
+                td = row.select_one("td")
+                if not th or not td:
+                    continue
+                label = safe_text(th)
+                order = safe_text(td)
+                if not self._looks_like_corner_order_summary(order):
+                    continue
+                corner_n = 0
+                m = re.match(r"^(\d+)", label)
+                if m:
+                    corner_n = int(m.group(1))
+                out.append({"corner": corner_n, "label": label, "order_text": order})
+        return out
+
+    @staticmethod
+    def _looks_like_corner_order_summary(order: str) -> bool:
+        o = order.strip()
+        if len(o) < 4 or len(o) > 900:
+            return False
+        if "http" in o.lower() or "<" in o:
+            return False
+        if "プレミアム" in o or "premium" in o.lower():
+            return False
+        if not re.search(r"\d", o):
+            return False
+        return ("," in o) or ("(" in o and ")" in o)
+
     def _parse_entries(self, soup: BeautifulSoup) -> list[dict]:
         table = self._RESULT_TABLE.select_one(soup)
         if not table:
@@ -167,6 +260,15 @@ class RaceResultParser:
             cols = row.select("td")
             if len(cols) < 13:
                 continue
+
+            off = self._entry_column_offsets(cols)
+            pi, li, oi, pri, wi = (
+                off["passing"],
+                off["last_3f"],
+                off["odds"],
+                off["popularity"],
+                off["weight_text"],
+            )
 
             pos_raw = safe_text(cols[0])
             if pos_raw in ("取", "除", "中", "失"):
@@ -194,7 +296,7 @@ class RaceResultParser:
             trainer_name = safe_text(trainer_link) if trainer_link else ""
             trainer_id = extract_id_from_url(safe_attr(trainer_link, "href"), r"/(\w+)/?$") if trainer_link else ""
 
-            weight_text = safe_text(cols[14]) if len(cols) > 14 else ""
+            weight_text = safe_text(cols[wi]) if len(cols) > wi else ""
             weight, weight_change = parse_weight_change(weight_text)
 
             finish_time_str = safe_text(cols[7])
@@ -213,10 +315,10 @@ class RaceResultParser:
                 "finish_time": finish_time_str,
                 "time_sec": time_sec,
                 "margin": safe_text(cols[8]) if len(cols) > 8 else "",
-                "passing_order": safe_text(cols[10]) if len(cols) > 10 else "",
-                "last_3f": self._to_float(safe_text(cols[11])) if len(cols) > 11 else 0,
-                "odds": self._to_float(safe_text(cols[12])) if len(cols) > 12 else 0,
-                "popularity": self._safe_int(safe_text(cols[13])) if len(cols) > 13 else 0,
+                "passing_order": safe_text(cols[pi]) if len(cols) > pi else "",
+                "last_3f": self._to_float(safe_text(cols[li])) if len(cols) > li else 0,
+                "odds": self._to_float(safe_text(cols[oi])) if len(cols) > oi else 0,
+                "popularity": self._safe_int(safe_text(cols[pri])) if len(cols) > pri else 0,
                 "weight": weight,
                 "weight_change": weight_change,
                 "trainer_name": trainer_name,
@@ -282,6 +384,17 @@ class RaceResultParser:
         return payoff
 
     def _parse_lap(self, soup: BeautifulSoup) -> list[float]:
+        for table in soup.select("table.result_table_02"):
+            for row in table.select("tr"):
+                th = row.select_one("th")
+                td = row.select_one("td.race_lap_cell")
+                if not th or not td:
+                    continue
+                if "ペース" in safe_text(th):
+                    continue
+                text = safe_text(td)
+                if re.search(r"\d+\.\d", text):
+                    return [float(x) for x in re.findall(r"\d+\.\d", text)]
         for cell in soup.select("td, span"):
             text = safe_text(cell)
             if re.match(r"\d+\.\d\s*-\s*\d+\.\d", text):
@@ -300,17 +413,28 @@ class RaceResultParser:
         """ペース行から前半/後半3Fと、ラップからT1F/L1Fを算出する。"""
         pace: dict[str, Any] = {}
 
-        for cell in soup.select("td, span"):
-            text = safe_text(cell)
-            m = re.search(r"\((\d+\.\d)\s*-\s*(\d+\.\d)\)", text)
-            if m:
-                parent_tr = cell.find_parent("tr")
-                if parent_tr:
-                    th = parent_tr.select_one("th")
-                    if th and "ペース" in safe_text(th):
-                        pace["first_half_3f"] = float(m.group(1))
-                        pace["second_half_3f"] = float(m.group(2))
-                        break
+        for table in soup.select("table.result_table_02"):
+            lap_rows = [r for r in table.select("tr") if r.select_one("td.race_lap_cell")]
+            if len(lap_rows) >= 2:
+                text = safe_text(lap_rows[1].select_one("td.race_lap_cell"))
+                m = re.search(r"\((\d+\.\d)\s*-\s*(\d+\.\d)\)", text)
+                if m:
+                    pace["first_half_3f"] = float(m.group(1))
+                    pace["second_half_3f"] = float(m.group(2))
+                    break
+
+        if not pace.get("first_half_3f"):
+            for cell in soup.select("td, span"):
+                text = safe_text(cell)
+                m = re.search(r"\((\d+\.\d)\s*-\s*(\d+\.\d)\)", text)
+                if m:
+                    parent_tr = cell.find_parent("tr")
+                    if parent_tr:
+                        th = parent_tr.select_one("th")
+                        if th and "ペース" in safe_text(th):
+                            pace["first_half_3f"] = float(m.group(1))
+                            pace["second_half_3f"] = float(m.group(2))
+                            break
 
         if lap_times:
             pace["t1f"] = lap_times[0]
@@ -1288,13 +1412,22 @@ class ShutubaPastParser:
                 if not text or text == "-":
                     continue
 
-                # "2026.02.18 大井13 雲取賞 JpnIII ダ1800 ..."
                 past_rec = self._parse_past_cell(text)
                 if past_rec:
+                    finish_pos = 0
                     rank_cls = [c for c in (pc.get("class") or []) if c.startswith("Ranking_")]
                     if rank_cls:
                         nums = extract_numbers(rank_cls[0])
-                        past_rec["finish_position"] = int(nums[0]) if nums else 0
+                        finish_pos = int(nums[0]) if nums else 0
+                    if not finish_pos:
+                        num_span = pc.select_one("span.Num")
+                        if num_span:
+                            nums = extract_numbers(safe_text(num_span))
+                            finish_pos = int(nums[0]) if nums else 0
+                    past_rec["finish_position"] = finish_pos
+                    cell_id = pc.get("id") or ""
+                    if cell_id.startswith("myhorse_"):
+                        past_rec["race_id"] = cell_id[8:]
                     entry["past_races"].append(past_rec)
 
             entries.append(entry)
@@ -1317,7 +1450,8 @@ class ShutubaPastParser:
             "surface": m_dist.group(1) if m_dist else "",
             "distance": int(m_dist.group(2)) if m_dist else 0,
             "finish_time": m_time.group(1) if m_time else "",
-            "raw": text[:80],
+            # Data Viewer は raw から会場・R・通過等を補完するため全文を保持する
+            "raw": text,
         }
 
     def _parse_training(self, soup: BeautifulSoup) -> list[dict]:
@@ -1649,7 +1783,7 @@ class PaddockParser:
             for td in cols:
                 cls = " ".join(td.get("class", []))
                 text = safe_text(td)
-                if "Rank" in cls or "Hyouka" in cls or "評価" in cls:
+                if "Rank" in cls or "Hyoka" in cls or "Hyouka" in cls or "評価" in cls:
                     rank = text
                 if "Comment" in cls or len(text) > 10:
                     if not rank or text != rank:
@@ -1690,6 +1824,10 @@ class PaddockParser:
 #    AJAX API: db.netkeiba.com/race/ajax_race_result_horse_laptime.html?id={race_id}&credit=1
 #    Page URL: db.netkeiba.com/race/barometer/{race_id}/
 #
+#    credit=1 は netkeiba 側の「有料会員向け（プレミアム等）」用パラメータ。未ログイン・
+#    非有料のセッションでは中身が空に近い／非表示になり得る。ScraperRunner.scrape_barometer
+#    は先に client.login()（.env の netkeiba_id / netkeiba_pw）を必須とする。
+#
 #    バロメーターページは JS 動的レンダリングのため、
 #    AJAX API で取得した HTML を直接パースする。
 #    LapSummary_Table にタイム指数 (全体/スタート/追走/上がり) が含まれる。
@@ -1697,6 +1835,8 @@ class PaddockParser:
 class BarometerParser:
     """
     走行データ (タイム指数・ラップ) をパースする。
+
+    取得には通常 netkeiba 会員ログインに加え、有料会員向け表示（ credit=1 ）が前提。
 
     AJAX API のレスポンス HTML に含まれる LapSummary_Table から:
     - 着順, 馬番, 馬名
@@ -1787,6 +1927,196 @@ class BarometerParser:
 
 
 # ═══════════════════════════════════════════════════════
+# 9b. db レース結果「各馬ラップ表」AJAX [要ログイン・プレミアム]
+#     AJAX: db.netkeiba.com/race/ajax_race_result_horse_laptime.html?id={race_id}&credit=1
+#     （レースラップ・ポジション表示の 200m 毎セクション + 縦位置）
+# ═══════════════════════════════════════════════════════
+class DbHorseLaptimeTableParser:
+    """
+    レース結果ページ内プレミアム「各馬ラップ表」の HTML 断片をパースする。
+
+    出力:
+    {
+      "race_id": "...",
+      "section_columns": [{"header": "200m", "distance_m": 200, "corner": ""}, ...],
+      "entries": [
+        {
+          "finish_order", "horse_number", "horse_id", "horse_name",
+          "index_total", "index_start", "index_chase", "index_closing",
+          "sections": [{"distance_m", "header", "corner", "lap_time", "position"}, ...],
+          "lap_comment": "..."
+        }, ...
+      ]
+    }
+    """
+
+    AJAX_URL = (
+        "https://db.netkeiba.com/race/ajax_race_result_horse_laptime.html"
+        "?id={race_id}&credit=1"
+    )
+
+    def fetch_and_parse(
+        self,
+        session: Any,
+        race_id: str,
+        *,
+        timeout: float = 30,
+    ) -> dict[str, Any]:
+        empty: dict[str, Any] = {"race_id": race_id, "section_columns": [], "entries": []}
+        try:
+            url = self.AJAX_URL.format(race_id=race_id)
+            resp = session.get(
+                url,
+                timeout=timeout,
+                headers={"Referer": f"https://db.netkeiba.com/race/{race_id}/"},
+            )
+            resp.encoding = "euc-jp"
+            if resp.status_code != 200 or len(resp.text) < 100:
+                return empty
+            return self.parse(resp.text, race_id=race_id)
+        except Exception as e:
+            logger.debug("DbHorseLaptimeTableParser fetch failed [%s]: %s", race_id, e)
+            return empty
+
+    def parse(self, html: str, race_id: str = "") -> dict[str, Any]:
+        soup = BeautifulSoup(html, "html.parser")
+        result: dict[str, Any] = {
+            "race_id": race_id,
+            "section_columns": [],
+            "entries": [],
+        }
+        table = None
+        for t in soup.select("table.LapSummary_Table"):
+            if t.select_one("td.CellDataWrap"):
+                table = t
+                break
+        if not table:
+            return result
+
+        rows = table.select("tr")
+        section_columns: list[dict[str, Any]] = []
+        header_row_idx = -1
+        for i, row in enumerate(rows):
+            fcells: list = []
+            for th in row.find_all("th"):
+                cls = th.get("class") or []
+                if "FurlongCell" not in cls or "FurlongCell_Head" in cls:
+                    continue
+                fcells.append(th)
+            if len(fcells) < 2:
+                continue
+            first_lbl = re.sub(r"\s+", " ", fcells[0].get_text(" ", strip=True))
+            if not re.search(r"\d+\s*m", first_lbl):
+                continue
+            for th in fcells:
+                # <br> 区切り等はスペースでつなぐ（safe_text だと「1C」「400m」が結合されて読めない）
+                label_raw = re.sub(r"\s+", " ", th.get_text(" ", strip=True))
+                m = re.search(r"(\d+)\s*m", label_raw)
+                dm = int(m.group(1)) if m else 0
+                corner_m = re.search(r"(\d)\s*C", label_raw)
+                corner = f"{corner_m.group(1)}C" if corner_m else ""
+                if corner and dm:
+                    header_display = f"{dm}m ({corner})"
+                elif dm:
+                    header_display = f"{dm}m"
+                else:
+                    header_display = label_raw
+                section_columns.append({
+                    "header": header_display,
+                    "header_raw": label_raw,
+                    "distance_m": dm,
+                    "corner": corner,
+                })
+            header_row_idx = i
+            break
+
+        if not section_columns:
+            return result
+        result["section_columns"] = section_columns
+
+        for row in rows[header_row_idx + 2:]:
+            horse_td = row.select_one("td.Horse_Info")
+            if not horse_td:
+                continue
+            horse_link = horse_td.select_one("a[href*='/horse/']")
+            horse_name = safe_text(horse_link) if horse_link else safe_text(horse_td)
+            horse_id = (
+                extract_id_from_url(safe_attr(horse_link, "href")) if horse_link else ""
+            )
+            num_td = row.select_one("td.Num")
+            order_td = row.select_one("td.Result_Num")
+            hm = extract_numbers(safe_text(num_td)) if num_td else []
+            ho = extract_numbers(safe_text(order_td)) if order_td else []
+            horse_number = int(hm[0]) if hm else 0
+            finish_order = int(ho[0]) if ho else 0
+
+            idx_cells = row.select("td.IndexMasterCell")
+            indices: list[int] = []
+            for cell in idx_cells:
+                nums = extract_numbers(safe_text(cell))
+                indices.append(int(float(nums[0])) if nums else 0)
+
+            tds = row.find_all("td")
+            sections: list[dict[str, Any]] = []
+            si = 0
+            ti = 0
+            while ti < len(tds) and si < len(section_columns):
+                td = tds[ti]
+                cl = " ".join(td.get("class", []))
+                if "CellDataWrap" not in cl:
+                    ti += 1
+                    continue
+                lt_raw = td.get("data-laptime") or safe_text(td)
+                lt_f = self._to_float_lt(str(lt_raw))
+                pos = 0
+                if ti + 1 < len(tds):
+                    ptd = tds[ti + 1]
+                    pcl = " ".join(ptd.get("class", []))
+                    if "PositionCell" in pcl:
+                        po = ptd.get("data-position")
+                        if po is not None and str(po).strip().isdigit():
+                            pos = int(str(po).strip())
+                        else:
+                            pn = extract_numbers(safe_text(ptd))
+                            pos = int(pn[0]) if pn else 0
+                sc = section_columns[si]
+                sections.append({
+                    "distance_m": sc["distance_m"],
+                    "header": sc["header"],
+                    "corner": sc.get("corner", ""),
+                    "lap_time": lt_f,
+                    "position": pos,
+                })
+                si += 1
+                ti += 2
+
+            comment = ""
+            com_td = row.select_one("td.Comment")
+            if com_td:
+                comment = safe_text(com_td)
+
+            result["entries"].append({
+                "finish_order": finish_order,
+                "horse_number": horse_number,
+                "horse_id": horse_id,
+                "horse_name": horse_name,
+                "index_total": indices[0] if len(indices) > 0 else 0,
+                "index_start": indices[1] if len(indices) > 1 else 0,
+                "index_chase": indices[2] if len(indices) > 2 else 0,
+                "index_closing": indices[3] if len(indices) > 3 else 0,
+                "sections": sections,
+                "lap_comment": comment,
+            })
+
+        return result
+
+    @staticmethod
+    def _to_float_lt(s: str) -> float:
+        nums = extract_numbers(s)
+        return float(nums[0]) if nums else 0.0
+
+
+# ═══════════════════════════════════════════════════════
 # 10. 追い切り (調教詳細) パーサー
 #     URL: https://race.netkeiba.com/race/oikiri.html?race_id={id}
 # ═══════════════════════════════════════════════════════
@@ -1830,60 +2160,94 @@ class OikiriParser:
         if not table:
             return result
 
-        for row in table.select("tr"):
-            horse_link = row.select_one("a[href*='/horse/']")
-            if not horse_link:
-                continue
+        rows = table.select("tr.HorseList, tr")
+        rows = [r for r in rows if r.select("td")]
 
+        i = 0
+        while i < len(rows):
+            row = rows[i]
             cols = row.select("td")
-            uma_tag = row.select_one("td[class*='Umaban'], td[class*='Waku']")
-            uma_nums = extract_numbers(safe_text(uma_tag)) if uma_tag else []
 
-            def col_text(idx: int) -> str:
-                return safe_text(cols[idx]) if idx < len(cols) else ""
+            # ヘッダー行 (5列前後: 枠/馬番/チェック/馬名/短評) の後に
+            # データ行 (10列前後: 日付/コース/馬場/騎手/タイム/…/評価) が続く
+            horse_link = row.select_one("a[href*='/horse/']")
+            has_date_col = any("Training_Day" in " ".join(td.get("class", [])) for td in cols)
 
-            eval_tag = row.select_one("td[class*='Rank'], td[class*='Hyouka'], span[class*='Rank']")
-            evaluation = safe_text(eval_tag) if eval_tag else ""
+            if horse_link and not has_date_col:
+                # ヘッダー行: 馬情報を取得し、次の行からデータを読む
+                uma_tag = row.select_one("td[class*='Umaban']") or row.select_one("td[class*='Waku']")
+                uma_nums = extract_numbers(safe_text(uma_tag)) if uma_tag else []
 
-            comment_tag = row.select_one("td[class*='Comment'], td.Tanpyo")
-            comment = safe_text(comment_tag) if comment_tag else ""
+                comment_tag = row.select_one("td[class*='Review'], td[class*='Comment'], td.Tanpyo")
+                comment = safe_text(comment_tag) if comment_tag else ""
 
-            training_date = ""
-            course = ""
-            condition = ""
-            rider = ""
-            lap_times = ""
-            impression = ""
-
-            for i, td in enumerate(cols):
-                text = safe_text(td)
-                cls = " ".join(td.get("class", []))
-                if re.match(r"\d+/\d+", text):
-                    training_date = text
-                elif "course" in cls.lower() or text in ("栗坂", "栗CW", "美坂", "美ウッド", "栗P", "美P"):
-                    course = text
-                elif text in ("良", "稍重", "稍", "重", "不良"):
-                    condition = text
-                elif re.match(r"\d+\.\d+-", text):
-                    lap_times = text
-                elif text in ("馬なり", "一杯", "強め", "仕掛け", "末強め", "G前仕掛け"):
-                    impression = text
-
-            result["entries"].append({
-                "horse_number": int(uma_nums[0]) if uma_nums else 0,
-                "horse_name": safe_text(horse_link),
-                "horse_id": extract_id_from_url(safe_attr(horse_link, "href")),
-                "training_date": training_date,
-                "course": course,
-                "condition": condition,
-                "rider": rider,
-                "lap_times": lap_times,
-                "impression": impression,
-                "evaluation": evaluation,
-                "comment": comment[:200],
-            })
+                data_row = rows[i + 1] if (i + 1) < len(rows) else None
+                entry = self._parse_data_row(data_row)
+                entry["horse_number"] = int(uma_nums[0]) if uma_nums else 0
+                entry["horse_name"] = safe_text(horse_link)
+                entry["horse_id"] = extract_id_from_url(safe_attr(horse_link, "href"))
+                if comment and not entry["comment"]:
+                    entry["comment"] = comment[:200]
+                result["entries"].append(entry)
+                i += 2
+            elif has_date_col:
+                # データ行が単独で出現（ヘッダー行なし）
+                hl = row.select_one("a[href*='/horse/']")
+                entry = self._parse_data_row(row)
+                if hl:
+                    uma_tag = row.select_one("td[class*='Umaban'], td[class*='Waku']")
+                    uma_nums = extract_numbers(safe_text(uma_tag)) if uma_tag else []
+                    entry["horse_number"] = int(uma_nums[0]) if uma_nums else 0
+                    entry["horse_name"] = safe_text(hl)
+                    entry["horse_id"] = extract_id_from_url(safe_attr(hl, "href"))
+                result["entries"].append(entry)
+                i += 1
+            else:
+                i += 1
 
         return result
+
+    def _parse_data_row(self, row) -> dict[str, Any]:
+        """調教データ行 (日付/コース/馬場/騎手/タイム/評価) をパースする。"""
+        entry: dict[str, Any] = {
+            "horse_number": 0, "horse_name": "", "horse_id": "",
+            "training_date": "", "course": "", "condition": "",
+            "rider": "", "lap_times": "", "impression": "",
+            "evaluation": "", "comment": "",
+        }
+        if row is None:
+            return entry
+
+        cols = row.select("td")
+        for td in cols:
+            text = safe_text(td)
+            cls = " ".join(td.get("class", []))
+
+            if "Training_Day" in cls:
+                entry["training_date"] = text
+            elif "Rank" in cls:
+                entry["evaluation"] = text
+            elif "TrainingLoad" in cls:
+                entry["impression"] = text
+            elif "Training_Critic" in cls or "Comment" in cls or "Tanpyo" in cls:
+                if not entry["comment"]:
+                    entry["comment"] = text[:200]
+            elif "TrainingTimeData" in cls or "Time" in cls:
+                m = re.search(r"-?[\d.]+\([\d.]+\)", text)
+                if m:
+                    entry["lap_times"] = re.sub(r"[^\d.()\-].*", "", text).strip()
+            elif re.match(r"\d{4}/\d{2}/\d{2}", text):
+                entry["training_date"] = text
+            elif text in ("栗坂", "栗CW", "美坂", "美ウッド", "美南W", "栗P", "美P",
+                          "栗芝", "栗ダ", "美芝", "美ダ", "栗南P") or "course" in cls.lower():
+                entry["course"] = text
+            elif text in ("良", "稍重", "稍", "重", "不良"):
+                entry["condition"] = text
+            elif text in ("助手", "本人") or re.match(r"[\u4e00-\u9fff]{2,4}$", text):
+                if not entry["rider"] and text not in ("良", "稍重", "重", "不良"):
+                    entry["rider"] = text
+
+        return entry
 
 
 # ═══════════════════════════════════════════════════════

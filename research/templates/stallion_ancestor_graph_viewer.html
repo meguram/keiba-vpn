@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>種牡馬祖先グラフ（父・母父）</title>
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+    #toolbar { padding: 8px 12px; border-bottom: 1px solid #ccc; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    #panel-wrap { border-bottom: 1px solid #ddd; background: #f8f9fa; }
+    #panel-wrap summary { cursor: pointer; padding: 8px 12px; font-weight: 600; user-select: none; list-style: none; }
+    #panel-wrap summary::-webkit-details-marker { display: none; }
+    #panel-wrap summary::before { content: "▸ "; display: inline-block; width: 1em; }
+    #panel-wrap details[open] summary::before { content: "▾ "; }
+    .panel-body { padding: 0 12px 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .row input[type="range"] { width: 140px; vertical-align: middle; }
+    #net { flex: 1; min-height: 280px; outline: none; border-top: 1px solid #eee; }
+    label { font-size: 14px; }
+    input[type="search"] { min-width: 200px; padding: 4px 8px; }
+    .hint { color: #555; font-size: 13px; }
+    kbd { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 12px; border: 1px solid #ccc; }
+    button { padding: 4px 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <strong>種牡馬祖先グラフ</strong>
+    <span class="hint">青=父 / 橙=母父 · ドラッグで移動 · トラックパッド／マウスホイールで拡縮</span>
+    <label>検索 <input type="search" id="q" placeholder="horse_id または 名前" /></label>
+  </div>
+  <div id="panel-wrap">
+    <details id="panel" open>
+      <summary>ズーム・表示のカスタマイズ</summary>
+      <div class="panel-body">
+        <div class="row">
+          <span>ズーム</span>
+          <button type="button" id="zoomIn">拡大</button>
+          <button type="button" id="zoomOut">縮小</button>
+          <button type="button" id="zoomOne">等倍 (1.0)</button>
+          <button type="button" id="fit">全体表示</button>
+          <span class="hint">現在の倍率 <strong id="scaleLbl">—</strong></span>
+        </div>
+        <div class="row">
+          <button type="button" id="physicsToggle">物理シミュ ON（クリックで停止）</button>
+          <label>ばねの長さ <input type="range" id="springLen" min="40" max="280" value="120" /></label>
+          <span id="springVal" class="hint">120</span>
+        </div>
+        <div class="row">
+          <label>ノード文字 <input type="range" id="fontSize" min="8" max="28" value="13" /></label>
+          <span id="fontVal" class="hint">13</span>
+          <label>エッジ太さ <input type="range" id="edgeWidth" min="1" max="8" value="2" /></label>
+          <span id="edgeVal" class="hint">2</span>
+        </div>
+        <div class="row hint">
+          グラフをクリック後、<kbd>+</kbd> / <kbd>-</kbd> でも拡縮、<kbd>0</kbd> で等倍（検索欄・スライダー操作中は無効）
+        </div>
+      </div>
+    </details>
+  </div>
+  <div id="net" tabindex="0" role="application" aria-label="種牡馬祖先グラフ"></div>
+  <script>
+(function () {
+  const netEl = document.getElementById("net");
+  const q = document.getElementById("q");
+  const scaleLbl = document.getElementById("scaleLbl");
+  const physicsToggle = document.getElementById("physicsToggle");
+  const springLen = document.getElementById("springLen");
+  const springVal = document.getElementById("springVal");
+  const fontSize = document.getElementById("fontSize");
+  const fontVal = document.getElementById("fontVal");
+  const edgeWidth = document.getElementById("edgeWidth");
+  const edgeVal = document.getElementById("edgeVal");
+
+  let network = null;
+  let lastData = null;
+  let nodesDS = null;
+  let edgesDS = null;
+  let physicsEnabled = true;
+
+  function syncScaleLabel() {
+    if (!network) return;
+    try {
+      scaleLbl.textContent = network.getScale().toFixed(2);
+    } catch (e) {
+      scaleLbl.textContent = "—";
+    }
+  }
+
+  function setPhysicsButtonLabel() {
+    physicsToggle.textContent = physicsEnabled
+      ? "物理シミュ ON（クリックで停止）"
+      : "物理シミュ OFF（クリックで再開）";
+  }
+
+  function colorForNode(n) {
+    if (n.in_target) return "#c8e6c9";
+    return "#e0e0e0";
+  }
+
+  function readSpring() {
+    return parseInt(springLen.value, 10) || 120;
+  }
+
+  function buildVis(data) {
+    const fs = parseInt(fontSize.value, 10) || 13;
+    const ew = parseInt(edgeWidth.value, 10) || 2;
+    fontVal.textContent = String(fs);
+    edgeVal.textContent = String(ew);
+    springVal.textContent = springLen.value;
+
+    nodesDS = new vis.DataSet(data.nodes.map(function (n) {
+      return {
+        id: n.id,
+        label: (n.label || n.id).slice(0, 28),
+        title: n.id + "\n" + (n.label || ""),
+        color: colorForNode(n),
+        font: { size: fs },
+      };
+    }));
+    edgesDS = new vis.DataSet(data.edges.map(function (e, i) {
+      const isSire = e.relation === "sire";
+      return {
+        id: "e" + i,
+        from: e.source,
+        to: e.target,
+        arrows: "to",
+        width: ew,
+        color: { color: isSire ? "#1565c0" : "#ef6c00" },
+        dashes: !isSire,
+        title: e.relation,
+      };
+    }));
+    const opts = {
+      interaction: { hover: true, multiselect: true, zoomView: true, dragView: true },
+      nodes: { shape: "box", margin: 8, borderWidth: 1 },
+      edges: { smooth: { type: "cubicBezier", forceDirection: "horizontal", roundness: 0.2 } },
+      physics: {
+        enabled: physicsEnabled,
+        barnesHut: { gravitationalConstant: -2500, springLength: readSpring() },
+        stabilization: { iterations: 120 },
+      },
+    };
+    network = new vis.Network(netEl, { nodes: nodesDS, edges: edgesDS }, opts);
+    lastData = data;
+    network.on("zoom", function (p) {
+      if (p && typeof p.scale === "number") scaleLbl.textContent = p.scale.toFixed(2);
+      else syncScaleLabel();
+    });
+    network.on("animationFinished", syncScaleLabel);
+    network.once("stabilizationIterationsDone", syncScaleLabel);
+    syncScaleLabel();
+  }
+
+  fetch("graph.json")
+    .then(function (r) {
+      if (!r.ok) throw new Error(r.status + " " + r.statusText);
+      return r.json();
+    })
+    .then(buildVis)
+    .catch(function (e) {
+      netEl.innerHTML =
+        '<p style="padding:16px">graph.json を読めませんでした（同一フォルダで <code>python3 -m http.server</code> を実行して開いてください）。<br/>' +
+        e +
+        "</p>";
+    });
+
+  function zoomBy(factor) {
+    if (!network) return;
+    let s = network.getScale() * factor;
+    s = Math.max(0.02, Math.min(8, s));
+    network.moveTo({ scale: s, animation: true });
+  }
+
+  document.getElementById("zoomIn").onclick = function () {
+    zoomBy(1.25);
+  };
+  document.getElementById("zoomOut").onclick = function () {
+    zoomBy(1 / 1.25);
+  };
+  document.getElementById("zoomOne").onclick = function () {
+    if (!network) return;
+    network.moveTo({ scale: 1, animation: true });
+  };
+  document.getElementById("fit").onclick = function () {
+    if (network) network.fit({ animation: true });
+  };
+
+  physicsToggle.onclick = function () {
+    if (!network) return;
+    physicsEnabled = !physicsEnabled;
+    network.setOptions({ physics: { enabled: physicsEnabled } });
+    setPhysicsButtonLabel();
+  };
+
+  springLen.addEventListener("input", function () {
+    springVal.textContent = springLen.value;
+    if (!network) return;
+    network.setOptions({
+      physics: {
+        enabled: physicsEnabled,
+        barnesHut: { gravitationalConstant: -2500, springLength: readSpring() },
+      },
+    });
+  });
+
+  fontSize.addEventListener("input", function () {
+    fontVal.textContent = fontSize.value;
+    if (!nodesDS) return;
+    const sz = parseInt(fontSize.value, 10) || 13;
+    const updates = nodesDS.getIds().map(function (id) {
+      return { id: id, font: { size: sz } };
+    });
+    nodesDS.update(updates);
+  });
+
+  edgeWidth.addEventListener("input", function () {
+    edgeVal.textContent = edgeWidth.value;
+    if (!edgesDS) return;
+    const w = parseInt(edgeWidth.value, 10) || 1;
+    const updates = edgesDS.getIds().map(function (id) {
+      return { id: id, width: w };
+    });
+    edgesDS.update(updates);
+  });
+
+  q.addEventListener("input", function () {
+    if (!network || !lastData) return;
+    const term = (q.value || "").trim().toLowerCase();
+    const sel = lastData.nodes.filter(function (n) {
+      if (!term) return false;
+      return (n.id && n.id.toLowerCase().indexOf(term) >= 0) ||
+        ((n.label || "").toLowerCase().indexOf(term) >= 0);
+    });
+    if (sel.length === 0) return;
+    const ids = sel.map(function (n) {
+      return n.id;
+    });
+    network.selectNodes(ids);
+    network.focus(ids[0], { scale: 1.2, animation: true });
+  });
+
+  function isTypingTarget(el) {
+    if (!el || !el.tagName) return false;
+    const t = el.tagName.toLowerCase();
+    if (t === "textarea") return true;
+    if (t === "select") return true;
+    if (t === "input") {
+      const typ = (el.type || "").toLowerCase();
+      if (typ === "button" || typ === "checkbox" || typ === "radio" || typ === "submit") return false;
+      return true;
+    }
+    return false;
+  }
+
+  document.addEventListener("keydown", function (ev) {
+    if (isTypingTarget(ev.target)) return;
+    if (!network) return;
+    if (ev.key === "+" || ev.key === "=") {
+      ev.preventDefault();
+      zoomBy(1.2);
+    } else if (ev.key === "-" || ev.key === "_") {
+      ev.preventDefault();
+      zoomBy(1 / 1.2);
+    } else if (ev.key === "0") {
+      ev.preventDefault();
+      network.moveTo({ scale: 1, animation: true });
+    }
+  });
+
+  setPhysicsButtonLabel();
+})();
+  </script>
+</body>
+</html>

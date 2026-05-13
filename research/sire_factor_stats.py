@@ -27,21 +27,29 @@ logger = logging.getLogger(__name__)
 
 AXES = [
     {"id": "ts", "label_ja": "TS（最高速度）",
-     "hint": "上がり3Fの速さ。距離・馬場補正済み偏差値"},
+     "hint": "上がり3Fの速さ。距離・馬場補正済み偏差値",
+     "lower_is_better": False},
     {"id": "gear_change", "label_ja": "ギアチェンジ",
-     "hint": "後方から上がりの速さで追い込む力"},
+     "hint": "後方から上がりの速さで追い込む力",
+     "lower_is_better": False},
     {"id": "ts_sustain", "label_ja": "TS持続力",
-     "hint": "前半ペースの効率 + 長距離での成績"},
+     "hint": "前半ペースの効率 + 長距離での成績",
+     "lower_is_better": False},
     {"id": "wet_turf", "label_ja": "道悪適性",
-     "hint": "芝の重/不良での複勝率向上度"},
+     "hint": "芝の重/不良での複勝率向上度",
+     "lower_is_better": False},
     {"id": "dirt", "label_ja": "ダート適性",
-     "hint": "ダートでの複勝率向上度"},
+     "hint": "ダートでの複勝率向上度",
+     "lower_is_better": False},
     {"id": "start_speed", "label_ja": "スタート速度",
-     "hint": "序盤の位置取り（前に行ける力）"},
+     "hint": "序盤の位置取り（前に行ける力）",
+     "lower_is_better": False},
     {"id": "distance_range", "label_ja": "距離適性幅",
-     "hint": "好走距離の幅広さ（大=万能型）"},
+     "hint": "好走距離の幅広さ（大=万能型）",
+     "lower_is_better": False},
     {"id": "consistency", "label_ja": "安定性",
-     "hint": "総合的な複勝率"},
+     "hint": "総合的な複勝率",
+     "lower_is_better": False},
 ]
 
 AXIS_IDS = tuple(a["id"] for a in AXES)
@@ -565,9 +573,12 @@ def invalidate_cache():
 
 if __name__ == "__main__":
     import sys
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s")
+    _r = str(Path(__file__).resolve().parents[1])
+    if _r not in sys.path:
+        sys.path.insert(0, _r)
+    from utils.keiba_logging import script_basic_config
+
+    script_basic_config()
     from scraper.storage import HybridStorage
     storage = HybridStorage(".")
 

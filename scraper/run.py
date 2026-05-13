@@ -5,6 +5,8 @@ Usage:
   python -m scraper.run race-result 202505020811
   python -m scraper.run race-card 202606020611
   python -m scraper.run horse 2021105354
+  python -m scraper.run horse-training 2021105143   # 調教タイム（最大20ページ、要ログイン）
+  python -m scraper.run horse-training 2021105143 --force  # GCS+ローカル済でも再取得
   python -m scraper.run race-list 20260322
   python -m scraper.run race-detail 202606020611
   python -m scraper.run summary
@@ -27,12 +29,15 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import json
 import logging
+import os
 import random
 import sys
 import threading
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import requests
 
@@ -43,14 +48,68 @@ from scraper.parsers import (
     PaddockParser, BarometerParser, OikiriParser, TrainingParser,
     TrainerCommentParser,
 )
+from scraper.horse_training_local import (
+    horse_training_json_path,
+    write_horse_training_json,
+)
 from scraper.storage import HybridStorage
 from scraper.html_archive import HtmlArchive
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-)
+from utils.keiba_logging import script_basic_config
+
+script_basic_config()
 logger = logging.getLogger("scraper.run")
+
+# キューワーカー等で cwd がプロジェクト外でも data/ 配下が一箇所に揃うよう、リポジトリルートを固定する
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _horse_training_http_means_empty(exc: BaseException, url: str) -> bool:
+    """
+    調教一覧 URL に対するレスポンスが「この馬には調教ページが無い」扱いのとき True。
+    HTTP 400 は IP 制限等の可能性があるため扱わず、例外は上位でキュー一時停止に回す。
+
+    404 のみ空データ保存でジョブ成功にする（文字列メッセージからの 404 も想定）。
+    """
+    if "/horse/training" not in url:
+        return False
+    resp = getattr(exc, "response", None)
+    if resp is not None and resp.status_code == 404:
+        return True
+    s = str(exc)
+    if "training.html" not in s and "/horse/training" not in s:
+        return False
+    if "404 Client Error" in s or " 404 " in s or "Not Found for url" in s:
+        return True
+    return False
+
+
+def _read_horse_training_local_file(
+    local_path: Path,
+) -> dict | None:
+    try:
+        if not local_path.is_file():
+            return None
+        with open(local_path, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else None
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _horse_training_local_dict_looks_stored(
+    d: dict | None, horse_id: str
+) -> bool:
+    """
+    手元 JSON (data/local/horse_training) が 1 件分の正規化済スナップか。
+    空件数も「取得済」として扱う（404 等で 0 件を保存したケース）。
+    """
+    if not d or not isinstance(d, dict):
+        return False
+    h = d.get("horse_id")
+    if h is not None and str(h) != str(horse_id):
+        return False
+    return "entries" in d or d.get("total_items") is not None or d.get("pages_fetched") is not None
 
 
 class ScraperRunner:
@@ -78,7 +137,7 @@ class ScraperRunner:
             cache_dir=None,
             auto_login=auto_login,
         )
-        self.storage = HybridStorage(".")
+        self.storage = HybridStorage(str(REPO_ROOT))
         self.archive = HtmlArchive()
 
         self.result_parser = RaceResultParser()
@@ -102,6 +161,9 @@ class ScraperRunner:
         self._horse_session_cache: dict[str, float] = {}
         self._horse_blob_prefetched: set[str] = set()
         self._horse_cache_lock = threading.Lock()
+        self._last_pedigree_5gen_skip = False
+        # キュー 1 ジョブ内: ネット/HTML を一切引いていなければ True（ジョブ後待機を省略）
+        self._queue_mute_scrape_throttle: bool = False
 
     # ── 馬情報の鮮度判定 ──────────────────────────────
 
@@ -239,6 +301,22 @@ class ScraperRunner:
             n = len(data.get("entries", []))
             label = data.get("race_name", "") or data.get("horse_name", "") or key
             logger.info("取得完了: %s/%s — %s (%d件)", category, key, label, n)
+            if category == "race_shutuba" and isinstance(data, dict):
+                try:
+                    from pipeline.sync_ped_tbl_for_horses import sync_ped_tbl_after_shutuba
+
+                    st = sync_ped_tbl_after_shutuba(data, base_dir=self.storage._base_dir)
+                    if st is not None:
+                        logger.info(
+                            "ped_tbl 同期 (shutuba %s): written=%d skipped=%d missing_json=%d errors=%d",
+                            key,
+                            st.get("written", 0),
+                            st.get("skipped_existing_parquet", 0),
+                            st.get("missing_json", 0),
+                            st.get("errors", 0),
+                        )
+                except Exception as e:
+                    logger.warning("ped_tbl 同期失敗 (%s/%s): %s", category, key, e)
             return data
 
         except Exception as e:
@@ -254,6 +332,47 @@ class ScraperRunner:
             self.result_parser, {"race_id": race_id},
             skip_existing=skip_existing, min_entries=1,
         )
+
+    def scrape_race_result_lap(self, race_id: str, skip_existing: bool = True) -> dict | None:
+        """
+        結果ページ（race_result と同一 URL）を取得し、ラップ・通過等を
+        ``race_result_lap`` カテゴリ用ペイロードにまとめて保存する。
+
+        詳細通過はプレミアム表示分があるため、ログイン推奨（未ログインでも枠は組める）。
+        """
+        if skip_existing and self.storage.exists("race_result_lap", race_id):
+            logger.info("スキップ (既存): race_result_lap/%s", race_id)
+            return self.storage.load("race_result_lap", race_id)
+
+        if not self.client.is_logged_in:
+            if not self.client.login():
+                logger.warning(
+                    "race_result_lap: ログイン失敗（ラップ列が空に近い可能性） %s",
+                    race_id,
+                )
+
+        url = self.RACE_RESULT_URL.format(race_id=race_id)
+        try:
+            html = self.client.fetch(url)
+            self.archive.save("race_result", race_id, html)
+            parsed = self.result_parser.parse(html, race_id=race_id)
+            lap = self.result_parser.build_race_result_lap_payload(parsed)
+            n_e = len(lap.get("entries_lap") or [])
+            n_l = len(lap.get("lap_times") or [])
+            if n_e == 0 and n_l == 0:
+                logger.warning("race_result_lap: ラップ系データが空: %s", race_id)
+                return None
+            self.storage.save("race_result_lap", race_id, lap)
+            logger.info(
+                "取得完了: race_result_lap/%s — entries_lap=%d lap_rows=%d",
+                race_id,
+                n_e,
+                n_l,
+            )
+            return lap
+        except Exception as e:
+            logger.error("race_result_lap 取得失敗 [%s]: %s", race_id, e)
+            return None
 
     def scrape_race_card(self, race_id: str, skip_existing: bool = True) -> dict | None:
         return self._fetch_parse_save(
@@ -448,10 +567,12 @@ class ScraperRunner:
         from research.pedigree_similarity import parse_blood_table_5gen
         from scripts.scrape_pedigree_5gen import build_pedigree_record
 
+        self._last_pedigree_5gen_skip = False
         if skip_existing:
             ex = self.storage.load("horse_pedigree_5gen", horse_id)
             anc = (ex or {}).get("ancestors") or []
             if ex and len(anc) >= 5:
+                self._last_pedigree_5gen_skip = True
                 logger.info("スキップ (既存): horse_pedigree_5gen/%s", horse_id)
                 return ex
 
@@ -477,11 +598,29 @@ class ScraperRunner:
 
     # ── 調教タイム (全ページ結合) ────────────────────────────
 
+    def _persist_horse_training(self, horse_id: str, result: dict) -> None:
+        """GCS とローカル JSON に同一 dict を保存（_meta は storage.save が付与）。"""
+        gcs_err: Exception | None = None
+        try:
+            self.storage.save("horse_training", horse_id, result)
+        except Exception as e:
+            gcs_err = e
+            logger.error("GCS save 失敗 horse_training/%s: %s", horse_id, e)
+        try:
+            write_horse_training_json(self.storage._base_dir, horse_id, result)
+        except Exception as e:
+            logger.warning("horse_training ローカルミラー失敗 %s: %s", horse_id, e)
+        if gcs_err is not None:
+            raise gcs_err
+
     def scrape_horse_training(
         self,
         horse_id: str,
         skip_existing: bool = False,
         max_pages: int = 20,
+        *,
+        force: bool = False,
+        smart_skip: bool = True,
     ) -> dict | None:
         """
         馬の調教タイムを全ページ分スクレイピングし、結合して保存する。
@@ -489,23 +628,83 @@ class ScraperRunner:
         ページネーションは ?page=N で遷移（10件/ページ）。
         全ページを取得し、entries を時系列で結合する。
 
-        鮮度管理: skip_existing=False（デフォルト）で常に最新化。
-                  True の場合は既存データが7日以内なら再取得しない。
+        **取得方針（``force=False`` のとき）**
+
+        - **smart_skip かつ 手元 ``data/local/horse_training/...json`` が正規化済 かつ GCS にオブジェクトあり**
+          → ネット・**``load`` による GCS 全件取得も行わず**、手元 JSON を返す（再書き込みで揃え）。
+        - 手元が欠損・壊損で **GCS にはある**場合は ``load`` を使う（従来どおり GCS 経路）。
+        - **ローカルなし・GCS あり** → スクレイピングし、GCS とローカルへ保存。
+        - **GCS なし**（ローカルの有無に依らず） → スクレイピングし、GCS とローカルへ保存。
+
+        ``force=True`` のときは上記を無視し、常にスクレイピングする。
+
+        ``skip_existing`` は後方互換のため残す（旧 API）。``smart_skip=False`` のときは
+        ローカル+GCS があっても再取得する。
+
+        調教行が 1 件も無い馬も ``entries: []`` のレコードを GCS/ローカルに保存する。
+        1 ページ目が HTTP 404（調教ページ無し等）のときは空保存して正常終了する。
+        HTTP 400 はブロック疑いのため空保存せず例外を上げ、キューが一時停止する。
+
+        ログイン失敗、その他の HTTP エラーや 1 ページ目以外の致命的失敗は例外を送出する。
         """
-        if skip_existing:
-            existing = self.storage.load("horse_training", horse_id)
-            if existing:
-                scraped_at = existing.get("_meta", {}).get("scraped_at", 0)
-                age_days = (time.time() - scraped_at) / 86400 if scraped_at else 999
-                if age_days < self._horse_freshness_days:
-                    logger.info("スキップ (鮮度OK): horse_training/%s (%.1f日前)",
-                                horse_id, age_days)
-                    return existing
+        _ = skip_existing  # 呼び出し互換（旧鮮度スキップは廃止）
+
+        self._queue_mute_scrape_throttle = False
+        local_path = horse_training_json_path(self.storage._base_dir, horse_id)
+        local_ok = local_path.is_file()
+        d_local: dict | None = None
+        if local_ok:
+            d_local = _read_horse_training_local_file(local_path)
+
+        # 手元+GCS 共に取り得るとき: exists のみ、full load は行わない（GCS ダウンロード＆待機不要）
+        if not force and smart_skip and d_local and _horse_training_local_dict_looks_stored(
+            d_local, horse_id
+        ):
+            gcs_ok = self.storage.exists("horse_training", horse_id)
+            if gcs_ok:
+                self._queue_mute_scrape_throttle = True
+                try:
+                    write_horse_training_json(
+                        self.storage._base_dir, horse_id, d_local
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "horse_training スキップ時のローカル再書き込み失敗 %s: %s",
+                        horse_id, e,
+                    )
+                logger.info(
+                    "スキップ (ローカル+GCS・ネット0・load スキップ): horse_training/%s", horse_id
+                )
+                return d_local
+            # 手元のみで GCS 未配置 → 従来どおり下流で再取得（警告は出さない）
+        if not force and smart_skip and local_ok and self.storage.exists(
+            "horse_training", horse_id
+        ):
+            data = self.storage.load("horse_training", horse_id)
+            if data:
+                try:
+                    write_horse_training_json(
+                        self.storage._base_dir, horse_id, data,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "horse_training スキップ時のローカル同期失敗 %s: %s",
+                        horse_id, e,
+                    )
+                logger.info(
+                    "スキップ (GCS+手元・load 使用): horse_training/%s", horse_id
+                )
+                return data
+            logger.warning(
+                "horse_training: GCS 有りだが load 失敗のため再取得へ %s",
+                horse_id,
+            )
 
         if not self.client.is_logged_in:
             if not self.client.login():
-                logger.warning("調教データの取得にはログインが必要です")
-                return None
+                raise RuntimeError(
+                    "netkeiba ログインに失敗したため horse_training を取得できません"
+                )
 
         all_entries: list[dict] = []
         total_items = 0
@@ -519,9 +718,23 @@ class ScraperRunner:
             try:
                 html = self.client.fetch(url, use_cache=False)
             except Exception as e:
+                if page == 1 and _horse_training_http_means_empty(e, url):
+                    logger.warning(
+                        "調教ページ HTTP 404 — データなしとして空保存 [%s]: %s",
+                        horse_id, e,
+                    )
+                    empty_result = {
+                        "horse_id": horse_id,
+                        "total_items": 0,
+                        "pages_fetched": 0,
+                        "entries": [],
+                    }
+                    self._persist_horse_training(horse_id, empty_result)
+                    logger.info("調教保存完了: %s — 0件 (404 によりページ無し)", horse_id)
+                    return empty_result
                 logger.error("調教ページ取得失敗 [%s] page=%d: %s", horse_id, page, e)
                 if page == 1:
-                    return None
+                    raise
                 break
 
             self.archive.save("horse_training", f"{horse_id}_p{page}", html)
@@ -532,8 +745,18 @@ class ScraperRunner:
                 total_items = data.get("total_items", 0)
                 max_page = data.get("max_page", 1)
                 if total_items == 0 and not data.get("entries"):
-                    logger.warning("調教データなし: %s", horse_id)
-                    return None
+                    logger.warning(
+                        "調教データなし: %s — 空の entries で GCS/ローカルに保存", horse_id,
+                    )
+                    empty_result = {
+                        "horse_id": horse_id,
+                        "total_items": 0,
+                        "pages_fetched": 0,
+                        "entries": [],
+                    }
+                    self._persist_horse_training(horse_id, empty_result)
+                    logger.info("調教保存完了: %s — 0件 (調教行なし)", horse_id)
+                    return empty_result
 
             entries = data.get("entries", [])
             if not entries:
@@ -546,7 +769,18 @@ class ScraperRunner:
             if page >= max_page:
                 break
 
-            time.sleep(random.uniform(1.0, 2.0))
+            try:
+                lo = float(
+                    os.environ.get("HORSE_TRAINING_INTER_PAGE_MIN_SEC", "1.2")
+                )
+                hi = float(
+                    os.environ.get("HORSE_TRAINING_INTER_PAGE_MAX_SEC", "2.4")
+                )
+            except (TypeError, ValueError):
+                lo, hi = 1.2, 2.4
+            if hi < lo:
+                lo, hi = hi, lo
+            time.sleep(random.uniform(lo, hi))
 
         seen = set()
         unique_entries = []
@@ -562,9 +796,9 @@ class ScraperRunner:
             "pages_fetched": min(max_page, max_pages),
             "entries": unique_entries,
         }
-        self.storage.save("horse_training", horse_id, result)
+        self._persist_horse_training(horse_id, result)
         logger.info("調教保存完了: %s — %d件 (%dページ)",
-                     horse_id, len(unique_entries), result["pages_fetched"])
+                    horse_id, len(unique_entries), result["pages_fetched"])
         return result
 
     # ── レース詳細 (マージ) ──────────────────────────────
@@ -784,8 +1018,6 @@ class ScraperRunner:
                 inter_race_pause = random.uniform(3.0, 8.0)
                 logger.debug("レース間クールダウン: %.1f 秒", inter_race_pause)
                 time.sleep(inter_race_pause)
-
-        # SmartRC は scrape_race_all 内で各レースごとに取得済み
 
         logger.info("=== %s: 全 %d レース取得完了 (スキップ: %d カテゴリ) ===",
                      date, len(races), total_skipped)
@@ -1311,7 +1543,7 @@ class ScraperRunner:
             fetched = 0
             skip_count = 0
             for i, hid in enumerate(horse_ids):
-                if self.is_horse_fresh(hid, race_date):
+                if smart_skip and self.is_horse_fresh(hid, race_date):
                     hdata = self.storage.load("horse_result", hid)
                     skipped_h.append(f"horse_result/{hid}")
                     skip_count += 1
@@ -1358,7 +1590,7 @@ class ScraperRunner:
             sire_ids: set[str] = set()
             for hid in horse_ids:
                 ex = self.storage.load("horse_pedigree_5gen", hid)
-                if ex and len((ex.get("ancestors") or [])) >= 5:
+                if smart_skip and ex and len((ex.get("ancestors") or [])) >= 5:
                     ped5_skipped += 1
                     for a in ex.get("ancestors", []):
                         if a.get("generation") == 1 and a.get("position") == 0:
@@ -1737,7 +1969,7 @@ def main():
     parser = argparse.ArgumentParser(description="netkeiba.com スクレイパー")
     parser.add_argument("command", choices=[
         "race-result", "race-results-date", "race-card", "race-cards-date",
-        "horse", "race-list", "batch-results", "horses-from-results",
+        "horse", "horse-training", "race-list", "batch-results", "horses-from-results",
         "speed-index", "shutuba-past", "race-detail",
         "race-all", "scrape-all-date", "batch-all",
         "batch-dates", "batch-month",
@@ -1752,6 +1984,17 @@ def main():
     parser.add_argument("--year", default=None, help="再パース時の年指定 (例: 2025)")
     parser.add_argument("--month", type=int, default=0, help="月指定 (batch-month用, 1-12)")
     parser.add_argument("--smart-skip", action="store_true", help="鮮度チェックでスキップ")
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=20,
+        help="horse-training 時の調教ページ上限（1ページ≈10レース分、既定20）",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="horse-training: GCS・ローカル両方にあっても再スクレイプする",
+    )
     parsed = parser.parse_args()
 
     runner = ScraperRunner(
@@ -1774,6 +2017,20 @@ def main():
             runner.scrape_date_cards(args[0])
         elif cmd == "horse" and args:
             runner.scrape_horse(args[0], skip_existing=False)
+        elif cmd == "horse-training" and args:
+            for hid in args:
+                rec = runner.scrape_horse_training(
+                    hid,
+                    skip_existing=False,
+                    max_pages=parsed.max_pages,
+                    force=parsed.force,
+                )
+                if rec:
+                    n = len(rec.get("entries") or [])
+                    pg = rec.get("pages_fetched", 0)
+                    print(f"{hid}: entries={n}, pages_fetched={pg}")
+                else:
+                    print(f"{hid}: 取得失敗（ログイン・ネットワーク・データなし等）")
         elif cmd == "race-list" and args:
             races = runner.scrape_race_list(args[0])
             for r in races:

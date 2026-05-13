@@ -1,0 +1,239 @@
+{
+  "dataset_key": "trainer_tbl/lookup_trainer_slices",
+  "generated_at": "2026-05-01T08:17:54.073156+00:00",
+  "sample_parquet": "data/features/trainer_tbl/lookup_trainer_slices.parquet",
+  "parquet_files": 1,
+  "parquet_paths_relative": [
+    "data/features/trainer_tbl/lookup_trainer_slices.parquet"
+  ],
+  "paths_truncated": false,
+  "total_rows_meta_sum": 9355,
+  "sample_rows_used_for_profile": 9355,
+  "pyarrow_schema": [
+    {
+      "name": "trainer_id",
+      "type": "string",
+      "nullable": true
+    },
+    {
+      "name": "slice_kind",
+      "type": "string",
+      "nullable": true
+    },
+    {
+      "name": "slice_key",
+      "type": "string",
+      "nullable": true
+    },
+    {
+      "name": "starts",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "wins",
+      "type": "double",
+      "nullable": true
+    },
+    {
+      "name": "top3",
+      "type": "double",
+      "nullable": true
+    },
+    {
+      "name": "avg_finish",
+      "type": "double",
+      "nullable": true
+    }
+  ],
+  "pandas_profiles": {
+    "trainer_id": {
+      "dtype": "object",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 349,
+      "value_counts_top": {
+        "01199": 37,
+        "01200": 37,
+        "01123": 37,
+        "01106": 37,
+        "01102": 37,
+        "01092": 37,
+        "01046": 37,
+        "01071": 37,
+        "01137": 37,
+        "01029": 37,
+        "00399": 37,
+        "01186": 37,
+        "01182": 37,
+        "01183": 37,
+        "01184": 37,
+        "01185": 37,
+        "01151": 37,
+        "01119": 37,
+        "01005": 37,
+        "00362": 37,
+        "00420": 37,
+        "01054": 37,
+        "01103": 37,
+        "01066": 37,
+        "01042": 37,
+        "01134": 37,
+        "01173": 37,
+        "01089": 37,
+        "01155": 37,
+        "00417": 37,
+        "00425": 37,
+        "01104": 37,
+        "01141": 37,
+        "01039": 37,
+        "01165": 37,
+        "01087": 37,
+        "01088": 37,
+        "01139": 37,
+        "01158": 37,
+        "00438": 37
+      }
+    },
+    "slice_kind": {
+      "dtype": "object",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 7,
+      "value_counts_top": {
+        "venue_code": 2452,
+        "grade_bucket": 1664,
+        "distance_band": 1525,
+        "weight_bin": 1418,
+        "season_quarter": 1090,
+        "track_bucket": 613,
+        "surface_coarse": 593
+      }
+    },
+    "slice_key": {
+      "dtype": "object",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 37,
+      "value_counts_top": {
+        "firm_good": 339,
+        "turf": 336,
+        "turf_S_<1600": 311,
+        "55-56": 302,
+        "class_nov_cond": 288,
+        "Q3": 282,
+        "Q4": 280,
+        "53-54": 278,
+        "yielding_heavy": 274,
+        "Q1": 274,
+        "57-58": 271,
+        "05": 268,
+        "OP": 265,
+        "06": 263,
+        "turf_M_1600_1999": 262,
+        "dirt_ob_S_<1600": 257,
+        "dirt_ob": 257,
+        "Q2": 254,
+        "10": 248,
+        "08": 247,
+        "09": 246,
+        "07": 244,
+        "turf_L_ge2400": 244,
+        "turf_I_2000_2399": 243,
+        "<=52": 243,
+        "01": 240,
+        "G3": 236,
+        "04": 235,
+        "03": 234,
+        "L": 232,
+        "02": 227,
+        "G2": 220,
+        "59-60": 220,
+        "other": 213,
+        "G1": 210,
+        "dirt_ob_L_ge2400": 208,
+        ">=61": 104
+      }
+    },
+    "starts": {
+      "dtype": "int64",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 1147,
+      "distribution": {
+        "count": 9355.0,
+        "mean": 212.29267771245324,
+        "std": 296.7535821937772,
+        "min": 1.0,
+        "1%": 1.0,
+        "5%": 1.0,
+        "25%": 14.0,
+        "50%": 72.0,
+        "75%": 332.0,
+        "95%": 862.2999999999993,
+        "99%": 1355.7599999999948,
+        "max": 2407.0
+      }
+    },
+    "wins": {
+      "dtype": "float64",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 184,
+      "distribution": {
+        "count": 9355.0,
+        "mean": 15.541421699625868,
+        "std": 25.988012851348923,
+        "min": 0.0,
+        "1%": 0.0,
+        "5%": 0.0,
+        "25%": 0.0,
+        "50%": 5.0,
+        "75%": 20.0,
+        "95%": 66.0,
+        "99%": 127.0,
+        "max": 269.0
+      }
+    },
+    "top3": {
+      "dtype": "float64",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 398,
+      "distribution": {
+        "count": 9355.0,
+        "mean": 46.5748797434527,
+        "std": 72.35227907566404,
+        "min": 0.0,
+        "1%": 0.0,
+        "5%": 0.0,
+        "25%": 2.0,
+        "50%": 15.0,
+        "75%": 64.0,
+        "95%": 190.0,
+        "99%": 345.0,
+        "max": 690.0
+      }
+    },
+    "avg_finish": {
+      "dtype": "float64",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 6055,
+      "distribution": {
+        "count": 9355.0,
+        "mean": 8.070494071262518,
+        "std": 2.081711655656488,
+        "min": 1.0,
+        "1%": 3.538571428571429,
+        "5%": 5.5,
+        "25%": 6.97124773960217,
+        "50%": 7.75,
+        "75%": 8.774823943661971,
+        "95%": 12.0,
+        "99%": 16.0,
+        "max": 18.0
+      }
+    }
+  }
+}

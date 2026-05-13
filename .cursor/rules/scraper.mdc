@@ -1,0 +1,12 @@
+---
+description: scraper 配下の編集時の参照先と注意
+globs: scraper/**/*.py
+alwaysApply: false
+---
+
+# scraper/
+
+- **パースとセレクタ**は `parsers.py` / `selectors.py` を中心に。HTML 変更時は両方の整合を確認する。
+- **キュー・タスク**は `queue_tasks.py` と既存の実行フローに合わせる。
+- **スキーマ・構造**のメタは `data/meta/structure/*.json`（生成物を壊さないよう差分は最小に）。
+- 保存レイアウトや完全性に触れる変更の前後では、`validate_storage` / `data_completeness` / `audit` 系（`scraper/` 直下）の有無を確認し、ユーザーが既に走らせている検証と重複しないよう短く報告する。

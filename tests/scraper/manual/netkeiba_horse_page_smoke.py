@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """
-馬ページのパーサーをテスト
+馬ページのパーサーを手動確認するスクリプト（unittest ではない）。
+リポジトリルートで: python tests/scraper/manual/netkeiba_horse_page_smoke.py
 """
 import sys
-sys.path.insert(0, '.')
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(_REPO_ROOT))
 
 from scraper.client import NetkeibaClient
 from bs4 import BeautifulSoup
@@ -14,10 +18,11 @@ print("Fetching horse result page...")
 client = NetkeibaClient(auto_login=True)
 
 # ログイン状態を確認
-if client.session.cookies.get('netkeiba_pc', domain='.netkeiba.com'):
+sess = getattr(client, "session", None)
+if sess is not None and sess.cookies.get("netkeiba_pc", domain=".netkeiba.com"):
     print("✓ Logged in (netkeiba_pc cookie exists)")
 else:
-    print("✗ Not logged in")
+    print("✗ Not logged in (session/cookies 構造はクライアント実装に依存)")
 
 result_url = f"https://db.netkeiba.com/horse/result/{horse_id}/"
 print(f"\nFetching: {result_url}")

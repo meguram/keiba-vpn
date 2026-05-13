@@ -1095,9 +1095,12 @@
     sameHorses.forEach(h => allPts.push(h.factors || {}));
     recentHorses.forEach(h => allPts.push(h.factors || {}));
 
-    const vxAll = allPts.map(f => Number(f[axX]) || 0);
-    const vyAll = allPts.map(f => Number(f[axY]) || 0);
-    const vzAll = allPts.map(f => Number(f[axZ]) || 0);
+    const flipX = _axisInfo(axX).lowerIsBetter;
+    const flipY = _axisInfo(axY).lowerIsBetter;
+    const flipZ = _axisInfo(axZ).lowerIsBetter;
+    const vxAll = allPts.map(f => { const v = Number(f[axX]) || 0; return flipX ? -v : v; });
+    const vyAll = allPts.map(f => { const v = Number(f[axY]) || 0; return flipY ? -v : v; });
+    const vzAll = allPts.map(f => { const v = Number(f[axZ]) || 0; return flipZ ? -v : v; });
     const rng = (arr) => {
       const lo = Math.min(...arr, -0.1);
       const hi = Math.max(...arr, 0.1);
@@ -1105,9 +1108,9 @@
     };
     const rx = rng(vxAll), ry = rng(vyAll), rz = rng(vzAll);
     const span = 42;
-    const toX = v => ((v - rx.lo) / rx.d - 0.5) * 2 * span;
-    const toY = v => ((v - ry.lo) / ry.d - 0.5) * 2 * span;
-    const toZ = v => ((v - rz.lo) / rz.d - 0.5) * 2 * span;
+    const toX = v => { const w = flipX ? -v : v; return ((w - rx.lo) / rx.d - 0.5) * 2 * span; };
+    const toY = v => { const w = flipY ? -v : v; return ((w - ry.lo) / ry.d - 0.5) * 2 * span; };
+    const toZ = v => { const w = flipZ ? -v : v; return ((w - rz.lo) / rz.d - 0.5) * 2 * span; };
 
     const meshes = [];
     horses.forEach((h) => {
@@ -1166,9 +1169,13 @@
     }
     const axisLabelMap = {};
     (_lastData && _lastData.axes || []).forEach(a => { axisLabelMap[a.id] = a.label_ja; });
-    makeLabel(axisLabelMap[axX] || axX, new THREE.Vector3(span + 6, -span - 3, 0), '#ef4444');
-    makeLabel(axisLabelMap[axY] || axY, new THREE.Vector3(0, span + 6, 0), '#22c55e');
-    makeLabel(axisLabelMap[axZ] || axZ, new THREE.Vector3(0, -span - 3, span + 6), '#3b82f6');
+    function _dirHint(id) {
+      const info = _axisInfo(id);
+      return info.lowerIsBetter ? ' ◀小=好' : ' ▶大=好';
+    }
+    makeLabel((axisLabelMap[axX] || axX) + _dirHint(axX), new THREE.Vector3(span + 6, -span - 3, 0), '#ef4444');
+    makeLabel((axisLabelMap[axY] || axY) + _dirHint(axY), new THREE.Vector3(0, span + 6, 0), '#22c55e');
+    makeLabel((axisLabelMap[axZ] || axZ) + _dirHint(axZ), new THREE.Vector3(0, -span - 3, span + 6), '#3b82f6');
 
     const axes = new THREE.AxesHelper(58);
     scene.add(axes);
@@ -1580,18 +1587,21 @@
     { key: 'mmmm_f',   label: '母母母母父', w: 0.14 },
   ];
   const DEFAULT_AXES_X = 'ts';
-  const DEFAULT_AXES_Y = 'gear_change';
+  const DEFAULT_AXES_Y = 'start_speed';
   const DEFAULT_AXES_Z = 'ts_sustain';
   const ALL_AXES = [
-    { id: 'ts',             label: 'TS（最高速度）' },
-    { id: 'gear_change',    label: 'ギアチェンジ' },
-    { id: 'ts_sustain',     label: 'TS持続力' },
-    { id: 'wet_turf',       label: '道悪適性' },
-    { id: 'dirt',           label: 'ダート適性' },
-    { id: 'start_speed',    label: 'スタート速度' },
-    { id: 'distance_range', label: '距離適性幅' },
-    { id: 'consistency',    label: '安定性' },
+    { id: 'ts',             label: 'TS（最高速度）',  lowerIsBetter: false },
+    { id: 'gear_change',    label: 'ギアチェンジ',    lowerIsBetter: false },
+    { id: 'ts_sustain',     label: 'TS持続力',       lowerIsBetter: false },
+    { id: 'wet_turf',       label: '道悪適性',       lowerIsBetter: false },
+    { id: 'dirt',           label: 'ダート適性',      lowerIsBetter: false },
+    { id: 'start_speed',    label: 'スタート速度',    lowerIsBetter: false },
+    { id: 'distance_range', label: '距離適性幅',      lowerIsBetter: false },
+    { id: 'consistency',    label: '安定性',          lowerIsBetter: false },
   ];
+  function _axisInfo(id) {
+    return ALL_AXES.find(a => a.id === id) || { id: id, label: id, lowerIsBetter: false };
+  }
 
   function initFactorControls() {
     [['axisX2', DEFAULT_AXES_X], ['axisY2', DEFAULT_AXES_Y], ['axisZ2', DEFAULT_AXES_Z]].forEach(([id, def]) => {
@@ -1601,7 +1611,7 @@
       ALL_AXES.forEach(a => {
         const opt = document.createElement('option');
         opt.value = a.id;
-        opt.textContent = a.label;
+        opt.textContent = a.label + (a.lowerIsBetter ? ' [小=好]' : ' [大=好]');
         if (a.id === def) opt.selected = true;
         sel.appendChild(opt);
       });
@@ -2579,7 +2589,7 @@
     if (!_lastData) return;
     const horses = _lastData.horses || [];
     const axX = _lastData.axis_x || 'ts';
-    const axY = _lastData.axis_y || 'gear_change';
+    const axY = _lastData.axis_y || 'start_speed';
     const axZ = _lastData.axis_z || 'ts_sustain';
     void drawScatter3D(horses, axX, axY, axZ).catch(function(e){ console.error(e); });
   }
@@ -2608,11 +2618,20 @@
     showErr('');
     _lastData = data;
     const axX = data.axis_x || 'ts';
-    const axY = data.axis_y || 'gear_change';
+    const axY = data.axis_y || 'start_speed';
     const axZ = data.axis_z || 'ts_sustain';
+    const flipX = _axisInfo(axX).lowerIsBetter;
+    const flipY = _axisInfo(axY).lowerIsBetter;
+    const flipZ = _axisInfo(axZ).lowerIsBetter;
 
     const axisLabelMap = {};
-    (data.axes || []).forEach(a => { axisLabelMap[a.id] = a.label_ja; });
+    (data.axes || []).forEach(a => {
+      axisLabelMap[a.id] = a.label_ja;
+      if (typeof a.lower_is_better === 'boolean') {
+        const local = ALL_AXES.find(x => x.id === a.id);
+        if (local) local.lowerIsBetter = a.lower_is_better;
+      }
+    });
     const lx = axisLabelMap[axX] || axX;
     const ly = axisLabelMap[axY] || axY;
     const lz = axisLabelMap[axZ] || axZ;
@@ -2626,9 +2645,9 @@
     ].join('');
 
     $('viz3dTitle').textContent = '3D 散布図（' + lx.replace(/（.*/, '') + ' / ' + ly.replace(/（.*/, '') + ' / ' + lz.replace(/（.*/, '') + '）';
-    $('thAxisX').textContent = lx.replace(/（.*/, '');
-    $('thAxisY').textContent = ly.replace(/（.*/, '');
-    $('thAxisZ').textContent = lz.replace(/（.*/, '');
+    $('thAxisX').textContent = lx.replace(/（.*/, '') + (flipX ? '↓' : '↑');
+    $('thAxisY').textContent = ly.replace(/（.*/, '') + (flipY ? '↓' : '↑');
+    $('thAxisZ').textContent = lz.replace(/（.*/, '') + (flipZ ? '↓' : '↑');
 
     if (data.stats_meta && $('statsMetaInfo')) {
       const sm = data.stats_meta;
@@ -2658,8 +2677,9 @@
       c.className = 'gcard';
       const cid = gr.group_id;
       const cent = gr.centroid || {};
+      const flips = { [axX]: flipX, [axY]: flipY, [axZ]: flipZ };
       const centHtml = [axX, axY, axZ].map(k =>
-        (axisLabelMap[k] || k).replace(/（.*/, '').slice(0, 4) + ' ' + fmt(cent[k])
+        (axisLabelMap[k] || k).replace(/（.*/, '').slice(0, 4) + ' ' + fmt(flips[k] ? -(cent[k]||0) : cent[k])
       ).join(' · ');
       c.innerHTML =
         '<h3 style="color:' + HEX[cid % 4] + '">グループ ' + cid + '（' + gr.count + '頭）</h3>' +
@@ -2682,9 +2702,9 @@
         '<td class="num">' + escapeHtml(String(h.bracket_number || '')) + '</td>' +
         '<td class="num">' + escapeHtml(String(h.horse_number || '')) + '</td>' +
         '<td style="cursor:pointer" class="horse-name-cell">' + escapeHtml(h.horse_name || '') + '</td>' +
-        '<td class="num">' + fmt(f[axX]) + '</td>' +
-        '<td class="num">' + fmt(f[axY]) + '</td>' +
-        '<td class="num">' + fmt(f[axZ]) + '</td>' +
+        '<td class="num">' + fmt(flipX ? -(f[axX]||0) : f[axX]) + '</td>' +
+        '<td class="num">' + fmt(flipY ? -(f[axY]||0) : f[axY]) + '</td>' +
+        '<td class="num">' + fmt(flipZ ? -(f[axZ]||0) : f[axZ]) + '</td>' +
         '<td><span class="pill" style="background:' + HEX[g % 4] + '33;color:' + HEX[g % 4] + '">' + g + '</span></td>' +
         '<td class="anc-cell" style="font-size:0.62rem;color:var(--dim);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="' + escapeHtml(ancSummary) + '">' + ancSummary + '</td>';
       tr.querySelector('.horse-name-cell').addEventListener('click', () => { showHorseDetail(h); scrollToDetail(); });

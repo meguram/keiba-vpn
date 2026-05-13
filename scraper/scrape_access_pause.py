@@ -115,9 +115,10 @@ def is_access_or_transport_error(exc: BaseException) -> bool:
                 code = resp.status_code
                 if code >= 500:
                     return True
-                if code in (401, 403, 408, 429):
+                if code in (400, 401, 403, 408, 429):
                     return True
-                # 404 はページ未存在（未来レース等で正常）— キュー停止しない
+                # 400: 到達不能・Bad Request 多くはWAF/ブロック疑い。運用方針で全キュー一時停止
+                # 404 はページ未存在（未来レース等で正常）— ここではキュー停止しない
             continue
 
         if isinstance(

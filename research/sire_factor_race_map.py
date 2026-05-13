@@ -43,9 +43,6 @@ _ped_cache_lock = threading.Lock()
 _ped_cache_ts: float = 0.0
 _PED_CACHE_TTL = 3600  # 1時間
 
-_LOCAL_PED_SNAPSHOT = Path("data/research/_ped_snapshot_cache.jsonl.gz")
-
-
 def _build_slim_ancestors(ancestors: list[dict]) -> dict[str, dict]:
     """6スロットの祖先情報だけを抽出。"""
     slim: dict[str, dict] = {}
@@ -60,7 +57,7 @@ def _build_slim_ancestors(ancestors: list[dict]) -> dict[str, dict]:
 
 
 def _load_ped_cache(storage: Any) -> dict[str, dict[str, dict]]:
-    """GCSスナップショットから血統キャッシュを構築/更新。"""
+    """GCS スナップショット（1 blob）→ ローカル gz → スリム辞書。ホットパスで list_keys/load しない。"""
     global _ped_cache, _ped_cache_ts
     now = _time.time()
     if _ped_cache and (now - _ped_cache_ts) < _PED_CACHE_TTL:
@@ -73,65 +70,38 @@ def _load_ped_cache(storage: Any) -> dict[str, dict[str, dict]]:
         t0 = _time.time()
         cache: dict[str, dict[str, dict]] = {}
 
-        _SNAP_DISK_TTL = 86400
-        snap_ok = False
-        if _LOCAL_PED_SNAPSHOT.exists():
-            snap_age = now - _LOCAL_PED_SNAPSHOT.stat().st_mtime
-            if snap_age <= _SNAP_DISK_TTL:
-                snap_ok = True
-            else:
-                try:
-                    _LOCAL_PED_SNAPSHOT.unlink()
-                except OSError:
-                    pass
-        if snap_ok:
-            try:
-                raw = gzip.decompress(_LOCAL_PED_SNAPSHOT.read_bytes())
-                for line in raw.decode("utf-8").splitlines():
-                    if not line.strip():
-                        continue
-                    rec = json.loads(line)
-                    hid = rec.get("horse_id", "")
-                    ancestors = rec.get("ancestors", [])
-                    if hid and ancestors:
-                        cache[hid] = _build_slim_ancestors(ancestors)
-                if cache:
-                    _ped_cache = cache
-                    _ped_cache_ts = now
-                    logger.info("ped_cache: ローカルから %d 馬ロード (%.1fs)",
-                                len(cache), _time.time() - t0)
-                    return _ped_cache
-            except Exception as e:
-                logger.warning("ped_cache: ローカル読込失敗: %s", e)
-
-        # 2. GCSからダウンロード
         try:
-            from research.sire_factor_stats import _download_snapshot_blob
-            ped_gz = _download_snapshot_blob(storage, "horse_pedigree_5gen.jsonl.gz")
-            if ped_gz:
-                _LOCAL_PED_SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
-                _LOCAL_PED_SNAPSHOT.write_bytes(ped_gz)
-                raw = gzip.decompress(ped_gz)
-                for line in raw.decode("utf-8").splitlines():
-                    if not line.strip():
-                        continue
-                    rec = json.loads(line)
-                    hid = rec.get("horse_id", "")
-                    ancestors = rec.get("ancestors", [])
-                    if hid and ancestors:
-                        cache[hid] = _build_slim_ancestors(ancestors)
+            from research.pedigree_local_store import (
+                ensure_local_pedigree_gz,
+                iter_pedigree_records_from_gz,
+                local_gz_path,
+            )
+
+            p = ensure_local_pedigree_gz(storage, path=local_gz_path())
+            if not p or not p.exists():
+                logger.warning("ped_cache: ローカル gz なし（GCS スナップショット未取得）")
+                return _ped_cache or {}
+
+            for rec in iter_pedigree_records_from_gz(p):
+                hid = (rec.get("horse_id") or "").strip()
+                ancestors = rec.get("ancestors") or []
+                if hid and ancestors:
+                    cache[hid] = _build_slim_ancestors(ancestors)
         except Exception as e:
-            logger.warning("ped_cache: GCSロード失敗: %s", e)
+            logger.warning("ped_cache: 読込失敗: %s", e)
 
         if cache:
             _ped_cache = cache
             _ped_cache_ts = now
-            logger.info("ped_cache: GCSから %d 馬ロード (%.1fs)",
-                        len(cache), _time.time() - t0)
+            logger.info(
+                "ped_cache: %d 馬ロード (%.1fs)",
+                len(cache),
+                _time.time() - t0,
+            )
         else:
             logger.warning("ped_cache: データなし")
 
-        return _ped_cache
+        return _ped_cache or {}
 
 
 def _compute_apt_cached(
@@ -242,7 +212,7 @@ def build_race_sire_factor_map(
     *,
     weights: dict[str, float] | None = None,
     axis_x: str = "ts",
-    axis_y: str = "gear_change",
+    axis_y: str = "start_speed",
     axis_z: str = "ts_sustain",
 ) -> dict[str, Any]:
     entries, source = load_race_entries(storage, race_id)
@@ -294,7 +264,7 @@ def build_race_sire_factor_map(
 
     valid_axes = set(AXIS_IDS)
     ax = axis_x if axis_x in valid_axes else "ts"
-    ay = axis_y if axis_y in valid_axes else "gear_change"
+    ay = axis_y if axis_y in valid_axes else "start_speed"
     az = axis_z if axis_z in valid_axes else "ts_sustain"
 
     coords = np.array([
@@ -462,7 +432,7 @@ def build_comparison_data(
     *,
     weights: dict[str, float] | None = None,
     axis_x: str = "ts",
-    axis_y: str = "gear_change",
+    axis_y: str = "start_speed",
     axis_z: str = "ts_sustain",
     same_cond_from: str = "2025-01-01",
     same_cond_top_n: int = 3,
@@ -613,13 +583,6 @@ def build_comparison_data(
             "label": f"\u76f4\u8fd1{recent_weeks}\u9031\u9593 {surface_label}\u8907\u52dd\u570f",
             "period_from": (target_dt - timedelta(days=recent_weeks * 7)).strftime("%Y-%m-%d") if target_dt else "",
             "period_to": cond["date"],
-            "count": len(recent_horses),
-            "horses": recent_horses,
-        },
-        "elapsed_sec": elapsed,
-        "scan_ms": scan_ms,
-    }
-cond["date"],
             "count": len(recent_horses),
             "horses": recent_horses,
         },

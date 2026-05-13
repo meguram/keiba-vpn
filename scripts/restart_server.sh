@@ -6,7 +6,8 @@
 #   ./scripts/restart_server.sh dev       # 開発: ホットリロード（単一ワーカー）
 #   PORT=9000 ./scripts/restart_server.sh
 #
-# ログ: logs/server_restart.log（追記）
+# ログ: logs/server_YYYYMMDD_HHMMSS.log（起動のたびに新規。日付・時刻をファイル名に含む）
+#      logs/server_latest.log へ同じファイルへのシンボリックリンク（直近1本）
 # PID:  .server.pid（watchdog と同じファイル。競合する場合はどちらか一方だけ使う）
 
 set -euo pipefail
@@ -18,7 +19,10 @@ PORT="${PORT:-8000}"
 PYTHON="${PYTHON:-$(command -v python3)}"
 LOG_DIR="$ROOT/logs"
 PID_FILE="$ROOT/.server.pid"
-LOG_FILE="$LOG_DIR/server_restart.log"
+TS="$(date +%Y%m%d_%H%M%S)"
+LOG_BASENAME="server_${TS}.log"
+LOG_FILE="$LOG_DIR/$LOG_BASENAME"
+LOG_LATEST_SYMLINK="$LOG_DIR/server_latest.log"
 HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
 
 MODE="prod"
@@ -86,8 +90,11 @@ stop_server() {
 }
 
 start_server() {
+  mkdir -p "$LOG_DIR"
+  # 直近ログへの短い参照（同じ起動のファイル名を指す）
+  ln -sfn "$LOG_BASENAME" "$LOG_LATEST_SYMLINK" 2>/dev/null || true
   {
-    echo "======== $(date -Iseconds) restart_server MODE=${MODE} PORT=${PORT} ========"
+    echo "======== $(date -Iseconds) restart_server MODE=${MODE} PORT=${PORT} LOG_FILE=${LOG_BASENAME} ========"
   } >>"$LOG_FILE"
 
   if [[ "$MODE" == "dev" ]]; then
@@ -119,7 +126,7 @@ wait_health() {
 
 case "${1:-}" in
   -h|--help)
-    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
     ;;
 esac

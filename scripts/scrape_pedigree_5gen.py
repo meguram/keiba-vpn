@@ -30,9 +30,10 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from research.pedigree_similarity import parse_blood_table_5gen
+from research.pedigree_similarity import parse_blood_table_5gen, parse_horse_sex_from_ped_html
 from scraper.client import NetkeibaClient
 from scraper.storage import HybridStorage
+from utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger("scrape_pedigree_5gen")
 
@@ -77,6 +78,7 @@ def build_pedigree_record(
     horse_id: str,
     ancestors: list[dict],
     source: str = "netkeiba",
+    sex: str = "",
 ) -> dict:
     """保存用の血統レコードを構築。"""
     sire_name = ""
@@ -92,6 +94,7 @@ def build_pedigree_record(
 
     return {
         "horse_id": horse_id,
+        "sex": sex,          # '牡' / '牝' / '' (スクレイプ時に抽出)
         "sire": sire_name,
         "dam": dam_name,
         "dam_sire": dam_sire_name,
@@ -142,7 +145,8 @@ def _scrape_one(
         if len(ancestors) < 5:
             return (horse_id, False, f"祖先不足({len(ancestors)})")
 
-        record = build_pedigree_record(horse_id, ancestors, source=source)
+        sex = parse_horse_sex_from_ped_html(html, horse_id)
+        record = build_pedigree_record(horse_id, ancestors, source=source, sex=sex)
         storage.save("horse_pedigree_5gen", horse_id, record)
         return (horse_id, True, "")
     except Exception as e:
@@ -381,10 +385,7 @@ def main():
     parser.add_argument("--workers", type=int, default=3)
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-    )
+    script_basic_config()
 
     storage = HybridStorage()
 

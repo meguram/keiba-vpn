@@ -30,6 +30,8 @@ from typing import Any
 
 import requests
 
+from utils.keiba_logging import script_basic_config
+
 logger = logging.getLogger("scraper.jra_cushion")
 
 BASE_URL = "https://www.jra.go.jp/keiba/baba/archive"
@@ -561,10 +563,7 @@ class JRACushionScraper:
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    script_basic_config()
 
     parser = argparse.ArgumentParser(description="JRA クッション値・含水率スクレイパー")
     parser.add_argument("--years", nargs="+", type=int, help="対象年度 (例: 2024 2025)")

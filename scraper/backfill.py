@@ -56,11 +56,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-    handlers=[logging.StreamHandler()],
-)
+from utils.keiba_logging import script_basic_config
+
+script_basic_config(handlers=[logging.StreamHandler()])
 logger = logging.getLogger("scraper.backfill")
 
 PROGRESS_PATH = Path("data/meta/backfill_progress.json")

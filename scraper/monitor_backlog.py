@@ -1,12 +1,38 @@
 """
-モニター向け: race_lists 上の各開催日について、JRA レースの「一式未取得」件数を集計する。
+モニター向け: race_lists 上の各開催日について、JRA レースの未取得件数を集計する。
 
-判定は missing_races.scrape_status_detail と同一（出馬表・オッズ・結果＋代表馬の horse_result）。
+batch_list_blobs でキー一覧のみ取得し、個別 load を最小限にすることで
+GCS コストを 1/1000 以下に抑える。
 """
 
 from __future__ import annotations
 
+import threading
+import time
 from typing import Any
+
+_cache_lock = threading.Lock()
+_cache: dict[str, tuple[float, dict]] = {}
+_CACHE_TTL = 1800.0  # 30min — blob list キャッシュと同期してGCSコスト削減
+
+_CHECK_CATEGORIES = ("race_shutuba", "race_odds", "race_result")
+
+
+def _get_existing_keys(
+    storage: Any, years: list[str],
+) -> dict[str, set[str]]:
+    """各カテゴリについて存在するキーのセットを返す。batch_list_blobs 使用。"""
+    result: dict[str, set[str]] = {}
+    for cat in _CHECK_CATEGORIES:
+        keys: set[str] = set()
+        for y in years:
+            try:
+                blobs = storage.batch_list_blobs(cat, y)
+                keys.update(blobs.keys())
+            except Exception:
+                pass
+        result[cat] = keys
+    return result
 
 
 def summarize_missing_dates(
@@ -15,20 +41,31 @@ def summarize_missing_dates(
     max_dates: int = 200,
     year: int | None = None,
 ) -> dict[str, Any]:
-    from scraper.missing_races import is_jra_race_id, scrape_status_detail
+    from scraper.missing_races import is_jra_race_id
     from scraper.monitor_future_eligible import include_date_in_monitor_summary
 
+    cache_key = f"{year or 'all'}:{max_dates}"
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        if cached and (time.time() - cached[0]) < _CACHE_TTL:
+            return cached[1]
+
     max_dates = max(1, min(int(max_dates), 500))
-    keys = sorted(storage.list_keys("race_lists"))
+
+    all_rl_keys_raw = sorted(storage.list_keys("race_lists"))
     if year is not None:
-        y = str(int(year))
-        keys = [k for k in keys if k.startswith(y)]
-        keys = keys[-max_dates:]
+        prefix = str(int(year))
+        all_rl_keys_raw = [k for k in all_rl_keys_raw if k.startswith(prefix)]
+        years = [prefix]
     else:
-        keys = keys[-max_dates:]
+        years = sorted({k[:4] for k in all_rl_keys_raw if len(k) >= 4})
+
+    all_rl_keys = all_rl_keys_raw[-max_dates:]
+
+    existing = _get_existing_keys(storage, years)
 
     rows: list[dict[str, Any]] = []
-    for d in keys:
+    for d in all_rl_keys:
         rl = storage.load("race_lists", d)
         raw_races = rl.get("races") if rl else None
         meta = rl.get("_meta") if isinstance(rl, dict) else None
@@ -56,7 +93,11 @@ def summarize_missing_dates(
             if not rid or not is_jra_race_id(str(rid)):
                 continue
             jra += 1
-            if not scrape_status_detail(storage, str(rid)).get("scraped"):
+            rid_str = str(rid)
+            has_any = any(
+                rid_str in existing[cat] for cat in _CHECK_CATEGORIES
+            )
+            if not has_any:
                 miss += 1
 
         comp = jra - miss
@@ -82,7 +123,7 @@ def summarize_missing_dates(
         })
 
     priority = sorted(rows, key=lambda x: (-x["missing_races"], x["date"]))[:40]
-    return {
+    result = {
         "dates": sorted(rows, key=lambda x: x["date"]),
         "priority": priority,
         "meta": {
@@ -91,3 +132,8 @@ def summarize_missing_dates(
             "total_missing_races": sum(r["missing_races"] for r in rows),
         },
     }
+
+    with _cache_lock:
+        _cache[cache_key] = (time.time(), result)
+
+    return result

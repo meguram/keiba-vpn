@@ -1,0 +1,1515 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>レース直前確率モデル — 機械学習パイプライン全体図</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f172a;
+    --bg-soft: #111c34;
+    --panel: #15213c;
+    --panel-2: #1b294a;
+    --border: #243358;
+    --text: #e6ecff;
+    --muted: #9aa7c7;
+    --accent: #4f8bff;
+    --accent-2: #7aa9ff;
+    --accent-3: #a78bfa;
+    --good: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --chip-bg: #1d2b50;
+    --chip-fg: #cfdcff;
+    --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border);
+    padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center;
+    font-weight: 700; color: white;
+    box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; letter-spacing: .04em; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text);
+    padding: 6px 10px; border-radius: 8px; margin: 2px 0;
+    border-left: 2px solid transparent;
+  }
+  nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+
+  main.content { padding: 48px 56px 96px; max-width: 1180px; width: 100%; }
+  header.hero {
+    padding: 32px 32px 28px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700;
+    text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 30px; line-height: 1.3; }
+  header.hero p { color: var(--muted); margin: 0; max-width: 780px; }
+  .hero-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .tag {
+    background: var(--chip-bg); color: var(--chip-fg);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 12px; font-size: 11px; letter-spacing: .04em;
+  }
+
+  section.section { margin-top: 40px; scroll-margin-top: 24px; }
+  section.section h2 {
+    font-size: 22px; margin: 0 0 6px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  section.section h2 .num {
+    color: var(--accent-2); font-weight: 700; font-size: 14px;
+    font-family: "JetBrains Mono", monospace;
+  }
+  section.section h3 { margin: 20px 0 8px; font-size: 17px; }
+  section.section h4 { margin: 16px 0 6px; font-size: 14px; color: var(--accent-2); }
+  section.section p, section.section li { color: #d8e0f7; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px 20px; margin: 14px 0;
+    box-shadow: var(--shadow);
+  }
+  .card.soft { background: var(--panel-2); }
+  .card h4:first-child { margin-top: 0; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; }
+    main.content { padding: 28px 20px 80px; }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  }
+
+  .stage-card {
+    background: linear-gradient(180deg, #182747, #131f3c);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 18px; margin: 14px 0;
+    border-left: 4px solid var(--accent);
+  }
+  .stage-card.s2 { border-left-color: #38bdf8; }
+  .stage-card.s3 { border-left-color: #34d399; }
+  .stage-card.s4 { border-left-color: #fbbf24; }
+  .stage-card.s5 { border-left-color: #a78bfa; }
+  .stage-card.s6 { border-left-color: #f472b6; }
+  .stage-card.s7 { border-left-color: #f87171; }
+  .stage-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 8px;
+  }
+  .stage-head .badge {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; letter-spacing: .08em;
+    background: rgba(79,139,255,.15); color: var(--accent-2);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 2px 8px;
+  }
+  .stage-head h3 { margin: 0; font-size: 17px; }
+
+  .metric {
+    background: linear-gradient(180deg, #182747, #131f3c);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .metric .label {
+    color: var(--muted); font-size: 11px;
+    letter-spacing: .1em; text-transform: uppercase; font-weight: 600;
+  }
+  .metric .value {
+    margin-top: 6px; font-family: "JetBrains Mono", monospace;
+    font-weight: 600; font-size: 22px; color: var(--text);
+  }
+  .metric .delta { font-size: 11px; color: var(--good); margin-top: 4px; }
+
+  table.table {
+    width: 100%; border-collapse: collapse; margin: 12px 0;
+    background: var(--panel); border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  table.table th, table.table td {
+    padding: 10px 14px; text-align: left;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  table.table th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    text-transform: uppercase; font-size: 11px; letter-spacing: .08em;
+  }
+  table.table tr:last-child td { border-bottom: 0; }
+  table.table td.mono, table.table th.mono { font-family: "JetBrains Mono", monospace; }
+  table.table td .ok { color: var(--good); font-weight: 600; }
+  table.table td .ng { color: var(--bad); font-weight: 600; }
+  table.table td .wn { color: var(--warn); font-weight: 600; }
+
+  pre.code {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; color: #cfe2ff;
+  }
+  code.inline {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px;
+    font-size: 12.5px; color: #cfe2ff;
+  }
+
+  .pillset { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill {
+    background: var(--chip-bg); border: 1px solid var(--border);
+    color: var(--chip-fg); border-radius: 999px;
+    padding: 3px 10px; font-size: 11px;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .pill.good { border-color: rgba(74,222,128,.5); color: #b6f3cd; }
+  .pill.warn { border-color: rgba(251,191,36,.45); color: #ffe6a8; }
+  .pill.bad  { border-color: rgba(248,113,113,.45); color: #ffc6c6; }
+  .pill.cyan { border-color: rgba(56,189,248,.45); color: #c1e9ff; }
+  .pill.violet { border-color: rgba(167,139,250,.45); color: #ddd0ff; }
+
+  .callout {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    padding: 12px 16px; border-radius: 8px; margin: 12px 0;
+  }
+  .callout.warn { border-left-color: var(--warn); background: rgba(251,191,36,.06); }
+  .callout.good { border-left-color: var(--good); background: rgba(74,222,128,.07); }
+  .callout.bad { border-left-color: var(--bad); background: rgba(248,113,113,.07); }
+  .callout h4 { margin: 0 0 6px; font-size: 13px; color: var(--text); }
+  .callout p { margin: 0; color: #e7eeff; font-size: 13.5px; }
+
+  .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px;
+  }
+
+  ul.clean { padding-left: 20px; }
+  ul.clean li { margin: 4px 0; }
+  ul.bullets { list-style: none; padding: 0; margin: 6px 0; }
+  ul.bullets li { position: relative; padding-left: 18px; margin: 4px 0; }
+  ul.bullets li::before {
+    content: ""; position: absolute; left: 4px; top: 11px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  }
+
+  /* Layer banners */
+  .layer-banner {
+    display: flex; gap: 10px; align-items: center; margin: 8px 0;
+    padding: 10px 14px; border-radius: 10px; font-size: 13px;
+    border: 1px solid var(--border);
+  }
+  .layer-banner.a { background: rgba(56,189,248,.08); }
+  .layer-banner.b { background: rgba(167,139,250,.08); }
+  .layer-banner b { font-family: "JetBrains Mono", monospace; }
+
+  /* Phase timeline */
+  .phases { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .phase {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(180deg, #16213f 0%, #111a36 100%);
+  }
+  .phase .ph-num {
+    color: var(--accent-2); font-family: "JetBrains Mono", monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: .14em;
+  }
+  .phase .ph-title { font-weight: 700; font-size: 14px; margin: 4px 0 6px; }
+  .phase .ph-body { font-size: 12px; color: var(--muted); }
+  @media (max-width: 980px) {
+    .phases { grid-template-columns: 1fr; }
+  }
+
+  footer {
+    margin-top: 60px; padding-top: 22px;
+    border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">ML</div>
+      <div>
+        <div class="title">ML Pipeline</div>
+        <div class="sub">Pre-race Probability Model</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <h4>Overview</h4>
+      <a href="#purpose">1. 目的とゴール</a>
+      <a href="#architecture">2. 全体アーキテクチャ</a>
+      <a href="#layers">3. LayerA / LayerB</a>
+      <a href="#baseline-extended">4. Baseline / Extended</a>
+
+      <h4>Stages</h4>
+      <a href="#stage0">Stage0: PreRaceDataset</a>
+      <a href="#stage1">Stage1: HorseLatentState</a>
+      <a href="#stage2">Stage2: Positioning</a>
+      <a href="#stage3">Stage3: PaceScenario</a>
+      <a href="#stage4">Stage4: DayTrackBias</a>
+      <a href="#stage5">Stage5: BloodlineContextFit</a>
+      <a href="#stage6">Stage6: FinalProbability</a>
+      <a href="#stage7">Stage7: Market & Betting</a>
+
+      <h4>Data Contracts</h4>
+      <a href="#dataset-spec">5. horse_pre_race_dataset</a>
+      <a href="#split-strategy">5b. Train/Valid/Test 分割と EDA</a>
+      <a href="#feature-catalog">6. 特徴量カタログ</a>
+      <a href="#whitelist">7. 入力ホワイトリスト</a>
+      <a href="#labels">8. labels テーブル</a>
+
+      <h4>ML Techniques</h4>
+      <a href="#encoding">9. カテゴリエンコーディング</a>
+      <a href="#numeric">10. 数値特徴処理</a>
+      <a href="#cv">11. Purged CV / Adversarial</a>
+      <a href="#calibration">12. Calibration</a>
+      <a href="#ensemble">13. モデル戦略・アンサンブル</a>
+      <a href="#interpret">14. SHAP / Ablation</a>
+
+      <h4>Engineering</h4>
+      <a href="#coding">15. コーディング戦略</a>
+      <a href="#artifacts">16. 中間成果物・版管理</a>
+      <a href="../feature_engineering/index.html">特徴量探索（HTML）</a>
+      <a href="../data_features/index.html">データ・特徴量（現行）</a>
+
+      <h4>Betting</h4>
+      <a href="#betting">17. 馬券最適化テーブル</a>
+      <a href="#safe-ev">18. safe_ev と policy</a>
+
+      <h4>Operations</h4>
+      <a href="#leakage">19. リーク防止チェック</a>
+      <a href="#phases">20. 実装フェーズ</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">Pre-race Probability — Multi-stage ML Pipeline</div>
+      <h1>機械学習パイプライン 全体図</h1>
+      <p>
+        レース直前の <code class="inline">T-10分</code> 時点情報のみで、各馬の
+        <code class="inline">勝率 / 連対率 / 複勝率</code> を出し、馬券最適化までつなげる
+        多段階 ML パイプラインを、データ契約・ステージ設計・テクニック・運用ルールまで一枚に統合したリファレンスです。
+      </p>
+      <div class="hero-tags">
+        <span class="tag">Stage0 → Stage7 / 7 段階</span>
+        <span class="tag">LayerA (能力) / LayerB (市場)</span>
+        <span class="tag">BaselineV1 / ExtendedV1</span>
+        <span class="tag">Train/Valid/Test（2020–23 / 24 / 25）</span>
+        <span class="tag">Purged Group Time Series Split</span>
+        <span class="tag">OOF Target Encoding</span>
+        <span class="tag">LightGBM × CatBoost ensemble</span>
+        <span class="tag">Polars-first / fold materialize</span>
+      </div>
+    </header>
+
+    <!-- 1. Purpose -->
+    <section id="purpose" class="section">
+      <h2><span class="num">01</span> 目的とゴール</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>到達ゴール</h4>
+          <ul class="bullets">
+            <li>レース直前情報のみで <code class="inline">p_win / p_top2 / p_top3</code> を出す</li>
+            <li>予測確率を用いて <b>safe_ev</b> ベースの馬券最適化を行う</li>
+            <li>確率信頼性 (LogLoss / Brier / ECE) を ROI より先に評価する</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>設計の思想</h4>
+          <ul class="bullets">
+            <li>単段ベースラインと多段階パイプラインの両建て</li>
+            <li>特徴量を <b>LayerA (能力)</b> と <b>LayerB (市場)</b> に厳格分離</li>
+            <li>母表は <b>BaselineV1</b> と <b>ExtendedV1</b> を同時生成し、差分で寄与を測る</li>
+            <li>OOF・Purged CV・version 管理を前提に、Kaggle 風 tabular 手法を投入</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Architecture -->
+    <section id="architecture" class="section">
+      <h2><span class="num">02</span> 全体アーキテクチャ</h2>
+      <p>
+        多段階パイプラインは <b>Stage0〜Stage7</b> の 7 段で構成。
+        Stage1 で馬単体の latent state を作り、Stage2/3 で位置取り・ペース、
+        Stage4 で当日馬場、Stage5 で血統文脈適合を経由して、Stage6 が最終確率を出力します。
+        Stage7 で初めて市場価格と統合して馬券判断に使います。
+      </p>
+      <div class="mermaid">
+flowchart TD
+    stage0["Stage0<br/>PreRaceDataset"] --> stage1["Stage1<br/>HorseLatentState"]
+    stage1 --> stage2["Stage2<br/>Positioning"]
+    stage1 --> stage3["Stage3<br/>PaceScenario"]
+    stage1 --> stage5["Stage5<br/>BloodlineContextFit"]
+    stage2 --> stage3
+    stage3 --> stage4["Stage4<br/>DayTrackBias"]
+    stage4 --> stage5
+    stage1 --> stage6["Stage6<br/>FinalProbability"]
+    stage2 --> stage6
+    stage3 --> stage6
+    stage4 --> stage6
+    stage5 --> stage6
+    stage6 --> stage7["Stage7<br/>Market &amp; Betting"]
+      </div>
+      <div class="callout">
+        <h4>多段階化の意義</h4>
+        <p>
+          中間状態 (位置取り・ペース・当日バイアス・血統文脈) を明示的にモデル化することで、
+          ① 失敗原因を分解しやすい / ② 当日更新できる情報と事前固定情報を切り分けられる /
+          ③ 血統を「その日の馬場特性」に応じて使い分けられる、という3つの利点があります。
+        </p>
+      </div>
+    </section>
+
+    <!-- 3. Layers -->
+    <section id="layers" class="section">
+      <h2><span class="num">03</span> LayerA / LayerB の分離</h2>
+      <div class="layer-banner a">
+        <b>LayerA</b>
+        <span>市場非依存の能力・状態モデル。<code class="inline">単勝/複勝/人気/連系オッズ</code> を <b>絶対に</b> 入れない。</span>
+      </div>
+      <div class="layer-banner b">
+        <b>LayerB</b>
+        <span>市場統合・馬券最適化。LayerA の馬単位確率に、直前オッズ・連系オッズを追加。</span>
+      </div>
+      <div class="callout warn">
+        <h4>分離理由</h4>
+        <p>
+          市場を確率推定器に混ぜると、モデルが市場をなぞるだけになり edge を出せない。
+          市場は意思決定器側でのみ使い、確率推定器は純粋に能力 / 状態を当てに行く構造とします。
+        </p>
+      </div>
+    </section>
+
+    <!-- 4. Baseline/Extended -->
+    <section id="baseline-extended" class="section">
+      <h2><span class="num">04</span> BaselineV1 / ExtendedV1 の二段構え</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>BaselineV1 — 安定基準</h4>
+          <p>coverage と保守性を優先。最初の比較対象を固定。</p>
+          <div class="pillset">
+            <span class="pill">race_shutuba_flat</span>
+            <span class="pill">race_shutuba_past_flat</span>
+            <span class="pill">race_index_flat</span>
+            <span class="pill">horse bundle 集約</span>
+          </div>
+          <p style="color:var(--muted);font-size:12.5px;margin-top:8px;">追加特徴量の寄与は常にこの差分で評価。</p>
+        </div>
+        <div class="card">
+          <h4>ExtendedV1 — 直前情報強化</h4>
+          <p>BaselineV1 + 直前状態・馬場 proxy。</p>
+          <div class="pillset">
+            <span class="pill cyan">race_oikiri_flat</span>
+            <span class="pill cyan">race_paddock_flat</span>
+            <span class="pill cyan">race_trainer_comment_flat</span>
+            <span class="pill cyan">cushion / moisture</span>
+            <span class="pill cyan">venue_era_fit</span>
+            <span class="pill cyan">seasonal_surface_fit</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stage 0 -->
+    <section id="stage0" class="section">
+      <h2><span class="num">S0</span> Stage0 — Pre-race 母表</h2>
+      <div class="stage-card">
+        <div class="stage-head">
+          <span class="badge">STAGE 0</span>
+          <h3>役割: 学習・推論共通の入力母表を作る</h3>
+        </div>
+        <p>
+          <code class="inline">race_shutuba_flat</code> を母表に、<code class="inline">past_flat</code> /
+          <code class="inline">race_index</code> / <code class="inline">oikiri</code> /
+          <code class="inline">paddock</code> / <code class="inline">trainer_comment</code> を
+          時点整合で join。GCS の horse bundle と JRA クッション値も統合。
+        </p>
+        <h4>主な出力</h4>
+        <div class="pillset">
+          <span class="pill">horse_pre_race_dataset.parquet</span>
+          <span class="pill">horse_labels.parquet</span>
+          <span class="pill">race_market_snapshot.parquet</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stage 1 -->
+    <section id="stage1" class="section">
+      <h2><span class="num">S1</span> Stage1 — Horse Latent State</h2>
+      <div class="stage-card s2">
+        <div class="stage-head">
+          <span class="badge">STAGE 1</span>
+          <h3>馬単体の地力・適性・仕上がりを latent block 化する</h3>
+        </div>
+        <div class="grid-2">
+          <div>
+            <h4>主な latent block</h4>
+            <ul class="bullets">
+              <li><code class="inline">ability_latent</code> — 戦績・speed index</li>
+              <li><code class="inline">form_latent</code> — 休み明け・叩き・体重変化</li>
+              <li><code class="inline">surface_distance_latent</code> — 芝/ダ・距離適性</li>
+              <li><code class="inline">pedigree_latent</code> — sire / dam_sire / myostatin / note aptitude</li>
+              <li><code class="inline">trainer_jockey_latent</code> — OOF TE / CatBoost ordered encoding</li>
+            </ul>
+          </div>
+          <div>
+            <h4>外部接続</h4>
+            <ul class="bullets">
+              <li><code class="inline">race_performance_rating_system</code> 由来の <code class="inline">run_performance_final</code> 系履歴</li>
+              <li><code class="inline">horse_pre_rating_pre_race</code> / <code class="inline">field_relative_pre_rating</code></li>
+              <li><a href="../race_performance/index.html">→ レースパフォーマンス算出システム HTML へ</a></li>
+            </ul>
+          </div>
+        </div>
+        <h4>主な出力</h4>
+        <div class="pillset"><span class="pill">horse_latent_state.parquet</span></div>
+      </div>
+    </section>
+
+    <!-- Stage 2 -->
+    <section id="stage2" class="section">
+      <h2><span class="num">S2</span> Stage2 — Positioning / 追走難度</h2>
+      <div class="stage-card s3">
+        <div class="stage-head">
+          <span class="badge">STAGE 2</span>
+          <h3>「いつもの位置を取れるか」を予測</h3>
+        </div>
+        <p>既存コード <code class="inline">pipeline/tracking_difficulty.py</code> を活用。</p>
+        <div class="grid-2">
+          <div>
+            <h4>主な入力</h4>
+            <ul class="bullets">
+              <li>直近走の通過順・脚質ばらつき</li>
+              <li>枠順・馬番・隣枠馬の傾向</li>
+              <li>頭数・コース・距離・馬場状態</li>
+            </ul>
+          </div>
+          <div>
+            <h4>出力</h4>
+            <div class="pillset">
+              <span class="pill">expected_first_corner_pos</span>
+              <span class="pill">expected_first_corner_pos_norm</span>
+              <span class="pill">tracking_difficulty_score</span>
+              <span class="pill">front_run_probability</span>
+              <span class="pill">stalker_probability</span>
+              <span class="pill">closer_probability</span>
+            </div>
+          </div>
+        </div>
+        <h4>学習ターゲット候補</h4>
+        <div class="pillset">
+          <span class="pill">position_deviation</span>
+          <span class="pill">first_corner_rank_norm</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stage 3 -->
+    <section id="stage3" class="section">
+      <h2><span class="num">S3</span> Stage3 — Pace Scenario</h2>
+      <div class="stage-card s3">
+        <div class="stage-head">
+          <span class="badge">STAGE 3</span>
+          <h3>レース全体の前半流速・消耗度・上がり勝負化を推定</h3>
+        </div>
+        <p>既存コード <code class="inline">pipeline/pace_predictor.py</code> を活用。</p>
+        <div class="grid-2">
+          <div>
+            <h4>入力</h4>
+            <ul class="bullets">
+              <li>Stage2 の <code class="inline">front_run_probability</code> 集約</li>
+              <li>頭数 / 距離 / surface / track_condition / venue / grade</li>
+              <li>逃げ・先行馬の想定頭数</li>
+            </ul>
+          </div>
+          <div>
+            <h4>出力</h4>
+            <div class="pillset">
+              <span class="pill">pred_lap_1f</span>
+              <span class="pill">pred_lap_3f</span>
+              <span class="pill">pred_pace_class (slow/avg/fast)</span>
+              <span class="pill">pred_energy_distribution (瞬発/持続/消耗)</span>
+            </div>
+            <h4>派生</h4>
+            <div class="pillset">
+              <span class="pill">pace_pressure_proxy</span>
+              <span class="pill">late_kick_advantage</span>
+              <span class="pill">front_runner_penalty</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stage 4 -->
+    <section id="stage4" class="section">
+      <h2><span class="num">S4</span> Stage4 — Day Track Bias</h2>
+      <div class="stage-card s4">
+        <div class="stage-head">
+          <span class="badge">STAGE 4</span>
+          <h3>「今日はどんな馬が走りやすい日か」を二層 (prior / posterior) で推定</h3>
+        </div>
+        <div class="grid-2">
+          <div>
+            <h4>4A: 事前 day prior</h4>
+            <ul class="bullets">
+              <li>venue / venue_era / surface / distance</li>
+              <li>track_condition / weather / cushion / moisture / season</li>
+            </ul>
+          </div>
+          <div>
+            <h4>4B: 同日更新 day posterior</h4>
+            <ul class="bullets">
+              <li>同日先行レースの上位馬特徴 / 脚質偏り / 内外枠バイアス</li>
+              <li>上がり偏重 or 前残り / 血統クラスタ偏り</li>
+            </ul>
+          </div>
+        </div>
+        <h4>出力</h4>
+        <div class="pillset">
+          <span class="pill">day_bias_front</span>
+          <span class="pill">day_bias_closing</span>
+          <span class="pill">day_bias_inner</span>
+          <span class="pill">day_bias_outer</span>
+          <span class="pill">day_bias_stamina</span>
+          <span class="pill">day_bias_burst</span>
+          <span class="pill">day_bias_mud</span>
+          <span class="pill">day_bias_speed</span>
+        </div>
+        <div class="callout">
+          <h4>ブレンド方針</h4>
+          <p>先行レース 0 → prior のみ / 1-2 本 → prior 強め + posterior 弱め / 3 本以上 → posterior 重み増。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stage 5 -->
+    <section id="stage5" class="section">
+      <h2><span class="num">S5</span> Stage5 — Bloodline × 当日文脈適合</h2>
+      <div class="stage-card s5">
+        <div class="stage-head">
+          <span class="badge">STAGE 5</span>
+          <h3>血統を「静的距離適性」だけでなく「当日 day-bias との相性」で再評価</h3>
+        </div>
+        <p>既存コード: <code class="inline">research/bloodline_distance.py</code> / <code class="inline">bloodline_vector.py</code> / <code class="inline">course_bloodline.py</code> / <code class="inline">sire_factor_*.py</code> / <code class="inline">note_aptitude_5gen.py</code> / <code class="inline">myostatin.py</code> / <code class="inline">race_quality_model.py</code></p>
+        <div class="grid-2">
+          <div>
+            <h4>5A: 静的血統適性</h4>
+            <div class="pillset">
+              <span class="pill violet">sire_distance_fit</span>
+              <span class="pill violet">dam_sire_distance_fit</span>
+              <span class="pill violet">surface_fit</span>
+              <span class="pill violet">mud_fit</span>
+              <span class="pill violet">speed_fit</span>
+              <span class="pill violet">stamina_fit</span>
+              <span class="pill violet">burst_fit</span>
+            </div>
+          </div>
+          <div>
+            <h4>5B: 当日文脈適合</h4>
+            <pre class="code" style="margin:0;">bloodline_day_fit_speed   = sire_speed_fit  * day_bias_speed
+bloodline_day_fit_stamina = sire_stamina_fit* day_bias_stamina
+bloodline_day_fit_mud     = mud_fit        * day_bias_mud
+bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
+          </div>
+        </div>
+        <h4>出力</h4>
+        <div class="pillset">
+          <span class="pill">contextual_bloodline_fit</span>
+          <span class="pill">contextual_bloodline_speed_fit</span>
+          <span class="pill">contextual_bloodline_stamina_fit</span>
+          <span class="pill">contextual_bloodline_mud_fit</span>
+          <span class="pill">contextual_bloodline_burst_fit</span>
+          <span class="pill">same_day_sire_cluster_bias</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stage 6 -->
+    <section id="stage6" class="section">
+      <h2><span class="num">S6</span> Stage6 — Final Probability</h2>
+      <div class="stage-card s6">
+        <div class="stage-head">
+          <span class="badge">STAGE 6</span>
+          <h3>Stage1-5 を統合し p_win / p_top2 / p_top3 を出す</h3>
+        </div>
+        <div class="grid-2">
+          <div>
+            <h4>入力ブロック</h4>
+            <ul class="bullets">
+              <li>基礎母表 (Stage0)</li>
+              <li>Stage1 latent state</li>
+              <li>Stage2 positioning outputs</li>
+              <li>Stage3 pace outputs</li>
+              <li>Stage4 day bias outputs</li>
+              <li>Stage5 contextual bloodline outputs</li>
+              <li><b>optional</b>: LayerB market features (※意思決定層側に渡すのが原則)</li>
+            </ul>
+          </div>
+          <div>
+            <h4>モデル構成</h4>
+            <table class="table" style="margin:0;">
+              <thead><tr><th>Model</th><th>ターゲット</th></tr></thead>
+              <tbody>
+                <tr><td>ModelA</td><td class="mono">p_win</td></tr>
+                <tr><td>ModelB</td><td class="mono">p_top2</td></tr>
+                <tr><td>ModelC</td><td class="mono">p_top3</td></tr>
+                <tr><td>ModelD (optional)</td><td>race-wise ranking score</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <h4>アンサンブル / 校正</h4>
+        <div class="pillset">
+          <span class="pill">LightGBM</span>
+          <span class="pill">CatBoost</span>
+          <span class="pill">OOF blending</span>
+          <span class="pill">temperature / isotonic</span>
+        </div>
+        <h4>出力</h4>
+        <div class="pillset">
+          <span class="pill">p_win_raw / p_win_calibrated</span>
+          <span class="pill">p_top2_raw / p_top2_calibrated</span>
+          <span class="pill">p_top3_raw / p_top3_calibrated</span>
+          <span class="pill">rank_by_p_win</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stage 7 -->
+    <section id="stage7" class="section">
+      <h2><span class="num">S7</span> Stage7 — Market 統合 & 馬券最適化</h2>
+      <div class="stage-card s7">
+        <div class="stage-head">
+          <span class="badge">STAGE 7</span>
+          <h3>初めて市場価格と結合し、safe_ev ベースで馬券判断</h3>
+        </div>
+        <ul class="bullets">
+          <li><code class="inline">horse_probability_table</code> + <code class="inline">horse_market_snapshot</code> + <code class="inline">pair_market_snapshot</code> + <code class="inline">payout_table</code> を統合</li>
+          <li><b>Stage6 までで市場非依存モデル完成</b> / <b>Stage7 でのみ市場統合</b> を厳守</li>
+          <li>高オッズ帯ほど <code class="inline">buffer</code> を厚くして <code class="inline">safe_ev &gt; 0</code> を最低条件に</li>
+          <li><b>推奨印・券種・資金配分</b>の戦略層は教師あり ML の延長ではなく <b>強化学習（方策）</b> を想定。議論は <code class="inline">betting_policy_reinforcement_learning.md</code>、要約 HTML は <a href="../betting_rl_policy/index.html">betting_rl_policy</a>。</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 5. Dataset spec -->
+    <section id="dataset-spec" class="section">
+      <h2><span class="num">05</span> horse_pre_race_dataset 仕様</h2>
+      <div class="grid-3">
+        <div class="metric">
+          <div class="label">粒度</div>
+          <div class="value mono">1 race × 1 horse</div>
+        </div>
+        <div class="metric">
+          <div class="label">主キー</div>
+          <div class="value mono">race_id + horse_number</div>
+        </div>
+        <div class="metric">
+          <div class="label">時点</div>
+          <div class="value mono">T-10 min</div>
+        </div>
+      </div>
+      <h3>セクション構成</h3>
+      <table class="table">
+        <thead><tr><th>Section</th><th>内容</th><th>主な列</th></tr></thead>
+        <tbody>
+          <tr><td>A. キー</td><td>識別子</td><td class="mono">race_id, horse_number, horse_id, horse_name, venue_code, race_date</td></tr>
+          <tr><td>B. レース条件</td><td>条件</td><td class="mono">surface, distance, direction, grade, race_class, weather, track_condition, field_size, venue_era</td></tr>
+          <tr><td>C. 開催・季節文脈</td><td>時間軸</td><td class="mono">month, quarter, season, days_since_meet_start, recent_meet_density_*, *_season_key</td></tr>
+          <tr><td>D. 馬の基本属性</td><td>静的属性</td><td class="mono">bracket_number, sex, age, jockey_*, trainer_*, body_weight, body_weight_change</td></tr>
+          <tr><td>E. 指数・能力</td><td>速度指数</td><td class="mono">time_index_m, speed_max/avg/distance/course/recent_*, speed_*_in_race</td></tr>
+          <tr><td>F. 直近走集計</td><td>戦績</td><td class="mono">prev{1..5}_*, avg/min/std_*_5, days_since_last, position_trend, career_*_rate, same_*_runs/win_rate</td></tr>
+          <tr><td>G. 調教・直前</td><td>状態</td><td class="mono">training_*, oikiri_count/best/mean/keyword_*</td></tr>
+          <tr><td>H. パドック・コメント</td><td>直前評価</td><td class="mono">paddock_*, trainer_comment_*</td></tr>
+          <tr><td>I. 血統・適性</td><td>静的血統</td><td class="mono">sire, dam_sire, *_cluster, mstn_*, note_apt_*, *_aptitude_proxy</td></tr>
+          <tr><td>J. 独自追加</td><td>派生</td><td class="mono">field_strength_proxy, pace_pressure_proxy, travel_burden_proxy, freshness_cluster, draw_bias_adjusted</td></tr>
+          <tr><td>K. 中間特徴</td><td>多段階出力</td><td class="mono">expected_first_corner_pos*, *_probability, pred_lap_*, pred_pace_class, day_bias_*, contextual_bloodline_*</td></tr>
+          <tr><td>L. カバレッジフラグ</td><td>欠損</td><td class="mono">has_race_index, has_recent_5_runs, has_oikiri, has_paddock, has_cushion_value, has_*_moisture</td></tr>
+          <tr><td>M. LayerB 市場 (optional)</td><td>市場</td><td class="mono">win_odds, place_odds_*, market_popularity, market_implied_*, market_rank_*, market_gap_*</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 5b. Train valid test -->
+    <section id="split-strategy" class="section">
+      <h2><span class="num">05b</span> Train / Valid / Test 分割と分布把握</h2>
+      <p>
+        競馬の行データは <b>同一レース内で強く相関</b>し、かつ <b>時間方向の因果</b>が厳しいため、
+        通常のランダム split はリークと楽観バイアスの温床になる。
+        本プロジェクトでは <code class="inline">data/meta/modeling/dataset_split_manifest.json</code> を
+        <b>機械上の正</b>とし、詳細はマークダウン
+        <code class="inline">docs/modeling/train_valid_test_split_strategy.md</code> に集約する。
+      </p>
+
+      <h3>一次プロトコル（確率モデル本線）</h3>
+      <table class="table">
+        <thead><tr><th>役割</th><th>期間</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">train</td><td>2020–2023</td><td>学習本体・fold 内 target encoding / 集約特徴の学習</td></tr>
+          <tr><td class="mono">valid</td><td>2024</td><td>特徴・モデル・ハイパラ・<b>キャリブレーション fit</b>（test を見ない）</td></tr>
+          <tr><td class="mono">test</td><td>2025</td><td><b>一度きりの最終汎化報告</b>・セグメント補助評価</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        <h4>分割の単位</h4>
+        <p>
+          <code class="inline">race_id</code> 単位で train / valid / test を完全分離する。
+          行単位ランダム split は禁止。キャリブレーションは OOF または valid のみに fit し、
+          test では fit しない（<code class="inline">advanced_modeling_techniques.md</code> と一致）。
+        </p>
+      </div>
+
+      <h3>開発時の CV（主戦場）</h3>
+      <div class="grid-2">
+        <div class="card">
+          <h4>Purged + embargo</h4>
+          <ul class="bullets">
+            <li><code class="inline">group_key = race_id</code> / <code class="inline">time_key = race_date</code></li>
+            <li>初期値: <code class="inline">purge_window_days = 7</code>、<code class="inline">embargo_days = 3</code></li>
+            <li>OOF target encoding・中間 stage 出力も同一制約に従う</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Rolling-origin folds</h4>
+          <p>
+            マニフェストの <code class="inline">rolling_origin_folds</code>（2020 起点で valid を半年ずつスライド）で
+            ハイパラと特徴の安定性を見る。一次 valid が 2024 のみでも、開発中の分散推定に使う。
+          </p>
+        </div>
+      </div>
+
+      <h3>補助評価・ドリフト</h3>
+      <ul class="bullets">
+        <li><b>京都改修後</b>（<code class="inline">venue_era</code> フィルタ）— 現行コース条件への追従</li>
+        <li><b>クッション観測あり / パドック有無</b> — ExtendedV1 の依存度と欠損バイアス</li>
+        <li><b>Adversarial validation</b> — <code class="inline">train(2020–2023)</code> vs <code class="inline">valid(2024)</code> と <code class="inline">train(2020–2023)</code> vs <code class="inline">test(2025)</code> を<b>用途別</b>に実施し分布差を監視（<code class="inline">advanced_modeling_techniques.md</code> §3.2 と一致）</li>
+      </ul>
+
+      <h3>他ドキュメントの split との関係</h3>
+      <p>
+        <code class="inline">race_performance_rating_system.md</code> の
+        「2020–2024 履歴 vs 2025 test」は <b>レースパフォーマンス特徴モジュール単体</b>のベンチ向けであり、
+        上記の一次プロトコル（2020–2023 / 2024 / 2025）と目的が異なる。実験ログに protocol 名を必ず残す。
+      </p>
+
+      <h3>EDA サマリ（母集団の安定性）</h3>
+      <p>
+        同一カレンダー範囲の参照用に、<code class="inline">data/features/race_performance/20xx.parquet</code>
+       （馬行）から年次集計した。確率モデル母表の完成後も、同様の
+        <code class="inline">dataset_profile.json</code> を必須成果物とする（<code class="inline">reference_insights.md</code>）。
+      </p>
+      <table class="table">
+        <thead><tr><th>年</th><th>行数（馬行）</th><th>レース数</th><th>勝ち行%</th><th>複勝圏行%</th></tr></thead>
+        <tbody>
+          <tr><td>2020</td><td class="mono">47,876</td><td class="mono">3,456</td><td>7.24</td><td>21.67</td></tr>
+          <tr><td>2021</td><td class="mono">47,476</td><td class="mono">3,456</td><td>7.30</td><td>21.86</td></tr>
+          <tr><td>2022</td><td class="mono">46,840</td><td class="mono">3,456</td><td>7.39</td><td>22.14</td></tr>
+          <tr><td>2023</td><td class="mono">47,273</td><td class="mono">3,456</td><td>7.32</td><td>21.95</td></tr>
+          <tr><td>2024</td><td class="mono">46,752</td><td class="mono">3,454</td><td>7.40</td><td>22.18</td></tr>
+          <tr><td>2025</td><td class="mono">47,497</td><td class="mono">3,455</td><td>7.29</td><td>21.85</td></tr>
+        </tbody>
+      </table>
+      <div class="grid-2">
+        <div class="card soft">
+          <h4>カテゴリ（全期間合算の傾向）</h4>
+          <ul class="bullets">
+            <li><code class="inline">surface</code>: ダート &gt; 芝 &gt;&gt; 障害</li>
+            <li><code class="inline">distance_band</code>: mile / sprint が大半、長距離は少数</li>
+            <li><code class="inline">pace_shape_class</code>: balanced が主、grind が次点</li>
+            <li><code class="inline">class_group</code>: 未勝利・1勝が中心、G/OP は少数だが重要セグメント</li>
+            <li><code class="inline">track_condition</code>: 良が大半、稍重・重はセグメント評価必須</li>
+          </ul>
+        </div>
+        <div class="card soft">
+          <h4>数値ドリフトの示唆</h4>
+          <ul class="bullets">
+            <li><code class="inline">run_performance_final</code> の平均は年次で緩やかに移動（分布全体のシフト疑い）</li>
+            <li><code class="inline">track_variant_online</code> は尾が重い — winsorize / robust scaling を valid で調整</li>
+            <li>2025 に極端な外れ値が見える列は <b>結合キー・欠損埋めの監査</b>対象（<code class="inline">outlier_watchlist</code>）</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mermaid">
+flowchart LR
+  subgraph EDA[分布把握]
+    P[dataset_profile]
+    S[セグメント集計]
+    A[adversarial]
+  end
+  subgraph Split[本番前評価]
+    T[train 2020-2023]
+    V[valid 2024]
+    X[test 2025]
+  end
+  subgraph CV[開発CV]
+    R[rolling folds]
+    PE[purge_embargo]
+  end
+  EDA --> Split
+  CV --> V
+  T --> V
+  V --> X
+      </div>
+    </section>
+
+    <!-- 6. Feature catalog -->
+    <section id="feature-catalog" class="section">
+      <h2><span class="num">06</span> 特徴量カタログ — 出力中間成果物</h2>
+      <p>各 stage の出力は OOF 単位で Parquet 化し、後段で join できる契約に揃えます。</p>
+      <table class="table">
+        <thead><tr><th>Stage</th><th>主な出力ファイル</th></tr></thead>
+        <tbody>
+          <tr><td>Stage0</td><td class="mono">horse_pre_race_dataset.parquet / horse_labels.parquet</td></tr>
+          <tr><td>Stage1</td><td class="mono">horse_latent_state.parquet</td></tr>
+          <tr><td>Stage2</td><td class="mono">positioning_features.parquet</td></tr>
+          <tr><td>Stage3</td><td class="mono">pace_scenario_features.parquet</td></tr>
+          <tr><td>Stage4</td><td class="mono">day_track_bias_features.parquet</td></tr>
+          <tr><td>Stage5</td><td class="mono">contextual_bloodline_features.parquet</td></tr>
+          <tr><td>Stage6</td><td class="mono">horse_probability_table.parquet</td></tr>
+          <tr><td>Stage7</td><td class="mono">betting_backtest_dataset.parquet / pair_probability_input.parquet</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 7. Whitelist -->
+    <section id="whitelist" class="section">
+      <h2><span class="num">07</span> 入力ホワイトリスト</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>LayerA 採用テーブル</h4>
+          <ul class="bullets">
+            <li><code class="inline">race_shutuba_flat</code> (非市場列)</li>
+            <li><code class="inline">race_shutuba_past_flat</code> (履歴集約)</li>
+            <li><code class="inline">race_index_flat</code> (指数)</li>
+            <li><code class="inline">race_oikiri_flat</code> (馬単位集約)</li>
+            <li><code class="inline">race_paddock_flat</code> (スコア化)</li>
+            <li><code class="inline">race_trainer_comment_flat</code> (スコア化)</li>
+            <li>GCS horse bundle (履歴・血統・適性)</li>
+            <li>JRA クッション値・含水率・proxy</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>LayerB 専用テーブル</h4>
+          <ul class="bullets">
+            <li><code class="inline">race_odds_flat</code> (win/place)</li>
+            <li><code class="inline">race_pair_odds_flat</code> (umaren/wide/umatan)</li>
+            <li>市場由来差分: <code class="inline">market_implied_*</code> / <code class="inline">market_rank_*</code> / <code class="inline">market_gap_*</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout bad">
+        <h4>明示的に除外</h4>
+        <p>
+          <code class="inline">race_result_flat</code> /
+          <code class="inline">race_result_lap_flat</code> /
+          <code class="inline">race_barometer_flat</code> /
+          <code class="inline">smartrc_race_flat</code>。
+          <code class="inline">race_shutuba_flat</code> / <code class="inline">race_index_flat</code> 内の
+          <code class="inline">odds</code> / <code class="inline">popularity</code> も LayerA からは外す。
+        </p>
+      </div>
+    </section>
+
+    <!-- 8. Labels -->
+    <section id="labels" class="section">
+      <h2><span class="num">08</span> ラベル (horse_labels.parquet)</h2>
+      <table class="table">
+        <thead><tr><th>列</th><th>定義</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">finish_position</td><td>確定着順</td></tr>
+          <tr><td class="mono">is_win</td><td><code class="inline">1[finish_position == 1]</code></td></tr>
+          <tr><td class="mono">is_top2</td><td><code class="inline">1[finish_position &lt;= 2]</code></td></tr>
+          <tr><td class="mono">is_top3</td><td><code class="inline">1[finish_position &lt;= 3]</code></td></tr>
+          <tr><td class="mono">finish_position_pct</td><td><code class="inline">finish_position / field_size</code></td></tr>
+          <tr><td class="mono">margin_seconds_proxy</td><td>着差秒換算</td></tr>
+          <tr><td class="mono">race_has_official_result</td><td>レース確定フラグ</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 9. Encoding -->
+    <section id="encoding" class="section">
+      <h2><span class="num">09</span> カテゴリ変数エンコーディング</h2>
+      <div class="grid-3">
+        <div class="card">
+          <h4>Tier1 — 常設・低リスク</h4>
+          <div class="pillset">
+            <span class="pill good">frequency encoding</span>
+            <span class="pill good">count encoding</span>
+            <span class="pill good">rare label grouping</span>
+            <span class="pill good">label encoding</span>
+          </div>
+        </div>
+        <div class="card">
+          <h4>Tier2 — OOF 必須</h4>
+          <div class="pillset">
+            <span class="pill warn">target encoding</span>
+            <span class="pill warn">CatBoost ordered TE</span>
+            <span class="pill warn">expanding mean</span>
+            <span class="pill warn">group target encoding</span>
+          </div>
+        </div>
+        <div class="card">
+          <h4>Tier3 — 比較実験</h4>
+          <div class="pillset">
+            <span class="pill">target std / skew</span>
+            <span class="pill">WoE 風</span>
+            <span class="pill">cross feature TE</span>
+          </div>
+        </div>
+      </div>
+      <h3>主な対象カテゴリと交差</h3>
+      <div class="pillset">
+        <span class="pill">jockey_name</span>
+        <span class="pill">trainer_name</span>
+        <span class="pill">sire</span>
+        <span class="pill">dam_sire</span>
+        <span class="pill">venue_surface_distance_key</span>
+        <span class="pill">jockey × venue</span>
+        <span class="pill">trainer × surface × distance</span>
+        <span class="pill">sire × surface</span>
+        <span class="pill">venue_era × surface</span>
+        <span class="pill">bracket × venue_surface_distance</span>
+      </div>
+      <div class="callout warn">
+        <h4>OOF TE の鉄則</h4>
+        <p>
+          全件平均の直接流し込みは <b>禁止</b>。fold ごとに train 側だけで category mean を作って
+          valid に map。test には全 train 統計のみ。rare category は global mean に shrink、
+          unseen は train fold global mean に fallback。
+        </p>
+      </div>
+    </section>
+
+    <!-- 10. Numeric -->
+    <section id="numeric" class="section">
+      <h2><span class="num">10</span> 数値特徴の実戦処理</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>変換</h4>
+          <ul class="bullets">
+            <li>log / clipping / winsorization</li>
+            <li>rank-gauss / quantile transform</li>
+            <li>裾の重い列 (career_runs / days_since_last / training_time_4f / oikiri_best_lap)</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>レース内相対化（最重要）</h4>
+          <ul class="bullets">
+            <li>rank / percentile / z-score</li>
+            <li>gap to best / gap to median</li>
+            <li>対象: speed_*, body_weight, oikiri_best_evaluation, paddock_score</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11. CV -->
+    <section id="cv" class="section">
+      <h2><span class="num">11</span> Purged Group Time Series Split / Adversarial</h2>
+      <p style="color:var(--muted);font-size:14px;margin:-4px 0 12px">
+        年次の train / valid / test の割当と EDA の整理は
+        <a href="#split-strategy">§5b Train/Valid/Test 分割と分布把握</a> を参照。
+      </p>
+      <div class="grid-2">
+        <div class="card">
+          <h4>Purged Group Time Series Split</h4>
+          <ul class="bullets">
+            <li>split unit = <code class="inline">race_id</code></li>
+            <li>時間キー = <code class="inline">race_date</code></li>
+            <li><code class="inline">purge_window_days</code> + <code class="inline">embargo_days</code></li>
+            <li>OOF target encoding もこの分割に従う</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Adversarial Validation</h4>
+          <ul class="bullets">
+            <li><code class="inline">train(2020-2023)</code> vs <code class="inline">valid(2024)</code> と <code class="inline">train(2020-2023)</code> vs <code class="inline">test(2025)</code> の <b>用途別</b>分布差（一次 split と整合）</li>
+            <li>venue_era / cushion / paddock の drift 検知</li>
+            <li>出力: <code class="inline">adversarial_auc</code> / drift 上位特徴量 / drift segment 一覧</li>
+          </ul>
+        </div>
+      </div>
+      <h3>分割マニフェスト</h3>
+      <pre class="code">2020-2023 train / 2024 valid / 2025 test
+rolling-origin fold (race_id 単位)
+行単位ランダム split: 禁止
+train fold 内でのみ集計・encoding</pre>
+    </section>
+
+    <!-- 12. Calibration -->
+    <section id="calibration" class="section">
+      <h2><span class="num">12</span> Calibration</h2>
+      <p>確率モデルでは最重要。LeaderBoard より実運用を重視するなら後段校正が効く。</p>
+      <div class="grid-3">
+        <div class="card">
+          <h4>候補手法</h4>
+          <div class="pillset">
+            <span class="pill">temperature scaling</span>
+            <span class="pill">isotonic regression</span>
+            <span class="pill">Platt scaling</span>
+          </div>
+        </div>
+        <div class="card">
+          <h4>運用ルール</h4>
+          <ul class="bullets">
+            <li>OOF または valid 予測のみで fit</li>
+            <li>test では fit しない</li>
+            <li><code class="inline">p_win</code> / <code class="inline">p_top2</code> / <code class="inline">p_top3</code> 別に比較</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>主要指標</h4>
+          <div class="pillset">
+            <span class="pill good">LogLoss</span>
+            <span class="pill good">Brier</span>
+            <span class="pill good">ECE</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13. Ensemble -->
+    <section id="ensemble" class="section">
+      <h2><span class="num">13</span> モデル戦略・アンサンブル</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>単体モデル推奨順</h4>
+          <ol class="clean">
+            <li>LightGBM baseline</li>
+            <li>CatBoost baseline</li>
+            <li>2 者の OOF blending</li>
+            <li>(option) XGBoost / 線形 baseline</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h4>初期 blend 案</h4>
+          <pre class="code" style="margin:0;">blend_p_win  = 0.5 * lgbm + 0.5 * catboost
+blend_p_top2 = weighted average
+blend_p_top3 = weighted average
+
+stacker は OOF 予測のみで学習</pre>
+        </div>
+      </div>
+      <h3>rank + probability の二層化</h3>
+      <ul class="bullets">
+        <li>ModelA (確率) を主、ModelB (race 内 ranking) を tie-break / 安定化補助に</li>
+      </ul>
+      <h3>多段階パイプラインの学習ルール</h3>
+      <ul class="bullets">
+        <li>各 stage の出力は <b>OOF</b> で生成して次段に渡す</li>
+        <li>次段学習時に train fold へ valid fold の stage 出力を混ぜない</li>
+        <li>stacking 時も <b>OOF only</b> を守る</li>
+      </ul>
+      <h3>疑似ターゲット / 補助タスク</h3>
+      <div class="pillset">
+        <span class="pill">first_corner_rank_norm</span>
+        <span class="pill">position_deviation</span>
+        <span class="pill">lap_time_1f</span>
+        <span class="pill">lap_time_3f</span>
+        <span class="pill">pace_class</span>
+        <span class="pill">day_bias_front_like</span>
+        <span class="pill">day_bias_closing_like</span>
+      </div>
+    </section>
+
+    <!-- 14. Interpret -->
+    <section id="interpret" class="section">
+      <h2><span class="num">14</span> 特徴量解釈・Ablation</h2>
+      <div class="grid-3">
+        <div class="card">
+          <h4>SHAP</h4>
+          <p>重要特徴量・drift 原因・venue 別効き方差分の確認に。</p>
+        </div>
+        <div class="card">
+          <h4>Permutation Importance</h4>
+          <p>SHAP と順位がズレる列・noisy feature の削除判断。</p>
+        </div>
+        <div class="card">
+          <h4>Ablation Study</h4>
+          <p>ブロック ON/OFF: base / history / race_index / pedigree / oikiri / paddock / trainer_comment / cushion / TE block。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 15. Coding -->
+    <section id="coding" class="section">
+      <h2><span class="num">15</span> コーディング戦略 (Polars 中心)</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>原則</h4>
+          <ul class="bullets">
+            <li>DataFrame 第一選択は <code class="inline">polars</code></li>
+            <li><code class="inline">scan_parquet</code> で必要列だけ <code class="inline">select</code> → 必要行だけ <code class="inline">filter</code> → <code class="inline">collect</code></li>
+            <li>pandas は LightGBM / CatBoost 直前など境界面のみ</li>
+            <li>fold 単位 materialize、不要になったら即解放</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>型最適化</h4>
+          <table class="table" style="margin:0;">
+            <thead><tr><th>用途</th><th>型</th></tr></thead>
+            <tbody>
+              <tr><td>確率 / 連続</td><td class="mono">Float32</td></tr>
+              <tr><td>count / flag</td><td class="mono">Int8 / Int16 / UInt16</td></tr>
+              <tr><td>rank</td><td class="mono">UInt16</td></tr>
+              <tr><td>カテゴリ ID</td><td class="mono">Int32</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <h3>母表生成パターン</h3>
+      <pre class="code">base = (
+    pl.concat([
+        pl.scan_parquet(f"data/local/tables/{y}/race_shutuba_flat.parquet")
+        for y in years
+    ])
+    .select([
+        "race_id", "date", "venue_code", "venue", "surface", "distance",
+        "direction", "grade", "race_class", "field_size",
+        "horse_number", "horse_id", "horse_name",
+        "jockey_id", "trainer_id", "weight", "weight_change",
+        "sire", "dam_sire",
+    ])
+)</pre>
+      <h3>レース内 z-score / rank</h3>
+      <pre class="code">df = df.with_columns([
+    pl.col("speed_max").rank("ordinal").over("race_id").alias("speed_rank_in_race"),
+    (
+        (pl.col("speed_max") - pl.col("speed_max").mean().over("race_id"))
+        / (pl.col("speed_max").std().over("race_id") + 1e-6)
+    ).alias("speed_z_in_race"),
+])</pre>
+    </section>
+
+    <!-- 16. Artifacts -->
+    <section id="artifacts" class="section">
+      <h2><span class="num">16</span> 中間成果物・版管理</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>必須メタデータ</h4>
+          <div class="pillset">
+            <span class="pill">data_version</span>
+            <span class="pill">code_version</span>
+            <span class="pill">source_table_versions</span>
+            <span class="pill">venue_era_definition_version</span>
+            <span class="pill">split_manifest_version</span>
+            <span class="pill">created_at</span>
+            <span class="pill">row_count</span>
+            <span class="pill">feature_count</span>
+            <span class="pill">baseline_or_extended</span>
+            <span class="pill">encoding_recipe_version</span>
+            <span class="pill">cv_policy_version</span>
+            <span class="pill">calibration_recipe_version</span>
+            <span class="pill">staged_pipeline_version</span>
+            <span class="pill">upstream_stage_versions</span>
+            <span class="pill">mlflow_experiment_name</span>
+            <span class="pill">mlflow_run_id</span>
+          </div>
+          <p style="margin:12px 0 0;font-size:13px;color:var(--muted);">
+            学習ジョブは <b>MLflow</b> で Run を必ず残す（params / metrics / tags / 主要 artifact）。
+            正本: <code class="inline">docs/modeling/modeling_coding_strategy.md</code>「MLflow による学習記録」、実装参照は <code class="inline">pipeline/trainer.py</code> 等。
+          </p>
+        </div>
+        <div class="card">
+          <h4>監査成果物</h4>
+          <ul class="bullets">
+            <li><code class="inline">dataset_profile.json</code></li>
+            <li><code class="inline">feature_missingness.csv</code></li>
+            <li><code class="inline">segment_coverage.csv</code></li>
+            <li><code class="inline">label_balance.json</code></li>
+            <li><code class="inline">outlier_watchlist.csv</code></li>
+          </ul>
+        </div>
+      </div>
+      <h3>ディレクトリ規約</h3>
+      <table class="table">
+        <thead><tr><th>用途</th><th>パス</th></tr></thead>
+        <tbody>
+          <tr><td>ソース</td><td class="mono">data/local/tables/&lt;year&gt;/*.parquet</td></tr>
+          <tr><td>母表</td><td class="mono">data/modeling/base/</td></tr>
+          <tr><td>特徴量</td><td class="mono">data/modeling/features/</td></tr>
+          <tr><td>OOF</td><td class="mono">data/modeling/oof/</td></tr>
+          <tr><td>校正</td><td class="mono">data/modeling/calibration/</td></tr>
+          <tr><td>バックテスト</td><td class="mono">data/modeling/backtest/</td></tr>
+          <tr><td>メタ</td><td class="mono">data/meta/modeling/</td></tr>
+        </tbody>
+      </table>
+      <h3>命名規則例</h3>
+      <div class="pillset">
+        <span class="pill">baseline_v1_fold1.parquet</span>
+        <span class="pill">extended_v1_fold1.parquet</span>
+        <span class="pill">oof_te_recipe_a_fold1.parquet</span>
+        <span class="pill">final_prob_lgbm_catboost_blend_fold1.parquet</span>
+      </div>
+    </section>
+
+    <!-- 17. Betting -->
+    <section id="betting" class="section">
+      <h2><span class="num">17</span> 馬券最適化テーブル契約</h2>
+      <div class="mermaid">
+flowchart TD
+    horseProb["HorseProbabilityTable"] --> backtest["BettingBacktestDataset"]
+    marketHorse["HorseMarketTable"] --> backtest
+    marketPair["PairMarketTable"] --> backtest
+    raceResult["RaceOutcomeTable"] --> backtest
+    payout["PayoutTable"] --> backtest
+    raceConstraint["RaceConstraintTable"] --> backtest
+      </div>
+      <table class="table">
+        <thead><tr><th>テーブル</th><th>粒度</th><th>主キー</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">horse_probability_table</td><td>1 race × 1 horse</td><td class="mono">race_id + horse_number</td></tr>
+          <tr><td class="mono">horse_market_snapshot</td><td>1 race × 1 horse</td><td class="mono">race_id + horse_number</td></tr>
+          <tr><td class="mono">pair_market_snapshot</td><td>1 race × 1 pair × 1 odds_type</td><td class="mono">race_id + odds_type + pair + market_timestamp</td></tr>
+          <tr><td class="mono">race_outcome_table</td><td>1 race × 1 horse</td><td class="mono">race_id + horse_number</td></tr>
+          <tr><td class="mono">payout_table</td><td>1 race × 1 ticket</td><td class="mono">race_id + bet_type + ticket_key</td></tr>
+          <tr><td class="mono">race_constraint_table</td><td>1 race</td><td class="mono">race_id</td></tr>
+          <tr><td class="mono">betting_backtest_dataset</td><td>1 race × 1 horse × 1 phase</td><td class="mono">race_id + horse_number + snapshot_phase</td></tr>
+        </tbody>
+      </table>
+      <h3><code class="inline">snapshot_phase</code> 標準</h3>
+      <div class="pillset">
+        <span class="pill">t_minus_60</span>
+        <span class="pill">t_minus_30</span>
+        <span class="pill good">t_minus_10 (主基準)</span>
+        <span class="pill">t_minus_05</span>
+        <span class="pill">off_time_final (simulation_only)</span>
+      </div>
+      <h3>確率テーブル制約</h3>
+      <ul class="bullets">
+        <li><code class="inline">sum(p_win) ≈ 1.0</code> (race 内)</li>
+        <li><code class="inline">p_win ≤ p_top2 ≤ p_top3 ≤ 1.0</code></li>
+        <li><code class="inline">rank_by_p_win</code> は 1 から始まる連番</li>
+      </ul>
+    </section>
+
+    <!-- 18. Safe EV -->
+    <section id="safe-ev" class="section">
+      <h2><span class="num">18</span> safe_ev と policy 管理</h2>
+      <div class="grid-3">
+        <div class="card">
+          <h4>1. 生期待値</h4>
+          <pre class="code" style="margin:0;">raw_ev = predicted_prob * odds - 1</pre>
+        </div>
+        <div class="card">
+          <h4>2. 校正後期待値</h4>
+          <pre class="code" style="margin:0;">calibrated_ev = calibrated_prob * odds - 1</pre>
+        </div>
+        <div class="card">
+          <h4>3. 安全域込み</h4>
+          <pre class="code" style="margin:0;">safe_ev = calibrated_ev - buffer</pre>
+        </div>
+      </div>
+      <div class="callout warn">
+        <h4>初期ルール</h4>
+        <p>
+          ベット候補は <code class="inline">safe_ev &gt; 0</code> を最低条件。
+          <code class="inline">buffer</code> は固定値ではなく <b>odds bucket × uncertainty_proxy</b> で可変。
+          高オッズ帯ほど buffer を厚く。
+        </p>
+      </div>
+      <h3>外部設定 <code class="inline">bet_policy_thresholds.json</code></h3>
+      <table class="table">
+        <thead><tr><th>項目</th><th>意味</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">policy_name</td><td>戦略名</td></tr>
+          <tr><td class="mono">snapshot_phase</td><td>適用 phase</td></tr>
+          <tr><td class="mono">bet_type</td><td>券種</td></tr>
+          <tr><td class="mono">min_safe_ev</td><td>下限 safe_ev</td></tr>
+          <tr><td class="mono">min_model_confidence</td><td>下限信頼度</td></tr>
+          <tr><td class="mono">exclude_longshot_over_odds</td><td>過大オッズ除外</td></tr>
+          <tr><td class="mono">max_tickets_per_race</td><td>レース内上限</td></tr>
+          <tr><td class="mono">stake_sizing_rule</td><td>ステーク配分</td></tr>
+        </tbody>
+      </table>
+      <h3>バックテスト評価指標</h3>
+      <div class="pillset">
+        <span class="pill">stake_count</span>
+        <span class="pill">turnover</span>
+        <span class="pill">return_amount</span>
+        <span class="pill">roi</span>
+        <span class="pill">hit_rate</span>
+        <span class="pill">max_drawdown</span>
+        <span class="pill">odds_bucket_roi</span>
+        <span class="pill">venue_surface_segment_roi</span>
+        <span class="pill">kelly_regret_proxy</span>
+        <span class="pill">selection_rate</span>
+        <span class="pill">race_coverage_rate</span>
+        <span class="pill">avg_safe_ev</span>
+        <span class="pill">avg_realized_edge</span>
+      </div>
+    </section>
+
+    <!-- 19. Leakage -->
+    <section id="leakage" class="section">
+      <h2><span class="num">19</span> リーク防止チェック</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>必須ルール</h4>
+          <ul class="bullets">
+            <li>結果確定後テーブルを特徴量母表に入れない</li>
+            <li>LayerA に当日オッズを入れない</li>
+            <li>target encoding / 集計は split 後・fold 内で作る</li>
+            <li><code class="inline">finish_position</code> を説明変数に戻さない</li>
+            <li>同一 <code class="inline">race_id</code> を split 跨いで分けない</li>
+            <li>推論時点に存在しない future master / encoded mapping を読まない</li>
+            <li>ordered / target encoding は purged_group_time_series_split 前提</li>
+            <li>calibration は train ではなく valid / OOF 予測のみで fit</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>学習前チェック</h4>
+          <ul class="bullets">
+            <li>除外テーブルが混入していないか</li>
+            <li>LayerA に <code class="inline">odds</code> / <code class="inline">popularity</code> が入っていないか</li>
+            <li><code class="inline">race_oikiri_flat</code> が 1 頭 1 行に集約されているか</li>
+            <li>sparse テーブルに <code class="inline">presence_flag</code> が付与されているか</li>
+            <li>未来日付の履歴が混ざっていないか</li>
+            <li>split 前に target encoding を作っていないか</li>
+            <li>BaselineV1 / ExtendedV1 を同時保存しているか</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout bad">
+        <h4>やらないこと</h4>
+        <p>
+          split 前 TE / test を見ながら encoding 作成 / market を LayerA 投入 /
+          高次交差を無制限増設 / ROI のみでモデル採択。
+        </p>
+      </div>
+    </section>
+
+    <!-- 20. Phases -->
+    <section id="phases" class="section">
+      <h2><span class="num">20</span> 実装フェーズ</h2>
+      <div class="phases">
+        <div class="phase">
+          <div class="ph-num">PHASE 1</div>
+          <div class="ph-title">単段ベースライン</div>
+          <div class="ph-body">Stage0 + Stage1 + Stage6。BaselineV1 で安定基準を成立させる。</div>
+        </div>
+        <div class="phase">
+          <div class="ph-num">PHASE 2</div>
+          <div class="ph-title">位置取り・ペース追加</div>
+          <div class="ph-body">Stage2 / Stage3 を導入し、改善幅を差分で測定。</div>
+        </div>
+        <div class="phase">
+          <div class="ph-num">PHASE 3</div>
+          <div class="ph-title">当日バイアス・血統文脈</div>
+          <div class="ph-body">Stage4 / Stage5 を追加し、当日適合度モデルへ。</div>
+        </div>
+        <div class="phase">
+          <div class="ph-num">PHASE 4</div>
+          <div class="ph-title">safe_ev 馬券最適化</div>
+          <div class="ph-body">Stage7。pair_probability_input → 配分最適化へ。</div>
+        </div>
+      </div>
+
+      <h3>テクニック投入順</h3>
+      <ol class="clean">
+        <li>frequency / count encoding</li>
+        <li>OOF target encoding</li>
+        <li>CatBoost-style ordered encoding</li>
+        <li>purged group time series split</li>
+        <li>calibration</li>
+        <li>positioning / pace 補助モデル</li>
+        <li>day bias / contextual bloodline 補助モデル</li>
+        <li>LightGBM + CatBoost OOF ensemble</li>
+        <li>safe_ev と policy search</li>
+      </ol>
+
+      <h3>関連ドキュメント</h3>
+      <table class="table">
+        <thead><tr><th>テーマ</th><th>ファイル</th></tr></thead>
+        <tbody>
+          <tr><td>多段階パイプライン</td><td class="mono">docs/modeling/staged_probability_pipeline.md</td></tr>
+          <tr><td>母表仕様</td><td class="mono">docs/modeling/horse_pre_race_dataset_spec.md</td></tr>
+          <tr><td>入力ホワイトリスト</td><td class="mono">docs/modeling/pre_race_feature_whitelist.md</td></tr>
+          <tr><td>ML テクニック</td><td class="mono">docs/modeling/advanced_modeling_techniques.md</td></tr>
+          <tr><td>コーディング戦略</td><td class="mono">docs/modeling/modeling_coding_strategy.md</td></tr>
+          <tr><td>馬券最適化（データ契約）</td><td class="mono">docs/modeling/betting_backtest_dataset_spec.md</td></tr>
+          <tr><td>馬券推奨 × RL（方策設計）</td><td class="mono">docs/modeling/betting_policy_reinforcement_learning.md（<a href="../betting_rl_policy/index.html">HTML</a>）</td></tr>
+          <tr><td>レースパフォーマンス</td><td class="mono">docs/modeling/race_performance_rating_system.md (<a href="../race_performance/index.html">HTML</a>)</td></tr>
+          <tr><td>次アクション・議論整理</td><td class="mono">（ダッシュボード） <a href="../modeling_actions/index.html">modeling_actions/index.html</a></td></tr>
+          <tr><td>チューニング工程 SOP</td><td class="mono">docs/modeling/hyperparameter_tuning_workflow.md</td></tr>
+          <tr><td>特徴量探索（LayerA）</td><td class="mono">docs/modeling/feature_engineering_exploration.md（<a href="../feature_engineering/index.html">HTML</a>）</td></tr>
+          <tr><td>データ・特徴量一覧（現段階）</td><td class="mono">docs/html/data_features/index.html</td></tr>
+          <tr><td>参考資料反映</td><td class="mono">docs/modeling/reference_insights.md</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>
+      <span>Source: <code class="inline">docs/modeling/*.md</code></span>
+      <span>Pre-race Probability ML Pipeline / Complete Edition</span>
+    </footer>
+  </main>
+</div>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#0b1428',
+      primaryColor: '#1d2b50',
+      primaryTextColor: '#e6ecff',
+      primaryBorderColor: '#4f8bff',
+      lineColor: '#7aa9ff',
+      secondaryColor: '#16213f',
+      tertiaryColor: '#15213c',
+      fontFamily: 'JetBrains Mono, Noto Sans JP, sans-serif'
+    }
+  });
+</script>
+</body>
+</html>

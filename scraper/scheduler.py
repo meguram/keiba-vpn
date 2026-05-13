@@ -1,4 +1,3 @@
-```python
 """
 構造チェック スケジューラー
 
@@ -30,10 +29,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-)
+from utils.keiba_logging import script_basic_config
+
+script_basic_config()
 logger = logging.getLogger("scraper.scheduler")
 
 

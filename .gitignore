@@ -18,8 +18,10 @@ coverage.xml
 .env.*
 !.env.example
 
-# IDE
-.vscode/
+# IDE（共有したい設定のみ追跡）
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
@@ -52,7 +54,10 @@ data/meta/disk_l2_weekly_access.json
 data/meta/pedigree_weekly_access.json
 
 # 大容量のローカル専用データ（必要なら個別に追跡）
-data/meta/person/
+data/meta/
+data/features/
+data/research/
+data/modeling/
 
 # Jupyter
 .ipynb_checkpoints/

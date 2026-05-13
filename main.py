@@ -19,15 +19,25 @@ import sys
 
 def run_server(host: str = "0.0.0.0", port: int = 8000,
                workers: int = 1, reload: bool = True):
+    import logging
+
     import uvicorn
+
+    from utils.keiba_logging import apply_root_logging_basic, build_uvicorn_log_config
+
+    # uvicorn 以外（起動前の import など）向けに root を整える
+    apply_root_logging_basic()
+    _lg = logging.getLogger("main")
+    log_cfg = build_uvicorn_log_config()
     mode = "development (reload)" if reload else f"production ({workers} workers)"
-    print(f"keiba-vpn server starting: http://{host}:{port}  [{mode}]")
+    _lg.info("keiba-vpn server starting: http://%s:%s  [%s]", host, port, mode)
     uvicorn.run(
         "api.app:app",
         host=host,
         port=port,
         workers=1 if reload else workers,
         reload=reload,
+        log_config=log_cfg,
         log_level="info",
         timeout_keep_alive=120,
         limit_concurrency=100,

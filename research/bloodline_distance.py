@@ -36,6 +36,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from utils.keiba_logging import script_basic_config
+
 logger = logging.getLogger("research.bloodline")
 
 DISTANCE_CATEGORIES = {
@@ -73,7 +75,88 @@ class BloodlineDistanceAnalyzer:
         self.df: pd.DataFrame = pd.DataFrame()
 
     def load_from_gcs(self, years: list[str] | None = None):
-        """GCS からレース結果 + 馬データを読み込み、分析用 DataFrame を構築する。"""
+        """ローカル Parquet を優先し、不足分のみ GCS から読み込む。"""
+        rows = self._load_from_local_parquet(years)
+        if rows:
+            logger.info("ローカル Parquet からロード完了: %d 出走行", len(rows))
+            self.df = pd.DataFrame(rows)
+            return
+
+        logger.info("ローカル Parquet なし → GCS フォールバック")
+        self._load_from_gcs_fallback(years)
+
+    def _load_from_local_parquet(self, years: list[str] | None = None) -> list[dict]:
+        """ローカル Parquet テーブルからバルクロード (GCS コスト ¥0)。"""
+        try:
+            from scraper.local_tables import load_all_races_grouped, available_years
+        except ImportError:
+            return []
+
+        if years is None:
+            years = available_years()
+        if not years:
+            return []
+
+        result_map = load_all_races_grouped("race_result", years)
+        if not result_map:
+            return []
+
+        shutuba_map = load_all_races_grouped("race_shutuba", years)
+
+        rows: list[dict] = []
+        for race_id, result_data in result_map.items():
+            distance = result_data.get("distance", 0)
+            surface = result_data.get("surface", "")
+            venue = result_data.get("venue", "")
+
+            s_data = shutuba_map.get(race_id, {})
+            s_map = {}
+            for e in s_data.get("entries", []):
+                hn = e.get("horse_number", 0)
+                if hn:
+                    s_map[hn] = e
+
+            for entry in result_data.get("entries", []):
+                hn = entry.get("horse_number", 0)
+                hid = entry.get("horse_id", "")
+                fp = entry.get("finish_position", 0)
+                if not hid or fp == 0:
+                    continue
+
+                sire = entry.get("sire", "")
+                dam_sire = entry.get("dam_sire", "")
+                se = s_map.get(hn, {})
+                if not sire:
+                    sire = se.get("sire", "")
+                if not dam_sire:
+                    dam_sire = se.get("dam_sire", "")
+
+                if not sire:
+                    continue
+
+                field_size = result_data.get("field_size", 0) or len(
+                    result_data.get("entries", [])
+                )
+
+                rows.append({
+                    "race_id": race_id,
+                    "horse_id": hid,
+                    "horse_number": hn,
+                    "finish_position": fp,
+                    "sire": sire,
+                    "dam_sire": dam_sire or "不明",
+                    "distance": distance,
+                    "distance_cat": categorize_distance(distance),
+                    "surface": surface,
+                    "venue": venue,
+                    "field_size": field_size,
+                    "is_top3": 1 if fp <= 3 else 0,
+                    "is_win": 1 if fp == 1 else 0,
+                })
+        return rows
+
+    def _load_from_gcs_fallback(self, years: list[str] | None = None):
+        """GCS フォールバック (ローカル Parquet がない場合のみ)。"""
         from scraper.storage import HybridStorage
         storage = HybridStorage(".")
         if not storage.gcs_enabled:
@@ -789,11 +872,7 @@ class BloodlineDistanceAnalyzer:
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    script_basic_config()
 
     parser = argparse.ArgumentParser(description="血統×距離適性 研究")
     parser.add_argument("--source", choices=["gcs", "csv"], default="gcs")

@@ -13,13 +13,11 @@ import sys
 import time
 from datetime import date, datetime, timedelta
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-)
-logger = logging.getLogger("batch_scrape")
-
 sys.path.insert(0, ".")
+from utils.keiba_logging import script_basic_config  # noqa: E402
+
+script_basic_config()
+logger = logging.getLogger("batch_scrape")
 
 
 def generate_race_dates(year: int, start_month: int = 1, end_month: int = 12) -> list[str]:

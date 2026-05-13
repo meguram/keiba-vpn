@@ -1,7 +1,7 @@
 {
   "category": "horse_result_html",
-  "timestamp": "2026-03-19T09:44:02.943698",
-  "sample_id": "2023103225",
+  "timestamp": "2026-05-13T06:00:44.872795",
+  "sample_id": "2023101473",
   "selector_results": {
     "race_table": {
       "selector": "table.db_h_race_results",
@@ -11,8 +11,8 @@
       "optional": false
     }
   },
-  "row_count": 4,
-  "column_count": 29,
+  "row_count": 8,
+  "column_count": 33,
   "column_classes": [
     "",
     "",
@@ -25,7 +25,7 @@
     "txt_right",
     "txt_right",
     "txt_right",
-    "bml txt_right",
+    "rank_3 txt_right",
     "",
     "",
     "",
@@ -34,10 +34,14 @@
     "index2 txt_right",
     "txt_right",
     "txt_right",
-    "index1 txt_right",
+    "TimeIndexHeadCell01 index1 txt_right",
+    "TimeIndexMasterCell01 bml txt_right",
+    "TimeIndexMasterCell01 bml txt_right",
+    "TimeIndexMasterCell01 bml txt_right",
+    "TimeIndexMasterCell01 bml txt_right",
     "",
     "",
-    "bml",
+    "rank_3",
     "",
     "",
     "bml",

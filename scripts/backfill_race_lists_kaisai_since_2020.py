@@ -30,6 +30,7 @@ from scraper.client import NetkeibaClient  # noqa: E402
 from scraper.netkeiba_top_race_list import is_plausible_race_day_races  # noqa: E402
 from scraper.parsers import RaceListParser  # noqa: E402
 from scraper.storage import HybridStorage  # noqa: E402
+from utils.keiba_logging import script_basic_config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -124,10 +125,7 @@ def run(
 
 
 def main() -> int:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)s %(message)s",
-    )
+    script_basic_config()
     p = argparse.ArgumentParser(description="2020年以降の開催日のみ race_lists をバックフィル")
     p.add_argument("--start", type=str, default="2024-01-01", help="開始日 YYYY-MM-DD")
     p.add_argument(

@@ -78,6 +78,21 @@ def collect_horse_ids_for_race_period(
     return out, meta
 
 
+def collect_date_keys_for_race_period(
+    storage: Any,
+    *,
+    start_date: str | None,
+    end_date: str | None,
+) -> list[str]:
+    """``race_lists`` キー（開催日 YYYYMMDD）を期間で絞った一覧。"""
+    dates = sorted(storage.list_keys("race_lists"))
+    if start_date:
+        dates = [d for d in dates if d >= str(start_date)]
+    if end_date:
+        dates = [d for d in dates if d <= str(end_date)]
+    return dates
+
+
 def enqueue_horse_tasks_for_race_period(
     storage: Any,
     queue: Any,
@@ -88,6 +103,9 @@ def enqueue_horse_tasks_for_race_period(
     limit: int,
     dry_run: bool,
     jra_only: bool = True,
+    smart_skip: bool | None = None,
+    overwrite: bool | None = None,
+    skip_local_mirror: bool | None = None,
 ) -> dict[str, Any]:
     """
     出走馬 ID を収集し、最大 limit 頭まで馬ジョブをキューに載せる（dry_run なら載せない）。
@@ -111,7 +129,18 @@ def enqueue_horse_tasks_for_race_period(
             "sample_horse_ids": capped[:25],
         }
 
-    stats = queue.add_horse_jobs_bulk(capped, tasks)
+    hkw: dict[str, Any] = {}
+    if smart_skip is not None:
+        hkw["smart_skip"] = smart_skip
+    if overwrite is not None:
+        hkw["overwrite"] = overwrite
+    if skip_local_mirror is not None:
+        hkw["skip_local_mirror"] = skip_local_mirror
+    stats = queue.add_horse_jobs_bulk(
+        capped,
+        tasks,
+        **hkw,
+    )
     return {
         "dry_run": False,
         "candidate_horses": total_candidates,
@@ -128,11 +157,11 @@ def collect_jra_race_job_specs_for_period(
     start_date: str | None,
     end_date: str | None,
     jra_only: bool = True,
-    limit: int,
+    limit: int | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """
-    race_lists の開催日を期間で絞り、JRA 各レースをユニークに最大 limit 件まで収集。
-    各要素は add_job / bulk_add_jobs 用（tasks は呼び出し側で付与）。
+    race_lists の開催日を期間で絞り、JRA 各レースをユニークに収集。
+    limit を省略または None なら件数上限なし。各要素は add_job / bulk_add_jobs 用（tasks は呼び出し側で付与）。
     """
     meta: dict[str, int | bool] = {
         "dates_scanned": 0,
@@ -175,7 +204,7 @@ def collect_jra_race_job_specs_for_period(
                     "race_name": str(r.get("race_name") or ""),
                 }
             )
-            if len(specs) >= limit:
+            if limit is not None and len(specs) >= limit:
                 meta["capped"] = True
                 meta["races_unique_enqueued"] = len(specs)
                 return specs, meta
@@ -194,6 +223,9 @@ def enqueue_race_tasks_for_race_period(
     limit: int,
     dry_run: bool,
     jra_only: bool = True,
+    smart_skip: bool | None = None,
+    overwrite: bool | None = None,
+    skip_local_mirror: bool | None = None,
 ) -> dict[str, Any]:
     """
     期間内の JRA レース（race_lists）に対し、同一 tasks のレースジョブをキューへ（dry_run なら列挙のみ）。
@@ -236,12 +268,78 @@ def enqueue_race_tasks_for_race_period(
             "sample_races": sample,
         }
 
-    full = [{**sp, "tasks": tasks_norm} for sp in specs]
+    extras: dict[str, Any] = {}
+    if smart_skip is not None:
+        extras["smart_skip"] = bool(smart_skip)
+    if overwrite is not None:
+        extras["overwrite"] = bool(overwrite)
+    if skip_local_mirror is not None:
+        extras["skip_local_mirror"] = bool(skip_local_mirror)
+    full = [{**sp, "tasks": tasks_norm, **extras} for sp in specs]
     stats = queue.bulk_add_jobs(full)
     return {
         "dry_run": False,
         "candidate_races": total,
         "tasks": tasks_norm,
         "meta": meta,
+        **stats,
+    }
+
+
+def enqueue_date_tasks_for_race_period(
+    storage: Any,
+    queue: Any,
+    *,
+    start_date: str | None,
+    end_date: str | None,
+    tasks: list[str],
+    limit: int,
+    dry_run: bool,
+    smart_skip: bool | None = None,
+    overwrite: bool | None = None,
+    skip_local_mirror: bool | None = None,
+) -> dict[str, Any]:
+    """
+    期間内の開催日キー（race_lists）に対し、日付向けタスクのジョブをキューへ投入する。
+    """
+    from scraper.queue_tasks import validate_tasks_for_kind
+
+    tnorm = [str(x).strip() for x in tasks if str(x).strip()]
+    if not tnorm:
+        raise ValueError("tasks に1つ以上のタスクIDを指定してください")
+    err = validate_tasks_for_kind("date", tnorm)
+    if err:
+        raise ValueError(err)
+    dkeys = collect_date_keys_for_race_period(
+        storage,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    n_all = len(dkeys)
+    capped = dkeys[: max(0, limit)]
+    if dry_run:
+        return {
+            "dry_run": True,
+            "candidate_dates": n_all,
+            "would_enqueue": min(n_all, limit),
+            "tasks": tnorm,
+            "sample_dates": capped[:25],
+        }
+    extras: dict[str, Any] = {
+        "job_kind": "date",
+        "tasks": tnorm,
+    }
+    if smart_skip is not None:
+        extras["smart_skip"] = bool(smart_skip)
+    if overwrite is not None:
+        extras["overwrite"] = bool(overwrite)
+    if skip_local_mirror is not None:
+        extras["skip_local_mirror"] = bool(skip_local_mirror)
+    full = [dict(extras, target_id=d) for d in capped]
+    stats = queue.bulk_add_jobs(full)
+    return {
+        "dry_run": False,
+        "candidate_dates": n_all,
+        "tasks": tnorm,
         **stats,
     }

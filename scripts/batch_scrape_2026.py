@@ -21,17 +21,21 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+from utils.keiba_logging import script_basic_config  # noqa: E402
+
+_LOG_DIR = _ROOT / "logs"
+_LOG_DIR.mkdir(exist_ok=True, parents=True)
+_log_path = _LOG_DIR / f"batch_scrape_2026_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+script_basic_config(
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("/tmp/batch_scrape_2026.log", mode="w"),
+        logging.FileHandler(_log_path, mode="w", encoding="utf-8"),
     ],
 )
 logger = logging.getLogger("batch_scrape")
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scraper.run import ScraperRunner
 from scraper.storage import HybridStorage

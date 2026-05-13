@@ -6,6 +6,7 @@
 <title>血統構造マップ | ML-AutoPilot Keiba</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700&family=Noto+Sans+JP:wght@300;400;600;700&display=swap" rel="stylesheet">
+<script src="/static/vendor/d3.min.js"></script>
 <style>
 :root {
   --bg: #0a0c10;
@@ -21,6 +22,8 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;overflow:hidden;height:100vh}
+#tree-view{flex:1;min-height:0;overflow:hidden;display:none;flex-direction:column;position:relative}
+#tree-msg{display:none;align-items:center;justify-content:center;position:absolute;inset:0;font-size:1rem;background:var(--bg);z-index:5}
 .gnav+.layout{height:calc(100vh - 44px)}
 h1{font-family:'Shippori Mincho',serif;font-size:1.4rem;font-weight:700;letter-spacing:0.05em;color:var(--accent)}
 .layout{display:grid;grid-template-columns:280px 1fr 300px;height:calc(100vh - 44px);gap:0}
@@ -33,7 +36,7 @@ h1{font-family:'Shippori Mincho',serif;font-size:1.4rem;font-weight:700;letter-s
 .color-mode-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .legend-item{display:flex;align-items:center;gap:8px;font-size:0.75rem;margin:3px 0;color:var(--text-dim)}
 .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-canvas{display:block;background:var(--bg)}
+canvas{display:block;background:var(--bg);flex-shrink:0}
 .tooltip{position:fixed;pointer-events:none;background:rgba(18,21,28,.95);border:1px solid var(--accent);border-radius:6px;padding:12px 16px;font-size:0.8rem;line-height:1.5;max-width:340px;display:none;z-index:100;backdrop-filter:blur(8px)}
 .tooltip .name{font-family:'Shippori Mincho',serif;font-size:1rem;font-weight:700;color:var(--accent);margin-bottom:6px}
 .tooltip .line-tag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:0.7rem;margin-bottom:6px;font-weight:600}
@@ -61,6 +64,120 @@ canvas{display:block;background:var(--bg)}
 .compare-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600;margin-left:4px}
 .compare-badge.perf{background:rgba(255,107,53,.15);color:#ff6b35}
 .compare-badge.ped{background:rgba(0,212,170,.15);color:#00d4aa}
+
+/* ── ビュー切り替えタブ ── */
+.view-tabs{display:flex;gap:4px;padding:0 16px}
+.view-tab{padding:6px 16px;font-size:.75rem;font-weight:600;border:1px solid var(--border);
+  background:transparent;color:var(--text-dim);border-radius:4px;cursor:pointer;transition:all .15s}
+.view-tab:hover{border-color:var(--accent);color:var(--accent)}
+.view-tab.active{background:var(--accent);color:#0a0c10;border-color:var(--accent)}
+
+/* ── 父系ツリー（インライン階層展開式） ── */
+.tree-info-card{background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2);
+  border-radius:6px;padding:10px 12px;font-size:.75rem;line-height:1.7}
+.tree-info-stat{display:flex;justify-content:space-between;color:var(--text-dim);margin-bottom:2px}
+.tree-info-stat span:last-child{color:var(--text);font-weight:600}
+
+#tree-toolbar{padding:6px 10px;border-bottom:1px solid var(--border);
+  background:rgba(0,0,0,.15);display:flex;align-items:center;gap:8px;flex-shrink:0}
+#tree-search-input{flex:1;padding:5px 10px;background:var(--bg);border:1px solid var(--border);
+  color:var(--text);border-radius:4px;font-size:.8rem;outline:none}
+#tree-search-input:focus{border-color:var(--accent)}
+.tree-search-clear{background:none;border:none;color:var(--text-dim);cursor:pointer;
+  font-size:.9rem;padding:2px 6px}
+.tree-search-clear:hover{color:var(--accent)}
+
+/* ── ツリー本体スクロール域 ── */
+#tree-node-list{flex:1;min-height:0;overflow-y:auto;padding:4px 0;font-size:.82rem}
+
+/* ── ノード行 ── */
+.tn-row{display:flex;align-items:center;gap:0;height:28px;
+  cursor:pointer;transition:background .1s;position:relative}
+.tn-row:hover{background:rgba(255,255,255,.04)}
+.tn-row.tn-active{background:rgba(0,212,170,.09)}
+
+/* 階層インデント + 縦線 */
+.tn-indent{display:flex;align-items:center;flex-shrink:0}
+.tn-vline{width:20px;height:28px;flex-shrink:0;position:relative}
+.tn-vline::before{content:'';position:absolute;left:10px;top:0;bottom:0;
+  border-left:1px solid rgba(255,255,255,.1)}
+.tn-connector{width:20px;height:28px;flex-shrink:0;position:relative}
+.tn-connector::before{content:'';position:absolute;left:10px;top:0;bottom:50%;
+  border-left:1px solid rgba(255,255,255,.1)}
+.tn-connector::after{content:'';position:absolute;left:10px;top:50%;width:10px;
+  border-top:1px solid rgba(255,255,255,.1)}
+.tn-connector.last::before{bottom:50%}
+/* トグルボタン */
+.tn-toggle{width:20px;height:20px;flex-shrink:0;display:flex;align-items:center;
+  justify-content:center;border-radius:3px;font-size:.65rem;transition:transform .2s}
+.tn-toggle.open{transform:rotate(90deg)}
+.tn-toggle.leaf{color:rgba(255,255,255,.15);cursor:default}
+.tn-toggle.has-children{color:var(--accent);cursor:pointer}
+/* 名前 */
+.tn-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:0 4px;color:var(--text)}
+.tn-name.tn-root-name{font-weight:600;color:var(--accent)}
+/* 名前リンク（クリックで血統ページへ） */
+a.tn-name{text-decoration:none;cursor:pointer}
+a.tn-name:hover{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+a.tn-name.tn-root-name:hover{color:#00ffcc}
+/* バッジ */
+.tn-desc{font-size:.65rem;padding:1px 7px;border-radius:8px;flex-shrink:0;margin-right:2px;
+  white-space:nowrap}
+.tn-desc.big{background:rgba(0,212,170,.12);color:var(--accent)}
+.tn-desc.mid{background:rgba(245,158,11,.1);color:#f59e0b}
+.tn-desc.small{background:rgba(255,255,255,.06);color:var(--text-dim)}
+/* netkeibaリンク */
+.tn-link{display:flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:3px;color:rgba(255,255,255,.3);
+  text-decoration:none;flex-shrink:0;font-size:.7rem;margin-right:6px;
+  transition:color .15s,background .15s}
+.tn-link:hover{color:#06b6d4;background:rgba(6,182,212,.1)}
+
+/* 子コンテナ */
+.tn-children{overflow:hidden;max-height:0;transition:max-height .2s ease}
+.tn-children.open{max-height:none}
+/* もっと表示ボタン */
+.tn-load-more{padding:4px 8px 4px 32px}
+.tn-load-more button{background:transparent;border:1px solid var(--border);color:var(--text-dim);
+  font-size:.72rem;padding:3px 12px;border-radius:4px;cursor:pointer;transition:all .15s}
+.tn-load-more button:hover{border-color:var(--accent);color:var(--accent)}
+.tn-load-more button:disabled{opacity:.5;cursor:default}
+
+/* ローディングスピナー */
+.tn-loading{padding:6px 0 6px 44px;color:var(--text-dim);font-size:.75rem;font-style:italic}
+
+/* ── 再構築パネル ── */
+#rebuild-panel{margin-top:16px;padding:10px 12px;background:rgba(0,0,0,.2);
+  border:1px solid var(--border);border-radius:6px;font-size:.72rem}
+#rebuild-panel h3{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--text-dim);margin:0 0 8px;font-weight:600}
+.rebuild-btn{width:100%;padding:7px 0;background:rgba(0,212,170,.12);
+  border:1px solid rgba(0,212,170,.35);color:var(--accent);font-size:.78rem;
+  border-radius:4px;cursor:pointer;transition:all .15s;font-weight:600}
+.rebuild-btn:hover:not(:disabled){background:rgba(0,212,170,.22);border-color:var(--accent)}
+.rebuild-btn:disabled{opacity:.45;cursor:default}
+.rebuild-btn.running{background:rgba(245,158,11,.1);border-color:#f59e0b;color:#f59e0b}
+.rebuild-progress-wrap{margin-top:8px;display:none}
+.rebuild-progress-bar-bg{height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-bottom:5px}
+.rebuild-progress-bar{height:100%;background:var(--accent);border-radius:3px;
+  transition:width .4s ease;width:0%}
+.rebuild-progress-bar.error{background:#e63946}
+.rebuild-msg{color:var(--text-dim);font-size:.68rem;line-height:1.5;word-break:break-all}
+.rebuild-stats{margin-top:6px;font-size:.68rem;color:var(--text-dim);
+  display:grid;grid-template-columns:1fr 1fr;gap:2px 8px}
+.rebuild-stats span:nth-child(odd){color:var(--text-dim)}
+.rebuild-stats span:nth-child(even){color:var(--text);font-weight:600}
+.rebuild-file-info{margin-top:6px;font-size:.65rem;color:rgba(255,255,255,.3);line-height:1.6}
+
+/* 詳細パネル */
+.tree-detail-name{font-family:'Shippori Mincho',serif;font-size:1rem;font-weight:700;
+  margin-bottom:8px;word-break:break-all;line-height:1.4}
+.tn-netkeiba-btn{display:block;margin-top:10px;padding:7px 12px;
+  background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);
+  border-radius:5px;color:#06b6d4;text-decoration:none;font-size:.75rem;text-align:center;
+  transition:background .15s}
+.tn-netkeiba-btn:hover{background:rgba(6,182,212,.2)}
 
 /* ── Responsive ── */
 @media (max-width: 900px) {
@@ -97,18 +214,36 @@ canvas{display:block;background:var(--bg)}
   </div>
   <div style="display:flex;flex-direction:column;overflow:hidden">
     <div class="header-bar">
+      <div class="view-tabs">
+        <button class="view-tab active" id="tab-scatter" onclick="switchView('scatter')">類似度マップ</button>
+        <button class="view-tab" id="tab-tree" onclick="switchView('tree')">父系ツリー</button>
+      </div>
       <div class="info" id="info-text">Loading...</div>
-      <div class="zoom-controls">
+      <div class="zoom-controls" id="zoom-controls-wrap">
         <button class="zoom-btn" id="zoom-in">+</button>
         <button class="zoom-btn" id="zoom-out">−</button>
         <button class="zoom-btn" id="zoom-reset">⟳</button>
       </div>
     </div>
     <canvas id="chart"></canvas>
+    <div id="tree-view">
+      <div id="tree-msg" class="loading" style="display:none"></div>
+      <div id="tree-toolbar">
+        <input id="tree-search-input" type="text" placeholder="🔍  種牡馬名で検索..." oninput="treeSearch(this.value)">
+        <button class="tree-search-clear" onclick="clearTreeSearch()" title="クリア">✕</button>
+      </div>
+      <div id="tree-node-list"></div>
+    </div>
   </div>
   <div class="panel panel-right" id="right-panel">
-    <h2>Selected Stallion</h2>
-    <div id="detail-content"><p style="color:var(--text-dim);font-size:.8rem">クリックで種牡馬を選択</p></div>
+    <div id="scatter-right-content">
+      <h2>Selected Stallion</h2>
+      <div id="detail-content"><p style="color:var(--text-dim);font-size:.8rem">クリックで種牡馬を選択</p></div>
+    </div>
+    <div id="tree-right-content" style="display:none">
+      <h2 style="margin-top:0">選択ノード</h2>
+      <div id="tree-node-detail"><p style="color:var(--text-dim);font-size:.75rem">ノードをクリックして選択</p></div>
+    </div>
   </div>
 </div>
 <div class="tooltip" id="tooltip"></div>
@@ -367,6 +502,525 @@ searchInput.addEventListener("input",()=>{
 });
 
 init();
+
+// ════════════════════════════════════════════════════════════
+//  父系ツリービュー（全種牡馬 78K+ 対応 / 段階展開式）
+// ════════════════════════════════════════════════════════════
+
+// 系統グループカラーパレット（pedigree_race_stats と同一）
+const TREE_COLORS = [
+  "#e63946","#457b9d","#2a9d8f","#e9c46a","#f4a261",
+  "#264653","#a8dadc","#6d6875","#b5838d","#ffb4a2",
+  "#06b6d4","#a78bfa","#f59e0b","#22c55e","#ec4899",
+  "#84cc16","#14b8a6","#f97316","#8b5cf6","#3b82f6",
+  "#fb923c","#a3e635","#34d399","#60a5fa","#c084fc",
+  "#f43f5e","#0ea5e9","#10b981","#d97706","#7c3aed",
+  "#dc2626","#16a34a","#2563eb","#9333ea","#ea580c",
+  "#65a30d","#0891b2","#d946ef","#c026d3","#0284c7",
+  "#4ade80","#fbbf24","#818cf8","#fb7185","#a78bfa",
+  "#34d399","#38bdf8","#f472b6","#facc15","#86efac"
+];
+const treeColor = gid => (gid >= 0) ? TREE_COLORS[gid % TREE_COLORS.length] : '#555';
+
+let _treeLoaded = false;
+let _currentView = 'scatter';
+const _treeCache = {};  // id -> {node, children} APIレスポンスキャッシュ
+
+// ── switchView ──────────────────────────────────────────────
+function switchView(view) {
+  _currentView = view;
+  document.getElementById('tab-scatter').classList.toggle('active', view === 'scatter');
+  document.getElementById('tab-tree').classList.toggle('active', view === 'tree');
+  document.getElementById('chart').style.display = view === 'scatter' ? 'block' : 'none';
+  document.getElementById('tree-view').style.display = view === 'tree' ? 'flex' : 'none';
+  document.getElementById('zoom-controls-wrap').style.display = view === 'scatter' ? 'flex' : 'none';
+  document.getElementById('scatter-left-content').style.display = view === 'scatter' ? '' : 'none';
+  document.getElementById('tree-left-content').style.display = view === 'tree' ? '' : 'none';
+  document.getElementById('scatter-right-content').style.display = view === 'scatter' ? '' : 'none';
+  document.getElementById('tree-right-content').style.display = view === 'tree' ? '' : 'none';
+  if (view === 'tree' && !_treeLoaded) {
+    _treeLoaded = true;
+    _treeMsg('読み込み中...');
+    initFullTree();
+  }
+}
+
+function _treeMsg(text, isError) {
+  const el = document.getElementById('tree-msg');
+  if (!text) { el.style.display = 'none'; return; }
+  el.textContent = text;
+  el.style.color = isError ? '#e63946' : 'var(--text-dim)';
+  el.style.display = 'flex';
+}
+
+// ── ユーティリティ ──────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+function netkeibaUrl(horse_id) {
+  // 10桁数字（日本馬）または 000a系（外国馬）→ netkeiba 血統ページ
+  const id = String(horse_id || '');
+  if (/^\d{10}$/.test(id) || /^000a[0-9a-f]+$/i.test(id)) {
+    return `https://db.netkeiba.com/horse/ped/${id}/`;
+  }
+  return null;
+}
+
+function descClass(n_desc) {
+  if (n_desc > 1000) return 'big';
+  if (n_desc > 50)   return 'mid';
+  return 'small';
+}
+
+function descLabel(node) {
+  if (node.n_descendants > 0) return `${node.n_descendants.toLocaleString()} 子孫`;
+  if (node.n_children > 0)    return `${node.n_children} 子`;
+  return '末端';
+}
+
+// ── APIフェッチ（キャッシュ付き） ──────────────────────────
+async function fetchNode(id) {
+  if (_treeCache[id]) return _treeCache[id];
+  const res = await fetch(`/api/stallion-sire-tree/node/${encodeURIComponent(id)}`);
+  const data = await res.json();
+  _treeCache[id] = data;
+  return data;
+}
+
+// ── ノード行のHTMLを生成 ────────────────────────────────────
+function makeNodeRowHtml(node, depth, isLast, isRoot) {
+  const indent = buildIndentHtml(depth, isLast);
+  const hasKids = node.n_children > 0;
+  const toggleCls = hasKids ? 'has-children' : 'leaf';
+  const nameCls   = isRoot && depth === 0 ? 'tn-name tn-root-name' : 'tn-name';
+  const nkUrl = netkeibaUrl(node.id);
+  // 名前をリンクにする（クリックで新タブ）。リンクがない場合は span のまま
+  const nameHtml = nkUrl
+    ? `<a class="${nameCls}" href="${nkUrl}" target="_blank" title="netkeiba 血統ページを開く" onclick="event.stopPropagation()">${esc(node.name)}</a>`
+    : `<span class="${nameCls}" title="${esc(node.name)}">${esc(node.name)}</span>`;
+  const descHtml = `<span class="tn-desc ${descClass(node.n_descendants)}">${descLabel(node)}</span>`;
+  return `
+    <div class="tn-row" data-id="${esc(node.id)}" onclick="onNodeClick(this,'${esc(node.id)}','${esc(node.name)}',${hasKids})">
+      ${indent}
+      <span class="tn-toggle ${toggleCls}" data-toggle="${node.id}">${hasKids ? '▶' : '·'}</span>
+      ${nameHtml}
+      ${descHtml}
+    </div>
+    <div class="tn-children" id="ch-${esc(node.id)}"></div>`;
+}
+
+function buildIndentHtml(depth, isLast) {
+  if (depth === 0) return '';
+  let html = '';
+  // depth-1 本の縦線
+  for (let i = 0; i < depth - 1; i++) {
+    html += '<span class="tn-vline"></span>';
+  }
+  // 最後の接続線
+  html += `<span class="tn-connector${isLast ? ' last' : ''}"></span>`;
+  return `<span class="tn-indent">${html}</span>`;
+}
+
+// ── ノードクリック処理 ─────────────────────────────────────
+async function onNodeClick(el, id, name, hasKids) {
+  // 詳細パネル更新
+  highlightRow(id);
+  const cached = _treeCache[id];
+  if (cached?.node) renderTreeDetail(cached.node);
+  else {
+    // 非同期で詳細を取得
+    fetchNode(id).then(d => { if (d.node) renderTreeDetail(d.node); });
+  }
+  if (!hasKids) return;
+
+  const childContainer = document.getElementById(`ch-${id}`);
+  if (!childContainer) return;
+
+  const toggle = el.querySelector(`[data-toggle="${id}"]`);
+  const isOpen = childContainer.classList.contains('open');
+
+  if (isOpen) {
+    // 折りたたみ
+    childContainer.classList.remove('open');
+    childContainer.style.maxHeight = '0';
+    if (toggle) toggle.classList.remove('open');
+    return;
+  }
+
+  // 展開
+  childContainer.classList.add('open');
+  childContainer.style.maxHeight = 'none';
+  if (toggle) toggle.classList.add('open');
+
+  // 子ノードが未ロードなら取得
+  if (childContainer.innerHTML === '') {
+    childContainer.innerHTML = '<div class="tn-loading">読み込み中...</div>';
+    try {
+      const parentDepth = countDepth(el);
+      await loadChildren(id, childContainer, parentDepth, 0);
+    } catch(e) {
+      childContainer.innerHTML = `<div class="tn-loading" style="color:#e63946">エラー: ${esc(e.message)}</div>`;
+    }
+  }
+}
+
+const PAGE_SIZE = 100; // 一度に表示する子ノード数
+
+async function loadChildren(id, container, parentDepth, offset) {
+  const url = `/api/stallion-sire-tree/node/${encodeURIComponent(id)}?offset=${offset}&limit=${PAGE_SIZE}`;
+  const res  = await fetch(url);
+  const data = await res.json();
+  if (data.node && !_treeCache[id]) _treeCache[id] = data;
+
+  const children     = data.children || [];
+  const total        = data.total_children || children.length;
+  const nextOffset   = offset + children.length;
+  const hasMore      = nextOffset < total;
+
+  if (offset === 0) {
+    // 初回: コンテナを完全クリア（読み込み中...を除去）
+    container.innerHTML = '';
+    if (children.length === 0) {
+      container.innerHTML = '<div class="tn-loading">（子ノードなし）</div>';
+      return;
+    }
+  } else {
+    // 追加ロード: 「もっと表示」ボタンだけ削除
+    const existingMore = container.querySelector('.tn-load-more');
+    if (existingMore) existingMore.remove();
+  }
+
+  // horse_id で重複を排除して描画
+  const seenIds = new Set(
+    Array.from(container.querySelectorAll('.tn-row')).map(r => r.dataset.id)
+  );
+  const frag = document.createDocumentFragment();
+  children.forEach((c, i) => {
+    if (seenIds.has(c.id)) return; // horse_id 重複スキップ
+    seenIds.add(c.id);
+    const isLast = !hasMore && (i === children.length - 1);
+    const div = document.createElement('div');
+    div.innerHTML = makeNodeRowHtml(c, parentDepth + 1, isLast, false);
+    while (div.firstChild) frag.appendChild(div.firstChild);
+  });
+  container.appendChild(frag);
+
+  if (hasMore) {
+    const btn = document.createElement('div');
+    btn.className = 'tn-load-more';
+    btn.innerHTML = `<button onclick="loadMoreChildren('${esc(id)}', this, ${parentDepth}, ${nextOffset})">▼ さらに表示（${nextOffset} / ${total} 件）</button>`;
+    container.appendChild(btn);
+  }
+}
+
+async function loadMoreChildren(id, btn, parentDepth, offset) {
+  btn.disabled = true;
+  btn.textContent = '読み込み中...';
+  const container = btn.closest('.tn-children');
+  try {
+    await loadChildren(id, container, parentDepth, offset);
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'エラー（再試行）';
+  }
+}
+
+function countDepth(rowEl) {
+  // tn-indent スパン内の vline/connector 数でネストの深さを算出
+  const indent = rowEl.querySelector('.tn-indent');
+  if (!indent) return 0;
+  return indent.querySelectorAll('.tn-vline, .tn-connector').length;
+}
+
+function highlightRow(id) {
+  document.querySelectorAll('.tn-row.tn-active').forEach(r => r.classList.remove('tn-active'));
+  const row = document.querySelector(`.tn-row[data-id="${CSS.escape(id)}"]`);
+  if (row) { row.classList.add('tn-active'); row.scrollIntoView({block:'nearest', behavior:'smooth'}); }
+}
+
+// ── ノード詳細（右パネル）描画 ─────────────────────────────
+function renderTreeDetail(node) {
+  const panel = document.getElementById('tree-node-detail');
+  if (!node || !panel) return;
+  const nkUrl = netkeibaUrl(node.id);
+  const nkHtml = nkUrl
+    ? `<a class="tn-netkeiba-btn" href="${nkUrl}" target="_blank">🔗 netkeiba 血統ページを開く</a>`
+    : '';
+  panel.innerHTML = `
+    <div class="tree-detail-name">${esc(node.name)}</div>
+    <div class="tree-info-card">
+      <div class="tree-info-stat"><span>Horse ID</span><span style="font-size:.65rem">${esc(node.id)}</span></div>
+      <div class="tree-info-stat"><span>直接の子</span><span>${(node.n_children||0).toLocaleString()} 頭</span></div>
+      <div class="tree-info-stat"><span>全子孫</span><span>${(node.n_descendants||0).toLocaleString()} 頭</span></div>
+      <div class="tree-info-stat"><span>根からの深さ</span><span>${node.depth >= 0 ? node.depth : '不明'} 世代</span></div>
+      ${node.is_root ? '<div style="margin-top:6px;font-size:.7rem;color:var(--accent)">● 根ノード（父不明）</div>' : ''}
+    </div>
+    ${nkHtml}`;
+}
+
+// ── ルートからツリー全体を描画 ─────────────────────────────
+async function initFullTree() {
+  try {
+    const res = await fetch('/api/stallion-sire-tree/roots?limit=100');
+    const data = await res.json();
+    if (data.error) { _treeMsg(data.error, true); return; }
+    _treeMsg('');
+    const list = document.getElementById('tree-node-list');
+    list.innerHTML = data.nodes.map((n, i) =>
+      makeNodeRowHtml(n, 0, i === data.nodes.length - 1, true)
+    ).join('');
+  } catch(e) {
+    _treeMsg('読み込みエラー: ' + e.message, true);
+  }
+}
+
+// ── 検索 ──────────────────────────────────────────────────
+let _treeSearchTimer = null;
+function treeSearch(q) {
+  clearTimeout(_treeSearchTimer);
+  _treeSearchTimer = setTimeout(async () => {
+    const list = document.getElementById('tree-node-list');
+    if (!q.trim()) {
+      // 検索クリア → ルート再表示
+      _treeMsg('');
+      await initFullTree();
+      return;
+    }
+    _treeMsg('検索中...');
+    try {
+      const res = await fetch(`/api/stallion-sire-tree/search?q=${encodeURIComponent(q)}&limit=80`);
+      const data = await res.json();
+      _treeMsg('');
+      if (!data.nodes?.length) {
+        list.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-dim);font-size:.8rem">"${esc(q)}" に一致する馬が見つかりません</div>`;
+        return;
+      }
+      // 検索結果はフラットリスト（depth=0）で表示
+      list.innerHTML = `
+        <div style="padding:4px 12px 8px;font-size:.7rem;color:var(--text-dim)">
+          検索結果: ${data.total.toLocaleString()} 件中 上位${data.nodes.length}件
+        </div>
+        ${data.nodes.map((n, i) => makeNodeRowHtml(n, 0, i === data.nodes.length - 1, false)).join('')}`;
+    } catch(e) { _treeMsg('検索エラー: ' + e.message, true); }
+  }, 350);
+}
+
+function clearTreeSearch() {
+  const inp = document.getElementById('tree-search-input');
+  if (inp) inp.value = '';
+  treeSearch('');
+}
+
+// ════════════════════════════════════════════════════════════
+//  ツリー再構築
+// ════════════════════════════════════════════════════════════
+
+let _rebuildPollTimer = null;
+
+async function startRebuild() {
+  const btn  = document.getElementById('rebuild-btn');
+  const wrap = document.getElementById('rebuild-progress-wrap');
+  const bar  = document.getElementById('rebuild-progress-bar');
+  const msg  = document.getElementById('rebuild-msg');
+  const det  = document.getElementById('rebuild-stats-detail');
+  if (!btn || !wrap) return;
+
+  btn.disabled = true;
+  btn.classList.add('running');
+  btn.textContent = '⚙ 再計算中...';
+  wrap.style.display = 'block';
+  bar.className = 'rebuild-progress-bar';
+  bar.style.width = '0%';
+  msg.textContent = '起動中...';
+  det.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/stallion-sire-tree/rebuild', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) {
+      msg.textContent = data.error || 'エラー';
+      bar.classList.add('error');
+      btn.disabled = false;
+      btn.classList.remove('running');
+      btn.textContent = '⚙ 父系ツリーを再計算';
+      return;
+    }
+  } catch(e) {
+    msg.textContent = 'リクエストエラー: ' + e.message;
+    bar.classList.add('error');
+    btn.disabled = false;
+    btn.classList.remove('running');
+    btn.textContent = '⚙ 父系ツリーを再計算';
+    return;
+  }
+
+  // ポーリング開始
+  clearInterval(_rebuildPollTimer);
+  _rebuildPollTimer = setInterval(_pollRebuildStatus, 1500);
+}
+
+async function _pollRebuildStatus() {
+  const btn  = document.getElementById('rebuild-btn');
+  const wrap = document.getElementById('rebuild-progress-wrap');
+  const bar  = document.getElementById('rebuild-progress-bar');
+  const msg  = document.getElementById('rebuild-msg');
+  const det  = document.getElementById('rebuild-stats-detail');
+  const fi   = document.getElementById('rebuild-file-info');
+
+  let data;
+  try {
+    const res = await fetch('/api/stallion-sire-tree/rebuild/status');
+    data = await res.json();
+  } catch(e) {
+    return; // ネットワークエラーは無視して再試行
+  }
+
+  const pct = Math.round((data.progress || 0) * 100);
+  bar.style.width = pct + '%';
+  msg.textContent = data.message || '';
+
+  // ファイル情報
+  if (data.files) {
+    const parts = [];
+    if (data.files.nodes) parts.push(`nodes: ${data.files.nodes.size_kb} KB  (${data.files.nodes.updated_at?.slice(0,19).replace('T',' ')})`);
+    if (data.files.edges) parts.push(`edges: ${data.files.edges.size_kb} KB  (${data.files.edges.updated_at?.slice(0,19).replace('T',' ')})`);
+    if (fi) fi.textContent = parts.join('\n');
+  }
+
+  if (!data.running) {
+    clearInterval(_rebuildPollTimer);
+    _rebuildPollTimer = null;
+    btn.disabled = false;
+    btn.classList.remove('running');
+    btn.textContent = '⚙ 父系ツリーを再計算';
+
+    if (data.error) {
+      bar.classList.add('error');
+    } else if (data.stats) {
+      // 統計カードを更新
+      _updateTreeStatsCard(data.stats);
+      // 詳細表示
+      det.style.display = 'grid';
+      det.innerHTML = `
+        <span>ノード総数</span><span>${(data.stats.n_nodes||0).toLocaleString()} 頭</span>
+        <span>父-子ペア</span><span>${(data.stats.n_edges||0).toLocaleString()} 組</span>
+        <span>ルート数</span><span>${(data.stats.n_roots||0).toLocaleString()}</span>
+        <span>最大深さ</span><span>${data.stats.max_depth || '—'} 世代</span>
+        <span>処理時間</span><span>${data.stats.elapsed_sec || '—'} 秒</span>
+        <span>ファイル数</span><span>${(data.stats.n_files||0).toLocaleString()}</span>`;
+      // ツリーキャッシュをクリアして再読み込み
+      Object.keys(_treeCache).forEach(k => delete _treeCache[k]);
+      _treeLoaded = false;
+      _treeMsg('再読み込み中...');
+      document.getElementById('tree-node-list').innerHTML = '';
+      setTimeout(() => {
+        _treeLoaded = true;
+        _treeMsg('');
+        initFullTree();
+      }, 800);
+    }
+  }
+}
+
+function _updateTreeStatsCard(stats) {
+  const nEl = document.getElementById('stat-nodes');
+  const eEl = document.getElementById('stat-edges');
+  const rEl = document.getElementById('stat-roots');
+  if (nEl) nEl.textContent = (stats.n_nodes||0).toLocaleString() + ' 頭';
+  if (eEl) eEl.textContent = (stats.n_edges||0).toLocaleString() + ' 組';
+  if (rEl) rEl.textContent = (stats.n_roots||0).toLocaleString();
+}
+
+async function _loadInitialRebuildStatus() {
+  try {
+    const res  = await fetch('/api/stallion-sire-tree/rebuild/status');
+    const data = await res.json();
+    const fi   = document.getElementById('rebuild-file-info');
+
+    if (data.files && fi) {
+      const parts = [];
+      if (data.files.nodes) parts.push(`nodes: ${data.files.nodes.size_kb} KB  (${data.files.nodes.updated_at?.slice(0,19).replace('T',' ')})`);
+      if (data.files.edges) parts.push(`edges: ${data.files.edges.size_kb} KB  (${data.files.edges.updated_at?.slice(0,19).replace('T',' ')})`);
+      fi.textContent = parts.join('\n');
+    }
+    if (data.stats) _updateTreeStatsCard(data.stats);
+
+    // 前回のジョブが実行中なら自動でポーリング再開
+    if (data.running) {
+      const btn  = document.getElementById('rebuild-btn');
+      const wrap = document.getElementById('rebuild-progress-wrap');
+      if (btn)  { btn.disabled = true; btn.classList.add('running'); btn.textContent = '⚙ 再計算中...'; }
+      if (wrap) wrap.style.display = 'block';
+      clearInterval(_rebuildPollTimer);
+      _rebuildPollTimer = setInterval(_pollRebuildStatus, 1500);
+    }
+  } catch(e) { /* ignore */ }
+}
+
+// ── 左パネル初期化 ─────────────────────────────────────────
+function initTreeLeftPanel() {
+  const leftPanel = document.getElementById('left-panel');
+  if (!document.getElementById('scatter-left-content')) {
+    const scatterContent = document.createElement('div');
+    scatterContent.id = 'scatter-left-content';
+    while (leftPanel.children.length > 1) {
+      scatterContent.appendChild(leftPanel.children[1]);
+    }
+    leftPanel.appendChild(scatterContent);
+  }
+  if (!document.getElementById('tree-left-content')) {
+    const treeContent = document.createElement('div');
+    treeContent.id = 'tree-left-content';
+    treeContent.style.display = 'none';
+    treeContent.innerHTML = `
+      <h2 style="margin-top:0">操作方法</h2>
+      <div style="font-size:.7rem;color:var(--text-dim);line-height:1.9">
+        <div><span style="color:var(--accent);font-weight:600">▶</span> をクリックして子ノードを展開</div>
+        <div><span style="color:var(--accent);font-weight:600">▼</span> で折りたたみ</div>
+        <div><span style="color:#06b6d4">🔗</span> でnetkeiba血統ページへ</div>
+        <div style="margin-top:6px">上部検索欄で名前絞り込み</div>
+      </div>
+      <div id="tree-stats-card" style="margin-top:14px;padding:10px;background:rgba(0,212,170,.05);
+        border-radius:4px;border:1px solid rgba(0,212,170,.15);font-size:.72rem">
+        <div style="color:var(--accent);font-weight:600;margin-bottom:6px">データ規模</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+          <span style="color:var(--text-dim)">馬総数</span><strong id="stat-nodes">—</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+          <span style="color:var(--text-dim)">父-子ペア</span><strong id="stat-edges">—</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--text-dim)">ルート数</span><strong id="stat-roots">—</strong>
+        </div>
+      </div>
+      <h2 style="margin-top:16px">色の意味</h2>
+      <div style="font-size:.7rem;color:var(--text-dim);line-height:1.8">
+        <div><span style="color:var(--accent);font-weight:600">緑バッジ</span> 1,000+ 子孫</div>
+        <div><span style="color:#f59e0b;font-weight:600">黄バッジ</span> 51〜1,000 子孫</div>
+        <div><span style="color:var(--text-dim)">灰バッジ</span> 〜50 子孫</div>
+      </div>
+
+      <div id="rebuild-panel">
+        <h3>ツリー再構築</h3>
+        <button class="rebuild-btn" id="rebuild-btn" onclick="startRebuild()">
+          ⚙ 父系ツリーを再計算
+        </button>
+        <div class="rebuild-progress-wrap" id="rebuild-progress-wrap">
+          <div class="rebuild-progress-bar-bg">
+            <div class="rebuild-progress-bar" id="rebuild-progress-bar"></div>
+          </div>
+          <div class="rebuild-msg" id="rebuild-msg"></div>
+          <div class="rebuild-stats" id="rebuild-stats-detail" style="display:none"></div>
+        </div>
+        <div class="rebuild-file-info" id="rebuild-file-info"></div>
+      </div>`;
+    leftPanel.appendChild(treeContent);
+  }
+}
+
+initTreeLeftPanel();
+_loadInitialRebuildStatus();
 </script>
 </body>
 </html>

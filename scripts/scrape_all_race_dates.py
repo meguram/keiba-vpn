@@ -12,15 +12,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scraper.run import ScraperRunner
 from scraper.storage import HybridStorage
+from utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger("scrape_all_race_dates")
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-    )
+    script_basic_config()
 
     storage = HybridStorage()
     runner = ScraperRunner()

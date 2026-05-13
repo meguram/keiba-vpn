@@ -31,6 +31,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from utils.keiba_logging import script_basic_config
+
 logger = logging.getLogger("research.course_bloodline")
 
 COURSE_PROFILES_PATH = Path(__file__).parent.parent / "data" / "knowledge" / "course_profiles.json"
@@ -79,11 +81,127 @@ class CourseBloodlineAnalyzer:
     # ── データロード ──
 
     def load_from_gcs(self, years: list[str] | None = None):
+        """ローカル Parquet を優先し、不足分のみ GCS から読み込む。"""
+        rows = self._load_from_local_parquet(years)
+        if rows:
+            logger.info("ローカル Parquet からロード完了: %d 出走行", len(rows))
+            self.df = pd.DataFrame(rows)
+        else:
+            logger.info("ローカル Parquet なし → GCS フォールバック")
+            self.df = pd.DataFrame(self._load_from_gcs_fallback(years))
+        if not self.df.empty:
+            self.df["dist_cat"] = self.df["distance"].apply(self._categorize_distance)
+            self.df["draw_zone"] = self.df.apply(self._classify_draw_zone, axis=1)
+            self.df["grass_type_est"] = self.df.apply(
+                lambda r: self._estimate_grass_type(r["venue_code"], r["race_month"], r["surface"]),
+                axis=1,
+            )
+            self.df["first_corner_m"] = self.df.apply(
+                lambda r: self._get_first_corner_distance(r["venue_code"], r["distance"], r["surface"]),
+                axis=1,
+            )
+            self.df["fc_band"] = self.df["first_corner_m"].apply(self._classify_first_corner_band)
+        logger.info("データ構築完了: %d 出走", len(self.df))
+
+    def _load_from_local_parquet(self, years: list[str] | None = None) -> list[dict]:
+        """ローカル Parquet テーブルからバルクロード (GCS コスト ¥0)。"""
+        try:
+            from scraper.local_tables import load_all_races_grouped, available_years
+        except ImportError:
+            return []
+
+        if years is None:
+            years = available_years()
+        if not years:
+            return []
+
+        result_map = load_all_races_grouped("race_result", years)
+        if not result_map:
+            return []
+
+        shutuba_map_all = load_all_races_grouped("race_shutuba", years)
+        rows: list[dict] = []
+
+        for race_id, result_data in result_map.items():
+            venue_code = race_id[4:6] if len(race_id) >= 6 else ""
+            venue_name = result_data.get("venue", "")
+            if not venue_code and venue_name:
+                venue_code = self._venue_name_to_code(venue_name)
+
+            distance = result_data.get("distance", 0)
+            surface = result_data.get("surface", "")
+            track_cond = result_data.get("track_condition", "")
+            direction = result_data.get("direction", "")
+
+            s_data = shutuba_map_all.get(race_id, {})
+            s_map = {}
+            for e in s_data.get("entries", []):
+                hn = e.get("horse_number", 0)
+                if hn:
+                    s_map[hn] = e
+
+            field_size = result_data.get("field_size", 0) or len(
+                result_data.get("entries", [])
+            )
+
+            for entry in result_data.get("entries", []):
+                hid = entry.get("horse_id", "")
+                fp = entry.get("finish_position", 0)
+                hn = entry.get("horse_number", 0)
+                if not hid or fp == 0:
+                    continue
+
+                sire = entry.get("sire", "")
+                dam_sire = entry.get("dam_sire", "")
+                se = s_map.get(hn, {})
+                if not sire:
+                    sire = se.get("sire", "")
+                if not dam_sire:
+                    dam_sire = se.get("dam_sire", "")
+
+                if not sire:
+                    continue
+
+                bracket = entry.get("bracket_number", 0) or se.get("bracket_number", 0)
+
+                race_month = 0
+                race_date = result_data.get("date", "")
+                if not race_date and len(race_id) >= 4:
+                    race_date = race_id[:4]
+                if race_date and len(race_date) >= 6:
+                    try:
+                        race_month = int(race_date[4:6])
+                    except ValueError:
+                        pass
+
+                rows.append({
+                    "race_id": race_id,
+                    "horse_id": hid,
+                    "horse_number": hn,
+                    "bracket_number": bracket,
+                    "finish_position": fp,
+                    "sire": sire,
+                    "dam_sire": dam_sire or "不明",
+                    "venue_code": venue_code,
+                    "venue": venue_name or self.profiles.get(venue_code, {}).get("name", ""),
+                    "distance": distance,
+                    "surface": surface,
+                    "track_condition": track_cond,
+                    "direction": direction,
+                    "field_size": field_size,
+                    "race_month": race_month,
+                    "is_top3": 1 if fp <= 3 else 0,
+                    "is_win": 1 if fp == 1 else 0,
+                })
+        return rows
+
+    def _load_from_gcs_fallback(self, years: list[str] | None = None) -> list[dict]:
+        """GCS フォールバック。"""
         from scraper.storage import HybridStorage
         storage = HybridStorage(".")
         if not storage.gcs_enabled:
             logger.error("GCS 未接続")
-            return
+            return []
 
         if years is None:
             years = storage.list_years("race_result")
@@ -178,21 +296,7 @@ class CourseBloodlineAnalyzer:
                         "is_top3": 1 if fp <= 3 else 0,
                         "is_win": 1 if fp == 1 else 0,
                     })
-
-        self.df = pd.DataFrame(rows)
-        if not self.df.empty:
-            self.df["dist_cat"] = self.df["distance"].apply(self._categorize_distance)
-            self.df["draw_zone"] = self.df.apply(self._classify_draw_zone, axis=1)
-            self.df["grass_type_est"] = self.df.apply(
-                lambda r: self._estimate_grass_type(r["venue_code"], r["race_month"], r["surface"]),
-                axis=1,
-            )
-            self.df["first_corner_m"] = self.df.apply(
-                lambda r: self._get_first_corner_distance(r["venue_code"], r["distance"], r["surface"]),
-                axis=1,
-            )
-            self.df["fc_band"] = self.df["first_corner_m"].apply(self._classify_first_corner_band)
-        logger.info("データ構築完了: %d 出走", len(self.df))
+        return rows
 
     @staticmethod
     def _categorize_distance(d: int) -> str:
@@ -1020,11 +1124,7 @@ for (const v of venues) {{
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    script_basic_config()
 
     parser = argparse.ArgumentParser(description="コース特性×血統適性 研究")
     parser.add_argument("--years", nargs="*", default=None)

@@ -227,14 +227,16 @@
   .bashira-cell:nth-child(even):hover { background: rgba(59,130,246,0.08); }
   .bc-pos {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 26px; height: 26px; border-radius: 6px; font-size: 15px; font-weight: 900;
-    margin-right: 4px; flex-shrink: 0;
-    letter-spacing: -0.5px;
+    min-width: 24px; height: 24px; border-radius: 5px; font-size: 13px; font-weight: 900;
+    margin-right: 4px; flex-shrink: 0; padding: 0 4px;
+    letter-spacing: -0.5px; line-height: 1;
   }
   .bc-pos-1 { background: #b8860b; color: #fff; box-shadow: 0 0 8px rgba(234,179,8,0.4); }
   .bc-pos-2 { background: #6b7280; color: #fff; }
   .bc-pos-3 { background: #92400e; color: #fbbf24; }
-  .bc-pos-out { background: rgba(107,125,149,0.15); color: #94a3b8; }
+  .bc-pos-mid { background: rgba(59,130,246,0.15); color: #3b82f6; }
+  .bc-pos-low { background: rgba(107,125,149,0.10); color: #64748b; }
+  .bc-pos-out { background: rgba(107,125,149,0.15); color: #94a3b8; font-size: 10px; font-weight: 700; }
   .bc-venue { color: var(--purple); font-weight: 600; font-size: 11px; }
   .bc-grade {
     font-weight: 800; font-size: 9px; padding: 1px 4px; border-radius: 3px;
@@ -293,6 +295,241 @@
     letter-spacing: 0.3px;
   }
   .section-title:first-child { margin-top: 0; }
+
+  /* race_result_lap レース共通ラップ・ペース（カード） */
+  .rrl-pace-panel {
+    margin: 0 0 20px;
+    padding: 18px 20px;
+    border-radius: 14px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+    background: linear-gradient(155deg, rgba(51, 65, 85, 0.35) 0%, rgba(15, 23, 42, 0.92) 48%, rgba(15, 23, 42, 0.98) 100%);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .rrl-pace-block-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text-dim, #94a3b8);
+    margin-bottom: 12px;
+    text-transform: none;
+  }
+  .rrl-pace-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 6px;
+  }
+  .rrl-pace-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    background: linear-gradient(180deg, rgba(56, 189, 248, 0.2), rgba(14, 165, 233, 0.12));
+    border: 1px solid rgba(56, 189, 248, 0.38);
+    color: #e0f2fe;
+    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.12);
+  }
+  .rrl-pace-flow-arr {
+    color: var(--text-dim, #64748b);
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0.85;
+    user-select: none;
+    line-height: 1;
+  }
+  .rrl-pace-metrics {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .rrl-pace-metrics.no-border-top {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+  .rrl-pace-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 12px;
+  }
+  .rrl-pace-stat {
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .rrl-pace-stat:hover {
+    border-color: rgba(148, 163, 184, 0.2);
+    background: rgba(0, 0, 0, 0.28);
+  }
+  .rrl-pace-stat-label {
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text-dim, #94a3b8);
+    margin-bottom: 8px;
+  }
+  .rrl-pace-stat-val {
+    font-size: 22px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    color: var(--text, #f1f5f9);
+    line-height: 1.1;
+  }
+
+  /* race_result_lap 各馬テーブル（ヘッダーは改行可・距離/コーナーを縦積み） */
+  table.lap-detail-table { font-size: 11px; }
+  table.lap-detail-table thead th {
+    white-space: normal;
+    text-align: center;
+    vertical-align: bottom;
+    padding: 8px 5px;
+    max-width: 54px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  table.lap-detail-table thead th.lap-th-fixed { max-width: none; }
+  table.lap-detail-table tbody td { text-align: center; }
+  table.lap-detail-table tbody td.lap-td-num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.lap-detail-table tbody td.lap-td-comment {
+    white-space: normal; font-size: 11px; text-align: left;
+    max-width: 320px; line-height: 1.35;
+  }
+  .lap-th-stack {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .lap-th-corner { font-size: 9px; font-weight: 600; opacity: 0.75; }
+  table.lap-detail-table thead th.rrl-sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.12s;
+  }
+  table.lap-detail-table thead th.rrl-sortable:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  table.lap-detail-table thead th.rrl-sort-sorted-asc::after,
+  table.lap-detail-table thead th.rrl-sort-sorted-desc::after {
+    display: block;
+    font-size: 9px;
+    opacity: 0.85;
+    margin-top: 2px;
+    line-height: 1;
+  }
+  table.lap-detail-table thead th.rrl-sort-sorted-asc::after { content: '▲'; }
+  table.lap-detail-table thead th.rrl-sort-sorted-desc::after { content: '▼'; }
+
+  /* 汎用テーブルソート */
+  .data-table th.col-sortable,
+  .hm-history-table th.col-sortable {
+    cursor: pointer; user-select: none; transition: background 0.12s;
+    position: relative;
+  }
+  .data-table th.col-sortable:hover,
+  .hm-history-table th.col-sortable:hover { background: rgba(255,255,255,0.06); }
+  .data-table th.col-sortable::after,
+  .hm-history-table th.col-sortable::after {
+    content: '⇅'; font-size: 9px; opacity: 0.3; margin-left: 3px; vertical-align: middle;
+  }
+  .data-table th.col-sort-asc::after,
+  .hm-history-table th.col-sort-asc::after { content: '▲'; opacity: 0.85; }
+  .data-table th.col-sort-desc::after,
+  .hm-history-table th.col-sort-desc::after { content: '▼'; opacity: 0.85; }
+  table.lap-detail-table td.lap-sec-viz {
+    position: relative;
+    vertical-align: middle;
+    min-width: 52px;
+  }
+  /* 各区間タイムの出走馬内 1〜3 位（速い順） */
+  table.lap-detail-table td.lap-sec-viz.lap-sec-fast-1 {
+    background: rgba(234, 179, 8, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(234, 179, 8, 0.42);
+  }
+  table.lap-detail-table td.lap-sec-viz.lap-sec-fast-2 {
+    background: rgba(148, 163, 184, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.45);
+  }
+  table.lap-detail-table td.lap-sec-viz.lap-sec-fast-3 {
+    background: rgba(180, 83, 9, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.4);
+  }
+  .lap-sec-stack {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px 2px;
+    min-height: 46px;
+  }
+  .lap-sec-time {
+    font-size: 12px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: var(--text, #e2e8f0);
+    line-height: 1.15;
+  }
+  .lap-sec-time.is-muted { font-weight: 700; opacity: 0.55; font-size: 11px; }
+  .lap-sec-pos-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    justify-content: center;
+    max-width: 100%;
+  }
+  .lap-sec-pos-label {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--text-dim, #94a3b8);
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .lap-sec-pos-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.35rem;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #e2e8f0;
+    line-height: 1.2;
+  }
+  .lap-sec-pos-num.is-empty {
+    font-weight: 600;
+    opacity: 0.4;
+    border-style: dashed;
+    background: transparent;
+  }
+  table.lap-detail-table td.lap-sec-viz.lap-sec-fast-1 .lap-sec-pos-num:not(.is-empty) {
+    background: rgba(0, 0, 0, 0.22);
+    border-color: rgba(120, 53, 15, 0.45);
+    color: #fffbeb;
+  }
+  table.lap-detail-table td.lap-sec-viz.lap-sec-fast-2 .lap-sec-pos-num:not(.is-empty) {
+    background: rgba(15, 23, 42, 0.35);
+    border-color: rgba(148, 163, 184, 0.4);
+  }
+  table.lap-detail-table td.lap-sec-viz.lap-sec-fast-3 .lap-sec-pos-num:not(.is-empty) {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: rgba(180, 83, 9, 0.45);
+    color: #ffedd5;
+  }
 
   /* Horse link in tables */
   .horse-link {
@@ -618,6 +855,7 @@
     <optgroup label="netkeiba レース">
       <option value="race_shutuba">出馬表</option>
       <option value="race_result">レース結果</option>
+      <option value="race_result_lap">結果ラップ（各馬セクション）</option>
       <option value="race_index">タイム指数</option>
       <option value="race_shutuba_past">馬柱</option>
       <option value="race_odds">オッズ</option>
@@ -637,6 +875,9 @@
     </optgroup>
     <optgroup label="予測">
       <option value="race_predictions">AI予測結果</option>
+    </optgroup>
+    <optgroup label="特徴量">
+      <option value="race_performance">レースパフォーマンス値</option>
     </optgroup>
   </select>
   <button onclick="loadDataDirect()" style="font-size:11px">個別取得</button>
@@ -672,6 +913,7 @@
 const RACE_CATEGORIES = [
   {key:'race_shutuba', label:'出馬表'},
   {key:'race_result', label:'結果'},
+  {key:'race_result_lap', label:'結果ラップ'},
   {key:'race_index', label:'指数'},
   {key:'race_shutuba_past', label:'馬柱'},
   {key:'race_odds', label:'オッズ'},
@@ -682,6 +924,7 @@ const RACE_CATEGORIES = [
   {key:'smartrc_horses', label:'SC:Horses', smartrc: true},
   {key:'smartrc_fullresults', label:'SC:Results', smartrc: true},
   {key:'race_predictions', label:'AI予測'},
+  {key:'race_performance', label:'パフォーマンス値'},
 ];
 const CATEGORIES = RACE_CATEGORIES;
 
@@ -941,6 +1184,20 @@ async function loadAll() {
         fetchJson('race_predictions', raceId).then(d => {
           if (d) { cache[`race_predictions/${raceId}`] = d; }
         });
+      } else if (c.key === 'race_performance') {
+        results[c.key] = null;
+        fetchJson('race_performance', raceId).then(d => {
+          if (d) {
+            cache[`race_performance/${raceId}`] = d;
+            const tab = document.querySelector(`.tab[data-cat="race_performance"]`);
+            if (tab) {
+              tab.classList.remove('no-data');
+              tab.classList.add('has-data');
+              const badge = tab.querySelector('.badge');
+              if (badge) badge.textContent = (d.entries || []).length;
+            }
+          }
+        });
       } else {
         results[c.key] = bundle[c.key] || null;
       }
@@ -1103,10 +1360,15 @@ function renderTabs(raceId, results) {
     }
   }
   tabBar.innerHTML = html;
+  // loadAll では race_performance / race_predictions を非同期取得するため、
+  // results 上の null がここでキャッシュに入ると、(1) 先に返った JSON を上書きする、
+  // (2) fetchJson が「null キャッシュ済み」で再取得しない、という不整合になる。
+  const _deferNullCache = (k) => k === 'race_performance' || k === 'race_predictions';
   for (const [key, data] of Object.entries(results)) {
     if (key.includes('/') && !CATEGORIES.find(c => c.key === key)) {
       cache[key] = data;
     } else {
+      if (data == null && _deferNullCache(key)) continue;
       cache[`${key}/${raceId}`] = data;
     }
   }
@@ -1118,6 +1380,11 @@ function countData(cat, data) {
   if (cat === 'smartrc_runners') return (data.runners || []).length;
   if (cat === 'smartrc_horses') return Object.keys(data.horses || {}).length;
   if (cat === 'smartrc_fullresults') return Object.keys(data.fullresults || {}).length;
+  if (cat === 'race_result_lap') {
+    const ht = data.horse_laptime_table;
+    if (ht && ht.entries && ht.entries.length) return ht.entries.length;
+    return (data.entries_lap || []).length;
+  }
   if (data.entries) return data.entries.length;
   return Object.keys(data).length;
 }
@@ -1130,6 +1397,23 @@ function selectTab(cat, raceId) {
     data = cache[cat];
   } else {
     data = cache[`${cat}/${raceId}`];
+  }
+  if (data == null && (cat === 'race_performance' || cat === 'race_predictions')) {
+    document.getElementById('content').innerHTML = '<div class="empty"><div class="hm-spinner" style="display:inline-block;vertical-align:middle;margin-right:8px"></div>読み込み中...</div>';
+    fetchJson(cat, raceId).then(d => {
+      cache[`${cat}/${raceId}`] = d;
+      if (activeTab === cat) renderSingle(cat, raceId, d);
+      if (d) {
+        const tab = document.querySelector(`.tab[data-cat="${cat}"]`);
+        if (tab) {
+          tab.classList.remove('no-data');
+          tab.classList.add('has-data');
+          const badge = tab.querySelector('.badge');
+          if (badge) badge.textContent = countData(cat, d);
+        }
+      }
+    });
+    return;
   }
   renderSingle(cat, raceId, data);
 }
@@ -1149,10 +1433,21 @@ function _renderRaceMeta(data) {
   return fields.length ? `<div class="meta">${fields.join('<span class="meta-sep">|</span>')}</div>` : '';
 }
 
+function _eraHint(cat, raceId) {
+  const yr = parseInt((raceId || '').slice(0, 4), 10) || 9999;
+  if (cat === 'race_barometer') {
+    if (yr < 2023) return '偏差値データは2023年以降に導入されました。この年代では提供されていません。';
+    if (yr === 2023) return '偏差値データは2023年は重賞（G1/G2/G3）のみ提供されています。非重賞レースにはデータがありません。';
+  }
+  return '';
+}
+
 function renderSingle(cat, raceId, data) {
   const content = document.getElementById('content');
   if (!data) {
-    content.innerHTML = `<div class="empty">データなし: ${cat}/${raceId}</div>`;
+    const hint = _eraHint(cat, raceId);
+    const extra = hint ? `<div style="margin-top:8px;color:var(--text-dim);font-size:13px">${hint}</div>` : '';
+    content.innerHTML = `<div class="empty">データなし: ${cat}/${raceId}${extra}</div>`;
     return;
   }
   const mode = viewMode[cat] || (hasTableView(cat) ? 'table' : 'json');
@@ -1169,8 +1464,14 @@ function renderSingle(cat, raceId, data) {
   }
 
   if (mode === 'table' && hasTableView(cat)) {
-    parts.push(renderTableView(cat, data));
+    parts.push(renderTableView(cat, data, raceId));
     content.innerHTML = parts.join('');
+    if (cat === 'race_result_lap') {
+      requestAnimationFrame(() => initRaceResultLapTableEnhancements(raceId));
+    }
+    requestAnimationFrame(() => {
+      content.querySelectorAll('table.data-table').forEach(enableTableSort);
+    });
   } else {
     parts.push('<div class="json-view" id="jsonContainer">読み込み中...</div>');
     content.innerHTML = parts.join('');
@@ -1183,10 +1484,10 @@ function renderSingle(cat, raceId, data) {
 
 function hasTableView(cat) {
   return ['smartrc_runners','smartrc_horses','smartrc_fullresults',
-          'race_shutuba','race_result','race_index',
+          'race_shutuba','race_result','race_result_lap','race_index',
           'race_shutuba_past','race_odds','race_paddock',
           'race_oikiri','race_barometer','race_predictions',
-          'race_trainer_comment'].includes(cat);
+          'race_trainer_comment','race_performance'].includes(cat);
 }
 
 function setView(cat, mode, raceId) {
@@ -1208,12 +1509,13 @@ const SMARTRC_BLOODLINE_COLORS = {
   '09':'#e84393','10':'#00cec9','11':'#fd79a8','12':'#6c5ce7',
 };
 
-function renderTableView(cat, data) {
+function renderTableView(cat, data, raceId) {
   if (cat === 'smartrc_runners') return renderRunnersTable(data);
   if (cat === 'smartrc_horses') return renderHorsesTable(data);
   if (cat === 'smartrc_fullresults') return renderFullresultsTable(data);
   if (cat === 'race_shutuba') return renderShutubaTable(data);
   if (cat === 'race_result') return renderResultTable(data);
+  if (cat === 'race_result_lap') return renderRaceResultLapTable(data, raceId);
   if (cat === 'race_index') return renderIndexTable(data);
   if (cat === 'race_shutuba_past') return renderShtubaPastTable(data);
   if (cat === 'race_odds') return renderOddsTable(data);
@@ -1222,6 +1524,7 @@ function renderTableView(cat, data) {
   if (cat === 'race_barometer') return renderBarometerTable(data);
   if (cat === 'race_predictions') return renderPredictionsTable(data);
   if (cat === 'race_trainer_comment') return renderTrainerCommentTable(data);
+  if (cat === 'race_performance') return renderRacePerformanceTable(data);
   return '';
 }
 
@@ -1246,10 +1549,10 @@ function renderRunnersTable(data) {
   const runners = data.runners || [];
   if (!runners.length) return '<div class="empty">runners データなし</div>';
 
-  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
-  html += '<th class="tc">枠</th><th class="tc">番</th><th>馬名</th><th class="tc">性齢</th><th class="tr">斤量</th>';
-  html += '<th>騎手</th><th>調教師</th><th class="tr">CR</th><th class="tr">推定人気</th>';
-  html += '<th class="tr">テン1F</th><th class="tr">単勝</th><th class="tc">過去5走</th>';
+  let html = '<div class="table-wrap"><table class="data-table" id="tbl-runners"><thead><tr>';
+  html += '<th class="tc col-sortable">枠</th><th class="tc col-sortable">番</th><th class="col-sortable">馬名</th><th class="tc col-sortable">性齢</th><th class="tr col-sortable">斤量</th>';
+  html += '<th class="col-sortable">騎手</th><th class="col-sortable">調教師</th><th class="tr col-sortable">CR</th><th class="tr col-sortable">推定人気</th>';
+  html += '<th class="tr col-sortable">テン1F</th><th class="tr col-sortable">単勝</th><th class="tc">過去5走</th>';
   html += '</tr></thead><tbody>';
 
   const sorted = [...runners].sort((a,b) => (a.uno||99) - (b.uno||99));
@@ -1302,10 +1605,10 @@ function renderHorsesTable(data) {
   const keys = Object.keys(horses);
   if (!keys.length) return '<div class="empty">horses データなし</div>';
 
-  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
-  html += '<th>hcode</th><th>馬名</th><th>色</th><th>父</th><th>母</th><th>母父</th>';
-  html += '<th>父父</th><th>父母</th><th>母父父</th><th>母母</th>';
-  html += '<th>LL系統</th><th>SL系統</th><th>CL系統</th>';
+  let html = '<div class="table-wrap"><table class="data-table" id="tbl-horses"><thead><tr>';
+  html += '<th class="col-sortable">hcode</th><th class="col-sortable">馬名</th><th class="col-sortable">色</th><th class="col-sortable">父</th><th class="col-sortable">母</th><th class="col-sortable">母父</th>';
+  html += '<th class="col-sortable">父父</th><th class="col-sortable">父母</th><th class="col-sortable">母父父</th><th class="col-sortable">母母</th>';
+  html += '<th class="col-sortable">LL系統</th><th class="col-sortable">SL系統</th><th class="col-sortable">CL系統</th>';
   html += '</tr></thead><tbody>';
 
   for (const hcode of keys) {
@@ -1347,10 +1650,10 @@ function renderFullresultsTable(data) {
     const hname = records[0]?.hname || hcode;
     const hnameEsc = hname.replace(/'/g, "\\'");
     html += `<div class="section-title"><span class="horse-link" onclick="openHorseModal('${hcode}','${hnameEsc}')">${hname}</span> (${hcode}) — ${records.length}戦</div>`;
-    html += '<div class="table-wrap" style="margin-bottom:16px"><table class="data-table"><thead><tr>';
-    html += '<th class="tc">日付</th><th>場所</th><th class="tc">R</th><th class="tr">距離</th>';
-    html += '<th class="tc">着</th><th class="tr">タイム</th><th class="tr">テン1F</th><th class="tr">上り3F</th>';
-    html += '<th class="tr">斤量</th><th>騎手</th><th class="tc">頭数</th><th class="tc">人気</th>';
+    html += `<div class="table-wrap" style="margin-bottom:16px"><table class="data-table" id="tbl-fr-${hcode}"><thead><tr>`;
+    html += '<th class="tc col-sortable">日付</th><th class="col-sortable">場所</th><th class="tc col-sortable">R</th><th class="tr col-sortable">距離</th>';
+    html += '<th class="tc col-sortable">着</th><th class="tr col-sortable">タイム</th><th class="tr col-sortable">テン1F</th><th class="tr col-sortable">上り3F</th>';
+    html += '<th class="tr col-sortable">斤量</th><th class="col-sortable">騎手</th><th class="tc col-sortable">頭数</th><th class="tc col-sortable">人気</th>';
     html += '</tr></thead><tbody>';
 
     for (const r of records) {
@@ -1382,8 +1685,8 @@ function renderFullresultsTable(data) {
 function renderShutubaTable(data) {
   const entries = data.entries || [];
   if (!entries.length) return '<div class="empty">出馬表データなし</div>';
-  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
-  html += '<th class="tc">枠</th><th class="tc">馬番</th><th>馬名</th><th class="tc">性齢</th><th class="tr">斤量</th><th>騎手</th><th>調教師</th>';
+  let html = '<div class="table-wrap"><table class="data-table" id="tbl-shutuba"><thead><tr>';
+  html += '<th class="tc col-sortable">枠</th><th class="tc col-sortable">馬番</th><th class="col-sortable">馬名</th><th class="tc col-sortable">性齢</th><th class="tr col-sortable">斤量</th><th class="col-sortable">騎手</th><th class="col-sortable">調教師</th>';
   html += '</tr></thead><tbody>';
   for (const e of entries) {
     const w = e.bracket_number ?? e.waku;
@@ -1435,6 +1738,46 @@ function _bashiraUmaBadge(umaban, waku) {
   return `<span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;font-size:15px;font-weight:800;background:${c.bg};color:${c.fg}${bd}">${u}</span>`;
 }
 
+function enableTableSort(tableEl) {
+  if (!tableEl || tableEl.dataset.sortBound === '1') return;
+  tableEl.dataset.sortBound = '1';
+  const thead = tableEl.querySelector('thead tr');
+  const tbody = tableEl.querySelector('tbody');
+  if (!thead || !tbody) return;
+  const ths = thead.querySelectorAll('th.col-sortable');
+  let sortCol = null, sortDir = 1;
+
+  function parseVal(td) {
+    if (!td) return {n: NaN, s: ''};
+    const txt = (td.textContent || '').trim().replace(/[¥,%]/g, '');
+    const num = parseFloat(txt);
+    return Number.isNaN(num) ? {n: NaN, s: txt} : {n: num, s: txt};
+  }
+
+  function cmp(a, b, col) {
+    const A = parseVal(a.children[col]);
+    const B = parseVal(b.children[col]);
+    if (!Number.isNaN(A.n) && !Number.isNaN(B.n)) return sortDir * (A.n - B.n);
+    if (!Number.isNaN(A.n)) return -sortDir;
+    if (!Number.isNaN(B.n)) return sortDir;
+    return sortDir * A.s.localeCompare(B.s, 'ja');
+  }
+
+  tableEl.addEventListener('click', (ev) => {
+    const th = ev.target.closest('th.col-sortable');
+    if (!th || !tableEl.contains(th)) return;
+    const idx = Array.from(thead.children).indexOf(th);
+    if (idx < 0) return;
+    if (sortCol === idx) sortDir = -sortDir;
+    else { sortCol = idx; sortDir = 1; }
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => cmp(a, b, idx));
+    rows.forEach(r => tbody.appendChild(r));
+    ths.forEach(h => h.classList.remove('col-sort-asc', 'col-sort-desc'));
+    th.classList.add(sortDir > 0 ? 'col-sort-asc' : 'col-sort-desc');
+  });
+}
+
 function _rankBadge(r) {
   if (!r && r !== 0) return '-';
   const n = Number(r);
@@ -1452,8 +1795,8 @@ function _personCell(type, pid, pname) {
 function renderResultTable(data) {
   const entries = data.entries || [];
   if (!entries.length) return '<div class="empty">結果データなし</div>';
-  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
-  html += '<th class="tc">着</th><th class="tc">枠</th><th class="tc">馬番</th><th>馬名</th><th>騎手</th><th>調教師</th><th class="tr">タイム</th><th class="tr">着差</th><th class="tr">上り3F</th><th class="tc">人気</th><th class="tr">オッズ</th>';
+  let html = '<div class="table-wrap"><table class="data-table" id="tbl-result"><thead><tr>';
+  html += '<th class="tc col-sortable">着</th><th class="tc col-sortable">枠</th><th class="tc col-sortable">馬番</th><th class="col-sortable">馬名</th><th class="col-sortable">騎手</th><th class="col-sortable">調教師</th><th class="tr col-sortable">タイム</th><th class="tr col-sortable">着差</th><th class="tr col-sortable">上り3F</th><th class="tc col-sortable">人気</th><th class="tr col-sortable">オッズ</th>';
   html += '</tr></thead><tbody>';
   for (const e of entries) {
     const rank = e.finish_position ?? e.rank ?? e.order ?? '-';
@@ -1478,11 +1821,313 @@ function renderResultTable(data) {
   return html;
 }
 
+const RRL_PACE_LABELS = {
+  t1f: '1角（通過）',
+  t3f: '前半3F（計）',
+  l1f: '終盤1F',
+  l3f: '終盤3F（計）',
+  first_half_3f: '前半3F（ペース行）',
+  second_half_3f: '後半3F（ペース行）',
+};
+
+function formatLapColumnHeaderHtml(c, escFn) {
+  const dm = Number(c.distance_m);
+  const cr = String(c.corner || '').trim();
+  if (Number.isFinite(dm) && dm > 0) {
+    const line1 = escFn(`${dm}m`);
+    const line2 = cr
+      ? `<span class="lap-th-corner">${escFn(cr)}</span>`
+      : '';
+    return `<div class="lap-th-stack">${line1}${line2}</div>`;
+  }
+  const fallback = String(c.header || c.header_raw || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return escFn(fallback) || '—';
+}
+
+function _rrlSafeTableId(raceId) {
+  return 'rrl-lap-table-' + String(raceId || 'x').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function _rrlParseSortNum(val) {
+  if (val == null || val === '' || val === '—' || val === '-') return null;
+  const n = Number(val);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** 区間タイムの同値判定（表示どおりの小数誤差を吸収） */
+function _rrlLapTimeKey(t) {
+  if (t == null || !Number.isFinite(t)) return null;
+  return Math.round(t * 1000) / 1000;
+}
+
+function _rrlPositionSortKey(pos) {
+  if (pos == null || pos === '') return null;
+  const m = String(pos).match(/\d+/);
+  return m ? parseInt(m[0], 10) : null;
+}
+
+function _rrlSortTh(colIdx, innerHtml, extraClass, title) {
+  const t = title ? String(title).replace(/"/g, '&quot;') : '';
+  const ec = extraClass ? ` ${extraClass}` : '';
+  return `<th class="rrl-sortable${ec}" data-rrl-col="${colIdx}" title="${t}">${innerHtml}</th>`;
+}
+
+function renderRaceResultLapTable(data, raceId) {
+  const esc = (t) => String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const escAttr = (t) => String(t ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  const parts = [];
+  const rid = data.race_id || '';
+  if (rid) {
+    parts.push(`<div class="meta" style="margin-bottom:10px"><span style="color:var(--text-dim)">race_id</span> ${esc(rid)}</div>`);
+  }
+
+  const lt = data.lap_times || [];
+  const pace = data.pace || {};
+  if (lt.length || (pace && Object.keys(pace).length)) {
+    parts.push('<div class="section-title">レース共通ラップ・ペース</div>');
+    const pk = ['t1f', 't3f', 'l1f', 'l3f', 'first_half_3f', 'second_half_3f'];
+    const paceItems = [];
+    for (const k of pk) {
+      if (pace[k] != null && pace[k] !== '') {
+        paceItems.push({ lab: RRL_PACE_LABELS[k] || k, val: pace[k] });
+      }
+    }
+    parts.push('<div class="rrl-pace-panel">');
+    if (lt.length) {
+      parts.push('<div class="rrl-pace-block-label">セクションタイム（200m 等の分割・レース全体）</div>');
+      parts.push('<div class="rrl-pace-flow" aria-label="セクションタイムの連なり">');
+      lt.forEach((x, idx) => {
+        if (idx > 0) parts.push('<span class="rrl-pace-flow-arr" aria-hidden="true">→</span>');
+        parts.push(`<span class="rrl-pace-chip">${esc(String(x))}</span>`);
+      });
+      parts.push('</div>');
+    }
+    if (paceItems.length) {
+      const mcls = lt.length ? 'rrl-pace-metrics' : 'rrl-pace-metrics no-border-top';
+      parts.push(`<div class="${mcls}">`);
+      parts.push('<div class="rrl-pace-block-label">ペース指標</div>');
+      parts.push('<div class="rrl-pace-grid">');
+      for (const it of paceItems) {
+        parts.push(`<div class="rrl-pace-stat"><div class="rrl-pace-stat-label">${esc(it.lab)}</div><div class="rrl-pace-stat-val">${esc(String(it.val))}</div></div>`);
+      }
+      parts.push('</div></div>');
+    }
+    parts.push('</div>');
+  }
+
+  const cp = data.corner_passing || [];
+  if (cp.length) {
+    parts.push('<div class="section-title">コーナー通過順（レース単位）</div>');
+    parts.push('<div class="table-wrap" style="margin-bottom:14px"><table class="data-table"><thead><tr><th>コーナー</th><th>順列</th></tr></thead><tbody>');
+    for (const row of cp) {
+      const lab = esc(row.label || (row.corner ? `${row.corner}C` : ''));
+      parts.push(`<tr><td>${lab}</td><td style="font-size:12px;word-break:break-all">${esc(row.order_text || '')}</td></tr>`);
+    }
+    parts.push('</tbody></table></div>');
+  }
+
+  const ht = data.horse_laptime_table;
+  const cols = (ht && ht.section_columns) ? ht.section_columns : [];
+  const hent = (ht && ht.entries) ? ht.entries : [];
+  parts.push('<div class="section-title">各馬ラップ・ポジション（200m毎・プレミアムAJAX）</div>');
+  if (!hent.length) {
+    const _yr = parseInt((rid || raceId || '').slice(0, 4), 10) || 9999;
+    let _msg;
+    if (_yr < 2023) {
+      _msg = '各馬セクションラップ（200m毎）は2023年以降のデータです。この年代では提供されていません。';
+    } else if (_yr === 2023) {
+      _msg = '各馬セクションラップ（200m毎）は2023年は重賞（G1/G2/G3）のみ提供されています。非重賞レースにはデータがありません。';
+    } else {
+      _msg = '各馬セクションラップがまだありません。<code>race_result</code> をプレミアムログインで再取得すると <code>horse_laptime_table</code> が付与されます。';
+    }
+    parts.push(`<div class="empty" style="margin:12px 0">${_msg}</div>`);
+  } else {
+    const rankByHorseCol = hent.map(() => cols.map(() => null));
+    for (let j = 0; j < cols.length; j++) {
+      const keys = [];
+      for (let hi = 0; hi < hent.length; hi++) {
+        const k = _rrlLapTimeKey(_rrlParseSortNum(hent[hi].sections?.[j]?.lap_time));
+        if (k != null) keys.push(k);
+      }
+      const distinctAsc = [...new Set(keys)].sort((a, b) => a - b);
+      const k1 = distinctAsc[0];
+      const k2 = distinctAsc[1];
+      const k3 = distinctAsc[2];
+      for (let hi = 0; hi < hent.length; hi++) {
+        const k = _rrlLapTimeKey(_rrlParseSortNum(hent[hi].sections?.[j]?.lap_time));
+        if (k == null) continue;
+        if (k1 !== undefined && k === k1) rankByHorseCol[hi][j] = 1;
+        else if (k2 !== undefined && k === k2) rankByHorseCol[hi][j] = 2;
+        else if (k3 !== undefined && k === k3) rankByHorseCol[hi][j] = 3;
+      }
+    }
+    parts.push('<p class="meta" style="margin:0 0 10px;font-size:12px;color:var(--text-dim);line-height:1.45">各セルは<strong style="color:var(--text,#e2e8f0)">上段＝区間タイム</strong>、<strong style="color:var(--text,#e2e8f0)">下段＝通過位置</strong>（その距離地点での隊列の番手）です。区間タイムが出走馬のうち速い順1〜3番目のタイム値ごとにセル色が付きます（同タイムは同色・金銀銅系）。</p>');
+    const tblId = _rrlSafeTableId(raceId != null && raceId !== '' ? raceId : rid);
+    let colIdx = 0;
+    parts.push(`<div class="table-wrap" style="overflow-x:auto;max-width:100%;margin-bottom:16px"><table id="${tblId}" class="data-table lap-detail-table"><thead><tr>`);
+    parts.push(_rrlSortTh(colIdx++, '着', 'tc lap-th-fixed', '着順（クリックでソート）'));
+    parts.push(_rrlSortTh(colIdx++, '番', 'tc lap-th-fixed', '馬番（クリックでソート）'));
+    parts.push(`<th class="rrl-sortable lap-th-fixed" style="min-width:100px" data-rrl-col="${colIdx++}" title="馬名（クリックでソート）">馬名</th>`);
+    parts.push(_rrlSortTh(colIdx++, '全体', 'tc', 'タイム指数・全体'));
+    parts.push(_rrlSortTh(colIdx++, 'スタ', 'tc', 'タイム指数・スタート'));
+    parts.push(_rrlSortTh(colIdx++, '追走', 'tc', 'タイム指数・追走'));
+    parts.push(_rrlSortTh(colIdx++, '上が', 'tc', 'タイム指数・上がり'));
+    for (const c of cols) {
+      parts.push(`<th class="tc rrl-sortable" data-rrl-col="${colIdx++}" title="セクション（クリックでソート）">${formatLapColumnHeaderHtml(c, esc)}</th>`);
+    }
+    parts.push(`<th class="rrl-sortable lap-th-fixed" style="min-width:180px" data-rrl-col="${colIdx++}" title="ラップの動き（クリックでソート）">ラップの動き</th>`);
+    parts.push('</tr></thead><tbody>');
+    for (let hi = 0; hi < hent.length; hi++) {
+      const e = hent[hi];
+      parts.push('<tr>');
+      const fo = _rrlParseSortNum(e.finish_order);
+      parts.push(`<td class="tc lap-td-num" data-sort="${fo != null ? fo : ''}">${_rankBadge(e.finish_order)}</td>`);
+      const hn = _rrlParseSortNum(e.horse_number);
+      parts.push(`<td class="tc lap-td-num" data-sort="${hn != null ? hn : ''}">${e.horse_number ?? '-'}</td>`);
+      const hname = e.horse_name || '';
+      parts.push(`<td style="white-space:normal;text-align:left" data-sort-text="${escAttr(hname)}">${_horseCell(e.horse_id, e.horse_name)}</td>`);
+      const it = _rrlParseSortNum(e.index_total);
+      const is = _rrlParseSortNum(e.index_start);
+      const ic = _rrlParseSortNum(e.index_chase);
+      const icl = _rrlParseSortNum(e.index_closing);
+      parts.push(`<td class="num lap-td-num" data-sort="${it != null ? it : ''}">${e.index_total ?? '-'}</td>`);
+      parts.push(`<td class="num lap-td-num" data-sort="${is != null ? is : ''}">${e.index_start ?? '-'}</td>`);
+      parts.push(`<td class="num lap-td-num" data-sort="${ic != null ? ic : ''}">${e.index_chase ?? '-'}</td>`);
+      parts.push(`<td class="num lap-td-num" data-sort="${icl != null ? icl : ''}">${e.index_closing ?? '-'}</td>`);
+      const secs = e.sections || [];
+      const secTimes = cols.map((_, i) => _rrlParseSortNum(secs[i]?.lap_time));
+      const validT = secTimes.filter((t) => t != null);
+      const tMin = validT.length ? Math.min(...validT) : 0;
+      const tMax = validT.length ? Math.max(...validT) : 0;
+      for (let i = 0; i < cols.length; i++) {
+        const s = secs[i];
+        if (s && (s.lap_time || s.position)) {
+          const lt0 = s.lap_time != null && s.lap_time !== '' ? s.lap_time : '—';
+          let pNum = null;
+          if (s.position != null && s.position !== '') {
+            const n = Number(s.position);
+            if (Number.isFinite(n) && n > 0) pNum = n;
+          }
+          const p0 = pNum != null ? String(pNum) : '—';
+          const posEmpty = pNum == null;
+          const timeMuted = lt0 === '—';
+          const tCur = secTimes[i];
+          const tNext = i < cols.length - 1 ? secTimes[i + 1] : tCur;
+          const yFor = (t) => {
+            if (t == null || !Number.isFinite(t) || !validT.length) return 22;
+            if (tMax <= tMin) return 22;
+            const r = (t - tMin) / (tMax - tMin);
+            return 4 + r * 32;
+          };
+          // 左端=当該区間、右端=次区間（隣セルの左端と y を一致させ、折れ線が連続する）
+          const yLeft = yFor(tCur != null ? tCur : tNext);
+          const yRight = yFor(tNext != null ? tNext : tCur);
+          const ptsPoly = `0,${yLeft} 100,${yRight}`;
+          const fillPoly = `0,40 0,${yLeft} 100,${yRight} 100,40`;
+          let sk = _rrlParseSortNum(s.lap_time);
+          if (sk == null) sk = _rrlPositionSortKey(s.position);
+          const skAttr = sk != null ? String(sk) : '';
+          const segRank = rankByHorseCol[hi][i];
+          const fastCls = segRank === 1 ? ' lap-sec-fast-1' : segRank === 2 ? ' lap-sec-fast-2' : segRank === 3 ? ' lap-sec-fast-3' : '';
+          parts.push(`<td class="tc lap-td-num lap-sec-viz${fastCls}" data-sort="${skAttr}" style="padding:4px 2px;vertical-align:middle">
+            <svg class="lap-sec-spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;left:0;right:0;top:0;bottom:0;width:100%;height:100%;opacity:0.55;pointer-events:none;z-index:0">
+              <polygon fill="rgba(88,166,255,0.22)" points="${fillPoly}"/>
+              <polyline fill="none" stroke="rgba(147,197,253,0.95)" stroke-width="1.35" points="${ptsPoly}"/>
+            </svg>
+            <div class="lap-sec-stack">
+              <span class="lap-sec-time${timeMuted ? ' is-muted' : ''}">${esc(String(lt0))}</span>
+              <div class="lap-sec-pos-row">
+                <span class="lap-sec-pos-label">通過</span>
+                <span class="lap-sec-pos-num${posEmpty ? ' is-empty' : ''}">${esc(p0)}</span>
+              </div>
+            </div>
+          </td>`);
+        } else {
+          parts.push('<td class="tc" data-sort="">—</td>');
+        }
+      }
+      const cmtRaw = (e.lap_comment || '').slice(0, 500);
+      const cmt = esc(cmtRaw);
+      parts.push(`<td class="lap-td-comment" data-sort-text="${escAttr(cmtRaw)}">${cmt || '—'}</td>`);
+      parts.push('</tr>');
+    }
+    parts.push('</tbody></table></div>');
+  }
+
+  const hasAny = lt.length || cp.length || hent.length || Object.keys(pace).length;
+  if (!hasAny) {
+    return '<div class="empty">結果ラップ JSON は空です</div>';
+  }
+  return parts.join('');
+}
+
+function initRaceResultLapTableEnhancements(raceId) {
+  const tblId = _rrlSafeTableId(raceId);
+  const table = document.getElementById(tblId);
+  if (!table || table.dataset.rrlSortBound === '1') return;
+  table.dataset.rrlSortBound = '1';
+  const theadRow = table.querySelector('thead tr');
+  const tbody = table.querySelector('tbody');
+  if (!theadRow || !tbody) return;
+  const ths = theadRow.querySelectorAll('th.rrl-sortable');
+  let sortCol = null;
+  let sortDir = 1;
+
+  const cellSortVal = (td) => {
+    if (!td) return { n: NaN, s: null };
+    if (td.hasAttribute('data-sort-text')) {
+      return { n: NaN, s: td.getAttribute('data-sort-text') || '' };
+    }
+    const ds = td.getAttribute('data-sort');
+    if (ds != null && ds !== '') {
+      const v = parseFloat(ds);
+      if (!Number.isNaN(v)) return { n: v, s: null };
+    }
+    return { n: NaN, s: null };
+  };
+
+  const compare = (a, b, col) => {
+    const ac = a.children[col];
+    const bc = b.children[col];
+    const A = cellSortVal(ac);
+    const B = cellSortVal(bc);
+    const aText = A.s != null;
+    const bText = B.s != null;
+    if (aText && bText) return sortDir * A.s.localeCompare(B.s, 'ja');
+    if (aText !== bText) return sortDir * (aText ? 1 : -1);
+    const an = A.n;
+    const bn = B.n;
+    if (Number.isNaN(an) && Number.isNaN(bn)) return 0;
+    if (Number.isNaN(an)) return sortDir;
+    if (Number.isNaN(bn)) return -sortDir;
+    return sortDir * (an - bn);
+  };
+
+  table.addEventListener('click', (ev) => {
+    const th = ev.target.closest('th.rrl-sortable');
+    if (!th || !table.contains(th)) return;
+    const col = parseInt(th.getAttribute('data-rrl-col'), 10);
+    if (Number.isNaN(col)) return;
+    if (sortCol === col) sortDir = -sortDir;
+    else {
+      sortCol = col;
+      sortDir = 1;
+    }
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => compare(a, b, col));
+    rows.forEach((r) => tbody.appendChild(r));
+    ths.forEach((h) => h.classList.remove('rrl-sort-sorted-asc', 'rrl-sort-sorted-desc'));
+    th.classList.add(sortDir > 0 ? 'rrl-sort-sorted-asc' : 'rrl-sort-sorted-desc');
+  });
+}
+
 function renderIndexTable(data) {
   const entries = data.entries || [];
   if (!entries.length) return '<div class="empty">指数データなし</div>';
-  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
-  html += '<th class="tc">馬番</th><th>馬名</th><th class="tr">最高指数</th><th class="tr">平均</th><th class="tr">距離</th><th class="tr">コース</th><th class="tr">近走</th>';
+  let html = '<div class="table-wrap"><table class="data-table" id="tbl-index"><thead><tr>';
+  html += '<th class="tc col-sortable">馬番</th><th class="col-sortable">馬名</th><th class="tr col-sortable">最高指数</th><th class="tr col-sortable">平均</th><th class="tr col-sortable">距離</th><th class="tr col-sortable">コース</th><th class="tr col-sortable">近走</th>';
   html += '</tr></thead><tbody>';
   for (const e of entries) {
     const hid = e.horse_id || '';
@@ -1504,9 +2149,16 @@ function renderIndexTable(data) {
 // ── 馬柱 (race_shutuba_past) ──
 
 function _parsePastRaw(r) {
+  if (!r) return {};
   const raw = r.raw || '';
-  const o = { date: r.date || '', surface: r.surface || '', distance: r.distance || '',
-              time: r.finish_time || '', pos: r.finish_position ?? null };
+  const distStr = (r.distance != null && r.distance !== '') ? String(r.distance) : '';
+  const o = {
+    date: r.date || '',
+    surface: r.surface || '',
+    distance: distStr,
+    time: r.finish_time || '',
+    pos: r.finish_position != null && r.finish_position !== '' ? r.finish_position : null,
+  };
   const venueM = raw.match(/^\d{4}\.\d{2}\.\d{2}\s+(\S+)/);
   o.venue = venueM ? venueM[1] : '';
   const roundM = raw.match(/^\d{4}\.\d{2}\.\d{2}\s+\S+\s+(\d+)\s+/);
@@ -1533,9 +2185,9 @@ function _parsePastRaw(r) {
   const bwM = raw.match(/(\d{3,4})\(([+-]?\d+)\)/);
   o.bodyWeight = bwM ? bwM[1] : '';
   o.bodyDiff = bwM ? bwM[2] : '';
-  if (!o.pos) {
+  if (o.pos == null && raw) {
     const posM = raw.match(/(\d+)着/);
-    o.pos = posM ? parseInt(posM[1]) : null;
+    o.pos = posM ? parseInt(posM[1], 10) : null;
   }
   return o;
 }
@@ -1552,8 +2204,10 @@ function _getWakuMap(raceId) {
     const map = {};
     let found = 0;
     for (const e of d.entries) {
-      if (e.horse_number != null && e.bracket_number != null) {
-        map[e.horse_number] = e.bracket_number;
+      const uma = e.horse_number != null && e.horse_number !== '' ? e.horse_number : null;
+      const wk = e.bracket_number != null && e.bracket_number !== '' ? e.bracket_number : null;
+      if (uma != null) {
+        map[uma] = wk != null ? wk : 0;
         found++;
       }
     }
@@ -1573,8 +2227,14 @@ function _getHorseIdMap(raceId) {
     const map = {};
     let found = 0;
     for (const e of d.entries) {
-      if (e.horse_id && e.horse_number != null && e.bracket_number != null) {
-        map[e.horse_id] = { umaban: e.horse_number, waku: e.bracket_number };
+      if (!e.horse_id) continue;
+      const uma = e.horse_number != null && e.horse_number !== '' ? e.horse_number : null;
+      const wk = e.bracket_number != null && e.bracket_number !== '' ? e.bracket_number : null;
+      if (uma != null || wk != null) {
+        map[e.horse_id] = {
+          umaban: uma != null ? uma : (e.horse_number || '-'),
+          waku: wk != null ? wk : (e.bracket_number || 0),
+        };
         found++;
       }
     }
@@ -1584,9 +2244,11 @@ function _getHorseIdMap(raceId) {
 }
 
 function _posBadge(pos) {
-  if (pos == null) return '<span class="bc-pos bc-pos-out">-</span>';
-  const cls = pos === 1 ? 'bc-pos-1' : pos === 2 ? 'bc-pos-2' : pos === 3 ? 'bc-pos-3' : 'bc-pos-out';
-  return `<span class="bc-pos ${cls}">${pos}</span>`;
+  if (pos == null || pos === 0 || pos === '0') return '<span class="bc-pos bc-pos-out">着外</span>';
+  const n = typeof pos === 'number' ? pos : parseInt(pos, 10);
+  if (isNaN(n) || n <= 0) return `<span class="bc-pos bc-pos-out">${pos}</span>`;
+  const cls = n === 1 ? 'bc-pos-1' : n === 2 ? 'bc-pos-2' : n === 3 ? 'bc-pos-3' : n <= 5 ? 'bc-pos-mid' : 'bc-pos-low';
+  return `<span class="bc-pos ${cls}">${n}</span>`;
 }
 
 function _condBadge(c) {
@@ -1640,8 +2302,9 @@ function renderShtubaPastTable(data) {
     for (let i = 0; i < maxPast; i++) {
       if (i < past.length) {
         const p = _parsePastRaw(past[i]);
+        const posHtml = _posBadge(p.pos);
         html += '<div class="bashira-cell">';
-        html += `<div class="bc-row">${_posBadge(p.pos)} <span class="bc-venue">${p.venue}</span>`;
+        html += `<div class="bc-row">${posHtml} <span class="bc-venue">${p.venue}</span>`;
         if (p.round) html += `<span class="bc-detail">${p.round}R</span>`;
         html += '</div>';
         if (p.raceName || p.grade) {
@@ -1683,8 +2346,8 @@ function renderOddsTable(data) {
   const raceId = document.getElementById('raceIdInput').value.trim();
   const wm = _getWakuMap(raceId);
   const sorted = [...entries].sort((a,b) => (a.popularity||99) - (b.popularity||99));
-  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
-  html += '<th class="tc">人気</th><th class="tc">馬番</th><th class="tr">単勝</th><th class="tr">複勝(下限)</th><th class="tr">複勝(上限)</th>';
+  let html = '<div class="table-wrap"><table class="data-table" id="tbl-odds"><thead><tr>';
+  html += '<th class="tc col-sortable">人気</th><th class="tc col-sortable">馬番</th><th class="tr col-sortable">単勝</th><th class="tr col-sortable">複勝(下限)</th><th class="tr col-sortable">複勝(上限)</th>';
   html += '</tr></thead><tbody>';
   for (const e of sorted) {
     const pop = e.popularity || '-';
@@ -1718,8 +2381,8 @@ function renderPaddockTable(data) {
   if (!entries.length) return '<div class="empty">パドックデータなし</div>';
   const raceId = document.getElementById('raceIdInput').value.trim();
   const wm = _getWakuMap(raceId);
-  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
-  html += '<th class="tc">馬番</th><th>馬名</th><th class="tc">評価</th><th>コメント</th>';
+  let html = '<div class="table-wrap"><table class="data-table" id="tbl-paddock"><thead><tr>';
+  html += '<th class="tc col-sortable">馬番</th><th class="col-sortable">馬名</th><th class="tc col-sortable">評価</th><th>コメント</th>';
   html += '</tr></thead><tbody>';
   for (const e of entries) {
     const w = wm[e.horse_number] || 0;
@@ -1739,8 +2402,8 @@ function renderPaddockTable(data) {
 function renderTrainerCommentTable(data) {
   const entries = data.entries || [];
   if (!entries.length) return '<div class="empty">厩舎コメントデータなし</div>';
-  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
-  html += '<th class="tc">枠</th><th class="tc">馬番</th><th>馬名</th><th class="tc">評価</th><th>調教師</th><th>コメント</th>';
+  let html = '<div class="table-wrap"><table class="data-table" id="tbl-trainer-comment"><thead><tr>';
+  html += '<th class="tc col-sortable">枠</th><th class="tc col-sortable">馬番</th><th class="col-sortable">馬名</th><th class="tc col-sortable">評価</th><th class="col-sortable">調教師</th><th>コメント</th>';
   html += '</tr></thead><tbody>';
   for (const e of entries) {
     const w = e.bracket_number;
@@ -1764,8 +2427,8 @@ function renderOikiriTable(data) {
   if (!entries.length) return '<div class="empty">追い切りデータなし</div>';
   const raceId = document.getElementById('raceIdInput').value.trim();
   const wm = _getWakuMap(raceId);
-  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
-  html += '<th class="tc">馬番</th><th>馬名</th><th class="tc">評価</th><th class="tc">日付</th><th>コース</th><th>状態</th><th>騎乗者</th><th>ラップ</th><th>所見</th><th>コメント</th>';
+  let html = '<div class="table-wrap"><table class="data-table" id="tbl-oikiri"><thead><tr>';
+  html += '<th class="tc col-sortable">馬番</th><th class="col-sortable">馬名</th><th class="tc col-sortable">評価</th><th class="tc col-sortable">日付</th><th class="col-sortable">コース</th><th class="col-sortable">状態</th><th class="col-sortable">騎乗者</th><th>ラップ</th><th>所見</th><th>コメント</th>';
   html += '</tr></thead><tbody>';
   for (const e of entries) {
     const w = wm[e.horse_number] || 0;
@@ -1794,7 +2457,8 @@ function renderBarometerTable(data) {
     if (data.barometer || data.deviation) {
       return _renderGenericTable(data);
     }
-    return '<div class="empty">偏差値データなし</div>';
+    const hint = _eraHint('race_barometer', data.race_id || '');
+    return `<div class="empty">偏差値データなし${hint ? '<div style="margin-top:8px;color:var(--text-dim);font-size:13px">' + hint + '</div>' : ''}</div>`;
   }
   return _renderGenericTable(data);
 }
@@ -1810,8 +2474,8 @@ function renderPredictionsTable(data) {
     return '<div class="empty">予測データなし</div>';
   }
   const sorted = [...preds].sort((a,b) => (a.predicted_rank || a.rank || 99) - (b.predicted_rank || b.rank || 99));
-  let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
-  html += '<th class="tc">予測順位</th><th class="tc">馬番</th><th>馬名</th><th class="tr">スコア</th><th class="tr">確率</th>';
+  let html = '<div class="table-wrap"><table class="data-table" id="tbl-predictions"><thead><tr>';
+  html += '<th class="tc col-sortable">予測順位</th><th class="tc col-sortable">馬番</th><th class="col-sortable">馬名</th><th class="tr col-sortable">スコア</th><th class="tr col-sortable">確率</th>';
   html += '</tr></thead><tbody>';
   for (const p of sorted) {
     const rank = p.predicted_rank ?? p.rank ?? '-';
@@ -1824,6 +2488,153 @@ function renderPredictionsTable(data) {
     html += '</tr>';
   }
   html += '</tbody></table></div>';
+  return html;
+}
+
+// ── レースパフォーマンス値 (race_performance) ──
+
+function _fmtNum(v, digits = 2) {
+  if (v == null || v === '') return '-';
+  const n = Number(v);
+  if (!isFinite(n)) return '-';
+  return n.toFixed(digits);
+}
+
+function _perfBar(pct) {
+  if (pct == null || !isFinite(pct)) return '';
+  const p = Math.max(0, Math.min(1, Number(pct)));
+  const hue = Math.round(p * 130);
+  const w = Math.round(p * 100);
+  return `<div style="display:inline-block;width:60px;height:8px;background:var(--surface2);border-radius:4px;vertical-align:middle;margin-right:6px;overflow:hidden">
+    <div style="width:${w}%;height:100%;background:hsl(${hue},70%,50%)"></div>
+  </div><span style="font-size:10px;color:var(--text-dim)">${(p*100).toFixed(0)}%</span>`;
+}
+
+function _stdColor(v) {
+  if (v == null || !isFinite(v)) return '';
+  const n = Number(v);
+  if (n >= 0.5) return 'color:#27d96b;font-weight:600';
+  if (n <= -0.5) return 'color:#e74c3c';
+  return '';
+}
+
+function renderRacePerformanceTable(data) {
+  if (!data) return '<div class="empty">パフォーマンス値データなし</div>';
+  const entries = data.entries || [];
+  const meta = data.meta || {};
+  if (!entries.length) return '<div class="empty">パフォーマンス値データなし</div>';
+
+  // メタ情報サマリー
+  const metaFields = [];
+  if (meta.race_date) metaFields.push(`日付: ${meta.race_date}`);
+  if (meta.venue) metaFields.push(meta.venue);
+  if (meta.surface) metaFields.push(`${meta.surface}${meta.distance || ''}m`);
+  if (meta.distance_band) metaFields.push(`帯: ${meta.distance_band}`);
+  if (meta.class_group) metaFields.push(`クラス: ${meta.class_group}`);
+  if (meta.track_condition) metaFields.push(`馬場: ${meta.track_condition}`);
+  if (meta.field_size != null) metaFields.push(`${meta.field_size}頭`);
+  if (meta.pace_shape_class) metaFields.push(`ペース: ${meta.pace_shape_class}`);
+  if (data.as_of_date) metaFields.push(`as_of: ${data.as_of_date}`);
+
+  const raceCards = `
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:11px">
+        <div style="color:var(--text-dim);font-size:9px">RaceLevel (PreRace)</div>
+        <div style="font-size:14px;font-weight:600;color:var(--accent)">${_fmtNum(meta.race_level_pre_race)}</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:11px">
+        <div style="color:var(--text-dim);font-size:9px">RaceLevel (Retro)</div>
+        <div style="font-size:14px;font-weight:600;color:var(--warn)">${_fmtNum(meta.race_level_retrospective)}</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:11px">
+        <div style="color:var(--text-dim);font-size:9px">TrackVariant</div>
+        <div style="font-size:14px;font-weight:600">${_fmtNum(meta.track_variant)}</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:11px">
+        <div style="color:var(--text-dim);font-size:9px">RaceUncertainty</div>
+        <div style="font-size:14px;font-weight:600">${_fmtNum(meta.race_uncertainty)}</div>
+      </div>
+    </div>`;
+
+  const metaLine = metaFields.length
+    ? `<div class="meta">${metaFields.join('<span class="meta-sep">|</span>')}</div>`
+    : '';
+
+  // run_performance_final 降順でソート (default)
+  const sorted = [...entries].sort((a, b) => {
+    const va = a.run_performance_final ?? -Infinity;
+    const vb = b.run_performance_final ?? -Infinity;
+    return vb - va;
+  });
+
+  let html = metaLine + raceCards;
+  html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">
+    レースパフォーマンス値: <code>run_performance_final</code> 降順 (= レース内推定実力ランキング)。
+    <code>std</code>=同レース内Z値, <code>pct</code>=パーセンタイル。
+    着順は実結果 (参考)。
+  </div>`;
+  html += '<div class="table-wrap"><table class="data-table" id="tbl-race-performance"><thead><tr>';
+  html += '<th class="tc col-sortable">推定順位</th>';
+  html += '<th class="tc col-sortable">馬番</th>';
+  html += '<th class="col-sortable">馬名</th>';
+  html += '<th class="tc col-sortable">実着順</th>';
+  html += '<th class="tr col-sortable">最終性能</th>';
+  html += '<th class="tr col-sortable">std</th>';
+  html += '<th class="tr col-sortable">pct</th>';
+  html += '<th class="tr col-sortable">時計指数</th>';
+  html += '<th class="tr col-sortable">着差補正</th>';
+  html += '<th class="tr col-sortable">ペース補正</th>';
+  html += '<th class="tr col-sortable">斤量補正</th>';
+  html += '<th class="tr col-sortable">事前格 (PreRace)</th>';
+  html += '<th class="tr col-sortable">場相対格</th>';
+  html += '<th class="tr col-sortable">TOP3差</th>';
+  html += '<th class="tr col-sortable">斤量</th>';
+  html += '<th class="tr col-sortable">斤量Adv</th>';
+  html += '</tr></thead><tbody>';
+
+  sorted.forEach((e, i) => {
+    const predRank = i + 1;
+    const finishPos = e.finish_position;
+    const finishCell = (finishPos != null && finishPos > 0)
+      ? _rankBadge(finishPos)
+      : '<span style="color:var(--text-dim)">-</span>';
+    const stdStyle = _stdColor(e.run_performance_final_std);
+    html += '<tr>';
+    html += `<td class="tc">${_rankBadge(predRank)}</td>`;
+    html += `<td class="tc">${e.horse_number ?? '-'}</td>`;
+    html += `<td>${_horseCell(e.horse_id, e.horse_name)}</td>`;
+    html += `<td class="tc">${finishCell}</td>`;
+    html += `<td class="num" style="font-weight:600">${_fmtNum(e.run_performance_final, 2)}</td>`;
+    html += `<td class="num" style="${stdStyle}">${_fmtNum(e.run_performance_final_std, 2)}</td>`;
+    html += `<td class="num">${_perfBar(e.run_performance_final_pct)}</td>`;
+    html += `<td class="num">${_fmtNum(e.time_figure, 2)}</td>`;
+    html += `<td class="num">${_fmtNum(e.margin_adjusted_figure, 2)}</td>`;
+    html += `<td class="num">${_fmtNum(e.pace_adjusted_figure, 2)}</td>`;
+    html += `<td class="num">${_fmtNum(e.weight_adjusted_figure, 2)}</td>`;
+    html += `<td class="num">${_fmtNum(e.horse_pre_rating_pre_race, 2)}</td>`;
+    html += `<td class="num">${_fmtNum(e.field_relative_pre_rating, 2)}</td>`;
+    html += `<td class="num">${_fmtNum(e.field_top3_gap, 2)}</td>`;
+    html += `<td class="num">${_fmtNum(e.normalized_weight_carried, 1)}</td>`;
+    html += `<td class="num">${_fmtNum(e.current_weight_advantage_points, 2)}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+
+  // 特徴量ポリシー
+  const policies = data.feature_policies;
+  if (policies && (policies.online_safe || policies.retro_only)) {
+    html += '<div style="margin-top:12px;font-size:10px;color:var(--text-dim);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px">';
+    html += '<div style="font-weight:600;color:var(--text);margin-bottom:4px">特徴量ポリシー</div>';
+    if (policies.online_safe) {
+      html += `<div><span style="color:#27d96b">online_safe</span>: ${(policies.online_safe || []).join(', ')}</div>`;
+    }
+    if (policies.retro_only) {
+      html += `<div style="margin-top:4px"><span style="color:var(--warn)">retro_only</span>: ${(policies.retro_only || []).join(', ')}</div>`;
+    }
+    html += '</div>';
+  }
+
   return html;
 }
 
@@ -1876,8 +2687,8 @@ function _renderGenericTable(data) {
     for (const k of keys) {
       if (typeof entries[0][k] === 'number') numCols.add(k);
     }
-    let html = '<div class="table-wrap"><table class="data-table"><thead><tr>';
-    for (const k of keys) html += `<th${numCols.has(k) ? ' class="tr"' : ''}>${k}</th>`;
+    let html = '<div class="table-wrap"><table class="data-table" id="tbl-generic"><thead><tr>';
+    for (const k of keys) html += `<th class="${numCols.has(k) ? 'tr ' : ''}col-sortable">${k}</th>`;
     html += '</tr></thead><tbody>';
     for (const row of entries) {
       html += '<tr>';
@@ -1969,6 +2780,8 @@ function toggle(id) {
 // ═══════════════════════════════════════════════════════
 
 let _horseCache = {};
+/** @type {Record<string, any[]>} */
+let _horsePerfCache = {};
 let _hmActiveTab = 'info';
 
 function getCurrentRaceId() {
@@ -2029,12 +2842,14 @@ function closeHorseModal() {
   overlay.classList.remove('visible');
   setTimeout(() => { overlay.style.display = 'none'; }, 200);
   document.body.style.overflow = '';
+  _horsePerfCache = {};
 }
 
 function _renderHmTabs() {
   const tabs = [
     {id: 'info', label: '基本情報'},
     {id: 'history', label: '成績'},
+    {id: 'perf', label: 'パフォーマンス'},
     {id: 'pedigree', label: '血統'},
     {id: 'stats', label: '統計'},
   ];
@@ -2052,6 +2867,146 @@ function _renderHorseDetail(data) {
   else if (_hmActiveTab === 'history') body.innerHTML = _renderHmHistory(data);
   else if (_hmActiveTab === 'pedigree') body.innerHTML = _renderHmPedigree(data);
   else if (_hmActiveTab === 'stats') body.innerHTML = _renderHmStats(data);
+  else if (_hmActiveTab === 'perf') {
+    body.innerHTML = '<div class="hm-loading"><div class="hm-spinner"></div>パフォーマンス値を読み込み中...</div>';
+    _loadAndRenderHorsePerf(data.horse_id);
+    return;
+  }
+  requestAnimationFrame(() => {
+    body.querySelectorAll('table.hm-history-table').forEach(enableTableSort);
+  });
+}
+
+function _hmEsc(s) {
+  if (s == null || s === '') return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** 集約APIが未デプロイ(404)のとき、戦績の race_id で既存 /api/data/race_performance を叩いて同内容を組み立てる */
+async function _loadHorsePerfClientFallback(horseId, limit, raceHistory) {
+  const rids = [];
+  const seen = new Set();
+  let scanned = 0;
+  for (const rec of raceHistory) {
+    if (scanned >= 400) break;
+    scanned += 1;
+    const rid = (rec.race_id || '').trim();
+    if (rid.length !== 12 || !/^\d{12}$/.test(rid) || seen.has(rid)) continue;
+    seen.add(rid);
+    rids.push(rec);
+  }
+  const rows = [];
+  const CH = 10;
+  for (let i = 0; i < rids.length; i += CH) {
+    const chunk = rids.slice(i, i + CH);
+    const part = await Promise.all(chunk.map(async (rec) => {
+      const rid = String(rec.race_id || '').trim();
+      try {
+        const r = await fetch(`/api/data/race_performance/${encodeURIComponent(rid)}`);
+        if (!r.ok) return null;
+        const data = await r.json();
+        const ent = (data.entries || []).find((e) => String(e.horse_id) === String(horseId));
+        if (!ent) return null;
+        return {
+          race_id: rid,
+          race_date: ent.race_date || rec.date,
+          venue: ent.venue || rec.venue,
+          race_name: rec.race_name,
+          surface: ent.surface || rec.surface,
+          distance: ent.distance != null ? ent.distance : rec.distance,
+          finish_position: ent.finish_position,
+          run_performance_raw: ent.run_performance_raw,
+          run_performance_final: ent.run_performance_final,
+          run_performance_final_std: ent.run_performance_final_std,
+          run_performance_final_pct: ent.run_performance_final_pct,
+          time_figure: ent.time_figure,
+        };
+      } catch {
+        return null;
+      }
+    }));
+    for (const x of part) if (x) rows.push(x);
+  }
+  rows.sort((a, b) => String(b.race_date || '').slice(0, 10).localeCompare(String(a.race_date || '').slice(0, 10)));
+  return rows.slice(0, limit);
+}
+
+async function _fetchHorsePerfRows(horseId, limit) {
+  const resp = await fetch(`/api/horse/${encodeURIComponent(horseId)}/race_performance_history?limit=${limit}`);
+  if (resp.ok) {
+    const j = await resp.json();
+    return { rows: j.rows || [], fallback: false };
+  }
+  if (resp.status === 404 && _lastHorseData && Array.isArray(_lastHorseData.race_history) && _lastHorseData.race_history.length) {
+    const rows = await _loadHorsePerfClientFallback(horseId, limit, _lastHorseData.race_history);
+    return { rows, fallback: true };
+  }
+  throw new Error(`HTTP ${resp.status}`);
+}
+
+async function _loadAndRenderHorsePerf(horseId) {
+  const body = document.getElementById('hmBody');
+  if (!body || !horseId) return;
+  if (_hmActiveTab !== 'perf') return;
+  try {
+    let rows = _horsePerfCache[horseId];
+    let fallbackBanner = '';
+    if (!rows) {
+      if (_hmActiveTab !== 'perf') return;
+      const { rows: r, fallback } = await _fetchHorsePerfRows(horseId, 80);
+      rows = r;
+      _horsePerfCache[horseId] = rows;
+      if (fallback) {
+        fallbackBanner = `<div style="font-size:11px;color:var(--warn);margin-bottom:10px;padding:8px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">集約APIが見つかりませんでした（HTTP 404）。レース別APIで代替取得しています。VPN 上の <code class="mono">api/app.py</code> を最新にデプロイすると高速・安定になります。</div>`;
+      }
+    }
+    if (_hmActiveTab !== 'perf') return;
+    body.innerHTML = fallbackBanner + _renderHmPerfTable(rows, horseId);
+    requestAnimationFrame(() => {
+      body.querySelectorAll('table.hm-history-table').forEach(enableTableSort);
+    });
+  } catch (e) {
+    if (_hmActiveTab === 'perf' && body) {
+      body.innerHTML = `<div class="empty">取得失敗: ${_hmEsc(e.message)}<div style="margin-top:10px;font-size:12px;color:var(--text-dim)">パフォーマンス履歴APIが404のときはサーバー未更新の可能性があります。<code class="mono">git pull</code> 後にプロセス再起動、または上記フォールバックに必要な <code class="mono">/api/data/race_performance/&lt;race_id&gt;</code> が利用可能か確認してください。</div></div>`;
+    }
+  }
+}
+
+function _renderHmPerfTable(rows, horseId) {
+  if (!rows.length) {
+    return `<div class="empty">パフォーマンス算出データが見つかりません（<code class="mono">pipeline.race_performance</code> で当該レースが未生成、または戦績の先頭400走に該当が無い可能性があります）。</div>`;
+  }
+  let html = `<div class="section-title">レースパフォーマンス履歴（新しい順・最大80件）</div>`;
+  html += '<p style="font-size:11px;color:var(--text-dim);margin:0 0 8px 0"><code>run_performance_final</code> はタイム・着差・斤量・展開・レースレベル等の<strong>合成スケール</strong>（仕様: <code class="mono">docs/modeling/race_performance_rating_system.md</code>）。<strong>0 が下限ではなくマイナスも普通に出ます</strong>。レース内順位と <code>run_performance_final_pct</code> を併用してください。</p>';
+  html += '<p style="font-size:11px;color:var(--text-dim);margin:0 0 8px 0">戦績の <code>race_id</code> に対応する <code>data/features/race_performance/races/&lt;年&gt;/&lt;race_id&gt;.json</code> がある走のみ表示します。</p>';
+  html += '<div class="table-wrap"><table class="hm-history-table"><thead><tr>';
+  html += '<th class="tc col-sortable">日付</th><th class="col-sortable">race_id</th><th class="col-sortable">レース</th><th class="col-sortable">場</th><th class="tr col-sortable">距離</th><th class="tc col-sortable">着</th>';
+  html += '<th class="tr col-sortable">final</th><th class="tr col-sortable">std</th><th class="tr col-sortable">%</th><th class="tr col-sortable">TF</th>';
+  html += '</tr></thead><tbody>';
+  for (const r of rows) {
+    const rid = r.race_id || '';
+    const rlink = rid
+      ? `<a href="/data-viewer?race_id=${encodeURIComponent(rid)}" target="_blank" rel="noopener" class="mono">${_hmEsc(rid)}</a>`
+      : '-';
+    const stdStyle = _stdColor(r.run_performance_final_std);
+    html += '<tr>';
+    html += `<td class="dim tc">${_hmEsc((r.race_date || '').slice(0, 10))}</td>`;
+    html += `<td class="dim">${rlink}</td>`;
+    html += `<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${_hmEsc(r.race_name || '')}">${_hmEsc(r.race_name || '-')}</td>`;
+    html += `<td>${_hmEsc(r.venue || '-')}</td>`;
+    html += `<td class="num">${_hmEsc(r.surface || '')}${r.distance != null ? r.distance : '-'}</td>`;
+    html += `<td class="tc" style="font-weight:700">${r.finish_position != null ? r.finish_position : '-'}</td>`;
+    html += `<td class="num" style="font-weight:600">${_fmtNum(r.run_performance_final, 2)}</td>`;
+    html += `<td class="num" style="${stdStyle}">${_fmtNum(r.run_performance_final_std, 2)}</td>`;
+    html += `<td class="num">${_perfBar(r.run_performance_final_pct)}</td>`;
+    html += `<td class="num">${_fmtNum(r.time_figure, 1)}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
 }
 
 function _switchHmTab(tabId) {
@@ -2111,7 +3066,7 @@ function _renderHmHistory(data) {
   if (netkeiba.length) {
     html += `<div class="section-title">netkeiba 戦績 (${netkeiba.length}戦)</div>`;
     html += '<div class="table-wrap" style="margin-bottom:16px"><table class="hm-history-table"><thead><tr>';
-    html += '<th class="tc">日付</th><th>場所</th><th>レース</th><th class="tr">距離</th><th class="tc">馬場</th><th class="tc">着</th><th class="tr">タイム</th><th class="tr">着差</th><th class="tc">通過</th><th class="tr">上り3F</th><th>騎手</th><th class="tr">斤量</th><th class="tc">人気</th><th class="tr">オッズ</th><th class="tr">馬体重</th>';
+    html += '<th class="tc col-sortable">日付</th><th class="col-sortable">場所</th><th class="col-sortable">レース</th><th class="tr col-sortable">距離</th><th class="tc col-sortable">馬場</th><th class="tc col-sortable">着</th><th class="tr col-sortable">タイム</th><th class="tr col-sortable">着差</th><th class="tc">通過</th><th class="tr col-sortable">上り3F</th><th class="col-sortable">騎手</th><th class="tr col-sortable">斤量</th><th class="tc col-sortable">人気</th><th class="tr col-sortable">オッズ</th><th class="tr col-sortable">馬体重</th>';
     html += '</tr></thead><tbody>';
 
     for (const r of netkeiba) {
@@ -2142,7 +3097,7 @@ function _renderHmHistory(data) {
   if (useSmartrc) {
     html += `<div class="section-title" style="color:var(--smartrc)">SmartRC 全戦績 (${smartrc.length}戦)</div>`;
     html += '<div class="table-wrap"><table class="hm-history-table"><thead><tr>';
-    html += '<th class="tc">日付</th><th>場所</th><th class="tc">R</th><th class="tr">距離</th><th class="tc">着</th><th class="tr">タイム</th><th class="tr">テン1F</th><th class="tr">上り3F</th><th>騎手</th><th class="tr">斤量</th><th class="tc">人気</th><th class="tr">馬体重</th>';
+    html += '<th class="tc col-sortable">日付</th><th class="col-sortable">場所</th><th class="tc col-sortable">R</th><th class="tr col-sortable">距離</th><th class="tc col-sortable">着</th><th class="tr col-sortable">タイム</th><th class="tr col-sortable">テン1F</th><th class="tr col-sortable">上り3F</th><th class="col-sortable">騎手</th><th class="tr col-sortable">斤量</th><th class="tc col-sortable">人気</th><th class="tr col-sortable">馬体重</th>';
     html += '</tr></thead><tbody>';
 
     for (const r of smartrc) {
@@ -2393,6 +3348,9 @@ function _renderPersonDetail() {
   if (_pmActiveTab === 'profile') body.innerHTML = _renderPmProfile();
   else if (_pmActiveTab === 'yearly') body.innerHTML = _renderPmYearly();
   else if (_pmActiveTab === 'records') body.innerHTML = _renderPmRecords();
+  requestAnimationFrame(() => {
+    body.querySelectorAll('table.hm-history-table').forEach(enableTableSort);
+  });
 }
 
 function _renderPmProfile() {
@@ -2464,7 +3422,7 @@ function _renderPmYearly() {
   html += '</div>';
 
   html += '<div class="table-wrap"><table class="hm-history-table"><thead><tr>';
-  html += '<th class="tc">年度</th><th class="tc">順位</th><th class="tr">1着</th><th class="tr">2着</th><th class="tr">3着</th><th class="tr">着外</th><th class="tr">騎乗数</th><th class="tr">勝率</th><th class="tr">連対率</th><th class="tr">複勝率</th>';
+  html += '<th class="tc col-sortable">年度</th><th class="tc col-sortable">順位</th><th class="tr col-sortable">1着</th><th class="tr col-sortable">2着</th><th class="tr col-sortable">3着</th><th class="tr col-sortable">着外</th><th class="tr col-sortable">騎乗数</th><th class="tr col-sortable">勝率</th><th class="tr col-sortable">連対率</th><th class="tr col-sortable">複勝率</th>';
   if (ys[0]?.earnings) html += '<th class="tr">賞金(万円)</th>';
   html += '</tr></thead><tbody>';
   for (const y of ys) {
@@ -2537,7 +3495,7 @@ function _renderPmRecords() {
 
   html += `<div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">※ このレース出走馬の過去走から集約 (${allRecords.length}件中 ${filtered.length}件表示)</div>`;
   html += '<div class="table-wrap"><table class="hm-history-table"><thead><tr>';
-  html += '<th class="tc">日付</th><th>場所</th><th>レース</th><th>馬名</th><th class="tr">距離</th><th class="tc">馬場</th><th class="tc">状態</th><th class="tc">着</th><th class="tr">タイム</th><th class="tr">上り3F</th><th class="tc">人気</th><th class="tr">オッズ</th>';
+  html += '<th class="tc col-sortable">日付</th><th class="col-sortable">場所</th><th class="col-sortable">レース</th><th class="col-sortable">馬名</th><th class="tr col-sortable">距離</th><th class="tc col-sortable">馬場</th><th class="tc col-sortable">状態</th><th class="tc col-sortable">着</th><th class="tr col-sortable">タイム</th><th class="tr col-sortable">上り3F</th><th class="tc col-sortable">人気</th><th class="tr col-sortable">オッズ</th>';
   html += '</tr></thead><tbody>';
 
   for (const r of filtered) {

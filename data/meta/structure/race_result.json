@@ -1,7 +1,7 @@
 {
   "category": "race_result",
-  "timestamp": "2026-03-19T09:43:11.073099",
-  "sample_id": "202606020601",
+  "timestamp": "2026-05-13T06:00:08.793201",
+  "sample_id": "202606030801",
   "selector_results": {
     "result_table": {
       "selector": "table.race_table_01",
@@ -32,8 +32,8 @@
       "optional": false
     }
   },
-  "row_count": 17,
-  "column_count": 21,
+  "row_count": 13,
+  "column_count": 25,
   "column_classes": [
     "",
     "",
@@ -44,7 +44,11 @@
     "",
     "",
     "",
-    "",
+    "TimeIndexHeadCell01",
+    "TimeIndexMasterHeadCell01",
+    "TimeIndexMasterHeadCell01 fsS",
+    "TimeIndexMasterHeadCell01",
+    "TimeIndexMasterHeadCell01 fsS",
     "",
     "",
     "",

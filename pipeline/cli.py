@@ -15,11 +15,9 @@ import logging
 import sys
 from pathlib import Path
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
+from utils.keiba_logging import script_basic_config
+
+script_basic_config(handlers=[logging.StreamHandler(sys.stdout)])
 
 
 def cmd_predict(args):

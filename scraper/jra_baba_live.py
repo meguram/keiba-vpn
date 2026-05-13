@@ -40,6 +40,8 @@ from typing import Any
 import requests
 from bs4 import BeautifulSoup
 
+from utils.keiba_logging import script_basic_config
+
 logger = logging.getLogger("scraper.jra_baba_live")
 
 BASE_URL = "https://www.jra.go.jp/keiba/baba"
@@ -654,10 +656,7 @@ def print_upcoming_schedule(output_dir: str = "data/jra_baba", days: int = 14):
 # ═══════════════════════════════════════════════════════════════════
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    script_basic_config()
 
     parser = argparse.ArgumentParser(description="JRA 馬場情報ライブスクレイパー")
     parser.add_argument("--cron", action="store_true",

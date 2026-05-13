@@ -58,7 +58,7 @@ class SelectorChain:
                 self._hit_cache = sel
                 return result
 
-        logger.error("❌ 全セレクタ失敗 [%s]: %s", self.name, self.selectors)
+        logger.warning("全セレクタ失敗 [%s]: %s", self.name, self.selectors)
         return None
 
     def select(self, soup: BeautifulSoup | Tag) -> list[Tag]:
@@ -79,7 +79,7 @@ class SelectorChain:
                 self._hit_cache = sel
                 return results
 
-        logger.error("❌ 全セレクタ失敗 [%s]: %s", self.name, self.selectors)
+        logger.warning("全セレクタ失敗 [%s]: %s", self.name, self.selectors)
         return []
 
 

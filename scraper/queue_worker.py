@@ -9,11 +9,9 @@ import time
 from pathlib import Path
 
 from scraper.job_queue import ScrapeJobQueue
+from utils.keiba_logging import script_basic_config
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
+script_basic_config()
 logger = logging.getLogger(__name__)
 
 

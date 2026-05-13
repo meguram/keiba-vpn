@@ -1,11 +1,31 @@
 {
   "category": "race_barometer",
-  "timestamp": "2026-03-19T09:43:33.824282",
-  "sample_id": "202606020601",
-  "selector_results": {},
-  "row_count": 0,
+  "timestamp": "2026-05-13T06:00:31.074906",
+  "sample_id": "202606030801",
+  "selector_results": {
+    "lap_summary_table": {
+      "selector": "table.LapSummary_Table",
+      "matched": true,
+      "index": 0,
+      "element_count": 3,
+      "optional": false
+    },
+    "index_cells": {
+      "selector": "td.IndexMasterCell",
+      "matched": true,
+      "index": 0,
+      "element_count": 48,
+      "optional": true
+    },
+    "horse_info": {
+      "selector": "td.Horse_Info.Horse_Link",
+      "matched": true,
+      "index": 0,
+      "element_count": 36,
+      "optional": false
+    }
+  },
+  "row_count": 31,
   "column_count": 0,
-  "column_classes": [],
-  "not_published": true,
-  "note": "データ未公開のためチェックスキップ"
+  "column_classes": []
 }

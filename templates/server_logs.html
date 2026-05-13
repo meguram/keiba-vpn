@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>サーバーログ | ML-AutoPilot Keiba</title>
+<style>
+  :root {
+    --bg: #0a0e17; --surface: #131926; --surface2: #1a2235;
+    --border: #243049; --text: #c8d6e5; --text-dim: #6b7d95;
+    --accent: #3b82f6; --err: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
+  .page-header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px;
+  }
+  .page-header h1 { font-size: 16px; font-weight: 700; color: #fff; }
+  .page-header .subtitle { font-size: 11px; color: var(--text-dim); margin-top: 4px; max-width: 720px; line-height: 1.5; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .controls label { font-size: 11px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
+  .controls select, .controls input {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 8px; border-radius: 5px; font-size: 12px; min-width: 120px;
+  }
+  .refresh-btn {
+    background: var(--accent); color: #fff; border: none; padding: 8px 16px;
+    border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: 600; height: 36px;
+  }
+  .refresh-btn:hover { background: #2563eb; }
+  .content { padding: 20px 24px; max-width: 1600px; margin: 0 auto; }
+  .meta { font-size: 11px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.5; }
+  .log-wrap {
+    background: #0d1117; border: 1px solid var(--border); border-radius: 8px; overflow: auto;
+    max-height: min(78vh, 900px);
+  }
+  .log-wrap pre {
+    font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+    font-size: 11px; line-height: 1.45; padding: 12px 14px; white-space: pre-wrap; word-break: break-all;
+    color: #9ecbff;
+  }
+  .err-banner { display: none; margin-bottom: 12px; padding: 10px 12px; background: rgba(239,68,68,0.12);
+    border: 1px solid var(--err); border-radius: 6px; font-size: 12px; color: #fecaca; }
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+
+<div class="page-header">
+  <div>
+    <h1>サーバーログ（管理者）</h1>
+    <div class="subtitle">
+      リポジトリ直下 <code style="font-size:10px">logs/*.log</code> の<strong>末尾</strong>を表示します（
+      <code style="font-size:10px">scripts/restart_server.sh</code> では
+      <code style="font-size:10px">logs/server_restart.log</code> に追記）。uvicorn の標準出力はターミナル側の場合があります。
+    </div>
+  </div>
+  <div class="controls">
+    <label>ファイル
+      <select id="logFile" title="logs ディレクトリ内の .log"></select>
+    </label>
+    <label>行数
+      <input type="number" id="logMaxLines" value="500" min="10" max="5000" step="10" title="末尾から最大行数">
+    </label>
+    <label>読み取り上限 (KiB)
+      <input type="number" id="logMaxKib" value="2048" min="64" max="8192" step="256" title="ファイル末尾から読む最大バイト（大きいほど先頭行が切れにくい）">
+    </label>
+    <button type="button" class="refresh-btn" onclick="loadServerLogs()">再読み込み</button>
+  </div>
+</div>
+
+<div class="content">
+  <div id="errBanner" class="err-banner"></div>
+  <div class="meta" id="logMeta">読み込み中…</div>
+  <div class="log-wrap">
+    <pre id="logPre">（まだありません）</pre>
+  </div>
+</div>
+
+<script>
+const SERVER_API_PREFIX = {{ (api_prefix | default('')) | tojson }};
+
+function apiUrl(path) {
+  const p = (path || '').startsWith('/') ? path : '/' + path;
+  const pre = (SERVER_API_PREFIX || '').replace(/\/$/, '');
+  return pre + p;
+}
+
+async function readJsonResp(resp) {
+  const text = await resp.text();
+  try { return JSON.parse(text); } catch (e) { return { _raw: text, _parseError: String(e) }; }
+}
+
+function showError(msg) {
+  const b = document.getElementById('errBanner');
+  if (!b) return;
+  if (msg) { b.style.display = 'block'; b.textContent = msg; } else { b.style.display = 'none'; b.textContent = ''; }
+}
+
+async function loadServerLogs() {
+  const sel = document.getElementById('logFile');
+  const pre = document.getElementById('logPre');
+  const meta = document.getElementById('logMeta');
+  const maxLines = parseInt(document.getElementById('logMaxLines').value, 10) || 500;
+  const maxKib = parseInt(document.getElementById('logMaxKib').value, 10) || 2048;
+  const file = sel && sel.value ? sel.value : '';
+  showError('');
+  if (meta) meta.textContent = '取得中…';
+  if (pre) pre.textContent = '';
+  const u = new URL(apiUrl('/api/admin/server-logs'), window.location.origin);
+  u.searchParams.set('max_lines', String(maxLines));
+  u.searchParams.set('max_kib', String(maxKib));
+  if (file) u.searchParams.set('file', file);
+  try {
+    const resp = await fetch(u.toString(), { credentials: 'same-origin' });
+    const d = await readJsonResp(resp);
+    if (resp.status === 401) {
+      showError('認証が必要です。開発者でログインしてから再度お試しください。');
+      if (meta) meta.textContent = '未認証';
+      return;
+    }
+    if (!d.ok) {
+      showError(d.error || d.message || '取得に失敗しました');
+      if (meta) meta.textContent = 'エラー';
+      return;
+    }
+    const files = d.files || [];
+    if (sel) {
+      if (files.length) {
+        sel.innerHTML = files.map(f => '<option value="' + escapeAttr(f.name) + '">' + escapeAttr(f.name)
+          + ' (' + formatBytes(f.size_bytes) + ')</option>').join('');
+        sel.value = d.file || files[0].name;
+      } else {
+        sel.innerHTML = '<option value="">（.log なし）</option>';
+      }
+    }
+    if (pre) pre.textContent = d.content != null ? d.content : (d.message || '（空）');
+    if (meta) {
+      const parts = [];
+      if (d.file) parts.push('ファイル: ' + d.file);
+      if (d.line_count != null) parts.push('表示行数: ' + d.line_count);
+      if (d.truncated) parts.push('先頭付近は切り捨てあり（末尾優先）');
+      if (d.message) parts.push(d.message);
+      meta.textContent = parts.join(' · ') || '—';
+    }
+  } catch (e) {
+    showError('通信エラー: ' + (e.message || e));
+    if (meta) meta.textContent = '通信エラー';
+  }
+}
+
+function escapeAttr(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function formatBytes(n) {
+  if (n == null || !isFinite(n)) return '—';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KiB';
+  return (n / 1024 / 1024).toFixed(1) + ' MiB';
+}
+
+document.getElementById('logFile') && document.getElementById('logFile').addEventListener('change', loadServerLogs);
+loadServerLogs();
+</script>
+</body>
+</html>

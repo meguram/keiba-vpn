@@ -1,7 +1,7 @@
 {
   "category": "race_paddock",
-  "timestamp": "2026-03-19T09:43:33.543845",
-  "sample_id": "202606020601",
+  "timestamp": "2026-05-13T06:00:30.757071",
+  "sample_id": "202606030801",
   "selector_results": {
     "paddock_table": {
       "selector": "table.Paddock_Table",

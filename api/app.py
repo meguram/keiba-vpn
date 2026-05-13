@@ -39,6 +39,7 @@ from api.auth import (
     verify_password, create_session_response, clear_session_response,
     COOKIE_NAME,
 )
+from utils.keiba_logging import standard_log_formatter
 
 
 # ── 毎朝の構造チェックスケジューラ ──────────────────────
@@ -69,6 +70,15 @@ _WORKER_HEALTH_FILE = os.path.join(
 # ── data/cache 定期クリーンアップ（HybridStorage.cleanup_disk_cache） ──
 _disk_cache_cleanup_thread: threading.Thread | None = None
 _disk_cache_cleanup_stop = threading.Event()
+
+# ── キュー定期メンテ（1時間ごと: 失敗→待機、完了レコード削除）リーダーのみ ──
+_queue_maintain_thread: threading.Thread | None = None
+_queue_maintain_stop = threading.Event()
+
+# ── logs/ 保持: 直近1週間超の *.log を毎日 12:00 JST に削除（リーダー1プロセス・fcntl） ──
+_logs_retention_thread: threading.Thread | None = None
+_logs_retention_stop = threading.Event()
+_log_retention_leader_fh = None
 
 
 _AUTO_RESUME_DELAY = 120  # アクセス一時停止後の自動復帰待機（秒）
@@ -105,23 +115,29 @@ def get_worker_health() -> dict:
             data = json.loads(f.read())
     except (OSError, json.JSONDecodeError):
         data = {}
-    hb = data.get("heartbeat", 0)
-    pid = data.get("pid", 0)
+    hb = float(data.get("heartbeat", 0) or 0)
+    pid = int(data.get("pid", 0) or 0)
     age = _time.time() - hb if hb > 0 else -1
 
     alive = False
-    pid_alive = False
-    if pid > 0:
-        try:
-            os.kill(pid, 0)
-            pid_alive = True
-        except (ProcessLookupError, PermissionError, OSError):
-            pass
+    if not data:
+        # 未記録は「停止」にしない（リーダーが先に heartbeat を書き込む）
+        alive = True
+    else:
+        pid_alive = False
+        if pid > 0:
+            try:
+                os.kill(pid, 0)
+                pid_alive = True
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
 
-    if pid_alive:
-        if age >= 0 and age < 120:
-            alive = True
-        elif LOCK_FILE.exists():
+        if pid_alive:
+            if age >= 0 and age < 120:
+                alive = True
+            elif LOCK_FILE.exists():
+                alive = True
+        elif pid <= 0 and hb <= 0 and not (data.get("last_error") or data.get("crash_count")):
             alive = True
 
     processing = LOCK_FILE.exists() and alive
@@ -176,7 +192,7 @@ def _queue_worker_loop():
     _worker_log.setLevel(logging.INFO)
     if not _worker_log.handlers:
         _h = logging.StreamHandler()
-        _h.setFormatter(logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s"))
+        _h.setFormatter(standard_log_formatter())
         _worker_log.addHandler(_h)
     _worker_log.info("スクレイピングキューワーカー起動")
 
@@ -255,7 +271,7 @@ def _scheduler_loop():
     _sched_log.setLevel(logging.INFO)
     if not _sched_log.handlers:
         _h = logging.StreamHandler()
-        _h.setFormatter(logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s"))
+        _h.setFormatter(standard_log_formatter())
         _sched_log.addHandler(_h)
     _sched_log.info("構造チェックスケジューラ起動 (毎朝 %02d:%02d JST)",
                     STRUCTURE_CHECK_HOUR_JST, STRUCTURE_CHECK_MINUTE_JST)
@@ -335,7 +351,7 @@ def _try_acquire_queue_runner_leader() -> bool:
 
 @asynccontextmanager
 async def lifespan(app):
-    global _scheduler_thread, _queue_worker_thread, _queue_runner_leader_fh, _disk_cache_cleanup_thread
+    global _scheduler_thread, _queue_worker_thread, _queue_runner_leader_fh, _disk_cache_cleanup_thread, _queue_maintain_thread, _logs_retention_thread, _log_retention_leader_fh
 
     # 構造チェックスケジューラ起動
     _scheduler_stop.clear()
@@ -365,6 +381,35 @@ async def lifespan(app):
         _queue_worker_thread = None
         logger.info("スクレイピングキューワーカーは別ワーカーが担当（スキップ）")
 
+    if _queue_is_leader:
+        _queue_maintain_stop.clear()
+        _queue_maintain_thread = threading.Thread(
+            target=_queue_hourly_maintain_loop,
+            daemon=True,
+            name="queue-hourly-maintain",
+        )
+        _queue_maintain_thread.start()
+        logger.info("キュー定期メンテスレッド起動（当プロセスがリーダー）")
+    else:
+        _queue_maintain_thread = None
+
+    _logs_retention_stop.clear()
+    _ld = (os.environ.get("LOGS_RETENTION_DISABLED") or "").strip().lower()
+    if _ld in ("1", "true", "yes", "on"):
+        _logs_retention_thread = None
+        logger.info("logs/ 保持クリーンアップ: 無効 (LOGS_RETENTION_DISABLED)")
+    elif _try_acquire_logs_retention_leader():
+        _logs_retention_thread = threading.Thread(
+            target=_logs_retention_loop,
+            daemon=True,
+            name="logs-retention",
+        )
+        _logs_retention_thread.start()
+        logger.info("logs/ 保持クリーンアップ起動（毎日 12:00 JST ・直近7日超の *.log 削除、当プロセス）")
+    else:
+        _logs_retention_thread = None
+        logger.info("logs/ 保持クリーンアップは別ワーカーが担当")
+
     try:
         from scraper.queue_worker_log import ensure_queue_worker_log_handler
 
@@ -378,8 +423,11 @@ async def lifespan(app):
         "/api/scrape-queue/add-job",
         "/api/scrape-queue/enqueue-period-horses",
         "/api/scrape-queue/enqueue-period-races",
+        "/api/scrape-queue/enqueue-scrape-period",
         "/api/scrape-queue/worker-logs",
+        "/api/scrape-queue/progress",
         "/api/scrape-queue/resume",
+        "/api/scrape-queue/verify-horse-coverage",
     )
     _paths = {getattr(r, "path", "") for r in app.routes if getattr(r, "path", None)}
     _missing_q = [p for p in _queue_api_required if p not in _paths]
@@ -399,6 +447,8 @@ async def lifespan(app):
     _scheduler_stop.set()
     _queue_worker_stop.set()
     _disk_cache_cleanup_stop.set()
+    _queue_maintain_stop.set()
+    _logs_retention_stop.set()
 
     if _scheduler_thread:
         _scheduler_thread.join(timeout=5)
@@ -406,6 +456,16 @@ async def lifespan(app):
         _queue_worker_thread.join(timeout=5)
     if _disk_cache_cleanup_thread:
         _disk_cache_cleanup_thread.join(timeout=5)
+    if _queue_maintain_thread:
+        _queue_maintain_thread.join(timeout=5)
+    if _logs_retention_thread:
+        _logs_retention_thread.join(timeout=5)
+    if _log_retention_leader_fh:
+        try:
+            _log_retention_leader_fh.close()
+        except OSError:
+            pass
+        _log_retention_leader_fh = None
     if _queue_runner_leader_fh:
         try:
             _queue_runner_leader_fh.close()
@@ -617,7 +677,7 @@ def _disk_cache_cleanup_loop():
     if not _log.handlers:
         _h = logging.StreamHandler()
         _h.setFormatter(
-            logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+            standard_log_formatter()
         )
         _log.addHandler(_h)
     interval = float(_os.environ.get("DISK_CACHE_CLEANUP_INTERVAL_SEC", "86400"))
@@ -641,14 +701,144 @@ def _disk_cache_cleanup_loop():
     _log.info("data/cache クリーンアップスレッド終了")
 
 
-def _kick_scrape_queue_worker() -> None:
-    """ロックが空いていればキューワーカーを起動（最優先ジョブを含む）。"""
-    try:
-        from scraper.job_queue import ScrapeJobQueue
+def _queue_hourly_maintain_loop():
+    """
+    一定間隔で失敗ジョブを待機に戻し、完了レコードをキューから取り除く。
+    終了目安は /api/scrape-queue/status の queue_eta が都度再計算される。
+    """
+    import os as _os
 
-        q = ScrapeJobQueue()
-        if not q.is_locked():
-            asyncio.create_task(asyncio.to_thread(q.process_queue))
+    _m_log = logging.getLogger("scheduler.queue_maintain")
+    _m_log.setLevel(logging.INFO)
+    if not _m_log.handlers:
+        _h = logging.StreamHandler()
+        _h.setFormatter(
+            standard_log_formatter()
+        )
+        _m_log.addHandler(_h)
+
+    try:
+        interval = float(_os.environ.get("SCRAPE_QUEUE_HOURLY_MAINTENANCE_SEC", "3600"))
+    except (TypeError, ValueError):
+        interval = 3600.0
+    if interval <= 0:
+        _m_log.info("キュー定期メンテ: 無効 (SCRAPE_QUEUE_HOURLY_MAINTENANCE_SEC<=0)")
+        return
+
+    _m_log.info("キュー定期メンテ: 初回以降 %.0f 秒ごと (失敗→待機 + 完了レコード削除)", interval)
+
+    from scraper.job_queue import run_hourly_queue_maintenance
+
+    while not _queue_maintain_stop.is_set():
+        if _queue_maintain_stop.wait(timeout=interval):
+            break
+        if _queue_maintain_stop.is_set():
+            break
+        try:
+            r = run_hourly_queue_maintenance()
+            if r.get("ok"):
+                _m_log.info(
+                    "キュー定期メンテ完了: 失敗→待機 %d 件, 完了レコード削除 %d 件",
+                    int(r.get("requeued") or 0),
+                    int(r.get("completed_removed") or 0),
+                )
+            else:
+                _m_log.warning("キュー定期メンテ: %s", r.get("error") or r)
+        except Exception as e:
+            _m_log.error("キュー定期メンテ失敗: %s", e, exc_info=True)
+
+    _m_log.info("キュー定期メンテスレッド終了")
+
+
+def _try_acquire_logs_retention_leader() -> bool:
+    """``logs/`` 保持期限切れ削除を1プロセスだけが実行（uvicorn マルチワーカー対策）。"""
+    global _log_retention_leader_fh
+    try:
+        import fcntl
+    except ImportError:
+        return True
+    from pathlib import Path
+
+    p = Path(BASE_DIR) / "logs" / ".log_retention_leader"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        _log_retention_leader_fh = open(p, "a+", encoding="utf-8", errors="replace")
+        fcntl.flock(_log_retention_leader_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except BlockingIOError:
+        try:
+            if _log_retention_leader_fh:
+                _log_retention_leader_fh.close()
+        except OSError:
+            pass
+        _log_retention_leader_fh = None
+        return False
+
+
+def _logs_retention_loop():
+    """
+    毎日 JST 12:00 に ``logs/*.log`` のうち最終更新が保持日数（既定7日）を超えたものを削除。
+    環境変数: LOGS_RETENTION_DAYS, LOGS_RETENTION_HOUR_JST, LOGS_RETENTION_MINUTE_JST, LOGS_RETENTION_DISABLED
+    """
+    import os as _os
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+
+    _JST = _tz(_td(hours=9))
+    _log = logging.getLogger("scheduler.logs_retention")
+    _log.setLevel(logging.INFO)
+    if not _log.handlers:
+        _h = logging.StreamHandler()
+        _h.setFormatter(standard_log_formatter())
+        _log.addHandler(_h)
+    try:
+        h = int(_os.environ.get("LOGS_RETENTION_HOUR_JST", "12"))
+        m = int(_os.environ.get("LOGS_RETENTION_MINUTE_JST", "0"))
+    except ValueError:
+        h, m = 12, 0
+    h = max(0, min(23, h))
+    m = max(0, min(59, m))
+    _log.info("logs/ 保持クリーンアップ起動 (毎日 %02d:%02d JST, LOGS_RETENTION_DAYS 超を削除)", h, m)
+
+    while not _logs_retention_stop.is_set():
+        now = _dt.now(_JST)
+        target_today = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        if now >= target_today:
+            target = target_today + _td(days=1)
+        else:
+            target = target_today
+        wait_seconds = (target - now).total_seconds()
+        _log.info(
+            "次回 logs 保持期限切れ削除: %s (%.0f秒後)",
+            target.strftime("%Y-%m-%d %H:%M JST"),
+            wait_seconds,
+        )
+        if _logs_retention_stop.wait(timeout=wait_seconds):
+            break
+        if _logs_retention_stop.is_set():
+            break
+        try:
+            from utils.log_retention import run_log_retention_once
+
+            r = run_log_retention_once(BASE_DIR)
+            _log.info(
+                "logs 保持クリーンアップ: removed=%s bytes_freed=%s max_age_days=%s",
+                r.get("removed"),
+                r.get("bytes_freed"),
+                r.get("max_age_days"),
+            )
+            if r.get("errors"):
+                _log.warning("logs 保持クリーンアップ: 一部失敗 %s", r.get("errors"))
+        except Exception as e:
+            _log.warning("logs 保持クリーンアップ失敗: %s", e, exc_info=True)
+    _log.info("logs/ 保持クリーンアップスレッド終了")
+
+
+def _kick_scrape_queue_worker() -> None:
+    """ロックが空いていれば process_queue を別スレッドで起動。イベントループ非依存（定期メンテと同一路線）。"""
+    try:
+        from scraper.job_queue import kick_process_queue_background
+
+        kick_process_queue_background()
     except Exception as e:
         logger.warning("キューワーカー起動スキップ: %s", e)
 
@@ -656,11 +846,9 @@ def _kick_scrape_queue_worker() -> None:
 def _kick_urgent_worker() -> None:
     """最優先ジョブ専用のファストレーンワーカーを起動。通常ワーカーと並走可能。"""
     try:
-        from scraper.job_queue import ScrapeJobQueue
+        from scraper.job_queue import kick_urgent_process_queue_background
 
-        q = ScrapeJobQueue()
-        if q.has_urgent_pending() and not q.is_locked_urgent():
-            asyncio.create_task(asyncio.to_thread(q.process_queue_urgent))
+        kick_urgent_process_queue_background()
     except Exception as e:
         logger.warning("urgent ワーカー起動スキップ: %s", e)
 
@@ -1521,9 +1709,13 @@ def _sync_enqueue_incomplete_summary_dates(body: dict | None) -> dict[str, Any]:
     max_dates = max(1, min(max_dates, 2000))
     to_enqueue = all_incomplete[:max_dates]
 
+    from scraper.scrape_policy import coerce_bool
+
     smart_skip = body.get("smart_skip", True)
     if isinstance(smart_skip, str):
         smart_skip = smart_skip.strip().lower() not in ("0", "false", "no")
+    else:
+        smart_skip = bool(smart_skip)
 
     from scraper.job_queue import ScrapeJobQueue
 
@@ -1531,12 +1723,15 @@ def _sync_enqueue_incomplete_summary_dates(body: dict | None) -> dict[str, Any]:
     created = requeued = duplicate = 0
     details: list[dict[str, Any]] = []
     for date in to_enqueue:
-        result = queue.add_job({
+        job_spec: dict[str, Any] = {
             "job_kind": "date",
             "target_id": date,
             "tasks": ["date_all"],
-            "smart_skip": bool(smart_skip),
-        })
+            "smart_skip": smart_skip,
+        }
+        if "overwrite" in body:
+            job_spec["overwrite"] = coerce_bool(body.get("overwrite"), default=False)
+        result = queue.add_job(job_spec)
         act = result.get("action", "created")
         if act == "created":
             created += 1
@@ -1564,6 +1759,20 @@ def _sync_enqueue_incomplete_summary_dates(body: dict | None) -> dict[str, Any]:
 async def get_raw_data(category: str, key: str):
     """GCS上の生JSONデータを返す。"""
     def _load():
+        if category == "race_performance":
+            from pathlib import Path
+            year = (key or "")[:4]
+            if not year.isdigit() or len(key) < 10:
+                return None, "race_performance"
+            base = Path(__file__).resolve().parent.parent
+            path = base / "data" / "features" / "race_performance" / "races" / year / f"{key}.json"
+            if not path.exists():
+                return None, "race_performance"
+            try:
+                with path.open("r", encoding="utf-8") as f:
+                    return json.load(f), None
+            except Exception:
+                return None, "race_performance"
         storage = _get_storage()
         if category in ("smartrc_runners", "smartrc_horses", "smartrc_fullresults"):
             data = storage.load("smartrc_race", key)
@@ -1643,6 +1852,79 @@ async def api_horse_detail(horse_id: str, race_id: str = ""):
 
     result = await asyncio.to_thread(_load)
     return JSONResponse(result)
+
+
+def _horse_race_performance_history_rows(horse_id: str, limit: int) -> list[dict[str, Any]]:
+    """馬の戦績に紐づくレースについて、race_performance の per-race JSON から当該馬の行を収集する。"""
+    from pathlib import Path
+
+    storage = _get_storage()
+    hr = storage.load("horse_result", horse_id)
+    if not hr:
+        return []
+    history = hr.get("race_history") or []
+    base = Path(__file__).resolve().parent.parent
+    rows: list[dict[str, Any]] = []
+    # 戦績行数が多い馬でもディスク読み取りが暴れないよう上限
+    max_reads = min(len(history), 400)
+    for rec in history[:max_reads]:
+        rid = (rec.get("race_id") or "").strip()
+        if len(rid) != 12 or not rid.isdigit():
+            continue
+        year = rid[:4]
+        path = base / "data" / "features" / "race_performance" / "races" / year / f"{rid}.json"
+        if not path.is_file():
+            continue
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        match: dict[str, Any] | None = None
+        for ent in data.get("entries") or []:
+            if str(ent.get("horse_id")) == str(horse_id):
+                match = ent
+                break
+        if not match:
+            continue
+        rows.append(
+            {
+                "race_id": rid,
+                "race_date": match.get("race_date") or rec.get("date"),
+                "venue": match.get("venue") or rec.get("venue"),
+                "race_name": rec.get("race_name"),
+                "surface": match.get("surface") or rec.get("surface"),
+                "distance": match.get("distance") or rec.get("distance"),
+                "finish_position": match.get("finish_position"),
+                "run_performance_raw": match.get("run_performance_raw"),
+                "run_performance_final": match.get("run_performance_final"),
+                "run_performance_final_std": match.get("run_performance_final_std"),
+                "run_performance_final_pct": match.get("run_performance_final_pct"),
+                "time_figure": match.get("time_figure"),
+            }
+        )
+
+    def _sort_key(x: dict[str, Any]) -> str:
+        return str(x.get("race_date") or "")[:10]
+
+    rows.sort(key=_sort_key, reverse=True)
+    return rows[:limit]
+
+
+@app.get("/api/horse/{horse_id}/race_performance_history", response_class=JSONResponse)
+async def api_horse_race_performance_history(
+    horse_id: str,
+    limit: int = Query(80, ge=1, le=200),
+):
+    """戦績に現れるレースのうち、race_performance が生成済みのものだけを返す。"""
+    rows = await asyncio.to_thread(_horse_race_performance_history_rows, horse_id, limit)
+    return JSONResponse(
+        {
+            "horse_id": horse_id,
+            "rows": rows,
+            "count": len(rows),
+        }
+    )
 
 
 def _tail_sire_line(
@@ -2817,6 +3099,10 @@ async def get_scrape_queue_status():
             )
             status["failed_jobs"] = failed[:200]
 
+        from scraper.queue_load_settings import get_status_summary
+
+        status["scrape_load_settings"] = get_status_summary()
+
         return JSONResponse(status)
 
     except Exception as e:
@@ -2825,6 +3111,25 @@ async def get_scrape_queue_status():
             "error": str(e),
             "traceback": traceback.format_exc(),
         }, status_code=500)
+
+
+@app.get("/api/scrape-queue/progress", response_class=JSONResponse)
+async def api_scrape_queue_progress():
+    """
+    キュー実行中ジョブの細かい進捗（ワーカーが `queue_job_progress` に書いた内容）。
+    別プロセスのワーカーでは `data/meta/_queue_job_progress.json` 経由。
+    """
+    try:
+        from scraper.queue_job_progress import get_progress_snapshot_for_api
+
+        return JSONResponse(get_progress_snapshot_for_api())
+    except Exception as e:
+        import traceback
+
+        return JSONResponse(
+            {"error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
 
 
 @app.get("/api/scrape-queue/worker-logs", response_class=JSONResponse)
@@ -2924,12 +3229,17 @@ async def api_scrape_queue_kick():
         kicked_normal = False
         kicked_urgent = False
 
+        from scraper.job_queue import (
+            kick_process_queue_background,
+            kick_urgent_process_queue_background,
+        )
+
         if not q.is_locked():
-            asyncio.create_task(asyncio.to_thread(q.process_queue))
+            kick_process_queue_background()
             kicked_normal = True
 
         if q.has_urgent_pending() and not q.is_locked_urgent():
-            asyncio.create_task(asyncio.to_thread(q.process_queue_urgent))
+            kick_urgent_process_queue_background()
             kicked_urgent = True
 
         if not kicked_normal and not kicked_urgent:
@@ -2950,6 +3260,376 @@ async def api_scrape_queue_kick():
     except Exception as e:
         import traceback
         return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+
+
+def _sync_verify_horse_coverage(body: dict) -> dict[str, Any]:
+    """
+    キュー待機（任意）のあと、指定期間・年代について馬・レース・開催日の
+    キュー対象タスクに相当するストレージ有無を検査し、必要なら不足分をジョブ投入する。
+    """
+    from scraper.job_queue import ScrapeJobQueue
+    from scraper.scrape_policy import coerce_bool
+    from scraper.verify_horse_scrape_completeness import wait_until_queue_idle
+    from scraper.verify_scrape_completeness import (
+        enqueue_combined_missing as _enqueue_combined_missing,
+        public_combined_payload,
+        verify_combined_for_period,
+        year_to_date_range,
+    )
+
+    out: dict[str, Any] = {}
+    if bool(body.get("wait_for_queue_idle")):
+        try:
+            timeout = float(body.get("idle_timeout_sec") or 7200)
+        except (TypeError, ValueError):
+            timeout = 7200.0
+        try:
+            poll = float(body.get("idle_poll_sec") or 3)
+        except (TypeError, ValueError):
+            poll = 3.0
+        q = ScrapeJobQueue()
+        ok, msg, last = wait_until_queue_idle(
+            q, timeout_sec=max(30.0, timeout), poll_sec=poll,
+        )
+        out["wait_result"] = msg
+        out["last_queue_before_verify"] = last
+        if not ok:
+            out["ok"] = False
+            return out
+
+    start_date = body.get("start_date")
+    end_date = body.get("end_date")
+    y_val = body.get("year")
+    year: int | None = None
+    if y_val is not None and str(y_val).strip() != "":
+        try:
+            year = int(y_val)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "year must be an integer (e.g. 2024)"}
+        try:
+            start_date, end_date = year_to_date_range(year)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+
+    if start_date and (len(str(start_date)) != 8 or not str(start_date).isdigit()):
+        return {"ok": False, "error": "start_date must be YYYYMMDD"}
+    if end_date and (len(str(end_date)) != 8 or not str(end_date).isdigit()):
+        return {"ok": False, "error": "end_date must be YYYYMMDD"}
+    if start_date and end_date and str(start_date) > str(end_date):
+        return {"ok": False, "error": "start_date must be <= end_date"}
+
+    jra_only = body.get("jra_only", True)
+    if isinstance(jra_only, str):
+        jra_only = jra_only.strip().lower() not in ("0", "false", "no", "")
+
+    def _parse_task_list(k: str) -> list[str] | None:
+        raw = body.get(k)
+        if raw is None:
+            return None
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, (list, tuple)):
+            return []
+        return [str(t).strip() for t in raw if str(t).strip()]
+
+    include_horse = body.get("include_horse", True)
+    if isinstance(include_horse, str):
+        include_horse = include_horse.strip().lower() not in ("0", "false", "no", "")
+    include_race = body.get("include_race", True)
+    if isinstance(include_race, str):
+        include_race = include_race.strip().lower() not in ("0", "false", "no", "")
+    include_date = body.get("include_date", True)
+    if isinstance(include_date, str):
+        include_date = include_date.strip().lower() not in ("0", "false", "no", "")
+    if not (bool(include_horse) or bool(include_race) or bool(include_date)):
+        return {"ok": False, "error": "include_horse / include_race / include_date のいずれかをオンにしてください"}
+
+    tasks_horse = _parse_task_list("tasks_horse")
+    tasks_race = _parse_task_list("tasks_race")
+    tasks_date = _parse_task_list("tasks_date")
+    if tasks_horse is None and body.get("tasks") is not None:
+        raw = body.get("tasks")
+        if isinstance(raw, str):
+            raw = [raw]
+        if isinstance(raw, (list, tuple)):
+            tasks_horse = [str(t).strip() for t in raw if str(t).strip()]
+
+    smode = str(body.get("satisfaction_mode") or "load_default").strip()
+    if smode not in ("load_default", "gcs_strict", "mirror_for_selected"):
+        return {
+            "ok": False,
+            "error": "satisfaction_mode must be one of: load_default, gcs_strict, mirror_for_selected",
+        }
+    raw_mir = body.get("local_mirror_categories")
+    if raw_mir is None:
+        lm_list: list[str] = []
+    elif isinstance(raw_mir, str):
+        lm_list = [x.strip() for x in raw_mir.split(",") if str(x).strip()]
+    elif isinstance(raw_mir, (list, tuple)):
+        lm_list = [str(x).strip() for x in raw_mir if str(x).strip()]
+    else:
+        lm_list = []
+
+    storage = _get_storage()
+    combined = verify_combined_for_period(
+        storage,
+        start_date=str(start_date) if start_date else None,
+        end_date=str(end_date) if end_date else None,
+        jra_only=bool(jra_only),
+        include_horse=bool(include_horse),
+        include_race=bool(include_race),
+        include_date=bool(include_date),
+        tasks_horse=tasks_horse,
+        user_race_tasks=tasks_race,
+        user_date_tasks=tasks_date,
+        year=year,
+        satisfaction_mode=smode,
+        local_mirror_categories=lm_list,
+    )
+    pub = public_combined_payload(combined)
+    out.update(pub)
+    out["ok"] = bool(combined.get("ok"))
+    for k, sub in (("verify_horse", combined.get("verify_horse")),
+                   ("verify_race", combined.get("verify_race")),
+                   ("verify_date", combined.get("verify_date"))):
+        if isinstance(sub, dict) and not sub.get("ok"):
+            out["ok"] = False
+
+    if not combined.get("ok"):
+        for k in ("verify_horse", "verify_race", "verify_date"):
+            sub = combined.get(k)
+            if isinstance(sub, dict) and sub.get("error"):
+                out["error"] = sub.get("error")
+                break
+
+    if not body.get("enqueue_missing"):
+        if year is not None and "year" not in out:
+            out["year"] = year
+        return out
+
+    try:
+        plim = int(body.get("per_task_limit") or 50_000)
+    except (TypeError, ValueError):
+        plim = 50_000
+    plim = max(1, min(100_000, plim))
+    if "smart_skip" in body:
+        ss = body.get("smart_skip")
+        if isinstance(ss, str):
+            smart_skip = ss.strip().lower() not in ("0", "false", "no")
+        else:
+            smart_skip = bool(ss)
+    else:
+        smart_skip = True
+    overwrite = coerce_bool(body.get("overwrite"), default=False)
+
+    queue = ScrapeJobQueue()
+    enr = _enqueue_combined_missing(
+        queue, storage, combined,
+        per_task_limit=plim,
+        smart_skip=smart_skip,
+        overwrite=overwrite,
+    )
+    out["enqueue"] = enr
+    if not enr.get("ok", True):
+        out["ok"] = False
+    if year is not None and "year" not in out:
+        out["year"] = year
+    return out
+
+
+@app.post("/api/scrape-queue/verify-horse-coverage", response_class=JSONResponse)
+async def api_scrape_queue_verify_horse_coverage(request: Request):
+    """
+    開発者向け: キューが空になるまで待ったうえで（任意）、
+    指定期間または year（西暦）について、馬・レース・開催日のキュー対象タスク相当のストレージ有無を検査。
+    不足分は `enqueue_missing: true` で各エンティティ向けにキュー投入（`overwrite` は既定 false）。
+
+    Body: {
+      "wait_for_queue_idle"?: true,
+      "idle_timeout_sec"?: 7200,
+      "year"?: 2024,  // 指定時は 1/1–12/31。start_date/end_date より優先
+      "start_date"?, "end_date"?: YYYYMMDD
+      "jra_only"?: true,
+      "include_horse"?: true, "include_race"?: true, "include_date"?: true,
+      "tasks_horse"?: [], "tasks_race"?: [], "tasks_date"?: [],
+      "tasks"?: []  // 下位互換: 指定時は tasks_horse 相当
+      "enqueue_missing"?: false, "per_task_limit"?: 50000,
+      "smart_skip"?: true, "overwrite"?: false,
+      "satisfaction_mode"?: "load_default" | "gcs_strict" | "mirror_for_selected",
+      "local_mirror_categories"?: ["race_oikiri", ...]  // mirror_for_selected 時
+    }
+    """
+    if not is_developer(request):
+        return JSONResponse({"error": "開発者セッションが必要です"}, status_code=403)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    try:
+        out = await asyncio.to_thread(_sync_verify_horse_coverage, body)
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
+    enq = (out or {}).get("enqueue") or {}
+    tot = int(enq.get("total_enqueued_ops") or 0)
+    if bool(body.get("enqueue_missing")) and tot > 0:
+        _kick_scrape_queue_worker()
+        _kick_urgent_worker()
+    return JSONResponse(out or {})
+
+
+@app.post("/api/scrape-queue/migrate-precheck", response_class=JSONResponse)
+async def api_scrape_queue_migrate_precheck(request: Request):
+    """
+    開発者向け: 既存 ``pending`` のうち上書きなし・スキップあり（smart_skip）の行を
+    統一 precheck 列へ戻す（馬・レ・開催日すべて）。
+    Body: { \"dry_run\"?: true }（dry_run 時は件数のみ、JSON は更新しない）
+    """
+    if not is_developer(request):
+        return JSONResponse({"error": "開発者セッションが必要です"}, status_code=403)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    dry = bool(body.get("dry_run"))
+    try:
+        from scraper.job_queue import ScrapeJobQueue
+
+        out = ScrapeJobQueue().migrate_pending_to_storage_precheck(dry_run=dry)
+        return JSONResponse(out)
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"ok": False, "error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
+
+
+@app.get("/api/scrape-queue/local-mirror-config", response_class=JSONResponse)
+async def api_scrape_queue_local_mirror_config_get(request: Request):
+    """
+    開発者向け: GCS 保存成功時に `data/local/mirror/` へコピーするカテゴリ（追い切り等）の設定を取得。
+    併せて、ミラー候補のストレージカテゴリ一覧を返す。
+    """
+    if not is_developer(request):
+        return JSONResponse({"error": "開発者セッションが必要です"}, status_code=403)
+    try:
+        from scraper import local_mirror_config
+
+        st = _get_storage()
+        base = st._base_dir
+        return JSONResponse(
+            {
+                "ok": True,
+                "config": local_mirror_config.get_local_mirror_config(base),
+                "mirrorable_categories": local_mirror_config.mirrorable_storage_categories(),
+            }
+        )
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"ok": False, "error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
+
+
+@app.post("/api/scrape-queue/local-mirror-config", response_class=JSONResponse)
+async def api_scrape_queue_local_mirror_config_post(request: Request):
+    """開発者向け: 上記ミラー設定の保存。Body: { \"enabled\": bool, \"categories\": [\"race_oikiri\", ...] }"""
+    if not is_developer(request):
+        return JSONResponse({"error": "開発者セッションが必要です"}, status_code=403)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    try:
+        from scraper import local_mirror_config
+
+        st = _get_storage()
+        base = st._base_dir
+        en = bool(body.get("enabled"))
+        raw = body.get("categories")
+        if raw is None:
+            cats: list[str] = []
+        elif isinstance(raw, str):
+            cats = [x.strip() for x in raw.split(",") if str(x).strip()]
+        else:
+            cats = [str(x).strip() for x in (raw or []) if str(x).strip()]
+        saved = local_mirror_config.save_local_mirror_config(
+            base, enabled=en, categories=cats
+        )
+        return JSONResponse({"ok": True, "config": saved})
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"ok": False, "error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
+
+
+@app.get("/api/scrape-queue/load-settings", response_class=JSONResponse)
+async def api_scrape_queue_load_settings_get():
+    """ランタイム負荷（並列度・in-flight 等）の上書き設定を取得。"""
+    try:
+        from scraper.queue_load_settings import get_status_summary
+
+        return JSONResponse(get_status_summary())
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"error": str(e), "traceback": traceback.format_exc()}, status_code=500,
+        )
+
+
+@app.post("/api/scrape-queue/load-settings", response_class=JSONResponse)
+async def api_scrape_queue_load_settings_post(request: Request):
+    """
+    data/queue/queue_load_settings.json を更新。開発者セッション必須。
+    Body: { "parallel"?: 1-32, "stagger_sec"?: number, "eta_sec_per_job"?: number,
+            "netkeiba_max_inflight"?: 0-64(0=無制限, null/空=env),
+            "note"?: str, "reset_all"?: true }
+    """
+    if not is_developer(request):
+        return JSONResponse({"error": "開発者セッションが必要です"}, status_code=403)
+    try:
+        from scraper.client import reset_netkeiba_inflight_semaphore_cache
+        from scraper.queue_load_settings import clear_overrides_file, validate_and_save
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "JSON オブジェクトを送ってください"}, status=400)
+    if body.get("reset_all"):
+        out: dict = clear_overrides_file()  # type: ignore[assignment]
+        if out.get("error"):
+            return JSONResponse(out, status=400)
+        try:
+            reset_netkeiba_inflight_semaphore_cache()
+        except Exception as _e:
+            out["inflight_cache_warning"] = str(_e)
+        return JSONResponse(out)
+    r = validate_and_save(body)
+    if r.get("error"):
+        return JSONResponse(r, status=400)
+    try:
+        reset_netkeiba_inflight_semaphore_cache()
+    except Exception as e:
+        r = dict(r)
+        r["inflight_cache_warning"] = str(e)
+    return JSONResponse(r)
 
 
 @app.get("/api/scrape-queue/tasks", response_class=JSONResponse)
@@ -3003,7 +3683,7 @@ async def scrape_queue_enqueue_incomplete_dates(request: Request):
     モニター全日付一覧の「データ保有率」が 100% 未満の開催日を、新しい日付から順に
     job_kind=date / tasks=date_all でキューへ投入する。
 
-    Body (任意): force_summary (bool|1), max_dates (default 500), smart_skip (default true)
+    Body (任意): force_summary (bool|1), max_dates (default 500), smart_skip (default true), overwrite
     """
     try:
         body = await request.json()
@@ -3041,29 +3721,37 @@ async def clear_scrape_queue():
         }, status_code=500)
 
 
+@app.post("/api/scrape-queue/hourly-maintenance-run", response_class=JSONResponse)
+async def api_scrape_queue_hourly_maintenance_run():
+    """
+    手動で定期メンテと同じ処理（失敗→全件待機、完了レコード削除）を実行。
+    バックグラウンドの定期実行と同じ `run_hourly_queue_maintenance`。
+    """
+    try:
+        from scraper.job_queue import run_hourly_queue_maintenance
+
+        out = await asyncio.to_thread(run_hourly_queue_maintenance)
+        return JSONResponse(out)
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
+
+
 def _sync_scrape_queue_stop_and_clear() -> dict[str, Any]:
     """
     実行中ワーカーが次ループでジョブを取らないよう一瞬一時停止を掛け、
     全ジョブ削除後に必ず一時停止を解除する（残すと get_next_job が常に None で固まる）。
     """
     from scraper.job_queue import ScrapeJobQueue
-    from scraper.scrape_access_pause import (
-        clear_access_pause,
-        read_access_pause,
-        write_access_pause,
-    )
+    from scraper.scrape_access_pause import read_access_pause
 
-    write_access_pause(
+    queue = ScrapeJobQueue()
+    removed = queue.clear_all_jobs_with_transport_pause(
         reason="ユーザー操作: キュー全消去処理中（完了後に自動解除されます）"
     )
-    queue = ScrapeJobQueue()
-    removed = queue.clear_all_jobs()
-    if queue.lock_file.exists() and not queue.is_locked():
-        try:
-            queue.lock_file.unlink()
-        except OSError:
-            pass
-    clear_access_pause()
     return {
         "status": "ok",
         "removed_jobs": removed,
@@ -3181,6 +3869,18 @@ async def add_batch_to_scrape_queue(request: Request):
         duplicate = 0
         processed = 0
 
+        from scraper.scrape_policy import coerce_bool
+
+        batch_extras: dict[str, Any] = {}
+        if "smart_skip" in body:
+            ss = body.get("smart_skip")
+            if isinstance(ss, str):
+                batch_extras["smart_skip"] = ss.strip().lower() not in ("0", "false", "no")
+            else:
+                batch_extras["smart_skip"] = bool(ss)
+        if "overwrite" in body:
+            batch_extras["overwrite"] = coerce_bool(body.get("overwrite"), default=False)
+
         for race in races:
             race_id = race.get("race_id")
             if not race_id:
@@ -3193,6 +3893,7 @@ async def add_batch_to_scrape_queue(request: Request):
                 "venue": race.get("venue", ""),
                 "round": race.get("round", 0),
                 "race_name": race.get("race_name", ""),
+                **batch_extras,
             }
 
             result = queue.add_job(job_data)
@@ -3228,16 +3929,28 @@ async def add_batch_to_scrape_queue(request: Request):
 def _sync_enqueue_missing_races(body: dict) -> dict:
     """
     race_lists 上の JRA レースで未取得のものをキューへ（未来レースに限らない）。
-    body: start_date?, end_date? (YYYYMMDD), limit (default 200), dry_run (bool)
+    body: start_date?, end_date? (YYYYMMDD), limit (default 200), dry_run (bool),
+          smart_skip?, overwrite?
     """
     from scraper.job_queue import ScrapeJobQueue
     from scraper.missing_races import find_missing_jra_races_for_queue
+    from scraper.scrape_policy import coerce_bool
 
     start_date = body.get("start_date") or None
     end_date = body.get("end_date") or None
     limit = int(body.get("limit") or 200)
     limit = max(1, min(limit, 2000))
     dry_run = bool(body.get("dry_run"))
+
+    job_extras: dict[str, Any] = {}
+    if "smart_skip" in body:
+        ss = body.get("smart_skip")
+        if isinstance(ss, str):
+            job_extras["smart_skip"] = ss.strip().lower() not in ("0", "false", "no")
+        else:
+            job_extras["smart_skip"] = bool(ss)
+    if "overwrite" in body:
+        job_extras["overwrite"] = coerce_bool(body.get("overwrite"), default=False)
 
     if start_date and (len(str(start_date)) != 8 or not str(start_date).isdigit()):
         return {"error": "start_date must be YYYYMMDD"}
@@ -3281,6 +3994,7 @@ def _sync_enqueue_missing_races(body: dict) -> dict:
             "venue": race.get("venue", ""),
             "round": race.get("round", 0),
             "race_name": race.get("race_name", ""),
+            **job_extras,
         }
         result = queue.add_job(job_data)
         act = result.get("action", "created")
@@ -3308,10 +4022,12 @@ def _sync_enqueue_missing_races(body: dict) -> dict:
 def _sync_enqueue_period_horse_tasks(body: dict) -> dict:
     """
     race_lists 上の期間内レースから出走馬を解決し、馬タスクのジョブをキューへ。
-    body: start_date?, end_date? (YYYYMMDD), tasks (list[str]), limit, dry_run, jra_only?
+    body: start_date?, end_date? (YYYYMMDD), tasks (list[str]), limit, dry_run, jra_only?,
+          smart_skip?, overwrite?（上書き再取得。未指定時は SCRAPE_DEFAULT_OVERWRITE）
     """
     from scraper.job_queue import ScrapeJobQueue
     from scraper.period_runners import enqueue_horse_tasks_for_race_period
+    from scraper.scrape_policy import coerce_bool
 
     start_date = body.get("start_date") or None
     end_date = body.get("end_date") or None
@@ -3339,6 +4055,20 @@ def _sync_enqueue_period_horse_tasks(body: dict) -> dict:
     if not tasks:
         return {"error": "tasks に馬エンティティのタスクIDを1つ以上指定してください（例: horse_pedigree）"}
 
+    horse_kw: dict[str, Any] = {}
+    if "smart_skip" in body:
+        ss = body.get("smart_skip")
+        if isinstance(ss, str):
+            horse_kw["smart_skip"] = ss.strip().lower() not in ("0", "false", "no")
+        else:
+            horse_kw["smart_skip"] = bool(ss)
+    if "overwrite" in body:
+        horse_kw["overwrite"] = coerce_bool(body.get("overwrite"), default=False)
+    if "skip_local_mirror" in body:
+        horse_kw["skip_local_mirror"] = coerce_bool(
+            body.get("skip_local_mirror"), default=False
+        )
+
     storage = _get_storage()
     queue = ScrapeJobQueue()
     try:
@@ -3351,6 +4081,7 @@ def _sync_enqueue_period_horse_tasks(body: dict) -> dict:
             limit=limit,
             dry_run=dry_run,
             jra_only=bool(jra_only),
+            **horse_kw,
         )
     except ValueError as ve:
         return {"error": str(ve)}
@@ -3362,10 +4093,12 @@ def _sync_enqueue_period_horse_tasks(body: dict) -> dict:
 def _sync_enqueue_period_race_tasks(body: dict) -> dict:
     """
     race_lists 上の期間内 JRA レースに対し、レース単位タスクをキューへ。
-    body: start_date?, end_date? (YYYYMMDD), tasks (list[str]), limit, dry_run, jra_only?
+    body: start_date?, end_date? (YYYYMMDD), tasks (list[str]), limit, dry_run, jra_only?,
+          smart_skip?, overwrite?
     """
     from scraper.job_queue import ScrapeJobQueue
     from scraper.period_runners import enqueue_race_tasks_for_race_period
+    from scraper.scrape_policy import coerce_bool
 
     start_date = body.get("start_date") or None
     end_date = body.get("end_date") or None
@@ -3393,6 +4126,20 @@ def _sync_enqueue_period_race_tasks(body: dict) -> dict:
     if not tasks:
         return {"error": "tasks にレースエンティティのタスクIDを1つ以上指定してください（例: race_shutuba）"}
 
+    race_kw: dict[str, Any] = {}
+    if "smart_skip" in body:
+        ss = body.get("smart_skip")
+        if isinstance(ss, str):
+            race_kw["smart_skip"] = ss.strip().lower() not in ("0", "false", "no")
+        else:
+            race_kw["smart_skip"] = bool(ss)
+    if "overwrite" in body:
+        race_kw["overwrite"] = coerce_bool(body.get("overwrite"), default=False)
+    if "skip_local_mirror" in body:
+        race_kw["skip_local_mirror"] = coerce_bool(
+            body.get("skip_local_mirror"), default=False
+        )
+
     storage = _get_storage()
     queue = ScrapeJobQueue()
     try:
@@ -3405,12 +4152,236 @@ def _sync_enqueue_period_race_tasks(body: dict) -> dict:
             limit=limit,
             dry_run=dry_run,
             jra_only=bool(jra_only),
+            **race_kw,
         )
     except ValueError as ve:
         return {"error": str(ve)}
 
     result["status"] = "success"
     return result
+
+
+def _partition_scrape_tasks(
+    task_ids: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    from scraper.queue_tasks import TASK_CATALOG
+
+    m = {t["id"]: t["entity"] for t in TASK_CATALOG}
+    h, r, d = [], [], []
+    seen_h: set[str] = set()
+    seen_r: set[str] = set()
+    seen_dt: set[str] = set()
+    for x in task_ids:
+        s = str(x).strip()
+        if not s:
+            continue
+        e = m.get(s)
+        if e == "horse" and s not in seen_h:
+            seen_h.add(s)
+            h.append(s)
+        elif e == "race" and s not in seen_r:
+            seen_r.add(s)
+            r.append(s)
+        elif e == "date" and s not in seen_dt:
+            seen_dt.add(s)
+            d.append(s)
+    return h, r, d
+
+
+def _sync_enqueue_scrape_period(body: dict) -> dict[str, Any]:
+    """
+    期間 + タスク（馬 / レース / 開催日の混在可）を一括キュー投入。
+
+    - 馬: 当該期間に出馬履歴のある馬（race_lists → shutuba/result から ID 解決）
+    - レース: 当該期間の JRA 各レース（tasks に ``race_result`` / ``race_result_lap`` 等を指定可。``race_result_lap`` は結果ページのラップ系）
+    - 開催日: 当該期間の race_lists キー
+
+    Body:
+      start_date?, end_date? (YYYYMMDD)
+      tasks: list[str]  (TASK_CATALOG id)
+      save_mode: "local_gcs" | "gcs_only"  — gcs_only 時 GCS 保存は行うが常設ローカルミラーは付けない
+      skip_mode: "use_skip" | "overwrite"  — 上書き時は smart_skip 相当なし
+      use_skip かつ少なくとも1件投入した場合、直後に統一 storage precheck（全タスク種。調教は一括キー照会併用）
+      limit?, dry_run?, jra_only? (馬・レースのみ)
+    """
+    from scraper.job_queue import ScrapeJobQueue
+    from scraper.period_runners import (
+        enqueue_date_tasks_for_race_period,
+        enqueue_horse_tasks_for_race_period,
+        enqueue_race_tasks_for_race_period,
+    )
+    from scraper.queue_tasks import TASK_CATALOG
+
+    raw = body.get("tasks") or []
+    if isinstance(raw, str):
+        raw = [raw]
+    task_ids = [str(t).strip() for t in raw if str(t).strip()]
+    if not task_ids:
+        return {"ok": False, "error": "tasks を1つ以上指定してください"}
+    valid = {t["id"] for t in TASK_CATALOG}
+    bad = [x for x in task_ids if x not in valid]
+    if bad:
+        return {"ok": False, "error": f"未登録のタスクID: {bad}"}
+
+    h_tasks, r_tasks, d_tasks = _partition_scrape_tasks(task_ids)
+    if not (h_tasks or r_tasks or d_tasks):
+        return {
+            "ok": False,
+            "error": "有効なタスクがありません（race_all・馬・開催日のいずれか）",
+        }
+
+    start_date = body.get("start_date") or None
+    end_date = body.get("end_date") or None
+    if start_date and (len(str(start_date)) != 8 or not str(start_date).isdigit()):
+        return {"ok": False, "error": "start_date must be YYYYMMDD"}
+    if end_date and (len(str(end_date)) != 8 or not str(end_date).isdigit()):
+        return {"ok": False, "error": "end_date must be YYYYMMDD"}
+    if start_date and end_date and str(start_date) > str(end_date):
+        return {"ok": False, "error": "start_date must be <= end_date"}
+
+    try:
+        limit = int(body.get("limit") or 500_000)
+    except (TypeError, ValueError):
+        limit = 500_000
+    limit = max(1, min(limit, 1_000_000))
+
+    dry_run = bool(body.get("dry_run"))
+    jra_only = body.get("jra_only", True)
+    if isinstance(jra_only, str):
+        jra_only = jra_only.strip().lower() not in ("0", "false", "no", "")
+
+    sm = str(body.get("save_mode") or "local_gcs").strip().lower()
+    skip_local_mirror = sm in ("gcs_only", "gcs", "gcsonly", "gcs only")
+
+    sk = str(body.get("skip_mode") or "use_skip").strip().lower()
+    use_overwrite = sk in (
+        "overwrite",
+        "no_skip",
+        "false",
+        "上書き",
+    )
+    if use_overwrite:
+        job_skip = False
+        job_ow = True
+    else:
+        job_skip = True
+        job_ow = False
+
+    run_kw: dict[str, Any] = {
+        "smart_skip": job_skip,
+        "overwrite": job_ow,
+        "skip_local_mirror": skip_local_mirror,
+    }
+
+    storage = _get_storage()
+    queue = ScrapeJobQueue()
+    out: dict[str, Any] = {
+        "ok": True,
+        "partition": {
+            "horse_tasks": h_tasks,
+            "race_tasks": r_tasks,
+            "date_tasks": d_tasks,
+        },
+        "save_mode": "gcs_only" if skip_local_mirror else "local_gcs",
+        "skip_mode": "overwrite" if use_overwrite else "use_skip",
+        "limit": limit,
+    }
+    tot_ops = 0
+    if h_tasks:
+        try:
+            out["horse"] = enqueue_horse_tasks_for_race_period(
+                storage,
+                queue,
+                start_date=str(start_date) if start_date else None,
+                end_date=str(end_date) if end_date else None,
+                tasks=h_tasks,
+                limit=limit,
+                dry_run=dry_run,
+                jra_only=bool(jra_only),
+                **run_kw,
+            )
+        except ValueError as ve:
+            return {"ok": False, "error": str(ve)}
+        hst = out["horse"]
+        if not dry_run and hst:
+            tot_ops += int(
+                hst.get("created", 0) or 0
+            ) + int(hst.get("requeued", 0) or 0)
+    if r_tasks:
+        try:
+            out["race"] = enqueue_race_tasks_for_race_period(
+                storage,
+                queue,
+                start_date=str(start_date) if start_date else None,
+                end_date=str(end_date) if end_date else None,
+                tasks=r_tasks,
+                limit=limit,
+                dry_run=dry_run,
+                jra_only=bool(jra_only),
+                **run_kw,
+            )
+        except ValueError as ve:
+            return {"ok": False, "error": str(ve)}
+        rst = out["race"]
+        if not dry_run and rst:
+            tot_ops += int(
+                rst.get("created", 0) or 0
+            ) + int(rst.get("requeued", 0) or 0)
+    if d_tasks:
+        try:
+            out["date"] = enqueue_date_tasks_for_race_period(
+                storage,
+                queue,
+                start_date=str(start_date) if start_date else None,
+                end_date=str(end_date) if end_date else None,
+                tasks=d_tasks,
+                limit=limit,
+                dry_run=dry_run,
+                **run_kw,
+            )
+        except ValueError as ve:
+            return {"ok": False, "error": str(ve)}
+        dst = out["date"]
+        if not dry_run and dst:
+            tot_ops += int(
+                dst.get("created", 0) or 0
+            ) + int(dst.get("requeued", 0) or 0)
+
+    if not dry_run and not use_overwrite and (h_tasks or r_tasks or d_tasks):
+        out["storage_precheck"] = queue.run_storage_precheck_horse_now()
+    if not dry_run and tot_ops > 0:
+        _kick_scrape_queue_worker()
+    return out
+
+
+@app.post("/api/scrape-queue/enqueue-scrape-period", response_class=JSONResponse)
+async def api_scrape_queue_enqueue_scrape_period(request: Request):
+    """
+    期間・保存先・スキップ方針をまとめて指定し、馬/レース/開催日タスクを一括投入する。
+    詳細は ``_sync_enqueue_scrape_period`` 参照。
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    try:
+        out = await asyncio.to_thread(_sync_enqueue_scrape_period, body)
+    except Exception as e:
+        import traceback
+
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            },
+            status_code=500,
+        )
+    if not out.get("ok", True):
+        return JSONResponse(out, status_code=400)
+    return JSONResponse(out)
 
 
 @app.api_route("/api/scrape-queue/enqueue-period-horses", methods=["GET", "POST"])
@@ -3446,6 +4417,8 @@ async def enqueue_period_horse_tasks(request: Request):
             "tasks": task_list,
             "jra_only": q.get("jra_only", "1"),
         }
+        if str(q.get("overwrite") or "").strip().lower() in ("1", "true", "yes"):
+            body["overwrite"] = True
     else:
         try:
             body = await request.json()
@@ -3502,6 +4475,8 @@ async def enqueue_period_race_tasks(request: Request):
             "tasks": task_list,
             "jra_only": q.get("jra_only", "1"),
         }
+        if str(q.get("overwrite") or "").strip().lower() in ("1", "true", "yes"):
+            body["overwrite"] = True
     else:
         try:
             body = await request.json()
@@ -5431,6 +6406,137 @@ async def queue_status_page(request: Request):
         "breadcrumbs": [],
         "api_prefix": api_prefix,
         "task_catalog": catalog_for_api(),
+        "is_dev": is_developer(request),
+    })
+
+
+# ── 開発者: 直近サーバーログ（logs/*.log 末尾） ──
+
+
+def _admin_safe_log_basename(basename: str) -> str | None:
+    """``logs/`` 直下の *.log のみ（パストラバーサル禁止）。"""
+    import re as _re
+    s = (basename or "").strip()
+    if not s or _re.search(r"[/\\]", s) or ".." in s:
+        return None
+    if not _re.match(r"^[\w.\-]+\.log$", s, _re.IGNORECASE):
+        return None
+    return s
+
+
+def _list_admin_log_files() -> list[dict[str, Any]]:
+    from pathlib import Path
+    d = Path(BASE_DIR) / "logs"
+    if not d.is_dir():
+        return []
+    items: list[tuple[float, Any, int]] = []
+    for p in d.glob("*.log"):
+        try:
+            st = p.stat()
+            items.append((st.st_mtime, p, st.st_size))
+        except OSError:
+            continue
+    items.sort(key=lambda x: x[0], reverse=True)
+    return [
+        {
+            "name": p.name,
+            "size_bytes": sz,
+            "mtime": datetime.fromtimestamp(mtime).isoformat(),
+        }
+        for mtime, p, sz in items
+    ]
+
+
+def _read_admin_log_tail(
+    basename: str, *, max_lines: int, max_read_bytes: int
+) -> tuple[str | None, int, bool, str | None]:
+    """
+    戻り値: (内容 or None, 行数, 先頭欠落の可能性, エラー)
+    """
+    from pathlib import Path
+    b = _admin_safe_log_basename(basename)
+    if not b:
+        return (None, 0, False, "不正なファイル名です")
+    p = (Path(BASE_DIR) / "logs" / b).resolve()
+    logs_dir = (Path(BASE_DIR) / "logs").resolve()
+    if p.parent != logs_dir or not p.is_file():
+        return (None, 0, False, "ファイルが存在しません")
+    try:
+        size = p.stat().st_size
+    except OSError as e:
+        return (None, 0, False, str(e))
+    truncated = False
+    to_read = min(size, max_read_bytes)
+    if size > to_read:
+        truncated = True
+    try:
+        with open(p, "rb") as f:
+            if size > to_read:
+                f.seek(size - to_read)
+            raw = f.read()
+    except OSError as e:
+        return (None, 0, False, str(e))
+    text = raw.decode("utf-8", errors="replace")
+    if size > to_read and "\n" in text:
+        text = text.split("\n", 1)[-1] or text
+    lines = text.splitlines()
+    if len(lines) > max_lines:
+        lines = lines[-max_lines:]
+        truncated = True
+    return ("\n".join(lines) + ("\n" if lines else ""), len(lines), truncated, None)
+
+
+@app.get("/api/admin/server-logs", response_class=JSONResponse)
+async def api_admin_server_logs(
+    request: Request,
+    file: str | None = Query(None, description="logs/ 下の .log ファイル名"),
+    max_lines: int = Query(500, ge=10, le=5_000),
+    max_kib: int = Query(2048, ge=64, le=8192, description="ファイル末尾から読む最大キロバイト"),
+):
+    """``logs/`` 内ログの末尾を返す。開発者セッション必須。"""
+    if not is_developer(request):
+        return JSONResponse({"ok": False, "error": "認証が必要です"}, status_code=401)
+    max_read_bytes = max_kib * 1024
+    found = _list_admin_log_files()
+    if not file and found:
+        file = found[0]["name"]
+    elif not file:
+        return JSONResponse({
+            "ok": True,
+            "file": None,
+            "files": [],
+            "content": "",
+            "line_count": 0,
+            "message": "logs/ に .log がありません（scripts/restart_server.sh 実行で logs/server_YYYYMMDD_HHMMSS.log が作られます）",
+        })
+    content, nlines, trunc, err = _read_admin_log_tail(
+        file, max_lines=max_lines, max_read_bytes=max_read_bytes
+    )
+    if err:
+        return JSONResponse({"ok": False, "error": err, "files": found}, status_code=400)
+    return JSONResponse({
+        "ok": True,
+        "file": _admin_safe_log_basename(file),
+        "files": found,
+        "content": content,
+        "line_count": nlines,
+        "truncated": trunc,
+        "max_lines": max_lines,
+        "max_read_bytes": max_read_bytes,
+    })
+
+
+@app.get("/server-logs", response_class=HTMLResponse)
+async def server_logs_page(request: Request):
+    from_path = _url_path_prefix_before_suffix(request.url.path, "/server-logs")
+    root = (request.scope.get("root_path") or "").rstrip("/")
+    api_prefix = from_path or root
+    return templates.TemplateResponse("server_logs.html", {
+        "request": request,
+        "current_page": "server_logs",
+        "breadcrumbs": [],
+        "api_prefix": api_prefix,
+        "is_dev": is_developer(request),
     })
 
 
@@ -5488,6 +6594,292 @@ async def api_pedigree_map():
         return JSONResponse({"error": "データ未生成。python -m research.pedigree_similarity を実行してください。"})
     with open(data_path, encoding="utf-8") as f:
         return JSONResponse(json.load(f))
+
+
+@app.get("/api/stallion-sire-tree", response_class=JSONResponse)
+async def api_stallion_sire_tree():
+    """
+    アンカーノード間の親子関係ツリー (50ノード・軽量版) を返す。
+    research/build_stallion_lineage.py が生成する anchor_tree.json を提供。
+    """
+    anchor_tree_path = os.path.join(
+        BASE_DIR, "data", "research", "pedigree_race_index", "anchor_tree.json"
+    )
+    if not os.path.exists(anchor_tree_path):
+        return JSONResponse({
+            "error": "ツリーデータ未生成。python -m research.build_stallion_lineage を実行してください。"
+        })
+    with open(anchor_tree_path, encoding="utf-8") as f:
+        return JSONResponse(json.load(f))
+
+
+# ── 全種牡馬ツリー（lazily cached in-memory） ─────────────────────────────────
+_full_tree_nodes_df:  "pd.DataFrame | None" = None
+_full_tree_node_map:  "dict[str, dict] | None" = None   # horse_id → node dict (O(1) lookup)
+_full_tree_children:  "dict[str, list[str]] | None" = None  # ソート済み
+_full_tree_parents:   "dict[str, str] | None" = None
+_full_tree_lock = threading.Lock()
+
+# ── ツリー再構築ジョブ状態 ────────────────────────────────────────────────────
+_rebuild_state: "dict[str, Any]" = {
+    "running":     False,
+    "progress":    0.0,      # 0.0 - 1.0
+    "message":     "",
+    "started_at":  None,
+    "finished_at": None,
+    "error":       None,
+    "stats":       None,     # 完了時の統計情報
+}
+_rebuild_lock = threading.Lock()
+
+
+def _load_full_tree() -> bool:
+    """full_sire_tree_nodes.parquet + full_sire_tree.parquet をキャッシュロード。"""
+    global _full_tree_nodes_df, _full_tree_node_map, _full_tree_children, _full_tree_parents
+    import pandas as _pd
+
+    with _full_tree_lock:
+        if _full_tree_nodes_df is not None:
+            return True
+        nodes_path = os.path.join(_PED_RACE_IDX_DIR, "full_sire_tree_nodes.parquet")
+        edges_path = os.path.join(_PED_RACE_IDX_DIR, "full_sire_tree.parquet")
+        if not os.path.exists(nodes_path) or not os.path.exists(edges_path):
+            return False
+
+        nodes_df = _pd.read_parquet(nodes_path)
+        nodes_df["horse_id"] = nodes_df["horse_id"].astype(str)
+        _full_tree_nodes_df = nodes_df
+
+        # O(1) ルックアップ用辞書を構築（DataFrame スキャンを排除）
+        node_map: dict[str, dict] = {}
+        for r in nodes_df.itertuples(index=False):
+            hid = str(r.horse_id)
+            node_map[hid] = {
+                "id":            hid,
+                "name":          str(r.name),
+                "n_children":    int(r.n_children),
+                "n_descendants": int(r.n_descendants),
+                "depth":         int(r.depth_from_root),
+                "is_root":       bool(r.is_root),
+            }
+        _full_tree_node_map = node_map
+
+        edges_df = _pd.read_parquet(edges_path, columns=["sire_id", "child_id"])
+        children_raw: dict[str, list[str]] = {}
+        parents:  dict[str, str] = {}
+        for row in edges_df.itertuples(index=False):
+            sid = str(row.sire_id)
+            cid = str(row.child_id)
+            children_raw.setdefault(sid, []).append(cid)
+            parents[cid] = sid
+
+        # 子リストを horse_id と名前でユニーク化（同名は子孫数が多い方を優先）→ アルファベット順
+        # さらに末端ノード（n_children == 0）を除外（種牡馬として未確立）
+        def _dedup_children(cids: list[str]) -> list[str]:
+            seen_ids:   set[str] = set()
+            best_by_name: dict[str, str] = {}  # name → best horse_id
+            for cid in cids:
+                if cid in seen_ids:
+                    continue
+                seen_ids.add(cid)
+                info = node_map.get(cid, {})
+                # 末端ノード（子を持たない）はスキップ
+                if info.get("n_children", 0) == 0:
+                    continue
+                name = info.get("name", cid).lower()
+                cur_best = best_by_name.get(name)
+                if cur_best is None:
+                    best_by_name[name] = cid
+                else:
+                    # 子孫数が多い方を採用
+                    cur_desc = node_map.get(cur_best, {}).get("n_descendants", 0)
+                    new_desc = info.get("n_descendants", 0)
+                    if new_desc > cur_desc:
+                        best_by_name[name] = cid
+            return sorted(
+                best_by_name.values(),
+                key=lambda c: node_map.get(c, {}).get("name", "").lower()
+            )
+
+        children: dict[str, list[str]] = {
+            sid: _dedup_children(cids)
+            for sid, cids in children_raw.items()
+        }
+        _full_tree_children = children
+        _full_tree_parents  = parents
+
+        # n_children を「末端フィルタ後の実際の可視子ノード数」に更新
+        # parquet の n_children は末端ノード（n_children==0）を含むため
+        # フロントエンドの hasKids 判定が狂い「▶あるのに展開で空」になるのを防ぐ
+        for hid in node_map:
+            node_map[hid]["n_children"] = len(children.get(hid, []))
+
+        return True
+
+
+def _node_json(hid: str) -> dict:
+    """単一ノードの JSON 表現を返す（O(1) dict lookup）。"""
+    if _full_tree_node_map is None:
+        return {"id": hid, "name": hid}
+    return _full_tree_node_map.get(hid) or {
+        "id": hid, "name": hid, "n_children": 0, "n_descendants": 0, "depth": -1, "is_root": False
+    }
+
+
+def _invalidate_full_tree_cache() -> None:
+    """インメモリツリーキャッシュを破棄する（再構築後に呼ぶ）。"""
+    global _full_tree_nodes_df, _full_tree_node_map, _full_tree_children, _full_tree_parents
+    with _full_tree_lock:
+        _full_tree_nodes_df = None
+        _full_tree_node_map = None
+        _full_tree_children = None
+        _full_tree_parents  = None
+
+
+def _run_rebuild_job() -> None:
+    """バックグラウンドスレッドで全種牡馬ツリーを再構築する。"""
+    import datetime as _dt2
+    with _rebuild_lock:
+        _rebuild_state["running"]     = True
+        _rebuild_state["progress"]    = 0.0
+        _rebuild_state["message"]     = "起動中..."
+        _rebuild_state["started_at"]  = _dt2.datetime.now().isoformat()
+        _rebuild_state["finished_at"] = None
+        _rebuild_state["error"]       = None
+        _rebuild_state["stats"]       = None
+
+    def _cb(msg: str, frac: float) -> None:
+        with _rebuild_lock:
+            _rebuild_state["message"]  = msg
+            _rebuild_state["progress"] = round(frac, 3)
+
+    try:
+        from research.build_full_sire_tree import build as _build_tree
+        stats = _build_tree(progress_cb=_cb)
+        _invalidate_full_tree_cache()       # キャッシュ破棄 → 次回アクセス時に再ロード
+        with _rebuild_lock:
+            _rebuild_state["stats"]       = stats
+            _rebuild_state["progress"]    = 1.0
+            _rebuild_state["message"]     = (
+                f"完了: ノード {stats['n_nodes']:,} / エッジ {stats['n_edges']:,} / "
+                f"ルート {stats['n_roots']:,}  ({stats['elapsed_sec']}s)"
+            )
+            _rebuild_state["finished_at"] = _dt2.datetime.now().isoformat()
+    except Exception as e:
+        logger.exception("ツリー再構築エラー")
+        with _rebuild_lock:
+            _rebuild_state["error"]       = str(e)
+            _rebuild_state["message"]     = f"エラー: {e}"
+            _rebuild_state["progress"]    = 0.0
+    finally:
+        with _rebuild_lock:
+            _rebuild_state["running"] = False
+
+
+@app.post("/api/stallion-sire-tree/rebuild", response_class=JSONResponse)
+async def api_stallion_sire_tree_rebuild():
+    """
+    全種牡馬ツリーをバックグラウンドで再構築する。
+    既に実行中の場合は 409 を返す。
+    """
+    with _rebuild_lock:
+        if _rebuild_state["running"]:
+            return JSONResponse(
+                {"error": "既に再構築ジョブが実行中です。", "state": dict(_rebuild_state)},
+                status_code=409,
+            )
+
+    t = threading.Thread(target=_run_rebuild_job, daemon=True, name="sire-tree-rebuild")
+    t.start()
+    return JSONResponse({"ok": True, "message": "再構築ジョブを開始しました。"})
+
+
+@app.get("/api/stallion-sire-tree/rebuild/status", response_class=JSONResponse)
+async def api_stallion_sire_tree_rebuild_status():
+    """再構築ジョブの現在状態を返す。"""
+    with _rebuild_lock:
+        state = dict(_rebuild_state)
+
+    # 既存ファイルの更新日時も付与
+    import os as _os
+    nodes_path = os.path.join(_PED_RACE_IDX_DIR, "full_sire_tree_nodes.parquet")
+    edges_path = os.path.join(_PED_RACE_IDX_DIR, "full_sire_tree.parquet")
+    file_info = {}
+    for key, path in [("nodes", nodes_path), ("edges", edges_path)]:
+        if _os.path.exists(path):
+            st = _os.stat(path)
+            import datetime as _dt3
+            file_info[key] = {
+                "updated_at": _dt3.datetime.fromtimestamp(st.st_mtime).isoformat(),
+                "size_kb": round(st.st_size / 1024, 1),
+            }
+        else:
+            file_info[key] = None
+
+    return JSONResponse({**state, "files": file_info})
+
+
+@app.get("/api/stallion-sire-tree/roots", response_class=JSONResponse)
+async def api_stallion_sire_tree_roots(limit: int = 50, offset: int = 0):
+    """
+    父不明（ルート）ノードを名前アルファベット順で返す。
+    """
+    if not _load_full_tree():
+        return JSONResponse({"error": "full_sire_tree データ未生成。python -m research.build_full_sire_tree を実行してください。"}, status_code=404)
+    roots_df = _full_tree_nodes_df[
+        (_full_tree_nodes_df["is_root"] == True) &
+        (_full_tree_nodes_df["n_children"] > 0)   # 末端（子なし）は除外
+    ].copy()
+    roots_df = roots_df.sort_values("name", ascending=True, key=lambda s: s.str.lower())
+    total = len(roots_df)
+    page  = roots_df.iloc[offset : offset + limit]
+    nodes = [_node_json(str(r["horse_id"])) for _, r in page.iterrows()]
+    return JSONResponse({"total": total, "offset": offset, "nodes": nodes})
+
+
+@app.get("/api/stallion-sire-tree/node/{horse_id}", response_class=JSONResponse)
+async def api_stallion_sire_tree_node(horse_id: str, offset: int = 0, limit: int = 100):
+    """
+    指定ノードの情報＋直接の子リスト（アルファベット順、ページネーション対応）。
+    limit=0 で全件返す。
+    """
+    if not _load_full_tree():
+        return JSONResponse({"error": "full_sire_tree データ未生成。"}, status_code=404)
+    info = _node_json(horse_id)
+    # ロード時にアルファベット順でソート済み
+    all_children_ids = _full_tree_children.get(horse_id, [])
+    total_children = len(all_children_ids)
+    if limit > 0:
+        page_ids = all_children_ids[offset: offset + limit]
+    else:
+        page_ids = all_children_ids
+    children = [_node_json(c) for c in page_ids]
+    parent_id = _full_tree_parents.get(horse_id)
+    parent = _node_json(parent_id) if parent_id else None
+    return JSONResponse({
+        "node": info,
+        "children": children,
+        "total_children": total_children,
+        "offset": offset,
+        "limit": limit,
+        "parent": parent,
+    })
+
+
+@app.get("/api/stallion-sire-tree/search", response_class=JSONResponse)
+async def api_stallion_sire_tree_search(q: str = "", limit: int = 20):
+    """
+    名前で馬を検索して一致ノードを返す。
+    """
+    if not _load_full_tree():
+        return JSONResponse({"error": "full_sire_tree データ未生成。"}, status_code=404)
+    if not q.strip():
+        return JSONResponse({"nodes": []})
+    q_lower = q.strip().lower()
+    mask = _full_tree_nodes_df["name"].str.lower().str.contains(q_lower, na=False)
+    matched = _full_tree_nodes_df[mask].sort_values("n_descendants", ascending=False).head(limit)
+    nodes = [_node_json(str(r["horse_id"])) for _, r in matched.iterrows()]
+    return JSONResponse({"nodes": nodes, "total": int(mask.sum())})
 
 
 @app.get("/api/pedigree/note-aptitude", response_class=JSONResponse)
@@ -7407,4 +8799,299 @@ async def search_horse_names(q: str = "", limit: int = 20):
 
     except Exception as e:
         logger.error(f"馬名検索エラー: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  血統×コース条件 分析ページ  /pedigree-race-stats
+# ══════════════════════════════════════════════════════════════════
+
+_PED_RACE_IDX_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "research", "pedigree_race_index")
+_ped_race_slim_df: "pd.DataFrame | None" = None
+_ped_cats_df: "pd.DataFrame | None" = None
+_ped_race_meta: dict = {}
+_stallion_lineage_df: "pd.DataFrame | None" = None
+_ped_race_lock = threading.Lock()
+
+
+def _load_ped_race_index() -> tuple["Any", "Any", dict]:
+    """race_result_slim と horse_pedigree_cats を遅延ロード（メモリキャッシュ）。"""
+    global _ped_race_slim_df, _ped_cats_df, _ped_race_meta
+    import pandas as _pd
+    with _ped_race_lock:
+        if _ped_race_slim_df is not None:
+            return _ped_race_slim_df, _ped_cats_df, _ped_race_meta
+        slim_path = os.path.join(_PED_RACE_IDX_DIR, "race_result_slim.parquet")
+        cats_path = os.path.join(_PED_RACE_IDX_DIR, "horse_pedigree_cats.parquet")
+        meta_path = os.path.join(_PED_RACE_IDX_DIR, "meta.json")
+        if not os.path.exists(slim_path) or not os.path.exists(cats_path):
+            return None, None, {}
+        _ped_race_slim_df = _pd.read_parquet(slim_path)
+        _ped_cats_df = _pd.read_parquet(cats_path)
+        if os.path.exists(meta_path):
+            with open(meta_path, encoding="utf-8") as _f:
+                _ped_race_meta = json.loads(_f.read())
+        return _ped_race_slim_df, _ped_cats_df, _ped_race_meta
+
+
+def _load_stallion_lineage() -> "pd.DataFrame | None":
+    """stallion_lineage.parquet を遅延ロード（メモリキャッシュ）。"""
+    global _stallion_lineage_df
+    import pandas as _pd
+    with _ped_race_lock:
+        if _stallion_lineage_df is not None:
+            return _stallion_lineage_df
+        lineage_path = os.path.join(_PED_RACE_IDX_DIR, "stallion_lineage.parquet")
+        if not os.path.exists(lineage_path):
+            return None
+        lin = _pd.read_parquet(lineage_path, columns=["stallion_id", "anchor_name", "group_id", "depth_to_anchor"])
+        lin["stallion_id"] = lin["stallion_id"].astype(str)
+        lin["group_id"] = lin["group_id"].astype(int)
+        lin["depth_to_anchor"] = lin["depth_to_anchor"].astype(int)
+        # 重複があればfirst を使う
+        lin = lin.drop_duplicates(subset=["stallion_id"])
+        _stallion_lineage_df = lin
+        return _stallion_lineage_df
+
+
+@app.get("/pedigree-race-stats", response_class=HTMLResponse)
+async def pedigree_race_stats_page(request: Request):
+    return templates.TemplateResponse("pedigree_race_stats.html", {
+        "request": request,
+        "current_page": "pedigree_race_stats",
+    })
+
+
+@app.get("/api/pedigree-race-stats/meta", response_class=JSONResponse)
+async def api_pedigree_race_stats_meta():
+    """フィルタ用のメタ情報（会場・クラス・距離範囲等）を返す。"""
+    try:
+        slim, cats, meta = _load_ped_race_index()
+        if slim is None:
+            return JSONResponse({
+                "error": "インデックス未生成。python -m research.build_pedigree_race_index を実行してください。"
+            })
+        return JSONResponse({
+            "venues": meta.get("venues", []),
+            "surfaces": meta.get("surfaces", []),
+            "grades": [g for g in meta.get("grades", []) if g],
+            "track_conditions": meta.get("track_conditions", []),
+            "dist_min": int(slim["distance"].min()),
+            "dist_max": int(slim["distance"].max()),
+            "date_min": str(slim["date"].min()),
+            "date_max": str(slim["date"].max()),
+            "built_at": meta.get("built_at"),
+            "race_rows": meta.get("race_rows"),
+            "unique_horses": meta.get("unique_horses"),
+        })
+    except Exception as e:
+        logger.error("pedigree-race-stats meta エラー: %s", e, exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/pedigree-race-stats/query", response_class=JSONResponse)
+async def api_pedigree_race_stats_query(
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    venues: Optional[str] = Query(None, description="カンマ区切り: 東京,中山"),
+    surface: Optional[str] = Query(None, description="芝 / ダート / 障"),
+    dist_min: Optional[int] = Query(None),
+    dist_max: Optional[int] = Query(None),
+    track_conditions: Optional[str] = Query(None, description="カンマ区切り: 良,稍重"),
+    grades: Optional[str] = Query(None, description="カンマ区切り: G1,G2"),
+    finish_min: Optional[int] = Query(None, description="着順下限（1着=1）"),
+    finish_max: Optional[int] = Query(None, description="着順上限"),
+    pop_min: Optional[int] = Query(None, description="人気下限（1番人気=1）"),
+    pop_max: Optional[int] = Query(None, description="人気上限"),
+    cat: Optional[str] = Query(None, description="1 / 2 / 3 / all"),
+    gen_min: Optional[int] = Query(None, description="世代下限（1〜10）"),
+    gen_max: Optional[int] = Query(None, description="世代上限（1〜10）"),
+    count_mode: str = Query("unique", description="unique=ユニーク馬数 / appearances=出現回数（クロス込み）"),
+    top_n: int = Query(50, description="上位N件"),
+):
+    """
+    条件で絞り込み後の血統カテゴリ別種牡馬カウント分布を返す（10世代対応）。
+
+    count_mode:
+      unique      - 各種牡馬が血統に含まれるユニーク馬数（同一馬内の重複は1カウント）
+      appearances - 各種牡馬が血統ツリー上に出現した総回数（クロス = 重複出現も全てカウント）
+
+    レスポンス形式:
+    {
+      "total_entries": 675,
+      "unique_horses": 450,
+      "cat1": [{"stallion_id": "...", "stallion_name": "...", "gen": 1, "count": 120}, ...],
+      "cat2": [...],
+      "cat3": [...],
+    }
+    """
+    try:
+        slim, cats, meta = _load_ped_race_index()
+        if slim is None:
+            return JSONResponse({
+                "error": "インデックス未生成。python -m research.build_pedigree_race_index を実行してください。"
+            })
+
+        df = slim.copy()
+
+        # ── レースフィルタ ──
+        if date_from:
+            df = df[df["date"] >= date_from]
+        if date_to:
+            df = df[df["date"] <= date_to]
+        if venues:
+            vlist = [v.strip() for v in venues.split(",") if v.strip()]
+            df = df[df["venue"].isin(vlist)]
+        if surface:
+            slist = [s.strip() for s in surface.split(",") if s.strip()]
+            df = df[df["surface"].isin(slist)]
+        if dist_min is not None:
+            df = df[df["distance"] >= dist_min]
+        if dist_max is not None:
+            df = df[df["distance"] <= dist_max]
+        if track_conditions:
+            tclist = [t.strip() for t in track_conditions.split(",") if t.strip()]
+            df = df[df["track_condition"].isin(tclist)]
+        if grades:
+            glist = [g.strip() for g in grades.split(",") if g.strip()]
+            df = df[df["grade"].isin(glist)]
+        if finish_min is not None:
+            df = df[df["finish_position"] >= finish_min]
+        if finish_max is not None:
+            df = df[df["finish_position"] <= finish_max]
+        if pop_min is not None:
+            df = df[df["popularity"] >= pop_min]
+        if pop_max is not None:
+            df = df[df["popularity"] <= pop_max]
+
+        total_entries = int(len(df))
+        unique_horses = int(df["horse_id"].nunique())
+
+        if total_entries == 0:
+            return JSONResponse({
+                "total_entries": 0,
+                "unique_horses": 0,
+                "cat1": [], "cat2": [], "cat3": [],
+            })
+
+        # ── 血統カテゴリJOIN ──
+        horse_ids = df["horse_id"].unique()
+        ped_filtered = cats[cats["horse_id"].isin(horse_ids)].copy()
+
+        # cat フィルタ
+        cat_filter = None
+        if cat and cat != "all":
+            try:
+                cat_filter = int(cat)
+            except ValueError:
+                pass
+        if cat_filter:
+            ped_filtered = ped_filtered[ped_filtered["cat"] == cat_filter]
+
+        # 世代フィルタ
+        if gen_min is not None:
+            ped_filtered = ped_filtered[ped_filtered["gen"] >= gen_min]
+        if gen_max is not None:
+            ped_filtered = ped_filtered[ped_filtered["gen"] <= gen_max]
+
+        # カウント集計（unique = ユニーク馬数 / appearances = 出現回数）
+        use_appearances = (count_mode == "appearances")
+
+        lineage_df = _load_stallion_lineage()
+
+        def _count_stallions(cat_val: int) -> list[dict]:
+            subset = ped_filtered[ped_filtered["cat"] == cat_val].copy()
+            if subset.empty:
+                return []
+            for col in ["stallion_id", "stallion_name"]:
+                if hasattr(subset[col], "cat"):
+                    subset[col] = subset[col].astype(str)
+
+            # stallion_id が空文字の場合は stallion_name をキーとして使う
+            key = subset["stallion_id"].where(
+                subset["stallion_id"].str.len() > 0, subset["stallion_name"]
+            )
+            subset = subset.assign(_key=key)
+
+            # キーごとに最短名（国名サフィックスなし版）を正規名として採用
+            canon = (
+                subset.groupby("_key", observed=True)["stallion_name"]
+                .agg(lambda x: min(x, key=len))
+                .rename("_canon")
+            )
+            subset = subset.join(canon, on="_key")
+
+            if use_appearances:
+                grp = (
+                    subset.groupby(["_key", "_canon", "gen"], observed=True)
+                    .size()
+                    .reset_index(name="count")
+                )
+            else:
+                grp = (
+                    subset.groupby(["_key", "_canon", "gen"], observed=True)["horse_id"]
+                    .nunique()
+                    .reset_index(name="count")
+                )
+            grp = (
+                grp.rename(columns={"_key": "stallion_id", "_canon": "stallion_name"})
+                .sort_values("count", ascending=False)
+                .head(top_n)
+            )
+            grp["gen"] = grp["gen"].astype(int)
+
+            # 系統グループ情報を JOIN
+            if lineage_df is not None:
+                grp = grp.merge(
+                    lineage_df[["stallion_id", "anchor_name", "group_id", "depth_to_anchor"]],
+                    on="stallion_id",
+                    how="left",
+                )
+                grp["group_id"] = grp["group_id"].fillna(-1).astype(int)
+                grp["depth_to_anchor"] = grp["depth_to_anchor"].fillna(0).astype(int)
+                grp["anchor_name"] = grp["anchor_name"].fillna("").astype(str)
+            else:
+                grp["group_id"] = -1
+                grp["anchor_name"] = ""
+                grp["depth_to_anchor"] = 0
+
+            return grp.to_dict(orient="records")
+
+        result: dict = {
+            "total_entries": total_entries,
+            "unique_horses": unique_horses,
+        }
+        if not cat_filter or cat_filter == 1:
+            result["cat1"] = _count_stallions(1)
+        if not cat_filter or cat_filter == 2:
+            result["cat2"] = _count_stallions(2)
+        if not cat_filter or cat_filter == 3:
+            result["cat3"] = _count_stallions(3)
+
+        return JSONResponse(result)
+
+    except Exception as e:
+        logger.error("pedigree-race-stats query エラー: %s", e, exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/pedigree-race-stats/lineage-meta", response_class=JSONResponse)
+async def api_pedigree_race_stats_lineage_meta():
+    """
+    系統グループのメタ情報を返す。
+    {
+      "groups": [{"group_id": 0, "anchor_name": "Pharos", "anchor_id": "...", "count": 7}, ...]
+    }
+    """
+    try:
+        meta_path = os.path.join(_PED_RACE_IDX_DIR, "stallion_lineage_meta.json")
+        if not os.path.exists(meta_path):
+            return JSONResponse({"groups": []})
+        with open(meta_path, encoding="utf-8") as f:
+            groups = json.loads(f.read())
+        # group_id=-1（その他）は除外して返す
+        groups = [g for g in groups if g.get("group_id", -1) >= 0]
+        return JSONResponse({"groups": groups})
+    except Exception as e:
+        logger.error("lineage-meta エラー: %s", e, exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)

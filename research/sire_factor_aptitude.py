@@ -125,6 +125,67 @@ def compute_horse_aptitude(
     }
 
 
+def compute_blended_factors_from_ancestors(
+    ancestors_list: list[dict],
+    stats_data: dict[str, Any],
+    *,
+    weights: dict[str, float] | None = None,
+) -> dict[str, float]:
+    """
+    ``storage.load("horse_pedigree_5gen")`` 不要。5 世代血統の ``ancestors`` と
+    ``load_sire_factor_stats()`` の種牡馬 DB だけで 6 スロット加権ブレンドを返す。
+
+    母表・馬場傾向・オフラインスナップショットでは、あらかじめ
+    ``horse_id -> ブレンド因子`` を Parquet に焼いておき ``merge`` すると
+    走査時の GCS / 再パースを避けられる。
+    """
+    sires_db = stats_data.get("sires", {})
+
+    w = dict(DEFAULT_WEIGHTS)
+    if weights:
+        for k, v in weights.items():
+            if k in w:
+                w[k] = float(v)
+
+    w_sum = sum(w.values())
+    if w_sum <= 0:
+        w_sum = 1.0
+
+    blended = zero_vector()
+
+    for slot in ANCESTOR_SLOTS:
+        sk = slot["key"]
+        weight = w.get(sk, 0.0) / w_sum
+        anc = _find_ancestor(ancestors_list, slot["gen"], slot["pos"])
+        if not anc:
+            continue
+        sire_id = (anc.get("horse_id") or "").strip()
+        sire_data = sires_db.get(sire_id, {})
+        side_data = sire_data.get(slot["side"], {})
+        axes = side_data.get("axes", {})
+        for k in AXIS_IDS:
+            blended[k] += axes.get(k, 0.0) * weight
+
+    return {k: round(v, 4) for k, v in blended.items()}
+
+
+def count_resolved_slots(
+    ancestors_list: list[dict],
+    stats_data: dict[str, Any],
+) -> int:
+    """6 スロットのうち、種牡馬 DB に解決できるスロット数。"""
+    sires_db = stats_data.get("sires", {})
+    n = 0
+    for slot in ANCESTOR_SLOTS:
+        anc = _find_ancestor(ancestors_list, slot["gen"], slot["pos"])
+        if not anc:
+            continue
+        sire_id = (anc.get("horse_id") or "").strip()
+        if sire_id and sires_db.get(sire_id):
+            n += 1
+    return n
+
+
 # ---------------------------------------------------------------------------
 # ウェイト自動チューニング
 # ---------------------------------------------------------------------------

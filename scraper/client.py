@@ -21,6 +21,8 @@ Anti-Bot 対策:
 NETKEIBA_BURST_WINDOW, NETKEIBA_BURST_COOLDOWN_MIN/MAX,
 NETKEIBA_SESSION_COOLDOWN_INTERVAL, NETKEIBA_SESSION_COOLDOWN_MIN/MAX,
 NETKEIBA_SESSION_REFRESH_INTERVAL, NETKEIBA_THROTTLE_MIN/MAX
+NETKEIBA_MAX_CONCURRENT_REQUESTS … プロセス内の netkeiba 同時 in-flight 上限
+（キューが複数本並列で各ジョブが独立 Session を持つため、未指定時は並列度から 2〜4 程度に自動。0=制限なし・旧来の高スルー）
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ import os
 import random
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -162,8 +165,8 @@ def _env_float(name: str, default: float) -> float:
 
 _THROTTLE_CONFIG: dict[str, dict[str, float]] = {
     "netkeiba": {
-        "min_interval": _env_float("NETKEIBA_THROTTLE_MIN", 1.8),
-        "max_interval": _env_float("NETKEIBA_THROTTLE_MAX", 3.5),
+        "min_interval": _env_float("NETKEIBA_THROTTLE_MIN", 2.2),
+        "max_interval": _env_float("NETKEIBA_THROTTLE_MAX", 4.0),
     },
     "smartrc": {"min_interval": 2.0, "max_interval": 4.0},
 }
@@ -175,17 +178,118 @@ _BACKOFF_FACTOR = 2.5
 _BACKOFF_MAX_RETRIES = 3
 
 # バースト制限: 連続 N リクエスト後に追加休止（.env / 環境変数で上書き可）
-_BURST_WINDOW = _env_int("NETKEIBA_BURST_WINDOW", 18)
-_BURST_COOLDOWN_MIN = _env_float("NETKEIBA_BURST_COOLDOWN_MIN", 5.0)
-_BURST_COOLDOWN_MAX = _env_float("NETKEIBA_BURST_COOLDOWN_MAX", 10.0)
+_BURST_WINDOW = _env_int("NETKEIBA_BURST_WINDOW", 14)
+_BURST_COOLDOWN_MIN = _env_float("NETKEIBA_BURST_COOLDOWN_MIN", 6.0)
+_BURST_COOLDOWN_MAX = _env_float("NETKEIBA_BURST_COOLDOWN_MAX", 12.0)
 
 # セッションクールダウン: N リクエストごとに長い休止
-_SESSION_COOLDOWN_INTERVAL = _env_int("NETKEIBA_SESSION_COOLDOWN_INTERVAL", 75)
-_SESSION_COOLDOWN_MIN = _env_float("NETKEIBA_SESSION_COOLDOWN_MIN", 20.0)
-_SESSION_COOLDOWN_MAX = _env_float("NETKEIBA_SESSION_COOLDOWN_MAX", 35.0)
+_SESSION_COOLDOWN_INTERVAL = _env_int("NETKEIBA_SESSION_COOLDOWN_INTERVAL", 60)
+_SESSION_COOLDOWN_MIN = _env_float("NETKEIBA_SESSION_COOLDOWN_MIN", 22.0)
+_SESSION_COOLDOWN_MAX = _env_float("NETKEIBA_SESSION_COOLDOWN_MAX", 40.0)
 
 # セッションリフレッシュ: N リクエストごとに新しいセッション（TLS/接続の張り直し）
 _SESSION_REFRESH_INTERVAL = _env_int("NETKEIBA_SESSION_REFRESH_INTERVAL", 150)
+
+# 全ワーカー合算の「同時に空中にある netkeiba GET」上限（各ジョブが別 Client のため）
+_NETKEIBA_INFLIGHT_SEM: threading.Semaphore | None = None
+_NETKEIBA_INFLIGHT_OFF = False
+_NETKEIBA_INFLIGHT_INIT = threading.Lock()
+# queue_load_settings.json 更新でセマフォを作り直す
+_INFLIGHT_SETTINGS_MTIME: float = -1.0
+
+
+def reset_netkeiba_inflight_semaphore_cache() -> None:
+    """data/queue/queue_load_settings.json 変更後、次のリクエストで in-flight 上限を再計算。"""
+    global _NETKEIBA_INFLIGHT_SEM, _NETKEIBA_INFLIGHT_OFF, _INFLIGHT_SETTINGS_MTIME
+    with _NETKEIBA_INFLIGHT_INIT:
+        _NETKEIBA_INFLIGHT_SEM = None
+        _NETKEIBA_INFLIGHT_OFF = False
+        _INFLIGHT_SETTINGS_MTIME = -1.0
+
+
+def _queue_load_settings_mtime() -> float:
+    try:
+        from scraper.queue_load_settings import QUEUE_LOAD_SETTINGS
+        return float(QUEUE_LOAD_SETTINGS.stat().st_mtime)
+    except OSError:
+        return 0.0
+
+
+def _get_netkeiba_inflight_semaphore() -> threading.Semaphore | None:
+    global _NETKEIBA_INFLIGHT_SEM, _NETKEIBA_INFLIGHT_OFF, _INFLIGHT_SETTINGS_MTIME
+    from scraper import queue_load_settings
+
+    with _NETKEIBA_INFLIGHT_INIT:
+        mt = _queue_load_settings_mtime()
+        if _INFLIGHT_SETTINGS_MTIME < 0:
+            _INFLIGHT_SETTINGS_MTIME = mt
+        elif mt != _INFLIGHT_SETTINGS_MTIME:
+            _NETKEIBA_INFLIGHT_SEM = None
+            _NETKEIBA_INFLIGHT_OFF = False
+            _INFLIGHT_SETTINGS_MTIME = mt
+
+        if _NETKEIBA_INFLIGHT_OFF:
+            return None
+        if _NETKEIBA_INFLIGHT_SEM is not None:
+            return _NETKEIBA_INFLIGHT_SEM
+
+        ovr = queue_load_settings.netkeiba_inflight_file_override()
+        raw = (os.environ.get("NETKEIBA_MAX_CONCURRENT_REQUESTS") or "").strip()
+
+        if ovr is not None:
+            if ovr == 0:
+                _NETKEIBA_INFLIGHT_OFF = True
+                logger.info(
+                    "netkeiba 同時 in-flight: 制限なし (queue_load_settings: netkeiba_max_inflight=0)",
+                )
+                return None
+            n2 = max(1, min(32, ovr))
+            _NETKEIBA_INFLIGHT_SEM = threading.Semaphore(n2)
+            logger.info("netkeiba 同時 in-flight 上限: %d (queue_load_settings 上書き)", n2)
+            return _NETKEIBA_INFLIGHT_SEM
+
+        if raw == "0":
+            _NETKEIBA_INFLIGHT_OFF = True
+            logger.info(
+                "netkeiba 同時 in-flight: 制限なし (NETKEIBA_MAX_CONCURRENT_REQUESTS=0)",
+            )
+            return None
+
+        n = 0
+        if raw:
+            try:
+                n = int(raw)
+            except ValueError:
+                n = 0
+        if n <= 0:
+            qp = queue_load_settings.get_effective_parallel()
+            n = max(2, min(4, (qp + 2) // 3))
+        n = max(1, min(32, n))
+        _NETKEIBA_INFLIGHT_SEM = threading.Semaphore(n)
+        detail = f"={raw}" if raw and raw != "0" else f"auto(parallel≈{queue_load_settings.get_effective_parallel()})"
+        logger.info(
+            "netkeiba 同時 in-flight 上限: %d (NETKEIBA_MAX_CONCURRENT_REQUESTS%s)",
+            n,
+            detail,
+        )
+        return _NETKEIBA_INFLIGHT_SEM
+
+
+@contextmanager
+def _netkeiba_inflight_guard(url: str):
+    host = (urlparse(url).netloc or "").lower()
+    if "netkeiba.com" not in host:
+        yield
+        return
+    sem = _get_netkeiba_inflight_semaphore()
+    if sem is None:
+        yield
+        return
+    sem.acquire()
+    try:
+        yield
+    finally:
+        sem.release()
 
 
 def _load_env(env_path: str | None = None) -> dict[str, str]:
@@ -219,6 +323,23 @@ def _load_env(env_path: str | None = None) -> dict[str, str]:
             os.environ[k] = v
 
     return env_vars
+
+
+def _http_adapter_pool_maxsize() -> int:
+    """
+    requests.Session 同一オリジンあたりの同時接続数（urllib3 プール）。
+
+    旧: pool_maxsize=5 固定。SCRAPE_QUEUE_PARALLEL を上げても、ここが 5
+    だと HTTP が最大 5 本までしか並ばず、実行中ジョブ数が低く見えていた。
+    ランタイム上書きは queue_load_settings.json（get_effective_parallel）に追従。
+    """
+    from scraper.queue_load_settings import get_effective_parallel
+
+    explicit = _env_int("NETKEIBA_HTTP_POOL_MAXSIZE", 0)
+    if explicit > 0:
+        return max(4, min(64, explicit))
+    qp = int(get_effective_parallel())
+    return max(8, min(64, qp + 4))
 
 
 def _source_from_url(url: str) -> str:
@@ -323,7 +444,13 @@ class NetkeibaClient:
             status_forcelist=[500, 502, 504],
             allowed_methods=["GET", "POST"],
         )
-        adapter = HTTPAdapter(max_retries=retry, pool_maxsize=5)
+        pmax = _http_adapter_pool_maxsize()
+        pconn = max(10, min(32, pmax))
+        adapter = HTTPAdapter(
+            max_retries=retry,
+            pool_maxsize=pmax,
+            pool_connections=pconn,
+        )
         session.mount("https://", adapter)
         session.mount("http://", adapter)
 
@@ -459,8 +586,14 @@ class NetkeibaClient:
             else:
                 self._session.headers["Cache-Control"] = "max-age=0"
 
-            logger.info("GET %s (attempt %d/%d)", url, attempt + 1, _BACKOFF_MAX_RETRIES + 1)
-            resp = self._session.get(url, timeout=self.timeout)
+            with _netkeiba_inflight_guard(url):
+                logger.info(
+                    "GET %s (attempt %d/%d)",
+                    url,
+                    attempt + 1,
+                    _BACKOFF_MAX_RETRIES + 1,
+                )
+                resp = self._session.get(url, timeout=self.timeout)
             last_resp = resp
 
             if resp.status_code in (429, 503):
@@ -496,6 +629,22 @@ class NetkeibaClient:
                 if attempt < _BACKOFF_MAX_RETRIES:
                     time.sleep(wait + random.uniform(5, 15))
                     wait *= _BACKOFF_FACTOR
+                    continue
+                resp.raise_for_status()
+            elif resp.status_code == 400 and "netkeiba.com" in url:
+                if attempt < _BACKOFF_MAX_RETRIES:
+                    pause = random.uniform(18.0, 40.0)
+                    logger.warning(
+                        "HTTP 400 (到達性・ブロック疑い) — %.1f 秒後にセッション再構築して再試行: %s",
+                        pause,
+                        url,
+                    )
+                    time.sleep(pause)
+                    was_logged = self._logged_in
+                    self._refresh_session()
+                    if was_logged:
+                        self.login()
+                    wait = min(max(wait, _BACKOFF_INITIAL) * 1.2, 120.0)
                     continue
                 resp.raise_for_status()
             else:

@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scraper.client import NetkeibaClient
 from scraper.run import ScraperRunner
 from scraper.storage import HybridStorage
+from utils.keiba_logging import script_basic_config
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -29,9 +30,7 @@ os.makedirs(LOG_DIR, exist_ok=True)
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 log_file = os.path.join(LOG_DIR, f"backfill_{timestamp}.log")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+script_basic_config(
     handlers=[
         logging.FileHandler(log_file, encoding="utf-8"),
         logging.StreamHandler(),

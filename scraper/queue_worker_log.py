@@ -80,11 +80,13 @@ def ensure_queue_worker_log_handler() -> None:
     if getattr(root, "_queue_worker_ring_handler_installed", False):
         return
     h = QueueWorkerRingHandler(level=logging.DEBUG)
+    from utils.keiba_logging import (
+        STANDARD_DATE_FMT,
+        STANDARD_LOG_FORMAT,
+    )
+
     h.setFormatter(
-        logging.Formatter(
-            "%(asctime)s %(levelname)s [%(name)s] %(message)s",
-            datefmt="%H:%M:%S",
-        )
+        logging.Formatter(STANDARD_LOG_FORMAT, datefmt=STANDARD_DATE_FMT)
     )
     h.addFilter(_QueueWorkerContextFilter())
     root.addHandler(h)

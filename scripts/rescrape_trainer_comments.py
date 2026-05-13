@@ -10,6 +10,7 @@ import argparse
 import logging
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -17,12 +18,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from scraper.client import NetkeibaClient
 from scraper.parsers import TrainerCommentParser
 from scraper.storage import HybridStorage
+from utils.keiba_logging import script_basic_config
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(exist_ok=True, parents=True)
+_rescrape_log = LOG_DIR / f"rescrape_comments_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+script_basic_config(
     handlers=[
-        logging.FileHandler("logs/rescrape_comments.log", encoding="utf-8"),
+        logging.FileHandler(_rescrape_log, encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )

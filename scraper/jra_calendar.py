@@ -22,6 +22,8 @@ from typing import Any
 
 import requests
 
+from utils.keiba_logging import script_basic_config
+
 logger = logging.getLogger("scraper.jra_calendar")
 
 CALENDAR_API = "https://www.jra.go.jp/keiba/common/calendar/json/{ym}.json"
@@ -267,10 +269,7 @@ def get_today_poll_windows(output_dir: str = "data/jra_baba") -> list[tuple[str,
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    script_basic_config()
 
     parser = argparse.ArgumentParser(description="JRA年間開催スケジュール取得")
     parser.add_argument("--year", type=int, default=date.today().year,

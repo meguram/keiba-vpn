@@ -1,7 +1,7 @@
 {
   "category": "race_oikiri",
-  "timestamp": "2026-03-19T09:43:36.043915",
-  "sample_id": "202606020601",
+  "timestamp": "2026-05-13T06:00:34.157700",
+  "sample_id": "202606030801",
   "selector_results": {
     "oikiri_table": {
       "selector": "table.OikiriTable",

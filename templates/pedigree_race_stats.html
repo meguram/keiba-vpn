@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>血統構成分析 | ML-AutoPilot Keiba</title>
+<style>
+:root {
+  --bg:#0a0e17;--sf:#131926;--sf2:#1a2235;--sf3:#212d42;
+  --bd:#243049;--tx:#c8d6e5;--txd:#6b7d95;--txb:#edf2f7;
+  --ac:#06b6d4;--acd:rgba(6,182,212,.15);
+  --bl:#3b82f6;--gn:#22c55e;--yl:#f59e0b;--rd:#ef4444;--pp:#a78bfa;--pk:#ec4899;
+  --cat1:#f59e0b;--cat2:#3b82f6;--cat3:#a78bfa;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;}
+.top-bar{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:1px solid var(--bd);background:var(--sf);}
+.top-bar h1{font-size:19px;font-weight:700;flex:1;}
+.container{max-width:1600px;margin:0 auto;padding:20px 24px;}
+.hidden{display:none!important;}
+
+/* ── Controls ── */
+.controls{background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:16px 20px;margin-bottom:16px;}
+.ctrl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;}
+.cf{display:flex;flex-direction:column;gap:5px;}
+.cf label{font-size:10px;color:var(--txd);text-transform:uppercase;letter-spacing:.6px;font-weight:600;}
+.cf input{background:var(--sf2);border:1px solid var(--bd);border-radius:6px;color:var(--tx);
+  padding:6px 10px;font-size:12px;width:100%;}
+.cf input:focus{outline:none;border-color:var(--ac);}
+.cf-wide{grid-column:span 2;}
+.cf-date-pair{display:flex;gap:6px;align-items:center;}
+.cf-date-pair input{flex:1;}
+.cf-date-pair span{color:var(--txd);font-size:11px;white-space:nowrap;}
+/* トグルボタン群 */
+.toggle-group{display:flex;flex-wrap:wrap;gap:4px;}
+.tg{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;
+  border:1px solid var(--bd);background:var(--sf2);color:var(--txd);
+  transition:all .12s;white-space:nowrap;user-select:none;}
+.tg:hover{border-color:var(--ac);color:var(--ac);}
+.tg.on{background:var(--acd);color:var(--ac);border-color:var(--ac);}
+/* 数値ペア */
+.num-pair{display:flex;gap:4px;align-items:center;}
+.num-pair input{flex:1;width:0;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;
+  color:var(--tx);padding:5px 8px;font-size:12px;text-align:center;}
+.num-pair input:focus{outline:none;border-color:var(--ac);}
+.num-pair span{color:var(--txd);font-size:11px;}
+/* ボタン */
+.btn{background:var(--ac);color:#fff;border:none;border-radius:8px;padding:9px 24px;
+  font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s;white-space:nowrap;}
+.btn:hover{opacity:.85;}.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-sec{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:8px;
+  padding:8px 16px;font-size:12px;cursor:pointer;white-space:nowrap;}
+.btn-sec:hover{border-color:var(--ac);color:var(--ac);}
+.ctrl-footer{display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--bd);}
+.ctrl-footer .note{flex:1;font-size:11px;color:var(--txd);}
+
+/* ── Status ── */
+.status-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--sf2);
+  border-radius:8px;margin-bottom:14px;font-size:12px;}
+.spinner{width:14px;height:14px;border:2px solid var(--bd);border-top-color:var(--ac);
+  border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── Stats row ── */
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.sb{background:var(--sf2);border-radius:8px;padding:10px 16px;flex:1;min-width:100px;}
+.sb .l{font-size:10px;color:var(--txd);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;}
+.sb .v{font-size:20px;font-weight:700;}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:4px;margin-bottom:0;}
+.tab-btn{padding:8px 20px;border-radius:8px 8px 0 0;font-size:13px;font-weight:500;cursor:pointer;
+  background:var(--sf);border:1px solid var(--bd);border-bottom:none;color:var(--txd);white-space:nowrap;transition:all .15s;}
+.tab-btn:hover{color:var(--tx);}
+.tab-btn.active-cat1{background:var(--sf2);color:var(--cat1);border-color:var(--cat1);}
+.tab-btn.active-cat2{background:var(--sf2);color:var(--cat2);border-color:var(--cat2);}
+.tab-btn.active-cat3{background:var(--sf2);color:var(--cat3);border-color:var(--cat3);}
+.panel{background:var(--sf);border:1px solid var(--bd);border-radius:0 12px 12px 12px;
+  padding:20px;min-height:300px;}
+
+/* ── Table ── */
+.scroll-x{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{text-align:left;font-size:10px;color:var(--txd);text-transform:uppercase;letter-spacing:.5px;
+  padding:8px 8px;border-bottom:1px solid var(--bd);white-space:nowrap;}
+td{padding:6px 8px;border-bottom:1px solid rgba(36,48,73,.3);vertical-align:middle;}
+tr:hover{background:rgba(6,182,212,.03);}
+.rank-badge{display:inline-block;min-width:22px;text-align:center;padding:1px 5px;border-radius:4px;
+  font-weight:700;font-size:11px;}
+.bar-cell{min-width:120px;}
+.bar-bg{height:10px;background:var(--sf3);border-radius:3px;overflow:hidden;display:inline-block;width:100%;}
+.bar-fill{height:100%;border-radius:3px;transition:width .4s;}
+.sub-badge{font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(255,255,255,.06);
+  color:var(--txd);white-space:nowrap;}
+
+/* ── Sub-cat toggle ── */
+.sub-toggle{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+.sub-btn{font-size:10px;padding:3px 10px;border-radius:12px;cursor:pointer;border:1px solid var(--bd);
+  background:var(--sf2);color:var(--txd);transition:all .15s;}
+.sub-btn:hover{border-color:var(--ac);color:var(--ac);}
+.sub-btn.active{background:var(--acd);color:var(--ac);border-color:var(--ac);}
+
+/* ── Misc ── */
+.empty{text-align:center;padding:50px 20px;color:var(--txd);font-size:13px;}
+.note{font-size:11px;color:var(--txd);padding:10px 0;}
+.cat-label-1{color:var(--cat1);}
+.cat-label-2{color:var(--cat2);}
+.cat-label-3{color:var(--cat3);}
+.pct-badge{font-size:11px;color:var(--txd);margin-left:4px;}
+
+/* ── 系統凡例バー ── */
+.lineage-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 12px;
+  background:var(--sf2);border:1px solid var(--bd);border-radius:8px;margin-bottom:12px;}
+.lineage-legend-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--txd);
+  font-weight:600;margin-right:4px;white-space:nowrap;}
+.lineage-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
+  border-radius:10px;border:1.5px solid;font-size:11px;font-weight:500;white-space:nowrap;cursor:default;}
+.lineage-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+/* ── 全体集計ボックス ── */
+.overall-box{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:12px 16px;margin-bottom:14px;}
+.overall-box-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.overall-box-title{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--txd);font-weight:600;flex:1;}
+.exclude-btn{padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--bd);
+  background:var(--sf);color:var(--txd);transition:all .15s;white-space:nowrap;}
+.exclude-btn:hover{border-color:var(--rd);color:var(--rd);}
+.exclude-btn.active{background:rgba(239,68,68,.15);color:var(--rd);border-color:var(--rd);}
+.overall-n-select{background:var(--sf);border:1px solid var(--bd);color:var(--tx);border-radius:6px;
+  padding:4px 8px;font-size:11px;cursor:pointer;}
+.overall-list{display:flex;flex-wrap:wrap;gap:6px;}
+.overall-item{display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:12px;
+  background:rgba(255,255,255,.04);border:1px solid var(--bd);font-size:11px;white-space:nowrap;}
+.overall-rank{font-weight:700;color:var(--txd);font-size:10px;min-width:16px;}
+.overall-name{color:var(--tx);font-weight:500;}
+.overall-cnt{color:var(--txd);font-size:10px;}
+.overall-gen{font-size:10px;padding:1px 5px;border-radius:8px;background:rgba(6,182,212,.1);color:var(--ac);}
+.excluded-tag{display:inline-block;padding:1px 6px;border-radius:10px;background:rgba(239,68,68,.1);
+  color:var(--rd);font-size:10px;border:1px solid rgba(239,68,68,.3);}
+
+@media(max-width:900px){
+  .ctrl-grid{grid-template-columns:1fr;}
+  .cf-wide{grid-column:span 1;}
+  .stats{flex-direction:column;}
+}
+</style>
+</head>
+<body>
+{% include '_nav.html' %}
+<div class="top-bar">
+  <h1>🧬 血統構成 × コース条件 分析</h1>
+</div>
+<div class="container">
+
+  <!-- ── Filter Controls ── -->
+  <div class="controls">
+    <div class="ctrl-grid">
+
+      <!-- 期間 -->
+      <div class="cf cf-wide">
+        <label>期間</label>
+        <div class="cf-date-pair">
+          <input type="date" id="dateFrom">
+          <span>〜</span>
+          <input type="date" id="dateTo">
+        </div>
+      </div>
+
+      <!-- 会場 -->
+      <div class="cf cf-wide">
+        <label>会場 <span style="color:var(--ac);font-size:9px">複数OK</span></label>
+        <div class="toggle-group" id="venueGroup"></div>
+      </div>
+
+      <!-- 馬場種別 -->
+      <div class="cf">
+        <label>馬場種別 <span style="color:var(--ac);font-size:9px">複数OK</span></label>
+        <div class="toggle-group" id="surfaceGroup">
+          <button class="tg" data-val="芝" onclick="toggleBtn(this,'surfaceGroup')">芝</button>
+          <button class="tg" data-val="ダート" onclick="toggleBtn(this,'surfaceGroup')">ダート</button>
+          <button class="tg" data-val="障" onclick="toggleBtn(this,'surfaceGroup')">障害</button>
+        </div>
+      </div>
+
+      <!-- 距離 -->
+      <div class="cf">
+        <label>距離 (m)</label>
+        <div class="num-pair">
+          <input type="number" id="distMin" placeholder="下限" step="100" min="0">
+          <span>〜</span>
+          <input type="number" id="distMax" placeholder="上限" step="100" min="0">
+        </div>
+      </div>
+
+      <!-- 馬場状態 -->
+      <div class="cf">
+        <label>馬場状態 <span style="color:var(--ac);font-size:9px">複数OK</span></label>
+        <div class="toggle-group" id="trackGroup">
+          <button class="tg" data-val="良" onclick="toggleBtn(this,'trackGroup')">良</button>
+          <button class="tg" data-val="稍重" onclick="toggleBtn(this,'trackGroup')">稍重</button>
+          <button class="tg" data-val="重" onclick="toggleBtn(this,'trackGroup')">重</button>
+          <button class="tg" data-val="不良" onclick="toggleBtn(this,'trackGroup')">不良</button>
+        </div>
+      </div>
+
+      <!-- クラス -->
+      <div class="cf cf-wide">
+        <label>クラス <span style="color:var(--ac);font-size:9px">複数OK</span></label>
+        <div class="toggle-group" id="gradeGroup"></div>
+      </div>
+
+      <!-- 着順 -->
+      <div class="cf">
+        <label>着順</label>
+        <div class="num-pair">
+          <input type="number" id="finishMin" placeholder="下限" min="1">
+          <span>〜</span>
+          <input type="number" id="finishMax" placeholder="上限" min="1">
+        </div>
+      </div>
+
+      <!-- 人気 -->
+      <div class="cf">
+        <label>人気</label>
+        <div class="num-pair">
+          <input type="number" id="popMin" placeholder="下限" min="1">
+          <span>〜</span>
+          <input type="number" id="popMax" placeholder="上限" min="1">
+        </div>
+      </div>
+
+      <!-- 世代フィルタ -->
+      <div class="cf">
+        <label>血統世代 (1〜10)</label>
+        <div class="num-pair">
+          <input type="number" id="genMin" placeholder="下限" min="1" max="10" value="">
+          <span>〜</span>
+          <input type="number" id="genMax" placeholder="上限" min="1" max="10" value="">
+        </div>
+      </div>
+
+      <!-- カウントモード -->
+      <div class="cf">
+        <label>カウント方式</label>
+        <div class="toggle-group" id="countModeGroup">
+          <button class="tg on" data-val="unique" onclick="selectCountMode(this)">ユニーク馬数</button>
+          <button class="tg" data-val="appearances" onclick="selectCountMode(this)">出現回数（クロス込み）</button>
+        </div>
+      </div>
+
+    </div>
+    <div class="ctrl-footer">
+      <button class="btn" id="btnSearch" onclick="doSearch()">🔍 検索</button>
+      <button class="btn-sec" onclick="clearFilters()">リセット</button>
+      <div class="note" id="metaNote"></div>
+    </div>
+  </div>
+
+  <!-- ── Status bar ── -->
+  <div class="status-bar hidden" id="sBar">
+    <div class="spinner" id="sSpin"></div>
+    <span id="sTxt">検索中...</span>
+  </div>
+
+  <!-- ── Stats ── -->
+  <div class="stats hidden" id="statsRow">
+    <div class="sb"><div class="l">該当出走数</div><div class="v" id="stEntries">-</div></div>
+    <div class="sb"><div class="l">ユニーク馬数</div><div class="v" id="stHorses">-</div></div>
+    <div class="sb"><div class="l" style="color:var(--cat1)">① 父系種牡馬</div><div class="v" id="stCat1">-</div></div>
+    <div class="sb"><div class="l" style="color:var(--cat2)">②③ 母系種牡馬</div><div class="v" id="stCat23">-</div></div>
+    <div class="sb"><div class="l" id="stModeLabel">カウント方式</div><div class="v" id="stMode" style="font-size:12px">-</div></div>
+  </div>
+
+  <!-- ── Tabs ── -->
+  <div class="tabs hidden" id="tabsRow">
+    <button class="tab-btn active-cat1" data-tab="1" onclick="switchTab(1)">
+      ① 父系（父・父父）
+    </button>
+    <button class="tab-btn" data-tab="23" onclick="switchTab(23)">
+      ②③ 母系種牡馬（母父母・母母 系）
+    </button>
+  </div>
+
+  <!-- ── Panels ── -->
+  <div id="panelsWrap" class="hidden">
+    <div class="panel" id="p-1"></div>
+    <div class="panel hidden" id="p-23"></div>
+  </div>
+
+  <!-- ── Empty ── -->
+  <div class="empty" id="emptyState">
+    <p style="font-size:32px;margin-bottom:10px">🧬</p>
+    <p>フィルター条件を設定して「検索」を実行してください。</p>
+    <p style="margin-top:6px;font-size:12px;color:var(--txd)">
+      ① 父・父父　②③ 母父母以降・母母以降の種牡馬（最大10世代）の分布を確認できます。
+    </p>
+  </div>
+
+</div>
+
+<script>
+const CAT_COLORS = {1: 'var(--cat1)', 23: 'var(--cat2)'};
+
+// sub_cat → 読みやすい血統区分ラベル（10世代対応）
+function subCatLabel(sc) {
+  if (sc === 'sire') return '父';
+  if (sc === 'grandsire') return '父父';
+  const m = sc.match(/^gen(\d+)$/);
+  if (m) return `第${m[1]}世代`;
+  return sc;
+}
+
+// cat2/cat3 各エントリに cat_mark を付与（② または ③）
+// cat2 = 母父母以降、cat3 = 母母以降
+const CAT_MARKS = {2: '②', 3: '③'};
+
+// ── 系統グループカラーパレット（最大50色）──
+const GROUP_COLORS = [
+  "#e63946","#457b9d","#2a9d8f","#e9c46a","#f4a261",
+  "#264653","#a8dadc","#6d6875","#b5838d","#ffb4a2",
+  "#06b6d4","#a78bfa","#f59e0b","#22c55e","#ec4899",
+  "#84cc16","#14b8a6","#f97316","#8b5cf6","#3b82f6",
+  "#fb923c","#a3e635","#34d399","#60a5fa","#c084fc",
+  "#f43f5e","#0ea5e9","#10b981","#d97706","#7c3aed",
+  "#dc2626","#16a34a","#2563eb","#9333ea","#ea580c",
+  "#65a30d","#0891b2","#d946ef","#c026d3","#0284c7",
+  "#4ade80","#fbbf24","#818cf8","#fb7185","#a78bfa",
+  "#34d399","#38bdf8","#f472b6","#facc15","#86efac"
+];
+
+function getGroupColor(group_id) {
+  if (group_id == null || group_id < 0) return null;
+  return GROUP_COLORS[group_id % GROUP_COLORS.length];
+}
+
+// 系統グループメタ: [{group_id, anchor_name, anchor_id, count}]
+let _lineageMeta = [];
+let _lineageColorMap = {}; // anchor_name → color
+
+let _currentTab = 1;
+let _lastResult = null;
+let _activeGens = {};
+let _countMode = 'unique';
+
+// 全体集計（常時参照用）
+let _overallTop = [];       // [{stallion_name, stallion_id, gen, total_count}] 降順
+let _overallTopN = 20;      // 何件を「全体上位」とするか
+let _excludeOverall = false; // 全体上位を除外するか
+
+// ── カウントモード選択（排他） ──
+function selectCountMode(btn) {
+  document.getElementById('countModeGroup').querySelectorAll('.tg').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  _countMode = btn.dataset.val;
+}
+
+// ── トグルボタン操作 ──
+function toggleBtn(btn, groupId) {
+  btn.classList.toggle('on');
+}
+
+function getGroupValues(groupId) {
+  return [...document.getElementById(groupId).querySelectorAll('.tg.on')].map(b => b.dataset.val);
+}
+
+function clearGroup(groupId) {
+  document.getElementById(groupId).querySelectorAll('.tg.on').forEach(b => b.classList.remove('on'));
+}
+
+// ── 系統凡例バー構築 ──
+function buildLineageLegend() {
+  if (!_lineageMeta.length) return '';
+  // 上位30グループのみ凡例に表示
+  const display = _lineageMeta.filter(g => g.group_id >= 0).slice(0, 30);
+  if (!display.length) return '';
+  let html = `<div class="lineage-legend" id="lineageLegend">`;
+  html += `<span class="lineage-legend-title">系統凡例</span>`;
+  display.forEach(g => {
+    const color = getGroupColor(g.group_id);
+    html += `<span class="lineage-chip" style="border-color:${color};color:${color}" title="${g.anchor_name} (${g.count}頭)">
+      <span class="lineage-dot" style="background:${color}"></span>${g.anchor_name}
+    </span>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+// ── 初期化 ──
+async function init() {
+  try {
+    const m = await (await fetch('/api/pedigree-race-stats/meta')).json();
+    if (m.error) { showMeta('⚠ ' + m.error); return; }
+
+    // 系統グループメタを並列取得
+    fetch('/api/pedigree-race-stats/lineage-meta').then(r => r.json()).then(lm => {
+      if (lm.groups) {
+        _lineageMeta = lm.groups;
+        _lineageMeta.forEach(g => { _lineageColorMap[g.anchor_name] = getGroupColor(g.group_id); });
+        // 凡例を panels 上部に挿入
+        const wrap = document.getElementById('panelsWrap');
+        if (wrap) {
+          const existing = document.getElementById('lineageLegend');
+          if (existing) existing.remove();
+          wrap.insertAdjacentHTML('afterbegin', buildLineageLegend());
+        }
+      }
+    }).catch(() => {});
+
+    // 会場トグルボタン
+    const venueGroup = document.getElementById('venueGroup');
+    (m.venues || []).forEach(v => {
+      const btn = document.createElement('button');
+      btn.className = 'tg'; btn.dataset.val = v; btn.textContent = v;
+      btn.setAttribute('onclick', `toggleBtn(this,'venueGroup')`);
+      venueGroup.appendChild(btn);
+    });
+
+    // クラストグルボタン
+    const gradeGroup = document.getElementById('gradeGroup');
+    const gradeOrder = ['G1','G2','G3','L','OP','3勝','2勝','1勝','新馬','未勝利'];
+    const sortedGrades = (m.grades || []).filter(g=>g).sort((a,b) => {
+      const ai = gradeOrder.indexOf(a), bi = gradeOrder.indexOf(b);
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    });
+    sortedGrades.forEach(g => {
+      const btn = document.createElement('button');
+      btn.className = 'tg'; btn.dataset.val = g; btn.textContent = g;
+      btn.setAttribute('onclick', `toggleBtn(this,'gradeGroup')`);
+      gradeGroup.appendChild(btn);
+    });
+
+    // 距離プレースホルダー
+    document.getElementById('distMin').placeholder = String(m.dist_min || 1000);
+    document.getElementById('distMax').placeholder = String(m.dist_max || 3600);
+
+    // 日付
+    if (m.date_min) document.getElementById('dateFrom').value = m.date_min;
+    if (m.date_max) document.getElementById('dateTo').value = m.date_max;
+
+    showMeta(`データ: ${(m.race_rows||0).toLocaleString()}出走 / ${(m.unique_horses||0).toLocaleString()}頭 (更新: ${m.built_at||''}) ※最大10世代`);
+
+    // 全体集計（②③）を非同期で取得
+    fetchOverallTop();
+  } catch(e) {
+    showMeta('メタ情報取得失敗: ' + e.message);
+  }
+}
+
+async function fetchOverallTop() {
+  try {
+    const r = await (await fetch('/api/pedigree-race-stats/query?count_mode=appearances&top_n=60')).json();
+    if (r.error) return;
+    // cat2 + cat3 を統合して stallion ごとに合計
+    const agg = {};
+    for (const row of [...(r.cat2||[]).map(x=>({...x,_cat:2})), ...(r.cat3||[]).map(x=>({...x,_cat:3}))]) {
+      const key = row.stallion_name || row.stallion_id;
+      if (!agg[key]) agg[key] = {
+        stallion_name: row.stallion_name, stallion_id: row.stallion_id,
+        gen: row.gen, total_count: 0, cats: new Set(),
+        group_id: row.group_id ?? -1, anchor_name: row.anchor_name || ''
+      };
+      agg[key].total_count += row.count;
+      agg[key].cats.add(row._cat);
+      if (row.gen < agg[key].gen) agg[key].gen = row.gen;
+      if ((row.group_id ?? -1) >= 0 && (agg[key].group_id < 0 || row.group_id < agg[key].group_id)) {
+        agg[key].group_id = row.group_id;
+        agg[key].anchor_name = row.anchor_name || '';
+      }
+    }
+    _overallTop = Object.values(agg)
+      .map(v => ({...v, cats: [...v.cats].sort()}))
+      .sort((a,b) => b.total_count - a.total_count);
+  } catch(e) {
+    // 取得失敗は無視
+  }
+}
+
+function showMeta(t) { document.getElementById('metaNote').textContent = t; }
+
+// ── 検索 ──
+async function doSearch() {
+  const btn = document.getElementById('btnSearch');
+  btn.disabled = true;
+  showSt('検索中...');
+  try {
+    const params = buildParams();
+    const url = '/api/pedigree-race-stats/query?' + params.toString();
+    const r = await (await fetch(url)).json();
+    if (r.error) { showSt(r.error, true); return; }
+    hideSt();
+    _lastResult = r;
+    _activeGens = {};
+    showResults(r);
+  } catch(e) {
+    showSt('エラー: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function buildParams() {
+  const p = new URLSearchParams();
+  const vn = (id) => { const x = document.getElementById(id)?.value; return x && x.trim() ? x.trim() : null; };
+
+  if (vn('dateFrom')) p.set('date_from', vn('dateFrom'));
+  if (vn('dateTo')) p.set('date_to', vn('dateTo'));
+
+  const venues = getGroupValues('venueGroup');
+  if (venues.length) p.set('venues', venues.join(','));
+
+  const surfaces = getGroupValues('surfaceGroup');
+  if (surfaces.length) p.set('surface', surfaces.join(','));
+
+  if (vn('distMin')) p.set('dist_min', vn('distMin'));
+  if (vn('distMax')) p.set('dist_max', vn('distMax'));
+
+  const tcs = getGroupValues('trackGroup');
+  if (tcs.length) p.set('track_conditions', tcs.join(','));
+
+  const grades = getGroupValues('gradeGroup');
+  if (grades.length) p.set('grades', grades.join(','));
+
+  if (vn('finishMin')) p.set('finish_min', vn('finishMin'));
+  if (vn('finishMax')) p.set('finish_max', vn('finishMax'));
+  if (vn('popMin')) p.set('pop_min', vn('popMin'));
+  if (vn('popMax')) p.set('pop_max', vn('popMax'));
+  if (vn('genMin')) p.set('gen_min', vn('genMin'));
+  if (vn('genMax')) p.set('gen_max', vn('genMax'));
+  p.set('count_mode', _countMode);
+  p.set('top_n', '100');
+  return p;
+}
+
+function clearFilters() {
+  document.getElementById('dateFrom').value = '';
+  document.getElementById('dateTo').value = '';
+  ['venueGroup','surfaceGroup','trackGroup','gradeGroup'].forEach(clearGroup);
+  document.getElementById('distMin').value = '';
+  document.getElementById('distMax').value = '';
+  ['finishMin','finishMax','popMin','popMax','genMin','genMax'].forEach(id => document.getElementById(id).value = '');
+  // カウントモードをデフォルトに戻す
+  selectCountMode(document.querySelector('#countModeGroup .tg[data-val="unique"]'));
+}
+
+// ── 結果表示 ──
+function showResults(r) {
+  document.getElementById('emptyState').classList.add('hidden');
+  document.getElementById('statsRow').classList.remove('hidden');
+  document.getElementById('tabsRow').classList.remove('hidden');
+  document.getElementById('panelsWrap').classList.remove('hidden');
+
+  document.getElementById('stEntries').textContent = (r.total_entries||0).toLocaleString();
+  document.getElementById('stHorses').textContent = (r.unique_horses||0).toLocaleString();
+  document.getElementById('stCat1').textContent = countUnique(r.cat1||[]) + '種';
+
+  const merged23 = mergeForCount([...((r.cat2||[])).map(x=>({...x,cat:2})), ...(r.cat3||[]).map(x=>({...x,cat:3}))]);
+  document.getElementById('stCat23').textContent = merged23.length + '種';
+
+  const modeLabel = _countMode === 'appearances' ? '出現回数（クロス込み）' : 'ユニーク馬数';
+  document.getElementById('stMode').textContent = modeLabel;
+
+  renderCat1(r.cat1 || []);
+  renderCat23(r.cat2 || [], r.cat3 || []);
+  switchTab(_currentTab);
+}
+
+function countUnique(rows) {
+  return new Set(rows.map(r => r.stallion_name || r.stallion_id)).size;
+}
+
+// ── ① 父系パネル ──
+function renderCat1(rows) {
+  const panel = document.getElementById('p-1');
+  const color = CAT_COLORS[1];
+  if (!rows || rows.length === 0) { panel.innerHTML = '<div class="empty">データなし</div>'; return; }
+
+  const gens = [...new Set(rows.map(r => r.gen))].sort((a,b)=>a-b);
+  if (!_activeGens[1]) _activeGens[1] = new Set(gens);
+
+  let html = buildGenToggle(1, gens);
+  const filtered = rows.filter(r => _activeGens[1].has(r.gen));
+  if (!filtered.length) { panel.innerHTML = html + '<div class="empty">選択中の世代にデータなし</div>'; return; }
+
+  const agg = aggregateRows(filtered);
+  const sorted = agg.slice(0, 60);
+  const aggMax = sorted[0]?.count || 1;
+  const total = sorted.reduce((s,r)=>s+r.count, 0);
+
+  html += `<div style="font-size:12px;color:var(--txd);margin-bottom:8px">① 父系 — 上位 ${sorted.length} 件（延べ: ${total.toLocaleString()} / ユニーク: ${sorted.length}）</div>`;
+  html += buildTable(sorted, aggMax, total, color);
+  html += `<div class="note">「父」= 出走馬の直接の父（第1世代）。「父父」= 父方の父父（第2世代）。カウントはユニーク馬数ベース。</div>`;
+  panel.innerHTML = html;
+}
+
+// 全体上位 N件の種牡馬名 Set
+function getOverallTopSet() {
+  return new Set(_overallTop.slice(0, _overallTopN).map(r => r.stallion_name || r.stallion_id));
+}
+
+// ── ②③ 統合パネル ──
+function renderCat23(cat2rows, cat3rows) {
+  const panel = document.getElementById('p-23');
+  const color = CAT_COLORS[23];
+
+  const allRows = [
+    ...(cat2rows||[]).map(r => ({...r, _cat: 2})),
+    ...(cat3rows||[]).map(r => ({...r, _cat: 3})),
+  ];
+  if (!allRows.length) { panel.innerHTML = '<div class="empty">データなし</div>'; return; }
+
+  const gens = [...new Set(allRows.map(r => r.gen))].sort((a,b)=>a-b);
+  if (!_activeGens[23]) _activeGens[23] = new Set(gens);
+
+  // ── 全体集計ボックス ──
+  let html = buildOverallBox();
+
+  html += buildGenToggle(23, gens);
+
+  // 世代 + 全体上位除外フィルタ
+  const overallTopSet = getOverallTopSet();
+  let filtered = allRows.filter(r => _activeGens[23].has(r.gen));
+  let excluded = [];
+  if (_excludeOverall) {
+    excluded = filtered.filter(r => overallTopSet.has(r.stallion_name || r.stallion_id));
+    filtered = filtered.filter(r => !overallTopSet.has(r.stallion_name || r.stallion_id));
+  }
+
+  if (!filtered.length) { panel.innerHTML = html + '<div class="empty">選択中の条件にデータなし（全体上位除外により0件の可能性あり）</div>'; return; }
+
+  const agg = aggregateRowsCat23(filtered);
+  const sorted = agg.slice(0, 80);
+  const aggMax = sorted[0]?.count || 1;
+  const total = sorted.reduce((s,r)=>s+r.count, 0);
+
+  const excludedNote = _excludeOverall
+    ? `<span style="color:var(--rd);font-size:11px">（全体上位 ${_overallTopN}件を除外中）</span>`
+    : '';
+  html += `<div style="font-size:12px;color:var(--txd);margin-bottom:8px">②③ 母系 — 上位 ${sorted.length} 件（延べ: ${total.toLocaleString()} / ユニーク: ${sorted.length}）${excludedNote}</div>`;
+  html += buildTableCat23(sorted, aggMax, total, color);
+  html += `<div class="note">
+    <strong style="color:var(--cat2)">②</strong> 母父母以降（母父母父〜第10世代）と
+    <strong style="color:var(--cat3)">③</strong> 母母以降（母母父〜第10世代）の種牡馬を統合表示（最大10世代）。
+    世代ボタンで絞り込みできます。
+  </div>`;
+  panel.innerHTML = html;
+}
+
+// ── 全体集計ボックス構築 ──
+function buildOverallBox() {
+  const topN = _overallTop.slice(0, _overallTopN);
+  const excActive = _excludeOverall;
+
+  let html = `<div class="overall-box">`;
+  html += `<div class="overall-box-header">`;
+  html += `<span class="overall-box-title">全体集計 上位（参照用 / ②③ 合計出現回数）</span>`;
+  // 除外数セレクタ
+  html += `<select class="overall-n-select" onchange="setOverallN(parseInt(this.value))" title="全体上位N件">`;
+  [10, 15, 20, 30].forEach(n => {
+    html += `<option value="${n}" ${n===_overallTopN?'selected':''}>${n}件</option>`;
+  });
+  html += `</select>`;
+  // 除外トグル
+  html += `<button class="exclude-btn ${excActive?'active':''}" onclick="toggleExcludeOverall()" title="${excActive?'除外解除':'全体上位をメインテーブルから除外'}">`;
+  html += excActive ? `🚫 全体上位${_overallTopN}件を除外中` : `全体上位を除外`;
+  html += `</button>`;
+  html += `</div>`;
+
+  if (!topN.length) {
+    html += `<div style="font-size:11px;color:var(--txd)">読み込み中...</div>`;
+  } else {
+    html += `<div class="overall-list">`;
+    topN.forEach((r, i) => {
+      const lc = getGroupColor(r.group_id);
+      const dimStyle = excActive ? 'opacity:.5;' : '';
+      const borderStyle = lc ? `border-left:3px solid ${lc};` : '';
+      html += `<div class="overall-item" style="${dimStyle}${borderStyle}" title="${lc ? (r.anchor_name||'') + ' 系 / ' : ''}全体出現回数: ${r.total_count.toLocaleString()}">`;
+      if (lc) html += `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lc};flex-shrink:0"></span>`;
+      html += `<span class="overall-rank">${i+1}</span>`;
+      html += `<span class="overall-name">${r.stallion_name || '-'}</span>`;
+      html += `<span class="overall-gen">第${r.gen}〜</span>`;
+      html += `<span class="overall-cnt">${r.total_count.toLocaleString()}</span>`;
+      if (excActive) html += `<span class="excluded-tag">除外</span>`;
+      html += `</div>`;
+    });
+    html += `</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function toggleExcludeOverall() {
+  _excludeOverall = !_excludeOverall;
+  if (_lastResult) renderCat23(_lastResult.cat2 || [], _lastResult.cat3 || []);
+}
+
+function setOverallN(n) {
+  _overallTopN = n;
+  if (_lastResult) renderCat23(_lastResult.cat2 || [], _lastResult.cat3 || []);
+}
+
+// ── ヘルパー ──
+function mergeForCount(rows) {
+  const agg = {};
+  for (const r of rows) {
+    const key = r.stallion_name || r.stallion_id;
+    if (!agg[key]) agg[key] = { stallion_name: r.stallion_name, count: 0 };
+    agg[key].count += r.count;
+  }
+  return Object.values(agg).sort((a,b)=>b.count-a.count);
+}
+
+function aggregateRows(rows) {
+  const agg = {};
+  for (const r of rows) {
+    const key = r.stallion_name || r.stallion_id;
+    if (!agg[key]) agg[key] = {
+      stallion_name: r.stallion_name, stallion_id: r.stallion_id,
+      count: 0, gens: new Set(), sub_cats: [],
+      group_id: r.group_id ?? -1, anchor_name: r.anchor_name || ''
+    };
+    agg[key].count += r.count;
+    agg[key].gens.add(r.gen);
+    if (!agg[key].sub_cats.includes(r.sub_cat)) agg[key].sub_cats.push(r.sub_cat);
+    // group_id: 最も小さい（最も重要な）グループを採用
+    if ((r.group_id ?? -1) >= 0 && (agg[key].group_id < 0 || r.group_id < agg[key].group_id)) {
+      agg[key].group_id = r.group_id;
+      agg[key].anchor_name = r.anchor_name || '';
+    }
+  }
+  return Object.values(agg).map(v => ({...v, gens: [...v.gens].sort((a,b)=>a-b)}))
+    .sort((a,b)=>b.count-a.count);
+}
+
+function aggregateRowsCat23(rows) {
+  const agg = {};
+  for (const r of rows) {
+    const key = r.stallion_name || r.stallion_id;
+    if (!agg[key]) agg[key] = {
+      stallion_name: r.stallion_name, stallion_id: r.stallion_id,
+      count: 0, gens: new Set(), cats: new Set(),
+      group_id: r.group_id ?? -1, anchor_name: r.anchor_name || ''
+    };
+    agg[key].count += r.count;
+    agg[key].gens.add(r.gen);
+    agg[key].cats.add(r._cat);
+    if ((r.group_id ?? -1) >= 0 && (agg[key].group_id < 0 || r.group_id < agg[key].group_id)) {
+      agg[key].group_id = r.group_id;
+      agg[key].anchor_name = r.anchor_name || '';
+    }
+  }
+  return Object.values(agg).map(v => ({...v,
+    gens: [...v.gens].sort((a,b)=>a-b),
+    cats: [...v.cats].sort()
+  })).sort((a,b)=>b.count-a.count);
+}
+
+// 世代トグル（gen1〜gen10 のボタン）
+function buildGenToggle(key, gens) {
+  let html = '<div class="sub-toggle">';
+  html += `<span style="font-size:11px;color:var(--txd);align-self:center;margin-right:4px">世代:</span>`;
+  const allOn = _activeGens[key]?.size === gens.length;
+  html += `<button class="sub-btn ${allOn ? 'active' : ''}" onclick="toggleAllGens(${key})">全て</button>`;
+  gens.forEach(g => {
+    const isActive = _activeGens[key]?.has(g);
+    const lbl = g <= 2 ? (g===1?'父':'父父') : `第${g}世代`;
+    html += `<button class="sub-btn ${isActive ? 'active' : ''}" onclick="toggleGen(${key},${g})">${lbl}</button>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+function buildTable(sorted, aggMax, total, color) {
+  const cntLabel = _countMode === 'appearances' ? '出現回数' : 'ユニーク馬数';
+  let html = '<div class="scroll-x"><table>';
+  html += `<thead><tr><th style="width:32px">#</th><th>種牡馬名</th><th>世代</th><th style="width:90px">${cntLabel}</th><th style="width:160px">分布</th><th style="width:50px">割合</th></tr></thead><tbody>`;
+  sorted.forEach((r, i) => {
+    const w = Math.round((r.count / aggMax) * 100);
+    const pct = ((r.count / total) * 100).toFixed(1);
+    const genBadges = (r.gens||[]).map(g => {
+      const lbl = g <= 2 ? (g===1?'父':'父父') : `第${g}世代`;
+      return `<span class="sub-badge">${lbl}</span>`;
+    }).join(' ');
+    const lc = getGroupColor(r.group_id);
+    const rowStyle = lc ? `border-left:3px solid ${lc}` : '';
+    const nameExtra = lc
+      ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${lc};margin-right:4px;vertical-align:middle" title="${r.anchor_name||''}"></span>`
+      : '';
+    html += `<tr style="${rowStyle}">
+      <td><span class="rank-badge" style="background:${i<3?color:'var(--sf3)'};color:${i<3?'#fff':'var(--txd)'}">${i+1}</span></td>
+      <td>${nameExtra}<strong>${r.stallion_name || '-'}</strong></td>
+      <td>${genBadges}</td>
+      <td style="font-weight:700;color:${color}">${r.count.toLocaleString()}</td>
+      <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${w}%;background:${color}"></div></div></td>
+      <td><span class="pct-badge">${pct}%</span></td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function buildTableCat23(sorted, aggMax, total, color) {
+  const cntLabel = _countMode === 'appearances' ? '出現回数' : 'ユニーク馬数';
+  let html = '<div class="scroll-x"><table>';
+  html += `<thead><tr><th style="width:32px">#</th><th>種牡馬名</th><th>区分</th><th>世代</th><th style="width:90px">${cntLabel}</th><th style="width:160px">分布</th><th style="width:50px">割合</th></tr></thead><tbody>`;
+  sorted.forEach((r, i) => {
+    const w = Math.round((r.count / aggMax) * 100);
+    const pct = ((r.count / total) * 100).toFixed(1);
+    const catBadges = (r.cats||[]).map(c =>
+      `<span class="sub-badge" style="color:${c===2?'var(--cat2)':'var(--cat3)'}">${CAT_MARKS[c]}</span>`
+    ).join('');
+    const genBadges = (r.gens||[]).map(g =>
+      `<span class="sub-badge">第${g}世代</span>`
+    ).join(' ');
+    const lc = getGroupColor(r.group_id);
+    const rowStyle = lc ? `border-left:3px solid ${lc}` : '';
+    const nameExtra = lc
+      ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${lc};margin-right:4px;vertical-align:middle" title="${r.anchor_name||''}"></span>`
+      : '';
+    html += `<tr style="${rowStyle}">
+      <td><span class="rank-badge" style="background:${i<3?color:'var(--sf3)'};color:${i<3?'#fff':'var(--txd)'}">${i+1}</span></td>
+      <td>${nameExtra}<strong>${r.stallion_name || '-'}</strong></td>
+      <td>${catBadges}</td>
+      <td>${genBadges}</td>
+      <td style="font-weight:700;color:${color}">${r.count.toLocaleString()}</td>
+      <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${w}%;background:${color}"></div></div></td>
+      <td><span class="pct-badge">${pct}%</span></td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function toggleGen(key, g) {
+  if (!_activeGens[key]) _activeGens[key] = new Set();
+  if (_activeGens[key].has(g)) _activeGens[key].delete(g);
+  else _activeGens[key].add(g);
+  if (!_lastResult) return;
+  if (key === 1) renderCat1(_lastResult.cat1 || []);
+  else renderCat23(_lastResult.cat2 || [], _lastResult.cat3 || []);
+}
+
+function toggleAllGens(key) {
+  if (!_lastResult) return;
+  const allRows = key === 1
+    ? (_lastResult.cat1 || [])
+    : [...(_lastResult.cat2||[]), ...(_lastResult.cat3||[])];
+  const gens = [...new Set(allRows.map(r => r.gen))];
+  _activeGens[key] = (_activeGens[key]?.size === gens.length)
+    ? new Set(gens.slice(0, 1))
+    : new Set(gens);
+  if (key === 1) renderCat1(_lastResult.cat1 || []);
+  else renderCat23(_lastResult.cat2 || [], _lastResult.cat3 || []);
+}
+
+// ── タブ切り替え ──
+function switchTab(tab) {
+  _currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    const isThis = b.dataset.tab == String(tab);
+    b.className = isThis ? `tab-btn active-cat${tab === 1 ? 1 : 2}` : 'tab-btn';
+  });
+  ['1','23'].forEach(id => {
+    document.getElementById('p-'+id).classList.toggle('hidden', String(tab) !== id);
+  });
+}
+
+// ── ユーティリティ ──
+function showSt(m, err) {
+  const b = document.getElementById('sBar'), s = document.getElementById('sSpin'), t = document.getElementById('sTxt');
+  b.classList.remove('hidden'); t.textContent = m;
+  t.style.color = err ? 'var(--rd)' : 'var(--tx)';
+  s.style.display = err ? 'none' : 'block';
+}
+function hideSt() { document.getElementById('sBar').classList.add('hidden'); }
+
+// Enter で検索
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !document.getElementById('btnSearch').disabled) doSearch();
+});
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>馬券推奨レイヤと強化学習 — 設計議論</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #15213c; --panel-2: #1b294a; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff; --accent-2: #7aa9ff;
+    --accent-3: #a78bfa; --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
+    --chip-bg: #1d2b50; --code-bg: #0b1428; --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 55%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+  }
+  code, .mono { font-family: "JetBrains Mono", monospace; font-size: 13px; }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 268px 1fr; min-height: 100vh; }
+  aside {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+    padding: 24px 18px;
+    background: linear-gradient(180deg, #0a1124, #0d1632);
+  }
+  .brand { margin-bottom: 20px; }
+  .brand .logo {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, #f472b6, #a78bfa);
+    display: grid; place-items: center; font-weight: 800; font-size: 13px; color: #fff;
+    margin-bottom: 10px;
+  }
+  .brand .t { font-weight: 700; font-size: 13px; }
+  .brand .s { color: var(--muted); font-size: 11px; margin-top: 4px; line-height: 1.5; }
+  nav a { display: block; padding: 6px 10px; border-radius: 8px; margin: 2px 0; color: var(--text); font-size: 13px; }
+  nav a:hover { background: rgba(79,139,255,.1); }
+  nav h4 { color: var(--muted); font-size: 10px; letter-spacing: .12em; margin: 14px 0 6px; }
+  main { padding: 40px 48px 100px; max-width: 960px; }
+  .hero {
+    padding: 28px 26px; border-radius: 16px; margin-bottom: 28px;
+    border: 1px solid var(--border); box-shadow: var(--shadow);
+    background: radial-gradient(800px 300px at 100% 0%, rgba(244,114,182,.12), transparent),
+                linear-gradient(180deg, #1a1f3c, #121a32);
+  }
+  .hero .ey { color: #f9a8d4; font-size: 11px; font-weight: 700; letter-spacing: .18em; }
+  .hero h1 { margin: 8px 0 10px; font-size: 26px; line-height: 1.35; }
+  .hero p { color: var(--muted); margin: 0; max-width: 720px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .tag {
+    background: var(--chip-bg); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 11px; font-size: 11px; color: #e8ecff;
+  }
+  section { margin-top: 38px; scroll-margin-top: 22px; }
+  section h2 {
+    font-size: 20px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 12px;
+  }
+  section h3 { font-size: 16px; color: var(--accent-2); margin: 20px 0 8px; }
+  section h4 { font-size: 14px; color: var(--accent-3); margin: 14px 0 6px; }
+  p, li { color: #d8e0f7; }
+  ul { padding-left: 20px; }
+  li { margin: 5px 0; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 18px; margin: 12px 0;
+  }
+  .card.soft { background: var(--panel-2); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0;
+    font-size: 13px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; }
+  tr:last-child td { border-bottom: 0; }
+  .callout {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    padding: 12px 14px; border-radius: 8px; margin: 14px 0; font-size: 14px;
+  }
+  .callout.warn { border-left-color: var(--warn); background: rgba(251,191,36,.07); }
+  .mermaid { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin: 14px 0; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  footer {
+    margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+    main { padding: 24px 18px 72px; }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand">
+      <div class="logo">RL</div>
+      <div class="t">馬券推奨 × 強化学習</div>
+      <div class="s">正本: docs/modeling/<wbr>betting_policy_<wbr>reinforcement_<wbr>learning.md</div>
+    </div>
+    <nav>
+      <h4>目次</h4>
+      <a href="#boundary">境界</a>
+      <a href="#why-rl">なぜ RL か</a>
+      <a href="#mdp">MDP の骨格</a>
+      <a href="#ev">期待値とバランス</a>
+      <a href="#marks">予測印</a>
+      <a href="#paradigms">学習パラダイム</a>
+      <a href="#env">バックテスト環境</a>
+      <a href="#risks">リスク</a>
+      <a href="#roadmap">ロードマップ</a>
+      <h4>関連</h4>
+      <a href="../ml_pipeline/index.html">ML パイプライン全体図</a>
+      <a href="../modeling_actions/index.html">次アクション</a>
+    </nav>
+  </aside>
+  <main>
+    <header class="hero">
+      <div class="ey">STAGE7+ / BETTING POLICY</div>
+      <h1>馬券推奨レイヤと強化学習</h1>
+      <p>
+        <b>勝率・連帯率・複勝率</b>までは教師あり機械学習で推進する。
+        その先の <b>オッズ × 予測確率 × 予測印</b> を束ね、<b>バランスの良い期待値</b>を土台にしつつ
+        <b>推奨券種と印の結びつけ</b>を出すレイヤは、いわゆる ML の延長ではなく <b>強化学習による戦略学習</b> を第一候補とする設計議論の要約である。
+      </p>
+      <div class="tags">
+        <span class="tag">LayerA 確率 → LayerB 意思決定</span>
+        <span class="tag">Contextual Bandit → Offline RL</span>
+        <span class="tag">safe_ev 整合</span>
+        <span class="tag">印は行動または状態</span>
+      </div>
+    </header>
+
+    <section id="boundary">
+      <h2>1. 境界 — 何が ML で、何が RL か</h2>
+      <table>
+        <thead><tr><th>レイヤ</th><th>出力</th><th>手法の位置づけ</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>確率モデル</b><br><span class="mono" style="color:var(--muted)">Stage6 まで</span></td>
+            <td><code class="mono">p_win</code>, <code class="mono">p_top2</code>, <code class="mono">p_top3</code> 等</td>
+            <td>GBDT / ランキング / NN など <b>教師あり学習</b>。split・OOF・校正は既存 <code class="mono">docs/modeling/</code> に従う。</td>
+          </tr>
+          <tr>
+            <td><b>馬券推奨</b><br><span class="mono" style="color:var(--muted)">本ページの主題</span></td>
+            <td>券種・組合せ・投資額・<b>予測印との対応</b></td>
+            <td><b>強化学習（ポリシー）</b>。オッズは状態の中心。期待値はスコアリングの核だが <b>終点ではない</b>。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="why-rl">
+      <h2>2. なぜ推奨を RL に寄せるか</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>目的が異なる</h4>
+          <p style="margin:0;font-size:14px">確率層は校正・対数損失。推奨層は <b>長期リターン・ドローダウン・印の説得力</b>など複数目標と制約のバランス。</p>
+        </div>
+        <div class="card">
+          <h4>行動空間が巨大</h4>
+          <p style="margin:0;font-size:14px">単純 argmax EV は分散が尖りやすい。<b>資金・券種相関</b>を同時に扱うには方策表現が有利。</p>
+        </div>
+      </div>
+      <div class="card soft">
+        <h4>市場は非定常・対抗的</h4>
+        <p style="margin:0;font-size:14px">LayerB のオッズは確率学習から切り離してきた情報であり、<b>状態遷移の一部</b>として RL に入れるのが自然。</p>
+      </div>
+    </section>
+
+    <section id="mdp">
+      <h2>3. MDP の骨格（概念）</h2>
+      <div class="mermaid">
+flowchart LR
+  subgraph obs[状態]
+    P[p_calibrated]
+    U[uncertainty]
+    O[odds snapshot]
+    C[印候補]
+    X[venue/surface/field]
+  end
+  subgraph act[行動]
+    T[券種・組]
+    S[金額バケット]
+    M[印の束ね方]
+  end
+  subgraph rew[報酬]
+    R[safe_ev 加重エッジ]
+    D[DD ペナルティ]
+    I[印一貫性]
+  end
+  obs --> act --> rew
+      </div>
+      <h3>行動の階層化</h3>
+      <ul>
+        <li><b>レベル1</b>：券種の離散選択（少数）。</li>
+        <li><b>レベル2</b>：各券種で Top-K 組 ＋ 金額の離散バケット。</li>
+        <li><b>レベル3</b>：印を <b>行動の一部</b>にするか <b>状態＋ペナルティ</b>にするか（初期は後者が学習しやすい）。</li>
+      </ul>
+    </section>
+
+    <section id="ev">
+      <h2>4. 期待値と「バランス」</h2>
+      <ul>
+        <li>期待値は Q / advantage の<b>構成要素</b>として組み込む（<code class="mono">safe_ev</code>・buffer は <code class="mono">betting_backtest_dataset_spec.md</code> と整合）。</li>
+        <li><b>バランス</b>は報酬合成（リスク項・印ペナルティ）と <b>環境側の stake 制約</b>で表現する。</li>
+        <li>実務的には <b>ルール EV で候補を刈り込み → 残りを方策で配分</b> でもよい（二段ガード）。</li>
+      </ul>
+    </section>
+
+    <section id="marks">
+      <h2>5. 予測印との結びつけ</h2>
+      <table>
+        <thead><tr><th>パターン</th><th>概要</th><th>コメント</th></tr></thead>
+        <tbody>
+          <tr><td>A</td><td>印は別モジュールが生成し、RL は券＋金額のみ</td><td>導入容易。印と券のズレは報酬ペナルティで抑える。</td></tr>
+          <tr><td>B</td><td>行動 = (印セット, 券, 組) の joint</td><td>一貫性は高いが探索空間が膨らむ。</td></tr>
+          <tr><td>C</td><td>階層 RL：上位が「印ストーリー」、下位が具体券</td><td>説明性と探索の分離。データが溜まってから。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="paradigms">
+      <h2>6. 学習パラダイムの比較</h2>
+      <ul>
+        <li><b>オンライン RL</b>：本番での探索コストが高すぎるため、原則採用しない。</li>
+        <li><b>Contextual Bandit</b>：1 レース ≈ 1 ステップ。候補券を有限化すれば <b>最初の本番的プロトタイプ</b>に最適。</li>
+        <li><b>Offline RL</b>：ログ <code class="mono">(s,a,r,s')</code> から学習。CQL / IQL 等で <b>行動分布のずれ</b>に注意。オッズの反事実性は仮定として文書化。</li>
+        <li><b>BC + 微調整</b>：safe_ev ルールや人間方策を教師にし、小さなオフライン RL で改善。</li>
+      </ul>
+    </section>
+
+    <section id="env">
+      <h2>7. バックテスト環境</h2>
+      <div class="mermaid">
+flowchart TB
+  DS[betting_backtest_dataset]
+  SIM["step: 1 race or 1 day"]
+  POL[policy]
+  OUT[stake_ticket_marks]
+  DS --> SIM
+  POL --> OUT
+  SIM -->|payout reward| POL
+      </div>
+      <p><code class="mono">horse_probability_table</code> と <code class="mono">horse_market_snapshot</code> と <code class="mono">payout_table</code> が simulator の入力契約になる（既存仕様を MDP に写像）。</p>
+      <div class="callout warn">
+        <b>指標の分離</b>：LogLoss / ECE は確率モデルの責務。ROI・DD・selection_rate は推奨ポリシーの責務。<b>test 期間の扱いは manifest と一致</b>させる。
+      </div>
+    </section>
+
+    <section id="risks">
+      <h2>8. リスクチェック（要約）</h2>
+      <ul>
+        <li>RL 学習に <b>確率モデルの test 予測を混ぜない</b>。</li>
+        <li>反事実オッズの近似範囲を明記する。</li>
+        <li>本番は方策 + <b>ハードクリップ</b>（最大投資・券種禁止リスト等）。</li>
+        <li>印・券・期待値を同一 <code class="mono">run_id</code> でトレース可能にする。</li>
+      </ul>
+    </section>
+
+    <section id="roadmap">
+      <h2>9. ロードマップ（提案）</h2>
+      <ol>
+        <li><b>Phase 0</b>：safe_ev + 閾値 + 印のルールマッピング（ログスキーマを RL 用に整備）。</li>
+        <li><b>Phase 1</b>：Contextual Bandit（有限候補）。</li>
+        <li><b>Phase 2</b>：Offline RL（セッション報酬）。</li>
+        <li><b>Phase 3</b>：階層化・印 joint 行動。</li>
+      </ol>
+      <p style="color:var(--muted);font-size:14px">詳細・チェックリスト・成果物契約は <code class="mono">docs/modeling/betting_policy_reinforcement_learning.md</code> を正とする。</p>
+    </section>
+
+    <footer>
+      <span><code class="mono">docs/html/betting_rl_policy/index.html</code></span>
+      <span>HTML 要約 / マークダウンと併用</span>
+    </footer>
+  </main>
+</div>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#0b1428',
+      primaryTextColor: '#e6ecff',
+      lineColor: '#c4b5fd',
+      secondaryColor: '#1a1f3c',
+      fontFamily: 'JetBrains Mono, Noto Sans JP, sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
