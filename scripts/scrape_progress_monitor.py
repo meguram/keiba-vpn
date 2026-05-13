@@ -3,6 +3,17 @@
   python scripts/scrape_progress_monitor.py            # 10秒ごとに更新
   python scripts/scrape_progress_monitor.py --once     # 1回表示して終了
   python scripts/scrape_progress_monitor.py --interval 5
+
+【並列数ガイド】
+  NETKEIBA_GLOBAL_MAX_SLOTS=4 (デフォルト) により、
+  複数プロセスを同時起動しても netkeiba へのリクエストは常に 4本以下に抑制される。
+
+  例: ancestors(4ワーカー) + patch_sex(4ワーカー) を同時起動しても合計 in-flight ≤ 4
+    python scripts/scrape_ancestors_upward.py --workers 4 &
+    python scripts/patch_sex.py --workers 4 &
+
+  上限を変えたい場合は環境変数で指定（VPN 使用時など）:
+    NETKEIBA_GLOBAL_MAX_SLOTS=8 python scripts/scrape_ancestors_upward.py --workers 4
 """
 from __future__ import annotations
 import argparse

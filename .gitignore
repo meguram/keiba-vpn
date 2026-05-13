@@ -65,3 +65,6 @@ data/modeling/
 # 資格情報
 *.pem
 credentials.json
+
+# プロセス横断スロットファイル（スクレイパー並列数制御用）
+data/meta/netkeiba_global_slots/

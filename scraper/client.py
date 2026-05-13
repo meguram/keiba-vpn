@@ -23,10 +23,13 @@ NETKEIBA_SESSION_COOLDOWN_INTERVAL, NETKEIBA_SESSION_COOLDOWN_MIN/MAX,
 NETKEIBA_SESSION_REFRESH_INTERVAL, NETKEIBA_THROTTLE_MIN/MAX
 NETKEIBA_MAX_CONCURRENT_REQUESTS … プロセス内の netkeiba 同時 in-flight 上限
 （キューが複数本並列で各ジョブが独立 Session を持つため、未指定時は並列度から 2〜4 程度に自動。0=制限なし・旧来の高スルー）
+NETKEIBA_GLOBAL_MAX_SLOTS … 全プロセス合算の netkeiba 同時リクエスト上限（デフォルト=4）
+（複数スクリプトを並行実行しても合計が常に GLOBAL_MAX_SLOTS 以下に抑えられる。0=無効）
 """
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import logging
 import os
@@ -275,21 +278,108 @@ def _get_netkeiba_inflight_semaphore() -> threading.Semaphore | None:
         return _NETKEIBA_INFLIGHT_SEM
 
 
+
+# ── プロセス横断グローバルスロット ──────────────────────────────────────────
+# 複数の Python プロセス（ancestors + patch_sex 等）が同時に netkeiba へ
+# アクセスする場合でも、合計 in-flight 数を NETKEIBA_GLOBAL_MAX_SLOTS 以下に保つ。
+#
+# 仕組み: data/meta/netkeiba_global_slots/ に 1スロット=1ファイル を作成。
+#   ファイル名: {pid}_{thread_id}_{monotonic_ns}.slot
+#   スロット獲得: ファイル数 < 上限なら作成、そうでなければ待機（最大 120 秒）
+#   スロット解放: ファイルを削除
+#   死活確認: ファイル名の PID が存在しない（プロセスクラッシュ）ならば古いファイルを除去
+#
+# 環境変数 NETKEIBA_GLOBAL_MAX_SLOTS で上限を変更可（デフォルト=4）
+# 0 を設定すると無効化（無制限）
+
+_GLOBAL_SLOTS_DIR = Path(__file__).resolve().parents[1] / "data" / "meta" / "netkeiba_global_slots"
+_GLOBAL_MAX_SLOTS = _env_int("NETKEIBA_GLOBAL_MAX_SLOTS", 4)
+_GLOBAL_SLOT_LOCK = threading.Lock()   # ディレクトリ操作用スレッドロック
+
+
+def _cleanup_stale_global_slots() -> None:
+    """プロセスが死んで残ったスロットファイルを除去する。"""
+    try:
+        for p in _GLOBAL_SLOTS_DIR.glob("*.slot"):
+            try:
+                pid = int(p.stem.split("_")[0])
+                # /proc/{pid} が存在しなければ死亡プロセス
+                if not Path(f"/proc/{pid}").exists():
+                    p.unlink(missing_ok=True)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _count_global_slots() -> int:
+    try:
+        return sum(1 for _ in _GLOBAL_SLOTS_DIR.glob("*.slot"))
+    except Exception:
+        return 0
+
+
+class _GlobalSlot:
+    """
+    コンテキストマネージャ: プロセス横断スロットを 1 つ獲得・解放する。
+    最大待機 120 秒（超過時はスロット獲得をあきらめて続行）。
+    """
+    def __init__(self) -> None:
+        self._path: Path | None = None
+
+    def __enter__(self) -> "_GlobalSlot":
+        if _GLOBAL_MAX_SLOTS <= 0:
+            return self                        # 無効化
+
+        _GLOBAL_SLOTS_DIR.mkdir(parents=True, exist_ok=True)
+        slot_path = _GLOBAL_SLOTS_DIR / (
+            f"{os.getpid()}_{threading.get_ident()}_{time.monotonic_ns()}.slot"
+        )
+
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            with _GLOBAL_SLOT_LOCK:
+                _cleanup_stale_global_slots()
+                if _count_global_slots() < _GLOBAL_MAX_SLOTS:
+                    try:
+                        slot_path.touch()
+                        self._path = slot_path
+                        return self
+                    except Exception:
+                        pass
+            time.sleep(0.2 + random.random() * 0.3)
+
+        # タイムアウト: スロット獲得できなくても続行（制限は best-effort）
+        logger.warning("global slot timeout – proceeding without slot")
+        return self
+
+    def __exit__(self, *_) -> None:
+        if self._path:
+            try:
+                self._path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            self._path = None
+
+
 @contextmanager
 def _netkeiba_inflight_guard(url: str):
     host = (urlparse(url).netloc or "").lower()
     if "netkeiba.com" not in host:
         yield
         return
+
+    # ① プロセス内セマフォ（既存）
     sem = _get_netkeiba_inflight_semaphore()
-    if sem is None:
-        yield
-        return
-    sem.acquire()
+    if sem is not None:
+        sem.acquire()
     try:
-        yield
+        # ② プロセス横断グローバルスロット（新規）
+        with _GlobalSlot():
+            yield
     finally:
-        sem.release()
+        if sem is not None:
+            sem.release()
 
 
 def _load_env(env_path: str | None = None) -> dict[str, str]:
