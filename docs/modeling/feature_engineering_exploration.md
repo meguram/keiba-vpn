@@ -6,7 +6,7 @@
 **追加で検証に値する特徴量候補**を列挙する。ここに書いた項目はすべて **LayerA（T-10 時点で観測可能）** を優先し、  
 **結果ラベル由来のリーク**にならないものだけを対象とする（オッズ由来は LayerB として別枠）。
 
-実装時は `pipeline/feature_store.py` の列登録・`data/features/_registry.json` 方針に従い、  
+実装時は `src/pipeline/feature_store.py` の列登録・`data/features/_registry.json` 方針に従い、  
 **OOF + purged CV** でのみ寄与を測る。
 
 HTML 要約（ナビ用）: `docs/html/feature_engineering/index.html`

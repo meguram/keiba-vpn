@@ -8,8 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pipeline.horse_entity_layout import ped_parquet_path
-from pipeline.sync_ped_tbl_for_horses import (
+from src.pipeline.features.horse_entity_layout import ped_parquet_path
+from src.pipeline.sync_ped_tbl_for_horses import (
     normalize_horse_id_list,
     sync_ped_tbl_after_shutuba,
     sync_ped_tbl_for_horses,

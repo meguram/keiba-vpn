@@ -10,7 +10,7 @@
 | 用語 | 意味 |
 |------|------|
 | 主馬 S | 対象の `subject_horse_id` |
-| 主表 | S の 5 世代パース結果 `ancestors`（`research.pedigree_similarity.parse_blood_table_5gen` 相当） |
+| 主表 | S の 5 世代パース結果 `ancestors`（`research.pedigree.pedigree_similarity.parse_blood_table_5gen` 相当） |
 | アンカー H | 主表上で **generation = 5** かつ **牡スロット**（`is_male_pedigree_slot(5, p)==True`）かつ **`horse_id` が有効**な祖先馬 |
 | 枝表 | H を根とみたときの 5 世代データ（`horse_pedigree_5gen[H]` の `ancestors`。H 自身は含めない。generation 1 = H の父母） |
 
@@ -19,7 +19,7 @@
 主表の各行のうち、次をすべて満たすものをアンカーとする。
 
 1. `generation == 5`
-2. `is_male_pedigree_slot(5, position)` が True（同一世代内で偶数 `position` が牡。`research.pedigree_similarity.is_male_pedigree_slot` と一致）
+2. `is_male_pedigree_slot(5, position)` が True（同一世代内で偶数 `position` が牡。`research.pedigree.pedigree_similarity.is_male_pedigree_slot` と一致）
 3. `horse_id` が null / 空 / プレースホルダでない（`sanitize_netkeiba_string_id` 後に有効）
 
 **牝馬はアンカーにしない**（ユーザー要件「5 世代目の**種牡馬**」）。将来牝系深掘りする場合は別フラグで拡張可能。
@@ -88,15 +88,15 @@ global_depth = 5 + local_generation
 
 | Phase | 内容 |
 |-------|------|
-| 1 | `(generation, position) → path_fm`（主表 1..5）とその逆の単体テスト（`research.pedigree_similarity` の父系/牡定義と整合） |
+| 1 | `(generation, position) → path_fm`（主表 1..5）とその逆の単体テスト（`research.pedigree.pedigree_similarity` の父系/牡定義と整合） |
 | 2 | アンカー抽出 + `path_SH` + 枝表 `path_Hx` 連結 + 重複ポリシー |
 | 3 | `pipeline/build_horse_entity_store` の ped 生成経路にオプション `--merge-gen5-sires` で結合 |
 | 4 | キュー連携（アンカー未取得時の自動投入） |
 
 ## 9. 関連コード
 
-- 5 世代パース: `research.pedigree_similarity.parse_blood_table_5gen`
+- 5 世代パース: `research.pedigree.pedigree_similarity.parse_blood_table_5gen`
 - 牡スロット: `is_male_pedigree_slot`, `MALE_PEDIGREE_SLOTS_5GEN`
-- ローカル JSON: `data/local/horse_pedigree_5gen/{4桁}/{horse_id}.json`, `research.pedigree_local_store`
-- 馬単位出力: `pipeline/build_horse_entity_store.py`, `pipeline/horse_entity_layout.py`
-- 骨子モジュール（写像・定数の置き場）: `pipeline/horse_pedigree_expand.py`
+- ローカル JSON: `data/local/horse_pedigree_5gen/{4桁}/{horse_id}.json`, `research.pedigree.pedigree_local_store`
+- 馬単位出力: `src/pipeline/build_horse_entity_store.py`, `src/pipeline/horse_entity_layout.py`
+- 骨子モジュール（写像・定数の置き場）: `src/pipeline/horse_pedigree_expand.py`

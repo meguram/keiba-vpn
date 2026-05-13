@@ -42,8 +42,8 @@ api/app.py.bak_*
 
 # ML（再生成可）
 catboost_info/
-mlflow_data/
-mlruns/
+mlflow/data/
+mlflow/runs/
 
 # スクレイプ・キュー由来の生成物（GCS が正、ローカルは再取得可）
 data/cache/

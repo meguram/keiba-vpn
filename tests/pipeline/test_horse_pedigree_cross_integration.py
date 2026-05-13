@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from pipeline.build_horse_entity_store import _flatten_pedigree_json_with_gen5_merge
+from src.pipeline.build_horse_entity_store import _flatten_pedigree_json_with_gen5_merge
 class TestPedCrossIntegration(unittest.TestCase):
     def test_merge_fixture_cross_columns(self) -> None:
         """test_build_horse_entity_store と同じ最小フィクスチャで merge 後のクロスが一貫すること。"""

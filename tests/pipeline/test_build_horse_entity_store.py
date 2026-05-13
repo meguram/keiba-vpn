@@ -11,7 +11,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from pipeline.build_horse_entity_store import (
+from src.pipeline.build_horse_entity_store import (
     RESULT_TBL_DROP_NESTED_COLS,
     build_horse_entity_store,
     _flatten_pedigree_json,

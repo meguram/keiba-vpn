@@ -150,7 +150,7 @@
 ドキュメント（`dataset_split_manifest.json`・本書・`train_valid_test_split_strategy.md`）と、リポジトリ内の学習コードは **2026 時点で完全には一致していない**。  
 モデル選定 SOP をコードに落とすときは、次の差分を前提にマイルストーンを切る。
 
-### 10.1 `pipeline/trainer.py`（`ModelTrainer`）
+### 10.1 `src/pipeline/trainer.py`（`ModelTrainer`）
 
 | ドキュメント側の意図 | 実装の現状 | リスク |
 |----------------------|------------|--------|
@@ -161,7 +161,7 @@
 
 **やれること（実装）**: `race_date`（または `race_id` 先頭年）でソート → `dataset_split_manifest.json` を読み、**eval 用 race_id 集合**でマスク分割するモジュールを `ModelTrainer` 前段に挿入する。LambdaRank 用は `relevance = f(finish_position)` を別列で渡すオプションを追加する。
 
-### 10.2 `pipeline/ensemble_trainer.py`（`EnsembleTrainer`）
+### 10.2 `src/pipeline/ensemble_trainer.py`（`EnsembleTrainer`）
 
 | ドキュメント側の意図 | 実装の現状 | リスク |
 |----------------------|------------|--------|
@@ -170,12 +170,12 @@
 
 **やれること（実装）**: `GroupKFold` を維持しつつ、fold 境界を **`race_date` + purge_window_days** で切る `PurgedGroupTimeSeriesSplit` 相当のイテレータに差し替える。メタ用に **2024 行を学習から除外した OOF** を別パスで生成するオプションを検討する。
 
-### 10.3 `pipeline/feature_store.py`
+### 10.3 `src/pipeline/feature_store.py`
 
 - 列指向・スナップショット・`_registry.json` は **`modeling_coding_strategy.md` の方針と整合**しやすい。
 - 学習行列の **行順・重複 race** がスナップショット生成側でどう保証されるかは、`build_training_matrix` 呼び出し規約で明示する必要がある（trainer の分割と連動）。
 
-### 10.4 `research/evaluate_race_performance_signal.py` 等
+### 10.4 `src/research/evaluate_race_performance_signal.py` 等
 
 - ベンチ用スクリプトは **独自のデータ結合・特徴**を持つ。**本番 `ModelTrainer` と同じ split とは限らない**。
 - 指標比較は「信号検証」としてログに残し、**本番選定スコアは manifest 準拠の runner 一本**に寄せるのがよい。
@@ -185,7 +185,7 @@
 1. **Split モジュール**: manifest 読込 + `race_id` / `race_date` による train/valid/test マスク（**trainer から切り出し**）。  
 2. **trainer**: 上記マスクに差し替え、`test_ratio` ベース分割を **deprecated** または「デバッグ専用」と明記。  
 3. **relevance 列**（任意）と二値 top3 の **切り替えフラグ**。  
-4. **Optuna**: `train()` から `study.optimize` を呼ぶオプション、または CLI `pipeline/cli.py` から study 専用コマンド。  
+4. **Optuna**: `train()` から `study.optimize` を呼ぶオプション、または CLI `src/pipeline/cli.py` から study 専用コマンド。  
 5. **ensemble**: purge 対応 fold → メタの fit 対象データをドキュメントの outer valid 方針に揃えるオプション。
 
 以上を進めると、**議論（md）と実装（pipeline）の二重管理**が減り、`study_id` と `split_manifest_version` を同一 run で記録できるようになる。

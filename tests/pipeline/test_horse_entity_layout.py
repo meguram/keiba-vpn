@@ -1,10 +1,10 @@
-"""pipeline.horse_entity_layout の unittest。"""
+"""pipeline.features.horse_entity_layout の unittest。"""
 
 from __future__ import annotations
 
 import unittest
 
-from pipeline.horse_entity_layout import horse_shard4
+from src.pipeline.features.horse_entity_layout import horse_shard4
 
 
 class TestHorseShard4(unittest.TestCase):

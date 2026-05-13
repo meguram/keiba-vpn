@@ -8,7 +8,7 @@ import unittest
 
 class TestScrapePolicy(unittest.TestCase):
     def test_resolve_enqueue_overwrite_smart_skip(self):
-        from scraper.scrape_policy import resolve_enqueue_overwrite_smart_skip
+        from src.scraper.scrape_policy import resolve_enqueue_overwrite_smart_skip
 
         ow, ss = resolve_enqueue_overwrite_smart_skip(
             {"job_kind": "horse", "target_id": "1", "tasks": ["horse_profile"], "overwrite": True},
@@ -37,7 +37,7 @@ class TestScrapePolicy(unittest.TestCase):
                 os.environ["SCRAPE_DEFAULT_OVERWRITE"] = prev
 
     def test_effective_smart_skip_respects_missing_overwrite_key(self):
-        from scraper.scrape_policy import effective_smart_skip_for_queue_job
+        from src.scraper.scrape_policy import effective_smart_skip_for_queue_job
 
         prev = os.environ.get("SCRAPE_DEFAULT_OVERWRITE")
         try:

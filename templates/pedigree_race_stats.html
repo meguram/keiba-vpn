@@ -109,13 +109,16 @@ tr:hover{background:rgba(6,182,212,.03);}
 .pct-badge{font-size:11px;color:var(--txd);margin-left:4px;}
 
 /* ── 系統凡例バー ── */
-.lineage-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 12px;
+.lineage-legend{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:8px 12px;
   background:var(--sf2);border:1px solid var(--bd);border-radius:8px;margin-bottom:12px;}
 .lineage-legend-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--txd);
   font-weight:600;margin-right:4px;white-space:nowrap;}
-.lineage-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
+.lineage-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;
   border-radius:10px;border:1.5px solid;font-size:11px;font-weight:500;white-space:nowrap;cursor:default;}
-.lineage-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.lineage-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.lineage-main-chip{display:inline-flex;align-items:center;padding:2px 8px;
+  border-radius:4px;border:1.5px solid;font-size:11px;font-weight:700;white-space:nowrap;margin-left:4px;}
+.lineage-sep{display:block;width:1px;height:16px;background:var(--bd);margin:0 4px;}
 
 /* ── 全体集計ボックス ── */
 .overall-box{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:12px 16px;margin-bottom:14px;}
@@ -247,6 +250,20 @@ tr:hover{background:rgba(6,182,212,.03);}
         </div>
       </div>
 
+      <!-- 根幹血統フィルタ -->
+      <div class="cf">
+        <label>表示フィルタ
+          <span style="font-size:9px;color:var(--txd);font-weight:400;margin-left:4px">
+            根幹＝4大主流の幹系祖先・汎用古代祖先
+          </span>
+        </label>
+        <div class="toggle-group">
+          <button class="tg on" id="btnExcludeTrunk" onclick="toggleTrunkFilter(this)">
+            根幹血統を除外（派生＋非主流のみ）
+          </button>
+        </div>
+      </div>
+
     </div>
     <div class="ctrl-footer">
       <button class="btn" id="btnSearch" onclick="doSearch()">🔍 検索</button>
@@ -314,32 +331,65 @@ function subCatLabel(sc) {
 const CAT_MARKS = {2: '②', 3: '③'};
 
 // ── 系統グループカラーパレット（最大50色）──
-const GROUP_COLORS = [
-  "#e63946","#457b9d","#2a9d8f","#e9c46a","#f4a261",
-  "#264653","#a8dadc","#6d6875","#b5838d","#ffb4a2",
-  "#06b6d4","#a78bfa","#f59e0b","#22c55e","#ec4899",
-  "#84cc16","#14b8a6","#f97316","#8b5cf6","#3b82f6",
-  "#fb923c","#a3e635","#34d399","#60a5fa","#c084fc",
-  "#f43f5e","#0ea5e9","#10b981","#d97706","#7c3aed",
-  "#dc2626","#16a34a","#2563eb","#9333ea","#ea580c",
-  "#65a30d","#0891b2","#d946ef","#c026d3","#0284c7",
-  "#4ade80","#fbbf24","#818cf8","#fb7185","#a78bfa",
-  "#34d399","#38bdf8","#f472b6","#facc15","#86efac"
-];
+// 系統グループメタ: [{group_id, main_group_id, main_group_name, anchor_name, count, color, main_color}]
+let _lineageMeta = [];
+let _groupColorMap = {};    // group_id → color
+let _groupMainColorMap = {}; // group_id → main_color
 
 function getGroupColor(group_id) {
   if (group_id == null || group_id < 0) return null;
-  return GROUP_COLORS[group_id % GROUP_COLORS.length];
+  return _groupColorMap[group_id] || null;
+}
+function getGroupMainColor(group_id) {
+  if (group_id == null || group_id < 0) return null;
+  return _groupMainColorMap[group_id] || null;
 }
 
-// 系統グループメタ: [{group_id, anchor_name, anchor_id, count}]
-let _lineageMeta = [];
-let _lineageColorMap = {}; // anchor_name → color
+// 4大主流グループの代表色
+const MAIN_GROUP_COLORS = {
+  1: "#f97316",  // Turn-To系 (橙)
+  2: "#3b82f6",  // Northern Dancer系 (青)
+  3: "#22c55e",  // Native Dancer系 (緑)
+  4: "#ef4444",  // Nasrullah系 (赤)
+  5: "#9ca3af",  // 非主流 (グレー)
+};
+const MAIN_GROUP_NAMES = {
+  1: "Turn-To系", 2: "Northern Dancer系",
+  3: "Native Dancer系", 4: "Nasrullah系", 5: "非主流"
+};
 
 let _currentTab = 1;
 let _lastResult = null;
 let _activeGens = {};
 let _countMode = 'unique';
+// 根幹血統を除外するか（デフォルト: ON）
+let _excludeTrunk = true;
+
+/**
+ * 根幹血統判定:
+ *   - sub_group_label が "その他" で終わる → 4大主流の幹系祖先（Turn-To, Northern Dancer 等）
+ *   - main_group_id==5 かつ sub_group_label が "非主流" → 汎用古代祖先（Pharos, Nearco 等）
+ * 上記はどちらも「鑑別価値が低い因子」
+ */
+function isTrunkStallion(row) {
+  const label  = row.sub_group_label || '';
+  const mainId = row.main_group_id   ?? -1;
+  if (label.endsWith('その他')) return true;
+  if (mainId === 5 && label === '非主流') return true;
+  return false;
+}
+
+function toggleTrunkFilter(btn) {
+  _excludeTrunk = !_excludeTrunk;
+  btn.classList.toggle('on', _excludeTrunk);
+  btn.textContent = _excludeTrunk
+    ? '根幹血統を除外（派生＋非主流のみ）'
+    : '根幹血統を表示（全て）';
+  if (_lastResult) {
+    renderCat1(_lastResult.cat1 || []);
+    renderCat23(_lastResult.cat2 || [], _lastResult.cat3 || []);
+  }
+}
 
 // 全体集計（常時参照用）
 let _overallTop = [];       // [{stallion_name, stallion_id, gen, total_count}] 降順
@@ -366,19 +416,34 @@ function clearGroup(groupId) {
   document.getElementById(groupId).querySelectorAll('.tg.on').forEach(b => b.classList.remove('on'));
 }
 
-// ── 系統凡例バー構築 ──
+// ── 系統凡例バー構築（4大主流 大グループ→小グループ 階層表示） ──
 function buildLineageLegend() {
   if (!_lineageMeta.length) return '';
-  // 上位30グループのみ凡例に表示
-  const display = _lineageMeta.filter(g => g.group_id >= 0).slice(0, 30);
-  if (!display.length) return '';
+  // main_group_id でグループ化
+  const byMain = {};
+  _lineageMeta.filter(g => g.group_id >= 0).forEach(g => {
+    const mgid = g.main_group_id ?? 5;
+    if (!byMain[mgid]) byMain[mgid] = [];
+    byMain[mgid].push(g);
+  });
   let html = `<div class="lineage-legend" id="lineageLegend">`;
   html += `<span class="lineage-legend-title">系統凡例</span>`;
-  display.forEach(g => {
-    const color = getGroupColor(g.group_id);
-    html += `<span class="lineage-chip" style="border-color:${color};color:${color}" title="${g.anchor_name} (${g.count}頭)">
-      <span class="lineage-dot" style="background:${color}"></span>${g.anchor_name}
-    </span>`;
+  [1, 2, 3, 4, 5].forEach(mgid => {
+    const subs = byMain[mgid];
+    if (!subs || !subs.length) return;
+    const mainColor = MAIN_GROUP_COLORS[mgid] || '#888';
+    const mainName  = MAIN_GROUP_NAMES[mgid]  || '非主流';
+    // 大グループラベル
+    html += `<span class="lineage-main-chip" style="background:${mainColor}20;border-color:${mainColor};color:${mainColor}">${mainName}</span>`;
+    // 小グループチップ（count 多い順・最大8件）
+    subs.sort((a,b)=>b.count-a.count).slice(0, 8).forEach(g => {
+      const color = g.color || mainColor;
+      const label = g.anchor_name.replace(/系$/, '').replace(/その他$/, '');
+      html += `<span class="lineage-chip" style="border-color:${color};color:${color}" title="${g.anchor_name} (${g.count.toLocaleString()}頭)">
+        <span class="lineage-dot" style="background:${color}"></span>${label}
+      </span>`;
+    });
+    html += `<span class="lineage-sep"></span>`;
   });
   html += `</div>`;
   return html;
@@ -394,7 +459,10 @@ async function init() {
     fetch('/api/pedigree-race-stats/lineage-meta').then(r => r.json()).then(lm => {
       if (lm.groups) {
         _lineageMeta = lm.groups;
-        _lineageMeta.forEach(g => { _lineageColorMap[g.anchor_name] = getGroupColor(g.group_id); });
+        _lineageMeta.forEach(g => {
+          _groupColorMap[g.group_id]     = g.color || '#888';
+          _groupMainColorMap[g.group_id] = g.main_color || g.color || '#888';
+        });
         // 凡例を panels 上部に挿入
         const wrap = document.getElementById('panelsWrap');
         if (wrap) {
@@ -447,7 +515,8 @@ async function init() {
 
 async function fetchOverallTop() {
   try {
-    const r = await (await fetch('/api/pedigree-race-stats/query?count_mode=appearances&top_n=60')).json();
+    const trunk = _excludeTrunk ? '&exclude_trunk=true' : '';
+    const r = await (await fetch(`/api/pedigree-race-stats/query?count_mode=appearances&top_n=100${trunk}`)).json();
     if (r.error) return;
     // cat2 + cat3 を統合して stallion ごとに合計
     const agg = {};
@@ -456,14 +525,19 @@ async function fetchOverallTop() {
       if (!agg[key]) agg[key] = {
         stallion_name: row.stallion_name, stallion_id: row.stallion_id,
         gen: row.gen, total_count: 0, cats: new Set(),
-        group_id: row.group_id ?? -1, anchor_name: row.anchor_name || ''
+        group_id: row.group_id ?? -1, anchor_name: row.anchor_name || '',
+        main_group_id: row.main_group_id ?? -1, main_group_name: row.main_group_name || '',
+        sub_group_label: row.sub_group_label || ''
       };
       agg[key].total_count += row.count;
       agg[key].cats.add(row._cat);
       if (row.gen < agg[key].gen) agg[key].gen = row.gen;
       if ((row.group_id ?? -1) >= 0 && (agg[key].group_id < 0 || row.group_id < agg[key].group_id)) {
-        agg[key].group_id = row.group_id;
-        agg[key].anchor_name = row.anchor_name || '';
+        agg[key].group_id        = row.group_id;
+        agg[key].anchor_name     = row.anchor_name || '';
+        agg[key].main_group_id   = row.main_group_id ?? -1;
+        agg[key].main_group_name = row.main_group_name || '';
+        agg[key].sub_group_label = row.sub_group_label || '';
       }
     }
     _overallTop = Object.values(agg)
@@ -527,6 +601,7 @@ function buildParams() {
   if (vn('genMax')) p.set('gen_max', vn('genMax'));
   p.set('count_mode', _countMode);
   p.set('top_n', '100');
+  if (_excludeTrunk) p.set('exclude_trunk', 'true');
   return p;
 }
 
@@ -550,9 +625,13 @@ function showResults(r) {
 
   document.getElementById('stEntries').textContent = (r.total_entries||0).toLocaleString();
   document.getElementById('stHorses').textContent = (r.unique_horses||0).toLocaleString();
-  document.getElementById('stCat1').textContent = countUnique(r.cat1||[]) + '種';
+  const cat1Src = _excludeTrunk ? (r.cat1||[]).filter(row => !isTrunkStallion(row)) : (r.cat1||[]);
+  document.getElementById('stCat1').textContent = countUnique(cat1Src) + '種';
 
-  const merged23 = mergeForCount([...((r.cat2||[])).map(x=>({...x,cat:2})), ...(r.cat3||[]).map(x=>({...x,cat:3}))]);
+  const cats23Src = _excludeTrunk
+    ? [...(r.cat2||[]), ...(r.cat3||[])].filter(row => !isTrunkStallion(row))
+    : [...(r.cat2||[]), ...(r.cat3||[])];
+  const merged23 = mergeForCount(cats23Src.map(x=>({...x,cat:x.cat??2})));
   document.getElementById('stCat23').textContent = merged23.length + '種';
 
   const modeLabel = _countMode === 'appearances' ? '出現回数（クロス込み）' : 'ユニーク馬数';
@@ -593,7 +672,8 @@ function renderCat1(rows) {
 
 // 全体上位 N件の種牡馬名 Set
 function getOverallTopSet() {
-  return new Set(_overallTop.slice(0, _overallTopN).map(r => r.stallion_name || r.stallion_id));
+  const srcTop = _excludeTrunk ? _overallTop.filter(r => !isTrunkStallion(r)) : _overallTop;
+  return new Set(srcTop.slice(0, _overallTopN).map(r => r.stallion_name || r.stallion_id));
 }
 
 // ── ②③ 統合パネル ──
@@ -646,7 +726,8 @@ function renderCat23(cat2rows, cat3rows) {
 
 // ── 全体集計ボックス構築 ──
 function buildOverallBox() {
-  const topN = _overallTop.slice(0, _overallTopN);
+  const srcTop = _excludeTrunk ? _overallTop.filter(r => !isTrunkStallion(r)) : _overallTop;
+  const topN = srcTop.slice(0, _overallTopN);
   const excActive = _excludeOverall;
 
   let html = `<div class="overall-box">`;
@@ -669,11 +750,13 @@ function buildOverallBox() {
   } else {
     html += `<div class="overall-list">`;
     topN.forEach((r, i) => {
-      const lc = getGroupColor(r.group_id);
+      const lc      = getGroupColor(r.group_id);
+      const mcol    = r.main_group_id > 0 ? (MAIN_GROUP_COLORS[r.main_group_id] || lc) : lc;
+      const tooltip = [r.main_group_name, r.sub_group_label].filter(Boolean).join(' > ');
       const dimStyle = excActive ? 'opacity:.5;' : '';
       const borderStyle = lc ? `border-left:3px solid ${lc};` : '';
-      html += `<div class="overall-item" style="${dimStyle}${borderStyle}" title="${lc ? (r.anchor_name||'') + ' 系 / ' : ''}全体出現回数: ${r.total_count.toLocaleString()}">`;
-      if (lc) html += `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lc};flex-shrink:0"></span>`;
+      html += `<div class="overall-item" style="${dimStyle}${borderStyle}" title="${tooltip ? tooltip + ' / ' : ''}全体出現回数: ${r.total_count.toLocaleString()}">`;
+      if (lc) html += `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${lc};flex-shrink:0;border:1.5px solid ${mcol||lc}"></span>`;
       html += `<span class="overall-rank">${i+1}</span>`;
       html += `<span class="overall-name">${r.stallion_name || '-'}</span>`;
       html += `<span class="overall-gen">第${r.gen}〜</span>`;
@@ -710,20 +793,26 @@ function mergeForCount(rows) {
 
 function aggregateRows(rows) {
   const agg = {};
-  for (const r of rows) {
+  const srcRows = _excludeTrunk ? rows.filter(r => !isTrunkStallion(r)) : rows;
+  for (const r of srcRows) {
     const key = r.stallion_name || r.stallion_id;
     if (!agg[key]) agg[key] = {
       stallion_name: r.stallion_name, stallion_id: r.stallion_id,
       count: 0, gens: new Set(), sub_cats: [],
-      group_id: r.group_id ?? -1, anchor_name: r.anchor_name || ''
+      group_id: r.group_id ?? -1, anchor_name: r.anchor_name || '',
+      main_group_id: r.main_group_id ?? -1, main_group_name: r.main_group_name || '',
+      sub_group_label: r.sub_group_label || ''
     };
     agg[key].count += r.count;
     agg[key].gens.add(r.gen);
     if (!agg[key].sub_cats.includes(r.sub_cat)) agg[key].sub_cats.push(r.sub_cat);
     // group_id: 最も小さい（最も重要な）グループを採用
     if ((r.group_id ?? -1) >= 0 && (agg[key].group_id < 0 || r.group_id < agg[key].group_id)) {
-      agg[key].group_id = r.group_id;
-      agg[key].anchor_name = r.anchor_name || '';
+      agg[key].group_id       = r.group_id;
+      agg[key].anchor_name    = r.anchor_name || '';
+      agg[key].main_group_id  = r.main_group_id ?? -1;
+      agg[key].main_group_name= r.main_group_name || '';
+      agg[key].sub_group_label= r.sub_group_label || '';
     }
   }
   return Object.values(agg).map(v => ({...v, gens: [...v.gens].sort((a,b)=>a-b)}))
@@ -732,19 +821,25 @@ function aggregateRows(rows) {
 
 function aggregateRowsCat23(rows) {
   const agg = {};
-  for (const r of rows) {
+  const srcRows = _excludeTrunk ? rows.filter(r => !isTrunkStallion(r)) : rows;
+  for (const r of srcRows) {
     const key = r.stallion_name || r.stallion_id;
     if (!agg[key]) agg[key] = {
       stallion_name: r.stallion_name, stallion_id: r.stallion_id,
       count: 0, gens: new Set(), cats: new Set(),
-      group_id: r.group_id ?? -1, anchor_name: r.anchor_name || ''
+      group_id: r.group_id ?? -1, anchor_name: r.anchor_name || '',
+      main_group_id: r.main_group_id ?? -1, main_group_name: r.main_group_name || '',
+      sub_group_label: r.sub_group_label || ''
     };
     agg[key].count += r.count;
     agg[key].gens.add(r.gen);
     agg[key].cats.add(r._cat);
     if ((r.group_id ?? -1) >= 0 && (agg[key].group_id < 0 || r.group_id < agg[key].group_id)) {
-      agg[key].group_id = r.group_id;
-      agg[key].anchor_name = r.anchor_name || '';
+      agg[key].group_id        = r.group_id;
+      agg[key].anchor_name     = r.anchor_name || '';
+      agg[key].main_group_id   = r.main_group_id ?? -1;
+      agg[key].main_group_name = r.main_group_name || '';
+      agg[key].sub_group_label = r.sub_group_label || '';
     }
   }
   return Object.values(agg).map(v => ({...v,
@@ -779,17 +874,19 @@ function buildTable(sorted, aggMax, total, color) {
       const lbl = g <= 2 ? (g===1?'父':'父父') : `第${g}世代`;
       return `<span class="sub-badge">${lbl}</span>`;
     }).join(' ');
-    const lc = getGroupColor(r.group_id);
+    const lc      = getGroupColor(r.group_id);
+    const mcol    = r.main_group_id > 0 ? (MAIN_GROUP_COLORS[r.main_group_id] || lc) : lc;
     const rowStyle = lc ? `border-left:3px solid ${lc}` : '';
+    const tooltip  = [r.main_group_name, r.sub_group_label].filter(Boolean).join(' > ');
     const nameExtra = lc
-      ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${lc};margin-right:4px;vertical-align:middle" title="${r.anchor_name||''}"></span>`
+      ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${lc};margin-right:4px;vertical-align:middle;border:1.5px solid ${mcol}" title="${tooltip}"></span>`
       : '';
-    html += `<tr style="${rowStyle}">
+    html += `<tr style="${rowStyle}" title="${tooltip}">
       <td><span class="rank-badge" style="background:${i<3?color:'var(--sf3)'};color:${i<3?'#fff':'var(--txd)'}">${i+1}</span></td>
       <td>${nameExtra}<strong>${r.stallion_name || '-'}</strong></td>
       <td>${genBadges}</td>
       <td style="font-weight:700;color:${color}">${r.count.toLocaleString()}</td>
-      <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${w}%;background:${color}"></div></div></td>
+      <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${w}%;background:${lc||color}"></div></div></td>
       <td><span class="pct-badge">${pct}%</span></td>
     </tr>`;
   });
@@ -810,18 +907,20 @@ function buildTableCat23(sorted, aggMax, total, color) {
     const genBadges = (r.gens||[]).map(g =>
       `<span class="sub-badge">第${g}世代</span>`
     ).join(' ');
-    const lc = getGroupColor(r.group_id);
+    const lc      = getGroupColor(r.group_id);
+    const mcol    = r.main_group_id > 0 ? (MAIN_GROUP_COLORS[r.main_group_id] || lc) : lc;
     const rowStyle = lc ? `border-left:3px solid ${lc}` : '';
+    const tooltip  = [r.main_group_name, r.sub_group_label].filter(Boolean).join(' > ');
     const nameExtra = lc
-      ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${lc};margin-right:4px;vertical-align:middle" title="${r.anchor_name||''}"></span>`
+      ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${lc};margin-right:4px;vertical-align:middle;border:1.5px solid ${mcol}" title="${tooltip}"></span>`
       : '';
-    html += `<tr style="${rowStyle}">
+    html += `<tr style="${rowStyle}" title="${tooltip}">
       <td><span class="rank-badge" style="background:${i<3?color:'var(--sf3)'};color:${i<3?'#fff':'var(--txd)'}">${i+1}</span></td>
       <td>${nameExtra}<strong>${r.stallion_name || '-'}</strong></td>
       <td>${catBadges}</td>
       <td>${genBadges}</td>
       <td style="font-weight:700;color:${color}">${r.count.toLocaleString()}</td>
-      <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${w}%;background:${color}"></div></div></td>
+      <td class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${w}%;background:${lc||color}"></div></div></td>
       <td><span class="pct-badge">${pct}%</span></td>
     </tr>`;
   });

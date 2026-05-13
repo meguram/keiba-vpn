@@ -9,8 +9,8 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
 
-from scraper.client import NetkeibaClient
-from scraper.parsers import SpeedIndexParser
+from src.scraper.client import NetkeibaClient
+from src.scraper.parsers import SpeedIndexParser
 
 race_id = "202606020409"
 url = f"https://race.netkeiba.com/race/speed.html?race_id={race_id}"

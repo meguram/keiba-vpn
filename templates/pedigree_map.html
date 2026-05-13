@@ -78,6 +78,29 @@ canvas{display:block;background:var(--bg);flex-shrink:0}
 .tree-info-stat{display:flex;justify-content:space-between;color:var(--text-dim);margin-bottom:2px}
 .tree-info-stat span:last-child{color:var(--text);font-weight:600}
 
+/* ── BMS 統計パネル ── */
+.bms-section{margin-top:12px}
+.bms-section-title{font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--text-dim);font-weight:600;margin-bottom:6px;padding-bottom:4px;
+  border-bottom:1px solid var(--border)}
+.bms-total-label{font-size:.65rem;color:var(--text-dim);margin-bottom:6px}
+.bms-rank-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;
+  padding:4px 6px;border-radius:4px;cursor:pointer;transition:background .12s}
+.bms-rank-row:hover{background:rgba(255,255,255,.05)}
+.bms-rank-no{width:16px;font-size:.6rem;color:var(--text-dim);text-align:right;flex-shrink:0}
+.bms-rank-bar-wrap{flex:1;height:5px;background:rgba(255,255,255,.07);
+  border-radius:3px;overflow:hidden}
+.bms-rank-bar{height:100%;border-radius:3px;transition:width .3s ease}
+.bms-rank-bar.as-sire{background:linear-gradient(90deg,#00d4aa,#00a87f)}
+.bms-rank-bar.as-bms{background:linear-gradient(90deg,#ff6b35,#cc4a1a)}
+.bms-rank-name{font-size:.72rem;color:var(--text);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:110px;flex-shrink:0}
+.bms-rank-root{font-size:.6rem;color:var(--text-dim);flex-shrink:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px}
+.bms-rank-count{font-size:.65rem;color:var(--accent2);font-weight:600;flex-shrink:0;
+  min-width:28px;text-align:right}
+.bms-loading{font-size:.72rem;color:var(--text-dim);padding:6px 0}
+
 #tree-toolbar{padding:6px 10px;border-bottom:1px solid var(--border);
   background:rgba(0,0,0,.15);display:flex;align-items:center;gap:8px;flex-shrink:0}
 #tree-search-input{flex:1;padding:5px 10px;background:var(--bg);border:1px solid var(--border);
@@ -739,6 +762,24 @@ function highlightRow(id) {
   if (row) { row.classList.add('tn-active'); row.scrollIntoView({block:'nearest', behavior:'smooth'}); }
 }
 
+// ── BMS ランキング HTML 生成 ──────────────────────────────
+function renderBmsRankList(items, colorClass, maxCount) {
+  if (!items || items.length === 0)
+    return '<div class="bms-loading">データなし</div>';
+  return items.map((item, i) => {
+    const pct = maxCount > 0 ? Math.max(4, Math.round(item.count / maxCount * 100)) : 4;
+    const rootLabel = item.root_name && item.root_name !== item.name
+      ? `<span class="bms-rank-root" title="${esc(item.root_name)}">${esc(item.root_name)}系</span>` : '';
+    return `<div class="bms-rank-row" title="${esc(item.name)} (${item.count.toLocaleString()}頭)">
+      <span class="bms-rank-no">${i+1}</span>
+      <span class="bms-rank-name" title="${esc(item.name)}">${esc(item.name)}</span>
+      ${rootLabel}
+      <div class="bms-rank-bar-wrap"><div class="bms-rank-bar ${colorClass}" style="width:${pct}%"></div></div>
+      <span class="bms-rank-count">${item.count.toLocaleString()}</span>
+    </div>`;
+  }).join('');
+}
+
 // ── ノード詳細（右パネル）描画 ─────────────────────────────
 function renderTreeDetail(node) {
   const panel = document.getElementById('tree-node-detail');
@@ -756,13 +797,53 @@ function renderTreeDetail(node) {
       <div class="tree-info-stat"><span>根からの深さ</span><span>${node.depth >= 0 ? node.depth : '不明'} 世代</span></div>
       ${node.is_root ? '<div style="margin-top:6px;font-size:.7rem;color:var(--accent)">● 根ノード（父不明）</div>' : ''}
     </div>
-    ${nkHtml}`;
+    ${nkHtml}
+    <div id="bms-stats-area">
+      <div class="bms-section">
+        <div class="bms-section-title">産駒の母父 TOP10</div>
+        <div class="bms-loading">読み込み中…</div>
+      </div>
+      <div class="bms-section" style="margin-top:14px">
+        <div class="bms-section-title">母父としての父 TOP10</div>
+        <div class="bms-loading">読み込み中…</div>
+      </div>
+    </div>`;
+
+  // BMS 統計を非同期で取得して差し込む
+  fetch(`/api/stallion-sire-tree/bms-stats/${encodeURIComponent(node.id)}?top=10`)
+    .then(r => r.json())
+    .then(data => {
+      const area = document.getElementById('bms-stats-area');
+      if (!area) return;
+      if (data.error) {
+        area.innerHTML = `<div class="bms-loading" style="color:var(--accent2)">${esc(data.error)}</div>`;
+        return;
+      }
+      const max1 = data.as_sire[0]?.count || 1;
+      const max2 = data.as_bms[0]?.count  || 1;
+      area.innerHTML = `
+        <div class="bms-section">
+          <div class="bms-section-title">産駒の母父 TOP10</div>
+          <div class="bms-total-label">産駒 ${data.total_as_sire.toLocaleString()} 頭のデータより</div>
+          ${renderBmsRankList(data.as_sire, 'as-sire', max1)}
+        </div>
+        <div class="bms-section" style="margin-top:14px">
+          <div class="bms-section-title">母父としての父 TOP10</div>
+          <div class="bms-total-label">母父として ${data.total_as_bms.toLocaleString()} 頭のデータより</div>
+          ${renderBmsRankList(data.as_bms, 'as-bms', max2)}
+        </div>`;
+    })
+    .catch(() => {
+      const area = document.getElementById('bms-stats-area');
+      if (area) area.innerHTML = '';
+    });
 }
 
 // ── ルートからツリー全体を描画 ─────────────────────────────
 async function initFullTree() {
   try {
-    const res = await fetch('/api/stallion-sire-tree/roots?limit=100');
+    // 全ルートを一括取得（limit=9999 で実質上限なし）
+    const res = await fetch('/api/stallion-sire-tree/roots?limit=9999');
     const data = await res.json();
     if (data.error) { _treeMsg(data.error, true); return; }
     _treeMsg('');
@@ -1006,6 +1087,11 @@ function initTreeLeftPanel() {
         <button class="rebuild-btn" id="rebuild-btn" onclick="startRebuild()">
           ⚙ 父系ツリーを再計算
         </button>
+        <div style="margin-top:5px;font-size:.65rem;color:rgba(255,255,255,.35);line-height:1.6">
+          ローカル上の全血統データから<br>
+          父子ペアを再集計します。<br>
+          目安: 約 10 秒
+        </div>
         <div class="rebuild-progress-wrap" id="rebuild-progress-wrap">
           <div class="rebuild-progress-bar-bg">
             <div class="rebuild-progress-bar" id="rebuild-progress-bar"></div>

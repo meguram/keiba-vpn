@@ -192,7 +192,7 @@
       <p class="small" style="margin-bottom:0">
         列の追加・更新は主に <span class="mono">FeatureStore</span>（現状は <span class="mono">columns/</span> 出力。移行後はブロック別 <span class="mono">features_dir</span> を拡張する想定）。
         レースパフォーマンス系は <span class="mono">save_race_performance_features()</span> が年 Parquet・<span class="mono">columns/</span>・snapshots・race store を更新。
-        騎手・調教師統計は <span class="mono">python -m pipeline.build_jockey_trainer_stats</span>（定期: <span class="mono">scripts/update_jockey_trainer_stats.sh</span>）。
+        騎手・調教師統計は <span class="mono">python -m pipeline.build_jockey_trainer_stats</span>（定期: <span class="mono">scripts/cron/update_jockey_trainer_stats.sh</span>）。
       </p>
       </div>
     </details>
@@ -318,7 +318,7 @@
     <details class="raw-collapsible">
       <summary>現在のワークスペースで計測した母集団（<span class="mono">registry</span> の <span class="mono">source=custom</span> 列・クリックで展開）</summary>
       <div class="raw-collapsible-body">
-        <p class="small" style="margin-top:0">次の数値は <span class="mono">scripts/embed_raw_flat_samples_in_reference_html.py</span> が
+        <p class="small" style="margin-top:0">次の数値は <span class="mono">scripts/docs/embed_raw_flat_samples_in_reference_html.py</span> が
           <span class="mono">data/features/_registry.json</span> と <span class="mono">columns/*.parquet</span> から再計測した結果です。</p>
     <!-- POPULATION_EMBED_BEGIN -->
       <ul class="compact" style="margin-bottom:0">
@@ -819,7 +819,7 @@
       <li><strong>検証用同梱列</strong>: <span class="mono">jt_result_date</span>, <span class="mono">jt_race_datetime</span>, <span class="mono">jt_row_jockey_id</span>, <span class="mono">jt_row_trainer_id</span></li>
       <li><strong>欠損方針</strong>: 各ブロックの <span class="mono">*_starts</span> が 0 または欠損の行では、対応する勝数・率・平均着・<strong>通過位置の平均系</strong>を欠損にする（過去なしの 0 と本物の 0 を混同しない）</li>
       <li><strong>通過位置</strong>: <span class="mono">race_result.passing_order</span> と <span class="mono">field_size</span> から先頭コーナー位置・セグメント平均・正規化（先頭/頭数）を算出し、<span class="mono">jk_/tr_</span> の <span class="mono">*_avg_pass_*</span> として直前平均・ローリングに反映</li>
-      <li><strong>マージ仕様 JSON</strong>: <span class="mono">_merge_spec.json</span>（<span class="mono">pipeline.jockey_trainer_stats.build_merge_spec</span> と同期）</li>
+      <li><strong>マージ仕様 JSON</strong>: <span class="mono">_merge_spec.json</span>（<span class="mono">pipeline.features.jockey_trainer_stats.build_merge_spec</span> と同期）</li>
       <li><strong>推論用ルックアップ</strong>: <span class="mono">lookup_jockey.parquet</span> / <span class="mono">lookup_trainer.parquet</span>（ID キー）・<span class="mono">lookup_*_slices.parquet</span>（条件別通算。学習での条件マージは <span class="mono">jt_race_features</span> 側を推奨）</li>
     </ul>
     <p class="small" style="margin-bottom:0">
@@ -829,7 +829,7 @@
       </div>
     </details>
     <h3 id="jt-stats-sample"><code>jt_race_features.parquet</code> サンプル（先頭行）</h3>
-    <p class="small">以下は <span class="mono">scripts/embed_raw_flat_samples_in_reference_html.py</span> が
+    <p class="small">以下は <span class="mono">scripts/docs/embed_raw_flat_samples_in_reference_html.py</span> が
       <span class="mono">JT_STATS_REF_*</span> マーカー間を更新した結果です（ファイル未生成時はプレースホルダ）。</p>
     <!-- JT_STATS_REF_BEGIN -->
     <details class="raw-collapsible" id="jt-stats-sample-table">
@@ -1156,7 +1156,7 @@
     </details>
     <p class="small" style="margin-top:2rem">
       ドキュメント生成日: 2026-04-20 起稿。
-      <span class="mono">scripts/embed_raw_flat_samples_in_reference_html.py</span> が
+      <span class="mono">scripts/docs/embed_raw_flat_samples_in_reference_html.py</span> が
       <span class="mono">RAW_FLAT_SAMPLES_*</span>・<span class="mono">JT_STATS_REF_*</span>・<span class="mono">KEYS_SAMPLE_*</span>・<span class="mono">POPULATION_EMBED_*</span>・
       <span class="mono">COLUMN_STATS_EMBED_*</span>・<span class="mono">RP_WIDE_SAMPLE_*</span>・<span class="mono">REGISTRY_MERGED_SAMPLES_*</span>・<span class="mono">RACE_STORE_SAMPLE_*</span>
       マーカー間を、ローカルの <span class="mono">data/features/</span> から再生成します。

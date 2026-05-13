@@ -994,7 +994,7 @@
   <div class="enqueue-missing-panel manual-task-panel">
     <h3>race_lists バックフィル（開催日のみ・主に2024年〜）</h3>
     <p style="font-size:11px;color:var(--text-dim);line-height:1.55">
-      <code>scripts/backfill_race_lists_kaisai_since_2020.py</code> をサーバ上でバックグラウンド実行します（キューとは別プロセス）。
+      <code>scripts/data/backfill_race_lists_kaisai_since_2020.py</code> をサーバ上でバックグラウンド実行します（キューとは別プロセス）。
       db.netkeiba の日別一覧から、レースがある開催日だけ <code>data/local/race_lists/</code> に保存します。
       既に妥当な件数（4〜36件）の <code>race_lists</code> がある日はスキップされます（<code>--force</code> で再取得）。
     </p>

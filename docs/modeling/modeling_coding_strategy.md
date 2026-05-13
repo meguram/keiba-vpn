@@ -413,7 +413,7 @@ df = df.with_columns([
 - **採用ハイパラ** JSON、**重要度**（gain）が取れるモデルでは CSV
 - 可能なら **OOF 予測のサンプル Parquet**（容量に応じて）
 
-既存コードでは `pipeline/trainer.py` / `pipeline/ensemble_trainer.py` / `pipeline/pace_predictor.py` 等が MLflow 連携を持つ。**新規 runner を追加するときも同パターンに揃える**こと。
+既存コードでは `src/pipeline/trainer.py` / `src/pipeline/ensemble_trainer.py` / `src/pipeline/pace_predictor.py` 等が MLflow 連携を持つ。**新規 runner を追加するときも同パターンに揃える**こと。
 
 ## 再現性・比較可能性
 

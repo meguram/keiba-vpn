@@ -9,7 +9,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
 
-from scraper.client import NetkeibaClient
+from src.scraper.client import NetkeibaClient
 from bs4 import BeautifulSoup
 
 horse_id = "2020103111"  # アスターブジエ

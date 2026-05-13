@@ -23,7 +23,7 @@ def run_server(host: str = "0.0.0.0", port: int = 8000,
 
     import uvicorn
 
-    from utils.keiba_logging import apply_root_logging_basic, build_uvicorn_log_config
+    from src.utils.keiba_logging import apply_root_logging_basic, build_uvicorn_log_config
 
     # uvicorn 以外（起動前の import など）向けに root を整える
     apply_root_logging_basic()
@@ -32,7 +32,7 @@ def run_server(host: str = "0.0.0.0", port: int = 8000,
     mode = "development (reload)" if reload else f"production ({workers} workers)"
     _lg.info("keiba-vpn server starting: http://%s:%s  [%s]", host, port, mode)
     uvicorn.run(
-        "api.app:app",
+        "src.api.app:app",
         host=host,
         port=port,
         workers=1 if reload else workers,

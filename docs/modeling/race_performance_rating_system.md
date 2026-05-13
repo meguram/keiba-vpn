@@ -250,7 +250,7 @@ flowchart TD
 - 1-3着平均などから日次補正する
 
 ### 推奨方法
-既存の `research/track_speed.py` を基礎にする。
+既存の `src/research/track_speed.py` を基礎にする。
 
 このコードは
 - 条件別ベースタイム
@@ -528,9 +528,9 @@ flowchart TD
 本設計の最小実装として、以下を追加した。
 
 - 生成器:
-  - `pipeline/race_performance.py`
+  - `src/pipeline/race_performance.py`
 - 評価スクリプト:
-  - `research/evaluate_race_performance_signal.py`
+  - `src/research/evaluate_race_performance_signal.py`
 - 評価結果:
   - `data/meta/modeling/race_performance_eval.json`
 
@@ -601,7 +601,7 @@ flowchart TD
 - `distance` / `surface` の一部欠損は `race_shutuba_flat` から補完して評価した
 - `race_level_retrospective` は future-aware のため評価特徴量には使っていない
 - 評価スクリプトは `online_safe` な列だけを使っている
-- 通常運用の `pipeline.race_performance.py` も `future_horizon_days=0` がデフォルト
+- 通常運用の `pipeline.features.race_performance.py` も `future_horizon_days=0` がデフォルト
 
 ## 8.3 結果
 
@@ -695,7 +695,7 @@ flowchart TD
 これは **実装済み**。
 
 初回実装では `race_result` 側の欠損に引きずられて一部 `distance=0` が残っていたが、  
-現在は `pipeline/race_performance.py` で `race_shutuba` から補完するよう修正済み。
+現在は `src/pipeline/race_performance.py` で `race_shutuba` から補完するよう修正済み。
 
 今後の改善:
 - `grade`, `race_class`, `track_condition` も同様に `shutuba` 優先で監査する
@@ -869,8 +869,8 @@ flowchart TD
 ## 8.7 実装済み成果物
 
 ### 生成コード
-- `pipeline/race_performance.py`
-- `research/evaluate_race_performance_signal.py`
+- `src/pipeline/race_performance.py`
+- `src/research/evaluate_race_performance_signal.py`
 
 ### 保存先
 - レース単位の source of truth:
@@ -896,12 +896,12 @@ flowchart TD
 
 ### 結論
 現在の実装は、**2026 年の新しいレース結果に対しても実行可能** な形にしてある。  
-`pipeline/race_performance.py` は固定年ではなく、ローカルテーブルの存在年を `auto` 検出して処理する。
+`src/pipeline/race_performance.py` は固定年ではなく、ローカルテーブルの存在年を `auto` 検出して処理する。
 
 ### 現在の挙動
-- `python -m pipeline.race_performance --years auto`
+- `python -m src.pipeline.features.race_performance --years auto`
   - `data/local/tables/<year>/` の存在年を自動検出して処理する
-- `python -m pipeline.race_performance --race-ids 202506010101`
+- `python -m src.pipeline.features.race_performance --race-ids 202506010101`
   - 指定レースだけを算出し、`race_id` 単位ファイルへ保存した後、対象年の年別 Parquet / columns / snapshot を再構成する
 - したがって `2026` のローカルテーブルが作成されれば、そのまま算出対象に入る
 
@@ -947,7 +947,7 @@ flowchart TD
 
 1. 当週分の `race_result` / `race_shutuba` ローカルテーブルを更新
 2. 当週に結果が確定した `race_id` 一覧を取得
-3. `python -m pipeline.race_performance --race-ids <comma-separated-race-ids>`
+3. `python -m src.pipeline.features.race_performance --race-ids <comma-separated-race-ids>`
 4. `data/features/race_performance/races/<year>/<race_id>.json` を蓄積 / 上書き
 5. 対象年の `data/features/race_performance/<year>.parquet` を race store から再構成
 6. `data/features/columns/` の列指向特徴量を更新

@@ -10,7 +10,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from pipeline.build_rank_target import build_rank_tbl_for_year, write_rank_target_parquets
+from src.pipeline.build_rank_target import build_rank_tbl_for_year, write_rank_target_parquets
 
 
 class TestBuildRankTarget(unittest.TestCase):

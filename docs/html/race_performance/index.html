@@ -870,7 +870,7 @@ others: margin_seconds / sec_per_point</pre>
 flowchart LR
     A["新レース結果到着"] --> B["race_result / race_shutuba 更新"]
     B --> C["対象 race_id 抽出"]
-    C --> D["python -m pipeline.race_performance --race-ids ..."]
+    C --> D["python -m pipeline.features.race_performance --race-ids ..."]
     D --> E["data/features/race_performance/races/&lt;year&gt;/&lt;race_id&gt;.json 保存"]
     E --> F["年別 Parquet 再構成"]
     F --> G["data/features/columns/*.parquet 再生成"]
@@ -878,10 +878,10 @@ flowchart LR
       </div>
       <h3>使えるコマンド</h3>
       <pre class="code"># 既存ローカルテーブルから自動年検出して全期間ビルド
-python -m pipeline.race_performance --years auto
+python -m pipeline.features.race_performance --years auto
 
 # 当日 / 週次のレース単位ビルド（推奨）
-python -m pipeline.race_performance \
+python -m pipeline.features.race_performance \
     --race-ids 202604110101,202604110102,...
 
 # online-safe デフォルト

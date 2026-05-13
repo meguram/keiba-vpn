@@ -1,4 +1,4 @@
-"""research.race_quality_model のユニットテスト（ストレージなしで検証可能な部分）。"""
+"""research.race.race_quality_model のユニットテスト（ストレージなしで検証可能な部分）。"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from research.race_quality_model import (
+from src.research.race.race_quality_model import (
     compute_pace_shape,
     distance_surface_segment,
     extract_lap_times_from_blob,

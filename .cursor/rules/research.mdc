@@ -1,10 +1,11 @@
 ---
 description: research 配下の Python 編集時
-globs: research/**/*.py
+globs: src/research/**/*.py
 alwaysApply: false
 ---
 
-# research/
+# src/research/
 
-- 本番 API に直結しないことが多いが、`pipeline/` や `data/features/` と指標が重なる場合は二重定義を避ける。
+- 本番 API に直結しないことが多いが、`src/pipeline/` や `data/features/` と指標が重なる場合は二重定義を避ける。
 - 特徴量・レーティングの定義を変える場合は `docs/modeling/` の仕様と整合を取る。
+- import は `from src.research.X import ...` の形（src プレフィックス必須）。

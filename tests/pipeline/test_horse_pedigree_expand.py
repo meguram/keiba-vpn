@@ -1,12 +1,12 @@
-"""pipeline.horse_pedigree_expand の unittest。"""
+"""pipeline.features.horse_pedigree_expand の unittest。"""
 
 from __future__ import annotations
 
 import unittest
 
-from research.pedigree_similarity import is_paternal_side
+from src.research.pedigree.pedigree_similarity import is_paternal_side
 
-from pipeline.horse_pedigree_expand import (
+from src.pipeline.features.horse_pedigree_expand import (
     PRIMARY_MAX_GENERATION,
     fm_path_from_gp,
     global_depth_after_merge,

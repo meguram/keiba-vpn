@@ -80,7 +80,7 @@ flowchart TD
 対象レースで「その馬がいつもの位置を取りやすいか」を推定する。
 
 ## 既存コードの活用先
-- `pipeline/tracking_difficulty.py`
+- `src/pipeline/tracking_difficulty.py`
 
 ## 入力
 - 直近走の通過順傾向
@@ -113,7 +113,7 @@ flowchart TD
 レース全体の前半流速・消耗度・上がり勝負化を推定する。
 
 ## 既存コードの活用先
-- `pipeline/pace_predictor.py`
+- `src/pipeline/pace_predictor.py`
 
 ## 入力
 - Stage2 の `front_run_probability` 集約
@@ -189,8 +189,8 @@ flowchart TD
 - 3 本以上で posterior 重みを増やす
 
 ## 既存コードの活用先
-- `research/race_quality_model.py`
-- `research/tune_race_quality_priors.py`
+- `src/research/race_quality_model.py`
+- `src/research/tune_race_quality_priors.py`
 
 ## Stage5: 血統 × 当日文脈適合モデル
 
@@ -207,16 +207,16 @@ flowchart TD
 したがって、血統特徴は「静的な距離適性」だけでなく「当日の race-day bias との相性」で再評価する。
 
 ## 既存コードの活用先
-- `research/bloodline_distance.py`
-- `research/bloodline_vector.py`
-- `research/course_bloodline.py`
-- `research/sire_factor_stats.py`
-- `research/sire_factor_race_map.py`
-- `research/sire_factor_aptitude.py`
-- `research/note_aptitude_5gen.py`
-- `research/sire_aptitude_note.py`
-- `research/myostatin.py`
-- `research/race_quality_model.py`
+- `src/research/bloodline_distance.py`
+- `src/research/bloodline_vector.py`
+- `src/research/course_bloodline.py`
+- `src/research/sire_factor_stats.py`
+- `src/research/sire_factor_race_map.py`
+- `src/research/sire_factor_aptitude.py`
+- `src/research/note_aptitude_5gen.py`
+- `src/research/sire_aptitude_note.py`
+- `src/research/myostatin.py`
+- `src/research/race_quality_model.py`
 
 ## 血統特徴の二層構造
 
@@ -246,7 +246,7 @@ Stage4 出力との相互作用で作る。
 を集計し、当日クラスタ bias を作る。
 
 ### 2. segment prior + same-day posterior
-`research/race_quality_model.py` の segment prior を day prior として使い、  
+`src/research/race_quality_model.py` の segment prior を day prior として使い、  
 同日先行レースの結果で posterior 補正する。
 
 ### 3. race-wise contextual fit

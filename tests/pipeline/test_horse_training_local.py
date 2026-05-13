@@ -9,9 +9,9 @@ from pathlib import Path
 
 import requests
 
-from pipeline.horse_entity_layout import horse_shard4
-from scraper.horse_training_local import horse_training_local_root, write_horse_training_json
-from scraper.run import _horse_training_http_means_empty
+from src.pipeline.features.horse_entity_layout import horse_shard4
+from src.scraper.horse_training_local import horse_training_local_root, write_horse_training_json
+from src.scraper.run import _horse_training_http_means_empty
 
 
 class TestHorseTrainingLocal(unittest.TestCase):
@@ -41,7 +41,7 @@ class TestHorseTrainingLocal(unittest.TestCase):
         )
 
     def test_access_pause_treats_http_400_as_block(self):
-        from scraper.scrape_access_pause import is_access_or_transport_error
+        from src.scraper.scrape_access_pause import is_access_or_transport_error
 
         r = requests.Response()
         r.status_code = 400
@@ -90,14 +90,14 @@ class TestHorseTrainingLocal(unittest.TestCase):
 
     def test_scraper_runner_storage_root_is_repo_absolute(self):
         """キューが ``ScraperRunner()`` を使うときと同じく、cwd に依存しないリポジトリルートを向く。"""
-        from scraper.run import REPO_ROOT, ScraperRunner
+        from src.scraper.run import REPO_ROOT, ScraperRunner
 
         runner = ScraperRunner()
         self.assertEqual(runner.storage._base_dir.resolve(), REPO_ROOT.resolve())
 
     def test_queue_execute_job_dispatches_horse_training(self):
         """``execute_job`` → ``scrape_horse_training``（キューと同じディスパッチ）。"""
-        from scraper.queue_tasks import execute_job
+        from src.scraper.queue_tasks import execute_job
 
         calls: list[tuple[str, bool]] = []
 
@@ -123,14 +123,14 @@ class TestHorseTrainingLocal(unittest.TestCase):
         """
         import os
 
-        from scraper.client import _load_env
+        from src.scraper.client import _load_env
 
         _load_env(None)
         if not os.environ.get("netkeiba_id"):
             self.skipTest("netkeiba_id なし（.env を確認）")
 
-        from scraper.queue_tasks import execute_job
-        from scraper.run import REPO_ROOT, ScraperRunner
+        from src.scraper.queue_tasks import execute_job
+        from src.scraper.run import REPO_ROOT, ScraperRunner
 
         hid = "2023106216"
         root = horse_training_local_root(REPO_ROOT)

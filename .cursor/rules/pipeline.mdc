@@ -1,11 +1,12 @@
 ---
 description: pipeline 配下の Python 編集時
-globs: pipeline/**/*.py
+globs: src/pipeline/**/*.py
 alwaysApply: false
 ---
 
-# pipeline/
+# src/pipeline/
 
-- **特徴量ストア**は `feature_store.py`、`race_performance.py` 等と `data/features/_registry.json` をセットで扱う。新列はレジストリ方針に従う。
+- **特徴量ストア**は `features/feature_store.py`、`features/race_performance.py` 等と `data/features/_registry.json` をセットで扱う。新列はレジストリ方針に従う。
 - **`data/features/`**（`columns/`、`snapshots/` 等）は生成・中間物が多い。パスや形式を変える場合は呼び出し元を同じ変更に含める。
-- **学習**は `trainer.py` 周辺の既存パターンに合わせる。
+- **学習**は `models/trainer.py` 周辺の既存パターンに合わせる。
+- import は `from src.pipeline.features.X import ...` の形（src プレフィックス必須）。

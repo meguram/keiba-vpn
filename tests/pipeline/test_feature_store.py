@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from pipeline.feature_store import FeatureStore
+from src.pipeline.features.feature_store import FeatureStore
 
 
 class TestFeatureStoreYearPartition(unittest.TestCase):

@@ -10,13 +10,13 @@
 2. **種牡馬・牝系の適性表**  
    `stallions` が **種牡馬×軸**、`broodmare_lines` が **牝系ライン×軸**（同じ 17 軸）。  
    - 一覧 API: `GET /api/pedigree/note-aptitude/table`（`rows` と `broodmare_rows`）  
-   - 記事の全リストから JSON を再生成: `python3 scripts/build_sire_aptitude_note_full.py`（既存 `stallions` の手調整分はマージで保持）  
+   - 記事の全リストから JSON を再生成: `python3 src/scripts/data/build_sire_aptitude_note_full.py`（既存 `stallions` の手調整分はマージで保持）  
    - CSV 化: `stallion_table_rows` / `broodmare_table_rows` をそれぞれ書き出す。
 
 3. **各馬への接続（ブレンド）**  
    **父 1.0 + 母父 0.55 + 牝系ライン 0.35**（牝系名が解決したときのみ第 3 項が効く）。母父のみの場合は従来どおり父+母父。  
    パイプラインでは `entry` / `profile` に `broodmare_line`（JSON の牝系キーまたは `aliases` 経由で解決できる表記）があれば自動で乗る。  
-   将来的には 5 代血統から祖先名ヒットでベクトルを足す、あるいは `research/bloodline_vector.py` の系統埋め込みと concat する。
+   将来的には 5 代血統から祖先名ヒットでベクトルを足す、あるいは `src/research/bloodline_vector.py` の系統埋め込みと concat する。
 
 4. **レース条件との整合（距離帯）**  
    `research/sire_aptitude_note.DIST_AXIS_WEIGHTS` でスプリント／マイル／中距離／長距離ごとに軸の重みを変え、`note_apt_dist_fit` として **1 次元の距離整合スコア**に圧縮。これはあくまでヒューリスティックで、**本番の重み付けは学習データに任せる**のが望ましい。
@@ -30,7 +30,7 @@
 
 ```bash
 # デモ（父・母父・距離）
-python3 -m research.sire_aptitude_note
+python3 -m src.research.pedigree.sire_aptitude_note
 
 # JSON の軸キー整合チェック（開発時）
 python3 -c "import json; from pathlib import Path; ..."  # CI に載せる場合は scripts 化可
@@ -43,7 +43,7 @@ API 例（サーバ起動時）:
 - **レース全頭の 3 次元マップ（パワー・欧州瞬発・TS 素地）**  
   - **ブラウザ**: `/note-aptitude-race`（`?race_id=...` で初期表示可）  
   - **API**: `GET /api/pedigree/race-note-3d?race_id=202505010511&mode=shallow` または `mode=5gen`（5世代は `horse_pedigree_5gen` が必要。父／母経路の係数は `docs/NOTE_APTITUDE_5GEN.md`）  
-  出走は `race_shutuba` 優先、無ければ `race_result`＋各馬 `horse_result` で血統補完。CLI: `python3 -m research.note_aptitude_race_map <race_id> [--5gen]`
+  出走は `race_shutuba` 優先、無ければ `race_result`＋各馬 `horse_result` で血統補完。CLI: `python3 -m src.research.pedigree.note_aptitude_race_map <race_id> [--5gen]`
 
 ## 限界
 

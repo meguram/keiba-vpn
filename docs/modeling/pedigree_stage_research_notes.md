@@ -196,7 +196,7 @@ flowchart LR
   - **血統**: 父・母父の **芝/ダ別のリークなし累計勝率**（産駒全体の過去）
   - **加重**: 当日/前日ブレンド＋（チューニング済み）**馬場区分・距離帯の乗算**
 - **チューニング**: `research/tune_track_bias_weights` → `data/meta/modeling/track_bias_weight_best.json`（**version 2**: `cond_multipliers` / `dist_multipliers`）
-- **母表への焼き込み**: `python3 -m pipeline.build_layer_a_dataset --track-bias-weights-json ...`
+- **母表への焼き込み**: `python3 -m src.pipeline.build_layer_a_dataset --track-bias-weights-json ...`
 
 ### 2.2 血統因子（6 スロット・種牡馬統計）
 
@@ -275,7 +275,7 @@ flowchart LR
 
 ### 5.1 ファーストステップ: 母系種牡馬 × 舞台別集計（バッチ）
 
-- **スクリプト**: `research/build_maternal_stallion_stage_stats.py`
+- **スクリプト**: `src/research/build_maternal_stallion_stage_stats.py`
 - **入力**: `data/local/tables/{年}/race_result_flat.parquet`、5 世代血統索引（既定は `data/local/horse_pedigree_5gen/**/*.json` があれば優先、無ければ `KEIBA_PEDIGREE_JSONL_GZ` / `data/research/_ped_snapshot_cache.jsonl.gz`）
 - **種牡馬の含有範囲（本節）**: 集計に載せる `stallion_id` は、下記の母系展開で **当馬基準の世代 3〜10 に入るノードに限る**（母系側・最大 10 世代の窓）。`data/research/sire_factor_stats.json` の `sires` は（既定の `--stallions-only` 相当）**その窓内の ID を辞書でさらに絞る**ためのもの。`--no-stallions-only` を付けると辞書絞りを外し、**同じ窓内**のすべての祖先 `horse_id` を対象にできる（窓外の父系全体へ広がるわけではない）
 - **母系**: `research/pedigree_similarity.is_maternal_side` と同じ二分木定義。世代 3〜10 は、当馬の 5 世代表で母系に含まれるノードをシードとし、各シード祖先の 5 世代表を **当馬基準世代 `g + r`** として数える（最大 5+5=10）。拡張先の 5 世代表は父・母両系を含む（母系 = 母側 subtree 内の全祖先）
@@ -286,15 +286,15 @@ flowchart LR
 
 ```bash
 # ローカルにある全レース結果で集計（リーク許容のファーストステップ想定）
-python3 -m research.build_maternal_stallion_stage_stats --fetch-pedigree
+python3 -m src.research.pedigree.build_maternal_stallion_stage_stats --fetch-pedigree
 
 # 年を絞る例
-python3 -m research.build_maternal_stallion_stage_stats --years 2024
+python3 -m src.research.pedigree.build_maternal_stallion_stage_stats --years 2024
 ```
 
 ### 5.2 セカンドステップ: 種牡馬祖先グラフ（父・母父の2本）
 
-- **スクリプト**: `research/build_stallion_ancestor_graph.py`
+- **スクリプト**: `src/research/build_stallion_ancestor_graph.py`
 - **対象**: `--from-parquet` でファーストステップの `stallion_id` 一意を読む（省略時は `sire_factor_stats` の全 `sires`）
 - **辺**: 各馬の主馬 5 世代表で **父 (1,0)** と **母父 (2,2)** の `horse_id` を取り、**祖先 → 子孫** の有向辺を張る（`relation` は `sire` / `dam_sire`）
 - **親方向の閉包（既定）**: 対象の主馬（Parquet の `stallion_id` で索引に主馬があるもの）をシードに BFS し、索引に主馬がある限り **各ノードについて父・母父へ再帰的に** 辺を伸ばす。主馬 JSON が無い ID で途切れるまで「上」に辿れる（`meta.closure_nodes_processed` など）
@@ -304,7 +304,7 @@ python3 -m research.build_maternal_stallion_stage_stats --years 2024
 
 ```bash
 # 5.1 と同じローカル 5gen シャードを使うときは --pedigree-gz にディレクトリを渡す（省略時は .jsonl.gz のみ）
-python3 -m research.build_stallion_ancestor_graph \\
+python3 -m src.research.pedigree.build_stallion_ancestor_graph \\
   --from-parquet data/meta/modeling/maternal_stallion_stage_stats.parquet \\
   --pedigree-gz data/local/horse_pedigree_5gen \\
   --out-dir data/meta/modeling/stallion_tree --write-html
@@ -386,14 +386,14 @@ python3 -m research.build_stallion_ancestor_graph \\
 
 #### 5.3.1 評価ラボ（実装済み・結果は JSON）
 
-- **特徴モジュール**: `research/pedigree_stage5_3_features.py` … §5.3 A〜E を可能な範囲で数値化（EB・残差・logit・winsor・粗/細 stage・PCA/NMF/SVD・因子平均・グラフ平滑・PPR サブグラフ・最短経路カーネル・連結成分ラベル・双線形/FM/RBF 代理など）
-- **評価スクリプト**: `python3 -m research.pedigree_stage5_3_eval` … 二値「1着」予測、時系列 split（既定: ≤2023 学習、≥2024 テスト）、特徴群 Ablation、馬単位 GroupShuffleSplit
+- **特徴モジュール**: `src/research/pedigree_stage5_3_features.py` … §5.3 A〜E を可能な範囲で数値化（EB・残差・logit・winsor・粗/細 stage・PCA/NMF/SVD・因子平均・グラフ平滑・PPR サブグラフ・最短経路カーネル・連結成分ラベル・双線形/FM/RBF 代理など）
+- **評価スクリプト**: `python3 -m src.research.pedigree.pedigree_stage5_3_eval` … 二値「1着」予測、時系列 split（既定: ≤2023 学習、≥2024 テスト）、特徴群 Ablation、馬単位 GroupShuffleSplit
 - **出力**: `data/meta/modeling/pedigree_stage5_3_eval.json`（指標・Ablation・補助 R² 等）
 - **重要（リーク）**: 現行ファーストステップの **種牡馬×舞台** 集計は **全期間・同一レース行を母数に含みうる**ため、本ラボの ROC-AUC は **楽観的に高く出やすい**（探索用）。本番評価では **レース日以前のみ**で種牡馬×舞台ベクトル v_s を再集計する必要がある
 - **補助指標**: 「舞台 PCA → `consistency` 因子」の Ridge R²（因子と舞台表現の接続の弱い代理）
 
 ```bash
-python3 -m research.pedigree_stage5_3_eval --max-rows 100000
+python3 -m src.research.pedigree.pedigree_stage5_3_eval --max-rows 100000
 ```
 
 ---
@@ -411,15 +411,15 @@ python3 -m research.pedigree_stage5_3_eval --max-rows 100000
 
 | パス | 役割 |
 |------|------|
-| `pipeline/track_bias_pedigree.py` | 馬場×血統特徴・`include_shutuba_entries_without_result` |
-| `research/tune_track_bias_weights.py` | 重みチューニング（v2 JSON） |
-| `research/pedigree_local_store.py` | 血統スナップショット・索引・BFS 補助 |
-| `research/pedigree_factor_table.py` | `horse_id` × 因子ブレンド Parquet |
-| `research/pedigree_similarity.py` | 血統構造類似度 |
-| `research/build_maternal_stallion_stage_stats.py` | 母系種牡馬 × 舞台別集計（Parquet） |
-| `research/build_stallion_ancestor_graph.py` | 種牡馬祖先グラフ JSON / 簡易 HTML 可視化 |
-| `research/pedigree_stage5_3_features.py` | §5.3 特徴前計算（評価ラボ） |
-| `research/pedigree_stage5_3_eval.py` | §5.3 精度検証（Logistic + Ablation） |
+| `src/pipeline/track_bias_pedigree.py` | 馬場×血統特徴・`include_shutuba_entries_without_result` |
+| `src/research/tune_track_bias_weights.py` | 重みチューニング（v2 JSON） |
+| `src/research/pedigree_local_store.py` | 血統スナップショット・索引・BFS 補助 |
+| `src/research/pedigree_factor_table.py` | `horse_id` × 因子ブレンド Parquet |
+| `src/research/pedigree_similarity.py` | 血統構造類似度 |
+| `src/research/build_maternal_stallion_stage_stats.py` | 母系種牡馬 × 舞台別集計（Parquet） |
+| `src/research/build_stallion_ancestor_graph.py` | 種牡馬祖先グラフ JSON / 簡易 HTML 可視化 |
+| `src/research/pedigree_stage5_3_features.py` | §5.3 特徴前計算（評価ラボ） |
+| `src/research/pedigree_stage5_3_eval.py` | §5.3 精度検証（Logistic + Ablation） |
 | `docs/modeling/track_bias_pedigree_pipeline.md` | 馬場×血統パイプライン説明 |
 
 ---

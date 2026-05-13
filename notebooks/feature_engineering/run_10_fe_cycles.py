@@ -21,7 +21,7 @@ import os
 
 os.chdir(REPO)
 
-from pipeline.feature_store import FeatureStore  # noqa: E402
+from src.pipeline.features.feature_store import FeatureStore  # noqa: E402
 
 
 OUT = Path(__file__).resolve().parent / "_run_output"

@@ -1,4 +1,4 @@
-"""pipeline.horse_pedigree_cross の unittest。"""
+"""pipeline.features.horse_pedigree_cross の unittest。"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import unittest
 
 import pandas as pd
 
-from pipeline.horse_pedigree_cross import add_pedigree_cross_columns
+from src.pipeline.features.horse_pedigree_cross import add_pedigree_cross_columns
 
 
 class TestHorsePedigreeCross(unittest.TestCase):

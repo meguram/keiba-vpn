@@ -1,4 +1,4 @@
-"""pipeline.jockey_trainer_stats のマージキー・スキーマ検証（unittest）。"""
+"""pipeline.features.jockey_trainer_stats のマージキー・スキーマ検証（unittest）。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from pipeline.jockey_trainer_stats import (
+from src.pipeline.features.jockey_trainer_stats import (
     JT_RACE_FEATURES_CONTEXT_COLS,
     JT_RACE_FEATURES_PRIMARY_KEYS,
     attach_jt_race_metadata,
@@ -114,7 +114,7 @@ class TestJockeyTrainerStats(unittest.TestCase):
         self.assertEqual(out["jt_row_jockey_id"].iloc[0], "100")
 
     def test_merge_spec_json_written_with_build(self):
-        from pipeline import jockey_trainer_stats as jtmod
+        from src.pipeline.features import jockey_trainer_stats as jtmod
 
         rr = _minimal_race_result()
         with tempfile.TemporaryDirectory() as td:

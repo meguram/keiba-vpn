@@ -17,7 +17,7 @@
 ### 実装での位置づけ
 
 - 以下は **著者ナレッジ JSON（主観スコア）への重み付けルール**であり、**遺伝子レベルの実測ではない**。
-- **再現性・比較のため**、係数は `research/note_aptitude_5gen.py` に集約し、検証しながら調整する想定。
+- **再現性・比較のため**、係数は `src/research/note_aptitude_5gen.py` に集約し、検証しながら調整する想定。
 
 ## アルゴリズム概要
 
@@ -34,8 +34,8 @@
 
 ## 関連コード
 
-- `research/note_aptitude_5gen.py` — 5世代ブレンド本体・係数表
-- `research/note_aptitude_race_map.py` — レース全頭3D（`blend_mode`）
+- `src/research/note_aptitude_5gen.py` — 5世代ブレンド本体・係数表
+- `src/research/note_aptitude_race_map.py` — レース全頭3D（`blend_mode`）
 - `GET /api/pedigree/race-note-3d?mode=5gen` — API
 
 ## 欠損時の自動取得（レース単位）
@@ -50,4 +50,4 @@
 - API 単体利用:
   - `POST /api/pedigree/race-ensure-5gen` — body: `{ "race_id": "..." }`
   - `GET /api/pedigree/race-ensure-5gen/status?session_id=...` — 投入セッションの完了状況
-- 実装: `research/race_pedigree_5gen_prefetch.py`、キュー優先度は `scraper/job_queue.py`。
+- 実装: `src/research/race_pedigree_5gen_prefetch.py`、キュー優先度は `src/scraper/job_queue.py`。
