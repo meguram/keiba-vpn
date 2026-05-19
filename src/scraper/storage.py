@@ -420,10 +420,16 @@ class HybridStorage:
 
     # ── save ──────────────────────────────────────────
 
-    def save(self, category: str, key: str, data: dict[str, Any]):
+    def save(self, category: str, key: str, data: dict[str, Any]) -> bool:
         """データを保存する。local_only カテゴリはローカル、それ以外は GCS のみ。
 
         自動的に _meta.scraped_at タイムスタンプを付与する。
+
+        Returns:
+            True  — GCS への書き込み成功
+            False — GCS 未接続 / バックオフ中のためスキップ（local_only は常に True）
+        Raises:
+            Exception — GCS 書き込み試行中のエラー
         """
         now = _time.time()
         if "_meta" not in data:
@@ -435,7 +441,7 @@ class HybridStorage:
 
         if self._is_local_only(category):
             self._save_local(category, key, data)
-            return
+            return True
 
         gated = self._is_locally_cached(category)
         # ディスク L2 は週次アクセス閾値付きのみ（GCS 成功後に _weekly_disk_l2_maybe_write）
@@ -444,13 +450,13 @@ class HybridStorage:
             logger.warning("GCS 未接続のため save スキップ: %s/%s", category, key)
             if gated:
                 self._weekly_disk_l2_maybe_write(category, key, data)
-            return
+            return False
 
         if not self._gcs_healthy:
             logger.debug("GCS バックオフ中のため save スキップ: %s/%s", category, key)
             if gated:
                 self._weekly_disk_l2_maybe_write(category, key, data)
-            return
+            return False
 
         try:
             blob_path = self._gcs_blob_path(category, key)
@@ -461,11 +467,13 @@ class HybridStorage:
                                     retry=self._gcs_retry)
             logger.debug("GCS save: %s/%s", category, key)
             self._mark_gcs_success()
+            HybridStorage._last_scrape_activity = _time.time()
             self.invalidate_blob_cache(category)
             self._cache_put(f"{category}/{key}", data)
             if gated:
                 self._weekly_disk_l2_maybe_write(category, key, data)
             self._maybe_write_local_mirror(category, key, data)
+            return True
         except Exception as e:
             logger.error("GCS save 失敗 [%s/%s]: %s", category, key, e)
             self._mark_gcs_failure()
@@ -868,11 +876,20 @@ class HybridStorage:
     _BLOB_LIST_TTL_PAST = 3600     # 1h — 過去年 (不変)
     _BLOB_LIST_TTL_CURRENT = 60    # 1min — 当年 (モニターリアルタイム反映)
 
+    # スクレイピング活動ウィンドウ: この秒数以内に GCS save が成功していれば
+    # 過去年 blob リストも短い TTL (_BLOB_LIST_TTL_CURRENT) を適用する。
+    # 何も動いていないときに GCS list を叩かないための最適化。
+    _last_scrape_activity: float = 0.0
+    _SCRAPE_ACTIVITY_WINDOW: float = 300.0  # 5 分
+
     def _blob_list_ttl(self, year: str) -> float:
         current_year = datetime.now(JST).strftime("%Y")
-        if year < current_year:
-            return self._BLOB_LIST_TTL_PAST
-        return self._BLOB_LIST_TTL_CURRENT
+        if year >= current_year:
+            return self._BLOB_LIST_TTL_CURRENT
+        # 最近スクレイピングが動いていれば過去年も短い TTL で監視
+        if (_time.time() - HybridStorage._last_scrape_activity) < self._SCRAPE_ACTIVITY_WINDOW:
+            return self._BLOB_LIST_TTL_CURRENT
+        return self._BLOB_LIST_TTL_PAST
 
     _BLOB_DISK_CACHE_TTL_PAST = 3600    # 1h — 過去年の blob リスト (ほぼ不変)
     _BLOB_DISK_CACHE_TTL_CURRENT = 60   # 1min — 当年の blob リスト

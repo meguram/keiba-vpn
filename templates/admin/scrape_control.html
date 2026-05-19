@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スクレイピングコントロール | ML-AutoPilot Keiba</title>
+<style>
+  :root {
+    --bg: #0a0e17; --surface: #131926; --surface2: #1a2235;
+    --border: #243049; --text: #c8d6e5; --text-dim: #6b7d95;
+    --accent: #3b82f6; --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+    --log-bg: #090d14; --log-info: #a8c7e8; --log-warn: #f59e0b;
+    --log-err: #f87171; --log-ok: #4ade80;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+
+  /* ── ヘッダー ── */
+  .header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 20px; display: flex; align-items: center; gap: 16px; flex-shrink: 0;
+  }
+  .header h1 { font-size: 15px; font-weight: 700; color: #fff; }
+  .header a { color: var(--text-dim); font-size: 12px; text-decoration: none; }
+  .header a:hover { color: var(--accent); }
+  .header-spacer { flex: 1; }
+  .worker-badge {
+    display: flex; align-items: center; gap: 6px; font-size: 12px;
+    padding: 5px 10px; border-radius: 6px; background: var(--surface2); border: 1px solid var(--border);
+  }
+  .worker-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .worker-dot.alive { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .worker-dot.idle { background: var(--text-dim); }
+  .worker-dot.error { background: var(--err); }
+
+  /* ── ステータスバー ── */
+  .status-bar {
+    background: var(--surface2); border-bottom: 1px solid var(--border);
+    padding: 8px 20px; display: flex; gap: 20px; flex-shrink: 0; font-size: 12px;
+  }
+  .stat-item { display: flex; align-items: center; gap: 6px; }
+  .stat-label { color: var(--text-dim); }
+  .stat-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat-val.running { color: var(--accent); }
+  .stat-val.pending { color: var(--warn); }
+  .stat-val.done { color: var(--ok); }
+  .stat-val.failed { color: var(--err); }
+
+  /* ── メインレイアウト ── */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── 左パネル ── */
+  .left-panel {
+    width: 380px; min-width: 320px; flex-shrink: 0; overflow-y: auto;
+    border-right: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; gap: 16px;
+  }
+
+  /* ── 右パネル (ログ) ── */
+  .log-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .log-toolbar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 8px 14px; display: flex; align-items: center; gap: 10px; font-size: 12px; flex-shrink: 0;
+  }
+  .log-toolbar h3 { font-size: 13px; font-weight: 600; flex: 1; }
+  .log-toolbar .log-count { color: var(--text-dim); font-size: 11px; }
+  .log-stream {
+    flex: 1; overflow-y: auto; padding: 6px 0;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 11.5px; background: var(--log-bg);
+  }
+
+  /* ── ログ行 ── */
+  .log-entry {
+    display: grid;
+    grid-template-columns: 72px 42px minmax(0,110px) 1fr;
+    grid-template-rows: auto;
+    column-gap: 6px;
+    align-items: baseline;
+    padding: 3px 14px;
+    border-bottom: 1px solid rgba(36,48,73,0.18);
+    line-height: 1.5;
+  }
+  .log-entry:hover { background: rgba(255,255,255,0.025); }
+  .log-ts {
+    color: #2e4458; font-size: 10.5px; white-space: nowrap;
+    font-variant-numeric: tabular-nums; flex-shrink: 0;
+  }
+  .log-pill {
+    display: inline-block; padding: 0 5px; border-radius: 3px;
+    font-size: 9.5px; font-weight: 800; letter-spacing: 0.4px;
+    text-align: center; white-space: nowrap;
+  }
+  .pill-INFO     { background: rgba(59,130,246,0.18); color: #7ab8f5; }
+  .pill-WARNING  { background: rgba(245,158,11,0.2);  color: #fbbf24; }
+  .pill-ERROR    { background: rgba(239,68,68,0.2);   color: #f87171; }
+  .pill-CRITICAL { background: rgba(239,68,68,0.3);   color: #ff9090; }
+  .pill-DEBUG    { background: rgba(107,125,149,0.12); color: #4a6070; }
+  .log-tag {
+    color: #3b5268; font-size: 10px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .log-msg {
+    color: #9dbbd4; font-size: 11px; word-break: break-word; min-width: 0;
+    line-height: 1.55;
+  }
+  .log-msg .hl-ok   { color: #4ade80; }
+  .log-msg .hl-warn { color: #fbbf24; }
+  .log-msg .hl-err  { color: #f87171; }
+  .log-msg .hl-skip { color: #3d5268; }
+
+  /* ── 時間ギャップ区切り ── */
+  .log-sep {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px; color: #2a3f58; font-size: 10px;
+  }
+  .log-sep-line { flex: 1; height: 1px; background: rgba(36,48,73,0.45); }
+
+  .log-empty { color: var(--text-dim); text-align: center; padding: 40px 0; font-size: 12px; }
+
+  /* ── セクションカード ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  .card-head {
+    padding: 10px 14px; background: var(--surface2); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
+  }
+  .card-head .icon { font-size: 14px; }
+  .card-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ── フォーム部品 ── */
+  label { font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  select, input[type=date], input[type=text] {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 10px; border-radius: 5px; font-size: 12px; font-family: inherit; outline: none;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row .grow { flex: 1; }
+
+  /* ── ボタン ── */
+  .btn {
+    padding: 7px 14px; border-radius: 5px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border: none; font-family: inherit; transition: opacity 0.15s;
+  }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:not(:disabled):hover { background: #2563eb; }
+  .btn-ok { background: var(--ok); color: #000; }
+  .btn-ok:not(:disabled):hover { background: #16a34a; }
+  .btn-warn { background: var(--warn); color: #000; }
+  .btn-warn:not(:disabled):hover { background: #d97706; }
+  .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm { padding: 5px 10px; font-size: 11px; }
+
+  /* ── タスク実行ステータス ── */
+  .task-status {
+    padding: 8px 10px; border-radius: 5px; font-size: 11px; background: var(--surface2);
+    border: 1px solid var(--border); display: none;
+  }
+  .task-status.visible { display: block; }
+  .task-status-step { color: var(--accent); margin-bottom: 4px; font-weight: 600; }
+  .task-status-info { color: var(--text-dim); }
+  .task-status.state-done .task-status-step { color: var(--ok); }
+  .task-status.state-error .task-status-step { color: var(--err); }
+
+  /* ── レース一覧テーブル ── */
+  .race-list-wrap { max-height: 320px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { background: var(--surface2); padding: 6px 8px; text-align: left; font-weight: 600; color: var(--text-dim); font-size: 10px; text-transform: uppercase; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+  td { padding: 5px 8px; border-bottom: 1px solid rgba(36,48,73,0.5); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  input[type=checkbox] { cursor: pointer; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; }
+  .badge-done { background: rgba(34,197,94,0.15); color: var(--ok); }
+  .badge-none { background: rgba(107,125,149,0.15); color: var(--text-dim); }
+  .badge-running { background: rgba(59,130,246,0.15); color: var(--accent); }
+
+  /* ── キューアクション ── */
+  .action-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ── データタイプ選択 ── */
+  .dtype-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .dtype-item { display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; }
+  .dtype-item input { width: auto; }
+  .dtype-section-label {
+    grid-column: 1 / -1; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--text-dim); padding: 6px 0 2px;
+    border-top: 1px solid var(--border); margin-top: 2px;
+  }
+  .dtype-section-label:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+  .dtype-item-derived { color: #8888cc; }
+  .badge-derived {
+    display: inline-block; padding: 0 5px; border-radius: 3px; font-size: 9px; font-weight: 700;
+    background: #f0f0ff22; color: #8888cc; border: 1px solid #8888cc44; margin-left: 2px;
+  }
+
+  /* ── エンプティ ── */
+  .empty-msg { text-align: center; color: var(--text-dim); font-size: 12px; padding: 20px 0; }
+
+  /* ── データ存在グリッド ── */
+  .data-legend { display: flex; flex-wrap: wrap; gap: 5px 12px; font-size: 10px; color: var(--text-dim); }
+  .data-legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .cat-dot {
+    display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+    flex-shrink: 0; cursor: default;
+  }
+  .cat-dot.ok      { background: var(--ok); }
+  .cat-dot.stale   { background: var(--warn); }
+  .cat-dot.partial { background: rgba(245,158,11,0.5); }
+  .cat-dot.empty   { background: rgba(107,125,149,0.2); border: 1px solid rgba(107,125,149,0.3); }
+  .cat-dot.na      { background: transparent; border: 1px dashed rgba(107,125,149,0.25); }
+  .cat-dot.derived { background: #8888cc44; border: 1px solid #8888cc88; }
+  .data-race-row { padding: 5px 0; border-bottom: 1px solid rgba(36,48,73,0.35); }
+  .data-race-header { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; font-size: 11px; }
+  .data-race-name { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .data-cat-row { display: flex; gap: 3px; flex-wrap: wrap; margin-left: 22px; }
+  .data-cat-sep { width: 5px; display: inline-block; flex-shrink: 0; }
+  .cat-header-row { display: flex; gap: 3px; flex-wrap: wrap; margin-left: 22px; font-size: 9px; color: var(--text-dim); margin-bottom: 4px; }
+  .cat-header-item { width: 9px; text-align: center; overflow: hidden; cursor: default; }
+  .cat-group-sep { width: 5px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🎯 スクレイピングコントロール</h1>
+  <a href="/queue-status">キューステータス →</a>
+  <a href="/monitor">モニター →</a>
+  <a href="/scrape-upcoming">予定取得 →</a>
+  <div class="header-spacer"></div>
+  <div class="worker-badge">
+    <div class="worker-dot idle" id="wdot"></div>
+    <span id="wstatus">確認中...</span>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="stat-item"><span class="stat-label">実行中</span><span class="stat-val running" id="s-running">–</span></div>
+  <div class="stat-item"><span class="stat-label">待機中</span><span class="stat-val pending" id="s-pending">–</span></div>
+  <div class="stat-item"><span class="stat-label">完了</span><span class="stat-val done" id="s-done" title="完了ジョブは自動削除されます">–</span></div>
+  <div class="stat-item"><span class="stat-label">失敗</span><span class="stat-val failed" id="s-failed">–</span></div>
+  <div class="stat-item"><span class="stat-label">最終更新</span><span class="stat-val" id="s-updated" style="color:var(--text-dim)">–</span></div>
+  <div class="header-spacer"></div>
+  <button class="btn btn-ghost btn-sm" onclick="recoverQueue()">回復</button>
+  <button class="btn btn-ghost btn-sm" onclick="kickWorker()">ワーカー再起動</button>
+</div>
+
+<div class="main">
+  <!-- ── 左パネル ── -->
+  <div class="left-panel">
+
+    <!-- タスク実行 -->
+    <div class="card">
+      <div class="card-head"><span class="icon">⚡</span> 自動スクレイプタスク実行</div>
+      <div class="card-body">
+        <div>
+          <label>タスク</label>
+          <select id="task-select">
+            <option value="raceday-evening">raceday-evening — 開催日夕方 速報結果・確定オッズ</option>
+            <option value="weekly-update">weekly-update — 週次更新</option>
+            <option value="catchup-missing">catchup-missing — 欠損補完</option>
+            <option value="daily-race-lists">daily-race-lists — 日次レース一覧更新</option>
+          </select>
+        </div>
+        <div>
+          <label>対象日 <span style="font-weight:400;text-transform:none;letter-spacing:0">(空欄 = タスクデフォルト)</span></label>
+          <input type="date" id="task-date" />
+        </div>
+        <button class="btn btn-primary" id="run-btn" onclick="runTask()">▶ 実行</button>
+        <div class="task-status" id="task-status">
+          <div class="task-status-step" id="task-step">起動中...</div>
+          <div class="task-status-info" id="task-info"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 日付指定データ保存 -->
+    <div class="card">
+      <div class="card-head"><span class="icon">📊</span> 日付指定データ保存</div>
+      <div class="card-body">
+        <div class="row">
+          <div class="grow">
+            <label>開催日</label>
+            <input type="date" id="date-input" />
+          </div>
+          <button class="btn btn-ghost" onclick="fetchDateData()">データ確認</button>
+        </div>
+
+        <!-- 凡例 -->
+        <div class="data-legend" id="data-legend" style="display:none">
+          <span><span class="cat-dot ok"></span> 取得済</span>
+          <span><span class="cat-dot empty"></span> 未取得</span>
+          <span><span class="cat-dot na"></span> 対象外</span>
+          <span><span class="cat-dot derived"></span> 派生</span>
+        </div>
+
+        <!-- カテゴリ略称ヘッダー行 -->
+        <div class="cat-header-row" id="cat-header-row" style="display:none"></div>
+
+        <!-- レース別ドットグリッド -->
+        <div id="data-race-list" style="display:none; max-height:300px; overflow-y:auto;"></div>
+
+        <div id="date-data-empty" class="empty-msg" style="display:none">レースなし</div>
+        <div id="date-data-loading" class="empty-msg" style="display:none">取得中...</div>
+
+        <!-- キューモード -->
+        <div id="queue-mode-section" style="display:none">
+          <label>キューモード</label>
+          <div style="display:flex;gap:12px;margin-bottom:8px;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px;text-transform:none;letter-spacing:0;cursor:pointer;font-weight:400;">
+              <input type="radio" name="qmode" value="all" checked onchange="queueModeChange()"> 全データ
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px;text-transform:none;letter-spacing:0;cursor:pointer;font-weight:400;">
+              <input type="radio" name="qmode" value="missing" onchange="queueModeChange()"> 未取得のみ
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px;text-transform:none;letter-spacing:0;cursor:pointer;font-weight:400;">
+              <input type="radio" name="qmode" value="custom" onchange="queueModeChange()"> カテゴリ指定
+            </label>
+          </div>
+          <!-- カテゴリ指定パネル -->
+          <div id="custom-cat-panel" style="display:none; margin-bottom:8px;">
+            <div class="dtype-grid">
+              <div class="dtype-section-label">直接スクレイピング</div>
+              <label class="dtype-item"><input type="checkbox" value="race_shutuba" id="dc-race_shutuba"> 出馬表</label>
+              <label class="dtype-item"><input type="checkbox" value="race_result" id="dc-race_result"> レース結果</label>
+              <label class="dtype-item"><input type="checkbox" value="race_result_on_time" id="dc-race_result_on_time"> 速報結果</label>
+              <label class="dtype-item"><input type="checkbox" value="race_index" id="dc-race_index"> タイム指数</label>
+              <label class="dtype-item"><input type="checkbox" value="race_odds" id="dc-race_odds"> 単複オッズ</label>
+              <label class="dtype-item"><input type="checkbox" value="race_pair_odds" id="dc-race_pair_odds"> 2連系オッズ</label>
+              <label class="dtype-item"><input type="checkbox" value="race_paddock" id="dc-race_paddock"> パドック</label>
+              <label class="dtype-item"><input type="checkbox" value="race_barometer" id="dc-race_barometer"> 偏差値</label>
+              <label class="dtype-item"><input type="checkbox" value="race_trainer_comment" id="dc-race_trainer_comment"> 厩舎コメント</label>
+              <label class="dtype-item"><input type="checkbox" value="smartrc" id="dc-smartrc"> SmartRC</label>
+              <div class="dtype-section-label">馬軸</div>
+              <label class="dtype-item"><input type="checkbox" value="horse_result" id="dc-horse_result"> 馬成績</label>
+              <label class="dtype-item"><input type="checkbox" value="horse_pedigree_5gen" id="dc-horse_pedigree_5gen"> 血統5gen</label>
+              <label class="dtype-item" title="要ログイン"><input type="checkbox" value="horse_training" id="dc-horse_training"> 調教 🔒</label>
+              <div class="dtype-section-label">★ 派生</div>
+              <label class="dtype-item dtype-item-derived"><input type="checkbox" value="race_result_lap" id="dc-race_result_lap"> ラップ <span class="badge-derived">★派生</span></label>
+            </div>
+          </div>
+          <button class="btn btn-ok" id="queue-btn" onclick="queueSelected()">✓ キューに追加</button>
+          <div id="queue-result" style="font-size:11px;display:none;margin-top:6px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- キューアクション -->
+    <div class="card">
+      <div class="card-head"><span class="icon">⚙</span> キュー操作</div>
+      <div class="card-body">
+        <div class="action-row">
+          <button class="btn btn-ghost btn-sm" onclick="recoverQueue()">孤児ジョブ回復</button>
+          <button class="btn btn-ghost btn-sm" onclick="requeueFailed()">失敗を再キュー</button>
+          <button class="btn btn-ghost btn-sm" onclick="kickWorker()">ワーカー再起動</button>
+        </div>
+        <div id="action-result" style="font-size:11px;color:var(--text-dim);display:none"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── 右パネル: ライブログ ── -->
+  <div class="log-panel">
+    <div class="log-toolbar">
+      <h3>📋 ライブ ワーカーログ</h3>
+      <span class="log-count" id="log-count" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);padding:1px 7px;border-radius:10px;color:#60a5fa">0 件</span>
+      <span id="log-window-info" style="color:var(--text-dim);font-size:10px"></span>
+      <div style="flex:1"></div>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim);text-transform:none;letter-spacing:0;margin:0;cursor:pointer;">
+        <input type="checkbox" id="auto-scroll" checked> 自動スクロール
+      </label>
+      <button class="btn btn-ghost btn-sm" onclick="clearLogs()">クリア</button>
+      <button class="btn btn-ghost btn-sm" id="log-pause-btn" onclick="toggleLogPause()">⏸ 一時停止</button>
+    </div>
+    <div class="log-stream" id="log-stream">
+      <div class="log-empty" id="log-empty">ワーカーログ待機中... (1秒ごと自動更新)</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "{{ api_prefix }}";
+let lastLogId = -1;
+let logCount = 0;
+let logPaused = false;
+let taskPolling = null;
+
+// ──────────────── ステータス更新 ────────────────
+async function refreshStatus() {
+  try {
+    const r = await fetch(`${API}/api/scrape-queue/status`);
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('s-running').textContent = (d.active_jobs || d.current_jobs || []).length;
+    document.getElementById('s-pending').textContent = (d.pending_queue || []).length;
+    document.getElementById('s-done').textContent = '–';
+    document.getElementById('s-failed').textContent = (d.failed_jobs || []).length;
+    document.getElementById('s-updated').textContent = new Date().toLocaleTimeString('ja-JP');
+
+    const wh = d.worker_health || {};
+    const dot = document.getElementById('wdot');
+    const ws = document.getElementById('wstatus');
+    const slots = wh.live_slots || 0;
+    const total = wh.slot_count || 0;
+    const slotLabel = total > 0 ? ` (${slots}/${total})` : '';
+    if (wh.alive) {
+      dot.className = 'worker-dot ' + (wh.processing ? 'alive' : 'idle');
+      ws.textContent = (wh.processing ? '処理中' : '待機中') + slotLabel;
+    } else {
+      dot.className = 'worker-dot error';
+      ws.textContent = 'ワーカー停止' + slotLabel;
+    }
+  } catch (e) {}
+}
+
+// ──────────────── ログ更新 ────────────────
+const LOG_MAX = 200;        // DOMに保持する最大行数
+const LOG_SEP_GAP = 30;     // この秒数以上の間隔で区切り線を挿入
+let logBuffer = [];         // {id, ts, node} の配列
+let lastLogTs = 0;          // 直前エントリのタイムスタンプ (秒)
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function pillClass(lv) {
+  if (lv === 'ERROR' || lv === 'CRITICAL') return 'pill-' + lv;
+  if (lv === 'WARNING') return 'pill-WARNING';
+  if (lv === 'DEBUG')   return 'pill-DEBUG';
+  return 'pill-INFO';
+}
+
+function shortLogger(name) {
+  // "src.scraper.run.phase1" → "scraper.run" (src. を除き最大2セグメント)
+  const s = name.replace(/^src\./, '');
+  const parts = s.split('.');
+  return parts.length > 2 ? parts.slice(0, 2).join('.') : s;
+}
+
+function highlightMsg(msg) {
+  const safe = escHtml(msg);
+  if (/スキップ|skip/i.test(msg))     return `<span class="hl-skip">${safe}</span>`;
+  if (/エラー|error|failed|fail/i.test(msg))  return `<span class="hl-err">${safe}</span>`;
+  if (/警告|warn/i.test(msg))           return `<span class="hl-warn">${safe}</span>`;
+  if (/完了|保存|success|ok|done/i.test(msg)) return `<span class="hl-ok">${safe}</span>`;
+  return safe;
+}
+
+function makeSepNode(ts) {
+  const el = document.createElement('div');
+  el.className = 'log-sep';
+  const d = new Date(ts * 1000);
+  const label = d.toLocaleTimeString('ja-JP', {hour12:false});
+  el.innerHTML = `<span class="log-sep-line"></span><span>${label}</span><span class="log-sep-line"></span>`;
+  return el;
+}
+
+function makeEntryNode(e) {
+  const row = document.createElement('div');
+  row.className = 'log-entry';
+  const ts = new Date(e.ts * 1000).toLocaleTimeString('ja-JP', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  const lv = (e.level || 'INFO').toUpperCase();
+  const tag = shortLogger(e.logger || '');
+  row.innerHTML =
+    `<span class="log-ts">${ts}</span>` +
+    `<span class="log-pill ${pillClass(lv)}">${lv.slice(0,4)}</span>` +
+    `<span class="log-tag" title="${escHtml(e.logger || '')}">${escHtml(tag)}</span>` +
+    `<span class="log-msg">${highlightMsg(e.message || '')}</span>`;
+  return row;
+}
+
+function trimOldestEntries(stream) {
+  while (logBuffer.length > LOG_MAX) {
+    const oldest = logBuffer.shift();
+    // ノード（区切り + エントリ）を削除
+    if (oldest.sepNode && oldest.sepNode.parentNode === stream) stream.removeChild(oldest.sepNode);
+    if (oldest.node && oldest.node.parentNode === stream)        stream.removeChild(oldest.node);
+  }
+}
+
+async function pollLogs() {
+  if (logPaused) return;
+  try {
+    const r = await fetch(`${API}/api/scrape-queue/worker-logs?after=${lastLogId}&limit=100`);
+    if (!r.ok) return;
+    const d = await r.json();
+    const entries = d.entries || [];
+    if (entries.length === 0) {
+      updateLogWindowInfo();
+      return;
+    }
+
+    const stream = document.getElementById('log-stream');
+    const emptyEl = document.getElementById('log-empty');
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    const frag = document.createDocumentFragment();
+    for (const e of entries) {
+      let sepNode = null;
+      if (lastLogTs > 0 && (e.ts - lastLogTs) >= LOG_SEP_GAP) {
+        sepNode = makeSepNode(e.ts);
+        frag.appendChild(sepNode);
+      }
+      const node = makeEntryNode(e);
+      frag.appendChild(node);
+      logBuffer.push({id: e.id, ts: e.ts, node, sepNode});
+      lastLogTs = e.ts;
+      lastLogId = Math.max(lastLogId, e.id);
+    }
+
+    stream.appendChild(frag);
+    logCount += entries.length;
+    trimOldestEntries(stream);
+    updateLogWindowInfo();
+    document.getElementById('log-count').textContent = logBuffer.length + ' 件';
+
+    if (document.getElementById('auto-scroll').checked) {
+      stream.scrollTop = stream.scrollHeight;
+    }
+  } catch (e) {}
+}
+
+function updateLogWindowInfo() {
+  const el = document.getElementById('log-window-info');
+  if (!el) return;
+  if (logBuffer.length === 0) { el.textContent = ''; return; }
+  const oldestTs = logBuffer[0].ts;
+  const newestTs = logBuffer[logBuffer.length - 1].ts;
+  const spanSec = Math.round(newestTs - oldestTs);
+  if (spanSec < 60) {
+    el.textContent = `直近 ${spanSec}秒 / 最大${LOG_MAX}件`;
+  } else {
+    el.textContent = `直近 ${Math.round(spanSec/60)}分 / 最大${LOG_MAX}件`;
+  }
+}
+
+function clearLogs() {
+  fetch(`${API}/api/scrape-queue/worker-logs/clear`, {method:'POST'}).catch(()=>{});
+  const stream = document.getElementById('log-stream');
+  stream.innerHTML = '<div class="log-empty">ログをクリアしました</div>';
+  lastLogId = -1;
+  logCount = 0;
+  logBuffer = [];
+  lastLogTs = 0;
+  document.getElementById('log-count').textContent = '0 件';
+  document.getElementById('log-window-info').textContent = '';
+}
+
+function toggleLogPause() {
+  logPaused = !logPaused;
+  document.getElementById('log-pause-btn').textContent = logPaused ? '▶ 再開' : '⏸ 一時停止';
+}
+
+// ──────────────── タスク実行 ────────────────
+async function runTask() {
+  const task = document.getElementById('task-select').value;
+  const dateVal = document.getElementById('task-date').value;  // YYYY-MM-DD or ""
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+
+  const st = document.getElementById('task-status');
+  const step = document.getElementById('task-step');
+  const info = document.getElementById('task-info');
+  st.className = 'task-status visible';
+  step.textContent = '起動中...';
+  info.textContent = '';
+
+  try {
+    const body = { task, date: dateVal || new Date().toISOString().slice(0,10) };
+    const r = await fetch(`${API}/api/auto-scrape/run`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.error) {
+      st.className = 'task-status visible state-error';
+      step.textContent = 'エラー: ' + d.error;
+      btn.disabled = false;
+      return;
+    }
+    if (d.status === 'already_running') {
+      step.textContent = `既に実行中: ${d.task} (${d.date})`;
+      btn.disabled = false;
+      return;
+    }
+    step.textContent = `実行中: ${task}`;
+    // poll run-status
+    if (taskPolling) clearInterval(taskPolling);
+    taskPolling = setInterval(async () => {
+      try {
+        const sr = await fetch(`${API}/api/auto-scrape/run-status`);
+        const sd = await sr.json();
+        step.textContent = sd.current_step || sd.status;
+        if (sd.status === 'done') {
+          st.className = 'task-status visible state-done';
+          step.textContent = '✓ 完了: ' + task;
+          info.textContent = sd.result ? JSON.stringify(sd.result) : '';
+          clearInterval(taskPolling); btn.disabled = false;
+        } else if (sd.status === 'error') {
+          st.className = 'task-status visible state-error';
+          step.textContent = 'エラー: ' + (sd.error || '不明');
+          clearInterval(taskPolling); btn.disabled = false;
+        }
+      } catch {}
+    }, 1500);
+  } catch (e) {
+    st.className = 'task-status visible state-error';
+    step.textContent = 'エラー: ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+// ──────────────── 日付指定データ保存 ────────────────
+// §3 カテゴリ定義 (グループ別)
+const CAT_GROUPS = [
+  {
+    label: 'レース直接',
+    cats: [
+      {id:'race_shutuba',          abbr:'出', hint:'出馬表'},
+      {id:'race_result',           abbr:'結', hint:'DB結果'},
+      {id:'race_result_on_time',   abbr:'速', hint:'速報結果'},
+      {id:'race_index',            abbr:'指', hint:'タイム指数'},
+      {id:'race_odds',             abbr:'単', hint:'単複オッズ'},
+      {id:'race_pair_odds',        abbr:'2', hint:'2連系オッズ'},
+      {id:'race_paddock',          abbr:'P', hint:'パドック'},
+      {id:'race_barometer',        abbr:'偏', hint:'偏差値'},
+      {id:'race_trainer_comment',  abbr:'厩', hint:'厩舎コメント'},
+      {id:'smartrc_race',          abbr:'S', hint:'SmartRC'},
+    ],
+  },
+  {
+    label: '派生',
+    cats: [
+      {id:'race_result_lap', abbr:'L', hint:'ラップ', derived:true},
+    ],
+  },
+  {
+    label: '馬軸',
+    cats: [
+      {id:'horse_result',        abbr:'馬', hint:'馬成績'},
+      {id:'horse_pedigree_5gen', abbr:'血', hint:'血統5gen'},
+      {id:'horse_training',      abbr:'調', hint:'調教'},
+    ],
+  },
+];
+
+// 障害レースで取得対象外のカテゴリ
+const STEEPLE_NA = new Set(['race_index','race_barometer','race_pair_odds','smartrc_race']);
+
+let dateRaceData = [];
+
+function queueModeChange() {
+  const mode = document.querySelector('input[name="qmode"]:checked')?.value;
+  const panel = document.getElementById('custom-cat-panel');
+  if (panel) panel.style.display = mode === 'custom' ? 'block' : 'none';
+}
+
+async function fetchDateData() {
+  const dateInput = document.getElementById('date-input').value;
+  if (!dateInput) { alert('日付を選択してください'); return; }
+  const dateStr = dateInput.replace(/-/g, '');
+
+  document.getElementById('date-data-loading').style.display = 'block';
+  document.getElementById('data-race-list').style.display = 'none';
+  document.getElementById('date-data-empty').style.display = 'none';
+  document.getElementById('data-legend').style.display = 'none';
+  document.getElementById('cat-header-row').style.display = 'none';
+  document.getElementById('queue-mode-section').style.display = 'none';
+  document.getElementById('queue-result').style.display = 'none';
+
+  try {
+    const r = await fetch(`${API}/api/scrape-status?date=${dateStr}`);
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    dateRaceData = d.races || d.race_list || [];
+    document.getElementById('date-data-loading').style.display = 'none';
+
+    if (dateRaceData.length === 0) {
+      document.getElementById('date-data-empty').style.display = 'block';
+      return;
+    }
+    renderDataGrid(dateRaceData);
+  } catch (e) {
+    document.getElementById('date-data-loading').style.display = 'none';
+    const el = document.getElementById('date-data-empty');
+    el.style.display = 'block';
+    el.textContent = 'エラー: ' + e.message;
+  }
+}
+
+function renderDataGrid(races) {
+  // カテゴリ略称ヘッダー行
+  const headerRow = document.getElementById('cat-header-row');
+  headerRow.innerHTML = '';
+  for (let gi = 0; gi < CAT_GROUPS.length; gi++) {
+    if (gi > 0) {
+      const sep = document.createElement('span');
+      sep.className = 'cat-group-sep';
+      headerRow.appendChild(sep);
+    }
+    for (const cat of CAT_GROUPS[gi].cats) {
+      const span = document.createElement('span');
+      span.className = 'cat-header-item';
+      span.title = cat.hint;
+      span.textContent = cat.abbr;
+      headerRow.appendChild(span);
+    }
+  }
+  headerRow.style.display = 'flex';
+
+  // レース別ドット行
+  const container = document.getElementById('data-race-list');
+  container.innerHTML = '';
+  for (const race of races) {
+    const sources = race.sources || {};
+    const raceId = race.race_id || race.id || '';
+    const raceName = race.race_name || race.name || raceId;
+    const rnum = race.race_num || race.round || '';
+    const isSteeple = race.is_steeplechase || false;
+
+    const raceRow = document.createElement('div');
+    raceRow.className = 'data-race-row';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'data-race-header';
+    hdr.innerHTML =
+      `<span style="color:var(--text-dim);font-size:10px;flex-shrink:0;min-width:18px">${rnum}R</span>` +
+      `<span class="data-race-name" title="${escHtml(raceId)}">${escHtml(raceName)}</span>`;
+    raceRow.appendChild(hdr);
+
+    const dotsRow = document.createElement('div');
+    dotsRow.className = 'data-cat-row';
+    for (let gi = 0; gi < CAT_GROUPS.length; gi++) {
+      if (gi > 0) {
+        const sep = document.createElement('span');
+        sep.className = 'data-cat-sep';
+        dotsRow.appendChild(sep);
+      }
+      for (const cat of CAT_GROUPS[gi].cats) {
+        const dot = document.createElement('span');
+        dot.className = 'cat-dot';
+        dot.title = cat.hint;
+        const isNA = isSteeple && STEEPLE_NA.has(cat.id);
+        if (isNA) {
+          dot.classList.add('na');
+        } else if (cat.derived) {
+          dot.classList.add(sources[cat.id] ? 'derived' : 'empty');
+        } else {
+          const val = sources[cat.id];
+          dot.classList.add(val === true || val === 'fresh' ? 'ok' : val === 'stale' ? 'stale' : 'empty');
+        }
+        dotsRow.appendChild(dot);
+      }
+    }
+    raceRow.appendChild(dotsRow);
+    container.appendChild(raceRow);
+  }
+
+  document.getElementById('data-legend').style.display = 'flex';
+  document.getElementById('data-race-list').style.display = 'block';
+  document.getElementById('queue-mode-section').style.display = 'block';
+}
+
+function getMissingRaces() {
+  const result = [];
+  for (const race of dateRaceData) {
+    const sources = race.sources || {};
+    const raceId = race.race_id || race.id || '';
+    if (!raceId) continue;
+    const isSteeple = race.is_steeplechase || false;
+    const missingTasks = [];
+    for (const g of CAT_GROUPS) {
+      for (const cat of g.cats) {
+        if (cat.derived) continue;
+        if (isSteeple && STEEPLE_NA.has(cat.id)) continue;
+        if (!sources[cat.id]) {
+          missingTasks.push(cat.id === 'smartrc_race' ? 'smartrc' : cat.id);
+        }
+      }
+    }
+    if (missingTasks.length > 0) result.push({raceId, tasks: missingTasks});
+  }
+  return result;
+}
+
+function showQueueResult(msg, isError) {
+  const el = document.getElementById('queue-result');
+  el.style.display = 'block';
+  el.style.color = isError ? 'var(--err)' : 'var(--ok)';
+  el.textContent = msg;
+}
+
+async function queueSelected() {
+  const mode = document.querySelector('input[name="qmode"]:checked')?.value || 'all';
+  const dateStr = document.getElementById('date-input').value.replace(/-/g,'');
+  const btn = document.getElementById('queue-btn');
+  btn.disabled = true;
+  document.getElementById('queue-result').style.display = 'none';
+
+  try {
+    if (mode === 'all') {
+      const r = await fetch(`${API}/api/scrape-queue/add-job`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({job_kind:'date', target_id:dateStr, tasks:['date_all'], smart_skip:false}),
+      });
+      const d = await r.json();
+      showQueueResult(`✓ 日付ジョブ追加: ${dateStr} (${d.status || d.action})`);
+
+    } else if (mode === 'missing') {
+      const missingRaces = getMissingRaces();
+      if (missingRaces.length === 0) {
+        showQueueResult('未取得レースなし');
+        btn.disabled = false;
+        return;
+      }
+      let created = 0, duplicate = 0, errors = 0;
+      for (const {raceId, tasks} of missingRaces) {
+        try {
+          const r = await fetch(`${API}/api/scrape-queue/add-job`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({job_kind:'race', target_id:raceId, tasks, smart_skip:true}),
+          });
+          const d = await r.json();
+          if (d.action === 'duplicate') duplicate++; else created++;
+        } catch { errors++; }
+      }
+      showQueueResult(`✓ 追加: ${created}件, 重複: ${duplicate}件, エラー: ${errors}件`);
+
+    } else {
+      // カテゴリ指定
+      const allCatIds = CAT_GROUPS.flatMap(g => g.cats.map(c => c.id));
+      const selectedCats = allCatIds.filter(id => document.getElementById('dc-' + id)?.checked);
+      if (selectedCats.length === 0) { alert('カテゴリを選択してください'); btn.disabled = false; return; }
+      // cat id → task id (smartrc_race → smartrc)
+      const tasks = selectedCats.map(id => id === 'smartrc_race' ? 'smartrc' : id);
+
+      let created = 0, duplicate = 0, errors = 0;
+      for (const race of dateRaceData) {
+        const raceId = race.race_id || race.id || '';
+        if (!raceId) continue;
+        try {
+          const r = await fetch(`${API}/api/scrape-queue/add-job`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({job_kind:'race', target_id:raceId, tasks, smart_skip:false}),
+          });
+          const d = await r.json();
+          if (d.action === 'duplicate') duplicate++; else created++;
+        } catch { errors++; }
+      }
+      showQueueResult(`✓ 追加: ${created}件, 重複: ${duplicate}件, エラー: ${errors}件`);
+    }
+  } catch (e) {
+    showQueueResult('エラー: ' + e.message, true);
+  }
+  btn.disabled = false;
+}
+
+// ──────────────── キュー操作 ────────────────
+async function recoverQueue() {
+  const r = await fetch(`${API}/api/scrape-queue/recover`, {method:'POST'}).catch(()=>null);
+  showActionResult(r ? '孤児ジョブを回復しました' : 'エラー');
+}
+async function kickWorker() {
+  const r = await fetch(`${API}/api/scrape-queue/kick`, {method:'POST'}).catch(()=>null);
+  showActionResult(r ? 'ワーカーを再起動しました' : 'エラー');
+}
+async function requeueFailed() {
+  const r = await fetch(`${API}/api/scrape-queue/failed/requeue`, {method:'POST'}).catch(()=>null);
+  showActionResult(r ? '失敗ジョブを再キューしました' : 'エラー');
+}
+function showActionResult(msg) {
+  const el = document.getElementById('action-result');
+  el.style.display = 'block';
+  el.textContent = msg;
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// ──────────────── 初期化 ────────────────
+refreshStatus();
+setInterval(refreshStatus, 5000);
+pollLogs();
+setInterval(pollLogs, 1000);
+
+// 本日の日付をデフォルト設定
+(function() {
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('date-input').value = today;
+  document.getElementById('task-date').value = today;
+})();
+</script>
+
+</body>
+</html>

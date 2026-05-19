@@ -24,7 +24,9 @@ F=父系、M=母系。文字列長 = 世代数。
 ----
 data/research/pedigree_race_index/race_result_slim.parquet
   └ race_id, date, venue, surface, distance, grade, track_condition,
-    finish_position, popularity, horse_id, horse_name
+    finish_position, popularity, horse_id, horse_name,
+    win_odds_real, win_payout, place_payout
+    (※ payoff JSON から正規パースした単勝オッズ・払戻。元 odds 列は信頼できないため不使用)
 
 data/research/pedigree_race_index/horse_pedigree_cats.parquet
   └ horse_id, cat (int 1/2/3), sub_cat, gen (世代数), stallion_id, stallion_name
@@ -43,6 +45,7 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 # リポジトリルートを sys.path に追加（pipeline モジュールを import するため）
@@ -179,8 +182,69 @@ def _extract_stallion_entries_10gen(
 
 
 RESULT_COLS = [
-    "race_id", "horse_id", "horse_name", "finish_position", "popularity", "grade",
+    "race_id", "horse_id", "horse_name", "horse_number",
+    "finish_position", "popularity", "grade", "payoff", "odds",
 ]
+
+
+# ────────────────────────────────────────────────────────────────
+# payoff JSON から「単勝払戻」「複勝払戻 (1〜3 着順)」を抽出するパーサ
+#
+# 仕様メモ:
+#   payoff 例: {"単勝": {"numbers":"3","payout":"480"},
+#               "複勝": {"numbers":"342","payout":"130110140"}, ...}
+#   payout 文字列は「100〜999 円は 3 桁」「1,000 円以上はカンマ付き 4 桁 (1,xxx)」
+#   が連結された形式。numbers と payout の順番は **着順順**(1着→2着→3着)。
+#   レース結果 parquet の `odds` / `popularity` 列は破損例があるため、ここで
+#   payoff から逆算した単勝オッズ (= 単勝払戻 / 100) を真の値として採用する。
+# ────────────────────────────────────────────────────────────────
+
+_PAY_RE = __import__("re").compile(r"\d{1,2},\d{3}|\d{3}")
+
+
+def _parse_payouts(s: str) -> list[int]:
+    """payout 文字列から整数リストを抽出 (3 桁 or 1,xxx 形式)。"""
+    if not s:
+        return []
+    return [int(x.replace(",", "")) for x in _PAY_RE.findall(str(s).strip())]
+
+
+def _flatten_payout_field(v) -> str:
+    """単勝/複勝フィールドが dict / list[dict] / None どれでも payout 文字列を連結して返す。
+
+    同着のときに list 形式 [{numbers, payout}, ...] となるケースがあるため、
+    要素の payout を空白区切りで連結する。
+    """
+    if not v:
+        return ""
+    if isinstance(v, dict):
+        return str(v.get("payout") or "")
+    if isinstance(v, list):
+        return " ".join(str(d.get("payout") or "") for d in v if isinstance(d, dict))
+    return str(v)
+
+
+def _parse_race_payoff(p_str: str) -> dict | None:
+    """payoff JSON 文字列から単勝/複勝の払戻金 (整数) を返す。
+
+    Returns:
+        {"win_payout": int|None,         # 1 着馬の単勝払戻 (100 円賭け)
+         "place_payouts": list[int]}     # 1〜3 着馬の複勝払戻 (順番=着順、最大 3)
+        パース失敗時は None。
+    """
+    if not p_str:
+        return None
+    try:
+        po = json.loads(p_str)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    win_pays = _parse_payouts(_flatten_payout_field(po.get("単勝")))
+    place_pays = _parse_payouts(_flatten_payout_field(po.get("複勝")))
+    return {
+        "win_payout": int(win_pays[0]) if win_pays else None,
+        "place_payouts": place_pays[:3],
+    }
+
 # race_shutuba_flat から取得する race レベル情報（grade は result_flat の方が正確なため除外）
 SHUTUBA_RACE_COLS = [
     "race_id", "date", "venue", "surface", "distance", "track_condition",
@@ -272,6 +336,52 @@ def build_index(years: list[str] | None = None) -> None:
     # path_fm は1頭の血統ツリー内で一意な座標 → (horse_id, cat, path_fm) で重複除去
     ped_df = ped_df.drop_duplicates(subset=["horse_id", "cat", "path_fm"])
 
+    # ── payoff JSON から「単勝払戻 / 複勝払戻」を導出 (race_id 単位で 1 回だけパース) ──
+    if "payoff" in race_df.columns:
+        unique_pf = race_df.drop_duplicates("race_id")[["race_id", "payoff"]]
+        race_pay_map: dict[str, dict] = {}
+        for _row in unique_pf.itertuples(index=False):
+            parsed = _parse_race_payoff(getattr(_row, "payoff", None))
+            if parsed:
+                race_pay_map[str(_row.race_id)] = parsed
+
+        win_payouts: list[int] = []
+        place_payouts: list[int] = []
+        for rid, fp in zip(race_df["race_id"].astype(str), race_df["finish_position"].astype(int)):
+            d = race_pay_map.get(rid)
+            if not d:
+                win_payouts.append(0)
+                place_payouts.append(0)
+                continue
+            wp = d.get("win_payout") or 0
+            pps = d.get("place_payouts") or []
+            win_payouts.append(int(wp) if fp == 1 else 0)
+            if 1 <= fp <= 3 and len(pps) >= fp:
+                place_payouts.append(int(pps[fp - 1]))
+            else:
+                place_payouts.append(0)
+        race_df["win_payout"] = pd.Series(win_payouts, index=race_df.index, dtype="int32")
+        race_df["place_payout"] = pd.Series(place_payouts, index=race_df.index, dtype="int32")
+        # 「単勝オッズ」= 単勝払戻 / 100 (浮動小数)。1 着馬以外もそのレース全体の単勝オッズを保持
+        win_odds_real = []
+        for rid in race_df["race_id"].astype(str):
+            d = race_pay_map.get(rid)
+            if not d or not d.get("win_payout"):
+                win_odds_real.append(0.0)
+            else:
+                win_odds_real.append(round(int(d["win_payout"]) / 100.0, 2))
+        race_df["win_odds_real"] = pd.Series(win_odds_real, index=race_df.index, dtype="float32")
+        race_df = race_df.drop(columns=["payoff"])  # raw JSON は不要 (重い)
+        logger.info(
+            "payoff 解析: %d レースから単勝/複勝払戻を抽出",
+            len(race_pay_map),
+        )
+    else:
+        logger.warning("payoff 列が無いため、回収率計算は不可")
+        race_df["win_payout"] = 0
+        race_df["place_payout"] = 0
+        race_df["win_odds_real"] = 0.0
+
     # race_result_slim の型最適化
     for col in ["venue", "surface", "grade", "track_condition"]:
         if col in race_df.columns:
@@ -279,6 +389,13 @@ def build_index(years: list[str] | None = None) -> None:
     race_df["distance"] = pd.to_numeric(race_df["distance"], errors="coerce").fillna(0).astype("int32")
     race_df["finish_position"] = pd.to_numeric(race_df["finish_position"], errors="coerce").fillna(0).astype("int16")
     race_df["popularity"] = pd.to_numeric(race_df["popularity"], errors="coerce").fillna(0).astype("int16")
+    if "odds" in race_df.columns:
+        race_df["odds"] = pd.to_numeric(race_df["odds"], errors="coerce").astype("float32")
+        race_df.loc[~((race_df["odds"] > 0) & (race_df["odds"] <= 999.9)), "odds"] = np.nan
+    else:
+        race_df["odds"] = np.nan
+    if "horse_number" in race_df.columns:
+        race_df["horse_number"] = pd.to_numeric(race_df["horse_number"], errors="coerce").fillna(0).astype("int16")
 
     # ── 保存 ──
     OUT_DIR.mkdir(parents=True, exist_ok=True)

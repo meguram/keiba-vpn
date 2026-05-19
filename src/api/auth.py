@@ -102,21 +102,33 @@ PUBLIC_PAGES: set[str] = {
     "/",
     "/login",
     "/race/{race_id}",
+    # ④ AI 予測
     "/tracking-difficulty",
+    # ③ 血統
     "/bloodline",
     "/bloodline-vector",
     "/pedigree-map",
-    "/note-aptitude-race",
+    "/bloodline-cluster",
     "/course-bloodline",
-    "/track-speed",
+    "/pedigree-race-stats",
     "/myostatin",
+    # ⑤ データ分析
+    "/note-aptitude-race",
+    "/track-speed",
+    "/growth-curve",
 }
 
 DEV_ONLY_PAGES: set[str] = {
+    # ① 開発者モード（データチェック・スクレイピング）
     "/monitor",
     "/data-viewer",
-    "/betting",
+    "/queue-status",
     "/server-logs",
+    "/scrape-upcoming",
+    # ② 馬券の最適化
+    "/betting",
+    # ③ 馬場速度 計算ロジック解説
+    "/track-speed/dev",
 }
 
 PUBLIC_API_PREFIXES: list[str] = [
@@ -129,33 +141,49 @@ PUBLIC_API_PREFIXES: list[str] = [
     "/api/scrape-status",
     "/api/data/",
     "/api/horse/",
+    "/api/horse-names/",
     "/api/person/",
+    # ③ 血統
     "/api/bloodline",
     "/api/course-bloodline",
-    "/api/track-speed",
     "/api/myostatin",
     "/api/pedigree-map",
     "/api/pedigree/",
+    "/api/pedigree-race-stats",
+    "/api/stallion-sire-tree",
+    # ⑤ データ分析
+    "/api/track-speed",
+    "/api/growth-curve",
     "/api/cushion",
+    "/api/auth/status",
     "/static/",
 ]
 
 DEV_ONLY_API_PREFIXES: list[str] = [
     "/api/admin/",
     "/api/monitor/",
+    # ① 開発者モード（スクレイピング・データチェック）
     "/api/scrape-trigger",
     "/api/scrape-jobs",
-    "/api/train",
-    "/api/backfill",
-    "/api/race-lists-backfill",
-    "/api/html-archive",
-    "/api/gcs-stats",
+    "/api/scrape-queue",
+    "/api/check-scraped-status",
+    "/api/fetch-future-calendar",
     "/api/structure",
+    "/api/html-archive",
     "/api/auto-scrape",
+    "/api/gcs-stats",
+    # ④ AI 予測（モデル学習・追走難度の訓練）
+    "/api/tracking-difficulty/train",
+    "/api/train",
+    "/api/model/",
+    # ② 馬券の最適化
     "/api/betting",
     "/api/odds/train",
+    "/api/odds/snapshot",
     "/api/simulation",
-    "/api/model/",
+    # データバックフィル
+    "/api/backfill",
+    "/api/race-lists-backfill",
 ]
 
 

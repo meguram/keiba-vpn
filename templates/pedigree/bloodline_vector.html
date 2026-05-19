@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>血統ベクトル空間 v2 (L2グループ) | ML-AutoPilot Keiba</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700&family=Noto+Sans+JP:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0c10; --surface:#12151c; --surface2:#181c25; --border:#1e2330;
+  --text:#e8eaf0; --text-dim:#8890a0;
+  --accent:#ff6b35; --accent2:#00d4aa; --accent3:#a78bfa;
+  --good:#10b981; --bad:#ef4444; --warn:#f59e0b;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;overflow:hidden;height:100vh}
+.gnav+.layout{height:calc(100vh - 44px)}
+h1{font-family:'Shippori Mincho',serif;font-size:1.3rem;font-weight:700;letter-spacing:0.04em;color:var(--accent)}
+h1 small{display:block;font-size:.55rem;color:var(--text-dim);font-weight:400;letter-spacing:.1em;margin-top:2px}
+.layout{display:grid;grid-template-columns:280px 1fr 320px;height:calc(100vh - 44px);gap:0}
+.panel{background:var(--surface);border-right:1px solid var(--border);padding:14px;overflow-y:auto}
+.panel-right{border-right:none;border-left:1px solid var(--border)}
+.panel h2{font-size:.7rem;text-transform:uppercase;letter-spacing:.13em;color:var(--text-dim);margin:14px 0 6px;font-weight:600}
+.panel h2:first-of-type{margin-top:8px}
+.btn-row{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.btn{padding:5px 8px;background:transparent;border:1px solid var(--border);color:var(--text-dim);font-size:.7rem;cursor:pointer;border-radius:4px;transition:all .12s;font-family:inherit}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-mini{padding:3px 6px;font-size:.62rem}
+.legend-item{display:flex;align-items:center;gap:7px;font-size:.7rem;margin:2px 0;color:var(--text-dim)}
+.legend-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}
+.legend-shape{width:11px;height:11px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1}
+canvas{display:block;background:var(--bg);cursor:grab}
+canvas:active{cursor:grabbing}
+.tooltip{position:fixed;pointer-events:none;background:rgba(18,21,28,.97);border:1px solid var(--accent);border-radius:6px;padding:10px 12px;font-size:.75rem;line-height:1.5;max-width:340px;display:none;z-index:200;backdrop-filter:blur(8px);box-shadow:0 4px 18px rgba(0,0,0,.5)}
+.tooltip .tt-name{font-family:'Shippori Mincho',serif;font-size:.95rem;font-weight:700;color:var(--accent);margin-bottom:2px}
+.tooltip .tt-sub{font-size:.65rem;color:var(--text-dim);margin-bottom:6px}
+.tooltip .tt-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:.62rem;margin:1px 2px 1px 0;background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--border)}
+.tooltip .tt-tag.good{border-color:var(--good);color:var(--good)}
+.tooltip .tt-tag.bad{border-color:var(--bad);color:var(--bad)}
+.tooltip .tt-block{margin-top:6px}
+.tooltip .tt-block-label{font-size:.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px}
+.search-box{width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:.78rem;outline:none;font-family:inherit}
+.search-box:focus{border-color:var(--accent)}
+.search-results{max-height:240px;overflow-y:auto;margin-top:4px}
+.search-result{padding:5px 8px;cursor:pointer;font-size:.72rem;border-radius:3px;transition:background .1s;color:var(--text-dim)}
+.search-result:hover{background:rgba(255,107,53,.12);color:var(--accent)}
+.search-result-tag{font-size:.6rem;color:var(--text-dim);margin-left:6px}
+.header-bar{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--surface);gap:8px;flex-wrap:wrap}
+.header-bar .info{font-size:.7rem;color:var(--text-dim)}
+.zoom-controls{display:flex;gap:4px}
+.zoom-btn{width:30px;height:30px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;border-radius:4px;font-size:1rem;display:flex;align-items:center;justify-content:center}
+.zoom-btn:hover{border-color:var(--accent);color:var(--accent)}
+.axis-label{font-size:.62rem;color:var(--text-dim)}
+.detail-name{font-family:'Shippori Mincho',serif;font-size:1.05rem;font-weight:700;color:var(--accent);margin-bottom:2px}
+.detail-sub{font-size:.65rem;color:var(--text-dim);margin-bottom:8px}
+.tag-list{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px}
+.tag{display:inline-block;padding:2px 7px;border-radius:3px;font-size:.65rem;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text)}
+.tag.good{border-color:var(--good);color:var(--good);background:rgba(16,185,129,.08)}
+.tag.bad{border-color:var(--bad);color:var(--bad);background:rgba(239,68,68,.08)}
+.tag.member{background:rgba(255,107,53,.06);border-color:rgba(255,107,53,.4);color:var(--accent)}
+.section{margin-top:10px}
+.section-label{font-size:.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;font-weight:600}
+.similar-list{margin-top:4px}
+.similar-item{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;margin:2px 0;background:rgba(255,255,255,.025);border-radius:4px;font-size:.7rem;cursor:pointer;transition:all .12s;border:1px solid transparent}
+.similar-item:hover{background:rgba(255,107,53,.08);border-color:rgba(255,107,53,.4);color:var(--accent)}
+.similar-score{color:var(--accent2);font-weight:600;font-variant-numeric:tabular-nums;font-size:.65rem}
+.similar-bar{height:3px;background:var(--border);border-radius:2px;margin-top:2px;overflow:hidden}
+.similar-bar > span{display:block;height:100%;background:var(--accent2)}
+.empty{font-size:.7rem;color:var(--text-dim);padding:8px 0;font-style:italic}
+.axes-info{font-size:.62rem;color:var(--text-dim);padding:6px;background:var(--surface2);border-radius:4px;margin-top:6px;line-height:1.5}
+.axes-info .axis-key{color:var(--accent3);font-weight:600}
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;height:auto;overflow:auto}
+  body{overflow:auto;height:auto}
+  .panel{border-right:none;border-bottom:1px solid var(--border);max-height:none}
+  .panel-right{border-left:none;border-top:1px solid var(--border)}
+  canvas{height:480px!important}
+}
+</style>
+</head>
+<body>
+{% include 'partials/_nav.html' %}
+<div class="layout">
+  <!-- ── 左パネル ───────────────────── -->
+  <div class="panel" id="left-panel">
+    <h1>
+      <img src="/data/image/icon.jpg" alt="" class="page-brand-icon">血統ベクトル空間 v2
+      <small>L2 派生サブグループ + 非主流ルート</small>
+    </h1>
+
+    <h2>配置基底</h2>
+    <div class="btn-row" id="layout-modes"></div>
+
+    <h2>色分け</h2>
+    <div class="btn-row" id="color-modes"></div>
+
+    <h2>類似度モード</h2>
+    <div class="btn-row" id="sim-modes"></div>
+
+    <h2>軸の意味 (PCA loadings)</h2>
+    <div id="axis-info" class="axes-info"></div>
+
+    <h2>凡例</h2>
+    <div id="legend"></div>
+
+    <h2>検索</h2>
+    <input type="text" class="search-box" id="search" placeholder="グループ / 種牡馬名 で検索...">
+    <div class="search-results" id="search-results"></div>
+  </div>
+
+  <!-- ── 中央 Canvas ─────────────────── -->
+  <div style="display:flex;flex-direction:column;overflow:hidden;background:var(--bg)">
+    <div class="header-bar">
+      <div class="info" id="info-text"></div>
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoom-in" title="拡大">+</button>
+        <button class="zoom-btn" id="zoom-out" title="縮小">−</button>
+        <button class="zoom-btn" id="zoom-reset" title="リセット">⟳</button>
+      </div>
+    </div>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <!-- ── 右パネル ───────────────────── -->
+  <div class="panel panel-right" id="right-panel">
+    <h2>選択グループ</h2>
+    <div id="detail-content">
+      <p class="empty">グループをクリックして詳細を表示</p>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ── サーバから注入 ────────────────────────────────────
+const PAYLOAD = {{ groups_payload_json | safe }};
+const NODES = PAYLOAD.nodes || [];
+const SIM_TOP = PAYLOAD.similar_top || {};
+const META = PAYLOAD.meta || {};
+
+// ── 設定 ──────────────────────────────────────────────
+const SUPER_PALETTE = {
+  0: "#3b82f6", 1: "#a78bfa", 2: "#b45309",
+  3: "#10b981", 4: "#ef4444", "-1": "#94a3b8",
+};
+const MAIN_GROUP_PALETTE = {
+  "派生 (主流)": "#60a5fa",
+  "非主流": "#94a3b8",
+};
+const DIST_PALETTE = {
+  "短距離": "#ef4444", "マイル": "#f59e0b",
+  "中距離": "#10b981", "長距離": "#3b82f6",
+};
+const SURFACE_PALETTE = {"芝": "#10b981", "ダート": "#b45309"};
+const HEAVY_PALETTE = {
+  "道悪巧者": "#a78bfa", "中立": "#64748b", "道悪苦手": "#fbbf24",
+};
+
+const COLOR_MODES = [
+  {id: "super", label: "Super Group", get: n => SUPER_PALETTE[String(n.super_id ?? -1)] || "#888"},
+  {id: "main", label: "主流/非主流", get: n => MAIN_GROUP_PALETTE[n.main_group] || "#888"},
+  {id: "dist", label: "距離支配", get: n => DIST_PALETTE[n.axes.dist_dominant] || "#888"},
+  {id: "surface", label: "馬場支配", get: n => SURFACE_PALETTE[n.axes.surface_dominant] || "#888"},
+  {id: "heavy", label: "道悪適性", get: n => HEAVY_PALETTE[n.axes.heavy_label] || "#888"},
+];
+
+const LAYOUT_MODES = ["pca", "umap", "tsne"]
+  .filter(k => (META.layouts_available || []).includes(k));
+const SIM_MODES = [
+  {id: "aptitude", label: "適性類似"},
+  {id: "structure", label: "血統構造類似"},
+  {id: "blend", label: "ブレンド (推奨)"},
+];
+
+let currentLayout = LAYOUT_MODES.includes("umap") ? "umap" : (LAYOUT_MODES[0] || "pca");
+let currentColor = "super";
+let currentSim = "blend";
+let selectedId = null;
+let hoveredId = null;
+let offsetX = 0, offsetY = 0, scale = 1;
+let dragging = false, dragStartX = 0, dragStartY = 0, didDrag = false;
+
+const canvas = document.getElementById("chart");
+const ctx = canvas.getContext("2d");
+const tooltip = document.getElementById("tooltip");
+
+// ── ヘルパ ──────────────────────────────────────────
+function escHTML(s){return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+function fmtScore(v){return (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "%"}
+function fmtZ(v){return (v >= 0 ? "+" : "") + Number(v).toFixed(2)}
+
+function getNodePos(n){
+  const p = (n.pos || {})[currentLayout];
+  return p && p.length === 2 ? p : [0, 0];
+}
+
+function getColorFn(){return COLOR_MODES.find(m => m.id === currentColor).get}
+
+function nodeRadius(n){
+  const base = 8 + Math.sqrt(Math.max(n.n_members || 1, 1)) * 2.2;
+  return Math.max(10, Math.min(36, base));
+}
+
+// ── 座標変換 ───────────────────────────────────────
+function getBounds(){
+  let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+  NODES.forEach(n => {
+    const [x, y] = getNodePos(n);
+    if (x < xmin) xmin = x;
+    if (x > xmax) xmax = x;
+    if (y < ymin) ymin = y;
+    if (y > ymax) ymax = y;
+  });
+  if (xmin === Infinity) {xmin = -1; xmax = 1; ymin = -1; ymax = 1;}
+  return {xmin, xmax, ymin, ymax};
+}
+
+function worldToScreen(wx, wy){
+  const cw = canvas.width / devicePixelRatio;
+  const ch = canvas.height / devicePixelRatio;
+  const {xmin, xmax, ymin, ymax} = getBounds();
+  const pad = 80;
+  const dx = Math.max(xmax - xmin, 1e-6);
+  const dy = Math.max(ymax - ymin, 1e-6);
+  const sx = (wx - xmin) / dx * (cw - 2 * pad) + pad;
+  const sy = (1 - (wy - ymin) / dy) * (ch - 2 * pad) + pad;
+  return [
+    (sx + offsetX) * scale + cw * (1 - scale) / 2,
+    (sy + offsetY) * scale + ch * (1 - scale) / 2,
+  ];
+}
+
+function resize(){
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * devicePixelRatio;
+  canvas.height = (rect.height - 44) * devicePixelRatio;
+  canvas.style.width = rect.width + "px";
+  canvas.style.height = (rect.height - 44) + "px";
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  draw();
+}
+window.addEventListener("resize", resize);
+
+// ── 描画 ────────────────────────────────────────────
+function drawShape(x, y, r, type, color, isSelected, isHovered, isLinked){
+  ctx.save();
+  let alpha = 1;
+  if (selectedId && !isSelected && !isLinked) alpha = 0.25;
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = isSelected ? "#fff" : (isHovered ? "rgba(255,255,255,.7)" : "rgba(0,0,0,.5)");
+  ctx.lineWidth = isSelected ? 2.5 : (isHovered ? 1.8 : 1);
+
+  if (type === "non_main") {
+    // ◇ 菱形
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r, y);
+    ctx.lineTo(x, y + r);
+    ctx.lineTo(x - r, y);
+    ctx.closePath();
+  } else {
+    // ● 円
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+  }
+  ctx.fill();
+  ctx.stroke();
+
+  if (isSelected) {
+    ctx.beginPath();
+    ctx.arc(x, y, r + 8, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,107,53,.5)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function draw(){
+  const cw = canvas.width / devicePixelRatio;
+  const ch = canvas.height / devicePixelRatio;
+  ctx.clearRect(0, 0, cw, ch);
+
+  // 背景座標軸
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,.04)";
+  ctx.lineWidth = 1;
+  // 中央十字 (worldの (0,0))
+  const [cx0, cy0] = worldToScreen(0, 0);
+  ctx.beginPath();
+  ctx.moveTo(cx0, 0); ctx.lineTo(cx0, ch);
+  ctx.moveTo(0, cy0); ctx.lineTo(cw, cy0);
+  ctx.stroke();
+  ctx.restore();
+
+  const colorFn = getColorFn();
+  const linked = (selectedId && SIM_TOP[currentSim] && SIM_TOP[currentSim][selectedId])
+    ? new Set(SIM_TOP[currentSim][selectedId].map(s => s.node_id))
+    : null;
+
+  // 類似リンク線
+  if (selectedId && linked) {
+    const sn = NODES.find(n => n.node_id === selectedId);
+    if (sn) {
+      const [sx, sy] = worldToScreen(...getNodePos(sn));
+      SIM_TOP[currentSim][selectedId].forEach(item => {
+        const tn = NODES.find(n => n.node_id === item.node_id);
+        if (!tn) return;
+        const [tx, ty] = worldToScreen(...getNodePos(tn));
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(tx, ty);
+        const a = Math.max(0.05, Math.min(0.7, item.score));
+        ctx.strokeStyle = `rgba(255,107,53,${a})`;
+        ctx.lineWidth = Math.max(1, item.score * 4);
+        ctx.stroke();
+      });
+    }
+  }
+
+  // ノード描画
+  NODES.forEach(n => {
+    const [px, py] = worldToScreen(...getNodePos(n));
+    const r = nodeRadius(n);
+    const isSel = n.node_id === selectedId;
+    const isHov = n.node_id === hoveredId;
+    const isLinked = linked ? linked.has(n.node_id) : false;
+    drawShape(px, py, r, n.node_type, colorFn(n), isSel, isHov, isLinked);
+
+    // ラベル
+    let alpha = 1;
+    if (selectedId && !isSel && !isLinked) alpha = 0.35;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = isSel ? "#fff" : "rgba(255,255,255,.85)";
+    ctx.font = `${isSel ? "bold " : ""}${isSel ? 12 : 11}px 'Noto Sans JP',sans-serif`;
+    ctx.textAlign = "center";
+    const lab = (n.name || "").length > 14 ? (n.name.slice(0, 14) + "…") : n.name;
+    ctx.fillText(lab, px, py + r + 14);
+    ctx.restore();
+  });
+
+  // 軸ラベル (PCA時のみ)
+  if (currentLayout === "pca" && META.pca_loadings_top5) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,.4)";
+    ctx.font = "10px 'Noto Sans JP',sans-serif";
+    const pc1 = (META.pca_loadings_top5.pc1 || []).slice(0, 2)
+      .map(x => x.feature.replace("win_", "")).join(", ");
+    const pc2 = (META.pca_loadings_top5.pc2 || []).slice(0, 2)
+      .map(x => x.feature.replace("win_", "")).join(", ");
+    ctx.textAlign = "right";
+    ctx.fillText(`PC1: ${pc1} →`, cw - 12, ch - 8);
+    ctx.save();
+    ctx.translate(12, 16);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = "right";
+    ctx.fillText(`← PC2: ${pc2}`, 0, 0);
+    ctx.restore();
+    ctx.restore();
+  }
+}
+
+// ── マウス操作 ─────────────────────────────────────
+function findNearest(mx, my){
+  let best = null, bestDist = Infinity;
+  NODES.forEach(n => {
+    const [px, py] = worldToScreen(...getNodePos(n));
+    const r = nodeRadius(n);
+    const d = Math.hypot(px - mx, py - my);
+    if (d < r + 6 && d < bestDist) {bestDist = d; best = n;}
+  });
+  return best;
+}
+
+canvas.addEventListener("mousemove", e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  if (dragging) {
+    if (Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY) > 3) didDrag = true;
+    offsetX += e.movementX / scale;
+    offsetY += e.movementY / scale;
+    draw();
+    return;
+  }
+  const n = findNearest(mx, my);
+  hoveredId = n ? n.node_id : null;
+  canvas.style.cursor = n ? "pointer" : "grab";
+  draw();
+  if (n) showTooltip(n, e.clientX, e.clientY);
+  else tooltip.style.display = "none";
+});
+canvas.addEventListener("mousedown", e => {
+  dragging = true; didDrag = false;
+  dragStartX = e.clientX; dragStartY = e.clientY;
+});
+canvas.addEventListener("mouseup", e => {
+  dragging = false;
+  if (!didDrag) {
+    const rect = canvas.getBoundingClientRect();
+    const n = findNearest(e.clientX - rect.left, e.clientY - rect.top);
+    if (n) selectNode(n.node_id);
+  }
+});
+canvas.addEventListener("mouseleave", () => {
+  dragging = false; hoveredId = null;
+  tooltip.style.display = "none"; draw();
+});
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  scale = Math.max(0.3, Math.min(8, scale * delta));
+  draw();
+}, {passive: false});
+
+document.getElementById("zoom-in").onclick = () => {scale = Math.min(8, scale * 1.3); draw();};
+document.getElementById("zoom-out").onclick = () => {scale = Math.max(0.3, scale / 1.3); draw();};
+document.getElementById("zoom-reset").onclick = () => {scale = 1; offsetX = 0; offsetY = 0; draw();};
+
+// ── ツールチップ ────────────────────────────────────
+function showTooltip(n, cx, cy){
+  const hl = (n.highlights || []).slice(0, 8).map(h => `<span class="tt-tag good">${escHTML(h)}</span>`).join("");
+  const wk = (n.weaknesses || []).slice(0, 6).map(h => `<span class="tt-tag bad">${escHTML(h)}</span>`).join("");
+  const tm = (n.top_members || []).slice(0, 5).map(m => `<span class="tt-tag">${escHTML(m)}</span>`).join("");
+  tooltip.innerHTML = `
+    <div class="tt-name">${n.icon || ""} ${escHTML(n.name)}</div>
+    <div class="tt-sub">${escHTML(n.subtitle || "")} · n=${n.n_members}</div>
+    <div class="tt-block">
+      <span class="tt-tag">${escHTML(n.super_name || "—")}</span>
+      <span class="tt-tag">${escHTML(n.axes.dist_dominant)}</span>
+      <span class="tt-tag">${escHTML(n.axes.surface_dominant)}</span>
+      <span class="tt-tag">${escHTML(n.axes.heavy_label)}</span>
+    </div>
+    ${hl ? `<div class="tt-block"><div class="tt-block-label">得意</div>${hl}</div>` : ""}
+    ${wk ? `<div class="tt-block"><div class="tt-block-label">苦手</div>${wk}</div>` : ""}
+    ${tm ? `<div class="tt-block"><div class="tt-block-label">代表種牡馬</div>${tm}</div>` : ""}
+    ${n.rationale ? `<div class="tt-block" style="font-size:.62rem;color:var(--text-dim)">${escHTML(n.rationale)}</div>` : ""}`;
+  tooltip.style.display = "block";
+  const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  tooltip.style.left = Math.min(cx + 14, window.innerWidth - tw - 8) + "px";
+  tooltip.style.top = Math.min(cy + 14, window.innerHeight - th - 8) + "px";
+}
+
+// ── 詳細パネル ──────────────────────────────────────
+function selectNode(id){
+  selectedId = id;
+  draw();
+  const n = NODES.find(x => x.node_id === id);
+  if (!n) return;
+  const sims = (SIM_TOP[currentSim] && SIM_TOP[currentSim][id]) || [];
+  const hl = (n.highlights || []).map(h => `<span class="tag good">${escHTML(h)}</span>`).join("");
+  const wk = (n.weaknesses || []).map(h => `<span class="tag bad">${escHTML(h)}</span>`).join("");
+  const tm = (n.top_members || []).map(m => `<span class="tag member">${escHTML(m)}</span>`).join("");
+  const simHtml = sims.map(s => {
+    const w = Math.max(0, Math.min(1, (s.score + 1) / 2)) * 100;
+    return `
+    <div class="similar-item" data-target="${escHTML(s.node_id)}">
+      <div style="flex:1;min-width:0">
+        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHTML(s.name)}</div>
+        <div class="similar-bar"><span style="width:${w}%"></span></div>
+      </div>
+      <span class="similar-score" style="margin-left:8px">${fmtScore(s.score)}</span>
+    </div>`;
+  }).join("") || `<div class="empty">類似データなし</div>`;
+
+  const axes = n.axes || {};
+  const axesHtml = `
+    <div class="tag-list">
+      <span class="tag">距離: ${escHTML(axes.dist_dominant)}</span>
+      <span class="tag">馬場: ${escHTML(axes.surface_dominant)}</span>
+      <span class="tag">${escHTML(axes.heavy_label)}</span>
+    </div>
+    <div style="font-size:.62rem;color:var(--text-dim);line-height:1.6">
+      短距離 z=${fmtZ(axes.z_sprint)} / マイル z=${fmtZ(axes.z_mile)} / 中距離 z=${fmtZ(axes.z_mid)} / 長距離 z=${fmtZ(axes.z_stay)}<br>
+      芝 z=${fmtZ(axes.z_turf)} / ダート z=${fmtZ(axes.z_dirt)} / 急坂 z=${fmtZ(axes.z_steep)} / 道悪 z=${fmtZ(axes.z_heavy)}
+    </div>`;
+
+  const html = `
+    <div class="detail-name">${n.icon || ""} ${escHTML(n.name)}</div>
+    <div class="detail-sub">${escHTML(n.subtitle || "")}</div>
+    <div class="tag-list">
+      <span class="tag" style="background:${getColorFn()(n)}33;border-color:${getColorFn()(n)}">${escHTML(n.super_name || "—")}</span>
+      <span class="tag">所属種牡馬 n=${n.n_members}</span>
+    </div>
+    ${n.rationale ? `<div class="section"><div class="section-label">特徴</div><div style="font-size:.7rem;color:var(--text-dim)">${escHTML(n.rationale)}</div></div>` : ""}
+    <div class="section"><div class="section-label">適性軸 (z-score)</div>${axesHtml}</div>
+    ${hl ? `<div class="section"><div class="section-label">得意条件</div><div class="tag-list">${hl}</div></div>` : ""}
+    ${wk ? `<div class="section"><div class="section-label">苦手条件</div><div class="tag-list">${wk}</div></div>` : ""}
+    ${tm ? `<div class="section"><div class="section-label">代表種牡馬</div><div class="tag-list">${tm}</div></div>` : ""}
+    <div class="section">
+      <div class="section-label">類似グループ Top 8 (${currentSim})</div>
+      <div class="similar-list">${simHtml}</div>
+    </div>`;
+  document.getElementById("detail-content").innerHTML = html;
+  document.querySelectorAll("#detail-content .similar-item").forEach(el => {
+    el.onclick = () => selectNode(el.dataset.target);
+  });
+}
+
+// ── 各種ボタン群 ────────────────────────────────────
+function buildLayoutModes(){
+  const c = document.getElementById("layout-modes");
+  c.innerHTML = "";
+  LAYOUT_MODES.forEach(k => {
+    const btn = document.createElement("button");
+    btn.className = "btn btn-mini" + (k === currentLayout ? " active" : "");
+    btn.textContent = k.toUpperCase();
+    btn.onclick = () => {
+      currentLayout = k;
+      [...c.children].forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      offsetX = 0; offsetY = 0; scale = 1;
+      updateAxisInfo();
+      draw();
+    };
+    c.appendChild(btn);
+  });
+}
+
+function buildColorModes(){
+  const c = document.getElementById("color-modes");
+  c.innerHTML = "";
+  COLOR_MODES.forEach(m => {
+    const btn = document.createElement("button");
+    btn.className = "btn btn-mini" + (m.id === currentColor ? " active" : "");
+    btn.textContent = m.label;
+    btn.onclick = () => {
+      currentColor = m.id;
+      [...c.children].forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      updateLegend();
+      draw();
+      if (selectedId) selectNode(selectedId);
+    };
+    c.appendChild(btn);
+  });
+}
+
+function buildSimModes(){
+  const c = document.getElementById("sim-modes");
+  c.innerHTML = "";
+  SIM_MODES.forEach(m => {
+    const btn = document.createElement("button");
+    btn.className = "btn btn-mini" + (m.id === currentSim ? " active" : "");
+    btn.textContent = m.label;
+    btn.onclick = () => {
+      currentSim = m.id;
+      [...c.children].forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      draw();
+      if (selectedId) selectNode(selectedId);
+    };
+    c.appendChild(btn);
+  });
+}
+
+function updateLegend(){
+  const c = document.getElementById("legend");
+  let html = "";
+  if (currentColor === "super") {
+    Object.entries(META.super_groups || {}).forEach(([sid, info]) => {
+      const cnt = NODES.filter(n => String(n.super_id) === sid).length;
+      if (!cnt) return;
+      html += `<div class="legend-item"><span class="legend-dot" style="background:${SUPER_PALETTE[sid] || '#888'}"></span>${escHTML(info.name || ('Super ' + sid))} (${cnt})</div>`;
+    });
+    const nmCnt = NODES.filter(n => n.is_non_main).length;
+    if (nmCnt) html += `<div class="legend-item"><span class="legend-shape">◇</span>非主流 (${nmCnt})</div>`;
+  } else if (currentColor === "main") {
+    Object.entries(MAIN_GROUP_PALETTE).forEach(([k, col]) => {
+      const cnt = NODES.filter(n => n.main_group === k).length;
+      if (!cnt) return;
+      html += `<div class="legend-item"><span class="legend-dot" style="background:${col}"></span>${escHTML(k)} (${cnt})</div>`;
+    });
+  } else if (currentColor === "dist") {
+    Object.entries(DIST_PALETTE).forEach(([k, col]) => {
+      html += `<div class="legend-item"><span class="legend-dot" style="background:${col}"></span>${escHTML(k)}支配</div>`;
+    });
+  } else if (currentColor === "surface") {
+    Object.entries(SURFACE_PALETTE).forEach(([k, col]) => {
+      html += `<div class="legend-item"><span class="legend-dot" style="background:${col}"></span>${escHTML(k)}支配</div>`;
+    });
+  } else if (currentColor === "heavy") {
+    Object.entries(HEAVY_PALETTE).forEach(([k, col]) => {
+      html += `<div class="legend-item"><span class="legend-dot" style="background:${col}"></span>${escHTML(k)}</div>`;
+    });
+  }
+  html += `<div style="margin-top:8px;font-size:.6rem;color:var(--text-dim);line-height:1.6">
+    <div><span class="legend-shape">●</span> L2 派生サブグループ (主流)</div>
+    <div><span class="legend-shape">◇</span> 非主流ルート派生グループ</div>
+    <div>サイズ = 所属種牡馬数</div>
+  </div>`;
+  c.innerHTML = html;
+}
+
+function updateAxisInfo(){
+  const c = document.getElementById("axis-info");
+  if (currentLayout === "pca") {
+    const evr = META.explained_variance_ratio || [];
+    const pc1 = (META.pca_loadings_top5?.pc1 || []).slice(0, 3)
+      .map(x => `${x.feature.replace("win_","")} (${x.weight >= 0 ? "+" : ""}${x.weight.toFixed(2)})`).join(", ");
+    const pc2 = (META.pca_loadings_top5?.pc2 || []).slice(0, 3)
+      .map(x => `${x.feature.replace("win_","")} (${x.weight >= 0 ? "+" : ""}${x.weight.toFixed(2)})`).join(", ");
+    c.innerHTML = `
+      <div><span class="axis-key">PC1 (${(evr[0]*100||0).toFixed(1)}%)</span><br>→ ${pc1}</div>
+      <div style="margin-top:6px"><span class="axis-key">PC2 (${(evr[1]*100||0).toFixed(1)}%)</span><br>→ ${pc2}</div>`;
+  } else {
+    c.innerHTML = `<div>${currentLayout.toUpperCase()} は非線形配置のため、軸自体に解釈はありません。<br>近接=似た適性プロファイル、として読んでください。</div>`;
+  }
+}
+
+// ── 検索 ─────────────────────────────────────────
+const searchInput = document.getElementById("search");
+const searchResults = document.getElementById("search-results");
+searchInput.addEventListener("input", () => {
+  const q = searchInput.value.trim().toLowerCase();
+  if (!q) {searchResults.innerHTML = ""; return;}
+  const matches = [];
+  NODES.forEach(n => {
+    if ((n.name || "").toLowerCase().includes(q)
+        || (n.subtitle || "").toLowerCase().includes(q)) {
+      matches.push({node: n, hit: "group"});
+    } else {
+      const memberMatch = (n.top_members || []).some(m => m.toLowerCase().includes(q));
+      if (memberMatch) matches.push({node: n, hit: "member"});
+    }
+  });
+  searchResults.innerHTML = matches.slice(0, 12).map(m => `
+    <div class="search-result" data-id="${escHTML(m.node.node_id)}">
+      ${escHTML(m.node.name)}
+      <span class="search-result-tag">${m.hit === "member" ? "← 所属種牡馬一致" : ""}</span>
+    </div>`).join("");
+  document.querySelectorAll("#search-results .search-result").forEach(el => {
+    el.onclick = () => {
+      selectNode(el.dataset.id);
+      searchInput.value = "";
+      searchResults.innerHTML = "";
+    };
+  });
+});
+
+// ── 初期化 ──────────────────────────────────────────
+function init(){
+  document.getElementById("info-text").textContent =
+    `${NODES.length} groups (L2 派生 ${NODES.filter(n => !n.is_non_main).length} + 非主流 ${NODES.filter(n => n.is_non_main).length}) / ${META.feature_dim || 0}次元`;
+  buildLayoutModes();
+  buildColorModes();
+  buildSimModes();
+  updateLegend();
+  updateAxisInfo();
+  resize();
+}
+
+init();
+</script>
+</body>
+</html>

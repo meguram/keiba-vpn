@@ -11,42 +11,34 @@ import time
 from collections import deque
 from typing import Any
 
-_worker_active = threading.local()
 _lock = threading.Lock()
 _buffer: deque[dict[str, Any]] = deque(maxlen=2500)
 _seq = 0
 _handler: logging.Handler | None = None
+# スレッドローカルではなくグローバルフラグ — process_queue() 実行中はすべての
+# スレッド (rdata_N / phase1_N / phase2_N 含む) のログを補足するため。
+_queue_globally_active = threading.Event()
 
 
 def mark_queue_worker_active(active: bool) -> None:
-    """process_queue 実行スレッド上で True にする。"""
-    _worker_active.active = bool(active)
+    """process_queue 開始/終了時に呼ぶ。"""
+    if active:
+        _queue_globally_active.set()
+    else:
+        _queue_globally_active.clear()
 
 
 def is_queue_worker_active() -> bool:
-    return bool(getattr(_worker_active, "active", False))
+    return _queue_globally_active.is_set()
 
 
 class _QueueWorkerContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        tname = getattr(record, "threadName", "") or ""
-        is_worker_thread = tname == "queue-worker"
-        if is_worker_thread:
-            n = record.name
-            return (
-                n.startswith("scraper")
-                or n.startswith("queue")
-                or n.startswith("urllib3")
-                or n == "requests"
-            )
-        if not is_queue_worker_active():
-            return False
         n = record.name
         return (
             n.startswith("scraper")
             or n.startswith("queue")
-            or n.startswith("urllib3")
-            or n == "requests"
+            or n.startswith("src.scraper")
         )
 
 
@@ -92,6 +84,15 @@ def ensure_queue_worker_log_handler() -> None:
     root.addHandler(h)
     root._queue_worker_ring_handler_installed = True  # type: ignore[attr-defined]
     _handler = h
+
+    # scraper.* / src.scraper.* はデフォルトで root レベルを継承するが、
+    # root が WARNING のままだと INFO ログが作られず ring handler に届かない。
+    # queue.worker は明示的に setLevel(INFO) しているので届くが、
+    # scraper.run 等は NOTSET のため root の WARNING を継承してしまう。
+    for _ns in ("scraper", "src.scraper"):
+        _lg = logging.getLogger(_ns)
+        if _lg.level == logging.NOTSET or _lg.level > logging.INFO:
+            _lg.setLevel(logging.INFO)
 
 
 def get_worker_logs(*, after: int = -1, limit: int = 300) -> dict[str, Any]:

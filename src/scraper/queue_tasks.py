@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 # API・UI 向けメタ（id は job.tasks に入れる文字列と一致）
 TASK_CATALOG: list[dict[str, Any]] = [
     {"id": "race_all", "entity": "race", "label": "レース一式（従来どおり）", "hint": "出馬表・指数・オッズ・SmartRC・馬情報など scrape_race_all"},
-    {"id": "race_result", "entity": "race", "label": "レース結果", "hint": "race_result"},
+    {"id": "race_result", "entity": "race", "label": "レース結果 (DB版)", "hint": "race_result (db.netkeiba.com)"},
+    {"id": "race_result_on_time", "entity": "race", "label": "速報結果 (当日)", "hint": "race_result_on_time (race.netkeiba.com 当日17:30)"},
     {
         "id": "race_result_lap",
         "entity": "race",
@@ -27,14 +28,11 @@ TASK_CATALOG: list[dict[str, Any]] = [
     {"id": "race_odds", "entity": "race", "label": "単複オッズ", "hint": "race_odds"},
     {"id": "race_pair_odds", "entity": "race", "label": "2連系オッズ", "hint": "race_pair_odds"},
     {"id": "race_index", "entity": "race", "label": "タイム指数", "hint": "race_index"},
-    {"id": "race_shutuba_past", "entity": "race", "label": "馬柱・過去成績", "hint": "race_shutuba_past"},
     {"id": "race_paddock", "entity": "race", "label": "パドック", "hint": "race_paddock"},
     {"id": "race_barometer", "entity": "race", "label": "偏差値", "hint": "race_barometer"},
-    {"id": "race_oikiri", "entity": "race", "label": "追い切り", "hint": "race_oikiri"},
     {"id": "race_trainer_comment", "entity": "race", "label": "厩舎コメント", "hint": "race_trainer_comment"},
     {"id": "smartrc", "entity": "race", "label": "SmartRC 一式", "hint": "smartrc_race（開催日はジョブの date 推奨）"},
     {"id": "horse_profile", "entity": "horse", "label": "馬ページ（成績・血統HTML含む）", "hint": "horse_result + アーカイブ"},
-    {"id": "horse_pedigree", "entity": "horse", "label": "血統（馬ページ経由・血統HTML）", "hint": "horse_profile と同じ（出走馬集合は期間投入APIから）"},
     {"id": "horse_pedigree_5gen", "entity": "horse", "label": "5世代血統JSON（db.netkeiba /horse/ped/）", "hint": "horse_pedigree_5gen カテゴリへ保存"},
     {"id": "horse_training", "entity": "horse", "label": "調教タイム全ページ", "hint": "horse_training（要ログイン）"},
     {"id": "race_list", "entity": "date", "label": "その日のレース一覧", "hint": "race_lists"},
@@ -188,19 +186,41 @@ def _race_task(
     if task == "smartrc":
         runner.scrape_smartrc(race_id, date=meta_date)
         return False
+    # horse タスクが race ジョブに含まれる場合: race_shutuba から horse_id を解決して委譲
+    _horse_from_race: dict[str, str] = {
+        "horse_result":       "horse_profile",
+        "horse_pedigree_5gen": "horse_pedigree_5gen",
+        "horse_training":     "horse_training",
+    }
+    if task in _horse_from_race:
+        horse_task = _horse_from_race[task]
+        card = runner.storage.load("race_shutuba", race_id)
+        horse_ids: list[str] = [
+            e["horse_id"] for e in ((card.get("entries", []) if card else []))
+            if e.get("horse_id")
+        ]
+        if jid:
+            update_job_progress(
+                jid, phase=task, step_kind="race", step_id=race_id,
+                message=f"{task} · {race_id} ({len(horse_ids)}頭)",
+            )
+        for hid in horse_ids:
+            _horse_task(runner, hid, horse_task, smart_skip=smart_skip)
+            _pause()
+        return False
+
     # getattr で遅延解決: fn_map リテラルで存在しないメソッドを列挙すると
     # 他タスク実行時も AttributeError になるためメソッド名だけ列挙する。
     _race_fn: dict[str, str] = {
         "race_result": "scrape_race_result",
+        "race_result_on_time": "scrape_race_result_on_time",
         "race_result_lap": "scrape_race_result_lap",
         "race_shutuba": "scrape_race_card",
         "race_odds": "scrape_odds",
         "race_pair_odds": "scrape_pair_odds",
         "race_index": "scrape_speed_index",
-        "race_shutuba_past": "scrape_shutuba_past",
         "race_paddock": "scrape_paddock",
         "race_barometer": "scrape_barometer",
-        "race_oikiri": "scrape_oikiri",
         "race_trainer_comment": "scrape_trainer_comment",
     }
     mname = _race_fn.get(task)
@@ -297,9 +317,14 @@ def build_job_label(job_kind: str, target_id: str, tasks: list[str]) -> str:
     return f"{job_kind}:{target_id} [{tstr}]"
 
 
+_HORSE_TASKS_IN_RACE = frozenset({"horse_result", "horse_pedigree_5gen", "horse_training"})
+
+
 def validate_tasks_for_kind(job_kind: str, tasks: list[str]) -> str | None:
     """エラー文 or None"""
     allowed = {t["id"] for t in TASK_CATALOG if t["entity"] == job_kind}
+    if job_kind == "race":
+        allowed |= _HORSE_TASKS_IN_RACE  # race_shutuba 経由で horse_id 解決
     for x in tasks:
         if x not in allowed:
             return f"タスク {x!r} は entity={job_kind!r} では使えません"

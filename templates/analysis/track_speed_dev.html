@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>馬場速度 Dev Docs | Keiba</title>
+<style>
+  :root {
+    --bg: #0f1117; --bg2: #161b27; --bg3: #1e2535;
+    --border: #2a3347; --text: #e2e8f0; --text-dim: #64748b;
+    --accent: #6366f1; --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+    --blue: #3b82f6; --purple: #a855f7; --teal: #14b8a6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 14px; line-height: 1.6; }
+
+  .dev-header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 12px; }
+  .dev-badge { background: #7c3aed22; border: 1px solid #7c3aed; color: #a78bfa; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; letter-spacing: 1px; }
+  .dev-title { font-size: 17px; font-weight: 700; }
+  .dev-sub { color: var(--text-dim); font-size: 11px; margin-top: 1px; }
+  .back-link { margin-left: auto; color: var(--text-dim); text-decoration: none; font-size: 12px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; }
+  .back-link:hover { color: var(--text); border-color: var(--accent); }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+  /* ── Pipeline ── */
+  .pipeline { display: flex; flex-direction: column; align-items: stretch; gap: 0; margin-bottom: 40px; }
+  .pipe-node { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 12px; cursor: pointer; transition: border-color .15s, background .15s; text-decoration: none; color: var(--text); }
+  .pipe-node:hover { border-color: var(--accent); background: #1e2535; }
+  .pipe-num { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .pipe-node-title { font-weight: 600; font-size: 13px; }
+  .pipe-node-desc { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+  .pipe-badge { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+  .pipe-arrow { text-align: center; color: var(--text-dim); font-size: 18px; line-height: 1; padding: 3px 0; }
+
+  /* ── Step Cards ── */
+  .step-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 28px; overflow: hidden; scroll-margin-top: 16px; }
+  .step-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .step-num-badge { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .step-title { font-size: 15px; font-weight: 700; }
+  .step-file { font-size: 11px; color: var(--text-dim); margin-top: 2px; font-family: monospace; }
+  .step-body { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 700px) { .step-body { grid-template-columns: 1fr; } }
+  .step-body-1col { padding: 20px; }
+
+  /* ── Boxes ── */
+  .formula-box { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .formula-box h4, .sample-box h4 { font-size: 10px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+  .formula { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 12px; color: #93c5fd; line-height: 2; }
+  .formula .c  { color: var(--text-dim); }
+  .formula .v  { color: #86efac; }
+  .formula .k  { color: #fbbf24; }
+
+  .sample-box { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .stag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 600; margin-bottom: 8px; }
+  .sa { background: #1e3a5f; color: #93c5fd; }
+  .sb { background: #3b1e1e; color: #fca5a5; }
+  .kv-list { display: flex; flex-direction: column; gap: 5px; }
+  .kv { display: flex; justify-content: space-between; align-items: center; font-size: 12px; gap: 8px; }
+  .kl { color: var(--text-dim); white-space: nowrap; }
+  .kv-val { font-family: monospace; font-weight: 500; text-align: right; }
+  .cv-ok   { color: #86efac; }
+  .cv-hi   { color: #fca5a5; }
+  .cv-warn { color: #fbbf24; }
+  .note { font-size: 11px; color: var(--text-dim); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+
+  /* ── Temporal ── */
+  .temporal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+  .tc { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 8px; text-align: center; }
+  .tc-label  { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .4px; }
+  .tc-weight { font-size: 24px; font-weight: 800; margin: 4px 0; }
+  .tc-cond   { font-size: 10px; color: var(--text-dim); }
+  .tc.curr  { border-color: var(--ok); }
+  .tc.prev  { border-color: var(--warn); }
+  .tc.week  { border-color: var(--blue); }
+  .pool-formula { margin-top: 12px; background: var(--bg3); border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; color: #93c5fd; line-height: 2; }
+
+  /* ── IQR bar ── */
+  .iqr-wrap { position: relative; height: 48px; margin: 14px 0 32px; }
+  .iqr-bar  { position: absolute; top: 8px; left: 0; right: 0; height: 28px; background: var(--bg3); border-radius: 6px; }
+  .iqr-region { position: absolute; top: 0; height: 28px; border-radius: 4px; }
+  .iqr-dot { position: absolute; top: 4px; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; transform: translateX(-50%); cursor: default; }
+  .iqr-lbl { position: absolute; top: 30px; transform: translateX(-50%); font-size: 9px; white-space: nowrap; }
+
+  /* ── Confidence chips ── */
+  .conf-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-top: 10px; }
+  .conf-chip { background: var(--bg2); border-radius: 6px; padding: 10px; font-size: 11px; line-height: 1.6; }
+
+  /* ── Artifacts ── */
+  .artifact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 12px; }
+  .artifact-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .artifact-card h4 { font-size: 10px; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .5px; }
+  .artifact-card .path { font-family: monospace; font-size: 11px; color: #93c5fd; word-break: break-all; margin-bottom: 6px; }
+  .artifact-card ul { padding-left: 14px; }
+  .artifact-card li { font-size: 11px; color: var(--text-dim); margin-bottom: 2px; }
+
+  /* ── Notes ── */
+  .notes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .note-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-size: 12px; line-height: 1.8; }
+  .note-card strong { color: var(--text); display: block; margin-bottom: 4px; }
+
+  section h2 { font-size: 17px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .sep { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+
+  /* ── Animated Flow Chart ── */
+  .anim-flow-wrap { padding: 20px 24px 24px; position: relative; }
+  .flow-replay-btn {
+    position: absolute; top: 14px; right: 16px;
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text-dim); font-size: 11px; padding: 4px 12px;
+    border-radius: 6px; cursor: pointer; transition: color .15s, border-color .15s;
+  }
+  .flow-replay-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .flow-chart { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  .fc-node {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 16px; text-align: center;
+    width: 100%; max-width: 420px;
+    opacity: 0; transform: translateY(10px);
+    transition: opacity .45s ease, transform .45s ease, border-color .4s;
+  }
+  .fc-node.vis { opacity: 1; transform: translateY(0); }
+
+  .fc-arrow {
+    height: 28px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .3s ease;
+  }
+  .fc-arrow.vis { opacity: 1; }
+  .fc-arrow-line { width: 2px; height: 14px; background: var(--border); }
+  .fc-arrow-tip { color: var(--text-dim); font-size: 13px; line-height: 1; }
+  .fc-arrow-label { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+
+  .fc-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+  .fc-mono { font-family: monospace; font-size: 12px; color: #93c5fd; line-height: 1.9; }
+  .fc-val  { font-family: monospace; font-size: 14px; font-weight: 700; }
+  .fc-desc { font-size: 11px; color: var(--text-dim); margin-top: 4px; line-height: 1.5; }
+
+  /* node colours */
+  .fc-node.n-input  { border-color: #3b82f6; background: #0d1c3a; }
+  .fc-node.n-calc   { border-color: #6366f1; background: #181030; }
+  .fc-node.n-split  { background: transparent; border: none; padding: 0; }
+  .fc-node.n-out    { border-color: var(--ok); background: #0a2416; }
+
+  .fc-split-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 420px; opacity: 0; transform: translateY(10px); transition: opacity .45s ease, transform .45s ease; }
+  .fc-split-row.vis { opacity: 1; transform: translateY(0); }
+  .fc-cand { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; transition: border-color .4s, background .4s, opacity .4s; }
+  .fc-cand.win { border-color: var(--ok); background: #0a2416; }
+  .fc-cand.lose { opacity: .28; }
+
+  /* corr bar */
+  .corr-row { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: 10px; color: var(--text-dim); }
+  .corr-track { flex: 1; height: 5px; background: var(--bg2); border-radius: 3px; overflow: hidden; }
+  .corr-fill  { height: 5px; border-radius: 3px; width: 0; transition: width .7s ease; }
+  .corr-num   { font-family: monospace; font-size: 10px; color: var(--text-dim); white-space: nowrap; min-width: 40px; text-align: right; }
+
+  /* step indicator dots */
+  .flow-steps { display: flex; gap: 6px; margin-bottom: 16px; justify-content: center; }
+  .flow-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bg3); border: 1px solid var(--border); transition: background .3s, border-color .3s; }
+  .flow-dot.active { background: var(--accent); border-color: var(--accent); }
+
+  /* sample selector tabs */
+  .sample-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .sample-tab { font-size: 11px; padding: 4px 12px; border-radius: 5px; border: 1px solid var(--border); cursor: pointer; background: var(--bg3); color: var(--text-dim); transition: all .15s; }
+  .sample-tab.active { border-color: var(--accent); color: var(--text); background: #2224448a; }
+</style>
+</head>
+<body>
+{% include 'partials/_nav.html' %}
+
+<div class="dev-header">
+  <span class="dev-badge">DEV ONLY</span>
+  <div>
+    <div class="dev-title">🔬 馬場速度指数 — 計算ロジック解説</div>
+    <div class="dev-sub">Track Speed Index · Calculation Pipeline · Sample Data (実データ使用)</div>
+  </div>
+  <a href="/track-speed" class="back-link">← 馬場速度に戻る</a>
+</div>
+
+<div class="container">
+
+  <!-- ━━━ PIPELINE OVERVIEW ━━━ -->
+  <section>
+    <h2>🔄 パイプライン概要</h2>
+    <div class="pipeline">
+      <a class="pipe-node" href="#step1">
+        <div class="pipe-num" style="background:#1e3a5f;color:#93c5fd">1</div>
+        <div>
+          <div class="pipe-node-title">ペース特徴量抽出</div>
+          <div class="pipe-node-desc">前半3F・上がり3F・RPCI を race_result から取得し、time_2nd との相関が高い指標を採用</div>
+        </div>
+        <span class="pipe-badge" style="background:#1e3a5f;color:#93c5fd">入力</span>
+      </a>
+      <div class="pipe-arrow">↓</div>
+
+      <a class="pipe-node" href="#step2">
+        <div class="pipe-num" style="background:#1e4a3a;color:#86efac">2</div>
+        <div>
+          <div class="pipe-node-title">ペース補正（OLS z変換）</div>
+          <div class="pipe-node-desc">同条件グループ内で前半ペースの線形効果を除去 → time_2nd_adj を算出</div>
+        </div>
+        <span class="pipe-badge" style="background:#1e4a3a;color:#86efac">補正</span>
+      </a>
+      <div class="pipe-arrow">↓</div>
+
+      <a class="pipe-node" href="#step3">
+        <div class="pipe-num" style="background:#3b2e5e;color:#c4b5fd">3</div>
+        <div>
+          <div class="pipe-node-title">ベースライン Z得点 → 馬場指数</div>
+          <div class="pipe-node-desc">補正後タイムを過去分布で標準化 → z得点・baba_index (50=標準)</div>
+        </div>
+        <span class="pipe-badge" style="background:#3b2e5e;color:#c4b5fd">標準化</span>
+      </a>
+      <div class="pipe-arrow">↓</div>
+
+      <a class="pipe-node" href="#step4">
+        <div class="pipe-num" style="background:#4a2e1e;color:#fbbf24">4</div>
+        <div>
+          <div class="pipe-node-title">日別ロバスト平均Z（テンポラルプーリング）</div>
+          <div class="pipe-node-desc">IQR外れ値除去 + 前日・前週データを同馬場状態限定で加重プーリング</div>
+        </div>
+        <span class="pipe-badge" style="background:#4a2e1e;color:#fbbf24">集計</span>
+      </a>
+      <div class="pipe-arrow">↓</div>
+
+      <a class="pipe-node" href="#step5">
+        <div class="pipe-num" style="background:#1e3a4a;color:#67e8f9">5</div>
+        <div>
+          <div class="pipe-node-title">PF指数 + 速度水準ラベル</div>
+          <div class="pipe-node-desc">馬場速度差分 → PF指数（50=標準）/ 各クラス基準とのσ最近傍で「○○級」ラベルを付与</div>
+        </div>
+        <span class="pipe-badge" style="background:#1e3a4a;color:#67e8f9">出力</span>
+      </a>
+    </div>
+
+    <!-- sample legend -->
+    <div style="display:flex;gap:12px;font-size:11px;color:var(--text-dim);margin-bottom:8px">
+      <span>以降のサンプル:</span>
+      <span class="stag sa">A: 府中S (3勝) 東京芝2000m 良 2025-05-04</span>
+      <span class="stag sb">B: 摩周湖特別 (2勝) 札幌芝1500m 良 2025-08-10 ハイペース</span>
+    </div>
+  </section>
+
+  <hr class="sep">
+
+  <!-- ━━━ STEP 1 ━━━ -->
+  <section id="step1">
+    <div class="step-card">
+      <div class="step-header" style="background:#0c1a2a">
+        <div class="step-num-badge" style="background:#1e3a5f;color:#93c5fd">1</div>
+        <div>
+          <div class="step-title">ペース特徴量抽出</div>
+          <div class="step-file">track_speed_engine.py · extract_pace_features() · _select_pace_metric()</div>
+        </div>
+      </div>
+
+      <!-- Animated flow -->
+      <div class="anim-flow-wrap">
+        <button class="flow-replay-btn" onclick="playStep1()">▶ 再生</button>
+
+        <!-- sample selector -->
+        <div class="sample-tabs">
+          <button class="sample-tab active" id="tab-a" onclick="selectSample('a')">A: 府中S · 東京芝2000m</button>
+          <button class="sample-tab"        id="tab-b" onclick="selectSample('b')">B: 摩周湖特別 · 札幌芝1500m</button>
+        </div>
+
+        <!-- step dots -->
+        <div class="flow-steps">
+          <div class="flow-dot" id="fdot-1"></div>
+          <div class="flow-dot" id="fdot-2"></div>
+          <div class="flow-dot" id="fdot-3"></div>
+          <div class="flow-dot" id="fdot-4"></div>
+          <div class="flow-dot" id="fdot-5"></div>
+        </div>
+
+        <!-- flowchart -->
+        <div class="flow-chart">
+
+          <!-- node 1: input -->
+          <div class="fc-node n-input" id="fn1">
+            <div class="fc-label">① データ取得 — race_result.pace</div>
+            <div class="fc-mono" id="fn1-body">
+              first_half_3f = <span id="v-fh" style="color:#fbbf24">36.3</span> 秒<br>
+              last_3f &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= <span id="v-l3" style="color:#fbbf24">35.1</span> 秒<br>
+              time_2nd &nbsp;&nbsp;&nbsp;&nbsp;= <span id="v-t2" style="color:#fbbf24">117.8</span> 秒
+            </div>
+          </div>
+
+          <div class="fc-arrow" id="fa1"><div class="fc-arrow-line"></div><div class="fc-arrow-tip">▼</div></div>
+
+          <!-- node 2: RPCI calc -->
+          <div class="fc-node n-calc" id="fn2">
+            <div class="fc-label">② RPCI を計算</div>
+            <div class="fc-mono">RPCI = <span id="v-fh2">36.3</span> ÷ <span id="v-l3b">35.1</span> = <span id="v-rpci" style="color:#c4b5fd">1.034</span></div>
+            <div class="fc-desc">前半と後半の相対的なペース比 — 大きいほどスロー</div>
+          </div>
+
+          <div class="fc-arrow" id="fa2">
+            <div class="fc-arrow-line"></div>
+            <div class="fc-arrow-tip">▼</div>
+            <div class="fc-arrow-label">どちらを採用？</div>
+          </div>
+
+          <!-- node 3: two candidates side by side -->
+          <div class="fc-split-row" id="fn3">
+            <div class="fc-cand" id="cand-fh">
+              <div class="fc-label">候補 A</div>
+              <div class="fc-val" style="color:#93c5fd">first_half_3f</div>
+              <div class="fc-desc" id="fh-val-desc">36.3 秒（絶対値）</div>
+              <div class="corr-row">
+                <div class="corr-track"><div class="corr-fill" id="corr-fh" style="background:#3b82f6"></div></div>
+                <div class="corr-num" id="corr-fh-num">|r| = ?</div>
+              </div>
+            </div>
+            <div class="fc-cand" id="cand-rpci">
+              <div class="fc-label">候補 B</div>
+              <div class="fc-val" style="color:#c4b5fd">RPCI</div>
+              <div class="fc-desc" id="rpci-val-desc">1.034（比率）</div>
+              <div class="corr-row">
+                <div class="corr-track"><div class="corr-fill" id="corr-rpci" style="background:#a855f7"></div></div>
+                <div class="corr-num" id="corr-rpci-num">|r| = ?</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="fc-arrow" id="fa3">
+            <div class="fc-arrow-line"></div>
+            <div class="fc-arrow-tip">▼</div>
+            <div class="fc-arrow-label">|corr| 大きい方を採用</div>
+          </div>
+
+          <!-- node 4: output -->
+          <div class="fc-node n-out" id="fn4">
+            <div class="fc-label">③ 採用指標 → Step 2 へ</div>
+            <div class="fc-val" id="fn4-metric" style="color:#86efac">first_half_3f</div>
+            <div class="fc-mono" style="margin-top:6px">
+              pace_metric = <span id="fn4-val" style="color:#fbbf24">36.3</span> 秒
+              &nbsp;<span id="fn4-note" style="color:var(--text-dim);font-size:11px">大 = 前半遅い (スロー)</span>
+            </div>
+          </div>
+
+        </div><!-- /flow-chart -->
+      </div><!-- /anim-flow-wrap -->
+    </div>
+  </section>
+
+  <!-- ━━━ STEP 2 ━━━ -->
+  <section id="step2">
+    <div class="step-card">
+      <div class="step-header" style="background:#0a1e14">
+        <div class="step-num-badge" style="background:#1e4a3a;color:#86efac">2</div>
+        <div>
+          <div class="step-title">ペース補正（OLS z変換）</div>
+          <div class="step-file">track_speed_engine.py · _build_context_cohort() · _apply_cohort_adjustment() / pace_baselines.parquet</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <div class="formula-box">
+          <h4>グルーピング → β算出 → 補正</h4>
+          <div class="formula">
+<span class="c"># コンテキストキー（ベースライン構築時に計算）</span>
+key = venue|layout|surface|dist|class|cond_pool
+
+<span class="c"># ペース指標を z 変換（Var=1 に正規化）</span>
+z_pace = (metric_val − <span class="k">μ_pace</span>) ÷ <span class="k">σ_pace</span>
+
+<span class="c"># OLS回帰係数（Var(z_pace)=1 なので簡略化）</span>
+β = Cov(z_pace, time_2nd)
+
+<span class="c"># 補正量（±1.5秒クリップ）</span>
+adj       = clip(β × z_pace, −1.5, +1.5)
+time_adj  = time_2nd − adj
+
+<span class="c"># ペースラベル（指標値が大 = 前半遅い = スロー）</span>
+z_pace &lt; −1 → "前傾" (ハイペース)
+z_pace &gt; +1 → "抑え" (スロー)
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="sample-box">
+            <h4>サンプル A · 標準ペース</h4>
+            <span class="stag sa">府中S · μ=36.2 σ=1.0</span>
+            <div class="kv-list">
+              <div class="kv"><span class="kl">z_pace = (36.3−36.2)÷1.0</span><span class="kv-val cv-ok">+0.08 (標準)</span></div>
+              <div class="kv"><span class="kl">adj = β×0.08</span><span class="kv-val cv-ok">+0.03 秒（微小）</span></div>
+              <div class="kv"><span class="kl">time_adj = 117.8 − 0.03</span><span class="kv-val">≈ 117.8 秒</span></div>
+            </div>
+            <div class="note">標準ペース → 補正量は無視できる水準</div>
+          </div>
+          <div class="sample-box">
+            <h4>サンプル B · 極端なハイペース</h4>
+            <span class="stag sb">摩周湖特別 · μ=35.2 σ=1.6</span>
+            <div class="kv-list">
+              <div class="kv"><span class="kl">z_pace = (28.9−35.2)÷1.6</span><span class="kv-val cv-hi">−3.99 (前傾)</span></div>
+              <div class="kv"><span class="kl">adj = clip(β×(−4.0), ±1.5)</span><span class="kv-val cv-hi">−1.5 秒（上限クリップ）</span></div>
+              <div class="kv"><span class="kl">time_adj = 89.2 − (−1.5)</span><span class="kv-val cv-warn">90.7 秒</span></div>
+            </div>
+            <div class="note">ハイペースにより生タイムが速すぎる → 補正で +1.5秒</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ━━━ STEP 3 ━━━ -->
+  <section id="step3">
+    <div class="step-card">
+      <div class="step-header" style="background:#180f2e">
+        <div class="step-num-badge" style="background:#3b2e5e;color:#c4b5fd">3</div>
+        <div>
+          <div class="step-title">ベースライン Z得点 → 馬場指数</div>
+          <div class="step-file">track_speed_engine.py · score_race() / track_speed_baselines.parquet</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <div class="formula-box">
+          <h4>Z得点 → 馬場指数変換</h4>
+          <div class="formula">
+<span class="c"># ベースラインキー（同一コース×クラス×馬場）</span>
+key = venue|layout|surface|dist|class|cond_pool
+
+<span class="c"># 補正後タイムを標準化</span>
+z = (time_adj − <span class="k">baseline_mean</span>) ÷ <span class="k">baseline_std</span>
+
+<span class="c"># 馬場指数: 50=標準、高いほど速い馬場</span>
+baba_index = 50 − z × 10
+
+<span class="c"># 稍重・重は複数プール候補から |z| 最小を採用</span>
+cond_pool ∈ {firm_yielding, yielding_soft, soft_heavy}
+          </div>
+          <div style="margin-top:14px;font-size:11px">
+            <div style="font-weight:700;color:var(--text);margin-bottom:6px">速度レベル</div>
+            <div style="display:flex;flex-direction:column;gap:3px;color:var(--text-dim)">
+              <div style="display:flex;justify-content:space-between"><span>z ≤ −1.5</span><span style="color:#60a5fa">超高速 (≥65)</span></div>
+              <div style="display:flex;justify-content:space-between"><span>−1.5 &lt; z ≤ −0.5</span><span style="color:#34d399">高速 (55〜65)</span></div>
+              <div style="display:flex;justify-content:space-between"><span>−0.5 &lt; z ≤ +0.5</span><span>標準 (45〜55)</span></div>
+              <div style="display:flex;justify-content:space-between"><span>+0.5 &lt; z ≤ +1.5</span><span style="color:#fbbf24">低速 (35〜45)</span></div>
+              <div style="display:flex;justify-content:space-between"><span>z &gt; +1.5</span><span style="color:#ef4444">超低速 (≤35)</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="sample-box">
+            <h4>サンプル A</h4>
+            <span class="stag sa">東京|内|芝|2000|3勝|firm_yielding</span>
+            <div class="kv-list">
+              <div class="kv"><span class="kl">baseline_mean</span><span class="kv-val">119.304 秒</span></div>
+              <div class="kv"><span class="kl">baseline_std</span><span class="kv-val">1.125 秒</span></div>
+              <div class="kv"><span class="kl">z = (117.8−119.3)÷1.1</span><span class="kv-val cv-ok">−1.364</span></div>
+              <div class="kv"><span class="kl">baba_index = 50−(−1.36×10)</span><span class="kv-val cv-ok">63.6 <span style="color:var(--text-dim);font-weight:400">[高速]</span></span></div>
+            </div>
+          </div>
+          <div class="sample-box">
+            <h4>サンプル B</h4>
+            <span class="stag sb">札幌|外|芝|1500|2勝|firm_yielding</span>
+            <div class="kv-list">
+              <div class="kv"><span class="kl">time_adj（補正後）</span><span class="kv-val cv-warn">90.7 秒</span></div>
+              <div class="kv"><span class="kl">baseline_mean</span><span class="kv-val">89.983 秒</span></div>
+              <div class="kv"><span class="kl">baseline_std</span><span class="kv-val">0.650 秒</span></div>
+              <div class="kv"><span class="kl">z = (90.7−90.0)÷0.65</span><span class="kv-val cv-hi">+1.103</span></div>
+              <div class="kv"><span class="kl">baba_index = 50−(+1.1×10)</span><span class="kv-val cv-hi">39.0 <span style="color:var(--text-dim);font-weight:400">[低速]</span></span></div>
+            </div>
+            <div class="note">補正なし(89.2秒)なら z≈−1.2→高速 と誤判定。補正で正しく低速に</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ━━━ STEP 4 ━━━ -->
+  <section id="step4">
+    <div class="step-card">
+      <div class="step-header" style="background:#1a1208">
+        <div class="step-num-badge" style="background:#4a2e1e;color:#fbbf24">4</div>
+        <div>
+          <div class="step-title">日別ロバスト平均Z（テンポラルプーリング）</div>
+          <div class="step-file">perf_index.py · _robust_mean_z() · build_temporal_pooled_z_stats()</div>
+        </div>
+      </div>
+
+      <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+        <!-- IQR -->
+        <div>
+          <div class="formula-box">
+            <h4>① IQRロバスト平均（外れ値除去）</h4>
+            <div class="formula" style="font-size:11px">
+Q1, Q3 = 同日・同会場・同面の z 四分位
+IQR    = Q3 − Q1
+
+<span class="c"># Tukey フェンス (n ≥ 4 のとき)</span>
+lo = Q1 − 1.5 × IQR
+hi = Q3 + 1.5 × IQR
+
+inliers = z[lo ≤ z ≤ hi]
+mean_z  = mean(inliers)
+            </div>
+          </div>
+          <!-- IQR visual -->
+          <div style="margin-top:12px;font-size:10px;color:var(--text-dim)">例: 東京芝 5レース</div>
+          <div class="iqr-wrap">
+            <div class="iqr-bar">
+              <div class="iqr-region" style="left:14%;width:57%;background:#1e4a3a44;border:1px dashed #22c55e55"></div>
+              <div class="iqr-dot" style="left:18%;background:#22c55e22;border:2px solid var(--ok);color:var(--ok)">○</div>
+              <div class="iqr-dot" style="left:36%;background:#22c55e22;border:2px solid var(--ok);color:var(--ok)">○</div>
+              <div class="iqr-dot" style="left:51%;background:#22c55e22;border:2px solid var(--ok);color:var(--ok)">○</div>
+              <div class="iqr-dot" style="left:63%;background:#22c55e22;border:2px solid var(--ok);color:var(--ok)">○</div>
+              <div class="iqr-dot" style="left:89%;background:#ef444422;border:2px solid var(--err);color:var(--err)">✕</div>
+            </div>
+            <div class="iqr-lbl" style="left:18%;color:var(--text-dim)">−1.2</div>
+            <div class="iqr-lbl" style="left:36%;color:var(--text-dim)">−0.5</div>
+            <div class="iqr-lbl" style="left:51%;color:var(--text-dim)">−0.3</div>
+            <div class="iqr-lbl" style="left:63%;color:var(--text-dim)">−0.1</div>
+            <div class="iqr-lbl" style="left:89%;color:var(--err)">+2.1⚠</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim)">
+            除外後: mean = (−1.2−0.5−0.3−0.1)÷4 = <strong style="color:var(--ok)">−0.525</strong><br>
+            除外前: mean = (−1.2…+2.1)÷5 = 0.0（過大評価）
+          </div>
+
+          <!-- confidence -->
+          <div style="margin-top:14px">
+            <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">信頼度判定</div>
+            <div class="conf-grid">
+              <div class="conf-chip" style="border:1px solid var(--ok)">
+                <div style="color:var(--ok);font-weight:700">high</div>
+                <div style="color:var(--text-dim)">σ_z &lt; 0.5<br>外れ値率 &lt; 20%<br>n ≥ 4</div>
+              </div>
+              <div class="conf-chip" style="border:1px solid var(--border)">
+                <div style="color:var(--text-dim);font-weight:700">mid</div>
+                <div style="color:var(--text-dim)">σ_z &lt; 1.0<br>外れ値率 &lt; 40%</div>
+              </div>
+              <div class="conf-chip" style="border:1px solid var(--warn)">
+                <div style="color:var(--warn);font-weight:700">low</div>
+                <div style="color:var(--text-dim)">上記以外<br>（少数・分散大）</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Temporal -->
+        <div>
+          <div class="formula-box">
+            <h4>② テンポラルプーリング（相関分析に基づく重み）</h4>
+            <div class="formula" style="font-size:11px">
+<span class="c"># 馬場状態の最頻値が一致する場合のみ採用</span>
+prior_day  = date − 1日  <span class="c"># 同週前日 (r≈0.55)</span>
+prior_week = date − 7日  <span class="c"># 前週同曜日 (r≈0.52)</span>
+
+pooled_mean_z =
+  Σ(w_i × n_inliers_i × mean_z_i)
+  ────────────────────────────────
+  Σ(w_i × n_inliers_i)
+            </div>
+          </div>
+          <div class="temporal-grid">
+            <div class="tc curr">
+              <div class="tc-label">当日</div>
+              <div class="tc-weight" style="color:var(--ok)">1.0</div>
+              <div class="tc-cond">常に採用</div>
+            </div>
+            <div class="tc prev">
+              <div class="tc-label">前日（同週）</div>
+              <div class="tc-weight" style="color:var(--warn)">0.35</div>
+              <div class="tc-cond">同馬場状態<br>r≈0.55</div>
+            </div>
+            <div class="tc week">
+              <div class="tc-label">前週同曜日</div>
+              <div class="tc-weight" style="color:var(--blue)">0.25</div>
+              <div class="tc-cond">同馬場状態<br>r≈0.52</div>
+            </div>
+          </div>
+          <div class="pool-formula">
+<span style="color:var(--text-dim)"># 実例: 2025-12-28 東京芝（日曜）</span>
+当日  n=5  mean_z=−0.028  w=1.0
+前日  n=6  mean_z=−0.182  w=0.35 ✓同条件(良)
+────────────────────────────────
+分子: 1.0×5×(−0.028) + 0.35×6×(−0.182)
+    = −0.14 + (−0.38) = −0.52
+分母: 1.0×5 + 0.35×6 = 7.1
+<span style="color:var(--ok)">pooled_mean_z = −0.52÷7.1 ≈ −0.073</span>
+<span style="color:var(--text-dim)"># 当日のみなら −0.028、前日込みでやや修正</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ━━━ STEP 5 ━━━ -->
+  <section id="step5">
+    <div class="step-card">
+      <div class="step-header" style="background:#08181e">
+        <div class="step-num-badge" style="background:#1e3a4a;color:#67e8f9">5</div>
+        <div>
+          <div class="step-title">PF指数 + 速度水準ラベル（クラス換算）</div>
+          <div class="step-file">perf_index.py · add_perf_index() / track_speed_engine.py · _classify_class_level()</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <div class="formula-box">
+          <h4>PF指数の定義</h4>
+          <div class="formula">
+<span class="c"># 馬場速度との差分（1pt = 0.1秒）</span>
+Δt = (pooled_mean_z − race_z) × baseline_std × 10
+
+<span class="c"># コース内 PF指数（50 = 当日馬場速度と同等）</span>
+<span class="k">perf_index</span>         = 50 + Δt
+
+<span class="c"># 全コース横断比較（東京芝2000m良 基準）</span>
+scale = σ_2000m_良 ÷ σ_actual        <span class="c"># [0.33, 3.0] clip</span>
+<span class="k">perf_index_std2000</span> = 50 + Δt × scale
+          </div>
+          <div style="margin-top:12px;background:var(--bg2);border-radius:6px;padding:10px;font-size:11px;color:var(--text-dim)">
+            <strong style="color:var(--text)">std2000 補正の意味</strong><br>
+            短距離（芝1000m）はσ小 → Δtを拡大して他コースと比較可<br>
+            重馬場はσ大 → Δtを縮小してレベル差を公平評価
+          </div>
+          <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+            <h4 style="font-size:10px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">速度水準ラベル（クラス換算）</h4>
+            <div class="formula">
+<span class="c"># 定義: PF=50に最も近いクラス = argmin σ距離</span>
+score_C = |(<span class="v">time_2nd_adj</span> − mean_C) ÷ std_C| + 1÷√n_C
+<span class="k">class_level_label</span> = argmin_C score_C
+
+<span class="c"># 制約</span>
+候補: |rank_C − own_rank| ≤ 2  <span class="c"># ±2クラス以内</span>
+条件: n_C ≥ 20                  <span class="c"># 小サンプル排除</span>
+            </div>
+            <div style="margin-top:8px;font-size:11px;color:var(--text-dim)">
+              第2項 <code style="color:#93c5fd">1/√n</code> は平均推定誤差(SE/std)のペナルティ。n→∞ で消滅。<br>
+              ±2制約はベースライン逆転・G級データ不足による遠距離ジャンプを防ぐ。
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="sample-box">
+            <h4>サンプル A · 府中S</h4>
+            <span class="stag sa">東京芝2000m 良 2025-05-04</span>
+            <div class="kv-list">
+              <div class="kv"><span class="kl">race_z</span><span class="kv-val cv-ok">−1.364</span></div>
+              <div class="kv"><span class="kl">daily_mean_z (東京芝・当日)</span><span class="kv-val">−0.741</span></div>
+              <div class="kv"><span class="kl">baseline_std</span><span class="kv-val">1.125 秒</span></div>
+              <div class="kv"><span class="kl">Δt = (−0.741−(−1.364))×1.125×10</span><span class="kv-val cv-ok">+7.0</span></div>
+              <div class="kv"><span class="kl">perf_index = 50 + 7.0</span><span class="kv-val cv-ok" style="font-size:16px;font-weight:800">57.0</span></div>
+            </div>
+            <div class="note">当日は高速馬場（baba=63.6）だが、それでも速い → 馬場を差し引いてもハイペース</div>
+          </div>
+          <div class="sample-box">
+            <h4>サンプル B · 摩周湖特別</h4>
+            <span class="stag sb">札幌芝1500m 良 2025-08-10</span>
+            <div class="kv-list">
+              <div class="kv"><span class="kl">race_z（補正後）</span><span class="kv-val cv-hi">+1.103</span></div>
+              <div class="kv"><span class="kl">daily_mean_z (札幌芝・当日)</span><span class="kv-val">≈+0.40</span></div>
+              <div class="kv"><span class="kl">Δt = (0.40−1.10)×0.65×10</span><span class="kv-val cv-hi">−4.6</span></div>
+              <div class="kv"><span class="kl">perf_index = 50 + (−4.6)</span><span class="kv-val cv-hi" style="font-size:16px;font-weight:800">41.8</span></div>
+            </div>
+            <div class="note">補正なしでは race_z≈−0.4 → perf≈57 と過大評価。ペース補正で正確なレベルを反映</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="sep">
+
+  <!-- ━━━ ARTIFACTS ━━━ -->
+  <section>
+    <h2>📦 データアーティファクト</h2>
+    <div class="artifact-grid">
+      <div class="artifact-card">
+        <h4>ベースライン</h4>
+        <div class="path">data/knowledge/track_speed_baselines.parquet</div>
+        <ul>
+          <li>venue, layout, surface, distance, class_band, cond_pool</li>
+          <li>mean, std, n（馬場指数用: n≥12 / 速度水準分類用: n≥20）</li>
+          <li>venue=ALL フォールバック行あり</li>
+        </ul>
+      </div>
+      <div class="artifact-card">
+        <h4>ペースベースライン</h4>
+        <div class="path">data/knowledge/track_speed_pace_baselines.parquet</div>
+        <ul>
+          <li>context_key, metric (rpci / first_half_3f)</li>
+          <li>metric_mean, metric_std, beta</li>
+          <li>global_mean, n (最小 30レース)</li>
+        </ul>
+      </div>
+      <div class="artifact-card">
+        <h4>レース別スコア（年次）</h4>
+        <div class="path">data/analysis/track_speed/races_{year}.parquet</div>
+        <ul>
+          <li>z, baba_index, baseline_std, cond_pool</li>
+          <li>pace_z, pace_label, pace_metric</li>
+          <li>perf_index, perf_index_std2000（永続保存）</li>
+          <li>class_level_label: 速度水準ラベルはクエリ時に動的計算</li>
+        </ul>
+      </div>
+      <div class="artifact-card">
+        <h4>ビルドスクリプト</h4>
+        <div class="path">src/research/race/</div>
+        <ul>
+          <li>build_track_speed_baselines.py</li>
+          <li>assign_track_speed.py</li>
+          <li>track_speed_engine.py → TrackSpeedEngine</li>
+          <li>perf_index.py → PF指数・テンポラルプーリング</li>
+          <li>track_speed_engine.py → _classify_class_level() 速度水準ラベル</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <hr class="sep">
+
+  <!-- ━━━ NOTES ━━━ -->
+  <section>
+    <h2>📝 設計メモ・制約</h2>
+    <div class="notes-grid">
+      <div class="note-card">
+        <strong>ペース補正の限界</strong>
+        <span style="color:var(--text-dim)">
+          補正量は ±1.5秒でクリップ（過補正防止）<br>
+          コンテキスト n &lt; 30 はフォールバック（distance_band 単位）<br>
+          RPCI は laps データがないと計算不可 → first_half_3f へ
+        </span>
+      </div>
+      <div class="note-card">
+        <strong>テンポラルプーリング適用範囲</strong>
+        <span style="color:var(--text-dim)">
+          query_day のみ適用（query_by_category は各日単独）<br>
+          馬場状態の最頻値が不一致なら前日・前週は除外<br>
+          PF指数は assign_races 時に計算・parquet 保存で不変
+        </span>
+      </div>
+      <div class="note-card">
+        <strong>速度水準ラベルの制約</strong>
+        <span style="color:var(--text-dim)">
+          ±2ランク制約: 全コースの73.8%でG級ベースラインが不在、34箇所で高クラスほど平均タイムが遅い逆転現象あり。無制限検索では2勝→G1の誤分類が5%発生<br>
+          MIN_CLASSIFY_N=20: n=17等の不安定な平均に引きつけられるのを防ぐ<br>
+          class_level_label はクエリ時に動的計算（parquet に保存しない）
+        </span>
+      </div>
+      <div class="note-card">
+        <strong>std2000 補正テーブル</strong>
+        <span style="color:var(--text-dim)">
+          σ_2000m良 は baselines.parquet から surface 別に計算<br>
+          スケール係数は [0.33, 3.0] にクリップ（極端距離対策）<br>
+          distance=0 のレースはスケール=1.0
+        </span>
+      </div>
+      <div class="note-card">
+        <strong>baseline_std CAP</strong>
+        <span style="color:var(--text-dim)">
+          baseline_std は 3.0秒でキャップ（BASELINE_STD_CAP）<br>
+          distance=0 集約行の std が 20〜47 になる問題への対処<br>
+          通常コース（距離既知）の std 範囲: 0.55〜2.88秒
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <div style="height:48px"></div>
+</div>
+
+<script>
+// ── Step 1 animated flowchart ────────────────────────────────────
+const SAMPLES = {
+  a: {
+    fh: '36.3', l3: '35.1', t2: '117.8',
+    rpci: '1.034',
+    corrFh: 0.724, corrRpci: 0.651,
+    winner: 'fh',
+    metric: 'first_half_3f', metricVal: '36.3', metricNote: '大 = 前半遅い (スロー)',
+    fhDesc: '36.3 秒（絶対値）', rpciDesc: '1.034（比率）',
+  },
+  b: {
+    fh: '28.9', l3: '34.0', t2: '89.2',
+    rpci: '0.850',
+    corrFh: 0.708, corrRpci: 0.619,
+    winner: 'fh',
+    metric: 'first_half_3f', metricVal: '28.9', metricNote: '大 = 前半遅い (スロー)',
+    fhDesc: '28.9 秒（絶対値）', rpciDesc: '0.850（比率）',
+  },
+};
+
+let currentSample = 'a';
+let timers = [];
+
+function selectSample(key) {
+  currentSample = key;
+  document.querySelectorAll('.sample-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + key).classList.add('active');
+  resetStep1();
+  setTimeout(() => playStep1(), 80);
+}
+
+function resetStep1() {
+  timers.forEach(clearTimeout);
+  timers = [];
+  ['fn1','fn2','fn3','fn4'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('vis');
+  });
+  ['fa1','fa2','fa3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('vis');
+  });
+  for (let i = 1; i <= 5; i++) {
+    const d = document.getElementById('fdot-' + i);
+    if (d) d.classList.remove('active');
+  }
+  document.getElementById('corr-fh').style.width = '0';
+  document.getElementById('corr-rpci').style.width = '0';
+  document.getElementById('cand-fh').classList.remove('win', 'lose');
+  document.getElementById('cand-rpci').classList.remove('win', 'lose');
+  document.getElementById('corr-fh-num').textContent = '|r| = ?';
+  document.getElementById('corr-rpci-num').textContent = '|r| = ?';
+}
+
+function playStep1() {
+  resetStep1();
+  const s = SAMPLES[currentSample];
+
+  // populate values
+  document.getElementById('v-fh').textContent    = s.fh;
+  document.getElementById('v-l3').textContent    = s.l3;
+  document.getElementById('v-t2').textContent    = s.t2;
+  document.getElementById('v-fh2').textContent   = s.fh;
+  document.getElementById('v-l3b').textContent   = s.l3;
+  document.getElementById('v-rpci').textContent  = s.rpci;
+  document.getElementById('fh-val-desc').textContent   = s.fhDesc;
+  document.getElementById('rpci-val-desc').textContent = s.rpciDesc;
+  document.getElementById('fn4-metric').textContent    = s.metric;
+  document.getElementById('fn4-val').textContent       = s.metricVal;
+  document.getElementById('fn4-note').textContent      = s.metricNote;
+
+  const dot = i => {
+    const d = document.getElementById('fdot-' + i);
+    if (d) d.classList.add('active');
+  };
+  const show = id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('vis');
+  };
+
+  const t = ms => new Promise(r => { timers.push(setTimeout(r, ms)); });
+
+  (async () => {
+    dot(1); show('fn1');
+    await t(700);
+
+    dot(2); show('fa1'); show('fn2');
+    await t(700);
+
+    dot(3); show('fa2'); show('fn3');
+    await t(550);
+
+    // animate corr bars
+    dot(4);
+    const fhPct  = Math.round(s.corrFh  * 100) + '%';
+    const rpciPct= Math.round(s.corrRpci* 100) + '%';
+    document.getElementById('corr-fh').style.width   = fhPct;
+    document.getElementById('corr-rpci').style.width = rpciPct;
+    await t(750);
+    document.getElementById('corr-fh-num').textContent   = '|r| = ' + s.corrFh.toFixed(3);
+    document.getElementById('corr-rpci-num').textContent = '|r| = ' + s.corrRpci.toFixed(3);
+    await t(500);
+
+    // highlight winner
+    if (s.winner === 'fh') {
+      document.getElementById('cand-fh').classList.add('win');
+      document.getElementById('cand-rpci').classList.add('lose');
+    } else {
+      document.getElementById('cand-rpci').classList.add('win');
+      document.getElementById('cand-fh').classList.add('lose');
+    }
+    await t(400);
+
+    dot(5); show('fa3'); show('fn4');
+  })();
+}
+
+// autoplay on load
+window.addEventListener('DOMContentLoaded', () => setTimeout(playStep1, 400));
+</script>
+</body>
+</html>

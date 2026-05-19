@@ -157,34 +157,70 @@
   .status-chip .dot.red { background: var(--red); }
 
   .main {
-    max-width: 1200px;
+    max-width: 1240px;
     margin: 0 auto;
     padding: 0 32px 60px;
   }
 
-  .section-label {
+  /* ── カテゴリセクション ── */
+  .category {
+    margin-bottom: 40px;
+  }
+  .category-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .category-num {
+    font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
+    color: var(--bg);
+    background: var(--cat-color, var(--accent));
+    padding: 2px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+  }
+  .category-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-bright);
+    letter-spacing: -0.3px;
+  }
+  .category-desc {
+    font-size: 12px;
     color: var(--text-dim);
-    letter-spacing: 2px;
+    margin-left: auto;
+    text-align: right;
+  }
+  .category-badge {
+    font-size: 9px;
+    font-weight: 700;
     text-transform: uppercase;
-    margin-bottom: 16px;
-    padding-left: 4px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(245,158,11,0.15);
+    color: #f59e0b;
+    letter-spacing: 0.5px;
+    margin-left: 4px;
   }
 
   .nav-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 16px;
-    margin-bottom: 48px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
   }
 
   .nav-card {
     display: block;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 28px 28px 24px;
+    border-radius: 10px;
+    padding: 20px 22px 18px;
     text-decoration: none;
     color: inherit;
     transition: all 0.2s ease;
@@ -208,16 +244,16 @@
   .nav-card:hover::before { opacity: 1; }
 
   .nav-card .card-icon {
-    font-size: 32px;
-    margin-bottom: 14px;
+    font-size: 26px;
+    margin-bottom: 10px;
     display: block;
     filter: saturate(0.9);
   }
   .nav-card .card-title {
-    font-size: 17px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--text-bright);
-    margin-bottom: 6px;
+    margin-bottom: 5px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -226,52 +262,48 @@
     opacity: 0;
     transition: all 0.2s;
     color: var(--text-dim);
-    font-size: 14px;
+    font-size: 13px;
   }
   .nav-card:hover .card-title .arrow { opacity: 1; transform: translateX(3px); }
   .nav-card .card-desc {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-dim);
-    line-height: 1.7;
-    margin-bottom: 12px;
+    line-height: 1.65;
+    margin-bottom: 10px;
   }
   .nav-card .card-tags {
     display: flex;
-    gap: 6px;
+    gap: 5px;
     flex-wrap: wrap;
   }
   .nav-card .tag {
     font-size: 10px;
-    padding: 2px 8px;
+    padding: 2px 7px;
     border-radius: 4px;
     background: var(--surface2);
     color: var(--text-dim);
     font-family: 'JetBrains Mono', monospace;
     border: 1px solid var(--border);
   }
-  .nav-card .card-badge {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    font-size: 10px;
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
+
+  /* ── 馬券最適化 ヒーロー（dev only 単独カテゴリ） ── */
+  .single-card-row .nav-card {
+    padding: 24px 28px 22px;
   }
 
   .quick-jump {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 24px 28px;
-    margin-bottom: 48px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
   }
   .quick-jump h3 {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--text-bright);
-    margin-bottom: 12px;
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
   }
   .quick-jump .jump-form {
     display: flex;
@@ -283,9 +315,9 @@
     background: var(--surface2);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 10px 16px;
+    padding: 9px 14px;
     color: var(--text-bright);
-    font-size: 14px;
+    font-size: 13px;
     font-family: 'JetBrains Mono', monospace;
     width: 220px;
     outline: none;
@@ -298,21 +330,21 @@
     color: #fff;
     border: none;
     border-radius: 8px;
-    padding: 10px 20px;
-    font-size: 13px;
+    padding: 9px 18px;
+    font-size: 12.5px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.15s;
   }
   .quick-jump button:hover { opacity: 0.85; }
   .quick-jump .jump-hint {
-    font-size: 12px;
+    font-size: 11.5px;
     color: var(--text-dim);
     margin-left: 8px;
   }
 
   .api-section {
-    margin-bottom: 48px;
+    margin-bottom: 40px;
   }
   .api-grid {
     display: grid;
@@ -323,7 +355,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 12px 16px;
+    padding: 11px 14px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -360,6 +392,39 @@
     max-width: 120px;
   }
 
+  /* ── 最近のレース日（dev のみ）── */
+  .recent-dates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 10px;
+  }
+  .recent-date-card {
+    display: block;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .recent-date-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-1px);
+  }
+  .recent-date-card .rd-date {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .recent-date-card .rd-hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
   footer {
     text-align: center;
     padding: 24px;
@@ -377,11 +442,13 @@
     .hero h1 .icon { width: 42px; height: 42px; }
     .main { padding: 0 16px 40px; }
     .nav-grid { grid-template-columns: 1fr; }
+    .category-header { flex-wrap: wrap; }
+    .category-desc { width: 100%; text-align: left; margin-left: 0; margin-top: 4px; }
   }
 </style>
 </head>
 <body>
-{% include '_nav.html' %}
+{% include 'partials/_nav.html' %}
 
 <div class="hero">
   <h1><span class="icon-wrap"><span class="icon-glow"></span><span class="icon-ring"></span><img src="/data/image/icon.jpg" alt="Meguro" class="icon"></span> ML-<span class="accent">AutoPilot</span> Keiba</h1>
@@ -396,7 +463,6 @@
 <div class="main">
 
   {% if is_dev_check(request) %}
-  <div class="section-label">📍 クイックジャンプ</div>
   <div class="quick-jump">
     <h3>🔍 レースID / 日付で直接移動</h3>
     <div class="jump-form">
@@ -408,151 +474,261 @@
   </div>
   {% endif %}
 
-  <div class="section-label">🧭 メインページ</div>
-  <div class="nav-grid">
+  {# ═══════════════════════════════════════════════════════
+     ④ AI 予測
+     ═══════════════════════════════════════════════════════ #}
+  <div class="category" style="--cat-color: var(--orange)">
+    <div class="category-header">
+      <span class="category-num">04</span>
+      <span class="category-title">🤖 AI 予測</span>
+      <span class="category-desc">追走難度・レース別予測ランキング</span>
+    </div>
+    <div class="nav-grid">
+      <a class="nav-card" href="/tracking-difficulty" style="--card-accent: var(--orange)">
+        <span class="card-icon">📊</span>
+        <div class="card-title">追走難度分析 <span class="arrow">→</span></div>
+        <div class="card-desc">
+          ゲート位置・隣枠の馬の傾向・脚質構成から各馬のポジション取得容易度を推定。ML モデルによるスコアリング。
+        </div>
+        <div class="card-tags">
+          <span class="tag">ゲート</span>
+          <span class="tag">脚質</span>
+          <span class="tag">隣枠</span>
+          <span class="tag">ML</span>
+        </div>
+      </a>
+      <a class="nav-card" href="#" onclick="event.preventDefault();focusJump();" style="--card-accent: var(--orange)">
+        <span class="card-icon">🏁</span>
+        <div class="card-title">レース予測結果 <span class="arrow">→</span></div>
+        <div class="card-desc">
+          個別レースの出馬表・結果・オッズ・馬情報・「AI 予測」タブで推奨印 (◎○▲△☆) を確認。レース ID で直接移動可能。
+        </div>
+        <div class="card-tags">
+          <span class="tag">出馬表</span>
+          <span class="tag">オッズ</span>
+          <span class="tag">AI 推奨印</span>
+        </div>
+      </a>
+    </div>
+  </div>
 
-    <a class="nav-card" href="/tracking-difficulty" style="--card-accent: var(--orange)">
-      <span class="card-icon">📊</span>
-      <div class="card-title">追走難度分析 <span class="arrow">→</span></div>
-      <div class="card-desc">
-        ゲート位置・隣枠の馬の傾向・脚質構成から各馬のポジション取得容易度を推定。MLモデルによるスコアリング。
-      </div>
-      <div class="card-tags">
-        <span class="tag">ゲート分析</span>
-        <span class="tag">脚質</span>
-        <span class="tag">隣枠影響</span>
-        <span class="tag">ML</span>
-      </div>
-      <span class="card-badge" style="background:var(--orange-dim);color:var(--orange)">PREDICT</span>
-    </a>
+  {# ═══════════════════════════════════════════════════════
+     ③ 血統
+     ═══════════════════════════════════════════════════════ #}
+  <div class="category" style="--cat-color: var(--purple)">
+    <div class="category-header">
+      <span class="category-num">03</span>
+      <span class="category-title">🧬 血統</span>
+      <span class="category-desc">血統研究・コース適性・構造マップ・遺伝子マーカー</span>
+    </div>
+    <div class="nav-grid">
+      <a class="nav-card" href="/bloodline" style="--card-accent: var(--purple)">
+        <span class="card-icon">🧬</span>
+        <div class="card-title">血統 × 距離・コース 研究 <span class="arrow">→</span></div>
+        <div class="card-desc">種牡馬・母父の血統が距離適性・コース特性 (坂/直線/枠順/馬場/芝種) にどう作用するかを事前計算済みアーティファクトでまとめて閲覧。</div>
+        <div class="card-tags"><span class="tag">距離適性</span><span class="tag">コース</span><span class="tag">最適条件</span></div>
+      </a>
+      <a class="nav-card" href="/bloodline-vector" style="--card-accent: var(--purple)">
+        <span class="card-icon">🗺️</span>
+        <div class="card-title">血統マップ <span class="arrow">→</span></div>
+        <div class="card-desc">種牡馬を血統ベクトルで埋め込み、2D マップ上で関係性を可視化。</div>
+        <div class="card-tags"><span class="tag">ベクトル</span><span class="tag">UMAP</span></div>
+      </a>
+      <a class="nav-card" href="/pedigree-map" style="--card-accent: var(--purple)">
+        <span class="card-icon">🌳</span>
+        <div class="card-title">血統構造（サイアー系図） <span class="arrow">→</span></div>
+        <div class="card-desc">種牡馬を父系で階層化して、サイアーライン全体を俯瞰。</div>
+        <div class="card-tags"><span class="tag">サイアー系図</span><span class="tag">階層</span></div>
+      </a>
+      <a class="nav-card" href="/bloodline-cluster" style="--card-accent: var(--purple)">
+        <span class="card-icon">🪐</span>
+        <div class="card-title">メタクラスタ判定 <span class="arrow">→</span></div>
+        <div class="card-desc">馬名から血統メタクラスタを判定し、強み・弱みを推定。</div>
+        <div class="card-tags"><span class="tag">クラスタ</span><span class="tag">強み/弱み</span></div>
+      </a>
+      <a class="nav-card" href="/pedigree-race-stats" style="--card-accent: var(--purple)">
+        <span class="card-icon">📈</span>
+        <div class="card-title">血統構成分析 <span class="arrow">→</span></div>
+        <div class="card-desc">レース別に出走馬の血統構成を集計し、共通する血統傾向を抽出。</div>
+        <div class="card-tags"><span class="tag">構成</span><span class="tag">クロス</span></div>
+      </a>
+      <a class="nav-card" href="/myostatin" style="--card-accent: var(--pink)">
+        <span class="card-icon">🧪</span>
+        <div class="card-title">MSTN 遺伝子 <span class="arrow">→</span></div>
+        <div class="card-desc">マイオスタチン遺伝子型（C:C / C:T / T:T）の予測と距離適性。</div>
+        <div class="card-tags"><span class="tag">遺伝子</span><span class="tag">距離型</span></div>
+      </a>
+    </div>
+  </div>
 
-    <a class="nav-card" href="/bloodline" style="--card-accent: var(--purple)">
-      <span class="card-icon">🧬</span>
-      <div class="card-title">血統 × 距離適性 研究 <span class="arrow">→</span></div>
-      <div class="card-desc">
-        種牡馬・母父の血統構成が距離適性にどう影響するかを統計的に分析。ヒートマップ・クラスタリング・類似度マトリクスで可視化。
-      </div>
-      <div class="card-tags">
-        <span class="tag">種牡馬</span>
-        <span class="tag">母父</span>
-        <span class="tag">距離適性</span>
-        <span class="tag">クラスタ</span>
-      </div>
-      <span class="card-badge" style="background:rgba(167,139,250,0.15);color:#a78bfa">RESEARCH</span>
-    </a>
-
-    <a class="nav-card" href="/course-bloodline" style="--card-accent: var(--cyan)">
-      <span class="card-icon">🏟️</span>
-      <div class="card-title">コース特性 × 血統適性 <span class="arrow">→</span></div>
-      <div class="card-desc">
-        JRA全10場の物理特性 (坂・直線長・回り) をドメインナレッジ化し、血統グループの成績との相関を分析。最適コース条件を推定。
-      </div>
-      <div class="card-tags">
-        <span class="tag">競馬場</span>
-        <span class="tag">坂・直線</span>
-        <span class="tag">コース適性</span>
-        <span class="tag">最適条件</span>
-      </div>
-      <span class="card-badge" style="background:rgba(6,182,212,0.15);color:#06b6d4">RESEARCH</span>
-    </a>
-
-    <a class="nav-card" href="/race-quality" style="--card-accent: var(--pink)">
-      <span class="card-icon">🎯</span>
-      <div class="card-title">レース質分析 <span class="arrow">→</span></div>
-      <div class="card-desc">
-        上がり型・基礎スピード・スタミナ・瞬発・持続・枠順・能力・道悪など 8 タイプ＋判定困難を、血統・指数・過去成績と着順の整合から推定。開催日の加重平均も表示。
-      </div>
-      <div class="card-tags">
-        <span class="tag">レース質</span>
-        <span class="tag">NNLS</span>
-        <span class="tag">無教師</span>
-      </div>
-      <span class="card-badge" style="background:var(--pink-dim);color:var(--pink)">RESEARCH</span>
-    </a>
-
-    <a class="nav-card" href="#" onclick="event.preventDefault();document.getElementById('jumpInput').focus()" style="--card-accent: var(--orange)">
-      <span class="card-icon">🏁</span>
-      <div class="card-title">レース詳細 & AI予測 <span class="arrow">→</span></div>
-      <div class="card-desc">
-        個別レースの出馬表・結果・オッズ・馬情報を表示。「AI予測」タブで特徴量ベースの予測ランキング・推奨印 (◎○▲△☆) を確認。
-      </div>
-      <div class="card-tags">
-        <span class="tag">出馬表</span>
-        <span class="tag">オッズ</span>
-        <span class="tag">AI予測</span>
-        <span class="tag">◎○▲△☆</span>
-      </div>
-      <span class="card-badge" style="background:var(--orange-dim);color:var(--orange)">PREDICT</span>
-    </a>
-
+  {# ═══════════════════════════════════════════════════════
+     ⑤ データ分析
+     ═══════════════════════════════════════════════════════ #}
+  <div class="category" style="--cat-color: var(--cyan)">
+    <div class="category-header">
+      <span class="category-num">05</span>
+      <span class="category-title">📊 データ分析</span>
+      <span class="category-desc">成長曲線・適性・馬場速度などのドメイン分析</span>
+    </div>
+    <div class="nav-grid">
+      <a class="nav-card" href="/growth-curve" style="--card-accent: var(--green)">
+        <span class="card-icon">📈</span>
+        <div class="card-title">成長曲線 <span class="arrow">→</span></div>
+        <div class="card-desc">馬ごとの年齢別パフォーマンスを成長曲線として可視化。早熟・晩成判定。</div>
+        <div class="card-tags"><span class="tag">年齢</span><span class="tag">パフォーマンス</span></div>
+      </a>
+      <a class="nav-card" href="/note-aptitude-race" style="--card-accent: var(--pink)">
+        <span class="card-icon">🎯</span>
+        <div class="card-title">適性 3D（NOTE 軸） <span class="arrow">→</span></div>
+        <div class="card-desc">瞬発・持続・スタミナの 3D 空間で馬の適性ベクトルを可視化、レースとの相性を判定。</div>
+        <div class="card-tags"><span class="tag">3D</span><span class="tag">適性ベクトル</span></div>
+      </a>
+      <a class="nav-card" href="/track-speed" style="--card-accent: var(--cyan)">
+        <span class="card-icon">⚡</span>
+        <div class="card-title">馬場速度 <span class="arrow">→</span></div>
+        <div class="card-desc">開催・トラック別の馬場速度指標を集計、当日の馬場傾向の参考に。</div>
+        <div class="card-tags"><span class="tag">馬場</span><span class="tag">クッション</span></div>
+      </a>
+    </div>
   </div>
 
   {% if is_dev_check(request) %}
-  <div class="section-label">🔗 最近のレース日</div>
-  <div id="recentDates" class="nav-grid" style="margin-bottom:48px">
-    <div style="color:var(--text-dim);font-size:13px;padding:16px">読み込み中...</div>
+  {# ═══════════════════════════════════════════════════════
+     ② 馬券の最適化（dev only）
+     ═══════════════════════════════════════════════════════ #}
+  <div class="category" style="--cat-color: var(--green)">
+    <div class="category-header">
+      <span class="category-num">02</span>
+      <span class="category-title">💰 馬券の最適化</span>
+      <span class="category-badge">DEV</span>
+      <span class="category-desc">期待値・的中率・ROI の最適化</span>
+    </div>
+    <div class="nav-grid single-card-row">
+      <a class="nav-card" href="/betting" style="--card-accent: var(--green)">
+        <span class="card-icon">💴</span>
+        <div class="card-title">馬券最適化 <span class="arrow">→</span></div>
+        <div class="card-desc">
+          AI 予測ランキング × オッズから、期待値最大の券種・買い目をシミュレートし、ROI を可視化。バックテストとの整合も確認。
+        </div>
+        <div class="card-tags">
+          <span class="tag">期待値</span>
+          <span class="tag">ROI</span>
+          <span class="tag">バックテスト</span>
+          <span class="tag">複合最適化</span>
+        </div>
+      </a>
+    </div>
   </div>
 
-  <div class="section-label">⚙️ API エンドポイント</div>
-  <div class="api-section">
-    <div class="api-grid" id="apiGrid">
+  {# ═══════════════════════════════════════════════════════
+     ① 開発者モード（dev only）
+     ═══════════════════════════════════════════════════════ #}
+  <div class="category" style="--cat-color: #f59e0b">
+    <div class="category-header">
+      <span class="category-num">01</span>
+      <span class="category-title">🛠 開発者モード</span>
+      <span class="category-badge">DEV</span>
+      <span class="category-desc">データ取得・チェック・運用ツール</span>
+    </div>
+    <div class="nav-grid">
+      <a class="nav-card" href="/monitor" style="--card-accent: #f59e0b">
+        <span class="card-icon">📡</span>
+        <div class="card-title">モニター <span class="arrow">→</span></div>
+        <div class="card-desc">スクレイピング状況・取得済みデータの俯瞰ボード。日付別レース一覧から個別レース詳細に遷移。</div>
+        <div class="card-tags"><span class="tag">monitor</span><span class="tag">日付別</span></div>
+      </a>
+      <a class="nav-card" href="/data-viewer" style="--card-accent: #f59e0b">
+        <span class="card-icon">🗄️</span>
+        <div class="card-title">データビューア <span class="arrow">→</span></div>
+        <div class="card-desc">GCS / ローカル上の生 JSON・特徴量 parquet を構造化して閲覧。馬・レース・騎手 etc.</div>
+        <div class="card-tags"><span class="tag">data-viewer</span><span class="tag">parquet</span></div>
+      </a>
+      <a class="nav-card" href="/queue-status" style="--card-accent: #f59e0b">
+        <span class="card-icon">⏳</span>
+        <div class="card-title">スクレイピングキュー <span class="arrow">→</span></div>
+        <div class="card-desc">ジョブキュー・ワーカー稼働・進捗・失敗一覧を一覧表示。手動キックや再投入も可能。</div>
+        <div class="card-tags"><span class="tag">queue</span><span class="tag">workers</span></div>
+      </a>
+      <a class="nav-card" href="/scrape-upcoming" style="--card-accent: #f59e0b">
+        <span class="card-icon">⏰</span>
+        <div class="card-title">未来レース取得 <span class="arrow">→</span></div>
+        <div class="card-desc">出馬表・カレンダーなど将来日のレース情報を先行取得。</div>
+        <div class="card-tags"><span class="tag">upcoming</span><span class="tag">出馬表</span></div>
+      </a>
+      <a class="nav-card" href="/server-logs" style="--card-accent: #f59e0b">
+        <span class="card-icon">📜</span>
+        <div class="card-title">サーバーログ <span class="arrow">→</span></div>
+        <div class="card-desc"><code>logs/*.log</code> の末尾を Web から確認、エラー原因をすぐに追跡。</div>
+        <div class="card-tags"><span class="tag">logs</span><span class="tag">tail</span></div>
+      </a>
+    </div>
+  </div>
 
-      <a class="api-item" href="/api/scrape-status?date=20260315" target="_blank">
-        <span class="api-method get">GET</span>
-        <span class="api-path">/api/scrape-status</span>
-        <span class="api-desc">取得状況</span>
-      </a>
-      <a class="api-item" href="/api/scrape-dates?raw_keys=1" target="_blank">
-        <span class="api-method get">GET</span>
-        <span class="api-path">/api/scrape-dates?raw_keys=1</span>
-        <span class="api-desc">日付キー全件（バッチ用）</span>
-      </a>
-      <a class="api-item" href="/api/scrape-jobs" target="_blank">
-        <span class="api-method get">GET</span>
-        <span class="api-path">/api/scrape-jobs</span>
-        <span class="api-desc">ジョブ状況</span>
-      </a>
-      <a class="api-item" href="#" onclick="fetch('/api/odds/train',{method:'POST'}).then(r=>r.json()).then(d=>alert(JSON.stringify(d)));return false;">
-        <span class="api-method post">POST</span>
-        <span class="api-path">/api/odds/train</span>
-        <span class="api-desc">オッズ予測モデル学習</span>
-      </a>
-      <a class="api-item" href="/api/odds/train/status" target="_blank">
-        <span class="api-method get">GET</span>
-        <span class="api-path">/api/odds/train/status</span>
-        <span class="api-desc">オッズ学習状態</span>
-      </a>
-      <a class="api-item" href="#" onclick="runSimulation();return false;">
-        <span class="api-method post">POST</span>
-        <span class="api-path">/api/simulation/run</span>
-        <span class="api-desc">バランス最適化</span>
-      </a>
-      <a class="api-item" href="/api/simulation/params" target="_blank">
-        <span class="api-method get">GET</span>
-        <span class="api-path">/api/simulation/params</span>
-        <span class="api-desc">最適化結果</span>
-      </a>
-      <a class="api-item" href="/api/structure-status" target="_blank">
-        <span class="api-method get">GET</span>
-        <span class="api-path">/api/structure-status</span>
-        <span class="api-desc">構造チェック</span>
-      </a>
-      <a class="api-item" href="/api/structure-fingerprints" target="_blank">
-        <span class="api-method get">GET</span>
-        <span class="api-path">/api/structure-fingerprints</span>
-        <span class="api-desc">FP情報</span>
-      </a>
-      <div class="api-item" style="cursor:default">
-        <span class="api-method post">POST</span>
-        <span class="api-path">/api/scrape-trigger</span>
-        <span class="api-desc">スクレイプ</span>
-      </div>
-      <div class="api-item" style="cursor:default">
-        <span class="api-method post">POST</span>
-        <span class="api-path">/api/structure-check</span>
-        <span class="api-desc">構造チェック実行</span>
-      </div>
+  <div class="category">
+    <div class="category-header">
+      <span class="category-num" style="background: var(--accent)">📅</span>
+      <span class="category-title">最近のレース日</span>
+      <span class="category-desc">モニターボードでスクレイピング進捗を確認</span>
+    </div>
+    <div id="recentDates" class="recent-dates-grid">
+      <div style="color:var(--text-dim);font-size:13px;padding:16px">読み込み中...</div>
+    </div>
+  </div>
 
+  <div class="category">
+    <div class="category-header">
+      <span class="category-num" style="background: var(--text-dim)">⚙️</span>
+      <span class="category-title">API エンドポイント</span>
+      <span class="category-desc">代表的なバックエンド API への直接アクセス</span>
+    </div>
+    <div class="api-section">
+      <div class="api-grid">
+        <a class="api-item" href="/api/scrape-status?date=20260315" target="_blank">
+          <span class="api-method get">GET</span>
+          <span class="api-path">/api/scrape-status</span>
+          <span class="api-desc">取得状況</span>
+        </a>
+        <a class="api-item" href="/api/scrape-dates?raw_keys=1" target="_blank">
+          <span class="api-method get">GET</span>
+          <span class="api-path">/api/scrape-dates?raw_keys=1</span>
+          <span class="api-desc">日付キー一覧</span>
+        </a>
+        <a class="api-item" href="/api/scrape-jobs" target="_blank">
+          <span class="api-method get">GET</span>
+          <span class="api-path">/api/scrape-jobs</span>
+          <span class="api-desc">ジョブ状況</span>
+        </a>
+        <a class="api-item" href="#" onclick="fetch('/api/odds/train',{method:'POST'}).then(r=>r.json()).then(d=>alert(JSON.stringify(d)));return false;">
+          <span class="api-method post">POST</span>
+          <span class="api-path">/api/odds/train</span>
+          <span class="api-desc">オッズ予測モデル学習</span>
+        </a>
+        <a class="api-item" href="/api/odds/train/status" target="_blank">
+          <span class="api-method get">GET</span>
+          <span class="api-path">/api/odds/train/status</span>
+          <span class="api-desc">オッズ学習状態</span>
+        </a>
+        <a class="api-item" href="#" onclick="runSimulation();return false;">
+          <span class="api-method post">POST</span>
+          <span class="api-path">/api/simulation/run</span>
+          <span class="api-desc">バランス最適化</span>
+        </a>
+        <a class="api-item" href="/api/simulation/params" target="_blank">
+          <span class="api-method get">GET</span>
+          <span class="api-path">/api/simulation/params</span>
+          <span class="api-desc">最適化結果</span>
+        </a>
+        <a class="api-item" href="/api/structure-status" target="_blank">
+          <span class="api-method get">GET</span>
+          <span class="api-path">/api/structure-status</span>
+          <span class="api-desc">構造チェック</span>
+        </a>
+        <a class="api-item" href="/api/structure-fingerprints" target="_blank">
+          <span class="api-method get">GET</span>
+          <span class="api-path">/api/structure-fingerprints</span>
+          <span class="api-desc">FP 情報</span>
+        </a>
+      </div>
     </div>
   </div>
   {% endif %}
@@ -600,6 +776,18 @@ async function pollSimulation() {
 
 /* ── クイックジャンプ ── */
 
+function focusJump() {
+  const el = document.getElementById('jumpInput');
+  if (el) { el.focus(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+  /* 非 dev のときはプロンプトでフォールバック */
+  const v = window.prompt('レース ID（12桁）または日付（8桁）を入力');
+  if (v) {
+    const t = String(v).trim().replace(/[^0-9]/g, '');
+    if (t.length === 8) window.location.href = '/monitor?date=' + t;
+    else if (t.length >= 10) window.location.href = '/race/' + t;
+  }
+}
+
 function jump() {
   const v = document.getElementById('jumpInput').value.trim();
   if (!v) return;
@@ -642,7 +830,8 @@ async function checkStatus() {
       document.getElementById('raceInfo').textContent = `${dates.length}日分のデータ`;
       renderRecentDates(dates);
     } else {
-      document.getElementById('recentDates').innerHTML =
+      const rd = document.getElementById('recentDates');
+      if (rd) rd.innerHTML =
         '<div style="color:var(--text-dim);font-size:13px;padding:16px">レース日データがまだありません</div>';
     }
   } catch {
@@ -653,19 +842,16 @@ async function checkStatus() {
 
 function renderRecentDates(dates) {
   const container = document.getElementById('recentDates');
+  if (!container) return;
   const recent = dates.slice(0, 8);
   container.innerHTML = recent.map(d => {
     const y = d.slice(0,4), m = d.slice(4,6), day = d.slice(6,8);
     const dt = new Date(+y, +m - 1, +day);
     const weekday = ['日','月','火','水','木','金','土'][dt.getDay()];
     const weekColor = dt.getDay() === 0 ? 'var(--red)' : dt.getDay() === 6 ? 'var(--accent)' : 'var(--text-dim)';
-    return `<a class="nav-card" href="/monitor?date=${d}" style="--card-accent:var(--accent);padding:20px 24px">
-      <div class="card-title" style="margin-bottom:4px">
-        📅 ${y}/${m}/${day}
-        <span style="font-size:13px;color:${weekColor};font-weight:700">(${weekday})</span>
-        <span class="arrow">→</span>
-      </div>
-      <div class="card-desc" style="margin-bottom:0">モニタリングボードで確認</div>
+    return `<a class="recent-date-card" href="/monitor?date=${d}">
+      <div class="rd-date">📅 ${y}/${m}/${day} <span style="color:${weekColor}">(${weekday})</span></div>
+      <div class="rd-hint">モニターで開く</div>
     </a>`;
   }).join('');
 }

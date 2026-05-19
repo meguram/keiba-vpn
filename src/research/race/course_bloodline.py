@@ -25,8 +25,9 @@ import json
 import logging
 import math
 import sys
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import numpy as np
 import pandas as pd
@@ -67,6 +68,32 @@ class CourseBloodlineAnalyzer:
         self.dist_bands = data.get("distance_band_characteristics", {})
         logger.info("コースプロファイル読込: %d場", len(self.profiles))
 
+    def _attach_payoffs_from_slim(self) -> None:
+        """払戻・単勝オッズを付与し、回収率用列（オッズ30倍以内のみ）を準備。"""
+        if self.df.empty:
+            return
+        from src.research.pedigree.bloodline_roi import (
+            attach_payoffs_and_odds,
+            prepare_roi_columns,
+        )
+
+        self.df = prepare_roi_columns(attach_payoffs_and_odds(self.df))
+
+    @contextmanager
+    def _surface_context(
+        self, df: pd.DataFrame, out_dir: Path,
+    ) -> Iterator[None]:
+        """一時的に self.df / self.output_dir をサーフェス別に差し替える。"""
+        prev_df, prev_out = self.df, self.output_dir
+        self.df = df
+        self.output_dir = out_dir
+        out_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            yield
+        finally:
+            self.df = prev_df
+            self.output_dir = prev_out
+
     def _venue_name_to_code(self, name: str) -> str:
         for code, prof in self.profiles.items():
             if prof["name"] == name:
@@ -101,10 +128,16 @@ class CourseBloodlineAnalyzer:
                 axis=1,
             )
             self.df["fc_band"] = self.df["first_corner_m"].apply(self._classify_first_corner_band)
+            self._attach_payoffs_from_slim()
         logger.info("データ構築完了: %d 出走", len(self.df))
 
     def _load_from_local_parquet(self, years: list[str] | None = None) -> list[dict]:
-        """ローカル Parquet テーブルからバルクロード (GCS コスト ¥0)。"""
+        """ローカル Parquet テーブルからバルクロード (GCS コスト ¥0)。
+
+        race_shutuba_flat の sire/dam_sire 列が空のため、
+        data/research/pedigree_race_index/horse_sire_damsire.parquet を使って
+        horse_id ベースで sire/dam_sire を補完する。
+        """
         try:
             from src.scraper.local_tables import load_all_races_grouped, available_years
         except ImportError:
@@ -120,6 +153,23 @@ class CourseBloodlineAnalyzer:
             return []
 
         shutuba_map_all = load_all_races_grouped("race_shutuba", years)
+
+        # ── horse_id → (sire, dam_sire) ルックアップ ──
+        sire_lookup: dict[str, tuple[str, str]] = {}
+        ds_path = Path("data/research/pedigree_race_index/horse_sire_damsire.parquet")
+        if ds_path.exists():
+            try:
+                _sd = pd.read_parquet(ds_path, columns=["horse_id", "sire", "dam_sire"])
+                _sd["horse_id"] = _sd["horse_id"].astype(str)
+                for _row in _sd.itertuples(index=False):
+                    sire_lookup[_row.horse_id] = (
+                        str(_row.sire or ""),
+                        str(_row.dam_sire or ""),
+                    )
+                logger.info("sire/dam_sire ルックアップ読込: %d 頭", len(sire_lookup))
+            except Exception as e:  # pragma: no cover
+                logger.warning("horse_sire_damsire.parquet 読込失敗: %s", e)
+
         rows: list[dict] = []
 
         for race_id, result_data in result_map.items():
@@ -159,6 +209,14 @@ class CourseBloodlineAnalyzer:
                 if not dam_sire:
                     dam_sire = se.get("dam_sire", "")
 
+                if not sire or not dam_sire:
+                    sd = sire_lookup.get(str(hid))
+                    if sd:
+                        if not sire:
+                            sire = sd[0]
+                        if not dam_sire:
+                            dam_sire = sd[1]
+
                 if not sire:
                     continue
 
@@ -191,6 +249,7 @@ class CourseBloodlineAnalyzer:
                     "field_size": field_size,
                     "race_month": race_month,
                     "is_top3": 1 if fp <= 3 else 0,
+                    "is_top2": 1 if fp <= 2 else 0,
                     "is_win": 1 if fp == 1 else 0,
                 })
         return rows
@@ -294,6 +353,7 @@ class CourseBloodlineAnalyzer:
                         "field_size": field_size,
                         "race_month": race_month,
                         "is_top3": 1 if fp <= 3 else 0,
+                        "is_top2": 1 if fp <= 2 else 0,
                         "is_win": 1 if fp == 1 else 0,
                     })
         return rows
@@ -354,6 +414,118 @@ class CourseBloodlineAnalyzer:
             return best_match
         return None
 
+    def _match_draw_bias_course_key(
+        self, venue_code: str, distance: int, surface: str,
+    ) -> str | None:
+        """出走条件に最も近い course_profiles.draw_bias のキー (例: turf_1200)。"""
+        if surface in ("障", "障害"):
+            return None
+        vc = str(venue_code or "").zfill(2)
+        prof = self.profiles.get(vc, {})
+        draw_bias = prof.get("draw_bias") or {}
+        if not draw_bias or not distance:
+            return None
+        surface_prefix = "dirt" if surface in ("ダ", "ダート") else "turf"
+        candidates: list[tuple[int, int, str]] = []
+        for key in draw_bias:
+            if not key.startswith(surface_prefix + "_"):
+                continue
+            try:
+                rest = key[len(surface_prefix) + 1 :]
+                base_part = rest.split("_")[0]
+                key_dist = int(base_part)
+            except (ValueError, IndexError):
+                continue
+            diff = abs(key_dist - int(distance))
+            if diff > 200:
+                continue
+            extra = 0 if rest == str(key_dist) else 1
+            candidates.append((diff, extra, key))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda x: (x[0], x[1], x[2]))
+        return candidates[0][2]
+
+    def export_profile_course_roi_highlights(
+        self,
+        *,
+        min_cell_runs: int = MIN_SAMPLES,
+        min_roi_runs: int = 8,
+        max_sires_per_cell: int = 12,
+    ) -> Path:
+        """各競馬場×コースプロファイル (draw_bias キー) でサンプル十分かつ回収>100%の種牡馬。"""
+        path = self.output_dir / "profile_course_roi_highlights.json"
+        meta = {
+            "min_cell_runs": min_cell_runs,
+            "min_roi_runs": min_roi_runs,
+            "max_roi_odds": 30,
+            "note": "単・複回収は単勝オッズ30倍以内の出走のみ。n_runs=当該コース条件の総出走、roi_n=回収集計対象出走。",
+        }
+        empty = json.dumps({"meta": meta, "highlights": {}}, ensure_ascii=False, indent=2)
+        if self.df.empty:
+            path.write_text(empty, encoding="utf-8")
+            return path
+        if "win_payout_roi" not in self.df.columns:
+            self._attach_payoffs_from_slim()
+        df = self.df.copy()
+        df["profile_course_key"] = df.apply(
+            lambda r: self._match_draw_bias_course_key(
+                str(r.get("venue_code") or "").zfill(2),
+                int(r.get("distance") or 0),
+                str(r.get("surface") or ""),
+            ),
+            axis=1,
+        )
+        df = df[df["profile_course_key"].notna() & (df["profile_course_key"] != "")]
+        if df.empty:
+            path.write_text(empty, encoding="utf-8")
+            return path
+
+        grp = df.groupby(["venue_code", "profile_course_key", "sire"]).agg(
+            n_runs=("is_win", "size"),
+            win_return_sum=("win_payout_roi", "sum"),
+            place_return_sum=("place_payout_roi", "sum"),
+            roi_count=("roi_eligible", "sum"),
+        ).reset_index()
+        rc = grp["roi_count"].replace(0, np.nan)
+        grp["win_roi"] = (grp["win_return_sum"] / rc).fillna(0.0)
+        grp["place_roi"] = (grp["place_return_sum"] / rc).fillna(0.0)
+        grp["score"] = grp[["win_roi", "place_roi"]].max(axis=1)
+
+        mask = (
+            (grp["n_runs"] >= min_cell_runs)
+            & (grp["roi_count"] >= min_roi_runs)
+            & ((grp["win_roi"] > 100) | (grp["place_roi"] > 100))
+        )
+        hits = grp.loc[mask].copy()
+        highlights: dict[str, dict[str, list[dict[str, Any]]]] = {}
+        for (vc, ck), sub in hits.groupby(["venue_code", "profile_course_key"]):
+            vc_s = str(vc).zfill(2)
+            sub = sub.sort_values("score", ascending=False).head(max_sires_per_cell)
+            rows_o: list[dict[str, Any]] = []
+            for _, row in sub.iterrows():
+                tags: list[str] = []
+                if float(row["win_roi"]) > 100:
+                    tags.append("単")
+                if float(row["place_roi"]) > 100:
+                    tags.append("複")
+                rows_o.append({
+                    "sire": str(row["sire"]),
+                    "n_runs": int(row["n_runs"]),
+                    "roi_n": int(row["roi_count"]),
+                    "win_roi": round(float(row["win_roi"]), 1),
+                    "place_roi": round(float(row["place_roi"]), 1),
+                    "tags": tags,
+                })
+            highlights.setdefault(vc_s, {})[str(ck)] = rows_o
+
+        path.write_text(
+            json.dumps({"meta": meta, "highlights": highlights}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        logger.info("保存: %s", path)
+        return path
+
     def _classify_first_corner_band(self, fc_m: int | None) -> str:
         """初角距離をバンドに分類"""
         if fc_m is None:
@@ -396,12 +568,21 @@ class CourseBloodlineAnalyzer:
     # ── 分析A: 競馬場別×種牡馬別 成績マトリクス ──
 
     def analyze_venue_sire_matrix(self) -> pd.DataFrame:
-        """種牡馬×競馬場の複勝率/勝率ピボット"""
+        """種牡馬×競馬場の複勝率/勝率/回収率ピボット"""
+        if "win_payout" not in self.df.columns:
+            self._attach_payoffs_from_slim()
         grp = self.df.groupby(["sire", "venue"]).agg(
             count=("is_top3", "size"),
             top3_rate=("is_top3", "mean"),
+            top2_rate=("is_top2", "mean"),
             win_rate=("is_win", "mean"),
+            win_return_sum=("win_payout_roi", "sum"),
+            place_return_sum=("place_payout_roi", "sum"),
+            roi_count=("roi_eligible", "sum"),
         ).reset_index()
+        rc = grp["roi_count"].replace(0, np.nan)
+        grp["win_roi"] = (grp["win_return_sum"] / rc).fillna(0.0)
+        grp["place_roi"] = (grp["place_return_sum"] / rc).fillna(0.0)
         grp = grp[grp["count"] >= MIN_SAMPLES]
 
         top_sires = (
@@ -410,7 +591,7 @@ class CourseBloodlineAnalyzer:
         )
         filtered = grp[grp["sire"].isin(top_sires)]
 
-        pivot = filtered.pivot_table(
+        pivot_t3 = filtered.pivot_table(
             index="sire", columns="venue",
             values="top3_rate", fill_value=np.nan,
         )
@@ -418,14 +599,30 @@ class CourseBloodlineAnalyzer:
         venue_order = [
             self.profiles[c]["name"]
             for c in sorted(self.profiles.keys())
-            if self.profiles[c]["name"] in pivot.columns
+            if self.profiles[c]["name"] in pivot_t3.columns
         ]
-        pivot = pivot[[c for c in venue_order if c in pivot.columns]]
+        pivot_t3 = pivot_t3[[c for c in venue_order if c in pivot_t3.columns]]
 
         path = self.output_dir / "venue_sire_top3rate.csv"
-        pivot.to_csv(path, encoding="utf-8-sig")
+        pivot_t3.to_csv(path, encoding="utf-8-sig")
         logger.info("保存: %s", path)
-        return pivot
+
+        for val_col, fname in (
+            ("top2_rate", "venue_sire_top2rate.csv"),
+            ("win_rate", "venue_sire_win_rate.csv"),
+            ("count", "venue_sire_sample_count.csv"),
+            ("win_roi", "venue_sire_win_roi.csv"),
+            ("place_roi", "venue_sire_place_roi.csv"),
+            ("roi_count", "venue_sire_roi_count.csv"),
+        ):
+            pv = filtered.pivot_table(
+                index="sire", columns="venue", values=val_col, fill_value=np.nan,
+            )
+            pv = pv[[c for c in venue_order if c in pv.columns]]
+            pv.to_csv(self.output_dir / fname, encoding="utf-8-sig")
+            logger.info("保存: %s", fname)
+
+        return pivot_t3
 
     # ── 分析B: コース特性ベクトル×血統成績の相関 ──
 
@@ -494,6 +691,8 @@ class CourseBloodlineAnalyzer:
         種牡馬ごとに、各コース特性への適性スコアを算出。
         特性値×複勝率の加重平均で「得意な特性」を定量化。
         """
+        if "win_payout" not in self.df.columns:
+            self._attach_payoffs_from_slim()
         venue_sire = self.df.groupby(["sire", "venue_code"]).agg(
             count=("is_top3", "size"),
             top3_rate=("is_top3", "mean"),
@@ -535,11 +734,20 @@ class CourseBloodlineAnalyzer:
 
             aptitude = weighted_traits / total_weight
             overall_top3 /= total_count
+            tdf = self.df[self.df["sire"] == sire]
+            tw = int(len(tdf))
+            overall_win = float(tdf["is_win"].mean()) if tw else 0.0
+            from src.research.pedigree.bloodline_roi import sire_roi_totals
+
+            _, win_ret, place_ret = sire_roi_totals(tdf)
 
             row_data = {
                 "sire": sire,
                 "total_runs": total_count,
                 "overall_top3_rate": round(overall_top3, 4),
+                "overall_win_rate": round(overall_win, 4),
+                "win_return_pct": win_ret,
+                "place_return_pct": place_ret,
             }
             for j, tk in enumerate(TRAIT_KEYS):
                 row_data[f"apt_{tk}"] = round(aptitude[j], 2)
@@ -564,6 +772,8 @@ class CourseBloodlineAnalyzer:
         種牡馬ごとに、コース特性を加味した「最適レース条件」を推定。
         距離×競馬場×馬場の複勝率から、最も適した条件を逆算する。
         """
+        if "win_payout" not in self.df.columns:
+            self._attach_payoffs_from_slim()
         grp = self.df.groupby([
             "sire", "venue", "dist_cat", "surface",
         ]).agg(
@@ -618,11 +828,17 @@ class CourseBloodlineAnalyzer:
 
             avg_dist = total[total["is_top3"] == 1]["distance"].mean()
             avg_dist = round(avg_dist) if not np.isnan(avg_dist) else 0
+            from src.research.pedigree.bloodline_roi import sire_roi_totals
+
+            _, win_ret, place_ret = sire_roi_totals(total)
 
             results.append({
                 "sire": sire,
                 "total_runs": len(total),
                 "overall_top3": round(total["is_top3"].mean(), 4),
+                "overall_win": round(total["is_win"].mean(), 4),
+                "win_return_pct": win_ret,
+                "place_return_pct": place_ret,
                 "best_distance_cat": best_dist.get("dist_cat", ""),
                 "best_distance_top3": round(float(best_dist.get("top3_rate", 0)), 4),
                 "weighted_best_dist_m": int(avg_dist),
@@ -884,33 +1100,49 @@ class CourseBloodlineAnalyzer:
     # ── 統合レポート ──
 
     def generate_report(self) -> str:
+        from src.research.pedigree.bloodline_surface import (
+            SURFACE_KEYS,
+            SURFACE_LABELS,
+            compute_surface_counts,
+            filter_df_by_surface,
+            surface_output_dir,
+            write_surface_meta,
+        )
+
         logger.info("=" * 60)
-        logger.info("コース特性 × 血統適性 統合分析")
+        logger.info("コース特性 × 血統適性 統合分析 (芝/ダ/障 分離)")
         logger.info("=" * 60)
 
-        logger.info("[1/7] 競馬場×種牡馬 成績マトリクス")
-        venue_sire = self.analyze_venue_sire_matrix()
+        if self.df.empty:
+            logger.error("データが空です")
+            return ""
 
-        logger.info("[2/7] コース特性×血統 相関分析")
-        trait_corr = self.analyze_trait_bloodline_correlation()
+        counts = compute_surface_counts(self.df)
+        write_surface_meta(self.output_dir, counts)
+        for sk in SURFACE_KEYS:
+            logger.info("  %s: %s 出走", SURFACE_LABELS[sk], f"{counts[sk]:,}")
 
-        logger.info("[3/7] 種牡馬コース適性スコア")
-        aptitude = self.compute_sire_course_aptitude()
+        self.export_profile_course_roi_highlights()
 
-        logger.info("[4/7] 最適レース条件推定")
-        optimal = self.estimate_optimal_conditions()
-
-        logger.info("[5/7] 馬場状態×血統 交互作用")
-        track_cond = self.analyze_track_condition_interaction()
-
-        logger.info("[6/8] 枠順×血統 交互作用")
-        draw_bl = self.analyze_draw_bloodline_interaction()
-
-        logger.info("[7/8] 芝種別×血統パフォーマンス")
-        grass_bl = self.analyze_grass_type_bloodline()
-
-        logger.info("[8/8] 初角距離×枠順×血統 交互作用")
-        fc_draw = self.analyze_first_corner_draw_interaction()
+        venue_sire = trait_corr = aptitude = optimal = track_cond = None
+        for sk in SURFACE_KEYS:
+            sdf = filter_df_by_surface(self.df, sk)
+            if sdf.empty:
+                logger.warning("%s: 出走データなし — スキップ", SURFACE_LABELS[sk])
+                continue
+            out = surface_output_dir(self.output_dir, sk)
+            label = SURFACE_LABELS[sk]
+            logger.info("--- サーフェス: %s 出走 %d ---", label, len(sdf))
+            with self._surface_context(sdf, out):
+                venue_sire = self.analyze_venue_sire_matrix()
+                trait_corr = self.analyze_trait_bloodline_correlation()
+                aptitude = self.compute_sire_course_aptitude()
+                optimal = self.estimate_optimal_conditions()
+                track_cond = self.analyze_track_condition_interaction()
+                self.analyze_draw_bloodline_interaction()
+                if sk == "turf":
+                    self.analyze_grass_type_bloodline()
+                self.analyze_first_corner_draw_interaction()
 
         profiles_out = []
         for code in sorted(self.profiles.keys()):

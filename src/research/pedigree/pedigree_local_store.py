@@ -238,6 +238,75 @@ def ancestor_horse_ids_from_record(rec: dict | None) -> list[str]:
     return out
 
 
+# === 10gen 統合データ用ヘルパー (build_horse_pedigree_10gen.py で生成) ===
+
+LOCAL_10GEN_DIR = Path("data/local/horse_pedigree_10gen")
+
+
+def local_10gen_path(horse_id: str) -> Path:
+    """horse_id から 10gen 統合 JSON のローカルパスを返す。"""
+    prefix = horse_id[:4] if len(horse_id) >= 4 else "0000"
+    return LOCAL_10GEN_DIR / prefix / f"{horse_id}.json"
+
+
+def load_10gen_record(horse_id: str) -> dict | None:
+    """1 馬の 10gen 統合データを直接ロード (キャッシュ無し)。
+
+    形式は ``build_horse_pedigree_10gen.py`` 参照。
+    存在しない場合は None。
+    """
+    p = local_10gen_path(horse_id)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        logger.warning("10gen ロード失敗 %s: %s", horse_id, e)
+        return None
+
+
+def load_full_pedigree_10gen_index(
+    *,
+    path: Path | str | None = None,
+    force_refresh: bool = False,
+    mem_ttl_sec: float = MEM_TTL_SEC,
+) -> dict[str, dict]:
+    """10gen 統合データを ``horse_id -> レコード`` でロード (メモリキャッシュ付き)。
+
+    引数 ``path`` は 10gen 統合ディレクトリ (default: data/local/horse_pedigree_10gen)。
+    ``load_full_pedigree_index`` と同じインタフェースで使える。
+    """
+    p = Path(path) if path else LOCAL_10GEN_DIR
+    return load_full_pedigree_index(
+        storage=None,
+        path=p,
+        force_refresh=force_refresh,
+        mem_ttl_sec=mem_ttl_sec,
+    )
+
+
+def expand_10gen_ancestors_from_record(rec: dict | None) -> dict[str, set[str]]:
+    """10gen レコードから 4 視点別の祖先 ID 集合を返す。
+
+    Returns:
+        {'father': set, 'dam_sire_line': set, 'dam_dam_line': set, 'dam': set}
+        (g=1 の母自身は 'dam')
+
+    生成時にすでに ``ancestors[].side`` が付与されているため、ここでは単純集計のみ。
+    """
+    out = {"father": set(), "dam_sire_line": set(), "dam_dam_line": set(), "dam": set()}
+    if not rec:
+        return out
+    for anc in rec.get("ancestors") or []:
+        hid = str(anc.get("horse_id") or "").strip()
+        if not hid:
+            continue
+        side = anc.get("side") or "unknown"
+        if side in out:
+            out[side].add(hid)
+    return out
+
+
 def bfs_pedigree_closure(
     seed_horse_ids: Iterable[str],
     index: dict[str, dict],

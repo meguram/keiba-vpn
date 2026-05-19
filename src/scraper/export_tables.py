@@ -46,7 +46,19 @@ FLAT_CATEGORIES = [
     "race_trainer_comment", "race_result_lap", "smartrc_race",
 ]
 
-ALL_CATEGORIES = FLAT_CATEGORIES + ["race_pair_odds"]
+# ML / 分析向け: 1レース=複数行(entries) とみなせる追加カテゴリ（欠損レース多めのため export 時は COMPLETENESS_EXEMPT 扱い）
+ML_EXTRA_FLAT_CATEGORIES = [
+    "race_info",
+    "race_lap",
+    "race_lap_on_time",
+    "race_return",
+    "race_detail",
+    "race_result_on_time",
+    "horse_lap",
+    "race_predictions",
+]
+
+ALL_CATEGORIES = FLAT_CATEGORIES + ML_EXTRA_FLAT_CATEGORIES + ["race_pair_odds"]
 
 RACE_META_FIELDS = [
     "race_id", "date", "venue", "surface", "distance", "direction",
@@ -111,6 +123,42 @@ def _build_meta_index(year: str, storage: Any) -> dict[str, dict]:
     _clear_storage_cache(storage)
     logger.info("[%s] メタデータインデックス: %d races", year, len(index))
     return index
+
+
+def _build_meta_index_from_race_result_flat(year: str) -> dict[str, dict]:
+    """ローカル race_result_flat.parquet からメタを構築（race_shutuba の GCS 列挙・load を避ける）。"""
+    p = OUTPUT_DIR / year / "race_result_flat.parquet"
+    if not p.exists():
+        return {}
+    try:
+        schema = pq.read_schema(p)
+        names = set(schema.names)
+        cols = ["race_id"] + [f for f in RACE_META_FIELDS if f in names and f != "race_id"]
+        tbl = pq.read_table(p, columns=cols)
+        df = tbl.to_pandas()
+        if "race_id" not in df.columns or df.empty:
+            return {}
+        df = df.drop_duplicates(subset=["race_id"], keep="first")
+        index: dict[str, dict] = {}
+        for rec in df.to_dict("records"):
+            rid = str(rec.get("race_id") or "").strip()
+            if not rid:
+                continue
+            meta: dict[str, Any] = {"race_id": rid}
+            for field in RACE_META_FIELDS:
+                if field == "race_id":
+                    continue
+                if field in rec:
+                    meta[field] = rec.get(field)
+            index[rid] = meta
+        logger.info(
+            "[%s] メタデータ: ローカル race_result_flat から %d races（GCS shutuba なし）",
+            year, len(index),
+        )
+        return index
+    except Exception as e:
+        logger.warning("[%s] race_result_flat メタ構築失敗: %s", year, e)
+        return {}
 
 
 def _clear_storage_cache(storage: Any) -> None:
@@ -289,9 +337,7 @@ def _validate_export(flat_path: Path, category: str, n_races: int) -> dict:
         if n_races > 0:
             avg = n_rows / n_races
             v["avg_entries_per_race"] = round(avg, 1)
-            if avg < 1.0 and category not in (
-                "race_paddock", "race_trainer_comment", "race_barometer",
-            ):
+            if avg < 1.0 and category not in COMPLETENESS_EXEMPT:
                 v["warning"] = f"entries が想定より少ない (avg={avg:.1f})"
 
         df_sample = pf.read_row_group(0).to_pandas()
@@ -312,16 +358,42 @@ COMPLETENESS_EXEMPT = frozenset({
     "race_barometer",
     "race_paddock",
     "race_trainer_comment",
+    *ML_EXTRA_FLAT_CATEGORIES,
 })
 
 
 def _count_parquet_races(path: Path) -> int:
     """既存 Parquet ファイルのユニーク race_id 数を返す。"""
+    return len(_existing_race_ids(path))
+
+
+def _existing_race_ids(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
     try:
         tbl = pq.read_table(path, columns=["race_id"])
-        return tbl.column("race_id").to_pandas().nunique()
+        return {str(x) for x in tbl.column("race_id").to_pandas().tolist() if x}
     except Exception:
+        return set()
+
+
+def _append_parquet_rows(path: Path, new_rows: list[dict]) -> int:
+    """既存 flat Parquet に行を追記して書き戻す。"""
+    if not new_rows:
         return 0
+    if path.exists():
+        old = pq.read_table(path).to_pandas()
+        merged = pd.concat([old, pd.DataFrame(new_rows)], ignore_index=True)
+        if "race_id" in merged.columns:
+            merged = merged.drop_duplicates(
+                subset=["race_id", "horse_number"] if "horse_number" in merged.columns else ["race_id"],
+                keep="last",
+            )
+    else:
+        merged = pd.DataFrame(new_rows)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    merged.to_parquet(path, index=False, engine="pyarrow")
+    return len(new_rows)
 
 
 def export_category_chunked(
@@ -335,6 +407,31 @@ def export_category_chunked(
     """
     out_dir = OUTPUT_DIR / year
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    flat_path = out_dir / f"{category}_flat.parquet"
+    race_path = out_dir / f"{category}_race.parquet"
+
+    if (
+        expected_keys
+        and category not in COMPLETENESS_EXEMPT
+        and flat_path.exists()
+    ):
+        ex_ids = _existing_race_ids(flat_path)
+        if expected_keys <= ex_ids:
+            stats: dict[str, Any] = {
+                "category": category,
+                "races": len(ex_ids),
+                "flat_rows": -1,
+                "race_rows": -1,
+                "skipped": True,
+                "reason": "ローカル flat が基準レースを包含。GCS batch_list スキップ",
+            }
+            if race_path.exists():
+                stats["race_size_mb"] = round(race_path.stat().st_size / (1024 * 1024), 2)
+            if flat_path.exists():
+                stats["flat_size_mb"] = round(flat_path.stat().st_size / (1024 * 1024), 2)
+            logger.info("[%s/%s] SKIP: %s", year, category, stats["reason"])
+            return stats
 
     blobs = storage.batch_list_blobs(category, year)
     jra_keys = sorted(k for k in blobs if is_jra_race(k))
@@ -362,19 +459,24 @@ def export_category_chunked(
             logger.warning("[%s/%s] SKIP: %s", year, category, stats["reason"])
             return stats
 
-    # 増分チェック: 既存 Parquet のレース数が GCS と一致していればスキップ
-    flat_path = out_dir / f"{category}_flat.parquet"
-    race_path = out_dir / f"{category}_race.parquet"
-    if flat_path.exists():
-        existing_races = _count_parquet_races(flat_path)
-        if existing_races >= n_total:
-            stats["races"] = existing_races
+    existing_ids = _existing_race_ids(flat_path)
+    if existing_ids:
+        missing_keys = [k for k in jra_keys if k not in existing_ids]
+        if not missing_keys:
+            stats["races"] = len(existing_ids)
             stats["flat_rows"] = -1
             stats["race_rows"] = -1
             stats["skipped"] = True
-            stats["reason"] = f"既にエクスポート済み (Parquet={existing_races}, GCS={n_total})"
+            stats["reason"] = f"既にエクスポート済み (Parquet={len(existing_ids)}, GCS={n_total})"
             logger.info("[%s/%s] SKIP: %s", year, category, stats["reason"])
             return stats
+        if len(missing_keys) < len(jra_keys):
+            jra_keys = missing_keys
+            n_total = len(jra_keys)
+            logger.info(
+                "[%s/%s] 差分のみ %d レースを追記 (既存 %d / GCS合計 %d)",
+                year, category, n_total, len(existing_ids), len(existing_ids) + n_total,
+            )
 
     logger.info("[%s/%s] %d JRA races → チャンク処理 (chunk=%d)",
                 year, category, n_total, CHUNK_SIZE)
@@ -407,7 +509,7 @@ def export_category_chunked(
 
             if category == "race_pair_odds":
                 flat_rows.extend(_data_to_pair_odds_flat_rows(data, meta_index))
-            elif category in FLAT_CATEGORIES:
+            elif category in FLAT_CATEGORIES or category in ML_EXTRA_FLAT_CATEGORIES:
                 flat_rows.extend(_data_to_flat_rows(data, category, meta_index))
 
         chunk_idx = chunk_start // CHUNK_SIZE
@@ -435,7 +537,18 @@ def export_category_chunked(
     if race_chunks:
         _merge_parquet_chunks(race_chunks, race_path)
     if flat_chunks:
-        _merge_parquet_chunks(flat_chunks, flat_path)
+        if existing_ids and flat_path.exists():
+            # 差分追記モード: チャンクを読み込んで既存にマージ
+            incr_rows: list[dict] = []
+            for p in flat_chunks:
+                incr_rows.extend(pq.read_table(p).to_pandas().to_dict("records"))
+            added = _append_parquet_rows(flat_path, incr_rows)
+            total_flat_rows = added
+            for p in flat_chunks:
+                p.unlink(missing_ok=True)
+            flat_chunks = []
+        else:
+            _merge_parquet_chunks(flat_chunks, flat_path)
 
     import shutil
     shutil.rmtree(chunk_dir, ignore_errors=True)
@@ -469,15 +582,44 @@ def export_year(
     if storage is None:
         storage = HybridStorage()
 
-    cats = categories or ALL_CATEGORIES
+    cats = categories or (FLAT_CATEGORIES + ["race_pair_odds"])
     t0 = time.time()
     all_stats: list[dict] = []
 
-    meta_index = _build_meta_index(year, storage)
+    local_rr = OUTPUT_DIR / year / "race_result_flat.parquet"
+    if local_rr.exists():
+        expected_keys = frozenset(_existing_race_ids(local_rr))
+        logger.info(
+            "[%s] 基準レース数 (ローカル race_result_flat): %d",
+            year, len(expected_keys),
+        )
+    else:
+        base_blobs = storage.batch_list_blobs("race_result", year)
+        expected_keys = frozenset(k for k in base_blobs if is_jra_race(k))
+        logger.info("[%s] 基準レース数 (GCS race_result): %d", year, len(expected_keys))
 
-    base_blobs = storage.batch_list_blobs("race_result", year)
-    expected_keys = frozenset(k for k in base_blobs if is_jra_race(k))
-    logger.info("[%s] 基準レース数 (race_result): %d", year, len(expected_keys))
+    # メタ: 増分 export があるときだけ。ローカル Parquet から組むことを最優先し GCS shutuba を避ける。
+    needs_meta = False
+    out_dir = OUTPUT_DIR / year
+    for cat in cats:
+        fp = out_dir / f"{cat}_flat.parquet"
+        if not fp.exists():
+            needs_meta = True
+            break
+        if cat in COMPLETENESS_EXEMPT:
+            continue
+        ex = _existing_race_ids(fp)
+        if expected_keys and not expected_keys <= ex:
+            needs_meta = True
+            break
+
+    if needs_meta:
+        meta_index = _build_meta_index_from_race_result_flat(year)
+        if not meta_index:
+            meta_index = _build_meta_index(year, storage)
+    else:
+        meta_index = {}
+        logger.info("[%s] 全カテゴリ export 済み → メタインデックス構築スキップ", year)
 
     for cat in cats:
         stats = export_category_chunked(

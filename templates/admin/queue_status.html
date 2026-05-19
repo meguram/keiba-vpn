@@ -1,0 +1,3355 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スクレイピングキュー | ML-AutoPilot Keiba</title>
+<style>
+  :root {
+    --bg: #0a0e17; --surface: #131926; --surface2: #1a2235;
+    --border: #243049; --text: #c8d6e5; --text-dim: #6b7d95;
+    --accent: #3b82f6; --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
+
+  .page-header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .page-header h1 { font-size: 16px; font-weight: 700; color: #fff; }
+  .page-header .subtitle { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .refresh-btn {
+    background: var(--accent); color: #fff; border: none; padding: 8px 16px;
+    border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: 600;
+  }
+  .refresh-btn:hover { background: #2563eb; }
+
+  .content { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+
+  .status-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  .status-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .status-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .status-value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .status-running { color: var(--accent); }
+  .status-pending { color: var(--warn); }
+  .status-completed { color: var(--ok); }
+  .status-failed { color: var(--err); }
+
+  .current-job {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px; margin-bottom: 24px;
+  }
+  .current-job h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--accent); }
+  .job-info { display: flex; flex-direction: column; gap: 14px; font-size: 12px; }
+  .job-info-worker {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .job-info-worker-label {
+    font-weight: 700; font-size: 12px; color: var(--accent);
+    margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .job-info-worker-label .wid-badge {
+    display: inline-block; background: rgba(59,130,246,0.15); padding: 2px 8px;
+    border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  }
+  .job-info-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px 20px;
+  }
+  .job-info-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .job-info-label { color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .job-info-value { font-weight: 600; word-break: break-all; }
+
+  .jobs-table-section { margin-bottom: 24px; }
+  .jobs-table-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #fff; }
+  .jobs-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+    background: var(--surface); border-radius: 8px; overflow: hidden;
+  }
+  .jobs-table th {
+    background: var(--surface2); padding: 10px 12px; text-align: left;
+    font-weight: 600; color: var(--text-dim); font-size: 11px;
+    border-bottom: 1px solid var(--border);
+  }
+  .jobs-table td {
+    padding: 10px 12px; border-bottom: 1px solid rgba(36,48,73,0.4);
+  }
+  .jobs-table tr:hover td { background: rgba(59,130,246,0.04); }
+
+  .status-badge {
+    display: inline-block; padding: 4px 10px; border-radius: 5px;
+    font-size: 11px; font-weight: 600;
+  }
+  .badge-pending { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .badge-running { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .badge-completed { background: rgba(34,197,94,0.15); color: var(--ok); }
+  .badge-failed { background: rgba(239,68,68,0.15); color: var(--err); }
+
+  .empty { color: var(--text-dim); text-align: center; padding: 40px 20px; font-size: 13px; }
+
+  .clear-btn {
+    background: var(--warn); color: #fff; border: none; padding: 8px 16px;
+    border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: 600;
+    margin-right: 8px;
+  }
+  .clear-btn:hover { background: #d97706; }
+  .stop-clear-btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(248, 113, 113, 0.45);
+    background: rgba(220, 38, 38, 0.18);
+    color: #fecaca;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-right: 8px;
+  }
+  .stop-clear-btn:hover { background: rgba(220, 38, 38, 0.32); border-color: #f87171; }
+  .btn-recover {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(251, 191, 36, 0.5);
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-right: 8px;
+  }
+  .btn-recover:hover { background: rgba(245, 158, 11, 0.35); border-color: #fbbf24; }
+
+  .failed-actions-bar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    margin-bottom: 12px;
+  }
+  .btn-failed-req {
+    background: rgba(59,130,246,0.2); color: var(--accent); border: 1px solid var(--accent);
+    padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .btn-failed-req:hover { background: rgba(59,130,246,0.3); }
+  .btn-failed-del {
+    background: rgba(239,68,68,0.15); color: var(--err); border: 1px solid var(--err);
+    padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .btn-failed-del:hover { background: rgba(239,68,68,0.25); }
+  .btn-failed-mini {
+    padding: 4px 8px; font-size: 10px; border-radius: 4px; cursor: pointer; font-weight: 600;
+    margin-right: 4px; border: 1px solid var(--border); background: var(--surface2); color: var(--text);
+  }
+  .btn-failed-mini.requeue { border-color: var(--accent); color: var(--accent); }
+  .btn-failed-mini.remove { border-color: var(--err); color: var(--err); }
+  .btn-failed-mini:hover { filter: brightness(1.1); }
+  .failed-err-cell {
+    max-width: 200px; font-size: 10px; color: var(--text-dim);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  .worker-status {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px;
+  }
+  .worker-indicator {
+    width: 12px; height: 12px; border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  .worker-running { background: var(--ok); }
+  .worker-idle { background: var(--text-dim); animation: none; }
+  .worker-paused { background: var(--warn); animation: none; }
+  .worker-dead { background: #ef4444; animation: pulse 0.8s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .worker-text { font-size: 13px; font-weight: 600; flex: 1; }
+  .btn-kick-worker {
+    padding: 7px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(34,197,94,0.5);
+    background: rgba(34,197,94,0.15);
+    color: #4ade80;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    display: none;
+  }
+  .btn-kick-worker:hover { background: rgba(34,197,94,0.3); border-color: #4ade80; }
+  .btn-kick-worker:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-kick-worker.show { display: inline-flex; align-items: center; gap: 5px; }
+
+  .queue-progress-panel {
+    margin: 0 0 20px;
+    padding: 16px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .queue-progress-inner { min-height: 32px; }
+  .queue-progress-empty {
+    font-size: 12px; color: var(--text-dim); margin: 0; line-height: 1.5;
+  }
+  .queue-progress-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background: rgba(0,0,0,0.15);
+  }
+  .queue-progress-card:last-child { margin-bottom: 0; }
+  .queue-progress-card-title {
+    font-size: 12px; font-weight: 600; color: #fff;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin-bottom: 6px;
+  }
+  .queue-progress-card-title code { font-size: 10px; color: var(--accent); }
+  .queue-progress-card-sub {
+    font-size: 11px; color: var(--text-dim); margin-bottom: 8px;
+    word-break: break-all;
+  }
+  .queue-pbar-row { display: flex; align-items: center; gap: 10px; }
+  .queue-pbar-track {
+    flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden;
+    min-width: 80px;
+  }
+  .queue-pbar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #34d399);
+    border-radius: 4px;
+    transition: width 0.35s ease;
+  }
+  .queue-pbar-track.queue-pbar-indet .queue-pbar-fill {
+    animation: queue-indet 1.2s ease-in-out infinite;
+  }
+  @keyframes queue-indet {
+    0%, 100% { transform: translateX(-30%); opacity: 0.7; }
+    50% { transform: translateX(80%); opacity: 1; }
+  }
+  .queue-pbar-pct {
+    font-size: 11px; font-weight: 700; color: var(--accent);
+    font-variant-numeric: tabular-nums; min-width: 38px; text-align: right;
+  }
+
+  .worker-log-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 24px;
+  }
+  .worker-log-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    margin-bottom: 8px;
+  }
+  .worker-log-toolbar h3 { font-size: 13px; font-weight: 600; color: #fff; margin: 0; }
+  .worker-log-meta { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .worker-log-hint {
+    font-size: 10px; color: var(--text-dim);
+    line-height: 1.5; margin-bottom: 10px;
+  }
+  .worker-log-viewport {
+    max-height: 360px;
+    overflow: auto;
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  #workerLogPre {
+    font-family: ui-monospace, 'Cascadia Code', monospace;
+    font-size: 10px;
+    line-height: 1.4;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+  }
+  .worker-log-toolbar label { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .log-clear-btn {
+    background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .log-clear-btn:hover { color: var(--text); border-color: var(--text-dim); }
+
+  .activity-hero {
+    background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(26,34,53,0.95));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 24px;
+  }
+  .activity-hero h2 {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+  .activity-primary {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.45;
+    margin-bottom: 8px;
+  }
+  .activity-secondary {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    font-family: ui-monospace, monospace;
+  }
+  .activity-idle {
+    font-size: 15px;
+    color: var(--text-dim);
+  }
+  .queue-eta-bar {
+    display: none;
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    border-left: 3px solid var(--accent);
+  }
+  .queue-eta-bar .queue-eta-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+  .queue-eta-bar .queue-eta-main {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  .queue-eta-bar .queue-eta-sub {
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 1.45;
+  }
+  .transport-pause-banner {
+    display: none;
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid var(--warn);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--text);
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .transport-pause-banner strong { color: var(--warn); }
+  .transport-pause-reason {
+    margin-top: 8px;
+    color: var(--text-dim);
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.45;
+  }
+  .transport-pause-at { margin-top: 6px; font-size: 10px; color: var(--text-dim); }
+  .btn-resume-queue {
+    background: var(--ok);
+    color: #fff;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn-resume-queue:hover { filter: brightness(1.08); }
+  .btn-resume-queue:disabled { opacity: 0.5; cursor: not-allowed; }
+  .type-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .type-tag {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(59,130,246,0.2);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .subsection-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .subsection-title .count {
+    font-size: 11px;
+    color: var(--warn);
+    font-weight: 700;
+  }
+
+  .enqueue-missing-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 24px;
+    border-left: 4px solid var(--ok);
+  }
+  .enqueue-missing-panel h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+  .enqueue-missing-panel p {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.55;
+    margin-bottom: 12px;
+  }
+  .enqueue-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .enqueue-row label { font-size: 11px; color: var(--text-dim); }
+  .enqueue-row input[type="text"], .enqueue-row input[type="number"] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    width: 110px;
+  }
+  .enqueue-row input[type="date"] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    min-width: 148px;
+    width: auto;
+    color-scheme: dark;
+  }
+  .enqueue-row input[type="number"] { width: 72px; }
+  .btn-missing {
+    background: var(--ok);
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-missing:hover { background: #16a34a; }
+  .btn-missing-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-missing-secondary:hover { background: var(--border); }
+  #enqueueMissingResult,
+  #enqueueResultLapResult {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 10px;
+    white-space: pre-wrap;
+    max-height: 160px;
+    overflow: auto;
+  }
+
+  .manual-task-panel { border-left-color: var(--accent); }
+  .manual-task-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 8px 14px;
+    margin: 12px 0;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 8px;
+    background: var(--surface2);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .manual-task-grid label {
+    font-size: 11px;
+    color: var(--text);
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    cursor: pointer;
+    line-height: 1.35;
+  }
+  .manual-task-grid input { margin-top: 2px; flex-shrink: 0; }
+
+  details.queue-fold {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  details.queue-fold > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--surface2);
+    border-bottom: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    user-select: none;
+  }
+  details.queue-fold[open] > summary {
+    border-bottom-color: var(--border);
+  }
+  details.queue-fold > summary::-webkit-details-marker { display: none; }
+  details.queue-fold > summary::before {
+    content: '';
+    width: 0;
+    height: 0;
+    border-left: 5px solid var(--text-dim);
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transform: rotate(0deg);
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+  details.queue-fold[open] > summary::before {
+    transform: rotate(90deg);
+  }
+  .queue-fold-hint {
+    font-weight: 500;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .queue-fold-body {
+    padding: 16px;
+  }
+  .queue-fold-body--flush {
+    padding: 12px 16px 16px;
+  }
+  .queue-fold-body--flush > .enqueue-missing-panel:first-child {
+    margin-top: 0;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 16px; }
+    .status-grid { grid-template-columns: 1fr; }
+    .job-info { flex-direction: column; gap: 12px; }
+    .jobs-table { font-size: 11px; }
+    .jobs-table th, .jobs-table td { padding: 8px 6px; }
+  }
+
+  .cost-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 4px;
+    vertical-align: middle;
+    font-variant-numeric: tabular-nums;
+  }
+  .cost-badge.cost-free { background: rgba(34,197,94,0.12); color: #86efac; }
+  .cost-badge.cost-low  { background: rgba(59,130,246,0.12); color: #93c5fd; }
+  .cost-badge.cost-mid  { background: rgba(245,158,11,0.12); color: #fcd34d; }
+  .cost-badge.cost-high { background: rgba(239,68,68,0.12); color: #fca5a5; }
+</style>
+</head>
+<body>
+{% include 'partials/_nav.html' %}
+
+<div class="page-header">
+  <div>
+    <h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">スクレイピングキュー</h1>
+    <div class="subtitle">レース・馬・開催日単位の各種スクレイプを1本のキューで直列処理（未来レース・欠損補完・手動投入・API 共通）。各ブロックは見出しをクリックして折りたたみできます。</div>
+  </div>
+  <div>
+    <button type="button" class="btn-kick-worker show" id="btnKickWorkerHeader" onclick="kickWorker()" title="待機中のワーカーを即座に起動してキュー処理を開始します" style="display:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      ワーカー起動 <span class="cost-badge cost-free" title="ワーカーの起動自体は無料。コストはジョブ実行時に発生">¥0</span>
+    </button>
+    <button type="button" class="stop-clear-btn" onclick="stopAndClearQueue()" title="全ジョブを削除し、一時停止フラグは自動解除します">停止して全消去 <span class="cost-badge cost-free">¥0</span></button>
+    <button class="clear-btn" onclick="clearCompleted()">完了ジョブをクリア <span class="cost-badge cost-free">¥0</span></button>
+    <button type="button" class="btn-recover" onclick="recoverQueue()" title="孤児ジョブをpendingに戻し、ロックファイルを削除してキューを復旧">緊急復旧 <span class="cost-badge cost-free">¥0</span></button>
+    <button class="refresh-btn" onclick="loadStatus()">更新</button>
+  </div>
+</div>
+
+<div class="content">
+  <div class="queue-status-metrics-first" id="queueStatusMetricsFirst" style="margin-bottom:10px">
+  <div class="status-grid" id="statusGrid">
+    <div class="status-card">
+      <div class="status-label">実行中</div>
+      <div class="status-value status-running" id="runningCount">-</div>
+      <div class="status-card-hint" id="parallelWorkersHint" style="display:none;font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.35;max-width:140px"></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">待機中</div>
+      <div class="status-value status-pending" id="pendingCount">-</div>
+      <div class="status-card-hint" id="pendingCardHint" style="display:none;font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.35;max-width:140px"></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">完了</div>
+      <div class="status-value status-completed" id="completedCount">-</div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">失敗</div>
+      <div class="status-value status-failed" id="failedCount">-</div>
+    </div>
+  </div>
+  <div class="queue-eta-bar" id="queueEtaBar" aria-live="polite" style="margin-top:0;margin-bottom:0">
+    <div class="queue-eta-title">キュー消化の目安</div>
+    <div class="queue-eta-main" id="queueEtaMain">読み込み中…</div>
+    <div class="queue-eta-sub" id="queueEtaSub"></div>
+    <div class="queue-eta-sub" id="queueHourlyMaintainLine" style="margin-top:8px;opacity:0.92"></div>
+  </div>
+  </div>
+
+  <div id="statusErrorBanner" style="display:none;margin-bottom:16px;padding:12px 14px;background:rgba(239,68,68,0.12);border:1px solid var(--err);border-radius:8px;font-size:12px;color:#fecaca"></div>
+
+  <div id="transportPauseBanner" class="transport-pause-banner">
+    <div style="flex:1;min-width:220px">
+      <strong>キュー一時停止中</strong>
+      <div class="transport-pause-reason" id="transportPauseReason"></div>
+      <div class="transport-pause-at" id="transportPauseAt"></div>
+      <p style="margin-top:10px;font-size:10px;color:var(--text-dim);line-height:1.5">
+        ページ取得不可・タイムアウト・<strong>HTTP 400 / 401 / 403 / 429 / 5xx</strong> などを検知すると自動で停止し、実行中だったジョブは待機列に戻します。原因を解消したら「再開」を押してください。
+      </p>
+    </div>
+    <button type="button" class="btn-resume-queue" id="btnResumeQueue" onclick="resumeScrapeQueue()">再開</button>
+  </div>
+
+  <div class="queue-status-top" id="queueStatusTop" style="margin-bottom:10px">
+  <div class="activity-hero" id="activityHero">
+    <h2>いまのスクレイピング状況</h2>
+    <div id="activityBody" class="activity-idle">読み込み中…</div>
+  </div>
+  <div id="workersContainer"></div>
+  <div id="workerKickRow" style="margin-bottom:16px;display:none">
+    <button type="button" class="btn-kick-worker show" id="btnKickWorker" onclick="kickWorker()" title="待機中のワーカーを即座に起動してキュー処理を開始します">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      ワーカー起動
+    </button>
+  </div>
+  </div>
+
+  <details class="queue-fold" id="progressLogFold">
+    <summary>実行中の進捗とスクレイピングログ <span class="queue-fold-hint">折りたたみ初期 · メモリ内</span></summary>
+    <div class="queue-fold-body" style="padding-top:12px">
+  <div class="queue-progress-panel" id="queueProgressPanel">
+    <div class="worker-log-toolbar">
+      <h3>実行中ジョブの進捗</h3>
+      <span class="worker-log-meta" id="queueProgressMeta">読み込み中…</span>
+    </div>
+    <p class="worker-log-hint">
+      <code>date_all</code> はレース単位で残り件数をプログレスバー表示します。レース・馬・単一タスクはタスク番号またはメッセージで表示します。
+      データは<strong>このAPIプロセスのメモリ</strong>のみ（複数ワーカー時はキューを動かしたプロセスにだけ出ます）。
+    </p>
+    <div id="queueProgressInner" class="queue-progress-inner"></div>
+  </div>
+  <div class="worker-log-panel" id="workerLogPanel">
+    <div class="worker-log-toolbar">
+      <h3>スクレイピングログ（キュー実行中）</h3>
+      <span class="worker-log-meta" id="workerLogMeta">読み込み中…</span>
+      <label title="新しい行が来たら下へスクロール">
+        <input type="checkbox" id="workerLogAutoscroll" checked> 自動スクロール
+      </label>
+      <button type="button" class="log-clear-btn" onclick="clearWorkerLogsUi()">バッファをクリア</button>
+    </div>
+    <p class="worker-log-hint">
+      ファイルキューが <code>process_queue</code> でスクレイピングしている間のログ（<code>scraper.*</code> / <code>queue.*</code> / <code>urllib3</code> 等）を<strong>このプロセスのメモリ</strong>に最大約2500行保持します。<br>
+      <strong>ここが空でも処理は進んでいることがあります。</strong>（下の「待機中／実行中」や <code>/monitor</code> のジョブ表示で確認してください）<br>
+      <span style="color:var(--warn)">本番で <code>--prod</code> かつ <code>--workers 4</code> など複数プロセスのとき、ブラウザのリクエストが別ワーカーに振られると、この画面のプロセスにはログが1行も来ません。</span>
+      ログを確実に見るには <code>python main.py --prod --workers 1</code> のようにワーカー1つにするか、サーバのファイルログ（例: <code>logs/server_restart.log</code>）を参照してください。
+    </p>
+    <div class="worker-log-viewport" id="workerLogViewport">
+      <pre id="workerLogPre"></pre>
+    </div>
+  </div>
+    </div>
+  </details>
+
+  <details class="queue-fold" id="loadControlDetails">
+    <summary>負荷調整（同時ジョブ・netkeiba 同時接続）<span class="queue-fold-hint" id="loadControlSummary">読み込み中…</span></summary>
+    <div class="queue-fold-body" style="font-size:12px;line-height:1.55">
+      <p style="margin:0 0 10px;color:var(--text-dim)">
+        <code>data/queue/queue_load_settings.json</code> に保存され、<strong>サーバ再起動不要</strong>で反映されます（<code>.env</code> より優先）。CPU・メモリの負荷や遠隔側のブロックを避けたいときは並列を下げ、逆に空いているときは上げてください。終了目安（ETA）の表示: <code>eta_sec_per_job</code> は 1 ジョブ=フル取得の目安（既定 10s）のため、<strong>大量の <code>horse_training</code>+スマートスキップ</strong>では目安を自動で補正します（<code>SCRAPE_QUEUE_ETA_HORSE_TRAINING_SKIP_SEC</code>、既定 0.55s）。補正は表示のみで、実スクレイプ速度は変わりません。
+      </p>
+      <div id="loadControlFormWrap" style="display:grid;gap:10px;max-width:720px">
+        <label style="display:grid;gap:4px">同時ジョブ数 (parallel, 1〜32)
+          <input type="number" id="inpLoadParallel" min="1" max="32" style="max-width:120px;padding:6px 8px">
+        </label>
+        <label style="display:grid;gap:4px">ジョブ開始のずらし (stagger_sec, 0〜30 秒)
+          <input type="number" id="inpLoadStagger" min="0" max="30" step="0.05" style="max-width:120px;padding:6px 8px">
+        </label>
+        <label style="display:grid;gap:4px">ETA 用 1 ジョブ秒 (eta_sec_per_job, 0.5〜300)
+          <input type="number" id="inpLoadEta" min="0.5" max="300" step="0.5" style="max-width:120px;padding:6px 8px">
+        </label>
+        <label style="display:grid;gap:4px">netkeiba 同時 in-flight 上限（空欄=環境のまま, 0=制限なし, 1〜64）
+          <input type="number" id="inpLoadInflight" min="0" max="64" style="max-width:120px;padding:6px 8px" placeholder="（.env 準拠）">
+        </label>
+        <label style="display:grid;gap:4px">メモ
+          <input type="text" id="inpLoadNote" style="max-width:100%;padding:6px 8px" placeholder="任意（履歴用）" maxlength="2000">
+        </label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <span id="loadControlDevMsg" style="color:var(--text-dim);font-size:11px"></span>
+        </div>
+        <div class="load-control-btns" id="loadControlDevBtns" style="display:none;flex-wrap:wrap;gap:8px">
+          <button type="button" class="btn-missing" onclick="saveLoadSettings()">保存</button>
+          <button type="button" class="btn-missing-secondary" onclick="fillLoadFormFromEffective()">入力を実効に合わせる</button>
+          <button type="button" class="btn-missing-secondary" title="上書きファイルを削除し .env のみ" onclick="resetLoadSettingsAll()">上書きを全解除</button>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  {% if is_dev %}
+  <details class="queue-fold" id="verifyHorseCoveragePanel">
+    <summary>データ網羅検証（馬・レース・開催日）<span class="queue-fold-hint">年代・ストレージ照会 · 不足をキューに再投入</span></summary>
+    <div class="queue-fold-body" style="font-size:12px;line-height:1.55">
+      <p style="margin:0 0 8px;color:var(--text-dim)">
+        現在のキューが <strong>待機+実行=0</strong> になってから（任意）、<code>race_lists</code> 上の期間に対し
+        キューで扱える<strong>全タスク種別</strong>（<code>queue_tasks.TASK_CATALOG</code>）のうち、対象に含めた
+        馬 / レース / 開催日ごとにストレージ有無を確認します。レースは <code>race_all</code> 指定時に内部で各カテゴリ展開、
+        再投入は不足レースを <code>race_all</code> 1 本に集約します。<code>POST /api/scrape-queue/verify-horse-coverage</code>
+      </p>
+      <p style="margin:0 0 10px;color:var(--text-dim)">
+        <strong>「ある」と判定する条件:</strong> 既定の <code>load_default</code> は <code>HybridStorage.load</code> 相当で、<strong>メモリ → <code>data/cache</code>（L2） → GCS</strong> の順に参照するため、
+        「GCS にだけありキャッシュに無い」ときと見え方が異なる場合があります。<code>gcs_strict</code> は L1/L2 を極力バイパスし GCS 近傍の有無に寄せます。
+        <code>mirror_for_selected</code> では、下の「ミラー照合」で選んだカテゴリは <strong><code>data/local/mirror/</code> にファイルがあれば満足</strong>扱いにします。
+        キュー実行の <code>smart_skip</code> やスクレイパの上書き判定とは別レイヤーです。
+      </p>
+      <div style="display:grid;gap:10px;max-width:640px;margin-bottom:10px">
+        <label style="display:grid;gap:4px;max-width:100%">充足判定モード
+          <select id="verifySatisfactionMode" style="max-width:100%;padding:6px 8px" onchange="updateVerifyMirrorUi()">
+            <option value="load_default">load_default（既定・L1/L2/GCS の通常 load）</option>
+            <option value="gcs_strict">gcs_strict（キャッシュをバイパスして厳密寄りに照会）</option>
+            <option value="mirror_for_selected">mirror_for_selected（下で選ぶカテゴリはローカルミラーのみで満足）</option>
+          </select>
+        </label>
+        <div id="verifyMirrorWrap" style="display:grid;gap:4px">
+          <span style="font-size:11px;color:var(--text-dim)">ミラー照合カテゴリ（<code>mirror_for_selected</code> 用。Windows は Ctrl+クリックで複数）</span>
+          <select id="verifyLocalMirrorCategories" multiple size="7" style="min-width:280px;max-width:100%;padding:4px" title="STORAGE_CATEGORIES 由来の候補"></select>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--surface2)">
+          <div style="font-size:12px;font-weight:600;margin-bottom:6px">GCS 成功後のローカル保存（<code>data/local/mirror/</code> へコピー）</div>
+          <p style="margin:0 0 8px;font-size:11px;color:var(--text-dim);line-height:1.5">
+            追切など、取得後に常に手元に残したいカテゴリを選びます。ミラーは <strong>GCS へのアップロード成功後</strong> に書き出されます。設定は <code>data/meta/local_mirror_config.json</code>（環境変数 <code>GCS_LOCAL_MIRROR_CATEGORIES</code> と併用可）に保存します。
+          </p>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+              <input type="checkbox" id="localMirrorEnabled"> ローカルミラーを有効
+            </label>
+            <label style="display:grid;gap:4px;font-size:12px;flex:1;min-width:200px">保存するカテゴリ（複数可）
+              <select id="localMirrorCategories" multiple size="5" style="min-width:260px;max-width:100%;padding:4px"></select>
+            </label>
+            <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
+              <button type="button" class="btn-missing-secondary" onclick="saveLocalMirrorConfig()">ミラー設定を保存</button>
+              <span id="localMirrorSaveMsg" style="font-size:11px;color:var(--text-dim)"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;gap:8px;max-width:560px;margin-bottom:10px">
+        <label style="display:grid;gap:4px">対象西暦（推奨・例: 2024。指定時は1/1〜12/31。未入力なら下の日付 or 全期間）
+          <input type="number" id="verifyYear" min="1984" max="2100" step="1" placeholder="例: 2024" style="max-width:140px;padding:6px 8px">
+        </label>
+        <label style="display:grid;gap:4px">開始日（<strong>上書き</strong>。YYYYMMDD。年が空のとき有効。空=下限なし）
+          <input type="text" id="verifyStartDate" placeholder="YYYYMMDD" maxlength="8" style="max-width:140px;padding:6px 8px" pattern="[0-9]*">
+        </label>
+        <label style="display:grid;gap:4px">終了日（<strong>上書き</strong>。空=上限なし）
+          <input type="text" id="verifyEndDate" placeholder="YYYYMMDD" maxlength="8" style="max-width:140px;padding:6px 8px" pattern="[0-9]*">
+        </label>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="verifyInHorse" checked> 出走馬系</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="verifyInRace" checked> レース系</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="verifyInDate" checked> 開催日系</label>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="verifyWaitIdle" checked> 先にキューが空になるまで待つ（長時間の場合あり）
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer" title="既定オフ。オンにした場合のみ、投入ジョブに上書き再取得を付与（欠損補完より上書きが多い負荷になり得ます）">
+          <input type="checkbox" id="verifyOverwrite"> 投入時 <strong>上書き再取得</strong>（overwrite。既定: オフ）
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="verifyEnqueueMissing"> 不足分をキューに投入
+        </label>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <button type="button" class="btn-missing" onclick="runVerifyHorseCoverage()">検証を実行</button>
+        <span id="verifyCoverageResult" style="font-size:11px;color:var(--text-dim);max-width:100%"></span>
+      </div>
+      <pre id="verifyCoveragePre" style="display:none;margin-top:10px;font-size:10px;max-height:220px;overflow:auto;background:var(--surface2);padding:10px;border-radius:6px;border:1px solid var(--border);white-space:pre-wrap"></pre>
+    </div>
+  </details>
+  {% endif %}
+
+  <details class="queue-fold">
+    <summary>キューにジョブを投入 <span class="queue-fold-hint">欠損レース・結果ラップ・race_lists最新化・5gen・一括/任意投入</span></summary>
+    <div class="queue-fold-body queue-fold-body--flush">
+  <div class="enqueue-row" style="margin:0 0 12px 0;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;flex-wrap:wrap;gap:10px;align-items:center">
+    <label style="display:flex;align-items:center;gap:8px;font-size:11px;cursor:pointer;max-width:min(720px,100%)" title="チェック時はこの折りたたみ内の各投入 API に overwrite=true を付与し、既存 JSON があっても再取得します。未チェック時はジョブごとの smart_skip のほか、サーバの環境変数 SCRAPE_DEFAULT_OVERWRITE（.env）を参照します。">
+      <input type="checkbox" id="queueEnqueueOverwrite"> <strong>上書き再取得</strong>（overwrite）をこのページからの投入に付与
+    </label>
+  </div>
+
+  <div class="enqueue-missing-panel manual-task-panel" id="unifiedPeriodScrapePanel" style="border:2px solid #6366f1;background:linear-gradient(180deg, rgba(99,102,241,0.06) 0%, var(--surface) 100%)">
+    <h3>期間指定一括（データ種別・保存先・スキップ）</h3>
+    <p style="font-size:11px;color:var(--text-dim);line-height:1.6;margin:0 0 12px">
+      <code>race_lists</code> 上の <strong>開始日〜終了日</strong> について、<strong>馬</strong>は出馬表または結果のある全頭、<strong>レース</strong>は同区間の JRA 各レース、<strong>開催日</strong>は同区間の日キー（YYYYMMDD）に対し、下で選んだタスクを一括投入します（混在可）。<strong>レース系</strong>では <code>race_result</code>（成績）に加え、<code>race_result_lap</code>（<strong>結果ラップ</strong>：ラップ・コーナー通過・上り等、<code>race_result</code> ページ由来）を選べます（取得にはログイン［プレミアム等］が要る場合あり）。<strong style="color:var(--text)">JRA 全レースを対象</strong>にするには、<strong>開始日・終了日を空</strong>にし、<strong>件数上限</strong>を大きく（例: 1,000,000）してレース系タスク（例: <code>race_all</code>）を選びます（手元の <code>race_lists</code> 開催日に出てくるレースが対象。GCS にだけ存在する日は含まれません）。<code>race_all</code> を含めると他レース系タスクは無視されるため、ラップだけ取りたい場合は <code>race_result_lap</code> のみを選びます。
+      <br><strong>スキップあり</strong>は、投入直後にストレージ充足の一括判定（<code>precheck</code> 列）を挟み、不要行は即完了、要取得だけ <code>pending</code> へ（馬・レ・開催日・混在タスクは同じ手順。調教は GCS 一括キー照会も併用）。<strong>上書き</strong>は precheck を経ず再取得寄り。
+      <br><code>POST /api/scrape-queue/enqueue-scrape-period</code>
+    </p>
+    <div class="enqueue-row" style="flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px">
+      <span style="font-size:11px;font-weight:600">クイック:</span>
+      <button type="button" class="btn-missing-secondary" style="font-size:11px;padding:5px 10px" onclick="unifiedQuickAllRacesPreset()">JRA 全期間＋<code>race_all</code> プリセット</button>
+      <button type="button" class="btn-missing-secondary" style="font-size:11px;padding:5px 10px" title="期間内の全 JRA レースに race_result_lap（結果ラップ）タスクだけを選びます" onclick="unifiedQuickResultLapPeriodPreset()">レース: <code>race_result_lap</code> のみ選択</button>
+      <button type="button" class="btn-missing-secondary" style="font-size:11px;padding:5px 10px" onclick="unifiedClearPeriodDates()">日付欄を空に（全期間）</button>
+    </div>
+    <div class="enqueue-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+      <label>開始日
+        <input type="date" id="unifiedScrapeStart" autocomplete="off" style="max-width:160px;padding:6px 8px" title="空=下限なし（全期間走査。負荷に注意）">
+      </label>
+      <label>終了日
+        <input type="date" id="unifiedScrapeEnd" autocomplete="off" style="max-width:160px;padding:6px 8px" title="空=上限なし">
+      </label>
+      <label>件数上限（馬・レ・日それぞれ）
+        <input type="number" id="unifiedScrapeLimit" value="500000" min="1" max="1000000" style="max-width:120px;padding:6px 8px" title="各エンティティ解決後、先頭から最大この件数">
+      </label>
+    </div>
+    <div class="enqueue-row" style="margin-top:10px;flex-wrap:wrap;gap:16px">
+      <div style="flex:1;min-width:260px;max-width:100%">
+        <div style="font-size:11px;font-weight:600;margin-bottom:6px">スクレイピング対象（複数可）</div>
+        <select id="unifiedScrapeTaskSelect" multiple size="14" style="width:100%;min-height:200px;padding:4px" title="Ctrl+クリックで複数（Windows）"></select>
+        <p style="font-size:10px;color:var(--text-dim);margin:6px 0 0">例: 成績＝<code>race_result</code>、<strong>結果ラップ</strong>＝<code>race_result_lap</code>、追い切り＝<code>race_oikiri</code>、出馬表＝<code>race_shutuba</code>、馬成績系＝<code>horse_profile</code> 等（<code>race_all</code> 選択時は他レース系は無効）</p>
+      </div>
+    </div>
+    <div class="enqueue-row" style="margin-top:10px;flex-wrap:wrap;gap:20px;align-items:flex-start">
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin:0;min-width:200px">
+        <legend style="font-size:11px;padding:0 4px">保存対象</legend>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin:4px 0">
+          <input type="radio" name="unifiedSaveMode" value="local_gcs" checked> ローカル＆GCS（GCS 保存＋<code>data/local/mirror/</code> 設定に従う常設コピー）
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin:4px 0">
+          <input type="radio" name="unifiedSaveMode" value="gcs_only"> GCS のみ（常設ローカルミラーは書かない。GCS・キャッシュ挙止は従来どおり）
+        </label>
+      </fieldset>
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin:0;min-width:220px">
+        <legend style="font-size:11px;padding:0 4px">スキップ / 上書き</legend>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin:4px 0" title="上書きなしの行は同じ precheck プロトコル（満足なら直完、不足だけ pending）">
+          <input type="radio" name="unifiedSkipMode" value="use_skip" checked> スキップあり（既存が揃っていれば省略・調教は先に一括照会可）
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin:4px 0" title="ジョブに上書き指定。取得コスト大">
+          <input type="radio" name="unifiedSkipMode" value="overwrite"> スキップなし（データ上書き再取得寄り）
+        </label>
+      </fieldset>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin:4px 0">
+        <input type="checkbox" id="unifiedJraOnly" checked> 馬・レは JRA のみ
+      </label>
+    </div>
+    <div class="enqueue-row" style="margin-top:12px;flex-wrap:wrap;gap:8px">
+      <button type="button" class="btn-missing-secondary" onclick="runUnifiedScrapePeriod(true)">プレビュー（dry_run）</button>
+      <button type="button" class="btn-missing" onclick="runUnifiedScrapePeriod(false)">キューに一括投入</button>
+    </div>
+    <div id="unifiedScrapePeriodResult" style="font-size:11px;color:var(--text-dim);white-space:pre-wrap;margin-top:8px;max-width:100%"></div>
+  </div>
+
+  <div class="enqueue-missing-panel">
+    <h3>欠損レースをキューに追加</h3>
+    <p>
+      保存済みの <code style="font-size:10px">race_lists</code> に載っている JRA レースのうち、
+      出馬表・オッズ・結果・馬成績（代表1頭）のいずれも満たさない「未取得」と判定したものを、このキューに投入します。
+      開始・終了はカレンダーで選べます。両方空にすると全開催日を対象にしますが、件数上限で打ち切ります（負荷対策）。
+    </p>
+    <p id="dryRunUrlHint" style="font-size:10px;color:var(--text-dim);line-height:1.45">
+      <strong>404 / Not Found のとき:</strong> アプリが <code>/keiba</code> などのサブパス配信の場合、API も同じプレフィックスが必要です（このページの URL から自動補正します）。
+      検証用にブラウザで開けるプレビューURL: <a href="#" id="dryRunUrlLink" style="color:var(--accent)">（生成中）</a>
+    </p>
+    <div class="enqueue-row">
+      <label>開始日</label>
+      <input type="date" id="missingStart" autocomplete="off" title="空欄＝下限なし">
+      <label>終了日</label>
+      <input type="date" id="missingEnd" autocomplete="off" title="空欄＝上限なし">
+      <label>上限</label>
+      <input type="number" id="missingLimit" value="200" min="1" max="2000">
+    </div>
+    <div class="enqueue-row">
+      <button type="button" class="btn-missing-secondary" onclick="runEnqueueMissing(true)">プレビュー（ドライラン）<span class="cost-badge cost-free" title="list のみ。実際のスクレイピングは別途"><¥0.1</span></button>
+      <button type="button" class="btn-missing" onclick="runEnqueueMissing(false)">未取得をキューに追加 <span class="cost-badge cost-mid" title="キュー投入のみ。実行時コスト: 1Rあたり ~¥0.01">投入¥0 / 実行: 1R ~¥0.01</span></button>
+    </div>
+    <div id="enqueueMissingResult"></div>
+  </div>
+
+  <div class="enqueue-missing-panel manual-task-panel">
+    <h3>結果ラップ欠損をキューに追加（2024年〜・最優先）</h3>
+    <p style="font-size:11px;color:var(--text-dim);line-height:1.55">
+      保存済み <code style="font-size:10px">race_lists</code> の開催日について、ストレージに <code style="font-size:10px">race_result_lap</code> が無い JRA レースだけを
+      <strong>race_result_lap</strong> タスクでこのキューに投入します。優先度はモニター欠損と同じ最上位帯です（通常キュー先頭・ファストレーン対象）。
+      開始日の既定は <strong>2024-01-01</strong> です。終了日を空にすると、保存されている最後の開催日までを対象にします。件数は上限で打ち切られるため、打ち切りメッセージが出た場合は再度実行してください。
+    </p>
+    <p style="font-size:10px;color:var(--text-dim);line-height:1.45">
+      GET プレビューURL: <a href="#" id="resultLapDryRunUrlLink" style="color:var(--accent);word-break:break-all">（生成中）</a>
+    </p>
+    <div class="enqueue-row">
+      <label>開始日</label>
+      <input type="date" id="resultLapStart" value="2024-01-01" autocomplete="off" title="YYYYMMDD に変換して送信（2024年以降推奨）">
+      <label>終了日</label>
+      <input type="date" id="resultLapEnd" autocomplete="off" title="空欄＝race_lists の最終開催日まで">
+      <label>上限</label>
+      <input type="number" id="resultLapLimit" value="500000" min="1" max="500000" title="1〜500000。打ち切られたら範囲を分けるか再実行">
+    </div>
+    <div class="enqueue-row">
+      <button type="button" class="btn-missing-secondary" onclick="runEnqueueMissingRaceResultLap(true)">プレビュー（ドライラン）<span class="cost-badge cost-free" title="list のみ"><¥0.1</span></button>
+      <button type="button" class="btn-missing" onclick="runEnqueueMissingRaceResultLap(false)">結果ラップ欠損をキューに追加 <span class="cost-badge cost-low" title="1レースあたり get1+put1 ≈¥0.001">投入¥0 / 実行: 1R ~¥0.001</span></button>
+    </div>
+    <div id="enqueueResultLapResult"></div>
+  </div>
+
+  <div class="enqueue-missing-panel manual-task-panel">
+    <h3>適性3D用・5世代血統プリフェッチ（日付範囲一括）</h3>
+    <p style="font-size:11px;color:var(--text-dim);line-height:1.55">
+      <code>note-aptitude-race</code> の「5世代まで確保」と同じく、<code>race_lists</code> に載る <strong>JRA 各レース</strong>を開催日で絞り、
+      血統プリフェッチ用ジョブをキューに積みます。長い期間や多レースは時間がかかるため、上限で打ち切ります。
+    </p>
+    <div class="enqueue-row">
+      <label>開始日</label>
+      <input type="date" id="batchPed5genStart" autocomplete="off" title="必須（YYYYMMDD に変換して送信）">
+      <label>終了日</label>
+      <input type="date" id="batchPed5genEnd" autocomplete="off" title="必須">
+      <label>上限レース数</label>
+      <input type="number" id="batchPed5genMax" value="500" min="1" max="5000" title="列挙した race_id の最大件数（1〜5000）">
+    </div>
+    <div class="enqueue-row">
+      <button type="button" class="btn-missing-secondary" onclick="runBatchPedigree5gen(true)">プレビュー（ドライラン）<span class="cost-badge cost-free"><¥0.1</span></button>
+      <button type="button" class="btn-missing" onclick="runBatchPedigree5gen(false)">5gen をキューに投入 <span class="cost-badge cost-mid" title="1レースあたり ~16頭 × get2+put2 ≈¥0.05">投入¥0 / 実行: 1R ~¥0.05</span></button>
+    </div>
+    <div id="batchPed5genResult" style="font-size:11px;color:var(--text-dim);margin-top:8px;white-space:pre-wrap"></div>
+  </div>
+
+  <div class="enqueue-missing-panel manual-task-panel">
+    <h3>race_lists 最新化（ネットケイバ・トップの開催ウィンドウ）</h3>
+    <p style="font-size:11px;color:var(--text-dim);line-height:1.55">
+      <code>race.netkeiba.com/top</code> が日付タブで読み込む一覧（<code>race_list_sub</code>）と<strong>同じ経路</strong>で、
+      <strong>今日を基準に過去〜未来の日付を1日ずつ</strong>取得します。
+      トップにレースが載っている日＝<strong>開催カレンダー上にレースがある日</strong>、または<strong>出馬表が掲載されている日</strong>相当の情報が取れます。
+      レースが1件以上ある日だけ <code>data/local/race_lists/YYYYMMDD.json</code> を<strong>上書き</strong>します（開催なしの日はファイルを作りません）。
+    </p>
+    <div id="rlTopStatus" style="font-size:11px;margin-bottom:10px;padding:10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);white-space:pre-wrap;min-height:2.5em">読み込み中…</div>
+    <div class="enqueue-row" style="flex-wrap:wrap;gap:8px;align-items:center">
+      <label title="今日より前にさかのぼる日数">過去（日）</label>
+      <input type="number" id="rlTopDaysPast" value="14" min="0" max="120" style="width:72px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:5px;font-size:12px">
+      <label title="今日より先の日数">未来（日）</label>
+      <input type="number" id="rlTopDaysFuture" value="21" min="0" max="120" style="width:72px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:5px;font-size:12px">
+      <label title="1日ごとの待機（秒）">sleep（秒）</label>
+      <input type="number" id="rlTopSleep" value="0.35" step="0.05" min="0" max="5" style="width:72px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:5px;font-size:12px">
+    </div>
+    <div class="enqueue-row" style="flex-wrap:wrap;gap:8px;margin-top:8px">
+      <button type="button" class="btn-missing-secondary" onclick="startRaceListsTopRefresh(true)">プレビュー（dry-run）<span class="cost-badge cost-free">¥0</span></button>
+      <button type="button" class="btn-missing" onclick="startRaceListsTopRefresh(false)">トップの開催ウィンドウで race_lists を更新 <span class="cost-badge cost-free" title="ローカルファイルのみ。GCS不使用">¥0</span></button>
+      <button type="button" class="refresh-btn" onclick="refreshRaceListsTopRefreshStatus()">状態を更新</button>
+    </div>
+    <div id="rlTopResult" style="font-size:11px;color:var(--text-dim);margin-top:8px;white-space:pre-wrap"></div>
+  </div>
+
+  <div class="enqueue-missing-panel manual-task-panel">
+    <h3>race_lists バックフィル（開催日のみ・主に2024年〜）</h3>
+    <p style="font-size:11px;color:var(--text-dim);line-height:1.55">
+      <code>scripts/data/backfill_race_lists_kaisai_since_2020.py</code> をサーバ上でバックグラウンド実行します（キューとは別プロセス）。
+      db.netkeiba の日別一覧から、レースがある開催日だけ <code>data/local/race_lists/</code> に保存します。
+      既に妥当な件数（4〜36件）の <code>race_lists</code> がある日はスキップされます（<code>--force</code> で再取得）。
+    </p>
+    <div id="rlbfStatus" style="font-size:11px;margin-bottom:10px;padding:10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);white-space:pre-wrap;min-height:2.5em">読み込み中…</div>
+    <pre id="rlbfLog" style="display:none;font-size:10px;line-height:1.35;max-height:220px;overflow:auto;background:#0d1117;color:#9ecbff;padding:10px;border-radius:6px;border:1px solid var(--border);margin-bottom:10px"></pre>
+    <div class="enqueue-row">
+      <label>開始日</label>
+      <input type="date" id="rlbfStart" value="2024-01-01" autocomplete="off">
+      <label>終了日</label>
+      <input type="date" id="rlbfEnd" autocomplete="off" title="空欄＝今日">
+    </div>
+    <div class="enqueue-row" style="flex-wrap:wrap;gap:8px">
+      <label>sleep（秒）</label>
+      <input type="number" id="rlbfSleep" value="1.2" step="0.1" min="0" title="日付ごとの追加待機。ブロック回避のため既定を長めにしています" style="width:88px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:5px;font-size:12px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px" title="バースト間隔・セッション休止・スロットルを広げ、子プロセスにのみ適用（.env で既に指定があれば上書きしません）">
+        <input type="checkbox" id="rlbfConservative" checked> 控えめアクセス（推奨）
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px"><input type="checkbox" id="rlbfForce"> 既存が妥当でも再取得（--force）</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px"><input type="checkbox" id="rlbfAcceptImp"> 件数想定外も保存</label>
+    </div>
+    <div class="enqueue-row" style="flex-wrap:wrap;gap:8px">
+      <button type="button" class="btn-missing-secondary" onclick="runRaceListsBackfill(true)">ドライラン <span class="cost-badge cost-free">¥0</span></button>
+      <button type="button" class="btn-missing" onclick="runRaceListsBackfill(false)">バックフィル開始 <span class="cost-badge cost-free" title="ローカルファイルのみ。GCS不使用">¥0</span></button>
+      <button type="button" class="clear-btn" onclick="stopRaceListsBackfill()">停止（SIGTERM）</button>
+      <button type="button" class="refresh-btn" onclick="refreshRaceListsBackfillStatus()">状態を更新</button>
+    </div>
+    <div id="rlbfResult" style="font-size:11px;color:var(--text-dim);margin-top:8px"></div>
+  </div>
+
+  <div class="enqueue-missing-panel manual-task-panel cushion-sync-panel" style="border:2px solid #22c55e;background:linear-gradient(180deg, rgba(34,197,94,0.08) 0%, var(--surface) 100%);box-shadow:0 0 0 1px rgba(34,197,94,0.25)">
+    <h3 style="display:flex;align-items:center;gap:8px;font-size:15px;color:#86efac">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e"></span>
+      クッション値を最新化（前処理 GCS → jra_cushion）
+    </h3>
+    <p style="font-size:11px;color:var(--text-dim);line-height:1.6;margin:8px 0 12px">
+      自動保存されている <strong style="color:var(--text)">chuou/data/preprocessed/others/cushion_data/</strong>
+      （会場フォルダ＋日付 JSON）を読み、既存の
+      <strong style="color:var(--text)">chuou/data/others/jra_cushion/{年}.json</strong> とマージして上書き保存します。
+      同じ <code style="font-size:10px">日付・場・回・race_day</code> の行は<strong style="color:#86efac">前処理側を優先</strong>します。
+      あわせてローカル <code style="font-size:10px">data/jra_baba/cushion_values.json</code> も更新します（チェックで無効化可）。
+    </p>
+    <div class="enqueue-row" style="flex-wrap:wrap;gap:10px;align-items:center">
+      <label style="font-size:11px">対象年（カンマ・空欄＝preprocessed にある年すべて）</label>
+      <input type="text" id="cushionSyncYears" placeholder="例 2026 または 2025,2026" style="width:220px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:12px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px">
+        <input type="checkbox" id="cushionSyncLocal" checked> ローカル cushion_values.json も更新
+      </label>
+    </div>
+    <div class="enqueue-row" style="flex-wrap:wrap;gap:10px;margin-top:12px">
+      <button type="button" class="btn-missing-secondary" onclick="runCushionPreprocessedSync(true)">プレビュー（dry-run）<span class="cost-badge cost-free"><¥0.1</span></button>
+      <button type="button" onclick="runCushionPreprocessedSync(false)" style="background:linear-gradient(180deg,#22c55e,#16a34a);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 12px rgba(34,197,94,0.35)">
+        クッション値を GCS に反映する <span class="cost-badge cost-low" title="GCS list+get+put: 年あたり ~¥0.5">~¥0.5/年</span>
+      </button>
+    </div>
+    <pre id="cushionSyncResult" style="display:none;margin-top:12px;font-size:10px;line-height:1.4;max-height:280px;overflow:auto;background:#0d1117;color:#bbf7d0;padding:12px;border-radius:8px;border:1px solid #166534;white-space:pre-wrap"></pre>
+  </div>
+
+  <div class="enqueue-missing-panel manual-task-panel">
+    <h3>任意タスクをキューに追加</h3>
+    <p style="font-size:11px;color:var(--text-dim);line-height:1.55">
+      種別とタスクを選んで投入します。
+      <strong style="color:var(--text)">レース（期間）</strong>は保存済み <code>race_lists</code> の JRA 各レースに（<code>enqueue-period-races</code>）、
+      <strong style="color:var(--text)">馬（期間内・出走馬解決）</strong>は同じ期間で <code>race_shutuba</code>/<code>race_result</code> から馬IDを集め各頭に（<code>enqueue-period-horses</code>）。
+      各レースジョブには開催日が付き、<code>race_all</code> 選択時は他タスクは無視されます。
+      <strong style="color:var(--text)">馬（単一ID）・開催日</strong>は下のターゲット1件で <code>add-job</code> です。
+    </p>
+    <div class="enqueue-row">
+      <label>種別</label>
+      <select id="manualKind" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:5px;font-size:12px;">
+        <option value="race">レース（期間・race_lists）</option>
+        <option value="horse_period">馬（期間内・出走馬解決）</option>
+        <option value="horse">馬（horse_id 単一）</option>
+        <option value="date">開催日（YYYYMMDD 単一）</option>
+      </select>
+    </div>
+    <div id="manualRacePeriodBlock" style="display:none">
+      <div class="enqueue-row">
+        <label>開始日</label>
+        <input type="date" id="manualRaceStart" autocomplete="off" title="空欄＝下限なし">
+        <label>終了日</label>
+        <input type="date" id="manualRaceEnd" autocomplete="off" title="空欄＝上限なし">
+        <label id="manualPeriodLimitLabel">上限（件数）</label>
+        <input type="number" id="manualRaceLimit" value="500" min="1" max="10000" title="期間内で先頭から最大この件数（レレース or 馬頭数）">
+      </div>
+    </div>
+    <div id="manualSingleTargetRow">
+      <div class="enqueue-row">
+        <label>ターゲットID</label>
+        <input type="text" id="manualTarget" placeholder="例 202601010101 / 2021100001 / 20260322" style="width:200px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:5px;font-size:12px;">
+        <label>補助日</label>
+        <input type="text" id="manualAuxDate" placeholder="SmartRC用 YYYYMMDD（任意）" maxlength="8" style="width:160px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:5px;font-size:12px;">
+      </div>
+    </div>
+    <div id="manualTaskChecks" class="manual-task-grid"></div>
+    <div class="enqueue-row" id="manualRacePeriodSubmitRow" style="display:none;flex-wrap:wrap;gap:8px">
+      <button type="button" class="btn-missing-secondary" onclick="runManualPeriodJobs(true)">プレビュー <span class="cost-badge cost-free"><¥0.1</span></button>
+      <button type="button" class="btn-missing" onclick="runManualPeriodJobs(false)">キューに追加 <span class="cost-badge cost-low" title="投入は無料。実行時のコストはタスク種別による">投入¥0</span></button>
+    </div>
+    <div class="enqueue-row" id="manualSingleSubmitRow">
+      <button type="button" class="btn-missing" onclick="submitManualJob()">選択タスクをキューに追加 <span class="cost-badge cost-low" title="投入は無料。実行時: 1タスクあたり ~¥0.001〜0.01">投入¥0</span></button>
+    </div>
+    <div id="manualJobResult" style="font-size:11px;color:var(--text-dim);margin-top:8px;white-space:pre-wrap"></div>
+  </div>
+
+    </div>
+  </details>
+
+  <details class="queue-fold" id="currentJobFold" style="display:none">
+    <summary>実行中ジョブの詳細</summary>
+    <div class="queue-fold-body" style="padding-top:12px">
+      <div class="job-info" id="currentJobInfo"></div>
+    </div>
+  </details>
+
+  <details class="queue-fold" id="pendingFold" style="display:none">
+    <summary>処理キュー（実行中・待機）<span class="count" id="pendingQueueTitleCount" style="margin-left:6px;color:var(--warn)"></span></summary>
+    <div class="queue-fold-body" style="padding-top:8px">
+    <p style="font-size:11px;color:var(--text-dim);margin:0 0 12px">実行中のジョブを含みます。見出しの件数は<strong>実行中+待機の合計</strong>（API: <code style="font-size:10px">queue.processing_total</code>）です。先に <code>precheck</code>（ストレージ一括照会）を経たあと <code>pending</code> へ送られます。上部の「待機中」カードの数字は <strong>pending + precheck</strong> です。同じ種別・タスクの行は<strong>表示上のまとめ</strong>で、実体は馬ごと等の<strong>個別ジョブ</strong>です。処理は環境変数 <code>SCRAPE_QUEUE_PARALLEL</code>（未設定時は既定 6）本まで<strong>同時に複数ジョブ</strong>を取り出して実行します（一覧は最大200件）。</p>
+    <table class="jobs-table" id="pendingTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>状態</th>
+          <th>種別</th>
+          <th>タスク</th>
+          <th>件数</th>
+          <th>最初の登録時刻</th>
+        </tr>
+      </thead>
+      <tbody id="pendingTableBody"></tbody>
+    </table>
+    </div>
+  </details>
+
+  <details class="queue-fold" id="failedFold" style="display:none">
+    <summary>失敗したジョブ <span class="queue-fold-hint">最大200件表示・待機に戻す／削除</span></summary>
+    <div class="queue-fold-body" style="padding-top:8px">
+    <p style="font-size:11px;color:var(--text-dim);margin:0 0 12px">
+      待機列に戻すとワーカーが再実行します。削除するとキューから消え、自動では再投入されません。
+    </p>
+    <div class="failed-actions-bar">
+      <button type="button" class="btn-failed-req" onclick="requeueAllFailed()">すべて待機に戻す</button>
+      <button type="button" class="btn-failed-del" onclick="removeAllFailed()">すべて削除</button>
+    </div>
+    <table class="jobs-table" id="failedTable">
+      <thead>
+        <tr>
+          <th>ジョブID</th>
+          <th>種別</th>
+          <th>ターゲット</th>
+          <th>タスク</th>
+          <th>エラー（抜粋）</th>
+          <th>完了時刻</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="failedTableBody"></tbody>
+    </table>
+    </div>
+  </details>
+
+  <details class="queue-fold" id="historyFold">
+    <summary>ジョブ履歴 <span class="queue-fold-hint">最新80件</span></summary>
+    <div class="queue-fold-body" style="padding-top:12px">
+    <table class="jobs-table" id="jobsTable">
+      <thead>
+        <tr>
+          <th>ジョブID</th>
+          <th>種別</th>
+          <th>ターゲット</th>
+          <th>タスク</th>
+          <th>ステータス</th>
+          <th>登録時刻</th>
+          <th>開始時刻</th>
+          <th>完了時刻</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="jobsTableBody">
+        <tr><td colspan="9" class="empty">読み込み中...</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </details>
+</div>
+
+<script>
+/* GCS コスト見積もり (Class A: $0.05/10k, Class B: $0.004/10k, 1USD≈150JPY) */
+const _GCS = { a: 0.05/10000*150, b: 0.004/10000*150 };
+function _costBadge(yen, tip) {
+  let cls, lbl;
+  if (yen <= 0) { cls='cost-free'; lbl='¥0'; }
+  else if (yen < 0.1) { cls='cost-free'; lbl='<¥0.1'; }
+  else if (yen < 1) { cls='cost-low'; lbl='~¥'+yen.toFixed(1); }
+  else if (yen < 10) { cls='cost-mid'; lbl='~¥'+yen.toFixed(0); }
+  else { cls='cost-high'; lbl='~¥'+yen.toFixed(0); }
+  return `<span class="cost-badge ${cls}" title="${tip||''}">${lbl}</span>`;
+}
+const SERVER_API_PREFIX = {{ (api_prefix | default('')) | tojson }};
+const IS_DEV_QUEUE = {{ (is_dev | default(false)) | tojson }};
+let _lastScrapeLoadSettings = null;
+
+function _fillLoadInputsFromEffective(sls) {
+  if (!sls || !sls.effective) return;
+  const e = sls.effective;
+  const p = document.getElementById('inpLoadParallel');
+  const s = document.getElementById('inpLoadStagger');
+  const et = document.getElementById('inpLoadEta');
+  const inf = document.getElementById('inpLoadInflight');
+  if (p) p.value = String(e.parallel ?? 6);
+  if (s) s.value = String(e.stagger_sec != null ? e.stagger_sec : 0.25);
+  if (et) et.value = String(e.eta_sec_per_job != null ? e.eta_sec_per_job : 10);
+  if (inf) {
+    if (e.netkeiba_max_inflight === 'env_or_auto' || e.netkeiba_max_inflight === void 0) {
+      inf.value = '';
+    } else {
+      inf.value = String(e.netkeiba_max_inflight);
+    }
+  }
+  const ovr = (sls.overrides || {});
+  const nt = document.getElementById('inpLoadNote');
+  if (nt) nt.value = (ovr.note != null ? String(ovr.note) : '');
+}
+function updateLoadControlFromStatus(data) {
+  const sls = data && data.scrape_load_settings;
+  const sum = document.getElementById('loadControlSummary');
+  const dmsg = document.getElementById('loadControlDevMsg');
+  const btns = document.getElementById('loadControlDevBtns');
+  if (!sum) return;
+  if (!sls || !sls.effective) {
+    sum.textContent = '（設定未取得）';
+    if (dmsg) dmsg.textContent = !IS_DEV_QUEUE ? '上書きの保存は開発者セッションが必要です。' : '';
+    if (btns) btns.style.display = IS_DEV_QUEUE ? 'flex' : 'none';
+    return;
+  }
+  const e = sls.effective;
+  const infl = e.netkeiba_max_inflight;
+  const inflStr = (infl === 0) ? '無制限' : (infl === 'env_or_auto' ? 'env/自動' : String(infl));
+  sum.textContent = `実効: 同時${e.parallel}本 · stagger ${e.stagger_sec}s · ETA仮定 ${e.eta_sec_per_job}s · in-flight ${inflStr}（.env より上書きファイルが優先）`;
+  if (dmsg) dmsg.textContent = !IS_DEV_QUEUE ? '上書きの保存は開発者セッションが必要です。' : '';
+  if (btns) btns.style.display = IS_DEV_QUEUE ? 'flex' : 'none';
+  _lastScrapeLoadSettings = sls;
+  _fillLoadInputsFromEffective(sls);
+}
+async function saveLoadSettings(quiet) {
+  if (typeof quiet === 'undefined') quiet = false;
+  if (!IS_DEV_QUEUE) { if (!quiet) alert('開発者にログインしてください。'); return; }
+  const inf = document.getElementById('inpLoadInflight');
+  const inv = (inf && inf.value.trim() === '') ? null : (inf && inf.value ? parseInt(inf.value, 10) : null);
+  const p = document.getElementById('inpLoadParallel');
+  const s = document.getElementById('inpLoadStagger');
+  const et = document.getElementById('inpLoadEta');
+  const nt = document.getElementById('inpLoadNote');
+  const body = {
+    parallel: p && p.value ? parseInt(p.value, 10) : 8,
+    stagger_sec: s && s.value !== '' ? parseFloat(s.value) : 0.25,
+    eta_sec_per_job: et && et.value !== '' ? parseFloat(et.value) : 10,
+    netkeiba_max_inflight: inv,
+  };
+  if (nt) body.note = nt.value;
+  if (body.netkeiba_max_inflight != null && (Number.isNaN(body.netkeiba_max_inflight) || body.netkeiba_max_inflight < 0)) {
+    if (!quiet) alert('in-flight は空欄・0 以上の整数');
+    return;
+  }
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/load-settings'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await readJsonResp(resp);
+    if (!resp.ok || d.error) {
+      if (!quiet) alert(d.error || '保存失敗');
+      return;
+    }
+    if (!quiet) loadStatus();
+  } catch (e) {
+    if (!quiet) alert(e.message || e);
+  }
+}
+function fillLoadFormFromEffective() {
+  if (_lastScrapeLoadSettings && _lastScrapeLoadSettings.effective) {
+    _fillLoadInputsFromEffective(_lastScrapeLoadSettings);
+  } else {
+    loadStatus();
+  }
+}
+async function resetLoadSettingsAll() {
+  if (!IS_DEV_QUEUE) { alert('開発者にログインしてください。'); return; }
+  if (!confirm('上書きファイルを削除し、すべて .env 基準に戻します。よいですか？')) return;
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/load-settings'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset_all: true }),
+    });
+    const d = await readJsonResp(resp);
+    if (!resp.ok || d.error) { alert(d.error || '失敗'); return; }
+    loadStatus();
+  } catch (e) { alert(e.message || e); }
+}
+
+function _setMultiSelectFromList(sel, values) {
+  if (!sel) return;
+  const want = new Set((values || []).map(String));
+  for (const opt of sel.options) {
+    opt.selected = want.has(opt.value);
+  }
+}
+
+function _selectedMultiSelectValues(sel) {
+  if (!sel) return [];
+  return Array.from(sel.selectedOptions || []).map(function (o) { return o.value; });
+}
+
+function _fillMirrorCategoryOptions(selectEl, categories) {
+  if (!selectEl) return;
+  const prev = _selectedMultiSelectValues(selectEl);
+  selectEl.innerHTML = '';
+  for (const c of categories || []) {
+    const o = document.createElement('option');
+    o.value = c;
+    o.textContent = c;
+    selectEl.appendChild(o);
+  }
+  _setMultiSelectFromList(selectEl, prev.length ? prev : []);
+}
+
+function updateVerifyMirrorUi() {
+  const mode = (document.getElementById('verifySatisfactionMode') && document.getElementById('verifySatisfactionMode').value) || 'load_default';
+  const wrap = document.getElementById('verifyMirrorWrap');
+  if (wrap) {
+    wrap.style.opacity = (mode === 'mirror_for_selected') ? '1' : '0.5';
+  }
+  const s = document.getElementById('verifyLocalMirrorCategories');
+  if (s) s.disabled = (mode !== 'mirror_for_selected');
+}
+
+async function loadLocalMirrorConfigForm() {
+  if (!IS_DEV_QUEUE) return;
+  const msg = document.getElementById('localMirrorSaveMsg');
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/local-mirror-config'), { method: 'GET' });
+    const d = await readJsonResp(resp);
+    if (!resp.ok || d.error) {
+      if (msg) msg.textContent = d.error || 'ミラー設定の取得に失敗';
+      return;
+    }
+    const m = d.mirrorable_categories || [];
+    _fillMirrorCategoryOptions(document.getElementById('localMirrorCategories'), m);
+    _fillMirrorCategoryOptions(document.getElementById('verifyLocalMirrorCategories'), m);
+    const cfg = d.config || {};
+    const en = document.getElementById('localMirrorEnabled');
+    if (en) en.checked = !!cfg.enabled;
+    const saved = cfg.categories || [];
+    _setMultiSelectFromList(document.getElementById('localMirrorCategories'), saved);
+    _setMultiSelectFromList(document.getElementById('verifyLocalMirrorCategories'), saved);
+    updateVerifyMirrorUi();
+    if (msg) msg.textContent = '';
+  } catch (e) {
+    if (msg) msg.textContent = e.message || String(e);
+  }
+}
+
+async function saveLocalMirrorConfig() {
+  if (!IS_DEV_QUEUE) { alert('開発者にログインしてください。'); return; }
+  const msg = document.getElementById('localMirrorSaveMsg');
+  const en = document.getElementById('localMirrorEnabled');
+  const sel = document.getElementById('localMirrorCategories');
+  const body = {
+    enabled: !!(en && en.checked),
+    categories: _selectedMultiSelectValues(sel),
+  };
+  if (msg) msg.textContent = '保存中…';
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/local-mirror-config'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await readJsonResp(resp);
+    if (!resp.ok || d.error) {
+      if (msg) msg.textContent = d.error || '保存失敗';
+      return;
+    }
+    if (msg) msg.textContent = '保存しました';
+    const cfg = d.config || {};
+    _setMultiSelectFromList(document.getElementById('verifyLocalMirrorCategories'), cfg.categories || _selectedMultiSelectValues(sel));
+  } catch (e) {
+    if (msg) msg.textContent = e.message || String(e);
+  }
+}
+
+async function runVerifyHorseCoverage() {
+  const outEl = document.getElementById('verifyCoverageResult');
+  const pre = document.getElementById('verifyCoveragePre');
+  if (!IS_DEV_QUEUE) { alert('開発者にログインしてください。'); return; }
+  if (document.getElementById('verifyEnqueueMissing') && document.getElementById('verifyEnqueueMissing').checked) {
+    if (!confirm('不足分をキューに投入します。よいですか？（負荷・GCS コストに注意。上書きONなら更に負荷大）')) return;
+  }
+  const start = (document.getElementById('verifyStartDate') && document.getElementById('verifyStartDate').value || '').trim();
+  const end = (document.getElementById('verifyEndDate') && document.getElementById('verifyEndDate').value || '').trim();
+  const yearStr = (document.getElementById('verifyYear') && document.getElementById('verifyYear').value || '').trim();
+  if (outEl) outEl.textContent = '実行中…';
+  if (pre) { pre.style.display = 'none'; pre.textContent = ''; }
+  const smode = (document.getElementById('verifySatisfactionMode') && document.getElementById('verifySatisfactionMode').value) || 'load_default';
+  const body = {
+    wait_for_queue_idle: !!(document.getElementById('verifyWaitIdle') && document.getElementById('verifyWaitIdle').checked),
+    idle_timeout_sec: 7200,
+    enqueue_missing: !!(document.getElementById('verifyEnqueueMissing') && document.getElementById('verifyEnqueueMissing').checked),
+    smart_skip: true,
+    overwrite: !!(document.getElementById('verifyOverwrite') && document.getElementById('verifyOverwrite').checked),
+    jra_only: true,
+    include_horse: !!(document.getElementById('verifyInHorse') && document.getElementById('verifyInHorse').checked),
+    include_race: !!(document.getElementById('verifyInRace') && document.getElementById('verifyInRace').checked),
+    include_date: !!(document.getElementById('verifyInDate') && document.getElementById('verifyInDate').checked),
+    satisfaction_mode: smode,
+  };
+  if (smode === 'mirror_for_selected') {
+    const vm = _selectedMultiSelectValues(document.getElementById('verifyLocalMirrorCategories'));
+    if (vm.length) body.local_mirror_categories = vm;
+  }
+  if (yearStr !== '' && /^\d{4}$/.test(yearStr)) {
+    body.year = parseInt(yearStr, 10);
+  } else {
+    if (start && /^\d{8}$/.test(start)) body.start_date = start;
+    if (end && /^\d{8}$/.test(end)) body.end_date = end;
+  }
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/verify-horse-coverage'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await readJsonResp(resp);
+    if (pre) {
+      pre.textContent = JSON.stringify(d, null, 2);
+      pre.style.display = 'block';
+    }
+    if (outEl) {
+      if (!resp.ok) {
+        outEl.textContent = d.error || ('HTTP ' + resp.status);
+        return;
+      }
+      if (d.ok === false) {
+        const parts = [];
+        if (d.wait_result) parts.push('待機: ' + d.wait_result);
+        if (d.error) parts.push(d.error);
+        ['verify_horse', 'verify_race', 'verify_date'].forEach(function (k) {
+          const s = d[k];
+          if (s && s.error) parts.push(k + ': ' + s.error);
+        });
+        outEl.textContent = parts.length ? parts.join(' · ') : '失敗';
+        return;
+      }
+      const w = d.wait_result;
+      const vh = d.verify_horse || {};
+      const vr = d.verify_race || {};
+      const vd = d.verify_date || {};
+      const h = (vh.missing_count_by_task) || {};
+      const r = (vr.missing_count_by_task) || {};
+      const t = (vd.missing_count_by_task) || {};
+      const dt = d.duration_total_sec;
+      outEl.textContent = (w ? ('待機: ' + w + ' · ') : '') +
+        '年/期間: ' + (d.year != null ? d.year : (d.start_date || '—') + '…' + (d.end_date || '—')) +
+        ' · 馬 ' + (vh.total_horses != null ? vh.total_horses : '—') + ' 頭 欠 ' + JSON.stringify(h) +
+        ' · レ ' + (vr.total_races != null ? vr.total_races : '—') + 'R 欠 ' + JSON.stringify(r) +
+        ' · 日 ' + (vd.total_dates != null ? vd.total_dates : '—') + '日 欠 ' + JSON.stringify(t) +
+        (dt != null ? ' · 計 ' + dt + 's' : '');
+    }
+    loadStatus();
+  } catch (e) {
+    if (outEl) outEl.textContent = e.message || String(e);
+  }
+}
+
+function inferApiPrefixFromPath() {
+  try {
+    const path = window.location.pathname || '';
+    const m = path.match(/^(\/.+)\/queue-status\/?$/);
+    return m ? m[1] : '';
+  } catch (_) {
+    return '';
+  }
+}
+const API_PREFIX = String(SERVER_API_PREFIX || inferApiPrefixFromPath() || '').replace(/\/$/, '');
+/** タスク一覧取得で確定したプレフィックス（以降の API 呼び出しと揃える） */
+let _apiPrefixResolved = false;
+let RESOLVED_API_PREFIX = '';
+let workerLogMaxId = -1;
+let workerLogInitialized = false;
+
+function apiUrl(path) {
+  const p = path.startsWith('/') ? path : '/' + path;
+  const prefix = _apiPrefixResolved ? RESOLVED_API_PREFIX : API_PREFIX;
+  return String(prefix || '').replace(/\/$/, '') + p;
+}
+
+function prefixFromMatchedTasksPath(pathname) {
+  const suf = '/api/scrape-queue/tasks';
+  if (!pathname || !pathname.endsWith(suf)) return '';
+  return pathname.slice(0, -suf.length).replace(/\/$/, '');
+}
+
+/** タスク一覧用 URL を優先順で列挙（サブパス誤推定のフォールバック） */
+function candidateTaskCatalogUrls() {
+  const out = [];
+  const primary = String(API_PREFIX || '').replace(/\/$/, '') + '/api/scrape-queue/tasks';
+  out.push(primary);
+  try {
+    const pathname = window.location.pathname || '';
+    const m = pathname.match(/^(.*)\/queue-status\/?$/);
+    if (m && m[1] !== undefined) {
+      const inferred = String(m[1]).replace(/\/$/, '') + '/api/scrape-queue/tasks';
+      if (inferred !== primary) out.push(inferred);
+    }
+  } catch (_) { /* ignore */ }
+  const root = '/api/scrape-queue/tasks';
+  if (root !== primary) out.push(root);
+  return [...new Set(out)];
+}
+
+function applyResolvedPrefixFromTasksUrl(urlTried) {
+  try {
+    const u = new URL(urlTried, window.location.origin);
+    _apiPrefixResolved = true;
+    RESOLVED_API_PREFIX = prefixFromMatchedTasksPath(u.pathname);
+  } catch (_) {
+    _apiPrefixResolved = true;
+    RESOLVED_API_PREFIX = '';
+  }
+}
+async function readJsonResp(resp) {
+  const text = await resp.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      error: 'HTTP ' + resp.status + ' — JSON でない応答です。サブパス配信では /api がルート直下に向いていない可能性があります。',
+      _body_preview: (text || '').slice(0, 400),
+    };
+  }
+}
+
+const TYPE_LABELS = {
+  race_shutuba: '出馬表',
+  horse_result: '馬成績',
+  race_odds: 'オッズ',
+  race_result: 'レース結果',
+  race_result_lap: '結果ラップ',
+  race_all: 'レース一式',
+  smartrc: 'SmartRC',
+  horse_profile: '馬ページ',
+  horse_training: '調教タイム',
+  race_list: 'レース一覧',
+  date_results: '日別結果',
+  date_cards: '日別出馬表',
+  date_all: '日別一式',
+  race_pair_odds: '2連オッズ',
+  race_index: 'タイム指数',
+  race_shutuba_past: '馬柱',
+  race_paddock: 'パドック',
+  race_barometer: '偏差値',
+  race_oikiri: '追い切り',
+  race_trainer_comment: '厩舎コメント',
+  horse_pedigree: '血統（馬ページ）',
+};
+
+const SERVER_TASK_CATALOG = {{ (task_catalog | default([])) | tojson }};
+
+/** サーバ埋め込み・/api 取得の両方に失敗したときの最終手段（scraper/queue_tasks と同一内容） */
+const FALLBACK_TASK_CATALOG = [
+  { id: "race_all", entity: "race", label: "レース一式（従来どおり）", hint: "出馬表・指数・オッズ・SmartRC 等 scrape_race_all" },
+  { id: "race_result", entity: "race", label: "レース結果", hint: "race_result" },
+  { id: "race_result_lap", entity: "race", label: "結果ラップ", hint: "race_result_lap（成績ページのラップ・通過。要ログイン）" },
+  { id: "race_shutuba", entity: "race", label: "出馬表", hint: "race_shutuba" },
+  { id: "race_odds", entity: "race", label: "単複オッズ", hint: "race_odds" },
+  { id: "race_pair_odds", entity: "race", label: "2連系オッズ", hint: "race_pair_odds" },
+  { id: "race_index", entity: "race", label: "タイム指数", hint: "race_index" },
+  { id: "race_shutuba_past", entity: "race", label: "馬柱・過去成績", hint: "race_shutuba_past" },
+  { id: "race_paddock", entity: "race", label: "パドック", hint: "race_paddock" },
+  { id: "race_barometer", entity: "race", label: "偏差値", hint: "race_barometer" },
+  { id: "race_oikiri", entity: "race", label: "追い切り", hint: "race_oikiri" },
+  { id: "race_trainer_comment", entity: "race", label: "厩舎コメント", hint: "race_trainer_comment" },
+  { id: "smartrc", entity: "race", label: "SmartRC 一式", hint: "smartrc_race" },
+  { id: "horse_profile", entity: "horse", label: "馬ページ（成績・血統）", hint: "horse_result" },
+  { id: "horse_pedigree", entity: "horse", label: "血統", hint: "血統" },
+  { id: "horse_pedigree_5gen", entity: "horse", label: "5世代血統JSON", hint: "horse_pedigree_5gen" },
+  { id: "horse_training", entity: "horse", label: "調教タイム全ページ", hint: "horse_training" },
+  { id: "race_list", entity: "date", label: "その日のレース一覧", hint: "race_lists" },
+  { id: "date_results", entity: "date", label: "その日の結果一括", hint: "scrape_date_results" },
+  { id: "date_cards", entity: "date", label: "その日の出馬表一括", hint: "scrape_date_cards" },
+  { id: "date_all", entity: "date", label: "その日の一式", hint: "scrape_date_all" },
+];
+let _taskCatalog = [];
+
+function syncLabelsFromCatalog() {
+  _taskCatalog.forEach(t => {
+    if (t.id) TYPE_LABELS[t.id] = t.label;
+  });
+}
+
+/** サーバ埋め込みカタログで即描画（空ならクライアント定義のフォールバック） */
+function initCatalogFromEmbedded() {
+  if (Array.isArray(SERVER_TASK_CATALOG) && SERVER_TASK_CATALOG.length) {
+    _taskCatalog = SERVER_TASK_CATALOG.slice();
+  } else {
+    _taskCatalog = (FALLBACK_TASK_CATALOG || []).slice();
+  }
+  syncLabelsFromCatalog();
+  rebuildManualTaskChecks();
+  buildUnifiedScrapeTaskSelect();
+  updateManualManualUi();
+}
+
+function updateManualManualUi() {
+  const kindEl = document.getElementById('manualKind');
+  if (!kindEl) return;
+  const v = kindEl.value;
+  const isPeriod = v === 'race' || v === 'horse_period';
+  const isSingle = v === 'horse' || v === 'date';
+  const pb = document.getElementById('manualRacePeriodBlock');
+  const pr = document.getElementById('manualRacePeriodSubmitRow');
+  const sr = document.getElementById('manualSingleTargetRow');
+  const sb = document.getElementById('manualSingleSubmitRow');
+  if (pb) pb.style.display = isPeriod ? '' : 'none';
+  if (pr) pr.style.display = isPeriod ? '' : 'none';
+  if (sr) sr.style.display = isPeriod ? 'none' : '';
+  if (sb) sb.style.display = isSingle ? '' : 'none';
+  const limLab = document.getElementById('manualPeriodLimitLabel');
+  if (limLab) {
+    if (v === 'race') limLab.textContent = '上限（レース数）';
+    else if (v === 'horse_period') limLab.textContent = '上限（頭数）';
+    else limLab.textContent = '上限（件数）';
+  }
+}
+
+function showCatalogLoadError(msg) {
+  const url = apiUrl('/api/scrape-queue/tasks');
+  const html = '<span style="font-size:11px;color:var(--err)">タスク一覧の取得に失敗しました: ' +
+    escapeHtml(msg) + '<br><span style="opacity:0.85">試したURL: ' + escapeHtml(url) +
+    '</span><br><span style="opacity:0.75">サブパス配信時はページURLと API のプレフィックスが一致しているか確認してください。</span></span>';
+  const m = document.getElementById('manualTaskChecks');
+  if (m) m.innerHTML = html;
+}
+
+async function loadTaskCatalog() {
+  const urls = candidateTaskCatalogUrls();
+  let lastErr = 'すべての URL で取得に失敗しました';
+  for (const url of urls) {
+    try {
+      const resp = await fetch(url);
+      const data = await readJsonResp(resp);
+      if (!resp.ok || data.error) {
+        lastErr = data.error || ('HTTP ' + resp.status);
+        continue;
+      }
+      if (!Array.isArray(data.tasks) || !data.tasks.length) {
+        lastErr = 'レスポンスに tasks がありません';
+        continue;
+      }
+      applyResolvedPrefixFromTasksUrl(url);
+      _taskCatalog = data.tasks;
+      syncLabelsFromCatalog();
+      rebuildManualTaskChecks();
+      buildUnifiedScrapeTaskSelect();
+      return;
+    } catch (e) {
+      lastErr = e.message || String(e);
+    }
+  }
+  console.warn('タスクカタログAPI:', lastErr, 'tried:', urls);
+  if (!_taskCatalog.length) {
+    if (Array.isArray(FALLBACK_TASK_CATALOG) && FALLBACK_TASK_CATALOG.length) {
+      _taskCatalog = FALLBACK_TASK_CATALOG.slice();
+      syncLabelsFromCatalog();
+      rebuildManualTaskChecks();
+      buildUnifiedScrapeTaskSelect();
+    } else {
+      showCatalogLoadError(lastErr);
+    }
+  }
+}
+
+function rebuildManualTaskChecks() {
+  const kindEl = document.getElementById('manualKind');
+  const box = document.getElementById('manualTaskChecks');
+  if (!kindEl || !box) return;
+  const v = kindEl.value;
+  const ent = v === 'horse_period' ? 'horse' : v;
+  const relevant = _taskCatalog.filter(t => t.entity === ent);
+  if (!relevant.length) {
+    box.innerHTML = '<span style="font-size:11px;color:var(--text-dim)">この種別のタスクはありません（カタログが空です）。</span>';
+    return;
+  }
+  box.innerHTML = relevant.map(t => `
+    <label title="${escapeHtml(t.hint || '')}">
+      <input type="checkbox" name="manualTask" value="${escapeHtml(t.id)}">
+      <span><strong>${escapeHtml(t.label)}</strong><br><span style="opacity:0.75;font-size:10px">${escapeHtml(t.id)}</span></span>
+    </label>
+  `).join('');
+  if (v === 'horse_period') {
+    const preferred = box.querySelector('input[value="horse_pedigree"]');
+    if (preferred) preferred.checked = true;
+  }
+}
+
+function buildUnifiedScrapeTaskSelect() {
+  const sel = document.getElementById('unifiedScrapeTaskSelect');
+  if (!sel) return;
+  if (!_taskCatalog || !_taskCatalog.length) {
+    sel.innerHTML = '<option disabled>タスク定義を読めていません。ページ再読み込み後も空なら /api/scrape-queue/tasks を確認してください</option>';
+    return;
+  }
+  const by = { horse: [], race: [], date: [] };
+  _taskCatalog.forEach(t => {
+    const e = t.entity;
+    if (e === 'horse' || e === 'race' || e === 'date') {
+      (by[e] = by[e] || []).push(t);
+    }
+  });
+  const labels = { horse: '馬', race: 'レース', date: '開催日' };
+  let html = '';
+  for (const ent of ['race', 'horse', 'date']) {
+    const arr = by[ent] || [];
+    if (!arr.length) continue;
+    html += '<optgroup label="' + escapeHtml(labels[ent] || ent) + '">';
+    arr.forEach(t => {
+      const lab = (t.label || t.id) + ' (' + t.id + ')';
+      html += '<option value="' + escapeHtml(t.id) + '" title="' + escapeHtml(t.hint || '') + '">' + escapeHtml(lab) + '</option>';
+    });
+    html += '</optgroup>';
+  }
+  sel.innerHTML = html || '<option disabled>タスクなし</option>';
+}
+
+function unifiedClearPeriodDates() {
+  const a = document.getElementById('unifiedScrapeStart');
+  const b = document.getElementById('unifiedScrapeEnd');
+  if (a) a.value = '';
+  if (b) b.value = '';
+  const out = document.getElementById('unifiedScrapePeriodResult');
+  if (out) out.textContent = '日付欄を空にしました（race_lists 上の全開催日が候補）。件数上限は上の欄のままです。';
+}
+
+/** race_lists 上の全開催日・JRA 全レース向けのプリセット（保存は GCS のみ） */
+function unifiedQuickAllRacesPreset() {
+  if (!_taskCatalog.length) {
+    _taskCatalog = (Array.isArray(SERVER_TASK_CATALOG) && SERVER_TASK_CATALOG.length)
+      ? SERVER_TASK_CATALOG.slice()
+      : (FALLBACK_TASK_CATALOG || []).slice();
+  }
+  buildUnifiedScrapeTaskSelect();
+  const a = document.getElementById('unifiedScrapeStart');
+  const b = document.getElementById('unifiedScrapeEnd');
+  if (a) a.value = '';
+  if (b) b.value = '';
+  const u = document.getElementById('unifiedScrapeLimit');
+  if (u) u.value = '1000000';
+  const sm = document.querySelector('input[name="unifiedSaveMode"][value="gcs_only"]');
+  if (sm) sm.checked = true;
+  const sel = document.getElementById('unifiedScrapeTaskSelect');
+  if (sel) {
+    for (let i = 0; i < sel.options.length; i++) {
+      sel.options[i].selected = (sel.options[i].value === 'race_all');
+    }
+  }
+  const out = document.getElementById('unifiedScrapePeriodResult');
+  if (out) {
+    out.textContent = '【プリセット済み】日付: 全期間（空）/ 件数上限: 1,000,000 / 保存: GCS のみ / タスク: race_all のみ選択。\n「スキップ／上書き」は下のラジオで。必ず先に「プレビュー（dry_run）」で候補数を確認してください。';
+  }
+}
+
+/** 期間一括でレース系タスク「結果ラップ」のみ（race_result_lap）。上の日付範囲はそのまま。 */
+function unifiedQuickResultLapPeriodPreset() {
+  if (!_taskCatalog.length) {
+    _taskCatalog = (Array.isArray(SERVER_TASK_CATALOG) && SERVER_TASK_CATALOG.length)
+      ? SERVER_TASK_CATALOG.slice()
+      : (FALLBACK_TASK_CATALOG || []).slice();
+  }
+  buildUnifiedScrapeTaskSelect();
+  const hasInCatalog = _taskCatalog.some(t => t && t.id === 'race_result_lap');
+  const sel = document.getElementById('unifiedScrapeTaskSelect');
+  if (sel) {
+    for (let i = 0; i < sel.options.length; i++) {
+      const opt = sel.options[i];
+      opt.selected = hasInCatalog && (opt.value === 'race_result_lap');
+    }
+  }
+  const u = document.getElementById('unifiedScrapeLimit');
+  if (u && (!u.value || parseInt(u.value, 10) < 1000)) u.value = '500000';
+  const out = document.getElementById('unifiedScrapePeriodResult');
+  if (out) {
+    out.textContent = hasInCatalog
+      ? '【プリセット】「レース」系で race_result_lap（結果ラップ）のみを選択しました。日付範囲は今の欄のままです。保存先・スキップは下で指定し、先に「プレビュー（dry_run）」で件数を確認してください。'
+      : '【エラー】カタログに race_result_lap がありません。/api/scrape-queue/tasks またはサーバの更新を確認してください。';
+  }
+}
+
+async function runUnifiedScrapePeriod(dryRun) {
+  const outEl = document.getElementById('unifiedScrapePeriodResult');
+  const tasks = Array.from(
+    (document.getElementById('unifiedScrapeTaskSelect') && document.getElementById('unifiedScrapeTaskSelect').selectedOptions) || []
+  ).map(o => o.value).filter(Boolean);
+  if (!tasks.length) {
+    if (outEl) outEl.textContent = 'タスクを1つ以上選んでください。';
+    return;
+  }
+  if (!dryRun) {
+    if (!confirm('指定期間・タスクをキューに一括投入します。負荷とコストに注意。よろしいですか？')) return;
+  }
+  const s = datePickerToYmd(document.getElementById('unifiedScrapeStart'));
+  const e = datePickerToYmd(document.getElementById('unifiedScrapeEnd'));
+  if (s === '' || e === '') {
+    if (outEl) {
+      outEl.textContent = '日付欄の形式が不正です。両方空＝全期間、片方だけ指定も可。';
+    }
+    return;
+  }
+  const lim = parseInt(document.getElementById('unifiedScrapeLimit') && document.getElementById('unifiedScrapeLimit').value, 10) || 500000;
+  const saveMode = (document.querySelector('input[name="unifiedSaveMode"]:checked') || {}).value || 'local_gcs';
+  const skipMode = (document.querySelector('input[name="unifiedSkipMode"]:checked') || {}).value || 'use_skip';
+  const jraOnly = !!(document.getElementById('unifiedJraOnly') && document.getElementById('unifiedJraOnly').checked);
+  const body = {
+    tasks: tasks,
+    limit: lim,
+    dry_run: !!dryRun,
+    jra_only: jraOnly,
+    save_mode: saveMode,
+    skip_mode: skipMode,
+  };
+  if (s) body.start_date = s;
+  if (e) body.end_date = e;
+  if (outEl) outEl.textContent = dryRun ? 'プレビュー実行中…' : '投入中…';
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/enqueue-scrape-period'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await readJsonResp(resp);
+    if (outEl) {
+      if (!resp.ok) {
+        outEl.textContent = d.error || ('HTTP ' + resp.status);
+        return;
+      }
+      if (d.ok === false) {
+        outEl.textContent = d.error || '失敗';
+        return;
+      }
+      outEl.textContent = JSON.stringify(d, null, 2);
+    }
+    loadStatus();
+  } catch (err) {
+    if (outEl) outEl.textContent = err.message || String(err);
+  }
+}
+
+function runManualPeriodJobs(dryRun) {
+  const kind = document.getElementById('manualKind') && document.getElementById('manualKind').value;
+  if (kind === 'race') return runManualRacePeriodJobs(dryRun);
+  if (kind === 'horse_period') return runPeriodHorseJobs(dryRun);
+}
+
+async function runPeriodHorseJobs(dryRun) {
+  const out = document.getElementById('manualJobResult');
+  const start = datePickerToYmd(document.getElementById('manualRaceStart'));
+  const end = datePickerToYmd(document.getElementById('manualRaceEnd'));
+  const limit = parseInt(document.getElementById('manualRaceLimit').value, 10) || 500;
+  const checks = [...document.querySelectorAll('#manualTaskChecks input[name="manualTask"]:checked')].map(el => el.value);
+
+  if (start === '' || end === '') {
+    if (out) out.textContent = '日付の取得に失敗しました。ブラウザを更新して再度お試しください。';
+    return;
+  }
+  if (!checks.length) {
+    if (out) out.textContent = '馬タスクを1つ以上選択してください。';
+    return;
+  }
+  if (!dryRun && !confirm(`出走馬を解決し、最大 ${limit} 件まで馬ジョブをキューに追加します。よろしいですか？`)) return;
+
+  if (out) out.textContent = '処理中…';
+  try {
+    const body = { limit, dry_run: dryRun, tasks: checks, ...queueEnqueueOverwritePayload() };
+    if (start) body.start_date = start;
+    if (end) body.end_date = end;
+
+    const resp = await fetch(apiUrl('/api/scrape-queue/enqueue-period-horses'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      let msg = data.error || resp.statusText || String(resp.status);
+      if (data._body_preview) msg += '\n---\n' + data._body_preview;
+      if (out) out.textContent = 'エラー: ' + msg;
+      return;
+    }
+    const m = data.meta || {};
+    const lines = [
+      data.dry_run ? '【プレビュー】' : '【キュー投入完了】',
+      `ユニーク出走馬（候補）: ${data.candidate_horses ?? '—'}`,
+      `今回の上限内: ${data.dry_run ? (data.would_enqueue ?? '—') : (data.processed_horses ?? '—')}`,
+      `走査開催日: ${m.dates_scanned ?? '—'} / race_lists内レース: ${m.races_in_lists ?? '—'} / 出走データあり: ${m.races_with_entries ?? '—'} / データなしレース: ${m.races_no_data ?? '—'}`,
+    ];
+    if (!data.dry_run) {
+      lines.push(`新規: ${data.created ?? 0} / 再キュー: ${data.requeued ?? 0} / 重複スキップ: ${data.duplicate ?? 0}`);
+    }
+    const sample = data.sample_horse_ids || [];
+    if (sample.length && data.dry_run) {
+      lines.push('サンプル horse_id（最大25）:');
+      sample.forEach(h => lines.push(`  ${h}`));
+    }
+    if (out) out.textContent = lines.join('\n');
+    await loadStatus();
+  } catch (e) {
+    if (out) out.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+async function runManualRacePeriodJobs(dryRun) {
+  const out = document.getElementById('manualJobResult');
+  const start = datePickerToYmd(document.getElementById('manualRaceStart'));
+  const end = datePickerToYmd(document.getElementById('manualRaceEnd'));
+  const limit = parseInt(document.getElementById('manualRaceLimit').value, 10) || 500;
+  const checks = [...document.querySelectorAll('#manualTaskChecks input[name="manualTask"]:checked')].map(el => el.value);
+
+  if (start === '' || end === '') {
+    if (out) out.textContent = '日付の取得に失敗しました。ブラウザを更新して再度お試しください。';
+    return;
+  }
+  if (!checks.length) {
+    if (out) out.textContent = 'レースタスクを1つ以上選択してください。';
+    return;
+  }
+  if (!dryRun && !confirm(`期間内の JRA レース（最大 ${limit} 件）に選択タスクをキュー投入します。よろしいですか？`)) return;
+
+  if (out) out.textContent = '処理中…';
+  try {
+    const body = { limit, dry_run: dryRun, tasks: checks, ...queueEnqueueOverwritePayload() };
+    if (start) body.start_date = start;
+    if (end) body.end_date = end;
+
+    const resp = await fetch(apiUrl('/api/scrape-queue/enqueue-period-races'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      let msg = data.error || resp.statusText || String(resp.status);
+      if (data._body_preview) msg += '\n---\n' + data._body_preview;
+      if (out) out.textContent = 'エラー: ' + msg;
+      return;
+    }
+    const m = data.meta || {};
+    const lines = [
+      data.dry_run ? '【プレビュー】' : '【キュー投入完了】',
+      `対象レース数（今回）: ${data.dry_run ? (data.would_enqueue ?? '—') : (data.candidate_races ?? '—')}`,
+      `走査開催日: ${m.dates_scanned ?? '—'} / race_lists内レース行: ${m.races_in_lists ?? '—'} / ユニーク取得: ${m.races_unique_enqueued ?? '—'}${m.capped ? '（上限で打ち切り）' : ''}`,
+    ];
+    if (!data.dry_run) {
+      lines.push(`新規: ${data.created ?? 0} / 再キュー: ${data.requeued ?? 0} / 重複スキップ: ${data.duplicate ?? 0} / 正規化失敗スキップ: ${data.skipped ?? 0}`);
+    }
+    const sample = data.sample_races || [];
+    if (sample.length && data.dry_run) {
+      lines.push('サンプル（最大25件）:');
+      sample.forEach(r => {
+        const rr = r.round != null && r.round !== '' ? `${r.round}R` : '';
+        lines.push(`  ${r.race_id || '—'}  ${r.date || ''}  ${r.venue || ''}  ${rr}  ${r.race_name || ''}`);
+      });
+    }
+    if (out) out.textContent = lines.join('\n');
+    await loadStatus();
+  } catch (e) {
+    if (out) out.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+async function submitManualJob() {
+  const out = document.getElementById('manualJobResult');
+  const kind = document.getElementById('manualKind').value;
+  if (kind === 'race' || kind === 'horse_period') {
+    if (out) {
+      out.textContent = kind === 'race'
+        ? 'レース（期間）は上の「プレビュー」／「キューに追加」から投入してください。'
+        : '馬（期間内・出走馬解決）は上の「プレビュー」／「キューに追加」から投入してください。';
+    }
+    return;
+  }
+  const target = document.getElementById('manualTarget').value.trim();
+  const aux = document.getElementById('manualAuxDate').value.trim();
+  const checks = [...document.querySelectorAll('#manualTaskChecks input[name="manualTask"]:checked')].map(el => el.value);
+  if (!target) {
+    if (out) out.textContent = 'ターゲットIDを入力してください。';
+    return;
+  }
+  if (!checks.length) {
+    if (out) out.textContent = 'タスクを1つ以上選択してください。';
+    return;
+  }
+  const body = { job_kind: kind, target_id: target, tasks: checks, ...queueEnqueueOverwritePayload() };
+  if (aux.length === 8 && /^\d{8}$/.test(aux)) body.date = aux;
+  if (out) out.textContent = '送信中…';
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/add-job'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      if (out) out.textContent = 'エラー: ' + (data.error || resp.statusText);
+      return;
+    }
+    const bits = [`追加: ${data.action || 'ok'}`, `job_id: ${data.job_id || '—'}`];
+    if (data.position != null) bits.push(`順番: ${data.position}`);
+    if (out) out.textContent = bits.join(' / ');
+    await loadStatus();
+  } catch (e) {
+    if (out) out.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+function formatJobTasksDisplay(job) {
+  const arr = job.tasks || job.types || [];
+  if (!arr.length) return '—';
+  return arr.map(t => TYPE_LABELS[t] || t).join('・');
+}
+
+function formatKaisaiDate(compact) {
+  if (!compact || String(compact).length !== 8) return compact || '—';
+  const s = String(compact);
+  const y = s.slice(0, 4);
+  const m = parseInt(s.slice(4, 6), 10);
+  const d = parseInt(s.slice(6, 8), 10);
+  return `${y}年${m}月${d}日`;
+}
+
+function formatTypes(types) {
+  if (!types || !types.length) return '—';
+  return types.map(t => TYPE_LABELS[t] || t).join('・');
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function normalizeYmdInput(raw) {
+  const s = (raw || '').trim();
+  if (!s) return null;
+  if (s.length !== 8 || !/^\d{8}$/.test(s)) return '';
+  return s;
+}
+
+/** <input type="date"> の値 (YYYY-MM-DD) を API 用 YYYYMMDD に。空なら null。 */
+function datePickerToYmd(el) {
+  if (!el) return null;
+  const v = (el.value || '').trim();
+  if (!v) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v.replace(/-/g, '');
+  return '';
+}
+
+/** キュー投入折りたたみ内「上書き再取得」チェック → API 用フラグ */
+function queueEnqueueOverwritePayload() {
+  const el = document.getElementById('queueEnqueueOverwrite');
+  if (el && el.checked) return { overwrite: true };
+  return {};
+}
+
+async function runEnqueueMissing(dryRun) {
+  const out = document.getElementById('enqueueMissingResult');
+  const start = datePickerToYmd(document.getElementById('missingStart'));
+  const end = datePickerToYmd(document.getElementById('missingEnd'));
+  const limit = parseInt(document.getElementById('missingLimit').value, 10) || 200;
+
+  if (start === '' || end === '') {
+    out.textContent = '日付の取得に失敗しました。ブラウザを更新して再度お試しください。';
+    return;
+  }
+  if (!dryRun && !confirm(`未取得レースを最大 ${limit} 件までキューに追加します。よろしいですか？`)) return;
+
+  out.textContent = '処理中…';
+  try {
+    const body = { limit, dry_run: dryRun, ...queueEnqueueOverwritePayload() };
+    if (start) body.start_date = start;
+    if (end) body.end_date = end;
+
+    const resp = await fetch(apiUrl('/api/scrape-queue/enqueue-missing'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      let msg = data.error || resp.statusText || String(resp.status);
+      if (data._body_preview) msg += '\n---\n' + data._body_preview;
+      out.textContent = 'エラー: ' + msg;
+      return;
+    }
+    const m = data.meta || {};
+    let lines = [
+      data.dry_run ? '【ドライラン】' : '【キュー投入完了】',
+      `候補件数: ${data.candidate_count ?? 0}`,
+      `走査開催日数: ${m.dates_scanned ?? '—'} / race_lists内レース参照: ${m.races_in_lists ?? '—'}`,
+      `取得済みスキップ: ${m.already_scraped ?? '—'} / 既にキュー内でスキップ: ${m.skipped_in_queue ?? '—'}`,
+    ];
+    if (!data.dry_run) {
+      lines.push(`新規: ${data.new_jobs ?? 0} / 再実行: ${data.requeued ?? 0} / 重複: ${data.already_in_queue ?? 0}`);
+    }
+    const sample = data.sample_races || [];
+    if (sample.length) {
+      lines.push('サンプル（最大25件）:');
+      sample.forEach(r => {
+        lines.push(`  ${r.race_id}  ${r.date || ''}  ${r.venue || ''}  ${r.round}R  ${r.race_name || ''}`);
+      });
+    }
+    out.textContent = lines.join('\n');
+    await loadStatus();
+  } catch (e) {
+    out.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+async function runEnqueueMissingRaceResultLap(dryRun) {
+  const out = document.getElementById('enqueueResultLapResult');
+  const start = datePickerToYmd(document.getElementById('resultLapStart'));
+  const end = datePickerToYmd(document.getElementById('resultLapEnd'));
+  const limit = parseInt(document.getElementById('resultLapLimit').value, 10) || 500000;
+
+  if (start === '') {
+    if (out) out.textContent = '開始日の取得に失敗しました。ブラウザを更新して再度お試しください。';
+    return;
+  }
+  if (!dryRun && !confirm(
+    `2024年以降の race_result_lap 欠損レースを最大 ${limit} 件まで、最優先でキューに追加します。よろしいですか？`
+  )) return;
+
+  if (out) out.textContent = '処理中…';
+  try {
+    const body = {
+      limit,
+      dry_run: dryRun,
+      start_date: start || '20240101',
+      smart_skip: true,
+      jra_only: true,
+      ...queueEnqueueOverwritePayload(),
+    };
+    if (end) body.end_date = end;
+
+    const resp = await fetch(apiUrl('/api/scrape-queue/enqueue-missing-race-result-lap'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      let msg = data.error || resp.statusText || String(resp.status);
+      if (data._body_preview) msg += '\n---\n' + data._body_preview;
+      if (out) out.textContent = 'エラー: ' + msg;
+      return;
+    }
+    const m = data.meta || {};
+    const lines = [
+      data.dry_run ? '【プレビュー】' : '【キュー投入完了】',
+      `欠損候補（ユニークレース）: ${data.candidate_missing ?? '—'}`,
+      `優先度: ${data.priority ?? '—'}（最優先帯）`,
+      `走査開催日: ${m.dates_scanned ?? '—'} / race_lists内レース行: ${m.races_in_lists ?? '—'} / ラップありスキップ: ${m.races_already_have_lap ?? '—'} / 欠損（ユニーク）: ${m.races_missing_unique ?? '—'}${m.capped ? '（上限で打ち切り）' : ''}`,
+    ];
+    if (data.message) lines.push(data.message);
+    if (!data.dry_run) {
+      lines.push(`新規: ${data.created ?? 0} / 再キュー: ${data.requeued ?? 0} / 重複スキップ: ${data.duplicate ?? 0} / 正規化失敗スキップ: ${data.skipped ?? 0}`);
+    }
+    const sample = data.sample_races || [];
+    if (sample.length && data.dry_run) {
+      lines.push('サンプル（最大25件）:');
+      sample.forEach(r => {
+        const rr = r.round != null && r.round !== '' ? `${r.round}R` : '';
+        lines.push(`  ${r.race_id || '—'}  ${r.date || ''}  ${r.venue || ''}  ${rr}  ${r.race_name || ''}`);
+      });
+    }
+    if (out) out.textContent = lines.join('\n');
+    await loadStatus();
+  } catch (e) {
+    if (out) out.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+async function runBatchPedigree5gen(dryRun) {
+  const out = document.getElementById('batchPed5genResult');
+  const date_from = datePickerToYmd(document.getElementById('batchPed5genStart'));
+  const date_to = datePickerToYmd(document.getElementById('batchPed5genEnd'));
+  const max_races = parseInt(document.getElementById('batchPed5genMax').value, 10) || 500;
+
+  if (date_from == null || date_to == null || date_from === '' || date_to === '') {
+    if (out) out.textContent = '開始日と終了日の両方を指定してください。';
+    return;
+  }
+  if (!dryRun && !confirm(
+    `指定期間の JRA レース（最大 ${max_races} 件まで）に対し 5gen 血統プリフェッチをキューに投入します。よろしいですか？`
+  )) return;
+
+  if (out) out.textContent = '処理中…';
+  try {
+    const resp = await fetch(apiUrl('/api/pedigree/batch-race-ensure-5gen'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date_from, date_to, dry_run: dryRun, max_races }),
+    });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      let msg = data.error || resp.statusText || String(resp.status);
+      if (data._body_preview) msg += '\n---\n' + data._body_preview;
+      if (out) out.textContent = 'エラー: ' + msg;
+      return;
+    }
+    const m = data.meta || {};
+    const lines = [];
+    if (data.dry_run) {
+      lines.push('【ドライラン】');
+      lines.push(data.message || '');
+      lines.push(
+        `範囲: ${m.date_from || date_from} … ${m.date_to || date_to} · カレンダー日数: ${m.days_in_range ?? '—'} · 列挙レース数: ${m.races_enumerated ?? '—'} · 上限: ${m.max_races ?? max_races}` +
+        (m.capped ? '（上限で打ち切り）' : '')
+      );
+      const sample = data.sample_race_ids || [];
+      if (sample.length) {
+        lines.push('サンプル race_id（最大50件）:');
+        sample.forEach(rid => { lines.push('  ' + rid); });
+      }
+    } else {
+      lines.push('【投入完了】');
+      lines.push(
+        `範囲: ${m.date_from || date_from} … ${m.date_to || date_to} · 処理レース数: ${data.races_processed ?? '—'} · ジョブ投入計: ${data.total_jobs_enqueued ?? '—'}`
+      );
+      lines.push(
+        `ジョブありレース: ${data.races_with_jobs ?? '—'} · 既に完備でスキップ相当: ${data.races_already_complete ?? '—'} · セッション数: ${data.session_count ?? '—'}`
+      );
+      const sid = data.session_ids_sample || [];
+      if (sid.length) {
+        lines.push('session_id サンプル（最大20）:');
+        sid.forEach(s => { lines.push('  ' + s); });
+      }
+      const errs = data.errors_sample || [];
+      if (errs.length) {
+        lines.push('エラー例（最大25）:');
+        errs.forEach(e => { lines.push(`  ${e.race_id || '—'}  ${e.error || ''}`); });
+      }
+    }
+    if (out) out.textContent = lines.join('\n');
+    await loadStatus();
+  } catch (e) {
+    if (out) out.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+function jobSummarySentence(job) {
+  if (!job) return '';
+  if (job.job_label) return job.job_label;
+  const dateJa = formatKaisaiDate(job.date);
+  const v = job.venue || '会場不明';
+  const r = job.round != null && job.round !== '' ? `${job.round}R` : '';
+  const name = job.race_name || '（名称未設定）';
+  return `${dateJa}　${v}　${r}　${name}`;
+}
+
+function buildProcessingQueueFallback(data) {
+  // 空配列も「キューに載っている処理対象が0件」の正当な応答。旧判定だと .length が 0 で
+  // jobs 末尾80件フォールバックに落ち、件数が大きくずれた。
+  if (Array.isArray(data.pending_queue)) return data.pending_queue;
+  if (Array.isArray(data.active_jobs)) return data.active_jobs;
+  const jobs = data.jobs || [];
+  const runn = jobs.filter(j => j.status === 'running');
+  const pend = jobs.filter(j => j.status === 'pending' || j.status === 'precheck');
+  return runn.concat(pend);
+}
+
+/** 実行中+待機の実件数（API の queue.processing_total があれば優先） */
+function processingQueueTotalJobs(data, pendingQ) {
+  const q = data.queue || {};
+  if (q.processing_total != null && q.processing_total !== '') {
+    const n = Number(q.processing_total);
+    if (!Number.isNaN(n)) return n;
+  }
+  return pendingQ.length;
+}
+
+function formatQueueEtaDuration(sec) {
+  const s = Math.max(0, Math.round(Number(sec) || 0));
+  if (s < 60) return `約 ${s} 秒`;
+  if (s < 3600) return `約 ${Math.round(s / 60)} 分`;
+  const h = Math.floor(s / 3600);
+  const m = Math.round((s % 3600) / 60);
+  if (m <= 0) return `約 ${h} 時間`;
+  return `約 ${h} 時間 ${m} 分`;
+}
+
+/** /api/scrape-queue/status の queue_eta を「いまの状況」に描画 */
+function renderQueueEta(data) {
+  const eta = data.queue_eta || {};
+  const bar = document.getElementById('queueEtaBar');
+  const main = document.getElementById('queueEtaMain');
+  const sub = document.getElementById('queueEtaSub');
+  if (!bar || !main || !sub) return;
+
+  bar.style.display = 'block';
+  const rem = Number(eta.remaining_jobs) || 0;
+
+  if (rem <= 0 && eta.available) {
+    main.textContent = '処理待ち・実行中のジョブはありません。';
+    sub.textContent = eta.note || '';
+    return;
+  }
+
+  if (!eta.available || eta.eta_seconds == null) {
+    main.textContent = '終了の目安は算出できません。';
+    sub.textContent = eta.note || '';
+    return;
+  }
+
+  const jst = eta.eta_finish_at_jst || '—';
+  main.textContent =
+    `残り ${rem} 件（実行中+待機） · 終了の目安 ${jst} 頃（JST） · あと ${formatQueueEtaDuration(eta.eta_seconds)}`;
+  sub.textContent = eta.note || '';
+}
+
+function renderQueueHourlyMaintenance(data) {
+  const el = document.getElementById('queueHourlyMaintainLine');
+  if (!el) return;
+  const m = data.queue_hourly_maintenance || {};
+  if (m.available && m.written_at) {
+    const t = new Date(m.written_at);
+    const ts = Number.isNaN(t.getTime()) ? m.written_at : t.toLocaleString('ja-JP');
+    if (m.ok !== false) {
+      const rq = m.requeued != null ? m.requeued : '—';
+      const cr = m.completed_removed != null ? m.completed_removed : '—';
+      el.textContent = `定期メンテ: 最終 ${ts} — 失敗→待機 ${rq} 件, 完了レコード削除 ${cr} 件（目安はこの直後の件数に同期）`;
+    } else {
+      el.textContent = `定期メンテ: 最終 ${ts} — エラー: ${m.error || '—'}`;
+    }
+  } else {
+    el.textContent =
+      '定期メンテ: 未記録（キューリーダープロセス起動時、約1時間ごとに失敗を待機へ戻し完了行を消して終了目安を更新します。SCRAPE_QUEUE_HOURLY_MAINTENANCE_SEC）';
+  }
+}
+
+/**
+ * 直近の /api/scrape-queue/status 成功時に「キューに処理すべきジョブがあったか」。
+ * progress API はプロセス内メモリのため一瞬空になったり別ワーカーだと常に空になりうる。
+ * このフラグが true のあいだは、進捗パネルを「空です」と上書きしない（スティッキー表示）。
+ */
+let _queueHasPendingOrRunning = false;
+/** 最後に描画した進捗カード HTML（スティッキー復元用） */
+let _lastProgressCardsHtml = '';
+
+function _computeQueueHasWork(data, pendingQ, currentJob) {
+  const q = data.queue || {};
+  const nPend = Number(q.pending) || 0;
+  const nPre = Number(q.precheck) || 0;
+  const nRun = Number(q.running) || 0;
+  const nProc = processingQueueTotalJobs(data, pendingQ);
+  return (
+    (pendingQ && pendingQ.length > 0) ||
+    !!currentJob ||
+    !!data.worker_transition ||
+    nPend + nPre + nRun > 0 ||
+    nProc > 0
+  );
+}
+
+async function pollQueueProgress() {
+  const meta = document.getElementById('queueProgressMeta');
+  const inner = document.getElementById('queueProgressInner');
+  if (!inner) return;
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/progress'));
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      if (meta) meta.textContent = '取得失敗';
+      if (_queueHasPendingOrRunning && _lastProgressCardsHtml) {
+        inner.innerHTML = _lastProgressCardsHtml;
+        if (meta) meta.textContent += ' · 前回の進捗表示を維持';
+      }
+      return;
+    }
+    const jobs = (data.jobs || []).slice().sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
+    if (!jobs.length) {
+      if (_queueHasPendingOrRunning) {
+        if (_lastProgressCardsHtml) {
+          inner.innerHTML = _lastProgressCardsHtml;
+          if (meta) meta.textContent = '詳細進捗: 一時的に未取得（キューに待機・実行中あり。別ワーカー／更新タイミングで空になることがあります）';
+        } else {
+          inner.innerHTML =
+            '<div class="queue-progress-card">' +
+            '<div class="queue-progress-card-title"><span style="color:var(--warn)">キューにジョブがあります</span></div>' +
+            '<div class="queue-progress-card-sub">この API は処理プロセス内の細かい進捗のみ返します。別 Uvicorn ワーカーや更新の瞬間は空に見えることがあります。上部の件数・「処理待ちキュー」を参照してください。</div>' +
+            '</div>';
+          if (meta) meta.textContent = '待機・実行中有（詳細バーは未取得）';
+        }
+        return;
+      }
+      inner.innerHTML = '<p class="queue-progress-empty">実行中のジョブ進捗はありません。ジョブ完了直後、または別 Uvicorn ワーカーが処理している場合は空になります。</p>';
+      if (meta) meta.textContent = '0 件';
+      _lastProgressCardsHtml = '';
+      return;
+    }
+    if (meta) meta.textContent = `${jobs.length} 件（このプロセス）`;
+    inner.innerHTML = jobs.map((j) => {
+      let pct = null;
+      let stepNote = '';
+      if (j.phase === 'date_all' && j.step_kind === 'races' && j.step_total > 0) {
+        pct = Math.min(100, (j.step_current / j.step_total) * 100);
+        stepNote = `${j.step_current}/${j.step_total} レース`;
+      } else if (j.task_total > 0 && j.task_index > 0) {
+        pct = Math.min(100, (j.task_index / j.task_total) * 100);
+        stepNote = `タスク ${j.task_index}/${j.task_total}`;
+      }
+      const indet = pct == null;
+      const barFill = indet
+        ? '<div class="queue-pbar-fill" style="width:38%"></div>'
+        : `<div class="queue-pbar-fill" style="width:${pct.toFixed(1)}%"></div>`;
+      const pctTxt = indet ? '—' : `${pct.toFixed(0)}%`;
+      const jid = escapeHtml(String(j.job_id || '').slice(-18));
+      const kind = escapeHtml(j.job_kind || '');
+      const tid = escapeHtml(j.target_id || '');
+      const msg = escapeHtml(j.message || '');
+      const sid = escapeHtml(j.step_id || '');
+      const sname = escapeHtml(j.step_name || '');
+      const phase = escapeHtml(j.phase || '');
+      const wid = j.worker_id != null ? `W${j.worker_id}` : '';
+      const subLine = [msg, sid && sid !== tid ? sid : '', sname].filter(Boolean).join(' · ');
+      const subTop = [phase ? `<span style="color:var(--warn)">${phase}</span>` : '', stepNote ? escapeHtml(stepNote) : ''].filter(Boolean).join(' · ');
+      const subBody = [subTop, subLine].filter(Boolean).join(subTop && subLine ? '<br>' : '');
+      return `
+        <div class="queue-progress-card">
+          <div class="queue-progress-card-title">
+            <span>${wid ? `<span style="color:var(--accent);font-weight:600;margin-right:4px">${escapeHtml(wid)}</span>` : ''}${kind} · <code>${tid}</code></span>
+            <span style="font-size:10px;color:var(--text-dim)">${jid}</span>
+          </div>
+          ${subBody ? `<div class="queue-progress-card-sub">${subBody}</div>` : ''}
+          <div class="queue-pbar-row">
+            <div class="queue-pbar-track${indet ? ' queue-pbar-indet' : ''}">${barFill}</div>
+            <div class="queue-pbar-pct">${pctTxt}</div>
+          </div>
+        </div>`;
+    }).join('');
+    _lastProgressCardsHtml = inner.innerHTML;
+  } catch (e) {
+    if (meta) meta.textContent = '通信エラー';
+    if (_queueHasPendingOrRunning && _lastProgressCardsHtml) {
+      inner.innerHTML = _lastProgressCardsHtml;
+    }
+  }
+}
+
+async function pollWorkerLogs() {
+  const pre = document.getElementById('workerLogPre');
+  const meta = document.getElementById('workerLogMeta');
+  const vp = document.getElementById('workerLogViewport');
+  if (!pre) return;
+  try {
+    const params = new URLSearchParams();
+    params.set('after', workerLogInitialized ? String(workerLogMaxId) : '-1');
+    params.set('limit', workerLogInitialized ? '250' : '500');
+    const resp = await fetch(apiUrl('/api/scrape-queue/worker-logs?') + params.toString());
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      if (meta) meta.textContent = '取得失敗: ' + (data.error || resp.status);
+      return;
+    }
+    const entries = data.entries || [];
+    let errN = 0;
+    let warnN = 0;
+    for (const e of entries) {
+      const lv = (e.level || '').toUpperCase();
+      if (lv === 'ERROR' || lv === 'CRITICAL') errN++;
+      else if (lv === 'WARNING') warnN++;
+    }
+    if (!workerLogInitialized) {
+      pre.textContent = entries.length ? entries.map(e => e.message || '').join('\n') + '\n' : '';
+      workerLogInitialized = true;
+    } else if (entries.length) {
+      pre.textContent += entries.map(e => e.message || '').join('\n') + '\n';
+    }
+    if (typeof data.max_id === 'number' && data.max_id >= 0) {
+      workerLogMaxId = data.max_id;
+    }
+    if (meta) {
+      const buf = data.total_buffered != null ? data.total_buffered : '—';
+      meta.textContent = `バッファ ${buf} 行 · 今回 +${entries.length} · ERROR ${errN} / WARN ${warnN} · cursor id=${workerLogMaxId}`;
+    }
+    const auto = document.getElementById('workerLogAutoscroll');
+    if (auto && auto.checked && vp) {
+      vp.scrollTop = vp.scrollHeight;
+    }
+  } catch (e) {
+    if (meta) meta.textContent = '通信エラー';
+  }
+}
+
+async function clearWorkerLogsUi() {
+  if (!confirm('サーバ上のワーカーログバッファを空にしますか？（実行中ジョブのログも消えます）')) return;
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/worker-logs/clear'), { method: 'POST' });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      alert(data.error || 'クリア失敗');
+      return;
+    }
+    workerLogMaxId = -1;
+    workerLogInitialized = false;
+    const pre = document.getElementById('workerLogPre');
+    if (pre) pre.textContent = '';
+    await pollWorkerLogs();
+  } catch (e) {
+    alert(e.message || e);
+  }
+}
+
+async function resumeScrapeQueue() {
+  const btn = document.getElementById('btnResumeQueue');
+  if (btn) btn.disabled = true;
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/resume'), { method: 'POST' });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      alert(data.error || '再開に失敗しました');
+      return;
+    }
+    await loadStatus();
+  } catch (e) {
+    alert(e.message || String(e));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function loadStatus() {
+  const banner = document.getElementById('statusErrorBanner');
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/status'));
+    const data = await readJsonResp(resp);
+
+    if (!resp.ok || data.error) {
+      if (banner) {
+        banner.style.display = 'block';
+        banner.textContent = 'ステータス取得に失敗しました: ' + (data.error || resp.statusText || String(resp.status));
+      }
+      return;
+    }
+    if (banner) banner.style.display = 'none';
+    updateLoadControlFromStatus(data);
+
+    const queue = data.queue || {};
+    const currentJob = data.current_job;
+    const currentJobs = data.current_jobs || (currentJob ? [currentJob] : []);
+    const activeWorkers =
+      data.active_workers != null ? data.active_workers : currentJobs.length;
+    const pendingQ = buildProcessingQueueFallback(data);
+    _queueHasPendingOrRunning = _computeQueueHasWork(data, pendingQ, currentJob);
+    const lockOn = !!data.is_running;
+    const tp = data.transport_pause || {};
+    const accessPaused = !!tp.active;
+
+    const tpb = document.getElementById('transportPauseBanner');
+    if (tpb) {
+      if (accessPaused) {
+        tpb.style.display = 'flex';
+        const rEl = document.getElementById('transportPauseReason');
+        const aEl = document.getElementById('transportPauseAt');
+        if (rEl) rEl.textContent = tp.reason || '（詳細なし）';
+        if (aEl) aEl.textContent = tp.paused_at ? ('停止時刻: ' + formatTime(tp.paused_at)) : '';
+      } else {
+        tpb.style.display = 'none';
+      }
+    }
+
+    // ── ヒーロー: いま何の日の何をしているか
+    const actBody = document.getElementById('activityBody');
+    if (accessPaused) {
+      const procN = processingQueueTotalJobs(data, pendingQ);
+      actBody.innerHTML = `
+        <div class="activity-primary" style="color:var(--warn)">アクセス系エラー検知のため一時停止中</div>
+        <div class="activity-secondary" style="margin-top:10px">新しいジョブは処理を開始しません。処理キュー（実行中+待機）<strong>${procN}</strong> 件です（うち待機カードは pending <strong>${queue.pending ?? '—'}</strong> 件のみ）。原因を解消してから上部の「再開」を押してください。</div>
+      `;
+      actBody.className = '';
+    } else if (currentJobs.length > 0) {
+      const workerLabel = activeWorkers > 1 ? `${activeWorkers}並列実行中` : '実行中';
+      let html = '';
+      for (const cj of currentJobs) {
+        const tags = (cj.tasks || cj.types || [])
+          .map(t => `<span class="type-tag">${escapeHtml(TYPE_LABELS[t] || t)}</span>`)
+          .join('');
+        const kind = cj.job_kind || 'race';
+        const tid = cj.target_id || cj.race_id || '';
+        const wid = cj.worker_id != null ? `W${cj.worker_id}` : '';
+        html += `
+          <div style="margin-bottom:8px${currentJobs.length > 1 ? ';padding:6px 0;border-bottom:1px solid var(--border)' : ''}">
+            <div class="activity-primary">${escapeHtml(wid)} ${escapeHtml(jobSummarySentence(cj))}</div>
+            <div class="activity-secondary">${escapeHtml(kind)} / ${escapeHtml(tid)}　· 開始 ${escapeHtml(formatTime(cj.started_at))}</div>
+            ${tags ? `<div class="type-tags">${tags}</div>` : ''}
+          </div>`;
+      }
+      actBody.innerHTML = `<div class="activity-primary" style="margin-bottom:6px;font-size:13px;color:var(--accent)">${escapeHtml(workerLabel)}</div>${html}`;
+      actBody.className = '';
+    } else if (data.worker_transition && !accessPaused) {
+      actBody.innerHTML = `
+        <div class="activity-primary" style="color:var(--accent)">ジョブの切り替え中（ワーカーは稼働中）</div>
+        <div class="activity-secondary" style="margin-top:10px">直前のジョブの保存が完了し、次のジョブを <code>running</code> にするまでの短い区間です。数秒以内に再表示されます。</div>
+      `;
+      actBody.className = '';
+    } else if (pendingQ.length > 0) {
+      const next = pendingQ[0];
+      const nk = next.job_kind || 'race';
+      const nt = next.target_id || next.race_id || '';
+      const procN = processingQueueTotalJobs(data, pendingQ);
+      const pendOnly = Number(queue.pending) || 0;
+      actBody.innerHTML = `
+        <div class="activity-primary">いまは待機中です（ワーカー起動待ちまたは直前までアイドル）</div>
+        <div class="activity-secondary" style="margin-top:10px;color:var(--text)">次に処理される予定: ${escapeHtml(jobSummarySentence(next))}</div>
+        <div class="activity-secondary">処理キュー合計 <strong>${procN}</strong> 件（実行中+待機）／待機カードは pending <strong>${pendOnly}</strong> 件のみ</div>
+      `;
+      actBody.className = '';
+    } else {
+      actBody.innerHTML = '<div class="activity-idle">キューにジョブはありません。未来レース・欠損補完・「任意タスク」・API（/api/scrape-queue/add-job）から投入できます。</div>';
+      actBody.className = 'activity-idle';
+    }
+
+    // ワーカー個別表示
+    const urgentLock = !!data.is_running_urgent;
+    const urgentPending = queue.urgent_pending || 0;
+    const wh = data.worker_health || {};
+    const workers = data.workers || [];
+
+    const wContainer = document.getElementById('workersContainer');
+    if (wContainer && workers.length > 0) {
+      let html = '';
+      for (const w of workers) {
+        const wid = w.worker_id;
+        const alive = w.alive;
+        const job = w.current_job;
+        let indicatorClass, text, textColor = '';
+        if (!alive && !accessPaused) {
+          indicatorClass = 'worker-dead';
+          text = `Worker ${wid}: 停止`;
+          textColor = '#ef4444';
+        } else if (accessPaused) {
+          indicatorClass = 'worker-paused';
+          text = `Worker ${wid}: 一時停止中`;
+        } else if (alive && job) {
+          indicatorClass = 'worker-running';
+          const label = job.job_label || job.target_id || job.job_id || '';
+          const started = job.started_at ? job.started_at.replace('T', ' ').substring(0, 19) : '';
+          text = `Worker ${wid}: 実行中 — ${label}`;
+          if (started) text += ` (${started}〜)`;
+        } else if (alive) {
+          indicatorClass = 'worker-running';
+          text = `Worker ${wid}: 待機中（次のジョブを取得中）`;
+        } else {
+          indicatorClass = 'worker-idle';
+          text = `Worker ${wid}: 待機中`;
+        }
+        html += `<div class="worker-status" style="margin-bottom:8px">
+          <div class="worker-indicator ${indicatorClass}"></div>
+          <div class="worker-text" style="${textColor ? 'color:' + textColor : ''}">${escapeHtml(text)}</div>
+        </div>`;
+      }
+      if (wh.crash_count > 0 || wh.last_error) {
+        let detail = '';
+        if (wh.crash_count > 0) detail += `再起動回数: ${wh.crash_count}`;
+        if (wh.last_error) {
+          const errAge = wh.last_error_ts ? Math.round((Date.now() / 1000 - wh.last_error_ts) / 60) : '?';
+          detail += (detail ? ' · ' : '') + `<span style="color:#ef4444">最終エラー (${errAge}分前): ${escapeHtml(wh.last_error).substring(0, 200)}</span>`;
+        }
+        html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;padding-left:24px">${detail}</div>`;
+      }
+      wContainer.innerHTML = html;
+    } else if (wContainer) {
+      const workerAlive = wh.alive !== false;
+      let indicatorClass = 'worker-idle', text = 'ワーカー: 待機中';
+      if (!workerAlive) { indicatorClass = 'worker-dead'; text = 'ワーカー: 停止'; }
+      else if (lockOn && currentJobs.length > 0) { indicatorClass = 'worker-running'; text = `ワーカー: ${activeWorkers}並列で取得中`; }
+      wContainer.innerHTML = `<div class="worker-status"><div class="worker-indicator ${indicatorClass}"></div><div class="worker-text">${escapeHtml(text)}</div></div>`;
+    }
+
+    const nPrecheckC = Number(queue.precheck) || 0;
+    const nPendingC = Number(queue.pending) || 0;
+    const hasPending = nPendingC + nPrecheckC > 0;
+    const canKickNormal = !lockOn && !accessPaused && hasPending;
+    const canKickUrgent = !urgentLock && !accessPaused && urgentPending > 0;
+    const showKick = canKickNormal || canKickUrgent;
+    const kickBtn = document.getElementById('btnKickWorker');
+    const kickBtnH = document.getElementById('btnKickWorkerHeader');
+    const kickRow = document.getElementById('workerKickRow');
+    if (kickBtn) kickBtn.className = 'btn-kick-worker' + (showKick ? ' show' : '');
+    if (kickBtnH) kickBtnH.style.display = showKick ? '' : 'none';
+    if (kickRow) kickRow.style.display = showKick ? '' : 'none';
+
+    document.getElementById('runningCount').textContent = queue.running || 0;
+    const pwh = document.getElementById('parallelWorkersHint');
+    if (pwh) {
+      const pw = data.scrape_queue_parallel_workers;
+      if (pw != null && pw !== '' && !Number.isNaN(Number(pw))) {
+        pwh.textContent = `同時ジョブ上限 ${pw}（.env または queue_load_settings.json；未保存の変更は「負荷調整」で確認）`;
+        pwh.style.display = '';
+      } else {
+        pwh.textContent = '';
+        pwh.style.display = 'none';
+      }
+    }
+    document.getElementById('pendingCount').textContent = nPrecheckC + nPendingC;
+    document.getElementById('completedCount').textContent = queue.completed || 0;
+    document.getElementById('failedCount').textContent = queue.failed || 0;
+
+    const pendingHint = document.getElementById('pendingCardHint');
+    if (pendingHint) {
+      const pt = queue.processing_total != null ? Number(queue.processing_total) : null;
+      const pd = nPrecheckC + nPendingC;
+      if (pt != null && !Number.isNaN(pt) && pt !== pd) {
+        pendingHint.style.display = 'block';
+        pendingHint.textContent = `実行中+待機 合計 ${pt} 件（下の「処理キュー」と同じ基準）`;
+      } else {
+        pendingHint.style.display = 'none';
+        pendingHint.textContent = '';
+      }
+    }
+
+    renderQueueEta(data);
+    renderQueueHourlyMaintenance(data);
+
+    // 実行中ジョブ詳細ブロック（複数ワーカー対応）
+    const currentJobFold = document.getElementById('currentJobFold');
+    if (currentJobs.length > 0) {
+      if (currentJobFold) currentJobFold.style.display = '';
+      const multi = currentJobs.length > 1;
+      let jobInfoHtml = '';
+      for (let wi = 0; wi < currentJobs.length; wi++) {
+        const cj = currentJobs[wi];
+        const jk = cj.job_kind || 'race';
+        const jt = cj.target_id || cj.race_id || '—';
+        const wBadge = multi
+          ? `<div class="job-info-worker-label"><span class="wid-badge">WORKER ${cj.worker_id ?? wi}</span></div>`
+          : '';
+        jobInfoHtml += `<div class="job-info-worker">${wBadge}<div class="job-info-grid">
+          <div class="job-info-item">
+            <div class="job-info-label">種別</div>
+            <div class="job-info-value">${escapeHtml(jk)}</div>
+          </div>
+          <div class="job-info-item">
+            <div class="job-info-label">ターゲット</div>
+            <div class="job-info-value" style="font-family:monospace;font-size:11px">${escapeHtml(jt)}</div>
+          </div>
+          <div class="job-info-item">
+            <div class="job-info-label">ラベル</div>
+            <div class="job-info-value">${escapeHtml(cj.job_label || jobSummarySentence(cj))}</div>
+          </div>
+          <div class="job-info-item">
+            <div class="job-info-label">タスク</div>
+            <div class="job-info-value">${escapeHtml(formatJobTasksDisplay(cj))}</div>
+          </div>
+          <div class="job-info-item">
+            <div class="job-info-label">日付・会場</div>
+            <div class="job-info-value">${escapeHtml(formatKaisaiDate(cj.date))} ${escapeHtml(cj.venue || '')} ${escapeHtml(String(cj.round ?? ''))}R</div>
+          </div>
+          <div class="job-info-item">
+            <div class="job-info-label">開始時刻</div>
+            <div class="job-info-value">${escapeHtml(formatTime(cj.started_at))}</div>
+          </div>
+        </div></div>`;
+      }
+      document.getElementById('currentJobInfo').innerHTML = jobInfoHtml;
+    } else {
+      if (currentJobFold) currentJobFold.style.display = 'none';
+    }
+
+    // 待機キュー（種別+タスクでグループ化）
+    const pendingFold = document.getElementById('pendingFold');
+    const pendBody = document.getElementById('pendingTableBody');
+    const pendTitle = document.getElementById('pendingQueueTitleCount');
+    if (pendingQ.length > 0) {
+      if (pendingFold) pendingFold.style.display = '';
+      const procTotal = processingQueueTotalJobs(data, pendingQ);
+      let pendTitleText = `（${procTotal}件）`;
+      if (procTotal > pendingQ.length) {
+        pendTitleText = `（${procTotal}件・表は先頭${pendingQ.length}件分）`;
+      }
+      pendTitle.textContent = pendTitleText;
+
+      // 種別+タスクでグループ化
+      const grouped = new Map();
+      let positionCounter = 0;
+      pendingQ.forEach((job) => {
+        const jk = job.job_kind || 'race';
+        const tasks = (job.tasks || job.types || []).slice().sort().join(',');
+        const key = `${jk}::${tasks}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            kind: jk,
+            tasks: job.tasks || job.types || [],
+            jobs: [],
+            firstStatus: job.status,
+            firstQueuedAt: job.queued_at,
+            position: positionCounter++,
+          });
+        }
+        grouped.get(key).jobs.push(job);
+      });
+
+      // グループを表示
+      const rows = [];
+      for (const [key, group] of grouped) {
+        const count = group.jobs.length;
+        const nRun = group.jobs.filter((j) => j.status === 'running').length;
+        const nPen = group.jobs.filter((j) => j.status === 'pending').length;
+        let st = '';
+        if (nRun > 0 && nPen > 0) {
+          st = `実行中 ${nRun} · 待機 ${nPen}`;
+        } else if (nRun > 0) {
+          st = `実行中 ${nRun}`;
+        } else {
+          st = `待機 ${nPen}`;
+        }
+        const stClass = nRun > 0 ? 'var(--accent)' : 'var(--warn)';
+        const tasksDisplay = formatJobTasksDisplay(group.jobs[0]);
+
+        rows.push(`
+        <tr>
+          <td style="font-weight:700;color:var(--warn)">${group.position + 1}</td>
+          <td style="font-weight:600;color:${stClass}">${escapeHtml(st)}</td>
+          <td>${escapeHtml(group.kind)}</td>
+          <td style="font-size:10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(tasksDisplay)}">${escapeHtml(tasksDisplay)}</td>
+          <td style="font-weight:700;color:#fff">${count}件</td>
+          <td style="font-size:10px">${escapeHtml(formatTime(group.firstQueuedAt))}</td>
+        </tr>`);
+      }
+      pendBody.innerHTML = rows.join('');
+    } else {
+      if (pendingFold) pendingFold.style.display = 'none';
+      pendTitle.textContent = '';
+    }
+
+    // 失敗ジョブ（一覧＋一括）
+    const failedList = data.failed_jobs || [];
+    const failedFold = document.getElementById('failedFold');
+    const failedBody = document.getElementById('failedTableBody');
+    if (failedList.length > 0) {
+      if (failedFold) failedFold.style.display = '';
+      failedBody.innerHTML = failedList.map((job) => {
+        const jid = job.job_id || '';
+        const jk = job.job_kind || 'race';
+        const jtid = job.target_id || job.race_id || '—';
+        const err = (job.error || '').replace(/\s+/g, ' ').trim();
+        const errShort = err.length > 80 ? err.slice(0, 80) + '…' : err;
+        const btns = jid
+          ? `<button type="button" class="btn-failed-mini requeue js-failed-requeue" data-job-id="${escapeHtml(jid)}">待機に戻す</button><button type="button" class="btn-failed-mini remove js-failed-remove" data-job-id="${escapeHtml(jid)}">削除</button>`
+          : '—';
+        return `<tr>
+          <td style="font-size:10px;font-family:monospace" title="${escapeHtml(jid)}">${escapeHtml((jid).slice(-14))}</td>
+          <td>${escapeHtml(jk)}</td>
+          <td style="font-size:10px;font-family:monospace">${escapeHtml(jtid)}</td>
+          <td style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(formatJobTasksDisplay(job))}">${escapeHtml(formatJobTasksDisplay(job))}</td>
+          <td class="failed-err-cell" title="${escapeHtml(err)}">${escapeHtml(errShort || '—')}</td>
+          <td style="font-size:10px">${escapeHtml(formatTime(job.completed_at))}</td>
+          <td style="white-space:nowrap">${btns}</td>
+        </tr>`;
+      }).join('');
+    } else {
+      if (failedFold) failedFold.style.display = 'none';
+      failedBody.innerHTML = '';
+    }
+
+    // ジョブ履歴テーブル
+    const jobs = data.jobs || [];
+    const tbody = document.getElementById('jobsTableBody');
+    if (jobs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="empty">ジョブがありません</td></tr>';
+    } else {
+      tbody.innerHTML = jobs.map(job => {
+        const statusClass = {
+          precheck: 'badge-pending',
+          pending: 'badge-pending',
+          running: 'badge-running',
+          completed: 'badge-completed',
+          failed: 'badge-failed'
+        }[job.status] || 'badge-pending';
+        const jk = job.job_kind || 'race';
+        const jtid = job.target_id || job.race_id || '—';
+        const jid = job.job_id || '';
+        const op =
+          job.status === 'failed' && jid
+            ? `<button type="button" class="btn-failed-mini requeue js-failed-requeue" data-job-id="${escapeHtml(jid)}">待機に戻す</button><button type="button" class="btn-failed-mini remove js-failed-remove" data-job-id="${escapeHtml(jid)}">削除</button>`
+            : '—';
+
+        return `<tr>
+          <td style="font-size:10px;font-family:monospace">${escapeHtml((job.job_id || '').slice(-12))}</td>
+          <td>${escapeHtml(jk)}</td>
+          <td style="font-size:10px;font-family:monospace">${escapeHtml(jtid)}</td>
+          <td style="font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(formatJobTasksDisplay(job))}">${escapeHtml(formatJobTasksDisplay(job))}</td>
+          <td><span class="status-badge ${statusClass}">${escapeHtml(translateStatus(job.status))}</span></td>
+          <td style="font-size:10px">${escapeHtml(formatTime(job.queued_at))}</td>
+          <td style="font-size:10px">${escapeHtml(formatTime(job.started_at))}</td>
+          <td style="font-size:10px">${escapeHtml(formatTime(job.completed_at))}</td>
+          <td style="white-space:nowrap;font-size:10px">${op}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // status と progress のずれ（ポーリング周期差）で進捗だけが先に空になるのを抑える
+    void pollQueueProgress();
+  } catch (e) {
+    console.error('ステータス取得エラー:', e);
+    const b = document.getElementById('statusErrorBanner');
+    if (b) {
+      b.style.display = 'block';
+      b.textContent = '通信エラー: ' + (e.message || String(e));
+    }
+  }
+}
+
+function formatTime(isoString) {
+  if (!isoString) return '-';
+  const d = new Date(isoString);
+  return d.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function translateStatus(status) {
+  const map = {
+    precheck: '存在確認中',
+    pending: '待機中',
+    running: '実行中',
+    completed: '完了',
+    failed: '失敗'
+  };
+  return map[status] || status;
+}
+
+async function clearCompleted() {
+  if (!confirm('完了・失敗したジョブをすべてクリアしますか？（アーカイブも含む）')) return;
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/clear'), { method: 'POST' });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      alert('クリア失敗: ' + (data.error || resp.statusText));
+      return;
+    }
+    await loadStatus();
+  } catch (e) {
+    alert('クリア失敗: ' + e.message);
+  }
+}
+
+async function stopAndClearQueue() {
+  if (
+    !confirm(
+      '待機・実行中・完了・失敗のジョブをすべて削除します。\n\n' +
+        '実行中のジョブは 1 件分が終わるまで進むことがあります。\n' +
+        '削除後は一時停止は自動で解除され、あとから追加したジョブはそのまま消化されます。\n\n' +
+        '実行しますか？'
+    )
+  ) {
+    return;
+  }
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/stop-and-clear'), { method: 'POST' });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      alert('失敗: ' + (data.error || resp.statusText || String(resp.status)));
+      return;
+    }
+    const n = data.removed_jobs != null ? data.removed_jobs : '—';
+    alert('キューを全消去しました（削除前 ' + n + ' 件）。一時停止は解除済みです。');
+    await loadStatus();
+  } catch (e) {
+    alert('通信エラー: ' + (e.message || e));
+  }
+}
+
+async function recoverQueue() {
+  if (!confirm('キューが停止している場合の緊急復旧を実行します。\n\n' +
+    '・running状態の孤児ジョブをpendingに戻します\n' +
+    '・デッドプロセスのロックファイルを削除します\n\n' +
+    '実行しますか？')) {
+    return;
+  }
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/recover'), { method: 'POST' });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      alert('失敗: ' + (data.error || resp.statusText || String(resp.status)));
+      return;
+    }
+    const msg = data.message || 'キューを復旧しました';
+    const details = [];
+    if (data.requeued_jobs > 0) details.push(`${data.requeued_jobs}件のジョブを待機に戻しました`);
+    if (data.lock_removed) details.push('ロックファイルを削除しました');
+    alert(msg + (details.length > 0 ? '\n\n' + details.join('\n') : ''));
+    await loadStatus();
+  } catch (e) {
+    alert('通信エラー: ' + (e.message || e));
+  }
+}
+
+async function kickWorker() {
+  const btn = document.getElementById('btnKickWorker');
+  const btnH = document.getElementById('btnKickWorkerHeader');
+  if (btn) btn.disabled = true;
+  if (btnH) btnH.disabled = true;
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/kick'), { method: 'POST' });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      alert('起動失敗: ' + (data.error || resp.statusText || String(resp.status)));
+      return;
+    }
+    if (data.status === 'no_jobs') {
+      alert(data.message || '処理待ちのジョブがありません');
+    } else if (data.status === 'already_running') {
+      alert(data.message || 'ワーカーは既に実行中です');
+    } else {
+      await loadStatus();
+    }
+  } catch (e) {
+    alert('通信エラー: ' + (e.message || e));
+  } finally {
+    if (btn) btn.disabled = false;
+    if (btnH) btnH.disabled = false;
+  }
+}
+
+async function requeueAllFailed() {
+  if (!confirm('失敗したジョブをすべて「待機中」に戻し、ワーカーが再実行できるようにしますか？')) return;
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/failed/requeue'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ all: true }),
+    });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      alert('失敗: ' + (data.error || resp.statusText));
+      return;
+    }
+    const n = data.requeued ?? 0;
+    if (n === 0) {
+      alert('失敗ステータスのジョブはありませんでした（再キュー 0 件）。');
+    } else {
+      alert(`待機に戻したジョブ: ${n} 件。ワーカーを起動しました。`);
+    }
+    await loadStatus();
+  } catch (e) {
+    alert('通信エラー: ' + (e.message || e));
+  }
+}
+
+async function removeAllFailed() {
+  if (!confirm('失敗したジョブをキューからすべて削除しますか？（元に戻せません）')) return;
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/failed/remove'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ all: true }),
+    });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      alert('失敗: ' + (data.error || resp.statusText));
+      return;
+    }
+    await loadStatus();
+  } catch (e) {
+    alert('通信エラー: ' + (e.message || e));
+  }
+}
+
+function bindFailedJobActionClicks() {
+  const root = document.querySelector('.content');
+  if (!root || root.dataset.failedActionsBound === '1') return;
+  root.dataset.failedActionsBound = '1';
+  root.addEventListener('click', async (e) => {
+    const rq = e.target.closest('.js-failed-requeue');
+    const rm = e.target.closest('.js-failed-remove');
+    const el = rq || rm;
+    if (!el) return;
+    const jid = el.getAttribute('data-job-id');
+    if (!jid) return;
+    e.preventDefault();
+    if (rm && !confirm('この失敗ジョブをキューから削除しますか？')) return;
+    const path = rq ? '/api/scrape-queue/failed/requeue' : '/api/scrape-queue/failed/remove';
+    try {
+      const resp = await fetch(apiUrl(path), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: jid }),
+      });
+      const data = await readJsonResp(resp);
+      if (!resp.ok || data.error) {
+        alert('失敗: ' + (data.error || resp.statusText));
+        return;
+      }
+      await loadStatus();
+    } catch (err) {
+      alert('通信エラー: ' + (err.message || err));
+    }
+  });
+}
+
+(function initDryRunLink() {
+  const a = document.getElementById('dryRunUrlLink');
+  if (a) {
+    const u = window.location.origin + apiUrl('/api/scrape-queue/enqueue-missing?dry_run=1&limit=50');
+    a.href = u;
+    a.textContent = u;
+  }
+  const rl = document.getElementById('resultLapDryRunUrlLink');
+  if (rl) {
+    const u2 = window.location.origin + apiUrl('/api/scrape-queue/enqueue-missing-race-result-lap?start_date=20240101&limit=500');
+    rl.href = u2;
+    rl.textContent = u2;
+  }
+})();
+
+function _ymdCompactToIso(compact) {
+  if (!compact || compact.length !== 8) return null;
+  return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`;
+}
+
+async function refreshRaceListsTopRefreshStatus() {
+  const st = document.getElementById('rlTopStatus');
+  if (!st) return;
+  try {
+    const resp = await fetch(apiUrl('/api/race-lists/refresh-top/status'));
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      st.textContent = 'エラー: ' + (data.error || resp.statusText || String(resp.status));
+      return;
+    }
+    const lines = [];
+    if (data.running) lines.push('● 実行中（API プロセス内バックグラウンド）');
+    else lines.push('○ 停止');
+    if (data.started_at_jst) lines.push(`開始(JST): ${data.started_at_jst}`);
+    if (data.range_label) lines.push(`範囲: ${data.range_label}`);
+    if (data.status) lines.push(`状態: ${data.status}`);
+    const p = data.progress || {};
+    if (p.message) lines.push(p.message);
+    if (p.total_days > 0) {
+      lines.push(`進捗: ${p.completed_days ?? 0} / ${p.total_days} 日`);
+      if (p.current_date) lines.push(`処理中の日付: ${p.current_date}`);
+    }
+    if (data.result && typeof data.result === 'object') {
+      const r = data.result;
+      lines.push(
+        `結果: 保存 ${r.days_saved ?? 0} 日 · 開催なし ${r.days_empty ?? 0} 日 · エラー ${r.days_errors ?? 0} 日` +
+          (r.days_dry_would_save != null ? ` · dry-run なら保存予定 ${r.days_dry_would_save} 日` : '')
+      );
+    }
+    if (data.status === 'error' && data.error) lines.push('エラー: ' + data.error);
+    st.textContent = lines.filter(Boolean).join('\n');
+  } catch (e) {
+    st.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+async function startRaceListsTopRefresh(dryRun) {
+  const out = document.getElementById('rlTopResult');
+  const dp = parseInt(document.getElementById('rlTopDaysPast').value, 10);
+  const df = parseInt(document.getElementById('rlTopDaysFuture').value, 10);
+  const sl = parseFloat(document.getElementById('rlTopSleep').value);
+  const body = {
+    dry_run: !!dryRun,
+    days_past: Number.isFinite(dp) ? dp : 14,
+    days_future: Number.isFinite(df) ? df : 21,
+    sleep: Number.isFinite(sl) ? sl : 0.35,
+  };
+  const msg = dryRun
+    ? 'dry-run で、保存せず「保存予定日数」だけ集計します。よろしいですか？'
+    : `過去 ${body.days_past} 日〜未来 ${body.days_future} 日を netkeiba トップ経由で取得し、レースがある日の race_lists を上書きします。よろしいですか？`;
+  if (!confirm(msg)) return;
+  if (out) out.textContent = '開始リクエスト送信中…';
+  try {
+    const resp = await fetch(apiUrl('/api/race-lists/refresh-top/start'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      if (out) out.textContent = 'エラー: ' + (data.error || resp.statusText || String(resp.status));
+      await refreshRaceListsTopRefreshStatus();
+      return;
+    }
+    if (out) out.textContent = data.message || '開始しました。下の状態を更新してください。';
+    await refreshRaceListsTopRefreshStatus();
+  } catch (e) {
+    if (out) out.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+async function refreshRaceListsBackfillStatus() {
+  const st = document.getElementById('rlbfStatus');
+  if (!st) return;
+  const logEl = document.getElementById('rlbfLog');
+  try {
+    const resp = await fetch(apiUrl('/api/race-lists-backfill/status'));
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      if (st) st.textContent = 'エラー: ' + (data.error || resp.statusText || String(resp.status));
+      return;
+    }
+    const lines = [
+      data.running ? '● 実行中' : '○ 停止',
+      data.pid != null ? `PID: ${data.pid}` : 'PID: —',
+      data.started_at_jst ? `開始(JST): ${data.started_at_jst}` : '',
+      data.log_path ? `ログ: ${data.log_path}` : '',
+      data.stale_lock_cleared ? '（終了済みプロセスの lock を削除しました）' : '',
+    ].filter(Boolean);
+    if (st) st.textContent = lines.join('\n');
+    if (logEl) {
+      if (data.log_tail && data.log_tail.length) {
+        logEl.style.display = 'block';
+        logEl.textContent = data.log_tail.join('\n');
+        logEl.scrollTop = logEl.scrollHeight;
+      } else {
+        logEl.textContent = '';
+        logEl.style.display = data.running ? 'block' : 'none';
+      }
+    }
+  } catch (e) {
+    if (st) st.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+async function runRaceListsBackfill(dryRun) {
+  if (!document.getElementById('rlbfStart')) return;
+  const out = document.getElementById('rlbfResult');
+  const startEl = document.getElementById('rlbfStart');
+  const endEl = document.getElementById('rlbfEnd');
+  const startC = datePickerToYmd(startEl);
+  const endC = datePickerToYmd(endEl);
+  const sleepEl = document.getElementById('rlbfSleep');
+  const sleep = sleepEl ? parseFloat(sleepEl.value) : 1.2;
+  const force = document.getElementById('rlbfForce') && document.getElementById('rlbfForce').checked;
+  const acceptImplausible = document.getElementById('rlbfAcceptImp') && document.getElementById('rlbfAcceptImp').checked;
+  const conservativeEl = document.getElementById('rlbfConservative');
+  const conservative = !conservativeEl || conservativeEl.checked;
+
+  const body = {
+    dry_run: dryRun,
+    sleep: Number.isFinite(sleep) ? sleep : 1.2,
+    force: !!force,
+    accept_implausible: !!acceptImplausible,
+    conservative,
+  };
+  const isoStart = _ymdCompactToIso(startC);
+  if (isoStart) body.start = isoStart;
+  const isoEnd = _ymdCompactToIso(endC);
+  if (isoEnd) body.end = isoEnd;
+
+  if (!dryRun && !confirm('race_lists バックフィルをバックグラウンドで開始します。よろしいですか？')) return;
+
+  if (out) out.textContent = '送信中…';
+  try {
+    const resp = await fetch(apiUrl('/api/race-lists-backfill/start'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      if (out) out.textContent = 'エラー: ' + (data.error || resp.statusText || String(resp.status));
+      await refreshRaceListsBackfillStatus();
+      return;
+    }
+    if (out) out.textContent = `開始しました pid=${data.pid} log=${data.log_path || '—'}`;
+    await refreshRaceListsBackfillStatus();
+  } catch (e) {
+    if (out) out.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+async function runCushionPreprocessedSync(dryRun) {
+  const yearsEl = document.getElementById('cushionSyncYears');
+  const localEl = document.getElementById('cushionSyncLocal');
+  const pre = document.getElementById('cushionSyncResult');
+  if (!yearsEl) return;
+  const years = (yearsEl.value || '').trim();
+  const updateLocal = !!(localEl && localEl.checked);
+  if (!dryRun && !confirm('GCS の jra_cushion（年別 JSON）と、必要ならローカル cushion_values.json を更新します。実行しますか？')) return;
+  if (pre) {
+    pre.style.display = 'block';
+    pre.textContent = '処理中…';
+  }
+  try {
+    const body = { dry_run: dryRun, update_local_json: updateLocal };
+    if (years) body.years = years;
+    const resp = await fetch(apiUrl('/api/cushion/admin/sync-preprocessed'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      if (pre) pre.textContent = 'エラー: ' + (data.error || data.detail || resp.statusText || String(resp.status));
+      return;
+    }
+    if (pre) pre.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    if (pre) pre.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+async function stopRaceListsBackfill() {
+  if (!document.getElementById('rlbfResult')) return;
+  if (!confirm('race_lists バックフィルに SIGTERM を送りますか？')) return;
+  const out = document.getElementById('rlbfResult');
+  try {
+    const resp = await fetch(apiUrl('/api/race-lists-backfill/stop'), { method: 'POST' });
+    const data = await readJsonResp(resp);
+    if (!resp.ok && data.error) {
+      if (out) out.textContent = 'エラー: ' + data.error;
+      return;
+    }
+    if (out) out.textContent = data.message || data.status || JSON.stringify(data);
+    await refreshRaceListsBackfillStatus();
+  } catch (e) {
+    if (out) out.textContent = '通信エラー: ' + (e.message || e);
+  }
+}
+
+async function initQueuePage() {
+  bindFailedJobActionClicks();
+  const mk = document.getElementById('manualKind');
+  if (mk) mk.addEventListener('change', () => {
+    updateManualManualUi();
+    rebuildManualTaskChecks();
+  });
+  initCatalogFromEmbedded();
+  await loadTaskCatalog();
+  await loadStatus();
+  if (IS_DEV_QUEUE) { await loadLocalMirrorConfigForm(); }
+  await pollQueueProgress();
+  await pollWorkerLogs();
+  await refreshRaceListsBackfillStatus();
+  await refreshRaceListsTopRefreshStatus();
+}
+initQueuePage();
+
+// 2秒ごとに自動更新（実行中ジョブの把握しやすさ優先）
+setInterval(loadStatus, 2000);
+setInterval(pollQueueProgress, 1500);
+setInterval(pollWorkerLogs, 1800);
+setInterval(refreshRaceListsBackfillStatus, 6000);
+setInterval(refreshRaceListsTopRefreshStatus, 6000);
+</script>
+</body>
+</html>

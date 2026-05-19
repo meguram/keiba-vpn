@@ -55,8 +55,11 @@ _scheduler_state: dict[str, Any] = {
 _scheduler_lock = threading.Lock()
 
 # ── スクレイピングキューワーカー ──────────────────────
-_queue_worker_thread: threading.Thread | None = None
+# 各スロットのスレッドを保持（インデックス = slot_id）
+_queue_worker_threads: list[threading.Thread] = []
 _queue_worker_stop = threading.Event()
+# 新規ジョブ追加時に set() → 待機中スロットを即起床させる
+_queue_new_job_event = threading.Event()
 # マルチワーカー時は flock で1プロセスだけがキューループを回す（JSON 競合防止）
 _queue_runner_leader_fh = None
 _queue_is_leader = False
@@ -96,6 +99,10 @@ def _write_worker_health(*, heartbeat: float = 0, error: str = "", error_ts: flo
         if heartbeat:
             data["heartbeat"] = heartbeat
             data["pid"] = os.getpid()
+            # スロット稼働状況を記録
+            live = sum(1 for t in _queue_worker_threads if t is not None and t.is_alive())
+            data["slot_count"] = len(_queue_worker_threads)
+            data["live_slots"] = live
         if error:
             data["last_error"] = error
             data["last_error_ts"] = error_ts
@@ -150,19 +157,17 @@ def get_worker_health() -> dict:
         "last_error": data.get("last_error"),
         "last_error_ts": data.get("last_error_ts"),
         "crash_count": data.get("crash_count", 0),
+        "slot_count": data.get("slot_count", 0),
+        "live_slots": data.get("live_slots", 0),
     }
 
 
-def _ensure_worker_thread():
-    """ワーカースレッドが死んでいたら再起動する。リーダーでなくてもリーダー権を奪取して起動する。"""
-    global _queue_worker_thread, _queue_is_leader
+def _ensure_worker_slots() -> None:
+    """停止しているスロットを検出して再起動する。リーダーでなければリーダー権を奪取してから実行。"""
+    global _queue_is_leader, _queue_worker_threads
     if _queue_worker_stop.is_set():
         return
-    if _queue_is_leader:
-        thr = _queue_worker_thread
-        if thr is not None and thr.is_alive():
-            return
-    else:
+    if not _queue_is_leader:
         health = get_worker_health()
         if health.get("alive"):
             return
@@ -171,37 +176,69 @@ def _ensure_worker_thread():
         _queue_is_leader = True
         logger.warning("前リーダーが停止したため、このプロセスが新リーダーになります")
 
-    health = get_worker_health()
-    cc = health.get("crash_count", 0) + 1
-    logger.warning(
-        "キューワーカースレッドが停止していたため再起動します (通算クラッシュ: %d)", cc,
-    )
-    _write_worker_health(crash_count=cc)
-    _queue_worker_thread = threading.Thread(
-        target=_queue_worker_loop, daemon=True, name="queue-worker"
-    )
-    _queue_worker_thread.start()
+    from src.scraper.job_queue import _queue_parallel_workers
+    n_target = _queue_parallel_workers()
+
+    # スロットリストが足りなければ拡張
+    while len(_queue_worker_threads) < n_target:
+        _queue_worker_threads.append(None)  # type: ignore[arg-type]
+
+    for slot_id in range(n_target):
+        t = _queue_worker_threads[slot_id]
+        if t is not None and t.is_alive():
+            continue
+        health = get_worker_health()
+        cc = health.get("crash_count", 0) + 1
+        logger.warning("スロット[%d] 停止 — 再起動 (クラッシュ累計: %d)", slot_id, cc)
+        _write_worker_health(crash_count=cc)
+        new_t = threading.Thread(
+            target=_queue_slot_worker, args=(slot_id,),
+            daemon=True, name=f"queue-worker-{slot_id}",
+        )
+        new_t.start()
+        _queue_worker_threads[slot_id] = new_t
 
 
-def _queue_worker_loop():
-    """スクレイピングキューを処理するワーカー（クラッシュ耐性強化版）"""
+def _queue_slot_worker(slot_id: int) -> None:
+    """
+    キュースロットワーカー。SCRAPE_QUEUE_PARALLEL 本並列起動する。
+    各スロットが独立して claim_next_pending_job → _process_claimed_job を繰り返す。
+    スロット 0 がストール回復・ストレージプレチェックを担当する。
+    """
     from src.scraper.job_queue import ScrapeJobQueue
     from src.scraper.scrape_access_pause import read_access_pause, clear_access_pause
+    from src.scraper.queue_worker_log import ensure_queue_worker_log_handler, mark_queue_worker_active
 
-    _worker_log = logging.getLogger("queue.worker")
-    _worker_log.setLevel(logging.INFO)
-    if not _worker_log.handlers:
+    log = logging.getLogger("queue.worker")
+    log.setLevel(logging.INFO)
+    if not log.handlers:
         _h = logging.StreamHandler()
         _h.setFormatter(standard_log_formatter())
-        _worker_log.addHandler(_h)
-    _worker_log.info("スクレイピングキューワーカー起動")
+        log.addHandler(_h)
+    ensure_queue_worker_log_handler()
 
     queue = ScrapeJobQueue()
+
+    if slot_id == 0:
+        log.info("キュースロット[0] 起動 — ストール回復・プレチェック実行")
+        queue.requeue_stale_running_jobs(assume_lock_holder=False)
+        queue._run_storage_precheck()
+    else:
+        # スロット間の起動タイミングをずらして同時アクセスを回避
+        _queue_worker_stop.wait(timeout=slot_id * 0.3)
+
+    mark_queue_worker_active(True)
+    _write_worker_health(heartbeat=_time.time())
+    log.info("キュースロット[%d] 待機開始", slot_id)
+
+    # アクセスエラー時にこのスロットの現在ジョブを中断するためのイベント
+    slot_stop = threading.Event()
 
     try:
         while not _queue_worker_stop.is_set():
             _write_worker_health(heartbeat=_time.time())
             try:
+                # ── アクセス一時停止チェック ──
                 pause = read_access_pause()
                 if pause.get("active"):
                     paused_at = pause.get("paused_at", "")
@@ -213,49 +250,47 @@ def _queue_worker_loop():
                         elapsed = _AUTO_RESUME_DELAY + 1
 
                     if elapsed >= _AUTO_RESUME_DELAY:
-                        _worker_log.info(
-                            "アクセス一時停止から %.0f秒経過 — 自動復帰します", elapsed)
-                        clear_access_pause()
+                        if slot_id == 0:
+                            log.info("アクセス停止から %.0f 秒経過 — 自動復帰します", elapsed)
+                            clear_access_pause()
+                            queue.requeue_stale_running_jobs(assume_lock_holder=False)
+                        else:
+                            _queue_worker_stop.wait(timeout=3)
                     else:
                         remain = _AUTO_RESUME_DELAY - elapsed
                         if _queue_worker_stop.wait(timeout=min(remain, 30)):
                             break
-                        continue
+                    continue
 
-                queue.requeue_stale_running_jobs(assume_lock_holder=False)
+                # スロット 0: precheck ジョブを pending/completed へ移行
+                if slot_id == 0:
+                    queue._run_storage_precheck()
 
-                next_job = queue.get_next_job()
-                if next_job:
-                    if queue.is_locked():
-                        if _queue_worker_stop.wait(timeout=2):
-                            break
-                        continue
-                    _worker_log.info(
-                        "ジョブ処理開始: %s",
-                        next_job.get("job_label")
-                        or next_job.get("target_id")
-                        or next_job.get("race_id")
-                        or "?",
+                # ── ジョブ取得・実行 ──
+                slot_stop.clear()
+                job = queue.claim_next_pending_job()
+                if job:
+                    log.info(
+                        "[slot-%d] ジョブ開始: %s",
+                        slot_id,
+                        job.get("job_label") or job.get("target_id") or "?",
                     )
-                    queue.process_queue()
+                    queue._process_claimed_job(job, slot_stop, start_delay_sec=0)
                     invalidate_status_cache()
                 else:
-                    if _queue_worker_stop.wait(timeout=30):
-                        break
+                    # キューが空 — 新ジョブ通知か最大5秒後に再試行
+                    _queue_new_job_event.wait(timeout=5)
+                    _queue_new_job_event.clear()
+
             except Exception as e:
                 msg = f"{type(e).__name__}: {e}"
                 _write_worker_health(error=msg, error_ts=_time.time())
-                _worker_log.error("ワーカーループ内エラー: %s", e, exc_info=True)
+                log.error("[slot-%d] エラー: %s", slot_id, e, exc_info=True)
                 if _queue_worker_stop.wait(timeout=10):
                     break
-    except BaseException as e:
-        msg = f"FATAL {type(e).__name__}: {e}"
-        _write_worker_health(error=msg, error_ts=_time.time())
-        _worker_log.critical(
-            "ワーカースレッドが致命的エラーで停止します: %s", e, exc_info=True)
-        raise
     finally:
-        _worker_log.info("スクレイピングキューワーカー終了")
+        mark_queue_worker_active(False)
+        log.info("[slot-%d] 終了", slot_id)
 
 
 STRUCTURE_CHECK_HOUR_JST = 6
@@ -351,7 +386,7 @@ def _try_acquire_queue_runner_leader() -> bool:
 
 @asynccontextmanager
 async def lifespan(app):
-    global _scheduler_thread, _queue_worker_thread, _queue_runner_leader_fh, _disk_cache_cleanup_thread, _queue_maintain_thread, _logs_retention_thread, _log_retention_leader_fh
+    global _scheduler_thread, _queue_worker_threads, _queue_runner_leader_fh, _disk_cache_cleanup_thread, _queue_maintain_thread, _logs_retention_thread, _log_retention_leader_fh
 
     # 構造チェックスケジューラ起動
     _scheduler_stop.clear()
@@ -366,20 +401,32 @@ async def lifespan(app):
     _disk_cache_cleanup_thread.start()
     logger.info("data/cache クリーンアップスレッド起動")
 
+    # ワーカーログリングハンドラを起動時に登録（process_queue 前でも有効にするため）
+    from src.scraper.queue_worker_log import ensure_queue_worker_log_handler, get_worker_logs
+    ensure_queue_worker_log_handler()
+
     # スクレイピングキューワーカー（マルチワーカー時はリーダー1プロセスのみ）
     global _queue_is_leader
     if _try_acquire_queue_runner_leader():
         _queue_is_leader = True
         _queue_worker_stop.clear()
-        _queue_worker_thread = threading.Thread(
-            target=_queue_worker_loop, daemon=True, name="queue-worker"
+        _queue_new_job_event.clear()
+        from src.scraper.job_queue import _queue_parallel_workers
+        n_slots = _queue_parallel_workers()
+        for _slot_id in range(n_slots):
+            _t = threading.Thread(
+                target=_queue_slot_worker, args=(_slot_id,),
+                daemon=True, name=f"queue-worker-{_slot_id}",
+            )
+            _t.start()
+            _queue_worker_threads.append(_t)
+        logger.info(
+            "スクレイピングキュースロットワーカー %d 本起動（当プロセスがリーダー）",
+            n_slots,
         )
-        _queue_worker_thread.start()
-        logger.info("スクレイピングキューワーカー起動（当プロセスがリーダー）")
     else:
         _queue_is_leader = False
-        _queue_worker_thread = None
-        logger.info("スクレイピングキューワーカーは別ワーカーが担当（スキップ）")
+        logger.info("スクレイピングキューワーカーは別プロセスが担当（スキップ）")
 
     if _queue_is_leader:
         _queue_maintain_stop.clear()
@@ -452,8 +499,9 @@ async def lifespan(app):
 
     if _scheduler_thread:
         _scheduler_thread.join(timeout=5)
-    if _queue_worker_thread:
-        _queue_worker_thread.join(timeout=5)
+    for _t in _queue_worker_threads:
+        if _t is not None:
+            _t.join(timeout=5)
     if _disk_cache_cleanup_thread:
         _disk_cache_cleanup_thread.join(timeout=5)
     if _queue_maintain_thread:
@@ -629,16 +677,16 @@ async def get_gcs_stats():
         race_detail_cache_size = len(_race_detail_cache)
     return JSONResponse({
         "gcs_api_calls": storage._gcs_call_count,
-        "gcs_healthy": storage._gcs_healthy,
+        "gcs_healthy": getattr(storage, "_gcs_healthy", None),
         "gcs_backoff_remaining_s": max(0, round(
             storage._gcs_backoff - (_time.time() - storage._gcs_last_failure), 1
         )) if storage._gcs_last_failure > 0 else 0,
         "load_cache_size": len(storage._load_cache),
-        "load_cache_max": storage._LOAD_CACHE_MAX,
-        "load_cache_ttl_s": storage._LOAD_CACHE_TTL,
-        "blob_list_cache_size": len(storage._blob_list_cache),
-        "blob_list_cache_ttl_current_s": storage._BLOB_LIST_TTL_CURRENT,
-        "blob_list_cache_ttl_past_s": storage._BLOB_LIST_TTL_PAST,
+        "load_cache_max": getattr(storage, "_mem_cache_max", None),
+        "load_cache_ttl_s": getattr(storage, "_mem_cache_ttl", None),
+        "blob_list_cache_size": len(getattr(storage, "_blob_list_cache", {}) or {}),
+        "blob_list_cache_ttl_current_s": getattr(storage, "_BLOB_LIST_TTL_CURRENT", None),
+        "blob_list_cache_ttl_past_s": getattr(storage, "_BLOB_LIST_TTL_PAST", None),
         "status_cache_entries": len(_status_cache),
         "status_cache_ttl_s": _STATUS_CACHE_TTL,
         "horse_ids_cache_size": len(_horse_ids_cache),
@@ -834,13 +882,8 @@ def _logs_retention_loop():
 
 
 def _kick_scrape_queue_worker() -> None:
-    """ロックが空いていれば process_queue を別スレッドで起動。イベントループ非依存（定期メンテと同一路線）。"""
-    try:
-        from src.scraper.job_queue import kick_process_queue_background
-
-        kick_process_queue_background()
-    except Exception as e:
-        logger.warning("キューワーカー起動スキップ: %s", e)
+    """新規ジョブが追加されたことをスロットワーカーに通知して即起床させる。"""
+    _queue_new_job_event.set()
 
 
 def _kick_urgent_worker() -> None:
@@ -869,7 +912,7 @@ def _get_html_archive():
 @app.get("/monitor", response_class=HTMLResponse)
 async def scrape_monitor_page(request: Request):
     """スクレイピング状態のリアルタイムモニタリングボード"""
-    return templates.TemplateResponse("monitor.html", {
+    return templates.TemplateResponse("admin/monitor.html", {
         "request": request,
         "current_page": "monitor",
         "breadcrumbs": [],
@@ -878,19 +921,19 @@ async def scrape_monitor_page(request: Request):
 
 MONITOR_SOURCES = [
     "race_shutuba",
+    "race_result_on_time",
     "race_result",
     "race_index",
-    "race_shutuba_past",
     "race_odds",
+    "race_pair_odds",
     "race_paddock",
     "race_barometer",
-    "race_oikiri",
     "race_trainer_comment",
     "smartrc_race",
 ]
 
 _STEEPLECHASE_NA_CATS = frozenset({
-    "race_index", "race_barometer", "race_oikiri", "smartrc_race",
+    "race_index", "race_barometer", "race_pair_odds", "smartrc_race",
 })
 
 # 障害レースかどうかを race_name から判定
@@ -976,7 +1019,7 @@ def _build_scrape_status(date: str) -> dict:
             "gcs_enabled": storage.gcs_enabled,
             "progress": {"completed": 0, "total": 0, "percentage": 0,
                          "fresh": 0, "fresh_percentage": 0},
-            "sources": MONITOR_SOURCES + ["horse_result", "horse_pedigree"],
+            "sources": MONITOR_SOURCES + ["horse_result", "horse_pedigree_5gen"],
             "races": [],
         }
 
@@ -1002,7 +1045,7 @@ def _build_scrape_status(date: str) -> dict:
                 "fresh": 0,
                 "fresh_percentage": 0,
             },
-            "sources": MONITOR_SOURCES + ["horse_result", "horse_pedigree"],
+            "sources": MONITOR_SOURCES + ["horse_result", "horse_pedigree_5gen"],
             "races": [],
         }
 
@@ -1200,7 +1243,7 @@ def _build_scrape_status(date: str) -> dict:
                 ped_v1 or ped_changed == 0 or ped_blobs[h] >= ped_changed
             )
         )
-        sources["horse_pedigree"] = {
+        sources["horse_pedigree_5gen"] = {
             "total": len(hids),
             "scraped": ped_on_gcs,
             "ok": len(hids) > 0 and ped_on_gcs == len(hids),
@@ -1250,7 +1293,7 @@ def _build_scrape_status(date: str) -> dict:
                 completed_items += 1
             if info.get("fresh"):
                 fresh_items += 1
-        for hcat in ("horse_result", "horse_pedigree"):
+        for hcat in ("horse_result", "horse_pedigree_5gen"):
             hr = s.get(hcat, {})
             total_items += 1
             if isinstance(hr, dict) and hr.get("ok"):
@@ -1278,7 +1321,7 @@ def _build_scrape_status(date: str) -> dict:
             "fresh_percentage": round(fresh_items / total_items * 100, 1)
             if total_items > 0 else 0,
         },
-        "sources": MONITOR_SOURCES + ["horse_result", "horse_pedigree"],
+        "sources": MONITOR_SOURCES + ["horse_result", "horse_pedigree_5gen"],
         "races": races_info,
     }
 
@@ -1343,7 +1386,7 @@ _SCRAPE_DATES_RAW_CACHE: dict[str, Any] = {"data": None, "ts": 0.0}
 
 # 開催日セレクタ用: list_keys の結果をプロセス内にキャッシュ（GCS 全件列挙のコストを下げる）
 _RACE_LIST_STEMS_CACHE: dict[str, Any] = {"stems": None, "ts": 0.0}
-_RACE_LIST_STEMS_TTL = 600.0
+_RACE_LIST_STEMS_TTL = 120.0  # 2分 (daily-race-lists バッチ後の反映を早める)
 
 # picker_past_days 応答の短時間キャッシュ
 _PICKER_SCRAPE_DATES_CACHE: dict[str, Any] = {"key": None, "data": None, "ts": 0.0}
@@ -1352,8 +1395,25 @@ _PICKER_SCRAPE_DATES_TTL = 60.0
 _NO_STORE_HEADERS = {"Cache-Control": "no-store, max-age=0", "Pragma": "no-cache"}
 
 
+def _invalidate_race_list_caches() -> None:
+    """race_lists 関連の全インメモリキャッシュを即時無効化する。"""
+    _RACE_LIST_STEMS_CACHE["stems"] = None
+    _RACE_LIST_STEMS_CACHE["ts"] = 0.0
+    _scrape_dates_cache["data"] = None
+    _scrape_dates_cache["ts"] = 0.0
+    _SCRAPE_DATES_RAW_CACHE["data"] = None
+    _SCRAPE_DATES_RAW_CACHE["ts"] = 0.0
+    _PICKER_SCRAPE_DATES_CACHE["data"] = None
+    _PICKER_SCRAPE_DATES_CACHE["ts"] = 0.0
+    try:
+        from src.scraper.monitor_backlog import invalidate_cache as _mb_invalidate
+        _mb_invalidate()
+    except Exception:
+        pass
+
+
 def _cached_race_list_stems(storage) -> list[str]:
-    """race_lists のキーを stem（通常 YYYYMMDD）の昇順で返す。5分キャッシュ。"""
+    """race_lists のキーを stem（通常 YYYYMMDD）の昇順で返す。2分キャッシュ。"""
     now = _time.time()
     c = _RACE_LIST_STEMS_CACHE
     if c["stems"] is not None and (now - c["ts"]) < _RACE_LIST_STEMS_TTL:
@@ -1503,13 +1563,13 @@ async def get_race_list_for_date(date: str):
 
 
 _scrape_summary_cache: dict = {"data": None, "ts": 0.0, "gen": 0}
-_SCRAPE_SUMMARY_FILTER_GEN = 3  # フィルタ条件変更時にインクリメントしてキャッシュ無効化
+_SCRAPE_SUMMARY_FILTER_GEN = 4  # フィルタ条件変更時にインクリメントしてキャッシュ無効化
 
 
 _SUMMARY_SOURCES = [
-    "race_shutuba", "race_result", "race_index", "race_shutuba_past",
-    "race_odds", "race_paddock", "race_barometer", "race_oikiri",
-    "race_trainer_comment", "smartrc_race",
+    "race_shutuba", "race_result", "race_index",
+    "race_odds", "race_pair_odds", "race_paddock", "race_barometer",
+    "race_trainer_comment",
 ]
 
 
@@ -2118,8 +2178,8 @@ def _calc_horse_stats(
 
 
 _BUNDLE_CATEGORIES = [
-    "race_shutuba", "race_result", "race_index", "race_shutuba_past",
-    "race_odds", "race_paddock", "race_barometer", "race_oikiri",
+    "race_shutuba", "race_result", "race_result_on_time", "race_index",
+    "race_odds", "race_pair_odds", "race_paddock", "race_barometer",
     "race_trainer_comment",
 ]
 
@@ -2529,7 +2589,7 @@ def _collect_person_records(
 @app.get("/data-viewer", response_class=HTMLResponse)
 async def data_viewer(request: Request, race_id: str = "", category: str = ""):
     """生JSONデータビューア。"""
-    return templates.TemplateResponse("data_viewer.html", {
+    return templates.TemplateResponse("admin/data_viewer.html", {
         "request": request,
         "race_id": race_id,
         "category": category,
@@ -2576,14 +2636,14 @@ def _get_runner():
 
 
 CATEGORY_TO_METHOD = {
-    "race_shutuba":      "scrape_race_card",
-    "race_result":       "scrape_race_result",
-    "race_index":        "scrape_speed_index",
-    "race_shutuba_past": "scrape_shutuba_past",
-    "race_odds":         "scrape_odds",
-    "race_paddock":      "scrape_paddock",
-    "race_barometer":    "scrape_barometer",
-    "race_oikiri":       "scrape_oikiri",
+    "race_shutuba":         "scrape_race_card",
+    "race_result":          "scrape_race_result",
+    "race_result_on_time":  "scrape_race_result_on_time",
+    "race_index":           "scrape_speed_index",
+    "race_odds":            "scrape_odds",
+    "race_pair_odds":       "scrape_pair_odds",
+    "race_paddock":         "scrape_paddock",
+    "race_barometer":       "scrape_barometer",
     "race_trainer_comment": "scrape_trainer_comment",
 }
 
@@ -2794,6 +2854,72 @@ class ScrapeRequest(BaseModel):
     force: bool = False
 
 
+# Race-entity tasks recognized by ScrapeJobQueue
+_QUEUE_RACE_TASKS = {
+    "race_all", "race_result", "race_result_on_time", "race_result_lap",
+    "race_shutuba", "race_odds", "race_pair_odds", "race_index",
+    "race_paddock", "race_barometer",
+    "race_trainer_comment", "smartrc",
+    # race_shutuba 経由で horse_id を解決して処理する horse-from-race タスク
+    "horse_result", "horse_pedigree_5gen", "horse_training",
+}
+# Date-entity tasks recognized by ScrapeJobQueue
+_QUEUE_DATE_TASKS = {"race_list", "date_results", "date_cards", "date_all"}
+
+
+def _trigger_to_queue_spec(race_id: str, category: str, force: bool) -> dict | None:
+    """Convert legacy scrape-trigger params to a ScrapeJobQueue job spec.
+    Returns None for categories not supported by the queue (e.g. horse_result).
+    """
+    overwrite = force
+    smart_skip = not force
+    if category in _QUEUE_DATE_TASKS:
+        return {"job_kind": "date", "target_id": race_id, "tasks": [category],
+                "overwrite": overwrite, "smart_skip": smart_skip}
+    # "all" is the legacy alias for "race_all"
+    task = "race_all" if category == "all" else category
+    if task in _QUEUE_RACE_TASKS:
+        return {"job_kind": "race", "target_id": race_id, "tasks": [task],
+                "overwrite": overwrite, "smart_skip": smart_skip}
+    return None  # horse_result, horse_pedigree, etc. → legacy path
+
+
+def _iso_to_unix(s: str | None) -> float | None:
+    if not s:
+        return None
+    try:
+        from datetime import datetime, timezone
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except Exception:
+        return None
+
+
+def _queue_status_to_legacy(status: str) -> str:
+    if status in ("pending", "precheck"):
+        return "queued"
+    if status == "running":
+        return "running"
+    if status == "completed":
+        return "done"
+    if status == "failed":
+        return "error"
+    return status
+
+
+def _category_from_queue_tasks(tasks: list) -> str:
+    if not tasks:
+        return "unknown"
+    t = tasks[0]
+    if t == "race_all":
+        return "all"
+    if t == "smartrc":
+        return "smartrc_race"
+    return t
+
+
 @app.post("/api/scrape-trigger", response_class=JSONResponse)
 async def trigger_scrape(body: ScrapeRequest):
     """
@@ -2808,6 +2934,25 @@ async def trigger_scrape(body: ScrapeRequest):
 
     force: true にすると鮮度チェックをスキップして強制再取得する。
     """
+    queue_spec = _trigger_to_queue_spec(body.race_id, body.category, body.force)
+
+    if queue_spec is not None:
+        # Route through file-based ScrapeJobQueue
+        from src.scraper.job_queue import ScrapeJobQueue
+        queue = ScrapeJobQueue()
+        result = queue.add_job(queue_spec)
+        _kick_scrape_queue_worker()
+        return JSONResponse({
+            "status": result.get("action", result.get("status", "queued")),
+            "job_id": result.get("job_id", ""),
+            "race_id": body.race_id,
+            "category": body.category,
+            "force": body.force,
+            "queue_action": result.get("action"),
+        })
+
+    # Legacy in-memory path for categories not supported by the queue
+    # (e.g. horse_result, horse_pedigree, horse_pedigree_5gen)
     job_id = f"{body.race_id}:{body.category}:{int(_time.time())}"
 
     with _scrape_jobs_lock:
@@ -2864,26 +3009,74 @@ async def trigger_scrape(body: ScrapeRequest):
 
 @app.get("/api/scrape-jobs", response_class=JSONResponse)
 async def get_scrape_jobs():
-    """実行中・キュー待ち・完了済みのスクレイピングジョブ一覧と統計を返す。"""
+    """実行中・キュー待ち・完了済みのスクレイピングジョブ一覧と統計を返す。
+
+    ScrapeJobQueue（ファイルベース）のジョブを正とし、queue_job_progress で進捗を補完。
+    キューに乗らないカテゴリ（horse_result 等）はレガシー _scrape_jobs からも補完する。
+    """
     now = _time.time()
+    cutoff = now - 120  # show completed jobs up to 2 minutes after finish
+
+    from src.scraper.job_queue import ScrapeJobQueue, _queue_parallel_workers
+    from src.scraper.queue_job_progress import get_progress_snapshot_for_api
+
+    queue = ScrapeJobQueue()
+    q_jobs = queue.load_queue()
+    progress_data = get_progress_snapshot_for_api()
+    progress_by_job = {str(p["job_id"]): p for p in progress_data.get("jobs", [])}
+
+    result_jobs: list[dict] = []
+    for j in q_jobs:
+        status = _queue_status_to_legacy(str(j.get("status") or ""))
+        completed_at = _iso_to_unix(j.get("completed_at"))
+        started_at = _iso_to_unix(j.get("started_at"))
+        queued_at = _iso_to_unix(j.get("queued_at"))
+
+        if status in ("done", "error") and completed_at and completed_at < cutoff:
+            continue
+
+        tasks = j.get("tasks") or j.get("types") or []
+        prog = progress_by_job.get(str(j.get("job_id", "")), {})
+
+        result_jobs.append({
+            "job_id": j["job_id"],
+            "race_id": j.get("target_id") or j.get("race_id", ""),
+            "category": _category_from_queue_tasks(tasks),
+            "status": status,
+            "force": not bool(j.get("smart_skip", True)),
+            "created_at": queued_at,
+            "started_at": started_at or queued_at,
+            "started_running_at": started_at,
+            "finished_at": completed_at,
+            "error": j.get("error"),
+            "progress": {
+                "current": prog.get("done", 0),
+                "total": prog.get("total", 0),
+                "current_label": prog.get("current_label") or prog.get("label", ""),
+            } if prog else None,
+            "_source": "queue",
+        })
+
+    # Append legacy in-memory jobs (only for categories not routed to queue)
     with _scrape_jobs_lock:
-        active = {k: v for k, v in _scrape_jobs.items()
-                  if v["status"] in ("running", "queued")
-                  or (v["finished_at"] and now - v["finished_at"] < 120)}
-        running_count = sum(1 for j in _scrape_jobs.values()
-                           if j["status"] == "running")
-        queued_count = sum(1 for j in _scrape_jobs.values()
-                          if j["status"] == "queued")
-    runner = _get_runner() if hasattr(_get_runner, "_inst") else None
-    req_count = runner.client.request_count if runner else 0
+        for j in _scrape_jobs.values():
+            if j["status"] in ("running", "queued") or (
+                j.get("finished_at") and now - j["finished_at"] < 120
+            ):
+                result_jobs.append(dict(j, _source="legacy"))
+
+    running_count = sum(1 for j in result_jobs if j["status"] == "running")
+    queued_count = sum(1 for j in result_jobs if j["status"] == "queued")
+    n_workers = _queue_parallel_workers()
+
     return JSONResponse({
-        "jobs": list(active.values()),
+        "jobs": result_jobs,
         "stats": {
             "running": running_count,
             "queued": queued_count,
-            "max_concurrent": _MAX_CONCURRENT_SCRAPE,
-            "slots_available": max(0, _MAX_CONCURRENT_SCRAPE - running_count),
-            "total_requests": req_count,
+            "max_concurrent": n_workers,
+            "slots_available": max(0, n_workers - running_count),
+            "total_requests": 0,
         },
     })
 
@@ -3071,7 +3264,7 @@ async def get_scrape_queue_status():
     try:
         from src.scraper.job_queue import ScrapeJobQueue
 
-        _ensure_worker_thread()
+        _ensure_worker_slots()
 
         queue = ScrapeJobQueue()
         if not queue.is_locked():
@@ -3226,34 +3419,22 @@ async def api_scrape_queue_kick():
         if pending == 0:
             return JSONResponse({"status": "no_jobs", "message": "処理待ちのジョブがありません"})
 
-        kicked_normal = False
+        # スロットワーカーを起床させる
+        _ensure_worker_slots()
+        _kick_scrape_queue_worker()
+
         kicked_urgent = False
-
-        from src.scraper.job_queue import (
-            kick_process_queue_background,
-            kick_urgent_process_queue_background,
-        )
-
-        if not q.is_locked():
-            kick_process_queue_background()
-            kicked_normal = True
-
         if q.has_urgent_pending() and not q.is_locked_urgent():
+            from src.scraper.job_queue import kick_urgent_process_queue_background
             kick_urgent_process_queue_background()
             kicked_urgent = True
 
-        if not kicked_normal and not kicked_urgent:
-            return JSONResponse({"status": "already_running", "message": "ワーカーは既に実行中です"})
-
-        parts = []
-        if kicked_normal:
-            parts.append("通常ワーカー")
+        parts = ["スロットワーカー"]
         if kicked_urgent:
             parts.append("ファストレーン（最優先）")
         return JSONResponse({
             "status": "kicked",
             "pending_jobs": pending,
-            "kicked_normal": kicked_normal,
             "kicked_urgent": kicked_urgent,
             "message": f"{' + '.join(parts)} を起動しました（待機中ジョブ: {pending}件）",
         })
@@ -4764,7 +4945,7 @@ def _fetch_calendar_background(start_date: str = None, end_date: str = None):
 @app.get("/race/{race_id}", response_class=HTMLResponse)
 async def race_detail_page(request: Request, race_id: str):
     """レース詳細ページを表示する。"""
-    return templates.TemplateResponse("race_detail.html", {
+    return templates.TemplateResponse("race/race_detail.html", {
         "request": request,
         "race_id": race_id,
         "current_page": "race_detail",
@@ -6211,7 +6392,7 @@ async def race_lists_backfill_stop():
 
 @app.get("/betting", response_class=HTMLResponse)
 async def betting_page(request: Request):
-    return templates.TemplateResponse("betting.html", {
+    return templates.TemplateResponse("betting/betting.html", {
         "request": request,
         "current_page": "betting",
         "breadcrumbs": [],
@@ -6372,7 +6553,7 @@ def _get_race_predictions(race_id: str, storage) -> list[dict]:
 
 @app.get("/tracking-difficulty", response_class=HTMLResponse)
 async def tracking_difficulty_page(request: Request):
-    return templates.TemplateResponse("tracking_difficulty.html", {
+    return templates.TemplateResponse("analysis/tracking_difficulty.html", {
         "request": request,
         "current_page": "tracking_difficulty",
         "breadcrumbs": [],
@@ -6393,21 +6574,28 @@ def _url_path_prefix_before_suffix(url_path: str, page_suffix: str) -> str:
     return ""
 
 
-@app.get("/queue-status", response_class=HTMLResponse)
-async def queue_status_page(request: Request):
+@app.get("/scrape", response_class=HTMLResponse)
+async def scrape_management_page(request: Request):
     from src.scraper.queue_tasks import catalog_for_api
 
-    from_path = _url_path_prefix_before_suffix(request.url.path, "/queue-status")
-    root = (request.scope.get("root_path") or "").rstrip("/")
-    api_prefix = from_path or root
-    return templates.TemplateResponse("queue_status.html", {
+    return templates.TemplateResponse("admin/scrape.html", {
         "request": request,
-        "current_page": "queue_status",
-        "breadcrumbs": [],
-        "api_prefix": api_prefix,
+        "current_page": "scrape",
         "task_catalog": catalog_for_api(),
         "is_dev": is_developer(request),
     })
+
+
+@app.get("/scrape-control", response_class=HTMLResponse)
+async def scrape_control_page(request: Request):
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/scrape?tab=control", status_code=302)
+
+
+@app.get("/queue-status", response_class=HTMLResponse)
+async def queue_status_page(request: Request):
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/scrape?tab=queue", status_code=302)
 
 
 # ── 開発者: 直近サーバーログ（logs/*.log 末尾） ──
@@ -6531,7 +6719,7 @@ async def server_logs_page(request: Request):
     from_path = _url_path_prefix_before_suffix(request.url.path, "/server-logs")
     root = (request.scope.get("root_path") or "").rstrip("/")
     api_prefix = from_path or root
-    return templates.TemplateResponse("server_logs.html", {
+    return templates.TemplateResponse("admin/server_logs.html", {
         "request": request,
         "current_page": "server_logs",
         "breadcrumbs": [],
@@ -6542,19 +6730,31 @@ async def server_logs_page(request: Request):
 
 @app.get("/scrape-upcoming", response_class=HTMLResponse)
 async def scrape_upcoming_page(request: Request):
-    return templates.TemplateResponse("scrape_upcoming.html", {
-        "request": request,
-        "current_page": "scrape_upcoming",
-        "breadcrumbs": [],
-    })
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/scrape?tab=upcoming", status_code=302)
 
 
 @app.get("/bloodline-vector", response_class=HTMLResponse)
 async def bloodline_vector_page(request: Request):
-    return templates.TemplateResponse("bloodline_vector.html", {
+    """
+    血統ベクトル空間 v2 (L2 メタクラスタ + 非主流グループ単位)
+    src.research.pedigree.bloodline_vector_l2 で生成した
+    groups_embeddings.json を読み込んでテンプレートに渡す。
+    """
+    import json as _json
+    from pathlib import Path as _Path
+    payload: dict = {"nodes": [], "similar_top": {}, "meta": {}}
+    p = _Path("data/research/bloodline_vector/v2_l2/groups_embeddings.json")
+    if p.exists():
+        try:
+            payload = _json.loads(p.read_text(encoding="utf-8"))
+        except Exception as e:
+            payload = {"nodes": [], "similar_top": {}, "meta": {"error": str(e)}}
+    return templates.TemplateResponse("pedigree/bloodline_vector.html", {
         "request": request,
         "current_page": "bloodline_vector",
         "breadcrumbs": [],
+        "groups_payload_json": _json.dumps(payload, ensure_ascii=False),
     })
 
 
@@ -6564,7 +6764,7 @@ async def bloodline_vector_page(request: Request):
 
 @app.get("/pedigree-map", response_class=HTMLResponse)
 async def pedigree_map_page(request: Request):
-    return templates.TemplateResponse("pedigree_map.html", {
+    return templates.TemplateResponse("pedigree/pedigree_map.html", {
         "request": request,
         "current_page": "pedigree_map",
         "breadcrumbs": [],
@@ -6577,7 +6777,7 @@ async def note_aptitude_race_page(request: Request):
     from_path = _url_path_prefix_before_suffix(request.url.path, "/note-aptitude-race")
     root = (request.scope.get("root_path") or "").rstrip("/")
     api_prefix = from_path or root
-    return templates.TemplateResponse("note_aptitude_race.html", {
+    return templates.TemplateResponse("race/note_aptitude_race.html", {
         "request": request,
         "current_page": "note_aptitude_race",
         "breadcrumbs": [],
@@ -6593,7 +6793,76 @@ async def api_pedigree_map():
     if not os.path.exists(data_path):
         return JSONResponse({"error": "データ未生成。python -m src.research.pedigree.pedigree_similarity を実行してください。"})
     with open(data_path, encoding="utf-8") as f:
-        return JSONResponse(json.load(f))
+        payload = json.load(f)
+
+    # ── 各ノードに特殊適性タグを付与 ──────────────
+    try:
+        from src.api.bloodline_meta_cluster import (
+            get_sire_tags_map, list_tag_definitions, TAG_CATEGORY_COLORS,
+        )
+        sire_tags_map = get_sire_tags_map(min_lift=1.0)
+        if sire_tags_map and isinstance(payload.get("data"), list):
+            for node in payload["data"]:
+                hid = str(node.get("horse_id", ""))
+                if hid in sire_tags_map:
+                    node["tags"] = sire_tags_map[hid]
+                else:
+                    node["tags"] = []
+        payload["tag_definitions"] = list_tag_definitions()
+        payload["tag_category_colors"] = TAG_CATEGORY_COLORS
+    except Exception as e:
+        logger.warning("pedigree-map タグ付与失敗: %s", e)
+    return JSONResponse(payload)
+
+
+@app.get("/api/pedigree-map/tags", response_class=JSONResponse)
+async def api_pedigree_map_tags(min_lift: float = 1.0):
+    """pedigree-map ノードごとの特殊適性タグマップ (horse_id → tags)。"""
+    try:
+        from src.api.bloodline_meta_cluster import (
+            get_sire_tags_map, list_tag_definitions, TAG_CATEGORY_COLORS,
+        )
+        return JSONResponse({
+            "tags_by_horse": get_sire_tags_map(min_lift=min_lift),
+            "tag_definitions": list_tag_definitions(),
+            "tag_category_colors": TAG_CATEGORY_COLORS,
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/pedigree-map/cluster-hierarchy", response_class=JSONResponse)
+async def api_pedigree_map_cluster_hierarchy():
+    """L1 (系統) × L2 (適性) × L3 (細粒度) の階層構造を返す。
+
+    pedigree-map のクラスタ階層タブで描画するためのデータ。
+    """
+    try:
+        from src.api.bloodline_meta_cluster import get_cluster_hierarchy
+        return JSONResponse(get_cluster_hierarchy())
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/pedigree-map/tags-full", response_class=JSONResponse)
+async def api_pedigree_map_tags_full():
+    """父系ツリー用 (緩い閾値): 全種牡馬 (~400頭) のタグマップ + タグ定義 + 色情報。
+
+    ツリー UI 初期化時に一括取得し、各ノード描画時に horse_id でルックアップする。
+    """
+    try:
+        from src.api.bloodline_meta_cluster import (
+            get_sire_tags_full_map, list_tag_definitions, TAG_CATEGORY_COLORS,
+        )
+        m = get_sire_tags_full_map()
+        return JSONResponse({
+            "tags_by_horse": m,
+            "n_stallions": len(m),
+            "tag_definitions": list_tag_definitions(),
+            "tag_category_colors": TAG_CATEGORY_COLORS,
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/api/stallion-sire-tree", response_class=JSONResponse)
@@ -6619,6 +6888,28 @@ _full_tree_node_map:  "dict[str, dict] | None" = None   # horse_id → node dict
 _full_tree_children:  "dict[str, list[str]] | None" = None  # ソート済み
 _full_tree_parents:   "dict[str, str] | None" = None
 _full_tree_lock = threading.Lock()
+
+# root_horse_id → main_group (L1 系統) マッピング
+_root_to_main: "dict[str, str] | None" = None
+
+
+def _load_root_to_main() -> "dict[str, str]":
+    """各 root の代表 L1 系統マッピングをロード (cached)。"""
+    global _root_to_main
+    if _root_to_main is not None:
+        return _root_to_main
+    path = os.path.join(BASE_DIR, "data", "research", "bloodline_meta_cluster",
+                         "root_to_main_group.json")
+    if not os.path.exists(path):
+        _root_to_main = {}
+        return _root_to_main
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        _root_to_main = {k: v.get("main_group", "非主流") for k, v in data.items()}
+    except Exception:
+        _root_to_main = {}
+    return _root_to_main
 
 # ── 該当馬×母父ペアテーブル（horse_bms.parquet）キャッシュ ──────────────────
 _horse_bms_df:   "pd.DataFrame | None" = None
@@ -6782,13 +7073,25 @@ def _load_full_tree() -> bool:
         return True
 
 
-def _node_json(hid: str) -> dict:
-    """単一ノードの JSON 表現を返す（O(1) dict lookup）。"""
+def _node_json(hid: str, with_tags: bool = True) -> dict:
+    """単一ノードの JSON 表現を返す（O(1) dict lookup）。
+
+    with_tags=True (default) の場合、特殊適性タグ (is_top20) を `tags` キーで埋め込む。
+    """
     if _full_tree_node_map is None:
-        return {"id": hid, "name": hid}
-    return _full_tree_node_map.get(hid) or {
-        "id": hid, "name": hid, "n_children": 0, "n_descendants": 0, "depth": -1, "is_root": False
-    }
+        base = {"id": hid, "name": hid}
+    else:
+        base = dict(_full_tree_node_map.get(hid) or {
+            "id": hid, "name": hid, "n_children": 0, "n_descendants": 0, "depth": -1, "is_root": False
+        })
+    if with_tags:
+        try:
+            from src.api.bloodline_meta_cluster import get_sire_tags_full_map
+            tags_map = get_sire_tags_full_map()
+            base["tags"] = tags_map.get(hid, [])
+        except Exception:
+            base["tags"] = []
+    return base
 
 
 def _regenerate_relevant_stallion_ids(
@@ -6976,16 +7279,21 @@ async def api_stallion_sire_tree_rebuild_status():
     return JSONResponse({**state, "files": file_info})
 
 
-@app.get("/api/stallion-sire-tree/roots", response_class=JSONResponse)
-async def api_stallion_sire_tree_roots(limit: int = 50, offset: int = 0):
-    """
-    父不明（ルート）ノードを名前アルファベット順で返す。
+@app.get("/api/stallion-sire-tree/l1-groups", response_class=JSONResponse)
+async def api_stallion_sire_tree_l1_groups():
+    """父系ツリーの第一階層 = L1 系統血統 (4 大主流 + 非主流) を返す。
+
+    各 L1 ノードは以下を持つ:
+        id, name, color, icon, founder_name, n_roots, n_descendants_total
     """
     if not _load_full_tree():
-        return JSONResponse({"error": "full_sire_tree データ未生成。python -m src.research.pedigree.build_full_sire_tree を実行してください。"}, status_code=404)
+        return JSONResponse({"error": "full_sire_tree データ未生成。"}, status_code=404)
+    root_to_main = _load_root_to_main()
+    if not root_to_main:
+        return JSONResponse({"error": "root_to_main_group.json 未生成。"
+                              "python -m src.research.pedigree.build_root_to_main_group を実行してください。"},
+                              status_code=404)
     relevant_ids = _load_relevant_stallion_ids()
-    # n_children > 0 のみ: ▶ が存在するノードだけ表示
-    # （n_descendants は牡牝混在カウントのため sex 補完完了まで信頼性なし）
     base_mask = (
         (_full_tree_nodes_df["is_root"] == True) &
         (_full_tree_nodes_df["n_children"] > 0)
@@ -6993,11 +7301,91 @@ async def api_stallion_sire_tree_roots(limit: int = 50, offset: int = 0):
     if relevant_ids:
         base_mask = base_mask & _full_tree_nodes_df["horse_id"].isin(relevant_ids)
     roots_df = _full_tree_nodes_df[base_mask].copy()
-    roots_df = roots_df.sort_values("name", ascending=True, key=lambda s: s.str.lower())
+    # ── L1 メタ定義 (bloodline_meta_cluster と整合) ──
+    L1_META = [
+        {"id": "Turn-To系",         "color": "#3b82f6", "icon": "△",
+         "founder_name": "Turn-to (1951)",
+         "description": "Hail to Reason → Roberto / Halo → Sunday Silence。Deep Impact, Hearts Cry 系。"},
+        {"id": "Native Dancer系",   "color": "#10b981", "icon": "○",
+         "founder_name": "Native Dancer (1950)",
+         "description": "Raise a Native → Mr. Prospector → Kingmambo, King Kamehameha 系。"},
+        {"id": "Northern Dancer系", "color": "#f59e0b", "icon": "◇",
+         "founder_name": "Northern Dancer (1961)",
+         "description": "Sadler's Wells / Storm Bird / Nijinsky / Storm Cat 系。"},
+        {"id": "Nasrullah系",       "color": "#ef4444", "icon": "□",
+         "founder_name": "Nasrullah (1940)",
+         "description": "Princely Gift / Bold Ruler / Never Bend。古典系統。"},
+        {"id": "非主流",             "color": "#9ca3af", "icon": "✕",
+         "founder_name": "(複数の派生に属さない群)",
+         "description": "Monsun系, Wild Rush系, Macho Uno系 等の独立系統群。"},
+    ]
+    l1_to_roots: "dict[str, list[str]]" = {m["id"]: [] for m in L1_META}
+    for _, r in roots_df.iterrows():
+        hid = str(r["horse_id"])
+        l1 = root_to_main.get(hid, "非主流")
+        if l1 not in l1_to_roots:
+            l1_to_roots[l1] = []
+        l1_to_roots[l1].append(hid)
+
+    out = []
+    for meta in L1_META:
+        ids = l1_to_roots.get(meta["id"], [])
+        n_desc_total = int(_full_tree_nodes_df[_full_tree_nodes_df["horse_id"].isin(ids)]["n_descendants"].sum())
+        out.append({
+            **meta,
+            "name": meta["id"],
+            "n_roots": len(ids),
+            "n_descendants_total": n_desc_total,
+        })
+    return JSONResponse({"l1_groups": out})
+
+
+@app.get("/api/stallion-sire-tree/roots", response_class=JSONResponse)
+async def api_stallion_sire_tree_roots(
+    limit: int = 50, offset: int = 0, main_group: str | None = None,
+    sort: str = "n_descendants",
+):
+    """父不明（ルート）ノードを返す。
+
+    Args:
+        main_group: 指定すると該当 L1 系統に属する root のみ返す
+                    (Turn-To系 / Native Dancer系 / Northern Dancer系 / Nasrullah系 / 非主流)
+        sort: "n_descendants" (デフォルト, 子孫数の多い祖先順) または "name" (アルファベット順)
+    """
+    if not _load_full_tree():
+        return JSONResponse({"error": "full_sire_tree データ未生成。python -m src.research.pedigree.build_full_sire_tree を実行してください。"}, status_code=404)
+    relevant_ids = _load_relevant_stallion_ids()
+    base_mask = (
+        (_full_tree_nodes_df["is_root"] == True) &
+        (_full_tree_nodes_df["n_children"] > 0)
+    )
+    if relevant_ids:
+        base_mask = base_mask & _full_tree_nodes_df["horse_id"].isin(relevant_ids)
+    # L1 フィルタ
+    if main_group:
+        root_to_main = _load_root_to_main()
+        target_ids = {hid for hid, mg in root_to_main.items() if mg == main_group}
+        base_mask = base_mask & _full_tree_nodes_df["horse_id"].isin(target_ids)
+    roots_df = _full_tree_nodes_df[base_mask].copy()
+    if sort == "name":
+        roots_df = roots_df.sort_values("name", ascending=True, key=lambda s: s.str.lower())
+    else:
+        roots_df = roots_df.sort_values(
+            ["n_descendants", "name"], ascending=[False, True],
+        )
     total = len(roots_df)
     page  = roots_df.iloc[offset : offset + limit]
-    nodes = [_node_json(str(r["horse_id"])) for _, r in page.iterrows()]
-    return JSONResponse({"total": total, "offset": offset, "nodes": nodes})
+    root_to_main_cached = _load_root_to_main()
+    nodes = []
+    for _, r in page.iterrows():
+        hid = str(r["horse_id"])
+        node = _node_json(hid)
+        node["main_group"] = main_group or root_to_main_cached.get(hid, "非主流")
+        nodes.append(node)
+    return JSONResponse({
+        "total": total, "offset": offset, "nodes": nodes,
+        "main_group": main_group, "sort": sort,
+    })
 
 
 @app.get("/api/stallion-sire-tree/node/{horse_id}", response_class=JSONResponse)
@@ -7498,7 +7886,7 @@ _bloodline_job: dict[str, Any] = {"running": False}
 
 @app.get("/bloodline", response_class=HTMLResponse)
 async def bloodline_page(request: Request):
-    return templates.TemplateResponse("bloodline.html", {
+    return templates.TemplateResponse("pedigree/bloodline.html", {
         "request": request,
         "current_page": "bloodline",
         "breadcrumbs": [],
@@ -7573,38 +7961,828 @@ async def api_bloodline_status():
     })
 
 
+def _bloodline_surface_dir(base: "Path", surface: str) -> "Path":
+    from src.research.pedigree.bloodline_surface import (
+        normalize_surface_key,
+        surface_output_dir,
+    )
+
+    sk = normalize_surface_key(surface)
+    if (base / "by_surface" / "_meta.json").exists():
+        return surface_output_dir(base, sk)
+    return base
+
+
+def _bloodline_surface_context(base: "Path", surface: str) -> dict[str, Any]:
+    from src.research.pedigree.bloodline_surface import (
+        SURFACE_LABELS,
+        load_surface_meta,
+        normalize_surface_key,
+        run_count_for_surface,
+    )
+
+    sk = normalize_surface_key(surface)
+    meta = load_surface_meta(base)
+    return {
+        "surface": sk,
+        "surface_label": SURFACE_LABELS[sk],
+        "run_count": run_count_for_surface(meta, sk),
+        "surfaces": meta.get("surfaces"),
+    }
+
+
+@app.get("/api/bloodline/surfaces", response_class=JSONResponse)
+async def api_bloodline_surfaces():
+    from pathlib import Path as _Path
+    from src.research.pedigree.bloodline_surface import load_surface_meta
+
+    base = _Path(__file__).resolve().parents[2] / "data" / "research" / "bloodline"
+    meta = load_surface_meta(base)
+    if not meta:
+        base_c = _Path(__file__).resolve().parents[2] / "data" / "research" / "course_bloodline"
+        meta = load_surface_meta(base_c)
+    return JSONResponse(meta or {"surfaces": {}, "total_run_count": 0})
+
+
 @app.get("/api/bloodline/data/{analysis_type}", response_class=JSONResponse)
-async def api_bloodline_data(analysis_type: str):
-    """分析結果 CSV/JSON を読み込んで返す。"""
+async def api_bloodline_data(
+    analysis_type: str,
+    surface: str = Query("turf", description="turf|dirt|jump"),
+):
+    """分析結果 CSV/JSON を読み込んで返す（芝・ダート・障害は surface で分離）。"""
     import csv as csv_mod
     from pathlib import Path
-    base = Path(os.path.dirname(__file__)).parent / "data" / "research" / "bloodline"
+
+    def _csv_table(p: Path) -> dict[str, Any]:
+        rows: list[dict[str, str]] = []
+        if not p.exists():
+            return {"columns": [], "rows": []}
+        with open(p, encoding="utf-8-sig") as f:
+            reader = csv_mod.DictReader(f)
+            for row in reader:
+                rows.append(row)
+        return {"columns": list(rows[0].keys()) if rows else [], "rows": rows}
+
+    base = Path(__file__).resolve().parents[2] / "data" / "research" / "bloodline"
+    data_dir = _bloodline_surface_dir(base, surface)
+    ctx = _bloodline_surface_context(base, surface)
+
+    if analysis_type == "sire_distance":
+        top3 = data_dir / "sire_distance_top3rate.csv"
+        if top3.exists():
+            return JSONResponse({
+                "format": "metric_bundle",
+                "min_cell_samples": 20,
+                "min_roi_samples": 10,
+                **ctx,
+                "metrics": {
+                    "top3_rate": _csv_table(top3),
+                    "top2_rate": _csv_table(data_dir / "sire_distance_top2rate.csv"),
+                    "win_rate": _csv_table(data_dir / "sire_distance_win_rate.csv"),
+                    "sample_count": _csv_table(data_dir / "sire_distance_sample_count.csv"),
+                    "win_roi": _csv_table(data_dir / "sire_distance_win_roi.csv"),
+                    "place_roi": _csv_table(data_dir / "sire_distance_place_roi.csv"),
+                    "roi_count": _csv_table(data_dir / "sire_distance_roi_count.csv"),
+                },
+            })
+
+    if analysis_type == "sire_damsire_rate":
+        top3 = data_dir / "sire_damsire_top3rate.csv"
+        if top3.exists():
+            return JSONResponse({
+                "format": "metric_bundle",
+                "min_cell_samples": 10,
+                "min_roi_samples": 8,
+                **ctx,
+                "metrics": {
+                    "top3_rate": _csv_table(top3),
+                    "top2_rate": _csv_table(data_dir / "sire_damsire_top2rate.csv"),
+                    "win_rate": _csv_table(data_dir / "sire_damsire_win_rate.csv"),
+                    "sample_count": _csv_table(data_dir / "sire_damsire_sample_count.csv"),
+                    "win_roi": _csv_table(data_dir / "sire_damsire_win_roi.csv"),
+                    "place_roi": _csv_table(data_dir / "sire_damsire_place_roi.csv"),
+                    "roi_count": _csv_table(data_dir / "sire_damsire_roi_count.csv"),
+                },
+            })
 
     file_map = {
-        "sire_distance": base / "sire_distance_top3rate.csv",
-        "best_distance": base / "sire_best_distance.csv",
-        "sire_damsire_rate": base / "sire_damsire_top3rate.csv",
-        "sire_damsire_dist": base / "sire_damsire_avg_distance.csv",
-        "similarity": base / "distance_bloodline_similarity.csv",
-        "clusters": base / "sire_clusters.csv",
-        "cluster_summary": base / "cluster_summary.csv",
-        "predictive_power": base / "pedigree_predictive_power.json",
+        "sire_distance": data_dir / "sire_distance_top3rate.csv",
+        "best_distance": data_dir / "sire_best_distance.csv",
+        "sire_damsire_rate": data_dir / "sire_damsire_top3rate.csv",
+        "sire_damsire_dist": data_dir / "sire_damsire_avg_distance.csv",
+        "similarity": data_dir / "distance_bloodline_similarity.csv",
+        "clusters": data_dir / "sire_clusters.csv",
+        "cluster_summary": data_dir / "cluster_summary.csv",
+        "predictive_power": data_dir / "pedigree_predictive_power.json",
     }
 
     path = file_map.get(analysis_type)
     if not path or not path.exists():
-        return JSONResponse({"error": f"データなし: {analysis_type}"}, status_code=404)
+        return JSONResponse(
+            {"error": f"データなし: {analysis_type} (surface={ctx['surface']})"},
+            status_code=404,
+        )
 
     if path.suffix == ".json":
         import json as json_mod
-        return JSONResponse(json_mod.loads(path.read_text(encoding="utf-8")))
+        payload = json_mod.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict) and analysis_type == "predictive_power":
+            return JSONResponse({**ctx, **payload})
+        return JSONResponse(payload)
 
     rows = []
     with open(path, encoding="utf-8-sig") as f:
         reader = csv_mod.DictReader(f)
         for row in reader:
             rows.append(row)
-    return JSONResponse({"columns": list(rows[0].keys()) if rows else [], "rows": rows})
+    return JSONResponse({
+        **ctx,
+        "columns": list(rows[0].keys()) if rows else [],
+        "rows": rows,
+    })
+
+
+# ══════════════════════════════════════════════════════
+#  血統メタクラスタリング（馬名 → クラスタ → 適性プロファイル）
+#  notebooks/pedigree/bloodline_subgroup_analysis.ipynb §21〜§22 のWeb版
+# ══════════════════════════════════════════════════════
+
+
+@app.get("/bloodline-cluster", response_class=HTMLResponse)
+async def bloodline_cluster_page(request: Request):
+    return templates.TemplateResponse("pedigree/bloodline_cluster.html", {
+        "request": request,
+        "current_page": "bloodline_cluster",
+        "breadcrumbs": [],
+    })
+
+
+@app.get("/api/bloodline-cluster/meta", response_class=JSONResponse)
+async def api_bloodline_cluster_meta():
+    """アーティファクトのメタ情報 (生成日時、エンティティ数、L2 数等)。"""
+    from src.api.bloodline_meta_cluster import get_meta, is_ready
+    if not is_ready():
+        return JSONResponse(
+            {
+                "error": "アーティファクト未生成",
+                "hint": "python -m src.research.pedigree.build_meta_cluster_artifacts を実行してください",
+            },
+            status_code=503,
+        )
+    return JSONResponse(get_meta())
+
+
+@app.get("/api/bloodline-cluster/lookup", response_class=JSONResponse)
+async def api_bloodline_cluster_lookup(name: str = Query(..., min_length=1, description="馬名 (部分一致対応)")):
+    """馬名 → 主流 + L1_sub + L2 + 強み・弱みプロファイル。"""
+    from src.api.bloodline_meta_cluster import analyze_horse
+    return JSONResponse(analyze_horse(name))
+
+
+@app.get("/api/bloodline-cluster/lookup-by-id", response_class=JSONResponse)
+async def api_bloodline_cluster_lookup_id(horse_id: str = Query(..., description="netkeiba horse_id (例: 2015104961)")):
+    """horse_id 直接指定で適性プロファイルを取得 (race テーブルに無い馬でも 5 代血統があれば動作)。"""
+    from src.api.bloodline_meta_cluster import lookup_by_horse_id
+    return JSONResponse(lookup_by_horse_id(horse_id))
+
+
+@app.get("/api/bloodline-cluster/sire-info", response_class=JSONResponse)
+async def api_bloodline_cluster_sire_info(stallion_id: str = Query(..., description="種牡馬 horse_id 自身")):
+    """種牡馬 ID 自身を入力 → その種牡馬のクラスタ分類 + プロファイル + 特殊適性タグ。
+
+    /pedigree-map のツリーから馬名 (=種牡馬) クリックされた際の遷移先で利用。
+    """
+    from src.api.bloodline_meta_cluster import analyze_stallion
+    return JSONResponse(analyze_stallion(stallion_id))
+
+
+@app.get("/api/bloodline-cluster/clusters", response_class=JSONResponse)
+async def api_bloodline_cluster_clusters():
+    """全 L2 メタクラスタの構成 (主流別) + プロファイル top7 強み/弱み。"""
+    from src.api.bloodline_meta_cluster import list_clusters
+    return JSONResponse({"clusters": list_clusters()})
+
+
+@app.get("/api/bloodline-cluster/suggest", response_class=JSONResponse)
+async def api_bloodline_cluster_suggest(prefix: str = Query("", description="馬名の先頭/部分文字列"),
+                                        limit: int = Query(15, ge=1, le=50)):
+    """馬名オートサジェスト用。"""
+    from src.api.bloodline_meta_cluster import list_horses
+    return JSONResponse({"results": list_horses(prefix, limit=limit)})
+
+
+@app.post("/api/bloodline-cluster/reload", response_class=JSONResponse)
+async def api_bloodline_cluster_reload():
+    """アーティファクトを再ロード (ノートブック再実行後の反映用)。"""
+    from src.api.bloodline_meta_cluster import reload_artifacts, get_meta
+    ok = reload_artifacts()
+    return JSONResponse({"reloaded": ok, "meta": get_meta() if ok else None})
+
+
+# ══════════════════════════════════════════════════════
+#  血統メタクラスタリング: 開発者向け管理エンドポイント
+#  ──────────────────────────────────────────────────────
+#  アーティファクトの再生成 / リロード / 状態確認。
+#  /api/admin/ 配下なので開発者ログイン必須 (auth.py の DEV_ONLY_API_PREFIXES)。
+# ══════════════════════════════════════════════════════
+
+# 各アーティファクトの定義 (UI 表示・rebuild 対象判定)
+_BLOODLINE_ARTIFACTS = [
+    # ── 順序: 軽い→重い (UI で上から順に並ぶ) ──
+    {
+        "key": "pair_lift",
+        "label": "父×母父系 ペア lift プロファイル",
+        "files": [
+            "pair_lift_profiles_bms_root.parquet",
+            "pair_lift_profiles_group.parquet",
+            "pair_lift_profiles_gxg.parquet",
+            "pair_lift_meta.json",
+        ],
+        "rebuilder": "src.research.pedigree.build_pair_lift_profiles",
+        "estimated_seconds": 5,
+        "description": (
+            "父個体×母父系 (母父父系root, 227系統) / 父個体×母父5大系統 / 父5大系統×母父5大系統"
+            " の 3 階層ペア lift。race_result_slim.parquet と horse_bms.parquet から集計。"
+            " 統合 prior の pair_bms_root / pair_group / pair_gxg レイヤーで使用。"
+            " 旧 pair_indiv (父個体×母父個体, n>=80) は件数不足のため 2026-05-15 に廃止。"
+        ),
+    },
+    {
+        "key": "role_lift",
+        "label": "役割別 (F/MF/FF/MMF) lift プロファイル",
+        "files": [
+            "role_lift_profiles.parquet",
+            "role_lift_meta.json",
+            "role_lift_main_group_fallback.json",
+        ],
+        "rebuilder": "src.research.pedigree.build_role_lift_profiles",
+        "estimated_seconds": 60,
+        "description": (
+            "F (父) / MF (母父) / FF (父父) / MMF (母母父) の役割別 lift。"
+            " 5 代血統の祖先位置から該当する種牡馬 ID を取得し、産駒の条件別勝率を集計。"
+            " 統合 prior の role_blend レイヤーで使用 (新着馬や個別ペアが薄い時の fallback)。"
+        ),
+    },
+    {
+        "key": "l2_names",
+        "label": "L2 クラスタ自動命名 (l2_names.json)",
+        "files": [
+            "l2_names.json",
+        ],
+        "rebuilder": "src.research.pedigree.generate_l2_fine_names",
+        "estimated_seconds": 10,
+        "description": (
+            "L2_fine クラスタの自動命名 (例「東京芝中距離主流型」) と説明文・色・アイコン・"
+            "得意/苦手タグ・代表種牡馬を生成。l2_profiles.json の更新後に再生成すると、"
+            "UI ラベルが新しいクラスタ特性に追従する。"
+        ),
+    },
+    {
+        "key": "ancestor_l2_index",
+        "label": "祖先 → L2 マッピング (ancestor_to_l2 / ancestor_vectors / ancestor_positions_2d)",
+        "files": [
+            "ancestor_to_l2.json",
+            "ancestor_vectors.parquet",
+            "ancestor_positions_2d.json",
+        ],
+        "rebuilder": "src.research.pedigree.build_ancestor_l2_index",
+        "estimated_seconds": 90,
+        "description": (
+            "拡張祖先 (主流133頭 + 約4500頭) を L2 クラスタにマッピングし、各祖先の"
+            "条件別 lift ベクトルと 2D 位置を計算。馬の血統適性プロファイル合成で利用。"
+        ),
+    },
+    {
+        "key": "l2_fine_clusters",
+        "label": "L2 fine クラスタリング (l2_profiles / l2_centroids / l2_super_groups / l2_similarity)",
+        "files": [
+            "l2_profiles.json",
+            "l2_centroids.json",
+            "l2_super_groups.json",
+            "l2_similarity.json",
+            "l2_positions_2d.json",
+        ],
+        "rebuilder": "src.research.pedigree.build_l2_fine_clusters",
+        "estimated_seconds": 60,
+        "description": (
+            "133 主流種牡馬を 31 次元の条件別 lift で再クラスタリング (Ward 法)。"
+            " L2 cluster (=11 個前後) と SuperGroup (=5 個) を再構築し、各クラスタの平均プロファイル・"
+            "中心点・類似度行列・2D 座標 (PCA) を保存。L2 構造の再計算はここから。"
+        ),
+    },
+    {
+        "key": "meta_cluster_base",
+        "label": "メタクラスタ基盤 (notebook 由来: unified / overall / sid_to_* / scaler / knn / meta)",
+        "files": [
+            "unified.parquet",
+            "overall_raw.json",
+            "sid_to_main.json",
+            "sid_to_name.json",
+            "scaler.json",
+            "knn_data.json",
+            "meta.json",
+            "non_main_root_of.json",
+            "non_main_group_labels.json",
+        ],
+        "rebuilder": "src.research.pedigree.build_meta_cluster_artifacts",
+        "estimated_seconds": 600,
+        "description": (
+            "全パイプラインの「基盤」となるアーティファクト群 (notebook §21〜§22 を headless 実行)。"
+            " 種牡馬統合データ (unified)、全体勝率 (overall_raw)、ID→名前/系統マップ、"
+            " 標準化スケーラ、KNN データ、メタ情報を一括生成する。最も重い (約 10 分)。"
+            " 通常はレース結果データに大きな更新があった時のみ実行。"
+        ),
+    },
+]
+
+_bl_rebuild_job: dict[str, Any] = {
+    "running": False,
+    "target": None,
+    "started_at": None,
+    "finished_at": None,
+    "duration_sec": None,
+    "result": None,
+    "error": None,
+    "log": [],
+}
+
+
+def _get_bl_artifact_status() -> list[dict[str, Any]]:
+    """各アーティファクトの存在 / 最終更新日時 / サイズを返す。"""
+    from datetime import datetime as _dt
+    from pathlib import Path as _Path
+    art_dir = _Path("data/research/bloodline_meta_cluster")
+    out = []
+    for spec in _BLOODLINE_ARTIFACTS:
+        files_info = []
+        for fn in spec["files"]:
+            p = art_dir / fn
+            if p.exists():
+                st = p.stat()
+                files_info.append({
+                    "name": fn,
+                    "exists": True,
+                    "size_bytes": int(st.st_size),
+                    "mtime_iso": _dt.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
+                })
+            else:
+                files_info.append({"name": fn, "exists": False})
+        all_exist = all(f["exists"] for f in files_info)
+        latest_mtime = max((f.get("mtime_iso", "") for f in files_info if f["exists"]), default="")
+        out.append({
+            "key": spec["key"],
+            "label": spec["label"],
+            "description": spec["description"],
+            "estimated_seconds": spec["estimated_seconds"],
+            "rebuilder_available": spec["rebuilder"] is not None,
+            "files": files_info,
+            "all_files_exist": all_exist,
+            "latest_mtime_iso": latest_mtime,
+        })
+    return out
+
+
+@app.get("/api/admin/bloodline-cluster/artifact-status", response_class=JSONResponse)
+async def api_admin_bl_artifact_status():
+    """全アーティファクトの状態 (存在・最終更新日時・サイズ・説明)。
+
+    開発者専用 (/api/admin/ プレフィックス)。
+    """
+    return JSONResponse({
+        "artifacts": _get_bl_artifact_status(),
+        "current_job": _bl_rebuild_job,
+    })
+
+
+def _run_bl_rebuild(target_key: str, rebuilder_module: str):
+    """バックグラウンドでアーティファクト再生成 → キャッシュリロード。"""
+    import importlib
+    from datetime import datetime as _dt
+    import time as _time
+    t0 = _time.time()
+    _bl_rebuild_job["log"] = [f"[{_dt.now().isoformat(timespec='seconds')}] start: {target_key} ({rebuilder_module})"]
+    try:
+        mod = importlib.import_module(rebuilder_module)
+        if hasattr(mod, "build"):
+            mod.build()
+        elif hasattr(mod, "main"):
+            mod.main()
+        else:
+            raise RuntimeError(f"{rebuilder_module} に build() / main() 関数が見つかりません")
+        # 生成後はキャッシュリロード
+        from src.api.bloodline_meta_cluster import reload_artifacts
+        reload_ok = reload_artifacts()
+        _bl_rebuild_job["log"].append(f"reload_artifacts -> {reload_ok}")
+        _bl_rebuild_job["result"] = {"target": target_key, "reload": reload_ok}
+        _bl_rebuild_job["error"] = None
+    except Exception as e:
+        _bl_rebuild_job["error"] = f"{type(e).__name__}: {e}"
+        _bl_rebuild_job["log"].append(f"ERROR: {_bl_rebuild_job['error']}")
+        logger.error("bloodline rebuild [%s] failed: %s", target_key, e, exc_info=True)
+    finally:
+        _bl_rebuild_job["running"] = False
+        _bl_rebuild_job["finished_at"] = datetime.now().isoformat(timespec="seconds")
+        _bl_rebuild_job["duration_sec"] = round(_time.time() - t0, 2)
+
+
+@app.post("/api/admin/bloodline-cluster/rebuild/{target}", response_class=JSONResponse)
+async def api_admin_bl_rebuild(target: str, background_tasks: BackgroundTasks):
+    """指定アーティファクトを再生成 (バックグラウンド)。
+
+    target: アーティファクト key (例: pair_lift / role_lift)
+    開発者専用 (/api/admin/ プレフィックス)。
+    """
+    spec = next((s for s in _BLOODLINE_ARTIFACTS if s["key"] == target), None)
+    if not spec:
+        return JSONResponse(
+            {"status": "error", "message": f"未知の target: {target}"},
+            status_code=400,
+        )
+    if not spec["rebuilder"]:
+        return JSONResponse(
+            {
+                "status": "no_rebuilder",
+                "message": f"{spec['label']} はノートブック側で生成する必要があります。",
+                "hint": "notebooks/pedigree/bloodline_subgroup_analysis.ipynb の §21〜§22 を実行してください。",
+            },
+            status_code=400,
+        )
+    if _bl_rebuild_job.get("running"):
+        return JSONResponse(
+            {
+                "status": "already_running",
+                "current_target": _bl_rebuild_job.get("target"),
+                "started_at": _bl_rebuild_job.get("started_at"),
+            },
+            status_code=409,
+        )
+    _bl_rebuild_job.update({
+        "running": True,
+        "target": target,
+        "started_at": datetime.now().isoformat(timespec="seconds"),
+        "finished_at": None,
+        "duration_sec": None,
+        "result": None,
+        "error": None,
+        "log": [f"queued: {target}"],
+    })
+    background_tasks.add_task(_run_bl_rebuild, target, spec["rebuilder"])
+    return JSONResponse({
+        "status": "started",
+        "target": target,
+        "estimated_seconds": spec["estimated_seconds"],
+        "started_at": _bl_rebuild_job["started_at"],
+    })
+
+
+@app.get("/api/admin/bloodline-cluster/job-status", response_class=JSONResponse)
+async def api_admin_bl_job_status():
+    """直近の rebuild ジョブのステータス。"""
+    return JSONResponse(_bl_rebuild_job)
+
+
+@app.post("/api/admin/bloodline-cluster/reload", response_class=JSONResponse)
+async def api_admin_bl_reload():
+    """キャッシュリロード (開発者向け、admin 配下)。"""
+    from src.api.bloodline_meta_cluster import reload_artifacts, get_meta
+    ok = reload_artifacts()
+    return JSONResponse({
+        "reloaded": ok,
+        "meta": get_meta() if ok else None,
+        "artifacts": _get_bl_artifact_status() if ok else None,
+    })
+
+
+@app.get("/api/bloodline-cluster/tags", response_class=JSONResponse)
+async def api_bloodline_cluster_tags(
+    tag_id: Optional[str] = Query(None, description="特定タグID (例: track_heavy / runstyle_nige)"),
+    category: Optional[str] = Query(None, description="カテゴリ: 脚質 / 馬場 / ペース / 距離 / コース"),
+    top_n: int = Query(30, ge=1, le=200, description="各タグの上位N (combo_score 降順)"),
+):
+    """特殊適性タグの一覧 + 各タグの上位種牡馬を返す。
+
+    タグ判定は L2 メタクラスタ (総合プロファイル) と直交する。
+    "is_top20" は「絶対勝率 >= 条件平均×1.10」 AND 「lift >= 1.15」 AND 「combo Top20%」。
+    """
+    from src.api.bloodline_meta_cluster import list_special_tags
+    return JSONResponse(list_special_tags(tag_id=tag_id, category=category, top_n=top_n))
+
+
+@app.get("/api/bloodline-cluster/stats", response_class=JSONResponse)
+async def api_bloodline_cluster_stats(
+    target_kind: str = Query("sire", description="sire | L2 | L1_sub | main | all"),
+    target_id: Optional[str] = Query(None, description="種牡馬ID / L2番号 / L1_sub番号 / 主流名"),
+    main_group: Optional[str] = Query(None, description="L1_sub 指定時の主流名"),
+    date_from: Optional[str] = Query(None, description="期間開始 (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="期間終了 (YYYY-MM-DD)"),
+    venues: Optional[str] = Query(None, description="競馬場 (カンマ区切り 例: 東京,中山)"),
+    surfaces: Optional[str] = Query(None, description="路面 (カンマ区切り 例: 芝,ダート)"),
+    dist_min: Optional[float] = Query(None, description="距離下限 (m)"),
+    dist_max: Optional[float] = Query(None, description="距離上限 (m)"),
+    track_conditions: Optional[str] = Query(None, description="馬場 (カンマ区切り 例: 良,稍重,重,不良)"),
+    grades: Optional[str] = Query(None, description="グレード (カンマ区切り 例: G1,G2,G3,オープン)"),
+    breakdown: Optional[str] = Query(None, description="内訳 sire | venue | surface | dist_cat | grade | L2 | L1_sub"),
+    top_per_breakdown: int = Query(30, ge=1, le=200, description="内訳の上位N (n_records 降順)"),
+):
+    """期間 × 舞台条件 × 種牡馬/クラスタ で統計量 (勝率/連対/複勝/平均着/平均人気/単回/複回) を返す。
+
+    例:
+        - 種牡馬ロードカナロアの 2023-2025 東京芝:
+          /api/bloodline-cluster/stats?target_kind=sire&target_id=2008103552&date_from=2023-01-01&date_to=2025-12-31&venues=東京&surfaces=芝
+        - L2=2 全体の 2024 年:
+          /api/bloodline-cluster/stats?target_kind=L2&target_id=2&date_from=2024-01-01
+        - Native Dancer系 の L1_sub=1 を内訳=sire で:
+          /api/bloodline-cluster/stats?target_kind=L1_sub&target_id=1&main_group=Native Dancer系&breakdown=sire
+    """
+    from src.api.bloodline_meta_cluster import compute_stats
+    result = compute_stats(
+        target_kind=target_kind,
+        target_id=target_id,
+        main_group=main_group,
+        date_from=date_from,
+        date_to=date_to,
+        venues=venues,
+        surfaces=surfaces,
+        dist_min=dist_min,
+        dist_max=dist_max,
+        track_conditions=track_conditions,
+        grades=grades,
+        breakdown=breakdown,
+        top_per_breakdown=top_per_breakdown,
+    )
+    return JSONResponse(result)
+
+
+@app.get("/api/bloodline-cluster/sire-presence-stats", response_class=JSONResponse)
+async def api_bloodline_cluster_sire_presence_stats(
+    stallion_id: str = Query(..., description="種牡馬 horse_id"),
+    date_from: Optional[str] = Query(None, description="期間開始 (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="期間終了 (YYYY-MM-DD)"),
+    venues: Optional[str] = Query(None, description="競馬場 (カンマ区切り)"),
+    surfaces: Optional[str] = Query(None, description="路面 (カンマ区切り)"),
+    dist_min: Optional[float] = Query(None, description="距離下限 (m)"),
+    dist_max: Optional[float] = Query(None, description="距離上限 (m)"),
+    track_conditions: Optional[str] = Query(None, description="馬場 (カンマ区切り)"),
+    grades: Optional[str] = Query(None, description="グレード (カンマ区切り)"),
+):
+    """指定種牡馬 X が血統 (直近10世代) のどの領域に登場するかで層別した成績を返す。
+
+    レスポンス内訳:
+        - ``sire``        : X = 父そのもの (1代直結) - 既存 sire 統計と一致
+        - ``father``      : A = X が父系領域 (父・父父・父父父...) のどこかに登場 (10gen 以内)
+        - ``mother``      : B = X が母系領域 (母父系 OR 母母系) のどこかに登場 (10gen 以内)
+        - ``father_only`` / ``mother_only`` / ``both`` : A∩B 排他的分割
+    """
+    from src.api.bloodline_meta_cluster import compute_sire_presence_stats
+    result = compute_sire_presence_stats(
+        stallion_id=stallion_id,
+        date_from=date_from,
+        date_to=date_to,
+        venues=venues,
+        surfaces=surfaces,
+        dist_min=dist_min,
+        dist_max=dist_max,
+        track_conditions=track_conditions,
+        grades=grades,
+    )
+    return JSONResponse(result)
+
+
+@app.get("/api/pedigree-map/condition-ranking", response_class=JSONResponse)
+async def api_pedigree_map_condition_ranking(
+    side: str = Query("sire", description="sire | bms | father | mother"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    venues: Optional[str] = Query(None),
+    surfaces: Optional[str] = Query(None),
+    dist_min: Optional[float] = Query(None),
+    dist_max: Optional[float] = Query(None),
+    track_conditions: Optional[str] = Query(None),
+    grades: Optional[str] = Query(None),
+    pop_min: Optional[float] = Query(None),
+    pop_max: Optional[float] = Query(None),
+    odds_min: Optional[float] = Query(None, description="単勝オッズ下限"),
+    odds_max: Optional[float] = Query(None, description="単勝オッズ上限"),
+    min_n: int = Query(30, ge=1, le=10000),
+    top: int = Query(30, ge=1, le=200),
+    sort: str = Query("balanced", description="balanced | win_roi | place_roi | win_rate | place3_rate | n_records"),
+):
+    """馬券条件マッチ種牡馬ランキング (探索モードのメイン API)。"""
+    from src.api.bloodline_meta_cluster import compute_condition_ranking
+    return JSONResponse(compute_condition_ranking(
+        side=side,
+        date_from=date_from, date_to=date_to,
+        venues=venues, surfaces=surfaces,
+        dist_min=dist_min, dist_max=dist_max,
+        track_conditions=track_conditions, grades=grades,
+        pop_min=pop_min, pop_max=pop_max,
+        odds_min=odds_min, odds_max=odds_max,
+        min_n=min_n, top=top, sort=sort,
+    ))
+
+
+@app.get("/api/pedigree-map/progeny-under-condition", response_class=JSONResponse)
+async def api_pedigree_map_progeny_under_condition(
+    stallion_id: str = Query(..., description="種牡馬 / 祖先 horse_id"),
+    side: str = Query("sire", description="sire | bms | father | mother"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    venues: Optional[str] = Query(None),
+    surfaces: Optional[str] = Query(None),
+    dist_min: Optional[float] = Query(None),
+    dist_max: Optional[float] = Query(None),
+    track_conditions: Optional[str] = Query(None),
+    grades: Optional[str] = Query(None),
+    pop_min: Optional[float] = Query(None),
+    pop_max: Optional[float] = Query(None),
+    odds_min: Optional[float] = Query(None),
+    odds_max: Optional[float] = Query(None),
+    min_n: int = Query(3, ge=1, le=10000, description="馬ごとの最小出走数"),
+    top: int = Query(12, ge=1, le=100),
+    sort: str = Query("balanced"),
+    sample_per_horse: int = Query(5, ge=0, le=30),
+):
+    """探索モード行展開: 該当条件における代表的な該当馬と各馬の条件下成績。"""
+    from src.api.bloodline_meta_cluster import compute_progeny_under_condition
+    return JSONResponse(compute_progeny_under_condition(
+        stallion_id=stallion_id, side=side,
+        date_from=date_from, date_to=date_to,
+        venues=venues, surfaces=surfaces,
+        dist_min=dist_min, dist_max=dist_max,
+        track_conditions=track_conditions, grades=grades,
+        pop_min=pop_min, pop_max=pop_max,
+        odds_min=odds_min, odds_max=odds_max,
+        min_n=min_n, top=top, sort=sort,
+        sample_per_horse=sample_per_horse,
+    ))
+
+
+@app.get("/api/bloodline-cluster/sire-heatmap", response_class=JSONResponse)
+async def api_bloodline_cluster_sire_heatmap(
+    stallion_id: str = Query(...),
+    axis_x: str = Query("venue"),
+    axis_y: str = Query("dist_cat"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    surfaces: Optional[str] = Query(None),
+    track_conditions: Optional[str] = Query(None),
+    min_n_cell: int = Query(1, ge=0),
+):
+    """指定種牡馬 直結産駒の 2 軸ヒートマップ用集計。"""
+    from src.api.bloodline_meta_cluster import compute_sire_heatmap
+    return JSONResponse(compute_sire_heatmap(
+        stallion_id=stallion_id,
+        axis_x=axis_x, axis_y=axis_y,
+        date_from=date_from, date_to=date_to,
+        surfaces=surfaces, track_conditions=track_conditions,
+        min_n_cell=min_n_cell,
+    ))
+
+
+@app.get("/api/bloodline-cluster/sire-summary-card", response_class=JSONResponse)
+async def api_bloodline_cluster_sire_summary_card(
+    stallion_id: str = Query(...),
+    period: str = Query("all", description="all | 2y | 1y"),
+):
+    """サマリーカード用の集計 (上部ヘッダ用)。"""
+    from src.api.bloodline_meta_cluster import compute_sire_summary_card
+    return JSONResponse(compute_sire_summary_card(stallion_id=stallion_id, period=period))
+
+
+@app.get("/api/bloodline-cluster/sire-best-conditions", response_class=JSONResponse)
+async def api_bloodline_cluster_sire_best_conditions(
+    stallion_id: str = Query(..., description="種牡馬 horse_id"),
+    min_n: int = Query(30, ge=1, le=10000, description="最小出走数 (これ以下の条件は除外)"),
+    top: int = Query(10, ge=1, le=100, description="各ランキングの上位 N"),
+    date_from: Optional[str] = Query(None, description="期間開始 (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="期間終了 (YYYY-MM-DD)"),
+):
+    """指定種牡馬直結産駒 (sire) のベスト条件ランキング (複合条件 + 単軸別)。
+
+    返却:
+      - rankings.combo: 場×路面×距離区分 (勝率/複勝率/単回収/複回収の上位 N)
+      - rankings.combo_full: 場×路面×距離×馬場×グレード (単回収/複回収の上位 N)
+      - rankings.by_venue / by_surface / by_dist_cat / by_track_condition / by_grade: 単軸別の全行
+    """
+    from src.api.bloodline_meta_cluster import compute_sire_best_conditions
+    result = compute_sire_best_conditions(
+        stallion_id=stallion_id,
+        min_n=min_n,
+        top=top,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return JSONResponse(result)
+
+
+@app.get("/api/bloodline-cluster/sire-presence-horses", response_class=JSONResponse)
+async def api_bloodline_cluster_sire_presence_horses(
+    stallion_id: str = Query(..., description="種牡馬 horse_id"),
+    side: str = Query("father", description="father (A=父系領域) | mother (B=母系領域) | sire (父=本馬) | both (両方)"),
+    limit: int = Query(10, ge=0, le=2000, description="返却件数 (0=全件)"),
+    offset: int = Query(0, ge=0, description="開始位置"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    venues: Optional[str] = Query(None),
+    surfaces: Optional[str] = Query(None),
+    dist_min: Optional[float] = Query(None),
+    dist_max: Optional[float] = Query(None),
+    track_conditions: Optional[str] = Query(None),
+    grades: Optional[str] = Query(None),
+):
+    """指定種牡馬を A/B/sire/both で含む該当馬一覧を、推定獲得賞金の多い順で返す。"""
+    from src.api.bloodline_meta_cluster import compute_sire_presence_horses
+    result = compute_sire_presence_horses(
+        stallion_id=stallion_id,
+        side=side,
+        limit=limit,
+        offset=offset,
+        date_from=date_from,
+        date_to=date_to,
+        venues=venues,
+        surfaces=surfaces,
+        dist_min=dist_min,
+        dist_max=dist_max,
+        track_conditions=track_conditions,
+        grades=grades,
+    )
+    return JSONResponse(result)
+
+
+# ── 競走馬の血統ベース適性プロファイル (Phase 1: 馬名 → L2_fine 所属度) ──
+_horse_apt_calc = None
+
+
+def _get_horse_apt_calc():
+    """HorseAptitudeProfileCalc のシングルトン取得 (遅延初期化)。"""
+    global _horse_apt_calc
+    if _horse_apt_calc is None:
+        from src.research.pedigree.horse_aptitude_profile import (
+            HorseAptitudeProfileCalc,
+        )
+        _horse_apt_calc = HorseAptitudeProfileCalc()
+    return _horse_apt_calc
+
+
+@app.get("/api/bloodline-cluster/horse-aptitude", response_class=JSONResponse)
+async def api_bloodline_cluster_horse_aptitude(
+    horse_id: Optional[str] = Query(None, description="競走馬 horse_id (優先)"),
+    horse_name: Optional[str] = Query(None, description="競走馬名"),
+):
+    """指定された競走馬の **血統ベース適性プロファイル** を返す。
+
+    - 10 世代以内の祖先 (主流 133 種牡馬 + 拡張 ~4640 祖先) の L2_fine 所属を
+      位置別重み付き集計し、11 個の L2 クラスタへの所属度ベクトルを算出。
+    - 実成績 (オッズ < 30 倍のレコードのみ) からのベスト条件もシグナルとして付与。
+
+    Returns: HorseAptitudeProfileCalc.compute() の dict (フォーマットはモジュールの
+             docstring を参照)。
+    """
+    if not horse_id and not horse_name:
+        return JSONResponse({"error": "horse_id or horse_name required"}, status_code=400)
+    try:
+        calc = _get_horse_apt_calc()
+        result = calc.compute(horse_id=horse_id, horse_name=horse_name)
+    except FileNotFoundError as e:
+        return JSONResponse({"error": f"artifacts not found: {e}"}, status_code=500)
+    if "error" in result:
+        return JSONResponse(result, status_code=404)
+    return JSONResponse(result)
+
+
+@app.get("/api/bloodline-cluster/horse-name-suggest", response_class=JSONResponse)
+async def api_bloodline_cluster_horse_name_suggest(
+    q: str = Query(..., min_length=1, description="馬名検索クエリ (先頭一致)"),
+    limit: int = Query(15, ge=1, le=50),
+):
+    """馬名のサジェスト (先頭一致) を返す。
+
+    Returns: ``{"items": [{"horse_id": "...", "horse_name": "...", "sex": "牡", "n_races": 17, "last_date": "..."}]}``
+    """
+    try:
+        calc = _get_horse_apt_calc()
+    except FileNotFoundError as e:
+        return JSONResponse({"items": [], "error": str(e)}, status_code=500)
+    q_norm = q.strip()
+    if not q_norm:
+        return JSONResponse({"items": []})
+    idx = calc.idx
+    mask = idx["horse_name"].str.startswith(q_norm, na=False)
+    if not mask.any():
+        # フォールバック: 部分一致
+        mask = idx["horse_name"].str.contains(q_norm, na=False, regex=False)
+    hits = idx[mask].sort_values(["last_date"], ascending=False).head(limit)
+    items = [
+        {
+            "horse_id": str(r["horse_id"]),
+            "horse_name": str(r["horse_name"]),
+            "sex": str(r.get("sex", "?")),
+            "n_races": int(r.get("n_races", 0)),
+            "last_date": str(r.get("last_date", "")),
+        }
+        for _, r in hits.iterrows()
+    ]
+    return JSONResponse({"items": items, "q": q_norm})
 
 
 # ══════════════════════════════════════════════════════
@@ -7614,13 +8792,15 @@ async def api_bloodline_data(analysis_type: str):
 _course_bl_job: dict[str, Any] = {"running": False}
 
 
-@app.get("/course-bloodline", response_class=HTMLResponse)
-async def course_bloodline_page(request: Request):
-    return templates.TemplateResponse("course_bloodline.html", {
-        "request": request,
-        "current_page": "course_bloodline",
-        "breadcrumbs": [],
-    })
+@app.get("/course-bloodline", include_in_schema=False)
+async def course_bloodline_page_redirect():
+    """旧 /course-bloodline ページは /bloodline (統合 Viewer) にリダイレクト。
+
+    「コース特性 × 血統適性」と「血統 × 距離適性 研究」は 1 ページに統合された。
+    既存 API (/api/course-bloodline/data/*, /api/course-profiles) はそのまま残置。
+    """
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/bloodline", status_code=308)
 
 
 @app.get("/api/course-profiles", response_class=JSONResponse)
@@ -7628,10 +8808,17 @@ async def api_course_profiles():
     """コースプロファイル (ドメインナレッジ) を返す。"""
     import json as json_mod
     from pathlib import Path as _P
-    p = _P(os.path.dirname(__file__)).parent / "data" / "knowledge" / "course_profiles.json"
+    p = _P(__file__).resolve().parents[2] / "data" / "knowledge" / "course_profiles.json"
     if not p.exists():
         return JSONResponse({"error": "course_profiles.json が見つかりません"}, status_code=404)
-    return JSONResponse(json_mod.loads(p.read_text(encoding="utf-8")))
+    payload = json_mod.loads(p.read_text(encoding="utf-8"))
+    hl = _P(__file__).resolve().parents[2] / "data" / "research" / "course_bloodline" / "profile_course_roi_highlights.json"
+    if hl.exists():
+        try:
+            payload["roi_highlights"] = json_mod.loads(hl.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return JSONResponse(payload)
 
 
 @app.post("/api/course-bloodline/analyze", response_class=JSONResponse)
@@ -7700,37 +8887,110 @@ async def api_course_bl_status():
     })
 
 
+@app.get("/api/course-bloodline/surfaces", response_class=JSONResponse)
+async def api_course_bl_surfaces():
+    from pathlib import Path as _Path
+    from src.research.pedigree.bloodline_surface import load_surface_meta
+
+    base = _Path(__file__).resolve().parents[2] / "data" / "research" / "course_bloodline"
+    return JSONResponse(load_surface_meta(base) or {"surfaces": {}, "total_run_count": 0})
+
+
 @app.get("/api/course-bloodline/data/{analysis_type}", response_class=JSONResponse)
-async def api_course_bl_data(analysis_type: str):
+async def api_course_bl_data(
+    analysis_type: str,
+    surface: str = Query("turf", description="turf|dirt|jump"),
+):
     import csv as csv_mod
     from pathlib import Path as _P
-    base = _P(os.path.dirname(__file__)).parent / "data" / "research" / "course_bloodline"
+
+    def _csv_tab(p: _P) -> dict[str, Any]:
+        rows: list[dict[str, str]] = []
+        if not p.exists():
+            return {"columns": [], "rows": []}
+        with open(p, encoding="utf-8-sig") as f:
+            r = csv_mod.DictReader(f)
+            for row in r:
+                rows.append(row)
+        return {"columns": list(rows[0].keys()) if rows else [], "rows": rows}
+
+    base = _P(__file__).resolve().parents[2] / "data" / "research" / "course_bloodline"
+    ctx = _bloodline_surface_context(base, surface)
+
+    if analysis_type == "profiles":
+        path = base / "course_profiles_summary.csv"
+        if not path.exists():
+            return JSONResponse({"error": "データなし: profiles"}, status_code=404)
+        rows = []
+        with open(path, encoding="utf-8-sig") as f:
+            reader = csv_mod.DictReader(f)
+            for row in reader:
+                rows.append(row)
+        return JSONResponse({
+            "columns": list(rows[0].keys()) if rows else [],
+            "rows": rows,
+        })
+
+    data_dir = _bloodline_surface_dir(base, surface)
+
+    if analysis_type == "venue_sire":
+        top3 = data_dir / "venue_sire_top3rate.csv"
+        if top3.exists():
+            return JSONResponse({
+                "format": "metric_bundle",
+                "min_cell_samples": 15,
+                "min_roi_samples": 8,
+                **ctx,
+                "metrics": {
+                    "top3_rate": _csv_tab(top3),
+                    "top2_rate": _csv_tab(data_dir / "venue_sire_top2rate.csv"),
+                    "win_rate": _csv_tab(data_dir / "venue_sire_win_rate.csv"),
+                    "sample_count": _csv_tab(data_dir / "venue_sire_sample_count.csv"),
+                    "win_roi": _csv_tab(data_dir / "venue_sire_win_roi.csv"),
+                    "place_roi": _csv_tab(data_dir / "venue_sire_place_roi.csv"),
+                    "roi_count": _csv_tab(data_dir / "venue_sire_roi_count.csv"),
+                },
+            })
+
+    if analysis_type == "grass_summary" and surface != "turf":
+        return JSONResponse({
+            **ctx,
+            "columns": [],
+            "rows": [],
+            "note": "芝種別分析は芝レースのみ対象です",
+        })
 
     file_map = {
-        "venue_sire": base / "venue_sire_top3rate.csv",
-        "trait_correlation": base / "sire_trait_correlation.csv",
-        "aptitude": base / "sire_course_aptitude.csv",
-        "optimal": base / "sire_optimal_conditions.csv",
-        "track_condition": base / "track_condition_interaction.csv",
-        "profiles": base / "course_profiles_summary.csv",
-        "draw_bloodline": base / "draw_bloodline_interaction.csv",
-        "draw_summary": base / "sire_draw_bias_summary.csv",
-        "grass_type": base / "grass_type_bloodline.csv",
-        "grass_summary": base / "sire_grass_type_summary.csv",
-        "fc_draw": base / "first_corner_draw_interaction.csv",
-        "fc_draw_summary": base / "first_corner_draw_summary.csv",
+        "venue_sire": data_dir / "venue_sire_top3rate.csv",
+        "trait_correlation": data_dir / "sire_trait_correlation.csv",
+        "aptitude": data_dir / "sire_course_aptitude.csv",
+        "optimal": data_dir / "sire_optimal_conditions.csv",
+        "track_condition": data_dir / "track_condition_interaction.csv",
+        "draw_bloodline": data_dir / "draw_bloodline_interaction.csv",
+        "draw_summary": data_dir / "sire_draw_bias_summary.csv",
+        "grass_type": data_dir / "grass_type_bloodline.csv",
+        "grass_summary": data_dir / "sire_grass_type_summary.csv",
+        "fc_draw": data_dir / "first_corner_draw_interaction.csv",
+        "fc_draw_summary": data_dir / "first_corner_draw_summary.csv",
     }
 
     path = file_map.get(analysis_type)
     if not path or not path.exists():
-        return JSONResponse({"error": f"データなし: {analysis_type}"}, status_code=404)
+        return JSONResponse(
+            {"error": f"データなし: {analysis_type} (surface={ctx['surface']})"},
+            status_code=404,
+        )
 
     rows = []
     with open(path, encoding="utf-8-sig") as f:
         reader = csv_mod.DictReader(f)
         for row in reader:
             rows.append(row)
-    return JSONResponse({"columns": list(rows[0].keys()) if rows else [], "rows": rows})
+    return JSONResponse({
+        **ctx,
+        "columns": list(rows[0].keys()) if rows else [],
+        "rows": rows,
+    })
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -8065,67 +9325,427 @@ async def api_auto_scrape_status():
     })
 
 
+# ── バッチ手動実行 (dev-only) ──────────────────────────────────────
+
+_manual_batch_job: dict[str, Any] = {
+    "status": "idle",   # idle | running | done | error
+    "task": None,
+    "date": None,
+    "started_at": None,
+    "finished_at": None,
+    "logs": [],
+    "current_step": "",
+    "result": None,
+    "error": None,
+}
+_manual_batch_lock = threading.Lock()
+
+
+def _run_manual_batch(task: str, date_str: str) -> None:
+    """バッチタスクをバックグラウンドスレッドで実行する。"""
+    import datetime as _dt
+    from src.scraper.auto_scrape import (
+        run_raceday_evening_for_date,
+        run_raceday_eve_for_date,
+        run_weekly_update_for_dates,
+        run_catchup_for_dates,
+        task_daily_race_lists,
+        task_catchup_missing_dates,
+        _load_race_calendar,
+        _last_week_race_dates,
+        _missing_past_race_dates,
+    )
+
+    import re as _re
+    _STEP_SKIP = _re.compile(r'^[\s=\-*]+$')
+
+    job = _manual_batch_job
+    job["status"] = "running"
+    job["started_at"] = _dt.datetime.now().isoformat()
+    job["finished_at"] = None
+    job["logs"] = []
+    job["current_step"] = "起動中..."
+    job["result"] = None
+    job["error"] = None
+
+    # ログをメモリに積み、意味ある行を current_step に反映する Handler
+    class _ListHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            job["logs"].append(self.format(record))
+            msg = record.getMessage().strip()
+            if msg and not _STEP_SKIP.match(msg):
+                job["current_step"] = msg[:200]
+
+    handler = _ListHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    handler.setLevel(logging.DEBUG)
+    root_logger = logging.getLogger()
+    _orig_root_level = root_logger.level
+    if _orig_root_level == logging.NOTSET or _orig_root_level > logging.INFO:
+        root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(handler)
+    try:
+        if task == "raceday-evening":
+            result = run_raceday_evening_for_date(date_str)
+        elif task == "raceday-eve":
+            # date_str が空なら翌日を使う
+            target = date_str.replace("-", "") if date_str else ""
+            if not target:
+                target = (_dt.date.today() + _dt.timedelta(days=1)).strftime("%Y%m%d")
+            result = run_raceday_eve_for_date(target)
+        elif task == "weekly-update":
+            # date_str (金曜日) の10日前〜当日の開催日を解決
+            job["current_step"] = "カレンダー読み込み中..."
+            cal = _load_race_calendar()
+            ref = _dt.date.fromisoformat(date_str)
+            range_start = ref - _dt.timedelta(days=10)
+            target_dates = [
+                d["date"]
+                for d in cal.get("race_days", [])
+                if range_start.isoformat() <= d["date"] <= ref.isoformat()
+            ]
+            if not target_dates:
+                target_dates = _last_week_race_dates(cal)
+            result = run_weekly_update_for_dates(target_dates)
+        elif task == "catchup-missing":
+            job["current_step"] = "カレンダー読み込み中..."
+            cal = _load_race_calendar()
+            job["current_step"] = "欠損日チェック中..."
+            missing = _missing_past_race_dates(cal)
+            if missing:
+                job["current_step"] = f"補完対象: {len(missing)}日 ({', '.join(missing)})"
+                result = run_catchup_for_dates(missing)
+            else:
+                job["current_step"] = "欠損日なし"
+                result = {"status": "skipped", "reason": "no-missing-dates"}
+            _invalidate_race_list_caches()
+        elif task == "daily-race-lists":
+            task_daily_race_lists()
+            _invalidate_race_list_caches()
+            result = {"status": "ok", "note": "daily-race-lists completed"}
+        else:
+            result = {"status": "error", "reason": f"unknown task: {task}"}
+
+        job["result"] = result
+        job["status"] = "done" if result.get("status") != "error" else "error"
+    except Exception as e:
+        logger.error("[ManualBatch] %s / %s: %s", task, date_str, e, exc_info=True)
+        job["error"] = str(e)
+        job["status"] = "error"
+    finally:
+        root_logger.removeHandler(handler)
+        root_logger.setLevel(_orig_root_level)
+        job["finished_at"] = _dt.datetime.now().isoformat()
+
+
+@app.post("/api/auto-scrape/run", response_class=JSONResponse)
+async def api_auto_scrape_run(request: Request):
+    """バッチタスクを手動実行する (dev-only)。
+    Body: {"task": "raceday-evening"|"weekly-update"|"catchup-missing"|"daily-race-lists", "date": "YYYY-MM-DD"}
+    """
+    from src.api.auth import is_developer
+    if not is_developer(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=403)
+
+    body = await request.json()
+    task = str(body.get("task", ""))
+    date_str = str(body.get("date", ""))
+
+    _ALLOWED_TASKS = (
+        "raceday-eve", "raceday-evening", "weekly-update",
+        "catchup-missing", "daily-race-lists",
+    )
+    if task not in _ALLOWED_TASKS:
+        return JSONResponse({"error": f"unknown task: {task}"}, status_code=400)
+
+    import re as _re
+    if not _re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+        return JSONResponse({"error": "date must be YYYY-MM-DD"}, status_code=400)
+
+    with _manual_batch_lock:
+        if _manual_batch_job["status"] == "running":
+            return JSONResponse({"status": "already_running",
+                                 "task": _manual_batch_job["task"],
+                                 "date": _manual_batch_job["date"]})
+        _manual_batch_job["task"] = task
+        _manual_batch_job["date"] = date_str
+
+    t = threading.Thread(target=_run_manual_batch, args=(task, date_str), daemon=True)
+    t.start()
+    return JSONResponse({"status": "started", "task": task, "date": date_str})
+
+
+@app.get("/api/auto-scrape/run-status", response_class=JSONResponse)
+async def api_auto_scrape_run_status(request: Request):
+    """手動バッチの実行状態を返す (dev-only)。"""
+    from src.api.auth import is_developer
+    if not is_developer(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=403)
+
+    job = _manual_batch_job
+    return JSONResponse({
+        "status": job["status"],
+        "task": job["task"],
+        "date": job["date"],
+        "started_at": job["started_at"],
+        "finished_at": job["finished_at"],
+        "log_count": len(job["logs"]),
+        "logs": job["logs"][-200:],   # 最新 200 行
+        "current_step": job.get("current_step", ""),
+        "result": job["result"],
+        "error": job["error"],
+    })
+
+
+@app.post("/api/admin/invalidate-race-list-caches", response_class=JSONResponse)
+async def api_invalidate_race_list_caches(request: Request):
+    """race_lists 関連インメモリキャッシュを即時クリア (dev-only)。daily-race-lists cron から呼ぶ。"""
+    from src.api.auth import is_developer
+    if not is_developer(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=403)
+    _invalidate_race_list_caches()
+    return JSONResponse({"status": "ok", "cleared": ["_RACE_LIST_STEMS_CACHE", "_scrape_dates_cache",
+                                                      "_SCRAPE_DATES_RAW_CACHE", "_PICKER_SCRAPE_DATES_CACHE"]})
+
+
+
 # ══════════════════════════════════════════════════════
-#  馬場速度レベリング (Track Speed Index)
+#  馬場速度レベリング v2 (2着タイム z-score / 基準データ方式)
 # ══════════════════════════════════════════════════════
 
 _track_speed_job: dict[str, Any] = {
     "status": "idle",
     "progress": [],
     "error": None,
-    "data_available": False,
 }
-_track_speed_data: dict[str, Any] = {}
-_track_speed_lock = threading.Lock()
+
+
+def _track_speed_engine():
+    from pathlib import Path
+    from src.research.race.track_speed_engine import TrackSpeedEngine
+    eng = TrackSpeedEngine(str(Path(__file__).resolve().parents[2]))
+    eng.load_baselines()
+    return eng
 
 
 @app.get("/track-speed", response_class=HTMLResponse)
 async def track_speed_page(request: Request):
-    return templates.TemplateResponse("track_speed.html", {
+    return templates.TemplateResponse("analysis/track_speed.html", {
         "request": request,
         "current_page": "track_speed",
         "breadcrumbs": [],
     })
 
 
+@app.get("/track-speed/dev", response_class=HTMLResponse)
+async def track_speed_dev_page(request: Request):
+    from src.api.auth import is_developer
+    if not is_developer(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=f"/login?next=/track-speed/dev", status_code=302)
+    return templates.TemplateResponse("analysis/track_speed_dev.html", {
+        "request": request,
+        "current_page": "track_speed",
+        "breadcrumbs": [{"label": "馬場速度", "url": "/track-speed"}, {"label": "Dev Docs"}],
+    })
+
+
+@app.get("/api/track-speed/meta", response_class=JSONResponse)
+async def api_track_speed_meta():
+    from src.research.race.track_speed_engine import (
+        BASELINES_PATH, META_PATH, PACE_BASELINES_PATH,
+    )
+    meta: dict[str, Any] = {
+        "baselines_ready": BASELINES_PATH.exists(),
+        "pace_baselines_ready": PACE_BASELINES_PATH.exists(),
+    }
+    if META_PATH.exists():
+        import json as _json
+        meta.update(_json.loads(META_PATH.read_text(encoding="utf-8")))
+    try:
+        eng = _track_speed_engine()
+        meta["dates_count"] = len(eng.list_dates())
+        meta["venues"] = eng.list_venues()
+    except Exception:
+        meta["venues"] = []
+    return JSONResponse(meta)
+
+
+@app.get("/api/track-speed/dates", response_class=JSONResponse)
+async def api_track_speed_dates(venue: Optional[str] = Query(None)):
+    try:
+        eng = _track_speed_engine()
+        return JSONResponse({"dates": eng.list_dates(venue=venue)})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/track-speed/venues", response_class=JSONResponse)
+async def api_track_speed_venues(
+    date: str = Query(..., description="YYYYMMDD or YYYY-MM-DD"),
+):
+    try:
+        eng = _track_speed_engine()
+        return JSONResponse({"venues": eng.list_venues_for_date(date)})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/track-speed/day", response_class=JSONResponse)
+async def api_track_speed_day(
+    date: str = Query(..., description="YYYYMMDD or YYYY-MM-DD"),
+    venue: Optional[str] = Query(None),
+):
+    try:
+        eng = _track_speed_engine()
+        return JSONResponse(eng.query_day(date, venue=venue))
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.get("/api/track-speed/status", response_class=JSONResponse)
 async def track_speed_status():
+    from src.research.race.track_speed_engine import BASELINES_PATH, META_PATH
     return JSONResponse({
         "status": _track_speed_job["status"],
         "progress": _track_speed_job["progress"][-30:],
         "error": _track_speed_job["error"],
-        "data_available": _track_speed_job["data_available"],
+        "baselines_ready": BASELINES_PATH.exists(),
+        "assignments_ready": META_PATH.exists(),
     })
 
 
-@app.get("/api/track-speed", response_class=JSONResponse)
-async def track_speed_data():
-    if not _track_speed_data:
-        return JSONResponse({"error": "データなし。計算を実行してください。"})
-    return JSONResponse(_track_speed_data)
-
-
-@app.post("/api/track-speed/compute", response_class=JSONResponse)
-async def track_speed_compute():
+@app.post("/api/track-speed/rebuild-baselines", response_class=JSONResponse)
+async def track_speed_rebuild_baselines():
     if _track_speed_job["status"] == "running":
         return JSONResponse({"status": "already_running"})
-    threading.Thread(target=_compute_track_speed, daemon=True).start()
+    threading.Thread(target=_run_track_speed_baselines, daemon=True).start()
     return JSONResponse({"status": "started"})
 
 
-def _compute_track_speed():
-    """
-    TSI (Track Speed Index) 算出:
-      1. 全レースの2着走破タイムを収集
-      2. (馬場×距離×会場) ごとにベースライン統計を算出
-      3. raw_z = (time_2nd - mean) / std
-      4. 出走馬のレーティングから馬質補正 (field_adj) を算出
-      5. TSI = raw_z - field_adj
-      6. 日×会場×馬場 で集約 → 速度レベル判定
-    """
-    import statistics
-    global _track_speed_data
+@app.post("/api/track-speed/assign", response_class=JSONResponse)
+async def track_speed_assign(
+    date_from: str = Query("2026-01-01"),
+    date_to: Optional[str] = Query(None),
+):
+    if _track_speed_job["status"] == "running":
+        return JSONResponse({"status": "already_running"})
+    threading.Thread(
+        target=_run_track_speed_assign,
+        args=(date_from, date_to),
+        daemon=True,
+    ).start()
+    return JSONResponse({"status": "started"})
 
+
+@app.get("/api/track-speed/validate-perf", response_class=JSONResponse)
+async def api_validate_perf():
+    """レースパフォーマンス指数のバリデーションを実行して結果を返す。"""
+    try:
+        from src.research.race.perf_index import run_validation
+        result = run_validation()
+        return JSONResponse(result)
+    except Exception as e:
+        logger.error("[ValidatePerf] %s", e, exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/track-speed/race-horses", response_class=JSONResponse)
+async def api_race_horses(
+    race_id: str = Query(...),
+    race_perf: float = Query(..., description="レース全体のperf_index（2着馬の基準値）"),
+):
+    """レースの全馬にperf_indexと速度水準ラベルを付けて返す。2着馬がrace_perfと同値。"""
+    try:
+        import pandas as _pd
+        from src.scraper.local_tables import load_flat_df
+        from src.research.race.track_speed_engine import format_race_time, RACES_DIR
+
+        year = str(race_id)[:4]
+        cols = ["race_id", "finish_position", "horse_number", "horse_name", "time_sec"]
+        df = load_flat_df("race_result", years=[year], columns=cols, base_dir=BASE_DIR)
+        race_df = df[df["race_id"] == race_id].copy()
+        if race_df.empty:
+            return JSONResponse({"horses": [], "error": "レースデータなし"})
+        race_df = race_df[race_df["finish_position"] > 0].sort_values("finish_position")
+        r2 = race_df[race_df["finish_position"] == 2]
+        if r2.empty:
+            return JSONResponse({"horses": [], "error": "2着データなし"})
+        time_2nd = float(r2.iloc[0]["time_sec"])
+
+        # レースメタデータをtrack_speedパーケットから取得（速度水準分類に必要）
+        race_meta: dict = {}
+        try:
+            rp = RACES_DIR / f"races_{year}.parquet"
+            if rp.exists():
+                meta_cols = ["race_id", "venue", "layout", "surface", "distance",
+                             "class_band", "cond_pool", "time_2nd_adj"]
+                rm = _pd.read_parquet(rp, columns=meta_cols)
+                rm = rm[rm["race_id"] == race_id]
+                if not rm.empty:
+                    race_meta = rm.iloc[0].to_dict()
+        except Exception:
+            pass
+
+        # 速度水準ラベル分類の準備
+        eng = _track_speed_engine() if race_meta else None
+        time_2nd_adj = float(race_meta.get("time_2nd_adj") or 0)
+
+        horses = []
+        for _, row in race_df.iterrows():
+            t = row["time_sec"]
+            if t is None or (isinstance(t, float) and _pd.isna(t)) or float(t) <= 0:
+                continue
+            t = float(t)
+            diff = round(t - time_2nd, 1)
+            hp = round(race_perf - diff * 10, 1)
+
+            # 各馬のペース補正済みタイム = 2着馬の補正値 + 2着からの差
+            horse_class_level: str | None = None
+            if eng and time_2nd_adj > 0:
+                time_adj_horse = time_2nd_adj + (t - time_2nd)
+                horse_class_level = eng._classify_class_level(
+                    time_adj_horse,
+                    str(race_meta.get("venue", "")),
+                    str(race_meta.get("layout") or "-"),
+                    str(race_meta.get("surface", "")),
+                    int(race_meta.get("distance") or 0),
+                    str(race_meta.get("cond_pool") or "firm_yielding"),
+                    class_band=str(race_meta.get("class_band") or ""),
+                )
+
+            horses.append({
+                "finish_position": int(row["finish_position"]),
+                "horse_number": int(row["horse_number"]) if row["horse_number"] else 0,
+                "horse_name": str(row["horse_name"] or ""),
+                "time_sec": round(t, 1),
+                "time_fmt": format_race_time(t),
+                "time_diff": diff,
+                "horse_perf": hp,
+                "horse_class_level": horse_class_level,
+            })
+        return JSONResponse({"horses": horses, "race_perf": race_perf, "time_2nd": time_2nd})
+    except Exception as e:
+        logger.error("[RaceHorses] %s", e, exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/track-speed/by-category", response_class=JSONResponse)
+async def api_track_speed_by_category(
+    venue: str = Query(..., description="競馬場名"),
+    level: int = Query(..., ge=1, le=5, description="馬場速度レベル 1=超低速〜5=超高速"),
+    surface: Optional[str] = Query(None, description="芝 or ダート"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    try:
+        eng = _track_speed_engine()
+        return JSONResponse(eng.query_by_category(venue, level, surface=surface, offset=offset, limit=limit))
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+def _run_track_speed_baselines():
     job = _track_speed_job
     job["status"] = "running"
     job["progress"] = []
@@ -8136,229 +9756,47 @@ def _compute_track_speed():
         logger.info("[TrackSpeed] %s", msg)
 
     try:
-        storage = _get_storage()
-        race_list_dates = sorted(storage.list_keys("race_lists"), reverse=True)
-        log(f"開催日数: {len(race_list_dates)}")
-
-        all_races: list[dict] = []
-
-        for i, date in enumerate(race_list_dates):
-            rl = storage.load("race_lists", date)
-            if not rl:
-                continue
-            races = rl.get("races", [])
-            jra = [r for r in races if r.get("race_id") and _is_jra_race(r["race_id"])]
-
-            for race_meta in jra:
-                rid = race_meta["race_id"]
-                result = storage.load("race_result", rid)
-                if not result:
-                    continue
-
-                entries = result.get("entries", [])
-                if len(entries) < 3:
-                    continue
-
-                surface = result.get("surface", "")
-                distance = result.get("distance", 0)
-                venue = result.get("venue", "")
-                track_cond = result.get("track_condition", "")
-                grade = result.get("grade", "")
-
-                if not surface or not distance or not venue:
-                    continue
-                if surface == "障":
-                    continue
-
-                second_entry = None
-                for e in entries:
-                    fp = e.get("finish_position") or e.get("finish_order")
-                    if fp and (fp == 2 or str(fp) == "2"):
-                        second_entry = e
-                        break
-                if not second_entry:
-                    sorted_by_order = [
-                        e for e in entries
-                        if e.get("time_sec") and e["time_sec"] > 0
-                    ]
-                    sorted_by_order.sort(key=lambda x: x["time_sec"])
-                    if len(sorted_by_order) >= 2:
-                        second_entry = sorted_by_order[1]
-
-                if not second_entry or not second_entry.get("time_sec"):
-                    continue
-                time_2nd = second_entry["time_sec"]
-                if time_2nd <= 0:
-                    continue
-
-                horse_times = [
-                    e["time_sec"] for e in entries
-                    if e.get("time_sec") and e["time_sec"] > 0
-                ]
-                field_mean = statistics.mean(horse_times) if horse_times else time_2nd
-
-                all_races.append({
-                    "date": date,
-                    "race_id": rid,
-                    "venue": venue,
-                    "surface": surface,
-                    "distance": distance,
-                    "track_condition": track_cond,
-                    "grade": grade,
-                    "round": result.get("round", 0),
-                    "time_2nd": round(time_2nd, 1),
-                    "field_mean": round(field_mean, 2),
-                    "n_runners": len(entries),
-                })
-
-            if (i + 1) % 20 == 0:
-                log(f"レース読込: {i+1}/{len(race_list_dates)} 日 ({len(all_races)} R)")
-
-        log(f"全レース収集完了: {len(all_races)} R")
-
-        if not all_races:
-            job["status"] = "error"
-            job["error"] = "有効なレースデータがありません"
-            return
-
-        baselines: dict[str, list[float]] = {}
-        for r in all_races:
-            key = f"{r['surface']}_{r['distance']}_{r['venue']}"
-            baselines.setdefault(key, []).append(r["time_2nd"])
-
-        baseline_stats: dict[str, dict] = {}
-        for key, times in baselines.items():
-            if len(times) < 3:
-                continue
-            mu = statistics.mean(times)
-            sd = statistics.stdev(times) if len(times) > 1 else 1.0
-            if sd < 0.1:
-                sd = 0.1
-            baseline_stats[key] = {"mean": round(mu, 3), "std": round(sd, 3), "n": len(times)}
-
-        log(f"ベースライン: {len(baseline_stats)} グループ")
-
-        for r in all_races:
-            key = f"{r['surface']}_{r['distance']}_{r['venue']}"
-            bl = baseline_stats.get(key)
-            if not bl:
-                key_wide = f"{r['surface']}_{r['distance']}"
-                fallback = [
-                    v for k, v in baseline_stats.items()
-                    if k.startswith(key_wide)
-                ]
-                if fallback:
-                    mu = statistics.mean([f["mean"] for f in fallback])
-                    sd = statistics.mean([f["std"] for f in fallback])
-                    bl = {"mean": mu, "std": sd, "n": sum(f["n"] for f in fallback)}
-            if not bl:
-                r["raw_z"] = 0.0
-                r["field_adj"] = 0.0
-                r["tsi"] = 0.0
-                r["baseline_mean"] = None
-                continue
-
-            raw_z = (r["time_2nd"] - bl["mean"]) / bl["std"]
-
-            bl_mean_field = bl["mean"]
-            field_adj = (r["field_mean"] - bl_mean_field) / bl["std"] * 0.3
-
-            tsi = raw_z - field_adj
-            tsi = max(-3.0, min(3.0, tsi))
-
-            r["raw_z"] = round(raw_z, 3)
-            r["field_adj"] = round(field_adj, 3)
-            r["tsi"] = round(tsi, 3)
-            r["baseline_mean"] = round(bl["mean"], 1)
-
-        log("TSI 算出完了")
-
-        daily: dict[str, dict] = {}
-        for r in all_races:
-            date = r["date"]
-            venue = r["venue"]
-            surface = r["surface"]
-            daily.setdefault(date, {}).setdefault(venue, {}).setdefault(surface, {
-                "races": [], "tsi_values": [], "track_conditions": set(),
-            })
-            bucket = daily[date][venue][surface]
-            bucket["races"].append({
-                "round": r["round"],
-                "distance": r["distance"],
-                "grade": r["grade"],
-                "time_2nd": r["time_2nd"],
-                "baseline_mean": r["baseline_mean"],
-                "raw_z": r["raw_z"],
-                "field_adj": r["field_adj"],
-                "tsi": r["tsi"],
-            })
-            if r.get("tsi") is not None:
-                bucket["tsi_values"].append(r["tsi"])
-            if r["track_condition"]:
-                bucket["track_conditions"].add(r["track_condition"])
-
-        def _speed_label(tsi: float) -> tuple[str, int]:
-            if tsi <= -1.5:
-                return "超高速", 5
-            if tsi <= -0.5:
-                return "高速", 4
-            if tsi < 0.5:
-                return "標準", 3
-            if tsi < 1.5:
-                return "低速", 2
-            return "超低速", 1
-
-        output_daily: dict[str, dict] = {}
-        total_races_with_z = 0
-        days_computed = 0
-
-        for date in sorted(daily.keys()):
-            output_daily[date] = {}
-            day_has = False
-            for venue, surfaces in daily[date].items():
-                output_daily[date][venue] = {}
-                for surface, bucket in surfaces.items():
-                    vals = bucket["tsi_values"]
-                    if not vals:
-                        continue
-                    mean_tsi = statistics.mean(vals)
-                    label, level = _speed_label(mean_tsi)
-                    races_sorted = sorted(bucket["races"], key=lambda x: x["round"])
-
-                    output_daily[date][venue][surface] = {
-                        "tsi": round(mean_tsi, 3),
-                        "label": label,
-                        "level": level,
-                        "sample_size": len(vals),
-                        "track_conditions": sorted(bucket["track_conditions"]),
-                        "races": races_sorted,
-                    }
-                    total_races_with_z += len(vals)
-                    day_has = True
-            if day_has:
-                days_computed += 1
-
-        _track_speed_data.clear()
-        _track_speed_data.update({
-            "daily": output_daily,
-            "meta": {
-                "stats": {
-                    "days_computed": days_computed,
-                    "races_with_z": total_races_with_z,
-                    "horses_with_hsr": len(all_races),
-                    "baseline_groups": len(baseline_stats),
-                },
-            },
-        })
-
-        job["data_available"] = True
+        from pathlib import Path
+        from src.research.race.track_speed_engine import TrackSpeedEngine
+        eng = TrackSpeedEngine(str(Path(__file__).resolve().parents[2]))
+        eng.build_baselines(years=["2020", "2021", "2022", "2023", "2024", "2025"], progress_cb=log)
+        from src.research.race.perf_index import invalidate_sigma_cache
+        invalidate_sigma_cache()
         job["status"] = "done"
-        log(f"完了: {days_computed} 日, {total_races_with_z} R")
-
     except Exception as e:
         logger.error("[TrackSpeed] %s", e, exc_info=True)
         job["status"] = "error"
         job["error"] = str(e)
+
+
+def _run_track_speed_assign(date_from: str, date_to: str | None):
+    job = _track_speed_job
+    job["status"] = "running"
+    job["progress"] = []
+    job["error"] = None
+
+    def log(msg: str):
+        job["progress"].append(msg)
+        logger.info("[TrackSpeed] %s", msg)
+
+    try:
+        from pathlib import Path
+        from src.research.race.track_speed_engine import TrackSpeedEngine
+        eng = TrackSpeedEngine(str(Path(__file__).resolve().parents[2]))
+        y0 = int(date_from[:4])
+        y1 = int((date_to or date_from)[:4])
+        eng.assign_races(
+            years=[str(y) for y in range(y0, y1 + 1)],
+            date_min=date_from.replace("-", ""),
+            date_max=(date_to or "").replace("-", "") or None,
+            progress_cb=log,
+        )
+        job["status"] = "done"
+    except Exception as e:
+        logger.error("[TrackSpeed] %s", e, exc_info=True)
+        job["status"] = "error"
+        job["error"] = str(e)
+
 
 
 # ─── ミオスタチン遺伝子ページ ──────────────────────────
@@ -8367,7 +9805,7 @@ def _compute_track_speed():
 @app.get("/myostatin", response_class=HTMLResponse)
 async def myostatin_page(request: Request):
     return templates.TemplateResponse(
-        "myostatin.html",
+        "pedigree/myostatin.html",
         {"request": request, "current_page": "myostatin"},
     )
 
@@ -8376,9 +9814,14 @@ async def myostatin_page(request: Request):
 async def myostatin_data():
     import json as _json
     from pathlib import Path
-    kb_path = Path(__file__).resolve().parents[3] / "data" / "knowledge" / "myostatin_genes.json"
+    # app.py は src/api/app.py に位置するため、project root は parents[2]。
+    # (parents[3] だと project の親 = キーノット外を指してしまい、KB が見つからない)
+    kb_path = Path(__file__).resolve().parents[2] / "data" / "knowledge" / "myostatin_genes.json"
     if not kb_path.exists():
-        return JSONResponse({"error": "KB not found"}, status_code=404)
+        return JSONResponse(
+            {"error": "KB not found", "checked_path": str(kb_path)},
+            status_code=404,
+        )
     data = _json.loads(kb_path.read_text(encoding="utf-8"))
     return JSONResponse(data)
 
@@ -8416,8 +9859,8 @@ async def myostatin_recalculate():
     from pathlib import Path
 
     try:
-        # JSONファイルのパス
-        json_path = Path(__file__).parents[3] / "data" / "knowledge" / "myostatin_genes.json"
+        # JSONファイルのパス (app.py は src/api/ に在り、project root は parents[2])
+        json_path = Path(__file__).resolve().parents[2] / "data" / "knowledge" / "myostatin_genes.json"
 
         # 読み込み
         with open(json_path, 'r', encoding='utf-8') as f:
@@ -8577,7 +10020,7 @@ async def myostatin_recalculate():
 @app.get("/growth-curve", response_class=HTMLResponse)
 async def growth_curve_page(request: Request):
     return templates.TemplateResponse(
-        "growth_curve.html",
+        "analysis/growth_curve.html",
         {"request": request, "current_page": "growth_curve"},
     )
 
@@ -9094,7 +10537,7 @@ def _load_stallion_lineage() -> "pd.DataFrame | None":
 
 @app.get("/pedigree-race-stats", response_class=HTMLResponse)
 async def pedigree_race_stats_page(request: Request):
-    return templates.TemplateResponse("pedigree_race_stats.html", {
+    return templates.TemplateResponse("pedigree/pedigree_race_stats.html", {
         "request": request,
         "current_page": "pedigree_race_stats",
     })
@@ -9141,6 +10584,8 @@ async def api_pedigree_race_stats_query(
     finish_max: Optional[int] = Query(None, description="着順上限"),
     pop_min: Optional[int] = Query(None, description="人気下限（1番人気=1）"),
     pop_max: Optional[int] = Query(None, description="人気上限"),
+    odds_min: Optional[float] = Query(None, description="単勝オッズ下限 (payoff 由来)"),
+    odds_max: Optional[float] = Query(None, description="単勝オッズ上限 (payoff 由来)"),
     cat: Optional[str] = Query(None, description="1 / 2 / 3 / all"),
     gen_min: Optional[int] = Query(None, description="世代下限（1〜10）"),
     gen_max: Optional[int] = Query(None, description="世代上限（1〜10）"),
@@ -9194,6 +10639,10 @@ async def api_pedigree_race_stats_query(
         if grades:
             glist = [g.strip() for g in grades.split(",") if g.strip()]
             df = df[df["grade"].isin(glist)]
+
+        # 成績計算は着順フィルタを適用しない全出走を母集団とする
+        df_for_perf = df.copy()
+
         if finish_min is not None:
             df = df[df["finish_position"] >= finish_min]
         if finish_max is not None:
@@ -9202,6 +10651,12 @@ async def api_pedigree_race_stats_query(
             df = df[df["popularity"] >= pop_min]
         if pop_max is not None:
             df = df[df["popularity"] <= pop_max]
+        # 単勝オッズ範囲フィルタ (payoff JSON 由来の win_odds_real が真の値)
+        if "win_odds_real" in df.columns:
+            if odds_min is not None:
+                df = df[df["win_odds_real"] >= float(odds_min)]
+            if odds_max is not None:
+                df = df[df["win_odds_real"] <= float(odds_max)]
 
         total_entries = int(len(df))
         unique_horses = int(df["horse_id"].nunique())
@@ -9251,6 +10706,63 @@ async def api_pedigree_race_stats_query(
             )
             _trunk_ids = set(lin.loc[trunk_mask, "stallion_id"].astype(str))
 
+        # 成績集計用に「該当出走の rows」を最小限のカラムだけ保持（着順フィルタなし）
+        df_perf_cols = ["horse_id", "finish_position"]
+        for c in ("win_payout", "place_payout"):
+            if c in df_for_perf.columns:
+                df_perf_cols.append(c)
+        df_perf = df_for_perf[df_perf_cols].copy()
+        df_perf["horse_id"] = df_perf["horse_id"].astype(str)
+        df_perf["finish_position"] = df_perf["finish_position"].astype(int)
+        if "win_payout" not in df_perf.columns:
+            df_perf["win_payout"] = 0
+        if "place_payout" not in df_perf.columns:
+            df_perf["place_payout"] = 0
+
+        # 成績計算用血統インデックス（着順/人気/オッズフィルタ前の全出走馬ベース）
+        _horse_ids_for_perf = set(df_for_perf["horse_id"].astype(str).unique())
+        ped_for_perf = cats[cats["horse_id"].isin(_horse_ids_for_perf)].copy()
+        if gen_min is not None:
+            ped_for_perf = ped_for_perf[ped_for_perf["gen"] >= gen_min]
+        if gen_max is not None:
+            ped_for_perf = ped_for_perf[ped_for_perf["gen"] <= gen_max]
+
+        def _aggregate_perf(horse_ids_set: set[str]) -> dict:
+            """指定 horse_id 集合に対するレース成績統計をまとめて返す。
+
+            返却:
+              n: 出走数
+              wins/p2/p3/p45/p6plus: 着順別カウント
+              win_rate / top3_rate: 0-1 のレート
+              win_recovery / place_recovery: 100円賭けあたり払戻% (= 平均払戻)
+            """
+            if not horse_ids_set:
+                return {"n": 0}
+            sub = df_perf[df_perf["horse_id"].isin(horse_ids_set)]
+            # 除外/取消 (finish_position <= 0) を成績集計から除く
+            sub = sub[sub["finish_position"] > 0]
+            n = int(len(sub))
+            if n == 0:
+                return {"n": 0}
+            fp = sub["finish_position"].to_numpy()
+            wins = int((fp == 1).sum())
+            p2 = int((fp == 2).sum())
+            p3 = int((fp == 3).sum())
+            p45 = int(((fp == 4) | (fp == 5)).sum())
+            p6plus = int((fp >= 6).sum())
+            top3 = wins + p2 + p3
+            win_pay_sum = int(sub["win_payout"].sum())
+            place_pay_sum = int(sub["place_payout"].sum())
+            return {
+                "n": n,
+                "wins": wins, "p2": p2, "p3": p3, "p45": p45, "p6plus": p6plus,
+                "win_rate": round(wins / n, 4),
+                "top3_rate": round(top3 / n, 4),
+                # 100 円賭けに対する平均払戻 (% 表記用に *1 = そのまま)
+                "win_recovery": round(win_pay_sum / n, 1),
+                "place_recovery": round(place_pay_sum / n, 1),
+            }
+
         def _count_stallions(cat_val: int) -> list[dict]:
             subset = ped_filtered[ped_filtered["cat"] == cat_val].copy()
             if subset.empty:
@@ -9294,6 +10806,28 @@ async def api_pedigree_race_stats_query(
                 grp = grp[~grp["stallion_id"].isin(_trunk_ids)]
             grp = grp.head(top_n)
             grp["gen"] = grp["gen"].astype(int)
+
+            # 成績 horse_id マッピング: top-N 種牡馬のみ・着順フィルタなし全出走馬ベース
+            # （全 stallion に groupby-apply するとメモリ/速度問題が出るため top-N に絞る）
+            top_sids = set(grp["stallion_id"].tolist())
+            _perf_sub = ped_for_perf[ped_for_perf["cat"] == cat_val]
+            key_to_horses: dict = {}
+            if not _perf_sub.empty and top_sids:
+                _sid   = _perf_sub["stallion_id"].astype(str)
+                _sname = _perf_sub["stallion_name"].astype(str)
+                _pkey  = _sid.where(_sid.str.len() > 0, _sname)
+                _mask  = _pkey.isin(top_sids).values
+                for k, h in zip(_pkey.values[_mask],
+                                _perf_sub["horse_id"].astype(str).values[_mask]):
+                    if k not in key_to_horses:
+                        key_to_horses[k] = set()
+                    key_to_horses[k].add(h)
+            perf_records = []
+            for sid in grp["stallion_id"]:
+                perf_records.append(_aggregate_perf(key_to_horses.get(sid, set())))
+            for k in ("n", "wins", "p2", "p3", "p45", "p6plus",
+                     "win_rate", "top3_rate", "win_recovery", "place_recovery"):
+                grp[k] = [r.get(k, 0) for r in perf_records]
 
             # 系統グループ情報を JOIN
             if lineage_df is not None:

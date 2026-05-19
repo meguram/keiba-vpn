@@ -43,16 +43,16 @@ logger = logging.getLogger("research.bloodline")
 DISTANCE_CATEGORIES = {
     "sprint": (0, 1400),
     "mile": (1400, 1800),
-    "intermediate": (1800, 2200),
-    "long": (2200, 2800),
+    "intermediate": (1800, 2400),  # 2400m未満を中距離 (ダービー2400=長距離側)
+    "long": (2400, 2800),           # ステイヤー閾値は 2400m+ (天皇賞春3200/菊花賞3000)
     "extended": (2800, 9999),
 }
 
 DIST_CAT_LABELS = {
     "sprint": "短距離 (〜1400m)",
     "mile": "マイル (1400〜1800m)",
-    "intermediate": "中距離 (1800〜2200m)",
-    "long": "長距離 (2200〜2800m)",
+    "intermediate": "中距離 (1800〜2400m)",
+    "long": "長距離 (2400〜2800m)",
     "extended": "超長距離 (2800m〜)",
 }
 
@@ -74,16 +74,150 @@ class BloodlineDistanceAnalyzer:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.df: pd.DataFrame = pd.DataFrame()
 
+    def _ensure_payoff_columns(self) -> None:
+        """払戻・単勝オッズを付与し、回収率用列（オッズ30倍以内のみ）を準備。"""
+        if self.df.empty:
+            return
+        from src.research.pedigree.bloodline_roi import (
+            attach_payoffs_and_odds,
+            prepare_roi_columns,
+        )
+
+        self.df = prepare_roi_columns(attach_payoffs_and_odds(self.df))
+
+    def _resolve_df_out(
+        self,
+        df: pd.DataFrame | None = None,
+        out_dir: str | Path | None = None,
+    ) -> tuple[pd.DataFrame, Path]:
+        use_df = self.df if df is None else df
+        use_out = self.output_dir if out_dir is None else Path(out_dir)
+        use_out.mkdir(parents=True, exist_ok=True)
+        return use_df, use_out
+
     def load_from_gcs(self, years: list[str] | None = None):
-        """ローカル Parquet を優先し、不足分のみ GCS から読み込む。"""
+        """データソース優先順:
+        1) data/research/pedigree_race_index/{race_result_slim, horse_pedigree_cats}.parquet
+           ← 最も高速・最新。build_pedigree_race_index.py で生成。
+        2) ローカル race_shutuba_flat.parquet からの sire 抽出 ← (現状 sire 列が空のため失敗する想定)
+        3) GCS フォールバック ← 最終手段、極めて遅い (数十分〜)
+        """
+        # ── 1) pedigree_race_index parquet からの高速ロード ──
+        if self._load_from_pedigree_race_index(years):
+            return
+
+        # ── 2) race_shutuba_flat に sire 列が入っていればそれを利用 ──
         rows = self._load_from_local_parquet(years)
         if rows:
             logger.info("ローカル Parquet からロード完了: %d 出走行", len(rows))
             self.df = pd.DataFrame(rows)
+            self._ensure_payoff_columns()
             return
 
         logger.info("ローカル Parquet なし → GCS フォールバック")
         self._load_from_gcs_fallback(years)
+
+    def _load_from_pedigree_race_index(self, years: list[str] | None = None) -> bool:
+        """data/research/pedigree_race_index/ から JOIN して sire / dam_sire を
+        取得する高速パス。
+
+        必要ファイル:
+          - race_result_slim.parquet         : build_pedigree_race_index.py 生成
+          - horse_sire_damsire.parquet       : data/local/horse_pedigree_5gen から構築
+                                               （存在しない場合はその場で再生成）
+
+        Returns: True なら self.df をセットして成功、False なら失敗。
+        """
+        idx_dir = Path("data/research/pedigree_race_index")
+        slim_p = idx_dir / "race_result_slim.parquet"
+        ds_p = idx_dir / "horse_sire_damsire.parquet"
+        if not slim_p.exists():
+            return False
+
+        if not ds_p.exists():
+            try:
+                self._rebuild_horse_sire_damsire(ds_p)
+            except Exception as e:  # pragma: no cover
+                logger.warning("horse_sire_damsire.parquet 構築失敗: %s", e)
+                return False
+
+        try:
+            slim = pd.read_parquet(slim_p)
+            sd = pd.read_parquet(ds_p, columns=["horse_id", "sire", "dam_sire"])
+        except Exception as e:  # pragma: no cover
+            logger.warning("pedigree_race_index 読込失敗: %s", e)
+            return False
+
+        # 年度フィルタ (date は "YYYY-MM-DD" string)
+        if years:
+            yr_set = {str(y) for y in years}
+            slim = slim[slim["date"].astype(str).str.slice(0, 4).isin(yr_set)]
+        if slim.empty:
+            return False
+
+        df = slim.copy()
+        df["horse_id"] = df["horse_id"].astype(str)
+        sd["horse_id"] = sd["horse_id"].astype(str)
+        df = df.merge(sd.drop_duplicates("horse_id"), on="horse_id", how="left")
+        df["sire"] = df["sire"].fillna("").astype(str)
+        df["dam_sire"] = df["dam_sire"].fillna("").astype(str)
+        df = df[df["sire"].str.len() > 0]
+        df["dam_sire"] = df["dam_sire"].where(df["dam_sire"].str.len() > 0, "不明")
+
+        # 必要列を整える
+        df["distance_cat"] = df["distance"].astype(int).apply(categorize_distance)
+        fp = df["finish_position"].astype(int)
+        df["is_top3"] = fp.between(1, 3).astype(int)
+        df["is_top2"] = fp.between(1, 2).astype(int)
+        df["is_win"] = (fp == 1).astype(int)
+        if "field_size" not in df.columns:
+            df["field_size"] = 0
+
+        keep = [
+            "race_id", "horse_id", "horse_number", "finish_position",
+            "sire", "dam_sire", "distance", "distance_cat",
+            "surface", "venue", "field_size", "is_top3", "is_top2", "is_win",
+        ]
+        for _c in ("win_payout", "place_payout"):
+            if _c not in df.columns:
+                df[_c] = 0
+            keep.append(_c)
+        keep = [c for c in keep if c in df.columns]
+        self.df = df[keep].reset_index(drop=True)
+        logger.info(
+            "pedigree_race_index からロード完了: %d 出走行 / %d ユニーク種牡馬 / %d ユニーク母父",
+            len(self.df), self.df["sire"].nunique(), self.df["dam_sire"].nunique(),
+        )
+        return True
+
+    @staticmethod
+    def _rebuild_horse_sire_damsire(out_path: Path) -> None:
+        """5gen JSON から sire / dam_sire の参照テーブルを 1 度だけ生成する。"""
+        import json as _json
+        ped_root = Path("data/local/horse_pedigree_5gen")
+        if not ped_root.exists():
+            raise FileNotFoundError(ped_root)
+        rows = []
+        for f in ped_root.rglob("*.json"):
+            try:
+                d = _json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            hid = str(d.get("horse_id") or "").strip()
+            if not hid:
+                continue
+            sire = d.get("sire") if isinstance(d.get("sire"), dict) else {"name": d.get("sire")}
+            damsire = d.get("dam_sire") if isinstance(d.get("dam_sire"), dict) else {"name": d.get("dam_sire")}
+            rows.append({
+                "horse_id": hid,
+                "sire": str((sire or {}).get("name") or "").strip(),
+                "sire_id": str((sire or {}).get("horse_id") or "").strip(),
+                "dam_sire": str((damsire or {}).get("name") or "").strip(),
+                "dam_sire_id": str((damsire or {}).get("horse_id") or "").strip(),
+            })
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(rows).to_parquet(out_path, index=False, compression="zstd")
+        logger.info("生成: %s (%d 頭)", out_path, len(rows))
 
     def _load_from_local_parquet(self, years: list[str] | None = None) -> list[dict]:
         """ローカル Parquet テーブルからバルクロード (GCS コスト ¥0)。"""
@@ -151,6 +285,7 @@ class BloodlineDistanceAnalyzer:
                     "venue": venue,
                     "field_size": field_size,
                     "is_top3": 1 if fp <= 3 else 0,
+                    "is_top2": 1 if fp <= 2 else 0,
                     "is_win": 1 if fp == 1 else 0,
                 })
         return rows
@@ -234,12 +369,14 @@ class BloodlineDistanceAnalyzer:
                         "venue": venue,
                         "field_size": field_size,
                         "is_top3": 1 if fp <= 3 else 0,
+                        "is_top2": 1 if fp <= 2 else 0,
                         "is_win": 1 if fp == 1 else 0,
                     })
 
                 total_races += 1
 
         self.df = pd.DataFrame(rows)
+        self._ensure_payoff_columns()
         logger.info(
             "データ構築完了: %d レース, %d 出走, %d ユニーク種牡馬, %d ユニーク母父",
             total_races, len(self.df),
@@ -264,60 +401,112 @@ class BloodlineDistanceAnalyzer:
             return
 
         df["distance_cat"] = df["distance"].apply(categorize_distance)
-        df["is_top3"] = (df["finish_position"].between(1, 3)).astype(int)
-        df["is_win"] = (df["finish_position"] == 1).astype(int)
+        fp = df["finish_position"].astype(int)
+        df["is_top3"] = fp.between(1, 3).astype(int)
+        df["is_top2"] = fp.between(1, 2).astype(int)
+        df["is_win"] = (fp == 1).astype(int)
         if "dam_sire" not in df.columns:
             df["dam_sire"] = "不明"
 
         self.df = df
+        self._ensure_payoff_columns()
         logger.info("CSV データ読込: %d 行", len(df))
 
     # ── 分析1: 種牡馬別・距離カテゴリ別の複勝率ヒートマップ ──
 
-    def analyze_sire_distance_top3rate(self, min_samples: int = MIN_SAMPLE_SIZE) -> pd.DataFrame:
+    def analyze_sire_distance_top3rate(
+        self,
+        min_samples: int = MIN_SAMPLE_SIZE,
+        df: pd.DataFrame | None = None,
+        out_dir: str | Path | None = None,
+    ) -> pd.DataFrame:
         """種牡馬 × 距離カテゴリの複勝率 pivot を作成する。"""
-        grp = self.df.groupby(["sire", "distance_cat"]).agg(
+        work_df, out = self._resolve_df_out(df, out_dir)
+        if work_df.empty:
+            return pd.DataFrame()
+        if df is None:
+            self._ensure_payoff_columns()
+            work_df = self.df
+        grp = work_df.groupby(["sire", "distance_cat"]).agg(
             count=("is_top3", "size"),
             top3_rate=("is_top3", "mean"),
+            top2_rate=("is_top2", "mean"),
             win_rate=("is_win", "mean"),
+            win_return_sum=("win_payout_roi", "sum"),
+            place_return_sum=("place_payout_roi", "sum"),
+            roi_count=("roi_eligible", "sum"),
         ).reset_index()
+        rc = grp["roi_count"].replace(0, np.nan)
+        grp["win_roi"] = (grp["win_return_sum"] / rc).fillna(0.0)
+        grp["place_roi"] = (grp["place_return_sum"] / rc).fillna(0.0)
 
         grp = grp[grp["count"] >= min_samples]
 
-        total_by_sire = self.df.groupby("sire")["is_top3"].agg(["size", "mean"])
+        total_by_sire = work_df.groupby("sire")["is_top3"].agg(["size", "mean"])
         total_by_sire.columns = ["total_count", "overall_top3_rate"]
         total_by_sire = total_by_sire[total_by_sire["total_count"] >= min_samples * 2]
 
         top_sires = total_by_sire.nlargest(50, "total_count").index.tolist()
         grp_top = grp[grp["sire"].isin(top_sires)]
 
-        pivot = grp_top.pivot_table(
+        cat_order = [c for c in DISTANCE_CATEGORIES if c in grp_top["distance_cat"].unique()]
+
+        pivot_top3 = grp_top.pivot_table(
             index="sire", columns="distance_cat",
             values="top3_rate", fill_value=0,
         )
-        cat_order = [c for c in DISTANCE_CATEGORIES if c in pivot.columns]
-        pivot = pivot[cat_order]
+        pivot_top3 = pivot_top3[[c for c in cat_order if c in pivot_top3.columns]]
 
-        csv_path = self.output_dir / "sire_distance_top3rate.csv"
-        pivot.to_csv(csv_path, encoding="utf-8-sig")
+        csv_path = out / "sire_distance_top3rate.csv"
+        pivot_top3.to_csv(csv_path, encoding="utf-8-sig")
         logger.info("保存: %s", csv_path)
 
-        return pivot
+        for val_col, fname in (
+            ("win_rate", "sire_distance_win_rate.csv"),
+            ("top2_rate", "sire_distance_top2rate.csv"),
+            ("count", "sire_distance_sample_count.csv"),
+            ("win_roi", "sire_distance_win_roi.csv"),
+            ("place_roi", "sire_distance_place_roi.csv"),
+            ("roi_count", "sire_distance_roi_count.csv"),
+        ):
+            pv = grp_top.pivot_table(
+                index="sire", columns="distance_cat", values=val_col, fill_value=0,
+            )
+            pv = pv[[c for c in cat_order if c in pv.columns]]
+            pv.to_csv(out / fname, encoding="utf-8-sig")
+            logger.info("保存: %s", fname)
+
+        return pivot_top3
 
     # ── 分析2: 種牡馬のベスト距離推定 ──
 
-    def estimate_sire_best_distance(self, min_samples: int = MIN_SAMPLE_SIZE) -> pd.DataFrame:
+    def estimate_sire_best_distance(
+        self,
+        min_samples: int = MIN_SAMPLE_SIZE,
+        df: pd.DataFrame | None = None,
+        out_dir: str | Path | None = None,
+    ) -> pd.DataFrame:
         """種牡馬ごとの「ベスト距離」を加重平均で推定する。"""
-        df = self.df.copy()
+        work_df, out = self._resolve_df_out(df, out_dir)
+        if work_df.empty:
+            return pd.DataFrame()
+        if df is None:
+            self._ensure_payoff_columns()
+            work_df = self.df
+        df = work_df.copy()
         df["weighted_dist"] = df["distance"] * df["is_top3"]
 
         grp = df.groupby("sire").agg(
             total_runs=("is_top3", "size"),
             total_top3=("is_top3", "sum"),
             top3_rate=("is_top3", "mean"),
+            top2_rate=("is_top2", "mean"),
             win_rate=("is_win", "mean"),
             avg_distance=("distance", "mean"),
             weighted_dist_sum=("weighted_dist", "sum"),
+            win_return_sum=("win_payout_roi", "sum"),
+            place_return_sum=("place_payout_roi", "sum"),
+            roi_count=("roi_eligible", "sum"),
         ).reset_index()
 
         grp = grp[grp["total_runs"] >= min_samples]
@@ -328,9 +517,13 @@ class BloodlineDistanceAnalyzer:
         )
         grp["best_distance"] = grp["best_distance"].round(0).astype(int)
         grp["best_dist_cat"] = grp["best_distance"].apply(categorize_distance)
+        rc = grp["roi_count"].replace(0, np.nan)
+        grp["win_return_pct"] = (grp["win_return_sum"] / rc).round(1).fillna(0.0)
+        grp["place_return_pct"] = (grp["place_return_sum"] / rc).round(1).fillna(0.0)
+        grp = grp.drop(columns=["win_return_sum", "place_return_sum", "roi_count"])
         grp = grp.sort_values("total_runs", ascending=False)
 
-        csv_path = self.output_dir / "sire_best_distance.csv"
+        csv_path = out / "sire_best_distance.csv"
         grp.to_csv(csv_path, index=False, encoding="utf-8-sig")
         logger.info("保存: %s", csv_path)
 
@@ -339,23 +532,41 @@ class BloodlineDistanceAnalyzer:
     # ── 分析3: 父×母父の距離適性マトリクス ──
 
     def analyze_sire_damsire_matrix(
-        self, min_samples: int = 10, top_n: int = 30,
+        self,
+        min_samples: int = 10,
+        top_n: int = 30,
+        df: pd.DataFrame | None = None,
+        out_dir: str | Path | None = None,
     ) -> pd.DataFrame:
         """父×母父の組み合わせごとの複勝率と出走数。"""
-        grp = self.df.groupby(["sire", "dam_sire"]).agg(
+        work_df, out = self._resolve_df_out(df, out_dir)
+        if work_df.empty:
+            return pd.DataFrame()
+        if df is None:
+            self._ensure_payoff_columns()
+            work_df = self.df
+        grp = work_df.groupby(["sire", "dam_sire"]).agg(
             count=("is_top3", "size"),
             top3_rate=("is_top3", "mean"),
+            top2_rate=("is_top2", "mean"),
+            win_rate=("is_win", "mean"),
             avg_distance=("distance", "mean"),
+            win_return_sum=("win_payout_roi", "sum"),
+            place_return_sum=("place_payout_roi", "sum"),
+            roi_count=("roi_eligible", "sum"),
         ).reset_index()
+        rc = grp["roi_count"].replace(0, np.nan)
+        grp["win_roi"] = (grp["win_return_sum"] / rc).fillna(0.0)
+        grp["place_roi"] = (grp["place_return_sum"] / rc).fillna(0.0)
 
         grp = grp[grp["count"] >= min_samples]
 
         top_sires = (
-            self.df.groupby("sire")["is_top3"].size()
+            work_df.groupby("sire")["is_top3"].size()
             .nlargest(top_n).index.tolist()
         )
         top_damsires = (
-            self.df.groupby("dam_sire")["is_top3"].size()
+            work_df.groupby("dam_sire")["is_top3"].size()
             .nlargest(top_n).index.tolist()
         )
 
@@ -363,20 +574,27 @@ class BloodlineDistanceAnalyzer:
             grp["sire"].isin(top_sires) & grp["dam_sire"].isin(top_damsires)
         ]
 
-        pivot_rate = filtered.pivot_table(
-            index="sire", columns="dam_sire",
-            values="top3_rate", fill_value=np.nan,
-        )
-
-        csv_path = self.output_dir / "sire_damsire_top3rate.csv"
-        pivot_rate.to_csv(csv_path, encoding="utf-8-sig")
-        logger.info("保存: %s", csv_path)
+        for val_col, fname in (
+            ("top3_rate", "sire_damsire_top3rate.csv"),
+            ("top2_rate", "sire_damsire_top2rate.csv"),
+            ("win_rate", "sire_damsire_win_rate.csv"),
+            ("count", "sire_damsire_sample_count.csv"),
+            ("win_roi", "sire_damsire_win_roi.csv"),
+            ("place_roi", "sire_damsire_place_roi.csv"),
+            ("roi_count", "sire_damsire_roi_count.csv"),
+        ):
+            pivot_rate = filtered.pivot_table(
+                index="sire", columns="dam_sire",
+                values=val_col, fill_value=np.nan,
+            )
+            pivot_rate.to_csv(out / fname, encoding="utf-8-sig")
+            logger.info("保存: %s", fname)
 
         pivot_dist = filtered.pivot_table(
             index="sire", columns="dam_sire",
             values="avg_distance", fill_value=np.nan,
         )
-        csv_path2 = self.output_dir / "sire_damsire_avg_distance.csv"
+        csv_path2 = out / "sire_damsire_avg_distance.csv"
         pivot_dist.to_csv(csv_path2, encoding="utf-8-sig")
         logger.info("保存: %s", csv_path2)
 
@@ -385,14 +603,20 @@ class BloodlineDistanceAnalyzer:
     # ── 分析4: 距離カテゴリ間の血統類似度 ──
 
     def compute_distance_bloodline_similarity(
-        self, min_sire_count: int = 10,
+        self,
+        min_sire_count: int = 10,
+        df: pd.DataFrame | None = None,
+        out_dir: str | Path | None = None,
     ) -> pd.DataFrame:
         """
         距離カテゴリごとに「複勝した種牡馬の分布ベクトル」を構成し、
         カテゴリ間のコサイン類似度を計算する。
         血統分布が近い距離カテゴリ = 適性の近い距離帯。
         """
-        top3_df = self.df[self.df["is_top3"] == 1]
+        work_df, out = self._resolve_df_out(df, out_dir)
+        if work_df.empty:
+            return pd.DataFrame()
+        top3_df = work_df[work_df["is_top3"] == 1]
 
         sire_counts = top3_df.groupby("sire")["is_top3"].size()
         valid_sires = sire_counts[sire_counts >= min_sire_count].index.tolist()
@@ -415,7 +639,7 @@ class BloodlineDistanceAnalyzer:
         cat_order = [c for c in DISTANCE_CATEGORIES if c in sim_df.index]
         sim_df = sim_df.loc[cat_order, cat_order]
 
-        csv_path = self.output_dir / "distance_bloodline_similarity.csv"
+        csv_path = out / "distance_bloodline_similarity.csv"
         sim_df.to_csv(csv_path, encoding="utf-8-sig")
         logger.info("保存: %s", csv_path)
 
@@ -424,18 +648,25 @@ class BloodlineDistanceAnalyzer:
     # ── 分析5: 血統ベクトルクラスタリング ──
 
     def cluster_sires_by_distance_profile(
-        self, min_samples: int = MIN_SAMPLE_SIZE, n_clusters: int = 6,
+        self,
+        min_samples: int = MIN_SAMPLE_SIZE,
+        n_clusters: int = 6,
+        df: pd.DataFrame | None = None,
+        out_dir: str | Path | None = None,
     ) -> pd.DataFrame:
         """
         種牡馬を距離適性プロファイル (各距離カテゴリの複勝率ベクトル) で
         K-means クラスタリングする。
         """
-        grp = self.df.groupby(["sire", "distance_cat"]).agg(
+        work_df, out = self._resolve_df_out(df, out_dir)
+        if work_df.empty:
+            return pd.DataFrame()
+        grp = work_df.groupby(["sire", "distance_cat"]).agg(
             count=("is_top3", "size"),
             top3_rate=("is_top3", "mean"),
         ).reset_index()
 
-        total = self.df.groupby("sire")["is_top3"].size()
+        total = work_df.groupby("sire")["is_top3"].size()
         valid = total[total >= min_samples * 2].index
         grp = grp[grp["sire"].isin(valid)]
 
@@ -472,11 +703,11 @@ class BloodlineDistanceAnalyzer:
         result["cluster_name"] = result["cluster"].map(cluster_names)
         cluster_summary["cluster_name"] = cluster_summary.index.map(cluster_names)
 
-        csv_path = self.output_dir / "sire_clusters.csv"
+        csv_path = out / "sire_clusters.csv"
         result.to_csv(csv_path, encoding="utf-8-sig")
         logger.info("保存: %s", csv_path)
 
-        summary_path = self.output_dir / "cluster_summary.csv"
+        summary_path = out / "cluster_summary.csv"
         cluster_summary.to_csv(summary_path, encoding="utf-8-sig")
         logger.info("保存: %s", summary_path)
 
@@ -485,7 +716,10 @@ class BloodlineDistanceAnalyzer:
     # ── 分析6: 血統特徴量の予測寄与度 ──
 
     def analyze_pedigree_predictive_power(
-        self, min_samples: int = MIN_SAMPLE_SIZE,
+        self,
+        min_samples: int = MIN_SAMPLE_SIZE,
+        df: pd.DataFrame | None = None,
+        out_dir: str | Path | None = None,
     ) -> dict[str, Any]:
         """
         血統関連特徴量のみで LightGBM を学習し、
@@ -499,7 +733,10 @@ class BloodlineDistanceAnalyzer:
 
         from sklearn.metrics import roc_auc_score
 
-        df = self.df.copy()
+        work_df, out = self._resolve_df_out(df, out_dir)
+        if work_df.empty:
+            return {}
+        df = work_df.copy()
 
         sire_counts = df.groupby("sire")["is_top3"].size()
         valid_sires = set(sire_counts[sire_counts >= min_samples].index)
@@ -594,38 +831,73 @@ class BloodlineDistanceAnalyzer:
             )),
         }
 
-        json_path = self.output_dir / "pedigree_predictive_power.json"
+        json_path = out / "pedigree_predictive_power.json"
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(results_by_cat, f, ensure_ascii=False, indent=2)
         logger.info("保存: %s", json_path)
 
         return results_by_cat
 
+    def _run_surface_analyses(self, surface_key: str, sdf: pd.DataFrame) -> None:
+        from src.research.pedigree.bloodline_surface import SURFACE_LABELS, surface_output_dir
+
+        out = surface_output_dir(self.output_dir, surface_key)
+        label = SURFACE_LABELS[surface_key]
+        logger.info("--- サーフェス: %s (%s) 出走 %d ---", label, surface_key, len(sdf))
+        self.analyze_sire_distance_top3rate(df=sdf, out_dir=out)
+        self.estimate_sire_best_distance(df=sdf, out_dir=out)
+        self.analyze_sire_damsire_matrix(df=sdf, out_dir=out)
+        self.compute_distance_bloodline_similarity(df=sdf, out_dir=out)
+        self.cluster_sires_by_distance_profile(df=sdf, out_dir=out)
+        self.analyze_pedigree_predictive_power(df=sdf, out_dir=out)
+
     # ── 可視化 (HTML レポート) ──
 
     def generate_report(self) -> str:
-        """分析結果を統合した HTML レポートを生成する。"""
+        """分析結果を統合した HTML レポートを生成する（芝・ダート・障害を分離）。"""
+        from src.research.pedigree.bloodline_surface import (
+            SURFACE_KEYS,
+            SURFACE_LABELS,
+            compute_surface_counts,
+            filter_df_by_surface,
+            write_surface_meta,
+        )
+
+        self._ensure_payoff_columns()
         logger.info("=" * 60)
-        logger.info("血統 × 距離適性 分析レポート生成")
+        logger.info("血統 × 距離適性 分析レポート生成 (芝/ダ/障 分離)")
         logger.info("=" * 60)
 
-        logger.info("[1/6] 種牡馬×距離 複勝率")
-        sire_dist = self.analyze_sire_distance_top3rate()
+        counts = compute_surface_counts(self.df)
+        write_surface_meta(self.output_dir, counts)
+        for sk in SURFACE_KEYS:
+            logger.info("  %s: %s 出走", SURFACE_LABELS[sk], f"{counts[sk]:,}")
 
-        logger.info("[2/6] 種牡馬ベスト距離")
-        best_dist = self.estimate_sire_best_distance()
+        sire_dist = best_dist = cross = sim = clusters = None
+        pred_power: dict[str, Any] = {}
+        for sk in SURFACE_KEYS:
+            sdf = filter_df_by_surface(self.df, sk)
+            if sdf.empty:
+                logger.warning("%s: 出走データなし — スキップ", SURFACE_LABELS[sk])
+                continue
+            self._run_surface_analyses(sk, sdf)
+            if sk == "turf":
+                from src.research.pedigree.bloodline_surface import surface_output_dir
+                turf_out = surface_output_dir(self.output_dir, "turf")
+                sire_dist = pd.read_csv(turf_out / "sire_distance_top3rate.csv", index_col=0)
+                best_dist = pd.read_csv(turf_out / "sire_best_distance.csv")
+                cross = pd.read_csv(turf_out / "sire_damsire_top3rate.csv", index_col=0)
+                sim = pd.read_csv(turf_out / "distance_bloodline_similarity.csv", index_col=0)
+                clusters = pd.read_csv(turf_out / "sire_clusters.csv", index_col=0)
+                with open(turf_out / "pedigree_predictive_power.json", encoding="utf-8") as f:
+                    pred_power = json.load(f)
 
-        logger.info("[3/6] 父×母父 マトリクス")
-        cross = self.analyze_sire_damsire_matrix()
-
-        logger.info("[4/6] 距離間 血統類似度")
-        sim = self.compute_distance_bloodline_similarity()
-
-        logger.info("[5/6] 血統クラスタリング")
-        clusters = self.cluster_sires_by_distance_profile()
-
-        logger.info("[6/6] 血統予測寄与度")
-        pred_power = self.analyze_pedigree_predictive_power()
+        if sire_dist is None:
+            sire_dist = pd.DataFrame()
+            best_dist = pd.DataFrame()
+            cross = pd.DataFrame()
+            sim = pd.DataFrame()
+            clusters = pd.DataFrame()
 
         html = self._build_html_report(
             sire_dist, best_dist, cross, sim, clusters, pred_power,

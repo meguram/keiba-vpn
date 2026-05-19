@@ -8,6 +8,10 @@
 #
 # 変則開催 (祝日月曜・火曜等) も完全にカバー。
 #
+# 運用方針 (2026-05): raceday-runner の T-15 バンドルに jra_baba_live を統合するため、
+# 本 systemd サービスは legacy。T-15 統合運用時は二重取得を避け停止を推奨。
+# 参照: docs/html/operations/scraping_sla.html §9.2
+#
 # Usage:
 #   bash scripts/cron/setup_baba_cron.sh              # systemd ユーザーサービス登録 (推奨)
 #   bash scripts/cron/setup_baba_cron.sh --remove     # 削除

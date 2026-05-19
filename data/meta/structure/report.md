@@ -1,4 +1,4 @@
-# 構造チェックレポート (2026-05-13 06:00)
+# 構造チェックレポート (2026-05-19 06:17)
 
-CRITICAL: 0  WARNING: 0  OK: 12
-  netkeiba HTML: 11件  SmartRC API: 1件
+CRITICAL: 0  WARNING: 0  OK: 1
+  netkeiba HTML: 0件  SmartRC API: 1件

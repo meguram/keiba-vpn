@@ -43,6 +43,29 @@
 - テスト一式: リポジトリルートで `python3 -m unittest discover -s tests -t . -p 'test_*.py' -v`
 - 騎手・調教師統計のマージキー検証: `python3 -m unittest tests.pipeline.test_jockey_trainer_stats -v`
 - netkeiba 実 HTML を叩く手動スモーク（unittest 対象外）: `tests/scraper/manual/netkeiba_horse_page_smoke.py`, `tests/scraper/manual/netkeiba_speed_index_smoke.py`
+- 血統メタクラスタの手動検証（unittest 対象外）: `tests/research/manual/verify_*.py`。バックテスト・仮説検証バッチ: `src/research/pedigree/backtest_*.py`, `*_evidence.py`（中間 Parquet は `data/analysis/pedigree/`）
+
+### WSL2 と Cursor（`installServerScript` / `Wsl/Service/0x80072746`）
+
+**症状**: `Connection to Cursor server failed: [wsl exec: installServerScript]`、標準出力に「既存の接続はリモート ホストに強制的に切断されました」、`Wsl/Service/0x80072746`。終了コード `4294967295`（符号なしの -1）は、Windows 側が WSL との通信・子プロセスを異常扱いしたときに出やすい。
+
+**想定される原因**（併発しやすい）:
+
+1. **WSL2 の VM が落ちた／応答不能** — メモリ不足（OOM）、スワップ不足、短時間の CPU・I/O 飽和で vmmem が不安定になる。
+2. **ホスト–ゲスト間の接続リセット** — スリープ復帰、Hyper-V / 仮想スイッチの再構成、VPN やセキュリティ製品が WSL のソケットやパイプを切断する。
+3. **Cursor のリモートサーバ展開が途中で切れた** — 上記 1 または 2 のあいだに `installServerScript` が走ると、同じメッセージで失敗する。
+
+**本リポジトリで起きやすい文脈**: `build_horse_pedigree_10gen` や `build_pedigree_10gen_3view_index` など、大量の JSON / Parquet を扱う処理はメモリを消費する。Cursor エージェントや IDE と同時に WSL 上で走らせると、WSL の既定メモリ上限に達して 1 が起き、続けて Cursor 接続だけが切れる、というパターンが現実的にある。
+
+**改善手順（上から試す）**:
+
+1. Windows の PowerShell で `wsl --shutdown` を実行し、数十秒待ってから Cursor を起動し直す。
+2. `C:\Users\<ユーザー名>\.wslconfig` に `[wsl2]` を置き、例として `memory=8GB` 以上・`swap=8GB` 程度・`processors=4` などを明示する（マシンに合わせて調整）。保存後に必ず `wsl --shutdown` で反映。
+3. `wsl --update` と、可能なら Windows Update を最新にする。
+4. WSL 内で `rm -rf ~/.cursor-server` してから、Cursor から WSL ワークスペースを開き直す（展開済みサーバが壊れている場合の切り分け）。
+5. **重いバッチは Cursor の外で回す** — 例: `nohup` / `tmux`、または Windows ターミナルから WSL のみ起動して `scripts/run_after_scrape_missing_5gen_10gen_chain.sh` を実行し、IDE とのメモリ競合を避ける。
+
+完全に IDE 側のバグだけで説明できない場合もあるが、実務では **WSL のメモリ・安定性** と **接続を切るソフトウェア** の切り分けが効く。
 
 ## ユーザー向け応答
 

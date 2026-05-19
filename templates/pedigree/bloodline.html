@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>血統 × 距離・コース 研究 | ML-AutoPilot Keiba</title>
+<style>
+:root {
+  --bg:#0a0e17; --sf:#131926; --sf2:#1a2235; --sf3:#212d42;
+  --bd:#243049; --tx:#c8d6e5; --txd:#6b7d95; --txb:#edf2f7;
+  --ac:#a78bfa; --acd:rgba(167,139,250,.15);
+  --ac2:#06b6d4; --ac2d:rgba(6,182,212,.15);
+  --bl:#3b82f6; --gn:#22c55e; --yl:#f59e0b; --rd:#ef4444; --pp:#a78bfa; --pk:#ec4899;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;}
+.top-bar{display:flex;align-items:center;gap:16px;padding:16px 24px;border-bottom:1px solid var(--bd);background:var(--sf);}
+.top-bar h1{font-size:20px;font-weight:700;flex:1;}
+.top-bar .meta{font-size:11px;color:var(--txd);}
+.container{max-width:1700px;margin:0 auto;padding:20px 24px;}
+
+.intro{
+  background:var(--sf);border:1px solid var(--bd);border-radius:12px;
+  padding:14px 18px;margin-bottom:16px;font-size:13px;line-height:1.7;color:var(--txd);
+}
+.intro strong{color:var(--tx);}
+.intro .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:11px;}
+.intro .legend span{display:inline-flex;align-items:center;gap:4px;}
+.intro .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;}
+
+/* ── アーティファクト状態 ── */
+.artifacts-bar{
+  display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;
+  background:var(--sf);border:1px solid var(--bd);border-radius:10px;margin-bottom:14px;
+  font-size:11px;align-items:center;
+}
+.artifacts-bar .grp{display:flex;align-items:center;gap:6px;padding:3px 10px;background:var(--sf2);border-radius:6px;}
+.artifacts-bar .grp.ok{color:var(--gn);}
+.artifacts-bar .grp.miss{color:var(--rd);}
+.artifacts-bar .grp.partial{color:var(--yl);}
+.artifacts-bar .dot{width:7px;height:7px;border-radius:50%;background:currentColor;}
+.artifacts-bar .mt{color:var(--txd);font-size:10px;}
+
+/* ── タブ ── */
+.tab-group{margin-bottom:8px;}
+.tab-group-label{
+  font-size:10px;color:var(--txd);text-transform:uppercase;letter-spacing:1px;
+  font-weight:700;padding:0 6px 4px;
+}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;}
+.tab{
+  padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:500;
+  cursor:pointer;background:var(--sf);border:1px solid var(--bd);
+  color:var(--txd);white-space:nowrap;transition:all .15s;
+}
+.tab:hover{color:var(--tx);border-color:var(--ac);}
+.tab.active{background:var(--acd);color:var(--ac);border-color:var(--ac);}
+.tab.ac2.active{background:var(--ac2d);color:var(--ac2);border-color:var(--ac2);}
+.tab .tag-na{font-size:9px;color:var(--rd);margin-left:4px;font-weight:700;}
+
+.panel{
+  background:var(--sf);border:1px solid var(--bd);border-radius:12px;
+  padding:20px;min-height:400px;margin-top:8px;
+}
+.panel h3{font-size:15px;font-weight:600;margin-bottom:8px;color:var(--txb);}
+.panel .desc{color:var(--txd);font-size:12px;margin-bottom:14px;line-height:1.6;}
+
+/* ── データ未生成 案内 ── */
+.empty-card{
+  text-align:center;padding:40px 20px;color:var(--txd);
+  background:var(--sf2);border-radius:10px;border:1px dashed var(--bd);
+}
+.empty-card .icon{font-size:32px;margin-bottom:10px;}
+.empty-card h4{font-size:14px;color:var(--tx);margin-bottom:6px;}
+.empty-card .cmd{
+  display:inline-block;margin-top:10px;padding:8px 14px;
+  background:var(--sf3);border:1px solid var(--bd);border-radius:6px;
+  font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
+  color:var(--ac);user-select:all;cursor:text;
+}
+
+/* ── 表 ── */
+.scroll-x{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{text-align:left;font-size:10px;color:var(--txd);text-transform:uppercase;letter-spacing:.5px;
+   padding:8px 6px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--sf);z-index:1;}
+th.th-sortable{cursor:pointer;user-select:none;white-space:nowrap;}
+th.th-sortable:hover{color:var(--txb);}
+th.th-sortable::after{content:'  ·';opacity:.35;font-size:9px;font-weight:400;}
+th.th-sort-asc::after{content:' ▲';opacity:1;color:var(--ac);font-size:8px;}
+th.th-sort-desc::after{content:' ▼';opacity:1;color:var(--ac);font-size:8px;}
+td{padding:6px;border-bottom:1px solid rgba(36,48,73,.3);}
+tr:hover{background:rgba(167,139,250,.04);}
+.cell{display:inline-block;min-width:48px;padding:3px 6px;border-radius:4px;font-weight:600;font-size:11px;}
+.hc{display:inline-block;min-width:44px;padding:2px 6px;border-radius:4px;font-weight:600;text-align:center;font-size:11px;}
+.cg{background:rgba(34,197,94,.12);color:var(--gn);}
+.cy{background:rgba(245,158,11,.1);color:var(--yl);}
+.cr{background:rgba(239,68,68,.08);color:var(--rd);}
+td.hc-roi-win{background:rgba(59,130,246,.14);box-shadow:inset 0 0 0 1px rgba(59,130,246,.35);}
+td.hc-roi-place{background:rgba(168,85,247,.12);box-shadow:inset 0 0 0 1px rgba(168,85,247,.32);}
+td.hc-roi-both{background:linear-gradient(135deg,rgba(251,191,36,.22),rgba(234,179,8,.12));
+  box-shadow:inset 0 0 0 1px rgba(251,191,36,.55);}
+.roi-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--txd);margin:6px 0 10px;}
+.roi-legend span{display:inline-flex;align-items:center;gap:5px;}
+.roi-swatch{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;}
+.roi-swatch.hc-roi-win{background:rgba(59,130,246,.35);box-shadow:inset 0 0 0 1px rgba(59,130,246,.5);}
+.roi-swatch.hc-roi-place{background:rgba(168,85,247,.3);box-shadow:inset 0 0 0 1px rgba(168,85,247,.45);}
+.roi-swatch.hc-roi-both{background:linear-gradient(135deg,rgba(251,191,36,.5),rgba(234,179,8,.25));
+  box-shadow:inset 0 0 0 1px rgba(251,191,36,.6);}
+.mini{height:10px;background:var(--sf3);border-radius:3px;overflow:hidden;width:60px;display:inline-block;vertical-align:middle;}
+.mini>div{height:100%;border-radius:3px;}
+.mv{font-size:10px;color:var(--txd);margin-left:4px;}
+.badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--acd);color:var(--ac);}
+
+/* ── プロファイル レーダー ── */
+.radar-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;}
+.rc{background:var(--sf2);border-radius:10px;padding:16px;}
+.rc h4{font-size:14px;margin-bottom:2px;}
+.rc .meta{font-size:11px;color:var(--txd);margin-bottom:10px;}
+.br{display:flex;align-items:center;gap:6px;margin:3px 0;}
+.br .bl{font-size:10px;color:var(--txd);min-width:50px;}
+.bbg{flex:1;height:12px;background:var(--sf3);border-radius:3px;overflow:hidden;}
+.bf{height:100%;border-radius:3px;transition:width .4s;}
+.br .bv{font-size:10px;min-width:24px;text-align:right;}
+
+/* ── クラスタカード ── */
+.cluster-card{background:var(--sf2);border-radius:10px;padding:16px;margin-bottom:12px;}
+.cluster-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.cluster-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;background:var(--acd);color:var(--ac);}
+.profile-bar-row{display:flex;align-items:center;gap:8px;margin:3px 0;}
+.profile-bar-row .plbl{font-size:11px;color:var(--txd);min-width:140px;}
+.profile-bar-bg{flex:1;height:14px;background:var(--sf3);border-radius:3px;overflow:hidden;}
+.profile-bar-fill{height:100%;border-radius:3px;transition:width .4s;}
+.profile-bar-row .pval{font-size:11px;min-width:44px;text-align:right;}
+
+/* ── PP カード ── */
+.pp-card{display:flex;flex-direction:column;align-items:center;background:var(--sf2);border-radius:10px;padding:16px;min-width:140px;flex:1;}
+.pp-auc{font-size:28px;font-weight:700;}
+.pp-label{font-size:11px;color:var(--txd);margin-top:4px;text-align:center;}
+.pp-n{font-size:10px;color:var(--txd);}
+
+.notes{background:var(--sf2);border-radius:8px;padding:14px;font-size:12px;color:var(--txd);margin-top:12px;line-height:1.7;}
+.notes strong{color:var(--tx);}
+.notes ul{padding-left:20px;margin-top:6px;}
+.notes li{margin:3px 0;}
+
+
+/* ── コースプロファイル: 回収率ハイライト ── */
+.roi-panel{background:var(--sf2);border:1px solid var(--bd);border-radius:12px;padding:16px 18px;margin-bottom:20px;}
+.roi-panel-head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-bottom:14px;}
+.roi-panel-head h3{font-size:15px;font-weight:600;color:var(--txb);margin:0;flex:1;min-width:200px;}
+.roi-panel-meta{font-size:11px;color:var(--txd);line-height:1.5;}
+.roi-filter{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;}
+.roi-filter select{background:var(--sf3);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 10px;font-size:12px;}
+.roi-table-wrap{overflow:auto;max-height:min(70vh,720px);border-radius:8px;border:1px solid var(--bd);}
+.roi-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.roi-table th{position:sticky;top:0;z-index:2;background:var(--sf3);padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--txd);border-bottom:1px solid var(--bd);white-space:nowrap;}
+.roi-table td{padding:9px 12px;border-bottom:1px solid rgba(36,48,73,.35);vertical-align:middle;}
+.roi-table tbody tr:hover{background:rgba(6,182,212,.06);}
+.roi-table .sire-name{font-weight:600;color:var(--txb);}
+.roi-table .course-label{color:var(--ac2);font-weight:500;white-space:nowrap;}
+.roi-table .venue-label{color:var(--txd);font-size:11px;}
+.roi-pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;}
+.roi-pill.win{background:rgba(59,130,246,.2);color:#93c5fd;}
+.roi-pill.place{background:rgba(168,85,247,.2);color:#d8b4fe;}
+.roi-pill.both{background:rgba(251,191,36,.22);color:#fcd34d;}
+.roi-num{font-variant-numeric:tabular-nums;font-weight:700;}
+.roi-num.hot{color:var(--gn);}
+.roi-num.muted{color:var(--txd);font-weight:400;}
+.roi-n{font-size:11px;color:var(--txd);}
+.roi-empty{padding:24px;text-align:center;color:var(--txd);font-size:13px;}
+.rc-draw{margin-top:8px;font-size:11px;border-left:2px solid var(--bl);padding-left:10px;}
+.rc-draw-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:4px 0;border-bottom:1px solid rgba(36,48,73,.25);}
+.rc-draw-row:last-child{border-bottom:none;}
+.rc-draw-course{font-weight:600;color:var(--tx);}
+.rc-draw-tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;}
+.rc-draw-tag.inner{background:rgba(34,197,94,.15);color:var(--gn);}
+.rc-draw-tag.outer{background:rgba(239,68,68,.12);color:var(--rd);}
+.rc-draw-tag.flat{background:rgba(107,125,149,.15);color:var(--txd);}
+.rc-draw-sub{font-size:10px;color:var(--txd);}
+@media(max-width:900px){.radar-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+{% include 'partials/_nav.html' %}
+<div class="top-bar">
+  <h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">🧬 血統 × 距離・コース 研究</h1>
+  <span class="meta" id="updateMeta">アーティファクト読み込み中...</span>
+</div>
+
+<div class="container">
+  <div class="intro">
+    本ページは <strong>事前計算済みの血統研究アーティファクト</strong> をそのまま閲覧する Viewer です。
+    各タブは分析結果ファイル (CSV / JSON / コースプロファイル) を直接読み込んで表示します。
+    <strong>芝・ダート・障害は別集計</strong>です（馬場切替で切り替え、出走件数を表示）。
+    <div class="legend">
+      <span><i style="background:var(--ac)"></i>距離適性系 (sire × distance)</span>
+      <span><i style="background:var(--ac2)"></i>コース・馬場・枠順系 (course × bloodline)</span>
+      <span><i style="background:var(--gn)"></i>生成済</span>
+      <span><i style="background:var(--yl)"></i>一部</span>
+      <span><i style="background:var(--rd)"></i>未生成</span>
+    </div>
+  </div>
+
+  <div class="artifacts-bar" id="artifactsBar">
+    <span class="grp"><span class="dot"></span>アーティファクト読み込み中...</span>
+  </div>
+
+  <!-- ── 距離適性系 (purple) ── -->
+  <div class="tab-group">
+    <div class="tab-group-label" style="color:var(--ac)">▎ 距離適性 (Sire × Distance)</div>
+    <div class="tabs" id="tabsDist">
+      <div class="tab active" data-tab="heatmap">距離×複勝率</div>
+      <div class="tab" data-tab="bestdist">ベスト距離</div>
+      <div class="tab" data-tab="similarity">距離間 血統類似度</div>
+      <div class="tab" data-tab="clusters">距離プロファイル クラスタ</div>
+      <div class="tab" data-tab="predictive">予測寄与度 (AUC)</div>
+      <div class="tab" data-tab="damsire">父×母父 複勝率</div>
+    </div>
+  </div>
+
+  <!-- ── コース系 (cyan) ── -->
+  <div class="tab-group" style="margin-top:12px">
+    <div class="tab-group-label" style="color:var(--ac2)">▎ コース特性 × 血統</div>
+    <div class="tabs" id="tabsCourse">
+      <div class="tab ac2" data-tab="profiles">コースプロファイル</div>
+      <div class="tab ac2" data-tab="venue_sire">競馬場×種牡馬 複勝率</div>
+      <div class="tab ac2" data-tab="aptitude">コース適性スコア</div>
+      <div class="tab ac2" data-tab="optimal">最適条件</div>
+      <div class="tab ac2" data-tab="trackcond">馬場状態×血統</div>
+      <div class="tab ac2" data-tab="drawbl">枠順×血統</div>
+      <div class="tab ac2" data-tab="fcdraw">初角距離×枠順×血統</div>
+      <div class="tab ac2" data-tab="grasstype">芝種別×血統</div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel"></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+//  共通定義
+// ─────────────────────────────────────────────────────────────
+const DIST_LABELS = {
+  sprint: '短距離 (〜1400m)', mile: 'マイル (1400〜1800m)',
+  intermediate: '中距離 (1800〜2400m)', long: '長距離 (2400〜2800m)',
+  extended: '超長距離 (2800m〜)',
+};
+const DIST_COLORS = {
+  sprint:'#ef4444', mile:'#f59e0b', intermediate:'#3b82f6', long:'#22c55e', extended:'#a78bfa',
+};
+const TL = {stamina_demand:'スタミナ',power_demand:'パワー',speed_sustain:'持続力',acceleration:'瞬発力',agility:'器用さ',track_bias_inner:'内枠○',front_runner_advantage:'先行○'};
+const TC = {stamina_demand:'#ef4444',power_demand:'#f59e0b',speed_sustain:'#22c55e',acceleration:'#3b82f6',agility:'#a78bfa',track_bias_inner:'#06b6d4',front_runner_advantage:'#ec4899'};
+const TK = Object.keys(TL);
+
+// API パス → 表示名・グループの対応 (アーティファクトステータス用)
+const ARTIFACT_DEFS = [
+  // 距離適性
+  {key:'heatmap', label:'距離×複勝率', api:'/api/bloodline/data/sire_distance', group:'dist'},
+  {key:'bestdist', label:'ベスト距離', api:'/api/bloodline/data/best_distance', group:'dist'},
+  {key:'similarity', label:'距離類似度', api:'/api/bloodline/data/similarity', group:'dist'},
+  {key:'clusters', label:'クラスタ', api:'/api/bloodline/data/cluster_summary', group:'dist'},
+  {key:'predictive', label:'予測寄与度', api:'/api/bloodline/data/predictive_power', group:'dist'},
+  {key:'damsire', label:'父×母父', api:'/api/bloodline/data/sire_damsire_rate', group:'dist'},
+  // コース系
+  {key:'profiles', label:'コースプロファイル', api:'/api/course-profiles', group:'course'},
+  {key:'venue_sire', label:'競馬場×種牡馬', api:'/api/course-bloodline/data/venue_sire', group:'course'},
+  {key:'aptitude', label:'適性スコア', api:'/api/course-bloodline/data/aptitude', group:'course'},
+  {key:'optimal', label:'最適条件', api:'/api/course-bloodline/data/optimal', group:'course'},
+  {key:'trackcond', label:'馬場×血統', api:'/api/course-bloodline/data/track_condition', group:'course'},
+  {key:'drawbl', label:'枠順×血統', api:'/api/course-bloodline/data/draw_summary', group:'course'},
+  {key:'fcdraw', label:'初角×枠順', api:'/api/course-bloodline/data/fc_draw_summary', group:'course'},
+  {key:'grasstype', label:'芝種別×血統', api:'/api/course-bloodline/data/grass_summary', group:'course'},
+];
+
+// 再生成コマンド (未生成時に表示) — 各 viewer タブ別
+const REGEN_HINT = {
+  dist: 'python -m src.research.pedigree.bloodline_distance --years 2020,2021,2022,2023,2024,2025',
+  course: 'python -m src.research.race.course_bloodline --years 2020,2021,2022,2023,2024,2025',
+  profiles: '(静的ナレッジ: data/knowledge/course_profiles.json)',
+};
+
+const _CACHE = {};       // key → {ok:bool, data:any, error:string}
+let _CURRENT_TAB = 'heatmap';
+
+function cacheKey(k) { return k; }
+
+// ─────────────────────────────────────────────────────────────
+//  ブート: 全アーティファクトを並列フェッチ → ステータスバー描画 → 初期タブ描画
+// ─────────────────────────────────────────────────────────────
+(async function init() {
+  // タブクリック
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => selectTab(t.dataset.tab));
+  });
+  await preloadAll();
+  renderArtifactsBar();
+  selectTab(_CURRENT_TAB);
+})();
+
+async function preloadAll() {
+  await Promise.all(ARTIFACT_DEFS.map(async def => {
+    try {
+      const resp = await fetch(def.api);
+      if (!resp.ok) {
+        _CACHE[def.key] = {ok:false, error:`HTTP ${resp.status}`};
+        return;
+      }
+      const data = await resp.json();
+      if (data && data.error) {
+        _CACHE[def.key] = {ok:false, error: data.error};
+      } else {
+        _CACHE[def.key] = {ok:true, data};
+      }
+    } catch (e) {
+      _CACHE[def.key] = {ok:false, error: e.message};
+    }
+  }));
+}
+
+function renderArtifactsBar() {
+  const bar = document.getElementById('artifactsBar');
+  const distOk = ARTIFACT_DEFS.filter(d => d.group==='dist').filter(d => _CACHE[cacheKey(d.key)]?.ok).length;
+  const distAll = ARTIFACT_DEFS.filter(d => d.group==='dist').length;
+  const cseOk = ARTIFACT_DEFS.filter(d => d.group==='course').filter(d => _CACHE[cacheKey(d.key)]?.ok).length;
+  const cseAll = ARTIFACT_DEFS.filter(d => d.group==='course').length;
+
+  function cls(ok, all) { return ok===all ? 'ok' : (ok===0 ? 'miss' : 'partial'); }
+
+  let html = '';
+  html += `<span class="grp ${cls(distOk,distAll)}"><span class="dot"></span><strong>距離適性</strong> ${distOk}/${distAll} 利用可</span>`;
+  html += `<span class="grp ${cls(cseOk,cseAll)}"><span class="dot"></span><strong>コース×血統</strong> ${cseOk}/${cseAll} 利用可</span>`;
+  bar.innerHTML = html;
+
+  // タブに「未生成」マーカー
+  document.querySelectorAll('.tab').forEach(t => {
+    const k = t.dataset.tab;
+    if (_CACHE[cacheKey(k)] && !_CACHE[cacheKey(k)].ok) {
+      if (!t.querySelector('.tag-na')) {
+        const sp = document.createElement('span');
+        sp.className = 'tag-na';
+        sp.textContent = '未生成';
+        t.appendChild(sp);
+      }
+    }
+  });
+
+  // メタ
+  document.getElementById('updateMeta').textContent =
+    `距離適性 ${distOk}/${distAll} | コース×血統 ${cseOk}/${cseAll}`;
+}
+
+function selectTab(tab) {
+  _CURRENT_TAB = tab;
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.dataset.tab === tab) t.classList.add('active');
+    else t.classList.remove('active');
+  });
+  renderPanel(tab);
+}
+
+function renderPanel(tab) {
+  const p = document.getElementById('panel');
+  const cache = _CACHE[tab];
+  const def = ARTIFACT_DEFS.find(d => d.key === tab);
+  if (!cache || !cache.ok) {
+    p.innerHTML = renderEmpty(tab, cache?.error || '不明なエラー', def?.group || 'dist');
+    return;
+  }
+  try {
+    const fn = RENDERERS[tab];
+    if (!fn) { p.innerHTML = `<div class="empty-card"><div class="icon">⚠️</div>レンダラ未実装: ${tab}</div>`; return; }
+    p.innerHTML = fn(cache.data);
+    initPanelTableSort(p);
+    if (tab === 'profiles') initProfileRoiFilters();
+  } catch (e) {
+    p.innerHTML = `<div class="empty-card"><div class="icon">⚠️</div>描画エラー: ${e.message}</div>`;
+  }
+}
+
+/** セルからソートキーを取得（数値は %・カンマ除去、空は末尾扱い） */
+function cellSortValue(td) {
+  if (!td) return { kind: 'empty', n: 0, s: '', empty: true };
+  const ds = td.getAttribute('data-sort');
+  if (ds != null && String(ds).trim() !== '') {
+    const num = parseFloat(ds);
+    if (!Number.isNaN(num)) return { kind: 'num', n: num, s: '', empty: false };
+    return { kind: 'str', n: 0, s: String(ds), empty: false };
+  }
+  let t = td.textContent.replace(/\u00a0/g, ' ').trim();
+  if (!t || t === '—' || t === '-' || t === '−') return { kind: 'empty', n: 0, s: '', empty: true };
+  const forNum = t.replace(/,/g, '').replace(/%/g, '').replace(/\s+/g, '');
+  const num = parseFloat(forNum);
+  if (!Number.isNaN(num) && /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(forNum))
+    return { kind: 'num', n: num, s: t, empty: false };
+  return { kind: 'str', n: 0, s: t, empty: false };
+}
+
+function compareSortCells(a, b) {
+  if (a.empty && !b.empty) return 1;
+  if (!a.empty && b.empty) return -1;
+  if (a.empty && b.empty) return 0;
+  if (a.kind === 'num' && b.kind === 'num') {
+    if (a.n === b.n) return 0;
+    return a.n < b.n ? -1 : 1;
+  }
+  if (a.kind === 'num') return -1;
+  if (b.kind === 'num') return 1;
+  return a.s.localeCompare(b.s, 'ja', { numeric: true, sensitivity: 'base' });
+}
+
+/**
+ * パネル内の全 table に列ヘッダクリックでソートを付与。
+ * thead が複数行の場合は最終行の th と tbody の列を対応付け（初角×枠順タブ等）
+ */
+function initPanelTableSort(panelEl) {
+  if (!panelEl) return;
+  panelEl.querySelectorAll('table').forEach(table => {
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    if (!thead || !tbody) return;
+    const hRows = thead.querySelectorAll('tr');
+    if (!hRows.length) return;
+    const headerRow = hRows[hRows.length - 1];
+    const headers = [...headerRow.querySelectorAll('th')];
+    if (!headers.length) return;
+    const sampleRow = tbody.querySelector('tr');
+    const nCol = sampleRow ? sampleRow.cells.length : 0;
+    if (nCol && headers.length !== nCol) return;
+
+    headers.forEach((th, colIdx) => {
+      if (th.classList.contains('no-sort')) return;
+      th.classList.add('th-sortable');
+      th.setAttribute('data-sort-col', String(colIdx));
+      th.addEventListener('click', () => {
+        const prevCol = table.dataset.sortCol;
+        const prevDir = table.dataset.sortDir || 'asc';
+        let dir = 'asc';
+        if (String(colIdx) === prevCol) dir = prevDir === 'asc' ? 'desc' : 'asc';
+        table.dataset.sortCol = String(colIdx);
+        table.dataset.sortDir = dir;
+
+        const rows = [...tbody.querySelectorAll('tr')];
+        rows.sort((r1, r2) => {
+          const v1 = cellSortValue(r1.cells[colIdx]);
+          const v2 = cellSortValue(r2.cells[colIdx]);
+          const c = compareSortCells(v1, v2);
+          return dir === 'asc' ? c : -c;
+        });
+        rows.forEach(r => tbody.appendChild(r));
+
+        const firstTh = headers[0]?.textContent.trim();
+        if (firstTh === '#' || firstTh === '＃')
+          rows.forEach((r, i) => { if (r.cells[0]) r.cells[0].textContent = String(i + 1); });
+
+        table.querySelectorAll('thead th.th-sortable').forEach(h => {
+          h.classList.remove('th-sort-asc', 'th-sort-desc');
+          if (h.getAttribute('data-sort-col') === String(colIdx))
+            h.classList.add(dir === 'asc' ? 'th-sort-asc' : 'th-sort-desc');
+        });
+      });
+    });
+  });
+}
+
+function renderEmpty(tab, errMsg, group) {
+  const def = ARTIFACT_DEFS.find(d => d.key === tab);
+  const hint = REGEN_HINT[group] || REGEN_HINT['dist'];
+  return `<div class="empty-card">
+    <div class="icon">📭</div>
+    <h4>${def?.label || tab} のアーティファクトがまだ生成されていません</h4>
+    <div style="font-size:12px;margin-top:4px">エラー: ${errMsg}</div>
+    <div style="margin-top:14px;font-size:12px;color:var(--txd)">CLI で再生成:</div>
+    <div class="cmd">${hint}</div>
+    <div style="margin-top:10px;font-size:11px;color:var(--txd)">出力先: <code>data/research/${group==='course'?'course_bloodline':'bloodline'}/</code></div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  レンダラ群
+// ─────────────────────────────────────────────────────────────
+const RENDERERS = {};
+
+/** API metric_bundle 用: 種牡馬×列名 → 各指標の値 */
+function bundleCellLookup(metrics, sireCol, dataCols) {
+  const keys = ['top3_rate', 'top2_rate', 'win_rate', 'sample_count', 'win_roi', 'place_roi', 'roi_count'];
+  const L = {};
+  for (const mk of keys) {
+    const tbl = metrics[mk];
+    if (!tbl || !tbl.rows) continue;
+    for (const row of tbl.rows) {
+      const sire = (sireCol != null && Object.prototype.hasOwnProperty.call(row, sireCol))
+        ? row[sireCol]
+        : (row[''] || Object.values(row)[0]);
+      if (!L[sire]) L[sire] = {};
+      for (const dc of dataCols) {
+        if (!L[sire][dc]) L[sire][dc] = {};
+        const v = parseFloat(row[dc]);
+        L[sire][dc][mk] = Number.isNaN(v) ? null : v;
+      }
+    }
+  }
+  return L;
+}
+
+const MIN_ROI_N = 8;
+
+function roiProfitCellClass(m, n) {
+  if ((m.roi_count ?? 0) < n) return '';
+  const winOk = m.win_roi != null && m.win_roi > 100;
+  const placeOk = m.place_roi != null && m.place_roi > 100;
+  if (winOk && placeOk) return 'hc-roi-both';
+  if (winOk) return 'hc-roi-win';
+  if (placeOk) return 'hc-roi-place';
+  return '';
+}
+
+const ROI_LEGEND_HTML = `<div class="roi-legend">
+  <span><i class="roi-swatch hc-roi-win"></i>単回収&gt;100%（30倍以内・サンプル十分）</span>
+  <span><i class="roi-swatch hc-roi-place"></i>複回収&gt;100%</span>
+  <span><i class="roi-swatch hc-roi-both"></i>単・複とも&gt;100%</span>
+</div>`;
+
+function pctRate(v) {
+  if (v == null || Number.isNaN(Number(v))) return null;
+  return `${(Number(v) * 100).toFixed(1)}%`;
+}
+
+function fmtCellSub(m) {
+  const rates = [];
+  const w = pctRate(m.win_rate);
+  const t2 = pctRate(m.top2_rate);
+  const t3 = pctRate(m.top3_rate);
+  if (w) rates.push(`勝${w}`);
+  if (t2) rates.push(`連${t2}`);
+  if (t3) rates.push(`複${t3}`);
+  const sub = [];
+  const n = m.sample_count != null ? Math.round(Number(m.sample_count)) : null;
+  if (n != null && n > 0) sub.push(`n=${n.toLocaleString()}`);
+  if (m.win_roi != null && !Number.isNaN(m.win_roi)) sub.push(`単回${Number(m.win_roi).toFixed(1)}%`);
+  if (m.place_roi != null && !Number.isNaN(m.place_roi)) sub.push(`複回${Number(m.place_roi).toFixed(1)}%`);
+  let html = '';
+  if (rates.length) {
+    html += `<div style="font-size:10px;font-weight:600;line-height:1.35;margin-top:2px">${rates.join(' · ')}</div>`;
+  }
+  if (sub.length) {
+    html += `<div style="font-size:9px;color:var(--txd);line-height:1.25;margin-top:1px">${sub.join(' · ')}</div>`;
+  }
+  return html;
+}
+
+// ── 距離適性: 距離×複勝率 ヒートマップ ──
+RENDERERS.heatmap = (data) => {
+  const distKeys = ['sprint', 'mile', 'intermediate', 'long', 'extended'];
+  let rowSource, distCols, sireCol, lookup = null;
+
+  if (data.format === 'metric_bundle' && data.metrics && data.metrics.top3_rate) {
+    const tr = data.metrics.top3_rate;
+    const cols = tr.columns;
+    sireCol = cols.find(c => !distKeys.includes(c)) || '';
+    distCols = distKeys.filter(c => cols.includes(c));
+    rowSource = tr.rows.slice(0, 60);
+    lookup = bundleCellLookup(data.metrics, sireCol, distCols);
+  } else {
+    const cols = data.columns.filter(c => c !== '');
+    sireCol = cols.find(c => !distKeys.includes(c)) || '';
+    distCols = distKeys.filter(c => cols.includes(c));
+    rowSource = data.rows.slice(0, 60);
+  }
+
+  let html = '<h3>種牡馬 × 距離カテゴリ 成績</h3>';
+  html += '<div class="desc">メインは複勝率（色分け）。下段は勝率・<strong>単回収率</strong>・<strong>複回収率</strong>（各出走に単勝100円・複勝100円を毎回買った場合の払戻総額÷出走数、100円基準の%）。<code>race_result_slim</code> の払戻が必要です。</div>';
+  html += '<div class="scroll-x"><table><thead><tr><th>種牡馬</th>';
+  for (const c of distCols) html += `<th>${DIST_LABELS[c] || c}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const row of rowSource) {
+    const sire = row[sireCol] || row[''] || Object.values(row)[0];
+    html += `<tr><td><strong>${sire}</strong></td>`;
+    for (const c of distCols) {
+      let t3 = null;
+      const m = lookup && lookup[sire] && lookup[sire][c] ? lookup[sire][c] : {};
+      if (lookup && m.top3_rate != null) t3 = m.top3_rate;
+      else {
+        const v = parseFloat(row[c]);
+        if (!Number.isNaN(v)) t3 = v;
+      }
+      if (t3 == null || Number.isNaN(t3)) { html += '<td>-</td>'; continue; }
+      const pct = (t3 * 100).toFixed(1);
+      const cls = pct >= 35 ? 'cg' : (pct >= 25 ? 'cy' : 'cr');
+      const sortV = (Number(t3) * 100).toFixed(2);
+      const roiCls = lookup ? roiProfitCellClass(m, MIN_ROI_N) : '';
+      html += `<td data-sort="${sortV}"${roiCls ? ` class="${roiCls}"` : ''}><span class="hc ${cls}">${pct}%</span>${lookup ? fmtCellSub(m) : ''}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+};
+
+// ── ベスト距離 ──
+RENDERERS.bestdist = (data) => {
+  let html = '<h3>種牡馬ベスト距離推定 (加重平均)</h3>';
+  html += '<div class="desc">距離別複勝率を重みとして加重平均距離を算出。回収率は<strong>単勝オッズ30倍以内</strong>の出走のみ集計。</div>';
+  html += '<div class="scroll-x"><table><thead><tr><th>#</th><th>種牡馬</th><th>出走数</th><th>勝率</th><th>連対率</th><th>複勝率</th><th>単回収率</th><th>複回収率</th><th>ベスト距離</th><th>距離帯</th><th>適性バー</th></tr></thead><tbody>';
+  const rows = data.rows.slice(0, 80);
+  const maxRuns = Math.max(...rows.map(r => parseInt(r.total_runs) || 0));
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const runs = parseInt(r.total_runs) || 0;
+    const wr = (parseFloat(r.win_rate) * 100).toFixed(1);
+    const t2 = r.top2_rate != null && r.top2_rate !== '' ? (parseFloat(r.top2_rate) * 100).toFixed(1) : '—';
+    const t3 = (parseFloat(r.top3_rate) * 100).toFixed(1);
+    const wrp = r.win_return_pct != null && r.win_return_pct !== '' ? parseFloat(r.win_return_pct) : null;
+    const plp = r.place_return_pct != null && r.place_return_pct !== '' ? parseFloat(r.place_return_pct) : null;
+    const bd = parseInt(r.best_distance) || 0;
+    const bcat = r.best_dist_cat || '';
+    const barW = runs / maxRuns * 100;
+    const catColor = DIST_COLORS[bcat] || 'var(--ac)';
+    const wrpS = wrp != null && !Number.isNaN(wrp) ? `${wrp.toFixed(1)}%` : '—';
+    const plpS = plp != null && !Number.isNaN(plp) ? `${plp.toFixed(1)}%` : '—';
+    html += `<tr>
+      <td style="color:var(--txd)">${i + 1}</td>
+      <td><strong>${r.sire}</strong></td>
+      <td>${runs.toLocaleString()}</td>
+      <td>${wr}%</td>
+      <td>${t2 === '—' ? '—' : t2 + '%'}</td>
+      <td style="color:${parseFloat(t3) >= 30 ? 'var(--gn)' : 'var(--tx)'}">${t3}%</td>
+      <td data-sort="${wrp != null && !Number.isNaN(wrp) ? wrp : ''}">${wrpS}</td>
+      <td data-sort="${plp != null && !Number.isNaN(plp) ? plp : ''}">${plpS}</td>
+      <td style="font-weight:600">${bd.toLocaleString()}m</td>
+      <td><span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${catColor}22;color:${catColor}">${DIST_LABELS[bcat] || bcat}</span></td>
+      <td style="min-width:100px"><div style="height:8px;background:var(--sf2);border-radius:4px;overflow:hidden"><div style="height:100%;width:${barW}%;background:${catColor};border-radius:4px"></div></div></td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  return html;
+};
+
+// ── 距離間 類似度 ──
+RENDERERS.similarity = (data) => {
+  const cols = data.columns.filter(c => c !== '');
+  let html = '<h3>距離カテゴリ間 血統類似度 (コサイン類似度)</h3>';
+  html += '<div class="desc">1.0 に近いほど同じ種牡馬集団が活躍する距離帯。隣接距離帯の類似性が高ければ適性は連続的。</div>';
+  html += '<div class="scroll-x"><table><thead><tr><th></th>';
+  for (const c of cols) html += `<th>${DIST_LABELS[c]||c}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const row of data.rows) {
+    const label = row[''] || Object.values(row)[0];
+    html += `<tr><td><strong>${DIST_LABELS[label]||label}</strong></td>`;
+    for (const c of cols) {
+      const v = parseFloat(row[c]);
+      const color = v >= 0.95 ? 'var(--gn)' : (v >= 0.85 ? 'var(--yl)' : (v >= 0.7 ? 'var(--ac2)' : 'var(--txd)'));
+      const bg = v >= 0.95 ? 'rgba(34,197,94,.08)' : (v >= 0.85 ? 'rgba(245,158,11,.06)' : 'transparent');
+      html += `<td style="color:${color};background:${bg};font-weight:600">${isNaN(v)?'-':v.toFixed(3)}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+};
+
+// ── クラスタ ──
+RENDERERS.clusters = (data) => {
+  let html = '<h3>種牡馬クラスタリング (距離適性プロファイル)</h3>';
+  html += '<div class="desc">距離カテゴリ別複勝率ベクトルで K-means クラスタリング。各クラスタのプロファイルと所属種牡馬数を表示。</div>';
+  const distKeys = ['sprint','mile','intermediate','long','extended'];
+  for (const row of data.rows) {
+    const clId = row[''] || row.cluster || '?';
+    const clName = row.cluster_name || '';
+    const nSires = parseInt(row.n_sires) || 0;
+    const vals = {};
+    let maxVal = 0;
+    for (const k of distKeys) {
+      const v = parseFloat(row[k]) || 0;
+      vals[k] = v;
+      if (v > maxVal) maxVal = v;
+    }
+    html += `<div class="cluster-card">`;
+    html += `<div class="cluster-header"><span class="cluster-badge">Cluster ${clId}</span><strong>${clName}</strong><span style="color:var(--txd);font-size:12px">(${nSires} 種牡馬)</span></div>`;
+    for (const k of distKeys) {
+      const v = vals[k]; const pct = (v * 100).toFixed(1);
+      const w = maxVal > 0 ? (v / maxVal * 100) : 0;
+      const color = DIST_COLORS[k] || 'var(--ac)';
+      html += `<div class="profile-bar-row">
+        <span class="plbl">${DIST_LABELS[k]||k}</span>
+        <div class="profile-bar-bg"><div class="profile-bar-fill" style="width:${w}%;background:${color}"></div></div>
+        <span class="pval">${pct}%</span>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // 個別種牡馬の所属を一覧
+  const sires = _CACHE.heatmap?.data; // not exact; use a separate API instead
+  const siresData = _CACHE['_sire_clusters'] || null;
+  // sire_clusters.csv は別 API
+  const srRows = (window._sireClusterRows || []);
+  if (srRows.length) {
+    html += '<h3 style="margin-top:20px">クラスタ別 種牡馬一覧 (上位)</h3>';
+    html += '<div class="scroll-x"><table><thead><tr><th>クラスタ</th><th>種牡馬</th>';
+    for (const k of distKeys) html += `<th>${DIST_LABELS[k]?.split('(')[0]?.trim()||k}</th>`;
+    html += '</tr></thead><tbody>';
+    for (const row of srRows.slice(0, 100)) {
+      const sire = row.sire || row[''] || Object.values(row)[0];
+      const cl = row.cluster || '?';
+      html += `<tr><td><span class="cluster-badge" style="font-size:10px">${cl}</span></td><td><strong>${sire}</strong></td>`;
+      for (const k of distKeys) {
+        const v = parseFloat(row[k]);
+        html += `<td style="font-size:12px">${isNaN(v) ? '-' : (v*100).toFixed(1)+'%'}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+  } else {
+    // 非同期に追加取得して再レンダリング
+    fetch(`/api/bloodline/data/clusters?surface=${encodeURIComponent(_CURRENT_SURFACE)}`).then(r => r.json()).then(d => {
+      if (d && d.rows) { window._sireClusterRows = d.rows; if (_CURRENT_TAB === 'clusters') renderPanel('clusters'); }
+    }).catch(() => {});
+  }
+  return html;
+};
+
+// ── 予測寄与度 ──
+RENDERERS.predictive = (data) => {
+  let html = '<h3>血統特徴量の予測寄与度</h3>';
+  html += '<div class="desc">血統情報のみ (sire_enc, dam_sire_enc, distance) で複勝を予測した際の AUC。0.50 = ランダム。0.55+ で有意な予測力。</div>';
+  html += '<div style="display:flex;gap:14px;flex-wrap:wrap">';
+  const order = ['sprint','mile','intermediate','long','extended','all'];
+  for (const cat of order) {
+    const info = data[cat]; if (!info) continue;
+    const label = cat === 'all' ? '全体' : (DIST_LABELS[cat] || cat);
+    const auc = info.auc || 0; const n = info.n_samples || 0;
+    const color = auc >= 0.65 ? 'var(--gn)' : (auc >= 0.55 ? 'var(--yl)' : 'var(--rd)');
+    html += `<div class="pp-card">
+      <div class="pp-auc" style="color:${color}">${auc.toFixed(4)}</div>
+      <div class="pp-label">${label}</div>
+      <div class="pp-n">n=${n.toLocaleString()}</div>
+    </div>`;
+  }
+  html += '</div>';
+  html += '<h3 style="margin-top:24px">特徴量重要度 (距離帯別)</h3>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">';
+  for (const cat of order) {
+    const info = data[cat]; if (!info || !info.feature_importance) continue;
+    const label = cat === 'all' ? '全体' : (DIST_LABELS[cat] || cat);
+    const fi = info.feature_importance;
+    const maxImp = Math.max(...Object.values(fi));
+    html += `<div style="background:var(--sf2);border-radius:8px;padding:14px">`;
+    html += `<div style="font-size:12px;font-weight:600;margin-bottom:8px">${label}</div>`;
+    for (const [feat, imp] of Object.entries(fi).sort((a,b) => b[1]-a[1])) {
+      const w = maxImp > 0 ? (imp / maxImp * 100) : 0;
+      html += `<div class="profile-bar-row">
+        <span class="plbl" style="min-width:110px;font-size:11px">${feat}</span>
+        <div class="profile-bar-bg"><div class="profile-bar-fill" style="width:${w}%;background:var(--ac)"></div></div>
+        <span class="pval" style="font-size:10px">${imp.toFixed(0)}</span>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  html += '<div class="notes"><strong>読み方</strong><ul>';
+  html += '<li>AUC が特定距離帯で高い → その距離帯では血統が重要な予測因子</li>';
+  html += '<li>sire_enc の重要度が高い → 父系の影響が大きい</li>';
+  html += '<li>dam_sire_enc の重要度が高い → 母系 (母父) の影響が大きい</li>';
+  html += '<li>distance の重要度が高い → 距離×血統の交互作用が存在する</li>';
+  html += '</ul></div>';
+  return html;
+};
+
+// ── 父×母父 複勝率 ──
+RENDERERS.damsire = (data) => {
+  let cols, dsCols, rowSource, lookup = null, sireCol = 'sire';
+  if (data.format === 'metric_bundle' && data.metrics && data.metrics.top3_rate) {
+    const tr = data.metrics.top3_rate;
+    cols = tr.columns.filter(c => c !== '');
+    dsCols = cols.filter(c => c !== 'sire');
+    rowSource = data.metrics.top3_rate.rows;
+    lookup = bundleCellLookup(data.metrics, 'sire', dsCols);
+  } else {
+    cols = data.columns.filter(c => c !== '');
+    dsCols = cols.filter(c => c !== 'sire');
+    rowSource = data.rows;
+  }
+  let html = '<h3>父 × 母父 成績マトリクス</h3>';
+  html += '<div class="desc">メインは複勝率。再集計後は各セルに勝率・単回収・複回収を併記（<code>sire_damsire_*.csv</code>）。</div>';
+  html += '<div class="scroll-x"><table><thead><tr><th>父 \\ 母父</th>';
+  for (const c of dsCols) html += `<th style="font-size:10px">${c}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const row of rowSource) {
+    const sire = row.sire || row[''] || Object.values(row)[0];
+    html += `<tr><td><strong>${sire}</strong></td>`;
+    for (const c of dsCols) {
+      const m = lookup && lookup[sire] && lookup[sire][c] ? lookup[sire][c] : {};
+      let v = m.top3_rate;
+      if (v == null) {
+        const pv = parseFloat(row[c]);
+        if (!Number.isNaN(pv)) v = pv;
+      }
+      if (v == null || Number.isNaN(v)) { html += '<td style="color:var(--txd)">-</td>'; continue; }
+      const pct = (v * 100).toFixed(1);
+      const cls = pct >= 35 ? 'cg' : (pct >= 25 ? 'cy' : 'cr');
+      const sortV = (Number(v) * 100).toFixed(2);
+      const roiCls = lookup ? roiProfitCellClass(m, MIN_ROI_N) : '';
+      html += `<td data-sort="${sortV}"${roiCls ? ` class="${roiCls}"` : ''}><span class="hc ${cls}">${pct}%</span>${lookup ? fmtCellSub(m) : ''}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+};
+
+
+function shortSireName(s) {
+  if (!s) return '';
+  const t = String(s).trim();
+  const p = t.indexOf('(');
+  return p > 0 ? t.slice(0, p).trim() : t;
+}
+function roiPillClass(tags) {
+  if (tags && tags.includes('単') && tags.includes('複')) return 'both';
+  if (tags && tags.includes('単')) return 'win';
+  if (tags && tags.includes('複')) return 'place';
+  return '';
+}
+function roiPillLabel(tags) {
+  if (!tags || !tags.length) return '';
+  if (tags.includes('単') && tags.includes('複')) return '単・複';
+  return tags.join('・');
+}
+function renderProfileRoiPanel(data) {
+  const block = data.roi_highlights;
+  const highlights = block?.highlights || {};
+  const meta = block?.meta || {};
+  const venueMap = data.venues || {};
+  const rows = [];
+  for (const [code, courses] of Object.entries(highlights)) {
+    const vname = venueMap[code]?.name || ('場' + code);
+    for (const [courseKey, list] of Object.entries(courses)) {
+      for (const h of list || []) {
+        rows.push({
+          code, vname,
+          courseLabel: formatCourseLabel(courseKey),
+          sire: h.sire,
+          sireShort: shortSireName(h.sire),
+          win_roi: h.win_roi,
+          place_roi: h.place_roi,
+          tags: h.tags || [],
+          n_runs: h.n_runs,
+          roi_n: h.roi_n,
+        });
+      }
+    }
+  }
+  rows.sort((a, b) => Math.max(b.win_roi, b.place_roi) - Math.max(a.win_roi, a.place_roi));
+  let html = '<div class="roi-panel" id="profileRoiPanel">';
+  html += '<div class="roi-panel-head"><h3>回収率 100% 超 — 種牡馬一覧</h3>';
+  html += '<div class="roi-panel-meta">単・複回収は<strong>オッズ30倍以内</strong>のみ。';
+  if (meta.min_cell_runs != null) {
+    html += ' コース出走 ≥' + meta.min_cell_runs + '、回収集計 ≥' + (meta.min_roi_runs ?? 8) + '。';
+  }
+  html += '</div></div>';
+  if (!rows.length) {
+    html += '<div class="roi-empty">該当データがありません。</div></div>';
+    return html;
+  }
+  const venueOpts = [...new Set(rows.map(r => r.code))].sort();
+  html += '<div class="roi-filter">';
+  html += '<select id="roiFilterVenue"><option value="">全競馬場</option>';
+  for (const c of venueOpts) {
+    html += '<option value="' + c + '">' + (venueMap[c]?.name || c) + '</option>';
+  }
+  html += '</select>';
+  html += '<select id="roiFilterTag"><option value="">単・複すべて</option><option value="both">単・複とも100%超</option><option value="単">単勝のみ</option><option value="複">複勝のみ</option></select>';
+  html += '<span class="roi-n" id="roiFilterCount">' + rows.length + ' 件</span>';
+  html += '</div>';
+  html += '<div class="roi-table-wrap"><table class="roi-table" id="profileRoiTable"><thead><tr>';
+  html += '<th>競馬場</th><th>コース</th><th>種牡馬</th><th>区分</th><th>単回収</th><th>複回収</th><th>出走</th><th>30倍内</th>';
+  html += '</tr></thead><tbody>';
+  for (const r of rows) {
+    const pill = roiPillClass(r.tags);
+    const winHot = r.win_roi > 100;
+    const placeHot = r.place_roi > 100;
+    const tagVal = pill === 'both' ? 'both' : (r.tags[0] || '');
+    html += '<tr data-venue="' + r.code + '" data-tag="' + tagVal + '">';
+    html += '<td><span class="venue-label">' + r.vname + '</span></td>';
+    html += '<td class="course-label">' + r.courseLabel + '</td>';
+    html += '<td class="sire-name" title="' + r.sire + '">' + r.sireShort + '</td>';
+    html += '<td>' + (pill ? '<span class="roi-pill ' + pill + '">' + roiPillLabel(r.tags) + '</span>' : '—') + '</td>';
+    html += '<td class="roi-num ' + (winHot ? 'hot' : 'muted') + '">' + (winHot ? r.win_roi.toFixed(1) + '%' : '—') + '</td>';
+    html += '<td class="roi-num ' + (placeHot ? 'hot' : 'muted') + '">' + (placeHot ? r.place_roi.toFixed(1) + '%' : '—') + '</td>';
+    html += '<td class="roi-n">' + r.n_runs + '</td>';
+    html += '<td class="roi-n">' + r.roi_n + '</td>';
+    html += '</tr>';
+  }
+  html += '</tbody></table></div></div>';
+  return html;
+}
+function initProfileRoiFilters() {
+  const venueSel = document.getElementById('roiFilterVenue');
+  const tagSel = document.getElementById('roiFilterTag');
+  const table = document.getElementById('profileRoiTable');
+  const countEl = document.getElementById('roiFilterCount');
+  if (!table) return;
+  function apply() {
+    const v = venueSel && venueSel.value || '';
+    const t = tagSel && tagSel.value || '';
+    let n = 0;
+    table.querySelectorAll('tbody tr').forEach(function(tr) {
+      const show = (!v || tr.dataset.venue === v) && (!t || tr.dataset.tag === t);
+      tr.style.display = show ? '' : 'none';
+      if (show) n++;
+    });
+    if (countEl) countEl.textContent = n + ' 件';
+  }
+  if (venueSel) venueSel.addEventListener('change', apply);
+  if (tagSel) tagSel.addEventListener('change', apply);
+}
+// ── コースプロファイル (静的ナレッジ) ──
+RENDERERS.profiles = (data) => {
+  const venues = data.venues || {};
+  let html = renderProfileRoiPanel(data);
+  html += '<h3 style="margin-top:4px">JRA 全10場 — コース特性</h3>';
+  html += '<div class="desc">芝種・枠順バイアスなどの静的ナレッジ（回収率ハイライトは上の表）。</div>';
+  html += '<div class="radar-grid">';
+  for (const code of Object.keys(venues).sort()) {
+    const v = venues[code];
+    const t = v.traits || {};
+    let bars = '';
+    for (const k of TK) {
+      const val = t[k] || 0; const w = val/10*100;
+      bars += `<div class="br"><span class="bl">${TL[k]}</span><div class="bbg"><div class="bf" style="width:${w}%;background:${TC[k]}"></div></div><span class="bv">${val}</span></div>`;
+    }
+    const gi = v.grass_info || {};
+    const grassBase = gi.base_type || v.grass_type || '';
+    let grassHtml = '';
+    if (gi.schedule) {
+      grassHtml = '<div style="margin-top:6px;font-size:10px;border-left:2px solid var(--yl);padding-left:8px">';
+      grassHtml += `<div style="color:var(--yl);font-weight:600;margin-bottom:2px">🌱 芝種: ${grassBase}${gi.seasonal_variation?' (季節変動あり)':''}</div>`;
+      for (const s of gi.schedule) {
+        const ms = s.months.map(m => m+'月').join(',');
+        grassHtml += `<div style="color:var(--txd)"><strong>${ms}</strong>: ${s.type} — ${s.condition}</div>`;
+      }
+      if (gi.note) grassHtml += `<div style="color:var(--txd);font-style:italic;margin-top:2px">${gi.note}</div>`;
+      grassHtml += '</div>';
+    } else if (grassBase) {
+      grassHtml = `<div style="margin-top:6px;font-size:10px;color:var(--yl)">🌱 芝種: ${grassBase} (通年)</div>`;
+    }
+    const db = v.draw_bias || {};
+    let drawHtml = '';
+    if (Object.keys(db).length) {
+      drawHtml = '<div class="rc-draw"><div style="color:var(--bl);font-weight:600;margin-bottom:4px">枠順バイアス</div>';
+      for (const [dist, bias] of Object.entries(db)) {
+        const label = formatCourseLabel(dist);
+        const inner = bias.inner_1_4, outer = bias.outer_9_plus;
+        let tagCls = 'flat', tag = 'フラット';
+        if (inner > 1.08) { tagCls = 'inner'; tag = '内枠有利'; }
+        else if (outer > 1.08) { tagCls = 'outer'; tag = '外枠有利'; }
+        const fcm = bias.first_corner_m;
+        const sub = fcm != null ? ('初角' + fcm + 'm') : '';
+        drawHtml += '<div class="rc-draw-row"><span class="rc-draw-course">' + label + '</span><span class="rc-draw-tag ' + tagCls + '">' + tag + '</span>' + (sub ? '<span class="rc-draw-sub">' + sub + '</span>' : '') + '</div>';
+      }
+      drawHtml += '</div>';
+    }
+    html += `<div class="rc">
+      <h4>${v.name}</h4>
+      <div class="meta">${v.direction||''} / ${grassBase}${v.turf_straight_m?` / 直線${v.turf_straight_m}m`:''}</div>
+      ${bars}
+      ${grassHtml}
+      ${drawHtml}
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+};
+
+function formatCourseLabel(key) {
+  const surface = key.startsWith('turf_') ? '芝' : key.startsWith('dirt_') ? 'ダ' : '';
+  const rest = key.replace(/^(turf|dirt)_/, '');
+  const m = rest.match(/^(\d+)(?:_(int|ext|straight))?$/);
+  if (!m) return key;
+  const dist = m[1];
+  const variant = m[2];
+  const suffix = variant === 'int' ? '(内)' : variant === 'ext' ? '(外)' : variant === 'straight' ? '(直)' : '';
+  return `${surface}${dist}m${suffix}`;
+}
+
+// ── 競馬場×種牡馬 複勝率 ──
+RENDERERS.venue_sire = (data) => {
+  const cols = data.columns.filter(c => c !== '');
+  let html = '<h3>競馬場 × 種牡馬 複勝率</h3>';
+  html += '<div class="desc">各競馬場での複勝率。色は <span style="color:var(--gn)">≥35%</span> / <span style="color:var(--yl)">≥25%</span> / <span style="color:var(--rd)"><25%</span>。</div>';
+  html += '<div class="scroll-x"><table><thead><tr><th>種牡馬</th>';
+  for (const c of cols) html += `<th>${c}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const row of data.rows.slice(0, 60)) {
+    const sire = row[''] || Object.values(row)[0];
+    html += `<tr><td><strong>${sire}</strong></td>`;
+    for (const c of cols) {
+      const v = parseFloat(row[c]);
+      if (isNaN(v)) { html += '<td>-</td>'; continue; }
+      const pct = (v * 100).toFixed(1);
+      const cls = pct >= 35 ? 'cg' : (pct >= 25 ? 'cy' : 'cr');
+      html += `<td><span class="hc ${cls}">${pct}%</span></td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+};
+
+// ── コース適性スコア ──
+RENDERERS.aptitude = (data) => {
+  let html = '<h3>種牡馬コース適性スコア — 得意な特性を定量化</h3>';
+  html += '<div class="desc">各特性の 0–10 適性スコア。最も高い特性を「最適特性」として表示。</div>';
+  html += '<div class="scroll-x"><table><thead><tr><th>種牡馬</th><th>出走</th><th>複勝率</th>';
+  for (const k of TK) html += `<th>${TL[k]}</th>`;
+  html += '<th>最適特性</th></tr></thead><tbody>';
+  for (const r of data.rows.slice(0, 60)) {
+    const t3 = (parseFloat(r.overall_top3_rate) * 100).toFixed(1);
+    let cells = `<td><strong>${r.sire}</strong></td><td>${parseInt(r.total_runs).toLocaleString()}</td><td>${t3}%</td>`;
+    for (const k of TK) {
+      const v = parseFloat(r['apt_'+k]) || 5;
+      const w = v / 10 * 100;
+      cells += `<td><div class="mini"><div style="width:${w}%;background:${TC[k]}"></div></div><span class="mv">${v.toFixed(1)}</span></td>`;
+    }
+    const bt = TL[r.best_trait] || r.best_trait || '';
+    cells += `<td><span class="badge">${bt}</span></td>`;
+    html += `<tr>${cells}</tr>`;
+  }
+  html += '</tbody></table></div>';
+  html += `<div class="notes"><strong>読み方</strong><ul>
+    <li>パワー高 → 坂のあるコース (中山・阪神) で好成績</li>
+    <li>瞬発力高 → 直線が長いコース (新潟・東京・京都) で好成績</li>
+    <li>器用さ高 → 小回りコース (函館・札幌・小倉) で好成績</li>
+  </ul></div>`;
+  return html;
+};
+
+// ── 最適条件 ──
+RENDERERS.optimal = (data) => {
+  let html = '<h3>種牡馬の最適レース条件推定</h3>';
+  html += '<div class="desc">複勝率最大化の場・距離・馬場の組み合わせを 1 行で要約。</div>';
+  html += '<div class="scroll-x"><table><thead><tr><th>種牡馬</th><th>出走</th><th>複勝率</th><th>最適競馬場</th><th>場複勝</th><th>最適距離帯</th><th>加重ベスト距離</th><th>最適馬場</th><th>最強コンボ</th></tr></thead><tbody>';
+  for (const r of data.rows.slice(0, 60)) {
+    const t3 = (parseFloat(r.overall_top3) * 100).toFixed(1);
+    const vt3 = (parseFloat(r.best_venue_top3) * 100).toFixed(1);
+    html += `<tr>
+      <td><strong>${r.sire}</strong></td>
+      <td>${parseInt(r.total_runs).toLocaleString()}</td>
+      <td>${t3}%</td>
+      <td style="font-weight:600">${r.best_venue}</td>
+      <td style="color:var(--gn)">${vt3}%</td>
+      <td>${r.best_distance_cat}</td>
+      <td style="font-weight:600">${parseInt(r.weighted_best_dist_m).toLocaleString()}m</td>
+      <td>${r.best_track_cond}</td>
+      <td style="color:var(--ac2);font-weight:600">${r.best_combo}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  return html;
+};
+
+// ── 馬場×血統 ──
+RENDERERS.trackcond = (data) => {
+  const bySire = {};
+  for (const r of data.rows) {
+    if (!bySire[r.sire]) bySire[r.sire] = [];
+    bySire[r.sire].push(r);
+  }
+  let html = '<h3>馬場状態 × 血統 — 成績変動</h3>';
+  html += '<div class="desc">Δ = その馬場条件での複勝率 − 全体平均複勝率。正なら得意、負なら苦手。</div>';
+  html += '<div class="scroll-x"><table><thead><tr><th>種牡馬</th><th>条件</th><th>出走数</th><th>複勝率</th><th>全体平均</th><th>Δ</th><th></th></tr></thead><tbody>';
+  let count = 0;
+  for (const [sire, rows] of Object.entries(bySire)) {
+    if (count > 200) break;
+    const sorted = [...rows].sort((a,b) => parseFloat(b.delta) - parseFloat(a.delta));
+    for (const r of sorted) {
+      const t3 = (parseFloat(r.top3_rate) * 100).toFixed(1);
+      const base = (parseFloat(r.baseline_top3) * 100).toFixed(1);
+      const delta = (parseFloat(r.delta) * 100).toFixed(1);
+      const dc = parseFloat(delta) >= 0 ? 'var(--gn)' : 'var(--rd)';
+      const sign = parseFloat(delta) >= 0 ? '+' : '';
+      const w = Math.min(Math.abs(parseFloat(delta))/10*100, 100);
+      html += `<tr>
+        <td><strong>${r.sire}</strong></td>
+        <td>${r.condition_label || (r.surface+'・'+r.track_condition)}</td>
+        <td>${r.count}</td>
+        <td style="font-weight:600">${t3}%</td>
+        <td style="color:var(--txd)">${base}%</td>
+        <td style="color:${dc};font-weight:700">${sign}${delta}%</td>
+        <td style="min-width:80px"><div class="mini"><div style="width:${w}%;background:${dc}"></div></div></td>
+      </tr>`;
+      count++;
+    }
+  }
+  html += '</tbody></table></div>';
+  return html;
+};
+
+// ── 枠順×血統 ──
+RENDERERS.drawbl = (data) => {
+  let html = '<h3>枠順バイアス × 血統 — 内枠/外枠の得意不得意</h3>';
+  html += '<div class="desc">内外差 = 内枠での複勝率 − 外枠での複勝率。正なら内枠得意、負なら外枠得意。</div>';
+  html += '<div class="scroll-x"><table><thead><tr><th>種牡馬</th><th>内枠 複勝率</th><th>中枠 複勝率</th><th>外枠 複勝率</th><th>内外差</th><th></th><th>傾向</th></tr></thead><tbody>';
+  for (const row of data.rows.slice(0, 80)) {
+    const sire = row[''] || Object.values(row)[0];
+    const inner = parseFloat(row.inner), mid = parseFloat(row.middle), outer = parseFloat(row.outer);
+    const gap = parseFloat(row.inner_outer_gap);
+    const gc = gap >= 0 ? 'var(--gn)' : 'var(--rd)';
+    const sign = gap >= 0 ? '+' : '';
+    const fmt = v => isNaN(v) ? '-' : (v*100).toFixed(1)+'%';
+    let label = '', lc = 'var(--txd)';
+    if (gap > 0.05) { label = '🟢 内枠巧者'; lc = 'var(--gn)'; }
+    else if (gap < -0.05) { label = '🔴 外枠巧者'; lc = 'var(--rd)'; }
+    else { label = '⚪ フラット'; lc = 'var(--txd)'; }
+    const w = Math.min(Math.abs(gap)/0.15*100, 100);
+    html += `<tr>
+      <td><strong>${sire}</strong></td>
+      <td>${fmt(inner)}</td><td>${fmt(mid)}</td><td>${fmt(outer)}</td>
+      <td style="color:${gc};font-weight:700">${sign}${(gap*100).toFixed(1)}%</td>
+      <td style="min-width:80px"><div class="mini"><div style="width:${w}%;background:${gc}"></div></div></td>
+      <td style="color:${lc};font-weight:600">${label}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  html += `<div class="notes"><strong>読み方</strong><ul>
+    <li>内枠巧者 = 小回り・短距離で好成績を出しやすい血統 (器用さ・先行力が高い)</li>
+    <li>外枠巧者 = 直線の長いコースで外を回しても差しが利く血統 (末脚の切れ味が高い)</li>
+    <li>フラット = 枠順に左右されにくい万能血統</li>
+  </ul></div>`;
+  return html;
+};
+
+// ── 初角距離×枠順×血統 ──
+RENDERERS.fcdraw = (data) => {
+  const bands = ['very_short','short','medium','long','very_long'];
+  const bandLabels = {very_short:'~250m', short:'250~400m', medium:'400~550m', long:'550~700m', very_long:'700m~'};
+  const bandIcons = {very_short:'🔴', short:'🟠', medium:'🟡', long:'🟢', very_long:'🔵'};
+  let html = '<h3>初角距離 × 枠順 × 血統 — 距離別ドローバイアス感受性</h3>';
+  html += '<div class="desc">初角までの距離が短いほど内枠有利。枠順感受性が高い種牡馬は初角が短いコースで特に内枠を引きたい。</div>';
+  html += '<div class="scroll-x"><table><thead><tr><th>種牡馬</th><th>出走数</th>';
+  for (const b of bands) html += `<th colspan="3" style="text-align:center;color:var(--ac2)">${bandIcons[b]} ${bandLabels[b]}</th>`;
+  html += '<th>枠順感受性</th><th>タイプ</th></tr><tr><th></th><th></th>';
+  for (let i = 0; i < bands.length; i++) html += '<th style="font-size:9px">内枠率</th><th style="font-size:9px">外枠率</th><th style="font-size:9px">内外差</th>';
+  html += '<th></th><th></th></tr></thead><tbody>';
+  for (const row of data.rows.slice(0, 80)) {
+    html += `<tr><td><strong>${row.sire}</strong></td><td>${parseInt(row.total||0).toLocaleString()}</td>`;
+    for (const b of bands) {
+      const ir = parseFloat(row[b+'_inner_rate']);
+      const or2 = parseFloat(row[b+'_outer_rate']);
+      const gap = parseFloat(row[b+'_gap']);
+      const fmtR = v => isNaN(v) ? '<span style="color:var(--txd)">-</span>' : `${(v*100).toFixed(1)}%`;
+      html += `<td>${fmtR(ir)}</td><td>${fmtR(or2)}</td>`;
+      if (!isNaN(gap)) {
+        const gc = gap >= 0 ? 'var(--gn)' : 'var(--rd)';
+        const sign = gap >= 0 ? '+' : '';
+        html += `<td style="color:${gc};font-weight:700;font-size:11px">${sign}${(gap*100).toFixed(1)}%</td>`;
+      } else { html += '<td style="color:var(--txd)">-</td>'; }
+    }
+    const ds = parseFloat(row.draw_sensitivity);
+    if (!isNaN(ds)) {
+      const dsc = ds >= 0.05 ? 'var(--rd)' : (ds <= -0.05 ? 'var(--gn)' : 'var(--txd)');
+      const dsSign = ds >= 0 ? '+' : '';
+      html += `<td style="color:${dsc};font-weight:700">${dsSign}${(ds*100).toFixed(1)}%</td>`;
+    } else { html += '<td style="color:var(--txd)">-</td>'; }
+    let typeLabel = '', typeColor = 'var(--txd)';
+    if (!isNaN(ds)) {
+      if (ds > 0.05) { typeLabel = '🔴 内枠依存型'; typeColor = 'var(--rd)'; }
+      else if (ds < -0.05) { typeLabel = '🔵 外枠巧者型'; typeColor = 'var(--bl)'; }
+      else { typeLabel = '⚪ 枠不問型'; typeColor = 'var(--txd)'; }
+    } else { typeLabel = '-'; }
+    html += `<td style="color:${typeColor};font-weight:600;font-size:11px">${typeLabel}</td></tr>`;
+  }
+  html += '</tbody></table></div>';
+  html += `<div class="notes"><strong>読み方</strong><ul>
+    <li>🔴 内枠依存型 = 初角が短いコースでは内枠が必須。外枠だと成績が大きく低下</li>
+    <li>🔵 外枠巧者型 = 初角が短いコースでも外枠から好走可能。先行力・機動力が高い</li>
+    <li>⚪ 枠不問型 = 初角距離に関わらず枠順の影響が小さい万能型</li>
+    <li>例: 中山芝1200m (初角200m) は内枠依存型にとって最も有利なコース</li>
+  </ul></div>`;
+  return html;
+};
+
+// ── 芝種別×血統 ──
+RENDERERS.grasstype = (data) => {
+  const gtCols = ['洋芝','野芝','オーバーシード','エクイターフ'];
+  const gtColors = {'洋芝':'var(--gn)','野芝':'var(--bl)','オーバーシード':'var(--yl)','エクイターフ':'var(--pp)'};
+  const gtIcons = {'洋芝':'🌿','野芝':'🌾','オーバーシード':'🌱','エクイターフ':'🏗️'};
+  let html = '<h3>芝種別 × 血統パフォーマンス</h3>';
+  html += '<div class="desc">同じ種牡馬でも芝の種類 (洋芝/野芝/オーバーシード) によって成績が大きく変わります。</div>';
+  html += '<div class="scroll-x"><table><thead><tr><th>種牡馬</th>';
+  for (const gt of gtCols) html += `<th style="color:${gtColors[gt]}">${gtIcons[gt]} ${gt}</th>`;
+  const hasGaps = data.columns.includes('洋芝_野芝_gap');
+  const hasOS = data.columns.includes('OS_野芝_gap');
+  if (hasGaps) html += '<th>洋芝-野芝差</th>';
+  if (hasOS) html += '<th>OS-野芝差</th>';
+  html += '<th>適性タイプ</th></tr></thead><tbody>';
+  for (const row of data.rows.slice(0, 80)) {
+    const sire = row[''] || Object.values(row)[0];
+    html += `<tr><td><strong>${sire}</strong></td>`;
+    for (const gt of gtCols) {
+      const v = parseFloat(row[gt]);
+      if (isNaN(v)) { html += '<td style="color:var(--txd)">-</td>'; continue; }
+      const pct = (v * 100).toFixed(1);
+      const cls = pct >= 35 ? 'cg' : (pct >= 25 ? 'cy' : 'cr');
+      html += `<td><span class="hc ${cls}">${pct}%</span></td>`;
+    }
+    if (hasGaps) {
+      const gap = parseFloat(row['洋芝_野芝_gap']);
+      if (!isNaN(gap)) {
+        const gc = gap >= 0 ? 'var(--gn)' : 'var(--rd)';
+        const sign = gap >= 0 ? '+' : '';
+        html += `<td style="color:${gc};font-weight:700">${sign}${(gap*100).toFixed(1)}%</td>`;
+      } else html += '<td>-</td>';
+    }
+    if (hasOS) {
+      const gap = parseFloat(row['OS_野芝_gap']);
+      if (!isNaN(gap)) {
+        const gc = gap >= 0 ? 'var(--yl)' : 'var(--rd)';
+        const sign = gap >= 0 ? '+' : '';
+        html += `<td style="color:${gc};font-weight:700">${sign}${(gap*100).toFixed(1)}%</td>`;
+      } else html += '<td>-</td>';
+    }
+    const yo = parseFloat(row['洋芝']) || 0, no = parseFloat(row['野芝']) || 0;
+    let typeLabel = '', typeColor = 'var(--txd)';
+    const gap1 = yo - no;
+    if (gap1 > 0.05) { typeLabel = '🌿 洋芝巧者'; typeColor = 'var(--gn)'; }
+    else if (gap1 < -0.05) { typeLabel = '🌾 野芝巧者'; typeColor = 'var(--bl)'; }
+    else { typeLabel = '⚡ 万能型'; typeColor = 'var(--ac2)'; }
+    html += `<td style="color:${typeColor};font-weight:600;font-size:11px">${typeLabel}</td></tr>`;
+  }
+  html += '</tbody></table></div>';
+  html += `<div class="notes"><strong>読み方</strong><ul>
+    <li>🌿 洋芝巧者 = 札幌・函館で好成績。パワーがあり欧州血統の影響が強い</li>
+    <li>🌾 野芝巧者 = 夏〜秋の高速馬場で好成績。スピード・瞬発力が高い</li>
+    <li>🌱 オーバーシードが得意 = 冬の中山・阪神で好成績</li>
+    <li>🏗️ エクイターフ = 改修後の京都 (2023〜)。洋芝ベースだが従来より均一</li>
+  </ul></div>`;
+  return html;
+};
+</script>
+</body>
+</html>

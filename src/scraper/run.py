@@ -43,7 +43,7 @@ import requests
 
 from src.scraper.client import NetkeibaClient
 from src.scraper.parsers import (
-    RaceResultParser, RaceCardParser, HorseParser, RaceListParser,
+    RaceResultParser, RaceResultOnTimeParser, RaceCardParser, HorseParser, RaceListParser,
     SpeedIndexParser, ShutubaPastParser, OddsParser,
     PaddockParser, BarometerParser, OikiriParser, TrainingParser,
     TrainerCommentParser,
@@ -112,10 +112,102 @@ def _horse_training_local_dict_looks_stored(
     return "entries" in d or d.get("total_items") is not None or d.get("pages_fetched") is not None
 
 
+def _update_local_pedigree_10gen(horse_id: str, rec5gen: dict, base_dir) -> None:
+    """5gen GCS 保存直後に、ローカル 5gen / 10gen / ped_tbl Parquet を即時更新する。
+
+    処理順:
+      1. data/local/horse_pedigree_5gen/{prefix}/{horse_id}.json を書く
+      2. gen-5 祖先の既存ローカル 5gen を使って 10gen を構築し保存
+      3. data/features/horse/ped_tbl/{prefix}/{horse_id}.parquet を生成 (sync_ped_tbl)
+
+    GCS read は行わない。gen-6〜10 が揃わない場合は coverage.missing_5gen_data に残る。
+    """
+    import json as _json
+    from pathlib import Path as _Path
+    from src.research.pedigree.build_horse_pedigree_10gen import build_10gen_record
+    try:
+        base = _Path(base_dir)
+        ped5_dir = base / "data" / "local" / "horse_pedigree_5gen"
+        ped10_dir = base / "data" / "local" / "horse_pedigree_10gen"
+        prefix = horse_id[:4] if len(horse_id) >= 4 else "0000"
+
+        # 1) data/local/horse_pedigree_5gen/{prefix}/{horse_id}.json に書く
+        p5 = ped5_dir / prefix / f"{horse_id}.json"
+        p5.parent.mkdir(parents=True, exist_ok=True)
+        p5.write_text(_json.dumps(rec5gen, ensure_ascii=False), encoding="utf-8")
+
+        # 2) mini_idx: 本馬 + gen=5 祖先のローカル 5gen (あるものだけ)
+        mini_idx: dict[str, dict] = {horse_id: rec5gen}
+        for anc in rec5gen.get("ancestors") or []:
+            try:
+                if int(anc.get("generation", 0)) != 5:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            aid = (anc.get("horse_id") or "").strip()
+            if not aid or aid in mini_idx:
+                continue
+            ap = ped5_dir / (aid[:4] if len(aid) >= 4 else "0000") / f"{aid}.json"
+            if ap.exists():
+                try:
+                    mini_idx[aid] = _json.loads(ap.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+
+        # 3) 10gen を構築して data/local/horse_pedigree_10gen/{prefix}/{horse_id}.json に保存
+        rec10 = build_10gen_record(horse_id, mini_idx)
+        if rec10:
+            p10 = ped10_dir / prefix / f"{horse_id}.json"
+            p10.parent.mkdir(parents=True, exist_ok=True)
+            p10.write_text(_json.dumps(rec10, ensure_ascii=False), encoding="utf-8")
+            n_resolved = rec10["coverage"]["n_5gen_ancestors_resolved"]
+            n_total = rec10["coverage"]["n_5gen_ancestors"]
+            logger.debug(
+                "10gen ローカル更新: %s  %d祖先 gen-5解決=%d/%d",
+                horse_id, rec10["n_ancestors"], n_resolved, n_total,
+            )
+
+        # 4) ped_tbl Parquet を生成 (data/features/horse/ped_tbl/{prefix}/{horse_id}.parquet)
+        #    5gen JSON を書いた後なので _load_pedigree_json はそのまま参照できる
+        try:
+            from src.pipeline.sync_ped_tbl_for_horses import sync_ped_tbl_for_horses
+            sync_ped_tbl_for_horses(
+                [horse_id],
+                base_dir=base,
+                pedigree_json_dir=ped5_dir,
+                skip_if_parquet_exists=False,  # 常に最新 5gen で上書き
+            )
+        except Exception as e:
+            logger.warning("ped_tbl Parquet 生成失敗 [%s]: %s", horse_id, e)
+
+    except Exception as e:
+        logger.warning("10gen ローカル更新失敗 [%s]: %s", horse_id, e)
+
+
+def _enqueue_pedigree_retry(horse_ids: list[str], base_dir=None) -> None:
+    """Phase 2b/2c で失敗した馬の horse_pedigree_5gen を個別キュージョブとして再投入する。"""
+    try:
+        from src.scraper.job_queue import ScrapeJobQueue
+        queue = ScrapeJobQueue()
+        specs = [
+            {"job_kind": "horse", "target_id": hid,
+             "tasks": ["horse_pedigree_5gen"], "priority": 5, "smart_skip": False}
+            for hid in horse_ids
+        ]
+        result = queue.bulk_add_jobs(specs)
+        logger.info(
+            "5世代血統失敗馬を再キュー: %d頭 (created=%d, duplicate=%d)",
+            len(horse_ids), result["created"], result["duplicate"],
+        )
+    except Exception as e:
+        logger.warning("5世代血統失敗馬の再キュー失敗: %s", e)
+
+
 class ScraperRunner:
     """各スクレイピングタスクを統合するランナー (GCS プライマリ + HTML アーカイブ)"""
 
     RACE_RESULT_URL = "https://db.netkeiba.com/race/{race_id}/"
+    RACE_RESULT_ON_TIME_URL = "https://race.netkeiba.com/race/result.html?race_id={race_id}"
     RACE_CARD_URL = "https://race.netkeiba.com/race/shutuba.html?race_id={race_id}"
     SPEED_INDEX_URL = "https://race.netkeiba.com/race/speed.html?race_id={race_id}"
     SHUTUBA_PAST_URL = "https://race.netkeiba.com/race/shutuba_past.html?race_id={race_id}"
@@ -141,6 +233,7 @@ class ScraperRunner:
         self.archive = HtmlArchive()
 
         self.result_parser = RaceResultParser()
+        self.result_on_time_parser = RaceResultOnTimeParser()
         self.card_parser = RaceCardParser()
         self.horse_parser = HorseParser()
         self.list_parser = RaceListParser()
@@ -326,10 +419,34 @@ class ScraperRunner:
     # ── 個別スクレイピングメソッド ──────────────────────────
 
     def scrape_race_result(self, race_id: str, skip_existing: bool = True) -> dict | None:
-        return self._fetch_parse_save(
+        data = self._fetch_parse_save(
             "race_result", race_id,
             self.RACE_RESULT_URL.format(race_id=race_id),
             self.result_parser, {"race_id": race_id},
+            skip_existing=skip_existing, min_entries=1,
+        )
+        if data is not None:
+            from src.scraper.pace_utils import merge_race_result_pace
+
+            lap = self.storage.load("race_result_lap", race_id)
+            merged = merge_race_result_pace(data, lap)
+            if merged is not data:
+                self.storage.save("race_result", race_id, merged)
+                return merged
+        return data
+
+    def scrape_race_result_on_time(self, race_id: str, skip_existing: bool = True) -> dict | None:
+        """
+        race.netkeiba.com 速報結果ページを取得し race_result_on_time に保存する。
+
+        レース当日17:30 (raceday-evening) に呼び出す。ログイン不要。
+        db.netkeiba.com 版 (race_result) の上書き前に速報として保存しておくことで、
+        AI予測の再現に使用できる当日速報データを別パスに保持する。
+        """
+        return self._fetch_parse_save(
+            "race_result_on_time", race_id,
+            self.RACE_RESULT_ON_TIME_URL.format(race_id=race_id),
+            self.result_on_time_parser, {"race_id": race_id},
             skip_existing=skip_existing, min_entries=1,
         )
 
@@ -363,6 +480,12 @@ class ScraperRunner:
                 logger.warning("race_result_lap: ラップ系データが空: %s", race_id)
                 return None
             self.storage.save("race_result_lap", race_id, lap)
+            existing = self.storage.load("race_result", race_id)
+            if existing:
+                from src.scraper.pace_utils import merge_race_result_pace
+
+                merged = merge_race_result_pace(existing, lap)
+                self.storage.save("race_result", race_id, merged)
             logger.info(
                 "取得完了: race_result_lap/%s — entries_lap=%d lap_rows=%d",
                 race_id,
@@ -565,7 +688,7 @@ class ScraperRunner:
         キュータスク horse_pedigree_5gen から呼ばれる。
         """
         from src.research.pedigree.pedigree_similarity import parse_blood_table_5gen
-        from scripts.scrape_pedigree_5gen import build_pedigree_record
+        from src.scripts.scraping.scrape_pedigree_5gen import build_pedigree_record
 
         self._last_pedigree_5gen_skip = False
         if skip_existing:
@@ -590,10 +713,16 @@ class ScraperRunner:
         rec = build_pedigree_record(
             horse_id, ancestors, source="queue_horse_pedigree_5gen"
         )
-        self.storage.save("horse_pedigree_5gen", horse_id, rec)
+        saved = self.storage.save("horse_pedigree_5gen", horse_id, rec)
+        if not saved:
+            logger.warning(
+                "horse_pedigree_5gen GCS未保存 (バックオフ/GCS無効): %s", horse_id
+            )
+            return None
         logger.info(
             "保存: horse_pedigree_5gen/%s (%d頭)", horse_id, len(ancestors)
         )
+        _update_local_pedigree_10gen(horse_id, rec, self.storage._base_dir)
         return rec
 
     # ── 調教タイム (全ページ結合) ────────────────────────────
@@ -1587,6 +1716,7 @@ class ScraperRunner:
             ped5_fetched = 0
             ped5_skipped = 0
             ped5_failed = 0
+            ped5_failed_ids: list[str] = []
             sire_ids: set[str] = set()
             for hid in horse_ids:
                 ex = self.storage.load("horse_pedigree_5gen", hid)
@@ -1604,22 +1734,28 @@ class ScraperRunner:
                         f"5世代血統 ({ped5_fetched + ped5_failed + 1}/"
                         f"{len(horse_ids) - ped5_skipped}): {hid}")
                     rec = self.scrape_horse_pedigree_5gen(hid, skip_existing=False)
-                    ped5_fetched += 1
-                    if rec:
+                    if rec is not None:
+                        ped5_fetched += 1
                         for a in rec.get("ancestors", []):
                             if a.get("generation") == 1 and a.get("position") == 0:
                                 sid = a.get("horse_id", "")
                                 if sid:
                                     sire_ids.add(sid)
                                 break
+                    else:
+                        ped5_failed += 1
+                        ped5_failed_ids.append(hid)
                 except Exception as e:
                     ped5_failed += 1
+                    ped5_failed_ids.append(hid)
                     logger.debug("5gen取得失敗 [%s]: %s", hid, e)
             if ped5_fetched > 0 or ped5_failed > 0:
                 logger.info(
                     "5世代血統(出走馬): %d頭スキップ, %d頭新規取得, %d頭失敗",
                     ped5_skipped, ped5_fetched, ped5_failed,
                 )
+            if ped5_failed_ids:
+                _enqueue_pedigree_retry(ped5_failed_ids, self.storage._base_dir)
 
             # ── Phase 2c: 種牡馬の5世代血統 ──
             sire_ids -= set(horse_ids)
@@ -1627,6 +1763,7 @@ class ScraperRunner:
                 sire_fetched = 0
                 sire_skipped = 0
                 sire_failed = 0
+                sire_failed_ids: list[str] = []
                 sire_list = sorted(sire_ids)
                 for sid in sire_list:
                     ex = self.storage.load("horse_pedigree_5gen", sid)
@@ -1637,16 +1774,23 @@ class ScraperRunner:
                         _cb("pedigree_5gen_sire",
                             f"種牡馬5世代血統 ({sire_fetched + sire_failed + 1}/"
                             f"{len(sire_list) - sire_skipped}): {sid}")
-                        self.scrape_horse_pedigree_5gen(sid, skip_existing=False)
-                        sire_fetched += 1
+                        rec = self.scrape_horse_pedigree_5gen(sid, skip_existing=False)
+                        if rec is not None:
+                            sire_fetched += 1
+                        else:
+                            sire_failed += 1
+                            sire_failed_ids.append(sid)
                     except Exception as e:
                         sire_failed += 1
+                        sire_failed_ids.append(sid)
                         logger.debug("5gen取得失敗(種牡馬) [%s]: %s", sid, e)
                 if sire_fetched > 0 or sire_failed > 0:
                     logger.info(
                         "5世代血統(種牡馬): %d頭スキップ, %d頭新規取得, %d頭失敗",
                         sire_skipped, sire_fetched, sire_failed,
                     )
+                if sire_failed_ids:
+                    _enqueue_pedigree_retry(sire_failed_ids, self.storage._base_dir)
 
         # ── サマリー構築 ──
 

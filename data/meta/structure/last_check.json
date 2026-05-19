@@ -1,10 +1,10 @@
 {
   "status": "ok",
-  "timestamp": "2026-05-13T06:00:46.456348",
-  "sample_race_id": "202606030801",
+  "timestamp": "2026-05-19T06:17:33.279346",
+  "sample_race_id": "202605021211",
   "sample_horse_id": "",
   "total_categories": 15,
-  "checked": 12,
+  "checked": 1,
   "critical": 0,
   "warning": 0,
   "reparsed_categories": [],

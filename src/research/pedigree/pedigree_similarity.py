@@ -81,39 +81,61 @@ def parse_horse_sex_from_ped_html(html: str, horse_id: str) -> str:
     """
     馬の blood/ped HTML ページから主役馬の性別を判定して返す。
 
-    判定順:
-      1. mare_line_box 内の現在馬（太字リンク）→ '牝'
-      2. プロフィール section で 牝/牡/セン を検索
-      3. 不明なら ''
+    判定順 (信頼度が高い方から):
+      1. プロフィール領域 (horse_title / db_prof_area) の sex_age 表記
+      2. h1/h2 ヘッダ近辺の 牝/牡/セン マーカー
+      3. (最終手段) mare_line_box の太字リンク → '牝'
+
+    注: 旧版は mare_line_box を最優先で判定していたが、
+        多くの牡馬ページでも母系系図上の祖母が太字強調されており
+        全てが '牝' と誤判定される問題があった (Phase E 検証時に発見)。
     """
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
 
-    # 1. mare_line_box: 現在馬が <b> タグで強調されていれば牝馬
+    # 1. プロフィール領域: 「牡5 / 牝3 / セ4」など sex_age 表記を優先
+    for selector in [
+        "div.horse_title",
+        "div.db_prof_area_02",
+        "div.db_prof_area",
+        "h1.horse_title",
+        "p.txt_01",
+    ]:
+        el = soup.select_one(selector)
+        if not el:
+            continue
+        text = el.get_text(" ", strip=True)
+        # 「牡」「牝」「セ」の前に空白か行頭が来ることが多い。
+        # 「牝」と「牡」が両方含まれる場合は、馬名の直後に出てくる方を優先。
+        # 簡易: 単純に最初に出現したものを採用 (ただし両方ある場合は別判定)。
+        idx_male = text.find("牡")
+        idx_female = text.find("牝")
+        idx_gelding = text.find("セン")
+        candidates = [(i, s) for i, s in [(idx_male, "牡"), (idx_female, "牝"), (idx_gelding, "牡")] if i >= 0]
+        if candidates:
+            candidates.sort()
+            return candidates[0][1]
+
+    # 2. ヘッダ群 (h1/h2 等) の最初の sex マーカー
+    for tag in soup.select("h1, h2, .horse_info, .db_h_title"):
+        text = tag.get_text(" ", strip=True)
+        idx_male = text.find("牡")
+        idx_female = text.find("牝")
+        idx_gelding = text.find("セン")
+        candidates = [(i, s) for i, s in [(idx_male, "牡"), (idx_female, "牝"), (idx_gelding, "牡")] if i >= 0]
+        if candidates:
+            candidates.sort()
+            return candidates[0][1]
+
+    # 3. (最終手段) mare_line_box: 主役馬が <b> で強調されていれば牝
+    # ※ 注: blood/ped ページの mare_line_box には主役馬の "母系祖先" が並ぶため、
+    #        この判定は信頼性が低い。プロフィールが取れない場合のみのフォールバック。
     mare_box = soup.select_one(".mare_line_box, .mare_line")
     if mare_box:
         for a in mare_box.select("a"):
             href = a.get("href", "")
             if horse_id in href and a.select_one("b"):
                 return "牝"
-
-    # 2. ページテキストから 牝/牡/セン を抽出（プロフィール欄）
-    for selector in ["div.horse_title", "div.db_prof_area_02", "div.db_prof_area"]:
-        el = soup.select_one(selector)
-        if el:
-            text = el.get_text()
-            if "牝" in text:
-                return "牝"
-            if "牡" in text or "セン" in text:
-                return "牡"
-
-    # 3. ページ全体の最初の 牝/牡 マーカー（ヘッダ付近）
-    for tag in soup.select("h1, h2, .horse_info, .db_h_title"):
-        text = tag.get_text()
-        if "牝" in text:
-            return "牝"
-        if "牡" in text:
-            return "牡"
 
     return ""
 

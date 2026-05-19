@@ -1,0 +1,3495 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>血統構造マップ | ML-AutoPilot Keiba</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700&family=Noto+Sans+JP:wght@300;400;600;700&display=swap" rel="stylesheet">
+<script src="/static/vendor/d3.min.js"></script>
+<style>
+:root {
+  --bg: #0a0c10;
+  --surface: #12151c;
+  --border: #1e2330;
+  --text: #e8eaf0;
+  --text-dim: #8890a0;
+  --accent: #00d4aa;
+  --accent2: #ff6b35;
+  --ss: #e63946; --kk: #457b9d; --rb: #2a9d8f; --nd: #e9c46a;
+  --dh: #f4a261; --sw: #264653; --sc: #a8dadc; --mp: #6d6875;
+  --ap: #b5838d; --dp: #ffb4a2; --other: #606060;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;overflow:hidden;height:100vh}
+#tree-view{flex:1;min-height:0;overflow:hidden;display:none;flex-direction:column;position:relative}
+#tree-msg{display:none;align-items:center;justify-content:center;position:absolute;inset:0;font-size:1rem;background:var(--bg);z-index:5}
+.gnav+.layout{height:calc(100vh - 44px)}
+h1{font-family:'Shippori Mincho',serif;font-size:1.4rem;font-weight:700;letter-spacing:0.05em;color:var(--accent)}
+.layout{display:none;grid-template-columns:280px 1fr 300px;height:calc(100vh - 44px);gap:0}
+.layout.show{display:grid}
+.panel{background:var(--surface);border-right:1px solid var(--border);padding:16px;overflow-y:auto}
+.panel-right{border-right:none;border-left:1px solid var(--border)}
+.panel h2{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--text-dim);margin:16px 0 8px;font-weight:600}
+.panel h2:first-child{margin-top:0}
+.color-mode-btn{display:block;width:100%;padding:8px 12px;margin:3px 0;background:transparent;border:1px solid var(--border);color:var(--text);font-size:0.8rem;cursor:pointer;text-align:left;border-radius:4px;transition:all .15s}
+.color-mode-btn:hover{border-color:var(--accent);color:var(--accent)}
+.color-mode-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:0.75rem;margin:3px 0;color:var(--text-dim)}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+canvas{display:block;background:var(--bg);flex-shrink:0}
+.tooltip{position:fixed;pointer-events:none;background:rgba(18,21,28,.95);border:1px solid var(--accent);border-radius:6px;padding:12px 16px;font-size:0.8rem;line-height:1.5;max-width:340px;display:none;z-index:100;backdrop-filter:blur(8px)}
+.tooltip .name{font-family:'Shippori Mincho',serif;font-size:1rem;font-weight:700;color:var(--accent);margin-bottom:6px}
+.tooltip .line-tag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:0.7rem;margin-bottom:6px;font-weight:600}
+.tooltip .stats{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px}
+.tooltip .stat-label{color:var(--text-dim);font-size:0.7rem}
+.tooltip .stat-value{color:var(--text);font-weight:600;font-size:0.75rem}
+.similar-list{margin-top:12px}
+.similar-item{display:flex;justify-content:space-between;padding:6px 10px;margin:2px 0;background:rgba(255,255,255,.03);border-radius:4px;font-size:0.75rem;cursor:pointer;transition:all .15s}
+.similar-item:hover{background:rgba(0,212,170,.1);color:var(--accent)}
+.similar-score{color:var(--accent2);font-weight:600}
+.selected-sire{font-family:'Shippori Mincho',serif;font-size:1.1rem;font-weight:700;color:var(--accent);margin-bottom:8px}
+.search-box{width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:0.85rem;margin:8px 0;outline:none}
+.search-box:focus{border-color:var(--accent)}
+.search-results{max-height:200px;overflow-y:auto}
+.search-result{padding:6px 10px;cursor:pointer;font-size:0.8rem;border-radius:3px;transition:background .15s}
+.search-result:hover{background:rgba(0,212,170,.15);color:var(--accent)}
+.header-bar{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--surface)}
+.header-bar .info{font-size:0.75rem;color:var(--text-dim)}
+.zoom-controls{display:flex;gap:4px}
+.zoom-btn{width:32px;height:32px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;border-radius:4px;font-size:1rem;display:flex;align-items:center;justify-content:center}
+.zoom-btn:hover{border-color:var(--accent);color:var(--accent)}
+.inbreed-item{font-size:.7rem;color:var(--text-dim);padding:2px 0}
+.inbreed-cross{color:var(--accent2);font-weight:600}
+
+/* ── 適性タグチップ ── */
+.tag-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 9px;border-radius:11px;
+  font-size:.68rem;font-weight:600;line-height:1.2;
+  margin:2px 3px 2px 0;
+  background:rgba(255,255,255,.06);
+  border:1px solid;
+  cursor:default;
+  white-space:nowrap;
+}
+.tag-chip .tag-meta{font-size:.6rem;font-weight:500;opacity:.85;margin-left:2px}
+.tag-chip-empty{font-size:.7rem;color:var(--text-dim);padding:2px 4px;font-style:italic}
+.tag-chips-row{display:flex;flex-wrap:wrap;gap:2px;margin-top:6px;margin-bottom:8px}
+.tag-cat-pill{
+  display:inline-block;padding:1px 7px;border-radius:8px;
+  font-size:.6rem;font-weight:700;letter-spacing:.04em;
+  margin-right:4px;color:#0a0c10;
+}
+.tooltip .tag-chips-row{margin:6px 0 4px;max-width:320px}
+.tag-filter-bar{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 8px}
+.tag-filter-btn{
+  padding:3px 8px;font-size:.65rem;font-weight:600;
+  background:transparent;border:1px solid var(--border);
+  color:var(--text-dim);border-radius:10px;cursor:pointer;
+  transition:all .15s;
+}
+.tag-filter-btn:hover{color:var(--text);border-color:var(--accent)}
+.tag-filter-btn.active{background:var(--accent);color:#0a0c10;border-color:var(--accent)}
+
+/* ── ツリー上のミニタグ (馬名行に並べる超コンパクト版) ── */
+.tn-tags{display:inline-flex;flex-wrap:wrap;gap:2px;margin-left:6px;vertical-align:middle}
+.tn-tag-mini{
+  display:inline-block;padding:1px 5px;border-radius:6px;
+  font-size:.58rem;font-weight:700;line-height:1.4;
+  border:1px solid;
+  white-space:nowrap;
+}
+.tn-tag-empty{display:inline-block;font-size:.58rem;color:var(--text-dim);
+  margin-left:6px;font-style:italic;opacity:.4}
+.tn-nk-icon{
+  display:inline-block;margin-left:4px;padding:0 4px;
+  font-size:.58rem;font-weight:700;line-height:1.4;
+  color:#06b6d4;background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.25);
+  border-radius:4px;text-decoration:none;
+  transition:all .12s;
+}
+.tn-nk-icon:hover{background:rgba(6,182,212,.2);color:#22d3ee}
+.loading{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:1rem}
+.compare-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600;margin-left:4px}
+.compare-badge.perf{background:rgba(255,107,53,.15);color:#ff6b35}
+.compare-badge.ped{background:rgba(0,212,170,.15);color:#00d4aa}
+
+/* ── トップモードバー (探索 / 研究) ── */
+.topmode-bar{
+  display:flex;align-items:center;gap:8px;padding:8px 16px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+}
+.topmode-bar .tm-tabs{display:flex;gap:6px}
+.topmode-bar .tm-tab{
+  padding:7px 16px;font-size:.85rem;font-weight:700;
+  background:transparent;border:1px solid var(--border);color:var(--text-dim);
+  border-radius:6px;cursor:pointer;transition:all .15s;
+}
+.topmode-bar .tm-tab .badge{font-size:.62rem;font-weight:500;color:var(--text-dim);margin-left:6px}
+.topmode-bar .tm-tab:hover{color:var(--text);border-color:var(--accent)}
+.topmode-bar .tm-tab.active{background:var(--accent);color:#0a0c10;border-color:var(--accent)}
+.topmode-bar .tm-tab.active .badge{color:#0a0c10;opacity:.8}
+.topmode-bar .tm-spacer{flex:1}
+.topmode-bar .tm-hint{font-size:.7rem;color:var(--text-dim)}
+.gnav+.topmode-bar+.layout,
+.gnav+.topmode-bar+#discovery-layout{height:calc(100vh - 44px - 41px)}
+
+/* ── 探索モード Layout ── */
+#discovery-layout{
+  display:none;height:calc(100vh - 44px - 41px);
+  grid-template-columns: 320px 1fr;
+}
+#discovery-layout.show{display:grid}
+.disc-form{
+  background:var(--surface);border-right:1px solid var(--border);
+  padding:14px 16px;overflow-y:auto;
+}
+.disc-form h2{font-size:.75rem;text-transform:uppercase;letter-spacing:.15em;color:var(--text-dim);margin:14px 0 6px;font-weight:600}
+.disc-form h2:first-child{margin-top:0}
+.disc-form .form-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.disc-form .form-row label{font-size:.7rem;color:var(--text-dim);margin-bottom:2px;display:block}
+.disc-form .ff{flex:1 1 130px;min-width:130px}
+.disc-form input, .disc-form select{
+  width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);
+  color:var(--text);border-radius:4px;font-size:.78rem;outline:none;
+}
+.disc-form input:focus, .disc-form select:focus{border-color:var(--accent)}
+.disc-form input[type=date]{color-scheme:dark}
+.disc-form .multi-head{
+  display:flex;align-items:center;justify-content:space-between;
+  margin:0 0 4px;gap:8px;flex-wrap:wrap;
+}
+.disc-form .multi-head label{font-size:.7rem;color:var(--text-dim);margin:0;display:inline-flex;align-items:center;gap:6px}
+.disc-form .multi-hint{
+  font-size:.6rem;color:var(--text-dim);background:rgba(255,255,255,.06);
+  padding:1px 6px;border-radius:6px;font-weight:400;letter-spacing:.04em;
+}
+.disc-form .multi-actions{display:flex;gap:4px}
+.disc-form .multi-action{
+  background:transparent;color:var(--text-dim);border:1px solid var(--border);
+  padding:2px 8px;border-radius:4px;font-size:.65rem;cursor:pointer;
+  transition:color .12s,border-color .12s,background .12s;
+}
+.disc-form .multi-action:hover{color:var(--accent);border-color:var(--accent)}
+.disc-form .preset-row{display:flex;gap:4px;flex-wrap:wrap;margin-top:0}
+/* グレード別カラーアクセント */
+.disc-form .preset-btn.grade-g1.active{background:#ff5b5b;border-color:#ff5b5b;color:#fff}
+.disc-form .preset-btn.grade-g2.active{background:#ff9942;border-color:#ff9942;color:#fff}
+.disc-form .preset-btn.grade-g3.active{background:#ffc83d;border-color:#ffc83d;color:#1a1a1a}
+.disc-form .preset-btn.grade-l.active {background:#a78bfa;border-color:#a78bfa;color:#fff}
+.disc-form .preset-btn.grade-op.active{background:#60a5fa;border-color:#60a5fa;color:#fff}
+.disc-form .preset-btn{
+  padding:3px 8px;font-size:.65rem;font-weight:600;
+  background:transparent;border:1px solid var(--border);
+  color:var(--text-dim);border-radius:4px;cursor:pointer;
+}
+.disc-form .preset-btn:hover{color:var(--text);border-color:var(--accent)}
+.disc-form .preset-btn.active{background:var(--accent);color:#0a0c10;border-color:var(--accent)}
+.disc-form .disc-submit{
+  width:100%;padding:10px;background:var(--accent);color:#0a0c10;
+  border:none;border-radius:6px;font-weight:700;font-size:.85rem;
+  cursor:pointer;margin-top:12px;transition:.15s;
+}
+.disc-form .disc-submit:hover{background:#00b894;transform:translateY(-1px)}
+.disc-form .disc-submit:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.disc-form .disc-reset-btn{
+  padding:8px 12px;background:transparent;border:1px solid var(--border);
+  border-radius:6px;color:var(--text-dim);font-size:.7rem;font-weight:600;
+  cursor:pointer;margin-top:12px;transition:.15s;white-space:nowrap;
+}
+.disc-form .disc-reset-btn:hover{color:#ef4444;border-color:#ef4444}
+.disc-form .disc-validation{
+  margin-top:8px;padding:6px 10px;background:rgba(239,68,68,.08);
+  border:1px solid rgba(239,68,68,.4);border-radius:4px;
+  color:#fca5a5;font-size:.68rem;line-height:1.5;
+}
+.disc-form .disc-validation b{color:#ef4444}
+/* 0件 / エラー時の診断表示 */
+.disc-empty .disc-diag{
+  margin-top:10px;padding:10px;background:rgba(0,0,0,.3);
+  border:1px solid var(--border);border-radius:4px;text-align:left;
+  font-size:.66rem;color:var(--text-dim);line-height:1.6;
+}
+.disc-empty .disc-diag h5{
+  margin:0 0 6px;color:var(--accent2);font-size:.7rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;
+}
+.disc-empty .disc-diag table{
+  width:100%;border-collapse:collapse;font-size:.65rem;margin:4px 0;
+}
+.disc-empty .disc-diag th,.disc-empty .disc-diag td{
+  padding:2px 6px;text-align:left;border-bottom:1px dotted rgba(255,255,255,.06);
+  vertical-align:top;
+}
+.disc-empty .disc-diag th{color:var(--text-dim);font-weight:500;width:140px}
+.disc-empty .disc-diag td{color:var(--text);font-family:ui-monospace,monospace}
+.disc-empty .disc-diag td.dim{color:var(--text-dim)}
+.disc-empty .disc-diag .diag-url{
+  background:rgba(0,212,170,.06);padding:6px 8px;border-radius:3px;
+  word-break:break-all;color:var(--accent);margin-top:6px;
+  font-family:ui-monospace,monospace;font-size:.6rem;
+}
+.disc-empty .disc-diag .diag-hint{
+  color:#fbbf24;margin-top:8px;padding:6px 8px;
+  background:rgba(251,191,36,.05);border-left:2px solid #fbbf24;border-radius:0 3px 3px 0;
+}
+
+.disc-main{
+  background:var(--bg);padding:14px 16px;overflow-y:auto;
+}
+.disc-main .disc-title{font-size:1rem;font-weight:700;color:var(--text);margin-bottom:8px}
+.disc-main .side-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.disc-main .side-tab{
+  padding:6px 14px;font-size:.78rem;font-weight:600;
+  background:var(--surface);border:1px solid var(--border);color:var(--text-dim);
+  border-radius:6px;cursor:pointer;transition:.15s;
+}
+.disc-main .side-tab:hover{color:var(--text);border-color:var(--accent)}
+.disc-main .side-tab.active{background:var(--accent);color:#0a0c10;border-color:var(--accent)}
+.disc-main .sort-row{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.disc-main .sort-row .lab{font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em}
+.disc-main .sort-btn{
+  padding:4px 10px;font-size:.7rem;font-weight:600;
+  background:var(--surface);border:1px solid var(--border);color:var(--text-dim);
+  border-radius:4px;cursor:pointer;transition:.15s;
+}
+.disc-main .sort-btn:hover{color:var(--text)}
+.disc-main .sort-btn.active{background:var(--accent);color:#0a0c10;border-color:var(--accent)}
+
+.disc-table-wrap{
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  overflow:auto;max-height:calc(100vh - 250px);
+}
+.disc-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.disc-table thead th{
+  position:sticky;top:0;background:var(--surface);color:var(--text-dim);
+  font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;
+  padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);
+  white-space:nowrap;
+}
+.disc-table thead th:first-child, .disc-table thead th:nth-child(2){text-align:left}
+.disc-table tbody td{
+  padding:6px 10px;text-align:right;font-family:'Inter','Noto Sans JP',monospace;
+  color:var(--text);border-bottom:1px solid rgba(255,255,255,.03);
+}
+.disc-table tbody td:first-child, .disc-table tbody td:nth-child(2){text-align:left;font-family:'Noto Sans JP',sans-serif}
+.disc-table tbody tr:hover td{background:rgba(0,212,170,.04)}
+.disc-table .rank-cell{color:var(--text-dim);font-weight:700;width:36px}
+.disc-table .name-cell a{color:var(--text);text-decoration:none;border-bottom:1px dashed transparent;font-weight:600}
+.disc-table .name-cell a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+.disc-table .roi-pos{color:#10b981;font-weight:600}
+.disc-table .roi-neg{color:#ef4444}
+.disc-table .score-cell{color:var(--accent2);font-weight:700}
+.disc-table .finish-dist-cell{
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:.72rem;letter-spacing:.02em;white-space:nowrap;
+  color:var(--text);text-align:center;
+}
+.disc-table .finish-dist-cell .fd-1{color:#fbbf24;font-weight:700}      /* 1着: 金 */
+.disc-table .finish-dist-cell .fd-2{color:#cbd5e1;font-weight:600}      /* 2着: 銀 */
+.disc-table .finish-dist-cell .fd-3{color:#d97706}                       /* 3着: 銅 */
+.disc-table .finish-dist-cell .fd-rest{color:var(--text-dim)}            /* 4-5着 / 6+ */
+.disc-table .finish-dist-cell .fd-sep{color:var(--text-dim);margin:0 1px}
+.disc-table thead th .col-sub{
+  display:block;font-size:.55rem;color:var(--text-dim);
+  font-weight:400;letter-spacing:.04em;margin-top:1px;
+}
+/* ── 平均着 < 平均人気 = アツい行ハイライト ── */
+.disc-table tr.row-hot td{background:rgba(34,197,94,0.08)}
+.disc-table tr.row-hot:hover td{background:rgba(34,197,94,0.16)}
+.disc-table tr.row-hot td:nth-last-child(2){color:#22c55e;font-weight:700}
+.disc-table tr.row-hot .upset-badge{
+  display:inline-block;margin-left:4px;padding:0 5px;border-radius:8px;
+  background:rgba(34,197,94,0.18);color:#22c55e;font-size:.55rem;font-weight:700;
+  vertical-align:middle;border:1px solid rgba(34,197,94,0.4);
+}
+/* ── 行展開トグル ── */
+.disc-table .expand-toggle{
+  display:inline-block;width:18px;height:18px;line-height:14px;text-align:center;
+  font-size:.7rem;color:var(--text-dim);border:1px solid var(--border);
+  border-radius:4px;cursor:pointer;margin-right:6px;background:transparent;
+  user-select:none;font-family:ui-monospace,monospace;padding:0;
+  transition:transform .15s ease,color .15s ease,border-color .15s ease;
+}
+.disc-table .expand-toggle:hover{color:var(--accent);border-color:var(--accent)}
+.disc-table .expand-toggle.open{transform:rotate(90deg);color:var(--accent);border-color:var(--accent)}
+/* ── 折り畳み詳細行 ── */
+.disc-table tr.disc-detail-row td{
+  background:rgba(14,17,24,0.6);padding:0;border-bottom:1px solid var(--border);
+}
+.disc-detail-inner{padding:10px 14px 14px}
+.disc-detail-inner .dh-head{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;
+  font-size:.72rem;color:var(--text-dim);
+}
+.disc-detail-inner .dh-head b{color:var(--text)}
+.disc-detail-inner .dh-loading{font-size:.72rem;color:var(--text-dim);padding:8px 0}
+.disc-progeny-table{
+  width:100%;border-collapse:collapse;font-size:.7rem;background:rgba(255,255,255,.02);
+  border:1px solid var(--border);border-radius:4px;overflow:hidden;
+}
+.disc-progeny-table th,.disc-progeny-table td{
+  padding:5px 8px;text-align:right;border-bottom:1px dashed rgba(255,255,255,.05);
+  white-space:nowrap;
+}
+.disc-progeny-table th:first-child,.disc-progeny-table td:first-child{text-align:left}
+.disc-progeny-table th:nth-child(2),.disc-progeny-table td:nth-child(2){text-align:left}
+.disc-progeny-table th{
+  color:var(--text-dim);font-weight:500;font-size:.62rem;
+  background:rgba(255,255,255,.03);position:sticky;top:0;
+}
+.disc-progeny-table tr.progeny-hot td{background:rgba(34,197,94,0.07)}
+.disc-progeny-table tr.progeny-hot td:nth-last-child(2){color:#22c55e;font-weight:700}
+.disc-progeny-table tbody tr:hover td{background:rgba(0,212,170,0.04)}
+.disc-progeny-table .horse-link{
+  color:var(--text);text-decoration:none;border-bottom:1px dashed transparent;font-weight:600;
+}
+.disc-progeny-table .horse-link:hover{color:var(--accent);border-bottom-color:var(--accent)}
+.disc-progeny-table .progeny-toggle{
+  background:transparent;border:1px solid var(--border);color:var(--text-dim);
+  padding:0 5px;font-size:.6rem;border-radius:3px;cursor:pointer;line-height:14px;
+  height:16px;font-family:ui-monospace,monospace;margin-right:4px;
+}
+.disc-progeny-table .progeny-toggle:hover{color:var(--accent);border-color:var(--accent)}
+.disc-progeny-table .progeny-toggle.open{color:var(--accent);border-color:var(--accent)}
+.disc-progeny-table tr.progeny-sample-row td{padding:0;background:rgba(255,255,255,.015)}
+.progeny-sample-inner{padding:6px 8px 8px}
+.progeny-sample-inner table{
+  width:100%;border-collapse:collapse;font-size:.62rem;
+}
+.progeny-sample-inner th{
+  color:var(--text-dim);font-weight:400;text-align:left;
+  padding:3px 6px;border-bottom:1px solid var(--border);
+}
+.progeny-sample-inner td{
+  padding:3px 6px;border-bottom:1px dotted rgba(255,255,255,.04);
+}
+.progeny-sample-inner .fp-1{color:#fbbf24;font-weight:700}
+.progeny-sample-inner .fp-2{color:#cbd5e1;font-weight:600}
+.progeny-sample-inner .fp-3{color:#d97706}
+.progeny-sample-inner .fp-loser{color:var(--text-dim)}
+.progeny-sample-inner .race-link{
+  color:var(--text-dim);text-decoration:none;border-bottom:1px dotted transparent;
+}
+.progeny-sample-inner .race-link:hover{color:var(--accent);border-bottom-color:var(--accent)}
+.disc-table .tag-mini{
+  display:inline-block;padding:1px 6px;border-radius:6px;
+  font-size:.6rem;font-weight:700;line-height:1.4;
+  border:1px solid;margin-right:3px;white-space:nowrap;
+  transition: transform .08s ease, box-shadow .08s ease, filter .08s ease;
+  cursor: pointer;
+}
+.disc-table .tag-mini:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  filter: brightness(1.15);
+}
+
+/* ─── タグ詳細ポップアップ (pedigree-map ページ) ─── */
+.tag-popup-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  animation: tpFadeIn .12s ease-out;
+}
+.tag-popup-overlay[hidden] { display: none; }
+@keyframes tpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.tag-popup-panel {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  max-width: 560px; width: 100%;
+  max-height: 88vh; overflow-y: auto;
+  padding: 20px 22px 18px 22px;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+  position: relative;
+  animation: tpSlideIn .15s ease-out;
+}
+@keyframes tpSlideIn { from { transform: translateY(8px); opacity: .6; } to { transform: none; opacity: 1; } }
+.tag-popup-close {
+  position: absolute; top: 10px; right: 12px;
+  background: transparent; color: var(--text-dim);
+  border: none; font-size: 22px; cursor: pointer;
+  width: 32px; height: 32px; border-radius: 50%;
+  line-height: 1; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .1s ease, color .1s ease;
+}
+.tag-popup-close:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+.tp-head { margin-bottom: 14px; }
+.tp-cat {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .6px;
+  color: var(--text-dim); margin-bottom: 4px;
+}
+.tp-tag { font-size: 18px; font-weight: 700; line-height: 1.3; }
+.tp-sire { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.tp-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 8px; margin-bottom: 14px;
+}
+.tp-cell {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px; padding: 8px 10px;
+}
+.tp-cell .k { font-size: 10.5px; color: var(--text-dim); margin-bottom: 3px; line-height: 1.25; }
+.tp-cell .v { font-size: 14px; font-weight: 600; color: var(--text); font-family: 'Inter', monospace; }
+.tp-cell .v.hi { color: #4ade80; }
+.tp-cell .v.lo { color: #f87171; }
+.tp-flags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.tp-flag {
+  display: inline-block;
+  padding: 3px 9px; border-radius: 10px;
+  font-size: 11px; font-weight: 600;
+  background: rgba(148,163,184,0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148,163,184,0.3);
+}
+.tp-flag.ok { background: rgba(34,197,94,0.14); color: #4ade80; border-color: rgba(34,197,94,0.4); }
+.tp-flag.star { background: rgba(245,158,11,0.14); color: #fbbf24; border-color: rgba(245,158,11,0.4); }
+.tp-explain {
+  font-size: 11.5px; line-height: 1.55;
+  color: var(--text-dim);
+  background: rgba(255,255,255,0.025);
+  border-left: 2px solid rgba(255,255,255,0.15);
+  padding: 8px 10px 6px 12px; border-radius: 4px;
+}
+.tp-explain p { margin: 0 0 4px 0; }
+.tp-explain ul { margin: 4px 0 0 0; padding-left: 18px; }
+.tp-explain ul li { margin-bottom: 2px; }
+.tp-explain b { color: var(--text); font-weight: 600; }
+.disc-empty{
+  padding:30px 20px;text-align:center;color:var(--text-dim);font-size:.85rem;
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+}
+
+/* ── ビュー切り替えタブ ── */
+.view-tabs{display:flex;gap:4px;padding:0 16px}
+.view-tab{padding:6px 16px;font-size:.75rem;font-weight:600;border:1px solid var(--border);
+  background:transparent;color:var(--text-dim);border-radius:4px;cursor:pointer;transition:all .15s}
+.view-tab:hover{border-color:var(--accent);color:var(--accent)}
+.view-tab.active{background:var(--accent);color:#0a0c10;border-color:var(--accent)}
+
+/* L1 仮想ノード (父系ツリーの第一階層) */
+.tn-l1-row{padding:8px 10px !important;margin:4px 0;border-radius:4px;
+  border-bottom:none !important;font-weight:600}
+.tn-l1-row .tn-toggle{font-size:1rem;color:#94a3b8;margin-right:8px}
+.tn-l1-row .tn-toggle.open{transform:rotate(90deg)}
+.tn-l1-name{font-size:.95rem}
+.tn-l1-desc{font-size:.7rem;color:#94a3b8;font-weight:400;margin-left:8px}
+
+/* ── 父系ツリー（インライン階層展開式） ── */
+.tree-info-card{background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2);
+  border-radius:6px;padding:10px 12px;font-size:.75rem;line-height:1.7}
+.tree-info-stat{display:flex;justify-content:space-between;color:var(--text-dim);margin-bottom:2px}
+.tree-info-stat span:last-child{color:var(--text);font-weight:600}
+
+/* ── BMS 統計パネル ── */
+.bms-section{margin-top:12px}
+.bms-section-title{font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--text-dim);font-weight:600;margin-bottom:6px;padding-bottom:4px;
+  border-bottom:1px solid var(--border)}
+.bms-total-label{font-size:.65rem;color:var(--text-dim);margin-bottom:6px}
+.bms-rank-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;
+  padding:4px 6px;border-radius:4px;cursor:pointer;transition:background .12s}
+.bms-rank-row:hover{background:rgba(255,255,255,.05)}
+.bms-rank-no{width:16px;font-size:.6rem;color:var(--text-dim);text-align:right;flex-shrink:0}
+.bms-rank-bar-wrap{flex:1;height:5px;background:rgba(255,255,255,.07);
+  border-radius:3px;overflow:hidden}
+.bms-rank-bar{height:100%;border-radius:3px;transition:width .3s ease}
+.bms-rank-bar.as-sire{background:linear-gradient(90deg,#00d4aa,#00a87f)}
+.bms-rank-bar.as-bms{background:linear-gradient(90deg,#ff6b35,#cc4a1a)}
+.bms-rank-name{font-size:.72rem;color:var(--text);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:110px;flex-shrink:0}
+.bms-rank-root{font-size:.6rem;color:var(--text-dim);flex-shrink:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px}
+.bms-rank-count{font-size:.65rem;color:var(--accent2);font-weight:600;flex-shrink:0;
+  min-width:28px;text-align:right}
+.bms-loading{font-size:.72rem;color:var(--text-dim);padding:6px 0}
+
+#tree-toolbar{padding:6px 10px;border-bottom:1px solid var(--border);
+  background:rgba(0,0,0,.15);display:flex;align-items:center;gap:8px;flex-shrink:0}
+#tree-search-input{flex:1;padding:5px 10px;background:var(--bg);border:1px solid var(--border);
+  color:var(--text);border-radius:4px;font-size:.8rem;outline:none}
+#tree-search-input:focus{border-color:var(--accent)}
+.tree-search-clear{background:none;border:none;color:var(--text-dim);cursor:pointer;
+  font-size:.9rem;padding:2px 6px}
+.tree-search-clear:hover{color:var(--accent)}
+
+/* ── ツリー本体スクロール域 ── */
+#tree-node-list{flex:1;min-height:0;overflow-y:auto;padding:4px 0;font-size:.82rem}
+
+/* ── ノード行 ── */
+.tn-row{display:flex;align-items:center;gap:0;height:28px;
+  cursor:pointer;transition:background .1s;position:relative}
+.tn-row:hover{background:rgba(255,255,255,.04)}
+.tn-row.tn-active{background:rgba(0,212,170,.09)}
+
+/* 階層インデント + 縦線 */
+.tn-indent{display:flex;align-items:center;flex-shrink:0}
+.tn-vline{width:20px;height:28px;flex-shrink:0;position:relative}
+.tn-vline::before{content:'';position:absolute;left:10px;top:0;bottom:0;
+  border-left:1px solid rgba(255,255,255,.1)}
+.tn-connector{width:20px;height:28px;flex-shrink:0;position:relative}
+.tn-connector::before{content:'';position:absolute;left:10px;top:0;bottom:50%;
+  border-left:1px solid rgba(255,255,255,.1)}
+.tn-connector::after{content:'';position:absolute;left:10px;top:50%;width:10px;
+  border-top:1px solid rgba(255,255,255,.1)}
+.tn-connector.last::before{bottom:50%}
+/* トグルボタン */
+.tn-toggle{width:20px;height:20px;flex-shrink:0;display:flex;align-items:center;
+  justify-content:center;border-radius:3px;font-size:.65rem;transition:transform .2s}
+.tn-toggle.open{transform:rotate(90deg)}
+.tn-toggle.leaf{color:rgba(255,255,255,.15);cursor:default}
+.tn-toggle.has-children{color:var(--accent);cursor:pointer}
+/* 名前 */
+.tn-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:0 4px;color:var(--text)}
+.tn-name.tn-root-name{font-weight:600;color:var(--accent)}
+/* 名前リンク（クリックで血統ページへ） */
+a.tn-name{text-decoration:none;cursor:pointer}
+a.tn-name:hover{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+a.tn-name.tn-root-name:hover{color:#00ffcc}
+/* バッジ */
+.tn-desc{font-size:.65rem;padding:1px 7px;border-radius:8px;flex-shrink:0;margin-right:2px;
+  white-space:nowrap}
+.tn-desc.big{background:rgba(0,212,170,.12);color:var(--accent)}
+.tn-desc.mid{background:rgba(245,158,11,.1);color:#f59e0b}
+.tn-desc.small{background:rgba(255,255,255,.06);color:var(--text-dim)}
+/* netkeibaリンク */
+.tn-link{display:flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:3px;color:rgba(255,255,255,.3);
+  text-decoration:none;flex-shrink:0;font-size:.7rem;margin-right:6px;
+  transition:color .15s,background .15s}
+.tn-link:hover{color:#06b6d4;background:rgba(6,182,212,.1)}
+
+/* 子コンテナ */
+.tn-children{overflow:hidden;max-height:0;transition:max-height .2s ease}
+.tn-children.open{max-height:none}
+/* もっと表示ボタン */
+.tn-load-more{padding:4px 8px 4px 32px}
+.tn-load-more button{background:transparent;border:1px solid var(--border);color:var(--text-dim);
+  font-size:.72rem;padding:3px 12px;border-radius:4px;cursor:pointer;transition:all .15s}
+.tn-load-more button:hover{border-color:var(--accent);color:var(--accent)}
+.tn-load-more button:disabled{opacity:.5;cursor:default}
+
+/* ローディングスピナー */
+.tn-loading{padding:6px 0 6px 44px;color:var(--text-dim);font-size:.75rem;font-style:italic}
+
+/* ── 再構築パネル ── */
+#rebuild-panel{margin-top:16px;padding:10px 12px;background:rgba(0,0,0,.2);
+  border:1px solid var(--border);border-radius:6px;font-size:.72rem}
+#rebuild-panel h3{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--text-dim);margin:0 0 8px;font-weight:600}
+.rebuild-btn{width:100%;padding:7px 0;background:rgba(0,212,170,.12);
+  border:1px solid rgba(0,212,170,.35);color:var(--accent);font-size:.78rem;
+  border-radius:4px;cursor:pointer;transition:all .15s;font-weight:600}
+.rebuild-btn:hover:not(:disabled){background:rgba(0,212,170,.22);border-color:var(--accent)}
+.rebuild-btn:disabled{opacity:.45;cursor:default}
+.rebuild-btn.running{background:rgba(245,158,11,.1);border-color:#f59e0b;color:#f59e0b}
+.rebuild-progress-wrap{margin-top:8px;display:none}
+.rebuild-progress-bar-bg{height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-bottom:5px}
+.rebuild-progress-bar{height:100%;background:var(--accent);border-radius:3px;
+  transition:width .4s ease;width:0%}
+.rebuild-progress-bar.error{background:#e63946}
+.rebuild-msg{color:var(--text-dim);font-size:.68rem;line-height:1.5;word-break:break-all}
+.rebuild-stats{margin-top:6px;font-size:.68rem;color:var(--text-dim);
+  display:grid;grid-template-columns:1fr 1fr;gap:2px 8px}
+.rebuild-stats span:nth-child(odd){color:var(--text-dim)}
+.rebuild-stats span:nth-child(even){color:var(--text);font-weight:600}
+.rebuild-file-info{margin-top:6px;font-size:.65rem;color:rgba(255,255,255,.3);line-height:1.6}
+
+/* 詳細パネル */
+.tree-detail-name{font-family:'Shippori Mincho',serif;font-size:1rem;font-weight:700;
+  margin-bottom:8px;word-break:break-all;line-height:1.4}
+.tn-netkeiba-btn{display:block;margin-top:10px;padding:7px 12px;
+  background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);
+  border-radius:5px;color:#06b6d4;text-decoration:none;font-size:.75rem;text-align:center;
+  transition:background .15s}
+.tn-netkeiba-btn:hover{background:rgba(6,182,212,.2)}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .layout{grid-template-columns:1fr;height:auto}
+  .panel{border-right:none;border-bottom:1px solid var(--border);max-height:none}
+  .panel-right{border-left:none;border-top:1px solid var(--border)}
+  h1{font-size:1.2rem}
+  canvas{height:400px!important}
+}
+@media (max-width: 480px) {
+  .panel{padding:12px}
+  h1{font-size:1rem}
+  h2{font-size:0.7rem}
+  .search-box{font-size:0.8rem}
+  .header-bar{padding:10px 12px;flex-wrap:wrap}
+  .zoom-controls{width:100%;justify-content:center;margin-top:8px}
+  canvas{height:350px!important}
+}
+
+/* ── クラスタ階層 Layout ── */
+#hierarchy-layout{display:none;padding:20px 24px 60px;max-width:1240px;margin:0 auto}
+#hierarchy-layout.show{display:block}
+.hier-wrap{display:flex;flex-direction:column;gap:24px}
+.hier-intro{padding:18px 20px;background:linear-gradient(135deg,#1e293b,#0f172a);
+  border-radius:8px;border:1px solid var(--border)}
+.hier-title{margin:0 0 6px;font-size:1.4rem;color:#e2e8f0}
+.hier-title-sub{font-size:.85rem;color:#94a3b8;font-weight:400;margin-left:8px}
+.hier-desc{margin:0;font-size:.85rem;color:#94a3b8;line-height:1.6}
+.hier-desc b{color:#cbd5e1;font-weight:600}
+.hier-totals{margin-top:12px;display:flex;gap:18px;flex-wrap:wrap;font-size:.78rem;color:#a5b4fc}
+.hier-totals span b{color:#fff;font-size:1.1rem;font-weight:700;margin-right:3px}
+.hier-section{padding:0}
+.hier-h{margin:0 0 10px;font-size:1.1rem;color:#e2e8f0;font-weight:600;
+  text-transform:none;letter-spacing:.02em;border-left:3px solid #60a5fa;padding-left:10px;
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.hier-h .step-no{display:inline-block;background:#3b82f6;color:#fff;padding:1px 7px;
+  border-radius:3px;font-size:.6rem;font-weight:700;letter-spacing:.05em;margin-right:4px}
+.hier-h-sub{font-size:.7rem;color:#94a3b8;font-weight:400}
+.hier-note{margin:6px 0 14px 13px;font-size:.78rem;color:#94a3b8;line-height:1.5}
+
+/* L1 帯グラフ (5 系統の構成比) */
+.l1-stack-bar{display:flex;height:28px;border-radius:4px;overflow:hidden;margin:8px 0 18px;
+  border:1px solid #334155;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.l1-stack-seg{display:flex;align-items:center;justify-content:center;color:#fff;
+  font-size:.7rem;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.6);
+  transition:filter .15s;cursor:pointer;min-width:30px;overflow:hidden;white-space:nowrap}
+.l1-stack-seg:hover{filter:brightness(1.25)}
+.l1-stack-seg.active{box-shadow:inset 0 0 0 3px #fff,inset 0 0 12px rgba(255,255,255,.4)}
+
+/* L1 系統 大カード */
+.l1-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.l1-card{padding:14px 16px;background:#1e293b;border:1px solid var(--border);
+  border-radius:8px;border-top:4px solid;cursor:pointer;
+  transition:transform .15s,box-shadow .15s,filter .15s;position:relative}
+.l1-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.4)}
+.l1-card.active{filter:brightness(1.15);box-shadow:0 0 0 2px var(--l1-color,#60a5fa),0 8px 20px rgba(0,0,0,.5)}
+.l1-card .l1-rank{position:absolute;top:8px;right:10px;font-size:.62rem;color:#64748b}
+.l1-card .l1-icon{font-size:1.6rem;display:inline-block;line-height:1;margin-right:6px;vertical-align:middle}
+.l1-card .l1-name{display:inline-block;font-size:1.05rem;font-weight:700;color:#fff;vertical-align:middle}
+.l1-card .l1-founder{margin-top:6px;font-size:.72rem;color:#94a3b8}
+.l1-card .l1-founder b{color:#cbd5e1;font-weight:600}
+.l1-card .l1-counts{margin-top:8px;display:flex;gap:10px;font-size:.7rem;color:#94a3b8}
+.l1-card .l1-counts .num{font-size:1.2rem;font-weight:700;display:block}
+.l1-card .l1-counts .num.total{color:#fff}
+.l1-card .l1-counts .num.l2{color:#a5b4fc}
+.l1-card .l1-l2bar{margin-top:10px;display:flex;height:8px;border-radius:3px;overflow:hidden;
+  background:#0f172a;border:1px solid #334155}
+.l1-card .l1-l2bar .seg{min-width:2px}
+.l1-card .l1-l2bar-empty{margin-top:10px;font-size:.65rem;color:#475569;text-align:center;padding:6px;
+  background:#0f172a;border:1px dashed #334155;border-radius:3px}
+.l1-card .l1-desc{margin-top:8px;font-size:.7rem;color:#94a3b8;line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+/* 主要種牡馬リスト (L1 展開時) */
+.l1-stallions-section{margin-top:18px;padding:14px 16px;background:#0f172a;
+  border-radius:6px;border-left:3px solid var(--l1-color,#60a5fa)}
+.l1-stallions-section h3{margin:0 0 8px;font-size:.85rem;color:#e2e8f0;font-weight:600}
+.l1-stallions-grid{display:flex;flex-wrap:wrap;gap:8px}
+.l1-stallion-chip{padding:5px 10px;background:#1e293b;border:1px solid #334155;
+  border-radius:4px;font-size:.75rem;color:#cbd5e1;display:flex;align-items:center;gap:6px}
+.l1-stallion-chip .chip-n{font-size:.65rem;color:#64748b}
+.l1-stallion-chip .chip-l2{padding:1px 5px;border-radius:8px;font-size:.6rem;font-weight:600}
+.l1-nonmain-list{margin-top:8px;display:flex;flex-direction:column;gap:5px}
+.l1-nonmain-row{padding:6px 10px;background:#1e293b;border:1px solid #334155;
+  border-radius:4px;font-size:.75rem;color:#cbd5e1;display:flex;justify-content:space-between}
+.l1-nonmain-row b{color:#fbbf24;font-weight:500}
+
+/* Super-group カード */
+.sg-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.sg-card{padding:14px 16px;background:#1e293b;border:1px solid var(--border);
+  border-radius:8px;border-top:4px solid;cursor:pointer;
+  transition:transform .15s,filter .15s;position:relative}
+.sg-card:hover{transform:translateY(-2px);filter:brightness(1.1)}
+.sg-card.active{filter:brightness(1.2);box-shadow:0 0 0 2px var(--sg-color,#60a5fa)}
+.sg-card .sg-rank{position:absolute;top:8px;right:10px;font-size:.62rem;color:#64748b}
+.sg-card .sg-icon{font-size:1.5rem;margin-right:6px;vertical-align:middle}
+.sg-card .sg-name{font-size:1.05rem;font-weight:700;color:#fff;vertical-align:middle}
+.sg-card .sg-sub{margin-top:6px;font-size:.72rem;color:#94a3b8;line-height:1.4}
+.sg-card .sg-counts{margin-top:8px;font-size:.72rem;color:#cbd5e1}
+.sg-card .sg-counts b{color:#fff}
+.sg-card .sg-members{margin-top:8px;display:flex;flex-wrap:wrap;gap:4px}
+.sg-card .sg-member-tag{background:rgba(255,255,255,.08);color:#cbd5e1;padding:2px 7px;
+  border-radius:8px;font-size:.65rem}
+
+/* L2 カード (細粒度) */
+.l2-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.l2-card{padding:12px 14px;border-radius:6px;background:#1e293b;border:1px solid var(--border);
+  border-left:4px solid;cursor:pointer;transition:transform .12s,filter .12s,opacity .15s}
+.l2-card:hover{transform:translateY(-1px);filter:brightness(1.1)}
+.l2-card.dimmed{opacity:.35}
+.l2-card.active{box-shadow:0 0 0 2px #fff}
+.l2-card .l2-sg-tag{font-size:.6rem;color:#94a3b8;margin-bottom:3px}
+.l2-card .l2-icon{font-size:1.2rem;margin-right:4px;vertical-align:middle}
+.l2-card .l2-name{font-size:.92rem;font-weight:700;color:#fff;vertical-align:middle}
+.l2-card .l2-subtitle{margin:5px 0 0;font-size:.7rem;color:#cbd5e1;line-height:1.4}
+.l2-card .l2-counts{margin-top:6px;font-size:.65rem;color:#94a3b8}
+.l2-card .l2-counts b{color:#e2e8f0}
+.l2-card .l2-highlights{margin-top:6px;display:flex;flex-wrap:wrap;gap:3px}
+.l2-card .l2-tag{background:rgba(255,255,255,.08);color:#cbd5e1;padding:1px 6px;
+  border-radius:8px;font-size:.6rem}
+.l2-card details{margin-top:8px;border-top:1px dashed #334155;padding-top:6px}
+.l2-card details summary{cursor:pointer;font-size:.68rem;color:#a5b4fc;outline:none;list-style:none}
+.l2-card details summary::-webkit-details-marker{display:none}
+.l2-card details summary::before{content:"▸ ";color:#64748b}
+.l2-card details[open] summary::before{content:"▾ "}
+.l2-card details .l2-detail{margin-top:5px;font-size:.65rem;color:#94a3b8;line-height:1.5}
+.l2-card details .l2-detail .lbl{color:#cbd5e1;font-weight:600;margin-right:3px}
+
+/* 2D 散布図 */
+.vec-controls{display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:10px;margin-bottom:8px}
+.vec-tabs{display:flex;gap:6px}
+.vec-tab{padding:6px 14px;background:#1e293b;color:#94a3b8;border:1px solid #334155;
+  border-radius:6px;font-size:.78rem;cursor:pointer;transition:background .15s,color .15s}
+.vec-tab:hover{background:#334155;color:#e2e8f0}
+.vec-tab.active{background:#3b82f6;color:#fff;border-color:#60a5fa}
+.vec-legend{display:flex;flex-wrap:wrap;gap:6px;font-size:.7rem}
+.vec-legend .leg{padding:2px 8px;border-radius:8px;color:#fff;display:flex;align-items:center;gap:4px}
+.vec-canvas-wrap{position:relative;background:#0f172a;border:1px solid #334155;
+  border-radius:6px;overflow:hidden}
+#vectorMap{display:block;width:100%;max-width:100%;cursor:crosshair}
+.vec-tooltip{position:absolute;background:#0f172a;border:1px solid #475569;
+  padding:6px 10px;border-radius:4px;font-size:.72rem;color:#e2e8f0;
+  pointer-events:none;display:none;z-index:10;max-width:240px;line-height:1.4;
+  box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.vec-tooltip b{color:#fbbf24;font-weight:600}
+
+/* 類似度パネル */
+.sim-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.sim-card{padding:10px 12px;background:#1e293b;border:1px solid var(--border);
+  border-radius:6px;border-left:3px solid}
+.sim-card .sim-head{font-size:.85rem;color:#fff;font-weight:600;margin-bottom:6px}
+.sim-card .sim-head .lbl{font-size:.6rem;color:#94a3b8;font-weight:400;margin-left:4px}
+.sim-row{font-size:.7rem;color:#cbd5e1;margin:3px 0;display:flex;justify-content:space-between;
+  padding:3px 6px;border-radius:3px;background:rgba(255,255,255,.03)}
+.sim-row.pos{border-left:2px solid #10b981}
+.sim-row.neg{border-left:2px solid #ef4444}
+.sim-row .sim-val{font-family:monospace;color:#fbbf24}
+
+.l3-empty{grid-column:1/-1;padding:30px;text-align:center;color:#64748b;font-size:.85rem;
+  background:#1e293b;border-radius:8px;border:1px dashed #334155}
+</style>
+</head>
+<body>
+{% include 'partials/_nav.html' %}
+
+<!-- ── トップモードバー ── -->
+<div class="topmode-bar">
+  <div class="tm-tabs">
+    <button class="tm-tab active" id="tmTabDiscovery" onclick="switchTopMode('discovery')">
+      ◆ 探索モード <span class="badge">条件 → 強い血統</span>
+    </button>
+    <button class="tm-tab" id="tmTabHierarchy" onclick="switchTopMode('hierarchy')">
+      ▣ クラスタ階層 <span class="badge">系統 × 適性</span>
+    </button>
+    <button class="tm-tab" id="tmTabResearch" onclick="switchTopMode('research')">
+      ◇ 研究モード <span class="badge">血統可視化</span>
+    </button>
+  </div>
+  <div class="tm-spacer"></div>
+  <div class="tm-hint" id="tmHint">条件を入力して、その条件に強い種牡馬・血統を探索しましょう</div>
+</div>
+
+<!-- ── 探索モード Layout (新規) ── -->
+<div id="discovery-layout" class="show">
+  <div class="disc-form" id="discForm">
+    <h2>期間</h2>
+    <div class="preset-row" id="discPeriodPresets">
+      <button class="preset-btn" data-period="1y">直近1年</button>
+      <button class="preset-btn active" data-period="2y">直近2年</button>
+      <button class="preset-btn" data-period="3y">直近3年</button>
+      <button class="preset-btn" data-period="all">全期間</button>
+    </div>
+    <div class="form-row" style="margin-top:6px">
+      <div class="ff"><label>開始日</label><input type="date" id="discFrom"></div>
+      <div class="ff"><label>終了日</label><input type="date" id="discTo"></div>
+    </div>
+
+    <h2>レース条件</h2>
+
+    <!-- ── 競馬場 (複数選択) ── -->
+    <div class="form-row">
+      <div class="ff" style="flex:1 1 100%">
+        <div class="multi-head">
+          <label>競馬場 <span class="multi-hint">複数選択可</span></label>
+          <div class="multi-actions">
+            <button type="button" class="multi-action" data-target="#discVenuesGroup" data-act="all">全選択</button>
+            <button type="button" class="multi-action" data-target="#discVenuesGroup" data-act="clear">クリア</button>
+          </div>
+        </div>
+        <div class="preset-row" id="discVenuesGroup">
+          <button class="preset-btn" data-value="東京">東京</button>
+          <button class="preset-btn" data-value="中山">中山</button>
+          <button class="preset-btn" data-value="阪神">阪神</button>
+          <button class="preset-btn" data-value="京都">京都</button>
+          <button class="preset-btn" data-value="中京">中京</button>
+          <button class="preset-btn" data-value="新潟">新潟</button>
+          <button class="preset-btn" data-value="小倉">小倉</button>
+          <button class="preset-btn" data-value="福島">福島</button>
+          <button class="preset-btn" data-value="札幌">札幌</button>
+          <button class="preset-btn" data-value="函館">函館</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 路面 + 馬場 (複数選択) ── -->
+    <div class="form-row">
+      <div class="ff" style="flex:1 1 100%">
+        <div class="multi-head"><label>路面 <span class="multi-hint">複数選択可</span></label></div>
+        <div class="preset-row" id="discSurfaceGroup">
+          <button class="preset-btn" data-value="芝">芝</button>
+          <button class="preset-btn" data-value="ダート">ダート</button>
+          <button class="preset-btn" data-value="障">障害</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="ff" style="flex:1 1 100%">
+        <div class="multi-head"><label>馬場状態 <span class="multi-hint">複数選択可</span></label></div>
+        <div class="preset-row" id="discTrackGroup">
+          <button class="preset-btn" data-value="良">良</button>
+          <button class="preset-btn" data-value="稍">稍重</button>
+          <button class="preset-btn" data-value="重">重</button>
+          <button class="preset-btn" data-value="不">不良</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 距離 ── -->
+    <div class="form-row">
+      <div class="ff" style="flex:1 1 100%">
+        <div class="multi-head">
+          <label>距離プリセット</label>
+          <div class="multi-actions">
+            <button type="button" class="multi-action" data-target="#discDistGroup" data-act="clear">クリア</button>
+          </div>
+        </div>
+        <div class="preset-row" id="discDistGroup">
+          <button class="preset-btn" data-dmin="0"    data-dmax="1400">短距離 (〜1400)</button>
+          <button class="preset-btn" data-dmin="1400" data-dmax="1800">マイル (1400-1800)</button>
+          <button class="preset-btn" data-dmin="1800" data-dmax="2400">中距離 (1800-2400)</button>
+          <button class="preset-btn" data-dmin="2400" data-dmax="9999">長距離 (2400〜)</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="ff"><label>距離下限 (m)</label><input type="number" id="discDistMin" step="100" min="800" max="3600" placeholder="例: 1600"></div>
+      <div class="ff"><label>距離上限 (m)</label><input type="number" id="discDistMax" step="100" min="800" max="3600" placeholder="例: 2400"></div>
+    </div>
+
+    <!-- ── グレード (複数選択) ── -->
+    <div class="form-row">
+      <div class="ff" style="flex:1 1 100%">
+        <div class="multi-head">
+          <label>グレード <span class="multi-hint">複数選択可</span></label>
+          <div class="multi-actions">
+            <button type="button" class="multi-action" data-act="grades-jusho">重賞のみ</button>
+            <button type="button" class="multi-action" data-act="grades-open">OP以上</button>
+            <button type="button" class="multi-action" data-target="#discGradesGroup" data-act="clear">クリア</button>
+          </div>
+        </div>
+        <div class="preset-row" id="discGradesGroup">
+          <button class="preset-btn grade-g1" data-value="G1">G1</button>
+          <button class="preset-btn grade-g2" data-value="G2">G2</button>
+          <button class="preset-btn grade-g3" data-value="G3">G3</button>
+          <button class="preset-btn grade-l"  data-value="L">L</button>
+          <button class="preset-btn grade-op" data-value="OP">OP</button>
+          <button class="preset-btn" data-value="3勝">3勝</button>
+          <button class="preset-btn" data-value="2勝">2勝</button>
+          <button class="preset-btn" data-value="1勝">1勝</button>
+          <button class="preset-btn" data-value="未勝利">未勝利</button>
+          <button class="preset-btn" data-value="新馬">新馬</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 人気帯 ── -->
+    <div class="form-row">
+      <div class="ff" style="flex:1 1 100%">
+        <div class="multi-head">
+          <label>人気帯プリセット</label>
+          <div class="multi-actions">
+            <button type="button" class="multi-action" data-act="pop-clear">クリア</button>
+          </div>
+        </div>
+        <div class="preset-row" id="discPopGroup">
+          <button class="preset-btn" data-pmin="1" data-pmax="3">上位 (1-3番)</button>
+          <button class="preset-btn" data-pmin="1" data-pmax="5">上位5 (1-5番)</button>
+          <button class="preset-btn" data-pmin="4" data-pmax="9">中位 (4-9番)</button>
+          <button class="preset-btn" data-pmin="6" data-pmax="18">下位 (6番〜)</button>
+          <button class="preset-btn" data-pmin="10" data-pmax="18">穴 (10番〜)</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="ff"><label>人気下限</label><input type="number" id="discPopMin" placeholder="例: 1" min="1" max="18"></div>
+      <div class="ff"><label>人気上限</label><input type="number" id="discPopMax" placeholder="例: 18" min="1" max="18"></div>
+    </div>
+
+    <!-- ── 単勝オッズ範囲 ── -->
+    <div class="form-row">
+      <div class="ff" style="flex:1 1 100%">
+        <div class="multi-head">
+          <label>単勝オッズプリセット</label>
+          <div class="multi-actions">
+            <button type="button" class="multi-action" data-act="odds-clear">クリア</button>
+          </div>
+        </div>
+        <div class="preset-row" id="discOddsGroup">
+          <button class="preset-btn" data-omin="1.0" data-omax="3.0">本命 (〜3.0)</button>
+          <button class="preset-btn" data-omin="3.0" data-omax="7.0">対抗 (3.0-7.0)</button>
+          <button class="preset-btn" data-omin="7.0" data-omax="15.0">中穴 (7.0-15)</button>
+          <button class="preset-btn" data-omin="15.0" data-omax="50.0">穴 (15-50)</button>
+          <button class="preset-btn" data-omin="50.0" data-omax="999.0">大穴 (50〜)</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="ff"><label>オッズ下限 (倍)</label><input type="number" id="discOddsMin" placeholder="例: 3.0" min="1.0" step="0.1"></div>
+      <div class="ff"><label>オッズ上限 (倍)</label><input type="number" id="discOddsMax" placeholder="例: 50.0" min="1.0" step="0.1"></div>
+    </div>
+
+    <h2>抽出条件</h2>
+    <div class="form-row">
+      <div class="ff"><label>最小出走 N</label><input type="number" id="discMinN" value="30" min="1" max="9999"></div>
+      <div class="ff"><label>上位 N 件</label><input type="number" id="discTop" value="30" min="1" max="200"></div>
+    </div>
+
+    <div id="discValidation" class="disc-validation" style="display:none"></div>
+
+    <div style="display:flex;gap:6px">
+      <button class="disc-submit" id="discRunBtn" style="flex:1">▶ ランキング表示</button>
+      <button type="button" class="disc-reset-btn" id="discResetBtn" title="全条件をデフォルトに戻す">条件全クリア</button>
+    </div>
+  </div>
+
+  <div class="disc-main">
+    <div class="disc-title" id="discTitle">条件マッチ種牡馬ランキング</div>
+    <div class="side-tabs" id="discSideTabs">
+      <button class="side-tab active" data-side="sire">直結父 (sire)</button>
+      <button class="side-tab" data-side="bms">母父 (BMS)</button>
+      <button class="side-tab" data-side="mother">母系領域 (10gen)</button>
+    </div>
+    <div class="sort-row" id="discSortRow">
+      <span class="lab">ソート:</span>
+      <button class="sort-btn active" data-sort="balanced">バランス推奨</button>
+      <button class="sort-btn" data-sort="win_roi">単回収</button>
+      <button class="sort-btn" data-sort="place_roi">複回収</button>
+      <button class="sort-btn" data-sort="win_rate">勝率</button>
+      <button class="sort-btn" data-sort="place3_rate">複勝率</button>
+      <button class="sort-btn" data-sort="n_records">出走数</button>
+    </div>
+    <div id="discResult">
+      <div class="disc-empty">左側で条件を指定して「ランキング表示」を押すと、その条件で勝率/回収率が高い血統を表示します。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── クラスタ階層 Layout (新規) ── -->
+<div id="hierarchy-layout">
+  <div class="hier-wrap">
+    <div class="hier-intro">
+      <h1 class="hier-title">血統クラスタ階層 <span class="hier-title-sub">— 系統 × 適性 × 細粒度</span></h1>
+      <p class="hier-desc">
+        <b>第一階層 (L1):</b> 4 大主流血統 + 非主流。世界の競走馬血統は <b>Turn-To / Native Dancer / Northern Dancer / Nasrullah</b>
+        の 4 始祖から派生する 4 大主流系統と、それに属さない <b>非主流</b> に分類される。
+        さらに <b>第二階層 (L2)</b> = データ駆動の適性領域 (4 種)、
+        <b>第三階層 (L3)</b> = L2 内の細粒度サブクラスタ。
+      </p>
+      <div class="hier-totals" id="hierTotals"></div>
+    </div>
+
+    <!-- ▼ ステップ 1: L1 (系統) -->
+    <section class="hier-section">
+      <h2 class="hier-h"><span class="step-no">STEP 1</span> ▮ 系統血統 (L1) <span class="hier-h-sub">— 4 大主流 + 非主流</span></h2>
+      <p class="hier-note">カードをクリックすると、その系統内の <b>適性分布 (L2)</b> と <b>主要種牡馬</b> を下に展開します。</p>
+      <div class="l1-stack-bar" id="l1StackBar"></div>
+      <div class="l1-cards" id="l1Cards"></div>
+    </section>
+
+    <!-- ▼ ステップ 2: Super-group (適性大カテゴリ) -->
+    <section class="hier-section" id="sgSection">
+      <h2 class="hier-h"><span class="step-no">STEP 2</span> ▲ 適性スーパーグループ <span class="hier-h-sub">— L2 centroid をコサイン距離で階層クラスタリング → 近接同士をまとめた大カテゴリ</span></h2>
+      <p class="hier-note">各スーパーグループは「相互に類似した適性パターンを共有する L2 クラスタの集合」。<b>カードクリック</b>で配下の L2 と種牡馬を表示。</p>
+      <div class="sg-cards" id="sgCards"></div>
+    </section>
+
+    <!-- ▼ ステップ 3: L2_fine (細粒度適性クラスタ) -->
+    <section class="hier-section" id="l2Section">
+      <h2 class="hier-h"><span class="step-no">STEP 3</span> ▮ 細粒度適性クラスタ (L2) <span class="hier-h-sub" id="l2SectSub">— 11 個 (得意領域別)</span></h2>
+      <div class="l2-cards" id="l2Cards"></div>
+      <div id="l1Stallions"></div>
+    </section>
+
+    <!-- ▼ 2D 適性ベクトル空間 (散布図) -->
+    <section class="hier-section" id="vectorSection">
+      <h2 class="hier-h"><span class="step-no">MAP</span> ◎ 適性ベクトル空間 <span class="hier-h-sub">— 31D 条件 lift を 2D へ射影 / クラスタ間の距離 = 適性の遠近</span></h2>
+      <div class="vec-controls">
+        <div class="vec-tabs">
+          <button class="vec-tab active" data-proj="pca">PCA 射影</button>
+          <button class="vec-tab" data-proj="umap">UMAP 射影 (非線形)</button>
+        </div>
+        <div class="vec-legend" id="vecLegend"></div>
+      </div>
+      <p class="hier-note" id="vecExplain">PC1, PC2 累積寄与率: 計算中...</p>
+      <div class="vec-canvas-wrap">
+        <canvas id="vectorMap" width="900" height="540"></canvas>
+        <div id="vecTooltip" class="vec-tooltip"></div>
+      </div>
+    </section>
+
+    <!-- ▼ 類似度ランキング -->
+    <section class="hier-section" id="simSection">
+      <h2 class="hier-h"><span class="step-no">SIM</span> ⇄ クラスタ類似度ランキング <span class="hier-h-sub">— centroid コサイン類似度</span></h2>
+      <p class="hier-note">各 L2 クラスタについて、適性ベクトルが最も近い 3 つ (+) と最も遠い 3 つ (−) を表示。</p>
+      <div class="sim-grid" id="simGrid"></div>
+    </section>
+  </div>
+</div>
+
+<!-- ── 研究モード Layout (既存) ── -->
+<div class="layout">
+  <div class="panel" id="left-panel">
+    <h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">血統構造マップ</h1>
+    <p style="font-size:.7rem;color:var(--text-dim);margin:4px 0 12px">5世代祖先共有 PCA 2D / コサイン類似度</p>
+    <h2>Color Mode</h2>
+    <div id="color-modes"></div>
+    <h2>Legend</h2>
+    <div id="legend"></div>
+    <h2>Search</h2>
+    <input type="text" class="search-box" id="search" placeholder="種牡馬名で検索...">
+    <div class="search-results" id="search-results"></div>
+    <div id="tag-filter-host" style="margin-top:12px"></div>
+  </div>
+  <div style="display:flex;flex-direction:column;overflow:hidden">
+    <div class="header-bar">
+      <div class="view-tabs">
+        <button class="view-tab active" id="tab-scatter" onclick="switchView('scatter')">類似度マップ</button>
+        <button class="view-tab" id="tab-tree" onclick="switchView('tree')">父系ツリー</button>
+      </div>
+      <div class="info" id="info-text">Loading...</div>
+      <div class="zoom-controls" id="zoom-controls-wrap">
+        <button class="zoom-btn" id="zoom-in">+</button>
+        <button class="zoom-btn" id="zoom-out">−</button>
+        <button class="zoom-btn" id="zoom-reset">⟳</button>
+      </div>
+    </div>
+    <canvas id="chart"></canvas>
+    <div id="tree-view">
+      <div id="tree-msg" class="loading" style="display:none"></div>
+      <div id="tree-toolbar">
+        <input id="tree-search-input" type="text" placeholder="🔍  種牡馬名で検索..." oninput="treeSearch(this.value)">
+        <button class="tree-search-clear" onclick="clearTreeSearch()" title="クリア">✕</button>
+      </div>
+      <div id="tree-node-list"></div>
+    </div>
+  </div>
+  <div class="panel panel-right" id="right-panel">
+    <div id="scatter-right-content">
+      <h2>Selected Stallion</h2>
+      <div id="detail-content"><p style="color:var(--text-dim);font-size:.8rem">クリックで種牡馬を選択</p></div>
+    </div>
+    <div id="tree-right-content" style="display:none">
+      <h2 style="margin-top:0">選択ノード</h2>
+      <div id="tree-node-detail"><p style="color:var(--text-dim);font-size:.75rem">ノードをクリックして選択</p></div>
+    </div>
+  </div>
+</div>
+<div class="tooltip" id="tooltip"></div>
+<script>
+const LINE_COLORS={
+  "サンデーサイレンス系":"#e63946","キングカメハメハ系":"#457b9d","ロベルト系":"#2a9d8f",
+  "ノーザンダンサー系":"#e9c46a","デインヒル系":"#f4a261","サドラーズウェルズ系":"#264653",
+  "ストームキャット系":"#a8dadc","ミスタープロスペクター系":"#6d6875",
+  "エーピーインディ系":"#b5838d","デピュティミニスター系":"#ffb4a2","その他":"#606060"
+};
+
+let DATA=[], SIM={};
+let TAG_DEFS=[], TAG_CAT_COLORS={};
+let TAG_FILTER=null; // 選択カテゴリ (null = 全て表示)
+let currentMode="sire_line", selected=null, hovered=null;
+let offsetX=0, offsetY=0, scale=1, dragging=false, dragStartX=0, dragStartY=0;
+
+const canvas=document.getElementById("chart");
+const ctx=canvas.getContext("2d");
+const tooltip=document.getElementById("tooltip");
+
+const COLOR_MODES=[
+  {id:"sire_line",label:"系統別",fn:d=>LINE_COLORS[d.sire_line]||"#606060"},
+  {id:"inbreeding",label:"インブリード数",fn:d=>{
+    const v=Math.min(d.inbreeding_count/6,1);
+    return `rgb(${Math.round(60+195*v)},${Math.round(180-100*v)},${Math.round(180-130*v)})`;
+  }},
+  {id:"unique",label:"ユニーク祖先数",fn:d=>{
+    const v=Math.min((d.unique_ancestors||30)/50,1);
+    return `rgb(${Math.round(40+200*v)},${Math.round(60+160*v)},${Math.round(120+100*v)})`;
+  }},
+  {id:"progeny",label:"産駒数",fn:d=>{
+    const v=Math.min(d.n_progeny/250,1);
+    return `rgb(${Math.round(40+200*v)},${Math.round(60+150*v)},${Math.round(120+100*v)})`;
+  }},
+  {id:"tag_count",label:"タグ数",fn:d=>{
+    const n=(d.tags||[]).length;
+    if(n===0)return "#2a2a30";
+    const v=Math.min(n/8,1);
+    return `rgb(${Math.round(60+195*v)},${Math.round(120+100*v)},${Math.round(80+60*v)})`;
+  }},
+  {id:"tag_filter",label:"選択タグ保持",fn:d=>{
+    if(!TAG_FILTER){
+      const n=(d.tags||[]).length;
+      return n>0?"#34d399":"#2a2a30";
+    }
+    const has=(d.tags||[]).some(t=>t.category===TAG_FILTER);
+    return has?(tagColor(TAG_FILTER)):"#2a2a30";
+  }}
+];
+
+async function init(){
+  try{
+    const res=await fetch('/api/pedigree-map');
+    const json=await res.json();
+    if(json.error){document.getElementById('info-text').textContent=json.error;return}
+    DATA=json.data||[];
+    SIM=json.similarity||{};
+    TAG_DEFS=json.tag_definitions||[];
+    TAG_CAT_COLORS=json.tag_category_colors||{};
+    const nTagged=DATA.filter(d=>d.tags&&d.tags.length>0).length;
+    document.getElementById('info-text').textContent=`${DATA.length} stallions (タグ付与 ${nTagged} 頭 / 25タグ)`;
+    initColorModes();updateLegend();renderTagFilter();resize();
+  }catch(e){document.getElementById('info-text').textContent='データ取得エラー: '+e.message}
+}
+
+// ── タグユーティリティ ──────────────────────────
+function tagColor(category){return TAG_CAT_COLORS[category]||'#888'}
+
+function renderTagChips(tags, opts={}){
+  if(!tags||!tags.length)return `<div class="tag-chip-empty">タグなし</div>`;
+  const filtered=TAG_FILTER?tags.filter(t=>t.category===TAG_FILTER):tags;
+  if(!filtered.length)return `<div class="tag-chip-empty">該当タグなし</div>`;
+  const showMeta=opts.meta!==false;
+  return `<div class="tag-chips-row">${filtered.map(t=>{
+    const c=t.category_color||tagColor(t.category);
+    const meta=showMeta?`<span class="tag-meta">${(t.rate_eb*100).toFixed(1)}%·×${t.lift.toFixed(2)}</span>`:'';
+    return `<span class="tag-chip" style="color:${c};border-color:${c}33;background:${c}1a"
+      title="${t.category} / EB勝率 ${(t.rate_eb*100).toFixed(1)}% / Lift ×${t.lift.toFixed(2)} / N=${t.n_records}">${t.tag_label}${meta}</span>`;
+  }).join('')}</div>`;
+}
+
+function renderTagFilter(){
+  const cats=[...new Set(TAG_DEFS.map(d=>d.category))];
+  const hosts=[document.getElementById('tag-filter-host'),
+               document.getElementById('tree-tag-filter-host')];
+  hosts.forEach(host=>{
+    if(!host)return;
+    host.innerHTML=`
+      <h2>適性タグフィルタ</h2>
+      <div class="tag-filter-bar">
+        <button class="tag-filter-btn ${TAG_FILTER===null?'active':''}" data-cat="">全カテゴリ</button>
+        ${cats.map(c=>`<button class="tag-filter-btn ${TAG_FILTER===c?'active':''}"
+          data-cat="${c}" style="${TAG_FILTER===c?`background:${tagColor(c)};border-color:${tagColor(c)}`:''}">${c}</button>`).join('')}
+      </div>
+      <div style="font-size:.65rem;color:var(--text-dim);margin-bottom:6px">
+        タグは産駒成績の Empirical Bayes 勝率 + lift 上位 20% に該当する種牡馬に付与
+      </div>`;
+    host.querySelectorAll('.tag-filter-btn').forEach(b=>{
+      b.onclick=()=>{
+        const c=b.dataset.cat;
+        TAG_FILTER=c||null;
+        renderTagFilter();
+        updateLegend();
+        draw();
+        if(selected)selectSire(selected);
+        rerenderVisibleTreeRows();
+      };
+    });
+  });
+}
+
+// ツリー上に表示中の全ノード行のタグ部分を再描画 (フィルタ変更時)
+function rerenderVisibleTreeRows(){
+  const rows = document.querySelectorAll('.tn-row');
+  rows.forEach(row=>{
+    const id = row.dataset.id;
+    if(!id) return;
+    // ノード本体は _treeCache から / 子は親の children 配列内から探す
+    let node = _treeCache[id]?.node;
+    if(!node){
+      // 親のキャッシュから子として見つける
+      Object.values(_treeCache).forEach(c=>{
+        if(node) return;
+        const found = (c.children||[]).find(ch=>ch.id===id);
+        if(found) node = found;
+      });
+    }
+    if(!node) return;
+    // 既存タグ要素を入れ替え
+    const oldTags = row.querySelector('.tn-tags');
+    if(oldTags) oldTags.remove();
+    const html = makeNodeTagsHtml(node.tags);
+    if(html){
+      const desc = row.querySelector('.tn-desc');
+      const tmp = document.createElement('div'); tmp.innerHTML = html.trim();
+      const newTags = tmp.firstChild;
+      if(desc) row.insertBefore(newTags, desc); else row.appendChild(newTags);
+    }
+  });
+}
+
+function resize(){
+  const rect=canvas.parentElement.getBoundingClientRect();
+  canvas.width=rect.width*devicePixelRatio;
+  canvas.height=(rect.height-44)*devicePixelRatio;
+  canvas.style.width=rect.width+"px";
+  canvas.style.height=(rect.height-44)+"px";
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  draw();
+}
+window.addEventListener("resize",resize);
+
+function getColorFn(){return COLOR_MODES.find(m=>m.id===currentMode).fn}
+
+function worldToScreen(wx,wy){
+  const cw=canvas.width/devicePixelRatio,ch=canvas.height/devicePixelRatio;
+  if(!DATA.length)return[cw/2,ch/2];
+  const xs=DATA.map(d=>d.x),ys=DATA.map(d=>d.y);
+  const xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);
+  const pad=60;
+  const sx=(wx-xmin)/(xmax-xmin||1)*(cw-2*pad)+pad;
+  const sy=(1-(wy-ymin)/(ymax-ymin||1))*(ch-2*pad)+pad;
+  return[(sx+offsetX)*scale+cw*(1-scale)/2,(sy+offsetY)*scale+ch*(1-scale)/2];
+}
+
+function draw(){
+  const cw=canvas.width/devicePixelRatio,ch=canvas.height/devicePixelRatio;
+  ctx.clearRect(0,0,cw,ch);
+  if(!DATA.length)return;
+  const colorFn=getColorFn();
+
+  if(selected&&SIM[selected]){
+    const simList=SIM[selected];
+    const selData=DATA.find(d=>d.name===selected);
+    if(selData){
+      const[sx,sy]=worldToScreen(selData.x,selData.y);
+      simList.forEach(([name,score])=>{
+        const other=DATA.find(d=>d.name===name);
+        if(other){
+          const[ox,oy]=worldToScreen(other.x,other.y);
+          ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ox,oy);
+          ctx.strokeStyle=`rgba(0,212,170,${score*0.6})`;
+          ctx.lineWidth=score*4;ctx.stroke();
+        }
+      });
+    }
+  }
+
+  DATA.forEach(d=>{
+    const[px,py]=worldToScreen(d.x,d.y);
+    const r=Math.max(4,Math.min(12,Math.sqrt(d.n_progeny||20)*0.7));
+    const isSelected=d.name===selected;
+    const isHovered=d.name===hovered;
+    const isSimilar=selected&&SIM[selected]&&SIM[selected].some(([n])=>n===d.name);
+
+    ctx.beginPath();
+    ctx.arc(px,py,isSelected?r+4:isHovered?r+2:r,0,Math.PI*2);
+    if(selected&&!isSelected&&!isSimilar){
+      ctx.fillStyle=colorFn(d).replace("rgb","rgba").replace(")",",0.15)");
+    }else{
+      ctx.fillStyle=colorFn(d);
+    }
+    ctx.fill();
+    if(isSelected){
+      ctx.strokeStyle="#fff";ctx.lineWidth=2.5;ctx.stroke();
+      ctx.beginPath();ctx.arc(px,py,r+8,0,Math.PI*2);
+      ctx.strokeStyle="rgba(0,212,170,0.4)";ctx.lineWidth=1;ctx.stroke();
+    }else if(isHovered){
+      ctx.strokeStyle="rgba(255,255,255,0.6)";ctx.lineWidth=1.5;ctx.stroke();
+    }
+
+    const showLabel=isSelected||isHovered||isSimilar||(d.n_progeny||0)>100||scale>1.5;
+    if(showLabel){
+      ctx.font=`${isSelected?'bold ':''}${isSelected?'12':'10'}px 'Noto Sans JP',sans-serif`;
+      ctx.fillStyle=isSelected?"#fff":isSimilar?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)";
+      ctx.textAlign="center";
+      const label=d.name.length>10?d.name.slice(0,10)+"…":d.name;
+      ctx.fillText(label,px,py-r-5);
+    }
+  });
+}
+
+function findNearest(mx,my){
+  let best=null,bestDist=Infinity;
+  DATA.forEach(d=>{
+    const[px,py]=worldToScreen(d.x,d.y);
+    const dist=Math.hypot(px-mx,py-my);
+    if(dist<bestDist){bestDist=dist;best=d}
+  });
+  return bestDist<20?best:null;
+}
+
+canvas.addEventListener("mousemove",e=>{
+  if(dragging){offsetX+=e.movementX/scale;offsetY+=e.movementY/scale;draw();return}
+  const rect=canvas.getBoundingClientRect();
+  const d=findNearest(e.clientX-rect.left,e.clientY-rect.top);
+  hovered=d?d.name:null;canvas.style.cursor=d?"pointer":"grab";draw();
+  if(d){showTooltip(d,e.clientX,e.clientY)}else{tooltip.style.display="none"}
+});
+canvas.addEventListener("mousedown",e=>{dragging=true;dragStartX=e.clientX;dragStartY=e.clientY;canvas.style.cursor="grabbing"});
+canvas.addEventListener("mouseup",e=>{
+  const moved=Math.hypot(e.clientX-dragStartX,e.clientY-dragStartY);
+  dragging=false;canvas.style.cursor="grab";
+  if(moved<5){const rect=canvas.getBoundingClientRect();const d=findNearest(e.clientX-rect.left,e.clientY-rect.top);if(d)selectSire(d.name)}
+});
+canvas.addEventListener("mouseleave",()=>{dragging=false;hovered=null;tooltip.style.display="none";draw()});
+canvas.addEventListener("wheel",e=>{e.preventDefault();scale=Math.max(0.3,Math.min(8,scale*(e.deltaY>0?0.9:1.1)));draw()},{passive:false});
+
+document.getElementById("zoom-in").onclick=()=>{scale=Math.min(8,scale*1.3);draw()};
+document.getElementById("zoom-out").onclick=()=>{scale=Math.max(0.3,scale/1.3);draw()};
+document.getElementById("zoom-reset").onclick=()=>{scale=1;offsetX=0;offsetY=0;draw()};
+
+function showTooltip(d,cx,cy){
+  tooltip.innerHTML=`
+    <div class="name">${d.name}</div>
+    <span class="line-tag" style="background:${LINE_COLORS[d.sire_line]||'#606060'};color:#fff">${d.sire_line}</span>
+    <div class="stats">
+      <span class="stat-label">産駒数</span><span class="stat-value">${d.n_progeny||'-'}</span>
+      <span class="stat-label">ユニーク祖先</span><span class="stat-value">${d.unique_ancestors||'-'}頭</span>
+      <span class="stat-label">インブリード</span><span class="stat-value">${d.inbreeding_count||0}件</span>
+    </div>
+    ${(d.tags&&d.tags.length)?`<div style="margin-top:6px;border-top:1px solid rgba(255,255,255,.1);padding-top:6px">
+      <div style="font-size:.65rem;color:var(--text-dim);margin-bottom:3px">特殊適性タグ ${d.tags.length}件</div>
+      ${renderTagChips(d.tags,{meta:false})}
+    </div>`:''}`;
+  tooltip.style.display="block";
+  tooltip.style.left=Math.min(cx+12,window.innerWidth-tooltip.offsetWidth-8)+"px";
+  tooltip.style.top=Math.min(cy+12,window.innerHeight-tooltip.offsetHeight-8)+"px";
+}
+
+function selectSire(name){
+  selected=name;
+  const d=DATA.find(x=>x.name===name);
+  if(!d)return;draw();
+  const sim=SIM[name]||[];
+  const panel=document.getElementById("detail-content");
+
+  let inbreedHtml='';
+  if(d.inbreeding&&d.inbreeding.length>0){
+    inbreedHtml='<h2 style="margin-top:12px">インブリード</h2>';
+    d.inbreeding.forEach(ib=>{
+      inbreedHtml+=`<div class="inbreed-item">${ib.ancestor} <span class="inbreed-cross">${ib.cross}</span></div>`;
+    });
+  }
+
+  // 特殊適性タグセクション (カテゴリ別グルーピング)
+  let tagsHtml='';
+  const tags=d.tags||[];
+  if(tags.length){
+    const filtered=TAG_FILTER?tags.filter(t=>t.category===TAG_FILTER):tags;
+    const byCat={};
+    filtered.forEach(t=>{(byCat[t.category]=byCat[t.category]||[]).push(t)});
+    const cats=Object.keys(byCat);
+    if(cats.length){
+      tagsHtml='<h2 style="margin-top:14px">特殊適性タグ <span style="color:var(--text-dim);font-weight:400">('+filtered.length+'件)</span></h2>';
+      cats.forEach(c=>{
+        const col=tagColor(c);
+        tagsHtml+=`<div style="margin:6px 0">
+          <span class="tag-cat-pill" style="background:${col}">${c}</span>
+          ${renderTagChips(byCat[c])}
+        </div>`;
+      });
+    }else{
+      tagsHtml='<h2 style="margin-top:14px">特殊適性タグ</h2><div class="tag-chip-empty">フィルタ該当なし</div>';
+    }
+  }else{
+    tagsHtml='<h2 style="margin-top:14px">特殊適性タグ</h2><div class="tag-chip-empty">データ不足 (タグ未付与)</div>';
+  }
+
+  panel.innerHTML=`
+    <div class="selected-sire">${name}</div>
+    <span class="line-tag" style="background:${LINE_COLORS[d.sire_line]||'#606060'};color:#fff;display:inline-block;padding:2px 8px;border-radius:3px;font-size:.7rem;margin-bottom:12px">${d.sire_line}</span>
+    <div style="margin:8px 0">
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:2px">
+        <span style="color:var(--text-dim)">産駒数</span><span style="font-weight:600">${d.n_progeny||'-'}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:2px">
+        <span style="color:var(--text-dim)">ユニーク祖先</span><span style="font-weight:600;color:var(--accent)">${d.unique_ancestors||'-'}頭 / 62</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:2px">
+        <span style="color:var(--text-dim)">インブリード数</span><span style="font-weight:600">${d.inbreeding_count||0}件</span>
+      </div>
+    </div>
+    ${tagsHtml}
+    ${inbreedHtml}
+    <h2 style="margin-top:16px">血統構造 類似 Top 8</h2>
+    <div class="similar-list">${sim.map(([n,s])=>`
+      <div class="similar-item" onclick="selectSire('${n.replace(/'/g,"\\'")}')">
+        <span>${n.length>16?n.slice(0,16)+'…':n}</span>
+        <span class="similar-score">${(s*100).toFixed(1)}%</span>
+      </div>`).join("")}
+    </div>`;
+}
+
+function initColorModes(){
+  const c=document.getElementById("color-modes");
+  COLOR_MODES.forEach(m=>{
+    const btn=document.createElement("button");
+    btn.className="color-mode-btn"+(m.id===currentMode?" active":"");
+    btn.textContent=m.label;
+    btn.onclick=()=>{currentMode=m.id;c.querySelectorAll(".color-mode-btn").forEach(b=>b.classList.remove("active"));btn.classList.add("active");updateLegend();draw()};
+    c.appendChild(btn);
+  });
+}
+
+function updateLegend(){
+  const c=document.getElementById("legend");c.innerHTML="";
+  if(currentMode==="sire_line"){
+    Object.entries(LINE_COLORS).forEach(([name,color])=>{
+      const count=DATA.filter(d=>d.sire_line===name).length;
+      if(count===0)return;
+      c.innerHTML+=`<div class="legend-item"><div class="legend-dot" style="background:${color}"></div>${name} (${count})</div>`;
+    });
+  }else if(currentMode==="inbreeding"){
+    c.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(255,80,50)"></div>多インブリード (5+)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(160,130,110)"></div>中程度 (2-4)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(60,180,180)"></div>少/無 (0-1)</div>`;
+  }else if(currentMode==="unique"){
+    c.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(240,220,220)"></div>多 (45+)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(140,150,170)"></div>中 (~35)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(40,60,120)"></div>少 (<25)</div>`;
+  }else if(currentMode==="progeny"){
+    c.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(240,210,220)"></div>多頭数 (200+)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(140,130,170)"></div>中程度 (~100)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(40,60,120)"></div>少頭数 (<30)</div>`;
+  }else if(currentMode==="tag_count"){
+    c.innerHTML=`
+      <div class="legend-item"><div class="legend-dot" style="background:#2a2a30"></div>タグなし</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(150,180,130)"></div>1-3 タグ</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgb(255,220,140)"></div>4+ タグ (オールラウンダー)</div>`;
+  }else if(currentMode==="tag_filter"){
+    if(TAG_FILTER){
+      c.innerHTML=`
+        <div class="legend-item"><div class="legend-dot" style="background:${tagColor(TAG_FILTER)}"></div>${TAG_FILTER}カテゴリ保持</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2a2a30"></div>非保持</div>`;
+    }else{
+      c.innerHTML=`
+        <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div>タグ付き</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2a2a30"></div>タグなし</div>
+        <div class="legend-item" style="font-size:.65rem;color:var(--text-dim);margin-top:6px">↑ カテゴリを選択すると絞込</div>`;
+    }
+  }
+}
+
+const searchInput=document.getElementById("search");
+const searchResults=document.getElementById("search-results");
+searchInput.addEventListener("input",()=>{
+  const q=searchInput.value.toLowerCase();
+  if(!q){searchResults.innerHTML="";return}
+  const matches=DATA.filter(d=>d.name.toLowerCase().includes(q)).slice(0,10);
+  searchResults.innerHTML=matches.map(d=>`<div class="search-result" onclick="selectSire('${d.name.replace(/'/g,"\\'")}');document.getElementById('search').value=''">${d.name}</div>`).join("");
+});
+
+init();
+
+// ════════════════════════════════════════════════════════════
+//  父系ツリービュー（全種牡馬 78K+ 対応 / 段階展開式）
+// ════════════════════════════════════════════════════════════
+
+// 系統グループカラーパレット（pedigree_race_stats と同一）
+const TREE_COLORS = [
+  "#e63946","#457b9d","#2a9d8f","#e9c46a","#f4a261",
+  "#264653","#a8dadc","#6d6875","#b5838d","#ffb4a2",
+  "#06b6d4","#a78bfa","#f59e0b","#22c55e","#ec4899",
+  "#84cc16","#14b8a6","#f97316","#8b5cf6","#3b82f6",
+  "#fb923c","#a3e635","#34d399","#60a5fa","#c084fc",
+  "#f43f5e","#0ea5e9","#10b981","#d97706","#7c3aed",
+  "#dc2626","#16a34a","#2563eb","#9333ea","#ea580c",
+  "#65a30d","#0891b2","#d946ef","#c026d3","#0284c7",
+  "#4ade80","#fbbf24","#818cf8","#fb7185","#a78bfa",
+  "#34d399","#38bdf8","#f472b6","#facc15","#86efac"
+];
+const treeColor = gid => (gid >= 0) ? TREE_COLORS[gid % TREE_COLORS.length] : '#555';
+
+let _treeLoaded = false;
+let _currentView = 'scatter';
+const _treeCache = {};  // id -> {node, children} APIレスポンスキャッシュ
+
+// ── switchView ──────────────────────────────────────────────
+function switchView(view) {
+  _currentView = view;
+  document.getElementById('tab-scatter').classList.toggle('active', view === 'scatter');
+  document.getElementById('tab-tree').classList.toggle('active', view === 'tree');
+  document.getElementById('chart').style.display = view === 'scatter' ? 'block' : 'none';
+  document.getElementById('tree-view').style.display = view === 'tree' ? 'flex' : 'none';
+  document.getElementById('zoom-controls-wrap').style.display = view === 'scatter' ? 'flex' : 'none';
+  document.getElementById('scatter-left-content').style.display = view === 'scatter' ? '' : 'none';
+  document.getElementById('tree-left-content').style.display = view === 'tree' ? '' : 'none';
+  document.getElementById('scatter-right-content').style.display = view === 'scatter' ? '' : 'none';
+  document.getElementById('tree-right-content').style.display = view === 'tree' ? '' : 'none';
+  if (view === 'tree' && !_treeLoaded) {
+    _treeLoaded = true;
+    _treeMsg('読み込み中...');
+    initFullTree();
+  }
+}
+
+function _treeMsg(text, isError) {
+  const el = document.getElementById('tree-msg');
+  if (!text) { el.style.display = 'none'; return; }
+  el.textContent = text;
+  el.style.color = isError ? '#e63946' : 'var(--text-dim)';
+  el.style.display = 'flex';
+}
+
+// ── ユーティリティ ──────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+function netkeibaUrl(horse_id) {
+  // 10桁数字（日本馬）または 000a系（外国馬）→ netkeiba 血統ページ
+  const id = String(horse_id || '');
+  if (/^\d{10}$/.test(id) || /^000a[0-9a-f]+$/i.test(id)) {
+    return `https://db.netkeiba.com/horse/ped/${id}/`;
+  }
+  return null;
+}
+
+function descClass(n_desc) {
+  if (n_desc > 1000) return 'big';
+  if (n_desc > 50)   return 'mid';
+  return 'small';
+}
+
+function descLabel(node) {
+  if (node.n_descendants > 0) return `${node.n_descendants.toLocaleString()} 子孫`;
+  if (node.n_children > 0)    return `${node.n_children} 子`;
+  return '末端';
+}
+
+// ── APIフェッチ（キャッシュ付き） ──────────────────────────
+async function fetchNode(id) {
+  if (_treeCache[id]) return _treeCache[id];
+  const res = await fetch(`/api/stallion-sire-tree/node/${encodeURIComponent(id)}`);
+  const data = await res.json();
+  _treeCache[id] = data;
+  return data;
+}
+
+// ── ノード行のHTMLを生成 ────────────────────────────────────
+function makeNodeTagsHtml(tags) {
+  if (!tags || !tags.length) return '';
+  // タグフィルタ適用
+  const filtered = TAG_FILTER ? tags.filter(t=>t.category === TAG_FILTER) : tags;
+  if (!filtered.length) return '';
+  // ツリー上は最大 5 個まで表示 (情報量過多防止)、残りは「+N」で表現
+  const MAX = 5;
+  const shown = filtered.slice(0, MAX);
+  const rest = filtered.length - shown.length;
+  const html = shown.map(t => {
+    const c = t.category_color || (TAG_CAT_COLORS && TAG_CAT_COLORS[t.category]) || '#888';
+    const tip = `${t.category} / EB勝率 ${(t.rate_eb*100).toFixed(1)}% / Lift ×${t.lift.toFixed(2)} / N=${t.n_records}`;
+    return `<span class="tn-tag-mini" style="color:${c};border-color:${c}55;background:${c}1a" title="${esc(tip)}">${esc(t.tag_label)}</span>`;
+  }).join('');
+  const more = rest > 0 ? `<span class="tn-tag-mini" style="color:var(--text-dim);border-color:var(--border)">+${rest}</span>` : '';
+  return `<span class="tn-tags">${html}${more}</span>`;
+}
+
+function makeNodeRowHtml(node, depth, isLast, isRoot) {
+  const indent = buildIndentHtml(depth, isLast);
+  const hasKids = node.n_children > 0;
+  const toggleCls = hasKids ? 'has-children' : 'leaf';
+  const nameCls   = isRoot && depth === 0 ? 'tn-name tn-root-name' : 'tn-name';
+  const nkUrl = netkeibaUrl(node.id);
+  // 馬名 → 種牡馬統計ページ (新タブ): /bloodline-cluster?stallion_id=...
+  // ツリー上の各ノードは「種牡馬」 (= 子を持つ or 産駒成績がある馬) なので
+  // クリックで「その種牡馬の含有統計 + 所属クラスタ統計」を見られるページへ遷移。
+  const statsUrl = `/bloodline-cluster?stallion_id=${encodeURIComponent(node.id)}`;
+  const nameHtml = `<a class="${nameCls}" href="${statsUrl}" target="_blank" title="${esc(node.name)} の種牡馬統計 + 所属クラスタを開く" onclick="event.stopPropagation()">${esc(node.name)}</a>`;
+  // netkeiba 血統ページは別アイコンとして残す
+  const nkLink = nkUrl ? `<a class="tn-nk-icon" href="${nkUrl}" target="_blank" title="netkeiba 血統ページ" onclick="event.stopPropagation()">血</a>` : '';
+  const tagsHtml = makeNodeTagsHtml(node.tags);
+  const descHtml = `<span class="tn-desc ${descClass(node.n_descendants)}">${descLabel(node)}</span>`;
+  return `
+    <div class="tn-row" data-id="${esc(node.id)}" onclick="onNodeClick(this,'${esc(node.id)}','${esc(node.name)}',${hasKids})">
+      ${indent}
+      <span class="tn-toggle ${toggleCls}" data-toggle="${node.id}">${hasKids ? '▶' : '·'}</span>
+      ${nameHtml}
+      ${nkLink}
+      ${tagsHtml}
+      ${descHtml}
+    </div>
+    <div class="tn-children" id="ch-${esc(node.id)}"></div>`;
+}
+
+function buildIndentHtml(depth, isLast) {
+  if (depth === 0) return '';
+  let html = '';
+  // depth-1 本の縦線
+  for (let i = 0; i < depth - 1; i++) {
+    html += '<span class="tn-vline"></span>';
+  }
+  // 最後の接続線
+  html += `<span class="tn-connector${isLast ? ' last' : ''}"></span>`;
+  return `<span class="tn-indent">${html}</span>`;
+}
+
+// ── ノードクリック処理 ─────────────────────────────────────
+async function onNodeClick(el, id, name, hasKids) {
+  // 詳細パネル更新
+  highlightRow(id);
+  const cached = _treeCache[id];
+  if (cached?.node) renderTreeDetail(cached.node);
+  else {
+    // 非同期で詳細を取得
+    fetchNode(id).then(d => { if (d.node) renderTreeDetail(d.node); });
+  }
+  if (!hasKids) return;
+
+  const childContainer = document.getElementById(`ch-${id}`);
+  if (!childContainer) return;
+
+  const toggle = el.querySelector(`[data-toggle="${id}"]`);
+  const isOpen = childContainer.classList.contains('open');
+
+  if (isOpen) {
+    // 折りたたみ
+    childContainer.classList.remove('open');
+    childContainer.style.maxHeight = '0';
+    if (toggle) toggle.classList.remove('open');
+    return;
+  }
+
+  // 展開
+  childContainer.classList.add('open');
+  childContainer.style.maxHeight = 'none';
+  if (toggle) toggle.classList.add('open');
+
+  // 子ノードが未ロードなら取得
+  if (childContainer.innerHTML === '') {
+    childContainer.innerHTML = '<div class="tn-loading">読み込み中...</div>';
+    try {
+      const parentDepth = countDepth(el);
+      await loadChildren(id, childContainer, parentDepth, 0);
+    } catch(e) {
+      childContainer.innerHTML = `<div class="tn-loading" style="color:#e63946">エラー: ${esc(e.message)}</div>`;
+    }
+  }
+}
+
+const PAGE_SIZE = 100; // 一度に表示する子ノード数
+
+async function loadChildren(id, container, parentDepth, offset) {
+  const url = `/api/stallion-sire-tree/node/${encodeURIComponent(id)}?offset=${offset}&limit=${PAGE_SIZE}`;
+  const res  = await fetch(url);
+  const data = await res.json();
+  if (data.node && !_treeCache[id]) _treeCache[id] = data;
+
+  const children     = data.children || [];
+  const total        = data.total_children || children.length;
+  const nextOffset   = offset + children.length;
+  const hasMore      = nextOffset < total;
+
+  if (offset === 0) {
+    // 初回: コンテナを完全クリア（読み込み中...を除去）
+    container.innerHTML = '';
+    if (children.length === 0) {
+      container.innerHTML = '<div class="tn-loading">（子ノードなし）</div>';
+      return;
+    }
+  } else {
+    // 追加ロード: 「もっと表示」ボタンだけ削除
+    const existingMore = container.querySelector('.tn-load-more');
+    if (existingMore) existingMore.remove();
+  }
+
+  // horse_id で重複を排除して描画
+  const seenIds = new Set(
+    Array.from(container.querySelectorAll('.tn-row')).map(r => r.dataset.id)
+  );
+  const frag = document.createDocumentFragment();
+  children.forEach((c, i) => {
+    if (seenIds.has(c.id)) return; // horse_id 重複スキップ
+    seenIds.add(c.id);
+    const isLast = !hasMore && (i === children.length - 1);
+    const div = document.createElement('div');
+    div.innerHTML = makeNodeRowHtml(c, parentDepth + 1, isLast, false);
+    while (div.firstChild) frag.appendChild(div.firstChild);
+  });
+  container.appendChild(frag);
+
+  if (hasMore) {
+    const btn = document.createElement('div');
+    btn.className = 'tn-load-more';
+    btn.innerHTML = `<button onclick="loadMoreChildren('${esc(id)}', this, ${parentDepth}, ${nextOffset})">▼ さらに表示（${nextOffset} / ${total} 件）</button>`;
+    container.appendChild(btn);
+  }
+}
+
+async function loadMoreChildren(id, btn, parentDepth, offset) {
+  btn.disabled = true;
+  btn.textContent = '読み込み中...';
+  const container = btn.closest('.tn-children');
+  try {
+    await loadChildren(id, container, parentDepth, offset);
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'エラー（再試行）';
+  }
+}
+
+function countDepth(rowEl) {
+  // tn-indent スパン内の vline/connector 数でネストの深さを算出
+  const indent = rowEl.querySelector('.tn-indent');
+  if (!indent) return 0;
+  return indent.querySelectorAll('.tn-vline, .tn-connector').length;
+}
+
+function highlightRow(id) {
+  document.querySelectorAll('.tn-row.tn-active').forEach(r => r.classList.remove('tn-active'));
+  const row = document.querySelector(`.tn-row[data-id="${CSS.escape(id)}"]`);
+  if (row) { row.classList.add('tn-active'); row.scrollIntoView({block:'nearest', behavior:'smooth'}); }
+}
+
+// ── BMS ランキング HTML 生成 ──────────────────────────────
+function renderBmsRankList(items, colorClass, maxCount) {
+  if (!items || items.length === 0)
+    return '<div class="bms-loading">データなし</div>';
+  return items.map((item, i) => {
+    const pct = maxCount > 0 ? Math.max(4, Math.round(item.count / maxCount * 100)) : 4;
+    const rootLabel = item.root_name && item.root_name !== item.name
+      ? `<span class="bms-rank-root" title="${esc(item.root_name)}">${esc(item.root_name)}系</span>` : '';
+    return `<div class="bms-rank-row" title="${esc(item.name)} (${item.count.toLocaleString()}頭)">
+      <span class="bms-rank-no">${i+1}</span>
+      <span class="bms-rank-name" title="${esc(item.name)}">${esc(item.name)}</span>
+      ${rootLabel}
+      <div class="bms-rank-bar-wrap"><div class="bms-rank-bar ${colorClass}" style="width:${pct}%"></div></div>
+      <span class="bms-rank-count">${item.count.toLocaleString()}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── ノード詳細（右パネル）描画 ─────────────────────────────
+function renderTreeDetail(node) {
+  const panel = document.getElementById('tree-node-detail');
+  if (!node || !panel) return;
+  const nkUrl = netkeibaUrl(node.id);
+  const statsUrl = `/bloodline-cluster?stallion_id=${encodeURIComponent(node.id)}`;
+  const statsBtn = `<a class="tn-netkeiba-btn" href="${statsUrl}" target="_blank"
+    style="background:rgba(0,212,170,.12);border-color:rgba(0,212,170,.4);color:var(--accent);font-weight:700">
+    ◎ ${esc(node.name)} 種牡馬統計 + 所属クラスタを開く</a>`;
+  const nkHtml = nkUrl
+    ? `<a class="tn-netkeiba-btn" href="${nkUrl}" target="_blank">🔗 netkeiba 血統ページを開く</a>`
+    : '';
+  // 特殊適性タグ (フル版・カテゴリ別グルーピング)
+  let tagsBlockHtml = '';
+  const tags = node.tags || [];
+  if (tags.length) {
+    const filtered = TAG_FILTER ? tags.filter(t=>t.category === TAG_FILTER) : tags;
+    const byCat = {};
+    filtered.forEach(t => { (byCat[t.category] = byCat[t.category] || []).push(t); });
+    const cats = Object.keys(byCat);
+    if (cats.length) {
+      let inner = '';
+      cats.forEach(c => {
+        const col = (TAG_CAT_COLORS && TAG_CAT_COLORS[c]) || '#888';
+        inner += `<div style="margin:6px 0">
+          <span class="tag-cat-pill" style="background:${col}">${c}</span>
+          ${renderTagChips(byCat[c])}
+        </div>`;
+      });
+      tagsBlockHtml = `<h2 style="margin-top:10px">特殊適性タグ <span style="color:var(--text-dim);font-weight:400">(${filtered.length}件)</span></h2>${inner}`;
+    } else {
+      tagsBlockHtml = `<h2 style="margin-top:10px">特殊適性タグ</h2><div class="tag-chip-empty">フィルタ該当なし</div>`;
+    }
+  } else {
+    tagsBlockHtml = `<h2 style="margin-top:10px">特殊適性タグ</h2><div class="tag-chip-empty">産駒データ不足 (タグ未付与)</div>`;
+  }
+  panel.innerHTML = `
+    <div class="tree-detail-name">${esc(node.name)}</div>
+    <div class="tree-info-card">
+      <div class="tree-info-stat"><span>Horse ID</span><span style="font-size:.65rem">${esc(node.id)}</span></div>
+      <div class="tree-info-stat"><span>直接の子</span><span>${(node.n_children||0).toLocaleString()} 頭</span></div>
+      <div class="tree-info-stat"><span>全子孫</span><span>${(node.n_descendants||0).toLocaleString()} 頭</span></div>
+      <div class="tree-info-stat"><span>根からの深さ</span><span>${node.depth >= 0 ? node.depth : '不明'} 世代</span></div>
+      ${node.is_root ? '<div style="margin-top:6px;font-size:.7rem;color:var(--accent)">● 根ノード（父不明）</div>' : ''}
+    </div>
+    ${statsBtn}
+    ${tagsBlockHtml}
+    ${nkHtml}
+    <div id="bms-stats-area">
+      <div class="bms-section">
+        <div class="bms-section-title">産駒の母父 TOP10</div>
+        <div class="bms-loading">読み込み中…</div>
+      </div>
+      <div class="bms-section" style="margin-top:14px">
+        <div class="bms-section-title">母父としての父 TOP10</div>
+        <div class="bms-loading">読み込み中…</div>
+      </div>
+    </div>`;
+
+  // BMS 統計を非同期で取得して差し込む
+  fetch(`/api/stallion-sire-tree/bms-stats/${encodeURIComponent(node.id)}?top=10`)
+    .then(r => r.json())
+    .then(data => {
+      const area = document.getElementById('bms-stats-area');
+      if (!area) return;
+      if (data.error) {
+        area.innerHTML = `<div class="bms-loading" style="color:var(--accent2)">${esc(data.error)}</div>`;
+        return;
+      }
+      const max1 = data.as_sire[0]?.count || 1;
+      const max2 = data.as_bms[0]?.count  || 1;
+      area.innerHTML = `
+        <div class="bms-section">
+          <div class="bms-section-title">産駒の母父 TOP10</div>
+          <div class="bms-total-label">産駒 ${data.total_as_sire.toLocaleString()} 頭のデータより</div>
+          ${renderBmsRankList(data.as_sire, 'as-sire', max1)}
+        </div>
+        <div class="bms-section" style="margin-top:14px">
+          <div class="bms-section-title">母父としての父 TOP10</div>
+          <div class="bms-total-label">母父として ${data.total_as_bms.toLocaleString()} 頭のデータより</div>
+          ${renderBmsRankList(data.as_bms, 'as-bms', max2)}
+        </div>`;
+    })
+    .catch(() => {
+      const area = document.getElementById('bms-stats-area');
+      if (area) area.innerHTML = '';
+    });
+}
+
+// ── L1 (系統血統) を root として階層ツリーを描画 ─────────────
+async function initFullTree() {
+  try {
+    // 第一階層 = L1 系統 (Turn-To系 / Native Dancer系 / Northern Dancer系 / Nasrullah系 / 非主流)
+    const res = await fetch('/api/stallion-sire-tree/l1-groups');
+    const data = await res.json();
+    if (data.error) { _treeMsg(data.error, true); return; }
+    _treeMsg('');
+    const list = document.getElementById('tree-node-list');
+    const groups = data.l1_groups || [];
+    list.innerHTML = groups.map((g, i) =>
+      makeL1RowHtml(g, i === groups.length - 1)
+    ).join('');
+  } catch(e) {
+    _treeMsg('読み込みエラー: ' + e.message, true);
+  }
+}
+
+// L1 仮想ノードの行 HTML
+function makeL1RowHtml(g, isLast) {
+  const vid = `l1:${g.id}`;
+  const subTitle = `${g.founder_name} — 配下 root ${g.n_roots} 系統 / 子孫 ${g.n_descendants_total.toLocaleString()} 頭`;
+  return `
+    <div class="tn-row tn-l1-row" data-id="${esc(vid)}"
+      style="background:linear-gradient(90deg,${g.color}22,transparent);border-left:4px solid ${g.color}"
+      onclick="onL1Click(this,'${esc(g.id)}')">
+      <span class="tn-toggle has-children" data-toggle="${esc(vid)}">▶</span>
+      <span class="tn-name tn-l1-name" style="color:${g.color}">
+        <span style="font-size:1.1rem;margin-right:6px">${esc(g.icon)}</span>
+        <b>${esc(g.name)}</b>
+        <span class="tn-l1-desc">— ${esc(subTitle)}</span>
+      </span>
+    </div>
+    <div class="tn-children" id="ch-${esc(vid)}"></div>`;
+}
+
+// L1 クリック処理 (配下の roots を展開)
+async function onL1Click(el, l1Id) {
+  const vid = `l1:${l1Id}`;
+  const childContainer = document.getElementById(`ch-${vid}`);
+  if (!childContainer) return;
+  const toggle = el.querySelector(`[data-toggle="${vid}"]`);
+  const isOpen = childContainer.classList.contains('open');
+  if (isOpen) {
+    childContainer.classList.remove('open');
+    childContainer.style.maxHeight = '0';
+    if (toggle) toggle.classList.remove('open');
+    return;
+  }
+  childContainer.classList.add('open');
+  childContainer.style.maxHeight = 'none';
+  if (toggle) toggle.classList.add('open');
+  if (childContainer.innerHTML !== '') return;
+  childContainer.innerHTML = '<div class="tn-loading">読み込み中...</div>';
+  try {
+    const url = `/api/stallion-sire-tree/roots?main_group=${encodeURIComponent(l1Id)}&limit=9999`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.error) { childContainer.innerHTML = `<div class="tn-loading" style="color:#e63946">${esc(data.error)}</div>`; return; }
+    const nodes = data.nodes || [];
+    childContainer.innerHTML = nodes.map((n, i) =>
+      makeNodeRowHtml(n, 1, i === nodes.length - 1, true)
+    ).join('');
+  } catch(e) {
+    childContainer.innerHTML = `<div class="tn-loading" style="color:#e63946">エラー: ${esc(e.message)}</div>`;
+  }
+}
+window.onL1Click = onL1Click;
+
+// ── 検索 ──────────────────────────────────────────────────
+let _treeSearchTimer = null;
+function treeSearch(q) {
+  clearTimeout(_treeSearchTimer);
+  _treeSearchTimer = setTimeout(async () => {
+    const list = document.getElementById('tree-node-list');
+    if (!q.trim()) {
+      // 検索クリア → ルート再表示
+      _treeMsg('');
+      await initFullTree();
+      return;
+    }
+    _treeMsg('検索中...');
+    try {
+      const res = await fetch(`/api/stallion-sire-tree/search?q=${encodeURIComponent(q)}&limit=80`);
+      const data = await res.json();
+      _treeMsg('');
+      if (!data.nodes?.length) {
+        list.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-dim);font-size:.8rem">"${esc(q)}" に一致する馬が見つかりません</div>`;
+        return;
+      }
+      // 検索結果はフラットリスト（depth=0）で表示
+      list.innerHTML = `
+        <div style="padding:4px 12px 8px;font-size:.7rem;color:var(--text-dim)">
+          検索結果: ${data.total.toLocaleString()} 件中 上位${data.nodes.length}件
+        </div>
+        ${data.nodes.map((n, i) => makeNodeRowHtml(n, 0, i === data.nodes.length - 1, false)).join('')}`;
+    } catch(e) { _treeMsg('検索エラー: ' + e.message, true); }
+  }, 350);
+}
+
+function clearTreeSearch() {
+  const inp = document.getElementById('tree-search-input');
+  if (inp) inp.value = '';
+  treeSearch('');
+}
+
+// ════════════════════════════════════════════════════════════
+//  ツリー再構築
+// ════════════════════════════════════════════════════════════
+
+let _rebuildPollTimer = null;
+
+async function startRebuild() {
+  const btn  = document.getElementById('rebuild-btn');
+  const wrap = document.getElementById('rebuild-progress-wrap');
+  const bar  = document.getElementById('rebuild-progress-bar');
+  const msg  = document.getElementById('rebuild-msg');
+  const det  = document.getElementById('rebuild-stats-detail');
+  if (!btn || !wrap) return;
+
+  btn.disabled = true;
+  btn.classList.add('running');
+  btn.textContent = '⚙ 再計算中...';
+  wrap.style.display = 'block';
+  bar.className = 'rebuild-progress-bar';
+  bar.style.width = '0%';
+  msg.textContent = '起動中...';
+  det.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/stallion-sire-tree/rebuild', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) {
+      msg.textContent = data.error || 'エラー';
+      bar.classList.add('error');
+      btn.disabled = false;
+      btn.classList.remove('running');
+      btn.textContent = '⚙ 父系ツリーを再計算';
+      return;
+    }
+  } catch(e) {
+    msg.textContent = 'リクエストエラー: ' + e.message;
+    bar.classList.add('error');
+    btn.disabled = false;
+    btn.classList.remove('running');
+    btn.textContent = '⚙ 父系ツリーを再計算';
+    return;
+  }
+
+  // ポーリング開始
+  clearInterval(_rebuildPollTimer);
+  _rebuildPollTimer = setInterval(_pollRebuildStatus, 1500);
+}
+
+async function _pollRebuildStatus() {
+  const btn  = document.getElementById('rebuild-btn');
+  const wrap = document.getElementById('rebuild-progress-wrap');
+  const bar  = document.getElementById('rebuild-progress-bar');
+  const msg  = document.getElementById('rebuild-msg');
+  const det  = document.getElementById('rebuild-stats-detail');
+  const fi   = document.getElementById('rebuild-file-info');
+
+  let data;
+  try {
+    const res = await fetch('/api/stallion-sire-tree/rebuild/status');
+    data = await res.json();
+  } catch(e) {
+    return; // ネットワークエラーは無視して再試行
+  }
+
+  const pct = Math.round((data.progress || 0) * 100);
+  bar.style.width = pct + '%';
+  msg.textContent = data.message || '';
+
+  // ファイル情報
+  if (data.files) {
+    const parts = [];
+    if (data.files.nodes) parts.push(`nodes: ${data.files.nodes.size_kb} KB  (${data.files.nodes.updated_at?.slice(0,19).replace('T',' ')})`);
+    if (data.files.edges) parts.push(`edges: ${data.files.edges.size_kb} KB  (${data.files.edges.updated_at?.slice(0,19).replace('T',' ')})`);
+    if (fi) fi.textContent = parts.join('\n');
+  }
+
+  if (!data.running) {
+    clearInterval(_rebuildPollTimer);
+    _rebuildPollTimer = null;
+    btn.disabled = false;
+    btn.classList.remove('running');
+    btn.textContent = '⚙ 父系ツリーを再計算';
+
+    if (data.error) {
+      bar.classList.add('error');
+    } else if (data.stats) {
+      // 統計カードを更新
+      _updateTreeStatsCard(data.stats);
+      // 詳細表示
+      det.style.display = 'grid';
+      det.innerHTML = `
+        <span>ノード総数</span><span>${(data.stats.n_nodes||0).toLocaleString()} 頭</span>
+        <span>父-子ペア</span><span>${(data.stats.n_edges||0).toLocaleString()} 組</span>
+        <span>ルート数</span><span>${(data.stats.n_roots||0).toLocaleString()}</span>
+        <span>最大深さ</span><span>${data.stats.max_depth || '—'} 世代</span>
+        <span>処理時間</span><span>${data.stats.elapsed_sec || '—'} 秒</span>
+        <span>ファイル数</span><span>${(data.stats.n_files||0).toLocaleString()}</span>`;
+      // ツリーキャッシュをクリアして再読み込み
+      Object.keys(_treeCache).forEach(k => delete _treeCache[k]);
+      _treeLoaded = false;
+      _treeMsg('再読み込み中...');
+      document.getElementById('tree-node-list').innerHTML = '';
+      setTimeout(() => {
+        _treeLoaded = true;
+        _treeMsg('');
+        initFullTree();
+      }, 800);
+    }
+  }
+}
+
+function _updateTreeStatsCard(stats) {
+  const nEl = document.getElementById('stat-nodes');
+  const eEl = document.getElementById('stat-edges');
+  const rEl = document.getElementById('stat-roots');
+  if (nEl) nEl.textContent = (stats.n_nodes||0).toLocaleString() + ' 頭';
+  if (eEl) eEl.textContent = (stats.n_edges||0).toLocaleString() + ' 組';
+  if (rEl) rEl.textContent = (stats.n_roots||0).toLocaleString();
+}
+
+async function _loadInitialRebuildStatus() {
+  try {
+    const res  = await fetch('/api/stallion-sire-tree/rebuild/status');
+    const data = await res.json();
+    const fi   = document.getElementById('rebuild-file-info');
+
+    if (data.files && fi) {
+      const parts = [];
+      if (data.files.nodes) parts.push(`nodes: ${data.files.nodes.size_kb} KB  (${data.files.nodes.updated_at?.slice(0,19).replace('T',' ')})`);
+      if (data.files.edges) parts.push(`edges: ${data.files.edges.size_kb} KB  (${data.files.edges.updated_at?.slice(0,19).replace('T',' ')})`);
+      fi.textContent = parts.join('\n');
+    }
+    if (data.stats) _updateTreeStatsCard(data.stats);
+
+    // 前回のジョブが実行中なら自動でポーリング再開
+    if (data.running) {
+      const btn  = document.getElementById('rebuild-btn');
+      const wrap = document.getElementById('rebuild-progress-wrap');
+      if (btn)  { btn.disabled = true; btn.classList.add('running'); btn.textContent = '⚙ 再計算中...'; }
+      if (wrap) wrap.style.display = 'block';
+      clearInterval(_rebuildPollTimer);
+      _rebuildPollTimer = setInterval(_pollRebuildStatus, 1500);
+    }
+  } catch(e) { /* ignore */ }
+}
+
+// ── 左パネル初期化 ─────────────────────────────────────────
+function initTreeLeftPanel() {
+  const leftPanel = document.getElementById('left-panel');
+  if (!document.getElementById('scatter-left-content')) {
+    const scatterContent = document.createElement('div');
+    scatterContent.id = 'scatter-left-content';
+    while (leftPanel.children.length > 1) {
+      scatterContent.appendChild(leftPanel.children[1]);
+    }
+    leftPanel.appendChild(scatterContent);
+  }
+  if (!document.getElementById('tree-left-content')) {
+    const treeContent = document.createElement('div');
+    treeContent.id = 'tree-left-content';
+    treeContent.style.display = 'none';
+    treeContent.innerHTML = `
+      <h2 style="margin-top:0">操作方法</h2>
+      <div style="font-size:.7rem;color:var(--text-dim);line-height:1.9">
+        <div><span style="color:var(--accent);font-weight:600">▶</span> をクリックして子ノードを展開</div>
+        <div><span style="color:var(--accent);font-weight:600">▼</span> で折りたたみ</div>
+        <div><span style="color:#06b6d4">🔗</span> でnetkeiba血統ページへ</div>
+        <div style="margin-top:6px">上部検索欄で名前絞り込み</div>
+      </div>
+      <div id="tree-stats-card" style="margin-top:14px;padding:10px;background:rgba(0,212,170,.05);
+        border-radius:4px;border:1px solid rgba(0,212,170,.15);font-size:.72rem">
+        <div style="color:var(--accent);font-weight:600;margin-bottom:6px">データ規模</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+          <span style="color:var(--text-dim)">馬総数</span><strong id="stat-nodes">—</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+          <span style="color:var(--text-dim)">父-子ペア</span><strong id="stat-edges">—</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--text-dim)">ルート数</span><strong id="stat-roots">—</strong>
+        </div>
+      </div>
+      <h2 style="margin-top:16px">色の意味</h2>
+      <div style="font-size:.7rem;color:var(--text-dim);line-height:1.8">
+        <div><span style="color:var(--accent);font-weight:600">緑バッジ</span> 1,000+ 子孫</div>
+        <div><span style="color:#f59e0b;font-weight:600">黄バッジ</span> 51〜1,000 子孫</div>
+        <div><span style="color:var(--text-dim)">灰バッジ</span> 〜50 子孫</div>
+      </div>
+      <div id="tree-tag-filter-host" style="margin-top:14px"></div>
+
+      <div id="rebuild-panel">
+        <h3>ツリー再構築</h3>
+        <button class="rebuild-btn" id="rebuild-btn" onclick="startRebuild()">
+          ⚙ 父系ツリーを再計算
+        </button>
+        <div style="margin-top:5px;font-size:.65rem;color:rgba(255,255,255,.35);line-height:1.6">
+          ローカル上の全血統データから<br>
+          父子ペアを再集計します。<br>
+          目安: 約 10 秒
+        </div>
+        <div class="rebuild-progress-wrap" id="rebuild-progress-wrap">
+          <div class="rebuild-progress-bar-bg">
+            <div class="rebuild-progress-bar" id="rebuild-progress-bar"></div>
+          </div>
+          <div class="rebuild-msg" id="rebuild-msg"></div>
+          <div class="rebuild-stats" id="rebuild-stats-detail" style="display:none"></div>
+        </div>
+        <div class="rebuild-file-info" id="rebuild-file-info"></div>
+      </div>`;
+    leftPanel.appendChild(treeContent);
+  }
+}
+
+initTreeLeftPanel();
+_loadInitialRebuildStatus();
+
+/* ═════════════════════════════════════════════════════════
+   探索モード / 研究モード のトップタブ切替
+   + 探索モードの条件マッチランキング機能
+   ═════════════════════════════════════════════════════════ */
+function switchTopMode(mode) {
+  const discL = document.getElementById('discovery-layout');
+  const hierL = document.getElementById('hierarchy-layout');
+  const resL  = document.querySelector('.layout');
+  const tabD  = document.getElementById('tmTabDiscovery');
+  const tabH  = document.getElementById('tmTabHierarchy');
+  const tabR  = document.getElementById('tmTabResearch');
+  const hint  = document.getElementById('tmHint');
+  // すべてリセット
+  [discL, hierL, resL].forEach(el => el && el.classList.remove('show'));
+  [tabD, tabH, tabR].forEach(t => t && t.classList.remove('active'));
+  if (mode === 'discovery') {
+    discL && discL.classList.add('show');
+    tabD && tabD.classList.add('active');
+    if (hint) hint.textContent = '条件を入力して、その条件に強い種牡馬・血統を探索しましょう';
+  } else if (mode === 'hierarchy') {
+    hierL && hierL.classList.add('show');
+    tabH && tabH.classList.add('active');
+    if (hint) hint.textContent = '系統血統 (L1) × 適性領域 (L2) × 細粒度 (L3) の階層マップ';
+    if (typeof loadHierarchy === 'function') loadHierarchy();
+  } else {
+    resL && resL.classList.add('show');
+    tabR && tabR.classList.add('active');
+    if (hint) hint.textContent = '血統類似度マップ / 父系ツリーで構造を俯瞰';
+  }
+}
+window.switchTopMode = switchTopMode;
+
+/* ═══════════════════════════════════════════════════════════
+   クラスタ階層 (L1 × L2 × L3) - データ取得 & レンダリング
+   ═══════════════════════════════════════════════════════════ */
+const _hierState = {
+  data: null, loading: false, selectedL1: null,
+  selectedSG: null, selectedL2: null, vecProj: 'pca',
+};
+window._hierState = _hierState;
+
+async function loadHierarchy() {
+  if (_hierState.data || _hierState.loading) return _hierState.data;
+  _hierState.loading = true;
+  try {
+    const r = await fetch('/api/pedigree-map/cluster-hierarchy');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    _hierState.data = d;
+    // sidToName マップ構築 (L1 top_main_stallions + matrix top_members)
+    const sidToName = {};
+    (d.L1_groups || []).forEach(g => {
+      (g.top_main_stallions || []).forEach(m => { sidToName[m.id] = m.name; });
+    });
+    (d.matrix || []).forEach(cell => {
+      (cell.top_members || []).forEach(m => { sidToName[m.id] = m.name; });
+    });
+    (d.L2_clusters || []).forEach(c => {
+      (c.top_members || []).forEach(m => { sidToName[m.id] = m.name; });
+    });
+    _hierState.sidToName = sidToName;
+    renderHierarchy(d);
+    return d;
+  } catch (e) {
+    document.getElementById('l2Cards').innerHTML =
+      `<div class="l3-empty">読み込みエラー: ${e.message}</div>`;
+  } finally {
+    _hierState.loading = false;
+  }
+}
+window.loadHierarchy = loadHierarchy;
+
+function escH(s) {
+  return String(s == null ? '' : s).replace(/[<>&"']/g,
+    c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+function renderHierarchy(d) {
+  // Totals
+  const t = d.totals || {};
+  document.getElementById('hierTotals').innerHTML =
+    `<span><b>${(t.n_stallions_total || 0).toLocaleString()}</b>種牡馬を分類</span>` +
+    `<span><b>4</b>大主流系統 + <b>1</b>非主流</span>` +
+    `<span><b>${t.n_super_groups || 0}</b>適性スーパーグループ</span>` +
+    `<span><b>${t.n_L2_fine || 0}</b>細粒度 L2</span>` +
+    `<span><b>${t.n_stallions_with_L2 || 0}</b>主要種牡馬に L2 付与</span>`;
+
+  // L1 帯グラフ + 大カード
+  renderL1(d);
+  // Super-group カード
+  renderSuperGroups(d);
+  // L2_fine カード (初期は全表示)
+  renderL2Cards(d, null);
+  // 散布図
+  renderVectorMap(d, _hierState.vecProj);
+  // 類似度
+  renderSimilarity(d);
+
+  // 散布図タブ
+  document.querySelectorAll('#vectorSection .vec-tab').forEach(btn => {
+    btn.onclick = () => {
+      _hierState.vecProj = btn.dataset.proj;
+      document.querySelectorAll('#vectorSection .vec-tab').forEach(b =>
+        b.classList.toggle('active', b === btn));
+      renderVectorMap(d, _hierState.vecProj);
+    };
+  });
+}
+
+function renderSuperGroups(d) {
+  const sgs = d.super_groups || [];
+  const root = document.getElementById('sgCards');
+  if (!sgs.length) { root.innerHTML = '<div class="l3-empty">スーパーグループ未生成</div>'; return; }
+  root.innerHTML = sgs.map((sg, i) => {
+    const mems = (sg.member_L2_names || []).slice(0, 4).map(n =>
+      `<span class="sg-member-tag">${escH(n)}</span>`).join('');
+    const tops = (sg.top_stallions || []).slice(0, 4).map(s => escH(s)).join(', ');
+    return `<div class="sg-card" data-sg="${sg.super_id}" id="sgcard-${i}"
+      style="border-top-color:${sg.color};--sg-color:${sg.color}"
+      onclick="selectSG(${sg.super_id})">
+      <div class="sg-rank">#${i+1}</div>
+      <div>
+        <span class="sg-icon" style="color:${sg.color}">${escH(sg.icon)}</span>
+        <span class="sg-name">${escH(sg.name)}</span>
+      </div>
+      <div class="sg-sub">${escH(sg.subtitle || '')}</div>
+      <div class="sg-counts">L2 <b>${sg.n_L2}</b> 個 / 主要種牡馬 <b>${sg.n_stallions}</b> 頭</div>
+      <div class="sg-members">${mems}</div>
+      ${tops ? `<div style="margin-top:6px;font-size:.65rem;color:#a5b4fc">代表: ${tops}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function selectSG(sgId) {
+  _hierState.selectedSG = (_hierState.selectedSG === sgId) ? null : sgId;
+  document.querySelectorAll('.sg-card').forEach(el =>
+    el.classList.toggle('active', _hierState.selectedSG !== null
+      && Number(el.dataset.sg) === _hierState.selectedSG));
+  renderL2Cards(_hierState.data, _hierState.selectedL1, _hierState.selectedSG);
+  renderVectorMap(_hierState.data, _hierState.vecProj);
+}
+window.selectSG = selectSG;
+
+function renderL2Cards(d, filterL1, filterSG) {
+  const cards = d.L2_clusters || [];
+  const sgs = d.super_groups || [];
+  const sgMap = {}; sgs.forEach(s => sgMap[s.super_id] = s);
+  // フィルタ対象 L2 セット
+  let l2Filter = null;
+  if (filterL1) {
+    const g = (d.L1_groups || []).find(x => x.name === filterL1);
+    if (g) {
+      const dist = g.l2_distribution || {};
+      l2Filter = new Set(Object.keys(dist).filter(k => dist[k] > 0).map(k => parseInt(k)));
+    }
+  }
+  const root = document.getElementById('l2Cards');
+  root.innerHTML = cards.map(c => {
+    const sg = sgMap[c.super_group] || {};
+    const dimmed = (filterSG != null && c.super_group !== filterSG)
+      || (l2Filter && !l2Filter.has(c.L2));
+    const hl = (c.highlights || []).slice(0, 4).map(h =>
+      `<span class="l2-tag">${escH(h)}</span>`).join('');
+    return `<div class="l2-card ${dimmed ? 'dimmed' : ''}"
+      data-l2="${c.L2}"
+      style="border-left-color:${c.color}"
+      onclick="selectL2(${c.L2})">
+      <div class="l2-sg-tag">L2=${c.L2} ・ SG=${c.super_group} ${escH((sg.name||'').slice(0,12))}</div>
+      <div>
+        <span class="l2-icon" style="color:${c.color}">${escH(c.icon)}</span>
+        <span class="l2-name">${escH(c.name)}</span>
+      </div>
+      <div class="l2-subtitle">${escH(c.subtitle)}</div>
+      <div class="l2-counts"><b>${c.n_stallions}</b> 種牡馬</div>
+      <div class="l2-highlights">${hl}</div>
+      <details onclick="event.stopPropagation()">
+        <summary>代表 / 不得意 / 根拠</summary>
+        <div class="l2-detail">
+          <div><span class="lbl">代表:</span> ${(c.top_members||[]).slice(0,5).map(m => escH(m.name)).join(', ')}</div>
+          ${c.weaknesses && c.weaknesses.length ? `<div style="margin-top:4px"><span class="lbl">不得意:</span> ${c.weaknesses.map(w => escH(w)).join(', ')}</div>` : ''}
+          ${c.rationale ? `<div style="margin-top:4px"><span class="lbl">根拠:</span> ${escH(c.rationale)}</div>` : ''}
+        </div>
+      </details>
+    </div>`;
+  }).join('');
+}
+
+function selectL2(L2) {
+  _hierState.selectedL2 = (_hierState.selectedL2 === L2) ? null : L2;
+  document.querySelectorAll('.l2-card').forEach(el =>
+    el.classList.toggle('active', _hierState.selectedL2 !== null
+      && Number(el.dataset.l2) === _hierState.selectedL2));
+  renderVectorMap(_hierState.data, _hierState.vecProj);
+}
+window.selectL2 = selectL2;
+
+/* ── 2D 散布図 (Canvas) ── */
+function renderVectorMap(d, proj) {
+  const canvas = document.getElementById('vectorMap');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const data = (d.positions_2d || {})[proj || 'pca'];
+  const explain = document.getElementById('vecExplain');
+  if (!data || !data.centroids || !data.centroids.length) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('座標データなし', canvas.width / 2, canvas.height / 2);
+    if (explain) explain.textContent = `${proj.toUpperCase()} 座標データなし`;
+    return;
+  }
+  if (proj === 'pca' && data.explained_variance_ratio) {
+    const ev = data.explained_variance_ratio;
+    explain.innerHTML = `<b>PCA</b> PC1=${(ev[0]*100).toFixed(1)}% / PC2=${(ev[1]*100).toFixed(1)}% (累積 ${((ev[0]+ev[1])*100).toFixed(1)}%) — 1点=1種牡馬、大円=L2 centroid、近い=適性類似`;
+  } else if (proj === 'umap') {
+    explain.innerHTML = `<b>UMAP</b> 局所構造を保持する非線形射影 (パラメータ: cosine 距離, n_neighbors~15)`;
+  }
+
+  const L2cards = d.L2_clusters || [];
+  const l2Map = {}; L2cards.forEach(c => l2Map[c.L2] = c);
+  const L1Map = {}; (d.L1_groups || []).forEach(g => L1Map[g.name] = g);
+  const sidToL1 = {};
+  (d.L1_groups || []).forEach(g => {
+    (g.top_main_stallions || []).forEach(s => { sidToL1[s.id] = g.name; });
+  });
+  // 全主流種牡馬 → L1 マップ (詳しくは matrix から復元)
+  (d.matrix || []).forEach(cell => {
+    (cell.top_members || []).forEach(m => { sidToL1[m.id] = cell.L1; });
+  });
+
+  // 主流外祖先 (ancestors) を背景プロット
+  const ancestors = data.ancestors || [];
+  const showAnc = _hierState.showAncestors !== false;   // デフォルト ON
+
+  // 範囲計算 (ancestor 含む)
+  const allX = [...data.centroids.map(c => c.x), ...data.stallions.map(s => s.x)];
+  const allY = [...data.centroids.map(c => c.y), ...data.stallions.map(s => s.y)];
+  if (showAnc) {
+    ancestors.forEach(a => { allX.push(a.x); allY.push(a.y); });
+  }
+  const minX = Math.min(...allX), maxX = Math.max(...allX);
+  const minY = Math.min(...allY), maxY = Math.max(...allY);
+  const padX = (maxX - minX) * 0.08, padY = (maxY - minY) * 0.08;
+  const W = canvas.width, H = canvas.height;
+  const pad = 40;
+  const sx = x => pad + (x - minX + padX) / (maxX - minX + 2 * padX) * (W - 2 * pad);
+  const sy = y => H - pad - (y - minY + padY) / (maxY - minY + 2 * padY) * (H - 2 * pad);
+
+  ctx.clearRect(0, 0, W, H);
+  // 背景グリッド
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 10; i++) {
+    const x = pad + (W - 2 * pad) * i / 10;
+    const y = pad + (H - 2 * pad) * i / 10;
+    ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, H - pad); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+  }
+  ctx.strokeStyle = '#334155'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(pad, pad, W - 2 * pad, H - 2 * pad);
+
+  const points = [];
+
+  // 1) 主流外祖先 (背景レイヤー) — L2 色の淡い小点
+  if (showAnc) {
+    ancestors.forEach(a => {
+      const meta = l2Map[a.L2] || {};
+      const baseColor = meta.color || '#555';
+      // 半透明 (16進数 alpha 30/255 ≒ "1e")
+      ctx.fillStyle = baseColor + '38';
+      const x = sx(a.x), y = sy(a.y);
+      ctx.beginPath();
+      ctx.arc(x, y, 1.7, 0, Math.PI * 2);
+      ctx.fill();
+      points.push({ type: 'ancestor', id: a.id, name: a.name, L2: a.L2,
+                    main_group: a.main_group, x, y });
+    });
+  }
+
+  // 2) 類似度ペアを線で結ぶ (nearest top1)
+  const nrst = (d.similarity || {}).nearest_top3 || {};
+  ctx.strokeStyle = 'rgba(96,165,250,0.22)';
+  ctx.lineWidth = 1;
+  data.centroids.forEach(c => {
+    const near = nrst[c.L2] || nrst[String(c.L2)];
+    if (!near || !near.length) return;
+    const tgt = data.centroids.find(x => x.L2 === near[0].L2);
+    if (!tgt) return;
+    ctx.beginPath();
+    ctx.moveTo(sx(c.x), sy(c.y));
+    ctx.lineTo(sx(tgt.x), sy(tgt.y));
+    ctx.stroke();
+  });
+
+  // 3) 主流種牡馬点 (L1 で色分け、ancestor より大きい点)
+  data.stallions.forEach(s => {
+    const l1 = sidToL1[s.id];
+    const l1Color = (L1Map[l1] || {}).color || '#888';
+    ctx.fillStyle = l1Color + 'b0';
+    const x = sx(s.x), y = sy(s.y);
+    ctx.beginPath();
+    ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = l1Color;
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+    points.push({ type: 'stallion', id: s.id, x, y, l1, name: s.id });
+  });
+
+  // centroid 大円 (L2 色 + 番号)
+  data.centroids.forEach(c => {
+    const meta = l2Map[c.L2] || {};
+    const x = sx(c.x), y = sy(c.y);
+    const selected = _hierState.selectedL2 === c.L2;
+    const r = selected ? 16 : 12;
+    ctx.fillStyle = meta.color + 'e0' || '#888';
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = selected ? '#fff' : meta.color;
+    ctx.lineWidth = selected ? 3 : 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = `${selected ? 14 : 11}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(c.L2), x, y);
+    points.push({ type: 'centroid', L2: c.L2, x, y, name: meta.name });
+  });
+
+  // ラベル (L2 名を centroid の右側に小さく)
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  data.centroids.forEach(c => {
+    const meta = l2Map[c.L2] || {};
+    ctx.fillStyle = meta.color;
+    ctx.fillText(meta.name || `L2=${c.L2}`, sx(c.x) + 16, sy(c.y));
+  });
+
+  // 軸ラベル
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(proj === 'pca' ? 'PC1' : 'UMAP-1', W / 2, H - 12);
+  ctx.save();
+  ctx.translate(14, H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(proj === 'pca' ? 'PC2' : 'UMAP-2', 0, 0);
+  ctx.restore();
+
+  // 凡例 (L1 系統色) + ancestor トグル
+  const legend = document.getElementById('vecLegend');
+  legend.innerHTML = (d.L1_groups || []).filter(g => !g.is_nonmain).map(g =>
+    `<span class="leg" style="background:${g.color}">${escH(g.icon)} ${escH(g.name)}</span>`).join('')
+    + `<span class="leg" style="background:#64748b">○ centroid (L2)</span>`
+    + `<button class="leg toggle ${showAnc ? 'on' : 'off'}" id="vecAncToggle" style="border:1px dashed currentColor;background:${showAnc ? '#475569' : '#1e293b'};color:${showAnc ? '#fff' : '#94a3b8'};cursor:pointer">主流外祖先 ${ancestors.length}頭 ${showAnc ? '◉ ON' : '○ OFF'}</button>`;
+  const tog = document.getElementById('vecAncToggle');
+  if (tog) tog.onclick = () => {
+    _hierState.showAncestors = !showAnc;
+    renderVectorMap(d, proj);
+  };
+
+  // ホバー処理
+  _hierState.vecPoints = points;
+  attachVectorMapHover(canvas);
+}
+
+function attachVectorMapHover(canvas) {
+  if (canvas._hookInstalled) return;
+  canvas._hookInstalled = true;
+  const tooltip = document.getElementById('vecTooltip');
+  canvas.addEventListener('mousemove', (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width;
+    const sy = canvas.height / rect.height;
+    const mx = (ev.clientX - rect.left) * sx;
+    const my = (ev.clientY - rect.top) * sy;
+    const pts = _hierState.vecPoints || [];
+    let best = null, bestD = 18;
+    pts.forEach(p => {
+      const d = Math.hypot(p.x - mx, p.y - my);
+      const r = p.type === 'centroid' ? 18 : (p.type === 'stallion' ? 10 : 6);
+      if (d < r && d < bestD) { bestD = d; best = p; }
+    });
+    if (best) {
+      const d = _hierState.data;
+      let html;
+      if (best.type === 'centroid') {
+        const meta = (d.L2_clusters || []).find(c => c.L2 === best.L2);
+        html = `<b>${escH(meta.name)}</b><br>L2=${best.L2}, SG=${meta.super_group}<br>${escH(meta.subtitle)}<br>n=${meta.n_stallions}`;
+      } else if (best.type === 'ancestor') {
+        const l2 = _hierState.data.L2_clusters?.find(c => c.L2 === best.L2);
+        html = `<b>${escH(best.name || best.id)}</b><br>` +
+               `<span style="color:#94a3b8">主流外祖先</span><br>` +
+               `系統: ${escH(best.main_group || '?')}<br>` +
+               `L2=${best.L2}${l2 ? ' (' + escH(l2.name) + ')' : ''}`;
+      } else {
+        const l1 = best.l1 || '?';
+        const sidName = _hierState.sidToName?.[best.id] || best.id;
+        html = `<b>${escH(sidName)}</b><br>系統: ${escH(l1)}<br>id: ${escH(best.id)}`;
+      }
+      tooltip.innerHTML = html;
+      tooltip.style.display = 'block';
+      tooltip.style.left = (ev.clientX - rect.left + 12) + 'px';
+      tooltip.style.top = (ev.clientY - rect.top + 12) + 'px';
+    } else {
+      tooltip.style.display = 'none';
+    }
+  });
+  canvas.addEventListener('mouseleave', () => {
+    document.getElementById('vecTooltip').style.display = 'none';
+  });
+}
+
+/* ── 類似度パネル ── */
+function renderSimilarity(d) {
+  const root = document.getElementById('simGrid');
+  const nrst = (d.similarity || {}).nearest_top3 || {};
+  const frst = (d.similarity || {}).farthest_top3 || {};
+  const cards = d.L2_clusters || [];
+  const l2Map = {}; cards.forEach(c => l2Map[c.L2] = c);
+  root.innerHTML = cards.map(c => {
+    const near = nrst[c.L2] || nrst[String(c.L2)] || [];
+    const far = frst[c.L2] || frst[String(c.L2)] || [];
+    const nearRows = near.map(x => {
+      const m = l2Map[x.L2] || {};
+      return `<div class="sim-row pos">
+        <span><span style="color:${m.color}">${escH(m.icon||'●')}</span> ${escH(m.name||x.L2)}</span>
+        <span class="sim-val">+${x.cos_sim.toFixed(2)}</span></div>`;
+    }).join('');
+    const farRows = far.map(x => {
+      const m = l2Map[x.L2] || {};
+      return `<div class="sim-row neg">
+        <span><span style="color:${m.color}">${escH(m.icon||'●')}</span> ${escH(m.name||x.L2)}</span>
+        <span class="sim-val">${x.cos_sim.toFixed(2)}</span></div>`;
+    }).join('');
+    return `<div class="sim-card" style="border-left-color:${c.color}">
+      <div class="sim-head">
+        <span style="color:${c.color}">${escH(c.icon)}</span> ${escH(c.name)}
+        <span class="lbl">L2=${c.L2} / SG=${c.super_group}</span>
+      </div>
+      <div style="font-size:.65rem;color:#10b981;margin:5px 0 3px">近接 top3</div>
+      ${nearRows}
+      <div style="font-size:.65rem;color:#ef4444;margin:6px 0 3px">遠隔 top3</div>
+      ${farRows}
+    </div>`;
+  }).join('');
+}
+
+function renderL1(d) {
+  const l1s = d.L1_groups || [];
+  const totalAll = l1s.reduce((s, g) => s + (g.n_stallions_total || 0), 0) || 1;
+
+  // 帯グラフ
+  const bar = document.getElementById('l1StackBar');
+  bar.innerHTML = l1s.map(g => {
+    const pct = (g.n_stallions_total || 0) / totalAll * 100;
+    return `<div class="l1-stack-seg" data-l1="${escH(g.name)}"
+      style="width:${pct}%;background:${g.color}"
+      onclick="selectL1('${escH(g.name)}')"
+      title="${escH(g.name)}: ${g.n_stallions_total}頭 (${pct.toFixed(1)}%)">
+      ${pct >= 6 ? escH(g.name.replace('系','')) + ' ' + g.n_stallions_total : ''}
+    </div>`;
+  }).join('');
+
+  // 大カード
+  const cards = document.getElementById('l1Cards');
+  const l2Map = {};
+  (d.L2_clusters || []).forEach(c => { l2Map[c.L2] = c; });
+  cards.innerHTML = l1s.map((g, i) => {
+    const l2dist = g.l2_distribution || {};
+    // L2 構成バー (主要種牡馬のみ)
+    const l2total = Object.values(l2dist).reduce((s, n) => s + n, 0);
+    let l2barHtml;
+    if (l2total > 0) {
+      l2barHtml = '<div class="l1-l2bar">' + Object.entries(l2dist)
+        .sort((a, b) => b[1] - a[1])
+        .map(([L2, n]) => {
+          const meta = l2Map[parseInt(L2)] || {};
+          const w = n / l2total * 100;
+          return `<div class="seg" style="width:${w}%;background:${meta.color || '#888'}"
+            title="${escH(meta.name || '?')}: ${n}頭"></div>`;
+        }).join('') + '</div>';
+    } else {
+      l2barHtml = '<div class="l1-l2bar-empty">L2 ラベルは主要種牡馬のみ付与</div>';
+    }
+    const founderHtml = g.founder_name
+      ? `<b>始祖:</b> ${escH(g.founder_name)} (${escH(g.founder_year || '')})`
+      : `<b>始祖:</b> ― (4 大派生に属さない群)`;
+    return `<div class="l1-card" data-l1="${escH(g.name)}" id="l1card-${i}"
+      style="border-top-color:${g.color};--l1-color:${g.color}"
+      onclick="selectL1('${escH(g.name)}')">
+      <div class="l1-rank">#${i+1}</div>
+      <div>
+        <span class="l1-icon" style="color:${g.color}">${escH(g.icon)}</span>
+        <span class="l1-name">${escH(g.name)}</span>
+      </div>
+      <div class="l1-founder">${founderHtml}</div>
+      <div class="l1-counts">
+        <div><span class="num total">${(g.n_stallions_total || 0).toLocaleString()}</span><span>全種牡馬</span></div>
+        ${g.n_stallions_with_L2 > 0
+          ? `<div><span class="num l2">${g.n_stallions_with_L2}</span><span>L2 付き</span></div>`
+          : ''}
+      </div>
+      ${l2barHtml}
+      <div class="l1-desc">${escH(g.description || '')}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectL1(l1Name) {
+  const d = _hierState.data;
+  if (!d) return;
+  // トグル: 同じL1再クリックで解除
+  _hierState.selectedL1 = (_hierState.selectedL1 === l1Name) ? null : l1Name;
+  document.querySelectorAll('.l1-card').forEach(el =>
+    el.classList.toggle('active', el.dataset.l1 === _hierState.selectedL1));
+  document.querySelectorAll('.l1-stack-seg').forEach(el =>
+    el.classList.toggle('active', el.dataset.l1 === _hierState.selectedL1));
+
+  if (_hierState.selectedL1) {
+    const g = (d.L1_groups || []).find(x => x.name === _hierState.selectedL1);
+    if (g) {
+      document.getElementById('l2SectSub').innerHTML =
+        `— <b style="color:${g.color}">${escH(g.icon)} ${escH(g.name)}</b> 内の分布 (主要 ${g.n_stallions_with_L2} 頭)`;
+      renderStallionsForL1(d, g);
+    }
+  } else {
+    document.getElementById('l2SectSub').innerHTML = '— 11 個 (得意領域別)';
+    document.getElementById('l1Stallions').innerHTML = '';
+  }
+  // L2 カードをフィルタ再描画
+  renderL2Cards(d, _hierState.selectedL1, _hierState.selectedSG);
+  // 散布図再描画 (フィルタ反映)
+  renderVectorMap(d, _hierState.vecProj);
+}
+window.selectL1 = selectL1;
+
+function renderStallionsForL1(d, l1) {
+  const root = document.getElementById('l1Stallions');
+  const l2Map = {};
+  (d.L2_clusters || []).forEach(c => { l2Map[c.L2] = c; });
+  if (l1.is_nonmain) {
+    const rows = (l1.nonmain_subgroups || []).map(s =>
+      `<div class="l1-nonmain-row"><span>${escH(s.name)}</span><b>${s.n_horses} 頭</b></div>`
+    ).join('');
+    root.innerHTML = `
+      <div class="l1-stallions-section" style="--l1-color:${l1.color}">
+        <h3>${escH(l1.icon)} 非主流系統群 (${l1.nonmain_subgroups.length} 群)</h3>
+        <div class="l1-nonmain-list">${rows || '<div style="color:#64748b;font-size:.75rem">系統群データなし</div>'}</div>
+      </div>`;
+    return;
+  }
+  const chips = (l1.top_main_stallions || []).map(m => {
+    const meta = l2Map[m.L2] || {};
+    return `<div class="l1-stallion-chip">
+      <span class="chip-l2" style="background:${meta.color || '#888'}33;color:${meta.color || '#888'}">
+        ${escH(meta.icon || '●')} ${escH((meta.name || '?').slice(0,8))}
+      </span>
+      <span>${escH(m.name)}</span>
+      <span class="chip-n">${m.n_horses}頭</span>
+    </div>`;
+  }).join('');
+  root.innerHTML = `
+    <div class="l1-stallions-section" style="--l1-color:${l1.color}">
+      <h3>${escH(l1.icon)} ${escH(l1.name)} の主要種牡馬 (n_horses 上位 ${l1.top_main_stallions.length} 頭)</h3>
+      <div class="l1-stallions-grid">${chips}</div>
+    </div>`;
+}
+
+
+function hexToRgb(hex) {
+  const h = (hex || '#888').replace('#', '');
+  const r = parseInt(h.substring(0,2),16) || 136;
+  const g = parseInt(h.substring(2,4),16) || 136;
+  const b = parseInt(h.substring(4,6),16) || 136;
+  return `${r},${g},${b}`;
+}
+
+(function initDiscovery() {
+  const state = {
+    side: 'sire',
+    sort: 'balanced',
+    period: '2y',
+  };
+  window._discState = state;
+
+  const $f = (id) => document.getElementById(id);
+
+  function setPeriod(p) {
+    state.period = p;
+    document.querySelectorAll('#discPeriodPresets .preset-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.period === p);
+    });
+    const today = new Date();
+    const toStr = (d) => d.toISOString().slice(0,10);
+    if (p === 'all') {
+      $f('discFrom').value = '';
+    } else if (p === '1y') {
+      const f = new Date(today); f.setFullYear(today.getFullYear()-1);
+      $f('discFrom').value = toStr(f);
+    } else if (p === '2y') {
+      const f = new Date(today); f.setFullYear(today.getFullYear()-2);
+      $f('discFrom').value = toStr(f);
+    } else if (p === '3y') {
+      const f = new Date(today); f.setFullYear(today.getFullYear()-3);
+      $f('discFrom').value = toStr(f);
+    }
+    $f('discTo').value = '';
+  }
+  setPeriod('2y');
+
+  document.querySelectorAll('#discPeriodPresets .preset-btn').forEach(b => {
+    b.onclick = () => setPeriod(b.dataset.period);
+  });
+
+  // ── マルチセレクト共通ヘルパー ──
+  function initMultiSelect(selector) {
+    document.querySelectorAll(`${selector} .preset-btn[data-value]`).forEach(b => {
+      b.onclick = (e) => { e.preventDefault(); b.classList.toggle('active'); };
+    });
+  }
+  function getMultiCsv(selector) {
+    return Array.from(document.querySelectorAll(`${selector} .preset-btn.active[data-value]`))
+      .map(b => b.dataset.value).join(',');
+  }
+  function setMultiActive(selector, values) {
+    const set = new Set((values || []).map(String));
+    document.querySelectorAll(`${selector} .preset-btn[data-value]`).forEach(b => {
+      b.classList.toggle('active', set.has(b.dataset.value));
+    });
+  }
+  function clearMulti(selector) {
+    document.querySelectorAll(`${selector} .preset-btn[data-value]`).forEach(b => b.classList.remove('active'));
+  }
+  function selectAllMulti(selector) {
+    document.querySelectorAll(`${selector} .preset-btn[data-value]`).forEach(b => b.classList.add('active'));
+  }
+
+  // 競馬場 / 路面 / 馬場 / グレード のマルチセレクト初期化
+  ['#discVenuesGroup','#discSurfaceGroup','#discTrackGroup','#discGradesGroup'].forEach(initMultiSelect);
+
+  // ── multi-action (全選択 / クリア / グレードプリセット 等) ──
+  document.querySelectorAll('.disc-form .multi-action').forEach(b => {
+    b.onclick = (e) => {
+      e.preventDefault();
+      const act = b.dataset.act;
+      const tgt = b.dataset.target;
+      if (act === 'all' && tgt) selectAllMulti(tgt);
+      else if (act === 'clear' && tgt) clearMulti(tgt);
+      else if (act === 'grades-jusho') setMultiActive('#discGradesGroup', ['G1','G2','G3']);
+      else if (act === 'grades-open')  setMultiActive('#discGradesGroup', ['G1','G2','G3','L','OP']);
+      else if (act === 'pop-clear') {
+        $f('discPopMin').value = ''; $f('discPopMax').value = '';
+        document.querySelectorAll('#discPopGroup .preset-btn').forEach(o => o.classList.remove('active'));
+      }
+      else if (act === 'odds-clear') {
+        $f('discOddsMin').value = ''; $f('discOddsMax').value = '';
+        document.querySelectorAll('#discOddsGroup .preset-btn').forEach(o => o.classList.remove('active'));
+      }
+    };
+  });
+
+  // 距離プリセット (排他選択 + 入力欄に反映)
+  document.querySelectorAll('#discDistGroup .preset-btn[data-dmin]').forEach(b => {
+    b.onclick = (e) => {
+      e.preventDefault();
+      const wasActive = b.classList.contains('active');
+      document.querySelectorAll('#discDistGroup .preset-btn[data-dmin]').forEach(o => o.classList.remove('active'));
+      if (wasActive) {
+        // 同じボタンを再クリックで解除 (距離指定をクリア)
+        $f('discDistMin').value = ''; $f('discDistMax').value = '';
+      } else {
+        b.classList.add('active');
+        $f('discDistMin').value = b.dataset.dmin === '0' ? '' : b.dataset.dmin;
+        $f('discDistMax').value = b.dataset.dmax === '9999' ? '' : b.dataset.dmax;
+      }
+    };
+  });
+
+  // 人気帯プリセット (排他選択 + 入力欄に反映)
+  document.querySelectorAll('#discPopGroup .preset-btn[data-pmin]').forEach(b => {
+    b.onclick = (e) => {
+      e.preventDefault();
+      const wasActive = b.classList.contains('active');
+      document.querySelectorAll('#discPopGroup .preset-btn[data-pmin]').forEach(o => o.classList.remove('active'));
+      if (wasActive) {
+        $f('discPopMin').value = ''; $f('discPopMax').value = '';
+      } else {
+        b.classList.add('active');
+        $f('discPopMin').value = b.dataset.pmin;
+        $f('discPopMax').value = b.dataset.pmax;
+      }
+    };
+  });
+
+  // 単勝オッズプリセット (排他選択 + 入力欄に反映)
+  document.querySelectorAll('#discOddsGroup .preset-btn[data-omin]').forEach(b => {
+    b.onclick = (e) => {
+      e.preventDefault();
+      const wasActive = b.classList.contains('active');
+      document.querySelectorAll('#discOddsGroup .preset-btn[data-omin]').forEach(o => o.classList.remove('active'));
+      if (wasActive) {
+        $f('discOddsMin').value = ''; $f('discOddsMax').value = '';
+      } else {
+        b.classList.add('active');
+        $f('discOddsMin').value = b.dataset.omin;
+        // 大穴 (上限なし扱い) は入力上限を空に
+        $f('discOddsMax').value = (b.dataset.omax === '999.0' || b.dataset.omax === '999') ? '' : b.dataset.omax;
+      }
+    };
+  });
+
+  // 数値入力を直接編集したらプリセット選択を解除 (距離・人気・オッズ)
+  ['discDistMin','discDistMax'].forEach(id => {
+    const el = $f(id); if (el) el.addEventListener('input', () => {
+      document.querySelectorAll('#discDistGroup .preset-btn[data-dmin]').forEach(o => o.classList.remove('active'));
+    });
+  });
+  ['discPopMin','discPopMax'].forEach(id => {
+    const el = $f(id); if (el) el.addEventListener('input', () => {
+      document.querySelectorAll('#discPopGroup .preset-btn[data-pmin]').forEach(o => o.classList.remove('active'));
+    });
+  });
+  ['discOddsMin','discOddsMax'].forEach(id => {
+    const el = $f(id); if (el) el.addEventListener('input', () => {
+      document.querySelectorAll('#discOddsGroup .preset-btn[data-omin]').forEach(o => o.classList.remove('active'));
+    });
+  });
+
+  // side tab
+  document.querySelectorAll('#discSideTabs .side-tab').forEach(b => {
+    b.onclick = () => {
+      state.side = b.dataset.side;
+      document.querySelectorAll('#discSideTabs .side-tab').forEach(o => o.classList.toggle('active', o === b));
+      if (window._lastDiscData) runDiscovery();
+    };
+  });
+  // sort tab
+  document.querySelectorAll('#discSortRow .sort-btn').forEach(b => {
+    b.onclick = () => {
+      state.sort = b.dataset.sort;
+      document.querySelectorAll('#discSortRow .sort-btn').forEach(o => o.classList.toggle('active', o === b));
+      if (window._lastDiscData) runDiscovery();
+    };
+  });
+
+  $f('discRunBtn').onclick = runDiscovery;
+
+  // ── 入力矛盾チェック (ランキング表示前 + 入力イベント時) ──
+  function validateDiscInputs() {
+    const v = (id) => $f(id) ? $f(id).value.trim() : '';
+    const num = (s) => (s === '' ? null : Number(s));
+    const errors = [];
+    // 期間
+    const df = v('discFrom'), dt = v('discTo');
+    if (df && dt && df > dt) errors.push(`<b>開始日 (${df}) > 終了日 (${dt})</b> — 期間範囲が逆転しています`);
+    // 距離
+    const dmin = num(v('discDistMin')), dmax = num(v('discDistMax'));
+    if (dmin != null && dmax != null && dmin > dmax) errors.push(`<b>距離下限 (${dmin}m) > 上限 (${dmax}m)</b> — 範囲が逆転しています`);
+    // 人気
+    const pmin = num(v('discPopMin')), pmax = num(v('discPopMax'));
+    if (pmin != null && pmax != null && pmin > pmax) errors.push(`<b>人気下限 (${pmin}番) > 上限 (${pmax}番)</b> — 範囲が逆転しています`);
+    // オッズ
+    const omin = num(v('discOddsMin')), omax = num(v('discOddsMax'));
+    if (omin != null && omax != null && omin > omax) errors.push(`<b>オッズ下限 (${omin}倍) > 上限 (${omax}倍)</b> — 範囲が逆転しています`);
+    // min_n / top
+    const mn = num(v('discMinN'));
+    if (mn != null && mn > 5000) errors.push(`<b>最小出走 N (${mn}) が大きすぎ</b> — 通常は 30 程度。空にすればデフォルト 30 が使われます。`);
+
+    const box = $f('discValidation');
+    if (errors.length === 0) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return true;
+    }
+    box.innerHTML = '⚠ 入力に矛盾があります:<ul style="margin:4px 0 0;padding-left:18px">'
+      + errors.map(e => `<li>${e}</li>`).join('') + '</ul>';
+    box.style.display = '';
+    return false;
+  }
+  // 入力イベントでも軽くチェック
+  ['discFrom','discTo','discDistMin','discDistMax','discPopMin','discPopMax','discOddsMin','discOddsMax','discMinN'].forEach(id => {
+    const el = $f(id); if (el) el.addEventListener('input', () => validateDiscInputs());
+  });
+
+  // ── 全条件クリア ──
+  $f('discResetBtn').onclick = () => {
+    if (!confirm('すべての条件をデフォルト (直近2年・他なし) にリセットします。よろしいですか?')) return;
+    // マルチセレクト全クリア (data-value 属性付きの preset-btn)
+    ['#discVenuesGroup','#discSurfaceGroup','#discTrackGroup','#discGradesGroup'].forEach(sel => {
+      document.querySelectorAll(`${sel} .preset-btn[data-value]`).forEach(b => b.classList.remove('active'));
+    });
+    // プリセット (距離 / 人気 / オッズ) 全解除
+    document.querySelectorAll('#discDistGroup .preset-btn[data-dmin],#discPopGroup .preset-btn[data-pmin],#discOddsGroup .preset-btn[data-omin]').forEach(b => b.classList.remove('active'));
+    // 数値/日付入力クリア
+    ['discDistMin','discDistMax','discPopMin','discPopMax','discOddsMin','discOddsMax','discTo'].forEach(id => {
+      const el = $f(id); if (el) el.value = '';
+    });
+    $f('discMinN').value = '30';
+    $f('discTop').value = '30';
+    // 期間プリセットを 2y に
+    setPeriod('2y');
+    // バリデーションリセット
+    $f('discValidation').style.display = 'none';
+    $f('discValidation').innerHTML = '';
+    // side / sort もデフォルトに
+    state.side = 'sire'; state.sort = 'balanced';
+    document.querySelectorAll('#discSideTabs .side-tab').forEach(o => o.classList.toggle('active', o.dataset.side === 'sire'));
+    document.querySelectorAll('#discSortRow .sort-btn').forEach(o => o.classList.toggle('active', o.dataset.sort === 'balanced'));
+    // 結果クリア
+    $f('discResult').innerHTML = '<div class="disc-empty">条件をクリアしました。「ランキング表示」を押してください。</div>';
+    window._lastDiscData = null;
+  };
+
+  async function runDiscovery() {
+    const params = new URLSearchParams({ side: state.side, sort: state.sort });
+    const v = (id) => ($f(id) ? $f(id).value.trim() : '');
+    // 入力矛盾バリデーション
+    if (!validateDiscInputs()) {
+      return;
+    }
+    if (v('discFrom'))   params.set('date_from', v('discFrom'));
+    if (v('discTo'))     params.set('date_to',   v('discTo'));
+    // ── マルチセレクト → CSV ──
+    const venuesCsv   = getMultiCsv('#discVenuesGroup');
+    const surfacesCsv = getMultiCsv('#discSurfaceGroup');
+    const tracksCsv   = getMultiCsv('#discTrackGroup');
+    const gradesCsv   = getMultiCsv('#discGradesGroup');
+    if (venuesCsv)   params.set('venues',           venuesCsv);
+    if (surfacesCsv) params.set('surfaces',         surfacesCsv);
+    if (tracksCsv)   params.set('track_conditions', tracksCsv);
+    if (gradesCsv)   params.set('grades',           gradesCsv);
+    // ── 数値入力 ──
+    if (v('discDistMin'))params.set('dist_min',  v('discDistMin'));
+    if (v('discDistMax'))params.set('dist_max',  v('discDistMax'));
+    if (v('discPopMin')) params.set('pop_min',   v('discPopMin'));
+    if (v('discPopMax')) params.set('pop_max',   v('discPopMax'));
+    if (v('discOddsMin')) params.set('odds_min', v('discOddsMin'));
+    if (v('discOddsMax')) params.set('odds_max', v('discOddsMax'));
+    params.set('min_n', v('discMinN') || '30');
+    params.set('top',   v('discTop')  || '30');
+
+    // 行展開 (代表馬 fetch) で同じ条件を再利用するため共有用にも保存
+    state.lastParams = params;
+
+    const btn = $f('discRunBtn'); btn.disabled = true; btn.textContent = '集計中...';
+    $f('discResult').innerHTML = '<div class="disc-empty">集計中... (条件によっては数秒かかります)</div>';
+    try {
+      const r = await fetch('/api/pedigree-map/condition-ranking?' + params.toString());
+      const d = await r.json();
+      window._lastDiscData = d;
+      renderDiscoveryResult(d);
+    } catch (e) {
+      $f('discResult').innerHTML = `<div class="disc-empty">エラー: ${e.message}</div>`;
+    } finally {
+      btn.disabled = false; btn.textContent = '▶ ランキング表示';
+    }
+  }
+  window.runDiscovery = runDiscovery;
+
+  function escapeHtmlSafe(s){return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]));}
+
+  // 0件 / エラー時の診断パネル (実際にサーバへ送った全条件 + URL + ヒント)
+  function renderDiscDiag(d) {
+    const f = (d && d.filters) || {};
+    const rows = [
+      ['side',     d && d.side, '対象 (sire / bms / mother)'],
+      ['期間',     `${f.date_from || '指定なし'} 〜 ${f.date_to || '指定なし'}`, ''],
+      ['競馬場',   f.venues || '指定なし', ''],
+      ['路面',     f.surfaces || '指定なし', ''],
+      ['距離',     `${f.dist_min ?? '*'} 〜 ${f.dist_max ?? '*'} m`, ''],
+      ['馬場状態', f.track_conditions || '指定なし', ''],
+      ['グレード', f.grades || '指定なし', ''],
+      ['人気',     `${f.pop_min ?? '*'} 〜 ${f.pop_max ?? '*'} 番`, ''],
+      ['オッズ',   `${f.odds_min ?? '*'} 〜 ${f.odds_max ?? '*'} 倍`, ''],
+      ['min_n',    d && d.min_n, '各 stallion グループの最小出走数'],
+      ['top',      d && d.top, '上位件数'],
+      ['sort',     d && d.sort, ''],
+    ];
+    const tableRows = rows.map(([k,v,note]) => {
+      const isEmpty = (v === '指定なし' || v === '*' || v == null);
+      return `<tr><th>${escapeHtmlSafe(k)}</th><td class="${isEmpty ? 'dim' : ''}">${escapeHtmlSafe(String(v ?? ''))}</td></tr>`;
+    }).join('');
+
+    // 集計の各段階の件数
+    const stageRows = [];
+    if (d && d.n_records_after_filter != null) stageRows.push(`<tr><th>フィルタ後レース行</th><td>${(d.n_records_after_filter||0).toLocaleString()} 件</td></tr>`);
+    if (d && d.n_horses_after_filter != null)  stageRows.push(`<tr><th>フィルタ後 馬数</th><td>${(d.n_horses_after_filter||0).toLocaleString()} 頭</td></tr>`);
+    if (d && d.n_groups_before_minn != null)   stageRows.push(`<tr><th>${escapeHtmlSafe(d.side)} グループ数 (min_n 適用前)</th><td>${(d.n_groups_before_minn||0).toLocaleString()}</td></tr>`);
+    if (d && d.n_groups_after_minn != null)    stageRows.push(`<tr><th>min_n=${d.min_n} 通過</th><td>${(d.n_groups_after_minn||0).toLocaleString()}</td></tr>`);
+
+    const url = (window._discState && window._discState.lastParams)
+      ? '/api/pedigree-map/condition-ranking?' + window._discState.lastParams.toString()
+      : '';
+
+    let hint = '';
+    if (d && d.diagnose) {
+      hint = `<div class="diag-hint">💡 ${escapeHtmlSafe(d.diagnose)}</div>`;
+    }
+    return `
+      <div class="disc-diag">
+        <h5>サーバに送られた条件 (このまま 0 件になっています)</h5>
+        <table>${tableRows}</table>
+        ${stageRows.length ? `<h5 style="margin-top:8px">集計パイプライン</h5><table>${stageRows.join('')}</table>` : ''}
+        ${hint}
+        ${url ? `<div class="diag-url">${escapeHtmlSafe(url)}</div>` : ''}
+      </div>`;
+  }
+  function fmtPct(v){ return v==null ? '-' : (v*100).toFixed(2)+'%'; }
+  function fmtFinishDist(r){
+    // 着度数を 1-2-3-(4/5)-(6+) のセグメント色付きで返す
+    if (r == null) return '-';
+    const n1 = r.n_1st ?? 0, n2 = r.n_2nd ?? 0, n3 = r.n_3rd ?? 0;
+    const n45 = r.n_4_5 ?? 0, n6 = r.n_6plus ?? 0;
+    const sep = '<span class="fd-sep">-</span>';
+    return `<span class="fd-1">${n1}</span>${sep}`
+         + `<span class="fd-2">${n2}</span>${sep}`
+         + `<span class="fd-3">${n3}</span>${sep}`
+         + `<span class="fd-rest">${n45}</span>${sep}`
+         + `<span class="fd-rest">${n6}</span>`;
+  }
+  function fmtFinishDistTitle(r){
+    if (r == null) return '';
+    const n1 = r.n_1st ?? 0, n2 = r.n_2nd ?? 0, n3 = r.n_3rd ?? 0;
+    const n45 = r.n_4_5 ?? 0, n6 = r.n_6plus ?? 0;
+    const tot = (r.n_records ?? (n1+n2+n3+n45+n6));
+    const pct = (x) => tot ? ((x/tot)*100).toFixed(1)+'%' : '0%';
+    return `着順分布 (合計 ${tot} 戦)
+  1着: ${n1} (${pct(n1)})
+  2着: ${n2} (${pct(n2)})
+  3着: ${n3} (${pct(n3)})
+  4-5着: ${n45} (${pct(n45)})
+  6着以下: ${n6} (${pct(n6)})`;
+  }
+  function fmtRoi(v){ return v==null ? '-' : v.toFixed(1)+'%'; }
+  function roiCls(v){ return v==null ? '' : (v>=100 ? 'roi-pos' : 'roi-neg'); }
+
+  function renderDiscoveryResult(d) {
+    if (d.status !== 'ok') {
+      $f('discResult').innerHTML = `<div class="disc-empty">エラー: ${escapeHtmlSafe(d.message||'unknown')}${renderDiscDiag(d)}</div>`;
+      return;
+    }
+    if (!d.rows.length) {
+      $f('discResult').innerHTML = `
+        <div class="disc-empty">
+          <div>指定条件・最小出走Nを満たす種牡馬がありません。</div>
+          <div style="margin-top:4px;font-size:.7rem">min_n を下げるか、条件を緩めるか、「条件全クリア」を試してください。</div>
+          ${renderDiscDiag(d)}
+        </div>`;
+      return;
+    }
+    const flt = d.filters || {};
+    const fltChips = [];
+    if (flt.date_from || flt.date_to) fltChips.push(`期間: ${flt.date_from || '*'} ～ ${flt.date_to || '*'}`);
+    if (flt.venues) fltChips.push(`場: ${flt.venues}`);
+    if (flt.surfaces) fltChips.push(`路面: ${flt.surfaces}`);
+    if (flt.dist_min || flt.dist_max) fltChips.push(`距離: ${flt.dist_min || '*'}m～${flt.dist_max || '*'}m`);
+    if (flt.track_conditions) fltChips.push(`馬場: ${flt.track_conditions}`);
+    if (flt.grades) fltChips.push(`G: ${flt.grades}`);
+    if (flt.pop_min != null || flt.pop_max != null) fltChips.push(`人気: ${flt.pop_min ?? '*'}-${flt.pop_max ?? '*'}番`);
+    if (flt.odds_min != null || flt.odds_max != null) fltChips.push(`オッズ: ${flt.odds_min ?? '*'}-${flt.odds_max ?? '*'}倍`);
+
+    const colCount = 12;
+    const rows = d.rows.map((r, i) => {
+      const tags = (r.tags || []).slice(0, 4).map(t => {
+        // 全タグをクリック可能化。統計が欠けていてもポップアップ側で「— 」表示にフォールバック。
+        const payload = escapeHtmlSafe(JSON.stringify({
+          ...t,
+          tag_label: t.tag_label || t.label,
+          sire_id: r.stallion_id,
+          sire_name: r.stallion_name,
+        }));
+        return `<span class="tag-mini" style="color:${t.color};border-color:${t.color}" data-tag-payload='${payload}' title="クリックで詳細統計を表示">${escapeHtmlSafe(t.label)}</span>`;
+      }).join('');
+      const url = `/bloodline-cluster?stallion_id=${encodeURIComponent(r.stallion_id)}`;
+      // アツい条件: 平均着 < 平均人気 (期待を上回るパフォーマンス)
+      const upset = (r.avg_finish != null && r.avg_popularity != null)
+        ? (r.avg_popularity - r.avg_finish) : null;
+      const isHot = upset != null && upset > 0;
+      const hotCls = isHot ? 'row-hot' : '';
+      const hotBadge = isHot
+        ? `<span class="upset-badge" title="平均人気 ${r.avg_popularity.toFixed(2)} に対し平均着順 ${r.avg_finish.toFixed(2)} → +${upset.toFixed(2)}">＋${upset.toFixed(2)}</span>`
+        : '';
+      const sidEsc = encodeURIComponent(r.stallion_id);
+      return `
+        <tr class="disc-row ${hotCls}" data-sid="${escapeHtmlSafe(r.stallion_id)}">
+          <td class="rank-cell">${i+1}</td>
+          <td class="name-cell">
+            <button type="button" class="expand-toggle" data-sid="${escapeHtmlSafe(r.stallion_id)}"
+                    title="該当馬の内訳を表示">▶</button>
+            <a href="${url}" target="_blank">${escapeHtmlSafe(r.stallion_name)}</a>${hotBadge}
+            <div style="margin-top:3px">${tags}</div>
+          </td>
+          <td class="score-cell">${(r.balanced_score||0).toFixed(1)}</td>
+          <td>${(r.n_records||0).toLocaleString()}</td>
+          <td>${fmtPct(r.win_rate)}</td>
+          <td>${fmtPct(r.place2_rate)}</td>
+          <td>${fmtPct(r.place3_rate)}</td>
+          <td class="finish-dist-cell" title="${escapeHtmlSafe(fmtFinishDistTitle(r))}">${fmtFinishDist(r)}</td>
+          <td class="${roiCls(r.win_roi)}">${fmtRoi(r.win_roi)}</td>
+          <td class="${roiCls(r.place_roi)}">${fmtRoi(r.place_roi)}</td>
+          <td>${r.avg_finish != null ? r.avg_finish.toFixed(2) : '-'}</td>
+          <td>${r.avg_popularity != null ? r.avg_popularity.toFixed(2) : '-'}</td>
+        </tr>`;
+    }).join('');
+
+    const sideName = { sire: '直結父', bms: '母父 (BMS)', mother: '母系領域 (10gen)' }[d.side] || d.side;
+    $f('discResult').innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <div style="font-size:.78rem;color:var(--text-dim)">
+          ${escapeHtmlSafe(sideName)} × 条件マッチ <b style="color:var(--text)">${d.n_rows}</b> 件中 上位 ${d.rows.length}
+        </div>
+        ${fltChips.map(c => `<span style="display:inline-block;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:.65rem;color:var(--text-dim)">${escapeHtmlSafe(c)}</span>`).join(' ')}
+        <span style="font-size:.62rem;color:#22c55e;margin-left:auto">
+          <span style="display:inline-block;width:10px;height:10px;background:rgba(34,197,94,.3);border:1px solid #22c55e;border-radius:2px;vertical-align:middle;margin-right:4px"></span>
+          平均着順 &lt; 平均人気 (人気以上の走り)
+        </span>
+      </div>
+      <div class="disc-table-wrap">
+        <table class="disc-table">
+          <thead><tr>
+            <th>順</th><th>種牡馬名</th><th>スコア</th><th>出走</th>
+            <th>勝率</th><th>連対率</th><th>複勝率</th>
+            <th>着度数<span class="col-sub">1-2-3-4/5-6+</span></th>
+            <th>単回収</th><th>複回収</th>
+            <th>平均着</th><th>平均人気</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+
+    // ── 展開トグルバインド ──
+    document.querySelectorAll('#discResult .disc-table .expand-toggle').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleProgenyDetail(btn, colCount);
+      });
+    });
+  }
+
+  // 折り畳み詳細: 該当条件における代表馬と各馬の条件成績
+  async function toggleProgenyDetail(btn, colCount) {
+    const sid = btn.dataset.sid;
+    const tr = btn.closest('tr.disc-row');
+    if (!tr) return;
+    const next = tr.nextElementSibling;
+    const isOpen = btn.classList.contains('open');
+    if (isOpen) {
+      btn.classList.remove('open');
+      btn.textContent = '▶';
+      if (next && next.classList.contains('disc-detail-row') && next.dataset.sid === sid) {
+        next.remove();
+      }
+      return;
+    }
+    btn.classList.add('open');
+    btn.textContent = '▼';
+
+    // 詳細行を新規挿入 (loading 表示)
+    const detailTr = document.createElement('tr');
+    detailTr.className = 'disc-detail-row';
+    detailTr.dataset.sid = sid;
+    detailTr.innerHTML = `<td colspan="${colCount}">
+      <div class="disc-detail-inner">
+        <div class="dh-loading">該当条件における代表馬を集計中...</div>
+      </div>
+    </td>`;
+    tr.parentNode.insertBefore(detailTr, tr.nextSibling);
+
+    // 既存ランキング条件 + sid で fetch
+    const baseParams = (window._discState && window._discState.lastParams) ? window._discState.lastParams : null;
+    const params = new URLSearchParams(baseParams ? baseParams.toString() : '');
+    params.set('stallion_id', sid);
+    // ランキング側固有のパラメータは詳細では別意味になるので調整
+    params.delete('top'); params.delete('min_n'); params.delete('sort');
+    params.set('min_n', '3');
+    params.set('top', '15');
+    params.set('sort', 'balanced');
+    params.set('sample_per_horse', '5');
+
+    try {
+      const r = await fetch('/api/pedigree-map/progeny-under-condition?' + params.toString());
+      const d = await r.json();
+      detailTr.querySelector('.disc-detail-inner').innerHTML = renderProgenyDetail(d);
+      // 各馬の出走サンプル展開トグルバインド
+      detailTr.querySelectorAll('.progeny-toggle').forEach(b => {
+        b.addEventListener('click', (e) => {
+          e.preventDefault();
+          const sampleRow = detailTr.querySelector(`tr.progeny-sample-row[data-hid="${b.dataset.hid}"]`);
+          if (!sampleRow) return;
+          const open = b.classList.toggle('open');
+          sampleRow.style.display = open ? '' : 'none';
+          b.textContent = open ? '▼' : '▶';
+        });
+      });
+    } catch (e) {
+      detailTr.querySelector('.disc-detail-inner').innerHTML =
+        `<div class="dh-loading">エラー: ${escapeHtmlSafe(e.message)}</div>`;
+    }
+  }
+
+  function renderProgenyDetail(d) {
+    if (!d || d.status !== 'ok') {
+      return `<div class="dh-loading">エラー: ${escapeHtmlSafe((d && d.message) || 'unknown')}</div>`;
+    }
+    const head = `
+      <div class="dh-head">
+        <span><b>${escapeHtmlSafe(d.stallion_name)}</b> 該当条件下</span>
+        <span>該当出走 <b>${(d.n_records_total||0).toLocaleString()}</b></span>
+        <span>該当馬 <b>${(d.n_horses_total||0).toLocaleString()}</b></span>
+        <span>条件下 ≥ ${d.min_n} 戦の馬 <b>${(d.n_horses_matched||0).toLocaleString()}</b></span>
+      </div>`;
+    if (!d.rows || !d.rows.length) {
+      return head + `<div class="dh-loading">条件を満たす馬 (${d.min_n}戦以上) がいません。</div>`;
+    }
+    const rowsHtml = d.rows.map(r => {
+      const upset = (r.avg_finish != null && r.avg_popularity != null)
+        ? (r.avg_popularity - r.avg_finish) : null;
+      const hotCls = (upset != null && upset > 0) ? 'progeny-hot' : '';
+      const samples = r.sample_races || [];
+      const horseUrl = `/horse-aptitude?horse_id=${encodeURIComponent(r.horse_id)}`;
+      const sampleHtml = samples.length ? renderProgenySamples(samples) : '<i style="color:var(--text-dim)">サンプルなし</i>';
+      return `
+        <tr class="${hotCls}" data-hid="${escapeHtmlSafe(r.horse_id)}">
+          <td><button type="button" class="progeny-toggle" data-hid="${escapeHtmlSafe(r.horse_id)}">▶</button></td>
+          <td><a class="horse-link" href="${horseUrl}" target="_blank">${escapeHtmlSafe(r.horse_name || r.horse_id)}</a></td>
+          <td>${r.n_records}</td>
+          <td class="finish-dist-cell" title="${escapeHtmlSafe(fmtFinishDistTitle(r))}">${fmtFinishDist(r)}</td>
+          <td>${fmtPct(r.win_rate)}</td>
+          <td>${fmtPct(r.place3_rate)}</td>
+          <td class="${roiCls(r.win_roi)}">${fmtRoi(r.win_roi)}</td>
+          <td class="${roiCls(r.place_roi)}">${fmtRoi(r.place_roi)}</td>
+          <td>${r.avg_finish != null ? r.avg_finish.toFixed(2) : '-'}</td>
+          <td>${r.avg_popularity != null ? r.avg_popularity.toFixed(2) : '-'}</td>
+        </tr>
+        <tr class="progeny-sample-row" data-hid="${escapeHtmlSafe(r.horse_id)}" style="display:none">
+          <td colspan="10"><div class="progeny-sample-inner">${sampleHtml}</div></td>
+        </tr>`;
+    }).join('');
+    return head + `
+      <table class="disc-progeny-table">
+        <thead><tr>
+          <th></th><th>馬名</th><th>戦数</th>
+          <th>着度数<br><span style="font-size:.55rem;color:var(--text-dim)">1-2-3-4/5-6+</span></th>
+          <th>勝率</th><th>複勝率</th><th>単回収</th><th>複回収</th>
+          <th>平均着</th><th>平均人気</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>`;
+  }
+
+  function renderProgenySamples(samples) {
+    const fpCls = (fp) => {
+      if (fp === 1) return 'fp-1'; if (fp === 2) return 'fp-2';
+      if (fp === 3) return 'fp-3'; return 'fp-loser';
+    };
+    const head = `<table>
+      <thead><tr>
+        <th>日付</th><th>場</th><th>路面/距離</th><th>馬場</th><th>G</th>
+        <th>人気</th><th>オッズ</th><th>着順</th><th>R</th>
+      </tr></thead><tbody>`;
+    const body = samples.map(s => {
+      const raceUrl = s.race_id ? `/race?race_id=${encodeURIComponent(s.race_id)}` : null;
+      const raceCell = raceUrl
+        ? `<a class="race-link" href="${raceUrl}" target="_blank">→</a>`
+        : '';
+      return `<tr>
+        <td>${escapeHtmlSafe(s.date || '')}</td>
+        <td>${escapeHtmlSafe(s.venue || '')}</td>
+        <td>${escapeHtmlSafe(s.surface || '')} ${s.distance ? s.distance+'m' : ''}</td>
+        <td>${escapeHtmlSafe(s.track_condition || '')}</td>
+        <td>${escapeHtmlSafe(s.grade || '')}</td>
+        <td>${s.popularity != null ? s.popularity : '-'}</td>
+        <td>${s.odds != null ? s.odds.toFixed(1) : '-'}</td>
+        <td class="${fpCls(s.finish_position)}">${s.finish_position != null ? s.finish_position : '-'}${s.field_size ? '/'+s.field_size : ''}</td>
+        <td>${raceCell}</td>
+      </tr>`;
+    }).join('');
+    return head + body + '</tbody></table>';
+  }
+})();
+
+// ═════════════════════════════════════════════════════════
+//  適性タグ詳細ポップアップ
+//  - 探索モード結果テーブル内の tag-mini[data-tag-payload] をクリック → 詳細表示
+//  - オーバーレイクリック / × ボタン / Esc キーで閉じる
+// ═════════════════════════════════════════════════════════
+(function(){
+  function _esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function _fmtPct(v, d){ d = d == null ? 2 : d; return (v == null || isNaN(v)) ? '—' : (v*100).toFixed(d) + '%'; }
+  function _fmtNum(v){ return (v == null || isNaN(v)) ? '—' : Number(v).toLocaleString(); }
+  function _fmtMul(v){ return (v == null || isNaN(v)) ? '—' : '×' + Number(v).toFixed(2); }
+
+  function openTagPopup(payload){
+    const ov = document.getElementById('tagPopupOverlay');
+    const body = document.getElementById('tagPopupBody');
+    if (!ov || !body) return;
+    body.innerHTML = renderTagPopupHTML(payload);
+    ov.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function closeTagPopup(){
+    const ov = document.getElementById('tagPopupOverlay');
+    if (!ov) return;
+    ov.hidden = true;
+    document.body.style.overflow = '';
+  }
+  window.openTagPopup = openTagPopup;
+  window.closeTagPopup = closeTagPopup;
+
+  function renderTagPopupHTML(p){
+    const cat = p.category || '';
+    const tag = p.tag_label || p.label || '';
+    const sire = p.sire_name || '';
+    const lift = p.lift;
+    const liftCls = (lift != null && lift >= 1.10) ? 'hi' : (lift != null && lift <= 0.90 ? 'lo' : '');
+    const rateEbCls = (p.rate_eb != null && p.cond_global != null)
+      ? (p.rate_eb >= p.cond_global * 1.10 ? 'hi' : (p.rate_eb < p.cond_global ? 'lo' : ''))
+      : '';
+    const sharePct = p.share != null ? (p.share*100).toFixed(1) + '%' : '—';
+    const flagsHtml = `
+      <div class="tp-flags">
+        ${p.is_top20 ? '<span class="tp-flag star">★ Top20% 認定</span>' : '<span class="tp-flag">Top20% 未満</span>'}
+        ${p.is_strong_abs ? '<span class="tp-flag ok">絶対値: 強</span>' : '<span class="tp-flag">絶対値: 平均並</span>'}
+        ${p.is_relative_strong ? '<span class="tp-flag ok">相対値: 強</span>' : '<span class="tp-flag">相対値: 平均並</span>'}
+        ${p.is_specialist ? '<span class="tp-flag ok">スペシャリスト</span>' : ''}
+      </div>`;
+    const isDistTag = String(p.tag_id || '').startsWith('dist_');
+    const distNote = isDistTag
+      ? `<li>距離タグは「絶対勝率 + 出走シェア (≥10%) + n≥100」を満たし、<b>各種牡馬で rate_eb 最大の 1 距離区分のみ採用</b>します (排他化)。</li>`
+      : '';
+    return `
+      <div class="tp-head">
+        <div class="tp-cat">${_esc(cat)}</div>
+        <div class="tp-tag">${_esc(tag)}</div>
+        ${sire ? `<div class="tp-sire">種牡馬: <b>${_esc(sire)}</b></div>` : ''}
+      </div>
+      <div class="tp-grid">
+        <div class="tp-cell"><div class="k">該当条件下 出走数</div><div class="v">${_fmtNum(p.n_records)}</div></div>
+        <div class="tp-cell"><div class="k">該当条件下 勝利数</div><div class="v">${_fmtNum(p.wins)}</div></div>
+        <div class="tp-cell"><div class="k">該当条件下勝率 (生)</div><div class="v">${_fmtPct(p.rate_raw)}</div></div>
+        <div class="tp-cell"><div class="k">該当条件下勝率 (EB shrinkage)</div><div class="v ${rateEbCls}">${_fmtPct(p.rate_eb)}</div></div>
+        <div class="tp-cell"><div class="k">この種牡馬の通常勝率 (baseline)</div><div class="v">${_fmtPct(p.baseline_eb)}</div></div>
+        <div class="tp-cell"><div class="k">該当条件の全体平均勝率</div><div class="v">${_fmtPct(p.cond_global)}</div></div>
+        <div class="tp-cell"><div class="k">lift (条件勝率 ÷ baseline)</div><div class="v ${liftCls}">${_fmtMul(p.lift)}</div></div>
+        <div class="tp-cell"><div class="k">出走シェア (この条件 / 全出走)</div><div class="v">${sharePct}</div></div>
+        ${p.sire_n_total != null ? `
+        <div class="tp-cell" style="grid-column:1/-1"><div class="k">産駒の全出走数 (条件無制約)</div><div class="v">${_fmtNum(p.sire_n_total)}</div></div>` : ''}
+      </div>
+      ${flagsHtml}
+      <div class="tp-explain">
+        <p><b>このタグの意味:</b> 「${_esc(tag)}」 (${_esc(cat)}) は、${_esc(sire || 'この種牡馬')} の産駒が該当条件下で示した実績を統計的に評価したものです。</p>
+        <p><b>判定基準:</b></p>
+        <ul>
+          <li><b>絶対値: 強</b> = 該当条件下勝率 (EB) が、全種牡馬の同条件平均の <b>1.10倍以上</b></li>
+          <li><b>相対値: 強</b> = 該当条件下勝率が、この種牡馬自身の通常勝率の <b>1.15倍以上</b></li>
+          <li><b>★ Top20%</b> = 上記両方を満たし、複合スコア (rate_eb × lift) で全種牡馬中 <b>上位 20%</b> 以内</li>
+          ${distNote}
+        </ul>
+      </div>
+    `;
+  }
+
+  // event delegation: data-tag-payload を持つ要素のクリックを拾う
+  document.addEventListener('click', (e) => {
+    const target = e.target.closest('[data-tag-payload]');
+    if (!target) return;
+    try {
+      const payload = JSON.parse(target.dataset.tagPayload);
+      openTagPopup(payload);
+    } catch (err) {
+      console.warn('tag popup payload parse error', err);
+    }
+  });
+
+  // オーバーレイクリック / × / Esc で閉じる
+  document.addEventListener('DOMContentLoaded', () => {
+    const ov = document.getElementById('tagPopupOverlay');
+    if (ov) ov.addEventListener('click', (e) => { if (e.target === ov) closeTagPopup(); });
+    const closeBtn = document.getElementById('tagPopupClose');
+    if (closeBtn) closeBtn.addEventListener('click', closeTagPopup);
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const ov = document.getElementById('tagPopupOverlay');
+      if (ov && !ov.hidden) closeTagPopup();
+    }
+  });
+})();
+</script>
+
+<!-- ─── タグ詳細ポップアップ (DOM) ─── -->
+<div id="tagPopupOverlay" class="tag-popup-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="tagPopupBody">
+  <div class="tag-popup-panel">
+    <button id="tagPopupClose" class="tag-popup-close" aria-label="閉じる">×</button>
+    <div id="tagPopupBody" class="tag-popup-body"></div>
+  </div>
+</div>
+</body>
+</html>

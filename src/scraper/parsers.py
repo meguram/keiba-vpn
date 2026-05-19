@@ -471,6 +471,119 @@ class RaceResultParser:
 
 
 # ═══════════════════════════════════════════════════════
+# 1b. 速報レース結果パーサー
+#     URL: https://race.netkeiba.com/race/result.html?race_id={id}
+#     レース当日17:30に公開される速報ページ (db.netkeiba版の確定前)
+# ═══════════════════════════════════════════════════════
+class RaceResultOnTimeParser(RaceResultParser):
+    """
+    race.netkeiba.com 速報結果ページ (result.html) をパースする。
+
+    RaceResultParser を継承し、race.netkeiba.com の HTML構造 (RaceData01/02) に
+    対応した race_info 解析に差し替える。エントリー・払い戻し・ラップは共通ロジックを使用。
+
+    出力スキーマは race_result と同一。
+    """
+
+    _RACE_NAME_LIVE = SelectorChain("rr_live_name", [
+        "h1.RaceName",
+        "div.RaceName",
+        ".RaceName",
+        "h1[class*='RaceName']",
+        "dl.racedata h1",   # fallback to db.netkeiba selectors
+        ".racedata h1",
+    ])
+    _RACE_DATA1_LIVE = SelectorChain("rr_live_data1", [
+        "div.RaceData01",
+        "span.RaceData01",
+        "dl.racedata dd",   # fallback
+        ".racedata dd",
+    ])
+    _RACE_DATA2_LIVE = SelectorChain("rr_live_data2", [
+        "div.RaceData02",
+        "span.RaceData02",
+    ])
+
+    _GRADE_MAP_LIVE = {
+        "(G1)": "G1", "(G2)": "G2", "(G3)": "G3",
+        "(Ｇ１)": "G1", "(Ｇ２)": "G2", "(Ｇ３)": "G3",
+        "(GI)": "G1", "(GII)": "G2", "(GIII)": "G3",
+        "(L)": "L", "リステッド": "L",
+        "オープン": "OP", "OPEN": "OP",
+        "3勝": "3勝", "2勝": "2勝", "1勝": "1勝", "未勝利": "未勝利", "新馬": "新馬",
+    }
+
+    def _parse_race_info(self, soup: BeautifulSoup) -> dict:  # type: ignore[override]
+        info: dict[str, Any] = {}
+
+        name_tag = self._RACE_NAME_LIVE.select_one(soup)
+        raw_name = safe_text(name_tag)
+        info["race_name"] = re.sub(r"\(G[I1-3]+\)|\(Ｇ[１-３]\)", "", raw_name).strip()
+
+        data1_tag = self._RACE_DATA1_LIVE.select_one(soup)
+        data1 = data1_tag.get_text(" ", strip=True) if data1_tag else ""
+
+        # race.netkeiba.com RaceData01 format: "10:05発走 / 芝1600m(左) / 天候:晴 / 馬場:良"
+        m = re.search(r"(芝|ダ|ダート|障)\s*(\d{3,5})\s*m", data1)
+        if m:
+            surface_raw = m.group(1)
+            info["surface"] = "ダート" if surface_raw.startswith("ダ") else surface_raw
+            info["distance"] = int(m.group(2))
+        else:
+            info["surface"], info["distance"] = "", 0
+
+        m_dir = re.search(r"\d+m\s*\(?\s*(左|右|直)\s*\)?", data1)
+        info["direction"] = m_dir.group(1) if m_dir else ""
+
+        m_w = re.search(r"天候\s*[:：]\s*([^\s/]+)", data1)
+        info["weather"] = m_w.group(1) if m_w else ""
+
+        m_t = re.search(r"馬場\s*[:：]\s*([^\s/]+)", data1)
+        if not m_t:
+            m_t = re.search(r"(?:芝|ダート?|障)\s*[:：]\s*(\S+)", data1)
+        info["track_condition"] = m_t.group(1) if m_t else ""
+
+        m_start = re.search(r"(\d{1,2}:\d{2})\s*発走", data1)
+        info["start_time"] = m_start.group(1) if m_start else ""
+
+        data2_tag = self._RACE_DATA2_LIVE.select_one(soup)
+        data2 = data2_tag.get_text(" ", strip=True) if data2_tag else ""
+
+        m_v = re.search(r"\d+回\s*(\S+?)\s*\d+日目", data2)
+        info["venue"] = m_v.group(1) if m_v else ""
+
+        # date and round from page title (race.netkeiba.com puts them there)
+        title = safe_text(soup.title) if soup.title else ""
+        m_d = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", title)
+        if m_d:
+            info["date"] = f"{m_d.group(1)}-{int(m_d.group(2)):02d}-{int(m_d.group(3)):02d}"
+        else:
+            # fallback: parse from page body (db.netkeiba smalltxt style)
+            date_text = ""
+            for sel in ("div.race_head_inner p[class*='smalltxt']", "#main .smalltxt", "p.smalltxt"):
+                tag = soup.select_one(sel)
+                if tag:
+                    date_text = safe_text(tag)
+                    break
+            m_d2 = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", date_text)
+            info["date"] = (f"{m_d2.group(1)}-{int(m_d2.group(2)):02d}-{int(m_d2.group(3)):02d}"
+                            if m_d2 else "")
+
+        m_r = re.search(r"(\d+)\s*R", title)
+        info["round"] = int(m_r.group(1)) if m_r else 0
+
+        combined = raw_name + " " + data2
+        grade = ""
+        for key, val in self._GRADE_MAP_LIVE.items():
+            if key in combined:
+                grade = val
+                break
+        info["grade"] = grade
+
+        return info
+
+
+# ═══════════════════════════════════════════════════════
 # 2. 出馬表 (レースカード) パーサー
 #    URL: https://race.netkeiba.com/race/shutuba.html?race_id={id}
 # ═══════════════════════════════════════════════════════

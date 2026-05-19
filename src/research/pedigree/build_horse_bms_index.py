@@ -32,7 +32,11 @@ from typing import Callable
 import pandas as pd
 
 _ROOT = Path(__file__).resolve().parents[3]
-_PED_DIR = _ROOT / "data" / "local" / "horse_pedigree_5gen"
+# 10gen を優先 (母父父系を上流まで遡って bms_root_id を解決するため)。
+# 5gen しか無い場合はそちらを使う (後方互換)。
+_PED_DIR_10 = _ROOT / "data" / "local" / "horse_pedigree_10gen"
+_PED_DIR_5 = _ROOT / "data" / "local" / "horse_pedigree_5gen"
+_PED_DIR = _PED_DIR_10 if _PED_DIR_10.exists() else _PED_DIR_5
 _IDX_DIR = _ROOT / "data" / "research" / "pedigree_race_index"
 _OUT_PATH = _IDX_DIR / "horse_bms.parquet"
 
@@ -153,12 +157,26 @@ def build(
             bms_id    = str(bms_anc.get("horse_id") or "").strip()
             bms_name  = str(bms_anc.get("name") or "").strip()
 
+            # 母父父系 (gen=2,pos=2) から (gen=3,pos=4) → (gen=4,pos=8) ... と
+            # 上流に遡った祖先 ID 列を保持。bms_id が full_sire_tree に
+            # 居ない場合のフォールバック解決に使う。
+            bms_lineage_ids: list[str] = []
+            for g in range(2, 11):
+                p = 2 << (g - 2)  # 2, 4, 8, 16, ..., 512
+                a = anc_map.get((g, p))
+                if not a:
+                    break
+                hid = str(a.get("horse_id") or "").strip()
+                if hid:
+                    bms_lineage_ids.append(hid)
+
             rows.append({
-                "horse_id":       horse_id,
-                "sire_id":        sire_id,
-                "sire_name":      sire_name,
-                "bms_id":         bms_id,
-                "bms_name":       bms_name,
+                "horse_id":         horse_id,
+                "sire_id":          sire_id,
+                "sire_name":        sire_name,
+                "bms_id":           bms_id,
+                "bms_name":         bms_name,
+                "_bms_lineage_ids": bms_lineage_ids,
             })
 
     _cb(f"{n_files:,} 件走査完了。父系情報を付与中...", 0.7)
@@ -173,10 +191,57 @@ def build(
     df["sire_root_name"] = df["sire_root_id"].map(lambda h: name_of.get(h, h) if h else "")
     df["sire_depth"]     = df["sire_id"].map(lambda h: depth_of.get(h, -1) if h else -1)
 
-    # 母父の父系ルート / 深さ
+    # 母父の父系ルート / 深さ (まず bms_id 直接で解決)
     df["bms_root_id"]    = df["bms_id"].map(lambda h: root_of.get(h, "") if h else "")
     df["bms_root_name"]  = df["bms_root_id"].map(lambda h: name_of.get(h, h) if h else "")
     df["bms_depth"]      = df["bms_id"].map(lambda h: depth_of.get(h, -1) if h else -1)
+
+    # ── 4b. bms_root_id が空の行は、母父父系を上流に遡って再解決 ────────────
+    #
+    # 例: タイトルホルダー (Motivator 母父) は full_sire_tree に Motivator が
+    # 登録されておらず bms_root_id="" となるが、horse_pedigree_10gen JSON で
+    # 1 ステップ上流の Montjeu は登録済み (root) なので、それを root として採用。
+    # 海外馬の母父も同様に解決可能になる。
+    def _resolve_via_lineage(lineage_ids: list[str]) -> tuple[str, str, int]:
+        # lineage_ids[0] = 母父個体, [1] = 母父父, [2] = 母父父父, ...
+        for offset, hid in enumerate(lineage_ids):
+            if not hid:
+                continue
+            r = root_of.get(hid)
+            if r:
+                # bms から見た深さ = root のツリー深さ + offset
+                d = depth_of.get(hid, -1)
+                if d < 0:
+                    d = depth_of.get(r, -1)
+                return r, name_of.get(r, r), d
+        return "", "", -1
+
+    mask_unresolved = df["bms_root_id"].astype(str).str.len() == 0
+    n_unresolved_before = int(mask_unresolved.sum())
+    if n_unresolved_before > 0:
+        _cb(
+            f"母父父系を上流まで遡って再解決中 ({n_unresolved_before:,} レコード)...",
+            0.85,
+        )
+        for idx in df.index[mask_unresolved]:
+            lineage = df.at[idx, "_bms_lineage_ids"] or []
+            rid, rname, rdepth = _resolve_via_lineage(list(lineage))
+            if rid:
+                df.at[idx, "bms_root_id"] = rid
+                df.at[idx, "bms_root_name"] = rname
+                if df.at[idx, "bms_depth"] == -1 and rdepth >= 0:
+                    df.at[idx, "bms_depth"] = rdepth
+        n_resolved = int((df["bms_root_id"].astype(str).str.len() > 0).sum())
+        n_after = int(len(df) - n_resolved)
+        n_recovered = n_unresolved_before - n_after
+        _cb(
+            f"  → {n_recovered:,} 件回復 (未解決残: {n_after:,})",
+            0.9,
+        )
+
+    # 一時カラムを除去
+    if "_bms_lineage_ids" in df.columns:
+        df = df.drop(columns=["_bms_lineage_ids"])
 
     # 列の順序を整理
     df = df[[

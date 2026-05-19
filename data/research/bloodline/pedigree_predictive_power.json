@@ -1,56 +1,56 @@
 {
   "sprint": {
-    "auc": 0.7404,
-    "n_samples": 6482,
+    "auc": 0.6135,
+    "n_samples": 69309,
     "feature_importance": {
-      "sire_enc": 2680.2760070562363,
-      "dam_sire_enc": 3691.1772220134735,
-      "distance": 0.0
+      "sire_enc": 11662.60429763794,
+      "dam_sire_enc": 10439.298407554626,
+      "distance": 411.1268410682678
     }
   },
   "mile": {
-    "auc": 0.6258,
-    "n_samples": 460,
+    "auc": 0.6064,
+    "n_samples": 93384,
     "feature_importance": {
-      "sire_enc": 126.35704101622105,
-      "dam_sire_enc": 134.78417266905308,
-      "distance": 13.756400108337402
+      "sire_enc": 10899.118478298187,
+      "dam_sire_enc": 7147.81187582016,
+      "distance": 673.741560459137
     }
   },
   "intermediate": {
-    "auc": 0.6723,
-    "n_samples": 1320,
+    "auc": 0.6145,
+    "n_samples": 104136,
     "feature_importance": {
-      "sire_enc": 69.58722788095474,
-      "dam_sire_enc": 129.19323986768723,
-      "distance": 7.1444700956344604
+      "sire_enc": 19387.873628139496,
+      "dam_sire_enc": 16050.948595762253,
+      "distance": 705.9747385978699
     }
   },
   "long": {
-    "auc": 0.6452,
-    "n_samples": 177,
+    "auc": 0.5795,
+    "n_samples": 10973,
     "feature_importance": {
-      "sire_enc": 57.672709941864014,
-      "dam_sire_enc": 55.72846853733063,
-      "distance": 9.192600011825562
+      "sire_enc": 722.3592991828918,
+      "dam_sire_enc": 1185.0960459709167,
+      "distance": 100.74824047088623
     }
   },
   "extended": {
-    "auc": 0.7017,
-    "n_samples": 318,
+    "auc": 0.5846,
+    "n_samples": 8258,
     "feature_importance": {
-      "sire_enc": 293.70129822194576,
-      "dam_sire_enc": 217.69275791943073,
-      "distance": 74.25392138957977
+      "sire_enc": 2613.271281480789,
+      "dam_sire_enc": 2835.5882828235626,
+      "distance": 894.2514803409576
     }
   },
   "all": {
-    "auc": 0.7117,
-    "n_samples": 8757,
+    "auc": 0.6119,
+    "n_samples": 286060,
     "feature_importance": {
-      "sire_enc": 2000.1319153308868,
-      "dam_sire_enc": 2871.891936302185,
-      "distance": 79.74630999565125
+      "sire_enc": 43700.070749759674,
+      "dam_sire_enc": 34798.143879175186,
+      "distance": 6165.461807489395
     }
   }
 }
