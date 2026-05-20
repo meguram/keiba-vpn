@@ -6246,6 +6246,130 @@ def _load_auto_scrape_status() -> dict:
         return {}
 
 
+@app.get("/api/admin/system-stats", response_class=JSONResponse)
+async def get_system_stats():
+    """VPS のリソース使用状況（CPU・メモリ・ディスク・プロセス・ネットワーク）を返す。"""
+    import psutil, time, shutil
+    from pathlib import Path
+
+    def _b2mb(b): return round(b / 1024 / 1024, 1)
+    def _b2gb(b): return round(b / 1024 / 1024 / 1024, 2)
+
+    # ── CPU ──
+    cpu_pct  = psutil.cpu_percent(interval=0.5)
+    cpu_count_logical  = psutil.cpu_count(logical=True)
+    cpu_count_physical = psutil.cpu_count(logical=False)
+    load1, load5, load15 = psutil.getloadavg()
+
+    # ── メモリ ──
+    vm = psutil.virtual_memory()
+    sw = psutil.swap_memory()
+    mem = {
+        "total_mb":     _b2mb(vm.total),
+        "used_mb":      _b2mb(vm.used),
+        "available_mb": _b2mb(vm.available),
+        "free_mb":      _b2mb(vm.free),
+        "percent":      vm.percent,
+        "buffers_mb":   _b2mb(getattr(vm, "buffers", 0)),
+        "cached_mb":    _b2mb(getattr(vm, "cached", 0)),
+        "swap_total_mb": _b2mb(sw.total),
+        "swap_used_mb":  _b2mb(sw.used),
+        "swap_percent":  sw.percent,
+    }
+
+    # ── ディスク ──
+    partitions = []
+    for part in psutil.disk_partitions(all=False):
+        try:
+            usage = psutil.disk_usage(part.mountpoint)
+            partitions.append({
+                "device":     part.device,
+                "mountpoint": part.mountpoint,
+                "fstype":     part.fstype,
+                "total_gb":   _b2gb(usage.total),
+                "used_gb":    _b2gb(usage.used),
+                "free_gb":    _b2gb(usage.free),
+                "percent":    usage.percent,
+            })
+        except PermissionError:
+            pass
+
+    # アプリのデータディレクトリ個別集計
+    data_dirs = {}
+    app_root = Path(BASE_DIR)
+    for name, rel in [
+        ("data/local",          "data/local"),
+        ("data/cache",          "data/cache"),
+        ("data/queue",          "data/queue"),
+        ("data/page_reference", "data/page_reference"),
+        ("data/features",       "data/features"),
+    ]:
+        p = app_root / rel
+        if p.exists():
+            try:
+                total = sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+                data_dirs[name] = _b2mb(total)
+            except Exception:
+                data_dirs[name] = None
+
+    # ── プロセス ──
+    top_procs = []
+    for proc in sorted(psutil.process_iter(["pid","name","cmdline","cpu_percent","memory_info","status"]),
+                       key=lambda p: p.info.get("memory_info") and p.info["memory_info"].rss or 0,
+                       reverse=True)[:8]:
+        try:
+            cmd = " ".join((proc.info["cmdline"] or []))[:80] or proc.info["name"]
+            top_procs.append({
+                "pid":    proc.info["pid"],
+                "name":   proc.info["name"],
+                "cmd":    cmd,
+                "cpu_pct": proc.cpu_percent(),
+                "mem_mb": _b2mb(proc.info["memory_info"].rss if proc.info["memory_info"] else 0),
+                "status": proc.info["status"],
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    # ── ネットワーク ──
+    net = psutil.net_io_counters()
+    net_stats = {
+        "bytes_sent_mb":  _b2mb(net.bytes_sent),
+        "bytes_recv_mb":  _b2mb(net.bytes_recv),
+        "packets_sent":   net.packets_sent,
+        "packets_recv":   net.packets_recv,
+        "errin":          net.errin,
+        "errout":         net.errout,
+    }
+
+    # ── アップタイム ──
+    boot_time = psutil.boot_time()
+    uptime_sec = int(time.time() - boot_time)
+    uptime_str = f"{uptime_sec//3600}h {(uptime_sec%3600)//60}m"
+
+    # ── キュー scrape_queue.json ──
+    queue_file = Path(BASE_DIR) / "data" / "queue" / "scrape_queue.json"
+    queue_file_mb = _b2mb(queue_file.stat().st_size) if queue_file.exists() else 0
+
+    return JSONResponse({
+        "timestamp": time.time(),
+        "uptime_str": uptime_str,
+        "cpu": {
+            "percent": cpu_pct,
+            "count_logical": cpu_count_logical,
+            "count_physical": cpu_count_physical,
+            "load_avg": {"1m": round(load1,2), "5m": round(load5,2), "15m": round(load15,2)},
+        },
+        "memory": mem,
+        "disk": {
+            "partitions": partitions,
+            "app_dirs_mb": data_dirs,
+            "queue_file_mb": queue_file_mb,
+        },
+        "processes": top_procs,
+        "network": net_stats,
+    })
+
+
 @app.get("/api/admin/auto-scrape-status", response_class=JSONResponse)
 async def get_auto_scrape_status():
     """外部 cron で実行される auto_scrape ジョブの一覧と状態を返す。"""
@@ -7242,6 +7366,7 @@ async def scrape_management_page(request: Request):
     return templates.TemplateResponse("admin/scrape.html", {
         "request": request,
         "current_page": "scrape",
+        "breadcrumbs": [{"label": "ホーム", "url": "/"}, {"label": "スクレイピング管理"}],
         "task_catalog": catalog_for_api(),
         "is_dev": is_developer(request),
     })

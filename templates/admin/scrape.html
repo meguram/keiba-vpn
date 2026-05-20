@@ -16,7 +16,7 @@
   body { font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; }
 
   /* ── Tab bar ── */
-  .tab-bar { display: flex; gap: 4px; padding: 8px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); background: var(--surface); position: sticky; top: 0; z-index: 100; align-items: center; }
+  .tab-bar { display: flex; gap: 4px; padding: 8px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); background: var(--surface); position: sticky; top: 44px; z-index: 100; align-items: center; }
   .tab-btn { padding: 6px 18px; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; background: transparent; color: #94a3b8; cursor: pointer; font-size: 13px; font-family: inherit; }
   .tab-btn.active { background: rgba(59,130,246,0.15); color: #60a5fa; border-color: rgba(59,130,246,0.4); }
   .tab-panel { display: none; min-height: 80vh; }
@@ -1389,11 +1389,12 @@
 </head>
 <body>
 
-<div id="page-header" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border-bottom:1px solid rgba(255,255,255,0.08)">
-  <img src="/data/image/icon.jpg" alt="" style="width:24px;height:24px;border-radius:4px">
-  <h1 style="margin:0;font-size:16px;font-weight:700">🔧 スクレイピング管理</h1>
+{% include 'partials/_nav.html' %}
+
+<div id="page-header" style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid rgba(255,255,255,0.06)">
+  <span style="font-size:18px">🔧</span>
+  <h1 style="margin:0;font-size:15px;font-weight:700">スクレイピング管理</h1>
   <div id="shared-worker-badge" style="margin-left:auto;font-size:12px;color:var(--text-dim)">確認中...</div>
-  <a href="/monitor" style="font-size:12px;color:var(--text-dim);text-decoration:none">モニター →</a>
 </div>
 
 <div class="tab-bar">
@@ -1401,6 +1402,7 @@
   <button class="tab-btn" id="tabbtn-queue" onclick="showTab('queue')">キュー管理</button>
   <button class="tab-btn" id="tabbtn-upcoming" onclick="showTab('upcoming')">未来レース</button>
   <button class="tab-btn" id="tabbtn-monitor" onclick="showTab('monitor')">モニター</button>
+  <button class="tab-btn" id="tabbtn-system" onclick="showTab('system')">🖥 システム</button>
 </div>
 
 <!-- ═══════════════════════════════════════════════ TAB 1: CONTROL ═══ -->
@@ -2191,11 +2193,54 @@
 </div>
 <!-- ═══════════════════════════════════════════════ END TAB 4 ═══ -->
 
+<!-- ═══════════════════════════════════════════════ TAB 5: SYSTEM ═══ -->
+<div id="tab-system" class="tab-panel">
+<style>
+  .sys-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 16px; }
+  .sys-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .sys-card h3 { font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .sys-stat-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
+  .sys-stat-row:last-child { border-bottom: none; }
+  .sys-stat-label { color: var(--text-dim); }
+  .sys-stat-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sys-bar-wrap { margin: 6px 0 10px; }
+  .sys-bar-bg { height: 8px; background: rgba(255,255,255,0.07); border-radius: 4px; overflow: hidden; }
+  .sys-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+  .sys-bar-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); margin-top: 3px; }
+  .sys-proc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .sys-proc-table th { text-align: left; padding: 5px 6px; color: var(--text-dim); font-weight: 600; font-size: 10px; border-bottom: 1px solid var(--border); }
+  .sys-proc-table td { padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+  .sys-dir-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 3px 0; }
+  .sys-dir-bar { flex: 1; height: 5px; background: rgba(255,255,255,0.07); border-radius: 3px; margin: 0 8px; overflow: hidden; }
+  .sys-dir-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+  .sys-badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+  .sys-ok   { background: rgba(34,197,94,0.15);  color: var(--ok); }
+  .sys-warn { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .sys-err  { background: rgba(239,68,68,0.15);  color: var(--err); }
+  .sys-refresh-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px 0; font-size: 11px; color: var(--text-dim); }
+  .sys-refresh-bar button { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; font-size: 11px; }
+  .sys-refresh-bar button:hover { border-color: var(--accent); color: var(--accent); }
+</style>
+
+<div class="sys-refresh-bar">
+  <span id="sys-last-updated">読み込み中...</span>
+  <button onclick="sys_load()">🔄 更新</button>
+  <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+    <input type="checkbox" id="sys-auto-refresh" onchange="sys_toggleAuto(this.checked)"> 自動更新（5秒）
+  </label>
+</div>
+
+<div class="sys-grid" id="sys-grid">
+  <div class="sys-card" style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim)">読み込み中...</div>
+</div>
+</div>
+<!-- ═══════════════════════════════════════════════ END TAB 5 ═══ -->
+
 <script>
 /* ═══════════════════════════════════════════════════════════════════
    SHARED
 ═══════════════════════════════════════════════════════════════════ */
-const TAB_NAMES = ['control', 'queue', 'upcoming', 'monitor'];
+const TAB_NAMES = ['control', 'queue', 'upcoming', 'monitor', 'system'];
 const _tabInited = {};
 let _activeTab = 'control';
 
@@ -2207,7 +2252,7 @@ function showTab(name) {
   });
   if (!_tabInited[name]) {
     _tabInited[name] = true;
-    ({control: initControlTab, queue: initQueueTab, upcoming: initUpcomingTab, monitor: initMonitorTab})[name]?.();
+    ({control: initControlTab, queue: initQueueTab, upcoming: initUpcomingTab, monitor: initMonitorTab, system: initSystemTab})[name]?.();
   }
   localStorage.setItem('scrape_tab', name);
   const u = new URL(location.href);
@@ -6222,6 +6267,153 @@ function initMonitorTab() {
   if (mon_tabInitialized) return;
   mon_tabInitialized = true;
   mon_init();
+}
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   TAB 5: SYSTEM MONITOR
+═══════════════════════════════════════════════════════════════════ */
+let _sysAutoTimer = null;
+
+function initSystemTab() {
+  sys_load();
+}
+
+function sys_toggleAuto(on) {
+  clearInterval(_sysAutoTimer);
+  if (on) _sysAutoTimer = setInterval(sys_load, 5000);
+}
+
+function _pct_color(pct) {
+  if (pct >= 90) return 'var(--err)';
+  if (pct >= 70) return 'var(--warn)';
+  return 'var(--ok)';
+}
+function _badge(pct) {
+  const cls = pct >= 90 ? 'sys-err' : pct >= 70 ? 'sys-warn' : 'sys-ok';
+  const lbl = pct >= 90 ? '危険' : pct >= 70 ? '注意' : '正常';
+  return `<span class="sys-badge ${cls}">${lbl}</span>`;
+}
+function _bar(pct, color) {
+  const c = color || _pct_color(pct);
+  return `<div class="sys-bar-wrap">
+    <div class="sys-bar-bg"><div class="sys-bar-fill" style="width:${Math.min(pct,100)}%;background:${c}"></div></div>
+    <div class="sys-bar-label"><span>${pct.toFixed(1)}% 使用中</span><span>${(100-pct).toFixed(1)}% 空き</span></div>
+  </div>`;
+}
+
+async function sys_load() {
+  const grid = document.getElementById('sys-grid');
+  try {
+    const r = await fetch('/api/admin/system-stats');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    document.getElementById('sys-last-updated').textContent =
+      '最終更新: ' + new Date(d.timestamp * 1000).toLocaleTimeString('ja-JP') +
+      ' — 稼働: ' + d.uptime_str;
+    grid.innerHTML = sys_render(d);
+  } catch(e) {
+    grid.innerHTML = `<div class="sys-card" style="grid-column:1/-1;color:var(--err)">取得エラー: ${e.message}</div>`;
+  }
+}
+
+function sys_render(d) {
+  const cpu = d.cpu, mem = d.memory, disk = d.disk, procs = d.processes, net = d.network;
+  let html = '';
+
+  // ── CPU ──
+  html += `<div class="sys-card">
+    <h3>⚡ CPU ${_badge(cpu.percent)}</h3>
+    ${_bar(cpu.percent)}
+    <div class="sys-stat-row"><span class="sys-stat-label">論理コア数</span><span class="sys-stat-value">${cpu.count_logical}</span></div>
+    <div class="sys-stat-row"><span class="sys-stat-label">物理コア数</span><span class="sys-stat-value">${cpu.count_physical}</span></div>
+    <div class="sys-stat-row"><span class="sys-stat-label">ロードアベレージ</span>
+      <span class="sys-stat-value" style="color:${_pct_color(cpu.load_avg['1m']/cpu.count_logical*100)}">
+        ${cpu.load_avg['1m']} / ${cpu.load_avg['5m']} / ${cpu.load_avg['15m']}
+      </span>
+    </div>
+  </div>`;
+
+  // ── メモリ ──
+  html += `<div class="sys-card">
+    <h3>🧠 メモリ ${_badge(mem.percent)}</h3>
+    ${_bar(mem.percent)}
+    <div class="sys-stat-row"><span class="sys-stat-label">合計</span><span class="sys-stat-value">${(mem.total_mb/1024).toFixed(1)} GB</span></div>
+    <div class="sys-stat-row"><span class="sys-stat-label">使用中</span><span class="sys-stat-value" style="color:${_pct_color(mem.percent)}">${(mem.used_mb/1024).toFixed(1)} GB</span></div>
+    <div class="sys-stat-row"><span class="sys-stat-label">空き（実質）</span><span class="sys-stat-value" style="color:var(--ok)">${(mem.available_mb/1024).toFixed(1)} GB</span></div>
+    <div class="sys-stat-row"><span class="sys-stat-label">バッファ/キャッシュ</span><span class="sys-stat-value">${((mem.buffers_mb+mem.cached_mb)/1024).toFixed(1)} GB</span></div>
+    ${mem.swap_total_mb > 0 ? `<div class="sys-stat-row"><span class="sys-stat-label">スワップ</span>
+      <span class="sys-stat-value" style="color:${_pct_color(mem.swap_percent)}">${(mem.swap_used_mb/1024).toFixed(2)} / ${(mem.swap_total_mb/1024).toFixed(1)} GB (${mem.swap_percent.toFixed(1)}%)</span>
+    </div>` : ''}
+  </div>`;
+
+  // ── ディスク パーティション ──
+  const mainPart = disk.partitions.find(p => p.mountpoint === '/') || disk.partitions[0];
+  if (mainPart) {
+    html += `<div class="sys-card">
+      <h3>💾 ディスク (${mainPart.mountpoint}) ${_badge(mainPart.percent)}</h3>
+      ${_bar(mainPart.percent)}
+      <div class="sys-stat-row"><span class="sys-stat-label">合計</span><span class="sys-stat-value">${mainPart.total_gb} GB</span></div>
+      <div class="sys-stat-row"><span class="sys-stat-label">使用中</span><span class="sys-stat-value" style="color:${_pct_color(mainPart.percent)}">${mainPart.used_gb} GB</span></div>
+      <div class="sys-stat-row"><span class="sys-stat-label">空き</span><span class="sys-stat-value" style="color:var(--ok)">${mainPart.free_gb} GB</span></div>
+    </div>`;
+  }
+
+  // ── アプリデータディレクトリ ──
+  const dirs = disk.app_dirs_mb || {};
+  const dirEntries = Object.entries(dirs).filter(([,v]) => v != null).sort((a,b) => b[1]-a[1]);
+  const maxDir = Math.max(...dirEntries.map(([,v])=>v), 1);
+  if (dirEntries.length > 0) {
+    html += `<div class="sys-card">
+      <h3>📁 データディレクトリ使用量</h3>
+      ${dirEntries.map(([name, mb]) => {
+        const pct = mb / maxDir * 100;
+        const gb = mb >= 1024 ? (mb/1024).toFixed(2)+'GB' : mb.toFixed(0)+'MB';
+        return `<div class="sys-dir-row">
+          <span style="color:var(--text-dim);min-width:140px;font-size:10px">${name}</span>
+          <div class="sys-dir-bar"><div class="sys-dir-bar-fill" style="width:${pct}%"></div></div>
+          <span style="font-size:11px;font-weight:600;min-width:60px;text-align:right">${gb}</span>
+        </div>`;
+      }).join('')}
+      ${disk.queue_file_mb ? `<div class="sys-stat-row" style="margin-top:6px"><span class="sys-stat-label">scrape_queue.json</span>
+        <span class="sys-stat-value" style="color:${disk.queue_file_mb > 10 ? 'var(--warn)' : 'inherit'}">${disk.queue_file_mb.toFixed(1)} MB</span></div>` : ''}
+    </div>`;
+  }
+
+  // ── プロセス ──
+  html += `<div class="sys-card" style="grid-column:span 2">
+    <h3>⚙️ プロセス（メモリ使用量 上位）</h3>
+    <table class="sys-proc-table">
+      <thead><tr><th>PID</th><th>名前</th><th>コマンド</th><th>CPU%</th><th>MEM</th><th>状態</th></tr></thead>
+      <tbody>
+      ${procs.map(p => {
+        const memColor = p.mem_mb > 300 ? 'var(--warn)' : 'inherit';
+        return `<tr>
+          <td style="color:var(--text-dim)">${p.pid}</td>
+          <td style="font-weight:600">${p.name}</td>
+          <td style="color:var(--text-dim);font-size:10px" title="${p.cmd}">${p.cmd.slice(0,60)}</td>
+          <td>${p.cpu_pct.toFixed(1)}%</td>
+          <td style="color:${memColor};font-weight:600">${p.mem_mb >= 1024 ? (p.mem_mb/1024).toFixed(1)+'GB' : p.mem_mb.toFixed(0)+'MB'}</td>
+          <td><span class="sys-badge ${p.status==='running'?'sys-ok':'sys-warn'}">${p.status}</span></td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+
+  // ── ネットワーク ──
+  html += `<div class="sys-card">
+    <h3>🌐 ネットワーク I/O（起動時からの累計）</h3>
+    <div class="sys-stat-row"><span class="sys-stat-label">送信</span><span class="sys-stat-value">${(net.bytes_sent_mb/1024).toFixed(2)} GB</span></div>
+    <div class="sys-stat-row"><span class="sys-stat-label">受信</span><span class="sys-stat-value">${(net.bytes_recv_mb/1024).toFixed(2)} GB</span></div>
+    <div class="sys-stat-row"><span class="sys-stat-label">送信パケット</span><span class="sys-stat-value">${net.packets_sent.toLocaleString()}</span></div>
+    <div class="sys-stat-row"><span class="sys-stat-label">受信パケット</span><span class="sys-stat-value">${net.packets_recv.toLocaleString()}</span></div>
+    ${net.errin + net.errout > 0 ? `<div class="sys-stat-row"><span class="sys-stat-label" style="color:var(--err)">エラー数</span>
+      <span class="sys-stat-value" style="color:var(--err)">in:${net.errin} / out:${net.errout}</span></div>` : ''}
+  </div>`;
+
+  return html;
 }
 </script>
 
