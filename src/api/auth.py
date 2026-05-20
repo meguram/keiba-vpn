@@ -68,23 +68,33 @@ def is_developer(request: Request) -> bool:
     return _verify_token(token)
 
 
-def create_session_response(redirect_to: str = "/") -> RedirectResponse:
+def _request_is_secure(request: Request) -> bool:
+    if request.url.scheme == "https":
+        return True
+    forwarded = request.headers.get("x-forwarded-proto", "")
+    return forwarded.split(",")[0].strip().lower() == "https"
+
+
+def create_session_response(redirect_to: str = "/", request: Request | None = None) -> RedirectResponse:
     token = _make_token()
     response = RedirectResponse(url=redirect_to, status_code=303)
+    secure = _request_is_secure(request) if request is not None else False
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         max_age=COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
+        secure=secure,
         path="/",
     )
     return response
 
 
-def clear_session_response(redirect_to: str = "/") -> RedirectResponse:
+def clear_session_response(redirect_to: str = "/", request: Request | None = None) -> RedirectResponse:
     response = RedirectResponse(url=redirect_to, status_code=303)
-    response.delete_cookie(key=COOKIE_NAME, path="/")
+    secure = _request_is_secure(request) if request is not None else False
+    response.delete_cookie(key=COOKIE_NAME, path="/", secure=secure)
     return response
 
 

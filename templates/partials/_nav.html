@@ -264,7 +264,23 @@
 
 <nav class="gnav" role="navigation">
   <a href="/" class="gnav-brand" title="ダッシュボード">
-    <img src="/data/image/icon.jpg" alt="Keguro" class="gnav-logo">
+    <svg class="gnav-logo" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <radialGradient id="ng-bg" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#1e3a5f"/>
+          <stop offset="100%" stop-color="#0d1117"/>
+        </radialGradient>
+        <linearGradient id="ng-horse" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#58a6ff"/>
+          <stop offset="100%" stop-color="#bc8cff"/>
+        </linearGradient>
+      </defs>
+      <circle cx="20" cy="20" r="19" fill="url(#ng-bg)" stroke="#21262d" stroke-width="1"/>
+      <!-- horse body -->
+      <path d="M24 28 C22 26 18 25 16 22 C14 19 15 16 17 15 C19 14 22 15 23 17 L26 16 C27 15 28 13 27 11 C26 10 24 10 23 11 L22 13 C21 12 20 11 19 11 C16 11 13 13 12 16 C11 19 12 23 15 26 L14 30 L17 30 L18 27 C20 28 22 29 22 31 L25 31 L24 28 Z" fill="url(#ng-horse)" opacity="0.9"/>
+      <!-- mane highlight -->
+      <path d="M22 13 C23 12 25 11 26 12" stroke="#f778ba" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+    </svg>
     <span>Keiba</span>
   </a>
 
@@ -444,11 +460,25 @@
 <div class="watermark" aria-hidden="true">
   <div class="watermark-inner">
     <div class="watermark-ring"></div>
-    <img src="/data/image/icon.jpg" alt="" class="watermark-img">
+    <svg class="watermark-img" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="19" fill="#1e3a5f" stroke="#21262d" stroke-width="1"/>
+      <path d="M24 28 C22 26 18 25 16 22 C14 19 15 16 17 15 C19 14 22 15 23 17 L26 16 C27 15 28 13 27 11 C26 10 24 10 23 11 L22 13 C21 12 20 11 19 11 C16 11 13 13 12 16 C11 19 12 23 15 26 L14 30 L17 30 L18 27 C20 28 22 29 22 31 L25 31 L24 28 Z" fill="#58a6ff" opacity="0.6"/>
+    </svg>
   </div>
 </div>
 
 <script>
+  /* ── favicon を head に動的注入（各テンプレートへの個別追加を不要にする） ── */
+  (function() {
+    if (!document.querySelector('link[rel~="icon"]')) {
+      var lnk = document.createElement('link');
+      lnk.rel = 'icon';
+      lnk.type = 'image/svg+xml';
+      lnk.href = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%230d1117'/%3E%3Cpath d='M24 28 C22 26 18 25 16 22 C14 19 15 16 17 15 C19 14 22 15 23 17 L26 16 C27 15 28 13 27 11 C26 10 24 10 23 11 L22 13 C21 12 20 11 19 11 C16 11 13 13 12 16 C11 19 12 23 15 26 L14 30 L17 30 L18 27 C20 28 22 29 22 31 L25 31 L24 28 Z' fill='%2358a6ff'/%3E%3C/svg%3E";
+      document.head.appendChild(lnk);
+    }
+  })();
+
   /* ── ナビ・ドロップダウンのトグル（モバイル / クリック対応） ── */
   (function() {
     var groups = document.querySelectorAll('.gnav-group');

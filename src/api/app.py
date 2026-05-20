@@ -740,7 +740,7 @@ async def login_submit(request: Request):
     next_url = form.get("next", "/")
 
     if verify_password(password):
-        return create_session_response(redirect_to=next_url)
+        return create_session_response(redirect_to=next_url, request=request)
 
     return templates.TemplateResponse("login.html", {
         "request": request,
@@ -753,7 +753,7 @@ async def login_submit(request: Request):
 
 @app.get("/logout")
 async def logout():
-    return clear_session_response(redirect_to="/")
+    return clear_session_response(redirect_to="/", request=request)
 
 
 @app.get("/api/auth/status", response_class=JSONResponse)
@@ -5562,8 +5562,8 @@ async def api_tracking_difficulty(race_id: str):
             race_data = runner.scrape_race_all(race_id, smart_skip=True)
             horses_data = None
 
-        # 追走難度の予測
-        tracking_results = predict_tracking_difficulty(
+        # 追走難度の予測（field_prev_stats も返す）
+        tracking_results, field_prev_stats = predict_tracking_difficulty(
             race_data,
             horse_histories=horses_data,
             storage=storage,
@@ -5591,9 +5591,11 @@ async def api_tracking_difficulty(race_id: str):
         # ペース予想
         pace_prediction = predict_race_pace(entries, horse_profiles, race_info)
 
-        # 位置取り予測
+        # 位置取り予測（スタミナ指数含む）
         position_flow = predict_position_flow(
-            entries, horse_profiles, tracking_results, pace_prediction
+            entries, horse_profiles, tracking_results, pace_prediction,
+            field_prev_stats=field_prev_stats,
+            race_info=race_info,
         )
 
         return {
@@ -5607,6 +5609,7 @@ async def api_tracking_difficulty(race_id: str):
             "pace_prediction": pace_prediction,
             "position_flow": position_flow,
             "entries": tracking_results,
+            "field_prev_stats": field_prev_stats,
         }
 
     try:

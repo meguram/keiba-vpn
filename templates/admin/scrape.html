@@ -73,6 +73,8 @@
   .ctrl-label { font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
   .ctrl-select, .ctrl-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: 5px; font-size: 12px; font-family: inherit; outline: none; }
   .ctrl-select:focus, .ctrl-input:focus { border-color: var(--accent); }
+  input[type="date"].ctrl-input { color-scheme: dark; cursor: pointer; }
+  input[type="date"].ctrl-input::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
   .row { display: flex; gap: 8px; align-items: flex-end; }
   .row .grow { flex: 1; }
   .btn { padding: 7px 14px; border-radius: 5px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; font-family: inherit; transition: opacity 0.15s; }
@@ -140,6 +142,8 @@
   .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; }
   .cal-day-hdr { text-align:center; font-size:8px; color:var(--text-dim); padding:1px 0; font-weight:600; }
   .cal-day { text-align:center; font-size:10px; padding:2px 1px; border-radius:2px; cursor:default; user-select:none; color:rgba(107,125,149,0.35); line-height:1.5; }
+  .cal-day.selectable { cursor:pointer; color:var(--text-dim); }
+  .cal-day.selectable:hover { background:rgba(255,255,255,0.06); color:var(--text); }
   .cal-day.race-day { background:rgba(59,130,246,0.15); color:var(--accent); cursor:pointer; font-weight:700; border:1px solid rgba(59,130,246,0.3); }
   .cal-day.race-day:hover { background:rgba(59,130,246,0.3); }
   .cal-day.selected { background:var(--accent) !important; color:#fff !important; border-color:var(--accent) !important; }
@@ -2257,6 +2261,8 @@ function initControlTab() {
   const today = new Date().toISOString().slice(0,10);
   const td = document.getElementById('task-date');
   if (td && !td.value) td.value = today;
+  const ds = document.getElementById('date-start');
+  if (ds && !ds.value) ds.value = today;
   ctrl_buildCatHeader();
   ctrl_loadRaceDates();   // 非同期でレース日を取得・カレンダーデータを準備
 }
@@ -2353,11 +2359,12 @@ function ctrl_renderCalendar() {
     const isRace = ctrl_raceDateSet.has(ds);
     const isSel  = ds === ctrl_calSelStart || ds === ctrl_calSelEnd;
     const inRange = ctrl_calSelStart && ctrl_calSelEnd && ds > ctrl_calSelStart && ds < ctrl_calSelEnd;
-    let cls = 'cal-day';
-    if (isRace)       cls += ' race-day';
+    let cls = 'cal-day selectable';           // 全日付をクリック可能に
+    if (isRace)       cls += ' race-day';     // 開催日はハイライト
     if (isSel)        cls += ' selected';
     else if (inRange) cls += ' in-range';
-    html += `<div class="${cls}"${isRace ? ` onclick="ctrl_calSelectDate('${ds}')" title="${ds}"` : ''}>${d}</div>`;
+    const hint = isRace ? `${ds} (開催日)` : ds;
+    html += `<div class="${cls}" onclick="ctrl_calSelectDate('${ds}')" title="${hint}">${d}</div>`;
   }
   grid.innerHTML = html;
   ctrl_updateCalLabel();

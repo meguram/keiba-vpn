@@ -170,6 +170,75 @@
 
   .empty { color: var(--text-dim); text-align: center; padding: 60px 20px; font-size: 14px; }
 
+  /* ── スタミナ指数 ── */
+  .stamina-index-badge {
+    font-size: 18px; font-weight: 800; padding: 4px 12px; border-radius: 8px;
+    text-align: center; min-width: 60px; flex-shrink: 0;
+  }
+  .stamina-max  { background: rgba(34,197,94,0.15); color: var(--ok); }
+  .stamina-high { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .stamina-mid  { background: rgba(107,125,149,0.1); color: var(--text-dim); }
+  .stamina-low  { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .stamina-burn { background: rgba(239,68,68,0.15); color: var(--err); }
+
+  /* ── 位置取り分布ビン ── */
+  .pos-dist-section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 18px; margin-bottom: 20px;
+  }
+  .pos-dist-section h3 { font-size: 13px; font-weight: 600; color: var(--purple); margin-bottom: 14px; }
+  .bin-chart { display: flex; align-items: flex-end; gap: 6px; height: 100px; padding-bottom: 4px; }
+  .bin-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
+  .bin-bar { width: 100%; border-radius: 4px 4px 0 0; transition: height 0.4s ease; min-height: 4px; }
+  .bin-count { font-size: 12px; font-weight: 700; color: #fff; }
+  .bin-label { font-size: 9px; color: var(--text-dim); text-align: center; word-break: break-all; line-height: 1.2; }
+  .bin-horse-nums { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; margin-top: 2px; }
+  .bin-hn {
+    width: 18px; height: 18px; border-radius: 50%; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 9px; font-weight: 700;
+  }
+
+  /* ── T1F・コース比較テーブル ── */
+  .analysis-section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 18px; margin-bottom: 20px; overflow-x: auto;
+  }
+  .analysis-section h3 { font-size: 13px; font-weight: 600; color: var(--key); margin-bottom: 12px; }
+  .analysis-table {
+    width: 100%; border-collapse: collapse; font-size: 11px;
+  }
+  .analysis-table th {
+    background: var(--surface2); padding: 8px 10px; text-align: left;
+    font-weight: 600; color: var(--text-dim); font-size: 10px;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .analysis-table td {
+    padding: 8px 10px; border-bottom: 1px solid rgba(36,48,73,0.4); white-space: nowrap;
+  }
+  .analysis-table tr:hover td { background: rgba(59,130,246,0.04); }
+  .t1f-bar-cell { width: 80px; }
+  .t1f-bar-bg { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .t1f-bar-fill { height: 100%; border-radius: 3px; }
+  .dist-ext { color: var(--err); font-weight: 600; }
+  .dist-red { color: var(--ok); font-weight: 600; }
+  .dist-same { color: var(--text-dim); }
+  .gate-up { color: var(--warn); }
+  .gate-down { color: var(--accent); }
+  .gate-same { color: var(--text-dim); }
+  .surface-match { color: var(--ok); }
+  .surface-diff { color: var(--warn); }
+
+  /* ── 追走難度指数拡張カード ── */
+  .td-stamina-row {
+    display: flex; align-items: center; gap: 8px; padding: 4px 0;
+    border-top: 1px solid rgba(36,48,73,0.4); margin-top: 6px;
+  }
+  .td-stamina-label { font-size: 10px; color: var(--text-dim); min-width: 70px; }
+  .td-stamina-value { font-size: 13px; font-weight: 700; min-width: 40px; }
+  .stamina-load-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+  .load-item { display: flex; align-items: center; gap: 3px; font-size: 10px; }
+  .load-dot { width: 6px; height: 6px; border-radius: 50%; }
+
   /* ── ペース分析セクション ── */
   .pace-section {
     background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
@@ -204,6 +273,33 @@
     background: #fff; border: 2px solid var(--border); border-radius: 2px;
   }
   .pace-pattern { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+
+  /* ── ペース解説テキスト ── */
+  .pace-comment-block {
+    margin-top: 14px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .pace-comment-line {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 12px; line-height: 1.65; color: var(--text);
+  }
+  .pace-comment-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+  .pace-comment-text { flex: 1; }
+  .pace-verdict {
+    margin-top: 4px; padding: 10px 14px; border-radius: 7px;
+    font-size: 12px; font-weight: 600; line-height: 1.6;
+    border-left: 3px solid;
+  }
+  .pace-verdict-high  { background: rgba(239,68,68,0.08);  border-color: var(--err);    color: #fca5a5; }
+  .pace-verdict-mid   { background: rgba(59,130,246,0.08);  border-color: var(--accent); color: var(--text); }
+  .pace-verdict-slow  { background: rgba(34,197,94,0.08);   border-color: var(--ok);    color: #86efac; }
+  .pace-tip {
+    font-size: 11px; color: var(--text-dim); padding: 6px 10px;
+    background: rgba(255,255,255,0.03); border-radius: 5px;
+    line-height: 1.6;
+  }
 
   /* ── 位置取り予測 ── */
   .position-flow {
@@ -368,7 +464,7 @@
 <div class="page-header">
   <div>
     <h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">追走難度分析</h1>
-    <span class="subtitle">ゲート位置・隣枠・脚質構成から各馬のポジション取得容易度を推定</span>
+    <span class="subtitle">前走T1F・位置取り分布・コース比較・ペース予測から追走難度（脚がたまる度）を算出</span>
   </div>
 </div>
 
@@ -643,6 +739,107 @@ function wakuClass(bn) {
   return bn >= 1 && bn <= 8 ? `waku-${bn}` : '';
 }
 
+/**
+ * ペース数値から人間向けの解説文を生成する。
+ * @returns { lines: [{icon, text}], verdict: string, tip: string }
+ */
+function generatePaceComment(pace, fps, fieldSize) {
+  const paceType  = pace.pace_type  || 'ミドル';
+  const paceIdx   = pace.pace_index || 50;
+  const dist      = pace.distribution || {};
+  const nigeN     = dist['逃げ']  || 0;
+  const senkoN    = dist['先行']  || 0;
+  const sashiN    = dist['差し']  || 0;
+  const oikomiN   = dist['追込']  || 0;
+  const lap1f     = pace.lap_times?.first_1f || 0;
+  const lap3f     = pace.lap_times?.first_3f || 0;
+  const prevTop3  = fps.prev_top3_count     || 0;
+  const presRatio = fps.front_pressure_ratio || 0;
+  const frontN    = nigeN + senkoN;
+  const backN     = sashiN + oikomiN;
+
+  const lines = [];
+
+  // ── ① 逃げ頭数によるシナリオ ──
+  if (nigeN === 0) {
+    lines.push({ icon: '🏳️', text: `逃げ馬が不在のため、誰かが行かされる展開になりそうです。先行馬がハナを主張する可能性があり、前半は比較的落ち着いた流れになりやすいです。` });
+  } else if (nigeN === 1 && senkoN <= 2) {
+    lines.push({ icon: '🏇', text: `逃げ馬は${nigeN}頭で単騎逃げが濃厚。マイペースで進めやすく、前半は引き締まらないスロー〜ミドルが想定されます。` });
+  } else if (nigeN === 2) {
+    lines.push({ icon: '⚔️', text: `逃げ馬が${nigeN}頭おり、ハナ争いが発生する可能性があります。2頭が競り合うと前半が速くなりやすく、早めにペースが落ち着くか激化するか注目です。` });
+  } else {
+    lines.push({ icon: '🔥', text: `逃げ馬が${nigeN}頭と多く、先行争いが激しくなります。前半から速い流れが予想され、先行馬は脚を使わされる消耗戦になりやすいです。` });
+  }
+
+  // ── ② 先行馬の厚みによる補足 ──
+  if (senkoN >= 4) {
+    lines.push({ icon: '⚠️', text: `先行馬が${senkoN}頭と厚く、前半の隊列が縦長になりやすいです。好位を取るのが難しく、ポジション争いが激化する可能性があります。` });
+  } else if (senkoN >= 2 && nigeN >= 1) {
+    lines.push({ icon: '📌', text: `先行馬${senkoN}頭が逃げ馬の後ろに並ぶ形。序盤にポジション争いはあるものの、${nigeN + senkoN}頭が前を固める展開が見込まれます。` });
+  }
+
+  // ── ③ 後方馬・差し馬の多さ ──
+  if (backN >= fieldSize * 0.6) {
+    lines.push({ icon: '🌊', text: `差し・追込馬が${backN}頭（全体の${Math.round(backN/fieldSize*100)}%）を占めており、後方待機組が多いです。スローになると届かないケースもあるため、ペースの読みが重要です。` });
+  }
+
+  // ── ④ 前走前目馬による追走圧力 ──
+  if (prevTop3 >= 3) {
+    lines.push({ icon: '💥', text: `前走で3番手以内を走っていた馬が${prevTop3}頭いるため、今回も序盤のポジション争いが起きやすい構成です。前半のT1Fペースは想定より速くなる可能性があります。` });
+  }
+
+  // ── ⑤ ラップタイム説明 ──
+  if (lap1f > 0 && lap3f > 0) {
+    const lap1fQ = lap1f <= 11.5 ? '非常に速い' : lap1f <= 12.0 ? '速め' : lap1f <= 12.5 ? '標準的' : 'ゆったりした';
+    lines.push({ icon: '⏱️', text: `前半1Fは約 ${lap1f.toFixed(1)} 秒（${lap1fQ}ペース）、前半3Fは約 ${lap3f.toFixed(1)} 秒と予測されます。${lap1f <= 11.8 ? '序盤から脚を使われるため、スタミナのある馬が有利です。' : '前半が抑えられる分、末脚の持続力が問われます。'}` });
+  }
+
+  // ── ⑥ 総合verdict ──
+  let verdict = '';
+  if (paceType === 'ハイ') {
+    if (nigeN >= 3) {
+      verdict = `逃げ馬${nigeN}頭の先行争いでハイペース確定的。前残りは困難で、差し・追込馬に展開利があります。逃げ・先行馬は早仕掛けにならないよう注意。`;
+    } else {
+      verdict = `ハイペース想定（指数 ${paceIdx.toFixed(0)}）。前につけた馬ほど消耗が激しく、後方待機の馬が台頭しやすいレース質です。`;
+    }
+  } else if (paceType === 'スロー') {
+    if (nigeN === 0) {
+      verdict = `逃げ不在のスローが濃厚（指数 ${paceIdx.toFixed(0)}）。縦長になりにくく、前に位置した馬がそのまま残るケースが多い展開です。差し・追込には厳しい。`;
+    } else {
+      verdict = `スローペース想定（指数 ${paceIdx.toFixed(0)}）。位置取りが重要になり、外を回しすぎると距離損になります。早め動きが鍵になる差し馬に注目。`;
+    }
+  } else {
+    verdict = `ミドルペース想定（指数 ${paceIdx.toFixed(0)}）。各馬の能力が素直に出やすく、極端な展開利不利は少ない見込みです。`;
+  }
+
+  // ── ⑦ 馬券ヒント ──
+  let tip = '';
+  if (paceType === 'ハイ') {
+    tip = `📝 ヒント: ハイペースでは逃げ・先行馬の「スタミナ温存度」が低くなりがちです。温存度ランキング上位（後方から差してくる馬）を重視してみてください。`;
+  } else if (paceType === 'スロー') {
+    tip = `📝 ヒント: スローペースでは先行馬が有利。「序盤予測位置」が前の馬かつ追走容易度が高い馬を中心に組み立てるのが得策です。`;
+  } else {
+    tip = `📝 ヒント: ミドルペースは総合力勝負。追走容易度が高く、かつスタミナ温存度も標準以上の馬を軸にするとバランスがよいです。`;
+  }
+
+  return { lines, verdict, paceType, tip };
+}
+
+function staminaClass(lbl) {
+  if (lbl === '最大温存') return 'stamina-max';
+  if (lbl === '温存')     return 'stamina-high';
+  if (lbl === '標準')     return 'stamina-mid';
+  if (lbl === '消耗')     return 'stamina-low';
+  return 'stamina-burn';
+}
+function staminaColor(idx) {
+  if (idx >= 75) return 'var(--ok)';
+  if (idx >= 60) return 'var(--accent)';
+  if (idx >= 45) return 'var(--text-dim)';
+  if (idx >= 30) return 'var(--warn)';
+  return 'var(--err)';
+}
+
 function renderResults(data) {
   const main = document.getElementById('mainContent');
   if (!data.entries || data.entries.length === 0) {
@@ -652,6 +849,7 @@ function renderResults(data) {
 
   const entries = data.entries;
   const byHorseNum = [...entries].sort((a, b) => a.horse_number - b.horse_number);
+  const fps = data.field_prev_stats || {};
 
   let html = '';
 
@@ -660,7 +858,98 @@ function renderResults(data) {
     <span class="race-name">${data.race_name || data.race_id}</span>
     <span class="race-tag">${data.venue || ''} ${data.surface || ''}${data.distance || ''}m ${data.track_condition || ''}</span>
     <span class="race-tag">${data.field_size}頭</span>
+    ${fps.prev_top3_count != null ? `<span class="race-tag" style="background:rgba(239,68,68,0.1);color:var(--err)">前走前目 ${fps.prev_top3_count}頭</span>` : ''}
+    ${fps.front_pressure_ratio != null ? `<span class="race-tag" style="background:rgba(245,158,11,0.1);color:var(--warn)">前半圧力 ${(fps.front_pressure_ratio*100).toFixed(0)}%</span>` : ''}
   </div>`;
+
+  // ── 位置取り分布ビン ──
+  const bins = fps.position_bins || [];
+  if (bins.length > 0) {
+    const maxCount = Math.max(...bins.map(b => b.count), 1);
+    const binColors = ['var(--err)', 'var(--warn)', 'var(--accent)', 'var(--purple)', 'var(--text-dim)'];
+    html += `<div class="pos-dist-section">
+      <h3>📊 前走位置取り分布（ビン別頭数）</h3>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+        <div style="flex:1;min-width:280px">
+          <div class="bin-chart">`;
+    bins.forEach((b, i) => {
+      const pct = b.count / maxCount;
+      const barH = Math.max(8, pct * 90);
+      const col = binColors[i];
+      const nums = b.horse_numbers.map(n => {
+        const e = byHorseNum.find(x => x.horse_number === n);
+        const bn = e?.bracket_number || 1;
+        return `<div class="bin-hn waku-${bn}" title="${e?.horse_name || ''}">${n}</div>`;
+      }).join('');
+      html += `<div class="bin-bar-wrap">
+        <div class="bin-count" style="color:${col}">${b.count}</div>
+        <div class="bin-bar" style="height:${barH}px;background:${col}33;border:1px solid ${col}"></div>
+        <div class="bin-horse-nums">${nums}</div>
+        <div class="bin-label">${b.label}</div>
+      </div>`;
+    });
+    html += `</div></div>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.7;max-width:260px;padding-top:8px">
+          <div><b style="color:#fff">T1F正規化係数</b> ${(fps.t1f_normalization_factor||1).toFixed(2)}</div>
+          <div>前走3番手以内: <b style="color:var(--err)">${fps.prev_top3_count||0}頭</b></div>
+          <div>前半圧力: <b style="color:var(--warn)">${((fps.front_pressure_ratio||0)*100).toFixed(0)}%</b></div>
+          <div>同馬場: ${fps.same_surface_count||0}頭 / 距離延長: ${fps.dist_extension_count||0}頭 / 距離短縮: ${fps.dist_reduction_count||0}頭</div>
+          <div style="margin-top:6px;color:var(--text-dim);font-size:10px">
+            T1F係数が高いほど前に行きたい馬が多く、ペース争いが激化します
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── T1F・コース比較テーブル ──
+  if (byHorseNum.length > 0 && byHorseNum[0].prev_race) {
+    html += `<div class="analysis-section">
+      <h3>🔍 前走T1Fデータ・コース比較</h3>
+      <table class="analysis-table">
+        <thead><tr>
+          <th>馬番</th><th>馬名</th><th>脚質</th>
+          <th>前走1角</th><th>前走頭数</th><th>前走位置%</th><th>T1F正規化</th><th>T1F強度</th>
+          <th>前走馬場</th><th>馬場変化</th><th>前走距離</th><th>距離変化</th><th>馬番変化</th><th>前走着</th>
+        </tr></thead>
+        <tbody>`;
+    for (const e of byHorseNum) {
+      const pr = e.prev_race || {};
+      const cc = e.course_comparison || {};
+      const prof = e.profile || {};
+      const bn = e.bracket_number || 0;
+
+      const t1fNorm = pr.t1f_norm || 0.5;
+      const t1fBarW = Math.min(100, (1 - t1fNorm) * 120);
+      const t1fColor = t1fNorm < 0.25 ? 'var(--err)' : t1fNorm < 0.45 ? 'var(--warn)' : 'var(--accent)';
+
+      const distCls = cc.dist_category === '距離延長' ? 'dist-ext' : cc.dist_category === '距離短縮' ? 'dist-red' : 'dist-same';
+      const distSign = cc.dist_change > 0 ? `+${cc.dist_change}` : cc.dist_change;
+      const gateCls = cc.gate_change > 0 ? 'gate-up' : cc.gate_change < 0 ? 'gate-down' : 'gate-same';
+      const gateSign = cc.gate_change > 0 ? `+${cc.gate_change}` : (cc.gate_change === 0 ? '±0' : cc.gate_change);
+      const surfCls = cc.same_surface ? 'surface-match' : 'surface-diff';
+
+      html += `<tr>
+        <td><span class="${wakuClass(bn)}" style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;font-weight:700;font-size:10px">${e.horse_number}</span></td>
+        <td style="font-weight:600">${e.horse_name || '-'}</td>
+        <td><span class="${styleClass(prof.style||'差し')}" style="font-size:10px">${prof.style||'-'}</span></td>
+        <td style="text-align:center;font-weight:700;color:${t1fColor}">${pr.t1f_raw || '-'}</td>
+        <td style="text-align:center">${pr.field_size || '-'}</td>
+        <td style="text-align:center">${pr.pos_ratio ? (pr.pos_ratio*100).toFixed(0)+'%' : '-'}</td>
+        <td style="text-align:center;font-weight:700;color:${t1fColor}">${t1fNorm.toFixed(3)}</td>
+        <td class="t1f-bar-cell">
+          <div class="t1f-bar-bg"><div class="t1f-bar-fill" style="width:${t1fBarW}%;background:${t1fColor}"></div></div>
+        </td>
+        <td class="${surfCls}">${pr.surface||'-'} ${cc.same_surface ? '✓' : '→' + cc.current_surface}</td>
+        <td class="${surfCls}" style="font-size:10px">${cc.same_surface ? '同馬場' : '馬場変化'}</td>
+        <td style="text-align:center">${pr.distance ? pr.distance+'m' : '-'}</td>
+        <td class="${distCls}" style="text-align:center">${pr.distance ? distSign+'m' : '-'}<br><span style="font-size:9px">${cc.dist_category||''}</span></td>
+        <td class="${gateCls}" style="text-align:center">${pr.horse_number ? gateSign : '-'}</td>
+        <td style="text-align:center;color:${pr.finish_pos<=3?'var(--ok)':pr.finish_pos<=5?'var(--accent)':'var(--text-dim)'};font-weight:700">${pr.finish_pos||'-'}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
 
   // Pace prediction
   const pace = data.pace_prediction || {};
@@ -677,42 +966,58 @@ function renderResults(data) {
   const lap1f = lapTimes.first_1f || 0;
   const lap3f = lapTimes.first_3f || 0;
 
+  // ペース解説生成
+  const paceComment = generatePaceComment(pace, fps, data.field_size || entries.length);
+  const verdictCls = paceType === 'ハイ' ? 'pace-verdict-high' : paceType === 'スロー' ? 'pace-verdict-slow' : 'pace-verdict-mid';
+
   html += `<div class="pace-prediction">
     <h3>🏁 ペース予想</h3>
-    <div style="margin-bottom:10px">
+    <div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span class="pace-type-badge ${paceClass}">${paceType}ペース</span>
-      <span style="font-size:13px;color:var(--text-dim)">指数: ${paceIndex.toFixed(1)}</span>
+      <span style="font-size:13px;color:var(--text-dim)">ペース指数 ${paceIndex.toFixed(1)}</span>
+      <span style="font-size:11px;color:var(--text-dim);padding:3px 8px;background:rgba(255,255,255,0.05);border-radius:4px">${pacePattern}</span>
     </div>
     <div class="pace-meter">
       <div class="pace-meter-pointer" style="left:${paceIndex}%"></div>
     </div>
-    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-bottom:10px">
-      <span>スロー</span><span>ミドル</span><span>ハイ</span>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-bottom:12px">
+      <span>◀ スロー</span><span>ミドル</span><span>ハイ ▶</span>
     </div>
-    <div class="pace-pattern">${pacePattern}</div>
 
-    ${lap1f > 0 ? `
-    <div class="lap-times">
-      <div class="lap-time-item">
-        <div class="lap-label">前半1F (200m)</div>
-        <div class="lap-value">${lap1f.toFixed(1)}<span class="lap-unit">秒</span></div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-start">
+      <div class="pace-bars" style="gap:14px">
+        <div class="pace-item"><span class="pace-dot" style="background:var(--err)"></span>
+          <span class="pace-label">逃げ</span><span class="pace-count">${dist['逃げ'] || 0}頭</span></div>
+        <div class="pace-item"><span class="pace-dot" style="background:var(--warn)"></span>
+          <span class="pace-label">先行</span><span class="pace-count">${dist['先行'] || 0}頭</span></div>
+        <div class="pace-item"><span class="pace-dot" style="background:var(--accent)"></span>
+          <span class="pace-label">差し</span><span class="pace-count">${dist['差し'] || 0}頭</span></div>
+        <div class="pace-item"><span class="pace-dot" style="background:var(--purple)"></span>
+          <span class="pace-label">追込</span><span class="pace-count">${dist['追込'] || 0}頭</span></div>
       </div>
-      <div class="lap-time-item">
-        <div class="lap-label">前半3F (600m)</div>
-        <div class="lap-value">${lap3f.toFixed(1)}<span class="lap-unit">秒</span></div>
-      </div>
+      ${lap1f > 0 ? `
+      <div class="lap-times" style="margin-top:0;padding:10px 14px">
+        <div class="lap-time-item">
+          <div class="lap-label">前半1F</div>
+          <div class="lap-value">${lap1f.toFixed(1)}<span class="lap-unit">秒</span></div>
+        </div>
+        <div class="lap-time-item">
+          <div class="lap-label">前半3F</div>
+          <div class="lap-value">${lap3f.toFixed(1)}<span class="lap-unit">秒</span></div>
+        </div>
+      </div>` : ''}
     </div>
-    ` : ''}
 
-    <div class="pace-bars" style="margin-top:12px">
-      <div class="pace-item"><span class="pace-dot" style="background:var(--err)"></span>
-        <span class="pace-label">逃げ</span><span class="pace-count">${dist['逃げ'] || 0}</span></div>
-      <div class="pace-item"><span class="pace-dot" style="background:var(--warn)"></span>
-        <span class="pace-label">先行</span><span class="pace-count">${dist['先行'] || 0}</span></div>
-      <div class="pace-item"><span class="pace-dot" style="background:var(--accent)"></span>
-        <span class="pace-label">差し</span><span class="pace-count">${dist['差し'] || 0}</span></div>
-      <div class="pace-item"><span class="pace-dot" style="background:var(--purple)"></span>
-        <span class="pace-label">追込</span><span class="pace-count">${dist['追込'] || 0}</span></div>
+    <div class="pace-comment-block">
+      ${paceComment.lines.map(l => `
+        <div class="pace-comment-line">
+          <span class="pace-comment-icon">${l.icon}</span>
+          <span class="pace-comment-text">${l.text}</span>
+        </div>`).join('')}
+      <div class="pace-verdict ${verdictCls}">
+        ${paceComment.verdict}
+      </div>
+      <div class="pace-tip">${paceComment.tip}</div>
     </div>
   </div>`;
 
@@ -869,7 +1174,7 @@ function renderResults(data) {
   }
   html += `</div></div>`;
 
-  // Cards
+  // Cards（スタミナ指数付き）
   html += '<div class="cards-grid">';
   for (const e of entries) {
     const td = e.tracking_difficulty || {};
@@ -877,8 +1182,15 @@ function renderResults(data) {
     const gate = e.gate_factors || {};
     const neighbor = e.neighbor_factors || {};
     const field = e.field_factors || {};
+    const pr = e.prev_race || {};
     const pct = td.ease_pct || 50;
     const bn = e.bracket_number || 0;
+
+    // スタミナ指数: position_flowから取得
+    const pf = (data.position_flow || []).find(x => x.horse_number === e.horse_number);
+    const stm = pf?.stamina || {};
+    const stmIdx = stm.stamina_index ?? null;
+    const stmLbl = stm.stamina_label || '';
 
     html += `<div class="td-card" id="card-${e.horse_number}">
       <div class="td-card-header">
@@ -888,12 +1200,25 @@ function renderResults(data) {
           <span class="td-card-style ${styleClass(prof.style || '差し')}">${prof.style || '-'}</span>
           <span style="font-size:10px;color:var(--text-dim);margin-left:4px">安定度 ${((prof.stability || 0)*100).toFixed(0)}%</span>
         </div>
-        <div class="td-ease-badge ${easeClass(td.label || '普通')}">
-          ${pct.toFixed(0)}
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+          <div class="td-ease-badge ${easeClass(td.label || '普通')}" title="追走容易度">${pct.toFixed(0)}</div>
+          ${stmIdx !== null ? `<div class="stamina-index-badge ${staminaClass(stmLbl)}" title="スタミナ温存度">${stmIdx.toFixed(0)}</div>` : ''}
         </div>
       </div>
       <div class="td-card-body">
-        <div class="td-factor-group">
+        ${stmIdx !== null ? `
+        <div class="td-stamina-row">
+          <span class="td-stamina-label">🔋 温存度</span>
+          <span class="td-stamina-value" style="color:${staminaColor(stmIdx)}">${stmIdx.toFixed(1)}</span>
+          <span class="${staminaClass(stmLbl)}" style="font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px">${stmLbl}</span>
+          <div class="stamina-load-row">
+            <span class="load-item"><span class="load-dot" style="background:var(--accent)"></span>ペース ${(stm.pace_load>0?'+':'')+(stm.pace_load*100).toFixed(0)}%</span>
+            <span class="load-item"><span class="load-dot" style="background:var(--warn)"></span>位置 ${(stm.position_load*100).toFixed(0)}%</span>
+            <span class="load-item"><span class="load-dot" style="background:var(--purple)"></span>距離×${stm.distance_load}</span>
+          </div>
+        </div>` : ''}
+
+        <div class="td-factor-group" style="margin-top:${stmIdx !== null ? '8px' : '0'}">
           <div class="td-factor-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             ゲート要因
@@ -914,6 +1239,34 @@ function renderResults(data) {
         <div class="td-factor-group">
           <div class="td-factor-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+            前走データ
+          </div>
+          <div class="td-factor-row">
+            <span class="td-factor-label">前走1角</span>
+            <span class="td-factor-value" style="color:${(pr.t1f_raw||0)<=3?'var(--err)':(pr.t1f_raw||0)<=6?'var(--warn)':'var(--text-dim)'}">
+              ${pr.t1f_raw||'-'}番手/${pr.field_size||'-'}頭
+            </span>
+            ${pr.prev_was_top3 ? '<span style="font-size:10px;color:var(--ok);margin-left:4px">前々走も前目</span>' : ''}
+          </div>
+          <div class="td-factor-row">
+            <span class="td-factor-label">T1F正規化</span>
+            <div class="td-bar-container">
+              <div class="td-bar-fill" style="width:${Math.min(100,(1-(pr.t1f_norm||0.5))*100)}%;background:${(pr.t1f_norm||0.5)<0.3?'var(--err)':'var(--accent)'}"></div>
+            </div>
+            <span class="td-factor-value">${(pr.t1f_norm||0).toFixed(3)}</span>
+          </div>
+          <div class="td-factor-row">
+            <span class="td-factor-label">コース変化</span>
+            <span class="td-factor-value" style="font-size:10px">
+              ${e.course_comparison?.dist_category||'-'}
+              ${e.course_comparison?.same_surface ? '<span style="color:var(--ok)">同馬場</span>' : '<span style="color:var(--warn)">馬場変化</span>'}
+            </span>
+          </div>
+        </div>
+
+        <div class="td-factor-group">
+          <div class="td-factor-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
             隣枠影響
           </div>
           <div class="td-factor-row">
@@ -926,15 +1279,7 @@ function renderResults(data) {
           <div class="td-factor-row">
             <span class="td-factor-label">遅い隣馬</span>
             <span class="td-factor-value" style="color:${neighbor.slow_neighbors >= 2 ? 'var(--ok)' : neighbor.slow_neighbors === 1 ? 'var(--accent)' : 'var(--text-dim)'}">
-              ${neighbor.slow_neighbors}/2
-              ${neighbor.slow_neighbors >= 2 ? ' ★ 進路確保しやすい' : ''}
-            </span>
-          </div>
-          <div class="td-factor-row">
-            <span class="td-factor-label">速い隣馬</span>
-            <span class="td-factor-value" style="color:${neighbor.fast_neighbors >= 1 ? 'var(--ok)' : 'var(--text-dim)'}">
-              ${neighbor.fast_neighbors}
-              ${neighbor.fast_neighbors >= 1 ? ' ★ 前に引っ張ってもらえる' : ''}
+              ${neighbor.slow_neighbors}/2${neighbor.slow_neighbors >= 2 ? ' ★' : ''}
             </span>
           </div>
         </div>
@@ -948,7 +1293,7 @@ function renderResults(data) {
             <span class="td-factor-label">同脚質馬</span>
             <span class="td-factor-value" style="color:${field.same_style_count <= 2 ? 'var(--ok)' : field.same_style_count >= 5 ? 'var(--err)' : 'var(--warn)'}">
               ${field.same_style_count}頭
-              ${field.same_style_count <= 2 ? ' ◎ 競合少' : field.same_style_count >= 5 ? ' △ 激戦' : ''}
+              ${field.same_style_count <= 2 ? ' ◎' : field.same_style_count >= 5 ? ' △' : ''}
             </span>
           </div>
           <div class="td-factor-row">
@@ -964,20 +1309,43 @@ function renderResults(data) {
   }
   html += '</div>';
 
-  // Summary table
-  html += `<div class="summary-section"><h3>追走難度ランキング</h3>
+  // Summary table（スタミナ指数付き）
+  html += `<div class="summary-section"><h3>追走難度ランキング（スタミナ温存度含む）</h3>
   <table class="summary-table"><thead><tr>
     <th>順位</th><th>枠</th><th>馬番</th><th>馬名</th><th>脚質</th>
-    <th class="num">容易度</th><th>判定</th><th>偶数枠</th><th>遅い隣馬</th><th>速い隣馬</th><th>同脚質</th>
+    <th class="num">容易度</th><th>容易判定</th>
+    <th class="num">🔋温存度</th><th>温存判定</th>
+    <th>序盤位置</th>
+    <th>前走1角</th><th>T1F正規化</th><th>距離変化</th><th>馬場</th>
+    <th>同脚質</th>
   </tr></thead><tbody>`;
-  entries.forEach((e, i) => {
+  const sortedEntries = [...entries].sort((a, b) => {
+    // スタミナ指数でソート（なければ容易度）
+    const pa = (data.position_flow||[]).find(x=>x.horse_number===a.horse_number);
+    const pb = (data.position_flow||[]).find(x=>x.horse_number===b.horse_number);
+    const sa = pa?.stamina?.stamina_index ?? (a.tracking_difficulty?.ease_pct||50);
+    const sb = pb?.stamina?.stamina_index ?? (b.tracking_difficulty?.ease_pct||50);
+    return sb - sa;
+  });
+  sortedEntries.forEach((e, i) => {
     const td = e.tracking_difficulty || {};
     const prof = e.profile || {};
     const gate = e.gate_factors || {};
-    const neighbor = e.neighbor_factors || {};
     const field = e.field_factors || {};
+    const pr = e.prev_race || {};
+    const cc = e.course_comparison || {};
     const bn = e.bracket_number || 0;
     const pct = td.ease_pct || 50;
+
+    const pf = (data.position_flow || []).find(x => x.horse_number === e.horse_number);
+    const stm = pf?.stamina || {};
+    const stmIdx = stm.stamina_index ?? null;
+    const stmLbl = stm.stamina_label || '';
+    const earlyPos = pf?.positions?.early?.position ?? '-';
+
+    const t1fColor = (pr.t1f_raw||0)<=3 ? 'var(--err)' : (pr.t1f_raw||0)<=6 ? 'var(--warn)' : 'var(--text-dim)';
+    const distCls = cc.dist_category === '距離延長' ? 'dist-ext' : cc.dist_category === '距離短縮' ? 'dist-red' : 'dist-same';
+
     html += `<tr>
       <td class="num">${i + 1}</td>
       <td><span class="gate-num ${wakuClass(bn)}" style="width:22px;height:22px;font-size:11px;display:inline-flex">${bn}</span></td>
@@ -986,9 +1354,13 @@ function renderResults(data) {
       <td><span class="td-card-style ${styleClass(prof.style || '差し')}" style="font-size:10px">${prof.style || '-'}</span></td>
       <td class="num" style="color:${easeColor(pct)};font-weight:700">${pct.toFixed(1)}</td>
       <td><span class="td-ease-badge ${easeClass(td.label || '普通')}" style="font-size:11px;padding:2px 8px">${td.label || '-'}</span></td>
-      <td style="text-align:center">${gate.is_even_gate ? '✓' : '-'}</td>
-      <td class="num">${neighbor.slow_neighbors || 0}/2</td>
-      <td class="num" style="color:${neighbor.fast_neighbors >= 1 ? 'var(--ok)' : 'var(--text-dim)'}">${neighbor.fast_neighbors || 0}</td>
+      <td class="num" style="color:${stmIdx!==null?staminaColor(stmIdx):'var(--text-dim)'};font-weight:700">${stmIdx!==null?stmIdx.toFixed(1):'-'}</td>
+      <td>${stmLbl ? `<span class="${staminaClass(stmLbl)}" style="font-size:11px;padding:2px 8px;border-radius:4px">${stmLbl}</span>` : '-'}</td>
+      <td class="num">${earlyPos}番手</td>
+      <td class="num" style="color:${t1fColor};font-weight:700">${pr.t1f_raw||'-'}/${pr.field_size||'-'}</td>
+      <td class="num" style="color:${t1fColor}">${pr.t1f_norm!==undefined?(pr.t1f_norm).toFixed(3):'-'}</td>
+      <td class="${distCls}">${cc.dist_change!=null?(cc.dist_change>0?'+'+cc.dist_change:cc.dist_change)+'m':'-'}</td>
+      <td style="color:${cc.same_surface?'var(--ok)':'var(--warn)'}">${cc.same_surface?'同馬場':'変化'}</td>
       <td class="num" style="color:${field.same_style_count <= 2 ? 'var(--ok)' : field.same_style_count >= 5 ? 'var(--err)' : 'var(--warn)'}">
         ${field.same_style_count || 0}頭</td>
     </tr>`;

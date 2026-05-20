@@ -1,38 +1,30 @@
 """
 追走難度 (Tracking Difficulty) モジュール
 
-「今回いつもと同じ位置を取るのにどれくらい楽か」を数値化する。
+「今回いつもと同じ位置を取るのにどれくらい楽か」「脚がどれだけたまるか」を数値化する。
 
 == コンセプト ==
-各馬には「好む脚質ポジション」（直近走の通過順平均）がある。
-今回のレースで、ゲート位置・隣枠の馬の傾向・頭数・コース特性などから
-そのポジションを取る難易度を推定する。
+各馬の前走・前々走の通過順位割合を基礎データとし、
+今回のペース・位置取り予測と組み合わせて「追走難度指数（スタミナ温存度）」を算出する。
+
+== 分析データ ==
+1. 前走位置取り割合（N番手/出走頭数）と分布ビン
+2. 全馬の前走T1F（1コーナー通過順）データ（頭数・コース・前々走3番手以内馬数による正規化）
+3. 前走との出走コース比較（馬場タイプ・距離変化・枠番推移）
+4. ペースデータ（前半1F/3F予測・ペース圧力指数）
+5. 各馬の追走難度指数（脚がたまる度 0-100）
 
 == 特徴量設計 ==
-1. 馬の脚質プロファイル
-   - 直近走の平均初角通過順位（正規化: pos / field_size）
-   - 脚質のバラつき（安定 vs 不安定）
-   - 前走からの脚質変化トレンド
-2. ゲート要因
-   - 馬番（内/外）
-   - 枠番の偶奇（偶数枠 = ゲート入り遅い → スタートしやすい）
-   - 馬番の正規化位置（horse_number / field_size）
-3. 隣枠影響
-   - 左隣・右隣馬の平均初角通過順位
-   - 隣馬が出遅れ傾向か（初角順位 > 頭数の60%）
-   - 隣馬のスタート安定性
-4. 場全体の構成
-   - 同脚質馬（先行馬/差し馬）の数
-   - ペース予測（先行馬比率）
-   - 頭数
-5. コース・距離要因
-   - 芝/ダート
-   - 距離帯（短距離/中距離/長距離）
-   - 馬場状態
+1. 馬の脚質プロファイル: 直近走平均初角通過順位・安定性
+2. 前走T1Fデータ: 前走1角通過順 / 前走頭数（前々走3番手以内馬数で正規化）
+3. コース比較: 馬場タイプ一致・距離変化カテゴリ・枠番変化
+4. ゲート要因: 馬番・枠番偶奇・ゾーン
+5. 隣枠影響: 左右隣馬の傾向・スペーススコア
+6. 場全体構成: 同脚質馬数・ペース圧力・先行馬比率
 
 == ターゲット変数 ==
-position_deviation = (typical_position_normalized - actual_position_normalized)
-正 = 想定より楽にポジション取得、負 = 想定より困難
+stamina_index = 脚がたまる度（100 = フル温存、0 = 消耗）
+position_deviation = (typical_norm_pos - actual_norm_pos)
 """
 
 from __future__ import annotations
@@ -91,6 +83,327 @@ def _safe_std(values: list[float]) -> float:
         return 0.0
     mean = sum(values) / len(values)
     return math.sqrt(sum((v - mean) ** 2 for v in values) / (len(values) - 1))
+
+
+def _safe_float(v, default: float = 0.0) -> float:
+    try:
+        return float(v) if v is not None else default
+    except (TypeError, ValueError):
+        return default
+
+
+# ── 前走データ特徴量 ──
+
+def extract_prev_race_features(race_history: list[dict]) -> dict:
+    """
+    前走・前々走の特徴量を抽出する。
+
+    T1F = 前走1コーナー通過順位（初角ポジション）。
+    正規化は build_field_prev_stats() で行う（全馬の前走top3馬数が必要）。
+    """
+    if not race_history:
+        return _empty_prev_features()
+
+    prev = race_history[0]
+    prev_prev = race_history[1] if len(race_history) > 1 else None
+
+    prev_passing = _parse_passing(prev.get("passing_order", ""))
+    prev_fs = int(prev.get("field_size") or 0)
+
+    if not prev_passing or prev_fs < 4:
+        return _empty_prev_features()
+
+    prev_t1f_raw = prev_passing[0]           # 前走1コーナー通過順
+    prev_pos_ratio = prev_t1f_raw / prev_fs  # 位置取り割合 (0-1)
+
+    # 前々走で自馬が3番手以内だったか
+    prev_prev_was_top3 = 0
+    prev_prev_passing = []
+    prev_prev_fs = 0
+    if prev_prev:
+        prev_prev_passing = _parse_passing(prev_prev.get("passing_order", ""))
+        prev_prev_fs = int(prev_prev.get("field_size") or 0)
+        if prev_prev_passing and prev_prev_fs >= 4:
+            prev_prev_was_top3 = 1 if prev_prev_passing[0] <= 3 else 0
+
+    return {
+        "prev_t1f_raw": prev_t1f_raw,
+        "prev_pos_ratio": round(prev_pos_ratio, 4),
+        "prev_field_size": prev_fs,
+        "prev_surface": str(prev.get("surface") or ""),
+        "prev_distance": int(prev.get("distance") or 0),
+        "prev_bracket": int(prev.get("bracket_number") or prev.get("horse_number") or 0),
+        "prev_horse_number": int(prev.get("horse_number") or 0),
+        "prev_track_condition": str(prev.get("track_condition") or ""),
+        "prev_last3f": _safe_float(prev.get("last_3f")),
+        "prev_finish_pos": int(prev.get("finish_position") or 0),
+        "prev_prev_was_top3": prev_prev_was_top3,
+        "prev_prev_t1f_raw": prev_prev_passing[0] if prev_prev_passing else 0,
+        "prev_prev_field_size": prev_prev_fs,
+    }
+
+
+def _empty_prev_features() -> dict:
+    return {
+        "prev_t1f_raw": 0,
+        "prev_pos_ratio": 0.5,
+        "prev_field_size": 0,
+        "prev_surface": "",
+        "prev_distance": 0,
+        "prev_bracket": 0,
+        "prev_horse_number": 0,
+        "prev_track_condition": "",
+        "prev_last3f": 0.0,
+        "prev_finish_pos": 0,
+        "prev_prev_was_top3": 0,
+        "prev_prev_t1f_raw": 0,
+        "prev_prev_field_size": 0,
+    }
+
+
+def build_field_prev_stats(
+    all_prev_features: dict[int, dict],
+    current_entries: list[dict],
+    current_distance: int,
+    current_surface: str,
+) -> dict:
+    """
+    フィールド全体の前走統計を計算する。
+
+    - 位置取り割合のビン化
+    - 前走T1F正規化（前々走で3番手以内だった馬の頭数を使用）
+    - コース比較統計
+
+    Args:
+        all_prev_features: horse_number → prev_features のマップ
+        current_entries: 今回の出走エントリ
+        current_distance: 今回の距離
+        current_surface: 今回の馬場タイプ
+    """
+    field_size = len(current_entries)
+    if field_size == 0:
+        return {}
+
+    pos_ratios = []
+    t1f_raws = []
+    prev_top3_count = 0   # 前走で3番手以内（前走pos_ratio <= 3/prev_fs）
+
+    for e in current_entries:
+        hn = e.get("horse_number", 0)
+        pf = all_prev_features.get(hn, _empty_prev_features())
+        pr = pf["prev_pos_ratio"]
+        t1f_raw = pf["prev_t1f_raw"]
+
+        pos_ratios.append(pr)
+        if t1f_raw > 0:
+            t1f_raws.append(t1f_raw)
+
+        # 前走で1コーナー3番手以内を走っていた馬
+        if pf["prev_field_size"] > 0 and t1f_raw > 0 and t1f_raw <= 3:
+            prev_top3_count += 1
+
+    # ── 位置取り割合ビン化（5区分）──
+    bin_edges = [0.0, 0.2, 0.4, 0.6, 0.8, 1.01]
+    bin_labels = ["先頭圏 (0-20%)", "前目 (20-40%)", "中団 (40-60%)", "後方 (60-80%)", "最後方 (80-100%)"]
+    bins: list[dict] = []
+    for i, label in enumerate(bin_labels):
+        lo, hi = bin_edges[i], bin_edges[i + 1]
+        horses_in_bin = [
+            e.get("horse_number", 0)
+            for e in current_entries
+            if lo <= all_prev_features.get(e.get("horse_number", 0), _empty_prev_features())["prev_pos_ratio"] < hi
+        ]
+        bins.append({
+            "label": label,
+            "range": [lo, hi],
+            "count": len(horses_in_bin),
+            "horse_numbers": horses_in_bin,
+        })
+
+    # ── T1F正規化係数 ──
+    # 前走で3番手以内だった馬の割合が高いほど、今回の前半争いが激化
+    front_pressure_ratio = prev_top3_count / max(field_size, 1)
+    # 正規化係数: front_pressure_ratio が高い = 各馬のT1F値の価値が下がる（競争が激しい）
+    t1f_normalization_factor = 1.0 + front_pressure_ratio  # 1.0 ~ 2.0
+
+    # T1F正規化値を各馬に適用
+    normalized_t1f: dict[int, float] = {}
+    for e in current_entries:
+        hn = e.get("horse_number", 0)
+        pf = all_prev_features.get(hn, _empty_prev_features())
+        t1f_raw = pf["prev_t1f_raw"]
+        prev_fs = pf["prev_field_size"]
+        if t1f_raw > 0 and prev_fs > 0:
+            # 前走T1F正規化 = (T1F順位/前走頭数) × 正規化係数
+            # 値が小さいほど「前にいた馬」（前走前目＋今回も競争が少ない）
+            normalized_t1f[hn] = round(
+                (t1f_raw / prev_fs) * (1.0 + pf["prev_prev_was_top3"] * 0.15) / t1f_normalization_factor,
+                4,
+            )
+        else:
+            normalized_t1f[hn] = 0.5
+
+    # ── コース比較統計 ──
+    same_surface_count = sum(
+        1 for e in current_entries
+        if all_prev_features.get(e.get("horse_number", 0), _empty_prev_features())["prev_surface"] in (current_surface, "")
+    )
+    dist_changes = []
+    for e in current_entries:
+        hn = e.get("horse_number", 0)
+        pf = all_prev_features.get(hn, _empty_prev_features())
+        if pf["prev_distance"] > 0 and current_distance > 0:
+            dist_changes.append(current_distance - pf["prev_distance"])
+
+    return {
+        "position_bins": bins,
+        "prev_top3_count": prev_top3_count,
+        "front_pressure_ratio": round(front_pressure_ratio, 3),
+        "t1f_normalization_factor": round(t1f_normalization_factor, 3),
+        "normalized_t1f": normalized_t1f,
+        "same_surface_count": same_surface_count,
+        "avg_dist_change": round(sum(dist_changes) / len(dist_changes), 0) if dist_changes else 0,
+        "dist_extension_count": sum(1 for d in dist_changes if d > 50),
+        "dist_reduction_count": sum(1 for d in dist_changes if d < -50),
+    }
+
+
+def build_course_comparison(
+    entry: dict,
+    prev_features: dict,
+    current_distance: int,
+    current_surface: str,
+) -> dict:
+    """各馬の前走コースとの比較情報を構築する。"""
+    hn = entry.get("horse_number", 0)
+    current_bracket = entry.get("bracket_number", 0)
+    prev_bracket = prev_features.get("prev_bracket", 0)
+    prev_hn = prev_features.get("prev_horse_number", 0)
+    prev_dist = prev_features.get("prev_distance", 0)
+    prev_surf = prev_features.get("prev_surface", "")
+
+    dist_change = (current_distance - prev_dist) if prev_dist > 0 and current_distance > 0 else 0
+    if abs(dist_change) <= 50:
+        dist_category = "同距離"
+    elif dist_change > 50:
+        dist_category = "距離延長"
+    else:
+        dist_category = "距離短縮"
+
+    gate_change = (hn - prev_hn) if prev_hn > 0 else 0
+
+    same_surface = False
+    if prev_surf:
+        surf_norm = {"ダ": "ダート", "芝": "芝"}.get(prev_surf, prev_surf)
+        curr_norm = {"ダ": "ダート", "芝": "芝"}.get(current_surface, current_surface)
+        same_surface = surf_norm == curr_norm
+
+    return {
+        "same_surface": same_surface,
+        "prev_surface": prev_surf,
+        "current_surface": current_surface,
+        "prev_distance": prev_dist,
+        "current_distance": current_distance,
+        "dist_change": dist_change,
+        "dist_category": dist_category,
+        "gate_change": gate_change,
+        "prev_horse_number": prev_hn,
+        "current_horse_number": hn,
+    }
+
+
+# ── 追走難度指数（スタミナ温存度）──
+
+def compute_stamina_index(
+    predicted_position_norm: float,
+    pace_index: float,
+    pace_type: str,
+    distance: int,
+    surface: str,
+    t1f_norm: float,
+    profile: dict,
+) -> dict:
+    """
+    追走難度指数（脚がたまる度）を計算する。
+
+    脚がたまる = スタミナが温存される = 終盤に使える脚が多く残る
+
+    理論:
+    - 後方位置 × スローペース → 最大温存（差し・追込には不利）
+    - 前方位置 × スローペース → 消耗は少ないが位置取りの意味が薄い
+    - 前方位置 × ハイペース  → 最大消耗（逃げ・先行には苦しい）
+    - 後方位置 × ハイペース  → 温存はできるが届きにくい
+
+    Returns:
+        {
+            "stamina_index": 0-100 (高いほど脚がたまる),
+            "stamina_label": str,
+            "pace_load": float,   # ペース負荷
+            "position_load": float,  # 位置取り負荷
+            "distance_load": float,  # 距離負荷
+        }
+    """
+    style = profile.get("style", "差し")
+    pos_std = profile.get("pos_std", 0.2)
+
+    # 1) ペース負荷（ハイペース = 負荷大）
+    pace_load = (pace_index - 50) / 100  # -0.5 ~ +0.5
+    pace_load = max(-0.5, min(0.5, pace_load))
+
+    # 2) 位置取り負荷
+    # 前方にいるほど負荷が大きいが、ペースとの組み合わせが重要
+    # pos_norm: 0=1番手, 1=最後尾
+    pos_front = 1.0 - predicted_position_norm  # 0=最後尾, 1=1番手
+    position_load = pos_front * (1.0 + pace_load)  # ハイペースで前にいるほど負荷増
+
+    # 3) 距離負荷（長距離ほどペース・位置取りの影響が大きい）
+    if distance <= 1400:
+        dist_factor = 0.8   # 短距離：消耗が短時間なので少し緩和
+    elif distance <= 1800:
+        dist_factor = 1.0
+    elif distance <= 2200:
+        dist_factor = 1.15
+    else:
+        dist_factor = 1.3
+
+    # 4) ダートは芝より消耗が大きい
+    surface_factor = 1.1 if surface in ("ダ", "ダート") else 1.0
+
+    # 5) T1F正規化値による前半争い強度
+    # t1f_norm が低い = 前に行きたい馬が多い = ペース争い激化
+    t1f_pressure = (0.5 - min(t1f_norm, 1.0)) * 0.3  # -0.3 ~ +0.15
+
+    # 総合消耗スコア（0=全消耗, 1=全温存）
+    raw_load = (
+        position_load * 0.4
+        + pace_load * 0.3
+        + t1f_pressure * 0.2
+        + (pos_std - 0.2) * 0.1  # 不安定な脚質は追走で無駄な動きが多い
+    )
+    raw_load *= dist_factor * surface_factor
+
+    # スタミナ温存度 = 100 - 消耗率×100
+    stamina_index = max(0.0, min(100.0, 50.0 - raw_load * 100))
+
+    if stamina_index >= 75:
+        label = "最大温存"
+    elif stamina_index >= 60:
+        label = "温存"
+    elif stamina_index >= 45:
+        label = "標準"
+    elif stamina_index >= 30:
+        label = "消耗"
+    else:
+        label = "激消耗"
+
+    return {
+        "stamina_index": round(stamina_index, 1),
+        "stamina_label": label,
+        "pace_load": round(pace_load, 3),
+        "position_load": round(position_load, 3),
+        "distance_load": round(dist_factor, 2),
+        "t1f_pressure": round(t1f_pressure, 3),
+    }
 
 
 # ── 馬の脚質プロファイル ──
@@ -611,7 +924,7 @@ def predict_tracking_difficulty(
     race_data: dict,
     horse_histories: dict[str, list[dict]] | None = None,
     storage=None,
-) -> list[dict]:
+) -> tuple[list[dict], dict]:
     """
     レースデータに対して各馬の追走難度を推定する。
 
@@ -621,19 +934,22 @@ def predict_tracking_difficulty(
         storage: HybridStorage (horse_histories が None の場合に使用)
 
     Returns:
-        馬番順の追走難度スコアリスト
+        (馬番順の追走難度スコアリスト, フィールド統計dict)
     """
     shutuba = race_data.get("race_shutuba") or race_data.get("race_card") or {}
     result = race_data.get("race_result") or {}
     entries = shutuba.get("entries") or result.get("entries") or []
     if not entries:
-        return []
+        return [], {}
+
+    current_distance = int(shutuba.get("distance") or result.get("distance") or 1600)
+    current_surface = str(shutuba.get("surface") or result.get("surface") or "芝")
 
     race_info = {
         "race_id": shutuba.get("race_id") or result.get("race_id", ""),
         "field_size": len(entries),
-        "distance": shutuba.get("distance") or result.get("distance", 1600),
-        "surface": shutuba.get("surface") or result.get("surface", "芝"),
+        "distance": current_distance,
+        "surface": current_surface,
         "track_condition": (
             shutuba.get("track_condition")
             or result.get("track_condition", "良")
@@ -656,13 +972,20 @@ def predict_tracking_difficulty(
                     horse_histories[hid] = hr["race_history"]
 
     profiles: dict[int, dict] = {}
+    prev_features_map: dict[int, dict] = {}
     for e in entries:
         hid = e.get("horse_id", "")
         hn = e.get("horse_number", 0)
         history = horse_histories.get(hid, [])
         profiles[hn] = build_horse_profile(history)
+        prev_features_map[hn] = extract_prev_race_features(history)
 
     field_profiles = list(profiles.values())
+
+    # フィールドレベルの前走統計
+    field_prev_stats = build_field_prev_stats(
+        prev_features_map, entries, current_distance, current_surface
+    )
 
     model = load_model()
     results = []
@@ -672,6 +995,7 @@ def predict_tracking_difficulty(
         hid = e.get("horse_id", "")
         bn = e.get("bracket_number", 0)
         profile = profiles.get(hn, build_horse_profile([]))
+        prev_feat = prev_features_map.get(hn, _empty_prev_features())
 
         left_hn = hn - 1
         right_hn = hn + 1
@@ -690,6 +1014,14 @@ def predict_tracking_difficulty(
 
         ease_pct = _deviation_to_ease(pred, profile)
 
+        # コース比較
+        course_cmp = build_course_comparison(
+            e, prev_feat, current_distance, current_surface
+        )
+
+        # T1F正規化値
+        t1f_norm = field_prev_stats.get("normalized_t1f", {}).get(hn, 0.5)
+
         results.append({
             "horse_number": hn,
             "horse_id": hid,
@@ -705,6 +1037,7 @@ def predict_tracking_difficulty(
                 "style": profile["style"],
                 "stability": round(1.0 - profile["pos_std"], 3),
                 "n_races": profile["n_races"],
+                "positions": profile.get("positions", []),
             },
             "gate_factors": {
                 "horse_number": hn,
@@ -729,10 +1062,23 @@ def predict_tracking_difficulty(
                 "same_style_count": row.get("same_style_count", 0),
                 "pace_pressure": round(row.get("pace_pressure", 0), 3),
             },
+            "prev_race": {
+                "t1f_raw": prev_feat["prev_t1f_raw"],
+                "t1f_norm": round(t1f_norm, 4),
+                "pos_ratio": prev_feat["prev_pos_ratio"],
+                "field_size": prev_feat["prev_field_size"],
+                "surface": prev_feat["prev_surface"],
+                "distance": prev_feat["prev_distance"],
+                "horse_number": prev_feat["prev_horse_number"],
+                "last3f": prev_feat["prev_last3f"],
+                "finish_pos": prev_feat["prev_finish_pos"],
+                "prev_was_top3": prev_feat["prev_prev_was_top3"],
+            },
+            "course_comparison": course_cmp,
         })
 
     results.sort(key=lambda x: -x["tracking_difficulty"]["ease_pct"])
-    return results
+    return results, field_prev_stats
 
 
 def _build_inference_row(
@@ -1066,6 +1412,8 @@ def predict_position_flow(
     horse_profiles: dict[int, dict],
     tracking_results: list[dict],
     pace_prediction: dict,
+    field_prev_stats: dict | None = None,
+    race_info: dict | None = None,
 ) -> list[dict]:
     """
     各馬の位置取りの流れ（序盤→中盤→終盤）を予測する。
@@ -1181,6 +1529,25 @@ def predict_position_flow(
             (pace_type == "スロー" and style in ("差し", "追込"))
         )
 
+        # T1F情報取得
+        t1f_norm = 0.5
+        if field_prev_stats:
+            t1f_norm = field_prev_stats.get("normalized_t1f", {}).get(hn, 0.5)
+
+        distance = (race_info or {}).get("distance", 1600)
+        surface = (race_info or {}).get("surface", "芝")
+
+        # 追走難度指数（スタミナ温存度）
+        stamina_data = compute_stamina_index(
+            predicted_position_norm=early_pos_norm,
+            pace_index=pace_index,
+            pace_type=pace_type,
+            distance=distance,
+            surface=surface,
+            t1f_norm=t1f_norm,
+            profile=profile,
+        )
+
         results.append({
             "horse_number": hn,
             "horse_name": e.get("horse_name", ""),
@@ -1202,6 +1569,7 @@ def predict_position_flow(
             "flow_pattern": flow_pattern,
             "stamina_concern": stamina_concern,
             "confidence": round(max(0, 1.0 - pos_std * 2), 2),
+            "stamina": stamina_data,
         })
 
     # 序盤位置でソート
