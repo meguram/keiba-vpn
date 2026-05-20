@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>参考資料から反映した設計メモ — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>参考資料から反映した設計メモ</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/reference_insights.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">参考資料から反映した設計メモ</h1>
+<h2 id="_2">目的</h2>
+<p>このメモは、レース直前確率モデル向けデータ準備企画書をブラッシュアップする際に参照した外部資料と、その反映ポイントを整理したものである。</p>
+<h2 id="_3">参照資料</h2>
+<ul>
+<li><a href="https://syslab.k.hosei.ac.jp/abst/2023-MN-RM.pdf">法政大学 経営数理工学研究室 2023年度卒論要旨 PDF</a></li>
+<li><a href="https://qiita.com/umaro_ai/items/d1e0b61f90098ee7fbcb">Qiita: 機械学習で競馬の回収率140%超を達成</a></li>
+<li><a href="https://qiita.com/dijzpeb/items/db74aa9726aaf55201eb">Qiita: 「機械学習で競馬予想」をガチで作る</a></li>
+<li><a href="https://speakerdeck.com/shoheimitani/machine-learning-with-horse-racing">Speaker Deck: 競馬で学ぶ機械学習の基本と実践</a></li>
+<li><a href="https://medium.com/@prathik.codes/how-to-do-target-encoding-without-data-leakage-the-right-way-280bd24fbc81">How to Do Target Encoding Without Data Leakage</a></li>
+<li><a href="https://github.com/amerob/kaggle-for-ml-engineers">amerob/kaggle-for-ml-engineers</a></li>
+<li><a href="https://github.com/thomastschinkel/autofepg">autofepg</a></li>
+<li><a href="https://towardsdatascience.com/benchmarking-categorical-encoders-9c322bd77ee8">Benchmarking Categorical Encoders</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Purged_cross-validation">Purged cross-validation</a></li>
+<li><a href="https://www.waylandz.com/quant-book-en/Time-Series-Cross-Validation-Purged-CV">Background: Time Series Cross-Validation (Purged CV)</a></li>
+</ul>
+<h2 id="_4">既存コードから反映した点</h2>
+<ul>
+<li><code>src/pipeline/tracking_difficulty.py</code></li>
+<li><code>src/pipeline/pace_predictor.py</code></li>
+<li><code>src/research/bloodline_distance.py</code></li>
+<li><code>src/research/race_quality_model.py</code></li>
+</ul>
+<h2 id="_5">実装戦略の補足</h2>
+<ul>
+<li><code>docs/html/modeling/modeling_coding_strategy.html</code></li>
+<li><code>docs/html/modeling/race_performance_rating_system.html</code></li>
+</ul>
+<h2 id="_6">反映したポイント</h2>
+<h2 id="1">1. ベースラインを先に固定する</h2>
+<p>Speaker Deck と法政大の資料では、まずは指数中心のシンプルなベースモデルを作り、その後に特徴量を段階的に追加して比較する流れが明確だった。</p>
+<p>これを受けて、今回の設計では以下を明示した。<br />
+- <code>BaselineV1</code> を定義する<br />
+- <code>ExtendedV1</code> を別出力する<br />
+- 追加特徴量の効果は差分で評価する</p>
+<p>反映先:<br />
+- <code>docs/html/modeling/pre_race_feature_whitelist.html</code><br />
+- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code></p>
+<h2 id="2-roi">2. 確率の信頼性を ROI より先に評価する</h2>
+<p>Speaker Deck では、期待値が 1 を超えても高オッズ帯では小さな確率誤差で簡単に負けに転ぶ点が強調されていた。また <code>logloss</code> や <code>Brier score</code> のような確率の信頼性指標が重要だと示されていた。</p>
+<p>これを受けて、今回の設計では以下を明示した。<br />
+- 一次評価は <code>log_loss</code>, <code>Brier score</code>, <code>ECE</code><br />
+- ROI は二次評価<br />
+- <code>safe_ev</code> と <code>buffer</code> を前提にする<br />
+- 高オッズ帯は安全域付きで扱う</p>
+<p>反映先:<br />
+- <code>docs/html/modeling/betting_backtest_dataset_spec.html</code><br />
+- <code>data/meta/modeling/dataset_split_manifest.json</code></p>
+<h2 id="3-timeseriessplit">3. TimeSeriesSplit / 時系列分割を採用する</h2>
+<p>法政大資料と Speaker Deck の双方で、競馬モデルでは時間順の検証が重要であることが示されていた。</p>
+<p>これを受けて、今回の設計では以下を採用した。<br />
+- <code>2020-2023 train / 2024 valid / 2025 test</code><br />
+- <code>rolling-origin</code> fold<br />
+- 行単位ランダム split 禁止<br />
+- train fold 内での集計・encoding</p>
+<p>反映先:<br />
+- <code>data/meta/modeling/dataset_split_manifest.json</code></p>
+<h2 id="4-123">4. 1着・2着内・3着内を分けて持つ</h2>
+<p>Qiita の 140% 記事では <code>1着指数</code>, <code>2着以内指数</code>, <code>3着以内指数</code> を併せて扱う思想があり、今回のゴールにも合致していた。</p>
+<p>これを受けて、今回の設計ではラベルと出力を最初から 3 本持つ形にした。<br />
+- <code>is_win</code><br />
+- <code>is_top2</code><br />
+- <code>is_top3</code><br />
+- <code>p_win</code><br />
+- <code>p_top2</code><br />
+- <code>p_top3</code></p>
+<p>反映先:<br />
+- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code><br />
+- <code>docs/html/modeling/betting_backtest_dataset_spec.html</code></p>
+<h2 id="5-mlops">5. MLOps / 継続開発前提で成果物を版管理する</h2>
+<p>Qiita の <code>dijzpeb</code> 記事では、単発 notebook で終わらせずに、ソースコード・データ・モデル・実験結果を整理して継続改善できる形にする重要性が強調されていた。</p>
+<p>これを受けて、今回の設計では以下を追加した。<br />
+- <code>data_version</code>, <code>code_version</code>, <code>source_table_versions</code> を成果物に保存<br />
+- <code>dataset_profile.json</code>, <code>feature_missingness.csv</code>, <code>label_balance.json</code> を監査成果物として出す<br />
+- 閾値ルールを <code>bet_policy_thresholds.json</code> のような外部設定で管理する</p>
+<p>反映先:<br />
+- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code><br />
+- <code>docs/html/modeling/betting_backtest_dataset_spec.html</code></p>
+<h2 id="6-eda">6. EDA と欠損・外れ値監査を必須化する</h2>
+<p>法政大資料と Speaker Deck では、分布・欠損・相関・外れ値を先に点検することが、特徴量設計より前に重要とされていた。</p>
+<p>これを受けて、今回の設計では以下を必須にした。<br />
+- <code>dataset_profile.json</code><br />
+- <code>feature_missingness.csv</code><br />
+- <code>segment_coverage.csv</code><br />
+- <code>outlier_watchlist.csv</code></p>
+<p>反映先:<br />
+- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code></p>
+<h2 id="7">7. 市場情報はモデル本体と意思決定層で分離する</h2>
+<p>Qiita の 140% 記事は「オッズを特徴量に使わない能力モデル」を示しつつ、Speaker Deck は「期待値計算には市場価格が必要」と示していた。</p>
+<p>この緊張関係を解くため、今回の設計では次のように分けた。<br />
+- <code>LayerA</code>: 市場非依存の能力・状態モデル<br />
+- <code>LayerB</code>: 市場価格を使う意思決定・最適化レイヤ</p>
+<p>反映先:<br />
+- <code>docs/html/modeling/pre_race_feature_whitelist.html</code><br />
+- <code>docs/html/modeling/betting_backtest_dataset_spec.html</code></p>
+<h2 id="8-oof-target-encoding">8. OOF target encoding を正式採用する</h2>
+<p>Kaggle 系の実戦では、target encoding は強力だが leakage を起こしやすいため、OOF 前提で使うのが定石とされている。<br />
+また、rare category を global mean に shrink し、unseen category に fallback を持つ実装が一般的である。</p>
+<p>これを受けて、今回の設計では以下を追加した。<br />
+- <code>OOF target encoding</code><br />
+- <code>CatBoost-style ordered target encoding</code><br />
+- <code>OOF aggregate features</code><br />
+- <code>encoding_recipe_version</code></p>
+<p>反映先:<br />
+- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code><br />
+- <code>docs/html/modeling/advanced_modeling_techniques.html</code></p>
+<h2 id="9-purged-embargo-cv">9. Purged / embargo 付き CV を採用する</h2>
+<p>Kaggle の時系列・非IIDタスクでは、通常の KFold より <code>PurgedGroupTimeSeriesSplit</code> が安全であるという知見が多い。</p>
+<p>これを受けて、今回の設計では以下を追加した。<br />
+- <code>cv_policy.primary_scheme = purged_group_time_series_split</code><br />
+- <code>purge_window_days</code><br />
+- <code>embargo_days</code><br />
+- OOF 特徴量も purge / embargo に従う制約</p>
+<p>反映先:<br />
+- <code>data/meta/modeling/dataset_split_manifest.json</code><br />
+- <code>docs/html/modeling/advanced_modeling_techniques.html</code></p>
+<h2 id="10-catboost-lightgbm">10. CatBoost / LightGBM の二本柱を比較対象にする</h2>
+<p>Kaggle の tabular 実戦では、カテゴリ処理に強い CatBoost と、高速で拡張しやすい LightGBM の比較・ブレンドが定番である。</p>
+<p>これを受けて、今回の設計では以下を追加した。<br />
+- <code>LightGBM baseline</code><br />
+- <code>CatBoost baseline</code><br />
+- <code>OOF blending</code></p>
+<p>反映先:<br />
+- <code>docs/html/modeling/advanced_modeling_techniques.html</code></p>
+<h2 id="11">11. 期待値安全域をルール化する</h2>
+<p>Speaker Deck と Qiita の実践例では、高オッズ帯の期待値判定はわずかな確率誤差に弱く、そのまま買うと破綻しやすい点が繰り返し示されていた。</p>
+<p>これを受けて、今回の設計では以下を追加した。<br />
+- <code>safe_ev</code><br />
+- <code>buffer</code><br />
+- <code>bet_policy_thresholds.json</code></p>
+<p>反映先:<br />
+- <code>docs/html/modeling/betting_backtest_dataset_spec.html</code></p>
+<h2 id="12-kaggle">12. Kaggle 的な比較可能性を設計に含める</h2>
+<p>Kaggle 実戦では、「手法を追加したら必ず OOF / holdout で差分比較する」流れが徹底される。</p>
+<p>これを受けて、今回の設計では以下を追加した。<br />
+- <code>BaselineV1</code> / <code>ExtendedV1</code><br />
+- ablation study<br />
+- feature block ごとの ON/OFF 比較<br />
+- adversarial validation の導入</p>
+<p>反映先:<br />
+- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code><br />
+- <code>docs/html/modeling/advanced_modeling_techniques.html</code></p>
+<h2 id="13">13. 位置取りを前段モデル化する</h2>
+<p>既存の <code>src/pipeline/tracking_difficulty.py</code> には、脚質プロファイル・隣枠影響・頭数・コース条件から <code>position_deviation</code> を学習する設計がある。</p>
+<p>これを受けて、今回の設計では以下を追加した。<br />
+- <code>expected_first_corner_pos</code><br />
+- <code>tracking_difficulty_score</code><br />
+- <code>front_run_probability</code><br />
+- <code>stalker_probability</code><br />
+- <code>closer_probability</code><br />
+- 位置取りモデルを FinalProbability の前段に置く</p>
+<p>反映先:<br />
+- <code>docs/html/modeling/staged_probability_pipeline.html</code><br />
+- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code></p>
+<h2 id="14">14. ペースを前段モデル化する</h2>
+<p>既存の <code>src/pipeline/pace_predictor.py</code> には、距離・馬場・頭数・前に行きたい馬の比率から <code>lap_time_1f</code> と <code>lap_time_3f</code> を予測する実装がある。</p>
+<p>これを受けて、今回の設計では以下を追加した。<br />
+- <code>pred_lap_1f</code><br />
+- <code>pred_lap_3f</code><br />
+- <code>pred_pace_class</code><br />
+- <code>pred_energy_distribution</code><br />
+- ペースシナリオを Stage3 として独立</p>
+<p>反映先:<br />
+- <code>docs/html/modeling/staged_probability_pipeline.html</code><br />
+- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code></p>
+<h2 id="15">15. 血統を当日文脈と組み合わせて使う</h2>
+<p>既存の <code>src/research/bloodline_distance.py</code> は sire / dam_sire と距離適性の関係を整理しており、<code>src/research/race_quality_model.py</code> は「そのレースでどのタイプが好走したか」を segment prior と結果整合で推定している。</p>
+<p>この 2 つを組み合わせることで、<br />
+- 血統の静的距離適性<br />
+- その日の馬場タイプ / race-day bias</p>
+<p>の相互作用として血統を扱う設計に広げた。</p>
+<p>追加した考え方:<br />
+- <code>day prior + same-day posterior</code><br />
+- <code>contextual_bloodline_fit</code><br />
+- <code>same_day_sire_cluster_bias</code><br />
+- <code>bloodline_day_fit_speed/stamina/mud/burst</code></p>
+<p>反映先:<br />
+- <code>docs/html/modeling/staged_probability_pipeline.html</code><br />
+- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code></p>
+<h2 id="16-polars">16. Polars 中心の省メモリ実装を前提にする</h2>
+<p>現在のデータ量と WSL 環境を考えると、全年・全列を <code>pandas</code> で一括処理する実装は不安定である。</p>
+<p>そのため、今回の設計では以下を追加した。<br />
+- <code>polars scan_parquet()</code> を第一選択にする<br />
+- fold 単位で materialize する<br />
+- OOF / stage 出力を都度 Parquet 保存する<br />
+- <code>float32/int8</code> への型削減を前提にする</p>
+<p>反映先:<br />
+- <code>docs/html/modeling/modeling_coding_strategy.html</code><br />
+- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code><br />
+- <code>docs/html/modeling/advanced_modeling_techniques.html</code></p>
+<h2 id="_7">結論</h2>
+<p>今回のブラッシュアップで、企画書は「何を作るか」だけでなく、<br />
+- どう比較するか<br />
+- どの指標で良し悪しを判断するか<br />
+- どこでリークや過大評価が起きやすいか<br />
+- どう継続改善できる形にするか</p>
+<p>まで含む設計に強化された。</p>
+    </article>
+    <nav class="doc-nav">
+      <a href="race_performance_rating_system.html">← レースパフォーマンス算出システム設計</a>
+      <a href="staged_probability_pipeline.html">多段階レース直前確率パイプライン設計 →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/reference_insights.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

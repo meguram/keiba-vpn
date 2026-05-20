@@ -124,7 +124,7 @@ class HybridStorage:
         self._base_dir = Path(base_dir)
         self._local_dir = self._base_dir / "data" / "local"
         self._local_dir.mkdir(parents=True, exist_ok=True)
-        self._meta_dir = self._base_dir / "data" / "meta"
+        self._meta_dir = self._base_dir / "data" / "local" / "meta"
         self._meta_dir.mkdir(parents=True, exist_ok=True)
 
         self._bucket_name = bucket_name or os.environ.get("GCS_BUCKET", "")
@@ -813,10 +813,10 @@ class HybridStorage:
         return "", ""
 
     def cleanup_snapshot_files(self, max_age_seconds: float = 86400) -> int:
-        """data/research/_*_snapshot_cache.jsonl.gz 等の古いスナップショットを削除。"""
+        """data/local/research/_*_snapshot_cache.jsonl.gz 等の古いスナップショットを削除。"""
         patterns = [
-            self._base_dir / "data" / "research" / "_ped_snapshot_cache.jsonl.gz",
-            self._base_dir / "data" / "research" / "_hr_snapshot_cache.jsonl.gz",
+            self._base_dir / "data" / "local" / "research" / "_ped_snapshot_cache.jsonl.gz",
+            self._base_dir / "data" / "local" / "research" / "_hr_snapshot_cache.jsonl.gz",
         ]
         removed = 0
         now = _time.time()
@@ -1073,7 +1073,7 @@ class HybridStorage:
 
     def _load_structure_versions(self) -> dict[str, dict]:
         """StructureMonitor の versions.json を読み込む。"""
-        vp = self._base_dir / "data" / "meta" / "structure" / "versions.json"
+        vp = self._base_dir / "data" / "local" / "meta" / "structure" / "versions.json"
         if not vp.exists():
             return {}
         try:

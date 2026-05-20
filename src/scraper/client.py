@@ -292,7 +292,7 @@ def _get_netkeiba_inflight_semaphore() -> threading.Semaphore | None:
 # 環境変数 NETKEIBA_GLOBAL_MAX_SLOTS で上限を変更可（デフォルト=4）
 # 0 を設定すると無効化（無制限）
 
-_GLOBAL_SLOTS_DIR = Path(__file__).resolve().parents[2] / "data" / "meta" / "netkeiba_global_slots"
+_GLOBAL_SLOTS_DIR = Path(__file__).resolve().parents[2] / "data" / "local" / "meta" / "netkeiba_global_slots"
 _GLOBAL_MAX_SLOTS = _env_int("NETKEIBA_GLOBAL_MAX_SLOTS", 4)
 _GLOBAL_SLOT_LOCK = threading.Lock()   # ディレクトリ操作用スレッドロック
 

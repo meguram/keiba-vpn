@@ -157,6 +157,10 @@ tr:hover td{background:#1c2128}
     </div>
   </div>
   <div class="stats-grid" id="statsGrid"></div>
+  <div id="weightStatsSection" style="display:none;margin-top:10px">
+    <div style="font-size:10px;color:#6e7681;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">馬体重の変化</div>
+    <div class="stats-grid" id="weightStatsGrid"></div>
+  </div>
 </div>
 
 <div class="filter-bar" id="filterBar">
@@ -372,12 +376,49 @@ function updatePresetHighlight() {
   });
 }
 
+function calcWeightGrowthStats(races, debutDate, debutWeight) {
+  const withWeight = races.filter(r => r.weight && r.date !== debutDate);
+  const recent3 = withWeight.slice(0, 3);
+  if (!recent3.length || !debutWeight) return { avg3: null, diff: null };
+  const avg3 = recent3.reduce((a, r) => a + r.weight, 0) / recent3.length;
+  const diff = Math.round((avg3 - debutWeight) * 10) / 10;
+  return { avg3: Math.round(avg3 * 10) / 10, diff };
+}
+
+function renderWeightStats(debutWeight, avg3, diff) {
+  const section = document.getElementById('weightStatsSection');
+  const grid = document.getElementById('weightStatsGrid');
+  if (!section || !grid) return;
+  if (debutWeight == null) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  const diffColor = diff == null ? '#6e7681'
+    : Math.abs(diff) <= 2 ? '#8b949e'
+    : diff > 0 ? '#d29922' : '#58a6ff';
+  const diffSign = diff != null && diff > 0 ? '+' : '';
+  grid.innerHTML = `
+    <div class="stat-box">
+      <div class="stat-value">${debutWeight}kg</div>
+      <div class="stat-label">デビュー時馬体重</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">${avg3 != null ? avg3.toFixed(1) + 'kg' : '-'}</div>
+      <div class="stat-label">直近3戦平均（デビュー除く）</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" style="color:${diffColor}">${diff != null ? diffSign + diff.toFixed(1) + 'kg' : '-'}</div>
+      <div class="stat-label">デビューとの体重差</div>
+    </div>`;
+}
+
 function renderFilteredStats(data) {
   const races = data.races;
   const weights = races.filter(r => r.weight).map(r => r.weight);
   const ranks = races.filter(r => r.rank).map(r => r.rank);
   const statsGrid = document.getElementById('statsGrid');
   if (!statsGrid) return;
+  const dw = horseData?.debut_weight ?? null;
+  const dd = horseData?.debut_date ?? null;
+  const { avg3, diff } = calcWeightGrowthStats(races, dd, dw);
   statsGrid.innerHTML = `
     <div class="stat-box">
       <div class="stat-value" style="color:#ffd700">${ranks.length ? Math.min(...ranks) : '-'}</div>
@@ -396,6 +437,7 @@ function renderFilteredStats(data) {
       <div class="stat-label">馬体重変動幅</div>
     </div>
   `;
+  renderWeightStats(dw, avg3, diff);
 }
 
 // オートコンプリート機能
@@ -712,25 +754,27 @@ function backToSearch(e) {
 }
 
 function renderHorseInfo(data) {
-  const {horse_name, total_races, avg_weight, weight_range, best_rank, avg_rank} = data;
+  const {horse_name, total_races, total_all_races, avg_weight, weight_range, best_rank, avg_rank, debut_weight, debut_date} = data;
 
   document.getElementById('horseName').textContent = horse_name || '不明';
 
   const meta = document.getElementById('horseMeta');
   meta.innerHTML = `
-    <span>総出走: ${total_races}戦</span>
+    <span>総出走: ${total_all_races ?? total_races}戦</span>
     <span>平均馬体重: ${avg_weight.toFixed(1)}kg</span>
     <span>馬体重範囲: ${weight_range[0]}-${weight_range[1]}kg</span>
   `;
 
+  const { avg3, diff } = calcWeightGrowthStats(data.races, debut_date, debut_weight);
+
   const stats = document.getElementById('statsGrid');
   stats.innerHTML = `
     <div class="stat-box">
-      <div class="stat-value" style="color:#ffd700">${best_rank}</div>
+      <div class="stat-value" style="color:#ffd700">${best_rank ?? '-'}</div>
       <div class="stat-label">最高着順</div>
     </div>
     <div class="stat-box">
-      <div class="stat-value">${avg_rank.toFixed(1)}</div>
+      <div class="stat-value">${avg_rank != null ? avg_rank.toFixed(1) : '-'}</div>
       <div class="stat-label">平均着順</div>
     </div>
     <div class="stat-box">
@@ -742,10 +786,12 @@ function renderHorseInfo(data) {
       <div class="stat-label">馬体重変動幅</div>
     </div>
   `;
+  renderWeightStats(debut_weight, avg3, diff);
 }
 
 function renderCharts(data) {
-  const races = data.races;
+  // グラフは古い順（左）→新しい順（右）で表示
+  const races = [...data.races].reverse();
 
   // 既存チャートを破棄
   Object.values(charts).forEach(c => c?.destroy());
@@ -841,27 +887,56 @@ function renderCharts(data) {
   const wtMin = wtVals.length ? Math.floor((Math.min(...wtVals) - 6) / 2) * 2 : 400;
   const wtMax = wtVals.length ? Math.ceil((Math.max(...wtVals) + 10) / 2) * 2 : 520;
 
-  // バー上部に着順を表示するプラグイン
+  // バー上部に着順楕円ボックスを描画する共通関数
+  function drawRankBadges(chart, racesArr) {
+    const meta = chart.getDatasetMeta(0);
+    if (!meta || meta.type !== 'bar') return;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.font = 'bold 9px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const chartTop = chart.chartArea.top;
+    meta.data.forEach((bar, i) => {
+      const r = racesArr[i];
+      if (!r || !r.rank) return;
+      const rankStr = `${r.rank}着`;
+      const bgColor = r.rank === 1 ? '#ffd700' : r.rank === 2 ? '#c0c0c0' : r.rank === 3 ? '#cd7f32' : '#6e7681';
+      const textColor = (r.rank === 1 || r.rank === 2) ? '#111' : '#fff';
+      const tw = ctx.measureText(rankStr).width;
+      const ph = 14, rad = ph / 2;
+      const pw = tw + 10;
+      const cx = bar.x;
+      // バーが非常に高い場合もバッジがチャートエリア内に収まるようにクランプ
+      const cy = Math.max(bar.y - rad - 5, chartTop + rad + 2);
+      ctx.beginPath();
+      ctx.moveTo(cx - pw / 2 + rad, cy - rad);
+      ctx.lineTo(cx + pw / 2 - rad, cy - rad);
+      ctx.arc(cx + pw / 2 - rad, cy, rad, -Math.PI / 2, Math.PI / 2);
+      ctx.lineTo(cx - pw / 2 + rad, cy + rad);
+      ctx.arc(cx - pw / 2 + rad, cy, rad, Math.PI / 2, 3 * Math.PI / 2);
+      ctx.closePath();
+      ctx.fillStyle = bgColor;
+      ctx.fill();
+      ctx.fillStyle = textColor;
+      ctx.fillText(rankStr, cx, cy);
+    });
+    ctx.restore();
+  }
+
+  // 馬体重チャート用プラグイン（馬体重がある場合のみ表示）
   const barLabelPlugin = {
     id: 'barLabel',
     afterDatasetsDraw(chart) {
-      const meta = chart.getDatasetMeta(0);
-      if (!meta || meta.type !== 'bar') return;
-      const ctx = chart.ctx;
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 9px -apple-system, sans-serif';
-      meta.data.forEach((bar, i) => {
-        const r = races[i];
-        if (!r || !r.weight) return;
-        const rankStr = r.rank ? `${r.rank}着` : '';
-        if (rankStr) {
-          const color = r.rank === 1 ? '#ffd700' : r.rank === 2 ? '#c0c0c0' : r.rank === 3 ? '#cd7f32' : '#6e7681';
-          ctx.fillStyle = color;
-          ctx.fillText(rankStr, bar.x, bar.y - 4);
-        }
-      });
-      ctx.restore();
+      drawRankBadges(chart, races.map((r, i) => races[i]?.weight ? r : null));
+    }
+  };
+
+  // レース間隔チャート用プラグイン（全レースに表示）
+  const intervalLabelPlugin = {
+    id: 'intervalLabel',
+    afterDatasetsDraw(chart) {
+      drawRankBadges(chart, races);
     }
   };
 
@@ -963,7 +1038,7 @@ function renderCharts(data) {
   // レース間隔 × タイム指数チャート
   charts.interval = new Chart(document.getElementById('intervalCanvas'), {
     type: 'bar',
-    plugins: [timeIndexZonePlugin],
+    plugins: [timeIndexZonePlugin, intervalLabelPlugin],
     data: {
       labels,
       datasets: [

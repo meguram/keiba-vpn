@@ -36,7 +36,7 @@ from src.utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger("research.race.course_bloodline")
 
-COURSE_PROFILES_PATH = Path(__file__).resolve().parents[3] / "data" / "knowledge" / "course_profiles.json"
+COURSE_PROFILES_PATH = Path(__file__).resolve().parents[3] / "data" / "local" / "knowledge" / "course_profiles.json"
 
 TRAIT_KEYS = [
     "stamina_demand", "power_demand", "speed_sustain",
@@ -50,7 +50,7 @@ MIN_SAMPLES = 15
 class CourseBloodlineAnalyzer:
     """コース特性×血統の統合分析エンジン"""
 
-    def __init__(self, output_dir: str = "data/research/course_bloodline"):
+    def __init__(self, output_dir: str = "data/local/research/course_bloodline"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.df = pd.DataFrame()
@@ -156,7 +156,7 @@ class CourseBloodlineAnalyzer:
 
         # ── horse_id → (sire, dam_sire) ルックアップ ──
         sire_lookup: dict[str, tuple[str, str]] = {}
-        ds_path = Path("data/research/pedigree_race_index/horse_sire_damsire.parquet")
+        ds_path = Path("data/page_reference/pedigree_race_index/horse_sire_damsire.parquet")
         if ds_path.exists():
             try:
                 _sd = pd.read_parquet(ds_path, columns=["horse_id", "sire", "dam_sire"])
@@ -1360,7 +1360,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="コース特性×血統適性 研究")
     parser.add_argument("--years", nargs="*", default=None)
-    parser.add_argument("--output-dir", default="data/research/course_bloodline")
+    parser.add_argument("--output-dir", default="data/local/research/course_bloodline")
     args = parser.parse_args()
 
     analyzer = CourseBloodlineAnalyzer(output_dir=args.output_dir)

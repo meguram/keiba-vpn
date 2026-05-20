@@ -12,7 +12,7 @@ from copy import deepcopy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-JSON_PATH = ROOT / "data" / "knowledge" / "sire_aptitude_note.json"
+JSON_PATH = ROOT / "data" / "local" / "knowledge" / "sire_aptitude_note.json"
 
 AXIS_IDS = [
     "zaitech_stamina",

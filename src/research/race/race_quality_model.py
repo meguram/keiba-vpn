@@ -48,7 +48,7 @@ from src.research.pedigree.sire_factor_stats import AXES, AXIS_IDS, load_sire_fa
 logger = logging.getLogger(__name__)
 
 # データ駆動で上書きするセグメント事前倍率（8軸の log 補正）。チューニングスクリプトが生成。
-PRIORS_JSON_PATH = Path(__file__).resolve().parents[3] / "data" / "research" / "race_quality_priors.json"
+PRIORS_JSON_PATH = Path(__file__).resolve().parents[3] / "data" / "local" / "research" / "race_quality_priors.json"
 _prior_json_cache: dict[str, Any] | None = None
 _prior_json_mtime: float = 0.0
 

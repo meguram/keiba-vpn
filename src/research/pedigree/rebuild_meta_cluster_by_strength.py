@@ -30,7 +30,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[3]
-ART_DIR = ROOT / "data/research/bloodline_meta_cluster"
+ART_DIR = ROOT / "data/page_reference/note_aptitude_race"
 
 # 条件特徴量 (絶対勝率) のうち、相対化対象にするカラム
 COND_COLS_BASE = [

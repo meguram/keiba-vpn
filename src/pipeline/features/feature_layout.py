@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-FEATURES_DIR = Path("data/features")
+FEATURES_DIR = Path("data/local/features")
 
 BLOCK_BASE_TBL = "base_tbl"
 BLOCK_RACE_TBL = "race_tbl"

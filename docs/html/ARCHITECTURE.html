@@ -1,0 +1,1642 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ML-AutoPilot Keiba — システム仕様書 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>ML-AutoPilot Keiba — システム仕様書</h1>
+      <p class="meta">ソース: <code>docs/html/ARCHITECTURE.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="ml-autopilot-keiba">ML-AutoPilot Keiba — システム仕様書</h1>
+<blockquote>
+<p>自動生成: 2026-03-19 01:36:10<br />
+このファイルはシステム起動時・コマンド実行時に自動更新されます。</p>
+</blockquote>
+<hr />
+<h2 id="1">1. 設計思想</h2>
+<h3 id="11">1.1 階層型マルチエージェントアーキテクチャ</h3>
+<p>本システムは<strong>将軍 → 家老 → 足軽</strong>の3階層構造で設計されている。</p>
+<table>
+<thead>
+<tr>
+<th>階層</th>
+<th>呼称</th>
+<th>責務</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>将軍</strong> (Shogun)</td>
+<td>Orchestrator</td>
+<td>ユーザー入力の意図分類、家老への委譲、結果の返却</td>
+</tr>
+<tr>
+<td><strong>家老</strong> (Karou)</td>
+<td>MiddleManager</td>
+<td>担当領域のサブエージェント連携・調整、他家老との協調</td>
+</tr>
+<tr>
+<td><strong>足軽</strong> (Ashigaru)</td>
+<td>BaseAgent</td>
+<td>単一責務のタスク実行 (学習, 予測, スクレイピング等)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="12">1.2 設計原則</h3>
+<ul>
+<li><strong>委譲原則</strong>: 将軍はロジックを持たず、全てを家老に委譲する</li>
+<li><strong>自律性</strong>: 各家老は独立して配下のエージェントを統率できる</li>
+<li><strong>安全デフォルト</strong>: 認識不能なコマンドは予測を自動実行しない (<code>unknown → 選択肢提示</code>)</li>
+<li><strong>疎結合通信</strong>: エージェント間通信は MessageBus 経由、家老間連携は明示的な API 呼び出し</li>
+<li><strong>観測可能性</strong>: 全エージェントの状態を StatusBoard と MLflow で追跡可能</li>
+</ul>
+<h2 id="2">2. 階層構成</h2>
+<pre><code>将軍 (Orchestrator)
+│
+├── 意図分類エンジン (parse_command)
+│     スコアリング方式で 6カテゴリ × 20+ アクションに分類
+│
+├── 軍師 (ConfigMgr)
+│    責務: 設定・要件管理
+│    配下:
+│      └── RDA (要件定義)
+│    • 蓄積要件の管理
+│    • MLP仕様 (MLProjectSpec) の生成
+│    • 設定表示・変更・リセット
+│
+├── パイプライン奉行 (PipelineMgr)
+│    責務: 予測パイプライン統率
+│    配下:
+│      ├── SMA (データ取得)
+│      ├── DOA (データ整理)
+│      ├── FEA (特徴量生成)
+│      ├── MTEA (モデル学習)
+│      └── POA (予測出力)
+│    • 軍師から仕様を受け取り全6フェーズ実行
+│    • SMA → DOA → FEA → MTEA → POA のシーケンス制御
+│    • 学習結果は MLflow に自動記録
+│
+├── データ奉行 (DataMgr)
+│    責務: データ取得・確認
+│    • ScraperRunner 統合 (5種類のスクレイピング)
+│    • データプレビュー・統計・カラム一覧
+│    • 予測結果エクスポート
+│
+└── 目付 (InfoMgr)
+     責務: 情報照会・報告
+     • 他3家老から情報を収集
+     • エージェント状態・精度・重要度の報告
+     • システム全体概要の生成
+</code></pre>
+<h2 id="3">3. エージェントカタログ</h2>
+<h3 id="30-orchestrator">3.0 将軍 (Orchestrator)</h3>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>値</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>クラス</td>
+<td><code>Orchestrator</code></td>
+</tr>
+<tr>
+<td>ファイル</td>
+<td><code>agents/orchestrator.py</code></td>
+</tr>
+<tr>
+<td>責務</td>
+<td>意図分類、家老への委譲、結果返却</td>
+</tr>
+<tr>
+<td>現在状態</td>
+<td>待機中</td>
+</tr>
+</tbody>
+</table>
+<h3 id="31-configmgr">3.1 軍師 (ConfigMgr)</h3>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>値</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>クラス</td>
+<td><code>ConfigManager</code></td>
+</tr>
+<tr>
+<td>ファイル</td>
+<td><code>agents/config_manager.py</code></td>
+</tr>
+<tr>
+<td>責務</td>
+<td>設定・要件管理を統率する家老</td>
+</tr>
+<tr>
+<td>入力</td>
+<td>ユーザーの設定変更コマンド、自然言語要件</td>
+</tr>
+<tr>
+<td>出力</td>
+<td>MLProjectSpec、設定レポート</td>
+</tr>
+<tr>
+<td>公開API</td>
+<td><code>generate_spec()</code>, <code>handle_show()</code>, <code>handle_change()</code>, <code>handle_reset()</code>, <code>add_requirements()</code></td>
+</tr>
+<tr>
+<td>現在状態</td>
+<td>待機中</td>
+</tr>
+<tr>
+<td>配下エージェント</td>
+<td>RDA (要件定義)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-pipelinemgr">3.2 パイプライン奉行 (PipelineMgr)</h3>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>値</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>クラス</td>
+<td><code>PipelineManager</code></td>
+</tr>
+<tr>
+<td>ファイル</td>
+<td><code>agents/pipeline_manager.py</code></td>
+</tr>
+<tr>
+<td>責務</td>
+<td>ML予測パイプラインの全6フェーズを統率する家老</td>
+</tr>
+<tr>
+<td>入力</td>
+<td>MLProjectSpec (軍師経由)</td>
+</tr>
+<tr>
+<td>出力</td>
+<td>PredictionResult、MLflow run_id</td>
+</tr>
+<tr>
+<td>公開API</td>
+<td><code>run_pipeline(spec)</code> → <code>(PredictionResult, elapsed)</code></td>
+</tr>
+<tr>
+<td>現在状態</td>
+<td>待機中</td>
+</tr>
+<tr>
+<td>配下エージェント</td>
+<td>SMA (データ取得), DOA (データ整理), FEA (特徴量生成), MTEA (モデル学習), POA (予測出力)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33-datamgr">3.3 データ奉行 (DataMgr)</h3>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>値</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>クラス</td>
+<td><code>DataManager</code></td>
+</tr>
+<tr>
+<td>ファイル</td>
+<td><code>agents/data_manager.py</code></td>
+</tr>
+<tr>
+<td>責務</td>
+<td>スクレイピング・データ確認・エクスポートを統率する家老</td>
+</tr>
+<tr>
+<td>入力</td>
+<td>スクレイピングコマンド (action, params)</td>
+</tr>
+<tr>
+<td>出力</td>
+<td>スクレイピング結果、データ概要レポート</td>
+</tr>
+<tr>
+<td>公開API</td>
+<td><code>handle_scrape()</code>, <code>handle_preview()</code>, <code>handle_stats()</code>, <code>handle_columns()</code>, <code>handle_export()</code></td>
+</tr>
+<tr>
+<td>現在状態</td>
+<td>待機中</td>
+</tr>
+</tbody>
+</table>
+<h3 id="34-infomgr">3.4 目付 (InfoMgr)</h3>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>値</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>クラス</td>
+<td><code>InfoManager</code></td>
+</tr>
+<tr>
+<td>ファイル</td>
+<td><code>agents/info_manager.py</code></td>
+</tr>
+<tr>
+<td>責務</td>
+<td>情報照会・評価報告を統率する家老</td>
+</tr>
+<tr>
+<td>入力</td>
+<td>他3家老への参照 (<code>set_peers()</code>)</td>
+</tr>
+<tr>
+<td>出力</td>
+<td>状態レポート、評価レポート、概要レポート</td>
+</tr>
+<tr>
+<td>公開API</td>
+<td><code>handle_status()</code>, <code>handle_evaluate()</code>, <code>handle_importance()</code>, <code>handle_summary()</code></td>
+</tr>
+<tr>
+<td>現在状態</td>
+<td>待機中</td>
+</tr>
+</tbody>
+</table>
+<h3 id="35">3.5 足軽エージェント一覧</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>クラス</th>
+<th>ファイル</th>
+<th>責務</th>
+<th>入力</th>
+<th>出力</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RDA</td>
+<td><code>RequirementsDefinitionAgent</code></td>
+<td><code>agents/requirements_agent.py</code></td>
+<td>自然言語 → MLProjectSpec の構造化変換</td>
+<td>自然言語テキスト, UserRequirement リスト</td>
+<td>MLProjectSpec</td>
+</tr>
+<tr>
+<td>SMA</td>
+<td><code>ScrapingMonitoringAgent</code></td>
+<td><code>agents/scraping_agent.py</code></td>
+<td>netkeiba.com からのデータ取得・ファイル監視</td>
+<td>MLProjectSpec</td>
+<td>ScrapingResult (CSV パス群)</td>
+</tr>
+<tr>
+<td>DOA</td>
+<td><code>DataOrganizationAgent</code></td>
+<td><code>agents/data_organization_agent.py</code></td>
+<td>CSV/JSON データの結合・分割・クレンジング</td>
+<td>MLProjectSpec, ScrapingResult</td>
+<td>OrganizedData (training_data, prediction_entries, prediction_races)</td>
+</tr>
+<tr>
+<td>FEA</td>
+<td><code>FeatureEngineeringAgent</code></td>
+<td><code>agents/feature_engineering_agent.py</code></td>
+<td>特徴量生成・Label Encoding・派生特徴量・特徴量選択</td>
+<td>MLProjectSpec, OrganizedData</td>
+<td>FeatureSet (X_train, X_val, y_train, y_val, X_predict, predict_meta)</td>
+</tr>
+<tr>
+<td>MTEA</td>
+<td><code>ModelTrainingAgent</code></td>
+<td><code>agents/model_training_agent.py</code></td>
+<td>LightGBM + Optuna チューニング・評価・MLflow 記録</td>
+<td>MLProjectSpec, FeatureSet</td>
+<td>TrainedModel (model, evaluation, best_params, feature_importance, mlflow_run_id)</td>
+</tr>
+<tr>
+<td>POA</td>
+<td><code>PredictionOutputAgent</code></td>
+<td><code>agents/prediction_agent.py</code></td>
+<td>学習済みモデルによる予測実行・結果構造化・JSON 出力</td>
+<td>TrainedModel, FeatureSet, upcoming_races</td>
+<td>PredictionResult (races, model_evaluation, feature_importance)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="4">4. 意図分類とルーティング</h2>
+<h3 id="41">4.1 分類フロー</h3>
+<pre><code>ユーザー入力
+    │
+    ▼
+parse_command() ── スコアリング方式
+    │
+    ├── 各カテゴリのキーワードマッチ数を計算
+    ├── 最高スコアのカテゴリを採用
+    ├── カテゴリ内で最高スコアのアクションを特定
+    ├── スコア 0 かつ要件パーサーが認識 → config/change
+    └── スコア 0 かつ要件なし → unknown
+</code></pre>
+<h3 id="42">4.2 カテゴリ → 家老マッピング</h3>
+<table>
+<thead>
+<tr>
+<th>カテゴリ</th>
+<th>委譲先</th>
+<th>アクション</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pipeline</code></td>
+<td>パイプライン奉行</td>
+<td>predict, retrain</td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td>軍師</td>
+<td>show, target, feature, filter, model_param, change</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td>データ奉行</td>
+<td>preview, stats, columns</td>
+</tr>
+<tr>
+<td><code>scrape</code></td>
+<td>データ奉行</td>
+<td>race_result, race_card, horse, speed_index, race_detail, scrape</td>
+</tr>
+<tr>
+<td><code>info</code></td>
+<td>目付</td>
+<td>status, evaluate, importance</td>
+</tr>
+<tr>
+<td><code>system</code></td>
+<td>将軍/軍師/データ奉行/目付</td>
+<td>server, help, reset, export, summary</td>
+</tr>
+<tr>
+<td><code>unknown</code></td>
+<td>将軍</td>
+<td>選択肢を提示 (予測を実行しない)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="43">4.3 曖昧入力の処理</h3>
+<p>「やって」「お願い」等の曖昧な pipeline トリガーが、config/scrape 等の具体的カテゴリと<br />
+同時にマッチした場合、<strong>具体的なカテゴリを優先する</strong>。</p>
+<pre><code>「芝のみにしてお願い」
+  → pipeline スコア 1 (「お願い」) + config スコア 1 (「芝のみ」)
+  → config を優先 → 軍師に委譲
+</code></pre>
+<h2 id="5">5. 予測パイプラインフロー</h2>
+<pre><code>ユーザー: 「予測して」
+    │
+    ▼
+将軍: parse_command → pipeline/predict
+    │
+    ▼
+軍師 (ConfigManager)
+    │  generate_spec()
+    │  └── RDA.execute(accumulated_reqs)
+    │      └── MLProjectSpec を生成
+    ▼
+パイプライン奉行 (PipelineManager)
+    │  run_pipeline(spec)
+    │
+    ├── Phase 2: SMA.execute(spec)
+    │   └── モックデータ or スクレイピングデータを読み込み
+    │
+    ├── Phase 3: DOA.execute(spec, scraping_result)
+    │   └── training_data, prediction_entries, prediction_races に分割
+    │
+    ├── Phase 4: FEA.execute(spec, organized)
+    │   └── Label Encoding → 派生特徴量 → 特徴量選択 → Train/Val/Predict 分割
+    │
+    ├── Phase 5: MTEA.execute(spec, feature_set)
+    │   ├── Optuna チューニング (n_trials 回)
+    │   ├── LightGBM 最終学習
+    │   ├── 評価 (Accuracy, F1, ROC AUC)
+    │   ├── モデル保存 (joblib → models/keiba_model.pkl)
+    │   └── MLflow 記録 (パラメータ, メトリクス, モデル登録)
+    │
+    └── Phase 6: POA.execute(trained_model, feature_set, upcoming_races)
+        ├── predict_proba で確率を算出
+        ├── レースごとにランキング生成
+        ├── 推奨印 (◎○▲△☆) を付与
+        └── predictions.json に保存
+</code></pre>
+<h2 id="6">6. 通信パターン</h2>
+<h3 id="61">6.1 家老間連携</h3>
+<table>
+<thead>
+<tr>
+<th>パターン</th>
+<th>発信元</th>
+<th>受信先</th>
+<th>データ</th>
+<th>タイミング</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>仕様生成</td>
+<td>パイプライン奉行</td>
+<td>軍師</td>
+<td><code>generate_spec()</code> → <code>MLProjectSpec</code></td>
+<td>パイプライン開始時</td>
+</tr>
+<tr>
+<td>情報収集</td>
+<td>目付</td>
+<td>軍師</td>
+<td><code>accumulated_reqs</code>, <code>last_spec</code></td>
+<td><code>handle_summary()</code></td>
+</tr>
+<tr>
+<td>情報収集</td>
+<td>目付</td>
+<td>パイプライン奉行</td>
+<td><code>last_result</code></td>
+<td><code>handle_evaluate()</code></td>
+</tr>
+<tr>
+<td>情報収集</td>
+<td>目付</td>
+<td>データ奉行</td>
+<td><code>get_data_summary()</code></td>
+<td><code>handle_summary()</code></td>
+</tr>
+<tr>
+<td>エクスポート</td>
+<td>データ奉行</td>
+<td>パイプライン奉行</td>
+<td><code>last_result</code> (将軍経由)</td>
+<td><code>handle_export()</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="62-messagebus">6.2 MessageBus</h3>
+<p>全エージェント (将軍・家老・足軽) が <code>MessageBus</code> を共有し、以下を発行する:</p>
+<ul>
+<li><strong>report</strong>: 進捗・完了報告 (<code>self.report("メッセージ")</code>)</li>
+<li><strong>status</strong>: 状態遷移 (<code>self.update_status(AgentStatus.RUNNING, "...")</code>)</li>
+</ul>
+<p>ログは <code>logs/agents/</code> にファイル保存され、StatusBoard で Markdown ダッシュボード化される。</p>
+<h3 id="63-statusboard">6.3 StatusBoard</h3>
+<p><code>status/dashboard.html</code> に全エージェントのリアルタイム状態を Markdown テーブルで出力する。<br />
+パイプライン実行中は現在のフェーズ (Phase 1/6 ~ 6/6) を表示する。</p>
+<h2 id="7">7. データアーキテクチャ</h2>
+<pre><code>data/
+├── mock/                      モックデータ (CSV, 学習用)
+│   ├── races.csv              レース情報 (race_id, date, racecourse, ...)
+│   ├── results.csv            出走結果 (race_id, horse_name, finish_position, ...)
+│   ├── upcoming_races.csv     予測対象レース
+│   └── upcoming_entries.csv   予測対象出走馬
+│
+├── scraped/                   スクレイピング済 (JSON)
+│   ├── races/                 レース結果 (db.netkeiba.com/race/{id})
+│   ├── cards/                 出馬表 (race.netkeiba.com/race/shutuba.html)
+│   ├── horses/               馬情報 (db.netkeiba.com/horse/{id})
+│   ├── speed/                タイム指数 [要ログイン]
+│   ├── past/                 馬柱 (shutuba_past.html)
+│   ├── details/             出馬表+タイム指数+馬柱 統合データ
+│   └── race_lists/          日別レース一覧
+│
+└── processed/                 加工済データ
+    └── predictions.json       予測結果
+</code></pre>
+<h3 id="71">7.1 データフロー</h3>
+<pre><code>netkeiba.com ──[ScraperRunner]──→ GCS (JSON + HTML.gz)
+                                       │
+data/mock/ (CSV) ────────────┐        │
+                              ▼        ▼
+                         SMA (DataAgent)
+                              │
+                              ▼
+                         DOA (整理・結合)
+                              │
+                    ┌─────────┼──────────┐
+                    ▼         ▼          ▼
+             training_data  prediction  prediction
+                            _entries    _races
+                    │         │
+                    ▼         │
+               FEA (特徴量)   │
+                    │         │
+                    ▼         ▼
+               MTEA (学習) → POA (予測)
+                    │         │
+                    ▼         ▼
+               MLflow     predictions.json
+</code></pre>
+<h2 id="8-mlflow">8. MLflow 統合</h2>
+<h3 id="81">8.1 記録内容</h3>
+<table>
+<thead>
+<tr>
+<th>種別</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>パラメータ</td>
+<td>LightGBM ハイパーパラメータ, n_optuna_trials, target_variable, n_features, train_size</td>
+</tr>
+<tr>
+<td>メトリクス</td>
+<td>accuracy, f1_score, roc_auc, positive_rate</td>
+</tr>
+<tr>
+<td>アーティファクト</td>
+<td>LightGBM モデル (<code>model/</code>), 特徴量情報 (<code>feature_info/</code>)</td>
+</tr>
+<tr>
+<td>タグ</td>
+<td>agent=MTEA, target, filters</td>
+</tr>
+<tr>
+<td>モデル登録</td>
+<td><code>keiba-lgbm</code> (Model Registry に自動登録)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="82">8.2 モデルライフサイクル</h3>
+<pre><code>MTEA 学習完了
+    │
+    ├── joblib.dump → models/keiba_model.pkl (ローカル)
+    │
+    └── mlflow.lightgbm.log_model
+        ├── Tracking Server に記録
+        └── Model Registry に登録 (keiba-lgbm v{N})
+            │
+            ├── API 予測時: load_latest_model() で最新バージョンをロード
+            └── Production 昇格: MLflow UI で手動操作
+</code></pre>
+<h3 id="83">8.3 フォールバック</h3>
+<p>MLflow サーバーに接続できない場合、ローカルファイルストア (<code>mlflow/runs/</code>) に自動フォールバック。<br />
+接続テストは 3秒タイムアウトで判定。</p>
+<h3 id="84-mlflow-srcutilsmlflow_clientpy">8.4 MLflow ユーティリティ (<code>src/utils/mlflow_client.py</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>関数</th>
+<th>説明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>init_mlflow(uri?)</code></td>
+<td>Tracking URI 設定、サーバー接続確認、フォールバック</td>
+</tr>
+<tr>
+<td><code>get_or_create_experiment(name?)</code></td>
+<td>実験の取得/作成、experiment_id を返却</td>
+</tr>
+<tr>
+<td><code>log_training_run(params, metrics, model, ...)</code></td>
+<td>パラメータ・メトリクス・モデル登録を一括記録</td>
+</tr>
+<tr>
+<td><code>load_latest_model(name?)</code></td>
+<td>Model Registry から最新モデルをロード → <code>(model, run_info)</code></td>
+</tr>
+<tr>
+<td><code>get_experiment_history(limit?)</code></td>
+<td>直近の学習履歴を取得</td>
+</tr>
+</tbody>
+</table>
+<h2 id="9-mlflow-ui">9. MLflow UI (ブラウザ)</h2>
+<p>MLflow Tracking Server はブラウザベースの管理 UI を提供する。</p>
+<h3 id="91-url">9.1 アクセス URL</h3>
+<table>
+<thead>
+<tr>
+<th>環境</th>
+<th>URL</th>
+<th>認証</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ローカル開発</td>
+<td><code>http://localhost:5000</code></td>
+<td>なし</td>
+</tr>
+<tr>
+<td>Docker (内部)</td>
+<td><code>http://mlflow:5000</code></td>
+<td>なし</td>
+</tr>
+<tr>
+<td>外部公開 (nginx経由)</td>
+<td><code>http://&lt;your-ip&gt;:80/</code></td>
+<td>Basic認証</td>
+</tr>
+<tr>
+<td>外部公開 (HTTPS)</td>
+<td><code>https://&lt;your-domain&gt;/</code></td>
+<td>Basic認証 + TLS</td>
+</tr>
+</tbody>
+</table>
+<h3 id="92">9.2 主要画面</h3>
+<table>
+<thead>
+<tr>
+<th>画面</th>
+<th>パス</th>
+<th>機能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Experiments</strong></td>
+<td><code>/</code></td>
+<td>実験一覧、run の検索・フィルタ・比較</td>
+</tr>
+<tr>
+<td><strong>Run 詳細</strong></td>
+<td><code>/#/experiments/{id}/runs/{run_id}</code></td>
+<td>パラメータ・メトリクス・アーティファクト・タグの閲覧</td>
+</tr>
+<tr>
+<td><strong>メトリクス比較</strong></td>
+<td>複数 run 選択 → Compare</td>
+<td>グラフでメトリクスを比較 (Accuracy, F1, AUC の推移)</td>
+</tr>
+<tr>
+<td><strong>Artifacts</strong></td>
+<td>Run 詳細 → Artifacts タブ</td>
+<td>モデルファイル (<code>model/</code>)、特徴量情報 (<code>feature_info/</code>)</td>
+</tr>
+<tr>
+<td><strong>Model Registry</strong></td>
+<td><code>/models</code></td>
+<td>登録モデル一覧、バージョン管理、ステージ遷移</td>
+</tr>
+</tbody>
+</table>
+<h3 id="93-model-registry">9.3 Model Registry のステージ管理</h3>
+<pre><code>None → Staging → Production → Archived
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>ステージ</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>None</strong></td>
+<td>学習直後に自動登録された状態</td>
+</tr>
+<tr>
+<td><strong>Staging</strong></td>
+<td>検証中 (手動で昇格)</td>
+</tr>
+<tr>
+<td><strong>Production</strong></td>
+<td>本番運用モデル (API が自動で最新版をロード)</td>
+</tr>
+<tr>
+<td><strong>Archived</strong></td>
+<td>過去バージョン</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>ステージ遷移は MLflow UI の Model Registry 画面から手動で行う。<br />
+<code>load_latest_model()</code> はステージに関係なく最新バージョンをロードする。</p>
+</blockquote>
+<h3 id="94">9.4 記録されるデータの確認方法</h3>
+<table>
+<thead>
+<tr>
+<th>確認したい内容</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>学習パラメータ</td>
+<td>Run 詳細 → Parameters タブ</td>
+</tr>
+<tr>
+<td>評価メトリクス</td>
+<td>Run 詳細 → Metrics タブ / チャート</td>
+</tr>
+<tr>
+<td>特徴量重要度</td>
+<td>Run 詳細 → Artifacts → <code>feature_info/</code></td>
+</tr>
+<tr>
+<td>モデルファイル</td>
+<td>Run 詳細 → Artifacts → <code>model/</code></td>
+</tr>
+<tr>
+<td>複数 run 比較</td>
+<td>Experiments → チェック → Compare</td>
+</tr>
+<tr>
+<td>モデルバージョン</td>
+<td>Model Registry → <code>keiba-lgbm</code> → Versions</td>
+</tr>
+</tbody>
+</table>
+<h2 id="10-web">10. Web ダッシュボード (ブラウザ)</h2>
+<h3 id="101">10.1 アクセス方法</h3>
+<table>
+<thead>
+<tr>
+<th>起動方法</th>
+<th>コマンド</th>
+<th>URL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ローカル</td>
+<td><code>python main.py --server</code></td>
+<td><code>http://localhost:8000</code></td>
+</tr>
+<tr>
+<td>Docker</td>
+<td><code>docker compose up</code></td>
+<td><code>http://localhost:8000</code> または <code>http://&lt;ip&gt;:80/keiba/</code></td>
+</tr>
+<tr>
+<td>uvicorn 直接</td>
+<td><code>uvicorn api.app:app --reload</code></td>
+<td><code>http://localhost:8000</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="102">10.2 ダッシュボード画面構成 (<code>/</code>)</h3>
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│  🏇 ML-AutoPilot Keiba                                  │
+│  マルチエージェント競馬AI予測システム                          │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  ■ エージェント状態                                        │
+│  ┌──────────────┐                                        │
+│  │  🎖️ Orchestrator (将軍) │                             │
+│  └───────┬──────┘                                        │
+│          ↓                                               │
+│  ┌────┐┌────┐┌────┐┌────┐┌────┐┌────┐                  │
+│  │RDA ││SMA ││DOA ││FEA ││MTEA││POA │                  │
+│  │📋  ││🌐  ││🧹  ││⚙️  ││🧠  ││📊  │                  │
+│  └────┘└────┘└────┘└────┘└────┘└────┘                  │
+│  各カードに: 名前 / 役割 / 状態(✅🔄❌⏸️) / 詳細           │
+│                                                          │
+│  ■ モデル評価サマリー                                      │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐                │
+│  │ Accuracy │ │ F1 Score │ │ ROC AUC  │                │
+│  │  87.3%   │ │  67.3%   │ │  87.9%   │                │
+│  └──────────┘ └──────────┘ └──────────┘                │
+│                                                          │
+│  ■ 特徴量重要度 TOP10                                     │
+│  odds          ████████████████████ 523                  │
+│  horse_number  ██████████████ 371                        │
+│  weight        ███████████ 298                           │
+│  ...                                                     │
+│                                                          │
+│  ■ レース予測結果                                         │
+│  ┌───────────────────────────────────────┐              │
+│  │ 🏆 第XX回 ○○記念  📅 2026-XX-XX      │              │
+│  │ 📍 東京  📏 芝2000m                   │              │
+│  ├────┬────┬──────┬────┬──────┬─────────┤              │
+│  │予測│馬番│馬名  │騎手│確率  │評価     │              │
+│  │ 1  │ 3  │○○○○│△△ │72.3% │◎ 本命  │              │
+│  │ 2  │ 7  │□□□□│▽▽ │55.1% │○ 対抗  │              │
+│  │ 3  │ 1  │◇◇◇◇│×× │41.2% │▲ 単穴  │              │
+│  └────┴────┴──────┴────┴──────┴─────────┘              │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="103">10.3 テンプレートとスタイル</h3>
+<table>
+<thead>
+<tr>
+<th>ファイル</th>
+<th>役割</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>templates/index.html</code></td>
+<td>Jinja2 テンプレート (ダッシュボード全体)</td>
+</tr>
+<tr>
+<td><code>static/style.css</code></td>
+<td>スタイルシート</td>
+</tr>
+</tbody>
+</table>
+<h3 id="104">10.4 テンプレートに渡されるデータ</h3>
+<table>
+<thead>
+<tr>
+<th>変数</th>
+<th>型</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data</code></td>
+<td><code>dict \| None</code></td>
+<td><code>predictions.json</code> の内容</td>
+</tr>
+<tr>
+<td><code>data.model_evaluation</code></td>
+<td><code>dict</code></td>
+<td><code>{accuracy, f1_score, roc_auc}</code></td>
+</tr>
+<tr>
+<td><code>data.feature_importance</code></td>
+<td><code>dict</code></td>
+<td><code>{feature_name: importance_score, ...}</code> TOP10</td>
+</tr>
+<tr>
+<td><code>data.races</code></td>
+<td><code>list[dict]</code></td>
+<td>レースごとの予測結果</td>
+</tr>
+<tr>
+<td><code>data.mlflow_run_id</code></td>
+<td><code>str \| None</code></td>
+<td>MLflow の run ID</td>
+</tr>
+<tr>
+<td><code>agent_status</code></td>
+<td><code>dict</code></td>
+<td>全エージェントの状態 <code>{name: {status, detail}}</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="105">10.5 予測が無い場合</h3>
+<p><code>predictions.json</code> が存在しない場合、「予測データがありません」メッセージと<br />
+<code>python commander.py</code> の実行方法を案内する画面が表示される。</p>
+<h2 id="11_1">11. 予測結果出力フォーマット</h2>
+<h3 id="111">11.1 出力ファイル</h3>
+<table>
+<thead>
+<tr>
+<th>ファイル</th>
+<th>パス</th>
+<th>形式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>予測結果</td>
+<td><code>data/processed/predictions.json</code></td>
+<td>JSON</td>
+</tr>
+</tbody>
+</table>
+<h3 id="112-predictionsjson">11.2 predictions.json スキーマ</h3>
+<pre><code class="language-json">{
+  &quot;model_evaluation&quot;: {
+    &quot;accuracy&quot;: 0.8731,
+    &quot;f1_score&quot;: 0.6731,
+    &quot;roc_auc&quot;: 0.8785
+  },
+  &quot;feature_importance&quot;: {
+    &quot;odds&quot;: 523,
+    &quot;horse_number&quot;: 371,
+    &quot;weight&quot;: 298
+  },
+  &quot;mlflow_run_id&quot;: &quot;b7e991fafc7e4a1...&quot;,
+  &quot;races&quot;: [
+    {
+      &quot;race_id&quot;: &quot;202606020611&quot;,
+      &quot;race_name&quot;: &quot;第XX回○○賞&quot;,
+      &quot;date&quot;: &quot;2026-03-15&quot;,
+      &quot;racecourse&quot;: &quot;東京&quot;,
+      &quot;distance&quot;: 2000,
+      &quot;surface&quot;: &quot;芝&quot;,
+      &quot;grade&quot;: &quot;G1&quot;,
+      &quot;predictions&quot;: [
+        {
+          &quot;predicted_rank&quot;: 1,
+          &quot;horse_number&quot;: 3,
+          &quot;horse_name&quot;: &quot;ディープインパクト&quot;,
+          &quot;jockey&quot;: &quot;武豊&quot;,
+          &quot;odds&quot;: 5.2,
+          &quot;top3_probability&quot;: 72.3,
+          &quot;recommendation&quot;: &quot;◎ 本命&quot;
+        }
+      ]
+    }
+  ]
+}
+</code></pre>
+<h3 id="113-recommendation">11.3 推奨印 (recommendation) ルール</h3>
+<table>
+<thead>
+<tr>
+<th>3着内確率</th>
+<th>印</th>
+<th>意味</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>≥ 70%</td>
+<td>◎ 本命</td>
+<td>最も3着内に入る確率が高い</td>
+</tr>
+<tr>
+<td>≥ 55%</td>
+<td>○ 対抗</td>
+<td>本命に次ぐ有力候補</td>
+</tr>
+<tr>
+<td>≥ 40%</td>
+<td>▲ 単穴</td>
+<td>穴馬として注目</td>
+</tr>
+<tr>
+<td>≥ 25%</td>
+<td>△ 連下</td>
+<td>連複の相手候補</td>
+</tr>
+<tr>
+<td>&lt; 25%</td>
+<td>☆ 穴馬</td>
+<td>大穴候補</td>
+</tr>
+</tbody>
+</table>
+<h3 id="114">11.4 出力タイミング</h3>
+<p>POA (予測出力エージェント) がパイプラインの最終フェーズで自動生成する。<br />
+ファイルは上書きされるため、履歴は MLflow の run artifacts で管理する。</p>
+<h2 id="12-api">12. API リファレンス</h2>
+<h3 id="121-api-fastapi">12.1 予測 API (FastAPI)</h3>
+<table>
+<thead>
+<tr>
+<th>メソッド</th>
+<th>パス</th>
+<th>説明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET</code></td>
+<td><code>/</code></td>
+<td>Web ダッシュボード</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/predictions</code></td>
+<td>最新の予測結果 JSON</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/status</code></td>
+<td>エージェント状態 + 最新ログ</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/command</code></td>
+<td>将軍にコマンド送信</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/requirements</code></td>
+<td>要件を指定して予測実行</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/predict</code></td>
+<td><strong>MLflow モデルで特徴量 → 予測</strong></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/mlflow/model-info</code></td>
+<td>登録モデル情報</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/mlflow/history</code></td>
+<td>学習履歴一覧</td>
+</tr>
+</tbody>
+</table>
+<h3 id="122-apipredict">12.2 /api/predict リクエスト例</h3>
+<pre><code class="language-json">POST /api/predict
+{
+  &quot;features&quot;: [
+    {&quot;horse_number&quot;: 3, &quot;age&quot;: 4, &quot;weight&quot;: 480, &quot;odds&quot;: 5.2, ...},
+    {&quot;horse_number&quot;: 7, &quot;age&quot;: 3, &quot;weight&quot;: 456, &quot;odds&quot;: 12.8, ...}
+  ],
+  &quot;model_name&quot;: &quot;keiba-lgbm&quot;
+}
+</code></pre>
+<h3 id="123-apipredict">12.3 /api/predict レスポンス例</h3>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;success&quot;,
+  &quot;model_info&quot;: {
+    &quot;run_id&quot;: &quot;b7e991fafc7e...&quot;,
+    &quot;metrics&quot;: {&quot;accuracy&quot;: 0.8731, &quot;f1_score&quot;: 0.6731, &quot;roc_auc&quot;: 0.8785}
+  },
+  &quot;results&quot;: [
+    {&quot;index&quot;: 0, &quot;prediction&quot;: 1, &quot;probability&quot;: 0.7234, &quot;recommendation&quot;: &quot;◎ 本命&quot;},
+    {&quot;index&quot;: 1, &quot;prediction&quot;: 0, &quot;probability&quot;: 0.3156, &quot;recommendation&quot;: &quot;△ 連下&quot;}
+  ]
+}
+</code></pre>
+<h3 id="124-apicommand">12.4 /api/command リクエスト例</h3>
+<pre><code class="language-json">POST /api/command
+{
+  &quot;command&quot;: &quot;予測して&quot;
+}
+</code></pre>
+<h3 id="125-apirequirements">12.5 /api/requirements リクエスト例</h3>
+<pre><code class="language-json">POST /api/requirements
+{
+  &quot;requirements&quot;: [&quot;芝のみ&quot;, &quot;オッズ除外&quot;, &quot;チューニング100回&quot;]
+}
+</code></pre>
+<h3 id="126-apirequirement-examples">12.6 /api/requirement-examples レスポンス例</h3>
+<pre><code class="language-json">GET /api/requirement-examples
+{
+  &quot;examples&quot;: [
+    {&quot;text&quot;: &quot;予測して&quot;, &quot;description&quot;: &quot;デフォルト設定でフルパイプラインを実行&quot;},
+    {&quot;text&quot;: &quot;1着予測に変更して実行&quot;, &quot;description&quot;: &quot;ターゲットを1着に変更して予測&quot;},
+    {&quot;text&quot;: &quot;精度は？&quot;, &quot;description&quot;: &quot;モデル評価結果を表示&quot;}
+  ]
+}
+</code></pre>
+<h2 id="13">13. デプロイアーキテクチャ</h2>
+<h3 id="131-docker-compose">13.1 Docker Compose 構成</h3>
+<pre><code>mlflow/
+├── data/                  実行時データ (.gitignore)
+│   ├── mlflow.db          SQLite トラッキング DB
+│   └── artifacts/         アーティファクト
+└── server/                デプロイ設定
+    ├── docker-compose.yml Docker Compose 定義
+    ├── Dockerfile.api     Keiba FastAPI コンテナ
+    ├── setup.sh           セットアップスクリプト
+    └── nginx/
+        ├── nginx.conf      リバースプロキシ設定
+        ├── htpasswd        Basic認証ファイル
+        └── certs/          SSL証明書 (オプション)
+</code></pre>
+<h3 id="132">13.2 サービス構成</h3>
+<pre><code>┌─────────────────────────────────────────────────┐
+│                   nginx (:80/:443)               │
+│              Basic認証 + リバースプロキシ           │
+├──────────┬──────────────────────────────────────┤
+│          │                                       │
+│  /       │  /keiba/*                             │
+│  ↓       │  ↓                                    │
+│  mlflow  │  keiba-api                            │
+│  (:5000) │  (:8000)                              │
+│          │                                       │
+│  MLflow  │  FastAPI                              │
+│  Tracking│  予測API + ダッシュボード               │
+│  Server  │                                       │
+│  SQLite  │  ┌──────────┐                         │
+│  +       │  │data/     │ (ボリューム共有)          │
+│  Artifacts│  │models/   │                         │
+│          │  │config/   │                         │
+│          │  └──────────┘                         │
+└──────────┴──────────────────────────────────────┘
+</code></pre>
+<h3 id="133">13.3 サービス詳細</h3>
+<table>
+<thead>
+<tr>
+<th>サービス</th>
+<th>イメージ</th>
+<th>ポート</th>
+<th>役割</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mlflow</code></td>
+<td><code>ghcr.io/mlflow/mlflow:v2.12.2</code></td>
+<td>5000</td>
+<td>MLflow Tracking Server (SQLite + ファイルアーティファクト)</td>
+</tr>
+<tr>
+<td><code>nginx</code></td>
+<td><code>nginx:alpine</code></td>
+<td>80, 443</td>
+<td>リバースプロキシ (Basic認証, SSL終端)</td>
+</tr>
+<tr>
+<td><code>keiba-api</code></td>
+<td>カスタムビルド (<code>Dockerfile.api</code>)</td>
+<td>8000</td>
+<td>FastAPI 予測API + Web ダッシュボード</td>
+</tr>
+</tbody>
+</table>
+<h3 id="134">13.4 ボリューム</h3>
+<table>
+<thead>
+<tr>
+<th>ボリューム</th>
+<th>マウント先</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mlflow_data</code>（名前付き Docker volume）</td>
+<td><code>/mlflow</code></td>
+<td>MLflow DB + アーティファクト</td>
+</tr>
+<tr>
+<td><code>../../data</code></td>
+<td><code>/app/data</code></td>
+<td>学習/予測データ</td>
+</tr>
+<tr>
+<td><code>../../models</code></td>
+<td><code>/app/models</code></td>
+<td>ローカルモデルファイル</td>
+</tr>
+<tr>
+<td><code>../../config</code></td>
+<td><code>/app/config</code></td>
+<td>settings.yaml</td>
+</tr>
+</tbody>
+</table>
+<h3 id="135">13.5 セットアップ手順</h3>
+<pre><code class="language-bash">cd mlflow/server/
+chmod +x setup.sh
+./setup.sh
+</code></pre>
+<p>setup.sh が自動で以下を実行:<br />
+1. Basic認証パスワード生成 (<code>htpasswd</code>)<br />
+2. SSL証明書ディレクトリ準備 (自己署名証明書の生成オプション)<br />
+3. Docker Compose ビルド・起動<br />
+4. MLflow サーバーの起動確認</p>
+<h3 id="136-url">13.6 外部アクセスURL一覧</h3>
+<table>
+<thead>
+<tr>
+<th>リソース</th>
+<th>ローカル</th>
+<th>外部 (nginx経由)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MLflow UI</td>
+<td><code>http://localhost:5000</code></td>
+<td><code>http://&lt;ip&gt;:80/</code></td>
+</tr>
+<tr>
+<td>予測ダッシュボード</td>
+<td><code>http://localhost:8000</code></td>
+<td><code>http://&lt;ip&gt;:80/keiba/</code></td>
+</tr>
+<tr>
+<td>予測 API</td>
+<td><code>http://localhost:8000/api/</code></td>
+<td><code>http://&lt;ip&gt;:80/keiba/api/</code></td>
+</tr>
+<tr>
+<td>MLflow モデル予測</td>
+<td><code>http://localhost:8000/api/predict</code></td>
+<td><code>http://&lt;ip&gt;:80/keiba/api/predict</code></td>
+</tr>
+<tr>
+<td>学習履歴</td>
+<td><code>http://localhost:8000/api/mlflow/history</code></td>
+<td><code>http://&lt;ip&gt;:80/keiba/api/mlflow/history</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="137">13.7 セキュリティ</h3>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>実装</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>認証</td>
+<td>Nginx Basic認証 (<code>htpasswd</code>)</td>
+</tr>
+<tr>
+<td>TLS</td>
+<td>SSL証明書設定 (Let's Encrypt or 自己署名)</td>
+</tr>
+<tr>
+<td>ネットワーク分離</td>
+<td>Docker bridge network (<code>keiba-net</code>)</td>
+</tr>
+<tr>
+<td>環境変数</td>
+<td><code>.env</code> に機密情報を分離</td>
+</tr>
+</tbody>
+</table>
+<h2 id="14">14. スクレイピング仕様</h2>
+<h3 id="141">14.1 対応ページ</h3>
+<table>
+<thead>
+<tr>
+<th>ページ</th>
+<th>URL パターン</th>
+<th>パーサー</th>
+<th>認証</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>レース結果</td>
+<td><code>db.netkeiba.com/race/{race_id}/</code></td>
+<td><code>RaceResultParser</code></td>
+<td>不要</td>
+</tr>
+<tr>
+<td>出馬表</td>
+<td><code>race.netkeiba.com/race/shutuba.html?race_id={id}</code></td>
+<td><code>RaceCardParser</code></td>
+<td>不要</td>
+</tr>
+<tr>
+<td>馬情報</td>
+<td><code>db.netkeiba.com/horse/{horse_id}/</code></td>
+<td><code>HorseParser</code></td>
+<td>不要</td>
+</tr>
+<tr>
+<td>日別一覧</td>
+<td><code>db.netkeiba.com/race/list/{YYYYMMDD}/</code></td>
+<td><code>RaceListParser</code></td>
+<td>不要</td>
+</tr>
+<tr>
+<td>タイム指数</td>
+<td><code>race.netkeiba.com/race/speed.html?race_id={id}</code></td>
+<td><code>SpeedIndexParser</code></td>
+<td><strong>要</strong></td>
+</tr>
+<tr>
+<td>馬柱</td>
+<td><code>race.netkeiba.com/race/shutuba_past.html?race_id={id}</code></td>
+<td><code>ShutubaPastParser</code></td>
+<td>不要</td>
+</tr>
+</tbody>
+</table>
+<h3 id="142">14.2 耐久設計</h3>
+<ul>
+<li><strong>SelectorChain</strong>: 1つのデータに対して複数の CSS セレクタを優先順に試行</li>
+<li><strong>エンコーディング</strong>: <code>db.netkeiba.com</code> = EUC-JP, <code>race.netkeiba.com</code> = EUC-JP</li>
+<li><strong>レート制限</strong>: <code>request_interval_sec</code> (デフォルト 1.0秒)</li>
+<li><strong>キャッシュ</strong>: URL ベースの MD5 キー、認証時は <code>_auth</code> サフィックス</li>
+<li><strong>認証</strong>: <code>.env</code> から <code>netkeiba_id</code> / <code>netkeiba_pw</code> を読み込み、セッション Cookie で管理</li>
+</ul>
+<h2 id="15">15. 設定リファレンス</h2>
+<h3 id="configsettingsyaml">config/settings.yaml</h3>
+<table>
+<thead>
+<tr>
+<th>セクション</th>
+<th>キー</th>
+<th>説明</th>
+<th>デフォルト</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>project</code></td>
+<td><code>name</code></td>
+<td>プロジェクト名</td>
+<td>ML-AutoPilot Keiba</td>
+</tr>
+<tr>
+<td><code>data_source</code></td>
+<td><code>base_url</code></td>
+<td>データソースURL</td>
+<td>https://db.netkeiba.com/</td>
+</tr>
+<tr>
+<td><code>data_source</code></td>
+<td><code>request_interval_sec</code></td>
+<td>リクエスト間隔</td>
+<td>1.0</td>
+</tr>
+<tr>
+<td><code>paths</code></td>
+<td><code>models</code></td>
+<td>モデル保存先</td>
+<td>models</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>target_variable</code></td>
+<td>予測対象</td>
+<td>finish_position_top3</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>n_optuna_trials</code></td>
+<td>チューニング回数</td>
+<td>50</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>test_size</code></td>
+<td>検証データ比率</td>
+<td>0.2</td>
+</tr>
+<tr>
+<td><code>mlflow</code></td>
+<td><code>tracking_uri</code></td>
+<td>MLflow サーバー URI</td>
+<td>http://localhost:5000</td>
+</tr>
+<tr>
+<td><code>mlflow</code></td>
+<td><code>experiment_name</code></td>
+<td>実験名</td>
+<td>keiba-prediction</td>
+</tr>
+<tr>
+<td><code>mlflow</code></td>
+<td><code>registered_model_name</code></td>
+<td>モデル登録名</td>
+<td>keiba-lgbm</td>
+</tr>
+<tr>
+<td><code>api</code></td>
+<td><code>port</code></td>
+<td>API ポート</td>
+<td>8000</td>
+</tr>
+</tbody>
+</table>
+<h3 id="env">.env (認証情報)</h3>
+<table>
+<thead>
+<tr>
+<th>キー</th>
+<th>説明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>netkeiba_id</code></td>
+<td>netkeiba.com ログインID</td>
+</tr>
+<tr>
+<td><code>netkeiba_pw</code></td>
+<td>netkeiba.com パスワード</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>このファイルはシステム起動時・コマンド実行時に <code>src/utils/spec_gen.py</code> により自動更新されます。</em><br />
+<em>手動編集は次回の自動更新で上書きされます。</em></p>
+    </article>
+    <nav class="doc-nav">
+      <a href="DATASOURCES.html">データソース一覧 →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">ARCHITECTURE.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

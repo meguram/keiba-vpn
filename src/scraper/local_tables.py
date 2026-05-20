@@ -51,11 +51,11 @@ _cache_lock = threading.Lock()
 _df_cache: dict[str, tuple[float, Any]] = {}
 _DF_CACHE_TTL = 3600.0
 
-TABLES_DIR = Path("data/local/tables")
+TABLES_DIR = Path("data/page_reference/tables")
 
 
 def _get_tables_dir(base_dir: str | Path = ".") -> Path:
-    return Path(base_dir) / "data" / "local" / "tables"
+    return Path(base_dir) / "data" / "page_reference" / "tables"
 
 
 def available_years(base_dir: str | Path = ".") -> list[str]:

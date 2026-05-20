@@ -29,7 +29,7 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-ART = ROOT / "data/research/bloodline_meta_cluster"
+ART = ROOT / "data/page_reference/note_aptitude_race"
 
 COND_LABEL = {
     "win_v_東京": "東京", "win_v_中山": "中山", "win_v_阪神": "阪神", "win_v_京都": "京都",
@@ -44,6 +44,10 @@ COND_LABEL = {
     "win_pace_持久力勝負_短距離": "持久力短", "win_pace_持久力勝負_マイル": "持久力マイル",
     "win_pace_持久力勝負_中距離": "持久力中", "win_pace_持久力勝負_長距離": "持久力長",
     "win_steep": "急坂", "win_flat": "平坦", "win_heavy": "道悪",
+    # 基礎スピード次元 (track_speed_races 由来)
+    "win_fast": "高速馬場", "win_slow": "低速馬場",
+    # コース形状次元
+    "win_outer": "外回り", "win_inner": "内回り",
 }
 
 # 条件カテゴリ (重複削減用)
@@ -55,6 +59,8 @@ COND_CATEGORY = {
     **{c: "distance" for c in ["win_d_短距離", "win_d_マイル", "win_d_中距離", "win_d_長距離"]},
     **{c: "pace" for c in COND_LABEL if c.startswith("win_pace_")},
     "win_steep": "course", "win_flat": "course", "win_heavy": "track",
+    "win_fast": "track_speed", "win_slow": "track_speed",
+    "win_outer": "course_shape", "win_inner": "course_shape",
 }
 
 # super-group → ベース色 (HSL 5 色, 視覚的に明確に区別)
@@ -74,9 +80,25 @@ def _format_label(c: str) -> str:
     return COND_LABEL.get(c, c.replace("win_", ""))
 
 
+# カテゴリ命名優先順位: 低い = より優先
+# venue を surface より優先 → 特定コース種牡馬の命名がより具体的になる
+_CAT_PRIORITY = {
+    "distance": 0,
+    "venue": 1,       # venue: 特定コースへの偏りは最重要
+    "surface": 2,
+    "pace": 3,
+    "track": 4,
+    "track_speed": 5, # 高速/低速馬場: speed index の指標として有用
+    "course": 6,
+    "course_shape": 8,  # 外回り/内回りは補助的に
+    "other": 7,
+}
+
+
 def _pick_top(profile: dict[str, float], threshold: float, top_n: int) -> list[tuple[str, float]]:
     items = [(c, v) for c, v in profile.items() if v >= threshold]
-    items.sort(key=lambda x: -x[1])
+    # カテゴリ優先度を考慮してソート: まず優先度 asc, 次に lift desc
+    items.sort(key=lambda x: (_CAT_PRIORITY.get(COND_CATEGORY.get(x[0], "other"), 7), -x[1]))
     return items[:top_n]
 
 
@@ -87,12 +109,14 @@ def _pick_bottom(profile: dict[str, float], threshold: float, top_n: int) -> lis
 
 
 def _dedupe_by_category(items: list[tuple[str, float]], max_per_cat: int = 2) -> list[tuple[str, float]]:
-    """同じカテゴリの条件が並ぶのを抑える。"""
+    """同じカテゴリの条件が並ぶのを抑える。course_shape/track_speed は 1 個まで。"""
+    cat_max = {"course_shape": 1, "track_speed": 1}
     cat_count: dict[str, int] = {}
     out = []
     for c, v in items:
         cat = COND_CATEGORY.get(c, "other")
-        if cat_count.get(cat, 0) >= max_per_cat:
+        limit = cat_max.get(cat, max_per_cat)
+        if cat_count.get(cat, 0) >= limit:
             continue
         out.append((c, v))
         cat_count[cat] = cat_count.get(cat, 0) + 1
@@ -100,8 +124,9 @@ def _dedupe_by_category(items: list[tuple[str, float]], max_per_cat: int = 2) ->
 
 
 def _generate_name(top_conds: list[tuple[str, float]], top_members: list[str]) -> tuple[str, str]:
-    """名前 + サブタイトル を生成。"""
-    deduped = _dedupe_by_category(top_conds, max_per_cat=2)
+    """名前 + サブタイトル を生成。名前は各カテゴリから最大1件で2語以内。"""
+    # 名前用: カテゴリ内重複は1件まで
+    deduped = _dedupe_by_category(top_conds, max_per_cat=1)
     labels = [_format_label(c) for c, _ in deduped[:3]]
     if not labels:
         return "汎用型", "強み突出なし"
@@ -138,11 +163,24 @@ def main() -> int:
         sub = stallions[stallions["L2"] == L2].sort_values("n_horses", ascending=False)
         top_members = [str(r["entity_label"])[:24] for _, r in sub.head(5).iterrows()]
 
-        # 得意 / 不得意 (閾値を緩和: 0.05 → 0.03, top_n 6 → 8)
+        # 命名用: 強シグナル (lift>0.10) を強度順に並べる (カテゴリ優先なし)
+        # → 本当に際立った条件のみが名前に反映される
+        top_for_name = sorted(
+            [(c, v) for c, v in prof.items() if v >= 0.10],
+            key=lambda x: -x[1],
+        )
+        if not top_for_name:
+            # fallback: 0.03 以上から最大3件
+            top_for_name = sorted(
+                [(c, v) for c, v in prof.items() if v >= 0.03],
+                key=lambda x: -x[1],
+            )[:3]
+
+        # 得意 / 不得意 highlights (閾値 0.03, カテゴリ優先度ソート)
         top_pos = _pick_top(prof, threshold=0.03, top_n=8)
         top_neg = _pick_bottom(prof, threshold=-0.03, top_n=5)
 
-        name, subtitle = _generate_name(top_pos, top_members)
+        name, subtitle = _generate_name(top_for_name, top_members)
 
         # ハイライト/不得意のラベル化 (max_per_cat 緩和 + 取得数増)
         highlights = [_format_label(c) for c, _ in _dedupe_by_category(top_pos, max_per_cat=3)[:7]]

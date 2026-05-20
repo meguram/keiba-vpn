@@ -65,9 +65,9 @@ CLASS_PRIOR = {
     "unknown": 0.0,
 }
 
-OUTPUT_DIR = Path("data/features/race_performance")
+OUTPUT_DIR = Path("data/page_reference/race_performance")
 RACE_STORE_DIR = OUTPUT_DIR / "races"
-SUMMARY_PATH = Path("data/meta/modeling/race_performance_build_summary.json")
+SUMMARY_PATH = Path("data/local/meta/modeling/race_performance_build_summary.json")
 
 FEATURE_COLUMNS = [
     "run_performance_raw",

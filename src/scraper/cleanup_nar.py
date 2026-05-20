@@ -124,7 +124,7 @@ def main() -> int:
     group = ap.add_mutually_exclusive_group(required=True)
     group.add_argument("--dry-run", action="store_true", help="削除せず確認のみ")
     group.add_argument("--execute", action="store_true", help="実際に削除する")
-    ap.add_argument("--report-out", default="data/meta/nar_cleanup_report.json")
+    ap.add_argument("--report-out", default="data/local/meta/nar_cleanup_report.json")
     args = ap.parse_args()
 
     report = run_cleanup(execute=args.execute)

@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 # 大穴上振れ回避: この倍率以下の単勝オッズのみ回収率集計に含める
 MAX_ROI_ODDS = 30.0
 
-SLIM_PATH = Path("data/research/pedigree_race_index/race_result_slim.parquet")
-TABLES_DIR = Path("data/local/tables")
+SLIM_PATH = Path("data/page_reference/pedigree_race_index/race_result_slim.parquet")
+TABLES_DIR = Path("data/page_reference/tables")
 
 
 def roi_eligible_mask(odds: pd.Series) -> pd.Series:

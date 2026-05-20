@@ -3,2943 +3,754 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>レース適性3Dマップ | ML-AutoPilot Keiba</title>
+<title>血統適性マップ — レース | ML-AutoPilot Keiba</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0c0e12;
-    --surface: #141820;
-    --border: #252b36;
-    --text: #e6e9ef;
-    --dim: #7d8698;
-    --accent: #5eead4;
-    --accent2: #f472b6;
-    --warn: #fbbf24;
-    --g0: #5eead4; --g1: #a78bfa; --g2: #fb923c; --g3: #94a3b8;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'IBM Plex Sans JP', 'DM Sans', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-  }
-  .wrap { max-width: 1200px; margin: 0 auto; padding: 20px 20px 48px; }
-  h1 {
-    font-size: 1.35rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    margin-bottom: 6px;
-  }
-  .lead {
-    font-size: 0.8rem;
-    color: var(--dim);
-    line-height: 1.55;
-    max-width: 720px;
-    margin-bottom: 20px;
-  }
-  .lead code { font-size: 0.75em; background: var(--surface); padding: 1px 6px; border-radius: 4px; }
-  .form-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 18px;
-  }
-  .form-row label { font-size: 0.75rem; color: var(--dim); }
-  .form-row input,
-  .form-row select {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    font-family: inherit;
-  }
-  .form-row input { width: min(320px, 100%); font-family: ui-monospace, monospace; }
-  #dateSelect { min-width: 200px; }
-  #venueSelect { min-width: 100px; }
-  #raceSelect { min-width: min(420px, 100%); max-width: 100%; }
-  .picker-status {
-    font-size: 0.7rem;
-    color: var(--dim);
-    width: 100%;
-    flex-basis: 100%;
-  }
-  .form-row button {
-    background: linear-gradient(135deg, #0d9488, #14b8a6);
-    color: #042f2e;
-    border: none;
-    padding: 8px 18px;
-    border-radius: 6px;
-    font-weight: 700;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-  .form-row button:disabled { opacity: 0.45; cursor: not-allowed; }
-  .err {
-    background: rgba(239, 68, 68, 0.12);
-    border: 1px solid rgba(239, 68, 68, 0.35);
-    color: #fecaca;
-    padding: 12px 14px;
-    border-radius: 8px;
-    font-size: 0.8rem;
-    margin-bottom: 16px;
-    display: none;
-  }
-  .err.show { display: block; }
-  .meta-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px 20px;
-    font-size: 0.78rem;
-    color: var(--dim);
-    margin-bottom: 16px;
-  }
-  .meta-bar strong { color: var(--text); }
-  .viz-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px;
-    margin-bottom: 20px;
-  }
-  .viz-wrap h2 {
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--dim);
-    margin-bottom: 10px;
-  }
-  .viz-note { font-size: 0.72rem; color: var(--dim); margin-top: 8px; line-height: 1.45; }
-  .scatter-tap-hint {
-    min-height: 1.4em;
-    font-size: 0.88rem;
-    color: var(--accent);
-    margin-top: 8px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-  }
-  .scatter-tap-hint:empty { display: none; }
-  .scatter-tap-hint:not(:empty) { display: block; }
-  .viz-3d-root {
-    width: 100%;
-    max-width: 640px;
-    min-height: 380px;
-    border-radius: 8px;
-    overflow: hidden;
-    background: #0a0c10;
-    border: 1px solid var(--border);
-    touch-action: none;
-  }
-  .viz-3d-root canvas {
-    display: block;
-    width: 100% !important;
-    height: auto !important;
-    vertical-align: top;
-  }
-  .viz-3d-hint {
-    font-size: 0.68rem;
-    color: var(--dim);
-    margin-top: 6px;
-    line-height: 1.45;
-  }
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 10px;
-    font-size: 0.72rem;
-  }
-  .legend span { display: flex; align-items: center; gap: 6px; color: var(--dim); }
-  .dot { width: 10px; height: 10px; border-radius: 50%; }
-  .groups {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 10px;
-    margin-bottom: 22px;
-  }
-  .gcard {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    font-size: 0.75rem;
-  }
-  .gcard h3 { font-size: 0.7rem; color: var(--dim); margin-bottom: 6px; }
-  .gcard .cent { font-family: ui-monospace, monospace; color: var(--accent); font-size: 0.72rem; }
-  .gcard ul { margin-top: 6px; padding-left: 1em; color: var(--dim); line-height: 1.4; }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.78rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
-  th {
-    background: rgba(94, 234, 212, 0.06);
-    color: var(--dim);
-    font-weight: 600;
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: rgba(255,255,255,0.02); }
-  .num { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-  .pill {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 0.65rem;
-    font-weight: 700;
-  }
-  .loading { color: var(--dim); font-size: 0.85rem; padding: 24px; text-align: center; display: none; }
-  .loading.show { display: block; }
-  .scrape-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 10000;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    background: rgba(8, 10, 14, 0.88);
-    backdrop-filter: blur(5px);
-  }
-  .scrape-overlay.show { display: flex; }
-  .scrape-overlay-inner {
-    max-width: 440px;
-    margin: 16px;
-    padding: 22px 24px;
-    border-radius: 12px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    text-align: center;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  }
-  .scrape-overlay-title {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--text);
-    margin-bottom: 10px;
-  }
-  .scrape-overlay-msg {
-    font-size: 0.82rem;
-    color: var(--dim);
-    line-height: 1.55;
-    min-height: 2.8em;
-  }
-  .scrape-overlay-sub {
-    margin-top: 14px;
-    font-size: 0.68rem;
-    color: var(--dim);
-    opacity: 0.85;
-    line-height: 1.45;
-    white-space: pre-line;
-    text-align: left;
-    max-height: 11rem;
-    overflow-y: auto;
-  }
-  .scrape-overlay-phase {
-    display: inline-block;
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    padding: 5px 12px;
-    border-radius: 999px;
-    margin-bottom: 10px;
-    border: 1px solid transparent;
-  }
-  .scrape-phase-storage {
-    background: rgba(59, 130, 246, 0.15);
-    color: #93c5fd;
-    border-color: rgba(59, 130, 246, 0.35);
-  }
-  .scrape-phase-queue {
-    background: rgba(251, 191, 36, 0.12);
-    color: #fcd34d;
-    border-color: rgba(251, 191, 36, 0.35);
-  }
-  .scrape-phase-scrape {
-    background: rgba(16, 185, 129, 0.14);
-    color: #6ee7b7;
-    border-color: rgba(16, 185, 129, 0.35);
-  }
-  .scrape-phase-done {
-    background: rgba(148, 163, 184, 0.12);
-    color: #cbd5e1;
-    border-color: rgba(148, 163, 184, 0.3);
-  }
-  .scrape-overlay-bar-wrap {
-    height: 8px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.06);
-    overflow: hidden;
-    margin: 10px 0 6px;
-  }
-  .scrape-overlay-bar-fill {
-    height: 100%;
-    border-radius: 4px;
-    width: 0%;
-    background: linear-gradient(90deg, #0d9488, #5eead4);
-    transition: width 0.28s ease-out;
-  }
-  .scrape-overlay-bar-wrap.indeterminate .scrape-overlay-bar-fill {
-    width: 35%;
-    animation: scrape-bar-indet 1s ease-in-out infinite;
-  }
-  @keyframes scrape-bar-indet {
-    0% { transform: translateX(-100%); opacity: 0.7; }
-    50% { opacity: 1; }
-    100% { transform: translateX(320%); opacity: 0.7; }
-  }
-  .scrape-overlay-stats {
-    font-size: 0.65rem;
-    color: var(--dim);
-    font-family: ui-monospace, monospace;
-    line-height: 1.4;
-    text-align: left;
-    margin-top: 4px;
-    word-break: break-all;
-  }
-  .scrape-overlay-runner-block {
-    display: none;
-    margin-top: 12px;
-    text-align: left;
-  }
-  .scrape-overlay-runner-block.show {
-    display: block;
-  }
-  .scrape-overlay-runner-caption {
-    font-size: 0.72rem;
-    color: #a5b4fc;
-    line-height: 1.45;
-    margin-bottom: 6px;
-  }
-  .scrape-overlay-runner-bar-wrap {
-    height: 8px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.06);
-    overflow: hidden;
-  }
-  .scrape-overlay-runner-bar-fill {
-    height: 100%;
-    border-radius: 4px;
-    width: 0%;
-    background: linear-gradient(90deg, #6366f1, #a78bfa);
-    transition: width 0.28s ease-out;
-  }
-  .scrape-overlay-pause {
-    display: none;
-    margin-top: 16px;
-    padding: 8px 18px;
-    border-radius: 8px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    font-family: inherit;
-    cursor: pointer;
-    border: 1px solid rgba(251, 191, 36, 0.45);
-    background: rgba(251, 191, 36, 0.12);
-    color: #fcd34d;
-  }
-  .scrape-overlay-pause:hover {
-    background: rgba(251, 191, 36, 0.2);
-  }
-  .scrape-overlay.pedigree-pause-active .scrape-overlay-pause {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .wrap.fivegen-wait-mode .lead,
-  .wrap.fivegen-wait-mode .form-row,
-  .wrap.fivegen-wait-mode #loading,
-  .wrap.fivegen-wait-mode #main {
-    display: none !important;
-  }
-  .wrap.fivegen-wait-mode .err:not(.show) {
-    display: none !important;
-  }
-  .fivegen-wait-done {
-    display: none;
-    max-width: 42rem;
-    margin: 1.25rem auto 0;
-    padding: 1rem 1.25rem;
-    border-radius: 8px;
-    background: rgba(13, 148, 136, 0.12);
-    border: 1px solid rgba(94, 234, 212, 0.25);
-    font-size: 0.9rem;
-    line-height: 1.55;
-  }
-  .fivegen-wait-done.show {
-    display: block;
-  }
-  .fivegen-wait-done .dim {
-    color: var(--dim);
-    font-size: 0.8rem;
-    margin-top: 0.5rem;
-  }
-  .factor-controls {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    margin-bottom: 18px;
-    overflow: hidden;
-  }
-  .factor-controls summary {
-    padding: 10px 16px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--dim);
-    cursor: pointer;
-    user-select: none;
-  }
-  .factor-controls summary:hover { color: var(--text); }
-  .factor-controls[open] summary { border-bottom: 1px solid var(--border); }
-  .factor-controls-inner { padding: 14px 16px 18px; }
-  .fc-section { margin-bottom: 16px; }
-  .fc-section:last-child { margin-bottom: 0; }
-  .fc-section h3 {
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--dim);
-    margin-bottom: 8px;
-  }
-  .fc-axis-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .fc-axis-row label {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--accent);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .fc-axis-row select {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 5px 8px;
-    border-radius: 5px;
-    font-size: 0.78rem;
-    font-family: inherit;
-  }
-  .fc-weights {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 8px 16px;
-  }
-  .fc-weight-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.75rem;
-  }
-  .fc-weight-item label {
-    min-width: 80px;
-    color: var(--dim);
-    font-size: 0.72rem;
-    flex-shrink: 0;
-  }
-  .fc-weight-item input[type="range"] {
-    flex: 1;
-    accent-color: var(--accent);
-    height: 4px;
-  }
-  .fc-weight-item .fc-wval {
-    min-width: 36px;
-    text-align: right;
-    font-family: ui-monospace, monospace;
-    font-size: 0.72rem;
-    color: var(--accent);
-  }
-  .fc-weight-actions {
-    margin-top: 10px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-  }
-  .fc-btn-reset, .fc-btn-rebuild {
-    background: rgba(94, 234, 212, 0.08);
-    border: 1px solid rgba(94, 234, 212, 0.3);
-    color: var(--accent);
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-  }
-  .fc-btn-reset:hover, .fc-btn-rebuild:hover {
-    background: rgba(94, 234, 212, 0.15);
-  }
-  .fc-btn-rebuild {
-    background: rgba(251, 191, 36, 0.08);
-    border-color: rgba(251, 191, 36, 0.3);
-    color: var(--warn);
-  }
-  .fc-btn-rebuild:hover { background: rgba(251, 191, 36, 0.15); }
-  .fc-btn-rebuild:disabled { opacity: 0.4; cursor: not-allowed; }
-  .fc-btn-full {
-    background: rgba(239, 68, 68, 0.08);
-    border-color: rgba(239, 68, 68, 0.3);
-    color: #ef4444;
-  }
-  .fc-btn-full:hover { background: rgba(239, 68, 68, 0.15); }
-  .fc-btn-tune {
-    background: rgba(139, 92, 246, 0.08);
-    border-color: rgba(139, 92, 246, 0.3);
-    color: #8b5cf6;
-  }
-  .fc-btn-tune:hover { background: rgba(139, 92, 246, 0.15); }
-  .fc-tune-result {
-    background: rgba(139, 92, 246, 0.06);
-    border: 1px solid rgba(139, 92, 246, 0.2);
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-size: 0.72rem;
-    margin-top: 6px;
-  }
-  .fc-tune-result strong { color: #a78bfa; }
-  .fc-tune-result .tune-corr { font-size: 1.1rem; font-weight: 700; color: #8b5cf6; }
-  .fc-weight-sum {
-    font-size: 0.68rem;
-    color: var(--dim);
-    font-family: ui-monospace, monospace;
-  }
-  .fc-stats-meta {
-    font-size: 0.72rem;
-    color: var(--dim);
-    margin-bottom: 8px;
-    line-height: 1.5;
-  }
-  .fc-rebuild-status {
-    font-size: 0.68rem;
-    color: var(--warn);
-    margin-left: 8px;
-  }
-  .horse-detail {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px 16px;
-    margin-bottom: 18px;
-  }
-  .horse-detail h3 {
-    font-size: 0.85rem;
-    color: var(--accent);
-    margin-bottom: 10px;
-  }
-  /* ── ペディグリーツリー ── */
-  .hd-layout {
-    display: grid;
-    grid-template-columns: 1fr 380px;
-    gap: 16px;
-    margin-top: 8px;
-  }
-  @media (max-width: 860px) {
-    .hd-layout { grid-template-columns: 1fr; }
-  }
-  .hd-radar-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-  .hd-radar-col canvas { max-width: 360px; max-height: 360px; }
-  .hd-radar-label {
-    font-size: 0.68rem;
-    color: var(--dim);
-    text-align: center;
-  }
-  .ped-tree { padding: 0; }
-  .ped-tree ul {
-    margin: 0;
-    padding: 0 0 0 22px;
-    list-style: none;
-    position: relative;
-  }
-  .ped-tree > ul { padding-left: 0; }
-  .ped-tree ul::before {
-    content: '';
-    position: absolute;
-    left: 9px;
-    top: 0;
-    bottom: 12px;
-    border-left: 1px dashed rgba(94,234,212,0.18);
-  }
-  .ped-tree > ul::before { display: none; }
-  .ped-tree li {
-    position: relative;
-    padding: 4px 0 4px 0;
-  }
-  .ped-tree li::before {
-    content: '';
-    position: absolute;
-    left: -13px;
-    top: 17px;
-    width: 13px;
-    border-top: 1px dashed rgba(94,234,212,0.18);
-  }
-  .ped-tree > ul > li::before { display: none; }
+:root {
+  --bg:#0a0c10; --surface:#12151c; --surface2:#181c25; --border:#1e2330;
+  --text:#e8eaf0; --muted:#8890a0;
+  --accent:#5b7cfa; --accent2:#38d9a9; --warn:#fbbf24;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;overflow:hidden;height:100vh}
+.gnav+.main-layout{height:calc(100vh - 44px)}
+.main-layout{display:grid;grid-template-columns:260px 1fr 290px;grid-template-rows:1fr;height:calc(100vh - 44px)}
 
-  .ped-pass {
-    display: inline-block;
-    font-size: 0.66rem;
-    color: var(--dim);
-    padding: 2px 6px;
-    opacity: 0.7;
-    font-weight: 500;
-  }
-  .ped-pass::before {
-    content: '○';
-    margin-right: 4px;
-    font-size: 0.5rem;
-    vertical-align: middle;
-    color: rgba(94,234,212,0.35);
-  }
+/* ── Sidebar ── */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.sidebar-inner{flex:1;overflow-y:auto;padding:12px;min-height:0}
+.section-lbl{font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin:10px 0 5px}
+.race-group-date{font-size:.68rem;color:var(--muted);background:var(--surface2);padding:2px 7px;border-radius:3px;margin:6px 0 3px}
+.race-item{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:5px;cursor:pointer;font-size:.78rem;transition:.12s;border-left:2px solid transparent;color:var(--text)}
+.race-item:hover{background:var(--surface2)}
+.race-item.active{background:#1a1f3a;border-left-color:var(--accent);color:#fff}
+.venue-badge{font-size:.68rem;background:var(--surface2);padding:1px 5px;border-radius:3px;color:var(--muted);white-space:nowrap;flex-shrink:0}
+.race-name-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.course-card{background:var(--surface2);border-radius:6px;padding:10px 12px;margin:10px 12px 0;font-size:.78rem}
+.course-card .c-title{font-weight:700;font-size:.88rem;margin-bottom:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-block;padding:.15em .55em;border-radius:3px;font-size:.72rem;margin:.1em}
+.p-turf{background:#0d3320;color:#5eead4}
+.p-dirt{background:#3a2206;color:#fbbf24}
+.p-dist{background:#1a1f3a;color:#818cf8}
+.p-cond{background:#2a1230;color:#c084fc}
+.p-date{background:var(--surface);color:var(--muted)}
+.no-data{padding:32px 16px;text-align:center;color:var(--muted);font-size:.8rem}
 
-  .ped-card {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin: 3px 0;
-    cursor: pointer;
-    transition: border-color 0.2s, box-shadow 0.2s;
-    max-width: 420px;
-  }
-  .ped-card:hover {
-    border-color: rgba(94,234,212,0.4);
-    box-shadow: 0 0 12px rgba(94,234,212,0.08);
-  }
-  .ped-card.ped-active {
-    border-color: var(--accent);
-    box-shadow: 0 0 16px rgba(94,234,212,0.15);
-  }
-  .ped-card.ped-father {
-    border-left: 3px solid var(--accent);
-  }
-  .ped-card-nodata { opacity: 0.35; cursor: default; }
+/* ── Map ── */
+.map-col{display:flex;flex-direction:column;background:var(--bg);min-height:0;overflow:hidden}
+.map-toolbar{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);min-height:40px}
+.map-toolbar .m-title{font-size:.82rem;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.legend-row{display:flex;align-items:center;gap:4px;font-size:.7rem;color:var(--muted);flex-shrink:0}
+.legend-swatch{width:16px;height:8px;border-radius:2px}
+.map-area{flex:1;position:relative;overflow:hidden;cursor:grab}
+.map-area:active{cursor:grabbing}
+#race-svg{width:100%;height:100%;display:block}
+.map-loader{display:none;position:absolute;inset:0;background:rgba(10,12,16,.75);align-items:center;justify-content:center;color:var(--muted);font-size:.82rem;z-index:5}
+.map-loader.show{display:flex}
+.zone-legend{padding:6px 12px;border-top:1px solid var(--border);background:var(--surface);display:flex;gap:8px;flex-wrap:wrap;min-height:30px}
+.zl-item{display:flex;align-items:center;gap:4px;font-size:.7rem;color:var(--muted)}
+.zl-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+/* axis overlays */
+.ax-overlay{position:absolute;inset:0;pointer-events:none;z-index:2}
+.ax-lbl{position:absolute;font-size:.65rem;color:#374151;font-weight:500;white-space:nowrap;background:rgba(10,12,16,.55);padding:.1em .35em;border-radius:3px;line-height:1.3}
+.ax-left{bottom:28px;left:8px}
+.ax-right{bottom:28px;right:8px;text-align:right}
+.ax-top{top:8px;left:50%;transform:translateX(-50%)}
+.ax-bottom{bottom:28px;left:50%;transform:translateX(-50%)}
+.ax-reset{position:absolute;bottom:8px;right:8px;pointer-events:auto;font-size:.65rem;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:.2em .5em;cursor:pointer;z-index:3}
+.ax-reset:hover{color:var(--text)}
+/* sidebar collapsible dates */
+.race-group-date{display:flex;align-items:center;justify-content:space-between;font-size:.68rem;color:var(--muted);background:var(--surface2);padding:3px 7px;border-radius:3px;margin:6px 0 2px;cursor:pointer;user-select:none}
+.race-group-date .dg-arrow{transition:transform .15s}
+.race-group-date.collapsed .dg-arrow{transform:rotate(-90deg)}
+.race-group-body{overflow:hidden}
+.race-group-body.collapsed{display:none}
+/* venue sub-group */
+.venue-group-hdr{display:flex;align-items:center;justify-content:space-between;font-size:.68rem;color:var(--accent);padding:3px 8px 3px 12px;cursor:pointer;user-select:none;margin:2px 0 1px}
+.venue-group-hdr .vg-arrow{font-size:.6rem;transition:transform .15s;color:var(--muted)}
+.venue-group-hdr.collapsed .vg-arrow{transform:rotate(-90deg)}
+.venue-group-body{overflow:hidden;padding-left:8px}
+.venue-group-body.collapsed{display:none}
 
-  .ped-card-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
-  }
-  .ped-card-pos {
-    font-size: 0.62rem;
-    font-weight: 700;
-    color: var(--accent);
-    background: rgba(94,234,212,0.1);
-    border-radius: 4px;
-    padding: 1px 6px;
-    white-space: nowrap;
-  }
-  .ped-card-father .ped-card-pos {
-    background: rgba(94,234,212,0.18);
-  }
-  .ped-card-name {
-    font-weight: 600;
-    font-size: 0.78rem;
-    color: var(--text);
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .ped-card-wt {
-    font-size: 0.62rem;
-    font-family: ui-monospace, monospace;
-    color: var(--warn);
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  .ped-card-meta {
-    font-size: 0.6rem;
-    color: var(--dim);
-    font-family: ui-monospace, monospace;
-    margin-bottom: 6px;
-  }
+/* ── Horse list ── */
+.horse-panel{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.hp-header{padding:8px 12px;border-bottom:1px solid var(--border);font-size:.72rem;color:var(--muted);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.hp-list{flex:1;overflow-y:auto;min-height:0}
+.hc{padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:.1s}
+.hc:hover{background:var(--surface2)}
+.hc.hl{background:#1a1f3a}
+.hc-row1{display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.hc-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0}
+.hc-name{font-weight:600;font-size:.82rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hc-l2{font-size:.66rem;padding:.1em .4em;border-radius:3px;white-space:nowrap;flex-shrink:0}
+.hc-sire{font-size:.7rem;color:var(--muted);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-row{display:flex;align-items:center;gap:5px}
+.bar-label{font-size:.68rem;color:var(--muted);width:54px;flex-shrink:0}
+.bar-track{flex:1;height:4px;border-radius:2px;background:var(--border);overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;transition:.3s}
+.bar-val{font-size:.7rem;width:36px;text-align:right;flex-shrink:0}
+.top-conds{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
+.tc-tag{font-size:.64rem;background:var(--surface2);padding:.1em .38em;border-radius:3px;color:var(--muted)}
+.tc-pos{color:#34d399}
+.tc-neg{color:#f87171}
+.tc-neu{color:var(--muted)}
 
-  .ped-heatstrip {
-    display: flex;
-    gap: 2px;
-    height: 14px;
-    border-radius: 3px;
-    overflow: hidden;
-  }
-  .ped-heatstrip-cell {
-    flex: 1;
-    border-radius: 2px;
-    position: relative;
-  }
-  .ped-heatstrip-cell .ped-hs-tip {
-    display: none;
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #1a1e2e;
-    color: #e2e8f0;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.58rem;
-    font-family: ui-monospace, monospace;
-    white-space: nowrap;
-    z-index: 10;
-    pointer-events: none;
-  }
-  .ped-heatstrip-cell:hover .ped-hs-tip { display: block; }
+/* ── Tooltip ── */
+.tooltip{
+  position:fixed;background:rgba(18,21,28,.97);border:1px solid var(--accent);
+  border-radius:6px;padding:9px 12px;font-size:.75rem;pointer-events:none;
+  z-index:200;max-width:220px;display:none;line-height:1.55;backdrop-filter:blur(8px)
+}
+.tt-name{font-weight:700;color:#fff;margin-bottom:3px}
+.tt-l2{display:inline-block;padding:.1em .4em;border-radius:3px;font-size:.68rem;margin-bottom:4px}
+.tt-line{color:var(--muted)}
+.tt-match{color:var(--accent2);font-weight:700}
 
-  .ped-bars {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    margin-top: 4px;
-  }
-  .ped-bar-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    height: 14px;
-  }
-  .ped-bar-lbl {
-    font-size: 0.58rem;
-    color: var(--dim);
-    width: 42px;
-    text-align: right;
-    flex-shrink: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .ped-bar-track {
-    flex: 1;
-    height: 8px;
-    background: rgba(255,255,255,0.04);
-    border-radius: 4px;
-    position: relative;
-    overflow: hidden;
-  }
-  .ped-bar-center {
-    position: absolute;
-    left: 50%;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background: rgba(255,255,255,0.15);
-  }
-  .ped-bar-fill {
-    position: absolute;
-    top: 1px;
-    bottom: 1px;
-    border-radius: 3px;
-    transition: width 0.3s, left 0.3s;
-  }
-  .ped-bar-val {
-    font-size: 0.56rem;
-    font-family: ui-monospace, monospace;
-    color: var(--dim);
-    width: 32px;
-    text-align: right;
-    flex-shrink: 0;
-  }
-
-  /* ── 軸選択バー（全員表示） ── */
-  .axis-bar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 10px;
-    flex-wrap: wrap;
-    padding: 8px 12px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 8px;
-  }
-  .axis-bar label {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--dim);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .axis-bar select {
-    background: var(--bg2);
-    border: 1px solid rgba(255,255,255,0.15);
-    color: var(--fg);
-    padding: 4px 8px;
-    border-radius: 5px;
-    font-size: 0.72rem;
-    font-family: inherit;
-  }
-  .axis-apply-btn {
-    background: rgba(94, 234, 212, 0.10);
-    border: 1px solid rgba(94, 234, 212, 0.35);
-    color: var(--accent);
-    padding: 5px 16px;
-    border-radius: 6px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.15s;
-  }
-  .axis-apply-btn:hover {
-    background: rgba(94, 234, 212, 0.20);
-  }
-
-  /* ── 比較コントロール ── */
-  .cmp-controls {
-    margin-top: 10px;
-    padding: 8px 12px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 8px;
-  }
-  .cmp-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .cmp-filter-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    flex-wrap: wrap;
-  }
-  .cmp-sel {
-    background: var(--bg2);
-    border: 1px solid rgba(255,255,255,0.15);
-    color: var(--fg);
-    padding: 4px 8px;
-    border-radius: 5px;
-    font-size: 0.70rem;
-    font-family: inherit;
-  }
-  .cmp-reload-btn {
-    background: rgba(245,158,11,0.10);
-    border: 1px solid rgba(245,158,11,0.35);
-    color: #f59e0b;
-    padding: 4px 14px;
-    border-radius: 6px;
-    font-size: 0.70rem;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.15s;
-  }
-  .cmp-reload-btn:hover { background: rgba(245,158,11,0.20); }
-  .cmp-reload-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .cmp-toggle { cursor: pointer; display: flex; align-items: center; gap: 4px; }
-  .cmp-toggle input { display: none; }
-  .cmp-chip {
-    font-size: 0.68rem;
-    padding: 3px 10px;
-    border-radius: 12px;
-    border: 1px solid;
-    font-weight: 600;
-    opacity: 0.45;
-    transition: opacity 0.2s;
-  }
-  .cmp-toggle input:checked + .cmp-chip { opacity: 1; }
-  .cmp-chip-same { border-color: #f59e0b; color: #f59e0b; background: rgba(245,158,11,0.08); }
-  .cmp-chip-recent { border-color: #a78bfa; color: #a78bfa; background: rgba(167,139,250,0.08); }
-  .cmp-status { font-size: 0.62rem; color: var(--dim);
-  }
+/* ── Rank medals ── */
+.rank-badge{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;flex-shrink:0;line-height:1}
+.rank-1-badge{background:linear-gradient(135deg,#78510a,#f59e0b);color:#fff;box-shadow:0 0 7px rgba(251,191,36,.5)}
+.rank-2-badge{background:linear-gradient(135deg,#374151,#9ca3af);color:#fff;box-shadow:0 0 5px rgba(156,163,175,.35)}
+.rank-3-badge{background:linear-gradient(135deg,#5a2d0c,#b45309);color:#fff;box-shadow:0 0 5px rgba(180,83,9,.35)}
+.rank-other-badge{background:var(--surface2);color:var(--muted)}
+.hc.rank-1{border-left-color:#f59e0b!important;background:rgba(245,158,11,.06)!important}
+.hc.rank-2{border-left-color:#9ca3af!important;background:rgba(156,163,175,.04)!important}
+.hc.rank-3{border-left-color:#b45309!important;background:rgba(180,83,9,.04)!important}
+/* ── Top-3 summary bar ── */
+.top3-bar{padding:7px 10px;border-bottom:1px solid var(--border);display:flex;gap:5px;align-items:center;background:var(--surface);flex-shrink:0;min-height:36px;flex-wrap:wrap}
+.top3-label{font-size:.63rem;color:var(--muted);white-space:nowrap;flex-shrink:0;margin-right:2px}
+.top3-chip{display:flex;align-items:center;gap:4px;font-size:.7rem;padding:.2em .5em;border-radius:4px;white-space:nowrap;cursor:pointer;transition:.1s;overflow:hidden;max-width:100px}
+.top3-chip:hover{filter:brightness(1.2)}
+.top3-chip .chip-score{font-size:.62rem;opacity:.8}
+/* ── Score bar ── */
+.bar-track{background:var(--surface2)!important}
+.bar-fill-wrap{position:relative;flex:1;height:6px;border-radius:3px;background:var(--surface2);overflow:hidden}
+.bar-fill2{height:100%;border-radius:3px;transition:.35s}
+.score-val{font-size:.72rem;font-weight:600;width:40px;text-align:right;flex-shrink:0}
+/* individual adjustment indicator */
+.ind-badge{font-size:.6rem;padding:.1em .4em;border-radius:3px;background:#0f2a1a;color:#34d399;border:1px solid #34d39944;flex-shrink:0;white-space:nowrap}
+.spd-hi{font-size:.6rem;padding:.1em .35em;border-radius:3px;background:#0f1f2a;color:#60a5fa;border:1px solid #60a5fa44;flex-shrink:0;white-space:nowrap}
+.spd-lo{font-size:.6rem;padding:.1em .35em;border-radius:3px;background:#2a1010;color:#f97316;border:1px solid #f9731644;flex-shrink:0;white-space:nowrap}
 </style>
 </head>
 <body>
 {% include 'partials/_nav.html' %}
-<div class="wrap">
-  <h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">レース適性3Dマップ</h1>
-  <p class="lead">
-    実レースデータから集計した<strong>種牡馬因子統計</strong>に基づき、6頭の重要祖先（父・母父母父・母父母母父・母母父・母母母父・母母母母父）の適性を
-    重み付きブレンドして各馬の適性ベクトルを算出します。3D散布図の軸はグラフ下部から自由に切り替えられます。
-    開催日・会場・レースを選んで「表示」を押してください。
-  </p>
 
-  <div class="form-row">
-    <label for="dateSelect">開催日</label>
-    <select id="dateSelect"><option value="">読み込み中…</option></select>
-    <label for="venueSelect">会場</label>
-    <select id="venueSelect" disabled><option value="">—</option></select>
-    <label for="raceSelect">レース</label>
-    <select id="raceSelect" disabled><option value="">—</option></select>
-    <button type="button" id="btnLoad" disabled>表示</button>
-    <span class="picker-status" id="pickerStatus"></span>
+<div class="main-layout">
+  <!-- ── Left sidebar ─────────────────────────────── -->
+  <div class="sidebar">
+    <div class="sidebar-inner" id="sidebar-inner">
+      <div class="section-lbl">今週のレース</div>
+      <div id="race-list"><div class="no-data">読み込み中…</div></div>
+    </div>
+    <div id="course-card"></div>
   </div>
 
-  {% if is_dev_check(request) %}
-  <details class="factor-controls" id="factorControls">
-    <summary>開発者ツール</summary>
-    <div class="factor-controls-inner">
-      <div class="fc-section">
-        <h3>祖先の重み</h3>
-        <div class="fc-weights" id="weightSliders"></div>
-        <div class="fc-weight-actions">
-          <button type="button" class="fc-btn-reset" id="btnResetWeights">デフォルトに戻す</button>
-          <span class="fc-weight-sum" id="weightSum"></span>
-        </div>
-      </div>
-      <div class="fc-section">
-        <h3>統計データ</h3>
-        <div class="fc-stats-meta" id="statsMetaInfo">—</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
-          <button type="button" class="fc-btn-rebuild" id="btnRebuildFast">高速再計算</button>
-          <button type="button" class="fc-btn-rebuild fc-btn-full" id="btnRebuildFull">フル再計算</button>
-          <span class="fc-rebuild-status" id="rebuildStatus"></span>
-        </div>
-        <p style="font-size:0.68rem;color:var(--dim);margin:0 0 10px">
-          高速: スナップショットから ~10秒 ｜ フル: GCS全件走査 + スナップショット更新 ~5分
-        </p>
-        <h3>ウェイト自動チューニング</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
-          <button type="button" class="fc-btn-rebuild fc-btn-tune" id="btnTuneGlobal">グローバル最適化</button>
-          <button type="button" class="fc-btn-rebuild fc-btn-tune" id="btnTuneRace">このレースで最適化</button>
-          <span class="fc-rebuild-status" id="tuneStatus"></span>
-        </div>
-        <div class="fc-tune-result" id="tuneResult" style="display:none"></div>
-      </div>
+  <!-- ── Map center ───────────────────────────────── -->
+  <div class="map-col">
+    <div class="map-toolbar">
+      <span class="m-title" id="map-title">レースを選択してください</span>
+      <span class="legend-row">
+        <span class="legend-swatch" style="border:2px dashed #3b82f6;background:rgba(59,130,246,.1)"></span>
+        過去好走域
+      </span>
+      <span class="legend-row" id="today-leg" style="display:none">
+        <span class="legend-swatch" style="border:2px dashed #f97316;background:rgba(249,115,22,.1)"></span>
+        当日傾向
+      </span>
     </div>
-  </details>
-  {% endif %}
-  <div class="err" id="errBox"></div>
-  <div class="loading" id="loading">読み込み中…</div>
-
-  <div id="scrapeOverlay" class="scrape-overlay" role="status" aria-live="polite">
-    <div class="scrape-overlay-inner">
-      <div class="scrape-overlay-title">5世代血統データの取得</div>
-      <div class="scrape-overlay-phase scrape-phase-storage" id="scrapeOverlayPhase">準備</div>
-      <div class="scrape-overlay-msg" id="scrapeOverlayMsg">準備中…</div>
-      <div class="scrape-overlay-bar-wrap indeterminate" id="scrapeOverlayBarWrap">
-        <div class="scrape-overlay-bar-fill" id="scrapeOverlayBarFill"></div>
+    <div class="map-area" id="map-area">
+      <div class="map-loader" id="map-loader">データ取得中…</div>
+      <svg id="race-svg" viewBox="-8 -6 16 12" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="ax-overlay" id="ax-overlay">
+        <div class="ax-lbl ax-left" id="ax-left"></div>
+        <div class="ax-lbl ax-right" id="ax-right"></div>
+        <div class="ax-lbl ax-top" id="ax-top"></div>
       </div>
-      <div class="scrape-overlay-runner-block" id="scrapeOverlayRunnerBlock" aria-hidden="true">
-        <div class="scrape-overlay-runner-caption" id="scrapeOverlayRunnerCaption"></div>
-        <div class="scrape-overlay-runner-bar-wrap" id="scrapeOverlayRunnerBarWrap">
-          <div class="scrape-overlay-runner-bar-fill" id="scrapeOverlayRunnerBarFill"></div>
-        </div>
-      </div>
-      <div class="scrape-overlay-stats" id="scrapeOverlayStats"></div>
-      <div class="scrape-overlay-sub" id="scrapeOverlaySub">
-        最優先キューで処理します（通常のスクレイプ待ちより先に実行されます）。ウィンドウを閉じないでください。
-      </div>
-      <button type="button" class="scrape-overlay-pause" id="pedigreePauseBtn">
-        一時停止（キュー待ちを取り下げ）
-      </button>
+      <button class="ax-reset" id="ax-reset" title="リセット" style="display:none">⌂ リセット</button>
     </div>
+    <div class="zone-legend" id="zone-legend"></div>
   </div>
 
-  <div id="fiveGenWaitDone" class="fivegen-wait-done" aria-live="polite">
-    <p><strong>処理が完了しました。</strong>元のタブに戻ると、続きの表示が進みます。</p>
-    <p class="dim">このタブは閉じて構いません。</p>
-  </div>
-
-  <div id="main" style="display:none">
-    <div class="meta-bar" id="metaBar"></div>
-    <div class="viz-wrap">
-      <h2 id="viz3dTitle">3D 散布図</h2>
-      <p class="viz-3d-hint" id="viz3dHint">
-        左ドラッグで回転、ホイールでズーム、右ドラッグでパン。<strong>球をクリック</strong>すると馬名と適性詳細を表示します。
-      </p>
-      <div id="viz3dRoot" class="viz-3d-root" role="img" aria-label="3次元散布図"></div>
-      <p class="scatter-tap-hint" id="scatterTapHint" aria-live="polite"></p>
-      <div class="legend" id="legend"></div>
-      <div class="axis-bar" id="axisBar">
-        <label>X <select id="axisX2"></select></label>
-        <label>Y <select id="axisY2"></select></label>
-        <label>Z <select id="axisZ2"></select></label>
-        <button type="button" class="axis-apply-btn" id="btnApplyAxes">軸を反映</button>
-      </div>
-      <div class="cmp-controls" id="cmpControls" style="display:none">
-        <div class="cmp-row">
-          <label class="cmp-toggle">
-            <input type="checkbox" id="cmpSameCond" checked>
-            <span class="cmp-chip cmp-chip-same" id="cmpSameLabel">同条件上位</span>
-          </label>
-          <label class="cmp-toggle">
-            <input type="checkbox" id="cmpRecent" checked>
-            <span class="cmp-chip cmp-chip-recent" id="cmpRecentLabel">直近2週間</span>
-          </label>
-          <span class="cmp-status" id="cmpStatus"></span>
-        </div>
-        <div class="cmp-filter-row" id="cmpFilterRow">
-          <select id="cmpSurface" class="cmp-sel">
-            <option value="">芝</option>
-            <option value="芝">芝</option>
-            <option value="ダ">ダート</option>
-          </select>
-          <select id="cmpDistance" class="cmp-sel">
-            <option value="0">距離: レースと同じ</option>
-          </select>
-          <select id="cmpTrackGood" class="cmp-sel">
-            <option value="">馬場: レースと同じ</option>
-            <option value="good">良馬場</option>
-            <option value="bad">良馬場以外</option>
-          </select>
-          <button type="button" class="cmp-reload-btn" id="btnCmpReload">条件で再取得</button>
-        </div>
-      </div>
+  <!-- ── Right: horse list ───────────────────────── -->
+  <div class="horse-panel">
+    <div class="hp-header">
+      <span id="hp-count">—</span>
+      <span>コース適性順</span>
     </div>
-    <div id="horseDetail" class="horse-detail" style="display:none"></div>
-    <div class="groups" id="groups"></div>
-    <table>
-      <thead>
-        <tr>
-          <th>枠</th>
-          <th>馬番</th>
-          <th>馬名</th>
-          <th id="thAxisX">—</th>
-          <th id="thAxisY">—</th>
-          <th id="thAxisZ">—</th>
-          <th>群</th>
-          <th>祖先</th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
+    <div class="top3-bar" id="top3-bar" style="display:none"></div>
+    <div class="hp-list" id="hp-list"><div class="no-data">レースを選択してください</div></div>
   </div>
 </div>
+
+<div class="tooltip" id="tooltip"></div>
+
 <script>
-(function () {
-  const SERVER_API_PREFIX = {{ (api_prefix | default('')) | tojson }};
-  function inferApiPrefixFromPath() {
-    try {
-      const path = window.location.pathname || '';
-      const m = path.match(/^(\/.+)\/note-aptitude-race\/?$/);
-      return m ? m[1] : '';
-    } catch (_) {
-      return '';
-    }
-  }
-  const API_PREFIX = String(SERVER_API_PREFIX || inferApiPrefixFromPath() || '').replace(/\/$/, '');
-  function apiUrl(path) {
-    const p = path.startsWith('/') ? path : '/' + path;
-    return (API_PREFIX || '') + p;
-  }
+(function(){
+const API_V2  = '{{ api_prefix }}/api/pedigree/race-note-3d-v2';
+const API_WK  = '{{ api_prefix }}/api/pedigree/week-races';
 
-  const GROUP_COLORS = ['var(--g0)', 'var(--g1)', 'var(--g2)', 'var(--g3)'];
-  const HEX = ['#5eead4', '#a78bfa', '#fb923c', '#94a3b8'];
+let cur = null;
 
-  const $ = (id) => document.getElementById(id);
-  const dateSelect = $('dateSelect');
-  const venueSelect = $('venueSelect');
-  const raceSelect = $('raceSelect');
-  const btn = $('btnLoad');
-  const pickerStatus = $('pickerStatus');
-  const errBox = $('errBox');
-  const loading = $('loading');
-  const main = $('main');
-  const scrapeOverlay = $('scrapeOverlay');
-  const scrapeOverlayMsg = $('scrapeOverlayMsg');
-  const scrapeOverlayPhase = $('scrapeOverlayPhase');
-  const scrapeOverlayBarWrap = $('scrapeOverlayBarWrap');
-  const scrapeOverlayBarFill = $('scrapeOverlayBarFill');
-  const scrapeOverlayStats = $('scrapeOverlayStats');
-  const scrapeOverlaySub = $('scrapeOverlaySub');
-  const scrapeOverlayRunnerBlock = $('scrapeOverlayRunnerBlock');
-  const scrapeOverlayRunnerCaption = $('scrapeOverlayRunnerCaption');
-  const scrapeOverlayRunnerBarFill = $('scrapeOverlayRunnerBarFill');
-  const pedigreePauseBtn = $('pedigreePauseBtn');
-  const scatterTapHint = $('scatterTapHint');
-  const viz3dRoot = $('viz3dRoot');
+// ── Utils ──────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const svgNS = 'http://www.w3.org/2000/svg';
+function mkel(tag, attrs={}, text='') {
+  const el = document.createElementNS(svgNS, tag);
+  Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
+  if (text) el.textContent = text;
+  return el;
+}
+function bracketBg(n) {
+  return ['#fff','#000','#e03','#00d','#dd0','#080','#e60','#c8f'][(n-1)%8]||'#555';
+}
+function bracketFg(n) { return n===1?'#000':n===2?'#fff':'#fff'; }
+function matchColor(v) {
+  return v>=1.08?'#34d399':v>=1.03?'#60a5fa':v>=0.97?'#94a3b8':'#f87171';
+}
+function fmt3(v) { return v!=null?v.toFixed(3):'—'; }
 
-  let viz3dDispose = null;
+// ── Load week races ────────────────────────────────────────────────────────
+const _WK_CACHE_KEY = 'week_races_v3';
+const _WK_CACHE_TTL = 5 * 60 * 1000; // 5 min
 
-  function formatScatterHorseLabel(h) {
-    if (!h) return '';
-    const name = (h.horse_name || '').trim() || '（馬名なし）';
-    const parts = [];
-    const bn = h.bracket_number;
-    const hn = h.horse_number;
-    if (bn !== undefined && bn !== null && bn !== '' && !Number.isNaN(Number(bn))) parts.push('枠' + bn);
-    if (hn !== undefined && hn !== null && hn !== '' && !Number.isNaN(Number(hn))) parts.push(hn + '番');
-    return parts.length ? parts.join(' ') + ' ' + name : name;
-  }
-
-  let _compareData = null;
-
-  async function drawScatter3D(horses, axX, axY, axZ) {
-    if (!viz3dRoot) return;
-    if (viz3dDispose) {
-      try { viz3dDispose(); } catch (_) {}
-      viz3dDispose = null;
-    }
-    if (!horses || !horses.length) {
-      viz3dRoot.innerHTML = '';
+async function loadWeekRaces() {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(_WK_CACHE_KEY) || 'null');
+    if (cached && Date.now() - cached.ts < _WK_CACHE_TTL) {
+      renderRaceList(cached.races);
       return;
     }
-
-    const THREE = await import('https://esm.sh/three@0.160.0');
-    const { OrbitControls } = await import(
-      'https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js'
-    );
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0c10);
-
-    const allPts = horses.map(h => (h.factors || {}));
-    const showSame = $('cmpSameCond') && $('cmpSameCond').checked;
-    const showRecent = $('cmpRecent') && $('cmpRecent').checked;
-    const sameHorses = (showSame && _compareData && _compareData.same_condition) ? (_compareData.same_condition.horses || []) : [];
-    const recentHorses = (showRecent && _compareData && _compareData.recent_course) ? (_compareData.recent_course.horses || []) : [];
-    sameHorses.forEach(h => allPts.push(h.factors || {}));
-    recentHorses.forEach(h => allPts.push(h.factors || {}));
-
-    const flipX = _axisInfo(axX).lowerIsBetter;
-    const flipY = _axisInfo(axY).lowerIsBetter;
-    const flipZ = _axisInfo(axZ).lowerIsBetter;
-    const vxAll = allPts.map(f => { const v = Number(f[axX]) || 0; return flipX ? -v : v; });
-    const vyAll = allPts.map(f => { const v = Number(f[axY]) || 0; return flipY ? -v : v; });
-    const vzAll = allPts.map(f => { const v = Number(f[axZ]) || 0; return flipZ ? -v : v; });
-    const rng = (arr) => {
-      const lo = Math.min(...arr, -0.1);
-      const hi = Math.max(...arr, 0.1);
-      return { lo, hi, d: hi - lo || 1 };
-    };
-    const rx = rng(vxAll), ry = rng(vyAll), rz = rng(vzAll);
-    const span = 42;
-    const toX = v => { const w = flipX ? -v : v; return ((w - rx.lo) / rx.d - 0.5) * 2 * span; };
-    const toY = v => { const w = flipY ? -v : v; return ((w - ry.lo) / ry.d - 0.5) * 2 * span; };
-    const toZ = v => { const w = flipZ ? -v : v; return ((w - rz.lo) / rz.d - 0.5) * 2 * span; };
-
-    const meshes = [];
-    horses.forEach((h) => {
-      const f = h.factors || {};
-      const g = Math.min(3, Math.max(0, h.group_id | 0));
-      const col = new THREE.Color(HEX[g] || '#888888');
-      const geom = new THREE.SphereGeometry(1.35, 22, 22);
-      const mat = new THREE.MeshStandardMaterial({ color: col, metalness: 0.12, roughness: 0.42 });
-      const mesh = new THREE.Mesh(geom, mat);
-      mesh.position.set(toX(Number(f[axX]) || 0), toY(Number(f[axY]) || 0), toZ(Number(f[axZ]) || 0));
-      mesh.userData.horse = h;
-      scene.add(mesh);
-      meshes.push(mesh);
-    });
-
-    sameHorses.forEach(h => {
-      const f = h.factors || {};
-      const geom = new THREE.OctahedronGeometry(1.3);
-      const mat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.2, roughness: 0.3, transparent: true, opacity: 0.7 });
-      const mesh = new THREE.Mesh(geom, mat);
-      mesh.position.set(toX(Number(f[axX]) || 0), toY(Number(f[axY]) || 0), toZ(Number(f[axZ]) || 0));
-      mesh.userData.horse = { horse_name: h.horse_name, factors: f, _cmp: 'same', race_date: h.race_date, finish_position: h.finish_position };
-      scene.add(mesh);
-      meshes.push(mesh);
-    });
-
-    recentHorses.forEach(h => {
-      const f = h.factors || {};
-      const geom = new THREE.TetrahedronGeometry(1.2);
-      const mat = new THREE.MeshStandardMaterial({ color: 0xa78bfa, metalness: 0.2, roughness: 0.3, transparent: true, opacity: 0.7 });
-      const mesh = new THREE.Mesh(geom, mat);
-      mesh.position.set(toX(Number(f[axX]) || 0), toY(Number(f[axY]) || 0), toZ(Number(f[axZ]) || 0));
-      mesh.userData.horse = { horse_name: h.horse_name, factors: f, _cmp: 'recent', race_date: h.race_date, finish_position: h.finish_position, distance: h.distance };
-      scene.add(mesh);
-      meshes.push(mesh);
-    });
-
-    const grid = new THREE.GridHelper(130, 16, 0x3d4556, 0x252b36);
-    grid.position.y = -span - 3;
-    scene.add(grid);
-
-    function makeLabel(text, position, color) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 256; canvas.height = 64;
-      const ctx = canvas.getContext('2d');
-      ctx.font = 'bold 28px sans-serif';
-      ctx.fillStyle = color || '#7d8698';
-      ctx.textAlign = 'center';
-      ctx.fillText(text, 128, 42);
-      const tex = new THREE.CanvasTexture(canvas);
-      const sp = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
-      const sprite = new THREE.Sprite(sp);
-      sprite.scale.set(18, 4.5, 1);
-      sprite.position.copy(position);
-      scene.add(sprite);
-    }
-    const axisLabelMap = {};
-    (_lastData && _lastData.axes || []).forEach(a => { axisLabelMap[a.id] = a.label_ja; });
-    function _dirHint(id) {
-      const info = _axisInfo(id);
-      return info.lowerIsBetter ? ' ◀小=好' : ' ▶大=好';
-    }
-    makeLabel((axisLabelMap[axX] || axX) + _dirHint(axX), new THREE.Vector3(span + 6, -span - 3, 0), '#ef4444');
-    makeLabel((axisLabelMap[axY] || axY) + _dirHint(axY), new THREE.Vector3(0, span + 6, 0), '#22c55e');
-    makeLabel((axisLabelMap[axZ] || axZ) + _dirHint(axZ), new THREE.Vector3(0, -span - 3, span + 6), '#3b82f6');
-
-    const axes = new THREE.AxesHelper(58);
-    scene.add(axes);
-
-    const box = new THREE.Box3();
-    meshes.forEach(m => box.expandByObject(m));
-    const center = new THREE.Vector3();
-    const size = new THREE.Vector3();
-    box.getCenter(center);
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z, 8);
-    const camDist = maxDim * 1.75;
-
-    const container = viz3dRoot;
-    const width = container.clientWidth || 640;
-    const height = Math.min(420, Math.max(320, Math.round(width * 0.62)));
-
-    const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 5000);
-    camera.position.set(center.x + camDist * 0.82, center.y + camDist * 0.58, center.z + camDist * 0.88);
-    camera.lookAt(center);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setSize(width, height);
-    container.innerHTML = '';
-    container.appendChild(renderer.domElement);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.07;
-    controls.target.copy(center);
-    controls.minDistance = maxDim * 0.28;
-    controls.maxDistance = maxDim * 8;
-    controls.update();
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.52));
-    const dir = new THREE.DirectionalLight(0xffffff, 0.58);
-    dir.position.set(35, 55, 28);
-    scene.add(dir);
-
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-    let dragStart = null;
-
-    function pickHorse(clientX, clientY) {
-      const rect = renderer.domElement.getBoundingClientRect();
-      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObjects(meshes, false);
-      return hits.length ? hits[0].object.userData.horse : null;
-    }
-    function onPointerDown(ev) { dragStart = { x: ev.clientX, y: ev.clientY }; }
-    function onPointerUp(ev) {
-      if (!dragStart) return;
-      var d = Math.hypot(ev.clientX - dragStart.x, ev.clientY - dragStart.y);
-      dragStart = null;
-      if (d > 10) return;
-      var h = pickHorse(ev.clientX, ev.clientY);
-      if (h) {
-        if (h._cmp) {
-          var cmpTag = h._cmp === 'same' ? '【同条件】' : '【直近】';
-          var extra = (h.race_date || '') + ' ' + (h.finish_position || '') + '着';
-          if (h.distance) extra += ' ' + h.distance + 'm';
-          if (scatterTapHint) scatterTapHint.textContent = cmpTag + ' ' + (h.horse_name || '') + ' (' + extra.trim() + ')';
-        } else {
-          if (scatterTapHint) scatterTapHint.textContent = formatScatterHorseLabel(h);
-          showHorseDetail(h);
-        }
-      } else {
-        if (scatterTapHint) scatterTapHint.textContent = '';
-      }
-    }
-    function onPointerMove(ev) {
-      renderer.domElement.style.cursor = pickHorse(ev.clientX, ev.clientY) ? 'pointer' : '';
-    }
-
-    renderer.domElement.addEventListener('pointerdown', onPointerDown);
-    renderer.domElement.addEventListener('pointerup', onPointerUp);
-    renderer.domElement.addEventListener('pointermove', onPointerMove);
-
-    var raf = 0;
-    function loop() {
-      raf = requestAnimationFrame(loop);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-    loop();
-
-    function onResize() {
-      var w = container.clientWidth || 640;
-      var h = Math.min(420, Math.max(320, Math.round(w * 0.62)));
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    }
-    window.addEventListener('resize', onResize);
-
-    viz3dDispose = function () {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', onResize);
-      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
-      renderer.domElement.removeEventListener('pointerup', onPointerUp);
-      renderer.domElement.removeEventListener('pointermove', onPointerMove);
-      controls.dispose();
-      meshes.forEach(m => { m.geometry.dispose(); m.material.dispose(); });
-      renderer.dispose();
-      if (renderer.domElement.parentNode) renderer.domElement.remove();
-      container.innerHTML = '';
-    };
+  } catch {}
+  try {
+    const r = await fetch(API_WK);
+    if (!r.ok) { $('race-list').innerHTML = '<div class="no-data">取得失敗</div>'; return; }
+    const d = await r.json();
+    try { sessionStorage.setItem(_WK_CACHE_KEY, JSON.stringify({ts: Date.now(), races: d.races || []})); } catch {}
+    renderRaceList(d.races || []);
+  } catch(e) {
+    $('race-list').innerHTML = `<div class="no-data">通信エラー</div>`;
   }
+}
 
-  function _hsColor(v) {
-    const t = Math.max(-3, Math.min(3, v));
-    if (t >= 0) {
-      const p = t / 3;
-      const r = Math.round(30 + (94 - 30) * (1 - p));
-      const g = Math.round(41 + (234 - 41) * (1 - p) * 0.5 + 234 * p);
-      const b = Math.round(59 + (212 - 59) * (1 - p) * 0.3 + 212 * p);
-      return `rgb(${r},${Math.min(255, g)},${Math.min(255, b)})`;
-    }
-    const p = Math.abs(t) / 3;
-    return `rgb(${Math.round(107 + 141 * p)},${Math.round(114 - 50 * p)},${Math.round(128 - 15 * p)})`;
+function renderRaceList(races) {
+  if (!races.length) {
+    $('race-list').innerHTML = '<div class="no-data">今週の開催レースがありません</div>';
+    return;
   }
-
-  function _renderAncCard(a, wPct, axisLabelMap, isFather) {
-    if (!a) return '';
-    const noData = !a.found_in_db;
-    const cls = 'ped-card' + (isFather ? ' ped-father' : '') + (noData ? ' ped-card-nodata' : '');
-    const axes = a.axes || {};
-    const keys = Object.keys(axisLabelMap);
-
-    let strip = '<div class="ped-heatstrip">';
-    keys.forEach(k => {
-      const v = axes[k] || 0;
-      const bg = _hsColor(v);
-      const lbl = (axisLabelMap[k] || k).replace(/（.*/, '');
-      strip += '<div class="ped-heatstrip-cell" style="background:' + bg + '">' +
-        '<span class="ped-hs-tip">' + lbl + ' ' + v.toFixed(2) + '</span></div>';
-    });
-    strip += '</div>';
-
-    return '<div class="' + cls + '" data-slot="' + a.slot + '">' +
-      '<div class="ped-card-head">' +
-      '<span class="ped-card-pos">' + escapeHtml(a.label_ja) + '</span>' +
-      '<span class="ped-card-name">' + escapeHtml(a.sire_name || '—') + '</span>' +
-      '<span class="ped-card-wt">' + wPct + '%</span>' +
-      '</div>' +
-      '<div class="ped-card-meta">' + (noData ? 'DB未登録' : a.side + ' n=' + a.sample_size) + '</div>' +
-      strip +
-      '</div>';
-  }
-
-  function _renderTree(ancMap, weightsUsed, axisLabelMap) {
-    function w(slot) { return Math.round((weightsUsed[slot] || 0) * 100); }
-    function card(slot, father) { return _renderAncCard(ancMap[slot], w(slot), axisLabelMap, !!father); }
-    function pass(label) { return '<span class="ped-pass">' + label + '</span>'; }
-
-    return '<div class="ped-tree"><ul>' +
-      '<li>' + card('father', true) + '</li>' +
-      '<li>' + pass('母') +
-        '<ul>' +
-          '<li>' + pass('母父') +
-            '<ul>' +
-              '<li>' + pass('母父母') +
-                '<ul>' +
-                  '<li>' + card('mf_mf') + '</li>' +
-                  '<li>' + pass('母父母母') +
-                    '<ul><li>' + card('mf_mm_f') + '</li></ul>' +
-                  '</li>' +
-                '</ul>' +
-              '</li>' +
-            '</ul>' +
-          '</li>' +
-          '<li>' + pass('母母') +
-            '<ul>' +
-              '<li>' + card('mm_f') + '</li>' +
-              '<li>' + pass('母母母') +
-                '<ul>' +
-                  '<li>' + card('mmm_f') + '</li>' +
-                  '<li>' + pass('母母母母') +
-                    '<ul><li>' + card('mmmm_f') + '</li></ul>' +
-                  '</li>' +
-                '</ul>' +
-              '</li>' +
-            '</ul>' +
-          '</li>' +
-        '</ul>' +
-      '</li>' +
-    '</ul></div>';
-  }
-
-  function _renderBars(axes, axisLabelMap) {
-    const keys = Object.keys(axisLabelMap);
-    let html = '<div class="ped-bars">';
-    keys.forEach(k => {
-      const v = Math.max(-3, Math.min(3, axes[k] || 0));
-      const pct = Math.abs(v) / 3 * 50;
-      const left = v >= 0 ? 50 : (50 - pct);
-      const color = v >= 0 ? 'rgba(94,234,212,0.6)' : 'rgba(248,113,113,0.5)';
-      const lbl = (axisLabelMap[k] || k).replace(/（.*/, '');
-      html += '<div class="ped-bar-row">' +
-        '<span class="ped-bar-lbl">' + lbl + '</span>' +
-        '<div class="ped-bar-track">' +
-          '<div class="ped-bar-center"></div>' +
-          '<div class="ped-bar-fill" style="left:' + left + '%;width:' + pct + '%;background:' + color + '"></div>' +
-        '</div>' +
-        '<span class="ped-bar-val">' + v.toFixed(2) + '</span>' +
-      '</div>';
-    });
-    html += '</div>';
-    return html;
-  }
-
-  function scrollToDetail() {
-    const el = $('horseDetail');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  let _detailHorse = null;
-  function showHorseDetail(h) {
-    const el = $('horseDetail');
-    if (!el || !h) return;
-    _detailHorse = h;
-    const f = h.factors || {};
-    const ancs = h.ancestors || [];
-    const weightsUsed = h.weights_used || {};
-    const axisLabelMap = {};
-    (_lastData && _lastData.axes || []).forEach(a => { axisLabelMap[a.id] = a.label_ja; });
-
-    const ancMap = {};
-    ancs.forEach(a => { ancMap[a.slot] = a; });
-
-    let html = '<h3>' + escapeHtml(formatScatterHorseLabel(h)) + '</h3>';
-    html += '<div class="hd-layout">';
-    html += '<div class="ped-tree-col">' + _renderTree(ancMap, weightsUsed, axisLabelMap) + '</div>';
-    html += '<div class="hd-radar-col">' +
-      '<canvas id="radarCanvas" width="360" height="360"></canvas>' +
-      '<div class="hd-radar-label" id="radarLabel">ブレンド適性</div>' +
-      '<div id="ancDetailBars" style="width:100%"></div>' +
-    '</div>';
-    html += '</div>';
-    el.innerHTML = html;
-    el.style.display = 'block';
-
-    const rCanvas = $('radarCanvas');
-    if (rCanvas) drawRadar(rCanvas, f, axisLabelMap, null);
-
-    el.querySelectorAll('.ped-card:not(.ped-card-nodata)').forEach(card => {
-      card.addEventListener('click', () => {
-        const slot = card.dataset.slot;
-        const a = ancMap[slot];
-        if (!a) return;
-        el.querySelectorAll('.ped-card').forEach(c => c.classList.remove('ped-active'));
-        const wasActive = card.classList.contains('ped-active');
-        if (!wasActive) {
-          card.classList.add('ped-active');
-          const rCanvas2 = $('radarCanvas');
-          if (rCanvas2) drawRadar(rCanvas2, f, axisLabelMap, a.axes);
-          const lbl = $('radarLabel');
-          if (lbl) lbl.innerHTML = '<strong>' + escapeHtml(a.label_ja) + '</strong> ' + escapeHtml(a.sire_name || '') + ' との比較';
-          const barsEl = $('ancDetailBars');
-          if (barsEl) barsEl.innerHTML = _renderBars(a.axes, axisLabelMap);
-        } else {
-          const rCanvas2 = $('radarCanvas');
-          if (rCanvas2) drawRadar(rCanvas2, f, axisLabelMap, null);
-          const lbl = $('radarLabel');
-          if (lbl) lbl.textContent = 'ブレンド適性';
-          const barsEl = $('ancDetailBars');
-          if (barsEl) barsEl.innerHTML = '';
-        }
-      });
-    });
-  }
-
-  function drawRadar(canvas, factors, labelMap, overlayAxes) {
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width, h = canvas.height;
-    const cx = w / 2, cy = h / 2;
-    const r = Math.min(cx, cy) - 40;
-    const keys = Object.keys(factors);
-    const n = keys.length;
-    if (n < 3) return;
-
-    ctx.clearRect(0, 0, w, h);
-    const angleStep = (2 * Math.PI) / n;
-    const startAngle = -Math.PI / 2;
-
-    for (let ring = 1; ring <= 3; ring++) {
-      const rr = r * ring / 3;
-      ctx.beginPath();
-      for (let i = 0; i <= n; i++) {
-        const a = startAngle + i * angleStep;
-        const px = cx + rr * Math.cos(a);
-        const py = cy + rr * Math.sin(a);
-        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-      }
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-
-    for (let i = 0; i < n; i++) {
-      const a = startAngle + i * angleStep;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
-      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-      ctx.stroke();
-    }
-
-    if (overlayAxes) {
-      ctx.beginPath();
-      keys.forEach((k, i) => {
-        const v = Math.max(-3, Math.min(3, overlayAxes[k] || 0));
-        const norm = (v + 3) / 6;
-        const a = startAngle + i * angleStep;
-        const px = cx + r * norm * Math.cos(a);
-        const py = cy + r * norm * Math.sin(a);
-        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-      });
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(251,191,36,0.12)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(251,191,36,0.6)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    ctx.beginPath();
-    keys.forEach((k, i) => {
-      const v = Math.max(-3, Math.min(3, factors[k] || 0));
-      const norm = (v + 3) / 6;
-      const a = startAngle + i * angleStep;
-      const px = cx + r * norm * Math.cos(a);
-      const py = cy + r * norm * Math.sin(a);
-      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-    });
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(94,234,212,0.18)';
-    ctx.fill();
-    ctx.strokeStyle = '#5eead4';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    keys.forEach((k, i) => {
-      const v = Math.max(-3, Math.min(3, factors[k] || 0));
-      const norm = (v + 3) / 6;
-      const a = startAngle + i * angleStep;
-      const px = cx + r * norm * Math.cos(a);
-      const py = cy + r * norm * Math.sin(a);
-      ctx.beginPath();
-      ctx.arc(px, py, 3, 0, Math.PI * 2);
-      ctx.fillStyle = '#5eead4';
-      ctx.fill();
-    });
-
-    if (overlayAxes) {
-      keys.forEach((k, i) => {
-        const v = Math.max(-3, Math.min(3, overlayAxes[k] || 0));
-        const norm = (v + 3) / 6;
-        const a = startAngle + i * angleStep;
-        const px = cx + r * norm * Math.cos(a);
-        const py = cy + r * norm * Math.sin(a);
-        ctx.beginPath();
-        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(251,191,36,0.8)';
-        ctx.fill();
-      });
-    }
-
-    ctx.fillStyle = '#7d8698';
-    ctx.font = '11px sans-serif';
-    ctx.textAlign = 'center';
-    keys.forEach((k, i) => {
-      const a = startAngle + i * angleStep;
-      const lx = cx + (r + 22) * Math.cos(a);
-      const ly = cy + (r + 22) * Math.sin(a);
-      const label = (labelMap[k] || k).replace(/（.*/, '');
-      ctx.fillText(label, lx, ly + 4);
-    });
-  }
-
-  let _pedigreePauseAction = null;
-  function setPedigreePauseHandler(fn) {
-    _pedigreePauseAction = typeof fn === 'function' ? fn : null;
-  }
-  if (pedigreePauseBtn) {
-    pedigreePauseBtn.addEventListener('click', function () {
-      if (_pedigreePauseAction) _pedigreePauseAction();
-    });
-  }
-
-  const PEDIGREE_PHASE_CLASSES = [
-    'scrape-phase-storage',
-    'scrape-phase-queue',
-    'scrape-phase-scrape',
-    'scrape-phase-done',
-  ];
-
-  const ANCESTOR_DEFAULTS = [
-    { key: 'father',   label: '父',       w: 0.30 },
-    { key: 'mf_mf',    label: '母父母父',   w: 0.14 },
-    { key: 'mf_mm_f',  label: '母父母母父', w: 0.14 },
-    { key: 'mm_f',     label: '母母父',     w: 0.14 },
-    { key: 'mmm_f',    label: '母母母父',   w: 0.14 },
-    { key: 'mmmm_f',   label: '母母母母父', w: 0.14 },
-  ];
-  const DEFAULT_AXES_X = 'ts';
-  const DEFAULT_AXES_Y = 'start_speed';
-  const DEFAULT_AXES_Z = 'ts_sustain';
-  const ALL_AXES = [
-    { id: 'ts',             label: 'TS（最高速度）',  lowerIsBetter: false },
-    { id: 'gear_change',    label: 'ギアチェンジ',    lowerIsBetter: false },
-    { id: 'ts_sustain',     label: 'TS持続力',       lowerIsBetter: false },
-    { id: 'wet_turf',       label: '道悪適性',       lowerIsBetter: false },
-    { id: 'dirt',           label: 'ダート適性',      lowerIsBetter: false },
-    { id: 'start_speed',    label: 'スタート速度',    lowerIsBetter: false },
-    { id: 'distance_range', label: '距離適性幅',      lowerIsBetter: false },
-    { id: 'consistency',    label: '安定性',          lowerIsBetter: false },
-  ];
-  function _axisInfo(id) {
-    return ALL_AXES.find(a => a.id === id) || { id: id, label: id, lowerIsBetter: false };
-  }
-
-  function initFactorControls() {
-    [['axisX2', DEFAULT_AXES_X], ['axisY2', DEFAULT_AXES_Y], ['axisZ2', DEFAULT_AXES_Z]].forEach(([id, def]) => {
-      const sel = $(id);
-      if (!sel) return;
-      sel.innerHTML = '';
-      ALL_AXES.forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a.id;
-        opt.textContent = a.label + (a.lowerIsBetter ? ' [小=好]' : ' [大=好]');
-        if (a.id === def) opt.selected = true;
-        sel.appendChild(opt);
-      });
-    });
-
-    {% if is_dev_check(request) %}
-    const wc = $('weightSliders');
-    if (wc) {
-      wc.innerHTML = '';
-      ANCESTOR_DEFAULTS.forEach(a => {
-        const div = document.createElement('div');
-        div.className = 'fc-weight-item';
-        div.innerHTML =
-          '<label for="w_' + a.key + '">' + a.label + '</label>' +
-          '<input type="range" id="w_' + a.key + '" min="0" max="100" value="' + Math.round(a.w * 100) + '" step="1">' +
-          '<span class="fc-wval" id="wv_' + a.key + '">' + Math.round(a.w * 100) + '%</span>';
-        wc.appendChild(div);
-        const slider = div.querySelector('input');
-        const valSpan = div.querySelector('.fc-wval');
-        slider.addEventListener('input', () => {
-          valSpan.textContent = slider.value + '%';
-          updateWeightSum();
-        });
-      });
-      updateWeightSum();
-    }
-
-    const resetBtn = $('btnResetWeights');
-    if (resetBtn) {
-      resetBtn.addEventListener('click', () => {
-        ANCESTOR_DEFAULTS.forEach(a => {
-          const sl = $('w_' + a.key);
-          const vl = $('wv_' + a.key);
-          if (sl) { sl.value = Math.round(a.w * 100); }
-          if (vl) { vl.textContent = Math.round(a.w * 100) + '%'; }
-        });
-        updateWeightSum();
-      });
-    }
-
-    async function doRebuild(mode) {
-      const statusEl = $('rebuildStatus');
-      const _fastBtn = $('btnRebuildFast');
-      const _fullBtn = $('btnRebuildFull');
-      if (_fastBtn) _fastBtn.disabled = true;
-      if (_fullBtn) _fullBtn.disabled = true;
-      if (statusEl) statusEl.textContent = (mode === 'full' ? 'フル' : '高速') + '再計算中…';
-      try {
-        const res = await fetch(apiUrl('/api/pedigree/rebuild-sire-factor-stats'), {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({mode}),
-        });
-        const d = await res.json();
-        if (d.error) {
-          if (statusEl) statusEl.textContent = 'エラー: ' + d.error;
-        } else {
-          const meta = d.meta || {};
-          if (statusEl) statusEl.textContent = '完了 (' + (meta.total_sires_filtered || 0) + '種牡馬, ' + (meta.elapsed_sec || 0) + '秒)';
-          if ($('statsMetaInfo')) $('statsMetaInfo').innerHTML =
-            '最終更新: <strong>' + escapeHtml(meta.generated_at || '—') + '</strong> · ' +
-            '種牡馬: ' + (meta.total_sires_filtered || 0) + '頭 · ' +
-            '馬: ' + (meta.horse_count || 0) + '頭 · ' +
-            'モード: ' + (d.mode || mode);
-        }
-      } catch (e) {
-        if (statusEl) statusEl.textContent = 'エラー: ' + e;
-      } finally {
-        if (_fastBtn) _fastBtn.disabled = false;
-        if (_fullBtn) _fullBtn.disabled = false;
-      }
-    }
-    {
-      const fb = $('btnRebuildFast');
-      if (fb) fb.addEventListener('click', () => doRebuild('fast'));
-      const fl = $('btnRebuildFull');
-      if (fl) fl.addEventListener('click', () => {
-        if (!confirm('フル再計算はGCS全件走査を行い、約5分かかります。実行しますか？')) return;
-        doRebuild('full');
-      });
-    }
-
-    async function doTune(scope) {
-      const tuneStatusEl = $('tuneStatus');
-      const tuneResultEl = $('tuneResult');
-      const gBtn = $('btnTuneGlobal');
-      const rBtn = $('btnTuneRace');
-      if (gBtn) gBtn.disabled = true;
-      if (rBtn) rBtn.disabled = true;
-      if (tuneStatusEl) tuneStatusEl.textContent = 'チューニング中…';
-      if (tuneResultEl) tuneResultEl.style.display = 'none';
-      try {
-        const body = scope === 'race' ? {race_id: getSelectedRaceId()} : {};
-        const res = await fetch(apiUrl('/api/pedigree/tune-weights'), {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(body),
-        });
-        const d = await res.json();
-        if (d.error) {
-          if (tuneStatusEl) tuneStatusEl.textContent = 'エラー: ' + d.error;
-          return;
-        }
-        if (tuneStatusEl) tuneStatusEl.textContent = '完了 (' + d.elapsed_sec + '秒)';
-        if (tuneResultEl) {
-          let html = '<div><span class="tune-corr">' + (d.correlation || 0).toFixed(4) + '</span> ' +
-            '<small>Spearman相関</small></div>' +
-            '<div style="margin-top:4px"><strong>最適ウェイト:</strong></div>';
-          const ow = d.optimized_weights || {};
-          ANCESTOR_DEFAULTS.forEach(a => {
-            const v = ow[a.key];
-            if (v !== undefined) {
-              html += '<div style="display:flex;justify-content:space-between;font-family:monospace">' +
-                '<span>' + a.label + '</span><span>' + (v * 100).toFixed(1) + '%</span></div>';
-            }
-          });
-          html += '<div style="margin-top:6px"><small>データ: ' +
-            (d.sample_size || 0) + '馬 / ' + (d.total_races || 0) + 'レース (' + d.scope + ')</small></div>';
-          html += '<button type="button" class="fc-btn-rebuild fc-btn-tune" ' +
-            'style="margin-top:8px" id="btnApplyTuned">このウェイトを適用</button>';
-          tuneResultEl.innerHTML = html;
-          tuneResultEl.style.display = 'block';
-          $('btnApplyTuned').addEventListener('click', () => {
-            ANCESTOR_DEFAULTS.forEach(a => {
-              const v = ow[a.key];
-              if (v !== undefined) {
-                const sl = $('w_' + a.key);
-                const vl = $('wv_' + a.key);
-                const pct = Math.round(v * 100);
-                if (sl) sl.value = pct;
-                if (vl) vl.textContent = pct + '%';
-              }
-            });
-            updateWeightSum();
-            load();
-          });
-        }
-      } catch (e) {
-        if (tuneStatusEl) tuneStatusEl.textContent = 'エラー: ' + e;
-      } finally {
-        if (gBtn) gBtn.disabled = false;
-        if (rBtn) rBtn.disabled = false;
-      }
-    }
-    {
-      const tg = $('btnTuneGlobal');
-      if (tg) tg.addEventListener('click', () => doTune('global'));
-      const tr = $('btnTuneRace');
-      if (tr) tr.addEventListener('click', () => doTune('race'));
-    }
-    {% endif %}
-  }
-
-  function updateWeightSum() {
-    let sum = 0;
-    ANCESTOR_DEFAULTS.forEach(a => {
-      const sl = $('w_' + a.key);
-      if (sl) sum += parseInt(sl.value, 10);
-    });
-    const el = $('weightSum');
-    if (el) el.textContent = '合計: ' + sum + '%';
-  }
-
-  function getSelectedWeights() {
-    const w = {};
-    ANCESTOR_DEFAULTS.forEach(a => {
-      const sl = $('w_' + a.key);
-      w[a.key] = sl ? parseInt(sl.value, 10) / 100 : a.w;
-    });
-    return w;
-  }
-
-  function getSelectedAxes() {
-    return {
-      x: ($('axisX2') || {}).value || DEFAULT_AXES_X,
-      y: ($('axisY2') || {}).value || DEFAULT_AXES_Y,
-      z: ($('axisZ2') || {}).value || DEFAULT_AXES_Z,
-    };
-  }
-
-  initFactorControls();
-
-  const params = new URLSearchParams(location.search);
-  const qRid = (params.get('race_id') || '').trim();
-  const qMode = (params.get('mode') || '').toLowerCase();
-  const IS_5GEN_WAIT_PAGE = params.get('5gen_wait') === '1';
-  const Q_5GEN_WAIT_RID = (params.get('race_id') || '').trim();
-  const PREFETCH_MSG_TYPE = 'keiba-note-5gen-prefetch';
-
-  let _allDates = [];
-  let _racesForDate = [];
-  let _dateRaceMap = {};
-  let _recentPastDatesForMerge = [];
-
-  function getSelectedRaceId() {
-    return raceSelect ? String(raceSelect.value || '').trim() : '';
-  }
-
-  function clearSelect(sel, placeholderText, placeholderValue) {
-    if (!sel) return;
-    sel.innerHTML = '';
-    const o = document.createElement('option');
-    o.value = placeholderValue != null ? placeholderValue : '';
-    o.textContent = placeholderText;
-    sel.appendChild(o);
-  }
-
-  function addSelectOption(sel, value, text) {
-    if (!sel) return;
-    const o = document.createElement('option');
-    o.value = value;
-    o.textContent = text;
-    sel.appendChild(o);
-  }
-
-  function updateLoadButtonState() {
-    if (btn) btn.disabled = !getSelectedRaceId();
-  }
-
-  async function loadAllDates() {
-    if (pickerStatus) pickerStatus.textContent = '開催日一覧を読み込み中…';
-    // /data-viewer と同じ /api/scrape-dates のみで先に確定（キャッシュ共有・体感を揃える）
-    const resp = await fetch(apiUrl('/api/scrape-dates'), { cache: 'no-store' });
-    const pastData = await resp.json();
-    const allPastDates = (pastData.dates || []).sort().reverse();
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const recentDates = allPastDates.filter((d) => {
-      const dateStr = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
-      const dateObj = new Date(dateStr);
-      dateObj.setHours(0, 0, 0, 0);
-      return dateObj < today && dateObj >= thirtyDaysAgo;
-    });
-    _recentPastDatesForMerge = recentDates;
-
-    _dateRaceMap = {};
-    _allDates = [...recentDates];
-
-    if (!dateSelect) return;
-    clearSelect(dateSelect, '日付を選択', '');
-    recentDates.forEach((d) => {
-      const label = `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
-      addSelectOption(dateSelect, d, label);
-    });
-
-    if (_allDates.length > 0) {
-      dateSelect.value = _allDates[0];
-      await onDateChange();
-    } else {
-      if (venueSelect) {
-        venueSelect.innerHTML = '<option value="">—</option>';
-        venueSelect.disabled = true;
-      }
-      if (raceSelect) {
-        raceSelect.innerHTML = '<option value="">—</option>';
-        raceSelect.disabled = true;
-      }
-    }
-    if (pickerStatus) pickerStatus.textContent = '';
-
-    fetch(apiUrl('/api/upcoming-races?_=' + Date.now()))
-      .then((r) => r.json())
-      .then((futureData) => {
-        const futureRaces = (futureData.races || []).filter((r) => r.race_id);
-        const futureDates = [...new Set(futureRaces.map((r) => r.date))].sort();
-        futureDates.forEach((date) => {
-          _dateRaceMap[date] = { type: 'future', races: futureRaces.filter((r) => r.date === date) };
-        });
-        const prev = dateSelect.value;
-        const pastList = _recentPastDatesForMerge;
-        _allDates = [...futureDates, ...pastList];
-        clearSelect(dateSelect, '日付を選択', '');
-        futureDates.forEach((d) => {
-          const y = d.slice(0, 4);
-          const m = d.slice(4, 6);
-          const day = d.slice(6, 8);
-          const raceCount = futureRaces.filter((r) => r.date === d).length;
-          const offset = _dateRaceMap[d].races[0]?.day_offset || 0;
-          let label = '';
-          if (offset === 1) label = '明日';
-          else if (offset === 2) label = '明後日';
-          else label = `${y}/${m}/${day}`;
-          addSelectOption(dateSelect, d, `${label} (${raceCount}R)`);
-        });
-        pastList.forEach((d) => {
-          const label = `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
-          addSelectOption(dateSelect, d, label);
-        });
-        if (_allDates.length === 0) return;
-        if (futureDates.length > 0) {
-          dateSelect.value = futureDates[0];
-          onDateChange();
-        } else if (pastList.includes(prev)) {
-          dateSelect.value = prev;
-        }
-      })
-      .catch((e) => console.warn('[loadAllDates] upcoming', e));
-  }
-
-  async function onDateChange() {
-    if (!dateSelect) return;
-    const date = dateSelect.value;
-    if (!date) return;
-    if (pickerStatus) pickerStatus.textContent = 'レース一覧を取得中…';
-    try {
-      if (_dateRaceMap[date] && _dateRaceMap[date].type === 'future') {
-        _racesForDate = _dateRaceMap[date].races;
-        const venues = [...new Set(_racesForDate.map((r) => r.venue))];
-        if (venueSelect) {
-          clearSelect(venueSelect, '全会場', '');
-          venues.forEach((v) => {
-            if (v) addSelectOption(venueSelect, v, v);
-          });
-          venueSelect.disabled = false;
-        }
-        populateRaces();
-      } else {
-        const resp = await fetch(apiUrl('/api/race-list/' + encodeURIComponent(date)));
-        const data = await resp.json();
-        _racesForDate = data.races || [];
-        const venues = data.venues || [];
-        if (venueSelect) {
-          clearSelect(venueSelect, '全会場', '');
-          venues.forEach((v) => {
-            if (v) addSelectOption(venueSelect, v, v);
-          });
-          venueSelect.disabled = false;
-        }
-        populateRaces();
-      }
-    } catch (e) {
-      console.error(e);
-      if (venueSelect) {
-        venueSelect.innerHTML = '<option value="">エラー</option>';
-        venueSelect.disabled = true;
-      }
-      if (raceSelect) {
-        raceSelect.innerHTML = '<option value="">—</option>';
-        raceSelect.disabled = true;
-      }
-    } finally {
-      if (pickerStatus) pickerStatus.textContent = '';
-      updateLoadButtonState();
-    }
-  }
-
-  function onVenueChange() {
-    populateRaces();
-  }
-
-  function populateRaces() {
-    if (!raceSelect || !venueSelect) return;
-    const venue = venueSelect.value;
-    const filtered = venue ? _racesForDate.filter((r) => r.venue === venue) : _racesForDate;
-    clearSelect(raceSelect, 'レースを選択', '');
-    filtered.forEach((r) => {
-      const nm = r.race_name || '';
-      const badge = /\(G[1-3I]\)/.test(nm) ? ' ★' : /\(Jpn[1-3I]\)/.test(nm) ? ' ◆' : '';
-      const label = `${r.round}R ${nm}${badge}` + (venue ? '' : ` (${r.venue || ''})`);
-      const rid = r.race_id || '';
-      if (rid) addSelectOption(raceSelect, rid, label);
-    });
-    raceSelect.disabled = filtered.length === 0;
-    updateLoadButtonState();
-  }
-
-  function onRaceChange() {
-    updateLoadButtonState();
-  }
-
-  /** URL の race_id から開催日・会場・レース欄を合わせる（ブックマーク用） */
-  async function syncPickersFromRaceId(rid) {
-    if (!rid || !dateSelect) return false;
-    try {
-      const res = await fetch(apiUrl('/api/race/' + encodeURIComponent(rid)));
-      if (!res.ok) return false;
-      const data = await res.json();
-      const raw = String(data.date || '').replace(/\D/g, '').slice(0, 8);
-      if (raw.length !== 8) return false;
-      let found = false;
-      for (let i = 0; i < dateSelect.options.length; i++) {
-        if (dateSelect.options[i].value === raw) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        const opt = document.createElement('option');
-        opt.value = raw;
-        opt.textContent = `${raw.slice(0, 4)}/${raw.slice(4, 6)}/${raw.slice(6, 8)}（リンク指定）`;
-        dateSelect.appendChild(opt);
-        _allDates.push(raw);
-      }
-      dateSelect.value = raw;
-      await onDateChange();
-      const ven = String(data.venue || '').trim();
-      if (ven && venueSelect) {
-        let vOk = false;
-        for (let i = 0; i < venueSelect.options.length; i++) {
-          if (venueSelect.options[i].value === ven) {
-            vOk = true;
-            break;
-          }
-        }
-        if (vOk) venueSelect.value = ven;
-        populateRaces();
-      }
-      if (raceSelect) {
-        let rOk = false;
-        for (let i = 0; i < raceSelect.options.length; i++) {
-          if (raceSelect.options[i].value === rid) {
-            rOk = true;
-            break;
-          }
-        }
-        if (rOk) raceSelect.value = rid;
-      }
-      updateLoadButtonState();
-      return getSelectedRaceId() === rid;
-    } catch (e) {
-      console.warn(e);
-      return false;
-    }
-  }
-
-  function showErr(msg) {
-    errBox.textContent = msg || '';
-    errBox.classList.toggle('show', !!msg);
-  }
-
-  function formatPedigreeScanStats(scanStats, planDurationMs) {
-    if (!scanStats || typeof scanStats !== 'object') return '';
-    const parts = [];
-    if (scanStats.prefetch_stage_ja)
-      parts.push('段階: ' + scanStats.prefetch_stage_ja);
-    if (scanStats.tier1_note_stallion_candidates != null)
-      parts.push('第1階層候補 ' + scanStats.tier1_note_stallion_candidates + ' 頭');
-    if (scanStats.tier2_note_stallion_candidates != null)
-      parts.push('第2階層候補 ' + scanStats.tier2_note_stallion_candidates + ' 頭');
-    if (scanStats.storage_loads != null)
-      parts.push('ストレージ読込 ' + scanStats.storage_loads + ' 回');
-    if (scanStats.bfs_visits != null)
-      parts.push('確認ヘッド数 ' + scanStats.bfs_visits);
-    if (scanStats.graph_nodes_seen != null)
-      parts.push('参照ノード ' + scanStats.graph_nodes_seen);
-    if (scanStats.runner_ids_checked != null)
-      parts.push('出走確認 ' + scanStats.runner_ids_checked + ' 頭');
-    if (planDurationMs != null && planDurationMs >= 0)
-      parts.push('計画処理 ' + planDurationMs + 'ms');
-    return parts.join(' · ');
-  }
-
-  /**
-   * @param {object} opts
-   * @param {boolean} [opts.show]
-   * @param {string} [opts.msg]
-   * @param {'storage'|'queue'|'scrape'|'done'} [opts.phase]
-   * @param {string} [opts.phaseText]
-   * @param {string} [opts.sub]
-   * @param {string} [opts.statsText]
-   * @param {number} [opts.progressPct] 0–100 で確定バー。未指定なら不定（indeterminate）
-   * @param {boolean} [opts.indeterminate] true なら progressPct があっても不定バー
-   * @param {boolean} [opts.runnerBarShow] 出走馬（レース全体）プログレスバー
-   * @param {number} [opts.runnerProgressPct] 0–100
-   * @param {string} [opts.runnerBarCaption]
-   */
-  function setPedigreeOverlay(opts) {
-    const o = opts || {};
-    if (o.show === false) {
-      if (scrapeOverlay) scrapeOverlay.classList.remove('show');
-      if (scrapeOverlayMsg) scrapeOverlayMsg.textContent = '';
-      if (scrapeOverlayPhase) {
-        scrapeOverlayPhase.textContent = '準備';
-        scrapeOverlayPhase.classList.remove(...PEDIGREE_PHASE_CLASSES);
-        scrapeOverlayPhase.classList.add('scrape-phase-storage');
-      }
-      if (scrapeOverlayBarWrap) scrapeOverlayBarWrap.classList.add('indeterminate');
-      if (scrapeOverlayBarFill) scrapeOverlayBarFill.style.width = '0%';
-      if (scrapeOverlayStats) scrapeOverlayStats.textContent = '';
-      if (scrapeOverlaySub) scrapeOverlaySub.textContent = '';
-      if (scrapeOverlayRunnerBlock) {
-        scrapeOverlayRunnerBlock.classList.remove('show');
-        scrapeOverlayRunnerBlock.setAttribute('aria-hidden', 'true');
-      }
-      if (scrapeOverlayRunnerCaption) scrapeOverlayRunnerCaption.textContent = '';
-      if (scrapeOverlayRunnerBarFill) scrapeOverlayRunnerBarFill.style.width = '0%';
-      return;
-    }
-    if (scrapeOverlay) scrapeOverlay.classList.add('show');
-    if (o.msg != null && scrapeOverlayMsg) scrapeOverlayMsg.textContent = o.msg;
-    if (scrapeOverlayPhase && o.phaseText != null)
-      scrapeOverlayPhase.textContent = o.phaseText;
-    const kind = o.phase || 'storage';
-    const cls = 'scrape-phase-' + kind;
-    if (scrapeOverlayPhase && PEDIGREE_PHASE_CLASSES.includes(cls)) {
-      scrapeOverlayPhase.classList.remove(...PEDIGREE_PHASE_CLASSES);
-      scrapeOverlayPhase.classList.add(cls);
-    }
-    if (scrapeOverlaySub && o.sub != null) scrapeOverlaySub.textContent = o.sub;
-    if (scrapeOverlayStats)
-      scrapeOverlayStats.textContent = o.statsText != null ? o.statsText : '';
-
-    const useIndeterminate =
-      o.indeterminate === true ||
-      (o.indeterminate !== false && typeof o.progressPct !== 'number');
-    if (scrapeOverlayBarWrap && scrapeOverlayBarFill) {
-      if (useIndeterminate) {
-        scrapeOverlayBarWrap.classList.add('indeterminate');
-        scrapeOverlayBarFill.style.width = '';
-      } else {
-        scrapeOverlayBarWrap.classList.remove('indeterminate');
-        const p = Math.max(0, Math.min(100, Number(o.progressPct) || 0));
-        scrapeOverlayBarFill.style.width = p + '%';
-      }
-    }
-    if (
-      scrapeOverlayRunnerBlock &&
-      scrapeOverlayRunnerCaption &&
-      scrapeOverlayRunnerBarFill
-    ) {
-      if (o.runnerBarShow === true && typeof o.runnerProgressPct === 'number') {
-        scrapeOverlayRunnerBlock.classList.add('show');
-        scrapeOverlayRunnerBlock.setAttribute('aria-hidden', 'false');
-        scrapeOverlayRunnerCaption.textContent = o.runnerBarCaption || '';
-        const rp = Math.max(0, Math.min(100, Number(o.runnerProgressPct) || 0));
-        scrapeOverlayRunnerBarFill.style.width = rp + '%';
-      } else {
-        scrapeOverlayRunnerBlock.classList.remove('show');
-        scrapeOverlayRunnerBlock.setAttribute('aria-hidden', 'true');
-        scrapeOverlayRunnerCaption.textContent = '';
-        scrapeOverlayRunnerBarFill.style.width = '0%';
-      }
-    }
-  }
-
-  /** @param {Record<string, unknown>|null|undefined} obj API の plan / status */
-  function pedigreeRunnerOptsFromApi(obj) {
-    if (!obj || typeof obj !== 'object') return {};
-    const total = Number(obj.runner_count) || 0;
-    if (total <= 0) return {};
-    const pct = Math.max(
-      0,
-      Math.min(100, Number(obj.runner_pedigree_progress_pct) || 0)
-    );
-    return {
-      runnerBarShow: true,
-      runnerProgressPct: pct,
-      runnerBarCaption: String(obj.runner_progress_label_ja || ''),
-    };
-  }
-
-  function sleep(ms, signal) {
-    if (signal && signal.aborted) {
-      return Promise.reject(new DOMException('Aborted', 'AbortError'));
-    }
-    return new Promise(function (resolve, reject) {
-      const t = setTimeout(resolve, ms);
-      if (!signal) return;
-      const onAbort = function () {
-        clearTimeout(t);
-        signal.removeEventListener('abort', onAbort);
-        reject(new DOMException('Aborted', 'AbortError'));
-      };
-      signal.addEventListener('abort', onAbort);
-    });
-  }
-
-  async function callCancelRaceEnsure5gen(sessionId) {
-    const sid = String(sessionId || '').trim();
-    if (!sid) return;
-    try {
-      await fetch(apiUrl('/api/pedigree/race-ensure-5gen/cancel'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sid }),
-      });
-    } catch (_) {}
-  }
-
-  /** @returns パース成功時 { data: object }、失敗時 { data: null, raw: string } */
-  async function tryParseJsonResponse(res) {
-    const text = await res.text();
-    try {
-      return { data: JSON.parse(text) };
-    } catch (_) {
-      return { data: null, raw: text.slice(0, 500) };
-    }
-  }
-
-  function flattenFastApiDetail(detail) {
-    if (detail == null) return '';
-    if (typeof detail === 'string') return detail;
-    if (Array.isArray(detail)) {
-      return detail
-        .map((x) => (x && typeof x === 'object' && x.msg ? x.msg : String(x)))
-        .filter(Boolean)
-        .join('; ');
-    }
-    return String(detail);
-  }
-
-  /** ルート未登録・URL 誤りなどで FastAPI が detail: Not Found を返した場合 */
-  function isHttpRouteNotFound(res, data) {
-    if (res.status !== 404 || data == null) return false;
-    const d = flattenFastApiDetail(data.detail);
-    return d === 'Not Found' || d.includes('Not Found');
-  }
-
-  function build5genWaitUrl(rid) {
-    const u = new URL(location.href);
-    u.searchParams.set('5gen_wait', '1');
-    u.searchParams.set('race_id', rid);
-    u.hash = '';
-    return u.toString();
-  }
-
-  /** @param {string} raceId @param {Window} childWin @param {number} deadlineMs */
-  function waitFor5genChildWindow(raceId, childWin, deadlineMs) {
-    return new Promise(function (resolve, reject) {
-      let settled = false;
-      function cleanup() {
-        window.removeEventListener('message', onMsg);
-        if (pollIv) clearInterval(pollIv);
-        if (toId) clearTimeout(toId);
-      }
-      function finish(fn) {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        fn();
-      }
-      function onMsg(ev) {
-        if (ev.origin !== location.origin) return;
-        const d = ev.data;
-        if (!d || d.type !== PREFETCH_MSG_TYPE) return;
-        if (String(d.race_id || '') !== String(raceId)) return;
-        if (d.ok)
-          finish(function () {
-            try {
-              window.focus();
-            } catch (_) {}
-            resolve({ ok: true, skipped: !!d.skipped });
-          });
-        else
-          finish(function () {
-            try {
-              window.focus();
-            } catch (_) {}
-            resolve({
-              ok: false,
-              error: d.error || '5世代血統の取得に失敗しました',
-              aborted: !!d.aborted,
-            });
-          });
-      }
-      const pollIv = setInterval(function () {
-        try {
-          if (childWin.closed)
-            finish(function () {
-              reject(
-                new Error(
-                  '取得用のタブが閉じられました。完了するまでそのタブを開いたままにしてください。'
-                )
-              );
-            });
-        } catch (_) {}
-      }, 450);
-      const toId = setTimeout(function () {
-        finish(function () {
-          reject(new Error('5世代血統の取得がタイムアウトしました。'));
-        });
-      }, deadlineMs);
-      window.addEventListener('message', onMsg);
-    });
-  }
-
-  /** 5gen: 欠損がなくなるまで ensure → ポーリングを繰り返す（出走馬 → 第1階層種牡馬 → 第2階層）
-   *  @returns {Promise<{ok:true}|{ok:true,skipped:true}|{ok:false,error:string,aborted?:boolean}>}
-   */
-  async function ensureRacePedigree5gen(rid) {
-    const maxRounds = 12;
-    const pollDeadlineMs = 300000;
-    const ac = new AbortController();
-    const signal = ac.signal;
-    let sessionForCancel = '';
-    const doPause = function () {
-      void callCancelRaceEnsure5gen(sessionForCancel);
-      ac.abort();
-    };
-    const abortReturn = function () {
-      setPedigreeOverlay({ show: false });
-      const msg =
-        '5世代血統の取得を一時停止しました。キュー待ちのジョブは取り下げました（実行中の取得は完了するまで続く場合があります）。';
-      showErr(msg);
-      return { ok: false, error: msg, aborted: true };
-    };
-    scrapeOverlay.classList.add('pedigree-pause-active');
-    setPedigreePauseHandler(doPause);
-    try {
-      for (let round = 0; round < maxRounds; round++) {
-        sessionForCancel = '';
-        setPedigreeOverlay({
-          show: true,
-          phase: 'storage',
-          phaseText: 'ストレージ確認',
-          msg:
-            round === 0
-              ? '出走馬の5世代血統データ（horse_pedigree_5gen）を確認しています…'
-              : `再確認中です（${round + 1} / ${maxRounds}）。新たに判明した不足分を取得します…`,
-          sub:
-            'GCS またはローカルから血統データを読み込み、欠損を調べています。この段階では netkeiba へのスクレイピングは行っていません。',
-          statsText: '',
-          indeterminate: true,
-        });
-        let pr;
-        try {
-          pr = await fetch(apiUrl('/api/pedigree/race-ensure-5gen'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ race_id: rid }),
-            signal,
-          });
-        } catch (e) {
-          if (signal.aborted || (e && e.name === 'AbortError')) return abortReturn();
-          throw e;
-        }
-        const parsed = await tryParseJsonResponse(pr);
-        const plan = parsed.data;
-        if (parsed.data == null && parsed.raw != null) {
-          setPedigreeOverlay({ show: false });
-          const msg =
-            'race-ensure-5gen の応答が JSON ではありません（HTTP ' +
-            pr.status +
-            '）。サブパス配信時はページ URL と API のベースパスを確認してください。';
-          showErr(msg);
-          return { ok: false, error: msg };
-        }
-        if (!pr.ok) {
-          if (isHttpRouteNotFound(pr, plan)) {
-            setPedigreeOverlay({ show: false });
-            console.warn(
-              '[note-aptitude-race] POST /api/pedigree/race-ensure-5gen が 404 のためプリフェッチをスキップします。API を最新にし再起動するか、リバプロのパスを確認してください。'
-            );
-            return { ok: true, skipped: true };
-          }
-          setPedigreeOverlay({ show: false });
-          const msg =
-            plan.error ||
-            flattenFastApiDetail(plan.detail) ||
-            '5世代血統の確認に失敗しました';
-          showErr(msg);
-          return { ok: false, error: msg };
-        }
-        const miss = Number(plan.missing_count) || 0;
-        if (miss === 0) {
-          setPedigreeOverlay({ show: false });
-          return { ok: true };
-        }
-        const sid = (plan.session_id || '').trim();
-        const enq = Number(plan.enqueued) || 0;
-        if (!sid || enq === 0) {
-          setPedigreeOverlay({ show: false });
-          const msg =
-            plan.message ||
-            '不足はありますがキューに投入できませんでした。スクレイプキュー設定を確認してください。';
-          showErr(msg);
-          return { ok: false, error: msg };
-        }
-        sessionForCancel = sid;
-        const statsLine = formatPedigreeScanStats(
-          plan.scan_stats,
-          plan.plan_duration_ms
-        );
-        const queueSubParts = [
-          plan.batch_targets_summary_ja,
-          'ワーカーがジョブを取るとフェーズが「スクレイピング中」に変わります。サイトへアクセスしているのはその間だけです。',
-        ].filter(Boolean);
-        setPedigreeOverlay({
-          show: true,
-          phase: 'queue',
-          phaseText: 'キュー',
-          msg:
-            plan.message ||
-            `最優先で ${enq} 件をキューに投入しました。サイトからの取得を待っています…`,
-          sub: queueSubParts.join('\n'),
-          statsText: statsLine,
-          indeterminate: true,
-          ...pedigreeRunnerOptsFromApi(plan),
-        });
-        const t0 = Date.now();
-        while (Date.now() - t0 < pollDeadlineMs) {
-          let sr;
-          try {
-            sr = await fetch(
-              apiUrl('/api/pedigree/race-ensure-5gen/status') +
-                '?session_id=' +
-                encodeURIComponent(sid),
-              { signal }
-            );
-          } catch (e) {
-            if (signal.aborted || (e && e.name === 'AbortError')) return abortReturn();
-            throw e;
-          }
-          const stParsed = await tryParseJsonResponse(sr);
-          const st = stParsed.data;
-          if (stParsed.data == null) {
-            setPedigreeOverlay({ show: false });
-            const msg =
-              '進捗 API の応答が JSON ではありません（HTTP ' + sr.status + '）。';
-            showErr(msg);
-            return { ok: false, error: msg };
-          }
-          if (!sr.ok) {
-            setPedigreeOverlay({ show: false });
-            const msg =
-              st.error || flattenFastApiDetail(st.detail) || '進捗の取得に失敗しました';
-            showErr(msg);
-            return { ok: false, error: msg };
-          }
-          if (st.user_cancelled) return abortReturn();
-          const tot = Number(st.total_jobs) || 0;
-          const done = (Number(st.completed) || 0) + (Number(st.failed) || 0);
-          const label = (st.current_job_label || '').trim();
-          const ph = String(st.phase || '');
-          let badgeKind = 'queue';
-          if (ph === 'scraping') badgeKind = 'scrape';
-          else if (ph === 'complete') badgeKind = 'done';
-          const pollStats = formatPedigreeScanStats(
-            st.scan_stats,
-            st.plan_duration_ms
-          );
-          const pct =
-            tot > 0 ? Math.max(0, Math.min(100, Number(st.progress_pct) || 0)) : null;
-          const stageJa = String(st.prefetch_stage_ja || '').trim();
-          const stagePrefix = stageJa ? `【${stageJa}】` : '';
-          const subLines = [
-            st.current_scrape_display_ja,
-            st.next_pending_display_ja,
-            st.batch_targets_summary_ja,
-            st.phase_detail_ja,
-          ].filter(Boolean);
-          setPedigreeOverlay({
-            show: true,
-            phase: badgeKind,
-            phaseText: st.phase_label_ja || '処理中',
-            msg:
-              tot > 0
-                ? `${stagePrefix}取得中 ${done} / ${tot}${label ? ' — ' + label : ''}`
-                : (stageJa ? `【${stageJa}】` : '') + 'キューを処理しています…',
-            sub: subLines.length ? subLines.join('\n') : '',
-            statsText: pollStats || statsLine,
-            progressPct: typeof pct === 'number' ? pct : undefined,
-            indeterminate: tot === 0 ? true : false,
-            ...pedigreeRunnerOptsFromApi(st),
-          });
-          if (st.all_done) break;
-          try {
-            await sleep(750, signal);
-          } catch (e) {
-            if (signal.aborted || (e && e.name === 'AbortError')) return abortReturn();
-            throw e;
-          }
-        }
-        if (Date.now() - t0 >= pollDeadlineMs) {
-          setPedigreeOverlay({ show: false });
-          const msg =
-            '5世代血統の取得がタイムアウトしました。キューの状態を確認してから再度お試しください。';
-          showErr(msg);
-          return { ok: false, error: msg };
-        }
-      }
-      setPedigreeOverlay({ show: false });
-      const msg =
-        '5世代血統の充足に繰り返し上限に達しました。データ欠損の可能性があります。';
-      showErr(msg);
-      return { ok: false, error: msg };
-    } finally {
-      scrapeOverlay.classList.remove('pedigree-pause-active');
-      setPedigreePauseHandler(null);
-    }
-  }
-
-  let _lastData = null;
-
-  const CMP_DISTANCES = [
-    1000, 1150, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 2000,
-    2100, 2200, 2300, 2400, 2500, 2600, 3000, 3200, 3400, 3600,
-  ];
-
-  function _initCmpFilters() {
-    const dSel = $('cmpDistance');
-    if (!dSel || dSel.options.length > 1) return;
-    CMP_DISTANCES.forEach(d => {
-      const opt = document.createElement('option');
-      opt.value = String(d);
-      opt.textContent = d + 'm';
-      dSel.appendChild(opt);
-    });
-  }
-
-  function _setCmpFilterDefaults(cond) {
-    if (!cond) return;
-    const sSel = $('cmpSurface');
-    const dSel = $('cmpDistance');
-    const tSel = $('cmpTrackGood');
-    if (sSel) {
-      const sv = cond.surface || '';
-      sSel.value = sv.includes('芝') ? '芝' : sv.includes('ダ') ? 'ダ' : '';
-    }
-    if (dSel) {
-      const dv = String(cond.distance || 0);
-      for (let i = 0; i < dSel.options.length; i++) {
-        if (dSel.options[i].value === dv) { dSel.value = dv; break; }
-      }
-    }
-    if (tSel) tSel.value = cond.track_good ? 'good' : 'bad';
-  }
-
-  async function _reloadCompareData() {
-    if (!_lastData) return;
-    const rid = getSelectedRaceId();
-    if (!rid) return;
-    const reloadBtn = $('btnCmpReload');
-    const cmpSt = $('cmpStatus');
-    if (reloadBtn) reloadBtn.disabled = true;
-    if (cmpSt) cmpSt.textContent = '比較データ再取得中…';
-
-    const axes = getSelectedAxes();
-    const weights = getSelectedWeights();
-    const qp = new URLSearchParams();
-    qp.set('race_id', rid);
-    qp.set('axis_x', axes.x);
-    qp.set('axis_y', axes.y);
-    qp.set('axis_z', axes.z);
-    ANCESTOR_DEFAULTS.forEach(a => { qp.set('w_' + a.key, String(weights[a.key])); });
-
-    const sSel = $('cmpSurface');
-    const dSel = $('cmpDistance');
-    const tSel = $('cmpTrackGood');
-    if (sSel && sSel.value) qp.set('cmp_surface', sSel.value);
-    if (dSel && dSel.value !== '0') qp.set('cmp_distance', dSel.value);
-    if (tSel && tSel.value) qp.set('cmp_track_good', tSel.value);
-
-    try {
-      const cmpUrl = apiUrl('/api/pedigree/race-note-3d-compare') + '?' + qp.toString();
-      const r = await fetch(cmpUrl);
-      if (r.ok) {
-        _compareData = await r.json();
-        _renderCompareLabels();
-        _redrawWith3D();
-      } else {
-        if (cmpSt) cmpSt.textContent = '取得失敗';
-      }
-    } catch (e) {
-      if (cmpSt) cmpSt.textContent = 'エラー: ' + e;
-    } finally {
-      if (reloadBtn) reloadBtn.disabled = false;
-    }
-  }
-
-  function _renderCompareLabels() {
-    if (!_compareData) return;
-    const sc = _compareData.same_condition || {};
-    const rc = _compareData.recent_course || {};
-    $('cmpSameLabel').textContent = (sc.label || '同条件上位') + '（' + (sc.count || 0) + '頭）';
-    $('cmpRecentLabel').textContent = (rc.label || '直近2週間') + '（' + (rc.count || 0) + '頭）';
-    const cmpSt = $('cmpStatus');
-    const cond = _compareData.condition || {};
-    if (cmpSt) cmpSt.textContent = cond.surface + cond.distance + 'm ' + cond.track_category;
-  }
-
-  function _redrawWith3D() {
-    if (!_lastData) return;
-    const horses = _lastData.horses || [];
-    const axX = _lastData.axis_x || 'ts';
-    const axY = _lastData.axis_y || 'start_speed';
-    const axZ = _lastData.axis_z || 'ts_sustain';
-    void drawScatter3D(horses, axX, axY, axZ).catch(function(e){ console.error(e); });
-  }
-
-  function _updateCompareUI(data) {
-    if (!_compareData) return;
-    const cmpCtrl = $('cmpControls');
-    if (!cmpCtrl) return;
-    cmpCtrl.style.display = 'block';
-
-    _initCmpFilters();
-    _setCmpFilterDefaults(_compareData.condition);
-    _renderCompareLabels();
-
-    function redraw3D() { _redrawWith3D(); }
-    $('cmpSameCond').onchange = redraw3D;
-    $('cmpRecent').onchange = redraw3D;
-
-    const reloadBtn = $('btnCmpReload');
-    if (reloadBtn) reloadBtn.onclick = function() { _reloadCompareData(); };
-
-    redraw3D();
-  }
-
-  function render(data) {
-    showErr('');
-    _lastData = data;
-    const axX = data.axis_x || 'ts';
-    const axY = data.axis_y || 'start_speed';
-    const axZ = data.axis_z || 'ts_sustain';
-    const flipX = _axisInfo(axX).lowerIsBetter;
-    const flipY = _axisInfo(axY).lowerIsBetter;
-    const flipZ = _axisInfo(axZ).lowerIsBetter;
-
-    const axisLabelMap = {};
-    (data.axes || []).forEach(a => {
-      axisLabelMap[a.id] = a.label_ja;
-      if (typeof a.lower_is_better === 'boolean') {
-        const local = ALL_AXES.find(x => x.id === a.id);
-        if (local) local.lowerIsBetter = a.lower_is_better;
-      }
-    });
-    const lx = axisLabelMap[axX] || axX;
-    const ly = axisLabelMap[axY] || axY;
-    const lz = axisLabelMap[axZ] || axZ;
-
-    $('metaBar').innerHTML = [
-      '<span><strong>race_id</strong> ' + (data.race_id || '') + '</span>',
-      '<span><strong>ソース</strong> ' + (data.source || '—') + '</span>',
-      '<span><strong>頭数</strong> ' + (data.horses || []).length + '</span>',
-      '<span><strong>統計更新</strong> ' + ((data.stats_meta || {}).generated_at || '—') + '</span>',
-      '<span><strong>種牡馬数</strong> ' + ((data.stats_meta || {}).total_sires || '—') + '</span>',
-    ].join('');
-
-    $('viz3dTitle').textContent = '3D 散布図（' + lx.replace(/（.*/, '') + ' / ' + ly.replace(/（.*/, '') + ' / ' + lz.replace(/（.*/, '') + '）';
-    $('thAxisX').textContent = lx.replace(/（.*/, '') + (flipX ? '↓' : '↑');
-    $('thAxisY').textContent = ly.replace(/（.*/, '') + (flipY ? '↓' : '↑');
-    $('thAxisZ').textContent = lz.replace(/（.*/, '') + (flipZ ? '↓' : '↑');
-
-    if (data.stats_meta && $('statsMetaInfo')) {
-      const sm = data.stats_meta;
-      $('statsMetaInfo').innerHTML =
-        '最終更新: <strong>' + escapeHtml(sm.generated_at || '—') + '</strong> · ' +
-        '種牡馬: ' + (sm.total_sires || 0) + '頭 · ' +
-        '馬: ' + (sm.horse_count || 0) + '頭';
-    }
-
-    const horses = data.horses || [];
-    if (scatterTapHint) scatterTapHint.textContent = '';
-    $('horseDetail').style.display = 'none';
-
-    const leg = $('legend');
-    leg.innerHTML = '';
-    const maxG = Math.max(0, ...horses.map(h => h.group_id)) + 1;
-    for (let g = 0; g < maxG; g++) {
-      const span = document.createElement('span');
-      span.innerHTML = '<span class="dot" style="background:' + HEX[g % 4] + '"></span> グループ ' + g;
-      leg.appendChild(span);
-    }
-
-    const groupsEl = $('groups');
-    groupsEl.innerHTML = '';
-    (data.groups || []).forEach(gr => {
-      const c = document.createElement('div');
-      c.className = 'gcard';
-      const cid = gr.group_id;
-      const cent = gr.centroid || {};
-      const flips = { [axX]: flipX, [axY]: flipY, [axZ]: flipZ };
-      const centHtml = [axX, axY, axZ].map(k =>
-        (axisLabelMap[k] || k).replace(/（.*/, '').slice(0, 4) + ' ' + fmt(flips[k] ? -(cent[k]||0) : cent[k])
-      ).join(' · ');
-      c.innerHTML =
-        '<h3 style="color:' + HEX[cid % 4] + '">グループ ' + cid + '（' + gr.count + '頭）</h3>' +
-        '<div class="cent">' + centHtml + '</div>' +
-        '<ul>' + (gr.horse_names || []).map(n => '<li>' + escapeHtml(n) + '</li>').join('') + '</ul>';
-      groupsEl.appendChild(c);
-    });
-
-    const tb = $('tbody');
-    tb.innerHTML = '';
-    horses.forEach(h => {
-      const tr = document.createElement('tr');
-      const g = h.group_id | 0;
-      const f = h.factors || {};
-      const ancSummary = (h.ancestors || []).map(a => {
-        const short = a.label_ja.replace(/母/g, 'M').replace(/父/g, 'F');
-        return short + ':' + escapeHtml((a.sire_name || '?').slice(0, 6));
-      }).join(' ');
-      tr.innerHTML =
-        '<td class="num">' + escapeHtml(String(h.bracket_number || '')) + '</td>' +
-        '<td class="num">' + escapeHtml(String(h.horse_number || '')) + '</td>' +
-        '<td style="cursor:pointer" class="horse-name-cell">' + escapeHtml(h.horse_name || '') + '</td>' +
-        '<td class="num">' + fmt(flipX ? -(f[axX]||0) : f[axX]) + '</td>' +
-        '<td class="num">' + fmt(flipY ? -(f[axY]||0) : f[axY]) + '</td>' +
-        '<td class="num">' + fmt(flipZ ? -(f[axZ]||0) : f[axZ]) + '</td>' +
-        '<td><span class="pill" style="background:' + HEX[g % 4] + '33;color:' + HEX[g % 4] + '">' + g + '</span></td>' +
-        '<td class="anc-cell" style="font-size:0.62rem;color:var(--dim);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="' + escapeHtml(ancSummary) + '">' + ancSummary + '</td>';
-      tr.querySelector('.horse-name-cell').addEventListener('click', () => { showHorseDetail(h); scrollToDetail(); });
-      tr.querySelector('.anc-cell').addEventListener('click', () => { showHorseDetail(h); scrollToDetail(); });
-      tb.appendChild(tr);
-    });
-
-    const cmpCtrl = $('cmpControls');
-    if (cmpCtrl) cmpCtrl.style.display = 'none';
-
-    main.style.display = 'block';
-    requestAnimationFrame(function () {
-      void drawScatter3D(horses, axX, axY, axZ).catch(function (e) {
-        console.error(e);
-        if (scatterTapHint)
-          scatterTapHint.textContent = '3D 表示の読み込みに失敗しました。';
-      });
-    });
-  }
-
-  function fmt(x) {
-    const n = Number(x);
-    if (Number.isNaN(n)) return '';
-    return n.toFixed(3);
-  }
-
-  function escapeHtml(s) {
-    if (!s) return '';
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  async function load(opts) {
-    const userClick = !!(opts && opts.userClick);
-    const rid = getSelectedRaceId();
-    if (!rid) {
-      showErr('開催日・会場・レースを選んでから「表示」を押してください。');
-      return;
-    }
-    showErr('');
-    loading.classList.add('show');
-    main.style.display = 'none';
-    btn.disabled = true;
-    try {
-      if (userClick && !IS_5GEN_WAIT_PAGE) {
-        const waitUrl = build5genWaitUrl(rid);
-        const childWin = window.open(waitUrl, '_blank');
-        if (childWin) {
-          const prevLoadingText = loading.textContent;
-          loading.textContent = '別タブで5世代血統を取得しています…';
-          try {
-            const pr = await waitFor5genChildWindow(rid, childWin, 330000);
-            if (!pr.ok) {
-              showErr(pr.error || '5世代血統の取得に失敗しました');
-              return;
-            }
-          } catch (e) {
-            showErr(String(e));
-            return;
-          } finally {
-            loading.textContent = prevLoadingText;
-          }
-        } else {
-          const ens = await ensureRacePedigree5gen(rid);
-          if (!ens.ok) return;
-        }
-      } else if (!IS_5GEN_WAIT_PAGE) {
-        const ens = await ensureRacePedigree5gen(rid);
-        if (!ens.ok) return;
-      }
-
-      const axes = getSelectedAxes();
-      const weights = getSelectedWeights();
-      const qp = new URLSearchParams();
-      qp.set('race_id', rid);
-      qp.set('axis_x', axes.x);
-      qp.set('axis_y', axes.y);
-      qp.set('axis_z', axes.z);
-      ANCESTOR_DEFAULTS.forEach(a => {
-        qp.set('w_' + a.key, String(weights[a.key]));
-      });
-      const url = apiUrl('/api/pedigree/race-note-3d') + '?' + qp.toString();
-      const cmpUrl = apiUrl('/api/pedigree/race-note-3d-compare') + '?' + qp.toString();
-      const res = await fetch(url);
-      const noteParsed = await tryParseJsonResponse(res);
-      const data = noteParsed.data;
-      if (data == null) {
-        showErr('race-note-3d の応答が JSON ではありません（HTTP ' + res.status + '）。');
-        return;
-      }
-      if (!res.ok) {
-        const flat = flattenFastApiDetail(data.detail);
-        const msg = data.error || flat || '取得に失敗しました';
-        showErr(msg);
-        return;
-      }
-      if (!data.horses || !data.horses.length) {
-        showErr(data.error || '出走データがありません。出馬表・結果のスクレイプを先に実行してください。');
-        return;
-      }
-      _compareData = null;
-      const u = new URL(location.pathname + location.search, location.origin);
-      u.searchParams.set('race_id', rid);
-      history.replaceState(null, '', u.pathname + '?' + u.searchParams.toString());
-      render(data);
-
-      const cmpSt = $('cmpStatus');
-      if (cmpSt) cmpSt.textContent = '比較データ読込中…';
-      fetch(cmpUrl).then(r => r.ok ? r.json() : null).then(cmpData => {
-        if (cmpData) {
-          _compareData = cmpData;
-          _updateCompareUI(data);
-        }
-        if (cmpSt) cmpSt.textContent = '';
-      }).catch(() => { if (cmpSt) cmpSt.textContent = ''; });
-    } catch (e) {
-      showErr(String(e));
-    } finally {
-      loading.classList.remove('show');
-      setPedigreeOverlay({ show: false });
-      btn.disabled = false;
-    }
-  }
-
-  btn.addEventListener('click', function () {
-    void load({ userClick: true });
+  // date → venue → races
+  const dateOrder = [];
+  const byDate = {};
+  races.forEach(r => {
+    const dk = r.date || '';
+    const dl = r.date_label || r.date;
+    if (!byDate[dk]) { byDate[dk] = {label: dl, venues: {}, venueOrder: []}; dateOrder.push(dk); }
+    const v = r.venue || '?';
+    if (!byDate[dk].venues[v]) { byDate[dk].venues[v] = []; byDate[dk].venueOrder.push(v); }
+    byDate[dk].venues[v].push(r);
   });
 
-  const btnApplyAxes = $('btnApplyAxes');
-  if (btnApplyAxes) {
-    btnApplyAxes.addEventListener('click', function () {
-      if (!_lastData || !_lastData.horses || !_lastData.horses.length) {
-        void load();
-        return;
-      }
-      const axes = getSelectedAxes();
-      _lastData.axis_x = axes.x;
-      _lastData.axis_y = axes.y;
-      _lastData.axis_z = axes.z;
-      render(_lastData);
-      if (_compareData) _updateCompareUI(_lastData);
+  let h = '';
+  let gIdx = 0;
+
+  dateOrder.forEach(dateKey => {
+    const {label, venues, venueOrder} = byDate[dateKey];
+    const dgId = `dg-${gIdx++}`;
+
+    h += `<div class="race-group-date collapsed" onclick="toggleDateGroup('${dgId}',this)">
+      <span>${label}</span><span class="dg-arrow">▾</span>
+    </div>`;
+    h += `<div id="${dgId}" class="race-group-body collapsed">`;
+
+    venueOrder.forEach(venue => {
+      const vrs = venues[venue];
+      const vgId = `vg-${gIdx++}`;
+      h += `<div class="venue-group-hdr collapsed" onclick="toggleVenueGroup('${vgId}',this)">
+        <span>${venue}（${vrs.length}R）</span><span class="vg-arrow">▾</span>
+      </div>`;
+      h += `<div id="${vgId}" class="venue-group-body collapsed">`;
+      vrs.forEach(r => {
+        const rnd = r.round ? `R${r.round} ` : '';
+        h += `<div class="race-item" data-rid="${r.race_id}" onclick="selRace('${r.race_id}',this)">
+          <span class="race-name-txt">${rnd}${r.race_name||r.race_id}</span>
+        </div>`;
+      });
+      h += `</div>`;
+    });
+
+    h += `</div>`;
+  });
+  $('race-list').innerHTML = h;
+}
+
+window.toggleDateGroup = function(gid, hdr) {
+  const body = $(gid);
+  const collapsed = body.classList.toggle('collapsed');
+  hdr.classList.toggle('collapsed', collapsed);
+};
+
+window.toggleVenueGroup = function(vgid, hdr) {
+  const body = $(vgid);
+  const collapsed = body.classList.toggle('collapsed');
+  hdr.classList.toggle('collapsed', collapsed);
+};
+
+// ── Select race ───────────────────────────────────────────────────────────
+window.selRace = async function(raceId, el) {
+  document.querySelectorAll('.race-item').forEach(x => x.classList.remove('active'));
+  if (el) el.classList.add('active');
+
+  $('map-loader').classList.add('show');
+  $('hp-list').innerHTML = '<div class="no-data">取得中…</div>';
+  $('map-title').textContent = '取得中…';
+  _resetView();
+
+  try {
+    const res = await fetch(`${API_V2}?race_id=${raceId}`);
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      $('hp-list').innerHTML = `<div class="no-data">${data.error||'データなし'}<br><span style="font-size:.72rem;color:var(--muted)">race_shutuba または race_result を先に取得してください</span></div>`;
+      $('map-title').textContent = 'データなし';
+      $('top3-bar').style.display = 'none';
+      drawEmptyMap();
+      return;
+    }
+    cur = data;
+    renderAll(data);
+    if (data.no_horse_data) {
+      $('hp-list').innerHTML = '<div class="no-data">出走データ未取得<br><span style="font-size:.72rem;color:var(--muted)">スクレイプ後に再表示されます</span></div>';
+      $('hp-count').textContent = '未取得';
+      $('top3-bar').style.display = 'none';
+    }
+  } catch(e) {
+    $('hp-list').innerHTML = `<div class="no-data">通信エラー: ${e}</div>`;
+  } finally {
+    $('map-loader').classList.remove('show');
+  }
+};
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function renderAll(data) {
+  renderCourseCard(data.course);
+  drawMap(data);
+  renderHorseList(data);
+  const c = data.course;
+  const distPart = c.distance ? `${c.distance}m` : '';
+  $('map-title').textContent =
+    `${c.venue||''}${c.surface||''}${distPart}${c.track_condition?` [${c.track_condition}]`:''}` +
+    (c.race_name ? `  ${c.race_name}` : '');
+}
+
+function renderCourseCard(c) {
+  const sc = c.surface==='芝'?'p-turf':c.surface==='ダート'?'p-dirt':'';
+  const surfacePill = c.surface ? `<span class="pill ${sc}">${c.surface}</span>` : '';
+  const distPill = c.distance
+    ? `<span class="pill p-dist">${c.distance}m · ${c.distance_class||''}</span>`
+    : '';
+  $('course-card').innerHTML = `<div class="course-card">
+    <div class="c-title">${c.race_name||'—'}</div>
+    ${surfacePill}${distPill}
+    ${c.track_condition?`<span class="pill p-cond">${c.track_condition}</span>`:''}
+    ${c.date?`<span class="pill p-date">${c.date}</span>`:''}
+    ${c.venue&&!c.surface?`<span class="pill" style="background:var(--surface2);color:var(--muted)">${c.venue}</span>`:''}
+  </div>`;
+}
+
+// ── SVG pan/zoom state ─────────────────────────────────────────────────────
+let _vcx = 0, _vcy = 0, _zoom = 1;
+let _drag = null, _mapReady = false;
+
+function _applyViewBox() {
+  const w = 16 / _zoom, h = 12 / _zoom;
+  $('race-svg').setAttribute('viewBox', `${_vcx - w/2} ${_vcy - h/2} ${w} ${h}`);
+  const isDefault = Math.abs(_zoom-1)<0.01 && Math.abs(_vcx)<0.01 && Math.abs(_vcy)<0.01;
+  $('ax-reset').style.display = isDefault ? 'none' : '';
+}
+
+function _resetView() { _vcx = 0; _vcy = 0; _zoom = 1; _applyViewBox(); }
+
+function _autoFitHorses(horses, bz, sd) {
+  if (!horses.length) return;
+  // Compute bounding box in SVG coords: horse (pos_x, -pos_y), zones (x, -y)
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  horses.forEach(h => {
+    minX = Math.min(minX, h.pos_x); maxX = Math.max(maxX, h.pos_x);
+    minY = Math.min(minY, -h.pos_y); maxY = Math.max(maxY, -h.pos_y);
+  });
+  if (bz) { minX=Math.min(minX,bz.x); maxX=Math.max(maxX,bz.x); minY=Math.min(minY,-bz.y); maxY=Math.max(maxY,-bz.y); }
+  if (sd) { minX=Math.min(minX,sd.x); maxX=Math.max(maxX,sd.x); minY=Math.min(minY,-sd.y); maxY=Math.max(maxY,-sd.y); }
+  const pad = 1.5;
+  const spanX = maxX - minX + pad * 2;
+  const spanY = maxY - minY + pad * 2;
+  _vcx = (minX + maxX) / 2;
+  _vcy = (minY + maxY) / 2;
+  _zoom = Math.max(0.8, Math.min(5, Math.min(16 / spanX, 12 / spanY)));
+  _applyViewBox();
+}
+
+function setupMapInteraction() {
+  if (_mapReady) return;
+  _mapReady = true;
+  const area = $('map-area');
+  const svg  = $('race-svg');
+
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    const w = 16/_zoom, h = 12/_zoom;
+    const mx = (_vcx - w/2) + (e.clientX - rect.left) / rect.width * w;
+    const my = (_vcy - h/2) + (e.clientY - rect.top)  / rect.height * h;
+    const factor = e.deltaY < 0 ? 1.25 : 0.8;
+    _zoom = Math.max(0.25, Math.min(12, _zoom * factor));
+    const w2 = 16/_zoom, h2 = 12/_zoom;
+    _vcx = mx - (e.clientX - rect.left) / rect.width * w2 + w2/2;
+    _vcy = my - (e.clientY - rect.top)  / rect.height * h2 + h2/2;
+    _applyViewBox();
+  }, {passive: false});
+
+  svg.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    _drag = {x: e.clientX, y: e.clientY, cx: _vcx, cy: _vcy};
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!_drag) return;
+    const rect = svg.getBoundingClientRect();
+    const w = 16/_zoom, h = 12/_zoom;
+    _vcx = _drag.cx - (e.clientX - _drag.x) / rect.width * w;
+    _vcy = _drag.cy - (e.clientY - _drag.y) / rect.height * h;
+    _applyViewBox();
+  });
+  window.addEventListener('mouseup', () => { _drag = null; });
+
+  $('ax-reset').addEventListener('click', _resetView);
+}
+
+// ── SVG map ────────────────────────────────────────────────────────────────
+function drawEmptyMap() {
+  const svg = $('race-svg');
+  svg.innerHTML = '';
+  $('zone-legend').innerHTML = '';
+  $('ax-left').textContent = '';
+  $('ax-right').textContent = '';
+  $('ax-top').textContent = '';
+}
+
+function drawMap(data) {
+  const svg = $('race-svg');
+  svg.innerHTML = '';
+
+  const horses   = data.horses   || [];
+  const clusters = data.l2_clusters || [];
+  const bz = data.best_zone;
+  const sd = data.same_day_tendency;
+  const al = data.axis_labels || {};
+
+  // Update axis overlay labels
+  $('ax-left').textContent  = al.x_neg ? `← ${al.x_neg}` : '';
+  $('ax-right').textContent = al.x_pos ? `${al.x_pos} →` : '';
+  $('ax-top').textContent   = al.y_pos ? `↑ ${al.y_pos}` : '';
+  setupMapInteraction();
+
+  // Grid
+  const grid = mkel('g', {opacity:'0.06'});
+  for(let x=-7;x<=7;x++) grid.appendChild(mkel('line',{x1:x,y1:-6,x2:x,y2:6,stroke:'#6b7280','stroke-width':'0.04'}));
+  for(let y=-6;y<=6;y++) grid.appendChild(mkel('line',{x1:-7,y1:y,x2:7,y2:y,stroke:'#6b7280','stroke-width':'0.04'}));
+  svg.appendChild(grid);
+
+  // Cluster aptitude background zones — drawn from pre-computed cluster_course_match
+  clusters.forEach(cl => {
+    const dev = (cl.cluster_course_match||1.0) - 1.0;
+    if (Math.abs(dev) < 0.02) return;
+    const a = Math.min(0.22, 0.04 + Math.abs(dev) * 1.5);
+    const fill = dev > 0 ? `rgba(52,211,153,${a})` : `rgba(248,113,113,${a})`;
+    const strk = dev > 0 ? 'rgba(52,211,153,0.5)' : 'rgba(248,113,113,0.5)';
+    svg.appendChild(mkel('ellipse', {
+      cx: cl.pos_x, cy: -cl.pos_y, rx: '1.3', ry: '1.0',
+      fill, stroke: strk, 'stroke-width': '0.04',
+      'stroke-dasharray': '0.3 0.15', opacity: '0.85',
+    }));
+  });
+
+  // L2 cluster labels (background)
+  clusters.filter(c=>c.horse_count>0).forEach(cl => {
+    const lbl = (cl.name||'').slice(0,9);
+    svg.appendChild(mkel('rect',{x:cl.pos_x-1.1,y:-cl.pos_y-0.3,width:'2.2',height:'0.62',rx:'0.12',fill:cl.color,opacity:'0.1'}));
+    svg.appendChild(mkel('text',{x:cl.pos_x,y:-cl.pos_y+0.15,fill:cl.color,'font-size':'0.28','text-anchor':'middle',opacity:'0.5'},lbl));
+  });
+
+  // Best zone ellipse
+  if (bz) {
+    const r = Math.max(bz.r||0.5, 0.5);
+    svg.appendChild(mkel('ellipse',{
+      cx:bz.x, cy:-bz.y, rx:r*1.2, ry:r*0.8,
+      fill:'rgba(59,130,246,0.07)',stroke:'#3b82f6','stroke-width':'0.07','stroke-dasharray':'0.25 0.12'
+    }));
+  }
+  // Same-day zone ellipse
+  if (sd) {
+    const r = Math.max(sd.r||0.5, 0.5);
+    svg.appendChild(mkel('ellipse',{
+      cx:sd.x, cy:-sd.y, rx:r*1.2, ry:r*0.8,
+      fill:'rgba(249,115,22,0.07)',stroke:'#f97316','stroke-width':'0.07','stroke-dasharray':'0.25 0.12'
+    }));
+    $('today-leg').style.display = '';
+  } else {
+    $('today-leg').style.display = 'none';
+  }
+
+  // Cluster aptitude ellipses — drawn BEFORE horse dots (background layer)
+  if (horses.length >= 2) {
+    const cg = {};
+    horses.forEach(h => {
+      const k = h.dominant_l2 >= 0 ? h.dominant_l2 : '__unk';
+      (cg[k] = cg[k] || []).push(h);
+    });
+    Object.entries(cg).forEach(([, ch]) => {
+      if (ch.length < 2) return;
+      const avgX = ch.reduce((s,h) => s + h.pos_x, 0) / ch.length;
+      const avgY = ch.reduce((s,h) => s - h.pos_y, 0) / ch.length;
+      const vX = ch.reduce((s,h) => s + (h.pos_x - avgX) ** 2, 0) / ch.length;
+      const vY = ch.reduce((s,h) => s + (-h.pos_y - avgY) ** 2, 0) / ch.length;
+      const rx = Math.max(Math.sqrt(vX) + 0.35, 0.4);
+      const ry = Math.max(Math.sqrt(vY) + 0.35, 0.4);
+      const avgM = ch.reduce((s,h) => s + (h.course_match||1), 0) / ch.length;
+      const dev = avgM - 1.0;
+      if (Math.abs(dev) < 0.015) return;  // 中立クラスターは描画スキップ
+      const a = Math.min(0.28, 0.07 + Math.abs(dev) * 0.8);
+      const fill  = dev > 0 ? `rgba(52,211,153,${a})` : `rgba(248,113,113,${a})`;
+      const strk  = dev > 0 ? '#34d399' : '#f87171';
+      svg.appendChild(mkel('ellipse', {
+        cx: avgX, cy: avgY, rx: String(rx), ry: String(ry),
+        fill, stroke: strk, 'stroke-width': '0.06',
+        'stroke-dasharray': '0.2 0.1', opacity: '0.75',
+      }));
     });
   }
 
-  if (dateSelect) dateSelect.addEventListener('change', () => { onDateChange(); });
-  if (venueSelect) venueSelect.addEventListener('change', onVenueChange);
-  if (raceSelect) raceSelect.addEventListener('change', onRaceChange);
+  // Pre-sort horses by course_match to know field rank
+  const nHorses = horses.length;
+  const rankColors = {1:'#f59e0b', 2:'#9ca3af', 3:'#b45309'};
 
-  (async function bootstrap() {
-    if (IS_5GEN_WAIT_PAGE) {
-      const wrapEl = document.querySelector('.wrap');
-      if (wrapEl) wrapEl.classList.add('fivegen-wait-mode');
-      const h1El = document.querySelector('.wrap h1');
-      if (h1El) h1El.textContent = '5世代血統データの取得（別タブ）';
-      const doneEl = $('fiveGenWaitDone');
-      if (!Q_5GEN_WAIT_RID) {
-        showErr('URL に race_id がありません。元のタブから「表示」を押して開き直してください。');
-        return;
-      }
-      try {
-        const r = await ensureRacePedigree5gen(Q_5GEN_WAIT_RID);
-        const payload = r.ok
-          ? {
-              type: PREFETCH_MSG_TYPE,
-              race_id: Q_5GEN_WAIT_RID,
-              ok: true,
-              skipped: !!r.skipped,
-            }
-          : {
-              type: PREFETCH_MSG_TYPE,
-              race_id: Q_5GEN_WAIT_RID,
-              ok: false,
-              error: r.error || '不明なエラー',
-              aborted: !!r.aborted,
-            };
-        try {
-          if (window.opener && !window.opener.closed) {
-            window.opener.postMessage(payload, location.origin);
-          }
-        } catch (_) {}
-        setPedigreeOverlay({ show: false });
-        if (r.ok && window.opener) {
-          setTimeout(function () {
-            try {
-              window.close();
-            } catch (_) {}
-            try {
-              if (!window.closed && doneEl) doneEl.classList.add('show');
-            } catch (_) {}
-          }, 450);
-        } else if (r.ok && doneEl) {
-          doneEl.classList.add('show');
-        }
-      } catch (e) {
-        console.error(e);
-        showErr(String(e));
-        try {
-          if (window.opener && !window.opener.closed) {
-            window.opener.postMessage(
-              {
-                type: PREFETCH_MSG_TYPE,
-                race_id: Q_5GEN_WAIT_RID,
-                ok: false,
-                error: String(e),
-              },
-              location.origin
-            );
-          }
-        } catch (_) {}
-        setPedigreeOverlay({ show: false });
-      }
-      return;
+  // Horse dots — draw low-rank first so top horses render on top
+  const sortedByRank = [...horses].sort((a,b) => (b.course_match||0) - (a.course_match||0));
+  [...sortedByRank].reverse().forEach(h => {
+    const rank = h.course_match_rank || (sortedByRank.indexOf(h) + 1);
+    const isTop3 = rank <= 3;
+    const baseR = rank === 1 ? 0.36 : rank === 2 ? 0.32 : rank === 3 ? 0.30 : 0.24;
+    // opacity: top = bright, bottom = dim
+    const opac = rank <= 3 ? 0.95 : Math.max(0.45, 0.85 - (rank - 4) * 0.04);
+
+    const g = mkel('g', {'data-hid': h.horse_id, 'data-rank': rank, 'data-base-r': baseR, style:'cursor:pointer'});
+
+    // Medal ring for top 3
+    if (isTop3) {
+      const mc = rankColors[rank];
+      const ringR = baseR + 0.14;
+      g.appendChild(mkel('circle', {
+        cx: h.pos_x, cy: -h.pos_y, r: String(ringR),
+        fill: mc + '22', stroke: mc, 'stroke-width': '0.07',
+        opacity: '0.85'
+      }));
     }
 
-    try {
-      await loadAllDates();
-      if (qRid) {
-        const ok = await syncPickersFromRaceId(qRid);
-        if (!ok) {
-          showErr(
-            'URL の race_id を開催日・レース欄に合わせられませんでした。手動で日付・会場・レースを選んでください。'
-          );
-        }
-      }
-    } catch (e) {
-      console.error(e);
-      if (pickerStatus) pickerStatus.textContent = '';
-      showErr('開催日一覧の取得に失敗しました。ネットワークまたは API（/api/scrape-dates 等）を確認してください。');
+    g.appendChild(mkel('circle', {
+      cx: h.pos_x, cy: -h.pos_y, r: String(baseR),
+      fill: h.l2_color||'#888', opacity: String(opac),
+      stroke: '#0a0c10', 'stroke-width': isTop3 ? '0.05' : '0.03'
+    }));
+    g.appendChild(mkel('text', {
+      x: h.pos_x, y: -h.pos_y + (baseR * 0.38),
+      fill: '#fff', 'font-size': String(baseR * 0.68),
+      'text-anchor': 'middle', 'pointer-events': 'none', 'font-weight': isTop3 ? '700' : '400'
+    }, String(h.horse_number||'')));
+
+    // Rank label above top-3 dots
+    if (isTop3) {
+      const mc = rankColors[rank];
+      const lblY = -(h.pos_y) - baseR - 0.22;
+      const bg = mkel('rect', {
+        x: h.pos_x - 0.18, y: lblY - 0.13, width: '0.36', height: '0.18',
+        rx: '0.07', fill: mc, opacity: '0.9'
+      });
+      const lbl = mkel('text', {
+        x: h.pos_x, y: lblY,
+        fill: '#000', 'font-size': '0.13', 'font-weight': '700',
+        'text-anchor': 'middle', 'pointer-events': 'none'
+      }, String(rank));
+      g.appendChild(bg);
+      g.appendChild(lbl);
     }
-    updateLoadButtonState();
-    if (getSelectedRaceId()) void load({ userClick: false });
-  })();
+
+    g.addEventListener('mouseenter', e => showTT(e, h));
+    g.addEventListener('mouseleave', hideTT);
+    g.addEventListener('click', () => hlHorse(h.horse_id));
+    svg.appendChild(g);
+  });
+
+  renderZoneLegend(data);
+  _autoFitHorses(horses, bz, sd);
+}
+
+function renderZoneLegend(data) {
+  const el = $('zone-legend');
+  const present = (data.l2_clusters||[]).filter(c=>c.horse_count>0)
+    .sort((a,b) => (b.cluster_course_match||1) - (a.cluster_course_match||1));
+  el.innerHTML = present.map(c => {
+    const dev = (c.cluster_course_match||1.0) - 1.0;
+    const pct = Math.round(dev * 100);
+    const badge = Math.abs(pct) >= 2
+      ? `<span style="font-size:0.75em;margin-left:3px;color:${dev>=0?'#34d399':'#f87171'}">${dev>=0?'+':''}${pct}%</span>`
+      : '';
+    return `<span class="zl-item"><span class="zl-dot" style="background:${c.color}"></span>${c.name||`L2-${c.l2_id}`} (${c.horse_count})${badge}</span>`;
+  }).join('');
+}
+
+// ── Horse list ────────────────────────────────────────────────────────────
+const MEDAL_COLORS = {1:'#f59e0b', 2:'#9ca3af', 3:'#b45309'};
+
+function renderTop3Bar(horses) {
+  const bar = $('top3-bar');
+  const top3 = horses.slice(0, 3);
+  if (!top3.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const chips = top3.map((h, i) => {
+    const rank = i + 1;
+    const mc = MEDAL_COLORS[rank];
+    return `<span class="top3-chip" style="background:${mc}1a;border:1px solid ${mc}66;color:${mc}"
+        onclick="hlHorse('${h.horse_id}')">
+      <strong>${rank}</strong>
+      <span style="overflow:hidden;text-overflow:ellipsis;max-width:62px">${h.horse_name}</span>
+      <span class="chip-score">${h.course_match.toFixed(3)}</span>
+    </span>`;
+  }).join('');
+  bar.innerHTML = `<span class="top3-label">適性TOP</span>${chips}`;
+}
+
+function renderHorseList(data) {
+  const horses = [...(data.horses||[])].sort((a,b) => b.course_match - a.course_match);
+  $('hp-count').textContent = `${horses.length} 頭`;
+  if (!horses.length) {
+    $('hp-list').innerHTML = '<div class="no-data">出走データなし</div>';
+    $('top3-bar').style.display = 'none';
+    return;
+  }
+
+  renderTop3Bar(horses);
+
+  const maxV = horses[0].course_match;
+  const minV = horses[horses.length - 1].course_match;
+  const range = maxV - minV || 0.01;
+
+  $('hp-list').innerHTML = horses.map((h, idx) => {
+    const rank = idx + 1;
+    const pct = Math.round(((h.course_match - minV) / range) * 100);
+    const col = matchColor(h.course_match);
+    const mc = MEDAL_COLORS[rank];
+    const l2s = `background:${h.l2_color}22;color:${h.l2_color};border:1px solid ${h.l2_color}44`;
+    const rankBadgeCls = rank <= 3 ? `rank-${rank}-badge` : 'rank-other-badge';
+    const cardCls = rank <= 3 ? ` rank-${rank}` : '';
+    const barColor = rank <= 3 ? `linear-gradient(90deg,${mc}55,${mc})` : `linear-gradient(90deg,${col}44,${col})`;
+    const scoreColor = rank <= 3 ? mc : col;
+    // レース条件別 lift を表示（全体 top_conds ではなく今回のコース条件に対する評価）
+    const raceConds = (data.cond_keys||[]);
+    const condTags = raceConds.map(k => {
+      const v = (h.lift||{})[k];
+      if (v == null) return '';
+      const diff = v - 1;
+      const cls = diff >= 0.03 ? 'tc-pos' : diff <= -0.03 ? 'tc-neg' : 'tc-neu';
+      const label = k.replace(/^win_[vsd]_/, '').replace('win_heavy', '重馬場');
+      return `<span class="tc-tag ${cls}">${label} ${diff>=0?'+':''}${(diff*100).toFixed(0)}%</span>`;
+    }).filter(Boolean).join('');
+    return `<div class="hc${cardCls}" id="hc-${h.horse_id}" onclick="hlHorse('${h.horse_id}')">
+      <div class="hc-row1">
+        <span class="rank-badge ${rankBadgeCls}">${rank}</span>
+        <span class="hc-num" style="background:${bracketBg(h.bracket_number)};color:${bracketFg(h.bracket_number)}">${h.horse_number}</span>
+        <span class="hc-name">${h.horse_name}</span>
+        <span class="hc-l2" style="${l2s}">${h.l2_name||`L2-${h.dominant_l2}`}</span>
+      </div>
+      <div class="hc-sire">父: ${h.sire_name||'—'}　母父: ${h.bms_name||'—'}${h.ind_adj?` <span class="ind-badge">実績補正 ${h.ind_n_cond}走</span>`:''
+        }${(()=>{const f=(h.lift||{}).win_fast;if(f==null)return '';const p=Math.round((f-1)*100);if(Math.abs(p)<12)return '';return p>=0?` <span class="spd-hi">⚡速+${p}%</span>`:`<span class="spd-lo">◎低${p}%</span>`;})()
+        }</div>
+      <div class="bar-row">
+        <span class="bar-label">コース適性</span>
+        <div class="bar-fill-wrap"><div class="bar-fill2" style="width:${pct}%;background:${barColor}"></div></div>
+        <span class="score-val" style="color:${scoreColor}">${h.course_match.toFixed(3)}</span>
+      </div>
+      ${condTags?`<div class="top-conds">${condTags}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ── Highlight ──────────────────────────────────────────────────────────────
+window.hlHorse = function(hid) {
+  document.querySelectorAll('.hc').forEach(c => c.classList.remove('hl'));
+  const card = $(`hc-${hid}`);
+  if (card) { card.classList.add('hl'); card.scrollIntoView({block:'nearest',behavior:'smooth'}); }
+
+  document.querySelectorAll('[data-hid]').forEach(g => {
+    const circles = g.querySelectorAll('circle');
+    if (!circles.length) return;
+    const isThis = g.dataset.hid === hid;
+    const rank = parseInt(g.dataset.rank || '99');
+    const baseR = parseFloat(g.dataset.baseR || '0.24');
+    // main fill circle is the last circle (rings come before it)
+    const mainCircle = circles[circles.length - 1];
+    if (isThis) {
+      mainCircle.setAttribute('r', String(baseR + 0.12));
+      mainCircle.setAttribute('opacity', '1');
+      mainCircle.setAttribute('stroke-width', '0.09');
+    } else {
+      mainCircle.setAttribute('r', String(baseR));
+      const opac = rank <= 3 ? '0.85' : '0.4';
+      mainCircle.setAttribute('opacity', opac);
+      mainCircle.setAttribute('stroke-width', rank <= 3 ? '0.05' : '0.03');
+    }
+  });
+};
+
+// ── Tooltip ───────────────────────────────────────────────────────────────
+function showTT(e, h) {
+  const tt = $('tooltip');
+  const condKeys = (cur&&cur.course.cond_keys)||[];
+  const lifts = condKeys.map(k=>{
+    const v=(h.lift||{})[k];
+    if(v==null) return null;
+    const s = v>=1?`+${((v-1)*100).toFixed(0)}%`:`${((v-1)*100).toFixed(0)}%`;
+    return `${k.replace('win_','')} <strong>${s}</strong>`;
+  }).filter(Boolean).join('  ');
+
+  tt.innerHTML = `<div class="tt-name">${h.horse_name}</div>
+    <span class="tt-l2" style="background:${h.l2_color}22;color:${h.l2_color}">${h.l2_name||''}</span>
+    <div class="tt-line">父: ${h.sire_name||'—'}</div>
+    <div class="tt-line">母父: ${h.bms_name||'—'}</div>
+    ${h.bms_root_name?`<div class="tt-line">母父系: ${h.bms_root_name}</div>`:''}
+    <div class="tt-line" style="margin-top:4px">コース適性: <span class="tt-match">${fmt3(h.course_match)}</span>${h.ind_adj?` <span style="color:#34d399;font-size:.68rem">実績補正(${(h.ind_weight*100).toFixed(0)}%)</span>`:''}</div>
+    ${lifts?`<div class="tt-line" style="font-size:.7rem;margin-top:2px">${lifts}</div>`:''}`;
+  tt.style.display = 'block';
+  moveTT(e);
+}
+function moveTT(e) {
+  const tt=$('tooltip');
+  tt.style.left=(e.clientX+14)+'px';
+  tt.style.top=(e.clientY+10)+'px';
+}
+function hideTT() { $('tooltip').style.display='none'; }
+document.addEventListener('mousemove', e => {
+  if($('tooltip').style.display!=='none') moveTT(e);
+});
+
+// ── URL param ─────────────────────────────────────────────────────────────
+const initRid = new URLSearchParams(location.search).get('race_id')||'';
+
+// ── Init ──────────────────────────────────────────────────────────────────
+(async function(){
+  await loadWeekRaces();
+  if (initRid) {
+    const el = document.querySelector(`[data-rid="${initRid}"]`);
+    selRace(initRid, el);
+  }
+})();
 })();
 </script>
 </body>

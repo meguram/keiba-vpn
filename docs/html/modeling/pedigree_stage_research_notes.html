@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>血統・馬場傾向・研究方針メモ（ブラッシュアップ用） — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>血統・馬場傾向・研究方針メモ（ブラッシュアップ用）</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/pedigree_stage_research_notes.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">血統・馬場傾向・研究方針メモ（ブラッシュアップ用）</h1>
+<p>この文書は、血統因子・馬場傾向・未出走馬への拡張・研究ロードマップについて、<strong>現状の実装</strong>と<strong>今後の考え</strong>を一枚にまとめたものです。一緒に推敲する前提で、未確定の仮説は「検討中」と明記しています。</p>
+<hr />
+<h2 id="1">1. ゴール（最終イメージ）</h2>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>最終出力</strong></td>
+<td><strong>任意の <code>race_id</code>（または日付・場・条件）</strong>に対し、<strong>出走馬全頭</strong>について <strong>血統由来の得点</strong>（＋必要なら舞台補正）を返す</td>
+</tr>
+<tr>
+<td><strong>制約</strong></td>
+<td><strong>GCS の read を推論・特徴計算のホットパスに置かない</strong>（ローカル Parquet / スナップショット中心）</td>
+</tr>
+<tr>
+<td><strong>未出走馬</strong></td>
+<td>自分の戦績がなくても、<strong>親・祖先・類似血統</strong>から何らかの「得意分野」を補間できる設計にしたい</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_2">算出イメージ（図解）</h2>
+<p>以下は <strong>概念図</strong> です。数式の厳密さより、<strong>データがどこから来て、何と掛け合わさるか</strong>を共有するためのものです。</p>
+<h3 id="_3">全体の流れ（鳥瞰図）</h3>
+<div class="mermaid">flowchart TB
+  subgraph in_data["入力データ"]
+    RR["race_result<br/>（全期間・時系列）"]
+    SB["race_shutuba<br/>（父・母父・レース条件）"]
+    SNAP["horse_pedigree_5gen<br/>（JSONL スナップショット）"]
+    SFS["sire_factor_stats.json<br/>（種牡馬×軸の統計）"]
+  end
+
+  subgraph feat["特徴モジュール"]
+    TB["track_bias_pedigree<br/>馬場傾向 × 血統勝率 × 交互作用"]
+    PF["sire_factor_aptitude<br/>6スロット血統因子ブレンド"]
+    PS["pedigree_similarity<br/>（任意）祖先類似度"]
+  end
+
+  subgraph out["出力イメージ"]
+    LA["LayerA Parquet<br/>学習・検証"]
+    INF["推論行<br/>（レース前は shutuba 主軸）"]
+    FUT["将来: race_id → 全頭スコア表"]
+  end
+
+  RR --> TB
+  SB --> TB
+  RR --> PF
+  SNAP --> PF
+  SFS --> PF
+  SNAP --> PS
+  TB --> LA
+  TB --> INF
+  PF --> LA
+  PF --> FUT</div>
+<p><strong>テキスト版（ASCII）</strong></p>
+<pre><code>  race_result ─────────┐
+                       ├──► track_bias_pedigree ──► LayerA / 推論
+  race_shutuba ────────┘
+
+  horse_pedigree_5gen ─┐
+                       ├──► 6スロット因子 ────────► horse_id 行（Parquet 等）
+  sire_factor_stats ───┘
+</code></pre>
+<hr />
+<h3 id="1-1">馬場傾向 × 血統（1 レース・1 頭あたりの合成イメージ）</h3>
+<p>「当日の空気（馬場・距離）」と「血統（父・母父の芝/ダ実績）」を <strong>掛け合わせる</strong>イメージです。</p>
+<div class="mermaid">flowchart LR
+  subgraph bias["馬場コンテキスト（レース条件依存）"]
+    SD["当日: 該当レース前までの<br/>勝者上がり3F 系"]
+    PV["前日: 同条件の平均"]
+    BL["w_same·当日 + w_prev·前日"]
+    CD["× 馬場3区分・距離4帯の<br/>チューニング済み重み"]
+    WB["track_bias_winner_3f_weighted 等"]
+  end
+
+  subgraph ped["血統（名前ベースの累計）"]
+    SW["父: sire_prior_win_rate_surface"]
+    DW["母父: dam_sire_prior_win_rate_surface"]
+  end
+
+  subgraph x["交互作用（例）"]
+    X1["sire × track_bias_weighted"]
+    X2["dam_sire × track_bias_weighted"]
+  end
+
+  SD --> BL
+  PV --> BL
+  BL --> CD
+  CD --> WB
+  WB --> X1
+  WB --> X2
+  SW --> X1
+  DW --> X2</div>
+<p><strong>一文で</strong>:<br />
+<code>馬場の合成ベクトル</code> × <code>親側の芝/ダ勝率</code> → <strong>「この舞台でこの血統がどう効きそうか」</strong>の代理特徴。</p>
+<hr />
+<h3 id="6">血統因子ブレンド（6 スロット）のイメージ</h3>
+<p>5 世代血統表上の <strong>決まった座標</strong>から祖先を拾い、<strong>種牡馬 DB の軸ベクトル</strong>を重み付き平均します（<strong>当該馬のレース履歴は不要</strong>）。</p>
+<div class="mermaid">flowchart TB
+  subgraph table["5gen 血統表（1 頭）"]
+    S1["父 (1,0)"]
+    S2["母系深部スロット …"]
+  end
+
+  subgraph db["sire_factor_stats（種牡馬 ID 単位）"]
+    A1["各祖先の axes<br/>（TS, 道悪, ダート, …）"]
+  end
+
+  subgraph blend["加権ブレンド"]
+    W["既定ウェイト w_slot<br/>（父を厚め等）"]
+    V["ped_* 列（馬 1 行）"]
+  end
+
+  S1 --> A1
+  S2 --> A1
+  A1 --> blend
+  W --> blend
+  blend --> V</div>
+<hr />
+<h3 id="_4">学習時（結果あり）と レース前推論（結果なし）の違い</h3>
+<div class="mermaid">flowchart TB
+  subgraph train["学習用 LayerA（既定）"]
+    T1["race_result に行がある馬だけが母表に残る"]
+    T2["track_bias: include_shutuba_entries_without_result = False"]
+  end
+
+  subgraph infer["レース前・新馬戦など"]
+    I1["当該レースがまだ result に無い行も出馬表から載せる"]
+    I2["track_bias: include_shutuba_entries_without_result = True"]
+    I3["未確定レース用プレースホルダで race 単位の傾向を付与"]
+  end
+
+  train --> M["同じ式の特徴定義（リークなし累計）"]
+  infer --> M</div>
+<hr />
+<h3 id="_5">目標：任意レースの「全頭」へのスコア拡張（ドラフト）</h3>
+<div class="mermaid">flowchart LR
+  R["race_id または<br/>日付・場・条件"]
+  E["出走馬一覧<br/>horse_id × N"]
+  P["血統スコア関数<br/>（因子・類似度・将来は GNN 等）"]
+  C["舞台補正<br/>（track_bias・条件マッチ）"]
+  T["全頭テーブル<br/>N 行"]
+
+  R --> C
+  E --> P
+  P --> T
+  C --> T</div>
+<p><strong>行列イメージ（イメージのみ）</strong></p>
+<pre><code>           血統ベース   舞台補正    合成（例）
+馬1 (新馬)   ○           ○          f(·,·)
+馬2          ○           ○          f(·,·)
+…
+馬N          ○           ○          f(·,·)
+</code></pre>
+<p><code>f</code> は <strong>学習で決める</strong>（線形・GBDT・ランキングなど）は後段の設計。</p>
+<hr />
+<h2 id="2">2. 現状のパイプライン（コード上の位置）</h2>
+<h3 id="21-layera-track_bias_pedigree">2.1 馬場傾向 × 血統（LayerA / <code>track_bias_pedigree</code>）</h3>
+<ul>
+<li><strong>入力</strong>: <code>race_result</code>（全期間・時系列）＋ <code>race_shutuba</code>（父・母父名など）</li>
+<li><strong>中身</strong>:</li>
+<li><strong>馬場傾向</strong>: 当日（該当レース前）・前日の勝者上がり3F系、<strong>馬場3区分</strong> × <strong>距離4帯</strong> × <strong>芝/ダ/障</strong> で細かく集計し、欠損は粗いキーでフォールバック</li>
+<li><strong>血統</strong>: 父・母父の <strong>芝/ダ別のリークなし累計勝率</strong>（産駒全体の過去）</li>
+<li><strong>加重</strong>: 当日/前日ブレンド＋（チューニング済み）<strong>馬場区分・距離帯の乗算</strong></li>
+<li><strong>チューニング</strong>: <code>research/tune_track_bias_weights</code> → <code>data/meta/modeling/track_bias_weight_best.json</code>（<strong>version 2</strong>: <code>cond_multipliers</code> / <code>dist_multipliers</code>）</li>
+<li><strong>母表への焼き込み</strong>: <code>python3 -m src.pipeline.build_layer_a_dataset --track-bias-weights-json ...</code></li>
+</ul>
+<h3 id="22-6">2.2 血統因子（6 スロット・種牡馬統計）</h3>
+<ul>
+<li><strong>モジュール</strong>: <code>research/sire_factor_aptitude</code>（父・母系深部スロットの加権ブレンド）</li>
+<li><strong>事前集計</strong>: <code>data/research/sire_factor_stats.json</code>（種牡馬ごとの軸ベクトル）</li>
+<li><strong>馬単位ワイド表（任意）</strong>: <code>research/pedigree_factor_table</code> → <code>data/modeling/horse_pedigree_factors.parquet</code>（<code>horse_id</code> 一発 join 用）</li>
+</ul>
+<h3 id="23">2.3 血統構造の類似度</h3>
+<ul>
+<li><strong>モジュール</strong>: <code>research/pedigree_similarity</code>（重み付き祖先集合、overlap / dual / λ など）</li>
+<li><strong>GCS 負荷対策</strong>: <code>research/pedigree_local_store</code>（<code>horse_pedigree_5gen.jsonl.gz</code> を <strong>1 blob</strong> 取得してローカル化、<code>list_keys</code> 全走査を避ける）</li>
+</ul>
+<h3 id="24">2.4 新馬・レース前予測（整合性）</h3>
+<ul>
+<li><strong>課題</strong>: 従来、<code>race_result</code> に <strong>当該レース行が無い</strong>と特徴が付かない場合があった</li>
+<li><strong>対応</strong>: <code>build_track_bias_pedigree_features(..., include_shutuba_entries_without_result=True)</code>  </li>
+<li>出馬表を主軸にマージし、<strong>未確定レース</strong>には SDP 用プレースホルダ行を追加  </li>
+<li><strong>日次平均（前日側）は実勝者のみ</strong>で集計（プレースホルダで汚さない）</li>
+<li><strong>学習用 LayerA</strong> の既定は <strong><code>False</code></strong>（結果済み行のみ・従来互換）</li>
+</ul>
+<hr />
+<h2 id="3-gcs">3. GCS 負荷を抑える運用原則（合意しやすい形）</h2>
+<ol>
+<li><strong>学習・チューニング・特徴生成</strong>は <strong><code>data/local/tables</code> と <code>data/modeling/</code> の Parquet</strong> で完結させる</li>
+<li><strong>5 世代血統</strong>は <strong>スナップショット JSONL.gz を 1 回</strong>取り、以降は <strong>ローカル索引</strong>（<code>pedigree_local_store</code>）</li>
+<li><strong>馬場傾向の重み</strong>は JSON に保存し、<strong>母表ビルド時に列へ焼く</strong>（推論のたびに全件再計算しない運用も可能）</li>
+<li><strong>list_keys("horse_pedigree_5gen") + 馬頭 load</strong> を特徴計算のループに置かない</li>
+</ol>
+<hr />
+<h2 id="4">4. 研究テーマ（文献とつなげる言い方）</h2>
+<h3 id="41">4.1 定量遺伝学・育種の語彙</h3>
+<ul>
+<li>血統表は <strong>親子関係のグラフ</strong> → <strong>親縁行列</strong>と <strong>BLUP / ゲノム予測</strong>の文脈で説明できる</li>
+<li>「未出走馬」＝ <strong>自分の表型が無い</strong>だけで、<strong>親・半兄妹・祖先の表型</strong>から <strong>EBV 的な補間</strong>が可能、というのが理論側の根拠になりうる</li>
+</ul>
+<h3 id="42">4.2 手法の段階（案）</h3>
+<table>
+<thead>
+<tr>
+<th>段階</th>
+<th>内容</th>
+<th>既存との対応</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A</strong></td>
+<td>6 スロット加権＋種牡馬因子</td>
+<td><code>sire_factor_aptitude</code> / <code>pedigree_factor_table</code></td>
+</tr>
+<tr>
+<td><strong>B</strong></td>
+<td>祖先集合の overlap / λ 合成</td>
+<td><code>pedigree_similarity</code></td>
+</tr>
+<tr>
+<td><strong>C</strong></td>
+<td>レア祖先の <strong>IDF 重み</strong>（共通だがレアな祖先を強調）</td>
+<td>検討中・未実装</td>
+</tr>
+<tr>
+<td><strong>D</strong></td>
+<td>ランダムウォーク / kinship 近似 / 小型 GNN</td>
+<td>検討中・データが揃ってから</td>
+</tr>
+</tbody>
+</table>
+<h3 id="43">4.3 馬場・舞台との結合</h3>
+<ul>
+<li><strong>遺伝 × 環境（G×E）</strong> のように整理すると、<strong>馬場傾向（当日の文脈）</strong>と <strong>血統由来のベース</strong>の <strong>交互作用</strong>として設計しやすい</li>
+<li>既存の <strong>track_bias × 血統勝率</strong> は、その <strong>実装レベルの第一歩</strong></li>
+</ul>
+<hr />
+<h2 id="5-io">5. 任意レース・全頭スコアに向けた I/O 案（ドラフト）</h2>
+<p><strong>入力（案）</strong></p>
+<ul>
+<li><code>race_id</code><br />
+  または <code>date</code> + <code>venue</code> + 条件（芝/ダ/障、距離、馬場区分 など）</li>
+</ul>
+<p><strong>出力（案）</strong></p>
+<table>
+<thead>
+<tr>
+<th>列</th>
+<th>意味</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>horse_id</code></td>
+<td>馬</td>
+</tr>
+<tr>
+<td><code>pedigree_score</code></td>
+<td>血統のみの総合 or 主軸スコア</td>
+</tr>
+<tr>
+<td><code>stage_adjusted_score</code></td>
+<td>当該レース条件での補正後（任意）</td>
+</tr>
+<tr>
+<td><code>components</code></td>
+<td>父系/母系/距離/道悪 等の内訳（JSON 列でも可）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>データ源（案）</strong></p>
+<ul>
+<li>ローカル <code>horse_pedigree_5gen</code> スナップショット  </li>
+<li><code>sire_factor_stats.json</code> / <code>horse_pedigree_factors.parquet</code>  </li>
+<li>当日の <strong>track_bias 特徴</strong>（<code>include_shutuba_entries_without_result</code> 経由の推論用パス）</li>
+</ul>
+<h3 id="51">5.1 ファーストステップ: 母系種牡馬 × 舞台別集計（バッチ）</h3>
+<ul>
+<li><strong>スクリプト</strong>: <code>src/research/build_maternal_stallion_stage_stats.py</code></li>
+<li><strong>入力</strong>: <code>data/local/tables/{年}/race_result_flat.parquet</code>、5 世代血統索引（既定は <code>data/local/horse_pedigree_5gen/**/*.json</code> があれば優先、無ければ <code>KEIBA_PEDIGREE_JSONL_GZ</code> / <code>data/research/_ped_snapshot_cache.jsonl.gz</code>）</li>
+<li><strong>種牡馬の含有範囲（本節）</strong>: 集計に載せる <code>stallion_id</code> は、下記の母系展開で <strong>当馬基準の世代 3〜10 に入るノードに限る</strong>（母系側・最大 10 世代の窓）。<code>data/research/sire_factor_stats.json</code> の <code>sires</code> は（既定の <code>--stallions-only</code> 相当）<strong>その窓内の ID を辞書でさらに絞る</strong>ためのもの。<code>--no-stallions-only</code> を付けると辞書絞りを外し、<strong>同じ窓内</strong>のすべての祖先 <code>horse_id</code> を対象にできる（窓外の父系全体へ広がるわけではない）</li>
+<li><strong>母系</strong>: <code>research/pedigree_similarity.is_maternal_side</code> と同じ二分木定義。世代 3〜10 は、当馬の 5 世代表で母系に含まれるノードをシードとし、各シード祖先の 5 世代表を <strong>当馬基準世代 <code>g + r</code></strong> として数える（最大 5+5=10）。拡張先の 5 世代表は父・母両系を含む（母系 = 母側 subtree 内の全祖先）</li>
+<li><strong>舞台キー</strong>: <code>pipeline/track_bias_pedigree</code> の <code>stage_key</code> に馬場3区分（<code>track_condition_bucket</code>）を連結した <code>full_stage_key</code></li>
+<li><strong>出力</strong>: <code>data/meta/modeling/maternal_stallion_stage_stats.parquet</code> と <code>maternal_stallion_stage_stats_meta.json</code></li>
+<li><strong>年範囲</strong>: <code>--years</code> を省略すると <code>data/local/tables</code> にある <strong>全エクスポート年</strong>の <code>race_result_flat</code> を対象（メタの <code>years_resolved</code> に実際に読んだ年が入る）</li>
+<li><strong>血統 gz</strong>: ローカルに無い場合は <code>--fetch-pedigree</code> で <code>HybridStorage</code> 経由の GCS スナップショット取得を試せる。馬ごとの母系種牡馬集合はメモ化して全年スキャンを高速化</li>
+</ul>
+<pre><code class="language-bash"># ローカルにある全レース結果で集計（リーク許容のファーストステップ想定）
+python3 -m src.research.pedigree.build_maternal_stallion_stage_stats --fetch-pedigree
+
+# 年を絞る例
+python3 -m src.research.pedigree.build_maternal_stallion_stage_stats --years 2024
+</code></pre>
+<h3 id="52-2">5.2 セカンドステップ: 種牡馬祖先グラフ（父・母父の2本）</h3>
+<ul>
+<li><strong>スクリプト</strong>: <code>src/research/build_stallion_ancestor_graph.py</code></li>
+<li><strong>対象</strong>: <code>--from-parquet</code> でファーストステップの <code>stallion_id</code> 一意を読む（省略時は <code>sire_factor_stats</code> の全 <code>sires</code>）</li>
+<li><strong>辺</strong>: 各馬の主馬 5 世代表で <strong>父 (1,0)</strong> と <strong>母父 (2,2)</strong> の <code>horse_id</code> を取り、<strong>祖先 → 子孫</strong> の有向辺を張る（<code>relation</code> は <code>sire</code> / <code>dam_sire</code>）</li>
+<li><strong>親方向の閉包（既定）</strong>: 対象の主馬（Parquet の <code>stallion_id</code> で索引に主馬があるもの）をシードに BFS し、索引に主馬がある限り <strong>各ノードについて父・母父へ再帰的に</strong> 辺を伸ばす。主馬 JSON が無い ID で途切れるまで「上」に辿れる（<code>meta.closure_nodes_processed</code> など）</li>
+<li><strong>フラグ</strong>: <code>--no-expand-parents</code> … 親が対象集合に含まれる辺だけ（閉包内でも親は対象のみ）。<code>--shallow-one-hop</code> … 再帰なしで対象主馬から父・母父へ 1 ホップのみ（旧挙動）</li>
+<li><strong>限界</strong>: ローカル索引に <strong>主馬レコードが無い</strong> <code>stallion_id</code> はシードになれず、他から辿っても主馬が無ければそこで途切れる</li>
+<li><strong>出力</strong>: <code>data/meta/modeling/stallion_tree/graph.json</code>（<code>nodes</code> / <code>edges</code>）、<code>meta.json</code>。<code>--write-html</code> で同ディレクトリに <code>index.html</code>（vis-network。拡大・縮小・等倍・全体表示・物理 ON/OFF・ばね長／文字／辺太さスライダー。テンプレは <code>research/templates/stallion_ancestor_graph_viewer.html</code> をコピー）。閲覧は当該ディレクトリで <code>python3 -m http.server</code> してブラウザから開く（大規模グラフは重くなるので検索・全体表示を利用）</li>
+</ul>
+<pre><code class="language-bash"># 5.1 と同じローカル 5gen シャードを使うときは --pedigree-gz にディレクトリを渡す（省略時は .jsonl.gz のみ）
+python3 -m src.research.pedigree.build_stallion_ancestor_graph \\
+  --from-parquet data/meta/modeling/maternal_stallion_stage_stats.parquet \\
+  --pedigree-gz data/local/horse_pedigree_5gen \\
+  --out-dir data/meta/modeling/stallion_tree --write-html
+</code></pre>
+<h3 id="53">5.3 ファースト／セカンドを踏まえた「種牡馬×舞台ベクトル → 出走馬の得意分野」構築アイデア（検討メモ）</h3>
+<p>以下は <strong>実装前の発想リスト</strong> です。優先度や排他関係は整理していません。組み合わせ・棄却は別途。</p>
+<h4 id="a-mathbfv_s">A. 種牡馬ごとの「舞台ベクトル」 (\mathbf{v}_s) の作り方（ファーストステップ起点）</h4>
+<ul>
+<li><strong>素ベクトル</strong>: <code>full_stage_key</code> ごとの勝率・複勝率・平均着順・着順逆数・（任意）期待値補正を <strong>縦に積んだ長ベクトル</strong>。</li>
+<li><strong>カウント欠損</strong>: 出走数が少ないセルは <strong>グローバル平均への経験ベイズ縮小</strong>、<strong>階層ベイズ</strong>（場→芝ダ→距離帯の階層）、または <strong>近傍舞台プール</strong> で埋める。</li>
+<li><strong>対数・ロジット</strong>: 率は <strong>logit</strong>、着順は <strong>log1p</strong> など <strong>歪みの少ない変換</strong> 後にモデルへ入れる。</li>
+<li><strong>母集団との差分</strong>: 各セルで <strong>全種牡馬平均を引いた残差</strong>（「その舞台での相対スキル」）。</li>
+<li><strong>Robust</strong>: 外れ値に強い <strong>Tukey／Winsorize</strong>、または <strong>median polish</strong>。</li>
+<li><strong>専門性スカラー</strong>: 舞台分布の <strong>エントロピー</strong>（万能型 vs 条件特化型）、<strong>Gini</strong>、<strong>top-k 舞台への質量集中度</strong>。</li>
+<li><strong>多解像度</strong>: 粗い <code>stage_key</code>（馬場・距離のみ）と細い <code>full_stage_key</code> を <strong>別チャネル</strong>で持ち、後段で融合。</li>
+<li><strong>低次元圧縮</strong>: 種牡馬×舞台行列に <strong>PCA / NMF / TruncatedSVD</strong>、または <strong>非負制約</strong>で解釈性を残す。</li>
+<li><strong>行列分解</strong>: (\mathbf{V} \approx \mathbf{B}\mathbf{C})（舞台基底 (\mathbf{B})、種牡馬係数 (\mathbf{c}_s)）で <strong>次元の呪い</strong>を抑える。</li>
+<li><strong>時系列版（学習用）</strong>: レース日以前のみで集計した (\mathbf{v}_s(t))（<strong>リークフリー</strong>）。ファーストステップの全期間版は探索・事前分布用。</li>
+<li><strong>重み付き集計</strong>: クラス・斤量・頭数で <strong>重み付き勝率</strong>（データが取れるなら）。</li>
+</ul>
+<h4 id="b-sire_factor_stats">B. 既存「種牡馬因子」軸との接続（<code>sire_factor_stats</code> 等）</h4>
+<ul>
+<li><strong>マルチタスク</strong>: (\mathbf{v}_s) から <strong>各因子軸を線形／MLP で予測</strong>し、<strong>補助損失</strong>に回す（舞台ベクトルが因子の根拠になる）。</li>
+<li><strong>蒸留</strong>: 因子スコラーを <strong>教師</strong>、舞台ベクトルからの予測を <strong>生徒</strong> とする。</li>
+<li><strong>直交化</strong>: 因子に既に説明される成分を <strong>射影除去</strong> し、残差を「舞台特化スキル」として使う。</li>
+<li><strong>相関制約</strong>: 因子と舞台ベクトルの <strong>相関ペナルティ</strong>（冗長すぎる結合を防ぐ）／逆に <strong>一貫性ペナルティ</strong>（因子と整合）。</li>
+</ul>
+<h4 id="c">C. セカンドステップ（グラフ）の使い方</h4>
+<ul>
+<li><strong>近傍平滑化</strong>: グラフ上で <strong>ラプラシアン平滑化</strong>（隣接種牡馬の (\mathbf{v}) を平均）。</li>
+<li><strong>伝播</strong>: <strong>GraphSAGE / GCN</strong> 風に 1〜2 ホップでメッセージパッシング（データが薄い種牡馬を祖先・近傍で補完）。</li>
+<li><strong>Personalized PageRank</strong>: 特定種牡馬をシードにした <strong>重要度</strong> を、別種牡馬の舞台ベクトルと <strong>内積</strong> して似た舞台嗜好を探す。</li>
+<li><strong>ランダムウォーク埋め込み</strong>: <strong>node2vec / DeepWalk</strong> で低次元座標を得て、舞台ベクトルと <strong>連結</strong> または <strong>乗算</strong>。</li>
+<li><strong>最短経路</strong>: 二種牡馬間の距離を <strong>カーネル</strong>（例: (\exp(-\lambda d))、(d)=最短パス長）にして類似度特徴に。</li>
+<li><strong>辺タイプ分離</strong>: <code>sire</code> と <code>dam_sire</code> を <strong>別隣接行列</strong> として <strong>二部グラフ的</strong>に扱う、または <strong>relation-specific</strong> 重み。</li>
+<li><strong>クラスタ</strong>: グラフ <strong>コミュニティ検出</strong>（Louvain 等）で「血統クラスタ ID」をカテゴリ特徴に。</li>
+</ul>
+<h4 id="d-h-s_h">D. 出走馬 (h) への集約（母系に現れる種牡馬集合 (S_h)）</h4>
+<ul>
+<li><strong>単純</strong>: <strong>平均・最大・最小・log-sum-exp</strong>（どれか一つが強い舞台で効く仮説）。</li>
+<li><strong>世代重み</strong>: <strong>((1/2)^g)</strong> や <strong>線形減衰</strong> で深い祖先を弱める（定義はファーストステップの世代と整合）。</li>
+<li><strong>Attention</strong>: クエリ＝当日レース条件埋め込み、キー・バリュー＝各祖先の (\mathbf{v}_s) で <strong>重み付き和</strong>（どの祖先がその条件で効くか学習）。</li>
+<li><strong>Set Transformer / DeepSets</strong>: 順序なし集合として ** permutation invariant** に集約。</li>
+<li><strong>インブリード</strong>: 同一 (\mathbf{v}_s) が複数回現れる場合の <strong>重み増幅</strong> または <strong>飽和関数</strong>。</li>
+<li><strong>父・母父とのハイブリッド</strong>: 既存の <strong>父・母父スロット</strong> と、母系集合集約を <strong>別チャネル</strong>で足す／ゲートする。</li>
+</ul>
+<h4 id="e-u">E. 当日レース条件 (u) との掛け合わせ（「得意分野」のスカラ／ベクトル化）</h4>
+<ul>
+<li><strong>インデックス抜き</strong>: (\mathbf{v}_h)（集約済み）の <strong>(u) 対応成分だけ</strong>を取り出す（スパースなら高速）。</li>
+<li><strong>内積</strong>: 条件を one-hot／埋め込み (\mathbf{e}_u) にし、(\mathbf{v}_h^\top \mathbf{e}_u) または (\mathbf{v}_h^\top \mathbf{W} \mathbf{e}_u)。</li>
+<li><strong>双線形</strong>: (\mathbf{v}_s^\top \mathbf{W} \mathbf{e}_u) を種牡馬ごとに足す（<strong>低ランク</strong> (\mathbf{W}) でパラメータ抑制）。</li>
+<li><strong>Factorization Machines</strong>: 馬・条件・血統 ID の <strong>2 次交互作用</strong>をまとめて扱う。</li>
+<li><strong>Hadamard</strong>: 二系統のベクトルを <strong>要素積</strong> してから線形層（<strong>同じ舞台インデックス</strong>での相乗効果）。</li>
+<li><strong>カーネル</strong>: RBF 等で ((h,u)) の近傍平滑化。</li>
+</ul>
+<h4 id="f">F. 学習・正則化・安定化</h4>
+<ul>
+<li><strong>L1/L2/Group Lasso</strong>: 舞台グループ（例: 同馬場）単位で <strong>スパース化</strong>。</li>
+<li><strong>Calibration</strong>: Platt / <strong>温度スケール</strong>、場別バイアス補正。</li>
+<li><strong>多タスク</strong>: 着順・複勝・タイム指数を <strong>共有下位層</strong>＋ヘッド分岐。</li>
+<li><strong>ドロップアウト</strong>／<strong>ノイズ注入</strong>（舞台ラベル摂動）で過学習抑制。</li>
+<li><strong>対照学習</strong>: 同馬の異なるレース条件、近い血統の異なる馬、など <strong>正負ペア</strong>。</li>
+</ul>
+<h4 id="g">G. 評価・検証の切り口</h4>
+<ul>
+<li><strong>時系列 split</strong>、<strong>馬単位 hold-out</strong>（近親がリークしない設計）。</li>
+<li><strong>未出走馬サブセット</strong>だけで性能を報告。</li>
+<li><strong>Ablation</strong>: グラフなし／母系集合なし／因子のみ 等。</li>
+<li><strong>校正曲線</strong>・<strong>期待キャリブレーション</strong>（勝率予測の信頼性）。</li>
+</ul>
+<h4 id="h-gcs">H. 実装・運用（GCS をホットにしない）</h4>
+<ul>
+<li><strong>事前計算 Parquet</strong>: 種牡馬×舞台行列、グラフ埋め込み、馬ごとの母系種牡馬 ID リストを <strong>ローカル固定</strong>。</li>
+<li><strong>FeatureStore 登録</strong>: 列指向で <strong>レースキーに join</strong> しやすい形に。</li>
+<li><strong>バージョン</strong>: 集計期間・血統スナップショット日付を <strong>メタに固定</strong>。</li>
+</ul>
+<h4 id="531-json">5.3.1 評価ラボ（実装済み・結果は JSON）</h4>
+<ul>
+<li><strong>特徴モジュール</strong>: <code>src/research/pedigree_stage5_3_features.py</code> … §5.3 A〜E を可能な範囲で数値化（EB・残差・logit・winsor・粗/細 stage・PCA/NMF/SVD・因子平均・グラフ平滑・PPR サブグラフ・最短経路カーネル・連結成分ラベル・双線形/FM/RBF 代理など）</li>
+<li><strong>評価スクリプト</strong>: <code>python3 -m src.research.pedigree.pedigree_stage5_3_eval</code> … 二値「1着」予測、時系列 split（既定: ≤2023 学習、≥2024 テスト）、特徴群 Ablation、馬単位 GroupShuffleSplit</li>
+<li><strong>出力</strong>: <code>data/meta/modeling/pedigree_stage5_3_eval.json</code>（指標・Ablation・補助 R² 等）</li>
+<li><strong>重要（リーク）</strong>: 現行ファーストステップの <strong>種牡馬×舞台</strong> 集計は <strong>全期間・同一レース行を母数に含みうる</strong>ため、本ラボの ROC-AUC は <strong>楽観的に高く出やすい</strong>（探索用）。本番評価では <strong>レース日以前のみ</strong>で種牡馬×舞台ベクトル v_s を再集計する必要がある</li>
+<li><strong>補助指標</strong>: 「舞台 PCA → <code>consistency</code> 因子」の Ridge R²（因子と舞台表現の接続の弱い代理）</li>
+</ul>
+<pre><code class="language-bash">python3 -m src.research.pedigree.pedigree_stage5_3_eval --max-rows 100000
+</code></pre>
+<hr />
+<h2 id="6_1">6. オープンな論点（ブラッシュアップしたいところ）</h2>
+<ul>
+<li>[ ] <strong>「血統得点」の定義</strong>: 回帰のターゲット（複勝確率・着順・タイム指数・独自 race_quality など）をどれに固定するか  </li>
+<li>[ ] <strong>未出走馬の評価</strong>: 検証データで「初出走馬だけ」を切り出した <strong>hold-out</strong> の設計  </li>
+<li>[ ] <strong>5 世代以外</strong>: 10 世代データを入れたときの <strong>スロット設計</strong>と再ビルドコスト  </li>
+<li>[ ] <strong>本番 API</strong>: <code>race_id</code> 1 本で <strong>全頭</strong>を返すエンドポイントをどこに置くか（<code>api/</code> vs バッチ）</li>
+</ul>
+<hr />
+<h2 id="7">7. 関連ファイル（リポジトリ内）</h2>
+<table>
+<thead>
+<tr>
+<th>パス</th>
+<th>役割</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/pipeline/track_bias_pedigree.py</code></td>
+<td>馬場×血統特徴・<code>include_shutuba_entries_without_result</code></td>
+</tr>
+<tr>
+<td><code>src/research/tune_track_bias_weights.py</code></td>
+<td>重みチューニング（v2 JSON）</td>
+</tr>
+<tr>
+<td><code>src/research/pedigree_local_store.py</code></td>
+<td>血統スナップショット・索引・BFS 補助</td>
+</tr>
+<tr>
+<td><code>src/research/pedigree_factor_table.py</code></td>
+<td><code>horse_id</code> × 因子ブレンド Parquet</td>
+</tr>
+<tr>
+<td><code>src/research/pedigree_similarity.py</code></td>
+<td>血統構造類似度</td>
+</tr>
+<tr>
+<td><code>src/research/build_maternal_stallion_stage_stats.py</code></td>
+<td>母系種牡馬 × 舞台別集計（Parquet）</td>
+</tr>
+<tr>
+<td><code>src/research/build_stallion_ancestor_graph.py</code></td>
+<td>種牡馬祖先グラフ JSON / 簡易 HTML 可視化</td>
+</tr>
+<tr>
+<td><code>src/research/pedigree_stage5_3_features.py</code></td>
+<td>§5.3 特徴前計算（評価ラボ）</td>
+</tr>
+<tr>
+<td><code>src/research/pedigree_stage5_3_eval.py</code></td>
+<td>§5.3 精度検証（Logistic + Ablation）</td>
+</tr>
+<tr>
+<td><code>docs/html/modeling/track_bias_pedigree_pipeline.html</code></td>
+<td>馬場×血統パイプライン説明</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8">8. 更新履歴</h2>
+<table>
+<thead>
+<tr>
+<th>日付</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-04-17</td>
+<td>初版（会話内容を統合）</td>
+</tr>
+<tr>
+<td>2026-04-17</td>
+<td>「算出イメージ（図解）」節を追加（Mermaid + ASCII）</td>
+</tr>
+<tr>
+<td>2026-04-17</td>
+<td>5.1 母系種牡馬×舞台集計バッチ（<code>build_maternal_stallion_stage_stats.py</code>）を追記</td>
+</tr>
+<tr>
+<td>2026-04-17</td>
+<td>5.2 種牡馬祖先グラフ（父・母父、<code>build_stallion_ancestor_graph.py</code>）を追記</td>
+</tr>
+<tr>
+<td>2026-04-17</td>
+<td>5.3 種牡馬×舞台ベクトルと出走馬得意分野の構築アイデア一覧を追記</td>
+</tr>
+<tr>
+<td>2026-04-17</td>
+<td>5.3.1 評価ラボ（<code>pedigree_stage5_3_*</code>）と結果 JSON パスを追記</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>このドキュメントは <code>docs/html/modeling/pedigree_stage_research_notes.html</code> に置いています。追記・修正は PR や直接編集でブラッシュアップしてください。</em></p>
+    </article>
+    <nav class="doc-nav">
+      <a href="modeling_coding_strategy.html">← モデリング実装時のコーディング戦略</a>
+      <a href="pre_race_feature_whitelist.html">レース直前特徴量ホワイトリスト →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/pedigree_stage_research_notes.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

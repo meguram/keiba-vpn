@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>モデリング実装時のコーディング戦略 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>モデリング実装時のコーディング戦略</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/modeling_coding_strategy.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">モデリング実装時のコーディング戦略</h1>
+<h2 id="_2">目的</h2>
+<p>このドキュメントは、<code>2020-2025</code> の年次ローカルテーブルと GCS 由来補助データを用いて、<br />
+メモリを極力抑えながら、再現性のあるモデリング基盤を実装するためのコーディング戦略を定義する。</p>
+<p>特に以下を重視する。<br />
+- <code>WSL</code> 上でも安定するメモリ使用量<br />
+- <code>OOF</code> / <code>purged CV</code> / 多段 stage に対応できる中間成果物管理<br />
+- <code>polars</code> を中心に据えた lazy 処理<br />
+- 速度よりもまず「落ちない」「再現できる」「比較できる」実装</p>
+<p>競馬の「レース内での相対順位」予測には <strong>ランキング学習（Learning-to-Rank, LTR）</strong> がよく採用される。<br />
+本書では従来の <strong>点推定（pointwise: 各馬を独立行として logloss 等）</strong> を主軸にしつつ、<strong>LambdaRank 系・最新の LTR・深いアンサンブル・NN</strong> を精度探索の軸として明示する（実装は段階的にブランチを切る）。</p>
+<h2 id="_3">基本方針</h2>
+<h3 id="1-dataframe-polars">1. DataFrame の第一選択は <code>polars</code></h3>
+<ul>
+<li>学習母表の組み立て</li>
+<li>特徴量結合</li>
+<li>集約</li>
+<li>fold ごとの OOF 特徴量生成</li>
+</ul>
+<p>は原則 <code>polars</code> で行う。</p>
+<h3 id="2-pandas">2. <code>pandas</code> は境界面だけで使う</h3>
+<p>以下のような最小限の場面に限定する。<br />
+- LightGBM / CatBoost / XGBoost へ最終入力する直前<br />
+- SHAP や一部可視化ライブラリが <code>pandas</code> を要求する場面<br />
+- 単純な小サイズ CSV 出力</p>
+<h3 id="3-parquet-scan">3. 入力は原則 <code>Parquet + scan</code></h3>
+<p><code>read_parquet()</code> ではなく、まず <code>scan_parquet()</code> を使う。<br />
+必要列だけ <code>select()</code> し、必要行だけ <code>filter()</code> してから <code>collect()</code> する。</p>
+<h3 id="4">4. 中間成果物を積極保存する</h3>
+<p>OOF や stage 出力を毎回再計算しない。</p>
+<p>保存対象:<br />
+- <code>horse_latent_state.parquet</code><br />
+- <code>positioning_features.parquet</code><br />
+- <code>pace_scenario_features.parquet</code><br />
+- <code>day_track_bias_features.parquet</code><br />
+- <code>contextual_bloodline_features.parquet</code><br />
+- <code>horse_probability_table.parquet</code></p>
+<h2 id="_4">推奨ライブラリ構成</h2>
+<h2 id="_5">データ処理</h2>
+<ul>
+<li><code>polars</code></li>
+<li><code>pyarrow</code></li>
+<li><code>duckdb</code>（必要時のみ）</li>
+</ul>
+<h2 id="_6">学習</h2>
+<ul>
+<li><code>lightgbm</code>（回帰・分類に加え <strong><code>lambdarank</code></strong>）</li>
+<li><code>catboost</code>（<strong><code>YetiRank</code></strong> / <strong><code>StochasticRank</code></strong> 等のランキングモード）</li>
+<li><code>xgboost</code>（<strong><code>rank:ndcg</code></strong>, <strong><code>rank:pairwise</code></strong>, <strong><code>rank:map</code></strong>）</li>
+<li><code>scikit-learn</code>（メタ学習・校正・補助回帰）</li>
+</ul>
+<h2 id="_7">ランキング・深層（任意・精度探索ブランチ）</h2>
+<ul>
+<li><code>pytorch</code> または <code>jax</code>（<strong>レース単位 listwise</strong>、スコアヘッド＋ softmax、小規模 MLP / 埋め込み）</li>
+<li>大規模 tabular NN（例: <strong>FT-Transformer</strong> 系）は実装コストとメモリが重いため、<strong>ベースライン確立後</strong>の比較実験として位置づける</li>
+</ul>
+<h2 id="_8">補助</h2>
+<ul>
+<li><code>numpy</code></li>
+<li><code>scipy</code></li>
+</ul>
+<h2 id="_9">ライブラリごとの役割</h2>
+<h3 id="polars"><code>polars</code></h3>
+<ul>
+<li>lazy query</li>
+<li>列選択</li>
+<li>join</li>
+<li>groupby 集約</li>
+<li>fold ごとの特徴量作成</li>
+</ul>
+<h3 id="pyarrow"><code>pyarrow</code></h3>
+<ul>
+<li>schema 管理</li>
+<li>Parquet metadata の取得</li>
+<li>row group / file layout 管理</li>
+</ul>
+<h3 id="duckdb"><code>duckdb</code></h3>
+<p>以下のときのみ使う。<br />
+- 複数年 Parquet をまたぐ ad-hoc 集計<br />
+- SQL 的に書いた方が明らかに読みやすい分析<br />
+- 大規模 segment coverage チェック</p>
+<h2 id="_10">ディレクトリ戦略</h2>
+<h2 id="_11">ソース</h2>
+<ul>
+<li><code>data/local/tables/&lt;year&gt;/*.parquet</code></li>
+</ul>
+<h2 id="_12">モデリング中間成果物</h2>
+<ul>
+<li><code>data/modeling/base/</code></li>
+<li><code>data/modeling/features/</code></li>
+<li><code>data/modeling/oof/</code></li>
+<li><code>data/modeling/calibration/</code></li>
+<li><code>data/modeling/backtest/</code></li>
+</ul>
+<h2 id="_13">実験メタデータ</h2>
+<ul>
+<li><code>data/meta/modeling/</code></li>
+</ul>
+<h2 id="_14">推奨ファイル分割</h2>
+<ul>
+<li><code>base_horse_dataset_2020_2025.parquet</code></li>
+<li><code>baseline_v1.parquet</code></li>
+<li><code>extended_v1.parquet</code></li>
+<li><code>oof_fold_1_target_encoding.parquet</code></li>
+<li><code>oof_fold_1_positioning.parquet</code></li>
+<li><code>oof_fold_1_final_probabilities.parquet</code></li>
+</ul>
+<h2 id="_15">メモリ節約の原則</h2>
+<h2 id="1">1. 必要列だけ読む</h2>
+<p>悪い例:</p>
+<pre><code class="language-python">df = pl.read_parquet(&quot;race_shutuba_flat.parquet&quot;)
+</code></pre>
+<p>良い例:</p>
+<pre><code class="language-python">df = (
+    pl.scan_parquet(&quot;race_shutuba_flat.parquet&quot;)
+    .select([
+        &quot;race_id&quot;, &quot;date&quot;, &quot;venue_code&quot;, &quot;surface&quot;, &quot;distance&quot;,
+        &quot;horse_number&quot;, &quot;horse_id&quot;, &quot;jockey_id&quot;, &quot;trainer_id&quot;,
+        &quot;weight&quot;, &quot;weight_change&quot;
+    ])
+    .collect()
+)
+</code></pre>
+<h2 id="2">2. 必要年だけ読む</h2>
+<p>年をまたぐ時も全件 <code>collect()</code> しない。</p>
+<pre><code class="language-python">lf = pl.concat([
+    pl.scan_parquet(f&quot;data/local/tables/{y}/race_shutuba_flat.parquet&quot;)
+    for y in years
+])
+</code></pre>
+<h2 id="3-fold-materialize">3. 必要 fold だけ materialize する</h2>
+<ul>
+<li>全 fold 分の OOF を一度に作らない</li>
+<li><code>fold_1</code> を作って保存</li>
+<li>メモリ解放</li>
+<li><code>fold_2</code> を作る</li>
+</ul>
+<h2 id="4_1">4. 型を落とす</h2>
+<ul>
+<li>確率・連続量: <code>Float32</code></li>
+<li>count・flag: <code>Int8 / Int16 / UInt16</code></li>
+<li>rank: <code>UInt16</code></li>
+<li>カテゴリ ID: <code>Int32</code></li>
+<li>長い文字列は可能なら辞書化 or id 化</li>
+</ul>
+<h2 id="5-python">5. Python ループを避ける</h2>
+<ul>
+<li><code>groupby().agg()</code> を優先</li>
+<li><code>with_columns()</code> で複数列をまとめて作る</li>
+<li><code>map_elements()</code> は最後の手段</li>
+</ul>
+<h2 id="6-join">6. 巨大 join を避ける</h2>
+<p>母表に全部一気に join しない。</p>
+<p>順番:<br />
+1. 母表の最小列を作る<br />
+2. <code>race_index</code> を join<br />
+3. 保存<br />
+4. <code>past aggregate</code> を join<br />
+5. 保存</p>
+<h2 id="7">7. 生テキストを展開しない</h2>
+<ul>
+<li><code>comment</code> や <code>paddock_comment</code> を全文保持した巨大 DataFrame を学習用に持たない</li>
+<li>スコア化・presence flag 化してから捨てる</li>
+</ul>
+<h2 id="polars_1"><code>polars</code> 実装パターン</h2>
+<h2 id="1_1">1. 母表生成</h2>
+<pre><code class="language-python">base = (
+    pl.concat([
+        pl.scan_parquet(f&quot;data/local/tables/{y}/race_shutuba_flat.parquet&quot;)
+        for y in years
+    ])
+    .select([
+        &quot;race_id&quot;, &quot;date&quot;, &quot;venue_code&quot;, &quot;venue&quot;, &quot;surface&quot;, &quot;distance&quot;,
+        &quot;direction&quot;, &quot;grade&quot;, &quot;race_class&quot;, &quot;field_size&quot;,
+        &quot;horse_number&quot;, &quot;horse_id&quot;, &quot;horse_name&quot;,
+        &quot;jockey_id&quot;, &quot;trainer_id&quot;, &quot;weight&quot;, &quot;weight_change&quot;,
+        &quot;sire&quot;, &quot;dam_sire&quot;
+    ])
+)
+</code></pre>
+<h2 id="2-sparse">2. sparse テーブル結合</h2>
+<pre><code class="language-python">paddock = (
+    pl.concat([
+        pl.scan_parquet(f&quot;data/local/tables/{y}/race_paddock_flat.parquet&quot;)
+        for y in years
+    ])
+    .select([&quot;race_id&quot;, &quot;horse_number&quot;, &quot;paddock_rank&quot;, &quot;paddock_comment&quot;])
+    .with_columns([
+        pl.lit(1).alias(&quot;has_paddock&quot;),
+    ])
+)
+
+joined = base.join(
+    paddock,
+    on=[&quot;race_id&quot;, &quot;horse_number&quot;],
+    how=&quot;left&quot;,
+)
+</code></pre>
+<h2 id="3-race-rank-z-score">3. race 内 rank / z-score</h2>
+<pre><code class="language-python">df = df.with_columns([
+    pl.col(&quot;speed_max&quot;)
+      .rank(&quot;ordinal&quot;)
+      .over(&quot;race_id&quot;)
+      .alias(&quot;speed_rank_in_race&quot;),
+    (
+        (pl.col(&quot;speed_max&quot;) - pl.col(&quot;speed_max&quot;).mean().over(&quot;race_id&quot;)) /
+        (pl.col(&quot;speed_max&quot;).std().over(&quot;race_id&quot;) + 1e-6)
+    ).alias(&quot;speed_z_in_race&quot;),
+])
+</code></pre>
+<h2 id="oof">OOF 特徴量の生成戦略</h2>
+<h2 id="1-target-encoding">1. target encoding</h2>
+<p>方針:<br />
+- split manifest に従って fold ごとに train / valid を分ける<br />
+- train 側だけでカテゴリ平均を作る<br />
+- valid 側へ map<br />
+- 結果を <code>oof_fold_x_*.parquet</code> に保存</p>
+<h2 id="2-stage">2. stage モデル出力</h2>
+<p><code>PositioningModel</code>, <code>PaceScenarioModel</code>, <code>DayTrackBiasModel</code>, <code>ContextualBloodlineFitModel</code> の出力は、必ず OOF 保存する。</p>
+<p>例:<br />
+- <code>data/modeling/oof/fold_1_positioning.parquet</code><br />
+- <code>data/modeling/oof/fold_1_pace.parquet</code><br />
+- <code>data/modeling/oof/fold_1_final_prob.parquet</code></p>
+<h2 id="3-calibration">3. calibration</h2>
+<ul>
+<li>OOF 予測を集めた 1 本の calibration 用テーブルを作る</li>
+<li>calibration 用テーブルだけ <code>pandas</code> / <code>numpy</code> に落としてもよい</li>
+</ul>
+<h2 id="_16">学習器ごとの実装戦略</h2>
+<h2 id="lightgbm">LightGBM</h2>
+<ul>
+<li>最終入力は <code>float32</code> / <code>int32</code></li>
+<li><code>categorical_feature</code> を活かせる列は integer id にして渡す</li>
+<li>ただし OOF target encoding 後の列は数値扱い</li>
+<li>学習用 matrix は fold 単位で生成し、不要になったら即解放</li>
+<li><strong>ランキング</strong>: <code>objective="lambdarank"</code> に <strong><code>label_gain</code></strong>（relevance レベルごとの gain）と <strong><code>group</code></strong>（各レースの行数）を指定。監視に <strong><code>eval_at=[3,5]</code></strong> 等で NDCG@k を併記すると比較が楽</li>
+</ul>
+<h2 id="catboost">CatBoost</h2>
+<ul>
+<li>高カードカテゴリは CatBoost の強み</li>
+<li>文字列カテゴリをそのまま渡すか、辞書 id を渡す</li>
+<li>ただし巨大 DataFrame を <code>pandas</code> に一気に変換しない</li>
+<li>fold 単位で <code>Pool</code> を組み立てる</li>
+<li><strong>ランキング</strong>: <code>loss_function</code> に <strong><code>YetiRank</code></strong> / <strong><code>StochasticRank</code></strong> / <strong><code>QueryCrossEntropy</code></strong> 等（公式の ranking 系一覧を参照）、<strong><code>group_id=race_id</code></strong> でクエリを指定</li>
+</ul>
+<h2 id="xgboost">XGBoost</h2>
+<ul>
+<li><code>QuantileDMatrix</code> を優先</li>
+<li>dense <code>float64</code> 行列を避ける</li>
+<li><strong>ランキング</strong>では <code>objective=rank:ndcg</code>（または <code>rank:pairwise</code> / <code>rank:map</code>）と、クエリごとの行数 <strong><code>group</code></strong> を必ず指定する</li>
+</ul>
+<hr />
+<h2 id="ltr">ランキング学習（LTR）と競馬タスクの相性</h2>
+<ul>
+<li><strong>クエリ（query）</strong> = 1 レース <code>race_id</code> に属する出走馬の集合（可変長）。</li>
+<li><strong>ドキュメント</strong> = 各馬の特徴ベクトル（<code>T-10分</code> までに観測可能な列のみ）。</li>
+<li><strong>関連度（relevance）</strong> = 確定着順や複勝圏から定義した非負整数／実数（例: 1着を最高、失格・除外は別ルールで 0 扱い等）。</li>
+</ul>
+<p><strong>Pointwise</strong>（各行に <code>is_win</code> を当てる）は実装が単純で馬券用の確率校正とも親和性が高い。<br />
+一方で <strong>Listwise / Pairwise</strong> は「同レース内の順序」を直接損失に入れるため、<strong>上位捕捉（NDCG@3）や順位形状</strong>に強いことが多い。</p>
+<p>本プロジェクトでは両方を <strong>同一の purged CV / race 単位 split</strong> の下で比較可能にする（<code>train_valid_test_split_strategy.html</code> と整合）。</p>
+<hr />
+<h2 id="lambdarank-gbdt">古典〜標準: LambdaRank と GBDT ランキング</h2>
+<h3 id="lambdarank-lambdamart">LambdaRank / LambdaMART</h3>
+<ul>
+<li><strong>LambdaRank</strong>: 勾配を NDCG の変化に重み付けした近似（ペアを動かしたときの評価指標改善を強調）。</li>
+<li><strong>LambdaMART</strong>: その勾配で MART（GBDT）を学習する枠組み。</li>
+<li><strong>LightGBM</strong>: <code>objective="lambdarank"</code> と <strong><code>label_gain</code></strong>（relevance レベルごとの gain 配列）、<strong><code>group</code></strong> で listwise 学習が可能。</li>
+<li>メモリ: <code>group</code> は <code>numpy</code> 配列で渡すことが多い → <strong>レース単位で fold materialize</strong> し、学習直前だけ行列化する。</li>
+</ul>
+<h3 id="xgboost_1">XGBoost のランキング目的関数</h3>
+<ul>
+<li><code>rank:ndcg</code> … NDCG を意識した pairwise 近似（報告しやすい）。</li>
+<li><code>rank:pairwise</code> … シンプルなペアワイズ（高速・ベースライン比較用）。</li>
+<li><code>rank:map</code> … 平均精度（上位重視の別解釈）。</li>
+</ul>
+<h3 id="catboost_1">CatBoost のランキング</h3>
+<ul>
+<li><strong><code>YetiRank</code></strong>、<strong><code>StochasticRank</code></strong>、<strong><code>QueryCrossEntropy</code></strong>、<strong><code>LambdaMart</code></strong> など（CatBoost 公式 <em>Ranking: objectives and metrics</em> 参照）。高カードカテゴリと併用しやすい。</li>
+<li><strong><code>group_id=race_id</code></strong> でクエリを指定し、同一レース内でペア／リスト損失を構成させる。</li>
+</ul>
+<h3 id="relevance">relevance 設計の例（実装メモ）</h3>
+<ul>
+<li>着順ベース: <code>relevance = max_rank + 1 - finish_position</code>（着外は一定の低値にクリップ）。</li>
+<li>複勝重視: 3着以内を同タイルに寄せる、または top3 にボーナスを付けた多段 relevance。</li>
+<li><strong>将来情報の混入禁止</strong>: relevance は <strong>確定結果ラベル</strong>のみで定義し、特徴側に結果由来の列を入れない（二重チェック）。</li>
+</ul>
+<hr />
+<h2 id="_17">拡張: 目的関数・学習枠の幅を広げる試み</h2>
+<p>精度向上の探索として、次を <strong>同一 CV プロトコル</strong>で ablation しやすい順に並べる。</p>
+<ol>
+<li>
+<p><strong>ListNet / ListMLE 型（NN または近似）</strong><br />
+   レース内スコア <code>s_i</code> に対し <code>P(順序) ∝ softmax</code> の負の対数尤度（ListMLE）や確率分布 KL（ListNet）。<br />
+   小規模なら <strong>レース単位バッチ</strong>（<code>batch_size=1 race</code>、馬数可変）の MLP で試せる。</p>
+</li>
+<li>
+<p><strong>Pairwise 深層（RankNet 系）</strong><br />
+   馬ペア <code>(i,j)</code> を同一レース内で生成し、<code>σ(s_i - s_j)</code> と真の勝敗ラベルの cross-entropy。<br />
+   メモリ注意: ペア数は <code>O(field^2)</code> → <strong>上位馬同士・サンプリング</strong>で削る。</p>
+</li>
+<li>
+<p><strong>Multi-task</strong><br />
+   同一バックボーンから <strong>pointwise head</strong>（BCE / focal）と <strong>ranking head</strong>（pairwise hinge）を併用し、損失を <code>L = L_point + λ L_rank</code> で結合。馬券用確率は pointwise 側を校正しやすい。</p>
+</li>
+<li>
+<p><strong>Tabular 深層（NN 線を残す）</strong><br />
+   - <strong>埋め込み</strong>: <code>horse_id</code> / <code>jockey_id</code> / <code>trainer_id</code> を hash embedding（出現頻度で次元調整）。<br />
+   - <strong>FT-Transformer / TabTransformer</strong>: 列をトークン化して self-attention。精度ポテンシャルは高いが <strong>fold ごとの学習コスト</strong>が大きい → <code>extended_v1</code> 確定後の「伸ばし」候補。<br />
+   - <strong>蒸留</strong>: 強いランカーまたは大きい NN のスコアを、LightGBM pointwise / lambdarank に <strong>知識蒸留</strong>（教師スコアを追加ターゲットまたはソフトラベル）。</p>
+</li>
+<li>
+<p><strong>確率とランキングの橋渡し</strong><br />
+   - ランカー出力スコア → レース内 <strong>softmax で疑似確率</strong> → 温度スケールで校正（valid のみ fit）。<br />
+   - <strong>Plackett–Luce</strong> 等の順序モデルは実装コストが高いが理論的に listwise と整合。まずは softmax 近似で十分なことが多い。</p>
+</li>
+<li>
+<p><strong>研究寄り・長期オプション</strong>（優先度は低め）<br />
+   - <strong>LambdaLoss</strong> 一般形や、オークション理論に基づく損失などは文献単位で検討。<br />
+   - <strong>Determinantal Point Process (DPP)</strong> で多様性を入れる等は馬券最適化層に近い。</p>
+</li>
+</ol>
+<hr />
+<h2 id="_18">アンサンブルの「層」を深くする（許容設計）</h2>
+<p>浅い平均ブレンドだけでなく、<strong>層状スタッキング</strong>を許容する。例:</p>
+<table>
+<thead>
+<tr>
+<th>層</th>
+<th>中身</th>
+<th>備考</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>L1a</td>
+<td>LightGBM / CatBoost / XGBoost <strong>pointwise</strong>（<code>is_win</code> / <code>is_top3</code>）</td>
+<td>現行方針の主戦力</td>
+</tr>
+<tr>
+<td>L1b</td>
+<td>LightGBM <strong>lambdarank</strong>、CatBoost <strong>YetiRank</strong>、XGBoost <strong>rank:ndcg</strong></td>
+<td>同一特徴でも順序目的で別視点</td>
+</tr>
+<tr>
+<td>L1c</td>
+<td><strong>NN</strong>（listwise または score + softmax、multi-task）</td>
+<td>メモリ・再現性のコストが高いので fold 単位 checkpoint</td>
+</tr>
+<tr>
+<td>L2</td>
+<td><strong>OOF 上のメタ特徴</strong>（L1 各モデルの予測・順位・レース内 z-score）を入力とした <strong>浅い GBDT / ロジスティック</strong></td>
+<td>valid でのみ学習、test では L1 の OOF 手順を固定</td>
+</tr>
+<tr>
+<td>L3</td>
+<td><strong>ランキング再ブレンド</strong>（Borda / 順位平均 + L2 出力の凸結合）や <strong>セグメント別重み</strong>（芝・ダ・頭数帯）</td>
+<td>過学習に注意し、重みは valid のみ</td>
+</tr>
+</tbody>
+</table>
+<p>実装原則:<br />
+- <strong>各層の OOF を Parquet 保存</strong>し、上の層は下の層の保存物だけを読む（再計算禁止に近い運用）。<br />
+- <strong>test には一切メタを fit しない</strong>（<code>advanced_modeling_techniques.html</code> と同じ）。</p>
+<hr />
+<h2 id="ltr-polars">LTR 導入時の <code>polars</code> / メモリとの両立</h2>
+<ul>
+<li>relevance・<code>group</code>（各 race の行数）列は <strong><code>polars</code> で母表に付与</strong>してから、学習直前に <code>numpy</code> に落とす。</li>
+<li><strong>可変長クエリ</strong>は、学習 API ごとに <code>group</code> 配列または <code>group_id</code> 列で表現。巨大なペア展開テーブルはディスクに書かず、<strong>DataLoader 内で on-the-fly 生成</strong>（NN）を推奨。</li>
+<li><strong>型</strong>: relevance は <code>Int16</code> 程度で足りることが多い。<code>label_gain</code> は事前に固定長配列として定義しておくと LightGBM 側が単純。</li>
+</ul>
+<hr />
+<h2 id="_19">ランキング用の評価指標（ログに必ず残す）</h2>
+<ul>
+<li><strong>NDCG@k</strong>（k=1,3,5 など）、<strong>MAP</strong>、レース内 <strong>Kendall τ</strong>（順序一致度）。</li>
+<li>馬券・校正との接続のため、<strong>pointwise の LogLoss / Brier / ECE</strong> も併記（LayerA 確率の品質監査）。</li>
+</ul>
+<h2 id="_20">校正の実装戦略</h2>
+<ul>
+<li><code>OOF predictions + labels</code> だけを集めた小さな calibration テーブルを作る</li>
+<li><code>isotonic</code> はメモリより overfit に注意</li>
+<li>初期版は <code>temperature scaling</code> と <code>Platt</code> を優先</li>
+</ul>
+<h2 id="stage">stage ごとの実装指針</h2>
+<h2 id="stage0-stage1">Stage0 / Stage1</h2>
+<ul>
+<li><code>polars</code> で母表を作る</li>
+<li>まず <code>BaselineV1</code> を保存</li>
+<li>次に <code>ExtendedV1</code> を差分生成</li>
+</ul>
+<h2 id="stage2-stage3">Stage2 / Stage3</h2>
+<ul>
+<li>学習データ構築は <code>polars</code></li>
+<li>モデル学習直前だけ <code>pandas</code> / <code>numpy</code></li>
+<li>出力は fold 単位保存</li>
+</ul>
+<h2 id="stage4-stage5">Stage4 / Stage5</h2>
+<ul>
+<li>同日先行レース集計は <code>polars.groupby</code></li>
+<li>同日 posterior はレースごとに更新するが、1 日単位の小さいテーブルで扱う</li>
+<li>血統ベクトルは事前計算して Parquet 化しておく</li>
+</ul>
+<h2 id="stage6">Stage6</h2>
+<ul>
+<li>入力は stage 出力を join した最終特徴量テーブル</li>
+<li><code>OOF final probabilities</code> を正式成果物にする（<strong>pointwise 主系</strong>）</li>
+<li><strong>（任意）</strong> 同一特徴から <strong>ランキング OOF</strong>（<code>lambdarank</code> / <code>YetiRank</code> / <code>rank:ndcg</code>）を別 Parquet で保存し、メタ層または softmax 疑似確率の比較材料にする</li>
+</ul>
+<h2 id="mlflow">MLflow による学習記録（必須運用）</h2>
+<p>確率モデル・ランキング枝・アンサンブル・（将来の）校正前後の比較まで、<strong>学習ジョブごとに MLflow に記録</strong>する。ローカル運用でも <strong>Tracking URI</strong> を固定し、実験名でモデル種別を分ける。</p>
+<h3 id="_21">最低限ログに残すタグ / パラメータ</h3>
+<ul>
+<li><code>split_manifest_version</code>, <code>data_version</code>, <code>encoding_recipe_version</code>, <code>feature_list_hash</code>（または列数）</li>
+<li><code>git_commit</code> / <code>code_version</code>（CI ならビルド ID）</li>
+<li><code>primary_metric</code> 名と <code>study_id</code>（Optuna 等を接続したとき）</li>
+<li><code>model_family</code>（例: <code>lgbm_pointwise</code>, <code>lgbm_lambdarank</code>, <code>ensemble_stack</code>）</li>
+</ul>
+<h3 id="_22">アーティファクト</h3>
+<ul>
+<li>学習に用いた <strong>特徴量リスト</strong>（テキスト or YAML）</li>
+<li><strong>採用ハイパラ</strong> JSON、<strong>重要度</strong>（gain）が取れるモデルでは CSV</li>
+<li>可能なら <strong>OOF 予測のサンプル Parquet</strong>（容量に応じて）</li>
+</ul>
+<p>既存コードでは <code>src/pipeline/trainer.py</code> / <code>src/pipeline/ensemble_trainer.py</code> / <code>src/pipeline/pace_predictor.py</code> 等が MLflow 連携を持つ。<strong>新規 runner を追加するときも同パターンに揃える</strong>こと。</p>
+<h2 id="_23">再現性・比較可能性</h2>
+<h2 id="_24">必ず保存するもの</h2>
+<ul>
+<li>使用列一覧</li>
+<li>dtypes</li>
+<li>split manifest version</li>
+<li>encoding recipe version</li>
+<li>stage model version</li>
+<li>calibration recipe version</li>
+<li>feature count</li>
+<li>row count</li>
+<li><strong>mlflow_experiment_name</strong> / <strong>mlflow_run_id</strong>（追跡 URL とセット）</li>
+</ul>
+<h2 id="_25">命名規則</h2>
+<ul>
+<li><code>baseline_v1_fold1.parquet</code></li>
+<li><code>extended_v1_fold1.parquet</code></li>
+<li><code>oof_te_recipe_a_fold1.parquet</code></li>
+<li><code>final_prob_lgbm_catboost_blend_fold1.parquet</code></li>
+<li><code>oof_fold1_lgbm_lambdarank_ndcg3.parquet</code></li>
+<li><code>oof_fold1_catboost_yetirank.parquet</code></li>
+<li><code>meta_stack_l2_from_l1a_l1b_oof.parquet</code></li>
+<li><code>nn_listwise_fold1_checkpoint.pt</code></li>
+</ul>
+<h2 id="_26">やらないこと</h2>
+<ul>
+<li>全年全列を <code>pandas</code> に一括ロード</li>
+<li><code>read_parquet()</code> だけで巨大テーブルを都度 materialize</li>
+<li>全 fold を同時にメモリ上に保持</li>
+<li>stage 出力を保存せず毎回再計算</li>
+<li>生テキストや nested list をそのまま最終学習行列へ入れる</li>
+<li><strong>L2/L3 メタ学習やランキング→確率の温度スケールを test で fit する</strong>（valid または OOF のみ）</li>
+</ul>
+<h2 id="_27">推奨実装順</h2>
+<ol>
+<li><code>polars</code> ベースの母表 builder</li>
+<li>fold 単位 OOF runner</li>
+<li>target encoding recipe runner</li>
+<li>stage 出力保存 runner</li>
+<li>final probability runner（<strong>pointwise 主系</strong>で安定版を確保）</li>
+<li><strong>（任意）</strong> LTR ブランチ: relevance / <code>group</code> 生成 → LightGBM <code>lambdarank</code> と CatBoost <code>YetiRank</code> の <strong>同一 CV 比較</strong></li>
+<li><strong>（任意）</strong> L2 メタ学習（L1 pointwise + L1 rank の OOF のみ入力）</li>
+<li><strong>（任意）</strong> NN listwise / multi-task（<code>extended_v1</code> と purged CV が固まってから）</li>
+<li>calibration runner</li>
+<li>backtest dataset runner</li>
+</ol>
+    </article>
+    <nav class="doc-nav">
+      <a href="hyperparameter_tuning_workflow.html">← ハイパーパラメータ・モデル選定のチューニング工程</a>
+      <a href="pedigree_stage_research_notes.html">血統・馬場傾向・研究方針メモ（ブラッシュアップ用） →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/modeling_coding_strategy.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

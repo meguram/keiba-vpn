@@ -1,7 +1,7 @@
 """
 5 世代目の種牡馬ノードに **各馬の 5 世代血統** を接木し、主馬から最大深さ 10 の祖先表を組み立てるためのヘルパ。
 
-設計の正: ``docs/modeling/horse_pedigree_10gen_merge_design.md``
+設計の正: ``docs/html/modeling/horse_pedigree_10gen_merge_design.html``
 
 座標写像・アンカー抽出・枝の連結と path 重複（主表優先）を提供する。枝 JSON の取得は呼び出し側
 （``data/local/horse_pedigree_5gen`` 等）で行う。

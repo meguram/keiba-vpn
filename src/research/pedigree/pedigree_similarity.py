@@ -52,7 +52,7 @@ GENERATION_ROWSPAN = {16: 1, 8: 2, 4: 3, 2: 4, 1: 5}
 # 完全な 5 世代 2 進血統表の牡スロット数（世代 g では 2^(g-1) 頭の牡）= 1+2+4+8+16
 MALE_PEDIGREE_SLOTS_5GEN = 31
 
-OUTPUT_DIR = Path(__file__).resolve().parents[3] / "data" / "research" / "pedigree_similarity"
+OUTPUT_DIR = Path(__file__).resolve().parents[3] / "data" / "local" / "research" / "pedigree_similarity"
 
 
 # ═══════════════════════════════════════════════════
@@ -400,7 +400,7 @@ def collect_sire_ids_from_embeddings() -> dict[str, dict]:
     """sire_embeddings.json から種牡馬名と産駒数を取得。"""
     embed_path = (
         Path(__file__).resolve().parents[3]
-        / "data" / "research" / "bloodline_vector" / "sire_embeddings.json"
+        / "data" / "local" / "research" / "bloodline_vector" / "sire_embeddings.json"
     )
     if not embed_path.exists():
         logger.error("sire_embeddings.json が見つかりません")

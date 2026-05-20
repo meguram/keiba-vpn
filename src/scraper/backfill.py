@@ -61,8 +61,8 @@ from src.utils.keiba_logging import script_basic_config
 script_basic_config(handlers=[logging.StreamHandler()])
 logger = logging.getLogger("scraper.backfill")
 
-PROGRESS_PATH = Path("data/meta/backfill_progress.json")
-LOCK_DIR = Path("data/meta/backfill_locks")
+PROGRESS_PATH = Path("data/local/meta/backfill_progress.json")
+LOCK_DIR = Path("data/local/meta/backfill_locks")
 
 DEFAULT_START_YEAR = 2020
 MAX_DATES_PER_RUN = 10

@@ -56,8 +56,8 @@ logger = logging.getLogger("scrape_shutuba_pedigree")
 
 TABLES_DIR     = _ROOT / "data" / "local" / "tables"
 LOCAL_PED_DIR  = _ROOT / "data" / "local" / "horse_pedigree_5gen"
-STATUS_PATH    = _ROOT / "data" / "meta" / "shutuba_pedigree_status.json"
-MISSING_PATH   = _ROOT / "data" / "meta" / "shutuba_missing_pedigree.json"
+STATUS_PATH    = _ROOT / "data" / "local" / "meta" / "shutuba_pedigree_status.json"
+MISSING_PATH   = _ROOT / "data" / "local" / "meta" / "shutuba_missing_pedigree.json"
 PED_URL        = "https://db.netkeiba.com/horse/ped/{horse_id}/"
 
 _HTTP_404_STREAK_LIMIT = 5
@@ -320,7 +320,7 @@ def phase1(*, workers: int = 2, dry_run: bool = False) -> int:
 
 
 # ── ancestor_index.json 再構築 ────────────────────────────────
-ANCESTOR_INDEX_PATH = _ROOT / "data" / "research" / "ancestor_index.json"
+ANCESTOR_INDEX_PATH = _ROOT / "data" / "local" / "research" / "ancestor_index.json"
 
 
 def rebuild_ancestor_index() -> None:

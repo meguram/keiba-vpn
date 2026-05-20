@@ -637,8 +637,14 @@ class ScraperRunner:
 
     # ── 馬情報 (2ページ分の HTML を個別にアーカイブ) ──────────
 
-    def scrape_horse(self, horse_id: str, skip_existing: bool = True,
-                     with_history: bool = True) -> dict | None:
+    def scrape_horse(
+        self,
+        horse_id: str,
+        skip_existing: bool = True,
+        with_history: bool = True,
+        *,
+        skip_pedigree: bool = False,
+    ) -> dict | None:
         if skip_existing and self.storage.exists("horse_result", horse_id):
             logger.info("スキップ (既存): horse_result/%s", horse_id)
             return self.storage.load("horse_result", horse_id)
@@ -655,12 +661,15 @@ class ScraperRunner:
                 self.archive.save("horse_result_html", horse_id, result_html)
 
             ped_html = None
-            try:
-                ped_url = self.HORSE_PED_URL.format(horse_id=horse_id)
-                ped_html = self.client.fetch(ped_url)
-                self.archive.save("horse_ped", horse_id, ped_html)
-            except Exception as e:
-                logger.debug("血統ページ取得失敗 [%s]: %s", horse_id, e)
+            if not skip_pedigree:
+                try:
+                    ped_url = self.HORSE_PED_URL.format(horse_id=horse_id)
+                    ped_html = self.client.fetch(ped_url)
+                    self.archive.save("horse_ped", horse_id, ped_html)
+                except Exception as e:
+                    logger.debug("血統ページ取得失敗 [%s]: %s", horse_id, e)
+            else:
+                logger.debug("血統ページ取得スキップ [%s] (skip_pedigree)", horse_id)
 
             data = self.horse_parser.parse(
                 html, horse_id=horse_id,

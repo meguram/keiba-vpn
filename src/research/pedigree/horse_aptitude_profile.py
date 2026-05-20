@@ -56,9 +56,9 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-ART = ROOT / "data/research/bloodline_meta_cluster"
-HORSE_AT = ROOT / "data/research/horse_aptitude"
-CATS_PATH = ROOT / "data/research/pedigree_race_index/horse_pedigree_cats.parquet"
+ART = ROOT / "data/page_reference/note_aptitude_race"
+HORSE_AT = ROOT / "data/local/research/horse_aptitude"
+CATS_PATH = ROOT / "data/page_reference/pedigree_race_index/horse_pedigree_cats.parquet"
 
 
 def _position_weight(gen: int, path_fm: str) -> float:

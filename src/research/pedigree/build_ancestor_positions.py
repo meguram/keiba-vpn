@@ -27,7 +27,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[3]
-ART = ROOT / "data/research/bloodline_meta_cluster"
+ART = ROOT / "data/page_reference/note_aptitude_race"
 
 FEAT_COLS = [
     "win_v_東京", "win_v_中山", "win_v_阪神", "win_v_京都", "win_v_中京",

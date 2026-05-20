@@ -92,15 +92,15 @@ def materialize_layout(
 
     ref_candidates = [
         ("research_pedigree_race_index_race_result_slim",
-         root / "data" / "research" / "pedigree_race_index" / "race_result_slim.parquet"),
+         root / "data" / "local" / "research" / "pedigree_race_index" / "race_result_slim.parquet"),
         ("research_pedigree_race_index_horse_pedigree_cats",
-         root / "data" / "research" / "pedigree_race_index" / "horse_pedigree_cats.parquet"),
+         root / "data" / "local" / "research" / "pedigree_race_index" / "horse_pedigree_cats.parquet"),
         ("knowledge_track_speed_baselines",
-         root / "data" / "knowledge" / "track_speed_baselines.parquet"),
+         root / "data" / "local" / "knowledge" / "track_speed_baselines.parquet"),
         ("knowledge_track_speed_pace_baselines",
-         root / "data" / "knowledge" / "track_speed_pace_baselines.parquet"),
+         root / "data" / "local" / "knowledge" / "track_speed_pace_baselines.parquet"),
     ]
-    ts_dir = root / "data" / "analysis" / "track_speed"
+    ts_dir = root / "data" / "local" / "analysis" / "track_speed"
     if ts_dir.is_dir():
         tsd = ref_dir / "track_speed_races"
         tsd.mkdir(parents=True, exist_ok=True)

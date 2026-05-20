@@ -31,8 +31,8 @@ from src.utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger("research.pedigree.bloodline_vector_l2")
 
-META_DIR = Path("data/research/bloodline_meta_cluster")
-OUT_DIR = Path("data/research/bloodline_vector/v2_l2")
+META_DIR = Path("data/page_reference/note_aptitude_race")
+OUT_DIR = Path("data/page_reference/bloodline_vector/v2_l2")
 
 
 # ─────────────────────────────────────────────────────

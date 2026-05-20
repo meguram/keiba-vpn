@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>血統×馬場傾向（track_bias_pedigree）パイプライン — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>血統×馬場傾向（track_bias_pedigree）パイプライン</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/track_bias_pedigree_pipeline.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="track_bias_pedigree">血統×馬場傾向（track_bias_pedigree）パイプライン</h1>
+<h2 id="_1">目的</h2>
+<p>当日・前日の馬場傾向（芝/ダ・場・発走順）と、出馬表の父・母父の芝/ダ別累計勝率を組み合わせた <strong>リークなし</strong> 特徴を LayerA に付与する。<br />
+<strong>5世代血統グラフや GCS の <code>horse_pedigree_5gen</code> は本パイプラインの必須ではない</strong>（後述）。</p>
+<h2 id="gcs">データフロー（GCS 負荷を抑える）</h2>
+<table>
+<thead>
+<tr>
+<th>段階</th>
+<th>データ源</th>
+<th>アクセス</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>特徴計算</td>
+<td><code>data/local/tables/&lt;年&gt;/race_result_flat.parquet</code></td>
+<td><strong>ローカルのみ</strong></td>
+</tr>
+<tr>
+<td>血統名</td>
+<td><code>race_shutuba_flat</code> の <code>sire</code> / <code>dam_sire</code></td>
+<td><strong>ローカルのみ</strong></td>
+</tr>
+<tr>
+<td>母表</td>
+<td><code>src/pipeline/layer_a_dataset.py</code> → <code>data/modeling/layer_a_train.parquet</code></td>
+<td>ローカル</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>学習・チューニング・評価</strong>はすべて上記 Parquet を読むだけで完結する。推論時も同様に、当日以前の <code>race_result</code> と出馬表で同じ式を再現する。</li>
+<li><strong>5世代血統（HTML/GCS）</strong>を使うのは <code>src/research/pedigree_similarity.py</code> など別系統であり、馬場傾向予測の必須入力ではない。必要な場合は <strong>一度だけバッチ取得 → <code>data/local/</code> またはローカルキャッシュに保存し、以降は再フェッチしない</strong> 方針を推奨する。</li>
+</ul>
+<h2 id="vs">重みチューニング（当日 vs 前日 + 馬場区分 + 距離帯）</h2>
+<p>加重合成は次の通り（<code>src/pipeline/track_bias_pedigree.py</code>）。</p>
+<ul>
+<li><strong>当日/前日ブレンド</strong>: <code>w_same × 当日該当レース前 + w_prev × 前日</code>（<code>w_same + w_prev = 1</code>）。既定は 0.75 / 0.25。</li>
+<li><strong>馬場適性（3 区分）</strong>: <code>race_result.track_condition</code> を <strong>良</strong> → <code>good</code>、<strong>稍重・重</strong> → <code>yielding_soft</code>、<strong>不良</strong> → <code>heavy_bad</code> に割り当て。<code>track_bias_winner_3f_same_day_prior</code> / <code>prev_day</code> に <strong>区分別の乗算重み</strong>（チューニングで決定、グループ内で平均 1 に正規化）。</li>
+<li><strong>舞台（競馬場 + 芝/ダ/障 + 距離帯）</strong>: <code>venue</code> + <code>surface</code>（芝/ダ/<code>障</code>→ obstacle）+ <code>distance</code> から距離帯（≤1400 sprint、≤1800 mile、≤2200 middle、それ以外 long）を付与。傾向集計は <strong>日×場×芝ダ障×馬場3区分×距離4帯</strong> の細キーで計算し、欠損は <strong>日×場×芝ダ障</strong> の粗キーでフォールバック。<code>track_bias_*</code> 列への距離帯別乗算重みもチューニング対象（4 帯で平均 1 に正規化、<code>unknown</code> は 1.0）。</li>
+</ul>
+<p>チューニング出力 JSON は <strong><code>version</code>: 2</strong> で、<code>best_same_day_weight</code> / <code>best_prev_day_weight</code> に加え <code>cond_multipliers</code> / <code>dist_multipliers</code> を含む。v1（当日/前日のみ）も <code>load_track_bias_weights_config</code> で読み込める。</p>
+<ol>
+<li><strong>馬場区分・距離帯列付き</strong>で LayerA を再ビルドする（古い Parquet には列が無い）。<br />
+<code>python3 -m src.pipeline.build_layer_a_dataset</code></li>
+<li>Optuna で valid の <strong>NDCG@3</strong> を最大化（GCS 不要）。<br />
+<code>python3 -m src.research.race.tune_track_bias_weights --n-trials 60</code></li>
+<li>出力 <code>data/meta/modeling/track_bias_weight_best.json</code> を母表ビルドに渡す。<br />
+<code>python3 -m src.pipeline.build_layer_a_dataset --track-bias-weights-json data/meta/modeling/track_bias_weight_best.json</code></li>
+<li>血統×馬場のみの検証（任意）。<br />
+<code>python3 -m src.research.race.evaluate_track_bias_pedigree_only --weights-json data/meta/modeling/track_bias_weight_best.json</code></li>
+</ol>
+<p><strong>test メトリクス</strong>（<code>metrics_test_at_best</code>）を JSON に載せたい場合は、マニフェストの test 年（例: 2025）を <code>--years</code> に含めて母表をビルドすること。train+valid のみの Parquet では test はスキップされる。</p>
+<p>チューニングの目的関数は <strong>valid のみ</strong>とし、test は最終報告用（リーク回避）。</p>
+<h2 id="_2">手法の伸ばし方（優先度の目安）</h2>
+<ol>
+<li><strong>重みの最適化</strong>（上記）— 当日/前日・馬場 3 区分・距離 4 帯のデータ駆動調整。</li>
+<li><strong>5世代血統</strong>— 父・母父名の一致を超えた類似度が必要な場合のみ、ローカルキャッシュ済みの系譜グラフを別特徴として結合（本モジュールとは独立に管理し、GCS をホットパスに置かない）。</li>
+</ol>
+<h2 id="_3">関連モジュール</h2>
+<ul>
+<li><code>src/pipeline/track_bias_pedigree.py</code> — 特徴定義・加重ブレンド・<code>recompute_weighted_interactions</code></li>
+<li><code>src/research/tune_track_bias_weights.py</code> — Optuna</li>
+<li><code>src/research/evaluate_track_bias_pedigree_only.py</code> — 単独特徴群のベースライン評価</li>
+</ul>
+    </article>
+    <nav class="doc-nav">
+      <a href="staged_probability_pipeline.html">← 多段階レース直前確率パイプライン設計</a>
+      <a href="train_valid_test_split_strategy.html">Train / Valid / Test 分割戦略（レース直前確率モデル） →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/track_bias_pedigree_pipeline.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

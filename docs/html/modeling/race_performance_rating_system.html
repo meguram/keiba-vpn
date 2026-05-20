@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>レースパフォーマンス算出システム設計 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>レースパフォーマンス算出システム設計</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/race_performance_rating_system.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">レースパフォーマンス算出システム設計</h1>
+<h2 id="_2">目的</h2>
+<p>このドキュメントは、過去レースごとに</p>
+<ul>
+<li>各馬の <code>そのレースでのパフォーマンス値</code></li>
+<li>レース自体の <code>レースレベル</code></li>
+</ul>
+<p>を、機械学習モデルの前段で利用できるようにロジックベースで算出する仕組みを定義する。</p>
+<p>ここで作りたいのは「単純な着順の置き換え」ではなく、<br />
+<strong>異なるレース間で比較可能な、能力・条件・相手関係をならした指標</strong> である。</p>
+<p>例:<br />
+- 同じ <code>2着</code> でも、相手が強いレースの 2着は高く評価したい<br />
+- 同じ <code>1.0秒差</code> でも、短距離と長距離では意味が違う<br />
+- 勝ち馬の <code>着差</code> は、流して勝っている可能性があるため、そのまま能力差とはみなしたくない</p>
+<h2 id="_3">基本方針</h2>
+<h3 id="1">1. 指標を分離する</h3>
+<p>以下を混ぜずに別指標として持つ。</p>
+<ul>
+<li><code>RunPerformance</code></li>
+<li>その馬がそのレースでどれだけ強い走りをしたか</li>
+<li><code>RaceLevel</code></li>
+<li>そのレースのメンバー水準がどれくらい高かったか</li>
+<li><code>TrackVariant</code></li>
+<li>その日の馬場・時計の出やすさ</li>
+<li><code>PaceDifficulty</code></li>
+<li>そのレースの展開が時計や着差に与えた歪み</li>
+</ul>
+<h3 id="2">2. 時点を分ける</h3>
+<p>レースレベルは 1 本ではなく、用途別に 2 本持つ。</p>
+<ul>
+<li><code>RaceLevel_PreRace</code></li>
+<li>そのレース時点までの情報だけで推定した相手レベル</li>
+<li>将来リークなし</li>
+<li><code>RaceLevel_Retrospective</code></li>
+<li>後続レースでの出世・賞金増・重賞実績まで見て安定化したレースレベル</li>
+<li>学習用データ作成・教師信号の精緻化向け</li>
+</ul>
+<p>この 2 本を分けることで、<br />
+- 将来予測に使う特徴量<br />
+- 過去レースのラベル品質向上</p>
+<p>の両方に対応できる。</p>
+<h3 id="3">3. 着順だけでなく走破時計と相手関係を使う</h3>
+<p>最終的な <code>RunPerformance</code> は、次の 4 ブロックを合成して作る。</p>
+<ul>
+<li><code>TimeFigure</code></li>
+<li><code>MarginAdjustment</code></li>
+<li><code>WeightAdjustment</code></li>
+<li><code>RaceLevelAdjustment</code></li>
+</ul>
+<h2 id="_4">システム全体像</h2>
+<div class="mermaid">flowchart TD
+    rawRace[RawRaceResultAndCard] --> trackVariant[TrackVariant]
+    rawRace --> baselineTime[BaselineTimeModel]
+    rawRace --> paceShape[PaceShapeModel]
+    rawRace --> preRaceLevel[RaceLevelPreRace]
+    rawRace --> retroRaceLevel[RaceLevelRetrospective]
+    baselineTime --> timeFigure[TimeFigure]
+    trackVariant --> timeFigure
+    paceShape --> marginAdj[MarginAdjustment]
+    preRaceLevel --> runPerf[RunPerformance]
+    retroRaceLevel --> runPerf
+    timeFigure --> runPerf
+    marginAdj --> runPerf
+    weightAdj[WeightAdjustment] --> runPerf</div>
+<h2 id="1_1">1. 出力指標</h2>
+<h2 id="11">1.1 馬ごとの指標</h2>
+<h3 id="run_performance_raw"><code>run_performance_raw</code></h3>
+<p>生の総合パフォーマンス値。<br />
+後段で平滑化・再標準化する前の値。</p>
+<h3 id="run_performance_final"><code>run_performance_final</code></h3>
+<p>最終採用値。<br />
+同一時代内で比較しやすいように平滑化・標準化したもの。</p>
+<h3 id="time_figure"><code>time_figure</code></h3>
+<p>走破時計ベースで見た能力値。</p>
+<h3 id="margin_adjusted_figure"><code>margin_adjusted_figure</code></h3>
+<p>着差・勝ち馬緩め補正込みの能力差値。</p>
+<h3 id="weight_adjusted_figure"><code>weight_adjusted_figure</code></h3>
+<p>斤量補正を反映した能力差値。</p>
+<h3 id="pace_adjusted_figure"><code>pace_adjusted_figure</code></h3>
+<p>展開補正を反映した能力差値。</p>
+<h3 id="field_strength_contrib"><code>field_strength_contrib</code></h3>
+<p>相手レベルに由来する補正分。</p>
+<h2 id="12">1.2 レースごとの指標</h2>
+<h3 id="race_level_pre_race"><code>race_level_pre_race</code></h3>
+<p>出走時点までの馬情報だけで見積もったレースレベル。</p>
+<h3 id="race_level_retrospective"><code>race_level_retrospective</code></h3>
+<p>後年の出世・賞金・重賞実績まで反映した安定版レースレベル。</p>
+<h3 id="track_variant"><code>track_variant</code></h3>
+<p>日付 × 競馬場 × surface ごとの馬場差。</p>
+<h3 id="pace_shape_class"><code>pace_shape_class</code></h3>
+<p>ハイ / ミドル / スロー、または消耗 / 持続 / 瞬発などの展開分類。</p>
+<h3 id="race_uncertainty"><code>race_uncertainty</code></h3>
+<p>そのレースの評価信頼度。<br />
+少頭数・新馬・出走馬情報不足・極端な不利が多い等で高くする。</p>
+<h2 id="2_1">2. 中核ロジック</h2>
+<h2 id="21-timefigure">2.1 ベースタイムから作る <code>TimeFigure</code></h2>
+<h3 id="_5">考え方</h3>
+<p>ユーザー案にある通り、まずクラス別・条件別に基準パフォーマンス値を置く。<br />
+ただしクラスだけでは荒いので、最低でも以下で層別する。</p>
+<ul>
+<li>競馬場</li>
+<li>芝/ダート</li>
+<li>距離</li>
+<li>クラス帯</li>
+<li>馬場状態</li>
+<li>開催 era</li>
+</ul>
+<h3 id="_6">推奨ベースキー</h3>
+<p><code>venue_code x surface x distance_bucket x class_group x track_condition x venue_era</code></p>
+<h3 id="_7">ベースタイムの作り方</h3>
+<p>各キーについて、基準走破時計を推定する。</p>
+<p>候補:<br />
+- 2着馬平均<br />
+- 1-3着平均<br />
+- 上位3頭の trimmed mean</p>
+<p>推奨:<br />
+- <strong>1-3着平均を基本</strong><br />
+- ただし極端な外れ race は除外</p>
+<p>理由:<br />
+- 勝ち馬単独だと流し勝ちの影響を受ける<br />
+- 2着単独だと展開で割を食うケースがある<br />
+- 1-3着平均がいちばん安定しやすい</p>
+<h3 id="_8">定義イメージ</h3>
+<p><code>time_figure_base = scale(distance_bucket) * (baseline_time - adjusted_finish_time)</code></p>
+<p>ここで <code>adjusted_finish_time</code> は<br />
+- track variant<br />
+- 斤量<br />
+- 極端な当日馬場差</p>
+<p>を先に補正した後の走破時計。</p>
+<h2 id="22-marginadjustment">2.2 着差補正 <code>MarginAdjustment</code></h2>
+<h3 id="_9">ユーザー案の採用</h3>
+<ul>
+<li>着差は能力差と整合させる</li>
+<li>ただし勝ち馬の着差はそのまま使わない</li>
+<li>距離レンジごとに着差の意味を変える</li>
+</ul>
+<h3 id="_10">推奨方法</h3>
+<p>着差を <code>秒</code> に統一し、距離帯別に <code>1 performance point あたり何秒か</code> を別管理する。</p>
+<h3 id="_11">距離帯</h3>
+<ul>
+<li>sprint: ～1400</li>
+<li>mile: 1400-1800</li>
+<li>intermediate: 1800-2200</li>
+<li>long: 2200-2800</li>
+<li>extended: 2800+</li>
+</ul>
+<h3 id="_12">例</h3>
+<p><code>margin_points = margin_seconds / seconds_per_point(distance_band)</code></p>
+<p>ここで<br />
+- sprint は <code>seconds_per_point</code> を小さく<br />
+- long は大きく</p>
+<p>する。</p>
+<h3 id="_13">勝ち馬の緩め補正</h3>
+<p>勝ち馬だけは、後続との差をそのまま能力差とみなさず、圧縮する。</p>
+<p>推奨:<br />
+- 1着馬に対する margin 補正は <code>sqrt</code> か <code>log1p</code> 圧縮<br />
+- 2着以下は線形寄り</p>
+<p>例:<br />
+- 1着馬: <code>winner_margin_points = alpha * log1p(margin_seconds / sec_per_point)</code><br />
+- 2着以下: <code>loser_margin_points = margin_seconds / sec_per_point</code></p>
+<h3 id="_14">追加で考えるべきこと</h3>
+<ul>
+<li>ハナ / アタマ / クビ などの着差表記の秒換算ルール</li>
+<li>同着</li>
+<li>落馬・競走中止・失格の扱い</li>
+</ul>
+<h2 id="23-weightadjustment">2.3 斤量補正 <code>WeightAdjustment</code></h2>
+<h3 id="_15">ユーザー案の採用</h3>
+<ul>
+<li>1kg = 約0.2秒近い影響を考慮</li>
+<li>距離で変化</li>
+<li>牝馬の性差斤量を基準に吸収</li>
+</ul>
+<h3 id="_16">推奨方法</h3>
+<p>斤量は絶対値ではなく、<code>条件内基準斤量との差</code> で扱う。</p>
+<p>まず <code>normalized_weight</code> を定義する。</p>
+<ul>
+<li>牡馬 58kg</li>
+<li>牝馬 56kg</li>
+</ul>
+<p>を同等に見るため、<br />
+<code>sex_allowance_reference</code> を使って <code>sex-adjusted carried weight</code> を作る。</p>
+<h3 id="_17">例</h3>
+<ul>
+<li>牡馬 58kg -&gt; 58</li>
+<li>牝馬 56kg -&gt; 58</li>
+<li>牝馬 54kg -&gt; 56</li>
+</ul>
+<h3 id="_18">重み係数</h3>
+<p><code>kg_to_seconds(distance)</code></p>
+<p>を距離の線形関数として置く。</p>
+<p>例:<br />
+- sprint: 0.14 sec/kg<br />
+- mile: 0.17 sec/kg<br />
+- intermediate: 0.20 sec/kg<br />
+- long: 0.24 sec/kg</p>
+<h3 id="_19">補正値</h3>
+<p><code>weight_adjustment_seconds = (normalized_weight - reference_weight_for_race) * kg_to_seconds(distance_band)</code></p>
+<h2 id="24-trackvariant">2.4 馬場差 <code>TrackVariant</code></h2>
+<h3 id="_20">ユーザー案の採用</h3>
+<ul>
+<li>日によって時計が出る / 出ない</li>
+<li>1-3着平均などから日次補正する</li>
+</ul>
+<h3 id="_21">推奨方法</h3>
+<p>既存の <code>src/research/track_speed.py</code> を基礎にする。</p>
+<p>このコードは<br />
+- 条件別ベースタイム<br />
+- 2着タイムベース<br />
+- 馬の能力偏差を反復推定</p>
+<p>で日別馬場差を作る設計になっている。</p>
+<p>今回のレースパフォーマンスでは、これを <code>track_variant</code> の基礎値として流用しつつ、<br />
+最終的には <code>1-3着平均</code> と <code>フィールド強度補正</code> をあわせて使う。</p>
+<h3 id="_22">追加改善</h3>
+<ul>
+<li>同日同場同 surface の前半レースだけで intraday drift を補正</li>
+<li>クッション値・含水率がある期間は prior として使う</li>
+<li>track_condition はカテゴリ、track_variant は連続量として両方保持</li>
+</ul>
+<h2 id="25-paceshapeadjustment">2.5 ペース・展開補正 <code>PaceShapeAdjustment</code></h2>
+<p>これはユーザー案には明示されていないが、強く追加したい要素。</p>
+<p>同じ時計・着差でも、<br />
+- 超ハイペースで差し決着<br />
+- ドスロー前残り</p>
+<p>では能力評価の意味が違う。</p>
+<h3 id="_23">推奨方法</h3>
+<ul>
+<li><code>pace_predictor</code></li>
+<li><code>race_quality_model</code></li>
+<li>ラップ実績</li>
+</ul>
+<p>から、レースを<br />
+- 消耗<br />
+- 持続<br />
+- 瞬発</p>
+<p>に分類する。</p>
+<h3 id="_24">補正の考え方</h3>
+<ul>
+<li>ハイペースで先行して粘った馬は加点</li>
+<li>ドスローで後方から届かなかった馬は減点しすぎない</li>
+<li>瞬発戦で上がり優位を見せた馬は加点</li>
+</ul>
+<h2 id="26-racelevel">2.6 相手レベル <code>RaceLevel</code></h2>
+<p>ここが本題。</p>
+<h3 id="racelevel-1-2">RaceLevel は 1 本ではなく 2 本持つ</h3>
+<h4 id="a-race_level_pre_race">A. <code>race_level_pre_race</code></h4>
+<p>そのレース時点までの情報だけで作る。</p>
+<p>主な入力:<br />
+- 出走馬の直近 <code>run_performance_final</code><br />
+- キャリア勝率 / 複勝率<br />
+- 同条件成績<br />
+- 獲得賞金<br />
+- クラス昇降履歴<br />
+- 騎手・厩舎の OOF 強さ</p>
+<p>推奨:<br />
+- 出走馬上位 3 頭の事前能力平均<br />
+- 出走馬全体平均<br />
+- 上位/全体の blend</p>
+<p>例:<br />
+<code>race_level_pre_race = 0.6 * mean(top3 entrant_rating) + 0.4 * mean(all entrant_rating)</code></p>
+<h4 id="b-race_level_retrospective">B. <code>race_level_retrospective</code></h4>
+<p>後続の戦績まで見て、そのレースに出た馬が後でどれだけ出世したかを反映する。</p>
+<p>主な入力:<br />
+- レース後 180日 / 365日 / 730日 の獲得賞金<br />
+- 重賞出走・重賞好走<br />
+- 後続レースの <code>run_performance_final</code><br />
+- 勝ち上がり頭数</p>
+<h3 id="_25">未来情報の扱い</h3>
+<p>ここが大事。</p>
+<ul>
+<li>学習用に <code>過去レースの質ラベル</code> を作るときは、<code>retrospective</code> を使ってよい</li>
+<li>未来予測の特徴量に入れるときは、<code>pre_race</code> しか使ってはいけない</li>
+</ul>
+<p>つまり<br />
+- <code>teacher-quality</code><br />
+- <code>feature-quality</code></p>
+<p>を分ける。</p>
+<h2 id="27-runperformance">2.7 最終 <code>RunPerformance</code> 合成</h2>
+<p>最終的に各馬のそのレースでの値を次のように合成する。</p>
+<p><code>run_performance_raw =</code></p>
+<ul>
+<li><code>a * time_figure</code></li>
+<li><code>+ b * margin_adjustment</code></li>
+<li><code>+ c * weight_adjustment</code></li>
+<li><code>+ d * pace_adjustment</code></li>
+<li><code>+ e * race_level_adjustment</code></li>
+<li><code>+ f * trouble_adjustment</code></li>
+</ul>
+<h3 id="_26">補足</h3>
+<ul>
+<li><code>race_level_adjustment</code> は、弱い相手に 2着した馬を下げ、強い相手に 2着した馬を上げる役目</li>
+<li><code>trouble_adjustment</code> は次項</li>
+</ul>
+<h2 id="3_1">3. ユーザー案以外に考えるべきこと</h2>
+<h2 id="31">3.1 不利・ロス補正</h2>
+<p>明示テキストがあるなら重要。</p>
+<p>例:<br />
+- 出遅れ<br />
+- 不利<br />
+- 前が壁<br />
+- 外を回す<br />
+- 直線詰まる</p>
+<p>最初は難しいので<br />
+- 通過順<br />
+- 上がり<br />
+- 枠順</p>
+<p>から proxy を作るでもよい。</p>
+<h2 id="32">3.2 少頭数 / 多頭数補正</h2>
+<p>少頭数の 2着とフルゲートの 2着は意味が違う。</p>
+<p>対策:<br />
+- <code>field_size_factor</code><br />
+- 小頭数戦は <code>race_uncertainty</code> を上げる</p>
+<h2 id="33">3.3 新馬・未勝利の信頼度</h2>
+<p>戦績が少ない馬ばかりのレースでは、当時点の <code>pre_race</code> レベルは不安定。</p>
+<p>対策:<br />
+- <code>race_uncertainty</code><br />
+- retrospective で安定化</p>
+<h2 id="34">3.4 年齢・時期による成長曲線</h2>
+<p>2歳・3歳春は能力変動が大きい。</p>
+<p>対策:<br />
+- <code>age_phase</code><br />
+- <code>month_from_birth_season_proxy</code><br />
+- 2歳戦は retrospective への依存を少し高める</p>
+<h2 id="35">3.5 距離変更・転戦ローテ</h2>
+<ul>
+<li>前走 1200 → 今回 1800</li>
+<li>ダート→芝</li>
+</ul>
+<p>は比較が難しい。</p>
+<p>対策:<br />
+- 距離帯変更ペナルティ<br />
+- surface switch uncertainty</p>
+<h2 id="36">3.6 当日位置取り有利不利</h2>
+<p>同じ 2着でも、<br />
+- 先行有利日に差して 2着<br />
+- 差し有利日に先行して 2着</p>
+<p>では評価が違う。</p>
+<p>対策:<br />
+- day bias を使って逆風好走を加点</p>
+<h2 id="37">3.7 レースの成立性</h2>
+<p>超スローで実質上がりだけのレースは、能力比較として不安定。</p>
+<p>対策:<br />
+- <code>race_uncertainty</code><br />
+- <code>pace_shape_class</code></p>
+<h2 id="4">4. 実装戦略</h2>
+<h2 id="phase1">Phase1: 基礎指標を作る</h2>
+<h3 id="_27">出力</h3>
+<ul>
+<li><code>track_variant_daily.parquet</code></li>
+<li><code>baseline_time_table.parquet</code></li>
+<li><code>weight_adjustment_table.parquet</code></li>
+<li><code>distance_band_margin_scale.json</code></li>
+</ul>
+<h3 id="_28">処理</h3>
+<ol>
+<li>条件別ベースタイムを作る</li>
+<li>日次馬場差を作る</li>
+<li>距離帯別の秒→performance 変換係数を作る</li>
+<li>斤量→秒換算テーブルを作る</li>
+</ol>
+<h2 id="phase2-performance">Phase2: レース単位の performance を作る</h2>
+<h3 id="_29">出力</h3>
+<ul>
+<li><code>race_run_performance.parquet</code></li>
+</ul>
+<h3 id="_30">粒度</h3>
+<ul>
+<li><code>race_id + horse_number</code></li>
+</ul>
+<h3 id="_31">必須列</h3>
+<ul>
+<li><code>race_id</code></li>
+<li><code>race_date</code></li>
+<li><code>horse_id</code></li>
+<li><code>horse_number</code></li>
+<li><code>finish_position</code></li>
+<li><code>adjusted_finish_time</code></li>
+<li><code>time_figure</code></li>
+<li><code>margin_adjustment</code></li>
+<li><code>weight_adjustment</code></li>
+<li><code>pace_adjustment</code></li>
+<li><code>run_performance_raw</code></li>
+<li><code>run_performance_final</code></li>
+<li><code>race_uncertainty</code></li>
+</ul>
+<h2 id="phase3">Phase3: レースレベルを作る</h2>
+<h3 id="_32">出力</h3>
+<ul>
+<li><code>race_level_pre_race.parquet</code></li>
+<li><code>race_level_retrospective.parquet</code></li>
+</ul>
+<h3 id="_33">粒度</h3>
+<ul>
+<li><code>race_id</code></li>
+</ul>
+<h3 id="_34">必須列</h3>
+<ul>
+<li><code>race_id</code></li>
+<li><code>race_date</code></li>
+<li><code>venue_code</code></li>
+<li><code>surface</code></li>
+<li><code>distance</code></li>
+<li><code>class_group</code></li>
+<li><code>race_level_pre_race</code></li>
+<li><code>race_level_retrospective</code></li>
+<li><code>race_uncertainty</code></li>
+</ul>
+<h2 id="phase4">Phase4: 馬の履歴サマリへ落とす</h2>
+<h3 id="_35">出力</h3>
+<ul>
+<li><code>horse_performance_history.parquet</code></li>
+<li><code>horse_performance_snapshot.parquet</code></li>
+</ul>
+<h3 id="_36">内容</h3>
+<ul>
+<li>直近 1-5 走の <code>run_performance_final</code></li>
+<li>同条件平均</li>
+<li>強レース好走率</li>
+<li>弱レース取りこぼし率</li>
+</ul>
+<h2 id="5">5. 推奨成果物</h2>
+<ul>
+<li><code>docs/html/modeling/race_performance_rating_system.html</code></li>
+<li><code>data/meta/modeling/race_performance_coefficients.json</code></li>
+<li><code>data/meta/modeling/race_level_definition.json</code></li>
+<li><code>data/processed/race_run_performance.parquet</code></li>
+<li><code>data/processed/race_level_pre_race.parquet</code></li>
+<li><code>data/processed/race_level_retrospective.parquet</code></li>
+<li><code>data/processed/horse_performance_snapshot.parquet</code></li>
+</ul>
+<h2 id="6">6. 最初の実装優先順</h2>
+<ol>
+<li>ベースタイム</li>
+<li>track variant</li>
+<li>距離帯別 margin scale</li>
+<li>斤量補正</li>
+<li>run_performance_raw</li>
+<li>race_level_pre_race</li>
+<li>race_level_retrospective</li>
+<li>horse_performance_snapshot</li>
+</ol>
+<h2 id="7">7. この設計の利点</h2>
+<ul>
+<li>「2着」の意味をレース間で比較できる</li>
+<li>強い相手に負けたレースを高く評価できる</li>
+<li>将来リークあり / なしを用途で分けて管理できる</li>
+<li>後続の機械学習モデルに、着順ではなく質の高い履歴特徴を渡せる</li>
+</ul>
+<h2 id="8-2025-test">8. 実測ベンチマーク (2025 test)</h2>
+<h2 id="81">8.1 実装</h2>
+<p>本設計の最小実装として、以下を追加した。</p>
+<ul>
+<li>生成器:</li>
+<li><code>src/pipeline/race_performance.py</code></li>
+<li>評価スクリプト:</li>
+<li><code>src/research/evaluate_race_performance_signal.py</code></li>
+<li>評価結果:</li>
+<li><code>data/meta/modeling/race_performance_eval.json</code></li>
+</ul>
+<p>生成済みの <code>data/features/snapshots/race_performance_2020_2025.parquet</code> を使い、<br />
+各馬の過去 <code>run_performance_final</code> 系履歴だけから 2025 年の着順寄与を検証した。</p>
+<h2 id="82">8.2 評価条件</h2>
+<h3 id="_37">検証プロトコル</h3>
+<p>最新版の評価方針は次の通りとする。</p>
+<ul>
+<li><code>2020-2024</code></li>
+<li>学習用の過去履歴整備期間</li>
+<li>パフォーマンス値の算出自体には最新版ロジックを使う</li>
+<li>学習用の履歴母集団としては、過去のレースパフォーマンスが十分に安定している前提で用いる</li>
+<li><code>2025</code></li>
+<li>純粋な評価期間</li>
+<li><code>future_horizon_days=0</code> の <strong>当日算出ロジック</strong></li>
+<li>つまり将来成績を見ない <code>online_safe</code> な指標だけで予測寄与を測る</li>
+</ul>
+<p>この方針により、</p>
+<ul>
+<li>学習側では十分な履歴の厚みを持たせる</li>
+<li>評価側では将来リークなしの実運用条件に合わせる</li>
+</ul>
+<p>という両立を狙う。</p>
+<h3 id="_38">学習データ</h3>
+<ul>
+<li>train: <code>2020-2024</code></li>
+<li>test: <code>2025</code></li>
+</ul>
+<h3 id="_39">使用特徴</h3>
+<p>パフォーマンス値由来だけに限定した。</p>
+<ul>
+<li><code>perf_last1</code></li>
+<li><code>perf_last2</code></li>
+<li><code>perf_avg3</code></li>
+<li><code>perf_avg5</code></li>
+<li><code>perf_avg10</code></li>
+<li><code>perf_best5</code></li>
+<li><code>perf_std5</code></li>
+<li><code>perf_stdscore_last1</code></li>
+<li><code>perf_stdscore_avg5</code></li>
+<li><code>perf_pct_last1</code></li>
+<li><code>perf_pct_avg5</code></li>
+<li><code>time_fig_avg5</code></li>
+<li><code>margin_fig_avg5</code></li>
+<li><code>pace_fig_avg5</code></li>
+<li><code>perf_trend_last1_vs_avg5</code></li>
+<li><code>perf_same_surface_avg5</code></li>
+<li><code>perf_same_distance_avg5</code></li>
+<li><code>race_level_gap_avg5</code></li>
+<li><code>horse_pre_rating_pre_race</code></li>
+<li><code>field_relative_pre_rating</code></li>
+<li><code>field_top3_gap</code></li>
+<li><code>n_prev_runs</code></li>
+<li>欠損フラグ群</li>
+</ul>
+<h3 id="_40">比較対象</h3>
+<ul>
+<li>単純ヒューリスティック</li>
+<li><code>0.45 * perf_avg5 + 0.25 * perf_last1 + 0.15 * perf_same_surface_avg5 + 0.15 * perf_same_distance_avg5</code></li>
+<li>LightGBM</li>
+<li><code>is_win</code></li>
+<li>LightGBM</li>
+<li><code>is_top3</code></li>
+</ul>
+<h3 id="_41">補足</h3>
+<ul>
+<li><code>distance</code> / <code>surface</code> の一部欠損は <code>race_shutuba_flat</code> から補完して評価した</li>
+<li><code>race_level_retrospective</code> は future-aware のため評価特徴量には使っていない</li>
+<li>評価スクリプトは <code>online_safe</code> な列だけを使っている</li>
+<li>通常運用の <code>pipeline.features.race_performance.py</code> も <code>future_horizon_days=0</code> がデフォルト</li>
+</ul>
+<h2 id="83">8.3 結果</h2>
+<h3 id="_42">ランダム基準</h3>
+<ul>
+<li>2025 平均頭数: <code>13.86</code></li>
+<li>race 内ランダム top1 的中率: <code>0.0766</code></li>
+<li>race 内ランダム top1-&gt;top3 率: <code>0.2299</code></li>
+</ul>
+<h3 id="_43">単純ヒューリスティック</h3>
+<ul>
+<li><code>top1_hit_rate = 0.1166</code></li>
+<li><code>top1_top3_rate = 0.2860</code></li>
+<li><code>ndcg3_win = 0.2227</code></li>
+<li><code>ndcg3_top3 = 0.2822</code></li>
+<li><code>mrr_win = 0.2910</code></li>
+</ul>
+<h3 id="lightgbm-is_win">LightGBM (<code>is_win</code>)</h3>
+<ul>
+<li><code>auc = 0.7197</code></li>
+<li><code>logloss = 0.2398</code></li>
+<li><code>top1_hit_rate = 0.2214</code></li>
+<li><code>top1_top3_rate = 0.4941</code></li>
+<li><code>ndcg3_win = 0.3825</code></li>
+<li><code>ndcg3_top3 = 0.4392</code></li>
+<li><code>mrr_win = 0.4193</code></li>
+</ul>
+<h3 id="lightgbm-is_top3">LightGBM (<code>is_top3</code>)</h3>
+<ul>
+<li><code>auc = 0.7154</code></li>
+<li><code>logloss = 0.4739</code></li>
+<li><code>top1_hit_rate = 0.2324</code></li>
+<li><code>top1_top3_rate = 0.5190</code></li>
+<li><code>ndcg3_win = 0.3948</code></li>
+<li><code>ndcg3_top3 = 0.4537</code></li>
+<li><code>mrr_win = 0.4293</code></li>
+</ul>
+<h2 id="84">8.4 解釈</h2>
+<h3 id="_44">結論</h3>
+<p>最終版では、<code>run_performance</code> 系の履歴だけでも、<br />
+<strong>2025 年の race-wise top1 的中率を 23% 前後まで押し上げられた</strong>。</p>
+<p>これはランダム基準 <code>7.66%</code> に対して約 <code>3.0倍</code> であり、<br />
+「この指標群だけで単独の予測信号として成立している」と判断してよい。</p>
+<p>しかもこの数値は、<code>2025</code> 側では <strong>当日算出ロジックのみ</strong> を使った結果である。<br />
+したがって、少なくとも現時点の設計では</p>
+<ul>
+<li><code>race_id</code> 単位の週次蓄積</li>
+<li><code>future_horizon_days=0</code></li>
+<li><code>online_safe</code> 特徴量のみ</li>
+</ul>
+<p>という本番想定の運用条件でも、予測寄与が十分確認できたと言える。</p>
+<p>一方で、単純な重み付きヒューリスティックはランダム近傍だった。<br />
+つまり重要なのは</p>
+<ul>
+<li>過去パフォーマンス値を持つこと</li>
+</ul>
+<p>だけではなく、</p>
+<ul>
+<li>履歴の集約方法</li>
+<li>condition 別分解</li>
+<li>非線形な組み合わせ</li>
+</ul>
+<p>である。</p>
+<h3 id="_45">重要特徴量</h3>
+<p><code>is_win</code> モデル上位は次の通りだった。</p>
+<ul>
+<li><code>margin_fig_avg5</code></li>
+<li><code>perf_pct_last1</code></li>
+<li><code>pace_fig_avg5</code></li>
+<li><code>field_top3_gap</code></li>
+<li><code>pace_same_distance_avg5</code></li>
+<li><code>margin_same_distance_avg5</code></li>
+<li><code>perf_same_class_avg5</code></li>
+<li><code>n_prev_runs</code></li>
+<li><code>perf_same_venue_avg5</code></li>
+<li><code>perf_same_track_cond_avg5</code></li>
+</ul>
+<p>ここから言えること:</p>
+<ul>
+<li>単純な「平均パフォーマンス」よりも、<strong>着差・展開・相手レベル差</strong> が重要</li>
+<li>同条件 (<code>same_surface</code>, <code>same_distance</code>) の履歴が効いている</li>
+<li>直近値そのものより、<strong>条件帯内での標準化順位 (<code>pct</code>, <code>std</code>)</strong> が強い</li>
+<li><code>field_relative_pre_rating</code> / <code>field_top3_gap</code> が効いており、<strong>レース内の相対強度差</strong> を明示したことが寄与している</li>
+<li><code>same_class</code>, <code>same_venue</code>, <code>same_track_condition</code>, <code>same_surface_distance</code> のような文脈別履歴は、微改善ながら一貫して有効だった</li>
+<li><code>pace_same_distance_avg5</code> / <code>margin_same_distance_avg5</code> が上位に入り、距離帯に閉じた pace/margin 履歴の価値が確認できた</li>
+</ul>
+<h2 id="85">8.5 改善点</h2>
+<h3 id="1-distance-surface-field_size">1. <code>distance</code> / <code>surface</code> / <code>field_size</code> の上流補完</h3>
+<p>これは <strong>実装済み</strong>。</p>
+<p>初回実装では <code>race_result</code> 側の欠損に引きずられて一部 <code>distance=0</code> が残っていたが、<br />
+現在は <code>src/pipeline/race_performance.py</code> で <code>race_shutuba</code> から補完するよう修正済み。</p>
+<p>今後の改善:<br />
+- <code>grade</code>, <code>race_class</code>, <code>track_condition</code> も同様に <code>shutuba</code> 優先で監査する</p>
+<h3 id="2-track_variant-walk-forward">2. <code>track_variant</code> の walk-forward 化</h3>
+<p>現行の <code>track_variant</code> は全期間を使ったベースラインから作っており、<br />
+厳密なオンライン純度ではまだ改善余地がある。</p>
+<p>改善:<br />
+- 年ごと、もしくは rolling window で baseline / variant を再構築する<br />
+- 未来期間を見ない <code>track_variant_online</code> を別に持つ</p>
+<h3 id="3-race_level_pre_race-race">3. <code>race_level_pre_race</code> の race 内差分化</h3>
+<p>これは今回の改善版で <strong>実装済み</strong>。</p>
+<p>追加した列:<br />
+- <code>horse_pre_rating_pre_race</code><br />
+- <code>field_relative_pre_rating</code><br />
+- <code>field_top3_gap</code></p>
+<p>効果:<br />
+- race 内で定数だった <code>race_level_pre_race</code> を、馬ごとの差分量として使えるようになった<br />
+- 実際に <code>field_relative_pre_rating</code>, <code>field_top3_gap</code> は重要特徴量上位に入った</p>
+<h3 id="4_1">4. ペース補正の強化</h3>
+<p><code>pace_fig_avg5</code> が強く効いたので、ここは今後も伸びる余地がある。</p>
+<p>改善:<br />
+- <code>positioning</code> モデルと接続<br />
+- <code>pace class</code> を過去レース履歴にも付ける<br />
+- ハイ / スロー別の履歴パフォーマンス平均を持つ</p>
+<h3 id="5-run_performance_final">5. <code>run_performance_final</code> の再スケーリング</h3>
+<p>これは今回の改善版で <strong>実装済み</strong>。</p>
+<p>追加した列:<br />
+- <code>run_performance_final_std</code><br />
+- <code>run_performance_final_pct</code></p>
+<p>実装内容:<br />
+- <code>venue_era x surface x distance_band x class_group</code> ごとに再標準化<br />
+- 同条件帯の中での相対順位も保持</p>
+<p>効果:<br />
+- <code>perf_pct_last1</code>, <code>perf_pct_avg5</code> が重要特徴量上位に入り、<br />
+  生スケールよりも相対化した performance 履歴の方が予測に効くことが確認できた</p>
+<h3 id="6-retrospective">6. retrospective 系の使い分け明確化</h3>
+<p><code>race_level_retrospective</code> は有用だが future-aware である。</p>
+<p>改善:<br />
+- 学習特徴量には使わない<br />
+- 教師ラベル品質の改善・後分析専用として明示<br />
+- <code>safe_feature</code> / <code>retro_only</code> を schema に持つ</p>
+<h3 id="61">6.1 現時点の運用整理</h3>
+<p>最新版コードと評価方針では、実質的に次の整理になる。</p>
+<ul>
+<li><code>2020-2024</code></li>
+<li>学習用履歴母集団</li>
+<li>retrospective の分析・後検証は許容</li>
+<li><code>2025</code></li>
+<li>本番条件模擬の holdout</li>
+<li><code>future_horizon_days=0</code></li>
+<li>retrospective 不使用</li>
+</ul>
+<p>この切り分けは妥当であり、今後もこの方針を基準にする。</p>
+<h3 id="7-track_variant-online">7. <code>track_variant</code> の online 化</h3>
+<p>これは <strong>実装済み</strong>。</p>
+<p>追加:<br />
+- <code>track_variant_online</code></p>
+<p>方針:<br />
+- 直近の同 <code>venue_code x surface</code> 履歴から online proxy を持つ<br />
+- retrospective 分析用途では現 <code>track_variant</code><br />
+- 週次 / 当日近似の特徴量用途では <code>track_variant_online</code></p>
+<p>注意:<br />
+- 現段階の評価は <code>track_variant_online</code> ベースで算出した performance 履歴を使っている<br />
+- 説明変数としての直接利用は、本番特徴量統合時に別途判断する</p>
+<h3 id="8">8. 標準斤量基準への正規化</h3>
+<p>これは <strong>実装済み</strong>。</p>
+<p>追加:<br />
+- <code>reference_weight_equivalent</code><br />
+- <code>normalized_weight_carried</code><br />
+- <code>current_weight_advantage_points</code><br />
+- <code>horse_pre_rating_neutral</code></p>
+<p>方針:<br />
+- 過去レースの <code>run_performance</code> は標準斤量基準へ正規化して保持する<br />
+- 次走で使う <code>horse_pre_rating_pre_race</code> は、今回出走斤量に応じて補正した値を使う</p>
+<p>効果:<br />
+- 軽斤量戦で高いパフォーマンスを出した馬が、次走定量戦で過大評価されるリスクを抑えた</p>
+<h3 id="9-race-store-source-of-truth">9. race store を source of truth にする</h3>
+<p>これは <strong>実装済み</strong>。</p>
+<p>追加:<br />
+- <code>data/features/race_performance/races/&lt;year&gt;/&lt;race_id&gt;.json</code><br />
+- <code>--race-ids</code> モード</p>
+<p>方針:<br />
+- 当日/週次はレース単位で算出<br />
+- 年別 Parquet / columns / snapshot は race store から再構成</p>
+<h2 id="86">8.6 改善版の判断</h2>
+<p>改善版では、</p>
+<ul>
+<li>上流補完</li>
+<li>race 内差分化</li>
+<li>条件帯標準化</li>
+<li>標準斤量基準化</li>
+<li>race 単位蓄積</li>
+<li>online-safe 運用整理</li>
+<li>同クラス / 同場 / 同馬場状態 / 同 surface×distance の履歴集約</li>
+<li>pace / margin の同距離帯履歴集約</li>
+</ul>
+<p>を入れたことで、<code>run_performance</code> 系の単独寄与がさらに強くなった。</p>
+<h3 id="_46">改善サイクル要約</h3>
+<p>今回の改善サイクルでは、次を順に実施した。</p>
+<ol>
+<li>race 内差分化</li>
+<li>条件帯標準化 (<code>std</code>, <code>pct</code>)</li>
+<li>標準斤量基準化と current race 斤量補正</li>
+<li><code>track_variant_online</code> 化</li>
+<li>文脈別履歴集約 (<code>same_class</code>, <code>same_venue</code>, <code>same_track_condition</code>, <code>same_surface_distance</code>)</li>
+<li><code>pace_same_distance_avg5</code> / <code>margin_same_distance_avg5</code> の追加</li>
+</ol>
+<p>この結果、最終的な <code>lgbm_top3</code> の <code>top1_hit_rate</code> は <code>0.2324</code> に到達した。</p>
+<h3 id="_47">頭打ち判断</h3>
+<p>伸びはまだ完全にゼロではないが、改善幅は小さくなっており、<br />
+<strong>現行スコープでは大きな改善余地は一巡した</strong> と判断する。</p>
+<p>現時点で、このレースパフォーマンス値群は</p>
+<ul>
+<li><code>特徴量として保持する価値が十分ある</code></li>
+<li><code>単独で有意な予測力を持つ</code></li>
+<li>ただし <code>単純ヒューリスティック</code> では使い切れず、学習器で非線形に扱うべき</li>
+</ul>
+<p>という結論でよい。</p>
+<p>したがって次段階では、</p>
+<ul>
+<li><code>horse_pre_race_dataset</code> に safe な履歴集約だけを正式追加</li>
+<li><code>run_performance_final</code> の直近・同条件・安定性・トレンド列を組み込む</li>
+<li><code>track_variant_online</code> を本番特徴量統合時に利用する</li>
+<li><code>pace_shape_class</code> 別履歴集計を追加する</li>
+</ul>
+<p>の順で進めるのが妥当。</p>
+<h3 id="_48">完全版の現状結論</h3>
+<p>現時点の race performance システムは、</p>
+<ul>
+<li><code>future_horizon_days=0</code> の本番想定ロジックで算出できる</li>
+<li>race 単位で蓄積できる</li>
+<li>2025 holdout に対して有意な予測寄与を持つ</li>
+<li>特徴量として <code>data/features</code> に保持済み</li>
+<li>再現可能な評価スクリプトを持つ</li>
+</ul>
+<p>状態に到達している。</p>
+<p>したがって、本テーマについては <strong>現行スコープでの完全版</strong> とみなしてよい。</p>
+<h2 id="87">8.7 実装済み成果物</h2>
+<h3 id="_49">生成コード</h3>
+<ul>
+<li><code>src/pipeline/race_performance.py</code></li>
+<li><code>src/research/evaluate_race_performance_signal.py</code></li>
+</ul>
+<h3 id="_50">保存先</h3>
+<ul>
+<li>レース単位の source of truth:</li>
+<li><code>data/features/race_performance/races/&lt;year&gt;/&lt;race_id&gt;.json</code></li>
+<li>年別詳細:</li>
+<li><code>data/features/race_performance/2020.parquet</code> 〜 <code>2025.parquet</code></li>
+<li>全年スナップショット:</li>
+<li><code>data/features/snapshots/race_performance_2020_2025.parquet</code></li>
+<li>列指向特徴量:</li>
+<li><code>data/features/columns/*.parquet</code></li>
+<li>生成サマリ:</li>
+<li><code>data/meta/modeling/race_performance_build_summary.json</code></li>
+<li>評価結果:</li>
+<li><code>data/meta/modeling/race_performance_eval.json</code></li>
+</ul>
+<h3 id="_51">保持ポリシー</h3>
+<ul>
+<li><strong>当日/週次の算出は race_id 単位</strong></li>
+<li><strong>年別 Parquet は race store から再構成</strong></li>
+<li><code>data/features/columns/*.parquet</code> は年別 Parquet 更新後に再生成</li>
+<li>標準斤量基準の <code>run_performance</code> を正本として保持し、今回斤量補正は <code>horse_pre_rating_pre_race</code> 側で反映する</li>
+</ul>
+<h2 id="88-2026">8.8 新規年次データ (2026 以降) への適用可否</h2>
+<h3 id="_52">結論</h3>
+<p>現在の実装は、<strong>2026 年の新しいレース結果に対しても実行可能</strong> な形にしてある。<br />
+<code>src/pipeline/race_performance.py</code> は固定年ではなく、ローカルテーブルの存在年を <code>auto</code> 検出して処理する。</p>
+<h3 id="_53">現在の挙動</h3>
+<ul>
+<li><code>python -m src.pipeline.features.race_performance --years auto</code></li>
+<li><code>data/local/tables/&lt;year&gt;/</code> の存在年を自動検出して処理する</li>
+<li><code>python -m src.pipeline.features.race_performance --race-ids 202506010101</code></li>
+<li>指定レースだけを算出し、<code>race_id</code> 単位ファイルへ保存した後、対象年の年別 Parquet / columns / snapshot を再構成する</li>
+<li>したがって <code>2026</code> のローカルテーブルが作成されれば、そのまま算出対象に入る</li>
+</ul>
+<h3 id="2026">2026 の新規レースで即時計算できるもの</h3>
+<ul>
+<li><code>run_performance_raw</code></li>
+<li><code>run_performance_final</code></li>
+<li><code>time_figure</code></li>
+<li><code>margin_adjusted_figure</code></li>
+<li><code>weight_adjusted_figure</code></li>
+<li><code>pace_adjusted_figure</code></li>
+<li><code>horse_pre_rating_pre_race</code></li>
+<li><code>field_relative_pre_rating</code></li>
+<li><code>field_top3_gap</code></li>
+<li><code>race_level_pre_race</code></li>
+<li><code>track_variant</code></li>
+<li><code>track_variant_online</code></li>
+<li><code>race_uncertainty</code></li>
+</ul>
+<p>これらは <strong>当該時点までの履歴だけ</strong> で計算できるため、週次運用にそのまま使える。</p>
+<h3 id="2026_1">2026 の新規レースで即時には未確定なもの</h3>
+<ul>
+<li><code>race_level_retrospective</code></li>
+</ul>
+<p>これは future-aware 指標なので、<br />
+- その週の直後に計算はできる<br />
+- ただし値は「現時点で観測されている未来」までで暫定<br />
+- 後日、出走馬の後続戦績が増えると再評価されうる</p>
+<h3 id="_54">運用ルール</h3>
+<p>したがって運用上は次のように分けるのがよい。</p>
+<ul>
+<li><code>online_safe</code></li>
+<li><code>race_level_pre_race</code> まで</li>
+<li>将来予測特徴量に使ってよい</li>
+<li><code>retro_only</code></li>
+<li><code>race_level_retrospective</code></li>
+<li>後分析・教師ラベル改善専用</li>
+</ul>
+<h2 id="89">8.9 週次バッチ運用の想定</h2>
+<h3 id="_55">推奨運用</h3>
+<p>毎週末のレース終了後に、次の順でバッチを回す。</p>
+<ol>
+<li>当週分の <code>race_result</code> / <code>race_shutuba</code> ローカルテーブルを更新</li>
+<li>当週に結果が確定した <code>race_id</code> 一覧を取得</li>
+<li><code>python -m src.pipeline.features.race_performance --race-ids &lt;comma-separated-race-ids&gt;</code></li>
+<li><code>data/features/race_performance/races/&lt;year&gt;/&lt;race_id&gt;.json</code> を蓄積 / 上書き</li>
+<li>対象年の <code>data/features/race_performance/&lt;year&gt;.parquet</code> を race store から再構成</li>
+<li><code>data/features/columns/</code> の列指向特徴量を更新</li>
+<li><code>race_performance_build_summary.json</code> を更新</li>
+</ol>
+<h3 id="_56">保持の考え方</h3>
+<ul>
+<li><code>data/features/race_performance/races/&lt;year&gt;/&lt;race_id&gt;.json</code></li>
+<li>レース単位の永続保存</li>
+<li>差分更新の source of truth</li>
+<li><code>data/features/race_performance/&lt;year&gt;.parquet</code></li>
+<li>年別の詳細保存</li>
+<li><code>data/features/columns/*.parquet</code></li>
+<li>学習・結合しやすい列指向保存</li>
+<li><code>data/features/snapshots/race_performance_YYYY_YYYY.parquet</code></li>
+<li>EDA / 検証用スナップショット</li>
+</ul>
+<h3 id="_57">注意</h3>
+<ul>
+<li>週次での本番特徴量利用は <code>pre_race</code> 系だけを使う</li>
+<li><code>future_horizon_days=0</code> をデフォルトとし、通常運用では未来成績を見ない</li>
+<li><code>retrospective</code> 系は必要な分析時のみ明示的に有効化する</li>
+</ul>
+<h2 id="810">8.10 運用改善の完了状況</h2>
+<p>当初の残課題として挙げていた以下は、現時点で解消済みまたは運用方針が確定している。</p>
+<ul>
+<li><code>track_variant_online</code> の追加</li>
+<li><code>future_horizon_days=0</code> をデフォルト化</li>
+<li>race 単位蓄積 + 年別再構成</li>
+<li>標準斤量基準の保持</li>
+<li>今回斤量での事前補正</li>
+</ul>
+<p>また、メタデータとして持つべき整理は次の通り。</p>
+<ul>
+<li><code>future_horizon_days</code></li>
+<li><code>as_of_date</code></li>
+<li><code>online_safe</code> / <code>retro_only</code></li>
+</ul>
+<p>これらは build summary / コード設計上では対応済みの扱いとする。</p>
+<h2 id="811">8.11 現在の推奨評価プロトコル</h2>
+<p>最終的に、今後この指標群を評価するときの基準は次とする。</p>
+<ol>
+<li><code>2020-2024</code> を履歴構築・学習用期間として使う</li>
+<li><code>2025</code> を holdout とする</li>
+<li><code>2025</code> の指標は <code>future_horizon_days=0</code> で再算出されたものを使う</li>
+<li><code>race_level_retrospective</code> は holdout 予測特徴量に入れない</li>
+<li>本番想定寄与の評価は常に <code>online_safe</code> 列だけで実施する</li>
+</ol>
+<p>このプロトコルに従う限り、<br />
+「パフォーマンス値そのものの有効性」と「実運用時の再現性」を同時に担保しやすい。</p>
+<h2 id="812">8.12 完全版の判断</h2>
+<p>評価プロトコルを固定したまま改善サイクルを回した結果、</p>
+<ul>
+<li>予測性能を押し上げた主要改善は<br />
+<code>race 内差分化</code>、<code>条件帯標準化</code>、<code>標準斤量基準化</code></li>
+<li>運用面の主要改善は<br />
+<code>future_horizon_days=0</code>、<code>race_id 単位蓄積</code>、<code>年別再構成</code></li>
+</ul>
+<p>であり、現時点で <strong>レースパフォーマンス算出ロジック単体として大きく残る改善点はなくなった</strong> と判断してよい。</p>
+<p>今後の改善は、このロジック単体の改善というより、<br />
+- <code>horse_pre_race_dataset</code> への安全な統合<br />
+- <code>pace_shape_class</code> 別履歴集計<br />
+- 多段階パイプラインとの接続</p>
+<p>といった上流/下流接続の話になる。</p>
+    </article>
+    <nav class="doc-nav">
+      <a href="pre_race_feature_whitelist.html">← レース直前特徴量ホワイトリスト</a>
+      <a href="reference_insights.html">参考資料から反映した設計メモ →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/race_performance_rating_system.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

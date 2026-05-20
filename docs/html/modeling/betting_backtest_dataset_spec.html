@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>betting_backtest_dataset 仕様 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>betting_backtest_dataset 仕様</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/betting_backtest_dataset_spec.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="betting_backtest_dataset">betting_backtest_dataset 仕様</h1>
+<h2 id="_1">目的</h2>
+<p>この仕様は、レース直前確率モデルの出力を馬券最適化・バックテストに接続するための入力テーブルを定義する。</p>
+<p>モデリング実装自体は別フェーズだが、以下を共通契約として先に固定する。</p>
+<ul>
+<li>馬単位確率テーブル</li>
+<li>市場価格テーブル</li>
+<li>結果・払戻テーブル</li>
+<li>レース制約テーブル</li>
+<li>バックテスト結合テーブル</li>
+</ul>
+<h2 id="_2">参考資料から追加した原則</h2>
+<ul>
+<li>期待値が 1 を少し超えた程度の券だけを機械的に買うと、確率推定誤差で簡単に負けに転ぶ</li>
+<li>特に高オッズ帯は、確率のわずかな過大評価が期待値を大きく歪める</li>
+<li>そのため、<code>期待値 &gt; 1</code> だけではなく、<code>校正済み確率</code> と <code>安全域</code> を前提にベット判断を行う</li>
+<li>ROI の評価は必ず <code>モデルが学習に使っていない期間</code> だけで実施する</li>
+</ul>
+<h2 id="_3">全体構造</h2>
+<div class="mermaid">flowchart TD
+    horseProb[HorseProbabilityTable] --> backtest[BettingBacktestDataset]
+    marketHorse[HorseMarketTable] --> backtest
+    marketPair[PairMarketTable] --> backtest
+    raceResult[RaceOutcomeTable] --> backtest
+    payout[PayoutTable] --> backtest
+    raceConstraint[RaceConstraintTable] --> backtest</div>
+<h2 id="1-horse_probability_tableparquet">1. <code>horse_probability_table.parquet</code></h2>
+<h2 id="_4">粒度</h2>
+<ul>
+<li><code>1行 = 1レース1頭</code></li>
+</ul>
+<h2 id="_5">主キー</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>horse_number</code></li>
+</ul>
+<h2 id="_6">必須列</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>race_date</code></li>
+<li><code>venue_code</code></li>
+<li><code>horse_number</code></li>
+<li><code>horse_id</code></li>
+<li><code>horse_name</code></li>
+<li><code>field_size</code></li>
+<li><code>model_name</code></li>
+<li><code>model_version</code></li>
+<li><code>data_version</code></li>
+<li><code>prediction_timestamp</code></li>
+<li><code>p_win</code></li>
+<li><code>p_top2</code></li>
+<li><code>p_top3</code></li>
+</ul>
+<h2 id="_7">推奨追加列</h2>
+<ul>
+<li><code>score_raw</code></li>
+<li><code>score_calibrated</code></li>
+<li><code>rank_by_p_win</code></li>
+<li><code>rank_by_p_top2</code></li>
+<li><code>rank_by_p_top3</code></li>
+<li><code>uncertainty_proxy</code></li>
+<li><code>feature_coverage_score</code></li>
+</ul>
+<h2 id="_8">制約</h2>
+<ul>
+<li>同一レース内で <code>sum(p_win) ~= 1.0</code></li>
+<li><code>p_win &lt;= p_top2 &lt;= p_top3 &lt;= 1.0</code></li>
+<li><code>rank_by_p_win</code> は 1 から始まる連番</li>
+</ul>
+<h2 id="_9">用途</h2>
+<ul>
+<li>単勝・複勝・馬単・ワイド・馬連の期待値計算の基礎</li>
+<li>モデル比較と校正評価</li>
+</ul>
+<h2 id="2-horse_market_snapshotparquet">2. <code>horse_market_snapshot.parquet</code></h2>
+<h2 id="_10">粒度</h2>
+<ul>
+<li><code>1行 = 1レース1頭</code></li>
+</ul>
+<h2 id="_11">主キー</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>horse_number</code></li>
+</ul>
+<h2 id="_12">必須列</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>market_timestamp</code></li>
+<li><code>snapshot_phase</code></li>
+<li><code>horse_number</code></li>
+<li><code>win_odds</code></li>
+<li><code>place_odds_min</code></li>
+<li><code>place_odds_max</code></li>
+<li><code>market_popularity</code></li>
+</ul>
+<h2 id="_13">推奨追加列</h2>
+<ul>
+<li><code>place_odds_avg</code></li>
+<li><code>market_implied_win_prob_raw</code></li>
+<li><code>market_implied_place_prob_raw</code></li>
+<li><code>odds_source</code></li>
+<li><code>has_market_snapshot</code></li>
+</ul>
+<h2 id="snapshot_phase"><code>snapshot_phase</code> の標準値</h2>
+<ul>
+<li><code>t_minus_60</code></li>
+<li><code>t_minus_30</code></li>
+<li><code>t_minus_10</code></li>
+<li><code>t_minus_05</code></li>
+<li><code>off_time_final</code></li>
+</ul>
+<p>初期版の正式評価は <code>t_minus_10</code> を主基準にする。</p>
+<h2 id="3-pair_market_snapshotparquet">3. <code>pair_market_snapshot.parquet</code></h2>
+<h2 id="_14">粒度</h2>
+<ul>
+<li><code>1行 = 1レース1組み合わせ1券種</code></li>
+</ul>
+<h2 id="_15">主キー</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>odds_type</code></li>
+<li><code>pair</code></li>
+<li><code>market_timestamp</code></li>
+</ul>
+<h2 id="_16">必須列</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>market_timestamp</code></li>
+<li><code>snapshot_phase</code></li>
+<li><code>odds_type</code></li>
+<li><code>pair</code></li>
+<li><code>odds</code></li>
+<li><code>popularity</code></li>
+</ul>
+<h2 id="_17">条件付き列</h2>
+<ul>
+<li><code>odds_min</code></li>
+<li><code>odds_max</code></li>
+</ul>
+<h2 id="odds_type"><code>odds_type</code></h2>
+<ul>
+<li><code>umaren</code></li>
+<li><code>wide</code></li>
+<li><code>umatan</code></li>
+</ul>
+<h2 id="_18">用途</h2>
+<ul>
+<li>組み合わせ市場に対するモデル優位性検証</li>
+<li>組み合わせ期待値計算</li>
+</ul>
+<h2 id="4-race_outcome_tableparquet">4. <code>race_outcome_table.parquet</code></h2>
+<h2 id="_19">粒度</h2>
+<ul>
+<li><code>1行 = 1レース1頭</code></li>
+</ul>
+<h2 id="_20">主キー</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>horse_number</code></li>
+</ul>
+<h2 id="_21">必須列</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>race_date</code></li>
+<li><code>venue_code</code></li>
+<li><code>horse_number</code></li>
+<li><code>horse_id</code></li>
+<li><code>finish_position</code></li>
+<li><code>official_finish_position</code></li>
+<li><code>is_win</code></li>
+<li><code>is_top2</code></li>
+<li><code>is_top3</code></li>
+</ul>
+<h2 id="_22">推奨追加列</h2>
+<ul>
+<li><code>margin_seconds_proxy</code></li>
+<li><code>status_code</code></li>
+<li><code>disqualified_flag</code></li>
+<li><code>late_scratched_flag</code></li>
+</ul>
+<h2 id="_23">用途</h2>
+<ul>
+<li>確率精度評価</li>
+<li>バックテストの的中判定</li>
+</ul>
+<h2 id="5-payout_tableparquet">5. <code>payout_table.parquet</code></h2>
+<h2 id="_24">粒度</h2>
+<ul>
+<li><code>1行 = 1レース1券種1組み合わせ</code></li>
+</ul>
+<h2 id="_25">主キー</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>bet_type</code></li>
+<li><code>ticket_key</code></li>
+</ul>
+<h2 id="_26">必須列</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>bet_type</code></li>
+<li><code>ticket_key</code></li>
+<li><code>payout_per_100</code></li>
+<li><code>is_official_payout</code></li>
+</ul>
+<h2 id="bet_type"><code>bet_type</code></h2>
+<ul>
+<li><code>win</code></li>
+<li><code>place</code></li>
+<li><code>umaren</code></li>
+<li><code>wide</code></li>
+<li><code>umatan</code></li>
+</ul>
+<h2 id="ticket_key"><code>ticket_key</code> の標準</h2>
+<ul>
+<li>単勝: <code>win:07</code></li>
+<li>複勝: <code>place:07</code></li>
+<li>馬連: <code>umaren:03-07</code></li>
+<li>ワイド: <code>wide:03-07</code></li>
+<li>馬単: <code>umatan:03-07</code></li>
+</ul>
+<h2 id="_27">用途</h2>
+<ul>
+<li>券種別 ROI 算出</li>
+<li>組み合わせ期待値計算</li>
+</ul>
+<h2 id="6-race_constraint_tableparquet">6. <code>race_constraint_table.parquet</code></h2>
+<h2 id="_28">粒度</h2>
+<ul>
+<li><code>1行 = 1レース</code></li>
+</ul>
+<h2 id="_29">主キー</h2>
+<ul>
+<li><code>race_id</code></li>
+</ul>
+<h2 id="_30">必須列</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>race_date</code></li>
+<li><code>venue_code</code></li>
+<li><code>surface</code></li>
+<li><code>distance</code></li>
+<li><code>field_size</code></li>
+<li><code>bettable_win</code></li>
+<li><code>bettable_place</code></li>
+<li><code>bettable_umaren</code></li>
+<li><code>bettable_wide</code></li>
+<li><code>bettable_umatan</code></li>
+</ul>
+<h2 id="_31">推奨追加列</h2>
+<ul>
+<li><code>market_snapshot_available</code></li>
+<li><code>pair_market_snapshot_available</code></li>
+<li><code>has_paddock</code></li>
+<li><code>has_oikiri</code></li>
+<li><code>has_cushion_value</code></li>
+<li><code>scratch_count</code></li>
+<li><code>refund_rule_flag</code></li>
+</ul>
+<h2 id="_32">用途</h2>
+<ul>
+<li>バックテスト時の対象レースフィルタ</li>
+<li>発売対象と情報整備状況の切り分け</li>
+</ul>
+<h2 id="7-betting_backtest_datasetparquet">7. <code>betting_backtest_dataset.parquet</code></h2>
+<h2 id="_33">粒度</h2>
+<ul>
+<li><code>1行 = 1レース1馬1snapshot_phase</code></li>
+</ul>
+<p>これは分析・可視化用の結合済みテーブルで、最適化計算の一次入力として使う。</p>
+<h2 id="_34">主キー</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>horse_number</code></li>
+<li><code>snapshot_phase</code></li>
+</ul>
+<h2 id="_35">必須列</h2>
+<ul>
+<li><code>race_id</code></li>
+<li><code>race_date</code></li>
+<li><code>venue_code</code></li>
+<li><code>horse_number</code></li>
+<li><code>horse_id</code></li>
+<li><code>horse_name</code></li>
+<li><code>snapshot_phase</code></li>
+<li><code>p_win</code></li>
+<li><code>p_top2</code></li>
+<li><code>p_top3</code></li>
+<li><code>win_odds</code></li>
+<li><code>place_odds_min</code></li>
+<li><code>place_odds_max</code></li>
+<li><code>market_popularity</code></li>
+<li><code>finish_position</code></li>
+<li><code>is_win</code></li>
+<li><code>is_top2</code></li>
+<li><code>is_top3</code></li>
+</ul>
+<h2 id="_36">推奨派生列</h2>
+<ul>
+<li><code>ev_win = p_win * payout_win_per_100 / 100 - 1</code></li>
+<li><code>ev_place_low = p_top3 * payout_place_low_per_100 / 100 - 1</code></li>
+<li><code>market_edge_win = p_win - market_implied_win_prob_raw_norm</code></li>
+<li><code>value_bucket</code></li>
+<li><code>longshot_flag</code></li>
+<li><code>favorite_flag</code></li>
+<li><code>safety_margin_win = ev_win - ev_threshold_buffer</code></li>
+<li><code>confidence_band</code></li>
+</ul>
+<h2 id="_37">注意</h2>
+<ul>
+<li><code>betting_backtest_dataset</code> だけで全券種を完結させない</li>
+<li>組み合わせ券種は <code>pair_market_snapshot</code> と <code>payout_table</code> を別 join する</li>
+</ul>
+<h2 id="75">7.5 期待値安全域ルール</h2>
+<p>期待値系の判定は、次の 3 層で管理する。</p>
+<h3 id="1">1. 生期待値</h3>
+<ul>
+<li><code>raw_ev = predicted_prob * odds - 1</code></li>
+</ul>
+<h3 id="2">2. 校正後期待値</h3>
+<ul>
+<li><code>calibrated_ev = calibrated_prob * odds - 1</code></li>
+</ul>
+<h3 id="3">3. 安全域込み期待値</h3>
+<ul>
+<li><code>safe_ev = calibrated_ev - buffer</code></li>
+</ul>
+<h3 id="_38">初期ルール</h3>
+<ul>
+<li>ベット候補は <code>safe_ev &gt; 0</code> を最低条件にする</li>
+<li><code>buffer</code> は固定値ではなく、<code>odds bucket</code> と <code>uncertainty_proxy</code> で可変にする</li>
+<li>高オッズ帯ほど buffer を厚くする</li>
+</ul>
+<h2 id="76">7.6 閾値管理テーブル</h2>
+<p>将来の戦略比較のため、閾値を別テーブルで管理する。</p>
+<h3 id="bet_policy_thresholdsjson"><code>bet_policy_thresholds.json</code></h3>
+<ul>
+<li><code>policy_name</code></li>
+<li><code>snapshot_phase</code></li>
+<li><code>bet_type</code></li>
+<li><code>min_safe_ev</code></li>
+<li><code>min_model_confidence</code></li>
+<li><code>exclude_longshot_over_odds</code></li>
+<li><code>max_tickets_per_race</code></li>
+<li><code>stake_sizing_rule</code></li>
+</ul>
+<h3 id="_39">目的</h3>
+<ul>
+<li>学習モデルと賭けルールを分離して比較する</li>
+<li>「モデルは同じだが閾値だけ違う」実験を簡単にする</li>
+</ul>
+<h2 id="8">8. 将来の組み合わせ最適化用中間テーブル</h2>
+<h2 id="pair_probability_inputparquet"><code>pair_probability_input.parquet</code></h2>
+<p>後段で馬連・ワイド・馬単の期待値最適化を行うための中間入力。</p>
+<h3 id="_40">粒度</h3>
+<ul>
+<li><code>1行 = 1レース1組み合わせ1券種</code></li>
+</ul>
+<h3 id="_41">必須列</h3>
+<ul>
+<li><code>race_id</code></li>
+<li><code>odds_type</code></li>
+<li><code>pair</code></li>
+<li><code>p_pair_hit</code></li>
+<li><code>market_odds</code></li>
+<li><code>market_popularity</code></li>
+<li><code>expected_value</code></li>
+</ul>
+<h3 id="_42">生成元</h3>
+<ul>
+<li><code>horse_probability_table</code></li>
+<li><code>pair_market_snapshot</code></li>
+<li><code>race_constraint_table</code></li>
+</ul>
+<h2 id="_43">券種別最適化の前提</h2>
+<h2 id="_44">単勝</h2>
+<ul>
+<li>入力: <code>p_win</code>, <code>win_odds</code></li>
+<li>最初に実装しやすい券種</li>
+</ul>
+<h2 id="_45">複勝</h2>
+<ul>
+<li>入力: <code>p_top3</code>, <code>place_odds_min</code>, <code>place_odds_max</code></li>
+<li>初期版は <code>place_odds_avg</code> を使い、後でレンジ評価に拡張</li>
+</ul>
+<h2 id="_46">馬連・ワイド・馬単</h2>
+<ul>
+<li>単体確率だけでは不十分</li>
+<li>後段で <code>pair_probability_input</code> を作る</li>
+<li>初期段階では市場比較と回収率検証用の入力だけ整える</li>
+</ul>
+<h2 id="_47">バックテストの評価指標</h2>
+<ul>
+<li><code>stake_count</code></li>
+<li><code>turnover</code></li>
+<li><code>return_amount</code></li>
+<li><code>roi</code></li>
+<li><code>hit_rate</code></li>
+<li><code>max_drawdown</code></li>
+<li><code>odds_bucket_roi</code></li>
+<li><code>venue_surface_segment_roi</code></li>
+<li><code>kelly_regret_proxy</code></li>
+<li><code>selection_rate</code></li>
+<li><code>race_coverage_rate</code></li>
+<li><code>avg_safe_ev</code></li>
+<li><code>avg_realized_edge</code></li>
+</ul>
+<h2 id="_48">ルール</h2>
+<ul>
+<li>ROI はモデル採択の一次指標にしない</li>
+<li>まず <code>p_win</code>, <code>p_top2</code>, <code>p_top3</code> の校正整合性を確保する</li>
+<li>バックテストは必ず <code>test</code> 期間で行い、学習期間とは完全分離する</li>
+<li>レース確定後の最終オッズでしか評価できない指標は、<code>simulation_only</code> と明示する</li>
+<li>T-10 オッズと最終オッズを混同しない</li>
+</ul>
+<h2 id="_49">追加で保存する監査成果物</h2>
+<ul>
+<li><code>betting_policy_manifest.json</code></li>
+<li><code>backtest_summary_by_policy.csv</code></li>
+<li><code>roi_by_odds_bucket.csv</code></li>
+<li><code>roi_by_segment.csv</code></li>
+<li><code>expected_value_calibration.csv</code></li>
+</ul>
+<h2 id="_50">配分最適化・予測印と強化学習（関連設計）</h2>
+<p>券種選択・<strong>予測印と推奨券の結びつけ</strong>・資金配分を、教師あり確率モデルとは切り離し <strong>強化学習（ポリシー）</strong> で扱う設計議論は、次を正とする。</p>
+<ul>
+<li><code>docs/html/modeling/betting_policy_reinforcement_learning.html</code>（<strong>MDP・報酬・オフライン RL・印のパターン</strong>）</li>
+<li>HTML 要約: <code>docs/html/betting_rl_policy/index.html</code></li>
+</ul>
+<p>本書（<code>betting_backtest_dataset_spec</code>）は <strong>データ契約・safe_ev・バックテスト指標</strong> が主。RL 環境は本書のテーブルを <strong>simulator の入出力</strong>として写像する。</p>
+<h2 id="_51">実装順</h2>
+<ol>
+<li><code>horse_probability_table</code> を確定</li>
+<li><code>horse_market_snapshot</code> を <code>snapshot_phase=t_minus_10</code> で固定整備</li>
+<li><code>race_outcome_table</code> / <code>payout_table</code> を整形</li>
+<li><code>betting_backtest_dataset</code> を生成</li>
+<li>券種別に <code>expected_value</code> 列を追加</li>
+<li><code>safe_ev</code> と policy thresholds を別管理にする</li>
+<li>その後に配分最適化モデルへ進む</li>
+</ol>
+    </article>
+    <nav class="doc-nav">
+      <a href="advanced_modeling_techniques.html">← レース直前確率モデルに使う実戦的 ML テクニック</a>
+      <a href="betting_policy_reinforcement_learning.html">馬券推奨レイヤと強化学習 — 設計議論 →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/betting_backtest_dataset_spec.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

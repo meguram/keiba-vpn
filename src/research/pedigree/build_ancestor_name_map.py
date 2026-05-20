@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[3]
 PED_5GEN_DIR = ROOT / "data/local/horse_pedigree_5gen"
 PED_10GEN_DIR = ROOT / "data/local/horse_pedigree_10gen"
-OUT_PATH = ROOT / "data/research/pedigree_10gen/ancestor_id_to_name.parquet"
+OUT_PATH = ROOT / "data/local/research/pedigree_10gen/ancestor_id_to_name.parquet"
 
 
 def _scan_dir(root_dir: Path, name_map: dict[str, str], stats: dict) -> None:

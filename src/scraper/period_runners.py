@@ -226,6 +226,7 @@ def enqueue_race_tasks_for_race_period(
     smart_skip: bool | None = None,
     overwrite: bool | None = None,
     skip_local_mirror: bool | None = None,
+    priority: int | None = None,
 ) -> dict[str, Any]:
     """
     期間内の JRA レース（race_lists）に対し、同一 tasks のレースジョブをキューへ（dry_run なら列挙のみ）。
@@ -275,6 +276,8 @@ def enqueue_race_tasks_for_race_period(
         extras["overwrite"] = bool(overwrite)
     if skip_local_mirror is not None:
         extras["skip_local_mirror"] = bool(skip_local_mirror)
+    if priority is not None:
+        extras["priority"] = int(priority)
     full = [{**sp, "tasks": tasks_norm, **extras} for sp in specs]
     stats = queue.bulk_add_jobs(full)
     return {

@@ -47,8 +47,8 @@ from src.research.pedigree.pedigree_local_store import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 PED_DIR = ROOT / "data/local/horse_pedigree_5gen"
-RACE_REC = ROOT / "data/research/bloodline_meta_cluster/race_records.parquet"
-OUT_DIR = ROOT / "data/research/pedigree_10gen"
+RACE_REC = ROOT / "data/page_reference/note_aptitude_race/race_records.parquet"
+OUT_DIR = ROOT / "data/local/research/pedigree_10gen"
 OUT_LONG = OUT_DIR / "horse_ancestor_long.parquet"
 OUT_INV = OUT_DIR / "ancestor_to_horses.parquet"
 OUT_NAME = OUT_DIR / "ancestor_id_to_name.parquet"

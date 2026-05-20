@@ -41,9 +41,9 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_OUT = ROOT / "data/modeling/horse_pedigree_factors.parquet"
-DEFAULT_META = ROOT / "data/modeling/horse_pedigree_factors.meta.json"
-DEFAULT_STATS = ROOT / "data/research/sire_factor_stats.json"
+DEFAULT_OUT = ROOT / "data/local/modeling/horse_pedigree_factors.parquet"
+DEFAULT_META = ROOT / "data/local/modeling/horse_pedigree_factors.meta.json"
+DEFAULT_STATS = ROOT / "data/local/research/sire_factor_stats.json"
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))

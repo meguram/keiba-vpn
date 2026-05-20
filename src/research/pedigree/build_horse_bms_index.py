@@ -37,7 +37,7 @@ _ROOT = Path(__file__).resolve().parents[3]
 _PED_DIR_10 = _ROOT / "data" / "local" / "horse_pedigree_10gen"
 _PED_DIR_5 = _ROOT / "data" / "local" / "horse_pedigree_5gen"
 _PED_DIR = _PED_DIR_10 if _PED_DIR_10.exists() else _PED_DIR_5
-_IDX_DIR = _ROOT / "data" / "research" / "pedigree_race_index"
+_IDX_DIR = _ROOT / "data" / "local" / "research" / "pedigree_race_index"
 _OUT_PATH = _IDX_DIR / "horse_bms.parquet"
 
 

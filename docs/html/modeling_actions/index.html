@@ -136,8 +136,8 @@
       <ul>
         <li>race 単位 split・purge/embargo・OOF TE・LayerA/B・多段 Stage0–7</li>
         <li>一次 split（2020–2023 / 2024 / 2025）と <code class="mono">dataset_split_manifest.json</code></li>
-        <li>ランキング（LambdaRank 系）・深いアンサンブル・NN 探索軸（<code class="mono">modeling_coding_strategy.md</code>）</li>
-        <li>馬券は safe_ev・二次評価（<code class="mono">betting_backtest_dataset_spec.md</code>）</li>
+        <li>ランキング（LambdaRank 系）・深いアンサンブル・NN 探索軸（<code class="mono">modeling_coding_strategy.html</code>）</li>
+        <li>馬券は safe_ev・二次評価（<code class="mono">betting_backtest_dataset_spec.html</code>）</li>
       </ul>
       <div class="callout">
         以降は「モデル式を増やす」より、<b>train–serve 一致・ラベル定義・多頭確率の一貫性・誤差相関</b>など、
@@ -147,7 +147,7 @@
 
     <section id="tuning">
       <h2>モデルチューニング工程 — 議論は終わっているか</h2>
-      <p><b>いいえ、専用ドキュメントまで含めて初めて輪郭が閉じる段階にした。</b> split・キャリブ・リークは別文書で厚い一方、<b>探索手順・試行予算・凍結ルール</b>は <code class="mono">hyperparameter_tuning_workflow.md</code> で初めて SOP 化した。</p>
+      <p><b>いいえ、専用ドキュメントまで含めて初めて輪郭が閉じる段階にした。</b> split・キャリブ・リークは別文書で厚い一方、<b>探索手順・試行予算・凍結ルール</b>は <code class="mono">hyperparameter_tuning_workflow.html</code> で初めて SOP 化した。</p>
 
       <h3>工程を最適化する主な打ち手（要約）</h3>
       <table>
@@ -162,7 +162,7 @@
         </tbody>
       </table>
 
-      <p>詳細・チェックリスト・成果物パス規約はマークダウン正本: <code class="mono">docs/modeling/hyperparameter_tuning_workflow.md</code>（<b>§10 現行実装とのギャップ</b>に <code class="mono">pipeline/trainer.py</code> / <code class="mono">ensemble_trainer.py</code> の対照表あり）。</p>
+      <p>詳細・チェックリスト・成果物パス規約はマークダウン正本: <code class="mono">docs/html/modeling/hyperparameter_tuning_workflow.html</code>（<b>§10 現行実装とのギャップ</b>に <code class="mono">pipeline/trainer.py</code> / <code class="mono">ensemble_trainer.py</code> の対照表あり）。</p>
 
       <h3>実装を踏まえた注意（要約）</h3>
       <ul>
@@ -204,9 +204,9 @@ flowchart TB
       <h3><span class="p0">P0</span> — すぐ着手しやすい（コスト小・効果大）</h3>
       <div class="card">
         <ul>
-          <li><b>ドキュメントとコードの接続</b>：<code class="mono">advanced_modeling_techniques.md</code> は valid/test の扱いを更新済み。<b>次は <code class="mono">pipeline/trainer.py</code> の分割を manifest 準拠に寄せる</b>（§10 マイルストーン）。</li>
+          <li><b>ドキュメントとコードの接続</b>：<code class="mono">advanced_modeling_techniques.html</code> は valid/test の扱いを更新済み。<b>次は <code class="mono">pipeline/trainer.py</code> の分割を manifest 準拠に寄せる</b>（§10 マイルストーン）。</li>
           <li><b>ラベル定義 1 枚</b>：同着・降着・除外・取消後の <code class="mono">field_size</code> と <code class="mono">is_win / is_top3</code>、
-            LTR の relevance を <code class="mono">horse_pre_race_dataset_spec.md</code> または短い <code class="mono">label_spec.md</code> に集約。</li>
+            LTR の relevance を <code class="mono">horse_pre_race_dataset_spec.html</code> または短い <code class="mono">label_spec.html</code> に集約。</li>
           <li><b>T-10 とスナップショット</b>：<code class="mono">snapshot_phase</code>・<code class="mono">prediction_timestamp</code> と学習母表の列の対応を Stage0 仕様に明記（train–serve skew 防止）。</li>
         </ul>
       </div>
@@ -214,8 +214,8 @@ flowchart TB
       <h3><span class="p1">P1</span> — 実装に直結（中コスト）</h3>
       <div class="card">
         <ul>
-          <li><b>多頭確率の一貫校正</b>：<code class="mono">p_win ≤ p_top2 ≤ p_top3</code> を壊さない校正方針（単一 logits＋累積、または制約付き校正）を <code class="mono">advanced_modeling_techniques.md</code> または betting 仕様に追記。</li>
-          <li><b>多段の誤差伝播</b>：前段の confidence / coverage を下流特徴に渡す、または単段 strong baseline を常時並走して監視（<code class="mono">staged_probability_pipeline.md</code> に「診断」節）。</li>
+          <li><b>多頭確率の一貫校正</b>：<code class="mono">p_win ≤ p_top2 ≤ p_top3</code> を壊さない校正方針（単一 logits＋累積、または制約付き校正）を <code class="mono">advanced_modeling_techniques.html</code> または betting 仕様に追記。</li>
+          <li><b>多段の誤差伝播</b>：前段の confidence / coverage を下流特徴に渡す、または単段 strong baseline を常時並走して監視（<code class="mono">staged_probability_pipeline.html</code> に「診断」節）。</li>
           <li><b>ランキング OOF の保存規約</b>：既に命名例あり → runner の契約（入力列・<code class="mono">group</code>・relevance）を JSON schema か README 1 本に固定。</li>
         </ul>
       </div>
@@ -223,7 +223,7 @@ flowchart TB
       <h3><span class="p2">P2</span> — 運用・評価の厚み（長期）</h3>
       <div class="card">
         <ul>
-          <li><b>ROI の分散</b>：同一レース内予測誤差の相関を前提に、ブートストラップやレース単位リサンプリングで信頼区間（<code class="mono">betting_backtest_dataset_spec.md</code> 注記）。</li>
+          <li><b>ROI の分散</b>：同一レース内予測誤差の相関を前提に、ブートストラップやレース単位リサンプリングで信頼区間（<code class="mono">betting_backtest_dataset_spec.html</code> 注記）。</li>
           <li><b>実験トラッキング</b>：run id・seed・ハイパラ・artifact パスを <code class="mono">data/meta/modeling/runs.jsonl</code> 等で統一（MLflow 不要でも可）。</li>
           <li><b>プロダクト境界</b>：自動投票・配信・スクレイピング利用範囲は技術ドキュメント外のポリシー文書に一行でも参照リンク。</li>
         </ul>
@@ -267,7 +267,7 @@ flowchart LR
           <tr>
             <td>年次 EDA 数値（行数・NDCG 等）</td>
             <td>HTML にハードコードせず、生成レポート or マークダウン + 定期ジョブ</td>
-            <td>例: <code class="mono">train_valid_test_split_strategy.md</code> ＋ CI/手動更新</td>
+            <td>例: <code class="mono">train_valid_test_split_strategy.html</code> ＋ CI/手動更新</td>
           </tr>
           <tr>
             <td>全マークダウンの全文ミラー</td>
@@ -284,14 +284,14 @@ flowchart LR
         <thead><tr><th>種別</th><th>パス</th></tr></thead>
         <tbody>
           <tr><td>Split 正本</td><td class="mono">data/meta/modeling/dataset_split_manifest.json</td></tr>
-          <tr><td>Split 説明</td><td class="mono">docs/modeling/train_valid_test_split_strategy.md</td></tr>
-          <tr><td>ML テクニック</td><td class="mono">docs/modeling/advanced_modeling_techniques.md</td></tr>
-          <tr><td>実装・LTR</td><td class="mono">docs/modeling/modeling_coding_strategy.md</td></tr>
-          <tr><td>馬券契約</td><td class="mono">docs/modeling/betting_backtest_dataset_spec.md</td></tr>
-          <tr><td>多段パイプライン</td><td class="mono">docs/modeling/staged_probability_pipeline.md</td></tr>
-          <tr><td>ハイパラ・選定 SOP</td><td class="mono">docs/modeling/hyperparameter_tuning_workflow.md</td></tr>
-          <tr><td>馬券推奨・RL 方策</td><td class="mono">docs/modeling/betting_policy_reinforcement_learning.md（<a href="../betting_rl_policy/index.html">HTML</a>）</td></tr>
-          <tr><td>特徴量探索</td><td class="mono">docs/modeling/feature_engineering_exploration.md（<a href="../feature_engineering/index.html">HTML</a>）</td></tr>
+          <tr><td>Split 説明</td><td class="mono">docs/html/modeling/train_valid_test_split_strategy.html</td></tr>
+          <tr><td>ML テクニック</td><td class="mono">docs/html/modeling/advanced_modeling_techniques.html</td></tr>
+          <tr><td>実装・LTR</td><td class="mono">docs/html/modeling/modeling_coding_strategy.html</td></tr>
+          <tr><td>馬券契約</td><td class="mono">docs/html/modeling/betting_backtest_dataset_spec.html</td></tr>
+          <tr><td>多段パイプライン</td><td class="mono">docs/html/modeling/staged_probability_pipeline.html</td></tr>
+          <tr><td>ハイパラ・選定 SOP</td><td class="mono">docs/html/modeling/hyperparameter_tuning_workflow.html</td></tr>
+          <tr><td>馬券推奨・RL 方策</td><td class="mono">docs/html/modeling/betting_policy_reinforcement_learning.html（<a href="../betting_rl_policy/index.html">HTML</a>）</td></tr>
+          <tr><td>特徴量探索</td><td class="mono">docs/html/modeling/feature_engineering_exploration.html（<a href="../feature_engineering/index.html">HTML</a>）</td></tr>
           <tr><td>データ・特徴量一覧（現段階）</td><td><a href="../data_features/index.html">HTML</a></td></tr>
         </tbody>
       </table>

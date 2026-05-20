@@ -47,9 +47,9 @@ if str(ROOT) not in sys.path:
 
 logger = logging.getLogger(__name__)
 
-ART_DIR = ROOT / "data/research/bloodline_meta_cluster"
-IDX_3V = ROOT / "data/research/pedigree_10gen_3view"
-OUT_DIR = ROOT / "data/research/bloodline_meta_cluster_l3"
+ART_DIR = ROOT / "data/page_reference/note_aptitude_race"
+IDX_3V = ROOT / "data/local/research/pedigree_10gen_3view"
+OUT_DIR = ROOT / "data/page_reference/note_aptitude_race_l3"
 
 # 31 条件カラム (建立元の特徴量と同じ)
 COND_COLS = [
@@ -72,7 +72,7 @@ def _classify_record(rec: pd.DataFrame) -> pd.DataFrame:
     df = rec.copy()
     if "dist_cat" not in df.columns and "distance" in df.columns:
         df["dist_cat"] = pd.cut(
-            df["distance"], bins=[0, 1400, 1800, 2200, 9999],
+            df["distance"], bins=[0, 1400, 1800, 2400, 9999],
             labels=["短距離", "マイル", "中距離", "長距離"],
         ).astype(str)
     for c in ("venue", "surface", "track_condition", "dist_cat"):

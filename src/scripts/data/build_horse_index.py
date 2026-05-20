@@ -63,7 +63,7 @@ def build_horse_index():
         print(f"  {count}頭を登録")
 
     # インデックスファイルを保存
-    output_path = BASE_DIR / "data" / "knowledge" / "horse_name_index.json"
+    output_path = BASE_DIR / "data" / "local" / "knowledge" / "horse_name_index.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, 'w', encoding='utf-8') as f:

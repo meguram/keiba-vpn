@@ -392,7 +392,7 @@ def main() -> int:
             seed=args.seed, storage=storage,
         )
 
-        out_path = args.json_out or f"data/meta/schema_reference_{year}.json"
+        out_path = args.json_out or f"data/local/meta/schema_reference_{year}.json"
         p = Path(out_path)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(

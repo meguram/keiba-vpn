@@ -50,8 +50,8 @@ if str(_ROOT) not in sys.path:
 logger = logging.getLogger(__name__)
 
 PED_DIR = _ROOT / "data" / "local" / "horse_pedigree_5gen"
-CATS_PARQUET = _ROOT / "data" / "research" / "pedigree_race_index" / "horse_pedigree_cats.parquet"
-OUT_PATH = _ROOT / "data" / "research" / "pedigree_race_index" / "stallion_lineage.parquet"
+CATS_PARQUET = _ROOT / "data" / "local" / "research" / "pedigree_race_index" / "horse_pedigree_cats.parquet"
+OUT_PATH = _ROOT / "data" / "local" / "research" / "pedigree_race_index" / "stallion_lineage.parquet"
 
 _COUNTRY_SUFFIX = re.compile(r"\s*\([^)]{1,4}\)\s*$")
 

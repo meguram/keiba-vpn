@@ -45,7 +45,7 @@ if str(_ROOT) not in sys.path:
 logger = logging.getLogger(__name__)
 
 PED_DIR   = _ROOT / "data" / "local" / "horse_pedigree_5gen"
-OUT_DIR   = _ROOT / "data" / "research" / "pedigree_race_index"
+OUT_DIR   = _ROOT / "data" / "local" / "research" / "pedigree_race_index"
 EDGES_OUT = OUT_DIR / "full_sire_tree.parquet"
 NODES_OUT = OUT_DIR / "full_sire_tree_nodes.parquet"
 

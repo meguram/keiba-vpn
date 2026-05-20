@@ -18,13 +18,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 PED_DIR = ROOT / "data/local/horse_pedigree_5gen"
-OUT_PATH = ROOT / "data/research/bloodline_meta_cluster/sid_to_name_full.json"
+OUT_PATH = ROOT / "data/page_reference/note_aptitude_race/sid_to_name_full.json"
 
 
 def main() -> int:
     name_map: dict[str, str] = {}
     # 既存 sid_to_name を seed として読み込む
-    seed = ROOT / "data/research/bloodline_meta_cluster/sid_to_name.json"
+    seed = ROOT / "data/page_reference/note_aptitude_race/sid_to_name.json"
     if seed.exists():
         try:
             name_map.update(json.loads(seed.read_text()))

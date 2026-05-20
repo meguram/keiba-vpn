@@ -12,7 +12,7 @@ from typing import Any
 
 import pandas as pd
 
-DEFAULT_MANIFEST = Path("data/meta/modeling/dataset_split_manifest.json")
+DEFAULT_MANIFEST = Path("data/local/meta/modeling/dataset_split_manifest.json")
 
 
 def race_calendar_year(race_id: Any) -> str:

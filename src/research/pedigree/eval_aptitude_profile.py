@@ -25,8 +25,8 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-ART = ROOT / "data/research/bloodline_meta_cluster"
-HORSE_AT = ROOT / "data/research/horse_aptitude"
+ART = ROOT / "data/page_reference/note_aptitude_race"
+HORSE_AT = ROOT / "data/local/research/horse_aptitude"
 
 
 def main(min_races: int = 5, sample_size: int = 3000, seed: int = 42) -> int:

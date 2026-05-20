@@ -21,7 +21,7 @@ _by_job: dict[str, dict[str, Any]] = {}
 _tl = threading.local()
 
 # ワーカーと API が別プロセスのときに共有するスナップショット
-PROGRESS_FILE = Path("data/meta/_queue_job_progress.json")
+PROGRESS_FILE = Path("data/local/meta/_queue_job_progress.json")
 _FILE_WRITE_INTERVAL = 1.0
 _last_file_write = 0.0
 

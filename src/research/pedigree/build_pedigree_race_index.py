@@ -62,9 +62,9 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = _ROOT
 
-TABLES_DIR = BASE_DIR / "data" / "local" / "tables"
+TABLES_DIR = BASE_DIR / "data" / "page_reference" / "tables"
 PED_DIR = BASE_DIR / "data" / "local" / "horse_pedigree_5gen"
-OUT_DIR = BASE_DIR / "data" / "research" / "pedigree_race_index"
+OUT_DIR = BASE_DIR / "data" / "page_reference" / "pedigree_race_index"
 
 # ────────────────────────────────────────────────────────────────
 # path_fm ベースの血統カテゴリ判定

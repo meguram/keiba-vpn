@@ -63,7 +63,7 @@ from src.utils.keiba_logging import script_basic_config  # noqa: E402
 logger = logging.getLogger(__name__)
 
 DEFAULT_OUT = Path("data/local/horse_pedigree_5gen")
-MANIFEST = Path("data/meta/pedigree_5gen_bulk_manifest.json")
+MANIFEST = Path("data/local/meta/pedigree_5gen_bulk_manifest.json")
 
 
 def _parse_years_arg(years_str: str) -> list[int]:
@@ -312,7 +312,7 @@ def main() -> None:
         help="出走馬 + 5gen 牡スロットの種牡馬クロージャをキューに追加",
     )
     pe.add_argument("--base-dir", type=Path, default=Path("."))
-    pe.add_argument("--tables-dir", type=Path, default=Path("data/local/tables"))
+    pe.add_argument("--tables-dir", type=Path, default=Path("data/page_reference/tables"))
     pe.add_argument("--years", type=str, default="2020,2021,2022,2023,2024,2025")
     pe.add_argument("--fetch-pedigree", action="store_true")
     pe.add_argument(
@@ -366,7 +366,7 @@ def main() -> None:
     pm.add_argument(
         "--summary-json",
         type=Path,
-        default=Path("data/meta/pedigree_5gen_mirror_summary.json"),
+        default=Path("data/local/meta/pedigree_5gen_mirror_summary.json"),
     )
     pm.set_defaults(func=cmd_mirror_local)
 

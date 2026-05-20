@@ -35,7 +35,7 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger("scraper.structure_monitor")
 
-FINGERPRINT_DIR = Path("data/meta/structure")
+FINGERPRINT_DIR = Path("data/local/meta/structure")
 VERSIONS_PATH = FINGERPRINT_DIR / "versions.json"
 
 CATEGORY_PROBES: dict[str, dict[str, Any]] = {
@@ -835,7 +835,7 @@ def run_daily_check(
     )
 
     report = monitor.generate_report(diffs)
-    report_path = Path("data/meta/structure/report.md")
+    report_path = Path("data/local/meta/structure/report.md")
     report_path.write_text(report, encoding="utf-8")
     logger.info("レポート保存: %s", report_path)
 
@@ -878,7 +878,7 @@ def run_daily_check(
     severity = "CRITICAL" if result["critical"] > 0 else "WARNING" if result["warning"] > 0 else "OK"
     result["severity"] = severity
 
-    summary_path = Path("data/meta/structure/last_check.json")
+    summary_path = Path("data/local/meta/structure/last_check.json")
     summary_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
     logger.info("=== 構造チェック完了 [%s] ===", severity)

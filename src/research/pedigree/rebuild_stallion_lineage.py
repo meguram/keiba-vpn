@@ -35,7 +35,7 @@ from typing import Callable
 import pandas as pd
 
 _ROOT    = Path(__file__).resolve().parents[3]
-_IDX_DIR = _ROOT / "data" / "research" / "pedigree_race_index"
+_IDX_DIR = _ROOT / "data" / "local" / "research" / "pedigree_race_index"
 _PED_DIR = _ROOT / "data" / "local" / "horse_pedigree_5gen"
 
 # サブグループを名付けるための最小出現頭数閾値
@@ -406,7 +406,7 @@ if __name__ == "__main__":
     print(f"  所要時間:           {stats['elapsed_sec']}s")
 
     import json as _json
-    meta = _json.loads((Path(__file__).resolve().parents[3] / "data/research/pedigree_race_index/stallion_lineage_meta.json").read_text())
+    meta = _json.loads((Path(__file__).resolve().parents[3] / "data/page_reference/pedigree_race_index/stallion_lineage_meta.json").read_text())
     print("\n系統グループ一覧:")
     for g in meta:
         print(f"  [{g['main_group_name']:18s}]  {g['anchor_name']:25s}  count={g['count']:7,}  color={g['color']}")

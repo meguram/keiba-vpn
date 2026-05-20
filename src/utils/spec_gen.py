@@ -389,7 +389,7 @@ def _data_architecture(base_dir: str) -> str:
         "```",
         "netkeiba.com ──[ScraperRunner]──→ GCS (JSON + HTML.gz)",
         "                                       │",
-        "data/mock/ (CSV) ────────────┐        │",
+        "data/local/mock/ (CSV) ────────────┐        │",
         "                              ▼        ▼",
         "                         SMA (DataAgent)",
         "                              │",

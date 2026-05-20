@@ -32,7 +32,7 @@ TASK_CATALOG: list[dict[str, Any]] = [
     {"id": "race_barometer", "entity": "race", "label": "偏差値", "hint": "race_barometer"},
     {"id": "race_trainer_comment", "entity": "race", "label": "厩舎コメント", "hint": "race_trainer_comment"},
     {"id": "smartrc", "entity": "race", "label": "SmartRC 一式", "hint": "smartrc_race（開催日はジョブの date 推奨）"},
-    {"id": "horse_profile", "entity": "horse", "label": "馬ページ（成績・血統HTML含む）", "hint": "horse_result + アーカイブ"},
+    {"id": "horse_profile", "entity": "horse", "label": "馬ページ（成績HTML）", "hint": "horse_result + アーカイブ。血統は skip_pedigree または horse_pedigree_5gen で別管理"},
     {"id": "horse_pedigree_5gen", "entity": "horse", "label": "5世代血統JSON（db.netkeiba /horse/ped/）", "hint": "horse_pedigree_5gen カテゴリへ保存"},
     {"id": "horse_training", "entity": "horse", "label": "調教タイム全ページ", "hint": "horse_training（要ログイン）"},
     {"id": "race_list", "entity": "date", "label": "その日のレース一覧", "hint": "race_lists"},
@@ -99,6 +99,15 @@ def execute_job(runner: Any, job: dict) -> None:
     from src.scraper.scrape_policy import effective_smart_skip_for_queue_job
 
     smart_skip = effective_smart_skip_for_queue_job(j)
+    skip_pedigree = bool(j.get("skip_pedigree"))
+    if not skip_pedigree:
+        import os
+
+        skip_pedigree = os.environ.get("KEIBA_QUEUE_HORSE_SKIP_PEDIGREE", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
     n_tasks = len(tasks)
 
     tok = set_skip_local_mirror(
@@ -124,7 +133,9 @@ def execute_job(runner: Any, job: dict) -> None:
                     step_name="",
                 )
             logger.info("キュータスク実行: kind=%s target=%s task=%s", kind, tid, task)
-            skip_pause = _dispatch(runner, kind, tid, task, meta_date, smart_skip)
+            skip_pause = _dispatch(
+                runner, kind, tid, task, meta_date, smart_skip, skip_pedigree=skip_pedigree
+            )
             if not skip_pause:
                 _pause()
     finally:
@@ -144,6 +155,8 @@ def _dispatch(
     task: str,
     meta_date: str,
     smart_skip: bool = True,
+    *,
+    skip_pedigree: bool = False,
 ) -> bool:
     """
     Returns:
@@ -152,7 +165,7 @@ def _dispatch(
     if kind == "race":
         return _race_task(runner, tid, task, meta_date, smart_skip=smart_skip)
     if kind == "horse":
-        return _horse_task(runner, tid, task, smart_skip=smart_skip)
+        return _horse_task(runner, tid, task, smart_skip=smart_skip, skip_pedigree=skip_pedigree)
     if kind == "date":
         return _date_task(runner, tid, task, smart_skip=smart_skip)
     raise ValueError(f"不明な job_kind: {kind}")
@@ -240,7 +253,12 @@ def _race_task(
 
 
 def _horse_task(
-    runner: Any, horse_id: str, task: str, *, smart_skip: bool = True
+    runner: Any,
+    horse_id: str,
+    task: str,
+    *,
+    smart_skip: bool = True,
+    skip_pedigree: bool = False,
 ) -> bool:
     from src.scraper.queue_job_progress import get_current_job_id, update_job_progress
 
@@ -259,7 +277,12 @@ def _horse_task(
             return True
         return False
     if task in ("horse_profile", "horse_pedigree"):
-        runner.scrape_horse(horse_id, skip_existing=smart_skip, with_history=True)
+        runner.scrape_horse(
+            horse_id,
+            skip_existing=smart_skip,
+            with_history=True,
+            skip_pedigree=skip_pedigree,
+        )
         return False
     if task == "horse_training":
         runner.scrape_horse_training(horse_id, smart_skip=smart_skip)

@@ -95,7 +95,7 @@ def main() -> int:
             table_block=BLOCK_RACE_HORSE_TBL,
             merge_keys=list(MERGE_KEYS_RACE_HORSE_TBL),
             overwrite=True,
-            registry_extra={**{k: v for k, v in meta.items() if k not in ("rel_path", "table_block", "merge_keys")}, "migrated_from": "data/features/columns"},
+            registry_extra={**{k: v for k, v in meta.items() if k not in ("rel_path", "table_block", "merge_keys")}, "migrated_from": "data/local/features/columns"},
         )
         f.unlink()
         migrated += 1

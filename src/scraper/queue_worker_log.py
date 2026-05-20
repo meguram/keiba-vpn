@@ -66,17 +66,31 @@ class QueueWorkerRingHandler(logging.Handler):
 
 
 def ensure_queue_worker_log_handler() -> None:
-    """冪等。root にハンドラを1つ追加。"""
+    """冪等。root にハンドラを1つ追加。
+
+    属性フラグではなく型チェックで判定する（fork/reload 後も正しく動作させるため）。
+    ハンドラが既存でも scraper.*/src.scraper.* のレベルは毎回 INFO に保証する。
+    """
     global _handler
     root = logging.getLogger()
-    if getattr(root, "_queue_worker_ring_handler_installed", False):
+
+    # scraper.* / src.scraper.* が WARNING 以上の場合 INFO ログが作られない。
+    # root が WARNING のままでも個別 logger を INFO にすることで record が生成される。
+    for _ns in ("scraper", "src.scraper"):
+        _lg = logging.getLogger(_ns)
+        if _lg.level == logging.NOTSET or _lg.level > logging.INFO:
+            _lg.setLevel(logging.INFO)
+
+    # 既にこのプロセスの root に ring handler が入っていれば追加しない
+    if any(isinstance(h, QueueWorkerRingHandler) for h in root.handlers):
         return
-    h = QueueWorkerRingHandler(level=logging.DEBUG)
+
     from src.utils.keiba_logging import (
         STANDARD_DATE_FMT,
         STANDARD_LOG_FORMAT,
     )
 
+    h = QueueWorkerRingHandler(level=logging.DEBUG)
     h.setFormatter(
         logging.Formatter(STANDARD_LOG_FORMAT, datefmt=STANDARD_DATE_FMT)
     )
@@ -84,15 +98,6 @@ def ensure_queue_worker_log_handler() -> None:
     root.addHandler(h)
     root._queue_worker_ring_handler_installed = True  # type: ignore[attr-defined]
     _handler = h
-
-    # scraper.* / src.scraper.* はデフォルトで root レベルを継承するが、
-    # root が WARNING のままだと INFO ログが作られず ring handler に届かない。
-    # queue.worker は明示的に setLevel(INFO) しているので届くが、
-    # scraper.run 等は NOTSET のため root の WARNING を継承してしまう。
-    for _ns in ("scraper", "src.scraper"):
-        _lg = logging.getLogger(_ns)
-        if _lg.level == logging.NOTSET or _lg.level > logging.INFO:
-            _lg.setLevel(logging.INFO)
 
 
 def get_worker_logs(*, after: int = -1, limit: int = 300) -> dict[str, Any]:

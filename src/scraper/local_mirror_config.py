@@ -17,7 +17,7 @@ _LOCK: dict[str, Any] = {}
 
 
 def _config_path(base_dir: str | Path) -> Path:
-    return Path(base_dir) / "data" / "meta" / "local_mirror_config.json"
+    return Path(base_dir) / "data" / "local" / "meta" / "local_mirror_config.json"
 
 
 def get_local_mirror_config(base_dir: str | Path) -> dict[str, Any]:

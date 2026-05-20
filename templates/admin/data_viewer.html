@@ -2980,7 +2980,7 @@ function _renderHmPerfTable(rows, horseId) {
     return `<div class="empty">パフォーマンス算出データが見つかりません（<code class="mono">pipeline.features.race_performance</code> で当該レースが未生成、または戦績の先頭400走に該当が無い可能性があります）。</div>`;
   }
   let html = `<div class="section-title">レースパフォーマンス履歴（新しい順・最大80件）</div>`;
-  html += '<p style="font-size:11px;color:var(--text-dim);margin:0 0 8px 0"><code>run_performance_final</code> はタイム・着差・斤量・展開・レースレベル等の<strong>合成スケール</strong>（仕様: <code class="mono">docs/modeling/race_performance_rating_system.md</code>）。<strong>0 が下限ではなくマイナスも普通に出ます</strong>。レース内順位と <code>run_performance_final_pct</code> を併用してください。</p>';
+  html += '<p style="font-size:11px;color:var(--text-dim);margin:0 0 8px 0"><code>run_performance_final</code> はタイム・着差・斤量・展開・レースレベル等の<strong>合成スケール</strong>（仕様: <code class="mono">docs/html/modeling/race_performance_rating_system.html</code>）。<strong>0 が下限ではなくマイナスも普通に出ます</strong>。レース内順位と <code>run_performance_final_pct</code> を併用してください。</p>';
   html += '<p style="font-size:11px;color:var(--text-dim);margin:0 0 8px 0">戦績の <code>race_id</code> に対応する <code>data/features/race_performance/races/&lt;年&gt;/&lt;race_id&gt;.json</code> がある走のみ表示します。</p>';
   html += '<div class="table-wrap"><table class="hm-history-table"><thead><tr>';
   html += '<th class="tc col-sortable">日付</th><th class="col-sortable">race_id</th><th class="col-sortable">レース</th><th class="col-sortable">場</th><th class="tr col-sortable">距離</th><th class="tc col-sortable">着</th>';

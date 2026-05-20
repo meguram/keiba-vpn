@@ -46,9 +46,11 @@ from sklearn.preprocessing import StandardScaler
 warnings.filterwarnings("ignore", category=UserWarning)
 
 ROOT = Path(__file__).resolve().parents[3]
-ART_DIR = ROOT / "data/research/bloodline_meta_cluster"
+ART_DIR = ROOT / "data/page_reference/note_aptitude_race"
 
 # 条件特徴量 (絶対勝率) のうち、相対化対象にするカラム
+# win_fast/win_slow: 基礎スピード (track_speed_races 由来)
+# win_outer/win_inner: コース形状適性
 COND_COLS_BASE = [
     "win_v_東京", "win_v_中山", "win_v_阪神", "win_v_京都", "win_v_中京",
     "win_v_新潟", "win_v_小倉", "win_v_福島", "win_v_札幌", "win_v_函館",
@@ -61,7 +63,14 @@ COND_COLS_BASE = [
     "win_pace_持久力勝負_短距離",   "win_pace_持久力勝負_マイル",
     "win_pace_持久力勝負_中距離",   "win_pace_持久力勝負_長距離",
     "win_steep", "win_flat", "win_heavy",
+    # 基礎スピード次元 (track_speed_races 由来)
+    "win_fast", "win_slow",
+    # コース形状次元 (外回り/内回り)
+    "win_outer", "win_inner",
 ]
+
+# role_lift_profiles から F 役割の新次元を補完するカラム
+_TS_LIFT_COLS = ["win_fast", "win_slow", "win_outer", "win_inner"]
 
 
 def _relativize(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
@@ -194,6 +203,36 @@ def _compute_similarity(centroids: np.ndarray) -> dict[str, Any]:
     }
 
 
+def _enrich_with_ts_cols(sub: pd.DataFrame) -> pd.DataFrame:
+    """role_lift_profiles から F 役割の win_fast/win_slow/win_outer/win_inner を補完する。
+    lift → 絶対勝率変換: win_X = lift_win_X * win_eb_total
+    """
+    rlp_path = ART_DIR / "role_lift_profiles.parquet"
+    if not rlp_path.exists():
+        print(f"  [warn] {rlp_path} not found — ts cols filled with eb_total", flush=True)
+        for c in _TS_LIFT_COLS:
+            sub[c] = sub["win_eb_total"]
+        return sub
+
+    rlp = pd.read_parquet(rlp_path, columns=["stallion_id", "role"] + [f"lift_{c}" for c in _TS_LIFT_COLS])
+    f_role = rlp[rlp["role"] == "F"].copy()
+    f_role = f_role.rename(columns={"stallion_id": "entity_id"})
+    f_role["entity_id"] = f_role["entity_id"].astype(str)
+
+    sub = sub.merge(f_role[["entity_id"] + [f"lift_{c}" for c in _TS_LIFT_COLS]],
+                    on="entity_id", how="left")
+    for c in _TS_LIFT_COLS:
+        lift_col = f"lift_{c}"
+        sub[c] = sub[lift_col] * sub["win_eb_total"]
+        # fillna: lift=1.0 → neutral (= win_eb_total)
+        sub[c] = sub[c].fillna(sub["win_eb_total"])
+        sub = sub.drop(columns=[lift_col])
+
+    n_ok = sub["win_fast"].notna().sum()
+    print(f"  [ts] win_fast coverage: {n_ok}/{len(sub)} stallions", flush=True)
+    return sub
+
+
 def build(
     k_min: int = 10, k_max: int = 18, n_super: int = 5,
     method: str = "agglomerative", k_fix: int | None = None,
@@ -208,6 +247,9 @@ def build(
     if mask_main.sum() == 0:
         mask_main = uni["entity_type"] == "stallion"
     sub = uni[mask_main].copy()
+
+    # 基礎スピード (win_fast/win_slow) + コース形状 (win_outer/win_inner) を補完
+    sub = _enrich_with_ts_cols(sub)
 
     rel = _relativize(sub, COND_COLS_BASE)
     print(f"  features after relativize: {rel.shape}", flush=True)
@@ -267,9 +309,13 @@ def build(
     sim = _compute_similarity(centroids)
 
     # ── 保存 ──
-    # 1) unified.parquet に L2 を書き戻し
+    # 1) unified.parquet に L2 + 新次元を書き戻し
     uni.loc[sub.index, "L2"] = sub["L2_new"].astype(int)
     uni.loc[~mask_main, "L2"] = -1
+    for _c in _TS_LIFT_COLS:
+        if _c not in uni.columns:
+            uni[_c] = float("nan")
+        uni.loc[sub.index, _c] = sub[_c]
     (ART_DIR / "unified.parquet").unlink(missing_ok=True)
     uni.to_parquet(ART_DIR / "unified.parquet")
 

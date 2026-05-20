@@ -24,10 +24,10 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[2]
-ART_DIR = ROOT / "data/research/bloodline_meta_cluster"
+ART_DIR = ROOT / "data/page_reference/note_aptitude_race"
 PED_DIR = ROOT / "data/local/horse_pedigree_5gen"
-IDX_DIR = ROOT / "data/research/pedigree_race_index"
-PED_10GEN_DIR = ROOT / "data/research/pedigree_10gen"
+IDX_DIR = ROOT / "data/page_reference/pedigree_race_index"
+PED_10GEN_DIR = ROOT / "data/local/research/pedigree_10gen"
 
 # 距離区分は父視点 (build_meta_cluster_artifacts.py) と統一:
 #   短距離 [0,1400) / マイル [1400,1800) / 中距離 [1800,2400) / 長距離 [2400,9999)
@@ -36,15 +36,17 @@ DIST_LABELS = ["短距離", "マイル", "中距離", "長距離"]
 STEEP_VENUES = ["中山", "阪神", "中京"]
 
 # 血統 role の重み（証拠ベース、role_lift_evidence.py の H1〜H4 に基づく）
-#   F (父)   : サンプル最大・std 最小、最も安定 → 主軸
-#   MF (母父): F と相関 r=0.04〜0.31 で独立、有効種牡馬数 50% → 第二の重み
-#   FF (父父): 父父系統。長距離・芝で有意 (Δ=+0.28, p=0.004)
-#   MMF(母母父): 隠れ適性シグナル (東京で Δ=+0.22, p=0.009)、サンプル小
+#   F             (父)   : サンプル最大・std 最小、最も安定 → 主軸
+#   MF            (母父)  : F と相関 r=0.04〜0.31 で独立 → 第二の重み
+#   FF            (父父)  : 長距離・芝で有意 (Δ=+0.28, p=0.004)
+#   maternal_deep (母母父以降): MMF∪MMMF∪MMMMF のゆる制約 union
+#                              ポジション問わず深母系に登場する馬全体で lift を推定
+#                              推論時は MMF/MMMF/MMMMF 各ポジションの種牡馬を参照して平均化
 ROLE_BLEND_WEIGHTS_BASE: dict[str, float] = {
-    "F":  0.50,
-    "MF": 0.25,
-    "FF": 0.15,
-    "MMF": 0.10,
+    "F":             0.50,
+    "MF":            0.25,
+    "FF":            0.15,
+    "maternal_deep": 0.15,
 }
 # 信頼度補正の擬似サンプル数 (n / (n+conf_pseudo_n))
 ROLE_CONF_PSEUDO_N = 100
@@ -640,17 +642,19 @@ def _fallback_main_group_lift(main_group: Optional[str], role: str, art: dict[st
 def _resolve_horse_role_stallions(horse_id: str) -> dict[str, Optional[dict[str, Any]]]:
     """horse_id → {role: {stallion_id, stallion_name, source}} を 5gen JSON ベースで構築。
 
-    role:
-        F   = generation=1, position=0  (父)
-        FF  = generation=2, position=0  (父父)
-        MF  = generation=2, position=2  (母父 = BMS)
-        MMF = generation=3, position=6  (母母父)
-            5gen JSON の position は世代内の 0-based。gen=k で 2^k 個。母系全 M の最後に父があるので
-            gen=k の最後の位置 = 2^k - 2 (= ...MF の位置)。
+    role        gen  pos   path        formula: pos = 2^gen - 2 for M^(gen-1)F
+    ---------  ----  ----  ----------  -------
+    F            1     0   F
+    FF           2     0   FF
+    MF           2     2   MF          2^2-2 = 2
+    MMF          3     6   MMF         2^3-2 = 6
+    MMMF         4    14   MMMF        2^4-2 = 14
+    MMMMF        5    30   MMMMF       2^5-2 = 30
     """
     horse_id = str(horse_id)
     p = PED_DIR / horse_id[:4] / f"{horse_id}.json"
-    out: dict[str, Optional[dict[str, Any]]] = {r: None for r in ("F", "FF", "MF", "MMF")}
+    all_roles = ("F", "FF", "MF", "MMF", "MMMF", "MMMMF")
+    out: dict[str, Optional[dict[str, Any]]] = {r: None for r in all_roles}
     if not p.exists():
         return out
     try:
@@ -667,10 +671,12 @@ def _resolve_horse_role_stallions(horse_id: str) -> dict[str, Optional[dict[str,
         by_pos[(g, pos)] = a
 
     POSITIONS = {
-        "F":   (1, 0),     # 父
-        "FF":  (2, 0),     # 父父
-        "MF":  (2, 2),     # 母父
-        "MMF": (3, 6),     # 母母父
+        "F":     (1,  0),   # 父
+        "FF":    (2,  0),   # 父父
+        "MF":    (2,  2),   # 母父
+        "MMF":   (3,  6),   # 母母父
+        "MMMF":  (4, 14),   # 母母母父  (2^4-2)
+        "MMMMF": (5, 30),   # 母母母母父 (2^5-2)
     }
     for role, key in POSITIONS.items():
         anc = by_pos.get(key)
@@ -683,24 +689,36 @@ def _resolve_horse_role_stallions(horse_id: str) -> dict[str, Optional[dict[str,
     return out
 
 
+def _merge_lift_dicts_weighted(
+    entries: list[tuple[float, dict[str, float]]]
+) -> dict[str, float]:
+    """[(weight, lift_dict), ...] → 重み付き平均 lift を返す。"""
+    all_k: set[str] = set()
+    for _, ld in entries:
+        all_k.update(ld.keys())
+    merged: dict[str, float] = {}
+    for k in all_k:
+        num = 0.0
+        den = 0.0
+        for w, ld in entries:
+            if k in ld:
+                num += w * ld[k]
+                den += w
+        if den > 0:
+            merged[k] = num / den
+    return merged
+
+
 def compute_role_blended_profile(
     horse_id: str,
     *,
     art: Optional[dict[str, Any]] = None,
     top_n: int = 7,
 ) -> Optional[dict[str, Any]]:
-    """horse_id について、F/MF/MMF/FF の役割別 lift と blended プロファイルを返す。
+    """horse_id について役割別 lift の blended プロファイルを返す。
 
-    返却:
-      {
-        "role_stallions": {role: {stallion_id, stallion_name}},
-        "role_profiles":  {role: {lift, n_records, weight_effective, source}},  # 採用された role のみ
-        "blended_lift":   {cond: blended_lift},
-        "blended_strengths": [{cond,label,lift,lift_pct}], 
-        "blended_weaknesses": [...],
-        "weights_used":   {role: effective_w},
-        "diagnostics":    {missing_roles, fallback_roles},
-      }
+    maternal_deep は MMF/MMMF/MMMMF の 3ポジション種牡馬を全て参照し、
+    n_records 加重平均した lift を 1ロールとして扱う。
     """
     if art is None:
         art = _load_artifacts()
@@ -712,7 +730,65 @@ def compute_role_blended_profile(
     role_profiles: dict[str, dict[str, Any]] = {}
     diag_missing: list[str] = []
     diag_fallback: list[str] = []
-    for role in ROLE_BLEND_WEIGHTS_BASE:
+
+    # ── maternal_deep: MMF/MMMF/MMMMF ポジションを union ────────────────
+    _DEEP_POSITIONS = ("MMF", "MMMF", "MMMMF")
+    _deep_indiv: list[tuple[int, dict[str, float]]] = []   # (n_records, lift)
+    _deep_sids: list[str] = []
+    _deep_snames: list[str] = []
+    for pos_role in _DEEP_POSITIONS:
+        info = role_stallions.get(pos_role)
+        if not info:
+            continue
+        sid_i = info.get("stallion_id")
+        prof_i = _role_lift_for(sid_i, "maternal_deep", art)
+        if prof_i and prof_i.get("lift"):
+            _deep_indiv.append((max(prof_i["n_records"], 1), prof_i["lift"]))
+            if sid_i:
+                _deep_sids.append(str(sid_i))
+            _deep_snames.append(info.get("stallion_name") or "")
+    if _deep_indiv:
+        total_n = sum(n for n, _ in _deep_indiv)
+        merged_lift = _merge_lift_dicts_weighted(
+            [(n / total_n, ld) for n, ld in _deep_indiv]
+        )
+        role_profiles["maternal_deep"] = {
+            "stallion_id": ",".join(_deep_sids),
+            "stallion_name": ",".join(s for s in _deep_snames if s),
+            "main_group": None,
+            "n_records": total_n,
+            "n_horses": 0,
+            "eb_total": None,
+            "lift": merged_lift,
+            "source": "individual",
+        }
+    else:
+        # fallback: 最初に見つかった deep 祖先の main_group で代替
+        sid_to_main = art.get("sid_to_main", {}) or {}
+        _fb_lifts: list[dict[str, float]] = []
+        for pos_role in _DEEP_POSITIONS:
+            info = role_stallions.get(pos_role)
+            sid_i = info.get("stallion_id") if info else None
+            main_g = sid_to_main.get(str(sid_i)) if sid_i else None
+            fb = _fallback_main_group_lift(main_g, "maternal_deep", art)
+            if fb:
+                _fb_lifts.append(fb)
+        if _fb_lifts:
+            merged_fb = _merge_lift_dicts_weighted(
+                [(1.0, fb) for fb in _fb_lifts]
+            )
+            role_profiles["maternal_deep"] = {
+                "stallion_id": None, "stallion_name": None,
+                "main_group": None, "n_records": 0, "n_horses": 0,
+                "eb_total": None, "lift": merged_fb,
+                "source": "main_group_fallback",
+            }
+            diag_fallback.append("maternal_deep")
+        else:
+            diag_missing.append("maternal_deep")
+
+    # ── F / MF / FF: 通常の単一種牡馬ルックアップ ──────────────────────
+    for role in ("F", "MF", "FF"):
         info = role_stallions.get(role)
         sid = info.get("stallion_id") if info else None
         sname = info.get("stallion_name") if info else None
@@ -2679,7 +2755,7 @@ def _load_horse_prize_map() -> Optional[dict[str, Any]]:
         name_map: dict[str, str] = {}
         try:
             from glob import glob
-            for f in sorted(glob(str(ROOT / "data/local/tables/*/race_result_flat.parquet"))):
+            for f in sorted(glob(str(ROOT / "data/page_reference/tables/*/race_result_flat.parquet"))):
                 df = pd.read_parquet(f, columns=["horse_id", "horse_name"])
                 df = df.dropna(subset=["horse_id", "horse_name"])
                 for hid, nm in zip(df["horse_id"].astype(str), df["horse_name"].astype(str)):
@@ -2688,9 +2764,10 @@ def _load_horse_prize_map() -> Optional[dict[str, Any]]:
         except Exception as e:
             logger.warning("horse_name マスタ構築失敗: %s", e)
         # 出走数 / 1着回数 / 平均着順 などの簡易メタ
+        sub["_win"] = (sub["finish_position"].astype(int) == 1).astype(int)
         agg = sub.groupby("horse_id").agg(
             n_records=("finish_position", "count"),
-            n_win=("finish_position", lambda s: int((s == 1).sum())),
+            n_win=("_win", "sum"),
         ).to_dict("index")
         # 全出走数 (5着以下含む)
         rec_all = rec[rec["finish_position"].notna() & (rec["finish_position"] > 0)]
@@ -2718,6 +2795,8 @@ def _load_pedigree_10gen() -> Optional[dict[str, Any]]:
         return None
     if "ped_10gen_loaded" in art:
         return art
+    if "ped_10gen_not_found" in art:
+        return None
     inv_path = PED_10GEN_DIR / "ancestor_to_horses.parquet"
     if not inv_path.exists():
         logger.warning(
@@ -2725,6 +2804,7 @@ def _load_pedigree_10gen() -> Optional[dict[str, Any]]:
             "  -> python -m src.research.pedigree.build_pedigree_10gen_index を実行してください",
             inv_path,
         )
+        art["ped_10gen_not_found"] = True
         return None
     with _lock:
         if "ped_10gen_loaded" in art:
@@ -2839,6 +2919,115 @@ def _resolve_target_stallions(
     sids = sorted(set(s for s in sids if s))
     label = {s: sid_to_name.get(s, s) for s in sids}
     return sids, label
+
+
+def _build_groupby_fast(
+    sub: pd.DataFrame,
+    cols: list[str],
+    label_fn,
+    min_n: int = 30,
+) -> list[dict[str, Any]]:
+    """_build_groupby の vectorized 高速版。
+    pandas groupby().agg() を1回呼ぶだけで全集計を完了する。
+    641グループ × _compute_aggregate() ループを排除し ~10x 高速化。
+    """
+    if sub.empty:
+        return []
+
+    s = sub.copy()
+    fp = s["finish_position"].astype("Float64")
+    s["_win"] = (fp == 1).astype(np.int32)
+    s["_p2"]  = (fp <= 2).astype(np.int32)
+    s["_p3"]  = (fp <= 3).astype(np.int32)
+    s["_2nd"] = (fp == 2).astype(np.int32)
+    s["_3rd"] = (fp == 3).astype(np.int32)
+    s["_45"]  = ((fp >= 4) & (fp <= 5)).astype(np.int32)
+    s["_6p"]  = (fp >= 6).astype(np.int32)
+
+    has_odds = "odds" in s.columns
+    if has_odds:
+        s["_wp"] = (s["odds"].astype("Float64") * 100 * s["_win"]).fillna(0)
+
+    has_place = "field_size" in s.columns and "place_payout_yen" in s.columns
+    if has_place:
+        fs = s["field_size"].astype("Float64")
+        eligible = (
+            (fs >= 8) |
+            ((fs >= 5) & (fs <= 7) & (s["_p2"] == 1)) |
+            ((fs < 5) & (s["_win"] == 1))
+        ).fillna(False)
+        s["_elig"] = eligible.astype(np.int32)
+        s["_pp"]   = s["place_payout_yen"].where(eligible, 0).fillna(0)
+
+    agg_spec: dict[str, Any] = {
+        "n_records":   ("finish_position", "count"),
+        "n_win":       ("_win", "sum"),
+        "n_p2":        ("_p2",  "sum"),
+        "n_p3":        ("_p3",  "sum"),
+        "n_2nd":       ("_2nd", "sum"),
+        "n_3rd":       ("_3rd", "sum"),
+        "n_4_5":       ("_45",  "sum"),
+        "n_6plus":     ("_6p",  "sum"),
+        "avg_finish":  ("finish_position", "mean"),
+        "n_horses":    ("horse_id",  "nunique"),
+        "n_races":     ("race_id",   "nunique"),
+    }
+    if has_odds:
+        agg_spec["win_payout"] = ("_wp", "sum")
+    if has_place:
+        agg_spec["place_bets"]    = ("_elig", "sum")
+        agg_spec["place_payout"]  = ("_pp",   "sum")
+
+    df_agg = s.groupby(cols, observed=True).agg(**agg_spec).reset_index()
+    df_agg = df_agg[df_agg["n_records"] >= min_n]
+
+    rows: list[dict[str, Any]] = []
+    for row in df_agg.itertuples(index=False):
+        n = int(row.n_records)
+        n_win = int(row.n_win)
+        n_p2  = int(row.n_p2)
+        n_p3  = int(row.n_p3)
+
+        win_roi: float | None = None
+        if has_odds and n > 0:
+            win_roi = float(row.win_payout) / (n * 100.0) * 100.0
+
+        place_roi: float | None = None
+        pb = int(row.place_bets) if has_place else 0
+        if has_place and pb > 0:
+            place_roi = float(row.place_payout) / (pb * 100.0) * 100.0
+
+        keys = tuple(getattr(row, c) for c in cols)
+        entry: dict[str, Any] = {
+            "key":    " × ".join(str(k) for k in keys),
+            "label":  label_fn(keys),
+            "n_records":  n,
+            "n_horses":   int(row.n_horses),
+            "n_races":    int(row.n_races),
+            "n_win":      n_win,
+            "n_place2":   n_p2,
+            "n_place3":   n_p3,
+            "n_1st":      n_win,
+            "n_2nd":      int(row.n_2nd),
+            "n_3rd":      int(row.n_3rd),
+            "n_4_5":      int(row.n_4_5),
+            "n_6plus":    int(row.n_6plus),
+            "finish_dist_str": f"{n_win}-{int(row.n_2nd)}-{int(row.n_3rd)}-{int(row.n_4_5)}-{int(row.n_6plus)}",
+            "win_rate":    n_win / n,
+            "place2_rate": n_p2  / n,
+            "place3_rate": n_p3  / n,
+            "avg_finish":  float(row.avg_finish) if not pd.isna(row.avg_finish) else None,
+            "avg_popularity": None,
+            "win_roi":   win_roi,
+            "place_roi": place_roi,
+            "place_bets":  pb,
+            "place_coverage": None,
+        }
+        for c, k in zip(cols, keys):
+            entry[c] = str(k) if k is not None else ""
+        rows.append(entry)
+
+    return rows
 
 
 def _compute_aggregate(df: pd.DataFrame) -> dict[str, Any]:
@@ -3765,10 +3954,6 @@ def compute_sire_best_conditions(
             "rankings": {},
         }
 
-    def _agg_group(grp: pd.DataFrame) -> dict[str, Any]:
-        a = _compute_aggregate(grp)
-        return a
-
     def _rank_by(rows: list[dict[str, Any]], key: str, *, reverse=True, n: int = None) -> list[dict[str, Any]]:
         items = [r for r in rows if r.get(key) is not None]
         items.sort(key=lambda r: r[key], reverse=reverse)
@@ -3776,34 +3961,19 @@ def compute_sire_best_conditions(
             return items
         return items[:n]
 
-    def _build_groupby(cols: list[str], label_fn) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        for keys, g in sub.groupby(cols, observed=True):
-            a = _agg_group(g)
-            if a.get("n_records", 0) < min_n:
-                continue
-            if not isinstance(keys, tuple):
-                keys = (keys,)
-            a["key"] = " × ".join(str(k) for k in keys)
-            a["label"] = label_fn(keys)
-            for c, k in zip(cols, keys):
-                a[c] = str(k) if k is not None else ""
-            rows.append(a)
-        return rows
-
-    combo_rows = _build_groupby(
-        ["venue", "surface", "dist_cat"],
-        lambda keys: f"{keys[0]} × {keys[1]} × {keys[2]}"
+    combo_rows = _build_groupby_fast(
+        sub, ["venue", "surface", "dist_cat"],
+        lambda keys: f"{keys[0]} × {keys[1]} × {keys[2]}", min_n=min_n
     )
-    combo_full_rows = _build_groupby(
-        ["venue", "surface", "dist_cat", "track_condition", "grade"],
-        lambda keys: f"{keys[0]} × {keys[1]} × {keys[2]} × {keys[3]} × {keys[4]}"
+    combo_full_rows = _build_groupby_fast(
+        sub, ["venue", "surface", "dist_cat", "track_condition", "grade"],
+        lambda keys: f"{keys[0]} × {keys[1]} × {keys[2]} × {keys[3]} × {keys[4]}", min_n=min_n
     )
-    by_venue_rows  = _build_groupby(["venue"],   lambda k: str(k[0]))
-    by_surface_rows= _build_groupby(["surface"], lambda k: str(k[0]))
-    by_dist_rows   = _build_groupby(["dist_cat"],lambda k: str(k[0]))
-    by_track_rows  = _build_groupby(["track_condition"], lambda k: str(k[0]))
-    by_grade_rows  = _build_groupby(["grade"],   lambda k: str(k[0]))
+    by_venue_rows   = _build_groupby_fast(sub, ["venue"],           lambda k: str(k[0]), min_n=min_n)
+    by_surface_rows = _build_groupby_fast(sub, ["surface"],         lambda k: str(k[0]), min_n=min_n)
+    by_dist_rows    = _build_groupby_fast(sub, ["dist_cat"],        lambda k: str(k[0]), min_n=min_n)
+    by_track_rows   = _build_groupby_fast(sub, ["track_condition"], lambda k: str(k[0]), min_n=min_n)
+    by_grade_rows   = _build_groupby_fast(sub, ["grade"],           lambda k: str(k[0]), min_n=min_n)
 
     return {
         "status": "ok",

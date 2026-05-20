@@ -39,7 +39,7 @@ def _parse_sex(sex_age: str) -> str:
 
 def main(clear_bad: bool = False) -> int:
     print("[load] race_result_flat (全年) ...", flush=True)
-    files = sorted(glob.glob(str(ROOT / "data/local/tables/*/race_result_flat.parquet")))
+    files = sorted(glob.glob(str(ROOT / "data/page_reference/tables/*/race_result_flat.parquet")))
     dfs = [pd.read_parquet(f, columns=["horse_id", "sex_age"]) for f in files]
     df = pd.concat(dfs, ignore_index=True)
     df["horse_id"] = df["horse_id"].astype(str)

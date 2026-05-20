@@ -27,7 +27,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_KB_PATH = Path(__file__).resolve().parents[3] / "data" / "knowledge" / "myostatin_genes.json"
+_KB_PATH = Path(__file__).resolve().parents[3] / "data" / "local" / "knowledge" / "myostatin_genes.json"
 
 
 class MyostatinLookup:

@@ -59,7 +59,7 @@ POLL_INTERVAL_SEC = 300  # 5分間隔
 class JRABabaLiveScraper:
     """JRA公式馬場情報ページからライブデータを取得する。"""
 
-    def __init__(self, output_dir: str = "data/jra_baba"):
+    def __init__(self, output_dir: str = "data/page_reference/cushion"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._state_file = self.output_dir / ".last_cushion_hash"
@@ -409,7 +409,7 @@ class JRABabaLiveScraper:
 #  スケジュール連動ポーリングデーモン
 # ═══════════════════════════════════════════════════════════════════
 
-def _load_poll_schedule(output_dir: str = "data/jra_baba") -> list[dict]:
+def _load_poll_schedule(output_dir: str = "data/page_reference/cushion") -> list[dict]:
     """カレンダーJSONからpoll_scheduleをロード。なければ取得。"""
     from src.scraper.jra_calendar import JRACalendarScraper
     scraper = JRACalendarScraper(output_dir=output_dir)
@@ -484,7 +484,7 @@ def _next_poll_time(schedule: list[dict]) -> tuple[str, str, int]:
     return "", "", 3600
 
 
-def start_watch_daemon(output_dir: str = "data/jra_baba"):
+def start_watch_daemon(output_dir: str = "data/page_reference/cushion"):
     """
     JRA年間スケジュール連動の更新検知ポーリングデーモン。
 
@@ -576,7 +576,7 @@ def _format_duration(seconds: int) -> str:
     return f"{h}時間{m}分"
 
 
-def run_cron_job(output_dir: str = "data/jra_baba") -> int:
+def run_cron_job(output_dir: str = "data/page_reference/cushion") -> int:
     """
     cron から呼ばれる軽量エントリポイント。
 
@@ -614,7 +614,7 @@ def run_cron_job(output_dir: str = "data/jra_baba") -> int:
     return len(records)
 
 
-def print_upcoming_schedule(output_dir: str = "data/jra_baba", days: int = 14):
+def print_upcoming_schedule(output_dir: str = "data/page_reference/cushion", days: int = 14):
     """直近のポーリングスケジュールを表示。"""
     schedule = _load_poll_schedule(output_dir)
     today = datetime.date.today()

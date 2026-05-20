@@ -363,7 +363,7 @@ _hr_cache: list[dict] | None = None
 _hr_cache_lock = threading.Lock()
 _hr_cache_ts: float = 0.0
 
-_LOCAL_HR_SNAPSHOT = Path("data/research/_hr_snapshot_cache.jsonl.gz")
+_LOCAL_HR_SNAPSHOT = Path("data/local/research/_hr_snapshot_cache.jsonl.gz")
 
 
 def _load_hr_snapshot(storage: Any) -> list[dict]:

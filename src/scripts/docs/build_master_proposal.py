@@ -42,6 +42,32 @@ def extract_main(html: str) -> str:
     return m2.group(1).strip() if m2 else ""
 
 
+def extract_doc_content(html: str) -> str:
+    """docs/html/ 配下の単体ドキュメント HTML から本文を抽出。"""
+    m = re.search(r'<article\s+class="md-body">([\s\S]*?)</article>', html, re.I)
+    if m:
+        return m.group(1).strip()
+    return extract_main(html)
+
+
+_SKIP_DOC_HTML = frozenset(
+    {
+        "index.html",
+        "keiba_ai_pipeline_proposal.html",
+        "data_features_reference.html",
+        "data_storage_platform_comparison.html",
+    }
+)
+
+
+def collect_doc_html_pages() -> list[Path]:
+    pages = [p for p in sorted(HTML_DIR.glob("*.html")) if p.name not in _SKIP_DOC_HTML]
+    modeling = HTML_DIR / "modeling"
+    if modeling.is_dir():
+        pages.extend(sorted(modeling.glob("*.html")))
+    return pages
+
+
 def read_text(p: Path) -> str:
     return p.read_text(encoding="utf-8", errors="replace")
 
@@ -49,16 +75,19 @@ def read_text(p: Path) -> str:
 def main() -> None:
     parts: list[str] = []
 
-    # --- Markdown ソース（docs 直下 + modeling）---
-    md_files = sorted(DOCS.glob("*.md")) + sorted((DOCS / "modeling").glob("*.md"))
+    # --- docs/html 単体ドキュメント ---
+    html_doc_pages = collect_doc_html_pages()
 
-    for p in md_files:
+    for p in html_doc_pages:
         rel = p.relative_to(ROOT)
+        inner = extract_doc_content(read_text(p))
+        if not inner.strip():
+            continue
         parts.append(
             f'<section class="section md-source" id="src-{p.stem}">'
-            f'<h2><span class="num">MD</span> {rel}</h2>'
+            f'<h2><span class="num">DOC</span> {rel}</h2>'
             f'<p class="muted">Source file: <code class="inline">{rel}</code></p>'
-            f'<div class="md-wrap">{md_to_html(read_text(p))}</div>'
+            f'<div class="md-wrap">{inner}</div>'
             f"</section>"
         )
 
@@ -144,8 +173,8 @@ def main() -> None:
 
     # --- TOC ---
     toc_lines = ['<a href="#hero">表紙・目的</a>', '<h4>Notebook</h4>', '<a href="#notebooks-overview">特徴量エンジニアリング</a>']
-    toc_lines.append('<h4>Markdown</h4>')
-    for p in md_files:
+    toc_lines.append('<h4>ドキュメント</h4>')
+    for p in html_doc_pages:
         toc_lines.append(f'<a href="#src-{p.stem}">{p.name}</a>')
     toc_lines.append('<h4>HTML 抽出</h4>')
     for sid, _ in html_pages:
@@ -191,7 +220,7 @@ def main() -> None:
     <div class="eyebrow">KEIBA-VPN / 企画書・完全版</div>
     <h1>競馬 AI パイプライン — 統合ドキュメント</h1>
     <p>
-      本 HTML は <code class="inline">docs/</code> 配下の Markdown・既存 HTML ダッシュボード、
+      本 HTML は <code class="inline">docs/html/</code> 配下のドキュメント・既存 HTML ダッシュボード、
       および <code class="inline">notebooks/feature_engineering/</code> の探索成果を<strong>単一ファイル</strong>に統合したものです。
       オフライン閲覧・印刷・社内配布を想定しています。ソースパスは各章に記載しています。
     </p>

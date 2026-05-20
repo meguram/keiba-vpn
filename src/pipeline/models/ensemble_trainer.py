@@ -64,7 +64,7 @@ class EnsembleTrainer:
 
     def train(
         self,
-        features_dir: str = "data/features",
+        features_dir: str = "data/local/features",
         test_ratio: float = 0.2,
         years: list[str] | None = None,
     ) -> dict[str, Any]:

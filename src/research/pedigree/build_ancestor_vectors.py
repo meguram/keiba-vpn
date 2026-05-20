@@ -44,8 +44,8 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-ART = ROOT / "data/research/bloodline_meta_cluster"
-CATS_PATH = ROOT / "data/research/pedigree_race_index/horse_pedigree_cats.parquet"
+ART = ROOT / "data/page_reference/note_aptitude_race"
+CATS_PATH = ROOT / "data/page_reference/pedigree_race_index/horse_pedigree_cats.parquet"
 
 ODDS_THRESHOLD = 30.0
 
@@ -73,15 +73,15 @@ HEAVY_CONDS = {"重", "不良"}                 # 道悪
 
 def _bin_dist(d: int) -> str:
     if d < 1400: return "短距離"
-    if d < 1700: return "マイル"
-    if d < 2100: return "中距離"
+    if d < 1800: return "マイル"
+    if d < 2400: return "中距離"
     return "長距離"
 
 
 def main(min_n_races: int = 50, max_gen: int = 5) -> int:
     # ── 1) 全レース結果 (オッズ < 30 倍) を結合 ──
     print(f"[load] race_result_flat (全年) ...", flush=True)
-    files = sorted(glob.glob(str(ROOT / "data/local/tables/*/race_result_flat.parquet")))
+    files = sorted(glob.glob(str(ROOT / "data/page_reference/tables/*/race_result_flat.parquet")))
     cols = ["race_id", "horse_id", "distance", "surface", "venue",
             "track_condition", "odds", "finish_position"]
     dfs = [pd.read_parquet(f, columns=cols) for f in files]

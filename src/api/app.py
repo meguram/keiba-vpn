@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import sys
+import math
 import threading
 import time as _time
 import traceback
@@ -19,6 +20,17 @@ from datetime import datetime
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _scrub_nan(obj: Any) -> Any:
+    """float NaN / Inf を None に変換する（JSON シリアライズ前の正規化用）。"""
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    if isinstance(obj, dict):
+        return {k: _scrub_nan(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_scrub_nan(v) for v in obj]
+    return obj
 
 from dotenv import load_dotenv as _load_dotenv
 _load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
@@ -69,19 +81,47 @@ _WORKER_HEALTH_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "data", "queue", ".worker_health.json",
 )
+_CRON_STATE_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data", "queue", ".cron_state.json",
+)
 
 # ── data/cache 定期クリーンアップ（HybridStorage.cleanup_disk_cache） ──
 _disk_cache_cleanup_thread: threading.Thread | None = None
 _disk_cache_cleanup_stop = threading.Event()
+_disk_cache_cleanup_state: dict[str, Any] = {
+    "running": False, "last_run": None, "last_result": None,
+    "next_run": None, "run_count": 0,
+}
+_disk_cache_cleanup_lock = threading.Lock()
 
 # ── キュー定期メンテ（1時間ごと: 失敗→待機、完了レコード削除）リーダーのみ ──
 _queue_maintain_thread: threading.Thread | None = None
 _queue_maintain_stop = threading.Event()
+_queue_maintain_state: dict[str, Any] = {
+    "running": False, "last_run": None, "last_result": None,
+    "next_run": None, "run_count": 0,
+}
+_queue_maintain_lock = threading.Lock()
 
 # ── logs/ 保持: 直近1週間超の *.log を毎日 12:00 JST に削除（リーダー1プロセス・fcntl） ──
 _logs_retention_thread: threading.Thread | None = None
 _logs_retention_stop = threading.Event()
 _log_retention_leader_fh = None
+_logs_retention_state: dict[str, Any] = {
+    "running": False, "last_run": None, "last_result": None,
+    "next_run": None, "run_count": 0,
+}
+_logs_retention_lock = threading.Lock()
+
+# ── 未来レース出馬表 毎日自動取得（race_lists → race_shutuba、リーダーのみ） ──
+_daily_shutuba_thread: threading.Thread | None = None
+_daily_shutuba_stop = threading.Event()
+_daily_shutuba_state: dict[str, Any] = {
+    "running": False, "last_run": None, "last_result": None,
+    "next_run": None, "run_count": 0,
+}
+_daily_shutuba_lock = threading.Lock()
 
 
 _AUTO_RESUME_DELAY = 120  # アクセス一時停止後の自動復帰待機（秒）
@@ -160,6 +200,33 @@ def get_worker_health() -> dict:
         "slot_count": data.get("slot_count", 0),
         "live_slots": data.get("live_slots", 0),
     }
+
+
+def _write_cron_state(job_id: str, partial: dict) -> None:
+    """クロンジョブの状態をファイルに書き込む（マルチワーカー対応）。"""
+    try:
+        try:
+            with open(_CRON_STATE_FILE) as f:
+                data = json.loads(f.read())
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        if job_id not in data:
+            data[job_id] = {}
+        data[job_id].update({k: v for k, v in partial.items() if v is not None or k in ("last_run", "last_result")})
+        with open(_CRON_STATE_FILE, "w") as f:
+            f.write(json.dumps(data))
+    except OSError:
+        pass
+
+
+def _read_cron_state(job_id: str) -> dict:
+    """ファイルからクロンジョブの状態を読む（マルチワーカー対応）。"""
+    try:
+        with open(_CRON_STATE_FILE) as f:
+            data = json.loads(f.read())
+        return data.get(job_id, {})
+    except (OSError, json.JSONDecodeError):
+        return {}
 
 
 def _ensure_worker_slots() -> None:
@@ -264,7 +331,17 @@ def _queue_slot_worker(slot_id: int) -> None:
 
                 # スロット 0: precheck ジョブを pending/completed へ移行
                 if slot_id == 0:
-                    queue._run_storage_precheck()
+                    _pc = queue.count_precheck_jobs()
+                    if _pc > 0:
+                        log.info("プレチェック実行: %d 件のストレージ確認中…", _pc)
+                    _pr = queue._run_storage_precheck()
+                    if _pc > 0 and isinstance(_pr, dict):
+                        _skip = _pr.get("to_completed", 0)
+                        _enq  = _pr.get("to_pending", 0)
+                        log.info(
+                            "プレチェック完了: スキップ %d 件 / キュー投入 %d 件 (残 precheck: %d 件)",
+                            _skip, _enq, queue.count_precheck_jobs(),
+                        )
 
                 # ── ジョブ取得・実行 ──
                 slot_stop.clear()
@@ -386,7 +463,7 @@ def _try_acquire_queue_runner_leader() -> bool:
 
 @asynccontextmanager
 async def lifespan(app):
-    global _scheduler_thread, _queue_worker_threads, _queue_runner_leader_fh, _disk_cache_cleanup_thread, _queue_maintain_thread, _logs_retention_thread, _log_retention_leader_fh
+    global _scheduler_thread, _queue_worker_threads, _queue_runner_leader_fh, _disk_cache_cleanup_thread, _queue_maintain_thread, _logs_retention_thread, _log_retention_leader_fh, _daily_shutuba_thread
 
     # 構造チェックスケジューラ起動
     _scheduler_stop.clear()
@@ -457,6 +534,20 @@ async def lifespan(app):
         _logs_retention_thread = None
         logger.info("logs/ 保持クリーンアップは別ワーカーが担当")
 
+    # 未来レース 出馬表 毎日自動取得（リーダーのみ）
+    if _queue_is_leader:
+        _daily_shutuba_stop.clear()
+        _daily_shutuba_thread = threading.Thread(
+            target=_daily_shutuba_enqueue_loop,
+            daemon=True,
+            name="daily-shutuba-enqueue",
+        )
+        _daily_shutuba_thread.start()
+        logger.info("出馬表 毎日自動取得スレッド起動（当プロセスがリーダー）")
+    else:
+        _daily_shutuba_thread = None
+        logger.info("出馬表 毎日自動取得は別プロセスが担当")
+
     try:
         from src.scraper.queue_worker_log import ensure_queue_worker_log_handler
 
@@ -488,6 +579,23 @@ async def lifespan(app):
             "scrape-queue API（tasks / add-job / enqueue-period-horses / worker-logs / resume）登録済み"
         )
 
+    # bloodline-cluster の重いデータをバックグラウンドで先読みしておく (初回リクエスト高速化)
+    def _preload_bloodline_cluster():
+        try:
+            from src.api.bloodline_meta_cluster import (
+                _load_stats_assets,
+                _load_pedigree_10gen,
+                _load_horse_prize_map,
+            )
+            _load_stats_assets()
+            _load_pedigree_10gen()
+            _load_horse_prize_map()
+            logger.info("bloodline-cluster 先読み完了")
+        except Exception as _e:
+            logger.warning("bloodline-cluster 先読み失敗: %s", _e)
+
+    threading.Thread(target=_preload_bloodline_cluster, daemon=True, name="bloodline-preload").start()
+
     yield
 
     # 終了処理
@@ -496,6 +604,7 @@ async def lifespan(app):
     _disk_cache_cleanup_stop.set()
     _queue_maintain_stop.set()
     _logs_retention_stop.set()
+    _daily_shutuba_stop.set()
 
     if _scheduler_thread:
         _scheduler_thread.join(timeout=5)
@@ -508,6 +617,8 @@ async def lifespan(app):
         _queue_maintain_thread.join(timeout=5)
     if _logs_retention_thread:
         _logs_retention_thread.join(timeout=5)
+    if _daily_shutuba_thread:
+        _daily_shutuba_thread.join(timeout=5)
     if _log_retention_leader_fh:
         try:
             _log_retention_leader_fh.close()
@@ -558,7 +669,7 @@ def _is_jra_race(race_id: str) -> bool:
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
-app.mount("/data/image", StaticFiles(directory=os.path.join(BASE_DIR, "data", "image")), name="data_image")
+app.mount("/data/image", StaticFiles(directory=os.path.join(BASE_DIR, "data", "local", "image")), name="data_image")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 templates.env.globals["is_dev_check"] = is_developer
 
@@ -728,6 +839,8 @@ def _disk_cache_cleanup_loop():
             standard_log_formatter()
         )
         _log.addHandler(_h)
+    from datetime import datetime as _dt2, timezone as _tz2, timedelta as _td2
+    _JST2 = _tz2(_td2(hours=9))
     interval = float(_os.environ.get("DISK_CACHE_CLEANUP_INTERVAL_SEC", "86400"))
     _log.info(
         "data/cache クリーンアップ: 初回即時、その後 %.0fs ごと (max_age=%s)",
@@ -735,6 +848,9 @@ def _disk_cache_cleanup_loop():
         _os.environ.get("DISK_CACHE_CLEANUP_MAX_AGE_SEC", "604800"),
     )
     while not _disk_cache_cleanup_stop.is_set():
+        with _disk_cache_cleanup_lock:
+            _disk_cache_cleanup_state["running"] = True
+            _disk_cache_cleanup_state["next_run"] = None
         try:
             st = _get_storage()
             r = st.cleanup_disk_cache()
@@ -742,8 +858,20 @@ def _disk_cache_cleanup_loop():
             sn = st.cleanup_snapshot_files(max_age_seconds=86400)
             if sn:
                 _log.info("snapshot cleanup: removed %d files", sn)
+            with _disk_cache_cleanup_lock:
+                _disk_cache_cleanup_state["last_run"] = _dt2.now(_JST2).isoformat()
+                _disk_cache_cleanup_state["last_result"] = {**r, "snapshot_removed": sn}
+                _disk_cache_cleanup_state["run_count"] += 1
         except Exception as e:
             _log.warning("disk cache cleanup 失敗: %s", e)
+            with _disk_cache_cleanup_lock:
+                _disk_cache_cleanup_state["last_run"] = _dt2.now(_JST2).isoformat()
+                _disk_cache_cleanup_state["last_result"] = {"error": str(e)}
+        finally:
+            with _disk_cache_cleanup_lock:
+                _disk_cache_cleanup_state["running"] = False
+                next_ts = (_dt2.now(_JST2).timestamp() + interval)
+                _disk_cache_cleanup_state["next_run"] = _dt2.fromtimestamp(next_ts, tz=_JST2).isoformat()
         if _disk_cache_cleanup_stop.wait(timeout=interval):
             break
     _log.info("data/cache クリーンアップスレッド終了")
@@ -776,12 +904,19 @@ def _queue_hourly_maintain_loop():
     _m_log.info("キュー定期メンテ: 初回以降 %.0f 秒ごと (失敗→待機 + 完了レコード削除)", interval)
 
     from src.scraper.job_queue import run_hourly_queue_maintenance
+    from datetime import datetime as _dt3, timezone as _tz3, timedelta as _td3
+    _JST3 = _tz3(_td3(hours=9))
 
     while not _queue_maintain_stop.is_set():
+        next_ts = _dt3.now(_JST3).timestamp() + interval
+        with _queue_maintain_lock:
+            _queue_maintain_state["next_run"] = _dt3.fromtimestamp(next_ts, tz=_JST3).isoformat()
         if _queue_maintain_stop.wait(timeout=interval):
             break
         if _queue_maintain_stop.is_set():
             break
+        with _queue_maintain_lock:
+            _queue_maintain_state["running"] = True
         try:
             r = run_hourly_queue_maintenance()
             if r.get("ok"):
@@ -792,8 +927,18 @@ def _queue_hourly_maintain_loop():
                 )
             else:
                 _m_log.warning("キュー定期メンテ: %s", r.get("error") or r)
+            with _queue_maintain_lock:
+                _queue_maintain_state["last_run"] = _dt3.now(_JST3).isoformat()
+                _queue_maintain_state["last_result"] = r
+                _queue_maintain_state["run_count"] += 1
         except Exception as e:
             _m_log.error("キュー定期メンテ失敗: %s", e, exc_info=True)
+            with _queue_maintain_lock:
+                _queue_maintain_state["last_run"] = _dt3.now(_JST3).isoformat()
+                _queue_maintain_state["last_result"] = {"error": str(e)}
+        finally:
+            with _queue_maintain_lock:
+                _queue_maintain_state["running"] = False
 
     _m_log.info("キュー定期メンテスレッド終了")
 
@@ -855,6 +1000,8 @@ def _logs_retention_loop():
         else:
             target = target_today
         wait_seconds = (target - now).total_seconds()
+        with _logs_retention_lock:
+            _logs_retention_state["next_run"] = target.isoformat()
         _log.info(
             "次回 logs 保持期限切れ削除: %s (%.0f秒後)",
             target.strftime("%Y-%m-%d %H:%M JST"),
@@ -864,6 +1011,8 @@ def _logs_retention_loop():
             break
         if _logs_retention_stop.is_set():
             break
+        with _logs_retention_lock:
+            _logs_retention_state["running"] = True
         try:
             from src.utils.log_retention import run_log_retention_once
 
@@ -876,9 +1025,122 @@ def _logs_retention_loop():
             )
             if r.get("errors"):
                 _log.warning("logs 保持クリーンアップ: 一部失敗 %s", r.get("errors"))
+            with _logs_retention_lock:
+                _logs_retention_state["last_run"] = _dt.now(_JST).isoformat()
+                _logs_retention_state["last_result"] = r
+                _logs_retention_state["run_count"] += 1
         except Exception as e:
             _log.warning("logs 保持クリーンアップ失敗: %s", e, exc_info=True)
+            with _logs_retention_lock:
+                _logs_retention_state["last_run"] = _dt.now(_JST).isoformat()
+                _logs_retention_state["last_result"] = {"error": str(e)}
+        finally:
+            with _logs_retention_lock:
+                _logs_retention_state["running"] = False
     _log.info("logs/ 保持クリーンアップスレッド終了")
+
+
+def _daily_shutuba_enqueue_loop() -> None:
+    """
+    毎日指定時刻 (JST) に、今日から DAYS_AHEAD 日先までの race_lists を走査し
+    未取得の race_shutuba をキューへ投入する。smart_skip=True なので取得済みはスキップ。
+
+    環境変数:
+        DAILY_SHUTUBA_HOUR_JST   (デフォルト 7)
+        DAILY_SHUTUBA_MINUTE_JST (デフォルト 0)
+        DAILY_SHUTUBA_DAYS_AHEAD (デフォルト 14)
+    """
+    import os as _os
+    from datetime import date as _date, datetime as _dt, timedelta as _td, timezone as _tz
+
+    _JST = _tz(_td(hours=9))
+    _log = logging.getLogger("scheduler.daily_shutuba")
+    _log.setLevel(logging.INFO)
+    if not _log.handlers:
+        _h = logging.StreamHandler()
+        _h.setFormatter(standard_log_formatter())
+        _log.addHandler(_h)
+
+    try:
+        h = int(_os.environ.get("DAILY_SHUTUBA_HOUR_JST", "7"))
+        m = int(_os.environ.get("DAILY_SHUTUBA_MINUTE_JST", "0"))
+        days_ahead = int(_os.environ.get("DAILY_SHUTUBA_DAYS_AHEAD", "14"))
+    except ValueError:
+        h, m, days_ahead = 7, 0, 14
+    h = max(0, min(23, h))
+    m = max(0, min(59, m))
+    days_ahead = max(1, min(60, days_ahead))
+
+    _log.info("出馬表 毎日自動取得スレッド起動 (%02d:%02d JST, 今日〜+%d日)", h, m, days_ahead)
+
+    while not _daily_shutuba_stop.is_set():
+        now = _dt.now(_JST)
+        target_today = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        if now >= target_today:
+            target = target_today + _td(days=1)
+        else:
+            target = target_today
+        wait_seconds = (target - now).total_seconds()
+        with _daily_shutuba_lock:
+            _daily_shutuba_state["next_run"] = target.isoformat()
+        _log.info(
+            "次回 出馬表 自動投入: %s (%.0f秒後)",
+            target.strftime("%Y-%m-%d %H:%M JST"),
+            wait_seconds,
+        )
+        if _daily_shutuba_stop.wait(timeout=wait_seconds):
+            break
+        if _daily_shutuba_stop.is_set():
+            break
+        with _daily_shutuba_lock:
+            _daily_shutuba_state["running"] = True
+        try:
+            today = _date.today()
+            end = today + _td(days=days_ahead)
+            body = {
+                "start_date": today.strftime("%Y%m%d"),
+                "end_date": end.strftime("%Y%m%d"),
+                "tasks": ["race_shutuba"],
+                "smart_skip": True,
+                "dry_run": False,
+                "limit": 500,
+                "jra_only": True,
+                "priority": 10,
+            }
+            result = _sync_enqueue_period_race_tasks(body)
+            added = result.get("created", 0)
+            skipped = result.get("skipped", 0)
+            total = result.get("candidate_races", 0)
+            _log.info(
+                "出馬表 自動投入完了: added=%d skipped=%d total=%d (%s〜%s)",
+                added, skipped, total,
+                body["start_date"], body["end_date"],
+            )
+            if added:
+                _kick_scrape_queue_worker()
+            with _daily_shutuba_lock:
+                _daily_shutuba_state["last_run"] = _dt.now(_JST).isoformat()
+                _daily_shutuba_state["last_result"] = result
+                _daily_shutuba_state["run_count"] += 1
+                _state_snap = dict(_daily_shutuba_state)
+            _write_cron_state("daily_shutuba", {
+                "last_run": _state_snap["last_run"],
+                "last_result": _state_snap["last_result"],
+                "run_count": _state_snap["run_count"],
+            })
+        except Exception as e:
+            _log.warning("出馬表 自動投入失敗: %s", e, exc_info=True)
+            with _daily_shutuba_lock:
+                _daily_shutuba_state["last_run"] = _dt.now(_JST).isoformat()
+                _daily_shutuba_state["last_result"] = {"error": str(e)}
+            _write_cron_state("daily_shutuba", {
+                "last_run": _daily_shutuba_state["last_run"],
+                "last_result": _daily_shutuba_state["last_result"],
+            })
+        finally:
+            with _daily_shutuba_lock:
+                _daily_shutuba_state["running"] = False
+    _log.info("出馬表 毎日自動取得スレッド終了")
 
 
 def _kick_scrape_queue_worker() -> None:
@@ -1825,7 +2087,7 @@ async def get_raw_data(category: str, key: str):
             if not year.isdigit() or len(key) < 10:
                 return None, "race_performance"
             base = Path(__file__).resolve().parents[2]
-            path = base / "data" / "features" / "race_performance" / "races" / year / f"{key}.json"
+            path = base / "data" / "local" / "features" / "race_performance" / "races" / year / f"{key}.json"
             if not path.exists():
                 return None, "race_performance"
             try:
@@ -1932,7 +2194,7 @@ def _horse_race_performance_history_rows(horse_id: str, limit: int) -> list[dict
         if len(rid) != 12 or not rid.isdigit():
             continue
         year = rid[:4]
-        path = base / "data" / "features" / "race_performance" / "races" / year / f"{rid}.json"
+        path = base / "data" / "local" / "features" / "race_performance" / "races" / year / f"{rid}.json"
         if not path.is_file():
             continue
         try:
@@ -2313,7 +2575,9 @@ def _fetch_person_profile(ptype: str, person_id: str) -> dict:
         return cached[1]
 
     from pathlib import Path
-    local_path = Path(f"data/meta/person/{ptype}_{person_id}.json")
+    if len(person_id) > 200:
+        return {}
+    local_path = Path(f"data/local/meta/person/{ptype}_{person_id}.json")
     if local_path.exists():
         try:
             data = json.loads(local_path.read_text(encoding="utf-8"))
@@ -3380,6 +3644,25 @@ async def api_scrape_queue_resume():
         )
 
 
+@app.post("/api/scrape-queue/dismiss-auto-cleared-notice", response_class=JSONResponse)
+async def api_scrape_queue_dismiss_auto_cleared_notice():
+    """HTTP 400 連続による自動全消去の告知バナーのみ閉じる（一時停止は維持）。"""
+    try:
+        from src.scraper.scrape_access_pause import (
+            dismiss_queue_auto_cleared_notice,
+            read_access_pause,
+        )
+
+        dismiss_queue_auto_cleared_notice()
+        return JSONResponse({"status": "ok", "transport_pause": read_access_pause()})
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
+
+
 @app.post("/api/scrape-queue/recover", response_class=JSONResponse)
 async def api_scrape_queue_recover():
     """キューが止まったときの緊急対応: running状態の孤児ジョブをpendingに戻し、ロックファイルを削除"""
@@ -3847,6 +4130,7 @@ async def scrape_queue_add_generic_job(request: Request):
         except ValueError as ve:
             return JSONResponse({"error": str(ve)}, status_code=400)
 
+        _ensure_worker_slots()
         _kick_scrape_queue_worker()
 
         return JSONResponse({"status": "success", **result})
@@ -4320,6 +4604,11 @@ def _sync_enqueue_period_race_tasks(body: dict) -> dict:
         race_kw["skip_local_mirror"] = coerce_bool(
             body.get("skip_local_mirror"), default=False
         )
+    if "priority" in body:
+        try:
+            race_kw["priority"] = int(body["priority"])
+        except (TypeError, ValueError):
+            pass
 
     storage = _get_storage()
     queue = ScrapeJobQueue()
@@ -5531,7 +5820,7 @@ def _extract_feature_highlights(features_df, entries: list[dict]) -> list[dict]:
 async def get_structure_status():
     """最新の構造チェック結果を返す。"""
     from pathlib import Path
-    check_path = Path(BASE_DIR) / "data" / "meta" / "structure" / "last_check.json"
+    check_path = Path(BASE_DIR) / "data" / "local" / "meta" / "structure" / "last_check.json"
     if not check_path.exists():
         return JSONResponse({
             "status": "no_data",
@@ -5548,7 +5837,7 @@ async def get_structure_status():
 async def get_structure_report():
     """構造チェックレポート (Markdown) を返す。"""
     from pathlib import Path
-    report_path = Path(BASE_DIR) / "data" / "meta" / "structure" / "report.md"
+    report_path = Path(BASE_DIR) / "data" / "local" / "meta" / "structure" / "report.md"
     if not report_path.exists():
         return JSONResponse({"status": "no_data", "report": ""})
     return JSONResponse({
@@ -5611,7 +5900,7 @@ async def trigger_structure_check():
 async def get_structure_check_schedule():
     """構造チェックの自動スケジュール状態を返す。"""
     from pathlib import Path
-    last_check_path = Path(BASE_DIR) / "data" / "meta" / "structure" / "last_check.json"
+    last_check_path = Path(BASE_DIR) / "data" / "local" / "meta" / "structure" / "last_check.json"
     last_check_file = None
     if last_check_path.exists():
         try:
@@ -5633,11 +5922,376 @@ async def get_structure_check_schedule():
     })
 
 
+@app.get("/api/admin/cron-jobs", response_class=JSONResponse)
+async def get_cron_jobs():
+    """定期実行ジョブ一覧とその状態を返す。"""
+    import os as _os
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    _JST = _tz(_td(hours=9))
+
+    disk_interval = float(_os.environ.get("DISK_CACHE_CLEANUP_INTERVAL_SEC", "86400"))
+    queue_interval = float(_os.environ.get("SCRAPE_QUEUE_HOURLY_MAINTENANCE_SEC", "3600"))
+    logs_h = int(_os.environ.get("LOGS_RETENTION_HOUR_JST", "12"))
+    logs_m = int(_os.environ.get("LOGS_RETENTION_MINUTE_JST", "0"))
+    logs_days = int(_os.environ.get("LOGS_RETENTION_DAYS", "7"))
+    shutuba_h = int(_os.environ.get("DAILY_SHUTUBA_HOUR_JST", "7"))
+    shutuba_m = int(_os.environ.get("DAILY_SHUTUBA_MINUTE_JST", "0"))
+    shutuba_days = int(_os.environ.get("DAILY_SHUTUBA_DAYS_AHEAD", "14"))
+
+    with _scheduler_lock:
+        structure_state = dict(_scheduler_state)
+    with _disk_cache_cleanup_lock:
+        disk_state = dict(_disk_cache_cleanup_state)
+    with _queue_maintain_lock:
+        queue_state = dict(_queue_maintain_state)
+    with _logs_retention_lock:
+        logs_state = dict(_logs_retention_state)
+    with _daily_shutuba_lock:
+        shutuba_state = dict(_daily_shutuba_state)
+    # マルチワーカー対応: ファイルの状態を優先して上書き（他プロセスが書いた可能性）
+    _file_shutuba = _read_cron_state("daily_shutuba")
+    if _file_shutuba:
+        # last_run はより新しい方を採用
+        _mem_lr = shutuba_state.get("last_run") or ""
+        _fil_lr = _file_shutuba.get("last_run") or ""
+        if _fil_lr >= _mem_lr and _fil_lr:
+            shutuba_state["last_run"] = _fil_lr
+            if _file_shutuba.get("last_result") is not None:
+                shutuba_state["last_result"] = _file_shutuba["last_result"]
+            if _file_shutuba.get("run_count") is not None:
+                shutuba_state["run_count"] = _file_shutuba["run_count"]
+
+    from src.scraper.job_queue import read_queue_hourly_maintain_state
+    queue_file_state = read_queue_hourly_maintain_state()
+    if queue_file_state.get("available") and not queue_state.get("last_run"):
+        queue_state["last_run"] = queue_file_state.get("written_at")
+        queue_state["last_result"] = queue_file_state
+
+    jobs = [
+        {
+            "id": "structure_check",
+            "name": "構造チェック",
+            "description": "HTML構造の異常検知・自動再パース",
+            "schedule": f"毎朝 {STRUCTURE_CHECK_HOUR_JST:02d}:{STRUCTURE_CHECK_MINUTE_JST:02d} JST",
+            "interval_sec": None,
+            "trigger_endpoint": "/api/structure-check",
+            **structure_state,
+        },
+        {
+            "id": "disk_cache_cleanup",
+            "name": "ディスクキャッシュクリーンアップ",
+            "description": f"data/cache の古いファイルを削除（max_age={int(disk_interval//3600)}h）",
+            "schedule": f"{int(disk_interval//3600)}時間ごと",
+            "interval_sec": int(disk_interval),
+            "trigger_endpoint": "/api/admin/cron-jobs/disk-cache-cleanup/trigger",
+            **disk_state,
+        },
+        {
+            "id": "queue_maintain",
+            "name": "キュー定期メンテ",
+            "description": "失敗ジョブを待機に戻し、完了レコードを削除",
+            "schedule": f"{int(queue_interval//60)}分ごと",
+            "interval_sec": int(queue_interval),
+            "trigger_endpoint": "/api/admin/cron-jobs/queue-maintain/trigger",
+            **queue_state,
+        },
+        {
+            "id": "logs_retention",
+            "name": "ログ保持期限切れ削除",
+            "description": f"logs/*.log のうち {logs_days}日超を削除",
+            "schedule": f"毎日 {logs_h:02d}:{logs_m:02d} JST",
+            "interval_sec": None,
+            "trigger_endpoint": "/api/admin/cron-jobs/logs-retention/trigger",
+            **logs_state,
+        },
+        {
+            "id": "daily_shutuba",
+            "name": "出馬表 毎日自動取得",
+            "description": f"今日〜+{shutuba_days}日の race_lists を走査し race_shutuba をキュー投入",
+            "schedule": f"毎日 {shutuba_h:02d}:{shutuba_m:02d} JST",
+            "interval_sec": None,
+            "trigger_endpoint": "/api/admin/cron-jobs/daily-shutuba/trigger",
+            **shutuba_state,
+        },
+    ]
+    return JSONResponse({"jobs": jobs})
+
+
+@app.post("/api/admin/cron-jobs/disk-cache-cleanup/trigger", response_class=JSONResponse)
+async def trigger_disk_cache_cleanup():
+    """ディスクキャッシュクリーンアップを即時実行（バックグラウンド）。"""
+    with _disk_cache_cleanup_lock:
+        if _disk_cache_cleanup_state.get("running"):
+            return JSONResponse({"status": "already_running"})
+        _disk_cache_cleanup_state["running"] = True
+
+    def _run():
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        _JST = _tz(_td(hours=9))
+        try:
+            st = _get_storage()
+            r = st.cleanup_disk_cache()
+            sn = st.cleanup_snapshot_files(max_age_seconds=86400)
+            with _disk_cache_cleanup_lock:
+                _disk_cache_cleanup_state["last_run"] = _dt.now(_JST).isoformat()
+                _disk_cache_cleanup_state["last_result"] = {**r, "snapshot_removed": sn}
+                _disk_cache_cleanup_state["run_count"] += 1
+        except Exception as e:
+            with _disk_cache_cleanup_lock:
+                _disk_cache_cleanup_state["last_run"] = _dt.now(_JST).isoformat()
+                _disk_cache_cleanup_state["last_result"] = {"error": str(e)}
+        finally:
+            with _disk_cache_cleanup_lock:
+                _disk_cache_cleanup_state["running"] = False
+
+    threading.Thread(target=_run, daemon=True, name="disk-cache-cleanup-manual").start()
+    return JSONResponse({"status": "started"})
+
+
+@app.post("/api/admin/cron-jobs/queue-maintain/trigger", response_class=JSONResponse)
+async def trigger_queue_maintain():
+    """キュー定期メンテを即時実行（バックグラウンド）。"""
+    with _queue_maintain_lock:
+        if _queue_maintain_state.get("running"):
+            return JSONResponse({"status": "already_running"})
+        _queue_maintain_state["running"] = True
+
+    def _run():
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        _JST = _tz(_td(hours=9))
+        try:
+            from src.scraper.job_queue import run_hourly_queue_maintenance
+            r = run_hourly_queue_maintenance()
+            with _queue_maintain_lock:
+                _queue_maintain_state["last_run"] = _dt.now(_JST).isoformat()
+                _queue_maintain_state["last_result"] = r
+                _queue_maintain_state["run_count"] += 1
+        except Exception as e:
+            with _queue_maintain_lock:
+                _queue_maintain_state["last_run"] = _dt.now(_JST).isoformat()
+                _queue_maintain_state["last_result"] = {"error": str(e)}
+        finally:
+            with _queue_maintain_lock:
+                _queue_maintain_state["running"] = False
+
+    threading.Thread(target=_run, daemon=True, name="queue-maintain-manual").start()
+    return JSONResponse({"status": "started"})
+
+
+@app.post("/api/admin/cron-jobs/logs-retention/trigger", response_class=JSONResponse)
+async def trigger_logs_retention():
+    """ログ保持期限切れ削除を即時実行（バックグラウンド）。"""
+    with _logs_retention_lock:
+        if _logs_retention_state.get("running"):
+            return JSONResponse({"status": "already_running"})
+        _logs_retention_state["running"] = True
+
+    def _run():
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        _JST = _tz(_td(hours=9))
+        try:
+            from src.utils.log_retention import run_log_retention_once
+            r = run_log_retention_once(BASE_DIR)
+            with _logs_retention_lock:
+                _logs_retention_state["last_run"] = _dt.now(_JST).isoformat()
+                _logs_retention_state["last_result"] = r
+                _logs_retention_state["run_count"] += 1
+        except Exception as e:
+            with _logs_retention_lock:
+                _logs_retention_state["last_run"] = _dt.now(_JST).isoformat()
+                _logs_retention_state["last_result"] = {"error": str(e)}
+        finally:
+            with _logs_retention_lock:
+                _logs_retention_state["running"] = False
+
+    threading.Thread(target=_run, daemon=True, name="logs-retention-manual").start()
+    return JSONResponse({"status": "started"})
+
+
+@app.post("/api/admin/cron-jobs/daily-shutuba/trigger", response_class=JSONResponse)
+async def trigger_daily_shutuba():
+    """出馬表 毎日自動取得を即時実行（バックグラウンド）。"""
+    import os as _os
+    from datetime import date as _date, datetime as _dt, timedelta as _td, timezone as _tz
+    with _daily_shutuba_lock:
+        if _daily_shutuba_state.get("running"):
+            return JSONResponse({"status": "already_running"})
+        _daily_shutuba_state["running"] = True
+
+    def _run():
+        from src.scraper.job_queue import PRIORITY_URGENT_PEDIGREE_5GEN
+        _JST = _tz(_td(hours=9))
+        try:
+            days_ahead = int(_os.environ.get("DAILY_SHUTUBA_DAYS_AHEAD", "14"))
+            today = _date.today()
+            end = today + _td(days=days_ahead)
+            body = {
+                "start_date": today.strftime("%Y%m%d"),
+                "end_date": end.strftime("%Y%m%d"),
+                "tasks": ["race_shutuba"],
+                "smart_skip": True,
+                "dry_run": False,
+                "limit": 500,
+                "jra_only": True,
+                "priority": PRIORITY_URGENT_PEDIGREE_5GEN,
+            }
+            result = _sync_enqueue_period_race_tasks(body)
+            if result.get("created", 0):
+                _kick_scrape_queue_worker()
+            with _daily_shutuba_lock:
+                _daily_shutuba_state["last_run"] = _dt.now(_JST).isoformat()
+                _daily_shutuba_state["last_result"] = result
+                _daily_shutuba_state["run_count"] += 1
+                _snap = dict(_daily_shutuba_state)
+            _write_cron_state("daily_shutuba", {
+                "last_run": _snap["last_run"],
+                "last_result": _snap["last_result"],
+                "run_count": _snap["run_count"],
+            })
+        except Exception as e:
+            with _daily_shutuba_lock:
+                _daily_shutuba_state["last_run"] = _dt.now(_JST).isoformat()
+                _daily_shutuba_state["last_result"] = {"error": str(e)}
+            _write_cron_state("daily_shutuba", {
+                "last_run": _daily_shutuba_state["last_run"],
+                "last_result": _daily_shutuba_state["last_result"],
+            })
+        finally:
+            with _daily_shutuba_lock:
+                _daily_shutuba_state["running"] = False
+
+    threading.Thread(target=_run, daemon=True, name="daily-shutuba-manual").start()
+    return JSONResponse({"status": "started"})
+
+
+# ---------------------------------------------------------------------------
+# Auto-scrape external cron jobs
+# ---------------------------------------------------------------------------
+
+_AUTO_SCRAPE_TASKS: dict[str, dict] = {
+    "daily-race-lists": {
+        "name": "デイリーレース一覧",
+        "description": "今後14日分の開催日ごとに番組表を取得・更新",
+        "schedule": "毎日 07:00 JST",
+        "tags": ["race_lists", "開催番組表", "14日先まで"],
+    },
+    "catchup-missing": {
+        "name": "欠損補完",
+        "description": "カレンダーに存在するが race_lists が未取得の過去開催日を補完",
+        "schedule": "毎日 09:00 JST",
+        "tags": ["race_lists", "過去欠損分"],
+    },
+    "raceday-runner": {
+        "name": "開催日常駐",
+        "description": "各レース発走15分前に出馬表・直前オッズ・SmartRC等を逐次取得（開催日のみ起動）",
+        "schedule": "土日 07:30 JST",
+        "tags": ["race_card", "出馬表", "馬番・斤量・騎手", "odds", "直前オッズ", "smartrc_race", "SmartRC指数"],
+    },
+    "raceday-result-runner": {
+        "name": "速報結果常駐",
+        "description": "各レース発走15分後に速報結果を逐次取得する開催日常駐プロセス",
+        "schedule": "土日 07:30 JST",
+        "tags": ["result_on_time", "速報結果"],
+    },
+    "raceday-eve": {
+        "name": "前日準備",
+        "description": "翌日が開催日の場合に馬柱・調教・SmartRC指数を先行取得（金曜 → 土曜開催分）",
+        "schedule": "金曜 22:00 JST",
+        "tags": ["shutuba_past", "馬柱(近走成績)", "oikiri", "追い切り・調教", "smartrc_race", "SmartRC指数", "テン1F"],
+    },
+    "raceday-evening": {
+        "name": "夕方結果取得",
+        "description": "当日の全レース終了後に速報結果・確定オッズ・SmartRC指数を取得",
+        "schedule": "土日 18:00 JST",
+        "tags": ["result_on_time", "速報結果", "odds", "確定オッズ", "pair_odds", "確定2連複/馬連", "SmartRC指数"],
+    },
+    "weekly-update": {
+        "name": "週次更新",
+        "description": "先週の全開催日について公式DBから確定版レース結果・オッズを再取得",
+        "schedule": "金曜 17:30 JST",
+        "tags": ["race_result", "確定レース結果", "odds", "確定オッズ", "pair_odds", "確定2連複/馬連", "SmartRC指数"],
+    },
+    "jra-baba-morning": {
+        "name": "JRA馬場情報",
+        "description": "JRA公式馬場ページからクッション値・含水率・馬場状態を朝取得（変更検知方式）",
+        "schedule": "毎10分 05:00-09:00 JST",
+        "tags": ["jra_baba", "クッション値", "含水率", "馬場状態"],
+    },
+}
+
+_AUTO_SCRAPE_STATUS_FILE = os.path.join(BASE_DIR, "data", "meta", "auto_scrape_status.json")
+_AUTO_SCRAPE_PYTHON = "/home/hirokiakataoka/miniconda3/bin/python3"
+
+
+def _auto_scrape_is_running(task: str) -> bool:
+    import subprocess as _sp
+    try:
+        result = _sp.run(
+            ["pgrep", "-f", f"auto_scrape.*--task.*{task}"],
+            capture_output=True,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _load_auto_scrape_status() -> dict:
+    try:
+        with open(_AUTO_SCRAPE_STATUS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+@app.get("/api/admin/auto-scrape-status", response_class=JSONResponse)
+async def get_auto_scrape_status():
+    """外部 cron で実行される auto_scrape ジョブの一覧と状態を返す。"""
+    status_data = _load_auto_scrape_status()
+    jobs = []
+    for task_id, meta in _AUTO_SCRAPE_TASKS.items():
+        task_status = status_data.get(task_id, {})
+        last_run = task_status.get("last_run")
+        last_result = {k: v for k, v in task_status.items() if k != "last_run"} if task_status else None
+        if last_result == {}:
+            last_result = None
+        jobs.append({
+            "id": task_id,
+            "name": meta["name"],
+            "description": meta["description"],
+            "schedule": meta["schedule"],
+            "tags": meta.get("tags", []),
+            "running": _auto_scrape_is_running(task_id),
+            "last_run": last_run,
+            "next_run": None,
+            "last_result": last_result,
+            "run_count": 0,
+            "trigger_endpoint": f"/api/admin/auto-scrape/{task_id}/trigger",
+        })
+    return JSONResponse({"jobs": jobs})
+
+
+@app.post("/api/admin/auto-scrape/{task}/trigger", response_class=JSONResponse)
+async def trigger_auto_scrape(task: str):
+    """auto_scrape タスクを即時起動する（非同期サブプロセス）。"""
+    import subprocess as _sp
+    if task not in _AUTO_SCRAPE_TASKS:
+        return JSONResponse({"status": "error", "message": f"Unknown task: {task}"}, status_code=400)
+    if _auto_scrape_is_running(task):
+        return JSONResponse({"status": "already_running"})
+    _sp.Popen(
+        [_AUTO_SCRAPE_PYTHON, "-m", "src.scraper.auto_scrape", "--task", task],
+        cwd=BASE_DIR,
+        stdout=_sp.DEVNULL,
+        stderr=_sp.DEVNULL,
+    )
+    return JSONResponse({"status": "started"})
+
+
 @app.get("/api/structure-fingerprints", response_class=JSONResponse)
 async def get_structure_fingerprints():
     """保存済みの全カテゴリのフィンガープリントを返す。"""
     from pathlib import Path
-    fp_dir = Path(BASE_DIR) / "data" / "meta" / "structure"
+    fp_dir = Path(BASE_DIR) / "data" / "local" / "meta" / "structure"
     result = {}
     if fp_dir.exists():
         for fp_file in fp_dir.glob("*.json"):
@@ -5936,7 +6590,11 @@ async def get_odds_history(race_id: str):
     """指定レースのオッズ推移履歴を返す。"""
     from src.pipeline.models.odds_predictor import OddsTrajectoryTracker, ODDS_HISTORY_DIR
     history_path = ODDS_HISTORY_DIR / f"{race_id}.json"
-    if not history_path.exists():
+    try:
+        exists = history_path.exists()
+    except OSError:
+        return JSONResponse({"snapshots": [], "message": "履歴なし"})
+    if not exists:
         return JSONResponse({"snapshots": [], "message": "履歴なし"})
     try:
         with open(history_path, encoding="utf-8") as f:
@@ -6598,6 +7256,14 @@ async def queue_status_page(request: Request):
     return RedirectResponse("/scrape?tab=queue", status_code=302)
 
 
+@app.get("/cron-jobs", response_class=HTMLResponse)
+async def cron_jobs_page(request: Request):
+    return templates.TemplateResponse(
+        "admin/cron_jobs.html",
+        {"request": request, "current_page": "cron_jobs"},
+    )
+
+
 # ── 開発者: 直近サーバーログ（logs/*.log 末尾） ──
 
 
@@ -6744,7 +7410,7 @@ async def bloodline_vector_page(request: Request):
     import json as _json
     from pathlib import Path as _Path
     payload: dict = {"nodes": [], "similar_top": {}, "meta": {}}
-    p = _Path("data/research/bloodline_vector/v2_l2/groups_embeddings.json")
+    p = _Path("data/page_reference/bloodline_vector/v2_l2/groups_embeddings.json")
     if p.exists():
         try:
             payload = _json.loads(p.read_text(encoding="utf-8"))
@@ -7677,6 +8343,44 @@ async def api_pedigree_race_note_3d_compare(
         )
 
 
+@app.get("/api/pedigree/race-note-3d-v2", response_class=JSONResponse)
+async def api_pedigree_race_note_3d_v2(race_id: str = ""):
+    """
+    血統メタクラスタベースのレース適性マップ v2。
+    旧 6 祖先重みブレンドに代わり compute_blended_prior_v2 を使用する。
+    """
+    rid = (race_id or "").strip()
+    if not rid:
+        return JSONResponse({"error": "race_id が必要です"}, status_code=400)
+    try:
+        from src.research.pedigree.race_note_3d_v2 import build_race_note_v2
+
+        storage = _get_storage()
+        out = await asyncio.to_thread(build_race_note_v2, storage, rid)
+        if not out.get("horses"):
+            return JSONResponse(
+                {**out, "no_horse_data": True, "message": "出走データ未取得。race_shutuba を先に取得してください。"},
+            )
+        return JSONResponse(out)
+    except Exception as e:
+        import traceback
+        return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+
+
+@app.get("/api/pedigree/week-races", response_class=JSONResponse)
+async def api_pedigree_week_races():
+    """今週の開催（土・日）のレース一覧を返す。/note-aptitude-race のデフォルト選択肢。"""
+    try:
+        from src.research.pedigree.race_note_3d_v2 import get_week_races
+
+        storage = _get_storage()
+        races = await asyncio.to_thread(get_week_races, storage)
+        return JSONResponse({"races": races})
+    except Exception as e:
+        import traceback
+        return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+
+
 @app.post("/api/pedigree/rebuild-sire-factor-stats", response_class=JSONResponse)
 async def api_rebuild_sire_factor_stats(request: Request):
     """種牡馬因子統計を再計算する。mode=fast(スナップショット) / full(個別GCS走査+スナップショット更新)。"""
@@ -7903,6 +8607,8 @@ async def api_bloodline_analyze(request: Request, background_tasks: BackgroundTa
         })
 
     body = await request.json()
+    if not isinstance(body, dict):
+        body = {}
     years = body.get("years")
     source = body.get("source", "gcs")
 
@@ -7940,7 +8646,7 @@ def _run_bloodline_analysis(years: list[str] | None, source: str):
             "n_records": len(df),
             "n_sires": int(df["sire"].nunique()),
             "n_dam_sires": int(df["dam_sire"].nunique()),
-            "report_path": "data/research/bloodline/bloodline_distance_report.html",
+            "report_path": "data/local/research/bloodline/bloodline_distance_report.html",
         }
     except Exception as e:
         _bloodline_job["error"] = str(e)
@@ -7996,10 +8702,10 @@ async def api_bloodline_surfaces():
     from pathlib import Path as _Path
     from src.research.pedigree.bloodline_surface import load_surface_meta
 
-    base = _Path(__file__).resolve().parents[2] / "data" / "research" / "bloodline"
+    base = _Path(__file__).resolve().parents[2] / "data" / "local" / "research" / "bloodline"
     meta = load_surface_meta(base)
     if not meta:
-        base_c = _Path(__file__).resolve().parents[2] / "data" / "research" / "course_bloodline"
+        base_c = _Path(__file__).resolve().parents[2] / "data" / "local" / "research" / "course_bloodline"
         meta = load_surface_meta(base_c)
     return JSONResponse(meta or {"surfaces": {}, "total_run_count": 0})
 
@@ -8023,7 +8729,7 @@ async def api_bloodline_data(
                 rows.append(row)
         return {"columns": list(rows[0].keys()) if rows else [], "rows": rows}
 
-    base = Path(__file__).resolve().parents[2] / "data" / "research" / "bloodline"
+    base = Path(__file__).resolve().parents[2] / "data" / "local" / "research" / "bloodline"
     data_dir = _bloodline_surface_dir(base, surface)
     ctx = _bloodline_surface_context(base, surface)
 
@@ -8160,7 +8866,7 @@ async def api_bloodline_cluster_sire_info(stallion_id: str = Query(..., descript
 async def api_bloodline_cluster_clusters():
     """全 L2 メタクラスタの構成 (主流別) + プロファイル top7 強み/弱み。"""
     from src.api.bloodline_meta_cluster import list_clusters
-    return JSONResponse({"clusters": list_clusters()})
+    return JSONResponse(_scrub_nan({"clusters": list_clusters()}))
 
 
 @app.get("/api/bloodline-cluster/suggest", response_class=JSONResponse)
@@ -8311,7 +9017,7 @@ def _get_bl_artifact_status() -> list[dict[str, Any]]:
     """各アーティファクトの存在 / 最終更新日時 / サイズを返す。"""
     from datetime import datetime as _dt
     from pathlib import Path as _Path
-    art_dir = _Path("data/research/bloodline_meta_cluster")
+    art_dir = _Path("data/page_reference/note_aptitude_race")
     out = []
     for spec in _BLOODLINE_ARTIFACTS:
         files_info = []
@@ -8665,7 +9371,8 @@ async def api_bloodline_cluster_sire_best_conditions(
       - rankings.by_venue / by_surface / by_dist_cat / by_track_condition / by_grade: 単軸別の全行
     """
     from src.api.bloodline_meta_cluster import compute_sire_best_conditions
-    result = compute_sire_best_conditions(
+    result = await asyncio.to_thread(
+        compute_sire_best_conditions,
         stallion_id=stallion_id,
         min_n=min_n,
         top=top,
@@ -8692,9 +9399,10 @@ async def api_bloodline_cluster_sire_presence_horses(
 ):
     """指定種牡馬を A/B/sire/both で含む該当馬一覧を、推定獲得賞金の多い順で返す。"""
     from src.api.bloodline_meta_cluster import compute_sire_presence_horses
-    result = compute_sire_presence_horses(
-        stallion_id=stallion_id,
-        side=side,
+    result = await asyncio.to_thread(
+        compute_sire_presence_horses,
+        stallion_id,
+        side,
         limit=limit,
         offset=offset,
         date_from=date_from,
@@ -8808,11 +9516,11 @@ async def api_course_profiles():
     """コースプロファイル (ドメインナレッジ) を返す。"""
     import json as json_mod
     from pathlib import Path as _P
-    p = _P(__file__).resolve().parents[2] / "data" / "knowledge" / "course_profiles.json"
+    p = _P(__file__).resolve().parents[2] / "data" / "local" / "knowledge" / "course_profiles.json"
     if not p.exists():
         return JSONResponse({"error": "course_profiles.json が見つかりません"}, status_code=404)
     payload = json_mod.loads(p.read_text(encoding="utf-8"))
-    hl = _P(__file__).resolve().parents[2] / "data" / "research" / "course_bloodline" / "profile_course_roi_highlights.json"
+    hl = _P(__file__).resolve().parents[2] / "data" / "local" / "research" / "course_bloodline" / "profile_course_roi_highlights.json"
     if hl.exists():
         try:
             payload["roi_highlights"] = json_mod.loads(hl.read_text(encoding="utf-8"))
@@ -8892,7 +9600,7 @@ async def api_course_bl_surfaces():
     from pathlib import Path as _Path
     from src.research.pedigree.bloodline_surface import load_surface_meta
 
-    base = _Path(__file__).resolve().parents[2] / "data" / "research" / "course_bloodline"
+    base = _Path(__file__).resolve().parents[2] / "data" / "local" / "research" / "course_bloodline"
     return JSONResponse(load_surface_meta(base) or {"surfaces": {}, "total_run_count": 0})
 
 
@@ -8914,7 +9622,7 @@ async def api_course_bl_data(
                 rows.append(row)
         return {"columns": list(rows[0].keys()) if rows else [], "rows": rows}
 
-    base = _P(__file__).resolve().parents[2] / "data" / "research" / "course_bloodline"
+    base = _P(__file__).resolve().parents[2] / "data" / "local" / "research" / "course_bloodline"
     ctx = _bloodline_surface_context(base, surface)
 
     if analysis_type == "profiles":
@@ -9007,7 +9715,7 @@ async def api_cushion_data(
     venue_name: str | None = None,
 ):
     from pathlib import Path as _P
-    data_path = _P(os.path.dirname(__file__)).parent / "data" / "jra_baba" / "cushion_values.json"
+    data_path = _P(os.path.dirname(__file__)).parent / "data" / "local" / "jra_baba" / "cushion_values.json"
     if not data_path.exists():
         return JSONResponse({"error": "クッション値データなし"}, status_code=404)
 
@@ -9025,7 +9733,7 @@ async def api_cushion_data(
 @app.get("/api/cushion/stats")
 async def api_cushion_stats():
     from pathlib import Path as _P
-    data_path = _P(os.path.dirname(__file__)).parent / "data" / "jra_baba" / "cushion_values.json"
+    data_path = _P(os.path.dirname(__file__)).parent / "data" / "local" / "jra_baba" / "cushion_values.json"
     if not data_path.exists():
         return JSONResponse({"error": "データなし"}, status_code=404)
 
@@ -9057,7 +9765,7 @@ async def api_cushion_scrape(request: Request, background_tasks: BackgroundTasks
         pass
     years = body.get("years")
 
-    _cushion_job.update(running=True, error=None, result=None, started_at=time.time())
+    _cushion_job.update(running=True, error=None, result=None, started_at=_time.time())
     background_tasks.add_task(_run_cushion_scrape, years)
     return JSONResponse({"status": "started"})
 
@@ -9816,7 +10524,7 @@ async def myostatin_data():
     from pathlib import Path
     # app.py は src/api/app.py に位置するため、project root は parents[2]。
     # (parents[3] だと project の親 = キーノット外を指してしまい、KB が見つからない)
-    kb_path = Path(__file__).resolve().parents[2] / "data" / "knowledge" / "myostatin_genes.json"
+    kb_path = Path(__file__).resolve().parents[2] / "data" / "local" / "knowledge" / "myostatin_genes.json"
     if not kb_path.exists():
         return JSONResponse(
             {"error": "KB not found", "checked_path": str(kb_path)},
@@ -9860,7 +10568,7 @@ async def myostatin_recalculate():
 
     try:
         # JSONファイルのパス (app.py は src/api/ に在り、project root は parents[2])
-        json_path = Path(__file__).resolve().parents[2] / "data" / "knowledge" / "myostatin_genes.json"
+        json_path = Path(__file__).resolve().parents[2] / "data" / "local" / "knowledge" / "myostatin_genes.json"
 
         # 読み込み
         with open(json_path, 'r', encoding='utf-8') as f:
@@ -10107,6 +10815,10 @@ def _enrich_race_with_speed_index(
     return race, False
 
 
+_growth_curve_cache: dict[str, tuple[float, dict]] = {}
+_GROWTH_CURVE_CACHE_TTL = 120  # 2 minutes
+
+
 @app.get("/api/growth-curve/{horse_id}", response_class=JSONResponse)
 async def growth_curve_data(
     horse_id: str,
@@ -10129,6 +10841,14 @@ async def growth_curve_data(
         - stats: 統計情報
     """
     try:
+        import time as _time_mod
+        # キャッシュチェック（force_refreshは除く）
+        if not force_refresh:
+            _cache_key = f"{horse_id}:{limit}:{fetch_speed_index}"
+            _cached = _growth_curve_cache.get(_cache_key)
+            if _cached and (_time_mod.time() - _cached[0]) < _GROWTH_CURVE_CACHE_TTL:
+                return JSONResponse(_cached[1])
+
         storage = _get_storage()
 
         # force_refreshの場合、既存のhorse_resultを削除して再スクレイピング
@@ -10173,7 +10893,13 @@ async def growth_curve_data(
                 return JSONResponse({"error": f"馬ID {horse_id} のデータが見つかりません"}, status_code=404)
 
         horse_name = horse_data.get("horse_name", "不明")
-        results = horse_data.get("race_history", horse_data.get("results", []))
+        results_all = horse_data.get("race_history", horse_data.get("results", []))
+        total_race_count = len(results_all)
+
+        # limitを先に適用してGCSフェッチ対象を絞り込む
+        results = sorted(results_all, key=lambda r: r.get("date", ""), reverse=True)
+        if limit and limit > 0:
+            results = results[:limit]
 
         # タイム指数を補完（必要に応じてキューに追加）
         scraping_status = {
@@ -10182,12 +10908,12 @@ async def growth_curve_data(
             "pending_races": 0,
         }
 
-        # タイム指数のステータス確認
+        # タイム指数のステータス確認（2024/1/1以降のみ対象）
         if fetch_speed_index:
             for race in results:
                 if race.get("time_index") and race.get("time_index") > 0:
                     scraping_status["completed_races"] += 1
-                else:
+                elif race.get("date", "").replace("/", "-") >= "2024-01-01":
                     scraping_status["required_races"] += 1
 
             # force_refreshの場合は何もしない（horse_result再取得で完了）
@@ -10201,17 +10927,19 @@ async def growth_curve_data(
                     for i, race in enumerate(results)
                     if (not race.get("time_index") or race.get("time_index") == 0)
                     and race.get("horse_number") and race.get("race_id")
+                    and race.get("date", "").replace("/", "-") >= "2024-01-01"
                 ]
                 if need_idx:
                     rids = list({r.get("race_id") for _, r in need_idx if r.get("race_id")})
                     idx_map: dict[str, dict] = {}
                     def _load_idx(rid):
                         return rid, storage.load("race_index", rid)
-                    with _GcPool(max_workers=min(len(rids), 8)) as pool:
+                    with _GcPool(max_workers=min(len(rids), 20)) as pool:
                         for rid, data in pool.map(_load_idx, rids):
                             if data:
                                 idx_map[rid] = data
 
+                    _jobs_to_add = []
                     for i, race in need_idx:
                         race_id = race.get("race_id")
                         horse_number = race.get("horse_number")
@@ -10229,11 +10957,16 @@ async def growth_curve_data(
                                         scraping_status["required_races"] -= 1
                                     break
                         elif not speed_data and queue:
-                            queue.add_job(
-                                kind="race", target_id=race_id,
-                                task="race_index", priority=1,
-                                label=f"タイム指数: {race_id}")
-                            scraping_status["pending_races"] += 1
+                            _jobs_to_add.append({
+                                "job_kind": "race",
+                                "target_id": race_id,
+                                "tasks": ["race_index"],
+                                "priority": 1,
+                                "job_label": f"タイム指数: {race_id}",
+                            })
+                    if _jobs_to_add:
+                        queue.bulk_add_jobs(_jobs_to_add)
+                        scraping_status["pending_races"] += len(_jobs_to_add)
 
         if not results:
             return JSONResponse({"error": "出走履歴が見つかりません"}, status_code=404)
@@ -10302,6 +11035,16 @@ async def growth_curve_data(
 
             prev_date = date_str
 
+        # デビュー時馬体重（全レース中最古の馬体重あり出走）
+        debut_weight = None
+        debut_date = None
+        for r in sorted(results_all, key=lambda x: x.get("date", "")):
+            w = r.get("weight")
+            if w:
+                debut_weight = w
+                debut_date = r.get("date")
+                break
+
         # 統計情報
         stats = {
             "horse_name": horse_name,
@@ -10315,18 +11058,24 @@ async def growth_curve_data(
         # レースを新しい順（降順）に戻す（フロントエンド表示用）
         races.reverse()
 
-        # 直近N戦に絞り込み
-        if limit and limit > 0:
-            races = races[:limit]
-
         response = {
             **stats,
+            "total_all_races": total_race_count,
+            "debut_weight": debut_weight,
+            "debut_date": debut_date,
             "races": races,
         }
 
         # スクレイピングステータスを追加（必要な場合のみ）
         if scraping_status["required_races"] > 0 or scraping_status["pending_races"] > 0:
             response["scraping_status"] = scraping_status
+
+        # キャッシュ書き込み
+        if not force_refresh:
+            _growth_curve_cache[_cache_key] = (_time_mod.time(), response)
+            if len(_growth_curve_cache) > 500:
+                oldest = min(_growth_curve_cache, key=lambda k: _growth_curve_cache[k][0])
+                del _growth_curve_cache[oldest]
 
         return JSONResponse(response)
 

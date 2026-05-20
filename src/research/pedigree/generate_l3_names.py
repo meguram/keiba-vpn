@@ -25,8 +25,8 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-L3DIR = ROOT / "data/research/bloodline_meta_cluster_l3"
-ART_DIR = ROOT / "data/research/bloodline_meta_cluster"
+L3DIR = ROOT / "data/page_reference/note_aptitude_race_l3"
+ART_DIR = ROOT / "data/page_reference/note_aptitude_race"
 
 # 条件名 → 短ラベル変換
 COND_LABEL = {

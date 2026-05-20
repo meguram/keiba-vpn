@@ -25,7 +25,7 @@ if str(_ROOT) not in sys.path:
 from src.scraper.job_queue import PRIORITY_URGENT_PEDIGREE_5GEN, ScrapeJobQueue  # noqa: E402
 from src.utils.keiba_logging import script_basic_config  # noqa: E402
 
-DEFAULT_IDS = Path("data/meta/pedigree_requeue_59_horse_ids.json")
+DEFAULT_IDS = Path("data/local/meta/pedigree_requeue_59_horse_ids.json")
 
 
 def main() -> None:

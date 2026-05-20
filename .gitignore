@@ -51,6 +51,7 @@ data/queue/
 data/local/
 data/ml/
 data/analysis/
+data/page_reference/
 data/meta/status/
 data/meta/disk_l2_weekly_access.json
 data/meta/pedigree_weekly_access.json

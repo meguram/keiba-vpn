@@ -17,7 +17,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_REGISTRY_PATH = Path("data/meta/date_complete.json")
+_REGISTRY_PATH = Path("data/local/meta/date_complete.json")
 
 
 def _structure_fingerprint(versions: dict[str, dict]) -> str:

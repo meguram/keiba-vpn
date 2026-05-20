@@ -9,8 +9,8 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-ART = ROOT / "data/research/bloodline_meta_cluster"
-IDX = ROOT / "data/research/pedigree_race_index"
+ART = ROOT / "data/page_reference/note_aptitude_race"
+IDX = ROOT / "data/page_reference/pedigree_race_index"
 
 print("="*80)
 print("【1】 現在の 3 階層 pair_lift プロファイル")

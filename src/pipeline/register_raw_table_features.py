@@ -54,7 +54,7 @@ from src.utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger(__name__)
 
-MANIFEST_PATH = Path("data/features/_raw_table_feature_selection.json")
+MANIFEST_PATH = Path("data/local/features/_raw_table_feature_selection.json")
 
 BASE_KEYS = list(MERGE_KEYS_BASE_TBL)
 
@@ -346,7 +346,7 @@ def _load_flat_per_year(
     want = list(dict.fromkeys(list(SOURCE_ROW_KEYS) + ["horse_id"] + columns))
     frames: list[pd.DataFrame] = []
     for y in years:
-        path = base_dir / Path("data/local/tables") / y / f"{source}_flat.parquet"
+        path = base_dir / Path("data/page_reference/tables") / y / f"{source}_flat.parquet"
         if not path.exists():
             continue
         schema = pq.read_schema(path)

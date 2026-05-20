@@ -133,7 +133,7 @@
       <strong>ディレクトリ構成</strong>・<strong>キー設計</strong>・<strong>各列の意味</strong>を、
       <span class="mono">pipeline/feature_store.py</span>・<span class="mono">pipeline/race_performance.py</span>・
       <span class="mono">pipeline/jockey_trainer_stats.py</span>・
-      <span class="mono">docs/modeling/race_performance_rating_system.md</span> に沿って整理したものです。
+      <span class="mono">docs/html/modeling/race_performance_rating_system.html</span> に沿って整理したものです。
       <strong>訓練データ</strong>は出馬表を正とし、<span class="mono">race_id</span>・<span class="mono">horse_id</span>・<span class="mono">jockey_id</span>・<span class="mono">trainer_id</span> および
       舞台キー（<span class="mono">place_id</span>＝実装では主に <span class="mono">shutuba_venue_code</span>＋芝ダ＋距離）で特徴ブロックを left join します。
       特徴量ファイルはブロックごとに <a href="#join-architecture"><span class="mono">data/features/</span> 直下の専用ディレクトリ</a>へ分割する<strong>目標レイアウト</strong>と、結合キー方針を整合させます。
@@ -735,7 +735,7 @@
       <div class="raw-collapsible-body">
     <p>
       <span class="mono">data/local/tables/&lt;年&gt;/*_flat.parquet</span> のうち、
-      <span class="mono">docs/modeling/pre_race_feature_whitelist.md</span> の LayerA 方針に沿って選別した列を
+      <span class="mono">docs/html/modeling/pre_race_feature_whitelist.html</span> の LayerA 方針に沿って選別した列を
       <span class="mono">data/features/columns/</span> にも登録できます（ファイル名は <span class="mono">shutuba_*</span>・<span class="mono">idx_*</span> など）。
     </p>
     <ul class="compact">
@@ -1143,11 +1143,11 @@
       <summary>パス一覧（折り畳み）</summary>
       <div class="raw-collapsible-body">
     <ul class="compact" style="margin-bottom:0">
-      <li><span class="mono">docs/modeling/race_performance_rating_system.md</span> — 指標分割・レベル2本・数式イメージの設計書</li>
+      <li><span class="mono">docs/html/modeling/race_performance_rating_system.html</span> — 指標分割・レベル2本・数式イメージの設計書</li>
       <li><span class="mono">pipeline/race_performance.py</span> — 現行の算出ロジックと係数</li>
       <li><span class="mono">pipeline/feature_store.py</span> — ストア API とディレクトリ規約</li>
       <li><span class="mono">data/meta/modeling/race_performance_build_summary.json</span> — 最終ビルドの年・行数・<span class="mono">feature_policies</span>（生成後に存在）</li>
-      <li><span class="mono">docs/modeling/pre_race_feature_whitelist.md</span> — 出馬表・指数の採用/除外ルール</li>
+      <li><span class="mono">docs/html/modeling/pre_race_feature_whitelist.html</span> — 出馬表・指数の採用/除外ルール</li>
       <li><span class="mono">data/features/_raw_table_feature_selection.json</span> — raw flat 由来列の登録マニフェスト（スクリプト実行で更新）</li>
       <li><span class="mono">data/features/jockey_trainer_stats/_merge_spec.json</span> — 騎手・調教師 Parquet のマージキー契約</li>
       <li><span class="mono">pipeline/jockey_trainer_stats.py</span> — 統計生成・LayerA マージヘルパ</li>

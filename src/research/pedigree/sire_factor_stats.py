@@ -54,7 +54,7 @@ AXES = [
 
 AXIS_IDS = tuple(a["id"] for a in AXES)
 
-OUTPUT_PATH = Path("data/research/sire_factor_stats.json")
+OUTPUT_PATH = Path("data/local/research/sire_factor_stats.json")
 SNAPSHOT_PREFIX = "chuou/data/snapshots/sire_factor"
 
 MIN_SAMPLE_DEFAULT = 10

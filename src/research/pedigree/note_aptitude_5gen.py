@@ -4,7 +4,7 @@ sire_aptitude_note を 5 世代血統（horse_pedigree_5gen）に展開してブ
 父系／母系:
   各祖先の (generation, position) から「母方へ進んだ世代の割合」m を算出し、
   軸ごとの係数 k で「母方経路を強める／父方経路を強める」を掛ける。
-  根拠・限界は docs/NOTE_APTITUDE_5GEN.md を参照。
+  根拠・限界は docs/html/NOTE_APTITUDE_5GEN.html を参照。
 
 基礎重み: (1/2)^generation — research.pedigree.pedigree_similarity と整合。
 """

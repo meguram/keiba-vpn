@@ -40,7 +40,7 @@ def main() -> None:
         "--base-dir",
         type=Path,
         default=Path("."),
-        help="プロジェクトルート（tables は base-dir/data/local/tables）",
+        help="プロジェクトルート（tables は base-dir/data/page_reference/tables）",
     )
     ap.add_argument(
         "--years",

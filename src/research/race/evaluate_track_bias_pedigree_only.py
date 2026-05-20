@@ -44,9 +44,9 @@ TRACK_BIAS_PEDIGREE_FEATURES = [
     "dam_sire_x_track_bias_weighted",
 ]
 
-DEFAULT_PARQUET = ROOT / "data/modeling/layer_a_train.parquet"
-DEFAULT_MANIFEST = ROOT / "data/meta/modeling/dataset_split_manifest.json"
-DEFAULT_OUT = ROOT / "data/meta/modeling/track_bias_pedigree_only_metrics.json"
+DEFAULT_PARQUET = ROOT / "data/local/modeling/layer_a_train.parquet"
+DEFAULT_MANIFEST = ROOT / "data/local/meta/modeling/dataset_split_manifest.json"
+DEFAULT_OUT = ROOT / "data/local/meta/modeling/track_bias_pedigree_only_metrics.json"
 
 
 def _group_sizes(race_id_series: pd.Series) -> np.ndarray:

@@ -50,7 +50,7 @@ DIST_AXIS_WEIGHTS: dict[str, dict[str, float]] = {
 
 
 def _json_path() -> Path:
-    return Path(__file__).resolve().parents[3] / "data" / "knowledge" / "sire_aptitude_note.json"
+    return Path(__file__).resolve().parents[3] / "data" / "local" / "knowledge" / "sire_aptitude_note.json"
 
 
 @lru_cache(maxsize=1)

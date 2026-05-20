@@ -52,7 +52,7 @@ from src.pipeline.features.feature_layout import (
 
 logger = logging.getLogger(__name__)
 
-TABLES_DIR = Path("data/local/tables")
+TABLES_DIR = Path("data/page_reference/tables")
 SNAPSHOTS_DIR = FEATURES_DIR / "snapshots"
 REGISTRY_PATH = FEATURES_DIR / "_registry.json"
 

@@ -238,9 +238,9 @@ def build_race_note_aptitude_map(
         "source": source,
         "distance_m": dist,
         "meta": {
-            "knowledge": "data/knowledge/sire_aptitude_note.json",
+            "knowledge": "data/page_reference/knowledge/sire_aptitude_note.json",
             "blend_mode_requested": blend_mode,
-            "blend_doc_5gen": "docs/NOTE_APTITUDE_5GEN.md",
+            "blend_doc_5gen": "docs/html/NOTE_APTITUDE_5GEN.html",
             "axes_ja": {
                 "power": "パワー（ダート・欧州パワー・ドイツイン・中距離S・在来S の加重）",
                 "eu_burst": "欧州瞬発（eu_burst・京都内回り型）",

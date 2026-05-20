@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>特徴量エンジニアリング — 探索メモ（新要素の発見） — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>特徴量エンジニアリング — 探索メモ（新要素の発見）</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/feature_engineering_exploration.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">特徴量エンジニアリング — 探索メモ（新要素の発見）</h1>
+<h2 id="_2">目的</h2>
+<p>既存の <code>BaselineV1</code> / <code>ExtendedV1</code>・<code>horse_pre_race_dataset_spec.html</code>・<code>pre_race_feature_whitelist.html</code> を前提に、<br />
+<strong>追加で検証に値する特徴量候補</strong>を列挙する。ここに書いた項目はすべて <strong>LayerA（T-10 時点で観測可能）</strong> を優先し、<br />
+<strong>結果ラベル由来のリーク</strong>にならないものだけを対象とする（オッズ由来は LayerB として別枠）。</p>
+<p>実装時は <code>src/pipeline/feature_store.py</code> の列登録・<code>data/features/_registry.json</code> 方針に従い、<br />
+<strong>OOF + purged CV</strong> でのみ寄与を測る。</p>
+<p>HTML 要約（ナビ用）: <code>docs/html/feature_engineering/index.html</code></p>
+<hr />
+<h2 id="1">1. レース内「圧力場」の量化（出走メンバー依存）</h2>
+<table>
+<thead>
+<tr>
+<th>候補</th>
+<th>定義イメージ</th>
+<th>データソース例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>field_speed_spread</code></td>
+<td>同一レース内の <code>speed_max</code> / 指数の <strong>標準偏差・IQR</strong></td>
+<td><code>race_index_flat</code>, shutuba past</td>
+</tr>
+<tr>
+<td><code>field_form_dispersion</code></td>
+<td>近走好走率や着順の <strong>分散</strong>（メンバーが揃いか荒れか）</td>
+<td>past flat</td>
+</tr>
+<tr>
+<td><code>favorite_clustering</code></td>
+<td>人気が集中しているか（分散が小さい＝堅い）※LayerB なら T-10 オッズ</td>
+<td>LayerB のみ</td>
+</tr>
+<tr>
+<td><code>ability_entropy</code></td>
+<td>レース内の能力指標を rank 化し <strong>エントロピー</strong>（混戦度）</td>
+<td>指数・past 集約</td>
+</tr>
+</tbody>
+</table>
+<p><strong>仮説</strong>: 混戦レースでは絶対スコアより <strong>相対順位特徴</strong> の効きが変わる → <code>race_rank</code> / <code>z-score</code> との <strong>交互作用</strong> を試す。</p>
+<hr />
+<h2 id="2">2. 時系列・リズム（馬・厩舎・騎手）</h2>
+<table>
+<thead>
+<tr>
+<th>候補</th>
+<th>定義イメージ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>days_since_last_same_surface</code></td>
+<td>前走同馬場からの日数（芝/ダ別）</td>
+</tr>
+<tr>
+<td><code>rotation_pressure</code></td>
+<td>短期間での連闘回数（開催単位でのカウント）</td>
+</tr>
+<tr>
+<td><code>trainer_recent_volatility</code></td>
+<td>厩舎の直近 N 走の着順分散（同一 trainer_id）</td>
+</tr>
+<tr>
+<td><code>jockey_venue_momentum</code></td>
+<td>騎手×場の直近 K 走の勝率変化率（OOF TE と別軸の raw 統計）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>仮説</strong>: 「仕上げ周期」と「陣営の波」は <strong>距離帯×季節</strong> と交差しやすい。</p>
+<hr />
+<h2 id="3-venue_era">3. コース・馬場文脈（venue_era 以外の次元）</h2>
+<table>
+<thead>
+<tr>
+<th>候補</th>
+<th>定義イメージ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rail_side_bucket</code></td>
+<td>直線の内外 / 向きと枠の交差（取得できる場合のみ）</td>
+</tr>
+<tr>
+<td><code>weather_transition</code></td>
+<td>前日〜当日の天候変化カテゴリ（同開催内）</td>
+</tr>
+<tr>
+<td><code>cushion_z_in_meet</code></td>
+<td>同一開催内でクッション値の <strong>Z 化</strong>（Extended）</td>
+</tr>
+<tr>
+<td><code>heavy_track_sire_rate</code></td>
+<td>父系統の重・不良別成績（血統 flat から集約）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>仮説</strong>: <code>venue_era</code> 改修フラグと <strong>馬場極端日</strong> の交差が重賞で効く。</p>
+<hr />
+<h2 id="4">4. ペース・位置取りの「事前合成」特徴</h2>
+<table>
+<thead>
+<tr>
+<th>候補</th>
+<th>定義イメージ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>expected_pace_pressure</code></td>
+<td>全馬の逃げ・先行指標の和／最大（レース全体の前圧）</td>
+</tr>
+<tr>
+<td><code>draw_bias_x_running_style</code></td>
+<td>枠 × 脚質の one-hot 交差（過去統計で埋める）</td>
+</tr>
+<tr>
+<td><code>late_charge_density</code></td>
+<td>差し・追込馬の頭数と距離バンドの組</td>
+</tr>
+</tbody>
+</table>
+<p><strong>仮説</strong>: Stage2/3 のモデル出力がなくても、<strong>ルールベース合成</strong>で一部を近似できる（後段モデルへの橋渡し）。</p>
+<hr />
+<h2 id="5">5. レースパフォーマンス信号の「文脈付き」取り込み</h2>
+<p><code>race_performance</code> 系は <strong>別モジュール</strong>だが、LayerA に載せるなら <strong>当日以前の履歴のみ</strong>。</p>
+<table>
+<thead>
+<tr>
+<th>候補</th>
+<th>定義イメージ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rp_final_ma3_same_distance_band</code></td>
+<td>同馬の <code>run_performance_final</code> の移動平均（過去のみ）</td>
+</tr>
+<tr>
+<td><code>rp_pct_vs_field_hist</code></td>
+<td>過去レースでの <code>run_performance_final_pct</code> の平均</td>
+</tr>
+<tr>
+<td><code>race_level_pre_race_ma_field</code></td>
+<td>当該馬が過去に出たレースの <code>race_level_pre_race</code> 平均（対戦強度履歴）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>仮説</strong>: 単発のパフォーマンス値より <strong>帯・コースとの組み合わせ</strong> で安定する。</p>
+<hr />
+<h2 id="6">6. 欠損・カバレッジを特徴にする（メタ特徴）</h2>
+<table>
+<thead>
+<tr>
+<th>候補</th>
+<th>定義イメージ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>n_past_races_used</code></td>
+<td>past から参照できた本数</td>
+</tr>
+<tr>
+<td><code>has_speed_index_any</code></td>
+<td>指数欠損の反転フラグ</td>
+</tr>
+<tr>
+<td><code>feature_coverage_score</code></td>
+<td>既に betting 仕様にあるが <strong>LayerA でも</strong> 学習に入れ欠損パターンを学習させる</td>
+</tr>
+</tbody>
+</table>
+<p><strong>仮説</strong>: 2020 前半など <strong>欠損が構造的</strong>な年では、メタ特徴がドリフト検知に寄与する。</p>
+<hr />
+<h2 id="7">7. 検証プロトコル（新要素を「発見」したと言える条件）</h2>
+<ol>
+<li><strong>同一 <code>split_manifest_version</code></strong> で Baseline と <strong>+1 特徴群</strong>のみ差分。  </li>
+<li><strong>primary metric</strong>（例: valid logloss）が統計的に改善、または <strong>セグメントで一貫して</strong>改善。  </li>
+<li>改善があれば <code>feature_dictionary.html</code> と <code>_registry.json</code> に登録し、<code>mlflow_run_id</code> を紐付ける。  </li>
+<li>効かない候補は本書に <strong>却下理由</strong> を 1 行追記（負の知見の蓄積）。</li>
+</ol>
+<hr />
+<h2 id="8">8. 次アクション（優先度）</h2>
+<ol>
+<li><strong>field 内分散系</strong>（セクション1）— 実装コスト低・解釈容易。  </li>
+<li><strong>メタカバレッジ</strong>（セクション6）— データ品質年との交互作用確認。  </li>
+<li><strong>race_performance 履歴</strong>（セクション5）— 既存パイプラインとの join 設計が必要。</li>
+</ol>
+<hr />
+<h2 id="9-2026-04">9. 実測メモ（自動探索・2026-04）</h2>
+<p>実行スクリプト: <code>notebooks/feature_engineering/run_10_fe_cycles.py</code>（10 サイクル）、<code>run_extended_fe_analysis.py</code>（拡張）。<br />
+成果物: <code>notebooks/feature_engineering/_run_output/cycles_report.html</code> / <code>extended_analysis.html</code>。</p>
+<h3 id="10">10 サイクル（要約）</h3>
+<ul>
+<li><strong>混戦度系</strong>（<code>field_speed_std</code> / <code>field_speed_iqr</code> / CV クリップ後）は相互に <strong>Spearman ρ≈0.91–0.98</strong>（レース単位）。<strong>本番は 1 本＋ablation</strong> が現実的。<code>speed_max/distance</code> のレース内 std は同一レースで距離一定のため <strong>ほぼ <code>field_speed_std</code> と同一情報</strong>。</li>
+<li><strong><code>ability_entropy</code>（粗いビン）</strong>は欠損・飽和があり、現定義では判別力が弱い → <strong>ビン数・最小頭数の再設計</strong>が必要。</li>
+<li><code>field_weight_std</code> は指数系と <strong>低冗長</strong>。<code>trainer_top_share</code> は <code>speed_pct</code> と弱い正の相関があり <strong>交絡の疑い</strong>。</li>
+<li><code>field_bracket_std</code> と <code>trainer_top_share</code> は <strong>強い負相関</strong> → 主効果を両方入れず <strong>交互作用または合成 1 本</strong>を推奨。</li>
+</ul>
+<h3 id="flat-parquet">拡張分析で出た新規候補（数値はローカル flat Parquet 時点）</h3>
+<table>
+<thead>
+<tr>
+<th>候補</th>
+<th>解釈</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>field_std_minus_iqr</code></td>
+<td>std−IQR。<strong>ρ(特徴, field_std)≈0.25</strong> で「外れ値混戦」成分として残りやすい。</td>
+</tr>
+<tr>
+<td><code>bracket_trader_interaction</code> = <code>bracket_std * (1 - trainer_share)</code></td>
+<td>枠×厩舎の合成。<strong>ρ(特徴, field_std)≈0.21</strong>。</td>
+</tr>
+<tr>
+<td><code>field_weight_cv</code></td>
+<td>斤量のレース内変動係数。<strong>ρ(特徴, field_std)≈0.15</strong> で指数系と最も直交に近い。</td>
+</tr>
+<tr>
+<td><code>field_speed_gap_std</code></td>
+<td><code>speed_max−speed_avg</code> のレース内 std。<strong>ρ(特徴, field_std)≈0.32</strong> — 付加価値は限定的になりやすい。</td>
+</tr>
+<tr>
+<td><code>field_std_surface_z</code></td>
+<td>年×surface 内 z 化。<strong>ρ(特徴, field_std)≈0.92</strong> — 依然として混戦度と強く重複。</td>
+</tr>
+<tr>
+<td><code>field_speed_std_per_sqrt_n</code></td>
+<td>頭数補正。<strong>ρ</strong> ほぼ <strong>1</strong> — 実質 <code>field_speed_std</code> の単調変換。</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_3">参照</h2>
+<ul>
+<li><code>horse_pre_race_dataset_spec.html</code></li>
+<li><code>pre_race_feature_whitelist.html</code></li>
+<li><code>advanced_modeling_techniques.html</code></li>
+<li><code>race_performance_rating_system.html</code></li>
+<li><code>modeling_coding_strategy.html</code></li>
+</ul>
+    </article>
+    <nav class="doc-nav">
+      <a href="betting_policy_reinforcement_learning.html">← 馬券推奨レイヤと強化学習 — 設計議論</a>
+      <a href="horse_pedigree_10gen_merge_design.html">5 世代血統表 ×「5 世代目の種牡馬」の 5 世代マージによる深さ 10 相当の血統設計 →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/feature_engineering_exploration.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

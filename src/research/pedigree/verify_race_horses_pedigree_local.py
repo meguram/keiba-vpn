@@ -28,7 +28,7 @@ from src.utils.keiba_logging import script_basic_config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TABLES = Path("data/local/tables")
+DEFAULT_TABLES = Path("data/page_reference/tables")
 DEFAULT_PED = Path("data/local/horse_pedigree_5gen")
 
 

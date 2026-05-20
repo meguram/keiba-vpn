@@ -35,8 +35,8 @@ from src.utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger(__name__)
 
-QUALITY_FILE = Path("data/local/tables/_table_quality.json")
-TABLES_DIR = Path("data/local/tables")
+QUALITY_FILE = Path("data/page_reference/tables/_table_quality.json")
+TABLES_DIR = Path("data/page_reference/tables")
 
 SCHEMA_SAMPLE_SIZE = 30
 ENTRY_ISSUE_TOLERANCE = 0.15

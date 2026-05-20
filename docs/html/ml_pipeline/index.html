@@ -734,7 +734,7 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
           <li><code class="inline">horse_probability_table</code> + <code class="inline">horse_market_snapshot</code> + <code class="inline">pair_market_snapshot</code> + <code class="inline">payout_table</code> を統合</li>
           <li><b>Stage6 までで市場非依存モデル完成</b> / <b>Stage7 でのみ市場統合</b> を厳守</li>
           <li>高オッズ帯ほど <code class="inline">buffer</code> を厚くして <code class="inline">safe_ev &gt; 0</code> を最低条件に</li>
-          <li><b>推奨印・券種・資金配分</b>の戦略層は教師あり ML の延長ではなく <b>強化学習（方策）</b> を想定。議論は <code class="inline">betting_policy_reinforcement_learning.md</code>、要約 HTML は <a href="../betting_rl_policy/index.html">betting_rl_policy</a>。</li>
+          <li><b>推奨印・券種・資金配分</b>の戦略層は教師あり ML の延長ではなく <b>強化学習（方策）</b> を想定。議論は <code class="inline">betting_policy_reinforcement_learning.html</code>、要約 HTML は <a href="../betting_rl_policy/index.html">betting_rl_policy</a>。</li>
         </ul>
       </div>
     </section>
@@ -785,7 +785,7 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
         通常のランダム split はリークと楽観バイアスの温床になる。
         本プロジェクトでは <code class="inline">data/meta/modeling/dataset_split_manifest.json</code> を
         <b>機械上の正</b>とし、詳細はマークダウン
-        <code class="inline">docs/modeling/train_valid_test_split_strategy.md</code> に集約する。
+        <code class="inline">docs/html/modeling/train_valid_test_split_strategy.html</code> に集約する。
       </p>
 
       <h3>一次プロトコル（確率モデル本線）</h3>
@@ -802,7 +802,7 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
         <p>
           <code class="inline">race_id</code> 単位で train / valid / test を完全分離する。
           行単位ランダム split は禁止。キャリブレーションは OOF または valid のみに fit し、
-          test では fit しない（<code class="inline">advanced_modeling_techniques.md</code> と一致）。
+          test では fit しない（<code class="inline">advanced_modeling_techniques.html</code> と一致）。
         </p>
       </div>
 
@@ -829,12 +829,12 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
       <ul class="bullets">
         <li><b>京都改修後</b>（<code class="inline">venue_era</code> フィルタ）— 現行コース条件への追従</li>
         <li><b>クッション観測あり / パドック有無</b> — ExtendedV1 の依存度と欠損バイアス</li>
-        <li><b>Adversarial validation</b> — <code class="inline">train(2020–2023)</code> vs <code class="inline">valid(2024)</code> と <code class="inline">train(2020–2023)</code> vs <code class="inline">test(2025)</code> を<b>用途別</b>に実施し分布差を監視（<code class="inline">advanced_modeling_techniques.md</code> §3.2 と一致）</li>
+        <li><b>Adversarial validation</b> — <code class="inline">train(2020–2023)</code> vs <code class="inline">valid(2024)</code> と <code class="inline">train(2020–2023)</code> vs <code class="inline">test(2025)</code> を<b>用途別</b>に実施し分布差を監視（<code class="inline">advanced_modeling_techniques.html</code> §3.2 と一致）</li>
       </ul>
 
       <h3>他ドキュメントの split との関係</h3>
       <p>
-        <code class="inline">race_performance_rating_system.md</code> の
+        <code class="inline">race_performance_rating_system.html</code> の
         「2020–2024 履歴 vs 2025 test」は <b>レースパフォーマンス特徴モジュール単体</b>のベンチ向けであり、
         上記の一次プロトコル（2020–2023 / 2024 / 2025）と目的が異なる。実験ログに protocol 名を必ず残す。
       </p>
@@ -843,7 +843,7 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
       <p>
         同一カレンダー範囲の参照用に、<code class="inline">data/features/race_performance/20xx.parquet</code>
        （馬行）から年次集計した。確率モデル母表の完成後も、同様の
-        <code class="inline">dataset_profile.json</code> を必須成果物とする（<code class="inline">reference_insights.md</code>）。
+        <code class="inline">dataset_profile.json</code> を必須成果物とする（<code class="inline">reference_insights.html</code>）。
       </p>
       <table class="table">
         <thead><tr><th>年</th><th>行数（馬行）</th><th>レース数</th><th>勝ち行%</th><th>複勝圏行%</th></tr></thead>
@@ -1256,7 +1256,7 @@ stacker は OOF 予測のみで学習</pre>
           </div>
           <p style="margin:12px 0 0;font-size:13px;color:var(--muted);">
             学習ジョブは <b>MLflow</b> で Run を必ず残す（params / metrics / tags / 主要 artifact）。
-            正本: <code class="inline">docs/modeling/modeling_coding_strategy.md</code>「MLflow による学習記録」、実装参照は <code class="inline">pipeline/trainer.py</code> 等。
+            正本: <code class="inline">docs/html/modeling/modeling_coding_strategy.html</code>「MLflow による学習記録」、実装参照は <code class="inline">pipeline/trainer.py</code> 等。
           </p>
         </div>
         <div class="card">
@@ -1471,25 +1471,25 @@ flowchart TD
       <table class="table">
         <thead><tr><th>テーマ</th><th>ファイル</th></tr></thead>
         <tbody>
-          <tr><td>多段階パイプライン</td><td class="mono">docs/modeling/staged_probability_pipeline.md</td></tr>
-          <tr><td>母表仕様</td><td class="mono">docs/modeling/horse_pre_race_dataset_spec.md</td></tr>
-          <tr><td>入力ホワイトリスト</td><td class="mono">docs/modeling/pre_race_feature_whitelist.md</td></tr>
-          <tr><td>ML テクニック</td><td class="mono">docs/modeling/advanced_modeling_techniques.md</td></tr>
-          <tr><td>コーディング戦略</td><td class="mono">docs/modeling/modeling_coding_strategy.md</td></tr>
-          <tr><td>馬券最適化（データ契約）</td><td class="mono">docs/modeling/betting_backtest_dataset_spec.md</td></tr>
-          <tr><td>馬券推奨 × RL（方策設計）</td><td class="mono">docs/modeling/betting_policy_reinforcement_learning.md（<a href="../betting_rl_policy/index.html">HTML</a>）</td></tr>
-          <tr><td>レースパフォーマンス</td><td class="mono">docs/modeling/race_performance_rating_system.md (<a href="../race_performance/index.html">HTML</a>)</td></tr>
+          <tr><td>多段階パイプライン</td><td class="mono">docs/html/modeling/staged_probability_pipeline.html</td></tr>
+          <tr><td>母表仕様</td><td class="mono">docs/html/modeling/horse_pre_race_dataset_spec.html</td></tr>
+          <tr><td>入力ホワイトリスト</td><td class="mono">docs/html/modeling/pre_race_feature_whitelist.html</td></tr>
+          <tr><td>ML テクニック</td><td class="mono">docs/html/modeling/advanced_modeling_techniques.html</td></tr>
+          <tr><td>コーディング戦略</td><td class="mono">docs/html/modeling/modeling_coding_strategy.html</td></tr>
+          <tr><td>馬券最適化（データ契約）</td><td class="mono">docs/html/modeling/betting_backtest_dataset_spec.html</td></tr>
+          <tr><td>馬券推奨 × RL（方策設計）</td><td class="mono">docs/html/modeling/betting_policy_reinforcement_learning.html（<a href="../betting_rl_policy/index.html">HTML</a>）</td></tr>
+          <tr><td>レースパフォーマンス</td><td class="mono">docs/html/modeling/race_performance_rating_system.html (<a href="../race_performance/index.html">HTML</a>)</td></tr>
           <tr><td>次アクション・議論整理</td><td class="mono">（ダッシュボード） <a href="../modeling_actions/index.html">modeling_actions/index.html</a></td></tr>
-          <tr><td>チューニング工程 SOP</td><td class="mono">docs/modeling/hyperparameter_tuning_workflow.md</td></tr>
-          <tr><td>特徴量探索（LayerA）</td><td class="mono">docs/modeling/feature_engineering_exploration.md（<a href="../feature_engineering/index.html">HTML</a>）</td></tr>
+          <tr><td>チューニング工程 SOP</td><td class="mono">docs/html/modeling/hyperparameter_tuning_workflow.html</td></tr>
+          <tr><td>特徴量探索（LayerA）</td><td class="mono">docs/html/modeling/feature_engineering_exploration.html（<a href="../feature_engineering/index.html">HTML</a>）</td></tr>
           <tr><td>データ・特徴量一覧（現段階）</td><td class="mono">docs/html/data_features/index.html</td></tr>
-          <tr><td>参考資料反映</td><td class="mono">docs/modeling/reference_insights.md</td></tr>
+          <tr><td>参考資料反映</td><td class="mono">docs/html/modeling/reference_insights.html</td></tr>
         </tbody>
       </table>
     </section>
 
     <footer>
-      <span>Source: <code class="inline">docs/modeling/*.md</code></span>
+      <span>Source: <code class="inline">docs/html/modeling/*.html</code></span>
       <span>Pre-race Probability ML Pipeline / Complete Edition</span>
     </footer>
   </main>

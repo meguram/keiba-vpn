@@ -106,7 +106,7 @@ class ModelTrainer:
 
     def train(
         self,
-        features_dir: str = "data/features",
+        features_dir: str = "data/local/features",
         test_ratio: float = 0.2,
         params: dict[str, Any] | None = None,
         years: list[str] | None = None,
@@ -144,7 +144,7 @@ class ModelTrainer:
         logger.info("学習データ: %d行 x %d列", len(df), len(df.columns))
 
         manifest_path = Path(
-            split_manifest_path or "data/meta/modeling/dataset_split_manifest.json"
+            split_manifest_path or "data/local/meta/modeling/dataset_split_manifest.json"
         )
         use_manifest = (
             use_split_manifest if use_split_manifest is not None else manifest_path.is_file()
@@ -609,7 +609,7 @@ class ModelTrainer:
         """特徴量を読み込む。優先順位: LayerA 学習 Parquet → FeatureStore スナップショット → 列ストア → CSV → GCS。"""
 
         # 0. LayerA 学習母表（pipeline.build_layer_a_dataset で生成・当日直前パイプライン整合）
-        layer_a = Path("data/modeling/layer_a_train.parquet")
+        layer_a = Path("data/local/modeling/layer_a_train.parquet")
         if layer_a.is_file():
             logger.info("LayerA 学習 Parquet から読込: %s", layer_a)
             return pd.read_parquet(layer_a)

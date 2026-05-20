@@ -28,7 +28,7 @@ import pyarrow.parquet as pq
 
 ROOT = Path(__file__).resolve().parents[3]
 HTML_PATH = ROOT / "docs/html/data_features_reference.html"
-FEATURES_ROOT = ROOT / "data/features"
+FEATURES_ROOT = ROOT / "data/local/features"
 REGISTRY_PATH = FEATURES_ROOT / "_registry.json"
 RACE_STORE_ROOT = FEATURES_ROOT / "race_performance/races"
 LEGACY_COLS = FEATURES_ROOT / "columns"

@@ -20,6 +20,10 @@ JRA年間カレンダーと db.netkeiba の更新タイミングに合わせて
 │                    │              │            │  前日取得済なら│
 │                    │              │            │  スキップ     │
 ├────────────────────┼──────────────┼────────────┼───────────────┤
+│  raceday-result-   │ 07:30 起動   │ 開催日のみ │ 各R発走15分後:│
+│  runner            │ 各R+15分後   │            │  速報結果取得 │
+│  (常駐プロセス)    │              │            │               │
+├────────────────────┼──────────────┼────────────┼───────────────┤
 │  raceday-evening   │ 17:30        │ 開催日のみ │ 結果          │
 │                    │              │            │ + 確定オッズ  │
 │                    │              │            │ + SmartRC     │
@@ -31,6 +35,10 @@ JRA年間カレンダーと db.netkeiba の更新タイミングに合わせて
 │  daily-race-lists  │ 毎日 07:00   │ 毎日       │ 今日+14日先   │
 │                    │              │            │ のrace_lists  │
 │                    │              │            │ 取得・更新    │
+├────────────────────┼──────────────┼────────────┼───────────────┤
+│  jra-baba-morning  │ 毎10分       │ 開催日+前日│ JRA馬場情報   │
+│  (cron 5:00-9:00)  │ 05:00-09:00  │            │ クッション値  │
+│                    │              │            │ 含水率・馬場  │
 └─────────────────────────────────────────────────────────────────┘
 
 raceday-eve の動作:
@@ -52,8 +60,9 @@ db.netkeiba の更新:
   - 出馬表は当日レース前15分に全情報が揃う
 
 Usage:
-  python -m src.scraper.auto_scrape --task raceday-runner    # 開催日常駐 (cron 07:30)
-  python -m src.scraper.auto_scrape --task raceday-evening    # 結果取得 (cron 17:30)
+  python -m src.scraper.auto_scrape --task raceday-runner          # 開催日常駐 T-15 (cron 07:30)
+  python -m src.scraper.auto_scrape --task raceday-result-runner   # 開催日常駐 T+15速報 (cron 07:30)
+  python -m src.scraper.auto_scrape --task raceday-evening         # 結果取得 (cron 17:30)
   python -m src.scraper.auto_scrape --task weekly-update       # 週次更新 (cron 金 17:30)
   python -m src.scraper.auto_scrape --task daily-race-lists    # 日次race_lists更新 (cron 07:00)
   python -m src.scraper.auto_scrape --status
@@ -75,11 +84,12 @@ from src.utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger("scraper.auto_scrape")
 
-LEAD_MINUTES = 15  # 発走何分前にスクレイプするか
+LEAD_MINUTES = 15    # 発走何分前にスクレイプするか
+RESULT_OFFSET_MINUTES = 15  # 発走何分後に速報結果を取得するか
 RACE_LIST_FETCH_DAYS_AHEAD = 14  # daily-race-lists で先読みする日数
 
 
-def _load_race_calendar(output_dir: str = "data/jra_baba") -> dict:
+def _load_race_calendar(output_dir: str = "data/page_reference/cushion") -> dict:
     from src.scraper.jra_calendar import JRACalendarScraper
     scraper = JRACalendarScraper(output_dir=output_dir)
     return scraper.get_schedule(date.today().year)
@@ -150,7 +160,7 @@ def _missing_past_race_dates(calendar: dict, since: str | None = None) -> list[s
 #  ステータス管理
 # ═══════════════════════════════════════════════════════════════════
 
-_STATUS_FILE = Path("data/meta/auto_scrape_status.json")
+_STATUS_FILE = Path("data/local/meta/auto_scrape_status.json")
 
 
 def _save_status(task: str, result: dict):
@@ -362,6 +372,116 @@ def _scrape_single_race(runner, race: dict, stats: dict):
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  タスク: 開催日速報結果ランナー (各R発走15分後に速報結果取得)
+# ═══════════════════════════════════════════════════════════════════
+
+def task_raceday_result_runner():
+    """
+    開催日に常駐するプロセス。各レース発走後 RESULT_OFFSET_MINUTES 分後に速報結果を取得する。
+
+    raceday-runner (T-15 事前取得) とは独立して動作する。
+    raceday-evening (夕方一括) は確定オッズ・SmartRC込みで引き続き別途実行される。
+    """
+    calendar = _load_race_calendar()
+    today_str = date.today().isoformat()
+
+    if not _is_race_day(calendar, today_str):
+        logger.info("今日 (%s) は開催日ではありません", today_str)
+        _save_status("raceday-result-runner", {"status": "skipped", "reason": "non-race-day"})
+        return
+
+    venues = _get_race_day_venues(calendar, today_str)
+    logger.info("=" * 60)
+    logger.info("  速報結果ランナー起動: %s", today_str)
+    logger.info("  開催場: %s", ", ".join(venues))
+    logger.info("=" * 60)
+
+    from src.scraper.run import ScraperRunner
+    runner = ScraperRunner()
+    date_fmt = today_str.replace("-", "")
+
+    logger.info("[Phase 1] レーススケジュール取得中...")
+    schedule = _fetch_race_schedule(runner, date_fmt)
+
+    if not schedule:
+        logger.warning("レーススケジュール取得失敗")
+        _save_status("raceday-result-runner", {"status": "error", "reason": "no-schedule"})
+        return
+
+    first_post = schedule[0]["post_time"]
+    last_post = schedule[-1]["post_time"]
+    logger.info("  全 %d レース", len(schedule))
+    logger.info("  最初の速報取得予定: %s (%s %sR %s 発走%d分後)",
+                (first_post + timedelta(minutes=RESULT_OFFSET_MINUTES)).strftime("%H:%M"),
+                schedule[0]["venue"], schedule[0]["round"], schedule[0]["race_name"],
+                RESULT_OFFSET_MINUTES)
+    logger.info("  最後の速報取得予定: %s (%s %sR %s 発走%d分後)",
+                (last_post + timedelta(minutes=RESULT_OFFSET_MINUTES)).strftime("%H:%M"),
+                schedule[-1]["venue"], schedule[-1]["round"], schedule[-1]["race_name"],
+                RESULT_OFFSET_MINUTES)
+
+    stats = {"races": len(schedule), "scraped": 0, "errors": []}
+    scraped_ids: set[str] = set()
+
+    for i, race in enumerate(schedule):
+        rid = race["race_id"]
+        target_time = race["post_time"] + timedelta(minutes=RESULT_OFFSET_MINUTES)
+        now = datetime.now()
+
+        if now < target_time:
+            wait_sec = (target_time - now).total_seconds()
+            logger.info("[%d/%d] %s %sR %s 発走 %s → %s まで待機 (あと %.0f分)",
+                        i + 1, len(schedule),
+                        race["venue"], race["round"], race["race_name"][:12],
+                        race["start_time_str"],
+                        target_time.strftime("%H:%M"),
+                        wait_sec / 60)
+            time.sleep(wait_sec)
+
+        # 同時刻に複数レースがある場合はまとめて処理
+        batch = []
+        for r in schedule:
+            if r["race_id"] in scraped_ids:
+                continue
+            if datetime.now() >= r["post_time"] + timedelta(minutes=RESULT_OFFSET_MINUTES):
+                batch.append(r)
+
+        for r in batch:
+            r_rid = r["race_id"]
+            label = f"{r['venue']} {r['round']}R {r['race_name'][:12]}"
+            logger.info("  ★ [%s] 速報結果取得: %s (%s)",
+                        datetime.now().strftime("%H:%M:%S"), label, r_rid)
+            try:
+                result = runner.scrape_race_result_on_time(r_rid, skip_existing=False)
+                if result:
+                    stats["scraped"] += 1
+                    logger.info("    ✓ 速報結果保存: %s", r_rid)
+                else:
+                    logger.warning("    - 速報結果なし: %s", r_rid)
+            except Exception as e:
+                logger.error("    ✗ 速報結果エラー [%s]: %s", r_rid, e)
+                stats["errors"].append(r_rid)
+            scraped_ids.add(r_rid)
+            time.sleep(random.uniform(1.0, 2.0))
+
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info("  速報結果ランナー完了: %d/%d レース", stats["scraped"], stats["races"])
+    if stats["errors"]:
+        logger.warning("  エラー: %d 件", len(stats["errors"]))
+    logger.info("=" * 60)
+
+    if stats["scraped"] > 0:
+        _trigger_track_speed_for_date(today_str)
+
+    _save_status("raceday-result-runner", {
+        "status": "ok", "date": today_str, "venues": venues,
+        **{k: v for k, v in stats.items() if k != "errors"},
+        "error_count": len(stats["errors"]),
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  タスク: 開催前日夕方 (馬柱・追い切りの先行取得)
 # ═══════════════════════════════════════════════════════════════════
 
@@ -391,6 +511,7 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
         "races": len(races),
         "shutuba_past": 0,
         "oikiri": 0,
+        "smartrc": 0,
         "errors": [],
     }
 
@@ -399,8 +520,9 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
         logger.info("[%d/%d] %s %s", i + 1, len(races), rid, race.get("race_name", ""))
 
         for task_name, task_key, task_fn in [
-            ("馬柱・調教", "shutuba_past", lambda: runner.scrape_shutuba_past(rid, skip_existing=False)),
-            ("追い切り",  "oikiri",       lambda: runner.scrape_oikiri(rid, skip_existing=False)),
+            ("馬柱・調教", "shutuba_past", lambda r=rid: runner.scrape_shutuba_past(r, skip_existing=False)),
+            ("追い切り",  "oikiri",       lambda r=rid: runner.scrape_oikiri(r, skip_existing=False)),
+            ("SmartRC指数", "smartrc",    lambda r=rid: runner.scrape_smartrc(r, race_date_str)),
         ]:
             try:
                 result = task_fn()
@@ -416,8 +538,8 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
             time.sleep(random.uniform(2.0, 4.0))
 
     logger.info("=" * 60)
-    logger.info("  前日夕方完了: 馬柱=%d, 追切=%d / %d レース",
-                stats["shutuba_past"], stats["oikiri"], stats["races"])
+    logger.info("  前日夕方完了: 馬柱=%d, 追切=%d, SmartRC=%d / %d レース",
+                stats["shutuba_past"], stats["oikiri"], stats["smartrc"], stats["races"])
     logger.info("=" * 60)
 
     return {
@@ -813,12 +935,14 @@ def show_status():
     print("\n=== 自動スクレイプ ステータス ===")
 
     task_labels = {
-        "raceday-eve":    "前日夕 (馬柱・追い切り先行取得 18:00)",
-        "raceday-runner": "開催日ランナー (出馬表・オッズ各R 15分前)",
-        "raceday-evening": "開催日夕 (結果・確定オッズ)",
-        "weekly-update": "金曜週次 (結果・指数・馬情報)",
-        "catchup-missing": "過去欠損補完 (race_listsなし開催日)",
-        "daily-race-lists": "日次レース一覧 (今日〜カレンダー末尾)",
+        "raceday-eve":           "前日夕 (馬柱・追い切り先行取得 18:00)",
+        "raceday-runner":        "開催日ランナー (出馬表・オッズ各R 15分前)",
+        "raceday-result-runner": "速報結果ランナー (各R発走15分後に速報取得)",
+        "raceday-evening":       "開催日夕 (結果・確定オッズ)",
+        "weekly-update":         "金曜週次 (結果・指数・馬情報)",
+        "catchup-missing":       "過去欠損補完 (race_listsなし開催日)",
+        "daily-race-lists":      "日次レース一覧 (今日〜カレンダー末尾)",
+        "jra-baba-morning":      "JRA馬場情報 (朝ポーリング 05:00-09:00)",
     }
 
     for task_id, label in task_labels.items():
@@ -870,16 +994,46 @@ def show_status():
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  タスク: JRA馬場情報 (朝ポーリング)
+# ═══════════════════════════════════════════════════════════════════
+
+def task_jra_baba_morning():
+    """
+    JRA公式馬場ページから馬場情報を取得する (cron 毎10分 05:00-09:00)。
+
+    jra_baba_live.run_cron_job() に委譲する。
+    - 当日が開催日でなければ即終了
+    - 時刻が前日発表窓 or 当日朝計測窓の外なら即終了
+    - 窓内かつ新データあればスクレイプして data/jra_baba/ に保存
+    """
+    from src.scraper.jra_baba_live import run_cron_job
+    today = date.today().isoformat()
+    logger.info("JRA馬場情報チェック: %s %s", today, datetime.now().strftime("%H:%M"))
+    count = run_cron_job()
+    if count > 0:
+        logger.info("JRA馬場情報: %d レコード保存", count)
+        _save_status("jra-baba-morning", {
+            "status": "ok",
+            "date": today,
+            "records": count,
+        })
+    else:
+        logger.debug("JRA馬場情報: 変更なし or 対象外 (ステータス更新なし)")
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  CLI
 # ═══════════════════════════════════════════════════════════════════
 
 TASKS = {
-    "raceday-eve":     task_raceday_eve,
-    "raceday-runner":  task_raceday_runner,
-    "raceday-evening": task_raceday_evening,
-    "weekly-update":   task_weekly_update,
-    "catchup-missing": task_catchup_missing_dates,
-    "daily-race-lists": task_daily_race_lists,
+    "raceday-eve":            task_raceday_eve,
+    "raceday-runner":         task_raceday_runner,
+    "raceday-result-runner":  task_raceday_result_runner,
+    "raceday-evening":        task_raceday_evening,
+    "weekly-update":          task_weekly_update,
+    "catchup-missing":        task_catchup_missing_dates,
+    "daily-race-lists":       task_daily_race_lists,
+    "jra-baba-morning":       task_jra_baba_morning,
 }
 
 

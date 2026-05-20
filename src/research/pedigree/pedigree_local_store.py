@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_LOCAL_GZ = Path(
     os.environ.get(
         "KEIBA_PEDIGREE_JSONL_GZ",
-        "data/research/_ped_snapshot_cache.jsonl.gz",
+        "data/local/research/_ped_snapshot_cache.jsonl.gz",
     )
 )
 

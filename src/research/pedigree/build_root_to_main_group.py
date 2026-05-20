@@ -26,10 +26,10 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-EDGES = ROOT / "data/research/pedigree_race_index/full_sire_tree.parquet"
-NODES = ROOT / "data/research/pedigree_race_index/full_sire_tree_nodes.parquet"
-SID2MAIN = ROOT / "data/research/bloodline_meta_cluster/sid_to_main.json"
-OUT = ROOT / "data/research/bloodline_meta_cluster/root_to_main_group.json"
+EDGES = ROOT / "data/page_reference/pedigree_race_index/full_sire_tree.parquet"
+NODES = ROOT / "data/page_reference/pedigree_race_index/full_sire_tree_nodes.parquet"
+SID2MAIN = ROOT / "data/page_reference/note_aptitude_race/sid_to_main.json"
+OUT = ROOT / "data/page_reference/note_aptitude_race/root_to_main_group.json"
 
 
 def main() -> int:

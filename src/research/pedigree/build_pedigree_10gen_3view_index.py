@@ -57,8 +57,8 @@ logger = logging.getLogger(__name__)
 
 PED_DIR = ROOT / "data/local/horse_pedigree_5gen"
 PED_10GEN_DIR = ROOT / "data/local/horse_pedigree_10gen"
-RACE_REC = ROOT / "data/research/bloodline_meta_cluster/race_records.parquet"
-OUT_DIR = ROOT / "data/research/pedigree_10gen_3view"
+RACE_REC = ROOT / "data/page_reference/note_aptitude_race/race_records.parquet"
+OUT_DIR = ROOT / "data/local/research/pedigree_10gen_3view"
 OUT_LONG = OUT_DIR / "horse_ancestor_long.parquet"
 OUT_INV = OUT_DIR / "ancestor_to_horses.parquet"
 OUT_META = OUT_DIR / "meta.json"

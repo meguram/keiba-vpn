@@ -44,7 +44,7 @@ RACE_DAY_POLL_WINDOW = ("07:30", "08:30")
 class JRACalendarScraper:
     """JRA公式カレンダーAPIから年間開催スケジュールを取得。"""
 
-    def __init__(self, output_dir: str = "data/jra_baba"):
+    def __init__(self, output_dir: str = "data/page_reference/cushion"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.session = requests.Session()
@@ -236,7 +236,7 @@ class JRACalendarScraper:
         return self.fetch_year(year)
 
 
-def get_today_poll_windows(output_dir: str = "data/jra_baba") -> list[tuple[str, str]]:
+def get_today_poll_windows(output_dir: str = "data/page_reference/cushion") -> list[tuple[str, str]]:
     """
     今日のポーリング窓を返す。
     外部からの利用を想定したヘルパー関数。

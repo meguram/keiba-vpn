@@ -56,7 +56,7 @@ from src.pipeline.features.id_value_policy import sanitize_netkeiba_string_id
 
 logger = logging.getLogger(__name__)
 
-JT_STATS_DIR = Path("data/features") / JT_STATS_META_SUBDIR
+JT_STATS_DIR = Path("data/local/features") / JT_STATS_META_SUBDIR
 MANIFEST_NAME = "_manifest.json"
 MERGE_SPEC_NAME = "_merge_spec.json"
 

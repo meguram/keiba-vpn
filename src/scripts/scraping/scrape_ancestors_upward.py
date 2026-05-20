@@ -51,10 +51,10 @@ logger = logging.getLogger("scrape_ancestors_upward")
 
 PED_URL        = "https://db.netkeiba.com/horse/ped/{horse_id}/"
 LOCAL_PED_DIR  = _ROOT / "data" / "local" / "horse_pedigree_5gen"
-NOT_FOUND_PATH = _ROOT / "data" / "meta" / "ancestors_not_found.json"
-PROGRESS_PATH  = _ROOT / "data" / "meta" / "ancestors_upward_progress.json"
-STATUS_PATH    = _ROOT / "data" / "meta" / "ancestors_upward_status.json"
-NODES_PARQUET  = _ROOT / "data" / "research" / "pedigree_race_index" / "full_sire_tree_nodes.parquet"
+NOT_FOUND_PATH = _ROOT / "data" / "local" / "meta" / "ancestors_not_found.json"
+PROGRESS_PATH  = _ROOT / "data" / "local" / "meta" / "ancestors_upward_progress.json"
+STATUS_PATH    = _ROOT / "data" / "local" / "meta" / "ancestors_upward_status.json"
+NODES_PARQUET  = _ROOT / "data" / "local" / "research" / "pedigree_race_index" / "full_sire_tree_nodes.parquet"
 
 # ── パス計算 ─────────────────────────────────────────────────
 def local_path(horse_id: str) -> Path:
@@ -95,7 +95,7 @@ def _write_status(
 
 
 # ancestor_index.json（scrape_pedigree_5gen._build_ancestor_index が生成）
-ANCESTOR_INDEX_PATH = _ROOT / "data" / "research" / "ancestor_index.json"
+ANCESTOR_INDEX_PATH = _ROOT / "data" / "local" / "research" / "ancestor_index.json"
 
 
 # ── 既存 JSON 収集 ────────────────────────────────────────────

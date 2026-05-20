@@ -1,6 +1,6 @@
 # keiba-vpn — エージェント向けメモ
 
-競馬データ基盤（スクレイピング・特徴量・ML・Web）。README の詳細は `README.md`。
+競馬データ基盤（スクレイピング・特徴量・ML・Web）。README の詳細は `README.html`。
 
 ## レイアウト
 
@@ -19,9 +19,7 @@
 | `data/` | 生データ・メタ・特徴量（大容量。不要な一括編集は避ける） |
 | `data/meta/structure/` | 各 JSON の構造メタ |
 | `data/features/` | 特徴量ストア。ブロック例: `base_tbl`（4キーのみの ``shutuba``）・`race_tbl`・`race_horse_tbl`・`horse_tbl`（血統・馬プロファイル等）・`race_jockey_tbl` / `race_trainer_tbl`・`jockey_tbl` / `trainer_tbl`・`jockey_trainer_stats/`（メタ）。**ラベル**: `target/rank_tbl/<年>/rank.parquet`（`race_id`,`horse_id`,`rank`）は `python -m src.pipeline.build_rank_target`。**馬単位エンティティ**（`horse/ped_tbl|result_tbl|training_tbl/{馬ID先頭4桁}/{horse_id}.parquet`、年ではなく馬シャード）は `python -m src.pipeline.build_horse_entity_store`。`docs/html/data_features_reference.html` の `#join-architecture`。出馬表 raw は `python -m src.pipeline.register_raw_table_features` → `_raw_table_feature_selection.json`。騎手・調教師は `python -m src.pipeline.build_jockey_trainer_stats`（定期: `scripts/cron/update_jockey_trainer_stats.sh` 等）。 |
-| `docs/` | システム文書（`ARCHITECTURE.md` / `DATASOURCES.md` など） |
-| `docs/modeling/` | レーティング・データセット仕様（設計の正） |
-| `docs/html/` | 参照用 HTML（`data_features_reference.html` 等。生成は `src/scripts/docs/`） |
+| `docs/html/` | システム文書（`ARCHITECTURE.html` / `modeling/*.html` など。設計の正） |
 | `scripts/` | シェルスクリプトのみ。`server/`（API 起動）・`cron/`（定期実行）。Python の CLI は `src/scripts/` を参照 |
 | `mlflow/` | MLflow 関連。`data/`（Docker サーバの DB + artifacts、`.gitignore`）・`runs/`（ローカルフォールバックのファイルストア、`.gitignore`）・`server/`（Docker Compose / Nginx / `setup.sh`） |
 | `config/` | 設定 |
@@ -34,7 +32,7 @@
 
 - 既存の命名・モジュール分割に合わせ、**依頼範囲だけ**変更する。
 - ファイル探索は `Read` / リポジトリ `Grep` / `Glob` を優先（巨大 `data/` の丸読みは避ける）。
-- モデリングや指標の意味を変える変更は、**`docs/modeling/` の該当仕様**と整合を取る。
+- モデリングや指標の意味を変える変更は、**`docs/html/modeling/` の該当仕様**と整合を取る。
 - スクレイパや保存形式を触る場合は、検証系スクリプト（`src/scraper/validate_storage.py` 等）の有無を確認してから進める。
 
 ## 環境

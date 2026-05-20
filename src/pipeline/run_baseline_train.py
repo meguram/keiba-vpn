@@ -35,7 +35,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Baseline LightGBM 学習（マニフェスト分割）")
     ap.add_argument(
         "--features-dir",
-        default="data/features",
+        default="data/local/features",
         help="特徴量 CSV ディレクトリ（FeatureStore 優先）",
     )
     ap.add_argument(
@@ -45,7 +45,7 @@ def main() -> None:
     )
     ap.add_argument(
         "--manifest",
-        default="data/meta/modeling/dataset_split_manifest.json",
+        default="data/local/meta/modeling/dataset_split_manifest.json",
         help="分割マニフェスト JSON",
     )
     ap.add_argument(

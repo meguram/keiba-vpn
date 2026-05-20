@@ -41,8 +41,8 @@ from src.utils.keiba_logging import script_basic_config
 logger = logging.getLogger("research.pair_lift")
 
 ROOT = Path(__file__).resolve().parents[3]
-IDX_DIR = ROOT / "data/research/pedigree_race_index"
-ART_DIR = ROOT / "data/research/bloodline_meta_cluster"
+IDX_DIR = ROOT / "data/page_reference/pedigree_race_index"
+ART_DIR = ROOT / "data/page_reference/note_aptitude_race"
 
 EB_PRIOR_N = 30
 GLOBAL_WIN = 0.139

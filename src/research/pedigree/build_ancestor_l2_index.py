@@ -35,8 +35,8 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-ART = ROOT / "data/research/bloodline_meta_cluster"
-CATS_PATH = ROOT / "data/research/pedigree_race_index/horse_pedigree_cats.parquet"
+ART = ROOT / "data/page_reference/note_aptitude_race"
+CATS_PATH = ROOT / "data/page_reference/pedigree_race_index/horse_pedigree_cats.parquet"
 
 # main_group → デフォルト L2 (centroid 最近接 + 解釈的整合性)
 MAIN_GROUP_DEFAULT_L2 = {

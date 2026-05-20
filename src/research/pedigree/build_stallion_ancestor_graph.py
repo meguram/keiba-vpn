@@ -298,7 +298,7 @@ def main() -> None:
     ap.add_argument(
         "--out-dir",
         type=Path,
-        default=Path("data/meta/modeling/stallion_tree"),
+        default=Path("data/local/meta/modeling/stallion_tree"),
         help="graph.json / meta.json / 任意で index.html",
     )
     ap.add_argument(

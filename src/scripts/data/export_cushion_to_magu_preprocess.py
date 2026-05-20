@@ -128,7 +128,7 @@ def main() -> int:
     args = p.parse_args()
 
     vpn = Path(__file__).resolve().parents[3]
-    src = args.json or (vpn / "data" / "jra_baba" / "cushion_values.json")
+    src = args.json or (vpn / "data" / "local" / "jra_baba" / "cushion_values.json")
     if not src.is_file():
         print(f"error: 入力がありません: {src}", file=sys.stderr)
         return 1

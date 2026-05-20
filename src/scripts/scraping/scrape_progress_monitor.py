@@ -25,9 +25,9 @@ from pathlib import Path
 
 _ROOT           = Path(__file__).resolve().parents[3]
 PED_DIR         = _ROOT / "data" / "local" / "horse_pedigree_5gen"
-NOT_FOUND       = _ROOT / "data" / "meta" / "ancestors_not_found.json"
-ANCESTORS_STATUS = _ROOT / "data" / "meta" / "ancestors_upward_status.json"
-PATCH_SEX_STATUS = _ROOT / "data" / "meta" / "patch_sex_status.json"
+NOT_FOUND       = _ROOT / "data" / "local" / "meta" / "ancestors_not_found.json"
+ANCESTORS_STATUS = _ROOT / "data" / "local" / "meta" / "ancestors_upward_status.json"
+PATCH_SEX_STATUS = _ROOT / "data" / "local" / "meta" / "patch_sex_status.json"
 
 BAR_WIDTH = 44
 
@@ -194,7 +194,7 @@ def render_all() -> str:
     return "\n".join(parts)
 
 
-DISPLAY_FILE = _ROOT / "data" / "meta" / "scrape_monitor.txt"
+DISPLAY_FILE = _ROOT / "data" / "local" / "meta" / "scrape_monitor.txt"
 
 
 def main() -> None:

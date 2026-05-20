@@ -69,7 +69,7 @@ def categorize_distance(dist: int) -> str:
 class BloodlineDistanceAnalyzer:
     """血統と距離適性の関係を分析する。"""
 
-    def __init__(self, output_dir: str = "data/research/bloodline"):
+    def __init__(self, output_dir: str = "data/local/research/bloodline"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.df: pd.DataFrame = pd.DataFrame()
@@ -118,7 +118,7 @@ class BloodlineDistanceAnalyzer:
         self._load_from_gcs_fallback(years)
 
     def _load_from_pedigree_race_index(self, years: list[str] | None = None) -> bool:
-        """data/research/pedigree_race_index/ から JOIN して sire / dam_sire を
+        """data/local/research/pedigree_race_index/ から JOIN して sire / dam_sire を
         取得する高速パス。
 
         必要ファイル:
@@ -128,7 +128,7 @@ class BloodlineDistanceAnalyzer:
 
         Returns: True なら self.df をセットして成功、False なら失敗。
         """
-        idx_dir = Path("data/research/pedigree_race_index")
+        idx_dir = Path("data/page_reference/pedigree_race_index")
         slim_p = idx_dir / "race_result_slim.parquet"
         ds_p = idx_dir / "horse_sire_damsire.parquet"
         if not slim_p.exists():
@@ -383,7 +383,7 @@ class BloodlineDistanceAnalyzer:
             self.df["sire"].nunique(), self.df["dam_sire"].nunique(),
         )
 
-    def load_from_csv(self, features_dir: str = "data/features"):
+    def load_from_csv(self, features_dir: str = "data/local/features"):
         """既存の特徴量 CSV から読み込む。"""
         p = Path(features_dir)
         csvs = list(p.glob("*.csv"))
@@ -1148,9 +1148,9 @@ def main():
 
     parser = argparse.ArgumentParser(description="血統×距離適性 研究")
     parser.add_argument("--source", choices=["gcs", "csv"], default="gcs")
-    parser.add_argument("--features-dir", default="data/features")
+    parser.add_argument("--features-dir", default="data/local/features")
     parser.add_argument("--years", nargs="*", default=None)
-    parser.add_argument("--output-dir", default="data/research/bloodline")
+    parser.add_argument("--output-dir", default="data/local/research/bloodline")
     args = parser.parse_args()
 
     analyzer = BloodlineDistanceAnalyzer(output_dir=args.output_dir)

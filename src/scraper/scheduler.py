@@ -61,7 +61,7 @@ class SmartRCConfig:
     SESSION_COOLDOWN_SEC: int = 60
 
     # アクセスログ保存先
-    ACCESS_LOG_PATH: Path = Path("data/meta/logs/smartrc_access.log")
+    ACCESS_LOG_PATH: Path = Path("data/local/meta/logs/smartrc_access.log")
 
     # SmartRC ベースURL
     BASE_URL: str = "https://www.smartrc.jp"

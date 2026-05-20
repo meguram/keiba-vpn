@@ -21,7 +21,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_KB_PATH = Path(__file__).resolve().parents[3] / "data" / "knowledge" / "performance_genes.json"
+_KB_PATH = Path(__file__).resolve().parents[3] / "data" / "local" / "knowledge" / "performance_genes.json"
 
 
 class PerformanceGenes:

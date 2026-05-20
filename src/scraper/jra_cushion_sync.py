@@ -233,7 +233,7 @@ def rebuild_local_cushion_file(
     year_to_records: dict[int, list[dict[str, Any]]],
 ) -> dict[str, Any]:
     """cushion_values.json を年別ブロックで差し替え。"""
-    path = base_dir / "data" / "jra_baba" / "cushion_values.json"
+    path = base_dir / "data" / "local" / "jra_baba" / "cushion_values.json"
     if not path.exists():
         all_rows: list[dict[str, Any]] = []
     else:

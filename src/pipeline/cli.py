@@ -94,7 +94,7 @@ def main():
     p_pred.add_argument("--force-scrape", action="store_true", help="キャッシュ無視")
 
     p_train = sub.add_parser("train", help="モデルを学習する")
-    p_train.add_argument("--features-dir", default="data/features", help="特徴量ディレクトリ")
+    p_train.add_argument("--features-dir", default="data/local/features", help="特徴量ディレクトリ")
 
     args = parser.parse_args()
 

@@ -37,7 +37,7 @@ from src.scraper.client import NetkeibaClient                                # n
 logger = logging.getLogger("patch_sex")
 
 PED_DIR     = _ROOT / "data" / "local" / "horse_pedigree_5gen"
-STATUS_PATH = _ROOT / "data" / "meta" / "patch_sex_status.json"
+STATUS_PATH = _ROOT / "data" / "local" / "meta" / "patch_sex_status.json"
 PED_URL     = "https://db.netkeiba.com/horse/ped/{horse_id}/"
 
 # HTTP エラーによる停止判定（ancestors_upward と共通ロジック）

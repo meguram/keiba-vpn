@@ -24,7 +24,7 @@ def upload_cushion_values_to_gcs(
     blob: chuou/data/others/jra_cushion/{YYYY}.json
     """
     base = base_dir or Path.cwd()
-    src = json_path or (base / "data" / "jra_baba" / "cushion_values.json")
+    src = json_path or (base / "data" / "local" / "jra_baba" / "cushion_values.json")
     if not src.is_file():
         return {"ok": False, "error": f"ファイルがありません: {src}"}
 

@@ -35,9 +35,9 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 NB_PATH = ROOT / "notebooks/pedigree/bloodline_subgroup_analysis.ipynb"
-TBL_DIR = ROOT / "data/local/tables"
-IDX_DIR = ROOT / "data/research/pedigree_race_index"
-ART_DIR = ROOT / "data/research/bloodline_meta_cluster"
+TBL_DIR = ROOT / "data/page_reference/tables"
+IDX_DIR = ROOT / "data/page_reference/pedigree_race_index"
+ART_DIR = ROOT / "data/page_reference/note_aptitude_race"
 
 
 def _extract_cells() -> str:
@@ -64,7 +64,7 @@ def _extract_cells() -> str:
 
 def build(quiet: bool = False) -> Path:
     """ノートブックを実行してアーティファクトを生成。"""
-    art_dir = ROOT / "data/research/bloodline_meta_cluster"
+    art_dir = ROOT / "data/page_reference/note_aptitude_race"
 
     script = _extract_cells()
     nb_dir = NB_PATH.parent
@@ -573,7 +573,7 @@ def _load_course_type_map() -> dict[tuple[str, str, int], str]:
     内外区別のない場/距離は "" を返す (大半の地方場/中京/東京/福島 等)。
     """
     import re as _re
-    path = ROOT / "data/knowledge/course_profiles.json"
+    path = ROOT / "data/page_reference/knowledge/course_profiles.json"
     mapping: dict[tuple[str, str, int], str] = {}
     if path.exists():
         prof = json.loads(path.read_text())

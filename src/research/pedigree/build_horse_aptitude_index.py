@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-OUT_DIR = ROOT / "data/research/horse_aptitude"
+OUT_DIR = ROOT / "data/local/research/horse_aptitude"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 ODDS_NOISE_THRESHOLD = 30.0  # オッズ >= 30 倍 はノイズとして除外
@@ -62,7 +62,7 @@ def _parse_sex(sex_age: str) -> str:
 
 def main() -> int:
     print("[load] race_result_flat (全年) ...", flush=True)
-    files = sorted(glob.glob(str(ROOT / "data/local/tables/*/race_result_flat.parquet")))
+    files = sorted(glob.glob(str(ROOT / "data/page_reference/tables/*/race_result_flat.parquet")))
     print(f"  files: {len(files)}", flush=True)
     cols = [
         "race_id", "date", "venue", "surface", "distance", "track_condition",

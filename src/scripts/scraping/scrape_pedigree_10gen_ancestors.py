@@ -46,7 +46,7 @@ logger = logging.getLogger("scrape_10gen_ancestors")
 
 PED_URL = "https://db.netkeiba.com/horse/ped/{horse_id}/"
 PED_DIR = ROOT / "data/local/horse_pedigree_5gen"
-PROGRESS_PATH = ROOT / "data/research/pedigree_10gen_3view/scrape_progress.json"
+PROGRESS_PATH = ROOT / "data/local/research/pedigree_10gen_3view/scrape_progress.json"
 
 
 def _prefix_of(horse_id: str) -> str:

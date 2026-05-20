@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
-ANALYSIS_DIR = ROOT / "data/analysis/pedigree"
+ANALYSIS_DIR = ROOT / "data/local/analysis/pedigree"
 DIST_LABELS = ["短距離", "マイル", "中距離", "長距離"]
 AXIS_CONDS: dict[str, list[str]] = {
     "venue":    [f"win_v_{v}" for v in ["東京","中山","阪神","京都","中京","新潟","小倉","福島","札幌","函館"]],

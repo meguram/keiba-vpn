@@ -32,8 +32,8 @@ import pandas as pd
 logger = logging.getLogger("research.perf_index")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-RACES_DIR = PROJECT_ROOT / "data" / "analysis" / "track_speed"
-BASELINES_PATH = PROJECT_ROOT / "data" / "knowledge" / "track_speed_baselines.parquet"
+RACES_DIR = PROJECT_ROOT / "data" / "local" / "analysis" / "track_speed"
+BASELINES_PATH = PROJECT_ROOT / "data" / "local" / "knowledge" / "track_speed_baselines.parquet"
 
 # baseline_std の上限キャップ
 # distance=0 のレースなど集約ベースラインは std が20〜47と異常に大きく、

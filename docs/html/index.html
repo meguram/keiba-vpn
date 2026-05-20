@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ドキュメント一覧 — keiba-vpn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="index.html" class="active">ドキュメント一覧</a>
+      <h4>ダッシュボード</h4>
+      <a href="ml_pipeline/index.html">ML パイプライン</a>
+      <a href="data_features/index.html">データ・特徴量</a>
+      <a href="data_features_reference.html">特徴量リファレンス</a>
+      <a href="keiba_ai_pipeline_proposal.html">統合企画書</a>
+      <h4>運用</h4>
+      <a href="operations/scraping_sla.html">スクレイピング SLA</a>
+      <a href="operations/local_dataset_endpoints.html">ローカル API 一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>ドキュメント一覧</h1>
+      <p class="meta"><code>docs/html/</code> の Markdown を HTML に変換したページです。生成: 2026-05-20 06:01 UTC</p>
+    </header>
+
+    <section class="index-section">
+      <h2>プロジェクト全体（docs/html/ 直下）</h2>
+      <div class="doc-grid">
+      <div class="doc-card">
+        <a class="title" href="ARCHITECTURE.html">ML-AutoPilot Keiba — システム仕様書</a>
+        <div class="path">ARCHITECTURE.html</div>
+        <p class="desc">本システムは**将軍 → 家老 → 足軽**の3階層構造で設計されている。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="DATASOURCES.html">データソース一覧</a>
+        <div class="path">DATASOURCES.html</div>
+        <p class="desc">netkeiba.com および SmartRC (smartrc.jp) から取得する全データソースの仕様書。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="NOTE_APTITUDE_5GEN.html">適性3D × 5世代血統（父系／母系経路の扱い）</a>
+        <div class="path">NOTE_APTITUDE_5GEN.html</div>
+        <p class="desc">- **常染色体**は父・母から各50%ずつ受け取るのが基本。5世代前の特定祖先からの**期待寄与**は、簡易モデルでは経路長 \(g\) に対し **\(2^{-g}\)**（各世代で半減）で表現できる（本リポジトリの research…</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="PEDIGREE_NOTE_APTITUDE.html">血統適性ナレッジ（note まとめ → 特徴量 → モデル）</a>
+        <div class="path">PEDIGREE_NOTE_APTITUDE.html</div>
+        <p class="desc">参照: Pedigree investigation｜めぐめぐ（各国血統・コース・種牡馬コメントの整理）</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="PERFORMANCE_GENES.html">競走馬パフォーマンス遺伝子ナレッジベース</a>
+        <div class="path">PERFORMANCE_GENES.html</div>
+        <p class="desc">競走馬の運動能力に関連する遺伝子マーカーのナレッジベースと推論システム。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="cost.html">GCS コスト分析レポート</a>
+        <div class="path">cost.html</div>
+        <p class="desc">エンドポイント**: GET /api/scrape-summary-all</p>
+      </div>
+      </div>
+    </section>
+
+    <section class="index-section">
+      <h2>モデリング（docs/html/modeling/）</h2>
+      <div class="doc-grid">
+      <div class="doc-card">
+        <a class="title" href="modeling/advanced_modeling_techniques.html">レース直前確率モデルに使う実戦的 ML テクニック</a>
+        <div class="path">modeling/advanced_modeling_techniques.html</div>
+        <p class="desc">このドキュメントは、競馬 tabular モデルの次フェーズで活用する機械学習テクニックを、実戦投入前提で整理したものである。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/betting_backtest_dataset_spec.html">betting_backtest_dataset 仕様</a>
+        <div class="path">modeling/betting_backtest_dataset_spec.html</div>
+        <p class="desc">この仕様は、レース直前確率モデルの出力を馬券最適化・バックテストに接続するための入力テーブルを定義する。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/betting_policy_reinforcement_learning.html">馬券推奨レイヤと強化学習 — 設計議論</a>
+        <div class="path">modeling/betting_policy_reinforcement_learning.html</div>
+        <p class="desc">本ドキュメントは次の **境界** を明確にする。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/feature_engineering_exploration.html">特徴量エンジニアリング — 探索メモ（新要素の発見）</a>
+        <div class="path">modeling/feature_engineering_exploration.html</div>
+        <p class="desc">既存の BaselineV1 / ExtendedV1・horse_pre_race_dataset_spec.html・pre_race_feature_whitelist.html を前提に、</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/horse_pedigree_10gen_merge_design.html">5 世代血統表 ×「5 世代目の種牡馬」の 5 世代マージによる深さ 10 相当の血統設計</a>
+        <div class="path">modeling/horse_pedigree_10gen_merge_design.html</div>
+        <p class="desc">- netkeiba の /horse/ped/{id}/ から得られる **固定レイアウトの 5 世代表**（最大 62 祖先、generation 1..5、position 世代内 0 始まり）だけでは、表の外側（6 代目以降）の祖…</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/horse_pre_race_dataset_spec.html">horse_pre_race_dataset 仕様</a>
+        <div class="path">modeling/horse_pre_race_dataset_spec.html</div>
+        <p class="desc">horse_pre_race_dataset は、レース直前確率モデルのための学習母表である。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/hyperparameter_tuning_workflow.html">ハイパーパラメータ・モデル選定のチューニング工程</a>
+        <div class="path">modeling/hyperparameter_tuning_workflow.html</div>
+        <p class="desc">終わっていない（未整理だった）領域である。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/modeling_coding_strategy.html">モデリング実装時のコーディング戦略</a>
+        <div class="path">modeling/modeling_coding_strategy.html</div>
+        <p class="desc">このドキュメントは、2020-2025 の年次ローカルテーブルと GCS 由来補助データを用いて、</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/pedigree_stage_research_notes.html">血統・馬場傾向・研究方針メモ（ブラッシュアップ用）</a>
+        <div class="path">modeling/pedigree_stage_research_notes.html</div>
+        <p class="desc">この文書は、血統因子・馬場傾向・未出走馬への拡張・研究ロードマップについて、**現状の実装**と**今後の考え**を一枚にまとめたものです。一緒に推敲する前提で、未確定の仮説は「検討中」と明記しています。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/pre_race_feature_whitelist.html">レース直前特徴量ホワイトリスト</a>
+        <div class="path">modeling/pre_race_feature_whitelist.html</div>
+        <p class="desc">このドキュメントは、T-10分 時点で利用可能な情報だけを使って、勝率・連対率・複勝率 モデルを構築するための入力列ホワイトリストを定義する。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/race_performance_rating_system.html">レースパフォーマンス算出システム設計</a>
+        <div class="path">modeling/race_performance_rating_system.html</div>
+        <p class="desc">このドキュメントは、過去レースごとに</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/reference_insights.html">参考資料から反映した設計メモ</a>
+        <div class="path">modeling/reference_insights.html</div>
+        <p class="desc">このメモは、レース直前確率モデル向けデータ準備企画書をブラッシュアップする際に参照した外部資料と、その反映ポイントを整理したものである。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/staged_probability_pipeline.html">多段階レース直前確率パイプライン設計</a>
+        <div class="path">modeling/staged_probability_pipeline.html</div>
+        <p class="desc">このドキュメントは、勝率・連対率・複勝率 を単一モデルで直接当てに行くだけでなく、</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/track_bias_pedigree_pipeline.html">血統×馬場傾向（track_bias_pedigree）パイプライン</a>
+        <div class="path">modeling/track_bias_pedigree_pipeline.html</div>
+        <p class="desc">当日・前日の馬場傾向（芝/ダ・場・発走順）と、出馬表の父・母父の芝/ダ別累計勝率を組み合わせた **リークなし** 特徴を LayerA に付与する。</p>
+      </div>
+      <div class="doc-card">
+        <a class="title" href="modeling/train_valid_test_split_strategy.html">Train / Valid / Test 分割戦略（レース直前確率モデル）</a>
+        <div class="path">modeling/train_valid_test_split_strategy.html</div>
+        <p class="desc">本ドキュメントは、**通常の i.i.d. 想定の機械学習タスクとは異なる**競馬データにおいて、</p>
+      </div>
+      </div>
+    </section>
+
+    <footer class="page-footer">
+      <span>再生成: <code class="mono">docs/html/ を直接編集</code></span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

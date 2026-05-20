@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>多段階レース直前確率パイプライン設計 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>多段階レース直前確率パイプライン設計</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/staged_probability_pipeline.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">多段階レース直前確率パイプライン設計</h1>
+<h2 id="_2">目的</h2>
+<p>このドキュメントは、<code>勝率</code>・<code>連対率</code>・<code>複勝率</code> を単一モデルで直接当てに行くだけでなく、<br />
+<code>位置取り</code>、<code>ペース</code>、<code>当日馬場タイプ</code>、<code>血統適性</code> といった中間状態を順に推定して最終確率へ接続する、多段階パイプラインの設計を定義する。</p>
+<p>前提として、ここでいう多段階化は「モデルを複雑にすること」そのものが目的ではなく、<br />
+- ドメインに沿った中間変数を明示する<br />
+- モデルの失敗原因を分解しやすくする<br />
+- 当日更新できる情報と、事前固定の情報を切り分ける<br />
+- 血統を“その日の馬場特性に応じて”使い分ける</p>
+<p>ために行う。</p>
+<h2 id="_3">基本思想</h2>
+<ul>
+<li><code>Stage0</code>: レース直前時点の母表を作る</li>
+<li><code>Stage1</code>: 馬単体の latent state を作る</li>
+<li><code>Stage2</code>: 位置取り / 追走難度を予測する</li>
+<li><code>Stage3</code>: レース全体のペースシナリオを予測する</li>
+<li><code>Stage4</code>: 当日馬場タイプ / race-day bias を推定する</li>
+<li><code>Stage5</code>: 血統・適性の当日文脈適合度を推定する</li>
+<li><code>Stage6</code>: それらを入力に最終 <code>p_win / p_top2 / p_top3</code> を推定する</li>
+<li><code>Stage7</code>: 市場統合・馬券最適化へ渡す</li>
+</ul>
+<h2 id="_4">全体像</h2>
+<div class="mermaid">flowchart TD
+    stage0[Stage0_PreRaceDataset] --> stage1[Stage1_HorseLatentState]
+    stage1 --> stage2[Stage2_Positioning]
+    stage1 --> stage3[Stage3_PaceScenario]
+    stage1 --> stage5[Stage5_BloodlineContextFit]
+    stage2 --> stage3
+    stage3 --> stage4[Stage4_DayTrackBias]
+    stage4 --> stage5
+    stage1 --> stage6[Stage6_FinalProbability]
+    stage2 --> stage6
+    stage3 --> stage6
+    stage4 --> stage6
+    stage5 --> stage6
+    stage6 --> stage7[Stage7_MarketAndBetting]</div>
+<h2 id="stage0-pre-race">Stage0: Pre-race 母表</h2>
+<h2 id="_5">役割</h2>
+<ul>
+<li><code>race_shutuba_flat</code> を母表にする</li>
+<li><code>race_shutuba_past_flat</code>, <code>race_index_flat</code>, <code>race_oikiri_flat</code>, <code>race_paddock_flat</code>, <code>race_trainer_comment_flat</code> を時点整合で join する</li>
+<li>GCS horse bundle とクッション値を統合する</li>
+</ul>
+<h2 id="_6">出力候補</h2>
+<ul>
+<li><code>horse_pre_race_dataset.parquet</code></li>
+<li><code>horse_labels.parquet</code></li>
+<li><code>race_market_snapshot.parquet</code></li>
+</ul>
+<h2 id="stage1-horse-latent-state">Stage1: Horse latent state</h2>
+<h2 id="_7">役割</h2>
+<p>馬単体の「今の地力・適性・仕上がり」を要約する。<br />
+最終確率モデルに直接生列を大量投入するより、意味のある latent block に整理する。</p>
+<h2 id="latent-block">主な latent block</h2>
+<ul>
+<li><code>ability_latent</code></li>
+<li>近5走戦績、同条件成績、speed index、career stats</li>
+<li><code>form_latent</code></li>
+<li>休み明け、叩き何戦目、馬体重変化、近走トレンド</li>
+<li><code>surface_distance_latent</code></li>
+<li>芝/ダート・距離帯適性</li>
+<li><code>pedigree_latent</code></li>
+<li>sire / dam_sire / myostatin / note aptitude</li>
+<li><code>trainer_jockey_latent</code></li>
+<li>OOF target encoding や CatBoost ordered encoding で作る人馬・陣営系</li>
+</ul>
+<h2 id="_8">出力候補</h2>
+<ul>
+<li><code>horse_latent_state.parquet</code></li>
+</ul>
+<h2 id="stage2">Stage2: 位置取り / 追走難度モデル</h2>
+<h2 id="_9">目的</h2>
+<p>対象レースで「その馬がいつもの位置を取りやすいか」を推定する。</p>
+<h2 id="_10">既存コードの活用先</h2>
+<ul>
+<li><code>src/pipeline/tracking_difficulty.py</code></li>
+</ul>
+<h2 id="_11">入力</h2>
+<ul>
+<li>直近走の通過順傾向</li>
+<li>脚質ばらつき</li>
+<li>枠順・馬番</li>
+<li>隣枠馬の傾向</li>
+<li>頭数</li>
+<li>コース・距離</li>
+<li>馬場状態</li>
+</ul>
+<h2 id="_12">出力</h2>
+<ul>
+<li><code>expected_first_corner_pos</code></li>
+<li><code>expected_first_corner_pos_norm</code></li>
+<li><code>tracking_difficulty_score</code></li>
+<li><code>front_run_probability</code></li>
+<li><code>stalker_probability</code></li>
+<li><code>closer_probability</code></li>
+</ul>
+<h2 id="_13">学習ターゲット</h2>
+<ul>
+<li>既存 <code>position_deviation</code></li>
+<li>または <code>first_corner_rank_norm</code></li>
+</ul>
+<h2 id="_14">価値</h2>
+<ul>
+<li>位置取りは、最終着順の前段変数として解釈しやすい</li>
+<li>後段のペースモデルと自然につながる</li>
+</ul>
+<h2 id="stage3">Stage3: ペースシナリオモデル</h2>
+<h2 id="_15">目的</h2>
+<p>レース全体の前半流速・消耗度・上がり勝負化を推定する。</p>
+<h2 id="_16">既存コードの活用先</h2>
+<ul>
+<li><code>src/pipeline/pace_predictor.py</code></li>
+</ul>
+<h2 id="_17">入力</h2>
+<ul>
+<li>Stage2 の <code>front_run_probability</code> 集約</li>
+<li>頭数</li>
+<li>距離</li>
+<li>surface</li>
+<li>track_condition</li>
+<li>venue</li>
+<li>grade</li>
+<li>逃げ・先行馬の想定頭数</li>
+</ul>
+<h2 id="_18">出力</h2>
+<ul>
+<li><code>pred_lap_1f</code></li>
+<li><code>pred_lap_3f</code></li>
+<li><code>pred_pace_class</code></li>
+<li><code>slow</code></li>
+<li><code>average</code></li>
+<li><code>fast</code></li>
+<li><code>pred_energy_distribution</code></li>
+<li>瞬発</li>
+<li>持続</li>
+<li>消耗</li>
+</ul>
+<h2 id="_19">派生特徴</h2>
+<ul>
+<li><code>pace_pressure_proxy</code></li>
+<li><code>late_kick_advantage</code></li>
+<li><code>front_runner_penalty</code></li>
+</ul>
+<h2 id="stage4-race-day-bias">Stage4: 当日馬場タイプ / race-day bias モデル</h2>
+<h2 id="_20">目的</h2>
+<p>「今日はどんな馬が走りやすい日か」を、レース条件の事前情報と、同日先行レースの結果から動的に更新する。</p>
+<p>これはユーザー要望の</p>
+<blockquote>
+<p>その日によって好走しやすい馬のタイプが変わる<br />
+を扱うための中心ステージ。</p>
+</blockquote>
+<h2 id="_21">二層構造</h2>
+<h3 id="stage4a-day-prior">Stage4A: 事前 day prior</h3>
+<p>対象レースが始まる前に、以下から当日バイアスの事前分布を作る。<br />
+- venue<br />
+- venue_era<br />
+- surface<br />
+- distance<br />
+- track_condition<br />
+- weather<br />
+- cushion_value<br />
+- moisture<br />
+- season</p>
+<h3 id="stage4b-day-posterior">Stage4B: 同日更新 day posterior</h3>
+<p>同日すでに終わったレースがある場合、当日の実績から posterior を更新する。<br />
+- 早いレースの上位馬特徴<br />
+- 脚質の偏り<br />
+- 内外枠バイアス<br />
+- 上がり偏重か、前残りか<br />
+- 血統クラスタの偏り</p>
+<h2 id="_22">出力</h2>
+<ul>
+<li><code>day_bias_front</code></li>
+<li><code>day_bias_closing</code></li>
+<li><code>day_bias_inner</code></li>
+<li><code>day_bias_outer</code></li>
+<li><code>day_bias_stamina</code></li>
+<li><code>day_bias_burst</code></li>
+<li><code>day_bias_mud</code></li>
+<li><code>day_bias_speed</code></li>
+</ul>
+<h2 id="_23">実装方針</h2>
+<ul>
+<li>先行レースが 0 本なら prior のみ</li>
+<li>1-2 本なら prior 強め + posterior 弱め</li>
+<li>3 本以上で posterior 重みを増やす</li>
+</ul>
+<h2 id="_24">既存コードの活用先</h2>
+<ul>
+<li><code>src/research/race_quality_model.py</code></li>
+<li><code>src/research/tune_race_quality_priors.py</code></li>
+</ul>
+<h2 id="stage5">Stage5: 血統 × 当日文脈適合モデル</h2>
+<h2 id="_25">目的</h2>
+<p>血統を固定特徴として使うだけでなく、<code>Stage4</code> で推定した「今日の好走タイプ」に合わせて、血統適合度を出す。</p>
+<h2 id="_26">中核アイデア</h2>
+<p>同じ <code>sire</code> でも、<br />
+- 高速馬場の瞬発戦で効く日<br />
+- 消耗戦で効く日<br />
+- 道悪で効く日</p>
+<p>は違う。<br />
+したがって、血統特徴は「静的な距離適性」だけでなく「当日の race-day bias との相性」で再評価する。</p>
+<h2 id="_27">既存コードの活用先</h2>
+<ul>
+<li><code>src/research/bloodline_distance.py</code></li>
+<li><code>src/research/bloodline_vector.py</code></li>
+<li><code>src/research/course_bloodline.py</code></li>
+<li><code>src/research/sire_factor_stats.py</code></li>
+<li><code>src/research/sire_factor_race_map.py</code></li>
+<li><code>src/research/sire_factor_aptitude.py</code></li>
+<li><code>src/research/note_aptitude_5gen.py</code></li>
+<li><code>src/research/sire_aptitude_note.py</code></li>
+<li><code>src/research/myostatin.py</code></li>
+<li><code>src/research/race_quality_model.py</code></li>
+</ul>
+<h2 id="_28">血統特徴の二層構造</h2>
+<h3 id="5a">5A: 静的血統適性</h3>
+<ul>
+<li><code>sire_distance_fit</code></li>
+<li><code>dam_sire_distance_fit</code></li>
+<li><code>surface_fit</code></li>
+<li><code>mud_fit</code></li>
+<li><code>speed_fit</code></li>
+<li><code>stamina_fit</code></li>
+<li><code>burst_fit</code></li>
+</ul>
+<h3 id="5b">5B: 当日文脈適合</h3>
+<p>Stage4 出力との相互作用で作る。<br />
+- <code>bloodline_day_fit_speed = sire_speed_fit * day_bias_speed</code><br />
+- <code>bloodline_day_fit_stamina = sire_stamina_fit * day_bias_stamina</code><br />
+- <code>bloodline_day_fit_mud = mud_fit * day_bias_mud</code><br />
+- <code>bloodline_day_fit_burst = burst_fit * day_bias_burst</code></p>
+<h2 id="_29">日単位で血統を使う具体策</h2>
+<h3 id="1">1. 同日先行レース血統クラスタ集計</h3>
+<p>同日同場同 surface の先行終了レースで、<br />
+- どの sire cluster が上位に来たか<br />
+- どの aptitude axis が強かったか</p>
+<p>を集計し、当日クラスタ bias を作る。</p>
+<h3 id="2-segment-prior-same-day-posterior">2. segment prior + same-day posterior</h3>
+<p><code>src/research/race_quality_model.py</code> の segment prior を day prior として使い、<br />
+同日先行レースの結果で posterior 補正する。</p>
+<h3 id="3-race-wise-contextual-fit">3. race-wise contextual fit</h3>
+<p>対象馬について、<br />
+- その馬の血統ベクトル<br />
+- 当日 posterior bias ベクトル</p>
+<p>の類似度を <code>contextual_bloodline_fit</code> として計算する。</p>
+<h2 id="_30">出力</h2>
+<ul>
+<li><code>contextual_bloodline_fit</code></li>
+<li><code>contextual_bloodline_speed_fit</code></li>
+<li><code>contextual_bloodline_stamina_fit</code></li>
+<li><code>contextual_bloodline_mud_fit</code></li>
+<li><code>contextual_bloodline_burst_fit</code></li>
+<li><code>same_day_sire_cluster_bias</code></li>
+</ul>
+<h2 id="stage6">Stage6: 最終確率モデル</h2>
+<h2 id="_31">目的</h2>
+<p>Stage1-5 を統合して、最終的な <code>p_win</code>, <code>p_top2</code>, <code>p_top3</code> を出す。</p>
+<h2 id="_32">入力ブロック</h2>
+<ul>
+<li>基礎母表</li>
+<li>latent state</li>
+<li>positioning outputs</li>
+<li>pace outputs</li>
+<li>day bias outputs</li>
+<li>contextual bloodline outputs</li>
+<li>optional LayerB market features</li>
+</ul>
+<h2 id="_33">推奨モデル構成</h2>
+<h3 id="modela">ModelA</h3>
+<ul>
+<li><code>p_win</code></li>
+</ul>
+<h3 id="modelb">ModelB</h3>
+<ul>
+<li><code>p_top2</code></li>
+</ul>
+<h3 id="modelc">ModelC</h3>
+<ul>
+<li><code>p_top3</code></li>
+</ul>
+<h3 id="optional-modeld">Optional ModelD</h3>
+<ul>
+<li>race-wise ranking score</li>
+</ul>
+<h2 id="_34">推奨アンサンブル</h2>
+<ul>
+<li>LightGBM</li>
+<li>CatBoost</li>
+<li>OOF blending</li>
+<li>後段 calibration</li>
+</ul>
+<h2 id="_35">出力</h2>
+<ul>
+<li><code>p_win_raw</code>, <code>p_win_calibrated</code></li>
+<li><code>p_top2_raw</code>, <code>p_top2_calibrated</code></li>
+<li><code>p_top3_raw</code>, <code>p_top3_calibrated</code></li>
+<li><code>rank_by_p_win</code></li>
+</ul>
+<h2 id="stage7">Stage7: 市場統合 / ベッティング</h2>
+<h2 id="_36">役割</h2>
+<ul>
+<li><code>horse_probability_table</code></li>
+<li><code>horse_market_snapshot</code></li>
+<li><code>pair_market_snapshot</code></li>
+<li><code>payout_table</code></li>
+</ul>
+<p>を統合して <code>safe_ev</code> を計算する。</p>
+<h2 id="ml">推奨レイヤ（教師あり ML とは分離）</h2>
+<p><strong>券種・投資配分・予測印と推奨券の結びつけ</strong>など、期待値を土台にしつつ系列意思決定を行う部分は、いわゆる確率モデルの勾配学習とは切り分け <strong>強化学習（方策）</strong> を第一候補とする設計議論を別紙にまとめた。</p>
+<ul>
+<li><code>docs/html/modeling/betting_policy_reinforcement_learning.html</code></li>
+<li>HTML 要約: <code>docs/html/betting_rl_policy/index.html</code></li>
+</ul>
+<h2 id="_37">ルール</h2>
+<ul>
+<li>Stage6 までで市場非依存モデルを完成</li>
+<li>Stage7 でのみ市場と結合</li>
+<li>高オッズ帯は <code>buffer</code> を厚くする</li>
+</ul>
+<h2 id="_38">優先実装順</h2>
+<h2 id="phase1">Phase1</h2>
+<ul>
+<li>Stage0</li>
+<li>Stage1</li>
+<li>Stage6</li>
+</ul>
+<p>まず単段ベースラインを成立させる。</p>
+<h2 id="phase2">Phase2</h2>
+<ul>
+<li>Stage2</li>
+<li>Stage3</li>
+</ul>
+<p>位置取り・ペースを追加し、改善幅を測る。</p>
+<h2 id="phase3">Phase3</h2>
+<ul>
+<li>Stage4</li>
+<li>Stage5</li>
+</ul>
+<p>当日バイアスと血統文脈適合を追加する。</p>
+<h2 id="phase4">Phase4</h2>
+<ul>
+<li>Stage7</li>
+</ul>
+<p>safe_ev ベースで馬券最適化へ進む。</p>
+<h2 id="_39">期待する中間成果物</h2>
+<ul>
+<li><code>horse_latent_state.parquet</code></li>
+<li><code>positioning_features.parquet</code></li>
+<li><code>pace_scenario_features.parquet</code></li>
+<li><code>day_track_bias_features.parquet</code></li>
+<li><code>contextual_bloodline_features.parquet</code></li>
+<li><code>horse_probability_table.parquet</code></li>
+</ul>
+<h2 id="_40">この設計の利点</h2>
+<ul>
+<li>なぜ当たった/外れたかを stage ごとに説明しやすい</li>
+<li>血統を「固定特徴」ではなく「その日の馬場文脈への適合」として使える</li>
+<li>先行レース結果を使ったオンライン更新に自然につながる</li>
+<li>将来的に stage ごとの単独改善が可能</li>
+</ul>
+    </article>
+    <nav class="doc-nav">
+      <a href="reference_insights.html">← 参考資料から反映した設計メモ</a>
+      <a href="track_bias_pedigree_pipeline.html">血統×馬場傾向（track_bias_pedigree）パイプライン →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/staged_probability_pipeline.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

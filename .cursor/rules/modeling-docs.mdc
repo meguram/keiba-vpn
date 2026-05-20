@@ -1,11 +1,11 @@
 ---
 description: モデリング仕様ドキュメント編集時
-globs: docs/modeling/**/*.md
+globs: docs/html/modeling/**/*.html
 alwaysApply: false
 ---
 
-# docs/modeling/
+# docs/html/modeling/
 
 - 数式・指標・データ定義を変える場合は、**実装**（`src/pipeline/`、`data/features/`、評価スクリプト）との二重管理にならないよう、どちらを正とするか明示する。
-- 主要参照: `race_performance_rating_system.md`、`horse_pre_race_dataset_spec.md`、`reference_insights.md`。
-- HTML レポート（`docs/html/`）はドキュメントと別生成のことがある。仕様変更時は生成元スクリプトの有無を確認する。
+- 主要参照: `race_performance_rating_system.html`、`horse_pre_race_dataset_spec.html`、`reference_insights.html`。
+- ダッシュボード HTML（`docs/html/ml_pipeline/` 等）は要約版のことがある。仕様変更時は単体 HTML との整合を確認する。

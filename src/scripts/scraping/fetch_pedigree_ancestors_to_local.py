@@ -34,7 +34,7 @@ from src.scraper.storage import HybridStorage  # noqa: E402
 logger = logging.getLogger("fetch_ancestors_to_local")
 
 PED_DIR = ROOT / "data/local/horse_pedigree_5gen"
-TODO_LIST_PATH = ROOT / "data/research/pedigree_10gen_3view/scrape_todo.json"
+TODO_LIST_PATH = ROOT / "data/local/research/pedigree_10gen_3view/scrape_todo.json"
 
 
 def _prefix_of(horse_id: str) -> str:

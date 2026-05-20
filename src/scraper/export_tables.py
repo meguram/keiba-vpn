@@ -73,7 +73,7 @@ ENTRY_KEY_MAP = {
 
 PAIR_ODDS_SECTIONS = ["umaren", "wide", "umatan"]
 
-OUTPUT_DIR = Path("data/local/tables")
+OUTPUT_DIR = Path("data/page_reference/tables")
 
 CHUNK_SIZE = 200
 

@@ -16,7 +16,7 @@
   python -m src.pipeline.build_horse_entity_store --overwrite --merge-gen5-sires
 
 ``--overwrite`` 時のみ既存 ``data/features/horse`` 配下の対象 stem を置換（部分更新は未対応）。
-``--merge-gen5-sires`` 時は ``ped_tbl`` に 5 世代目牡の枝を接木した行を載せ、``path_fm`` 等を付与する（``docs/modeling/horse_pedigree_10gen_merge_design.md``）。
+``--merge-gen5-sires`` 時は ``ped_tbl`` に 5 世代目牡の枝を接木した行を載せ、``path_fm`` 等を付与する（``docs/html/modeling/horse_pedigree_10gen_merge_design.html``）。
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ def _flatten_pedigree_json_with_gen5_merge(
     subject_horse_id: str,
     pedigree_dir: Path,
 ) -> pd.DataFrame:
-    """主表 + 5 世代目牡のアンカーごとの 5 世代枝を接木（最大論理深さ 10）。設計: docs/modeling/horse_pedigree_10gen_merge_design.md"""
+    """主表 + 5 世代目牡のアンカーごとの 5 世代枝を接木（最大論理深さ 10）。設計: docs/html/modeling/horse_pedigree_10gen_merge_design.html"""
     sub_name = str(rec.get("horse_name") or rec.get("name") or "")
     ancestors: list[dict[str, Any]] = list(rec.get("ancestors") or [])
     branch_by_anchor: dict[str, list[dict[str, Any]]] = {}
@@ -399,7 +399,7 @@ def build_horse_entity_store(
 
 def main() -> int:
     script_basic_config()
-    ap = argparse.ArgumentParser(description="data/features/horse/ に馬単位 Parquet を構築")
+    ap = argparse.ArgumentParser(description="data/local/features/horse/ に馬単位 Parquet を構築")
     ap.add_argument("--base-dir", type=Path, default=Path("."))
     ap.add_argument("--years", nargs="*", help="tables の対象年（省略で全年）")
     ap.add_argument("--pedigree-json-dir", type=Path, default=None, help="既定: data/local/horse_pedigree_5gen")

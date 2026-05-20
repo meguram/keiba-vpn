@@ -483,6 +483,7 @@ class ScrapeJobQueue:
             except (TypeError, ValueError):
                 priority = PRIORITY_DEFAULT
             skip_lm = bool(coerce_bool(job.get("skip_local_mirror"), default=False))
+            skip_ped = bool(coerce_bool(job.get("skip_pedigree"), default=False))
             return {
                 "job_kind": kind,
                 "target_id": tid,
@@ -497,6 +498,7 @@ class ScrapeJobQueue:
                 "overwrite": overwrite,
                 "priority": priority,
                 "skip_local_mirror": skip_lm,
+                "skip_pedigree": skip_ped,
             }
 
         race_id = str(job.get("race_id") or "").strip()
@@ -565,6 +567,8 @@ class ScrapeJobQueue:
                 existing_job["skip_local_mirror"] = bool(
                     normalized.get("skip_local_mirror", False)
                 )
+                if "skip_pedigree" in normalized:
+                    existing_job["skip_pedigree"] = bool(normalized["skip_pedigree"])
                 existing_job["priority"] = max(
                     int(existing_job.get("priority") or PRIORITY_DEFAULT), new_pri
                 )
@@ -578,6 +582,8 @@ class ScrapeJobQueue:
                 existing_job["skip_local_mirror"] = bool(
                     normalized.get("skip_local_mirror", False)
                 )
+                if "skip_pedigree" in normalized:
+                    existing_job["skip_pedigree"] = bool(normalized["skip_pedigree"])
             return "duplicate", existing_job.get("job_id")
 
         job_id = f"q_{int(time.time())}_{secrets.token_hex(4)}"
@@ -605,6 +611,7 @@ class ScrapeJobQueue:
             "overwrite": bool(normalized.get("overwrite", False)),
             "priority": int(normalized.get("priority", PRIORITY_DEFAULT)),
             "skip_local_mirror": bool(normalized.get("skip_local_mirror", False)),
+            "skip_pedigree": bool(normalized.get("skip_pedigree", False)),
         }
         jobs.append(new_job)
         if dedupe_index is not None:
@@ -811,6 +818,12 @@ class ScrapeJobQueue:
             )
         )
         return pre
+
+    def count_precheck_jobs(self) -> int:
+        """現在の precheck ジョブ数を返す（ロック不要・軽量）。"""
+        with _exclusive_queue_json_lock():
+            jobs = self._load_queue_nolock()
+        return sum(1 for j in jobs if j.get("status") == "precheck")
 
     def _work_queue_list(self, jobs: list[dict]) -> list[dict]:
         """存在確認 (precheck) 済み待機 (pending) の可視用一覧（実行順イメージ）。"""
@@ -1132,11 +1145,7 @@ class ScrapeJobQueue:
             "pending_queue": processing_queue,
             "active_jobs": active_jobs,
             "queue_eta": queue_eta,
-            "transport_pause": {
-                "active": transport_paused,
-                "reason": pause.get("reason"),
-                "paused_at": pause.get("paused_at"),
-            },
+            "transport_pause": pause,
             "queue": {
                 "pending": len(pending),
                 "precheck": len(precheck),
@@ -1291,8 +1300,6 @@ class ScrapeJobQueue:
         start_delay_sec: float = 0.0,
     ) -> None:
         """claim_next_pending_job 済みのジョブを1件実行（並列ワーカーから呼ばれる）。"""
-        from src.scraper.scrape_access_pause import is_access_or_transport_error
-
         if start_delay_sec and start_delay_sec > 0:
             time.sleep(start_delay_sec)
 
@@ -1307,15 +1314,24 @@ class ScrapeJobQueue:
             self._execute_scraping(job)
             self.update_job_status(job_id, "completed")
             logger.info("ジョブ完了: %s", job_id)
+            from src.scraper.scrape_access_pause import on_queue_job_completed_successfully
+
+            on_queue_job_completed_successfully()
 
         except Exception as e:
+            from src.scraper.scrape_access_pause import (
+                handle_queue_transport_error,
+                is_access_or_transport_error,
+            )
+
             if is_access_or_transport_error(e):
+                cleared = handle_queue_transport_error(self, e)
                 logger.error(
-                    "アクセス／ネットワーク系エラー — キューを一時停止し全実行中ジョブを待機に戻します: %s",
+                    "アクセス／ネットワーク系エラー — %s: %s",
+                    "キューを自動全消去しました" if cleared else "キューを一時停止しました",
                     job_id,
                     exc_info=True,
                 )
-                self.pause_queue_for_access_error(str(e))
                 stop_event.set()
                 return
 

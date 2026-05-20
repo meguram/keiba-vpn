@@ -56,7 +56,7 @@ VENUE_NAME_TO_CODE = {v["name"]: v["code"] for v in VENUE_MAP.values()}
 class JRACushionScraper:
     """JRA公式PDFからクッション値・含水率を取得・保存する。"""
 
-    def __init__(self, output_dir: str = "data/jra_baba"):
+    def __init__(self, output_dir: str = "data/page_reference/cushion"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.session = requests.Session()

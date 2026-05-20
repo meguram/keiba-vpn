@@ -367,6 +367,41 @@
     line-height: 1.45;
   }
   .transport-pause-at { margin-top: 6px; font-size: 10px; color: var(--text-dim); }
+  .queue-auto-cleared-banner {
+    display: none;
+    margin-bottom: 16px;
+    padding: 16px 18px;
+    background: rgba(239, 68, 68, 0.14);
+    border: 2px solid var(--err);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--text);
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .queue-auto-cleared-banner strong { color: #fecaca; font-size: 13px; }
+  .queue-auto-cleared-msg {
+    margin-top: 10px;
+    color: #fde68a;
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .queue-auto-cleared-meta { margin-top: 8px; font-size: 10px; color: var(--text-dim); }
+  .btn-dismiss-auto-cleared {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-dismiss-auto-cleared:hover { border-color: var(--accent); color: var(--accent); }
   .btn-resume-queue {
     background: var(--ok);
     color: #fff;
@@ -646,6 +681,18 @@
   </div>
 
   <div id="statusErrorBanner" style="display:none;margin-bottom:16px;padding:12px 14px;background:rgba(239,68,68,0.12);border:1px solid var(--err);border-radius:8px;font-size:12px;color:#fecaca"></div>
+
+  <div id="queueAutoClearedBanner" class="queue-auto-cleared-banner" role="alert">
+    <div style="flex:1;min-width:220px">
+      <strong>キューを自動で空にしました</strong>
+      <div class="queue-auto-cleared-msg" id="queueAutoClearedMessage"></div>
+      <div class="queue-auto-cleared-meta" id="queueAutoClearedMeta"></div>
+      <p style="margin-top:10px;font-size:10px;color:var(--text-dim);line-height:1.5">
+        HTTP 400（ブロック疑い）が連続で発生したため、待機・実行中ジョブをすべて削除しました。netkeiba へのアクセスを控え、しばらくしてから「再開」してください。
+      </p>
+    </div>
+    <button type="button" class="btn-dismiss-auto-cleared" id="btnDismissAutoCleared" onclick="dismissQueueAutoCleared()">確認して閉じる</button>
+  </div>
 
   <div id="transportPauseBanner" class="transport-pause-banner">
     <div style="flex:1;min-width:220px">
@@ -2536,6 +2583,24 @@ async function resumeScrapeQueue() {
   }
 }
 
+async function dismissQueueAutoCleared() {
+  const btn = document.getElementById('btnDismissAutoCleared');
+  if (btn) btn.disabled = true;
+  try {
+    const resp = await fetch(apiUrl('/api/scrape-queue/dismiss-auto-cleared-notice'), { method: 'POST' });
+    const data = await readJsonResp(resp);
+    if (!resp.ok || data.error) {
+      alert(data.error || '操作に失敗しました');
+      return;
+    }
+    await loadStatus();
+  } catch (e) {
+    alert(e.message || String(e));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function loadStatus() {
   const banner = document.getElementById('statusErrorBanner');
   try {
@@ -2562,6 +2627,28 @@ async function loadStatus() {
     const lockOn = !!data.is_running;
     const tp = data.transport_pause || {};
     const accessPaused = !!tp.active;
+    const qac = tp.queue_auto_cleared || {};
+
+    const qacb = document.getElementById('queueAutoClearedBanner');
+    if (qacb) {
+      if (qac.active) {
+        qacb.style.display = 'flex';
+        const mEl = document.getElementById('queueAutoClearedMessage');
+        const metaEl = document.getElementById('queueAutoClearedMeta');
+        if (mEl) mEl.textContent = qac.message || tp.reason || '（詳細なし）';
+        if (metaEl) {
+          const parts = [];
+          if (qac.cleared_at) parts.push('実行時刻: ' + formatTime(qac.cleared_at));
+          if (qac.removed_jobs != null) parts.push('削除 ' + qac.removed_jobs + ' 件');
+          if (qac.consecutive_count != null && qac.threshold != null) {
+            parts.push('HTTP 400 連続 ' + qac.consecutive_count + ' 回（閾値 ' + qac.threshold + '）');
+          }
+          metaEl.textContent = parts.join(' · ');
+        }
+      } else {
+        qacb.style.display = 'none';
+      }
+    }
 
     const tpb = document.getElementById('transportPauseBanner');
     if (tpb) {
@@ -2569,7 +2656,13 @@ async function loadStatus() {
         tpb.style.display = 'flex';
         const rEl = document.getElementById('transportPauseReason');
         const aEl = document.getElementById('transportPauseAt');
-        if (rEl) rEl.textContent = tp.reason || '（詳細なし）';
+        let reasonText = tp.reason || '（詳細なし）';
+        const n400 = Number(tp.block_400_consecutive) || 0;
+        const th400 = Number(tp.block_400_clear_threshold) || 0;
+        if (n400 > 0 && th400 > 0) {
+          reasonText += '\n\nHTTP 400 連続: ' + n400 + ' / ' + th400 + ' 回（' + th400 + ' 回でキューを自動全消去）';
+        }
+        if (rEl) rEl.textContent = reasonText;
         if (aEl) aEl.textContent = tp.paused_at ? ('停止時刻: ' + formatTime(tp.paused_at)) : '';
       } else {
         tpb.style.display = 'none';

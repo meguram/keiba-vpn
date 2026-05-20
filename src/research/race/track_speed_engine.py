@@ -85,9 +85,9 @@ MIN_BASELINE_N = 12
 # 小サンプルの不安定な平均値がクラス判定を引きつけるのを防ぐ。
 MIN_CLASSIFY_N = 20
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-BASELINES_PATH = PROJECT_ROOT / "data" / "knowledge" / "track_speed_baselines.parquet"
-PACE_BASELINES_PATH = PROJECT_ROOT / "data" / "knowledge" / "track_speed_pace_baselines.parquet"
-RACES_DIR = PROJECT_ROOT / "data" / "analysis" / "track_speed"
+BASELINES_PATH = PROJECT_ROOT / "data" / "local" / "knowledge" / "track_speed_baselines.parquet"
+PACE_BASELINES_PATH = PROJECT_ROOT / "data" / "local" / "knowledge" / "track_speed_pace_baselines.parquet"
+RACES_DIR = PROJECT_ROOT / "data" / "local" / "analysis" / "track_speed"
 META_PATH = RACES_DIR / "meta.json"
 MIN_PACE_CONTEXT_N = 30
 MIN_PACE_BIN_N = 8
@@ -522,13 +522,13 @@ def _load_json(path: Path) -> dict:
 def load_course_layout(venue: str, surface: str, distance: int) -> str:
     if surface != "芝":
         return "-"
-    data = _load_json(PROJECT_ROOT / "data" / "knowledge" / "course_layout_map.json")
+    data = _load_json(PROJECT_ROOT / "data" / "local" / "knowledge" / "course_layout_map.json")
     key = f"{venue}_{surface}_{distance}"
     return data.get("entries", {}).get(key, data.get("default", "-"))
 
 
 def renovation_cutoff(venue: str, surface: str) -> str | None:
-    data = _load_json(PROJECT_ROOT / "data" / "knowledge" / "track_renovations.json")
+    data = _load_json(PROJECT_ROOT / "data" / "local" / "knowledge" / "track_renovations.json")
     v = data.get("venues", {}).get(venue, {})
     return v.get(surface)
 
@@ -597,7 +597,7 @@ class TrackSpeedEngine:
             }
             for _, row in df.iterrows()
         }
-        ren = _load_json(PROJECT_ROOT / "data" / "knowledge" / "track_renovations.json")
+        ren = _load_json(PROJECT_ROOT / "data" / "local" / "knowledge" / "track_renovations.json")
         self._renovation = ren.get("venues", {})
         self.load_pace_baselines()
         return True

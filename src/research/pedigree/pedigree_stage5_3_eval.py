@@ -65,9 +65,9 @@ from src.utils.keiba_logging import script_basic_config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MATERNAL = Path("data/meta/modeling/maternal_stallion_stage_stats.parquet")
-DEFAULT_GRAPH = Path("data/meta/modeling/stallion_tree/graph.json")
-OUT_JSON = Path("data/meta/modeling/pedigree_stage5_3_eval.json")
+DEFAULT_MATERNAL = Path("data/local/meta/modeling/maternal_stallion_stage_stats.parquet")
+DEFAULT_GRAPH = Path("data/local/meta/modeling/stallion_tree/graph.json")
+OUT_JSON = Path("data/local/meta/modeling/pedigree_stage5_3_eval.json")
 
 
 def _parse_year(d: Any) -> int | None:
@@ -337,7 +337,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="5.3 特徴ラボ評価")
     ap.add_argument("--maternal-parquet", type=Path, default=DEFAULT_MATERNAL)
     ap.add_argument("--graph-json", type=Path, default=DEFAULT_GRAPH)
-    ap.add_argument("--tables-dir", type=Path, default=Path("data/local/tables"))
+    ap.add_argument("--tables-dir", type=Path, default=Path("data/page_reference/tables"))
     ap.add_argument("--train-max-year", type=int, default=2023)
     ap.add_argument("--test-min-year", type=int, default=2024)
     ap.add_argument("--max-rows", type=int, default=None)

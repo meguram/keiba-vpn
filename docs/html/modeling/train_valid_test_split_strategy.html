@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Train / Valid / Test 分割戦略（レース直前確率モデル） — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>Train / Valid / Test 分割戦略（レース直前確率モデル）</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/train_valid_test_split_strategy.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="train-valid-test">Train / Valid / Test 分割戦略（レース直前確率モデル）</h1>
+<h2 id="1">1. 目的</h2>
+<p>本ドキュメントは、<strong>通常の i.i.d. 想定の機械学習タスクとは異なる</strong>競馬データにおいて、</p>
+<ul>
+<li>どの期間を <strong>train / valid / test</strong> に割り当てるか</li>
+<li><strong>時系列リーク</strong>・<strong>同一開催週の相関</strong>・<strong>改修・制度変更</strong>をどう扱うか</li>
+<li>分割を決める前に、<strong>母集団の分布</strong>をどう把握すべきか</li>
+</ul>
+<p>を、<code>dataset_split_manifest.json</code> および既存のモデリング設計書と整合する形で整理する。</p>
+<p>参照ドキュメント:</p>
+<ul>
+<li><code>docs/html/modeling/advanced_modeling_techniques.html</code> — Purged CV / adversarial validation</li>
+<li><code>docs/html/modeling/betting_backtest_dataset_spec.html</code> — 二次評価・馬券テーブル</li>
+<li><code>docs/html/modeling/horse_pre_race_dataset_spec.html</code> — 母表・ラベル・OOF 方針</li>
+<li><code>docs/html/modeling/reference_insights.html</code> — 時系列分割・運用成果物</li>
+<li><code>docs/html/modeling/race_performance_rating_system.html</code> — 特徴モジュール単体の検証プロトコル（本書の一次分割とは別用途あり）</li>
+<li><code>docs/html/modeling/hyperparameter_tuning_workflow.html</code> — <strong>ハイパラ探索・inner/outer・試行予算</strong>（valid/test の使い方と整合）</li>
+<li><code>docs/html/modeling/feature_engineering_exploration.html</code> — <strong>追加特徴の探索</strong>（同一 split で ablation）</li>
+<li><code>data/meta/modeling/dataset_split_manifest.json</code> — <strong>機械上の正</strong>（バージョン付きマニフェスト）</li>
+</ul>
+<hr />
+<h2 id="2-split">2. なぜ「ランダム split」が通用しないか</h2>
+<table>
+<thead>
+<tr>
+<th>課題</th>
+<th>説明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>時間の因果</strong></td>
+<td>未来のレース・未来の成績が、過去の行に混入するとリークになる。</td>
+</tr>
+<tr>
+<td><strong>グループ相関</strong></td>
+<td>同一 <code>race_id</code> 内の馬行は独立ではない。<strong>分割単位は必ず race 単位</strong>。</td>
+</tr>
+<tr>
+<td><strong>開催週の連続性</strong></td>
+<td>近接日付のレースは馬場・天候・メンバー強度が似る。train と valid を日付で「接しすぎ」ないよう <strong>purge / embargo</strong> が必要。</td>
+</tr>
+<tr>
+<td><strong>分布シフト</strong></td>
+<td>コロナ以降の開催密度、データ取得カバレッジ、指数・パドックの提供範囲、京都競馬場改修後の <code>venue_era</code> など、<strong>年によって特徴の意味が変わる</strong>。</td>
+</tr>
+<tr>
+<td><strong>希少カテゴリ</strong></td>
+<td>重賞・特定コースの head が小さい。ランダムだと valid に偶然偏りが出る。</td>
+</tr>
+</tbody>
+</table>
+<p>以上より、<strong>行単位ランダム split は禁止</strong>（マニフェスト <code>constraints.no_random_row_split</code> と一致）。</p>
+<hr />
+<h2 id="3">3. 一次プロトコル（モデル選定・本番前評価）</h2>
+<p><code>data/meta/modeling/dataset_split_manifest.json</code> の <strong><code>protocols.model_selection_primary</code></strong> を採用する。</p>
+<table>
+<thead>
+<tr>
+<th>役割</th>
+<th>年（暦年・<code>race_date</code> 基準）</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Train</strong></td>
+<td>2020, 2021, 2022, 2023</td>
+<td>学習本体・（fold 内）TE / 集約特徴の学習</td>
+</tr>
+<tr>
+<td><strong>Valid</strong></td>
+<td>2024</td>
+<td>ハイパラ・特徴選抜・キャリブレーション fit（<strong>test は見ない</strong>）</td>
+</tr>
+<tr>
+<td><strong>Test</strong></td>
+<td>2025</td>
+<td><strong>一度きりの最終報告</strong>・本番前の汎化チェック</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>train / valid / test は <strong><code>race_id</code> 単位で完全分離</strong>。</li>
+<li><strong>Calibration</strong>（温度スケール・アイソトニック等）は <strong>OOF 予測または valid のみ</strong>に fit。test では fit しない。</li>
+</ul>
+<h3 id="31">3.1 本番再学習（モデル確定後のみ）</h3>
+<p><code>protocols.production_refit_after_selection</code> に従い、選定完了後の本番用再学習では <strong>2020–2025 を train に含めうる</strong>。<br />
+これは「test でチューニングした後」の手順であり、<strong>test 指標を報告する前に実行しない</strong>。</p>
+<hr />
+<h2 id="4">4. 交差検証（モデル開発の主戦場）</h2>
+<p>一次プロトコルの valid は <strong>2024 年 1 本</strong>のため、開発中の安定推定には <strong>rolling-origin + purged group time series</strong> を併用する。</p>
+<p>マニフェスト <code>cv_policy</code>:</p>
+<ul>
+<li><code>group_key</code>: <code>race_id</code></li>
+<li><code>time_key</code>: <code>race_date</code></li>
+<li><code>purge_window_days</code>: <strong>7</strong>（同一開催週付近の情報漏れを抑える保守的初期値）</li>
+<li><code>embargo_days</code>: <strong>3</strong>（validation 直前の train を除外し、TE / 集約特徴のリークを抑える）</li>
+</ul>
+<p><code>rolling_origin_folds</code> は <code>2020-01-01</code> 起点で valid を半年ずつずらす定義が入っている。<br />
+実装時は、母表の <code>race_date</code> と突き合わせ、<strong>fold ごとに race が片側にのみ属すること</strong>を自動テストする。</p>
+<hr />
+<h2 id="5">5. 補助評価セット（セグメント・ドリフト）</h2>
+<p>マニフェスト <code>special_sets</code> および <code>segment_evaluations</code> を活用する。</p>
+<ul>
+<li><strong>京都改修後</strong> (<code>kyoto_post_renovation_*</code>): 現行コース条件への追従性</li>
+<li><strong>クッション観測あり</strong> (<code>cushion_observed_test</code>): 数値馬場特徴の効き</li>
+<li><strong>パドック有無</strong> (<code>with_paddock_test</code> / <code>without_paddock_test</code>): ExtendedV1 の依存度</li>
+</ul>
+<p>一次の logloss / Brier / ECE に加え、<strong>セグメント別</strong>で性能とキャリブレーションを見る。</p>
+<hr />
+<h2 id="6-20202024-vs-2025">6. 他ドキュメントの「2020–2024 vs 2025」との関係</h2>
+<p><code>race_performance_rating_system.html</code> では、<strong>レースパフォーマンス特徴量単体</strong>の寄与検証として、</p>
+<ul>
+<li>履歴構築・学習側: 2020–2024</li>
+<li>ホールドアウト: 2025（かつ 2025 は online-safe 算出）</li>
+</ul>
+<p>という <strong>モジュールベンチ用</strong>の切り方が記載されている。</p>
+<p><strong>一次の確率モデル分割（2020–2023 / 2024 / 2025）とは目的が異なる</strong>ため、両方を併存させる:</p>
+<ul>
+<li><strong>確率モデル本線</strong>: マニフェスト §3</li>
+<li><strong>パフォーマンス信号の感度分析</strong>: 上記ベンチ（長い train で信号の安定性を見る用途）</li>
+</ul>
+<p>混同しないよう、実験ログに <code>protocol_name</code> を必ず残す。</p>
+<hr />
+<h2 id="7-eda">7. 分布把握（EDA）— 実データに基づくサマリ</h2>
+<p><code>horse_pre_race_dataset</code> 完成前でも、<strong>同一カレンダー範囲・JRA 中央・race 単位</strong>の派生表として<br />
+<code>data/features/race_performance/20xx.parquet</code>（馬行 = レース内出走頭数の行）が揃っている。<br />
+ここから <strong>年次の規模・ラベルバランス・主要カテゴリ・数値列のドリフト</strong>を把握した（集計日: リポジトリ上の Parquet 更新時点）。</p>
+<h3 id="71">7.1 規模（年 × 行数 × レース数）</h3>
+<table>
+<thead>
+<tr>
+<th>年</th>
+<th>行数（馬行）</th>
+<th>ユニーク <code>race_id</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2020</td>
+<td>47,876</td>
+<td>3,456</td>
+</tr>
+<tr>
+<td>2021</td>
+<td>47,476</td>
+<td>3,456</td>
+</tr>
+<tr>
+<td>2022</td>
+<td>46,840</td>
+<td>3,456</td>
+</tr>
+<tr>
+<td>2023</td>
+<td>47,273</td>
+<td>3,456</td>
+</tr>
+<tr>
+<td>2024</td>
+<td>46,752</td>
+<td>3,454</td>
+</tr>
+<tr>
+<td>2025</td>
+<td>47,497</td>
+<td>3,455</td>
+</tr>
+</tbody>
+</table>
+<p>→ <strong>年次の母数はほぼ一定</strong>。valid(2024) と test(2025) のサンプルサイズ感は対称に近い。</p>
+<h3 id="72">7.2 ラベル（行加重の参考値）</h3>
+<table>
+<thead>
+<tr>
+<th>年</th>
+<th>勝ち (1着) 行割合</th>
+<th>3着以内 行割合</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2020</td>
+<td>7.24%</td>
+<td>21.67%</td>
+</tr>
+<tr>
+<td>2021</td>
+<td>7.30%</td>
+<td>21.86%</td>
+</tr>
+<tr>
+<td>2022</td>
+<td>7.39%</td>
+<td>22.14%</td>
+</tr>
+<tr>
+<td>2023</td>
+<td>7.32%</td>
+<td>21.95%</td>
+</tr>
+<tr>
+<td>2024</td>
+<td>7.40%</td>
+<td>22.18%</td>
+</tr>
+<tr>
+<td>2025</td>
+<td>7.29%</td>
+<td>21.85%</td>
+</tr>
+</tbody>
+</table>
+<p>→ <strong>クラス比率は年間で大きくは揺れない</strong>。時系列分割でも極端な imbalance シフトは起きにくい一方、<strong>レース内相関</strong>は依然として最大の設計制約。</p>
+<h3 id="73">7.3 カテゴリ分布（全期間合算の上位）</h3>
+<p>全期間で観測された主なカテゴリのシェア（<strong>分割前の母集団把握用</strong>）:</p>
+<ul>
+<li><strong>surface</strong>: ダート &gt; 芝 &gt;&gt; 障害</li>
+<li><strong>distance_band</strong>: mile &gt; sprint &gt;&gt; intermediate &gt; long &gt; extended</li>
+<li><strong>pace_shape_class</strong>: balanced が大半、次いで grind（unknown / burst は少数）</li>
+<li><strong>class_group</strong>: 未勝利・1勝クラスが中心、G・OP は少数だが重要セグメント</li>
+<li><strong>track_condition</strong>: 良が大半、稍重・重・不良は少数だが馬場補正の検証に必要</li>
+</ul>
+<p>重賞など head の小さいセグメントは、<strong>全体指標だけに依存せず</strong> <code>segment_evaluations</code> で切る。</p>
+<h3 id="74">7.4 数値列の年次ドリフト（例: パフォーマンス派生列）</h3>
+<p><code>run_performance_final</code> の <strong>平均</strong>は年によって数ポイント程度変化（例: 2020 平均約 -21 → 2024–2025 平均約 -18 付近）。<br />
+<strong>標準偏差は年とともにやや縮小</strong>（分布が少し締まっている可能性）。<br />
+<code>race_level_pre_race</code> の平均も年次で緩やかに低下傾向。→ <strong>adversarial validation（train vs test の分離容易度）</strong>で確認することが <code>advanced_modeling_techniques.html</code> と整合。</p>
+<p><code>track_variant_online</code> は平均は 0 近辺だが、<strong>最大値側に外れ値</strong>（極端に速い日補正）が存在。学習時は <strong>winsorize / robust scaling</strong> を valid で調整するのが安全。</p>
+<p><strong>2025 の <code>run_performance_final</code> 最小付近に極端値</strong>が見える → 母表結合後も、<strong>結合キー誤り・欠損埋め・単位崩れ</strong>の監査対象とし、<code>dataset_profile</code> / <code>outlier_watchlist</code> に載せる。</p>
+<hr />
+<h2 id="8">8. 推奨ワークフロー（実装順）</h2>
+<ol>
+<li><code>race_date</code> でソートした母表を構築（<code>horse_pre_race_dataset_spec.html</code>）。</li>
+<li>マニフェストの <strong>primary split</strong> で holdout を固定し、<strong>2025 test を触らない</strong>。</li>
+<li><strong>Purged + embargo 付き rolling CV</strong> で開発（TE・OOF 中間特徴すべてに同一ポリシー）。</li>
+<li><strong>2024 valid</strong> でモデル・特徴・キャリブレーションを確定。</li>
+<li><strong>2025 test</strong> で最終報告 + <code>special_sets</code> / segment で補助診断。</li>
+<li>成果物: <code>dataset_profile.json</code>, <code>feature_missingness.csv</code>, <code>label_balance.json</code>（<code>reference_insights.html</code> の監査リスト）。</li>
+</ol>
+<hr />
+<h2 id="9">9. まとめ</h2>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>方針</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>分割単位</td>
+<td><strong><code>race_id</code>（レース単位）</strong></td>
+</tr>
+<tr>
+<td>一次 train / valid / test</td>
+<td><strong>2020–2023 / 2024 / 2025</strong>（マニフェスト準拠）</td>
+</tr>
+<tr>
+<td>開発時 CV</td>
+<td><strong>Purged group time series + rolling-origin</strong></td>
+</tr>
+<tr>
+<td>ランダム行分割</td>
+<td><strong>禁止</strong></td>
+</tr>
+<tr>
+<td>分布・ドリフト</td>
+<td><strong>年次 EDA + adversarial + セグメント</strong></td>
+</tr>
+<tr>
+<td>他用途の split</td>
+<td><strong>race_performance 単体ベンチ</strong>は別プロトコルとして明示</td>
+</tr>
+</tbody>
+</table>
+<p>マニフェストのバージョンを上げる際は、本書の該当節と <code>reference_insights.html</code> の相互リンクを更新すること。</p>
+    </article>
+    <nav class="doc-nav">
+      <a href="track_bias_pedigree_pipeline.html">← 血統×馬場傾向（track_bias_pedigree）パイプライン</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/train_valid_test_split_strategy.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

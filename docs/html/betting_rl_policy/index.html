@@ -106,7 +106,7 @@
     <div class="brand">
       <div class="logo">RL</div>
       <div class="t">馬券推奨 × 強化学習</div>
-      <div class="s">正本: docs/modeling/<wbr>betting_policy_<wbr>reinforcement_<wbr>learning.md</div>
+      <div class="s">正本: docs/html/modeling/<wbr>betting_policy_<wbr>reinforcement_<wbr>learning.html</div>
     </div>
     <nav>
       <h4>目次</h4>
@@ -149,7 +149,7 @@
           <tr>
             <td><b>確率モデル</b><br><span class="mono" style="color:var(--muted)">Stage6 まで</span></td>
             <td><code class="mono">p_win</code>, <code class="mono">p_top2</code>, <code class="mono">p_top3</code> 等</td>
-            <td>GBDT / ランキング / NN など <b>教師あり学習</b>。split・OOF・校正は既存 <code class="mono">docs/modeling/</code> に従う。</td>
+            <td>GBDT / ランキング / NN など <b>教師あり学習</b>。split・OOF・校正は既存 <code class="mono">docs/html/modeling/</code> に従う。</td>
           </tr>
           <tr>
             <td><b>馬券推奨</b><br><span class="mono" style="color:var(--muted)">本ページの主題</span></td>
@@ -212,7 +212,7 @@ flowchart LR
     <section id="ev">
       <h2>4. 期待値と「バランス」</h2>
       <ul>
-        <li>期待値は Q / advantage の<b>構成要素</b>として組み込む（<code class="mono">safe_ev</code>・buffer は <code class="mono">betting_backtest_dataset_spec.md</code> と整合）。</li>
+        <li>期待値は Q / advantage の<b>構成要素</b>として組み込む（<code class="mono">safe_ev</code>・buffer は <code class="mono">betting_backtest_dataset_spec.html</code> と整合）。</li>
         <li><b>バランス</b>は報酬合成（リスク項・印ペナルティ）と <b>環境側の stake 制約</b>で表現する。</li>
         <li>実務的には <b>ルール EV で候補を刈り込み → 残りを方策で配分</b> でもよい（二段ガード）。</li>
       </ul>
@@ -276,7 +276,7 @@ flowchart TB
         <li><b>Phase 2</b>：Offline RL（セッション報酬）。</li>
         <li><b>Phase 3</b>：階層化・印 joint 行動。</li>
       </ol>
-      <p style="color:var(--muted);font-size:14px">詳細・チェックリスト・成果物契約は <code class="mono">docs/modeling/betting_policy_reinforcement_learning.md</code> を正とする。</p>
+      <p style="color:var(--muted);font-size:14px">詳細・チェックリスト・成果物契約は <code class="mono">docs/html/modeling/betting_policy_reinforcement_learning.html</code> を正とする。</p>
     </section>
 
     <footer>

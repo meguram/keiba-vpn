@@ -20,7 +20,7 @@ from src.utils.keiba_logging import script_basic_config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-OUT_JSON = Path("data/meta/modeling/race_performance_eval.json")
+OUT_JSON = Path("data/local/meta/modeling/race_performance_eval.json")
 
 
 def _distance_band(distance: int) -> str:
@@ -83,7 +83,7 @@ def _race_metrics(df: pd.DataFrame, score_col: str) -> dict[str, float]:
 
 
 def _build_dataset() -> pd.DataFrame:
-    perf = pd.read_parquet("data/features/snapshots/race_performance_2020_2025.parquet")
+    perf = pd.read_parquet("data/local/features/snapshots/race_performance_2020_2025.parquet")
 
     store = FeatureStore()
     shutuba = store.load_source(

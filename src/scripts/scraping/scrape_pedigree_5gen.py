@@ -238,7 +238,7 @@ def phase1(storage: HybridStorage, **_kwargs):
     return _run_sequential(todo, storage, source="phase1", label="Phase 1")
 
 
-_ANCESTOR_INDEX_PATH = Path(__file__).resolve().parents[3] / "data" / "research" / "ancestor_index.json"
+_ANCESTOR_INDEX_PATH = Path(__file__).resolve().parents[3] / "data" / "local" / "research" / "ancestor_index.json"
 
 
 def _build_ancestor_index(storage: HybridStorage) -> dict[str, str]:

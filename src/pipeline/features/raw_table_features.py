@@ -2,7 +2,7 @@
 `data/local/tables/*_flat.parquet` から特徴量ストア用に選別した生列の定義。
 
 方針:
-  - `docs/modeling/pre_race_feature_whitelist.md` の LayerA 採用列を主に従う。
+  - `docs/html/modeling/pre_race_feature_whitelist.html` の LayerA 採用列を主に従う。
   - `race_shutuba_flat` / `race_index_flat` の odds・popularity は登録しない。
   - `race_result_flat` 等の結果確定後テーブルはここでは登録しない（別系統）。
   - `race_oikiri_flat` は race_id+horse_number が一意でないため、このモジュールの自動登録対象外。

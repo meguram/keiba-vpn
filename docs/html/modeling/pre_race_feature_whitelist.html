@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>レース直前特徴量ホワイトリスト — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>レース直前特徴量ホワイトリスト</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/pre_race_feature_whitelist.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">レース直前特徴量ホワイトリスト</h1>
+<h2 id="_2">目的</h2>
+<p>このドキュメントは、<code>T-10分</code> 時点で利用可能な情報だけを使って、<code>勝率</code>・<code>連対率</code>・<code>複勝率</code> モデルを構築するための入力列ホワイトリストを定義する。</p>
+<p>方針は次の 2 層に分ける。</p>
+<ul>
+<li><code>LayerA</code><br />
+  市場から独立した実力・状態推定モデル用。<code>単勝/複勝/人気/連系オッズ</code> は入れない。</li>
+<li><code>LayerB</code><br />
+  市場統合・馬券最適化用。<code>LayerA</code> の馬単位確率に加えて、直前オッズ・連系オッズを追加する。</li>
+</ul>
+<h2 id="_3">共通ルール</h2>
+<h3 id="_4">採用原則</h3>
+<ul>
+<li>母表は <code>race_shutuba_flat</code></li>
+<li>主キーは <code>race_id + horse_number</code></li>
+<li>結果確定後にしか得られない情報は不採用</li>
+<li>疎な情報は捨てず、<code>presence_flag</code> とセットで残す</li>
+<li>生のテキストはそのまま学習に入れず、集約・辞書化・スコア化して使う</li>
+</ul>
+<h3 id="_5">明示的に除外するテーブル</h3>
+<ul>
+<li><code>race_result_flat</code></li>
+<li><code>race_result_lap_flat</code></li>
+<li><code>race_barometer_flat</code></li>
+<li><code>smartrc_race_flat</code></li>
+</ul>
+<h3 id="_6">注意</h3>
+<ul>
+<li><code>race_shutuba_flat</code> と <code>race_index_flat</code> に含まれる <code>odds</code> / <code>popularity</code> は使わない</li>
+<li>オッズは必ず <code>race_odds_flat</code> と <code>race_pair_odds_flat</code> から扱う</li>
+<li><code>smartrc_race</code> は <code>runners</code> だけなら前情報化できる余地があるが、現時点では結果混入リスクが高いため最初のデータセットでは除外する</li>
+</ul>
+<h2 id="_7">ベースライン優先原則</h2>
+<p>参考資料では、最初に「指数中心のベースライン」を作ってから特徴量を段階的に足す戦略が有効だった。<br />
+そのため、本プロジェクトでも最初の正式比較対象は次のように固定する。</p>
+<ul>
+<li><code>BaselineV1</code></li>
+<li><code>race_shutuba_flat</code></li>
+<li><code>race_shutuba_past_flat</code></li>
+<li><code>race_index_flat</code></li>
+<li>horse bundle 由来の戦績・血統集約</li>
+<li><code>ExtendedV1</code></li>
+<li>BaselineV1</li>
+<li><code>race_oikiri_flat</code> 集約</li>
+<li><code>race_paddock_flat</code></li>
+<li><code>race_trainer_comment_flat</code></li>
+<li>クッション値・開催文脈の強化特徴</li>
+</ul>
+<p>この 2 つを常に同時出力し、追加特徴量の寄与を差分で評価する。</p>
+<h2 id="_8">テーブル別ホワイトリスト</h2>
+<h2 id="1-race_shutuba_flat">1. <code>race_shutuba_flat</code></h2>
+<h3 id="_9">粒度</h3>
+<ul>
+<li><code>race_id + horse_number</code></li>
+</ul>
+<h3 id="layera">LayerA でそのまま採用する列</h3>
+<ul>
+<li><code>race_id</code></li>
+<li><code>date</code></li>
+<li><code>venue</code></li>
+<li><code>surface</code></li>
+<li><code>distance</code></li>
+<li><code>direction</code></li>
+<li><code>grade</code></li>
+<li><code>race_class</code></li>
+<li><code>weather</code></li>
+<li><code>track_condition</code></li>
+<li><code>start_time</code></li>
+<li><code>field_size</code></li>
+<li><code>race_name</code></li>
+<li><code>venue_code</code></li>
+<li><code>round</code></li>
+<li><code>weight_rule</code></li>
+<li><code>course_type</code></li>
+<li><code>horse_number</code></li>
+<li><code>bracket_number</code></li>
+<li><code>horse_name</code></li>
+<li><code>horse_id</code></li>
+<li><code>sex_age</code></li>
+<li><code>jockey_weight</code></li>
+<li><code>jockey_name</code></li>
+<li><code>jockey_id</code></li>
+<li><code>trainer_name</code></li>
+<li><code>trainer_id</code></li>
+<li><code>weight</code></li>
+<li><code>weight_change</code></li>
+<li><code>sire</code></li>
+<li><code>dam_sire</code></li>
+</ul>
+<h3 id="layera_1">LayerA で派生に変換して使う列</h3>
+<ul>
+<li><code>date</code></li>
+<li><code>month</code>, <code>quarter</code>, <code>season</code>, <code>weekday</code>, <code>days_since_year_start</code></li>
+<li><code>start_time</code></li>
+<li><code>post_time_bucket</code>, <code>is_night_like</code></li>
+<li><code>venue</code>, <code>surface</code>, <code>distance</code>, <code>direction</code></li>
+<li><code>venue_surface_distance_key</code>, <code>distance_bucket</code>, <code>is_inner_outer_proxy</code></li>
+<li><code>sex_age</code></li>
+<li><code>sex</code>, <code>age</code></li>
+<li><code>weight</code>, <code>weight_change</code></li>
+<li><code>body_weight_missing_flag</code>, <code>abs_weight_change</code>, <code>weight_change_bucket</code></li>
+<li><code>jockey_name</code>, <code>trainer_name</code></li>
+<li>target encoding は禁止しないが、必ず fold 内集計で作る</li>
+<li><code>sire</code>, <code>dam_sire</code></li>
+<li>血統カテゴリ、血統クラスタ、距離帯適性派生</li>
+</ul>
+<h3 id="_10">除外する列</h3>
+<ul>
+<li><code>odds</code></li>
+<li><code>popularity</code></li>
+</ul>
+<h3 id="_11">必須フラグ</h3>
+<ul>
+<li><code>has_weight</code></li>
+<li><code>has_weight_change</code></li>
+<li><code>has_grade</code></li>
+<li><code>has_course_type</code></li>
+</ul>
+<h2 id="2-race_odds_flat">2. <code>race_odds_flat</code></h2>
+<h3 id="_12">粒度</h3>
+<ul>
+<li><code>race_id + horse_number</code></li>
+</ul>
+<h3 id="layera_2">LayerA</h3>
+<ul>
+<li>不採用</li>
+</ul>
+<h3 id="layerb">LayerB で採用する列</h3>
+<ul>
+<li><code>win_odds</code></li>
+<li><code>place_odds_min</code></li>
+<li><code>place_odds_max</code></li>
+<li><code>popularity</code></li>
+</ul>
+<h3 id="layerb_1">LayerB で派生に変換して使う列</h3>
+<ul>
+<li><code>place_odds_avg = (place_odds_min + place_odds_max) / 2</code></li>
+<li><code>market_implied_win_prob_raw = 1 / win_odds</code></li>
+<li><code>market_rank_by_win_odds</code></li>
+<li><code>market_rank_by_place_odds</code></li>
+<li><code>market_gap_to_race_median</code></li>
+<li><code>market_gap_to_race_favorite</code></li>
+<li><code>win_place_spread</code></li>
+</ul>
+<h3 id="_13">必須フラグ</h3>
+<ul>
+<li><code>has_win_odds</code></li>
+<li><code>has_place_odds</code></li>
+<li><code>has_market_snapshot</code></li>
+</ul>
+<h2 id="3-race_shutuba_past_flat">3. <code>race_shutuba_past_flat</code></h2>
+<h3 id="_14">粒度</h3>
+<ul>
+<li><code>race_id + horse_number</code></li>
+</ul>
+<h3 id="layera_3">LayerA で採用する元列</h3>
+<ul>
+<li><code>past_races</code></li>
+<li><code>training</code></li>
+</ul>
+<h3 id="layera_4">LayerA で集約して使う特徴量</h3>
+<ul>
+<li>直近 1-5 走の着順・距離・馬場・上がり</li>
+<li><code>avg_finish_5</code></li>
+<li><code>min_finish_5</code></li>
+<li><code>win_count_5</code></li>
+<li><code>top3_count_5</code></li>
+<li><code>avg_last_3f_5</code></li>
+<li><code>min_last_3f_5</code></li>
+<li><code>std_last_3f_5</code></li>
+<li><code>avg_time_sec_5</code></li>
+<li><code>days_since_last</code></li>
+<li><code>avg_interval</code></li>
+<li><code>position_trend</code></li>
+<li><code>last_3f_trend</code></li>
+<li><code>same_surface_runs</code></li>
+<li><code>same_surface_win_rate</code></li>
+<li><code>same_dist_runs</code></li>
+<li><code>same_dist_win_rate</code></li>
+<li><code>same_venue_runs</code></li>
+<li><code>same_venue_win_rate</code></li>
+<li><code>career_runs</code></li>
+<li><code>career_win_rate</code></li>
+<li><code>career_top3_rate</code></li>
+<li><code>career_avg_finish</code></li>
+<li><code>career_avg_last_3f</code></li>
+</ul>
+<h3 id="market">Market 派生で使う列</h3>
+<ul>
+<li><code>prev{i}_odds</code></li>
+<li><code>prev{i}_popularity</code></li>
+</ul>
+<h3 id="market_1">Market 派生としてのみ保持する特徴量</h3>
+<ul>
+<li><code>prev{i}_pop_rank_diff</code></li>
+<li><code>prev{i}_upset_flag</code></li>
+<li><code>avg_prev_pop_rank_diff</code></li>
+<li><code>popularity_trend_slope</code></li>
+<li><code>upset_count</code></li>
+</ul>
+<h3 id="_15">除外する生値</h3>
+<ul>
+<li><code>prev{i}_odds</code></li>
+<li><code>prev{i}_popularity</code></li>
+</ul>
+<h3 id="_16">必須フラグ</h3>
+<ul>
+<li><code>has_past_races</code></li>
+<li><code>has_recent_5_runs</code></li>
+<li><code>has_training_summary</code></li>
+</ul>
+<h2 id="4-race_index_flat">4. <code>race_index_flat</code></h2>
+<h3 id="_17">粒度</h3>
+<ul>
+<li><code>race_id + horse_number</code></li>
+</ul>
+<h3 id="layera_5">LayerA で採用する列</h3>
+<ul>
+<li><code>speed_max</code></li>
+<li><code>speed_avg</code></li>
+<li><code>speed_distance</code></li>
+<li><code>speed_course</code></li>
+<li><code>speed_recent</code>（結合時に <code>speed_recent_1</code> / <code>speed_recent_2</code> / <code>speed_recent_3</code> に展開。元リストのプレースホルダ <code>0</code> は null 扱い）</li>
+</ul>
+<h3 id="layera_6">LayerA で採用しない列（理由）</h3>
+<ul>
+<li><code>time_index_m</code> — 指数表 HTML 上の位置推定で抽出しており、欠損が数値 <code>0</code> と区別しづらい。特徴量ストアにも載せない。</li>
+</ul>
+<h3 id="layera_7">LayerA で派生に変換して使う特徴量</h3>
+<ul>
+<li>レース内 <code>z-score</code></li>
+<li>レース内 <code>rank</code></li>
+<li>レース内 <code>percentile</code></li>
+<li><code>speed_course_minus_race_mean</code></li>
+<li><code>speed_distance_minus_race_mean</code></li>
+<li><code>speed_recent_trend_proxy</code>（派生は <code>speed_recent_1</code>〜<code>3</code> から計算）</li>
+</ul>
+<h3 id="_18">条件付き・後回し列</h3>
+<ul>
+<li><code>all_txt_c</code></li>
+<li>初期版では未採用</li>
+<li>テキスト特徴として別系統で扱う場合のみ使用</li>
+</ul>
+<h3 id="_19">除外する列</h3>
+<ul>
+<li><code>odds</code></li>
+<li><code>popularity</code></li>
+</ul>
+<h3 id="_20">必須フラグ</h3>
+<ul>
+<li><code>has_race_index</code></li>
+<li><code>has_speed_recent</code></li>
+</ul>
+<h2 id="5-race_oikiri_flat">5. <code>race_oikiri_flat</code></h2>
+<h3 id="_21">粒度</h3>
+<ul>
+<li>1頭1行ではない可能性があるため、そのまま join しない</li>
+</ul>
+<h3 id="layera_8">LayerA の採用元列</h3>
+<ul>
+<li><code>training_date</code></li>
+<li><code>course</code></li>
+<li><code>condition</code></li>
+<li><code>rider</code></li>
+<li><code>lap_times</code></li>
+<li><code>impression</code></li>
+<li><code>evaluation</code></li>
+<li><code>comment</code></li>
+</ul>
+<h3 id="layera_9">LayerA で馬単位に集約する特徴量</h3>
+<ul>
+<li><code>oikiri_count</code></li>
+<li><code>oikiri_latest_days_before_race</code></li>
+<li><code>oikiri_latest_course</code></li>
+<li><code>oikiri_best_evaluation</code></li>
+<li><code>oikiri_mean_evaluation</code></li>
+<li><code>oikiri_best_lap</code></li>
+<li><code>oikiri_mean_lap</code></li>
+<li><code>oikiri_lap_count</code></li>
+<li><code>oikiri_has_comment</code></li>
+<li><code>oikiri_positive_keyword_score</code></li>
+<li><code>oikiri_negative_keyword_score</code></li>
+<li><code>oikiri_rider_is_jockey_flag</code></li>
+</ul>
+<h3 id="_22">必須フラグ</h3>
+<ul>
+<li><code>has_oikiri</code></li>
+<li><code>has_oikiri_lap</code></li>
+<li><code>has_oikiri_comment</code></li>
+</ul>
+<h2 id="6-race_paddock_flat">6. <code>race_paddock_flat</code></h2>
+<h3 id="_23">粒度</h3>
+<ul>
+<li><code>race_id + horse_number</code></li>
+</ul>
+<h3 id="layera_10">LayerA の採用元列</h3>
+<ul>
+<li><code>paddock_rank</code></li>
+<li><code>paddock_comment</code></li>
+</ul>
+<h3 id="layera_11">LayerA で派生に変換して使う特徴量</h3>
+<ul>
+<li><code>paddock_score</code></li>
+<li><code>paddock_positive_keyword_score</code></li>
+<li><code>paddock_negative_keyword_score</code></li>
+<li><code>paddock_rank_in_race</code></li>
+<li><code>paddock_rank_percentile</code></li>
+</ul>
+<h3 id="_24">必須フラグ</h3>
+<ul>
+<li><code>has_paddock</code></li>
+<li><code>has_paddock_comment</code></li>
+<li><code>has_paddock_rank</code></li>
+</ul>
+<h2 id="7-race_trainer_comment_flat">7. <code>race_trainer_comment_flat</code></h2>
+<h3 id="_25">粒度</h3>
+<ul>
+<li><code>race_id + horse_number</code></li>
+</ul>
+<h3 id="layera_12">LayerA の採用元列</h3>
+<ul>
+<li><code>comment</code></li>
+<li><code>evaluation</code></li>
+<li><code>trainer_name</code></li>
+<li><code>questioner</code></li>
+</ul>
+<h3 id="layera_13">LayerA で派生に変換して使う特徴量</h3>
+<ul>
+<li><code>trainer_comment_presence</code></li>
+<li><code>trainer_comment_sentiment_score</code></li>
+<li><code>trainer_comment_positive_keyword_score</code></li>
+<li><code>trainer_comment_negative_keyword_score</code></li>
+<li><code>trainer_comment_eval_score</code></li>
+</ul>
+<h3 id="_26">必須フラグ</h3>
+<ul>
+<li><code>has_trainer_comment</code></li>
+<li><code>has_trainer_eval</code></li>
+</ul>
+<h2 id="8-race_pair_odds_flat">8. <code>race_pair_odds_flat</code></h2>
+<h3 id="_27">粒度</h3>
+<ul>
+<li><code>race_id + odds_type + pair</code></li>
+</ul>
+<h3 id="layerb_2">LayerB で採用する列</h3>
+<ul>
+<li><code>odds_type</code></li>
+<li><code>pair</code></li>
+<li><code>odds</code></li>
+<li><code>popularity</code></li>
+<li><code>odds_min</code></li>
+<li><code>odds_max</code></li>
+</ul>
+<h3 id="layerb_3">LayerB で派生に変換して使う特徴量</h3>
+<ul>
+<li><code>pair_market_rank</code></li>
+<li><code>pair_implied_prob_raw</code></li>
+<li><code>wide_mid_odds</code></li>
+<li><code>pair_gap_to_market_best</code></li>
+</ul>
+<h3 id="_28">用途</h3>
+<ul>
+<li>馬券最適化専用</li>
+<li>馬単位確率モデルの学習には入れない</li>
+</ul>
+<h2 id="9-gcs">9. GCS 由来の馬情報バンドル</h2>
+<p><code>feature_builder</code> が参照している <code>horse_profile</code>, <code>race_history</code>, <code>pedigree</code>, <code>myostatin</code>, <code>aptitude</code> 系は LayerA の中心情報として採用する。</p>
+<h3 id="layera_14">LayerA で採用する派生の中心</h3>
+<ul>
+<li>戦績集計</li>
+<li>直近走推移</li>
+<li>距離帯適性</li>
+<li>芝/ダート適性</li>
+<li>コース相性</li>
+<li>血統適性</li>
+<li>ミオスタチン由来の距離適性 proxy</li>
+</ul>
+<h3 id="_29">ルール</h3>
+<ul>
+<li>生の post-race 結果をそのまま連結しない</li>
+<li>対象レース日以前の履歴だけで集計する</li>
+<li>集計時点基準を必ず明記する</li>
+</ul>
+<h2 id="layera_15">LayerA 最終採用対象</h2>
+<ul>
+<li><code>race_shutuba_flat</code> の非市場列</li>
+<li><code>race_shutuba_past_flat</code> の履歴集約</li>
+<li><code>race_index_flat</code> の指数列</li>
+<li><code>race_oikiri_flat</code> の馬単位集約</li>
+<li><code>race_paddock_flat</code> のスコア化列</li>
+<li><code>race_trainer_comment_flat</code> のスコア化列</li>
+<li>GCS horse bundle 由来の履歴・血統・適性集約</li>
+<li>JRA クッション値・含水率・proxy 系</li>
+</ul>
+<h2 id="layera_16">LayerA の追加ルール</h2>
+<ul>
+<li><code>odds</code> を直接使わなくても、オッズと強く相関するリーキー派生を後から混ぜない</li>
+<li>カテゴリ encoding は必ず train fold 内で作る</li>
+<li>ベースライン段階では、生テキスト埋め込みや大型外部特徴量は入れない</li>
+</ul>
+<h2 id="layerb_4">LayerB 最終採用対象</h2>
+<ul>
+<li>LayerA の最終馬単位確率</li>
+<li><code>race_odds_flat</code></li>
+<li><code>race_pair_odds_flat</code></li>
+<li>市場由来の差分特徴量</li>
+</ul>
+<h2 id="layerb_5">LayerB の追加ルール</h2>
+<ul>
+<li>市場を使うのは <code>確率推定器</code> ではなく <code>意思決定器</code> 側と明確に区別する</li>
+<li>高オッズ帯の期待値は誤差に弱いため、<code>安全域付き期待値</code> を前提に使う</li>
+<li>最終オッズを使った評価は <code>simulation_only</code> として管理する</li>
+</ul>
+<h2 id="_30">学習前チェックリスト</h2>
+<ul>
+<li><code>race_result</code>, <code>race_result_lap</code>, <code>race_barometer</code>, <code>smartrc_race</code> が混入していない</li>
+<li><code>odds</code> / <code>popularity</code> が LayerA に入っていない</li>
+<li><code>race_oikiri_flat</code> を 1頭1行に集約している</li>
+<li>sparse テーブルに <code>presence_flag</code> を付与している</li>
+<li>未来日付の履歴が混ざっていない</li>
+<li>split 前に target encoding を作っていない</li>
+<li>BaselineV1 と ExtendedV1 の両方を比較可能な形で保存している</li>
+</ul>
+    </article>
+    <nav class="doc-nav">
+      <a href="pedigree_stage_research_notes.html">← 血統・馬場傾向・研究方針メモ（ブラッシュアップ用）</a>
+      <a href="race_performance_rating_system.html">レースパフォーマンス算出システム設計 →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/pre_race_feature_whitelist.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

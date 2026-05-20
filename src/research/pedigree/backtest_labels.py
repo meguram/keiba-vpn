@@ -21,8 +21,8 @@ from src.api.bloodline_meta_cluster import (  # noqa: E402
 )
 
 ROOT = _ROOT
-ANALYSIS_DIR = ROOT / "data/analysis/pedigree"
-IDX = ROOT / "data/research/pedigree_race_index"
+ANALYSIS_DIR = ROOT / "data/local/analysis/pedigree"
+IDX = ROOT / "data/page_reference/pedigree_race_index"
 
 
 def main():

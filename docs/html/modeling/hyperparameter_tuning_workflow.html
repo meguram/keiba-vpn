@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ハイパーパラメータ・モデル選定のチューニング工程 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>ハイパーパラメータ・モデル選定のチューニング工程</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/hyperparameter_tuning_workflow.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">ハイパーパラメータ・モデル選定のチューニング工程</h1>
+<h2 id="0">0. 現状認識：議論は「終わっている」か</h2>
+<p><strong>終わっていない（未整理だった）領域である。</strong></p>
+<ul>
+<li><code>train_valid_test_split_strategy.html</code> では <strong>2024 valid でハイパラ・特徴選抜</strong>とあるが、<br />
+<strong>探索手順・打ち切り条件・再現性・計算予算の配分</strong>は別ドキュメント化されていなかった。</li>
+<li><code>advanced_modeling_techniques.html</code> はテクニック集であり、<strong>チューニング運用の SOP</strong> ではない。</li>
+<li>本書は <strong>「どのデータで・どの指標で・どこまで探索し、いつ凍結するか」</strong> と、<br />
+<strong>工程そのものの最適化（試行回数・壁時計時間・メモリ）</strong> を定義する。</li>
+</ul>
+<p>関連: <code>data/meta/modeling/dataset_split_manifest.json</code>、<code>train_valid_test_split_strategy.html</code>、<code>modeling_coding_strategy.html</code>。</p>
+<hr />
+<h2 id="1">1. 絶対ルール（リークと報告の潔さ）</h2>
+<table>
+<thead>
+<tr>
+<th>ルール</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>test 禁止</strong></td>
+<td><strong>2025</strong> の指標を見ながらハイパラ・特徴列・校正器をいじらない。</td>
+</tr>
+<tr>
+<td><strong>一次の選定面</strong></td>
+<td><strong>2024 valid</strong>（または inner CV の OOF 集約）だけでチューニング判断。</td>
+</tr>
+<tr>
+<td><strong>校正</strong></td>
+<td>温度スケール等は <strong>2024 valid または train 内 OOF</strong> のみ fit。<strong>2025 では fit しない</strong>。</td>
+</tr>
+<tr>
+<td><strong>データ版の固定</strong></td>
+<td>1 つの tuning study では <code>data_version</code>・母表列集合・TE recipe を <strong>凍結</strong>。変えたら別 study として記録。</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-inner-cv-outer-valid">2. 二層構造：inner CV と outer valid</h2>
+<h3 id="21-inner">2.1 Inner（開発の主戦場）</h3>
+<ul>
+<li><code>rolling_origin_folds</code> + <strong>purge / embargo</strong>（manifest 準拠）で <strong>複数 valid 窓</strong>を回す。</li>
+<li><strong>各 trial</strong> は「1 つのハイパラ設定」を <strong>全 inner fold で学習し、集約スコア</strong>（平均 logloss や平均 NDCG@3）を返す。</li>
+<li>目的: <strong>2024 1 年だけに過適合した設定</strong>を早期に弾く。</li>
+</ul>
+<h3 id="22-outer">2.2 Outer（最終ゲート）</h3>
+<ul>
+<li>inner で上位 K 件（例: 3〜5）に絞ったうえで、<strong>同一パイプライン・同一 feature</strong> のまま <strong>2024 valid 全体</strong>で再学習・再評価。</li>
+<li><strong>2025 test</strong> は、その設定が凍結されたあと <strong>一度だけ</strong>報告用に実行。</li>
+</ul>
+<h3 id="23-nested">2.3 いつ nested が必要か</h3>
+<ul>
+<li>試行数が少ない・探索空間が狭い → <strong>flat valid（2024 のみ）</strong>でも可。</li>
+<li>試行数が多い・Optuna 等で自動探索 → <strong>inner CV スコアを primary</strong> にし、2024 は <strong>最終 sanity</strong> として使うと安全。</li>
+</ul>
+<hr />
+<h2 id="3">3. 最適化する「対象」の順序（凍結の順）</h2>
+<p>過剰な同時探索を避け、<strong>下流ほど探索空間を狭くする</strong>。</p>
+<ol>
+<li><strong>母表・TE recipe・欠損方針</strong>を固定（BaselineV1 または ExtendedV1 のどちらか一方）。</li>
+<li><strong>単一モデル族</strong>（例: LightGBM pointwise）で木・正則化・学習率を tuning。</li>
+<li><strong>別モデル族</strong>（CatBoost）を同じグリッド思想で tuning → <strong>アンサンブル重みは valid のみ</strong>。</li>
+<li><strong>ランキング枝</strong>（lambdarank / YetiRank）は pointwise が安定してから <strong>別 study</strong>。</li>
+<li><strong>多段 stage</strong> のハイパラは <strong>段ごと</strong>に区切る（前段を毎 trial 再学習しないよう、前段は checkpoint 再利用）。</li>
+<li><strong>L2 メタ</strong>は L1 の OOF が揃ってから、<strong>極小探索空間</strong>（線形ブレンド係数など）。</li>
+</ol>
+<hr />
+<h2 id="4">4. チューニング「工程」の最適化（計算コスト・壁時計）</h2>
+<h3 id="41-coarse-to-fine">4.1 粗から細へ（Coarse-to-fine）</h3>
+<ul>
+<li><strong>第 0 相</strong>: ランダム探索を <strong>年サブセット</strong>（例: 2022 のみ）または <strong>レース数サンプリング</strong>で実施し、明らかに悪い領域を切る。</li>
+<li><strong>第 1 相</strong>: 残候補を <strong>全 train 年</strong> + inner CV で再評価。</li>
+<li><strong>第 2 相</strong>: 上位のみ <strong>木本数を増やす</strong> / early stopping round を伸ばす本番寄り設定。</li>
+</ul>
+<h3 id="42-multi-fidelity">4.2 多保真度（Multi-fidelity）</h3>
+<ul>
+<li><strong>少ない boosting round</strong> や <strong>縮小特徴集合</strong>で順位付けし、上位だけフル budget。</li>
+<li>LightGBM / XGBoost / CatBoost いずれも <strong>early stopping</strong> を primary にし、<strong>同じ valid fold</strong> で比較する。</li>
+</ul>
+<h3 id="43">4.3 探索アルゴリズム</h3>
+<ul>
+<li>次元が低〜中: <strong>Bayesian optimization（TPE / Gaussian Process）</strong> — Optuna 等。</li>
+<li>ベースライン比較: <strong>RandomizedSearch</strong> で十分なことが多い（競馬はノイズが大きい）。</li>
+<li><strong>グリッド全探索</strong>は次元爆発しやすいので、<strong>重要次元だけグリッド</strong>＋他はランダム推奨。</li>
+</ul>
+<h3 id="44-io">4.4 並列化と I/O</h3>
+<ul>
+<li><strong>trial 間は独立</strong> → 並列 worker。ただし <strong>WSL メモリ</strong>に合わせて同時 trial 数を制限（<code>modeling_coding_strategy.html</code>）。</li>
+<li><strong>fold 行列の materialize は 1 回キャッシュ</strong>し、同一 fold で複数 trial が読み替えるだけにする（Polars → 学習直前 numpy）。</li>
+</ul>
+<h3 id="45-study">4.5 早期打ち切り（Study レベル）</h3>
+<ul>
+<li><strong>ASHA / Successive Halving</strong> 的運用: 中間エポック（または round 10 のスコア）が下位分位以下なら trial 打ち切り。</li>
+<li><strong>Pruner</strong>（Optuna）と inner fold の平均を組み合わせると試行数対効果が良くなる。</li>
+</ul>
+<hr />
+<h2 id="5">5. 目的関数の設計（単一指標の宣言）</h2>
+<ul>
+<li><strong>1 study につき primary メトリックを 1 つ</strong>決める（例: <code>mean_logloss</code> または <code>mean_ndcg@3</code>）。</li>
+<li>副次指標（ECE、重賞セグメント）は <strong>ログに残すが primary にはしない</strong>（多目的最適化は複雑化の割に得が薄いことが多い）。</li>
+<li><strong>ランキング枝</strong>と <strong>pointwise 枝</strong>は <strong>別 primary</strong> で別 study にする。</li>
+</ul>
+<hr />
+<h2 id="6">6. アンチパターン</h2>
+<ul>
+<li>train+valid を結合して early stopping や探索に使う。</li>
+<li>test を見たあとに「もう一度だけ」グリッドを広げる。</li>
+<li>TE recipe と木の深さを <strong>同一 trial で毎回変えて</strong>比較する（要因分解不能）。</li>
+<li>inner fold を無視して <strong>2024 のたまたま良い日付</strong>にだけ合う設定を採用する。</li>
+</ul>
+<hr />
+<h2 id="7-study">7. 成果物（study ごとに保存）</h2>
+<ul>
+<li><code>study_id</code>, <code>git_commit</code>, <code>split_manifest_version</code>, <code>feature_list_hash</code></li>
+<li>各 trial: <code>params</code>, <code>inner_fold_scores</code>, <code>aggregated_score</code>, <code>wall_time_sec</code>, <code>gpu_mem_peak</code>（任意）</li>
+<li><strong>採用 config</strong> の YAML または JSON（本番 refit でそのまま読める形）</li>
+</ul>
+<p>推奨パス例: <code>data/meta/modeling/tuning_studies/&lt;study_id&gt;/</code></p>
+<h3 id="71-mlflow">7.1 MLflow での必須記録</h3>
+<p>各 study・各 trial（少なくとも <strong>採用 trial と最終 refit</strong>）について、<strong>MLflow Run</strong> を切る。</p>
+<ul>
+<li><strong>Parameters</strong>: ハイパラ全集、<code>split_manifest_version</code>、<code>feature_list_hash</code></li>
+<li><strong>Metrics</strong>: inner fold 集約スコア、2024 valid 再評価スコア、壁時計、<code>n_trees</code> 等</li>
+<li><strong>Tags</strong>: <code>study_id</code>, <code>trial_number</code>, <code>git_commit</code>, <code>primary_metric</code></li>
+<li><strong>Artifacts</strong>: 採用 <code>config.yaml</code>、特徴量リスト、（任意）OOF 予測サンプル</li>
+</ul>
+<p><code>horse_pre_race_dataset_spec.html</code> の必須メタデータと <strong><code>mlflow_run_id</code> を相互参照</strong>できるようにする。</p>
+<hr />
+<h2 id="8-2025">8. チェックリスト（2025 報告前の凍結）</h2>
+<ul>
+<li>[ ] primary metric が study 冒頭で文書化されている  </li>
+<li>[ ] 2025 を一切参照していない  </li>
+<li>[ ] 採用モデルの <code>model_version</code> / <code>data_version</code> / <code>encoding_recipe_version</code> が一意に決まる  </li>
+<li>[ ] 校正器は valid または OOF のみ fit  </li>
+<li>[ ] ランキング枝を併用する場合、<strong>馬券用確率</strong>はどの head から出すか明記されている  </li>
+<li>[ ] <strong>MLflow</strong> に採用 run が記録され、<code>mlflow_run_id</code> が成果物マニフェストと一致する  </li>
+</ul>
+<hr />
+<h2 id="9">9. まとめ</h2>
+<p>チューニング工程の議論は、<strong>split・リーク・実装メモリ</strong>とは別軸で、本書まで含めて初めて <strong>運用上の輪郭が閉じる</strong>。<br />
+今後の変更は <strong>study 単位</strong>でバージョンを切り、<code>runs.jsonl</code> または tuning ディレクトリに追記すること。</p>
+<hr />
+<h2 id="10-pipeline">10. 現行実装（<code>pipeline/</code>）とのギャップ — 実装を踏まえた議論</h2>
+<p>ドキュメント（<code>dataset_split_manifest.json</code>・本書・<code>train_valid_test_split_strategy.html</code>）と、リポジトリ内の学習コードは <strong>2026 時点で完全には一致していない</strong>。<br />
+モデル選定 SOP をコードに落とすときは、次の差分を前提にマイルストーンを切る。</p>
+<h3 id="101-srcpipelinetrainerpymodeltrainer">10.1 <code>src/pipeline/trainer.py</code>（<code>ModelTrainer</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>ドキュメント側の意図</th>
+<th>実装の現状</th>
+<th>リスク</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>暦年・race 単位</strong>で train / valid / test を分離</td>
+<td><code>split_idx = int(len(X) * (1 - test_ratio))</code> で <strong>行の先頭からの割合分割</strong>（DataFrame の行順依存）</td>
+<td>行順が日付順でないと <strong>時系列 split にならない</strong>。同一レースが train と test に跨る可能性。</td>
+</tr>
+<tr>
+<td>2024 valid / 2025 test など manifest 準拠</td>
+<td><code>years</code> は <code>_load_or_build</code> の一部経路でしか効かず、分割は <strong>年ではない</strong></td>
+<td>報告用 test を「一度きり」に固定できない。</td>
+</tr>
+<tr>
+<td>relevance による LambdaRank</td>
+<td><code>y</code> は <strong>複勝圏の二値</strong> <code>(1&lt;=着順&lt;=3)</code> をランキングラベルに使用</td>
+<td>着順の強弱が損失に反映されず、<strong>順位本来の listwise 意図とずれる</strong>（当面のベースラインとしてはあり得るが、ドキュメントの LTR 節とは別物として明示すべき）。</td>
+</tr>
+<tr>
+<td>Optuna によるハイパラ探索</td>
+<td><code>n_optuna_trials</code> は <strong>MLflow へのタグ記録</strong>中心で、<code>train()</code> 本体に <strong>探索ループは無い</strong></td>
+<td>ドキュメントの「study・pruner」は <strong>未接続</strong>。</td>
+</tr>
+</tbody>
+</table>
+<p><strong>やれること（実装）</strong>: <code>race_date</code>（または <code>race_id</code> 先頭年）でソート → <code>dataset_split_manifest.json</code> を読み、<strong>eval 用 race_id 集合</strong>でマスク分割するモジュールを <code>ModelTrainer</code> 前段に挿入する。LambdaRank 用は <code>relevance = f(finish_position)</code> を別列で渡すオプションを追加する。</p>
+<h3 id="102-srcpipelineensemble_trainerpyensembletrainer">10.2 <code>src/pipeline/ensemble_trainer.py</code>（<code>EnsembleTrainer</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>ドキュメント側の意図</th>
+<th>実装の現状</th>
+<th>リスク</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Purged + embargo 付き時系列 CV</td>
+<td><strong>GroupKFold(race_id)</strong> は train 内の <strong>同一レース同一 fold</strong> に閉じるが、<strong>日付に基づく purge は無い</strong></td>
+<td>近接開催の情報リークはドキュメントより緩い。</td>
+</tr>
+<tr>
+<td>メタ学習は valid のみ fit 等</td>
+<td>メタは <strong>train 区間の OOF</strong> に対して <code>LogisticRegression</code> fit（設計としては標準的）</td>
+<td><strong>最終報告用の 2024 ブロックを完全にホールドアウト</strong>する設計にはなっていない（train の一部の OOF 上でメタが学習される）。</td>
+</tr>
+</tbody>
+</table>
+<p><strong>やれること（実装）</strong>: <code>GroupKFold</code> を維持しつつ、fold 境界を <strong><code>race_date</code> + purge_window_days</strong> で切る <code>PurgedGroupTimeSeriesSplit</code> 相当のイテレータに差し替える。メタ用に <strong>2024 行を学習から除外した OOF</strong> を別パスで生成するオプションを検討する。</p>
+<h3 id="103-srcpipelinefeature_storepy">10.3 <code>src/pipeline/feature_store.py</code></h3>
+<ul>
+<li>列指向・スナップショット・<code>_registry.json</code> は <strong><code>modeling_coding_strategy.html</code> の方針と整合</strong>しやすい。</li>
+<li>学習行列の <strong>行順・重複 race</strong> がスナップショット生成側でどう保証されるかは、<code>build_training_matrix</code> 呼び出し規約で明示する必要がある（trainer の分割と連動）。</li>
+</ul>
+<h3 id="104-srcresearchevaluate_race_performance_signalpy">10.4 <code>src/research/evaluate_race_performance_signal.py</code> 等</h3>
+<ul>
+<li>ベンチ用スクリプトは <strong>独自のデータ結合・特徴</strong>を持つ。<strong>本番 <code>ModelTrainer</code> と同じ split とは限らない</strong>。</li>
+<li>指標比較は「信号検証」としてログに残し、<strong>本番選定スコアは manifest 準拠の runner 一本</strong>に寄せるのがよい。</li>
+</ul>
+<h3 id="105">10.5 推奨マイルストーン（実装順）</h3>
+<ol>
+<li><strong>Split モジュール</strong>: manifest 読込 + <code>race_id</code> / <code>race_date</code> による train/valid/test マスク（<strong>trainer から切り出し</strong>）。  </li>
+<li><strong>trainer</strong>: 上記マスクに差し替え、<code>test_ratio</code> ベース分割を <strong>deprecated</strong> または「デバッグ専用」と明記。  </li>
+<li><strong>relevance 列</strong>（任意）と二値 top3 の <strong>切り替えフラグ</strong>。  </li>
+<li><strong>Optuna</strong>: <code>train()</code> から <code>study.optimize</code> を呼ぶオプション、または CLI <code>src/pipeline/cli.py</code> から study 専用コマンド。  </li>
+<li><strong>ensemble</strong>: purge 対応 fold → メタの fit 対象データをドキュメントの outer valid 方針に揃えるオプション。</li>
+</ol>
+<p>以上を進めると、<strong>議論（md）と実装（pipeline）の二重管理</strong>が減り、<code>study_id</code> と <code>split_manifest_version</code> を同一 run で記録できるようになる。</p>
+    </article>
+    <nav class="doc-nav">
+      <a href="horse_pre_race_dataset_spec.html">← horse_pre_race_dataset 仕様</a>
+      <a href="modeling_coding_strategy.html">モデリング実装時のコーディング戦略 →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/hyperparameter_tuning_workflow.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

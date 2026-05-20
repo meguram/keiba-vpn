@@ -1,14 +1,15 @@
 """血統 role 別 lift プロファイルを集計するバッチ。
 
-ある種牡馬 X が「父 (F)」「母父 (MF)」「母母父 (MMF)」「父父 (FF)」のどの役割で登場する
-馬の集合（= その馬たちのレース戦績）から、条件別 EB 勝率と「自分の eb_total での lift」
-を計算し、`role_lift_profiles.parquet` として保存する。
+ある種牡馬 X が各役割で登場する馬の集合のレース戦績から、条件別 EB 勝率と
+「自分の eb_total での lift」を計算し、`role_lift_profiles.parquet` として保存する。
 
-検証スクリプト `src/research/pedigree/role_lift_evidence.py` の結果（H1〜H4）に基づく:
-  - F: 安定（n大・std小）→ 主軸
-  - MF: F と相関低く独立 → 第二の重み
-  - FF: 父父系統。長距離・芝で有意
-  - MMF: 隠れ適性シグナル
+役割の定義:
+  - F            : 父 (gen=1)
+  - MF           : 母父 (gen=2)
+  - FF           : 父父 (gen=2)
+  - maternal_deep: 母母父・母母母父・母母母母父 のいずれかに登場する馬を統合。
+                   horse_set = horses_at_MMF ∪ horses_at_MMMF ∪ horses_at_MMMMF
+                   ゆる制約によりサンプルを確保し、種牡馬ごとの lift を安定推定する。
 
 使用:
   python -m src.research.pedigree.build_role_lift_profiles
@@ -28,8 +29,9 @@ from src.utils.keiba_logging import script_basic_config
 logger = logging.getLogger("research.role_lift")
 
 ROOT = Path(__file__).resolve().parents[3]
-IDX_DIR = ROOT / "data/research/pedigree_race_index"
-ART_DIR = ROOT / "data/research/bloodline_meta_cluster"
+IDX_DIR = ROOT / "data/page_reference/pedigree_race_index"
+ART_DIR = ROOT / "data/page_reference/note_aptitude_race"
+TSR_DIR = ROOT / "data/local/ml/warehouse/reference/track_speed_races"
 
 # Empirical Bayes prior （特殊適性タグと整合）
 EB_PRIOR_N = 30
@@ -45,14 +47,17 @@ COND_COLS = (
     + [f"win_s_{s}" for s in ["芝", "ダート"]]
     + [f"win_d_{d}" for d in DIST_LABELS]
     + ["win_steep", "win_flat", "win_heavy", "win_outer", "win_inner"]
+    # 基礎スピード条件: 馬場速度ラベルに基づく（track_speed_races より）
+    + ["win_fast", "win_slow"]
 )
 
 # role の定義
-#   F   : sire_id 直接（horse_bms.parquet）
-#   MF  : bms_id 直接（horse_bms.parquet）
-#   MMF : path_fm == 'MMF' （horse_pedigree_cats.parquet）
-#   FF  : path_fm == 'FF'
-ROLES = ("F", "MF", "MMF", "FF")
+#   F             : sire_id 直接（horse_bms.parquet）
+#   MF            : bms_id 直接（horse_bms.parquet）
+#   FF            : path_fm == 'FF'   （horse_pedigree_cats.parquet）
+#   maternal_deep : path_fm ∈ {MMF, MMMF, MMMMF} の union（horse_pedigree_cats.parquet）
+#                   ゆる制約: 母母父・母母母父・母母母母父 いずれかへの登場を統合
+ROLES = ("F", "MF", "FF", "maternal_deep")
 MIN_N_RECORDS = 30  # この出走数未満の (stallion, role) は除外
 
 
@@ -81,9 +86,15 @@ def _build_role_indices(
     idx: dict[str, dict[str, set[str]]] = {}
     idx["F"] = bms.groupby("sire_id")["horse_id"].apply(set).to_dict()
     idx["MF"] = bms.groupby("bms_id")["horse_id"].apply(set).to_dict()
-    for path in ("MMF", "FF"):
-        sub = cats[cats["path_fm"] == path]
-        idx[path] = sub.groupby("stallion_id")["horse_id"].apply(set).to_dict()
+    # FF: 父父 (strict)
+    ff_sub = cats[cats["path_fm"] == "FF"]
+    idx["FF"] = ff_sub.groupby("stallion_id")["horse_id"].apply(set).to_dict()
+    # maternal_deep: MMF ∪ MMMF ∪ MMMMF の union（ゆる制約）
+    deep_sub = cats[cats["path_fm"].isin(("MMF", "MMMF", "MMMMF"))]
+    merged: dict[str, set[str]] = {}
+    for row in deep_sub[["stallion_id", "horse_id"]].itertuples(index=False):
+        merged.setdefault(row.stallion_id, set()).add(row.horse_id)
+    idx["maternal_deep"] = merged
     return idx
 
 
@@ -195,6 +206,23 @@ def build() -> Path:
     race = _attach_course_type(race)
     race["is_outer"] = race["course_type"] == "外"
     race["is_inner"] = race["course_type"] == "内"
+    # 基礎スピード: track_speed_races parquet より race_id → 馬場速度ラベルを付与
+    _tsr_files = sorted(TSR_DIR.glob("races_*.parquet")) if TSR_DIR.exists() else []
+    if _tsr_files:
+        _tsr = pd.concat(
+            [pd.read_parquet(p, columns=["race_id", "label"]) for p in _tsr_files],
+            ignore_index=True,
+        )
+        _tsr["race_id"] = _tsr["race_id"].astype(str)
+        _tsr = _tsr.drop_duplicates("race_id")
+        race = race.merge(_tsr.rename(columns={"label": "speed_label"}), on="race_id", how="left")
+        logger.info("[speed] track_speed_races 結合: %d レース (%d件が速度ラベル付き)",
+                    len(_tsr), race["speed_label"].notna().sum())
+    else:
+        race["speed_label"] = pd.NA
+        logger.warning("[speed] track_speed_races ディレクトリ未発見 — win_fast/win_slow は全て NaN")
+    race["is_fast"] = race["speed_label"].isin(["高速", "超高速"])
+    race["is_slow"] = race["speed_label"].isin(["低速", "超低速"])
     logger.info(
         "[ok] race=%s, cats=%s, bms=%s",
         f"{len(race):,}", f"{len(cats):,}", f"{len(bms):,}",
@@ -205,8 +233,9 @@ def build() -> Path:
 
     role_idx = _build_role_indices(cats, bms)
     logger.info(
-        "[idx] F=%d / MF=%d / MMF=%d / FF=%d 種牡馬を index 化",
-        len(role_idx["F"]), len(role_idx["MF"]), len(role_idx["MMF"]), len(role_idx["FF"]),
+        "[idx] F=%d / MF=%d / FF=%d / maternal_deep=%d 種牡馬を index 化",
+        len(role_idx["F"]), len(role_idx["MF"]), len(role_idx["FF"]),
+        len(role_idx["maternal_deep"]),
     )
 
     candidates, sid_to_name = _resolve_target_stallions(cats, bms)
@@ -230,6 +259,10 @@ def build() -> Path:
             return race["is_outer"]
         if col == "win_inner":
             return race["is_inner"]
+        if col == "win_fast":
+            return race["is_fast"]
+        if col == "win_slow":
+            return race["is_slow"]
         raise ValueError(col)
 
     cond_mask = {c: _filter_for(c) for c in COND_COLS}
@@ -269,12 +302,12 @@ def build() -> Path:
 
     df = pd.DataFrame(rows)
     logger.info(
-        "[done] role × stallion 行数: %d (F=%d, MF=%d, MMF=%d, FF=%d)",
+        "[done] role × stallion 行数: %d (F=%d, MF=%d, FF=%d, maternal_deep=%d)",
         len(df),
         int((df["role"] == "F").sum()),
         int((df["role"] == "MF").sum()),
-        int((df["role"] == "MMF").sum()),
         int((df["role"] == "FF").sum()),
+        int((df["role"] == "maternal_deep").sum()),
     )
 
     out_path = ART_DIR / "role_lift_profiles.parquet"
@@ -312,12 +345,15 @@ def build() -> Path:
         "n_role_rows": int(len(df)),
         "n_unique_stallions": int(df["stallion_id"].nunique()),
         "row_counts_by_role": {role: int((df["role"] == role).sum()) for role in ROLES},
-        "blend_weights_base": {"F": 0.50, "MF": 0.25, "FF": 0.15, "MMF": 0.10},
+        "blend_weights_base": {
+            "F": 0.50, "MF": 0.25, "FF": 0.15, "maternal_deep": 0.15,
+        },
         "confidence_pseudo_n": 100,
         "notes": (
             "lift_<cond> = EB(win_in_cond) / EB(win_total). "
-            "重み base は F/MF/FF/MMF=0.50/0.25/0.15/0.10、各 role の effective_w は "
-            "base × n_records / (n_records + 100) で信頼度補正。"
+            "重み base は F/MF/FF/maternal_deep=0.50/0.25/0.15/0.15。"
+            "maternal_deep は MMF∪MMMF∪MMMMF のゆる制約 union で horse_set を構築。"
+            "各 role の effective_w は base × n_records / (n_records + 100) で信頼度補正。"
         ),
     }
     (ART_DIR / "role_lift_meta.json").write_text(

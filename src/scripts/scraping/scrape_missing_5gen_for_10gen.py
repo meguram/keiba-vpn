@@ -74,8 +74,8 @@ logger = logging.getLogger("scrape_missing_5gen")
 
 PED_URL = "https://db.netkeiba.com/horse/ped/{horse_id}/"
 PED_DIR = ROOT / "data/local/horse_pedigree_5gen"
-TABLES_DIR = ROOT / "data/local/tables"
-PROGRESS_PATH = ROOT / "data/research/pedigree_10gen_3view/scrape_missing_5gen_progress.json"
+TABLES_DIR = ROOT / "data/page_reference/tables"
+PROGRESS_PATH = ROOT / "data/local/research/pedigree_10gen_3view/scrape_missing_5gen_progress.json"
 DEFAULT_YEARS = "2020,2021,2022,2023,2024,2025"
 
 

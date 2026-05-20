@@ -9,7 +9,7 @@ HORSE_SHARD_LEN = 4
 
 
 def warehouse_root(base: str | Path) -> Path:
-    return Path(base) / "data" / "ml" / "warehouse"
+    return Path(base) / "data" / "local" / "ml" / "warehouse"
 
 
 def by_year_dir(base: str | Path, year: str) -> Path:

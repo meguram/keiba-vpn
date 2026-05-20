@@ -2,7 +2,7 @@
 5.3 アイデア群に対応する種牡馬×舞台特徴の前計算（評価ラボ用）
 
 母系種牡馬集合 S_h と当日 full_stage_key に対し、集約スカラ・グラフ平滑・因子接続などを返す。
-各関数は docs/modeling/pedigree_stage_research_notes.md §5.3 の記号にコメントで対応付け。
+各関数は docs/html/modeling/pedigree_stage_research_notes.html §5.3 の記号にコメントで対応付け。
 """
 
 from __future__ import annotations

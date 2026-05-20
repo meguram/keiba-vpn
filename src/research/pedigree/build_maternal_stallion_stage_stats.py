@@ -69,10 +69,10 @@ from src.utils.keiba_logging import script_basic_config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-TABLES_DIR = Path("data/local/tables")
+TABLES_DIR = Path("data/page_reference/tables")
 DEFAULT_LOCAL_PEDIGREE_DIR = Path("data/local/horse_pedigree_5gen")
-DEFAULT_OUT = Path("data/meta/modeling/maternal_stallion_stage_stats.parquet")
-META_OUT = Path("data/meta/modeling/maternal_stallion_stage_stats_meta.json")
+DEFAULT_OUT = Path("data/local/meta/modeling/maternal_stallion_stage_stats.parquet")
+META_OUT = Path("data/local/meta/modeling/maternal_stallion_stage_stats_meta.json")
 
 
 def _norm_venue(v: Any) -> str:

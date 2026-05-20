@@ -23,13 +23,13 @@ import pandas as pd
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
-ANALYSIS_DIR = ROOT / "data/analysis/pedigree"
-IDX_DIR = ROOT / "data/research/pedigree_race_index"
-ART_DIR = ROOT / "data/research/bloodline_meta_cluster"
+ANALYSIS_DIR = ROOT / "data/local/analysis/pedigree"
+IDX_DIR = ROOT / "data/page_reference/pedigree_race_index"
+ART_DIR = ROOT / "data/page_reference/note_aptitude_race"
 
 EB_PRIOR = 30
 GLOBAL_WIN = 0.139
-DIST_BINS = [0, 1400, 1800, 2200, 9999]
+DIST_BINS = [0, 1400, 1800, 2400, 9999]
 DIST_LABELS = ["短距離", "マイル", "中距離", "長距離"]
 STEEP_VENUES = ("中山", "阪神", "中京")
 COND_COLS = (

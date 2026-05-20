@@ -29,9 +29,9 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_PARQUET = ROOT / "data/modeling/layer_a_train.parquet"
-DEFAULT_MANIFEST = ROOT / "data/meta/modeling/dataset_split_manifest.json"
-DEFAULT_OUT = ROOT / "data/meta/modeling/track_bias_weight_best.json"
+DEFAULT_PARQUET = ROOT / "data/local/modeling/layer_a_train.parquet"
+DEFAULT_MANIFEST = ROOT / "data/local/meta/modeling/dataset_split_manifest.json"
+DEFAULT_OUT = ROOT / "data/local/meta/modeling/track_bias_weight_best.json"
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))

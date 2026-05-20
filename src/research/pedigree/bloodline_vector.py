@@ -161,7 +161,7 @@ def _dist_bin(distance: int) -> str:
 class BloodlineVectorBuilder:
     """レースデータから種牡馬の血統ベクトルを構築する。"""
 
-    def __init__(self, output_dir: str = "data/research/bloodline_vector"):
+    def __init__(self, output_dir: str = "data/page_reference/bloodline_vector"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.raw_df: pd.DataFrame = pd.DataFrame()

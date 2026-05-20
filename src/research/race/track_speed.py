@@ -612,7 +612,7 @@ def run_analysis(base_dir: str = ".", progress_cb=None):
     analyzer = TrackSpeedAnalyzer(storage)
 
     analyzer.run(progress_cb=progress_cb)
-    files = analyzer.save(str(Path(base_dir) / "data" / "analysis"))
+    files = analyzer.save(str(Path(base_dir) / "data" / "local" / "analysis"))
     stats = analyzer.get_stats()
 
     return {"files": files, "stats": stats, "daily": analyzer._daily}
