@@ -7,8 +7,8 @@ JRA年間カレンダーと db.netkeiba の更新タイミングに合わせて
 ┌─────────────────────────────────────────────────────────────────┐
 │  タスク            │ 時刻         │ 対象日     │ 内容          │
 ├────────────────────┼──────────────┼────────────┼───────────────┤
-│  raceday-eve       │ 前日 18:00   │ 翌開催日   │ 馬柱・追い切り│
-│                    │              │ の前日のみ │ (前日17時確定)│
+│  raceday-eve       │ 前日 18:00   │ 翌開催日   │ 出馬表+馬柱   │
+│                    │              │ の前日のみ │ +追い切り     │
 ├────────────────────┼──────────────┼────────────┼───────────────┤
 │  raceday-runner    │ 07:30 起動   │ 開催日のみ │ 朝: レース一覧│
 │  (常駐プロセス)    │ 各R 15分前   │            │ 各R 15分前:   │
@@ -43,8 +43,10 @@ JRA年間カレンダーと db.netkeiba の更新タイミングに合わせて
 
 raceday-eve の動作:
   前日 18:00 起動 → 翌開催日の全レース一覧を取得
+  → race_shutuba (出馬表) を全レース分取得（前日時点の最新枠順・騎手）
   → race_shutuba_past (馬柱・調教) と race_oikiri (追い切り) を全レース分取得
-  → 馬柱・調教は前日 17 時に netkeiba で確定するため、T-15 ではなくこの時点で取得する
+  → 追走難度キャッシュを事前計算（出馬表のみ・result 非使用）
+  → T-15 では出馬表/馬柱・追切は skip_existing=True でスキップ可
   → 終了 (非常駐)
 
 raceday-runner の動作:
@@ -140,7 +142,9 @@ def _missing_past_race_dates(calendar: dict, since: str | None = None) -> list[s
     """
     yesterday = (date.today() - timedelta(days=1)).isoformat()
     start = since or f"{date.today().year}-01-01"
-    race_list_dir = Path("data/local/race_lists")
+    from src.config.data_paths import RACE_LISTS_DIR
+
+    race_list_dir = RACE_LISTS_DIR
 
     calendar_past = sorted(
         d["date"]
@@ -482,15 +486,17 @@ def task_raceday_result_runner():
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  タスク: 開催前日夕方 (馬柱・追い切りの先行取得)
+#  タスク: 開催前日夕方 (出馬表・馬柱・追い切り + 追走難度 precompute)
 # ═══════════════════════════════════════════════════════════════════
 
 def run_raceday_eve_for_date(race_date_str: str) -> dict:
     """
-    翌開催日 (race_date_str, YYYYMMDD) の全レースについて
-    race_shutuba_past と race_oikiri を先行取得する。
+    翌開催日 (race_date_str, YYYYMMDD) の全レースについて前日夕方データを取得する。
 
-    馬柱・調教は前日 17:00 に netkeiba で確定するため、T-15 ではなくこの時点で取得する。
+    - race_shutuba: 出馬表（枠順・馬番・騎手など。追走難度の入力）
+    - race_shutuba_past: 馬柱・調教（前日 17 時頃 netkeiba 確定）
+    - race_oikiri: 追い切り
+    - 完了後: 追走難度を pre_race_only で storage キャッシュ
 
     Returns: stats dict
     """
@@ -509,6 +515,7 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
 
     stats: dict = {
         "races": len(races),
+        "shutuba": 0,
         "shutuba_past": 0,
         "oikiri": 0,
         "smartrc": 0,
@@ -520,6 +527,7 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
         logger.info("[%d/%d] %s %s", i + 1, len(races), rid, race.get("race_name", ""))
 
         for task_name, task_key, task_fn in [
+            ("出馬表", "shutuba", lambda r=rid: runner.scrape_race_card(r, skip_existing=False)),
             ("馬柱・調教", "shutuba_past", lambda r=rid: runner.scrape_shutuba_past(r, skip_existing=False)),
             ("追い切り",  "oikiri",       lambda r=rid: runner.scrape_oikiri(r, skip_existing=False)),
             ("SmartRC指数", "smartrc",    lambda r=rid: runner.scrape_smartrc(r, race_date_str)),
@@ -538,24 +546,61 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
             time.sleep(random.uniform(2.0, 4.0))
 
     logger.info("=" * 60)
-    logger.info("  前日夕方完了: 馬柱=%d, 追切=%d, SmartRC=%d / %d レース",
-                stats["shutuba_past"], stats["oikiri"], stats["smartrc"], stats["races"])
+    logger.info(
+        "  前日夕方スクレイプ完了: 出馬表=%d, 馬柱=%d, 追切=%d, SmartRC=%d / %d レース",
+        stats["shutuba"],
+        stats["shutuba_past"],
+        stats["oikiri"],
+        stats["smartrc"],
+        stats["races"],
+    )
     logger.info("=" * 60)
+
+    precompute_stats: dict[str, Any] = {"ok": 0, "skip": 0, "fail": 0, "total": 0}
+    import os as _os
+
+    if _os.environ.get("KEIBA_EVE_PRECOMPUTE_TRACKING", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+    ):
+        try:
+            from src.pipeline.inference.tracking_difficulty_service import (
+                precompute_tracking_for_race_ids,
+            )
+
+            race_ids = [str(r["race_id"]) for r in races if r.get("race_id")]
+            precompute_stats = precompute_tracking_for_race_ids(
+                race_ids,
+                runner.storage,
+                pre_race_only=True,
+            )
+            logger.info(
+                "  追走難度 precompute: ok=%d skip=%d fail=%d / %d",
+                precompute_stats["ok"],
+                precompute_stats["skip"],
+                precompute_stats["fail"],
+                precompute_stats["total"],
+            )
+        except Exception as exc:
+            logger.warning("追走難度 precompute バッチ失敗: %s", exc)
+            precompute_stats = {"error": str(exc)}
 
     return {
         "status": "ok",
         "date": date_iso,
         **{k: v for k, v in stats.items() if k != "errors"},
         "error_count": len(stats["errors"]),
+        "tracking_precompute": precompute_stats,
     }
 
 
 def task_raceday_eve():
     """
-    翌日が開催日なら、前日 18:00 に馬柱・調教 / 追い切りを先行取得する (cron 18:00)。
+    翌日が開催日なら、前日 18:00 に出馬表・馬柱・追い切りを取得する (cron 18:00)。
 
-    馬柱・調教は前日 17:00 に netkeiba で確定するため、T-15 ランナーを待たずにこのタイミングで取得する。
-    T-15 バンドル側では skip_existing=True に変更済みのため、取得済みならスキップされる。
+    出馬表は追走難度・位置取り予測の入力。馬柱は前日 17:00 確定分をこの時点で取得する。
+    T-15 バンドルでは取得済みタスクは skip_existing=True でスキップされる。
     """
     calendar = _load_race_calendar()
     tomorrow = (date.today() + timedelta(days=1)).isoformat()
@@ -935,7 +980,7 @@ def show_status():
     print("\n=== 自動スクレイプ ステータス ===")
 
     task_labels = {
-        "raceday-eve":           "前日夕 (馬柱・追い切り先行取得 18:00)",
+        "raceday-eve":           "前日夕 (出馬表+馬柱・追切 18:00 +追走難度)",
         "raceday-runner":        "開催日ランナー (出馬表・オッズ各R 15分前)",
         "raceday-result-runner": "速報結果ランナー (各R発走15分後に速報取得)",
         "raceday-evening":       "開催日夕 (結果・確定オッズ)",
@@ -983,8 +1028,8 @@ def show_status():
         when = {0: "今日", 1: "明日"}.get(days_until, f"{days_until}日後")
         print(f"  次の開催: {rd} ({wd}) {v} ({when})")
         eve = (date.fromisoformat(rd) - timedelta(days=1)).isoformat()
-        print(f"    {eve} 18:00 前日夕 → 馬柱・追い切り先行取得")
-        print(f"    {rd} 07:30 ランナー起動 → 出馬表・オッズ各R発走15分前に取得")
+        print(f"    {eve} 18:00 前日夕 → 出馬表+馬柱・追切 + 追走難度キャッシュ")
+        print(f"    {rd} 07:30 ランナー起動 → オッズ・馬場各R発走15分前（出馬表は前日取得済）")
         print(f"    {rd} 17:30 結果+確定オッズ取得")
 
     nf = today + timedelta(days=(4 - today.weekday()) % 7)

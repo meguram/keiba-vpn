@@ -478,6 +478,16 @@ def get_predicted_odds(
         logger.info("オッズ推移ベースの予測を使用 (confidence=%.1f)", trajectory_preds[0].confidence)
         return _to_dict(trajectory_preds)
 
+    try:
+        from src.pipeline.models.final_odds_predictor import FinalOddsPredictor
+
+        final_preds = FinalOddsPredictor().predict(features_df)
+        if final_preds and final_preds[0].source == "final_odds_ml":
+            logger.info("最終オッズ ML モデル予測を使用")
+            return _to_dict(final_preds)
+    except Exception as exc:
+        logger.debug("final_odds ML 予測スキップ: %s", exc)
+
     predictor = OddsPredictor()
     model_preds = predictor.predict(features_df)
 
@@ -489,16 +499,21 @@ def get_predicted_odds(
 
 
 def _to_dict(preds: list[PredictedOdds]) -> dict[int, dict]:
-    return {
-        p.horse_number: {
-            "win_odds": p.predicted_win_odds,
+    out: dict[int, dict] = {}
+    for p in preds:
+        wo = p.predicted_win_odds
+        out[p.horse_number] = {
+            "win_odds": wo,
+            "predicted_win_odds": wo,
             "place_odds_min": p.predicted_place_odds_min,
+            "predicted_place_odds_min": p.predicted_place_odds_min,
             "place_odds_max": p.predicted_place_odds_max,
+            "predicted_place_odds_max": p.predicted_place_odds_max,
+            "top2_odds_est": round(max(wo * 1.65, 1.0), 1),
             "confidence": round(p.confidence, 2),
             "source": p.source,
         }
-        for p in preds
-    }
+    return out
 
 
 def _blend(

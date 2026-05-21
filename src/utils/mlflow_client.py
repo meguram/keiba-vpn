@@ -47,9 +47,9 @@ def init_mlflow(tracking_uri: str | None = None) -> str:
     try:
         mlflow.set_tracking_uri(uri)
         if uri.startswith("http"):
-            import requests as _req
-            resp = _req.get(f"{uri.rstrip('/')}/health", timeout=3)
-            resp.raise_for_status()
+            # MLflow 3.x は /health を持たないため Python クライアントで疎通確認
+            from mlflow.tracking import MlflowClient as _C
+            _C(uri).search_experiments(max_results=1)
         logger.info("MLflow 接続: %s", uri)
     except Exception:
         fallback = os.path.join(os.path.dirname(__file__), "..", "..", "mlflow", "runs")

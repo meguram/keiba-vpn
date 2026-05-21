@@ -1,0 +1,47 @@
+{
+  "sprint": {
+    "auc": 0.6531,
+    "n_samples": 40270,
+    "feature_importance": {
+      "sire_enc": 9448.822622060776,
+      "dam_sire_enc": 8040.490503311157,
+      "distance": 618.919193983078
+    }
+  },
+  "mile": {
+    "auc": 0.6225,
+    "n_samples": 52549,
+    "feature_importance": {
+      "sire_enc": 11987.812922596931,
+      "dam_sire_enc": 10810.281062722206,
+      "distance": 898.0433317422867
+    }
+  },
+  "intermediate": {
+    "auc": 0.6429,
+    "n_samples": 48612,
+    "feature_importance": {
+      "sire_enc": 10589.900328874588,
+      "dam_sire_enc": 9962.845205545425,
+      "distance": 322.03196954727173
+    }
+  },
+  "long": {
+    "auc": 0.6276,
+    "n_samples": 1524,
+    "feature_importance": {
+      "sire_enc": 156.7493714094162,
+      "dam_sire_enc": 378.041998565197,
+      "distance": 0.0
+    }
+  },
+  "all": {
+    "auc": 0.6402,
+    "n_samples": 142955,
+    "feature_importance": {
+      "sire_enc": 28305.923226475716,
+      "dam_sire_enc": 25847.38029539585,
+      "distance": 3336.765600323677
+    }
+  }
+}

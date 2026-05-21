@@ -9,7 +9,7 @@
     --bg: #0d1117; --surface: #161b22; --surface2: #1c2128;
     --border: #21262d; --text: #c9d1d9; --text-dim: #8b949e;
     --accent: #58a6ff; --green: #3fb950; --yellow: #d29922;
-    --red: #f85149; --purple: #a371f7;
+    --red: #f85149; --purple: #a371f7; --orange: #fb923c;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
@@ -107,6 +107,112 @@
     .job-card { grid-template-columns: 1fr; }
     .job-right { align-items: flex-start; }
   }
+
+  /* ── AI モデリング SLA ── */
+  .ai-section { margin-top: 32px; }
+  .ai-section-title { font-size: 15px; font-weight: 700; color: #f0f6fc; margin-bottom: 4px; }
+  .ai-section-sub   { font-size: 12px; color: var(--text-dim); margin-bottom: 20px; }
+
+  .trigger-block { margin-bottom: 24px; }
+
+  .trigger-hdr {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px; border-radius: 8px; margin-bottom: 12px;
+    border-left: 3px solid transparent;
+  }
+  .trigger-hdr.ta { background: rgba(251,146,60,0.07); border-left-color: #fb923c; }
+  .trigger-hdr.tb { background: rgba(88,166,255,0.07); border-left-color: var(--accent); }
+
+  .t-badge {
+    font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .ta .t-badge { background: rgba(251,146,60,0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.3); }
+  .tb .t-badge { background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+
+  .t-info .t-main { font-size: 13px; font-weight: 600; color: #f0f6fc; }
+  .t-info .t-sub  { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  /* パイプラインフロー */
+  .pipe-flow {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 0; row-gap: 6px; margin-bottom: 12px; padding: 0 4px;
+  }
+  .pipe-chip {
+    font-size: 11px; font-weight: 600; padding: 4px 10px;
+    border-radius: 5px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text);
+    white-space: nowrap;
+  }
+  .pipe-chip.c-data-a { background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,.3); color: #fb923c; }
+  .pipe-chip.c-data-b { background: rgba(88,166,255,0.12); border-color: rgba(88,166,255,.3); color: var(--accent); }
+  .pipe-chip.c-model  { background: rgba(163,113,247,0.12); border-color: rgba(163,113,247,.3); color: var(--purple); }
+  .pipe-chip.c-out    { background: rgba(63,185,80,0.10);   border-color: rgba(63,185,80,.3);   color: var(--green); }
+  .pipe-arrow { color: var(--text-dim); font-size: 13px; padding: 0 5px; }
+  .pipe-plus  { color: var(--text-dim); font-size: 11px; padding: 0 4px; font-weight: 600; }
+
+  /* モデルカードグリッド */
+  .ai-model-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+  }
+
+  .ai-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 8px;
+    transition: border-color .15s;
+  }
+  .ai-card:hover { border-color: rgba(88,166,255,0.4); }
+
+  .ai-card-top { display: flex; align-items: flex-start; gap: 9px; }
+  .ai-card-icon {
+    width: 30px; height: 30px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+  .ic-purple { background: rgba(163,113,247,0.12); }
+  .ic-cyan   { background: rgba(56,189,248,0.10); }
+  .ic-green  { background: rgba(63,185,80,0.10); }
+  .ic-orange { background: rgba(251,146,60,0.12); }
+  .ic-blue   { background: rgba(88,166,255,0.12); }
+
+  .ai-card-name { font-size: 12px; font-weight: 700; color: #f0f6fc; line-height: 1.35; }
+  .ai-card-badge {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    padding: 1px 6px; border-radius: 8px; margin-top: 3px;
+  }
+  .badge-a       { background: rgba(251,146,60,0.15);   color: #fb923c; }
+  .badge-b       { background: rgba(88,166,255,0.15);   color: var(--accent); }
+  .badge-derived { background: rgba(163,113,247,0.15);  color: var(--purple); }
+
+  .ai-card-desc { font-size: 11px; color: var(--text-dim); line-height: 1.55; flex: 1; }
+
+  .ai-card-meta { border-top: 1px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .ai-meta-row  { display: flex; gap: 6px; font-size: 10.5px; align-items: flex-start; }
+  .ai-meta-lbl  { color: #6e7681; flex-shrink: 0; width: 40px; }
+  .ai-meta-val  { color: var(--text-dim); line-height: 1.4; }
+  .ai-meta-val a { color: var(--accent); text-decoration: none; }
+  .ai-meta-val a:hover { text-decoration: underline; }
+  .ai-meta-val code {
+    background: var(--surface2); padding: 1px 5px; border-radius: 3px;
+    font-size: 9.5px; color: #7dd3fc;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+  }
+
+  /* 推論可否ステータスバッジ */
+  .ready-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 700; padding: 2px 8px;
+    border-radius: 20px; white-space: nowrap;
+  }
+  .ready-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+  .ready-ml      { background: rgba(63,185,80,0.14);   color: var(--green);  border: 1px solid rgba(63,185,80,.35); }
+  .ready-heur    { background: rgba(210,153,34,0.14);  color: var(--yellow); border: 1px solid rgba(210,153,34,.3); }
+  .ready-none    { background: rgba(248,81,73,0.12);   color: var(--red);    border: 1px solid rgba(248,81,73,.3); }
+
+  .ai-card-status { display: flex; justify-content: flex-end; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -128,6 +234,181 @@
   <p class="subtitle">crontab で定期実行されるスクレイピングジョブ</p>
   <div class="job-grid" id="autoScrapeGrid">
     <div style="color:#8b949e;padding:40px;text-align:center">読み込み中...</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       AI モデリング SLA
+       ═══════════════════════════════════════════ -->
+  <div class="ai-section">
+    <h2 class="ai-section-title">🤖 AI モデリング推論 (cron トリガー連動)</h2>
+    <p class="ai-section-sub">スクレイパー cron 完了を受けて連鎖実行されるモデル推論パイプライン</p>
+
+    <!-- ── Trigger A ── -->
+    <div class="trigger-block">
+      <div class="trigger-hdr ta">
+        <span class="t-badge">Trigger A</span>
+        <div class="t-info">
+          <div class="t-main">前日 18:00 — 出馬表・調教データ取得完了後</div>
+          <div class="t-sub">raceday-eve cron：race_shutuba / race_shutuba_past / race_oikiri が揃った時点でトリガー</div>
+        </div>
+      </div>
+
+      <div class="pipe-flow">
+        <span class="pipe-chip c-data-a">前日18時データ取得</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-model">位置取り</span>
+        <span class="pipe-plus">+</span>
+        <span class="pipe-chip c-model">ペース</span>
+        <span class="pipe-plus">+</span>
+        <span class="pipe-chip c-model">上り3F</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-model">追走難度分析</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-out"><a href="/tracking-difficulty" style="color:inherit;text-decoration:none">/race 追走難度</a></span>
+      </div>
+      <div class="pipe-flow" style="margin-bottom:14px">
+        <span class="pipe-chip c-data-a">前日18時データ取得</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-model">単複オッズ予測</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-out"><a href="/race" style="color:inherit;text-decoration:none">/race 想定オッズ</a></span>
+      </div>
+
+      <div class="ai-model-grid">
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-purple">📍</div>
+            <div>
+              <div class="ai-card-name">位置取り予測</div>
+              <span class="ai-card-badge badge-a">Trigger A</span>
+              <span class="ready-badge ready-ml" title="tracking-difficulty-lgbm v2 (local MLflow)">READY</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">各馬の想定ポジション（逃・先行・差し・追込）の確率分布。近走脚質・コース・ペース傾向を考慮。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">race_shutuba / shutuba_past / race_index</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">出力</span><span class="ai-meta-val">馬ごとの位置取り確率分布</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val">追走難度分析（中間モデル）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val"><code>tracking-difficulty-lgbm</code> v2</span></div>
+          </div>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-cyan">⚡</div>
+            <div>
+              <div class="ai-card-name">ペース予測</div>
+              <span class="ai-card-badge badge-a">Trigger A</span>
+              <span class="ready-badge ready-ml" title="pace-lap-time-predictor-1f/3f v1 (local MLflow, 2022-2025学習)">READY</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">レース全体のペース（ハイ/ミドル/スロー）を予測。逃げ頭数・前走ペース・距離・コース傾向から算出。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">race_shutuba / shutuba_past / race_index</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">出力</span><span class="ai-meta-val">前半1F・3F ラップタイム（秒）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val">追走難度分析（中間モデル）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val"><code>pace-lap-time-predictor-1f/3f</code> (MLflow, 1F MAE=0.191s)</span></div>
+          </div>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-green">🏃</div>
+            <div>
+              <div class="ai-card-name">上り3F予測</div>
+              <span class="ai-card-badge badge-a">Trigger A</span>
+              <span class="ready-badge ready-heur" title="ML モデルなし・近走実績とペースから規則的に推定">Heuristic</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">各馬の上り3ハロンタイムを予測。近走実績・馬場・距離適性・脚質を特徴量として使用。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">race_shutuba / shutuba_past / race_index</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">出力</span><span class="ai-meta-val">馬ごとの上り3F推定タイム</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val">追走難度分析（中間モデル）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val"><code>_estimate_horse_final_3f()</code> ルールベース</span></div>
+          </div>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-purple">🔬</div>
+            <div>
+              <div class="ai-card-name">追走難度分析</div>
+              <span class="ai-card-badge badge-derived">Derived</span>
+              <span class="ready-badge ready-ml" title="tracking-difficulty-lgbm v2 (local MLflow, 241 trees)">READY</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">位置取り・ペース・上り3F を統合し、各馬の追走難度スコアと展開パターンを算出。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">上記3モデルの出力</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">出力</span><span class="ai-meta-val">難度スコア・展開パターン</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val"><a href="/tracking-difficulty">/tracking-difficulty</a> · レース詳細</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val"><code>tracking-difficulty-lgbm</code> v2 · 241 trees</span></div>
+          </div>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-orange">💴</div>
+            <div>
+              <div class="ai-card-name">単複オッズ予測</div>
+              <span class="ai-card-badge badge-a">Trigger A</span>
+              <span class="ready-badge ready-ml" title="models/final_odds_bundle.json (win / place_min / place_max, 2026-05-21学習)">READY</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">LightGBM 3ヘッド（単勝/複勝下限/複勝上限）で回帰予測。前日18時時点のデータのみ使用（リーク排除）。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">shutuba / shutuba_past / oikiri / race_index（前日18時）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val"><code>models/final_odds_bundle.json</code> 3ヘッド</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">登録先</span><span class="ai-meta-val"><code>keiba-final-odds-lgbm</code></span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val"><a href="/race">/race</a> 🤖 AI予測「想定オッズ」</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Trigger B ── -->
+    <div class="trigger-block">
+      <div class="trigger-hdr tb">
+        <span class="t-badge">Trigger B</span>
+        <div class="t-info">
+          <div class="t-main">当日レース 15分前 — オッズ取得完了後</div>
+          <div class="t-sub">raceday-runner cron：race_odds 取得完了時点でトリガー</div>
+        </div>
+      </div>
+
+      <div class="pipe-flow" style="margin-bottom:14px">
+        <span class="pipe-chip c-data-b">当日15分前データ取得</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-model">勝率 / 連対率 / 複勝率予測</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-out"><a href="/race" style="color:inherit;text-decoration:none">/race 予測確率・印・買い目</a></span>
+      </div>
+
+      <div class="ai-model-grid">
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-blue">🏆</div>
+            <div>
+              <div class="ai-card-name">勝率 / 連対率 / 複勝率予測</div>
+              <span class="ai-card-badge badge-b">Trigger B</span>
+              <span class="ready-badge ready-none" title="keiba-lgbm 未登録・ローカルファイルなし → ヒューリスティックで代替中">未学習</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">当日オッズ・馬場・枠順を加味して各馬の勝率・連対率・複勝率を出力。Harville 法で正規化。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">race_shutuba / oikiri / race_index / race_odds（当日15分前）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val" style="color:var(--red)"><code>keiba-lgbm</code> 未登録・ファイルなし → ヒューリスティック代替中</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">登録先</span><span class="ai-meta-val"><code>keiba-lgbm-nopi</code> (予定)</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val"><a href="/race">/race</a> 🤖 AI予測「予測確率・印・買い目提案」</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
   </div>
 </div>
 

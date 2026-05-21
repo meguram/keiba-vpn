@@ -1,0 +1,29 @@
+{
+  "long": {
+    "auc": 0.6891,
+    "n_samples": 1123,
+    "feature_importance": {
+      "sire_enc": 700.4578365797297,
+      "dam_sire_enc": 1038.468334485311,
+      "distance": 31.605893909931183
+    }
+  },
+  "extended": {
+    "auc": 0.7098,
+    "n_samples": 7592,
+    "feature_importance": {
+      "sire_enc": 3386.248594403267,
+      "dam_sire_enc": 4909.2796895504,
+      "distance": 941.4141696691513
+    }
+  },
+  "all": {
+    "auc": 0.7051,
+    "n_samples": 8715,
+    "feature_importance": {
+      "sire_enc": 2367.435371160507,
+      "dam_sire_enc": 3357.9759171009064,
+      "distance": 507.6429982185364
+    }
+  }
+}

@@ -117,7 +117,11 @@ def enqueue_horse_tasks_for_race_period(
         jra_only=jra_only,
     )
     total_candidates = len(horse_ids)
-    capped = horse_ids[: max(0, limit)]
+    # limit <= 0 は全頭（API の上限とは別に CLI から利用）
+    if limit is None or int(limit) <= 0:
+        capped = horse_ids
+    else:
+        capped = horse_ids[: max(0, int(limit))]
 
     if dry_run:
         return {
@@ -136,18 +140,31 @@ def enqueue_horse_tasks_for_race_period(
         hkw["overwrite"] = overwrite
     if skip_local_mirror is not None:
         hkw["skip_local_mirror"] = skip_local_mirror
-    stats = queue.add_horse_jobs_bulk(
-        capped,
-        tasks,
-        **hkw,
+
+    batch_size = 2500
+    merged = {
+        "created": 0,
+        "requeued": 0,
+        "duplicate": 0,
+        "skipped_already_complete": 0,
+        "batches": 0,
+    }
+    for i in range(0, len(capped), batch_size):
+        chunk = capped[i : i + batch_size]
+        stats = queue.add_horse_jobs_bulk(chunk, tasks, **hkw)
+        merged["batches"] += 1
+        for k in ("created", "requeued", "duplicate", "skipped_already_complete"):
+            merged[k] += int(stats.get(k) or 0)
+    merged["processed_horses"] = (
+        merged["created"] + merged["requeued"] + merged["duplicate"]
     )
     return {
         "dry_run": False,
         "candidate_horses": total_candidates,
-        "enqueued_cap": limit,
+        "enqueued_cap": len(capped),
         "tasks": tasks,
         "meta": meta,
-        **stats,
+        **merged,
     }
 
 

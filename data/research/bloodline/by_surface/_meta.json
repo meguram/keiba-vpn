@@ -1,0 +1,17 @@
+{
+  "surfaces": {
+    "turf": {
+      "label": "芝",
+      "run_count": 134390
+    },
+    "dirt": {
+      "label": "ダート",
+      "run_count": 142955
+    },
+    "jump": {
+      "label": "障害",
+      "run_count": 8715
+    }
+  },
+  "total_run_count": 286060
+}

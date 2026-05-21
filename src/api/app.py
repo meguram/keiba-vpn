@@ -1694,7 +1694,7 @@ async def get_scraped_dates(
         None,
         ge=1,
         le=150,
-        description="UI 用: 直近 N 日は data/local/race_lists のファイル存在だけ確認（全件 glob しない）",
+        description="UI 用: 直近 N 日は data/page_reference/race_lists のファイル存在だけ確認（全件 glob しない）",
     ),
 ):
     """
@@ -1724,9 +1724,11 @@ async def get_scraped_dates(
             from datetime import datetime, timedelta
             from pathlib import Path
 
+            from src.config.data_paths import RACE_LISTS_DIR
+
             storage = _get_storage()
             today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            race_dir = Path(__file__).resolve().parents[2] / "data" / "local" / "race_lists"
+            race_dir = RACE_LISTS_DIR
             n = int(picker_past_days)
             out: list[str] = []
             for i in range(1, n + 1):
@@ -1801,9 +1803,11 @@ async def get_scraped_dates(
 
 
 @app.get("/api/race-list/{date}", response_class=JSONResponse)
-async def get_race_list_for_date(date: str):
-    """指定日付のレース一覧を会場別に返す。"""
+async def get_race_list_for_date(date: str, with_result_status: bool = True):
+    """指定日付のレース一覧を会場別に返す（結果データ有無オプション付き）。"""
     def _load():
+        from src.utils.race_result_availability import batch_race_result_status
+
         storage = _get_storage()
         data = storage.load("race_lists", date)
         if not data:
@@ -1811,14 +1815,29 @@ async def get_race_list_for_date(date: str):
         raw = data.get("races", [])
         jra = [r for r in raw if r.get("race_id") and _is_jra_race(r["race_id"])]
         venues = sorted(set(r.get("venue", "") for r in jra if r.get("venue")))
+        race_ids = [r["race_id"] for r in jra]
+        status_map = (
+            batch_race_result_status(storage, race_ids, date=date)
+            if with_result_status and race_ids
+            else {}
+        )
         races = []
         for r in sorted(jra, key=lambda x: (x.get("venue", ""), x.get("round", 0))):
-            races.append({
-                "race_id": r["race_id"],
+            rid = r["race_id"]
+            st = status_map.get(rid, {})
+            row = {
+                "race_id": rid,
                 "round": r.get("round", 0),
                 "venue": r.get("venue", ""),
                 "race_name": r.get("race_name", ""),
-            })
+            }
+            if with_result_status:
+                row["has_race_result"] = bool(st.get("has_confirmed"))
+                row["has_result_flash"] = bool(st.get("has_flash"))
+                row["result_viewable"] = bool(st.get("viewable"))
+                row["result_kind"] = st.get("kind")
+                row["result_view_url"] = st.get("result_view_url")
+            races.append(row)
         return {"date": date, "venues": venues, "races": races}
     result = await asyncio.to_thread(_load)
     return JSONResponse(result)
@@ -2174,6 +2193,76 @@ async def api_horse_detail(horse_id: str, race_id: str = ""):
 
     result = await asyncio.to_thread(_load)
     return JSONResponse(result)
+
+
+def _yyyymmdd_from_date_str(raw: str) -> str:
+    """YYYY-MM-DD / YYYY/MM/DD / YYYYMMDD → YYYYMMDD。"""
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    if len(s) >= 8 and s[:8].isdigit():
+        return s[:8]
+    if len(s) >= 10 and s[4] in "-/":
+        y, m, d = s[:4], s[5:7], s[8:10]
+        if y.isdigit() and m.isdigit() and d.isdigit():
+            return f"{y}{m}{d}"
+    return ""
+
+
+def _filter_horse_history_before(
+    history: list[dict],
+    *,
+    limit: int,
+    before_date: str = "",
+    exclude_race_id: str = "",
+) -> list[dict]:
+    """race_history（新しい順想定）から、指定日より前・除外 race_id 以外を最大 limit 件。"""
+    cutoff = _yyyymmdd_from_date_str(before_date)
+    ex = (exclude_race_id or "").strip()
+    out: list[dict] = []
+    for rec in history:
+        if ex and str(rec.get("race_id") or "").strip() == ex:
+            continue
+        rdate = _yyyymmdd_from_date_str(str(rec.get("date") or rec.get("race_date") or ""))
+        if cutoff and rdate and rdate >= cutoff:
+            continue
+        out.append(rec)
+        if len(out) >= limit:
+            break
+    return out
+
+
+@app.get("/api/horse/{horse_id}/recent_races", response_class=JSONResponse)
+async def api_horse_recent_races(
+    horse_id: str,
+    limit: int = Query(10, ge=1, le=30),
+    before_date: str = Query("", description="YYYYMMDD — この開催日より前のみ（当日含まず）"),
+    exclude_race_id: str = Query("", description="除外する race_id（分析対象レース）"),
+):
+    """horse_result の race_history から直近 N 走（新しい順）を返す。"""
+    def _load():
+        storage = _get_storage()
+        hr = storage.load("horse_result", horse_id)
+        if not hr:
+            return {"horse_id": horse_id, "horse_name": "", "races": [], "count": 0}
+        history = list(hr.get("race_history") or [])
+        if before_date or exclude_race_id:
+            races = _filter_horse_history_before(
+                history,
+                limit=limit,
+                before_date=before_date,
+                exclude_race_id=exclude_race_id,
+            )
+        else:
+            races = history[:limit]
+        return {
+            "horse_id": horse_id,
+            "horse_name": hr.get("horse_name") or "",
+            "races": races,
+            "count": len(races),
+        }
+
+    return JSONResponse(await asyncio.to_thread(_load))
 
 
 def _horse_race_performance_history_rows(horse_id: str, limit: int) -> list[dict[str, Any]]:
@@ -2577,7 +2666,9 @@ def _fetch_person_profile(ptype: str, person_id: str) -> dict:
     from pathlib import Path
     if len(person_id) > 200:
         return {}
-    local_path = Path(f"data/local/meta/person/{ptype}_{person_id}.json")
+    from src.config.data_paths import person_profile_path
+
+    local_path = person_profile_path(ptype, person_id)
     if local_path.exists():
         try:
             data = json.loads(local_path.read_text(encoding="utf-8"))
@@ -3355,11 +3446,18 @@ _UPCOMING_RACES_DEFAULT_TTL = 300.0
 
 
 @app.get("/api/upcoming-races", response_class=JSONResponse)
-async def get_upcoming_races(start_date: str = None, end_date: str = None):
+async def get_upcoming_races(
+    start_date: str = None,
+    end_date: str = None,
+    local_only: str | None = Query(
+        None,
+        description="1 のとき race_lists ローカルファイルのみ（netkeiba 未取得・UI 初回表示用）",
+    ),
+):
     """
     未来のレース一覧を取得（JRA は使わない）。
 
-    各日について data/local/race_lists/{YYYYMMDD}.json が存在し、
+    各日について data/page_reference/race_lists/{YYYYMMDD}.json が存在し、
     件数が is_plausible_race_day_races（中止で 12 の倍数でない日も妥当）ならそれを優先
     （カレンダー取得との整合・ポーリング負荷軽減）。
     極端に少ない件数などのファイルは無視し netkeiba から再取得する。
@@ -3371,8 +3469,9 @@ async def get_upcoming_races(start_date: str = None, end_date: str = None):
         end_date: 終了日 (YYYY-MM-DD形式、未指定時は7日後)
     """
     now = _time.time()
+    skip_remote = str(local_only or "").strip().lower() in ("1", "true", "yes", "on")
     default_window = start_date is None and end_date is None
-    if default_window:
+    if default_window and not skip_remote:
         uc = _UPCOMING_RACES_DEFAULT_CACHE
         if uc["payload"] is not None and (now - float(uc["ts"])) < _UPCOMING_RACES_DEFAULT_TTL:
             return JSONResponse(uc["payload"])
@@ -3389,8 +3488,9 @@ async def get_upcoming_races(start_date: str = None, end_date: str = None):
         )
         from src.scraper.monitor_future_eligible import include_date_in_data_viewer_race_list
 
-        BASE_DIR = Path(__file__).parents[2]
-        RACE_LIST_DIR = BASE_DIR / "data" / "local" / "race_lists"
+        from src.config.data_paths import RACE_LISTS_DIR
+
+        RACE_LIST_DIR = RACE_LISTS_DIR
 
         today = datetime.now()
         today_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -3441,9 +3541,12 @@ async def get_upcoming_races(start_date: str = None, end_date: str = None):
                     logger.warning("race_lists 読込失敗 %s: %s", list_path, e)
 
             if not decided_from_file:
-                if client is None:
-                    client = NetkeibaClient(auto_login=True)
-                races = fetch_races_for_kaisai_date(client, date_compact, use_cache=True)
+                if skip_remote:
+                    races = []
+                else:
+                    if client is None:
+                        client = NetkeibaClient(auto_login=True)
+                    races = fetch_races_for_kaisai_date(client, date_compact, use_cache=True)
 
             if races:
                 if not include_date_in_data_viewer_race_list(
@@ -3463,8 +3566,13 @@ async def get_upcoming_races(start_date: str = None, end_date: str = None):
 
     try:
         races = await asyncio.to_thread(_fetch)
-        payload = {"races": races, "start_date": start_date, "end_date": end_date}
-        if default_window:
+        payload = {
+            "races": races,
+            "start_date": start_date,
+            "end_date": end_date,
+            "local_only": skip_remote,
+        }
+        if default_window and not skip_remote:
             _UPCOMING_RACES_DEFAULT_CACHE["payload"] = payload
             _UPCOMING_RACES_DEFAULT_CACHE["ts"] = _time.time()
         return JSONResponse(payload)
@@ -4502,10 +4610,14 @@ def _sync_enqueue_period_horse_tasks(body: dict) -> dict:
     tasks = [str(t).strip() for t in raw_tasks if str(t).strip()]
     dry_run = bool(body.get("dry_run"))
     try:
-        limit = int(body.get("limit") or 500)
+        limit = int(body.get("limit") if body.get("limit") is not None else 500)
     except (TypeError, ValueError):
         limit = 500
-    limit = max(1, min(limit, 10000))
+    # limit=0: 期間内の全出走馬。正の値は 1〜50000（大量時は CLI 推奨）。
+    if limit == 0:
+        limit = 0
+    else:
+        limit = max(1, min(limit, 50000))
 
     jra_only = body.get("jra_only", True)
     if isinstance(jra_only, str):
@@ -4518,7 +4630,7 @@ def _sync_enqueue_period_horse_tasks(body: dict) -> dict:
     if start_date and end_date and str(start_date) > str(end_date):
         return {"error": "start_date must be <= end_date"}
     if not tasks:
-        return {"error": "tasks に馬エンティティのタスクIDを1つ以上指定してください（例: horse_pedigree）"}
+        return {"error": "tasks に馬エンティティのタスクIDを1つ以上指定してください（例: horse_profile）"}
 
     horse_kw: dict[str, Any] = {}
     if "smart_skip" in body:
@@ -5118,8 +5230,9 @@ def _fetch_calendar_background(start_date: str = None, end_date: str = None):
             invalidate_race_list_cache,
         )
 
-        BASE_DIR = Path(__file__).parents[2]
-        RACE_LIST_DIR = BASE_DIR / "data" / "local" / "race_lists"
+        from src.config.data_paths import RACE_LISTS_DIR
+
+        RACE_LIST_DIR = RACE_LISTS_DIR
         RACE_LIST_DIR.mkdir(parents=True, exist_ok=True)
 
         _calendar_fetch_job["status"] = "scraping_races"
@@ -5307,12 +5420,31 @@ async def get_race_detail(race_id: str):
                 result["surface"] = race_result_data.get("surface", "")
                 result["distance"] = race_result_data.get("distance", 0)
             result["horses"] = {}
+        try:
+            result["race_result_lap"] = storage.load("race_result_lap", race_id)
+        except Exception:
+            result["race_result_lap"] = None
+
+        from src.utils.race_result_display import prepare_race_result_display
+
+        prepared = prepare_race_result_display(
+            result.get("race_result"),
+            result.get("race_result_on_time"),
+            result.get("race_result_lap"),
+        )
+        if prepared:
+            result["race_result"] = prepared
+
         data_availability = {}
         for cat in MONITOR_SOURCES:
             data_availability[cat] = {
                 "json": result.get(cat) is not None,
                 "html": False,
             }
+        data_availability["race_result_lap"] = {
+            "json": result.get("race_result_lap") is not None,
+            "html": False,
+        }
         result["data_availability"] = data_availability
         return result
 
@@ -5340,7 +5472,7 @@ async def get_race_predictions(race_id: str):
 
 
 @app.post("/api/race/{race_id}/predict", response_class=JSONResponse)
-async def run_race_prediction(race_id: str):
+async def run_race_prediction(request: Request, race_id: str):
     """
     指定レースの AI 予測を実行し、結果を GCS に保存して返す。
 
@@ -5351,6 +5483,8 @@ async def run_race_prediction(race_id: str):
       4. 推奨印 (◎○▲△☆) 付与
       5. GCS に race_predictions/{race_id}.json として保存
     """
+    if not is_developer(request):
+        return JSONResponse({"error": "管理者権限が必要です"}, status_code=403)
     def _run():
         import time as _t
         import traceback
@@ -5469,7 +5603,7 @@ async def run_race_prediction(race_id: str):
                 "normalized_score": round(float(row["softmax_prob"]), 4),
             })
 
-        entries = _compute_composite_scores(base_entries, odds_map)
+        entries, bet_suggestion = _compute_composite_scores(base_entries, odds_map)
         # ソースを判定
         sources = set(v.get("source", "") for v in odds_map.values())
         odds_source = "/".join(sorted(sources)) if sources else "none"
@@ -5497,6 +5631,7 @@ async def run_race_prediction(race_id: str):
             "total_horses": len(entries),
             "elapsed_sec": elapsed,
             "predictions": entries,
+            "bet_suggestion": bet_suggestion,
             "feature_highlights": feature_highlights,
         }
 
@@ -5516,111 +5651,101 @@ async def run_race_prediction(race_id: str):
         }, status_code=500)
 
 
-@app.get("/api/race/{race_id}/tracking-difficulty", response_class=JSONResponse)
-async def api_tracking_difficulty(race_id: str):
-    """レースの追走難度・ペース予想・位置取り予測を返す（キャッシュ済みデータ優先で高速応答）。"""
+def _tracking_difficulty_public_payload(data: dict) -> dict:
+    """クライアント向けに内部メタキーを除去。"""
+    return {k: v for k, v in data.items() if not k.startswith("_")}
+
+
+@app.get("/api/race/{race_id}/result-status", response_class=JSONResponse)
+async def api_race_result_status(race_id: str):
+    """レース結果（確定・速報）の有無と結果ページ URL。"""
     def _run():
-        from src.pipeline.models.tracking_difficulty import (
-            predict_tracking_difficulty,
-            predict_race_pace,
-            predict_position_flow,
-            build_horse_profile,
+        from src.utils.race_result_availability import race_result_status
+
+        return race_result_status(_get_storage(), race_id)
+
+    return JSONResponse(await asyncio.to_thread(_run))
+
+
+@app.get("/api/race/{race_id}/tracking-difficulty", response_class=JSONResponse)
+async def api_tracking_difficulty(race_id: str, refresh: bool = False):
+    """追走難度・ペース・位置取り（storage キャッシュ優先、refresh=true で再計算）。"""
+    def _run():
+        from src.pipeline.inference.tracking_difficulty_service import get_or_compute
+
+        return get_or_compute(
+            _get_storage(),
+            race_id,
+            force_refresh=refresh,
+            allow_scrape=refresh,
         )
-
-        storage = _get_storage()
-
-        race_data = {}
-        for cat_key, storage_key in [
-            ("race_shutuba", "race_shutuba"),
-            ("race_result", "race_result"),
-        ]:
-            d = storage.load(storage_key, race_id)
-            if d:
-                race_data[cat_key] = d
-
-        horses_data = {}
-        entries = (
-            (race_data.get("race_shutuba") or {}).get("entries")
-            or (race_data.get("race_result") or {}).get("entries")
-            or []
-        )
-        hids = [e.get("horse_id", "") for e in entries if e.get("horse_id")]
-        if hids:
-            from concurrent.futures import ThreadPoolExecutor
-            def _load_hr(hid):
-                hr = storage.load("horse_result", hid)
-                if hr and "race_history" in hr:
-                    return hid, hr["race_history"]
-                return hid, None
-            with ThreadPoolExecutor(max_workers=min(len(hids), 8)) as pool:
-                for hid, hist in pool.map(_load_hr, hids):
-                    if hist is not None:
-                        horses_data[hid] = hist
-
-        if not race_data:
-            runner = _get_runner()
-            race_data = runner.scrape_race_all(race_id, smart_skip=True)
-            horses_data = None
-
-        # 追走難度の予測（field_prev_stats も返す）
-        tracking_results, field_prev_stats = predict_tracking_difficulty(
-            race_data,
-            horse_histories=horses_data,
-            storage=storage,
-        )
-
-        # 馬プロファイルの構築
-        horse_profiles = {}
-        for e in entries:
-            hid = e.get("horse_id", "")
-            hn = e.get("horse_number", 0)
-            history = horses_data.get(hid, []) if horses_data else []
-            horse_profiles[hn] = build_horse_profile(history)
-
-        shutuba = race_data.get("race_shutuba") or race_data.get("race_card") or {}
-        result_data = race_data.get("race_result") or {}
-        race_info = {
-            "distance": shutuba.get("distance", 0) or result_data.get("distance", 0),
-            "surface": shutuba.get("surface", "") or result_data.get("surface", ""),
-            "track_condition": (
-                shutuba.get("track_condition", "")
-                or result_data.get("track_condition", "良")
-            ),
-        }
-
-        # ペース予想
-        pace_prediction = predict_race_pace(entries, horse_profiles, race_info)
-
-        # 位置取り予測（スタミナ指数含む）
-        position_flow = predict_position_flow(
-            entries, horse_profiles, tracking_results, pace_prediction,
-            field_prev_stats=field_prev_stats,
-            race_info=race_info,
-        )
-
-        return {
-            "race_id": race_id,
-            "race_name": shutuba.get("race_name", "") or result_data.get("race_name", ""),
-            "venue": shutuba.get("venue", "") or result_data.get("venue", ""),
-            "surface": race_info["surface"],
-            "distance": race_info["distance"],
-            "track_condition": race_info["track_condition"],
-            "field_size": len(tracking_results),
-            "pace_prediction": pace_prediction,
-            "position_flow": position_flow,
-            "entries": tracking_results,
-            "field_prev_stats": field_prev_stats,
-        }
 
     try:
         result = await asyncio.to_thread(_run)
-        return JSONResponse(result)
+        return JSONResponse(_tracking_difficulty_public_payload(result))
     except Exception as e:
         import traceback
         return JSONResponse({
             "error": str(e),
             "traceback": traceback.format_exc(),
         }, status_code=500)
+
+
+@app.post("/api/race/{race_id}/tracking-difficulty/precompute", response_class=JSONResponse)
+async def api_precompute_tracking_difficulty(race_id: str):
+    """追走難度をバッチ計算して storage に保存（推論ワーカー相当）。"""
+    def _run():
+        from src.pipeline.inference.tracking_difficulty_service import (
+            build_tracking_difficulty_response,
+            save_cached_response,
+        )
+
+        storage = _get_storage()
+        payload = build_tracking_difficulty_response(race_id, storage, allow_scrape=False)
+        if payload.get("entries"):
+            save_cached_response(storage, race_id, payload, source="precompute_api")
+        return payload
+
+    try:
+        result = await asyncio.to_thread(_run)
+        out = _tracking_difficulty_public_payload(result)
+        meta = result.get("_compute_meta") or {}
+        out["precompute"] = True
+        out["compute_meta"] = meta
+        return JSONResponse(out)
+    except Exception as e:
+        import traceback
+        return JSONResponse({
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }, status_code=500)
+
+
+@app.get("/api/inference/health", response_class=JSONResponse)
+async def api_inference_health():
+    """MLflow Tracking / 全モデル Serving・ローカル Booster・キャッシュの疎通確認。"""
+    from src.pipeline.mlflow.runtime import platform_health
+    from src.pipeline.inference.tracking_difficulty_service import cache_enabled
+
+    def _run():
+        report = platform_health(force_serve_check=True)
+        # 後方互換フィールド（追走難度）
+        td = next(
+            (m for m in report["models"] if m["key"] == "tracking_difficulty"),
+            {},
+        )
+        tr = report["mlflow_tracking"]
+        report["mlflow_tracking_uri"] = tr.get("uri")
+        report["mlflow_tracking_ok"] = tr.get("ok")
+        report["mlflow_tracking_ms"] = tr.get("ms")
+        report["mlflow_tracking_error"] = tr.get("error")
+        report["mlflow_serve_uri"] = td.get("serve_uri")
+        report["mlflow_serve_ok"] = td.get("serve_ok")
+        report["mlflow_serve_ms"] = td.get("serve_ms")
+        report["tracking_difficulty_cache"] = cache_enabled()
+        return report
+
+    return JSONResponse(await asyncio.to_thread(_run))
 
 
 @app.post("/api/tracking-difficulty/train", response_class=JSONResponse)
@@ -5685,26 +5810,30 @@ def _compute_composite_scores(
     odds_map: dict[int, dict],
 ) -> list[dict]:
     """
-    複勝率と期待値のトレードオフで印を割り当てる。
+    勝率・連対率・複勝率（Harville）と各期待値、MECE 印を付与する。
 
-    composite = prob^α × EV^(1-α)    (幾何平均ベース)
-
-    α, 閾値パラメータはシミュレーション最適化結果から自動読込する。
-    最適化が未実行ならデフォルト値を使用。
-
-    ◎○ には複勝率の最低閾値を設け、低確率の大穴だけに
-    ◎が付く事態を防ぐ。
+    composite = top3_prob^α × EV_place^(1-α)（買い目ソート用）
     """
+    from src.utils.race_probabilities import (
+        assign_mece_marks,
+        buy_recommendation_tier,
+        derive_race_probabilities,
+        estimate_top2_payout_odds,
+    )
+
     params = _load_composite_params()
     alpha = params.get("prob_weight", _DEFAULT_PROB_WEIGHT)
-    honmei_ratio = params.get("min_prob_honmei_ratio", _DEFAULT_MIN_PROB_HONMEI_RATIO)
-    taikou_ratio = params.get("min_prob_taikou_ratio", _DEFAULT_MIN_PROB_TAIKOU_RATIO)
+
+    scores = [float(e.get("pred_score") or 0) for e in entries]
+    prob_list = derive_race_probabilities(scores)
 
     scored: list[dict] = []
 
-    for e in entries:
+    for e, probs in zip(entries, prob_list):
         hn = e["horse_number"]
-        prob = e.get("normalized_score", 0)
+        win_prob = probs["win_prob"]
+        top2_prob = probs["top2_prob"]
+        top3_prob = probs["top3_prob"]
         odds_info = odds_map.get(hn, {})
 
         place_min = odds_info.get("predicted_place_odds_min") or odds_info.get("place_odds_min", 0) or 0
@@ -5713,65 +5842,63 @@ def _compute_composite_scores(
         odds_confidence = odds_info.get("confidence", 1.0)
         odds_source = odds_info.get("source", "live")
         place_avg = (place_min + place_max) / 2 if (place_min and place_max) else 0
+        top2_odds = estimate_top2_payout_odds(win_odds) if win_odds else None
 
-        if prob > 0 and place_avg > 0:
-            ev = prob * place_avg
-            composite = (prob ** alpha) * (ev ** (1 - alpha))
-        elif prob > 0:
-            ev = 0
-            composite = prob
+        ev_win = round(win_prob * win_odds, 3) if win_odds and win_prob > 0 else None
+        ev_top2 = (
+            round(top2_prob * top2_odds, 3) if top2_odds and top2_prob > 0 else None
+        )
+        ev_place = round(top3_prob * place_avg, 3) if place_avg and top3_prob > 0 else None
+
+        if top3_prob > 0 and ev_place:
+            composite = (top3_prob ** alpha) * (ev_place ** (1 - alpha))
+        elif top3_prob > 0:
+            composite = top3_prob
         else:
-            ev = 0
             composite = 0
 
         scored.append({
             **e,
+            "win_prob": win_prob,
+            "top2_prob": top2_prob,
+            "top3_prob": top3_prob,
             "place_odds_min": round(place_min, 1) if place_min else None,
             "place_odds_max": round(place_max, 1) if place_max else None,
             "place_odds_avg": round(place_avg, 1) if place_avg else None,
             "win_odds": round(win_odds, 1) if win_odds else None,
+            "top2_odds_est": top2_odds,
             "odds_confidence": round(odds_confidence, 2),
             "odds_source": odds_source,
-            "estimated_prob": round(prob, 4),
-            "expected_value": round(ev, 3) if ev else None,
+            "estimated_prob": top3_prob,
+            "ev_win": ev_win,
+            "ev_top2": ev_top2,
+            "ev_place": ev_place,
+            "expected_value": ev_place,
             "composite_score": round(composite, 4),
         })
 
     scored.sort(key=lambda x: x["composite_score"], reverse=True)
-
-    n = len(scored)
-    base_prob = 1.0 / max(n, 1)
-    min_prob_honmei = base_prob * honmei_ratio
-    min_prob_taikou = base_prob * taikou_ratio
-
-    assigned: set[str] = set()
     for i, s in enumerate(scored):
-        prob = s["estimated_prob"]
-        if "◎ 本命" not in assigned and prob >= min_prob_honmei:
-            s["recommendation"] = "◎ 本命"
-            assigned.add("◎ 本命")
-        elif "○ 対抗" not in assigned and prob >= min_prob_taikou:
-            s["recommendation"] = "○ 対抗"
-            assigned.add("○ 対抗")
-        elif "▲ 単穴" not in assigned:
-            s["recommendation"] = "▲ 単穴"
-            assigned.add("▲ 単穴")
-        elif i < max(5, n // 3):
-            s["recommendation"] = "△ 連下"
-        else:
-            s["recommendation"] = "☆ 穴馬"
         s["composite_rank"] = i + 1
 
-    # ◎○▲ が1つも付かなかった場合のフォールバック
-    for mark in ["◎ 本命", "○ 対抗", "▲ 単穴"]:
-        if mark not in assigned and scored:
-            for s in scored:
-                if s["recommendation"] not in assigned:
-                    s["recommendation"] = mark
-                    assigned.add(mark)
-                    break
+    assign_mece_marks(scored)
+    from src.utils.race_bet_suggestion import suggest_race_bets
 
-    return scored
+    bet_suggestion = suggest_race_bets(scored)
+    _MARK_LABELS = {
+        "honmei": "◎ 1着優位",
+        "pair": "○ 2連相手",
+        "anchor": "✓ 3列紐",
+        "show_val": "▲ 複勝妙味",
+        "star": "★ 中穴妙味",
+        "none": "",
+    }
+    for s in scored:
+        mt = s.get("mark_type") or "none"
+        s["recommendation"] = _MARK_LABELS.get(mt, "")
+        s["buy_tier"] = buy_recommendation_tier(s)
+
+    return scored, bet_suggestion
 
 
 def _extract_feature_highlights(features_df, entries: list[dict]) -> list[dict]:
@@ -6198,9 +6325,19 @@ _AUTO_SCRAPE_TASKS: dict[str, dict] = {
     },
     "raceday-eve": {
         "name": "前日準備",
-        "description": "翌日が開催日の場合に馬柱・調教・SmartRC指数を先行取得（金曜 → 土曜開催分）",
-        "schedule": "金曜 22:00 JST",
-        "tags": ["shutuba_past", "馬柱(近走成績)", "oikiri", "追い切り・調教", "smartrc_race", "SmartRC指数", "テン1F"],
+        "description": "翌日が開催日の場合に出馬表・馬柱・追い切り・SmartRCを18:00に取得し追走難度を事前計算",
+        "schedule": "毎日 18:00 JST",
+        "tags": [
+            "race_shutuba",
+            "出馬表",
+            "shutuba_past",
+            "馬柱(近走成績)",
+            "oikiri",
+            "追い切り・調教",
+            "smartrc_race",
+            "SmartRC指数",
+            "tracking_difficulty",
+        ],
     },
     "raceday-evening": {
         "name": "夕方結果取得",
@@ -6664,13 +6801,22 @@ async def train_odds_model(background_tasks: BackgroundTasks):
 
 def _run_odds_training():
     try:
-        from src.pipeline.models.odds_predictor import OddsPredictor
-        predictor = OddsPredictor()
-        result = predictor.train(_get_storage())
+        from src.pipeline.models.final_odds_progress import load_status_file
+        from src.pipeline.models.final_odds_trainer import FinalOddsTrainer
+
+        trainer = FinalOddsTrainer()
+        result = trainer.train(_get_storage())
         _odds_training_job["result"] = result
         _odds_training_job["error"] = result.get("error")
+        _odds_training_job["progress"] = load_status_file()
     except Exception as e:
         _odds_training_job["error"] = str(e)
+        try:
+            from src.pipeline.models.final_odds_progress import load_status_file
+
+            _odds_training_job["progress"] = load_status_file()
+        except Exception:
+            pass
     finally:
         _odds_training_job["running"] = False
         _odds_training_job["finished_at"] = datetime.now().isoformat()
@@ -6679,18 +6825,29 @@ def _run_odds_training():
 @app.get("/api/odds/train/status", response_class=JSONResponse)
 async def get_odds_training_status():
     """オッズ予測モデルの学習状態を返す。"""
+    progress = {}
+    try:
+        from src.pipeline.models.final_odds_progress import load_status_file
+
+        progress = load_status_file()
+    except Exception:
+        pass
+    running = _odds_training_job.get("running", False) or progress.get("running", False)
     return JSONResponse({
-        "running": _odds_training_job.get("running", False),
+        "running": running,
         "started_at": _odds_training_job.get("started_at", ""),
         "finished_at": _odds_training_job.get("finished_at", ""),
         "result": _odds_training_job.get("result"),
-        "error": _odds_training_job.get("error"),
+        "error": _odds_training_job.get("error") or progress.get("error"),
+        "progress": progress,
     })
 
 
 @app.post("/api/odds/snapshot/{race_id}", response_class=JSONResponse)
-async def record_odds_snapshot(race_id: str):
+async def record_odds_snapshot(request: Request, race_id: str):
     """指定レースの現在オッズを取得し、推移履歴に記録する。"""
+    if not is_developer(request):
+        return JSONResponse({"error": "管理者権限が必要です"}, status_code=403)
     scraper = _get_runner()
     odds = scraper.scrape_odds(race_id, skip_existing=False)
     if not odds or not odds.get("entries"):
@@ -7343,6 +7500,11 @@ async def tracking_difficulty_page(request: Request):
         "current_page": "tracking_difficulty",
         "breadcrumbs": [],
     })
+
+
+@app.get("/ai-sla", response_class=HTMLResponse)
+async def ai_sla_page(request: Request):
+    return templates.TemplateResponse("analysis/ai_sla.html", {"request": request})
 
 
 def _url_path_prefix_before_suffix(url_path: str, page_suffix: str) -> str:

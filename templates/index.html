@@ -698,15 +698,15 @@
           <span class="api-path">/api/scrape-jobs</span>
           <span class="api-desc">ジョブ状況</span>
         </a>
-        <a class="api-item" href="#" onclick="fetch('/api/odds/train',{method:'POST'}).then(r=>r.json()).then(d=>alert(JSON.stringify(d)));return false;">
+        <a class="api-item" href="#" onclick="startOddsTrain();return false;">
           <span class="api-method post">POST</span>
           <span class="api-path">/api/odds/train</span>
           <span class="api-desc">オッズ予測モデル学習</span>
         </a>
-        <a class="api-item" href="/api/odds/train/status" target="_blank">
+        <a class="api-item" href="#" onclick="pollOddsTrainOnce();return false;">
           <span class="api-method get">GET</span>
           <span class="api-path">/api/odds/train/status</span>
-          <span class="api-desc">オッズ学習状態</span>
+          <span class="api-desc">オッズ学習状態（更新）</span>
         </a>
         <a class="api-item" href="#" onclick="runSimulation();return false;">
           <span class="api-method post">POST</span>
@@ -728,6 +728,16 @@
           <span class="api-path">/api/structure-fingerprints</span>
           <span class="api-desc">FP 情報</span>
         </a>
+      </div>
+      <div id="oddsTrainPanel" style="display:none;margin-top:16px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <strong style="font-size:14px">想定オッズモデル学習</strong>
+          <span id="oddsTrainPhase" style="font-size:12px;color:var(--text-dim)">—</span>
+        </div>
+        <div style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:8px">
+          <div id="oddsTrainBar" style="height:100%;width:0%;background:var(--accent);transition:width 0.3s"></div>
+        </div>
+        <div id="oddsTrainDetail" style="font-size:12px;color:var(--text-dim);line-height:1.5">待機中</div>
       </div>
     </div>
   </div>
@@ -753,6 +763,71 @@ async function runSimulation() {
     } else {
       alert(JSON.stringify(d));
     }
+  } catch (e) { alert('エラー: ' + e.message); }
+}
+
+let _oddsTrainPollTimer = null;
+
+function _renderOddsTrainProgress(d) {
+  const panel = document.getElementById('oddsTrainPanel');
+  const bar = document.getElementById('oddsTrainBar');
+  const phase = document.getElementById('oddsTrainPhase');
+  const detail = document.getElementById('oddsTrainDetail');
+  if (!panel || !bar) return;
+
+  const p = d.progress || {};
+  const running = d.running || p.running;
+  if (!running && !p.phase) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+
+  const pct = p.pct != null ? p.pct : 0;
+  bar.style.width = Math.min(100, pct) + '%';
+  phase.textContent = (p.phase || (running ? 'running' : 'idle')) + (pct ? ` ${pct}%` : '');
+
+  const parts = [];
+  if (p.message) parts.push(p.message);
+  if (p.total > 0) parts.push(`${p.current || 0} / ${p.total}`);
+  if (p.elapsed_sec != null) parts.push(`${p.elapsed_sec}s`);
+  if (p.extra?.n_rows) parts.push(`rows ${p.extra.n_rows.toLocaleString()}`);
+  if (d.error || p.error) parts.push('⚠ ' + (d.error || p.error));
+  if (!running && d.result) {
+    const r = d.result;
+    parts.push(`完了: train=${r.n_train_rows} eval=${r.n_eval_rows} ${r.training_time_sec}s`);
+  }
+  detail.textContent = parts.join(' · ') || (running ? '学習中…' : '完了');
+}
+
+async function pollOddsTrainOnce() {
+  try {
+    const r = await fetch('/api/odds/train/status', { cache: 'no-store' });
+    const d = await r.json();
+    _renderOddsTrainProgress(d);
+    return d;
+  } catch (e) {
+    console.warn('odds train status', e);
+    return null;
+  }
+}
+
+async function startOddsTrain() {
+  if (!confirm('想定オッズモデルの学習を開始しますか？（データセット構築に長時間かかります）')) return;
+  try {
+    const r = await fetch('/api/odds/train', { method: 'POST' });
+    const d = await r.json();
+    if (d.status === 'already_running') {
+      alert('すでに学習が実行中です。下の進捗バーで状態を確認できます。');
+    } else if (d.status !== 'started') {
+      alert(JSON.stringify(d));
+      return;
+    }
+    document.getElementById('oddsTrainPanel').style.display = 'block';
+    _renderOddsTrainProgress({ running: true, progress: { phase: 'init', message: '開始…', pct: 0 } });
+    if (_oddsTrainPollTimer) clearInterval(_oddsTrainPollTimer);
+    _oddsTrainPollTimer = setInterval(pollOddsTrainOnce, 2000);
+    pollOddsTrainOnce();
   } catch (e) { alert('エラー: ' + e.message); }
 }
 
@@ -857,6 +932,7 @@ function renderRecentDates(dates) {
 }
 
 checkStatus();
+pollOddsTrainOnce();
 </script>
 </body>
 </html>

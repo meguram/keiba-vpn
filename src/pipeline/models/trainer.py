@@ -27,6 +27,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from src.config.data_paths import MODELING_META_DIR
+
 logger = logging.getLogger("pipeline.models.trainer")
 
 
@@ -144,7 +146,7 @@ class ModelTrainer:
         logger.info("学習データ: %d行 x %d列", len(df), len(df.columns))
 
         manifest_path = Path(
-            split_manifest_path or "data/local/meta/modeling/dataset_split_manifest.json"
+            split_manifest_path or str(MODELING_META_DIR / "dataset_split_manifest.json")
         )
         use_manifest = (
             use_split_manifest if use_split_manifest is not None else manifest_path.is_file()

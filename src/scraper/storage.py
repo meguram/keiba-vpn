@@ -5,7 +5,7 @@ GCS を唯一のデータストア (source of truth) とする。
 ローカルにはデータ本体を保持しない。
 
 ローカルに保持するもの:
-  - race_lists (local_only カテゴリ: カレンダー情報)
+  - race_lists (local_only: data/page_reference/race_lists — ポータブル UI バンドル)
   - data/meta/status/ (GCS 存在ステータスのキャッシュ)
   - data/meta/disk_l2_weekly_access.json — ISO 週ごとのキー別参照回数
   - data/cache/ — GCS の L2。**すべてのカテゴリ**で週内アクセスが閾値以上のキーだけ書込
@@ -69,7 +69,7 @@ class HybridStorage:
     GCS プライマリストレージ。
 
     - save/load/exists はすべて GCS を対象
-    - local_only カテゴリ (race_lists) のみローカルファイル
+    - local_only カテゴリ (race_lists) は data/page_reference/ に保存（移行前は data/local/ も読む）
     - ステータスキャッシュ: data/meta/status/{date}.json で
       モニタリングボード向けの GCS 存在情報を保持
     """
@@ -102,6 +102,9 @@ class HybridStorage:
         "race_lists": "local_only",
         "smartrc_race": "race",
         "race_predictions": "race",
+        "tracking_difficulty": "race",
+        "finish_order_prediction": "race",
+        "final_odds_prediction": "race",
         "race_trainer_comment": "race",
         "horse_training": "horse",
         "horse_pedigree_5gen": "horse",
@@ -124,6 +127,12 @@ class HybridStorage:
         self._base_dir = Path(base_dir)
         self._local_dir = self._base_dir / "data" / "local"
         self._local_dir.mkdir(parents=True, exist_ok=True)
+        override = os.environ.get("KEIBA_PAGE_REFERENCE_DIR", "").strip()
+        if override:
+            self._page_ref_dir = Path(override).expanduser().resolve()
+        else:
+            self._page_ref_dir = self._base_dir / "data" / "page_reference"
+        self._page_ref_dir.mkdir(parents=True, exist_ok=True)
         self._meta_dir = self._base_dir / "data" / "local" / "meta"
         self._meta_dir.mkdir(parents=True, exist_ok=True)
 
@@ -377,6 +386,11 @@ class HybridStorage:
     # ── パス構築 ─────────────────────────────────────
 
     def _local_path(self, category: str, key: str) -> Path:
+        if self._is_local_only(category):
+            return self._page_ref_dir / category / f"{key}.json"
+        return self._local_dir / category / f"{key}.json"
+
+    def _legacy_local_path(self, category: str, key: str) -> Path:
         return self._local_dir / category / f"{key}.json"
 
     def _gcs_blob_path(self, category: str, key: str) -> str:
@@ -640,14 +654,20 @@ class HybridStorage:
                 self._load_cache.clear()
 
     def _load_local(self, category: str, key: str) -> dict[str, Any] | None:
-        path = self._local_path(category, key)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (FileNotFoundError, NotADirectoryError):
-            return None
-        except Exception:
-            return None
+        paths = [self._local_path(category, key)]
+        if self._is_local_only(category):
+            legacy = self._legacy_local_path(category, key)
+            if legacy != paths[0]:
+                paths.append(legacy)
+        for path in paths:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+            except Exception:
+                return None
+        return None
 
     # ── ローカルディスクキャッシュ (GCS の L2) ────────────
 
@@ -835,7 +855,11 @@ class HybridStorage:
     def exists(self, category: str, key: str) -> bool:
         """データが存在するか確認する。load キャッシュ → blob リストキャッシュ → GCS。"""
         if self._is_local_only(category):
-            return self._local_path(category, key).exists()
+            paths = [self._local_path(category, key)]
+            legacy = self._legacy_local_path(category, key)
+            if legacy != paths[0]:
+                paths.append(legacy)
+            return any(p.exists() for p in paths)
 
         cache_key = f"{category}/{key}"
         with self._load_cache_lock:
@@ -1224,10 +1248,21 @@ class HybridStorage:
         return sorted(keys)
 
     def _list_keys_local(self, category: str) -> list[str]:
-        d = self._local_dir / category
-        if not d.exists():
-            return []
-        return sorted(p.stem for p in d.glob("*.json"))
+        stems: set[str] = set()
+        for d in self._local_category_dirs(category):
+            if not d.exists():
+                continue
+            stems.update(p.stem for p in d.glob("*.json"))
+        return sorted(stems)
+
+    def _local_category_dirs(self, category: str) -> list[Path]:
+        if self._is_local_only(category):
+            dirs = [self._page_ref_dir / category]
+            legacy = self._local_dir / category
+            if legacy != dirs[0]:
+                dirs.append(legacy)
+            return dirs
+        return [self._local_dir / category]
 
     def count(self, category: str, year: str | None = None) -> int:
         return len(self.list_keys(category, year))

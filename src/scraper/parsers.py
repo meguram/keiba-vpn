@@ -771,10 +771,14 @@ class RaceCardParser:
             # td[4]=Barei td[5]=斤量 td[6]=Jockey td[7]=Trainer td[8]=Weight
             cols = row.select("td")
 
-            waku_tag = row.select_one("td[class*='Waku']")
+            waku_tag = row.select_one(
+                "td.Waku, td[class*='Waku'], td[class*='waku']"
+            )
             bracket = int(extract_numbers(safe_text(waku_tag))[0]) if waku_tag and extract_numbers(safe_text(waku_tag)) else 0
 
-            uma_tag = row.select_one("td[class*='Umaban']")
+            uma_tag = row.select_one(
+                "td.UmaBan, td[class*='Umaban'], td[class*='umaban']"
+            )
             horse_number = int(extract_numbers(safe_text(uma_tag))[0]) if uma_tag and extract_numbers(safe_text(uma_tag)) else 0
 
             barei_tag = row.select_one("td.Barei")

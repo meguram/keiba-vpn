@@ -40,6 +40,8 @@
   .controls button:hover { background: #2563eb; }
   .controls button:disabled { opacity: 0.5; cursor: not-allowed; }
   #statusMsg { font-size: 11px; color: var(--text-dim); }
+  #dateLoadMsg { font-size: 11px; color: var(--text-dim); margin-left: 4px; }
+  #dateLoadMsg.is-busy { color: var(--key); }
 
   .content { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
 
@@ -53,37 +55,90 @@
     font-size: 11px; padding: 3px 8px; border-radius: 4px;
     background: rgba(167,139,250,0.15); color: var(--purple); font-weight: 600;
   }
+  .race-result-link-wrap { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .race-result-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 700; color: #fff; text-decoration: none;
+    padding: 6px 14px; border-radius: 6px;
+    background: linear-gradient(135deg, rgba(34,197,94,0.35), rgba(34,197,94,0.15));
+    border: 1px solid rgba(34,197,94,0.45);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .race-result-link:hover {
+    background: rgba(34,197,94,0.35);
+    border-color: var(--ok);
+  }
+  .race-result-link.flash {
+    background: linear-gradient(135deg, rgba(245,158,11,0.35), rgba(245,158,11,0.12));
+    border-color: rgba(245,158,11,0.5);
+  }
+  .race-result-link.flash:hover { border-color: var(--warn); }
+  #controlsResultLink { margin-left: 4px; }
 
-  /* ── ゲートビジュアライゼーション ── */
-  .gate-viz {
+  /* ── ゲート配置 × 追走容易度（横棒） ── */
+  .gate-ease-panel {
     background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-    padding: 18px; margin-bottom: 20px; overflow-x: auto;
+    padding: 16px 18px; margin-bottom: 20px;
   }
-  .gate-viz h3 { font-size: 13px; font-weight: 600; color: var(--purple); margin-bottom: 14px; }
-  .gate-row {
-    display: flex; gap: 4px; align-items: flex-end; justify-content: center;
-    min-height: 180px; padding-bottom: 8px;
+  .gate-ease-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
   }
-  .gate-slot {
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    min-width: 60px; cursor: pointer; transition: transform 0.2s;
+  .gate-ease-head h3 {
+    font-size: 13px; font-weight: 600; color: var(--purple); margin: 0;
   }
-  .gate-slot:hover { transform: translateY(-4px); }
-  .gate-bar {
-    width: 40px; border-radius: 6px 6px 0 0; transition: height 0.6s ease;
-    position: relative;
+  .gate-ease-sort {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim);
   }
-  .gate-bar-label {
-    position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
-    font-size: 11px; font-weight: 700; white-space: nowrap;
+  .gate-ease-sort select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;
   }
-  .gate-num {
-    width: 28px; height: 28px; border-radius: 50%; display: flex;
-    align-items: center; justify-content: center; font-size: 12px; font-weight: 800;
+  .gate-ease-table {
+    width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed;
   }
-  .gate-name { font-size: 9.5px; color: var(--text-dim); white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; max-width: 60px; text-align: center; }
-  .gate-ease { font-size: 10px; font-weight: 700; }
+  .gate-ease-table th {
+    text-align: left; padding: 8px 10px; color: var(--text-dim); font-weight: 600;
+    border-bottom: 1px solid var(--border); font-size: 11px; white-space: nowrap;
+  }
+  .gate-ease-table th.col-rank { width: 36px; text-align: center; }
+  .gate-ease-table th.col-waku { width: 40px; text-align: center; }
+  .gate-ease-table th.col-num { width: 44px; text-align: center; }
+  .gate-ease-table th.col-name { width: 18%; }
+  .gate-ease-table th.col-pos { width: 72px; text-align: center; }
+  .gate-ease-table th.col-flow { width: 88px; text-align: center; }
+  .gate-ease-table th.col-l3f { width: 80px; text-align: center; }
+  .gate-ease-table th.col-bar { width: auto; }
+  .gate-ease-table th.col-label { width: 72px; text-align: center; }
+  .gate-ease-table td {
+    padding: 9px 10px; border-bottom: 1px solid rgba(36, 48, 73, 0.45);
+    vertical-align: middle;
+  }
+  .gate-ease-table tr { cursor: pointer; transition: background 0.12s; }
+  .gate-ease-table tbody tr:hover td { background: rgba(59, 130, 246, 0.06); }
+  .gate-ease-table .tc { text-align: center; }
+  .gate-ease-table .horse-cell { font-weight: 600; color: #fff; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; max-width: 0; }
+  .gate-ease-pos-main { font-weight: 800; color: var(--key); font-size: 13px; }
+  .gate-ease-flow-sub { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .ease-bar-cell { min-width: 120px; }
+  .ease-bar-track {
+    position: relative; height: 22px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+  }
+  .ease-bar-fill {
+    height: 100%; border-radius: 3px 0 0 3px; transition: width 0.35s ease;
+    min-width: 2px;
+  }
+  .ease-bar-pct {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    font-size: 11px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    pointer-events: none;
+  }
+  .gate-waku-pill {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%; font-size: 11px; font-weight: 800;
+  }
 
   /* ── カードグリッド ── */
   .cards-grid {
@@ -141,23 +196,122 @@
   .td-bar-container { flex: 1; height: 6px; background: rgba(36,48,73,0.5); border-radius: 3px; overflow: hidden; }
   .td-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
 
-  /* ── サマリーテーブル ── */
-  .summary-section { margin-top: 24px; }
-  .summary-section h3 { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 12px; }
-  .summary-table {
-    width: 100%; border-collapse: collapse; font-size: 12px;
-    background: var(--surface); border-radius: 8px; overflow: hidden;
+  /* ── 出走馬マスターテーブル（集約） ── */
+  .horse-table-section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; margin-bottom: 20px;
   }
-  .summary-table th {
-    background: var(--surface2); padding: 10px 12px; text-align: left;
+  .table-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .table-toolbar h3 { font-size: 14px; font-weight: 700; color: #fff; margin: 0; }
+  .table-toolbar-sort {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim);
+  }
+  .table-toolbar-sort select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 10px; border-radius: 5px; font-size: 12px;
+  }
+  .horse-table-wrap { overflow-x: auto; }
+  .horse-table {
+    width: 100%; border-collapse: collapse; font-size: 12px; min-width: 880px;
+  }
+  .horse-table thead th {
+    background: var(--surface2); padding: 9px 10px; text-align: left;
     font-weight: 600; color: var(--text-dim); font-size: 11px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border); white-space: nowrap;
   }
-  .summary-table td {
-    padding: 10px 12px; border-bottom: 1px solid rgba(36,48,73,0.4);
+  .horse-table tbody td {
+    padding: 8px 10px; border-bottom: 1px solid rgba(36, 48, 73, 0.4);
+    vertical-align: middle;
   }
-  .summary-table tr:hover td { background: rgba(59,130,246,0.04); }
-  .summary-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .horse-table tbody tr { transition: background 0.12s; }
+  .horse-table tbody tr:hover td { background: rgba(59, 130, 246, 0.06); }
+  .horse-table tbody tr.row-highlight td { background: rgba(59, 130, 246, 0.14); }
+  .horse-table .tc { text-align: center; }
+  .horse-table .num { text-align: center; font-variant-numeric: tabular-nums; }
+  .horse-table .horse-name-cell { font-weight: 600; color: #fff; white-space: nowrap; }
+  .mini-ease-track {
+    display: inline-block; vertical-align: middle; width: 52px; height: 8px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 3px;
+    overflow: hidden; margin-right: 6px;
+  }
+  .mini-ease-fill { height: 100%; display: block; }
+  .flow-compact { font-size: 11px; font-weight: 700; color: var(--key); white-space: nowrap; }
+  .field-extra {
+    margin-bottom: 16px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0 14px;
+  }
+  .field-extra summary {
+    cursor: pointer; padding: 12px 0; font-size: 12px; font-weight: 600;
+    color: var(--text-dim); list-style: none;
+  }
+  .field-extra summary::-webkit-details-marker { display: none; }
+  .field-extra[open] summary { margin-bottom: 4px; color: var(--key); }
+  .field-extra .pos-dist-section { margin: 0 0 12px; padding: 0; border: none; background: transparent; }
+  .field-extra .pos-dist-section h3 { display: none; }
+  .pace-prediction.compact { padding: 14px 18px; margin-bottom: 16px; }
+  .pace-prediction.compact .pace-comment-block { display: none; }
+  .pace-prediction.compact details.pace-more { margin-top: 8px; }
+  .pace-prediction.compact details.pace-more summary {
+    font-size: 11px; color: var(--key); cursor: pointer; list-style: none;
+  }
+  .pace-prediction.compact details.pace-more summary::-webkit-details-marker { display: none; }
+
+  /* テーブル列ソート（ヘッダークリック） */
+  .position-table th.col-sortable,
+  .analysis-table th.col-sortable,
+  .horse-table th.col-sortable,
+  .gate-ease-table th.col-sortable,
+  .pos-dist-table th.col-sortable,
+  .horse-history-table th.col-sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.12s, color 0.12s;
+    white-space: nowrap;
+  }
+  .position-table th.col-sortable:hover,
+  .analysis-table th.col-sortable:hover,
+  .horse-table th.col-sortable:hover,
+  .gate-ease-table th.col-sortable:hover,
+  .pos-dist-table th.col-sortable:hover,
+  .horse-history-table th.col-sortable:hover {
+    background: rgba(59, 130, 246, 0.1);
+    color: #fff;
+  }
+  .position-table th.col-sortable::after,
+  .analysis-table th.col-sortable::after,
+  .horse-table th.col-sortable::after,
+  .gate-ease-table th.col-sortable::after,
+  .pos-dist-table th.col-sortable::after,
+  .horse-history-table th.col-sortable::after {
+    content: '⇅';
+    font-size: 9px;
+    opacity: 0.35;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .position-table th.col-sort-asc::after,
+  .analysis-table th.col-sort-asc::after,
+  .horse-table th.col-sort-asc::after,
+  .gate-ease-table th.col-sort-asc::after,
+  .pos-dist-table th.col-sort-asc::after,
+  .horse-history-table th.col-sort-asc::after {
+    content: '▲';
+    opacity: 0.9;
+    color: var(--key);
+  }
+  .position-table th.col-sort-desc::after,
+  .analysis-table th.col-sort-desc::after,
+  .horse-table th.col-sort-desc::after,
+  .gate-ease-table th.col-sort-desc::after,
+  .pos-dist-table th.col-sort-desc::after,
+  .horse-history-table th.col-sort-desc::after {
+    content: '▼';
+    opacity: 0.9;
+    color: var(--key);
+  }
 
   .waku-1 { background: #f5f5f5; color: #222; }
   .waku-2 { background: #111; color: #fff; border: 1px solid #555; }
@@ -170,6 +324,215 @@
 
   .empty { color: var(--text-dim); text-align: center; padding: 60px 20px; font-size: 14px; }
 
+  /* ── 分析読み込み ── */
+  .td-loading {
+    animation: td-loading-in 0.35s ease-out;
+  }
+  @keyframes td-loading-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .td-loading-card {
+    background: linear-gradient(145deg, rgba(26, 34, 53, 0.95), rgba(19, 25, 38, 0.98));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 28px 24px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    position: relative;
+    overflow: hidden;
+  }
+  .td-loading-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(59, 130, 246, 0.12), transparent 55%);
+    pointer-events: none;
+  }
+  .td-loading-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    margin-bottom: 22px;
+    position: relative;
+    z-index: 1;
+  }
+  .td-loading-spinner {
+    flex-shrink: 0;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 2px solid rgba(59, 130, 246, 0.15);
+    border-top-color: var(--accent);
+    border-right-color: rgba(125, 211, 252, 0.5);
+    animation: td-spin 0.9s linear infinite;
+  }
+  @keyframes td-spin {
+    to { transform: rotate(360deg); }
+  }
+  .td-loading-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+    letter-spacing: 0.02em;
+  }
+  .td-loading-race {
+    font-size: 12px;
+    color: var(--key);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .td-loading-detail {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.55;
+    min-height: 1.55em;
+    transition: opacity 0.2s;
+  }
+  .td-loading-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .td-loading-meta strong {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .td-loading-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: rgba(125, 211, 252, 0.75);
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .td-loading-hint.is-visible { opacity: 1; }
+  .td-loading-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 22px;
+    position: relative;
+    z-index: 1;
+  }
+  .td-loading-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    color: var(--text-dim);
+    transition: background 0.25s, border-color 0.25s, color 0.25s;
+  }
+  .td-loading-step.is-active {
+    background: rgba(59, 130, 246, 0.08);
+    border-color: rgba(59, 130, 246, 0.25);
+    color: var(--text);
+  }
+  .td-loading-step.is-done {
+    color: var(--text);
+    opacity: 0.85;
+  }
+  .td-loading-step-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .td-loading-step.is-active .td-loading-step-dot {
+    border-color: var(--accent);
+    color: var(--key);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.35);
+  }
+  .td-loading-step.is-done .td-loading-step-dot {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: rgba(34, 197, 94, 0.45);
+    color: var(--ok);
+  }
+  .td-loading-skeleton {
+    display: grid;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+  }
+  .td-skel-block {
+    height: 14px;
+    border-radius: 6px;
+    background: linear-gradient(
+      90deg,
+      rgba(36, 48, 73, 0.5) 0%,
+      rgba(59, 130, 246, 0.12) 45%,
+      rgba(36, 48, 73, 0.5) 90%
+    );
+    background-size: 200% 100%;
+    animation: td-shimmer 1.6s ease-in-out infinite;
+  }
+  .td-skel-block.w40 { width: 40%; }
+  .td-skel-block.w55 { width: 55%; }
+  .td-skel-block.w70 { width: 70%; }
+  .td-skel-block.w100 { width: 100%; height: 48px; border-radius: 8px; }
+  .td-skel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+  }
+  .td-skel-card {
+    height: 120px;
+    border-radius: 8px;
+    border: 1px solid rgba(36, 48, 73, 0.6);
+    background: linear-gradient(
+      110deg,
+      rgba(19, 25, 38, 0.9) 0%,
+      rgba(36, 48, 73, 0.35) 50%,
+      rgba(19, 25, 38, 0.9) 100%
+    );
+    background-size: 200% 100%;
+    animation: td-shimmer 1.8s ease-in-out infinite;
+  }
+  @keyframes td-shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+  }
+  .td-loading-error {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .td-loading-retry {
+    margin-top: 12px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .td-loading-retry:hover {
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .controls.is-busy #analyzeBtn { opacity: 0.65; }
+  #dateSelect.is-loading { color: var(--text-dim); }
+
   /* ── スタミナ指数 ── */
   .stamina-index-badge {
     font-size: 18px; font-weight: 800; padding: 4px 12px; border-radius: 8px;
@@ -181,21 +544,79 @@
   .stamina-low  { background: rgba(245,158,11,0.15); color: var(--warn); }
   .stamina-burn { background: rgba(239,68,68,0.15); color: var(--err); }
 
-  /* ── 位置取り分布ビン ── */
+  /* ── 位置取り分布（ビン別・表形式） ── */
   .pos-dist-section {
     background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
     padding: 16px 18px; margin-bottom: 20px;
   }
-  .pos-dist-section h3 { font-size: 13px; font-weight: 600; color: var(--purple); margin-bottom: 14px; }
-  .bin-chart { display: flex; align-items: flex-end; gap: 6px; height: 100px; padding-bottom: 4px; }
-  .bin-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
-  .bin-bar { width: 100%; border-radius: 4px 4px 0 0; transition: height 0.4s ease; min-height: 4px; }
-  .bin-count { font-size: 12px; font-weight: 700; color: #fff; }
-  .bin-label { font-size: 9px; color: var(--text-dim); text-align: center; word-break: break-all; line-height: 1.2; }
-  .bin-horse-nums { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; margin-top: 2px; }
+  .pos-dist-section h3 { font-size: 13px; font-weight: 600; color: var(--purple); margin-bottom: 12px; }
+  .pos-dist-table-wrap { overflow-x: auto; margin-bottom: 14px; }
+  .pos-dist-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+    table-layout: fixed;
+  }
+  .pos-dist-table th,
+  .pos-dist-table td {
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    vertical-align: middle; text-align: left;
+  }
+  .pos-dist-table th {
+    font-size: 10px; font-weight: 600; color: var(--text-dim);
+    background: rgba(0, 0, 0, 0.12);
+  }
+  .pos-dist-table th:nth-child(1),
+  .pos-dist-table td:nth-child(1) { width: 34%; }
+  .pos-dist-table th:nth-child(2),
+  .pos-dist-table td:nth-child(2) { width: 18%; white-space: nowrap; }
+  .pos-dist-table .pos-dist-bin-label { color: #fff; font-weight: 600; line-height: 1.35; }
+  .pos-dist-table .pos-dist-count {
+    font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .bin-horse-nums {
+    display: flex; flex-wrap: wrap; gap: 3px; align-items: center;
+  }
   .bin-hn {
-    width: 18px; height: 18px; border-radius: 50%; display: inline-flex;
-    align-items: center; justify-content: center; font-size: 9px; font-weight: 700;
+    flex: 0 0 auto;
+    width: 20px; height: 20px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700;
+  }
+  .pos-dist-stats {
+    font-size: 11px; color: var(--text-dim); line-height: 1.75;
+    padding: 12px 14px; background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px; border: 1px solid rgba(36, 48, 73, 0.5);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 6px 16px;
+  }
+  .pos-dist-stat-item { display: flex; flex-direction: column; gap: 2px; }
+  .pos-dist-stat-label { font-size: 10px; color: var(--text-dim); }
+  .pos-dist-stat-value { font-size: 12px; color: #fff; font-weight: 600; }
+  .pos-dist-stat-sub { font-size: 10px; color: var(--text-dim); opacity: 0.9; }
+  .hana-badge {
+    display: inline-block; margin-left: 4px; padding: 1px 5px; border-radius: 3px;
+    font-size: 9px; font-weight: 800; color: #fff;
+    background: rgba(239, 68, 68, 0.35); border: 1px solid rgba(239, 68, 68, 0.55);
+    vertical-align: middle;
+  }
+  .pace-factor-scale { margin-top: 6px; }
+  .pace-factor-track {
+    position: relative; height: 6px; border-radius: 3px;
+    background: linear-gradient(90deg, rgba(59,130,246,0.35), rgba(239,68,68,0.45));
+    margin-bottom: 4px;
+  }
+  .pace-factor-marker {
+    position: absolute; top: 50%; width: 10px; height: 10px;
+    margin-left: -5px; margin-top: -5px; border-radius: 50%;
+    background: #fff; border: 2px solid var(--warn);
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.25);
+  }
+  .pace-factor-range {
+    display: flex; justify-content: space-between; font-size: 9px; color: var(--text-dim);
+  }
+  .pos-dist-stats-note {
+    grid-column: 1 / -1;
+    font-size: 10px; opacity: 0.9; margin-top: 4px; line-height: 1.65;
   }
 
   /* ── T1F・コース比較テーブル ── */
@@ -207,6 +628,25 @@
   .analysis-table {
     width: 100%; border-collapse: collapse; font-size: 11px;
   }
+  .t1f-front-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .t1f-front-cell .t1f-bar-bg { width: 100%; max-width: 72px; }
+
+  .analysis-table .th-sub {
+    display: block; font-size: 8px; font-weight: 500; color: var(--text-dim);
+    margin-top: 2px; line-height: 1.2;
+  }
+  .form-dual { display: flex; flex-direction: column; gap: 3px; line-height: 1.35; }
+  .form-dual-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: center; }
+  .form-dual-tag {
+    font-size: 8px; font-weight: 700; color: var(--text-dim);
+    padding: 1px 4px; border-radius: 3px; background: rgba(255,255,255,0.06);
+    flex: 0 0 auto;
+  }
+  .form-dual-main {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    margin-bottom: 2px; flex-wrap: wrap;
+  }
+  .form-style-note { font-size: 8px; color: var(--text-dim); }
   .analysis-table th {
     background: var(--surface2); padding: 8px 10px; text-align: left;
     font-weight: 600; color: var(--text-dim); font-size: 10px;
@@ -328,93 +768,169 @@
 
   /* ── ラップタイム表示 ── */
   .lap-times {
-    display: flex; gap: 20px; margin-top: 14px; padding: 12px;
-    background: rgba(59,130,246,0.05); border-radius: 8px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(88px, 1fr));
+    gap: 12px 16px;
+    margin-top: 0;
+    padding: 10px 14px;
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: 8px;
+    flex: 1 1 280px;
+    min-width: 260px;
+    align-self: stretch;
   }
-  .lap-time-item { display: flex; flex-direction: column; align-items: center; }
-  .lap-label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
-  .lap-value { font-size: 20px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
-  .lap-unit { font-size: 12px; color: var(--text-dim); margin-left: 2px; }
-
-  /* ── ポジションマッピング ── */
-  .position-map {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 18px; margin-bottom: 20px;
+  .lap-times.cols-2 { grid-template-columns: repeat(2, minmax(88px, 1fr)); }
+  .lap-time-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: center;
+    gap: 6px;
   }
-  .position-map h3 { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: #7dd3fc; }
-  .map-stages {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
-  }
-  .map-stage {
-    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
-    padding: 14px 12px; min-height: 520px; min-width: 320px;
-  }
-  .stage-label {
-    font-size: 12px; font-weight: 600; color: var(--text-dim);
-    text-align: center; margin-bottom: 12px; text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .track-container {
-    position: relative; height: 480px;
-    background: linear-gradient(to right,
-      rgba(239,68,68,0.08) 0%,
-      rgba(239,68,68,0.03) 10%,
-      rgba(59,130,246,0.02) 50%,
-      rgba(59,130,246,0.01) 100%);
-    border-radius: 6px; overflow: visible;
-    border-left: 3px solid rgba(239,68,68,0.5);
-    box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
-  }
-  .track-rachi {
-    position: absolute; left: 0; width: 3px; height: 100%;
-    background: linear-gradient(to bottom,
-      rgba(239,68,68,0.6) 0%,
-      rgba(239,68,68,0.3) 100%);
-    box-shadow: 0 0 10px rgba(239,68,68,0.3);
-  }
-  .track-rachi::before {
-    content: 'ラチ'; position: absolute; left: 8px; top: 8px;
-    font-size: 10px; color: var(--err); font-weight: 600;
-    writing-mode: vertical-rl;
-  }
-  .track-line {
-    position: absolute; left: 50%; width: 1px; height: 100%;
-    background: rgba(255,255,255,0.05); transform: translateX(-50%);
-  }
-  .horse-marker {
-    position: absolute;
-    width: 24px; height: 24px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 700; color: #fff;
-    cursor: pointer; transition: all 0.2s;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-    border: 1.5px solid rgba(255,255,255,0.4);
-  }
-  .horse-marker:hover {
-    transform: scale(1.4);
-    z-index: 100;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.6);
-    border: 2px solid rgba(255,255,255,0.8);
-  }
-  .horse-marker-group {
-    position: absolute;
+  .lap-label {
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--text-dim);
+    min-height: 2.7em;
     display: flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
   }
-  .horse-marker.waku-1 { background: #fff; color: #000; }
-  .horse-marker.waku-2 { background: #000; color: #fff; }
-  .horse-marker.waku-3 { background: #e74c3c; color: #fff; }
-  .horse-marker.waku-4 { background: #3498db; color: #fff; }
-  .horse-marker.waku-5 { background: #f1c40f; color: #000; }
-  .horse-marker.waku-6 { background: #2ecc71; color: #fff; }
-  .horse-marker.waku-7 { background: #e67e22; color: #fff; }
-  .horse-marker.waku-8 { background: #ff69b4; color: #fff; }
-  .position-label {
-    position: absolute; right: 8px; font-size: 9px; color: var(--text-dim);
-    font-family: 'JetBrains Mono', monospace;
-    background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 3px;
-    font-weight: 600; transform: translateY(-50%);
+  .lap-value {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 2px;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .lap-unit {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--text-dim);
+    font-family: inherit;
+  }
+
+  /* ── 序盤ポジション（1-3F）コンパクト ── */
+  .early-pos-map {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .early-pos-hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin: 0 0 10px;
+    line-height: 1.5;
+  }
+  .early-pos-axis {
+    display: grid;
+    grid-template-columns: 48px 1fr 48px;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    padding: 0 4px;
+  }
+  .early-pos-axis .axis-front { color: var(--err); text-align: left; }
+  .early-pos-axis .axis-title {
+    text-align: center;
+    color: var(--key);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+  }
+  .early-pos-axis .axis-back { color: var(--accent); text-align: right; }
+  .early-pos-ladder {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: linear-gradient(
+      to bottom,
+      rgba(239, 68, 68, 0.07) 0%,
+      rgba(59, 130, 246, 0.04) 100%
+    );
+    border-left: 3px solid rgba(239, 68, 68, 0.55);
+  }
+  .early-pos-row {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 8px 10px;
+    align-items: center;
+    padding: 5px 10px 5px 8px;
+    border-bottom: 1px solid rgba(36, 48, 73, 0.4);
+    min-height: 34px;
+  }
+  .early-pos-row:last-child { border-bottom: none; }
+  .early-pos-row:hover { background: rgba(59, 130, 246, 0.05); }
+  .early-pos-band {
+    font-size: 11px;
+    font-weight: 800;
+    color: #fff;
+    text-align: center;
+    background: rgba(59, 130, 246, 0.18);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 5px;
+    padding: 4px 2px;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .early-pos-band .band-unit {
+    display: block;
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-top: 1px;
+  }
+  .early-pos-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    min-width: 0;
+  }
+  .pos-pill {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.35);
+    font-size: 10px;
+    font-weight: 800;
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .pos-pill:hover {
+    transform: scale(1.12);
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  }
+  .pos-pill.waku-1 { background: #f5f5f5; color: #111; }
+  .pos-pill.waku-2 { background: #111; color: #fff; }
+  .pos-pill.waku-3 { background: #e53935; color: #fff; }
+  .pos-pill.waku-4 { background: #1e88e5; color: #fff; }
+  .pos-pill.waku-5 { background: #fdd835; color: #111; }
+  .pos-pill.waku-6 { background: #43a047; color: #fff; }
+  .pos-pill.waku-7 { background: #f57c00; color: #fff; }
+  .pos-pill.waku-8 { background: #ec407a; color: #fff; }
+  .position-map-details .early-pos-map {
+    margin: 0 0 8px;
+    padding: 0;
   }
 
   /* ── Responsive ── */
@@ -424,8 +940,9 @@
     .controls > * { width: 100%; }
     .controls button { width: 100%; }
     .cards-grid { grid-template-columns: 1fr; }
-    .gate-viz { overflow-x: scroll; }
-    .gate-row { justify-content: flex-start; min-width: 800px; }
+    .gate-ease-table { font-size: 11px; }
+    .gate-ease-table th.col-name { width: 22%; }
+    .gate-ease-head { flex-direction: column; align-items: flex-start; }
     .position-table { font-size: 10px; }
     .position-table th, .position-table td { padding: 6px 4px; }
   }
@@ -437,25 +954,106 @@
     .controls { padding: 10px 16px; }
     .race-meta { padding: 12px 14px; }
     .race-meta .race-name { font-size: 14px; }
-    .gate-viz { padding: 14px; }
+    .gate-ease-panel { padding: 12px 14px; }
+    .ease-bar-cell { min-width: 80px; }
     .td-card-header { padding: 10px 12px; }
     .td-card-body { padding: 12px 14px; }
     .pace-prediction { padding: 14px; }
     .pace-type-badge { font-size: 12px; padding: 4px 12px; }
-    .lap-times { flex-direction: column; gap: 10px; }
-    .lap-time-item { flex-direction: row; justify-content: space-between; width: 100%; }
-    .lap-value { font-size: 18px; }
+    .lap-times {
+      grid-template-columns: 1fr;
+      min-width: 0;
+      gap: 8px;
+    }
+    .lap-time-item {
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      gap: 12px;
+    }
+    .lap-label {
+      min-height: auto;
+      justify-content: flex-start;
+      text-align: left;
+      flex: 1;
+    }
+    .lap-value { font-size: 16px; }
+    .lap-unit { font-size: 10px; }
+    .pos-dist-stats { grid-template-columns: 1fr; }
     .position-flow { padding: 14px; }
     .position-table { font-size: 9px; }
     .position-table th, .position-table td { padding: 4px 2px; }
     .pos-num { min-width: 18px; padding: 1px 4px; font-size: 9px; }
     .flow-badge { font-size: 9px; padding: 1px 4px; }
-    .position-map { padding: 14px; }
-    .map-stages { grid-template-columns: 1fr; gap: 12px; }
-    .map-stage { min-height: 420px; }
-    .track-container { height: 400px; }
-    .horse-marker { width: 22px; height: 22px; font-size: 9px; }
+    .early-pos-row { grid-template-columns: 40px 1fr; padding: 5px 8px; }
+    .early-pos-band { font-size: 10px; }
+    .pos-pill { width: 24px; height: 24px; font-size: 9px; }
   }
+
+  /* ── 馬名クリック → 近10走 ── */
+  .horse-name-link {
+    background: none; border: none; padding: 0; margin: 0;
+    font: inherit; font-weight: inherit; color: var(--key);
+    cursor: pointer; text-align: inherit;
+    text-decoration: underline; text-decoration-color: rgba(125, 211, 252, 0.45);
+    text-underline-offset: 2px;
+  }
+  .horse-name-link:hover { color: #fff; text-decoration-color: var(--key); }
+  .gate-name .horse-name-link { font-size: 9.5px; font-weight: 400; }
+
+  .horse-history-modal {
+    position: fixed; inset: 0; z-index: 9000;
+    display: none; align-items: center; justify-content: center;
+    padding: 24px 16px;
+  }
+  .horse-history-modal.is-open { display: flex; }
+  .horse-history-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0, 0, 0, 0.62);
+  }
+  .horse-history-panel {
+    position: relative; z-index: 1;
+    width: min(920px, 100%); max-height: min(85vh, 720px);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .horse-history-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .horse-history-title { font-size: 15px; font-weight: 700; color: #fff; }
+  .horse-history-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .horse-history-close {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 6px 12px;
+    font-size: 12px; cursor: pointer;
+  }
+  .horse-history-close:hover { border-color: var(--accent); color: #fff; }
+  .horse-history-body {
+    padding: 14px 18px 18px; overflow: auto; flex: 1;
+  }
+  .horse-history-table {
+    width: 100%; border-collapse: collapse; font-size: 11px;
+  }
+  .horse-history-table th {
+    background: var(--surface2); padding: 8px 10px; text-align: left;
+    font-weight: 600; color: var(--text-dim); font-size: 10px;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+    position: sticky; top: 0; z-index: 1;
+  }
+  .horse-history-table td {
+    padding: 8px 10px; border-bottom: 1px solid rgba(36, 48, 73, 0.45);
+    white-space: nowrap;
+  }
+  .horse-history-table tr:hover td { background: rgba(59, 130, 246, 0.06); }
+  .horse-history-table .tc { text-align: center; }
+  .horse-history-table .tr { text-align: right; }
+  .hist-rank-1 { color: var(--ok); font-weight: 800; }
+  .hist-rank-2, .hist-rank-3 { color: var(--accent); font-weight: 700; }
+}
 </style>
 </head>
 <body>
@@ -476,11 +1074,29 @@
   <label>レース:</label>
   <select id="raceSelect" onchange="onRaceChange()"><option value="">-</option></select>
   <button id="analyzeBtn" onclick="analyze()" disabled>分析実行</button>
+  <span id="controlsResultLink"></span>
+  <span id="dateLoadMsg"></span>
   <span id="statusMsg"></span>
 </div>
 
 <div class="content" id="mainContent">
   <div class="empty" id="placeholder">レースを選択して「分析実行」をクリックしてください</div>
+</div>
+
+<div id="horseHistoryModal" class="horse-history-modal" aria-hidden="true">
+  <div class="horse-history-backdrop" onclick="closeHorseHistory()"></div>
+  <div class="horse-history-panel" role="dialog" aria-labelledby="horseHistoryTitle">
+    <div class="horse-history-header">
+      <div>
+        <div class="horse-history-title" id="horseHistoryTitle">近10走</div>
+        <div class="horse-history-sub" id="horseHistorySub"></div>
+      </div>
+      <button type="button" class="horse-history-close" onclick="closeHorseHistory()">閉じる</button>
+    </div>
+    <div id="horseHistoryBody" class="horse-history-body">
+      <div class="empty">馬名をクリックすると戦績を表示します</div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -489,94 +1105,424 @@ let _allDates = [];
 let _racesForDate = [];
 let _selectedRaceId = '';
 let _dateRaceMap = {}; // 日付ごとのレース情報を保存
-/** 未来マージ後も参照する直近過去の日付一覧（/data-viewer と同じ scrape-dates 由来） */
+/** race_id -> 結果ページ遷移用メタ（race-list / 分析レスポンス） */
+let _raceResultMeta = {};
+/** 分析中表示中レース（戦績モーダルの切り出し基準） */
+let _currentAnalysisContext = { race_id: '', race_date: '' };
+const _horseHistoryCache = {};
+/** 直近2週間の過去開催日（picker_past_days 由来） */
 let _recentPastDatesForMerge = [];
+/** バックグラウンドで追加した過去開催日 */
+let _olderPastDates = [];
+let _backgroundDatesLoading = false;
+const PICKER_RECENT_DAYS = 14;
+let _analysisLoadTimer = null;
+let _analysisLoadStartedAt = 0;
+
+const _ANALYSIS_LOAD_STEPS = [
+  { id: 'prepare', label: 'レース情報の確認' },
+  { id: 'fetch', label: '出馬表・戦績の取得' },
+  { id: 'compute', label: '追走難度・ペース・位置取りの計算' },
+  { id: 'render', label: '結果の表示' },
+];
+
+function getSelectedRaceLabel() {
+  const rsel = document.getElementById('raceSelect');
+  if (!rsel || !rsel.value) return '';
+  const opt = rsel.options[rsel.selectedIndex];
+  return opt ? opt.textContent.trim() : '';
+}
+
+function buildLoadingStepsHtml(activeId, doneIds) {
+  const doneSet = new Set(doneIds || []);
+  return _ANALYSIS_LOAD_STEPS.map((step, i) => {
+    let cls = 'td-loading-step';
+    if (step.id === activeId) cls += ' is-active';
+    else if (doneSet.has(step.id)) cls += ' is-done';
+    const mark = doneSet.has(step.id) ? '✓' : String(i + 1);
+    return `<div class="${cls}" data-step="${step.id}">
+      <span class="td-loading-step-dot">${mark}</span>
+      <span>${escHtml(step.label)}</span>
+    </div>`;
+  }).join('');
+}
+
+function showPageInitLoading() {
+  const main = document.getElementById('mainContent');
+  if (!main) return;
+  main.innerHTML = `
+    <div class="td-loading" id="pageInitLoading">
+      <div class="td-loading-card">
+        <div class="td-loading-top">
+          <div class="td-loading-spinner"></div>
+          <div>
+            <div class="td-loading-title">ページを準備しています</div>
+            <div class="td-loading-detail">直近2週間の開催日を読み込んでいます</div>
+          </div>
+        </div>
+        <div class="td-loading-skeleton">
+          <div class="td-skel-block w55"></div>
+          <div class="td-skel-block w40"></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function hidePageInitLoading() {
+  const el = document.getElementById('pageInitLoading');
+  if (!el) return;
+  const main = document.getElementById('mainContent');
+  if (main && main.querySelector('#pageInitLoading')) {
+    main.innerHTML = '<div class="empty" id="placeholder">レースを選択して「分析実行」をクリックしてください</div>';
+  }
+}
+
+function showAnalysisLoading(opts) {
+  const o = opts || {};
+  const raceLabel = o.raceLabel || getSelectedRaceLabel() || '選択中のレース';
+  const phase = o.phase || 'prepare';
+  const detail = o.detail || '処理を開始しています…';
+  const doneIds = o.doneIds || [];
+
+  const main = document.getElementById('mainContent');
+  if (!main) return;
+
+  _analysisLoadStartedAt = Date.now();
+  if (_analysisLoadTimer) clearInterval(_analysisLoadTimer);
+  _analysisLoadTimer = setInterval(updateAnalysisLoadingElapsed, 1000);
+
+  document.querySelector('.controls')?.classList.add('is-busy');
+
+  main.innerHTML = `
+    <div class="td-loading" id="analysisLoading">
+      <div class="td-loading-card">
+        <div class="td-loading-top">
+          <div class="td-loading-spinner" aria-hidden="true"></div>
+          <div style="flex:1;min-width:0">
+            <div class="td-loading-title">分析を実行しています</div>
+            <div class="td-loading-race">${escHtml(raceLabel)}</div>
+            <div class="td-loading-detail" id="loadingDetail">${escHtml(detail)}</div>
+            <div class="td-loading-meta">
+              <span>経過 <strong id="loadingElapsed">0</strong> 秒</span>
+              <span id="loadingEta">初回は10〜30秒ほどかかることがあります</span>
+            </div>
+            <div class="td-loading-hint" id="loadingHint">ML推論と全頭の位置取り計算を行っています。完了までこの画面のままお待ちください。</div>
+          </div>
+        </div>
+        <div class="td-loading-steps" id="loadingSteps">
+          ${buildLoadingStepsHtml(phase, doneIds)}
+        </div>
+        <div class="td-loading-skeleton">
+          <div class="td-skel-block w70"></div>
+          <div class="td-skel-block w100"></div>
+          <div class="td-skel-grid">
+            <div class="td-skel-card"></div>
+            <div class="td-skel-card"></div>
+            <div class="td-skel-card"></div>
+            <div class="td-skel-card"></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  requestAnimationFrame(() => {
+    const hint = document.getElementById('loadingHint');
+    if (hint) setTimeout(() => hint.classList.add('is-visible'), 2800);
+  });
+}
+
+function updateAnalysisLoadingElapsed() {
+  const el = document.getElementById('loadingElapsed');
+  if (!el || !_analysisLoadStartedAt) return;
+  const sec = Math.floor((Date.now() - _analysisLoadStartedAt) / 1000);
+  el.textContent = String(sec);
+  const eta = document.getElementById('loadingEta');
+  if (eta && sec >= 15) {
+    eta.textContent = 'まだお待ちください。データ量が多いレースはさらに時間がかかります';
+  } else if (eta && sec >= 8) {
+    eta.textContent = 'もう少しで完了する見込みです';
+  }
+}
+
+function setAnalysisLoadingPhase(phase, detail, doneIds) {
+  const detailEl = document.getElementById('loadingDetail');
+  const stepsEl = document.getElementById('loadingSteps');
+  if (detailEl && detail) detailEl.textContent = detail;
+  if (stepsEl) stepsEl.innerHTML = buildLoadingStepsHtml(phase, doneIds || []);
+  const msg = document.getElementById('statusMsg');
+  if (msg && detail) msg.textContent = detail;
+}
+
+function stopAnalysisLoadingTimer() {
+  if (_analysisLoadTimer) {
+    clearInterval(_analysisLoadTimer);
+    _analysisLoadTimer = null;
+  }
+  document.querySelector('.controls')?.classList.remove('is-busy');
+}
+
+function showAnalysisLoadingError(message) {
+  stopAnalysisLoadingTimer();
+  const main = document.getElementById('mainContent');
+  if (!main) return;
+  const elapsed = _analysisLoadStartedAt
+    ? Math.floor((Date.now() - _analysisLoadStartedAt) / 1000)
+    : 0;
+  main.innerHTML = `
+    <div class="td-loading">
+      <div class="td-loading-card">
+        <div class="td-loading-top">
+          <div class="td-loading-title" style="color:var(--err)">分析を完了できませんでした</div>
+          <div class="td-loading-detail">${escHtml(message)}</div>
+          ${elapsed > 0 ? `<div class="td-loading-meta">経過 ${elapsed} 秒で中断</div>` : ''}
+        </div>
+        <button type="button" class="td-loading-retry" onclick="analyze()">もう一度実行</button>
+      </div>
+    </div>`;
+}
+
+function formatPastDateLabel(d) {
+  return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
+}
+
+function setDateLoadMsg(text, busy) {
+  const el = document.getElementById('dateLoadMsg');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('is-busy', !!busy);
+}
+
+function applyUpcomingRaces(futureData) {
+  const futureRaces = (futureData.races || []).filter((r) => r.race_id);
+  const futureDates = [...new Set(futureRaces.map((r) => r.date))].sort();
+  futureDates.forEach((date) => {
+    _dateRaceMap[date] = {
+      type: 'future',
+      races: futureRaces.filter((r) => r.date === date),
+    };
+  });
+  return { futureRaces, futureDates };
+}
+
+function fillDateSelect(sel, opts) {
+  const {
+    futureDates = [],
+    recentPast = [],
+    olderPast = [],
+    selected = '',
+  } = opts || {};
+
+  _allDates = [...futureDates, ...recentPast, ...olderPast];
+
+  let html = '<option value="">日付を選択</option>';
+
+  if (futureDates.length) {
+    html += '<optgroup label="今後の開催">';
+    futureDates.forEach((d) => {
+      const y = d.slice(0, 4);
+      const m = d.slice(4, 6);
+      const day = d.slice(6, 8);
+      const raceCount = (_dateRaceMap[d]?.races || []).length;
+      const offset = _dateRaceMap[d]?.races[0]?.day_offset || 0;
+      let label = '';
+      if (offset === 1) label = '🔴 明日';
+      else if (offset === 2) label = '🟡 明後日';
+      else label = `🟢 ${y}/${m}/${day}`;
+      html += `<option value="${d}">${label} (${raceCount}R)</option>`;
+    });
+    html += '</optgroup>';
+  }
+
+  if (recentPast.length) {
+    html += '<optgroup label="直近2週間（過去）">';
+    recentPast.forEach((d) => {
+      html += `<option value="${d}">${formatPastDateLabel(d)}</option>`;
+    });
+    html += '</optgroup>';
+  }
+
+  if (olderPast.length) {
+    html += '<optgroup label="過去（追加読込）">';
+    olderPast.forEach((d) => {
+      html += `<option value="${d}">${formatPastDateLabel(d)}</option>`;
+    });
+    html += '</optgroup>';
+  }
+
+  sel.innerHTML = html;
+
+  if (selected && _allDates.includes(selected)) {
+    sel.value = selected;
+  } else if (futureDates.length) {
+    sel.value = futureDates[0];
+  } else if (recentPast.length) {
+    sel.value = recentPast[0];
+  } else if (olderPast.length) {
+    sel.value = olderPast[0];
+  } else {
+    sel.value = '';
+  }
+}
+
+async function loadPastDatesInBackground() {
+  if (_backgroundDatesLoading) return;
+  _backgroundDatesLoading = true;
+  const sel = document.getElementById('dateSelect');
+  if (!sel) {
+    _backgroundDatesLoading = false;
+    return;
+  }
+
+  const prev = sel.value;
+  setDateLoadMsg('過去の開催日を読み込み中…', true);
+
+  try {
+    const resp = await fetch('/api/scrape-dates', { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const allPast = (data.dates || []).sort().reverse();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const recentCutoff = new Date(today.getTime() - PICKER_RECENT_DAYS * 24 * 60 * 60 * 1000);
+
+    const known = new Set([
+      ..._recentPastDatesForMerge,
+      ..._olderPastDates,
+      ...Object.keys(_dateRaceMap).filter((d) => _dateRaceMap[d]?.type === 'future'),
+    ]);
+
+    const supplementRecent = [];
+    const olderDates = [];
+    allPast.forEach((d) => {
+      if (known.has(d)) return;
+      const dateStr = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+      const dateObj = new Date(dateStr);
+      dateObj.setHours(0, 0, 0, 0);
+      if (dateObj >= recentCutoff && dateObj < today) {
+        supplementRecent.push(d);
+      } else if (dateObj < recentCutoff) {
+        olderDates.push(d);
+      }
+    });
+
+    if (!supplementRecent.length && !olderDates.length) {
+      setDateLoadMsg('開催日一覧は最新です', false);
+      return;
+    }
+
+    if (supplementRecent.length) {
+      _recentPastDatesForMerge = [...new Set([..._recentPastDatesForMerge, ...supplementRecent])]
+        .sort()
+        .reverse();
+    }
+    if (olderDates.length) {
+      _olderPastDates = [...new Set([..._olderPastDates, ...olderDates])].sort().reverse();
+    }
+
+    const futureDates = Object.keys(_dateRaceMap)
+      .filter((d) => _dateRaceMap[d]?.type === 'future')
+      .sort();
+
+    fillDateSelect(sel, {
+      futureDates,
+      recentPast: _recentPastDatesForMerge,
+      olderPast: _olderPastDates,
+      selected: prev,
+    });
+
+    const parts = [];
+    if (supplementRecent.length) parts.push(`直近+${supplementRecent.length}`);
+    if (olderDates.length) parts.push(`過去+${olderDates.length}`);
+    setDateLoadMsg(`開催日を追加（${parts.join('、')}日）`, false);
+  } catch (e) {
+    console.warn('[loadPastDatesInBackground]', e);
+    setDateLoadMsg('過去分の追加読込に失敗（直近2週間は利用可能）', false);
+  } finally {
+    _backgroundDatesLoading = false;
+  }
+}
 
 async function init() {
+  showPageInitLoading();
+  const dateSel = document.getElementById('dateSelect');
+  if (dateSel) dateSel.classList.add('is-loading');
   try {
-    await loadAllDates();
+    await loadInitialPickerDates();
   } catch (e) {
     console.error('init error:', e);
+    const main = document.getElementById('mainContent');
+    if (main) {
+      main.innerHTML = '<div class="empty">開催日の読み込みに失敗しました。ページを再読み込みしてください。</div>';
+    }
+  } finally {
+    if (dateSel) dateSel.classList.remove('is-loading');
+    hidePageInitLoading();
   }
+  loadUpcomingRacesInBackground();
+  loadPastDatesInBackground();
+  primeSelectedDateRaces();
 }
 
-async function loadAllDates() {
-  // /data-viewer と同じ GET /api/scrape-dates のみで先に開催日を確定（サーバ 60s キャッシュ共有・体感を揃える）
-  const resp = await fetch('/api/scrape-dates', { cache: 'no-store' });
+/** 初回表示: 直近2週間の過去日だけ（ローカル存在確認のみ・高速） */
+async function loadInitialPickerDates() {
+  const sel = document.getElementById('dateSelect');
+  _dateRaceMap = {};
+  _olderPastDates = [];
+  _recentPastDatesForMerge = [];
+  setDateLoadMsg('', false);
+
+  const resp = await fetch(`/api/scrape-dates?picker_past_days=${PICKER_RECENT_DAYS}`, { cache: 'no-store' });
+  if (!resp.ok) throw new Error(`picker HTTP ${resp.status}`);
   const pastData = await resp.json();
-  const allPastDates = (pastData.dates || []).sort().reverse();
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-  const recentDates = allPastDates.filter(d => {
-    const dateStr = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
-    const dateObj = new Date(dateStr);
-    dateObj.setHours(0, 0, 0, 0);
-    return dateObj < today && dateObj >= thirtyDaysAgo;
-  });
+  const recentDates = (pastData.dates || []).sort().reverse();
   _recentPastDatesForMerge = recentDates;
 
-  _dateRaceMap = {};
-  _allDates = [...recentDates];
-
-  const sel = document.getElementById('dateSelect');
-  sel.innerHTML = '<option value="">日付を選択</option>';
-  recentDates.forEach(d => {
-    const label = `${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)}`;
-    sel.innerHTML += `<option value="${d}">${label}</option>`;
+  fillDateSelect(sel, {
+    futureDates: [],
+    recentPast: recentDates,
+    olderPast: [],
+    selected: '',
   });
-
-  if (_allDates.length > 0) {
-    sel.value = _allDates[0];
-    await onDateChange();
-  }
-
-  // 未来は netkeiba 系で遅くなりがちなので、開催日の体感を data-viewer に合わせた後から非同期で先頭に追加
-  fetch(`/api/upcoming-races?_=${Date.now()}`)
-    .then(r => r.json())
-    .then(futureData => {
-      const futureRaces = (futureData.races || []).filter(r => r.race_id);
-      const futureDates = [...new Set(futureRaces.map(r => r.date))].sort();
-      futureDates.forEach(date => {
-        _dateRaceMap[date] = {
-          type: 'future',
-          races: futureRaces.filter(r => r.date === date)
-        };
-      });
-      const prev = sel.value;
-      const pastList = _recentPastDatesForMerge;
-      _allDates = [...futureDates, ...pastList];
-      sel.innerHTML = '<option value="">日付を選択</option>';
-      futureDates.forEach(d => {
-        const y = d.slice(0,4), m = d.slice(4,6), day = d.slice(6,8);
-        const raceCount = futureRaces.filter(r => r.date === d).length;
-        const offset = _dateRaceMap[d].races[0]?.day_offset || 0;
-        let label = '';
-        if (offset === 1) label = '🔴 明日';
-        else if (offset === 2) label = '🟡 明後日';
-        else label = `🟢 ${y}/${m}/${day}`;
-        sel.innerHTML += `<option value="${d}">${label} (${raceCount}R)</option>`;
-      });
-      pastList.forEach(d => {
-        const label = `${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)}`;
-        sel.innerHTML += `<option value="${d}">${label}</option>`;
-      });
-      if (_allDates.length === 0) return;
-      if (futureDates.length > 0) {
-        sel.value = futureDates[0];
-        onDateChange();
-      } else if (pastList.includes(prev)) {
-        sel.value = prev;
-      }
-    })
-    .catch(e => console.warn('[loadAllDates] upcoming', e));
 }
 
-async function onDateChange() {
+/** 今後の開催（ローカル race_lists のみ・netkeiba は叩かない） */
+async function loadUpcomingRacesInBackground() {
+  const sel = document.getElementById('dateSelect');
+  if (!sel) return;
+  const prev = sel.value;
+  try {
+    const resp = await fetch(`/api/upcoming-races?local_only=1&_=${Date.now()}`, { cache: 'no-store' });
+    if (!resp.ok) return;
+    const futureData = await resp.json();
+    const { futureDates } = applyUpcomingRaces(futureData);
+    if (!futureDates.length) return;
+
+    fillDateSelect(sel, {
+      futureDates,
+      recentPast: _recentPastDatesForMerge,
+      olderPast: _olderPastDates,
+      selected: prev,
+    });
+    if (!prev && sel.value) {
+      onDateChange();
+    }
+  } catch (e) {
+    console.warn('[loadUpcomingRacesInBackground]', e);
+  }
+}
+
+/** 日付確定後のレース一覧（結果有無チェックは後回しで体感を優先） */
+function primeSelectedDateRaces() {
+  const sel = document.getElementById('dateSelect');
+  if (!sel?.value) return;
+  onDateChange({ skipResultStatus: true });
+}
+
+async function onDateChange(opts) {
   const date = document.getElementById('dateSelect').value;
   if (!date) return;
+  const skipResultStatus = !!(opts && opts.skipResultStatus);
 
   try {
     // 未来のレースかどうかをチェック
@@ -592,9 +1538,11 @@ async function onDateChange() {
       populateRaces();
     } else {
       // 過去のレース（APIから取得）
-      const resp = await fetch(`/api/race-list/${date}`);
+      const qs = skipResultStatus ? '?with_result_status=0' : '';
+      const resp = await fetch(`/api/race-list/${date}${qs}`);
       const data = await resp.json();
       _racesForDate = data.races || [];
+      applyRaceResultMeta(_racesForDate);
       const venues = data.venues || [];
       const vsel = document.getElementById('venueSelect');
       vsel.innerHTML = '<option value="">全会場</option>';
@@ -610,22 +1558,76 @@ async function onDateChange() {
 
 function onVenueChange() { populateRaces(); }
 
+function applyRaceResultMeta(races) {
+  if (!Array.isArray(races)) return;
+  for (const r of races) {
+    if (!r || !r.race_id) continue;
+    _raceResultMeta[r.race_id] = {
+      viewable: !!(r.result_viewable || r.has_race_result || r.has_result_flash),
+      kind: r.result_kind || (r.has_race_result ? 'confirmed' : (r.has_result_flash ? 'flash' : null)),
+      url: r.result_view_url || (r.result_viewable ? `/race/${r.race_id}` : null),
+    };
+  }
+}
+
+function resultLinkHtml(raceId, meta) {
+  const m = meta || _raceResultMeta[raceId];
+  if (!m || !m.viewable || !m.url) return '';
+  const isFlash = m.kind === 'flash';
+  const label = isFlash ? '速報結果を見る' : 'レース結果を見る';
+  const cls = isFlash ? 'race-result-link flash' : 'race-result-link';
+  return `<a class="${cls}" href="${m.url}" target="_blank" rel="noopener noreferrer">${label} →</a>`;
+}
+
+function updateControlsResultLink() {
+  const el = document.getElementById('controlsResultLink');
+  if (!el) return;
+  el.innerHTML = _selectedRaceId ? resultLinkHtml(_selectedRaceId) : '';
+}
+
 function populateRaces() {
   const venue = document.getElementById('venueSelect').value;
   const rsel = document.getElementById('raceSelect');
   const filtered = venue ? _racesForDate.filter(r => r.venue === venue) : _racesForDate;
+  applyRaceResultMeta(filtered);
   rsel.innerHTML = '<option value="">レースを選択</option>';
   for (const r of filtered) {
-    const label = `${r.round}R ${r.race_name || ''} (${r.venue})`;
+    const meta = _raceResultMeta[r.race_id];
+    const badge = meta && meta.viewable ? (meta.kind === 'flash' ? ' 🟡' : ' 🏁') : '';
+    const label = `${r.round}R ${r.race_name || ''} (${r.venue})${badge}`;
     rsel.innerHTML += `<option value="${r.race_id}">${label}</option>`;
   }
   document.getElementById('analyzeBtn').disabled = true;
   _selectedRaceId = '';
+  updateControlsResultLink();
+}
+
+async function refreshResultMetaForRace(raceId) {
+  if (!raceId) return;
+  try {
+    const resp = await fetch(`/api/race/${raceId}/result-status`);
+    if (!resp.ok) return;
+    const d = await resp.json();
+    if (d.viewable) {
+      _raceResultMeta[raceId] = {
+        viewable: true,
+        kind: d.kind || (d.has_confirmed ? 'confirmed' : 'flash'),
+        url: d.result_view_url || `/race/${raceId}`,
+      };
+    } else {
+      _raceResultMeta[raceId] = { viewable: false, kind: null, url: null };
+    }
+    updateControlsResultLink();
+  } catch (e) {
+    console.warn('[result-status]', e);
+  }
 }
 
 function onRaceChange() {
   _selectedRaceId = document.getElementById('raceSelect').value;
   document.getElementById('analyzeBtn').disabled = !_selectedRaceId;
+  updateControlsResultLink();
+  if (_selectedRaceId) refreshResultMetaForRace(_selectedRaceId);
 }
 
 async function analyze() {
@@ -633,18 +1635,26 @@ async function analyze() {
   const btn = document.getElementById('analyzeBtn');
   const msg = document.getElementById('statusMsg');
   btn.disabled = true;
-  msg.textContent = '分析中...';
+
+  const raceLabel = getSelectedRaceLabel();
+  showAnalysisLoading({
+    phase: 'prepare',
+    detail: 'レース情報を確認しています…',
+    raceLabel,
+    doneIds: [],
+  });
+
+  const done = [];
 
   try {
-    // 未来のレース（まだスクレイピングされていない可能性）の場合、先にデータ取得
     const selectedDate = document.getElementById('dateSelect').value;
     const isFutureRace = _dateRaceMap[selectedDate] && _dateRaceMap[selectedDate].type === 'future';
 
+    done.push('prepare');
     if (isFutureRace) {
-      msg.textContent = 'データ取得中...';
+      setAnalysisLoadingPhase('fetch', '出馬表・戦績を取得しています…', done);
       const raceInfo = _dateRaceMap[selectedDate].races.find(r => r.race_id === _selectedRaceId);
       if (raceInfo) {
-        // スクレイピングジョブをキューに追加
         const queueResp = await fetch('/api/scrape-queue/add', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -660,53 +1670,84 @@ async function analyze() {
         const queueData = await queueResp.json();
 
         if (queueData.status === 'queued') {
-          msg.textContent = `キュー待ち (${queueData.position}番目)...`;
-          // ポーリングでジョブ完了を待つ
-          await waitForScrapeComplete(_selectedRaceId, msg);
+          setAnalysisLoadingPhase(
+            'fetch',
+            `スクレイピングキューで待機中（${queueData.position}番目）…`,
+            done
+          );
+          await waitForScrapeComplete(_selectedRaceId);
         } else if (queueData.status === 'running') {
-          msg.textContent = 'データ取得中...';
-          await waitForScrapeComplete(_selectedRaceId, msg);
+          setAnalysisLoadingPhase('fetch', 'データを取得しています…', done);
+          await waitForScrapeComplete(_selectedRaceId);
         }
       }
+      done.push('fetch');
+    } else {
+      done.push('fetch');
     }
 
-    msg.textContent = '分析中...';
+    setAnalysisLoadingPhase(
+      'compute',
+      '追走難度・ペース・位置取り・想定上り3Fを計算しています…',
+      done
+    );
     const resp = await fetch(`/api/race/${_selectedRaceId}/tracking-difficulty`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) {
+      let errMsg = `HTTP ${resp.status}`;
+      try {
+        const errBody = await resp.json();
+        if (errBody.error) errMsg = errBody.error;
+      } catch (_) { /* ignore */ }
+      throw new Error(errMsg);
+    }
     const data = await resp.json();
+    if (data.error && (!data.entries || !data.entries.length)) {
+      throw new Error(data.error);
+    }
+
+    done.push('compute');
+    setAnalysisLoadingPhase('render', '結果を画面に反映しています…', done);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     renderResults(data);
-    msg.textContent = '完了';
+    done.push('render');
+    const elapsed = _analysisLoadStartedAt
+      ? Math.floor((Date.now() - _analysisLoadStartedAt) / 1000)
+      : 0;
+    msg.textContent = elapsed > 0 ? `完了（${elapsed}秒）` : '完了';
   } catch (e) {
     msg.textContent = `エラー: ${e.message}`;
     console.error(e);
+    showAnalysisLoadingError(e.message || '不明なエラー');
   } finally {
+    stopAnalysisLoadingTimer();
     btn.disabled = false;
   }
 }
 
-async function waitForScrapeComplete(raceId, msgElement) {
-  // 最大5分待機
+async function waitForScrapeComplete(raceId) {
+  const done = ['prepare'];
   for (let i = 0; i < 60; i++) {
-    await new Promise(r => setTimeout(r, 5000)); // 5秒ごとにポーリング
+    await new Promise(r => setTimeout(r, 5000));
 
     const statusResp = await fetch('/api/scrape-queue/status');
     const statusData = await statusResp.json();
 
-    // 該当ジョブを探す
     const job = statusData.jobs?.find(j => j.race_id === raceId);
-    if (!job) break; // ジョブが見つからない = 完了またはエラー
+    if (!job) break;
 
     if (job.status === 'completed') {
-      msgElement.textContent = 'データ取得完了';
+      setAnalysisLoadingPhase('fetch', 'データ取得が完了しました', done);
       break;
-    } else if (job.status === 'failed') {
+    }
+    if (job.status === 'failed') {
       throw new Error(`スクレイピング失敗: ${job.error || '不明'}`);
-    } else if (job.status === 'running') {
-      msgElement.textContent = 'データ取得中...';
+    }
+    if (job.status === 'running') {
+      setAnalysisLoadingPhase('fetch', 'データを取得しています…', done);
     } else {
       const pos = statusData.jobs.filter(j => j.status === 'pending').findIndex(j => j.race_id === raceId) + 1;
       if (pos > 0) {
-        msgElement.textContent = `キュー待ち (${pos}番目)...`;
+        setAnalysisLoadingPhase('fetch', `キュー待ち（${pos}番目）…`, done);
       }
     }
   }
@@ -726,6 +1767,290 @@ function easeColor(pct) {
   if (pct >= 45) return 'var(--text-dim)';
   if (pct >= 30) return 'var(--warn)';
   return 'var(--err)';
+}
+
+/**
+ * 前走1角の通過順などから求めた「序盤前寄り指数」（API: t1f_norm）。
+ * 数値が小さいほど前走で先行寄り、大きいほど後方寄り。
+ * 今回フィールドの先行意識（前走で前にいた馬の多さ）で補正している。
+ */
+function describeT1fFrontIndex(norm) {
+  if (norm === null || norm === undefined || Number.isNaN(Number(norm))) {
+    return { label: '—', sub: '', color: 'var(--text-dim)', barPct: 0, title: '' };
+  }
+  const n = Number(norm);
+  let label = '中団';
+  let color = 'var(--accent)';
+  if (n < 0.22) {
+    label = 'かなり前寄り';
+    color = 'var(--err)';
+  } else if (n < 0.38) {
+    label = 'やや前寄り';
+    color = 'var(--warn)';
+  } else if (n < 0.55) {
+    label = '中団';
+    color = 'var(--accent)';
+  } else if (n < 0.72) {
+    label = 'やや後方';
+    color = 'var(--text-dim)';
+  } else {
+    label = '後方寄り';
+    color = 'var(--text-dim)';
+  }
+  return {
+    label,
+    sub: n.toFixed(2),
+    color,
+    barPct: Math.min(100, Math.max(4, (1 - n) * 100)),
+    title: `序盤前寄り指数 ${n.toFixed(2)}（0に近い＝前走で先行寄り、1に近い＝後方。今回の先行意識で補正）`,
+  };
+}
+
+function t1fFrontIndexCell(norm) {
+  const d = describeT1fFrontIndex(norm);
+  if (d.label === '—') return '<span style="color:var(--text-dim)">—</span>';
+  return `<div class="t1f-front-cell" title="${escHtml(d.title)}">
+    <div class="t1f-bar-bg"><div class="t1f-bar-fill" style="width:${d.barPct}%;background:${d.color}"></div></div>
+    <div style="font-size:11px;font-weight:700;color:${d.color}">${escHtml(d.label)}</div>
+    <div style="font-size:9px;color:var(--text-dim)">指数 ${escHtml(d.sub)}</div>
+  </div>`;
+}
+
+/** 想定上り3F（秒・小さいほど速い）の表示色 */
+function last3fPredictColor(deltaSec) {
+  const d = Number(deltaSec);
+  if (Number.isNaN(d)) return 'var(--text-dim)';
+  if (d <= -0.25) return 'var(--ok)';
+  if (d <= -0.1) return 'var(--accent)';
+  if (d < 0.12) return 'var(--text-dim)';
+  if (d < 0.3) return 'var(--warn)';
+  return 'var(--err)';
+}
+
+function formatExpectedLast3f(l3f) {
+  if (!l3f || l3f.seconds == null || l3f.seconds <= 0) {
+    return { main: '—', sub: '', color: 'var(--text-dim)', title: '' };
+  }
+  const sec = Number(l3f.seconds);
+  const delta = Number(l3f.delta_sec);
+  const rank = l3f.rank != null ? `${l3f.rank}位` : '';
+  const label = l3f.label || '';
+  const title = [
+    `想定上り3F ${sec.toFixed(1)}秒`,
+    l3f.baseline_sec ? `基準 ${Number(l3f.baseline_sec).toFixed(1)}秒` : '',
+    !Number.isNaN(delta) ? `基準比 ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}秒` : '',
+    rank ? `フィールド内 ${rank}` : '',
+    label,
+  ].filter(Boolean).join(' / ');
+  return {
+    main: `${sec.toFixed(1)}秒`,
+    sub: [rank, label].filter(Boolean).join(' · '),
+    color: last3fPredictColor(delta),
+    title,
+  };
+}
+
+function expectedLast3fCell(l3f) {
+  const f = formatExpectedLast3f(l3f);
+  if (f.main === '—') return '<span style="color:var(--text-dim)">—</span>';
+  return `<div class="l3f-predict-cell" title="${escHtml(f.title)}">
+    <div style="font-size:12px;font-weight:800;color:${f.color}">${escHtml(f.main)}</div>
+    ${f.sub ? `<div style="font-size:9px;color:var(--text-dim)">${escHtml(f.sub)}</div>` : ''}
+  </div>`;
+}
+
+let _lastAnalysisPayload = null;
+let _horseTableSortMode = 'predicted';
+
+function buildMasterHorseRows(data) {
+  const entries = data.entries || [];
+  const pfMap = Object.fromEntries(
+    (data.position_flow || []).map((p) => [p.horse_number, p])
+  );
+  return entries.map((e) => {
+    const td = e.tracking_difficulty || {};
+    const pf = pfMap[e.horse_number] || {};
+    const pos = pf.positions || {};
+    const pr = e.prev_race || {};
+    const cc = e.course_comparison || {};
+    const prof = e.profile || {};
+    const pa = e.position_ability || {};
+    const stm = pf.stamina || {};
+    const bestMin = pa.best_norm_pos_min ?? prof.best_norm_pos_min;
+    const everLed = pa.ever_led_before_final ?? pa.ever_led_any;
+    return {
+      horse_number: e.horse_number,
+      horse_id: e.horse_id,
+      horse_name: e.horse_name || '',
+      bracket_number: e.bracket_number || 0,
+      style: pf.style || prof.style || '',
+      style_jra: prof.style_jra || '',
+      style_final: prof.style_final || '',
+      best_norm_min: bestMin != null ? Number(bestMin) : null,
+      ever_led: !!everLed,
+      jockey_bias: pa.jockey_position_bias != null ? Number(pa.jockey_position_bias) : null,
+      ease_pct: Number(td.ease_pct) || 50,
+      ease_label: td.label || '普通',
+      early: pos.early?.position ?? null,
+      mid: pos.mid?.position ?? null,
+      late: pos.late?.position ?? null,
+      flow_pattern: pf.flow_pattern || '',
+      stamina_concern: !!pf.stamina_concern,
+      expected_last_3f: pf.expected_last_3f || null,
+      stamina_index: stm.stamina_index ?? null,
+      stamina_label: stm.stamina_label || '',
+      prev_t1f: pr.t1f_raw || 0,
+      prev_field: pr.field_size || 0,
+      dist_change: cc.dist_change,
+      dist_category: cc.dist_category || '',
+      same_surface: !!cc.same_surface,
+    };
+  });
+}
+
+function sortMasterHorseRows(rows, mode) {
+  const list = [...rows];
+  const cmpHorse = (a, b) => a.horse_number - b.horse_number;
+  switch (mode) {
+    case 'ease_asc':
+      return list.sort((a, b) => a.ease_pct - b.ease_pct || cmpHorse(a, b));
+    case 'horse':
+      return list.sort(cmpHorse);
+    case 'stamina_desc':
+      return list.sort((a, b) => {
+        const sa = a.stamina_index ?? -1;
+        const sb = b.stamina_index ?? -1;
+        return sb - sa || cmpHorse(a, b);
+      });
+    case 'predicted':
+      return list.sort((a, b) => {
+        const ea = a.early ?? 99;
+        const eb = b.early ?? 99;
+        return ea - eb || cmpHorse(a, b);
+      });
+    case 'ease_desc':
+    default:
+      return list.sort((a, b) => b.ease_pct - a.ease_pct || cmpHorse(a, b));
+  }
+}
+
+function onHorseTableSortChange() {
+  const sel = document.getElementById('horseTableSort');
+  if (sel) _horseTableSortMode = sel.value;
+  const mount = document.getElementById('horseTableBodyMount');
+  if (mount && _lastAnalysisPayload) {
+    mount.innerHTML = buildHorseMasterTableBody(_lastAnalysisPayload);
+    const tbl = mount.querySelector('.horse-table');
+    if (tbl) enableTableSort(tbl);
+  }
+}
+
+function buildHorseMasterTableBody(data) {
+  const rows = sortMasterHorseRows(buildMasterHorseRows(data), _horseTableSortMode);
+  let body = '';
+  rows.forEach((r) => {
+    const color = easeColor(r.ease_pct);
+    const flowStr = (r.early != null && r.mid != null && r.late != null)
+      ? `${r.early}→${r.mid}→${r.late}` : '—';
+    const l3fFmt = formatExpectedLast3f(r.expected_last_3f);
+    const l3fSec = r.expected_last_3f?.seconds > 0 ? r.expected_last_3f.seconds : '';
+    const earlyN = r.early ?? 99;
+
+    let flowClass = 'flow-maintain';
+    const flow = r.flow_pattern || '';
+    if (flow.includes('追い込み') || flow.includes('差し')) flowClass = 'flow-forward';
+    else if (flow.includes('後退')) flowClass = 'flow-backward';
+
+    const t1fColor = (r.prev_t1f || 0) <= 3 ? 'var(--err)' : (r.prev_t1f || 0) <= 6 ? 'var(--warn)' : 'var(--text-dim)';
+    const bestPct = r.best_norm_min != null ? Math.round(r.best_norm_min * 100) : null;
+    const bestColor = bestPct != null && bestPct <= 12 ? 'var(--err)' : bestPct != null && bestPct <= 25 ? 'var(--warn)' : 'var(--text-dim)';
+    const hanaMark = r.ever_led ? '<span class="hana-badge" title="過去走で最終角前に1位通過あり">ハナ</span>' : '';
+    const distCls = r.dist_category === '距離延長' ? 'dist-ext' : r.dist_category === '距離短縮' ? 'dist-red' : 'dist-same';
+    const distSign = r.dist_change != null
+      ? (r.dist_change > 0 ? `+${r.dist_change}` : String(r.dist_change)) + 'm'
+      : '—';
+    const surfTxt = r.same_surface ? '同' : '変';
+    const warn = r.stamina_concern ? ' <span class="stamina-warn" title="スタミナ懸念">⚠</span>' : '';
+
+    body += `<tr id="row-${r.horse_number}">
+      <td class="tc" data-sort="${r.bracket_number || ''}"><span class="gate-waku-pill ${wakuClass(r.bracket_number)}" style="width:22px;height:22px;font-size:10px">${r.bracket_number || '—'}</span></td>
+      <td class="num" style="font-weight:800" data-sort="${r.horse_number}">${r.horse_number}</td>
+      <td class="horse-name-cell" data-sort-text="${escAttr(r.horse_name)}">${horseNameLink(r.horse_id, r.horse_name)}</td>
+      <td class="tc" data-sort-text="${escAttr(r.style)}">
+        <span class="${styleClass(r.style)}" style="font-size:10px" title="${escAttr([r.style_jra, r.style_final].filter(Boolean).join(' / '))}">${r.style || '—'}</span>
+        ${hanaMark}
+      </td>
+      <td data-sort="${r.ease_pct}">
+        <span class="mini-ease-track" title="追走容易度 ${r.ease_pct.toFixed(1)}%"><span class="mini-ease-fill" style="width:${Math.max(0, Math.min(100, r.ease_pct))}%;background:${color}"></span></span>
+        <span style="font-weight:700;color:${color}">${r.ease_pct.toFixed(0)}</span>
+        <span class="td-ease-badge ${easeClass(r.ease_label)}" style="font-size:10px;padding:1px 6px;margin-left:4px">${r.ease_label}</span>
+      </td>
+      <td class="num" style="color:${r.stamina_index != null ? staminaColor(r.stamina_index) : 'var(--text-dim)'};font-weight:700" data-sort="${r.stamina_index ?? ''}">
+        ${r.stamina_index != null ? r.stamina_index.toFixed(0) : '—'}
+        ${r.stamina_label ? `<div style="font-size:9px;font-weight:600">${escHtml(r.stamina_label)}</div>` : ''}
+      </td>
+      <td class="tc flow-compact" data-sort="${earlyN}" title="序→中→終">${flowStr}</td>
+      <td class="tc" title="${escHtml(l3fFmt.title)}" data-sort="${l3fSec}">
+        <span style="font-weight:800;color:${l3fFmt.color}">${escHtml(l3fFmt.main)}</span>
+      </td>
+      <td data-sort-text="${escAttr(flow)}"><span class="flow-badge ${flowClass}" style="font-size:10px">${flow || '—'}</span>${warn}</td>
+      <td class="num" style="color:${bestColor};font-weight:700" data-sort="${r.best_norm_min ?? ''}" title="過去走の最前方位置（0%=先頭圏）">${bestPct != null ? `前${bestPct}%` : '—'}</td>
+      <td class="num" style="color:${t1fColor};font-weight:700" data-sort="${r.prev_t1f || ''}">${r.prev_t1f > 0 ? `${r.prev_t1f}/${r.prev_field || '?'}` : '—'}</td>
+      <td class="${distCls}" style="font-size:11px;white-space:nowrap" data-sort="${r.dist_change != null ? r.dist_change : ''}">
+        ${distSign} <span style="color:${r.same_surface ? 'var(--ok)' : 'var(--warn)'}">${surfTxt}</span>
+      </td>
+    </tr>`;
+  });
+  return `<div class="horse-table-wrap">
+    <table class="horse-table">
+      <thead><tr>
+        <th class="col-sortable tc">枠</th>
+        <th class="col-sortable num">馬番</th>
+        <th class="col-sortable">馬名</th>
+        <th class="col-sortable tc">脚質</th>
+        <th class="col-sortable">容易度</th>
+        <th class="col-sortable num">温存</th>
+        <th class="col-sortable tc">序→中→終</th>
+        <th class="col-sortable tc">上り3F</th>
+        <th class="col-sortable">展開</th>
+        <th class="col-sortable num" title="過去走で最も前に行けた位置（%）">最前位置</th>
+        <th class="col-sortable num">前走1角</th>
+        <th class="col-sortable">コース</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+  </div>`;
+}
+
+function buildHorseMasterTableHtml(data) {
+  const sortOpts = [
+    ['predicted', '想定位置（前い順）'],
+    ['ease_desc', '追走容易度（高い順）'],
+    ['ease_asc', '追走容易度（低い順）'],
+    ['stamina_desc', '温存度（高い順）'],
+    ['horse', '馬番順'],
+  ];
+  const optsHtml = sortOpts.map(([v, l]) =>
+    `<option value="${v}"${_horseTableSortMode === v ? ' selected' : ''}>${l}</option>`
+  ).join('');
+  return `<div class="horse-table-section">
+    <div class="table-toolbar">
+      <h3>出走馬一覧</h3>
+      <div class="table-toolbar-sort">
+        <label for="horseTableSort">並び替え</label>
+        <select id="horseTableSort" onchange="onHorseTableSortChange()">${optsHtml}</select>
+      </div>
+    </div>
+    <div id="horseTableBodyMount">${buildHorseMasterTableBody(data)}</div>
+  </div>`;
+}
+
+function resolveFieldSize(data) {
+  const d = data || _lastAnalysisPayload || {};
+  const n = Number(d.field_size);
+  if (n > 0) return n;
+  const entries = d.entries || [];
+  return entries.length > 0 ? entries.length : 18;
 }
 
 function styleClass(style) {
@@ -840,119 +2165,548 @@ function staminaColor(idx) {
   return 'var(--err)';
 }
 
-function renderResults(data) {
-  const main = document.getElementById('mainContent');
-  if (!data.entries || data.entries.length === 0) {
-    main.innerHTML = '<div class="empty">データが不足しています</div>';
-    return;
+const BIN_COLORS = ['var(--err)', 'var(--warn)', 'var(--accent)', 'var(--purple)', 'var(--text-dim)'];
+
+/** 先行意識に応じた序盤補正（t1f_normalization_factor 1.0〜2.0）の平易ラベル */
+function fieldPrevPaceLabel(factor) {
+  const f = Number(factor) || 1;
+  if (f >= 1.5) return '混戦しやすい';
+  if (f >= 1.25) return 'やや混戦';
+  if (f > 1.05) return 'やや激しい';
+  return '落ち着き';
+}
+
+function paceFactorScaleHtml(factor) {
+  const f = Math.min(2, Math.max(1, Number(factor) || 1));
+  const leftPct = ((f - 1) / 1) * 100;
+  return `<div class="pace-factor-scale">
+    <div class="pace-factor-track"><div class="pace-factor-marker" style="left:${leftPct}%"></div></div>
+    <div class="pace-factor-range"><span>1.00 落ち着き</span><span>1.50</span><span>2.00 混戦</span></div>
+  </div>`;
+}
+
+function buildFieldPrevStatsHtml(fps) {
+  const prevFront = fps.prev_top3_count || 0;
+  const frontPct = ((fps.front_pressure_ratio || 0) * 100).toFixed(0);
+  const paceFactor = (fps.t1f_normalization_factor || 1).toFixed(2);
+  const paceLabel = fieldPrevPaceLabel(fps.t1f_normalization_factor);
+  const sameSurf = fps.same_surface_count || 0;
+  const distUp = fps.dist_extension_count || 0;
+  const distDown = fps.dist_reduction_count || 0;
+  const everLedBf = fps.ever_led_before_final_prev_count || 0;
+  const everLedAny = fps.ever_led_prev_count || 0;
+  return `
+      <div class="pos-dist-stat-item">
+        <span class="pos-dist-stat-label">前走でハナ（最終角前に1位通過）経験あり</span>
+        <span class="pos-dist-stat-value" style="color:var(--err)">${everLedBf}頭</span>
+        <span class="pos-dist-stat-sub">いずれかのコーナーで1位: ${everLedAny}頭。逃げ争い・前傾ラップの目安</span>
+      </div>
+      <div class="pos-dist-stat-item">
+        <span class="pos-dist-stat-label">前走で先頭付近（1コーナー3番手以内）だった馬</span>
+        <span class="pos-dist-stat-value" style="color:var(--err)">${prevFront}頭 <span style="font-weight:500;color:var(--text-dim)">（${frontPct}%）</span></span>
+        <span class="pos-dist-stat-sub">多いほど今回の先行意識が高く、序盤で前を取りにいく馬が多い目安</span>
+      </div>
+      <div class="pos-dist-stat-item">
+        <span class="pos-dist-stat-label">先行意識による序盤補正（指数）</span>
+        <span class="pos-dist-stat-value">${paceFactor} <span style="font-weight:500;color:var(--warn)">（${paceLabel}）</span></span>
+        <span class="pos-dist-stat-sub">序盤前寄り度の補正係数。目安 <b style="color:#fff">1.00〜2.00</b>（先行意識が高いほど大きい）</span>
+        ${paceFactorScaleHtml(fps.t1f_normalization_factor)}
+      </div>
+      <div class="pos-dist-stat-item">
+        <span class="pos-dist-stat-label">前走と同じ馬場（芝・ダ）</span>
+        <span class="pos-dist-stat-value">${sameSurf}頭</span>
+      </div>
+      <div class="pos-dist-stat-item">
+        <span class="pos-dist-stat-label">前走より距離が変わる馬</span>
+        <span class="pos-dist-stat-value">延長 ${distUp}頭 / 短縮 ${distDown}頭</span>
+        <span class="pos-dist-stat-sub">前走との差が50m以上の馬を数えています</span>
+      </div>
+      <div class="pos-dist-stats-note">上の表は、前走の1コーナー通過順位を「前の方〜後ろの方」に5段階で分けたものです。先行意識が高い（前走で前についていた馬が多い）ほど、序盤前寄り度の補正が強くなり、今回もポジション争いや速い流れになりやすくなります。</div>`;
+}
+
+function buildPositionBinSectionHtml(bins, byHorseNum, fps) {
+  if (!bins.length) return '';
+  let rows = '';
+  bins.forEach((b, i) => {
+    const col = BIN_COLORS[i] || BIN_COLORS[BIN_COLORS.length - 1];
+    const nums = (b.horse_numbers || []).map((n) => {
+      const e = byHorseNum.find((x) => x.horse_number === n);
+      const bn = e?.bracket_number || 1;
+      const nm = e?.horse_name || '';
+      return `<span class="bin-hn waku-${bn}" title="${escHtml(nm)}">${n}</span>`;
+    }).join('');
+    const horsesCell = nums
+      ? `<div class="bin-horse-nums">${nums}</div>`
+      : '<span style="color:var(--text-dim)">—</span>';
+    rows += `<tr>
+      <td class="pos-dist-bin-label" data-sort-text="${escAttr(b.label)}">${escHtml(b.label)}</td>
+      <td class="pos-dist-count" style="color:${col}" data-sort="${b.count}">${b.count}頭</td>
+      <td data-sort="${b.count}">${horsesCell}</td>
+    </tr>`;
+  });
+  return `<div class="pos-dist-section">
+    <h3>📊 前走の位置取り（5段階）</h3>
+    <div class="pos-dist-table-wrap">
+      <table class="pos-dist-table">
+        <thead><tr>
+          <th class="col-sortable">前走での位置帯</th><th class="col-sortable">頭数</th><th class="col-sortable">該当馬番</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="pos-dist-stats">${buildFieldPrevStatsHtml(fps)}</div>
+  </div>`;
+}
+
+function escHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function escAttr(s) {
+  return escHtml(s).replace(/'/g, '&#39;');
+}
+
+/** クリックで列ソート（data-sort / data-sort-text 対応） */
+function enableTableSort(tableEl, opts) {
+  if (!tableEl || tableEl.dataset.sortBound === '1') return;
+  tableEl.dataset.sortBound = '1';
+  const thead = tableEl.querySelector('thead tr');
+  const tbody = tableEl.querySelector('tbody');
+  if (!thead || !tbody) return;
+
+  const renumberCol = opts && opts.renumberCol >= 0 ? opts.renumberCol : -1;
+  let sortCol = null;
+  let sortDir = 1;
+
+  function cellValue(td) {
+    if (!td) return { n: NaN, s: '' };
+    if (td.hasAttribute('data-sort-text')) {
+      return { n: NaN, s: td.getAttribute('data-sort-text') || '' };
+    }
+    const ds = td.getAttribute('data-sort');
+    if (ds !== null && ds !== '') {
+      const num = parseFloat(ds);
+      return Number.isNaN(num) ? { n: NaN, s: String(ds) } : { n: num, s: String(ds) };
+    }
+    const txt = (td.textContent || '').trim().replace(/[¥,%]/g, '');
+    const num = parseFloat(txt);
+    return Number.isNaN(num) ? { n: NaN, s: txt } : { n: num, s: txt };
   }
 
-  const entries = data.entries;
-  const byHorseNum = [...entries].sort((a, b) => a.horse_number - b.horse_number);
-  const fps = data.field_prev_stats || {};
+  function compareRows(a, b, col) {
+    const A = cellValue(a.children[col]);
+    const B = cellValue(b.children[col]);
+    if (!Number.isNaN(A.n) && !Number.isNaN(B.n)) return sortDir * (A.n - B.n);
+    if (!Number.isNaN(A.n)) return -sortDir;
+    if (!Number.isNaN(B.n)) return sortDir;
+    return sortDir * A.s.localeCompare(B.s, 'ja');
+  }
 
-  let html = '';
-
-  // Race meta
-  html += `<div class="race-meta">
-    <span class="race-name">${data.race_name || data.race_id}</span>
-    <span class="race-tag">${data.venue || ''} ${data.surface || ''}${data.distance || ''}m ${data.track_condition || ''}</span>
-    <span class="race-tag">${data.field_size}頭</span>
-    ${fps.prev_top3_count != null ? `<span class="race-tag" style="background:rgba(239,68,68,0.1);color:var(--err)">前走前目 ${fps.prev_top3_count}頭</span>` : ''}
-    ${fps.front_pressure_ratio != null ? `<span class="race-tag" style="background:rgba(245,158,11,0.1);color:var(--warn)">前半圧力 ${(fps.front_pressure_ratio*100).toFixed(0)}%</span>` : ''}
-  </div>`;
-
-  // ── 位置取り分布ビン ──
-  const bins = fps.position_bins || [];
-  if (bins.length > 0) {
-    const maxCount = Math.max(...bins.map(b => b.count), 1);
-    const binColors = ['var(--err)', 'var(--warn)', 'var(--accent)', 'var(--purple)', 'var(--text-dim)'];
-    html += `<div class="pos-dist-section">
-      <h3>📊 前走位置取り分布（ビン別頭数）</h3>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
-        <div style="flex:1;min-width:280px">
-          <div class="bin-chart">`;
-    bins.forEach((b, i) => {
-      const pct = b.count / maxCount;
-      const barH = Math.max(8, pct * 90);
-      const col = binColors[i];
-      const nums = b.horse_numbers.map(n => {
-        const e = byHorseNum.find(x => x.horse_number === n);
-        const bn = e?.bracket_number || 1;
-        return `<div class="bin-hn waku-${bn}" title="${e?.horse_name || ''}">${n}</div>`;
-      }).join('');
-      html += `<div class="bin-bar-wrap">
-        <div class="bin-count" style="color:${col}">${b.count}</div>
-        <div class="bin-bar" style="height:${barH}px;background:${col}33;border:1px solid ${col}"></div>
-        <div class="bin-horse-nums">${nums}</div>
-        <div class="bin-label">${b.label}</div>
-      </div>`;
+  tableEl.addEventListener('click', (ev) => {
+    const th = ev.target.closest('th.col-sortable');
+    if (!th || !tableEl.contains(th)) return;
+    const idx = Array.from(thead.children).indexOf(th);
+    if (idx < 0) return;
+    if (sortCol === idx) sortDir = -sortDir;
+    else {
+      sortCol = idx;
+      sortDir = 1;
+    }
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => compareRows(a, b, idx));
+    rows.forEach((r, i) => {
+      tbody.appendChild(r);
+      if (renumberCol >= 0 && r.children[renumberCol]) {
+        r.children[renumberCol].textContent = String(i + 1);
+      }
     });
-    html += `</div></div>
-        <div style="font-size:11px;color:var(--text-dim);line-height:1.7;max-width:260px;padding-top:8px">
-          <div><b style="color:#fff">T1F正規化係数</b> ${(fps.t1f_normalization_factor||1).toFixed(2)}</div>
-          <div>前走3番手以内: <b style="color:var(--err)">${fps.prev_top3_count||0}頭</b></div>
-          <div>前半圧力: <b style="color:var(--warn)">${((fps.front_pressure_ratio||0)*100).toFixed(0)}%</b></div>
-          <div>同馬場: ${fps.same_surface_count||0}頭 / 距離延長: ${fps.dist_extension_count||0}頭 / 距離短縮: ${fps.dist_reduction_count||0}頭</div>
-          <div style="margin-top:6px;color:var(--text-dim);font-size:10px">
-            T1F係数が高いほど前に行きたい馬が多く、ペース争いが激化します
-          </div>
+    thead.querySelectorAll('th.col-sortable').forEach((h) => {
+      h.classList.remove('col-sort-asc', 'col-sort-desc');
+    });
+    th.classList.add(sortDir > 0 ? 'col-sort-asc' : 'col-sort-desc');
+  });
+}
+
+/** ポジションマップ: 1グループに格納する最大頭数 */
+const MAX_HORSES_PER_CLUSTER = 5;
+
+/**
+ * ポジションマップ用: 番手が近い馬を同一縦位置のクラスターにまとめる。
+ * 1グループ最大 MAX_HORSES_PER_CLUSTER 頭。超過分は別グループ（番手帯内で縦位置を少しずらす）。
+ */
+function clusterPositionMapHorses(horses, fieldSize) {
+  if (!horses.length) return [];
+  const fs = Math.max(Number(fieldSize) || horses.length, 2);
+  const maxGap = fs <= 10 ? 1 : fs <= 14 ? 2 : 2;
+
+  const sorted = [...horses].sort((a, b) => {
+    if (a.position !== b.position) return a.position - b.position;
+    return a.position_norm - b.position_norm;
+  });
+
+  const rawClusters = [];
+  let cur = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    const h = sorted[i];
+    const last = cur[cur.length - 1];
+    const withinGap = h.position - last.position <= maxGap;
+    if (withinGap && cur.length < MAX_HORSES_PER_CLUSTER) {
+      cur.push(h);
+    } else {
+      rawClusters.push(cur);
+      cur = [h];
+    }
+  }
+  rawClusters.push(cur);
+
+  const clusters = [];
+  rawClusters.forEach((group) => {
+    const parts = splitClusterGroupsByMaxSize(group, MAX_HORSES_PER_CLUSTER);
+    parts.forEach((part, partIdx) => {
+      clusters.push(buildPositionMapCluster(part, partIdx, parts.length));
+    });
+  });
+  return clusters;
+}
+
+function splitClusterGroupsByMaxSize(group, maxSize) {
+  const n = Math.max(1, maxSize || MAX_HORSES_PER_CLUSTER);
+  if (group.length <= n) return [group];
+  const parts = [];
+  for (let i = 0; i < group.length; i += n) {
+    parts.push(group.slice(i, i + n));
+  }
+  return parts;
+}
+
+function buildPositionMapCluster(group, partIdx, partTotal) {
+  group.sort((a, b) => a.bracket_number - b.bracket_number);
+  const positions = group.map((g) => g.position).sort((a, b) => a - b);
+  const norms = group.map((g) => g.position_norm);
+  let avgNorm = norms.reduce((s, v) => s + v, 0) / norms.length;
+  if (partTotal > 1) {
+    avgNorm = Math.min(0.97, avgNorm + partIdx * 0.018);
+  }
+  return {
+    horses: group,
+    horseRows: [group],
+    avgNorm,
+    positions,
+  };
+}
+
+function earlyPosBandLabel(positions) {
+  const p = (positions || []).filter((n) => n != null && !Number.isNaN(n));
+  if (!p.length) return '—';
+  const min = p[0];
+  const max = p[p.length - 1];
+  return min === max ? String(min) : `${min}-${max}`;
+}
+
+function buildPositionMapHtml(data, byHorseNum, fieldSize) {
+  const posFlow = data.position_flow || [];
+  if (!posFlow.length) return '';
+
+  const horsesWithPos = posFlow.map((pf) => {
+    const pos = pf.positions?.early;
+    if (!pos || pos.position == null) return null;
+    const bn = byHorseNum.find((e) => e.horse_number === pf.horse_number)?.bracket_number || 1;
+    return {
+      horse_number: pf.horse_number,
+      horse_name: pf.horse_name || '',
+      position: pos.position,
+      position_norm: pos.position_norm || 0,
+      bracket_number: bn,
+    };
+  }).filter((h) => h !== null);
+
+  if (!horsesWithPos.length) return '';
+
+  const clusters = clusterPositionMapHorses(horsesWithPos, fieldSize)
+    .sort((a, b) => (a.positions[0] || 99) - (b.positions[0] || 99));
+
+  let ladderHtml = '';
+  clusters.forEach((cluster) => {
+    const band = earlyPosBandLabel(cluster.positions);
+    let pills = '';
+    cluster.horses.forEach((horse) => {
+      pills += `<button type="button" class="pos-pill waku-${horse.bracket_number}"
+        title="${escAttr(horse.horse_name)} · 序盤${horse.position}番手 枠${horse.bracket_number}"
+        onclick="scrollToHorseRow(${horse.horse_number})">${horse.horse_number}</button>`;
+    });
+    ladderHtml += `<div class="early-pos-row">
+      <div class="early-pos-band" title="${band}番手">${escHtml(band)}<span class="band-unit">番手</span></div>
+      <div class="early-pos-pills">${pills}</div>
+    </div>`;
+  });
+
+  const gapNote = fieldSize <= 10 ? '1' : '2';
+  return `<div class="early-pos-map">
+    <p class="early-pos-hint">
+      序盤1-3Fの想定位置（全${fieldSize}頭に1〜${fieldSize}番手を割当）。
+      近い番手（${gapNote}番手差以内）は同じ行にまとめ、1行は最大${MAX_HORSES_PER_CLUSTER}頭です。上が前・下が後です。
+    </p>
+    <div class="early-pos-axis">
+      <span class="axis-front">▲ 前</span>
+      <span class="axis-title">序盤 1-3F</span>
+      <span class="axis-back">後 ▼</span>
+    </div>
+    <div class="early-pos-ladder">${ladderHtml}</div>
+  </div>`;
+}
+
+function initSortableTables(root) {
+  const el = root || document.getElementById('mainContent');
+  if (!el) return;
+  el.querySelectorAll('.horse-table, .pos-dist-table').forEach((t) => {
+    enableTableSort(t);
+  });
+}
+
+function horseNameLink(horseId, horseName, opts = {}) {
+  const name = horseName || '-';
+  if (!horseId) return escHtml(name);
+  const cls = opts.className || 'horse-name-link';
+  const id = escHtml(horseId);
+  const nm = escHtml(horseName || '');
+  const title = opts.title || 'クリックで対象レース以前の直近10走を表示';
+  const stop = opts.stopPropagation ? 'event.stopPropagation();' : '';
+  return `<button type="button" class="${cls}" data-horse-id="${id}" data-horse-name="${nm}" title="${title}" onclick="${stop}openHorseHistory(this.dataset.horseId, this.dataset.horseName)">${escHtml(name)}</button>`;
+}
+
+function formatPassingDisplay(po) {
+  const s = String(po || '').trim();
+  if (!s || s === '**') return '—';
+  if (s.includes('-')) return s;
+  if (/^\d+$/.test(s) && s.length > 2) {
+    const parts = [];
+    let i = 0;
+    while (i < s.length) {
+      if (i + 1 < s.length) {
+        const two = parseInt(s.slice(i, i + 2), 10);
+        if (two >= 10 && two <= 18) {
+          parts.push(String(two));
+          i += 2;
+          continue;
+        }
+      }
+      parts.push(s[i]);
+      i += 1;
+    }
+    return parts.join('-');
+  }
+  return s;
+}
+
+/** 前走 / 近3走 の2行表示（①前走 ②近3走） */
+function formDualCell(prevHtml, recent3Html) {
+  return `<div class="form-dual">
+    <div class="form-dual-row"><span class="form-dual-tag">前走</span><span>${prevHtml}</span></div>
+    <div class="form-dual-row"><span class="form-dual-tag">近3</span><span>${recent3Html}</span></div>
+  </div>`;
+}
+
+function formStyleCell(e) {
+  const form = e.form || {};
+  const r3 = e.recent_3 || {};
+  const main = form.style || e.profile?.style || '差し';
+  const prevS = form.style_prev || e.prev_race?.style || '-';
+  const r3S = form.style_recent3 || r3.style || '-';
+  const n = r3.n_races || 0;
+  return `<div class="form-dual-main">
+      <span class="${styleClass(main)}" style="font-size:10px" title="近3走をやや重視した脚質">${main}</span>
+    </div>
+    ${formDualCell(
+      `<span class="${styleClass(prevS)}" style="font-size:9px">${escHtml(prevS)}</span>`,
+      `<span class="${styleClass(r3S)}" style="font-size:9px">${escHtml(r3S)}${n > 0 ? `<span class="form-style-note">(${n}走)</span>` : ''}</span>`
+    )}`;
+}
+
+function blendedPosRatio(pr, r3) {
+  const p = pr.t1f_raw > 0 ? pr.pos_ratio : null;
+  const r = (r3.n_races || 0) > 0 ? r3.pos_ratio_avg : null;
+  if (p != null && r != null) return p * 0.4 + r * 0.6;
+  if (r != null) return r;
+  if (p != null) return p;
+  return 0.5;
+}
+
+function histRankClass(rank) {
+  const r = parseInt(rank, 10);
+  if (r === 1) return 'hist-rank-1';
+  if (r === 2 || r === 3) return 'hist-rank-2';
+  return '';
+}
+
+function renderHorseHistoryTable(races) {
+  if (!races.length) {
+    const dl = formatDateKeyLabel(_currentAnalysisContext.race_date);
+    const hint = dl
+      ? `${dl} より前の戦績がありません（未デビュー・データ未取得の可能性）`
+      : '戦績データがありません（horse_result 未取得の可能性）';
+    return `<div class="empty">${escHtml(hint)}</div>`;
+  }
+  let html = '<div style="overflow-x:auto"><table class="horse-history-table"><thead><tr>';
+  html += '<th class="tc col-sortable">日付</th><th class="col-sortable">開催</th><th class="col-sortable">レース名</th><th class="tc col-sortable">距離</th>';
+  html += '<th class="tc col-sortable">馬場</th><th class="tc col-sortable">頭数</th><th class="tc col-sortable">枠</th><th class="tc col-sortable">番</th>';
+  html += '<th class="tc col-sortable">着</th><th class="col-sortable">騎手</th><th class="tc col-sortable">通過</th><th class="tr col-sortable">上り3F</th><th class="tc col-sortable">人気</th>';
+  html += '</tr></thead><tbody>';
+  for (const r of races) {
+    const rank = r.finish_position;
+    const rc = histRankClass(rank);
+    const dist = r.distance ? `${r.surface || ''}${r.distance}m` : (r.surface || '—');
+    html += `<tr>
+      <td class="tc" data-sort-text="${escAttr(r.date || '')}">${escHtml(r.date || '—')}</td>
+      <td data-sort-text="${escAttr(r.venue || '')}">${escHtml(r.venue || '—')}</td>
+      <td style="max-width:200px;white-space:normal" data-sort-text="${escAttr(r.race_name || '')}">${escHtml(r.race_name || '—')}</td>
+      <td class="tc" data-sort="${r.distance || ''}">${escHtml(dist)}</td>
+      <td class="tc" data-sort-text="${escAttr(r.track_condition || '')}">${escHtml(r.track_condition || '—')}</td>
+      <td class="tc" data-sort="${r.field_size || ''}">${r.field_size || '—'}</td>
+      <td class="tc" data-sort="${r.bracket_number ?? ''}">${r.bracket_number ?? '—'}</td>
+      <td class="tc" data-sort="${r.horse_number ?? ''}">${r.horse_number ?? '—'}</td>
+      <td class="tc ${rc}" data-sort="${rank > 0 ? rank : ''}">${rank > 0 ? rank : '—'}</td>
+      <td data-sort-text="${escAttr(r.jockey_name || '')}">${escHtml(r.jockey_name || '—')}</td>
+      <td class="tc" data-sort-text="${escAttr(formatPassingDisplay(r.passing_order))}">${escHtml(formatPassingDisplay(r.passing_order))}</td>
+      <td class="tr" data-sort="${r.last_3f > 0 ? r.last_3f : ''}">${r.last_3f > 0 ? Number(r.last_3f).toFixed(1) : '—'}</td>
+      <td class="tc" data-sort="${r.popularity > 0 ? r.popularity : ''}">${r.popularity > 0 ? r.popularity : '—'}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function normalizeDateKey(d) {
+  if (!d) return '';
+  const s = String(d).trim();
+  if (/^\d{8}$/.test(s)) return s;
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}${iso[2]}${iso[3]}`;
+  const slash = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (slash) {
+    return `${slash[1]}${String(slash[2]).padStart(2, '0')}${String(slash[3]).padStart(2, '0')}`;
+  }
+  return '';
+}
+
+function formatDateKeyLabel(key) {
+  const k = normalizeDateKey(key);
+  if (k.length !== 8) return '';
+  return `${k.slice(0, 4)}/${k.slice(4, 6)}/${k.slice(6, 8)}`;
+}
+
+function filterRacesBeforeAnalysis(races, ctx, limit = 10) {
+  const cutoff = normalizeDateKey(ctx.race_date);
+  const curRid = String(ctx.race_id || '').trim();
+  const out = [];
+  for (const r of races || []) {
+    if (curRid && String(r.race_id || '').trim() === curRid) continue;
+    const rDate = normalizeDateKey(r.date || r.race_date);
+    if (cutoff && rDate && rDate >= cutoff) continue;
+    out.push(r);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function horseHistoryCacheKey(horseId, ctx) {
+  return `${horseId}|${ctx.race_id || ''}|${ctx.race_date || ''}`;
+}
+
+/** 対象レース日より前の直近戦績（recent_races 未デプロイ時は detail にフォールバック） */
+async function fetchHorseRecentRacesPayload(horseId, ctx, limit = 10) {
+  const beforeDate = normalizeDateKey(ctx.race_date);
+  const excludeRaceId = String(ctx.race_id || '').trim();
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (beforeDate) q.set('before_date', beforeDate);
+  if (excludeRaceId) q.set('exclude_race_id', excludeRaceId);
+
+  const recentUrl = `/api/horse/${encodeURIComponent(horseId)}/recent_races?${q}`;
+  let resp = await fetch(recentUrl);
+  if (resp.ok) {
+    const data = await resp.json();
+    return {
+      horse_name: data.horse_name || '',
+      races: data.races || [],
+    };
+  }
+  if (resp.status === 404) {
+    resp = await fetch(`/api/horse/${encodeURIComponent(horseId)}/detail`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const detail = await resp.json();
+    const info = detail.info || {};
+    const history = detail.race_history || [];
+    return {
+      horse_name: info.horse_name || detail.horse_name || '',
+      races: filterRacesBeforeAnalysis(history, ctx, limit),
+    };
+  }
+  throw new Error(`HTTP ${resp.status}`);
+}
+
+async function openHorseHistory(horseId, horseName) {
+  if (!horseId) return;
+  const modal = document.getElementById('horseHistoryModal');
+  const body = document.getElementById('horseHistoryBody');
+  const titleEl = document.getElementById('horseHistoryTitle');
+  const subEl = document.getElementById('horseHistorySub');
+  if (!modal || !body) return;
+
+  const ctx = { ..._currentAnalysisContext };
+  const cacheKey = horseHistoryCacheKey(horseId, ctx);
+  const dateLabel = formatDateKeyLabel(ctx.race_date);
+
+  modal.classList.add('is-open');
+  modal.setAttribute('aria-hidden', 'false');
+  titleEl.textContent = horseName || '馬';
+  subEl.textContent = dateLabel
+    ? `horse_id: ${horseId} — ${dateLabel} より前の直近10走（新しい順）`
+    : `horse_id: ${horseId} — 直近10走（新しい順）`;
+  body.innerHTML = `
+    <div class="td-loading" style="padding:20px 8px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div class="td-loading-spinner" style="width:32px;height:32px" aria-hidden="true"></div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#fff">戦績を読み込んでいます</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px">直近10走を取得中…</div>
         </div>
       </div>
     </div>`;
-  }
 
-  // ── T1F・コース比較テーブル ──
-  if (byHorseNum.length > 0 && byHorseNum[0].prev_race) {
-    html += `<div class="analysis-section">
-      <h3>🔍 前走T1Fデータ・コース比較</h3>
-      <table class="analysis-table">
-        <thead><tr>
-          <th>馬番</th><th>馬名</th><th>脚質</th>
-          <th>前走1角</th><th>前走頭数</th><th>前走位置%</th><th>T1F正規化</th><th>T1F強度</th>
-          <th>前走馬場</th><th>馬場変化</th><th>前走距離</th><th>距離変化</th><th>馬番変化</th><th>前走着</th>
-        </tr></thead>
-        <tbody>`;
-    for (const e of byHorseNum) {
-      const pr = e.prev_race || {};
-      const cc = e.course_comparison || {};
-      const prof = e.profile || {};
-      const bn = e.bracket_number || 0;
-
-      const t1fNorm = pr.t1f_norm || 0.5;
-      const t1fBarW = Math.min(100, (1 - t1fNorm) * 120);
-      const t1fColor = t1fNorm < 0.25 ? 'var(--err)' : t1fNorm < 0.45 ? 'var(--warn)' : 'var(--accent)';
-
-      const distCls = cc.dist_category === '距離延長' ? 'dist-ext' : cc.dist_category === '距離短縮' ? 'dist-red' : 'dist-same';
-      const distSign = cc.dist_change > 0 ? `+${cc.dist_change}` : cc.dist_change;
-      const gateCls = cc.gate_change > 0 ? 'gate-up' : cc.gate_change < 0 ? 'gate-down' : 'gate-same';
-      const gateSign = cc.gate_change > 0 ? `+${cc.gate_change}` : (cc.gate_change === 0 ? '±0' : cc.gate_change);
-      const surfCls = cc.same_surface ? 'surface-match' : 'surface-diff';
-
-      html += `<tr>
-        <td><span class="${wakuClass(bn)}" style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;font-weight:700;font-size:10px">${e.horse_number}</span></td>
-        <td style="font-weight:600">${e.horse_name || '-'}</td>
-        <td><span class="${styleClass(prof.style||'差し')}" style="font-size:10px">${prof.style||'-'}</span></td>
-        <td style="text-align:center;font-weight:700;color:${t1fColor}">${pr.t1f_raw || '-'}</td>
-        <td style="text-align:center">${pr.field_size || '-'}</td>
-        <td style="text-align:center">${pr.pos_ratio ? (pr.pos_ratio*100).toFixed(0)+'%' : '-'}</td>
-        <td style="text-align:center;font-weight:700;color:${t1fColor}">${t1fNorm.toFixed(3)}</td>
-        <td class="t1f-bar-cell">
-          <div class="t1f-bar-bg"><div class="t1f-bar-fill" style="width:${t1fBarW}%;background:${t1fColor}"></div></div>
-        </td>
-        <td class="${surfCls}">${pr.surface||'-'} ${cc.same_surface ? '✓' : '→' + cc.current_surface}</td>
-        <td class="${surfCls}" style="font-size:10px">${cc.same_surface ? '同馬場' : '馬場変化'}</td>
-        <td style="text-align:center">${pr.distance ? pr.distance+'m' : '-'}</td>
-        <td class="${distCls}" style="text-align:center">${pr.distance ? distSign+'m' : '-'}<br><span style="font-size:9px">${cc.dist_category||''}</span></td>
-        <td class="${gateCls}" style="text-align:center">${pr.horse_number ? gateSign : '-'}</td>
-        <td style="text-align:center;color:${pr.finish_pos<=3?'var(--ok)':pr.finish_pos<=5?'var(--accent)':'var(--text-dim)'};font-weight:700">${pr.finish_pos||'-'}</td>
-      </tr>`;
+  try {
+    let payload = _horseHistoryCache[cacheKey];
+    if (!payload) {
+      payload = await fetchHorseRecentRacesPayload(horseId, ctx, 10);
+      _horseHistoryCache[cacheKey] = payload;
     }
-    html += `</tbody></table></div>`;
+    const displayName = payload.horse_name || horseName || '';
+    titleEl.textContent = displayName;
+    body.innerHTML = renderHorseHistoryTable(payload.races || []);
+    const histTbl = body.querySelector('.horse-history-table');
+    if (histTbl) enableTableSort(histTbl);
+  } catch (e) {
+    body.innerHTML = `<div class="empty">戦績の取得に失敗しました: ${escHtml(e.message)}</div>`;
   }
+}
 
-  // Pace prediction
-  const pace = data.pace_prediction || {};
+function closeHorseHistory() {
+  const modal = document.getElementById('horseHistoryModal');
+  if (!modal) return;
+  modal.classList.remove('is-open');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeHorseHistory();
+});
+
+function buildPacePredictionHtml(data, entries, fps) {
+  const pace = data.pace_prediction;
+  if (!pace) return '';
+
   const paceType = pace.pace_type || 'ミドル';
   const paceIndex = pace.pace_index || 50;
   const pacePattern = pace.predicted_pattern || '';
@@ -965,12 +2719,11 @@ function renderResults(data) {
   const lapTimes = pace.lap_times || {};
   const lap1f = lapTimes.first_1f || 0;
   const lap3f = lapTimes.first_3f || 0;
-
-  // ペース解説生成
+  const l3fBaseline = pace.last_3f_baseline_sec || 0;
   const paceComment = generatePaceComment(pace, fps, data.field_size || entries.length);
   const verdictCls = paceType === 'ハイ' ? 'pace-verdict-high' : paceType === 'スロー' ? 'pace-verdict-slow' : 'pace-verdict-mid';
 
-  html += `<div class="pace-prediction">
+  return `<div class="pace-prediction compact">
     <h3>🏁 ペース予想</h3>
     <div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span class="pace-type-badge ${paceClass}">${paceType}ペース</span>
@@ -983,7 +2736,6 @@ function renderResults(data) {
     <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-bottom:12px">
       <span>◀ スロー</span><span>ミドル</span><span>ハイ ▶</span>
     </div>
-
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-start">
       <div class="pace-bars" style="gap:14px">
         <div class="pace-item"><span class="pace-dot" style="background:var(--err)"></span>
@@ -996,383 +2748,118 @@ function renderResults(data) {
           <span class="pace-label">追込</span><span class="pace-count">${dist['追込'] || 0}頭</span></div>
       </div>
       ${lap1f > 0 ? `
-      <div class="lap-times" style="margin-top:0;padding:10px 14px">
+      <div class="lap-times${l3fBaseline > 0 ? '' : ' cols-2'}">
         <div class="lap-time-item">
-          <div class="lap-label">前半1F</div>
-          <div class="lap-value">${lap1f.toFixed(1)}<span class="lap-unit">秒</span></div>
+          <span class="lap-label">前半1F</span>
+          <span class="lap-value">${lap1f.toFixed(1)}<span class="lap-unit">秒</span></span>
         </div>
         <div class="lap-time-item">
-          <div class="lap-label">前半3F</div>
-          <div class="lap-value">${lap3f.toFixed(1)}<span class="lap-unit">秒</span></div>
+          <span class="lap-label">前半3F</span>
+          <span class="lap-value">${lap3f.toFixed(1)}<span class="lap-unit">秒</span></span>
         </div>
+        ${l3fBaseline > 0 ? `
+        <div class="lap-time-item">
+          <span class="lap-label">上り3F基準</span>
+          <span class="lap-value">${l3fBaseline.toFixed(1)}<span class="lap-unit">秒</span></span>
+        </div>` : ''}
       </div>` : ''}
     </div>
-
-    <div class="pace-comment-block">
-      ${paceComment.lines.map(l => `
-        <div class="pace-comment-line">
-          <span class="pace-comment-icon">${l.icon}</span>
-          <span class="pace-comment-text">${l.text}</span>
-        </div>`).join('')}
-      <div class="pace-verdict ${verdictCls}">
-        ${paceComment.verdict}
-      </div>
-      <div class="pace-tip">${paceComment.tip}</div>
+    <div class="pace-verdict ${verdictCls}" style="margin-top:8px;font-size:12px;line-height:1.5">
+      ${paceComment.verdict}
     </div>
+    <details class="pace-more">
+      <summary>詳しいペース解説を表示</summary>
+      <div class="pace-comment-block" style="display:block;margin-top:10px">
+        ${paceComment.lines.map(l => `
+          <div class="pace-comment-line">
+            <span class="pace-comment-icon">${l.icon}</span>
+            <span class="pace-comment-text">${l.text}</span>
+          </div>`).join('')}
+        <div class="pace-tip" style="margin-top:8px">${paceComment.tip}</div>
+      </div>
+    </details>
   </div>`;
-
-  // Position flow prediction
-  const posFlow = data.position_flow || [];
-  const fieldSize = data.field_size || entries.length || byHorseNum.length || 18;
-
-  if (posFlow.length > 0) {
-    html += `<div class="position-flow">
-      <h3>🔄 位置取り予測（序盤 → 中盤 → 終盤）</h3>
-      <table class="position-table">
-        <thead><tr>
-          <th>馬番</th><th>馬名</th><th>脚質</th>
-          <th>序盤</th><th></th><th>中盤</th><th></th><th>終盤</th>
-          <th>展開</th><th>信頼度</th>
-        </tr></thead>
-        <tbody>`;
-
-    for (const pf of posFlow) {
-      const pos = pf.positions || {};
-      const early = pos.early?.position || '-';
-      const mid = pos.mid?.position || '-';
-      const late = pos.late?.position || '-';
-      const flow = pf.flow_pattern || '';
-      const conf = pf.confidence || 0;
-      const warn = pf.stamina_concern ? '<span class="stamina-warn">⚠️</span>' : '';
-
-      let flowClass = 'flow-maintain';
-      if (flow.includes('追い込み') || flow.includes('差し')) flowClass = 'flow-forward';
-      else if (flow.includes('後退')) flowClass = 'flow-backward';
-
-      const bn = byHorseNum.find(e => e.horse_number === pf.horse_number)?.bracket_number || 0;
-
-      html += `<tr>
-        <td><span class="${wakuClass(bn)}" style="display:inline-block;width:24px;height:24px;line-height:24px;text-align:center;border-radius:50%;font-weight:700;font-size:11px">${pf.horse_number}</span></td>
-        <td style="font-weight:600;font-size:11px">${pf.horse_name || ''}</td>
-        <td><span class="${styleClass(pf.style || '')}" style="font-size:10px">${pf.style || ''}</span></td>
-        <td><span class="pos-num" style="background:rgba(239,68,68,0.15);color:var(--err)">${early}</span></td>
-        <td><span class="pos-arrow">→</span></td>
-        <td><span class="pos-num" style="background:rgba(59,130,246,0.15);color:var(--accent)">${mid}</span></td>
-        <td><span class="pos-arrow">→</span></td>
-        <td><span class="pos-num" style="background:rgba(34,197,94,0.15);color:var(--ok)">${late}</span></td>
-        <td><span class="flow-badge ${flowClass}">${flow}</span>${warn}</td>
-        <td style="width:60px">
-          <div class="confidence-bar"><div class="confidence-fill" style="width:${conf*100}%"></div></div>
-        </td>
-      </tr>`;
-    }
-
-    html += `</tbody></table></div>`;
-
-    // Position Mapping Visualization
-    html += `<div class="position-map">
-      <h3>📍 ポジションマッピング（序盤 → 中盤 → 終盤）</h3>
-      <div class="map-stages">`;
-
-    // 序盤・中盤・終盤の3つのステージ
-    ['early', 'mid', 'late'].forEach((stage, idx) => {
-      const stageLabels = {early: '序盤 (1-3F)', mid: '中盤 (4-7F)', late: '終盤 (直線)'};
-      html += `<div class="map-stage">
-        <div class="stage-label">${stageLabels[stage]}</div>
-        <div class="track-container" id="track-${stage}">
-          <div class="track-rachi"></div>
-          <div class="track-line"></div>`;
-
-      // 各馬の位置情報を収集
-      const horsesWithPos = posFlow.map(pf => {
-        const pos = pf.positions[stage];
-        if (!pos) return null;
-
-        const bn = byHorseNum.find(e => e.horse_number === pf.horse_number)?.bracket_number || 1;
-        return {
-          horse_number: pf.horse_number,
-          horse_name: pf.horse_name || '',
-          position: pos.position,
-          position_norm: pos.position_norm || 0,
-          bracket_number: bn
-        };
-      }).filter(h => h !== null);
-
-      // 同じ位置の馬をグループ化
-      const positionGroups = {};
-      horsesWithPos.forEach(h => {
-        if (!positionGroups[h.position]) {
-          positionGroups[h.position] = [];
-        }
-        positionGroups[h.position].push(h);
-      });
-
-      // 各グループを横一列に配置（同じ位置の馬は縦位置を完全に揃える）
-      Object.values(positionGroups).forEach(group => {
-        // 枠番順にソート（内枠が先）
-        group.sort((a, b) => a.bracket_number - b.bracket_number);
-
-        const groupSize = group.length;
-        const posNorm = group[0].position_norm;
-        const topPct = posNorm * 94 + 3; // 全員同じ縦位置（3%〜97%の範囲を使用）
-
-        // グループ全体の横幅を計算
-        const markerSize = 24; // px
-        const gap = 4; // px
-        const trackWidth = 280; // px（コンテナの概算幅）
-        const groupWidthPx = groupSize * markerSize + (groupSize - 1) * gap;
-        const groupWidthPct = (groupWidthPx / trackWidth) * 100;
-
-        // グループの開始位置（ラチから少し離れた位置）
-        const baseLeftPct = 8;
-
-        // 各馬を配置
-        group.forEach((horse, idx) => {
-          const offsetPx = idx * (markerSize + gap);
-          const offsetPct = (offsetPx / trackWidth) * 100;
-          const leftPct = baseLeftPct + offsetPct;
-
-          html += `<div class="horse-marker waku-${horse.bracket_number}"
-                        style="top:${topPct}%; left:${leftPct}%; transform: translateY(-50%);"
-                        title="${horse.horse_name} (${horse.position}番手) 枠${horse.bracket_number}"
-                        onclick="scrollToCard('card-${horse.horse_number}')">
-            ${horse.horse_number}
-          </div>`;
-        });
-      });
-
-      // 位置ラベル（1番手、5番手、10番手など）
-      const labelInterval = Math.max(1, Math.floor(fieldSize / 5));
-      for (let p = 1; p <= fieldSize; p += labelInterval) {
-        const posNorm = (p - 1) / Math.max(fieldSize - 1, 1);
-        const topPct = posNorm * 94 + 3;
-        html += `<div class="position-label" style="top:${topPct}%">${p}番手</div>`;
-      }
-
-      html += `</div></div>`;
-    });
-
-    html += `</div></div>`;
-  }
-
-  // Gate visualization
-  html += `<div class="gate-viz"><h3>ゲート配置 × 追走容易度</h3><div class="gate-row">`;
-  for (const e of byHorseNum) {
-    const td = e.tracking_difficulty || {};
-    const pct = td.ease_pct || 50;
-    const barH = Math.max(20, pct * 1.4);
-    const color = easeColor(pct);
-    const bn = e.bracket_number || 0;
-    html += `<div class="gate-slot" onclick="scrollToCard('card-${e.horse_number}')">
-      <div class="gate-bar" style="height:${barH}px;background:${color}20;border:1px solid ${color}">
-        <span class="gate-bar-label" style="color:${color}">${pct.toFixed(0)}</span>
-      </div>
-      <div class="gate-num ${wakuClass(bn)}">${e.horse_number}</div>
-      <div class="gate-name">${e.horse_name || ''}</div>
-      <div class="gate-ease" style="color:${color}">${td.label || '-'}</div>
-    </div>`;
-  }
-  html += `</div></div>`;
-
-  // Cards（スタミナ指数付き）
-  html += '<div class="cards-grid">';
-  for (const e of entries) {
-    const td = e.tracking_difficulty || {};
-    const prof = e.profile || {};
-    const gate = e.gate_factors || {};
-    const neighbor = e.neighbor_factors || {};
-    const field = e.field_factors || {};
-    const pr = e.prev_race || {};
-    const pct = td.ease_pct || 50;
-    const bn = e.bracket_number || 0;
-
-    // スタミナ指数: position_flowから取得
-    const pf = (data.position_flow || []).find(x => x.horse_number === e.horse_number);
-    const stm = pf?.stamina || {};
-    const stmIdx = stm.stamina_index ?? null;
-    const stmLbl = stm.stamina_label || '';
-
-    html += `<div class="td-card" id="card-${e.horse_number}">
-      <div class="td-card-header">
-        <div class="td-card-num ${wakuClass(bn)}">${e.horse_number}</div>
-        <div class="td-card-info">
-          <div class="td-card-name">${e.horse_name || '-'}</div>
-          <span class="td-card-style ${styleClass(prof.style || '差し')}">${prof.style || '-'}</span>
-          <span style="font-size:10px;color:var(--text-dim);margin-left:4px">安定度 ${((prof.stability || 0)*100).toFixed(0)}%</span>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
-          <div class="td-ease-badge ${easeClass(td.label || '普通')}" title="追走容易度">${pct.toFixed(0)}</div>
-          ${stmIdx !== null ? `<div class="stamina-index-badge ${staminaClass(stmLbl)}" title="スタミナ温存度">${stmIdx.toFixed(0)}</div>` : ''}
-        </div>
-      </div>
-      <div class="td-card-body">
-        ${stmIdx !== null ? `
-        <div class="td-stamina-row">
-          <span class="td-stamina-label">🔋 温存度</span>
-          <span class="td-stamina-value" style="color:${staminaColor(stmIdx)}">${stmIdx.toFixed(1)}</span>
-          <span class="${staminaClass(stmLbl)}" style="font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px">${stmLbl}</span>
-          <div class="stamina-load-row">
-            <span class="load-item"><span class="load-dot" style="background:var(--accent)"></span>ペース ${(stm.pace_load>0?'+':'')+(stm.pace_load*100).toFixed(0)}%</span>
-            <span class="load-item"><span class="load-dot" style="background:var(--warn)"></span>位置 ${(stm.position_load*100).toFixed(0)}%</span>
-            <span class="load-item"><span class="load-dot" style="background:var(--purple)"></span>距離×${stm.distance_load}</span>
-          </div>
-        </div>` : ''}
-
-        <div class="td-factor-group" style="margin-top:${stmIdx !== null ? '8px' : '0'}">
-          <div class="td-factor-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            ゲート要因
-          </div>
-          <div class="td-factor-row">
-            <span class="td-factor-label">枠番</span>
-            <span class="td-factor-value">${bn}枠 ${e.horse_number}番</span>
-            <span style="font-size:10px;color:${gate.is_even_gate ? 'var(--ok)' : 'var(--text-dim)'};margin-left:6px">
-              ${gate.is_even_gate ? '偶数枠 ✓' : '奇数枠'}
-            </span>
-          </div>
-          <div class="td-factor-row">
-            <span class="td-factor-label">ゲート位置</span>
-            <span class="td-factor-value">${['内枠','中内枠','中外枠','外枠'][gate.gate_zone || 0]}</span>
-          </div>
-        </div>
-
-        <div class="td-factor-group">
-          <div class="td-factor-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-            前走データ
-          </div>
-          <div class="td-factor-row">
-            <span class="td-factor-label">前走1角</span>
-            <span class="td-factor-value" style="color:${(pr.t1f_raw||0)<=3?'var(--err)':(pr.t1f_raw||0)<=6?'var(--warn)':'var(--text-dim)'}">
-              ${pr.t1f_raw||'-'}番手/${pr.field_size||'-'}頭
-            </span>
-            ${pr.prev_was_top3 ? '<span style="font-size:10px;color:var(--ok);margin-left:4px">前々走も前目</span>' : ''}
-          </div>
-          <div class="td-factor-row">
-            <span class="td-factor-label">T1F正規化</span>
-            <div class="td-bar-container">
-              <div class="td-bar-fill" style="width:${Math.min(100,(1-(pr.t1f_norm||0.5))*100)}%;background:${(pr.t1f_norm||0.5)<0.3?'var(--err)':'var(--accent)'}"></div>
-            </div>
-            <span class="td-factor-value">${(pr.t1f_norm||0).toFixed(3)}</span>
-          </div>
-          <div class="td-factor-row">
-            <span class="td-factor-label">コース変化</span>
-            <span class="td-factor-value" style="font-size:10px">
-              ${e.course_comparison?.dist_category||'-'}
-              ${e.course_comparison?.same_surface ? '<span style="color:var(--ok)">同馬場</span>' : '<span style="color:var(--warn)">馬場変化</span>'}
-            </span>
-          </div>
-        </div>
-
-        <div class="td-factor-group">
-          <div class="td-factor-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-            隣枠影響
-          </div>
-          <div class="td-factor-row">
-            <span class="td-factor-label">スペース</span>
-            <div class="td-bar-container">
-              <div class="td-bar-fill" style="width:${Math.max(5, (neighbor.space_score + 0.5) * 100)}%;background:${neighbor.space_score > 0 ? 'var(--ok)' : 'var(--warn)'}"></div>
-            </div>
-            <span class="td-factor-value" style="color:${neighbor.space_score > 0 ? 'var(--ok)' : neighbor.space_score < -0.1 ? 'var(--warn)' : 'var(--text)'}">${neighbor.space_score > 0 ? '+' : ''}${(neighbor.space_score * 100).toFixed(0)}%</span>
-          </div>
-          <div class="td-factor-row">
-            <span class="td-factor-label">遅い隣馬</span>
-            <span class="td-factor-value" style="color:${neighbor.slow_neighbors >= 2 ? 'var(--ok)' : neighbor.slow_neighbors === 1 ? 'var(--accent)' : 'var(--text-dim)'}">
-              ${neighbor.slow_neighbors}/2${neighbor.slow_neighbors >= 2 ? ' ★' : ''}
-            </span>
-          </div>
-        </div>
-
-        <div class="td-factor-group">
-          <div class="td-factor-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            競合状況
-          </div>
-          <div class="td-factor-row">
-            <span class="td-factor-label">同脚質馬</span>
-            <span class="td-factor-value" style="color:${field.same_style_count <= 2 ? 'var(--ok)' : field.same_style_count >= 5 ? 'var(--err)' : 'var(--warn)'}">
-              ${field.same_style_count}頭
-              ${field.same_style_count <= 2 ? ' ◎' : field.same_style_count >= 5 ? ' △' : ''}
-            </span>
-          </div>
-          <div class="td-factor-row">
-            <span class="td-factor-label">ペース圧</span>
-            <div class="td-bar-container">
-              <div class="td-bar-fill" style="width:${Math.min(100, field.pace_pressure * 50)}%;background:${field.pace_pressure > 1.5 ? 'var(--err)' : field.pace_pressure > 1 ? 'var(--warn)' : 'var(--ok)'}"></div>
-            </div>
-            <span class="td-factor-value">${field.pace_pressure?.toFixed(2) || '-'}</span>
-          </div>
-        </div>
-      </div>
-    </div>`;
-  }
-  html += '</div>';
-
-  // Summary table（スタミナ指数付き）
-  html += `<div class="summary-section"><h3>追走難度ランキング（スタミナ温存度含む）</h3>
-  <table class="summary-table"><thead><tr>
-    <th>順位</th><th>枠</th><th>馬番</th><th>馬名</th><th>脚質</th>
-    <th class="num">容易度</th><th>容易判定</th>
-    <th class="num">🔋温存度</th><th>温存判定</th>
-    <th>序盤位置</th>
-    <th>前走1角</th><th>T1F正規化</th><th>距離変化</th><th>馬場</th>
-    <th>同脚質</th>
-  </tr></thead><tbody>`;
-  const sortedEntries = [...entries].sort((a, b) => {
-    // スタミナ指数でソート（なければ容易度）
-    const pa = (data.position_flow||[]).find(x=>x.horse_number===a.horse_number);
-    const pb = (data.position_flow||[]).find(x=>x.horse_number===b.horse_number);
-    const sa = pa?.stamina?.stamina_index ?? (a.tracking_difficulty?.ease_pct||50);
-    const sb = pb?.stamina?.stamina_index ?? (b.tracking_difficulty?.ease_pct||50);
-    return sb - sa;
-  });
-  sortedEntries.forEach((e, i) => {
-    const td = e.tracking_difficulty || {};
-    const prof = e.profile || {};
-    const gate = e.gate_factors || {};
-    const field = e.field_factors || {};
-    const pr = e.prev_race || {};
-    const cc = e.course_comparison || {};
-    const bn = e.bracket_number || 0;
-    const pct = td.ease_pct || 50;
-
-    const pf = (data.position_flow || []).find(x => x.horse_number === e.horse_number);
-    const stm = pf?.stamina || {};
-    const stmIdx = stm.stamina_index ?? null;
-    const stmLbl = stm.stamina_label || '';
-    const earlyPos = pf?.positions?.early?.position ?? '-';
-
-    const t1fColor = (pr.t1f_raw||0)<=3 ? 'var(--err)' : (pr.t1f_raw||0)<=6 ? 'var(--warn)' : 'var(--text-dim)';
-    const distCls = cc.dist_category === '距離延長' ? 'dist-ext' : cc.dist_category === '距離短縮' ? 'dist-red' : 'dist-same';
-
-    html += `<tr>
-      <td class="num">${i + 1}</td>
-      <td><span class="gate-num ${wakuClass(bn)}" style="width:22px;height:22px;font-size:11px;display:inline-flex">${bn}</span></td>
-      <td class="num">${e.horse_number}</td>
-      <td style="font-weight:600">${e.horse_name || '-'}</td>
-      <td><span class="td-card-style ${styleClass(prof.style || '差し')}" style="font-size:10px">${prof.style || '-'}</span></td>
-      <td class="num" style="color:${easeColor(pct)};font-weight:700">${pct.toFixed(1)}</td>
-      <td><span class="td-ease-badge ${easeClass(td.label || '普通')}" style="font-size:11px;padding:2px 8px">${td.label || '-'}</span></td>
-      <td class="num" style="color:${stmIdx!==null?staminaColor(stmIdx):'var(--text-dim)'};font-weight:700">${stmIdx!==null?stmIdx.toFixed(1):'-'}</td>
-      <td>${stmLbl ? `<span class="${staminaClass(stmLbl)}" style="font-size:11px;padding:2px 8px;border-radius:4px">${stmLbl}</span>` : '-'}</td>
-      <td class="num">${earlyPos}番手</td>
-      <td class="num" style="color:${t1fColor};font-weight:700">${pr.t1f_raw||'-'}/${pr.field_size||'-'}</td>
-      <td class="num" style="color:${t1fColor}">${pr.t1f_norm!==undefined?(pr.t1f_norm).toFixed(3):'-'}</td>
-      <td class="${distCls}">${cc.dist_change!=null?(cc.dist_change>0?'+'+cc.dist_change:cc.dist_change)+'m':'-'}</td>
-      <td style="color:${cc.same_surface?'var(--ok)':'var(--warn)'}">${cc.same_surface?'同馬場':'変化'}</td>
-      <td class="num" style="color:${field.same_style_count <= 2 ? 'var(--ok)' : field.same_style_count >= 5 ? 'var(--err)' : 'var(--warn)'}">
-        ${field.same_style_count || 0}頭</td>
-    </tr>`;
-  });
-  html += '</tbody></table></div>';
-
-  main.innerHTML = html;
 }
 
-function scrollToCard(id) {
-  const el = document.getElementById(id);
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+function renderResults(data) {
+  const main = document.getElementById('mainContent');
+  if (!data.entries || data.entries.length === 0) {
+    main.innerHTML = '<div class="empty">データが不足しています</div>';
+    return;
+  }
+
+  const selectedDate = document.getElementById('dateSelect')?.value || '';
+  _currentAnalysisContext = {
+    race_id: data.race_id || _selectedRaceId || '',
+    race_date: normalizeDateKey(data.race_date || selectedDate),
+  };
+
+  const entries = data.entries;
+  const byHorseNum = [...entries].sort((a, b) => a.horse_number - b.horse_number);
+  const fps = data.field_prev_stats || {};
+  const fieldSize = resolveFieldSize(data);
+
+  let html = '';
+
+  if (data.race_id && (data.result_viewable || data.result_view_url)) {
+    _raceResultMeta[data.race_id] = {
+      viewable: true,
+      kind: data.result_kind || 'confirmed',
+      url: data.result_view_url || `/race/${data.race_id}`,
+    };
+    updateControlsResultLink();
+  }
+
+  const resultLink = resultLinkHtml(data.race_id, {
+    viewable: data.result_viewable,
+    kind: data.result_kind,
+    url: data.result_view_url || (data.result_viewable ? `/race/${data.race_id}` : null),
+  });
+
+  // Race meta
+  html += `<div class="race-meta">
+    <span class="race-name">${data.race_name || data.race_id}</span>
+    <span class="race-tag">${data.venue || ''} ${data.surface || ''}${data.distance || ''}m ${data.track_condition || ''}</span>
+    <span class="race-tag">${data.field_size}頭</span>
+    ${fps.prev_top3_count != null ? `<span class="race-tag" style="background:rgba(239,68,68,0.1);color:var(--err)">前走3番手以内 ${fps.prev_top3_count}頭</span>` : ''}
+    ${fps.front_pressure_ratio != null ? `<span class="race-tag" style="background:rgba(245,158,11,0.1);color:var(--warn)">先行意識 ${fieldPrevPaceLabel(fps.t1f_normalization_factor)}</span>` : ''}
+    ${resultLink ? `<span class="race-result-link-wrap">${resultLink}</span>` : ''}
+  </div>`;
+
+  // ペース予想（レース情報直下）
+  html += buildPacePredictionHtml(data, entries, fps);
+
+  const bins = fps.position_bins || [];
+  if (bins.length > 0) {
+    html += `<details class="field-extra">
+      <summary>前走位置分布・フィールド統計（クリックで展開）</summary>
+      ${buildPositionBinSectionHtml(bins, byHorseNum, fps)}
+    </details>`;
+  }
+
+  if ((data.position_flow || []).length > 0) {
+    html += `<details class="field-extra position-map-details">
+      <summary>📍 序盤ポジション（1-3F）</summary>
+      ${buildPositionMapHtml(data, byHorseNum, fieldSize)}
+    </details>`;
+  }
+
+  html += `<p style="font-size:11px;color:var(--text-dim);margin:0 0 12px;line-height:1.5">
+    序盤位置は全${fieldSize}頭に1〜${fieldSize}番手を重複なく割当。列見出しクリックでソート（▲▼）。
+  </p>`;
+  html += buildHorseMasterTableHtml(data);
+
+  main.innerHTML = html;
+  _lastAnalysisPayload = data;
+  initSortableTables(main);
+}
+
+function scrollToHorseRow(horseNumber) {
+  const el = document.getElementById(`row-${horseNumber}`);
+  if (!el) return;
+  el.classList.add('row-highlight');
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => el.classList.remove('row-highlight'), 2000);
 }
 
 init();

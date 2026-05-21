@@ -210,6 +210,115 @@ def _detect_grade(race_name: str) -> int:
         return 0
 
 
+def build_training_dataset_from_parquet(years: list[str] | None = None) -> pd.DataFrame:
+    """
+    ローカル parquet ファイルから学習データを高速構築する。
+    data/page_reference/tables/{year}/race_result_race.parquet を使用。
+    """
+    if years is None:
+        years = ["2022", "2023", "2024", "2025"]
+
+    root = Path(__file__).resolve().parents[3]
+    tables_dir = root / "data" / "page_reference" / "tables"
+
+    dfs = []
+    for year in years:
+        path = tables_dir / year / "race_result_race.parquet"
+        if not path.exists():
+            logger.warning("parquet が見つかりません: %s", path)
+            continue
+        dfs.append(pd.read_parquet(path))
+        logger.info("%s: %d レース読み込み", year, len(dfs[-1]))
+
+    if not dfs:
+        return pd.DataFrame()
+
+    df = pd.concat(dfs, ignore_index=True)
+
+    import json as _json
+
+    rows = []
+    for _, row in df.iterrows():
+        raw_laps = row.get("lap_times") or []
+        if isinstance(raw_laps, str):
+            try:
+                raw_laps = _json.loads(raw_laps)
+            except Exception:
+                raw_laps = []
+        lap_times = raw_laps if isinstance(raw_laps, list) else []
+        if len(lap_times) < 3:
+            continue
+
+        raw_pace = row.get("pace") or {}
+        if isinstance(raw_pace, str):
+            try:
+                raw_pace = _json.loads(raw_pace)
+            except Exception:
+                raw_pace = {}
+        pace = raw_pace if isinstance(raw_pace, dict) else {}
+        lap_1f = pace.get("t1f") or lap_times[0]
+        lap_3f = pace.get("t3f") or sum(lap_times[:3])
+
+        distance = int(row.get("distance") or 0)
+        if distance < 1000:
+            continue
+
+        field_size = int(row.get("field_size") or 0)
+        if field_size < 4:
+            continue
+
+        surface = row.get("surface") or ""
+        track_cond = row.get("track_condition") or ""
+        venue = row.get("venue") or ""
+        race_name = row.get("race_name") or ""
+
+        # passing_order から逃げ・先行カウント
+        entries = row.get("entries") or []
+        if isinstance(entries, str):
+            import json as _json
+            try:
+                entries = _json.loads(entries)
+            except Exception:
+                entries = []
+
+        front_count = 0
+        stalker_count = 0
+        for e in entries:
+            passing = e.get("passing_order", "") if isinstance(e, dict) else ""
+            if passing:
+                try:
+                    positions = [int(x) for x in passing.split("-") if x.strip().isdigit()]
+                    if positions:
+                        norm = (positions[0] - 1) / max(field_size - 1, 1)
+                        if norm <= 0.15:
+                            front_count += 1
+                        elif norm <= 0.35:
+                            stalker_count += 1
+                except Exception:
+                    pass
+
+        early_pressure = (front_count + stalker_count) / field_size if field_size > 0 else 0.3
+
+        rows.append({
+            "race_id": row.get("race_id", ""),
+            "distance": distance,
+            "distance_category": _distance_category(distance),
+            "surface_code": 0 if surface in ("芝", "芝ダ") else 1,
+            "track_condition_code": _track_condition_code(track_cond),
+            "field_size": field_size,
+            "front_runner_count": front_count,
+            "stalker_count": stalker_count,
+            "early_pressure": round(early_pressure, 3),
+            "venue_code": _venue_code(venue),
+            "grade_code": _detect_grade(race_name),
+            "lap_time_1f": float(lap_1f),
+            "lap_time_3f": float(lap_3f),
+        })
+
+    logger.info("parquet 構築完了: %d 行", len(rows))
+    return pd.DataFrame(rows) if rows else pd.DataFrame()
+
+
 class PacePredictorTrainer:
     """ペース予測モデルの学習とMLflow登録"""
 
@@ -227,10 +336,13 @@ class PacePredictorTrainer:
         t0 = time.time()
 
         if df is None:
-            if storage is None:
+            # parquet が使えれば高速パス、なければ HybridStorage 経由
+            df = build_training_dataset_from_parquet(years=years)
+            if df.empty and storage is not None:
+                df = build_training_dataset(storage, years=years)
+            elif df.empty:
                 from src.scraper.storage import HybridStorage
-                storage = HybridStorage()
-            df = build_training_dataset(storage, years=years)
+                df = build_training_dataset(HybridStorage(), years=years)
 
         if df.empty:
             return {"error": "学習データなし"}
@@ -312,18 +424,28 @@ class PacePredictorTrainer:
         logger.info("1F: MAE=%.3f秒, RMSE=%.3f秒", mae_1f, rmse_1f)
         logger.info("3F: MAE=%.3f秒, RMSE=%.3f秒", mae_3f, rmse_3f)
 
-        # MLflowに記録
+        # MLflowに記録 + ローカル保存
         self._log_mlflow(model_1f, model_3f, metrics, lgb_params)
+        self._save_local(model_1f, model_3f)
 
         return metrics
+
+    def _save_local(self, model_1f, model_3f) -> None:
+        """ローカルファイルに保存（フォールバック用）"""
+        local_dir = Path(__file__).resolve().parents[3] / "models" / "pace_predictor"
+        local_dir.mkdir(parents=True, exist_ok=True)
+        model_1f.save_model(str(local_dir / "model_1f.txt"))
+        model_3f.save_model(str(local_dir / "model_3f.txt"))
+        logger.info("ローカル保存完了: %s", local_dir)
 
     def _log_mlflow(self, model_1f, model_3f, metrics: dict, params: dict):
         """MLflowに記録"""
         try:
             import mlflow
             import mlflow.lightgbm
+            from src.utils.mlflow_client import init_mlflow
 
-            mlflow.set_tracking_uri(self.mlflow_uri)
+            init_mlflow(self.mlflow_uri)
             mlflow.set_experiment(EXPERIMENT_NAME)
 
             run_name = f"pace_{datetime.now().strftime('%Y%m%d_%H%M%S')}"

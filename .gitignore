@@ -44,23 +44,15 @@ api/app.py.bak_*
 catboost_info/
 mlflow/data/
 mlflow/runs/
+mlruns
 
 # スクレイプ・キュー由来の生成物（GCS が正、ローカルは再取得可）
 data/cache/
-data/queue/
 data/local/
-data/ml/
-data/analysis/
+data/queue/
 data/page_reference/
-data/meta/status/
-data/meta/disk_l2_weekly_access.json
-data/meta/pedigree_weekly_access.json
-
-# 大容量のローカル専用データ（必要なら個別に追跡）
-data/meta/
-data/features/
-data/research/
-data/modeling/
+!data/page_reference/BUNDLE.md
+*.pre_page_ref_bak/
 
 # Jupyter
 .ipynb_checkpoints/

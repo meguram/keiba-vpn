@@ -1,9 +1,9 @@
 """開催日 T-15 プレレース取得バンドル + 完了後 AI 予測トリガ（モック含む）。
 
 運用方針（docs/html/operations/scraping_sla.html と整合）:
-  - 馬柱・調教 / 追い切りは **前日 18:00 の raceday-eve タスク** で先行取得する。
+  - 出馬表 / 馬柱・調教 / 追い切りは **前日 18:00 の raceday-eve** で取得する。
     T-15 バンドルでは skip_existing=True のため、取得済みならスキップ（フォールバック用に残す）。
-  - 出馬表 / オッズ / SmartRC は **発走 T-15 分** で取得（直前に確定するデータ）。
+  - オッズ / JRA 馬場は **発走 T-15 分** で取得（直前に確定するデータ）。
   - JRA 馬場ライブ (jra_baba_live) は **同じタイミング** に統合（別 systemd 5 分ポーリングは廃止方向）。
   - AI 予測は **T-15 バッチ完了** をトリガに起動（発走 10 分前時点の予測物として扱う）。
 
@@ -68,7 +68,7 @@ def run_t15_pre_race_bundle(runner: Any, race: dict) -> PreRaceBundleResult:
     out = PreRaceBundleResult(race_id=rid)
 
     tasks: list[tuple[str, Callable[[], Any]]] = [
-        ("出馬表",    lambda: runner.scrape_race_card(rid, skip_existing=False)),
+        ("出馬表",    lambda: runner.scrape_race_card(rid, skip_existing=True)),
         ("単複オッズ", lambda: runner.scrape_odds(rid, skip_existing=False)),
         ("2連オッズ", lambda: runner.scrape_pair_odds(rid, skip_existing=False)),
         # 馬柱・調教 / 追い切りは前日 raceday-eve で取得済みが前提。

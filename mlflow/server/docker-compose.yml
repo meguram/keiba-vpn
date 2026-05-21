@@ -1,9 +1,26 @@
 version: "3.8"
 
+# MLflow Tracking (:5000) + モデル別 Serving (:5001–:5004)
+# 新モデル追加時: catalog.py → settings.yaml → 本ファイルの serve サービスをコピー
+
+x-mlflow-serve: &mlflow-serve
+  image: ghcr.io/mlflow/mlflow:v2.12.2
+  restart: unless-stopped
+  environment:
+    - MLFLOW_TRACKING_URI=http://mlflow:5000
+  command: >
+    mlflow models serve
+      -m models:/__MODEL_URI__/latest
+      -h 0.0.0.0
+      -p __PORT__
+      --env-manager local
+      --no-conda
+  depends_on:
+    - mlflow
+  networks:
+    - keiba-net
+
 services:
-  # ─────────────────────────────────────────────
-  # MLflow Tracking Server
-  # ─────────────────────────────────────────────
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.12.2
     container_name: keiba-mlflow
@@ -24,9 +41,62 @@ services:
     networks:
       - keiba-net
 
-  # ─────────────────────────────────────────────
-  # Nginx リバースプロキシ (外部公開用)
-  # ─────────────────────────────────────────────
+  mlflow-serve-tracking:
+    <<: *mlflow-serve
+    container_name: keiba-mlflow-serve-tracking
+    command: >
+      mlflow models serve
+        -m models:/tracking-difficulty-lgbm/latest
+        -h 0.0.0.0
+        -p 5001
+        --env-manager local
+        --no-conda
+    ports:
+      - "5001:5001"
+
+  # 着順予測（Registry 登録後に docker compose --profile finish-order up）
+  mlflow-serve-finish-order:
+    <<: *mlflow-serve
+    profiles: ["finish-order", "all-models"]
+    container_name: keiba-mlflow-serve-finish-order
+    command: >
+      mlflow models serve
+        -m models:/keiba-finish-order-lgbm/latest
+        -h 0.0.0.0
+        -p 5002
+        --env-manager local
+        --no-conda
+    ports:
+      - "5002:5002"
+
+  mlflow-serve-final-odds:
+    <<: *mlflow-serve
+    profiles: ["final-odds", "all-models"]
+    container_name: keiba-mlflow-serve-final-odds
+    command: >
+      mlflow models serve
+        -m models:/keiba-final-odds-lgbm/latest
+        -h 0.0.0.0
+        -p 5003
+        --env-manager local
+        --no-conda
+    ports:
+      - "5003:5003"
+
+  mlflow-serve-keiba-lgbm:
+    <<: *mlflow-serve
+    profiles: ["keiba-lgbm", "all-models"]
+    container_name: keiba-mlflow-serve-keiba-lgbm
+    command: >
+      mlflow models serve
+        -m models:/keiba-lgbm/latest
+        -h 0.0.0.0
+        -p 5010
+        --env-manager local
+        --no-conda
+    ports:
+      - "5010:5010"
+
   nginx:
     image: nginx:alpine
     container_name: keiba-nginx
@@ -43,9 +113,6 @@ services:
     networks:
       - keiba-net
 
-  # ─────────────────────────────────────────────
-  # Keiba 予測 API (FastAPI)
-  # ─────────────────────────────────────────────
   keiba-api:
     build:
       context: ../..
@@ -62,8 +129,14 @@ services:
       - mlflow_data:/mlflow
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - KEIBA_MLFLOW_SERVE_TRACKING_DIFFICULTY_URI=http://mlflow-serve-tracking:5001
+      - KEIBA_MLFLOW_SERVE_FINISH_ORDER_URI=http://mlflow-serve-finish-order:5002
+      - KEIBA_MLFLOW_SERVE_FINAL_ODDS_URI=http://mlflow-serve-final-odds:5003
+      - KEIBA_MLFLOW_SERVE_KEIBA_LGBM_URI=http://mlflow-serve-keiba-lgbm:5010
+      - KEIBA_TRACKING_DIFFICULTY_CACHE=1
     depends_on:
       - mlflow
+      - mlflow-serve-tracking
     networks:
       - keiba-net
 

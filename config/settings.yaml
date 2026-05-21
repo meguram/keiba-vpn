@@ -72,9 +72,30 @@ api:
 
 mlflow:
   tracking_uri: "http://localhost:5000"
+  # 後方互換（keiba_lgbm と同義）
   experiment_name: "keiba-prediction"
   registered_model_name: "keiba-lgbm"
   artifact_location: "mlruns"
+  # モデル別設定（正は catalog.py の ModelSpec + 本ブロック）
+  models:
+    keiba_lgbm:
+      serve_uri: "http://localhost:5010"
+      serve_port: 5010
+    tracking_difficulty:
+      serve_uri: "http://localhost:5001"
+      serve_port: 5001
+    finish_order:
+      serve_uri: "http://localhost:5002"
+      serve_port: 5002
+    final_odds:
+      serve_uri: "http://localhost:5003"
+      serve_port: 5003
+    pace_predictor:
+      serve_uri: "http://localhost:5004"
+      serve_port: 5004
+  # 後方互換（tracking_difficulty.serve_uri を参照）
+  serve_tracking_uri: "http://localhost:5001"
+  serve_tracking_model: "models:/tracking-difficulty-lgbm/latest"
 
 llm:
   provider: "openai"

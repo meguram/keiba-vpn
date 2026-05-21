@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI モデリング SLA | ML-AutoPilot Keiba</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #131926;
+    --surface2: #1a2235;
+    --surface3: #1e293b;
+    --border: #243049;
+    --text: #c8d6e5;
+    --text-dim: #6b7d95;
+    --text-bright: #f0f6fc;
+    --accent: #3b82f6;
+    --accent-dim: rgba(59,130,246,0.12);
+    --ok: #22c55e;
+    --ok-dim: rgba(34,197,94,0.12);
+    --warn: #f59e0b;
+    --warn-dim: rgba(245,158,11,0.12);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.12);
+    --cyan: #22d3ee;
+    --cyan-dim: rgba(34,211,238,0.10);
+    --orange: #fb923c;
+    --orange-dim: rgba(251,146,60,0.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── ヘッダー ── */
+  .page-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .back-link {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: color .15s;
+  }
+  .back-link:hover { color: var(--accent); }
+  .page-title { font-size: 15px; font-weight: 700; color: var(--text-bright); }
+  .page-subtitle { font-size: 12px; color: var(--text-dim); margin-left: auto; }
+
+  /* ── レイアウト ── */
+  .content { padding: 28px; max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+
+  /* ── 概要バナー ── */
+  .summary-banner {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 22px;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+  .summary-banner strong { color: var(--text); }
+
+  /* ── トリガーセクション ── */
+  .trigger-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .trigger-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    border-radius: 10px;
+    border-left: 4px solid;
+    background: var(--surface);
+    border-color: var(--border);
+  }
+  .trigger-header.trigger-a { border-left-color: var(--orange); background: linear-gradient(90deg, rgba(251,146,60,0.07) 0%, var(--surface) 60%); }
+  .trigger-header.trigger-b { border-left-color: var(--accent); background: linear-gradient(90deg, rgba(59,130,246,0.07) 0%, var(--surface) 60%); }
+
+  .trigger-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: .04em;
+    white-space: nowrap;
+  }
+  .trigger-a .trigger-badge { background: var(--orange-dim); color: var(--orange); border: 1px solid rgba(251,146,60,0.3); }
+  .trigger-b .trigger-badge { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(59,130,246,0.3); }
+
+  .trigger-timing {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .trigger-timing .timing-main {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-bright);
+  }
+  .trigger-timing .timing-sub {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  /* ── パイプライン ── */
+  .pipeline {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .pipeline-step {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .pipeline-node {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pipeline-node.source-a { background: var(--orange-dim); border-color: rgba(251,146,60,0.3); color: var(--orange); }
+  .pipeline-node.source-b { background: var(--accent-dim); border-color: rgba(59,130,246,0.3); color: var(--accent); }
+
+  .pipeline-arrow {
+    width: 28px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  /* ── モデルグリッド ── */
+  .model-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  .model-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color .15s, background .15s;
+  }
+  .model-card:hover { border-color: var(--accent); background: var(--surface2); }
+
+  .model-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .model-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .icon-purple { background: var(--purple-dim); }
+  .icon-cyan   { background: var(--cyan-dim); }
+  .icon-ok     { background: var(--ok-dim); }
+  .icon-orange { background: var(--orange-dim); }
+  .icon-accent { background: var(--accent-dim); }
+  .icon-warn   { background: var(--warn-dim); }
+
+  .model-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+    line-height: 1.35;
+  }
+  .model-tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    margin-top: 3px;
+  }
+  .tag-a { background: var(--orange-dim); color: var(--orange); }
+  .tag-b { background: var(--accent-dim); color: var(--accent); }
+  .tag-derived { background: var(--purple-dim); color: var(--purple); }
+
+  .model-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    flex: 1;
+  }
+
+  .model-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+  }
+  .meta-row {
+    display: flex;
+    gap: 6px;
+    font-size: 11px;
+    align-items: flex-start;
+  }
+  .meta-label {
+    color: var(--text-dim);
+    flex-shrink: 0;
+    width: 42px;
+  }
+  .meta-val { color: var(--text); line-height: 1.5; }
+  .meta-val a { color: var(--accent); text-decoration: none; }
+  .meta-val a:hover { text-decoration: underline; }
+  .meta-val code {
+    background: var(--surface3);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--cyan);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── 依存グラフ ── */
+  .dep-section {
+    margin-top: 4px;
+  }
+  .dep-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 8px;
+  }
+  .dep-flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .dep-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .dep-chip.chip-data   { background: var(--orange-dim); border-color: rgba(251,146,60,.3); color: var(--orange); }
+  .dep-chip.chip-data-b { background: var(--accent-dim); border-color: rgba(59,130,246,.3); color: var(--accent); }
+  .dep-chip.chip-model  { background: var(--purple-dim); border-color: rgba(167,139,250,.3); color: var(--purple); }
+  .dep-chip.chip-output { background: var(--ok-dim); border-color: rgba(34,197,94,.3); color: var(--ok); }
+  .dep-arrow { color: var(--text-dim); font-size: 13px; padding: 0 6px; }
+
+  /* ── 凡例 ── */
+  .legend {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-size: 11px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <a class="back-link" href="/">← ホーム</a>
+  <span class="page-title">🤖 AI モデリング SLA</span>
+  <span class="page-subtitle">各モデルの実行タイミング・入出力・利用箇所の仕様書</span>
+</div>
+
+<div class="content">
+
+  <!-- 概要 -->
+  <div class="summary-banner">
+    <strong>実行方針：</strong>
+    スクレイパーの定期 cron が完了したタイミングを起点としてモデル推論を連鎖実行します。
+    <strong>トリガー A</strong> は「前日18時の出馬表・調教データ取得完了後」、
+    <strong>トリガー B</strong> は「当日レース15分前のオッズ取得完了後」に発火します。
+    推論結果は <a href="/race" style="color:var(--accent)">レース詳細ページ</a> の「🤖 AI予測」セクションに反映されます。
+  </div>
+
+  <!-- ═══ TRIGGER A ═══ -->
+  <div class="trigger-section">
+    <div class="trigger-header trigger-a">
+      <div class="trigger-badge">Trigger A</div>
+      <div class="trigger-timing">
+        <span class="timing-main">前日 18:00 — 出馬表・調教データ取得完了後</span>
+        <span class="timing-sub">race_shutuba / race_shutuba_past / race_oikiri が揃った時点でトリガー</span>
+      </div>
+    </div>
+
+    <!-- 依存フロー A -->
+    <div class="dep-section">
+      <div class="dep-title">実行フロー</div>
+      <div class="dep-flow">
+        <span class="dep-chip chip-data">前日18時データ取得</span>
+        <span class="dep-arrow">→</span>
+        <span class="dep-chip chip-model">位置取り予測</span>
+        <span class="dep-arrow">+</span>
+        <span class="dep-chip chip-model">ペース予測</span>
+        <span class="dep-arrow">+</span>
+        <span class="dep-chip chip-model">上り3F予測</span>
+        <span class="dep-arrow">→</span>
+        <span class="dep-chip chip-model">追走難度分析</span>
+        <span class="dep-arrow">→</span>
+        <span class="dep-chip chip-output">/race 追走難度</span>
+      </div>
+      <div class="dep-flow" style="margin-top:8px">
+        <span class="dep-chip chip-data">前日18時データ取得</span>
+        <span class="dep-arrow">→</span>
+        <span class="dep-chip chip-model">単複オッズ予測</span>
+        <span class="dep-arrow">→</span>
+        <span class="dep-chip chip-output">/race 想定オッズ</span>
+      </div>
+    </div>
+
+    <!-- モデルカード A -->
+    <div class="model-grid">
+
+      <div class="model-card">
+        <div class="model-card-header">
+          <div class="model-icon icon-purple">📍</div>
+          <div>
+            <div class="model-name">位置取り予測</div>
+            <span class="model-tag tag-a">Trigger A</span>
+          </div>
+        </div>
+        <div class="model-desc">
+          各馬がレースで採る想定ポジション（逃・先行・差し・追込）の確率分布を推定します。ペース・コース形態・近走の脚質傾向を考慮します。
+        </div>
+        <div class="model-meta">
+          <div class="meta-row"><span class="meta-label">入力</span><span class="meta-val">race_shutuba / race_shutuba_past / race_index</span></div>
+          <div class="meta-row"><span class="meta-label">出力</span><span class="meta-val">馬ごとの位置取り確率分布</span></div>
+          <div class="meta-row"><span class="meta-label">利用先</span><span class="meta-val">追走難度分析（中間モデル）</span></div>
+        </div>
+      </div>
+
+      <div class="model-card">
+        <div class="model-card-header">
+          <div class="model-icon icon-cyan">⚡</div>
+          <div>
+            <div class="model-name">ペース予測</div>
+            <span class="model-tag tag-a">Trigger A</span>
+          </div>
+        </div>
+        <div class="model-desc">
+          LightGBM 回帰（1F / 3F の2ヘッド）でレース前半ラップタイムを予測します。逃げ頭数・コース・馬場・頭数などをフィーチャーとし、2022–2025 の 5,035 レースで学習しました。
+        </div>
+        <div class="model-meta">
+          <div class="meta-row"><span class="meta-label">入力</span><span class="meta-val">race_shutuba / race_shutuba_past / race_index</span></div>
+          <div class="meta-row"><span class="meta-label">出力</span><span class="meta-val">前半1F・3F ラップタイム推定（秒）</span></div>
+          <div class="meta-row"><span class="meta-label">登録先</span><span class="meta-val"><code>pace-lap-time-predictor-1f/3f</code> (MLflow Registry, 1F MAE=0.191s)</span></div>
+          <div class="meta-row"><span class="meta-label">利用先</span><span class="meta-val">追走難度分析（中間モデル）</span></div>
+        </div>
+      </div>
+
+      <div class="model-card">
+        <div class="model-card-header">
+          <div class="model-icon icon-ok">🏃</div>
+          <div>
+            <div class="model-name">上り3F予測</div>
+            <span class="model-tag tag-a">Trigger A</span>
+          </div>
+        </div>
+        <div class="model-desc">
+          各馬の上り3ハロンタイムを予測します。近走の上り実績・馬場・距離適性・脚質を特徴量として使用します。
+        </div>
+        <div class="model-meta">
+          <div class="meta-row"><span class="meta-label">入力</span><span class="meta-val">race_shutuba / race_shutuba_past / race_index</span></div>
+          <div class="meta-row"><span class="meta-label">出力</span><span class="meta-val">馬ごとの上り3F推定タイム</span></div>
+          <div class="meta-row"><span class="meta-label">利用先</span><span class="meta-val">追走難度分析（中間モデル）</span></div>
+        </div>
+      </div>
+
+      <div class="model-card">
+        <div class="model-card-header">
+          <div class="model-icon icon-purple">🔬</div>
+          <div>
+            <div class="model-name">追走難度分析</div>
+            <span class="model-tag tag-derived">Derived</span>
+          </div>
+        </div>
+        <div class="model-desc">
+          位置取り・ペース・上り3F の3モデル出力を統合し、各馬が当該レースで追走する難易度スコアを算出します。
+        </div>
+        <div class="model-meta">
+          <div class="meta-row"><span class="meta-label">入力</span><span class="meta-val">位置取り / ペース / 上り3F 各予測値</span></div>
+          <div class="meta-row"><span class="meta-label">出力</span><span class="meta-val">追走難度スコア・展開パターン</span></div>
+          <div class="meta-row"><span class="meta-label">利用先</span><span class="meta-val"><a href="/tracking-difficulty">/tracking-difficulty</a> · レース詳細 AI予測</span></div>
+        </div>
+      </div>
+
+      <div class="model-card">
+        <div class="model-card-header">
+          <div class="model-icon icon-orange">💴</div>
+          <div>
+            <div class="model-name">単複オッズ予測</div>
+            <span class="model-tag tag-a">Trigger A</span>
+          </div>
+        </div>
+        <div class="model-desc">
+          LightGBM 3ヘッド（単勝 / 複勝下限 / 複勝上限）でオッズを回帰予測します。前日18時時点のデータのみを使用し、データリークを排除しています。
+        </div>
+        <div class="model-meta">
+          <div class="meta-row"><span class="meta-label">入力</span><span class="meta-val">race_shutuba / race_shutuba_past / race_oikiri / race_index（前日18時時点）</span></div>
+          <div class="meta-row"><span class="meta-label">出力</span><span class="meta-val">単勝オッズ・複勝下限・複勝上限（馬ごと）</span></div>
+          <div class="meta-row"><span class="meta-label">登録先</span><span class="meta-val"><code>keiba-final-odds-lgbm</code> (MLflow Registry)</span></div>
+          <div class="meta-row"><span class="meta-label">利用先</span><span class="meta-val"><a href="/race">/race</a> 🤖 AI予測「想定オッズ」</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ TRIGGER B ═══ -->
+  <div class="trigger-section">
+    <div class="trigger-header trigger-b">
+      <div class="trigger-badge">Trigger B</div>
+      <div class="trigger-timing">
+        <span class="timing-main">当日レース 15分前 — オッズ取得完了後</span>
+        <span class="timing-sub">race_odds / race_shutuba (fallback) の取得完了時点でトリガー</span>
+      </div>
+    </div>
+
+    <!-- 依存フロー B -->
+    <div class="dep-section">
+      <div class="dep-title">実行フロー</div>
+      <div class="dep-flow">
+        <span class="dep-chip chip-data-b">当日15分前データ取得</span>
+        <span class="dep-arrow">→</span>
+        <span class="dep-chip chip-model">勝率 / 連対率 / 複勝率予測</span>
+        <span class="dep-arrow">→</span>
+        <span class="dep-chip chip-output">/race 予測確率・印</span>
+      </div>
+    </div>
+
+    <!-- モデルカード B -->
+    <div class="model-grid">
+
+      <div class="model-card">
+        <div class="model-card-header">
+          <div class="model-icon icon-accent">🏆</div>
+          <div>
+            <div class="model-name">勝率 / 連対率 / 複勝率予測</div>
+            <span class="model-tag tag-b">Trigger B</span>
+          </div>
+        </div>
+        <div class="model-desc">
+          レース15分前時点のオッズ・馬場・枠順確定情報を加味し、各馬の勝率・連対率・複勝率を確率分布として出力します。Harville 法で正規化します。
+        </div>
+        <div class="model-meta">
+          <div class="meta-row"><span class="meta-label">入力</span><span class="meta-val">race_shutuba / race_oikiri / race_index / race_odds（当日15分前時点）</span></div>
+          <div class="meta-row"><span class="meta-label">出力</span><span class="meta-val">win_prob / top2_prob / top3_prob（馬ごと）</span></div>
+          <div class="meta-row"><span class="meta-label">登録先</span><span class="meta-val"><code>keiba-lgbm-nopi</code> (MLflow Registry)</span></div>
+          <div class="meta-row"><span class="meta-label">利用先</span><span class="meta-val"><a href="/race">/race</a> 🤖 AI予測「予測確率・印・買い目提案」</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 凡例 -->
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="background:var(--orange)"></div>
+      <span style="font-size:11px;color:var(--text-dim)">Trigger A — 前日18時データ</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:var(--accent)"></div>
+      <span style="font-size:11px;color:var(--text-dim)">Trigger B — 当日15分前データ</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:var(--purple)"></div>
+      <span style="font-size:11px;color:var(--text-dim)">Derived — 上流モデルの出力を入力とする派生モデル</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:var(--ok)"></div>
+      <span style="font-size:11px;color:var(--text-dim)">Output — 表示先エンドポイント</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
