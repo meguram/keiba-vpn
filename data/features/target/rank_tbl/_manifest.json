@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-04-21T03:42:25.245314+00:00",
+  "source": "data/local/tables/<YYYY>/race_result_flat.parquet",
+  "source_column_rank": "finish_position → rank (numeric, coerce null)",
+  "merge_keys": [
+    "race_id",
+    "horse_id"
+  ],
+  "output_pattern": "data/features/target/rank_tbl/<YYYY>/rank.parquet",
+  "years_requested": [
+    "2020",
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+  ],
+  "files_written": {
+    "2020": "data/features/target/rank_tbl/2020/rank.parquet",
+    "2021": "data/features/target/rank_tbl/2021/rank.parquet",
+    "2022": "data/features/target/rank_tbl/2022/rank.parquet",
+    "2023": "data/features/target/rank_tbl/2023/rank.parquet",
+    "2024": "data/features/target/rank_tbl/2024/rank.parquet",
+    "2025": "data/features/target/rank_tbl/2025/rank.parquet"
+  },
+  "skipped": []
+}

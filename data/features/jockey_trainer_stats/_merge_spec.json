@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "missing_prior_policy": "各ブロックの *_starts が 0 または欠損のとき、対応する *_wins/*_top3/*_rate/*_avg_finish/*_avg_pass_* を欠損にする。「過去が無いのに 0」が本当の数値 0 と混ざらないようにする。",
+  "passing_features": "通過順 race_result.passing_order から先頭コーナー位置・セグメント平均・(先頭/頭数) を算出。jk_/tr_ の *_avg_pass_first|*_avg_pass_seg_mean|*_avg_pass_norm_first を参照。",
+  "jt_race_features": {
+    "file_pattern": "race_horse_tbl/{year}/jt_race_features.parquet",
+    "file_legacy": "race_horse_tbl/jt_race_features.parquet",
+    "row_semantics": "race_result の 1 行（1 馬）に対応。統計は jt_race_datetime より前の完了レースのみ使用。",
+    "primary_merge_keys": [
+      "race_id",
+      "horse_id"
+    ],
+    "context_columns": {
+      "jt_result_date": "race_result.date（YYYY-MM-DD）",
+      "jt_race_datetime": "race_result の日付＋発走時刻に基づく並び用タイムスタンプ",
+      "jt_row_jockey_id": "当該結果行の jockey_id（出馬表側 ID との一致確認用）",
+      "jt_row_trainer_id": "当該結果行の trainer_id"
+    },
+    "feature_prefixes": {
+      "jockey": "jk_",
+      "trainer": "tr_"
+    }
+  },
+  "lookup_jockey": {
+    "file": "jockey_tbl/lookup_jockey.parquet",
+    "primary_merge_keys": [
+      "jockey_id"
+    ],
+    "note": "学習用の時点厳密マージは jt_race_features を使用。こちらは推論スナップショット向け。"
+  },
+  "lookup_trainer": {
+    "file": "trainer_tbl/lookup_trainer.parquet",
+    "primary_merge_keys": [
+      "trainer_id"
+    ],
+    "note": "同上"
+  },
+  "lookup_jockey_slices": {
+    "file": "jockey_tbl/lookup_jockey_slices.parquet",
+    "primary_merge_keys": [
+      "jockey_id",
+      "slice_kind",
+      "slice_key"
+    ],
+    "note": "通算スナップショット。学習で条件一致させる場合はリークに注意。"
+  },
+  "lookup_trainer_slices": {
+    "file": "trainer_tbl/lookup_trainer_slices.parquet",
+    "primary_merge_keys": [
+      "trainer_id",
+      "slice_kind",
+      "slice_key"
+    ],
+    "note": "同上"
+  }
+}

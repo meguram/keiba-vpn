@@ -1,0 +1,290 @@
+{
+  "years": [
+    "2020",
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+  ],
+  "overwrite": true,
+  "spec_count": 44,
+  "race_index_note": "time_index_m は特徴量ストアから除外。speed_recent は idx_speed_recent_1..3 に展開。",
+  "policy": "pre_race_feature_whitelist.md LayerA-oriented; no odds/popularity from shutuba/index",
+  "id_value_policy": "pipeline/id_value_policy.py — string id null not zero; shutuba_*_present flags",
+  "excluded_tables_note": "race_oikiri_flat はキー重複のため別途集約してから登録すること",
+  "layout": "base_tbl=shutuba（4キーのみ）/ horse_tbl=shutuba_horse / race_horse_tbl / race_jockey_tbl / race_trainer_tbl / race_tbl（馬番キー廃止）",
+  "results": {
+    "obsolete_removed": [
+      {
+        "store_name": "idx_time_index_m",
+        "ok": true
+      },
+      {
+        "store_name": "idx_speed_recent",
+        "ok": true
+      }
+    ],
+    "shutuba_bundle": [
+      {
+        "store_name": "shutuba_date",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_date.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_venue",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_venue.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_surface",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_surface.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_distance",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_distance.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_direction",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_direction.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_grade",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_grade.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_race_class",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_race_class.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_weather",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_weather.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_track_condition",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_track_condition.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_start_time",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_start_time.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_field_size",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_field_size.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_race_name",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_race_name.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_venue_code",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_venue_code.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_round",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_round.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_weight_rule",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_weight_rule.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba_course_type",
+        "ok": true,
+        "path": "data/features/race_tbl/2020/shutuba_course_type.parquet",
+        "note": "出馬表・条件・斤量・馬名等（LayerA）"
+      },
+      {
+        "store_name": "shutuba",
+        "ok": true,
+        "path": "data/features/base_tbl/2020/shutuba.parquet",
+        "rows": 286060
+      },
+      {
+        "store_name": "shutuba_race_horse",
+        "ok": true,
+        "path": "data/features/race_horse_tbl/2020/shutuba_race_horse.parquet",
+        "rows": 286060
+      },
+      {
+        "store_name": "shutuba_horse",
+        "ok": true,
+        "path": "data/features/horse_tbl/shutuba_horse.parquet",
+        "rows": 35891
+      },
+      {
+        "store_name": "shutuba_race_jockey",
+        "ok": true,
+        "path": "data/features/race_jockey_tbl/2020/shutuba_race_jockey.parquet",
+        "rows": 286059
+      },
+      {
+        "store_name": "shutuba_race_trainer",
+        "ok": true,
+        "path": "data/features/race_trainer_tbl/2020/shutuba_race_trainer.parquet",
+        "rows": 275955
+      }
+    ],
+    "race_index": [
+      {
+        "store_name": "idx_speed_max",
+        "ok": true,
+        "path": "data/features/race_horse_tbl/2020/idx_speed_max.parquet",
+        "note": "スピード指数・最大"
+      },
+      {
+        "store_name": "idx_speed_avg",
+        "ok": true,
+        "path": "data/features/race_horse_tbl/2020/idx_speed_avg.parquet",
+        "note": "スピード指数・平均"
+      },
+      {
+        "store_name": "idx_speed_distance",
+        "ok": true,
+        "path": "data/features/race_horse_tbl/2020/idx_speed_distance.parquet",
+        "note": "距離別スピード指数"
+      },
+      {
+        "store_name": "idx_speed_course",
+        "ok": true,
+        "path": "data/features/race_horse_tbl/2020/idx_speed_course.parquet",
+        "note": "コース別スピード指数"
+      },
+      {
+        "store_name": "past_past_races",
+        "ok": true,
+        "path": "data/features/race_horse_tbl/2020/past_past_races.parquet",
+        "note": "過去走ブロック（文字列）"
+      },
+      {
+        "store_name": "past_training",
+        "ok": true,
+        "path": "data/features/race_horse_tbl/2020/past_training.parquet",
+        "note": "調教ブロック（文字列）"
+      }
+    ],
+    "race_index_speed_recent_expanded": [
+      {
+        "store_name": "idx_speed_recent_1",
+        "ok": true,
+        "rows": 135712
+      },
+      {
+        "store_name": "idx_speed_recent_2",
+        "ok": true,
+        "rows": 135712
+      },
+      {
+        "store_name": "idx_speed_recent_3",
+        "ok": true,
+        "rows": 135712
+      }
+    ],
+    "paddock": [
+      {
+        "store_name": "paddock_rank",
+        "ok": true,
+        "rows": 37982,
+        "note": "パドック順位（要一意化）"
+      },
+      {
+        "store_name": "paddock_comment",
+        "ok": true,
+        "rows": 37982,
+        "note": "パドックコメント"
+      }
+    ],
+    "trainer_comment": [
+      {
+        "store_name": "tcomment_comment",
+        "ok": true,
+        "rows": 46828,
+        "note": "厩舎コメント本文"
+      },
+      {
+        "store_name": "tcomment_evaluation",
+        "ok": true,
+        "rows": 46828,
+        "note": "厩舎コメント評価"
+      },
+      {
+        "store_name": "tcomment_trainer_name",
+        "ok": true,
+        "rows": 46828,
+        "note": "コメント欄の調教師名"
+      },
+      {
+        "store_name": "tcomment_questioner",
+        "ok": true,
+        "rows": 46828,
+        "note": "取材者"
+      }
+    ]
+  },
+  "store_names": [
+    "shutuba",
+    "shutuba_race_horse",
+    "shutuba_horse",
+    "shutuba_race_jockey",
+    "shutuba_race_trainer",
+    "shutuba_date",
+    "shutuba_venue",
+    "shutuba_surface",
+    "shutuba_distance",
+    "shutuba_direction",
+    "shutuba_grade",
+    "shutuba_race_class",
+    "shutuba_weather",
+    "shutuba_track_condition",
+    "shutuba_start_time",
+    "shutuba_field_size",
+    "shutuba_race_name",
+    "shutuba_venue_code",
+    "shutuba_round",
+    "shutuba_weight_rule",
+    "shutuba_course_type",
+    "idx_speed_max",
+    "idx_speed_avg",
+    "idx_speed_distance",
+    "idx_speed_course",
+    "idx_speed_recent_1",
+    "idx_speed_recent_2",
+    "idx_speed_recent_3",
+    "past_past_races",
+    "past_training",
+    "paddock_rank",
+    "paddock_comment",
+    "tcomment_comment",
+    "tcomment_evaluation",
+    "tcomment_trainer_name",
+    "tcomment_questioner"
+  ]
+}

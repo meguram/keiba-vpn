@@ -1,0 +1,9 @@
+{
+  "built_at": "2026-05-18T18:52:21.441367",
+  "baseline_path": "/home/hirokiakataoka/project/myproject/keiba-vpn/data/knowledge/track_speed_baselines.parquet",
+  "baseline_groups": 476,
+  "races_scored": 9,
+  "years": [
+    "2026"
+  ]
+}

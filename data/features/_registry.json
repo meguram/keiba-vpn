@@ -1,0 +1,1258 @@
+{
+ "run_performance_raw": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/run_performance_raw.parquet",
+  "columns": [
+   "run_performance_raw"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:47",
+  "migrated_from": "data/features/columns"
+ },
+ "run_performance_final": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/run_performance_final.parquet",
+  "columns": [
+   "run_performance_final"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:47",
+  "migrated_from": "data/features/columns"
+ },
+ "time_figure": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/time_figure.parquet",
+  "columns": [
+   "time_figure"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:48",
+  "migrated_from": "data/features/columns"
+ },
+ "margin_adjusted_figure": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/margin_adjusted_figure.parquet",
+  "columns": [
+   "margin_adjusted_figure"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:44",
+  "migrated_from": "data/features/columns"
+ },
+ "weight_adjusted_figure": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/weight_adjusted_figure.parquet",
+  "columns": [
+   "weight_adjusted_figure"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:48",
+  "migrated_from": "data/features/columns"
+ },
+ "pace_adjusted_figure": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/pace_adjusted_figure.parquet",
+  "columns": [
+   "pace_adjusted_figure"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:45",
+  "migrated_from": "data/features/columns"
+ },
+ "field_strength_contrib": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/field_strength_contrib.parquet",
+  "columns": [
+   "field_strength_contrib"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:44",
+  "migrated_from": "data/features/columns"
+ },
+ "race_level_pre_race": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/race_level_pre_race.parquet",
+  "columns": [
+   "race_level_pre_race"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:46",
+  "migrated_from": "data/features/columns"
+ },
+ "race_level_retrospective": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/race_level_retrospective.parquet",
+  "columns": [
+   "race_level_retrospective"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:47",
+  "migrated_from": "data/features/columns"
+ },
+ "track_variant": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/track_variant.parquet",
+  "columns": [
+   "track_variant"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:48",
+  "migrated_from": "data/features/columns"
+ },
+ "race_uncertainty": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/race_uncertainty.parquet",
+  "columns": [
+   "race_uncertainty"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:47",
+  "migrated_from": "data/features/columns"
+ },
+ "run_performance_final_std": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/run_performance_final_std.parquet",
+  "columns": [
+   "run_performance_final_std"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:47",
+  "migrated_from": "data/features/columns"
+ },
+ "run_performance_final_pct": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/run_performance_final_pct.parquet",
+  "columns": [
+   "run_performance_final_pct"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:47",
+  "migrated_from": "data/features/columns"
+ },
+ "horse_pre_rating_pre_race": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/horse_pre_rating_pre_race.parquet",
+  "columns": [
+   "horse_pre_rating_pre_race"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:44",
+  "migrated_from": "data/features/columns"
+ },
+ "field_relative_pre_rating": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/field_relative_pre_rating.parquet",
+  "columns": [
+   "field_relative_pre_rating"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:44",
+  "migrated_from": "data/features/columns"
+ },
+ "field_top3_gap": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/field_top3_gap.parquet",
+  "columns": [
+   "field_top3_gap"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:44",
+  "migrated_from": "data/features/columns"
+ },
+ "reference_weight_equivalent": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/reference_weight_equivalent.parquet",
+  "columns": [
+   "reference_weight_equivalent"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:47",
+  "migrated_from": "data/features/columns"
+ },
+ "normalized_weight_carried": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/normalized_weight_carried.parquet",
+  "columns": [
+   "normalized_weight_carried"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:45",
+  "migrated_from": "data/features/columns"
+ },
+ "current_weight_advantage_points": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/current_weight_advantage_points.parquet",
+  "columns": [
+   "current_weight_advantage_points"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:44",
+  "migrated_from": "data/features/columns"
+ },
+ "horse_pre_rating_neutral": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/horse_pre_rating_neutral.parquet",
+  "columns": [
+   "horse_pre_rating_neutral"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:44",
+  "migrated_from": "data/features/columns"
+ },
+ "track_variant_online": {
+  "source": "custom",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/track_variant_online.parquet",
+  "columns": [
+   "track_variant_online"
+  ],
+  "rows": 47497,
+  "dtype": "float64",
+  "updated_at": "2026-04-21T10:47:48",
+  "migrated_from": "data/features/columns"
+ },
+ "shutuba_date": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_date.parquet",
+  "columns": [
+   "shutuba_date"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_date.parquet",
+   "2021": "race_tbl/2021/shutuba_date.parquet",
+   "2022": "race_tbl/2022/shutuba_date.parquet",
+   "2023": "race_tbl/2023/shutuba_date.parquet",
+   "2024": "race_tbl/2024/shutuba_date.parquet",
+   "2025": "race_tbl/2025/shutuba_date.parquet"
+  },
+  "source_column": "date",
+  "updated_at": "2026-04-21T11:24:49"
+ },
+ "shutuba_venue": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_venue.parquet",
+  "columns": [
+   "shutuba_venue"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_venue.parquet",
+   "2021": "race_tbl/2021/shutuba_venue.parquet",
+   "2022": "race_tbl/2022/shutuba_venue.parquet",
+   "2023": "race_tbl/2023/shutuba_venue.parquet",
+   "2024": "race_tbl/2024/shutuba_venue.parquet",
+   "2025": "race_tbl/2025/shutuba_venue.parquet"
+  },
+  "source_column": "venue",
+  "updated_at": "2026-04-21T11:24:49"
+ },
+ "shutuba_surface": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_surface.parquet",
+  "columns": [
+   "shutuba_surface"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_surface.parquet",
+   "2021": "race_tbl/2021/shutuba_surface.parquet",
+   "2022": "race_tbl/2022/shutuba_surface.parquet",
+   "2023": "race_tbl/2023/shutuba_surface.parquet",
+   "2024": "race_tbl/2024/shutuba_surface.parquet",
+   "2025": "race_tbl/2025/shutuba_surface.parquet"
+  },
+  "source_column": "surface",
+  "updated_at": "2026-04-21T11:24:49"
+ },
+ "shutuba_distance": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_distance.parquet",
+  "columns": [
+   "shutuba_distance"
+  ],
+  "rows": 20733,
+  "dtype": "int64",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_distance.parquet",
+   "2021": "race_tbl/2021/shutuba_distance.parquet",
+   "2022": "race_tbl/2022/shutuba_distance.parquet",
+   "2023": "race_tbl/2023/shutuba_distance.parquet",
+   "2024": "race_tbl/2024/shutuba_distance.parquet",
+   "2025": "race_tbl/2025/shutuba_distance.parquet"
+  },
+  "source_column": "distance",
+  "updated_at": "2026-04-21T11:24:49"
+ },
+ "shutuba_direction": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_direction.parquet",
+  "columns": [
+   "shutuba_direction"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_direction.parquet",
+   "2021": "race_tbl/2021/shutuba_direction.parquet",
+   "2022": "race_tbl/2022/shutuba_direction.parquet",
+   "2023": "race_tbl/2023/shutuba_direction.parquet",
+   "2024": "race_tbl/2024/shutuba_direction.parquet",
+   "2025": "race_tbl/2025/shutuba_direction.parquet"
+  },
+  "source_column": "direction",
+  "updated_at": "2026-04-21T11:24:49"
+ },
+ "shutuba_grade": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_grade.parquet",
+  "columns": [
+   "shutuba_grade"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_grade.parquet",
+   "2021": "race_tbl/2021/shutuba_grade.parquet",
+   "2022": "race_tbl/2022/shutuba_grade.parquet",
+   "2023": "race_tbl/2023/shutuba_grade.parquet",
+   "2024": "race_tbl/2024/shutuba_grade.parquet",
+   "2025": "race_tbl/2025/shutuba_grade.parquet"
+  },
+  "source_column": "grade",
+  "updated_at": "2026-04-21T11:24:49"
+ },
+ "shutuba_race_class": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_race_class.parquet",
+  "columns": [
+   "shutuba_race_class"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_race_class.parquet",
+   "2021": "race_tbl/2021/shutuba_race_class.parquet",
+   "2022": "race_tbl/2022/shutuba_race_class.parquet",
+   "2023": "race_tbl/2023/shutuba_race_class.parquet",
+   "2024": "race_tbl/2024/shutuba_race_class.parquet",
+   "2025": "race_tbl/2025/shutuba_race_class.parquet"
+  },
+  "source_column": "race_class",
+  "updated_at": "2026-04-21T11:24:49"
+ },
+ "shutuba_weather": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_weather.parquet",
+  "columns": [
+   "shutuba_weather"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_weather.parquet",
+   "2021": "race_tbl/2021/shutuba_weather.parquet",
+   "2022": "race_tbl/2022/shutuba_weather.parquet",
+   "2023": "race_tbl/2023/shutuba_weather.parquet",
+   "2024": "race_tbl/2024/shutuba_weather.parquet",
+   "2025": "race_tbl/2025/shutuba_weather.parquet"
+  },
+  "source_column": "weather",
+  "updated_at": "2026-04-21T11:24:49"
+ },
+ "shutuba_track_condition": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_track_condition.parquet",
+  "columns": [
+   "shutuba_track_condition"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_track_condition.parquet",
+   "2021": "race_tbl/2021/shutuba_track_condition.parquet",
+   "2022": "race_tbl/2022/shutuba_track_condition.parquet",
+   "2023": "race_tbl/2023/shutuba_track_condition.parquet",
+   "2024": "race_tbl/2024/shutuba_track_condition.parquet",
+   "2025": "race_tbl/2025/shutuba_track_condition.parquet"
+  },
+  "source_column": "track_condition",
+  "updated_at": "2026-04-21T11:24:49"
+ },
+ "shutuba_start_time": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_start_time.parquet",
+  "columns": [
+   "shutuba_start_time"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_start_time.parquet",
+   "2021": "race_tbl/2021/shutuba_start_time.parquet",
+   "2022": "race_tbl/2022/shutuba_start_time.parquet",
+   "2023": "race_tbl/2023/shutuba_start_time.parquet",
+   "2024": "race_tbl/2024/shutuba_start_time.parquet",
+   "2025": "race_tbl/2025/shutuba_start_time.parquet"
+  },
+  "source_column": "start_time",
+  "updated_at": "2026-04-21T11:24:49"
+ },
+ "shutuba_field_size": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_field_size.parquet",
+  "columns": [
+   "shutuba_field_size"
+  ],
+  "rows": 20733,
+  "dtype": "int64",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_field_size.parquet",
+   "2021": "race_tbl/2021/shutuba_field_size.parquet",
+   "2022": "race_tbl/2022/shutuba_field_size.parquet",
+   "2023": "race_tbl/2023/shutuba_field_size.parquet",
+   "2024": "race_tbl/2024/shutuba_field_size.parquet",
+   "2025": "race_tbl/2025/shutuba_field_size.parquet"
+  },
+  "source_column": "field_size",
+  "updated_at": "2026-04-21T11:24:50"
+ },
+ "shutuba_race_name": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_race_name.parquet",
+  "columns": [
+   "shutuba_race_name"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_race_name.parquet",
+   "2021": "race_tbl/2021/shutuba_race_name.parquet",
+   "2022": "race_tbl/2022/shutuba_race_name.parquet",
+   "2023": "race_tbl/2023/shutuba_race_name.parquet",
+   "2024": "race_tbl/2024/shutuba_race_name.parquet",
+   "2025": "race_tbl/2025/shutuba_race_name.parquet"
+  },
+  "source_column": "race_name",
+  "updated_at": "2026-04-21T11:24:50"
+ },
+ "shutuba_venue_code": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_venue_code.parquet",
+  "columns": [
+   "shutuba_venue_code"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_venue_code.parquet",
+   "2021": "race_tbl/2021/shutuba_venue_code.parquet",
+   "2022": "race_tbl/2022/shutuba_venue_code.parquet",
+   "2023": "race_tbl/2023/shutuba_venue_code.parquet",
+   "2024": "race_tbl/2024/shutuba_venue_code.parquet",
+   "2025": "race_tbl/2025/shutuba_venue_code.parquet"
+  },
+  "source_column": "venue_code",
+  "updated_at": "2026-04-21T11:24:50"
+ },
+ "shutuba_round": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_round.parquet",
+  "columns": [
+   "shutuba_round"
+  ],
+  "rows": 20733,
+  "dtype": "int64",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_round.parquet",
+   "2021": "race_tbl/2021/shutuba_round.parquet",
+   "2022": "race_tbl/2022/shutuba_round.parquet",
+   "2023": "race_tbl/2023/shutuba_round.parquet",
+   "2024": "race_tbl/2024/shutuba_round.parquet",
+   "2025": "race_tbl/2025/shutuba_round.parquet"
+  },
+  "source_column": "round",
+  "updated_at": "2026-04-21T11:24:50"
+ },
+ "shutuba_weight_rule": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_weight_rule.parquet",
+  "columns": [
+   "shutuba_weight_rule"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_weight_rule.parquet",
+   "2021": "race_tbl/2021/shutuba_weight_rule.parquet",
+   "2022": "race_tbl/2022/shutuba_weight_rule.parquet",
+   "2023": "race_tbl/2023/shutuba_weight_rule.parquet",
+   "2024": "race_tbl/2024/shutuba_weight_rule.parquet",
+   "2025": "race_tbl/2025/shutuba_weight_rule.parquet"
+  },
+  "source_column": "weight_rule",
+  "updated_at": "2026-04-21T11:24:50"
+ },
+ "shutuba_course_type": {
+  "source": "race_shutuba",
+  "table_block": "race_tbl",
+  "merge_keys": [
+   "race_id"
+  ],
+  "rel_path": "race_tbl/2020/shutuba_course_type.parquet",
+  "columns": [
+   "shutuba_course_type"
+  ],
+  "rows": 20733,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_tbl/2020/shutuba_course_type.parquet",
+   "2021": "race_tbl/2021/shutuba_course_type.parquet",
+   "2022": "race_tbl/2022/shutuba_course_type.parquet",
+   "2023": "race_tbl/2023/shutuba_course_type.parquet",
+   "2024": "race_tbl/2024/shutuba_course_type.parquet",
+   "2025": "race_tbl/2025/shutuba_course_type.parquet"
+  },
+  "source_column": "course_type",
+  "updated_at": "2026-04-21T11:24:50"
+ },
+ "idx_speed_max": {
+  "source": "race_index",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/idx_speed_max.parquet",
+  "columns": [
+   "idx_speed_max"
+  ],
+  "rows": 135712,
+  "dtype": "float64",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/idx_speed_max.parquet",
+   "2021": "race_horse_tbl/2021/idx_speed_max.parquet",
+   "2022": "race_horse_tbl/2022/idx_speed_max.parquet",
+   "2023": "race_horse_tbl/2023/idx_speed_max.parquet",
+   "2024": "race_horse_tbl/2024/idx_speed_max.parquet",
+   "2025": "race_horse_tbl/2025/idx_speed_max.parquet"
+  },
+  "source_column": "speed_max",
+  "has_transform": false,
+  "updated_at": "2026-04-21T11:24:52"
+ },
+ "idx_speed_avg": {
+  "source": "race_index",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/idx_speed_avg.parquet",
+  "columns": [
+   "idx_speed_avg"
+  ],
+  "rows": 135712,
+  "dtype": "float64",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/idx_speed_avg.parquet",
+   "2021": "race_horse_tbl/2021/idx_speed_avg.parquet",
+   "2022": "race_horse_tbl/2022/idx_speed_avg.parquet",
+   "2023": "race_horse_tbl/2023/idx_speed_avg.parquet",
+   "2024": "race_horse_tbl/2024/idx_speed_avg.parquet",
+   "2025": "race_horse_tbl/2025/idx_speed_avg.parquet"
+  },
+  "source_column": "speed_avg",
+  "has_transform": false,
+  "updated_at": "2026-04-21T11:24:52"
+ },
+ "idx_speed_distance": {
+  "source": "race_index",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/idx_speed_distance.parquet",
+  "columns": [
+   "idx_speed_distance"
+  ],
+  "rows": 135712,
+  "dtype": "float64",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/idx_speed_distance.parquet",
+   "2021": "race_horse_tbl/2021/idx_speed_distance.parquet",
+   "2022": "race_horse_tbl/2022/idx_speed_distance.parquet",
+   "2023": "race_horse_tbl/2023/idx_speed_distance.parquet",
+   "2024": "race_horse_tbl/2024/idx_speed_distance.parquet",
+   "2025": "race_horse_tbl/2025/idx_speed_distance.parquet"
+  },
+  "source_column": "speed_distance",
+  "has_transform": false,
+  "updated_at": "2026-04-21T11:24:53"
+ },
+ "idx_speed_course": {
+  "source": "race_index",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/idx_speed_course.parquet",
+  "columns": [
+   "idx_speed_course"
+  ],
+  "rows": 135712,
+  "dtype": "float64",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/idx_speed_course.parquet",
+   "2021": "race_horse_tbl/2021/idx_speed_course.parquet",
+   "2022": "race_horse_tbl/2022/idx_speed_course.parquet",
+   "2023": "race_horse_tbl/2023/idx_speed_course.parquet",
+   "2024": "race_horse_tbl/2024/idx_speed_course.parquet",
+   "2025": "race_horse_tbl/2025/idx_speed_course.parquet"
+  },
+  "source_column": "speed_course",
+  "has_transform": false,
+  "updated_at": "2026-04-21T11:24:53"
+ },
+ "past_past_races": {
+  "source": "race_shutuba_past",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/past_past_races.parquet",
+  "columns": [
+   "past_past_races"
+  ],
+  "rows": 286060,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/past_past_races.parquet",
+   "2021": "race_horse_tbl/2021/past_past_races.parquet",
+   "2022": "race_horse_tbl/2022/past_past_races.parquet",
+   "2023": "race_horse_tbl/2023/past_past_races.parquet",
+   "2024": "race_horse_tbl/2024/past_past_races.parquet",
+   "2025": "race_horse_tbl/2025/past_past_races.parquet"
+  },
+  "source_column": "past_races",
+  "has_transform": false,
+  "updated_at": "2026-04-21T11:24:55"
+ },
+ "past_training": {
+  "source": "race_shutuba_past",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/past_training.parquet",
+  "columns": [
+   "past_training"
+  ],
+  "rows": 286060,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/past_training.parquet",
+   "2021": "race_horse_tbl/2021/past_training.parquet",
+   "2022": "race_horse_tbl/2022/past_training.parquet",
+   "2023": "race_horse_tbl/2023/past_training.parquet",
+   "2024": "race_horse_tbl/2024/past_training.parquet",
+   "2025": "race_horse_tbl/2025/past_training.parquet"
+  },
+  "source_column": "training",
+  "has_transform": false,
+  "updated_at": "2026-04-21T11:24:56"
+ },
+ "paddock_rank": {
+  "source": "race_paddock_flat",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2021/paddock_rank.parquet",
+  "columns": [
+   "paddock_rank"
+  ],
+  "rows": 37982,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2021": "race_horse_tbl/2021/paddock_rank.parquet",
+   "2022": "race_horse_tbl/2022/paddock_rank.parquet",
+   "2023": "race_horse_tbl/2023/paddock_rank.parquet",
+   "2024": "race_horse_tbl/2024/paddock_rank.parquet",
+   "2025": "race_horse_tbl/2025/paddock_rank.parquet"
+  },
+  "source_column": "paddock_rank",
+  "preprocess": "drop_duplicates(race_id,horse_id,keep=last)",
+  "updated_at": "2026-04-21T11:24:57"
+ },
+ "paddock_comment": {
+  "source": "race_paddock_flat",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2021/paddock_comment.parquet",
+  "columns": [
+   "paddock_comment"
+  ],
+  "rows": 37982,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2021": "race_horse_tbl/2021/paddock_comment.parquet",
+   "2022": "race_horse_tbl/2022/paddock_comment.parquet",
+   "2023": "race_horse_tbl/2023/paddock_comment.parquet",
+   "2024": "race_horse_tbl/2024/paddock_comment.parquet",
+   "2025": "race_horse_tbl/2025/paddock_comment.parquet"
+  },
+  "source_column": "paddock_comment",
+  "preprocess": "drop_duplicates(race_id,horse_id,keep=last)",
+  "updated_at": "2026-04-21T11:24:57"
+ },
+ "tcomment_comment": {
+  "source": "race_trainer_comment_flat",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/tcomment_comment.parquet",
+  "columns": [
+   "tcomment_comment"
+  ],
+  "rows": 46828,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/tcomment_comment.parquet",
+   "2021": "race_horse_tbl/2021/tcomment_comment.parquet",
+   "2022": "race_horse_tbl/2022/tcomment_comment.parquet",
+   "2023": "race_horse_tbl/2023/tcomment_comment.parquet",
+   "2024": "race_horse_tbl/2024/tcomment_comment.parquet",
+   "2025": "race_horse_tbl/2025/tcomment_comment.parquet"
+  },
+  "source_column": "comment",
+  "preprocess": "horse_id sanitize; rows with null horse_id dropped",
+  "updated_at": "2026-04-21T11:24:57"
+ },
+ "tcomment_evaluation": {
+  "source": "race_trainer_comment_flat",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/tcomment_evaluation.parquet",
+  "columns": [
+   "tcomment_evaluation"
+  ],
+  "rows": 46828,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/tcomment_evaluation.parquet",
+   "2021": "race_horse_tbl/2021/tcomment_evaluation.parquet",
+   "2022": "race_horse_tbl/2022/tcomment_evaluation.parquet",
+   "2023": "race_horse_tbl/2023/tcomment_evaluation.parquet",
+   "2024": "race_horse_tbl/2024/tcomment_evaluation.parquet",
+   "2025": "race_horse_tbl/2025/tcomment_evaluation.parquet"
+  },
+  "source_column": "evaluation",
+  "preprocess": "horse_id sanitize; rows with null horse_id dropped",
+  "updated_at": "2026-04-21T11:24:57"
+ },
+ "tcomment_trainer_name": {
+  "source": "race_trainer_comment_flat",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/tcomment_trainer_name.parquet",
+  "columns": [
+   "tcomment_trainer_name"
+  ],
+  "rows": 46828,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/tcomment_trainer_name.parquet",
+   "2021": "race_horse_tbl/2021/tcomment_trainer_name.parquet",
+   "2022": "race_horse_tbl/2022/tcomment_trainer_name.parquet",
+   "2023": "race_horse_tbl/2023/tcomment_trainer_name.parquet",
+   "2024": "race_horse_tbl/2024/tcomment_trainer_name.parquet",
+   "2025": "race_horse_tbl/2025/tcomment_trainer_name.parquet"
+  },
+  "source_column": "trainer_name",
+  "preprocess": "horse_id sanitize; rows with null horse_id dropped",
+  "updated_at": "2026-04-21T11:24:57"
+ },
+ "tcomment_questioner": {
+  "source": "race_trainer_comment_flat",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/tcomment_questioner.parquet",
+  "columns": [
+   "tcomment_questioner"
+  ],
+  "rows": 46828,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/tcomment_questioner.parquet",
+   "2021": "race_horse_tbl/2021/tcomment_questioner.parquet",
+   "2022": "race_horse_tbl/2022/tcomment_questioner.parquet",
+   "2023": "race_horse_tbl/2023/tcomment_questioner.parquet",
+   "2024": "race_horse_tbl/2024/tcomment_questioner.parquet",
+   "2025": "race_horse_tbl/2025/tcomment_questioner.parquet"
+  },
+  "source_column": "questioner",
+  "preprocess": "horse_id sanitize; rows with null horse_id dropped",
+  "updated_at": "2026-04-21T11:24:57"
+ },
+ "idx_speed_recent_1": {
+  "source": "race_index_flat",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/idx_speed_recent_1.parquet",
+  "columns": [
+   "idx_speed_recent_1"
+  ],
+  "rows": 135712,
+  "dtype": "Float64",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/idx_speed_recent_1.parquet",
+   "2021": "race_horse_tbl/2021/idx_speed_recent_1.parquet",
+   "2022": "race_horse_tbl/2022/idx_speed_recent_1.parquet",
+   "2023": "race_horse_tbl/2023/idx_speed_recent_1.parquet",
+   "2024": "race_horse_tbl/2024/idx_speed_recent_1.parquet",
+   "2025": "race_horse_tbl/2025/idx_speed_recent_1.parquet"
+  },
+  "source_column": "speed_recent",
+  "derived_from_list": true,
+  "slot": "1",
+  "value_policy": "parser_zero_as_null",
+  "updated_at": "2026-04-21T11:24:57"
+ },
+ "idx_speed_recent_2": {
+  "source": "race_index_flat",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/idx_speed_recent_2.parquet",
+  "columns": [
+   "idx_speed_recent_2"
+  ],
+  "rows": 135712,
+  "dtype": "Float64",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/idx_speed_recent_2.parquet",
+   "2021": "race_horse_tbl/2021/idx_speed_recent_2.parquet",
+   "2022": "race_horse_tbl/2022/idx_speed_recent_2.parquet",
+   "2023": "race_horse_tbl/2023/idx_speed_recent_2.parquet",
+   "2024": "race_horse_tbl/2024/idx_speed_recent_2.parquet",
+   "2025": "race_horse_tbl/2025/idx_speed_recent_2.parquet"
+  },
+  "source_column": "speed_recent",
+  "derived_from_list": true,
+  "slot": "2",
+  "value_policy": "parser_zero_as_null",
+  "updated_at": "2026-04-21T11:24:57"
+ },
+ "idx_speed_recent_3": {
+  "source": "race_index_flat",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/idx_speed_recent_3.parquet",
+  "columns": [
+   "idx_speed_recent_3"
+  ],
+  "rows": 135712,
+  "dtype": "Float64",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/idx_speed_recent_3.parquet",
+   "2021": "race_horse_tbl/2021/idx_speed_recent_3.parquet",
+   "2022": "race_horse_tbl/2022/idx_speed_recent_3.parquet",
+   "2023": "race_horse_tbl/2023/idx_speed_recent_3.parquet",
+   "2024": "race_horse_tbl/2024/idx_speed_recent_3.parquet",
+   "2025": "race_horse_tbl/2025/idx_speed_recent_3.parquet"
+  },
+  "source_column": "speed_recent",
+  "derived_from_list": true,
+  "slot": "3",
+  "value_policy": "parser_zero_as_null",
+  "updated_at": "2026-04-21T11:24:57"
+ },
+ "shutuba": {
+  "source": "race_shutuba_flat",
+  "table_block": "base_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id",
+   "jockey_id",
+   "trainer_id"
+  ],
+  "rel_path": "base_tbl/2020/shutuba.parquet",
+  "columns": [],
+  "rows": 286060,
+  "dtype": "keys_only",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "base_tbl/2020/shutuba.parquet",
+   "2021": "base_tbl/2021/shutuba.parquet",
+   "2022": "base_tbl/2022/shutuba.parquet",
+   "2023": "base_tbl/2023/shutuba.parquet",
+   "2024": "base_tbl/2024/shutuba.parquet",
+   "2025": "base_tbl/2025/shutuba.parquet"
+  },
+  "value_columns": [],
+  "note": "予測ベースのスパイン（race_id, horse_id, jockey_id, trainer_id のみ）。",
+  "updated_at": "2026-04-21T11:24:50"
+ },
+ "shutuba_race_horse": {
+  "source": "race_shutuba_flat",
+  "table_block": "race_horse_tbl",
+  "merge_keys": [
+   "race_id",
+   "horse_id"
+  ],
+  "rel_path": "race_horse_tbl/2020/shutuba_race_horse.parquet",
+  "columns": [
+   "shutuba_bracket_number",
+   "shutuba_horse_id",
+   "shutuba_weight",
+   "shutuba_weight_change",
+   "shutuba_jockey_weight",
+   "shutuba_horse_id_present",
+   "shutuba_jockey_id_present",
+   "shutuba_trainer_id_present"
+  ],
+  "rows": 286060,
+  "dtype": "multi",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_horse_tbl/2020/shutuba_race_horse.parquet",
+   "2021": "race_horse_tbl/2021/shutuba_race_horse.parquet",
+   "2022": "race_horse_tbl/2022/shutuba_race_horse.parquet",
+   "2023": "race_horse_tbl/2023/shutuba_race_horse.parquet",
+   "2024": "race_horse_tbl/2024/shutuba_race_horse.parquet",
+   "2025": "race_horse_tbl/2025/shutuba_race_horse.parquet"
+  },
+  "value_columns": [
+   "shutuba_bracket_number",
+   "shutuba_horse_id",
+   "shutuba_weight",
+   "shutuba_weight_change",
+   "shutuba_jockey_weight",
+   "shutuba_horse_id_present",
+   "shutuba_jockey_id_present",
+   "shutuba_trainer_id_present"
+  ],
+  "note": "race_id+horse_id の当該レース馬行（枠・体重・斤量・ID 有効フラグ等）。",
+  "updated_at": "2026-04-21T11:24:51"
+ },
+ "shutuba_horse": {
+  "source": "race_shutuba_flat",
+  "table_block": "horse_tbl",
+  "merge_keys": [
+   "horse_id"
+  ],
+  "rel_path": "horse_tbl/shutuba_horse.parquet",
+  "columns": [
+   "shutuba_horse_name",
+   "shutuba_sex_age",
+   "shutuba_sire",
+   "shutuba_dam_sire"
+  ],
+  "rows": 35891,
+  "dtype": "multi",
+  "value_columns": [
+   "shutuba_horse_name",
+   "shutuba_sex_age",
+   "shutuba_sire",
+   "shutuba_dam_sire"
+  ],
+  "note": "馬単位（血統・馬名・性齢）。部分年登録時は既存行とマージ。",
+  "updated_at": "2026-04-21T11:24:51"
+ },
+ "shutuba_race_jockey": {
+  "source": "race_shutuba_flat",
+  "table_block": "race_jockey_tbl",
+  "merge_keys": [
+   "race_id",
+   "jockey_id"
+  ],
+  "rel_path": "race_jockey_tbl/2020/shutuba_race_jockey.parquet",
+  "columns": [
+   "shutuba_race_jockey"
+  ],
+  "rows": 286059,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_jockey_tbl/2020/shutuba_race_jockey.parquet",
+   "2021": "race_jockey_tbl/2021/shutuba_race_jockey.parquet",
+   "2022": "race_jockey_tbl/2022/shutuba_race_jockey.parquet",
+   "2023": "race_jockey_tbl/2023/shutuba_race_jockey.parquet",
+   "2024": "race_jockey_tbl/2024/shutuba_race_jockey.parquet",
+   "2025": "race_jockey_tbl/2025/shutuba_race_jockey.parquet"
+  },
+  "note": "race_id+jockey_id 一意化（レース内騎手参照用）",
+  "updated_at": "2026-04-21T11:24:51"
+ },
+ "shutuba_race_trainer": {
+  "source": "race_shutuba_flat",
+  "table_block": "race_trainer_tbl",
+  "merge_keys": [
+   "race_id",
+   "trainer_id"
+  ],
+  "rel_path": "race_trainer_tbl/2020/shutuba_race_trainer.parquet",
+  "columns": [
+   "shutuba_race_trainer"
+  ],
+  "rows": 275955,
+  "dtype": "object",
+  "year_partitioned": true,
+  "year_paths": {
+   "2020": "race_trainer_tbl/2020/shutuba_race_trainer.parquet",
+   "2021": "race_trainer_tbl/2021/shutuba_race_trainer.parquet",
+   "2022": "race_trainer_tbl/2022/shutuba_race_trainer.parquet",
+   "2023": "race_trainer_tbl/2023/shutuba_race_trainer.parquet",
+   "2024": "race_trainer_tbl/2024/shutuba_race_trainer.parquet",
+   "2025": "race_trainer_tbl/2025/shutuba_race_trainer.parquet"
+  },
+  "note": "race_id+trainer_id 一意化（レース内調教師参照用）",
+  "updated_at": "2026-04-21T11:24:52"
+ }
+}

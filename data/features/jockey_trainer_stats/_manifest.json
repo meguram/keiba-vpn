@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-04-21T02:15:38.757511+00:00",
+  "years_all_computed": [
+    "2020",
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+  ],
+  "years_jt_race_features_output": [
+    "2020",
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+  ],
+  "years_filter_requested": null,
+  "jra_only": true,
+  "rows_race_result_computed": 283714,
+  "rows_jt_race_features": 283714,
+  "paths": {
+    "jt_race_features_by_year": {
+      "2020": "data/features/race_horse_tbl/2020/jt_race_features.parquet",
+      "2021": "data/features/race_horse_tbl/2021/jt_race_features.parquet",
+      "2022": "data/features/race_horse_tbl/2022/jt_race_features.parquet",
+      "2023": "data/features/race_horse_tbl/2023/jt_race_features.parquet",
+      "2024": "data/features/race_horse_tbl/2024/jt_race_features.parquet",
+      "2025": "data/features/race_horse_tbl/2025/jt_race_features.parquet"
+    },
+    "jt_race_features": "data/features/race_horse_tbl/2020/jt_race_features.parquet",
+    "merge_spec": "data/features/jockey_trainer_stats/_merge_spec.json",
+    "lookup_jockey": "data/features/jockey_tbl/lookup_jockey.parquet",
+    "lookup_trainer": "data/features/trainer_tbl/lookup_trainer.parquet",
+    "lookup_jockey_slices": "data/features/jockey_tbl/lookup_jockey_slices.parquet",
+    "lookup_trainer_slices": "data/features/trainer_tbl/lookup_trainer_slices.parquet",
+    "manifest": "data/features/jockey_trainer_stats/_manifest.json"
+  },
+  "merge_spec_file": "_merge_spec.json",
+  "jt_race_features_primary_merge_keys": [
+    "race_id",
+    "horse_id"
+  ],
+  "notes": [
+    "jt_race_features は当該レースより前のみを使った条件別・ローリング統計（学習用）。",
+    "累計の参照期間は rows_race_result_computed に含まれる全年（--years は出力行フィルタのみ）。",
+    "lookup_* はデータ全体の最終状態スナップショット（当日予測で ID 参照用）。",
+    "lookup_*_slices は条件別通算（学習時の条件一致マージは jt_race_features 側を推奨）。"
+  ]
+}
