@@ -63,3 +63,4 @@ credentials.json
 
 # プロセス横断スロットファイル（スクレイパー並列数制御用）
 data/meta/netkeiba_global_slots/
+gcp-service-account.json
