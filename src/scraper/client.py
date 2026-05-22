@@ -722,18 +722,27 @@ class NetkeibaClient:
                     continue
                 resp.raise_for_status()
             elif resp.status_code == 400 and "netkeiba.com" in url:
-                if attempt < _BACKOFF_MAX_RETRIES:
-                    pause = random.uniform(18.0, 40.0)
+                from src.scraper.http400_strategy import (
+                    apply_recovery,
+                    classify_400_cause,
+                    get_recovery_tier,
+                    global_400_rate_monitor,
+                )
+                monitor = global_400_rate_monitor()
+                monitor.record()
+                cause = classify_400_cause(resp)
+                tier = get_recovery_tier(attempt, cause, monitor)
+
+                if tier < 0:
+                    # CONTENT_NOT_FOUND でリトライ上限: 404 相当として扱う
                     logger.warning(
-                        "HTTP 400 (到達性・ブロック疑い) — %.1f 秒後にセッション再構築して再試行: %s",
-                        pause,
-                        url,
+                        "HTTP 400 [%s] — コンテンツ不存在と判断し諦めます: %s",
+                        cause.value, url,
                     )
-                    time.sleep(pause)
-                    was_logged = self._logged_in
-                    self._refresh_session()
-                    if was_logged:
-                        self.login()
+                    resp.raise_for_status()
+
+                if attempt < _BACKOFF_MAX_RETRIES:
+                    apply_recovery(tier, cause, self, url, attempt)
                     wait = min(max(wait, _BACKOFF_INITIAL) * 1.2, 120.0)
                     continue
                 resp.raise_for_status()

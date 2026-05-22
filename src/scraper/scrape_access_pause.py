@@ -138,7 +138,12 @@ def _exception_chain(exc: BaseException) -> list[BaseException]:
 
 
 def is_block_suspect_http_400(exc: BaseException) -> bool:
-    """ブロック疑いとして扱う HTTP 400 のみ。"""
+    """
+    ブロック疑いとして扱う HTTP 400 のみ。
+
+    CONTENT_NOT_FOUND（コンテンツ不存在）はブロックではないため除外する。
+    原因分類が失敗した場合は安全側（ブロック疑い）に倒す。
+    """
     try:
         import requests
     except ImportError:
@@ -147,8 +152,24 @@ def is_block_suspect_http_400(exc: BaseException) -> bool:
     for e in _exception_chain(exc):
         if isinstance(e, requests.exceptions.HTTPError):
             resp = e.response
-            if resp is not None and resp.status_code == 400:
-                return True
+            if resp is None or resp.status_code != 400:
+                continue
+            # 原因分類でコンテンツ不存在と判明した場合はブロックではない
+            try:
+                from src.scraper.http400_strategy import (
+                    Cause400,
+                    classify_400_cause,
+                )
+                cause = classify_400_cause(resp)
+                if cause == Cause400.CONTENT_NOT_FOUND:
+                    logger.info(
+                        "HTTP 400 はコンテンツ不存在と判断 — キュー停止をスキップ: %s",
+                        getattr(resp, "url", "unknown"),
+                    )
+                    return False
+            except Exception:
+                pass
+            return True
     return False
 
 
