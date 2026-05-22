@@ -43,11 +43,11 @@
   .stat-val.failed { color: var(--err); }
   .ctrl-main { display: flex; overflow: hidden; min-height: calc(100vh - 200px); }
   .left-panel { width: 380px; min-width: 320px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; gap: 16px; }
-  .log-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .log-panel { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .log-stream { overflow-y: auto; padding: 0; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 11.5px; background: var(--log-bg); height: 220px; }
   .log-toolbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 8px 14px; display: flex; align-items: center; gap: 10px; font-size: 12px; flex-shrink: 0; }
   .log-toolbar h3 { font-size: 13px; font-weight: 600; flex: 1; }
   .log-toolbar .log-count { color: var(--text-dim); font-size: 11px; }
-  .log-stream { flex: 1; overflow-y: auto; padding: 6px 0; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 11.5px; background: var(--log-bg); min-height: 400px; }
   .log-entry { display: grid; grid-template-columns: 72px 42px minmax(0,110px) 1fr; column-gap: 6px; align-items: baseline; padding: 3px 14px; border-bottom: 1px solid rgba(36,48,73,0.18); line-height: 1.5; }
   .log-entry:hover { background: rgba(255,255,255,0.025); }
   .log-ts { color: #2e4458; font-size: 10.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -1428,6 +1428,23 @@
   <button class="btn btn-ghost btn-sm" onclick="ctrl_kickWorker()">ワーカー再起動</button>
 </div>
 
+<div class="log-panel">
+  <div class="log-toolbar">
+    <h3>📋 ライブ ワーカーログ</h3>
+    <span class="log-count" id="log-count" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);padding:1px 7px;border-radius:10px;color:#60a5fa">0 件</span>
+    <span id="log-window-info" style="color:var(--text-dim);font-size:10px"></span>
+    <div style="flex:1"></div>
+    <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim);cursor:pointer;">
+      <input type="checkbox" id="auto-scroll" checked> 自動スクロール
+    </label>
+    <button class="btn btn-ghost btn-sm" onclick="ctrl_clearLogs()">クリア</button>
+    <button class="btn btn-ghost btn-sm" id="log-pause-btn" onclick="ctrl_toggleLogPause()">⏸ 一時停止</button>
+  </div>
+  <div class="log-stream" id="log-stream">
+    <div class="log-empty" id="log-empty">ワーカーログ待機中... (1秒ごと自動更新)</div>
+  </div>
+</div>
+
 <div class="ctrl-main">
   <div class="left-panel">
     <div class="card">
@@ -1550,21 +1567,6 @@
     </div>
   </div>
 
-  <div class="log-panel">
-    <div class="log-toolbar">
-      <h3>📋 ライブ ワーカーログ</h3>
-      <span class="log-count" id="log-count" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);padding:1px 7px;border-radius:10px;color:#60a5fa">0 件</span>
-      <span id="log-window-info" style="color:var(--text-dim);font-size:10px"></span>
-      <div style="flex:1"></div>
-      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim);cursor:pointer;">
-        <input type="checkbox" id="auto-scroll" checked> 自動スクロール
-      </label>
-      <button class="btn btn-ghost btn-sm" onclick="ctrl_clearLogs()">クリア</button>
-      <button class="btn btn-ghost btn-sm" id="log-pause-btn" onclick="ctrl_toggleLogPause()">⏸ 一時停止</button>
-    </div>
-    <div class="log-stream" id="log-stream">
-      <div class="log-empty" id="log-empty">ワーカーログ待機中... (1秒ごと自動更新)</div>
-    </div>
   </div>
 </div>
 </div>
