@@ -40,6 +40,11 @@ from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
+from src.config.data_paths import (
+    TRACK_SPEED_BASELINES,
+    TRACK_SPEED_PACE_BASELINES,
+    TRACK_SPEED_RACES_DIR,
+)
 
 logger = logging.getLogger("research.track_speed")
 
@@ -85,9 +90,9 @@ MIN_BASELINE_N = 12
 # 小サンプルの不安定な平均値がクラス判定を引きつけるのを防ぐ。
 MIN_CLASSIFY_N = 20
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-BASELINES_PATH = PROJECT_ROOT / "data" / "local" / "knowledge" / "track_speed_baselines.parquet"
-PACE_BASELINES_PATH = PROJECT_ROOT / "data" / "local" / "knowledge" / "track_speed_pace_baselines.parquet"
-RACES_DIR = PROJECT_ROOT / "data" / "local" / "analysis" / "track_speed"
+BASELINES_PATH = TRACK_SPEED_BASELINES
+PACE_BASELINES_PATH = TRACK_SPEED_PACE_BASELINES
+RACES_DIR = TRACK_SPEED_RACES_DIR
 META_PATH = RACES_DIR / "meta.json"
 MIN_PACE_CONTEXT_N = 30
 MIN_PACE_BIN_N = 8

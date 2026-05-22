@@ -70,9 +70,9 @@ PED_DIR = LOCAL / "horse_pedigree_5gen"
 PED_10GEN_DIR = LOCAL / "horse_pedigree_10gen"
 PED_10GEN_RESEARCH_DIR = LOCAL / "research" / "pedigree_10gen"
 PED_10GEN_3VIEW_DIR = LOCAL / "research" / "pedigree_10gen_3view"
-BLOODLINE_DIR = LOCAL / "research" / "bloodline"
+BLOODLINE_DIR = ROOT / "data" / "research" / "bloodline"
 HORSE_APTITUDE_DIR = LOCAL / "research" / "horse_aptitude"
-COURSE_BLOODLINE_DIR = LOCAL / "research" / "course_bloodline"
+COURSE_BLOODLINE_DIR = ROOT / "data" / "research" / "course_bloodline"
 
 # -- Meta / operational (not in portable bundle) ------------------------------
 META_DIR = LOCAL / "meta"

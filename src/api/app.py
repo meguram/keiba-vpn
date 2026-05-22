@@ -8936,7 +8936,7 @@ def _run_bloodline_analysis(years: list[str] | None, source: str):
             "n_records": len(df),
             "n_sires": int(df["sire"].nunique()),
             "n_dam_sires": int(df["dam_sire"].nunique()),
-            "report_path": "data/local/research/bloodline/bloodline_distance_report.html",
+            "report_path": "data/research/bloodline/bloodline_distance_report.html",
         }
     except Exception as e:
         _bloodline_job["error"] = str(e)
@@ -8989,14 +8989,12 @@ def _bloodline_surface_context(base: "Path", surface: str) -> dict[str, Any]:
 
 @app.get("/api/bloodline/surfaces", response_class=JSONResponse)
 async def api_bloodline_surfaces():
-    from pathlib import Path as _Path
+    from src.config.data_paths import BLOODLINE_DIR, COURSE_BLOODLINE_DIR
     from src.research.pedigree.bloodline_surface import load_surface_meta
 
-    base = _Path(__file__).resolve().parents[2] / "data" / "local" / "research" / "bloodline"
-    meta = load_surface_meta(base)
+    meta = load_surface_meta(BLOODLINE_DIR)
     if not meta:
-        base_c = _Path(__file__).resolve().parents[2] / "data" / "local" / "research" / "course_bloodline"
-        meta = load_surface_meta(base_c)
+        meta = load_surface_meta(COURSE_BLOODLINE_DIR)
     return JSONResponse(meta or {"surfaces": {}, "total_run_count": 0})
 
 
@@ -9019,7 +9017,8 @@ async def api_bloodline_data(
                 rows.append(row)
         return {"columns": list(rows[0].keys()) if rows else [], "rows": rows}
 
-    base = Path(__file__).resolve().parents[2] / "data" / "local" / "research" / "bloodline"
+    from src.config.data_paths import BLOODLINE_DIR
+    base = BLOODLINE_DIR
     data_dir = _bloodline_surface_dir(base, surface)
     ctx = _bloodline_surface_context(base, surface)
 
@@ -9805,12 +9804,12 @@ async def course_bloodline_page_redirect():
 async def api_course_profiles():
     """コースプロファイル (ドメインナレッジ) を返す。"""
     import json as json_mod
-    from pathlib import Path as _P
-    p = _P(__file__).resolve().parents[2] / "data" / "local" / "knowledge" / "course_profiles.json"
+    from src.config.data_paths import COURSE_BLOODLINE_DIR, COURSE_PROFILES_JSON
+    p = COURSE_PROFILES_JSON
     if not p.exists():
         return JSONResponse({"error": "course_profiles.json が見つかりません"}, status_code=404)
     payload = json_mod.loads(p.read_text(encoding="utf-8"))
-    hl = _P(__file__).resolve().parents[2] / "data" / "local" / "research" / "course_bloodline" / "profile_course_roi_highlights.json"
+    hl = COURSE_BLOODLINE_DIR / "profile_course_roi_highlights.json"
     if hl.exists():
         try:
             payload["roi_highlights"] = json_mod.loads(hl.read_text(encoding="utf-8"))
@@ -9887,11 +9886,10 @@ async def api_course_bl_status():
 
 @app.get("/api/course-bloodline/surfaces", response_class=JSONResponse)
 async def api_course_bl_surfaces():
-    from pathlib import Path as _Path
+    from src.config.data_paths import COURSE_BLOODLINE_DIR
     from src.research.pedigree.bloodline_surface import load_surface_meta
 
-    base = _Path(__file__).resolve().parents[2] / "data" / "local" / "research" / "course_bloodline"
-    return JSONResponse(load_surface_meta(base) or {"surfaces": {}, "total_run_count": 0})
+    return JSONResponse(load_surface_meta(COURSE_BLOODLINE_DIR) or {"surfaces": {}, "total_run_count": 0})
 
 
 @app.get("/api/course-bloodline/data/{analysis_type}", response_class=JSONResponse)
@@ -9912,7 +9910,8 @@ async def api_course_bl_data(
                 rows.append(row)
         return {"columns": list(rows[0].keys()) if rows else [], "rows": rows}
 
-    base = _P(__file__).resolve().parents[2] / "data" / "local" / "research" / "course_bloodline"
+    from src.config.data_paths import COURSE_BLOODLINE_DIR
+    base = COURSE_BLOODLINE_DIR
     ctx = _bloodline_surface_context(base, surface)
 
     if analysis_type == "profiles":
