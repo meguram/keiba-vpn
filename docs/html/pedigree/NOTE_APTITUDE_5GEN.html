@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>適性3D × 5世代血統（父系／母系経路の扱い） — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>適性3D × 5世代血統（父系／母系経路の扱い）</h1>
+      <p class="meta">ソース: <code>docs/html/NOTE_APTITUDE_5GEN.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="3d-5">適性3D × 5世代血統（父系／母系経路の扱い）</h1>
+<p>血統適性（父・母系の遺伝的特徴がコース・距離に合うか）を精度高く評価するために、単純な「父・母父」の2段階ではなく、5代前までの血統を使ってスコアを計算します。このページでは、父方・母方の経路をどう区別して重み付けするかを解説します。</p>
+<h2 id="_1">なぜ父系と母系を別々に扱うのか</h2>
+<h3 id="_2">遺伝の基礎知識</h3>
+<table>
+  <thead>
+    <tr><th>遺伝要素</th><th>伝わり方</th><th>競馬予測への注意点</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>常染色体</strong></td>
+      <td>父・母からそれぞれ50%ずつ。世代が1つ上がるごとに寄与は約半分（2<sup>−g</sup>）になる</td>
+      <td><code>research/pedigree_similarity.build_ancestor_vector</code> と同じ計算方法</td>
+    </tr>
+    <tr>
+      <td><strong>ミトコンドリアDNA（mtDNA）</strong></td>
+      <td>母系のみが子に伝わる</td>
+      <td>エネルギー代謝関連遺伝子を含むが、タイム指数との直接因果関係は学術的合意なし。過大解釈に注意</td>
+    </tr>
+    <tr>
+      <td><strong>Y染色体</strong></td>
+      <td>父系のみで受け継がれる</td>
+      <td>ゲノム全体に占める割合が非常に小さく、影響は限定的</td>
+    </tr>
+  </tbody>
+</table>
+<h3 id="_3">競馬・配合の慣習</h3>
+<table>
+  <thead>
+    <tr><th>概念</th><th>内容</th><th>本プロジェクトでの扱い</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>母馬・繁殖牝馬の質</strong></td>
+      <td>産駒評価において重要視される。「母の影響」は競馬の世界で広く語られる</td>
+      <td>牝系ラインのスコアとして <code>sire_aptitude_note</code> に組み込み</td>
+    </tr>
+    <tr>
+      <td><strong>母父（broodmare sire）の効果</strong></td>
+      <td>血統解説や配合論でよく登場する</td>
+      <td><strong>父1.0 + 母父0.55</strong> というブレンド比率を採用。母方由来の影響を少し強めに設定</td>
+    </tr>
+    <tr>
+      <td><strong>スコアの性質</strong></td>
+      <td>遺伝子レベルで厳密に「父由来」「母由来」を測定したものではない</td>
+      <td>配合論・市場評価・専門家の知見を組み合わせた主観的スコアとして運用</td>
+    </tr>
+  </tbody>
+</table>
+<h3 id="_4">実装上の位置づけ（重要）</h3>
+<ul>
+<li>以下のアルゴリズムは、<strong>著者が作成したナレッジJSON（主観スコア）への重み付けルール</strong>です。遺伝子を直接測定したものではありません。</li>
+<li><strong>再現性と比較のため</strong>、係数は <code>src/research/note_aptitude_5gen.py</code> にまとめており、実績データと照らし合わせながら随時調整します。</li>
+</ul>
+<h2 id="_5">アルゴリズムの概要</h2>
+<ol>
+<li><code>horse_pedigree_5gen/{horse_id}.json</code> の <code>ancestors</code>（netkeiba 血統表と同順：<code>generation</code>×<code>position</code>）を読み込みます。</li>
+<li>各祖先に <strong>基礎重み</strong>（w_0 = 0.5<sup>g</sup>）を付与します（<code>g</code> は世代数）。同じ祖先が複数回現れる場合（インブリード）は重みを合算します。</li>
+<li>血統表上の位置から <strong>母方経路の割合</strong>（m ∈ [0,1]）を算出します。具体的には、世代 <code>g</code> の <code>position</code> を2進数で表したとき、「1の個数 ÷ g」が母方寄りの度合いを表します。</li>
+<li>軸ごとに係数（k<sub>a</sub>）を設定し、m<sub>a</sub> = 1 + k<sub>a</sub> × (2m − 1) という式で母方寄り・父方寄りの重みを調整します（m = 0.5 で中立）。極端な値にならないようクリップ処理も行います。</li>
+<li>祖先名を <code>sire_aptitude_note.json</code> の種牡馬（<code>aliases</code> 経由も含む）に照合し、<strong>マッチした祖先のみ</strong>スコアを持ちます。軸ごとに加重平均で正規化します。</li>
+<li>5代血統データがない馬は、<strong>従来の浅いブレンド</strong>（父・母父・牝系）にフォールバックします。</li>
+</ol>
+<h2 id="_6">関連ファイル</h2>
+<table>
+  <thead>
+    <tr><th>ファイル / エンドポイント</th><th>役割</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>src/research/note_aptitude_5gen.py</code></td>
+      <td>5代血統ブレンドの本体・係数表</td>
+    </tr>
+    <tr>
+      <td><code>src/research/note_aptitude_race_map.py</code></td>
+      <td>レース全頭の3次元適性マップ（<code>blend_mode</code> 対応）</td>
+    </tr>
+    <tr>
+      <td><code>GET /api/pedigree/race-note-3d?mode=5gen</code></td>
+      <td>API エンドポイント</td>
+    </tr>
+  </tbody>
+</table>
+<h2 id="_7">血統データが不足している場合の自動補完（レース単位）</h2>
+<p><strong>レース適性3D</strong>ページでブレンドを「5世代」に設定すると、表示前に不足している <code>horse_pedigree_5gen</code> を段階的に自動取得します。すべての取得ジョブは <strong>最高優先度</strong>（<code>PRIORITY_URGENT_PEDIGREE_5GEN</code>）でキューに投入され、画面上にオーバーレイで進捗が表示されます。</p>
+<p>取得は以下の3段階で行います。</p>
+<ol>
+<li><strong>出走馬</strong> — 出馬表に載っている各馬の5代血統を最初に取得・保存します。</li>
+<li><strong>第1階層</strong> — 保存済み血統の祖先のうち、<code>sire_aptitude_note</code> に登録されている種牡馬をレース内でユニーク化し、不足分だけ取得します。</li>
+<li><strong>第2階層</strong> — 第1階層で取得した各馬の血統から、さらにナレッジ種牡馬IDを収集し、不足分だけ取得します。段階を分けることで、一度に大量のジョブが投入されるのを防いでいます。</li>
+</ol>
+<ul>
+<li>ブレンド計算は引き続き <strong>各出走馬1件のJSONファイル</strong>内の祖先名のみを参照します。</li>
+<li>UIは<strong>複数ラウンド</strong>（各段完了後に再POSTしてポーリング）で、全段完了まで繰り返します。</li>
+</ul>
+<p><strong>API単体で利用する場合:</strong></p>
+<table>
+  <thead>
+    <tr><th>エンドポイント</th><th>用途</th><th>備考</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>POST /api/pedigree/race-ensure-5gen</code></td>
+      <td>5代血統の一括取得を開始</td>
+      <td>リクエストボディ: <code>{ "race_id": "..." }</code></td>
+    </tr>
+    <tr>
+      <td><code>GET /api/pedigree/race-ensure-5gen/status?session_id=...</code></td>
+      <td>投入セッションの完了状況を確認</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><code>src/research/race_pedigree_5gen_prefetch.py</code></td>
+      <td>実装ファイル</td>
+      <td>キュー優先度設定: <code>src/scraper/job_queue.py</code></td>
+    </tr>
+  </tbody>
+</table>
+    </article>
+    <nav class="doc-nav">
+      <a href="../data/DATASOURCES.html">← データソース一覧</a>
+      <a href="PEDIGREE_NOTE_APTITUDE.html">血統適性ナレッジ（note まとめ → 特徴量 → モデル） →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">NOTE_APTITUDE_5GEN.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

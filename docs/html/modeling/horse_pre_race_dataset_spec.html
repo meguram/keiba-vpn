@@ -206,134 +206,140 @@ document.addEventListener("DOMContentLoaded", function() {
       <h1>horse_pre_race_dataset 仕様</h1>
       <p class="meta">ソース: <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
-    <article class="md-body">
+    <article class="html-body">
 <h1 id="horse_pre_race_dataset">horse_pre_race_dataset 仕様</h1>
 <h2 id="_1">目的</h2>
-<p><code>horse_pre_race_dataset</code> は、レース直前確率モデルのための学習母表である。<br />
-<code>1行 = 1レース1頭</code> の粒度で、<code>T-10分</code> 時点までに観測できる情報だけを保持する。</p>
-<p>本仕様では以下の 2 つを定義する。</p>
+<p><code>horse_pre_race_dataset</code> は、レース直前確率モデルの学習母表である。粒度は <code>1行 = 1レース1頭</code> で、レース発走 10 分前（<code>T-10分</code>）までに観測できる情報だけを保持する。</p>
+<p>本仕様では以下の 2 ファイルを定義する。</p>
 <ul>
-<li><code>horse_pre_race_dataset.parquet</code><br />
-  学習・推論で共通利用する特徴量母表</li>
-<li><code>horse_labels.parquet</code><br />
-  学習・評価用の結果ラベル表</li>
+<li><code>horse_pre_race_dataset.parquet</code> — 学習・推論で共通利用する特徴量（予測に使う数値）の母表</li>
+<li><code>horse_labels.parquet</code> — 学習・評価用の結果ラベル表</li>
 </ul>
 <h2 id="_2">設計思想</h2>
 <ul>
-<li>最初から全特徴量を一括投入するのではなく、<code>ベースライン母表</code> と <code>拡張母表</code> を分けて比較可能にする</li>
-<li>ベースライン段階では、既存テーブルで coverage が高く安定している列だけを使う</li>
-<li>拡張段階で、<code>race_oikiri</code>、<code>race_paddock</code>、<code>race_trainer_comment</code>、血統補助、クッション値 proxy を順次追加する</li>
-<li>予測精度だけでなく、<code>確率の信頼性</code> と <code>後続のベット最適化で使える一貫性</code> を重視する</li>
-<li>Kaggle 実戦系の tabular テクニックを積極採用するが、必ず <code>OOF</code> と <code>時系列リーク防止</code> を前提にする</li>
-<li>単段モデルだけでなく、<code>位置取り → ペース → 当日馬場タイプ → 血統文脈適合 → 最終確率</code> の多段階パイプラインに拡張できる形で保存する</li>
+<li>最初から全特徴量を一括投入するのではなく、<code>ベースライン母表</code> と <code>拡張母表</code> を分けて比較できるようにする</li>
+<li>ベースライン段階では、既存テーブルでカバレッジが高く安定している列だけを使う</li>
+<li>拡張段階で、<code>race_oikiri</code>（追い切り）、<code>race_paddock</code>（パドック）、<code>race_trainer_comment</code>（厩舎コメント）、血統補助、クッション値 proxy を順次追加する</li>
+<li>予測精度だけでなく、<code>確率の信頼性（キャリブレーション）</code> と <code>後続のベット最適化で使える一貫性</code> を重視する</li>
+<li>Kaggle の tabular 実戦テクニックを積極的に採用するが、必ず <code>交差検証での予測（OOF）</code> と <code>データリーク（未来の情報を誤って使うこと）の防止</code> を前提にする</li>
+<li>単段モデルだけでなく、<code>位置取り → ペース → 当日馬場タイプ → 血統文脈適合 → 最終確率</code> の多段階の処理の流れに拡張できる形で保存する</li>
 </ul>
 <h2 id="_3">機械学習テクニックの利用方針</h2>
-<h2 id="1">1. カテゴリ変数エンコーディング</h2>
-<p>カテゴリ変数は 1 手法に固定せず、次のレイヤで比較する。</p>
-<h3 id="tier1">Tier1: 低リスクで常設</h3>
+<h2 id="1">1. カテゴリ変数エンコーディング（カテゴリを数値に変換する方法）</h2>
+<p>カテゴリ変数は 1 つの手法に固定せず、以下の 3 層で比較する。</p>
+<table>
+  <thead>
+    <tr><th>Tier</th><th>方針</th><th>手法一覧</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td id="tier1">Tier1</td>
+      <td>低リスクで常時利用</td>
+      <td>frequency encoding（出現頻度に変換）、count encoding（出現回数に変換）、rare label grouping（希少カテゴリをまとめる）、ラベルエンコーディング（simple label encoding）</td>
+    </tr>
+    <tr>
+      <td id="tier2-oof">Tier2</td>
+      <td>交差検証での予測（OOF）が必須</td>
+      <td>ターゲットエンコーディング（target encoding）、CatBoost-style ordered target encoding（時系列順に累積平均）、expanding mean encoding（時点ごとに累積平均）、group target encoding（グループ内平均）</td>
+    </tr>
+    <tr>
+      <td id="tier3">Tier3</td>
+      <td>比較実験用</td>
+      <td>target std / target skew encoding（標準偏差・歪度に変換）、weight of evidence 風 encoding、cross feature target encoding（交差特徴量のターゲットエンコーディング）</td>
+    </tr>
+  </tbody>
+</table>
+<h2 id="2-target-encoding">2. ターゲットエンコーディングの原則</h2>
 <ul>
-<li>frequency encoding</li>
-<li>count encoding</li>
-<li>rare label grouping</li>
-<li>simple label encoding</li>
-</ul>
-<h3 id="tier2-oof">Tier2: OOF 必須</h3>
-<ul>
-<li>target encoding</li>
-<li>CatBoost-style ordered target encoding</li>
-<li>expanding mean encoding</li>
-<li>group target encoding</li>
-</ul>
-<h3 id="tier3">Tier3: 比較実験用</h3>
-<ul>
-<li>target std / target skew encoding</li>
-<li>weight of evidence 風 encoding</li>
-<li>cross feature target encoding</li>
-</ul>
-<h2 id="2-target-encoding">2. target encoding の原則</h2>
-<ul>
-<li>全データでまとめて平均を計算しない</li>
-<li><code>OOF</code> で作る</li>
-<li>unseen category は train fold global mean にフォールバックする</li>
-<li>rare category は global mean へ shrink する</li>
-<li><code>jockey_name</code>, <code>trainer_name</code>, <code>sire</code>, <code>dam_sire</code>, <code>venue_surface_distance_key</code> などを主対象にする</li>
+<li>全データをまとめて平均計算しない（データリーク防止）</li>
+<li>必ず交差検証での予測（OOF）として作る</li>
+<li>未知のカテゴリは train fold 全体の平均にフォールバックする</li>
+<li>希少カテゴリは全体平均へ shrink（縮約）する</li>
+<li>主な対象: <code>jockey_name</code>, <code>trainer_name</code>, <code>sire</code>, <code>dam_sire</code>, <code>venue_surface_distance_key</code></li>
 </ul>
 <h2 id="3-catboost-style-encoding">3. CatBoost-style encoding の原則</h2>
 <ul>
 <li>時系列順に並べて、同一行より未来を参照しない ordered target mean を使う</li>
-<li>fold 内の train 部分だけで cumulative に更新する</li>
-<li>race 単位 group をまたいで leakage しない</li>
+<li>fold 内の train 部分だけで cumulative（累積）に更新する</li>
+<li>レース単位のグループをまたいでリークしない</li>
 </ul>
-<h2 id="4">4. 交差特徴</h2>
-<p>Kaggle の tabular 競技で効きやすい交差特徴を、過剰に増やさず上位から順に採用する。<br />
-- <code>jockey x venue</code><br />
-- <code>trainer x venue</code><br />
-- <code>sire x surface</code><br />
-- <code>sire x distance_bucket</code><br />
-- <code>sex x distance_bucket</code><br />
-- <code>bracket_number x venue_surface_distance_key</code><br />
-- <code>venue_era x surface</code></p>
-<h2 id="5-oof">5. OOF 集約特徴</h2>
+<h2 id="4">4. 交差特徴量</h2>
+<p>Kaggle の tabular 競技で効果が出やすい交差特徴量を、過剰に増やさず上位から順に採用する。</p>
+<table>
+  <thead>
+    <tr><th>交差特徴量キー</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>jockey x venue</code></td><td>騎手 × 開催場</td></tr>
+    <tr><td><code>trainer x venue</code></td><td>調教師 × 開催場</td></tr>
+    <tr><td><code>sire x surface</code></td><td>父馬 × 芝/ダート</td></tr>
+    <tr><td><code>sire x distance_bucket</code></td><td>父馬 × 距離帯</td></tr>
+    <tr><td><code>sex x distance_bucket</code></td><td>性別 × 距離帯</td></tr>
+    <tr><td><code>bracket_number x venue_surface_distance_key</code></td><td>枠番 × 開催条件</td></tr>
+    <tr><td><code>venue_era x surface</code></td><td>コース時代区分 × 芝/ダート</td></tr>
+  </tbody>
+</table>
+<h2 id="5-oof">5. 交差検証での予測（OOF）を使った集約特徴量</h2>
 <ul>
-<li>OOF でしか作らない</li>
-<li>train fold 内で集計し valid fold に map する</li>
-<li>例</li>
-<li><code>jockey_win_rate_oof</code></li>
-<li><code>trainer_top3_rate_oof</code></li>
-<li><code>sire_win_rate_oof</code></li>
-<li><code>jockey_venue_top3_rate_oof</code></li>
-<li><code>trainer_surface_distance_win_rate_oof</code></li>
+<li>OOF でのみ作成し、train fold 内で集計して valid fold にマッピングする</li>
+<li>例:
+  <ul>
+  <li><code>jockey_win_rate_oof</code>（騎手の勝率 OOF）</li>
+  <li><code>trainer_top3_rate_oof</code>（調教師の複勝率 OOF）</li>
+  <li><code>sire_win_rate_oof</code>（父馬の勝率 OOF）</li>
+  <li><code>jockey_venue_top3_rate_oof</code>（騎手 × 開催場の複勝率 OOF）</li>
+  <li><code>trainer_surface_distance_win_rate_oof</code>（調教師 × 芝/ダート・距離の勝率 OOF）</li>
+  </ul>
+</li>
 </ul>
 <h2 id="6">6. 数値列の実戦処理</h2>
 <ul>
-<li>log transform</li>
-<li>rank-gauss / quantile transform</li>
-<li>clipping / winsorization</li>
-<li>race 内 rank / percentile / z-score</li>
-<li>high-cardinality group 内の robust scaling</li>
+<li>log transform（対数変換）</li>
+<li>rank-gauss / quantile transform（分位点変換）</li>
+<li>clipping / winsorization（外れ値の上限・下限カット）</li>
+<li>レース内での rank / percentile / z-score</li>
+<li>高カーディナリティのグループ内 robust scaling</li>
 </ul>
-<h2 id="7">7. モデル側で想定する比較軸</h2>
+<h2 id="7">7. 比較するモデル構成</h2>
 <ul>
-<li>LightGBM</li>
-<li>CatBoost</li>
-<li>XGBoost</li>
-<li>線形 baseline</li>
+<li>GBDT（木を積み上げた機械学習モデル）として LightGBM / CatBoost / XGBoost</li>
+<li>線形モデル（ベースライン）</li>
 </ul>
-<p>最初の本命は LightGBM / CatBoost の 2 本柱とし、OOF 確率をアンサンブル可能な形で保存する。</p>
+<p>まず LightGBM / CatBoost の 2 本柱を本命とし、交差検証での予測（OOF）確率をアンサンブル可能な形で保存する。</p>
 <h2 id="_4">ベースライン母表と拡張母表</h2>
-<h2 id="baselinev1">BaselineV1</h2>
-<p>最初に必ず作る比較用母表。coverage と保守性を優先する。</p>
-<h3 id="_5">採用対象</h3>
+<h2 id="baselinev1">BaselineV1: まず作る比較基準</h2>
+<p>最初に必ず構築する比較用母表。カバレッジの高さと保守性を優先する。</p>
+<h3 id="_5">採用するテーブル</h3>
 <ul>
-<li><code>race_shutuba_flat</code></li>
-<li><code>race_shutuba_past_flat</code></li>
-<li><code>race_index_flat</code></li>
+<li><code>race_shutuba_flat</code>（出馬表）</li>
+<li><code>race_shutuba_past_flat</code>（過去走）</li>
+<li><code>race_index_flat</code>（指数）</li>
 <li>GCS 由来 horse bundle の履歴・血統基礎集約</li>
 </ul>
-<h3 id="_6">一時的に外すもの</h3>
+<h3 id="_6">ベースライン段階で除外するもの</h3>
 <ul>
-<li><code>race_oikiri_flat</code></li>
-<li><code>race_paddock_flat</code></li>
-<li><code>race_trainer_comment_flat</code></li>
+<li><code>race_oikiri_flat</code>（追い切り）</li>
+<li><code>race_paddock_flat</code>（パドック）</li>
+<li><code>race_trainer_comment_flat</code>（厩舎コメント）</li>
 <li>クッション値の高度な proxy</li>
 </ul>
 <h3 id="_7">目的</h3>
 <ul>
-<li>まず安定したベースラインを作り、追加特徴量の寄与を差分で検証する</li>
+<li>安定したベースラインを先に作り、追加特徴量の寄与を差分で検証する</li>
 </ul>
-<h2 id="extendedv1">ExtendedV1</h2>
+<h2 id="extendedv1">ExtendedV1: 直前情報・馬場 proxy を追加した母表</h2>
 <p>BaselineV1 に直前状態・馬場 proxy を追加した母表。</p>
-<h3 id="_8">追加対象</h3>
+<h3 id="_8">追加するテーブル・特徴量</h3>
 <ul>
-<li><code>race_oikiri_flat</code> 集約</li>
-<li><code>race_paddock_flat</code></li>
-<li><code>race_trainer_comment_flat</code></li>
+<li><code>race_oikiri_flat</code> の集約統計（追い切り評価・タイム）</li>
+<li><code>race_paddock_flat</code>（パドック評価）</li>
+<li><code>race_trainer_comment_flat</code>（厩舎コメントのスコア）</li>
 <li>クッション値・含水率・proxy</li>
-<li><code>venue_era_fit</code>, <code>seasonal_surface_fit</code>, <code>field_strength_proxy</code></li>
+<li><code>venue_era_fit</code>（コース時代適合）、<code>seasonal_surface_fit</code>（季節×馬場適合）、<code>field_strength_proxy</code>（出走馬のレベル代理変数）</li>
 </ul>
 <h3 id="_9">目的</h3>
 <ul>
-<li>直前情報を加えたときの <code>log_loss</code>, <code>Brier</code>, <code>ECE</code>, <code>ROI</code> の改善幅を測る</li>
+<li>直前情報を追加したときの <code>log_loss</code>、<code>Brier</code>、<code>ECE</code>（確率精度）、<code>ROI</code> の改善幅を測る</li>
 </ul>
 <h2 id="_10">粒度とキー</h2>
 <h2 id="_11">主キー</h2>
@@ -383,237 +389,300 @@ document.addEventListener("DOMContentLoaded", function() {
 </ul>
 <h2 id="1-horse_pre_race_datasetparquet">出力 1: <code>horse_pre_race_dataset.parquet</code></h2>
 <h2 id="a">セクション A. キー・識別子</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>horse_number</code></li>
-<li><code>horse_id</code></li>
-<li><code>horse_name</code></li>
-<li><code>venue_code</code></li>
-<li><code>venue</code></li>
-<li><code>race_date</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>race_id</code></td><td>レース識別子</td></tr>
+    <tr><td><code>horse_number</code></td><td>馬番</td></tr>
+    <tr><td><code>horse_id</code></td><td>馬識別子</td></tr>
+    <tr><td><code>horse_name</code></td><td>馬名</td></tr>
+    <tr><td><code>venue_code</code></td><td>開催場コード</td></tr>
+    <tr><td><code>venue</code></td><td>開催場名</td></tr>
+    <tr><td><code>race_date</code></td><td>レース開催日</td></tr>
+  </tbody>
+</table>
 <h2 id="b">セクション B. レース条件</h2>
-<ul>
-<li><code>surface</code></li>
-<li><code>distance</code></li>
-<li><code>direction</code></li>
-<li><code>grade</code></li>
-<li><code>race_class</code></li>
-<li><code>weather</code></li>
-<li><code>track_condition</code></li>
-<li><code>start_time</code></li>
-<li><code>field_size</code></li>
-<li><code>weight_rule</code></li>
-<li><code>course_type</code></li>
-<li><code>race_round</code></li>
-<li><code>venue_era</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>surface</code></td><td>馬場種別（芝/ダート/障害）</td></tr>
+    <tr><td><code>distance</code></td><td>レース距離（m）</td></tr>
+    <tr><td><code>direction</code></td><td>回り方向（左/右）</td></tr>
+    <tr><td><code>grade</code></td><td>レース格付け</td></tr>
+    <tr><td><code>race_class</code></td><td>クラス区分</td></tr>
+    <tr><td><code>weather</code></td><td>天気</td></tr>
+    <tr><td><code>track_condition</code></td><td>馬場状態</td></tr>
+    <tr><td><code>start_time</code></td><td>発走時刻</td></tr>
+    <tr><td><code>field_size</code></td><td>出走頭数</td></tr>
+    <tr><td><code>weight_rule</code></td><td>斤量ルール</td></tr>
+    <tr><td><code>course_type</code></td><td>コースタイプ</td></tr>
+    <tr><td><code>race_round</code></td><td>開催回次</td></tr>
+    <tr><td><code>venue_era</code></td><td>コース時代区分（改修等）</td></tr>
+  </tbody>
+</table>
 <h2 id="c">セクション C. 開催・季節文脈</h2>
-<ul>
-<li><code>month</code></li>
-<li><code>quarter</code></li>
-<li><code>season</code></li>
-<li><code>week_of_year</code></li>
-<li><code>venue_meeting_index</code></li>
-<li><code>days_since_meet_start</code></li>
-<li><code>days_since_last_race_for_venue</code></li>
-<li><code>recent_meet_density_14d</code></li>
-<li><code>recent_meet_density_30d</code></li>
-<li><code>surface_season_key</code></li>
-<li><code>venue_season_key</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>month</code></td><td>月（1〜12）</td></tr>
+    <tr><td><code>quarter</code></td><td>四半期</td></tr>
+    <tr><td><code>season</code></td><td>季節区分</td></tr>
+    <tr><td><code>week_of_year</code></td><td>年内通算週番号</td></tr>
+    <tr><td><code>venue_meeting_index</code></td><td>開催場の開催回インデックス</td></tr>
+    <tr><td><code>days_since_meet_start</code></td><td>開催開始日からの経過日数</td></tr>
+    <tr><td><code>days_since_last_race_for_venue</code></td><td>同開催場の前回レースからの経過日数</td></tr>
+    <tr><td><code>recent_meet_density_14d</code></td><td>直近14日の開催密度</td></tr>
+    <tr><td><code>recent_meet_density_30d</code></td><td>直近30日の開催密度</td></tr>
+    <tr><td><code>surface_season_key</code></td><td>馬場種別×季節の複合キー</td></tr>
+    <tr><td><code>venue_season_key</code></td><td>開催場×季節の複合キー</td></tr>
+  </tbody>
+</table>
 <h2 id="d">セクション D. 馬の基本属性</h2>
-<ul>
-<li><code>bracket_number</code></li>
-<li><code>sex</code></li>
-<li><code>age</code></li>
-<li><code>jockey_weight</code></li>
-<li><code>jockey_name</code></li>
-<li><code>jockey_id</code></li>
-<li><code>trainer_name</code></li>
-<li><code>trainer_id</code></li>
-<li><code>body_weight</code></li>
-<li><code>body_weight_change</code></li>
-<li><code>body_weight_missing_flag</code></li>
-<li><code>body_weight_change_missing_flag</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>bracket_number</code></td><td>枠番</td></tr>
+    <tr><td><code>sex</code></td><td>性別</td></tr>
+    <tr><td><code>age</code></td><td>年齢</td></tr>
+    <tr><td><code>jockey_weight</code></td><td>騎乗斤量</td></tr>
+    <tr><td><code>jockey_name</code></td><td>騎手名</td></tr>
+    <tr><td><code>jockey_id</code></td><td>騎手ID</td></tr>
+    <tr><td><code>trainer_name</code></td><td>調教師名</td></tr>
+    <tr><td><code>trainer_id</code></td><td>調教師ID</td></tr>
+    <tr><td><code>body_weight</code></td><td>馬体重（kg）</td></tr>
+    <tr><td><code>body_weight_change</code></td><td>馬体重増減（kg）</td></tr>
+    <tr><td><code>body_weight_missing_flag</code></td><td>馬体重欠損フラグ</td></tr>
+    <tr><td><code>body_weight_change_missing_flag</code></td><td>馬体重増減欠損フラグ</td></tr>
+  </tbody>
+</table>
 <h2 id="e">セクション E. 指数・能力</h2>
-<ul>
-<li><code>speed_max</code></li>
-<li><code>speed_avg</code></li>
-<li><code>speed_distance</code></li>
-<li><code>speed_course</code></li>
-<li><code>speed_recent_1</code></li>
-<li><code>speed_recent_2</code></li>
-<li><code>speed_recent_3</code></li>
-<li><code>speed_index_missing_flag</code></li>
-<li><code>speed_rank_in_race</code></li>
-<li><code>speed_percentile_in_race</code></li>
-<li><code>speed_course_minus_race_mean</code></li>
-<li><code>speed_distance_minus_race_mean</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>speed_max</code></td><td>最高スピード指数</td></tr>
+    <tr><td><code>speed_avg</code></td><td>平均スピード指数</td></tr>
+    <tr><td><code>speed_distance</code></td><td>同距離スピード指数</td></tr>
+    <tr><td><code>speed_course</code></td><td>同コーススピード指数</td></tr>
+    <tr><td><code>speed_recent_1</code> 〜 <code>speed_recent_3</code></td><td>直近1〜3走のスピード指数</td></tr>
+    <tr><td><code>speed_index_missing_flag</code></td><td>スピード指数欠損フラグ</td></tr>
+    <tr><td><code>speed_rank_in_race</code></td><td>レース内スピード指数順位</td></tr>
+    <tr><td><code>speed_percentile_in_race</code></td><td>レース内スピード指数パーセンタイル</td></tr>
+    <tr><td><code>speed_course_minus_race_mean</code></td><td>同コース指数 − レース平均</td></tr>
+    <tr><td><code>speed_distance_minus_race_mean</code></td><td>同距離指数 − レース平均</td></tr>
+  </tbody>
+</table>
 <h2 id="f">セクション F. 直近走・戦績集計</h2>
-<ul>
-<li><code>prev1_finish</code> 〜 <code>prev5_finish</code></li>
-<li><code>prev1_last_3f</code> 〜 <code>prev5_last_3f</code></li>
-<li><code>prev1_weight</code> 〜 <code>prev5_weight</code></li>
-<li><code>prev1_weight_change</code> 〜 <code>prev5_weight_change</code></li>
-<li><code>prev1_distance</code> 〜 <code>prev5_distance</code></li>
-<li><code>prev1_surface</code> 〜 <code>prev5_surface</code></li>
-<li><code>prev1_track_cond</code> 〜 <code>prev5_track_cond</code></li>
-<li><code>prev1_time_sec</code> 〜 <code>prev5_time_sec</code></li>
-<li><code>prev1_pass_first</code> 〜 <code>prev5_pass_first</code></li>
-<li><code>prev1_pass_last</code> 〜 <code>prev5_pass_last</code></li>
-<li><code>prev1_field_size</code> 〜 <code>prev5_field_size</code></li>
-<li><code>prev1_finish_diff</code> 〜 <code>prev5_finish_diff</code></li>
-<li><code>avg_finish_5</code></li>
-<li><code>min_finish_5</code></li>
-<li><code>win_count_5</code></li>
-<li><code>top3_count_5</code></li>
-<li><code>avg_last_3f_5</code></li>
-<li><code>min_last_3f_5</code></li>
-<li><code>std_last_3f_5</code></li>
-<li><code>avg_time_sec_5</code></li>
-<li><code>days_since_last</code></li>
-<li><code>avg_interval</code></li>
-<li><code>position_trend</code></li>
-<li><code>last_3f_trend</code></li>
-<li><code>career_runs</code></li>
-<li><code>career_win_rate</code></li>
-<li><code>career_top3_rate</code></li>
-<li><code>same_surface_runs</code></li>
-<li><code>same_surface_win_rate</code></li>
-<li><code>same_dist_runs</code></li>
-<li><code>same_dist_win_rate</code></li>
-<li><code>same_venue_runs</code></li>
-<li><code>same_venue_win_rate</code></li>
-<li><code>career_avg_finish</code></li>
-<li><code>career_avg_last_3f</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>prev1_finish</code> 〜 <code>prev5_finish</code></td><td>直近1〜5走の着順</td></tr>
+    <tr><td><code>prev1_last_3f</code> 〜 <code>prev5_last_3f</code></td><td>直近1〜5走の上がり3F</td></tr>
+    <tr><td><code>prev1_weight</code> 〜 <code>prev5_weight</code></td><td>直近1〜5走時の馬体重</td></tr>
+    <tr><td><code>prev1_weight_change</code> 〜 <code>prev5_weight_change</code></td><td>直近1〜5走時の馬体重増減</td></tr>
+    <tr><td><code>prev1_distance</code> 〜 <code>prev5_distance</code></td><td>直近1〜5走の距離</td></tr>
+    <tr><td><code>prev1_surface</code> 〜 <code>prev5_surface</code></td><td>直近1〜5走の馬場種別</td></tr>
+    <tr><td><code>prev1_track_cond</code> 〜 <code>prev5_track_cond</code></td><td>直近1〜5走の馬場状態</td></tr>
+    <tr><td><code>prev1_time_sec</code> 〜 <code>prev5_time_sec</code></td><td>直近1〜5走のタイム（秒）</td></tr>
+    <tr><td><code>prev1_pass_first</code> 〜 <code>prev5_pass_first</code></td><td>直近1〜5走の1コーナー通過順</td></tr>
+    <tr><td><code>prev1_pass_last</code> 〜 <code>prev5_pass_last</code></td><td>直近1〜5走の最終コーナー通過順</td></tr>
+    <tr><td><code>prev1_field_size</code> 〜 <code>prev5_field_size</code></td><td>直近1〜5走の出走頭数</td></tr>
+    <tr><td><code>prev1_finish_diff</code> 〜 <code>prev5_finish_diff</code></td><td>直近1〜5走の着差</td></tr>
+    <tr><td><code>avg_finish_5</code></td><td>直近5走平均着順</td></tr>
+    <tr><td><code>min_finish_5</code></td><td>直近5走最高着順（最小値）</td></tr>
+    <tr><td><code>win_count_5</code></td><td>直近5走勝利数</td></tr>
+    <tr><td><code>top3_count_5</code></td><td>直近5走複勝圏内数</td></tr>
+    <tr><td><code>avg_last_3f_5</code></td><td>直近5走平均上がり3F</td></tr>
+    <tr><td><code>min_last_3f_5</code></td><td>直近5走最速上がり3F</td></tr>
+    <tr><td><code>std_last_3f_5</code></td><td>直近5走上がり3F標準偏差</td></tr>
+    <tr><td><code>avg_time_sec_5</code></td><td>直近5走平均タイム</td></tr>
+    <tr><td><code>days_since_last</code></td><td>前走からの日数</td></tr>
+    <tr><td><code>avg_interval</code></td><td>平均出走間隔（日）</td></tr>
+    <tr><td><code>position_trend</code></td><td>通過順のトレンド</td></tr>
+    <tr><td><code>last_3f_trend</code></td><td>上がり3Fのトレンド</td></tr>
+    <tr><td><code>career_runs</code></td><td>通算出走数</td></tr>
+    <tr><td><code>career_win_rate</code></td><td>通算勝率</td></tr>
+    <tr><td><code>career_top3_rate</code></td><td>通算複勝率</td></tr>
+    <tr><td><code>same_surface_runs</code></td><td>同馬場種別出走数</td></tr>
+    <tr><td><code>same_surface_win_rate</code></td><td>同馬場種別勝率</td></tr>
+    <tr><td><code>same_dist_runs</code></td><td>同距離出走数</td></tr>
+    <tr><td><code>same_dist_win_rate</code></td><td>同距離勝率</td></tr>
+    <tr><td><code>same_venue_runs</code></td><td>同開催場出走数</td></tr>
+    <tr><td><code>same_venue_win_rate</code></td><td>同開催場勝率</td></tr>
+    <tr><td><code>career_avg_finish</code></td><td>通算平均着順</td></tr>
+    <tr><td><code>career_avg_last_3f</code></td><td>通算平均上がり3F</td></tr>
+  </tbody>
+</table>
 <h2 id="g">セクション G. 調教・直前状態</h2>
-<ul>
-<li><code>training_count</code></li>
-<li><code>best_training_rank</code></li>
-<li><code>training_time_4f</code></li>
-<li><code>training_impression_score</code></li>
-<li><code>oikiri_count</code></li>
-<li><code>oikiri_latest_days_before_race</code></li>
-<li><code>oikiri_latest_course</code></li>
-<li><code>oikiri_best_evaluation</code></li>
-<li><code>oikiri_mean_evaluation</code></li>
-<li><code>oikiri_best_lap</code></li>
-<li><code>oikiri_mean_lap</code></li>
-<li><code>oikiri_lap_count</code></li>
-<li><code>oikiri_has_comment</code></li>
-<li><code>oikiri_positive_keyword_score</code></li>
-<li><code>oikiri_negative_keyword_score</code></li>
-<li><code>oikiri_rider_is_jockey_flag</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>training_count</code></td><td>調教本数</td></tr>
+    <tr><td><code>best_training_rank</code></td><td>最高調教ランク</td></tr>
+    <tr><td><code>training_time_4f</code></td><td>調教4ハロンタイム</td></tr>
+    <tr><td><code>training_impression_score</code></td><td>調教印象スコア</td></tr>
+    <tr><td><code>oikiri_count</code></td><td>追い切り本数</td></tr>
+    <tr><td><code>oikiri_latest_days_before_race</code></td><td>最終追い切りからレースまでの日数</td></tr>
+    <tr><td><code>oikiri_latest_course</code></td><td>最終追い切りコース</td></tr>
+    <tr><td><code>oikiri_best_evaluation</code></td><td>追い切り最高評価</td></tr>
+    <tr><td><code>oikiri_mean_evaluation</code></td><td>追い切り平均評価</td></tr>
+    <tr><td><code>oikiri_best_lap</code></td><td>追い切り最速ラップ</td></tr>
+    <tr><td><code>oikiri_mean_lap</code></td><td>追い切り平均ラップ</td></tr>
+    <tr><td><code>oikiri_lap_count</code></td><td>ラップ計測本数</td></tr>
+    <tr><td><code>oikiri_has_comment</code></td><td>追い切りコメント有フラグ</td></tr>
+    <tr><td><code>oikiri_positive_keyword_score</code></td><td>追い切りポジティブキーワードスコア</td></tr>
+    <tr><td><code>oikiri_negative_keyword_score</code></td><td>追い切りネガティブキーワードスコア</td></tr>
+    <tr><td><code>oikiri_rider_is_jockey_flag</code></td><td>追い切り騎乗者が本番騎手フラグ</td></tr>
+  </tbody>
+</table>
 <h2 id="h">セクション H. パドック・厩舎コメント</h2>
-<ul>
-<li><code>has_paddock</code></li>
-<li><code>has_paddock_comment</code></li>
-<li><code>paddock_rank</code></li>
-<li><code>paddock_score</code></li>
-<li><code>paddock_positive_keyword_score</code></li>
-<li><code>paddock_negative_keyword_score</code></li>
-<li><code>paddock_rank_in_race</code></li>
-<li><code>paddock_rank_percentile</code></li>
-<li><code>has_trainer_comment</code></li>
-<li><code>trainer_comment_presence</code></li>
-<li><code>trainer_comment_eval_score</code></li>
-<li><code>trainer_comment_sentiment_score</code></li>
-<li><code>trainer_comment_positive_keyword_score</code></li>
-<li><code>trainer_comment_negative_keyword_score</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>has_paddock</code></td><td>パドック情報有フラグ</td></tr>
+    <tr><td><code>has_paddock_comment</code></td><td>パドックコメント有フラグ</td></tr>
+    <tr><td><code>paddock_rank</code></td><td>パドックランク</td></tr>
+    <tr><td><code>paddock_score</code></td><td>パドックスコア</td></tr>
+    <tr><td><code>paddock_positive_keyword_score</code></td><td>パドックポジティブキーワードスコア</td></tr>
+    <tr><td><code>paddock_negative_keyword_score</code></td><td>パドックネガティブキーワードスコア</td></tr>
+    <tr><td><code>paddock_rank_in_race</code></td><td>レース内パドックランク順位</td></tr>
+    <tr><td><code>paddock_rank_percentile</code></td><td>レース内パドックランクパーセンタイル</td></tr>
+    <tr><td><code>has_trainer_comment</code></td><td>厩舎コメント有フラグ</td></tr>
+    <tr><td><code>trainer_comment_presence</code></td><td>厩舎コメント存在フラグ</td></tr>
+    <tr><td><code>trainer_comment_eval_score</code></td><td>厩舎コメント評価スコア</td></tr>
+    <tr><td><code>trainer_comment_sentiment_score</code></td><td>厩舎コメントセンチメントスコア</td></tr>
+    <tr><td><code>trainer_comment_positive_keyword_score</code></td><td>厩舎コメントポジティブキーワードスコア</td></tr>
+    <tr><td><code>trainer_comment_negative_keyword_score</code></td><td>厩舎コメントネガティブキーワードスコア</td></tr>
+  </tbody>
+</table>
 <h2 id="i">セクション I. 血統・適性</h2>
-<ul>
-<li><code>sire</code></li>
-<li><code>dam_sire</code></li>
-<li><code>sire_cluster</code></li>
-<li><code>dam_sire_cluster</code></li>
-<li><code>sire_mstn_c</code></li>
-<li><code>sire_mstn_t</code></li>
-<li><code>dam_sire_mstn_c</code></li>
-<li><code>dam_sire_mstn_t</code></li>
-<li><code>mstn_cc_prob</code></li>
-<li><code>mstn_ct_prob</code></li>
-<li><code>mstn_tt_prob</code></li>
-<li><code>mstn_speed_index</code></li>
-<li><code>mstn_distance_affinity</code></li>
-<li><code>note_apt_dist_fit</code></li>
-<li><code>note_apt_l2</code></li>
-<li><code>surface_aptitude_proxy</code></li>
-<li><code>distance_band_aptitude_proxy</code></li>
-<li><code>heavy_track_aptitude_proxy</code></li>
-<li><code>firm_track_aptitude_proxy</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>sire</code></td><td>父馬名</td></tr>
+    <tr><td><code>dam_sire</code></td><td>母父馬名</td></tr>
+    <tr><td><code>sire_cluster</code></td><td>父馬クラスタID</td></tr>
+    <tr><td><code>dam_sire_cluster</code></td><td>母父クラスタID</td></tr>
+    <tr><td><code>sire_mstn_c</code></td><td>父馬のmyostatin C型</td></tr>
+    <tr><td><code>sire_mstn_t</code></td><td>父馬のmyostatin T型</td></tr>
+    <tr><td><code>dam_sire_mstn_c</code></td><td>母父のmyostatin C型</td></tr>
+    <tr><td><code>dam_sire_mstn_t</code></td><td>母父のmyostatin T型</td></tr>
+    <tr><td><code>mstn_cc_prob</code></td><td>myostatin CC型確率</td></tr>
+    <tr><td><code>mstn_ct_prob</code></td><td>myostatin CT型確率</td></tr>
+    <tr><td><code>mstn_tt_prob</code></td><td>myostatin TT型確率</td></tr>
+    <tr><td><code>mstn_speed_index</code></td><td>myostatinベースのスピード指標</td></tr>
+    <tr><td><code>mstn_distance_affinity</code></td><td>myostatinベースの距離適性</td></tr>
+    <tr><td><code>note_apt_dist_fit</code></td><td>note適性距離フィット</td></tr>
+    <tr><td><code>note_apt_l2</code></td><td>note適性L2スコア</td></tr>
+    <tr><td><code>surface_aptitude_proxy</code></td><td>馬場種別適性プロキシ</td></tr>
+    <tr><td><code>distance_band_aptitude_proxy</code></td><td>距離帯適性プロキシ</td></tr>
+    <tr><td><code>heavy_track_aptitude_proxy</code></td><td>重馬場適性プロキシ</td></tr>
+    <tr><td><code>firm_track_aptitude_proxy</code></td><td>高速馬場適性プロキシ</td></tr>
+  </tbody>
+</table>
 <h2 id="j">セクション J. 独自追加特徴量</h2>
-<ul>
-<li><code>field_strength_proxy</code></li>
-<li><code>pace_pressure_proxy</code></li>
-<li><code>travel_burden_proxy</code></li>
-<li><code>freshness_cluster</code></li>
-<li><code>seasonal_surface_fit</code></li>
-<li><code>venue_era_fit</code></li>
-<li><code>draw_bias_adjusted</code></li>
-<li><code>market_independent_score_inputs_count</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>field_strength_proxy</code></td><td>出走馬レベル代理変数</td></tr>
+    <tr><td><code>pace_pressure_proxy</code></td><td>ペースの厳しさ代理変数</td></tr>
+    <tr><td><code>travel_burden_proxy</code></td><td>輸送負担代理変数</td></tr>
+    <tr><td><code>freshness_cluster</code></td><td>仕上がり新鮮度クラスタ</td></tr>
+    <tr><td><code>seasonal_surface_fit</code></td><td>季節×馬場適合スコア</td></tr>
+    <tr><td><code>venue_era_fit</code></td><td>コース時代適合スコア</td></tr>
+    <tr><td><code>draw_bias_adjusted</code></td><td>枠順バイアス補正値</td></tr>
+    <tr><td><code>market_independent_score_inputs_count</code></td><td>市場非依存スコアの入力数</td></tr>
+  </tbody>
+</table>
 <h2 id="k">セクション K. 多段階パイプライン用中間特徴</h2>
-<ul>
-<li><code>expected_first_corner_pos</code></li>
-<li><code>expected_first_corner_pos_norm</code></li>
-<li><code>tracking_difficulty_score</code></li>
-<li><code>front_run_probability</code></li>
-<li><code>stalker_probability</code></li>
-<li><code>closer_probability</code></li>
-<li><code>pred_lap_1f</code></li>
-<li><code>pred_lap_3f</code></li>
-<li><code>pred_pace_class</code></li>
-<li><code>pred_energy_distribution</code></li>
-<li><code>day_bias_front</code></li>
-<li><code>day_bias_closing</code></li>
-<li><code>day_bias_inner</code></li>
-<li><code>day_bias_outer</code></li>
-<li><code>day_bias_stamina</code></li>
-<li><code>day_bias_burst</code></li>
-<li><code>day_bias_mud</code></li>
-<li><code>day_bias_speed</code></li>
-<li><code>contextual_bloodline_fit</code></li>
-<li><code>contextual_bloodline_speed_fit</code></li>
-<li><code>contextual_bloodline_stamina_fit</code></li>
-<li><code>contextual_bloodline_mud_fit</code></li>
-<li><code>contextual_bloodline_burst_fit</code></li>
-<li><code>same_day_sire_cluster_bias</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>由来 Stage</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>expected_first_corner_pos</code></td><td>Stage2</td><td>予測1コーナー通過順</td></tr>
+    <tr><td><code>expected_first_corner_pos_norm</code></td><td>Stage2</td><td>予測1コーナー通過順（正規化）</td></tr>
+    <tr><td><code>tracking_difficulty_score</code></td><td>Stage2</td><td>追走難度スコア</td></tr>
+    <tr><td><code>front_run_probability</code></td><td>Stage2</td><td>逃げ確率</td></tr>
+    <tr><td><code>stalker_probability</code></td><td>Stage2</td><td>先行確率</td></tr>
+    <tr><td><code>closer_probability</code></td><td>Stage2</td><td>差し・追い込み確率</td></tr>
+    <tr><td><code>pred_lap_1f</code></td><td>Stage3</td><td>予測1ハロンタイム</td></tr>
+    <tr><td><code>pred_lap_3f</code></td><td>Stage3</td><td>予測3ハロンタイム</td></tr>
+    <tr><td><code>pred_pace_class</code></td><td>Stage3</td><td>予測ペースクラス（slow/average/fast）</td></tr>
+    <tr><td><code>pred_energy_distribution</code></td><td>Stage3</td><td>予測エネルギー配分（瞬発/持続/消耗）</td></tr>
+    <tr><td><code>day_bias_front</code></td><td>Stage4</td><td>前残り有利度</td></tr>
+    <tr><td><code>day_bias_closing</code></td><td>Stage4</td><td>差し・追い込み有利度</td></tr>
+    <tr><td><code>day_bias_inner</code></td><td>Stage4</td><td>内枠有利度</td></tr>
+    <tr><td><code>day_bias_outer</code></td><td>Stage4</td><td>外枠有利度</td></tr>
+    <tr><td><code>day_bias_stamina</code></td><td>Stage4</td><td>スタミナ型有利度</td></tr>
+    <tr><td><code>day_bias_burst</code></td><td>Stage4</td><td>瞬発力型有利度</td></tr>
+    <tr><td><code>day_bias_mud</code></td><td>Stage4</td><td>道悪適性有利度</td></tr>
+    <tr><td><code>day_bias_speed</code></td><td>Stage4</td><td>高速馬場適性有利度</td></tr>
+    <tr><td><code>contextual_bloodline_fit</code></td><td>Stage5</td><td>血統の当日文脈総合適合</td></tr>
+    <tr><td><code>contextual_bloodline_speed_fit</code></td><td>Stage5</td><td>血統の高速馬場文脈適合</td></tr>
+    <tr><td><code>contextual_bloodline_stamina_fit</code></td><td>Stage5</td><td>血統のスタミナ文脈適合</td></tr>
+    <tr><td><code>contextual_bloodline_mud_fit</code></td><td>Stage5</td><td>血統の道悪文脈適合</td></tr>
+    <tr><td><code>contextual_bloodline_burst_fit</code></td><td>Stage5</td><td>血統の瞬発力文脈適合</td></tr>
+    <tr><td><code>same_day_sire_cluster_bias</code></td><td>Stage5</td><td>同日先行レースの血統クラスタバイアス</td></tr>
+  </tbody>
+</table>
 <h2 id="l">セクション L. 欠損・カバレッジフラグ</h2>
-<ul>
-<li><code>has_race_index</code></li>
-<li><code>has_recent_5_runs</code></li>
-<li><code>has_training_summary</code></li>
-<li><code>has_oikiri</code></li>
-<li><code>has_oikiri_lap</code></li>
-<li><code>has_paddock</code></li>
-<li><code>has_trainer_comment</code></li>
-<li><code>has_cushion_value</code></li>
-<li><code>has_turf_moisture</code></li>
-<li><code>has_dirt_moisture</code></li>
-</ul>
-<h2 id="m-layerb">セクション M. LayerB 用市場特徴量</h2>
-<p><code>horse_pre_race_dataset</code> は LayerA を基本とするが、後続の市場統合用に以下をオプション列として持てる構造にする。</p>
-<ul>
-<li><code>win_odds</code></li>
-<li><code>place_odds_min</code></li>
-<li><code>place_odds_max</code></li>
-<li><code>place_odds_avg</code></li>
-<li><code>market_popularity</code></li>
-<li><code>market_implied_win_prob_raw</code></li>
-<li><code>market_rank_by_win_odds</code></li>
-<li><code>market_rank_by_place_odds</code></li>
-<li><code>market_gap_to_race_median</code></li>
-<li><code>market_gap_to_race_favorite</code></li>
-<li><code>win_place_spread</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>意味</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>has_race_index</code></td><td>指数情報の有無</td></tr>
+    <tr><td><code>has_recent_5_runs</code></td><td>直近5走データの有無</td></tr>
+    <tr><td><code>has_training_summary</code></td><td>調教サマリの有無</td></tr>
+    <tr><td><code>has_oikiri</code></td><td>追い切りデータの有無</td></tr>
+    <tr><td><code>has_oikiri_lap</code></td><td>追い切りラップの有無</td></tr>
+    <tr><td><code>has_paddock</code></td><td>パドック情報の有無</td></tr>
+    <tr><td><code>has_trainer_comment</code></td><td>厩舎コメントの有無</td></tr>
+    <tr><td><code>has_cushion_value</code></td><td>クッション値の有無</td></tr>
+    <tr><td><code>has_turf_moisture</code></td><td>芝含水率の有無</td></tr>
+    <tr><td><code>has_dirt_moisture</code></td><td>ダート含水率の有無</td></tr>
+  </tbody>
+</table>
+<h2 id="m-layerb">セクション M. LayerB 用市場特徴量（オプション）</h2>
+<p><code>horse_pre_race_dataset</code> は LayerA（市場情報なし）を基本とするが、後続の市場統合に備えて以下をオプション列として保持できる構造にする。</p>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>win_odds</code></td><td>単勝オッズ</td></tr>
+    <tr><td><code>place_odds_min</code></td><td>複勝オッズ下限</td></tr>
+    <tr><td><code>place_odds_max</code></td><td>複勝オッズ上限</td></tr>
+    <tr><td><code>place_odds_avg</code></td><td>複勝オッズ平均</td></tr>
+    <tr><td><code>market_popularity</code></td><td>市場人気順位</td></tr>
+    <tr><td><code>market_implied_win_prob_raw</code></td><td>市場オッズから逆算した勝率（補正前）</td></tr>
+    <tr><td><code>market_rank_by_win_odds</code></td><td>単勝オッズによるレース内順位</td></tr>
+    <tr><td><code>market_rank_by_place_odds</code></td><td>複勝オッズによるレース内順位</td></tr>
+    <tr><td><code>market_gap_to_race_median</code></td><td>市場中央値との差</td></tr>
+    <tr><td><code>market_gap_to_race_favorite</code></td><td>1番人気との市場差</td></tr>
+    <tr><td><code>win_place_spread</code></td><td>単勝・複勝オッズのスプレッド</td></tr>
+  </tbody>
+</table>
 <h2 id="2-horse_labelsparquet">出力 2: <code>horse_labels.parquet</code></h2>
 <h2 id="_18">キー</h2>
 <ul>
@@ -622,161 +691,182 @@ document.addEventListener("DOMContentLoaded", function() {
 <li><code>horse_id</code></li>
 </ul>
 <h2 id="_19">ラベル列</h2>
-<ul>
-<li><code>finish_position</code></li>
-<li><code>is_win</code></li>
-<li><code>is_top2</code></li>
-<li><code>is_top3</code></li>
-<li><code>field_size</code></li>
-<li><code>finish_position_pct</code></li>
-<li><code>margin_seconds_proxy</code></li>
-<li><code>race_has_official_result</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>finish_position</code></td><td>着順</td></tr>
+    <tr><td><code>is_win</code></td><td>1着フラグ（<code>finish_position == 1</code>）</td></tr>
+    <tr><td><code>is_top2</code></td><td>2着以内フラグ（<code>finish_position &lt;= 2</code>）</td></tr>
+    <tr><td><code>is_top3</code></td><td>3着以内フラグ（<code>finish_position &lt;= 3</code>）</td></tr>
+    <tr><td><code>field_size</code></td><td>出走頭数</td></tr>
+    <tr><td><code>finish_position_pct</code></td><td>着順パーセンタイル（<code>finish_position / field_size</code>）</td></tr>
+    <tr><td><code>margin_seconds_proxy</code></td><td>着差プロキシ（秒）</td></tr>
+    <tr><td><code>race_has_official_result</code></td><td>公式結果有フラグ</td></tr>
+  </tbody>
+</table>
 <h2 id="_20">メタ列</h2>
-<ul>
-<li><code>race_date</code></li>
-<li><code>venue</code></li>
-<li><code>surface</code></li>
-<li><code>distance</code></li>
-</ul>
-<h2 id="_21">ラベル定義</h2>
-<ul>
-<li><code>is_win = 1[finish_position == 1]</code></li>
-<li><code>is_top2 = 1[finish_position &lt;= 2]</code></li>
-<li><code>is_top3 = 1[finish_position &lt;= 3]</code></li>
-<li><code>finish_position_pct = finish_position / field_size</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>race_date</code></td><td>レース開催日</td></tr>
+    <tr><td><code>venue</code></td><td>開催場名</td></tr>
+    <tr><td><code>surface</code></td><td>馬場種別</td></tr>
+    <tr><td><code>distance</code></td><td>レース距離（m）</td></tr>
+  </tbody>
+</table>
 <h2 id="_22">加工ルール</h2>
-<h2 id="1-join">1. join ルール</h2>
+<h2 id="1-join">1. 結合（join）ルール</h2>
 <ul>
-<li>基本 join key は <code>race_id + horse_number</code></li>
-<li><code>race_oikiri_flat</code> は <code>race_id + horse_number</code> に集約してから join</li>
-<li><code>horse_id</code> は補助キーとして保持するが、<code>race_odds_flat</code> には存在しないため join 主キーにしない</li>
+<li>基本の結合キーは <code>race_id + horse_number</code></li>
+<li><code>race_oikiri_flat</code> は <code>race_id + horse_number</code> に集約してから結合する</li>
+<li><code>horse_id</code> は補助キーとして保持するが、<code>race_odds_flat</code> には存在しないため結合の主キーに使わない</li>
 </ul>
 <h2 id="15">1.5 集約ルール</h2>
 <ul>
-<li><code>race_oikiri_flat</code> は複数行を持ちうるため、必ず <code>race_id + horse_number</code> に集約する</li>
-<li><code>race_shutuba_past_flat.past_races</code> は <code>対象レース日以前</code> の履歴に切ってから集約する</li>
-<li><code>horse bundle</code> 由来集計も、対象レース日以前だけで計算する</li>
-<li>レース内相対指標は、同一 <code>race_id</code> の母表完成後に最後に計算する</li>
+<li><code>race_oikiri_flat</code> は 1 頭に複数行あるため、必ず <code>race_id + horse_number</code> に集約する</li>
+<li><code>race_shutuba_past_flat.past_races</code> は対象レース日以前の履歴に絞ってから集約する</li>
+<li><code>horse bundle</code> 由来の集計も、対象レース日以前のデータだけで計算する</li>
+<li>レース内の相対指標（順位・偏差等）は、同一 <code>race_id</code> の母表が完成した後に最後に計算する</li>
 </ul>
-<h2 id="2">2. 時点ルール</h2>
+<h2 id="2">2. 時点ルール（データリーク防止）</h2>
 <ul>
-<li>各特徴は対象 <code>race_date</code> より前の情報だけで計算する</li>
+<li>各特徴量は対象 <code>race_date</code> より前の情報だけで計算する</li>
 <li><code>days_since_last</code> や戦績集計は、当該レース当日以前の履歴だけに限定する</li>
-<li>クッション値は対象開催日朝時点の公表値を使う</li>
+<li>クッション値は対象開催日の朝時点の公表値を使う</li>
 </ul>
 <h2 id="3">3. テキスト列ルール</h2>
 <ul>
 <li>生テキストは原則保存しない</li>
-<li>保存する場合も <code>*_raw_text</code> として分離し、学習投入対象から外す</li>
-<li>初期版では、コメントはスコア化と presence flag のみを正式採用とする</li>
+<li>保存する場合は <code>*_raw_text</code> として分離し、学習投入対象から除外する</li>
+<li>初期版では、コメントはスコア化と presence flag（存在フラグ）のみを正式採用とする</li>
 </ul>
-<h2 id="4_1">4. リーク防止ルール</h2>
-<ul>
-<li>結果確定後テーブルは特徴量母表に入れない</li>
-<li><code>LayerA</code> に当日オッズを入れない</li>
-<li>target encoding や集計は split 後・fold 内で作る</li>
-<li><code>finish_position</code> を説明変数に戻さない</li>
-<li>レース単位で train / valid / test を分け、同一 <code>race_id</code> をまたぐ分割を禁止する</li>
-<li>推論時点に存在しない future master や future encoded mapping を読み込まない</li>
-<li>ordered / target encoding は <code>purged_group_time_series_split</code> 前提で作る</li>
-<li>calibration は train データではなく valid もしくは OOF 予測のみで学習する</li>
-</ul>
+<h2 id="4_1">4. データリーク防止ルール</h2>
+<table>
+  <thead>
+    <tr><th>ルール</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>結果テーブルの除外</td><td>結果確定後のテーブルは特徴量母表に含めない</td></tr>
+    <tr><td>LayerA へのオッズ禁止</td><td><code>LayerA</code>（市場情報なし層）に当日オッズを入れない</td></tr>
+    <tr><td>エンコーディングの適用範囲</td><td>ターゲットエンコーディングや集計特徴量は、split 後・fold 内でのみ作る</td></tr>
+    <tr><td>着順の逆参照禁止</td><td><code>finish_position</code>（着順）を説明変数に戻さない</td></tr>
+    <tr><td>race_id 横断分割禁止</td><td>レース単位で train / valid / test を分け、同一 <code>race_id</code> をまたぐ分割を禁止する</td></tr>
+    <tr><td>未来マスター禁止</td><td>推論時点に存在しない future master や future encoded mapping を読み込まない</td></tr>
+    <tr><td>エンコーディングの前提</td><td>ordered / target encoding は <code>purged_group_time_series_split</code> を前提に作る</td></tr>
+    <tr><td>確率補正の適用対象</td><td>確率補正（calibration）は train データではなく valid または交差検証での予測（OOF）のみで学習する</td></tr>
+  </tbody>
+</table>
 <h2 id="45-eda">4.5 EDA・品質監査ルール</h2>
-<p>参考資料では、学習前に欠損・外れ値・分布確認を明示的に行う重要性が強調されていた。<br />
-そのため、母表生成時に以下の監査成果物を必須にする。</p>
-<ul>
-<li><code>dataset_profile.json</code></li>
-<li>行数、列数、欠損率、主要数値列の分位点</li>
-<li><code>feature_missingness.csv</code></li>
-<li>列ごとの欠損率</li>
-<li><code>segment_coverage.csv</code></li>
-<li><code>year x venue x surface</code> 単位の件数</li>
-<li><code>label_balance.json</code></li>
-<li><code>is_win</code>, <code>is_top2</code>, <code>is_top3</code> の陽性率</li>
-<li><code>outlier_watchlist.csv</code></li>
-<li>明示的に clip / winsorize 候補とした列</li>
-</ul>
+<p>学習前に欠損・外れ値・分布の確認を明示的に行うことが重要である。母表生成時に以下の監査成果物を必須とする。</p>
+<table>
+  <thead>
+    <tr><th>成果物ファイル名</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>dataset_profile.json</code></td><td>行数、列数、欠損率、主要数値列の分位点</td></tr>
+    <tr><td><code>feature_missingness.csv</code></td><td>列ごとの欠損率</td></tr>
+    <tr><td><code>segment_coverage.csv</code></td><td><code>year × venue × surface</code> 単位の件数</td></tr>
+    <tr><td><code>label_balance.json</code></td><td><code>is_win</code>, <code>is_top2</code>, <code>is_top3</code> の陽性率</td></tr>
+    <tr><td><code>outlier_watchlist.csv</code></td><td>clip / winsorize の候補として明示した列</td></tr>
+  </tbody>
+</table>
 <h2 id="46">4.6 外れ値・ノイズ方針</h2>
 <ul>
-<li>取消・除外・競走中止・失格は <code>label</code> 側で明示フラグ化し、Baseline 学習対象から外す候補として管理する</li>
-<li>極端なタイム差・明らかな異常値は、単純除外ではなく <code>outlier_flag</code> を立てた上で比較検証する</li>
-<li><code>race_oikiri</code> のようなノイズが強いテーブルは、最初は集約統計だけを使用し、生の列を直接広げない</li>
+<li>取消・除外・競走中止・失格は <code>label</code> 側で明示フラグを立て、Baseline の学習対象から除外する候補として管理する</li>
+<li>極端なタイム差・明らかな異常値は単純除外せず、<code>outlier_flag</code> を立てた上で比較検証する</li>
+<li><code>race_oikiri</code> のようにノイズが多いテーブルは、最初は集約統計だけを使い、生の列を直接展開しない</li>
 </ul>
 <h2 id="5">5. 推奨データ型</h2>
-<ul>
-<li>キー: string / int</li>
-<li>カテゴリ: string</li>
-<li>数値集計: float32 もしくは float64</li>
-<li>presence flag: int8 / bool</li>
-<li>ラベル: int8</li>
-</ul>
+<table>
+  <thead>
+    <tr><th>列種別</th><th>推奨型</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>キー</td><td><code>string</code> / <code>int</code></td></tr>
+    <tr><td>カテゴリ</td><td><code>string</code></td></tr>
+    <tr><td>数値集計</td><td><code>float32</code> もしくは <code>float64</code></td></tr>
+    <tr><td>presence flag（存在フラグ）</td><td><code>int8</code> / <code>bool</code></td></tr>
+    <tr><td>ラベル</td><td><code>int8</code></td></tr>
+  </tbody>
+</table>
 <h2 id="6_1">6. 期待する成果物</h2>
-<ul>
-<li><code>horse_pre_race_dataset.parquet</code></li>
-<li><code>horse_labels.parquet</code></li>
-<li><code>horse_pre_race_dataset_schema.json</code></li>
-<li><code>feature_dictionary.html</code></li>
-<li><code>dataset_profile.json</code></li>
-<li><code>feature_missingness.csv</code></li>
-<li><code>label_balance.json</code></li>
-<li><code>horse_latent_state.parquet</code></li>
-<li><code>positioning_features.parquet</code></li>
-<li><code>pace_scenario_features.parquet</code></li>
-<li><code>day_track_bias_features.parquet</code></li>
-<li><code>contextual_bloodline_features.parquet</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>ファイル名</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>horse_pre_race_dataset.parquet</code></td><td>特徴量母表</td></tr>
+    <tr><td><code>horse_labels.parquet</code></td><td>ラベル表</td></tr>
+    <tr><td><code>horse_pre_race_dataset_schema.json</code></td><td>スキーマ定義</td></tr>
+    <tr><td><code>feature_dictionary.html</code></td><td>特徴量辞書</td></tr>
+    <tr><td><code>dataset_profile.json</code></td><td>データ品質サマリ</td></tr>
+    <tr><td><code>feature_missingness.csv</code></td><td>欠損率レポート</td></tr>
+    <tr><td><code>label_balance.json</code></td><td>ラベルバランス</td></tr>
+    <tr><td><code>horse_latent_state.parquet</code></td><td>Stage1 出力</td></tr>
+    <tr><td><code>positioning_features.parquet</code></td><td>Stage2 出力</td></tr>
+    <tr><td><code>pace_scenario_features.parquet</code></td><td>Stage3 出力</td></tr>
+    <tr><td><code>day_track_bias_features.parquet</code></td><td>Stage4 出力</td></tr>
+    <tr><td><code>contextual_bloodline_features.parquet</code></td><td>Stage5 出力</td></tr>
+  </tbody>
+</table>
 <h2 id="7_1">7. 成果物の版管理</h2>
-<p>継続的な改善を前提に、母表とラベルはファイルだけでなく <code>生成条件</code> も保存する。</p>
-<p>実装時のメモリ節約・<code>polars</code> 中心の処理方針は<br />
-<code>docs/html/modeling/modeling_coding_strategy.html</code> を正本とする。</p>
+<p>継続的な改善を前提に、母表とラベルはファイルだけでなく <code>生成条件</code>（どのコード・設定で作ったか）も一緒に保存する。</p>
+<p>実装時のメモリ節約・<code>polars</code> 中心の処理方針は <code>docs/html/modeling/modeling_coding_strategy.html</code> を正本とする。</p>
 <h3 id="_23">必須メタデータ</h3>
-<ul>
-<li><code>data_version</code></li>
-<li><code>code_version</code></li>
-<li><code>source_table_versions</code></li>
-<li><code>venue_era_definition_version</code></li>
-<li><code>split_manifest_version</code></li>
-<li><code>created_at</code></li>
-<li><code>row_count</code></li>
-<li><code>feature_count</code></li>
-<li><code>baseline_or_extended</code></li>
-<li><code>encoding_recipe_version</code></li>
-<li><code>cv_policy_version</code></li>
-<li><code>calibration_recipe_version</code></li>
-<li><code>staged_pipeline_version</code></li>
-<li><code>upstream_stage_versions</code></li>
-<li><strong><code>mlflow_experiment_id</code></strong> / <strong><code>mlflow_run_id</code></strong>（学習・データ生成ジョブを追跡する。<code>modeling_coding_strategy.html</code> の MLflow 節と一致させる）</li>
-</ul>
+<table>
+  <thead>
+    <tr><th>フィールド名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>data_version</code></td><td>データバージョン</td></tr>
+    <tr><td><code>code_version</code></td><td>コードバージョン</td></tr>
+    <tr><td><code>source_table_versions</code></td><td>ソーステーブルのバージョン</td></tr>
+    <tr><td><code>venue_era_definition_version</code></td><td>コース時代区分の定義バージョン</td></tr>
+    <tr><td><code>split_manifest_version</code></td><td>分割マニフェストのバージョン</td></tr>
+    <tr><td><code>created_at</code></td><td>生成日時</td></tr>
+    <tr><td><code>row_count</code></td><td>行数</td></tr>
+    <tr><td><code>feature_count</code></td><td>特徴量数</td></tr>
+    <tr><td><code>baseline_or_extended</code></td><td>BaselineV1 か ExtendedV1 かの区分</td></tr>
+    <tr><td><code>encoding_recipe_version</code></td><td>エンコーディングレシピのバージョン</td></tr>
+    <tr><td><code>cv_policy_version</code></td><td>交差検証ポリシーのバージョン</td></tr>
+    <tr><td><code>calibration_recipe_version</code></td><td>確率補正レシピのバージョン</td></tr>
+    <tr><td><code>staged_pipeline_version</code></td><td>多段階パイプラインのバージョン</td></tr>
+    <tr><td><code>upstream_stage_versions</code></td><td>上流 Stage のバージョン一覧</td></tr>
+    <tr><td><code>mlflow_experiment_id</code> / <code>mlflow_run_id</code></td><td>学習・データ生成ジョブの追跡ID（<code>modeling_coding_strategy.html</code> の MLflow 節と一致させる）</td></tr>
+  </tbody>
+</table>
 <h3 id="mlflow">MLflow との対応</h3>
 <ul>
-<li>母表ビルド・fold 学習・校正・（将来）馬券方策学習の <strong>各ジョブで Run を分ける</strong>か、<strong>親子 Run</strong> で階層化するかをプロジェクトで統一する。</li>
-<li><code>dataset_build_manifest.json</code> に <strong><code>mlflow_run_id</code> を必ず書き戻す</strong>と、ドキュメント上の <code>data_version</code> と実験が一対一で辿れる。</li>
+<li>母表ビルド・fold 学習・確率補正・（将来）馬券方策学習の <strong>各ジョブで Run を分ける</strong>か、<strong>親子 Run</strong> で階層化するかをプロジェクトで統一する。</li>
+<li><code>dataset_build_manifest.json</code> に <strong><code>mlflow_run_id</code> を書き戻す</strong>ことで、ドキュメント上の <code>data_version</code> と実験ログを一対一で追跡できる。</li>
 </ul>
-<h3 id="_24">保存形</h3>
+<h3 id="_24">保存先</h3>
 <ul>
 <li><code>data/meta/modeling/dataset_build_manifest.json</code></li>
 <li><code>data/meta/modeling/dataset_profiles/&lt;dataset_name&gt;.json</code></li>
 </ul>
 <h2 id="8">8. 実装順</h2>
 <ol>
-<li><code>race_shutuba_flat</code> を母表に固定</li>
-<li><code>race_shutuba_past_flat</code>・<code>race_index_flat</code> を結合</li>
-<li><code>race_oikiri_flat</code> を馬単位に集約</li>
-<li><code>race_paddock_flat</code>・<code>race_trainer_comment_flat</code> を left join</li>
-<li>GCS 由来 horse bundle 集約を追加</li>
-<li>クッション値・開催文脈・<code>venue_era</code> を付与</li>
-<li>LayerA と LayerB の列集合を分離</li>
-<li><code>race_result_flat</code> から <code>horse_labels</code> を生成</li>
-<li><code>BaselineV1</code> と <code>ExtendedV1</code> を同時に出力</li>
-<li>監査成果物を保存</li>
-<li><code>encoding recipe</code> ごとの OOF 特徴量を分離保存</li>
-<li><code>calibration input</code> を別出力</li>
-<li><code>tracking_difficulty</code> 出力を中間成果物として保存</li>
-<li><code>pace_scenario</code> 出力を中間成果物として保存</li>
-<li><code>day_track_bias</code> と <code>contextual_bloodline</code> を別成果物として保存</li>
-<li><code>polars scan</code> ベースの builder で fold 単位に materialize する</li>
+<li><code>race_shutuba_flat</code> を母表の起点として固定する</li>
+<li><code>race_shutuba_past_flat</code>・<code>race_index_flat</code> を結合する</li>
+<li><code>race_oikiri_flat</code> を馬単位に集約する</li>
+<li><code>race_paddock_flat</code>・<code>race_trainer_comment_flat</code> を left join する</li>
+<li>GCS 由来 horse bundle の集約を追加する</li>
+<li>クッション値・開催文脈・<code>venue_era</code> を付与する</li>
+<li>LayerA（市場情報なし）と LayerB（市場情報あり）の列集合を分離する</li>
+<li><code>race_result_flat</code> から <code>horse_labels</code> を生成する</li>
+<li><code>BaselineV1</code> と <code>ExtendedV1</code> を同時に出力する</li>
+<li>品質監査成果物を保存する</li>
+<li><code>encoding recipe</code> ごとの交差検証での予測（OOF）特徴量を分離保存する</li>
+<li><code>calibration input</code>（確率補正用の入力）を別出力する</li>
+<li><code>tracking_difficulty</code> 出力を中間成果物として保存する</li>
+<li><code>pace_scenario</code> 出力を中間成果物として保存する</li>
+<li><code>day_track_bias</code> と <code>contextual_bloodline</code> を別成果物として保存する</li>
+<li><code>polars scan</code> ベースの builder で fold 単位に materiailize する</li>
 </ol>
     </article>
     <nav class="doc-nav">

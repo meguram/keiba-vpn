@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>データ基盤比較（GCS / Cloud SQL / BigQuery / 他社）— 本プロジェクト前提</title>
+  <style>
+    :root { --bg:#0f1419; --card:#1a222d; --b:#2d3a4a; --t:#e6edf3; --m:#8b9cb3; --a:#3b9eff; }
+    * { box-sizing: border-box; }
+    body { font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--t); line-height: 1.6; max-width: 1200px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 1.4rem; border-bottom: 1px solid var(--b); padding-bottom: 8px; }
+    h2 { font-size: 1.1rem; margin-top: 2rem; color: #fff; }
+    h3 { font-size: 1rem; color: #cbd5e1; margin-top: 1.2rem; }
+    p, li { color: var(--m); font-size: 0.92rem; }
+    a { color: var(--a); }
+    .warn { background: rgba(234,179,8,0.12); border: 1px solid rgba(234,179,8,0.35); padding: 12px 14px; border-radius: 8px; margin: 16px 0; font-size: 0.88rem; }
+    .card { background: var(--card); border: 1px solid var(--b); border-radius: 10px; padding: 16px 18px; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th, td { border: 1px solid var(--b); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #243044; color: #fff; }
+    tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+    code { background: #243044; padding: 1px 5px; border-radius: 4px; font-size: 0.86em; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+    .fig { color: #94a3b8; font-size: 0.85rem; }
+    kbd { font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+  <h1>データ保存場所の比較（GCP・他プロバイダ）<br><span class="fig">本リポジトリの保存形態・予測AI想定に基づく遅延 / コスト / 使い分け</span></h1>
+
+  <p class="warn">
+    <strong>重要:</strong> このページの金額はすべて<strong>概算</strong>です。各プロバイダの実際の料金はリージョン・通貨・税・割引によって変動します。意思決定の際は必ず<strong>公式価格ページ</strong>と<strong>料金計算ツール</strong>で確認してください。本ページの数値は取得時点の<strong>公開価格表</strong>に基づきます（Google: Cloud Storage / BigQuery / Cloud SQL 料金、他社は代表的なSKU）。
+  </p>
+
+  <h2>1. keiba-vpnの現在のデータ保存構成</h2>
+  <div class="card">
+    <p><code>scraper/storage.py</code> の <strong>HybridStorage</strong> は、原則として<strong>JSONオブジェクトをGoogle Cloud Storage（GCS）に保存</strong>します（<code>category</code> + <code>key</code> で管理）。<code>race_lists</code> など一部はローカルのみで扱います。</p>
+    <p><strong>カテゴリの例:</strong></p>
+    <table>
+      <thead>
+        <tr><th>分類</th><th>カテゴリキー</th><th>内容</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td rowspan="5">レース系</td>
+          <td><code>race_shutuba</code></td>
+          <td>出馬表</td>
+        </tr>
+        <tr>
+          <td><code>race_result</code></td>
+          <td>レース結果</td>
+        </tr>
+        <tr>
+          <td><code>race_odds</code></td>
+          <td>オッズ</td>
+        </tr>
+        <tr>
+          <td><code>smartrc_race</code></td>
+          <td>SmartRC レースデータ</td>
+        </tr>
+        <tr>
+          <td><code>race_result_lap</code></td>
+          <td>ラップタイム</td>
+        </tr>
+        <tr>
+          <td rowspan="3">馬系</td>
+          <td><code>horse_result</code></td>
+          <td>馬の戦績</td>
+        </tr>
+        <tr>
+          <td><code>horse_training</code></td>
+          <td>調教データ</td>
+        </tr>
+        <tr>
+          <td><code>horse_pedigree_5gen</code></td>
+          <td>5代血統</td>
+        </tr>
+        <tr>
+          <td>その他</td>
+          <td><code>race_predictions</code></td>
+          <td>AI予測結果</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>API・モニタリング画面は多数のキーを並列で読み出します（<code>storage.load(category, id)</code>）。欠損検知・学習用特徴量はローカルParquet層（<code>scraper/local_tables.py</code>）と組み合わせて使います。</p>
+  </div>
+
+  <h2>2. コスト試算の前提条件</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>データ量の前提</h3>
+      <p>GCS相当のデータ保存場所に<strong>合計500GiB</strong>（標準ストレージ）を保存する想定です。<br>（実際の総量は計測が必要です）</p>
+    </div>
+    <div class="card">
+      <h3>本番読み出しの前提</h3>
+      <p>1回1オブジェクトのGET操作を<strong>10,000回/日</strong>実行すると想定（1回あたり約500KiB、1日約5GiBの転送）。月換算では30万GET・約150GiBの転送となります。</p>
+    </div>
+  </div>
+  <div class="card">
+    <h3>予測・学習（AIワークロード）の前提</h3>
+    <p>月1回の<strong>日次/週次バッチ学習</strong>で<strong>2TiB相当をフルスキャン</strong>するクエリを仮定しています（特徴量再計算・広い期間の検証など）。<strong>オンライン推論</strong>は「数十ミリ秒以内に少数の特徴量を取得」するケースが多い想定です（キャッシュ併用）。</p>
+  </div>
+
+  <h2>3. レスポンスの遅さ（目安）</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>種類</th><th>代表サービス</th><th>1件読み出しの目安遅延</th><th>主な用途</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>オブジェクトストア</td><td>GCS, S3, R2</td><td>10〜100ms以上（帯域・SDK・物理距離に依存）</td><td>大きなJSON/ファイルの主保存、学習データの出し口</td>
+      </tr>
+      <tr>
+        <td>OLTP型リレーショナルDB</td><td>Cloud SQL, RDS, Neon</td><td>約1〜10ms / 数十ms（行数・接続プール次第）</td><td>主キー検索、正規化されたメタデータ・ユーザー設定</td>
+      </tr>
+      <tr>
+        <td>分析用データウェアハウス</td><td>BigQuery, Snowflake</td><td>100ms〜分単位（スキャン・クエリコンパイル次第）</td><td>集計・探索クエリ、大規模な特徴量ELT処理</td>
+      </tr>
+      <tr>
+        <td>ドキュメント型NoSQL</td><td>Firestore, DynamoDB, Atlas</td><td>数ms〜数十msのケースも</td><td>スキーマが可変なデータ、キー/複合インデックス検索</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>4. 各サービスの価格の考え方</h2>
+  <div class="card">
+    <h3>Google Cloud Storage（単一リージョン・Standardクラス）</h3>
+    <p>公式価格（東京を含む単一リージョン）: <strong>$0.000027397/GiB時間</strong>（<a href="https://cloud.google.com/storage/pricing">Storage pricing | Google Cloud</a>）。</p>
+    <p><strong>月額換算（730時間/月として計算）:</strong><br>
+      単価 ≈ 0.000027397 × 730 ≈ <strong>$0.020/GiB/月</strong></p>
+    <p>試算: <code>500GiB × $0.020 ≈ $10.0/月</code>（保存コストのみ）。Class A/Bのオペレーション料金は別途計算が必要ですが、月30万GETでも保存コストより小さいケースが多いです。同一リージョン内のEgress無料帯の条件は要確認です。</p>
+    <h3>Cloud SQL（PostgreSQLなど）— 小規模本番の「固定費」</h3>
+    <p>CPU・メモリ・ディスクの<strong>常時起動分</strong>が費用の大半を占めます。1vCPU級+小ディスクで<strong>月$50〜$200程度</strong>（リージョン・バージョンで変動）。1万GET/日程度のアクセスはインスタンス費用に比べると小さいです。</p>
+    <h3>BigQuery（オンデマンド分析）</h3>
+    <p>公式: <a href="https://cloud.google.com/bigquery/pricing">BigQuery pricing | Google Cloud</a> — オンデマンドは<strong>処理したデータ量（TiB単位）あたり</strong>の課金です。公示例: <strong>$6.25/TiB</strong>（クエリ処理）。さらに<strong>毎月最初の1TiBはクエリ処理が無料</strong>です（「On-demand (per TiB)」節を参照）。</p>
+    <p>試算: 月に2TiBスキャンを1回行う場合、無料枠1TiBを差し引くと <code>(2 − 1) × $6.25 ≈ $6.25/月</code>。無料枠内に収まる月は<strong>$0に近い</strong>こともあります。列・パーティションを最適化してスキャン量を減らすのが定石です。</p>
+  </div>
+
+  <h2>5. GCP内の構成パターンと特性</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>構成パターン</th><th>レスポンス遅延</th><th>主なコスト要因</th><th>本プロジェクトへの適合度</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>GCS + 現行アプリ</strong></td>
+        <td>GETで数十ms程度</td>
+        <td>保存量＋転送費。小〜中規模では比較的安価</td>
+        <td>現行構成と整合 ◎。大規模な学習は帯域・I/O設計が重要</td>
+      </tr>
+      <tr>
+        <td><strong>Cloud SQL 中心</strong></td>
+        <td>低遅延にしやすい</td>
+        <td><strong>インスタンスの固定費</strong>が支配的。大きなJSONは正規化・設計が必要</td>
+        <td>行指向メタ・索引中心なら ◯。JSONをそのまま大量格納するには非効率</td>
+      </tr>
+      <tr>
+        <td><strong>BigQuery 中心</strong></td>
+        <td>高め（リアルタイム点読には不向き）</td>
+        <td>大量スキャンには ◯。少数行のGETには割高・遅延が大きい</td>
+        <td>集計・特徴量バッチ処理に ◎。本番のリアルタイム読み出しには不向き</td>
+      </tr>
+      <tr>
+        <td><strong>GCS + BigQuery + Cloud SQL の組み合わせ</strong></td>
+        <td>用途別に最適化</td>
+        <td>役割を分離することで最もバランスが取れる</td>
+        <td>実務でよく見られる構成。データの同期コストに注意が必要</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>6. GCP以外のサービス（マネージドDB / BaaS）</h2>
+  <p>「GCPとは別のサービス」とは、<strong>AWS（RDS / S3 / Redshift）・マルチクラウドDB（Atlas / Supabase / Neon）・SaaS分析</strong>などを指します。<strong>データ転送費（Egress）とプロバイダをまたぐ通信</strong>がコスト・遅延に大きく影響します。</p>
+  <table>
+    <thead>
+      <tr>
+        <th>サービス / 主な用途</th><th>料金の仕組み（要公式確認）</th><th>試算メモ</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Amazon S3（Standard）</td>
+        <td>GB/月 + リクエスト回数 + Egress（外部転送費）</td>
+        <td>us-east-1で<strong>約$0.023/GB/月</strong>（<a href="https://aws.amazon.com/s3/pricing/">S3料金</a>）。500GBで月$11〜$12程度。GET操作の費用は規模によっては小額に収まることが多い。</td>
+      </tr>
+      <tr>
+        <td>Amazon RDS（MySQLなど）</td>
+        <td>DBインスタンス時間 + ストレージ + バックアップ</td>
+        <td>db.t3.microで月$20〜$30程度から（<a href="https://aws.amazon.com/rds/mysql/pricing/">RDS料金</a>）。Cloud SQL同様、<strong>固定費</strong>が中心。</td>
+      </tr>
+      <tr>
+        <td>Supabase（Proプラン）</td>
+        <td>月額定額 + 超過課金</td>
+        <td><strong>$25/月〜 + 超過分</strong>（<a href="https://supabase.com/pricing">supabase.com/pricing</a> で確認要）。PostgreSQL一体型。外部転送量が多い場合は超過課金に注意。</td>
+      </tr>
+      <tr>
+        <td>Neon（Serverless Postgres）</td>
+        <td>CU使用時間 + ストレージ</td>
+        <td>ストレージは<strong>約$0.35/GB/月</strong>程度（<a href="https://neon.tech/pricing">neon.tech/pricing</a>）。低負荷でスケールゼロになる環境向き。ただし500GBではストレージ代だけで$175程度になり、<strong>全データをRDBに移すと高コストになりやすい</strong>。</td>
+      </tr>
+      <tr>
+        <td>MongoDB Atlas（M10クラスタ目安）</td>
+        <td>クラスタ時間 + ディスク</td>
+        <td>AWSリージョン・クラスタサイズで大きく変わります（<a href="https://www.mongodb.com/pricing">料金ページ</a>で要計算）。2GB RAM級のM10で月$50程度から。</td>
+      </tr>
+      <tr>
+        <td>Snowflake / その他DW</td>
+        <td>クレジット制 + ストレージ</td>
+        <td>大規模分析向け。keiba-vpn規模では最小枠でどの程度になるか見積もりが必須。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>7. 同一シナリオでの月額比較（粗い概算）</h2>
+  <p>以下は各サービスを単独採用した場合の<strong>独立試算</strong>です。実際には用途別に組み合わせて使うことが多いです。</p>
+  <table>
+    <thead>
+      <tr>
+        <th>候補</th><th>主なコスト要因</th><th>本シナリオの粗い月額（USD概算）</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>GCS 500GiB保存 + 30万GET/月</td><td>保存 + 操作（小） + 転送条件次第</td><td><strong>約$10 + 小額 + α</strong>（Egress・オペレーション次第）</td></tr>
+      <tr><td>Cloud SQL 1vCPU級 常時起動 + 小ディスク</td><td>固定費</td><td><strong>$50〜$200程度</strong></td></tr>
+      <tr><td>BigQuery 月2TiBスキャン（$6.25/TiB、1TiB無料控除後）</td><td>クエリ処理量</td><td><strong>約$6.25</strong>（他費用は別途）</td></tr>
+      <tr><td>Supabase Pro</td><td>月額定額</td><td><strong>$25〜 + 超過分</strong></td></tr>
+      <tr><td>Neon 500GB（$0.35/GB仮定）</td><td>ストレージ</td><td><strong>約$175</strong>（+ CU使用料）</td></tr>
+      <tr><td>AWS S3 500GB + RDS小型</td><td>保存 + 固定費</td><td>保存約$12 + RDS<strong>$20〜$80+</strong>（サイズ次第）</td></tr>
+    </tbody>
+  </table>
+
+  <h2>8. 予測AIシステムとしての観点</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>ワークロード</th><th>推奨アーキテクチャ</th><th>本プロジェクトとの関係</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>学習・大規模特徴量の再計算</strong></td>
+          <td>列指向のParquet/外部テーブル + 列指向DW/Spark</td>
+          <td>行指向RDBより転送効率が良い。<code>export_tables</code> の設計思想と整合しやすい</td>
+        </tr>
+        <tr>
+          <td><strong>オンライン推論（リアルタイム予測）</strong></td>
+          <td>メモリキャッシュ（Redis等）+ OLTP/キーバリューストア、または事前に計算済みの少数列を参照</td>
+          <td>低遅延が求められる。キャッシュ層の設計が重要</td>
+        </tr>
+        <tr>
+          <td><strong>推奨構成（3段構成）</strong></td>
+          <td>正本データ: オブジェクトストア（GCS/S3）、メタ情報・索引: SQL/検索DB、学習: DW/バッチ処理</td>
+          <td>実務でよく見られる構成。役割の分離により管理しやすい</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>9. 参考リンク（各サービスの公式価格ページ）</h2>
+  <ul>
+    <li>Google: <a href="https://cloud.google.com/storage/pricing">Cloud Storage料金</a>、<a href="https://cloud.google.com/sql/pricing">Cloud SQL料金</a>、<a href="https://cloud.google.com/bigquery/pricing">BigQuery料金</a>、<a href="https://cloud.google.com/skus">SKU一覧</a>、<a href="https://cloud.google.com/products/calculator">料金計算ツール</a></li>
+    <li>AWS: <a href="https://aws.amazon.com/s3/pricing/">S3料金</a>、<a href="https://aws.amazon.com/rds/pricing/">RDS料金</a></li>
+    <li>その他: <a href="https://www.mongodb.com/pricing">MongoDB Atlas</a>、<a href="https://supabase.com/pricing">Supabase</a>、<a href="https://neon.tech/pricing">Neon</a>、<a href="https://www.snowflake.com/pricing/">Snowflake</a>（いずれも要検証）</li>
+  </ul>
+
+  <p class="fig" style="margin-top:2rem">本リポジトリ向けの比較メモです。ビジネス上の意思決定は必ず上記の公式一次情報で最終確認してください。</p>
+</body>
+</html>

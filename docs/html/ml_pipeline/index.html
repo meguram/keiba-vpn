@@ -331,9 +331,9 @@
       <div class="eyebrow">Pre-race Probability — Multi-stage ML Pipeline</div>
       <h1>機械学習パイプライン 全体図</h1>
       <p>
-        レース直前の <code class="inline">T-10分</code> 時点情報のみで、各馬の
-        <code class="inline">勝率 / 連対率 / 複勝率</code> を出し、馬券最適化までつなげる
-        多段階 ML パイプラインを、データ契約・ステージ設計・テクニック・運用ルールまで一枚に統合したリファレンスです。
+        レース直前の <code class="inline">T-10分</code> 時点情報のみを使い、各馬の
+        <code class="inline">勝率 / 連対率 / 複勝率</code> を推定します。
+        Stage0 から Stage7 までの多段階の処理の流れと、データ定義・テクニック・運用ルールをまとめたリファレンスです。
       </p>
       <div class="hero-tags">
         <span class="tag">Stage0 → Stage7 / 7 段階</span>
@@ -352,20 +352,20 @@
       <h2><span class="num">01</span> 目的とゴール</h2>
       <div class="grid-2">
         <div class="card">
-          <h4>到達ゴール</h4>
+          <h4>達成したいこと</h4>
           <ul class="bullets">
-            <li>レース直前情報のみで <code class="inline">p_win / p_top2 / p_top3</code> を出す</li>
-            <li>予測確率を用いて <b>safe_ev</b> ベースの馬券最適化を行う</li>
-            <li>確率信頼性 (LogLoss / Brier / ECE) を ROI より先に評価する</li>
+            <li>レース直前情報のみで <code class="inline">p_win / p_top2 / p_top3</code> を推定する</li>
+            <li>推定した確率を使って safe_ev ベースの馬券最適化を行う</li>
+            <li>確率の精度（LogLoss / Brier / ECE）を ROI より先に評価する</li>
           </ul>
         </div>
         <div class="card">
-          <h4>設計の思想</h4>
+          <h4>設計の考え方</h4>
           <ul class="bullets">
-            <li>単段ベースラインと多段階パイプラインの両建て</li>
-            <li>特徴量を <b>LayerA (能力)</b> と <b>LayerB (市場)</b> に厳格分離</li>
-            <li>母表は <b>BaselineV1</b> と <b>ExtendedV1</b> を同時生成し、差分で寄与を測る</li>
-            <li>OOF・Purged CV・version 管理を前提に、Kaggle 風 tabular 手法を投入</li>
+            <li>シンプルな単段ベースラインと多段階パイプラインを並行して管理する</li>
+            <li>特徴量（予測に使う数値）を <b>LayerA（能力）</b> と <b>LayerB（市場）</b> に厳格に分離する</li>
+            <li>母表は <b>BaselineV1</b> と <b>ExtendedV1</b> を同時に生成し、差分で各特徴の寄与を測る</li>
+            <li>交差検証での予測（OOF）・Purged CV・バージョン管理を前提とし、表形式データ向けの機械学習手法を活用する</li>
           </ul>
         </div>
       </div>
@@ -375,11 +375,65 @@
     <section id="architecture" class="section">
       <h2><span class="num">02</span> 全体アーキテクチャ</h2>
       <p>
-        多段階パイプラインは <b>Stage0〜Stage7</b> の 7 段で構成。
-        Stage1 で馬単体の latent state を作り、Stage2/3 で位置取り・ペース、
-        Stage4 で当日馬場、Stage5 で血統文脈適合を経由して、Stage6 が最終確率を出力します。
-        Stage7 で初めて市場価格と統合して馬券判断に使います。
+        処理の流れは <b>Stage0〜Stage7</b> の 8 段で構成されています。
+        Stage1 で馬の潜在的な能力状態を作り、Stage2・3 で位置取りとペースを推定します。
+        Stage4 で当日の馬場バイアス、Stage5 で血統と当日文脈の適合度を算出します。
+        Stage6 がこれらすべてを統合して最終確率を出力し、Stage7 で初めて市場オッズと組み合わせて馬券判断に使います。
       </p>
+      <h3>Stage 概要一覧</h3>
+      <table class="table">
+        <thead><tr><th>Stage</th><th>名称</th><th>主な処理</th><th>主な出力</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Stage 0</strong></td>
+            <td>PreRaceDataset</td>
+            <td>入力母表の組み立て。複数テーブルの時点整合結合</td>
+            <td class="mono">horse_pre_race_dataset.parquet / horse_labels.parquet</td>
+          </tr>
+          <tr>
+            <td><strong>Stage 1</strong></td>
+            <td>HorseLatentState</td>
+            <td>地力・適性・仕上がりを能力ブロックとしてまとめる</td>
+            <td class="mono">horse_latent_state.parquet</td>
+          </tr>
+          <tr>
+            <td><strong>Stage 2</strong></td>
+            <td>Positioning</td>
+            <td>位置取り・追走難度の推定</td>
+            <td class="mono">positioning_features.parquet</td>
+          </tr>
+          <tr>
+            <td><strong>Stage 3</strong></td>
+            <td>PaceScenario</td>
+            <td>前半流速・消耗度・展開分類の推定</td>
+            <td class="mono">pace_scenario_features.parquet</td>
+          </tr>
+          <tr>
+            <td><strong>Stage 4</strong></td>
+            <td>DayTrackBias</td>
+            <td>当日馬場バイアスを事前推定＋当日更新の2層で推定</td>
+            <td class="mono">day_track_bias_features.parquet</td>
+          </tr>
+          <tr>
+            <td><strong>Stage 5</strong></td>
+            <td>BloodlineContextFit</td>
+            <td>血統を当日馬場バイアスとの相性で評価し直す</td>
+            <td class="mono">contextual_bloodline_features.parquet</td>
+          </tr>
+          <tr>
+            <td><strong>Stage 6</strong></td>
+            <td>FinalProbability</td>
+            <td>Stage1〜5 を統合して p_win / p_top2 / p_top3 を算出</td>
+            <td class="mono">horse_probability_table.parquet</td>
+          </tr>
+          <tr>
+            <td><strong>Stage 7</strong></td>
+            <td>Market &amp; Betting</td>
+            <td>市場オッズと統合し safe_ev を根拠に馬券判断</td>
+            <td class="mono">betting_backtest_dataset.parquet</td>
+          </tr>
+        </tbody>
+      </table>
       <div class="mermaid">
 flowchart TD
     stage0["Stage0<br/>PreRaceDataset"] --> stage1["Stage1<br/>HorseLatentState"]
@@ -397,31 +451,43 @@ flowchart TD
     stage6 --> stage7["Stage7<br/>Market &amp; Betting"]
       </div>
       <div class="callout">
-        <h4>多段階化の意義</h4>
+        <h4>なぜ多段階にするのか</h4>
         <p>
-          中間状態 (位置取り・ペース・当日バイアス・血統文脈) を明示的にモデル化することで、
-          ① 失敗原因を分解しやすい / ② 当日更新できる情報と事前固定情報を切り分けられる /
-          ③ 血統を「その日の馬場特性」に応じて使い分けられる、という3つの利点があります。
+          位置取り・ペース・当日バイアス・血統文脈を個別にモデル化することで、次の3つの利点があります。
         </p>
+        <ul class="bullets">
+          <li>予測が外れたとき、どの段階が原因かを特定しやすい</li>
+          <li>当日更新できる情報（馬場・ペース）と事前固定の情報を明確に分けられる</li>
+          <li>血統の評価を「その日の馬場特性」に合わせて調整できる</li>
+        </ul>
       </div>
     </section>
 
     <!-- 3. Layers -->
     <section id="layers" class="section">
       <h2><span class="num">03</span> LayerA / LayerB の分離</h2>
-      <div class="layer-banner a">
-        <b>LayerA</b>
-        <span>市場非依存の能力・状態モデル。<code class="inline">単勝/複勝/人気/連系オッズ</code> を <b>絶対に</b> 入れない。</span>
-      </div>
-      <div class="layer-banner b">
-        <b>LayerB</b>
-        <span>市場統合・馬券最適化。LayerA の馬単位確率に、直前オッズ・連系オッズを追加。</span>
-      </div>
+      <table class="table">
+        <thead><tr><th>レイヤー</th><th>目的</th><th>使用情報</th><th>禁止事項</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>LayerA</strong></td>
+            <td>能力・状態モデル（確率推定）</td>
+            <td>戦績・血統・調教・馬場状態（非市場情報）</td>
+            <td><code class="inline">単勝/複勝/人気/連系オッズ</code> は絶対に使わない</td>
+          </tr>
+          <tr>
+            <td><strong>LayerB</strong></td>
+            <td>市場統合・馬券最適化</td>
+            <td>LayerA の確率 ＋ 直前オッズ・連系オッズ</td>
+            <td>確率推定には使わない（馬券判断層のみ）</td>
+          </tr>
+        </tbody>
+      </table>
       <div class="callout warn">
-        <h4>分離理由</h4>
+        <h4>なぜ分離するのか</h4>
         <p>
-          市場を確率推定器に混ぜると、モデルが市場をなぞるだけになり edge を出せない。
-          市場は意思決定器側でのみ使い、確率推定器は純粋に能力 / 状態を当てに行く構造とします。
+          市場オッズを確率推定に混ぜると、モデルが「市場をそのまま映す」だけになり、予測の優位性（edge）が生まれません。
+          市場情報は馬券判断の層（LayerB）でのみ使い、確率推定は純粋に馬の能力・状態を根拠にします。
         </p>
       </div>
     </section>
@@ -429,46 +495,38 @@ flowchart TD
     <!-- 4. Baseline/Extended -->
     <section id="baseline-extended" class="section">
       <h2><span class="num">04</span> BaselineV1 / ExtendedV1 の二段構え</h2>
-      <div class="grid-2">
-        <div class="card">
-          <h4>BaselineV1 — 安定基準</h4>
-          <p>coverage と保守性を優先。最初の比較対象を固定。</p>
-          <div class="pillset">
-            <span class="pill">race_shutuba_flat</span>
-            <span class="pill">race_shutuba_past_flat</span>
-            <span class="pill">race_index_flat</span>
-            <span class="pill">horse bundle 集約</span>
-          </div>
-          <p style="color:var(--muted);font-size:12.5px;margin-top:8px;">追加特徴量の寄与は常にこの差分で評価。</p>
-        </div>
-        <div class="card">
-          <h4>ExtendedV1 — 直前情報強化</h4>
-          <p>BaselineV1 + 直前状態・馬場 proxy。</p>
-          <div class="pillset">
-            <span class="pill cyan">race_oikiri_flat</span>
-            <span class="pill cyan">race_paddock_flat</span>
-            <span class="pill cyan">race_trainer_comment_flat</span>
-            <span class="pill cyan">cushion / moisture</span>
-            <span class="pill cyan">venue_era_fit</span>
-            <span class="pill cyan">seasonal_surface_fit</span>
-          </div>
-        </div>
-      </div>
+      <table class="table">
+        <thead><tr><th>バージョン</th><th>方針</th><th>主な入力テーブル</th><th>備考</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>BaselineV1</strong></td>
+            <td>カバレッジと保守性を優先した比較基準</td>
+            <td class="mono">race_shutuba_flat, race_shutuba_past_flat, race_index_flat, horse bundle 集約</td>
+            <td>追加特徴量の寄与は常にこの差分で評価する</td>
+          </tr>
+          <tr>
+            <td><strong>ExtendedV1</strong></td>
+            <td>直前状態・馬場の代理変数を強化</td>
+            <td class="mono">race_oikiri_flat, race_paddock_flat, race_trainer_comment_flat, cushion / moisture, venue_era_fit, seasonal_surface_fit</td>
+            <td>BaselineV1 を基盤とし直前情報を追加</td>
+          </tr>
+        </tbody>
+      </table>
     </section>
 
     <!-- Stage 0 -->
     <section id="stage0" class="section">
-      <h2><span class="num">S0</span> Stage0 — Pre-race 母表</h2>
+      <h2><span class="num">S0</span> Stage0 — 入力母表の作成</h2>
       <div class="stage-card">
         <div class="stage-head">
           <span class="badge">STAGE 0</span>
-          <h3>役割: 学習・推論共通の入力母表を作る</h3>
+          <h3>学習・予測処理に共通して使う入力テーブルを組み立てる</h3>
         </div>
         <p>
-          <code class="inline">race_shutuba_flat</code> を母表に、<code class="inline">past_flat</code> /
+          <code class="inline">race_shutuba_flat</code> を基盤に、<code class="inline">past_flat</code> /
           <code class="inline">race_index</code> / <code class="inline">oikiri</code> /
           <code class="inline">paddock</code> / <code class="inline">trainer_comment</code> を
-          時点整合で join。GCS の horse bundle と JRA クッション値も統合。
+          時点整合を保ちながら結合します。GCS の horse bundle と JRA クッション値も統合します。
         </p>
         <h4>主な出力</h4>
         <div class="pillset">
@@ -481,21 +539,21 @@ flowchart TD
 
     <!-- Stage 1 -->
     <section id="stage1" class="section">
-      <h2><span class="num">S1</span> Stage1 — Horse Latent State</h2>
+      <h2><span class="num">S1</span> Stage1 — 馬の潜在的な能力ブロック生成</h2>
       <div class="stage-card s2">
         <div class="stage-head">
           <span class="badge">STAGE 1</span>
-          <h3>馬単体の地力・適性・仕上がりを latent block 化する</h3>
+          <h3>馬一頭ごとの地力・適性・仕上がりを能力ブロックとしてまとめる</h3>
         </div>
         <div class="grid-2">
           <div>
-            <h4>主な latent block</h4>
+            <h4>主な能力ブロック</h4>
             <ul class="bullets">
-              <li><code class="inline">ability_latent</code> — 戦績・speed index</li>
+              <li><code class="inline">ability_latent</code> — 戦績・スピード指数</li>
               <li><code class="inline">form_latent</code> — 休み明け・叩き・体重変化</li>
-              <li><code class="inline">surface_distance_latent</code> — 芝/ダ・距離適性</li>
+              <li><code class="inline">surface_distance_latent</code> — 芝/ダート・距離適性</li>
               <li><code class="inline">pedigree_latent</code> — sire / dam_sire / myostatin / note aptitude</li>
-              <li><code class="inline">trainer_jockey_latent</code> — OOF TE / CatBoost ordered encoding</li>
+              <li><code class="inline">trainer_jockey_latent</code> — 交差検証での予測（OOF）エンコーディング / CatBoost ordered encoding</li>
             </ul>
           </div>
           <div>
@@ -514,13 +572,13 @@ flowchart TD
 
     <!-- Stage 2 -->
     <section id="stage2" class="section">
-      <h2><span class="num">S2</span> Stage2 — Positioning / 追走難度</h2>
+      <h2><span class="num">S2</span> Stage2 — 位置取り・追走難度の推定</h2>
       <div class="stage-card s3">
         <div class="stage-head">
           <span class="badge">STAGE 2</span>
-          <h3>「いつもの位置を取れるか」を予測</h3>
+          <h3>この馬がいつもの位置を取れるかを推定する</h3>
         </div>
-        <p>既存コード <code class="inline">pipeline/tracking_difficulty.py</code> を活用。</p>
+        <p>既存コード <code class="inline">pipeline/tracking_difficulty.py</code> を活用しています。</p>
         <div class="grid-2">
           <div>
             <h4>主な入力</h4>
@@ -552,13 +610,13 @@ flowchart TD
 
     <!-- Stage 3 -->
     <section id="stage3" class="section">
-      <h2><span class="num">S3</span> Stage3 — Pace Scenario</h2>
+      <h2><span class="num">S3</span> Stage3 — ペースシナリオの推定</h2>
       <div class="stage-card s3">
         <div class="stage-head">
           <span class="badge">STAGE 3</span>
-          <h3>レース全体の前半流速・消耗度・上がり勝負化を推定</h3>
+          <h3>レース全体の前半流速・消耗度・上がり勝負になるかを推定する</h3>
         </div>
-        <p>既存コード <code class="inline">pipeline/pace_predictor.py</code> を活用。</p>
+        <p>既存コード <code class="inline">pipeline/pace_predictor.py</code> を活用しています。</p>
         <div class="grid-2">
           <div>
             <h4>入力</h4>
@@ -589,25 +647,25 @@ flowchart TD
 
     <!-- Stage 4 -->
     <section id="stage4" class="section">
-      <h2><span class="num">S4</span> Stage4 — Day Track Bias</h2>
+      <h2><span class="num">S4</span> Stage4 — 当日馬場バイアスの推定</h2>
       <div class="stage-card s4">
         <div class="stage-head">
           <span class="badge">STAGE 4</span>
-          <h3>「今日はどんな馬が走りやすい日か」を二層 (prior / posterior) で推定</h3>
+          <h3>「今日はどんな馬が走りやすいか」を事前情報と当日実績の2層で推定する</h3>
         </div>
         <div class="grid-2">
           <div>
-            <h4>4A: 事前 day prior</h4>
+            <h4>4A: 事前推定（当日レース前）</h4>
             <ul class="bullets">
               <li>venue / venue_era / surface / distance</li>
               <li>track_condition / weather / cushion / moisture / season</li>
             </ul>
           </div>
           <div>
-            <h4>4B: 同日更新 day posterior</h4>
+            <h4>4B: 当日更新（同日先行レース後）</h4>
             <ul class="bullets">
               <li>同日先行レースの上位馬特徴 / 脚質偏り / 内外枠バイアス</li>
-              <li>上がり偏重 or 前残り / 血統クラスタ偏り</li>
+              <li>上がり偏重か前残りか / 血統クラスタの偏り</li>
             </ul>
           </div>
         </div>
@@ -624,18 +682,22 @@ flowchart TD
         </div>
         <div class="callout">
           <h4>ブレンド方針</h4>
-          <p>先行レース 0 → prior のみ / 1-2 本 → prior 強め + posterior 弱め / 3 本以上 → posterior 重み増。</p>
+          <p>
+            先行レースが 0 本 → 事前推定のみ使用。
+            1〜2 本 → 事前推定を主に、当日実績を補助的に使用。
+            3 本以上 → 当日実績の重みを増やす。
+          </p>
         </div>
       </div>
     </section>
 
     <!-- Stage 5 -->
     <section id="stage5" class="section">
-      <h2><span class="num">S5</span> Stage5 — Bloodline × 当日文脈適合</h2>
+      <h2><span class="num">S5</span> Stage5 — 血統と当日文脈の適合度</h2>
       <div class="stage-card s5">
         <div class="stage-head">
           <span class="badge">STAGE 5</span>
-          <h3>血統を「静的距離適性」だけでなく「当日 day-bias との相性」で再評価</h3>
+          <h3>血統を「固定の距離適性」だけでなく「当日の馬場バイアスとの相性」で評価し直す</h3>
         </div>
         <p>既存コード: <code class="inline">research/bloodline_distance.py</code> / <code class="inline">bloodline_vector.py</code> / <code class="inline">course_bloodline.py</code> / <code class="inline">sire_factor_*.py</code> / <code class="inline">note_aptitude_5gen.py</code> / <code class="inline">myostatin.py</code> / <code class="inline">race_quality_model.py</code></p>
         <div class="grid-2">
@@ -673,11 +735,11 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
 
     <!-- Stage 6 -->
     <section id="stage6" class="section">
-      <h2><span class="num">S6</span> Stage6 — Final Probability</h2>
+      <h2><span class="num">S6</span> Stage6 — 最終確率の出力</h2>
       <div class="stage-card s6">
         <div class="stage-head">
           <span class="badge">STAGE 6</span>
-          <h3>Stage1-5 を統合し p_win / p_top2 / p_top3 を出す</h3>
+          <h3>Stage1〜5 の出力を統合し、p_win / p_top2 / p_top3 を算出する</h3>
         </div>
         <div class="grid-2">
           <div>
@@ -705,7 +767,7 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
             </table>
           </div>
         </div>
-        <h4>アンサンブル / 校正</h4>
+        <h4>アンサンブル / 確率の補正（キャリブレーション）</h4>
         <div class="pillset">
           <span class="pill">LightGBM</span>
           <span class="pill">CatBoost</span>
@@ -724,24 +786,24 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
 
     <!-- Stage 7 -->
     <section id="stage7" class="section">
-      <h2><span class="num">S7</span> Stage7 — Market 統合 & 馬券最適化</h2>
+      <h2><span class="num">S7</span> Stage7 — 市場統合と馬券最適化</h2>
       <div class="stage-card s7">
         <div class="stage-head">
           <span class="badge">STAGE 7</span>
-          <h3>初めて市場価格と結合し、safe_ev ベースで馬券判断</h3>
+          <h3>初めて市場オッズと組み合わせ、safe_ev を根拠に馬券判断を行う</h3>
         </div>
         <ul class="bullets">
-          <li><code class="inline">horse_probability_table</code> + <code class="inline">horse_market_snapshot</code> + <code class="inline">pair_market_snapshot</code> + <code class="inline">payout_table</code> を統合</li>
-          <li><b>Stage6 までで市場非依存モデル完成</b> / <b>Stage7 でのみ市場統合</b> を厳守</li>
-          <li>高オッズ帯ほど <code class="inline">buffer</code> を厚くして <code class="inline">safe_ev &gt; 0</code> を最低条件に</li>
-          <li><b>推奨印・券種・資金配分</b>の戦略層は教師あり ML の延長ではなく <b>強化学習（方策）</b> を想定。議論は <code class="inline">betting_policy_reinforcement_learning.html</code>、要約 HTML は <a href="../betting_rl_policy/index.html">betting_rl_policy</a>。</li>
+          <li><code class="inline">horse_probability_table</code> + <code class="inline">horse_market_snapshot</code> + <code class="inline">pair_market_snapshot</code> + <code class="inline">payout_table</code> を結合する</li>
+          <li>Stage6 までは市場情報を使わずモデルを完成させる。市場との統合は Stage7 のみで行う</li>
+          <li>高オッズ帯ほど <code class="inline">buffer</code> を厚くし、<code class="inline">safe_ev &gt; 0</code> を最低条件とする</li>
+          <li>推奨印・券種・資金配分の戦略層は、教師あり ML の延長ではなく <b>強化学習（方策）</b> を想定。詳細は <code class="inline">betting_policy_reinforcement_learning.html</code>、要約 HTML は <a href="../appendix/betting_rl_policy.html">betting_rl_policy</a>。</li>
         </ul>
       </div>
     </section>
 
     <!-- 5. Dataset spec -->
     <section id="dataset-spec" class="section">
-      <h2><span class="num">05</span> horse_pre_race_dataset 仕様</h2>
+      <h2><span class="num">05</span> 入力テーブル仕様：horse_pre_race_dataset</h2>
       <div class="grid-3">
         <div class="metric">
           <div class="label">粒度</div>
@@ -779,71 +841,71 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
 
     <!-- 5b. Train valid test -->
     <section id="split-strategy" class="section">
-      <h2><span class="num">05b</span> Train / Valid / Test 分割と分布把握</h2>
+      <h2><span class="num">05b</span> Train / Valid / Test の分割方針と分布把握</h2>
       <p>
-        競馬の行データは <b>同一レース内で強く相関</b>し、かつ <b>時間方向の因果</b>が厳しいため、
-        通常のランダム split はリークと楽観バイアスの温床になる。
+        競馬のデータは <b>同一レース内で強く相関</b>しており、<b>時間方向の因果</b>も厳しく存在します。
+        通常のランダム分割を使うと、情報リークと過楽観バイアスの原因になります。
         本プロジェクトでは <code class="inline">data/meta/modeling/dataset_split_manifest.json</code> を
-        <b>機械上の正</b>とし、詳細はマークダウン
-        <code class="inline">docs/html/modeling/train_valid_test_split_strategy.html</code> に集約する。
+        唯一の分割定義とし、詳細は
+        <code class="inline">docs/html/modeling/train_valid_test_split_strategy.html</code> に集約します。
       </p>
 
       <h3>一次プロトコル（確率モデル本線）</h3>
       <table class="table">
         <thead><tr><th>役割</th><th>期間</th><th>用途</th></tr></thead>
         <tbody>
-          <tr><td class="mono">train</td><td>2020–2023</td><td>学習本体・fold 内 target encoding / 集約特徴の学習</td></tr>
-          <tr><td class="mono">valid</td><td>2024</td><td>特徴・モデル・ハイパラ・<b>キャリブレーション fit</b>（test を見ない）</td></tr>
+          <tr><td class="mono">train</td><td>2020–2023</td><td>学習本体・fold 内 target encoding / 集約特徴量（予測に使う数値）の学習</td></tr>
+          <tr><td class="mono">valid</td><td>2024</td><td>特徴・モデル・モデルの設定値（ハイパーパラメータ）・<b>確率の補正（キャリブレーション）の fit</b>（test は見ない）</td></tr>
           <tr><td class="mono">test</td><td>2025</td><td><b>一度きりの最終汎化報告</b>・セグメント補助評価</td></tr>
         </tbody>
       </table>
       <div class="callout warn">
         <h4>分割の単位</h4>
         <p>
-          <code class="inline">race_id</code> 単位で train / valid / test を完全分離する。
-          行単位ランダム split は禁止。キャリブレーションは OOF または valid のみに fit し、
-          test では fit しない（<code class="inline">advanced_modeling_techniques.html</code> と一致）。
+          <code class="inline">race_id</code> 単位で train / valid / test を完全分離します。
+          行単位のランダム分割は禁止です。確率の補正（キャリブレーション）は交差検証での予測（OOF）または valid のみに fit し、
+          test には適用しません（<code class="inline">advanced_modeling_techniques.html</code> と一致）。
         </p>
       </div>
 
-      <h3>開発時の CV（主戦場）</h3>
+      <h3>開発時の交差検証（CV）</h3>
       <div class="grid-2">
         <div class="card">
           <h4>Purged + embargo</h4>
           <ul class="bullets">
             <li><code class="inline">group_key = race_id</code> / <code class="inline">time_key = race_date</code></li>
             <li>初期値: <code class="inline">purge_window_days = 7</code>、<code class="inline">embargo_days = 3</code></li>
-            <li>OOF target encoding・中間 stage 出力も同一制約に従う</li>
+            <li>交差検証での予測（OOF）target encoding・中間 stage 出力も同じ制約に従う</li>
           </ul>
         </div>
         <div class="card">
           <h4>Rolling-origin folds</h4>
           <p>
-            マニフェストの <code class="inline">rolling_origin_folds</code>（2020 起点で valid を半年ずつスライド）で
-            ハイパラと特徴の安定性を見る。一次 valid が 2024 のみでも、開発中の分散推定に使う。
+            マニフェストの <code class="inline">rolling_origin_folds</code>（2020 起点で valid を半年ずつスライド）を使って、
+            モデルの設定値（ハイパーパラメータ）と特徴量の安定性を確認します。一次 valid が 2024 のみでも、開発中の分散推定に使えます。
           </p>
         </div>
       </div>
 
-      <h3>補助評価・ドリフト</h3>
+      <h3>補助評価・分布ドリフト</h3>
       <ul class="bullets">
-        <li><b>京都改修後</b>（<code class="inline">venue_era</code> フィルタ）— 現行コース条件への追従</li>
-        <li><b>クッション観測あり / パドック有無</b> — ExtendedV1 の依存度と欠損バイアス</li>
-        <li><b>Adversarial validation</b> — <code class="inline">train(2020–2023)</code> vs <code class="inline">valid(2024)</code> と <code class="inline">train(2020–2023)</code> vs <code class="inline">test(2025)</code> を<b>用途別</b>に実施し分布差を監視（<code class="inline">advanced_modeling_techniques.html</code> §3.2 と一致）</li>
+        <li><b>京都改修後</b>（<code class="inline">venue_era</code> フィルタ）— 現行コース条件への追従確認</li>
+        <li><b>クッション観測あり / パドック有無</b> — ExtendedV1 の依存度と欠損バイアスの確認</li>
+        <li><b>Adversarial validation</b>（敵対的検証）— <code class="inline">train(2020–2023)</code> vs <code class="inline">valid(2024)</code> と <code class="inline">train(2020–2023)</code> vs <code class="inline">test(2025)</code> を用途別に実施し、分布差を監視（<code class="inline">advanced_modeling_techniques.html</code> §3.2 と一致）</li>
       </ul>
 
-      <h3>他ドキュメントの split との関係</h3>
+      <h3>他ドキュメントの分割との関係</h3>
       <p>
         <code class="inline">race_performance_rating_system.html</code> の
-        「2020–2024 履歴 vs 2025 test」は <b>レースパフォーマンス特徴モジュール単体</b>のベンチ向けであり、
-        上記の一次プロトコル（2020–2023 / 2024 / 2025）と目的が異なる。実験ログに protocol 名を必ず残す。
+        「2020–2024 履歴 vs 2025 test」は <b>レースパフォーマンス特徴モジュール単体</b>の検証向けです。
+        上記の一次プロトコル（2020–2023 / 2024 / 2025）とは目的が異なります。実験ログには必ずプロトコル名を記録してください。
       </p>
 
-      <h3>EDA サマリ（母集団の安定性）</h3>
+      <h3>データ分布の概要（EDA サマリ）</h3>
       <p>
-        同一カレンダー範囲の参照用に、<code class="inline">data/features/race_performance/20xx.parquet</code>
-       （馬行）から年次集計した。確率モデル母表の完成後も、同様の
-        <code class="inline">dataset_profile.json</code> を必須成果物とする（<code class="inline">reference_insights.html</code>）。
+        同一期間の参照用として、<code class="inline">data/features/race_performance/20xx.parquet</code>
+       （馬行）から年次集計したものです。確率モデルの母表が完成した後も、同様の
+        <code class="inline">dataset_profile.json</code> を必須成果物とします（<code class="inline">reference_insights.html</code>）。
       </p>
       <table class="table">
         <thead><tr><th>年</th><th>行数（馬行）</th><th>レース数</th><th>勝ち行%</th><th>複勝圏行%</th></tr></thead>
@@ -858,21 +920,21 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
       </table>
       <div class="grid-2">
         <div class="card soft">
-          <h4>カテゴリ（全期間合算の傾向）</h4>
+          <h4>カテゴリ列の傾向（全期間合算）</h4>
           <ul class="bullets">
             <li><code class="inline">surface</code>: ダート &gt; 芝 &gt;&gt; 障害</li>
             <li><code class="inline">distance_band</code>: mile / sprint が大半、長距離は少数</li>
             <li><code class="inline">pace_shape_class</code>: balanced が主、grind が次点</li>
-            <li><code class="inline">class_group</code>: 未勝利・1勝が中心、G/OP は少数だが重要セグメント</li>
-            <li><code class="inline">track_condition</code>: 良が大半、稍重・重はセグメント評価必須</li>
+            <li><code class="inline">class_group</code>: 未勝利・1勝が中心。G/OP は少数ながら重要なセグメント</li>
+            <li><code class="inline">track_condition</code>: 良が大半。稍重・重はセグメント別評価が必須</li>
           </ul>
         </div>
         <div class="card soft">
-          <h4>数値ドリフトの示唆</h4>
+          <h4>数値ドリフトの兆候</h4>
           <ul class="bullets">
-            <li><code class="inline">run_performance_final</code> の平均は年次で緩やかに移動（分布全体のシフト疑い）</li>
-            <li><code class="inline">track_variant_online</code> は尾が重い — winsorize / robust scaling を valid で調整</li>
-            <li>2025 に極端な外れ値が見える列は <b>結合キー・欠損埋めの監査</b>対象（<code class="inline">outlier_watchlist</code>）</li>
+            <li><code class="inline">run_performance_final</code> の平均が年次で緩やかに移動している（分布全体のシフトの可能性）</li>
+            <li><code class="inline">track_variant_online</code> は裾が重い — valid で winsorize / robust scaling を調整する</li>
+            <li>2025 年データに極端な外れ値が見える列は、結合キー・欠損補完の確認対象（<code class="inline">outlier_watchlist</code>）</li>
           </ul>
         </div>
       </div>
@@ -902,8 +964,8 @@ flowchart LR
 
     <!-- 6. Feature catalog -->
     <section id="feature-catalog" class="section">
-      <h2><span class="num">06</span> 特徴量カタログ — 出力中間成果物</h2>
-      <p>各 stage の出力は OOF 単位で Parquet 化し、後段で join できる契約に揃えます。</p>
+      <h2><span class="num">06</span> 特徴量（予測に使う数値）カタログ — 各 Stage の出力ファイル</h2>
+      <p>各 Stage の出力は交差検証での予測（OOF）単位で Parquet 化し、後段で結合できる形式に統一します。</p>
       <table class="table">
         <thead><tr><th>Stage</th><th>主な出力ファイル</th></tr></thead>
         <tbody>
@@ -922,39 +984,34 @@ flowchart LR
     <!-- 7. Whitelist -->
     <section id="whitelist" class="section">
       <h2><span class="num">07</span> 入力ホワイトリスト</h2>
-      <div class="grid-2">
-        <div class="card">
-          <h4>LayerA 採用テーブル</h4>
-          <ul class="bullets">
-            <li><code class="inline">race_shutuba_flat</code> (非市場列)</li>
-            <li><code class="inline">race_shutuba_past_flat</code> (履歴集約)</li>
-            <li><code class="inline">race_index_flat</code> (指数)</li>
-            <li><code class="inline">race_oikiri_flat</code> (馬単位集約)</li>
-            <li><code class="inline">race_paddock_flat</code> (スコア化)</li>
-            <li><code class="inline">race_trainer_comment_flat</code> (スコア化)</li>
-            <li>GCS horse bundle (履歴・血統・適性)</li>
-            <li>JRA クッション値・含水率・proxy</li>
-          </ul>
-        </div>
-        <div class="card">
-          <h4>LayerB 専用テーブル</h4>
-          <ul class="bullets">
-            <li><code class="inline">race_odds_flat</code> (win/place)</li>
-            <li><code class="inline">race_pair_odds_flat</code> (umaren/wide/umatan)</li>
-            <li>市場由来差分: <code class="inline">market_implied_*</code> / <code class="inline">market_rank_*</code> / <code class="inline">market_gap_*</code></li>
-          </ul>
-        </div>
-      </div>
+      <table class="table">
+        <thead><tr><th>レイヤー</th><th>テーブル / ソース</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="8"><strong>LayerA</strong></td><td class="mono">race_shutuba_flat</td><td>非市場列のみ使用</td></tr>
+          <tr><td class="mono">race_shutuba_past_flat</td><td>履歴集約</td></tr>
+          <tr><td class="mono">race_index_flat</td><td>指数（odds/popularity 列は除外）</td></tr>
+          <tr><td class="mono">race_oikiri_flat</td><td>馬単位集約</td></tr>
+          <tr><td class="mono">race_paddock_flat</td><td>スコア化</td></tr>
+          <tr><td class="mono">race_trainer_comment_flat</td><td>スコア化</td></tr>
+          <tr><td>GCS horse bundle</td><td>履歴・血統・適性</td></tr>
+          <tr><td>JRA クッション値・含水率</td><td>proxy 含む</td></tr>
+          <tr><td rowspan="3"><strong>LayerB</strong></td><td class="mono">race_odds_flat</td><td>win / place オッズ</td></tr>
+          <tr><td class="mono">race_pair_odds_flat</td><td>umaren / wide / umatan</td></tr>
+          <tr><td class="mono">market_implied_* / market_rank_* / market_gap_*</td><td>市場由来差分</td></tr>
+        </tbody>
+      </table>
       <div class="callout bad">
-        <h4>明示的に除外</h4>
-        <p>
-          <code class="inline">race_result_flat</code> /
-          <code class="inline">race_result_lap_flat</code> /
-          <code class="inline">race_barometer_flat</code> /
-          <code class="inline">smartrc_race_flat</code>。
-          <code class="inline">race_shutuba_flat</code> / <code class="inline">race_index_flat</code> 内の
-          <code class="inline">odds</code> / <code class="inline">popularity</code> も LayerA からは外す。
-        </p>
+        <h4>使用禁止（LayerA から完全除外）</h4>
+        <table class="table" style="margin-top:8px;">
+          <thead><tr><th>テーブル / 列</th><th>除外理由</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">race_result_flat</td><td>レース確定後情報（リーク）</td></tr>
+            <tr><td class="mono">race_result_lap_flat</td><td>レース確定後情報（リーク）</td></tr>
+            <tr><td class="mono">race_barometer_flat</td><td>レース確定後情報（リーク）</td></tr>
+            <tr><td class="mono">smartrc_race_flat</td><td>レース確定後情報（リーク）</td></tr>
+            <tr><td class="mono">race_shutuba_flat / race_index_flat 内の odds / popularity 列</td><td>市場情報（LayerA 禁止）</td></tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
@@ -977,35 +1034,30 @@ flowchart LR
 
     <!-- 9. Encoding -->
     <section id="encoding" class="section">
-      <h2><span class="num">09</span> カテゴリ変数エンコーディング</h2>
-      <div class="grid-3">
-        <div class="card">
-          <h4>Tier1 — 常設・低リスク</h4>
-          <div class="pillset">
-            <span class="pill good">frequency encoding</span>
-            <span class="pill good">count encoding</span>
-            <span class="pill good">rare label grouping</span>
-            <span class="pill good">label encoding</span>
-          </div>
-        </div>
-        <div class="card">
-          <h4>Tier2 — OOF 必須</h4>
-          <div class="pillset">
-            <span class="pill warn">target encoding</span>
-            <span class="pill warn">CatBoost ordered TE</span>
-            <span class="pill warn">expanding mean</span>
-            <span class="pill warn">group target encoding</span>
-          </div>
-        </div>
-        <div class="card">
-          <h4>Tier3 — 比較実験</h4>
-          <div class="pillset">
-            <span class="pill">target std / skew</span>
-            <span class="pill">WoE 風</span>
-            <span class="pill">cross feature TE</span>
-          </div>
-        </div>
-      </div>
+      <h2><span class="num">09</span> カテゴリ変数のエンコーディング（数値化）方法</h2>
+      <table class="table">
+        <thead><tr><th>Tier</th><th>分類</th><th>手法</th><th>注意事項</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Tier 1</strong></td>
+            <td>常設・低リスク</td>
+            <td><span class="pill good">frequency encoding</span> <span class="pill good">count encoding</span> <span class="pill good">rare label grouping</span> <span class="pill good">label encoding</span></td>
+            <td>リークリスクが低く常時使用可能</td>
+          </tr>
+          <tr>
+            <td><strong>Tier 2</strong></td>
+            <td>OOF 必須</td>
+            <td><span class="pill warn">target encoding</span> <span class="pill warn">CatBoost ordered TE</span> <span class="pill warn">expanding mean</span> <span class="pill warn">group target encoding</span></td>
+            <td>fold 内 train 側のみで計算。test は全 train 統計量のみ使用</td>
+          </tr>
+          <tr>
+            <td><strong>Tier 3</strong></td>
+            <td>比較実験</td>
+            <td><span class="pill">target std / skew</span> <span class="pill">WoE 風</span> <span class="pill">cross feature TE</span></td>
+            <td>差分評価が必要。常設しない</td>
+          </tr>
+        </tbody>
+      </table>
       <h3>主な対象カテゴリと交差</h3>
       <div class="pillset">
         <span class="pill">jockey_name</span>
@@ -1020,18 +1072,20 @@ flowchart LR
         <span class="pill">bracket × venue_surface_distance</span>
       </div>
       <div class="callout warn">
-        <h4>OOF TE の鉄則</h4>
-        <p>
-          全件平均の直接流し込みは <b>禁止</b>。fold ごとに train 側だけで category mean を作って
-          valid に map。test には全 train 統計のみ。rare category は global mean に shrink、
-          unseen は train fold global mean に fallback。
-        </p>
+        <h4>交差検証での予測（OOF）target encoding の鉄則</h4>
+        <ul class="bullets">
+          <li>全データの平均を直接使うことは禁止</li>
+          <li>fold ごとに train 側だけでカテゴリ平均を計算し、valid に適用する</li>
+          <li>test には全 train の統計量のみを使う</li>
+          <li>希少カテゴリは global mean に縮小（shrink）する</li>
+          <li>未知カテゴリは train fold の global mean にフォールバックする</li>
+        </ul>
       </div>
     </section>
 
     <!-- 10. Numeric -->
     <section id="numeric" class="section">
-      <h2><span class="num">10</span> 数値特徴の実戦処理</h2>
+      <h2><span class="num">10</span> 数値特徴量の前処理</h2>
       <div class="grid-2">
         <div class="card">
           <h4>変換</h4>
@@ -1054,10 +1108,10 @@ flowchart LR
 
     <!-- 11. CV -->
     <section id="cv" class="section">
-      <h2><span class="num">11</span> Purged Group Time Series Split / Adversarial</h2>
+      <h2><span class="num">11</span> 時系列を考慮した交差検証 / 敵対的検証</h2>
       <p style="color:var(--muted);font-size:14px;margin:-4px 0 12px">
-        年次の train / valid / test の割当と EDA の整理は
-        <a href="#split-strategy">§5b Train/Valid/Test 分割と分布把握</a> を参照。
+        年次の train / valid / test の割り当てとデータ分布の整理は
+        <a href="#split-strategy">§5b Train/Valid/Test の分割方針と分布把握</a> を参照してください。
       </p>
       <div class="grid-2">
         <div class="card">
@@ -1070,15 +1124,15 @@ flowchart LR
           </ul>
         </div>
         <div class="card">
-          <h4>Adversarial Validation</h4>
+          <h4>Adversarial Validation（敵対的検証）</h4>
           <ul class="bullets">
-            <li><code class="inline">train(2020-2023)</code> vs <code class="inline">valid(2024)</code> と <code class="inline">train(2020-2023)</code> vs <code class="inline">test(2025)</code> の <b>用途別</b>分布差（一次 split と整合）</li>
-            <li>venue_era / cushion / paddock の drift 検知</li>
-            <li>出力: <code class="inline">adversarial_auc</code> / drift 上位特徴量 / drift segment 一覧</li>
+            <li><code class="inline">train(2020-2023)</code> vs <code class="inline">valid(2024)</code> と <code class="inline">train(2020-2023)</code> vs <code class="inline">test(2025)</code> の用途別分布差を確認する</li>
+            <li>venue_era / cushion / paddock の分布ドリフトを検知する</li>
+            <li>出力: <code class="inline">adversarial_auc</code> / ドリフトが大きい特徴量のリスト / ドリフトセグメント一覧</li>
           </ul>
         </div>
       </div>
-      <h3>分割マニフェスト</h3>
+      <h3>分割ルールのまとめ</h3>
       <pre class="code">2020-2023 train / 2024 valid / 2025 test
 rolling-origin fold (race_id 単位)
 行単位ランダム split: 禁止
@@ -1087,34 +1141,29 @@ train fold 内でのみ集計・encoding</pre>
 
     <!-- 12. Calibration -->
     <section id="calibration" class="section">
-      <h2><span class="num">12</span> Calibration</h2>
-      <p>確率モデルでは最重要。LeaderBoard より実運用を重視するなら後段校正が効く。</p>
-      <div class="grid-3">
-        <div class="card">
-          <h4>候補手法</h4>
-          <div class="pillset">
-            <span class="pill">temperature scaling</span>
-            <span class="pill">isotonic regression</span>
-            <span class="pill">Platt scaling</span>
-          </div>
-        </div>
-        <div class="card">
-          <h4>運用ルール</h4>
-          <ul class="bullets">
-            <li>OOF または valid 予測のみで fit</li>
-            <li>test では fit しない</li>
-            <li><code class="inline">p_win</code> / <code class="inline">p_top2</code> / <code class="inline">p_top3</code> 別に比較</li>
-          </ul>
-        </div>
-        <div class="card">
-          <h4>主要指標</h4>
-          <div class="pillset">
-            <span class="pill good">LogLoss</span>
-            <span class="pill good">Brier</span>
-            <span class="pill good">ECE</span>
-          </div>
-        </div>
-      </div>
+      <h2><span class="num">12</span> 確率の補正（キャリブレーション）</h2>
+      <p>確率モデルにおいて最も重要な工程です。コンペ上位を目指すより実運用を重視するなら、後段での確率補正が効果的です。</p>
+      <table class="table">
+        <thead><tr><th>項目</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>候補手法</strong></td>
+            <td><span class="pill">temperature scaling</span> <span class="pill">isotonic regression</span> <span class="pill">Platt scaling</span></td>
+          </tr>
+          <tr>
+            <td><strong>fit 先</strong></td>
+            <td>交差検証での予測（OOF）または valid の予測結果にのみ fit する。test には fit しない</td>
+          </tr>
+          <tr>
+            <td><strong>個別比較</strong></td>
+            <td><code class="inline">p_win</code> / <code class="inline">p_top2</code> / <code class="inline">p_top3</code> それぞれで個別に比較する</td>
+          </tr>
+          <tr>
+            <td><strong>評価指標</strong></td>
+            <td><span class="pill good">LogLoss</span> <span class="pill good">Brier</span> <span class="pill good">ECE</span></td>
+          </tr>
+        </tbody>
+      </table>
     </section>
 
     <!-- 13. Ensemble -->
@@ -1122,16 +1171,16 @@ train fold 内でのみ集計・encoding</pre>
       <h2><span class="num">13</span> モデル戦略・アンサンブル</h2>
       <div class="grid-2">
         <div class="card">
-          <h4>単体モデル推奨順</h4>
+          <h4>単体モデルの推奨順</h4>
           <ol class="clean">
-            <li>LightGBM baseline</li>
-            <li>CatBoost baseline</li>
-            <li>2 者の OOF blending</li>
-            <li>(option) XGBoost / 線形 baseline</li>
+            <li>LightGBM ベースライン</li>
+            <li>CatBoost ベースライン</li>
+            <li>2 モデルの交差検証での予測（OOF）ブレンド</li>
+            <li>（任意）XGBoost / 線形モデル</li>
           </ol>
         </div>
         <div class="card">
-          <h4>初期 blend 案</h4>
+          <h4>初期ブレンド案</h4>
           <pre class="code" style="margin:0;">blend_p_win  = 0.5 * lgbm + 0.5 * catboost
 blend_p_top2 = weighted average
 blend_p_top3 = weighted average
@@ -1139,17 +1188,20 @@ blend_p_top3 = weighted average
 stacker は OOF 予測のみで学習</pre>
         </div>
       </div>
-      <h3>rank + probability の二層化</h3>
+      <h3>確率モデルとランキングモデルの二層化</h3>
       <ul class="bullets">
-        <li>ModelA (確率) を主、ModelB (race 内 ranking) を tie-break / 安定化補助に</li>
+        <li>確率を出す ModelA を主軸に使い、レース内ランキングを出す ModelB を同点時の tie-break と安定化の補助に使う</li>
       </ul>
-      <h3>多段階パイプラインの学習ルール</h3>
-      <ul class="bullets">
-        <li>各 stage の出力は <b>OOF</b> で生成して次段に渡す</li>
-        <li>次段学習時に train fold へ valid fold の stage 出力を混ぜない</li>
-        <li>stacking 時も <b>OOF only</b> を守る</li>
-      </ul>
-      <h3>疑似ターゲット / 補助タスク</h3>
+      <h3>多段階処理の学習ルール</h3>
+      <table class="table">
+        <thead><tr><th>ルール</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td>Stage 出力の生成方法</td><td>各 Stage の出力は必ず交差検証での予測（OOF）で生成してから次の Stage に渡す</td></tr>
+          <tr><td>fold 間のデータ混入禁止</td><td>次段の学習時に、train fold へ valid fold の Stage 出力を混ぜない</td></tr>
+          <tr><td>stacking の原則</td><td>stacking 時も OOF のみを使うルールを徹底する</td></tr>
+        </tbody>
+      </table>
+      <h3>疑似ターゲット・補助タスク</h3>
       <div class="pillset">
         <span class="pill">first_corner_rank_norm</span>
         <span class="pill">position_deviation</span>
@@ -1163,34 +1215,34 @@ stacker は OOF 予測のみで学習</pre>
 
     <!-- 14. Interpret -->
     <section id="interpret" class="section">
-      <h2><span class="num">14</span> 特徴量解釈・Ablation</h2>
+      <h2><span class="num">14</span> 特徴量の解釈・Ablation（寄与検証）</h2>
       <div class="grid-3">
         <div class="card">
           <h4>SHAP</h4>
-          <p>重要特徴量・drift 原因・venue 別効き方差分の確認に。</p>
+          <p>重要な特徴量の特定、ドリフトの原因分析、開催場所ごとの効き方の差を確認します。</p>
         </div>
         <div class="card">
           <h4>Permutation Importance</h4>
-          <p>SHAP と順位がズレる列・noisy feature の削除判断。</p>
+          <p>SHAP と順位がズレる列の特定と、ノイズになっている特徴量の削除判断に使います。</p>
         </div>
         <div class="card">
           <h4>Ablation Study</h4>
-          <p>ブロック ON/OFF: base / history / race_index / pedigree / oikiri / paddock / trainer_comment / cushion / TE block。</p>
+          <p>特徴量ブロックを ON/OFF して寄与を確認します（base / history / race_index / pedigree / oikiri / paddock / trainer_comment / cushion / TE block）。</p>
         </div>
       </div>
     </section>
 
     <!-- 15. Coding -->
     <section id="coding" class="section">
-      <h2><span class="num">15</span> コーディング戦略 (Polars 中心)</h2>
+      <h2><span class="num">15</span> コーディング方針（Polars 中心）</h2>
       <div class="grid-2">
         <div class="card">
-          <h4>原則</h4>
+          <h4>基本方針</h4>
           <ul class="bullets">
-            <li>DataFrame 第一選択は <code class="inline">polars</code></li>
-            <li><code class="inline">scan_parquet</code> で必要列だけ <code class="inline">select</code> → 必要行だけ <code class="inline">filter</code> → <code class="inline">collect</code></li>
-            <li>pandas は LightGBM / CatBoost 直前など境界面のみ</li>
-            <li>fold 単位 materialize、不要になったら即解放</li>
+            <li>DataFrame の第一選択は <code class="inline">polars</code> を使う</li>
+            <li><code class="inline">scan_parquet</code> で必要な列のみ <code class="inline">select</code> → 必要な行のみ <code class="inline">filter</code> → <code class="inline">collect</code> の順で処理する</li>
+            <li>pandas は LightGBM / CatBoost へ渡す直前など、境界面だけで使う</li>
+            <li>fold 単位でメモリ展開し、不要になったら即解放する</li>
           </ul>
         </div>
         <div class="card">
@@ -1206,7 +1258,7 @@ stacker は OOF 予測のみで学習</pre>
           </table>
         </div>
       </div>
-      <h3>母表生成パターン</h3>
+      <h3>母表（ベーステーブル）の生成パターン</h3>
       <pre class="code">base = (
     pl.concat([
         pl.scan_parquet(f"data/local/tables/{y}/race_shutuba_flat.parquet")
@@ -1232,7 +1284,7 @@ stacker は OOF 予測のみで学習</pre>
 
     <!-- 16. Artifacts -->
     <section id="artifacts" class="section">
-      <h2><span class="num">16</span> 中間成果物・版管理</h2>
+      <h2><span class="num">16</span> 学習済みファイル（中間成果物）と版管理</h2>
       <div class="grid-2">
         <div class="card">
           <h4>必須メタデータ</h4>
@@ -1255,8 +1307,8 @@ stacker は OOF 予測のみで学習</pre>
             <span class="pill">mlflow_run_id</span>
           </div>
           <p style="margin:12px 0 0;font-size:13px;color:var(--muted);">
-            学習ジョブは <b>MLflow</b> で Run を必ず残す（params / metrics / tags / 主要 artifact）。
-            正本: <code class="inline">docs/html/modeling/modeling_coding_strategy.html</code>「MLflow による学習記録」、実装参照は <code class="inline">pipeline/trainer.py</code> 等。
+            学習ジョブは <b>MLflow モデル管理</b>で Run を必ず記録します（params / metrics / tags / 主要な学習済みファイル）。
+            定義ドキュメント: <code class="inline">docs/html/modeling/modeling_coding_strategy.html</code>「MLflow による学習記録」。実装参照: <code class="inline">pipeline/trainer.py</code>。
           </p>
         </div>
         <div class="card">
@@ -1294,7 +1346,7 @@ stacker は OOF 予測のみで学習</pre>
 
     <!-- 17. Betting -->
     <section id="betting" class="section">
-      <h2><span class="num">17</span> 馬券最適化テーブル契約</h2>
+      <h2><span class="num">17</span> 馬券最適化に使うテーブルの定義</h2>
       <div class="mermaid">
 flowchart TD
     horseProb["HorseProbabilityTable"] --> backtest["BettingBacktestDataset"]
@@ -1324,9 +1376,9 @@ flowchart TD
         <span class="pill">t_minus_05</span>
         <span class="pill">off_time_final (simulation_only)</span>
       </div>
-      <h3>確率テーブル制約</h3>
+      <h3>確率テーブルの整合条件</h3>
       <ul class="bullets">
-        <li><code class="inline">sum(p_win) ≈ 1.0</code> (race 内)</li>
+        <li><code class="inline">sum(p_win) ≈ 1.0</code>（レース内の合計）</li>
         <li><code class="inline">p_win ≤ p_top2 ≤ p_top3 ≤ 1.0</code></li>
         <li><code class="inline">rank_by_p_win</code> は 1 から始まる連番</li>
       </ul>
@@ -1334,30 +1386,30 @@ flowchart TD
 
     <!-- 18. Safe EV -->
     <section id="safe-ev" class="section">
-      <h2><span class="num">18</span> safe_ev と policy 管理</h2>
+      <h2><span class="num">18</span> safe_ev の定義とベット方針の管理</h2>
       <div class="grid-3">
         <div class="card">
           <h4>1. 生期待値</h4>
           <pre class="code" style="margin:0;">raw_ev = predicted_prob * odds - 1</pre>
         </div>
         <div class="card">
-          <h4>2. 校正後期待値</h4>
+          <h4>2. 確率補正後の期待値</h4>
           <pre class="code" style="margin:0;">calibrated_ev = calibrated_prob * odds - 1</pre>
         </div>
         <div class="card">
-          <h4>3. 安全域込み</h4>
+          <h4>3. 安全域を差し引いた期待値</h4>
           <pre class="code" style="margin:0;">safe_ev = calibrated_ev - buffer</pre>
         </div>
       </div>
       <div class="callout warn">
-        <h4>初期ルール</h4>
+        <h4>基本ルール</h4>
         <p>
-          ベット候補は <code class="inline">safe_ev &gt; 0</code> を最低条件。
-          <code class="inline">buffer</code> は固定値ではなく <b>odds bucket × uncertainty_proxy</b> で可変。
-          高オッズ帯ほど buffer を厚く。
+          ベット候補の最低条件は <code class="inline">safe_ev &gt; 0</code> です。
+          <code class="inline">buffer</code> は固定値ではなく、<b>オッズ帯 × 不確実性の代理変数</b> で変動します。
+          高オッズ帯ほど buffer を厚くします。
         </p>
       </div>
-      <h3>外部設定 <code class="inline">bet_policy_thresholds.json</code></h3>
+      <h3>外部設定ファイル <code class="inline">bet_policy_thresholds.json</code></h3>
       <table class="table">
         <thead><tr><th>項目</th><th>意味</th></tr></thead>
         <tbody>
@@ -1371,7 +1423,7 @@ flowchart TD
           <tr><td class="mono">stake_sizing_rule</td><td>ステーク配分</td></tr>
         </tbody>
       </table>
-      <h3>バックテスト評価指標</h3>
+      <h3>過去データを使った検証（バックテスト）の評価指標</h3>
       <div class="pillset">
         <span class="pill">stake_count</span>
         <span class="pill">turnover</span>
@@ -1391,40 +1443,46 @@ flowchart TD
 
     <!-- 19. Leakage -->
     <section id="leakage" class="section">
-      <h2><span class="num">19</span> リーク防止チェック</h2>
-      <div class="grid-2">
-        <div class="card">
-          <h4>必須ルール</h4>
-          <ul class="bullets">
-            <li>結果確定後テーブルを特徴量母表に入れない</li>
-            <li>LayerA に当日オッズを入れない</li>
-            <li>target encoding / 集計は split 後・fold 内で作る</li>
-            <li><code class="inline">finish_position</code> を説明変数に戻さない</li>
-            <li>同一 <code class="inline">race_id</code> を split 跨いで分けない</li>
-            <li>推論時点に存在しない future master / encoded mapping を読まない</li>
-            <li>ordered / target encoding は purged_group_time_series_split 前提</li>
-            <li>calibration は train ではなく valid / OOF 予測のみで fit</li>
-          </ul>
-        </div>
-        <div class="card">
-          <h4>学習前チェック</h4>
-          <ul class="bullets">
-            <li>除外テーブルが混入していないか</li>
-            <li>LayerA に <code class="inline">odds</code> / <code class="inline">popularity</code> が入っていないか</li>
-            <li><code class="inline">race_oikiri_flat</code> が 1 頭 1 行に集約されているか</li>
-            <li>sparse テーブルに <code class="inline">presence_flag</code> が付与されているか</li>
-            <li>未来日付の履歴が混ざっていないか</li>
-            <li>split 前に target encoding を作っていないか</li>
-            <li>BaselineV1 / ExtendedV1 を同時保存しているか</li>
-          </ul>
-        </div>
-      </div>
+      <h2><span class="num">19</span> 情報リーク防止チェックリスト</h2>
+      <h3>必須ルール</h3>
+      <table class="table">
+        <thead><tr><th>ルール</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td>レース結果テーブル除外</td><td>レース結果確定後のテーブルを特徴量の母表に含めない</td></tr>
+          <tr><td>LayerA オッズ禁止</td><td>LayerA に当日オッズを含めない</td></tr>
+          <tr><td>fold 内 encoding</td><td>target encoding や集計は分割後・fold 内でのみ行う</td></tr>
+          <tr><td>finish_position 戻し禁止</td><td><code class="inline">finish_position</code> を説明変数に戻さない</td></tr>
+          <tr><td>race_id 完全分離</td><td>同一 <code class="inline">race_id</code> を train と valid に分割しない</td></tr>
+          <tr><td>future mapping 禁止</td><td>予測処理時点に存在しない future master / encoded mapping を読み込まない</td></tr>
+          <tr><td>purged CV 前提</td><td>ordered / target encoding は purged_group_time_series_split を前提とする</td></tr>
+          <tr><td>calibration の fit 先</td><td>確率の補正（キャリブレーション）は train ではなく valid / OOF にのみ fit する</td></tr>
+        </tbody>
+      </table>
+      <h3>学習前チェック項目</h3>
+      <table class="table">
+        <thead><tr><th>確認項目</th><th>OK の状態</th></tr></thead>
+        <tbody>
+          <tr><td>除外テーブルの混入</td><td>禁止テーブルが含まれていない</td></tr>
+          <tr><td>LayerA のオッズ列</td><td><code class="inline">odds</code> / <code class="inline">popularity</code> 列が含まれていない</td></tr>
+          <tr><td>oikiri 集約粒度</td><td><code class="inline">race_oikiri_flat</code> が 1 頭 1 行に集約されている</td></tr>
+          <tr><td>presence_flag</td><td>sparse テーブルに <code class="inline">presence_flag</code> が付与されている</td></tr>
+          <tr><td>未来日付の履歴</td><td>未来日付の履歴が混在していない</td></tr>
+          <tr><td>encoding の順序</td><td>分割前に target encoding を作成していない</td></tr>
+          <tr><td>バージョン保存</td><td>BaselineV1 / ExtendedV1 を同時保存している</td></tr>
+        </tbody>
+      </table>
       <div class="callout bad">
-        <h4>やらないこと</h4>
-        <p>
-          split 前 TE / test を見ながら encoding 作成 / market を LayerA 投入 /
-          高次交差を無制限増設 / ROI のみでモデル採択。
-        </p>
+        <h4>絶対禁止事項</h4>
+        <table class="table" style="margin-top:8px;">
+          <thead><tr><th>禁止事項</th><th>理由</th></tr></thead>
+          <tbody>
+            <tr><td>分割前の target encoding 作成</td><td>ターゲットリーク（過楽観バイアス）</td></tr>
+            <tr><td>test を見ながら encoding を調整する</td><td>テストセット汚染</td></tr>
+            <tr><td>市場オッズを LayerA に混入させる</td><td>予測の優位性（edge）が失われる</td></tr>
+            <tr><td>高次の交差特徴を無制限に追加する</td><td>過学習リスク</td></tr>
+            <tr><td>ROI だけを根拠にモデルを採択する</td><td>確率精度の担保なしに馬券判断はできない</td></tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
@@ -1434,37 +1492,37 @@ flowchart TD
       <div class="phases">
         <div class="phase">
           <div class="ph-num">PHASE 1</div>
-          <div class="ph-title">単段ベースライン</div>
-          <div class="ph-body">Stage0 + Stage1 + Stage6。BaselineV1 で安定基準を成立させる。</div>
+          <div class="ph-title">単段ベースラインの確立</div>
+          <div class="ph-body">Stage0 + Stage1 + Stage6 を構築し、BaselineV1 で安定した比較基準を作る。</div>
         </div>
         <div class="phase">
           <div class="ph-num">PHASE 2</div>
-          <div class="ph-title">位置取り・ペース追加</div>
-          <div class="ph-body">Stage2 / Stage3 を導入し、改善幅を差分で測定。</div>
+          <div class="ph-title">位置取り・ペースの追加</div>
+          <div class="ph-body">Stage2 / Stage3 を導入し、差分で改善幅を測定する。</div>
         </div>
         <div class="phase">
           <div class="ph-num">PHASE 3</div>
-          <div class="ph-title">当日バイアス・血統文脈</div>
-          <div class="ph-body">Stage4 / Stage5 を追加し、当日適合度モデルへ。</div>
+          <div class="ph-title">当日バイアス・血統文脈の追加</div>
+          <div class="ph-body">Stage4 / Stage5 を追加して、当日の馬場・文脈に適合したモデルへ発展させる。</div>
         </div>
         <div class="phase">
           <div class="ph-num">PHASE 4</div>
-          <div class="ph-title">safe_ev 馬券最適化</div>
-          <div class="ph-body">Stage7。pair_probability_input → 配分最適化へ。</div>
+          <div class="ph-title">safe_ev による馬券最適化</div>
+          <div class="ph-body">Stage7 を実装。pair_probability_input から資金配分の最適化へつなげる。</div>
         </div>
       </div>
 
-      <h3>テクニック投入順</h3>
+      <h3>技術の導入順序</h3>
       <ol class="clean">
         <li>frequency / count encoding</li>
-        <li>OOF target encoding</li>
+        <li>交差検証での予測（OOF）target encoding</li>
         <li>CatBoost-style ordered encoding</li>
         <li>purged group time series split</li>
-        <li>calibration</li>
-        <li>positioning / pace 補助モデル</li>
-        <li>day bias / contextual bloodline 補助モデル</li>
-        <li>LightGBM + CatBoost OOF ensemble</li>
-        <li>safe_ev と policy search</li>
+        <li>確率の補正（キャリブレーション）</li>
+        <li>位置取り・ペース推定の補助モデル</li>
+        <li>当日バイアス・血統文脈の補助モデル</li>
+        <li>LightGBM + CatBoost 交差検証での予測（OOF）ensemble</li>
+        <li>safe_ev と方針探索</li>
       </ol>
 
       <h3>関連ドキュメント</h3>
@@ -1477,9 +1535,9 @@ flowchart TD
           <tr><td>ML テクニック</td><td class="mono">docs/html/modeling/advanced_modeling_techniques.html</td></tr>
           <tr><td>コーディング戦略</td><td class="mono">docs/html/modeling/modeling_coding_strategy.html</td></tr>
           <tr><td>馬券最適化（データ契約）</td><td class="mono">docs/html/modeling/betting_backtest_dataset_spec.html</td></tr>
-          <tr><td>馬券推奨 × RL（方策設計）</td><td class="mono">docs/html/modeling/betting_policy_reinforcement_learning.html（<a href="../betting_rl_policy/index.html">HTML</a>）</td></tr>
+          <tr><td>馬券推奨 × RL（方策設計）</td><td class="mono">docs/html/modeling/betting_policy_reinforcement_learning.html（<a href="../appendix/betting_rl_policy.html">HTML</a>）</td></tr>
           <tr><td>レースパフォーマンス</td><td class="mono">docs/html/modeling/race_performance_rating_system.html (<a href="../race_performance/index.html">HTML</a>)</td></tr>
-          <tr><td>次アクション・議論整理</td><td class="mono">（ダッシュボード） <a href="../modeling_actions/index.html">modeling_actions/index.html</a></td></tr>
+          <tr><td>次アクション・議論整理</td><td class="mono">（未作成）</td></tr>
           <tr><td>チューニング工程 SOP</td><td class="mono">docs/html/modeling/hyperparameter_tuning_workflow.html</td></tr>
           <tr><td>特徴量探索（LayerA）</td><td class="mono">docs/html/modeling/feature_engineering_exploration.html（<a href="../feature_engineering/index.html">HTML</a>）</td></tr>
           <tr><td>データ・特徴量一覧（現段階）</td><td class="mono">docs/html/data_features/index.html</td></tr>

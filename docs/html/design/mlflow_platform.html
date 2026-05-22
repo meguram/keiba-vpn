@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MLflow モデリング・予測プラットフォーム — keiba-vpn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, sans-serif;
+  background: var(--bg); color: var(--text);
+  line-height: 1.8; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  padding: 40px 56px 96px; max-width: 900px; margin: 0 auto;
+}
+code, pre { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px; margin-bottom: 36px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.eyebrow {
+  color: var(--accent-2); font-size: 11px; letter-spacing: .22em;
+  font-weight: 700; text-transform: uppercase; margin-bottom: 8px;
+}
+header.hero h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.35; }
+header.hero p { color: var(--muted); font-size: 13px; margin: 0; line-height: 1.7; }
+
+h2 {
+  font-size: 1.2rem; margin: 2.2em 0 0.7em; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border); color: #e8eeff;
+  scroll-margin-top: 20px;
+}
+h3 { font-size: 1.05rem; margin: 1.6em 0 0.5em; color: var(--accent-2); }
+p { margin: 0.7em 0; }
+ul, ol { padding-left: 1.5em; margin: 0.6em 0; }
+li { margin: 0.35em 0; }
+
+pre {
+  background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px; overflow-x: auto;
+  font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+}
+code {
+  background: #1a2748; border: 1px solid var(--border);
+  border-radius: 5px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+}
+pre code { background: none; border: none; padding: 0; color: #c9d8ff; }
+
+/* comment highlight in code blocks */
+pre .cm { color: #5a6e9c; }
+
+table {
+  width: 100%; border-collapse: collapse; margin: 1.2em 0;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; font-size: 13px;
+}
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+tr:last-child td { border-bottom: 0; }
+tr:hover td { background: rgba(79,139,255,.04); }
+
+.arch-block {
+  background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 20px; margin: 1em 0;
+  font-family: "JetBrains Mono", monospace; font-size: 12.5px;
+  line-height: 1.7; color: #c9d8ff;
+}
+.arch-block .arrow { color: var(--accent-2); }
+.arch-block .note  { color: #5a6e9c; }
+
+.step-list { counter-reset: step; padding: 0; }
+.step-list li {
+  list-style: none; counter-increment: step;
+  display: flex; gap: 12px; align-items: flex-start; margin: 10px 0;
+}
+.step-list li::before {
+  content: counter(step);
+  min-width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(135deg, #4f8bff, #7b5ea7);
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.tag {
+  display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 11px;
+  font-weight: 600; letter-spacing: .04em;
+}
+.tag-active  { background: rgba(34,197,94,.15);  color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+.tag-planned { background: rgba(251,191,36,.12);  color: #fbbf24; border: 1px solid rgba(251,191,36,.25); }
+
+.related {
+  margin-top: 40px; padding: 16px 18px; border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--border);
+}
+.related h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+.related ul { margin: 0; padding-left: 1.4em; }
+.related li { margin: 4px 0; font-size: 13px; }
+.related code { font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="eyebrow">Ch1 · システム設計</div>
+  <h1>MLflow（モデルの保管・バージョン管理ツール）モデリング・予測プラットフォーム</h1>
+  <p>競馬予測の学習・Registry・モデル実行サービス・API キャッシュを <strong>モデルキー単位</strong> で統一する基盤です。</p>
+</header>
+
+<h2>アーキテクチャ</h2>
+
+<div class="arch-block">
+<span class="note"># 学習フロー</span>
+pipeline/models/*.py
+  <span class="arrow">→</span> MLflow Tracking + Model Registry  (catalog.ModelSpec)
+  <span class="arrow">→</span> 任意: mlflow models serve (Docker :5001–:5010)
+
+<span class="note"># 予測実行フロー (API / バッチ)</span>
+  <span class="arrow">→</span> モデル実行サービス (/invocations)  … あれば優先
+  <span class="arrow">→</span> ローカル Booster (Registry / mlflow/runs)
+  <span class="arrow">→</span> ヒューリスティック / ルール
+
+<span class="note"># API 高速化</span>
+  <span class="arrow">→</span> HybridStorage キャッシュ (InferenceCacheMixin)
+  <span class="arrow">→</span> 事前計算 CLI (scripts/maintenance/precompute_*.py)
+</div>
+
+<h2>モデルカタログ</h2>
+<p>正の定義: <code>src/pipeline/mlflow/catalog.py</code> の <code>MODEL_CATALOG</code></p>
+
+<table>
+  <thead>
+    <tr>
+      <th>model_key</th>
+      <th>用途</th>
+      <th>Registry 名</th>
+      <th>Serving ポート</th>
+      <th>lifecycle</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>keiba_lgbm</code></td>
+      <td>既存着順 GBDT（木を積み上げた機械学習モデル）</td>
+      <td><code>keiba-lgbm</code></td>
+      <td>5010</td>
+      <td><span class="tag tag-active">active</span></td>
+    </tr>
+    <tr>
+      <td><code>tracking_difficulty</code></td>
+      <td>追走難度・位置取り</td>
+      <td><code>tracking-difficulty-lgbm</code></td>
+      <td>5001</td>
+      <td><span class="tag tag-active">active</span></td>
+    </tr>
+    <tr>
+      <td><code>finish_order</code></td>
+      <td>次期着順予測</td>
+      <td><code>keiba-finish-order-lgbm</code></td>
+      <td>5002</td>
+      <td><span class="tag tag-planned">planned</span></td>
+    </tr>
+    <tr>
+      <td><code>final_odds</code></td>
+      <td>最終オッズ予測</td>
+      <td><code>keiba-final-odds-lgbm</code></td>
+      <td>5003</td>
+      <td><span class="tag tag-planned">planned</span></td>
+    </tr>
+    <tr>
+      <td><code>pace_predictor</code></td>
+      <td>1F/3F ペース</td>
+      <td><code>pace-predictor-lgbm</code></td>
+      <td>5004</td>
+      <td><span class="tag tag-active">active</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  設定の上書き: <code>config/settings.yaml</code> → <code>mlflow.models.&lt;key&gt;</code><br/>
+  環境変数: <code>KEIBA_MLFLOW_SERVE_&lt;KEY&gt;_URI</code>（例: <code>KEIBA_MLFLOW_SERVE_FINISH_ORDER_URI</code>）
+</p>
+
+<h2>新しい予測タスクを追加する手順</h2>
+
+<ol class="step-list">
+  <li><strong>catalog</strong> — <code>ModelSpec</code> を <code>MODEL_CATALOG</code> に追加する</li>
+  <li><strong>settings</strong> — <code>mlflow.models.&lt;key&gt;.serve_uri</code> / <code>serve_port</code> を設定する</li>
+  <li><strong>storage</strong> — <code>CATEGORY_MAP</code> に <code>cache_category</code> を追加する（<code>race</code> など）</li>
+  <li><strong>学習</strong> — <code>train_utils.log_lightgbm_and_register("your_key", model, ...)</code> を呼び出す</li>
+  <li><strong>予測処理</strong> — <code>inference/&lt;task&gt;_service.py</code> を作成する（<code>InferenceCacheMixin</code> + <code>get_or_compute</code> を継承）</li>
+  <li><strong>API</strong> — 薄い GET エンドポイントと、任意で POST precompute を追加する</li>
+  <li><strong>Docker</strong> — <code>mlflow/server/docker-compose.yml</code> に serve サービスを追加する（profile 対応可）</li>
+</ol>
+
+<h2>コード例</h2>
+
+<h3>学習</h3>
+<pre><code>from src.pipeline.mlflow.train_utils import start_training_run, log_lightgbm_and_register
+
+with start_training_run("finish_order", params={"n_estimators": 500}):
+    log_lightgbm_and_register(
+        "finish_order",
+        booster,
+        metrics={"auc": 0.72},
+        feature_names=cols,
+    )</code></pre>
+
+<h3>予測実行（LGBM バッチ）</h3>
+<pre><code>from src.pipeline.mlflow.runtime import get_serve_client, load_lightgbm_booster, booster_feature_names
+
+cols   = booster_feature_names("finish_order") or FEATURE_COLUMNS
+client = get_serve_client("finish_order")
+if client and client.is_available():
+    scores = client.predict_dataframe(cols, matrix)
+else:
+    model = load_lightgbm_booster("finish_order")</code></pre>
+
+<h3>キャッシュ</h3>
+<pre><code>from src.pipeline.mlflow.inference_cache import InferenceCacheMixin
+
+class FinishOrderCache(InferenceCacheMixin):
+    model_key     = "finish_order"
+    cache_version = 1</code></pre>
+
+<h2>運用コマンド</h2>
+
+<table>
+  <thead>
+    <tr><th>目的</th><th>コマンド</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>全モデルのヘルスチェック</td>
+      <td><code>GET /api/inference/health</code></td>
+    </tr>
+    <tr>
+      <td>CLI からヘルスチェック</td>
+      <td><code>python -m src.scripts.maintenance.mlflow_platform_health</code></td>
+    </tr>
+    <tr>
+      <td>Tracking サーバーを起動</td>
+      <td><code>docker compose -f mlflow/server/docker-compose.yml up -d mlflow</code></td>
+    </tr>
+    <tr>
+      <td>追走難度のモデル実行サービスを起動</td>
+      <td><code>docker compose -f mlflow/server/docker-compose.yml up -d mlflow-serve-tracking</code></td>
+    </tr>
+    <tr>
+      <td>着順・オッズのモデル実行サービスを起動</td>
+      <td><code>docker compose -f mlflow/server/docker-compose.yml --profile finish-order up -d</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>ローカル開発で Registry の学習済みファイルが <code>mlruns/</code> を参照している場合は、リポジトリルートに <code>mlruns → mlflow/runs</code> のシンボリックリンクを配置してください（<code>ensure_mlruns_symlink()</code> が自動作成します）。</p>
+
+<div class="related">
+  <h3>関連ファイル</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>ファイル / パス</th>
+        <th>説明</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>src/pipeline/mlflow/</code></td>
+        <td>catalog, runtime, inference_cache, train_utils</td>
+      </tr>
+      <tr>
+        <td><code>src/pipeline/inference/*_service.py</code></td>
+        <td>タスク別の予測処理サービス</td>
+      </tr>
+      <tr>
+        <td><code>src/utils/mlflow_client.py</code></td>
+        <td>既存着順学習用（随時 train_utils へ統合可）</td>
+      </tr>
+      <tr>
+        <td><code>mlflow/server/docker-compose.yml</code></td>
+        <td>Tracking + モデル実行サービスのコンテナ定義</td>
+      </tr>
+      <tr>
+        <td><code>config/settings.yaml</code></td>
+        <td>モデル設定の上書き</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

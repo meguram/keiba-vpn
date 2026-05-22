@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>最終オッズ予測モデル — keiba-vpn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, sans-serif;
+  background: var(--bg); color: var(--text);
+  line-height: 1.8; font-size: 15px;
+  padding: 40px 56px 96px; max-width: 900px; margin: 0 auto;
+}
+code, pre { font-family: "JetBrains Mono", monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.back { font-size: 13px; color: var(--muted); margin-bottom: 28px; display: inline-block; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px; margin-bottom: 36px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.eyebrow {
+  color: var(--accent-2); font-size: 11px; letter-spacing: .22em;
+  font-weight: 700; text-transform: uppercase; margin-bottom: 8px;
+}
+header.hero h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.35; }
+header.hero p { color: var(--muted); font-size: 13px; margin: 0; line-height: 1.7; }
+h2 { font-size: 1.2rem; margin: 2.2em 0 0.7em; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border); color: #e8eeff; }
+h3 { font-size: 1.05rem; color: var(--accent-2); margin: 1.6em 0 0.5em; }
+p { margin: 0.7em 0; }
+pre { background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px; overflow-x: auto;
+  font-size: 12.5px; line-height: 1.55; }
+code { background: #1a2748; border: 1px solid var(--border);
+  border-radius: 5px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+pre code { background: none; border: none; padding: 0; color: #c9d8ff; }
+table { width: 100%; border-collapse: collapse; margin: 1.2em 0;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; font-size: 13px; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; }
+tr:last-child td { border-bottom: 0; }
+td.mono { font-family: "JetBrains Mono", monospace; font-size: 12px; }
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px 22px; margin: 14px 0;
+  box-shadow: var(--shadow);
+}
+.card h3 { margin-top: 0; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+@media (max-width: 720px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+.callout {
+  border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+  padding: 12px 16px; border-radius: 8px; margin: 12px 0;
+}
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.good { border-left-color: #4ade80; background: rgba(74,222,128,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+ul.bullets { list-style: none; padding: 0; margin: 6px 0; }
+ul.bullets li { position: relative; padding-left: 18px; margin: 4px 0; font-size: 14px; }
+ul.bullets li::before {
+  content: ""; position: absolute; left: 4px; top: 11px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+.tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.tag {
+  background: #1d2b50; color: #cfdcff;
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 3px 10px; font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+}
+.head-card {
+  background: linear-gradient(180deg, #182747, #131f3c);
+  border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px 18px; text-align: center;
+}
+.head-card .head-name {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 1.1rem; font-weight: 700; color: var(--accent-2);
+  margin-bottom: 6px;
+}
+.head-card .head-target { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+.head-card .head-formula {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px; color: #cfe2ff;
+  background: var(--code-bg); border-radius: 6px; padding: 6px 10px;
+}
+</style>
+</head>
+<body>
+
+<a class="back" href="../index.html">← ドキュメント一覧へ</a>
+
+<header class="hero">
+  <div class="eyebrow">MODELING · FINAL ODDS</div>
+  <h1>最終オッズ予測モデル</h1>
+  <p>
+    発走前の出馬表・調教・速度指数・過去走データから単勝・複勝オッズを推定する
+    LightGBM 3 ヘッドモデルの設計・学習・推論フローをまとめたページです。
+    <code>src/pipeline/models/final_odds_*.py</code> の実装に基づきます。
+  </p>
+</header>
+
+<h2>概要</h2>
+
+<p>
+  最終オッズ予測（<code>final_odds</code>）は MLflow モデルカタログに登録された
+  アクティブなモデルです。発走直前に「市場が形成するオッズを事前に推定する」という
+  目的で設計されており、LayerB（市場統合）の検証や safe_ev 計算の補助として使います。
+</p>
+
+<div class="callout warn">
+  <h4>設計上の注意</h4>
+  <p>
+    このモデルは「市場が付けるオッズを予測する」ものです。
+    LayerA の着順確率モデルとは独立して扱い、両者を直接比較して edge を求める設計です。
+    予測オッズに当日の実際のオッズを混ぜた特徴量は使いません（情報リーク防止）。
+  </p>
+</div>
+
+<h2>3 ヘッド構造</h2>
+
+<div class="grid-3">
+  <div class="head-card">
+    <div class="head-name">win</div>
+    <div class="head-target">単勝オッズ</div>
+    <div class="head-formula">exp(pred) = win_odds</div>
+  </div>
+  <div class="head-card">
+    <div class="head-name">place_min</div>
+    <div class="head-target">複勝オッズ（下限）</div>
+    <div class="head-formula">exp(pred) = place_min</div>
+  </div>
+  <div class="head-card">
+    <div class="head-name">place_max</div>
+    <div class="head-target">複勝オッズ（上限）</div>
+    <div class="head-formula">exp(pred) = place_max</div>
+  </div>
+</div>
+
+<p>
+  各ヘッドは対数変換したオッズ（<code>target_log_win_odds</code> 等）を回帰ターゲットとして個別に学習します。
+  推論時は <code>exp(pred)</code> で元のオッズスケールに戻します。最小値は 1.0 にクリップします。
+</p>
+
+<h2>ファイル構成</h2>
+
+<table>
+  <thead><tr><th>ファイル</th><th>役割</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="mono">final_odds_predictor.py</td>
+      <td>推論クラス <code>FinalOddsPredictor</code>。bundle / MLflow からロードして predict</td>
+    </tr>
+    <tr>
+      <td class="mono">final_odds_trainer.py</td>
+      <td>学習クラス <code>FinalOddsTrainer</code>。3 ヘッドを学習し MLflow に登録</td>
+    </tr>
+    <tr>
+      <td class="mono">final_odds_features.py</td>
+      <td>特徴量拡張 <code>enrich_final_odds_features()</code>。フィールド相対統計・符号化カテゴリを付与</td>
+    </tr>
+    <tr>
+      <td class="mono">final_odds_dataset.py</td>
+      <td>学習データセット構築 <code>build_final_odds_dataset()</code>。年次 split / リーク防止</td>
+    </tr>
+    <tr>
+      <td class="mono">final_odds_progress.py</td>
+      <td>学習進捗トラッカー <code>FinalOddsProgress</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>学習データと Train/Eval 分割</h2>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>既定の年次分割</h3>
+    <table style="margin:0">
+      <thead><tr><th>役割</th><th>年</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Train</td>
+          <td class="mono">2020, 2021, 2022, 2023, 2024</td>
+        </tr>
+        <tr>
+          <td>Eval（評価）</td>
+          <td class="mono">2025</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="color:var(--muted);font-size:12.5px;margin-top:8px;">
+      <code>TRAIN_YEARS_DEFAULT</code> / <code>EVAL_YEARS_DEFAULT</code> で指定
+    </p>
+  </div>
+  <div class="card">
+    <h3>ロードするデータカテゴリ</h3>
+    <table style="margin:0">
+      <thead>
+        <tr><th>カテゴリ</th><th>内容</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>race_shutuba</code></td>
+          <td>出馬表（枠順・騎手・馬体重）</td>
+        </tr>
+        <tr>
+          <td><code>race_index</code></td>
+          <td>速度指数</td>
+        </tr>
+        <tr>
+          <td><code>race_shutuba_past</code></td>
+          <td>馬柱</td>
+        </tr>
+        <tr>
+          <td><code>race_oikiri</code></td>
+          <td>追い切り</td>
+        </tr>
+        <tr>
+          <td><code>horse_result</code></td>
+          <td>馬の過去走全履歴</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="color:var(--muted);font-size:12.5px;margin-top:6px;">
+      ※ race_paddock・race_barometer は当日観察データのため除外（前日18時時点で存在しない）
+    </p>
+  </div>
+</div>
+
+<div class="callout">
+  <h4>リーク防止</h4>
+  <p>
+    <code>_filter_horse_history_by_date()</code> がレース日より後の過去走履歴をフィルタアウトします。
+    ターゲット（確定オッズ）もレース後に確定する値のため、学習データは
+    <code>race_result</code> の確定値を使い、推論時は <code>race_shutuba</code> のみで動作します。
+  </p>
+</div>
+
+<h2>特徴量エンジニアリング — enrich_final_odds_features()</h2>
+
+<p>
+  <code>build_race_features()</code> の出力に対して、以下の特徴量を追加します。
+</p>
+
+<h3>フィールド相対統計（レース内比較）</h3>
+
+<p>以下の数値列それぞれについてレース全馬との比較指標を計算します。</p>
+
+<div class="tag-row">
+  <span class="tag">speed_max</span>
+  <span class="tag">speed_avg</span>
+  <span class="tag">speed_best_dist</span>
+  <span class="tag">avg_finish_5</span>
+  <span class="tag">career_win_rate</span>
+  <span class="tag">same_surface_win_rate</span>
+  <span class="tag">paddock_score</span>
+  <span class="tag">... 計25列</span>
+</div>
+
+<table>
+  <thead>
+    <tr><th>派生列のパターン</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="mono">fld_z_{col}</td>
+      <td>レース内 z-score（平均0・標準偏差1に正規化）</td>
+    </tr>
+    <tr>
+      <td class="mono">fld_rank_{col}</td>
+      <td>レース内順位（上位ほど小さい値、0〜1 に正規化）</td>
+    </tr>
+    <tr>
+      <td class="mono">fld_gap_best_{col}</td>
+      <td>レース内最高値との差（0 = 最高値）</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>追加エンコーディング列</h3>
+
+<table>
+  <thead>
+    <tr><th>列名</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="mono">horse_number_norm</td>
+      <td>馬番 / 出走頭数（0〜1 に正規化）</td>
+    </tr>
+    <tr>
+      <td class="mono">bracket_gate_ratio</td>
+      <td>枠番 / 8</td>
+    </tr>
+    <tr>
+      <td class="mono">surface_code</td>
+      <td>1=芝, 2=ダート, 0=その他</td>
+    </tr>
+    <tr>
+      <td class="mono">direction_code</td>
+      <td>1=右, 2=左, 0=その他</td>
+    </tr>
+    <tr>
+      <td class="mono">track_condition_code</td>
+      <td>1=良, 2=稍重, 3=重, 4=不良</td>
+    </tr>
+    <tr>
+      <td class="mono">venue_code</td>
+      <td>開催場コード（1〜10: 札幌〜小倉）</td>
+    </tr>
+    <tr>
+      <td class="mono">grade_code</td>
+      <td>グレードコード（1=G1, 2=G2, ... 10=新馬, 11=障害）</td>
+    </tr>
+    <tr>
+      <td class="mono">distance_km</td>
+      <td>距離 (m) / 1000</td>
+    </tr>
+    <tr>
+      <td class="mono">is_turf / is_dirt</td>
+      <td>芝フラグ / ダートフラグ</td>
+    </tr>
+    <tr>
+      <td class="mono">log_field_size</td>
+      <td>log(1 + 出走頭数)</td>
+    </tr>
+    <tr>
+      <td class="mono">field_speed_std / field_speed_spread</td>
+      <td>レース内 speed_max の標準偏差・最大幅（混戦度指標）</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>モデルロード順序（FinalOddsPredictor）</h2>
+
+<pre><code>FinalOddsPredictor.load()
+  1. models/final_odds_bundle.json  が存在すれば bundle から読み込み
+     └─ heads.win / heads.place_min / heads.place_max それぞれの model_txt を lgb.Booster に変換
+  2. なければ MLflow Registry から artifacts をダウンロード
+     └─ model_win / model_place_min / model_place_max フォルダを download_artifacts()
+  3. どちらも失敗した場合は OddsPredictor（ルールベース）にフォールバック</code></pre>
+
+<h3>bundle.json の構造</h3>
+
+<pre><code>{
+  "feature_cols": ["horse_number_norm", "fld_z_speed_max", ...],
+  "heads": {
+    "win":       { "model_txt": "... LightGBM テキスト形式 ..." },
+    "place_min": { "model_txt": "..." },
+    "place_max": { "model_txt": "..." }
+  }
+}</code></pre>
+
+<h2>推論フロー</h2>
+
+<pre><code>predict_final_odds(features_df)
+  │
+  ├─ FinalOddsPredictor.load()  →  bundle / MLflow / フォールバック
+  │
+  ├─ enrich_final_odds_features(features_df)
+  │    └─ フィールド相対統計 + エンコーディング列を付与
+  │
+  ├─ feature_cols を bundle.json から取得（なければ select_model_feature_columns()）
+  │    └─ 欠損列は 0.0 で補完
+  │
+  ├─ Booster.predict(X) × 3 ヘッド
+  │
+  └─ exp(pred) でオッズスケールに変換
+       ├─ win_odds  = max(exp(win_pred), 1.0)
+       ├─ place_min = max(exp(place_min_pred), 1.0)
+       └─ place_max = max(exp(place_max_pred), place_min + 0.1)</code></pre>
+
+<h2>学習スクリプト</h2>
+
+<pre><code># 学習の実行
+python -m src.scripts.data.train_final_odds_model
+
+# API 経由でのバッチ事前計算
+POST /api/race/{race_id}/final-odds/precompute</code></pre>
+
+<h3>FinalOddsTrainer の動作</h3>
+
+<pre><code>FinalOddsTrainer.train()
+  ├─ build_final_odds_dataset(storage, train_years, eval_years)
+  │    ├─ race_shutuba / race_index / race_oikiri / horse_result を並行ロード
+  │    ├─ enrich_final_odds_features() で特徴量拡張
+  │    └─ target = log(確定オッズ) を付与
+  │
+  ├─ 3 ヘッドを順番に lightgbm.train() で学習
+  │
+  ├─ MLflow Run を start_training_run() で開始
+  │    └─ params / metrics / artifacts を自動ログ
+  │
+  └─ models/final_odds_bundle.json に保存 + Registry 登録</code></pre>
+
+<h2>MLflow カタログ定義</h2>
+
+<table>
+  <thead><tr><th>項目</th><th>値</th></tr></thead>
+  <tbody>
+    <tr><td>model_key</td><td class="mono">final_odds</td></tr>
+    <tr><td>registered_name</td><td class="mono">keiba-final-odds-lgbm</td></tr>
+    <tr><td>experiment_name</td><td class="mono">final-odds</td></tr>
+    <tr><td>lifecycle</td><td class="mono">active</td></tr>
+    <tr><td>default_serve_port</td><td class="mono">5003</td></tr>
+    <tr><td>cache_category</td><td class="mono">final_odds_prediction</td></tr>
+    <tr><td>cache_enabled_env</td><td class="mono">KEIBA_FINAL_ODDS_CACHE</td></tr>
+    <tr><td>local_booster_relpaths</td><td class="mono">models/final_odds.lgb, models/odds_predictor.json</td></tr>
+  </tbody>
+</table>
+
+<h2>関連ドキュメント</h2>
+<ul class="bullets">
+  <li><a href="../design/inference_services.html">推論サービス設計</a></li>
+  <li><a href="../design/mlflow_platform.html">MLflow モデリング・推論プラットフォーム</a></li>
+  <li><a href="staged_probability_pipeline.html">多段階確率パイプライン設計</a></li>
+  <li><a href="betting_backtest_dataset_spec.html">betting_backtest_dataset 仕様</a></li>
+</ul>
+
+</body>
+</html>

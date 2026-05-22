@@ -1,0 +1,963 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>レイヤー構成・設計仕様書 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --green: #34d399; --yellow: #fbbf24; --red: #f87171;
+    --purple: #a78bfa; --teal: #2dd4bf; --orange: #fb923c;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ── Layout ── */
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+  nav.toc a.active { background: rgba(79,139,255,.13); border-left-color: var(--accent); color: var(--accent-2); }
+  nav.toc a.sub { padding-left: 22px; color: var(--muted); font-size: 12px; }
+
+  main { padding: 48px 60px; max-width: 1100px; }
+  h1 { font-size: 28px; font-weight: 700; margin: 0 0 8px; }
+  h2 { font-size: 20px; font-weight: 700; margin: 52px 0 16px;
+       padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 16px; font-weight: 700; margin: 32px 0 10px; color: var(--accent-2); }
+  h4 { font-size: 14px; font-weight: 700; margin: 20px 0 8px; color: var(--muted); }
+  p { margin: 0 0 14px; }
+
+  /* ── Panels ── */
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px 28px; margin: 20px 0;
+  }
+  .panel-header { font-weight: 700; font-size: 15px; margin-bottom: 14px; }
+
+  /* ── Code blocks ── */
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.7; margin: 12px 0 20px;
+  }
+  code { background: rgba(79,139,255,.10); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  pre code { background: none; padding: 0; }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 13.5px; }
+  th {
+    background: rgba(79,139,255,.10); color: var(--accent-2);
+    font-weight: 700; text-align: left; padding: 10px 14px;
+    border-bottom: 2px solid var(--border);
+  }
+  td { padding: 9px 14px; border-bottom: 1px solid rgba(36,51,88,.6); vertical-align: top; }
+  tr:hover td { background: rgba(79,139,255,.04); }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px;
+    border-radius: 20px; vertical-align: middle; margin: 0 3px;
+  }
+  .badge-blue   { background: rgba(79,139,255,.18); color: var(--accent-2); }
+  .badge-green  { background: rgba(52,211,153,.15); color: var(--green); }
+  .badge-yellow { background: rgba(251,191,36,.15); color: var(--yellow); }
+  .badge-red    { background: rgba(248,113,113,.15); color: var(--red); }
+  .badge-purple { background: rgba(167,139,250,.15); color: var(--purple); }
+  .badge-teal   { background: rgba(45,212,191,.15); color: var(--teal); }
+  .badge-orange { background: rgba(251,146,60,.15); color: var(--orange); }
+
+  /* ── Layer blocks ── */
+  .layer-stack { display: flex; flex-direction: column; gap: 0; margin: 24px 0; }
+  .layer {
+    padding: 18px 24px; border: 1px solid var(--border);
+    position: relative; transition: background .15s;
+  }
+  .layer:first-child { border-radius: 12px 12px 0 0; }
+  .layer:last-child  { border-radius: 0 0 12px 12px; }
+  .layer + .layer { border-top: none; }
+  .layer:hover { background: rgba(79,139,255,.04); }
+  .layer-label {
+    font-weight: 700; font-size: 13px; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .layer-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .layer-arrow {
+    text-align: center; color: var(--muted); font-size: 18px;
+    padding: 6px 0; background: transparent; border: none; line-height: 1;
+  }
+
+  /* ── Component grid ── */
+  .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin: 16px 0; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; margin: 16px 0; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 18px;
+  }
+  .card h4 { margin: 0 0 8px; font-size: 13px; color: var(--accent-2); }
+  .card p  { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .card ul { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--muted); }
+  .card ul li { margin-bottom: 3px; }
+
+  /* ── Mermaid ── */
+  .mermaid { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; overflow-x: auto; margin: 20px 0; }
+
+  /* ── Callout ── */
+  .callout {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.07);
+    border-radius: 0 10px 10px 0; padding: 14px 18px; margin: 16px 0;
+    font-size: 13.5px;
+  }
+  .callout.green  { border-color: var(--green);  background: rgba(52,211,153,.07); }
+  .callout.yellow { border-color: var(--yellow); background: rgba(251,191,36,.07); }
+  .callout.red    { border-color: var(--red);    background: rgba(248,113,113,.07); }
+  .callout.purple { border-color: var(--purple); background: rgba(167,139,250,.07); }
+
+  /* ── KV list ── */
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 13px; }
+  .kv dt { color: var(--muted); font-weight: 700; white-space: nowrap; }
+  .kv dd { margin: 0; }
+
+  /* ── Version tag ── */
+  .version-tag {
+    display: inline-block; font-size: 11px; background: rgba(52,211,153,.12);
+    color: var(--green); border: 1px solid rgba(52,211,153,.25);
+    border-radius: 6px; padding: 2px 8px; font-family: "JetBrains Mono", monospace;
+    vertical-align: middle; margin-left: 8px;
+  }
+
+  /* ── Section divider ── */
+  .section-intro { color: var(--muted); font-size: 14px; margin: -8px 0 24px; }
+
+  /* ── File tree ── */
+  .filetree { font-family: "JetBrains Mono", monospace; font-size: 12.5px; line-height: 1.9; }
+  .filetree .dir  { color: var(--accent-2); font-weight: 700; }
+  .filetree .file { color: var(--muted); }
+  .filetree .note { color: #556080; font-style: italic; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#15213c', primaryTextColor: '#e6ecff',
+      primaryBorderColor: '#4f8bff', lineColor: '#4f8bff',
+      secondaryColor: '#0b1428', background: '#0f172a',
+      edgeLabelBackground: '#0f172a', nodeBorder: '#243358',
+    }
+  });
+
+  // Sidebar active highlight on scroll
+  window.addEventListener('DOMContentLoaded', () => {
+    const headings = document.querySelectorAll('h2[id], h3[id]');
+    const links = document.querySelectorAll('nav.toc a[href^="#"]');
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          links.forEach(l => l.classList.remove('active'));
+          const active = document.querySelector(`nav.toc a[href="#${e.target.id}"]`);
+          if (active) active.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-10% 0px -80% 0px' });
+    headings.forEach(h => observer.observe(h));
+  });
+</script>
+
+<div class="layout">
+<!-- ━━━ Sidebar ━━━ -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="logo">KB</div>
+    <div>
+      <div class="title">keiba-vpn</div>
+      <div class="sub">レイヤー構成・設計仕様書</div>
+    </div>
+  </div>
+  <nav class="toc">
+    <h4>概要</h4>
+    <a href="#overview">システム概要</a>
+    <a href="#dir-structure">ディレクトリ構成</a>
+
+    <h4>レイヤー詳細</h4>
+    <a href="#layer-scraper">L1 スクレイピング層</a>
+    <a href="#layer-storage">L2 ストレージ層</a>
+    <a href="#layer-sqlite">L2b SQLite 血統 DB</a>
+    <a href="#layer-pipeline">L3 パイプライン層</a>
+    <a href="#layer-inference">L4 予測処理・キャッシュ層</a>
+    <a href="#layer-api">L5 API 層</a>
+
+    <h4>横断設計</h4>
+    <a href="#hybrid-storage">HybridStorage 詳細</a>
+    <a href="#inference-cache">InferenceCacheMixin</a>
+    <a href="#mlflow-platform">MLflow プラットフォーム</a>
+    <a href="#vps-profile">VPS メモリ最適化</a>
+    <a href="#feature-store">フィーチャーストア</a>
+    <a href="#queue-system">ジョブキュー</a>
+
+    <h4>設定・運用</h4>
+    <a href="#config">環境変数・設定</a>
+    <a href="#data-flow">エンドツーエンド データフロー</a>
+    <a href="#deployment">デプロイ構成</a>
+    <a href="#ops-commands">主要コマンド</a>
+
+    <h4>ドキュメント一覧</h4>
+    <a href="../index.html" class="sub">← docs index</a>
+    <a href="ARCHITECTURE.html" class="sub">ARCHITECTURE.html</a>
+    <a href="../data/DATASOURCES.html" class="sub">DATASOURCES.html</a>
+    <a href="mlflow_platform.html" class="sub">mlflow_platform.html</a>
+  </nav>
+</aside>
+
+<!-- ━━━ Main ━━━ -->
+<main>
+  <h1>レイヤー構成・設計仕様書</h1>
+  <p class="section-intro">
+    keiba-vpn の全レイヤー・モジュール構成、データフロー、主要設計パターンをまとめた技術リファレンスです。
+    <span class="version-tag">2026-05</span>
+  </p>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="overview">システム概要</h2>
+
+  <p>keiba-vpn は JRA 競馬予測プラットフォームです。スクレイピング（Webからの自動データ収集）・ストレージ・ML 予測実行・Web API を垂直に統合し、以下の 5 つの責務層で構成されています。</p>
+
+  <div class="layer-stack">
+    <div class="layer" style="background:rgba(167,139,250,.07); border-color:#a78bfa40;">
+      <div class="layer-label"><span class="badge badge-purple">L5</span> API 層 — FastAPI Web Server</div>
+      <div class="layer-desc">HTTP のAPIのアドレス、レース詳細 UI、血統分析 UI、ベッティング最適化。バックグラウンドワーカーを内包。</div>
+    </div>
+    <div class="layer" style="background:rgba(79,139,255,.07); border-color:#4f8bff40;">
+      <div class="layer-label"><span class="badge badge-blue">L4</span> 予測処理・キャッシュ層 — Inference Services</div>
+      <div class="layer-desc">tracking_difficulty / finish_order / final_odds / pace の 4 モデルサービス。InferenceCacheMixin で Google Cloud Storage（GCS） ← → メモリ LRU の二段キャッシュを実現。</div>
+    </div>
+    <div class="layer" style="background:rgba(52,211,153,.07); border-color:#34d39940;">
+      <div class="layer-label"><span class="badge badge-green">L3</span> パイプライン層 — Feature &amp; ML Pipeline</div>
+      <div class="layer-desc">特徴量（予測に使う数値）エンジニアリング（Parquet フィーチャーストア）・GBDT（木を積み上げた機械学習モデル）学習・MLflow（モデルの保管・バージョン管理ツール）管理。</div>
+    </div>
+    <div class="layer" style="background:rgba(251,191,36,.07); border-color:#fbbf2440;">
+      <div class="layer-label"><span class="badge badge-yellow">L2</span> ストレージ層 — HybridStorage + SQLite</div>
+      <div class="layer-desc">GCS（正典）→ ディスク L2 キャッシュ → メモリ LRU の三段構成。血統 DB は SQLite (bloodline.db) で別管理。</div>
+    </div>
+    <div class="layer" style="background:rgba(251,146,60,.07); border-color:#fb923c40;">
+      <div class="layer-label"><span class="badge badge-orange">L1</span> スクレイピング層 — Scraper</div>
+      <div class="layer-desc">netkeiba / SmartRC / JRA HTTP クライアント、HTML パーサー、ジョブキュー、並列ワーカー。</div>
+    </div>
+  </div>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="dir-structure">ディレクトリ構成</h2>
+
+  <div class="panel">
+    <div class="filetree">
+<span class="dir">keiba-vpn/</span>
+├── <span class="dir">src/</span>                      <span class="note"># 全 Python コード (import src.X.Y)</span>
+│   ├── <span class="dir">api/</span>                   <span class="note"># FastAPI アプリ・血統 API</span>
+│   ├── <span class="dir">config/</span>                <span class="note"># 設定・プロファイル管理</span>
+│   ├── <span class="dir">pipeline/</span>              <span class="note"># ML パイプライン全般</span>
+│   │   ├── <span class="dir">features/</span>          <span class="note"># 特徴量エンジニアリング (62 モジュール)</span>
+│   │   ├── <span class="dir">models/</span>            <span class="note"># 学習・予測モデル</span>
+│   │   ├── <span class="dir">inference/</span>         <span class="note"># リアルタイム予測サービス</span>
+│   │   ├── <span class="dir">mlflow/</span>            <span class="note"># MLflow 統合 (catalog / cache / runtime)</span>
+│   │   └── <span class="dir">data/</span>              <span class="note"># データアクセス層 (SQLite)</span>
+│   ├── <span class="dir">research/</span>              <span class="note"># 血統・遺伝子・レース分析 (研究用)</span>
+│   │   ├── <span class="dir">pedigree/</span>          <span class="note"># 血統分析 (62 モジュール)</span>
+│   │   ├── <span class="dir">genes/</span>             <span class="note"># 遺伝子マーカー (MSTN / DMRT3 / PDK4)</span>
+│   │   └── <span class="dir">race/</span>              <span class="note"># トラック速度・レース品質モデル</span>
+│   ├── <span class="dir">scraper/</span>               <span class="note"># スクレイピング層 (180+ モジュール)</span>
+│   ├── <span class="dir">scripts/</span>               <span class="note"># 運用 CLI スクリプト</span>
+│   │   ├── <span class="dir">scraping/</span>          <span class="note"># バッチスクレイピング</span>
+│   │   ├── <span class="dir">data/</span>              <span class="note"># データ構築・マイグレーション</span>
+│   │   └── <span class="dir">maintenance/</span>       <span class="note"># ヘルスチェック・事前計算</span>
+│   └── <span class="dir">utils/</span>                 <span class="note"># 共通ユーティリティ</span>
+│
+├── <span class="dir">data/</span>                     <span class="note"># ローカルデータ置き場 (GCS が正典)</span>
+│   ├── <span class="dir">bloodline/</span>             <span class="note"># bloodline.db (SQLite, ~1.4 GB)</span>
+│   ├── <span class="dir">cache/</span>                 <span class="note"># ディスク L2 キャッシュ</span>
+│   ├── <span class="dir">page_reference/</span>        <span class="note"># 血統 Parquet 学習済みファイル</span>
+│   ├── <span class="dir">local/</span>                 <span class="note"># 予測処理キャッシュ・構造ハッシュ等</span>
+│   └── <span class="dir">queue/</span>                 <span class="note"># ジョブキュー・ワーカー状態</span>
+│
+├── <span class="dir">config/</span>                   <span class="note"># settings.yaml</span>
+├── <span class="dir">templates/</span>                <span class="note"># Jinja2 HTML テンプレート</span>
+├── <span class="dir">mlflow/</span>                   <span class="note"># MLflow インフラ (docker-compose)</span>
+│   └── <span class="dir">server/</span>               <span class="note"># Nginx + MLflow + API コンテナ定義</span>
+├── <span class="dir">models/</span>                   <span class="note"># 学習済みモデルファイル</span>
+├── <span class="dir">tests/</span>                    <span class="note"># ユニットテスト</span>
+├── <span class="dir">docs/html/</span>                <span class="note"># 技術ドキュメント (本ファイルを含む)</span>
+├── <span class="file">main.py</span>                   <span class="note"># uvicorn 起動エントリ</span>
+├── <span class="file">wsgi.py</span>                   <span class="note"># WSGI エントリ</span>
+└── <span class="file">.env.example</span>              <span class="note"># 環境変数テンプレート</span>
+    </div>
+  </div>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="layer-scraper">L1 スクレイピング層</h2>
+  <p class="section-intro"><code>src/scraper/</code> — netkeiba・SmartRC・JRA からのデータ取得</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <h4>HTTP クライアント <code>client.py</code></h4>
+      <ul>
+        <li>netkeiba プレミアム会員ログイン</li>
+        <li>レート制限 (throttle min/max)</li>
+        <li>再試行・Bot 検出回避</li>
+        <li>同時接続数の上限制御</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>HTML パーサー <code>parsers.py</code></h4>
+      <ul>
+        <li>BeautifulSoup ベース</li>
+        <li>race_shutuba / race_result / horse_result</li>
+        <li>出馬表・レース結果・追い切り</li>
+        <li>ページ構造のバージョン管理</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>ジョブキュー <code>job_queue.py</code></h4>
+      <ul>
+        <li>優先度付きキュー</li>
+        <li>smart_skip（データの新鮮度チェック）</li>
+        <li>強制上書きポリシー</li>
+        <li>ロックファイルで複数プロセス間を協調</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>ワーカー <code>queue_worker.py</code></h4>
+      <ul>
+        <li>SCRAPE_QUEUE_PARALLEL=6（既定）</li>
+        <li>stagger_sec でバースト防止</li>
+        <li>STAGGER スタート（デフォルト 0.25s）</li>
+        <li>ヘルス JSON を data/queue/ に書き出し</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>自動スクレイピング <code>auto_scrape.py</code></h4>
+      <ul>
+        <li>前日夕方（18:00 JST）に Cron で起動</li>
+        <li>出走表取得 → 事前計算まで一括実行</li>
+        <li>tracking_difficulty と final_odds を事前計算</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>ScraperRunner <code>run.py</code></h4>
+      <ul>
+        <li>HybridStorage を保持するオーケストレーター</li>
+        <li>複数のスクレイプジョブをディスパッチ</li>
+        <li>storage アクセスを集約する（DI 的役割）</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>取得データのカテゴリ</h3>
+  <table>
+    <tr><th>カテゴリキー</th><th>内容</th><th>更新頻度</th></tr>
+    <tr><td><code>race_shutuba</code></td><td>出馬表（枠番・馬番・馬体重・騎手）</td><td>出走前日〜当日朝</td></tr>
+    <tr><td><code>race_result</code></td><td>レース結果（着順・タイム・オッズ払戻）</td><td>レース直後</td></tr>
+    <tr><td><code>horse_result</code></td><td>馬別の過去成績</td><td>随時</td></tr>
+    <tr><td><code>race_oikiri</code></td><td>追い切り（SmartRC）</td><td>木〜土</td></tr>
+    <tr><td><code>race_shutuba_past</code></td><td>過去出走表（スタッツ計算用）</td><td>随時</td></tr>
+    <tr><td><code>race_index</code></td><td>レースインデックス（JRA）</td><td>毎週</td></tr>
+  </table>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="layer-storage">L2 ストレージ層</h2>
+  <p class="section-intro"><code>src/scraper/storage.py</code> — HybridStorage 三段構成</p>
+
+  <div class="mermaid">
+flowchart LR
+    A[API / 予測サービス] -->|load(key)| B(HybridStorage)
+    B -->|L1 hit| C[(メモリ LRU<br/>8,000 エントリ<br/>TTL=3600s)]
+    B -->|L1 miss| D{L2 ディスク<br/>data/cache/}
+    D -->|L2 hit| C
+    D -->|L2 miss| E[(GCS<br/>正典ストレージ)]
+    E -->|download| D
+    C -->|返却| A
+    F[スクレイパー] -->|save(key,data)| E
+    E -.->|access≥閾値| D
+  </div>
+
+  <div class="grid-3">
+    <div class="card">
+      <h4>L1 メモリ LRU</h4>
+      <p>Python dict + タイムスタンプ</p>
+      <ul>
+        <li>上限: LOAD_CACHE_MAX_ENTRIES（8,000）</li>
+        <li>データの有効期限（TTL）: LOAD_CACHE_TTL_SEC（3,600 s）</li>
+        <li>上限超過時: 古い 10% を削除</li>
+        <li>VPS: 1,500 エントリ / 1,800 s</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>L2 ディスク</h4>
+      <p><code>data/cache/</code> 以下の JSON/Parquet</p>
+      <ul>
+        <li>週次アクセス回数が閾値を超えると書き込み</li>
+        <li>DISK_L2_MIN_WEEKLY_ACCESSES（通常 2、VPS 3）</li>
+        <li>データの有効期限（TTL）: 2 日（デフォルト）</li>
+        <li>アクセス統計は .meta.json に保存</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>L3 GCS（正典）</h4>
+      <p>Google Cloud Storage（GCS）</p>
+      <ul>
+        <li>バケット: GCS_BUCKET</li>
+        <li>プレフィックス: chuou/data/</li>
+        <li>構造のバージョン管理（versions.json）</li>
+        <li>スクレイパーが直接書き込む</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>レース詳細キャッシュ <code>_race_detail_cache</code></h3>
+  <p>API 内でレース詳細 JSON を保持する専用のキャッシュです。</p>
+  <table>
+    <tr><th>設定</th><th>通常</th><th>VPS</th></tr>
+    <tr><td>RACE_DETAIL_CACHE_MAX</td><td>2,000 エントリ</td><td>200 エントリ</td></tr>
+    <tr><td>削除方式</td><td colspan="2">上限超過時に古い 10% を削除（mtime 基準）</td></tr>
+    <tr><td>推定メモリ</td><td>最大 ~360 MB</td><td>最大 ~36 MB</td></tr>
+  </table>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="layer-sqlite">L2b SQLite 血統 DB</h2>
+  <p class="section-intro"><code>data/bloodline/bloodline.db</code> + <code>src/pipeline/data/bloodline_sqlite.py</code></p>
+
+  <p>大容量 Parquet をプロセス内で全件展開するとメモリが不足するため、血統関連テーブルを SQLite に集約しています。インデックス付きクエリで必要な行だけ取得します。</p>
+
+  <div class="callout yellow">
+    <strong>主な削減効果:</strong>
+    horse_pedigree_cats.parquet（846 MB をフルロード）→ <code>horse_ids</code> フィルタクエリ（数 MB / リクエスト）に置き換え。
+    race_records.parquet（235 MB）→ race_results テーブルから必要なカラムだけ SELECT。
+  </div>
+
+  <h3>テーブル一覧</h3>
+  <table>
+    <tr><th>テーブル</th><th>行数</th><th>主なカラム</th><th>更新頻度</th></tr>
+    <tr><td><code>race_results</code></td><td>286,060</td><td>race_id, horse_id, stallion_id, date, venue, surface, distance, finish_position, odds …</td><td>週次 (high)</td></tr>
+    <tr><td><code>horse_names</code></td><td>37,181</td><td>horse_id (PK), horse_name</td><td>週次 (high)</td></tr>
+    <tr><td><code>race_result_slim</code></td><td>286,060</td><td>race_id, horse_id, horse_name, finish_position, date, venue, surface, distance …</td><td>週次 (high)</td></tr>
+    <tr><td><code>ancestor_horses</code></td><td>67,565</td><td>ancestor_id, side, horse_ids (JSON)</td><td>月次 (medium)</td></tr>
+    <tr><td><code>ancestor_names</code></td><td>62,514</td><td>ancestor_id (PK), name</td><td>不定期 (low)</td></tr>
+    <tr><td><code>pedigree_cats</code></td><td>7,106,389</td><td>horse_id, cat, gen, stallion_id, stallion_name …</td><td>不定期 (low)</td></tr>
+    <tr><td><code>horse_bms</code></td><td>37,654</td><td>horse_id (PK), sire_id, bms_id, sire_root_id, bms_root_id …</td><td>不定期 (low)</td></tr>
+    <tr><td><code>stallion_lineage</code></td><td>4,773</td><td>stallion_id (PK), anchor_name, group_id, depth_to_anchor …</td><td>不定期 (low)</td></tr>
+    <tr><td><code>_schema_meta</code></td><td>8</td><td>table_name (PK), col_hash, built_at, row_count</td><td>マイグレーション毎</td></tr>
+  </table>
+
+  <h3>スキーマのバージョン管理</h3>
+  <p>各テーブルはソース Parquet のカラム名リストを MD5 ハッシュして <code>_schema_meta</code> に保存します。<br>
+  次回マイグレーション時にハッシュが一致すればスキップし、変更があればそのテーブルのみ DROP して再構築します。</p>
+
+  <h3>GCS との連携</h3>
+  <pre>GCS_BLOB = "chuou/data/others/bloodline_db/bloodline.db"
+
+# アップロード (マイグレーション後)
+python -m src.scripts.data.migrate_bloodline_to_sqlite
+
+# 部分更新 (高頻度テーブルのみ)
+python -m src.scripts.data.migrate_bloodline_to_sqlite --update-tables race_results,horse_names
+
+# 全テーブル強制再構築
+python -m src.scripts.data.migrate_bloodline_to_sqlite --full</pre>
+
+  <h3>クエリヘルパー (bloodline_sqlite.py)</h3>
+  <table>
+    <tr><th>関数</th><th>主なフィルタ引数</th><th>メモリ効率</th></tr>
+    <tr><td><code>load_pedigree_cats()</code></td><td>stallion_id, cat, gen, gen_min/max, horse_ids, columns</td><td><span class="badge badge-green">高 — インデックス利用</span></td></tr>
+    <tr><td><code>load_race_results()</code></td><td>stallion_ids, columns</td><td><span class="badge badge-yellow">中 — 全件または種牡馬フィルタ</span></td></tr>
+    <tr><td><code>load_race_result_slim()</code></td><td>horse_ids</td><td><span class="badge badge-green">高 — horse_id フィルタ可</span></td></tr>
+    <tr><td><code>load_ancestor_horses()</code></td><td>ancestor_ids</td><td><span class="badge badge-green">高 — ancestor フィルタ可</span></td></tr>
+    <tr><td><code>load_horse_bms()</code></td><td>horse_ids, columns</td><td><span class="badge badge-yellow">中 — 全件またはフィルタ</span></td></tr>
+    <tr><td><code>load_horse_names()</code></td><td>—</td><td><span class="badge badge-yellow">中 — 全件（37K 行）</span></td></tr>
+    <tr><td><code>load_ancestor_names()</code></td><td>—</td><td><span class="badge badge-yellow">中 — 全件（63K 行）</span></td></tr>
+    <tr><td><code>load_stallion_lineage()</code></td><td>—</td><td><span class="badge badge-green">高 — 4,773 行のみ</span></td></tr>
+  </table>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="layer-pipeline">L3 パイプライン層</h2>
+  <p class="section-intro"><code>src/pipeline/</code> — 特徴量エンジニアリング・学習・MLflow 管理</p>
+
+  <h3 id="feature-store">フィーチャーストアの設計</h3>
+
+  <p>Parquet 列指向ストレージで特徴量（予測に使う数値）ブロックを管理します。ブロック単位で年次パーティションを区切ります。</p>
+
+  <table>
+    <tr><th>ブロック名</th><th>結合キー</th><th>内容</th></tr>
+    <tr><td><code>race_horse_tbl</code></td><td>race_id + horse_id</td><td>枠番・馬番・馬体重・騎手・調教師・芝/ダート適性</td></tr>
+    <tr><td><code>race_tbl</code></td><td>race_id</td><td>コース・距離・クラス・天候・馬場状態</td></tr>
+    <tr><td><code>horse_tbl</code></td><td>horse_id</td><td>馬齢・性別・毛色・血統ベクトル</td></tr>
+    <tr><td><code>jockey_tbl</code></td><td>jockey_id</td><td>騎手の累積勝率・ROI・コース別スタッツ</td></tr>
+    <tr><td><code>trainer_tbl</code></td><td>trainer_id</td><td>調教師の累積スタッツ</td></tr>
+    <tr><td><code>target_tbl</code></td><td>race_id + horse_id</td><td>正解ラベル（finish_position、1着フラグなど）</td></tr>
+    <tr><td><code>rank_tbl</code></td><td>race_id + horse_id</td><td>人気順・オッズ・払戻（Layer A では除外対象）</td></tr>
+  </table>
+
+  <h3>Layer A データセット（レース前特徴量）</h3>
+  <div class="callout">
+    <strong>設計方針:</strong> Layer A は<strong>オッズを一切含まない</strong>特徴量（予測に使う数値）のセットです。
+    本番予測実行でも同じ特徴量を使うことで、情報漏洩を構造的に防ぎます。<br>
+    除外するカラムは <code>config/settings.yaml</code> の <code>feature_policy.odds_excluded_columns</code> で明示的に定義します。
+  </div>
+
+  <h3>モデル一覧</h3>
+  <table>
+    <tr><th>モデルキー</th><th>目的変数</th><th>フレームワーク</th><th>Serve ポート</th></tr>
+    <tr><td><code>keiba_lgbm</code></td><td>finish_position（順位予測）</td><td>LightGBM</td><td>:5010</td></tr>
+    <tr><td><code>tracking_difficulty</code></td><td>追走難易度スコア</td><td>LightGBM</td><td>:5001</td></tr>
+    <tr><td><code>finish_order</code></td><td>着順確率分布</td><td>LightGBM / XGBoost</td><td>:5002</td></tr>
+    <tr><td><code>final_odds</code></td><td>最終オッズ予測</td><td>LightGBM</td><td>:5003</td></tr>
+    <tr><td><code>pace_predictor</code></td><td>1F/3F ラップペース</td><td>LightGBM</td><td>:5004</td></tr>
+  </table>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="layer-inference">L4 予測処理・キャッシュ層</h2>
+  <p class="section-intro"><code>src/pipeline/inference/</code> + <code>src/pipeline/mlflow/inference_cache.py</code></p>
+
+  <h2 id="inference-cache">InferenceCacheMixin の設計</h2>
+
+  <p>全予測サービスが継承する Mixin クラスです。予測結果を HybridStorage の race_id キャッシュに透過的に保存・読み込みします。</p>
+
+  <div class="mermaid">
+sequenceDiagram
+    participant Client as API クライアント
+    participant Svc as InferenceService
+    participant Cache as HybridStorage<br/>(L1 LRU + L2 disk + GCS)
+    participant MLflow as MLflow Serve<br/>(:5001〜:5010)
+
+    Client->>Svc: get_or_compute(race_id)
+    Svc->>Cache: load_cached_response(race_id)
+    alt キャッシュヒット (L1/L2/GCS)
+        Cache-->>Svc: cached JSON
+        Svc-->>Client: cached response (< 1ms)
+    else キャッシュミス
+        Svc->>MLflow: predict(features)
+        MLflow-->>Svc: predictions
+        Svc->>Cache: save_cached_response(race_id, result)
+        Svc-->>Client: fresh response
+    end
+  </div>
+
+  <table>
+    <tr><th>属性</th><th>tracking_difficulty</th><th>finish_order</th><th>final_odds</th></tr>
+    <tr><td>model_key</td><td>tracking_difficulty</td><td>finish_order</td><td>final_odds</td></tr>
+    <tr><td>cache_version</td><td>1</td><td>1</td><td>1</td></tr>
+    <tr><td>キャッシュのデータの有効期限（TTL）</td><td>86,400 s（1 日）</td><td>86,400 s</td><td>86,400 s</td></tr>
+    <tr><td>env フラグ</td><td>KEIBA_TRACKING_DIFFICULTY_CACHE</td><td>KEIBA_FINISH_ORDER_CACHE</td><td>KEIBA_FINAL_ODDS_CACHE</td></tr>
+    <tr><td>MLflow Serve URI</td><td>KEIBA_MLFLOW_SERVE_TRACKING_DIFFICULTY_URI</td><td>KEIBA_MLFLOW_SERVE_FINISH_ORDER_URI</td><td>KEIBA_MLFLOW_SERVE_FINAL_ODDS_URI</td></tr>
+    <tr><td>フォールバック</td><td>ローカル Booster → ヒューリスティック</td><td>同左</td><td>同左</td></tr>
+  </table>
+
+  <h3>前日夜の事前計算フロー</h3>
+  <pre>auto_scrape.run_raceday_eve_for_date()
+  └─ 出走表スクレイプ (race_shutuba)
+  └─ precompute_tracking_for_race_ids(race_ids, storage)   # tracking_difficulty
+  └─ precompute_final_odds_for_race_ids(race_ids, storage) # final_odds
+      └─ InferenceCacheMixin.get_or_compute() → GCS 保存</pre>
+
+  <div class="callout green">
+    18:00 JST の Cron で前日夜に全レース分を事前計算し、GCS に保存します。
+    翌朝以降の API リクエストはキャッシュから即時返却（2 ms 以内）。
+    初回アクセスは ~2s、2 回目以降は ~0.3s 程度です。
+  </div>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="layer-api">L5 API 層</h2>
+  <p class="section-intro"><code>src/api/app.py</code> — FastAPI (0.0.0.0:8000)</p>
+
+  <h3>主要エンドポイント（APIのアドレス）一覧</h3>
+  <table>
+    <tr><th>パス</th><th>メソッド</th><th>説明</th></tr>
+    <tr><td><code>/</code></td><td>GET</td><td>ダッシュボード（レース一覧）</td></tr>
+    <tr><td><code>/race/{race_id}</code></td><td>GET</td><td>レース詳細（予測処理付き）</td></tr>
+    <tr><td><code>/api/race/{race_id}/tracking-difficulty</code></td><td>GET</td><td>追走難易度 JSON を返す</td></tr>
+    <tr><td><code>/api/race/{race_id}/final-odds</code></td><td>GET</td><td>最終オッズ予測 JSON を返す</td></tr>
+    <tr><td><code>/api/race/{race_id}/final-odds/precompute</code></td><td>POST</td><td>即時事前計算を開始する</td></tr>
+    <tr><td><code>/api/race/{race_id}/tracking-difficulty/precompute</code></td><td>POST</td><td>追走難易度の事前計算を開始する</td></tr>
+    <tr><td><code>/api/pedigree-race-stats/query</code></td><td>GET</td><td>血統×レース成績クエリ（SQLite）</td></tr>
+    <tr><td><code>/api/pedigree-race-stats/meta</code></td><td>GET</td><td>フィルタのメタ情報を返す</td></tr>
+    <tr><td><code>/api/scrape-queue/*</code></td><td>GET/POST</td><td>スクレイプキューの管理</td></tr>
+    <tr><td><code>/api/gcs-stats</code></td><td>GET</td><td>GCS/キャッシュの統計・設定確認</td></tr>
+    <tr><td><code>/api/system-stats</code></td><td>GET</td><td>システム統計（メモリ・プロセスなど）</td></tr>
+    <tr><td><code>/bloodline/*</code></td><td>GET</td><td>血統メタクラスター分析 UI</td></tr>
+    <tr><td><code>/betting/*</code></td><td>GET</td><td>Kelly Criterion ベッティング最適化</td></tr>
+    <tr><td><code>/myostatin</code></td><td>GET</td><td>遺伝子マーカーのルックアップ</td></tr>
+  </table>
+
+  <h3>バックグラウンドタスク</h3>
+  <div class="grid-3">
+    <div class="card">
+      <h4>キューワーカー</h4>
+      <p>起動時にスレッドで立ち上がり、スクレイプジョブを並列実行します。</p>
+    </div>
+    <div class="card">
+      <h4>構造モニター</h4>
+      <p>netkeiba のページ構造変化を検出し、versions.json を更新します。</p>
+    </div>
+    <div class="card">
+      <h4>ログクリーナー</h4>
+      <p>毎日 12:00 JST に古い logs/*.log を削除します（LOGS_RETENTION_DAYS で保持日数を設定）。</p>
+    </div>
+  </div>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="hybrid-storage">HybridStorage 詳細</h2>
+
+  <p>スクレイパーと予測サービスが共有する統合ストレージクラスです。</p>
+
+  <div class="panel">
+    <div class="panel-header">主要メソッド</div>
+    <table>
+      <thead>
+        <tr>
+          <th>メソッド</th>
+          <th>説明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>load(key)</code></td>
+          <td>L1→L2→GCS の順に探索し、最初にヒットしたデータを返す</td>
+        </tr>
+        <tr>
+          <td><code>save(key, data)</code></td>
+          <td>GCS に書き込み、L1 LRU も更新する</td>
+        </tr>
+        <tr>
+          <td><code>load_from_gcs(key)</code></td>
+          <td>GCS から直接取得する（キャッシュをバイパス）</td>
+        </tr>
+        <tr>
+          <td><code>_get_bucket()</code></td>
+          <td>GCS バケットインスタンスを返す（血統 DB のアップロードなどに使用）</td>
+        </tr>
+        <tr>
+          <td><code>get_weekly_access_count(key)</code></td>
+          <td>L2 書き込み閾値の判定に使うアクセス統計を返す</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="mlflow-platform">MLflow プラットフォーム</h2>
+  <p class="section-intro"><code>mlflow/server/docker-compose.yml</code> + <code>src/pipeline/mlflow/</code></p>
+
+  <div class="mermaid">
+graph TD
+    subgraph Docker Compose
+        Nginx["Nginx :80/:443<br/>リバースプロキシ + 認証"]
+        API["keiba-api :8000<br/>FastAPI"]
+        MLT["mlflow-tracking :5000<br/>SQLite バックエンド"]
+        S1["mlflow-serve-tracking :5001<br/>tracking_difficulty"]
+        S2["mlflow-serve-finish-order :5002<br/>finish_order"]
+        S3["mlflow-serve-final-odds :5003<br/>final_odds"]
+        S4["mlflow-serve-keiba-lgbm :5010<br/>keiba_lgbm"]
+    end
+    Client --> Nginx
+    Nginx --> API
+    API --> MLT
+    API --> S1 & S2 & S3 & S4
+  </div>
+
+  <h3>ModelSpec カタログ (<code>src/pipeline/mlflow/catalog.py</code>)</h3>
+  <p>全モデルの単一の信頼源（Single Source of Truth）です。モデルキーごとに、フレーバー・Serve URI・キャッシュ設定・ローカルフォールバックを定義します。</p>
+
+  <div class="callout">
+    <strong>フォールバックの仕組み:</strong><br>
+    MLflow Serve URI が未設定 → ローカルの Booster ファイル（models/）を直接ロード →<br>
+    Booster もない → ヒューリスティック推定（モデルなしで動作）<br>
+    VPS では MLflow Docker を起動しないため、ローカル Booster またはヒューリスティックで運用します。
+  </div>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="vps-profile">VPS メモリ最適化</h2>
+  <p class="section-intro"><code>src/config/profiles.py</code> — KEIBA_PROFILE=vps</p>
+
+  <p>.env に <code>KEIBA_PROFILE=vps</code> を設定するだけで、以下のデフォルト値を一括適用できます。個別に上書きも可能です。</p>
+
+  <table>
+    <tr><th>環境変数</th><th>通常</th><th>VPS</th><th>削減効果</th></tr>
+    <tr><td>LOAD_CACHE_MAX_ENTRIES</td><td>8,000</td><td>1,500</td><td>〜 −25 MB</td></tr>
+    <tr><td>LOAD_CACHE_TTL_SEC</td><td>3,600 s</td><td>1,800 s</td><td>データの有効期限（TTL）を半減</td></tr>
+    <tr><td>DISK_L2_MIN_WEEKLY_ACCESSES</td><td>2</td><td>3</td><td>ディスク書き込みを削減</td></tr>
+    <tr><td>RACE_DETAIL_CACHE_MAX</td><td>2,000</td><td>200</td><td>〜 −324 MB</td></tr>
+    <tr><td>KEIBA_BLOODLINE_PRELOAD</td><td>1（有効）</td><td>0（無効）</td><td>〜 −267 MB</td></tr>
+  </table>
+
+  <div class="grid-2">
+    <div class="card">
+      <h4>通常環境の推定メモリ</h4>
+      <ul>
+        <li>uvicorn × 4 worker 基底: ~200 MB</li>
+        <li>bloodline 先読み: ~267 MB</li>
+        <li>LRU キャッシュ: ~50 MB</li>
+        <li>race_detail キャッシュ（最大）: ~360 MB</li>
+        <li><strong>合計目安: ~877 MB</strong></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>VPS（2 GB）の推定メモリ</h4>
+      <ul>
+        <li>uvicorn × 2 worker 基底: ~100 MB</li>
+        <li>bloodline 先読みなし: 0 MB</li>
+        <li>LRU キャッシュ: ~10 MB</li>
+        <li>race_detail キャッシュ（最大）: ~36 MB</li>
+        <li><strong>合計目安: ~146 MB</strong></li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>VPS 起動コマンド</h3>
+  <pre>KEIBA_PROFILE=vps uvicorn src.api.app:app --host 0.0.0.0 --port 8000 --workers 2</pre>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="queue-system">ジョブキューシステム</h2>
+  <p class="section-intro"><code>src/scraper/job_queue.py</code> + <code>queue_worker.py</code></p>
+
+  <div class="grid-2">
+    <div class="card">
+      <h4>キューの設計</h4>
+      <ul>
+        <li>JSONL ファイルベース（data/queue/*.jsonl）</li>
+        <li>優先度フィールド付き</li>
+        <li>smart_skip: GCS 上のデータ鮮度をチェック</li>
+        <li>overwrite フラグ: 強制的に再取得</li>
+        <li>バッチ投入: stagger_sec で間隔を制御</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>ワーカーの設計</h4>
+      <ul>
+        <li>SCRAPE_QUEUE_PARALLEL=6（既定）</li>
+        <li>NETKEIBA_MAX_CONCURRENT_REQUESTS で同時接続上限を管理</li>
+        <li>ヘルス JSON: data/queue/.worker_health.json</li>
+        <li>毎時メンテナンス: 失敗ジョブの復旧と完了分の削除</li>
+        <li>ETA 計算: SCRAPE_QUEUE_ETA_SEC_PER_JOB=10</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="config">環境変数・設定</h2>
+
+  <h3>主要な環境変数一覧</h3>
+  <table>
+    <tr><th>変数名</th><th>既定値</th><th>説明</th></tr>
+    <tr><td><code>KEIBA_PROFILE</code></td><td>—</td><td>vps を指定すると省メモリ設定を一括適用する</td></tr>
+    <tr><td><code>GCS_BUCKET</code></td><td>必須</td><td>Google Cloud Storage（GCS）のバケット名</td></tr>
+    <tr><td><code>GCS_PREFIX</code></td><td>keiba</td><td>GCS キープレフィックス</td></tr>
+    <tr><td><code>MLFLOW_TRACKING_URI</code></td><td>mlflow/runs</td><td>MLflow トラッキングサーバーの URI</td></tr>
+    <tr><td><code>KEIBA_MLFLOW_SERVE_TRACKING_DIFFICULTY_URI</code></td><td>—</td><td>tracking_difficulty モデル実行サービスの URI</td></tr>
+    <tr><td><code>KEIBA_MLFLOW_SERVE_FINISH_ORDER_URI</code></td><td>—</td><td>finish_order モデル実行サービスの URI</td></tr>
+    <tr><td><code>KEIBA_MLFLOW_SERVE_FINAL_ODDS_URI</code></td><td>—</td><td>final_odds モデル実行サービスの URI</td></tr>
+    <tr><td><code>KEIBA_MLFLOW_SERVE_KEIBA_LGBM_URI</code></td><td>—</td><td>keiba_lgbm モデル実行サービスの URI</td></tr>
+    <tr><td><code>KEIBA_BLOODLINE_PRELOAD</code></td><td>1</td><td>0 にすると bloodline cluster の先読みを無効化する</td></tr>
+    <tr><td><code>KEIBA_TRACKING_DIFFICULTY_CACHE</code></td><td>1</td><td>予測処理キャッシュの有効フラグ</td></tr>
+    <tr><td><code>KEIBA_EVE_PRECOMPUTE_TRACKING</code></td><td>1</td><td>前日夜の事前計算（tracking）有効フラグ</td></tr>
+    <tr><td><code>KEIBA_EVE_PRECOMPUTE_FINAL_ODDS</code></td><td>1</td><td>前日夜の事前計算（final_odds）有効フラグ</td></tr>
+    <tr><td><code>SCRAPE_QUEUE_PARALLEL</code></td><td>6</td><td>同時スクレイプジョブ数</td></tr>
+    <tr><td><code>NETKEIBA_THROTTLE_MIN</code></td><td>2.2</td><td>リクエストの最短間隔（秒）</td></tr>
+    <tr><td><code>NETKEIBA_THROTTLE_MAX</code></td><td>4.0</td><td>リクエストの最長間隔（秒）</td></tr>
+    <tr><td><code>LOAD_CACHE_MAX_ENTRIES</code></td><td>8000</td><td>HybridStorage のメモリ LRU 上限</td></tr>
+    <tr><td><code>RACE_DETAIL_CACHE_MAX</code></td><td>2000</td><td>race_detail キャッシュの上限</td></tr>
+    <tr><td><code>DEV_PASSWORD</code></td><td>必須</td><td>開発者認証パスワード</td></tr>
+  </table>
+
+  <h3>settings.yaml の主要セクション</h3>
+  <pre>config/settings.yaml:
+  data_sources:
+    netkeiba:   rate_limit, retry_policy, premium_login
+    smartrc:    endpoint, columns_whitelist
+    jra:        calendar_base_url
+  mlflow:
+    tracking_uri, artifact_location
+    model_specs: [keiba_lgbm, tracking_difficulty, finish_order, final_odds, pace_predictor]
+  feature_policy:
+    odds_excluded_columns: [単勝オッズ, 人気, 払戻 ...]   # Layer A 除外
+  lgbm:
+    optuna_trials: 50</pre>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="data-flow">エンドツーエンド データフロー</h2>
+
+  <div class="mermaid">
+flowchart TD
+    subgraph 取得
+        NK[netkeiba.com] -->|HTML| SC[Scraper\nclient.py + parsers.py]
+        SR[SmartRC] -->|HTML| SC
+        SC -->|JSON| GCS[(GCS\n正典ストレージ)]
+        SC -->|アクセス統計| DL2[(ディスク L2\ndata/cache/)]
+    end
+
+    subgraph 学習 (週次バッチ)
+        GCS -->|race_result_flat| FS[Feature Store\nParquet blocks]
+        FS -->|layer_a_dataset| TR[Trainer\nLGBM / XGBoost]
+        TR -->|model artifact| MLF[(MLflow Registry\nmlflow/runs/)]
+    end
+
+    subgraph 予測処理 (リアルタイム + 事前計算)
+        GCS -->|race_shutuba\nhorse_result\noikiri| IS[Inference Services\ntracking / final_odds\nfinish_order / pace]
+        IS -->|predict| MLFS[MLflow Serve\n:5001〜:5010]
+        MLFS -->|predictions| IS
+        IS -->|cache save| GCS
+        IS -->|cache save| L1[(メモリ LRU)]
+    end
+
+    subgraph API
+        API[FastAPI :8000] -->|load| HS[HybridStorage]
+        HS --> L1
+        HS --> DL2
+        HS --> GCS
+        API --> IS
+    end
+
+    subgraph 血統 DB
+        PARQ[blood Parquets\nIDX_DIR / PED10_DIR] -->|migrate| SQDB[(bloodline.db\n~1.4 GB)]
+        SQDB -->|GCS upload| GCS
+        GCS -->|auto download| SQDB
+        API -->|targeted query| SQDB
+    end
+  </div>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="deployment">デプロイ構成</h2>
+
+  <div class="grid-2">
+    <div class="card">
+      <h4>本番（VPS 2 GB）</h4>
+      <ul>
+        <li>uvicorn × 2 workers、KEIBA_PROFILE=vps</li>
+        <li>MLflow Serve なし → ローカル Booster を使用</li>
+        <li>bloodline.db を GCS から自動ダウンロード</li>
+        <li>Cron（18:00 JST）で前日夜に事前計算</li>
+        <li>Docker Compose は使わず直接起動</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>開発（大メモリ環境）</h4>
+      <ul>
+        <li>uvicorn × 4 workers</li>
+        <li>Docker Compose で MLflow Serve を起動</li>
+        <li>bloodline 先読み有効（267 MB）</li>
+        <li>MLflow Tracking UI: http://localhost:5000</li>
+        <li>Nginx リバースプロキシ（オプション）</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Docker Compose のサービス構成</h3>
+  <pre>mlflow/server/docker-compose.yml:
+  mlflow:5000            # tracking server (SQLite backend, artifact store: /mlflow/data)
+  mlflow-serve-tracking:5001    # tracking_difficulty モデル実行サービス (pyfunc)
+  mlflow-serve-finish-order:5002
+  mlflow-serve-final-odds:5003
+  mlflow-serve-keiba-lgbm:5010
+  nginx:80/443           # リバースプロキシ + Basic Auth (htpasswd)
+  keiba-api:8000         # FastAPI (data/ + models/ + config/ をマウント)</pre>
+
+  <!-- ───────────────────────────────────── -->
+  <h2 id="ops-commands">主要コマンド</h2>
+
+  <h3>血統 DB 管理</h3>
+  <pre># 初回構築 + GCS アップロード
+python -m src.scripts.data.migrate_bloodline_to_sqlite
+
+# 高頻度テーブルのみ更新 (週次)
+python -m src.scripts.data.migrate_bloodline_to_sqlite --update-tables race_results,horse_names,race_result_slim
+
+# スキーマ変更を含む全再構築
+python -m src.scripts.data.migrate_bloodline_to_sqlite --full
+
+# GCS アップロードのみ
+python -m src.scripts.data.migrate_bloodline_to_sqlite --upload-only
+
+# ローカル確認 (アップロードなし)
+python -m src.scripts.data.migrate_bloodline_to_sqlite --no-upload</pre>
+
+  <h3>予測の事前計算</h3>
+  <pre># 特定日の全レースを事前計算
+python -m src.scripts.maintenance.precompute_tracking_difficulty --date 2026-05-25
+
+# Cron トリガーテスト (前日夜フロー E2E 確認)
+python -m src.scripts.maintenance.verify_eve_trigger_pipeline</pre>
+
+  <h3>MLflow プラットフォーム</h3>
+  <pre># Docker Compose 起動
+cd mlflow/server && docker compose up -d
+
+# ヘルスチェック
+python -m src.scripts.maintenance.mlflow_platform_health
+
+# モデル登録 (学習後)
+python -m src.pipeline.run_baseline_train</pre>
+
+  <h3>スクレイピング</h3>
+  <pre># 馬結果をキューに投入
+python -m src.scripts.scraping.enqueue_horse_results_from_parquet
+
+# キュー状態確認
+curl http://localhost:8000/api/scrape-queue/status
+
+# 手動バックフィル
+python -m src.scraper.backfill --year 2025</pre>
+
+  <div style="height:60px"></div>
+  <hr style="border-color:var(--border); margin: 40px 0 20px">
+  <p style="font-size:12px; color:var(--muted); text-align:center">
+    keiba-vpn docs — レイヤー構成・設計仕様書 — 最終更新 2026-05
+  </p>
+</main>
+</div>
+</body>
+</html>

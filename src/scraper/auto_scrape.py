@@ -557,7 +557,10 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
     logger.info("=" * 60)
 
     precompute_stats: dict[str, Any] = {"ok": 0, "skip": 0, "fail": 0, "total": 0}
+    final_odds_precompute_stats: dict[str, Any] = {"ok": 0, "skip": 0, "fail": 0, "total": 0}
     import os as _os
+
+    race_ids = [str(r["race_id"]) for r in races if r.get("race_id")]
 
     if _os.environ.get("KEIBA_EVE_PRECOMPUTE_TRACKING", "1").strip().lower() not in (
         "0",
@@ -569,7 +572,6 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
                 precompute_tracking_for_race_ids,
             )
 
-            race_ids = [str(r["race_id"]) for r in races if r.get("race_id")]
             precompute_stats = precompute_tracking_for_race_ids(
                 race_ids,
                 runner.storage,
@@ -586,12 +588,38 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
             logger.warning("追走難度 precompute バッチ失敗: %s", exc)
             precompute_stats = {"error": str(exc)}
 
+    if _os.environ.get("KEIBA_EVE_PRECOMPUTE_FINAL_ODDS", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+    ):
+        try:
+            from src.pipeline.inference.final_odds_service import (
+                precompute_final_odds_for_race_ids,
+            )
+
+            final_odds_precompute_stats = precompute_final_odds_for_race_ids(
+                race_ids,
+                runner.storage,
+            )
+            logger.info(
+                "  想定オッズ precompute: ok=%d skip=%d fail=%d / %d",
+                final_odds_precompute_stats["ok"],
+                final_odds_precompute_stats["skip"],
+                final_odds_precompute_stats["fail"],
+                final_odds_precompute_stats["total"],
+            )
+        except Exception as exc:
+            logger.warning("想定オッズ precompute バッチ失敗: %s", exc)
+            final_odds_precompute_stats = {"error": str(exc)}
+
     return {
         "status": "ok",
         "date": date_iso,
         **{k: v for k, v in stats.items() if k != "errors"},
         "error_count": len(stats["errors"]),
         "tracking_precompute": precompute_stats,
+        "final_odds_precompute": final_odds_precompute_stats,
     }
 
 

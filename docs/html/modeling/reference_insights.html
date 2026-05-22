@@ -209,201 +209,284 @@ document.addEventListener("DOMContentLoaded", function() {
     <article class="md-body">
 <h1 id="_1">参考資料から反映した設計メモ</h1>
 <h2 id="_2">目的</h2>
-<p>このメモは、レース直前確率モデル向けデータ準備企画書をブラッシュアップする際に参照した外部資料と、その反映ポイントを整理したものである。</p>
+<p>このメモは、レース直前確率モデル向けのデータ準備企画書を改善する際に参照した外部資料と、そこから得た知見の反映ポイントをまとめたものです。</p>
 <h2 id="_3">参照資料</h2>
-<ul>
-<li><a href="https://syslab.k.hosei.ac.jp/abst/2023-MN-RM.pdf">法政大学 経営数理工学研究室 2023年度卒論要旨 PDF</a></li>
-<li><a href="https://qiita.com/umaro_ai/items/d1e0b61f90098ee7fbcb">Qiita: 機械学習で競馬の回収率140%超を達成</a></li>
-<li><a href="https://qiita.com/dijzpeb/items/db74aa9726aaf55201eb">Qiita: 「機械学習で競馬予想」をガチで作る</a></li>
-<li><a href="https://speakerdeck.com/shoheimitani/machine-learning-with-horse-racing">Speaker Deck: 競馬で学ぶ機械学習の基本と実践</a></li>
-<li><a href="https://medium.com/@prathik.codes/how-to-do-target-encoding-without-data-leakage-the-right-way-280bd24fbc81">How to Do Target Encoding Without Data Leakage</a></li>
-<li><a href="https://github.com/amerob/kaggle-for-ml-engineers">amerob/kaggle-for-ml-engineers</a></li>
-<li><a href="https://github.com/thomastschinkel/autofepg">autofepg</a></li>
-<li><a href="https://towardsdatascience.com/benchmarking-categorical-encoders-9c322bd77ee8">Benchmarking Categorical Encoders</a></li>
-<li><a href="https://en.wikipedia.org/wiki/Purged_cross-validation">Purged cross-validation</a></li>
-<li><a href="https://www.waylandz.com/quant-book-en/Time-Series-Cross-Validation-Purged-CV">Background: Time Series Cross-Validation (Purged CV)</a></li>
-</ul>
+<table>
+<thead>
+<tr><th>資料名</th><th>主な知見</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="https://syslab.k.hosei.ac.jp/abst/2023-MN-RM.pdf">法政大学 経営数理工学研究室 2023年度卒論要旨 PDF</a></td><td>ベースラインを先に固定する戦略、時系列分割の必要性、EDA と欠損点検</td></tr>
+<tr><td><a href="https://qiita.com/umaro_ai/items/d1e0b61f90098ee7fbcb">Qiita: 機械学習で競馬の回収率140%超を達成</a></td><td>1着・2着以内・3着以内の分離、オッズを使わない能力モデル設計</td></tr>
+<tr><td><a href="https://qiita.com/dijzpeb/items/db74aa9726aaf55201eb">Qiita: 「機械学習で競馬予想」をガチで作る</a></td><td>継続開発・バージョン管理・差分比較の重要性</td></tr>
+<tr><td><a href="https://speakerdeck.com/shoheimitani/machine-learning-with-horse-racing">Speaker Deck: 競馬で学ぶ機械学習の基本と実践</a></td><td>確率の信頼性（logloss/Brier）を先に評価、時系列 split、高オッズ帯の安全域</td></tr>
+<tr><td><a href="https://medium.com/@prathik.codes/how-to-do-target-encoding-without-data-leakage-the-right-way-280bd24fbc81">How to Do Target Encoding Without Data Leakage</a></td><td>OOF target encoding の正しい実装方法</td></tr>
+<tr><td><a href="https://github.com/amerob/kaggle-for-ml-engineers">amerob/kaggle-for-ml-engineers</a></td><td>Kaggle テーブルデータ実践パターン</td></tr>
+<tr><td><a href="https://github.com/thomastschinkel/autofepg">autofepg</a></td><td>特徴量エンジニアリング自動化</td></tr>
+<tr><td><a href="https://towardsdatascience.com/benchmarking-categorical-encoders-9c322bd77ee8">Benchmarking Categorical Encoders</a></td><td>カテゴリエンコーダの比較・選定基準</td></tr>
+<tr><td><a href="https://en.wikipedia.org/wiki/Purged_cross-validation">Purged cross-validation</a></td><td>時系列 CV における purge / embargo の理論</td></tr>
+<tr><td><a href="https://www.waylandz.com/quant-book-en/Time-Series-Cross-Validation-Purged-CV">Background: Time Series Cross-Validation (Purged CV)</a></td><td>Purged CV の実装ガイド</td></tr>
+</tbody>
+</table>
 <h2 id="_4">既存コードから反映した点</h2>
-<ul>
-<li><code>src/pipeline/tracking_difficulty.py</code></li>
-<li><code>src/pipeline/pace_predictor.py</code></li>
-<li><code>src/research/bloodline_distance.py</code></li>
-<li><code>src/research/race_quality_model.py</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>モジュール</th><th>役割</th></tr>
+</thead>
+<tbody>
+<tr><td><code>src/pipeline/tracking_difficulty.py</code></td><td>脚質プロファイル・位置取り予測</td></tr>
+<tr><td><code>src/pipeline/pace_predictor.py</code></td><td>ラップタイム・ペース分類予測</td></tr>
+<tr><td><code>src/research/bloodline_distance.py</code></td><td>父・母父と距離適性の関係整理</td></tr>
+<tr><td><code>src/research/race_quality_model.py</code></td><td>脚質タイプ別好走率のベイズ推定</td></tr>
+</tbody>
+</table>
 <h2 id="_5">実装戦略の補足</h2>
-<ul>
-<li><code>docs/html/modeling/modeling_coding_strategy.html</code></li>
-<li><code>docs/html/modeling/race_performance_rating_system.html</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>ドキュメント</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td><code>docs/html/modeling/modeling_coding_strategy.html</code></td><td>Polars・省メモリ・コーディング規約</td></tr>
+<tr><td><code>docs/html/modeling/race_performance_rating_system.html</code></td><td>レースパフォーマンス算出システム設計</td></tr>
+</tbody>
+</table>
 <h2 id="_6">反映したポイント</h2>
+<table>
+<thead>
+<tr><th>#</th><th>ポイント</th><th>反映先</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>ベースラインを先に固定する</td><td><code>pre_race_feature_whitelist.html</code>, <code>horse_pre_race_dataset_spec.html</code></td></tr>
+<tr><td>2</td><td>確率の信頼性を ROI より先に評価する</td><td><code>betting_backtest_dataset_spec.html</code>, <code>dataset_split_manifest.json</code></td></tr>
+<tr><td>3</td><td>時系列順での分割（TimeSeriesSplit）を採用する</td><td><code>dataset_split_manifest.json</code></td></tr>
+<tr><td>4</td><td>1着・2着以内・3着以内を分けて持つ</td><td><code>horse_pre_race_dataset_spec.html</code>, <code>betting_backtest_dataset_spec.html</code></td></tr>
+<tr><td>5</td><td>継続開発を前提に成果物をバージョン管理する</td><td><code>horse_pre_race_dataset_spec.html</code>, <code>betting_backtest_dataset_spec.html</code></td></tr>
+<tr><td>6</td><td>EDA と欠損・外れ値の点検を必須にする</td><td><code>horse_pre_race_dataset_spec.html</code></td></tr>
+<tr><td>7</td><td>市場情報はモデル本体と意思決定層で分離する</td><td><code>pre_race_feature_whitelist.html</code>, <code>betting_backtest_dataset_spec.html</code></td></tr>
+<tr><td>8</td><td>OOF target encoding を正式採用する</td><td><code>horse_pre_race_dataset_spec.html</code>, <code>advanced_modeling_techniques.html</code></td></tr>
+<tr><td>9</td><td>Purge / embargo 付き CV を採用する</td><td><code>dataset_split_manifest.json</code>, <code>advanced_modeling_techniques.html</code></td></tr>
+<tr><td>10</td><td>CatBoost / LightGBM の 2 モデル比較を行う</td><td><code>advanced_modeling_techniques.html</code></td></tr>
+<tr><td>11</td><td>期待値の安全域をルール化する</td><td><code>betting_backtest_dataset_spec.html</code></td></tr>
+<tr><td>12</td><td>追加特徴量は必ず差分比較する</td><td><code>horse_pre_race_dataset_spec.html</code>, <code>advanced_modeling_techniques.html</code></td></tr>
+<tr><td>13</td><td>位置取りを前段モデルで予測する</td><td><code>staged_probability_pipeline.html</code>, <code>horse_pre_race_dataset_spec.html</code></td></tr>
+<tr><td>14</td><td>ペースを前段モデルで予測する</td><td><code>staged_probability_pipeline.html</code>, <code>horse_pre_race_dataset_spec.html</code></td></tr>
+<tr><td>15</td><td>血統適性を当日のコースバイアスと組み合わせる</td><td><code>staged_probability_pipeline.html</code>, <code>horse_pre_race_dataset_spec.html</code></td></tr>
+<tr><td>16</td><td>Polars 中心の省メモリ実装を前提にする</td><td><code>modeling_coding_strategy.html</code>, <code>horse_pre_race_dataset_spec.html</code>, <code>advanced_modeling_techniques.html</code></td></tr>
+</tbody>
+</table>
 <h2 id="1">1. ベースラインを先に固定する</h2>
-<p>Speaker Deck と法政大の資料では、まずは指数中心のシンプルなベースモデルを作り、その後に特徴量を段階的に追加して比較する流れが明確だった。</p>
-<p>これを受けて、今回の設計では以下を明示した。<br />
-- <code>BaselineV1</code> を定義する<br />
-- <code>ExtendedV1</code> を別出力する<br />
-- 追加特徴量の効果は差分で評価する</p>
-<p>反映先:<br />
-- <code>docs/html/modeling/pre_race_feature_whitelist.html</code><br />
-- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code></p>
+<p>Speaker Deck と法政大の資料では、まずシンプルな指数中心のベースモデルを作り、そこから特徴量（予測に使う数値）を段階的に追加・比較する流れが有効であることが示されていました。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>BaselineV1</code> の定義</td><td>最初の比較基準となるシンプルなモデル</td></tr>
+<tr><td><code>ExtendedV1</code> を別出力として用意</td><td>追加特徴量を積み上げたモデル</td></tr>
+<tr><td>差分評価</td><td>追加特徴量の効果は BaselineV1 との差分で評価</td></tr>
+</tbody>
+</table>
 <h2 id="2-roi">2. 確率の信頼性を ROI より先に評価する</h2>
-<p>Speaker Deck では、期待値が 1 を超えても高オッズ帯では小さな確率誤差で簡単に負けに転ぶ点が強調されていた。また <code>logloss</code> や <code>Brier score</code> のような確率の信頼性指標が重要だと示されていた。</p>
-<p>これを受けて、今回の設計では以下を明示した。<br />
-- 一次評価は <code>log_loss</code>, <code>Brier score</code>, <code>ECE</code><br />
-- ROI は二次評価<br />
-- <code>safe_ev</code> と <code>buffer</code> を前提にする<br />
-- 高オッズ帯は安全域付きで扱う</p>
-<p>反映先:<br />
-- <code>docs/html/modeling/betting_backtest_dataset_spec.html</code><br />
-- <code>data/meta/modeling/dataset_split_manifest.json</code></p>
-<h2 id="3-timeseriessplit">3. TimeSeriesSplit / 時系列分割を採用する</h2>
-<p>法政大資料と Speaker Deck の双方で、競馬モデルでは時間順の検証が重要であることが示されていた。</p>
-<p>これを受けて、今回の設計では以下を採用した。<br />
-- <code>2020-2023 train / 2024 valid / 2025 test</code><br />
-- <code>rolling-origin</code> fold<br />
-- 行単位ランダム split 禁止<br />
-- train fold 内での集計・encoding</p>
-<p>反映先:<br />
-- <code>data/meta/modeling/dataset_split_manifest.json</code></p>
-<h2 id="4-123">4. 1着・2着内・3着内を分けて持つ</h2>
-<p>Qiita の 140% 記事では <code>1着指数</code>, <code>2着以内指数</code>, <code>3着以内指数</code> を併せて扱う思想があり、今回のゴールにも合致していた。</p>
-<p>これを受けて、今回の設計ではラベルと出力を最初から 3 本持つ形にした。<br />
-- <code>is_win</code><br />
-- <code>is_top2</code><br />
-- <code>is_top3</code><br />
-- <code>p_win</code><br />
-- <code>p_top2</code><br />
-- <code>p_top3</code></p>
-<p>反映先:<br />
-- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code><br />
-- <code>docs/html/modeling/betting_backtest_dataset_spec.html</code></p>
-<h2 id="5-mlops">5. MLOps / 継続開発前提で成果物を版管理する</h2>
-<p>Qiita の <code>dijzpeb</code> 記事では、単発 notebook で終わらせずに、ソースコード・データ・モデル・実験結果を整理して継続改善できる形にする重要性が強調されていた。</p>
-<p>これを受けて、今回の設計では以下を追加した。<br />
-- <code>data_version</code>, <code>code_version</code>, <code>source_table_versions</code> を成果物に保存<br />
-- <code>dataset_profile.json</code>, <code>feature_missingness.csv</code>, <code>label_balance.json</code> を監査成果物として出す<br />
-- 閾値ルールを <code>bet_policy_thresholds.json</code> のような外部設定で管理する</p>
-<p>反映先:<br />
-- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code><br />
-- <code>docs/html/modeling/betting_backtest_dataset_spec.html</code></p>
-<h2 id="6-eda">6. EDA と欠損・外れ値監査を必須化する</h2>
-<p>法政大資料と Speaker Deck では、分布・欠損・相関・外れ値を先に点検することが、特徴量設計より前に重要とされていた。</p>
-<p>これを受けて、今回の設計では以下を必須にした。<br />
-- <code>dataset_profile.json</code><br />
-- <code>feature_missingness.csv</code><br />
-- <code>segment_coverage.csv</code><br />
-- <code>outlier_watchlist.csv</code></p>
-<p>反映先:<br />
-- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code></p>
+<p>Speaker Deck では、期待値が 1 を超えていても、高オッズ帯ではわずかな確率誤差で簡単に損失になることが強調されていました。<code>logloss</code> や <code>Brier score</code> のような確率の信頼性指標が特に重要とされていました。</p>
+<table>
+<thead>
+<tr><th>評価優先度</th><th>指標</th><th>位置づけ</th></tr>
+</thead>
+<tbody>
+<tr><td>一次</td><td><code>log_loss</code>, <code>Brier score</code>, <code>ECE</code></td><td>確率の信頼性評価</td></tr>
+<tr><td>二次</td><td>ROI</td><td>収益評価（後段）</td></tr>
+<tr><td>安全域</td><td><code>safe_ev</code>（安全域付き期待値）, <code>buffer</code></td><td>高オッズ帯での判定バッファ</td></tr>
+</tbody>
+</table>
+<h2 id="3-timeseriessplit">3. 時系列順での分割（TimeSeriesSplit）を採用する</h2>
+<p>法政大資料と Speaker Deck の両方で、競馬モデルでは時間順での検証が不可欠であることが示されていました。</p>
+<table>
+<thead>
+<tr><th>設定</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td>期間分割</td><td><code>2020-2023 train / 2024 valid / 2025 test</code></td></tr>
+<tr><td>fold 方式</td><td><code>rolling-origin</code> fold</td></tr>
+<tr><td>禁止事項</td><td>行単位のランダム split は禁止</td></tr>
+<tr><td>encoding</td><td>カテゴリ encoding や集計は train fold 内のデータのみで作成</td></tr>
+</tbody>
+</table>
+<h2 id="4-123">4. 1着・2着以内・3着以内を分けて持つ</h2>
+<p>Qiita の 140% 記事では、1着指数・2着以内指数・3着以内指数を並行して扱う設計が示されており、本プロジェクトの目標とも合致していました。</p>
+<table>
+<thead>
+<tr><th>種別</th><th>ラベル</th><th>確率出力</th></tr>
+</thead>
+<tbody>
+<tr><td>1着</td><td><code>is_win</code></td><td><code>p_win</code></td></tr>
+<tr><td>2着以内</td><td><code>is_top2</code></td><td><code>p_top2</code></td></tr>
+<tr><td>3着以内</td><td><code>is_top3</code></td><td><code>p_top3</code></td></tr>
+</tbody>
+</table>
+<h2 id="5-mlops">5. 継続開発を前提に成果物をバージョン管理する</h2>
+<p>Qiita の <code>dijzpeb</code> 記事では、単発の notebook で終わらせず、ソースコード・データ・モデル・実験結果を整理して継続的に改善できる形にする重要性が強調されていました。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>data_version</code>, <code>code_version</code>, <code>source_table_versions</code></td><td>成果物ファイルにバージョン情報を保存</td></tr>
+<tr><td><code>dataset_profile.json</code>, <code>feature_missingness.csv</code>, <code>label_balance.json</code></td><td>監査成果物として出力</td></tr>
+<tr><td><code>bet_policy_thresholds.json</code></td><td>閾値ルールを外部設定ファイルで管理</td></tr>
+</tbody>
+</table>
+<h2 id="6-eda">6. EDA と欠損・外れ値の点検を必須にする</h2>
+<p>法政大資料と Speaker Deck では、特徴量を設計する前に分布・欠損・相関・外れ値を点検することが重要だと示されていました。</p>
+<table>
+<thead>
+<tr><th>必須成果物</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td><code>dataset_profile.json</code></td><td>データ全体の分布・基本統計</td></tr>
+<tr><td><code>feature_missingness.csv</code></td><td>特徴量ごとの欠損率</td></tr>
+<tr><td><code>segment_coverage.csv</code></td><td>セグメント別カバレッジ</td></tr>
+<tr><td><code>outlier_watchlist.csv</code></td><td>外れ値の監視リスト</td></tr>
+</tbody>
+</table>
 <h2 id="7">7. 市場情報はモデル本体と意思決定層で分離する</h2>
-<p>Qiita の 140% 記事は「オッズを特徴量に使わない能力モデル」を示しつつ、Speaker Deck は「期待値計算には市場価格が必要」と示していた。</p>
-<p>この緊張関係を解くため、今回の設計では次のように分けた。<br />
-- <code>LayerA</code>: 市場非依存の能力・状態モデル<br />
-- <code>LayerB</code>: 市場価格を使う意思決定・最適化レイヤ</p>
-<p>反映先:<br />
-- <code>docs/html/modeling/pre_race_feature_whitelist.html</code><br />
-- <code>docs/html/modeling/betting_backtest_dataset_spec.html</code></p>
+<p>Qiita の 140% 記事は「オッズを特徴量に使わない能力モデル」を示し、Speaker Deck は「期待値計算には市場価格が必要」と示していました。この相反する要求を整理するため、以下のように 2 層に分けました。</p>
+<table>
+<thead>
+<tr><th>レイヤ</th><th>役割</th><th>オッズの扱い</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>LayerA</strong></td><td>能力・状態推定モデル</td><td>オッズに依存しない</td></tr>
+<tr><td><strong>LayerB</strong></td><td>意思決定・馬券最適化レイヤ</td><td>オッズを使う</td></tr>
+</tbody>
+</table>
 <h2 id="8-oof-target-encoding">8. OOF target encoding を正式採用する</h2>
-<p>Kaggle 系の実戦では、target encoding は強力だが leakage を起こしやすいため、OOF 前提で使うのが定石とされている。<br />
-また、rare category を global mean に shrink し、unseen category に fallback を持つ実装が一般的である。</p>
-<p>これを受けて、今回の設計では以下を追加した。<br />
-- <code>OOF target encoding</code><br />
-- <code>CatBoost-style ordered target encoding</code><br />
-- <code>OOF aggregate features</code><br />
-- <code>encoding_recipe_version</code></p>
-<p>反映先:<br />
-- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code><br />
-- <code>docs/html/modeling/advanced_modeling_techniques.html</code></p>
-<h2 id="9-purged-embargo-cv">9. Purged / embargo 付き CV を採用する</h2>
-<p>Kaggle の時系列・非IIDタスクでは、通常の KFold より <code>PurgedGroupTimeSeriesSplit</code> が安全であるという知見が多い。</p>
-<p>これを受けて、今回の設計では以下を追加した。<br />
-- <code>cv_policy.primary_scheme = purged_group_time_series_split</code><br />
-- <code>purge_window_days</code><br />
-- <code>embargo_days</code><br />
-- OOF 特徴量も purge / embargo に従う制約</p>
-<p>反映先:<br />
-- <code>data/meta/modeling/dataset_split_manifest.json</code><br />
-- <code>docs/html/modeling/advanced_modeling_techniques.html</code></p>
-<h2 id="10-catboost-lightgbm">10. CatBoost / LightGBM の二本柱を比較対象にする</h2>
-<p>Kaggle の tabular 実戦では、カテゴリ処理に強い CatBoost と、高速で拡張しやすい LightGBM の比較・ブレンドが定番である。</p>
-<p>これを受けて、今回の設計では以下を追加した。<br />
-- <code>LightGBM baseline</code><br />
-- <code>CatBoost baseline</code><br />
-- <code>OOF blending</code></p>
-<p>反映先:<br />
-- <code>docs/html/modeling/advanced_modeling_techniques.html</code></p>
-<h2 id="11">11. 期待値安全域をルール化する</h2>
-<p>Speaker Deck と Qiita の実践例では、高オッズ帯の期待値判定はわずかな確率誤差に弱く、そのまま買うと破綻しやすい点が繰り返し示されていた。</p>
-<p>これを受けて、今回の設計では以下を追加した。<br />
-- <code>safe_ev</code><br />
-- <code>buffer</code><br />
-- <code>bet_policy_thresholds.json</code></p>
-<p>反映先:<br />
-- <code>docs/html/modeling/betting_backtest_dataset_spec.html</code></p>
-<h2 id="12-kaggle">12. Kaggle 的な比較可能性を設計に含める</h2>
-<p>Kaggle 実戦では、「手法を追加したら必ず OOF / holdout で差分比較する」流れが徹底される。</p>
-<p>これを受けて、今回の設計では以下を追加した。<br />
-- <code>BaselineV1</code> / <code>ExtendedV1</code><br />
-- ablation study<br />
-- feature block ごとの ON/OFF 比較<br />
-- adversarial validation の導入</p>
-<p>反映先:<br />
-- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code><br />
-- <code>docs/html/modeling/advanced_modeling_techniques.html</code></p>
-<h2 id="13">13. 位置取りを前段モデル化する</h2>
-<p>既存の <code>src/pipeline/tracking_difficulty.py</code> には、脚質プロファイル・隣枠影響・頭数・コース条件から <code>position_deviation</code> を学習する設計がある。</p>
-<p>これを受けて、今回の設計では以下を追加した。<br />
-- <code>expected_first_corner_pos</code><br />
-- <code>tracking_difficulty_score</code><br />
-- <code>front_run_probability</code><br />
-- <code>stalker_probability</code><br />
-- <code>closer_probability</code><br />
-- 位置取りモデルを FinalProbability の前段に置く</p>
-<p>反映先:<br />
-- <code>docs/html/modeling/staged_probability_pipeline.html</code><br />
-- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code></p>
-<h2 id="14">14. ペースを前段モデル化する</h2>
-<p>既存の <code>src/pipeline/pace_predictor.py</code> には、距離・馬場・頭数・前に行きたい馬の比率から <code>lap_time_1f</code> と <code>lap_time_3f</code> を予測する実装がある。</p>
-<p>これを受けて、今回の設計では以下を追加した。<br />
-- <code>pred_lap_1f</code><br />
-- <code>pred_lap_3f</code><br />
-- <code>pred_pace_class</code><br />
-- <code>pred_energy_distribution</code><br />
-- ペースシナリオを Stage3 として独立</p>
-<p>反映先:<br />
-- <code>docs/html/modeling/staged_probability_pipeline.html</code><br />
-- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code></p>
-<h2 id="15">15. 血統を当日文脈と組み合わせて使う</h2>
-<p>既存の <code>src/research/bloodline_distance.py</code> は sire / dam_sire と距離適性の関係を整理しており、<code>src/research/race_quality_model.py</code> は「そのレースでどのタイプが好走したか」を segment prior と結果整合で推定している。</p>
-<p>この 2 つを組み合わせることで、<br />
-- 血統の静的距離適性<br />
-- その日の馬場タイプ / race-day bias</p>
-<p>の相互作用として血統を扱う設計に広げた。</p>
-<p>追加した考え方:<br />
-- <code>day prior + same-day posterior</code><br />
-- <code>contextual_bloodline_fit</code><br />
-- <code>same_day_sire_cluster_bias</code><br />
-- <code>bloodline_day_fit_speed/stamina/mud/burst</code></p>
-<p>反映先:<br />
-- <code>docs/html/modeling/staged_probability_pipeline.html</code><br />
-- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code></p>
+<p>Kaggle の実践では、target encoding は強力である一方、データリークを起こしやすいため、OOF（Out-of-Fold）方式を前提にすることが定石です。また、出現が少ないカテゴリは全体平均に縮小（shrink）し、未知カテゴリにはフォールバックを持たせることが一般的です。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td>OOF target encoding</td><td>fold 外データのみで encoding を計算</td></tr>
+<tr><td>CatBoost-style ordered target encoding</td><td>時系列順序を保持した encoding</td></tr>
+<tr><td>OOF aggregate features</td><td>集計特徴量も OOF 方式で生成</td></tr>
+<tr><td><code>encoding_recipe_version</code></td><td>再現性のためのバージョン管理</td></tr>
+</tbody>
+</table>
+<h2 id="9-purged-embargo-cv">9. Purge / embargo 付き CV を採用する</h2>
+<p>Kaggle の時系列・非 IID タスクでは、通常の KFold より <code>PurgedGroupTimeSeriesSplit</code> の方が安全であるという知見が多数あります。近い時点のデータが学習・検証に同時に入ることで生じるリークを防ぐための仕組みです。</p>
+<table>
+<thead>
+<tr><th>設定</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td><code>cv_policy.primary_scheme</code></td><td><code>purged_group_time_series_split</code></td></tr>
+<tr><td><code>purge_window_days</code></td><td>学習・検証に同時利用しない期間（除外ウィンドウ）</td></tr>
+<tr><td><code>embargo_days</code></td><td>学習後の待機期間</td></tr>
+<tr><td>OOF 特徴量</td><td>purge / embargo のルールに従う</td></tr>
+</tbody>
+</table>
+<h2 id="10-catboost-lightgbm">10. CatBoost / LightGBM の 2 モデル比較を行う</h2>
+<p>Kaggle のテーブルデータ実践では、カテゴリ変数の処理に強い CatBoost と、高速で拡張しやすい LightGBM（いずれも GBDT、木を積み上げた機械学習モデル）の比較とアンサンブルが定番とされています。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td>LightGBM baseline</td><td>高速で拡張しやすい GBDT</td></tr>
+<tr><td>CatBoost baseline</td><td>カテゴリ変数の処理に強い GBDT</td></tr>
+<tr><td>OOF blending</td><td>複数モデルのアンサンブル</td></tr>
+</tbody>
+</table>
+<h2 id="11">11. 期待値の安全域をルール化する</h2>
+<p>Speaker Deck と Qiita の実践例では、高オッズ帯での期待値判定はわずかな確率誤差に弱く、そのまま買い続けると破綻しやすいことが繰り返し示されていました。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>safe_ev</code>（安全域付き期待値）</td><td>確率誤差を考慮した安全域付き期待値</td></tr>
+<tr><td><code>buffer</code>（判定バッファ）</td><td>高オッズ帯での判定バッファ</td></tr>
+<tr><td><code>bet_policy_thresholds.json</code></td><td>閾値の外部ファイル管理</td></tr>
+</tbody>
+</table>
+<h2 id="12-kaggle">12. 追加特徴量は必ず差分比較する</h2>
+<p>Kaggle の実践では、「手法を追加したら必ず OOF / holdout で差分比較する」流れが徹底されています。思い込みによる過剰な特徴量追加を防ぐために重要なプロセスです。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>BaselineV1</code> / <code>ExtendedV1</code> の 2 本立て</td><td>追加特徴量の効果を差分で測定</td></tr>
+<tr><td>ablation study</td><td>特徴量ブロック単位の寄与測定</td></tr>
+<tr><td>feature block ごとの ON/OFF 比較</td><td>各特徴グループの単独寄与を検証</td></tr>
+<tr><td>adversarial validation</td><td>学習・テスト分布のずれ検出</td></tr>
+</tbody>
+</table>
+<h2 id="13">13. 位置取りを前段モデルで予測する</h2>
+<p>既存の <code>src/pipeline/tracking_difficulty.py</code> には、脚質プロファイル・隣枠影響・頭数・コース条件から <code>position_deviation</code>（位置取りのずれ）を学習する設計があります。</p>
+<table>
+<thead>
+<tr><th>追加特徴量</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>expected_first_corner_pos</code></td><td>予測される第1コーナー通過順</td></tr>
+<tr><td><code>tracking_difficulty_score</code></td><td>位置取りの難しさスコア</td></tr>
+<tr><td><code>front_run_probability</code> / <code>stalker_probability</code> / <code>closer_probability</code></td><td>脚質確率（逃げ / 番手 / 差し）</td></tr>
+</tbody>
+</table>
+<p>位置取りモデルを最終確率モデルの前段に組み込む。</p>
+<h2 id="14">14. ペースを前段モデルで予測する</h2>
+<p>既存の <code>src/pipeline/pace_predictor.py</code> には、距離・馬場・頭数・前に行きたい馬の比率からラップタイムを予測する実装があります。</p>
+<table>
+<thead>
+<tr><th>追加特徴量</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>pred_lap_1f</code> / <code>pred_lap_3f</code></td><td>予測ラップタイム</td></tr>
+<tr><td><code>pred_pace_class</code></td><td>予測ペース分類（ハイ / ミドル / スロー）</td></tr>
+<tr><td><code>pred_energy_distribution</code></td><td>エネルギー分配の予測</td></tr>
+</tbody>
+</table>
+<p>ペースシナリオを Stage3 として独立したモジュールに分ける。</p>
+<h2 id="15">15. 血統適性を当日のコースバイアスと組み合わせる</h2>
+<p>既存の <code>src/research/bloodline_distance.py</code> は父・母父と距離適性の関係を整理しており、<code>src/research/race_quality_model.py</code> は「そのレースでどの脚質タイプが好走したか」をベイズ推定で計算しています。この 2 つを組み合わせると、血統適性（静的な距離適性）とコースバイアス（当日の馬場タイプ）の相互作用として血統を扱う設計になります。</p>
+<table>
+<thead>
+<tr><th>追加した考え方</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>day prior + same-day posterior</code></td><td>事前分布（血統） + 当日更新（馬場）のベイズ的組み合わせ</td></tr>
+<tr><td><code>contextual_bloodline_fit</code></td><td>文脈に応じた血統フィットスコア</td></tr>
+<tr><td><code>same_day_sire_cluster_bias</code></td><td>当日の父系クラスターバイアス</td></tr>
+<tr><td><code>bloodline_day_fit_speed/stamina/mud/burst</code></td><td>スピード / スタミナ / 道悪 / 瞬発別の血統適合度</td></tr>
+</tbody>
+</table>
 <h2 id="16-polars">16. Polars 中心の省メモリ実装を前提にする</h2>
-<p>現在のデータ量と WSL 環境を考えると、全年・全列を <code>pandas</code> で一括処理する実装は不安定である。</p>
-<p>そのため、今回の設計では以下を追加した。<br />
-- <code>polars scan_parquet()</code> を第一選択にする<br />
-- fold 単位で materialize する<br />
-- OOF / stage 出力を都度 Parquet 保存する<br />
-- <code>float32/int8</code> への型削減を前提にする</p>
-<p>反映先:<br />
-- <code>docs/html/modeling/modeling_coding_strategy.html</code><br />
-- <code>docs/html/modeling/horse_pre_race_dataset_spec.html</code><br />
-- <code>docs/html/modeling/advanced_modeling_techniques.html</code></p>
-<h2 id="_7">結論</h2>
-<p>今回のブラッシュアップで、企画書は「何を作るか」だけでなく、<br />
-- どう比較するか<br />
-- どの指標で良し悪しを判断するか<br />
-- どこでリークや過大評価が起きやすいか<br />
-- どう継続改善できる形にするか</p>
-<p>まで含む設計に強化された。</p>
+<p>現在のデータ量と WSL 環境では、全年・全列を pandas で一括処理するとメモリ不足や不安定な動作が起きやすくなります。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>polars scan_parquet()</code> を第一選択</td><td>遅延評価でメモリ効率が高い</td></tr>
+<tr><td>fold 単位で materialize</td><td>fold 単位でメモリ上に展開する</td></tr>
+<tr><td>OOF / stage 出力は都度 Parquet に保存</td><td>中間成果物をファイルで管理</td></tr>
+<tr><td><code>float32</code> / <code>int8</code> への型削減</td><td>メモリ使用量を削減</td></tr>
+</tbody>
+</table>
+<h2 id="_7">まとめ</h2>
+<p>参考資料の知見を反映した結果、設計は「何を作るか」だけでなく、以下まで含む形に強化されました。</p>
+<table>
+<thead>
+<tr><th>強化された観点</th><th>具体的な内容</th></tr>
+</thead>
+<tbody>
+<tr><td>どう比較・検証するか</td><td>BaselineV1 / ExtendedV1 の 2 本立て、ablation study</td></tr>
+<tr><td>どの指標で良し悪しを判断するか</td><td>logloss / Brier score / ECE を一次評価、ROI は二次評価</td></tr>
+<tr><td>どこでリークや過大評価が起きやすいか</td><td>target encoding の OOF 化、time series split、purge / embargo</td></tr>
+<tr><td>継続的に改善できる構造にするにはどうするか</td><td>バージョン管理、監査成果物の出力、外部設定ファイル</td></tr>
+</tbody>
+</table>
     </article>
     <nav class="doc-nav">
       <a href="race_performance_rating_system.html">← レースパフォーマンス算出システム設計</a>

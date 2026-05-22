@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>競走馬パフォーマンス遺伝子ナレッジベース — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>競走馬パフォーマンス遺伝子ナレッジベース</h1>
+      <p class="meta">ソース: <code>docs/html/PERFORMANCE_GENES.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">競走馬パフォーマンス遺伝子ナレッジベース</h1>
+<p>競走馬の運動能力に関係する遺伝子マーカーの知識ベースと推論システムです。遺伝子情報は「どの距離・条件に向いているか」を客観的に推定する手がかりになるため、血統適性の評価を補完する特徴量として活用します。</p>
+<h2 id="_2">対象とする遺伝子マーカー</h2>
+<p>現在、以下の遺伝子マーカーをカバーしています。</p>
+<table>
+  <thead>
+    <tr><th>遺伝子マーカー</th><th>別名・分類</th><th>機能・競走への影響</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>MSTN</strong></td>
+      <td>Myostatin・ミオスタチン遺伝子</td>
+      <td>筋肉量を制御。距離適性に最も影響する。筋肉質な馬はスプリント向き、スリムな馬は長距離向き</td>
+    </tr>
+    <tr>
+      <td><strong>DMRT3</strong></td>
+      <td>歩様遺伝子</td>
+      <td>ギャロップ（通常の競走走法）か側対歩・速歩かを決める。サラブレッドはほぼCC型で固定</td>
+    </tr>
+    <tr>
+      <td><strong>PDK4</strong></td>
+      <td>エネルギー代謝遺伝子</td>
+      <td>糖（グルコース）か脂肪酸どちらを優先的に使うかを決める。長距離では脂肪酸酸化優位（AA型）が有利</td>
+    </tr>
+    <tr>
+      <td><strong>COX4I2</strong></td>
+      <td>ミトコンドリア機能遺伝子</td>
+      <td>酸素の利用効率と持久力に関係する</td>
+    </tr>
+    <tr>
+      <td><strong>BIEC2-808543</strong></td>
+      <td>距離適性SNPマーカー</td>
+      <td>MSTN座近傍の多型マーカー。MSTNと組み合わせると距離予測精度が向上する</td>
+    </tr>
+    <tr>
+      <td>その他候補遺伝子</td>
+      <td>研究段階</td>
+      <td>—</td>
+    </tr>
+  </tbody>
+</table>
+<h2 id="_3">データファイル</h2>
+<table>
+  <thead>
+    <tr><th>ファイル</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>data/knowledge/myostatin_genes.json</code></td>
+      <td>ミオスタチン遺伝子（MSTN）専用のナレッジベース。130頭以上の競走馬・種牡馬の遺伝子型データ。産駒逆推論による継続的更新</td>
+    </tr>
+    <tr>
+      <td><code>data/knowledge/performance_genes.json</code></td>
+      <td>MSTN以外のパフォーマンス関連遺伝子。遺伝子機能・多型・競走能力との関連・遺伝子間相互作用を記録</td>
+    </tr>
+  </tbody>
+</table>
+<h2 id="python">Pythonモジュール</h2>
+<h3 id="srcresearchmyostatinpy"><code>src/research/myostatin.py</code></h3>
+<p>ミオスタチン遺伝子専用の解析モジュール。</p>
+<pre><code class="language-python">from research.genes.myostatin import MyostatinLookup
+
+mstn = MyostatinLookup()
+
+# 馬の遺伝子型を検索（種牡馬・競走馬どちらも対象）
+info = mstn.get_sire_info(&quot;ディープインパクト&quot;)
+# → {'genotype': 'TT', 'confidence': 'confirmed', ...}
+
+# 産駒の遺伝子型確率を推定
+probs = mstn.predict_offspring(&quot;ディープインパクト&quot;, &quot;キングカメハメハ&quot;)
+# → {'CC': 0.0, 'CT': 0.5, 'TT': 0.5}
+
+# 距離適合度を算出
+affinity = mstn.distance_affinity(&quot;ディープインパクト&quot;, &quot;キングカメハメハ&quot;, 2400)
+# → 0.8547（高適合）
+</code></pre>
+<h3 id="srcresearchperformance_genespy"><code>src/research/performance_genes.py</code></h3>
+<p>MSTN以外のパフォーマンス遺伝子解析モジュール。</p>
+<pre><code class="language-python">from research.genes.performance_genes import PerformanceGenes
+
+pg = PerformanceGenes()
+
+# DMRT3（歩様）の適合度
+gait = pg.dmrt3_gait_type(&quot;CC&quot;)  # → &quot;gallop&quot;
+suitability = pg.dmrt3_thoroughbred_suitability(&quot;CC&quot;)  # → 1.0
+
+# PDK4（代謝）の距離適性
+profile = pg.pdk4_distance_preference(&quot;AA&quot;)
+# → {'optimal_distance': 2200, 'stamina_score': 0.9, ...}
+
+# 複数遺伝子の統合プロファイル
+combined = pg.get_combined_distance_profile(
+    mstn=&quot;CT&quot;,
+    pdk4=&quot;GA&quot;,
+    biec2=&quot;CT&quot;,
+    distance_m=1800
+)
+# → {
+#     'optimal_distance': 1750,
+#     'distance_score': 0.95,
+#     'speed_index': 0.5,
+#     'stamina_index': 0.5,
+#     ...
+# }
+
+# 極端表現型（超スプリント/超ステイヤー）の判定
+extreme = pg.check_extreme_phenotype(mstn=&quot;TT&quot;, pdk4=&quot;AA&quot;)
+# → {'is_extreme': True, 'phenotype': 'ultra_stayer', ...}
+</code></pre>
+<h2 id="cli">CLI使用例</h2>
+<h3 id="_4">ミオスタチン遺伝子</h3>
+<pre><code class="language-bash"># 馬の遺伝子型を検索（種牡馬・競走馬どちらも対象）
+python3 -m src.research.genes.myostatin lookup ディープインパクト
+
+# 産駒の遺伝子型確率を推定
+python3 -m src.research.genes.myostatin predict ディープインパクト キングカメハメハ --distance 2000
+
+# 登録馬一覧（種牡馬・競走馬）
+python3 -m src.research.genes.myostatin list
+
+# 統計情報
+python3 -m src.research.genes.myostatin stats
+</code></pre>
+<h3 id="_5">その他のパフォーマンス遺伝子</h3>
+<pre><code class="language-bash"># 登録遺伝子一覧
+python3 -m src.research.genes.performance_genes list
+
+# 遺伝子情報表示
+python3 -m src.research.genes.performance_genes gene DMRT3
+
+# DMRT3遺伝子型の評価
+python3 -m src.research.genes.performance_genes dmrt3 CC
+
+# PDK4遺伝子型の距離適性
+python3 -m src.research.genes.performance_genes pdk4 AA
+
+# 統合的距離適性プロファイル
+python3 -m src.research.genes.performance_genes combined \
+  --mstn CT --pdk4 GA --biec2 CT --distance 2000
+
+# 極端表現型チェック
+python3 -m src.research.genes.performance_genes extreme --mstn TT --pdk4 AA
+</code></pre>
+<h2 id="_6">パイプラインへの組み込み</h2>
+<h3 id="srcpipelinefeature_builderpy"><code>src/pipeline/feature_builder.py</code></h3>
+<p>特徴量生成時に、遺伝子関連の特徴量が自動で追加されます。</p>
+<pre><code class="language-python">from research.genes.myostatin import get_lookup as get_mstn
+from research.genes.performance_genes import get_lookup as get_perf_genes
+
+mstn = get_mstn()
+pg = get_perf_genes()
+
+# ミオスタチン特徴量（既存）
+mstn_features = mstn.offspring_features(
+    sire_name=&quot;ディープインパクト&quot;,
+    dam_sire_name=&quot;キングカメハメハ&quot;,
+    distance_m=2000
+)
+# → {
+#     'sire_mstn_c': 0.0, 'sire_mstn_t': 1.0,
+#     'mstn_cc_prob': 0.0, 'mstn_ct_prob': 0.5, 'mstn_tt_prob': 0.5,
+#     'mstn_distance_affinity': 0.85,
+#     'mstn_speed_index': 0.0,
+#     ...
+# }
+
+# 統合的距離プロファイル（新規）
+# ※種牡馬のPDK4/BIEC2遺伝子型データが蓄積されたら利用可能
+combined_profile = pg.get_combined_distance_profile(
+    mstn=&quot;TT&quot;,  # MSTNはmstn.predict_offspringから取得
+    pdk4=&quot;GA&quot;,  # 将来的に種牡馬DBから取得
+    biec2=&quot;CT&quot;,
+    distance_m=2000
+)
+# → {
+#     'optimal_distance': 2100,
+#     'distance_score': 0.92,
+#     'speed_index': 0.3,
+#     'stamina_index': 0.7,
+#     ...
+# }
+</code></pre>
+<p><strong>生成される主な特徴量:</strong></p>
+<table>
+  <thead>
+    <tr><th>特徴量名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>mstn_cc_prob</code>, <code>mstn_ct_prob</code>, <code>mstn_tt_prob</code></td>
+      <td>MSTN遺伝子型（CC/CT/TT）の推定確率</td>
+    </tr>
+    <tr>
+      <td><code>mstn_distance_affinity</code></td>
+      <td>MSTN単独で計算した距離適合度</td>
+    </tr>
+    <tr>
+      <td><code>mstn_speed_index</code></td>
+      <td>スプリント寄りの度合い（0=長距離寄り, 1=短距離寄り）</td>
+    </tr>
+    <tr>
+      <td><code>gene_optimal_distance</code></td>
+      <td>複数遺伝子を統合した最適距離の推定値</td>
+    </tr>
+    <tr>
+      <td><code>gene_distance_score</code></td>
+      <td>対象レース距離での遺伝子的な適合度</td>
+    </tr>
+    <tr>
+      <td><code>gene_speed_index</code></td>
+      <td>統合スピード指数</td>
+    </tr>
+    <tr>
+      <td><code>gene_stamina_index</code></td>
+      <td>統合スタミナ指数</td>
+    </tr>
+  </tbody>
+</table>
+<h2 id="_7">遺伝子型の推定方法</h2>
+<p>遺伝子型データの取得方法は信頼度によって3段階あります。</p>
+<h3 id="_8">直接データ（信頼度：高）</h3>
+<ol>
+<li>一口馬主クラブ・@Plucky_Liege 等が公表した遺伝子検査結果</li>
+<li>学術論文での個体遺伝子型の報告</li>
+<li>Equinome・LRC等の商業検査サービスのデータ</li>
+</ol>
+<h3 id="_9">逆推論（信頼度：中）</h3>
+<p>産駒の遺伝子型が判明している場合、メンデル遺伝の法則から親の型を絞り込めます。</p>
+<table>
+  <thead>
+    <tr><th>産駒の遺伝子型</th><th>推論できる親の制約</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CC型確定（例: サトノカルナバル）</td>
+      <td>父（例: キタサンブラック）はCアレルを必ず持つ（CC or CT）</td>
+    </tr>
+    <tr>
+      <td>CC型が確認（例: ゴールドシップ産駒）</td>
+      <td>親（例: ゴールドシップ）はCT推定（TT型は除外される）</td>
+    </tr>
+    <tr>
+      <td>TT型の産駒が誕生</td>
+      <td>両親ともTアレルを保有（CC型は除外）</td>
+    </tr>
+    <tr>
+      <td>CC型の産駒が誕生</td>
+      <td>両親ともCアレルを保有（TT型は除外）</td>
+    </tr>
+  </tbody>
+</table>
+<h3 id="_10">血統推論（信頼度：低〜中）</h3>
+<ol>
+<li>父の遺伝子型から産駒の型を統計的に推定</li>
+<li>同系統馬の遺伝子型傾向を参考にする</li>
+<li>競走成績・産駒傾向からの間接的な推定</li>
+</ol>
+<h2 id="_11">データ更新の手順</h2>
+<h3 id="1">1. 新規情報の収集</h3>
+<ul>
+<li>X/Twitter（@Plucky_Liege 等）での産駒遺伝子型の報告</li>
+<li>一口馬主クラブの検査結果公表</li>
+<li>学術論文・業界誌の新知見</li>
+</ul>
+<h3 id="2">2. 逆推論の実行</h3>
+<pre><code class="language-python">from research.genes.myostatin import MyostatinLookup
+
+mstn = MyostatinLookup()
+
+# 産駒の遺伝子型から親の制約を推論
+result = mstn.reverse_infer(
+    offspring_genotype=&quot;CC&quot;,
+    sire_name=&quot;キタサンブラック&quot;
+)
+# → {
+#     'sire_constraints': {
+#         'has_c': True,
+#         'possible_genotypes': ['CC', 'CT'],
+#         'excludes': ['TT']
+#     },
+#     ...
+# }
+</code></pre>
+<h3 id="3">3. ナレッジベースの更新</h3>
+<ul>
+<li><code>myostatin_genes.json</code> を直接編集します</li>
+<li>種牡馬だけでなく、主要な競走馬（GI勝ち馬など）も記録します</li>
+<li><code>confidence</code> フィールドに信頼度レベルを適切に設定します</li>
+<li><code>source</code> フィールドに情報の出典を記録します</li>
+<li><code>update_log</code> に変更履歴を追記します</li>
+</ul>
+<h3 id="4">4. 検証</h3>
+<pre><code class="language-bash"># 整合性チェック（遺伝法則に矛盾がないか）
+python3 -m src.research.genes.myostatin stats
+
+# 産駒推定のテスト
+python3 -m src.research.genes.myostatin predict &lt;父名&gt; &lt;母父名&gt;
+</code></pre>
+<h2 id="_12">遺伝子間の相互作用</h2>
+<table>
+  <thead>
+    <tr><th>組み合わせ</th><th>遺伝的関係</th><th>予測への影響</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>MSTN × PDK4</strong><br><small>TT × AA</small></td>
+      <td>独立して作用</td>
+      <td>超長距離型（2400m以上向き）。スリムな体型＋脂肪酸酸化優位で極長距離に特化しやすい</td>
+    </tr>
+    <tr>
+      <td><strong>MSTN × PDK4</strong><br><small>CC × GG</small></td>
+      <td>独立して作用</td>
+      <td>超短距離型（1000〜1200m向き）。筋肉質の体型＋グルコース代謝優位で極短距離に特化しやすい</td>
+    </tr>
+    <tr>
+      <td><strong>MSTN × BIEC2-808543</strong></td>
+      <td>染色体上で近い位置にあるため同時に遺伝しやすい（連鎖不平衡）</td>
+      <td>両マーカーを組み合わせると単独より距離適性の予測精度が向上する</td>
+    </tr>
+    <tr>
+      <td><strong>DMRT3 × MSTN</strong></td>
+      <td>異なる染色体に位置するため独立して遺伝する</td>
+      <td>DMRT3は歩様パターン、MSTNは筋量と距離適性を別々に制御。サラブレッドではDMRT3=CCがほぼ固定されているため実質的な差異はほとんどない</td>
+    </tr>
+  </tbody>
+</table>
+<h2 id="_13">限界と注意事項</h2>
+<table>
+  <thead>
+    <tr><th>#</th><th>注意点</th><th>詳細</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>競走能力は多数の遺伝子が関与する</td>
+      <td>競走能力は数百〜数千の遺伝子が絡む複雑な形質。少数マーカーだけで能力を説明できる範囲は限定的</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>環境要因の影響が大きい</td>
+      <td>調教内容・栄養管理・騎手の技術・馬場状態などの環境要因は、遺伝要因と同等かそれ以上に競走結果に影響する</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>遺伝子型は「傾向」であり「確定」ではない</td>
+      <td>同じ遺伝子型を持っていても個体差は大きい。「この型なら必ず長距離が得意」とはならない</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>データに偏りがある</td>
+      <td>GI勝ち馬・種牡馬などエリート馬のデータは豊富だが一般競走馬は不足。日本馬が中心で欧米馬のデータは限られる。遺伝子検査は一口馬主クラブの馬が主体で代表性に限界あり</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>未発見の遺伝子が多数ある</td>
+      <td>現在把握しているマーカーは氷山の一角。多くの重要遺伝子がまだ発見されていない</td>
+    </tr>
+  </tbody>
+</table>
+<h2 id="_14">今後の展開計画</h2>
+<table>
+  <thead>
+    <tr><th>期間</th><th>タスク</th><th>ステータス</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="3"><strong>短期（〜6ヶ月）</strong></td>
+      <td>主要馬のPDK4・BIEC2遺伝子型データの収集</td>
+      <td>[ ] 未着手</td>
+    </tr>
+    <tr>
+      <td>統合距離プロファイルのパイプライン実装</td>
+      <td>[ ] 未着手</td>
+    </tr>
+    <tr>
+      <td>WebUI（<code>/performance-genes</code> ページ）の追加</td>
+      <td>[ ] 未着手</td>
+    </tr>
+    <tr>
+      <td rowspan="3"><strong>中期（〜1年）</strong></td>
+      <td>5代血統からの遺伝子型確率の推定</td>
+      <td>[ ] 未着手</td>
+    </tr>
+    <tr>
+      <td>産駒実績データとの相関分析（遺伝子型 vs 勝率・着度数）</td>
+      <td>[ ] 未着手</td>
+    </tr>
+    <tr>
+      <td>調教データとの統合（遺伝子型別の最適調教パターン分析）</td>
+      <td>[ ] 未着手</td>
+    </tr>
+    <tr>
+      <td rowspan="3"><strong>長期（1年以上）</strong></td>
+      <td>ゲノムワイド育種価（GBLUP）の導入</td>
+      <td>[ ] 未着手</td>
+    </tr>
+    <tr>
+      <td>エピジェネティクス要因の研究</td>
+      <td>[ ] 未着手</td>
+    </tr>
+    <tr>
+      <td>マルチオミクス統合（遺伝子発現・代謝物などを組み合わせた解析）</td>
+      <td>[ ] 未着手</td>
+    </tr>
+  </tbody>
+</table>
+<h2 id="_15">参考文献</h2>
+<h3 id="_16">学術論文</h3>
+<table>
+  <thead>
+    <tr><th>著者・年</th><th>タイトル</th><th>掲載誌</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Hill EW et al. (2010)</td>
+      <td>A sequence polymorphism in MSTN predicts sprinting ability and racing stamina in thoroughbred horses</td>
+      <td>PLoS ONE</td>
+    </tr>
+    <tr>
+      <td>Andersson LS et al. (2012)</td>
+      <td>Mutations in DMRT3 affect locomotion in horses and spinal circuit function in mice</td>
+      <td>Nature 488:642-646</td>
+    </tr>
+    <tr>
+      <td>McGivney BA et al. (2010)</td>
+      <td>MSTN genotypes in Thoroughbred horses influence skeletal muscle gene expression and racetrack performance</td>
+      <td>Functional Genomics</td>
+    </tr>
+    <tr>
+      <td>Gu J et al. (2009)</td>
+      <td>A genome scan for positive selection in thoroughbred horses</td>
+      <td>Genomics</td>
+    </tr>
+    <tr>
+      <td>Hill EW et al. (2019)</td>
+      <td>Moderate and high intensity sprint exercise induce differential responses in COX4I2 and PDK4 gene expression in Thoroughbred horse skeletal muscle</td>
+      <td>Equine Veterinary Journal</td>
+    </tr>
+  </tbody>
+</table>
+<h3 id="_17">ウェブリソース</h3>
+<ul>
+<li><a href="https://sg-test.lrc.or.jp/sg.php">LRC スピード遺伝子検査</a></li>
+<li><a href="https://equinome.com/">Equinome - 遺伝子検査サービス</a></li>
+<li><a href="https://uma-furi.com/myostatin/">馬ふり - ミオスタチン遺伝子解説</a></li>
+<li><a href="https://x.com/Plucky_Liege">@Plucky_Liege (X/Twitter)</a> - 産駒遺伝子型報告</li>
+<li><a href="https://chunichi.co.jp/">中日スポーツ - 獣医師記者コラム</a></li>
+</ul>
+<h3 id="_18">データベース</h3>
+<ul>
+<li>NCBI Gene Database</li>
+<li>Ensembl Genome Browser (Horse)</li>
+<li>UCSC Genome Browser (EquCab3.0)</li>
+</ul>
+<h2 id="_19">免責事項</h2>
+<h3 id="_20">データの利用について</h3>
+<ul>
+<li>本ナレッジベースは公開情報・学術文献をもとに構築しています。</li>
+<li>種牡馬遺伝子型の推定値は確定情報ではありません。</li>
+<li>商業利用の際は、独自に検証することを推奨します。</li>
+</ul>
+<h3 id="_21">免責</h3>
+<ul>
+<li>遺伝子型データの正確性を保証しません。</li>
+<li>本情報に基づいて馬券を購入した場合や馬体評価を行った場合の結果について、一切の責任を負いません。</li>
+<li>育種・調教への応用は専門家に相談してください。</li>
+</ul>
+    </article>
+    <nav class="doc-nav">
+      <a href="PEDIGREE_NOTE_APTITUDE.html">← 血統適性ナレッジ（note まとめ → 特徴量 → モデル）</a>
+      <a href="../appendix/cost.html">GCS コスト分析レポート →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">PERFORMANCE_GENES.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

@@ -206,29 +206,34 @@ document.addEventListener("DOMContentLoaded", function() {
       <h1>多段階レース直前確率パイプライン設計</h1>
       <p class="meta">ソース: <code>docs/html/modeling/staged_probability_pipeline.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
-    <article class="md-body">
-<h1 id="_1">多段階レース直前確率パイプライン設計</h1>
-<h2 id="_2">目的</h2>
-<p>このドキュメントは、<code>勝率</code>・<code>連対率</code>・<code>複勝率</code> を単一モデルで直接当てに行くだけでなく、<br />
-<code>位置取り</code>、<code>ペース</code>、<code>当日馬場タイプ</code>、<code>血統適性</code> といった中間状態を順に推定して最終確率へ接続する、多段階パイプラインの設計を定義する。</p>
-<p>前提として、ここでいう多段階化は「モデルを複雑にすること」そのものが目的ではなく、<br />
-- ドメインに沿った中間変数を明示する<br />
-- モデルの失敗原因を分解しやすくする<br />
-- 当日更新できる情報と、事前固定の情報を切り分ける<br />
-- 血統を“その日の馬場特性に応じて”使い分ける</p>
-<p>ために行う。</p>
-<h2 id="_3">基本思想</h2>
+    <article class=”html-body”>
+<h1 id=”_1”>多段階レース直前確率パイプライン設計</h1>
+<h2 id=”_2”>目的</h2>
+<p>このドキュメントは、<code>勝率</code>・<code>連対率</code>・<code>複勝率</code> を単一モデルで直接予測するだけでなく、<code>位置取り</code>、<code>ペース</code>、<code>当日馬場タイプ</code>、<code>血統適性</code> といった中間状態を順に推定して最終確率へつなぐ、多段階の処理の流れ（パイプライン）の設計を定義する。</p>
+<p>多段階化の目的は「モデルを複雑にすること」ではない。以下の理由で行う。</p>
 <ul>
-<li><code>Stage0</code>: レース直前時点の母表を作る</li>
-<li><code>Stage1</code>: 馬単体の latent state を作る</li>
-<li><code>Stage2</code>: 位置取り / 追走難度を予測する</li>
-<li><code>Stage3</code>: レース全体のペースシナリオを予測する</li>
-<li><code>Stage4</code>: 当日馬場タイプ / race-day bias を推定する</li>
-<li><code>Stage5</code>: 血統・適性の当日文脈適合度を推定する</li>
-<li><code>Stage6</code>: それらを入力に最終 <code>p_win / p_top2 / p_top3</code> を推定する</li>
-<li><code>Stage7</code>: 市場統合・馬券最適化へ渡す</li>
+<li>競馬ドメインに沿った中間変数を明示し、解釈しやすくする</li>
+<li>予測が外れたときの原因を段階ごとに分解しやすくする</li>
+<li>当日更新できる情報（馬場・オッズ）と事前固定の情報（血統・戦績）を明確に切り分ける</li>
+<li>血統を”その日の馬場特性に応じて”使い分ける</li>
 </ul>
-<h2 id="_4">全体像</h2>
+<h2 id=”_3”>基本思想</h2>
+<table>
+  <thead>
+    <tr><th>Stage</th><th>役割</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>Stage0</code></td><td>レース直前時点の学習母表を作る</td></tr>
+    <tr><td><code>Stage1</code></td><td>馬単体の能力・状態を要約した潜在表現（latent state）を作る</td></tr>
+    <tr><td><code>Stage2</code></td><td>位置取り・追走難度を予測する</td></tr>
+    <tr><td><code>Stage3</code></td><td>レース全体のペースシナリオを予測する</td></tr>
+    <tr><td><code>Stage4</code></td><td>当日馬場タイプ・レース当日バイアス（race-day bias）を推定する</td></tr>
+    <tr><td><code>Stage5</code></td><td>血統・適性の当日文脈への適合度を推定する</td></tr>
+    <tr><td><code>Stage6</code></td><td>Stage1〜5 の出力をまとめて最終確率 <code>p_win / p_top2 / p_top3</code> を推定する</td></tr>
+    <tr><td><code>Stage7</code></td><td>市場統合・馬券最適化へ渡す</td></tr>
+  </tbody>
+</table>
+<h2 id=”_4”>全体像</h2>
 <div class="mermaid">flowchart TD
     stage0[Stage0_PreRaceDataset] --> stage1[Stage1_HorseLatentState]
     stage1 --> stage2[Stage2_Positioning]
@@ -246,8 +251,8 @@ document.addEventListener("DOMContentLoaded", function() {
 <h2 id="stage0-pre-race">Stage0: Pre-race 母表</h2>
 <h2 id="_5">役割</h2>
 <ul>
-<li><code>race_shutuba_flat</code> を母表にする</li>
-<li><code>race_shutuba_past_flat</code>, <code>race_index_flat</code>, <code>race_oikiri_flat</code>, <code>race_paddock_flat</code>, <code>race_trainer_comment_flat</code> を時点整合で join する</li>
+<li><code>race_shutuba_flat</code> を学習母表の起点にする</li>
+<li><code>race_shutuba_past_flat</code>, <code>race_index_flat</code>, <code>race_oikiri_flat</code>, <code>race_paddock_flat</code>, <code>race_trainer_comment_flat</code> を時点整合で結合する</li>
 <li>GCS horse bundle とクッション値を統合する</li>
 </ul>
 <h2 id="_6">出力候補</h2>
@@ -256,23 +261,22 @@ document.addEventListener("DOMContentLoaded", function() {
 <li><code>horse_labels.parquet</code></li>
 <li><code>race_market_snapshot.parquet</code></li>
 </ul>
-<h2 id="stage1-horse-latent-state">Stage1: Horse latent state</h2>
+<h2 id="stage1-horse-latent-state">Stage1: Horse latent state（馬の潜在表現）</h2>
 <h2 id="_7">役割</h2>
-<p>馬単体の「今の地力・適性・仕上がり」を要約する。<br />
-最終確率モデルに直接生列を大量投入するより、意味のある latent block に整理する。</p>
-<h2 id="latent-block">主な latent block</h2>
-<ul>
-<li><code>ability_latent</code></li>
-<li>近5走戦績、同条件成績、speed index、career stats</li>
-<li><code>form_latent</code></li>
-<li>休み明け、叩き何戦目、馬体重変化、近走トレンド</li>
-<li><code>surface_distance_latent</code></li>
-<li>芝/ダート・距離帯適性</li>
-<li><code>pedigree_latent</code></li>
-<li>sire / dam_sire / myostatin / note aptitude</li>
-<li><code>trainer_jockey_latent</code></li>
-<li>OOF target encoding や CatBoost ordered encoding で作る人馬・陣営系</li>
-</ul>
+<p>馬単体の「現在の地力・適性・仕上がり」を意味のある固まりに要約する。生の特徴量（予測に使う数値）を大量に最終確率モデルへ直接渡すのではなく、解釈しやすい潜在ブロック（latent block）に整理する。</p>
+<h2 id="latent-block">主な潜在ブロック（latent block）</h2>
+<table>
+  <thead>
+    <tr><th>ブロック名</th><th>意味</th><th>主な入力情報</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>ability_latent</code></td><td>能力</td><td>近5走戦績、同条件成績、speed index、通算成績</td></tr>
+    <tr><td><code>form_latent</code></td><td>仕上がり</td><td>休み明け、叩き何戦目、馬体重変化、近走トレンド</td></tr>
+    <tr><td><code>surface_distance_latent</code></td><td>芝・ダート適性</td><td>芝/ダート・距離帯ごとの成績傾向</td></tr>
+    <tr><td><code>pedigree_latent</code></td><td>血統</td><td>sire / dam_sire / myostatin / note aptitude</td></tr>
+    <tr><td><code>trainer_jockey_latent</code></td><td>陣営</td><td>交差検証での予測（OOF）によるターゲットエンコーディングや CatBoost ordered encoding で生成した人馬・陣営系の特徴量</td></tr>
+  </tbody>
+</table>
 <h2 id="_8">出力候補</h2>
 <ul>
 <li><code>horse_latent_state.parquet</code></li>
@@ -284,116 +288,108 @@ document.addEventListener("DOMContentLoaded", function() {
 <ul>
 <li><code>src/pipeline/tracking_difficulty.py</code></li>
 </ul>
-<h2 id="_11">入力</h2>
+<h2 id="_11">入力特徴量 / 出力 / 学習ターゲット</h2>
+<table>
+  <thead>
+    <tr><th>区分</th><th>項目</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>入力特徴量</td><td>直近走の通過順傾向、脚質のばらつき、枠順・馬番、隣枠の馬の傾向、出走頭数、コース・距離、馬場状態</td></tr>
+    <tr><td>出力</td><td><code>expected_first_corner_pos</code>, <code>expected_first_corner_pos_norm</code>, <code>tracking_difficulty_score</code>, <code>front_run_probability</code>, <code>stalker_probability</code>, <code>closer_probability</code></td></tr>
+    <tr><td>学習ターゲット</td><td>既存 <code>position_deviation</code>、または <code>first_corner_rank_norm</code></td></tr>
+  </tbody>
+</table>
+<h2 id="_14">このステージの価値</h2>
 <ul>
-<li>直近走の通過順傾向</li>
-<li>脚質ばらつき</li>
-<li>枠順・馬番</li>
-<li>隣枠馬の傾向</li>
-<li>頭数</li>
-<li>コース・距離</li>
-<li>馬場状態</li>
-</ul>
-<h2 id="_12">出力</h2>
-<ul>
-<li><code>expected_first_corner_pos</code></li>
-<li><code>expected_first_corner_pos_norm</code></li>
-<li><code>tracking_difficulty_score</code></li>
-<li><code>front_run_probability</code></li>
-<li><code>stalker_probability</code></li>
-<li><code>closer_probability</code></li>
-</ul>
-<h2 id="_13">学習ターゲット</h2>
-<ul>
-<li>既存 <code>position_deviation</code></li>
-<li>または <code>first_corner_rank_norm</code></li>
-</ul>
-<h2 id="_14">価値</h2>
-<ul>
-<li>位置取りは、最終着順の前段変数として解釈しやすい</li>
+<li>位置取りは最終着順の前段変数として解釈しやすい</li>
 <li>後段のペースモデルと自然につながる</li>
 </ul>
 <h2 id="stage3">Stage3: ペースシナリオモデル</h2>
 <h2 id="_15">目的</h2>
-<p>レース全体の前半流速・消耗度・上がり勝負化を推定する。</p>
+<p>レース全体の前半ラップ速度・消耗度・上がり勝負になりやすさを推定する。</p>
 <h2 id="_16">既存コードの活用先</h2>
 <ul>
 <li><code>src/pipeline/pace_predictor.py</code></li>
 </ul>
-<h2 id="_17">入力</h2>
-<ul>
-<li>Stage2 の <code>front_run_probability</code> 集約</li>
-<li>頭数</li>
-<li>距離</li>
-<li>surface</li>
-<li>track_condition</li>
-<li>venue</li>
-<li>grade</li>
-<li>逃げ・先行馬の想定頭数</li>
-</ul>
-<h2 id="_18">出力</h2>
-<ul>
-<li><code>pred_lap_1f</code></li>
-<li><code>pred_lap_3f</code></li>
-<li><code>pred_pace_class</code></li>
-<li><code>slow</code></li>
-<li><code>average</code></li>
-<li><code>fast</code></li>
-<li><code>pred_energy_distribution</code></li>
-<li>瞬発</li>
-<li>持続</li>
-<li>消耗</li>
-</ul>
-<h2 id="_19">派生特徴</h2>
-<ul>
-<li><code>pace_pressure_proxy</code></li>
-<li><code>late_kick_advantage</code></li>
-<li><code>front_runner_penalty</code></li>
-</ul>
+<h2 id="_17">入力特徴量 / 出力 / 派生特徴量</h2>
+<table>
+  <thead>
+    <tr><th>区分</th><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="8">入力特徴量</td><td><code>front_run_probability</code>（Stage2集約）</td><td>逃げ確率の集約値</td></tr>
+    <tr><td>出走頭数</td><td></td></tr>
+    <tr><td>距離</td><td></td></tr>
+    <tr><td>surface</td><td>芝/ダート</td></tr>
+    <tr><td>track_condition</td><td>馬場状態</td></tr>
+    <tr><td>venue</td><td>開催場</td></tr>
+    <tr><td>grade</td><td>レース格</td></tr>
+    <tr><td>逃げ・先行馬の想定頭数</td><td></td></tr>
+    <tr><td rowspan="4">出力</td><td><code>pred_lap_1f</code></td><td>予測1ハロンタイム</td></tr>
+    <tr><td><code>pred_lap_3f</code></td><td>予測3ハロンタイム</td></tr>
+    <tr><td><code>pred_pace_class</code></td><td>slow / average / fast</td></tr>
+    <tr><td><code>pred_energy_distribution</code></td><td>瞬発 / 持続 / 消耗</td></tr>
+    <tr><td rowspan="3">派生特徴量</td><td><code>pace_pressure_proxy</code></td><td>ペースの厳しさ代理変数</td></tr>
+    <tr><td><code>late_kick_advantage</code></td><td>差し・追い込みへの有利度</td></tr>
+    <tr><td><code>front_runner_penalty</code></td><td>逃げ・先行への不利度</td></tr>
+  </tbody>
+</table>
 <h2 id="stage4-race-day-bias">Stage4: 当日馬場タイプ / race-day bias モデル</h2>
 <h2 id="_20">目的</h2>
-<p>「今日はどんな馬が走りやすい日か」を、レース条件の事前情報と、同日先行レースの結果から動的に更新する。</p>
-<p>これはユーザー要望の</p>
+<p>「今日はどんな馬が走りやすい日か」を推定する。レース条件の事前情報と、同日先行レースの結果を組み合わせて動的に更新する。</p>
 <blockquote>
-<p>その日によって好走しやすい馬のタイプが変わる<br />
-を扱うための中心ステージ。</p>
+<p>その日によって好走しやすい馬のタイプが変わる、という性質を扱うための中心ステージ。</p>
 </blockquote>
 <h2 id="_21">二層構造</h2>
-<h3 id="stage4a-day-prior">Stage4A: 事前 day prior</h3>
-<p>対象レースが始まる前に、以下から当日バイアスの事前分布を作る。<br />
-- venue<br />
-- venue_era<br />
-- surface<br />
-- distance<br />
-- track_condition<br />
-- weather<br />
-- cushion_value<br />
-- moisture<br />
-- season</p>
-<h3 id="stage4b-day-posterior">Stage4B: 同日更新 day posterior</h3>
-<p>同日すでに終わったレースがある場合、当日の実績から posterior を更新する。<br />
-- 早いレースの上位馬特徴<br />
-- 脚質の偏り<br />
-- 内外枠バイアス<br />
-- 上がり偏重か、前残りか<br />
-- 血統クラスタの偏り</p>
+<h3 id="stage4a-day-prior">Stage4A: 事前推定（day prior）</h3>
+<p>対象レースが始まる前に、以下の情報から当日バイアスの事前分布を作る。</p>
+<ul>
+<li>venue（開催場）</li>
+<li>venue_era（改修・時代区分）</li>
+<li>surface（芝/ダート）</li>
+<li>distance（距離）</li>
+<li>track_condition（馬場状態）</li>
+<li>weather（天気）</li>
+<li>cushion_value（クッション値）</li>
+<li>moisture（含水率）</li>
+<li>season（季節）</li>
+</ul>
+<h3 id="stage4b-day-posterior">Stage4B: 同日更新（day posterior）</h3>
+<p>同日にすでに終わったレースがある場合、その結果から推定を更新する。</p>
+<ul>
+<li>早いレースの上位馬の特徴</li>
+<li>脚質（前残り・差し）の偏り</li>
+<li>内外枠のバイアス</li>
+<li>上がり偏重か前残りか</li>
+<li>血統クラスタの偏り</li>
+</ul>
 <h2 id="_22">出力</h2>
-<ul>
-<li><code>day_bias_front</code></li>
-<li><code>day_bias_closing</code></li>
-<li><code>day_bias_inner</code></li>
-<li><code>day_bias_outer</code></li>
-<li><code>day_bias_stamina</code></li>
-<li><code>day_bias_burst</code></li>
-<li><code>day_bias_mud</code></li>
-<li><code>day_bias_speed</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>day_bias_front</code></td><td>前残り有利度</td></tr>
+    <tr><td><code>day_bias_closing</code></td><td>差し・追い込み有利度</td></tr>
+    <tr><td><code>day_bias_inner</code></td><td>内枠有利度</td></tr>
+    <tr><td><code>day_bias_outer</code></td><td>外枠有利度</td></tr>
+    <tr><td><code>day_bias_stamina</code></td><td>スタミナ型有利度</td></tr>
+    <tr><td><code>day_bias_burst</code></td><td>瞬発力型有利度</td></tr>
+    <tr><td><code>day_bias_mud</code></td><td>道悪適性有利度</td></tr>
+    <tr><td><code>day_bias_speed</code></td><td>高速馬場適性有利度</td></tr>
+  </tbody>
+</table>
 <h2 id="_23">実装方針</h2>
-<ul>
-<li>先行レースが 0 本なら prior のみ</li>
-<li>1-2 本なら prior 強め + posterior 弱め</li>
-<li>3 本以上で posterior 重みを増やす</li>
-</ul>
+<table>
+  <thead>
+    <tr><th>先行レース数</th><th>方針</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>0 本</td><td>事前推定（prior）のみを使う</td></tr>
+    <tr><td>1〜2 本</td><td>prior を重視しつつ、同日結果（posterior）を弱めに反映する</td></tr>
+    <tr><td>3 本以上</td><td>posterior の重みを増やす</td></tr>
+  </tbody>
+</table>
 <h2 id="_24">既存コードの活用先</h2>
 <ul>
 <li><code>src/research/race_quality_model.py</code></li>
@@ -401,14 +397,15 @@ document.addEventListener("DOMContentLoaded", function() {
 </ul>
 <h2 id="stage5">Stage5: 血統 × 当日文脈適合モデル</h2>
 <h2 id="_25">目的</h2>
-<p>血統を固定特徴として使うだけでなく、<code>Stage4</code> で推定した「今日の好走タイプ」に合わせて、血統適合度を出す。</p>
+<p>血統を固定した特徴量として使うだけでなく、<code>Stage4</code> で推定した「今日の好走タイプ」に合わせて血統の適合度を動的に評価する。</p>
 <h2 id="_26">中核アイデア</h2>
-<p>同じ <code>sire</code> でも、<br />
-- 高速馬場の瞬発戦で効く日<br />
-- 消耗戦で効く日<br />
-- 道悪で効く日</p>
-<p>は違う。<br />
-したがって、血統特徴は「静的な距離適性」だけでなく「当日の race-day bias との相性」で再評価する。</p>
+<p>同じ <code>sire</code>（父馬）でも、効果が出やすい条件は日によって異なる。</p>
+<ul>
+<li>高速馬場の瞬発戦で強い日</li>
+<li>消耗戦で強い日</li>
+<li>道悪で強い日</li>
+</ul>
+<p>そのため、血統特徴量は「静的な距離適性」だけでなく「当日の race-day bias との相性」で再評価する。</p>
 <h2 id="_27">既存コードの活用先</h2>
 <ul>
 <li><code>src/research/bloodline_distance.py</code></li>
@@ -422,149 +419,163 @@ document.addEventListener("DOMContentLoaded", function() {
 <li><code>src/research/myostatin.py</code></li>
 <li><code>src/research/race_quality_model.py</code></li>
 </ul>
-<h2 id="_28">血統特徴の二層構造</h2>
-<h3 id="5a">5A: 静的血統適性</h3>
+<h2 id="_28">血統特徴量の二層構造</h2>
+<h3 id="5a">5A: 静的血統適性（固定値）</h3>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>sire_distance_fit</code></td><td>父馬の距離適性</td></tr>
+    <tr><td><code>dam_sire_distance_fit</code></td><td>母父の距離適性</td></tr>
+    <tr><td><code>surface_fit</code></td><td>芝/ダート適性</td></tr>
+    <tr><td><code>mud_fit</code></td><td>道悪適性</td></tr>
+    <tr><td><code>speed_fit</code></td><td>高速馬場適性</td></tr>
+    <tr><td><code>stamina_fit</code></td><td>スタミナ適性</td></tr>
+    <tr><td><code>burst_fit</code></td><td>瞬発力適性</td></tr>
+  </tbody>
+</table>
+<h3 id="5b">5B: 当日文脈適合（動的スコア）</h3>
+<p>Stage4 の出力との掛け合わせで生成する。</p>
 <ul>
-<li><code>sire_distance_fit</code></li>
-<li><code>dam_sire_distance_fit</code></li>
-<li><code>surface_fit</code></li>
-<li><code>mud_fit</code></li>
-<li><code>speed_fit</code></li>
-<li><code>stamina_fit</code></li>
-<li><code>burst_fit</code></li>
+<li><code>bloodline_day_fit_speed = sire_speed_fit * day_bias_speed</code></li>
+<li><code>bloodline_day_fit_stamina = sire_stamina_fit * day_bias_stamina</code></li>
+<li><code>bloodline_day_fit_mud = mud_fit * day_bias_mud</code></li>
+<li><code>bloodline_day_fit_burst = burst_fit * day_bias_burst</code></li>
 </ul>
-<h3 id="5b">5B: 当日文脈適合</h3>
-<p>Stage4 出力との相互作用で作る。<br />
-- <code>bloodline_day_fit_speed = sire_speed_fit * day_bias_speed</code><br />
-- <code>bloodline_day_fit_stamina = sire_stamina_fit * day_bias_stamina</code><br />
-- <code>bloodline_day_fit_mud = mud_fit * day_bias_mud</code><br />
-- <code>bloodline_day_fit_burst = burst_fit * day_bias_burst</code></p>
 <h2 id="_29">日単位で血統を使う具体策</h2>
-<h3 id="1">1. 同日先行レース血統クラスタ集計</h3>
-<p>同日同場同 surface の先行終了レースで、<br />
-- どの sire cluster が上位に来たか<br />
-- どの aptitude axis が強かったか</p>
-<p>を集計し、当日クラスタ bias を作る。</p>
-<h3 id="2-segment-prior-same-day-posterior">2. segment prior + same-day posterior</h3>
-<p><code>src/research/race_quality_model.py</code> の segment prior を day prior として使い、<br />
-同日先行レースの結果で posterior 補正する。</p>
-<h3 id="3-race-wise-contextual-fit">3. race-wise contextual fit</h3>
-<p>対象馬について、<br />
-- その馬の血統ベクトル<br />
-- 当日 posterior bias ベクトル</p>
-<p>の類似度を <code>contextual_bloodline_fit</code> として計算する。</p>
-<h2 id="_30">出力</h2>
+<h3 id="1">1. 同日先行レースの血統クラスタ集計</h3>
+<p>同日・同場・同 surface の先行終了レースから以下を集計し、当日のクラスタバイアスを作る。</p>
 <ul>
-<li><code>contextual_bloodline_fit</code></li>
-<li><code>contextual_bloodline_speed_fit</code></li>
-<li><code>contextual_bloodline_stamina_fit</code></li>
-<li><code>contextual_bloodline_mud_fit</code></li>
-<li><code>contextual_bloodline_burst_fit</code></li>
-<li><code>same_day_sire_cluster_bias</code></li>
+<li>どの sire cluster が上位に入ったか</li>
+<li>どの適性軸（aptitude axis）が強く出たか</li>
 </ul>
+<h3 id="2-segment-prior-same-day-posterior">2. segment prior + same-day posterior</h3>
+<p><code>src/research/race_quality_model.py</code> の segment prior を day prior として利用し、同日先行レースの結果で posterior 補正する。</p>
+<h3 id="3-race-wise-contextual-fit">3. race-wise contextual fit（レース単位の文脈適合スコア）</h3>
+<p>対象馬について以下の類似度を計算し、<code>contextual_bloodline_fit</code> とする。</p>
+<ul>
+<li>その馬の血統ベクトル</li>
+<li>当日 posterior bias ベクトル</li>
+</ul>
+<h2 id="_30">出力</h2>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>contextual_bloodline_fit</code></td><td>血統の当日文脈総合適合スコア</td></tr>
+    <tr><td><code>contextual_bloodline_speed_fit</code></td><td>高速馬場文脈適合</td></tr>
+    <tr><td><code>contextual_bloodline_stamina_fit</code></td><td>スタミナ文脈適合</td></tr>
+    <tr><td><code>contextual_bloodline_mud_fit</code></td><td>道悪文脈適合</td></tr>
+    <tr><td><code>contextual_bloodline_burst_fit</code></td><td>瞬発力文脈適合</td></tr>
+    <tr><td><code>same_day_sire_cluster_bias</code></td><td>同日先行レースからの血統クラスタバイアス</td></tr>
+  </tbody>
+</table>
 <h2 id="stage6">Stage6: 最終確率モデル</h2>
 <h2 id="_31">目的</h2>
-<p>Stage1-5 を統合して、最終的な <code>p_win</code>, <code>p_top2</code>, <code>p_top3</code> を出す。</p>
+<p>Stage1〜5 を統合し、最終的な <code>p_win</code>（勝率）、<code>p_top2</code>（連対率）、<code>p_top3</code>（複勝率）を推定する。</p>
 <h2 id="_32">入力ブロック</h2>
-<ul>
-<li>基礎母表</li>
-<li>latent state</li>
-<li>positioning outputs</li>
-<li>pace outputs</li>
-<li>day bias outputs</li>
-<li>contextual bloodline outputs</li>
-<li>optional LayerB market features</li>
-</ul>
+<table>
+  <thead>
+    <tr><th>入力ブロック</th><th>由来 Stage</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>基礎母表</td><td>Stage0</td></tr>
+    <tr><td>潜在表現（latent state）</td><td>Stage1</td></tr>
+    <tr><td>位置取り出力</td><td>Stage2</td></tr>
+    <tr><td>ペース出力</td><td>Stage3</td></tr>
+    <tr><td>当日バイアス出力</td><td>Stage4</td></tr>
+    <tr><td>血統文脈適合出力</td><td>Stage5</td></tr>
+    <tr><td>LayerB 市場特徴量（任意）</td><td>—</td></tr>
+  </tbody>
+</table>
 <h2 id="_33">推奨モデル構成</h2>
-<h3 id="modela">ModelA</h3>
-<ul>
-<li><code>p_win</code></li>
-</ul>
-<h3 id="modelb">ModelB</h3>
-<ul>
-<li><code>p_top2</code></li>
-</ul>
-<h3 id="modelc">ModelC</h3>
-<ul>
-<li><code>p_top3</code></li>
-</ul>
-<h3 id="optional-modeld">Optional ModelD</h3>
-<ul>
-<li>race-wise ranking score</li>
-</ul>
+<table>
+  <thead>
+    <tr><th>モデル</th><th>予測ターゲット</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>ModelA</td><td><code>p_win</code>（勝率）</td></tr>
+    <tr><td>ModelB</td><td><code>p_top2</code>（連対率）</td></tr>
+    <tr><td>ModelC</td><td><code>p_top3</code>（複勝率）</td></tr>
+    <tr><td>ModelD（任意）</td><td>race-wise ranking score（レース内順位スコア）</td></tr>
+  </tbody>
+</table>
 <h2 id="_34">推奨アンサンブル</h2>
 <ul>
-<li>LightGBM</li>
-<li>CatBoost</li>
-<li>OOF blending</li>
-<li>後段 calibration</li>
+<li>GBDT（木を積み上げた機械学習モデル）として LightGBM / CatBoost の 2 本柱</li>
+<li>交差検証での予測（OOF）を使った blending</li>
+<li>後段で確率の信頼性補正（calibration）</li>
 </ul>
 <h2 id="_35">出力</h2>
-<ul>
-<li><code>p_win_raw</code>, <code>p_win_calibrated</code></li>
-<li><code>p_top2_raw</code>, <code>p_top2_calibrated</code></li>
-<li><code>p_top3_raw</code>, <code>p_top3_calibrated</code></li>
-<li><code>rank_by_p_win</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カラム名</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>p_win_raw</code>, <code>p_win_calibrated</code></td><td>勝率（補正前/補正後）</td></tr>
+    <tr><td><code>p_top2_raw</code>, <code>p_top2_calibrated</code></td><td>連対率（補正前/補正後）</td></tr>
+    <tr><td><code>p_top3_raw</code>, <code>p_top3_calibrated</code></td><td>複勝率（補正前/補正後）</td></tr>
+    <tr><td><code>rank_by_p_win</code></td><td>勝率によるレース内順位</td></tr>
+  </tbody>
+</table>
 <h2 id="stage7">Stage7: 市場統合 / ベッティング</h2>
 <h2 id="_36">役割</h2>
+<p>以下の 4 つのテーブルを統合し、safe_ev（安全期待値）を計算する。</p>
 <ul>
-<li><code>horse_probability_table</code></li>
-<li><code>horse_market_snapshot</code></li>
-<li><code>pair_market_snapshot</code></li>
-<li><code>payout_table</code></li>
+<li><code>horse_probability_table</code>（馬別確率テーブル）</li>
+<li><code>horse_market_snapshot</code>（馬別市場スナップショット）</li>
+<li><code>pair_market_snapshot</code>（馬連・馬単等の市場スナップショット）</li>
+<li><code>payout_table</code>（払い戻しテーブル）</li>
 </ul>
-<p>を統合して <code>safe_ev</code> を計算する。</p>
 <h2 id="ml">推奨レイヤ（教師あり ML とは分離）</h2>
-<p><strong>券種・投資配分・予測印と推奨券の結びつけ</strong>など、期待値を土台にしつつ系列意思決定を行う部分は、いわゆる確率モデルの勾配学習とは切り分け <strong>強化学習（方策）</strong> を第一候補とする設計議論を別紙にまとめた。</p>
+<p><strong>券種・投資配分・予測印と推奨券の結びつけ</strong>など、期待値を土台にした系列意思決定は、確率モデルの勾配学習とは切り分ける。<strong>強化学習（方策）</strong> を第一候補とする設計議論は別紙にまとめた。</p>
 <ul>
 <li><code>docs/html/modeling/betting_policy_reinforcement_learning.html</code></li>
-<li>HTML 要約: <code>docs/html/betting_rl_policy/index.html</code></li>
+<li>HTML 要約: <a href="../appendix/betting_rl_policy.html"><code>docs/html/appendix/betting_rl_policy.html</code></a></li>
 </ul>
-<h2 id="_37">ルール</h2>
-<ul>
-<li>Stage6 までで市場非依存モデルを完成</li>
-<li>Stage7 でのみ市場と結合</li>
-<li>高オッズ帯は <code>buffer</code> を厚くする</li>
-</ul>
+<h2 id="_37">設計ルール</h2>
+<table>
+  <thead>
+    <tr><th>ルール</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>市場独立</td><td>Stage6 までで市場情報に依存しないモデルを完成させる</td></tr>
+    <tr><td>市場結合の分離</td><td>市場との結合は Stage7 でのみ行う</td></tr>
+    <tr><td>高オッズ対応</td><td>高オッズ帯は <code>buffer</code>（安全マージン）を厚くする</td></tr>
+  </tbody>
+</table>
 <h2 id="_38">優先実装順</h2>
-<h2 id="phase1">Phase1</h2>
-<ul>
-<li>Stage0</li>
-<li>Stage1</li>
-<li>Stage6</li>
-</ul>
-<p>まず単段ベースラインを成立させる。</p>
-<h2 id="phase2">Phase2</h2>
-<ul>
-<li>Stage2</li>
-<li>Stage3</li>
-</ul>
-<p>位置取り・ペースを追加し、改善幅を測る。</p>
-<h2 id="phase3">Phase3</h2>
-<ul>
-<li>Stage4</li>
-<li>Stage5</li>
-</ul>
-<p>当日バイアスと血統文脈適合を追加する。</p>
-<h2 id="phase4">Phase4</h2>
-<ul>
-<li>Stage7</li>
-</ul>
-<p>safe_ev ベースで馬券最適化へ進む。</p>
+<table>
+  <thead>
+    <tr><th>Phase</th><th>目標</th><th>対象 Stage</th></tr>
+  </thead>
+  <tbody>
+    <tr><td id="phase1">Phase1</td><td>単段ベースラインを成立させる</td><td>Stage0（母表構築）、Stage1（馬の潜在表現）、Stage6（最終確率）</td></tr>
+    <tr><td id="phase2">Phase2</td><td>位置取り・ペースを追加し改善幅を測る</td><td>Stage2（位置取り）、Stage3（ペース）</td></tr>
+    <tr><td id="phase3">Phase3</td><td>当日バイアスと血統文脈適合を追加する</td><td>Stage4（当日馬場バイアス）、Stage5（血統文脈適合）</td></tr>
+    <tr><td id="phase4">Phase4</td><td>safe_ev ベースで馬券最適化へ進む</td><td>Stage7（市場統合・馬券最適化）</td></tr>
+  </tbody>
+</table>
 <h2 id="_39">期待する中間成果物</h2>
-<ul>
-<li><code>horse_latent_state.parquet</code></li>
-<li><code>positioning_features.parquet</code></li>
-<li><code>pace_scenario_features.parquet</code></li>
-<li><code>day_track_bias_features.parquet</code></li>
-<li><code>contextual_bloodline_features.parquet</code></li>
-<li><code>horse_probability_table.parquet</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>ファイル名</th><th>由来 Stage</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>horse_latent_state.parquet</code></td><td>Stage1</td></tr>
+    <tr><td><code>positioning_features.parquet</code></td><td>Stage2</td></tr>
+    <tr><td><code>pace_scenario_features.parquet</code></td><td>Stage3</td></tr>
+    <tr><td><code>day_track_bias_features.parquet</code></td><td>Stage4</td></tr>
+    <tr><td><code>contextual_bloodline_features.parquet</code></td><td>Stage5</td></tr>
+    <tr><td><code>horse_probability_table.parquet</code></td><td>Stage6</td></tr>
+  </tbody>
+</table>
 <h2 id="_40">この設計の利点</h2>
 <ul>
-<li>なぜ当たった/外れたかを stage ごとに説明しやすい</li>
-<li>血統を「固定特徴」ではなく「その日の馬場文脈への適合」として使える</li>
+<li>なぜ当たった・外れたかを stage ごとに説明できる</li>
+<li>血統を「固定特徴量」ではなく「その日の馬場文脈への適合度」として使える</li>
 <li>先行レース結果を使ったオンライン更新に自然につながる</li>
 <li>将来的に stage ごとの単独改善が可能</li>
 </ul>

@@ -207,10 +207,10 @@ document.addEventListener("DOMContentLoaded", function() {
       <p class="meta">ソース: <code>docs/html/modeling/pedigree_stage_research_notes.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
-<h1 id="_1">血統・馬場傾向・研究方針メモ（ブラッシュアップ用）</h1>
-<p>この文書は、血統因子・馬場傾向・未出走馬への拡張・研究ロードマップについて、<strong>現状の実装</strong>と<strong>今後の考え</strong>を一枚にまとめたものです。一緒に推敲する前提で、未確定の仮説は「検討中」と明記しています。</p>
+<h1 id="_1">血統・馬場傾向・研究方針メモ</h1>
+<p>このドキュメントは、血統適性（父・母系の遺伝的特徴がコース・距離に合うか）・コースバイアス（コース形状や馬場状態が特定の脚質を有利にすること）・未出走馬への対応・今後の研究方針について、<strong>現状の実装</strong>と<strong>今後の方向性</strong>をまとめたものです。未確定の仮説は「検討中」と明記しています。</p>
 <hr />
-<h2 id="1">1. ゴール（最終イメージ）</h2>
+<h2 id="1">1. ゴール（最終的なアウトプット）</h2>
 <table>
 <thead>
 <tr>
@@ -221,15 +221,15 @@ document.addEventListener("DOMContentLoaded", function() {
 <tbody>
 <tr>
 <td><strong>最終出力</strong></td>
-<td><strong>任意の <code>race_id</code>（または日付・場・条件）</strong>に対し、<strong>出走馬全頭</strong>について <strong>血統由来の得点</strong>（＋必要なら舞台補正）を返す</td>
+<td>任意の <code>race_id</code>（または日付・競馬場・条件）に対して、出走馬全頭の<strong>血統スコア</strong>（+ 必要に応じた舞台補正）を返す</td>
 </tr>
 <tr>
 <td><strong>制約</strong></td>
-<td><strong>GCS の read を推論・特徴計算のホットパスに置かない</strong>（ローカル Parquet / スナップショット中心）</td>
+<td>推論や特徴量（予測に使う数値）の計算で GCS へのリアルタイムアクセスをしない。ローカル Parquet・スナップショット中心で完結させる。</td>
 </tr>
 <tr>
-<td><strong>未出走馬</strong></td>
-<td>自分の戦績がなくても、<strong>親・祖先・類似血統</strong>から何らかの「得意分野」を補間できる設計にしたい</td>
+<td><strong>未出走馬への対応</strong></td>
+<td>自身の戦績がなくても、<strong>父・祖先・類似した血統</strong>から得意分野を補間できる設計を目指す</td>
 </tr>
 </tbody>
 </table>
@@ -306,8 +306,7 @@ document.addEventListener("DOMContentLoaded", function() {
   WB --> X2
   SW --> X1
   DW --> X2</div>
-<p><strong>一文で</strong>:<br />
-<code>馬場の合成ベクトル</code> × <code>親側の芝/ダ勝率</code> → <strong>「この舞台でこの血統がどう効きそうか」</strong>の代理特徴。</p>
+<p><strong>一言で言えば:</strong> <code>馬場の合成ベクトル</code> × <code>父・母父の芝/ダ別勝率</code> →「この舞台でこの血統がどう効きそうか」を表す代理特徴量（予測に使う数値）。</p>
 <hr />
 <h3 id="6">血統因子ブレンド（6 スロット）のイメージ</h3>
 <p>5 世代血統表上の <strong>決まった座標</strong>から祖先を拾い、<strong>種牡馬 DB の軸ベクトル</strong>を重み付き平均します（<strong>当該馬のレース履歴は不要</strong>）。</p>
@@ -371,48 +370,71 @@ document.addEventListener("DOMContentLoaded", function() {
 <hr />
 <h2 id="2">2. 現状のパイプライン（コード上の位置）</h2>
 <h3 id="21-layera-track_bias_pedigree">2.1 馬場傾向 × 血統（LayerA / <code>track_bias_pedigree</code>）</h3>
-<ul>
-<li><strong>入力</strong>: <code>race_result</code>（全期間・時系列）＋ <code>race_shutuba</code>（父・母父名など）</li>
-<li><strong>中身</strong>:</li>
-<li><strong>馬場傾向</strong>: 当日（該当レース前）・前日の勝者上がり3F系、<strong>馬場3区分</strong> × <strong>距離4帯</strong> × <strong>芝/ダ/障</strong> で細かく集計し、欠損は粗いキーでフォールバック</li>
-<li><strong>血統</strong>: 父・母父の <strong>芝/ダ別のリークなし累計勝率</strong>（産駒全体の過去）</li>
-<li><strong>加重</strong>: 当日/前日ブレンド＋（チューニング済み）<strong>馬場区分・距離帯の乗算</strong></li>
-<li><strong>チューニング</strong>: <code>research/tune_track_bias_weights</code> → <code>data/meta/modeling/track_bias_weight_best.json</code>（<strong>version 2</strong>: <code>cond_multipliers</code> / <code>dist_multipliers</code>）</li>
-<li><strong>母表への焼き込み</strong>: <code>python3 -m src.pipeline.build_layer_a_dataset --track-bias-weights-json ...</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>項目</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td>入力</td><td><code>race_result</code>（全期間・時系列）＋ <code>race_shutuba</code>（父・母父名など）</td></tr>
+<tr><td>馬場傾向の集計</td><td>当日（該当レース前）・前日の勝者上がり3F系を、<strong>馬場3区分 × 距離4帯 × 芝/ダ/障</strong> で細かく集計。データ不足時は粗いキーにフォールバック。</td></tr>
+<tr><td>血統の扱い</td><td>父・母父の<strong>芝/ダ別のリークなし累計勝率</strong>（産駒全体の過去実績）を使用</td></tr>
+<tr><td>加重合成</td><td>当日/前日のブレンド比率に加え、チューニング済みの<strong>馬場区分・距離帯の乗算係数</strong>を掛け合わせる</td></tr>
+<tr><td>チューニング出力</td><td><code>data/meta/modeling/track_bias_weight_best.json</code>（version 2：<code>cond_multipliers</code> / <code>dist_multipliers</code> を含む）</td></tr>
+<tr><td>学習データへの反映</td><td><code>python3 -m src.pipeline.build_layer_a_dataset --track-bias-weights-json ...</code></td></tr>
+</tbody>
+</table>
 <h3 id="22-6">2.2 血統因子（6 スロット・種牡馬統計）</h3>
-<ul>
-<li><strong>モジュール</strong>: <code>research/sire_factor_aptitude</code>（父・母系深部スロットの加権ブレンド）</li>
-<li><strong>事前集計</strong>: <code>data/research/sire_factor_stats.json</code>（種牡馬ごとの軸ベクトル）</li>
-<li><strong>馬単位ワイド表（任意）</strong>: <code>research/pedigree_factor_table</code> → <code>data/modeling/horse_pedigree_factors.parquet</code>（<code>horse_id</code> 一発 join 用）</li>
-</ul>
+<table>
+<thead>
+<tr><th>項目</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td>モジュール</td><td><code>research/sire_factor_aptitude</code>（父・母系深部スロットの加権ブレンド）</td></tr>
+<tr><td>事前集計</td><td><code>data/research/sire_factor_stats.json</code>（種牡馬ごとの軸ベクトル）</td></tr>
+<tr><td>馬単位ワイド表（任意）</td><td><code>research/pedigree_factor_table</code> → <code>data/modeling/horse_pedigree_factors.parquet</code>（<code>horse_id</code> 一発 join 用）</td></tr>
+</tbody>
+</table>
 <h3 id="23">2.3 血統構造の類似度</h3>
-<ul>
-<li><strong>モジュール</strong>: <code>research/pedigree_similarity</code>（重み付き祖先集合、overlap / dual / λ など）</li>
-<li><strong>GCS 負荷対策</strong>: <code>research/pedigree_local_store</code>（<code>horse_pedigree_5gen.jsonl.gz</code> を <strong>1 blob</strong> 取得してローカル化、<code>list_keys</code> 全走査を避ける）</li>
-</ul>
+<table>
+<thead>
+<tr><th>項目</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td>モジュール</td><td><code>research/pedigree_similarity</code>（重み付き祖先集合、overlap / dual / λ など）</td></tr>
+<tr><td>GCS 負荷対策</td><td><code>research/pedigree_local_store</code>（<code>horse_pedigree_5gen.jsonl.gz</code> を <strong>1 blob</strong> 取得してローカル化、<code>list_keys</code> 全走査を避ける）</td></tr>
+</tbody>
+</table>
 <h3 id="24">2.4 新馬・レース前予測（整合性）</h3>
-<ul>
-<li><strong>課題</strong>: 従来、<code>race_result</code> に <strong>当該レース行が無い</strong>と特徴が付かない場合があった</li>
-<li><strong>対応</strong>: <code>build_track_bias_pedigree_features(..., include_shutuba_entries_without_result=True)</code>  </li>
-<li>出馬表を主軸にマージし、<strong>未確定レース</strong>には SDP 用プレースホルダ行を追加  </li>
-<li><strong>日次平均（前日側）は実勝者のみ</strong>で集計（プレースホルダで汚さない）</li>
-<li><strong>学習用 LayerA</strong> の既定は <strong><code>False</code></strong>（結果済み行のみ・従来互換）</li>
-</ul>
+<table>
+<thead>
+<tr><th>項目</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td>課題</td><td>従来、<code>race_result</code> に<strong>当該レース行が無い</strong>と特徴が付かない場合があった</td></tr>
+<tr><td>対応</td><td><code>build_track_bias_pedigree_features(..., include_shutuba_entries_without_result=True)</code> で出馬表を主軸にマージし、<strong>未確定レース</strong>には SDP 用プレースホルダ行を追加</td></tr>
+<tr><td>前日集計</td><td><strong>日次平均（前日側）は実勝者のみ</strong>で集計（プレースホルダで汚さない）</td></tr>
+<tr><td>学習用 LayerA 既定</td><td><strong><code>False</code></strong>（結果済み行のみ・従来互換）</td></tr>
+</tbody>
+</table>
 <hr />
-<h2 id="3-gcs">3. GCS 負荷を抑える運用原則（合意しやすい形）</h2>
-<ol>
-<li><strong>学習・チューニング・特徴生成</strong>は <strong><code>data/local/tables</code> と <code>data/modeling/</code> の Parquet</strong> で完結させる</li>
-<li><strong>5 世代血統</strong>は <strong>スナップショット JSONL.gz を 1 回</strong>取り、以降は <strong>ローカル索引</strong>（<code>pedigree_local_store</code>）</li>
-<li><strong>馬場傾向の重み</strong>は JSON に保存し、<strong>母表ビルド時に列へ焼く</strong>（推論のたびに全件再計算しない運用も可能）</li>
-<li><strong>list_keys("horse_pedigree_5gen") + 馬頭 load</strong> を特徴計算のループに置かない</li>
-</ol>
+<h2 id="3-gcs">3. GCS 負荷を抑えるための運用原則</h2>
+<table>
+<thead>
+<tr><th>#</th><th>原則</th><th>詳細</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>ローカル Parquet で完結</td><td><strong>学習・チューニング・特徴量生成</strong>は、すべて <code>data/local/tables</code> と <code>data/modeling/</code> の Parquet ファイルだけで完結させる</td></tr>
+<tr><td>2</td><td>血統データは 1 回だけ取得</td><td><strong>5 世代血統データ</strong>は、スナップショット JSONL.gz を<strong>1 回だけ取得</strong>し、以降はローカル索引（<code>pedigree_local_store</code>）から読む</td></tr>
+<tr><td>3</td><td>重み係数を JSON に保存</td><td><strong>馬場傾向の重み係数</strong>は JSON に保存し、<strong>学習データのビルド時に列として焼き込む</strong>。推論のたびに全件再計算する必要がなくなる</td></tr>
+<tr><td>4</td><td>全件 load ループを禁止</td><td><strong><code>list_keys("horse_pedigree_5gen")</code> + 全件 load の組み合わせ</strong>を特徴量計算のループに入れない</td></tr>
+</tbody>
+</table>
 <hr />
-<h2 id="4">4. 研究テーマ（文献とつなげる言い方）</h2>
-<h3 id="41">4.1 定量遺伝学・育種の語彙</h3>
+<h2 id="4">4. 研究テーマ（学術的な位置づけ）</h2>
+<h3 id="41">4.1 定量遺伝学との接続</h3>
 <ul>
-<li>血統表は <strong>親子関係のグラフ</strong> → <strong>親縁行列</strong>と <strong>BLUP / ゲノム予測</strong>の文脈で説明できる</li>
-<li>「未出走馬」＝ <strong>自分の表型が無い</strong>だけで、<strong>親・半兄妹・祖先の表型</strong>から <strong>EBV 的な補間</strong>が可能、というのが理論側の根拠になりうる</li>
+<li>血統表は<strong>親子関係のグラフ</strong>として捉えられます。これは<strong>親縁行列</strong>や <strong>BLUP / ゲノム予測</strong>（畜産分野の育種手法）として学術的に説明できます。</li>
+<li>「未出走馬」は<strong>自身の実績がない</strong>だけで、<strong>父・母・半兄妹・祖先の実績</strong>から能力推定（EBV 的な補間）ができます。これが未出走馬スコアリングの理論的根拠です。</li>
 </ul>
 <h3 id="42">4.2 手法の段階（案）</h3>
 <table>
@@ -446,10 +468,10 @@ document.addEventListener("DOMContentLoaded", function() {
 </tr>
 </tbody>
 </table>
-<h3 id="43">4.3 馬場・舞台との結合</h3>
+<h3 id="43">4.3 馬場・舞台との組み合わせ</h3>
 <ul>
-<li><strong>遺伝 × 環境（G×E）</strong> のように整理すると、<strong>馬場傾向（当日の文脈）</strong>と <strong>血統由来のベース</strong>の <strong>交互作用</strong>として設計しやすい</li>
-<li>既存の <strong>track_bias × 血統勝率</strong> は、その <strong>実装レベルの第一歩</strong></li>
+<li>生物学の「遺伝 × 環境（G×E）」の考え方を借りると、<strong>馬場傾向（当日の状況）</strong>と<strong>血統由来のベース</strong>の<strong>交互作用</strong>として設計しやすくなります。</li>
+<li>現状の <strong>track_bias × 血統勝率</strong> の特徴量は、その交互作用モデルの最初の一歩です。</li>
 </ul>
 <hr />
 <h2 id="5-io">5. 任意レース・全頭スコアに向けた I/O 案（ドラフト）</h2>
@@ -598,22 +620,27 @@ python3 -m src.research.pedigree.build_stallion_ancestor_graph \\
 </ul>
 <h4 id="531-json">5.3.1 評価ラボ（実装済み・結果は JSON）</h4>
 <ul>
-<li><strong>特徴モジュール</strong>: <code>src/research/pedigree_stage5_3_features.py</code> … §5.3 A〜E を可能な範囲で数値化（EB・残差・logit・winsor・粗/細 stage・PCA/NMF/SVD・因子平均・グラフ平滑・PPR サブグラフ・最短経路カーネル・連結成分ラベル・双線形/FM/RBF 代理など）</li>
-<li><strong>評価スクリプト</strong>: <code>python3 -m src.research.pedigree.pedigree_stage5_3_eval</code> … 二値「1着」予測、時系列 split（既定: ≤2023 学習、≥2024 テスト）、特徴群 Ablation、馬単位 GroupShuffleSplit</li>
-<li><strong>出力</strong>: <code>data/meta/modeling/pedigree_stage5_3_eval.json</code>（指標・Ablation・補助 R² 等）</li>
-<li><strong>重要（リーク）</strong>: 現行ファーストステップの <strong>種牡馬×舞台</strong> 集計は <strong>全期間・同一レース行を母数に含みうる</strong>ため、本ラボの ROC-AUC は <strong>楽観的に高く出やすい</strong>（探索用）。本番評価では <strong>レース日以前のみ</strong>で種牡馬×舞台ベクトル v_s を再集計する必要がある</li>
-<li><strong>補助指標</strong>: 「舞台 PCA → <code>consistency</code> 因子」の Ridge R²（因子と舞台表現の接続の弱い代理）</li>
+<li><strong>特徴モジュール:</strong> <code>src/research/pedigree_stage5_3_features.py</code> — §5.3 A〜E を数値化します（経験ベイズ縮小・残差・logit 変換・粗/細 stage・PCA/NMF/SVD・グラフ平滑化・最短経路カーネルなど）。</li>
+<li><strong>評価スクリプト:</strong> <code>python3 -m src.research.pedigree.pedigree_stage5_3_eval</code> — 「1着」の二値予測。時系列 split（既定: 2023 以前を学習、2024 以降をテスト）・Ablation・馬単位 GroupShuffleSplit を実施。</li>
+<li><strong>出力先:</strong> <code>data/meta/modeling/pedigree_stage5_3_eval.json</code>（各指標・Ablation 結果・補助 R² など）</li>
+<li><strong>重要（リークに注意）:</strong> 現行の種牡馬×舞台集計は<strong>全期間の同一レース行を母数に含みうる</strong>ため、ROC-AUC は<strong>楽観的に高く出やすい</strong>（探索目的に限る）。本番評価では<strong>レース日以前のみ</strong>でベクトルを再集計する必要があります。</li>
+<li><strong>補助指標:</strong> 「舞台 PCA → <code>consistency</code> 因子」の Ridge R²（因子と舞台表現の整合性を測る代理指標）</li>
 </ul>
 <pre><code class="language-bash">python3 -m src.research.pedigree.pedigree_stage5_3_eval --max-rows 100000
 </code></pre>
 <hr />
-<h2 id="6_1">6. オープンな論点（ブラッシュアップしたいところ）</h2>
-<ul>
-<li>[ ] <strong>「血統得点」の定義</strong>: 回帰のターゲット（複勝確率・着順・タイム指数・独自 race_quality など）をどれに固定するか  </li>
-<li>[ ] <strong>未出走馬の評価</strong>: 検証データで「初出走馬だけ」を切り出した <strong>hold-out</strong> の設計  </li>
-<li>[ ] <strong>5 世代以外</strong>: 10 世代データを入れたときの <strong>スロット設計</strong>と再ビルドコスト  </li>
-<li>[ ] <strong>本番 API</strong>: <code>race_id</code> 1 本で <strong>全頭</strong>を返すエンドポイントをどこに置くか（<code>api/</code> vs バッチ）</li>
-</ul>
+<h2 id="6_1">6. 未解決の論点</h2>
+<table>
+<thead>
+<tr><th>状態</th><th>論点</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td>未解決</td><td>「血統スコア」のターゲット定義</td><td>複勝確率・着順・タイム指数・独自 race_quality など、何を予測目標にするかを固定する</td></tr>
+<tr><td>未解決</td><td>未出走馬の評価設計</td><td>検証データから「初出走馬だけ」を切り出した hold-out をどう設計するか</td></tr>
+<tr><td>未解決</td><td>10 世代データへの拡張</td><td>スロット設計の変更と再ビルドコストの見積もり</td></tr>
+<tr><td>未解決</td><td>本番 API の配置</td><td><code>race_id</code> 1 本で全頭スコアを返すエンドポイントを <code>api/</code> に置くかバッチにするか</td></tr>
+</tbody>
+</table>
 <hr />
 <h2 id="7">7. 関連ファイル（リポジトリ内）</h2>
 <table>
@@ -703,7 +730,7 @@ python3 -m src.research.pedigree.build_stallion_ancestor_graph \\
 </tbody>
 </table>
 <hr />
-<p><em>このドキュメントは <code>docs/html/modeling/pedigree_stage_research_notes.html</code> に置いています。追記・修正は PR や直接編集でブラッシュアップしてください。</em></p>
+<p><em>このドキュメントは <code>docs/html/modeling/pedigree_stage_research_notes.html</code> に置いています。追記・修正は PR または直接編集で更新してください。</em></p>
     </article>
     <nav class="doc-nav">
       <a href="modeling_coding_strategy.html">← モデリング実装時のコーディング戦略</a>

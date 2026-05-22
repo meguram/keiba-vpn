@@ -35,6 +35,10 @@ def _scrub_nan(obj: Any) -> Any:
 from dotenv import load_dotenv as _load_dotenv
 _load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
 
+# KEIBA_PROFILE で省メモリ設定を一括適用（.env の値は上書きしない）
+from src.config.profiles import apply_profile as _apply_profile
+_apply_profile()
+
 from fastapi import BackgroundTasks, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -563,22 +567,29 @@ async def lifespan(app):
             "scrape-queue API（tasks / add-job / enqueue-period-horses / worker-logs / resume）登録済み"
         )
 
-    # bloodline-cluster の重いデータをバックグラウンドで先読みしておく (初回リクエスト高速化)
-    def _preload_bloodline_cluster():
-        try:
-            from src.api.bloodline_meta_cluster import (
-                _load_stats_assets,
-                _load_pedigree_10gen,
-                _load_horse_prize_map,
-            )
-            _load_stats_assets()
-            _load_pedigree_10gen()
-            _load_horse_prize_map()
-            logger.info("bloodline-cluster 先読み完了")
-        except Exception as _e:
-            logger.warning("bloodline-cluster 先読み失敗: %s", _e)
+    # bloodline-cluster の重いデータをバックグラウンドで先読み (初回リクエスト高速化)
+    # KEIBA_BLOODLINE_PRELOAD=0 (or KEIBA_PROFILE=vps) で無効化 → −267MB
+    _bloodline_preload_enabled = os.environ.get("KEIBA_BLOODLINE_PRELOAD", "1").strip().lower() not in (
+        "0", "false", "no", "off"
+    )
+    if _bloodline_preload_enabled:
+        def _preload_bloodline_cluster():
+            try:
+                from src.api.bloodline_meta_cluster import (
+                    _load_stats_assets,
+                    _load_pedigree_10gen,
+                    _load_horse_prize_map,
+                )
+                _load_stats_assets()
+                _load_pedigree_10gen()
+                _load_horse_prize_map()
+                logger.info("bloodline-cluster 先読み完了")
+            except Exception as _e:
+                logger.warning("bloodline-cluster 先読み失敗: %s", _e)
 
-    threading.Thread(target=_preload_bloodline_cluster, daemon=True, name="bloodline-preload").start()
+        threading.Thread(target=_preload_bloodline_cluster, daemon=True, name="bloodline-preload").start()
+    else:
+        logger.info("bloodline-cluster 先読みをスキップ (KEIBA_BLOODLINE_PRELOAD=0)")
 
     yield
 
@@ -786,6 +797,9 @@ async def get_gcs_stats():
         "status_cache_ttl_s": _STATUS_CACHE_TTL,
         "horse_ids_cache_size": len(_horse_ids_cache),
         "race_detail_cache_size": race_detail_cache_size,
+        "race_detail_cache_max": _RACE_DETAIL_CACHE_MAX,
+        "keiba_profile": os.environ.get("KEIBA_PROFILE", ""),
+        "bloodline_preload": os.environ.get("KEIBA_BLOODLINE_PRELOAD", "1"),
     })
 
 
@@ -5374,6 +5388,18 @@ async def race_detail_page(request: Request, race_id: str):
 _race_detail_cache: dict[str, tuple[float, dict]] = {}
 _race_detail_cache_lock = threading.Lock()
 _RACE_DETAIL_TTL = 60  # seconds
+# RACE_DETAIL_CACHE_MAX: VPS では KEIBA_PROFILE=vps が 200 に設定（デフォルト 2000）
+_RACE_DETAIL_CACHE_MAX = int(os.environ.get("RACE_DETAIL_CACHE_MAX", "2000"))
+
+
+def _race_detail_cache_set(race_id: str, value: tuple) -> None:
+    """LRU 上限付きキャッシュ書き込み（ロック保持下で呼び出すこと）。"""
+    _race_detail_cache[race_id] = value
+    if len(_race_detail_cache) > _RACE_DETAIL_CACHE_MAX:
+        n_evict = max(1, _RACE_DETAIL_CACHE_MAX // 10)
+        oldest = sorted(_race_detail_cache.items(), key=lambda kv: kv[1][0])[:n_evict]
+        for k, _ in oldest:
+            del _race_detail_cache[k]
 
 
 @app.get("/api/race/{race_id}", response_class=JSONResponse)
@@ -5462,7 +5488,7 @@ async def get_race_detail(race_id: str):
 
     result = await asyncio.to_thread(_load)
     with _race_detail_cache_lock:
-        _race_detail_cache[race_id] = (_time.time(), result)
+        _race_detail_cache_set(race_id, (_time.time(), result))
     return JSONResponse(result)
 
 
@@ -5731,6 +5757,56 @@ async def api_precompute_tracking_difficulty(race_id: str):
             "error": str(e),
             "traceback": traceback.format_exc(),
         }, status_code=500)
+
+
+@app.get("/api/race/{race_id}/final-odds", response_class=JSONResponse)
+async def api_final_odds(race_id: str, refresh: bool = False):
+    """想定オッズ予測（storage キャッシュ優先、refresh=true で再計算）。"""
+    def _run():
+        from src.pipeline.inference.final_odds_service import get_or_compute
+
+        return get_or_compute(
+            _get_storage(),
+            race_id,
+            force_refresh=refresh,
+            allow_scrape=refresh,
+        )
+
+    try:
+        result = await asyncio.to_thread(_run)
+        return JSONResponse(result)
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
+
+
+@app.post("/api/race/{race_id}/final-odds/precompute", response_class=JSONResponse)
+async def api_precompute_final_odds(race_id: str):
+    """想定オッズをバッチ計算して storage に保存（推論ワーカー相当）。"""
+    def _run():
+        from src.pipeline.inference.final_odds_service import (
+            build_final_odds_response,
+            save_cached_response,
+        )
+
+        storage = _get_storage()
+        payload = build_final_odds_response(race_id, storage, allow_scrape=False)
+        if payload.get("entries"):
+            save_cached_response(storage, race_id, payload, source="precompute_api")
+        return payload
+
+    try:
+        result = await asyncio.to_thread(_run)
+        return JSONResponse(result)
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            {"error": str(e), "traceback": traceback.format_exc()},
+            status_code=500,
+        )
 
 
 @app.get("/api/inference/health", response_class=JSONResponse)
@@ -7919,18 +7995,21 @@ def _load_relevant_stallion_ids() -> "set[str]":
 
 
 def _load_horse_bms() -> "bool":
-    """horse_bms.parquet を lazy ロードしてキャッシュする。"""
+    """horse_bms テーブルを SQLite から lazy ロードしてキャッシュする。"""
     global _horse_bms_df
     if _horse_bms_df is not None:
         return True
     with _horse_bms_lock:
         if _horse_bms_df is not None:
             return True
-        bms_path = os.path.join(_PED_RACE_IDX_DIR, "horse_bms.parquet")
-        if not os.path.exists(bms_path):
+        try:
+            from src.pipeline.data.bloodline_sqlite import (
+                get_connection as _bmc_conn, load_horse_bms as _bmc_hbms,
+            )
+            df = _bmc_hbms(_bmc_conn())
+        except Exception as _e:
+            logger.warning("horse_bms SQLite ロード失敗: %s", _e)
             return False
-        import pandas as _pd
-        df = _pd.read_parquet(bms_path)
         for col in ("horse_id", "sire_id", "bms_id", "sire_root_id", "bms_root_id"):
             if col in df.columns:
                 df[col] = df[col].astype(str).str.strip()
@@ -11534,19 +11613,22 @@ _ped_race_lock = threading.Lock()
 
 
 def _load_ped_race_index() -> tuple["Any", "Any", dict]:
-    """race_result_slim と horse_pedigree_cats を遅延ロード（メモリキャッシュ）。"""
+    """race_result_slim を SQLite から遅延ロード（メモリキャッシュ）。pedigree_cats は都度クエリ。"""
     global _ped_race_slim_df, _ped_cats_df, _ped_race_meta
-    import pandas as _pd
     with _ped_race_lock:
         if _ped_race_slim_df is not None:
             return _ped_race_slim_df, _ped_cats_df, _ped_race_meta
-        slim_path = os.path.join(_PED_RACE_IDX_DIR, "race_result_slim.parquet")
-        cats_path = os.path.join(_PED_RACE_IDX_DIR, "horse_pedigree_cats.parquet")
         meta_path = os.path.join(_PED_RACE_IDX_DIR, "meta.json")
-        if not os.path.exists(slim_path) or not os.path.exists(cats_path):
+        try:
+            from src.pipeline.data.bloodline_sqlite import (
+                get_connection as _bmc_conn, load_race_result_slim as _bmc_rrs,
+            )
+            _ped_race_slim_df = _bmc_rrs(_bmc_conn())
+        except Exception as _e:
+            logger.warning("race_result_slim SQLite ロード失敗: %s", _e)
             return None, None, {}
-        _ped_race_slim_df = _pd.read_parquet(slim_path)
-        _ped_cats_df = _pd.read_parquet(cats_path)
+        # pedigree_cats は 846MB なので全件キャッシュせず、クエリ時に horse_ids で絞る
+        _ped_cats_df = None
         if os.path.exists(meta_path):
             with open(meta_path, encoding="utf-8") as _f:
                 _ped_race_meta = json.loads(_f.read())
@@ -11554,23 +11636,24 @@ def _load_ped_race_index() -> tuple["Any", "Any", dict]:
 
 
 def _load_stallion_lineage() -> "pd.DataFrame | None":
-    """stallion_lineage.parquet を遅延ロード（メモリキャッシュ）。"""
+    """stallion_lineage テーブルを SQLite から遅延ロード（メモリキャッシュ）。"""
     global _stallion_lineage_df
-    import pandas as _pd
     with _ped_race_lock:
         if _stallion_lineage_df is not None:
             return _stallion_lineage_df
-        lineage_path = os.path.join(_PED_RACE_IDX_DIR, "stallion_lineage.parquet")
-        if not os.path.exists(lineage_path):
+        try:
+            from src.pipeline.data.bloodline_sqlite import (
+                get_connection as _bmc_conn, load_stallion_lineage as _bmc_lin,
+            )
+            lin = _bmc_lin(_bmc_conn())
+        except Exception as _e:
+            logger.warning("stallion_lineage SQLite ロード失敗: %s", _e)
             return None
-        cols = ["stallion_id", "anchor_name", "group_id", "depth_to_anchor",
-                "main_group_id", "main_group_name", "sub_group_label"]
-        import pyarrow.parquet as _pq
-        pq_cols = _pq.read_schema(lineage_path).names
-        load_cols = [c for c in cols if c in pq_cols]
-        lin = _pd.read_parquet(lineage_path, columns=load_cols)
+        if lin is None or lin.empty:
+            return None
         lin["stallion_id"] = lin["stallion_id"].astype(str)
-        lin["group_id"] = lin["group_id"].astype(int)
+        if "group_id" in lin.columns:
+            lin["group_id"] = lin["group_id"].astype(int)
         if "depth_to_anchor" in lin.columns:
             lin["depth_to_anchor"] = lin["depth_to_anchor"].astype(int)
         if "main_group_id" not in lin.columns:
@@ -11579,7 +11662,6 @@ def _load_stallion_lineage() -> "pd.DataFrame | None":
             lin["main_group_name"] = ""
         if "sub_group_label" not in lin.columns:
             lin["sub_group_label"] = lin.get("anchor_name", "")
-        # 重複があればfirst を使う
         lin = lin.drop_duplicates(subset=["stallion_id"])
         _stallion_lineage_df = lin
         return _stallion_lineage_df
@@ -11600,7 +11682,7 @@ async def api_pedigree_race_stats_meta():
         slim, cats, meta = _load_ped_race_index()
         if slim is None:
             return JSONResponse({
-                "error": "インデックス未生成。python -m src.research.pedigree.build_pedigree_race_index を実行してください。"
+                "error": "インデックス未生成。① python -m src.research.pedigree.build_pedigree_race_index ② python -m src.scripts.data.migrate_bloodline_to_sqlite を実行してください。"
             })
         return JSONResponse({
             "venues": meta.get("venues", []),
@@ -11663,7 +11745,7 @@ async def api_pedigree_race_stats_query(
         slim, cats, meta = _load_ped_race_index()
         if slim is None:
             return JSONResponse({
-                "error": "インデックス未生成。python -m src.research.pedigree.build_pedigree_race_index を実行してください。"
+                "error": "インデックス未生成。① python -m src.research.pedigree.build_pedigree_race_index ② python -m src.scripts.data.migrate_bloodline_to_sqlite を実行してください。"
             })
 
         df = slim.copy()
@@ -11718,9 +11800,8 @@ async def api_pedigree_race_stats_query(
                 "cat1": [], "cat2": [], "cat3": [],
             })
 
-        # ── 血統カテゴリJOIN ──
-        horse_ids = df["horse_id"].unique()
-        ped_filtered = cats[cats["horse_id"].isin(horse_ids)].copy()
+        # ── 血統カテゴリJOIN (pedigree_cats を SQLite から horse_ids 絞り込みで取得) ──
+        horse_ids = df["horse_id"].astype(str).unique().tolist()
 
         # cat フィルタ
         cat_filter = None
@@ -11729,14 +11810,17 @@ async def api_pedigree_race_stats_query(
                 cat_filter = int(cat)
             except ValueError:
                 pass
-        if cat_filter:
-            ped_filtered = ped_filtered[ped_filtered["cat"] == cat_filter]
 
-        # 世代フィルタ
-        if gen_min is not None:
-            ped_filtered = ped_filtered[ped_filtered["gen"] >= gen_min]
-        if gen_max is not None:
-            ped_filtered = ped_filtered[ped_filtered["gen"] <= gen_max]
+        from src.pipeline.data.bloodline_sqlite import (
+            get_connection as _bmc_conn, load_pedigree_cats as _bmc_cats,
+        )
+        ped_filtered = _bmc_cats(
+            _bmc_conn(),
+            horse_ids=horse_ids,
+            cat=cat_filter,
+            gen_min=gen_min,
+            gen_max=gen_max,
+        )
 
         # カウント集計（unique = ユニーク馬数 / appearances = 出現回数）
         use_appearances = (count_mode == "appearances")
@@ -11770,12 +11854,13 @@ async def api_pedigree_race_stats_query(
             df_perf["place_payout"] = 0
 
         # 成績計算用血統インデックス（着順/人気/オッズフィルタ前の全出走馬ベース）
-        _horse_ids_for_perf = set(df_for_perf["horse_id"].astype(str).unique())
-        ped_for_perf = cats[cats["horse_id"].isin(_horse_ids_for_perf)].copy()
-        if gen_min is not None:
-            ped_for_perf = ped_for_perf[ped_for_perf["gen"] >= gen_min]
-        if gen_max is not None:
-            ped_for_perf = ped_for_perf[ped_for_perf["gen"] <= gen_max]
+        _horse_ids_for_perf = df_for_perf["horse_id"].astype(str).unique().tolist()
+        ped_for_perf = _bmc_cats(
+            _bmc_conn(),
+            horse_ids=_horse_ids_for_perf,
+            gen_min=gen_min,
+            gen_max=gen_max,
+        )
 
         def _aggregate_perf(horse_ids_set: set[str]) -> dict:
             """指定 horse_id 集合に対するレース成績統計をまとめて返す。

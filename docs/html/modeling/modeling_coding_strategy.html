@@ -209,117 +209,112 @@ document.addEventListener("DOMContentLoaded", function() {
     <article class="md-body">
 <h1 id="_1">モデリング実装時のコーディング戦略</h1>
 <h2 id="_2">目的</h2>
-<p>このドキュメントは、<code>2020-2025</code> の年次ローカルテーブルと GCS 由来補助データを用いて、<br />
-メモリを極力抑えながら、再現性のあるモデリング基盤を実装するためのコーディング戦略を定義する。</p>
-<p>特に以下を重視する。<br />
-- <code>WSL</code> 上でも安定するメモリ使用量<br />
-- <code>OOF</code> / <code>purged CV</code> / 多段 stage に対応できる中間成果物管理<br />
-- <code>polars</code> を中心に据えた lazy 処理<br />
-- 速度よりもまず「落ちない」「再現できる」「比較できる」実装</p>
-<p>競馬の「レース内での相対順位」予測には <strong>ランキング学習（Learning-to-Rank, LTR）</strong> がよく採用される。<br />
-本書では従来の <strong>点推定（pointwise: 各馬を独立行として logloss 等）</strong> を主軸にしつつ、<strong>LambdaRank 系・最新の LTR・深いアンサンブル・NN</strong> を精度探索の軸として明示する（実装は段階的にブランチを切る）。</p>
+<p>このドキュメントは、<code>2020-2025</code> の年次ローカルテーブルと GCS 由来補助データを使って、メモリを極力抑えながら再現性のあるモデリング基盤を実装するためのコーディング戦略を定義します。</p>
+<p>特に次の点を重視します。</p>
+<ul>
+<li><code>WSL</code>（Windows Subsystem for Linux）上でも安定するメモリ使用量</li>
+<li><code>OOF</code>（交差検証外データ）・<code>purged CV</code>（時系列対応交差検証）・多段ステージに対応できる中間成果物の管理</li>
+<li><code>polars</code> を中心に据えた lazy 処理（必要な列・行だけを遅延評価で読み込む）</li>
+<li>速度より「落ちない」「再現できる」「比較できる」実装を優先する</li>
+</ul>
+<p>競馬の「レース内での相対順位」予測には <strong>ランキング学習（Learning-to-Rank, LTR）</strong> がよく採用されます。</p>
+<p>本書では従来の <strong>点推定（pointwise: 各馬を独立した行として対数損失（LogLoss）：確率予測の誤差指標 などで学習する方式）</strong> を主軸にしながら、<strong>LambdaRank 系・最新の LTR・深いアンサンブル（複数モデルの組み合わせ）・NN</strong> を精度探索の軸として明示します（実装は段階的にブランチを切る）。</p>
 <h2 id="_3">基本方針</h2>
 <h3 id="1-dataframe-polars">1. DataFrame の第一選択は <code>polars</code></h3>
+<p>以下の処理はすべて <code>polars</code> で行います。</p>
 <ul>
 <li>学習母表の組み立て</li>
 <li>特徴量結合</li>
 <li>集約</li>
 <li>fold ごとの OOF 特徴量生成</li>
 </ul>
-<p>は原則 <code>polars</code> で行う。</p>
 <h3 id="2-pandas">2. <code>pandas</code> は境界面だけで使う</h3>
-<p>以下のような最小限の場面に限定する。<br />
-- LightGBM / CatBoost / XGBoost へ最終入力する直前<br />
-- SHAP や一部可視化ライブラリが <code>pandas</code> を要求する場面<br />
-- 単純な小サイズ CSV 出力</p>
+<p>以下の最小限の場面のみに限定します。</p>
+<ul>
+<li>LightGBM / CatBoost / XGBoost へ最終入力する直前</li>
+<li>SHAP（各特徴量の予測への寄与度を示す手法）や一部可視化ライブラリが <code>pandas</code> を要求する場面</li>
+<li>小サイズの CSV を出力する場面</li>
+</ul>
 <h3 id="3-parquet-scan">3. 入力は原則 <code>Parquet + scan</code></h3>
-<p><code>read_parquet()</code> ではなく、まず <code>scan_parquet()</code> を使う。<br />
-必要列だけ <code>select()</code> し、必要行だけ <code>filter()</code> してから <code>collect()</code> する。</p>
-<h3 id="4">4. 中間成果物を積極保存する</h3>
-<p>OOF や stage 出力を毎回再計算しない。</p>
-<p>保存対象:<br />
-- <code>horse_latent_state.parquet</code><br />
-- <code>positioning_features.parquet</code><br />
-- <code>pace_scenario_features.parquet</code><br />
-- <code>day_track_bias_features.parquet</code><br />
-- <code>contextual_bloodline_features.parquet</code><br />
-- <code>horse_probability_table.parquet</code></p>
+<p>全列を一括で読む <code>read_parquet()</code> ではなく、まず <code>scan_parquet()</code>（遅延読み込み）を使います。</p>
+<p>必要な列だけ <code>select()</code> し、必要な行だけ <code>filter()</code> してから <code>collect()</code>（実際の読み込み）を実行します。</p>
+<h3 id="4">4. 中間成果物を積極的に保存する</h3>
+<p>OOF や stage 出力は毎回再計算せず、Parquet に保存して使い回します。</p>
+<p>保存対象のファイル:</p>
+<ul>
+<li><code>horse_latent_state.parquet</code></li>
+<li><code>positioning_features.parquet</code></li>
+<li><code>pace_scenario_features.parquet</code></li>
+<li><code>day_track_bias_features.parquet</code></li>
+<li><code>contextual_bloodline_features.parquet</code></li>
+<li><code>horse_probability_table.parquet</code></li>
+</ul>
 <h2 id="_4">推奨ライブラリ構成</h2>
-<h2 id="_5">データ処理</h2>
-<ul>
-<li><code>polars</code></li>
-<li><code>pyarrow</code></li>
-<li><code>duckdb</code>（必要時のみ）</li>
-</ul>
-<h2 id="_6">学習</h2>
-<ul>
-<li><code>lightgbm</code>（回帰・分類に加え <strong><code>lambdarank</code></strong>）</li>
-<li><code>catboost</code>（<strong><code>YetiRank</code></strong> / <strong><code>StochasticRank</code></strong> 等のランキングモード）</li>
-<li><code>xgboost</code>（<strong><code>rank:ndcg</code></strong>, <strong><code>rank:pairwise</code></strong>, <strong><code>rank:map</code></strong>）</li>
-<li><code>scikit-learn</code>（メタ学習・校正・補助回帰）</li>
-</ul>
-<h2 id="_7">ランキング・深層（任意・精度探索ブランチ）</h2>
-<ul>
-<li><code>pytorch</code> または <code>jax</code>（<strong>レース単位 listwise</strong>、スコアヘッド＋ softmax、小規模 MLP / 埋め込み）</li>
-<li>大規模 tabular NN（例: <strong>FT-Transformer</strong> 系）は実装コストとメモリが重いため、<strong>ベースライン確立後</strong>の比較実験として位置づける</li>
-</ul>
-<h2 id="_8">補助</h2>
-<ul>
-<li><code>numpy</code></li>
-<li><code>scipy</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>カテゴリ</th><th>ライブラリ</th><th>用途</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="3">データ処理</td><td><code>polars</code></td><td>高速 DataFrame 処理の主軸</td></tr>
+    <tr><td><code>pyarrow</code></td><td>Parquet のスキーマ・メタデータ管理</td></tr>
+    <tr><td><code>duckdb</code></td><td>SQL で複数年 Parquet をまたぐ集計が必要なときのみ</td></tr>
+    <tr><td rowspan="4">学習</td><td><code>lightgbm</code></td><td>回帰・分類に加え <code>lambdarank</code> によるランキング学習にも対応</td></tr>
+    <tr><td><code>catboost</code></td><td>高カーディナリティカテゴリに強い GBDT。<code>YetiRank</code> / <code>StochasticRank</code> 等のランキングモードあり</td></tr>
+    <tr><td><code>xgboost</code></td><td>GBDT の別実装。<code>rank:ndcg</code>, <code>rank:pairwise</code>, <code>rank:map</code> のランキング目的関数に対応</td></tr>
+    <tr><td><code>scikit-learn</code></td><td>メタ学習・確率補正・補助回帰に使う</td></tr>
+    <tr><td rowspan="2">ランキング・深層学習（任意）</td><td><code>pytorch</code> / <code>jax</code></td><td>レース単位の listwise 学習・スコアヘッド＋ softmax・小規模 MLP / 埋め込み</td></tr>
+    <tr><td>FT-Transformer 系</td><td>大規模 tabular NN。実装コストが重いためベースライン確立後の比較実験として位置づける</td></tr>
+    <tr><td rowspan="2">補助</td><td><code>numpy</code></td><td>数値計算</td></tr>
+    <tr><td><code>scipy</code></td><td>統計・最適化</td></tr>
+  </tbody>
+</table>
 <h2 id="_9">ライブラリごとの役割</h2>
-<h3 id="polars"><code>polars</code></h3>
-<ul>
-<li>lazy query</li>
-<li>列選択</li>
-<li>join</li>
-<li>groupby 集約</li>
-<li>fold ごとの特徴量作成</li>
-</ul>
-<h3 id="pyarrow"><code>pyarrow</code></h3>
-<ul>
-<li>schema 管理</li>
-<li>Parquet metadata の取得</li>
-<li>row group / file layout 管理</li>
-</ul>
-<h3 id="duckdb"><code>duckdb</code></h3>
-<p>以下のときのみ使う。<br />
-- 複数年 Parquet をまたぐ ad-hoc 集計<br />
-- SQL 的に書いた方が明らかに読みやすい分析<br />
-- 大規模 segment coverage チェック</p>
+<table>
+  <thead>
+    <tr><th>ライブラリ</th><th>役割</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>polars</code></td><td>lazy query（遅延クエリ）・列選択・join・groupby 集約・fold ごとの特徴量作成</td></tr>
+    <tr><td><code>pyarrow</code></td><td>スキーマ（列の型定義）の管理・Parquet メタデータの取得・row group / ファイルレイアウトの管理</td></tr>
+    <tr><td><code>duckdb</code></td><td>複数年 Parquet への ad-hoc 集計・SQL で書いた方が明快な分析・大規模セグメントカバレッジチェック（これらの場合のみ使用）</td></tr>
+  </tbody>
+</table>
 <h2 id="_10">ディレクトリ戦略</h2>
-<h2 id="_11">ソース</h2>
-<ul>
-<li><code>data/local/tables/&lt;year&gt;/*.parquet</code></li>
-</ul>
-<h2 id="_12">モデリング中間成果物</h2>
-<ul>
-<li><code>data/modeling/base/</code></li>
-<li><code>data/modeling/features/</code></li>
-<li><code>data/modeling/oof/</code></li>
-<li><code>data/modeling/calibration/</code></li>
-<li><code>data/modeling/backtest/</code></li>
-</ul>
-<h2 id="_13">実験メタデータ</h2>
-<ul>
-<li><code>data/meta/modeling/</code></li>
-</ul>
-<h2 id="_14">推奨ファイル分割</h2>
-<ul>
-<li><code>base_horse_dataset_2020_2025.parquet</code></li>
-<li><code>baseline_v1.parquet</code></li>
-<li><code>extended_v1.parquet</code></li>
-<li><code>oof_fold_1_target_encoding.parquet</code></li>
-<li><code>oof_fold_1_positioning.parquet</code></li>
-<li><code>oof_fold_1_final_probabilities.parquet</code></li>
-</ul>
+<table>
+  <thead>
+    <tr><th>パス</th><th>カテゴリ</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>data/local/tables/&lt;year&gt;/*.parquet</code></td><td>ソース（入力データ）</td><td>年ごとのローカル Parquet テーブル</td></tr>
+    <tr><td><code>data/modeling/base/</code></td><td>中間成果物</td><td>学習母表</td></tr>
+    <tr><td><code>data/modeling/features/</code></td><td>中間成果物</td><td>特徴量テーブル</td></tr>
+    <tr><td><code>data/modeling/oof/</code></td><td>中間成果物</td><td>OOF 予測</td></tr>
+    <tr><td><code>data/modeling/calibration/</code></td><td>中間成果物</td><td>確率補正テーブル</td></tr>
+    <tr><td><code>data/modeling/backtest/</code></td><td>中間成果物</td><td>バックテスト結果</td></tr>
+    <tr><td><code>data/meta/modeling/</code></td><td>実験メタデータ</td><td>設定・バージョン情報</td></tr>
+  </tbody>
+</table>
+<h2 id="_14">推奨ファイル命名例</h2>
+<table>
+  <thead>
+    <tr><th>ファイル名</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>base_horse_dataset_2020_2025.parquet</code></td><td>全期間の馬基本データ</td></tr>
+    <tr><td><code>baseline_v1.parquet</code></td><td>最初の安定版特徴量セット</td></tr>
+    <tr><td><code>extended_v1.parquet</code></td><td>拡張特徴量セット</td></tr>
+    <tr><td><code>oof_fold_1_target_encoding.parquet</code></td><td>fold 1 の target encoding 結果</td></tr>
+    <tr><td><code>oof_fold_1_positioning.parquet</code></td><td>fold 1 の脚質予測結果</td></tr>
+    <tr><td><code>oof_fold_1_final_probabilities.parquet</code></td><td>fold 1 の最終確率予測</td></tr>
+  </tbody>
+</table>
 <h2 id="_15">メモリ節約の原則</h2>
-<h2 id="1">1. 必要列だけ読む</h2>
-<p>悪い例:</p>
+<h2 id="1">1. 必要な列だけ読む</h2>
+<p>全列を読み込むと不要なメモリを大量に消費します。必要列のみ指定してから読み込みます。</p>
+<p>悪い例（全列読み込み）:</p>
 <pre><code class="language-python">df = pl.read_parquet(&quot;race_shutuba_flat.parquet&quot;)
 </code></pre>
-<p>良い例:</p>
+<p>良い例（列を絞ってから読み込む）:</p>
 <pre><code class="language-python">df = (
     pl.scan_parquet(&quot;race_shutuba_flat.parquet&quot;)
     .select([
@@ -330,49 +325,58 @@ document.addEventListener("DOMContentLoaded", function() {
     .collect()
 )
 </code></pre>
-<h2 id="2">2. 必要年だけ読む</h2>
-<p>年をまたぐ時も全件 <code>collect()</code> しない。</p>
+<h2 id="2">2. 必要な年だけ読む</h2>
+<p>複数年にまたがる処理でも、全件を一度に <code>collect()</code> しません。年ごとの scan を lazy で結合します。</p>
 <pre><code class="language-python">lf = pl.concat([
     pl.scan_parquet(f&quot;data/local/tables/{y}/race_shutuba_flat.parquet&quot;)
     for y in years
 ])
 </code></pre>
-<h2 id="3-fold-materialize">3. 必要 fold だけ materialize する</h2>
+<h2 id="3-fold-materialize">3. 必要な fold だけ materialize する</h2>
+<p>全 fold 分の OOF を一度にメモリ上に作らず、1 fold ずつ処理します。</p>
 <ul>
-<li>全 fold 分の OOF を一度に作らない</li>
-<li><code>fold_1</code> を作って保存</li>
-<li>メモリ解放</li>
-<li><code>fold_2</code> を作る</li>
+<li><code>fold_1</code> を作って Parquet に保存する</li>
+<li>メモリを解放する</li>
+<li><code>fold_2</code> を作る（同じ手順を繰り返す）</li>
 </ul>
 <h2 id="4_1">4. 型を落とす</h2>
-<ul>
-<li>確率・連続量: <code>Float32</code></li>
-<li>count・flag: <code>Int8 / Int16 / UInt16</code></li>
-<li>rank: <code>UInt16</code></li>
-<li>カテゴリ ID: <code>Int32</code></li>
-<li>長い文字列は可能なら辞書化 or id 化</li>
-</ul>
+<p>不必要に精度の高い型を使うとメモリが増えます。用途に合わせて型を下げます。</p>
+<table>
+  <thead>
+    <tr><th>用途</th><th>推奨型</th><th>理由</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>確率・連続量</td><td><code>Float32</code></td><td>32bit 浮動小数点で十分な精度</td></tr>
+    <tr><td>count・フラグ</td><td><code>Int8</code> / <code>Int16</code> / <code>UInt16</code></td><td>小さい整数型でメモリ節約</td></tr>
+    <tr><td>順位</td><td><code>UInt16</code></td><td>符号なし16bit整数で十分</td></tr>
+    <tr><td>カテゴリ ID</td><td><code>Int32</code></td><td>符号あり32bit整数</td></tr>
+    <tr><td>長い文字列</td><td>辞書型または ID</td><td>可能な限り変換してメモリを節約</td></tr>
+  </tbody>
+</table>
 <h2 id="5-python">5. Python ループを避ける</h2>
+<p>行ごとに Python ループを回すと処理が遅くなります。polars の組み込み関数を使います。</p>
 <ul>
-<li><code>groupby().agg()</code> を優先</li>
-<li><code>with_columns()</code> で複数列をまとめて作る</li>
-<li><code>map_elements()</code> は最後の手段</li>
+<li><code>groupby().agg()</code>（グループ集計）を優先する</li>
+<li><code>with_columns()</code> で複数列をまとめて一括作成する</li>
+<li><code>map_elements()</code>（Python 関数をセルごとに適用）は最後の手段</li>
 </ul>
-<h2 id="6-join">6. 巨大 join を避ける</h2>
-<p>母表に全部一気に join しない。</p>
-<p>順番:<br />
-1. 母表の最小列を作る<br />
-2. <code>race_index</code> を join<br />
-3. 保存<br />
-4. <code>past aggregate</code> を join<br />
-5. 保存</p>
-<h2 id="7">7. 生テキストを展開しない</h2>
+<h2 id="6-join">6. 巨大な join を避ける</h2>
+<p>母表に全テーブルを一度に join するとメモリが爆発します。段階的に join して都度保存します。</p>
+<p>推奨する手順:</p>
+<ol>
+<li>母表の最小列（識別子と基本情報のみ）を作る</li>
+<li><code>race_index</code>（レース指数）を join する</li>
+<li>保存する</li>
+<li><code>past aggregate</code>（過去成績の集計）を join する</li>
+<li>保存する</li>
+</ol>
+<h2 id="7">7. 生テキストを学習行列に展開しない</h2>
 <ul>
-<li><code>comment</code> や <code>paddock_comment</code> を全文保持した巨大 DataFrame を学習用に持たない</li>
-<li>スコア化・presence flag 化してから捨てる</li>
+<li><code>comment</code> や <code>paddock_comment</code>（パドックコメント）を全文保持したままの巨大 DataFrame を学習に使わない</li>
+<li>スコア化（数値変換）または presence flag（存在フラグ）化してからテキスト列を削除する</li>
 </ul>
 <h2 id="polars_1"><code>polars</code> 実装パターン</h2>
-<h2 id="1_1">1. 母表生成</h2>
+<h2 id="1_1">1. 母表生成（全期間の基本特徴量を結合する）</h2>
 <pre><code class="language-python">base = (
     pl.concat([
         pl.scan_parquet(f&quot;data/local/tables/{y}/race_shutuba_flat.parquet&quot;)
@@ -387,7 +391,7 @@ document.addEventListener("DOMContentLoaded", function() {
     ])
 )
 </code></pre>
-<h2 id="2-sparse">2. sparse テーブル結合</h2>
+<h2 id="2-sparse">2. sparse テーブルの結合（存在しない行をスキップして left join する）</h2>
 <pre><code class="language-python">paddock = (
     pl.concat([
         pl.scan_parquet(f&quot;data/local/tables/{y}/race_paddock_flat.parquet&quot;)
@@ -405,7 +409,7 @@ joined = base.join(
     how=&quot;left&quot;,
 )
 </code></pre>
-<h2 id="3-race-rank-z-score">3. race 内 rank / z-score</h2>
+<h2 id="3-race-rank-z-score">3. レース内 rank / z-score（同一レース内での相対値を計算する）</h2>
 <pre><code class="language-python">df = df.with_columns([
     pl.col(&quot;speed_max&quot;)
       .rank(&quot;ordinal&quot;)
@@ -418,120 +422,136 @@ joined = base.join(
 ])
 </code></pre>
 <h2 id="oof">OOF 特徴量の生成戦略</h2>
-<h2 id="1-target-encoding">1. target encoding</h2>
-<p>方針:<br />
-- split manifest に従って fold ごとに train / valid を分ける<br />
-- train 側だけでカテゴリ平均を作る<br />
-- valid 側へ map<br />
-- 結果を <code>oof_fold_x_*.parquet</code> に保存</p>
-<h2 id="2-stage">2. stage モデル出力</h2>
-<p><code>PositioningModel</code>, <code>PaceScenarioModel</code>, <code>DayTrackBiasModel</code>, <code>ContextualBloodlineFitModel</code> の出力は、必ず OOF 保存する。</p>
-<p>例:<br />
-- <code>data/modeling/oof/fold_1_positioning.parquet</code><br />
-- <code>data/modeling/oof/fold_1_pace.parquet</code><br />
-- <code>data/modeling/oof/fold_1_final_prob.parquet</code></p>
-<h2 id="3-calibration">3. calibration</h2>
+<h2 id="1-target-encoding">1. target encoding（カテゴリの的中率エンコード）</h2>
+<p>方針:</p>
 <ul>
-<li>OOF 予測を集めた 1 本の calibration 用テーブルを作る</li>
-<li>calibration 用テーブルだけ <code>pandas</code> / <code>numpy</code> に落としてもよい</li>
+<li>split manifest に従って fold ごとに train / valid を分ける</li>
+<li>train 側だけでカテゴリ平均（的中率など）を計算する</li>
+<li>valid 側へその統計値を map する（valid 側の情報は使わない）</li>
+<li>結果を <code>oof_fold_x_*.parquet</code> として保存する</li>
+</ul>
+<h2 id="2-stage">2. ステージモデルの出力</h2>
+<p>以下のモデル出力は、必ず OOF（交差検証外データ）で生成して Parquet に保存します。</p>
+<table>
+  <thead>
+    <tr><th>モデル名</th><th>役割</th><th>保存パス例</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>PositioningModel</code></td><td>脚質・位置取り予測</td><td><code>data/modeling/oof/fold_1_positioning.parquet</code></td></tr>
+    <tr><td><code>PaceScenarioModel</code></td><td>ペース展開予測</td><td><code>data/modeling/oof/fold_1_pace.parquet</code></td></tr>
+    <tr><td><code>DayTrackBiasModel</code></td><td>当日バイアス予測</td><td>—</td></tr>
+    <tr><td><code>ContextualBloodlineFitModel</code></td><td>血統適性スコア</td><td>—</td></tr>
+    <tr><td>最終確率モデル</td><td>最終確率予測</td><td><code>data/modeling/oof/fold_1_final_prob.parquet</code></td></tr>
+  </tbody>
+</table>
+<h2 id="3-calibration">3. calibration（確率補正）</h2>
+<ul>
+<li>全 fold の OOF 予測を集めた 1 本の calibration 用テーブルを作る</li>
+<li>この calibration 用テーブルだけ <code>pandas</code> / <code>numpy</code> に変換してもよい</li>
 </ul>
 <h2 id="_16">学習器ごとの実装戦略</h2>
 <h2 id="lightgbm">LightGBM</h2>
 <ul>
-<li>最終入力は <code>float32</code> / <code>int32</code></li>
-<li><code>categorical_feature</code> を活かせる列は integer id にして渡す</li>
-<li>ただし OOF target encoding 後の列は数値扱い</li>
-<li>学習用 matrix は fold 単位で生成し、不要になったら即解放</li>
-<li><strong>ランキング</strong>: <code>objective="lambdarank"</code> に <strong><code>label_gain</code></strong>（relevance レベルごとの gain）と <strong><code>group</code></strong>（各レースの行数）を指定。監視に <strong><code>eval_at=[3,5]</code></strong> 等で NDCG@k を併記すると比較が楽</li>
+<li>最終入力は <code>float32</code> / <code>int32</code>（小さい型でメモリを節約）</li>
+<li><code>categorical_feature</code>（カテゴリ特徴量）を活かせる列は integer id に変換してから渡す</li>
+<li>OOF target encoding 後の列は数値列として扱う</li>
+<li>学習用 matrix は fold 単位で生成し、不要になったら即解放する</li>
+<li><strong>ランキングモード</strong>: <code>objective="lambdarank"</code> に <strong><code>label_gain</code></strong>（relevance レベルごとのゲイン）と <strong><code>group</code></strong>（各レースの行数）を指定する。監視指標に <strong><code>eval_at=[3,5]</code></strong> などで NDCG@k を追加すると比較しやすい</li>
 </ul>
 <h2 id="catboost">CatBoost</h2>
 <ul>
-<li>高カードカテゴリは CatBoost の強み</li>
-<li>文字列カテゴリをそのまま渡すか、辞書 id を渡す</li>
-<li>ただし巨大 DataFrame を <code>pandas</code> に一気に変換しない</li>
-<li>fold 単位で <code>Pool</code> を組み立てる</li>
-<li><strong>ランキング</strong>: <code>loss_function</code> に <strong><code>YetiRank</code></strong> / <strong><code>StochasticRank</code></strong> / <strong><code>QueryCrossEntropy</code></strong> 等（公式の ranking 系一覧を参照）、<strong><code>group_id=race_id</code></strong> でクエリを指定</li>
+<li>種類が多いカテゴリ（高カーディナリティ）の扱いが CatBoost の強み</li>
+<li>文字列カテゴリをそのまま渡すか、辞書 ID に変換して渡す</li>
+<li>巨大な DataFrame を一気に <code>pandas</code> に変換しない</li>
+<li>fold 単位で <code>Pool</code>（CatBoost の入力フォーマット）を組み立てる</li>
+<li><strong>ランキングモード</strong>: <code>loss_function</code> に <strong><code>YetiRank</code></strong> / <strong><code>StochasticRank</code></strong> / <strong><code>QueryCrossEntropy</code></strong> 等を指定し、<strong><code>group_id=race_id</code></strong> でクエリ（1レース）を指定する</li>
 </ul>
 <h2 id="xgboost">XGBoost</h2>
 <ul>
-<li><code>QuantileDMatrix</code> を優先</li>
-<li>dense <code>float64</code> 行列を避ける</li>
-<li><strong>ランキング</strong>では <code>objective=rank:ndcg</code>（または <code>rank:pairwise</code> / <code>rank:map</code>）と、クエリごとの行数 <strong><code>group</code></strong> を必ず指定する</li>
+<li><code>QuantileDMatrix</code>（メモリ効率の良い入力形式）を優先して使う</li>
+<li>dense <code>float64</code>（全セル展開の倍精度）行列は避ける</li>
+<li><strong>ランキングモード</strong>: <code>objective=rank:ndcg</code>（または <code>rank:pairwise</code> / <code>rank:map</code>）と、クエリごとの行数 <strong><code>group</code></strong> を必ず指定する</li>
 </ul>
 <hr />
 <h2 id="ltr">ランキング学習（LTR）と競馬タスクの相性</h2>
+<p>競馬の着順予測を「検索順位付け」と同じ問題として捉えたのがランキング学習（Learning-to-Rank）です。</p>
 <ul>
-<li><strong>クエリ（query）</strong> = 1 レース <code>race_id</code> に属する出走馬の集合（可変長）。</li>
-<li><strong>ドキュメント</strong> = 各馬の特徴ベクトル（<code>T-10分</code> までに観測可能な列のみ）。</li>
-<li><strong>関連度（relevance）</strong> = 確定着順や複勝圏から定義した非負整数／実数（例: 1着を最高、失格・除外は別ルールで 0 扱い等）。</li>
+<li><strong>クエリ（query）</strong> = 1レース（<code>race_id</code> に属する出走馬の集合、頭数は可変）</li>
+<li><strong>ドキュメント</strong> = 各馬の特徴ベクトル（レース発走 10 分前までに観測できる列のみ）</li>
+<li><strong>関連度（relevance）</strong> = 確定着順や複勝圏から定義した非負整数・実数（例: 1着を最高値、失格・除外は 0 など）</li>
 </ul>
-<p><strong>Pointwise</strong>（各行に <code>is_win</code> を当てる）は実装が単純で馬券用の確率校正とも親和性が高い。<br />
-一方で <strong>Listwise / Pairwise</strong> は「同レース内の順序」を直接損失に入れるため、<strong>上位捕捉（NDCG@3）や順位形状</strong>に強いことが多い。</p>
-<p>本プロジェクトでは両方を <strong>同一の purged CV / race 単位 split</strong> の下で比較可能にする（<code>train_valid_test_split_strategy.html</code> と整合）。</p>
+<p><strong>Pointwise</strong>（各馬に <code>is_win</code> を当てる分類）は実装が単純で馬券用の確率補正とも相性が良いです。</p>
+<p>一方で <strong>Listwise / Pairwise</strong> は「同一レース内の順序」を直接損失に組み込むため、<strong>上位馬の捕捉精度（NDCG@3）や着順の並び方の再現</strong>に強いことが多いです。</p>
+<p>本プロジェクトでは両方を <strong>同一の purged CV / race 単位 split</strong> の下で比較できる設計にします（<code>train_valid_test_split_strategy.html</code> と整合）。</p>
 <hr />
 <h2 id="lambdarank-gbdt">古典〜標準: LambdaRank と GBDT ランキング</h2>
 <h3 id="lambdarank-lambdamart">LambdaRank / LambdaMART</h3>
 <ul>
-<li><strong>LambdaRank</strong>: 勾配を NDCG の変化に重み付けした近似（ペアを動かしたときの評価指標改善を強調）。</li>
-<li><strong>LambdaMART</strong>: その勾配で MART（GBDT）を学習する枠組み。</li>
-<li><strong>LightGBM</strong>: <code>objective="lambdarank"</code> と <strong><code>label_gain</code></strong>（relevance レベルごとの gain 配列）、<strong><code>group</code></strong> で listwise 学習が可能。</li>
-<li>メモリ: <code>group</code> は <code>numpy</code> 配列で渡すことが多い → <strong>レース単位で fold materialize</strong> し、学習直前だけ行列化する。</li>
+<li><strong>LambdaRank</strong>: ペアを入れ替えたときの NDCG の変化量を勾配に反映する近似手法。「このペアの順位を直すとどれだけ評価が改善するか」を損失に組み込む。</li>
+<li><strong>LambdaMART</strong>: LambdaRank の勾配を使って GBDT（木を積み上げた機械学習モデル）を学習する枠組み。</li>
+<li><strong>LightGBM での使い方</strong>: <code>objective="lambdarank"</code> と <strong><code>label_gain</code></strong>（relevance レベルごとのゲイン配列）、<strong><code>group</code></strong>（各レースの行数）を指定することで listwise 学習が可能。</li>
+<li><strong>メモリの注意</strong>: <code>group</code> は <code>numpy</code> 配列で渡すことが多い。レース単位で fold を materialize し、学習直前だけ行列化する。</li>
 </ul>
 <h3 id="xgboost_1">XGBoost のランキング目的関数</h3>
 <ul>
-<li><code>rank:ndcg</code> … NDCG を意識した pairwise 近似（報告しやすい）。</li>
-<li><code>rank:pairwise</code> … シンプルなペアワイズ（高速・ベースライン比較用）。</li>
-<li><code>rank:map</code> … 平均精度（上位重視の別解釈）。</li>
+<li><code>rank:ndcg</code> — NDCG を意識した pairwise 近似（結果の報告がしやすい）</li>
+<li><code>rank:pairwise</code> — シンプルなペアワイズ損失（高速・ベースライン比較向き）</li>
+<li><code>rank:map</code> — 平均精度（上位重視の別解釈）</li>
 </ul>
 <h3 id="catboost_1">CatBoost のランキング</h3>
 <ul>
-<li><strong><code>YetiRank</code></strong>、<strong><code>StochasticRank</code></strong>、<strong><code>QueryCrossEntropy</code></strong>、<strong><code>LambdaMart</code></strong> など（CatBoost 公式 <em>Ranking: objectives and metrics</em> 参照）。高カードカテゴリと併用しやすい。</li>
-<li><strong><code>group_id=race_id</code></strong> でクエリを指定し、同一レース内でペア／リスト損失を構成させる。</li>
+<li><strong><code>YetiRank</code></strong>、<strong><code>StochasticRank</code></strong>、<strong><code>QueryCrossEntropy</code></strong>、<strong><code>LambdaMart</code></strong> などを <code>loss_function</code> に指定できる（CatBoost 公式ドキュメントの <em>Ranking: objectives and metrics</em> を参照）。高カーディナリティなカテゴリと組み合わせやすい。</li>
+<li><strong><code>group_id=race_id</code></strong> でクエリ（1レース）を指定し、同一レース内でペア／リスト損失を構成する。</li>
 </ul>
 <h3 id="relevance">relevance 設計の例（実装メモ）</h3>
 <ul>
-<li>着順ベース: <code>relevance = max_rank + 1 - finish_position</code>（着外は一定の低値にクリップ）。</li>
-<li>複勝重視: 3着以内を同タイルに寄せる、または top3 にボーナスを付けた多段 relevance。</li>
-<li><strong>将来情報の混入禁止</strong>: relevance は <strong>確定結果ラベル</strong>のみで定義し、特徴側に結果由来の列を入れない（二重チェック）。</li>
+<li>着順ベース: <code>relevance = max_rank + 1 - finish_position</code>（1着が最高値、着外は下限値にクリップ）</li>
+<li>複勝重視: 3着以内を同じ値に近づける、または top3 にボーナスを付けた多段 relevance</li>
+<li><strong>将来情報の混入禁止</strong>: relevance は <strong>確定した結果ラベルのみ</strong>で定義する。特徴量側に結果由来の列が入っていないことを二重チェックする。</li>
 </ul>
 <hr />
 <h2 id="_17">拡張: 目的関数・学習枠の幅を広げる試み</h2>
-<p>精度向上の探索として、次を <strong>同一 CV プロトコル</strong>で ablation しやすい順に並べる。</p>
+<p>着順予測の精度をさらに上げるための探索候補を、<strong>同一 CV プロトコル</strong>で ablation しやすい順に並べます。</p>
 <ol>
 <li>
 <p><strong>ListNet / ListMLE 型（NN または近似）</strong><br />
-   レース内スコア <code>s_i</code> に対し <code>P(順序) ∝ softmax</code> の負の対数尤度（ListMLE）や確率分布 KL（ListNet）。<br />
-   小規模なら <strong>レース単位バッチ</strong>（<code>batch_size=1 race</code>、馬数可変）の MLP で試せる。</p>
+   レース内スコア <code>s_i</code> に対し、<code>P(順序) ∝ softmax</code> の負の対数尤度（ListMLE）や確率分布の KL ダイバージェンス（ListNet）を損失に使う手法。<br />
+   小規模なら <strong>レース単位バッチ</strong>（<code>batch_size=1 race</code>、馬数可変）の MLP（多層パーセプトロン）で試せる。</p>
 </li>
 <li>
 <p><strong>Pairwise 深層（RankNet 系）</strong><br />
-   馬ペア <code>(i,j)</code> を同一レース内で生成し、<code>σ(s_i - s_j)</code> と真の勝敗ラベルの cross-entropy。<br />
-   メモリ注意: ペア数は <code>O(field^2)</code> → <strong>上位馬同士・サンプリング</strong>で削る。</p>
+   同一レース内の馬ペア <code>(i,j)</code> を生成し、<code>σ(s_i - s_j)</code> と真の勝敗ラベルの cross-entropy を損失にする。<br />
+   メモリ注意: ペア数は頭数の 2 乗（<code>O(field^2)</code>）になるため、<strong>上位馬同士に限定・サンプリング</strong>して削る。</p>
 </li>
 <li>
-<p><strong>Multi-task</strong><br />
-   同一バックボーンから <strong>pointwise head</strong>（BCE / focal）と <strong>ranking head</strong>（pairwise hinge）を併用し、損失を <code>L = L_point + λ L_rank</code> で結合。馬券用確率は pointwise 側を校正しやすい。</p>
+<p><strong>Multi-task（複数タスクの同時学習）</strong><br />
+   同一バックボーンから <strong>pointwise head</strong>（確率予測：BCE / focal 損失）と <strong>ranking head</strong>（順位予測：pairwise hinge 損失）を同時に学習し、損失を <code>L = L_point + λ L_rank</code> で合成する。<br />
+   馬券用確率は pointwise 側が補正しやすい。</p>
 </li>
 <li>
-<p><strong>Tabular 深層（NN 線を残す）</strong><br />
-   - <strong>埋め込み</strong>: <code>horse_id</code> / <code>jockey_id</code> / <code>trainer_id</code> を hash embedding（出現頻度で次元調整）。<br />
-   - <strong>FT-Transformer / TabTransformer</strong>: 列をトークン化して self-attention。精度ポテンシャルは高いが <strong>fold ごとの学習コスト</strong>が大きい → <code>extended_v1</code> 確定後の「伸ばし」候補。<br />
-   - <strong>蒸留</strong>: 強いランカーまたは大きい NN のスコアを、LightGBM pointwise / lambdarank に <strong>知識蒸留</strong>（教師スコアを追加ターゲットまたはソフトラベル）。</p>
+<p><strong>Tabular 深層学習（NN の可能性を残す）</strong></p>
+   <ul>
+   <li><strong>埋め込み（Embedding）</strong>: <code>horse_id</code> / <code>jockey_id</code> / <code>trainer_id</code> を hash embedding（出現頻度に応じて次元を調整）に変換する</li>
+   <li><strong>FT-Transformer / TabTransformer</strong>: 列をトークン化して self-attention で学習する。精度ポテンシャルは高いが <strong>fold ごとの学習コスト</strong>が大きいため、<code>extended_v1</code> 確定後の「精度を伸ばす」候補として位置づける</li>
+   <li><strong>知識蒸留</strong>: 強いランキングモデルや大きい NN のスコアを、LightGBM pointwise / lambdarank への<strong>追加ターゲットまたはソフトラベル</strong>として与える</li>
+   </ul>
 </li>
 <li>
 <p><strong>確率とランキングの橋渡し</strong><br />
-   - ランカー出力スコア → レース内 <strong>softmax で疑似確率</strong> → 温度スケールで校正（valid のみ fit）。<br />
-   - <strong>Plackett–Luce</strong> 等の順序モデルは実装コストが高いが理論的に listwise と整合。まずは softmax 近似で十分なことが多い。</p>
+   ランキングモデルの出力スコアをレース内 <strong>softmax で疑似確率</strong>に変換し、温度スケールで補正する（valid のみ fit）。<br />
+   <strong>Plackett–Luce</strong> 等の順序モデルは理論的には listwise と整合するが実装コストが高い。まずは softmax 近似で十分なことが多い。</p>
 </li>
 <li>
-<p><strong>研究寄り・長期オプション</strong>（優先度は低め）<br />
-   - <strong>LambdaLoss</strong> 一般形や、オークション理論に基づく損失などは文献単位で検討。<br />
-   - <strong>Determinantal Point Process (DPP)</strong> で多様性を入れる等は馬券最適化層に近い。</p>
+<p><strong>研究寄り・長期オプション</strong>（優先度は低め）</p>
+   <ul>
+   <li><strong>LambdaLoss</strong> の一般形やオークション理論に基づく損失関数は、文献を読んでから個別に検討する</li>
+   <li><strong>Determinantal Point Process (DPP)</strong> で多様性を入れる手法は馬券最適化層に近く、当面は保留</li>
+   </ul>
 </li>
 </ol>
 <hr />
-<h2 id="_18">アンサンブルの「層」を深くする（許容設計）</h2>
-<p>浅い平均ブレンドだけでなく、<strong>層状スタッキング</strong>を許容する。例:</p>
+<h2 id="_18">アンサンブル（複数モデルの組み合わせ）の層を深くする設計</h2>
+<p>単純な平均ブレンドだけでなく、<strong>層状スタッキング（モデルの予測を別モデルで再学習）</strong>を許容する設計です。</p>
 <table>
 <thead>
 <tr>
@@ -543,139 +563,174 @@ joined = base.join(
 <tbody>
 <tr>
 <td>L1a</td>
-<td>LightGBM / CatBoost / XGBoost <strong>pointwise</strong>（<code>is_win</code> / <code>is_top3</code>）</td>
+<td>LightGBM / CatBoost / XGBoost <strong>pointwise</strong>（<code>is_win</code> / <code>is_top3</code> の二値分類）</td>
 <td>現行方針の主戦力</td>
 </tr>
 <tr>
 <td>L1b</td>
 <td>LightGBM <strong>lambdarank</strong>、CatBoost <strong>YetiRank</strong>、XGBoost <strong>rank:ndcg</strong></td>
-<td>同一特徴でも順序目的で別視点</td>
+<td>同一特徴量を使いながら「順位付け」の視点で別モデルを作る</td>
 </tr>
 <tr>
 <td>L1c</td>
 <td><strong>NN</strong>（listwise または score + softmax、multi-task）</td>
-<td>メモリ・再現性のコストが高いので fold 単位 checkpoint</td>
+<td>メモリ・再現性コストが高いため fold 単位で checkpoint を保存する</td>
 </tr>
 <tr>
 <td>L2</td>
-<td><strong>OOF 上のメタ特徴</strong>（L1 各モデルの予測・順位・レース内 z-score）を入力とした <strong>浅い GBDT / ロジスティック</strong></td>
-<td>valid でのみ学習、test では L1 の OOF 手順を固定</td>
+<td><strong>OOF 上のメタ特徴</strong>（L1 各モデルの予測・順位・レース内 z-score）を入力にした <strong>浅い GBDT またはロジスティック回帰</strong></td>
+<td>valid でのみ学習。test では L1 の OOF 生成手順を固定して使う</td>
 </tr>
 <tr>
 <td>L3</td>
-<td><strong>ランキング再ブレンド</strong>（Borda / 順位平均 + L2 出力の凸結合）や <strong>セグメント別重み</strong>（芝・ダ・頭数帯）</td>
-<td>過学習に注意し、重みは valid のみ</td>
+<td><strong>ランキング再ブレンド</strong>（Borda / 順位平均 + L2 出力の凸結合）や <strong>セグメント別重み</strong>（芝・ダート・頭数帯ごとに異なる重みを適用）</td>
+<td>過学習に注意し、重みは valid のみで決定する</td>
 </tr>
 </tbody>
 </table>
-<p>実装原則:<br />
-- <strong>各層の OOF を Parquet 保存</strong>し、上の層は下の層の保存物だけを読む（再計算禁止に近い運用）。<br />
-- <strong>test には一切メタを fit しない</strong>（<code>advanced_modeling_techniques.html</code> と同じ）。</p>
-<hr />
-<h2 id="ltr-polars">LTR 導入時の <code>polars</code> / メモリとの両立</h2>
+<p>実装原則:</p>
 <ul>
-<li>relevance・<code>group</code>（各 race の行数）列は <strong><code>polars</code> で母表に付与</strong>してから、学習直前に <code>numpy</code> に落とす。</li>
-<li><strong>可変長クエリ</strong>は、学習 API ごとに <code>group</code> 配列または <code>group_id</code> 列で表現。巨大なペア展開テーブルはディスクに書かず、<strong>DataLoader 内で on-the-fly 生成</strong>（NN）を推奨。</li>
-<li><strong>型</strong>: relevance は <code>Int16</code> 程度で足りることが多い。<code>label_gain</code> は事前に固定長配列として定義しておくと LightGBM 側が単純。</li>
+<li><strong>各層の OOF を Parquet に保存</strong>し、上の層は下の層の保存ファイルだけを読む（毎回の再計算を禁止に近い運用）</li>
+<li><strong>test データにはメタ学習を一切 fit しない</strong>（<code>advanced_modeling_techniques.html</code> と同じルール）</li>
+</ul>
+<hr />
+<h2 id="ltr-polars">LTR 導入時の <code>polars</code> とメモリの両立</h2>
+<ul>
+<li>relevance（関連度）と <code>group</code>（各レースの行数）列は <strong><code>polars</code> で母表に付与</strong>してから、学習直前に <code>numpy</code> に変換する。</li>
+<li><strong>可変長クエリ</strong>（出走頭数が毎レース異なる）は、学習 API ごとに <code>group</code> 配列または <code>group_id</code> 列で表現する。巨大なペア展開テーブルはディスクに書かず、<strong>DataLoader 内で on-the-fly（その場で）生成</strong>（NN の場合）を推奨する。</li>
+<li><strong>型の設定</strong>: relevance は <code>Int16</code> 程度で足りることが多い。<code>label_gain</code>（LightGBM の relevance ゲイン配列）は事前に固定長配列として定義しておくと LightGBM 側の設定が単純になる。</li>
 </ul>
 <hr />
 <h2 id="_19">ランキング用の評価指標（ログに必ず残す）</h2>
 <ul>
-<li><strong>NDCG@k</strong>（k=1,3,5 など）、<strong>MAP</strong>、レース内 <strong>Kendall τ</strong>（順序一致度）。</li>
-<li>馬券・校正との接続のため、<strong>pointwise の LogLoss / Brier / ECE</strong> も併記（LayerA 確率の品質監査）。</li>
+<li><strong>NDCG@k</strong>（k=1, 3, 5 など）: 上位 k 頭の順位予測精度。高いほど上位馬を正しく並べられている。</li>
+<li><strong>MAP</strong>（平均精度）: 上位を正しく順位付けできているかの指標。</li>
+<li>レース内 <strong>Kendall τ</strong>: 予測した順位と実際の着順の一致度。</li>
+<li>馬券・確率補正との接続のため、<strong>pointwise の対数損失（LogLoss）：確率予測の誤差指標 / Brier スコア / ECE（期待誤差）</strong> も一緒に記録する（LayerA 確率の品質監査）。</li>
 </ul>
-<h2 id="_20">校正の実装戦略</h2>
+<h2 id="_20">calibration（確率補正）の実装戦略</h2>
 <ul>
 <li><code>OOF predictions + labels</code> だけを集めた小さな calibration テーブルを作る</li>
-<li><code>isotonic</code> はメモリより overfit に注意</li>
-<li>初期版は <code>temperature scaling</code> と <code>Platt</code> を優先</li>
+<li>isotonic regression は過学習（overfit）しやすいので注意する</li>
+<li>初期版は <code>temperature scaling</code>（最も単純）と <code>Platt scaling</code>（ロジスティック回帰）を優先する</li>
 </ul>
-<h2 id="stage">stage ごとの実装指針</h2>
-<h2 id="stage0-stage1">Stage0 / Stage1</h2>
-<ul>
-<li><code>polars</code> で母表を作る</li>
-<li>まず <code>BaselineV1</code> を保存</li>
-<li>次に <code>ExtendedV1</code> を差分生成</li>
-</ul>
-<h2 id="stage2-stage3">Stage2 / Stage3</h2>
-<ul>
-<li>学習データ構築は <code>polars</code></li>
-<li>モデル学習直前だけ <code>pandas</code> / <code>numpy</code></li>
-<li>出力は fold 単位保存</li>
-</ul>
-<h2 id="stage4-stage5">Stage4 / Stage5</h2>
-<ul>
-<li>同日先行レース集計は <code>polars.groupby</code></li>
-<li>同日 posterior はレースごとに更新するが、1 日単位の小さいテーブルで扱う</li>
-<li>血統ベクトルは事前計算して Parquet 化しておく</li>
-</ul>
-<h2 id="stage6">Stage6</h2>
-<ul>
-<li>入力は stage 出力を join した最終特徴量テーブル</li>
-<li><code>OOF final probabilities</code> を正式成果物にする（<strong>pointwise 主系</strong>）</li>
-<li><strong>（任意）</strong> 同一特徴から <strong>ランキング OOF</strong>（<code>lambdarank</code> / <code>YetiRank</code> / <code>rank:ndcg</code>）を別 Parquet で保存し、メタ層または softmax 疑似確率の比較材料にする</li>
-</ul>
+<h2 id="stage">ステージごとの実装指針</h2>
+<table>
+  <thead>
+    <tr><th>ステージ</th><th>目的</th><th>実装指針</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Stage0 / Stage1</td>
+      <td>母表と基本特徴量の構築</td>
+      <td><code>polars</code> で全期間の母表を組み立て、まず <code>BaselineV1</code> を Parquet に保存し、次に <code>ExtendedV1</code> を差分追加する</td>
+    </tr>
+    <tr>
+      <td>Stage2 / Stage3</td>
+      <td>中間モデルの学習と OOF 出力</td>
+      <td>学習データの構築は <code>polars</code>、モデルへの最終入力だけ <code>pandas</code> / <code>numpy</code> に変換する。モデル出力は fold 単位で Parquet に保存</td>
+    </tr>
+    <tr>
+      <td>Stage4 / Stage5</td>
+      <td>当日バイアスと血統適性の計算</td>
+      <td>同日先行レース集計は <code>polars.groupby</code>、posterior は 1 日単位の小テーブルで扱う。血統ベクトルは事前計算して Parquet に保存</td>
+    </tr>
+    <tr>
+      <td>Stage6</td>
+      <td>最終確率の出力</td>
+      <td>各ステージ出力を join した最終特徴量テーブルを入力とする。<code>OOF final probabilities</code> を正式成果物にする（pointwise 主系）。任意でランキング OOF も別 Parquet で保存</td>
+    </tr>
+  </tbody>
+</table>
 <h2 id="mlflow">MLflow による学習記録（必須運用）</h2>
-<p>確率モデル・ランキング枝・アンサンブル・（将来の）校正前後の比較まで、<strong>学習ジョブごとに MLflow に記録</strong>する。ローカル運用でも <strong>Tracking URI</strong> を固定し、実験名でモデル種別を分ける。</p>
-<h3 id="_21">最低限ログに残すタグ / パラメータ</h3>
-<ul>
-<li><code>split_manifest_version</code>, <code>data_version</code>, <code>encoding_recipe_version</code>, <code>feature_list_hash</code>（または列数）</li>
-<li><code>git_commit</code> / <code>code_version</code>（CI ならビルド ID）</li>
-<li><code>primary_metric</code> 名と <code>study_id</code>（Optuna 等を接続したとき）</li>
-<li><code>model_family</code>（例: <code>lgbm_pointwise</code>, <code>lgbm_lambdarank</code>, <code>ensemble_stack</code>）</li>
-</ul>
-<h3 id="_22">アーティファクト</h3>
-<ul>
-<li>学習に用いた <strong>特徴量リスト</strong>（テキスト or YAML）</li>
-<li><strong>採用ハイパラ</strong> JSON、<strong>重要度</strong>（gain）が取れるモデルでは CSV</li>
-<li>可能なら <strong>OOF 予測のサンプル Parquet</strong>（容量に応じて）</li>
-</ul>
-<p>既存コードでは <code>src/pipeline/trainer.py</code> / <code>src/pipeline/ensemble_trainer.py</code> / <code>src/pipeline/pace_predictor.py</code> 等が MLflow 連携を持つ。<strong>新規 runner を追加するときも同パターンに揃える</strong>こと。</p>
+<p>確率モデル・ランキング枝・アンサンブル（複数モデルの組み合わせ）・校正前後の比較まで、<strong>学習ジョブごとに MLflow に記録</strong>します。ローカル運用でも <strong>Tracking URI</strong> を固定し、実験名でモデル種別を分けます。</p>
+<h3 id="_21">最低限ログに残すタグ・パラメータ</h3>
+<table>
+  <thead>
+    <tr><th>キー</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>split_manifest_version</code></td><td>データ分割の設定バージョン</td></tr>
+    <tr><td><code>data_version</code></td><td>使用したデータのバージョン</td></tr>
+    <tr><td><code>encoding_recipe_version</code></td><td>エンコーディング設定のバージョン</td></tr>
+    <tr><td><code>feature_list_hash</code></td><td>使用した特徴量一覧のハッシュ値（または列数）</td></tr>
+    <tr><td><code>git_commit</code> / <code>code_version</code></td><td>コードバージョン（CI の場合はビルド ID）</td></tr>
+    <tr><td><code>primary_metric</code> / <code>study_id</code></td><td>主指標名と Optuna 探索セッション ID</td></tr>
+    <tr><td><code>model_family</code></td><td>例: <code>lgbm_pointwise</code>, <code>lgbm_lambdarank</code>, <code>ensemble_stack</code></td></tr>
+  </tbody>
+</table>
+<h3 id="_22">保存するアーティファクト</h3>
+<table>
+  <thead>
+    <tr><th>アーティファクト</th><th>形式</th><th>備考</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>特徴量リスト</td><td>テキストまたは YAML</td><td>学習に使った列を網羅</td></tr>
+    <tr><td>採用した設定値（ハイパーパラメータ）</td><td>JSON</td><td>特徴量重要度が取れるモデルでは CSV も追加</td></tr>
+    <tr><td>OOF 予測のサンプル</td><td>Parquet</td><td>ファイル容量に応じて保存（任意）</td></tr>
+  </tbody>
+</table>
+<p>既存コードでは <code>src/pipeline/trainer.py</code> / <code>src/pipeline/ensemble_trainer.py</code> / <code>src/pipeline/pace_predictor.py</code> 等が MLflow 連携を持ちます。<strong>新しい runner を追加するときも同じパターンに合わせる</strong>こと。</p>
 <h2 id="_23">再現性・比較可能性</h2>
 <h2 id="_24">必ず保存するもの</h2>
-<ul>
-<li>使用列一覧</li>
-<li>dtypes</li>
-<li>split manifest version</li>
-<li>encoding recipe version</li>
-<li>stage model version</li>
-<li>calibration recipe version</li>
-<li>feature count</li>
-<li>row count</li>
-<li><strong>mlflow_experiment_name</strong> / <strong>mlflow_run_id</strong>（追跡 URL とセット）</li>
-</ul>
-<h2 id="_25">命名規則</h2>
-<ul>
-<li><code>baseline_v1_fold1.parquet</code></li>
-<li><code>extended_v1_fold1.parquet</code></li>
-<li><code>oof_te_recipe_a_fold1.parquet</code></li>
-<li><code>final_prob_lgbm_catboost_blend_fold1.parquet</code></li>
-<li><code>oof_fold1_lgbm_lambdarank_ndcg3.parquet</code></li>
-<li><code>oof_fold1_catboost_yetirank.parquet</code></li>
-<li><code>meta_stack_l2_from_l1a_l1b_oof.parquet</code></li>
-<li><code>nn_listwise_fold1_checkpoint.pt</code></li>
-</ul>
-<h2 id="_26">やらないこと</h2>
-<ul>
-<li>全年全列を <code>pandas</code> に一括ロード</li>
-<li><code>read_parquet()</code> だけで巨大テーブルを都度 materialize</li>
-<li>全 fold を同時にメモリ上に保持</li>
-<li>stage 出力を保存せず毎回再計算</li>
-<li>生テキストや nested list をそのまま最終学習行列へ入れる</li>
-<li><strong>L2/L3 メタ学習やランキング→確率の温度スケールを test で fit する</strong>（valid または OOF のみ）</li>
-</ul>
+<table>
+  <thead>
+    <tr><th>項目</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>使用した列の一覧</td><td>学習に使った全特徴量列</td></tr>
+    <tr><td>各列の dtypes</td><td>データ型の定義</td></tr>
+    <tr><td>split manifest version</td><td>データ分割の設定バージョン</td></tr>
+    <tr><td>encoding recipe version</td><td>エンコーディングのレシピバージョン</td></tr>
+    <tr><td>stage model version</td><td>各ステージモデルのバージョン</td></tr>
+    <tr><td>calibration recipe version</td><td>確率補正設定のバージョン</td></tr>
+    <tr><td>feature count</td><td>特徴量の列数</td></tr>
+    <tr><td>row count</td><td>学習に使ったデータ行数</td></tr>
+    <tr><td><code>mlflow_experiment_name</code> / <code>mlflow_run_id</code></td><td>MLflow の追跡 URL とセットで管理</td></tr>
+  </tbody>
+</table>
+<h2 id="_25">ファイルの命名規則</h2>
+<table>
+  <thead>
+    <tr><th>ファイル名</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>baseline_v1_fold1.parquet</code></td><td>ベースライン特徴量セット fold1</td></tr>
+    <tr><td><code>extended_v1_fold1.parquet</code></td><td>拡張特徴量セット fold1</td></tr>
+    <tr><td><code>oof_te_recipe_a_fold1.parquet</code></td><td>target encoding レシピA の OOF fold1</td></tr>
+    <tr><td><code>final_prob_lgbm_catboost_blend_fold1.parquet</code></td><td>LightGBM + CatBoost ブレンド最終確率 fold1</td></tr>
+    <tr><td><code>oof_fold1_lgbm_lambdarank_ndcg3.parquet</code></td><td>LightGBM lambdarank の OOF（NDCG@3）fold1</td></tr>
+    <tr><td><code>oof_fold1_catboost_yetirank.parquet</code></td><td>CatBoost YetiRank の OOF fold1</td></tr>
+    <tr><td><code>meta_stack_l2_from_l1a_l1b_oof.parquet</code></td><td>L1a/L1b OOF を入力にした L2 メタスタッキング</td></tr>
+    <tr><td><code>nn_listwise_fold1_checkpoint.pt</code></td><td>NN listwise モデルの fold1 チェックポイント</td></tr>
+  </tbody>
+</table>
+<h2 id="_26">やらないこと（禁止事項）</h2>
+<table>
+  <thead>
+    <tr><th>禁止事項</th><th>理由</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>全年・全列を <code>pandas</code> に一括ロードする</td><td>メモリが枯渇する</td></tr>
+    <tr><td><code>read_parquet()</code> だけで巨大テーブルを毎回 materialize する</td><td><code>scan_parquet()</code> を使い遅延読み込みにする</td></tr>
+    <tr><td>全 fold 分のデータを同時にメモリ上に保持する</td><td>メモリ不足になる。fold ごとに逐次処理する</td></tr>
+    <tr><td>stage 出力を保存せず毎回再計算する</td><td>時間・メモリの無駄。Parquet に保存して使い回す</td></tr>
+    <tr><td>生テキストや nested list をそのまま最終学習行列に入れる</td><td>メモリが増大する。スコア化または presence flag 化する</td></tr>
+    <tr><td>L2/L3 メタ学習や温度スケールを test データで fit する</td><td>test の情報が補正器に漏れる。valid または OOF のみで fit する</td></tr>
+  </tbody>
+</table>
 <h2 id="_27">推奨実装順</h2>
 <ol>
-<li><code>polars</code> ベースの母表 builder</li>
-<li>fold 単位 OOF runner</li>
-<li>target encoding recipe runner</li>
-<li>stage 出力保存 runner</li>
+<li><code>polars</code> ベースの母表 builder（基本データの結合）</li>
+<li>fold 単位 OOF runner（交差検証の枠組み）</li>
+<li>target encoding recipe runner（カテゴリのエンコード）</li>
+<li>stage 出力保存 runner（各ステージモデルの OOF 保存）</li>
 <li>final probability runner（<strong>pointwise 主系</strong>で安定版を確保）</li>
 <li><strong>（任意）</strong> LTR ブランチ: relevance / <code>group</code> 生成 → LightGBM <code>lambdarank</code> と CatBoost <code>YetiRank</code> の <strong>同一 CV 比較</strong></li>
-<li><strong>（任意）</strong> L2 メタ学習（L1 pointwise + L1 rank の OOF のみ入力）</li>
-<li><strong>（任意）</strong> NN listwise / multi-task（<code>extended_v1</code> と purged CV が固まってから）</li>
-<li>calibration runner</li>
-<li>backtest dataset runner</li>
+<li><strong>（任意）</strong> L2 メタ学習（L1 pointwise + L1 ランキングの OOF のみを入力として使う）</li>
+<li><strong>（任意）</strong> NN listwise / multi-task（<code>extended_v1</code> と purged CV が固まってから実施）</li>
+<li>calibration runner（確率補正）</li>
+<li>backtest dataset runner（バックテスト用データの生成）</li>
 </ol>
     </article>
     <nav class="doc-nav">
