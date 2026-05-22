@@ -305,28 +305,12 @@ def _queue_slot_worker(slot_id: int) -> None:
         while not _queue_worker_stop.is_set():
             _write_worker_health(heartbeat=_time.time())
             try:
-                # ── アクセス一時停止チェック ──
+                # ── アクセス一時停止チェック（ユーザーが「再開」を押すまで待機）──
                 pause = read_access_pause()
                 if pause.get("active"):
-                    paused_at = pause.get("paused_at", "")
-                    try:
-                        from datetime import datetime as _dt
-                        pt = _dt.fromisoformat(paused_at)
-                        elapsed = (_dt.now() - pt).total_seconds()
-                    except Exception:
-                        elapsed = _AUTO_RESUME_DELAY + 1
-
-                    if elapsed >= _AUTO_RESUME_DELAY:
-                        if slot_id == 0:
-                            log.info("アクセス停止から %.0f 秒経過 — 自動復帰します", elapsed)
-                            clear_access_pause()
-                            queue.requeue_stale_running_jobs(assume_lock_holder=False)
-                        else:
-                            _queue_worker_stop.wait(timeout=3)
-                    else:
-                        remain = _AUTO_RESUME_DELAY - elapsed
-                        if _queue_worker_stop.wait(timeout=min(remain, 30)):
-                            break
+                    # 自動復帰しない。UI の「再開」ボタン押下まで 30 秒間隔でポーリング。
+                    if _queue_worker_stop.wait(timeout=30):
+                        break
                     continue
 
                 # スロット 0: precheck ジョブを pending/completed へ移行
@@ -2101,19 +2085,23 @@ async def get_raw_data(category: str, key: str):
     """GCS上の生JSONデータを返す。"""
     def _load():
         if category == "race_performance":
-            from pathlib import Path
             year = (key or "")[:4]
             if not year.isdigit() or len(key) < 10:
                 return None, "race_performance"
-            base = Path(__file__).resolve().parents[2]
-            path = base / "data" / "local" / "features" / "race_performance" / "races" / year / f"{key}.json"
-            if not path.exists():
-                return None, "race_performance"
-            try:
-                with path.open("r", encoding="utf-8") as f:
-                    return json.load(f), None
-            except Exception:
-                return None, "race_performance"
+            # GCS → L2 ディスクキャッシュ経由
+            data = _get_storage().load("race_performance", key)
+            if data is not None:
+                return data, None
+            # フォールバック: page_reference ローカルファイル
+            from src.config.data_paths import RACE_PERFORMANCE_DIR
+            path = RACE_PERFORMANCE_DIR / "races" / year / f"{key}.json"
+            if path.is_file():
+                try:
+                    with path.open("r", encoding="utf-8") as f:
+                        return json.load(f), None
+                except Exception:
+                    pass
+            return None, "race_performance"
         storage = _get_storage()
         if category in ("smartrc_runners", "smartrc_horses", "smartrc_fullresults"):
             data = storage.load("smartrc_race", key)
@@ -2267,14 +2255,13 @@ async def api_horse_recent_races(
 
 def _horse_race_performance_history_rows(horse_id: str, limit: int) -> list[dict[str, Any]]:
     """馬の戦績に紐づくレースについて、race_performance の per-race JSON から当該馬の行を収集する。"""
-    from pathlib import Path
+    from src.config.data_paths import RACE_PERFORMANCE_DIR
 
     storage = _get_storage()
     hr = storage.load("horse_result", horse_id)
     if not hr:
         return []
     history = hr.get("race_history") or []
-    base = Path(__file__).resolve().parents[2]
     rows: list[dict[str, Any]] = []
     # 戦績行数が多い馬でもディスク読み取りが暴れないよう上限
     max_reads = min(len(history), 400)
@@ -2283,13 +2270,19 @@ def _horse_race_performance_history_rows(horse_id: str, limit: int) -> list[dict
         if len(rid) != 12 or not rid.isdigit():
             continue
         year = rid[:4]
-        path = base / "data" / "local" / "features" / "race_performance" / "races" / year / f"{rid}.json"
-        if not path.is_file():
-            continue
-        try:
-            with path.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, json.JSONDecodeError):
+        # GCS → L2 ディスクキャッシュ経由で取得
+        data = storage.load("race_performance", rid)
+        if data is None:
+            # フォールバック: page_reference ローカルファイル
+            path = RACE_PERFORMANCE_DIR / "races" / year / f"{rid}.json"
+            if not path.is_file():
+                continue
+            try:
+                with path.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                continue
+        if data is None:
             continue
         match: dict[str, Any] | None = None
         for ent in data.get("entries") or []:
@@ -3736,14 +3729,33 @@ async def api_scrape_queue_worker_logs_clear():
 @app.post("/api/scrape-queue/resume", response_class=JSONResponse)
 async def api_scrape_queue_resume():
     """
-    アクセス系エラーで自動停止したキューを再開する（一時停止フラグを解除）。
-    ジョブの pending / failed は変更しない。
+    アクセス系エラーで停止したキューを再開する。
+    - 一時停止フラグを解除
+    - failed 状態のジョブを全件 pending に戻す（400 ブロックで失敗扱いになったジョブを復元）
+    - キューワーカーをキック
     """
     try:
-        from src.scraper.scrape_access_pause import clear_access_pause, read_access_pause
+        from src.scraper.scrape_access_pause import (
+            clear_access_pause,
+            read_access_pause,
+            reset_block_400_consecutive,
+        )
+        from src.scraper.job_queue import ScrapeJobQueue, kick_process_queue_background
 
         clear_access_pause()
-        return JSONResponse({"status": "ok", "transport_pause": read_access_pause()})
+        reset_block_400_consecutive()
+
+        queue = ScrapeJobQueue()
+        requeued, err = queue.requeue_failed_jobs(all_failed=True)
+
+        kick_process_queue_background()
+
+        return JSONResponse({
+            "status": "ok",
+            "requeued_jobs": requeued,
+            "requeue_error": err,
+            "transport_pause": read_access_pause(),
+        })
     except Exception as e:
         import traceback
         return JSONResponse(

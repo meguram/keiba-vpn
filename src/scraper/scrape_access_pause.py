@@ -224,8 +224,13 @@ def handle_queue_transport_error(queue: Any, exc: BaseException) -> bool:
     """
     ジョブ失敗時のトランスポート系エラー処理。
 
+    HTTP 400（ブロック疑い）が発生した場合、即座に pending/running/precheck の
+    全ジョブを failed に移動してスクレイピングを停止する。
+    ユーザーが UI から「再開」を押すことで failed ジョブが pending に戻り、
+    スクレイピングが再開される。
+
     Returns:
-        True ならキューを自動全消去した（N 回連続 HTTP 400）。
+        True なら全ジョブを failed に移動した（重大停止）。
     """
     from src.scraper.job_queue import ScrapeJobQueue
 
@@ -233,60 +238,39 @@ def handle_queue_transport_error(queue: Any, exc: BaseException) -> bool:
         queue = ScrapeJobQueue()
 
     if is_block_suspect_http_400(exc):
+        now = datetime.now()
+        msg = (
+            f"HTTP 400（ブロック疑い）が発生したため、待機中・実行中のジョブをすべて失敗に移動しました。"
+            f" netkeiba へのアクセスを控え、しばらくしてから UI の「再開」ボタンでスクレイピングを再開してください。"
+            f" 元のエラー: {str(exc)[:500]}"
+        )
+        failed_count = queue.fail_all_pending_and_running(reason=msg)
         state = _load_state()
-        threshold = block_400_clear_threshold()
-        n = int(state.get("block_400_consecutive") or 0) + 1
-        state["block_400_consecutive"] = n
-
-        if n >= threshold:
-            removed = queue.clear_all_jobs()
-            if queue.lock_file.exists():
-                try:
-                    queue.lock_file.unlink()
-                except OSError:
-                    pass
-            msg = (
-                f"HTTP 400（ブロック疑い）が {n} 回連続で発生したため、"
-                f"キューを自動で空にしました（削除 {removed} 件）。"
-                f" netkeiba へのアクセスを控え、しばらくしてから「再開」してください。"
-            )
-            state["active"] = True
-            state["reason"] = msg
-            state["paused_at"] = datetime.now().isoformat()
-            state["block_400_consecutive"] = 0
-            state["queue_auto_cleared"] = {
-                "active": True,
-                "cleared_at": datetime.now().isoformat(),
-                "removed_jobs": removed,
-                "threshold": threshold,
-                "consecutive_count": n,
-                "message": msg,
-            }
-            _save_state(state)
-            logger.error(msg)
-            return True
-
-        reason = (
-            f"HTTP 400（ブロック疑い）が連続 {n}/{threshold} 回発生しました。"
-            f" {threshold} 回でキューを自動全消去します。"
-        )
         state["active"] = True
-        state["reason"] = reason
-        state["paused_at"] = datetime.now().isoformat()
+        state["reason"] = msg
+        state["paused_at"] = now.isoformat()
+        state["block_400_timestamps"] = []
+        state["block_400_consecutive"] = 0
+        state["queue_auto_cleared"] = {
+            "active": True,
+            "cleared_at": now.isoformat(),
+            "removed_jobs": failed_count,
+            "threshold": 1,
+            "consecutive_count": 1,
+            "message": msg,
+        }
         _save_state(state)
-        queue.pause_queue_for_access_error(str(exc)[:2000])
-        logger.warning(
-            "HTTP 400 連続 %d/%d — 一時停止（閾値到達で全消去）: %s",
-            n,
-            threshold,
-            (str(exc) or "")[:300],
+        logger.error(
+            "HTTP 400 ブロック疑い — pending/running %d 件を失敗に移動・スクレイピング停止",
+            failed_count,
         )
-        return False
+        return True
 
     if is_access_or_transport_error(exc):
-        reset_block_400_consecutive()
         queue.pause_queue_for_access_error(str(exc))
         return False
+
+    return False
 
     return False
 

@@ -686,6 +686,10 @@ class ScraperRunner:
                 logger.warning("馬情報なし: %s", horse_id)
                 return None
         except Exception as e:
+            from src.scraper.scrape_access_pause import is_block_suspect_http_400
+            if is_block_suspect_http_400(e):
+                logger.error("取得失敗 [%s]: %s", horse_id, e)
+                raise
             logger.error("取得失敗 [%s]: %s", horse_id, e)
             return None
 
@@ -712,6 +716,10 @@ class ScraperRunner:
         try:
             html = self.client.fetch(url)
         except Exception as e:
+            from src.scraper.scrape_access_pause import is_block_suspect_http_400
+            if is_block_suspect_http_400(e):
+                logger.error("取得失敗 [horse_pedigree_5gen/%s]: %s", horse_id, e)
+                raise
             logger.error("取得失敗 [horse_pedigree_5gen/%s]: %s", horse_id, e)
             return None
         self.archive.save("horse_ped", horse_id, html)

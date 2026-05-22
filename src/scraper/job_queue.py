@@ -1256,6 +1256,34 @@ class ScrapeJobQueue:
             self._save_queue_nolock([])
         return n
 
+    def fail_all_pending_and_running(self, reason: str) -> int:
+        """
+        HTTP 400 ブロック疑い発生時に呼ぶ。
+        pending・running・precheck のジョブをすべて failed に移動し、
+        アクセス一時停止フラグを立てる。completed ジョブはそのまま。
+        戻り値: 失敗に移動した件数。
+        """
+        from src.scraper.scrape_access_pause import write_access_pause
+
+        now = datetime.now().isoformat()
+        with _exclusive_queue_json_lock():
+            jobs = self._load_queue_nolock()
+            n = 0
+            for job in jobs:
+                if job.get("status") in ("pending", "running", "precheck"):
+                    job["status"] = "failed"
+                    job["completed_at"] = now
+                    job["error"] = (reason or "")[:2000]
+                    n += 1
+            self._save_queue_nolock(jobs)
+        write_access_pause(reason=reason)
+        logger.warning(
+            "HTTP 400 ブロック疑い — pending/running/precheck %d 件を失敗に移動・キューを停止: %s",
+            n,
+            (reason or "")[:300],
+        )
+        return n
+
     def clear_all_jobs_with_transport_pause(
         self, *, reason: str | None = None
     ) -> int:
@@ -1727,25 +1755,48 @@ def kick_urgent_process_queue_background() -> None:
 
 def run_hourly_queue_maintenance() -> dict[str, Any]:
     """
-    失敗ジョブをすべて待機に戻し、完了レコードをキューから除去する。
+    ストール中（running のまま放置）のジョブを回収し、完了レコードをキューから除去する。
+    HTTP 400 ブロックによる一時停止中は failed ジョブを pending に戻さない（ユーザーが
+    「再開」ボタンを押すまで failed のまま保持）。
     終了目安 (queue_eta) は get_status 取得時に pending+running から都度再計算される。
     """
+    from src.scraper.scrape_access_pause import read_access_pause
+
     q = ScrapeJobQueue()
+    stale_recovered = q.requeue_stale_running_jobs(assume_lock_holder=False)
+
+    # アクセス一時停止中は failed→pending の自動復元をスキップ（ユーザー手動再開待ち）
+    pause = read_access_pause()
+    if pause.get("active"):
+        out: dict[str, Any] = {
+            "ok": True,
+            "requeued": 0,
+            "completed_removed": 0,
+            "stale_recovered": stale_recovered,
+            "skipped_requeue": True,
+            "error": None,
+        }
+        _write_queue_hourly_maintain_state(out)
+        return out
+
     requeued, err = q.requeue_failed_jobs(all_failed=True)
     if err:
-        out: dict[str, Any] = {
+        out = {
             "ok": False,
             "error": err,
             "requeued": 0,
             "completed_removed": 0,
+            "stale_recovered": stale_recovered,
         }
         _write_queue_hourly_maintain_state(out)
         return out
     removed = q.clear_completed_only()
-    out: dict[str, Any] = {
+    out = {
         "ok": True,
         "requeued": requeued,
         "completed_removed": removed,
+        "stale_recovered": stale_recovered,
+        "skipped_requeue": False,
         "error": None,
     }
     _write_queue_hourly_maintain_state(out)

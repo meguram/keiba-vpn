@@ -881,10 +881,35 @@ def save_race_performance_features(
     return summary
 
 
+def _upload_race_performance_to_gcs(
+    race_id: str,
+    payload: dict[str, Any],
+    *,
+    base_dir: str | Path = ".",
+) -> bool:
+    """GCS へ race_performance JSON をアップロードする（失敗しても処理継続）。
+
+    Returns:
+        True  — GCS へのアップロード成功（ローカル保存は不要）
+        False — GCS 無効 / アップロード失敗（ローカル保存にフォールバック）
+    """
+    try:
+        from src.scraper.storage import HybridStorage
+        import copy
+
+        storage = HybridStorage(base_dir=str(base_dir))
+        if not storage.gcs_enabled:
+            return False
+        storage.save("race_performance", race_id, copy.deepcopy(payload))
+        return True
+    except Exception as e:
+        logger.warning("race_performance GCS アップロード失敗 [%s]: %s", race_id, e)
+        return False
+
+
 def _save_race_store(df: pd.DataFrame, *, base_dir: str | Path = ".") -> None:
     base = Path(base_dir)
     root = base / RACE_STORE_DIR
-    root.mkdir(parents=True, exist_ok=True)
     meta_cols = [
         "race_id",
         "race_date",
@@ -906,7 +931,6 @@ def _save_race_store(df: pd.DataFrame, *, base_dir: str | Path = ".") -> None:
     for race_id, g in df.groupby("race_id", sort=False):
         year = str(race_id)[:4]
         path = root / year / f"{race_id}.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
         first = g.iloc[0]
         payload = {
             "race_id": race_id,
@@ -946,7 +970,13 @@ def _save_race_store(df: pd.DataFrame, *, base_dir: str | Path = ".") -> None:
                 ]
             }
         }
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        # GCS が有効な場合はアップロード成功時のみとし、ローカル保存をスキップする
+        # （data/page_reference/ のファイル肥大化を防ぐ）。
+        # GCS が無効または失敗した場合はローカルに保存してフォールバックとする。
+        uploaded = _upload_race_performance_to_gcs(str(race_id), payload, base_dir=base)
+        if not uploaded:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _ensure_race_store_seeded(
@@ -954,6 +984,14 @@ def _ensure_race_store_seeded(
     *,
     base_dir: str | Path = ".",
 ) -> None:
+    # GCS が有効な場合、ローカルファイルは保存しないためシード処理をスキップする。
+    try:
+        from src.scraper.storage import HybridStorage
+        if HybridStorage(base_dir=str(base_dir)).gcs_enabled:
+            return
+    except Exception:
+        pass
+
     base = Path(base_dir)
     root = base / RACE_STORE_DIR
     year_table_root = base / OUTPUT_DIR
