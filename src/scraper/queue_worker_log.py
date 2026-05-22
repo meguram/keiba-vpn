@@ -87,6 +87,9 @@ def is_queue_worker_active() -> bool:
 class _QueueWorkerContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         n = record.name
+        # HTML アーカイブの定期クリーンアップ等はノイズが多く UI 向けリングには載せない
+        if n == "scraper.html_archive":
+            return False
         return (
             n.startswith("scraper")
             or n.startswith("queue")

@@ -1241,6 +1241,8 @@
   .worker-log-meta { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
   .worker-log-hint { font-size: 10px; color: var(--text-dim); line-height: 1.5; margin-bottom: 10px; }
   .worker-log-viewport { max-height: 360px; overflow: auto; background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .worker-log-viewport--peek { max-height: 200px; }
+  .worker-log-panel--queue-peek { margin-bottom: 16px; }
   #workerLogPre { font-family: ui-monospace, 'Cascadia Code', monospace; font-size: 10px; line-height: 1.4; color: #c9d1d9; white-space: pre-wrap; word-break: break-word; margin: 0; }
   .worker-log-toolbar label { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .log-clear-btn { background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; }
@@ -1648,6 +1650,23 @@
     <button type="button" class="btn-resume-queue" id="btnResumeQueue" onclick="q_resumeScrapeQueue()">再開</button>
   </div>
 
+  <div class="worker-log-panel worker-log-panel--queue-peek" id="workerLogPanel">
+    <div class="worker-log-toolbar">
+      <h3>スクレイピングログ（直近10行）</h3>
+      <span class="worker-log-meta" id="workerLogMeta">読み込み中…</span>
+      <label title="新しい行が来たら下へスクロール">
+        <input type="checkbox" id="workerLogAutoscroll" checked> 自動スクロール
+      </label>
+      <button type="button" class="log-clear-btn" onclick="q_clearWorkerLogsUi()">バッファをクリア</button>
+    </div>
+    <p class="worker-log-hint" style="margin-bottom:8px">
+      <code>scraper.*</code> / <code>queue.*</code> のうち、取得・ジョブ進行に有用な行のみ（<code>html_archive</code> のクリーンアップ等は除外）。画面は<strong>直近10行</strong>です。
+    </p>
+    <div class="worker-log-viewport worker-log-viewport--peek" id="workerLogViewport">
+      <pre id="workerLogPre"></pre>
+    </div>
+  </div>
+
   <div style="margin-bottom:10px">
   <div class="activity-hero" id="activityHero">
     <h2>いまのスクレイピング状況</h2>
@@ -1663,7 +1682,7 @@
   </div>
 
   <details class="queue-fold" id="progressLogFold">
-    <summary>実行中の進捗とスクレイピングログ <span class="queue-fold-hint">折りたたみ初期 · メモリ内</span></summary>
+    <summary>実行中ジョブの進捗 <span class="queue-fold-hint">折りたたみ初期 · メモリ内</span></summary>
     <div class="queue-fold-body" style="padding-top:12px">
   <div class="queue-progress-panel" id="queueProgressPanel">
     <div class="worker-log-toolbar">
@@ -1674,23 +1693,6 @@
       <code>date_all</code> はレース単位で残り件数をプログレスバー表示します。データは<strong>このAPIプロセスのメモリ</strong>のみです。
     </p>
     <div id="queueProgressInner" class="queue-progress-inner"></div>
-  </div>
-  <div class="worker-log-panel" id="workerLogPanel">
-    <div class="worker-log-toolbar">
-      <h3>スクレイピングログ（キュー実行中）</h3>
-      <span class="worker-log-meta" id="workerLogMeta">読み込み中…</span>
-      <label title="新しい行が来たら下へスクロール">
-        <input type="checkbox" id="workerLogAutoscroll" checked> 自動スクロール
-      </label>
-      <button type="button" class="log-clear-btn" onclick="q_clearWorkerLogsUi()">バッファをクリア</button>
-    </div>
-    <p class="worker-log-hint">
-      ファイルキューが <code>process_queue</code> でスクレイピングしている間のログを<strong>このプロセスのメモリ</strong>に最大約2500行保持します。
-      <span style="color:var(--warn)">本番で複数プロセスのとき、ブラウザのリクエストが別ワーカーに振られると、この画面のプロセスにはログが1行も来ません。</span>
-    </p>
-    <div class="worker-log-viewport" id="workerLogViewport">
-      <pre id="workerLogPre"></pre>
-    </div>
   </div>
     </div>
   </details>
@@ -2548,7 +2550,11 @@ async function ctrl_pollLogs() {
     const r = await fetch(`/api/scrape-queue/worker-logs?after=${ctrl_lastLogId}&limit=100`);
     if (!r.ok) return;
     const d = await r.json();
-    const entries = d.entries || [];
+    const rawEntries = d.entries || [];
+    for (const e of rawEntries) {
+      ctrl_lastLogId = Math.max(ctrl_lastLogId, e.id);
+    }
+    const entries = rawEntries.filter(e => !q_workerLogEntryExcluded(e));
     if (entries.length === 0) { ctrl_updateLogWindowInfo(); return; }
     const stream = document.getElementById('log-stream');
     const emptyEl = document.getElementById('log-empty');
@@ -2564,7 +2570,6 @@ async function ctrl_pollLogs() {
       frag.appendChild(node);
       ctrl_logBuffer.push({id: e.id, ts: e.ts, node, sepNode});
       ctrl_lastLogTs = e.ts;
-      ctrl_lastLogId = Math.max(ctrl_lastLogId, e.id);
     }
     stream.appendChild(frag);
     ctrl_logCount += entries.length;
@@ -2936,6 +2941,33 @@ const IS_DEV_QUEUE = {{ (is_dev | default(false)) | tojson }};
 let _lastScrapeLoadSettings = null;
 let q_workerLogMaxId = -1;
 let q_workerLogInitialized = false;
+/** 画面表示用: フィルタ済みメッセージを最大 Q_WORKER_LOG_DISPLAY_MAX 行まで保持 */
+let q_workerLogDisplayLines = [];
+const Q_WORKER_LOG_DISPLAY_MAX = 10;
+const Q_WORKER_LOG_POLL_LIMIT = 100;
+
+function q_workerLogEntryExcluded(e) {
+  const n = String((e && e.logger) || '');
+  return n === 'scraper.html_archive';
+}
+
+function q_workerLogPushDisplayLines(messages) {
+  for (const m of messages) {
+    const line = String(m == null ? '' : m).replace(/\r\n/g, '\n');
+    if (!line.trim()) continue;
+    q_workerLogDisplayLines.push(line);
+  }
+  if (q_workerLogDisplayLines.length > Q_WORKER_LOG_DISPLAY_MAX) {
+    q_workerLogDisplayLines = q_workerLogDisplayLines.slice(-Q_WORKER_LOG_DISPLAY_MAX);
+  }
+}
+
+function q_workerLogRenderPre(pre) {
+  if (!pre) return;
+  pre.textContent = q_workerLogDisplayLines.length
+    ? q_workerLogDisplayLines.join('\n') + '\n'
+    : '';
+}
 let _queueHasPendingOrRunning = false;
 let _lastProgressCardsHtml = '';
 
@@ -3325,27 +3357,34 @@ async function q_pollWorkerLogs() {
   try {
     const params = new URLSearchParams();
     params.set('after', q_workerLogInitialized ? String(q_workerLogMaxId) : '-1');
-    params.set('limit', q_workerLogInitialized ? '250' : '500');
+    params.set('limit', String(Q_WORKER_LOG_POLL_LIMIT));
     const resp = await fetch('/api/scrape-queue/worker-logs?' + params.toString());
     const data = await q_readJsonResp(resp);
     if (!resp.ok || data.error) { if (meta) meta.textContent = '取得失敗: ' + (data.error||resp.status); return; }
-    const entries = data.entries || [];
+    const rawEntries = data.entries || [];
+    const entries = rawEntries.filter(e => !q_workerLogEntryExcluded(e));
     let errN = 0, warnN = 0;
     for (const e of entries) {
       const lv = (e.level||'').toUpperCase();
       if (lv === 'ERROR' || lv === 'CRITICAL') errN++;
       else if (lv === 'WARNING') warnN++;
     }
+    const msgs = entries.map(e => e.message||'');
     if (!q_workerLogInitialized) {
-      pre.textContent = entries.length ? entries.map(e => e.message||'').join('\n') + '\n' : '';
+      q_workerLogDisplayLines = [];
+      q_workerLogPushDisplayLines(msgs);
+      q_workerLogRenderPre(pre);
       q_workerLogInitialized = true;
-    } else if (entries.length) {
-      pre.textContent += entries.map(e => e.message||'').join('\n') + '\n';
+    } else if (msgs.length) {
+      q_workerLogPushDisplayLines(msgs);
+      q_workerLogRenderPre(pre);
     }
     if (typeof data.max_id === 'number' && data.max_id >= 0) q_workerLogMaxId = data.max_id;
     if (meta) {
       const buf = data.total_buffered != null ? data.total_buffered : '—';
-      meta.textContent = `バッファ ${buf} 行 · 今回 +${entries.length} · ERROR ${errN} / WARN ${warnN} · cursor id=${q_workerLogMaxId}`;
+      const skipped = rawEntries.length - entries.length;
+      const skipNote = skipped > 0 ? ` · 除外 ${skipped}` : '';
+      meta.textContent = `表示 ${Math.min(q_workerLogDisplayLines.length, Q_WORKER_LOG_DISPLAY_MAX)}/${Q_WORKER_LOG_DISPLAY_MAX} 行 · バッファ ${buf} 行 · 今回 +${entries.length}${skipNote} · ERR ${errN} / WARN ${warnN}`;
     }
     const auto = document.getElementById('workerLogAutoscroll');
     if (auto && auto.checked && vp) vp.scrollTop = vp.scrollHeight;
@@ -3360,6 +3399,7 @@ async function q_clearWorkerLogsUi() {
     if (!resp.ok || data.error) { alert(data.error||'クリア失敗'); return; }
     q_workerLogMaxId = -1;
     q_workerLogInitialized = false;
+    q_workerLogDisplayLines = [];
     const pre = document.getElementById('workerLogPre');
     if (pre) pre.textContent = '';
     await q_pollWorkerLogs();
