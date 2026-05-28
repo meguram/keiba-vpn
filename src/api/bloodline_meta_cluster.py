@@ -212,35 +212,35 @@ def _load_artifacts() -> Optional[dict[str, Any]]:
             )
 
             # horse_id → bms_root_id, bms_root_name のマップ (pair_bms_root 検索用)
+            # horse name index: race_result_slim から horse_id/horse_name/date を取得
+            from src.pipeline.data.bloodline_sqlite import (
+                get_connection as _bmc_get_conn,
+                load_horse_bms as _bmc_load_horse_bms,
+                load_race_result_slim as _bmc_load_rrs,
+            )
             try:
-                hbms_p = IDX_DIR / "horse_bms.parquet"
-                if hbms_p.exists():
-                    hbms = pd.read_parquet(
-                        hbms_p,
-                        columns=["horse_id", "bms_root_id", "bms_root_name"],
-                    )
-                    hbms["horse_id"] = hbms["horse_id"].astype(str)
-                    hbms["bms_root_id"] = (
-                        hbms["bms_root_id"].astype(str).fillna("").replace({"None": ""})
-                    )
-                    hbms["bms_root_name"] = (
-                        hbms["bms_root_name"].astype(str).fillna("").replace({"None": ""})
-                    )
-                    _cache["horse_to_bms_root_id"] = dict(zip(hbms["horse_id"], hbms["bms_root_id"]))
-                    _cache["horse_to_bms_root_name"] = dict(zip(hbms["horse_id"], hbms["bms_root_name"]))
-                else:
-                    logger.warning("horse_bms.parquet が見つからない: %s", hbms_p)
-                    _cache["horse_to_bms_root_id"] = {}
-                    _cache["horse_to_bms_root_name"] = {}
+                hbms = _bmc_load_horse_bms(
+                    _bmc_get_conn(),
+                    columns=["horse_id", "bms_root_id", "bms_root_name"],
+                )
+                hbms["horse_id"] = hbms["horse_id"].astype(str)
+                hbms["bms_root_id"] = (
+                    hbms["bms_root_id"].astype(str).fillna("").replace({"None": ""})
+                )
+                hbms["bms_root_name"] = (
+                    hbms["bms_root_name"].astype(str).fillna("").replace({"None": ""})
+                )
+                _cache["horse_to_bms_root_id"] = dict(zip(hbms["horse_id"], hbms["bms_root_id"]))
+                _cache["horse_to_bms_root_name"] = dict(zip(hbms["horse_id"], hbms["bms_root_name"]))
             except Exception as e:
-                logger.warning("horse_bms.parquet ロード失敗: %s", e)
+                logger.warning("horse_bms ロード失敗: %s", e)
                 _cache["horse_to_bms_root_id"] = {}
                 _cache["horse_to_bms_root_name"] = {}
 
-            race = pd.read_parquet(
-                IDX_DIR / "race_result_slim.parquet",
-                columns=["horse_id", "horse_name", "date"],
-            )
+            race = _bmc_load_rrs(
+                _bmc_get_conn(),
+                horse_ids=None,
+            )[["horse_id", "horse_name", "date"]]
             race["horse_id"] = race["horse_id"].astype(str)
             race = (
                 race.dropna(subset=["horse_name"])
@@ -373,8 +373,14 @@ def assign_unknown_stallion(sire_id: str) -> Optional[dict[str, Any]]:
         return None
     sire_id = str(sire_id)
     try:
-        cats = pd.read_parquet(
-            IDX_DIR / "horse_pedigree_cats.parquet",
+        from src.pipeline.data.bloodline_sqlite import (
+            get_connection as _bmc_get_conn,
+            load_pedigree_cats as _bmc_load_cats,
+            load_race_result_slim as _bmc_load_rrs,
+        )
+        cats = _bmc_load_cats(
+            _bmc_get_conn(),
+            stallion_id=sire_id, cat=1, gen=1,
             columns=["horse_id", "cat", "gen", "stallion_id", "stallion_name"],
         )
         cats["stallion_id"] = cats["stallion_id"].astype(str)
@@ -383,7 +389,8 @@ def assign_unknown_stallion(sire_id: str) -> Optional[dict[str, Any]]:
         if direct.empty:
             return None
 
-        race = pd.read_parquet(IDX_DIR / "race_result_slim.parquet")
+        horse_ids = direct["horse_id"].tolist()
+        race = _bmc_load_rrs(_bmc_get_conn(), horse_ids=horse_ids)
         race["horse_id"] = race["horse_id"].astype(str)
         race["win"] = (race["finish_position"] == 1).astype(int)
         race = race[race["finish_position"] > 0]
@@ -2666,30 +2673,37 @@ def _load_special_tags() -> Optional[dict[str, Any]]:
 
 
 def _load_stats_assets() -> Optional[dict[str, Any]]:
-    """statistics 用の追加アーティファクト (race_records / horse_to_sire) を遅延ロード。"""
+    """statistics 用の追加アーティファクト (race_results) を遅延ロード。"""
     art = _load_artifacts()
     if art is None:
         return None
     if "stats_loaded" in art:
         return art
-    rec_path = ART_DIR / "race_records.parquet"
-    h2s_path = ART_DIR / "horse_to_sire.parquet"
-    if not rec_path.exists() or not h2s_path.exists():
-        logger.warning("stats アーティファクト未生成: %s / %s", rec_path, h2s_path)
-        return None
     with _lock:
         if "stats_loaded" in art:
             return art
-        rec = pd.read_parquet(rec_path)
+        try:
+            from src.pipeline.data.bloodline_sqlite import (
+                get_connection as _bmc_get_conn,
+                load_race_results as _bmc_load_rr,
+            )
+            rec = _bmc_load_rr(_bmc_get_conn())
+        except Exception as e:
+            logger.warning("race_results ロード失敗: %s", e)
+            return None
+        if rec.empty:
+            logger.warning("race_results テーブルが空です")
+            return None
         rec["race_id"] = rec["race_id"].astype(str)
         rec["horse_id"] = rec["horse_id"].astype(str)
+        if "stallion_id" in rec.columns:
+            rec["stallion_id"] = rec["stallion_id"].astype(str)
         if "date" in rec.columns:
             rec["date"] = pd.to_datetime(rec["date"], errors="coerce")
-        h2s = pd.read_parquet(h2s_path)
-        h2s["horse_id"] = h2s["horse_id"].astype(str)
-        h2s["stallion_id"] = h2s["stallion_id"].astype(str)
-        sire_of: dict[str, str] = dict(zip(h2s["horse_id"], h2s["stallion_id"]))
-        rec["stallion_id"] = rec["horse_id"].map(sire_of)
+        sire_of: dict[str, str] = (
+            dict(zip(rec["horse_id"], rec["stallion_id"]))
+            if "stallion_id" in rec.columns else {}
+        )
         art["records"] = rec
         art["sire_of_horse"] = sire_of
         art["stats_loaded"] = True
@@ -2759,13 +2773,11 @@ def _load_horse_prize_map() -> Optional[dict[str, Any]]:
         # (NULL の場合は horse_id をそのまま表示)
         name_map: dict[str, str] = {}
         try:
-            from glob import glob
-            for f in sorted(glob(str(ROOT / "data/page_reference/tables/*/race_result_flat.parquet"))):
-                df = pd.read_parquet(f, columns=["horse_id", "horse_name"])
-                df = df.dropna(subset=["horse_id", "horse_name"])
-                for hid, nm in zip(df["horse_id"].astype(str), df["horse_name"].astype(str)):
-                    if hid and nm and hid not in name_map:
-                        name_map[hid] = nm
+            from src.pipeline.data.bloodline_sqlite import (
+                get_connection as _bmc_get_conn,
+                load_horse_names as _bmc_load_names,
+            )
+            name_map = _bmc_load_names(_bmc_get_conn())
         except Exception as e:
             logger.warning("horse_name マスタ構築失敗: %s", e)
         # 出走数 / 1着回数 / 平均着順 などの簡易メタ
@@ -2802,66 +2814,36 @@ def _load_pedigree_10gen() -> Optional[dict[str, Any]]:
         return art
     if "ped_10gen_not_found" in art:
         return None
-    ped_base: Path | None = None
-    inv_path: Path | None = None
-    for base in _PED_10GEN_SEARCH_BASES:
-        cand = base / "ancestor_to_horses.parquet"
-        if cand.is_file():
-            ped_base = base
-            inv_path = cand
-            break
-    if inv_path is None or ped_base is None:
-        # 未生成は軽量デプロイで普通にあり得る。任意機能のため WARNING は出さない。
-        logger.debug(
-            "10gen ancestor index なし（任意）。生成する場合: "
-            "python -m src.research.pedigree.build_pedigree_10gen_index → %s",
-            " または ".join(str(b / "ancestor_to_horses.parquet") for b in _PED_10GEN_SEARCH_BASES),
-        )
-        art["ped_10gen_not_found"] = True
-        return None
     with _lock:
         if "ped_10gen_loaded" in art:
             return art
         try:
-            inv = pd.read_parquet(inv_path)
+            from src.pipeline.data.bloodline_sqlite import (
+                get_connection as _bmc_get_conn,
+                load_ancestor_horses as _bmc_load_anc,
+                load_ancestor_names as _bmc_load_anc_names,
+            )
+            ancestor_to_father, ancestor_to_mother = _bmc_load_anc(_bmc_get_conn())
         except Exception as e:
-            logger.warning("10gen index 読み込み失敗: %s", e)
+            logger.warning("10gen ancestor index 読み込み失敗: %s", e)
+            art["ped_10gen_not_found"] = True
             return None
-        ancestor_to_father: dict[str, set[str]] = {}
-        ancestor_to_mother: dict[str, set[str]] = {}
-        for row in inv.itertuples(index=False):
-            anc = str(row.ancestor_id)
-            side = str(row.side)
-            raw = row.horse_ids
-            if raw is None:
-                horses: set[str] = set()
-            else:
-                horses = {str(h) for h in raw}
-            if side == "father":
-                ancestor_to_father[anc] = horses
-            elif side == "mother":
-                ancestor_to_mother[anc] = horses
+        if not ancestor_to_father and not ancestor_to_mother:
+            logger.warning(
+                "ancestor_horses テーブルが空です — "
+                "python -m src.scripts.data.migrate_bloodline_to_sqlite を実行してください"
+            )
+            art["ped_10gen_not_found"] = True
+            return None
         art["ancestor_to_father_horses"] = ancestor_to_father
         art["ancestor_to_mother_horses"] = ancestor_to_mother
 
-        # ── 祖先 horse_id → 馬名 のマップを (あれば) ロード ──
-        # 母系領域 (10gen) や bms 表示で「種牡馬名が horse_id のまま」になる問題を解消。
-        # build_ancestor_name_map.py で 5gen / 10gen JSON 全件から事前抽出した parquet を使う。
-        anc_name_path = ped_base / "ancestor_id_to_name.parquet"
-        anc_name_map: dict[str, str] = {}
-        if anc_name_path.exists():
-            try:
-                df_n = pd.read_parquet(anc_name_path)
-                for hid, nm in zip(df_n["horse_id"].astype(str), df_n["name"].astype(str)):
-                    if hid and nm:
-                        anc_name_map[hid] = nm
-            except Exception as e:
-                logger.warning("ancestor_id_to_name 読み込み失敗: %s", e)
-        else:
-            logger.debug(
-                "ancestor_id_to_name.parquet なし（任意）: %s — build_ancestor_name_map で生成可",
-                anc_name_path,
-            )
+        # 祖先 horse_id → 馬名 のマップ
+        try:
+            anc_name_map = _bmc_load_anc_names(_bmc_get_conn())
+        except Exception as e:
+            logger.warning("ancestor_id_to_name 読み込み失敗: %s", e)
+            anc_name_map = {}
         art["ancestor_id_to_name"] = anc_name_map
 
         art["ped_10gen_loaded"] = True
@@ -3493,12 +3475,14 @@ def compute_condition_ranking(
         sub["_stallion_id"] = sub["stallion_id"]
         groups = sub.dropna(subset=["_stallion_id"]).groupby("_stallion_id")
     elif side_lc == "bms":
-        # horse_id -> bms_id を horse_bms.parquet 等から構築。ここでは race_records だけでは無理。
-        # _load_artifacts() の中に存在する horse_to_bms か、別ソースが必要。
-        h2b_path = IDX_DIR / "horse_bms.parquet"
-        if not h2b_path.exists():
-            return {"status": "error", "message": f"horse_bms.parquet が無い ({h2b_path})"}
-        h2b = pd.read_parquet(h2b_path, columns=["horse_id", "bms_id"])
+        # horse_id -> bms_id マップを SQLite から構築
+        try:
+            from src.pipeline.data.bloodline_sqlite import (
+                get_connection as _bmc_get_conn, load_horse_bms as _bmc_load_hbms,
+            )
+            h2b = _bmc_load_hbms(_bmc_get_conn(), columns=["horse_id", "bms_id"])
+        except Exception as _e:
+            return {"status": "error", "message": f"horse_bms ロード失敗: {_e}"}
         h2b["horse_id"] = h2b["horse_id"].astype(str)
         h2b["bms_id"] = h2b["bms_id"].astype(str)
         bms_of: dict[str, str] = dict(zip(h2b["horse_id"], h2b["bms_id"]))
@@ -3762,10 +3746,13 @@ def compute_progeny_under_condition(
     if side_lc == "sire":
         target = sub[sub["stallion_id"].astype(str) == sid]
     elif side_lc == "bms":
-        h2b_path = IDX_DIR / "horse_bms.parquet"
-        if not h2b_path.exists():
-            return {"status": "error", "message": f"horse_bms.parquet が無い ({h2b_path})"}
-        h2b = pd.read_parquet(h2b_path, columns=["horse_id", "bms_id"])
+        try:
+            from src.pipeline.data.bloodline_sqlite import (
+                get_connection as _bmc_get_conn, load_horse_bms as _bmc_load_hbms,
+            )
+            h2b = _bmc_load_hbms(_bmc_get_conn(), columns=["horse_id", "bms_id"])
+        except Exception as _e:
+            return {"status": "error", "message": f"horse_bms ロード失敗: {_e}"}
         h2b = h2b.dropna(subset=["bms_id"])
         h2b["horse_id"] = h2b["horse_id"].astype(str)
         h2b["bms_id"] = h2b["bms_id"].astype(str)

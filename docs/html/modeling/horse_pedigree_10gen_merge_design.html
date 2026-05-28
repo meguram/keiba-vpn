@@ -207,13 +207,14 @@ document.addEventListener("DOMContentLoaded", function() {
       <p class="meta">ソース: <code>docs/html/modeling/horse_pedigree_10gen_merge_design.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
-<h1 id="5-5-5-10">5 世代血統表 ×「5 世代目の種牡馬」の 5 世代マージによる深さ 10 相当の血統設計</h1>
+<h1 id="5-5-5-10">5 世代血統表 ×「5 世代目の種牡馬」の 5 世代マージによる 10 代前まで対応の血統設計</h1>
 <h2 id="1">1. 背景</h2>
+<p>血統適性（父・母系の遺伝的特徴がコース・距離に合うか）を正確に評価するには、より深い祖先情報が必要です。しかし、標準の 5 世代表だけでは 6 代目以降の祖先が見えません。</p>
 <ul>
-<li>netkeiba の <code>/horse/ped/{id}/</code> から得られる <strong>固定レイアウトの 5 世代表</strong>（最大 62 祖先、<code>generation</code> 1..5、<code>position</code> 世代内 0 始まり）だけでは、表の外側（6 代目以降）の祖先は見えない。</li>
-<li>一方、<strong>5 世代目に現れる種牡馬（牡スロット）</strong> それぞれについて、同じく <strong>5 世代血統 JSON</strong>（既存 <code>horse_pedigree_5gen</code>）を取得できるなら、その種牡馬を「小さな根」とした 5 世代分を <strong>主表の該当ノードの下に接木</strong>することで、主観測馬から <strong>最大 5+5=10 世代</strong> 先までの祖先情報を機械可読に拡張できる（「ページが 10 世代」ではなく <strong>データ上の深さ</strong> が 10 になる）。</li>
+<li>netkeiba の <code>/horse/ped/{id}/</code> から得られる <strong>固定レイアウトの 5 世代表</strong>（最大 62 祖先、<code>generation</code> 1..5）は、6 代目以降の祖先が含まれません。</li>
+<li><strong>5 世代目に現れる種牡馬（牡スロット）</strong> それぞれについて、同じく <strong>5 世代血統 JSON</strong>（既存 <code>horse_pedigree_5gen</code>）を取得できれば、その種牡馬を「小さな根」として 5 世代分を <strong>主表の該当ノードに接木</strong> できます。これにより、主観測馬から <strong>最大 10 代前</strong> までの祖先情報をデータ上で保持できます（「HTMLページが 10 世代分ある」ではなく、<strong>データ構造の深さ</strong> が 10 になる点に注意）。</li>
 </ul>
-<h2 id="2">2. 用語</h2>
+<h2 id="2">2. 用語の整理</h2>
 <table>
 <thead>
 <tr>
@@ -224,57 +225,57 @@ document.addEventListener("DOMContentLoaded", function() {
 <tbody>
 <tr>
 <td>主馬 S</td>
-<td>対象の <code>subject_horse_id</code></td>
+<td>分析対象の馬（<code>subject_horse_id</code>）</td>
 </tr>
 <tr>
 <td>主表</td>
-<td>S の 5 世代パース結果 <code>ancestors</code>（<code>research.pedigree.pedigree_similarity.parse_blood_table_5gen</code> 相当）</td>
+<td>主馬 S の 5 代前までを解析したリスト。<code>parse_blood_table_5gen</code> の出力に相当します。</td>
 </tr>
 <tr>
 <td>アンカー H</td>
-<td>主表上で <strong>generation = 5</strong> かつ <strong>牡スロット</strong>（<code>is_male_pedigree_slot(5, p)==True</code>）かつ <strong><code>horse_id</code> が有効</strong>な祖先馬</td>
+<td>主表の中で <strong>5 代目・牡スロット・有効な horse_id</strong> を持つ祖先馬。接木の起点になります。</td>
 </tr>
 <tr>
 <td>枝表</td>
-<td>H を根とみたときの 5 世代データ（<code>horse_pedigree_5gen[H]</code> の <code>ancestors</code>。H 自身は含めない。generation 1 = H の父母）</td>
+<td>アンカー H を根として取得した 5 世代データ。H 自身は除き、H の父母が generation 1 となります。</td>
 </tr>
 </tbody>
 </table>
-<h2 id="3">3. 拡張対象ノード（アンカー選定ルール）</h2>
-<p>主表の各行のうち、次をすべて満たすものをアンカーとする。</p>
+<h2 id="3">3. アンカー選定のルール</h2>
+<p>主表の各行のうち、以下を<strong>すべて満たす</strong>ものをアンカーとして選びます。</p>
 <ol>
-<li><code>generation == 5</code></li>
-<li><code>is_male_pedigree_slot(5, position)</code> が True（同一世代内で偶数 <code>position</code> が牡。<code>research.pedigree.pedigree_similarity.is_male_pedigree_slot</code> と一致）</li>
-<li><code>horse_id</code> が null / 空 / プレースホルダでない（<code>sanitize_netkeiba_string_id</code> 後に有効）</li>
+<li><code>generation == 5</code>（5 代目の祖先である）</li>
+<li><code>is_male_pedigree_slot(5, position)</code> が True（牡スロット。偶数 position が牡に対応）</li>
+<li><code>horse_id</code> が有効（null・空・プレースホルダでない）</li>
 </ol>
-<p><strong>牝馬はアンカーにしない</strong>（ユーザー要件「5 世代目の<strong>種牡馬</strong>」）。将来牝系深掘りする場合は別フラグで拡張可能。</p>
-<h2 id="4">4. 深さとマージの写像</h2>
+<p><strong>牝馬はアンカーにしません</strong>（「5 代目の種牡馬」に絞る要件のため）。将来、牝系を深掘りする場合は別フラグで拡張できます。</p>
+<h2 id="4">4. 深さとマージの対応関係</h2>
 <ul>
-<li>主表における H の <strong>主馬からの深さ</strong> は <code>depth(H) = 5</code>（世代ラベルと一致）。</li>
-<li>枝表の祖先は H から見て <code>local_generation</code> 1..5（H の父母が 1）。</li>
-<li><strong>主馬 S から見た深さ</strong>（グローバル世代ラベル）:</li>
+<li>主表における H の<strong>主馬からの深さ</strong>は <code>depth(H) = 5</code>（世代ラベルと一致）。</li>
+<li>枝表の各祖先は H から見た <code>local_generation</code> 1〜5（H の父母が 1）。</li>
+<li><strong>主馬 S から見たグローバルな深さ</strong>は次の式で計算します。</li>
 </ul>
 <pre><code class="language-text">global_depth = 5 + local_generation
 </code></pre>
 <ul>
-<li>よって <code>local_generation</code> の最大 5 に対し、<code>global_depth</code> の最大は <strong>10</strong>。これが「5+5」の意味する上限。</li>
+<li><code>local_generation</code> の最大が 5 なので、<code>global_depth</code> の上限は <strong>10</strong> になります。これが「5+5」の意味です。</li>
 </ul>
-<p><strong>注意</strong>: <code>global_depth</code> は netkeiba HTML の「世代番号」とは別の <strong>論理深さ</strong> である。Parquet では <code>primary_generation</code>（主表のみの 1..5）と <code>merged_global_depth</code>（1..10）を併記するとデバッグしやすい。</p>
-<h2 id="5-fm">5. 一意キー（推奨）: FM パス</h2>
-<p>5 世代表は完全二分木の切断図として扱える。主馬から「父側=F / 母側=M」で辿った列を <strong>長さ = global_depth の文字列</strong>（例 <code>FFMFMM...</code>）とすると、</p>
+<p><strong>注意:</strong> <code>global_depth</code> は netkeiba HTML の「世代番号」とは別の<strong>論理的な深さ</strong>です。Parquet には <code>primary_generation</code>（主表のみ 1〜5）と <code>merged_global_depth</code>（1〜10）を両方持つと、デバッグがしやすくなります。</p>
+<h2 id="5-fm">5. 推奨する一意キー：FM パス</h2>
+<p>5 世代表は完全二分木として扱えます。主馬から「父方=F / 母方=M」で辿ったルートを <strong>文字列</strong>（例：<code>FFMFMM...</code>）にすると、各祖先を一意に特定できます。</p>
 <ul>
-<li>主表の各行（1..5 世代）は <strong>一意の FM パス</strong>（長さ 1..5）に変換できる（<code>position</code> の左から右の並びと <code>is_paternal_side</code> の分割を再帰的に適用）。</li>
-<li>アンカー H の枝表の各祖先は、<strong>「主表で H に至るパス」<code>path(S→H)</code></strong> と <strong>「H の枝表での相対パス」<code>path(H→x)</code></strong>（H の父母を F/M の第 1 歩とする）を連結した <code>path(S→x) = path(S→H) + path(H→x)</code> で表せる（長さ最大 10）。</li>
+<li>主表の各行（1〜5 世代）は<strong>一意の FM パス</strong>（長さ 1〜5）に変換できます。</li>
+<li>枝表の各祖先は、「主表上の H へのパス <code>path(S→H)</code>」と「枝表内の相対パス <code>path(H→x)</code>」を連結した <code>path(S→x) = path(S→H) + path(H→x)</code> で表せます（最大長 10）。</li>
 </ul>
-<p><strong>主キー案</strong>（ロング表）:</p>
+<p><strong>推奨する主キー構成</strong>（ロング表）:</p>
 <ul>
 <li><code>subject_horse_id</code></li>
-<li><code>path_fm</code> — 上記 FM 文字列（長さ 1..10）</li>
+<li><code>path_fm</code> — FM 文字列（長さ 1〜10）</li>
 <li><code>merged_global_depth</code> = <code>len(path_fm)</code></li>
-<li><code>source</code> — <code>primary</code> | <code>merged_gen5_sire</code></li>
-<li><code>anchor_horse_id</code> — <code>merged</code> 行のみ H を格納。<code>primary</code> は null</li>
+<li><code>source</code> — <code>primary</code>（主表由来）または <code>merged_gen5_sire</code>（接木後）</li>
+<li><code>anchor_horse_id</code> — 接木行のみ H を格納。主表行は null</li>
 </ul>
-<p>インブリードで同一 <code>horse_id</code> が複数 <code>path_fm</code> に乗る場合は <strong>行を分けて保持</strong>（血統解析ではパスが意味を持つ）。</p>
+<p>インブリード（同一祖先が複数のパスに現れる）の場合は、<strong>パスごとに別行</strong>として保持してください。血統解析ではパス（経路）そのものが意味を持ちます。</p>
 <h2 id="6">6. アルゴリズム（バッチ）</h2>
 <pre><code>入力: subject_horse_id S, primary = parse(S)
 出力: rows[]（ロング表）
@@ -292,15 +293,15 @@ document.addEventListener("DOMContentLoaded", function() {
 4. path_Sx 重複（同一 path 二重投入）があれば後勝ち or 先勝ちをポリシーで固定（推奨: 先勝ち＝主表優先）
 5. Parquet へ書き出し（既存 ped_tbl 列と整合するなら path_fm / merged_global_depth を追加列で載せる）
 </code></pre>
-<p><strong>第 2 ラウンド</strong>（6 世代目の牡の 5 世代をさらにマージ）は、本設計の「一回の 5+5」より先には進めない（深さ 15 になる）。要件が増えたら別設計。</p>
-<h2 id="7">7. データ供給・運用</h2>
+<p><strong>第 2 ラウンド</strong>（6 代目の牡の 5 世代をさらにマージ）は、今回の「5+5」設計の範囲外です。深さ 15 になります。要件が増えた場合は別途設計してください。</p>
+<h2 id="7">7. データ供給と運用上の注意</h2>
 <ol>
-<li><strong>前提</strong>: アンカー H の <code>horse_pedigree_5gen</code> がローカル／GCS に存在すること（<code>scraper.horse_pedigree_5gen_bulk</code> / キュー <code>horse_pedigree_5gen</code>）。</li>
-<li><strong>欠損</strong>: <code>ped_H</code> が無い H は <code>merge_status=missing_anchor_ped</code> としてマニフェストに集計。主表の 5 世代は常に出力。</li>
-<li><strong>鮮度</strong>: H の JSON が古い場合、H の子孫側だけ再フェッチして <code>ped_tbl/{shard}/{S}.parquet</code> を上書き（馬単位ストアの単位と一致）。</li>
-<li><strong>計算量</strong>: アンカー数は最大 <strong>5 世代目の牡スロット数</strong>（完全表なら 16）。馬ごとに最大 16 本の枝表マージで抑えられる。</li>
+<li><strong>前提条件</strong>: アンカー H の <code>horse_pedigree_5gen</code> がローカルまたは GCS に存在することが必要です（<code>scraper.horse_pedigree_5gen_bulk</code> またはキュー <code>horse_pedigree_5gen</code> で取得）。</li>
+<li><strong>欠損時の扱い</strong>: アンカーデータ（<code>ped_H</code>）が存在しない H は <code>merge_status=missing_anchor_ped</code> としてマニフェストに記録します。主表（5 世代分）は常に出力します。</li>
+<li><strong>データの鮮度管理</strong>: H の JSON が古い場合は、H の子孫側のデータだけ再取得して <code>ped_tbl/{shard}/{S}.parquet</code> を上書きします（馬単位ストアの粒度と一致）。</li>
+<li><strong>計算量の上限</strong>: アンカーは最大で <strong>5 代目の牡スロット数分</strong>（完全表なら 16 頭）です。馬 1 頭あたり最大 16 本の枝表マージに収まります。</li>
 </ol>
-<h2 id="8">8. 実装フェーズ（推奨）</h2>
+<h2 id="8">8. 推奨実装フェーズ</h2>
 <table>
 <thead>
 <tr>
@@ -311,30 +312,35 @@ document.addEventListener("DOMContentLoaded", function() {
 <tbody>
 <tr>
 <td>1</td>
-<td><code>(generation, position) → path_fm</code>（主表 1..5）とその逆の単体テスト（<code>research.pedigree.pedigree_similarity</code> の父系/牡定義と整合）</td>
+<td><code>(generation, position) → path_fm</code>（主表 1〜5）の変換とその逆変換の単体テスト。<code>pedigree_similarity</code> の父系/牡定義と整合を確認する。</td>
 </tr>
 <tr>
 <td>2</td>
-<td>アンカー抽出 + <code>path_SH</code> + 枝表 <code>path_Hx</code> 連結 + 重複ポリシー</td>
+<td>アンカー抽出・<code>path_SH</code> 生成・枝表 <code>path_Hx</code> との連結・重複ポリシーの実装</td>
 </tr>
 <tr>
 <td>3</td>
-<td><code>pipeline/build_horse_entity_store</code> の ped 生成経路にオプション <code>--merge-gen5-sires</code> で結合</td>
+<td><code>pipeline/build_horse_entity_store</code> の血統生成処理に <code>--merge-gen5-sires</code> オプションを追加</td>
 </tr>
 <tr>
 <td>4</td>
-<td>キュー連携（アンカー未取得時の自動投入）</td>
+<td>キュー連携：アンカーデータが未取得の場合に自動でキュー投入する仕組みを実装</td>
 </tr>
 </tbody>
 </table>
 <h2 id="9">9. 関連コード</h2>
-<ul>
-<li>5 世代パース: <code>research.pedigree.pedigree_similarity.parse_blood_table_5gen</code></li>
-<li>牡スロット: <code>is_male_pedigree_slot</code>, <code>MALE_PEDIGREE_SLOTS_5GEN</code></li>
-<li>ローカル JSON: <code>data/local/horse_pedigree_5gen/{4桁}/{horse_id}.json</code>, <code>research.pedigree.pedigree_local_store</code></li>
-<li>馬単位出力: <code>src/pipeline/build_horse_entity_store.py</code>, <code>src/pipeline/horse_entity_layout.py</code></li>
-<li>骨子モジュール（写像・定数の置き場）: <code>src/pipeline/horse_pedigree_expand.py</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>用途</th><th>コード / パス</th></tr>
+</thead>
+<tbody>
+<tr><td>5 世代パース</td><td><code>research.pedigree.pedigree_similarity.parse_blood_table_5gen</code></td></tr>
+<tr><td>牡スロット判定</td><td><code>is_male_pedigree_slot</code>, <code>MALE_PEDIGREE_SLOTS_5GEN</code></td></tr>
+<tr><td>ローカル JSON の場所</td><td><code>data/local/horse_pedigree_5gen/{4桁}/{horse_id}.json</code>、ストアは <code>research.pedigree.pedigree_local_store</code></td></tr>
+<tr><td>馬単位の出力</td><td><code>src/pipeline/build_horse_entity_store.py</code>, <code>src/pipeline/horse_entity_layout.py</code></td></tr>
+<tr><td>パス変換・定数の定義場所</td><td><code>src/pipeline/horse_pedigree_expand.py</code></td></tr>
+</tbody>
+</table>
     </article>
     <nav class="doc-nav">
       <a href="feature_engineering_exploration.html">← 特徴量エンジニアリング — 探索メモ（新要素の発見）</a>

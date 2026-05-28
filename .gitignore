@@ -48,6 +48,8 @@ mlruns
 
 # スクレイプ・キュー由来の生成物（GCS が正、ローカルは再取得可）
 data/cache/
+# Bloodline SQLite（サイズ大・ローカル生成。GitHub 100MB 制限対象のため追跡しない）
+data/bloodline/
 data/local/
 data/queue/
 data/page_reference/

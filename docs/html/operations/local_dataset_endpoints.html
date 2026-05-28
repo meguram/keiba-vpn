@@ -112,21 +112,23 @@
 <body>
 
 <h1>ローカルデータセット参照 エンドポイント一覧</h1>
-<p class="subtitle">src/api/app.py に定義された全エンドポイントのうち、ローカルファイルシステム上のデータセットを参照するものをまとめています。<br>
-最終更新: 2026-05-20</p>
+<p class="subtitle">
+  <code>src/api/app.py</code> に定義されたAPIのアドレス（エンドポイント）のうち、ローカルファイルシステム上のデータセットを参照するものをまとめています。<br>
+  最終更新: 2026-05-20
+</p>
 
 <div class="toc">
   <h4>目次</h4>
   <ol>
     <li><a href="#datasets">ローカルデータセット一覧</a></li>
-    <li><a href="#hybrid-storage">HybridStorage 経由 (GCS + data/cache/)</a></li>
+    <li><a href="#hybrid-storage">HybridStorage 経由 (Google Cloud Storage（GCS）+ data/cache/)</a></li>
     <li><a href="#race-lists">開催レース一覧 (race_lists)</a></li>
     <li><a href="#race-detail">レース詳細・バンドル</a></li>
     <li><a href="#horse-detail">馬詳細・パフォーマンス</a></li>
     <li><a href="#jra-baba">JRA 馬場情報 (data/local/jra_baba/)</a></li>
     <li><a href="#track-speed">馬場速度 (data/local/analysis/track_speed/)</a></li>
     <li><a href="#bloodline">血統ベクトル・血統マップ (data/local/research/)</a></li>
-    <li><a href="#scrape-queue">スクレイピングキュー (data/queue/)</a></li>
+    <li><a href="#scrape-queue">スクレイピング（Webからの自動データ収集）キュー (data/queue/)</a></li>
     <li><a href="#admin">管理・モニタリング</a></li>
   </ol>
 </div>
@@ -135,9 +137,10 @@
 <h2 id="datasets">1. ローカルデータセット一覧</h2>
 
 <div class="section-note">
-  すべてのデータは <code>BASE_DIR</code>（プロジェクトルート）からの相対パスです。
+  すべてのデータは <code>BASE_DIR</code>（プロジェクトルート）からの相対パスです。<br>
   <strong>HybridStorage</strong> 経由のカテゴリは GCS を一次ソースとし、<code>data/cache/</code> をディスクキャッシュとして使用します。
-  それ以外はローカルファイルを直接参照します。
+  GCS が利用できない場合やオフライン時は、キャッシュのみを参照します。<br>
+  それ以外のカテゴリはローカルファイルを直接参照します。
 </div>
 
 <table>
@@ -168,7 +171,8 @@
     </tr>
     <tr>
       <td><code>data/cache/_blob_list/</code></td>
-      <td>GCS Blob 存在リストのキャッシュ (<code>{category}_{year}.json</code>)</td>
+      <td>GCS Blob（ファイル）の存在リストをキャッシュしたファイル群 (<code>{category}_{year}.json</code>)。<br>
+          GCS へのアクセスを省略するために利用します。</td>
       <td>直接 JSON 読み込み</td>
       <td>モニター GCS 存在チェック、カバレッジ確認スクリプト</td>
     </tr>
@@ -180,7 +184,8 @@
     </tr>
     <tr>
       <td><code>data/local/horse_pedigree_10gen/</code></td>
-      <td>競走馬 10 世代血統 JSON (5gen から自動生成)</td>
+      <td>競走馬 10 世代血統 JSON（5gen から自動生成）。<br>
+          研究・適性分析での祖先展開に特化して使用します。</td>
       <td>直接 JSON 読み込み（スクリプト）</td>
       <td>血統ベクトル・適性分析の祖先展開</td>
     </tr>
@@ -204,7 +209,8 @@
     </tr>
     <tr>
       <td><code>data/local/research/bloodline_vector/v2_l2/groups_embeddings.json</code></td>
-      <td>血統グループ埋め込みベクトル（L2 メタクラスタ）</td>
+      <td>血統グループ埋め込みベクトル（L2 メタクラスタ）。<br>
+          血統の類似度を数値化して可視化するために利用します。</td>
       <td>直接 JSON 読み込み</td>
       <td><code>GET /bloodline-vector</code></td>
     </tr>
@@ -234,7 +240,8 @@
     </tr>
     <tr>
       <td><code>data/local/knowledge/track_speed_baselines.parquet</code></td>
-      <td>馬場速度ベースライン（会場×条件×クラス帯 基準タイム）</td>
+      <td>馬場速度ベースライン（会場×条件×クラス帯 基準タイム）。<br>
+          各レースの速度を相対評価するための基準値です。</td>
       <td>pandas 直接読み込み</td>
       <td>馬場速度モデル推論</td>
     </tr>
@@ -253,13 +260,15 @@
     </tr>
     <tr>
       <td><code>data/local/tables/{year}/race_result_flat.parquet</code></td>
-      <td>レース結果フラット Parquet（全年次スライス）</td>
+      <td>レース結果フラット Parquet（全年次スライス）。<br>
+          年ごとにファイルが分割されており、馬場速度計算時に参照します。</td>
       <td>pyarrow 直接読み込み (load_flat_df)</td>
       <td><code>GET /api/track-speed/race-horses</code></td>
     </tr>
     <tr>
       <td><code>data/queue/</code></td>
-      <td>スクレイピングジョブキュー JSON ファイル群</td>
+      <td>スクレイピングジョブキュー JSON ファイル群。<br>
+          UIやAPIから投入されたデータ収集タスクを順次管理します。</td>
       <td>ScrapeJobQueue (JSON R/W)</td>
       <td><code>/api/scrape-queue/*</code> 全エンドポイント</td>
     </tr>
@@ -282,9 +291,9 @@
 <h2 id="hybrid-storage">2. HybridStorage 経由エンドポイント (GCS + data/cache/)</h2>
 
 <div class="section-note">
-  <code>_get_storage()</code> で返す <code>HybridStorage</code> インスタンスを通じて <code>storage.load(category, key)</code> を呼ぶエンドポイントです。
-  GCS が一次ソースで、<code>data/cache/{category}/{key}.json</code> がディスクキャッシュです。
-  GCS 未設定・オフライン時はキャッシュのみ参照します。
+  <code>_get_storage()</code> が返す <code>HybridStorage</code> インスタンスを通じて <code>storage.load(category, key)</code> を呼ぶエンドポイントです。<br>
+  GCS が一次ソースで、<code>data/cache/{category}/{key}.json</code> がディスクキャッシュです。<br>
+  GCS が未設定またはオフライン時はキャッシュのみを参照します（代替処理として機能します）。
 </div>
 
 <table>
@@ -296,7 +305,7 @@
       <td class="path">/api/data/{category}/{key}</td>
       <td><span class="method-get">GET</span></td>
       <td><span class="tag">任意カテゴリ</span> <span class="tag">race_performance (local)</span></td>
-      <td>生 JSON データビューア用。<code>race_performance</code> は <code>data/local/features/</code> を直接参照</td>
+      <td>生 JSON データのビューア用エンドポイント。<code>race_performance</code> カテゴリのみ <code>data/local/features/</code> を直接参照します。</td>
     </tr>
     <tr>
       <td class="path">/api/race/{race_id}/bundle</td>
@@ -307,73 +316,73 @@
         <span class="tag">race_barometer</span><span class="tag">smartrc_race</span>
         <span class="tag">horse_result</span><span class="tag">horse_pedigree_5gen</span>
       </td>
-      <td>レース全カテゴリ + 出走馬データを並列一括取得（レースページのメイン API）</td>
+      <td>レース全カテゴリと出走馬データを並列で一括取得します。レースページのメイン API です。</td>
     </tr>
     <tr>
       <td class="path">/api/horse/{horse_id}/detail</td>
       <td><span class="method-get">GET</span></td>
       <td><span class="tag">horse_result</span><span class="tag">smartrc_race</span><span class="tag">horse_pedigree_5gen</span></td>
-      <td>馬詳細情報 (過去戦績・SmartRC 指数・5世代血統)</td>
+      <td>馬詳細情報（過去戦績・SmartRC 指数・5世代血統）を取得します。</td>
     </tr>
     <tr>
       <td class="path">/api/race/{race_id}/tracking-difficulty</td>
       <td><span class="method-get">GET</span></td>
       <td><span class="tag">race_shutuba</span><span class="tag">race_result</span><span class="tag">horse_result</span></td>
-      <td>追走難度・ペース予想・位置取り予測</td>
+      <td>追走難度・ペース予想・位置取り予測を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/person/{ptype}/{person_id}/stats</td>
       <td><span class="method-get">GET</span></td>
       <td><span class="tag">horse_result</span><span class="tag">race_result</span></td>
-      <td>騎手・調教師成績集計（horse_result の race_history を走査）</td>
+      <td>騎手・調教師の成績集計。<code>horse_result</code> の <code>race_history</code> を走査して集計します。</td>
     </tr>
     <tr>
       <td class="path">/api/race/{race_id}/predictions</td>
       <td><span class="method-get">GET</span></td>
       <td><span class="tag">race_shutuba</span><span class="tag">race_result</span><span class="tag">horse_result</span><span class="tag">horse_pedigree_5gen</span></td>
-      <td>予測結果取得（モデル推論前に storage からフィーチャを読み込み）</td>
+      <td>予測結果を取得します。モデル推論の前に storage から特徴量データを読み込みます。</td>
     </tr>
     <tr>
       <td class="path">/api/race/{race_id}/predict</td>
       <td><span class="method-post">POST</span></td>
       <td>上記と同様</td>
-      <td>予測を強制再実行</td>
+      <td>予測を強制的に再実行します（キャッシュを無視して最新データで再計算します）。</td>
     </tr>
     <tr>
       <td class="path">/api/betting/pair-odds/{race_id}</td>
       <td><span class="method-get">GET</span></td>
       <td><span class="tag">race_pair_odds</span><span class="tag">race_shutuba</span><span class="tag">horse_result</span></td>
-      <td>馬連オッズ詳細</td>
+      <td>馬連オッズの詳細情報を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/odds/predict/{race_id}</td>
       <td><span class="method-get">GET</span></td>
       <td><span class="tag">race_odds</span><span class="tag">race_shutuba</span></td>
-      <td>オッズモデル予測</td>
+      <td>オッズモデルによる予測結果を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/odds/history/{race_id}</td>
       <td><span class="method-get">GET</span></td>
       <td><span class="tag">race_odds</span></td>
-      <td>オッズ履歴（スナップショット一覧）</td>
+      <td>オッズの時系列履歴（スナップショット一覧）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/simulation/run</td>
       <td><span class="method-post">POST</span></td>
       <td><span class="tag">race_result</span><span class="tag">race_shutuba</span><span class="tag">race_odds</span><span class="tag">horse_result</span><span class="tag">horse_pedigree_5gen</span></td>
-      <td>バックテストシミュレーション（期間内レースを storage から読み込み）</td>
+      <td>バックテストシミュレーションを実行します。指定期間内のレースデータを storage から一括読み込みして計算します。</td>
     </tr>
     <tr>
       <td class="path">/api/backfill/start</td>
       <td><span class="method-post">POST</span></td>
       <td><span class="tag">race_result</span><span class="tag">race_shutuba</span><span class="tag">horse_result</span>…</td>
-      <td>データバックフィル（GCS → ローカルへの一括保存）</td>
+      <td>データバックフィルを起動します（GCS → ローカルへの一括保存処理です）。</td>
     </tr>
   </tbody>
 </table>
 
 <!-- ───────────────────────────────── -->
-<h2 id="race-lists">3. 開催レース一覧 (race_lists)</h2>
+<h2 id="race-lists">3. 開催レース一覧の取得 (race_lists)</h2>
 
 <table>
   <thead>
@@ -384,43 +393,43 @@
       <td class="path">/api/race-list/{date}</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/race_lists/YYYYMMDD.json</code></td>
-      <td>指定日のレース一覧</td>
+      <td>指定日のレース一覧を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-dates</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/race_lists/</code> (glob)</td>
-      <td>取得済み日付一覧（日付セレクタ用）</td>
+      <td>取得済み開催日の一覧を返します（日付セレクタ用）。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-summary-all</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/race_lists/</code> (全件)</td>
-      <td>全日付のレース・取得状況サマリー</td>
+      <td>全開催日のレース件数と取得状況のサマリーを返します。</td>
     </tr>
     <tr>
       <td class="path">/api/upcoming-races</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/race_lists/</code> + netkeiba（未来分）</td>
-      <td>今後のレース一覧（直近 N 日）</td>
+      <td>直近 N 日以内に開催される予定のレース一覧を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/race-lists-backfill/start</td>
       <td><span class="method-post">POST</span></td>
       <td><code>data/local/race_lists/</code> (書き込み先)</td>
-      <td>過去開催日の race_lists バックフィル起動</td>
+      <td>過去の開催日分の race_lists バックフィル処理を起動します。</td>
     </tr>
     <tr>
       <td class="path">/api/race-lists-backfill/status</td>
       <td><span class="method-get">GET</span></td>
       <td><code>logs/backfill_race_lists_*.log</code></td>
-      <td>バックフィルプロセス状態・ログ末尾</td>
+      <td>バックフィル処理の進捗状態とログ末尾を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/race-lists-backfill/stop</td>
       <td><span class="method-post">POST</span></td>
       <td><code>logs/race_lists_backfill.lock</code></td>
-      <td>バックフィルプロセス停止</td>
+      <td>実行中のバックフィル処理を停止します。</td>
     </tr>
   </tbody>
 </table>
@@ -436,27 +445,27 @@
     <tr>
       <td class="path">/race/{race_id}</td>
       <td><span class="method-get">GET</span></td>
-      <td>HTML テンプレートのみ（API は /api/race/{race_id}/bundle）</td>
-      <td>レース詳細ページ（HTML）</td>
+      <td>HTML テンプレートのみ（実際のデータは /api/race/{race_id}/bundle が返します）</td>
+      <td>レース詳細ページ（HTML）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/race/{race_id}</td>
       <td><span class="method-get">GET</span></td>
       <td><span class="tag">race_result</span><span class="tag">race_shutuba</span><span class="tag">race_odds</span>
           <span class="tag">smartrc_race</span><span class="tag">horse_result</span><span class="tag">horse_pedigree_5gen</span></td>
-      <td>単一カテゴリまたは全カテゴリのレースデータ</td>
+      <td>単一カテゴリまたは全カテゴリのレースデータを返します。</td>
     </tr>
     <tr>
       <td class="path">/api/race/{race_id}/bundle</td>
       <td><span class="method-get">GET</span></td>
       <td>全レースカテゴリ + 全出走馬 horse_result + horse_pedigree_5gen</td>
-      <td>レースページ用一括取得 API（並列 GCS 読み込み、TTL キャッシュあり）</td>
+      <td>レースページ用の一括取得 API です。GCS から並列読み込みし、データの有効期限（TTL）キャッシュで高速化しています。</td>
     </tr>
     <tr>
       <td class="path">/api/pedigree/race-ensure-5gen</td>
       <td><span class="method-post">POST</span></td>
       <td><span class="tag">horse_pedigree_5gen</span> (欠損チェック)</td>
-      <td>出走馬の 5gen 欠損を検出してスクレイピングキューに投入</td>
+      <td>出走馬の 5gen データの欠損を検出し、スクレイピングキューに投入します。</td>
     </tr>
   </tbody>
 </table>
@@ -477,7 +486,7 @@
         <span class="tag">smartrc_race</span>
         <span class="tag">horse_pedigree_5gen</span>
       </td>
-      <td>馬詳細 (戦績・SmartRC テン1F・5世代血統)</td>
+      <td>馬詳細情報（戦績・SmartRC テン1F・5世代血統）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/horse/{horse_id}/race_performance_history</td>
@@ -486,25 +495,25 @@
         <span class="tag">horse_result</span> (storage)<br>
         <code>data/local/features/race_performance/races/{year}/{race_id}.json</code>
       </td>
-      <td>馬の戦績レースの race_performance 特徴量履歴</td>
+      <td>馬の戦績レースに紐づく race_performance 特徴量の履歴を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/data/race_performance/{race_id}</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/features/race_performance/races/{year}/{race_id}.json</code></td>
-      <td>レース単位パフォーマンス特徴量 JSON の直接参照</td>
+      <td>レース単位のパフォーマンス特徴量 JSON を直接参照します。</td>
     </tr>
     <tr>
       <td class="path">/api/stallion-sire-tree/node/{horse_id}</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/research/pedigree_race_index/full_sire_tree*.parquet</code></td>
-      <td>種牡馬サイヤーツリーのノード情報</td>
+      <td>種牡馬サイヤーツリー上の指定ノード情報を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/stallion-sire-tree/bms-stats/{horse_id}</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/research/pedigree_race_index/horse_bms.parquet</code></td>
-      <td>種牡馬×母父統計</td>
+      <td>種牡馬×母父の成績統計を返します。</td>
     </tr>
   </tbody>
 </table>
@@ -513,8 +522,9 @@
 <h2 id="jra-baba">6. JRA 馬場情報 (data/local/jra_baba/)</h2>
 
 <div class="section-note">
-  <code>data/local/jra_baba/</code> ディレクトリに格納されたクッション値・含水率・馬場状態データを参照します。
-  定期取得は <code>jra-baba-morning</code> cron ジョブ（毎 10 分 05:00–09:00 JST 開催日のみ）が担当します。
+  <code>data/local/jra_baba/</code> ディレクトリに格納されたクッション値・含水率・馬場状態データを参照します。<br>
+  定期取得は <code>jra-baba-morning</code> cron ジョブ（開催日のみ 05:00〜09:00 JST の間、10 分ごと）が担当します。<br>
+  レース直前の馬場状態確認に利用するため、開催日は特に鮮度が重要なデータです。
 </div>
 
 <table>
@@ -526,65 +536,66 @@
       <td class="path">/api/cushion</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/jra_baba/cushion_values.json</code></td>
-      <td>クッション値・含水率レコード一覧（年・会場フィルタ可）</td>
+      <td>クッション値・含水率レコードの一覧を返します（年・会場フィルタが使えます）。</td>
     </tr>
     <tr>
       <td class="path">/api/cushion/stats</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/jra_baba/cushion_values.json</code></td>
-      <td>年別・会場別集計統計</td>
+      <td>年別・会場別の集計統計を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/cushion/scrape</td>
       <td><span class="method-post">POST</span></td>
       <td><code>data/local/jra_baba/</code> (書き込み)</td>
-      <td>クッション値を JRA 過去ページから一括スクレイプ（バックグラウンド）</td>
+      <td>JRA の過去ページからクッション値をまとめてスクレイプします（バックグラウンド実行）。</td>
     </tr>
     <tr>
       <td class="path">/api/cushion/scrape/status</td>
       <td><span class="method-get">GET</span></td>
       <td>インメモリ状態</td>
-      <td>スクレイプジョブ進捗</td>
+      <td>スクレイプジョブの進捗状況を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/cushion/live</td>
       <td><span class="method-post">POST</span></td>
       <td><code>data/local/jra_baba/baba_live_{date}.json</code> (書き込み)</td>
-      <td>JRA 公式馬場ページからライブ取得（当日データ）</td>
+      <td>JRA 公式馬場ページから当日の最新馬場情報をリアルタイムで取得します。</td>
     </tr>
     <tr>
       <td class="path">/api/cushion/live/status</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/jra_baba/baba_poll_schedule.json</code></td>
-      <td>ライブジョブ状態 + ポーリングスケジュール確認</td>
+      <td>ライブ取得ジョブの状態とポーリングスケジュールを確認します。</td>
     </tr>
     <tr>
       <td class="path">/api/cushion/live/check</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/jra_baba/baba_live_{date}.json</code></td>
-      <td>軽量更新チェック（フルスクレイプなし）</td>
+      <td>フルスクレイプなしで更新の有無だけを軽量チェックします。</td>
     </tr>
     <tr>
       <td class="path">/api/cushion/schedule</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/jra_baba/baba_poll_schedule.json</code></td>
-      <td>直近 N 日のポーリングスケジュール一覧</td>
+      <td>直近 N 日分のポーリングスケジュール一覧を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/cushion/admin/sync-gcs</td>
       <td><span class="method-post">POST</span></td>
       <td><code>data/local/jra_baba/cushion_values.json</code> → GCS</td>
-      <td>ローカル cushion_values.json を GCS へ年別同期（開発者限定）</td>
+      <td>ローカルの cushion_values.json を GCS へ年別に同期します（開発者限定の操作です）。</td>
     </tr>
   </tbody>
 </table>
 
 <!-- ───────────────────────────────── -->
-<h2 id="track-speed">7. 馬場速度 (data/local/analysis/track_speed/ 他)</h2>
+<h2 id="track-speed">7. 馬場速度インデックス (data/local/analysis/track_speed/ 他)</h2>
 
 <div class="section-note">
-  <code>TrackSpeedEngine</code> を通じて馬場速度 Parquet ファイルを参照します。
-  モデル構築は <code>POST /api/track-speed/assign</code> または直接スクリプト実行で行います。
+  <code>TrackSpeedEngine</code> を通じて馬場速度 Parquet ファイルを参照します。<br>
+  速度インデックスの構築は <code>POST /api/track-speed/assign</code> または直接スクリプト実行で行います。<br>
+  レース結果のタイムをペース・馬場・クラスで補正し、横断比較できる指標に変換したデータです。
 </div>
 
 <table>
@@ -596,13 +607,13 @@
       <td class="path">/track-speed</td>
       <td><span class="method-get">GET</span></td>
       <td>HTML テンプレートのみ</td>
-      <td>馬場速度ページ（HTML）</td>
+      <td>馬場速度ページ（HTML）を返します。</td>
     </tr>
     <tr>
       <td class="path">/track-speed/dev</td>
       <td><span class="method-get">GET</span></td>
       <td>HTML テンプレートのみ</td>
-      <td>馬場速度 Dev Docs ページ（開発者限定）</td>
+      <td>馬場速度の開発者向けドキュメントページ（開発者限定）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/track-speed/meta</td>
@@ -612,25 +623,25 @@
         <code>data/local/knowledge/track_speed_pace_baselines.parquet</code><br>
         <code>data/local/analysis/track_speed/meta.json</code>
       </td>
-      <td>ベースライン生成状態・会場一覧</td>
+      <td>ベースライン生成の状態と会場一覧を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/track-speed/dates</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/analysis/track_speed/races_{year}.parquet</code></td>
-      <td>速度指標を持つ日付一覧</td>
+      <td>速度指標が付与済みの日付一覧を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/track-speed/venues</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/analysis/track_speed/races_{year}.parquet</code></td>
-      <td>指定日の会場一覧</td>
+      <td>指定日に開催されている会場の一覧を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/track-speed/day</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/analysis/track_speed/races_{year}.parquet</code></td>
-      <td>指定日×会場の全レース速度指標</td>
+      <td>指定日・指定会場の全レース速度指標を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/track-speed/race-horses</td>
@@ -639,7 +650,7 @@
         <code>data/local/tables/{year}/race_result_flat.parquet</code><br>
         <code>data/local/analysis/track_speed/races_{year}.parquet</code>
       </td>
-      <td>指定レースの全馬 perf_index 計算</td>
+      <td>指定レースの全出走馬の perf_index（パフォーマンス指数）を計算して返します。</td>
     </tr>
     <tr>
       <td class="path">/api/track-speed/assign</td>
@@ -648,13 +659,13 @@
         <code>data/local/analysis/track_speed/</code> (書き込み)<br>
         <code>data/local/knowledge/track_speed_baselines.parquet</code> (書き込み)
       </td>
-      <td>期間内レースに速度指標を付与・保存（バックグラウンド）</td>
+      <td>指定期間内のレースに速度指標を付与して保存します（バックグラウンド実行）。</td>
     </tr>
     <tr>
       <td class="path">/api/track-speed/validate-perf</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/features/race_performance/</code> + <code>data/local/analysis/track_speed/</code></td>
-      <td>パフォーマンス指数バリデーション</td>
+      <td>パフォーマンス指数の整合性をバリデーションします。</td>
     </tr>
   </tbody>
 </table>
@@ -671,13 +682,13 @@
       <td class="path">/bloodline-vector</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/research/bloodline_vector/v2_l2/groups_embeddings.json</code></td>
-      <td>血統グループ L2 ベクトル空間ビジュアライザ（HTML）</td>
+      <td>血統グループを L2 ベクトル空間上に可視化するページ（HTML）を返します。</td>
     </tr>
     <tr>
       <td class="path">/pedigree-map</td>
       <td><span class="method-get">GET</span></td>
-      <td>HTML テンプレートのみ（API は /api/pedigree-map）</td>
-      <td>血統類似度マップ（HTML）</td>
+      <td>HTML テンプレートのみ（実際のデータは /api/pedigree-map が返します）</td>
+      <td>血統類似度マップページ（HTML）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/pedigree-map</td>
@@ -686,25 +697,25 @@
         <code>data/local/research/pedigree_similarity/pedigree_similarity.json</code><br>
         <code>data/local/research/pedigree_race_index/</code> (タグ付与)
       </td>
-      <td>血統類似度マップ JSON（ノード + タグ）</td>
+      <td>血統類似度マップの JSON データ（ノード + タグ）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/pedigree-map/tags</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/research/pedigree_race_index/{lift,l2,role_lift}*.parquet|json</code></td>
-      <td>horse_id ごとの特殊適性タグマップ</td>
+      <td>horse_id ごとの特殊適性タグマップを返します。</td>
     </tr>
     <tr>
       <td class="path">/api/pedigree-map/cluster-hierarchy</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/research/pedigree_race_index/l2_profiles.json</code> 他</td>
-      <td>L1/L2/L3 クラスタ階層構造</td>
+      <td>L1/L2/L3 クラスタの階層構造を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/pedigree/note-aptitude</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/local/research/pedigree_race_index/</code></td>
-      <td>血統ナレッジ適性プロファイル（note 記事向け）</td>
+      <td>血統ナレッジをもとにした適性プロファイルを返します（note 記事向け）。</td>
     </tr>
     <tr>
       <td class="path">/api/pedigree/race-note-3d</td>
@@ -713,7 +724,7 @@
         <span class="tag">race_shutuba</span> (storage) +
         <code>data/local/research/pedigree_race_index/ancestor_vectors.parquet</code>
       </td>
-      <td>レース出走馬の 3D 血統適性プロット</td>
+      <td>レース出走馬の 3D 血統適性プロット用データを返します。</td>
     </tr>
     <tr>
       <td class="path">/api/pedigree/rebuild-sire-factor-stats</td>
@@ -722,7 +733,7 @@
         <code>data/local/research/pedigree_race_index/</code> (書き込み)<br>
         <span class="tag">race_result</span><span class="tag">horse_pedigree_5gen</span> (storage)
       </td>
-      <td>サイヤーファクター統計を再ビルド</td>
+      <td>サイヤーファクター統計を再ビルドします。</td>
     </tr>
     <tr>
       <td class="path">/api/bloodline/*</td>
@@ -731,19 +742,19 @@
         <code>data/local/research/pedigree_race_index/</code><br>
         <span class="tag">race_result</span><span class="tag">horse_pedigree_5gen</span> (storage)
       </td>
-      <td>血統分析（analyze, surfaces, data/{analysis_type}）</td>
+      <td>血統分析（analyze, surfaces, data/{analysis_type}）のエンドポイント群です。</td>
     </tr>
     <tr>
       <td class="path">/api/admin/bloodline-cluster/*</td>
       <td><span class="method-get">GET</span> <span class="method-post">POST</span></td>
       <td><code>data/local/research/pedigree_race_index/</code> (rebuild/reload)</td>
-      <td>血統メタクラスタ アーティファクト管理（開発者限定）</td>
+      <td>血統メタクラスタのアーティファクト管理（開発者限定の操作です）。</td>
     </tr>
   </tbody>
 </table>
 
 <!-- ───────────────────────────────── -->
-<h2 id="scrape-queue">9. スクレイピングキュー (data/queue/)</h2>
+<h2 id="scrape-queue">9. スクレイピングキューの管理 (data/queue/)</h2>
 
 <table>
   <thead>
@@ -754,7 +765,7 @@
       <td class="path">/queue-status</td>
       <td><span class="method-get">GET</span></td>
       <td>HTML テンプレートのみ</td>
-      <td>キュー状態ページ（HTML）</td>
+      <td>キュー状態ページ（HTML）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/status</td>
@@ -763,73 +774,73 @@
         <code>data/queue/*.json</code><br>
         <code>data/queue/.worker_health.json</code>
       </td>
-      <td>キュー統計 + ワーカー健康状態</td>
+      <td>キューの統計情報とワーカーの健康状態を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/progress</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/queue/*.json</code></td>
-      <td>実行中ジョブのリアルタイム進捗スナップショット</td>
+      <td>実行中ジョブのリアルタイム進捗スナップショットを返します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/worker-logs</td>
       <td><span class="method-get">GET</span></td>
       <td>インメモリ (<code>queue_worker_log</code>)</td>
-      <td>ワーカーログ末尾</td>
+      <td>ワーカーログの末尾を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/add</td>
       <td><span class="method-post">POST</span></td>
       <td><code>data/queue/*.json</code> (書き込み)</td>
-      <td>単一ジョブをキューに追加</td>
+      <td>単一のジョブをキューに追加します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/add-job</td>
       <td><span class="method-post">POST</span></td>
       <td><code>data/queue/*.json</code> (書き込み)</td>
-      <td>高度オプション付きジョブ追加</td>
+      <td>詳細オプションを指定してジョブを追加します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/add-batch</td>
       <td><span class="method-post">POST</span></td>
       <td><code>data/queue/*.json</code> (書き込み)</td>
-      <td>複数ジョブ一括追加</td>
+      <td>複数のジョブをまとめて一括追加します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/enqueue-incomplete-dates</td>
       <td><span class="method-post">POST</span></td>
       <td><code>data/local/race_lists/</code> + <code>data/queue/</code></td>
-      <td>未取得日付のレースジョブを一括投入</td>
+      <td>データが未取得の日付のレースジョブを一括投入します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/enqueue-scrape-period</td>
       <td><span class="method-post">POST</span></td>
       <td><code>data/local/race_lists/</code> + <code>data/queue/</code></td>
-      <td>期間指定でレース・馬ジョブを一括投入</td>
+      <td>期間を指定してレース・馬の両ジョブを一括投入します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/enqueue-period-races</td>
       <td><span class="method-get">GET</span> <span class="method-post">POST</span></td>
       <td><code>data/local/race_lists/</code> + <code>data/queue/</code></td>
-      <td>期間内 JRA レースタスクをキュー投入</td>
+      <td>期間内の JRA レースタスクをキューに投入します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/enqueue-period-horses</td>
       <td><span class="method-get">GET</span> <span class="method-post">POST</span></td>
       <td><code>data/local/race_lists/</code> + <code>data/queue/</code></td>
-      <td>期間内出走馬タスクをキュー投入</td>
+      <td>期間内の出走馬タスクをキューに投入します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/failed/requeue</td>
       <td><span class="method-post">POST</span></td>
       <td><code>data/queue/*.json</code></td>
-      <td>失敗ジョブを pending に戻す</td>
+      <td>失敗したジョブを pending（待機中）状態に戻して再試行します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-queue/local-mirror-config</td>
       <td><span class="method-get">GET</span> <span class="method-post">POST</span></td>
       <td><code>data/local/mirror/</code> (設定ファイル)</td>
-      <td>GCS 保存時の local mirror コピー設定</td>
+      <td>GCS 保存時にローカルへもコピーする mirror 設定を参照・変更します。</td>
     </tr>
   </tbody>
 </table>
@@ -845,8 +856,8 @@
     <tr>
       <td class="path">/monitor</td>
       <td><span class="method-get">GET</span></td>
-      <td>HTML テンプレートのみ（API は /api/monitor/*）</td>
-      <td>データモニターページ（HTML）</td>
+      <td>HTML テンプレートのみ（実際のデータは /api/monitor/* が返します）</td>
+      <td>データモニターページ（HTML）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/monitor/missing-dates-summary</td>
@@ -855,7 +866,7 @@
         <code>data/cache/_blob_list/{category}_{year}.json</code><br>
         <span class="tag">race_result</span><span class="tag">race_shutuba</span><span class="tag">horse_result</span><span class="tag">horse_pedigree_5gen</span> (storage)
       </td>
-      <td>取得漏れ日付サマリー（Blob リストキャッシュ参照）</td>
+      <td>データ取得漏れの日付サマリーを返します（Blob リストキャッシュを参照します）。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-status</td>
@@ -864,55 +875,55 @@
         <code>data/cache/_blob_list/</code><br>
         <span class="tag">race_result</span><span class="tag">race_shutuba</span> 他 (storage)
       </td>
-      <td>指定日のスクレイプ取得状況チェック</td>
+      <td>指定日のスクレイプ取得状況を確認します。</td>
     </tr>
     <tr>
       <td class="path">/api/structure-status</td>
       <td><span class="method-get">GET</span></td>
       <td>インメモリ (スケジューラ状態)</td>
-      <td>構造チェックスケジューラの最終実行結果</td>
+      <td>構造チェックスケジューラの最終実行結果を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/structure-report</td>
       <td><span class="method-get">GET</span></td>
       <td>インメモリ</td>
-      <td>最新構造チェックレポート</td>
+      <td>最新の構造チェックレポートを返します。</td>
     </tr>
     <tr>
       <td class="path">/cron-jobs</td>
       <td><span class="method-get">GET</span></td>
       <td>HTML テンプレートのみ</td>
-      <td>Cron ジョブ管理ページ（HTML）</td>
+      <td>Cron ジョブ管理ページ（HTML）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/admin/cron-jobs</td>
       <td><span class="method-get">GET</span></td>
       <td>インメモリ (スレッド状態)</td>
-      <td>全 cron ジョブの状態（次回実行・最終実行・実行回数）</td>
+      <td>全 cron ジョブの状態（次回実行時刻・最終実行時刻・実行回数）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/admin/server-logs</td>
       <td><span class="method-get">GET</span></td>
       <td><code>logs/*.log</code></td>
-      <td>サーバーログ末尾（指定ファイル）</td>
+      <td>指定ファイルのサーバーログ末尾を返します。</td>
     </tr>
     <tr>
       <td class="path">/server-logs</td>
       <td><span class="method-get">GET</span></td>
       <td>HTML テンプレートのみ</td>
-      <td>サーバーログビューア（HTML）</td>
+      <td>サーバーログビューアページ（HTML）を返します。</td>
     </tr>
     <tr>
       <td class="path">/scrape</td>
       <td><span class="method-get">GET</span></td>
       <td>HTML テンプレートのみ</td>
-      <td>スクレイピング管理ページ（HTML）</td>
+      <td>スクレイピング管理ページ（HTML）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/scrape-jobs</td>
       <td><span class="method-get">GET</span></td>
       <td>インメモリ (<code>_scrape_jobs</code>)</td>
-      <td>直近スクレイピングジョブ履歴（上位 10 件）</td>
+      <td>直近のスクレイピングジョブ履歴（上位 10 件）を返します。</td>
     </tr>
     <tr>
       <td class="path">/api/train</td>
@@ -921,13 +932,13 @@
         <span class="tag">race_result</span><span class="tag">race_shutuba</span><span class="tag">horse_result</span><span class="tag">horse_pedigree_5gen</span> (storage)<br>
         <code>mlflow/runs/</code> (書き込み)
       </td>
-      <td>予測モデルの学習実行</td>
+      <td>予測モデルの学習を実行します。</td>
     </tr>
     <tr>
       <td class="path">/api/train/ensemble</td>
       <td><span class="method-post">POST</span></td>
       <td>上記と同様</td>
-      <td>アンサンブルモデルの学習実行</td>
+      <td>アンサンブルモデルの学習を実行します。</td>
     </tr>
     <tr>
       <td class="path">/api/simulation/run</td>
@@ -935,13 +946,13 @@
       <td>
         <span class="tag">race_result</span><span class="tag">race_shutuba</span><span class="tag">race_odds</span><span class="tag">horse_result</span><span class="tag">horse_pedigree_5gen</span> (storage)
       </td>
-      <td>バックテスト（期間内全レースを storage から一括読み込み）</td>
+      <td>バックテストを実行します。指定期間内の全レースデータを storage から一括読み込みして計算します。</td>
     </tr>
     <tr>
       <td class="path">/api/gcs-stats</td>
       <td><span class="method-get">GET</span></td>
       <td><code>data/cache/_blob_list/</code></td>
-      <td>GCS ストレージ統計（カテゴリ別ファイル数）</td>
+      <td>GCS のストレージ統計（カテゴリ別ファイル数）を返します。</td>
     </tr>
   </tbody>
 </table>

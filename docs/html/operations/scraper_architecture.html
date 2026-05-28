@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>スクレイパーアーキテクチャ — keiba-vpn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, sans-serif;
+  background: var(--bg); color: var(--text);
+  line-height: 1.8; font-size: 15px;
+  padding: 40px 56px 96px; max-width: 900px; margin: 0 auto;
+}
+code, pre { font-family: "JetBrains Mono", monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.back { font-size: 13px; color: var(--muted); margin-bottom: 28px; display: inline-block; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px; margin-bottom: 36px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.eyebrow {
+  color: var(--accent-2); font-size: 11px; letter-spacing: .22em;
+  font-weight: 700; text-transform: uppercase; margin-bottom: 8px;
+}
+header.hero h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.35; }
+header.hero p { color: var(--muted); font-size: 13px; margin: 0; line-height: 1.7; }
+h2 { font-size: 1.2rem; margin: 2.2em 0 0.7em; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border); color: #e8eeff; }
+h3 { font-size: 1.05rem; color: var(--accent-2); margin: 1.6em 0 0.5em; }
+p { margin: 0.7em 0; }
+pre { background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px; overflow-x: auto;
+  font-size: 12.5px; line-height: 1.55; }
+code { background: #1a2748; border: 1px solid var(--border);
+  border-radius: 5px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+pre code { background: none; border: none; padding: 0; color: #c9d8ff; }
+table { width: 100%; border-collapse: collapse; margin: 1.2em 0;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; font-size: 13px; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; }
+tr:last-child td { border-bottom: 0; }
+td.mono { font-family: "JetBrains Mono", monospace; font-size: 12px; }
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px 22px; margin: 14px 0;
+  box-shadow: var(--shadow);
+}
+.task-card {
+  background: linear-gradient(180deg, #182747, #131f3c);
+  border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px 18px; margin: 14px 0;
+  border-left: 4px solid var(--accent);
+}
+.task-card.result { border-left-color: #34d399; }
+.task-card.eve    { border-left-color: #7aa9ff; }
+.task-card.weekly { border-left-color: #fbbf24; }
+.task-card.daily  { border-left-color: #a78bfa; }
+.task-card.baba   { border-left-color: #f472b6; }
+.task-title {
+  font-size: 1rem; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.badge {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px; letter-spacing: .06em;
+  background: rgba(79,139,255,.15); color: var(--accent-2);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 2px 8px;
+}
+.callout {
+  border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+  padding: 12px 16px; border-radius: 8px; margin: 12px 0;
+}
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+ul.bullets { list-style: none; padding: 0; margin: 6px 0; }
+ul.bullets li { position: relative; padding-left: 18px; margin: 4px 0; font-size: 14px; }
+ul.bullets li::before {
+  content: ""; position: absolute; left: 4px; top: 11px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+.timeline {
+  border-left: 2px solid var(--border);
+  padding-left: 20px; margin: 16px 0;
+}
+.timeline-item {
+  position: relative; padding: 10px 0 10px;
+}
+.timeline-item::before {
+  content: ""; position: absolute;
+  left: -26px; top: 18px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent); border: 2px solid #0f172a;
+}
+.timeline-time {
+  font-family: "JetBrains Mono", monospace; font-size: 12px;
+  color: var(--accent-2); font-weight: 700; margin-bottom: 3px;
+}
+.timeline-body { font-size: 13.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<a class="back" href="../index.html">← ドキュメント一覧へ</a>
+
+<header class="hero">
+  <div class="eyebrow">OPERATIONS · SCRAPER</div>
+  <h1>スクレイパーアーキテクチャ</h1>
+  <p>
+    JRA 開催スケジュールに連動した自動スクレイピングの全体設計をまとめたページです。
+    タスク種別・実行タイミング・取得対象・ストレージ構成を説明します。
+  </p>
+</header>
+
+<h2>概要</h2>
+
+<p>
+  スクレイピングは <code>src/scraper/auto_scrape.py</code> のタスクを cron から起動することで実行されます。
+  データは GCS をプライマリストレージとし、<code>HybridStorage</code>（GCS + ローカル disk L2 + メモリ LRU）を経由して保存・読み込みします。
+</p>
+
+<div class="grid-2">
+  <div class="card">
+    <h3 style="margin-top:0">データソース</h3>
+    <ul class="bullets">
+      <li><strong>netkeiba (db.netkeiba.com)</strong> — メイン。レース・馬情報</li>
+      <li><strong>SmartRC</strong> — 追加能力指標（<code>cr_value</code>・<code>ten1f</code> 等）</li>
+      <li><strong>JRA 公式</strong> — 馬場クッション値・含水率</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">レートリミット</h3>
+    <table style="margin:0">
+      <thead><tr><th>サイト</th><th>最小間隔</th><th>日次上限</th></tr></thead>
+      <tbody>
+        <tr><td>netkeiba</td><td class="mono">1.0 s</td><td class="mono">5,000 req</td></tr>
+        <tr><td>SmartRC</td><td class="mono">2.0 s</td><td class="mono">1,000 req</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h2>タスク一覧とスケジュール</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>タスク名</th>
+      <th>実行タイミング</th>
+      <th>対象日</th>
+      <th>主な取得データ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>raceday-eve</code></td>
+      <td>前日 18:00</td>
+      <td>開催前日</td>
+      <td><code>race_shutuba</code> / <code>race_shutuba_past</code> / <code>race_oikiri</code>、追走難度事前計算</td>
+    </tr>
+    <tr>
+      <td><code>raceday-runner</code></td>
+      <td>07:30 起動（常駐）</td>
+      <td>開催日</td>
+      <td>各 R 発走 −15 分に <code>race_shutuba</code> / <code>race_odds</code> / <code>smartrc</code> / <code>jra_baba_live</code>、AI 予測トリガー</td>
+    </tr>
+    <tr>
+      <td><code>raceday-result-runner</code></td>
+      <td>07:30 起動（常駐）</td>
+      <td>開催日</td>
+      <td>各 R 発走 +15 分に <code>race_result</code>（速報）</td>
+    </tr>
+    <tr>
+      <td><code>raceday-evening</code></td>
+      <td>17:30</td>
+      <td>開催日</td>
+      <td><code>race_result</code>（確定）/ 確定オッズ / SmartRC 最終値</td>
+    </tr>
+    <tr>
+      <td><code>weekly-update</code></td>
+      <td>毎週金曜 17:30</td>
+      <td>毎週金曜</td>
+      <td>先週分 <code>race_result</code> / <code>horse_result</code> / <code>race_index</code> / <code>race_oikiri</code></td>
+    </tr>
+    <tr>
+      <td><code>daily-race-lists</code></td>
+      <td>毎日 07:00</td>
+      <td>毎日</td>
+      <td>本日 + 14 日先の <code>race_lists</code></td>
+    </tr>
+    <tr>
+      <td><code>jra-baba-morning</code></td>
+      <td>05:00–09:00（10 分毎）</td>
+      <td>開催日・前日朝</td>
+      <td>クッション値 / 含水率 / 馬場状態</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="task-card eve">
+  <div class="task-title">
+    <span class="badge">CRON 前日 18:00</span>
+    raceday-eve — 前日準備
+  </div>
+  <p>翌開催日の出馬表・馬柱・追い切りを一括取得し、追走難度の事前計算まで行います。</p>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-time">18:00 起動</div>
+      <div class="timeline-body">翌開催日の全レース一覧を取得</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-time">出馬表</div>
+      <div class="timeline-body"><code>race_shutuba</code> を全レース分取得（前日時点の最新枠順・騎手）</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-time">馬柱・調教</div>
+      <div class="timeline-body"><code>race_shutuba_past</code> + <code>race_oikiri</code> を全レース分取得</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-time">事前計算</div>
+      <div class="timeline-body">追走難度キャッシュを事前計算（出馬表のみ・result 非使用）</div>
+    </div>
+  </div>
+</div>
+
+<div class="task-card">
+  <div class="task-title">
+    <span class="badge">CRON 07:30 (常駐)</span>
+    raceday-runner — 当日発走前
+  </div>
+  <p>開催日に常駐し、各レース発走 15 分前に出馬表・オッズ・SmartRC・JRA 馬場情報をスクレイプします。</p>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-time">07:30 起動</div>
+      <div class="timeline-body">レース一覧取得 → 発走時刻リスト生成</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-time">各R −15分前</div>
+      <div class="timeline-body">
+        <code>race_shutuba</code>（最終枠順・騎手確定版）+
+        <code>race_odds</code> +
+        <code>smartrc</code> +
+        <code>jra_baba_live</code>
+        <br />※ 馬柱・追切は前日取得済みならスキップ
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-time">取得完了後</div>
+      <div class="timeline-body">AI 予測トリガー（<code>KEIBA_PRE_RACE_PREDICT_ENABLED=1</code> のとき）</div>
+    </div>
+  </div>
+</div>
+
+<div class="task-card result">
+  <div class="task-title">
+    <span class="badge">CRON 07:30 (常駐)</span>
+    raceday-result-runner — 速報結果
+  </div>
+  <p>各レース発走後 15 分に速報結果を取得します。</p>
+  <ul class="bullets">
+    <li>各 R 発走 +15 分後に <code>race_result</code> をスクレイプ</li>
+    <li><code>raceday-runner</code> と並行して同日に常駐</li>
+  </ul>
+</div>
+
+<div class="task-card">
+  <div class="task-title">
+    <span class="badge">CRON 開催日 17:30</span>
+    raceday-evening — 当日夕方
+  </div>
+  <p>全レース完了後に確定データを取得します。</p>
+  <ul class="bullets">
+    <li><code>race_result</code>（確定着順・確定タイム）</li>
+    <li>確定オッズ（払い戻し）</li>
+    <li>SmartRC 最終値</li>
+  </ul>
+</div>
+
+<div class="task-card weekly">
+  <div class="task-title">
+    <span class="badge">CRON 毎週金曜 17:30</span>
+    weekly-update — 週次更新
+  </div>
+  <p>netkeiba の DB が金曜 17:00 に先週分更新されるため、直後に一括取得します。</p>
+  <table style="margin:0.6em 0">
+    <thead>
+      <tr>
+        <th>カテゴリ</th>
+        <th>内容</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>race_result</code></td>
+        <td>先週分の確定着順・タイム・払い戻し</td>
+      </tr>
+      <tr>
+        <td><code>horse_result</code> / <code>horse_ped</code></td>
+        <td>馬情報（プロフィール・戦績・血統）</td>
+      </tr>
+      <tr>
+        <td><code>race_index</code></td>
+        <td>指数（速度指数）</td>
+      </tr>
+      <tr>
+        <td><code>race_oikiri</code></td>
+        <td>調教タイム・追い切り内容</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="task-card daily">
+  <div class="task-title">
+    <span class="badge">CRON 毎日 07:00</span>
+    daily-race-lists — レース一覧更新
+  </div>
+  <p>本日 + 14 日先のレース一覧（<code>race_lists</code>）をローカルに保存します。</p>
+</div>
+
+<div class="task-card baba">
+  <div class="task-title">
+    <span class="badge">CRON 5:00–9:00 10分毎</span>
+    jra-baba-morning — 馬場情報
+  </div>
+  <p>開催日・前日の朝に JRA 公式から馬場情報を定期取得します。</p>
+  <ul class="bullets">
+    <li>クッション値（<code>cushion_value</code>）</li>
+    <li>含水率</li>
+    <li>馬場状態</li>
+  </ul>
+</div>
+
+<h2>スクレイパー実行コマンド</h2>
+
+<pre><code># 前日準備（通常は cron から）
+python -m src.scraper.auto_scrape --task raceday-eve
+
+# 開催日常駐（発走 −15 分取得）
+python -m src.scraper.auto_scrape --task raceday-runner
+
+# 開催日常駐（発走 +15 分速報結果）
+python -m src.scraper.auto_scrape --task raceday-result-runner
+
+# 当日夕方まとめ取得
+python -m src.scraper.auto_scrape --task raceday-evening
+
+# 週次 DB 更新取得（毎週金曜 17:30）
+python -m src.scraper.auto_scrape --task weekly-update
+
+# 毎日レース一覧更新（07:00）
+python -m src.scraper.auto_scrape --task daily-race-lists
+
+# ステータス確認
+python -m src.scraper.auto_scrape --status</code></pre>
+
+<h2>取得データカテゴリ一覧</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>カテゴリ名</th>
+      <th>内容</th>
+      <th>取得タイミング</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="mono">race_shutuba</td>
+      <td>出馬表（枠順・騎手・馬体重）</td>
+      <td>前日 eve / 当日 −15分前</td>
+    </tr>
+    <tr>
+      <td class="mono">race_shutuba_past</td>
+      <td>馬柱（前走履歴・条件）</td>
+      <td>前日 eve</td>
+    </tr>
+    <tr>
+      <td class="mono">race_oikiri</td>
+      <td>追い切りタイム・内容</td>
+      <td>前日 eve / 週次</td>
+    </tr>
+    <tr>
+      <td class="mono">race_result</td>
+      <td>確定着順・タイム・払い戻し</td>
+      <td>速報 +15分後 / 夕方 / 週次</td>
+    </tr>
+    <tr>
+      <td class="mono">race_index</td>
+      <td>速度指数</td>
+      <td>週次</td>
+    </tr>
+    <tr>
+      <td class="mono">race_odds</td>
+      <td>単勝・複勝・連系オッズ</td>
+      <td>当日 −15分前</td>
+    </tr>
+    <tr>
+      <td class="mono">race_lists</td>
+      <td>レース一覧（日付別）</td>
+      <td>毎日 07:00</td>
+    </tr>
+    <tr>
+      <td class="mono">horse_result</td>
+      <td>馬過去走全履歴</td>
+      <td>週次</td>
+    </tr>
+    <tr>
+      <td class="mono">horse_ped</td>
+      <td>血統情報</td>
+      <td>週次</td>
+    </tr>
+    <tr>
+      <td class="mono">jra_cushion</td>
+      <td>JRA 馬場クッション値・含水率</td>
+      <td>朝 5:00–9:00（10分毎）</td>
+    </tr>
+    <tr>
+      <td class="mono">smartrc</td>
+      <td>SmartRC 独自指標</td>
+      <td>当日 −15分前 / 夕方</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>HybridStorage — データ保存レイヤー</h2>
+
+<p>
+  <code>src/scraper/storage.py</code> の <code>HybridStorage</code> が全カテゴリのデータ保存・読み込みを管理します。
+</p>
+
+<div class="grid-2">
+  <div class="card">
+    <h3 style="margin-top:0">ストレージ階層</h3>
+    <table style="margin:0.4em 0">
+      <thead>
+        <tr>
+          <th>レイヤー</th>
+          <th>場所 / 仕様</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>GCS</strong></td>
+          <td>primary（全データ）</td>
+        </tr>
+        <tr>
+          <td><strong>ローカル disk L2</strong></td>
+          <td><code>data/cache/</code>（週次アクセス頻度が高いキーのみ）</td>
+        </tr>
+        <tr>
+          <td><strong>メモリ LRU</strong></td>
+          <td>直近アクセスを TTL 付きでキャッシュ</td>
+        </tr>
+        <tr>
+          <td><strong>race_lists のみ</strong></td>
+          <td><code>data/page_reference/</code> にローカル保存</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">鮮度管理</h3>
+    <ul class="bullets">
+      <li>保存時に <code>_meta.scraped_at</code> タイムスタンプを自動付与</li>
+      <li><code>is_fresh()</code> は <code>StructureMonitor</code> の <code>versions.json</code> と照合</li>
+      <li>ページ構造変更があった場合、それ以前のデータは stale 扱いとなる</li>
+    </ul>
+  </div>
+</div>
+
+<h2>キュー型スクレイピング</h2>
+
+<p>
+  バックフィルや大量取得には <code>src/scraper/job_queue.py</code> + <code>queue_worker.py</code> を使います。
+  API 経由で <code>/api/scrape-queue/add</code> にジョブを積み、バックグラウンドワーカーが順次処理します。
+</p>
+
+<pre><code>POST /api/scrape-queue/add             # ジョブ追加
+POST /api/scrape-queue/add-batch       # バッチ追加
+GET  /api/scrape-queue/status          # キュー状態確認
+GET  /api/scrape-queue/progress        # 進捗確認
+GET  /api/scrape-queue/worker-logs     # ワーカーログ取得
+POST /api/scrape-queue/resume          # 一時停止後に再開
+POST /api/scrape-queue/kick            # スタック時の再起動</code></pre>
+
+<div class="callout warn">
+  <h4>レートリミット遵守</h4>
+  <p>
+    キューワーカーは <code>config/settings.yaml</code> の
+    <code>data_sources.netkeiba.rate_limit</code> と
+    <code>data_sources.smartrc.rate_limit</code> に従ってリクエスト間隔を制御します。
+    日次上限（netkeiba: 5,000 / SmartRC: 1,000）を超えた場合は自動停止します。
+  </p>
+</div>
+
+<div class="callout info">
+  <h4>HTTP 400 対策</h4>
+  <p>
+    <code>src/scraper/http400_strategy.py</code> に 400 エラー時の再試行戦略が実装されています。
+    連続 400 が発生した場合はセッション初期化・アクセス停止などに自動エスカレーションします。
+  </p>
+</div>
+
+<h2>関連ファイル</h2>
+
+<table>
+  <thead><tr><th>ファイル</th><th>役割</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="mono">src/scraper/auto_scrape.py</td>
+      <td>cron タスクエントリポイント</td>
+    </tr>
+    <tr>
+      <td class="mono">src/scraper/storage.py</td>
+      <td>HybridStorage（GCS + L2 + LRU）</td>
+    </tr>
+    <tr>
+      <td class="mono">src/scraper/job_queue.py</td>
+      <td>スクレイピングジョブキュー管理</td>
+    </tr>
+    <tr>
+      <td class="mono">src/scraper/queue_worker.py</td>
+      <td>キューワーカー（バックグラウンド処理）</td>
+    </tr>
+    <tr>
+      <td class="mono">src/scraper/scheduler.py</td>
+      <td>発走時刻ベースのスケジューラ</td>
+    </tr>
+    <tr>
+      <td class="mono">src/scraper/scrape_policy.py</td>
+      <td>スクレイピングポリシー（skip 判定等）</td>
+    </tr>
+    <tr>
+      <td class="mono">src/scraper/http400_strategy.py</td>
+      <td>HTTP 400 エラー対処戦略</td>
+    </tr>
+    <tr>
+      <td class="mono">src/scraper/parsers.py</td>
+      <td>HTML パーサー群（netkeiba 各ページ）</td>
+    </tr>
+    <tr>
+      <td class="mono">src/scraper/smartrc_client.py</td>
+      <td>SmartRC API クライアント</td>
+    </tr>
+    <tr>
+      <td class="mono">src/scraper/jra_cushion.py</td>
+      <td>JRA クッション値・含水率取得</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>関連ドキュメント</h2>
+<table>
+  <thead>
+    <tr>
+      <th>ドキュメント</th>
+      <th>内容</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="scraping_sla.html">スクレイピング SLA</a></td>
+      <td>データ収集の品質保証基準・タイムライン・リスク一覧</td>
+    </tr>
+    <tr>
+      <td><a href="local_dataset_endpoints.html">ローカル API 一覧</a></td>
+      <td>ローカルデータセットを参照する API エンドポイントの一覧</td>
+    </tr>
+    <tr>
+      <td><a href="../data/DATASOURCES.html">データソース一覧</a></td>
+      <td>netkeiba / SmartRC / JRA 各データソースの仕様</td>
+    </tr>
+    <tr>
+      <td><a href="../data/data_scraping_storage_reference.html">スクレイピング＆ストレージ仕様</a></td>
+      <td>スクレイピングポリシーと HybridStorage の詳細仕様</td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

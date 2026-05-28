@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>データソース一覧 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>データソース一覧</h1>
+      <p class="meta">ソース: <code>docs/html/DATASOURCES.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">データソース一覧</h1>
+<p>netkeiba.com および SmartRC (smartrc.jp) から取得するデータソースの仕様書です。<br />
+各ページの URL パターン・認証要否・パーサー／クライアント・ストレージカテゴリ名・取得フィールドを定義します。</p>
+<hr />
+<h2 id="_2">概要</h2>
+<h3 id="netkeibacom">netkeiba.com</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>データソース</th>
+<th>URL ドメイン</th>
+<th>認証</th>
+<th>パーサー</th>
+<th>ストレージカテゴリ</th>
+<th>キー</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>レース結果</td>
+<td>db.netkeiba.com</td>
+<td>不要</td>
+<td><code>RaceResultParser</code></td>
+<td><code>race_result</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>2</td>
+<td>出馬表</td>
+<td>race.netkeiba.com</td>
+<td>不要</td>
+<td><code>RaceCardParser</code></td>
+<td><code>race_shutuba</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>3</td>
+<td>タイム指数</td>
+<td>race.netkeiba.com</td>
+<td><strong>要</strong></td>
+<td><code>SpeedIndexParser</code></td>
+<td><code>race_index</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>4</td>
+<td>馬柱・調教</td>
+<td>race.netkeiba.com</td>
+<td>不要</td>
+<td><code>ShutubaPastParser</code></td>
+<td><code>race_shutuba_past</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>5</td>
+<td>オッズ (単勝/複勝)</td>
+<td>race.netkeiba.com</td>
+<td>不要</td>
+<td><code>OddsParser</code></td>
+<td><code>race_odds</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>6</td>
+<td>パドック評価</td>
+<td>race.netkeiba.com</td>
+<td><strong>要</strong></td>
+<td><code>PaddockParser</code></td>
+<td><code>race_paddock</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>7</td>
+<td>偏差値バロメーター</td>
+<td>race.netkeiba.com</td>
+<td><strong>要</strong></td>
+<td><code>BarometerParser</code></td>
+<td><code>race_barometer</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>8</td>
+<td>追い切り (調教詳細)</td>
+<td>race.netkeiba.com</td>
+<td>不要</td>
+<td><code>OikiriParser</code></td>
+<td><code>race_oikiri</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>9</td>
+<td>馬情報 (プロフィール+戦績)</td>
+<td>db.netkeiba.com</td>
+<td>不要</td>
+<td><code>HorseParser</code></td>
+<td><code>horse_result</code></td>
+<td>horse_id</td>
+</tr>
+<tr>
+<td>10</td>
+<td>日付別レース一覧</td>
+<td>db.netkeiba.com</td>
+<td>不要</td>
+<td><code>RaceListParser</code></td>
+<td><code>race_lists</code></td>
+<td>date</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>認証「要」</strong>: netkeiba プレミアム会員のログインが必要です。認証情報は <code>.env</code> の <code>netkeiba_id</code> / <code>netkeiba_pw</code> で管理します。</p>
+</blockquote>
+<h3 id="smartrc-smartrcjp">SmartRC (smartrc.jp)</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>データソース</th>
+<th>API エンドポイント</th>
+<th>認証</th>
+<th>クライアント</th>
+<th>ストレージカテゴリ</th>
+<th>キー</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>11</td>
+<td>出走馬 (独自指標含む)</td>
+<td><code>runners/view</code></td>
+<td><strong>要</strong></td>
+<td><code>SmartRCClient</code></td>
+<td><code>smartrc_runners</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>12</td>
+<td>全出走馬 (拡張)</td>
+<td><code>allrunners/view</code></td>
+<td><strong>要</strong></td>
+<td><code>SmartRCClient</code></td>
+<td><code>smartrc_runners</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>13</td>
+<td>双馬メモ付き出走馬</td>
+<td><code>bbrunners/view</code></td>
+<td><strong>要</strong></td>
+<td><code>SmartRCClient</code></td>
+<td><code>smartrc_runners</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>14</td>
+<td>トレンドデータ</td>
+<td><code>trendrunners/view</code></td>
+<td><strong>要</strong></td>
+<td><code>SmartRCClient</code></td>
+<td><code>smartrc_trend</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>15</td>
+<td>傾向集計</td>
+<td><code>trendaggregates/view</code></td>
+<td><strong>要</strong></td>
+<td><code>SmartRCClient</code></td>
+<td><code>smartrc_trend</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>16</td>
+<td>亀ポイント</td>
+<td><code>kamepoints/view</code></td>
+<td><strong>要</strong></td>
+<td><code>SmartRCClient</code></td>
+<td><code>smartrc_runners</code></td>
+<td>race_id</td>
+</tr>
+<tr>
+<td>17</td>
+<td>馬情報 (SmartRC)</td>
+<td><code>horses/view</code></td>
+<td><strong>要</strong></td>
+<td><code>SmartRCClient</code></td>
+<td><code>smartrc_horse</code></td>
+<td>horse_id</td>
+</tr>
+<tr>
+<td>18</td>
+<td>馬過去成績</td>
+<td><code>runnerresults/view</code></td>
+<td><strong>要</strong></td>
+<td><code>SmartRCClient</code></td>
+<td><code>smartrc_horse</code></td>
+<td>horse_id</td>
+</tr>
+<tr>
+<td>19</td>
+<td>近親馬</td>
+<td><code>relatives/view</code></td>
+<td><strong>要</strong></td>
+<td><code>SmartRCClient</code></td>
+<td><code>smartrc_horse</code></td>
+<td>horse_id</td>
+</tr>
+<tr>
+<td>20</td>
+<td>開催日一覧</td>
+<td><code>days/view</code></td>
+<td>不要</td>
+<td><code>SmartRCClient</code></td>
+<td>-</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>SmartRC 認証</strong>: netkeiba とは別アカウントです。<code>.env</code> の <code>SMARTRC_LOGIN</code> / <code>SMARTRC_PASSWORD</code> で管理します。<br />
+SmartRC は JSON API（ExtJS ベース）のため、HTML のパースは不要です。<br />
+APIのアドレス（ベース）: <code>https://www.smartrc.jp/v3/smartrc.php/{endpoint}</code></p>
+</blockquote>
+<h3 id="smartrc-netkeiba">SmartRC 独自データフィールド（netkeiba にないもの）</h3>
+<table>
+<thead>
+<tr>
+<th>フィールド</th>
+<th>説明</th>
+<th>カテゴリ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tb_memo</code></td>
+<td>双馬メモ — 前走の枠・馬場・脚質・ローテ不利の記録</td>
+<td>レース分析</td>
+</tr>
+<tr>
+<td><code>tb</code></td>
+<td>トラックバイアス — 馬場・コース取り・展開の有利不利</td>
+<td>レース分析</td>
+</tr>
+<tr>
+<td><code>evaluation</code></td>
+<td>前走評価 (A〜E)</td>
+<td>レース分析</td>
+</tr>
+<tr>
+<td><code>est_popularity</code></td>
+<td>推定人気</td>
+<td>予想</td>
+</tr>
+<tr>
+<td><code>popularity_rank</code></td>
+<td>人気ランク (A〜E)</td>
+<td>予想</td>
+</tr>
+<tr>
+<td><code>ten_p</code></td>
+<td>テンP — 序盤3F順位パターン (15/30/50)</td>
+<td>ペース</td>
+</tr>
+<tr>
+<td><code>ten_t</code></td>
+<td>テンT — 補正済み序盤3F最速タイム</td>
+<td>ペース</td>
+</tr>
+<tr>
+<td><code>agari_p</code></td>
+<td>上がりP — 末脚3F順位パターン</td>
+<td>ペース</td>
+</tr>
+<tr>
+<td><code>agari_t</code></td>
+<td>上がりT — 補正済み上がり3F最速タイム</td>
+<td>ペース</td>
+</tr>
+<tr>
+<td><code>ten_1f</code></td>
+<td>テン1F — 補正済みテン1Fタイム</td>
+<td>ペース</td>
+</tr>
+<tr>
+<td><code>blood_system</code></td>
+<td>血統系統カラーリング (小系統の色分け)</td>
+<td>血統</td>
+</tr>
+<tr>
+<td><code>country_type</code></td>
+<td>国系統 (日/米/欧)</td>
+<td>血統</td>
+</tr>
+<tr>
+<td><code>country_eval</code></td>
+<td>国系統評価 (プレミアム限定)</td>
+<td>血統</td>
+</tr>
+<tr>
+<td><code>rotation</code></td>
+<td>ロ — ローテーション (延/同/短)</td>
+<td>適性</td>
+</tr>
+<tr>
+<td><code>cross_surface</code></td>
+<td>異種 — 芝⇔ダート経験</td>
+<td>適性</td>
+</tr>
+<tr>
+<td><code>cr</code></td>
+<td>CR — 独自指標</td>
+<td>適性</td>
+</tr>
+<tr>
+<td><code>share</code></td>
+<td>シェア — 種牡馬産駒賞金比率 (1〜8)</td>
+<td>血統</td>
+</tr>
+<tr>
+<td><code>kame_point</code></td>
+<td>亀谷推奨ポイント</td>
+<td>予想</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_3">ストレージ構成</h2>
+<h3 id="gcs-source-of-truth">Google Cloud Storage（GCS）— 正データ置き場</h3>
+<pre><code>gs://{BUCKET}/chuou/data/
+  ├── race_result/{race_id}.json       # レース結果
+  ├── race_shutuba/{race_id}.json      # 出馬表
+  ├── race_index/{race_id}.json        # タイム指数
+  ├── race_shutuba_past/{race_id}.json # 馬柱・調教
+  ├── race_odds/{race_id}.json         # オッズ
+  ├── race_paddock/{race_id}.json      # パドック評価
+  ├── race_barometer/{race_id}.json    # 偏差値バロメーター
+  ├── race_oikiri/{race_id}.json       # 追い切り
+  ├── horse_result/{horse_id}.json     # 馬情報
+  ├── smartrc_runners/{race_id}.json   # SmartRC レースデータ
+  ├── smartrc_horse/{horse_id}.json    # SmartRC 馬データ
+  └── smartrc_trend/{race_id}.json     # SmartRC トレンド
+</code></pre>
+<h3 id="gcs-html">GCS — HTML アーカイブ</h3>
+<pre><code>gs://{BUCKET}/chuou/html/
+  ├── race_result/{race_id}.html.gz
+  ├── race_shutuba/{race_id}.html.gz
+  ├── ...
+  └── horse_result/{horse_id}.html.gz
+</code></pre>
+<blockquote>
+<p>SmartRC は JSON API のため、HTML アーカイブはありません。</p>
+</blockquote>
+<h3 id="_4">ローカル</h3>
+<pre><code>data/local/
+  └── race_lists/{date}.json   # 日付別レース一覧 (ローカルのみ)
+data/meta/
+  ├── structure/               # ページ構造フィンガープリント
+  └── logs/                    # アクセスログ
+</code></pre>
+<hr />
+<h2 id="env">認証情報の設定（.env）</h2>
+<pre><code class="language-dotenv"># netkeiba.com
+netkeiba_id=&lt;email&gt;
+netkeiba_pw=&lt;password&gt;
+
+# SmartRC (smartrc.jp) — 別アカウント
+SMARTRC_LOGIN=&lt;email&gt;
+SMARTRC_PASSWORD=&lt;password&gt;
+
+# GCS
+GCS_BUCKET_NAME=&lt;bucket&gt;
+GOOGLE_APPLICATION_CREDENTIALS=&lt;path&gt;
+</code></pre>
+    </article>
+    <nav class="doc-nav">
+      <a href="../design/ARCHITECTURE.html">← ML-AutoPilot Keiba — システム仕様書</a>
+      <a href="../pedigree/NOTE_APTITUDE_5GEN.html">適性3D × 5世代血統（父系／母系経路の扱い） →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">DATASOURCES.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

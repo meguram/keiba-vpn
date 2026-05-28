@@ -207,11 +207,11 @@ document.addEventListener("DOMContentLoaded", function() {
       <p class="meta">ソース: <code>docs/html/modeling/track_bias_pedigree_pipeline.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
-<h1 id="track_bias_pedigree">血統×馬場傾向（track_bias_pedigree）パイプライン</h1>
+<h1 id="track_bias_pedigree">血統×コースバイアス（track_bias_pedigree）パイプライン</h1>
 <h2 id="_1">目的</h2>
-<p>当日・前日の馬場傾向（芝/ダ・場・発走順）と、出馬表の父・母父の芝/ダ別累計勝率を組み合わせた <strong>リークなし</strong> 特徴を LayerA に付与する。<br />
-<strong>5世代血統グラフや GCS の <code>horse_pedigree_5gen</code> は本パイプラインの必須ではない</strong>（後述）。</p>
-<h2 id="gcs">データフロー（GCS 負荷を抑える）</h2>
+<p>コースバイアス（コース形状や馬場状態が特定の脚質を有利にすること）は、血統適性と組み合わせることで予測精度が向上します。このパイプラインは、当日・前日の馬場傾向（芝/ダ・競馬場・発走順）と出馬表の父・母父の芝/ダ別累計勝率を組み合わせた<strong>リークなし</strong>の特徴量を LayerA に付与します。</p>
+<p><strong>なお、5世代血統グラフや GCS の <code>horse_pedigree_5gen</code> はこのパイプラインの必須入力ではありません</strong>（詳細は後述）。</p>
+<h2 id="gcs">データフロー（GCS 負荷を抑える設計）</h2>
 <table>
 <thead>
 <tr>
@@ -239,40 +239,58 @@ document.addEventListener("DOMContentLoaded", function() {
 </tbody>
 </table>
 <ul>
-<li><strong>学習・チューニング・評価</strong>はすべて上記 Parquet を読むだけで完結する。推論時も同様に、当日以前の <code>race_result</code> と出馬表で同じ式を再現する。</li>
-<li><strong>5世代血統（HTML/GCS）</strong>を使うのは <code>src/research/pedigree_similarity.py</code> など別系統であり、馬場傾向予測の必須入力ではない。必要な場合は <strong>一度だけバッチ取得 → <code>data/local/</code> またはローカルキャッシュに保存し、以降は再フェッチしない</strong> 方針を推奨する。</li>
+<li><strong>学習・チューニング・評価</strong>はすべて上記の Parquet ファイルを読むだけで完結します。推論時も同様に、当日以前の <code>race_result</code> と出馬表から同じ計算式で再現できます。</li>
+<li><strong>5世代血統（HTML/GCS）</strong>を使うのは <code>src/research/pedigree_similarity.py</code> など別系統であり、馬場傾向の特徴量計算には不要です。必要な場合は<strong>一度だけバッチ取得し、<code>data/local/</code> またはローカルキャッシュに保存</strong>します。以降は再取得しない方針を推奨します。</li>
 </ul>
 <h2 id="vs">重みチューニング（当日 vs 前日 + 馬場区分 + 距離帯）</h2>
-<p>加重合成は次の通り（<code>src/pipeline/track_bias_pedigree.py</code>）。</p>
-<ul>
-<li><strong>当日/前日ブレンド</strong>: <code>w_same × 当日該当レース前 + w_prev × 前日</code>（<code>w_same + w_prev = 1</code>）。既定は 0.75 / 0.25。</li>
-<li><strong>馬場適性（3 区分）</strong>: <code>race_result.track_condition</code> を <strong>良</strong> → <code>good</code>、<strong>稍重・重</strong> → <code>yielding_soft</code>、<strong>不良</strong> → <code>heavy_bad</code> に割り当て。<code>track_bias_winner_3f_same_day_prior</code> / <code>prev_day</code> に <strong>区分別の乗算重み</strong>（チューニングで決定、グループ内で平均 1 に正規化）。</li>
-<li><strong>舞台（競馬場 + 芝/ダ/障 + 距離帯）</strong>: <code>venue</code> + <code>surface</code>（芝/ダ/<code>障</code>→ obstacle）+ <code>distance</code> から距離帯（≤1400 sprint、≤1800 mile、≤2200 middle、それ以外 long）を付与。傾向集計は <strong>日×場×芝ダ障×馬場3区分×距離4帯</strong> の細キーで計算し、欠損は <strong>日×場×芝ダ障</strong> の粗キーでフォールバック。<code>track_bias_*</code> 列への距離帯別乗算重みもチューニング対象（4 帯で平均 1 に正規化、<code>unknown</code> は 1.0）。</li>
-</ul>
-<p>チューニング出力 JSON は <strong><code>version</code>: 2</strong> で、<code>best_same_day_weight</code> / <code>best_prev_day_weight</code> に加え <code>cond_multipliers</code> / <code>dist_multipliers</code> を含む。v1（当日/前日のみ）も <code>load_track_bias_weights_config</code> で読み込める。</p>
+<p>加重合成のロジックは <code>src/pipeline/track_bias_pedigree.py</code> で定義されています。主なパラメータは以下の通りです。</p>
+<table>
+<thead>
+<tr><th>パラメータ</th><th>既定値 / 区分</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td>当日/前日ブレンド</td><td><code>w_same=0.75</code> / <code>w_prev=0.25</code></td><td><code>w_same × 当日（該当レース前）+ w_prev × 前日</code>（合計 1）</td></tr>
+<tr><td>馬場状態3区分</td><td><code>good</code> / <code>yielding_soft</code> / <code>heavy_bad</code></td><td>良 → <code>good</code>、稍重・重 → <code>yielding_soft</code>、不良 → <code>heavy_bad</code>。乗算重みを掛けグループ内平均 1 に正規化。</td></tr>
+<tr><td>距離帯4区分</td><td>スプリント / マイル / ミドル / ロング</td><td>≤1400m / ≤1800m / ≤2200m / それ以上</td></tr>
+<tr><td>傾向集計キー（細）</td><td>日×場×芝ダ障×馬場3区分×距離4帯</td><td>データ不足時は粗いキーにフォールバック</td></tr>
+<tr><td>傾向集計キー（粗）</td><td>日×場×芝ダ障</td><td>フォールバック先</td></tr>
+<tr><td>チューニング出力 JSON バージョン</td><td>version 2</td><td><code>best_same_day_weight</code> / <code>best_prev_day_weight</code> + <code>cond_multipliers</code> / <code>dist_multipliers</code> を含む。version 1 も <code>load_track_bias_weights_config</code> で読み込み可。</td></tr>
+</tbody>
+</table>
+<p><strong>チューニングの実行手順:</strong></p>
 <ol>
-<li><strong>馬場区分・距離帯列付き</strong>で LayerA を再ビルドする（古い Parquet には列が無い）。<br />
+<li>馬場区分・距離帯の列を含めて LayerA を再ビルドします（古い Parquet には列がないため）。<br />
 <code>python3 -m src.pipeline.build_layer_a_dataset</code></li>
-<li>Optuna で valid の <strong>NDCG@3</strong> を最大化（GCS 不要）。<br />
+<li>Optuna で valid の NDCG@3 を最大化します（GCS への接続不要）。<br />
 <code>python3 -m src.research.race.tune_track_bias_weights --n-trials 60</code></li>
-<li>出力 <code>data/meta/modeling/track_bias_weight_best.json</code> を母表ビルドに渡す。<br />
+<li>出力した重みファイルを使ってデータセットを再ビルドします。<br />
 <code>python3 -m src.pipeline.build_layer_a_dataset --track-bias-weights-json data/meta/modeling/track_bias_weight_best.json</code></li>
-<li>血統×馬場のみの検証（任意）。<br />
+<li>血統×馬場の特徴量のみで単体検証する場合（任意）。<br />
 <code>python3 -m src.research.race.evaluate_track_bias_pedigree_only --weights-json data/meta/modeling/track_bias_weight_best.json</code></li>
 </ol>
-<p><strong>test メトリクス</strong>（<code>metrics_test_at_best</code>）を JSON に載せたい場合は、マニフェストの test 年（例: 2025）を <code>--years</code> に含めて母表をビルドすること。train+valid のみの Parquet では test はスキップされる。</p>
-<p>チューニングの目的関数は <strong>valid のみ</strong>とし、test は最終報告用（リーク回避）。</p>
-<h2 id="_2">手法の伸ばし方（優先度の目安）</h2>
-<ol>
-<li><strong>重みの最適化</strong>（上記）— 当日/前日・馬場 3 区分・距離 4 帯のデータ駆動調整。</li>
-<li><strong>5世代血統</strong>— 父・母父名の一致を超えた類似度が必要な場合のみ、ローカルキャッシュ済みの系譜グラフを別特徴として結合（本モジュールとは独立に管理し、GCS をホットパスに置かない）。</li>
-</ol>
+<p>test 年のメトリクスを JSON に含めたい場合は、<code>--years</code> にテスト年（例：2025）を含めてビルドしてください。train+valid のみの Parquet では test はスキップされます。</p>
+<p>チューニングの最適化は<strong>valid のみ</strong>を対象とし、test は最終報告用に残します（リーク防止）。</p>
+<h2 id="_2">さらに精度を高めるための方針（優先度順）</h2>
+<table>
+<thead>
+<tr><th>優先度</th><th>方針</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>重みの最適化</td><td>当日/前日・馬場3区分・距離4帯の係数をデータで調整（上記の手順）。まずここから始めるのが効果的。</td></tr>
+<tr><td>2</td><td>5世代血統の活用</td><td>父・母父名の単純な一致を超えた類似度が必要な場合のみ、ローカルキャッシュ済みの血統グラフを別特徴として結合。このモジュールとは独立して管理し、GCS をリアルタイムのパスに置かない。</td></tr>
+</tbody>
+</table>
 <h2 id="_3">関連モジュール</h2>
-<ul>
-<li><code>src/pipeline/track_bias_pedigree.py</code> — 特徴定義・加重ブレンド・<code>recompute_weighted_interactions</code></li>
-<li><code>src/research/tune_track_bias_weights.py</code> — Optuna</li>
-<li><code>src/research/evaluate_track_bias_pedigree_only.py</code> — 単独特徴群のベースライン評価</li>
-</ul>
+<table>
+<thead>
+<tr><th>モジュール</th><th>役割</th></tr>
+</thead>
+<tbody>
+<tr><td><code>src/pipeline/track_bias_pedigree.py</code></td><td>特徴定義・加重ブレンド・<code>recompute_weighted_interactions</code></td></tr>
+<tr><td><code>src/research/tune_track_bias_weights.py</code></td><td>Optuna による重みチューニング</td></tr>
+<tr><td><code>src/research/evaluate_track_bias_pedigree_only.py</code></td><td>単独特徴群のベースライン評価</td></tr>
+</tbody>
+</table>
     </article>
     <nav class="doc-nav">
       <a href="staged_probability_pipeline.html">← 多段階レース直前確率パイプライン設計</a>

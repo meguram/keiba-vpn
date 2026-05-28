@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>馬券推奨レイヤと強化学習 — keiba-vpn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --panel-2: #1b294a; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff; --accent-2: #7aa9ff;
+  --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
+  --code-bg: #0b1428; --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, sans-serif;
+  background: var(--bg); color: var(--text);
+  line-height: 1.8; font-size: 15px;
+  padding: 40px 56px 96px; max-width: 900px; margin: 0 auto;
+}
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: "JetBrains Mono", monospace; font-size: 12.5px;
+  background: #1a2748; border: 1px solid var(--border);
+  border-radius: 5px; padding: 1px 6px; color: #cfe2ff; }
+
+/* ヒーロー */
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px; margin-bottom: 36px;
+  background: radial-gradient(900px 300px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(600px 300px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.eyebrow { color: var(--accent-2); font-size: 11px; letter-spacing: .22em;
+  font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }
+header.hero h1 { margin: 0 0 12px; font-size: 26px; line-height: 1.35; }
+.summary-box {
+  background: rgba(79,139,255,.08); border: 1px solid rgba(79,139,255,.3);
+  border-radius: 10px; padding: 14px 18px; font-size: 14px; color: #cfe2ff; line-height: 1.75;
+}
+.summary-box strong { color: #fff; }
+
+h2 { font-size: 1.2rem; margin: 2.2em 0 0.7em; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 20px; }
+h3 { font-size: 1.05rem; margin: 1.6em 0 0.5em; color: var(--accent-2); }
+p { margin: 0.7em 0; }
+ul, ol { padding-left: 1.5em; margin: 0.6em 0; }
+li { margin: 0.4em 0; }
+
+/* 2カラム比較 */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 1em 0; }
+@media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px;
+}
+.card.accent-blue  { border-color: rgba(79,139,255,.45);  background: rgba(79,139,255,.08); }
+.card.accent-purple { border-color: rgba(167,139,250,.45); background: rgba(167,139,250,.08); }
+.card.accent-green { border-color: rgba(74,222,128,.35);  background: rgba(74,222,128,.07); }
+.card.accent-warn  { border-color: rgba(251,191,36,.35);  background: rgba(251,191,36,.07); }
+.card-label { font-size: 11px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; margin-bottom: 8px; }
+.card.accent-blue   .card-label { color: var(--accent-2); }
+.card.accent-purple .card-label { color: #c4b5fd; }
+.card.accent-green  .card-label { color: var(--good); }
+.card.accent-warn   .card-label { color: var(--warn); }
+.card h4 { margin: 0 0 8px; font-size: 15px; }
+.card p  { margin: 0; font-size: 14px; color: #c9d8ff; }
+
+/* フロー図 */
+.flow {
+  display: flex; align-items: stretch; gap: 0; margin: 1.2em 0;
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+}
+.flow-step {
+  flex: 1; padding: 14px 16px; background: var(--panel);
+  border-right: 1px solid var(--border);
+  font-size: 13px;
+}
+.flow-step:last-child { border-right: none; }
+.flow-step .step-label { font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.flow-step .step-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.flow-step .step-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.flow-step.hl { background: rgba(79,139,255,.1); border-right-color: rgba(79,139,255,.3); }
+.flow-step.hl .step-name { color: var(--accent-2); }
+
+/* 表 */
+table { width: 100%; border-collapse: collapse; margin: 1.2em 0;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; font-size: 13px; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+tr:last-child td { border-bottom: 0; }
+tr:hover td { background: rgba(79,139,255,.04); }
+
+/* ステップリスト */
+.step-list { counter-reset: step; padding: 0; }
+.step-list li {
+  list-style: none; counter-increment: step;
+  display: flex; gap: 12px; align-items: flex-start; margin: 10px 0;
+}
+.step-list li::before {
+  content: counter(step);
+  min-width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(135deg, #4f8bff, #7b5ea7);
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; margin-top: 2px;
+}
+
+/* タグ */
+.tag { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 11px;
+  font-weight: 600; background: rgba(79,139,255,.14); color: var(--accent-2);
+  border: 1px solid rgba(79,139,255,.3); margin: 2px 3px 2px 0; }
+
+.callout {
+  border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+  padding: 12px 16px; border-radius: 8px; margin: 1em 0; font-size: 14px; color: #cfe2ff;
+}
+.callout.warn { border-left-color: var(--warn); background: rgba(251,191,36,.07); }
+
+.related { margin-top: 40px; padding: 16px 18px; border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--border); }
+.related h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em; }
+.related ul { margin: 0; padding-left: 1.4em; }
+.related li { margin: 4px 0; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<p style="margin-bottom:24px"><a href="../index.html">← ドキュメント一覧へ</a></p>
+
+<header class="hero">
+  <div class="eyebrow">Appendix · 馬券推奨レイヤ</div>
+  <h1>馬券推奨レイヤと強化学習</h1>
+  <div class="summary-box">
+    このページが伝えたいことは1つです。<br>
+    <strong>「着順を予測すること」と「どの馬券を買うか決めること」は、まったく別の問題です。</strong><br><br>
+    着順予測は機械学習（ML）で解けます。しかし馬券選択は「予測確率・オッズ・手持ちの印」を
+    組み合わせて、<strong>リターンと損失リスクのバランスを取りながら連続して意思決定する問題</strong>です。
+    これは強化学習（RL）が得意とする問題構造であり、このシステムでも馬券推奨レイヤにRLを採用する方針です。
+  </div>
+</header>
+
+<!-- ===== 1. 2つの問題の違い ===== -->
+<h2>1. 「予測」と「馬券選択」は別の問題</h2>
+
+<p>システムを2つのレイヤに分けて考えます。</p>
+
+<div class="flow">
+  <div class="flow-step">
+    <div class="step-label">Layer A — 確率予測</div>
+    <div class="step-name">着順・複勝の確率を出す</div>
+    <div class="step-desc">勝率・連対率・複勝率などを数値で予測。<br>GBDT（木を積み上げた機械学習モデル）やランキングモデルで学習する。</div>
+  </div>
+  <div class="flow-step hl">
+    <div class="step-label">Layer B — 馬券推奨（本ページの主題）</div>
+    <div class="step-name">どの馬券をいくら買うか決める</div>
+    <div class="step-desc">券種・金額・予測印を組み合わせて最終的な購入判断を出す。<br>長期的な収支のバランスを保ちながら選択する必要がある。</div>
+  </div>
+</div>
+
+<p>Layer Aの出力（予測確率）はLayer Bへの<strong>入力情報の一つ</strong>に過ぎません。Layer Bでは「期待値が高いからといって全額賭ける」のではなく、<strong>連続負けのリスク・印の一貫性・資金管理</strong>を同時に考慮する必要があります。</p>
+
+<!-- ===== 2. なぜ強化学習か ===== -->
+<h2>2. なぜ馬券選択に強化学習（RL）を使うのか</h2>
+
+<div class="two-col">
+  <div class="card accent-blue">
+    <div class="card-label">理由 1</div>
+    <h4>最適化の目標が複数ある</h4>
+    <p>「期待値を最大化する」だけでは不十分です。長期リターン・連続負け幅の抑制・印との整合性など、<strong>複数の目標をバランスよく達成</strong>する必要があります。強化学習はこれを「報酬の設計」で表現できます。</p>
+  </div>
+  <div class="card accent-purple">
+    <div class="card-label">理由 2</div>
+    <h4>一度きりではなく「連続した」意思決定</h4>
+    <p>1レースの結果が次のレースの判断に影響します（資金残高・調子など）。強化学習は<strong>複数ステップにまたがる意思決定の最適化</strong>が得意です。</p>
+  </div>
+  <div class="card accent-green">
+    <div class="card-label">理由 3</div>
+    <h4>オッズは「状態」として扱える</h4>
+    <p>オッズは着順予測とは独立した市場情報です。着順モデルの学習に混ぜるべきではなく、<strong>馬券選択時の状態情報</strong>として強化学習に自然に組み込めます。</p>
+  </div>
+  <div class="card accent-warn">
+    <div class="card-label">理由 4</div>
+    <h4>行動空間が大きい</h4>
+    <p>単勝・複勝・馬連・ワイド…複数の券種を組み合わせると選択肢は膨大です。単純に「期待値が一番高いものを買う」では分散が大きすぎます。<strong>方策（ポリシー）として表現</strong>することで資金分配を賢く扱えます。</p>
+  </div>
+</div>
+
+<!-- ===== 3. 設計の骨格 ===== -->
+<h2>3. 設計の骨格（強化学習の構造）</h2>
+
+<p>強化学習は「状態 → 行動 → 報酬」のサイクルで学習します。競馬に当てはめると以下のようになります。</p>
+
+<table>
+  <thead>
+    <tr><th>強化学習の概念</th><th>競馬馬券での意味</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>状態</strong></td>
+      <td>予測確率（勝率・複勝率）、現在のオッズ、予測印の候補、コース・距離・馬場状態</td>
+    </tr>
+    <tr>
+      <td><strong>行動</strong></td>
+      <td>買う券種と組み合わせ、投資金額のバケット（少額・中額・見送りなど）</td>
+    </tr>
+    <tr>
+      <td><strong>報酬</strong></td>
+      <td>期待値ベースの加重リターン × 連続負け幅ペナルティ × 印との一貫性ボーナス</td>
+    </tr>
+    <tr>
+      <td><strong>エピソード</strong></td>
+      <td>1レース or 1開催日（状況に応じて設定）</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>なぜ「払戻額だけ」を報酬にしないのか？</strong><br>
+  払戻額をそのまま報酬にすると、ノイズ（運）が大きすぎて学習が安定しません。
+  代わりに「期待値（safe_ev）」を核にしながら、損失幅ペナルティや印の整合性を組み合わせた複合報酬を設計します。
+</div>
+
+<!-- ===== 4. 印との対応 ===== -->
+<h2>4. 予測印（◎○▲）との関係</h2>
+
+<p>印（◎本命・○対抗・▲穴）は「この馬を強く推す」という判断の表現です。馬券推奨と印の整合性を保つには3つのパターンが考えられます。</p>
+
+<table>
+  <thead>
+    <tr><th>パターン</th><th>説明</th><th>採用しやすさ</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>A：印と券を分離</strong></td>
+      <td>印は別モジュールが生成し、RLは券種・金額だけを決める。印と券のズレは報酬のペナルティで抑える。</td>
+      <td><span class="tag">導入しやすい</span></td>
+    </tr>
+    <tr>
+      <td><strong>B：印も行動に含める</strong></td>
+      <td>「印セット＋券種＋組み合わせ」をまとめて1つの行動として学習する。</td>
+      <td><span class="tag">一貫性は高い</span> <span class="tag">探索空間が大きい</span></td>
+    </tr>
+    <tr>
+      <td><strong>C：階層的に分ける</strong></td>
+      <td>上位ポリシーが「印ストーリー（軸馬を決める）」、下位ポリシーが「具体的な券種」を決める2段構造。</td>
+      <td><span class="tag">データが多くなってから</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>初期実装では<strong>パターンA</strong>が最も現実的です。</p>
+
+<!-- ===== 5. 学習のアプローチ ===== -->
+<h2>5. どうやって学習させるか</h2>
+
+<p>本番環境で試行錯誤しながら学習する「オンラインRL」は、資金リスクが高すぎるため採用しません。代わりに過去データを使います。</p>
+
+<div class="two-col">
+  <div class="card">
+    <div class="card-label">フェーズ1（最初の実装）</div>
+    <h4>Contextual Bandit<br><small style="font-weight:400;color:var(--muted)">状況に応じた選択学習</small></h4>
+    <p>1レース = 1回の選択として単純化。候補馬券を事前に絞り込んで有限化すれば実装しやすい。</p>
+  </div>
+  <div class="card">
+    <div class="card-label">フェーズ2（本格実装）</div>
+    <h4>Offline RL<br><small style="font-weight:400;color:var(--muted)">過去データから学ぶ強化学習</small></h4>
+    <p>過去の（状態・行動・報酬）のログから学習する。実際には買わなかった馬券の仮の結果を仮定する「反事実推論」が必要になる。</p>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr><th>学習パラダイム</th><th>特徴</th><th>採用フェーズ</th><th>採用しやすさ</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>オンラインRL</strong></td>
+      <td>本番環境でリアルタイムに試行錯誤しながら学習する</td>
+      <td>—（不採用）</td>
+      <td>資金リスクが高すぎるため採用しない</td>
+    </tr>
+    <tr>
+      <td><strong>Contextual Bandit</strong></td>
+      <td>1レース = 1回の選択として単純化。候補馬券を事前に絞り込んで有限化する</td>
+      <td>フェーズ1</td>
+      <td>実装しやすい・小さくスタートできる</td>
+    </tr>
+    <tr>
+      <td><strong>Offline RL（CQL / IQL等）</strong></td>
+      <td>過去の（状態・行動・報酬）ログから学習する。反事実推論が必要</td>
+      <td>フェーズ2</td>
+      <td>過去ログが蓄積されてから着手</td>
+    </tr>
+    <tr>
+      <td><strong>階層的RL</strong></td>
+      <td>上位ポリシーが印ストーリー、下位ポリシーが券種を決める2段構造</td>
+      <td>フェーズ3（印との統合）</td>
+      <td>データとログが十分に蓄積されてから</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ===== 6. ロードマップ ===== -->
+<h2>6. 実装ロードマップ</h2>
+
+<ol class="step-list">
+  <li>
+    <div>
+      <strong>Phase 0 — ルールベースの整備</strong><br>
+      <span style="color:var(--muted);font-size:13px">safe_ev（期待値の安全基準）と印のルールマッピングを確立する。ログを（状態・行動・報酬）の形式で記録できるよう整備する。</span>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 1 — Contextual Bandit で最初のプロトタイプ</strong><br>
+      <span style="color:var(--muted);font-size:13px">1レース1選択に単純化して小さくスタート。ルールEVで候補を絞ってから方策で選ぶ「二段構え」でもよい。</span>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 2 — Offline RL でセッション学習</strong><br>
+      <span style="color:var(--muted);font-size:13px">複数レースにまたがる連続判断を学習。CQL / IQL などのアルゴリズムで過去ログから改善する。</span>
+    </div>
+  </li>
+  <li>
+    <div>
+      <strong>Phase 3 — 印との統合（階層的RL）</strong><br>
+      <span style="color:var(--muted);font-size:13px">印付けと馬券選択を統一した学習へ発展させる。データとログが十分に蓄積されてから着手。</span>
+    </div>
+  </li>
+</ol>
+
+<!-- ===== 7. 注意事項 ===== -->
+<h2>7. 実装上の注意点</h2>
+
+<table>
+  <thead>
+    <tr><th>注意点</th><th>理由・対策</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>着順モデルのテスト予測を学習データに混ぜない</td>
+      <td>Layer Aの汚染防止。強化学習（Layer B）のデータと学習スコープを厳密に分離する</td>
+    </tr>
+    <tr>
+      <td>方策の出力にハードクリップをかける</td>
+      <td>1レースの最大投資額・禁止券種リストを本番に必ず適用する</td>
+    </tr>
+    <tr>
+      <td>印・券・期待値を同じ <code>run_id</code> でトレース可能にする</td>
+      <td>ログを一元管理し、後から判断の根拠を検証できるようにする</td>
+    </tr>
+    <tr>
+      <td>反事実オッズの近似の仮定範囲を明記する</td>
+      <td>「あの券を買っていたら払戻はいくらか」の仮定が学習の前提となるため、仮定の範囲と限界を文書化する</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="related">
+  <h3>関連ドキュメント</h3>
+  <ul>
+    <li><a href="../modeling/betting_policy_reinforcement_learning.html">馬券推奨 × 強化学習（詳細版）</a> — MDP・報酬設計・チェックリスト</li>
+    <li><a href="../modeling/betting_backtest_dataset_spec.html">betting_backtest_dataset 仕様</a> — 検証用データセットの設計</li>
+    <li><a href="../ml_pipeline/index.html">ML パイプライン全体図</a> — Stage1〜7の全体像</li>
+  </ul>
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+</script>
+</body>
+</html>

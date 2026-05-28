@@ -209,8 +209,8 @@ document.addEventListener("DOMContentLoaded", function() {
     <article class="md-body">
 <h1 id="betting_backtest_dataset">betting_backtest_dataset 仕様</h1>
 <h2 id="_1">目的</h2>
-<p>この仕様は、レース直前確率モデルの出力を馬券最適化・バックテストに接続するための入力テーブルを定義する。</p>
-<p>モデリング実装自体は別フェーズだが、以下を共通契約として先に固定する。</p>
+<p>このドキュメントは、レース直前確率モデルの出力を馬券最適化・過去データを使った検証（バックテスト）に接続するための入力テーブルを定義します。</p>
+<p>モデリングの実装は別フェーズで行いますが、次のテーブルを共通契約として先に確定します。</p>
 <ul>
 <li>馬単位確率テーブル</li>
 <li>市場価格テーブル</li>
@@ -218,14 +218,19 @@ document.addEventListener("DOMContentLoaded", function() {
 <li>レース制約テーブル</li>
 <li>バックテスト結合テーブル</li>
 </ul>
-<h2 id="_2">参考資料から追加した原則</h2>
-<ul>
-<li>期待値が 1 を少し超えた程度の券だけを機械的に買うと、確率推定誤差で簡単に負けに転ぶ</li>
-<li>特に高オッズ帯は、確率のわずかな過大評価が期待値を大きく歪める</li>
-<li>そのため、<code>期待値 &gt; 1</code> だけではなく、<code>校正済み確率</code> と <code>安全域</code> を前提にベット判断を行う</li>
-<li>ROI の評価は必ず <code>モデルが学習に使っていない期間</code> だけで実施する</li>
-</ul>
-<h2 id="_3">全体構造</h2>
+<h2 id="_2">設計の基本原則</h2>
+<table>
+<thead>
+<tr><th>原則</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td>過小な期待値への依存を避ける</td><td>期待値が 1 をわずかに超えた程度の券だけを機械的に買うと、確率推定誤差により損失に転ぶことがある</td></tr>
+<tr><td>高オッズ帯のリスク</td><td>高オッズ帯では、確率をわずかに過大評価するだけで期待値が大きくずれる</td></tr>
+<tr><td>安全域の確保</td><td><code>期待値 &gt; 1</code> だけを条件にせず、<code>校正済み確率</code> と <code>安全域</code> の両方を前提にベット判断を行う</td></tr>
+<tr><td>テスト期間での評価</td><td>ROI の評価は、モデルが学習に使っていない期間（テスト期間）だけで実施する</td></tr>
+</tbody>
+</table>
+<h2 id="_3">テーブルの全体構造</h2>
 <div class="mermaid">flowchart TD
     horseProb[HorseProbabilityTable] --> backtest[BettingBacktestDataset]
     marketHorse[HorseMarketTable] --> backtest
@@ -234,417 +239,495 @@ document.addEventListener("DOMContentLoaded", function() {
     payout[PayoutTable] --> backtest
     raceConstraint[RaceConstraintTable] --> backtest</div>
 <h2 id="1-horse_probability_tableparquet">1. <code>horse_probability_table.parquet</code></h2>
+<p>確率モデルが出力した各馬の勝率・連帯率・複勝率を格納するテーブルです。</p>
 <h2 id="_4">粒度</h2>
-<ul>
-<li><code>1行 = 1レース1頭</code></li>
-</ul>
+<p><code>1行 = 1レース × 1頭</code></p>
 <h2 id="_5">主キー</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>horse_number</code></li>
-</ul>
+<p><code>race_id</code> + <code>horse_number</code></p>
 <h2 id="_6">必須列</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>race_date</code></li>
-<li><code>venue_code</code></li>
-<li><code>horse_number</code></li>
-<li><code>horse_id</code></li>
-<li><code>horse_name</code></li>
-<li><code>field_size</code></li>
-<li><code>model_name</code></li>
-<li><code>model_version</code></li>
-<li><code>data_version</code></li>
-<li><code>prediction_timestamp</code></li>
-<li><code>p_win</code></li>
-<li><code>p_top2</code></li>
-<li><code>p_top3</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>race_id</code></td><td>レース識別子</td></tr>
+<tr><td><code>race_date</code></td><td>開催日</td></tr>
+<tr><td><code>venue_code</code></td><td>競馬場コード</td></tr>
+<tr><td><code>horse_number</code></td><td>馬番</td></tr>
+<tr><td><code>horse_id</code></td><td>馬識別子</td></tr>
+<tr><td><code>horse_name</code></td><td>馬名</td></tr>
+<tr><td><code>field_size</code></td><td>出走頭数</td></tr>
+<tr><td><code>model_name</code></td><td>使用モデル名</td></tr>
+<tr><td><code>model_version</code></td><td>モデルバージョン</td></tr>
+<tr><td><code>data_version</code></td><td>データバージョン</td></tr>
+<tr><td><code>prediction_timestamp</code></td><td>予測実行時刻</td></tr>
+<tr><td><code>p_win</code></td><td>勝率（単勝確率）</td></tr>
+<tr><td><code>p_top2</code></td><td>連帯率（2着以内確率）</td></tr>
+<tr><td><code>p_top3</code></td><td>複勝率（3着以内確率）</td></tr>
+</tbody>
+</table>
 <h2 id="_7">推奨追加列</h2>
-<ul>
-<li><code>score_raw</code></li>
-<li><code>score_calibrated</code></li>
-<li><code>rank_by_p_win</code></li>
-<li><code>rank_by_p_top2</code></li>
-<li><code>rank_by_p_top3</code></li>
-<li><code>uncertainty_proxy</code></li>
-<li><code>feature_coverage_score</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>score_raw</code></td><td>モデルの生スコア</td></tr>
+<tr><td><code>score_calibrated</code></td><td>校正後スコア</td></tr>
+<tr><td><code>rank_by_p_win</code></td><td>勝率順位（1始まり）</td></tr>
+<tr><td><code>rank_by_p_top2</code></td><td>連帯率順位</td></tr>
+<tr><td><code>rank_by_p_top3</code></td><td>複勝率順位</td></tr>
+<tr><td><code>uncertainty_proxy</code></td><td>不確実性の指標</td></tr>
+<tr><td><code>feature_coverage_score</code></td><td>特徴量カバレッジスコア</td></tr>
+</tbody>
+</table>
 <h2 id="_8">制約</h2>
-<ul>
-<li>同一レース内で <code>sum(p_win) ~= 1.0</code></li>
-<li><code>p_win &lt;= p_top2 &lt;= p_top3 &lt;= 1.0</code></li>
-<li><code>rank_by_p_win</code> は 1 から始まる連番</li>
-</ul>
+<table>
+<thead>
+<tr><th>制約</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td>確率の合計</td><td>同一レース内で <code>sum(p_win) ~= 1.0</code></td></tr>
+<tr><td>確率の順序</td><td><code>p_win &lt;= p_top2 &lt;= p_top3 &lt;= 1.0</code></td></tr>
+<tr><td>順位列</td><td><code>rank_by_p_win</code> は 1 から始まる連番</td></tr>
+</tbody>
+</table>
 <h2 id="_9">用途</h2>
 <ul>
-<li>単勝・複勝・馬単・ワイド・馬連の期待値計算の基礎</li>
-<li>モデル比較と校正評価</li>
+<li>単勝・複勝・馬単・ワイド・馬連の期待値計算の基礎データ</li>
+<li>モデル間の比較と確率校正の評価</li>
 </ul>
 <h2 id="2-horse_market_snapshotparquet">2. <code>horse_market_snapshot.parquet</code></h2>
+<p>各馬のオッズや人気順位を時刻別に記録したテーブルです。レース発走前の複数時点で取得します。</p>
 <h2 id="_10">粒度</h2>
-<ul>
-<li><code>1行 = 1レース1頭</code></li>
-</ul>
+<p><code>1行 = 1レース × 1頭</code></p>
 <h2 id="_11">主キー</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>horse_number</code></li>
-</ul>
+<p><code>race_id</code> + <code>horse_number</code></p>
 <h2 id="_12">必須列</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>market_timestamp</code></li>
-<li><code>snapshot_phase</code></li>
-<li><code>horse_number</code></li>
-<li><code>win_odds</code></li>
-<li><code>place_odds_min</code></li>
-<li><code>place_odds_max</code></li>
-<li><code>market_popularity</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>race_id</code></td><td>レース識別子</td></tr>
+<tr><td><code>market_timestamp</code></td><td>スナップショット取得時刻</td></tr>
+<tr><td><code>snapshot_phase</code></td><td>取得フェーズ（標準値は下表参照）</td></tr>
+<tr><td><code>horse_number</code></td><td>馬番</td></tr>
+<tr><td><code>win_odds</code></td><td>単勝オッズ</td></tr>
+<tr><td><code>place_odds_min</code></td><td>複勝オッズ下限</td></tr>
+<tr><td><code>place_odds_max</code></td><td>複勝オッズ上限</td></tr>
+<tr><td><code>market_popularity</code></td><td>人気順位</td></tr>
+</tbody>
+</table>
 <h2 id="_13">推奨追加列</h2>
-<ul>
-<li><code>place_odds_avg</code></li>
-<li><code>market_implied_win_prob_raw</code></li>
-<li><code>market_implied_place_prob_raw</code></li>
-<li><code>odds_source</code></li>
-<li><code>has_market_snapshot</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>place_odds_avg</code></td><td>複勝オッズ平均</td></tr>
+<tr><td><code>market_implied_win_prob_raw</code></td><td>市場オッズから逆算した勝率（正規化前）</td></tr>
+<tr><td><code>market_implied_place_prob_raw</code></td><td>市場オッズから逆算した複勝率（正規化前）</td></tr>
+<tr><td><code>odds_source</code></td><td>オッズ取得元</td></tr>
+<tr><td><code>has_market_snapshot</code></td><td>スナップショット取得フラグ</td></tr>
+</tbody>
+</table>
 <h2 id="snapshot_phase"><code>snapshot_phase</code> の標準値</h2>
-<ul>
-<li><code>t_minus_60</code></li>
-<li><code>t_minus_30</code></li>
-<li><code>t_minus_10</code></li>
-<li><code>t_minus_05</code></li>
-<li><code>off_time_final</code></li>
-</ul>
-<p>初期版の正式評価は <code>t_minus_10</code> を主基準にする。</p>
+<table>
+<thead>
+<tr><th>値</th><th>意味</th><th>備考</th></tr>
+</thead>
+<tbody>
+<tr><td><code>t_minus_60</code></td><td>発走60分前</td><td></td></tr>
+<tr><td><code>t_minus_30</code></td><td>発走30分前</td><td></td></tr>
+<tr><td><code>t_minus_10</code></td><td>発走10分前</td><td>初期版の正式評価の主基準</td></tr>
+<tr><td><code>t_minus_05</code></td><td>発走5分前</td><td></td></tr>
+<tr><td><code>off_time_final</code></td><td>発走時確定オッズ</td><td></td></tr>
+</tbody>
+</table>
 <h2 id="3-pair_market_snapshotparquet">3. <code>pair_market_snapshot.parquet</code></h2>
+<p>馬連・ワイド・馬単などの組み合わせ券種のオッズを記録するテーブルです。</p>
 <h2 id="_14">粒度</h2>
-<ul>
-<li><code>1行 = 1レース1組み合わせ1券種</code></li>
-</ul>
+<p><code>1行 = 1レース × 1組み合わせ × 1券種</code></p>
 <h2 id="_15">主キー</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>odds_type</code></li>
-<li><code>pair</code></li>
-<li><code>market_timestamp</code></li>
-</ul>
+<p><code>race_id</code> + <code>odds_type</code> + <code>pair</code> + <code>market_timestamp</code></p>
 <h2 id="_16">必須列</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>market_timestamp</code></li>
-<li><code>snapshot_phase</code></li>
-<li><code>odds_type</code></li>
-<li><code>pair</code></li>
-<li><code>odds</code></li>
-<li><code>popularity</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>race_id</code></td><td>レース識別子</td></tr>
+<tr><td><code>market_timestamp</code></td><td>スナップショット取得時刻</td></tr>
+<tr><td><code>snapshot_phase</code></td><td>取得フェーズ</td></tr>
+<tr><td><code>odds_type</code></td><td>券種（下表参照）</td></tr>
+<tr><td><code>pair</code></td><td>馬番の組み合わせ</td></tr>
+<tr><td><code>odds</code></td><td>オッズ</td></tr>
+<tr><td><code>popularity</code></td><td>人気順位</td></tr>
+</tbody>
+</table>
 <h2 id="_17">条件付き列</h2>
-<ul>
-<li><code>odds_min</code></li>
-<li><code>odds_max</code></li>
-</ul>
-<h2 id="odds_type"><code>odds_type</code></h2>
-<ul>
-<li><code>umaren</code></li>
-<li><code>wide</code></li>
-<li><code>umatan</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>odds_min</code></td><td>オッズ下限（ワイドの場合）</td></tr>
+<tr><td><code>odds_max</code></td><td>オッズ上限（ワイドの場合）</td></tr>
+</tbody>
+</table>
+<h2 id="odds_type"><code>odds_type</code> の値</h2>
+<table>
+<thead>
+<tr><th>値</th><th>券種</th></tr>
+</thead>
+<tbody>
+<tr><td><code>umaren</code></td><td>馬連</td></tr>
+<tr><td><code>wide</code></td><td>ワイド</td></tr>
+<tr><td><code>umatan</code></td><td>馬単</td></tr>
+</tbody>
+</table>
 <h2 id="_18">用途</h2>
 <ul>
-<li>組み合わせ市場に対するモデル優位性検証</li>
-<li>組み合わせ期待値計算</li>
+<li>組み合わせ市場に対するモデルの優位性を検証する</li>
+<li>組み合わせ券種の期待値計算</li>
 </ul>
 <h2 id="4-race_outcome_tableparquet">4. <code>race_outcome_table.parquet</code></h2>
+<p>レース結果（着順・的中フラグ）を格納するテーブルです。確率モデルの精度評価と馬券の的中判定に使います。</p>
 <h2 id="_19">粒度</h2>
-<ul>
-<li><code>1行 = 1レース1頭</code></li>
-</ul>
+<p><code>1行 = 1レース × 1頭</code></p>
 <h2 id="_20">主キー</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>horse_number</code></li>
-</ul>
+<p><code>race_id</code> + <code>horse_number</code></p>
 <h2 id="_21">必須列</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>race_date</code></li>
-<li><code>venue_code</code></li>
-<li><code>horse_number</code></li>
-<li><code>horse_id</code></li>
-<li><code>finish_position</code></li>
-<li><code>official_finish_position</code></li>
-<li><code>is_win</code></li>
-<li><code>is_top2</code></li>
-<li><code>is_top3</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>race_id</code></td><td>レース識別子</td></tr>
+<tr><td><code>race_date</code></td><td>開催日</td></tr>
+<tr><td><code>venue_code</code></td><td>競馬場コード</td></tr>
+<tr><td><code>horse_number</code></td><td>馬番</td></tr>
+<tr><td><code>horse_id</code></td><td>馬識別子</td></tr>
+<tr><td><code>finish_position</code></td><td>着順（入線）</td></tr>
+<tr><td><code>official_finish_position</code></td><td>確定着順（審議後）</td></tr>
+<tr><td><code>is_win</code></td><td>単勝的中フラグ</td></tr>
+<tr><td><code>is_top2</code></td><td>連帯的中フラグ</td></tr>
+<tr><td><code>is_top3</code></td><td>複勝的中フラグ</td></tr>
+</tbody>
+</table>
 <h2 id="_22">推奨追加列</h2>
-<ul>
-<li><code>margin_seconds_proxy</code></li>
-<li><code>status_code</code></li>
-<li><code>disqualified_flag</code></li>
-<li><code>late_scratched_flag</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>margin_seconds_proxy</code></td><td>着差の秒数換算（近似値）</td></tr>
+<tr><td><code>status_code</code></td><td>出走状態コード</td></tr>
+<tr><td><code>disqualified_flag</code></td><td>失格フラグ</td></tr>
+<tr><td><code>late_scratched_flag</code></td><td>競走除外フラグ</td></tr>
+</tbody>
+</table>
 <h2 id="_23">用途</h2>
 <ul>
-<li>確率精度評価</li>
-<li>バックテストの的中判定</li>
+<li>確率モデルの予測精度を評価する</li>
+<li>過去データを使った検証での的中判定</li>
 </ul>
 <h2 id="5-payout_tableparquet">5. <code>payout_table.parquet</code></h2>
+<p>実際の払戻金額を券種・組み合わせ別に格納するテーブルです。ROI（回収率）計算の基礎となります。</p>
 <h2 id="_24">粒度</h2>
-<ul>
-<li><code>1行 = 1レース1券種1組み合わせ</code></li>
-</ul>
+<p><code>1行 = 1レース × 1券種 × 1組み合わせ</code></p>
 <h2 id="_25">主キー</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>bet_type</code></li>
-<li><code>ticket_key</code></li>
-</ul>
+<p><code>race_id</code> + <code>bet_type</code> + <code>ticket_key</code></p>
 <h2 id="_26">必須列</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>bet_type</code></li>
-<li><code>ticket_key</code></li>
-<li><code>payout_per_100</code></li>
-<li><code>is_official_payout</code></li>
-</ul>
-<h2 id="bet_type"><code>bet_type</code></h2>
-<ul>
-<li><code>win</code></li>
-<li><code>place</code></li>
-<li><code>umaren</code></li>
-<li><code>wide</code></li>
-<li><code>umatan</code></li>
-</ul>
-<h2 id="ticket_key"><code>ticket_key</code> の標準</h2>
-<ul>
-<li>単勝: <code>win:07</code></li>
-<li>複勝: <code>place:07</code></li>
-<li>馬連: <code>umaren:03-07</code></li>
-<li>ワイド: <code>wide:03-07</code></li>
-<li>馬単: <code>umatan:03-07</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>race_id</code></td><td>レース識別子</td></tr>
+<tr><td><code>bet_type</code></td><td>券種（下表参照）</td></tr>
+<tr><td><code>ticket_key</code></td><td>馬券キー（フォーマットは下表参照）</td></tr>
+<tr><td><code>payout_per_100</code></td><td>100円あたり払戻金額</td></tr>
+<tr><td><code>is_official_payout</code></td><td>確定払戻フラグ</td></tr>
+</tbody>
+</table>
+<h2 id="bet_type"><code>bet_type</code> の値</h2>
+<table>
+<thead>
+<tr><th>値</th><th>券種</th></tr>
+</thead>
+<tbody>
+<tr><td><code>win</code></td><td>単勝</td></tr>
+<tr><td><code>place</code></td><td>複勝</td></tr>
+<tr><td><code>umaren</code></td><td>馬連</td></tr>
+<tr><td><code>wide</code></td><td>ワイド</td></tr>
+<tr><td><code>umatan</code></td><td>馬単</td></tr>
+</tbody>
+</table>
+<h2 id="ticket_key"><code>ticket_key</code> の標準フォーマット</h2>
+<table>
+<thead>
+<tr><th>券種</th><th>フォーマット</th><th>例</th></tr>
+</thead>
+<tbody>
+<tr><td>単勝</td><td><code>win:{馬番}</code></td><td><code>win:07</code></td></tr>
+<tr><td>複勝</td><td><code>place:{馬番}</code></td><td><code>place:07</code></td></tr>
+<tr><td>馬連</td><td><code>umaren:{馬番}-{馬番}</code></td><td><code>umaren:03-07</code></td></tr>
+<tr><td>ワイド</td><td><code>wide:{馬番}-{馬番}</code></td><td><code>wide:03-07</code></td></tr>
+<tr><td>馬単</td><td><code>umatan:{馬番}-{馬番}</code></td><td><code>umatan:03-07</code></td></tr>
+</tbody>
+</table>
 <h2 id="_27">用途</h2>
 <ul>
-<li>券種別 ROI 算出</li>
-<li>組み合わせ期待値計算</li>
+<li>券種別の ROI（回収率）を算出する</li>
+<li>組み合わせ券種の期待値計算</li>
 </ul>
 <h2 id="6-race_constraint_tableparquet">6. <code>race_constraint_table.parquet</code></h2>
+<p>レースごとに、どの券種が発売対象か・必要な情報が揃っているかを記録するテーブルです。検証対象レースをフィルタするために使います。</p>
 <h2 id="_28">粒度</h2>
-<ul>
-<li><code>1行 = 1レース</code></li>
-</ul>
+<p><code>1行 = 1レース</code></p>
 <h2 id="_29">主キー</h2>
-<ul>
-<li><code>race_id</code></li>
-</ul>
+<p><code>race_id</code></p>
 <h2 id="_30">必須列</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>race_date</code></li>
-<li><code>venue_code</code></li>
-<li><code>surface</code></li>
-<li><code>distance</code></li>
-<li><code>field_size</code></li>
-<li><code>bettable_win</code></li>
-<li><code>bettable_place</code></li>
-<li><code>bettable_umaren</code></li>
-<li><code>bettable_wide</code></li>
-<li><code>bettable_umatan</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>race_id</code></td><td>レース識別子</td></tr>
+<tr><td><code>race_date</code></td><td>開催日</td></tr>
+<tr><td><code>venue_code</code></td><td>競馬場コード</td></tr>
+<tr><td><code>surface</code></td><td>馬場種別（芝/ダート）</td></tr>
+<tr><td><code>distance</code></td><td>距離（m）</td></tr>
+<tr><td><code>field_size</code></td><td>出走頭数</td></tr>
+<tr><td><code>bettable_win</code></td><td>単勝発売フラグ</td></tr>
+<tr><td><code>bettable_place</code></td><td>複勝発売フラグ</td></tr>
+<tr><td><code>bettable_umaren</code></td><td>馬連発売フラグ</td></tr>
+<tr><td><code>bettable_wide</code></td><td>ワイド発売フラグ</td></tr>
+<tr><td><code>bettable_umatan</code></td><td>馬単発売フラグ</td></tr>
+</tbody>
+</table>
 <h2 id="_31">推奨追加列</h2>
-<ul>
-<li><code>market_snapshot_available</code></li>
-<li><code>pair_market_snapshot_available</code></li>
-<li><code>has_paddock</code></li>
-<li><code>has_oikiri</code></li>
-<li><code>has_cushion_value</code></li>
-<li><code>scratch_count</code></li>
-<li><code>refund_rule_flag</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>market_snapshot_available</code></td><td>単勝・複勝オッズのスナップショット取得フラグ</td></tr>
+<tr><td><code>pair_market_snapshot_available</code></td><td>組み合わせオッズのスナップショット取得フラグ</td></tr>
+<tr><td><code>has_paddock</code></td><td>パドック情報の有無フラグ</td></tr>
+<tr><td><code>has_oikiri</code></td><td>追い切り情報の有無フラグ</td></tr>
+<tr><td><code>has_cushion_value</code></td><td>クッション値の有無フラグ</td></tr>
+<tr><td><code>scratch_count</code></td><td>競走除外頭数</td></tr>
+<tr><td><code>refund_rule_flag</code></td><td>払戻規則フラグ</td></tr>
+</tbody>
+</table>
 <h2 id="_32">用途</h2>
 <ul>
-<li>バックテスト時の対象レースフィルタ</li>
-<li>発売対象と情報整備状況の切り分け</li>
+<li>過去データを使った検証時の対象レースをフィルタする</li>
+<li>券種が発売されているかどうかと、必要な情報が整っているかどうかを切り分ける</li>
 </ul>
 <h2 id="7-betting_backtest_datasetparquet">7. <code>betting_backtest_dataset.parquet</code></h2>
+<p>上記1〜6のテーブルを結合した分析・可視化用のメインテーブルです。馬券最適化計算の一次入力として使います。</p>
 <h2 id="_33">粒度</h2>
-<ul>
-<li><code>1行 = 1レース1馬1snapshot_phase</code></li>
-</ul>
-<p>これは分析・可視化用の結合済みテーブルで、最適化計算の一次入力として使う。</p>
+<p><code>1行 = 1レース × 1頭 × 1スナップショット時刻</code></p>
 <h2 id="_34">主キー</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>horse_number</code></li>
-<li><code>snapshot_phase</code></li>
-</ul>
+<p><code>race_id</code> + <code>horse_number</code> + <code>snapshot_phase</code></p>
 <h2 id="_35">必須列</h2>
-<ul>
-<li><code>race_id</code></li>
-<li><code>race_date</code></li>
-<li><code>venue_code</code></li>
-<li><code>horse_number</code></li>
-<li><code>horse_id</code></li>
-<li><code>horse_name</code></li>
-<li><code>snapshot_phase</code></li>
-<li><code>p_win</code></li>
-<li><code>p_top2</code></li>
-<li><code>p_top3</code></li>
-<li><code>win_odds</code></li>
-<li><code>place_odds_min</code></li>
-<li><code>place_odds_max</code></li>
-<li><code>market_popularity</code></li>
-<li><code>finish_position</code></li>
-<li><code>is_win</code></li>
-<li><code>is_top2</code></li>
-<li><code>is_top3</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>race_id</code></td><td>レース識別子</td></tr>
+<tr><td><code>race_date</code></td><td>開催日</td></tr>
+<tr><td><code>venue_code</code></td><td>競馬場コード</td></tr>
+<tr><td><code>horse_number</code></td><td>馬番</td></tr>
+<tr><td><code>horse_id</code></td><td>馬識別子</td></tr>
+<tr><td><code>horse_name</code></td><td>馬名</td></tr>
+<tr><td><code>snapshot_phase</code></td><td>取得フェーズ</td></tr>
+<tr><td><code>p_win</code></td><td>勝率（単勝確率）</td></tr>
+<tr><td><code>p_top2</code></td><td>連帯率（2着以内確率）</td></tr>
+<tr><td><code>p_top3</code></td><td>複勝率（3着以内確率）</td></tr>
+<tr><td><code>win_odds</code></td><td>単勝オッズ</td></tr>
+<tr><td><code>place_odds_min</code></td><td>複勝オッズ下限</td></tr>
+<tr><td><code>place_odds_max</code></td><td>複勝オッズ上限</td></tr>
+<tr><td><code>market_popularity</code></td><td>人気順位</td></tr>
+<tr><td><code>finish_position</code></td><td>着順</td></tr>
+<tr><td><code>is_win</code></td><td>単勝的中フラグ</td></tr>
+<tr><td><code>is_top2</code></td><td>連帯的中フラグ</td></tr>
+<tr><td><code>is_top3</code></td><td>複勝的中フラグ</td></tr>
+</tbody>
+</table>
 <h2 id="_36">推奨派生列</h2>
+<table>
+<thead>
+<tr><th>列名</th><th>計算式・説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ev_win</code></td><td><code>p_win * payout_win_per_100 / 100 - 1</code>（単勝期待値）</td></tr>
+<tr><td><code>ev_place_low</code></td><td><code>p_top3 * payout_place_low_per_100 / 100 - 1</code>（複勝期待値・下限）</td></tr>
+<tr><td><code>market_edge_win</code></td><td><code>p_win - market_implied_win_prob_raw_norm</code>（市場との差分エッジ）</td></tr>
+<tr><td><code>value_bucket</code></td><td>期待値帯の分類バケット</td></tr>
+<tr><td><code>longshot_flag</code></td><td>大穴フラグ</td></tr>
+<tr><td><code>favorite_flag</code></td><td>人気馬フラグ</td></tr>
+<tr><td><code>safety_margin_win</code></td><td><code>ev_win - ev_threshold_buffer</code>（単勝安全域）</td></tr>
+<tr><td><code>confidence_band</code></td><td>確信度バンド</td></tr>
+</tbody>
+</table>
+<h2 id="_37">注意点</h2>
 <ul>
-<li><code>ev_win = p_win * payout_win_per_100 / 100 - 1</code></li>
-<li><code>ev_place_low = p_top3 * payout_place_low_per_100 / 100 - 1</code></li>
-<li><code>market_edge_win = p_win - market_implied_win_prob_raw_norm</code></li>
-<li><code>value_bucket</code></li>
-<li><code>longshot_flag</code></li>
-<li><code>favorite_flag</code></li>
-<li><code>safety_margin_win = ev_win - ev_threshold_buffer</code></li>
-<li><code>confidence_band</code></li>
-</ul>
-<h2 id="_37">注意</h2>
-<ul>
-<li><code>betting_backtest_dataset</code> だけで全券種を完結させない</li>
-<li>組み合わせ券種は <code>pair_market_snapshot</code> と <code>payout_table</code> を別 join する</li>
+<li><code>betting_backtest_dataset</code> 単体ですべての券種を完結させない</li>
+<li>組み合わせ券種（馬連・ワイド・馬単）は <code>pair_market_snapshot</code> と <code>payout_table</code> を別途 join して使う</li>
 </ul>
 <h2 id="75">7.5 期待値安全域ルール</h2>
-<p>期待値系の判定は、次の 3 層で管理する。</p>
-<h3 id="1">1. 生期待値</h3>
-<ul>
-<li><code>raw_ev = predicted_prob * odds - 1</code></li>
-</ul>
-<h3 id="2">2. 校正後期待値</h3>
-<ul>
-<li><code>calibrated_ev = calibrated_prob * odds - 1</code></li>
-</ul>
-<h3 id="3">3. 安全域込み期待値</h3>
-<ul>
-<li><code>safe_ev = calibrated_ev - buffer</code></li>
-</ul>
+<p>期待値の判定は次の 3 段階で行います。段階を踏むことで、確率推定のブレを安全域として吸収します。</p>
+<table>
+<thead>
+<tr><th>段階</th><th>指標名</th><th>計算式</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>生期待値</td><td><code>raw_ev = predicted_prob * odds - 1</code></td><td>モデルの生出力ベース</td></tr>
+<tr><td>2</td><td>校正後期待値</td><td><code>calibrated_ev = calibrated_prob * odds - 1</code></td><td>確率を補正した後</td></tr>
+<tr><td>3</td><td>safe_ev</td><td><code>safe_ev = calibrated_ev - buffer</code></td><td>安全域込みの最終判定値</td></tr>
+</tbody>
+</table>
 <h3 id="_38">初期ルール</h3>
 <ul>
-<li>ベット候補は <code>safe_ev &gt; 0</code> を最低条件にする</li>
-<li><code>buffer</code> は固定値ではなく、<code>odds bucket</code> と <code>uncertainty_proxy</code> で可変にする</li>
-<li>高オッズ帯ほど buffer を厚くする</li>
+<li>ベット候補は <code>safe_ev &gt; 0</code> を最低条件とする</li>
+<li><code>buffer</code> は固定値ではなく、<code>odds bucket</code>（オッズ帯）と <code>uncertainty_proxy</code>（不確実性の指標）に応じて変動させる</li>
+<li>高オッズ帯ほど buffer を大きく取る</li>
 </ul>
 <h2 id="76">7.6 閾値管理テーブル</h2>
-<p>将来の戦略比較のため、閾値を別テーブルで管理する。</p>
+<p>将来の戦略比較に備えて、判定に使う閾値は本テーブルとは別に管理します。</p>
 <h3 id="bet_policy_thresholdsjson"><code>bet_policy_thresholds.json</code></h3>
-<ul>
-<li><code>policy_name</code></li>
-<li><code>snapshot_phase</code></li>
-<li><code>bet_type</code></li>
-<li><code>min_safe_ev</code></li>
-<li><code>min_model_confidence</code></li>
-<li><code>exclude_longshot_over_odds</code></li>
-<li><code>max_tickets_per_race</code></li>
-<li><code>stake_sizing_rule</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>フィールド</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>policy_name</code></td><td>ポリシー名（識別子）</td></tr>
+<tr><td><code>snapshot_phase</code></td><td>適用するオッズスナップショット時刻</td></tr>
+<tr><td><code>bet_type</code></td><td>対象券種</td></tr>
+<tr><td><code>min_safe_ev</code></td><td>ベット判断の最低 safe_ev 閾値</td></tr>
+<tr><td><code>min_model_confidence</code></td><td>最低モデル確信度</td></tr>
+<tr><td><code>exclude_longshot_over_odds</code></td><td>大穴除外の上限オッズ</td></tr>
+<tr><td><code>max_tickets_per_race</code></td><td>1レース当たりの最大購入点数</td></tr>
+<tr><td><code>stake_sizing_rule</code></td><td>賭け金額算出ルール</td></tr>
+</tbody>
+</table>
 <h3 id="_39">目的</h3>
 <ul>
-<li>学習モデルと賭けルールを分離して比較する</li>
-<li>「モデルは同じだが閾値だけ違う」実験を簡単にする</li>
+<li>学習モデルと賭けルールを分離して比較できるようにする</li>
+<li>「モデルは同じで閾値だけ変えた」という実験を手軽に行えるようにする</li>
 </ul>
 <h2 id="8">8. 将来の組み合わせ最適化用中間テーブル</h2>
 <h2 id="pair_probability_inputparquet"><code>pair_probability_input.parquet</code></h2>
-<p>後段で馬連・ワイド・馬単の期待値最適化を行うための中間入力。</p>
+<p>後続の処理で馬連・ワイド・馬単の期待値最適化を行うための中間テーブルです。</p>
 <h3 id="_40">粒度</h3>
-<ul>
-<li><code>1行 = 1レース1組み合わせ1券種</code></li>
-</ul>
+<p><code>1行 = 1レース × 1組み合わせ × 1券種</code></p>
 <h3 id="_41">必須列</h3>
-<ul>
-<li><code>race_id</code></li>
-<li><code>odds_type</code></li>
-<li><code>pair</code></li>
-<li><code>p_pair_hit</code></li>
-<li><code>market_odds</code></li>
-<li><code>market_popularity</code></li>
-<li><code>expected_value</code></li>
-</ul>
-<h3 id="_42">生成元</h3>
-<ul>
-<li><code>horse_probability_table</code></li>
-<li><code>pair_market_snapshot</code></li>
-<li><code>race_constraint_table</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>列名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>race_id</code></td><td>レース識別子</td></tr>
+<tr><td><code>odds_type</code></td><td>券種（umaren / wide / umatan）</td></tr>
+<tr><td><code>pair</code></td><td>馬番の組み合わせ</td></tr>
+<tr><td><code>p_pair_hit</code></td><td>組み合わせの的中確率</td></tr>
+<tr><td><code>market_odds</code></td><td>市場オッズ</td></tr>
+<tr><td><code>market_popularity</code></td><td>人気順位</td></tr>
+<tr><td><code>expected_value</code></td><td>期待値（<code>p_pair_hit * market_odds - 1</code>）</td></tr>
+</tbody>
+</table>
+<h3 id="_42">生成元テーブル</h3>
+<table>
+<thead>
+<tr><th>テーブル</th><th>提供するデータ</th></tr>
+</thead>
+<tbody>
+<tr><td><code>horse_probability_table</code></td><td>各馬の確率（<code>p_win</code>, <code>p_top2</code>, <code>p_top3</code>）</td></tr>
+<tr><td><code>pair_market_snapshot</code></td><td>組み合わせオッズ・人気</td></tr>
+<tr><td><code>race_constraint_table</code></td><td>券種の発売可否・対象レースフィルタ</td></tr>
+</tbody>
+</table>
 <h2 id="_43">券種別最適化の前提</h2>
-<h2 id="_44">単勝</h2>
-<ul>
-<li>入力: <code>p_win</code>, <code>win_odds</code></li>
-<li>最初に実装しやすい券種</li>
-</ul>
-<h2 id="_45">複勝</h2>
-<ul>
-<li>入力: <code>p_top3</code>, <code>place_odds_min</code>, <code>place_odds_max</code></li>
-<li>初期版は <code>place_odds_avg</code> を使い、後でレンジ評価に拡張</li>
-</ul>
-<h2 id="_46">馬連・ワイド・馬単</h2>
-<ul>
-<li>単体確率だけでは不十分</li>
-<li>後段で <code>pair_probability_input</code> を作る</li>
-<li>初期段階では市場比較と回収率検証用の入力だけ整える</li>
-</ul>
-<h2 id="_47">バックテストの評価指標</h2>
-<ul>
-<li><code>stake_count</code></li>
-<li><code>turnover</code></li>
-<li><code>return_amount</code></li>
-<li><code>roi</code></li>
-<li><code>hit_rate</code></li>
-<li><code>max_drawdown</code></li>
-<li><code>odds_bucket_roi</code></li>
-<li><code>venue_surface_segment_roi</code></li>
-<li><code>kelly_regret_proxy</code></li>
-<li><code>selection_rate</code></li>
-<li><code>race_coverage_rate</code></li>
-<li><code>avg_safe_ev</code></li>
-<li><code>avg_realized_edge</code></li>
-</ul>
-<h2 id="_48">ルール</h2>
-<ul>
-<li>ROI はモデル採択の一次指標にしない</li>
-<li>まず <code>p_win</code>, <code>p_top2</code>, <code>p_top3</code> の校正整合性を確保する</li>
-<li>バックテストは必ず <code>test</code> 期間で行い、学習期間とは完全分離する</li>
-<li>レース確定後の最終オッズでしか評価できない指標は、<code>simulation_only</code> と明示する</li>
-<li>T-10 オッズと最終オッズを混同しない</li>
-</ul>
+<table>
+<thead>
+<tr><th>券種</th><th>主な入力列</th><th>備考</th></tr>
+</thead>
+<tbody>
+<tr><td>単勝</td><td><code>p_win</code>、<code>win_odds</code></td><td>実装が最もシンプル。最初に検証する券種として適している</td></tr>
+<tr><td>複勝</td><td><code>p_top3</code>、<code>place_odds_min</code>、<code>place_odds_max</code></td><td>初期版は <code>place_odds_avg</code> を使い、後でオッズ幅を考慮した評価へ拡張する</td></tr>
+<tr><td>馬連・ワイド・馬単</td><td><code>pair_probability_input</code> テーブル（別途 join）</td><td>単体の勝率・複勝率だけでは期待値を計算できない。初期段階は市場比較と回収率検証に必要な入力のみ整備する</td></tr>
+</tbody>
+</table>
+<h2 id="_47">過去データを使った検証（バックテスト）の評価指標</h2>
+<table>
+<thead>
+<tr><th>指標名</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>stake_count</code></td><td>購入点数（ベット回数）</td></tr>
+<tr><td><code>turnover</code></td><td>総投資額</td></tr>
+<tr><td><code>return_amount</code></td><td>総払戻額</td></tr>
+<tr><td><code>roi</code></td><td>回収率（<code>return_amount / turnover</code>）</td></tr>
+<tr><td><code>hit_rate</code></td><td>的中率</td></tr>
+<tr><td><code>max_drawdown</code></td><td>最大損失幅（連続損失の最大値）</td></tr>
+<tr><td><code>odds_bucket_roi</code></td><td>オッズ帯別の回収率</td></tr>
+<tr><td><code>venue_surface_segment_roi</code></td><td>競馬場×馬場種別のセグメント別回収率</td></tr>
+<tr><td><code>kelly_regret_proxy</code></td><td>Kelly 基準からの乖離の近似指標</td></tr>
+<tr><td><code>selection_rate</code></td><td>ベット対象として選択されたレースの割合</td></tr>
+<tr><td><code>race_coverage_rate</code></td><td>全レースに対するベット実施率</td></tr>
+<tr><td><code>avg_safe_ev</code></td><td>ベット対象の平均 safe_ev</td></tr>
+<tr><td><code>avg_realized_edge</code></td><td>実現エッジの平均</td></tr>
+</tbody>
+</table>
+<h2 id="_48">評価のルール</h2>
+<table>
+<thead>
+<tr><th>ルール</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td>ROI 至上主義の禁止</td><td>ROI（回収率）だけをモデル採択の指標にしない</td></tr>
+<tr><td>校正精度の優先確認</td><td>まず <code>p_win</code>、<code>p_top2</code>、<code>p_top3</code> の校正精度を確認する</td></tr>
+<tr><td>テスト期間の分離</td><td>検証は必ずモデルが学習に使っていないテスト期間だけで行い、学習期間と完全に分離する</td></tr>
+<tr><td>シミュレーション専用の明示</td><td>レース確定後の最終オッズでしか評価できない指標は、<code>simulation_only</code> と明示する</td></tr>
+<tr><td>オッズ時刻の混同禁止</td><td>発走10分前のオッズ（T-10）と最終確定オッズを混同しない</td></tr>
+</tbody>
+</table>
 <h2 id="_49">追加で保存する監査成果物</h2>
-<ul>
-<li><code>betting_policy_manifest.json</code></li>
-<li><code>backtest_summary_by_policy.csv</code></li>
-<li><code>roi_by_odds_bucket.csv</code></li>
-<li><code>roi_by_segment.csv</code></li>
-<li><code>expected_value_calibration.csv</code></li>
-</ul>
+<table>
+<thead>
+<tr><th>ファイル名</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td><code>betting_policy_manifest.json</code></td><td>ポリシー設定の記録（モデル・閾値・スナップショット時刻）</td></tr>
+<tr><td><code>backtest_summary_by_policy.csv</code></td><td>ポリシー別の検証サマリ</td></tr>
+<tr><td><code>roi_by_odds_bucket.csv</code></td><td>オッズ帯別の回収率レポート</td></tr>
+<tr><td><code>roi_by_segment.csv</code></td><td>セグメント別の回収率レポート</td></tr>
+<tr><td><code>expected_value_calibration.csv</code></td><td>期待値校正の評価結果</td></tr>
+</tbody>
+</table>
 <h2 id="_50">配分最適化・予測印と強化学習（関連設計）</h2>
-<p>券種選択・<strong>予測印と推奨券の結びつけ</strong>・資金配分を、教師あり確率モデルとは切り離し <strong>強化学習（ポリシー）</strong> で扱う設計議論は、次を正とする。</p>
+<p>券種選択・<strong>予測印と推奨券の結びつけ</strong>・資金配分は、教師あり確率モデルとは切り分けて、<strong>強化学習（報酬を最大化するよう行動を学習する手法）によるポリシー学習</strong>で扱う設計方針を採用しています。</p>
+<p>詳細な設計議論は次のドキュメントを参照してください。</p>
 <ul>
-<li><code>docs/html/modeling/betting_policy_reinforcement_learning.html</code>（<strong>MDP・報酬・オフライン RL・印のパターン</strong>）</li>
-<li>HTML 要約: <code>docs/html/betting_rl_policy/index.html</code></li>
+<li><code>docs/html/modeling/betting_policy_reinforcement_learning.html</code>（行動サイクル・報酬設計・過去データ学習・印のパターン）</li>
+<li>HTML 要約: <a href="../appendix/betting_rl_policy.html"><code>docs/html/appendix/betting_rl_policy.html</code></a></li>
 </ul>
-<p>本書（<code>betting_backtest_dataset_spec</code>）は <strong>データ契約・safe_ev・バックテスト指標</strong> が主。RL 環境は本書のテーブルを <strong>simulator の入出力</strong>として写像する。</p>
-<h2 id="_51">実装順</h2>
+<p>本書（<code>betting_backtest_dataset_spec</code>）の役割は<strong>データ契約・safe_ev（安全な期待値の閾値）・検証指標の定義</strong>です。強化学習の環境は、本書のテーブルを<strong>シミュレーターの入出力</strong>として使います。</p>
+<h2 id="_51">実装の順序</h2>
 <ol>
-<li><code>horse_probability_table</code> を確定</li>
-<li><code>horse_market_snapshot</code> を <code>snapshot_phase=t_minus_10</code> で固定整備</li>
-<li><code>race_outcome_table</code> / <code>payout_table</code> を整形</li>
-<li><code>betting_backtest_dataset</code> を生成</li>
-<li>券種別に <code>expected_value</code> 列を追加</li>
-<li><code>safe_ev</code> と policy thresholds を別管理にする</li>
-<li>その後に配分最適化モデルへ進む</li>
+<li><code>horse_probability_table</code>（確率テーブル）の仕様を確定する</li>
+<li><code>horse_market_snapshot</code> を <code>snapshot_phase=t_minus_10</code>（発走10分前）で整備する</li>
+<li><code>race_outcome_table</code>（結果テーブル）と <code>payout_table</code>（払戻テーブル）を整形する</li>
+<li><code>betting_backtest_dataset</code>（結合テーブル）を生成する</li>
+<li>券種別に <code>expected_value</code>（期待値）列を追加する</li>
+<li><code>safe_ev</code> と閾値設定（policy thresholds）を別ファイルで管理する</li>
+<li>上記が整ってから配分最適化モデルへ進む</li>
 </ol>
     </article>
     <nav class="doc-nav">

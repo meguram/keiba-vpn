@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>推論サービス設計 — keiba-vpn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, sans-serif;
+  background: var(--bg); color: var(--text);
+  line-height: 1.8; font-size: 15px;
+  padding: 40px 56px 96px; max-width: 900px; margin: 0 auto;
+}
+code, pre { font-family: "JetBrains Mono", monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.back { font-size: 13px; color: var(--muted); margin-bottom: 28px; display: inline-block; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px; margin-bottom: 36px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.eyebrow {
+  color: var(--accent-2); font-size: 11px; letter-spacing: .22em;
+  font-weight: 700; text-transform: uppercase; margin-bottom: 8px;
+}
+header.hero h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.35; }
+header.hero p { color: var(--muted); font-size: 13px; margin: 0; line-height: 1.7; }
+h2 { font-size: 1.2rem; margin: 2.2em 0 0.7em; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border); color: #e8eeff; }
+h3 { font-size: 1.05rem; color: var(--accent-2); margin: 1.6em 0 0.5em; }
+p { margin: 0.7em 0; }
+pre { background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px; overflow-x: auto;
+  font-size: 12.5px; line-height: 1.55; }
+code { background: #1a2748; border: 1px solid var(--border);
+  border-radius: 5px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+pre code { background: none; border: none; padding: 0; color: #c9d8ff; }
+table { width: 100%; border-collapse: collapse; margin: 1.2em 0;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; font-size: 13px; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; }
+tr:last-child td { border-bottom: 0; }
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px 22px; margin: 14px 0;
+  box-shadow: var(--shadow);
+}
+.card-title {
+  font-size: 1rem; font-weight: 700; color: var(--text); margin: 0 0 6px;
+  display: flex; align-items: center; gap: 10px;
+}
+.badge {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px; letter-spacing: .08em;
+  background: rgba(79,139,255,.15); color: var(--accent-2);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 2px 8px;
+}
+.badge.active { background: rgba(74,222,128,.12); color: #86efac; border-color: rgba(74,222,128,.3); }
+.badge.planned { background: rgba(251,191,36,.1); color: #fde68a; border-color: rgba(251,191,36,.3); }
+.tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.tag {
+  background: #1d2b50; color: #cfdcff;
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 3px 10px; font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+}
+.callout {
+  border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+  padding: 12px 16px; border-radius: 8px; margin: 12px 0;
+}
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+ul.bullets { list-style: none; padding: 0; margin: 6px 0; }
+ul.bullets li { position: relative; padding-left: 18px; margin: 4px 0; font-size: 14px; }
+ul.bullets li::before {
+  content: ""; position: absolute; left: 4px; top: 11px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<a class="back" href="../index.html">← ドキュメント一覧へ</a>
+
+<header class="hero">
+  <div class="eyebrow">DESIGN · INFERENCE</div>
+  <h1>推論サービス設計</h1>
+  <p>
+    keiba-vpn の推論層は <code>src/pipeline/inference/</code> 配下の 3 つのサービスと
+    MLflow ランタイム (<code>src/pipeline/mlflow/</code>) から構成されます。
+    このページでは各サービスの役割・キャッシュフロー・API エンドポイントを整理します。
+  </p>
+</header>
+
+<h2>サービス一覧</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>サービスファイル</th>
+      <th>model_key</th>
+      <th>状態</th>
+      <th>API エンドポイント</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>tracking_difficulty_service.py</code></td>
+      <td><code>tracking_difficulty</code></td>
+      <td><span class="badge active">ACTIVE</span></td>
+      <td><code>GET /api/race/{race_id}/tracking-difficulty</code></td>
+    </tr>
+    <tr>
+      <td><code>final_odds_service.py</code></td>
+      <td><code>final_odds</code></td>
+      <td><span class="badge active">ACTIVE</span></td>
+      <td><code>GET /api/race/{race_id}/final-odds</code></td>
+    </tr>
+    <tr>
+      <td><code>finish_order_service.py</code></td>
+      <td><code>finish_order</code></td>
+      <td><span class="badge planned">PLANNED</span></td>
+      <td>未実装</td>
+    </tr>
+    <tr>
+      <td><code>mlflow_serve_client.py</code></td>
+      <td>—</td>
+      <td><span class="badge active">後方互換</span></td>
+      <td><code>runtime.get_serve_client()</code> のエイリアス</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>共通キャッシュ構造 — InferenceCacheMixin</h2>
+
+<p>
+  全サービスは <code>src/pipeline/mlflow/inference_cache.py</code> の <code>InferenceCacheMixin</code> を
+  継承し、HybridStorage（GCS + ローカル L2 + メモリ LRU）に推論 JSON をキャッシュします。
+</p>
+
+<pre><code>class _TrackingDifficultyCache(InferenceCacheMixin):
+    model_key = "tracking_difficulty"
+    cache_version = 6   # バージョン変更でキャッシュ自動無効化</code></pre>
+
+<h3>キャッシュフロー（read-through）</h3>
+
+<pre><code>get_or_compute(storage, race_id)
+  ├─ load_cached()  →  HybridStorage.load(cache_category, race_id)
+  │     ├─ メモリ LRU
+  │     ├─ ローカル disk L2
+  │     └─ GCS
+  ├─ キャッシュヒット + version 一致 + TTL 内  →  返却
+  └─ キャッシュミス  →  build_*_response()  →  save_cached()  →  返却</code></pre>
+
+<h3>TTL とキャッシュ有効化</h3>
+
+<table>
+  <thead>
+    <tr><th>設定</th><th>環境変数</th><th>既定値</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>追走難度キャッシュ有効</td>
+      <td><code>KEIBA_TRACKING_DIFFICULTY_CACHE</code></td>
+      <td>1 (有効)</td>
+    </tr>
+    <tr>
+      <td>追走難度 TTL</td>
+      <td><code>KEIBA_TRACKING_DIFFICULTY_CACHE_TTL_SEC</code></td>
+      <td>86400 秒（24h）</td>
+    </tr>
+    <tr>
+      <td>最終オッズキャッシュ有効</td>
+      <td><code>KEIBA_FINAL_ODDS_CACHE</code></td>
+      <td>1 (有効)</td>
+    </tr>
+    <tr>
+      <td>最終オッズ TTL</td>
+      <td><code>KEIBA_FINAL_ODDS_CACHE_TTL_SEC</code></td>
+      <td>86400 秒（24h）</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>追走難度サービス — tracking_difficulty_service.py</h2>
+
+<div class="card">
+  <div class="card-title">
+    <span class="badge active">ACTIVE</span>
+    TrackingDifficultyService
+  </div>
+  <p>
+    枠順・隣接馬の傾向・前走通過順から「いつもの位置を取れるか（追走難度）」と
+    位置取りフロー（前半〜最終コーナーの各馬想定順位）を推定します。
+  </p>
+
+  <h3>主要関数</h3>
+  <table>
+    <thead><tr><th>関数</th><th>役割</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>load_race_bundle()</code></td>
+        <td>race_shutuba + horse_result を並行ロード。<code>pre_race_only=True</code> で事後リーク防止</td>
+      </tr>
+      <tr>
+        <td><code>build_tracking_difficulty_response()</code></td>
+        <td>レース全体の追走難度・ペース・位置フローを組み立てる（キャッシュ非管理）</td>
+      </tr>
+      <tr>
+        <td><code>get_or_compute()</code></td>
+        <td>キャッシュ優先で結果を返す（APIから呼ぶ入口）</td>
+      </tr>
+      <tr>
+        <td><code>precompute_tracking_for_race_ids()</code></td>
+        <td>前日 18 時トリガーでバッチ事前計算</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>レスポンスの主な項目</h3>
+  <div class="tag-row">
+    <span class="tag">pace_prediction</span>
+    <span class="tag">position_flow</span>
+    <span class="tag">entries (tracking_difficulty per horse)</span>
+    <span class="tag">field_prev_stats</span>
+    <span class="tag">_compute_meta</span>
+  </div>
+</div>
+
+<h2>最終オッズ予測サービス — final_odds_service.py</h2>
+
+<div class="card">
+  <div class="card-title">
+    <span class="badge active">ACTIVE</span>
+    FinalOddsService
+  </div>
+  <p>
+    発走前の出馬表・調教・指数・過去走から単勝・複勝オッズを推定します。
+    LightGBM 3 ヘッド（<code>win / place_min / place_max</code>）モデルを使用し、
+    <code>models/final_odds_bundle.json</code> またはMLflow Registry からロードします。
+  </p>
+
+  <h3>主要関数</h3>
+  <table>
+    <thead><tr><th>関数</th><th>役割</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>_build_race_data_from_storage()</code></td>
+        <td>storage から出馬表・指数・馬過去走を並行収集</td>
+      </tr>
+      <tr>
+        <td><code>build_final_odds_response()</code></td>
+        <td>特徴量構築 → <code>predict_final_odds()</code> 呼出 → JSON 整形</td>
+      </tr>
+      <tr>
+        <td><code>get_or_compute()</code></td>
+        <td>キャッシュ優先エントリポイント</td>
+      </tr>
+      <tr>
+        <td><code>precompute_final_odds_for_race_ids()</code></td>
+        <td>前日バッチ一括事前計算</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>レスポンスの主な項目</h3>
+  <div class="tag-row">
+    <span class="tag">entries[].horse_number</span>
+    <span class="tag">entries[].predicted_win_odds</span>
+    <span class="tag">entries[].predicted_place_odds_min</span>
+    <span class="tag">entries[].predicted_place_odds_max</span>
+    <span class="tag">elapsed_sec</span>
+  </div>
+</div>
+
+<h2>着順予測サービス — finish_order_service.py</h2>
+
+<div class="card">
+  <div class="card-title">
+    <span class="badge planned">PLANNED</span>
+    FinishOrderService（スタブ）
+  </div>
+  <p>
+    次期本番モデルの着順・複勝圏確率予測。現在は <code>InferenceCacheMixin</code> の
+    サブクラス宣言のみ実装済みで、推論ロジックは未実装です。
+    実装時は <code>tracking_difficulty_service.py</code> と同パターンで
+    <code>build_finish_order_response()</code> を追加します。
+  </p>
+  <pre><code>class FinishOrderCache(InferenceCacheMixin):
+    model_key = "finish_order"
+    cache_version = 1</code></pre>
+</div>
+
+<h2>MLflow バックエンド解決フロー</h2>
+
+<p>
+  <code>src/pipeline/mlflow/runtime.py</code> の <code>infer_backend_label()</code> が
+  推論時にどのバックエンドを使うかを決定します。
+</p>
+
+<pre><code>def infer_backend_label(key: str) -> str:
+    client = get_serve_client(key)
+    if client is not None and client.is_available():
+        return "mlflow_serve"      # 外部 MLflow モデルサーバ（推奨）
+    if load_lightgbm_booster(key) is not None:
+        return "local_mlflow"      # ローカル Registry または models/ ファイル
+    return "heuristic"             # ルールベースフォールバック</code></pre>
+
+<h3>モデル Serving ポート設定</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>model_key</th>
+      <th>registered_name</th>
+      <th>デフォルトポート</th>
+      <th>settings.yaml キー</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>keiba_lgbm</code></td>
+      <td><code>keiba-lgbm</code></td>
+      <td>5010</td>
+      <td><code>mlflow.models.keiba_lgbm.serve_uri</code></td>
+    </tr>
+    <tr>
+      <td><code>tracking_difficulty</code></td>
+      <td><code>tracking-difficulty-lgbm</code></td>
+      <td>5001</td>
+      <td><code>mlflow.models.tracking_difficulty.serve_uri</code></td>
+    </tr>
+    <tr>
+      <td><code>finish_order</code></td>
+      <td><code>keiba-finish-order-lgbm</code></td>
+      <td>5002</td>
+      <td><code>mlflow.models.finish_order.serve_uri</code></td>
+    </tr>
+    <tr>
+      <td><code>final_odds</code></td>
+      <td><code>keiba-final-odds-lgbm</code></td>
+      <td>5003</td>
+      <td><code>mlflow.models.final_odds.serve_uri</code></td>
+    </tr>
+    <tr>
+      <td><code>pace_predictor</code></td>
+      <td><code>pace-predictor-lgbm</code></td>
+      <td>5004</td>
+      <td><code>mlflow.models.pace_predictor.serve_uri</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <h4>ヘルスチェック</h4>
+  <p>
+    全モデルのバックエンド状態は <code>GET /api/inference/health</code> で確認できます。
+    <code>MlflowServeClient.is_available()</code> が <code>/health</code> エンドポイントに
+    HTTP GET して 200 かどうかで判定します（60 秒キャッシュ）。
+  </p>
+</div>
+
+<h2>API エンドポイント一覧</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>メソッド</th>
+      <th>パス</th>
+      <th>内容</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>GET</code></td>
+      <td><code>/api/race/{race_id}/tracking-difficulty</code></td>
+      <td>追走難度レスポンス（キャッシュ優先）</td>
+    </tr>
+    <tr>
+      <td><code>POST</code></td>
+      <td><code>/api/race/{race_id}/tracking-difficulty/precompute</code></td>
+      <td>追走難度を強制再計算してキャッシュ更新</td>
+    </tr>
+    <tr>
+      <td><code>GET</code></td>
+      <td><code>/api/race/{race_id}/final-odds</code></td>
+      <td>最終オッズ予測（キャッシュ優先）</td>
+    </tr>
+    <tr>
+      <td><code>POST</code></td>
+      <td><code>/api/race/{race_id}/final-odds/precompute</code></td>
+      <td>最終オッズを強制再計算してキャッシュ更新</td>
+    </tr>
+    <tr>
+      <td><code>GET</code></td>
+      <td><code>/api/inference/health</code></td>
+      <td>全モデルの Serving / ローカル Booster 状態</td>
+    </tr>
+    <tr>
+      <td><code>POST</code></td>
+      <td><code>/api/tracking-difficulty/train</code></td>
+      <td>追走難度モデルをその場で学習</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>コードの依存関係</h2>
+
+<pre><code>src/api/app.py
+  └─ tracking_difficulty_service.get_or_compute()
+       ├─ mlflow.inference_cache.InferenceCacheMixin
+       │    └─ mlflow.catalog.get_model_spec()
+       ├─ mlflow.runtime.infer_backend_label()
+       │    ├─ get_serve_client()  →  MlflowServeClient
+       │    └─ load_lightgbm_booster()  →  Registry / local .lgb
+       └─ models.tracking_difficulty.predict_tracking_difficulty()
+
+src/api/app.py
+  └─ final_odds_service.get_or_compute()
+       ├─ mlflow.inference_cache.InferenceCacheMixin
+       ├─ pipeline.features.feature_builder.build_race_features()
+       └─ models.final_odds_predictor.predict_final_odds()
+            └─ FinalOddsPredictor  (bundle.json または MLflow artifacts)</code></pre>
+
+<h2>関連ドキュメント</h2>
+<ul class="bullets">
+  <li><a href="mlflow_platform.html">MLflow モデリング・推論プラットフォーム</a></li>
+  <li><a href="LAYER_DESIGN.html">レイヤー設計 — 全体アーキテクチャ</a></li>
+  <li><a href="../modeling/final_odds_model.html">最終オッズ予測モデル詳細</a></li>
+  <li><a href="../operations/local_dataset_endpoints.html">ローカル API 一覧</a></li>
+</ul>
+
+</body>
+</html>

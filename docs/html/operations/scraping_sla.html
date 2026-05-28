@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>keiba-vpn 運用 SLA — スクレイピング自動化と AI 予測パイプライン</title>
+<title>keiba-vpn 運用 SLA（品質保証基準） — スクレイピング自動化と AI 予測の処理の流れ</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>
   mermaid.initialize({
     startOnLoad: true,
-    theme: "default",
+    theme: "dark",
     themeVariables: { fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
     flowchart: { curve: "basis", padding: 12 },
     gantt:    { fontSize: 12, sectionFontSize: 14 },
@@ -16,23 +16,23 @@
 </script>
 <style>
   :root {
-    --c-bg: #fafbfc;
-    --c-card: #ffffff;
-    --c-border: #e1e4e8;
-    --c-text: #24292e;
-    --c-text-muted: #6a737d;
-    --c-primary: #0969da;
-    --c-primary-soft: #ddf4ff;
-    --c-ok: #1a7f37;
-    --c-ok-soft: #dcfce7;
-    --c-warn: #9a6700;
-    --c-warn-soft: #fff8c5;
-    --c-ng: #cf222e;
-    --c-ng-soft: #ffebe9;
-    --c-accent: #8250df;
-    --c-accent-soft: #fbefff;
-    --shadow-sm: 0 1px 2px rgba(27,31,36,0.08);
-    --shadow-md: 0 3px 8px rgba(27,31,36,0.10);
+    --c-bg:           #0f172a;
+    --c-card:         #15213c;
+    --c-border:       #243358;
+    --c-text:         #e6ecff;
+    --c-text-muted:   #9aa7c7;
+    --c-primary:      #4f8bff;
+    --c-primary-soft: rgba(79,139,255,0.14);
+    --c-ok:           #4ade80;
+    --c-ok-soft:      rgba(74,222,128,0.12);
+    --c-warn:         #fbbf24;
+    --c-warn-soft:    rgba(251,191,36,0.12);
+    --c-ng:           #f87171;
+    --c-ng-soft:      rgba(248,113,113,0.12);
+    --c-accent:       #a78bfa;
+    --c-accent-soft:  rgba(167,139,250,0.12);
+    --shadow-sm: 0 2px 8px rgba(0,0,0,0.30);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.35);
     --radius: 10px;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
   }
@@ -41,7 +41,7 @@
     margin: 0;
     background: var(--c-bg);
     color: var(--c-text);
-    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
     line-height: 1.7;
     font-size: 15px;
   }
@@ -51,37 +51,19 @@
     padding-bottom: 18px;
     margin-bottom: 28px;
   }
-  header.page-head h1 {
-    margin: 0 0 6px;
-    font-size: 26px;
-    letter-spacing: 0.01em;
-  }
-  header.page-head .subtitle {
-    color: var(--c-text-muted);
-    font-size: 14px;
-  }
+  header.page-head h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: 0.01em; }
+  header.page-head .subtitle { color: var(--c-text-muted); font-size: 14px; }
   .meta-row {
-    display: flex;
-    gap: 14px;
-    flex-wrap: wrap;
-    margin-top: 12px;
-    font-size: 12px;
-    color: var(--c-text-muted);
+    display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px;
+    font-size: 12px; color: var(--c-text-muted);
   }
   .meta-row .pill {
-    background: var(--c-primary-soft);
-    color: var(--c-primary);
-    padding: 2px 10px;
-    border-radius: 999px;
-    font-weight: 600;
+    background: var(--c-primary-soft); color: var(--c-primary);
+    padding: 2px 10px; border-radius: 999px; font-weight: 600;
   }
-  /* ── 目次 ── */
   nav.toc {
-    background: var(--c-card);
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    padding: 16px 22px;
-    margin: 0 0 32px;
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--radius); padding: 16px 22px; margin: 0 0 32px;
     box-shadow: var(--shadow-sm);
   }
   nav.toc h2 { font-size: 14px; margin: 0 0 10px; color: var(--c-text-muted); letter-spacing: 0.06em; }
@@ -89,164 +71,103 @@
   nav.toc ol li { padding: 2px 0; break-inside: avoid; }
   nav.toc a { color: var(--c-primary); text-decoration: none; }
   nav.toc a:hover { text-decoration: underline; }
-  /* ── セクション ── */
   section {
-    background: var(--c-card);
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    padding: 24px 28px;
-    margin: 0 0 28px;
-    box-shadow: var(--shadow-sm);
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--radius); padding: 24px 28px;
+    margin: 0 0 28px; box-shadow: var(--shadow-sm);
   }
   section h2 {
-    margin: 0 0 14px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--c-border);
-    font-size: 20px;
+    margin: 0 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--c-border); font-size: 20px;
+    color: var(--c-text);
   }
   section h3 { margin: 22px 0 8px; font-size: 16px; }
   section h4 { margin: 16px 0 4px; font-size: 14px; color: var(--c-text-muted); }
   section p, section li { font-size: 14.5px; }
-  /* ── サマリカード ── */
   .summary-grid {
-    display: grid;
-    gap: 14px;
+    display: grid; gap: 14px;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    margin: 8px 0 8px;
+    margin: 8px 0;
   }
   .card {
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-    background: #fff;
+    border: 1px solid var(--c-border); border-radius: var(--radius);
+    padding: 14px 16px; background: var(--c-card);
     transition: transform 0.1s ease;
   }
   .card:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
   .card .lbl {
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    padding: 2px 8px;
-    border-radius: 6px;
-    margin-bottom: 8px;
+    display: inline-block; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.06em; padding: 2px 8px; border-radius: 6px; margin-bottom: 8px;
   }
-  .card.ok .lbl { background: var(--c-ok-soft); color: var(--c-ok); }
-  .card.warn .lbl { background: var(--c-warn-soft); color: var(--c-warn); }
-  .card.ng .lbl { background: var(--c-ng-soft); color: var(--c-ng); }
-  .card.info .lbl { background: var(--c-primary-soft); color: var(--c-primary); }
-  .card.accent .lbl { background: var(--c-accent-soft); color: var(--c-accent); }
-  .card .ttl { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .card.ok .lbl     { background: var(--c-ok-soft);      color: var(--c-ok);      }
+  .card.warn .lbl   { background: var(--c-warn-soft);    color: var(--c-warn);    }
+  .card.ng .lbl     { background: var(--c-ng-soft);      color: var(--c-ng);      }
+  .card.info .lbl   { background: var(--c-primary-soft); color: var(--c-primary); }
+  .card.accent .lbl { background: var(--c-accent-soft);  color: var(--c-accent);  }
+  .card .ttl  { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
   .card .desc { font-size: 13px; color: var(--c-text-muted); }
-  /* ── ステータスバッジ ── */
   .badge {
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 1px 8px;
-    border-radius: 6px;
-    line-height: 1.6;
-    vertical-align: middle;
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 1px 8px; border-radius: 6px; line-height: 1.6; vertical-align: middle;
   }
-  .badge.ok    { background: var(--c-ok-soft);    color: var(--c-ok);    }
-  .badge.warn  { background: var(--c-warn-soft);  color: var(--c-warn);  }
-  .badge.ng    { background: var(--c-ng-soft);    color: var(--c-ng);    }
+  .badge.ok    { background: var(--c-ok-soft);      color: var(--c-ok);      }
+  .badge.warn  { background: var(--c-warn-soft);    color: var(--c-warn);    }
+  .badge.ng    { background: var(--c-ng-soft);      color: var(--c-ng);      }
   .badge.info  { background: var(--c-primary-soft); color: var(--c-primary); }
-  .badge.muted { background: #f3f4f6; color: #57606a; }
-  /* ── テーブル ── */
+  .badge.muted { background: rgba(154,167,199,0.12); color: var(--c-text-muted); }
   table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 8px 0 12px;
-    font-size: 13.5px;
-    background: #fff;
+    width: 100%; border-collapse: collapse; margin: 8px 0 12px;
+    font-size: 13.5px; background: var(--c-card);
   }
   thead th {
-    background: #f6f8fa;
-    text-align: left;
-    padding: 8px 10px;
-    border-bottom: 2px solid var(--c-border);
-    font-weight: 600;
-    font-size: 12.5px;
-    color: var(--c-text-muted);
-    letter-spacing: 0.02em;
+    background: #1a2748; text-align: left; padding: 8px 10px;
+    border-bottom: 2px solid var(--c-border); font-weight: 600;
+    font-size: 12.5px; color: var(--c-text-muted); letter-spacing: 0.02em;
   }
   tbody td {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--c-border);
-    vertical-align: top;
+    padding: 8px 10px; border-bottom: 1px solid var(--c-border); vertical-align: top;
   }
-  tbody tr:hover { background: #fafbfc; }
+  tbody tr:hover { background: rgba(79,139,255,0.05); }
   td code, p code, li code {
-    font-family: var(--mono);
-    background: #f3f4f6;
-    color: #6f42c1;
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-size: 12.5px;
+    font-family: var(--mono); background: #0b1428;
+    color: #cfe2ff; padding: 1px 6px; border-radius: 4px;
+    font-size: 12.5px; border: 1px solid var(--c-border);
   }
   pre {
-    background: #f6f8fa;
-    border: 1px solid var(--c-border);
-    border-radius: 8px;
-    padding: 12px 14px;
-    overflow-x: auto;
-    font-family: var(--mono);
-    font-size: 12.5px;
-    line-height: 1.55;
+    background: #0b1428; border: 1px solid var(--c-border);
+    border-radius: 8px; padding: 12px 14px; overflow-x: auto;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+    color: #c9d8ff;
   }
-  /* ── mermaid ラッパ ── */
   .mermaid-wrap {
-    background: #fbfcfd;
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius);
-    padding: 14px;
-    overflow-x: auto;
-    margin: 10px 0;
+    background: #0d1632; border: 1px solid var(--c-border);
+    border-radius: var(--radius); padding: 14px; overflow-x: auto; margin: 10px 0;
   }
   .mermaid { font-size: 13px; }
-  /* ── コールアウト ── */
   .callout {
-    border-left: 4px solid var(--c-primary);
-    background: var(--c-primary-soft);
-    padding: 12px 16px;
-    border-radius: 0 8px 8px 0;
-    margin: 12px 0;
+    border-left: 4px solid var(--c-primary); background: var(--c-primary-soft);
+    padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 12px 0;
+    color: var(--c-text);
   }
   .callout.warn { border-left-color: var(--c-warn); background: var(--c-warn-soft); }
-  .callout.ng   { border-left-color: var(--c-ng);   background: var(--c-ng-soft); }
-  .callout.ok   { border-left-color: var(--c-ok);   background: var(--c-ok-soft); }
+  .callout.ng   { border-left-color: var(--c-ng);   background: var(--c-ng-soft);   }
+  .callout.ok   { border-left-color: var(--c-ok);   background: var(--c-ok-soft);   }
   .callout strong { display: block; margin-bottom: 4px; }
-  /* ── 折りたたみ ── */
   details {
-    border: 1px solid var(--c-border);
-    border-radius: 8px;
-    padding: 10px 14px;
-    margin: 10px 0;
-    background: #fbfcfd;
+    border: 1px solid var(--c-border); border-radius: 8px;
+    padding: 10px 14px; margin: 10px 0; background: #0d1632;
   }
   details > summary {
-    cursor: pointer;
-    font-weight: 600;
-    color: var(--c-text);
-    list-style: none;
+    cursor: pointer; font-weight: 600; color: var(--c-text); list-style: none;
   }
   details > summary::before { content: "▶ "; color: var(--c-text-muted); font-size: 11px; }
   details[open] > summary::before { content: "▼ "; }
-  /* ── パス表示 ── */
-  .path {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--c-text-muted);
-  }
-  /* ── 印刷 ── */
+  .path { font-family: var(--mono); font-size: 12px; color: var(--c-text-muted); }
   @media print {
-    body { background: #fff; }
+    body { background: #fff; color: #000; }
     section { box-shadow: none; page-break-inside: avoid; }
     nav.toc { display: none; }
-    a[href]::after { content: ""; }
   }
-  /* ── レスポンシブ ── */
   @media (max-width: 720px) {
     .layout { padding: 18px 12px 60px; }
     section { padding: 18px 16px; }
@@ -259,8 +180,8 @@
 <div class="layout">
 
 <header class="page-head">
-  <h1>keiba-vpn 運用 SLA — スクレイピング自動化と AI 予測パイプライン</h1>
-  <div class="subtitle">netkeiba データ取得の現状・依存関係・週次/開催日タイムライン、および「レース 10 分前 AI 予測」実現に向けたギャップ整理</div>
+  <h1>keiba-vpn 運用 SLA（品質保証基準） — スクレイピング（Webからの自動データ収集）自動化と AI 予測の処理の流れ</h1>
+  <div class="subtitle">netkeiba データ取得の現状・依存関係・週次/開催日タイムライン、および「レース 10 分前 AI 予測」実現に向けた現状ギャップの整理</div>
   <div class="meta-row">
     <span class="pill">最終更新 2026-05-18</span>
     <span>対象リポジトリ: <code>keiba-vpn</code></span>
@@ -272,14 +193,14 @@
   <h2>目次</h2>
   <ol>
     <li><a href="#summary">1. エグゼクティブサマリ</a></li>
-    <li><a href="#arch">2. システムアーキテクチャ全体像</a></li>
-    <li><a href="#categories">3. スクレイピング対象データ一覧</a></li>
+    <li><a href="#arch">2. システム全体の構成</a></li>
+    <li><a href="#categories">3. データ収集対象の一覧</a></li>
     <li><a href="#schedules">4. 自動化ジョブ一覧 (cron / 常駐)</a></li>
-    <li><a href="#raceday-timeline">5. 開催日タイムライン</a></li>
+    <li><a href="#raceday-timeline">5. 開催日のタイムライン</a></li>
     <li><a href="#weekly-cycle">6. 週次サイクル</a></li>
-    <li><a href="#dag">7. タスク依存関係 (DAG)</a></li>
+    <li><a href="#dag">7. タスクの依存関係 (DAG)</a></li>
     <li><a href="#queue">8. キューシステムと API トリガ</a></li>
-    <li><a href="#predict-t10">9. 「レース 10 分前 AI 予測」要件とギャップ</a></li>
+    <li><a href="#predict-t10">9. 「レース 10 分前 AI 予測」の設計とギャップ</a></li>
     <li><a href="#risks">10. 既知のリスクと注意点</a></li>
     <li><a href="#refs">11. 参考: 関連ファイル一覧</a></li>
   </ol>
@@ -289,75 +210,82 @@
 <section id="summary">
   <h2>1. エグゼクティブサマリ</h2>
   <p>
-    本ドキュメントは <strong>keiba-vpn の現運用 SLA</strong> と <strong>今後 (レース 10 分前 AI 予測) を見据えた要件</strong> を一枚にまとめたものです。
-    現状はサーバ常駐スレッド (FastAPI lifespan) とローカル cron / systemd の二本立てで動作し、
+    本ドキュメントは <strong>keiba-vpn の現運用 SLA（品質保証基準）</strong> と <strong>今後の目標（レース 10 分前 AI 予測）に向けた要件と現状ギャップ</strong> を一枚にまとめたものです。
+  </p>
+  <p>
+    現状はサーバ常駐スレッド（FastAPI lifespan）とローカル cron / systemd の二系統で動作しています。
     APScheduler のような統一スケジューラは使用していません。
   </p>
 
-  <h3>運用ステータス サマリ</h3>
+  <h3>現在の運用状況サマリ</h3>
   <div class="summary-grid">
     <div class="card ok">
       <span class="lbl">SLA OK</span>
       <div class="ttl">開催日朝バッチ (raceday-runner)</div>
-      <div class="desc">07:30 JST 起動 → 各レース <strong>発走 15 分前</strong> に出馬表 / オッズ / 馬柱 / 追切 / SmartRC を一括取得</div>
+      <div class="desc">07:30 JST 起動。各レースの <strong>発走 15 分前</strong> に出馬表・オッズ・馬柱・追切・SmartRC を一括取得します。</div>
     </div>
     <div class="card ok">
       <span class="lbl">SLA OK</span>
       <div class="ttl">開催日夕方バッチ (raceday-evening)</div>
-      <div class="desc">17:30 JST → 当日全レースの結果 + 確定オッズ + SmartRC を取得</div>
+      <div class="desc">17:30 JST 起動。当日全レースの結果・確定オッズ・SmartRC を取得します。</div>
     </div>
     <div class="card ok">
       <span class="lbl">SLA OK</span>
       <div class="ttl">週次バッチ (weekly-update)</div>
-      <div class="desc">金 17:30 JST → db.netkeiba 更新 (金 17:00) を待って先週分の結果・指数・馬情報を再取得</div>
+      <div class="desc">金曜 17:30 JST 起動。db.netkeiba の更新（金曜 17:00）を待って、先週分の結果・指数・馬情報を再取得します。</div>
     </div>
     <div class="card info">
       <span class="lbl">常駐</span>
       <div class="ttl">queue.worker</div>
-      <div class="desc">UI / API から投入されたスクレイプジョブを順次処理。アイドル時 ~30s 待機</div>
+      <div class="desc">UI / API から投入されたデータ収集ジョブを順次処理します。アイドル時は約 30 秒待機します。</div>
     </div>
     <div class="card info">
       <span class="lbl">常駐</span>
       <div class="ttl">scheduler.queue_maintain</div>
-      <div class="desc">3600 秒ごとに失敗ジョブを待機へ戻す + 完了レコードを掃除</div>
+      <div class="desc">3600 秒ごとに失敗ジョブを待機状態へ戻し、完了済みレコードを掃除します。</div>
     </div>
     <div class="card info">
       <span class="lbl">常駐</span>
       <div class="ttl">scheduler.structure</div>
-      <div class="desc">06:00 JST 毎日。netkeiba 各ページの HTML 構造フィンガープリント変化を検知</div>
+      <div class="desc">毎日 06:00 JST 起動。netkeiba 各ページの HTML 構造フィンガープリントの変化を検知します。</div>
     </div>
     <div class="card info">
       <span class="lbl">統合方針</span>
       <div class="ttl">JRA 馬場ライブ (jra_baba_live)</div>
-      <div class="desc"><strong>raceday-runner の T-15 バンドルに統合</strong>。発走 15 分前の netkeiba 一括取得と同タイミングでクッション / 含水率をキャッチアップ（別 systemd 5 分ポーリングは廃止方向）</div>
+      <div class="desc"><strong>raceday-runner の T-15 バンドルに統合済みです。</strong> 発走 15 分前の netkeiba 一括取得と同タイミングでクッション値・含水率をキャッチアップします。別途 systemd で動かす 5 分ポーリングは廃止方向です。</div>
     </div>
     <div class="card ok">
       <span class="lbl">SLA OK</span>
       <div class="ttl">日次レース一覧バッチ (daily-race-lists)</div>
-      <div class="desc">毎日 07:00 JST → 今日〜14日先の JRA 開催日の <code>race_lists</code> を取得・更新。モニター画面の開催日情報を常に最新に保つ</div>
+      <div class="desc">毎日 07:00 JST 起動。今日〜14日先の JRA 開催日の <code>race_lists</code> を取得・更新し、モニター画面の開催日情報を常に最新に保ちます。</div>
     </div>
     <div class="card warn">
       <span class="lbl">モック</span>
       <div class="ttl">レース 10 分前 AI 予測トリガ</div>
-      <div class="desc"><strong>T-15 バンドル完了</strong>をトリガに起動（別 T-10 再取得ジョブは不要）。<code>raceday_pre_race_pipeline</code> + <code>pre_race_predict_trigger</code>（本番は後補完）</div>
+      <div class="desc"><strong>T-15 バンドル完了</strong>をトリガに起動します（別途 T-10 再取得ジョブは不要）。<code>raceday_pre_race_pipeline</code> + <code>pre_race_predict_trigger</code> は実装済みですが、本番化は後補完です。</div>
     </div>
   </div>
 
   <div class="callout">
-    <strong>SLA の根拠</strong>
-    本サマリは <code>src/scraper/auto_scrape.py</code> 冒頭のドキュメント表、<code>src/api/app.py</code> の lifespan、
+    <strong>SLA の根拠について</strong>
+    本サマリは <code>src/scraper/auto_scrape.py</code> 冒頭のドキュメント表、<code>src/api/app.py</code> の lifespan 定義、
     および <code>scripts/cron/setup_*.sh</code> の cron 行定義から機械的に抽出しています。
-    これらを変更すると SLA も変わるため、変更時は本ドキュメントを更新してください。
+    これらのソースを変更すると SLA も変わりますので、変更時は本ドキュメントも合わせて更新してください。
   </div>
 </section>
 
 <!-- ════════════════════════════════════════════════════════════ -->
 <section id="arch">
-  <h2>2. システムアーキテクチャ全体像</h2>
+  <h2>2. システム全体の構成</h2>
   <p>
-    データ取得フローは <strong>外部 cron / systemd 起動の auto_scrape</strong> と
-    <strong>FastAPI 常駐の queue.worker / scheduler 群</strong> の二系統です。
-    両者は <code>HybridStorage</code> (GCS プライマリ + ローカルキャッシュ) を共有します。
+    データ取得処理は大きく 2 系統に分かれています。
+  </p>
+  <ul>
+    <li><strong>外部 cron / systemd で起動する auto_scrape</strong>: 開催日の朝・夕方・週次など時刻ベースで自動実行します。</li>
+    <li><strong>FastAPI 常駐の queue.worker / scheduler 群</strong>: UI や API からの操作、および定期メンテナンス処理を担当します。</li>
+  </ul>
+  <p>
+    両系統は <code>HybridStorage</code>（Google Cloud Storage（GCS）を一次ソースとし、ローカルをキャッシュとして使う仕組み）を共有します。
   </p>
 
   <div class="mermaid-wrap">
@@ -435,154 +363,158 @@ flowchart LR
 
 <!-- ════════════════════════════════════════════════════════════ -->
 <section id="categories">
-  <h2>3. スクレイピング対象データ一覧</h2>
+  <h2>3. データ収集対象の一覧</h2>
   <p>
-    <code>HybridStorage</code> に登録された <strong>netkeiba 由来カテゴリ</strong> と、
-    その更新頻度・直前性 (= レース直前で再取得が要るか) を整理します。
+    <code>HybridStorage</code> に登録された <strong>netkeiba 由来のカテゴリ</strong> と、その更新頻度・直前性（レース直前に再取得が必要かどうか）を整理します。
+  </p>
+  <p>
     保存先は GCS が <code>chuou/data/preprocessed/netkeiba/pc/{category}/{年or4桁}/{key}.json</code>、
     ローカルミラーは <code>data/local/&lt;category&gt;/</code> または <code>data/cache/</code> です。
   </p>
 
-  <h3>レース系 (race_id 基底)</h3>
+  <h3>レース系（race_id 基準）</h3>
   <table>
     <thead><tr>
       <th>category</th><th>内容</th><th>取得 URL</th><th>想定更新頻度</th><th>直前性</th><th>取得関数</th>
     </tr></thead>
     <tbody>
       <tr><td><code>race_lists</code></td><td>当日レース一覧</td><td>top レース一覧 (race.netkeiba.com)</td><td>開催日朝</td><td><span class="badge ok">必須</span></td><td><code>scrape_race_list(date)</code></td></tr>
-      <tr><td><code>race_shutuba</code></td><td><strong>出馬表</strong> (馬体重・増減を含む)</td><td><code>race.netkeiba.com/race/shutuba.html?race_id=...</code></td><td>当日 (T-15 で確定)</td><td><span class="badge ok">必須</span></td><td><code>scrape_race_card(rid)</code></td></tr>
-      <tr><td><code>race_odds</code></td><td>単複オッズ (JSON API)</td><td>race.netkeiba.com/odds API</td><td>変動 + 確定</td><td><span class="badge ok">必須</span></td><td><code>scrape_odds(rid)</code></td></tr>
-      <tr><td><code>race_pair_odds</code></td><td>2 連オッズ (JSON API)</td><td>race.netkeiba.com/odds API</td><td>変動 + 確定</td><td><span class="badge ok">必須</span></td><td><code>scrape_pair_odds(rid)</code></td></tr>
-      <tr><td><code>race_shutuba_past</code></td><td>馬柱 / 過去成績 / 当日調教表示</td><td>race.netkeiba.com/race/shutuba_past.html</td><td>当日 (T-15)</td><td><span class="badge ok">必須</span></td><td><code>scrape_shutuba_past(rid)</code></td></tr>
+      <tr><td><code>race_shutuba</code></td><td><strong>出馬表</strong>（馬体重・増減を含む）</td><td><code>race.netkeiba.com/race/shutuba.html?race_id=...</code></td><td>当日（T-15 で確定）</td><td><span class="badge ok">必須</span></td><td><code>scrape_race_card(rid)</code></td></tr>
+      <tr><td><code>race_odds</code></td><td>単複オッズ（JSON API）</td><td>race.netkeiba.com/odds API</td><td>変動中 + 確定後</td><td><span class="badge ok">必須</span></td><td><code>scrape_odds(rid)</code></td></tr>
+      <tr><td><code>race_pair_odds</code></td><td>2 連オッズ（JSON API）</td><td>race.netkeiba.com/odds API</td><td>変動中 + 確定後</td><td><span class="badge ok">必須</span></td><td><code>scrape_pair_odds(rid)</code></td></tr>
+      <tr><td><code>race_shutuba_past</code></td><td>馬柱 / 過去成績 / 当日調教表示</td><td>race.netkeiba.com/race/shutuba_past.html</td><td>当日（T-15）</td><td><span class="badge ok">必須</span></td><td><code>scrape_shutuba_past(rid)</code></td></tr>
       <tr><td><code>race_oikiri</code></td><td>追い切り評価</td><td>race.netkeiba.com/race/oikiri.html</td><td>週中 → 当日</td><td><span class="badge ok">必須</span></td><td><code>scrape_oikiri(rid)</code></td></tr>
-      <tr><td><code>race_paddock</code></td><td>パドック評価 (要ログイン)</td><td>race.netkeiba.com/race/paddock.html</td><td>レース直前帯</td><td><span class="badge warn">推奨</span></td><td><code>scrape_paddock(rid)</code></td></tr>
-      <tr><td><code>race_barometer</code></td><td>バロメータ (Ajax API, 要ログイン)</td><td>race.netkeiba.com Ajax</td><td>当日</td><td><span class="badge warn">推奨</span></td><td><code>scrape_barometer(rid)</code></td></tr>
-      <tr><td><code>race_trainer_comment</code></td><td>厩舎コメント (要ログイン)</td><td>race.netkeiba.com</td><td>当日</td><td><span class="badge warn">推奨</span></td><td><code>scrape_trainer_comment(rid)</code></td></tr>
-      <tr><td><code>race_index</code></td><td>タイム指数 (要ログイン)</td><td>db.netkeiba.com</td><td>レース後 + 週次更新</td><td><span class="badge muted">不要</span></td><td><code>scrape_speed_index(rid)</code></td></tr>
+      <tr><td><code>race_paddock</code></td><td>パドック評価（要ログイン）</td><td>race.netkeiba.com/race/paddock.html</td><td>レース直前帯</td><td><span class="badge warn">推奨</span></td><td><code>scrape_paddock(rid)</code></td></tr>
+      <tr><td><code>race_barometer</code></td><td>バロメータ（Ajax API、要ログイン）</td><td>race.netkeiba.com Ajax</td><td>当日</td><td><span class="badge warn">推奨</span></td><td><code>scrape_barometer(rid)</code></td></tr>
+      <tr><td><code>race_trainer_comment</code></td><td>厩舎コメント（要ログイン）</td><td>race.netkeiba.com</td><td>当日</td><td><span class="badge warn">推奨</span></td><td><code>scrape_trainer_comment(rid)</code></td></tr>
+      <tr><td><code>race_index</code></td><td>タイム指数（要ログイン）</td><td>db.netkeiba.com</td><td>レース後 + 週次更新</td><td><span class="badge muted">不要</span></td><td><code>scrape_speed_index(rid)</code></td></tr>
       <tr><td><code>race_result</code></td><td>レース結果</td><td>db.netkeiba.com/race/{race_id}</td><td>レース確定後</td><td><span class="badge muted">不要</span></td><td><code>scrape_race_result(rid)</code></td></tr>
       <tr><td><code>race_result_lap</code></td><td>ラップ / 通過順</td><td>同上</td><td>レース確定後</td><td><span class="badge muted">不要</span></td><td><code>scrape_race_result_lap(rid)</code></td></tr>
-      <tr><td><code>race_detail</code></td><td>出馬表+指数+馬柱マージ済み</td><td>(合成 JSON)</td><td>上流取得後</td><td><span class="badge muted">不要</span></td><td><code>scrape_race_detail(rid)</code></td></tr>
+      <tr><td><code>race_detail</code></td><td>出馬表+指数+馬柱をマージ済みのデータ</td><td>（合成 JSON）</td><td>上流取得後</td><td><span class="badge muted">不要</span></td><td><code>scrape_race_detail(rid)</code></td></tr>
       <tr><td><code>smartrc_race</code></td><td>SmartRC 一式</td><td>SmartRC API</td><td>当日 + 夕方</td><td><span class="badge warn">推奨</span></td><td><code>scrape_smartrc(rid)</code></td></tr>
-      <tr><td><code>race_predictions</code></td><td><strong>AI 予測結果</strong> (生成物, 取得ではない)</td><td>API 内で生成 → GCS 保存</td><td>予測 API 呼び出し時</td><td>—</td><td><code>POST /api/race/{rid}/predict</code></td></tr>
+      <tr><td><code>race_predictions</code></td><td><strong>AI 予測結果</strong>（取得ではなくシステム内で生成するデータです）</td><td>API 内で生成 → GCS 保存</td><td>予測 API 呼び出し時</td><td>—</td><td><code>POST /api/race/{rid}/predict</code></td></tr>
     </tbody>
   </table>
 
-  <h3>馬系 (horse_id 基底)</h3>
+  <h3>馬系（horse_id 基準）</h3>
   <table>
     <thead><tr>
       <th>category</th><th>内容</th><th>取得 URL</th><th>想定更新頻度</th><th>直前性</th><th>取得関数</th>
     </tr></thead>
     <tbody>
-      <tr><td><code>horse_result</code></td><td>馬プロフィール + 戦績 + 血統 HTML</td><td>db.netkeiba.com/horse/{hid}</td><td>出走のたびに更新余地 (鮮度 7 日)</td><td><span class="badge muted">中</span></td><td><code>scrape_horse(hid)</code></td></tr>
-      <tr><td><code>horse_pedigree_5gen</code></td><td>5 世代血統表</td><td>db.netkeiba.com/horse/ped/{hid}</td><td>実質静的 (初回のみ)</td><td><span class="badge muted">不要</span></td><td><code>scrape_horse_pedigree_5gen(hid)</code></td></tr>
-      <tr><td><code>horse_training</code></td><td>調教タイム全ページ (要ログイン)</td><td>db.netkeiba.com/horse/training/{hid}</td><td>調教公開のたび</td><td><span class="badge warn">推奨</span></td><td><code>scrape_horse_training(hid)</code></td></tr>
+      <tr><td><code>horse_result</code></td><td>馬プロフィール + 戦績 + 血統 HTML</td><td>db.netkeiba.com/horse/{hid}</td><td>出走のたびに更新余地あり（データの有効期限（TTL）: 7 日）</td><td><span class="badge muted">中</span></td><td><code>scrape_horse(hid)</code></td></tr>
+      <tr><td><code>horse_pedigree_5gen</code></td><td>5 世代血統表</td><td>db.netkeiba.com/horse/ped/{hid}</td><td>実質静的（初回のみ取得）</td><td><span class="badge muted">不要</span></td><td><code>scrape_horse_pedigree_5gen(hid)</code></td></tr>
+      <tr><td><code>horse_training</code></td><td>調教タイム全ページ（要ログイン）</td><td>db.netkeiba.com/horse/training/{hid}</td><td>調教タイムが公開されるたびに更新</td><td><span class="badge warn">推奨</span></td><td><code>scrape_horse_training(hid)</code></td></tr>
     </tbody>
   </table>
 
-  <h3>その他 (JRA 公式 / 派生データ)</h3>
+  <h3>その他（JRA 公式 / 派生データ）</h3>
   <table>
     <thead><tr>
       <th>category</th><th>内容</th><th>取得元</th><th>更新頻度</th><th>取得モジュール</th>
     </tr></thead>
     <tbody>
       <tr><td><code>jra_cushion</code></td><td>クッション値・含水率</td><td>JRA 公式 PDF</td><td>開催日朝・昼</td><td><code>src/scraper/jra_cushion.py</code></td></tr>
-      <tr><td>(ライブ馬場)</td><td>クッション・含水率のリアルタイム取得</td><td>JRA 公式</td><td>開催窓内 5 分ごと</td><td><code>src/scraper/jra_baba_live.py --watch</code></td></tr>
-      <tr><td>(JRA カレンダー)</td><td>年間 開催日程</td><td>JRA 公式</td><td>年初 / 改訂時</td><td><code>src/scraper/jra_calendar.py</code></td></tr>
+      <tr><td>（ライブ馬場）</td><td>クッション・含水率のリアルタイム取得</td><td>JRA 公式</td><td>開催窓内 5 分ごと</td><td><code>src/scraper/jra_baba_live.py --watch</code></td></tr>
+      <tr><td>（JRA カレンダー）</td><td>年間開催日程</td><td>JRA 公式</td><td>年初 / 改訂時</td><td><code>src/scraper/jra_calendar.py</code></td></tr>
     </tbody>
   </table>
 
   <details>
-    <summary>カテゴリ取得時の <code>smart_skip</code> 仕様 (重要)</summary>
+    <summary><code>smart_skip</code> の仕様と注意点（重要）</summary>
     <p>
-      <code>HybridStorage.is_fresh()</code> は <strong>ページ構造バージョンと既存 JSON の構造ハッシュ</strong>を比較して鮮度判定します。
-      <strong>時刻ベースの鮮度ではない</strong>ため、同じ <code>race_id</code> を T-2 時間で取得済みでも、
-      <code>smart_skip=True</code> のまま T-15 で再投入すると <strong>古いオッズ / 馬体重がそのまま採用される</strong>恐れがあります。
+      <code>HybridStorage.is_fresh()</code> は <strong>ページ構造バージョンと既存 JSON の構造ハッシュ</strong>を比較して鮮度を判定します。
+      <strong>時刻ベースの鮮度判定ではない</strong>点に注意が必要です。
+    </p>
+    <p>
+      同じ <code>race_id</code> を T-2 時間前に取得済みでも、<code>smart_skip=True</code> のまま T-15 で再投入すると
+      <strong>古いオッズ・馬体重がそのまま採用される</strong>恐れがあります。
     </p>
     <p>
       auto_scrape の <code>raceday-runner</code> は <code>scrape_race_card(..., skip_existing=False)</code> で
-      強制再取得しているため通常は問題ありませんが、API 経由 (<code>POST /api/race/{rid}/predict</code> 内の
-      <code>scrape_race_all(..., smart_skip=True)</code>) では「直前性」を保証しません。
-      → §9 の対応を参照。
+      強制再取得しているため通常は問題ありません。
+      ただし、API 経由（<code>POST /api/race/{rid}/predict</code> 内の <code>scrape_race_all(..., smart_skip=True)</code>）では
+      「直前性」が保証されません。詳細は §9 を参照してください。
     </p>
   </details>
 </section>
 
 <!-- ════════════════════════════════════════════════════════════ -->
 <section id="schedules">
-  <h2>4. 自動化ジョブ一覧 (cron / 常駐)</h2>
+  <h2>4. 自動化ジョブ一覧（cron / 常駐）</h2>
 
-  <h3>4.1 スクレイピング系 cron (要 <code>scripts/cron/</code> セットアップ)</h3>
+  <h3>4.1 データ収集系 cron（<code>scripts/cron/</code> でのセットアップが必要）</h3>
   <p>
-    <code>auto_scrape.py</code> 用の自動セットアップスクリプトはリポジトリに無いため、
-    <strong>運用者が手動で crontab に登録する想定</strong>です (推奨タイミングは <code>auto_scrape.py</code> 冒頭ドキュメント表に記載)。
+    <code>auto_scrape.py</code> 用の自動セットアップスクリプトはリポジトリに含まれていません。
+    <strong>運用者が手動で crontab に登録してください</strong>（推奨タイミングは <code>auto_scrape.py</code> 冒頭のドキュメント表を参照）。
   </p>
   <table>
     <thead><tr>
-      <th>ジョブ</th><th>cron 推奨</th><th>対象日</th><th>実行内容</th><th>ファイル</th>
+      <th>ジョブ名</th><th>cron 推奨設定</th><th>対象日</th><th>実行内容</th><th>ソースファイル</th>
     </tr></thead>
     <tbody>
       <tr>
         <td><code>raceday-runner</code></td>
         <td><code>30 7 * * *</code></td>
-        <td>開催日のみ (内部判定)</td>
-        <td>レース一覧取得 → 各 R 発走 <strong>T-15 分</strong>で出馬表/オッズ/馬柱/追切/SmartRC + JRA馬場 → <strong>完了後 AI 予測トリガ</strong>（モック）</td>
+        <td>開催日のみ（内部で自動判定）</td>
+        <td>レース一覧取得 → 各レースの発走 <strong>T-15 分</strong> に出馬表・オッズ・馬柱・追切・SmartRC + JRA 馬場を取得 → <strong>完了後に AI 予測トリガを起動</strong>（現在はモック）</td>
         <td><span class="path">src/scraper/auto_scrape.py</span></td>
       </tr>
       <tr>
         <td><code>raceday-evening</code></td>
         <td><code>30 17 * * *</code></td>
         <td>開催日のみ</td>
-        <td>当日全レースの結果 / 確定オッズ / SmartRC</td>
+        <td>当日全レースの結果・確定オッズ・SmartRC を取得します。</td>
         <td><span class="path">src/scraper/auto_scrape.py</span></td>
       </tr>
       <tr>
         <td><code>weekly-update</code></td>
         <td><code>30 17 * * 5</code></td>
-        <td>毎週金曜 (db.netkeiba 更新後)</td>
-        <td>先週分の結果再取得 + 指数 + 出走馬の <code>horse_result</code> 更新</td>
+        <td>毎週金曜（db.netkeiba 更新後）</td>
+        <td>先週分の結果を再取得し、指数と出走馬の <code>horse_result</code> を更新します。</td>
         <td><span class="path">src/scraper/auto_scrape.py</span></td>
       </tr>
       <tr>
         <td><code>daily-race-lists</code></td>
         <td><code>0 7 * * *</code></td>
         <td>毎日</td>
-        <td>今日〜14日先の JRA 開催日の <code>race_lists</code> を取得・更新。モニター表示やフロントエンドの開催日情報を常に最新に保つ</td>
+        <td>今日〜14日先の JRA 開催日の <code>race_lists</code> を取得・更新します。モニター画面やフロントエンドの開催日情報を常に最新に保ちます。</td>
         <td><span class="path">src/scraper/auto_scrape.py</span></td>
       </tr>
     </tbody>
   </table>
 
-  <h3>4.2 補完・バックフィル系 cron (<code>setup_*.sh install</code> で登録可)</h3>
+  <h3>4.2 補完・バックフィル系 cron（<code>setup_*.sh install</code> で登録可能）</h3>
   <table>
     <thead><tr>
-      <th>ジョブ</th><th>cron</th><th>内容</th><th>登録スクリプト</th>
+      <th>ジョブ名</th><th>cron 設定</th><th>実行内容</th><th>登録スクリプト</th>
     </tr></thead>
     <tbody>
-      <tr><td><code>backfill 2025 fast</code></td><td><code>0 1 * * *</code></td><td>当年の race_list / result / shutuba 系</td><td rowspan="6"><code>scripts/cron/setup_backfill_cron.sh install</code></td></tr>
-      <tr><td><code>backfill 2024 fast</code></td><td><code>0 2 * * *</code></td><td>前年の同上</td></tr>
-      <tr><td><code>backfill 2023 fast</code></td><td><code>0 3 * * *</code></td><td>2023 年の同上</td></tr>
-      <tr><td><code>backfill 2022 fast</code></td><td><code>0 4 * * *</code></td><td>2022 年の同上</td></tr>
-      <tr><td><code>backfill horse</code></td><td><code>0 6 * * *</code></td><td>horse_result / horse_pedigree_5gen 補完</td></tr>
-      <tr><td><code>backfill 2025 full</code></td><td><code>0 8 * * *</code></td><td>指数・追切等の重い補助</td></tr>
-      <tr><td><code>jockey/trainer 統計</code></td><td><code>30 5 * * *</code></td><td>ローカル特徴量再計算 (スクレイプではない)</td><td><code>scripts/cron/setup_jockey_trainer_stats_cron.sh install</code></td></tr>
-      <tr><td><code>JRA 馬場ライブ</code></td><td><strong>raceday-runner T-15 内</strong></td><td>各 R 発走 15 分前バンドルと同時に <code>jra_baba_live.scrape()</code>（2 分間隔で重複抑制）</td><td><code>src/scraper/raceday_pre_race_pipeline.py</code></td></tr>
-      <tr><td><code>watchdog (3 分)</code></td><td><code>*/3 * * * *</code></td><td>API/MLflow ヘルスチェック + 自動再起動</td><td rowspan="3"><code>scripts/cron/setup_watchdog_cron.sh install</code></td></tr>
-      <tr><td><code>watchdog (起動時)</code></td><td><code>@reboot</code></td><td>マシン起動時の全サービス起動</td></tr>
-      <tr><td><code>logs ローテート</code></td><td><code>0 0 * * 1</code></td><td>50MB 超のログを truncate</td></tr>
+      <tr><td><code>backfill 2025 fast</code></td><td><code>0 1 * * *</code></td><td>当年の race_list / result / shutuba 系を補完します。</td><td rowspan="6"><code>scripts/cron/setup_backfill_cron.sh install</code></td></tr>
+      <tr><td><code>backfill 2024 fast</code></td><td><code>0 2 * * *</code></td><td>前年の同上を補完します。</td></tr>
+      <tr><td><code>backfill 2023 fast</code></td><td><code>0 3 * * *</code></td><td>2023 年の同上を補完します。</td></tr>
+      <tr><td><code>backfill 2022 fast</code></td><td><code>0 4 * * *</code></td><td>2022 年の同上を補完します。</td></tr>
+      <tr><td><code>backfill horse</code></td><td><code>0 6 * * *</code></td><td>horse_result / horse_pedigree_5gen の欠損を補完します。</td></tr>
+      <tr><td><code>backfill 2025 full</code></td><td><code>0 8 * * *</code></td><td>指数・追切など処理負荷の高い補助カテゴリを補完します。</td></tr>
+      <tr><td><code>jockey/trainer 統計</code></td><td><code>30 5 * * *</code></td><td>ローカルの特徴量を再計算します（Web巡回収集ではなくローカル集計です）。</td><td><code>scripts/cron/setup_jockey_trainer_stats_cron.sh install</code></td></tr>
+      <tr><td><code>JRA 馬場ライブ</code></td><td><strong>raceday-runner T-15 内で実行</strong></td><td>各レースの発走 15 分前バンドルと同時に <code>jra_baba_live.scrape()</code> を呼び出します（2 分以内の重複取得は自動で抑制します）。</td><td><code>src/scraper/raceday_pre_race_pipeline.py</code></td></tr>
+      <tr><td><code>watchdog（3 分ごと）</code></td><td><code>*/3 * * * *</code></td><td>API / MLflow のヘルスチェックと自動再起動を行います。</td><td rowspan="3"><code>scripts/cron/setup_watchdog_cron.sh install</code></td></tr>
+      <tr><td><code>watchdog（起動時）</code></td><td><code>@reboot</code></td><td>マシン起動時に全サービスを起動します。</td></tr>
+      <tr><td><code>logs ローテート</code></td><td><code>0 0 * * 1</code></td><td>50MB を超えたログファイルを週次で truncate します。</td></tr>
     </tbody>
   </table>
 
   <div class="callout warn">
-    <strong>TZ 注意</strong>
-    各 cron スクリプトはサーバの TZ 設定に依存します (本リポジトリ既定)。
-    JST で動かしたい場合は <code>crontab</code> 先頭に <code>CRON_TZ=Asia/Tokyo</code> を入れるか、
-    OS の TZ を <code>Asia/Tokyo</code> に設定してください。
+    <strong>タイムゾーン（TZ）の設定に注意してください</strong>
+    各 cron スクリプトはサーバのタイムゾーン設定に依存します。
+    JST で動かしたい場合は、<code>crontab</code> の先頭に <code>CRON_TZ=Asia/Tokyo</code> を追記するか、
+    OS のタイムゾーンを <code>Asia/Tokyo</code> に設定してください。
   </div>
 
   <h3>4.3 FastAPI lifespan で起動する常駐スレッド</h3>
   <p>
-    <code>main.py --prod</code> でサーバを起動すると、以下が自動的に走り出します
-    (uvicorn の各 worker プロセス内で個別に起動 = workers=4 なら 4 重起動になる点に注意)。
+    <code>main.py --prod</code> でサーバを起動すると、以下が自動的に起動します。
+    uvicorn の各 worker プロセス内で個別に起動するため、<strong>workers=4 の場合は同じスレッドが 4 重に起動される</strong>点に注意してください。
   </p>
   <table>
     <thead><tr>
@@ -591,27 +523,27 @@ flowchart LR
     <tbody>
       <tr>
         <td><code>scheduler.structure</code></td><td>毎日 06:00 JST</td>
-        <td>netkeiba 各カテゴリの HTML 構造フィンガープリント比較。差分検出時はパーサー再構築の検討</td>
+        <td>netkeiba 各カテゴリの HTML 構造フィンガープリントを比較します。差分を検出した場合はパーサー再構築の検討が必要です。</td>
         <td><span class="path">src/api/app.py:261-321</span></td>
       </tr>
       <tr>
-        <td><code>scheduler.disk_cache</code></td><td>起動直後 + 86400s ごと</td>
-        <td><code>data/cache</code> の古い JSON 削除 + HybridStorage キャッシュ整理</td>
+        <td><code>scheduler.disk_cache</code></td><td>起動直後 + 86400 秒ごと</td>
+        <td><code>data/cache</code> の古い JSON を削除し、HybridStorage のキャッシュを整理します。</td>
         <td><span class="path">src/api/app.py:668-701</span></td>
       </tr>
       <tr>
-        <td><code>scheduler.queue_maintain</code></td><td>3600s ごと</td>
-        <td>失敗ジョブを <code>waiting</code> へ戻す + 完了レコード削除 + ワーカー喚起 (kick)</td>
+        <td><code>scheduler.queue_maintain</code></td><td>3600 秒ごと</td>
+        <td>失敗ジョブを <code>waiting</code>（待機）状態へ戻し、完了済みレコードを削除し、ワーカーを起こします（kick）。</td>
         <td><span class="path">src/api/app.py:704-750</span></td>
       </tr>
       <tr>
         <td><code>scheduler.logs_retention</code></td><td>毎日 12:00 JST</td>
-        <td><code>logs/*.log</code> の保持日数超を削除</td>
+        <td><code>logs/*.log</code> の保持期間を超えたファイルを削除します。</td>
         <td><span class="path">src/api/app.py:778-833</span></td>
       </tr>
       <tr>
-        <td><code>queue.worker</code></td><td>常駐 (アイドル時 ~30s 待機)</td>
-        <td><code>ScrapeJobQueue</code> を 1 件ずつ <code>process_queue</code> で消化</td>
+        <td><code>queue.worker</code></td><td>常駐（アイドル時は約 30 秒待機）</td>
+        <td><code>ScrapeJobQueue</code> のジョブを 1 件ずつ <code>process_queue</code> で消化します。</td>
         <td><span class="path">src/api/app.py:186-258</span></td>
       </tr>
     </tbody>
@@ -620,8 +552,10 @@ flowchart LR
 
 <!-- ════════════════════════════════════════════════════════════ -->
 <section id="raceday-timeline">
-  <h2>5. 開催日タイムライン</h2>
-  <p>JST。各レースの発走時刻が異なるため、<strong>"R" は順次 (例: 第 1R 10:00, 第 2R 10:30 ...)</strong>で繰り返されます。</p>
+  <h2>5. 開催日のタイムライン</h2>
+  <p>
+    時刻はすべて JST です。各レースの発走時刻が異なるため、<strong>「R」は第 1R（例: 10:00）から順次繰り返されます</strong>（例: 第 2R 10:30, …）。
+  </p>
 
   <div class="mermaid-wrap">
 <div class="mermaid">
@@ -644,7 +578,7 @@ gantt
 </div>
   </div>
 
-  <h3>5.1 各レースの 1 サイクル (T-15 → 確定)</h3>
+  <h3>5.1 各レースの 1 サイクル（T-15 から確定まで）</h3>
   <div class="mermaid-wrap">
 <div class="mermaid">
 sequenceDiagram
@@ -677,11 +611,11 @@ sequenceDiagram
   </div>
 
   <div class="callout">
-    <strong>現状で T-15 バンドルに含まれるもの</strong>
-    出馬表 (馬体重含む) / 単複オッズ / 2連オッズ / 馬柱 / 追い切り / SmartRC / <strong>JRA 馬場ライブ</strong> / <strong>AI 予測トリガ（モック）</strong>
+    <strong>T-15 バンドルに含まれるデータ</strong>
+    出馬表（馬体重含む）/ 単複オッズ / 2連オッズ / 馬柱 / 追い切り / SmartRC / <strong>JRA 馬場ライブ</strong> / <strong>AI 予測トリガ（現在はモック）</strong>
     <br>
-    <strong>含まれないもの</strong>
-    パドック (<code>race_paddock</code>) / バロメータ (<code>race_barometer</code>) / 厩舎コメント (<code>race_trainer_comment</code>)
+    <strong>T-15 バンドルに含まれないデータ</strong>
+    パドック（<code>race_paddock</code>）/ バロメータ（<code>race_barometer</code>）/ 厩舎コメント（<code>race_trainer_comment</code>）
   </div>
 </section>
 
@@ -707,20 +641,45 @@ flowchart LR
 </div>
   </div>
 
-  <ul>
-    <li><strong>月〜木</strong>: 開催が無いため scrape は静穏。深夜 1〜4 時に <code>backfill</code> が回り、過去年度の穴を埋める。</li>
-    <li><strong>金 17:00 (db.netkeiba 更新)</strong>: 先週分のレース DB が公開される。これ以前に取りに行っても古いデータの可能性あり。</li>
-    <li><strong>金 17:30 (weekly-update)</strong>: 先週分の <code>race_result</code> / <code>race_index</code> / <code>horse_result</code> を再取得。</li>
-    <li><strong>土日 (開催日)</strong>: <code>raceday-runner</code> + <code>raceday-evening</code> + JRA 馬場ライブ。</li>
-  </ul>
+  <table>
+    <thead>
+      <tr>
+        <th>期間</th>
+        <th>イベント</th>
+        <th>実行内容</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>月〜木</td>
+        <td>静穏期</td>
+        <td>開催がないためデータ収集処理は静穏です。深夜 1〜4 時に <code>backfill</code> が動き、過去年度の欠損データを補完します。</td>
+      </tr>
+      <tr>
+        <td>金曜 17:00</td>
+        <td>db.netkeiba DB 更新</td>
+        <td>先週分のレース DB が公開されます。これより前に取得しても古いデータが返る可能性があります。</td>
+      </tr>
+      <tr>
+        <td>金曜 17:30</td>
+        <td>weekly-update 起動</td>
+        <td>先週分の <code>race_result</code> / <code>race_index</code> / <code>horse_result</code> を再取得します。</td>
+      </tr>
+      <tr>
+        <td>土・日（開催日）</td>
+        <td>raceday-runner / raceday-evening</td>
+        <td><code>raceday-runner</code> + <code>raceday-evening</code> + JRA 馬場ライブが動きます。</td>
+      </tr>
+    </tbody>
+  </table>
 </section>
 
 <!-- ════════════════════════════════════════════════════════════ -->
 <section id="dag">
-  <h2>7. タスク依存関係 (DAG)</h2>
+  <h2>7. タスクの依存関係（DAG）</h2>
   <p>
-    キューの実行順は <code>queue_tasks.execute_job</code> が <code>tasks[]</code> を順番に処理する形で、
-    <strong>明示的な DAG ロックはありません</strong>。下図は「どのデータから ID を拾うか」という論理的依存です。
+    キューの実行順は <code>queue_tasks.execute_job</code> が <code>tasks[]</code> 配列を順番に処理する形です。
+    <strong>明示的な DAG ロックはありません</strong>。下図は「どのデータからどの ID を取り出すか」という論理的な依存関係を示しています。
   </p>
   <div class="mermaid-wrap">
 <div class="mermaid">
@@ -764,25 +723,54 @@ flowchart TD
   </div>
 
   <details>
-    <summary><code>scrape_race_all</code> がまとめて呼ぶカテゴリ</summary>
+    <summary><code>scrape_race_all</code> がまとめて取得するカテゴリ</summary>
     <p>
       <code>ScraperRunner.scrape_race_all(race_id, smart_skip=True)</code> は内部で
       <code>ThreadPoolExecutor</code> を使い、以下を並列取得します:
     </p>
-    <ul>
-      <li><code>scrape_race_card</code> (出馬表)</li>
-      <li><code>scrape_odds</code> + <code>scrape_pair_odds</code> (オッズ)</li>
-      <li><code>scrape_shutuba_past</code> (馬柱)</li>
-      <li><code>scrape_oikiri</code> (追切)</li>
-      <li><code>scrape_paddock</code> (パドック ★)</li>
-      <li><code>scrape_smartrc</code> (SmartRC)</li>
-      <li>取得した馬の <code>scrape_horse</code> + <code>scrape_horse_pedigree_5gen</code></li>
-    </ul>
+    <table>
+      <thead>
+        <tr>
+          <th>取得関数</th>
+          <th>取得内容</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>scrape_race_card</code></td>
+          <td>出馬表</td>
+        </tr>
+        <tr>
+          <td><code>scrape_odds</code> + <code>scrape_pair_odds</code></td>
+          <td>オッズ（単複・2連）</td>
+        </tr>
+        <tr>
+          <td><code>scrape_shutuba_past</code></td>
+          <td>馬柱</td>
+        </tr>
+        <tr>
+          <td><code>scrape_oikiri</code></td>
+          <td>追切</td>
+        </tr>
+        <tr>
+          <td><code>scrape_paddock</code></td>
+          <td>パドック ★（<code>raceday-runner</code> では除外）</td>
+        </tr>
+        <tr>
+          <td><code>scrape_smartrc</code></td>
+          <td>SmartRC</td>
+        </tr>
+        <tr>
+          <td><code>scrape_horse</code> + <code>scrape_horse_pedigree_5gen</code></td>
+          <td>取得した馬の馬情報・5世代血統</td>
+        </tr>
+      </tbody>
+    </table>
     <p>
-      ★ パドックは <code>scrape_race_all</code> には含まれるが、
+      ★ パドックは <code>scrape_race_all</code> の対象に含まれますが、
       <code>auto_scrape.py</code> の <code>raceday-runner</code> では除外されています。
       AI 予測パイプラインは <code>scrape_race_all</code> を使うため、
-      <strong>API 経由の予測時はパドックも取得される</strong>点は把握しておくべきです。
+      <strong>API 経由で予測を実行するとパドックも取得される</strong>点は把握しておいてください。
     </p>
   </details>
 </section>
@@ -791,11 +779,11 @@ flowchart TD
 <section id="queue">
   <h2>8. キューシステムと API トリガ</h2>
   <p>
-    UI / API から投入されたジョブは <strong>JSON ファイルキュー</strong> (<code>job_queue.json</code>) に積まれ、
-    <code>queue.worker</code> が消化します。tasks 配列の順序がそのまま実行順です (DAG ではない)。
+    UI / API から投入されたジョブは <strong>JSON ファイルキュー</strong>（<code>job_queue.json</code>）に積まれ、
+    <code>queue.worker</code> が順次処理します。tasks 配列の順序がそのまま実行順になります（DAG ではありません）。
   </p>
 
-  <h3>8.1 主な API トリガ</h3>
+  <h3>8.1 主な API トリガ一覧</h3>
   <table>
     <thead><tr>
       <th>エンドポイント</th><th>動作</th><th>キュー経由?</th>
@@ -804,26 +792,26 @@ flowchart TD
       <tr>
         <td><code>POST /api/race/{rid}/predict</code></td>
         <td><code>scrape_race_all(rid, smart_skip=True)</code> → <code>build_race_features</code> → MLflow <code>keiba-lgbm-nopi</code> → <code>race_predictions</code> 保存</td>
-        <td>同期 (キュー経由ではない)</td>
+        <td>同期実行（キュー経由ではありません）</td>
       </tr>
       <tr>
         <td><code>GET /api/race/{rid}/predictions</code></td>
-        <td>キャッシュ済み <code>race_predictions</code> を返却</td>
+        <td>キャッシュ済みの <code>race_predictions</code> を返します。</td>
         <td>—</td>
       </tr>
       <tr>
         <td><code>POST /api/odds/snapshot/{rid}</code></td>
-        <td>オッズ取得 → <code>OddsTrajectoryTracker</code> に履歴記録</td>
-        <td>同期</td>
+        <td>オッズを取得し、<code>OddsTrajectoryTracker</code> に履歴として記録します。</td>
+        <td>同期実行</td>
       </tr>
       <tr>
         <td><code>GET /api/odds/history/{rid}</code></td>
-        <td>オッズ履歴 (時系列) を返却</td>
+        <td>オッズの時系列履歴を返します。</td>
         <td>—</td>
       </tr>
       <tr>
-        <td>(UI から各種スクレイプ操作)</td>
-        <td>キューに積んで非同期実行 (進捗は <code>queue_job_progress</code>)</td>
+        <td>（UI からの各種データ収集操作）</td>
+        <td>キューに積んで非同期実行します。進捗は <code>queue_job_progress</code> で確認できます。</td>
         <td>キュー経由</td>
       </tr>
     </tbody>
@@ -831,31 +819,34 @@ flowchart TD
 
   <h3>8.2 「日付一括」「レース一括」の入口</h3>
   <ul>
-    <li><code>scrape_date_all(date)</code> = レース一覧 → 全 race を並列で <code>scrape_race_all</code></li>
-    <li><code>scrape_race_all(rid)</code> = §7 で示す全カテゴリを並列で取得</li>
-    <li><code>race_pedigree_5gen_prefetch</code> = レース単位で 5 世代血統だけ最優先キューに投入 (適性 UI 即応性向上)</li>
+    <li><code>scrape_date_all(date)</code>: レース一覧を取得し、全レースを並列で <code>scrape_race_all</code> します。</li>
+    <li><code>scrape_race_all(rid)</code>: §7 で示した全カテゴリを並列で取得します。</li>
+    <li><code>race_pedigree_5gen_prefetch</code>: レース単位で 5 世代血統だけを最優先キューに投入します（適性 UI の即応性向上のためです）。</li>
   </ul>
 </section>
 
 <!-- ════════════════════════════════════════════════════════════ -->
 <section id="predict-t10">
-  <h2>9. 「レース 10 分前 AI 予測」運用設計（統合版）</h2>
+  <h2>9. 「レース 10 分前 AI 予測」の運用設計（統合版）</h2>
   <p>
-    目標は <strong>発走 10 分前時点の予測物</strong>を出すことですが、
-    <strong>別途 T-10 再取得ジョブは置かない</strong>方針とします。
-    <code>raceday-runner</code> が各 R の <strong>発走 T-15 分</strong>に netkeiba + JRA 馬場を一括取得し、
-    <strong>そのバンドル完了をトリガ</strong>に AI 予測パイプラインを起動します（取得完了時点はおおよそ T-15〜T-12）。
+    目標は <strong>発走 10 分前時点の予測結果を出す</strong>ことですが、
+    <strong>別途 T-10 再取得ジョブは置かない</strong>方針です。
+  </p>
+  <p>
+    <code>raceday-runner</code> が各レースの <strong>発走 T-15 分</strong> に netkeiba + JRA 馬場を一括取得し、
+    <strong>そのバンドル完了をトリガ</strong> に AI 予測処理を起動します。
+    取得が完了する時点はおおよそ T-15〜T-12 です。
   </p>
 
   <div class="callout">
-    <strong>実装（モック）</strong>
+    <strong>実装状況（現在はモック）</strong>
     <code>src/scraper/raceday_pre_race_pipeline.py</code>（T-15 バンドル）と
-    <code>src/pipeline/inference/pre_race_predict_trigger.py</code>（予測トリガ）を追加済み。
+    <code>src/pipeline/inference/pre_race_predict_trigger.py</code>（予測トリガ）を追加済みです。
     <code>auto_scrape._scrape_single_race</code> から呼び出します。
-    本番予測は <code>KEIBA_PRE_RACE_PREDICT_ENABLED=1</code> で有効化（最終版は後補完）。
+    本番予測は <code>KEIBA_PRE_RACE_PREDICT_ENABLED=1</code> を設定することで有効化できます（最終実装は後補完）。
   </div>
 
-  <h3>9.1 1 レースあたりのフロー</h3>
+  <h3>9.1 1 レースあたりの処理の流れ</h3>
   <div class="mermaid-wrap">
 <div class="mermaid">
 sequenceDiagram
@@ -880,11 +871,11 @@ sequenceDiagram
 </div>
   </div>
 
-  <h3>9.2 JRA 馬場ライブの統合</h3>
+  <h3>9.2 JRA 馬場ライブの統合について</h3>
   <ul>
-    <li><strong>旧:</strong> <code>setup_baba_cron.sh</code> の systemd で開催窓内 5 分ポーリング（<code>jra_baba_live --watch</code>）</li>
-    <li><strong>新:</strong> 各 R の T-15 バンドル内で <code>JRABabaLiveScraper().scrape()</code> を呼び、netkeiba 取得と同タイミングで最新馬場をキャッチアップ</li>
-    <li>同一バッチで複数 R を処理するため、<code>KEIBA_BABA_REFRESH_MIN_SEC</code>（既定 120 秒）で重複取得を抑制</li>
+    <li><strong>旧方式:</strong> <code>setup_baba_cron.sh</code> の systemd サービスで開催窓内 5 分ごとにポーリング（<code>jra_baba_live --watch</code>）していました。</li>
+    <li><strong>新方式:</strong> 各レースの T-15 バンドル内で <code>JRABabaLiveScraper().scrape()</code> を呼び出し、netkeiba 取得と同タイミングで最新馬場情報をキャッチアップします。</li>
+    <li>同一バッチで複数レースを処理する際、<code>KEIBA_BABA_REFRESH_MIN_SEC</code>（既定 120 秒）で重複取得を自動的に抑制します。</li>
   </ul>
 
   <h3>9.3 残タスク（本番化・後補完）</h3>
@@ -892,14 +883,14 @@ sequenceDiagram
     <thead><tr><th>項目</th><th>状態</th><th>備考</th></tr></thead>
     <tbody>
       <tr><td>T-15 バンドル + JRA 統合</td><td><span class="badge ok">モック実装済</span></td><td><code>raceday_pre_race_pipeline.py</code></td></tr>
-      <tr><td>T-15 完了 → 予測トリガ</td><td><span class="badge warn">モック</span></td><td>ログのみ。本番は環境変数で有効化</td></tr>
-      <tr><td><code>POST /predict</code> 連携</td><td><span class="badge warn">後補完</span></td><td>HTTP 呼び出し・<code>race_predictions</code> 保存・通知</td></tr>
-      <tr><td><code>smart_skip</code> / 再取得方針</td><td><span class="badge warn">後補完</span></td><td>予測パスでは T-15 直後データを信頼する設計を明文化</td></tr>
-      <tr><td>パドック・直前オッズポーリング</td><td><span class="badge muted">任意</span></td><td>精度向上用の追加レイヤー</td></tr>
+      <tr><td>T-15 完了 → 予測トリガ</td><td><span class="badge warn">モック</span></td><td>現在はログ出力のみ。本番化は環境変数で有効化します。</td></tr>
+      <tr><td><code>POST /predict</code> 連携</td><td><span class="badge warn">後補完</span></td><td>HTTP 呼び出し・<code>race_predictions</code> 保存・通知の実装が必要です。</td></tr>
+      <tr><td><code>smart_skip</code> / 再取得方針</td><td><span class="badge warn">後補完</span></td><td>予測パスでは T-15 直後のデータを信頼する設計を明文化する必要があります。</td></tr>
+      <tr><td>パドック・直前オッズポーリング</td><td><span class="badge muted">任意</span></td><td>精度向上のための追加レイヤーです。必須ではありません。</td></tr>
     </tbody>
   </table>
 
-  <h3>9.4 環境変数</h3>
+  <h3>9.4 関連する環境変数</h3>
   <pre><code># 本番 AI 予測を T-15 完了トリガで実行（未設定時はモック＝ログのみ）
 export KEIBA_PRE_RACE_PREDICT_ENABLED=1
 
@@ -907,9 +898,9 @@ export KEIBA_PRE_RACE_PREDICT_ENABLED=1
 export KEIBA_BABA_REFRESH_MIN_SEC=120</code></pre>
 
   <div class="callout warn">
-    <strong>systemd 馬場サービスについて</strong>
+    <strong>既存の systemd 馬場サービスについて</strong>
     既存の <code>setup_baba_cron.sh install</code> は legacy として残しますが、
-    T-15 統合運用では <strong>二重取得を避けるため停止</strong>することを推奨します。
+    T-15 統合運用では <strong>二重取得を避けるため停止する</strong>ことを推奨します。
   </div>
 </section>
 
@@ -919,48 +910,48 @@ export KEIBA_BABA_REFRESH_MIN_SEC=120</code></pre>
 
   <table>
     <thead><tr>
-      <th>カテゴリ</th><th>リスク内容</th><th>緩和策</th>
+      <th>カテゴリ</th><th>リスク内容</th><th>対策</th>
     </tr></thead>
     <tbody>
       <tr>
         <td><span class="badge ng">高</span> smart_skip</td>
-        <td><code>HybridStorage.is_fresh</code> は構造ベース。時刻ベースではないため、API 経由の予測で古いオッズ / 馬体重を採用する恐れ</td>
-        <td>予測パスでは <code>smart_skip=False</code> 強制。<code>raceday-runner</code> は <code>skip_existing=False</code> 既定なので問題なし</td>
+        <td><code>HybridStorage.is_fresh</code> は構造ベースの判定です。時刻ベースではないため、API 経由の予測で古いオッズ・馬体重が採用される恐れがあります。</td>
+        <td>予測パスでは <code>smart_skip=False</code> を強制します。<code>raceday-runner</code> は <code>skip_existing=False</code> が既定なので問題ありません。</td>
       </tr>
       <tr>
         <td><span class="badge ng">高</span> auto_scrape の cron 未自動セットアップ</td>
-        <td><code>auto_scrape.py</code> 用の <code>setup_*.sh</code> が無く、運用者が手動で crontab 登録する必要</td>
-        <td>本ドキュメントの §4.1 を参照に手動登録 + 確認用 <code>--status</code> サブコマンドを定期実行</td>
+        <td><code>auto_scrape.py</code> 用の <code>setup_*.sh</code> が存在しないため、運用者が手動で crontab 登録する必要があります。</td>
+        <td>本ドキュメントの §4.1 を参考に手動登録し、<code>--status</code> サブコマンドで定期確認してください。</td>
       </tr>
       <tr>
-        <td><span class="badge warn">中</span> uvicorn ワーカー多重起動</td>
-        <td><code>main.py --prod</code> で 4 workers 起動すると、scheduler 群が 4 重に走る</td>
-        <td>ワーカー単位で起動するロガーを確認。ファイルロックや singleton 化を検討</td>
+        <td><span class="badge warn">中</span> uvicorn ワーカーの多重起動</td>
+        <td><code>main.py --prod</code> で 4 workers を起動すると、scheduler 群が 4 重に動作します。</td>
+        <td>ワーカーごとのロガーを確認し、ファイルロックや singleton 化を検討してください。</td>
       </tr>
       <tr>
-        <td><span class="badge warn">中</span> TZ 依存</td>
-        <td><code>scripts/cron/setup_*.sh</code> 群はサーバ TZ に依存。海外 VPS だと意図しない時刻で実行される</td>
-        <td><code>CRON_TZ=Asia/Tokyo</code> を crontab 先頭に書く。OS TZ も Asia/Tokyo に設定推奨</td>
+        <td><span class="badge warn">中</span> タイムゾーン依存</td>
+        <td><code>scripts/cron/setup_*.sh</code> 群はサーバのタイムゾーン設定に依存します。海外 VPS では意図しない時刻で実行される恐れがあります。</td>
+        <td>crontab の先頭に <code>CRON_TZ=Asia/Tokyo</code> を記載し、OS のタイムゾーンも <code>Asia/Tokyo</code> に設定することを推奨します。</td>
       </tr>
       <tr>
         <td><span class="badge warn">中</span> netkeiba ログインセッション切れ</td>
-        <td>パドック / 指数 / バロメータ / 厩舎コメントが要ログイン。セッション切れで自動取得失敗</td>
-        <td><code>NetkeibaClient</code> の再ログインリトライ + watchdog でセッション健全性監視</td>
+        <td>パドック・指数・バロメータ・厩舎コメントは要ログインです。セッション切れで自動取得が失敗します。</td>
+        <td><code>NetkeibaClient</code> の再ログインリトライと watchdog によるセッション健全性監視を行っています。</td>
       </tr>
       <tr>
         <td><span class="badge warn">中</span> ページ構造変更</td>
-        <td>netkeiba 側の HTML 改修で全パーサー停止</td>
-        <td><code>scheduler.structure</code> (06:00 JST 毎日) で構造ハッシュ差分を即座に検知</td>
+        <td>netkeiba 側の HTML が改修されると全パーサーが停止する恐れがあります。</td>
+        <td><code>scheduler.structure</code>（毎日 06:00 JST）が構造ハッシュの差分を即座に検知します。</td>
       </tr>
       <tr>
-        <td><span class="badge info">低</span> 5 世代血統ローカル不整合</td>
-        <td><code>data/local/horse_pedigree_5gen</code> と <code>10gen</code> の 2 系統。10gen 解析後の整合性は人手確認</td>
-        <td>10gen は研究用途専用。本番特徴量は 5gen を使う設計を維持</td>
+        <td><span class="badge info">低</span> 5 世代血統のローカル不整合</td>
+        <td><code>data/local/horse_pedigree_5gen</code> と <code>10gen</code> の 2 系統が存在します。10gen 解析後の整合性は人手での確認が必要です。</td>
+        <td>10gen は研究用途専用とし、本番の特徴量には 5gen を使う設計を維持してください。</td>
       </tr>
       <tr>
         <td><span class="badge info">低</span> watchdog のログ肥大化</td>
-        <td>3 分ごとに走るため <code>logs/watchdog.log</code> が肥大化</td>
-        <td><code>0 0 * * 1</code> で 50MB 超を truncate (週次) 設定済み</td>
+        <td>3 分ごとに実行されるため <code>logs/watchdog.log</code> が肥大化します。</td>
+        <td><code>0 0 * * 1</code> の週次 cron で 50MB 超のファイルを truncate する設定を済みです。</td>
       </tr>
     </tbody>
   </table>
@@ -971,41 +962,134 @@ export KEIBA_BABA_REFRESH_MIN_SEC=120</code></pre>
   <h2>11. 参考: 関連ファイル一覧</h2>
 
   <h3>主要モジュール</h3>
-  <ul>
-    <li><code>src/scraper/auto_scrape.py</code> — raceday-runner / raceday-evening / weekly-update の本体</li>
-    <li><code>src/scraper/run.py</code> — <code>ScraperRunner</code> と全 <code>scrape_*</code> メソッド</li>
-    <li><code>src/scraper/job_queue.py</code> + <code>queue_tasks.py</code> + <code>queue_worker.py</code> — キューシステム</li>
-    <li><code>src/scraper/storage.py</code> — <code>HybridStorage</code> + 全カテゴリ定義</li>
-    <li><code>src/scraper/parsers.py</code> — 各ページのパーサー (馬体重抽出も含む)</li>
-    <li><code>src/scraper/jra_baba_live.py</code> — JRA 馬場ライブ取得</li>
-    <li><code>src/scraper/raceday_pre_race_pipeline.py</code> — T-15 バンドル（netkeiba + JRA 馬場）</li>
-    <li><code>src/pipeline/inference/pre_race_predict_trigger.py</code> — T-15 完了トリガ AI 予測（モック）</li>
-    <li><code>src/scraper/structure_monitor.py</code> — HTML 構造変化検知</li>
-    <li><code>src/api/app.py</code> — FastAPI lifespan で 4 つの scheduler + queue.worker を起動</li>
-    <li><code>src/pipeline/inference/race_day.py</code> — RaceDayPipeline (予測バッチ)</li>
-  </ul>
+  <table>
+    <thead>
+      <tr>
+        <th>ファイル</th>
+        <th>役割</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>src/scraper/auto_scrape.py</code></td>
+        <td>raceday-runner / raceday-evening / weekly-update の本体</td>
+      </tr>
+      <tr>
+        <td><code>src/scraper/run.py</code></td>
+        <td><code>ScraperRunner</code> と全 <code>scrape_*</code> メソッド</td>
+      </tr>
+      <tr>
+        <td><code>src/scraper/job_queue.py</code> + <code>queue_tasks.py</code> + <code>queue_worker.py</code></td>
+        <td>キューシステム</td>
+      </tr>
+      <tr>
+        <td><code>src/scraper/storage.py</code></td>
+        <td><code>HybridStorage</code> と全カテゴリ定義</td>
+      </tr>
+      <tr>
+        <td><code>src/scraper/parsers.py</code></td>
+        <td>各ページのパーサー（馬体重抽出を含む）</td>
+      </tr>
+      <tr>
+        <td><code>src/scraper/jra_baba_live.py</code></td>
+        <td>JRA 馬場ライブ取得</td>
+      </tr>
+      <tr>
+        <td><code>src/scraper/raceday_pre_race_pipeline.py</code></td>
+        <td>T-15 バンドル（netkeiba + JRA 馬場）</td>
+      </tr>
+      <tr>
+        <td><code>src/pipeline/inference/pre_race_predict_trigger.py</code></td>
+        <td>T-15 完了トリガによる AI 予測（現在はモック）</td>
+      </tr>
+      <tr>
+        <td><code>src/scraper/structure_monitor.py</code></td>
+        <td>HTML 構造変化の検知</td>
+      </tr>
+      <tr>
+        <td><code>src/api/app.py</code></td>
+        <td>FastAPI lifespan で 4 つの scheduler + queue.worker を起動</td>
+      </tr>
+      <tr>
+        <td><code>src/pipeline/inference/race_day.py</code></td>
+        <td>RaceDayPipeline（予測バッチ）</td>
+      </tr>
+    </tbody>
+  </table>
 
   <h3>cron / systemd セットアップ</h3>
-  <ul>
-    <li><code>scripts/cron/setup_backfill_cron.sh</code></li>
-    <li><code>scripts/cron/setup_jockey_trainer_stats_cron.sh</code></li>
-    <li><code>scripts/cron/setup_baba_cron.sh</code> (systemd ユーザサービス)</li>
-    <li><code>scripts/cron/setup_watchdog_cron.sh</code></li>
-    <li>(<code>auto_scrape.py</code> 用は無し → 手動 crontab 登録)</li>
-  </ul>
+  <table>
+    <thead>
+      <tr>
+        <th>スクリプト</th>
+        <th>備考</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>scripts/cron/setup_backfill_cron.sh</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><code>scripts/cron/setup_jockey_trainer_stats_cron.sh</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><code>scripts/cron/setup_baba_cron.sh</code></td>
+        <td>systemd ユーザサービス</td>
+      </tr>
+      <tr>
+        <td><code>scripts/cron/setup_watchdog_cron.sh</code></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><code>auto_scrape.py</code> 用は無し</td>
+        <td>手動で crontab 登録が必要です</td>
+      </tr>
+    </tbody>
+  </table>
 
   <h3>関連ドキュメント</h3>
-  <ul>
-    <li><code>docs/html/ARCHITECTURE.html</code> — システム全体設計</li>
-    <li><code>docs/html/DATASOURCES.html</code> — netkeiba / SmartRC のデータソース仕様</li>
-    <li><code>docs/html/cost.html</code> — GCS 料金とエンドポイント別操作回数</li>
-    <li><code>docs/html/modeling/race_performance_rating_system.html §8.9</code> — 週次バッチ運用の推奨手順</li>
-    <li><code>docs/html/modeling/horse_pre_race_dataset_spec.html</code> — レース前データセット仕様</li>
-    <li><code>docs/html/modeling/pre_race_feature_whitelist.html</code> — レース前特徴量ホワイトリスト</li>
-    <li><code>AGENTS.html</code> — 全体レイアウト + 騎手・調教師統計の更新</li>
-  </ul>
+  <table>
+    <thead>
+      <tr>
+        <th>ファイル</th>
+        <th>内容</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>docs/html/ARCHITECTURE.html</code></td>
+        <td>システム全体設計</td>
+      </tr>
+      <tr>
+        <td><code>docs/html/DATASOURCES.html</code></td>
+        <td>netkeiba / SmartRC のデータソース仕様</td>
+      </tr>
+      <tr>
+        <td><code>docs/html/cost.html</code></td>
+        <td>GCS 料金とエンドポイント別操作回数</td>
+      </tr>
+      <tr>
+        <td><code>docs/html/modeling/race_performance_rating_system.html §8.9</code></td>
+        <td>週次バッチ運用の推奨手順</td>
+      </tr>
+      <tr>
+        <td><code>docs/html/modeling/horse_pre_race_dataset_spec.html</code></td>
+        <td>レース前データセット仕様</td>
+      </tr>
+      <tr>
+        <td><code>docs/html/modeling/pre_race_feature_whitelist.html</code></td>
+        <td>レース前特徴量ホワイトリスト</td>
+      </tr>
+      <tr>
+        <td><code>AGENTS.html</code></td>
+        <td>全体レイアウト + 騎手・調教師統計の更新</td>
+      </tr>
+    </tbody>
+  </table>
 
-  <h3>運用コマンド (チートシート)</h3>
+  <h3>よく使う運用コマンド（チートシート）</h3>
   <pre><code># auto_scrape の単発実行 (動作確認)
 python -m src.scraper.auto_scrape --task raceday-runner   # 開催日のみ常駐
 python -m src.scraper.auto_scrape --task raceday-evening   # 結果取得
@@ -1030,8 +1114,8 @@ curl -X POST http://127.0.0.1:8000/api/race/202506050811/predict
 
   <p style="margin-top: 24px; color: var(--c-text-muted); font-size: 12px;">
     本ドキュメントは <code>src/scraper/auto_scrape.py</code> / <code>src/api/app.py</code> /
-    <code>scripts/cron/setup_*.sh</code> の実装から機械的に抽出した SLA を整理したものです。
-    実装が変更されたタイミングで本ドキュメントも更新してください。
+    <code>scripts/cron/setup_*.sh</code> の実装から機械的に抽出した SLA（品質保証基準）を整理したものです。
+    実装が変更された場合は、本ドキュメントも合わせて更新してください。
   </p>
 </section>
 
