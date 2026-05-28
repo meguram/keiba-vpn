@@ -104,6 +104,7 @@ def _race_task_storage_category(task: str) -> str:
     t = str(task).strip()
     m: dict[str, str] = {
         "race_result": "race_result",
+        "race_result_on_time": "race_result_on_time",
         "race_result_lap": "race_result_lap",
         "race_shutuba": "race_shutuba",
         "race_odds": "race_odds",
@@ -163,6 +164,12 @@ def is_race_task_satisfied(
             if not d or not isinstance(d, dict):
                 return False
             return bool(d.get("entries") or [])
+
+        if t == "race_result_on_time":
+            d_ot = _ld("race_result_on_time")
+            if d_ot and isinstance(d_ot, dict) and (d_ot.get("entries") or []):
+                return True
+            return False
 
         if t == "race_result_lap":
             d = _ld("race_result_lap")

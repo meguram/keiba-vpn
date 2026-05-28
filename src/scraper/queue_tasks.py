@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 # API・UI 向けメタ（id は job.tasks に入れる文字列と一致）
 TASK_CATALOG: list[dict[str, Any]] = [
     {"id": "race_all", "entity": "race", "label": "レース一式（従来どおり）", "hint": "出馬表・指数・オッズ・SmartRC・馬情報など scrape_race_all"},
-    {"id": "race_result", "entity": "race", "label": "レース結果 (DB版)", "hint": "race_result (db.netkeiba.com)"},
-    {"id": "race_result_on_time", "entity": "race", "label": "速報結果 (当日)", "hint": "race_result_on_time (race.netkeiba.com 当日17:30)"},
+    {"id": "race_result", "entity": "race", "label": "レース結果 (DB版)", "hint": "race_result — db.netkeiba.com。_meta.result_schema_kind=db_race_result"},
+    {"id": "race_result_on_time", "entity": "race", "label": "レース結果 (race.netkeiba)", "hint": "race_result_on_time — result.html を取得。RaceTable01 対応。_meta: result_schema_kind=race_live_result, profile=race_live_archive|flash"},
     {
         "id": "race_result_lap",
         "entity": "race",
@@ -248,6 +248,10 @@ def _race_task(
         update_job_progress(
             jid, phase=task, step_kind="race", step_id=race_id, message=f"{task} · {race_id}",
         )
+    if task == "race_result_on_time":
+        od = meta_date.strip() if len(meta_date.strip()) == 8 and meta_date.strip().isdigit() else None
+        runner.scrape_race_result_on_time(race_id, skip_existing=smart_skip, opening_date=od)
+        return False
     fn(race_id, skip_existing=smart_skip)
     return False
 

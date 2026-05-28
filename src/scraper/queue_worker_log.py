@@ -2,6 +2,10 @@
 ファイルキュー経由のスクレイピング実行中だけ、ログ行をメモリ＋ファイルに蓄積する。
 /queue-status や API からワーカー相当のログをポーリング表示する用途。
 
+各エントリの ``ts`` はログレコードの発生時刻（Formatter の %(asctime)s と同一基準のエポック秒）。
+``ts_iso_jst`` は同瞬間を ``Asia/Tokyo`` の ISO8601（ミリ秒）で明示したもの（API/ブラウザのTZ差の切り分け用）。
+API 応答に ``display_timezone`` を付与する。
+
 マルチプロセス対応:
   uvicorn は --workers N で複数プロセスを持つ。スクレイパースレッドを持つプロセスだけが
   メモリ _buffer を持つため、別プロセスからの API リクエストは空を返す問題が起きる。
@@ -12,12 +16,15 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 import time
 from collections import deque
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+# ログ行の人可読日時（Formatter の asctime）と揃える。netkeiba 運用は JST 前提。
+_JST = timezone(timedelta(hours=9))
 
 _lock = threading.Lock()
 _buffer: deque[dict[str, Any]] = deque(maxlen=2500)
@@ -109,12 +116,18 @@ class QueueWorkerRingHandler(logging.Handler):
                 msg = msg[:3997] + "..."
             global _seq
             entry: dict[str, Any]
+            created = float(getattr(record, "created", None) or time.time())
+            ts_iso_jst = datetime.fromtimestamp(created, tz=_JST).isoformat(
+                timespec="milliseconds"
+            )
             with _lock:
                 _seq += 1
                 eid = _seq
                 entry = {
                     "id": eid,
-                    "ts": time.time(),
+                    "ts": created,
+                    "ts_iso_jst": ts_iso_jst,
+                    "tz": "Asia/Tokyo",
                     "level": record.levelname,
                     "logger": record.name,
                     "message": msg,
@@ -205,14 +218,24 @@ def get_worker_logs(*, after: int = -1, limit: int = 300) -> dict[str, Any]:
         snap = _read_file_entries()
 
     if not snap:
-        return {"entries": [], "max_id": -1, "total_buffered": 0}
+        return {
+            "entries": [],
+            "max_id": -1,
+            "total_buffered": 0,
+            "display_timezone": "Asia/Tokyo",
+        }
 
     max_id = snap[-1].get("id", len(snap))
     if after < 0:
         chunk = snap[-lim:]
     else:
         chunk = [e for e in snap if e.get("id", 0) > after][:lim]
-    return {"entries": chunk, "max_id": max_id, "total_buffered": len(snap)}
+    return {
+        "entries": chunk,
+        "max_id": max_id,
+        "total_buffered": len(snap),
+        "display_timezone": "Asia/Tokyo",
+    }
 
 
 def clear_worker_logs() -> None:

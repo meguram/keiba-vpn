@@ -64,9 +64,15 @@ class RaceResultParser:
     """
 
     _RESULT_TABLE = SelectorChain("result_table", [
+        "table#All_Result_Table",
+        "table.RaceTable01",
+        "table[class*='RaceTable01']",
+        ".ResultTableWrap table",
+        "table[class*='ResultCommon_Table']",
         "table.race_table_01",
         "table[class*='race_table']",
         "table[summary*='レース結果']",
+        "table[summary*='全着順']",
         "#contents_liquid table",
     ])
     _RACE_NAME = SelectorChain("race_name", [
@@ -193,9 +199,31 @@ class RaceResultParser:
         return bool(re.match(r"^[\d\-]+$", t.replace(" ", "")))
 
     @classmethod
-    def _entry_column_offsets(cls, cols: list) -> dict[str, int]:
-        """db.netkeiba の指数列拡張表 (通過=14列目付近) と従来の短い表を切り替える。"""
+    def _entry_column_offsets(
+        cls, cols: list, table: Any = None,
+    ) -> dict[str, int]:
+        """db.netkeiba の指数列拡張表 (通過=14列目付近) と race.netkeiba RaceTable01 を切り替える。"""
         n = len(cols)
+        cls_attr = ""
+        tid = ""
+        if table is not None:
+            cls_attr = " ".join(table.get("class") or [])
+            tid = table.get("id") or ""
+        cls_l = cls_attr.lower()
+        tid_l = tid.lower()
+        # race.netkeiba.com 「全着順」表（例: RaceTable01, id=All_Result_Table）。15列前後。
+        is_race_live_grid = (
+            "racetable01" in cls_l
+            or tid_l == "all_result_table"
+        )
+        if is_race_live_grid and 13 <= n <= 18:
+            return {
+                "passing": 12,
+                "last_3f": 11,
+                "odds": 10,
+                "popularity": 9,
+                "weight_text": min(14, n - 1),
+            }
         if n >= 19:
             p = safe_text(cols[14]) if n > 14 else ""
             if cls._looks_like_passing_order_cell(p):
@@ -254,14 +282,18 @@ class RaceResultParser:
         if not table:
             return []
 
-        rows = table.select("tr")[1:]  # ヘッダ行スキップ
+        tbody = table.select_one("tbody")
+        if tbody:
+            rows = tbody.select("tr")
+        else:
+            rows = table.select("tr")[1:]  # ヘッダ行スキップ
         entries = []
         for row in rows:
             cols = row.select("td")
             if len(cols) < 13:
                 continue
 
-            off = self._entry_column_offsets(cols)
+            off = self._entry_column_offsets(cols, table=table)
             pi, li, oi, pri, wi = (
                 off["passing"],
                 off["last_3f"],
@@ -482,7 +514,8 @@ class RaceResultOnTimeParser(RaceResultParser):
     RaceResultParser を継承し、race.netkeiba.com の HTML構造 (RaceData01/02) に
     対応した race_info 解析に差し替える。エントリー・払い戻し・ラップは共通ロジックを使用。
 
-    出力スキーマは race_result と同一。
+    トップレベルキーは db 版と同型だが、出自は ``race_result_on_time`` カテゴリと
+    ``_meta.result_schema_kind = "race_live_result"`` で区別する。
     """
 
     _RACE_NAME_LIVE = SelectorChain("rr_live_name", [

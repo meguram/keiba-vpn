@@ -12,6 +12,7 @@ Usage:
   python -m src.scraper.run summary
   python -m src.scraper.run reparse race_shutuba              # 全 race_shutuba を再パース
   python -m src.scraper.run reparse-one race_result 202505020811  # 1件だけ再パース
+  python -m src.scraper.run reparse-one race_result_on_time 202505020811  # 速報HTMLアーカイブから再パース
 
 ストレージ:
   GCS をプライマリとする HybridStorage (JSON) を使用。
@@ -29,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+from collections.abc import Callable
 import json
 import logging
 import os
@@ -36,7 +38,7 @@ import random
 import sys
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -60,8 +62,55 @@ from src.utils.keiba_logging import script_basic_config
 script_basic_config()
 logger = logging.getLogger("scraper.run")
 
+# レース結果 JSON の出自（_meta.result_schema_kind）。下流で db 確定と race 速報を区別する。
+RESULT_SCHEMA_DB_RACE_RESULT = "db_race_result"
+RESULT_SCHEMA_RACE_LIVE_RESULT = "race_live_result"
+
 # キューワーカー等で cwd がプロジェクト外でも data/ 配下が一箇所に揃うよう、リポジトリルートを固定する
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _race_live_schema_profile_for_opening_date(opening_date_yyyymmdd: str | None) -> str:
+    """race_result_on_time 用。
+
+    ``opening_date_yyyymmdd`` は ``race_lists`` の開催日キー（ジョブの ``date``）を想定。
+    本日(JST)より前ならアーカイブ、当日なら速報（欠損 None 許容）。未指定は速報扱い。
+    """
+    jst = timezone(timedelta(hours=9))
+    s = (opening_date_yyyymmdd or "").strip().replace("-", "").replace("/", "")[:8]
+    if len(s) != 8 or not s.isdigit():
+        return "race_live_flash"
+    try:
+        rd = datetime.strptime(s, "%Y%m%d").date()
+    except ValueError:
+        return "race_live_flash"
+    if rd < datetime.now(jst).date():
+        return "race_live_archive"
+    return "race_live_flash"
+
+
+def _apply_result_schema_meta(data: dict, kind: str) -> None:
+    """保存直前に付与。同一キーは上書き（その取得経路のスキーマを正とする）。"""
+    meta = data.get("_meta")
+    if not isinstance(meta, dict):
+        meta = {}
+    else:
+        meta = dict(meta)
+    meta["result_schema_kind"] = kind
+    data["_meta"] = meta
+
+
+def _ensure_result_schema_meta(data: dict | None, kind: str) -> None:
+    """既存データ更新時に欠けているときだけ付与する。"""
+    if not data or not isinstance(data, dict):
+        return
+    meta = data.get("_meta")
+    if not isinstance(meta, dict):
+        meta = {}
+    else:
+        meta = dict(meta)
+    meta.setdefault("result_schema_kind", kind)
+    data["_meta"] = meta
 
 
 def _horse_training_http_means_empty(exc: BaseException, url: str) -> bool:
@@ -353,6 +402,8 @@ class ScraperRunner:
         skip_existing: bool = True,
         need_login: bool = False,
         min_entries: int = 0,
+        result_schema_kind: str | None = None,
+        mutate_before_save: Callable[[dict], None] | None = None,
     ) -> dict | None:
         """
         共通フロー: fetch HTML → archive → parse → save JSON。
@@ -363,9 +414,12 @@ class ScraperRunner:
             url: スクレイピング対象 URL
             parser: parse(html, **kwargs) を持つパーサー
             parse_kwargs: parser.parse に渡す追加引数
-            skip_existing: 既存 JSON があればスキップ
+            skip_existing: 既存 JSON があればスキップ（False のとき HTTP クライアントの
+                ディスクキャッシュも無効化し、常にネットから取り直す）
             need_login: ログインが必要か
             min_entries: entries の最小数 (0 ならチェックしない)
+            result_schema_kind: 付与時は ``_meta.result_schema_kind`` に書き込む（レース結果系）
+            mutate_before_save: 保存直前に data を改変するフック（例: race_result_on_time 正規化）
         """
         if skip_existing and self.storage.exists(category, key):
             logger.info("スキップ (既存): %s/%s", category, key)
@@ -378,7 +432,9 @@ class ScraperRunner:
                 return None
 
         try:
-            html = self.client.fetch(url)
+            # skip_existing=False（上書き・強制再取得）のときは HTTP キャッシュを使わない。
+            # 古いキャッシュ HTML が残るとパース 0 件のまま固定されるのを防ぐ。
+            html = self.client.fetch(url, use_cache=skip_existing)
 
             self.archive.save(category, key, html)
 
@@ -389,6 +445,12 @@ class ScraperRunner:
                 logger.warning("データ不足: %s/%s (%d entries)", category, key,
                                len(data.get("entries", [])))
                 return None
+
+            if mutate_before_save is not None:
+                mutate_before_save(data)
+
+            if result_schema_kind:
+                _apply_result_schema_meta(data, result_schema_kind)
 
             self.storage.save(category, key, data)
             n = len(data.get("entries", []))
@@ -424,6 +486,7 @@ class ScraperRunner:
             self.RACE_RESULT_URL.format(race_id=race_id),
             self.result_parser, {"race_id": race_id},
             skip_existing=skip_existing, min_entries=1,
+            result_schema_kind=RESULT_SCHEMA_DB_RACE_RESULT,
         )
         if data is not None:
             from src.scraper.pace_utils import merge_race_result_pace
@@ -431,23 +494,49 @@ class ScraperRunner:
             lap = self.storage.load("race_result_lap", race_id)
             merged = merge_race_result_pace(data, lap)
             if merged is not data:
+                _ensure_result_schema_meta(merged, RESULT_SCHEMA_DB_RACE_RESULT)
                 self.storage.save("race_result", race_id, merged)
                 return merged
         return data
 
-    def scrape_race_result_on_time(self, race_id: str, skip_existing: bool = True) -> dict | None:
+    def scrape_race_result_on_time(
+        self,
+        race_id: str,
+        skip_existing: bool = True,
+        *,
+        opening_date: str | None = None,
+    ) -> dict | None:
         """
         race.netkeiba.com 速報結果ページを取得し race_result_on_time に保存する。
 
         レース当日17:30 (raceday-evening) に呼び出す。ログイン不要。
         db.netkeiba.com 版 (race_result) の上書き前に速報として保存しておくことで、
         AI予測の再現に使用できる当日速報データを別パスに保持する。
+
+        ``race_result``（db 確定）とは別カテゴリ・別スキーマ種別
+        （``_meta.result_schema_kind`` = ``race_live_result``）として保存する。
+        過去分も同 URL を試行する。
+
+        ``opening_date`` は ``race_lists`` の開催日キー（YYYYMMDD）。キュー経由では
+        ジョブの ``date`` を渡す。**race_id 先頭8桁は開催日とみなさない。**
+        本日(JST)より前の開催なら ``_meta.result_schema_profile=race_live_archive``、
+        当日開催なら ``race_live_flash``（速報で欠けるキーは None で正規化）。
         """
+        def _mutate_on_time(d: dict) -> None:
+            from src.scraper.race_result_on_time_normalize import normalize_race_live_result
+
+            normalize_race_live_result(
+                d,
+                profile=_race_live_schema_profile_for_opening_date(opening_date),
+            )
+
         return self._fetch_parse_save(
             "race_result_on_time", race_id,
             self.RACE_RESULT_ON_TIME_URL.format(race_id=race_id),
             self.result_on_time_parser, {"race_id": race_id},
             skip_existing=skip_existing, min_entries=1,
+            result_schema_kind=RESULT_SCHEMA_RACE_LIVE_RESULT,
+            mutate_before_save=_mutate_on_time,
         )
 
     def scrape_race_result_lap(self, race_id: str, skip_existing: bool = True) -> dict | None:
@@ -485,6 +574,7 @@ class ScraperRunner:
                 from src.scraper.pace_utils import merge_race_result_pace
 
                 merged = merge_race_result_pace(existing, lap)
+                _ensure_result_schema_meta(merged, RESULT_SCHEMA_DB_RACE_RESULT)
                 self.storage.save("race_result", race_id, merged)
             logger.info(
                 "取得完了: race_result_lap/%s — entries_lap=%d lap_rows=%d",
@@ -677,6 +767,17 @@ class ScraperRunner:
             )
             if data.get("horse_name"):
                 self.storage.save("horse_result", horse_id, data)
+                try:
+                    from src.utils.horse_name_index import upsert_horse_name_index_entry
+
+                    upsert_horse_name_index_entry(
+                        self.storage._base_dir,
+                        str(horse_id),
+                        str(data.get("horse_name") or ""),
+                        str(data.get("name_en") or ""),
+                    )
+                except Exception as _e:
+                    logger.debug("馬名インデックス同期スキップ [%s]: %s", horse_id, _e)
                 self.mark_horse_scraped(horse_id)
                 n_races = len(data.get("race_history", []))
                 logger.info("取得完了: %s - %s (%d戦) sire=%s",
@@ -1982,6 +2083,7 @@ class ScraperRunner:
             return
         self.PARSER_MAP.update({
             "race_result":       (self.result_parser,    "race_id"),
+            "race_result_on_time": (self.result_on_time_parser, "race_id"),
             "race_shutuba":      (self.card_parser,      "race_id"),
             "race_index":        (self.speed_parser,     "race_id"),
             "race_shutuba_past": (self.past_parser,      "race_id"),
@@ -2011,6 +2113,14 @@ class ScraperRunner:
         parser, id_param = self.PARSER_MAP[category]
         try:
             data = parser.parse(html, **{id_param: key})
+            if category == "race_result":
+                _apply_result_schema_meta(data, RESULT_SCHEMA_DB_RACE_RESULT)
+            elif category == "race_result_on_time":
+                from src.scraper.race_result_on_time_normalize import normalize_race_live_result
+
+                # アーカイブ HTML の再パース想定（開催日は race_lists 由来のジョブ date が無い）
+                normalize_race_live_result(data, profile="race_live_archive")
+                _apply_result_schema_meta(data, RESULT_SCHEMA_RACE_LIVE_RESULT)
             self.storage.save(category, key, data)
             n = len(data.get("entries", []))
             logger.info("再パース完了: %s/%s (%d件)", category, key, n)
@@ -2035,6 +2145,17 @@ class ScraperRunner:
             )
             if data.get("horse_name"):
                 self.storage.save("horse_result", horse_id, data)
+                try:
+                    from src.utils.horse_name_index import upsert_horse_name_index_entry
+
+                    upsert_horse_name_index_entry(
+                        self.storage._base_dir,
+                        str(horse_id),
+                        str(data.get("horse_name") or ""),
+                        str(data.get("name_en") or ""),
+                    )
+                except Exception as _e:
+                    logger.debug("馬名インデックス同期スキップ [%s]: %s", horse_id, _e)
                 logger.info("馬 再パース完了: %s - %s (sire=%s)",
                             horse_id, data["horse_name"], data.get("sire", "?"))
                 return data

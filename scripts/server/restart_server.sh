@@ -16,7 +16,16 @@ ROOT="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
 cd "$ROOT"
 
 PORT="${PORT:-8000}"
-PYTHON="${PYTHON:-$(command -v python3)}"
+# 既定は venv（本番は /opt/venv やプロジェクト .venv）。システム python だと uvicorn 未導入で落ちるのを避ける。
+if [[ -z "${PYTHON:-}" ]]; then
+  if [[ -x "$ROOT/.venv/bin/python" ]]; then
+    PYTHON="$ROOT/.venv/bin/python"
+  elif [[ -x "/opt/venv/bin/python3" ]]; then
+    PYTHON="/opt/venv/bin/python3"
+  else
+    PYTHON="$(command -v python3)"
+  fi
+fi
 LOG_DIR="$ROOT/logs"
 PID_FILE="$ROOT/.server.pid"
 TS="$(date +%Y%m%d_%H%M%S)"

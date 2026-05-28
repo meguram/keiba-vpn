@@ -7,12 +7,14 @@ FastAPI アプリケーション
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
 import os
 import sys
 import math
 import threading
+import unicodedata
 import time as _time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
@@ -47,8 +49,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from src.api.auth import (
-    is_developer, requires_auth, is_public_path,
-    verify_password, create_session_response, clear_session_response,
+    is_developer,
+    requires_auth,
+    is_public_path,
+    verify_password,
+    create_session_response,
+    clear_session_response,
     COOKIE_NAME,
 )
 from src.utils.keiba_logging import standard_log_formatter
@@ -463,8 +469,26 @@ async def lifespan(app):
     logger.info("data/cache クリーンアップスレッド起動")
 
     # ワーカーログリングハンドラを起動時に登録（process_queue 前でも有効にするため）
-    from src.scraper.queue_worker_log import ensure_queue_worker_log_handler, get_worker_logs
+    from src.scraper.queue_worker_log import ensure_queue_worker_log_handler
     ensure_queue_worker_log_handler()
+
+    # デプロイずれ検知: ワーカーが読み込んだ result_table セレクタ数（起動時1回）
+    try:
+        import logging as _logging
+        from src.scraper.parsers import RaceResultParser
+
+        _rt = RaceResultParser._RESULT_TABLE.selectors
+        _logging.getLogger("uvicorn.error").info(
+            "RaceResultParser._RESULT_TABLE: n=%d head=%s",
+            len(_rt),
+            _rt[:3],
+        )
+    except Exception as _e:
+        import logging as _logging
+
+        _logging.getLogger("uvicorn.error").warning(
+            "RaceResultParser セルフチェック失敗: %s", _e
+        )
 
     # スクレイピングキューワーカー（マルチワーカー時はリーダー1プロセスのみ）
     global _queue_is_leader
@@ -579,6 +603,31 @@ async def lifespan(app):
             logger.warning("bloodline-cluster 先読み失敗: %s", _e)
 
     threading.Thread(target=_preload_bloodline_cluster, daemon=True, name="bloodline-preload").start()
+
+    def _horse_name_index_bootstrap():
+        if (os.environ.get("HORSE_NAME_INDEX_DISABLE_BOOTSTRAP") or "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        ):
+            logger.info("馬名インデックス起動時生成: 無効 (HORSE_NAME_INDEX_DISABLE_BOOTSTRAP)")
+            return
+        try:
+            from src.utils import horse_name_index as hni
+
+            r = hni.ensure_horse_name_index(BASE_DIR)
+            logger.info(
+                "馬名インデックス起動時 ensure: status=%s total=%s",
+                r.get("status"),
+                r.get("total_horses"),
+            )
+        except Exception as _e:
+            logger.warning("馬名インデックス起動時 ensure 失敗: %s", _e)
+
+    threading.Thread(
+        target=_horse_name_index_bootstrap, daemon=True, name="horse-name-index-ensure"
+    ).start()
 
     yield
 
@@ -11423,35 +11472,66 @@ def _normalize_search_text(text: str) -> list:
     return variants
 
 
-# 馬名インデックスのキャッシュ
-_horse_name_index = None
-_horse_name_index_lock = threading.Lock()
+def _is_kana_only_query(q: str) -> bool:
+    """クエリがひらがな・カタカナ（長音記号等）のみか。漢字・英数字混じりなら False。"""
+    s = unicodedata.normalize("NFKC", (q or "").strip())
+    if not s:
+        return False
+    for c in s:
+        if c.isspace():
+            continue
+        o = ord(c)
+        if o in (0x30FC, 0xFF70):  # ー 長音
+            continue
+        if 0x3041 <= o <= 0x3096:  # ひらがな
+            continue
+        if 0x30A1 <= o <= 0x30F6:  # カタカナ
+            continue
+        if 0x31F0 <= o <= 0x31FF:  # 小書きカタカナ拡張
+            continue
+        return False
+    return True
+
+
+_horse_kks: Any = None
+
+
+@functools.lru_cache(maxsize=50000)
+def _horse_name_hiragana_reading_cached(horse_name: str) -> str:
+    """
+    馬名全体を pykakasi でひらがな列にしたもの（漢字馬名を「い」等のかな入力でヒットさせる）。
+    pykakasi 未導入・失敗時は空文字。
+    """
+    if not horse_name:
+        return ""
+    try:
+        import pykakasi
+
+        global _horse_kks
+        if _horse_kks is None:
+            _horse_kks = pykakasi.kakasi()
+        parts = _horse_kks.convert(horse_name)
+        return "".join((p.get("hira") or "") for p in parts)
+    except Exception:
+        return ""
 
 
 def _load_horse_name_index():
-    """馬名インデックスをロード（キャッシュ付き）"""
-    global _horse_name_index
+    """馬名インデックスをロード（mtime で無効化されるメモリキャッシュ）。"""
+    from src.utils.horse_name_index import load_horse_name_index
 
-    if _horse_name_index is not None:
-        return _horse_name_index
+    return load_horse_name_index(BASE_DIR)
 
-    with _horse_name_index_lock:
-        if _horse_name_index is not None:
-            return _horse_name_index
 
-        index_path = os.path.join(BASE_DIR, "data", "knowledge", "horse_name_index.json")
-        if not os.path.exists(index_path):
-            logger.warning(f"馬名インデックスが見つかりません: {index_path}")
-            return {"horses": []}
+@app.get("/api/horse-names/index-meta", response_class=JSONResponse)
+async def horse_names_index_meta():
+    """
+    馬名インデックスの参照用メタ（パス・頭数・生成時刻）。
+    全馬リストは返さない。
+    """
+    from src.utils.horse_name_index import horse_name_index_meta
 
-        try:
-            with open(index_path, 'r', encoding='utf-8') as f:
-                _horse_name_index = json.load(f)
-            logger.info(f"馬名インデックスをロードしました: {_horse_name_index.get('total_horses', 0)}頭")
-            return _horse_name_index
-        except Exception as e:
-            logger.error(f"馬名インデックスのロードに失敗: {e}")
-            return {"horses": []}
+    return JSONResponse(horse_name_index_meta(BASE_DIR))
 
 
 @app.get("/api/horse-names/search", response_class=JSONResponse)
@@ -11477,8 +11557,10 @@ async def search_horse_names(q: str = "", limit: int = 20):
         if not horses:
             return JSONResponse({"results": [], "error": "インデックスが空です"})
 
+        q_nfkc = unicodedata.normalize("NFKC", q.strip())
         # 検索クエリを正規化（ひらがな、カタカナのバリエーション）
-        query_variants = _normalize_search_text(q.lower())
+        query_variants = _normalize_search_text(q_nfkc.lower())
+        use_reading = _is_kana_only_query(q_nfkc)
 
         results = []
 
@@ -11496,6 +11578,11 @@ async def search_horse_names(q: str = "", limit: int = 20):
             search_targets = _normalize_search_text(horse_name.lower())
             if name_en:
                 search_targets.append(name_en.lower())
+            # かなのみのクエリ（例: 「い」）では、漢字馬名を pykakasi 読みでも照合する
+            if use_reading:
+                h_read = _horse_name_hiragana_reading_cached(horse_name)
+                if h_read:
+                    search_targets.extend(_normalize_search_text(h_read.lower()))
 
             # いずれかのバリアントがマッチするか確認
             matched = False

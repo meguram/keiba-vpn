@@ -1,83 +1,53 @@
 #!/usr/bin/env python3
 """
-馬名インデックスファイルを生成するスクリプト
+馬名検索用 horse_name_index.json を生成する。
 
-使用方法:
-    python3 scripts/data/build_horse_index.py
+正規の出力先: ``data/knowledge/horse_name_index.json``（API は常にこのローカルファイルのみ読む）。
+
+- 既定: ローカルの ``data/cache/horse_result`` と ``data/local/mirror/horse_result`` だけを走査。
+- ``--from-gcs``: メンテナンス用。GCS の ``horse_result`` を全走査して同じローカル JSON に書き出す
+  （API サーバの高頻度パスでは使わないこと）。
 """
 
-import json
-import time
+from __future__ import annotations
+
+import argparse
+import sys
 from pathlib import Path
 
-# プロジェクトルート
+# プロジェクトルート（本ファイル: src/scripts/data/build_horse_index.py）
 BASE_DIR = Path(__file__).resolve().parents[3]
 
 
-def build_horse_index():
-    """ローカルキャッシュから馬名インデックスを構築"""
+def main() -> int:
+    ap = argparse.ArgumentParser(description="馬名検索用 horse_name_index.json を生成")
+    ap.add_argument(
+        "--from-gcs",
+        action="store_true",
+        help="GCS の horse_result を全走査（ローカルキャッシュが無い場合の初回向け。時間がかかります）",
+    )
+    args = ap.parse_args()
 
-    horse_index = []
-    cache_dir = BASE_DIR / "data" / "cache" / "horse_result"
+    sys.path.insert(0, str(BASE_DIR))
+    from src.utils.horse_name_index import (
+        rebuild_horse_name_index_from_gcs_horse_result,
+        rebuild_horse_name_index_from_horse_result_cache,
+    )
 
-    if not cache_dir.exists():
-        print(f"キャッシュディレクトリが見つかりません: {cache_dir}")
-        return
+    if args.from_gcs:
+        n = rebuild_horse_name_index_from_gcs_horse_result(BASE_DIR)
+    else:
+        n = rebuild_horse_name_index_from_horse_result_cache(BASE_DIR)
 
-    total = 0
-    errors = 0
-
-    # 各年度のディレクトリを走査
-    for year_dir in sorted(cache_dir.iterdir()):
-        if not year_dir.is_dir():
-            continue
-
-        year = year_dir.name
-        print(f"処理中: {year}年度...")
-
-        count = 0
-        for json_file in year_dir.glob("*.json"):
-            try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-
-                horse_id = data.get("horse_id")
-                horse_name = data.get("horse_name")
-                name_en = data.get("name_en", "")
-
-                if horse_id and horse_name:
-                    horse_index.append({
-                        "horse_id": horse_id,
-                        "horse_name": horse_name,
-                        "name_en": name_en,
-                        "year": year
-                    })
-                    count += 1
-                    total += 1
-
-            except Exception as e:
-                errors += 1
-                if errors <= 10:  # 最初の10個のエラーのみ表示
-                    print(f"  エラー ({json_file.name}): {e}")
-
-        print(f"  {count}頭を登録")
-
-    # インデックスファイルを保存
-    output_path = BASE_DIR / "data" / "local" / "knowledge" / "horse_name_index.json"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump({
-            "version": "1.0",
-            "total_horses": total,
-            "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "horses": horse_index
-        }, f, ensure_ascii=False, indent=2)
-
-    print(f"\n完了: {total}頭のインデックスを生成しました")
-    print(f"出力先: {output_path}")
-    print(f"エラー数: {errors}")
+    out = BASE_DIR / "data" / "knowledge" / "horse_name_index.json"
+    print(f"完了: {n}頭のインデックスを {out} に書き出しました")
+    if n == 0 and not args.from_gcs:
+        print(
+            "注意: 0 頭の場合は --from-gcs で GCS から再構築するか、"
+            "horse_result のスクレイプ後に自動追記されるまでお待ちください。"
+        )
+    return 0
 
 
 if __name__ == "__main__":
-    build_horse_index()
+    raise SystemExit(main())

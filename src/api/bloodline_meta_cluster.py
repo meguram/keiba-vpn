@@ -27,7 +27,12 @@ ROOT = Path(__file__).resolve().parents[2]
 ART_DIR = ROOT / "data/page_reference/note_aptitude_race"
 PED_DIR = ROOT / "data/local/horse_pedigree_5gen"
 IDX_DIR = ROOT / "data/page_reference/pedigree_race_index"
-PED_10GEN_DIR = ROOT / "data/local/research/pedigree_10gen"
+# 10gen inverted index: ビルド既定は local/research。配布物のみ research 側にある場合も拾う。
+_PED_10GEN_SEARCH_BASES: tuple[Path, ...] = (
+    ROOT / "data/local/research/pedigree_10gen",
+    ROOT / "data/research/pedigree_10gen",
+)
+PED_10GEN_DIR = _PED_10GEN_SEARCH_BASES[0]
 
 # 距離区分は父視点 (build_meta_cluster_artifacts.py) と統一:
 #   短距離 [0,1400) / マイル [1400,1800) / 中距離 [1800,2400) / 長距離 [2400,9999)
@@ -2797,12 +2802,20 @@ def _load_pedigree_10gen() -> Optional[dict[str, Any]]:
         return art
     if "ped_10gen_not_found" in art:
         return None
-    inv_path = PED_10GEN_DIR / "ancestor_to_horses.parquet"
-    if not inv_path.exists():
-        logger.warning(
-            "10gen ancestor index 未生成: %s\n"
-            "  -> python -m src.research.pedigree.build_pedigree_10gen_index を実行してください",
-            inv_path,
+    ped_base: Path | None = None
+    inv_path: Path | None = None
+    for base in _PED_10GEN_SEARCH_BASES:
+        cand = base / "ancestor_to_horses.parquet"
+        if cand.is_file():
+            ped_base = base
+            inv_path = cand
+            break
+    if inv_path is None or ped_base is None:
+        # 未生成は軽量デプロイで普通にあり得る。任意機能のため WARNING は出さない。
+        logger.debug(
+            "10gen ancestor index なし（任意）。生成する場合: "
+            "python -m src.research.pedigree.build_pedigree_10gen_index → %s",
+            " または ".join(str(b / "ancestor_to_horses.parquet") for b in _PED_10GEN_SEARCH_BASES),
         )
         art["ped_10gen_not_found"] = True
         return None
@@ -2834,7 +2847,7 @@ def _load_pedigree_10gen() -> Optional[dict[str, Any]]:
         # ── 祖先 horse_id → 馬名 のマップを (あれば) ロード ──
         # 母系領域 (10gen) や bms 表示で「種牡馬名が horse_id のまま」になる問題を解消。
         # build_ancestor_name_map.py で 5gen / 10gen JSON 全件から事前抽出した parquet を使う。
-        anc_name_path = PED_10GEN_DIR / "ancestor_id_to_name.parquet"
+        anc_name_path = ped_base / "ancestor_id_to_name.parquet"
         anc_name_map: dict[str, str] = {}
         if anc_name_path.exists():
             try:
@@ -2845,9 +2858,8 @@ def _load_pedigree_10gen() -> Optional[dict[str, Any]]:
             except Exception as e:
                 logger.warning("ancestor_id_to_name 読み込み失敗: %s", e)
         else:
-            logger.warning(
-                "ancestor_id_to_name.parquet 未生成: %s\n"
-                "  -> python -m src.research.pedigree.build_ancestor_name_map で生成可",
+            logger.debug(
+                "ancestor_id_to_name.parquet なし（任意）: %s — build_ancestor_name_map で生成可",
                 anc_name_path,
             )
         art["ancestor_id_to_name"] = anc_name_map

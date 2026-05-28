@@ -452,7 +452,7 @@ function makeSepNode(ts) {
   const el = document.createElement('div');
   el.className = 'log-sep';
   const d = new Date(ts * 1000);
-  const label = d.toLocaleTimeString('ja-JP', {hour12:false});
+  const label = d.toLocaleTimeString('ja-JP', {hour12:false, timeZone: 'Asia/Tokyo'});
   el.innerHTML = `<span class="log-sep-line"></span><span>${label}</span><span class="log-sep-line"></span>`;
   return el;
 }
@@ -460,7 +460,7 @@ function makeSepNode(ts) {
 function makeEntryNode(e) {
   const row = document.createElement('div');
   row.className = 'log-entry';
-  const ts = new Date(e.ts * 1000).toLocaleTimeString('ja-JP', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  const ts = new Date(e.ts * 1000).toLocaleTimeString('ja-JP', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit', timeZone: 'Asia/Tokyo'});
   const lv = (e.level || 'INFO').toUpperCase();
   const tag = shortLogger(e.logger || '');
   row.innerHTML =

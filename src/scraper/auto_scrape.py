@@ -456,7 +456,9 @@ def task_raceday_result_runner():
             logger.info("  ★ [%s] 速報結果取得: %s (%s)",
                         datetime.now().strftime("%H:%M:%S"), label, r_rid)
             try:
-                result = runner.scrape_race_result_on_time(r_rid, skip_existing=False)
+                result = runner.scrape_race_result_on_time(
+                    r_rid, skip_existing=False, opening_date=date_fmt,
+                )
                 if result:
                     stats["scraped"] += 1
                     logger.info("    ✓ 速報結果保存: %s", r_rid)
@@ -702,7 +704,9 @@ def run_raceday_evening_for_date(date_str: str) -> dict:
 
         for task_name, task_key, task_fn in [
             # race_result_on_time のみ書き込む（race_result は weekly-update が担当）
-            ("速報結果",   "result_on_time", lambda: runner.scrape_race_result_on_time(rid, skip_existing=False)),
+            ("速報結果",   "result_on_time", lambda r=rid, d=date_fmt: runner.scrape_race_result_on_time(
+                r, skip_existing=False, opening_date=d,
+            )),
             ("確定オッズ", "odds",            lambda: runner.scrape_odds(rid, skip_existing=False)),
             ("確定2連",    "pair_odds",       lambda: runner.scrape_pair_odds(rid, skip_existing=False)),
             ("SmartRC",    "smartrc",         lambda: runner.scrape_smartrc(rid)),

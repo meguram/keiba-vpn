@@ -18,6 +18,8 @@ import unittest
 # Auth を無効化 + GCS を空にしてローカル動作を強制
 os.environ.setdefault("REQUIRE_AUTH", "false")
 os.environ.setdefault("GCS_BUCKET", "")
+# テスト import 時に GCS 全走査の馬名インデックス生成が走ると遅いため既定でオフ
+os.environ.setdefault("HORSE_NAME_INDEX_DISABLE_BOOTSTRAP", "1")
 
 from fastapi.testclient import TestClient
 from src.api.app import app

@@ -13,10 +13,16 @@ GCS 利用時は、対象カテゴリのキーについて **まとめて** ``ba
 ``batch_list_blobs`` の並列）を走らし、以降の満足判定の前提とする。ローカル専用
 カテゴリ（例: ``race_lists``）はリスト対象外。調教（``horse_training``）は手元
 JSON との二重照会を従来どおり行う。
+
+大量の ``precheck`` が溜まったとき、1サイクルで全件判定するとワーカーが長時間ブロックする。
+環境変数 ``SCRAPE_STORAGE_PRECHECK_MAX_JOBS``（既定 1200、0 で無制限）でチャンク化する。
+GCS 一括照会は ``SCRAPE_PRECHECK_GCS_SUBBATCH``（既定 200 ジョブごと）に分割し、
+``batch_check_keys`` のキー数を抑える。
 """
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -25,6 +31,34 @@ from src.scraper.horse_training_local import horse_training_json_path
 from src.scraper.run import _horse_training_local_dict_looks_stored, _read_horse_training_local_file
 
 logger = logging.getLogger(__name__)
+
+
+def _storage_precheck_chunk_limit() -> int | None:
+    """1回の precheck 計画で処理する行数の上限。None なら全件（従来挙動）。"""
+    raw = (os.environ.get("SCRAPE_STORAGE_PRECHECK_MAX_JOBS") or "1200").strip().lower()
+    if raw in ("", "0", "unlimited", "none", "off"):
+        return None
+    try:
+        n = int(raw)
+    except ValueError:
+        return 1200
+    if n <= 0:
+        return None
+    return n
+
+
+def _storage_precheck_gcs_subbatch_size() -> int:
+    """GCS batch_check_keys に渡すジョブ数の上限（1チャンク内で複数回に分割）。"""
+    raw = (os.environ.get("SCRAPE_PRECHECK_GCS_SUBBATCH") or "200").strip().lower()
+    if raw in ("0", "unlimited", "none", "off"):
+        return 1_000_000
+    try:
+        n = int(raw)
+    except ValueError:
+        return 200
+    if n <= 0:
+        return 1_000_000
+    return max(25, min(n, 5000))
 
 
 @dataclass
@@ -354,19 +388,33 @@ def plan_unified_storage_precheck(
         pre.append(j)
     if not pre:
         return []
-    req = collect_gcs_key_requirements(pre, storage)
-    gcs_blobs = run_gcs_key_batch_prefetch(storage, req)
+    # 優先度・投入時刻は job_queue._sorted_precheck と同順
+    pre.sort(key=lambda j: (-int(j.get("priority") or 0), j.get("queued_at") or ""))
+    chunk = _storage_precheck_chunk_limit()
+    total_pre = len(pre)
+    if chunk is not None and total_pre > chunk:
+        logger.info(
+            "storage precheck: チャンク処理 %d / %d 件（残りは次ループ以降）",
+            chunk,
+            total_pre,
+        )
+        pre = pre[:chunk]
+    sub_n = _storage_precheck_gcs_subbatch_size()
     out: list[tuple[str, bool]] = []
-    for j in pre:
-        jid = j.get("job_id")
-        if not jid:
-            continue
-        try:
-            sat = _one_job_storage_satisfied(j, storage, gcs_blobs=gcs_blobs)
-        except Exception as e:
-            logger.debug("precheck 判定失敗: job_id=%s: %s", jid, e)
-            sat = False
-        out.append((str(jid), sat))
+    for i in range(0, len(pre), sub_n):
+        sub = pre[i : i + sub_n]
+        req = collect_gcs_key_requirements(sub, storage)
+        gcs_blobs = run_gcs_key_batch_prefetch(storage, req)
+        for j in sub:
+            jid = j.get("job_id")
+            if not jid:
+                continue
+            try:
+                sat = _one_job_storage_satisfied(j, storage, gcs_blobs=gcs_blobs)
+            except Exception as e:
+                logger.debug("precheck 判定失敗: job_id=%s: %s", jid, e)
+                sat = False
+            out.append((str(jid), sat))
     return out
 
 
