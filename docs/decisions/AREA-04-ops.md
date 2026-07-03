@@ -1,135 +1,186 @@
-# AREA-04 — 運用最適化要件
-
-**Status**: FINAL  
-**Last Updated**: 2026-07-03  
-**Consolidates**: DEC-003(サーバ負荷), DEC-004(プロセス分離), DEC-009(メモリ), DEC-010(systemd/Circuit Breaker)
+# AREA-07 — 運用最適化要件（プロセス分離 / VPS メモリバジェット / Circuit Breaker / 監視・アラート / デプロイ / ロールバック）
+**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001-本要件定義書の最重要事項はas_of_race_id-によるスナップショット管理でテンポラルリークを.md
 
 ---
 
-## 1. プロセス分離設計
+## 1. 本仕様書の位置づけ
 
-| systemd ユニット | プロセス | スケジュール |
+DEC-001 は競馬予測システム全体の要件定義書であり、運用最適化（プロセス分離・VPS メモリバジェット・Circuit Breaker・監視・アラート・デプロイ・ロールバック）に関する独立した決定文書は現時点で **DEC-001 のみ** である。以下は、DEC-001 の非機能要件（Section 5）・機能要件（Section 4）・実装ロードマップ（Section 6）・リスク管理（Section 7）から運用最適化に関連する記述を抽出し、体系化したものである。
+
+---
+
+## 2. プロセス分離
+
+DEC-001 では以下のプロセスを論理的に分離することが前提とされている。
+
+| プロセス種別 | 役割 | 備考 |
 |---|---|---|
-| `keiba-api.service` | Flask API（Gunicorn） | 常時起動 |
-| `keiba-inference.service` | LightGBM バッチワーカー | cron 08:10 JST |
-| `keiba-scraper.service` | ETL スクレイパー | cron 06:00, 12:00 JST |
+| スクレイパープロセス | netkeiba.com からのデータ収集（Layer 1〜5 格納） | シングルワーカー (`concurrent_workers: 1`) |
+| スナップショット集計バッチ | `horse_stats_snapshot` / `jockey_stats_snapshot` / `trainer_stats_snapshot` の生成 | `as_of_race_id` 紐付け、results 収集完了後に起動 |
+| オッズ収集スケジューラ | 発走当日 08:00〜発走時刻まで 5分/2分/1分 間隔で収集 | タイムウィンドウ制御が必要 |
+| 推論バッチプロセス | Stage 1 → Stage 2 の順次推論、`prediction_results` / `prediction_lap_times` 書き込み | 発走 3 時間前までに完了（N-9） |
+| API サーバー | REST API 提供、Redis キャッシュ参照 | キャッシュヒット ≤ 200 ms（N-1）、ミス ≤ 2,000 ms（N-2） |
+| DDL マイグレーションプロセス | Alembic によるスキーマバージョン管理 | デプロイ時に独立実行（N-11） |
 
-**共通設定**: `Restart=on-failure`, `/healthz` エンドポイント監視
-
-**同時実行禁止**: スクレイパーと推論バッチは **90 分以上の間隔を強制**（OOM 防止）
-
----
-
-## 2. VPS メモリバジェット（2GB = 2,048MB）
-
-| コンポーネント | 割当 | 備考 |
-|---|---|---|
-| OS + systemd | 256 MB | |
-| Nginx | 50 MB | |
-| Flask/Gunicorn × 2（CoW） | 300 MB | preload_app=True でモデル共有 |
-| LightGBM Booster（CoW, 物理 1 コピー） | 200 MB | |
-| PostgreSQL（shared_buffers=128MB） | 200 MB | |
-| Redis（maxmemory=256MB） | 256 MB | |
-| スクレイパー（時間分離ピーク） | 300 MB | 推論と同時実行禁止 |
-| OOM バッファ | 238 MB | |
-| **通常時合計** | **~1,462 MB** | |
-| **ピーク（スクレイパー or 推論実行時）** | **~1,762 MB（86%）** | |
-
-**LightGBM 最適化**:
-- `num_threads = max(1, vCPU // workers)` = 1（2vCPU 環境）
-- `num_leaves` 上限 63（RSS 増加 ≤250MB）
-- Booster RSS 超過時 → `num_leaves` 31 で再学習
+**シングル IP 環境制約**: スクレイパーは `concurrent_workers: 1` を厳守し、並列リクエストによる IP ブロックを防止する。
 
 ---
 
-## 3. スクレイピング耐障害設計（Circuit Breaker）
+## 3. VPS メモリバジェット
 
-```
-tenacity リトライ: max_attempts=3, wait=4s→8s→60s（exponential）
-      │
-      ├─ 成功 → 通常処理
-      └─ 連続 5 回失敗 → pybreaker Circuit Breaker OPEN
-             │
-             ├─ GCS 最終成功データ配信（フォールバック）
-             ├─ "データ更新中" バナー（FreshnessStatus: STALE_CIRCUIT_OPEN）
-             ├─ Slack アラート（5 分以内）
-             └─ 60 秒後 HALF-OPEN → 回復試行 → 成功で CLOSED
-```
+DEC-001 には VPS のメモリ上限や具体的なメモリ割り当て数値の明示的な記述は存在しない。
 
-### Circuit Breaker 管理
-
-- `scrape_runs` テーブルで実行履歴を記録
-- `/admin/circuit-status`（IP 制限）で状態確認
-- FreshnessStatus enum: `FRESH` / `STALE` / `STALE_CIRCUIT_OPEN` / `UNKNOWN`
+> **要対応**: 後続の DEC（運用インフラ決定文書）で以下を確定する必要がある。
+> - VPS スペック（RAM 上限）
+> - 各プロセス（API サーバー・推論バッチ・Redis・PostgreSQL）へのメモリ上限割り当て
+> - LightGBM / LSTM モデルのロード時メモリ見積もり
 
 ---
 
-## 4. モニタリング
+## 4. Circuit Breaker
 
-| ツール | 用途 | コスト |
-|---|---|---|
-| UptimeRobot（無料） | 外部 HTTP 死活監視 | ¥0 |
-| Slack Webhook | ETL 失敗 / Circuit Breaker OPEN アラート | ¥0 |
-| Prometheus + Grafana（VPS 内） | CPU/メモリ/リクエスト数（Phase 2） | ¥0 |
-| opentelemetry | 分散トレーシング（Phase 3） | ¥0 |
-| structlog（JSON ロギング） | GCS / Cloud Logging への構造化ログ（Phase 2）| ¥0 |
+DEC-001 には Circuit Breaker パターンの明示的な記述は存在しないが、以下のリトライ・バックオフ設定がその代替機能を一部担っている。
 
-### アラート閾値
+### 4-1. スクレイパーのリトライ制御（SCRAPING_CONFIG）
 
-| メトリクス | 閾値 | アクション |
-|---|---|---|
-| VPS メモリ使用率 | >85% | Slack 警告 |
-| Redis メモリ | >220MB（256MB 上限の 86%） | Slack 警告 |
-| API P99 レイテンシ | >500ms | Slack 警告 |
-| スクレイピング失敗 | 1 回以上 | Slack 通知 |
-| Circuit Breaker OPEN | — | 即座に Slack アラート |
-
----
-
-## 5. デプロイ設計
-
-```bash
-# VPS デプロイ（git pull フック）
-git pull origin main
-pip install -r requirements.txt --no-cache-dir
-sudo systemctl restart keiba-api.service
-# Inference Worker は次回 cron で自動起動
+```python
+SCRAPING_CONFIG = {
+    "request_interval_sec": 2.0,
+    "jitter_sec": (0.5, 1.5),
+    "concurrent_workers": 1,
+    "session_rotate_interval": 50,   # 50 リクエスト毎にセッション更新
+    "retry_on_429": True,
+    "retry_backoff_base_sec": 30,    # 429 受信時のバックオフ基底秒数
+    "user_agent_rotate": True,
+}
 ```
 
-### Cloudflare（DDoS 防御 / SSL 終端）
+### 4-2. 結果スクレイパーのリトライ
 
-- 無料プランで DDoS 防御・SSL 終端・レート制限
-- VPS への直接アクセスは Nginx で拒否（Cloudflare IP のみ許可）
+```yaml
+results:
+  trigger: "発走予定時刻 + 35分"
+  retry: "5分間隔 × 最大6回"  # 合計最大 30 分間リトライ
+```
+
+### 4-3. 要対応事項
+
+> 後続 DEC で以下を確定する必要がある。
+> - Circuit Breaker ライブラリの選定（例: `pybreaker`・`tenacity`）
+> - 閾値定義: 連続失敗 N 回でオープン状態遷移、クールダウン時間
+> - Circuit Breaker 適用対象: netkeiba.com HTTP クライアント・Redis・PostgreSQL 接続
 
 ---
 
-## 6. ロールバック手順
+## 5. 監視・アラート
 
-| 項目 | 手順 | 目標時間 |
+### 5-1. スクレイピング成功率監視（N-6、R-2）
+
+| 項目 | 目標値 | アラート条件 |
 |---|---|---|
-| コードロールバック | `git revert` + `systemctl restart` | <5 分 |
-| モデルロールバック | `MODEL_ROLLBACK_PATH` からリストア | <10 分 |
-| Redis フラッシュ | `redis-cli FLUSHDB` → 再キャッシュ | <2 分 |
+| スクレイピング成功率 | ≥ 99% / 月 | 週次で閾値以下になった場合に通知（R-2 対策） |
+| DB 反映遅延 | ≤ 10 分 | 超過時アラート（N-7） |
+| オッズスナップショット欠損率（発走前 5 分以内） | ≤ 1% | 超過時アラート（N-8） |
 
----
+### 5-2. 実行ログ管理（F-5）
 
-## 7. 非機能要件（運用系）
+```sql
+-- scrape_runs テーブル（スクレイプ実行ログ）
+-- カラム: target_type, status, retry_count
+-- 監視基盤はこのテーブルを参照して成功率・失敗率を集計すること
+```
 
-| ID | 要件 |
+### 5-3. API パフォーマンス監視（N-1、N-2）
+
+| 項目 | SLO |
 |---|---|
-| NFR-OPS-01 | 可用性 ≥99.5%（月間ダウンタイム ≤3.6h） |
-| NFR-OPS-02 | VPS 総メモリ ≤1,536MB（通常時）|
-| NFR-OPS-03 | Redis ≤256MB（allkeys-lru 強制）|
-| NFR-OPS-04 | GCS 読み取りリクエスト削減 ≥95%（Redis 導入後比）|
-| NFR-OPS-05 | アラート配信 ≤5 分（障害発生から）|
-| NFR-OPS-06 | ボトルネック特定 ≤30 分（トレース情報から）|
+| キャッシュヒット時レスポンスタイム | ≤ 200 ms |
+| キャッシュミス時レスポンスタイム | ≤ 2,000 ms |
+
+### 5-4. 推論バッチ完了監視（N-9）
+
+- 発走 3 時間前までに推論バッチが完了していない場合はアラートを発報する。
+
+### 5-5. モデル品質モニタリング（Phase 4 以降）
+
+- 特徴量重要度のモニタリング
+- データドリフト検知
+- 障害・エラー通知アラートの整備
+
+### 5-6. テンポラルリーク検知（N-10）
+
+- CI パイプラインにおいてテストデータ時系列分割によるリーク検知テストを自動実行する。
+- `as_of_race_id` 紐付けの単体テストを必須化する（F-3 実装時）。
 
 ---
 
-## 8. Human Review 依頼事項
+## 6. デプロイ
 
-| 項目 | 優先度 |
-|---|---|
-| PostgreSQL shared_buffers 実際値の確認（メモリバジェット最終確定） | 高 |
-| SHAP 時間分離のロードテスト（Phase 2 移行前） | 中 |
-| ETL 遅延フォールバックポリシー: 503 全件 vs 前日データ配信 | 高 |
+### 6-1. スキーママイグレーション（N-11）
+
+- DDL 変更は **Alembic** でバージョン管理し、全スキーマ変更をマイグレーションファイルとして記録する。
+- デプロイ時はマイグレーションプロセスを API サーバー起動前に独立実行する。
+
+### 6-2. デプロイ順序（依存関係）
+
+```
+1. DDL マイグレーション実行（Alembic）
+2. スクレイパープロセス起動
+3. オッズ収集スケジューラ起動
+4. 推論バッチプロセス起動
+5. API サーバー起動
+```
+
+### 6-3. フェーズ別リリース計画
+
+| Phase | 主要デプロイ対象 | 完了条件 |
+|---|---|---|
+| Phase 0 | scrape_runs テーブル・基本スキーマ | ラップデータ可用性確認完了 |
+| Phase 1 | Layer 1〜5 全テーブル DDL・スクレイパー群・集計バッチ | 過去 2 年分データ格納済み |
+| Phase 2 | 特徴量パイプライン・Stage 1 モデル・回収率計算ロジック | 勝率 Log Loss ベースライン比 −5% 改善 |
+| Phase 3 | Stage 2 モデル・REST API・Redis キャッシュ・UI | 全予測ターゲット T-1〜T-11 が API 経由で取得可能 |
+| Phase 4 | LSTM ラップモデル・自動再学習スケジューラ | 継続運用 |
+
+### 6-4. キャッシュ設定（F-12、N-12）
+
+```
+キャッシュキー: prediction:{race_id}:{model_version}
+キャッシュキー: lap:prediction:{race_id}:{model_version}
+TTL: 発走時刻まで有効 / 発走後 60 秒で自動失効
+```
+
+---
+
+## 7. ロールバック
+
+### 7-1. モデルロールバック（F-16）
+
+- 学習済みモデルはバージョン管理基盤（MLflow 等）で管理し、古いバージョンへのロールバック機能を提供する（Phase 2 で基盤整備）。
+- `prediction_results` テーブルの `model_version` カラムにより、どのモデルバージョンによる推論結果かを追跡可能とする。
+
+### 7-2. スキーマロールバック
+
+- Alembic のダウングレード機能を用いてスキーマ変更を巻き戻す。
+- Layer 2〜5 テーブルは **追記型・不変（削除不可）** 設計のため、データ自体のロールバックは行わない。
+
+### 7-3. データロールバック非対応の設計原則
+
+| テーブル種別 | 更新ポリシー | ロールバック可否 |
+|---|---|---|
+| `race_results`（Layer 2） | 追記のみ | ✗ 不変 |
+| `*_stats_snapshot`（Layer 3） | 追記のみ（UNIQUE 制約） | ✗ 不変 |
+| `race_odds_snapshot`（Layer 5） | 追記のみ・削除不可 | ✗ 不変 |
+| `prediction_results` | UNIQUE(race_id, horse_id, model_version) | ✓ 旧 model_version を参照切替 |
+
+---
+
+## 8. 未決定事項（後続 DEC で確定が必要な項目）
+
+| # | 項目 | 理由 |
+|---|---|---|
+| OP-1 | VPS メモリバジェット（各プロセスへの割り当て上限） | DEC-001 に記述なし |
+| OP-2 | Circuit Breaker ライブラリ選定・閾値定義 | DEC-001 はリトライ設定のみ定義、CB パターン未採用 |
+| OP-3 | 監視基盤ツール選定（Prometheus / Grafana / Sentry 等） | DEC-001 に記述なし |
+| OP-4 | アラート通知チャネル（Slack / PagerDuty 等） | DEC-001 に記述なし |
+| OP-5 | デプロイ自動化手段（GitHub Actions / Ansible 等） | DEC-001 に記述なし |
+| OP-6 | MLflow 以外のモデルレジストリ候補の評価 | DEC-001 は「MLflow 等」と記載のみ |

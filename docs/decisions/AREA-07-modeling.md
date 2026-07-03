@@ -1,160 +1,216 @@
-# AREA-07 — モデリング管理要件
-
-**Status**: FINAL  
-**Last Updated**: 2026-07-03  
-**Consolidates**: DEC-004(分離設計), DEC-006(コスト比較), DEC-009(詳細実装), DEC-010(Feature Store)
+# AREA-05 — モデリング管理要件（LightGBM バッチ推論, 学習パイプライン, SHAP, ModelRegistry, バージョニング, CI ゲート）
+**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001-本要件定義書の最重要事項はas_of_race_id-によるスナップショット管理でテンポラルリークを.md
 
 ---
 
-## 1. 設計原則
+## 1. 概要
 
-1. **Web プロセス内での `predict()` 呼び出し禁止**（ruff lint CI ゲート）
-2. バッチ事前推論 + Redis キャッシュのみで API リクエストに応答
-3. モデル学習は Cloud Run Jobs 専用（**VPS での学習は禁止**）
-4. モデルは 1 プロセス内で 1 回のみロード（CoW で worker 間共有）
+本仕様書は keiba-vpn プロジェクトにおけるモデリング管理全般—LightGBM バッチ推論・学習パイプライン・SHAP 解釈・ModelRegistry・バージョニング・CI ゲート—を定義する。テンポラルリーク排除を大前提とし、全工程において `as_of_race_id` によるスナップショット管理を厳守する。
 
 ---
 
-## 2. バッチ推論パイプライン（cron 08:10 JST）
+## 2. 予測ターゲット定義
+
+| ID | ターゲット名 | 問題設定 | 出力型 | モデル担当 Stage |
+|---|---|---|---|---|
+| T-1 | win_prob（勝率） | 多クラス分類（1着） | NUMERIC(5,4) | Stage 1 |
+| T-2 | place_prob（連対率） | バイナリ分類（2着以内） | NUMERIC(5,4) | Stage 1 |
+| T-3 | show_prob（複勝率） | バイナリ分類（3着以内） | NUMERIC(5,4) | Stage 1 |
+| T-4 | predicted_win_odds | 回帰 | NUMERIC(7,1) | Stage 1 |
+| T-5 | predicted_place_odds | 回帰 | NUMERIC(7,1) | Stage 1 |
+| T-6 | win_roi（単回収率） | ポスト計算値（推論後算出） | NUMERIC(7,2) | ポスト処理 |
+| T-7 | show_roi（複回収率） | ポスト計算値（推論後算出） | NUMERIC(7,2) | ポスト処理 |
+| T-8 | predicted_position | 順位回帰 / ランキング学習 | SMALLINT | Stage 1 |
+| T-9 | predicted_running_style | 4値分類（FRONT/STALKER/MID/CLOSER） | VARCHAR(10) | Stage 1 |
+| T-10 | pace_category | 3値分類（HIGH/MIDDLE/SLOW） | VARCHAR(10) | Stage 2 |
+| T-11 | predicted_lap_sec[] | 時系列回帰（1F単位系列出力） | NUMERIC(4,2)[] | Stage 2 |
+
+> T-6・T-7 はモデルの直接予測ターゲットではなく、T-1〜T-5 の推論結果に基づくポスト計算値とする。値が 100 超 = 期待値プラスのバリューベット候補。
+
+---
+
+## 3. モデルアーキテクチャ
+
+### 3-1. 2ステージ構成
 
 ```
-ETL 完了フラグ確認: Redis key etl:complete:{race_date}
-    │ max 10 分待機 → タイムアウト: Slack アラート + TimeoutError
-    ▼
-GCS から最新モデル取得（generation metadata diff-check で不要な再 fetch を回避）
-    ▼
-Pandera スキーマバリデーション
-  - distance: 800〜3,600m
-  - field_size: 2〜18
-  - horse_weight: 380〜620kg
-    ▼
-LightGBM predict_proba（~12ms/レース）
-    ▼
-SHAP TreeExplainer（上位 10 頭のみ、時間分離実行）
-    ▼
-results: predictions/{date}/{race_id}.json → GCS + Redis
-  inference_source = 'local'
-  model_version = 現行バージョン
+┌───────────────────────────────────────────────────────────┐
+│ Stage 1: 共有表現マルチタスクモデル                          │
+│                                                             │
+│  入力: Layer 1〜3 特徴量（馬×レース単位）                    │
+│                                                             │
+│  ┌─────────────────────────────┐                           │
+│  │  Shared Encoder (LightGBM)  │                           │
+│  └─────────────┬───────────────┘                           │
+│                │                                            │
+│     ┌──────────┼───────────┐                               │
+│     ▼          ▼           ▼                               │
+│  [Head A]   [Head B]    [Head C]                           │
+│  勝率/連対  ポジション   オッズ予測                           │
+│  /複勝率    予測          (回帰)                             │
+│  (分類)   (LambdaMART)                                     │
+└───────────────────────────────────────────────────────────┘
+                │ ポジション予測値を受け渡し
+                ▼
+┌───────────────────────────────────────────────────────────┐
+│ Stage 2: ラップ・ペース予測モデル                             │
+│                                                             │
+│  入力: Layer 4 + Stage 1 ポジション予測 + コース形状特徴量    │
+│                                                             │
+│  ┌────────────────────────────────────────┐               │
+│  │  Pace & Lap Sequence Model              │               │
+│  │  (LightGBM per-furlong → LSTM へ移行)  │               │
+│  │                                          │               │
+│  │  出力:                                  │               │
+│  │   ├── ペースカテゴリ (HIGH/MIDDLE/SLOW) │               │
+│  │   └── 1F毎ラップ予測値 (furlong別)     │               │
+│  └────────────────────────────────────────┘               │
+└───────────────────────────────────────────────────────────┘
 ```
+
+### 3-2. アルゴリズム選定
+
+| ターゲット | アルゴリズム | 選定理由 |
+|---|---|---|
+| 勝率（T-1） | LightGBM softmax | 表形式データに最強、欠損耐性が高い |
+| 連対率・複勝率（T-2/3） | LightGBM binary | 同上 |
+| ポジション予測（T-8） | LambdaMART（LightGBM ranker） | 相対順位を直接最適化できる |
+| オッズ予測（T-4/5） | LightGBM regression | マーケット形成ロジックとの親和性 |
+| ペースカテゴリ（T-10） | LightGBM multiclass | 3クラス・解釈性を重視 |
+| 1F毎ラップ予測（T-11） | LightGBM per-furlong（初期）→ LSTM（拡張） | 解釈しやすい単独回帰から開始し、系列依存が大きければ LSTM へ移行 |
 
 ---
 
-## 3. ModelRegistry 設計
+## 4. 特徴量定義
+
+### 4-1. 基本特徴量（Layer 1〜2 由来）
+
+| 特徴量名 | 説明 | 型 |
+|---|---|---|
+| distance | レース距離 (m) | INT |
+| surface | 芝/ダート/障害 | CATEGORY |
+| direction | 左/右/直線 | CATEGORY |
+| going | 馬場状態（良/稍重/重/不良） | CATEGORY |
+| weather | 天候 | CATEGORY |
+| grade | レースクラス（G1〜未勝利） | CATEGORY |
+| horse_num | 出走頭数 | INT |
+| frame_no | 枠番 | INT |
+| post_no | 馬番 | INT |
+| weight_carried | 斤量 (kg) | FLOAT |
+| horse_weight | 馬体重 (kg) | INT |
+| horse_weight_diff | 馬体重増減 | INT |
+| days_since_last | 前走からの間隔（日） | INT |
+| horse_age | 馬齢 | INT |
+| sex | 性別（牡/牝/セン） | CATEGORY |
+
+### 4-2. 集計特徴量（Layer 3 スナップショット由来）
+
+| 特徴量名 | 説明 |
+|---|---|
+| win_rate_all / place_rate_all / show_rate_all | 生涯勝率・連対率・複勝率 |
+| win_rate_distance / win_rate_course / win_rate_going | 条件別勝率 |
+| avg_last_3f / speed_index_avg / speed_index_max | タイム・スピード指数 |
+| running_style_score | 脚質スコア（−5=逃 〜 +5=追込） |
+| jockey.win_rate_all | 騎手勝率 |
+| trainer.win_rate_all | 調教師勝率 |
+
+> **必須制約**: Layer 3 集計値は必ず `as_of_race_id = 予測対象レース ID` のスナップショットを参照すること。そのレース以後の情報を含めることを禁止する。
+
+### 4-3. クロス・相対特徴量（前処理で自動生成）
 
 ```python
-class ModelRegistry:
-    """モデルを一度のみロードし RWLock でゼロダウンタイム hot-reload を実現"""
+# 脚質 × コース形状のクロス特徴量
+df["style_x_straight"] = df["running_style_score"] * df["final_straight_length"]
+df["style_x_distance"] = df["running_style_score"] * df["distance_category_encoded"]
 
-    def load(self, path: str) -> None:
-        """GCS から fetch → /tmp にキャッシュ → lgb.Booster をロード"""
+# 逃げ・先行馬数（ペース予測用）
+df["front_runner_count"] = df.groupby("race_id")["running_style_score"] \
+                             .transform(lambda x: (x < -2).sum())
 
-    def predict(self, features: pd.DataFrame) -> np.ndarray:
-        """RWLock read ロックでスレッドセーフに predict_proba"""
+# 同レース内相対化
+df["rel_speed_index"]     = df["speed_index_avg"] / \
+                              df.groupby("race_id")["speed_index_avg"].transform("mean")
+df["rel_days_since_last"] = df["days_since_last"] - \
+                              df.groupby("race_id")["days_since_last"].transform("mean")
+df["rel_odds_rank"]       = df.groupby("race_id")["odds_value"].rank(ascending=True)
 
-    def hot_reload(self, new_path: str) -> None:
-        """RWLock write 取得 → 新モデルロード → 旧モデル解放"""
-        # ゼロダウンタイムでモデル更新
-```
-
-**Gunicorn 設定（CoW 活用）**:
-```python
-preload_app = True  # 親プロセスでモデルロード → fork で worker 間共有
-```
-
----
-
-## 4. モデル学習（Cloud Run Jobs）
-
-| 項目 | 値 |
-|---|---|
-| スケジュール | 毎週月曜 02:00 JST |
-| リソース | 2vCPU / 4GB RAM |
-| データソース | GCS `features/static/` + `features/dynamic/` |
-| テンポラルリーク防止 | バリデーション日より前で **strict カットオフ** |
-| 成果物 | `models/current/model.lgb` に upload |
-| ロールバック保持 | N-1 世代（`models/v{N-1}/model.lgb`）|
-
----
-
-## 5. モデルバージョニング
-
-```
-GCS パス（gcs_paths.py 定義）:
-  MODEL_CURRENT_PATH  = "models/current/model.lgb"   ← 現行モデル
-  MODEL_ROLLBACK_PATH = "models/v{version}/model.lgb" ← N-1 世代保持
-  MODEL_PREFIX        = "models/v{version}/"
-
-ロールバック: MODEL_ROLLBACK_PATH からリストア → ≤10 分で完了
-予測キャッシュに model_version を含める（後からのトレース用）
+# ペース事前シナリオ（逃げ馬比率から算出）
+df["pace_scenario_prior"] = (df["front_runner_count"] / df["horse_num"]) \
+    .apply(lambda r: "HIGH" if r > 0.3 else ("SLOW" if r < 0.1 else "MIDDLE"))
 ```
 
 ---
 
-## 6. SHAP 設計
+## 5. 学習パイプライン
 
-| 項目 | 決定内容 |
-|---|---|
-| ライブラリ | SHAP TreeExplainer |
-| 対象 | 上位 10 頭のみ（全頭は計算コスト大） |
-| 実行タイミング | 推論バッチと **時間分離**（OOM 防止） |
-| API | `/api/v1/shap/{race_id}` で取得（要認証） |
-| 表示 | 上位 5 特徴量を自然言語で説明（FE-07 折りたたみ） |
+### 5-1. データ分割ルール
 
----
+- 時系列順に train / validation / test を分割する。**ランダムシャッフルは禁止**。
+- 常に過去レースで学習し、未来レースで評価する。
+- 推論時も `as_of_race_id = 対象レース ID` のスナップショットのみ使用する。
 
-## 7. 差分再推論
+### 5-2. Stage 1 学習手順
 
-オッズが ±15% 超変動した際、該当レースのみ再推論:
-- 1 日上限 5 回
-- `inference_source = 'local'`（再推論後も）
+1. 特徴量エンジニアリングパイプライン実行（脚質スコア・クロス特徴量・相対特徴量の自動生成）
+2. 時系列分割により train/validation/test セット構築
+3. LightGBM binary で連対率・複勝率モデルを学習
+4. LightGBM softmax で勝率モデルを学習
+5. LambdaMART でポジション予測モデルを学習
+6. LightGBM regression でオッズ予測モデルを学習
+7. 各モデルの評価指標を計算（後述）
+8. モデルを ModelRegistry へ登録・バージョニング
 
----
+### 5-3. Stage 2 学習手順
 
-## 8. 外部 WebAPI フォールバック
+1. Stage 1 のポジション予測値を入力特徴量として受け渡し
+2. Layer 4（ラップ・ペース・コーナー通過）の特徴量を結合
+3. LightGBM multiclass でペースカテゴリモデルを学習
+4. LightGBM per-furlong で 1F 毎ラップ予測モデルを学習（初期実装）
+5. MAE ≤ 0.3 秒 の閾値を下回れない場合は LSTM への移行を検討（Phase 4 以降）
+6. 評価指標を計算・記録
+7. モデルを ModelRegistry へ登録・バージョニング
 
-VPS 障害またはモデル更新中は外部 WebAPI を呼び出し:
-- `inference_source = 'external'` を predictions に記録
-- UI に推論ソースを表示（FE-06 カード）
-- 応答 ≤3s 要件
+### 5-4. バッチ推論スケジュール
 
----
+- 推論バッチは**発走3時間前までに完了**させる（N-9）。
+- 推論時に使用するオッズ特徴量は「発走 N 分前の最終スナップショット」を固定使用する（直前確定値）。
+- 推論結果は `prediction_results` および `prediction_lap_times` テーブルに保存する。
 
-## 9. CI ゲート
+### 5-5. 回収率ポスト計算ロジック
 
 ```python
-# モデルサイズ上限
-assert model_size_mb < 50
-
-# Gunicorn ワーカー内での predict() 呼び出し禁止
-# ruff rule: no-predict-in-gunicorn
-
-# リアリスティック推論ベンチマーク
-result = batch_predict(realistic_18horses_features())
-assert result.latency_p99_ms < 200
+def calculate_recovery_rate(
+    win_prob: float,        # モデル予測勝率    (T-1)
+    win_odds: float,        # 予測単勝オッズ    (T-4)
+    show_prob: float,       # モデル予測複勝率  (T-3)
+    place_odds_mid: float,  # 予測複勝オッズ中値 (T-5)
+) -> dict:
+    """
+    単回収率 = 勝率 × 単勝オッズ × 100
+    複回収率 = 複勝率 × 複勝オッズ中値 × 100
+    100 超 = バリューベット候補
+    """
+    win_roi  = win_prob  * win_odds       * 100
+    show_roi = show_prob * place_odds_mid * 100
+    return {
+        "win_roi":  round(win_roi,  2),   # T-6
+        "show_roi": round(show_roi, 2),   # T-7
+    }
 ```
 
 ---
 
-## 10. 非機能要件（モデリング系）
+## 6. SHAP による解釈性
 
-| ID | 要件 |
-|---|---|
-| NFR-ML-01 | 単勝的中率: 初期 ≥20%, 中期 ≥30% |
-| NFR-ML-02 | Logloss ≤2.2 |
-| NFR-ML-03 | Calibration Error ≤0.05 |
-| NFR-ML-04 | ROI ≥-15% |
-| NFR-ML-05 | モデルファイル <50MB（CI 強制） |
-| NFR-ML-06 | 推論バッチ ≤10 分/日（~200 頭） |
-| NFR-ML-07 | Booster RSS 増加 ≤250MB（超過時 num_leaves 31 で再学習） |
-| NFR-ML-08 | ロールバック ≤10 分 |
-| NFR-ML-09 | テンポラルリーク防止（バリデーション日 strict カットオフ） |
+- 全 LightGBM モデルに対して **TreeSHAP**（`shap.TreeExplainer`）を適用し、特徴量重要度を算出・記録する。
+- 運用フェーズにおいて特徴量重要度の定期モニタリングを実施し、データドリフトの早期検知に活用する（Phase 4 以降の継続タスク）。
+- SHAP 値は ModelRegistry のアーティファクトとしてモデルバージョンに紐付けて保存する。
 
 ---
 
-## 11. Human Review 依頼事項
+## 7. ModelRegistry・バージョニング
 
-| 項目 | 優先度 |
-|---|---|
-| JRA スクレイピング ToS / robots.txt の法的確認（**ETL 開始前に必須**） | 緊急 |
-| SHAP 時間分離設計のロードテスト（Phase 2 移行前） | 中 |
-| ETL 遅延フォールバックポリシー: 503 全件 vs 前日データ配信 | 高 |
+### 7-1. 基本方針
+
+- モデル管理ツールとして **MLflow**（または同等のツール）を使用する（F-16）。
+-

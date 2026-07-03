@@ -1,159 +1,101 @@
-# AREA-09 — 開発環境要件
+# AREA-05 — 開発環境要件
 
-**Status**: FINAL  
-**Last Updated**: 2026-07-03  
-**Consolidates**: DEC-004(プロセス分離), DEC-008(VPS構成), 新規追加
+**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001
 
 ---
 
-## 1. 環境概要
+## 概要
 
-| 環境 | ホスト | 目的 | prod 機能の包含 |
-|---|---|---|---|
-| **dev / stg** | ローカル PC（ハイパフォーマンス + GPU） | 開発・モデリング・テスト・stg 動作確認 | ✅ prod の全機能を包含 |
-| **prod** | ConoHa VPS 2GB/100GB SSD（常時稼働） | ユーザー向けサービス提供 | — |
+DEC-001 は競馬予測システム（keiba-vpn）のデータ要件・モデリング要件を定義した文書であり、開発環境固有の仕様（dev/stg/prod 環境分離、docker-compose 設計、デプロイフロー等）に関する記述は含まれていない。
 
-> **方針**: dev/stg は同一ローカル PC 上で管理し、prod と同等の構成を再現できること。  
-> prod で動くすべての機能は dev/stg でテスト済みの状態で deploy する。
+以下に、DEC-001 から抽出できる **開発環境要件に直接関連する情報** のみを記載する。
 
 ---
 
-## 2. dev / stg 環境（ローカル PC）
+## 1. 実行環境に関する前提条件
 
-### ハードウェア要件（最小）
+DEC-001 から読み取れる環境要件は以下の通り。
 
-| 項目 | 要件 | 用途 |
+| 項目 | 内容 |
+|---|---|
+| データベース | PostgreSQL（`BIGSERIAL`、`TIMESTAMPTZ`、`NUMERIC`、`ARRAY` 型を使用）|
+| キャッシュ | Redis（TTL 管理付き、キャッシュキー: `prediction:{race_id}:{model_version}`、`lap:prediction:{race_id}:{model_version}`）|
+| スキーママイグレーション | Alembic 等の DDL バージョン管理ツールを使用（N-11）|
+| モデル管理 | MLflow 等のモデルバージョン管理基盤（F-16）|
+| ML フレームワーク | LightGBM（初期実装）、LSTM（Phase 4 以降）|
+| API | REST API（`GET /api/v1/races/{race_id}/predictions` 等）|
+
+---
+
+## 2. コンポーネント構成（推定）
+
+DEC-001 の機能要件・非機能要件から導出されるサービスコンポーネント。
+
+```
+┌──────────────────────────────────────────────────────┐
+│ keiba-vpn システム構成（DEC-001 から導出）              │
+│                                                        │
+│  scraper        ── netkeiba.com スクレイパー           │
+│  db (PostgreSQL) ── Layer 1〜5 データ格納              │
+│  redis          ── 予測結果キャッシュ                  │
+│  api            ── REST API（/api/v1/...）             │
+│  ml-worker      ── 特徴量生成・モデル学習・推論バッチ  │
+│  mlflow         ── モデルバージョン管理                │
+│  frontend       ── レース一覧・予測表示 UI             │
+└──────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. Redis キャッシュ設定
+
+| 項目 | 値 |
+|---|---|
+| キャッシュキー（予測結果） | `prediction:{race_id}:{model_version}` |
+| キャッシュキー（ラップ予測） | `lap:prediction:{race_id}:{model_version}` |
+| TTL | 発走まで有効 / 発走後 60 秒で自動失効 |
+
+---
+
+## 4. スクレイパー実行設定
+
+```python
+SCRAPING_CONFIG = {
+    "request_interval_sec": 2.0,
+    "jitter_sec": (0.5, 1.5),
+    "concurrent_workers": 1,          # シングルIP環境では並列1推奨
+    "session_rotate_interval": 50,
+    "retry_on_429": True,
+    "retry_backoff_base_sec": 30,
+    "user_agent_rotate": True,
+}
+```
+
+---
+
+## 5. 推論バッチ実行スケジュール
+
+| ジョブ | 実行タイミング | 完了目標 |
 |---|---|---|
-| CPU | 8 コア以上推奨 | LightGBM 学習 / SHAP 計算 |
-| RAM | 16GB 以上 | 全サービス同時起動 + 学習ジョブ |
-| GPU | NVIDIA GPU（CUDA 対応）推奨 | 将来の Neural ODE モデル学習 |
-| ストレージ | 100GB 以上（SSD 推奨） | データセット / GCS ローカルキャッシュ |
-
-### 実行するワークロード
-
-| カテゴリ | 内容 |
-|---|---|
-| **モデリング** | LightGBM 学習（全データ使用可）、ハイパーパラメータ探索、Feature Engineering |
-| **データセット確認** | EDA（探索的データ分析）、特徴量の可視化・統計確認 |
-| **SHAP 分析** | 全頭 SHAP 計算（prod では上位 10 頭のみ）、特徴量重要度の深掘り |
-| **E2E テスト** | Playwright E2E、統合テスト、バックエンド単体テスト |
-| **CI ローカル実行** | lint / pytest / vitest をローカルで確認 |
-| **stg 動作確認** | prod 相当の構成で動作確認（ユーザーには非公開） |
-
-### サービス構成（Docker Compose 推奨）
-
-```yaml
-# docker-compose.dev.yml（概要）
-services:
-  flask-api:        # Flask + Gunicorn（prod 同等設定）
-  inference-worker: # LightGBM バッチワーカー
-  scraper:          # ETL スクレイパー（JRA または テストフィクスチャ）
-  redis:            # Redis 7（maxmemory=256MB prod 設定に合わせる）
-  postgres:         # PostgreSQL（shared_buffers=128MB prod 設定に合わせる）
-  nextjs:           # Next.js dev server（または prod build）
-  prometheus:       # メトリクス（prod 同等監視の確認用）
-  grafana:          # ダッシュボード確認用
-```
-
-### 環境変数（`.env.dev`）
-
-```bash
-FLASK_ENV=development
-DATABASE_URL=postgresql://localhost:5432/keiba_dev
-REDIS_URL=redis://localhost:6379/0
-GCS_BUCKET=keiba-vpn-data-dev        # dev 専用バケット
-GCS_USE_LOCAL_CACHE=true              # GCS アクセスをローカルキャッシュで代替可
-MODEL_CURRENT_PATH=models/current/model.lgb
-LOG_LEVEL=DEBUG
-SLACK_WEBHOOK_URL=                    # dev では空白可（通知不要）
-```
-
-### dev 専用機能（prod には不要）
-
-| 機能 | 内容 |
-|---|---|
-| GCS ローカルキャッシュ | `GCS_USE_LOCAL_CACHE=true` で GCS アクセスをローカルディレクトリで代替 |
-| テストフィクスチャ用スクレイパー | JRA に接続せず静的フィクスチャからデータを読み込む |
-| Jupyter / JupyterLab | EDA・モデル評価・SHAP 可視化 |
-| MLflow（任意） | 実験管理・モデルバージョントラッキング |
-| full SHAP 計算 | 全頭対象（prod は上位 10 頭のみ）|
-| デバッグモード | Flask debug=True, ホットリロード |
-
-### dev でのモデル学習ルール
-
-- ローカル PC での学習は **dev/stg のみ許可**
-- 学習済みモデルは GCS `models/v{N}/model.lgb` にアップロードして Cloud Run Jobs と同じパスに配置
-- prod VPS 上での学習は **引き続き禁止**（Cloud Run Jobs または dev ローカルのみ）
+| 出馬表取得 | レース3日前 06:00 JST / 毎日 06:00 更新 | — |
+| オッズスナップショット | 発走当日 08:00 〜 発走時刻・5分毎（発走30分前は2分毎、5分前は1分毎） | — |
+| 結果・ラップ取得 | 発走予定時刻 + 35分（5分間隔・最大6回リトライ） | — |
+| 馬過去成績取得 | 結果収集完了後 | — |
+| 推論バッチ | — | 発走3時間前までに完了（N-9） |
 
 ---
 
-## 3. prod 環境（ConoHa VPS）
+## 6. 未定義事項（本仕様書の対象外）
 
-詳細は **[AREA-04-ops.md](AREA-04-ops.md)** 参照。
+DEC-001 には以下の事項が明示されていない。現時点では未定義であり、別途 DEC を作成して確定させる必要がある。
 
-### prod のみに適用される制約
-
-| 制約 | 内容 |
-|---|---|
-| メモリ制限 | 2GB 以内で全サービスを稼働 |
-| VPS での学習禁止 | LightGBM 学習は Cloud Run Jobs または dev ローカルのみ |
-| SHAP 実行制限 | 上位 10 頭のみ、推論と時間分離 |
-| ログレベル | INFO 以上のみ出力 |
-| デバッグモード無効 | Flask debug=False 必須 |
+- dev / stg / prod の環境分離方針（ローカル PC、GPU サーバー、VPS 等の割り当て）
+- docker-compose ファイルの具体的な設計（サービス定義、ネットワーク、ボリューム）
+- CI/CD パイプラインおよびデプロイフロー
+- 環境変数管理方法（`.env` ファイル、シークレット管理）
+- GPU 環境の要件（CUDA バージョン、GPU メモリ等）
+- VPS スペック・OS 要件
 
 ---
 
-## 4. 環境間の差異一覧
-
-| 機能 | dev / stg | prod |
-|---|---|---|
-| ホスト | ローカル PC（GPU）| ConoHa VPS 2GB |
-| Flask モード | debug=True / False（stg）| debug=False |
-| モデル学習 | ✅ 許可 | ❌ 禁止 |
-| SHAP 対象 | 全頭 | 上位 10 頭 |
-| GCS | dev 専用バケット or ローカルキャッシュ | `keiba-vpn-data` 本番バケット |
-| DB データ | シードデータ or 匿名化データ | 本番データ |
-| E2E テスト | ✅ 実行 | ❌ 実行しない |
-| Slack アラート | 任意（省略可）| ✅ 必須 |
-| Prometheus + Grafana | ✅ 起動 | Phase 2 以降 |
-| ログレベル | DEBUG | INFO |
-| Circuit Breaker | 動作確認用テストあり | 本番稼働 |
-| Jupyter | ✅ 起動 | ❌ 不要 |
-
----
-
-## 5. デプロイフロー
-
-```
-[ローカル dev/stg]
-  ├─ 機能開発 → unit test → integration test → E2E test
-  ├─ モデル学習 → GCS にアップロード → stg で推論動作確認
-  └─ docker-compose.dev.yml で prod 相当の動作を確認
-
-   │ GitHub PR → CI 通過 → main マージ
-   ▼
-
-[prod: ConoHa VPS]
-  └─ git pull → pip install → systemctl restart
-```
-
-### ブランチ戦略
-
-| ブランチ | 対応環境 | ルール |
-|---|---|---|
-| `feature/*` | dev | 自由開発 |
-| `develop` | stg（ローカル）| PR 必須、CI 通過必須 |
-| `main` | prod | PR + CI + レビュー必須 |
-
----
-
-## 6. 非機能要件（環境系）
-
-| ID | 要件 |
-|---|---|
-| NFR-ENV-01 | dev/stg と prod の Docker イメージは同一ベースイメージを使用 |
-| NFR-ENV-02 | prod デプロイ前に stg で E2E テストを通過すること |
-| NFR-ENV-03 | 本番データを dev/stg 環境で使用しない |
-| NFR-ENV-04 | dev でモデル学習を行った場合、GCS にアップロードして stg で動作確認後に prod へ deploy |
-| NFR-ENV-05 | 環境変数は `.env.dev` / `.env.prod` で管理し、`.gitignore` で除外 |
-| NFR-ENV-06 | dev/stg では GCS アクセスをローカルキャッシュで代替可能にすること（オフライン開発対応）|
+> **備考**: 本仕様書は DEC-001 のみを参照しており、開発環境要件の大部分が未決定の状態である。dev/stg/prod 環境設計、docker-compose 構成、デプロイフローを確定させる DEC の作成を推奨する。
