@@ -1,7 +1,7 @@
 # keiba-vpn — マスター仕様書
 
 > **最終更新**: 2026-07-03  
-> **参照ドキュメント**: AREA-01〜07（旧 DEC-001〜010 は `archive/` に移動済み）
+> **参照ドキュメント**: AREA-01〜09（旧 DEC-001〜011 は `archive/` に移動済み）
 
 ---
 
@@ -127,6 +127,40 @@ models/current/model.lgb    models/v{version}/model.lgb
 **学習**: Cloud Run Jobs（2vCPU/4GB, 週次月曜 02:00 JST）、テンポラルリーク防止
 
 **精度目標**: Logloss ≤2.2 / Calibration ≤0.05 / ROI ≥-15% / 単勝的中 ≥20% 初期 / ≥30% 中期
+
+---
+
+## 8. テスト
+
+詳細 → **[AREA-08-testing.md](AREA-08-testing.md)**
+
+| レイヤー | ツール | カバレッジ目標 |
+|---|---|---|
+| バックエンド Unit | pytest | ≥80%（推論バッチは ≥90%） |
+| フロントエンド Unit | Vitest + React Testing Library | ≥70% |
+| 統合テスト | pytest（fakeredis, 実 PostgreSQL） | ETL→Redis, 4 層キャッシュ, 認証フロー |
+| E2E | Playwright（TypeScript） | dev/stg 環境で実行 |
+
+**CI 必須ゲート**: lint（ruff / ESLint / GCS ハードコード検出）+ unit test + モデルサイズ <50MB + 推論 P99 ≤200ms
+
+---
+
+## 9. 開発環境
+
+詳細 → **[AREA-09-dev-environment.md](AREA-09-dev-environment.md)**
+
+| 環境 | ホスト | 主な役割 |
+|---|---|---|
+| **dev / stg** | ローカル PC（GPU 搭載, RAM ≥16GB） | モデリング・データ分析・E2E テスト・stg 動作確認 |
+| **prod** | ConoHa VPS 2GB（常時稼働） | ユーザー向けサービス提供 |
+
+**dev/stg の追加機能**（prod には不要）:
+- LightGBM 学習（ローカル可）、全頭 SHAP 計算、Jupyter/EDA
+- GCS ローカルキャッシュ（`GCS_USE_LOCAL_CACHE=true`）
+- docker-compose.dev.yml で prod 相当構成を再現
+- E2E テスト（Playwright）実行
+
+**デプロイフロー**: `feature/*` → dev → `develop`（stg 動作確認 + E2E pass）→ CI → `main` → prod VPS
 
 ---
 
