@@ -1,5 +1,5 @@
 # AREA-01 — アプリケーション要件
-**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001 (統合済み・削除)
+**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001 (統合済み・削除), TASK-046 (データ分析機能要件定義書 統合済み)
 
 ---
 
@@ -12,13 +12,13 @@
 
 ## 1. システム概要
 
-netkeiba.com から収集した競馬データを用いて、出走馬ごとの **勝率・連対率・複勝率・オッズ予測・単複回収率・ポジション予測・脚質予測**、ならびに **逃げ馬ペース予測・1F 単位ラップ予測** を実現する競馬予測 Web アプリ。
+netkeiba.com から収集した競馬データを用いて、出走馬ごとの **勝率・連対率・複勝率・オッズ予測・単複回収率・ポジション予測・脚質予測**、ならびに **逃げ馬ペース予測・1F 単位ラップ予測** を実現する競馬予測 Web アプリ。加えて、**ユーザーが予想の根拠を自ら探索・検証するためのデータ分析機能**（種牡馬成績分析・コース統計ダッシュボード・騎手/調教師成績分析・マイ分析）を提供する。
 
 | 項目 | 内容 |
 |---|---|
 | 対象競馬 | JRA（日本中央競馬会） |
 | データソース | netkeiba.com |
-| ユーザー種別 | ゲスト（TOP3 閲覧のみ） / ログイン済（全頭閲覧） |
+| ユーザー種別 | ゲスト（TOP3 閲覧のみ） / ログイン済（全頭閲覧・マイ分析保存） |
 | 主要制約 | ConoHa VPS 2GB — 2GB 以内での安定稼働を最優先 |
 
 ---
@@ -60,7 +60,7 @@ netkeiba.com から収集した競馬データを用いて、出走馬ごとの 
 
 ```
 Layer 1 — レース基本情報（静的マスター）
-  └─ races, entries, horses, jockeys, trainers, courses
+  └─ races, entries, horses, jockeys, trainers, courses, sires
 
 Layer 2 — 個別出走成績（確定結果・追記のみ）
   └─ race_results（着順・タイム・馬体重・コーナー通過順）
@@ -79,6 +79,21 @@ Layer 5 — オッズスナップショット（時系列追記型）
 **特徴量リーク防止の原則**: Layer 3 の集計値は必ず `as_of_race_id`（予測対象レース）に紐付けて保存し、そのレース以後の情報は含めない。
 
 ### 3-3. テーブルスキーマ定義
+
+#### Layer 1 追加: `sires`（種牡馬マスター）
+
+```sql
+CREATE TABLE sires (
+    sire_id    VARCHAR(20)   PRIMARY KEY,
+    sire_name  VARCHAR(100)  NOT NULL,
+    sire_line  VARCHAR(50),
+    created_at TIMESTAMPTZ   DEFAULT NOW()
+);
+
+-- horses テーブルへの FK 追加
+ALTER TABLE horses ADD COLUMN sire_id VARCHAR(20) REFERENCES sires(sire_id);
+CREATE INDEX idx_horses_sire_id ON horses (sire_id);
+```
 
 #### Layer 3: `horse_stats_snapshot`
 
@@ -191,6 +206,60 @@ CREATE TABLE prediction_lap_times (
 );
 ```
 
+#### 分析機能追加テーブル
+
+```sql
+-- コース統計事前集計キャッシュ
+CREATE TABLE course_stats_cache (
+    id              SERIAL PRIMARY KEY,
+    track           VARCHAR(20) NOT NULL,
+    distance        INTEGER     NOT NULL,
+    surface         VARCHAR(10) NOT NULL,
+    track_condition VARCHAR(10) NOT NULL,
+    stat_type       VARCHAR(30) NOT NULL,
+    stat_key        VARCHAR(50) NOT NULL,
+    n_runs          INTEGER,
+    win_rate        NUMERIC(5,4),
+    place_rate      NUMERIC(5,4),
+    roi_win         NUMERIC(7,4),
+    computed_at     TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (track, distance, surface, track_condition, stat_type, stat_key)
+);
+
+-- マイ分析（条件保存）
+CREATE TABLE saved_analyses (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id           UUID REFERENCES users(id) ON DELETE CASCADE,
+    name              VARCHAR(100) NOT NULL,
+    analysis_type     VARCHAR(20) NOT NULL
+                        CHECK (analysis_type IN ('sire','course','jockey','trainer')),
+    filter_conditions JSONB NOT NULL,
+    created_at        TIMESTAMPTZ DEFAULT NOW(),
+    last_run_at       TIMESTAMPTZ
+);
+
+ALTER TABLE saved_analyses ENABLE ROW LEVEL SECURITY;
+CREATE POLICY saved_analyses_user_isolation
+  ON saved_analyses FOR ALL
+  USING (user_id = current_setting('app.current_user_id')::UUID);
+
+CREATE INDEX idx_saved_analyses_params
+  ON saved_analyses USING gin(filter_conditions);
+```
+
+#### 分析機能必須インデックス
+
+```sql
+CREATE INDEX CONCURRENTLY idx_races_filter_axes
+  ON races (course, surface, track_condition, class, distance, race_date);
+
+CREATE INDEX CONCURRENTLY idx_results_race_finish
+  ON results (race_id, finish_pos);
+
+CREATE INDEX CONCURRENTLY idx_entries_horse_race
+  ON entries (horse_id, race_id);
+```
+
 ### 3-4. スクレイピング収集スケジュール
 
 ```yaml
@@ -272,9 +341,20 @@ def calculate_recovery_rate(win_prob, win_odds, show_prob, place_odds_mid):
 3. オッズ特徴量：推論時は「発走 N 分前の最終スナップショット」を固定使用
 4. 馬体重・馬場状態：レース当日の実測値を使用（出馬表確定後）
 
+### 4-5. MLパイプラインと分析バッチの時点整合性分離
+
+| 用途 | as_of 制約 | 集計範囲 | 理由 |
+|---|---|---|---|
+| AI予測モデル特徴量 | **必須**（`race_date < as_of_race_id`） | 予測時点以前のみ | テンポラルリーク防止 |
+| ユーザー向け分析UI | **不要** | 全期間またはUI選択 | 事後統計であり未来情報混入の問題なし |
+
+> **UIへの注記要件**: 分析画面に「※ この統計はリアルタイム集計です。AIモデルが予測に使用した時点の特徴量とは異なる場合があります。」を表示すること。
+
 ---
 
 ## 5. 機能要件
+
+### 5-1. 予測機能
 
 | # | 要件 | 優先度 | 担当 |
 |---|---|---|---|
@@ -296,190 +376,9 @@ def calculate_recovery_rate(win_prob, win_odds, show_prob, place_odds_mid):
 | F-16 | 学習済みモデルのバージョン管理と古いモデルへのロールバック機能 | 中 | ai-model-engineer / operations-engineer |
 | F-17 | ラップデータ可用性の事前検証（サンプル10レースで手動確認） — Phase 0 前提条件 | 高 | data-engineer |
 
----
+### 5-2. データ分析機能
 
-## 6. 非機能要件
-
-| # | 要件 | 目標値 |
-|---|---|---|
-| N-1 | 予測 API レスポンスタイム（キャッシュヒット時） | ≤ 200 ms |
-| N-2 | 予測 API レスポンスタイム（キャッシュミス時） | ≤ 2,000 ms |
-| N-3 | ラップ予測 MAE（1F 単位） | ≤ 0.3 秒 |
-| N-4 | 勝率予測 Log Loss（ベースライン比） | −5% 以上改善 |
-| N-5 | ポジション予測 Spearman ρ | ≥ 0.55 |
-| N-6 | スクレイピング成功率 | ≥ 99% / 月 |
-| N-7 | スクレイピング後の DB 反映遅延 | ≤ 10 分 |
-| N-8 | オッズスナップショット欠損率（発走前5分以内） | ≤ 1% |
-| N-9 | モデル推論バッチ完了時刻 | 発走3時間前までに完了 |
-| N-10 | 特徴量リーク（未来情報混入）ゼロ | テストデータ時系列分割で検証 |
-| N-11 | DDL マイグレーション管理 | Alembic 等で全変更をバージョン管理 |
-| N-12 | Redis キャッシュ TTL | 発走まで有効 / 発走後60秒で自動失効 |
-| N-13 | テストカバレッジ（スクレイパー・特徴量パイプライン） | ≥ 80% |
-| N-14 | 障害レース・海外レースは予測対象外として明示除外 | フラグ管理 |
-
----
-
-## 7. API 仕様
-
-### エンドポイント一覧
-
-| メソッド | エンドポイント | 説明 |
-|---|---|---|
-| `GET` | `/api/v1/races/{race_id}/predictions` | レース全体の予測結果取得（T-1〜T-11） |
-| `GET` | `/api/v1/races/{race_id}/laps` | ラップ予測系列取得（`furlong_index` 順） |
-
-### `GET /api/v1/races/{race_id}/predictions` レスポンス
-
-```json
-{
-  "race_id": "202506010811",
-  "model_version": "v1.2.0",
-  "predicted_at": "2025-06-01T08:30:00+09:00",
-  "pace_prediction": {
-    "pace_category": "MIDDLE",
-    "lap_times": [
-      { "furlong_index": 1, "predicted_lap_sec": 12.3 },
-      { "furlong_index": 2, "predicted_lap_sec": 11.8 }
-    ]
-  },
-  "horses": [
-    {
-      "horse_id": "2019105678",
-      "post_no": 3,
-      "win_prob": 0.1823,
-      "place_prob": 0.3241,
-      "show_prob": 0.4815,
-      "predicted_win_odds": 5.2,
-      "predicted_place_odds": 2.1,
-      "expected_win_roi": 94.8,
-      "expected_show_roi": 101.1,
-      "predicted_position": 2,
-      "predicted_running_style": "STALKER",
-      "is_value_bet": true
-    }
-  ]
-}
-```
-
-| フィールド | 型 | 説明 |
-|---|---|---|
-| `horses[].is_value_bet` | `BOOLEAN` | `expected_win_roi ≥ 100` または `expected_show_roi ≥ 100` で `true` |
-| `pace_prediction.lap_times[].furlong_index` | `INT` | 1始まり（1F 目 = スタート直後） |
-
-### キャッシュ仕様
-
-| キャッシュキー | TTL |
-|---|---|
-| `prediction:{race_id}:{model_version}` | 発走まで有効 / 発走後60秒失効 |
-| `lap:prediction:{race_id}:{model_version}` | 同上 |
-
----
-
-## 8. ユーザーストーリー
-
-| ID | ストーリー | 受入条件 |
-|---|---|---|
-| US-1 | 任意レースの全出走馬の勝率・連対率・複勝率を一覧で確認したい | T-1〜T-3 が全馬分返る |
-| US-2 | 期待値プラスの馬（バリューベット候補）を即座に識別したい | `is_value_bet: true` の馬が UI でハイライト表示 |
-| US-3 | レースの展開（ペース・ラップ推移）を視覚的に把握したい | ペースカテゴリと1F毎ラップ予測が折れ線グラフで表示（F-15） |
-| US-4 | 各馬の予測脚質とポジションを確認し展開を読みたい | `predicted_running_style`・`predicted_position` が全馬分表示 |
-| US-5 | スクレイピングの成否・リトライ状況を追跡したい | `scrape_runs` テーブルに `target_type`・`status`・`retry_count` が記録される |
-
----
-
-## 9. 実装ロードマップ
-
-### Phase 0: 前提条件検証（1〜2週間）
-
-> **F-17 が完了するまで Phase 1 以降は開始しない**
-
-- [ ] ラップデータ可用性調査（サンプル10レース × 4コース形状で手動確認）
-- [ ] netkeiba.com のロボット規約・利用規約の確認（**H-01: 着手前に必須**）
-- [ ] `scrape_runs` テーブル・基本スキーマの構築
-
-### Phase 1: データ基盤構築（2〜4週間）
-
-- [ ] F-1〜F-5 スクレイパー・実行管理テーブル実装
-- [ ] Layer 1〜5 全テーブルの DDL マイグレーション適用
-- [ ] 過去2〜3年分の全レースデータの一括取得
-
-**完了条件**: 過去2年分のレース・ラップ・オッズデータが Layer 1〜5 に格納済みであること
-
-### Phase 2: 特徴量パイプライン + Stage 1 モデル（3〜5週間）
-
-- [ ] F-6 特徴量エンジニアリングパイプライン実装
-- [ ] F-7 Stage 1 モデル学習パイプライン実装
-- [ ] F-9 回収率計算ロジック実装・単体テスト
-- [ ] F-16 モデルバージョン管理基盤整備
-
-**完了条件**: 勝率 Log Loss がベースライン比 −5% 以上改善
-
-### Phase 3: Stage 2 モデル + API + UI（3〜4週間）
-
-- [ ] F-8 Stage 2 モデル学習パイプライン実装
-- [ ] F-10〜F-15 API・Redis キャッシュ・UI 実装
-- [ ] N-1/N-2 API レスポンスタイム計測・チューニング
-
-**完了条件**: 任意レースの全予測ターゲットが API 経由で取得でき UI に表示される
-
-### Phase 4: 運用安定化・精度改善（継続）
-
-- [ ] LSTM によるラップ系列モデルへの移行検討
-- [ ] モデル再学習の定期実行自動化（週次 or 月次）
-- [ ] 特徴量重要度モニタリング・データドリフト検知
-
----
-
-## 10. 依存関係・リスク
-
-### 依存関係
-
-```
-Phase 0（ラップデータ可用性確認）
-    └─→ Phase 1（データ基盤構築）
-            └─→ Phase 2（特徴量 + Stage 1 モデル）
-                    └─→ Phase 3（Stage 2 + API + UI）
-
-Layer 3 スナップショット（F-3）→ Stage 1 モデル（F-7）前提
-Stage 1 ポジション予測（F-7）  → Stage 2 ラップ予測（F-8）入力として必須
-オッズスナップショット（F-4）  → 推論時特徴量として必須
-```
-
-### リスクと対策
-
-| # | リスク | 深刻度 | 対策 |
+| # | 機能名 | 優先度 | 担当 |
 |---|---|---|---|
-| R-1 | ラップデータが一部レースに存在しない | 🔴 高 | Phase 0 で事前検証。欠損は `lap_time_sec = NULL` で格納し予測除外 |
-| R-2 | netkeiba.com の HTML 構造変更によりスクレイパー破損 | 🔴 高 | HTML パース箇所を設定値化。週次で成功率を監視し閾値以下でアラート |
-| R-3 | netkeiba.com からアクセス制限（429 / IP ブロック） | 🟡 中 | リクエスト間隔2秒＋ジッター、セッションローテーション、リトライバックオフ |
-| R-4 | 特徴量リーク（テンポラルリーク）の混入 | 🔴 高 | `as_of_race_id` 紐付けの単体テスト必須化。CI でリーク検知テストを自動実行 |
-| R-5 | Stage 1 → Stage 2 の誤差伝播 | 🟡 中 | Stage 2 では Stage 1 予測値の信頼区間も特徴量として入力。独立評価で誤差を分離計測 |
-| R-6 | オッズの直前大幅変動による回収率計算のずれ | 🟡 中 | 発走5分前スナップショットを「推論時使用オッズ」として固定 |
-| R-7 | 障害レースのラップ形式が平地と異なる | 🟢 低 | `race_type = '障害'` フラグで予測対象外に除外 |
-| R-8 | LightGBM per-furlong が系列依存を捉えられない | 🟡 中 | Phase 4 で LSTM への移行を評価。MAE ≤ 0.3秒 を移行判断閾値とする |
-
----
-
-## 11. 未解決事項（Human Review 必須）
-
-| ID | 内容 | 優先度 |
-|---|---|---|
-| H-01 | **JRA スクレイピング ToS / robots.txt 法的確認** — ETL 開始前に必須 | 緊急 |
-| H-02 | ETL 遅延フォールバックポリシー（503 全件 vs 前日データ配信） | 高 |
-
----
-
-## 12. 用語定義
-
-| 用語 | 定義 |
-|---|---|
-| 勝率 | 当該馬が1着になる確率 |
-| 連対率 | 当該馬が2着以内になる確率 |
-| 複勝率 | 当該馬が3着以内になる確率 |
-| 単回収率 | `勝率 × 単勝オッズ × 100`。100超 = 期待値プラス |
-| 複回収率 | `複勝率 × 複勝オッズ中値 × 100`。100超 = 期待値プラス |
-| 脚質スコア | 過去レースのコーナー通過順から算出した先行傾向指数。−5(逃)〜+5(追込) |
-| ペースカテゴリ | 前半3F/後半3Fの差分から分類: HIGH(前傾)・MIDDLE(平均)・SLOW(後傾) |
-| テンポラルリーク | 予測時点より未来の情報が学習データに混入する現象。スナップショット設計で防止 |
-| バリューベット | 回収率が100以上、すなわち期待値がプラスの馬券 |
-| `as_of_race_id` | スナップショットが「このレース直前時点」の情報であることを示す外部キー |
+| AN-01 | 種牡馬成績多軸フィルタリング分析 | 高 | data-engineer / backend-engineer / frontend-engineer |
+| AN-02 | コース別・条件別統計
