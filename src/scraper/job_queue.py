@@ -3,7 +3,7 @@
 
 複数のスクレイピングリクエストを管理する。
 ファイルベースのキュー + ロックファイルで「キュー処理セッション」の排他（別プロセスが同時に process_queue しない）。
-process_queue 内は SCRAPE_QUEUE_PARALLEL 本（既定 6）まで同時にジョブ実行する。
+process_queue 内は SCRAPE_QUEUE_PARALLEL 本まで同時にジョブ実行する（件数は環境変数・queue_load_settings.json）。
 
 ジョブは job_kind（race / horse / date）+ target_id + tasks[] で任意の取得単位を指定できる。
 期間内の出走馬への馬タスクは API enqueue-period-horses が race_lists→各レースの出馬表/結果から馬IDを展開してからキューへ載せる。
@@ -32,6 +32,8 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+from src.scraper.schemas import SchemaValidationError
 
 try:
     import fcntl
@@ -96,7 +98,7 @@ PRIORITY_DEFAULT = 0
 PRIORITY_URGENT_PEDIGREE_5GEN = 9_000_000
 
 # process_queue 内の同時実行数（1〜32）。
-# 既定は queue_load_settings.json または環境変数 SCRAPE_QUEUE_PARALLEL（既定6）。
+# 既定は queue_load_settings.json の parallel、なければ環境変数 SCRAPE_QUEUE_PARALLEL（未設定時は 4）。
 # 多並列＋各ジョブ独立 Session だと netkeiba 側のブロックが出やすい
 def _queue_parallel_workers() -> int:
     from src.scraper.queue_load_settings import get_effective_parallel
@@ -1026,7 +1028,14 @@ class ScrapeJobQueue:
         batch = self.claim_pending_jobs_batch(1)
         return batch[0] if batch else None
 
-    def update_job_status(self, job_id: str, status: str, error: str | None = None):
+    def update_job_status(
+        self,
+        job_id: str,
+        status: str,
+        error: str | None = None,
+        *,
+        failure_reason: str | None = None,
+    ):
         """ジョブのステータスを更新"""
         with _exclusive_queue_json_lock():
             jobs = self._load_queue_nolock()
@@ -1048,7 +1057,17 @@ class ScrapeJobQueue:
                         job["started_at"] = datetime.now().isoformat()
                     elif status in ("completed", "failed"):
                         job["completed_at"] = datetime.now().isoformat()
-                    if error:
+                    if status == "completed":
+                        job["error"] = None
+                        job.pop("failure_reason", None)
+                    elif status == "failed":
+                        if error:
+                            job["error"] = error
+                        if failure_reason:
+                            job["failure_reason"] = failure_reason
+                        else:
+                            job.pop("failure_reason", None)
+                    elif error:
                         job["error"] = error
                     break
             self._save_queue_nolock(jobs)
@@ -1063,6 +1082,7 @@ class ScrapeJobQueue:
                     job["started_at"] = None
                     job["retry_count"] = retry_count
                     job["error"] = None
+                    job.pop("failure_reason", None)
                     break
             self._save_queue_nolock(jobs)
 
@@ -1128,6 +1148,15 @@ class ScrapeJobQueue:
         pause = read_access_pause()
         transport_paused = bool(pause.get("active"))
         proc_total = len(pending) + len(precheck) + len(running)
+        n_schema_failed = sum(
+            1
+            for j in jobs
+            if j.get("status") == "failed"
+            and (
+                j.get("failure_reason") == "schema_validation"
+                or str(j.get("error") or "").startswith("[schema_validation]")
+            )
+        )
         queue_eta = _build_queue_eta(
             n_pending=len(pending) + len(precheck),
             n_running=len(running),
@@ -1155,6 +1184,7 @@ class ScrapeJobQueue:
                 "total": len(jobs),
                 "urgent_pending": len(urgent_pending),
                 "processing_total": proc_total,
+                "schema_validation_failed": n_schema_failed,
             },
             "jobs": jobs[-80:],
             "failed_jobs": failed_sorted,
@@ -1190,6 +1220,7 @@ class ScrapeJobQueue:
                 job["started_at"] = None
                 job["completed_at"] = None
                 job["error"] = None
+                job.pop("failure_reason", None)
                 job["queued_at"] = datetime.now().isoformat()
                 n += 1
             if n:
@@ -1346,10 +1377,20 @@ class ScrapeJobQueue:
 
             on_queue_job_completed_successfully()
 
+        except SchemaValidationError as e:
+            logger.error("ジョブ失敗（スキーマ検証）: %s - %s", job_id, e, exc_info=True)
+            self.update_job_status(
+                job_id,
+                "failed",
+                str(e),
+                failure_reason="schema_validation",
+            )
+
         except Exception as e:
             from src.scraper.scrape_access_pause import (
                 handle_queue_transport_error,
                 is_access_or_transport_error,
+                is_block_suspect_http_400,
             )
 
             if is_access_or_transport_error(e):
@@ -1360,6 +1401,9 @@ class ScrapeJobQueue:
                     job_id,
                     exc_info=True,
                 )
+                if is_block_suspect_http_400(e):
+                    # ブロック疑い 400: 他ジョブは pending のまま。無限リトライ防止のため当該ジョブのみ failed。
+                    self.update_job_status(job_id, "failed", str(e))
                 stop_event.set()
                 return
 
@@ -1685,9 +1729,9 @@ class ScrapeJobQueue:
         execute_job(runner, job)
         # ネット/HTML 未取得（スマート即返等）のジョブは待機0。実取得のときだけ間隔（負荷緩和）
         try:
-            th = float(os.environ.get("SCRAPE_QUEUE_THROTTLE_SEC", "0.2"))
+            th = float(os.environ.get("SCRAPE_QUEUE_THROTTLE_SEC", "1.2"))
         except (TypeError, ValueError):
-            th = 0.2
+            th = 1.2
         th = max(0.0, th)
         if (
             th > 0.0

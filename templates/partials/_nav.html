@@ -24,6 +24,21 @@
     transform: scale(1.08);
     animation: none;
   }
+  .gnav-env-stg {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: #0d1117;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    border: 1px solid rgba(251,191,36,0.9);
+    box-shadow: 0 0 10px rgba(245,158,11,0.35);
+    flex-shrink: 0;
+  }
   .gnav-logo {
     width: 28px; height: 28px;
     border-radius: 50%;
@@ -283,6 +298,9 @@
     </svg>
     <span>Keiba</span>
   </a>
+  {% if keiba_staging_badge() %}
+  <span class="gnav-env-stg" title="KEIBA_ENV=stg（GCS は .env のバケット・prefix のまま。本番データ直結の検証用）">{{ keiba_staging_badge() }}</span>
+  {% endif %}
 
   <div class="gnav-tabs">
     <a href="/" class="gnav-tab{% if current_page == 'home' %} active{% endif %}">

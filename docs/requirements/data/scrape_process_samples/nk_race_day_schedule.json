@@ -1,0 +1,335 @@
+{
+  "date_fmt": "20230625",
+  "iso_date": "2023-06-25",
+  "slots": [
+    {
+      "race_id": "202302010601",
+      "venue": "函館",
+      "round": 1,
+      "race_name": "3歳未勝利",
+      "start_time_str": "09:50",
+      "post_time_iso": "2023-06-25T09:50:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030801",
+      "venue": "東京",
+      "round": 1,
+      "race_name": "2歳未勝利",
+      "start_time_str": "09:55",
+      "post_time_iso": "2023-06-25T09:55:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030801",
+      "venue": "阪神",
+      "round": 1,
+      "race_name": "3歳未勝利",
+      "start_time_str": "10:05",
+      "post_time_iso": "2023-06-25T10:05:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202302010602",
+      "venue": "函館",
+      "round": 2,
+      "race_name": "3歳未勝利",
+      "start_time_str": "10:15",
+      "post_time_iso": "2023-06-25T10:15:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030802",
+      "venue": "東京",
+      "round": 2,
+      "race_name": "3歳未勝利",
+      "start_time_str": "10:25",
+      "post_time_iso": "2023-06-25T10:25:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030802",
+      "venue": "阪神",
+      "round": 2,
+      "race_name": "3歳未勝利",
+      "start_time_str": "10:35",
+      "post_time_iso": "2023-06-25T10:35:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202302010603",
+      "venue": "函館",
+      "round": 3,
+      "race_name": "3歳未勝利",
+      "start_time_str": "10:45",
+      "post_time_iso": "2023-06-25T10:45:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030803",
+      "venue": "東京",
+      "round": 3,
+      "race_name": "3歳未勝利",
+      "start_time_str": "10:55",
+      "post_time_iso": "2023-06-25T10:55:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030803",
+      "venue": "阪神",
+      "round": 3,
+      "race_name": "3歳未勝利",
+      "start_time_str": "11:05",
+      "post_time_iso": "2023-06-25T11:05:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202302010604",
+      "venue": "函館",
+      "round": 4,
+      "race_name": "3歳未勝利",
+      "start_time_str": "11:15",
+      "post_time_iso": "2023-06-25T11:15:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030804",
+      "venue": "東京",
+      "round": 4,
+      "race_name": "3歳未勝利",
+      "start_time_str": "11:25",
+      "post_time_iso": "2023-06-25T11:25:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030804",
+      "venue": "阪神",
+      "round": 4,
+      "race_name": "3歳未勝利",
+      "start_time_str": "11:35",
+      "post_time_iso": "2023-06-25T11:35:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202302010605",
+      "venue": "函館",
+      "round": 5,
+      "race_name": "2歳新馬",
+      "start_time_str": "12:05",
+      "post_time_iso": "2023-06-25T12:05:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030805",
+      "venue": "東京",
+      "round": 5,
+      "race_name": "2歳新馬",
+      "start_time_str": "12:15",
+      "post_time_iso": "2023-06-25T12:15:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030805",
+      "venue": "阪神",
+      "round": 5,
+      "race_name": "2歳新馬",
+      "start_time_str": "12:25",
+      "post_time_iso": "2023-06-25T12:25:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202302010606",
+      "venue": "函館",
+      "round": 6,
+      "race_name": "3歳未勝利",
+      "start_time_str": "12:35",
+      "post_time_iso": "2023-06-25T12:35:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030806",
+      "venue": "東京",
+      "round": 6,
+      "race_name": "3歳未勝利",
+      "start_time_str": "12:45",
+      "post_time_iso": "2023-06-25T12:45:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030806",
+      "venue": "阪神",
+      "round": 6,
+      "race_name": "3歳以上1勝クラス",
+      "start_time_str": "12:55",
+      "post_time_iso": "2023-06-25T12:55:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202302010607",
+      "venue": "函館",
+      "round": 7,
+      "race_name": "3歳以上1勝クラス",
+      "start_time_str": "13:05",
+      "post_time_iso": "2023-06-25T13:05:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030807",
+      "venue": "東京",
+      "round": 7,
+      "race_name": "3歳以上1勝クラス",
+      "start_time_str": "13:15",
+      "post_time_iso": "2023-06-25T13:15:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030807",
+      "venue": "阪神",
+      "round": 7,
+      "race_name": "3歳以上1勝クラス",
+      "start_time_str": "13:25",
+      "post_time_iso": "2023-06-25T13:25:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202302010608",
+      "venue": "函館",
+      "round": 8,
+      "race_name": "3歳以上1勝クラス",
+      "start_time_str": "13:35",
+      "post_time_iso": "2023-06-25T13:35:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030808",
+      "venue": "東京",
+      "round": 8,
+      "race_name": "3歳以上1勝クラス",
+      "start_time_str": "13:45",
+      "post_time_iso": "2023-06-25T13:45:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030808",
+      "venue": "阪神",
+      "round": 8,
+      "race_name": "城崎特別(1勝クラス)",
+      "start_time_str": "13:55",
+      "post_time_iso": "2023-06-25T13:55:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202302010609",
+      "venue": "函館",
+      "round": 9,
+      "race_name": "北海ハンデキャップ(2勝クラス)",
+      "start_time_str": "14:05",
+      "post_time_iso": "2023-06-25T14:05:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030809",
+      "venue": "東京",
+      "round": 9,
+      "race_name": "八ヶ岳特別(2勝クラス)",
+      "start_time_str": "14:15",
+      "post_time_iso": "2023-06-25T14:15:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030809",
+      "venue": "阪神",
+      "round": 9,
+      "race_name": "舞子特別(2勝クラス)",
+      "start_time_str": "14:25",
+      "post_time_iso": "2023-06-25T14:25:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202302010610",
+      "venue": "函館",
+      "round": 10,
+      "race_name": "HTB杯(2勝クラス)",
+      "start_time_str": "14:40",
+      "post_time_iso": "2023-06-25T14:40:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030810",
+      "venue": "東京",
+      "round": 10,
+      "race_name": "甲州街道S(3勝クラス)",
+      "start_time_str": "14:50",
+      "post_time_iso": "2023-06-25T14:50:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030810",
+      "venue": "阪神",
+      "round": 10,
+      "race_name": "花のみちS(3勝クラス)",
+      "start_time_str": "15:01",
+      "post_time_iso": "2023-06-25T15:01:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202302010611",
+      "venue": "函館",
+      "round": 11,
+      "race_name": "大沼S(L)",
+      "start_time_str": "15:20",
+      "post_time_iso": "2023-06-25T15:20:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030811",
+      "venue": "東京",
+      "round": 11,
+      "race_name": "パラダイスS(L)",
+      "start_time_str": "15:30",
+      "post_time_iso": "2023-06-25T15:30:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030811",
+      "venue": "阪神",
+      "round": 11,
+      "race_name": "宝塚記念(G1)",
+      "start_time_str": "15:40",
+      "post_time_iso": "2023-06-25T15:40:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202302010612",
+      "venue": "函館",
+      "round": 12,
+      "race_name": "3歳以上1勝クラス",
+      "start_time_str": "16:05",
+      "post_time_iso": "2023-06-25T16:05:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202305030812",
+      "venue": "東京",
+      "round": 12,
+      "race_name": "3歳以上1勝クラス",
+      "start_time_str": "16:15",
+      "post_time_iso": "2023-06-25T16:15:00+09:00",
+      "time_source": "shutuba"
+    },
+    {
+      "race_id": "202309030812",
+      "venue": "阪神",
+      "round": 12,
+      "race_name": "リボン賞(2勝クラス)",
+      "start_time_str": "16:30",
+      "post_time_iso": "2023-06-25T16:30:00+09:00",
+      "time_source": "shutuba"
+    }
+  ],
+  "_meta": {
+    "source": "synthesized",
+    "built_from": "race_lists+race_shutuba",
+    "generated_at": 1781202148.920007
+  }
+}

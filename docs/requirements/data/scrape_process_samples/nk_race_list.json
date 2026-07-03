@@ -1,0 +1,236 @@
+{
+  "date": "20230625",
+  "races": [
+    {
+      "race_id": "202302010601",
+      "round": 1,
+      "venue": "函館",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202302010602",
+      "round": 2,
+      "venue": "函館",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202302010603",
+      "round": 3,
+      "venue": "函館",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202302010604",
+      "round": 4,
+      "venue": "函館",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202302010605",
+      "round": 5,
+      "venue": "函館",
+      "race_name": "2歳新馬"
+    },
+    {
+      "race_id": "202302010606",
+      "round": 6,
+      "venue": "函館",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202302010607",
+      "round": 7,
+      "venue": "函館",
+      "race_name": "3歳以上1勝クラス"
+    },
+    {
+      "race_id": "202302010608",
+      "round": 8,
+      "venue": "函館",
+      "race_name": "3歳以上1勝クラス"
+    },
+    {
+      "race_id": "202302010609",
+      "round": 9,
+      "venue": "函館",
+      "race_name": "北海ハンデキャップ(2勝クラス)"
+    },
+    {
+      "race_id": "202302010610",
+      "round": 10,
+      "venue": "函館",
+      "race_name": "HTB杯(2勝クラス)"
+    },
+    {
+      "race_id": "202302010611",
+      "round": 11,
+      "venue": "函館",
+      "race_name": "大沼S(L)"
+    },
+    {
+      "race_id": "202302010612",
+      "round": 12,
+      "venue": "函館",
+      "race_name": "3歳以上1勝クラス"
+    },
+    {
+      "race_id": "202305030801",
+      "round": 1,
+      "venue": "東京",
+      "race_name": "2歳未勝利"
+    },
+    {
+      "race_id": "202305030802",
+      "round": 2,
+      "venue": "東京",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202305030803",
+      "round": 3,
+      "venue": "東京",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202305030804",
+      "round": 4,
+      "venue": "東京",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202305030805",
+      "round": 5,
+      "venue": "東京",
+      "race_name": "2歳新馬"
+    },
+    {
+      "race_id": "202305030806",
+      "round": 6,
+      "venue": "東京",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202305030807",
+      "round": 7,
+      "venue": "東京",
+      "race_name": "3歳以上1勝クラス"
+    },
+    {
+      "race_id": "202305030808",
+      "round": 8,
+      "venue": "東京",
+      "race_name": "3歳以上1勝クラス"
+    },
+    {
+      "race_id": "202305030809",
+      "round": 9,
+      "venue": "東京",
+      "race_name": "八ヶ岳特別(2勝クラス)"
+    },
+    {
+      "race_id": "202305030810",
+      "round": 10,
+      "venue": "東京",
+      "race_name": "甲州街道S(3勝クラス)"
+    },
+    {
+      "race_id": "202305030811",
+      "round": 11,
+      "venue": "東京",
+      "race_name": "パラダイスS(L)"
+    },
+    {
+      "race_id": "202305030812",
+      "round": 12,
+      "venue": "東京",
+      "race_name": "3歳以上1勝クラス"
+    },
+    {
+      "race_id": "202309030801",
+      "round": 1,
+      "venue": "阪神",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202309030802",
+      "round": 2,
+      "venue": "阪神",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202309030803",
+      "round": 3,
+      "venue": "阪神",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202309030804",
+      "round": 4,
+      "venue": "阪神",
+      "race_name": "3歳未勝利"
+    },
+    {
+      "race_id": "202309030805",
+      "round": 5,
+      "venue": "阪神",
+      "race_name": "2歳新馬"
+    },
+    {
+      "race_id": "202309030806",
+      "round": 6,
+      "venue": "阪神",
+      "race_name": "3歳以上1勝クラス"
+    },
+    {
+      "race_id": "202309030807",
+      "round": 7,
+      "venue": "阪神",
+      "race_name": "3歳以上1勝クラス"
+    },
+    {
+      "race_id": "202309030808",
+      "round": 8,
+      "venue": "阪神",
+      "race_name": "城崎特別(1勝クラス)"
+    },
+    {
+      "race_id": "202309030809",
+      "round": 9,
+      "venue": "阪神",
+      "race_name": "舞子特別(2勝クラス)"
+    },
+    {
+      "race_id": "202309030810",
+      "round": 10,
+      "venue": "阪神",
+      "race_name": "花のみちS(3勝クラス)"
+    },
+    {
+      "race_id": "202309030811",
+      "round": 11,
+      "venue": "阪神",
+      "race_name": "宝塚記念(G1)"
+    },
+    {
+      "race_id": "202309030812",
+      "round": 12,
+      "venue": "阪神",
+      "race_name": "リボン賞(2勝クラス)"
+    }
+  ],
+  "_meta": {
+    "race_list_source": "db.netkeiba.com",
+    "scraped_at": 1781192604.3473468,
+    "scraped_at_jst": "2026-06-12 00:43:24",
+    "schema_validation": {
+      "schema_version": 2,
+      "passed": true,
+      "top_missing": [],
+      "top_type_errors": [],
+      "top_constraint_errors": [],
+      "entry_count": 36,
+      "entry_issues": {}
+    },
+    "scrape_validation_status": "ok"
+  }
+}

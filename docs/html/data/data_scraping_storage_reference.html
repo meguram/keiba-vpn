@@ -215,7 +215,7 @@
 <!-- ════════════════════ §1 スケジュール ════════════════════ -->
 <section id="s1">
   <h2>§1 自動スクレイピングのスケジュール</h2>
-  <p>自動スクレイピング（Webからの自動データ収集）は、<code>src/scraper/auto_scrape.py</code> が管理する 6 つのタスクと、常駐するキューワーカーで構成されます。</p>
+  <p>自動スクレイピング（Webからの自動データ収集）は、<code>src/scraper/auto_scrape.py</code> が管理する各タスクが <code>data/queue/scrape_queue.json</code> にジョブを載せ、常駐するキューワーカーが <code>queue_tasks.execute_job</code> 経由で netkeiba 取得する構成です（<code>KEIBA_AUTO_SCRAPE_USE_QUEUE=0</code> で従来の直取得）。</p>
 
   <h3>1-1. 自動タスク (auto_scrape)</h3>
   <div class="tbl-wrap">

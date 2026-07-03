@@ -19,6 +19,7 @@ pip install -r requirements.txt
 # 4. 環境変数を設定
 cp .env.example .env
 # .env を編集して認証情報を入力
+# ステージングとして動作確認する場合: KEIBA_ENV=stg（詳細 docs/environment-stg.md）
 
 # 5. サーバーを起動
 python main.py --port 8000

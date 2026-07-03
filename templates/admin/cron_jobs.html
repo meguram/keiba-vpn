@@ -231,7 +231,12 @@
   </div>
 
   <h2 style="font-size:15px;font-weight:700;color:#f0f6fc;margin-top:32px;margin-bottom:4px">スクレイピング自動実行 (外部 cron)</h2>
-  <p class="subtitle">crontab で定期実行されるスクレイピングジョブ</p>
+  <p class="subtitle">crontab で定期実行されるスクレイピングジョブ。最終実行日時は <code style="font-size:10px;color:#7dd3fc">data/local/meta/auto_scrape_status.json</code> と同期します。</p>
+  <p class="subtitle" id="autoScrapeQueueNote" style="max-width:920px;margin-bottom:12px;line-height:1.55;border-left:3px solid #238636;padding-left:12px;color:#8b949e">
+    <strong style="color:#c9d1d9">キューについて:</strong>
+    ここから起動する <code style="font-size:11px;color:#7dd3fc">auto_scrape</code> の <strong>netkeiba 取得は既定でスクレイピングキュー（<code style="font-size:11px">data/queue/scrape_queue.json</code>）経由</strong>です（<code style="font-size:10px">KEIBA_AUTO_SCRAPE_USE_QUEUE=0</code> で直取得に切り替え）。JRA 馬場ライブ・馬名インデックス等は別系統です。期間一括は <code style="font-size:10px;color:#7dd3fc">run_external_cron_month_coverage.py</code> が窓内の全開催日に対し金曜 <code style="font-size:10px">weekly-update</code> 相当（レース結果・指数は上書き、馬プロフィールは成績上書き＋血統は別キューで未保持のみ）をキュー投入したうえで、出馬表・指数（<code style="font-size:10px">race_shutuba</code> / <code style="font-size:10px">smartrc</code>）を載せます。例:
+    <code style="font-size:10px;color:#7dd3fc">python3 scripts/run_external_cron_month_coverage.py</code>
+  </p>
   <div class="job-grid" id="autoScrapeGrid">
     <div style="color:#8b949e;padding:40px;text-align:center">読み込み中...</div>
   </div>
@@ -425,6 +430,8 @@ const JOB_META = {
   daily_race_lists:   { icon: '📅', label: 'レース日程' },
   'catchup-missing':  { icon: '🔄', label: '欠損補完' },
   catchup_missing:    { icon: '🔄', label: '欠損補完' },
+  'raceday-result-runner': { icon: '🏇', label: '速報結果常駐' },
+  raceday_result_runner:   { icon: '🏇', label: '速報結果常駐' },
   'raceday-runner':   { icon: '🏇', label: '開催日常駐' },
   raceday_runner:     { icon: '🏇', label: '開催日常駐' },
   'raceday-eve':      { icon: '📋', label: '前日準備' },
@@ -433,6 +440,12 @@ const JOB_META = {
   raceday_evening:    { icon: '🏁', label: '結果取得' },
   'weekly-update':    { icon: '📊', label: '週次更新' },
   weekly_update:      { icon: '📊', label: '週次更新' },
+  'horse-name-index': { icon: '📝', label: '馬名インデックス' },
+  horse_name_index:   { icon: '📝', label: '馬名インデックス' },
+  'growth-curve-weekly': { icon: '📈', label: '成長曲線週次' },
+  growth_curve_weekly:   { icon: '📈', label: '成長曲線週次' },
+  'jra-baba-morning': { icon: '🌾', label: 'JRA馬場' },
+  jra_baba_morning:   { icon: '🌾', label: 'JRA馬場' },
 };
 
 let autoTimer = null;
@@ -554,6 +567,20 @@ async function loadAutoScrapeJobs() {
     const res = await fetch('/api/admin/auto-scrape-status');
     const data = await res.json();
     const jobs = data.jobs || [];
+    const noteEl = document.getElementById('autoScrapeQueueNote');
+    if (noteEl && data.scraping_queue_note && !noteEl.dataset.apiNoteDone) {
+      const d = document.createElement('div');
+      d.style.marginTop = '10px';
+      d.style.fontSize = '12px';
+      d.style.color = '#8b949e';
+      const strong = document.createElement('strong');
+      strong.style.color = '#c9d1d9';
+      strong.textContent = 'API からの補足: ';
+      d.appendChild(strong);
+      d.appendChild(document.createTextNode(data.scraping_queue_note));
+      noteEl.appendChild(d);
+      noteEl.dataset.apiNoteDone = '1';
+    }
     if (!jobs.length) {
       document.getElementById('autoScrapeGrid').innerHTML = '<div style="color:#8b949e;padding:40px;text-align:center">ジョブが見つかりません</div>';
       return;

@@ -25,6 +25,8 @@ LOG_DIR="${PROJECT_DIR}/logs"
 CRON_TAG="# KEIBA-VPN-RACEDAY-EVE"
 
 mkdir -p "$LOG_DIR"
+RUNNER="${PROJECT_DIR}/scripts/cron/run_auto_scrape_logged.sh"
+chmod +x "$RUNNER" 2>/dev/null || true
 
 remove_existing() {
     crontab -l 2>/dev/null | grep -v "$CRON_TAG" | crontab - 2>/dev/null || true
@@ -39,6 +41,15 @@ show_status() {
         echo "✓ cron 登録済み"
     else
         echo "  (未登録)"
+    fi
+
+    echo ""
+    echo "=== ステータスファイル（管理画面と共有）==="
+    local st="${PROJECT_DIR}/data/local/meta/auto_scrape_status.json"
+    if [ -f "$st" ]; then
+        ls -la "$st"
+    else
+        echo "  (未生成: ${st})"
     fi
 
     echo ""
@@ -72,9 +83,14 @@ CRON_ENTRIES=$(cat <<EOF
 #   毎日 18:00 に起動 → 翌日が開催日のときのみ取得
 #   非開催日は数秒で skip して終了
 # =========================================================
+# crontab の 5 フィールドは CRON_TZ に従う（未設定だとサーバ TZ＝UTC になりがち）
+CRON_TZ=Asia/Tokyo
 
-# --- 毎日 18:00 に raceday-eve タスクを実行 ---
-0 18 * * * cd ${PROJECT_DIR} && ${PYTHON} -m src.scraper.auto_scrape --task raceday-eve >> ${LOG_DIR}/raceday_eve.log 2>&1 ${CRON_TAG}
+# --- 毎日 18:00 に raceday-eve タスクを実行（ログは開始・終了行で区切る）---
+0 18 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} raceday-eve logs/raceday_eve.log ${CRON_TAG}
+
+# --- 毎週金曜 18:00 — 馬名リスト + 成長曲線（calculated_data 一括更新）---
+0 18 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} horse-name-index logs/horse_name_index.log ${CRON_TAG}-HORSE-INDEX
 
 EOF
 )
@@ -83,13 +99,16 @@ EOF
 
 echo "=== raceday-eve cron 設定完了 ==="
 echo ""
-echo "スケジュール: 毎日 18:00"
-echo "  翌日が開催日 → 全レースの出馬表・馬柱・追い切り + 追走難度キャッシュ"
-echo "  翌日が非開催日 → 即 skip して終了"
+echo "スケジュール:"
+echo "  毎日 18:00 — raceday-eve（翌開催日のみ 出馬表・馬柱・追い切り + 追走難度）"
+echo "  毎週金曜 18:00 — horse-name-index（馬名リスト + 成長曲線 → calculated_data）"
 echo ""
-echo "ログ: ${LOG_DIR}/raceday_eve.log"
+echo "ログ:"
+echo "  ${LOG_DIR}/raceday_eve.log"
+echo "  ${LOG_DIR}/horse_name_index.log"
 echo ""
 echo "操作コマンド:"
 echo "  cron 確認: crontab -l | grep KEIBA-VPN-RACEDAY-EVE"
 echo "  cron 削除: bash ${PROJECT_DIR}/scripts/cron/setup_raceday_eve_cron.sh --remove"
 echo "  手動実行:  cd ${PROJECT_DIR} && ${PYTHON} -m src.scraper.auto_scrape --task raceday-eve"
+echo "  管理画面: /cron-jobs （最終実行は data/local/meta/auto_scrape_status.json と同期）"

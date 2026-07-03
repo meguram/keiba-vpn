@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-PROJECT_DIR="/home/hirokiakataoka/project/myproject/keiba-vpn"
+PROJECT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
 WATCHDOG="${PROJECT_DIR}/scripts/server/server_watchdog.sh"
 CRON_TAG="# KEIBA-VPN-WATCHDOG"
 
@@ -43,6 +43,8 @@ CRON_ENTRIES=$(cat <<EOF
 #   API (port 8000) + MLflow (port 5000)
 #   3分間隔ヘルスチェック + ダウン時自動再起動
 # =========================================================
+# 時刻は日本時間（サーバが UTC でもこのブロックは JST）
+CRON_TZ=Asia/Tokyo
 
 # --- 3分ごとに全サービスをヘルスチェック → ダウン時は自動再起動 ---
 */3 * * * * ${WATCHDOG} ${CRON_TAG}

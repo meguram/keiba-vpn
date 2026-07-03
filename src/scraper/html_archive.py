@@ -48,6 +48,7 @@ CATEGORY_ID_TYPE = {
     "horse_profile": "horse",
     "horse_result_html": "horse",
     "horse_ped": "horse",
+    "horse_training": "horse",
 }
 
 

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 # 常に直近1本を指すシンボリックリンク（消さない）
-_SKIP_NAMES = frozenset({"server_latest.log"})
+_SKIP_NAMES = frozenset({"server_latest.log", "mlflow_latest.log"})
 
 
 def run_log_retention_once(
@@ -67,6 +67,10 @@ def run_log_retention_once(
 
     for p in sorted(d.iterdir()):
         if p.name in _SKIP_NAMES:
+            skipped += 1
+            continue
+        # シンボリックリンクはスキップ（リンク先の実ファイルが別エントリとして現れる）
+        if p.is_symlink():
             skipped += 1
             continue
         if p.is_dir():

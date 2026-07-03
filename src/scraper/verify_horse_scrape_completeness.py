@@ -135,10 +135,22 @@ def wait_until_queue_idle(
         except Exception as e:
             return False, f"get_status: {e}", last
         qd = st.get("queue") or {}
-        p = int(qd.get("pending", 0) or 0)
-        r = int(qd.get("running", 0) or 0)
-        last = {"pending": p, "running": r}
-        if p + r == 0:
+        proc = qd.get("processing_total")
+        if proc is not None:
+            n = int(proc or 0)
+        else:
+            n = (
+                int(qd.get("pending", 0) or 0)
+                + int(qd.get("precheck", 0) or 0)
+                + int(qd.get("running", 0) or 0)
+            )
+        last = {
+            "pending": int(qd.get("pending", 0) or 0),
+            "precheck": int(qd.get("precheck", 0) or 0),
+            "running": int(qd.get("running", 0) or 0),
+            "processing_total": n,
+        }
+        if n == 0:
             return True, "idle", last
         time.sleep(max(0.5, poll_sec))
     return False, "timeout", last

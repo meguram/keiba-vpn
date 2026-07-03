@@ -50,6 +50,7 @@ mlruns
 data/cache/
 # Bloodline SQLite（サイズ大・ローカル生成。GitHub 100MB 制限対象のため追跡しない）
 data/bloodline/
+data/calculated_data/
 data/local/
 data/queue/
 data/page_reference/
@@ -66,3 +67,8 @@ credentials.json
 # プロセス横断スロットファイル（スクレイパー並列数制御用）
 data/meta/netkeiba_global_slots/
 gcp-service-account.json
+
+# bloodline DB
+data/research/bloodline/*.db
+data/research/bloodline/*.db-shm
+data/research/bloodline/*.db-wal

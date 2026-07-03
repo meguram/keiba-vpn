@@ -25,6 +25,9 @@ def run_server(host: str = "0.0.0.0", port: int = 8000,
 
     from src.utils.keiba_logging import apply_root_logging_basic, build_uvicorn_log_config
 
+    # ログ・libc のローカル時刻を日本時間に揃える（Docker / stg が UTC のときの保険）
+    os.environ.setdefault("TZ", "Asia/Tokyo")
+
     # uvicorn 以外（起動前の import など）向けに root を整える
     apply_root_logging_basic()
     _lg = logging.getLogger("main")

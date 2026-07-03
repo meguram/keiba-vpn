@@ -1688,7 +1688,7 @@ async function analyze() {
 
     setAnalysisLoadingPhase(
       'compute',
-      '追走難度・ペース・位置取り・想定上り3Fを計算しています…',
+      '事前計算済みの追走難度データを読み込んでいます…',
       done
     );
     const resp = await fetch(`/api/race/${_selectedRaceId}/tracking-difficulty`);
@@ -1696,7 +1696,11 @@ async function analyze() {
       let errMsg = `HTTP ${resp.status}`;
       try {
         const errBody = await resp.json();
-        if (errBody.error) errMsg = errBody.error;
+        if (errBody.status === 'not_precomputed') {
+          errMsg = 'このレースの追走難度はまだ事前計算されていません。管理者がバッチ計算を実行するまでお待ちください。';
+        } else if (errBody.error) {
+          errMsg = errBody.error;
+        }
       } catch (_) { /* ignore */ }
       throw new Error(errMsg);
     }

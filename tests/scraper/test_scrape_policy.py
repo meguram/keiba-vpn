@@ -53,6 +53,48 @@ class TestScrapePolicy(unittest.TestCase):
             else:
                 os.environ["SCRAPE_DEFAULT_OVERWRITE"] = prev
 
+    def test_resolve_defaults_mutable_refresh(self):
+        from src.scraper.scrape_policy import resolve_enqueue_overwrite_smart_skip
+
+        ow, ss = resolve_enqueue_overwrite_smart_skip(
+            {
+                "job_kind": "race",
+                "target_id": "202501010101",
+                "tasks": ["race_result", "race_index"],
+            },
+        )
+        self.assertFalse(ow)
+        self.assertFalse(ss)
+
+    def test_resolve_immutable_default_skip(self):
+        from src.scraper.scrape_policy import resolve_enqueue_overwrite_smart_skip
+
+        ow, ss = resolve_enqueue_overwrite_smart_skip(
+            {
+                "job_kind": "horse",
+                "target_id": "2010100001",
+                "tasks": ["horse_pedigree_5gen"],
+            },
+        )
+        self.assertFalse(ow)
+        self.assertTrue(ss)
+
+    def test_effective_per_task_defaults(self):
+        from src.scraper.scrape_policy import effective_smart_skip_for_queue_job
+
+        self.assertFalse(
+            effective_smart_skip_for_queue_job({"overwrite": False}, task="race_result"),
+        )
+        self.assertTrue(
+            effective_smart_skip_for_queue_job({"overwrite": False}, task="horse_pedigree_5gen"),
+        )
+        self.assertTrue(
+            effective_smart_skip_for_queue_job(
+                {"smart_skip": True, "overwrite": False},
+                task="race_result",
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

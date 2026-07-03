@@ -41,6 +41,12 @@ _load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.pat
 from src.config.profiles import apply_profile as _apply_profile
 _apply_profile()
 
+from src.config.deployment import (
+    deployment_info as _deployment_info,
+    keiba_env as _keiba_env,
+    keiba_staging_badge,
+)
+
 from fastapi import BackgroundTasks, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -282,7 +288,7 @@ def _queue_slot_worker(slot_id: int) -> None:
     各スロットが独立して claim_next_pending_job → _process_claimed_job を繰り返す。
     スロット 0 がストール回復・ストレージプレチェックを担当する。
     """
-    from src.scraper.job_queue import ScrapeJobQueue
+    from src.scraper.job_queue import ScrapeJobQueue, _queue_parallel_workers
     from src.scraper.scrape_access_pause import read_access_pause, clear_access_pause
     from src.scraper.queue_worker_log import ensure_queue_worker_log_handler, mark_queue_worker_active
 
@@ -323,6 +329,12 @@ def _queue_slot_worker(slot_id: int) -> None:
                         break
                     continue
 
+                # 並列上限を下げたあとも、余剰スロットはジョブを取らず待機（プロセス再起動不要）
+                if slot_id >= _queue_parallel_workers():
+                    if _queue_worker_stop.wait(timeout=10):
+                        break
+                    continue
+
                 # スロット 0: precheck ジョブを pending/completed へ移行
                 if slot_id == 0:
                     _pc = queue.count_precheck_jobs()
@@ -331,10 +343,12 @@ def _queue_slot_worker(slot_id: int) -> None:
                     _pr = queue._run_storage_precheck()
                     if _pc > 0 and isinstance(_pr, dict):
                         _skip = _pr.get("to_completed", 0)
-                        _enq  = _pr.get("to_pending", 0)
+                        _enq = _pr.get("to_pending", 0)
                         log.info(
                             "プレチェック完了: スキップ %d 件 / キュー投入 %d 件 (残 precheck: %d 件)",
-                            _skip, _enq, queue.count_precheck_jobs(),
+                            _skip,
+                            _enq,
+                            queue.count_precheck_jobs(),
                         )
 
                 # ── ジョブ取得・実行 ──
@@ -458,6 +472,11 @@ def _try_acquire_queue_runner_leader() -> bool:
 @asynccontextmanager
 async def lifespan(app):
     global _scheduler_thread, _queue_worker_threads, _queue_runner_leader_fh, _disk_cache_cleanup_thread, _queue_maintain_thread, _logs_retention_thread, _log_retention_leader_fh, _daily_shutuba_thread
+
+    try:
+        logger.info("Deployment %s", _deployment_info())
+    except Exception:
+        pass
 
     # 構造チェックスケジューラ起動
     _scheduler_stop.clear()
@@ -682,8 +701,20 @@ async def lifespan(app):
         logger.warning("weekly access flush 失敗: %s", _e)
 
 
-app = FastAPI(title="ML-AutoPilot Keiba", version="3.0.0", lifespan=lifespan)
+_app_title = "ML-AutoPilot Keiba"
+if _keiba_env() == "stg":
+    _app_title = "ML-AutoPilot Keiba [STG]"
+app = FastAPI(title=_app_title, version="3.0.0", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+
+class KeibaDeploymentMiddleware(BaseHTTPMiddleware):
+    """全レスポンスに実行環境ヘッダを付与（stg 動作確認用）。"""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers["X-Keiba-Env"] = _keiba_env()
+        return response
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -703,6 +734,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(AuthMiddleware)
+app.add_middleware(KeibaDeploymentMiddleware)
 
 JRA_PLACE_CODES = {"01", "02", "03", "04", "05", "06", "07", "08", "09", "10"}
 
@@ -716,13 +748,42 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 app.mount("/data/image", StaticFiles(directory=os.path.join(BASE_DIR, "data", "local", "image")), name="data_image")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 templates.env.globals["is_dev_check"] = is_developer
+templates.env.globals["keiba_staging_badge"] = keiba_staging_badge
 
-PREDICTIONS_PATH = os.path.join(BASE_DIR, "data", "processed", "predictions.json")
+# Starlette 1.x: TemplateResponse(request, name, context)
+# 既存コードは TemplateResponse(name, {"request": request, ...}) のまま動かす
+_orig_template_response = templates.TemplateResponse
+
+
+def _compat_template_response(
+    name_or_request: Any,
+    name_or_context: Any = None,
+    context: dict[str, Any] | None = None,
+    **kwargs: Any,
+):
+    if isinstance(name_or_request, str):
+        template_name = name_or_request
+        ctx = dict(name_or_context or {})
+        req = ctx.pop("request", None)
+        if req is None:
+            raise ValueError(
+                f"template {template_name!r}: 'request' is required in context"
+            )
+        return _orig_template_response(req, template_name, ctx, **kwargs)
+    return _orig_template_response(
+        name_or_request, name_or_context, context, **kwargs
+    )
+
+
+templates.TemplateResponse = _compat_template_response  # type: ignore[method-assign]
+
+from src.config.data_paths import PREDICTIONS_JSON as PREDICTIONS_PATH
 
 
 def _load_predictions() -> dict | None:
-    if os.path.exists(PREDICTIONS_PATH):
-        with open(PREDICTIONS_PATH, "r", encoding="utf-8") as f:
+    path = PREDICTIONS_PATH if isinstance(PREDICTIONS_PATH, str) else str(PREDICTIONS_PATH)
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     return None
 
@@ -738,11 +799,16 @@ _SERVER_START_TIME = _time.time()
 async def health_check():
     """サーバーの稼働状態を返す。監視cron用。"""
     uptime = _time.time() - _SERVER_START_TIME
-    return JSONResponse({
+    payload = {
         "status": "ok",
         "uptime_seconds": round(uptime, 1),
         "timestamp": datetime.now().isoformat(),
-    })
+    }
+    try:
+        payload.update(_deployment_info())
+    except Exception:
+        payload.setdefault("keiba_env", _keiba_env())
+    return JSONResponse(payload)
 
 
 @app.post("/api/html-archive/cleanup", response_class=JSONResponse)
@@ -796,14 +862,19 @@ async def login_submit(request: Request):
 
 
 @app.get("/logout")
-async def logout():
+async def logout(request: Request):
     return clear_session_response(redirect_to="/", request=request)
 
 
 @app.get("/api/auth/status", response_class=JSONResponse)
 async def auth_status(request: Request):
     dev = is_developer(request)
-    return JSONResponse({"is_developer": dev})
+    out = {"is_developer": dev}
+    try:
+        out.update(_deployment_info())
+    except Exception:
+        out["keiba_env"] = _keiba_env()
+    return JSONResponse(out)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1232,6 +1303,7 @@ MONITOR_SOURCES = [
     "race_shutuba",
     "race_result_on_time",
     "race_result",
+    "race_result_lap",
     "race_index",
     "race_odds",
     "race_pair_odds",
@@ -1660,6 +1732,427 @@ async def get_scrape_status(date: str = "", force: str = ""):
     return JSONResponse(result)
 
 
+# ── 行固有派生データ カバレッジ ─────────────────────────────────────────────────
+
+# 派生カテゴリのグループ定義（表示用）
+_DERIVED_CATEGORY_GROUPS: list[dict] = [
+    {
+        "group": "出馬表系",
+        "source": "race_shutuba",
+        "categories": ["race_shutuba_meta"],
+        "axis": "race",
+    },
+    {
+        "group": "速報結果系",
+        "source": "race_result_on_time",
+        "categories": [
+            "race_result_on_time_payoff",
+            "race_result_on_time_lap",
+            "race_result_on_time_corner",
+        ],
+        "axis": "race",
+    },
+    {
+        "group": "確定結果系",
+        "source": "race_result",
+        "categories": [
+            "race_result_meta",
+            "race_result_payoff",
+            "race_result_track",
+            "race_result_corner",
+            "race_result_lap_times",
+        ],
+        "axis": "race",
+    },
+    {
+        "group": "馬データ系",
+        "source": "horse_result",
+        "categories": ["horse_profile", "horse_race_history"],
+        "axis": "horse",
+    },
+]
+
+# 派生カテゴリ名 → 日本語ラベル
+_DERIVED_CATEGORY_LABELS: dict[str, str] = {
+    "race_shutuba_meta":           "レース情報（メタ）",
+    "race_result_on_time_payoff":  "払戻（速報）",
+    "race_result_on_time_lap":     "ラップ（速報）",
+    "race_result_on_time_corner":  "通過順（速報）",
+    "race_result_meta":            "レース情報（確定）",
+    "race_result_payoff":          "払戻（確定）",
+    "race_result_track":           "馬場情報",
+    "race_result_corner":          "通過順（確定）",
+    "race_result_lap_times":       "ラップ（確定）",
+    "horse_profile":               "馬プロフィール",
+    "horse_race_history":          "馬過去成績",
+}
+
+
+def _build_row_data_coverage(date: str) -> dict:
+    """指定日の行固有派生カテゴリのカバレッジを計算する。"""
+    storage = _get_storage()
+    year = date[:4]
+
+    race_list_data = storage.load("race_lists", date)
+    if not race_list_data:
+        return {
+            "date": date,
+            "race_list_exists": False,
+            "total_races": 0,
+            "total_horses": 0,
+            "groups": [],
+        }
+
+    raw_races = race_list_data.get("races", [])
+    race_ids = [r["race_id"] for r in raw_races
+                if r.get("race_id") and _is_jra_race(r["race_id"])]
+    race_id_set = set(race_ids)
+
+    if not race_ids:
+        return {
+            "date": date,
+            "race_list_exists": True,
+            "total_races": 0,
+            "total_horses": 0,
+            "groups": [],
+        }
+
+    # 馬 ID 収集（horse 軸の派生カテゴリ用）
+    shutuba_blobs_main = storage.batch_list_blobs("race_shutuba", year)
+    all_horse_ids: list[str] = []
+    horse_id_set: set[str] = set()
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        futures = {
+            rid: pool.submit(storage.load, "race_shutuba", rid)
+            for rid in race_ids
+            if rid in shutuba_blobs_main
+        }
+        for rid, f in futures.items():
+            card = f.result()
+            if card:
+                for e in card.get("entries", []):
+                    hid = e.get("horse_id")
+                    if hid and hid not in horse_id_set:
+                        horse_id_set.add(hid)
+                        all_horse_ids.append(hid)
+
+    # 全派生カテゴリの blob 一覧を並列取得
+    all_derived_cats: list[str] = []
+    for g in _DERIVED_CATEGORY_GROUPS:
+        all_derived_cats.extend(g["categories"])
+
+    derived_blobs: dict[str, dict[str, float]] = {}
+    race_axis_cats = [c for g in _DERIVED_CATEGORY_GROUPS
+                      if g["axis"] == "race" for c in g["categories"]]
+    horse_axis_cats = [c for g in _DERIVED_CATEGORY_GROUPS
+                       if g["axis"] == "horse" for c in g["categories"]]
+
+    with ThreadPoolExecutor(max_workers=max(len(race_axis_cats), 1)) as pool:
+        futures_d = {
+            cat: pool.submit(storage.batch_list_blobs, cat, year)
+            for cat in race_axis_cats
+        }
+        for cat, f in futures_d.items():
+            derived_blobs[cat] = f.result()
+
+    if horse_axis_cats and all_horse_ids:
+        with ThreadPoolExecutor(max_workers=len(horse_axis_cats)) as pool:
+            futures_h = {
+                cat: pool.submit(storage.batch_check_keys, cat, all_horse_ids)
+                for cat in horse_axis_cats
+            }
+            for cat, f in futures_h.items():
+                derived_blobs[cat] = f.result()
+
+    # グループごとのカバレッジ集計
+    groups_result: list[dict] = []
+    for g in _DERIVED_CATEGORY_GROUPS:
+        cats_info: list[dict] = []
+        for cat in g["categories"]:
+            blobs = derived_blobs.get(cat, {})
+            if g["axis"] == "race":
+                total = len(race_ids)
+                count = sum(1 for rid in race_ids if rid in blobs)
+            else:
+                total = len(all_horse_ids)
+                count = sum(1 for hid in all_horse_ids if hid in blobs)
+            pct = round(count / total * 100, 1) if total > 0 else 0.0
+            cats_info.append({
+                "category": cat,
+                "label": _DERIVED_CATEGORY_LABELS.get(cat, cat),
+                "count": count,
+                "total": total,
+                "pct": pct,
+            })
+        groups_result.append({
+            "group": g["group"],
+            "source": g["source"],
+            "axis": g["axis"],
+            "categories": cats_info,
+        })
+
+    return {
+        "date": date,
+        "race_list_exists": True,
+        "total_races": len(race_ids),
+        "total_horses": len(all_horse_ids),
+        "groups": groups_result,
+    }
+
+
+@app.get("/api/date-race-matrix", response_class=JSONResponse)
+async def get_date_race_matrix(date: str = ""):
+    """
+    指定日の レース × カテゴリ マトリクスを返す。
+    各セル = GCS に該当 race_id のデータが存在するか。
+
+    ローカル coverage index (date_coverage/{date}.json) の race_ids をもとに
+    batch_list_blobs（年単位キャッシュ）で存在確認するため GCS コストを最小化。
+
+    返却形式:
+      {
+        "date": "20260614",
+        "race_ids": [...],
+        "categories": [...],
+        "race_meta": {"202606030101": {"race_num": 1, "venue": "阪神"}, ...},
+        "matrix": {"202606030101": {"race_shutuba": true, ...}, ...},
+        "local_index_updated_at": "..."
+      }
+    """
+    if not date or not (date.isdigit() and len(date) == 8):
+        return JSONResponse({"error": "日付(YYYYMMDD)を指定してください"}, status_code=400)
+
+    def _build():
+        from src.scraper.date_coverage import TRACK_CATEGORIES, load_date_coverage
+
+        cov = load_date_coverage(date)
+        if cov:
+            race_ids = cov.get("race_ids") or []
+            updated_at = cov.get("updated_at", "")
+        else:
+            # フォールバック: race_lists から取得
+            from pathlib import Path
+            import json
+            rl_path = Path("data/page_reference/race_lists") / f"{date}.json"
+            if not rl_path.exists():
+                return {"error": f"{date} の race_list が見つかりません", "race_ids": []}
+            rl = json.loads(rl_path.read_text(encoding="utf-8"))
+            race_ids = [r["race_id"] for r in rl.get("races", []) if r.get("race_id")]
+            updated_at = ""
+
+        if not race_ids:
+            return {"date": date, "race_ids": [], "categories": TRACK_CATEGORIES,
+                    "matrix": {}, "race_meta": {}, "local_index_updated_at": updated_at}
+
+        year = date[:4]
+        storage = _get_storage()
+
+        # 年単位でカテゴリごとのキーを取得（batch_list_blobs はキャッシュ済み）
+        cat_keys: dict[str, set[str]] = {}
+        for cat in TRACK_CATEGORIES:
+            try:
+                cat_keys[cat] = set(storage.batch_list_blobs(cat, year).keys())
+            except Exception:
+                cat_keys[cat] = set()
+
+        # N/A インデックスを読み込む（1ヶ月以上前の空レスポンスとして記録済みの race_id）
+        from src.scraper.date_coverage import load_not_available
+        cat_na: dict[str, set[str]] = {}
+        for cat in TRACK_CATEGORIES:
+            cat_na[cat] = load_not_available(cat, year)
+
+        # race_meta: race_id から race_num・場コードを推定
+        # race_id フォーマット: {year4}{venue2}{kaisai2}{day2}{race2}
+        _venue_map = {
+            "01": "札幌", "02": "函館", "03": "福島", "04": "新潟",
+            "05": "東京", "06": "中山", "07": "中京", "08": "京都",
+            "09": "阪神", "10": "小倉",
+        }
+        race_meta: dict[str, dict] = {}
+        for rid in race_ids:
+            if len(rid) >= 12:
+                venue_code = rid[4:6]
+                race_num = int(rid[10:12])
+                race_meta[rid] = {
+                    "race_num": race_num,
+                    "venue": _venue_map.get(venue_code, venue_code),
+                }
+
+        # マトリクス構築
+        # true  = データあり
+        # false = データなし（未取得）
+        # null  = データ取得試行済みだが存在しない（N/A）
+        matrix: dict[str, dict[str, bool | None]] = {}
+        for rid in race_ids:
+            row: dict[str, bool | None] = {}
+            for cat in TRACK_CATEGORIES:
+                if rid in cat_na[cat]:
+                    row[cat] = None   # N/A: 取得試行済みだが存在しない
+                elif rid in cat_keys[cat]:
+                    row[cat] = True   # データあり
+                else:
+                    row[cat] = False  # 未取得
+            matrix[rid] = row
+
+        return {
+            "date": date,
+            "race_ids": race_ids,
+            "categories": TRACK_CATEGORIES,
+            "race_meta": race_meta,
+            "matrix": matrix,
+            "local_index_updated_at": updated_at,
+        }
+
+    result = await asyncio.to_thread(_build)
+    return JSONResponse(result)
+
+
+# カテゴリ → スクレイピング対象タスク名のマッピング
+# 派生カテゴリは親タスクにマップして再スクレイピングで補完する
+_SCRAPE_MISSING_CATEGORY_MAP: dict[str, str] = {
+    "race_shutuba":              "race_shutuba",
+    "race_shutuba_meta":         "race_shutuba",         # race_shutuba の派生
+    "race_index":                "race_index",
+    "race_barometer":            "race_barometer",
+    "race_paddock":              "race_paddock",
+    "race_odds":                 "race_odds",
+    "race_result_on_time":       "race_result_on_time",
+    "race_result_on_time_payoff":"race_result_on_time",  # 派生
+    "race_result_on_time_lap":   "race_result_on_time",  # 派生
+    "race_result_on_time_corner":"race_result_on_time",  # 派生
+    "race_result":               "race_result",
+    "race_result_meta":          "race_result",          # 派生
+    "race_result_payoff":        "race_result",          # 派生
+    "race_result_track":         "race_result",          # 派生
+    "race_result_lap":           "race_result_lap",
+    "race_result_corner":        "race_result_lap",      # 派生
+    "race_result_lap_times":     "race_result_lap",      # 派生
+}
+
+
+class ScrapeMissingRequest(BaseModel):
+    date: str        # YYYYMMDD
+    category: str    # TRACK_CATEGORIES のいずれか
+    force: bool = False
+
+
+@app.post("/api/scrape-missing", response_class=JSONResponse)
+async def scrape_missing(body: ScrapeMissingRequest):
+    """
+    指定日 × カテゴリで GCS データが欠損しているレースを検出し、
+    スクレイピングをキューイングする。
+
+    派生カテゴリ（race_shutuba_meta 等）は親カテゴリのスクレイピングをキューイング。
+    返却値:
+      {
+        "enqueued": 3,
+        "skipped_already_queued": 1,
+        "missing_race_ids": [...],
+        "scrape_task": "race_shutuba",
+        "jobs": [{"job_id": ..., "race_id": ..., "status": ...}, ...]
+      }
+    """
+    date = body.date
+    category = body.category
+    force = body.force
+
+    if not date or not (date.isdigit() and len(date) == 8):
+        return JSONResponse({"error": "date は YYYYMMDD 形式で指定してください"}, status_code=400)
+
+    scrape_task = _SCRAPE_MISSING_CATEGORY_MAP.get(category)
+    if scrape_task is None:
+        return JSONResponse(
+            {"error": f"カテゴリ '{category}' はスクレイピング対象外です"},
+            status_code=400,
+        )
+
+    def _find_missing() -> list[str]:
+        from src.scraper.date_coverage import TRACK_CATEGORIES, load_date_coverage
+
+        cov = load_date_coverage(date)
+        if cov:
+            race_ids = cov.get("race_ids") or []
+        else:
+            from pathlib import Path
+            import json as _json
+            rl_path = Path("data/page_reference/race_lists") / f"{date}.json"
+            if not rl_path.exists():
+                return []
+            rl = _json.loads(rl_path.read_text(encoding="utf-8"))
+            race_ids = [r["race_id"] for r in rl.get("races", []) if r.get("race_id")]
+
+        if not race_ids:
+            return []
+
+        year = date[:4]
+        storage = _get_storage()
+        try:
+            existing_keys = set(storage.batch_list_blobs(category, year).keys())
+        except Exception:
+            existing_keys = set()
+
+        return [rid for rid in race_ids if rid not in existing_keys]
+
+    missing_race_ids = await asyncio.to_thread(_find_missing)
+
+    if not missing_race_ids:
+        return JSONResponse({
+            "enqueued": 0,
+            "skipped_already_queued": 0,
+            "missing_race_ids": [],
+            "scrape_task": scrape_task,
+            "jobs": [],
+            "message": "欠損データなし",
+        })
+
+    from src.scraper.job_queue import ScrapeJobQueue
+    queue = ScrapeJobQueue()
+    jobs = []
+    enqueued = 0
+    skipped = 0
+    overwrite = force
+    smart_skip = not force
+
+    for rid in missing_race_ids:
+        spec = {"job_kind": "race", "target_id": rid,
+                "tasks": [scrape_task], "overwrite": overwrite,
+                "smart_skip": smart_skip}
+        result = queue.add_job(spec)
+        action = result.get("action", result.get("status", "queued"))
+        if action in ("added", "queued"):
+            enqueued += 1
+        else:
+            skipped += 1
+        jobs.append({
+            "job_id": result.get("job_id", ""),
+            "race_id": rid,
+            "status": action,
+        })
+
+    _kick_scrape_queue_worker()
+
+    return JSONResponse({
+        "enqueued": enqueued,
+        "skipped_already_queued": skipped,
+        "missing_race_ids": missing_race_ids,
+        "scrape_task": scrape_task,
+        "jobs": jobs,
+    })
+
+
+@app.get("/api/row-data-coverage", response_class=JSONResponse)
+async def get_row_data_coverage(date: str = ""):
+    """
+    指定日の行固有派生カテゴリ（race_shutuba_meta 等）の GCS カバレッジを返す。
+    migrate_row_data_to_unique_paths.py の適用状況確認に使う。
+    """
+    if not date or not (date.isdigit() and len(date) == 8):
+        return JSONResponse(
+            {"error": "日付(YYYYMMDD)を指定してください"}, status_code=400)
+    result = await asyncio.to_thread(_build_row_data_coverage, date)
+    return JSONResponse(result)
+
+
 @app.get("/api/monitor/missing-dates-summary", response_class=JSONResponse)
 async def api_monitor_missing_dates_summary(
     max_dates: int = 200,
@@ -1895,7 +2388,7 @@ _SCRAPE_SUMMARY_FILTER_GEN = 4  # フィルタ条件変更時にインクリメ�
 
 
 _SUMMARY_SOURCES = [
-    "race_shutuba", "race_result", "race_index",
+    "race_shutuba", "race_result", "race_result_lap", "race_index",
     "race_odds", "race_pair_odds", "race_paddock", "race_barometer",
     "race_trainer_comment",
 ]
@@ -2063,6 +2556,97 @@ def _build_scrape_summary_all():
     _scrape_summary_cache["ts"] = now
     _scrape_summary_cache["gen"] = _SCRAPE_SUMMARY_FILTER_GEN
     return payload
+
+
+@app.get("/api/coverage-calendar", response_class=JSONResponse)
+async def get_coverage_calendar(year: str = ""):
+    """
+    年ごとのカテゴリ別カバレッジカレンダーを返す。
+
+    【優先度】
+      1. ローカル date_coverage インデックス (data/local/meta/date_coverage/)
+         → スクレイピング完了時に更新済みのため GCS コスト不要・高速。
+      2. ローカルに存在しない日は _build_scrape_summary_all() キャッシュでフォールバック。
+
+    返却形式:
+      {
+        "gcs_enabled": bool,
+        "source": "local_index" | "gcs_cache" | "mixed",
+        "categories": [...],
+        "dates": [
+          {
+            "date": "YYYYMMDD",
+            "total_races": int,
+            "per_cat": {"race_shutuba": 12, ...},
+            "pct": 85.3,
+            "source": "local" | "cache"
+          }, ...
+        ]
+      }
+    """
+    def _build():
+        from src.scraper.date_coverage import TRACK_CATEGORIES, load_year_coverage
+
+        target_years = [int(year)] if year else list(range(2020, datetime.now().year + 1))
+
+        result_dates: list[dict] = []
+        sources_used: set[str] = set()
+
+        for y in target_years:
+            local_cov = load_year_coverage(y)
+
+            if local_cov:
+                # ── ローカルインデックスから読む ──────────────────────────
+                for dt, cov in sorted(local_cov.items()):
+                    total = cov.get("total_races", 0)
+                    per_cat = cov.get("categories") or {}
+                    cats = TRACK_CATEGORIES
+                    vals = [per_cat.get(c, 0) for c in cats if total > 0]
+                    pct = round(sum(v / total * 100 for v in vals) / len(cats), 1) if (vals and total) else 0.0
+                    result_dates.append({
+                        "date": dt,
+                        "total_races": total,
+                        "per_cat": {c: per_cat.get(c, 0) for c in cats},
+                        "pct": pct,
+                        "source": "local",
+                    })
+                sources_used.add("local_index")
+            else:
+                # ── ローカルがなければ GCS キャッシュからフォールバック ──
+                summary = _build_scrape_summary_all()
+                all_dates = summary.get("dates") or []
+                year_str = str(y)
+                cats_fallback = _SUMMARY_SOURCES
+                for row in all_dates:
+                    dt = row.get("date", "")
+                    if not dt.startswith(year_str):
+                        continue
+                    prog = row.get("progress") or {}
+                    per_cat = prog.get("per_cat") or {}
+                    result_dates.append({
+                        "date": dt,
+                        "total_races": row.get("total_races", 0),
+                        "per_cat": {c: per_cat.get(c, 0) for c in cats_fallback},
+                        "pct": prog.get("pct", 0),
+                        "source": "cache",
+                    })
+                sources_used.add("gcs_cache")
+
+        cats_final = TRACK_CATEGORIES if "local_index" in sources_used else _SUMMARY_SOURCES
+        source_label = (
+            "mixed" if len(sources_used) > 1
+            else ("local_index" if "local_index" in sources_used else "gcs_cache")
+        )
+
+        return {
+            "gcs_enabled": _get_storage().gcs_enabled,
+            "source": source_label,
+            "categories": cats_final,
+            "dates": sorted(result_dates, key=lambda x: x["date"]),
+        }
+
+    result = await asyncio.to_thread(_build)
+    return JSONResponse(result)
 
 
 def _sync_enqueue_incomplete_summary_dates(body: dict | None) -> dict[str, Any]:
@@ -3331,6 +3915,12 @@ def _category_from_queue_tasks(tasks: list) -> str:
     return t
 
 
+def _queue_job_is_schema_validation_failure(job: dict) -> bool:
+    return job.get("failure_reason") == "schema_validation" or str(
+        job.get("error") or ""
+    ).startswith("[schema_validation]")
+
+
 @app.post("/api/scrape-trigger", response_class=JSONResponse)
 async def trigger_scrape(body: ScrapeRequest):
     """
@@ -3460,6 +4050,7 @@ async def get_scrape_jobs():
             "started_running_at": started_at,
             "finished_at": completed_at,
             "error": j.get("error"),
+            "failure_reason": j.get("failure_reason"),
             "progress": {
                 "current": prog.get("done", 0),
                 "total": prog.get("total", 0),
@@ -3480,14 +4071,44 @@ async def get_scrape_jobs():
     queued_count = sum(1 for j in result_jobs if j["status"] == "queued")
     n_workers = _queue_parallel_workers()
 
+    schema_validation_failures: list[dict[str, Any]] = []
+    for j in q_jobs:
+        if j.get("status") != "failed":
+            continue
+        if not _queue_job_is_schema_validation_failure(j):
+            continue
+        tasks = j.get("tasks") or j.get("types") or []
+        schema_validation_failures.append(
+            {
+                "job_id": j.get("job_id"),
+                "race_id": str(j.get("target_id") or j.get("race_id") or ""),
+                "category": _category_from_queue_tasks(tasks),
+                "completed_at": j.get("completed_at"),
+                "error": j.get("error"),
+                "failure_reason": j.get("failure_reason"),
+            }
+        )
+    schema_validation_failures.sort(
+        key=lambda x: (x.get("completed_at") or "", str(x.get("job_id") or "")),
+        reverse=True,
+    )
+    schema_validation_failures = schema_validation_failures[:50]
+    n_schema_failed = sum(
+        1
+        for j in q_jobs
+        if j.get("status") == "failed" and _queue_job_is_schema_validation_failure(j)
+    )
+
     return JSONResponse({
         "jobs": result_jobs,
+        "schema_validation_failures": schema_validation_failures,
         "stats": {
             "running": running_count,
             "queued": queued_count,
             "max_concurrent": n_workers,
             "slots_available": max(0, n_workers - running_count),
             "total_requests": 0,
+            "schema_validation_failed": n_schema_failed,
         },
     })
 
@@ -3759,7 +4380,7 @@ async def api_scrape_queue_worker_logs(
     limit: int = Query(300, ge=1, le=800),
 ):
     """
-    キュー実行スレッド中の scraper.* / queue.* / urllib3 等のログ行（メモリリング）。
+    キュー実行中の scraper.* / queue.* のログ行（ファイルリング＋メモリを API 側でマージ）。
     """
     try:
         from src.scraper.queue_worker_log import ensure_queue_worker_log_handler, get_worker_logs
@@ -5754,9 +6375,26 @@ async def api_race_result_status(race_id: str):
     return JSONResponse(await asyncio.to_thread(_run))
 
 
+@app.get("/api/tracking-difficulty/status", response_class=JSONResponse)
+async def api_tracking_difficulty_status():
+    """事前計算ストアの件数・パス（読み取り専用）。"""
+    from src.pipeline.inference.tracking_difficulty_store import (
+        count_local,
+        index_meta,
+        store_dir,
+    )
+
+    meta = index_meta()
+    return JSONResponse({
+        "store_dir": str(store_dir()),
+        "race_count": count_local(),
+        "index_meta": meta,
+    })
+
+
 @app.get("/api/race/{race_id}/tracking-difficulty", response_class=JSONResponse)
 async def api_tracking_difficulty(race_id: str, refresh: bool = False):
-    """追走難度・ペース・位置取り（storage キャッシュ優先、refresh=true で再計算）。"""
+    """追走難度・ペース・位置取り（calculated_data 事前計算を返す。refresh=true で再計算）。"""
     def _run():
         from src.pipeline.inference.tracking_difficulty_service import get_or_compute
 
@@ -5765,11 +6403,15 @@ async def api_tracking_difficulty(race_id: str, refresh: bool = False):
             race_id,
             force_refresh=refresh,
             allow_scrape=refresh,
+            allow_compute_on_miss=refresh,
         )
 
     try:
         result = await asyncio.to_thread(_run)
-        return JSONResponse(_tracking_difficulty_public_payload(result))
+        payload = _tracking_difficulty_public_payload(result)
+        if result.get("status") == "not_precomputed":
+            return JSONResponse(payload, status_code=404)
+        return JSONResponse(payload)
     except Exception as e:
         import traceback
         return JSONResponse({
@@ -5791,6 +6433,9 @@ async def api_precompute_tracking_difficulty(race_id: str):
         payload = build_tracking_difficulty_response(race_id, storage, allow_scrape=False)
         if payload.get("entries"):
             save_cached_response(storage, race_id, payload, source="precompute_api")
+            from src.pipeline.inference.tracking_difficulty_store import update_index_meta
+
+            update_index_meta(batch_source="precompute_api")
         return payload
 
     try:
@@ -6488,6 +7133,18 @@ _AUTO_SCRAPE_TASKS: dict[str, dict] = {
         "schedule": "金曜 17:30 JST",
         "tags": ["race_result", "確定レース結果", "odds", "確定オッズ", "pair_odds", "確定2連複/馬連", "SmartRC指数"],
     },
+    "horse-name-index": {
+        "name": "馬名インデックス",
+        "description": "馬名リスト再構築 + 成長曲線データ一括更新（calculated_data）",
+        "schedule": "金曜 18:00 JST",
+        "tags": ["horse_name_index", "horse_result", "growth_curve", "成長曲線"],
+    },
+    "growth-curve-weekly": {
+        "name": "成長曲線週次更新",
+        "description": "馬名インデックス対象全頭の成長曲線を最新化",
+        "schedule": "金曜 18:00 JST（horse-name-index 内で実行）",
+        "tags": ["growth_curve", "horse_result", "成長曲線"],
+    },
     "jra-baba-morning": {
         "name": "JRA馬場情報",
         "description": "JRA公式馬場ページからクッション値・含水率・馬場状態を朝取得（変更検知方式）",
@@ -6496,8 +7153,8 @@ _AUTO_SCRAPE_TASKS: dict[str, dict] = {
     },
 }
 
-_AUTO_SCRAPE_STATUS_FILE = os.path.join(BASE_DIR, "data", "meta", "auto_scrape_status.json")
-_AUTO_SCRAPE_PYTHON = "/home/hirokiakataoka/miniconda3/bin/python3"
+_AUTO_SCRAPE_STATUS_FILE = os.path.join(BASE_DIR, "data", "local", "meta", "auto_scrape_status.json")
+_AUTO_SCRAPE_STATUS_LEGACY = os.path.join(BASE_DIR, "data", "meta", "auto_scrape_status.json")
 
 
 def _auto_scrape_is_running(task: str) -> bool:
@@ -6513,11 +7170,15 @@ def _auto_scrape_is_running(task: str) -> bool:
 
 
 def _load_auto_scrape_status() -> dict:
-    try:
-        with open(_AUTO_SCRAPE_STATUS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    for path in (_AUTO_SCRAPE_STATUS_FILE, _AUTO_SCRAPE_STATUS_LEGACY):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and data:
+                    return data
+        except Exception:
+            continue
+    return {}
 
 
 @app.get("/api/admin/system-stats", response_class=JSONResponse)
@@ -6668,19 +7329,29 @@ async def get_auto_scrape_status():
             "run_count": 0,
             "trigger_endpoint": f"/api/admin/auto-scrape/{task_id}/trigger",
         })
-    return JSONResponse({"jobs": jobs})
+    return JSONResponse({
+        "jobs": jobs,
+        "scraping_queue_note": (
+            "auto_scrape の netkeiba 取得は既定で data/queue/scrape_queue.json に投入され、"
+            "キューワーカーが ScraperRunner を実行します（KEIBA_AUTO_SCRAPE_USE_QUEUE=0 で従来の直取得）。"
+            "JRA 馬場ライブ・馬名インデックス等はキュー対象外です。"
+        ),
+    })
 
 
 @app.post("/api/admin/auto-scrape/{task}/trigger", response_class=JSONResponse)
 async def trigger_auto_scrape(task: str):
     """auto_scrape タスクを即時起動する（非同期サブプロセス）。"""
     import subprocess as _sp
+    import sys
+
     if task not in _AUTO_SCRAPE_TASKS:
         return JSONResponse({"status": "error", "message": f"Unknown task: {task}"}, status_code=400)
     if _auto_scrape_is_running(task):
         return JSONResponse({"status": "already_running"})
+    py = sys.executable or "python3"
     _sp.Popen(
-        [_AUTO_SCRAPE_PYTHON, "-m", "src.scraper.auto_scrape", "--task", task],
+        [py, "-m", "src.scraper.auto_scrape", "--task", task],
         cwd=BASE_DIR,
         stdout=_sp.DEVNULL,
         stderr=_sp.DEVNULL,
@@ -9056,9 +9727,9 @@ def _run_bloodline_analysis(years: list[str] | None, source: str):
     try:
         from src.research.pedigree.bloodline_distance import BloodlineDistanceAnalyzer
 
-        _base = os.path.join(os.path.dirname(__file__), "..", "..")
-        _out = os.path.join(_base, "data", "research", "bloodline")
-        analyzer = BloodlineDistanceAnalyzer(output_dir=_out)
+        from src.config.data_paths import BLOODLINE_DIR
+
+        analyzer = BloodlineDistanceAnalyzer(output_dir=str(BLOODLINE_DIR))
 
         if source == "csv":
             analyzer.load_from_csv(os.path.join(_base, "data", "features"))
@@ -9076,7 +9747,7 @@ def _run_bloodline_analysis(years: list[str] | None, source: str):
             "n_records": len(df),
             "n_sires": int(df["sire"].nunique()),
             "n_dam_sires": int(df["dam_sire"].nunique()),
-            "report_path": "data/research/bloodline/bloodline_distance_report.html",
+            "report_path": "data/calculated_data/bloodline/bloodline_distance_report.html",
         }
     except Exception as e:
         _bloodline_job["error"] = str(e)
@@ -9980,11 +10651,10 @@ async def api_course_bloodline_analyze(request: Request, background_tasks: Backg
 
 def _run_course_bl_analysis(years: list[str] | None):
     try:
+        from src.config.data_paths import COURSE_BLOODLINE_DIR
         from src.research.race.course_bloodline import CourseBloodlineAnalyzer
-        _base = os.path.join(os.path.dirname(__file__), "..", "..")
-        _out = os.path.join(_base, "data", "research", "course_bloodline")
 
-        analyzer = CourseBloodlineAnalyzer(output_dir=_out)
+        analyzer = CourseBloodlineAnalyzer(output_dir=str(COURSE_BLOODLINE_DIR))
         analyzer.load_from_gcs(years=years)
 
         if analyzer.df.empty:
@@ -10143,12 +10813,12 @@ async def api_cushion_data(
     venue_code: str | None = None,
     venue_name: str | None = None,
 ):
-    from pathlib import Path as _P
-    data_path = _P(os.path.dirname(__file__)).parent / "data" / "local" / "jra_baba" / "cushion_values.json"
-    if not data_path.exists():
+    from src.config.data_paths import CUSHION_VALUES_JSON
+
+    if not CUSHION_VALUES_JSON.is_file():
         return JSONResponse({"error": "クッション値データなし"}, status_code=404)
 
-    records = json.loads(data_path.read_text(encoding="utf-8"))
+    records = json.loads(CUSHION_VALUES_JSON.read_text(encoding="utf-8"))
     if year:
         records = [r for r in records if r.get("year") == year]
     if venue_code:
@@ -10161,12 +10831,12 @@ async def api_cushion_data(
 
 @app.get("/api/cushion/stats")
 async def api_cushion_stats():
-    from pathlib import Path as _P
-    data_path = _P(os.path.dirname(__file__)).parent / "data" / "local" / "jra_baba" / "cushion_values.json"
-    if not data_path.exists():
+    from src.config.data_paths import CUSHION_VALUES_JSON
+
+    if not CUSHION_VALUES_JSON.is_file():
         return JSONResponse({"error": "データなし"}, status_code=404)
 
-    records = json.loads(data_path.read_text(encoding="utf-8"))
+    records = json.loads(CUSHION_VALUES_JSON.read_text(encoding="utf-8"))
     by_year: dict[int, int] = {}
     by_venue: dict[str, int] = {}
     for r in records:
@@ -10950,16 +11620,14 @@ async def myostatin_page(request: Request):
 @app.get("/api/myostatin", response_class=JSONResponse)
 async def myostatin_data():
     import json as _json
-    from pathlib import Path
-    # app.py は src/api/app.py に位置するため、project root は parents[2]。
-    # (parents[3] だと project の親 = キーノット外を指してしまい、KB が見つからない)
-    kb_path = Path(__file__).resolve().parents[2] / "data" / "local" / "knowledge" / "myostatin_genes.json"
-    if not kb_path.exists():
+    from src.config.data_paths import MYOSTATIN_GENES_JSON
+
+    if not MYOSTATIN_GENES_JSON.is_file():
         return JSONResponse(
-            {"error": "KB not found", "checked_path": str(kb_path)},
+            {"error": "KB not found", "checked_path": str(MYOSTATIN_GENES_JSON)},
             status_code=404,
         )
-    data = _json.loads(kb_path.read_text(encoding="utf-8"))
+    data = _json.loads(MYOSTATIN_GENES_JSON.read_text(encoding="utf-8"))
     return JSONResponse(data)
 
 
@@ -11244,272 +11912,64 @@ def _enrich_race_with_speed_index(
     return race, False
 
 
-_growth_curve_cache: dict[str, tuple[float, dict]] = {}
-_GROWTH_CURVE_CACHE_TTL = 120  # 2 minutes
+def _growth_curve_public_payload(data: dict) -> dict:
+    return {k: v for k, v in data.items() if not str(k).startswith("_")}
+
+
+@app.get("/api/growth-curve/status", response_class=JSONResponse)
+async def api_growth_curve_status():
+    """成長曲線ローカルストアの件数・パス。"""
+    from src.pipeline.inference.growth_curve_store import count_local, index_meta, store_dir
+
+    return JSONResponse({
+        "store_dir": str(store_dir()),
+        "horse_count": count_local(),
+        "index_meta": index_meta(),
+    })
 
 
 @app.get("/api/growth-curve/{horse_id}", response_class=JSONResponse)
 async def growth_curve_data(
     horse_id: str,
-    fetch_speed_index: bool = True,
+    fetch_speed_index: bool = False,
     force_refresh: bool = False,
-    limit: Optional[int] = None
+    allow_compute: bool = True,
+    jra_only: bool = True,
+    limit: Optional[int] = None,
 ):
     """
-    馬の成長曲線データを返す。
+    馬の成長曲線データ（calculated_data ローカル優先。計算成功時は随時蓄積）。
 
-    Args:
-        horse_id: 馬ID
-        fetch_speed_index: タイム指数を取得するか（デフォルト: True）
-        force_refresh: race_indexを強制的に再スクレイピングするか（デフォルト: False）
-        limit: 表示する直近レース数（デフォルト: None = 全て）
-
-    Returns:
-        - horse_name: 馬名
-        - races: 出走履歴（日付、馬体重、着順、レース間隔等）
-        - stats: 統計情報
+    通常 GET はローカル JSON のみ（GCS 読み取りなし）。
+    未計算時は ``allow_compute=true`` で horse_result から 1 回だけ計算可能。
+    ``force_refresh=true`` で再計算。``fetch_speed_index=true`` は race_index 補完（GCS 増）。
+    デフォルトは中央競馬のみ（``jra_only=false`` で地方・海外を含む全会場）。
     """
+    def _run():
+        from src.pipeline.inference.growth_curve_service import get_growth_curve
+
+        return get_growth_curve(
+            _get_storage(),
+            horse_id,
+            fetch_speed_index=fetch_speed_index or force_refresh,
+            force_refresh=force_refresh,
+            limit=limit,
+            jra_only=jra_only,
+            allow_compute_on_miss=allow_compute or force_refresh,
+            race_index_gcs=fetch_speed_index or force_refresh,
+            enqueue_missing=force_refresh,
+        )
+
     try:
-        import time as _time_mod
-        # キャッシュチェック（force_refreshは除く）
-        if not force_refresh:
-            _cache_key = f"{horse_id}:{limit}:{fetch_speed_index}"
-            _cached = _growth_curve_cache.get(_cache_key)
-            if _cached and (_time_mod.time() - _cached[0]) < _GROWTH_CURVE_CACHE_TTL:
-                return JSONResponse(_cached[1])
-
-        storage = _get_storage()
-
-        # force_refreshの場合、既存のhorse_resultを削除して再スクレイピング
-        if force_refresh:
-            import os
-            year = horse_id[:4]
-            local_path = os.path.join(storage._local_dir, "horse_result", year, f"{horse_id}.json")
-            if os.path.exists(local_path):
-                os.remove(local_path)
-                logger.info(f"古いhorse_resultを削除: {horse_id}")
-
-            # 再スクレイピングを実行
-            logger.info(f"horse_resultを再スクレイピング: {horse_id}")
-            from src.scraper.run import ScraperRunner
-            runner = ScraperRunner(interval=1.0, auto_login=True)
-            runner.storage = storage
-
-            # ログイン状態を確認
-            if runner.client._logged_in:
-                logger.info(f"✓ ログイン済み")
-            else:
-                logger.warning(f"✗ ログインしていません。タイム指数は取得できません。")
-
-            horse_data = runner.scrape_horse(horse_id, skip_existing=False, with_history=True)
-
-            if not horse_data:
-                return JSONResponse({"error": f"馬ID {horse_id} のスクレイピングに失敗しました"}, status_code=500)
-
-            # タイム指数の取得状況をログ出力
-            if horse_data.get("race_history"):
-                races_with_index = sum(1 for r in horse_data["race_history"] if r.get("time_index", 0) > 0)
-                total_races = len(horse_data["race_history"])
-                logger.info(f"タイム指数取得: {races_with_index}/{total_races}レース")
-
-                # 最初のレースのtime_indexをログ出力（デバッグ用）
-                first_race = horse_data["race_history"][0]
-                logger.info(f"最新レース: {first_race.get('race_name')} - time_index={first_race.get('time_index', 0)}")
-        else:
-            # 通常の取得
-            horse_data = storage.load("horse_result", horse_id)
-            if not horse_data:
-                return JSONResponse({"error": f"馬ID {horse_id} のデータが見つかりません"}, status_code=404)
-
-        horse_name = horse_data.get("horse_name", "不明")
-        results_all = horse_data.get("race_history", horse_data.get("results", []))
-        total_race_count = len(results_all)
-
-        # limitを先に適用してGCSフェッチ対象を絞り込む
-        results = sorted(results_all, key=lambda r: r.get("date", ""), reverse=True)
-        if limit and limit > 0:
-            results = results[:limit]
-
-        # タイム指数を補完（必要に応じてキューに追加）
-        scraping_status = {
-            "required_races": 0,
-            "completed_races": 0,
-            "pending_races": 0,
-        }
-
-        # タイム指数のステータス確認（2024/1/1以降のみ対象）
-        if fetch_speed_index:
-            for race in results:
-                if race.get("time_index") and race.get("time_index") > 0:
-                    scraping_status["completed_races"] += 1
-                elif race.get("date", "").replace("/", "-") >= "2024-01-01":
-                    scraping_status["required_races"] += 1
-
-            # force_refreshの場合は何もしない（horse_result再取得で完了）
-            if not force_refresh and scraping_status["required_races"] > 0:
-                from src.scraper.job_queue import ScrapeJobQueue
-                from concurrent.futures import ThreadPoolExecutor as _GcPool
-                queue = ScrapeJobQueue()
-
-                need_idx = [
-                    (i, race)
-                    for i, race in enumerate(results)
-                    if (not race.get("time_index") or race.get("time_index") == 0)
-                    and race.get("horse_number") and race.get("race_id")
-                    and race.get("date", "").replace("/", "-") >= "2024-01-01"
-                ]
-                if need_idx:
-                    rids = list({r.get("race_id") for _, r in need_idx if r.get("race_id")})
-                    idx_map: dict[str, dict] = {}
-                    def _load_idx(rid):
-                        return rid, storage.load("race_index", rid)
-                    with _GcPool(max_workers=min(len(rids), 20)) as pool:
-                        for rid, data in pool.map(_load_idx, rids):
-                            if data:
-                                idx_map[rid] = data
-
-                    _jobs_to_add = []
-                    for i, race in need_idx:
-                        race_id = race.get("race_id")
-                        horse_number = race.get("horse_number")
-                        speed_data = idx_map.get(race_id)
-                        if speed_data and "entries" in speed_data:
-                            for entry in speed_data["entries"]:
-                                if entry.get("horse_number") == horse_number:
-                                    ti = (entry.get("time_index_m")
-                                          or entry.get("speed_max")
-                                          or entry.get("speed_avg"))
-                                    if ti and ti > 0:
-                                        race["time_index"] = ti
-                                        results[i] = race
-                                        scraping_status["completed_races"] += 1
-                                        scraping_status["required_races"] -= 1
-                                    break
-                        elif not speed_data and queue:
-                            _jobs_to_add.append({
-                                "job_kind": "race",
-                                "target_id": race_id,
-                                "tasks": ["race_index"],
-                                "priority": 1,
-                                "job_label": f"タイム指数: {race_id}",
-                            })
-                    if _jobs_to_add:
-                        queue.bulk_add_jobs(_jobs_to_add)
-                        scraping_status["pending_races"] += len(_jobs_to_add)
-
-        if not results:
-            return JSONResponse({"error": "出走履歴が見つかりません"}, status_code=404)
-
-        # 出走履歴を古い順（昇順）にソート（日付でソート）
-        # レース間隔を正しく計算するため、古い順に処理する
-        results_sorted = sorted(results, key=lambda r: r.get("date", ""), reverse=False)
-
-        # 出走履歴を処理
-        races = []
-        prev_date = None
-        weights = []
-        ranks = []
-
-        for i, race in enumerate(results_sorted):
-            date_str = race.get("date", "")
-            weight = race.get("weight")
-            weight_diff = race.get("weight_change", race.get("weight_diff"))
-
-            # 着順を数値化（finish_positionまたはrank）
-            rank = race.get("finish_position", race.get("rank"))
-            if rank and isinstance(rank, str):
-                try:
-                    rank = int(rank) if rank.isdigit() else None
-                except:
-                    rank = None
-            elif rank == 0 or rank == -1:
-                rank = None
-
-            # レース間隔を計算
-            interval_days = None
-            if prev_date and date_str:
-                try:
-                    from datetime import datetime
-                    curr_date = datetime.strptime(date_str.replace("/", "-"), "%Y-%m-%d")
-                    prev_date_obj = datetime.strptime(prev_date.replace("/", "-"), "%Y-%m-%d")
-                    interval_days = (curr_date - prev_date_obj).days
-                except:
-                    pass
-
-            # タイム指数（簡易版：存在すれば使用）
-            time_index = race.get("time_index") or race.get("speed_index")
-
-            race_info = {
-                "date": date_str,
-                "venue": race.get("venue", ""),
-                "race_name": race.get("race_name", ""),
-                "surface": race.get("surface", ""),
-                "distance": race.get("distance"),
-                "track_condition": race.get("track_condition", ""),
-                "rank": rank,
-                "field_size": race.get("field_size"),
-                "weight": weight,
-                "weight_diff": weight_diff,
-                "weight_change": weight_diff,
-                "interval_days": interval_days,
-                "time": race.get("finish_time", race.get("time", "")),
-                "time_index": time_index,
-            }
-            races.append(race_info)
-
-            if weight:
-                weights.append(weight)
-            if rank:
-                ranks.append(rank)
-
-            prev_date = date_str
-
-        # デビュー時馬体重（全レース中最古の馬体重あり出走）
-        debut_weight = None
-        debut_date = None
-        for r in sorted(results_all, key=lambda x: x.get("date", "")):
-            w = r.get("weight")
-            if w:
-                debut_weight = w
-                debut_date = r.get("date")
-                break
-
-        # 統計情報
-        stats = {
-            "horse_name": horse_name,
-            "total_races": len(races),
-            "avg_weight": sum(weights) / len(weights) if weights else 0,
-            "weight_range": [min(weights), max(weights)] if weights else [0, 0],
-            "best_rank": min(ranks) if ranks else None,
-            "avg_rank": sum(ranks) / len(ranks) if ranks else None,
-        }
-
-        # レースを新しい順（降順）に戻す（フロントエンド表示用）
-        races.reverse()
-
-        response = {
-            **stats,
-            "total_all_races": total_race_count,
-            "debut_weight": debut_weight,
-            "debut_date": debut_date,
-            "races": races,
-        }
-
-        # スクレイピングステータスを追加（必要な場合のみ）
-        if scraping_status["required_races"] > 0 or scraping_status["pending_races"] > 0:
-            response["scraping_status"] = scraping_status
-
-        # キャッシュ書き込み
-        if not force_refresh:
-            _growth_curve_cache[_cache_key] = (_time_mod.time(), response)
-            if len(_growth_curve_cache) > 500:
-                oldest = min(_growth_curve_cache, key=lambda k: _growth_curve_cache[k][0])
-                del _growth_curve_cache[oldest]
-
-        return JSONResponse(response)
-
+        result = await asyncio.to_thread(_run)
+        payload = _growth_curve_public_payload(result)
+        if result.get("status") in ("no_horse_result", "no_races", "not_precomputed"):
+            return JSONResponse(payload, status_code=404)
+        if force_refresh and result.get("error") and not result.get("races"):
+            return JSONResponse(payload, status_code=500)
+        return JSONResponse(payload)
     except Exception as e:
-        logger.error(f"成長曲線データ取得エラー: {e}", exc_info=True)
+        logger.error("成長曲線データ取得エラー: %s", e, exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
 
 

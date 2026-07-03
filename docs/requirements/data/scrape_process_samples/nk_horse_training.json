@@ -1,0 +1,1138 @@
+{
+  "horse_id": "2019105219",
+  "total_items": 9,
+  "pages_fetched": 1,
+  "entries": [
+    {
+      "race_info": "2023/11/26  東京12R ジャパンカップ 結果 ： 1着",
+      "date": "2023-11-22",
+      "day_of_week": "水",
+      "course": "美Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "84.6 67.5 52.4 37.8 11.3",
+      "lap_times": [
+        84.6,
+        67.5,
+        52.4,
+        37.8,
+        11.3
+      ],
+      "position": "3",
+      "leg_color": "馬也",
+      "evaluation": "気配抜群",
+      "rank": "A",
+      "comment": "この時季でも毛ヅヤはピカピカで、走りのリズムも非常にいい。反動は皆無。"
+    },
+    {
+      "race_info": "2023/11/26  東京12R ジャパンカップ 結果 ： 1着",
+      "date": "2023-11-19",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 52.7 38.4 25.2 12.3",
+      "lap_times": [
+        52.7,
+        38.4,
+        25.2,
+        12.3
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/11/26  東京12R ジャパンカップ 結果 ： 1着",
+      "date": "2023-11-15",
+      "day_of_week": "水",
+      "course": "美Ｗ",
+      "track_condition": "稍",
+      "rider": "助手",
+      "time_raw": "(7)97.7 66.2 51.5 37.3 11.4",
+      "lap_times": [
+        66.2,
+        51.5,
+        37.3,
+        11.4
+      ],
+      "position": "3",
+      "leg_color": "馬也",
+      "evaluation": "気配抜群",
+      "rank": "A",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/11/26  東京12R ジャパンカップ 結果 ： 1着",
+      "date": "2023-11-12",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 54.9 40.1 26.0 12.8",
+      "lap_times": [
+        54.9,
+        40.1,
+        26.0,
+        12.8
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/10/29  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2023-10-25",
+      "day_of_week": "水",
+      "course": "美Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "84.7 67.6 52.5 37.3 11.3",
+      "lap_times": [
+        84.7,
+        67.6,
+        52.5,
+        37.3,
+        11.3
+      ],
+      "position": "4",
+      "leg_color": "馬也",
+      "evaluation": "気配抜群",
+      "rank": "A",
+      "comment": "直線では２頭の間をこじ開けるように伸びてきた。長めを乗り込み、態勢万全。"
+    },
+    {
+      "race_info": "2023/10/29  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2023-10-22",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 53.6 38.8 25.2 12.0",
+      "lap_times": [
+        53.6,
+        38.8,
+        25.2,
+        12.0
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/10/29  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2023-10-18",
+      "day_of_week": "水",
+      "course": "美Ｗ",
+      "track_condition": "良",
+      "rider": "ルメー",
+      "time_raw": "(7)93.7 65.4 51.4 37.4 11.8",
+      "lap_times": [
+        65.4,
+        51.4,
+        37.4,
+        11.8
+      ],
+      "position": "5",
+      "leg_color": "馬也",
+      "evaluation": "好気配",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/10/29  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2023-10-15",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "重",
+      "rider": "助手",
+      "time_raw": "- 53.7 39.1 25.4 12.4",
+      "lap_times": [
+        53.7,
+        39.1,
+        25.4,
+        12.4
+      ],
+      "position": "",
+      "leg_color": "Ｇ強",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/10/29  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2023-10-11",
+      "day_of_week": "水",
+      "course": "美Ｗ",
+      "track_condition": "稍",
+      "rider": "助手",
+      "time_raw": "(8)113.5 67.4 52.5 38.2 12.2",
+      "lap_times": [
+        67.4,
+        52.5,
+        38.2,
+        12.2
+      ],
+      "position": "4",
+      "leg_color": "馬也",
+      "evaluation": "好気配",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/10/29  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2023-10-08",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 55.8 41.2 26.9 13.1",
+      "lap_times": [
+        55.8,
+        41.2,
+        26.9,
+        13.1
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/10/29  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2023-10-04",
+      "day_of_week": "水",
+      "course": "美Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "86.1 69.2 54.2 39.4 12.4",
+      "lap_times": [
+        86.1,
+        69.2,
+        54.2,
+        39.4,
+        12.4
+      ],
+      "position": "4",
+      "leg_color": "馬也",
+      "evaluation": "好気配",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/10/29  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2023-10-01",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 60.0 43.1 28.5 14.0",
+      "lap_times": [
+        60.0,
+        43.1,
+        28.5,
+        14.0
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/06/25  阪神11R 宝塚記念 結果 ： 1着",
+      "date": "2023-06-21",
+      "day_of_week": "水",
+      "course": "ＣＷ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "82.4 67.9 53.1 37.4 11.3",
+      "lap_times": [
+        82.4,
+        67.9,
+        53.1,
+        37.4,
+        11.3
+      ],
+      "position": "5",
+      "leg_color": "馬也",
+      "evaluation": "本調子",
+      "rank": "A",
+      "comment": "追うごとに気持ちが入り、今週は機敏な走りで鋭い伸び脚。盤石の仕上がり。"
+    },
+    {
+      "race_info": "2023/06/25  阪神11R 宝塚記念 結果 ： 1着",
+      "date": "2023-06-18",
+      "day_of_week": "日",
+      "course": "栗坂",
+      "track_condition": "良",
+      "rider": "",
+      "time_raw": "- 53.1 38.0 24.2 11.8",
+      "lap_times": [
+        53.1,
+        38.0,
+        24.2,
+        11.8
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/06/25  阪神11R 宝塚記念 結果 ： 1着",
+      "date": "2023-06-14",
+      "day_of_week": "水",
+      "course": "ＣＷ",
+      "track_condition": "良",
+      "rider": "ルメー",
+      "time_raw": "79.3 65.0 50.8 36.8 11.6",
+      "lap_times": [
+        79.3,
+        65.0,
+        50.8,
+        36.8,
+        11.6
+      ],
+      "position": "5",
+      "leg_color": "馬也",
+      "evaluation": "追毎良化",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/06/25  阪神11R 宝塚記念 結果 ： 1着",
+      "date": "2023-06-11",
+      "day_of_week": "日",
+      "course": "栗坂",
+      "track_condition": "重",
+      "rider": "",
+      "time_raw": "- 54.8 38.5 24.5 12.0",
+      "lap_times": [
+        54.8,
+        38.5,
+        24.5,
+        12.0
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/06/25  阪神11R 宝塚記念 結果 ： 1着",
+      "date": "2023-06-08",
+      "day_of_week": "木",
+      "course": "ＣＷ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "84.2 69.3 54.4 39.4 12.2",
+      "lap_times": [
+        84.2,
+        69.3,
+        54.4,
+        39.4,
+        12.2
+      ],
+      "position": "5",
+      "leg_color": "馬也",
+      "evaluation": "動き軽快",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/06/25  阪神11R 宝塚記念 結果 ： 1着",
+      "date": "2023-06-03",
+      "day_of_week": "土",
+      "course": "南Ｗ",
+      "track_condition": "重",
+      "rider": "助手",
+      "time_raw": "85.5 69.9 55.1 39.9 12.2",
+      "lap_times": [
+        85.5,
+        69.9,
+        55.1,
+        39.9,
+        12.2
+      ],
+      "position": "4",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/06/25  阪神11R 宝塚記念 結果 ： 1着",
+      "date": "2023-06-01",
+      "day_of_week": "木",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "(7)100.8 69.9 54.8 40.1 12.7",
+      "lap_times": [
+        69.9,
+        54.8,
+        40.1,
+        12.7
+      ],
+      "position": "3",
+      "leg_color": "馬也",
+      "evaluation": "好気配",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2023/06/25  阪神11R 宝塚記念 結果 ： 1着",
+      "date": "2023-05-28",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 58.8 43.1 28.2 13.8",
+      "lap_times": [
+        58.8,
+        43.1,
+        28.2,
+        13.8
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/12/25  中山11R 有馬記念 結果 ： 1着",
+      "date": "2022-12-21",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "84.7 67.2 52.2 37.6 11.4",
+      "lap_times": [
+        84.7,
+        67.2,
+        52.2,
+        37.6,
+        11.4
+      ],
+      "position": "4",
+      "leg_color": "馬也",
+      "evaluation": "気配抜群",
+      "rank": "A",
+      "comment": "自らグイグイ進んで馬なりのまま突き抜けた。この時季でも毛ヅヤはピカピカ。"
+    },
+    {
+      "race_info": "2022/12/25  中山11R 有馬記念 結果 ： 1着",
+      "date": "2022-12-18",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "稍",
+      "rider": "助手",
+      "time_raw": "- 53.5 39.1 25.1 12.1",
+      "lap_times": [
+        53.5,
+        39.1,
+        25.1,
+        12.1
+      ],
+      "position": "",
+      "leg_color": "一杯",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/12/25  中山11R 有馬記念 結果 ： 1着",
+      "date": "2022-12-14",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "稍",
+      "rider": "ルメー",
+      "time_raw": "(7)96.0 67.3 52.6 38.4 12.0",
+      "lap_times": [
+        67.3,
+        52.6,
+        38.4,
+        12.0
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "気配抜群",
+      "rank": "A",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/12/25  中山11R 有馬記念 結果 ： 1着",
+      "date": "2022-12-11",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 55.0 40.2 25.9 12.6",
+      "lap_times": [
+        55.0,
+        40.2,
+        25.9,
+        12.6
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/12/25  中山11R 有馬記念 結果 ： 1着",
+      "date": "2022-12-07",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "稍",
+      "rider": "助手",
+      "time_raw": "84.1 68.8 54.1 40.1 12.8",
+      "lap_times": [
+        84.1,
+        68.8,
+        54.1,
+        40.1,
+        12.8
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "好気配",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/12/25  中山11R 有馬記念 結果 ： 1着",
+      "date": "2022-12-04",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 57.8 42.5 27.8 13.7",
+      "lap_times": [
+        57.8,
+        42.5,
+        27.8,
+        13.7
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/10/30  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2022-10-26",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "86.8 69.6 54.1 38.6 11.5",
+      "lap_times": [
+        86.8,
+        69.6,
+        54.1,
+        38.6,
+        11.5
+      ],
+      "position": "4",
+      "leg_color": "馬也",
+      "evaluation": "態勢万全",
+      "rank": "A",
+      "comment": "ひと追いごとに上向き、今週は促した程度で圧巻の加速力。体の張りも抜群。"
+    },
+    {
+      "race_info": "2022/10/30  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2022-10-23",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 54.1 39.8 25.7 12.3",
+      "lap_times": [
+        54.1,
+        39.8,
+        25.7,
+        12.3
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/10/30  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2022-10-19",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "重",
+      "rider": "ルメー",
+      "time_raw": "82.3 67.1 51.7 37.6 11.7",
+      "lap_times": [
+        82.3,
+        67.1,
+        51.7,
+        37.6,
+        11.7
+      ],
+      "position": "4",
+      "leg_color": "馬也",
+      "evaluation": "気配抜群",
+      "rank": "A",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/10/30  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2022-10-16",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 54.5 39.9 25.7 12.6",
+      "lap_times": [
+        54.5,
+        39.9,
+        25.7,
+        12.6
+      ],
+      "position": "",
+      "leg_color": "Ｇ強",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/10/30  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2022-10-12",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "(7)102.5 71.7 56.7 41.4 13.6",
+      "lap_times": [
+        71.7,
+        56.7,
+        41.4,
+        13.6
+      ],
+      "position": "5",
+      "leg_color": "馬也",
+      "evaluation": "好気配",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/10/30  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2022-10-09",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 58.1 42.8 27.9 14.0",
+      "lap_times": [
+        58.1,
+        42.8,
+        27.9,
+        14.0
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/10/30  東京11R 天皇賞(秋) 結果 ： 1着",
+      "date": "2022-10-05",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "87.7 70.3 55.0 39.9 12.6",
+      "lap_times": [
+        87.7,
+        70.3,
+        55.0,
+        39.9,
+        12.6
+      ],
+      "position": "2",
+      "leg_color": "馬也",
+      "evaluation": "迫力十分",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/05/29  東京11R 東京優駿 結果 ： 2着",
+      "date": "2022-05-25",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "ルメー",
+      "time_raw": "86.0 68.4 52.9 38.2 11.6",
+      "lap_times": [
+        86.0,
+        68.4,
+        52.9,
+        38.2,
+        11.6
+      ],
+      "position": "2",
+      "leg_color": "馬也",
+      "evaluation": "態勢整う",
+      "rank": "B",
+      "comment": "派手な時計は出していないが、動きは滑らかで、体も締まっている。好気配。"
+    },
+    {
+      "race_info": "2022/05/29  東京11R 東京優駿 結果 ： 2着",
+      "date": "2022-05-22",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "稍",
+      "rider": "助手",
+      "time_raw": "- 54.2 39.3 24.8 11.9",
+      "lap_times": [
+        54.2,
+        39.3,
+        24.8,
+        11.9
+      ],
+      "position": "2",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/05/29  東京11R 東京優駿 結果 ： 2着",
+      "date": "2022-05-18",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "稍",
+      "rider": "ルメー",
+      "time_raw": "83.0 67.7 52.6 38.2 12.0",
+      "lap_times": [
+        83.0,
+        67.7,
+        52.6,
+        38.2,
+        12.0
+      ],
+      "position": "4",
+      "leg_color": "馬也",
+      "evaluation": "好調子",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/04/17  中山11R 皐月賞 結果 ： 2着",
+      "date": "2022-04-13",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "ルメー",
+      "time_raw": "84.8 68.3 53.3 38.6 11.6",
+      "lap_times": [
+        84.8,
+        68.3,
+        53.3,
+        38.6,
+        11.6
+      ],
+      "position": "5",
+      "leg_color": "馬也",
+      "evaluation": "態勢万全",
+      "rank": "A",
+      "comment": "休養を経て体つきが良くなった。馬なりのまま加速し、動きは今までで一番。"
+    },
+    {
+      "race_info": "2022/04/17  中山11R 皐月賞 結果 ： 2着",
+      "date": "2022-04-10",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 55.9 40.5 25.7 12.7",
+      "lap_times": [
+        55.9,
+        40.5,
+        25.7,
+        12.7
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/04/17  中山11R 皐月賞 結果 ： 2着",
+      "date": "2022-04-06",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "稍",
+      "rider": "ルメー",
+      "time_raw": "(7)98.2 67.0 51.5 37.2 11.4",
+      "lap_times": [
+        67.0,
+        51.5,
+        37.2,
+        11.4
+      ],
+      "position": "5",
+      "leg_color": "馬也",
+      "evaluation": "迫力満点",
+      "rank": "A",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/04/17  中山11R 皐月賞 結果 ： 2着",
+      "date": "2022-04-03",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 55.7 40.6 26.4 13.0",
+      "lap_times": [
+        55.7,
+        40.6,
+        26.4,
+        13.0
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/04/17  中山11R 皐月賞 結果 ： 2着",
+      "date": "2022-03-30",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "(7)98.8 68.0 53.4 39.5 12.2",
+      "lap_times": [
+        68.0,
+        53.4,
+        39.5,
+        12.2
+      ],
+      "position": "4",
+      "leg_color": "馬也",
+      "evaluation": "好気配",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2022/04/17  中山11R 皐月賞 結果 ： 2着",
+      "date": "2022-03-27",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "重",
+      "rider": "助手",
+      "time_raw": "- 56.3 41.6 27.3 13.6",
+      "lap_times": [
+        56.3,
+        41.6,
+        27.3,
+        13.6
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2021/11/20  東京11R 東京スポーツ杯2歳S 結果 ： 1着",
+      "date": "2021-11-17",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 68.0 53.0 38.2 11.7",
+      "lap_times": [
+        68.0,
+        53.0,
+        38.2,
+        11.7
+      ],
+      "position": "4",
+      "leg_color": "馬也",
+      "evaluation": "動き良化",
+      "rank": "B",
+      "comment": "まだスッと動けなかった初戦から行きっぷり、反応ともに良化。成長している。"
+    },
+    {
+      "race_info": "2021/11/20  東京11R 東京スポーツ杯2歳S 結果 ： 1着",
+      "date": "2021-11-14",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 54.7 39.3 25.3 12.4",
+      "lap_times": [
+        54.7,
+        39.3,
+        25.3,
+        12.4
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2021/11/20  東京11R 東京スポーツ杯2歳S 結果 ： 1着",
+      "date": "2021-11-10",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "重",
+      "rider": "助手",
+      "time_raw": "86.0 69.4 54.5 39.8 11.6",
+      "lap_times": [
+        86.0,
+        69.4,
+        54.5,
+        39.8,
+        11.6
+      ],
+      "position": "4",
+      "leg_color": "馬也",
+      "evaluation": "気配上々",
+      "rank": "B",
+      "comment": ""
+    },
+    {
+      "race_info": "2021/11/20  東京11R 東京スポーツ杯2歳S 結果 ： 1着",
+      "date": "2021-11-07",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 55.3 40.3 26.5 13.0",
+      "lap_times": [
+        55.3,
+        40.3,
+        26.5,
+        13.0
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2021/11/20  東京11R 東京スポーツ杯2歳S 結果 ： 1着",
+      "date": "2021-11-03",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 68.8 53.2 38.5 11.8",
+      "lap_times": [
+        68.8,
+        53.2,
+        38.5,
+        11.8
+      ],
+      "position": "2",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2021/11/20  東京11R 東京スポーツ杯2歳S 結果 ： 1着",
+      "date": "2021-10-31",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 58.2 42.4 27.7 13.6",
+      "lap_times": [
+        58.2,
+        42.4,
+        27.7,
+        13.6
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2021/08/28  新潟5R 2歳新馬 結果 ： 1着",
+      "date": "2021-08-25",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 65.9 51.7 37.6 11.6",
+      "lap_times": [
+        65.9,
+        51.7,
+        37.6,
+        11.6
+      ],
+      "position": "4",
+      "leg_color": "Ｇ一",
+      "evaluation": "態勢整う",
+      "rank": "B",
+      "comment": "２頭で挟んで実戦を意識させたが、伸びやかなフォームで鋭伸。態勢ＯＫ。"
+    },
+    {
+      "race_info": "2021/08/28  新潟5R 2歳新馬 結果 ： 1着",
+      "date": "2021-08-22",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 54.9 39.9 26.0 12.7",
+      "lap_times": [
+        54.9,
+        39.9,
+        26.0,
+        12.7
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2021/08/28  新潟5R 2歳新馬 結果 ： 1着",
+      "date": "2021-08-18",
+      "day_of_week": "水",
+      "course": "南Ｗ",
+      "track_condition": "稍",
+      "rider": "助手",
+      "time_raw": "83.1 68.2 53.1 38.2 11.7",
+      "lap_times": [
+        83.1,
+        68.2,
+        53.1,
+        38.2,
+        11.7
+      ],
+      "position": "3",
+      "leg_color": "直強",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2021/08/28  新潟5R 2歳新馬 結果 ： 1着",
+      "date": "2021-08-15",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "不",
+      "rider": "助手",
+      "time_raw": "- 58.8 43.6 28.2 14.1",
+      "lap_times": [
+        58.8,
+        43.6,
+        28.2,
+        14.1
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2021/08/28  新潟5R 2歳新馬 結果 ： 1着",
+      "date": "2021-08-12",
+      "day_of_week": "木",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 71.3 55.0 39.3 12.0",
+      "lap_times": [
+        71.3,
+        55.0,
+        39.3,
+        12.0
+      ],
+      "position": "3",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2021/08/28  新潟5R 2歳新馬 結果 ： 1着",
+      "date": "2021-08-08",
+      "day_of_week": "日",
+      "course": "美坂",
+      "track_condition": "重",
+      "rider": "助手",
+      "time_raw": "- 56.9 42.0 27.8 13.7",
+      "lap_times": [
+        56.9,
+        42.0,
+        27.8,
+        13.7
+      ],
+      "position": "",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    },
+    {
+      "race_info": "2021/08/28  新潟5R 2歳新馬 結果 ： 1着",
+      "date": "2021-08-05",
+      "day_of_week": "木",
+      "course": "南Ｗ",
+      "track_condition": "良",
+      "rider": "助手",
+      "time_raw": "- 73.0 56.7 41.5 13.2",
+      "lap_times": [
+        73.0,
+        56.7,
+        41.5,
+        13.2
+      ],
+      "position": "2",
+      "leg_color": "馬也",
+      "evaluation": "順調",
+      "rank": "C",
+      "comment": ""
+    }
+  ],
+  "_meta": {
+    "scraped_at": 1781192597.0731978,
+    "scraped_at_jst": "2026-06-12 00:43:17",
+    "schema_validation": {
+      "schema_version": 2,
+      "passed": true,
+      "top_missing": [],
+      "top_type_errors": [],
+      "top_constraint_errors": [],
+      "entry_count": 55,
+      "entry_issues": {}
+    },
+    "scrape_validation_status": "ok"
+  }
+}

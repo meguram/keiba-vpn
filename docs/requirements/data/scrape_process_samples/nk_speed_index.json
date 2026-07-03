@@ -1,0 +1,349 @@
+{
+  "race_id": "202309030811",
+  "entries": [
+    {
+      "horse_number": 1,
+      "horse_name": "ライラック",
+      "horse_id": "2019103588",
+      "time_index_m": 109,
+      "speed_max": 110,
+      "speed_avg": 102,
+      "speed_distance": 110,
+      "speed_course": 110,
+      "speed_recent": [
+        94,
+        109,
+        110
+      ],
+      "all_txt_c": [
+        4
+      ],
+      "odds": 158.9,
+      "popularity": 13
+    },
+    {
+      "horse_number": 2,
+      "horse_name": "カラテ",
+      "horse_id": "2016106606",
+      "time_index_m": 110,
+      "speed_max": 110,
+      "speed_avg": 103,
+      "speed_distance": 85,
+      "speed_course": 97,
+      "speed_recent": [
+        87,
+        110,
+        105
+      ],
+      "all_txt_c": [
+        7
+      ],
+      "odds": 180.2,
+      "popularity": 15
+    },
+    {
+      "horse_number": 3,
+      "horse_name": "ダノンザキッド",
+      "horse_id": "2018104963",
+      "time_index_m": 110,
+      "speed_max": 112,
+      "speed_avg": 104,
+      "speed_distance": 0,
+      "speed_course": 112,
+      "speed_recent": [
+        0,
+        110,
+        90
+      ],
+      "all_txt_c": [
+        5
+      ],
+      "odds": 35.1,
+      "popularity": 8
+    },
+    {
+      "horse_number": 4,
+      "horse_name": "ボッケリーニ",
+      "horse_id": "2016104618",
+      "time_index_m": 109,
+      "speed_max": 109,
+      "speed_avg": 100,
+      "speed_distance": 107,
+      "speed_course": 109,
+      "speed_recent": [
+        91,
+        109,
+        102
+      ],
+      "all_txt_c": [
+        7
+      ],
+      "odds": 28.3,
+      "popularity": 6
+    },
+    {
+      "horse_number": 5,
+      "horse_name": "イクイノックス",
+      "horse_id": "2019105219",
+      "time_index_m": 116,
+      "speed_max": 116,
+      "speed_avg": 111,
+      "speed_distance": 0,
+      "speed_course": 0,
+      "speed_recent": [
+        0,
+        116,
+        111
+      ],
+      "all_txt_c": [
+        4
+      ],
+      "odds": 1.3,
+      "popularity": 1
+    },
+    {
+      "horse_number": 6,
+      "horse_name": "スルーセブンシーズ",
+      "horse_id": "2018105269",
+      "time_index_m": 103,
+      "speed_max": 106,
+      "speed_avg": 100,
+      "speed_distance": 105,
+      "speed_course": 98,
+      "speed_recent": [
+        106,
+        103,
+        96
+      ],
+      "all_txt_c": [
+        5
+      ],
+      "odds": 55.7,
+      "popularity": 10
+    },
+    {
+      "horse_number": 7,
+      "horse_name": "プラダリア",
+      "horse_id": "2019100109",
+      "time_index_m": 108,
+      "speed_max": 108,
+      "speed_avg": 101,
+      "speed_distance": 108,
+      "speed_course": 108,
+      "speed_recent": [
+        96,
+        108,
+        104
+      ],
+      "all_txt_c": [
+        4
+      ],
+      "odds": 262.5,
+      "popularity": 16
+    },
+    {
+      "horse_number": 8,
+      "horse_name": "ヴェラアズール",
+      "horse_id": "2017105082",
+      "time_index_m": 105,
+      "speed_max": 110,
+      "speed_avg": 104,
+      "speed_distance": 0,
+      "speed_course": 105,
+      "speed_recent": [
+        0,
+        105,
+        110
+      ],
+      "all_txt_c": [
+        6
+      ],
+      "odds": 42.1,
+      "popularity": 9
+    },
+    {
+      "horse_number": 9,
+      "horse_name": "ジャスティンパレス",
+      "horse_id": "2019105346",
+      "time_index_m": 102,
+      "speed_max": 109,
+      "speed_avg": 106,
+      "speed_distance": 102,
+      "speed_course": 108,
+      "speed_recent": [
+        108,
+        102,
+        109
+      ],
+      "all_txt_c": [
+        4
+      ],
+      "odds": 8.5,
+      "popularity": 2
+    },
+    {
+      "horse_number": 10,
+      "horse_name": "ディープボンド",
+      "horse_id": "2017102170",
+      "time_index_m": 99,
+      "speed_max": 114,
+      "speed_avg": 107,
+      "speed_distance": 114,
+      "speed_course": 115,
+      "speed_recent": [
+        106,
+        99,
+        108
+      ],
+      "all_txt_c": [
+        6
+      ],
+      "odds": 16.6,
+      "popularity": 5
+    },
+    {
+      "horse_number": 11,
+      "horse_name": "ジェラルディーナ",
+      "horse_id": "2018105081",
+      "time_index_m": 105,
+      "speed_max": 113,
+      "speed_avg": 108,
+      "speed_distance": 113,
+      "speed_course": 113,
+      "speed_recent": [
+        0,
+        105,
+        112
+      ],
+      "all_txt_c": [
+        5
+      ],
+      "odds": 13.8,
+      "popularity": 3
+    },
+    {
+      "horse_number": 12,
+      "horse_name": "アスクビクターモア",
+      "horse_id": "2019104706",
+      "time_index_m": 101,
+      "speed_max": 109,
+      "speed_avg": 105,
+      "speed_distance": 103,
+      "speed_course": 109,
+      "speed_recent": [
+        99,
+        101,
+        109
+      ],
+      "all_txt_c": [
+        4
+      ],
+      "odds": 14.3,
+      "popularity": 4
+    },
+    {
+      "horse_number": 13,
+      "horse_name": "ジオグリフ",
+      "horse_id": "2019105056",
+      "time_index_m": 0,
+      "speed_max": 104,
+      "speed_avg": 105,
+      "speed_distance": 0,
+      "speed_course": 91,
+      "speed_recent": [
+        0,
+        0,
+        0
+      ],
+      "all_txt_c": [
+        4
+      ],
+      "odds": 83.1,
+      "popularity": 11
+    },
+    {
+      "horse_number": 14,
+      "horse_name": "ブレークアップ",
+      "horse_id": "2018106273",
+      "time_index_m": 100,
+      "speed_max": 104,
+      "speed_avg": 97,
+      "speed_distance": 103,
+      "speed_course": 100,
+      "speed_recent": [
+        104,
+        100,
+        91
+      ],
+      "all_txt_c": [
+        5
+      ],
+      "odds": 113.4,
+      "popularity": 12
+    },
+    {
+      "horse_number": 15,
+      "horse_name": "ユニコーンライオン",
+      "horse_id": "2016110103",
+      "time_index_m": 103,
+      "speed_max": 107,
+      "speed_avg": 100,
+      "speed_distance": 107,
+      "speed_course": 107,
+      "speed_recent": [
+        0,
+        103,
+        99
+      ],
+      "all_txt_c": [
+        7
+      ],
+      "odds": 176.0,
+      "popularity": 14
+    },
+    {
+      "horse_number": 16,
+      "horse_name": "モズベッロ",
+      "horse_id": "2016100915",
+      "time_index_m": 99,
+      "speed_max": 103,
+      "speed_avg": 98,
+      "speed_distance": 109,
+      "speed_course": 109,
+      "speed_recent": [
+        89,
+        99,
+        103
+      ],
+      "all_txt_c": [
+        7
+      ],
+      "odds": 480.4,
+      "popularity": 17
+    },
+    {
+      "horse_number": 17,
+      "horse_name": "ドゥラエレーデ",
+      "horse_id": "2020103626",
+      "time_index_m": 0,
+      "speed_max": 95,
+      "speed_avg": 94,
+      "speed_distance": 0,
+      "speed_course": 56,
+      "speed_recent": [
+        0,
+        0,
+        95
+      ],
+      "all_txt_c": [
+        3
+      ],
+      "odds": 30.2,
+      "popularity": 7
+    }
+  ],
+  "_meta": {
+    "scraped_at": 1781190682.851525,
+    "scraped_at_jst": "2026-06-12 00:11:22"
+  }
+}

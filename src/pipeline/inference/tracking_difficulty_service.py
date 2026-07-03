@@ -1,12 +1,14 @@
 """
-追走難度 API レスポンスの組み立て・storage キャッシュ。
+追走難度 API レスポンスの組み立て・事前計算ストア。
 
-バッチ事前計算・薄い GET API の共通ロジック。
-キャッシュは ``src.pipeline.mlflow.inference_cache`` + カタログ ``tracking_difficulty``。
+- 正本: ``data/calculated_data/tracking_difficulty/{race_id}.json``（TTL なし）
+- GET API は正本を読むのみ（``refresh=true`` 時のみ再計算）
+- バッチ: ``batch_inference_all_races`` / ``precompute_tracking_difficulty_all``
 """
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 
@@ -32,7 +34,23 @@ def cache_enabled() -> bool:
 
 
 def load_cached_response(storage, race_id: str) -> dict | None:
-    return _TrackingDifficultyCache.load_cached(storage, race_id)
+    from src.pipeline.inference.tracking_difficulty_store import load_local, save_local
+
+    local = load_local(race_id)
+    if local is not None:
+        return local
+    # 移行: 旧 GCS キャッシュがあればローカルへ取り込む
+    if storage is not None and _TrackingDifficultyCache.cache_enabled():
+        gcs = _TrackingDifficultyCache.load_cached(storage, race_id)
+        if gcs is not None and gcs.get("entries"):
+            save_local(race_id, gcs, source="gcs_migration")
+            return load_local(race_id)
+    return None
+
+
+def _gcs_mirror_enabled() -> bool:
+    v = os.environ.get("KEIBA_TRACKING_DIFFICULTY_GCS_MIRROR", "0").strip().lower()
+    return v in ("1", "true", "yes", "on")
 
 
 def save_cached_response(
@@ -42,7 +60,15 @@ def save_cached_response(
     *,
     source: str = "api",
 ) -> None:
-    _TrackingDifficultyCache.save_cached(storage, race_id, payload, source=source)
+    from src.pipeline.inference.tracking_difficulty_store import save_local
+
+    save_local(race_id, payload, source=source)
+    if (
+        _gcs_mirror_enabled()
+        and storage is not None
+        and _TrackingDifficultyCache.cache_enabled()
+    ):
+        _TrackingDifficultyCache.save_cached(storage, race_id, payload, source=source)
 
 
 def load_race_bundle(
@@ -295,7 +321,15 @@ def precompute_tracking_for_race_ids(
         except Exception as exc:
             logger.warning("追走難度 precompute 失敗 %s: %s", rid, exc)
             fail += 1
+    from src.pipeline.inference.tracking_difficulty_store import update_index_meta
+
+    update_index_meta(batch_source="raceday_eve_precompute")
     return {"ok": ok, "skip": skip, "fail": fail, "total": len(race_ids)}
+
+
+def get_precomputed(storage, race_id: str) -> dict[str, Any] | None:
+    """事前計算済みデータのみ返す（未計算なら None）。"""
+    return load_cached_response(storage, race_id)
 
 
 def get_or_compute(
@@ -305,26 +339,47 @@ def get_or_compute(
     force_refresh: bool = False,
     allow_scrape: bool = False,
     pre_race_only: bool | None = None,
+    allow_compute_on_miss: bool | None = None,
 ) -> dict[str, Any]:
+    """
+    事前計算 JSON を返す。通常 GET では未計算時に再計算しない。
+
+    ``force_refresh=True`` または ``allow_compute_on_miss=True`` のときのみ再計算する。
+    """
     if pre_race_only is None:
-        # refresh=true は直前再取得（result フォールバック可）。通常閲覧は前日想定。
         pre_race_only = not (force_refresh and allow_scrape)
+
+    if allow_compute_on_miss is None:
+        allow_compute_on_miss = force_refresh
 
     if not force_refresh:
         cached = load_cached_response(storage, race_id)
         if cached is not None:
             return cached
+        if not allow_compute_on_miss:
+            from src.config.data_paths import TRACKING_DIFFICULTY_DIR
+
+            return {
+                "race_id": race_id,
+                "error": (
+                    "追走難度の事前計算データがありません。"
+                    f" batch で {TRACKING_DIFFICULTY_DIR} に生成してください。"
+                ),
+                "status": "not_precomputed",
+                "entries": [],
+            }
+
     payload = build_tracking_difficulty_response(
         race_id,
         storage,
         allow_scrape=allow_scrape,
         pre_race_only=pre_race_only,
     )
-    if "error" not in payload or payload.get("entries"):
+    if payload.get("entries"):
         save_cached_response(
             storage,
             race_id,
             payload,
-            source="api" if not force_refresh else "refresh",
+            source="refresh" if force_refresh else "api",
         )
     return payload

@@ -8,8 +8,11 @@ API 応答に ``display_timezone`` を付与する。
 
 マルチプロセス対応:
   uvicorn は --workers N で複数プロセスを持つ。スクレイパースレッドを持つプロセスだけが
-  メモリ _buffer を持つため、別プロセスからの API リクエストは空を返す問題が起きる。
+  実ログをメモリ _buffer に持ち、API が当たるワーカーは別プロセスで _buffer が空のことが多い。
   → emit 時に data/queue/.worker_log_ring.jsonl にも追記し、全プロセスから読めるようにした。
+  さらに get_worker_logs は **ファイルとメモリを常にマージ**する。API プロセスだけが
+  RingHandler で数件メモリに載せた場合に「メモリのみを返してファイルを無視する」と
+  本番スクレイプログが一切出ないバグがあったため。
 """
 
 from __future__ import annotations
@@ -150,16 +153,19 @@ def ensure_queue_worker_log_handler() -> None:
 
     属性フラグではなく型チェックで判定する（fork/reload 後も正しく動作させるため）。
     ハンドラが既存でも scraper.*/src.scraper.* のレベルは毎回 INFO に保証する。
+    uvicorn 等で propagate が False のとき root に届かないため、主要ロガーは propagate=True に戻す。
     """
     global _handler
     root = logging.getLogger()
 
-    # scraper.* / src.scraper.* が WARNING 以上の場合 INFO ログが作られない。
-    # root が WARNING のままでも個別 logger を INFO にすることで record が生成される。
-    for _ns in ("scraper", "src.scraper"):
-        _lg = logging.getLogger(_ns)
+    for _lg_name in ("scraper", "src.scraper", "queue", "queue.worker"):
+        _lg = logging.getLogger(_lg_name)
+        _lg.propagate = True
         if _lg.level == logging.NOTSET or _lg.level > logging.INFO:
             _lg.setLevel(logging.INFO)
+
+    if root.level > logging.INFO:
+        root.setLevel(logging.INFO)
 
     # 既にこのプロセスの root に ring handler が入っていれば追加しない
     if any(isinstance(h, QueueWorkerRingHandler) for h in root.handlers):
@@ -168,11 +174,12 @@ def ensure_queue_worker_log_handler() -> None:
     from src.utils.keiba_logging import (
         STANDARD_DATE_FMT,
         STANDARD_LOG_FORMAT,
+        JstFormatter,
     )
 
     h = QueueWorkerRingHandler(level=logging.DEBUG)
     h.setFormatter(
-        logging.Formatter(STANDARD_LOG_FORMAT, datefmt=STANDARD_DATE_FMT)
+        JstFormatter(STANDARD_LOG_FORMAT, datefmt=STANDARD_DATE_FMT)
     )
     h.addFilter(_QueueWorkerContextFilter())
     root.addHandler(h)
@@ -201,21 +208,62 @@ def _read_file_entries() -> list[dict[str, Any]]:
         return []
 
 
+def _dedupe_key(e: dict[str, Any]) -> tuple[float, str, str]:
+    return (
+        float(e.get("ts") or 0.0),
+        str(e.get("logger") or ""),
+        str(e.get("message") or ""),
+    )
+
+
+def _build_merged_log_snapshot() -> list[dict[str, Any]]:
+    """
+    ファイル（全プロセス共有）＋当プロセスメモリをマージし、時系列で id を 0..n-1 に振り直す。
+    ストア済みの id は無視する（プロセスごとに _seq が重複し得るため）。
+    """
+    file_entries = _read_file_entries()
+    with _lock:
+        mem_entries = [dict(x) for x in _buffer]
+
+    seen: set[tuple[float, str, str]] = set()
+    merged: list[tuple[float, int, dict[str, Any]]] = []
+    seq = 0
+    for e in file_entries:
+        ee = dict(e)
+        k = _dedupe_key(ee)
+        if k in seen:
+            continue
+        seen.add(k)
+        merged.append((k[0], seq, ee))
+        seq += 1
+    for e in mem_entries:
+        k = _dedupe_key(e)
+        if k in seen:
+            continue
+        seen.add(k)
+        merged.append((k[0], seq, e))
+        seq += 1
+
+    merged.sort(key=lambda t: (t[0], t[1]))
+    out: list[dict[str, Any]] = []
+    for i, (_, __, ee) in enumerate(merged):
+        row = dict(ee)
+        row["id"] = i
+        out.append(row)
+    return out
+
+
 def get_worker_logs(*, after: int = -1, limit: int = 300) -> dict[str, Any]:
     """
-    after < 0: バッファ末尾から limit 件（初回ロード用）。
-    after >= 0: id > after のエントリを先頭から最大 limit 件（増分ポーリング）。
+    after < 0: マージ済みスナップショット末尾から limit 件（初回ロード用）。
+    after >= 0: id > after のエントリを時系列順で最大 limit 件（増分ポーリング）。
 
-    メモリバッファが空の場合はファイルから読み込む（マルチプロセス対応）。
+    ファイルリングとメモリを常にマージする（uvicorn マルチワーカーで API 当たり先が
+    スクレイプ実行プロセスと異なる場合でもログが欠けないようにする）。
     """
     lim = max(1, min(int(limit), 800))
 
-    with _lock:
-        snap = list(_buffer)
-
-    # メモリバッファが空 → ファイルから読む（別プロセスが書いたログ）
-    if not snap:
-        snap = _read_file_entries()
+    snap = _build_merged_log_snapshot()
 
     if not snap:
         return {
@@ -225,11 +273,11 @@ def get_worker_logs(*, after: int = -1, limit: int = 300) -> dict[str, Any]:
             "display_timezone": "Asia/Tokyo",
         }
 
-    max_id = snap[-1].get("id", len(snap))
+    max_id = snap[-1].get("id", len(snap) - 1)
     if after < 0:
         chunk = snap[-lim:]
     else:
-        chunk = [e for e in snap if e.get("id", 0) > after][:lim]
+        chunk = [e for e in snap if int(e.get("id", 0)) > int(after)][:lim]
     return {
         "entries": chunk,
         "max_id": max_id,

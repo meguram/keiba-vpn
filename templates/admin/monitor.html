@@ -841,6 +841,29 @@
   .job-label { flex: 1; color: var(--text); }
   .job-elapsed { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 
+  .schema-validation-panel {
+    margin: 0 32px 16px;
+    padding: 14px 18px;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    border-radius: 10px;
+  }
+  .schema-validation-panel h4 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fecaca;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .schema-validation-panel .hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
   /* ── 未取得開催日バックログ（優先スクレイプ用） ── */
   .backlog-panel {
     margin: 0 32px 20px;
@@ -972,6 +995,101 @@
     border-color: var(--accent); color: var(--accent);
   }
   .backlog-empty-hint { font-size: 12px; color: var(--ok); padding: 8px 0; }
+
+  /* ── カバレッジカレンダー ── */
+  .cov-cal-panel {
+    margin: 0 32px 20px;
+    background: linear-gradient(165deg, rgba(59,130,246,0.09) 0%, var(--surface) 42%);
+    border: 1px solid rgba(59,130,246,0.25);
+    border-radius: 12px;
+    padding: 18px 20px 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  }
+  .cov-cal-head {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+    margin-bottom: 14px;
+  }
+  .cov-cal-title { font-size: 15px; font-weight: 700; color: #fff; }
+  .cov-cal-title span { color: #60a5fa; }
+  .cov-cal-meta { font-size: 12px; color: var(--text-dim); flex: 1; line-height: 1.5; }
+  .cov-cal-toolbar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  .cov-cal-toolbar label { font-size: 11px; color: var(--text-dim); }
+  .cov-cal-toolbar select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+  .cov-cal-toolbar button {
+    background: rgba(59,130,246,0.2); border: 1px solid rgba(59,130,246,0.45); color: #bfdbfe;
+    border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .cov-cal-toolbar button:hover { border-color: var(--accent); color: #fff; }
+  .cov-cat-legend {
+    display: flex; flex-wrap: wrap; gap: 8px 16px;
+    font-size: 11px; color: var(--text-dim);
+    margin-bottom: 14px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cov-cat-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 7px; font-size: 10px; cursor: default;
+  }
+  .cov-cat-chip .dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .cov-heatmap-wrap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(195px, 1fr));
+    gap: 12px 16px;
+  }
+  .cov-month { }
+  .cov-month h4 {
+    font-size: 12px; font-weight: 600; color: var(--text-dim);
+    margin: 0 0 6px; letter-spacing: 0.04em;
+  }
+  .cov-month-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+  .cov-dow {
+    font-size: 9px; color: var(--text-dim); text-align: center; padding: 2px 0;
+  }
+  .cov-cell {
+    aspect-ratio: 1; border-radius: 3px;
+    background: rgba(107,125,149,0.1); border: 1px solid transparent;
+    position: relative; font-size: 9px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.1s;
+  }
+  .cov-cell.has-data { cursor: pointer; }
+  .cov-cell.has-data:hover { transform: scale(1.25); z-index: 10; border-color: rgba(255,255,255,0.4); }
+  .cov-cell.cov-full   { background: linear-gradient(135deg,#22c55e,#16a34a); color:#fff; }
+  .cov-cell.cov-hi     { background: linear-gradient(135deg,#84cc16,#65a30d); color:#fff; }
+  .cov-cell.cov-mid    { background: linear-gradient(135deg,#f59e0b,#d97706); color:#fff; }
+  .cov-cell.cov-lo     { background: linear-gradient(135deg,#f97316,#ea580c); color:#fff; }
+  .cov-cell.cov-bare   { background: linear-gradient(135deg,#ef4444,#b91c1c); color:#fff; }
+  .cov-cell.cov-norace { background: rgba(100,100,120,0.2); }
+  .cov-cell.cov-empty  { background: rgba(107,125,149,0.06); border: 1px dashed rgba(107,125,149,0.2); }
+  /* ツールチップ */
+  .cov-tooltip {
+    position: fixed; z-index: 9999; pointer-events: none;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 11px; color: var(--text);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    max-width: 280px; min-width: 180px;
+    display: none;
+  }
+  .cov-tooltip .tt-date { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+  .cov-tooltip .tt-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .cov-tooltip .tt-row:last-child { border-bottom: none; }
+  .cov-tooltip .tt-cat { flex: 1; color: var(--text-dim); font-size: 10px; }
+  .cov-tooltip .tt-cnt { font-size: 11px; font-weight: 600; }
+  .cov-tooltip .tt-ok  { color: var(--ok); }
+  .cov-tooltip .tt-warn { color: var(--warn); }
+  .cov-tooltip .tt-ng  { color: var(--err); }
 
   /* ── Responsive ── */
   @media (max-width: 900px) {
@@ -1117,6 +1235,31 @@
   <div class="backlog-priority" id="backlogPriority"></div>
 </div>
 
+<!-- カテゴリ別カバレッジカレンダー -->
+<div class="cov-cal-panel" id="covCalPanel">
+  <div class="cov-cal-head">
+    <div>
+      <div class="cov-cal-title">📅 カテゴリ別 <span>カバレッジカレンダー</span></div>
+      <div class="cov-cal-meta" id="covCalMeta">
+        GCS 上のデータ保有状況を年・月・日単位で確認できます。
+        セルにカーソルを合わせるとカテゴリ別の件数が表示されます。
+      </div>
+    </div>
+    <div class="cov-cal-toolbar">
+      <label for="covCalYearSelect">年</label>
+      <select id="covCalYearSelect"></select>
+      <button onclick="fetchCovCal(true)">再集計</button>
+    </div>
+  </div>
+  <div class="cov-cat-legend" id="covCatLegend">
+    <span style="color:var(--text-dim);font-size:11px">読み込み中…</span>
+  </div>
+  <div id="covHeatmap" class="cov-heatmap-wrap">
+    <div style="font-size:12px;color:var(--text-dim);padding:14px">集計中…</div>
+  </div>
+</div>
+<div class="cov-tooltip" id="covTooltip"></div>
+
 <!-- ジョブステータスパネル -->
 <div class="job-panel" id="jobPanel" style="display:none">
   <div class="job-panel-header" onclick="toggleJobPanel()">
@@ -1124,6 +1267,14 @@
     <span class="job-counter idle" id="jobCounter">0</span>
   </div>
   <div class="job-list" id="jobList"></div>
+</div>
+
+<!-- スキーマ検証失敗（管理者向け・キュー failed のうち schema_validation） -->
+<div class="schema-validation-panel" id="schemaValidationPanel" style="display:none">
+  <h4><span id="schemaValidationTitle">スキーマ検証失敗（キュー）</span></h4>
+  <p class="hint">厳格モード（既定 <code>KEIBA_SCHEMA_STRICT=1</code>）で保存前検証に落ちたジョブです。
+    再投入は <a href="/scrape?tab=control" class="btn-link" style="color:var(--accent)">スクレイピング管理</a> から。</p>
+  <div id="schemaValidationList"></div>
 </div>
 
 <!-- 全日付一覧テーブル -->
@@ -1162,12 +1313,12 @@
         <div class="progress-fill" id="progressFill" style="width:0%"></div>
       </div>
       <div class="progress-stats">
-        <span>レース: <span class="stat-val" id="statRaces">0</span></span>
-        <span>GCS完了: <span class="stat-val" id="statDone">0</span>/<span id="statTotal">0</span></span>
-        <span>構造準拠: <span class="stat-val" id="statFresh" style="color:var(--fresh)">0</span>/<span id="statFreshTotal">0</span></span>
+        <span>レース: <span class="stat-val" id="statRaces">—</span></span>
+        <span>充足率: <span class="stat-val" id="statDone" style="color:var(--fresh)">—</span>%</span>
+        <span>欠損カテゴリ: <span class="stat-val" id="statMissingCats" style="color:var(--warn)">—</span></span>
         <span id="allFreshBadge" style="display:none;padding:2px 8px;border-radius:4px;
               font-size:11px;font-weight:700;background:var(--fresh-dim);color:var(--fresh);
-              border:1px solid rgba(52,211,153,0.3)">✓ 全データ構造準拠</span>
+              border:1px solid rgba(52,211,153,0.3)">✓ 全カテゴリ完備</span>
       </div>
     </div>
   </div>
@@ -1209,18 +1360,43 @@
   <div class="structure-grid" id="structureGrid"></div>
 </div>
 
-<div class="legend" id="legendWrap" style="display:none">
-  <div class="legend-item"><div class="legend-dot ok"></div> 現在構造に準拠 (Fresh)</div>
-  <div class="legend-item"><div class="legend-dot" style="background:var(--stale)"></div> 旧構造データ (Stale)</div>
-  <div class="legend-item"><div class="legend-dot partial"></div> 一部取得</div>
-  <div class="legend-item"><div class="legend-dot empty"></div> 未格納</div>
-  <div class="legend-item"><div class="legend-dot html"></div> HTMLアーカイブ有</div>
-</div>
+<!-- boardContainer と legendWrap は廃止（raceMatrixPanel に統合） -->
 
-<div class="board-container" id="boardContainer" style="display:none">
-  <div class="empty-state">
-    <div class="icon">📋</div>
-    <p>カレンダーから日付を選択して<br>GCSデータ格納状態を確認</p>
+<!-- rowDataCoveragePanel は廃止（raceMatrixPanel に統合） -->
+
+<!-- レース × カテゴリ マトリクスパネル -->
+<div id="raceMatrixPanel" style="display:none;margin:16px 32px 0">
+  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px 20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <h3 style="margin:0;font-size:14px;font-weight:600;color:#fff">🗂️ GCS データ存在マトリクス</h3>
+      <span style="font-size:11px;color:var(--text-dim)">列を選択 → 欠損データをスクレイピング</span>
+      <span id="raceMatrixBadge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(100,100,120,0.3);color:var(--text-dim)">読込中...</span>
+    </div>
+
+    <!-- スクレイピングアクションバー（列選択時に表示） -->
+    <div id="scrapeActionBar" style="display:none;background:rgba(99,179,237,0.08);border:1px solid rgba(99,179,237,0.25);border-radius:8px;padding:10px 14px;margin-bottom:12px;display:none;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--text-dim)">選択列:</span>
+      <span id="scrapeActionCat" style="font-size:13px;font-weight:600;color:#63b3ed"></span>
+      <span id="scrapeActionMissing" style="font-size:12px;color:var(--text-dim)"></span>
+      <button id="scrapeActionBtn"
+        onclick="triggerScrapeMissing()"
+        style="margin-left:auto;background:rgba(99,179,237,0.15);border:1px solid rgba(99,179,237,0.4);color:#63b3ed;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s"
+        onmouseover="this.style.background='rgba(99,179,237,0.28)'"
+        onmouseout="this.style.background='rgba(99,179,237,0.15)'">
+        🔄 欠損をスクレイピング
+      </button>
+      <button onclick="clearColumnSelection()"
+        style="background:transparent;border:1px solid rgba(100,100,120,0.35);color:var(--text-dim);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">
+        ✕
+      </button>
+    </div>
+    <!-- スクレイピング結果メッセージ -->
+    <div id="scrapeActionResult" style="display:none;font-size:12px;padding:6px 12px;border-radius:6px;margin-bottom:10px"></div>
+
+    <div id="raceMatrixContent" style="overflow-x:auto">
+      <div style="color:var(--text-dim);font-size:13px;padding:8px">日付を選択すると表示されます</div>
+    </div>
+    <div id="raceMatrixMeta" style="margin-top:8px;font-size:11px;color:var(--text-dim)"></div>
   </div>
 </div>
 
@@ -1253,11 +1429,12 @@ const SOURCE_LABELS = {
   'race_shutuba':         { label: '出馬表',        icon: '📋', login: false },
   'race_result_on_time':  { label: '速報結果',       icon: '🏁', login: false },
   'race_result':          { label: 'DB結果',         icon: '🏁', login: false },
+  'race_result_lap':      { label: 'ラップDB',       icon: '⏱',  login: false },
   'race_index':           { label: 'タイム指数',     icon: '⏱',  login: true  },
   'race_odds':            { label: '単複オッズ',     icon: '💰', login: false },
   'race_pair_odds':       { label: '2連系オッズ',    icon: '💰', login: false },
   'race_paddock':         { label: 'パドック',       icon: '🐴', login: true  },
-  'race_barometer':       { label: '偏差値',         icon: '📈', login: true  },
+  'race_barometer':       { label: '走行指数',        icon: '📈', login: true  },
   'race_trainer_comment': { label: '厩舎コメント',   icon: '📦', login: true  },
   'smartrc_race':         { label: 'SmartRC',        icon: '📊', login: false },
   // ── 直接スクレイピング (horse axis, per-race aggregate) ──
@@ -1556,7 +1733,8 @@ async function init() {
     by.addEventListener('change', () => fetchBacklogSummary());
   }
   await populateBacklogYearSelect();
-  await Promise.all([fetchAllDates(), fetchBacklogSummary()]);
+  initCovCalYearSelect();
+  await Promise.all([fetchAllDates(), fetchBacklogSummary(), fetchCovCal(false)]);
   _pollJobsOnce();
   startAutoRefresh();
 }
@@ -1569,8 +1747,9 @@ async function initWithDetailDate(dateStr) {
     by.addEventListener('change', () => fetchBacklogSummary());
   }
   await populateBacklogYearSelect();
+  initCovCalYearSelect();
   showDetailView(dateStr);
-  await Promise.all([fetchAllDates(), fetchBacklogSummary()]);
+  await Promise.all([fetchAllDates(), fetchBacklogSummary(), fetchCovCal(false)]);
   _pollJobsOnce();
   startAutoRefresh();
 }
@@ -1643,6 +1822,7 @@ async function _pollJobsOnce() {
       }
     }
     _renderJobPanelFromSources(jobs, qData);
+    _renderSchemaValidationPanel(data, qData);
     const needPoll = jobs.some(x => x.status === 'running' || x.status === 'queued')
       || (qData.active_jobs || []).length > 0;
     if (needPoll) {
@@ -1657,37 +1837,26 @@ function showListView() {
   document.getElementById('allDatesContainer').style.display = '';
   document.getElementById('detailSection').style.display = 'none';
   document.getElementById('progressWrap').style.display = 'none';
-  document.getElementById('legendWrap').style.display = 'none';
-  document.getElementById('boardContainer').style.display = 'none';
+  document.getElementById('raceMatrixPanel').style.display = 'none';
 }
 
 function showDetailView(date) {
   viewMode = 'detail';
   currentDate = date;
   _syncMonitorUrl(date);
-  lastBoardData = null;
   document.getElementById('allDatesContainer').style.display = 'none';
   document.getElementById('detailSection').style.display = '';
-  document.getElementById('boardContainer').style.display = '';
+  document.getElementById('raceMatrixPanel').style.display = '';
 
   const wd = getWeekday(date);
   const formatted = `${date.slice(0,4)}/${date.slice(4,6)}/${date.slice(6,8)} (${wd.name})`;
   document.getElementById('detailTitle').textContent = formatted;
   document.getElementById('dateInput').value = toIso(date);
 
-  const cached = _statusCache[date];
-  if (cached) {
-    clearBoardLoading();
-    lastBoardData = cached;
-    structureVersions = cached.structure_versions || {};
-    updateGcsBadge(cached.gcs_enabled);
-    renderProgress(cached);
-    renderBoard(cached);
-    document.getElementById('lastUpdate').textContent =
-      `キャッシュ表示 — 更新中...`;
-  } else {
-    showBoardLoading(`${formatted} のデータを読み込み中...`);
-  }
+  // マトリクスローディング表示
+  const matContent = document.getElementById('raceMatrixContent');
+  if (matContent) matContent.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:12px">読み込み中...</div>';
+
   fetchAndRender();
 }
 
@@ -2041,6 +2210,7 @@ async function _pollJobs() {
     const jobs = data.jobs || [];
 
     _renderJobPanelFromSources(jobs, qData);
+    _renderSchemaValidationPanel(data, qData);
 
     let anyRunning = false;
     for (const [date, state] of Object.entries(_dateJobs)) {
@@ -2225,6 +2395,40 @@ function _renderJobPanel(jobs) {
   list.innerHTML = html;
 }
 
+/** /api/scrape-jobs の schema_validation_failures とキュー集計を表示 */
+function _renderSchemaValidationPanel(data, qData) {
+  const wrap = document.getElementById('schemaValidationPanel');
+  const title = document.getElementById('schemaValidationTitle');
+  const ul = document.getElementById('schemaValidationList');
+  if (!wrap || !title || !ul) return;
+  const list = data.schema_validation_failures || [];
+  const fromStats = (data.stats && data.stats.schema_validation_failed) || 0;
+  const fromQueue = (qData && qData.queue && qData.queue.schema_validation_failed) || 0;
+  const n = Math.max(fromStats, fromQueue, list.length);
+  if (!n) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+  title.textContent = `スキーマ検証失敗（キュー）: ${n}件`;
+  if (!list.length) {
+    ul.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">直近50件の詳細がここに出ます。一覧はスクレイピング管理の failed を参照してください。</div>';
+    return;
+  }
+  ul.innerHTML = list.map((f) => {
+    const err = _blEsc(String(f.error || '').slice(0, 400));
+    const cat = _blEsc(String(f.category || ''));
+    const rid = _blEsc(String(f.race_id || ''));
+    const jid = _blEsc(String(f.job_id || ''));
+    return `<div style="font-size:11px;margin-bottom:6px;padding:8px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">
+      <div><strong style="color:var(--err)">${cat}</strong>
+        <span style="color:var(--text-dim)"> ${rid}</span>
+        <span style="color:var(--text-dim);font-size:10px"> · job ${jid}</span></div>
+      <div style="color:var(--text-dim);margin-top:4px;word-break:break-all">${err}</div>
+    </div>`;
+  }).join('');
+}
+
 function toggleJobPanel() {
   const list = document.getElementById('jobList');
   list.style.display = list.style.display === 'none' ? '' : 'none';
@@ -2260,46 +2464,417 @@ function clearBoardLoading() {
 async function fetchAndRender() {
   if (!currentDate) return;
 
-  // Show cached data immediately while fetching fresh data
-  const cached = _statusCache[currentDate];
-  if (cached && !lastBoardData) {
-    clearBoardLoading();
-    lastBoardData = cached;
-    structureVersions = cached.structure_versions || {};
-    updateGcsBadge(cached.gcs_enabled);
-    renderProgress(cached);
-    renderBoard(cached);
-    document.getElementById('lastUpdate').textContent =
-      `キャッシュ表示 ${new Date().toLocaleTimeString('ja-JP')}`;
+  // マトリクスのみ取得（旧 scrape-status・row-data-coverage は廃止）
+  const dateSnap = currentDate;
+  const [matrixRes] = await Promise.allSettled([
+    fetch(API_BASE + `/api/date-race-matrix?date=${dateSnap}`),
+  ]);
+
+  // レース × カテゴリ マトリクス描画
+  try {
+    if (matrixRes.status === 'fulfilled') {
+      const mx = await matrixRes.value.json();
+      if (!mx.error && dateSnap === currentDate) {
+        renderRaceMatrix(mx);
+        renderProgressFromMatrix(mx);
+        updateGcsBadge(true);
+        document.getElementById('lastUpdate').textContent =
+          `最終更新: ${new Date().toLocaleTimeString('ja-JP')}`;
+      }
+    }
+  } catch (e) {
+    console.warn('date-race-matrix fetch error:', e);
+  }
+}
+
+function renderRowDataCoverage(data) {
+  const panel = document.getElementById('rowDataCoveragePanel');
+  const content = document.getElementById('rowDataCoverageContent');
+  const badge = document.getElementById('rowDataCoverageBadge');
+
+  if (!data || !data.race_list_exists || !data.groups || data.groups.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = '';
+
+  // 全体カバレッジ集計（全派生カテゴリの平均）
+  let totalCount = 0, totalPossible = 0;
+  data.groups.forEach(g => {
+    g.categories.forEach(c => {
+      totalCount += c.count;
+      totalPossible += c.total;
+    });
+  });
+  const overallPct = totalPossible > 0
+    ? Math.round(totalCount / totalPossible * 100) : 0;
+  if (overallPct >= 100) {
+    badge.style.display = '';
+    badge.style.background = 'rgba(52,211,153,0.15)';
+    badge.style.color = 'var(--fresh)';
+    badge.style.border = '1px solid rgba(52,211,153,0.3)';
+    badge.textContent = '✓ 全行データ完備';
+  } else if (overallPct >= 80) {
+    badge.style.display = '';
+    badge.style.background = 'rgba(251,191,36,0.15)';
+    badge.style.color = '#fbbf24';
+    badge.style.border = '1px solid rgba(251,191,36,0.3)';
+    badge.textContent = `⚠ ${overallPct}% — 移行未完了あり`;
+  } else {
+    badge.style.display = '';
+    badge.style.background = 'rgba(239,68,68,0.15)';
+    badge.style.color = '#ef4444';
+    badge.style.border = '1px solid rgba(239,68,68,0.3)';
+    badge.textContent = `✗ ${overallPct}% — 移行が必要`;
   }
 
-  try {
-    const res = await fetch(API_BASE + `/api/scrape-status?date=${currentDate}`);
-    clearBoardLoading();
-    const data = await res.json();
-    if (data.error) {
-      if (!cached) {
-        document.getElementById('boardContainer').innerHTML =
-          `<div class="empty-state"><div class="icon">⚠️</div><p>${data.error}</p></div>`;
+  const groupHtml = data.groups.map(g => {
+    const catRows = g.categories.map(c => {
+      const pct = c.pct;
+      const barColor = pct >= 100 ? 'var(--fresh)' : pct >= 80 ? '#fbbf24' : '#ef4444';
+      const label = CATEGORY_LABELS[c.category] || c.label || c.category;
+      return `
+        <div style="margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+            <span style="font-size:11px;color:var(--text-dim)">${label}</span>
+            <span style="font-size:11px;color:${barColor};font-weight:600">${c.count}/${c.total} (${pct}%)</span>
+          </div>
+          <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${barColor};border-radius:2px;transition:width 0.3s"></div>
+          </div>
+        </div>`;
+    }).join('');
+
+    const groupPct = (() => {
+      const tot = g.categories.reduce((s, c) => s + c.total, 0);
+      const cnt = g.categories.reduce((s, c) => s + c.count, 0);
+      return tot > 0 ? Math.round(cnt / tot * 100) : 0;
+    })();
+    const groupColor = groupPct >= 100 ? 'var(--fresh)' : groupPct >= 80 ? '#fbbf24' : '#ef4444';
+    const axisLabel = g.axis === 'horse' ? `馬${data.total_horses}頭` : `${data.total_races}R`;
+
+    return `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:12px;font-weight:600;color:#fff">${g.group}</span>
+          <span style="font-size:10px;color:var(--text-dim)">${axisLabel}</span>
+          <span style="margin-left:auto;font-size:11px;font-weight:700;color:${groupColor}">${groupPct}%</span>
+        </div>
+        ${catRows}
+      </div>`;
+  }).join('');
+
+  content.innerHTML = groupHtml;
+}
+
+function renderProgressFromMatrix(data) {
+  const wrap = document.getElementById('progressWrap');
+  if (!wrap) return;
+
+  const raceIds = data.race_ids || [];
+  const cats    = data.categories || [];
+  const matrix  = data.matrix || {};
+
+  if (!raceIds.length) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'flex';
+
+  // 充足率計算（N/A セルは分母から除外）
+  let totalCell = 0;
+  let totalOk   = 0;
+  let totalNA   = 0;
+  const catMissing = {};
+  cats.forEach(c => { catMissing[c] = 0; });
+  raceIds.forEach(rid => {
+    const row = matrix[rid] || {};
+    cats.forEach(c => {
+      const v = row[c];
+      if (v === null) { totalNA++; return; }  // N/A は分母・欠損から除外
+      totalCell++;
+      if (v) totalOk++;
+      else catMissing[c]++;
+    });
+  });
+
+  const pct = totalCell > 0 ? Math.round(totalOk / totalCell * 100) : 0;
+  const missingCatNames = cats.filter(c => catMissing[c] > 0);
+
+  document.getElementById('progressPct').textContent = pct;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('statRaces').textContent = raceIds.length;
+  document.getElementById('statDone').textContent = pct;
+  document.getElementById('statDone').style.color = pct >= 100 ? 'var(--fresh)' : pct >= 75 ? 'var(--warn)' : 'var(--err)';
+
+  const missingEl = document.getElementById('statMissingCats');
+  if (missingCatNames.length === 0) {
+    missingEl.textContent = 'なし';
+    missingEl.style.color = 'var(--fresh)';
+  } else {
+    missingEl.textContent = missingCatNames.map(c => COV_CAT_LABELS[c] || c).join(', ');
+    missingEl.style.color = 'var(--warn)';
+  }
+
+  const badge = document.getElementById('allFreshBadge');
+  badge.style.display = pct >= 100 ? 'inline-block' : 'none';
+
+  if (data.local_index_updated_at) {
+    const scrapeLink = document.getElementById('scrapePageLink');
+    if (scrapeLink) scrapeLink.href = `/scrape?tab=control&date=${data.date}`;
+  }
+}
+
+// 列選択状態管理
+let _selectedColumn = null;        // 現在選択中のカテゴリ名
+let _matrixData = null;            // 最後にレンダーしたマトリクスデータ
+
+function renderRaceMatrix(data) {
+  const panel   = document.getElementById('raceMatrixPanel');
+  const content = document.getElementById('raceMatrixContent');
+  const badge   = document.getElementById('raceMatrixBadge');
+  const meta    = document.getElementById('raceMatrixMeta');
+
+  const raceIds  = data.race_ids  || [];
+  const cats     = data.categories || [];
+  const matrix   = data.matrix    || {};
+  const raceMeta = data.race_meta  || {};
+
+  _matrixData = data;
+  _selectedColumn = null;
+  document.getElementById('scrapeActionBar').style.display = 'none';
+  document.getElementById('scrapeActionResult').style.display = 'none';
+
+  if (!raceIds.length || !cats.length) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = '';
+
+  // バッジ: 全体充足率（N/A セルは分母から除外）
+  let totalOk = 0, totalCell = 0;
+  raceIds.forEach(rid => {
+    const row = matrix[rid] || {};
+    cats.forEach(c => {
+      const v = row[c];
+      if (v === null) return;  // N/A は除外
+      totalCell++;
+      if (v === true) totalOk++;
+    });
+  });
+  const pct = totalCell > 0 ? Math.round(totalOk / totalCell * 100) : 0;
+  badge.textContent = `${pct}% (${totalOk}/${totalCell})`;
+  badge.style.background = pct >= 100 ? 'rgba(52,211,153,0.18)' : pct >= 75 ? 'rgba(251,191,36,0.18)' : 'rgba(239,68,68,0.18)';
+  badge.style.color = pct >= 100 ? 'var(--fresh)' : pct >= 75 ? 'var(--warn)' : 'var(--err)';
+  badge.style.border = `1px solid ${pct >= 100 ? 'rgba(52,211,153,0.3)' : pct >= 75 ? 'rgba(251,191,36,0.3)' : 'rgba(239,68,68,0.3)'}`;
+
+  // カテゴリ略称（ヘッダ行）
+  const SHORT_LABEL = {
+    race_shutuba:               '出馬表',
+    race_shutuba_meta:          'R情報',
+    race_index:                 '指数',
+    race_barometer:             '走行指数',
+    race_paddock:               'パドック',
+    race_odds:                  'オッズ',
+    race_result_on_time:        '結果速',
+    race_result_on_time_payoff: '払戻速',
+    race_result_on_time_lap:    'ラップ速',
+    race_result_on_time_corner: '通過速',
+    race_result:                '結果確',
+    race_result_meta:           'R情報確',
+    race_result_payoff:         '払戻確',
+    race_result_track:          '馬場確',
+    race_result_corner:         '通過確',
+    race_result_lap_times:      'ラップ確',
+    race_result_lap:            '個別Lap',
+  };
+  // カテゴリ区切り（グループ境界インデックス）
+  const GROUP_START = new Set([
+    'race_shutuba',
+    'race_result_on_time',
+    'race_result',
+  ]);
+
+  // カテゴリカラー（グループ単位で背景色を変える）
+  const COL_BG = cat => {
+    if (['race_shutuba','race_shutuba_meta','race_index','race_paddock','race_odds'].includes(cat))
+      return 'rgba(99,179,237,0.06)';
+    if (cat.includes('on_time'))
+      return 'rgba(167,139,250,0.06)';
+    return 'rgba(52,211,153,0.06)';
+  };
+
+  // カテゴリごとの欠損数（N/A は欠損扱いしない）
+  const missingCountByCol = {};
+  const naCountByCol = {};
+  cats.forEach(cat => {
+    missingCountByCol[cat] = raceIds.filter(rid => (matrix[rid] || {})[cat] === false).length;
+    naCountByCol[cat] = raceIds.filter(rid => (matrix[rid] || {})[cat] === null).length;
+  });
+
+  // テーブル組み立て
+  const cellSz = 'min-width:42px;max-width:54px;width:46px';
+  let html = `<table id="raceMatrixTable" style="border-collapse:collapse;font-size:12px;white-space:nowrap">`;
+
+  // ── ヘッダ行 ──
+  html += `<thead><tr>`;
+  html += `<th style="position:sticky;left:0;background:var(--surface2);z-index:2;padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-dim);${cellSz};min-width:90px;width:90px">レース</th>`;
+  cats.forEach(cat => {
+    const sep = GROUP_START.has(cat) ? 'border-left:2px solid var(--border);' : '';
+    const missCnt = missingCountByCol[cat] || 0;
+    const naCnt   = naCountByCol[cat] || 0;
+    const missLabel = missCnt > 0
+      ? `<br><span style="color:#ef4444;font-size:9px;writing-mode:horizontal-tb">✗${missCnt}</span>`
+      : (naCnt > 0 ? `<br><span style="color:#6b7280;font-size:9px;writing-mode:horizontal-tb">−${naCnt}</span>` : '');
+    html += `<th data-col="${cat}" onclick="selectColumn('${cat}')"
+      style="cursor:pointer;${cellSz};${sep}padding:4px 2px;text-align:center;border-bottom:1px solid var(--border);background:${COL_BG(cat)};writing-mode:vertical-rl;height:72px;font-weight:500;color:var(--text-dim);font-size:11px;transition:background 0.15s;user-select:none"
+      title="${cat}（クリックで欠損スクレイピング）"
+      onmouseover="this.style.background='rgba(99,179,237,0.18)'"
+      onmouseout="this.style.background='${COL_BG(cat)}'">${SHORT_LABEL[cat] || cat}${missLabel}</th>`;
+  });
+  html += `</tr></thead><tbody>`;
+
+  // ── データ行 ──
+  raceIds.forEach((rid, idx) => {
+    const rm    = raceMeta[rid] || {};
+    const rNum  = rm.race_num || '';
+    const venue = rm.venue || '';
+    const rowBg = idx % 2 === 0 ? 'background:transparent' : 'background:rgba(255,255,255,0.02)';
+    html += `<tr style="${rowBg}">`;
+    html += `<td style="position:sticky;left:0;background:var(--surface2);z-index:1;padding:4px 10px;border-bottom:1px solid rgba(100,100,120,0.1);font-size:12px;white-space:nowrap;${cellSz};min-width:90px">`;
+    html += `<span style="color:var(--text-dim);font-size:11px">${venue}</span> <strong style="color:#fff">R${rNum}</strong>`;
+    html += `</td>`;
+    const row = matrix[rid] || {};
+    cats.forEach(cat => {
+      const val = row[cat];
+      const sep = GROUP_START.has(cat) ? 'border-left:2px solid var(--border);' : '';
+      let bg, sym, col, fw;
+      if (val === true) {
+        bg = 'rgba(52,211,153,0.18)'; sym = '✓'; col = '#34d399'; fw = '400';
+      } else if (val === null) {
+        bg = 'rgba(100,100,120,0.10)'; sym = '−'; col = '#6b7280'; fw = '400';
+      } else {
+        bg = 'rgba(239,68,68,0.12)'; sym = '✗'; col = '#ef4444'; fw = '600';
       }
-      return;
+      const tooltip = val === null ? `${cat}\n${rid}\n(N/A: 取得試行済みだが存在しない)` : `${cat}\n${rid}`;
+      html += `<td data-col="${cat}" style="${cellSz};${sep}text-align:center;padding:3px 2px;border-bottom:1px solid rgba(100,100,120,0.08);background:${bg};color:${col};font-size:13px;font-weight:${fw}" title="${tooltip}">${sym}</td>`;
+    });
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table>`;
+  content.innerHTML = html;
+
+  if (data.local_index_updated_at) {
+    meta.textContent = `ローカルインデックス更新: ${data.local_index_updated_at}`;
+  }
+}
+
+/**
+ * 列（カテゴリ）を選択してアクションバーを表示する
+ */
+function selectColumn(cat) {
+  if (!_matrixData) return;
+
+  const SHORT_LABEL = {
+    race_shutuba:'出馬表', race_shutuba_meta:'R情報', race_index:'指数',
+    race_barometer:'走行指数', race_paddock:'パドック', race_odds:'オッズ',
+    race_result_on_time:'結果速報', race_result_on_time_payoff:'払戻速報',
+    race_result_on_time_lap:'ラップ速報', race_result_on_time_corner:'通過順速報',
+    race_result:'結果確定', race_result_meta:'R情報確定', race_result_payoff:'払戻確定',
+    race_result_track:'馬場確定', race_result_corner:'通過順確定',
+    race_result_lap_times:'ラップ確定', race_result_lap:'個別Lap',
+  };
+
+  _selectedColumn = cat;
+
+  // 列ハイライト
+  document.querySelectorAll('[data-col]').forEach(el => {
+    el.style.outline = '';
+  });
+  document.querySelectorAll(`[data-col="${cat}"]`).forEach(el => {
+    el.style.outline = '2px solid rgba(99,179,237,0.7)';
+  });
+
+  // 欠損数算出（N/A は欠損としてカウントしない）
+  const matrix  = _matrixData.matrix || {};
+  const raceIds = _matrixData.race_ids || [];
+  const naCount = raceIds.filter(rid => (matrix[rid] || {})[cat] === null).length;
+  const missing = raceIds.filter(rid => (matrix[rid] || {})[cat] === false);
+
+  // アクションバー更新
+  const bar = document.getElementById('scrapeActionBar');
+  document.getElementById('scrapeActionCat').textContent = `${SHORT_LABEL[cat] || cat}  (${cat})`;
+  document.getElementById('scrapeActionMissing').textContent =
+    missing.length === 0
+      ? `✓ 欠損なし${naCount > 0 ? `  (N/A: ${naCount}件)` : ''}`
+      : `✗ 欠損 ${missing.length} 件 / ${raceIds.length} レース${naCount > 0 ? `  (N/A: ${naCount}件)` : ''}`;
+
+  const btn = document.getElementById('scrapeActionBtn');
+  btn.disabled = missing.length === 0;
+  btn.style.opacity = missing.length === 0 ? '0.4' : '1';
+  btn.style.cursor  = missing.length === 0 ? 'not-allowed' : 'pointer';
+
+  bar.style.display = 'flex';
+  document.getElementById('scrapeActionResult').style.display = 'none';
+}
+
+/**
+ * 列選択を解除する
+ */
+function clearColumnSelection() {
+  _selectedColumn = null;
+  document.querySelectorAll('[data-col]').forEach(el => { el.style.outline = ''; });
+  document.getElementById('scrapeActionBar').style.display = 'none';
+  document.getElementById('scrapeActionResult').style.display = 'none';
+}
+
+/**
+ * 選択列の欠損データをスクレイピングキューに投入する
+ */
+async function triggerScrapeMissing() {
+  if (!_selectedColumn || !currentDate) return;
+
+  const btn = document.getElementById('scrapeActionBtn');
+  const resultEl = document.getElementById('scrapeActionResult');
+  btn.disabled = true;
+  btn.textContent = '⏳ キュー投入中...';
+  resultEl.style.display = 'none';
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/scrape-missing`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({date: currentDate, category: _selectedColumn, force: false}),
+    });
+    const json = await resp.json();
+
+    if (!resp.ok) {
+      resultEl.textContent = `エラー: ${json.error || resp.status}`;
+      resultEl.style.background = 'rgba(239,68,68,0.12)';
+      resultEl.style.color = '#ef4444';
+      resultEl.style.border = '1px solid rgba(239,68,68,0.3)';
+    } else if (json.enqueued === 0) {
+      resultEl.textContent = '✓ 欠損データなし（既に全件揃っています）';
+      resultEl.style.background = 'rgba(52,211,153,0.1)';
+      resultEl.style.color = '#34d399';
+      resultEl.style.border = '1px solid rgba(52,211,153,0.25)';
+    } else {
+      resultEl.textContent = `🔄 ${json.enqueued} 件をキューに追加しました（タスク: ${json.scrape_task}）${json.skipped_already_queued > 0 ? `  ※${json.skipped_already_queued}件は既存ジョブ` : ''}`;
+      resultEl.style.background = 'rgba(99,179,237,0.1)';
+      resultEl.style.color = '#63b3ed';
+      resultEl.style.border = '1px solid rgba(99,179,237,0.25)';
     }
-    _statusCache[currentDate] = data;
-    lastBoardData = data;
-    structureVersions = data.structure_versions || {};
-    updateGcsBadge(data.gcs_enabled);
-    renderProgress(data);
-    renderBoard(data);
-    document.getElementById('lastUpdate').textContent =
-      `最終更新: ${new Date().toLocaleTimeString('ja-JP')}`;
-  } catch (e) {
-    clearBoardLoading();
-    if (!cached) {
-      console.error('fetch error:', e);
-      document.getElementById('boardContainer').innerHTML =
-        `<div class="empty-state"><div class="icon">⚠️</div>
-         <p>データ取得エラー<br><span style="font-size:12px;color:var(--text-dim)">${e.message}</span></p></div>`;
-    }
+    resultEl.style.display = 'block';
+  } catch(e) {
+    resultEl.textContent = `通信エラー: ${e.message}`;
+    resultEl.style.background = 'rgba(239,68,68,0.12)';
+    resultEl.style.color = '#ef4444';
+    resultEl.style.border = '1px solid rgba(239,68,68,0.3)';
+    resultEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 欠損をスクレイピング';
   }
 }
 
@@ -2571,20 +3146,33 @@ function horseCellHtml(info, raceId, clickLabel, category) {
 /* ── 構造チェック ── */
 
 const CATEGORY_LABELS = {
+  // 直接スクレイピング
   race_shutuba: '出馬表',
   race_result_on_time: '速報結果',
   race_result: 'DB結果',
+  race_result_lap: 'ラップDB',
   race_index: 'タイム指数',
   race_odds: '単複オッズ',
   race_pair_odds: '2連系オッズ',
   race_paddock: 'パドック',
-  race_barometer: '偏差値',
+  race_barometer: '走行指数',
   race_trainer_comment: '厩舎コメント',
   smartrc_race: 'SmartRC',
   horse_result: '馬成績',
   horse_pedigree_5gen: '血統5gen',
   horse_profile: '馬プロフィール',
   horse_result_html: '馬戦績HTML',
+  // 行固有派生カテゴリ
+  race_shutuba_meta: 'レース情報（メタ）',
+  race_result_on_time_payoff: '払戻（速報）',
+  race_result_on_time_lap: 'ラップ（速報）',
+  race_result_on_time_corner: '通過順（速報）',
+  race_result_meta: 'レース情報（確定）',
+  race_result_payoff: '払戻（確定）',
+  race_result_track: '馬場情報',
+  race_result_corner: '通過順（確定）',
+  race_result_lap_times: 'ラップ（確定）',
+  horse_race_history: '馬過去成績',
 };
 
 async function loadStructureStatus() {
@@ -2750,6 +3338,192 @@ if (dateParam && /^\d{8}$/.test(dateParam)) {
 
 // ── バッチ手動実行は /scrape ページに移動しました ──
 // ─────────────────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════
+//  カテゴリ別カバレッジカレンダー
+// ══════════════════════════════════════════════════════════
+let _covCalData = null;
+let _covCalYear = String(new Date().getFullYear());
+
+// カテゴリ表示ラベル（短縮）
+// scrape_process.md の行定義 17 カテゴリに準拠（smartrc は中止のため除外）
+const COV_CAT_LABELS = {
+  // ── 出走前 ───────────────────────────────────────────────
+  race_shutuba:               '出馬表',
+  race_shutuba_meta:          'レース情報',
+  race_index:                 '指数',
+  race_barometer:             '走行指数',
+  race_paddock:               'パドック',
+  race_odds:                  'オッズ',
+  // ── 結果（速報）─────────────────────────────────────────
+  race_result_on_time:        '結果(速)',
+  race_result_on_time_payoff: '払戻(速)',
+  race_result_on_time_lap:    'ラップ(速)',
+  race_result_on_time_corner: '通過順(速)',
+  // ── 結果（確定）─────────────────────────────────────────
+  race_result:                '結果(確)',
+  race_result_meta:           'レース情報(確)',
+  race_result_payoff:         '払戻(確)',
+  race_result_track:          '馬場(確)',
+  race_result_corner:         '通過順(確)',
+  race_result_lap_times:      'ラップ(確)',
+  race_result_lap:            '個別ラップ',
+};
+
+async function fetchCovCal(force) {
+  const heat = document.getElementById('covHeatmap');
+  const sel  = document.getElementById('covCalYearSelect');
+  if (!heat) return;
+  heat.innerHTML = '<div style="font-size:12px;color:var(--text-dim);padding:14px">集計中…（数秒かかる場合があります）</div>';
+  const yr = (sel && sel.value) ? sel.value : _covCalYear;
+  _covCalYear = yr;
+  const url = API_BASE + '/api/coverage-calendar?year=' + yr + (force ? '&_force=1' : '');
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+    _covCalData = data;
+    _renderCovCal(data, yr);
+  } catch (e) {
+    heat.innerHTML = `<div style="font-size:12px;color:var(--err);padding:12px">通信エラー: ${_blEsc(e.message)}</div>`;
+  }
+}
+
+function _renderCovCal(data, year) {
+  const cats     = data.categories || [];
+  const dates    = data.dates || [];
+  const heat     = document.getElementById('covHeatmap');
+  const metaEl   = document.getElementById('covCalMeta');
+  const legendEl = document.getElementById('covCatLegend');
+  if (!heat) return;
+
+  // 凡例
+  const gradColors = ['#22c55e','#84cc16','#f59e0b','#f97316','#ef4444'];
+  const levelLabels = ['100%', '75〜99%', '50〜74%', '1〜49%', '0%'];
+  let lgHtml = '';
+  gradColors.forEach((c,i) => {
+    lgHtml += `<span class="cov-cat-chip"><span class="dot" style="background:${c}"></span>${levelLabels[i]}</span>`;
+  });
+  lgHtml += '<span class="cov-cat-chip"><span class="dot" style="background:rgba(100,100,120,0.35)"></span>JRAなし</span>';
+  lgHtml += '<span class="cov-cat-chip"><span class="dot" style="background:rgba(107,125,149,0.06);border:1px dashed rgba(107,125,149,0.3)"></span>データなし</span>';
+  // カテゴリ名凡例
+  cats.forEach(c => {
+    lgHtml += `<span class="cov-cat-chip">${COV_CAT_LABELS[c] || c}</span>`;
+  });
+  if (legendEl) legendEl.innerHTML = lgHtml;
+
+  // 日付マップ（YYYYMMDD → row）
+  const dateMap = {};
+  dates.forEach(r => { dateMap[r.date] = r; });
+
+  // 開催日数・欠損日数をカウント
+  const raceDays = dates.filter(r => r.total_races > 0);
+  const incompleteDays = raceDays.filter(r => r.pct < 100);
+  const srcLabel = data.source === 'local_index' ? '🗂️ローカル' : data.source === 'gcs_cache' ? '☁️GCSキャッシュ' : '🔀混在';
+  if (metaEl) {
+    metaEl.innerHTML =
+      `${year}年 — 開催日 <strong style="color:#fff">${raceDays.length}</strong>日 ` +
+      `/ 欠損あり <strong style="color:var(--warn)">${incompleteDays.length}</strong>日 ` +
+      `· GCS 保有率 <strong style="color:${incompleteDays.length===0?'var(--ok)':'var(--warn)'}">${
+        raceDays.length > 0 ? Math.round(raceDays.reduce((s,r)=>s+r.pct,0)/raceDays.length) : 0
+      }%</strong> (平均) ` +
+      `<span style="font-size:11px;color:var(--text-dim);margin-left:6px">データソース: ${srcLabel}</span>`;
+  }
+
+  // カレンダーレンダリング
+  const DOW = ['月','火','水','木','金','土','日'];
+  const MONTH_LABELS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  let html = '';
+  for (let month = 1; month <= 12; month++) {
+    const dim   = new Date(parseInt(year), month, 0).getDate();
+    const first = new Date(parseInt(year), month - 1, 1);
+    const lead  = (first.getDay() + 6) % 7;
+    html += `<div class="cov-month"><h4>${MONTH_LABELS[month - 1]}</h4><div class="cov-month-grid">`;
+    DOW.forEach(d => { html += `<div class="cov-dow">${d}</div>`; });
+    for (let i = 0; i < lead; i++) {
+      html += '<div class="cov-cell" style="visibility:hidden;pointer-events:none"></div>';
+    }
+    for (let day = 1; day <= dim; day++) {
+      const ds  = `${year}${String(month).padStart(2,'0')}${String(day).padStart(2,'0')}`;
+      const row = dateMap[ds];
+      let cls = 'cov-cell', label = '', dataPct = '', dataDate = ds;
+      let hasData = false;
+      if (row) {
+        hasData = true;
+        const pct = row.pct || 0;
+        const n   = row.total_races || 0;
+        if (n === 0) {
+          cls += ' cov-norace';
+          label = '';
+        } else if (pct >= 100) { cls += ' cov-full has-data'; label = '✓'; }
+        else if (pct >= 75)    { cls += ' cov-hi has-data';   label = Math.round(pct); }
+        else if (pct >= 50)    { cls += ' cov-mid has-data';  label = Math.round(pct); }
+        else if (pct > 0)      { cls += ' cov-lo has-data';   label = Math.round(pct); }
+        else                   { cls += ' cov-bare has-data'; label = '0'; }
+        dataPct = pct;
+      } else {
+        cls += ' cov-empty';
+      }
+      const cellData = hasData ? ` data-date="${ds}" onmouseenter="showCovTip(event,'${ds}')" onmouseleave="hideCovTip()" onclick="showDetailView('${ds}')"` : '';
+      html += `<div class="${cls}" title="${ds}"${cellData}>${label}</div>`;
+    }
+    html += '</div></div>';
+  }
+  heat.innerHTML = html;
+}
+
+function showCovTip(ev, ds) {
+  const tip  = document.getElementById('covTooltip');
+  const data = _covCalData;
+  if (!tip || !data) return;
+  const row = (data.dates || []).find(r => r.date === ds);
+  if (!row) return;
+  const cats = data.categories || [];
+  const n    = row.total_races || 0;
+  const srcBadge = row.source === 'local' ? ' <span style="font-size:10px;opacity:.7">🗂️ローカル</span>' : row.source === 'cache' ? ' <span style="font-size:10px;opacity:.7">☁️キャッシュ</span>' : '';
+  let html = `<div class="tt-date">${ds.slice(0,4)}/${ds.slice(4,6)}/${ds.slice(6)} ${row.venues ? row.venues.join(' ') : ''}${srcBadge}</div>`;
+  html += `<div class="tt-row"><span class="tt-cat">総レース</span><span class="tt-cnt">${n}R</span></div>`;
+  html += `<div class="tt-row"><span class="tt-cat">平均充足率</span><span class="tt-cnt tt-${row.pct>=100?'ok':row.pct>0?'warn':'ng'}">${row.pct}%</span></div>`;
+  cats.forEach(c => {
+    const cnt  = (row.per_cat || {})[c] || 0;
+    const cls  = cnt >= n ? 'tt-ok' : cnt > 0 ? 'tt-warn' : 'tt-ng';
+    const lbl  = COV_CAT_LABELS[c] || c;
+    html += `<div class="tt-row"><span class="tt-cat">${lbl}</span><span class="tt-cnt ${cls}">${cnt}/${n}</span></div>`;
+  });
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  _moveCovTip(ev);
+}
+
+function _moveCovTip(ev) {
+  const tip = document.getElementById('covTooltip');
+  if (!tip || tip.style.display === 'none') return;
+  const x = ev.clientX + 14;
+  const y = ev.clientY - 10;
+  const w = tip.offsetWidth || 200;
+  const h = tip.offsetHeight || 200;
+  tip.style.left = (x + w > window.innerWidth  ? x - w - 28 : x) + 'px';
+  tip.style.top  = (y + h > window.innerHeight ? y - h + 20 : y) + 'px';
+}
+
+document.addEventListener('mousemove', function(ev) {
+  const tip = document.getElementById('covTooltip');
+  if (tip && tip.style.display !== 'none') _moveCovTip(ev);
+});
+
+function hideCovTip() {
+  const tip = document.getElementById('covTooltip');
+  if (tip) tip.style.display = 'none';
+}
+
+// 年セレクト初期化（backlogYearSelect と同期）
+function initCovCalYearSelect() {
+  const src = document.getElementById('backlogYearSelect');
+  const dst = document.getElementById('covCalYearSelect');
+  if (!dst) return;
+  dst.innerHTML = src ? src.innerHTML : `<option value="${_covCalYear}">${_covCalYear}</option>`;
+  dst.value = _covCalYear;
+  dst.addEventListener('change', () => { _covCalYear = dst.value; fetchCovCal(false); });
+}
 </script>
 </body>
 </html>

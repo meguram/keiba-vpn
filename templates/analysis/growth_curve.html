@@ -21,6 +21,11 @@ h1{font-size:22px;font-weight:700;color:#f0f6fc;margin-bottom:4px}
 .btn-primary{background:#238636;color:#fff}
 .btn-primary:hover{background:#2ea043}
 .btn-primary:disabled{background:#30363d;color:#6e7681;cursor:not-allowed}
+.btn-scope{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #30363d;background:#0d1117;color:#8b949e;transition:.15s}
+.btn-scope:hover{border-color:#58a6ff;color:#c9d1d9}
+.btn-scope.active{background:#23863640;border-color:#238636;color:#3fb950}
+.jra-scope-bar{display:none;align-items:center;flex-wrap:wrap;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid #21262d}
+.jra-scope-label{font-size:11px;color:#8b949e;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
 
 .info-card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:20px;margin-bottom:20px;display:none}
 .info-card.show{display:block}
@@ -116,7 +121,7 @@ tr:hover td{background:#1c2128}
 {% include 'partials/_nav.html' %}
 <div class="main">
 <h1><img src="/data/image/icon.jpg" alt="" class="page-brand-icon">成長曲線</h1>
-<p class="subtitle">馬体重・パフォーマンス・レース間隔の時系列分析</p>
+<p class="subtitle">馬体重・パフォーマンス・レース間隔の時系列分析（デフォルトは中央競馬のみ。全会場はボタンで切替）</p>
 
 <div class="search-card" id="searchCard">
   <div class="search-form">
@@ -155,6 +160,11 @@ tr:hover td{background:#1c2128}
       <div class="horse-name" id="horseName">-</div>
       <div class="horse-meta" id="horseMeta"></div>
     </div>
+  </div>
+  <div class="jra-scope-bar" id="jraScopeBar">
+    <span class="jra-scope-label">表示範囲</span>
+    <button type="button" class="btn-scope active" id="btnScopeJra" onclick="setGrowthCurveScope(true)">中央競馬のみ</button>
+    <button type="button" class="btn-scope" id="btnScopeAll" onclick="setGrowthCurveScope(false)">全会場（地方・海外含む）</button>
   </div>
   <div class="stats-grid" id="statsGrid"></div>
   <div id="weightStatsSection" style="display:none;margin-top:10px">
@@ -239,6 +249,7 @@ tr:hover td{background:#1c2128}
 </div>
 
 <script>
+window.lastLoadedHorseId = null;
 let horseData = null;
 let charts = {};
 let autocompleteTimeout = null;
@@ -629,6 +640,8 @@ async function loadHorseData(forceRefresh = false) {
     }
   }
 
+  window.lastLoadedHorseId = horseId;
+
   // URLを更新
   const limit = document.getElementById('limitSelect').value;
   const newUrl = new URL(window.location);
@@ -637,6 +650,11 @@ async function loadHorseData(forceRefresh = false) {
     newUrl.searchParams.set('limit', limit);
   } else {
     newUrl.searchParams.delete('limit');
+  }
+  if (window.growthCurveJraOnly === false) {
+    newUrl.searchParams.set('jra_only', 'false');
+  } else {
+    newUrl.searchParams.delete('jra_only');
   }
   window.history.pushState({}, '', newUrl);
 
@@ -664,8 +682,16 @@ async function loadHorseData(forceRefresh = false) {
   try {
     // URLパラメータを構築
     const params = new URLSearchParams();
-    if(forceRefresh) params.set('force_refresh', 'true');
+    if(forceRefresh) {
+      params.set('force_refresh', 'true');
+      params.set('fetch_speed_index', 'true');
+    }
     if(limit) params.set('limit', limit);
+    if (window.growthCurveJraOnly === false) {
+      params.set('jra_only', 'false');
+    } else {
+      params.set('jra_only', 'true');
+    }
     const apiUrl = `/api/growth-curve/${horseId}${params.toString() ? '?' + params.toString() : ''}`;
     const res = await fetch(apiUrl);
     if(!res.ok) {
@@ -693,6 +719,11 @@ async function loadHorseData(forceRefresh = false) {
       statusMsg.innerHTML = statusHtml;
     }
 
+    if ((!data.races || data.races.length === 0) && ((data.total_all_races || 0) > 0) && data.jra_filter_active) {
+      const warn = '<div class="status-msg warning">中央競馬のレースが0件です。「全会場（地方・海外含む）」ボタンで全出走を表示できます。</div>';
+      statusMsg.innerHTML = (statusMsg.innerHTML || '') + warn;
+    }
+
     horseData = data;
     renderHorseInfo(data);
     buildPresets();
@@ -702,6 +733,11 @@ async function loadHorseData(forceRefresh = false) {
     document.querySelectorAll('.info-card, .filter-bar, .chart-container, .race-table-container').forEach(el => {
       el.classList.add('show');
     });
+    const jraBar = document.getElementById('jraScopeBar');
+    if (jraBar) {
+      jraBar.style.display = 'flex';
+      syncScopeButtonStyles();
+    }
 
     // 「最新データ取得」ボタンを表示
     if(refreshBtn) {
@@ -730,6 +766,7 @@ function backToSearch(e) {
   const newUrl = new URL(window.location);
   newUrl.searchParams.delete('horse_id');
   newUrl.searchParams.delete('limit');
+  newUrl.searchParams.delete('jra_only');
   window.history.pushState({}, '', newUrl);
 
   // 入力フィールドをクリア
@@ -749,8 +786,28 @@ function backToSearch(e) {
   const refreshBtn = document.getElementById('refreshBtn');
   if(refreshBtn) refreshBtn.style.display = 'none';
 
+  const jraBar = document.getElementById('jraScopeBar');
+  if (jraBar) jraBar.style.display = 'none';
+
   // 検索フォームにフォーカス
   document.getElementById('horseInput').focus();
+}
+
+function syncScopeButtonStyles() {
+  const j = document.getElementById('btnScopeJra');
+  const a = document.getElementById('btnScopeAll');
+  if (!j || !a) return;
+  j.classList.toggle('active', window.growthCurveJraOnly);
+  a.classList.toggle('active', !window.growthCurveJraOnly);
+}
+
+function setGrowthCurveScope(jraOnly) {
+  if (window.growthCurveJraOnly === jraOnly) return;
+  window.growthCurveJraOnly = jraOnly;
+  syncScopeButtonStyles();
+  if (!window.lastLoadedHorseId) return;
+  selectedHorseId = window.lastLoadedHorseId;
+  loadHorseData(false);
 }
 
 function renderHorseInfo(data) {
@@ -759,8 +816,12 @@ function renderHorseInfo(data) {
   document.getElementById('horseName').textContent = horse_name || '不明';
 
   const meta = document.getElementById('horseMeta');
+  const excl = (data.excluded_non_jra_count > 0) && data.jra_filter_active
+    ? `<span style="color:#58a6ff">中央以外 ${data.excluded_non_jra_count}戦は表示から除外中</span>` : '';
   meta.innerHTML = `
     <span>総出走: ${total_all_races ?? total_races}戦</span>
+    <span>表示中: ${total_races}戦</span>
+    ${excl}
     <span>平均馬体重: ${avg_weight.toFixed(1)}kg</span>
     <span>馬体重範囲: ${weight_range[0]}-${weight_range[1]}kg</span>
   `;
@@ -1164,6 +1225,8 @@ let _distDebounce = null;
 
 // URLパラメータから馬IDとlimitを取得して自動検索
 const urlParams = new URLSearchParams(window.location.search);
+window.growthCurveJraOnly = urlParams.get('jra_only') !== 'false';
+window.lastLoadedHorseId = null;
 const horseIdParam = urlParams.get('horse_id');
 const limitParam = urlParams.get('limit');
 if(limitParam) {

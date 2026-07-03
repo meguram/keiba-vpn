@@ -41,6 +41,7 @@ After=network-online.target
 
 [Service]
 Type=simple
+Environment=TZ=Asia/Tokyo
 WorkingDirectory=${SCRIPT_DIR}
 ExecStart=${PYTHON} -m src.scraper.jra_baba_live --watch
 Restart=on-failure

@@ -61,6 +61,15 @@ from src.utils.keiba_logging import script_basic_config
 script_basic_config(handlers=[logging.StreamHandler()])
 logger = logging.getLogger("scraper.backfill")
 
+
+def _update_coverage_safe(date: str, runner: Any) -> None:
+    """phase 完了後に date_coverage を安全に更新する（失敗しても続行）。"""
+    try:
+        from src.scraper.date_coverage import update_date_coverage
+        update_date_coverage(date, runner.storage)
+    except Exception as e:
+        logger.debug("coverage 更新スキップ [%s]: %s", date, e)
+
 PROGRESS_PATH = Path("data/local/meta/backfill_progress.json")
 LOCK_DIR = Path("data/local/meta/backfill_locks")
 
@@ -74,6 +83,7 @@ _PHASE_CATEGORIES = {
     "full": [
         "race_index", "race_shutuba_past",
         "race_paddock", "race_oikiri",
+        "race_result_on_time",
     ],
 }
 
@@ -293,6 +303,7 @@ def _run_phase_fast(runner, progress: BackfillProgress,
                 })
                 stats["dates_processed"] += 1
                 stats["races_total"] += len(races)
+                _update_coverage_safe(date, runner)
 
             if i < min(len(pending), max_dates) - 1:
                 pause = random.uniform(10.0, 30.0)
@@ -405,6 +416,7 @@ def _run_phase_full(runner, progress: BackfillProgress,
                     "race_paddock": "scrape_paddock",
                     "race_barometer": "scrape_barometer",
                     "race_oikiri": "scrape_oikiri",
+                    "race_result_on_time": "scrape_race_result_on_time",
                 }
                 method_name = method_map.get(cat)
                 if not method_name:
@@ -420,6 +432,7 @@ def _run_phase_full(runner, progress: BackfillProgress,
             progress.mark_date_done(date, "full", {"races": len(races)})
             stats["dates_processed"] += 1
             stats["races_total"] += len(races)
+            _update_coverage_safe(date, runner)
 
         if i < min(len(pending), max_dates) - 1:
             pause = random.uniform(10.0, 30.0)

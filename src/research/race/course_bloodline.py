@@ -36,7 +36,10 @@ from src.utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger("research.race.course_bloodline")
 
-COURSE_PROFILES_PATH = Path(__file__).resolve().parents[3] / "data" / "local" / "knowledge" / "course_profiles.json"
+def _course_profiles_path() -> Path:
+    from src.config.data_paths import COURSE_PROFILES_JSON
+
+    return COURSE_PROFILES_JSON
 
 TRAIT_KEYS = [
     "stamina_demand", "power_demand", "speed_sustain",
@@ -50,7 +53,11 @@ MIN_SAMPLES = 15
 class CourseBloodlineAnalyzer:
     """コース特性×血統の統合分析エンジン"""
 
-    def __init__(self, output_dir: str = "data/local/research/course_bloodline"):
+    def __init__(self, output_dir: str | None = None):
+        if output_dir is None:
+            from src.config.data_paths import COURSE_BLOODLINE_DIR
+
+            output_dir = str(COURSE_BLOODLINE_DIR)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.df = pd.DataFrame()
@@ -58,10 +65,11 @@ class CourseBloodlineAnalyzer:
         self._load_course_profiles()
 
     def _load_course_profiles(self):
-        if not COURSE_PROFILES_PATH.exists():
-            logger.error("コースプロファイルが見つかりません: %s", COURSE_PROFILES_PATH)
+        path = _course_profiles_path()
+        if not path.is_file():
+            logger.error("コースプロファイルが見つかりません: %s", path)
             return
-        with open(COURSE_PROFILES_PATH, encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         self.profiles = data.get("venues", {})
         self.surface_modifiers = data.get("surface_modifiers", {})
@@ -1360,7 +1368,9 @@ def main():
 
     parser = argparse.ArgumentParser(description="コース特性×血統適性 研究")
     parser.add_argument("--years", nargs="*", default=None)
-    parser.add_argument("--output-dir", default="data/local/research/course_bloodline")
+    from src.config.data_paths import COURSE_BLOODLINE_DIR
+
+    parser.add_argument("--output-dir", default=str(COURSE_BLOODLINE_DIR))
     args = parser.parse_args()
 
     analyzer = CourseBloodlineAnalyzer(output_dir=args.output_dir)

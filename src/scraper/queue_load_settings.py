@@ -29,17 +29,17 @@ _INFLIGHT_MAX = 64
 
 def _default_parallel_env() -> int:
     try:
-        n = int(os.environ.get("SCRAPE_QUEUE_PARALLEL", "6"))
+        n = int(os.environ.get("SCRAPE_QUEUE_PARALLEL", "4"))
     except (TypeError, ValueError):
-        n = 6
+        n = 4
     return max(_P_MIN, min(_P_MAX, n))
 
 
 def _default_stagger_env() -> float:
     try:
-        v = float(os.environ.get("SCRAPE_QUEUE_STAGGER_SEC", "0.25"))
+        v = float(os.environ.get("SCRAPE_QUEUE_STAGGER_SEC", "1.0"))
     except (TypeError, ValueError):
-        v = 0.25
+        v = 1.0
     return max(0.0, v)
 
 

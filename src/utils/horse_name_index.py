@@ -32,15 +32,27 @@ _mem_mtime: float = -2.0
 _mem_data: dict[str, Any] | None = None
 
 
-def horse_name_index_candidate_paths(base_dir: str | Path) -> tuple[Path, Path]:
+def horse_name_index_candidate_paths(base_dir: str | Path) -> tuple[Path, ...]:
+    from src.config.data_paths import HORSE_NAME_INDEX_JSON
+
     base = Path(base_dir)
     return (
+        HORSE_NAME_INDEX_JSON,
+        base / "data" / "calculated_data" / "knowledge" / "horse_name_index.json",
+        base / "data" / "page_reference" / "knowledge" / "horse_name_index.json",
         base / "data" / "knowledge" / "horse_name_index.json",
         base / "data" / "local" / "knowledge" / "horse_name_index.json",
     )
 
 
 def canonical_horse_name_index_path(base_dir: str | Path) -> Path:
+    """正本: ``data/calculated_data/knowledge/horse_name_index.json``。"""
+    from src.config.data_paths import calculated_data_root
+
+    return calculated_data_root() / "knowledge" / "horse_name_index.json"
+
+
+def _legacy_mirror_path(base_dir: str | Path) -> Path:
     return Path(base_dir) / "data" / "knowledge" / "horse_name_index.json"
 
 
@@ -107,6 +119,33 @@ def _atomic_json_write(path: Path, obj: Any) -> None:
     os.replace(tmp, path)
 
 
+def _write_horse_name_index_bundle_unlocked(base_dir: str | Path, out: dict[str, Any]) -> Path:
+    """calculated_data 正本へ書き、旧 ``data/knowledge/`` にミラーする（ロック済み想定）。"""
+    canonical = canonical_horse_name_index_path(base_dir)
+    _atomic_json_write(canonical, out)
+    legacy = _legacy_mirror_path(base_dir)
+    try:
+        if legacy.resolve() != canonical.resolve():
+            _atomic_json_write(legacy, out)
+    except OSError:
+        if legacy != canonical:
+            _atomic_json_write(legacy, out)
+    invalidate_horse_name_index_cache()
+    return canonical
+
+
+def _write_horse_name_index_bundle(base_dir: str | Path, out: dict[str, Any]) -> Path:
+    canonical = canonical_horse_name_index_path(base_dir)
+    lock_path = canonical.with_suffix(".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lockf:
+        fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
+        try:
+            return _write_horse_name_index_bundle_unlocked(base_dir, out)
+        finally:
+            fcntl.flock(lockf.fileno(), fcntl.LOCK_UN)
+
+
 def upsert_horse_name_index_entry(
     base_dir: str | Path,
     horse_id: str,
@@ -163,11 +202,9 @@ def upsert_horse_name_index_entry(
             data["horses"] = horses
             data["total_horses"] = len(horses)
             data["generated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-            _atomic_json_write(canonical, data)
+            _write_horse_name_index_bundle_unlocked(base_dir, data)
         finally:
             fcntl.flock(lockf.fileno(), fcntl.LOCK_UN)
-
-    invalidate_horse_name_index_cache()
 
 
 def rebuild_horse_name_index_from_horse_result_cache(base_dir: str | Path) -> int:
@@ -209,18 +246,26 @@ def rebuild_horse_name_index_from_horse_result_cache(base_dir: str | Path) -> in
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "horses": horses,
     }
-    canonical = canonical_horse_name_index_path(base_dir)
-    lock_path = canonical.with_suffix(".lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(lock_path, "a+", encoding="utf-8") as lockf:
-        fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
-        try:
-            _atomic_json_write(canonical, out)
-        finally:
-            fcntl.flock(lockf.fileno(), fcntl.LOCK_UN)
-
-    invalidate_horse_name_index_cache()
+    path = _write_horse_name_index_bundle(base_dir, out)
+    logger.info("馬名インデックス（ローカルキャッシュ）: %d 頭 → %s", len(horses), path)
     return len(horses)
+
+
+def _horse_result_index_entry(
+    raw: dict[str, Any] | None, hid: str, pref: str,
+) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    hid_s = str(raw.get("horse_id") or hid or "").strip()
+    hn = str(raw.get("horse_name") or "").strip()
+    if not hid_s or not hn:
+        return None
+    return {
+        "horse_id": hid_s,
+        "horse_name": hn,
+        "name_en": str(raw.get("name_en") or "").strip(),
+        "year": pref if pref.isdigit() else (hid_s[:4] if len(hid_s) >= 4 else ""),
+    }
 
 
 def rebuild_horse_name_index_from_gcs_horse_result(base_dir: str | Path) -> int:
@@ -230,6 +275,8 @@ def rebuild_horse_name_index_from_gcs_horse_result(base_dir: str | Path) -> int:
     **API サーバのランタイムでは呼ばないこと**（コスト・レイテンシ大）。
     初回構築・バッチ更新は ``python -m src.scripts.data.build_horse_index --from-gcs`` から実行する。
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     from src.scraper.storage import HybridStorage
 
     st = HybridStorage(str(base_dir))
@@ -239,33 +286,38 @@ def rebuild_horse_name_index_from_gcs_horse_result(base_dir: str | Path) -> int:
 
     prefixes = st.list_years("horse_result")
     if not prefixes:
-        prefixes = [str(y) for y in range(2005, 2030)]
+        prefixes = [str(y) for y in range(2009, 2027)]
 
     merged: dict[str, dict[str, Any]] = {}
     n_load = 0
-    for pref in prefixes:
-        keys = st.list_keys("horse_result", pref)
-        for hid in keys:
+    workers = min(12, max(2, int(os.environ.get("HORSE_NAME_INDEX_GCS_WORKERS", "6"))))
+
+    def _load_one(args: tuple[str, str]) -> dict[str, Any] | None:
+        pref, hid = args
+        raw = None
+        for attempt in range(3):
             try:
                 raw = st.load("horse_result", hid)
+                break
             except Exception:
-                continue
-            n_load += 1
-            if n_load % 2000 == 0:
-                logger.info("馬名インデックス GCS 走査: %d 件読了", n_load)
-            if not isinstance(raw, dict):
-                continue
-            hid_s = str(raw.get("horse_id") or hid or "").strip()
-            hn = str(raw.get("horse_name") or "").strip()
-            if not hid_s or not hn:
-                continue
-            ne = str(raw.get("name_en") or "").strip()
-            merged[hid_s] = {
-                "horse_id": hid_s,
-                "horse_name": hn,
-                "name_en": ne,
-                "year": pref if pref.isdigit() else "",
-            }
+                if attempt < 2:
+                    time.sleep(0.4 * (attempt + 1))
+        return _horse_result_index_entry(raw, hid, pref)
+
+    for pref in prefixes:
+        keys = st.list_keys("horse_result", pref)
+        if not keys:
+            continue
+        logger.info("馬名インデックス: prefix=%s keys=%d", pref, len(keys))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_load_one, (pref, hid)): hid for hid in keys}
+            for fut in as_completed(futures):
+                rec = fut.result()
+                if rec:
+                    merged[rec["horse_id"]] = rec
+                n_load += 1
+                if n_load % 2000 == 0:
+                    logger.info("馬名インデックス GCS 走査: %d 件処理", n_load)
 
     horses = sorted(merged.values(), key=lambda h: h["horse_id"])
     out: dict[str, Any] = {
@@ -274,19 +326,112 @@ def rebuild_horse_name_index_from_gcs_horse_result(base_dir: str | Path) -> int:
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "horses": horses,
     }
-    canonical = canonical_horse_name_index_path(base_dir)
-    lock_path = canonical.with_suffix(".lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(lock_path, "a+", encoding="utf-8") as lockf:
-        fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
-        try:
-            _atomic_json_write(canonical, out)
-        finally:
-            fcntl.flock(lockf.fileno(), fcntl.LOCK_UN)
-
-    invalidate_horse_name_index_cache()
-    logger.info("馬名インデックス GCS 再構築完了: %d 頭（%d 件ロード）", len(horses), n_load)
+    path = _write_horse_name_index_bundle(base_dir, out)
+    logger.info(
+        "馬名インデックス GCS 再構築完了: %d 頭（%d 件ロード）→ %s",
+        len(horses),
+        n_load,
+        path,
+    )
     return len(horses)
+
+
+def rebuild_horse_name_index_from_gcs_race_shutuba(base_dir: str | Path) -> int:
+    """GCS ``race_shutuba`` の出馬表から馬名を収集（horse_result より軽い補完用）。"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from src.scraper.storage import HybridStorage
+
+    st = HybridStorage(str(base_dir))
+    if not st.gcs_enabled:
+        return 0
+
+    merged: dict[str, dict[str, Any]] = {}
+    years = st.list_years("race_shutuba") or [str(y) for y in range(2015, 2027)]
+    workers = min(8, max(2, int(os.environ.get("HORSE_NAME_INDEX_SHUTUBA_WORKERS", "6"))))
+
+    def _load_race(rid: str) -> list[dict[str, Any]]:
+        try:
+            card = st.load("race_shutuba", rid)
+        except Exception:
+            return []
+        if not isinstance(card, dict):
+            return []
+        out: list[dict[str, Any]] = []
+        for e in card.get("entries") or []:
+            hid = str(e.get("horse_id") or "").strip()
+            hn = str(e.get("horse_name") or e.get("name") or "").strip()
+            if hid and hn:
+                out.append({
+                    "horse_id": hid,
+                    "horse_name": hn,
+                    "name_en": "",
+                    "year": hid[:4] if len(hid) >= 4 else "",
+                })
+        return out
+
+    for yr in years:
+        rids = st.list_keys("race_shutuba", yr)
+        if not rids:
+            continue
+        logger.info("馬名インデックス shutuba: year=%s races=%d", yr, len(rids))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(_load_race, rid) for rid in rids]
+            for fut in as_completed(futures):
+                for rec in fut.result():
+                    merged[rec["horse_id"]] = rec
+
+    if not merged:
+        return 0
+
+    horses = sorted(merged.values(), key=lambda h: h["horse_id"])
+    out: dict[str, Any] = {
+        "version": "1.0",
+        "total_horses": len(horses),
+        "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "source": "race_shutuba_gcs",
+        "horses": horses,
+    }
+    _write_horse_name_index_bundle(base_dir, out)
+    return len(horses)
+
+
+def run_weekly_horse_name_index_update(base_dir: str | Path) -> dict[str, Any]:
+    """
+    金曜夕方バッチ用: GCS から馬名リストを再構築する。
+
+    既定は ``horse_result`` 全件。``HORSE_NAME_INDEX_SOURCE=shutuba`` で出馬表のみ。
+    ``task_raceday_eve``（金曜 18:00）および cron から呼ぶ。
+    """
+    t0 = time.time()
+    # 金曜 18:00 cron 向け: 出馬表走査は horse_result 全件より高速（約3〜5分）
+    source = os.environ.get("HORSE_NAME_INDEX_SOURCE", "shutuba").strip().lower()
+    try:
+        if source == "shutuba":
+            n = rebuild_horse_name_index_from_gcs_race_shutuba(base_dir)
+        else:
+            n = rebuild_horse_name_index_from_gcs_horse_result(base_dir)
+    except Exception as exc:
+        logger.error("馬名インデックス週次更新失敗: %s", exc, exc_info=True)
+        return {
+            "status": "error",
+            "error": str(exc),
+            "elapsed_sec": round(time.time() - t0, 1),
+        }
+    if n < 1:
+        return {
+            "status": "skipped",
+            "reason": "gcs_empty_or_disabled",
+            "total_horses": n,
+            "path": str(canonical_horse_name_index_path(base_dir)),
+            "elapsed_sec": round(time.time() - t0, 1),
+        }
+    return {
+        "status": "ok",
+        "total_horses": n,
+        "path": str(canonical_horse_name_index_path(base_dir)),
+        "elapsed_sec": round(time.time() - t0, 1),
+    }
 
 
 _last_ensure_result: dict[str, Any] = {}

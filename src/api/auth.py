@@ -145,6 +145,7 @@ PUBLIC_API_PREFIXES: list[str] = [
     "/api/health",
     "/api/predictions",
     "/api/race/",
+    "/api/tracking-difficulty",
     "/api/race-list/",
     "/api/scrape-dates",
     "/api/upcoming-races",
@@ -164,6 +165,7 @@ PUBLIC_API_PREFIXES: list[str] = [
     # ⑤ データ分析
     "/api/track-speed",
     "/api/growth-curve",
+    "/api/growth-curve/status",
     "/api/cushion",
     "/api/auth/status",
     "/static/",

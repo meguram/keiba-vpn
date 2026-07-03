@@ -1,0 +1,44 @@
+{
+  "race_id": "202309030811",
+  "entries": [
+    {
+      "horse_number": 3,
+      "horse_name": "イクイノックス",
+      "horse_id": "2019105219",
+      "paddock_rank": "B",
+      "paddock_comment": "有馬記念時と比べると見劣るが、体は仕上がっている"
+    },
+    {
+      "horse_number": 5,
+      "horse_name": "ジャスティンパレス",
+      "horse_id": "2019105346",
+      "paddock_rank": "A",
+      "paddock_comment": "キョロキョロして周回。踏み込み上々で好状態"
+    },
+    {
+      "horse_number": 5,
+      "horse_name": "ディープボンド",
+      "horse_id": "2017102170",
+      "paddock_rank": "A",
+      "paddock_comment": "張りがあって迫力十分。脚どりも力強く、状態いい"
+    },
+    {
+      "horse_number": 6,
+      "horse_name": "ジェラルディーナ",
+      "horse_id": "2018105081",
+      "paddock_rank": "B",
+      "paddock_comment": "テンションは高くても走れるタイプ。仕上がる"
+    },
+    {
+      "horse_number": 6,
+      "horse_name": "アスクビクターモア",
+      "horse_id": "2019104706",
+      "paddock_rank": "B",
+      "paddock_comment": "馬体が引き締まっている。春２戦以上のデキだろう"
+    }
+  ],
+  "_meta": {
+    "scraped_at": 1781190687.483203,
+    "scraped_at_jst": "2026-06-12 00:11:27"
+  }
+}

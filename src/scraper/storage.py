@@ -5,17 +5,19 @@ GCS を唯一のデータストア (source of truth) とする。
 ローカルにはデータ本体を保持しない。
 
 ローカルに保持するもの:
-  - race_lists (local_only: data/page_reference/race_lists — ポータブル UI バンドル)
+  - race_lists（local_only: data/page_reference/race_lists）
+  - race_day_schedule（local_only: data/page_reference/race_day_schedule — 発走時刻スナップショット）
   - data/meta/status/ (GCS 存在ステータスのキャッシュ)
   - data/meta/disk_l2_weekly_access.json — ISO 週ごとのキー別参照回数
   - data/cache/ — GCS の L2。**すべてのカテゴリ**で週内アクセスが閾値以上のキーだけ書込
     （DISK_L2_MIN_WEEKLY_ACCESSES 等）。旧ファイルは DISK_CACHE_CLEANUP_MAX_AGE_SEC で定期削除
   - メモリ LRU（LOAD_CACHE_TTL_SEC / LOAD_CACHE_MAX_ENTRIES）で GCS 往復を抑制
 
-GCS カテゴリ名で統一管理:
+GCS カテゴリ名で統一管理（抜粋）:
   race_shutuba, race_result, race_result_on_time, race_index, race_info,
   race_lap, race_oikiri, race_paddock, race_barometer, race_return,
-  horse_result, horse_ped, horse_ped_line, horse_lap, race_lists
+  horse_result, horse_ped, horse_ped_line, horse_lap,
+  requirement_row_trace（others）
 
 鮮度管理 (構造ベース):
   保存時に _meta.scraped_at タイムスタンプを自動付与。
@@ -112,10 +114,31 @@ class HybridStorage:
         "jra_cushion": "other",
         # パイプライン生成パフォーマンス指数 — GCS: chuou/data/preprocessed/netkeiba/pc/race_performance/{年}/{race_id}.json
         "race_performance": "race",
+        # 要件書 scrape_process 表の1行ごとの正本参照（GCS others フラット）
+        "requirement_row_trace": "other",
+        # 発走時刻表スナップショット（page_reference、race_lists+shutuba 由来）
+        "race_day_schedule": "local_only",
+        # ---- 行固有派生カテゴリ（migrate_row_data_to_unique_paths.py で生成） ----
+        # race_shutuba からメタフィールドのみ抽出
+        "race_shutuba_meta": "race",
+        # race_result_on_time から各フィールド抽出
+        "race_result_on_time_payoff": "race",
+        "race_result_on_time_lap": "race",
+        "race_result_on_time_corner": "race",
+        # horse_result からプロフィール / 過去成績を分離
+        "horse_profile": "horse",
+        "horse_race_history": "horse",
+        # race_result からメタ / 払戻 / 馬場情報を分離
+        "race_result_meta": "race",
+        "race_result_payoff": "race",
+        "race_result_track": "race",
+        # race_result_lap からコーナー / ラップを分離
+        "race_result_corner": "race",
+        "race_result_lap_times": "race",
     }
 
     # ローカルディスクキャッシュ除外カテゴリ (local_only 等)
-    _LOCAL_CACHE_EXCLUDE: set[str] = {"race_lists"}
+    _LOCAL_CACHE_EXCLUDE: set[str] = {"race_lists", "race_day_schedule"}
 
     _GCS_TIMEOUT = 5                  # GCS API コールのタイムアウト (秒)
 
@@ -445,6 +468,7 @@ class HybridStorage:
             True  — GCS への書き込み成功
             False — GCS 未接続 / バックオフ中のためスキップ（local_only は常に True）
         Raises:
+            src.scraper.schemas.SchemaValidationError — 厳格スキーマ検証失敗（既定 ``KEIBA_SCHEMA_STRICT``）
             Exception — GCS 書き込み試行中のエラー
         """
         now = _time.time()
@@ -454,6 +478,27 @@ class HybridStorage:
         data["_meta"]["scraped_at_jst"] = datetime.fromtimestamp(
             now, tz=JST
         ).strftime("%Y-%m-%d %H:%M:%S")
+
+        from src.scraper import schemas
+
+        vr = schemas.validate(category, data)
+        meta = data.setdefault("_meta", {})
+        meta["schema_validation"] = schemas.validation_report_for_meta(vr)
+        if vr.get("skipped"):
+            meta["scrape_validation_status"] = "schema_skipped"
+        elif vr.get("passed"):
+            meta["scrape_validation_status"] = "ok"
+        else:
+            meta["scrape_validation_status"] = "schema_failed"
+
+        strict = os.environ.get("KEIBA_SCHEMA_STRICT", "1").strip().lower() not in (
+            "0",
+            "false",
+            "off",
+            "no",
+        )
+        if strict and not vr.get("passed") and "skipped" not in vr:
+            raise schemas.SchemaValidationError(category, key, vr)
 
         if self._is_local_only(category):
             self._save_local(category, key, data)
@@ -555,6 +600,39 @@ class HybridStorage:
             return p.is_file() and p.stat().st_size >= min_bytes
         except OSError:
             return False
+
+    def has_local_json_snapshot(
+        self, category: str, key: str, *, min_bytes: int = 4
+    ) -> bool:
+        """
+        ローカルに「中身がありそうな」JSON が1つでもあるか（TTL は見ない）。
+
+        モニター scrape-summary と同じカテゴリで欠損判定するとき、GCS ではなく
+        ミラー・L2 キャッシュ・レガシー data/local/{cat}/{key}.json を対象にする。
+        """
+        if self._is_local_only(category):
+            for p in (self._local_path(category, key), self._legacy_local_path(category, key)):
+                try:
+                    if p.is_file() and p.stat().st_size >= min_bytes:
+                        return True
+                except OSError:
+                    continue
+            return False
+        if self.local_mirror_exists(category, key, min_bytes=min_bytes):
+            return True
+        p = self._local_cache_path(category, key)
+        try:
+            if p.is_file() and p.stat().st_size >= min_bytes:
+                return True
+        except OSError:
+            pass
+        leg = self._legacy_local_path(category, key)
+        try:
+            if leg.is_file() and leg.stat().st_size >= min_bytes:
+                return True
+        except OSError:
+            pass
+        return False
 
     def _save_local(self, category: str, key: str, data: dict[str, Any]):
         path = self._local_path(category, key)

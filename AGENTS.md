@@ -30,6 +30,12 @@
 
 **ped_tbl 増分**: `python -m src.pipeline.sync_ped_tbl_for_horses --horse-ids …`（ローカル `horse_pedigree_5gen` 参照）。出馬表 `race_shutuba` 保存直後の自動生成は `.env` で `KEIBA_SYNC_PED_TBL_ON_SHUTUBA=1` のときのみ。接木は `KEIBA_PED_TBL_MERGE_GEN5`（未設定時 1）。
 
+**保存前スキーマ検証**: `HybridStorage.save` が `schemas.validate` を必ず実行。`KEIBA_SCHEMA_STRICT` 未設定または `1` で不合格時は GCS 非保存・`SchemaValidationError`（キューは `failure_reason=schema_validation`）。診断のみ許容する場合は `KEIBA_SCHEMA_STRICT=0`。モニター `/monitor` と `GET /api/scrape-jobs` の `schema_validation_failures` を参照。
+
+**要件表↔ストレージの行単位整合**: `docs/requirements/data/scrape_process.md` の netkeiba 表は `src/scraper/requirement_row_catalog.py` の `row_id` と対応。参照 JSON は `requirement_row_trace`（GCS `others/`）。発走時刻スナップショットは `race_day_schedule`（`data/page_reference/race_day_schedule/`）。バックフィル: `python3 -m src.scripts.scraping.materialize_requirement_row_traces`。
+
+**行固有派生カテゴリ（物理分割済み）**: 複数行が共有していた canonical JSON（`race_shutuba` / `race_result_on_time` / `race_result` / `race_result_lap` / `horse_result`）から必要フィールドを抽出した派生カテゴリが GCS に存在する（2020-2026 年・全馬）。抽出ロジック: `src/scraper/row_data_extractor.py`。カテゴリ一覧: `race_shutuba_meta` / `race_result_on_time_payoff` / `_lap` / `_corner` / `horse_profile` / `horse_race_history` / `race_result_meta` / `_payoff` / `_track` / `race_result_corner` / `race_result_lap_times`（合計 11 カテゴリ、261,173 件保存）。追加・再実行: `python3 -m src.scripts.scraping.migrate_row_data_to_unique_paths --year-start 2020 --year-end 2026 --include-horses`。
+
 ## 作業の指針（短く）
 
 - 既存の命名・モジュール分割に合わせ、**依頼範囲だけ**変更する。

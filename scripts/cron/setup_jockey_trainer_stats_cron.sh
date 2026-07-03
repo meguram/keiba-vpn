@@ -20,7 +20,7 @@ MANIFEST="${PROJECT_DIR}/data/features/jockey_trainer_stats/_manifest.json"
 
 CRON_TAG="# KEIBA_JT_STATS"
 
-# 分 時 日 月 曜 — サーバの TZ に依存（必要なら crontab 先頭に CRON_TZ=Asia/Tokyo）
+# 分 時 日 月 曜 — CRON_TZ=Asia/Tokyo により日本時間で解釈（setup スクリプトが付与）
 CRON_SCHEDULE="${JT_STATS_CRON_SCHEDULE:-30 5 * * *}"
 
 mkdir -p "$LOG_DIR"
@@ -33,6 +33,8 @@ generate_cron() {
 #   src.pipeline.build_jockey_trainer_stats → data/features/jockey_trainer_stats/
 #   環境変数 JT_STATS_CRON_SCHEDULE でスケジュール変更可（既定 30 5 * * *）
 # =========================================================
+# 時刻は日本時間（サーバが UTC でもこの行は JST）
+CRON_TZ=Asia/Tokyo
 ${CRON_SCHEDULE} ${UPDATE_SH} ${CRON_TAG}
 
 CRON_ENTRIES

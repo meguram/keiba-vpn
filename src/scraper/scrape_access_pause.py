@@ -245,13 +245,12 @@ def handle_queue_transport_error(queue: Any, exc: BaseException) -> bool:
     """
     ジョブ失敗時のトランスポート系エラー処理。
 
-    HTTP 400（ブロック疑い）が発生した場合、即座に pending/running/precheck の
-    全ジョブを failed に移動してスクレイピングを停止する。
-    ユーザーが UI から「再開」を押すことで failed ジョブが pending に戻り、
-    スクレイピングが再開される。
+    HTTP 400（ブロック疑い）が発生した場合は **一時停止のみ** とする。
+    待機中ジョブは pending のまま保持し、巻き添えで数千件 failed にしない。
+    当該ジョブは呼び出し側（``_process_claimed_job``）で failed に更新される。
 
     Returns:
-        True なら全ジョブを failed に移動した（重大停止）。
+        True は互換のため未使用（常に False を返す想定）。
     """
     from src.scraper.job_queue import ScrapeJobQueue
 
@@ -259,39 +258,28 @@ def handle_queue_transport_error(queue: Any, exc: BaseException) -> bool:
         queue = ScrapeJobQueue()
 
     if is_block_suspect_http_400(exc):
-        now = datetime.now()
         msg = (
-            f"HTTP 400（ブロック疑い）が発生したため、待機中・実行中のジョブをすべて失敗に移動しました。"
-            f" netkeiba へのアクセスを控え、しばらくしてから UI の「再開」ボタンでスクレイピングを再開してください。"
+            "HTTP 400（ブロック疑い）が発生したためスクレイピングを一時停止しました。"
+            " 待機中のジョブはそのまま保持されています。"
+            " netkeiba へのアクセスを控え、しばらくしてから UI の「再開」で再開してください。"
             f" 元のエラー: {str(exc)[:500]}"
         )
-        failed_count = queue.fail_all_pending_and_running(reason=msg)
+        write_access_pause(reason=msg)
         state = _load_state()
-        state["active"] = True
-        state["reason"] = msg
-        state["paused_at"] = now.isoformat()
         state["block_400_timestamps"] = []
         state["block_400_consecutive"] = 0
-        state["queue_auto_cleared"] = {
-            "active": True,
-            "cleared_at": now.isoformat(),
-            "removed_jobs": failed_count,
-            "threshold": 1,
-            "consecutive_count": 1,
-            "message": msg,
-        }
+        # 旧挙動の「全消去」バナーと誤解されないよう非表示
+        state["queue_auto_cleared"] = {"active": False}
         _save_state(state)
         logger.error(
-            "HTTP 400 ブロック疑い — pending/running %d 件を失敗に移動・スクレイピング停止",
-            failed_count,
+            "HTTP 400 ブロック疑い — 一時停止のみ（他ジョブは pending のまま）: %s",
+            str(exc)[:300],
         )
-        return True
+        return False
 
     if is_access_or_transport_error(exc):
         queue.pause_queue_for_access_error(str(exc))
         return False
-
-    return False
 
     return False
 

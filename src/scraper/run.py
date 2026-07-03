@@ -271,6 +271,21 @@ class ScraperRunner:
     TRAINER_COMMENT_URL = "https://race.netkeiba.com/race/comment.html?race_id={race_id}"
     HORSE_TRAINING_URL = "https://db.netkeiba.com/horse/training.html?id={horse_id}"
 
+    @staticmethod
+    def _is_race_old(race_id: str, days: int = 30) -> bool:
+        """race_id が days 日以上前のレースかどうかを年ベースで判定する。
+
+        race_id[:4] が現在年より小さければ確実に古い。同年の場合は保守的に False。
+        """
+        if not race_id or len(race_id) < 4 or not race_id[:4].isdigit():
+            return False
+        from datetime import datetime, timezone, timedelta
+        current_year = datetime.now(timezone(timedelta(hours=9))).year
+        race_year = int(race_id[:4])
+        if race_year < current_year:
+            return True
+        return False
+
     def __init__(self, interval: float = 1.0, cache: bool = True,
                  auto_login: bool = True):
         self.client = NetkeibaClient(
@@ -704,10 +719,44 @@ class ScraperRunner:
                 return data
             else:
                 logger.warning("バロメーターデータなし: %s", race_id)
+                self._save_not_available_marker("race_barometer", race_id,
+                                                reason="empty_response")
                 return None
         except Exception as e:
             logger.error("バロメーター取得失敗 [%s]: %s", race_id, e)
             return None
+
+    def _save_not_available_marker(
+        self, category: str, race_id: str, reason: str = "empty_response"
+    ) -> None:
+        """1ヶ月以上前のレースで空レスポンスの場合に N/A マーカーを保存する。
+
+        - GCS にスタブ JSON（entries:[] + _meta.not_available=True）を保存して
+          次回スクレイプをスキップさせる。
+        - ローカル N/A インデックスにも記録して matrix 表示で区別できるようにする。
+        """
+        if not self._is_race_old(race_id, days=30):
+            return
+
+        from src.scraper.date_coverage import record_not_available
+
+        # ローカル N/A インデックスに記録
+        record_not_available(category, race_id, reason=reason)
+
+        # GCS にスタブを保存（以降の skip_existing=True で再取得しない）
+        stub: dict = {
+            "race_id": race_id,
+            "entries": [],
+            "_meta": {
+                "not_available": True,
+                "not_available_reason": reason,
+            },
+        }
+        try:
+            self.storage.save(category, race_id, stub)
+            logger.info("N/A スタブ保存: %s/%s (%s)", category, race_id, reason)
+        except Exception as e:
+            logger.warning("N/A スタブ保存失敗 [%s/%s]: %s", category, race_id, e)
 
     def scrape_oikiri(self, race_id: str, skip_existing: bool = True) -> dict | None:
         return self._fetch_parse_save(
@@ -747,8 +796,19 @@ class ScraperRunner:
             result_html = None
             if with_history:
                 result_url = self.HORSE_RESULT_URL.format(horse_id=horse_id)
-                result_html = self.client.fetch(result_url)
-                self.archive.save("horse_result_html", horse_id, result_html)
+                try:
+                    result_html = self.client.fetch(result_url)
+                    self.archive.save("horse_result_html", horse_id, result_html)
+                except Exception as e:
+                    # プロフィールは取れているのに戦績URLだけ 400 等になる馬があり、
+                    # ここで is_block_suspect を再送出するとキュー全体が一括失敗になる。
+                    # 血統ページ同様、戦績HTML欠損でパースを続行する。
+                    logger.warning(
+                        "戦績ページ取得失敗（result_html なしで続行） [%s]: %s",
+                        horse_id,
+                        e,
+                    )
+                    result_html = None
 
             ped_html = None
             if not skip_pedigree:
@@ -808,7 +868,12 @@ class ScraperRunner:
         if skip_existing:
             ex = self.storage.load("horse_pedigree_5gen", horse_id)
             anc = (ex or {}).get("ancestors") or []
-            if ex and len(anc) >= 5:
+            ped_html_ok = False
+            try:
+                ped_html_ok = bool(self.storage.exists("horse_ped", horse_id))
+            except Exception:
+                ped_html_ok = False
+            if ex and len(anc) >= 5 and ped_html_ok:
                 self._last_pedigree_5gen_skip = True
                 logger.info("スキップ (既存): horse_pedigree_5gen/%s", horse_id)
                 return ex
@@ -1085,6 +1150,22 @@ class ScraperRunner:
         logger.info("レース詳細取得完了: %s (%d頭)", race_id, len(card.get("entries", [])))
         return card
 
+    def _persist_race_day_schedule_snapshot_optional(self, date: str) -> None:
+        """環境変数が有効なときのみ、``race_day_schedule`` を合成して page_reference に保存。"""
+        if os.environ.get("KEIBA_WRITE_RACE_DAY_SCHEDULE_ON_RACE_LIST", "").strip().lower() not in (
+            "1",
+            "true",
+            "yes",
+        ):
+            return
+        try:
+            from src.scraper.race_day_schedule import synthesize_race_day_schedule_payload
+
+            pl = synthesize_race_day_schedule_payload(self.storage, date)
+            self.storage.save("race_day_schedule", date, pl)
+        except Exception as e:
+            logger.warning("race_day_schedule 自動保存失敗 [%s]: %s", date, e)
+
     # ── レース一覧 ──────────────────────────────────────
 
     def scrape_race_list(self, date: str) -> list[dict]:
@@ -1110,6 +1191,7 @@ class ScraperRunner:
             if source:
                 payload["_meta"] = {"race_list_source": source}
             self.storage.save("race_lists", date, payload)
+            self._persist_race_day_schedule_snapshot_optional(date)
             logger.info("レース一覧取得: %s - %d レース (%s)", date, len(rlist), source)
             return rlist
 
@@ -1168,6 +1250,7 @@ class ScraperRunner:
             if list_meta:
                 payload["_meta"].update(list_meta)
             self.storage.save("race_lists", date, payload)
+            self._persist_race_day_schedule_snapshot_optional(date)
             logger.info("レース一覧取得: %s - 0 レース", date)
             return []
 
@@ -2067,6 +2150,8 @@ class ScraperRunner:
                 return data
             else:
                 logger.warning("バロメーターデータなし: %s", race_id)
+                self._save_not_available_marker("race_barometer", race_id,
+                                                reason="empty_response")
                 return None
         except Exception as e:
             logger.error("バロメーター取得失敗 [%s]: %s", race_id, e)

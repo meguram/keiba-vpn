@@ -1,0 +1,176 @@
+{
+  "race_id": "202309030811",
+  "lap_times": [
+    12.4,
+    10.5,
+    11.1,
+    12.6,
+    12.3,
+    12.4,
+    12.5,
+    11.9,
+    11.7,
+    12.0,
+    11.8
+  ],
+  "pace": {
+    "first_half_3f": 34.0,
+    "second_half_3f": 35.5,
+    "t1f": 12.4,
+    "t3f": 34.0,
+    "l1f": 11.8,
+    "l3f": 35.5
+  },
+  "corner_passing": [
+    {
+      "corner": 0,
+      "label": "馬場指数",
+      "order_text": "-7 (?)"
+    },
+    {
+      "corner": 1,
+      "label": "1コーナー",
+      "order_text": "(*15,17)14(2,3,12)(1,10,13)16,7(4,9)(8,11)5,6"
+    },
+    {
+      "corner": 2,
+      "label": "2コーナー",
+      "order_text": "15,17(2,14)(3,12)(1,10,13)(4,7,16)9(8,11)5,6"
+    },
+    {
+      "corner": 3,
+      "label": "3コーナー",
+      "order_text": "(*15,17)14(2,12)(3,11)(1,10,13)(7,9)(4,16,5)(8,6)"
+    },
+    {
+      "corner": 4,
+      "label": "4コーナー",
+      "order_text": "(*15,17)(14,12,11)(2,10,13)(3,9,5)(1,7,16,6)(4,8)"
+    }
+  ],
+  "entries_lap": [
+    {
+      "horse_number": 5,
+      "horse_id": "2019105219",
+      "horse_name": "イクイノックス",
+      "passing_order": "16-16-13-9",
+      "last_3f": 34.8
+    },
+    {
+      "horse_number": 6,
+      "horse_id": "2018105269",
+      "horse_name": "スルーセブンシーズ",
+      "passing_order": "17-17-16-12",
+      "last_3f": 34.6
+    },
+    {
+      "horse_number": 9,
+      "horse_id": "2019105346",
+      "horse_name": "ジャスティンパレス",
+      "passing_order": "12-13-11-9",
+      "last_3f": 35.1
+    },
+    {
+      "horse_number": 11,
+      "horse_id": "2018105081",
+      "horse_name": "ジェラルディーナ",
+      "passing_order": "14-14-6-3",
+      "last_3f": 35.5
+    },
+    {
+      "horse_number": 10,
+      "horse_id": "2017102170",
+      "horse_name": "ディープボンド",
+      "passing_order": "7-7-8-6",
+      "last_3f": 35.5
+    },
+    {
+      "horse_number": 7,
+      "horse_id": "2019100109",
+      "horse_name": "プラダリア",
+      "passing_order": "11-10-11-12",
+      "last_3f": 35.3
+    },
+    {
+      "horse_number": 4,
+      "horse_id": "2016104618",
+      "horse_name": "ボッケリーニ",
+      "passing_order": "12-10-13-16",
+      "last_3f": 35.1
+    },
+    {
+      "horse_number": 8,
+      "horse_id": "2017105082",
+      "horse_name": "ヴェラアズール",
+      "passing_order": "14-14-16-16",
+      "last_3f": 35.2
+    },
+    {
+      "horse_number": 13,
+      "horse_id": "2019105056",
+      "horse_name": "ジオグリフ",
+      "passing_order": "7-7-8-6",
+      "last_3f": 35.8
+    },
+    {
+      "horse_number": 17,
+      "horse_id": "2020103626",
+      "horse_name": "ドゥラエレーデ",
+      "passing_order": "2-2-2-2",
+      "last_3f": 36.5
+    },
+    {
+      "horse_number": 12,
+      "horse_id": "2019104706",
+      "horse_name": "アスクビクターモア",
+      "passing_order": "4-5-4-3",
+      "last_3f": 36.5
+    },
+    {
+      "horse_number": 14,
+      "horse_id": "2018106273",
+      "horse_name": "ブレークアップ",
+      "passing_order": "3-3-3-3",
+      "last_3f": 36.5
+    },
+    {
+      "horse_number": 3,
+      "horse_id": "2018104963",
+      "horse_name": "ダノンザキッド",
+      "passing_order": "4-5-6-9",
+      "last_3f": 36.5
+    },
+    {
+      "horse_number": 16,
+      "horse_id": "2016100915",
+      "horse_name": "モズベッロ",
+      "passing_order": "10-10-13-12",
+      "last_3f": 36.2
+    },
+    {
+      "horse_number": 15,
+      "horse_id": "2016110103",
+      "horse_name": "ユニコーンライオン",
+      "passing_order": "1-1-1-1",
+      "last_3f": 36.9
+    },
+    {
+      "horse_number": 2,
+      "horse_id": "2016106606",
+      "horse_name": "カラテ",
+      "passing_order": "4-3-4-6",
+      "last_3f": 36.5
+    },
+    {
+      "horse_number": 1,
+      "horse_id": "2019103588",
+      "horse_name": "ライラック",
+      "passing_order": "7-7-8-12",
+      "last_3f": 36.4
+    }
+  ],
+  "_meta": {
+    "scraped_at": 1781190781.7651346,
+    "scraped_at_jst": "2026-06-12 00:13:01"
+  }
+}

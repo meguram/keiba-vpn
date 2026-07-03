@@ -1,0 +1,69 @@
+{
+  "race_id": "202309030811",
+  "payoff": {
+    "単勝": {
+      "numbers": "5",
+      "payout": "130",
+      "popularity": "1"
+    },
+    "複勝": [
+      {
+        "numbers": "5",
+        "payout": "110",
+        "popularity": "1"
+      },
+      {
+        "numbers": "6",
+        "payout": "560",
+        "popularity": "10"
+      },
+      {
+        "numbers": "9",
+        "payout": "170",
+        "popularity": "2"
+      }
+    ],
+    "枠連": {
+      "numbers": "3 - 3",
+      "payout": "2,280",
+      "popularity": "8"
+    },
+    "馬連": {
+      "numbers": "5 - 6",
+      "payout": "2,340",
+      "popularity": "8"
+    },
+    "ワイド": [
+      {
+        "numbers": "5 - 6",
+        "payout": "970",
+        "popularity": "11"
+      },
+      {
+        "numbers": "5 - 9",
+        "payout": "240",
+        "popularity": "1"
+      },
+      {
+        "numbers": "6 - 9",
+        "payout": "2,930",
+        "popularity": "28"
+      }
+    ],
+    "馬単": {
+      "numbers": "5 → 6",
+      "payout": "2,660",
+      "popularity": "9"
+    },
+    "三連複": {
+      "numbers": "5 - 6 - 9",
+      "payout": "4,030",
+      "popularity": "14"
+    },
+    "三連単": {
+      "numbers": "5 → 6 → 9",
+      "payout": "13,630",
+      "popularity": "36"
+    }
+  }
+}

@@ -26,7 +26,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[3]
-DB_LOCAL = ROOT / "data" / "bloodline" / "bloodline.db"
+def _db_local_path() -> Path:
+    from src.config.data_paths import calculated_data_root, resolve_existing_path
+
+    return resolve_existing_path(
+        calculated_data_root() / "bloodline" / "bloodline.db",
+        ROOT / "data" / "bloodline" / "bloodline.db",
+    )
+
+
+DB_LOCAL = _db_local_path()
 GCS_BLOB  = "chuou/data/others/bloodline_db/bloodline.db"
 
 _conn_lock = threading.Lock()

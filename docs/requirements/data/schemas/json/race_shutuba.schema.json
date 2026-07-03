@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/keiba-vpn/schemas/race_shutuba.json",
+  "title": "race_shutuba",
+  "type": "object",
+  "required": ["race_id", "race_name", "entries"],
+  "properties": {
+    "race_id": { "type": "string", "minLength": 1 },
+    "race_name": { "type": "string" },
+    "date": { "type": "string" },
+    "venue": { "type": "string" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["horse_number", "horse_name", "horse_id"],
+        "properties": {
+          "horse_number": { "type": "integer" },
+          "horse_name": { "type": "string", "minLength": 1 },
+          "horse_id": { "type": "string", "minLength": 1 },
+          "bracket_number": { "type": "integer" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,14 @@
+{
+  "date": "20230625",
+  "races": [
+    {
+      "race_id": "202306250501",
+      "round": 1,
+      "venue": "東京",
+      "race_name": "２歳未勝利"
+    }
+  ],
+  "_meta": {
+    "race_list_source": "race.netkeiba.com/top"
+  }
+}

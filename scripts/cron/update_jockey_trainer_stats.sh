@@ -14,6 +14,8 @@
 
 set -euo pipefail
 
+export TZ="${TZ:-Asia/Tokyo}"
+
 PROJECT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
 cd "$PROJECT_DIR"
 
@@ -22,7 +24,14 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="${LOG_DIR}/jockey_trainer_stats.log"
 LOCK_FILE="${LOG_DIR}/jockey_trainer_stats.lock"
 
-PYTHON="${PYTHON:-python3}"
+# conda 優先で Python を解決
+if [ -z "${PYTHON:-}" ]; then
+    if [ -x "/opt/conda/bin/python3" ]; then
+        PYTHON="/opt/conda/bin/python3"
+    else
+        PYTHON="$(command -v python3 2>/dev/null || echo python3)"
+    fi
+fi
 EXTRA=()
 if [ "${1:-}" = "--nar" ]; then
   EXTRA=(--nar)

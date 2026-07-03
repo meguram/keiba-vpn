@@ -1,0 +1,459 @@
+{
+  "horse_id": "2019105219",
+  "sex": "",
+  "sire": "キタサンブラック",
+  "dam": "シャトーブランシュ",
+  "dam_sire": "キングヘイロー",
+  "ancestors": [
+    {
+      "generation": 1,
+      "position": 0,
+      "name": "キタサンブラック",
+      "horse_id": "2012102013",
+      "sex": "牡"
+    },
+    {
+      "generation": 2,
+      "position": 0,
+      "name": "ブラックタイド",
+      "horse_id": "2001103312",
+      "sex": "牡"
+    },
+    {
+      "generation": 3,
+      "position": 0,
+      "name": "サンデーサイレンスSunday Silence(米)",
+      "horse_id": "000a00033a",
+      "sex": "牡"
+    },
+    {
+      "generation": 4,
+      "position": 0,
+      "name": "Halo",
+      "horse_id": "000a0012bf",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 0,
+      "name": "Hail to Reason",
+      "horse_id": "000a000f2b",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 1,
+      "name": "Cosmah",
+      "horse_id": "000a007459",
+      "sex": ""
+    },
+    {
+      "generation": 4,
+      "position": 1,
+      "name": "Wishing Well",
+      "horse_id": "000a008c1e",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 2,
+      "name": "Understanding",
+      "horse_id": "000a0019b6",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 3,
+      "name": "Mountain Flower",
+      "horse_id": "000a008c1d",
+      "sex": ""
+    },
+    {
+      "generation": 3,
+      "position": 1,
+      "name": "ウインドインハーヘアWind in Her Hair(愛)",
+      "horse_id": "000a0003a2",
+      "sex": "牝"
+    },
+    {
+      "generation": 4,
+      "position": 2,
+      "name": "Alzao",
+      "horse_id": "000a001cb4",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 4,
+      "name": "Lyphard",
+      "horse_id": "000a001205",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 5,
+      "name": "Lady Rebecca",
+      "horse_id": "000a009170",
+      "sex": ""
+    },
+    {
+      "generation": 4,
+      "position": 3,
+      "name": "Burghclere",
+      "horse_id": "000a00922c",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 6,
+      "name": "Busted",
+      "horse_id": "000a000e0d",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 7,
+      "name": "Highclere",
+      "horse_id": "000a008341",
+      "sex": ""
+    },
+    {
+      "generation": 2,
+      "position": 1,
+      "name": "シュガーハート",
+      "horse_id": "2005106935",
+      "sex": "牝"
+    },
+    {
+      "generation": 3,
+      "position": 2,
+      "name": "サクラバクシンオー",
+      "horse_id": "1989108341",
+      "sex": "牡"
+    },
+    {
+      "generation": 4,
+      "position": 4,
+      "name": "サクラユタカオー",
+      "horse_id": "1982101222",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 8,
+      "name": "テスコボーイ",
+      "horse_id": "000a000355",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 9,
+      "name": "アンジェリカ",
+      "horse_id": "1955103119",
+      "sex": ""
+    },
+    {
+      "generation": 4,
+      "position": 5,
+      "name": "サクラハゴロモ",
+      "horse_id": "1984104366",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 10,
+      "name": "ノーザンテースト",
+      "horse_id": "000a000258",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 11,
+      "name": "クリアアンバー",
+      "horse_id": "000a00058e",
+      "sex": ""
+    },
+    {
+      "generation": 3,
+      "position": 3,
+      "name": "オトメゴコロ",
+      "horse_id": "1990104600",
+      "sex": "牝"
+    },
+    {
+      "generation": 4,
+      "position": 6,
+      "name": "ジャッジアンジェルーチ",
+      "horse_id": "000a000d30",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 12,
+      "name": "Honest Pleasure",
+      "horse_id": "000a00062c",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 13,
+      "name": "Victorian Queen",
+      "horse_id": "000a008824",
+      "sex": ""
+    },
+    {
+      "generation": 4,
+      "position": 7,
+      "name": "テイズリー",
+      "horse_id": "000a000364",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 14,
+      "name": "Lyphard",
+      "horse_id": "000a001205",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 15,
+      "name": "Tizna",
+      "horse_id": "000a008aad",
+      "sex": ""
+    },
+    {
+      "generation": 1,
+      "position": 1,
+      "name": "シャトーブランシュ",
+      "horse_id": "2010104274",
+      "sex": "牝"
+    },
+    {
+      "generation": 2,
+      "position": 2,
+      "name": "キングヘイロー",
+      "horse_id": "1995104427",
+      "sex": "牡"
+    },
+    {
+      "generation": 3,
+      "position": 4,
+      "name": "ダンシングブレーヴDancing Brave(米)",
+      "horse_id": "000a0000cc",
+      "sex": "牡"
+    },
+    {
+      "generation": 4,
+      "position": 8,
+      "name": "Lyphard",
+      "horse_id": "000a001205",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 16,
+      "name": "Northern Dancer",
+      "horse_id": "000a000e04",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 17,
+      "name": "Goofed",
+      "horse_id": "000a007c8d",
+      "sex": ""
+    },
+    {
+      "generation": 4,
+      "position": 9,
+      "name": "Navajo Princess",
+      "horse_id": "000a0081bb",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 18,
+      "name": "Drone",
+      "horse_id": "000a001668",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 19,
+      "name": "Olmec",
+      "horse_id": "000a0081ba",
+      "sex": ""
+    },
+    {
+      "generation": 3,
+      "position": 5,
+      "name": "グッバイヘイローGoodbye Halo(米)",
+      "horse_id": "000a0062e2",
+      "sex": "牝"
+    },
+    {
+      "generation": 4,
+      "position": 10,
+      "name": "Halo",
+      "horse_id": "000a0012bf",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 20,
+      "name": "Hail to Reason",
+      "horse_id": "000a000f2b",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 21,
+      "name": "Cosmah",
+      "horse_id": "000a007459",
+      "sex": ""
+    },
+    {
+      "generation": 4,
+      "position": 11,
+      "name": "Pound Foolish",
+      "horse_id": "000a00877d",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 22,
+      "name": "Sir Ivor",
+      "horse_id": "000a000dd9",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 23,
+      "name": "Squander",
+      "horse_id": "000a007e4f",
+      "sex": ""
+    },
+    {
+      "generation": 2,
+      "position": 3,
+      "name": "ブランシェリー",
+      "horse_id": "1998101846",
+      "sex": "牝"
+    },
+    {
+      "generation": 3,
+      "position": 6,
+      "name": "トニービンTony Bin(愛)",
+      "horse_id": "1983109006",
+      "sex": "牡"
+    },
+    {
+      "generation": 4,
+      "position": 12,
+      "name": "カンパラ",
+      "horse_id": "000a000827",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 24,
+      "name": "Kalamoun",
+      "horse_id": "000a0016c2",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 25,
+      "name": "State Pension",
+      "horse_id": "000a00859a",
+      "sex": ""
+    },
+    {
+      "generation": 4,
+      "position": 13,
+      "name": "Severn Bridge",
+      "horse_id": "000a00859c",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 26,
+      "name": "Hornbeam",
+      "horse_id": "000a000e25",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 27,
+      "name": "Priddy Fair",
+      "horse_id": "000a00859b",
+      "sex": ""
+    },
+    {
+      "generation": 3,
+      "position": 7,
+      "name": "メゾンブランシュ",
+      "horse_id": "1989107947",
+      "sex": "牝"
+    },
+    {
+      "generation": 4,
+      "position": 14,
+      "name": "Alleged",
+      "horse_id": "000a0012f7",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 28,
+      "name": "Hoist the Flag",
+      "horse_id": "000a0012be",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 29,
+      "name": "Princess Pout",
+      "horse_id": "000a007f75",
+      "sex": ""
+    },
+    {
+      "generation": 4,
+      "position": 15,
+      "name": "ブランシユレイン",
+      "horse_id": "000a00006f",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 30,
+      "name": "Nureyev",
+      "horse_id": "000a001676",
+      "sex": ""
+    },
+    {
+      "generation": 5,
+      "position": 31,
+      "name": "Belga",
+      "horse_id": "000a0082dc",
+      "sex": ""
+    }
+  ],
+  "ancestor_count": 62,
+  "source": "queue_horse_pedigree_5gen",
+  "_meta": {
+    "scraped_at": 1781192590.1600595,
+    "scraped_at_jst": "2026-06-12 00:43:10",
+    "schema_validation": {
+      "schema_version": 2,
+      "passed": true,
+      "top_missing": [],
+      "top_type_errors": [],
+      "top_constraint_errors": [],
+      "entry_count": 0,
+      "entry_issues": {}
+    },
+    "scrape_validation_status": "ok"
+  }
+}

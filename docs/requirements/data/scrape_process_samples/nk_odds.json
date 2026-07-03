@@ -1,0 +1,128 @@
+{
+  "race_id": "202309030811",
+  "entries": [
+    {
+      "horse_number": 1,
+      "win_odds": 158.9,
+      "place_odds_min": 12.3,
+      "place_odds_max": 30.5,
+      "popularity": 13
+    },
+    {
+      "horse_number": 2,
+      "win_odds": 180.2,
+      "place_odds_min": 14.5,
+      "place_odds_max": 36.1,
+      "popularity": 15
+    },
+    {
+      "horse_number": 3,
+      "win_odds": 35.1,
+      "place_odds_min": 3.1,
+      "place_odds_max": 7.2,
+      "popularity": 8
+    },
+    {
+      "horse_number": 4,
+      "win_odds": 28.3,
+      "place_odds_min": 2.7,
+      "place_odds_max": 6.2,
+      "popularity": 6
+    },
+    {
+      "horse_number": 5,
+      "win_odds": 1.3,
+      "place_odds_min": 1.1,
+      "place_odds_max": 1.1,
+      "popularity": 1
+    },
+    {
+      "horse_number": 6,
+      "win_odds": 55.7,
+      "place_odds_min": 5.6,
+      "place_odds_max": 13.5,
+      "popularity": 10
+    },
+    {
+      "horse_number": 7,
+      "win_odds": 262.5,
+      "place_odds_min": 17.5,
+      "place_odds_max": 43.5,
+      "popularity": 16
+    },
+    {
+      "horse_number": 8,
+      "win_odds": 42.1,
+      "place_odds_min": 4.7,
+      "place_odds_max": 11.1,
+      "popularity": 9
+    },
+    {
+      "horse_number": 9,
+      "win_odds": 8.5,
+      "place_odds_min": 1.6,
+      "place_odds_max": 3.0,
+      "popularity": 2
+    },
+    {
+      "horse_number": 10,
+      "win_odds": 16.6,
+      "place_odds_min": 2.2,
+      "place_odds_max": 4.7,
+      "popularity": 5
+    },
+    {
+      "horse_number": 11,
+      "win_odds": 13.8,
+      "place_odds_min": 2.4,
+      "place_odds_max": 5.3,
+      "popularity": 3
+    },
+    {
+      "horse_number": 12,
+      "win_odds": 14.3,
+      "place_odds_min": 2.3,
+      "place_odds_max": 5.0,
+      "popularity": 4
+    },
+    {
+      "horse_number": 13,
+      "win_odds": 83.1,
+      "place_odds_min": 8.8,
+      "place_odds_max": 21.6,
+      "popularity": 11
+    },
+    {
+      "horse_number": 14,
+      "win_odds": 113.4,
+      "place_odds_min": 7.4,
+      "place_odds_max": 18.1,
+      "popularity": 12
+    },
+    {
+      "horse_number": 15,
+      "win_odds": 176.0,
+      "place_odds_min": 16.2,
+      "place_odds_max": 40.3,
+      "popularity": 14
+    },
+    {
+      "horse_number": 16,
+      "win_odds": 480.4,
+      "place_odds_min": 53.0,
+      "place_odds_max": 132.9,
+      "popularity": 17
+    },
+    {
+      "horse_number": 17,
+      "win_odds": 30.2,
+      "place_odds_min": 4.5,
+      "place_odds_max": 10.6,
+      "popularity": 7
+    }
+  ],
+  "_meta": {
+    "scraped_at": 1781190687.6626334,
+    "scraped_at_jst": "2026-06-12 00:11:27"
+  }
+}

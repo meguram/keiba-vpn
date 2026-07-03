@@ -1,0 +1,179 @@
+{
+  "race_id": "202309030811",
+  "entries": [
+    {
+      "horse_number": 5,
+      "horse_name": "イクイノックス",
+      "horse_id": "2019105219",
+      "finish_order": 1,
+      "index_total": 113,
+      "index_start": 102,
+      "index_chase": 104,
+      "index_closing": 106
+    },
+    {
+      "horse_number": 6,
+      "horse_name": "スルーセブンシーズ",
+      "horse_id": "2018105269",
+      "finish_order": 2,
+      "index_total": 114,
+      "index_start": 100,
+      "index_chase": 104,
+      "index_closing": 108
+    },
+    {
+      "horse_number": 9,
+      "horse_name": "ジャスティンパレス",
+      "horse_id": "2019105346",
+      "finish_order": 3,
+      "index_total": 112,
+      "index_start": 102,
+      "index_chase": 106,
+      "index_closing": 103
+    },
+    {
+      "horse_number": 11,
+      "horse_name": "ジェラルディーナ",
+      "horse_id": "2018105081",
+      "finish_order": 4,
+      "index_total": 113,
+      "index_start": 100,
+      "index_chase": 105,
+      "index_closing": 101
+    },
+    {
+      "horse_number": 10,
+      "horse_name": "ディープボンド",
+      "horse_id": "2017102170",
+      "finish_order": 5,
+      "index_total": 110,
+      "index_start": 105,
+      "index_chase": 109,
+      "index_closing": 101
+    },
+    {
+      "horse_number": 7,
+      "horse_name": "プラダリア",
+      "horse_id": "2019100109",
+      "finish_order": 6,
+      "index_total": 110,
+      "index_start": 105,
+      "index_chase": 107,
+      "index_closing": 103
+    },
+    {
+      "horse_number": 4,
+      "horse_name": "ボッケリーニ",
+      "horse_id": "2016104618",
+      "finish_order": 7,
+      "index_total": 109,
+      "index_start": 101,
+      "index_chase": 107,
+      "index_closing": 104
+    },
+    {
+      "horse_number": 8,
+      "horse_name": "ヴェラアズール",
+      "horse_id": "2017105082",
+      "finish_order": 8,
+      "index_total": 108,
+      "index_start": 102,
+      "index_chase": 105,
+      "index_closing": 103
+    },
+    {
+      "horse_number": 13,
+      "horse_name": "ジオグリフ",
+      "horse_id": "2019105056",
+      "finish_order": 9,
+      "index_total": 109,
+      "index_start": 105,
+      "index_chase": 109,
+      "index_closing": 99
+    },
+    {
+      "horse_number": 17,
+      "horse_name": "ドゥラエレーデ",
+      "horse_id": "2020103626",
+      "finish_order": 10,
+      "index_total": 103,
+      "index_start": 108,
+      "index_chase": 111,
+      "index_closing": 93
+    },
+    {
+      "horse_number": 12,
+      "horse_name": "アスクビクターモア",
+      "horse_id": "2019104706",
+      "finish_order": 11,
+      "index_total": 105,
+      "index_start": 107,
+      "index_chase": 110,
+      "index_closing": 94
+    },
+    {
+      "horse_number": 14,
+      "horse_name": "ブレークアップ",
+      "horse_id": "2018106273",
+      "finish_order": 12,
+      "index_total": 105,
+      "index_start": 107,
+      "index_chase": 111,
+      "index_closing": 93
+    },
+    {
+      "horse_number": 3,
+      "horse_name": "ダノンザキッド",
+      "horse_id": "2018104963",
+      "finish_order": 13,
+      "index_total": 103,
+      "index_start": 107,
+      "index_chase": 110,
+      "index_closing": 93
+    },
+    {
+      "horse_number": 16,
+      "horse_name": "モズベッロ",
+      "horse_id": "2016100915",
+      "finish_order": 14,
+      "index_total": 104,
+      "index_start": 104,
+      "index_chase": 107,
+      "index_closing": 96
+    },
+    {
+      "horse_number": 15,
+      "horse_name": "ユニコーンライオン",
+      "horse_id": "2016110103",
+      "finish_order": 15,
+      "index_total": 103,
+      "index_start": 109,
+      "index_chase": 112,
+      "index_closing": 91
+    },
+    {
+      "horse_number": 2,
+      "horse_name": "カラテ",
+      "horse_id": "2016106606",
+      "finish_order": 16,
+      "index_total": 103,
+      "index_start": 107,
+      "index_chase": 111,
+      "index_closing": 93
+    },
+    {
+      "horse_number": 1,
+      "horse_name": "ライラック",
+      "horse_id": "2019103588",
+      "finish_order": 17,
+      "index_total": 102,
+      "index_start": 105,
+      "index_chase": 109,
+      "index_closing": 94
+    }
+  ],
+  "_meta": {
+    "scraped_at": 1781190683.5042465,
+    "scraped_at_jst": "2026-06-12 00:11:23"
+  }
+}

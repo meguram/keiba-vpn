@@ -4,6 +4,11 @@ JRA開催スケジュール連動 自動スクレイピング
 JRA年間カレンダーと db.netkeiba の更新タイミングに合わせて
 各種データを自動取得する。cron から --task で呼び出す。
 
+**netkeiba 系の取得は既定で ``data/queue/scrape_queue.json`` 経由**（ワーカーが
+``queue_tasks.execute_job`` で実行）。切り戻しは環境変数
+``KEIBA_AUTO_SCRAPE_USE_QUEUE=0``。
+JRA 馬場ライブ・馬名インデックス・成長曲線はキュー対象外。
+
 ┌─────────────────────────────────────────────────────────────────┐
 │  タスク            │ 時刻         │ 対象日     │ 内容          │
 ├────────────────────┼──────────────┼────────────┼───────────────┤
@@ -29,8 +34,12 @@ JRA年間カレンダーと db.netkeiba の更新タイミングに合わせて
 │                    │              │            │ + SmartRC     │
 ├────────────────────┼──────────────┼────────────┼───────────────┤
 │  weekly-update     │ 金 17:30     │ 毎週金曜   │ 先週分        │
-│                    │              │            │ 結果+馬情報   │
-│                    │              │            │ +指数+調教    │
+│                    │              │            │ 結果・指数・偏差値は上書き再取得 │
+│                    │              │            │ 馬成績ページ上書き・血統は別ジョブ │
+│                    │              │            │ （未保持のみキュー・既存スキップ） │
+├────────────────────┼──────────────┼────────────┼───────────────┤
+│  horse-name-index  │ 金 18:00     │ 毎週金曜   │ 馬名リスト    │
+│                    │              │            │ (成長曲線用)  │
 ├────────────────────┼──────────────┼────────────┼───────────────┤
 │  daily-race-lists  │ 毎日 07:00   │ 毎日       │ 今日+14日先   │
 │                    │              │            │ のrace_lists  │
@@ -66,6 +75,7 @@ Usage:
   python -m src.scraper.auto_scrape --task raceday-result-runner   # 開催日常駐 T+15速報 (cron 07:30)
   python -m src.scraper.auto_scrape --task raceday-evening         # 結果取得 (cron 17:30)
   python -m src.scraper.auto_scrape --task weekly-update       # 週次更新 (cron 金 17:30)
+  python -m src.scraper.auto_scrape --task horse-name-index    # 馬名リスト (cron 金 18:00)
   python -m src.scraper.auto_scrape --task daily-race-lists    # 日次race_lists更新 (cron 07:00)
   python -m src.scraper.auto_scrape --status
 """
@@ -81,10 +91,30 @@ import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from src.utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger("scraper.auto_scrape")
+
+# JRA / netkeiba 運用は日本時間基準。Docker・stg が UTC でも日付・待機・ログを揃える。
+_JST = ZoneInfo("Asia/Tokyo")
+
+
+def _via_queue() -> bool:
+    """netkeiba 取得を scrape_queue.json 経由にする（既定オン）。"""
+    from src.scraper.auto_scrape_queue import use_queue
+
+    return use_queue()
+
+
+def _today_jst() -> date:
+    return datetime.now(_JST).date()
+
+
+def _now_jst_iso() -> str:
+    """auto_scrape_status.json の last_run 等（+09:00 付き）。"""
+    return datetime.now(_JST).isoformat(timespec="seconds")
 
 LEAD_MINUTES = 15    # 発走何分前にスクレイプするか
 RESULT_OFFSET_MINUTES = 15  # 発走何分後に速報結果を取得するか
@@ -94,16 +124,16 @@ RACE_LIST_FETCH_DAYS_AHEAD = 14  # daily-race-lists で先読みする日数
 def _load_race_calendar(output_dir: str = "data/page_reference/cushion") -> dict:
     from src.scraper.jra_calendar import JRACalendarScraper
     scraper = JRACalendarScraper(output_dir=output_dir)
-    return scraper.get_schedule(date.today().year)
+    return scraper.get_schedule(_today_jst().year)
 
 
 def _is_race_day(calendar: dict, target: str | None = None) -> bool:
-    target = target or date.today().isoformat()
+    target = target or _today_jst().isoformat()
     return any(d["date"] == target for d in calendar.get("race_days", []))
 
 
 def _get_race_day_venues(calendar: dict, target: str | None = None) -> list[str]:
-    target = target or date.today().isoformat()
+    target = target or _today_jst().isoformat()
     for d in calendar.get("race_days", []):
         if d["date"] == target:
             return [v["venue"] for v in d.get("venues", [])]
@@ -111,7 +141,7 @@ def _get_race_day_venues(calendar: dict, target: str | None = None) -> list[str]
 
 
 def _last_week_race_dates(calendar: dict) -> list[str]:
-    today = date.today()
+    today = _today_jst()
     last_sunday = today - timedelta(days=today.weekday() + 1)
     last_monday = last_sunday - timedelta(days=6)
     start = last_monday.isoformat()
@@ -125,7 +155,7 @@ def _last_week_race_dates(calendar: dict) -> list[str]:
 
 def _future_race_dates_iso(calendar: dict) -> list[str]:
     """今日〜カレンダー末尾までの全開催日を ISO 形式 (YYYY-MM-DD) リストで返す。"""
-    start = date.today().isoformat()
+    start = _today_jst().isoformat()
     return sorted(
         d["date"]
         for d in calendar.get("race_days", [])
@@ -140,8 +170,8 @@ def _missing_past_race_dates(calendar: dict, since: str | None = None) -> list[s
     since: 検索開始日 (YYYY-MM-DD)。省略時は今年の1月1日から。
     昨日以前を対象にする（当日は取得中の可能性があるため除外）。
     """
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
-    start = since or f"{date.today().year}-01-01"
+    yesterday = (_today_jst() - timedelta(days=1)).isoformat()
+    start = since or f"{_today_jst().year}-01-01"
     from src.config.data_paths import RACE_LISTS_DIR
 
     race_list_dir = RACE_LISTS_DIR
@@ -161,28 +191,88 @@ def _missing_past_race_dates(calendar: dict, since: str | None = None) -> list[s
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  ステータス管理
+#  ステータス管理（正本: data/local/meta/auto_scrape_status.json）
+#  管理画面 /api/admin/auto-scrape-status と同一パス。旧 data/meta/ は起動時に移行。
 # ═══════════════════════════════════════════════════════════════════
 
-_STATUS_FILE = Path("data/local/meta/auto_scrape_status.json")
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_AUTO_SCRAPE_STATUS_CANON = _REPO_ROOT / "data" / "local" / "meta" / "auto_scrape_status.json"
+_AUTO_SCRAPE_STATUS_LEGACY = _REPO_ROOT / "data" / "meta" / "auto_scrape_status.json"
+
+
+def _migrate_legacy_status_if_needed() -> None:
+    if _AUTO_SCRAPE_STATUS_CANON.exists():
+        return
+    if not _AUTO_SCRAPE_STATUS_LEGACY.exists():
+        return
+    try:
+        _AUTO_SCRAPE_STATUS_CANON.parent.mkdir(parents=True, exist_ok=True)
+        _AUTO_SCRAPE_STATUS_CANON.write_text(
+            _AUTO_SCRAPE_STATUS_LEGACY.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        logger.info(
+            "auto_scrape ステータスを移行しました: %s -> %s",
+            _AUTO_SCRAPE_STATUS_LEGACY,
+            _AUTO_SCRAPE_STATUS_CANON,
+        )
+    except Exception as exc:
+        logger.warning("auto_scrape ステータス移行失敗: %s", exc)
+
+
+def _update_date_coverage_bg(date: str) -> None:
+    """スクレイピング完了後、指定日の coverage index をバックグラウンドで更新する。"""
+    try:
+        from src.scraper.date_coverage import update_date_coverage
+        from src.scraper.run import ScraperRunner
+
+        runner = ScraperRunner()
+        update_date_coverage(date, runner.storage)
+    except Exception as e:
+        logger.warning("coverage 更新スキップ [%s]: %s", date, e)
+
+
+def _update_dates_coverage_bg(dates: list[str]) -> None:
+    """複数日の coverage index を年ごとにまとめて更新する（GCS コール最小化）。"""
+    try:
+        from src.scraper.date_coverage import update_year_coverage
+        from src.scraper.run import ScraperRunner
+
+        runner = ScraperRunner()
+        # 年ごとにグループ化
+        years: dict[int, list[str]] = {}
+        for d in dates:
+            y = int(d[:4])
+            years.setdefault(y, []).append(d)
+        for y, ds in years.items():
+            update_year_coverage(y, runner.storage, dates=ds)
+    except Exception as e:
+        logger.warning("coverage 一括更新スキップ: %s", e)
 
 
 def _save_status(task: str, result: dict):
-    _STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    status = {}
-    if _STATUS_FILE.exists():
+    _migrate_legacy_status_if_needed()
+    _AUTO_SCRAPE_STATUS_CANON.parent.mkdir(parents=True, exist_ok=True)
+    status: dict[str, Any] = {}
+    if _AUTO_SCRAPE_STATUS_CANON.exists():
         try:
-            status = json.loads(_STATUS_FILE.read_text())
+            status = json.loads(_AUTO_SCRAPE_STATUS_CANON.read_text(encoding="utf-8"))
         except Exception:
             pass
-    status[task] = {"last_run": datetime.now().isoformat(timespec="seconds"), **result}
-    _STATUS_FILE.write_text(json.dumps(status, ensure_ascii=False, indent=2))
+    status[task] = {**result, "last_run": _now_jst_iso()}
+    _AUTO_SCRAPE_STATUS_CANON.write_text(json.dumps(status, ensure_ascii=False, indent=2))
 
 
 def _load_status() -> dict:
-    if _STATUS_FILE.exists():
+    _migrate_legacy_status_if_needed()
+    if _AUTO_SCRAPE_STATUS_CANON.exists():
         try:
-            return json.loads(_STATUS_FILE.read_text())
+            return json.loads(_AUTO_SCRAPE_STATUS_CANON.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    if _AUTO_SCRAPE_STATUS_LEGACY.exists():
+        try:
+            return json.loads(_AUTO_SCRAPE_STATUS_LEGACY.read_text(encoding="utf-8"))
         except Exception:
             pass
     return {}
@@ -204,7 +294,11 @@ def _fetch_race_schedule(runner, date_str: str) -> list[dict]:
     if not races:
         return []
 
-    today = date.today()
+    try:
+        ys, ms, ds = int(date_str[:4]), int(date_str[4:6]), int(date_str[6:8])
+        race_day = date(ys, ms, ds)
+    except (ValueError, IndexError):
+        race_day = _today_jst()
     schedule = []
 
     for race in races:
@@ -230,7 +324,11 @@ def _fetch_race_schedule(runner, date_str: str) -> list[dict]:
 
         try:
             h, m = map(int, start_str.split(":"))
-            post_dt = datetime.combine(today, datetime.min.time().replace(hour=h, minute=m))
+            post_dt = datetime.combine(
+                race_day,
+                datetime.min.time().replace(hour=h, minute=m),
+                tzinfo=_JST,
+            )
         except (ValueError, TypeError):
             continue
 
@@ -260,8 +358,13 @@ def task_raceday_runner():
     3. 15分前になったら出馬表+オッズ+馬柱+追切+SmartRCをスクレイプ
     4. 全レース完了で終了
     """
+    if _via_queue():
+        from src.scraper import auto_scrape_queue as _asq
+
+        return _asq.task_raceday_runner()
+
     calendar = _load_race_calendar()
-    today_str = date.today().isoformat()
+    today_str = _today_jst().isoformat()
 
     if not _is_race_day(calendar, today_str):
         logger.info("今日 (%s) は開催日ではありません", today_str)
@@ -307,7 +410,7 @@ def task_raceday_runner():
     for i, race in enumerate(schedule):
         rid = race["race_id"]
         target_time = race["post_time"] - timedelta(minutes=LEAD_MINUTES)
-        now = datetime.now()
+        now = datetime.now(_JST)
 
         if now < target_time:
             wait_sec = (target_time - now).total_seconds()
@@ -325,7 +428,7 @@ def task_raceday_runner():
             if r["race_id"] in scraped_ids:
                 continue
             r_target = r["post_time"] - timedelta(minutes=LEAD_MINUTES)
-            if datetime.now() >= r_target:
+            if datetime.now(_JST) >= r_target:
                 batch.append(r)
 
         for r in batch:
@@ -356,7 +459,7 @@ def _scrape_single_race(runner, race: dict, stats: dict):
 
     rid = race["race_id"]
     label = f"{race['venue']} {race['round']}R {race['race_name'][:12]}"
-    now_str = datetime.now().strftime("%H:%M:%S")
+    now_str = datetime.now(_JST).strftime("%H:%M:%S")
 
     logger.info("  ★ [%s] %s (%s) T-15 バンドル開始", now_str, label, rid)
 
@@ -386,8 +489,13 @@ def task_raceday_result_runner():
     raceday-runner (T-15 事前取得) とは独立して動作する。
     raceday-evening (夕方一括) は確定オッズ・SmartRC込みで引き続き別途実行される。
     """
+    if _via_queue():
+        from src.scraper import auto_scrape_queue as _asq
+
+        return _asq.task_raceday_result_runner()
+
     calendar = _load_race_calendar()
-    today_str = date.today().isoformat()
+    today_str = _today_jst().isoformat()
 
     if not _is_race_day(calendar, today_str):
         logger.info("今日 (%s) は開催日ではありません", today_str)
@@ -430,7 +538,7 @@ def task_raceday_result_runner():
     for i, race in enumerate(schedule):
         rid = race["race_id"]
         target_time = race["post_time"] + timedelta(minutes=RESULT_OFFSET_MINUTES)
-        now = datetime.now()
+        now = datetime.now(_JST)
 
         if now < target_time:
             wait_sec = (target_time - now).total_seconds()
@@ -447,14 +555,14 @@ def task_raceday_result_runner():
         for r in schedule:
             if r["race_id"] in scraped_ids:
                 continue
-            if datetime.now() >= r["post_time"] + timedelta(minutes=RESULT_OFFSET_MINUTES):
+            if datetime.now(_JST) >= r["post_time"] + timedelta(minutes=RESULT_OFFSET_MINUTES):
                 batch.append(r)
 
         for r in batch:
             r_rid = r["race_id"]
             label = f"{r['venue']} {r['round']}R {r['race_name'][:12]}"
             logger.info("  ★ [%s] 速報結果取得: %s (%s)",
-                        datetime.now().strftime("%H:%M:%S"), label, r_rid)
+                        datetime.now(_JST).strftime("%H:%M:%S"), label, r_rid)
             try:
                 result = runner.scrape_race_result_on_time(
                     r_rid, skip_existing=False, opening_date=date_fmt,
@@ -502,6 +610,11 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
 
     Returns: stats dict
     """
+    if _via_queue():
+        from src.scraper import auto_scrape_queue as _asq
+
+        return _asq.run_raceday_eve_for_date(race_date_str)
+
     date_iso = f"{race_date_str[:4]}-{race_date_str[4:6]}-{race_date_str[6:]}"
     logger.info("=" * 60)
     logger.info("  前日夕方スクレイプ (raceday-eve): 翌開催日 %s", date_iso)
@@ -615,6 +728,8 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
             logger.warning("想定オッズ precompute バッチ失敗: %s", exc)
             final_odds_precompute_stats = {"error": str(exc)}
 
+    _update_date_coverage_bg(race_date_str)
+
     return {
         "status": "ok",
         "date": date_iso,
@@ -625,15 +740,40 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
     }
 
 
+def task_horse_name_index():
+    """毎週金曜 18:00 — 馬名リスト + 成長曲線データを calculated_data に更新。"""
+    today = _today_jst()
+    if today.weekday() != 4:
+        logger.info("今日 (%s) は金曜ではありません — 週次更新スキップ", today)
+        _save_status("horse-name-index", {"status": "skipped", "reason": "not-friday"})
+        return
+
+    from src.utils.horse_name_index import run_weekly_horse_name_index_update
+    from src.pipeline.inference.growth_curve_service import run_weekly_growth_curve_update
+
+    base = Path(__file__).resolve().parents[2]
+    logger.info("馬名インデックス週次更新を開始（calculated_data/knowledge）")
+    result_index = run_weekly_horse_name_index_update(base)
+    _save_status("horse-name-index", result_index)
+    logger.info("馬名インデックス週次更新完了: %s", result_index)
+
+    logger.info("成長曲線週次更新を開始（calculated_data/growth_curve）")
+    result_gc = run_weekly_growth_curve_update(base)
+    _save_status("growth-curve-weekly", result_gc)
+    logger.info("成長曲線週次更新完了: %s", result_gc)
+
+
 def task_raceday_eve():
     """
     翌日が開催日なら、前日 18:00 に出馬表・馬柱・追い切りを取得する (cron 18:00)。
 
     出馬表は追走難度・位置取り予測の入力。馬柱は前日 17:00 確定分をこの時点で取得する。
     T-15 バンドルでは取得済みタスクは skip_existing=True でスキップされる。
+
+    金曜 18:00 には ``horse-name-index`` タスクで馬名リストも別途更新される。
     """
     calendar = _load_race_calendar()
-    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    tomorrow = (_today_jst() + timedelta(days=1)).isoformat()
 
     if not _is_race_day(calendar, tomorrow):
         logger.info("明日 (%s) は開催日ではありません — スキップ", tomorrow)
@@ -706,6 +846,11 @@ def run_raceday_evening_for_date(date_str: str) -> dict:
 
     Returns: stats dict
     """
+    if _via_queue():
+        from src.scraper import auto_scrape_queue as _asq
+
+        return _asq.run_raceday_evening_for_date(date_str)
+
     calendar = _load_race_calendar()
     venues = _get_race_day_venues(calendar, date_str)
 
@@ -758,6 +903,8 @@ def run_raceday_evening_for_date(date_str: str) -> dict:
     if stats["result_on_time"] > 0:
         _trigger_track_speed_for_date(date_str)
 
+    _update_date_coverage_bg(date_str)
+
     return {"status": "ok", "date": date_str, "venues": venues,
             **{k: v for k, v in stats.items() if k != "errors"},
             "error_count": len(stats["errors"])}
@@ -770,6 +917,11 @@ def run_weekly_update_for_dates(target_dates: list[str]) -> dict:
 
     Returns: stats dict
     """
+    if _via_queue():
+        from src.scraper import auto_scrape_queue as _asq
+
+        return _asq.run_weekly_update_for_dates(target_dates)
+
     if not target_dates:
         return {"status": "skipped", "reason": "no-dates"}
 
@@ -838,6 +990,15 @@ def run_weekly_update_for_dates(target_dates: list[str]) -> dict:
 
         total_stats["horses_updated"] = updated
         logger.info("馬情報: %d頭更新, %d頭スキップ", updated, skipped)
+        if updated and _today_jst().weekday() == 4:
+            try:
+                from src.utils.horse_name_index import run_weekly_horse_name_index_update
+
+                idx = run_weekly_horse_name_index_update(Path(__file__).resolve().parents[2])
+                total_stats["horse_name_index"] = idx
+                _save_status("horse-name-index", idx)
+            except Exception as e:
+                logger.warning("週次更新後の馬名インデックス再構築をスキップ: %s", e)
 
     logger.info("=" * 60)
     logger.info("  週次更新完了: %d日, 結果=%d, 指数=%d, 偏差値=%d, 馬=%d頭",
@@ -845,6 +1006,8 @@ def run_weekly_update_for_dates(target_dates: list[str]) -> dict:
                 total_stats["index"], total_stats["barometer"],
                 total_stats["horses_updated"])
     logger.info("=" * 60)
+
+    _update_dates_coverage_bg(target_dates)
 
     return {"status": "ok", "target_dates": target_dates,
             **{k: v for k, v in total_stats.items() if k != "errors"},
@@ -854,7 +1017,7 @@ def run_weekly_update_for_dates(target_dates: list[str]) -> dict:
 def task_raceday_evening():
     """開催日の全レース終了後に実行 (cron 17:30 JST)。"""
     calendar = _load_race_calendar()
-    today_str = date.today().isoformat()
+    today_str = _today_jst().isoformat()
 
     if not _is_race_day(calendar, today_str):
         logger.info("今日 (%s) は開催日ではありません", today_str)
@@ -871,7 +1034,7 @@ def task_raceday_evening():
 
 def task_weekly_update():
     """毎週金曜17:30に実行 (cron)。db.netkeiba が先週分を更新した後に取得。"""
-    today = date.today()
+    today = _today_jst()
     if today.weekday() != 4:
         logger.info("今日 (%s) は金曜ではありません", today.isoformat())
         _save_status("weekly-update", {"status": "skipped", "reason": "not-friday"})
@@ -897,6 +1060,11 @@ def run_catchup_for_dates(target_dates: list[str]) -> dict:
     各日について run_raceday_evening_for_date() を実行する。
     Returns: 集計 stats dict
     """
+    if _via_queue():
+        from src.scraper import auto_scrape_queue as _asq
+
+        return _asq.run_catchup_for_dates(target_dates)
+
     if not target_dates:
         return {"status": "skipped", "reason": "no-dates"}
 
@@ -933,8 +1101,12 @@ def run_catchup_for_dates(target_dates: list[str]) -> dict:
     status = "ok" if not total["fail_dates"] else (
         "partial" if total["ok_dates"] else "error"
     )
+
+    if total["ok_dates"]:
+        _update_dates_coverage_bg(total["ok_dates"])
+
     return {**total, "status": status,
-            "last_run": datetime.now().isoformat(timespec="seconds")}
+            "last_run": _now_jst_iso()}
 
 
 def task_catchup_missing_dates():
@@ -947,8 +1119,7 @@ def task_catchup_missing_dates():
 
     if not missing:
         logger.info("過去の欠損開催日なし")
-        _save_status("catchup-missing", {"status": "skipped", "reason": "no-missing-dates",
-                                          "last_run": datetime.now().isoformat(timespec="seconds")})
+        _save_status("catchup-missing", {"status": "skipped", "reason": "no-missing-dates"})
         return
 
     logger.info("過去の欠損開催日: %d 日 (%s〜%s)", len(missing), missing[0], missing[-1])
@@ -958,6 +1129,11 @@ def task_catchup_missing_dates():
 
 def task_daily_race_lists():
     """毎日 07:00 に実行 (cron)。今日〜カレンダー末尾までの全開催日の race_lists を取得・更新する。"""
+    if _via_queue():
+        from src.scraper import auto_scrape_queue as _asq
+
+        return _asq.task_daily_race_lists()
+
     calendar = _load_race_calendar()
     target_dates = _future_race_dates_iso(calendar)
 
@@ -989,7 +1165,7 @@ def task_daily_race_lists():
 
     result: dict = {
         "status": "ok" if not fail_dates else ("partial" if ok_dates else "error"),
-        "last_run": datetime.now().isoformat(timespec="seconds"),
+        "last_run": _now_jst_iso(),
         "target_dates": target_dates,
         "ok_dates": ok_dates,
         "fail_dates": fail_dates,
@@ -1007,7 +1183,7 @@ def task_daily_race_lists():
 def show_status():
     status = _load_status()
     calendar = _load_race_calendar()
-    today = date.today()
+    today = _today_jst()
 
     print("\n=== 自動スクレイプ ステータス ===")
 
@@ -1017,6 +1193,8 @@ def show_status():
         "raceday-result-runner": "速報結果ランナー (各R発走15分後に速報取得)",
         "raceday-evening":       "開催日夕 (結果・確定オッズ)",
         "weekly-update":         "金曜週次 (結果・指数・馬情報)",
+        "horse-name-index":      "金曜18:00 馬名リスト+成長曲線",
+        "growth-curve-weekly":   "金曜18:00 成長曲線一括",
         "catchup-missing":       "過去欠損補完 (race_listsなし開催日)",
         "daily-race-lists":      "日次レース一覧 (今日〜カレンダー末尾)",
         "jra-baba-morning":      "JRA馬場情報 (朝ポーリング 05:00-09:00)",
@@ -1065,9 +1243,10 @@ def show_status():
         print(f"    {rd} 17:30 結果+確定オッズ取得")
 
     nf = today + timedelta(days=(4 - today.weekday()) % 7)
-    if nf == today and datetime.now().hour >= 18:
+    if nf == today and datetime.now(_JST).hour >= 18:
         nf += timedelta(days=7)
     print(f"  次の金曜: {nf.isoformat()} 17:30 → 週次更新 (db.netkeiba反映後)")
+    print(f"  次の金曜: {nf.isoformat()} 18:00 → 馬名インデックス (成長曲線オートコンプリート)")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1084,14 +1263,14 @@ def task_jra_baba_morning():
     - 窓内かつ新データあればスクレイプして data/jra_baba/ に保存
     """
     from src.scraper.jra_baba_live import run_cron_job
-    today = date.today().isoformat()
-    logger.info("JRA馬場情報チェック: %s %s", today, datetime.now().strftime("%H:%M"))
+    today_str = _today_jst().isoformat()
+    logger.info("JRA馬場情報チェック: %s %s", today_str, datetime.now(_JST).strftime("%H:%M"))
     count = run_cron_job()
     if count > 0:
         logger.info("JRA馬場情報: %d レコード保存", count)
         _save_status("jra-baba-morning", {
             "status": "ok",
-            "date": today,
+            "date": today_str,
             "records": count,
         })
     else:
@@ -1104,6 +1283,7 @@ def task_jra_baba_morning():
 
 TASKS = {
     "raceday-eve":            task_raceday_eve,
+    "horse-name-index":       task_horse_name_index,
     "raceday-runner":         task_raceday_runner,
     "raceday-result-runner":  task_raceday_result_runner,
     "raceday-evening":        task_raceday_evening,

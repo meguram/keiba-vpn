@@ -28,6 +28,8 @@ generate_cron() {
 # ML-AutoPilot Keiba: 過去データ自動取得 (Backfill)
 # 4並列 × 年度分割で効率的にデータ収集
 # =========================================================
+# 時刻は日本時間（サーバが UTC でもこのブロックは JST で解釈）
+CRON_TZ=Asia/Tokyo
 
 # --- Phase fast: レース結果 + 出馬表 (毎日 AM 1:00, 2:00, 3:00, 4:00) ---
 0  1 * * * cd ${PROJECT_DIR} && ${PYTHON} -m src.scraper.backfill --year 2025 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2025.log 2>&1 ${CRON_TAG}

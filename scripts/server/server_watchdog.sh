@@ -17,8 +17,11 @@
 
 set -euo pipefail
 
+export TZ="${TZ:-Asia/Tokyo}"
+
 # ── 設定 ──
-PROJECT_DIR="/home/hirokiakataoka/project/myproject/keiba-vpn"
+# PROJECT_DIR: スクリプト自身の位置から動的に解決（ハードコード不要）
+PROJECT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
 LOG_DIR="${PROJECT_DIR}/logs"
 LOG_FILE="${LOG_DIR}/watchdog.log"
 MAX_LOG_LINES=5000
@@ -34,16 +37,9 @@ MLFLOW_HEALTH_URL="http://127.0.0.1:${MLFLOW_PORT}/health"
 MLFLOW_BACKEND_STORE="${PROJECT_DIR}/mlflow/runs/mlflow.db"
 MLFLOW_ARTIFACT_ROOT="${PROJECT_DIR}/mlflow/runs/artifacts"
 
-PYTHON="/home/hirokiakataoka/miniconda3/bin/python3"
-MLFLOW_CMD="/home/hirokiakataoka/.local/bin/mlflow"
-
-# Python / MLflow がなければ fallback
-if [ ! -x "$PYTHON" ]; then
-    PYTHON="$(which python3 2>/dev/null || echo /usr/bin/python3)"
-fi
-if [ ! -x "$MLFLOW_CMD" ]; then
-    MLFLOW_CMD="$(which mlflow 2>/dev/null || echo "")"
-fi
+# Python / MLflow: PATH から動的に解決
+PYTHON="${KEIBA_PYTHON:-$(which python3 2>/dev/null || echo /usr/bin/python3)}"
+MLFLOW_CMD="${KEIBA_MLFLOW:-$(which mlflow 2>/dev/null || echo "")}"
 
 mkdir -p "$LOG_DIR"
 

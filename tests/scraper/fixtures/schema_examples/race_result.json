@@ -1,0 +1,18 @@
+{
+  "race_id": "202309030811",
+  "race_name": "宝塚記念",
+  "date": "2023-06-25",
+  "venue": "阪神",
+  "entries": [
+    {
+      "horse_number": 1,
+      "horse_name": "イクイノックス",
+      "horse_id": "2019105219",
+      "bracket_number": 1,
+      "finish_position": 1
+    }
+  ],
+  "payoff": {"単勝": [{"horse": "1", "payout": 100}]},
+  "lap_times": [12.3, 23.4],
+  "corner_passing": []
+}

@@ -1,8 +1,13 @@
 """
 全スクレイピングカテゴリの期待スキーマ定義 + バリデーション。
 
-保存前に validate() を呼び、結果を _meta.schema_validation に記録する。
-保存は常に行い（lenient モード）、診断だけを付加する。
+HybridStorage.save 経由では保存前に validate() を実行し、結果を
+``_meta.schema_validation`` と ``_meta.scrape_validation_status`` に記録する。
+
+厳格モード（既定）ではスキーマ定義があり検証に通らないデータは GCS に送らず
+``SchemaValidationError`` を送出する（キュージョブは failed 扱い）。
+``KEIBA_SCHEMA_STRICT=0`` のときは不合格でも保存し、メタに
+``scrape_validation_status=schema_failed`` のみ付与する。
 
 スキーマ dict の構造:
   top_required  : トップレベルで必ず存在すべきフィールド
@@ -22,10 +27,35 @@
 
 from __future__ import annotations
 
+import copy
+import json
 import re
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+
+class SchemaValidationError(RuntimeError):
+    """カテゴリスキーマ検証に不合格（厳格モードで保存前に送出）。"""
+
+    def __init__(self, category: str, key: str, report: dict[str, Any]) -> None:
+        self.category = category
+        self.key = key
+        self.report = report
+        msg = (
+            f"[schema_validation] {category}/{key} "
+            f"schema_version={report.get('schema_version')!r} passed=False"
+        )
+        super().__init__(msg)
+
+
+def validation_report_for_meta(report: dict[str, Any]) -> dict[str, Any]:
+    """_meta.schema_validation 用。JSON 直列化可能な dict のみを返す。"""
+    try:
+        json.dumps(report, ensure_ascii=False)
+        return dict(report)
+    except (TypeError, ValueError):
+        return {"schema_version": report.get("schema_version"), "passed": False, "note": "non_json_report"}
 
 _TYPE_MAP: dict[str, type | tuple[type, ...]] = {
     "str": str,
@@ -371,6 +401,49 @@ _RACE_DETAIL: dict[str, Any] = {
     "entry_list_key": "entries",
 }
 
+# race.netkeiba.com 速報結果（db 確定版 `race_result` より日付・払戻・ラップが欠けることがある）
+_RACE_RESULT_ON_TIME: dict[str, Any] = {
+    "top_required": {
+        "race_id": {"type": "str"},
+        "race_name": {"type": "str"},
+        "entries": {"type": "list", "min_length": 1},
+    },
+    "top_optional": {
+        **{
+            k: v
+            for k, v in _RACE_RESULT["top_optional"].items()
+            if k != "date"
+        },
+        "date": {"type": "str"},
+    },
+    "entry_required": copy.deepcopy(_RACE_RESULT["entry_required"]),
+    "entry_optional": copy.deepcopy(_RACE_RESULT["entry_optional"]),
+    "entry_list_key": "entries",
+}
+
+# scrape_race_list が保存するペイロード（`races` は 0 件もあり得る）
+_RACE_LISTS: dict[str, Any] = {
+    "top_required": {
+        "date": {"type": "str", "non_empty": True},
+        "races": {"type": "list"},
+    },
+    "top_optional": {
+        "_meta": {"type": "dict"},
+    },
+    "entry_required": {
+        "race_id": {"type": "str", "non_empty": True},
+    },
+    "entry_optional": {
+        "round": {"type": "any"},
+        "venue": {"type": "str"},
+        "race_name": {"type": "str"},
+        "entries_count": {"type": "any"},
+        "date": {"type": "str"},
+        "list_grade_icon": {"type": "str"},
+    },
+    "entry_list_key": "races",
+}
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 馬系スキーマ
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -493,12 +566,216 @@ _SMARTRC_RACE: dict[str, Any] = {
     },
 }
 
+_REQUIREMENT_ROW_TRACE: dict[str, Any] = {
+    "top_required": {
+        "row_id": {"type": "str", "non_empty": True},
+        "trace_key": {"type": "str", "non_empty": True},
+        "scope": {"type": "str", "non_empty": True},
+        "primary_id": {"type": "str", "non_empty": True},
+        "canonical": {"type": "list", "min_length": 1},
+    },
+    "top_optional": {
+        "title_ja": {"type": "str"},
+        "raw_html": {"type": "list"},
+    },
+    "entry_required": {
+        "category": {"type": "str", "non_empty": True},
+        "key": {"type": "str", "non_empty": True},
+    },
+    "entry_optional": {
+        "role": {"type": "str"},
+        "present": {"type": "bool"},
+        "note": {"type": "str"},
+    },
+    "entry_list_key": "canonical",
+}
+
+_RACE_DAY_SCHEDULE: dict[str, Any] = {
+    "top_required": {
+        "date_fmt": {"type": "str", "pattern": r"\d{8}"},
+        "slots": {"type": "list"},
+    },
+    "top_optional": {
+        "iso_date": {"type": "str"},
+    },
+    "entry_required": {
+        "race_id": {"type": "str", "non_empty": True},
+        "post_time_iso": {"type": "str", "non_empty": True},
+    },
+    "entry_optional": {
+        "venue": {"type": "str"},
+        "round": {"type": "any"},
+        "race_name": {"type": "str"},
+        "start_time_str": {"type": "str"},
+        "time_source": {"type": "str"},
+    },
+    "entry_list_key": "slots",
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 行固有派生カテゴリのスキーマ
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+_RACE_SHUTUBA_META: dict[str, Any] = {
+    "top_required": {
+        "race_id": {"type": "str", "non_empty": True},
+        "race_name": {"type": "str"},
+    },
+    "top_optional": {
+        "date": {"type": "str"},
+        "venue": {"type": "str"},
+        "round": {"type": "int"},
+        "surface": {"type": "str"},
+        "distance": {"type": "int"},
+        "direction": {"type": "str"},
+        "weather": {"type": "str"},
+        "track_condition": {"type": "str"},
+        "start_time": {"type": "str"},
+        "field_size": {"type": "int"},
+        "grade": {"type": "str"},
+        "race_class": {"type": "str"},
+        "weight_rule": {"type": "str"},
+        "course_type": {"type": "str"},
+    },
+}
+
+_RACE_RESULT_ON_TIME_PAYOFF: dict[str, Any] = {
+    "top_required": {
+        "race_id": {"type": "str", "non_empty": True},
+    },
+    "top_optional": {
+        "payoff": {"type": "dict"},
+    },
+}
+
+_RACE_RESULT_ON_TIME_LAP: dict[str, Any] = {
+    "top_required": {
+        "race_id": {"type": "str", "non_empty": True},
+    },
+    "top_optional": {
+        "lap_times": {"type": "list"},
+        "pace": {"type": "dict"},
+    },
+}
+
+_RACE_RESULT_ON_TIME_CORNER: dict[str, Any] = {
+    "top_required": {
+        "race_id": {"type": "str", "non_empty": True},
+    },
+    "top_optional": {
+        "corner_passing": {"type": "list"},
+    },
+}
+
+_HORSE_PROFILE: dict[str, Any] = {
+    "top_required": {
+        "horse_id": {"type": "str", "non_empty": True},
+        "horse_name": {"type": "str"},
+    },
+    "top_optional": {
+        "name_en": {"type": "str"},
+        "status": {"type": "str"},
+        "sex": {"type": "str"},
+        "age": {"type": "any"},
+        "color": {"type": "str"},
+        "birthday": {"type": "str"},
+        "trainer": {"type": "str"},
+        "trainer_id": {"type": "str"},
+        "owner": {"type": "str"},
+        "breeder": {"type": "str"},
+        "birthplace": {"type": "str"},
+        "total_earnings": {"type": "any"},
+        "career": {"type": "str"},
+        "career_record": {"type": "list"},
+        "major_wins": {"type": "list"},
+        "sire": {"type": "str"},
+        "dam": {"type": "str"},
+        "dam_sire": {"type": "str"},
+    },
+}
+
+_HORSE_RACE_HISTORY: dict[str, Any] = {
+    "top_required": {
+        "horse_id": {"type": "str", "non_empty": True},
+        "horse_name": {"type": "str"},
+        "race_history": {"type": "list"},
+    },
+    "top_optional": {},
+    "entry_required": {
+        "date": {"type": "str"},
+        "race_id": {"type": "str"},
+    },
+    "entry_optional": copy.deepcopy(_HORSE_RESULT["entry_optional"]),
+    "entry_list_key": "race_history",
+}
+
+_RACE_RESULT_META: dict[str, Any] = {
+    "top_required": {
+        "race_id": {"type": "str", "non_empty": True},
+        "race_name": {"type": "str"},
+    },
+    "top_optional": {
+        "date": {"type": "str"},
+        "venue": {"type": "str"},
+        "round": {"type": "int"},
+        "surface": {"type": "str"},
+        "distance": {"type": "int"},
+        "direction": {"type": "str"},
+        "grade": {"type": "str"},
+        "field_size": {"type": "int"},
+        "start_time": {"type": "str"},
+    },
+}
+
+_RACE_RESULT_PAYOFF: dict[str, Any] = {
+    "top_required": {
+        "race_id": {"type": "str", "non_empty": True},
+    },
+    "top_optional": {
+        "payoff": {"type": "dict"},
+    },
+}
+
+_RACE_RESULT_TRACK: dict[str, Any] = {
+    "top_required": {
+        "race_id": {"type": "str", "non_empty": True},
+    },
+    "top_optional": {
+        "weather": {"type": "str"},
+        "track_condition": {"type": "str"},
+        "track_condition_turf": {"type": "str"},
+        "track_condition_dirt": {"type": "str"},
+    },
+}
+
+_RACE_RESULT_CORNER: dict[str, Any] = {
+    "top_required": {
+        "race_id": {"type": "str", "non_empty": True},
+    },
+    "top_optional": {
+        "corner_passing": {"type": "list"},
+    },
+}
+
+_RACE_RESULT_LAP_TIMES: dict[str, Any] = {
+    "top_required": {
+        "race_id": {"type": "str", "non_empty": True},
+    },
+    "top_optional": {
+        "lap_times": {"type": "list"},
+        "pace": {"type": "dict"},
+    },
+}
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 全スキーマ登録
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 SCHEMAS: dict[str, dict[str, Any]] = {
     "race_result": _RACE_RESULT,
+    "race_result_on_time": _RACE_RESULT_ON_TIME,
+    "race_lists": _RACE_LISTS,
     "race_shutuba": _RACE_SHUTUBA,
     "race_shutuba_past": _RACE_SHUTUBA_PAST,
     "race_index": _RACE_INDEX,
@@ -514,6 +791,20 @@ SCHEMAS: dict[str, dict[str, Any]] = {
     "horse_pedigree_5gen": _HORSE_PEDIGREE_5GEN,
     "horse_training": _HORSE_TRAINING,
     "smartrc_race": _SMARTRC_RACE,
+    "requirement_row_trace": _REQUIREMENT_ROW_TRACE,
+    "race_day_schedule": _RACE_DAY_SCHEDULE,
+    # 行固有派生カテゴリ
+    "race_shutuba_meta": _RACE_SHUTUBA_META,
+    "race_result_on_time_payoff": _RACE_RESULT_ON_TIME_PAYOFF,
+    "race_result_on_time_lap": _RACE_RESULT_ON_TIME_LAP,
+    "race_result_on_time_corner": _RACE_RESULT_ON_TIME_CORNER,
+    "horse_profile": _HORSE_PROFILE,
+    "horse_race_history": _HORSE_RACE_HISTORY,
+    "race_result_meta": _RACE_RESULT_META,
+    "race_result_payoff": _RACE_RESULT_PAYOFF,
+    "race_result_track": _RACE_RESULT_TRACK,
+    "race_result_corner": _RACE_RESULT_CORNER,
+    "race_result_lap_times": _RACE_RESULT_LAP_TIMES,
 }
 
 

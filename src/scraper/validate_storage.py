@@ -231,13 +231,14 @@ def run_validate(
                 warn_counts[code] += 1
                 warn_samples[code].append((cat, key))
 
-    # race_lists ローカル
+    # race_lists / race_day_schedule ローカル (page_reference)
     rl_tasks: list[tuple[str, str]] = []
-    try:
-        for k in storage.list_keys("race_lists"):
-            rl_tasks.append(("race_lists", k))
-    except Exception as e:
-        logger.warning("race_lists list_keys: %s", e)
+    for cat in ("race_lists", "race_day_schedule"):
+        try:
+            for k in storage.list_keys(cat):
+                rl_tasks.append((cat, k))
+        except Exception as e:
+            logger.warning("%s list_keys: %s", cat, e)
 
     for cat, key in rl_tasks:
         data = storage.load(cat, key)
@@ -257,7 +258,8 @@ def run_validate(
         "key_prefix": key_prefix or None,
         "files_checked": len(tasks) + len(rl_tasks),
         "tasks_gcs": len(tasks),
-        "tasks_race_lists": len(rl_tasks),
+        "tasks_race_lists": sum(1 for c, _ in rl_tasks if c == "race_lists"),
+        "tasks_race_day_schedule": sum(1 for c, _ in rl_tasks if c == "race_day_schedule"),
         "by_category": dict(sorted(by_cat_files.items())),
         "error_counts": dict(sorted(err_counts.items(), key=lambda x: -x[1])),
         "warning_counts": dict(sorted(warn_counts.items(), key=lambda x: -x[1])),
@@ -469,7 +471,10 @@ def main() -> int:
 
     print("=== ストレージ検証サマリ ===")
     print(f"GCS: enabled={report['gcs_enabled']} healthy={report['gcs_healthy']}")
-    print(f"検査ファイル数: {report['files_checked']} (GCS系 {report['tasks_gcs']} + race_lists {report['tasks_race_lists']})")
+    print(
+        f"検査ファイル数: {report['files_checked']} (GCS系 {report['tasks_gcs']} + "
+        f"race_lists {report['tasks_race_lists']} + race_day_schedule {report.get('tasks_race_day_schedule', 0)})"
+    )
     print("\nカテゴリ別 件数:")
     for c, n in report["by_category"].items():
         print(f"  {c}: {n}")

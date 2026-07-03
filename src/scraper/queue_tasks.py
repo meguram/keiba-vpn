@@ -25,6 +25,13 @@ TASK_CATALOG: list[dict[str, Any]] = [
         "hint": "race_result_lap（成績ページのラップ・通過。期間一括のレース系で選択可。要ログイン）",
     },
     {"id": "race_shutuba", "entity": "race", "label": "出馬表", "hint": "race_shutuba"},
+    {
+        "id": "race_shutuba_past",
+        "entity": "race",
+        "label": "馬柱・調教 (shutuba_past)",
+        "hint": "race_shutuba_past",
+    },
+    {"id": "race_oikiri", "entity": "race", "label": "追い切り", "hint": "race_oikiri"},
     {"id": "race_odds", "entity": "race", "label": "単複オッズ", "hint": "race_odds"},
     {"id": "race_pair_odds", "entity": "race", "label": "2連系オッズ", "hint": "race_pair_odds"},
     {"id": "race_index", "entity": "race", "label": "タイム指数", "hint": "race_index"},
@@ -72,7 +79,7 @@ def normalize_job_for_run(job: dict) -> dict[str, Any]:
 
 
 def _pause():
-    time.sleep(random.uniform(0.3, 0.8))
+    time.sleep(random.uniform(1.0, 2.5))
 
 
 def execute_job(runner: Any, job: dict) -> None:
@@ -98,7 +105,6 @@ def execute_job(runner: Any, job: dict) -> None:
 
     from src.scraper.scrape_policy import effective_smart_skip_for_queue_job
 
-    smart_skip = effective_smart_skip_for_queue_job(j)
     skip_pedigree = bool(j.get("skip_pedigree"))
     if not skip_pedigree:
         import os
@@ -133,6 +139,7 @@ def execute_job(runner: Any, job: dict) -> None:
                     step_name="",
                 )
             logger.info("キュータスク実行: kind=%s target=%s task=%s", kind, tid, task)
+            smart_skip = effective_smart_skip_for_queue_job(j, task=task)
             skip_pause = _dispatch(
                 runner, kind, tid, task, meta_date, smart_skip, skip_pedigree=skip_pedigree
             )
@@ -236,6 +243,13 @@ def _race_task(
         "race_barometer": "scrape_barometer",
         "race_trainer_comment": "scrape_trainer_comment",
     }
+    if task == "race_shutuba_past":
+        runner.scrape_shutuba_past(race_id, skip_existing=smart_skip)
+        return False
+    if task == "race_oikiri":
+        runner.scrape_oikiri(race_id, skip_existing=smart_skip)
+        return False
+
     mname = _race_fn.get(task)
     if not mname:
         raise ValueError(f"レース向け未対応タスク: {task}")

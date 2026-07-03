@@ -6,6 +6,8 @@
 #   ./scripts/server/restart_server.sh dev       # 開発: ホットリロード（単一ワーカー）
 #   PORT=9000 ./scripts/server/restart_server.sh
 #
+# ステージング表示: .env に KEIBA_ENV=stg（docs/environment-stg.md）。GCS パスは同一でも可。
+#
 # ログ: logs/server_YYYYMMDD_HHMMSS.log（起動のたびに新規。日付・時刻をファイル名に含む）
 #      logs/server_latest.log へ同じファイルへのシンボリックリンク（直近1本）
 # PID:  .server.pid（watchdog と同じファイル。競合する場合はどちらか一方だけ使う）
@@ -14,6 +16,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
 cd "$ROOT"
+# ログファイル名・起動ログ行を日本時間に（ホストが UTC の stg 等）
+export TZ="${TZ:-Asia/Tokyo}"
 
 PORT="${PORT:-8000}"
 # 既定は venv（本番は /opt/venv やプロジェクト .venv）。システム python だと uvicorn 未導入で落ちるのを避ける。
