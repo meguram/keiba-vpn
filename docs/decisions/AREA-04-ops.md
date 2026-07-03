@@ -1,295 +1,292 @@
-# AREA-07 — 運用最適化要件（プロセス分離 / VPS メモリバジェット / Circuit Breaker / 監視・アラート / デプロイ / ロールバック）
-**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001, DEC-008, DEC-009, DEC-010, DEC-011
+# AREA-04: 運用・cron・監視設計
+
+> **改訂**: 2026-07-03 — 実装実態に合わせて全面改訂
 
 ---
 
-## 1. 本仕様書の位置づけ
+## 1. プロセス構成
 
-DEC-001 は競馬予測システム全体の要件定義書であり、運用最適化（プロセス分離・VPS メモリバジェット・Circuit Breaker・監視・アラート・デプロイ・ロールバック）に関する独立した決定文書は現時点で **DEC-001 のみ** である。以下は、DEC-001 の非機能要件（Section 5）・機能要件（Section 4）・実装ロードマップ（Section 6）・リスク管理（Section 7）から運用最適化に関連する記述を抽出し、体系化したものである。
+| プロセス | 起動方法 | 役割 |
+|--------|--------|------|
+| **FastAPI サーバ** | `python main.py --port 8000` | API + UI サーブ |
+| **ScrapeWorker** | FastAPI lifespan 内 background thread | キュー消化 |
+| **MLflow サーバ** | `mlflow/server/` Docker Compose | モデル管理・推論サーブ |
+| **server_watchdog.sh** | cron `*/3 * * * *` | API + MLflow 死活確認 → 自動再起動 |
 
----
+### watchdog の動作
 
-## 2. プロセス分離
-
-DEC-001 では以下のプロセスを論理的に分離することが前提とされている。
-
-| プロセス種別 | 役割 | 備考 |
-|---|---|---|
-| スクレイパープロセス | netkeiba.com からのデータ収集（Layer 1〜5 格納） | シングルワーカー (`concurrent_workers: 1`) |
-| スナップショット集計バッチ | `horse_stats_snapshot` / `jockey_stats_snapshot` / `trainer_stats_snapshot` の生成 | `as_of_race_id` 紐付け、results 収集完了後に起動 |
-| オッズ収集スケジューラ | 発走当日 08:00〜発走時刻まで 5分/2分/1分 間隔で収集 | タイムウィンドウ制御が必要 |
-| 推論バッチプロセス | Stage 1 → Stage 2 の順次推論、`prediction_results` / `prediction_lap_times` 書き込み | 発走 3 時間前までに完了（N-9） |
-| API サーバー | REST API 提供、Redis キャッシュ参照 | キャッシュヒット ≤ 200 ms（N-1）、ミス ≤ 2,000 ms（N-2） |
-| DDL マイグレーションプロセス | Alembic によるスキーマバージョン管理 | デプロイ時に独立実行（N-11） |
-
-**シングル IP 環境制約**: スクレイパーは `concurrent_workers: 1` を厳守し、並列リクエストによる IP ブロックを防止する。
+```bash
+# scripts/server/server_watchdog.sh
+# 1. FastAPI プロセスを確認
+# 2. 停止していれば再起動 (nohup python3 main.py ...)
+# 3. MLflow サーバも同様に確認・再起動
+# 4. ログ: logs/watchdog.log
+```
 
 ---
 
-## 3. VPS メモリバジェット
+## 2. cron スケジュール
 
-DEC-001 には VPS のメモリ上限や具体的なメモリ割り当て数値の明示的な記述は存在しない。
+> **管理方法**: `scripts/cron/setup_all_cron.sh` が唯一の cron 管理ソース。
+> 手動編集は禁止。変更は `setup_all_cron.sh` を修正して `install` し直すこと。
 
-> **要対応**: 後続の DEC（運用インフラ決定文書）で以下を確定する必要がある。
-> - VPS スペック（RAM 上限）
-> - 各プロセス（API サーバー・推論バッチ・Redis・PostgreSQL）へのメモリ上限割り当て
-> - LightGBM / LSTM モデルのロード時メモリ見積もり
+```bash
+bash scripts/cron/setup_all_cron.sh install   # crontab に登録
+bash scripts/cron/setup_all_cron.sh show       # 現在の cron を表示
+bash scripts/cron/setup_all_cron.sh remove     # keiba-vpn cron を削除
+bash scripts/cron/setup_all_cron.sh status     # 実行状態確認
+```
+
+> **注意**: 時刻はすべて UTC で crontab に記述する（`CRON_TZ` は Debian vixie-cron で無効）。
+
+### 全 cron エントリ（JST 換算）
+
+| JST 時刻 | UTC | タスク | ログ |
+|--------|-----|--------|------|
+| 常時 `*/3分` | 常時 | watchdog（API+MLflow 自動再起動） | — |
+| 再起動時 | @reboot | watchdog 初回起動 | — |
+| 04:30 | 19:30 UTC | ログローテーション | `logs/rotate_logs.log` |
+| 05:00-08:50 毎10分 | 20:00-23:50 UTC | `jra-baba-morning` | `logs/jra_baba_morning.log` |
+| 05:30 | 20:30 UTC | 騎手・調教師統計更新 | 内蔵 |
+| 07:00 | 22:00 UTC | `daily-race-lists`（朝） | `logs/daily_race_lists_am.log` |
+| 07:30 | 22:30 UTC | `raceday-runner` | `logs/raceday_runner.log` |
+| 07:30 | 22:30 UTC | `raceday-result-runner` | `logs/raceday_result_runner.log` |
+| 07:30 | 22:30 UTC | `backfill --year 2026 --phase full --max-dates 5` | `logs/backfill_full_2026.log` |
+| 08:00 | 23:00 UTC | `backfill --year 2025 --phase full --max-dates 3` | `logs/backfill_full_2025.log` |
+| 09:00 | 00:00 UTC | `backfill --year 2024 --phase full --max-dates 3` | `logs/backfill_full_2024.log` |
+| 17:00 | 08:00 UTC | `daily-race-lists`（夕方） | `logs/daily_race_lists_pm.log` |
+| 17:30 | 08:30 UTC | `raceday-evening` | `logs/raceday_evening.log` |
+| 17:30 金曜 | 08:30 UTC 金曜 | `weekly-update` | `logs/weekly_update.log` |
+| 18:00 | 09:00 UTC | `raceday-eve` | `logs/raceday_eve.log` |
+| 18:00 金曜 | 09:00 UTC 金曜 | `horse-name-index` | `logs/horse_name_index.log` |
+| 00:00 | 15:00 UTC | `backfill --year 2026 --phase fast --max-dates 7` | `logs/backfill_2026.log` |
+| 01:00 | 16:00 UTC | `backfill --year 2025 --phase fast --max-dates 5` | `logs/backfill_2025.log` |
+| 02:00 | 17:00 UTC | `backfill --year 2024 --phase fast --max-dates 5` | `logs/backfill_2024.log` |
+| 03:00 | 18:00 UTC | `backfill --year 2023 --phase fast --max-dates 5` | `logs/backfill_2023.log` |
+| 04:00 | 19:00 UTC | `backfill --year 2022 --phase fast --max-dates 5` | `logs/backfill_2022.log` |
+| 06:00 | 21:00 UTC | `backfill --phase horse` | `logs/backfill_horse.log` |
+| 02:00 月木 | 17:00 UTC 月木 | `backfill --year 2021 --phase fast --max-dates 5` | `logs/backfill_2021.log` |
+| 03:00 火金 | 18:00 UTC 火金 | `backfill --year 2020 --phase fast --max-dates 5` | `logs/backfill_2020.log` |
 
 ---
 
-## 4. Circuit Breaker
+## 3. cron タスク詳細
 
-DEC-001 には Circuit Breaker パターンの明示的な記述は存在しないが、以下のリトライ・バックオフ設定がその代替機能を一部担っている。
+### `raceday-eve`（JST 18:00）
 
-### 4-1. スクレイパーのリトライ制御（SCRAPING_CONFIG）
+前日夕方。翌日の出馬表・馬柱・追い切りを取得する。
 
 ```python
-SCRAPING_CONFIG = {
-    "request_interval_sec": 2.0,
-    "jitter_sec": (0.5, 1.5),
-    "concurrent_workers": 1,
-    "session_rotate_interval": 50,   # 50 リクエスト毎にセッション更新
-    "retry_on_429": True,
-    "retry_backoff_base_sec": 30,    # 429 受信時のバックオフ基底秒数
-    "user_agent_rotate": True,
-}
+# auto_scrape_queue.py: run_raceday_eve_for_date()
+投入タスク: ["race_shutuba", "race_shutuba_past", "race_oikiri", "smartrc"]
+smart_skip: False  # 強制再取得
+完了後: _eve_precomputes() → 追走難度・想定オッズ precompute
 ```
 
-### 4-2. 結果スクレイパーのリトライ
+**重要な実装注意**:
+`_ensure_race_list_date()` は race_list 未存在時:
+1. ローカルファイル（`data/page_reference/race_lists/{ymd}.json`）を確認
+2. GCS を確認
+3. なければ `race_list` ジョブを投入し、最大 5 分ポーリング（キュー全体が空くのを待たない）
 
-```yaml
-results:
-  trigger: "発走予定時刻 + 35分"
-  retry: "5分間隔 × 最大6回"  # 合計最大 30 分間リトライ
-```
-
-### 4-3. 要対応事項
-
-> 後続 DEC で以下を確定する必要がある。
-> - Circuit Breaker ライブラリの選定（例: `pybreaker`・`tenacity`）
-> - 閾値定義: 連続失敗 N 回でオープン状態遷移、クールダウン時間
-> - Circuit Breaker 適用対象: netkeiba.com HTTP クライアント・Redis・PostgreSQL 接続
+これにより、キューが混雑していても raceday-eve がタイムアウトしない。
 
 ---
 
-## 5. 監視・アラート
+### `raceday-runner`（JST 07:30）
 
-### 5-1. スクレイピング成功率監視（N-6、R-2）
+開催当日。発走 T-15 まで常駐し、タスクを投入する。
 
-| 項目 | 目標値 | アラート条件 |
-|---|---|---|
-| スクレイピング成功率 | ≥ 99% / 月 | 週次で閾値以下になった場合に通知（R-2 対策） |
-| DB 反映遅延 | ≤ 10 分 | 超過時アラート（N-7） |
-| オッズスナップショット欠損率（発走前 5 分以内） | ≤ 1% | 超過時アラート（N-8） |
-
-### 5-2. 実行ログ管理（F-5）
-
-```sql
--- scrape_runs テーブル（スクレイプ実行ログ）
--- カラム: target_type, status, retry_count
--- 監視基盤はこのテーブルを参照して成功率・失敗率を集計すること
-```
-
-### 5-3. API パフォーマンス監視（N-1、N-2）
-
-| 項目 | SLO |
-|---|---|
-| キャッシュヒット時レスポンスタイム | ≤ 200 ms |
-| キャッシュミス時レスポンスタイム | ≤ 2,000 ms |
-
-### 5-4. 推論バッチ完了監視（N-9）
-
-- 発走 3 時間前までに推論バッチが完了していない場合はアラートを発報する。
-
-### 5-5. モデル品質モニタリング（Phase 4 以降）
-
-- 特徴量重要度のモニタリング
-- データドリフト検知
-- 障害・エラー通知アラートの整備
-
-### 5-6. テンポラルリーク検知（N-10）
-
-- CI パイプラインにおいてテストデータ時系列分割によるリーク検知テストを自動実行する。
-- `as_of_race_id` 紐付けの単体テストを必須化する（F-3 実装時）。
-
----
-
-## 6. デプロイ
-
-### 6-1. スキーママイグレーション（N-11）
-
-- DDL 変更は **Alembic** でバージョン管理し、全スキーマ変更をマイグレーションファイルとして記録する。
-- デプロイ時はマイグレーションプロセスを API サーバー起動前に独立実行する。
-
-### 6-2. デプロイ順序（依存関係）
-
-```
-1. DDL マイグレーション実行（Alembic）
-2. スクレイパープロセス起動
-3. オッズ収集スケジューラ起動
-4. 推論バッチプロセス起動
-5. API サーバー起動
-```
-
-### 6-3. フェーズ別リリース計画
-
-| Phase | 主要デプロイ対象 | 完了条件 |
-|---|---|---|
-| Phase 0 | scrape_runs テーブル・基本スキーマ | ラップデータ可用性確認完了 |
-| Phase 1 | Layer 1〜5 全テーブル DDL・スクレイパー群・集計バッチ | 過去 2 年分データ格納済み |
-| Phase 2 | 特徴量パイプライン・Stage 1 モデル・回収率計算ロジック | 勝率 Log Loss ベースライン比 −5% 改善 |
-| Phase 3 | Stage 2 モデル・REST API・Redis キャッシュ・UI | 全予測ターゲット T-1〜T-11 が API 経由で取得可能 |
-| Phase 4 | LSTM ラップモデル・自動再学習スケジューラ | 継続運用 |
-
-### 6-4. キャッシュ設定（F-12、N-12）
-
-```
-キャッシュキー: prediction:{race_id}:{model_version}
-キャッシュキー: lap:prediction:{race_id}:{model_version}
-TTL: 発走時刻まで有効 / 発走後 60 秒で自動失効
-```
-
----
-
-## 7. ロールバック
-
-### 7-1. モデルロールバック（F-16）
-
-- 学習済みモデルはバージョン管理基盤（MLflow 等）で管理し、古いバージョンへのロールバック機能を提供する（Phase 2 で基盤整備）。
-- `prediction_results` テーブルの `model_version` カラムにより、どのモデルバージョンによる推論結果かを追跡可能とする。
-
-### 7-2. スキーマロールバック
-
-- Alembic のダウングレード機能を用いてスキーマ変更を巻き戻す。
-- Layer 2〜5 テーブルは **追記型・不変（削除不可）** 設計のため、データ自体のロールバックは行わない。
-
-### 7-3. データロールバック非対応の設計原則
-
-| テーブル種別 | 更新ポリシー | ロールバック可否 |
-|---|---|---|
-| `race_results`（Layer 2） | 追記のみ | ✗ 不変 |
-| `*_stats_snapshot`（Layer 3） | 追記のみ（UNIQUE 制約） | ✗ 不変 |
-| `race_odds_snapshot`（Layer 5） | 追記のみ・削除不可 | ✗ 不変 |
-| `prediction_results` | UNIQUE(race_id, horse_id, model_version) | ✓ 旧 model_version を参照切替 |
-
----
-
-## 8. 確定済み運用設計事項（DEC-008/009/010/011 統合）
-
-以下の事項は後続の DEC により確定済みである。
-
-### OP-1: VPS メモリバジェット（DEC-009 確定）
-
-ConoHa VPS 2GB 環境でのプロセス別メモリ割り当て上限（ピーク時・時間分離後）:
-
-```
-┌──────────────────────────────────────────────────┬──────────┐
-│ コンポーネント                                    │ 割当予算 │
-├──────────────────────────────────────────────────┼──────────┤
-│ OS + systemd                                      │  300 MB  │
-│ Gunicorn ワーカー × 2（preload_app CoW 共有）     │  200 MB  │
-│ LightGBM Booster（CoW = 物理 1 コピー）           │  200 MB  │
-│ PostgreSQL（shared_buffers 128MB + work_mem 等）  │  200 MB  │
-│ Redis（予測結果キャッシュ maxmemory 256MB）        │   64 MB  │
-│ スクレイパー（レース日ピーク・時間分離済み）      │  300 MB  │
-│ OOM Killer 回避バッファ                           │  736 MB  │
-└──────────────────────────────────────────────────┴──────────┘
-ピーク合計（スクレイパーと推論を時間分離後）: 約 1,264 MB ✅（2GB の 62%）
-アイドル時（常駐プロセスのみ）:              約 543 MB ✅
-```
-
-**設計上の制約**: スクレイパー（04:00 JST）と推論ワーカー（06:00 JST）は **同時起動禁止**。cron の時刻を 90 分以上空けること。
-
-### OP-2: Circuit Breaker（DEC-010 確定）
-
-- **ライブラリ**: `pybreaker`
-- **適用対象**: netkeiba.com HTTP クライアント（スクレイピング処理）
-- **閾値**:
-  - 連続失敗 5 回 → OPEN 状態遷移
-  - OPEN 後 60 秒 → HALF-OPEN 自動遷移（N-13 DEC-011）
-  - HALF-OPEN で 1 回成功 → CLOSED に復帰
-- **OPEN 時の挙動**: `gcs_paths.py` で定義された最終成功データの GCS パスからフォールバック表示（DEC-010 F-8）
-- **通知**: Circuit OPEN 検知時に Slack Webhook で 5 分以内にアラート送信（DEC-010 F-9）
-- **リトライ**: `tenacity` による指数バックオフ（最大3回 / 4s→8s→60s）
-
-### OP-3: 監視基盤ツール（DEC-007 確定）
-
-| 監視層 | ツール | 費用 |
-|---|---|---|
-| 外形監視（プライマリ） | **UptimeRobot 無料**（URL 死活・5分間隔） | ¥0 |
-| 内部メトリクス（フェーズ2以降） | **Prometheus + Grafana on VPS**（メモリ ~200MB 追加消費） | ¥0 |
-| 構造化ログ | `structlog`（JSON ログ → Cloud Logging / GCS 出力） | ¥0 |
-| 分散トレーシング（Phase 2） | `opentelemetry-sdk` on Flask | ¥0 |
-
-### OP-4: アラート通知チャネル（DEC-008/010 確定）
-
-- **Slack Webhook** を主チャネルとして採用
-- 通知対象: スクレイピング失敗、Circuit OPEN、ETL 遅延（T-90 分前未完了）、OOM 発生
-- 通知先: `#ops-alerts` チャンネル（DEC-005 確定）
-
-### OP-5: プロセス管理・デプロイ方式（DEC-009/010 確定）
-
-**systemd ユニット構成**:
-```
-unit1: keiba-api.service       ← Flask API（Gunicorn）
-unit2: keiba-inference.service ← Inference Worker（バッチ推論）
-```
-
-共通設定:
-```ini
-[Service]
-Restart=on-failure
-RestartSec=5s
-```
-
-**Gunicorn 設定**（DEC-007/009 確定）:
 ```python
-# gunicorn.conf.py
-worker_class         = "gthread"        # I/O バウンドな GCS/Redis アクセスに適合
-workers              = 2
-threads              = 4
-timeout              = 30
-max_requests         = 500
-max_requests_jitter  = 50               # 定期再起動でメモリリーク防止
-preload_app          = True             # fork 前にモデルをロード → CoW でメモリ共有
+# auto_scrape_queue.py: task_raceday_runner()
+T15_RACE_TASKS = ["race_shutuba", "race_odds", "race_pair_odds",
+                  "race_shutuba_past", "race_oikiri", "smartrc"]
+処理フロー:
+  1. race_list 取得 → 発走時刻を取得
+  2. 各レース T-15 になるまで sleep
+  3. T-15 到達 → 上記タスクを一括投入
+  4. JRA 馬場情報更新
+  5. AI 予測トリガ（KEIBA_PRE_RACE_PREDICT_ENABLED=1 の場合）
 ```
 
-**高負荷対応（DEC-011 確定）**:
-- 1,000 同時接続が必要な場合: `--worker-class gevent --worker-connections 500`
-- `monkey.patch_all()` を `app.py` 全インポートより先頭に適用必須
-- `time.sleep()` → `gevent.sleep()` に統一
+---
 
-**バッチ cron スケジュール**（DEC-009 確定）:
-```cron
-# スクレイパー: 04:00 JST（レース翌日確定後）
-00 4 * * * nice -n 10 /usr/bin/python3 -m etl.pipeline --date $(date +%Y-%m-%d)
-# 推論バッチ: 06:00 JST（スクレイパー完了から 2 時間後）
-00 6 * * * nice -n 10 /usr/bin/python3 -m inference.batch --date $(date +%Y-%m-%d)
-# ※ 同時起動禁止: 間隔 90 分以上確保
+### `raceday-result-runner`（JST 07:30）
+
+開催当日。各レース終了後（発走 T+15）に速報結果を取得する。
+
+```python
+# 各レース発走+15分後に race_result_on_time を投入
+smart_skip: False
 ```
 
-**モデル週次再学習**:
-- Cloud Run Jobs（2vCPU / 4GB）で週次（月曜 02:00 JST）実行（DEC-010/012 確定）
-- VPS 上での学習実行は **禁止**（メモリ不足のため）
+---
 
-### OP-6: モデルレジストリ（DEC-009 確定）
+### `raceday-evening`（JST 17:30 毎日 / 週 `weekly-update` と同時）
 
-- `ModelRegistry` クラス（`RWLock` パターン）をバッチワーカー専用に実装
-- GCS からのモデル取得は差分チェック（`generation` メタデータ比較）で最小化
-- モデルバージョン管理パス: `models/current/model.lgb`（現行）+ `models/vN/model.lgb`（ロールバック用）
-- ロールバック完了時間目標: ≤ 10 分（DEC-010 N-12）
-- MLflow は将来の Phase 2 以降での評価を継続する
+当日夕方。速報まとめ・オッズ確定版・SmartRC を取得する。
 
-### OP-7: セキュリティ・DDoS 対策（DEC-011 確定）
+```python
+投入タスク: ["race_result_on_time", "race_odds", "race_pair_odds", "smartrc"]
+完了後: _trigger_track_speed_for_date() → トラック速度指数計算
+```
 
-- **Cloudflare**: DNS プロキシとして設定、DDoS 防御・SSL 終端（無料プラン）
-- **Flask-Limiter**: IP 別レート制限
+---
 
-| エンドポイント | 制限値 |
-|---|---|
-| `POST /api/predict` | 10 回 / 分 / IP |
-| `GET /api/race/*` | 60 回 / 分 / IP |
-| `GET /api/odds/*` | 30 回 / 分 / IP |
+### `weekly-update`（JST 17:30 金曜）
 
-- **PostgreSQL 接続プール**: `max_connections=50`、`pool_size=5`、`max_overflow=10`（DEC-011 N-9）
-- **Redis Thundering Herd 防止**: `SET NX` ミューテックスロック実装（DEC-011 F-4）
+週次更新。確定結果・指数・barometer・馬プロフィールを取得する。
+
+```python
+処理フロー:
+  ① レース: ["race_result", "race_index", "race_barometer"]
+  ② 馬: ["horse_profile"] → horse_result, horse_pedigree_5gen
+  ③ 血統: ["horse_pedigree_5gen"] (smart_skip=True)
+  ④ 馬名インデックス再構築
+```
+
+---
+
+### `backfill`（深夜）
+
+過去データ補完。年度別・フェーズ別で実行する。
+
+```bash
+python -m src.scraper.backfill --year YYYY --phase fast|horse|full --max-dates N
+```
+
+| フェーズ | 対象 | 主要タスク |
+|--------|------|--------|
+| `fast` | レース結果・出馬表 | race_result, race_shutuba |
+| `horse` | 馬プロフィール | horse_result, horse_pedigree_5gen |
+| `full` | 補助データ全体 | race_result_on_time, race_odds, race_index 等 |
+
+---
+
+## 4. ログ管理
+
+### ログファイル
+
+```
+logs/
+├── server.log              ← FastAPI メインログ
+├── watchdog.log            ← watchdog 動作ログ
+├── raceday_eve.log         ← raceday-eve 実行ログ
+├── raceday_runner.log      ← raceday-runner 実行ログ
+├── raceday_result_runner.log
+├── raceday_evening.log
+├── weekly_update.log
+├── daily_race_lists_am.log
+├── daily_race_lists_pm.log
+├── jra_baba_morning.log
+├── horse_name_index.log
+├── backfill_*.log          ← 年度別バックフィルログ
+├── rotate_logs.log
+└── session_*.log           ← セッションログ（7日で削除）
+```
+
+### ログローテーション（JST 04:30 毎日）
+
+`scripts/cron/rotate_logs.sh`:
+- セッションログ: 7 日以上前を削除
+- 追記型ログ: サイズが一定以上で gzip アーカイブ
+
+---
+
+## 5. 監視
+
+### Watchdog（3 分間隔）
+
+```bash
+# scripts/server/server_watchdog.sh
+- FastAPI プロセス確認 → 停止していれば `nohup python3 main.py ...` で再起動
+- MLflow コンテナ確認 → 停止していれば `docker compose up -d`
+- 起動待機: 15 秒
+```
+
+### 外形監視
+
+- **UptimeRobot**: `GET /api/health` に 5 分間隔 HTTP チェック
+- アラート: メール通知（設定は UptimeRobot ダッシュボード）
+
+---
+
+## 6. デプロイ手順
+
+```bash
+# 1. リポジトリ更新
+cd /home/jovyan/work/keiba-vpn
+git pull origin main
+
+# 2. API サーバ再起動
+pkill -f "python.*main.py" || true
+sleep 2
+nohup python3 main.py --port 8000 > logs/server.log 2>&1 &
+
+# 3. cron 更新（変更がある場合）
+bash scripts/cron/setup_all_cron.sh install
+
+# 4. MLflow 更新（変更がある場合）
+cd mlflow/server
+docker compose pull && docker compose up -d
+```
+
+### ロールバック
+
+```bash
+git checkout HEAD~1
+# API サーバ再起動（上記手順）
+```
+
+---
+
+## 7. メモリバジェット（ConoHa VPS 2GB）
+
+| コンポーネント | 割当目安 |
+|-------------|---------|
+| OS + カーネル | 300 MB |
+| FastAPI + Uvicorn | 200〜400 MB |
+| ScrapeWorker (background) | 200〜300 MB |
+| LightGBM Booster (推論時) | 200 MB |
+| MLflow (Docker) | 300 MB |
+| バックフィル（深夜のみ） | 300〜500 MB |
+| バッファ | 残り |
+
+**同時実行の制約**:
+- バックフィルとスクレイプワーカーは同時に重い処理が走らないように cron スケジュールを調整済み
+- バックフィル深夜（JST 00:00〜09:00）、スクレイプ主活動（JST 07:00〜18:00）
+
+---
+
+## 8. 障害対応 FAQ
+
+### Q1: API が応答しない
+
+```bash
+# プロセス確認
+ps aux | grep main.py
+# 強制再起動
+kill -9 <PID>
+nohup python3 main.py --port 8000 > logs/server.log 2>&1 &
+```
+
+### Q2: キューが詰まっている
+
+```bash
+# キュー状態確認
+cat data/queue/scrape_queue.json | python3 -c "import json,sys; q=json.load(sys.stdin); print({s: len([j for j in q['jobs'] if j['status']==s]) for s in ['pending','running','failed']})"
+# 失敗ジョブの再キュー → POST /api/scrape-queue/failed/requeue
+# 強制クリア → POST /api/scrape-queue/stop-and-clear
+```
+
+### Q3: crontab が消えた
+
+```bash
+bash scripts/cron/setup_all_cron.sh install
+crontab -l  # 確認
+```
+
+### Q4: WSL2 接続失敗（Cursor IDE）
+
+AGENTS.md の「WSL2 と Cursor」セクションを参照。
+主に: `wsl --shutdown` → 再起動 で解消。
