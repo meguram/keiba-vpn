@@ -1,5 +1,5 @@
 # AREA-03 — バックエンド要件（Flask API, DB スキーマ, 認証・認可, 4 層キャッシュ設計, レート制限）
-**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001-本要件定義書の最重要事項はas_of_race_id-によるスナップショット管理でテンポラルリークを.md
+**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001, DEC-007, DEC-009, DEC-011
 
 ---
 
@@ -257,4 +257,93 @@ DEC-001 では Redis を用いた予測結果のキャッシュが明示され�
 ### 5-2. TTL 詳細ルール
 
 - **発走前**: 予測結果キャッシュは発走予定時刻まで有効とし、発走予定時刻を `EXPIREAT` で設定する。
-- **発走後**: 発走後 60 秒で自動失効させ、確定
+- **発走後**: 発走後 60 秒で自動失効させ、確定済みレース結果が DB に反映された後のリクエストは DB から直接取得する。
+- **オッズ**: 5 分間隔スナップショットに合わせた 5 分 TTL とし、発走直前（30 分前・5 分前）は優先ウィンドウで短縮。
+- **冪等性**: Thundering Herd 防止のため、`SET NX` ミューテックスロックを用い、TTL 切れ直後の GCS 集中フェッチを防ぐ（DEC-011 F-4）。
+
+---
+
+## 6. Gunicorn サーバー設定（DEC-007/009/011 確定）
+
+### 6-1. 標準設定（I/O バウンド向け）
+
+```python
+# gunicorn.conf.py
+worker_class         = "gthread"   # I/O バウンドな GCS / Redis アクセスに適合
+workers              = 2           # 2vCPU 環境
+threads              = 4           # スレッドで並行 I/O 処理
+timeout              = 30          # GCS P99 200ms に対して十分なマージン
+max_requests         = 500         # 定期再起動によるメモリリーク防止
+max_requests_jitter  = 50
+preload_app          = True        # fork 前に LightGBM Booster をロード → CoW メモリ共有
+```
+
+### 6-2. 高同時接続設定（1,000 同時接続対応時）
+
+瞬間アクセス数 1,000 超を処理する場合は gevent ワーカーに切り替える（DEC-011 F-1）:
+
+```python
+worker_class       = "gevent"
+worker_connections = 500           # 1,000 同時接続（workers=2 × connections=500）
+```
+
+**必須制約**:
+- `app.py` の全インポートより前に `from gevent import monkey; monkey.patch_all()` を適用すること
+- `time.sleep()` を `gevent.sleep()` に統一すること
+- Celery / LightGBM 推論（CPU バウンド）は gevent ワーカー内で **実行禁止**（別プロセスで実行）
+
+---
+
+## 7. セキュリティ・外部保護（DEC-007/011 確定）
+
+### 7-1. WireGuard VPN（DEC-007/008）
+
+- VPS 上で WireGuard VPN を稼働させ、スクレイピング出口 IP を管理する
+- アクセス制御: 管理系 API（`/api/v1/admin/*`）は VPN 内 IP のみ許可
+
+### 7-2. Cloudflare（DEC-011 F-9）
+
+- Cloudflare を DNS プロキシとして設定し、DDoS 防御・SSL 終端を有効化
+- 追加コスト: ¥0（無料プラン）
+
+### 7-3. Flask-Limiter レート制限（DEC-011 F-10）
+
+| エンドポイント | 制限値 |
+|---|---|
+| `POST /api/predict` | 10 回 / 分 / IP |
+| `GET /api/race/*` | 60 回 / 分 / IP |
+| `GET /api/odds/*` | 30 回 / 分 / IP |
+
+制限超過時は `HTTP 429 + Retry-After` を返す。
+
+### 7-4. PostgreSQL 接続プール（DEC-011 N-9）
+
+```python
+max_connections   = 50       # PostgreSQL 設定
+pool_size         = 5        # SQLAlchemy
+max_overflow      = 10
+pool_pre_ping     = True     # 再起動後の接続エラー防止
+pool_recycle      = 1800     # 接続再利用時間
+```
+
+---
+
+## 8. 認証（DEC-008 確定）
+
+- **認証方式**: `Flask-Login` セッション認証（ログイン・ログアウト）
+- **認可スコープ**: F-1〜F-10 の全 API に `@login_required` デコレータを適用（auth_required = Yes）
+- **認証不要**: `/health`、`/login`（ページ自体）
+- **ゲストアクセス**: 当日の予測 TOP3 は未ログインでも閲覧可（機能制限付き、DEC-005 US-02）
+
+**エンドポイント別 auth_required 確定値**（DEC-008 Appendix）:
+
+| メソッド | エンドポイント | auth_required |
+|---|---|---|
+| GET | `/health` | No |
+| GET/POST | `/login` | No |
+| POST | `/logout` | Yes |
+| POST | `/api/v1/filter/stats` | Yes |
+| GET | `/api/v1/sires/ranking` | Yes |
+| GET | `/api/v1/predictions/{race_id}` | Yes |
+| GET | `/api/v1/shap/{race_id}` | Yes |
+| GET | `/api/v1/races/{race_id}/entries` | Yes |

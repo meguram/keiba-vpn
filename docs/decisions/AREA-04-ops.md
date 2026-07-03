@@ -1,5 +1,5 @@
 # AREA-07 — 運用最適化要件（プロセス分離 / VPS メモリバジェット / Circuit Breaker / 監視・アラート / デプロイ / ロールバック）
-**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001-本要件定義書の最重要事項はas_of_race_id-によるスナップショット管理でテンポラルリークを.md
+**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001, DEC-008, DEC-009, DEC-010, DEC-011
 
 ---
 
@@ -174,13 +174,122 @@ TTL: 発走時刻まで有効 / 発走後 60 秒で自動失効
 
 ---
 
-## 8. 未決定事項（後続 DEC で確定が必要な項目）
+## 8. 確定済み運用設計事項（DEC-008/009/010/011 統合）
 
-| # | 項目 | 理由 |
+以下の事項は後続の DEC により確定済みである。
+
+### OP-1: VPS メモリバジェット（DEC-009 確定）
+
+ConoHa VPS 2GB 環境でのプロセス別メモリ割り当て上限（ピーク時・時間分離後）:
+
+```
+┌──────────────────────────────────────────────────┬──────────┐
+│ コンポーネント                                    │ 割当予算 │
+├──────────────────────────────────────────────────┼──────────┤
+│ OS + systemd                                      │  300 MB  │
+│ Gunicorn ワーカー × 2（preload_app CoW 共有）     │  200 MB  │
+│ LightGBM Booster（CoW = 物理 1 コピー）           │  200 MB  │
+│ PostgreSQL（shared_buffers 128MB + work_mem 等）  │  200 MB  │
+│ Redis（予測結果キャッシュ maxmemory 256MB）        │   64 MB  │
+│ スクレイパー（レース日ピーク・時間分離済み）      │  300 MB  │
+│ OOM Killer 回避バッファ                           │  736 MB  │
+└──────────────────────────────────────────────────┴──────────┘
+ピーク合計（スクレイパーと推論を時間分離後）: 約 1,264 MB ✅（2GB の 62%）
+アイドル時（常駐プロセスのみ）:              約 543 MB ✅
+```
+
+**設計上の制約**: スクレイパー（04:00 JST）と推論ワーカー（06:00 JST）は **同時起動禁止**。cron の時刻を 90 分以上空けること。
+
+### OP-2: Circuit Breaker（DEC-010 確定）
+
+- **ライブラリ**: `pybreaker`
+- **適用対象**: netkeiba.com HTTP クライアント（スクレイピング処理）
+- **閾値**:
+  - 連続失敗 5 回 → OPEN 状態遷移
+  - OPEN 後 60 秒 → HALF-OPEN 自動遷移（N-13 DEC-011）
+  - HALF-OPEN で 1 回成功 → CLOSED に復帰
+- **OPEN 時の挙動**: `gcs_paths.py` で定義された最終成功データの GCS パスからフォールバック表示（DEC-010 F-8）
+- **通知**: Circuit OPEN 検知時に Slack Webhook で 5 分以内にアラート送信（DEC-010 F-9）
+- **リトライ**: `tenacity` による指数バックオフ（最大3回 / 4s→8s→60s）
+
+### OP-3: 監視基盤ツール（DEC-007 確定）
+
+| 監視層 | ツール | 費用 |
 |---|---|---|
-| OP-1 | VPS メモリバジェット（各プロセスへの割り当て上限） | DEC-001 に記述なし |
-| OP-2 | Circuit Breaker ライブラリ選定・閾値定義 | DEC-001 はリトライ設定のみ定義、CB パターン未採用 |
-| OP-3 | 監視基盤ツール選定（Prometheus / Grafana / Sentry 等） | DEC-001 に記述なし |
-| OP-4 | アラート通知チャネル（Slack / PagerDuty 等） | DEC-001 に記述なし |
-| OP-5 | デプロイ自動化手段（GitHub Actions / Ansible 等） | DEC-001 に記述なし |
-| OP-6 | MLflow 以外のモデルレジストリ候補の評価 | DEC-001 は「MLflow 等」と記載のみ |
+| 外形監視（プライマリ） | **UptimeRobot 無料**（URL 死活・5分間隔） | ¥0 |
+| 内部メトリクス（フェーズ2以降） | **Prometheus + Grafana on VPS**（メモリ ~200MB 追加消費） | ¥0 |
+| 構造化ログ | `structlog`（JSON ログ → Cloud Logging / GCS 出力） | ¥0 |
+| 分散トレーシング（Phase 2） | `opentelemetry-sdk` on Flask | ¥0 |
+
+### OP-4: アラート通知チャネル（DEC-008/010 確定）
+
+- **Slack Webhook** を主チャネルとして採用
+- 通知対象: スクレイピング失敗、Circuit OPEN、ETL 遅延（T-90 分前未完了）、OOM 発生
+- 通知先: `#ops-alerts` チャンネル（DEC-005 確定）
+
+### OP-5: プロセス管理・デプロイ方式（DEC-009/010 確定）
+
+**systemd ユニット構成**:
+```
+unit1: keiba-api.service       ← Flask API（Gunicorn）
+unit2: keiba-inference.service ← Inference Worker（バッチ推論）
+```
+
+共通設定:
+```ini
+[Service]
+Restart=on-failure
+RestartSec=5s
+```
+
+**Gunicorn 設定**（DEC-007/009 確定）:
+```python
+# gunicorn.conf.py
+worker_class         = "gthread"        # I/O バウンドな GCS/Redis アクセスに適合
+workers              = 2
+threads              = 4
+timeout              = 30
+max_requests         = 500
+max_requests_jitter  = 50               # 定期再起動でメモリリーク防止
+preload_app          = True             # fork 前にモデルをロード → CoW でメモリ共有
+```
+
+**高負荷対応（DEC-011 確定）**:
+- 1,000 同時接続が必要な場合: `--worker-class gevent --worker-connections 500`
+- `monkey.patch_all()` を `app.py` 全インポートより先頭に適用必須
+- `time.sleep()` → `gevent.sleep()` に統一
+
+**バッチ cron スケジュール**（DEC-009 確定）:
+```cron
+# スクレイパー: 04:00 JST（レース翌日確定後）
+00 4 * * * nice -n 10 /usr/bin/python3 -m etl.pipeline --date $(date +%Y-%m-%d)
+# 推論バッチ: 06:00 JST（スクレイパー完了から 2 時間後）
+00 6 * * * nice -n 10 /usr/bin/python3 -m inference.batch --date $(date +%Y-%m-%d)
+# ※ 同時起動禁止: 間隔 90 分以上確保
+```
+
+**モデル週次再学習**:
+- Cloud Run Jobs（2vCPU / 4GB）で週次（月曜 02:00 JST）実行（DEC-010/012 確定）
+- VPS 上での学習実行は **禁止**（メモリ不足のため）
+
+### OP-6: モデルレジストリ（DEC-009 確定）
+
+- `ModelRegistry` クラス（`RWLock` パターン）をバッチワーカー専用に実装
+- GCS からのモデル取得は差分チェック（`generation` メタデータ比較）で最小化
+- モデルバージョン管理パス: `models/current/model.lgb`（現行）+ `models/vN/model.lgb`（ロールバック用）
+- ロールバック完了時間目標: ≤ 10 分（DEC-010 N-12）
+- MLflow は将来の Phase 2 以降での評価を継続する
+
+### OP-7: セキュリティ・DDoS 対策（DEC-011 確定）
+
+- **Cloudflare**: DNS プロキシとして設定、DDoS 防御・SSL 終端（無料プラン）
+- **Flask-Limiter**: IP 別レート制限
+
+| エンドポイント | 制限値 |
+|---|---|
+| `POST /api/predict` | 10 回 / 分 / IP |
+| `GET /api/race/*` | 60 回 / 分 / IP |
+| `GET /api/odds/*` | 30 回 / 分 / IP |
+
+- **PostgreSQL 接続プール**: `max_connections=50`、`pool_size=5`、`max_overflow=10`（DEC-011 N-9）
+- **Redis Thundering Herd 防止**: `SET NX` ミューテックスロック実装（DEC-011 F-4）

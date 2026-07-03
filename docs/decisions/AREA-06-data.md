@@ -1,5 +1,5 @@
 # AREA-03 — データ管理要件（GCS パス設計 gcs_paths.py SSoT, ETL パイプライン, Feature Store, Redis TTL 設計）
-**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001-本要件定義書の最重要事項はas_of_race_id-によるスナップショット管理でテンポラルリークを.md
+**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001, DEC-010
 
 ---
 
@@ -258,4 +258,80 @@ CREATE TABLE horse_stats_snapshot (
     snapshot_id          BIGSERIAL      PRIMARY KEY,
     horse_id             VARCHAR(20)    NOT NULL,
     as_of_race_id        VARCHAR(20)    NOT NULL,   -- 予測対象レース直前時点
-    as_of_date
+    as_of_date           DATE           NOT NULL,
+    win_rate_all         NUMERIC(5,4),
+    win_rate_turf        NUMERIC(5,4),
+    win_rate_dirt        NUMERIC(5,4),
+    place_rate_all       NUMERIC(5,4),
+    show_rate_all        NUMERIC(5,4),
+    win_rate_distance    NUMERIC(5,4),
+    win_rate_course      NUMERIC(5,4),
+    win_rate_going       NUMERIC(5,4),
+    avg_last_3f          NUMERIC(5,2),
+    speed_index_avg      NUMERIC(6,2),
+    speed_index_max      NUMERIC(6,2),
+    running_style_score  NUMERIC(5,2),
+    sample_count         SMALLINT,
+    created_at           TIMESTAMPTZ    DEFAULT NOW(),
+    UNIQUE (horse_id, as_of_race_id)
+);
+```
+
+---
+
+## 6. スクレイピング耐障害性・Circuit Breaker 設計（DEC-010 確定）
+
+### 6-1. Circuit Breaker（pybreaker）
+
+```python
+# scraper/circuit_breaker.py
+import pybreaker
+
+# 5 回連続失敗 → OPEN、60 秒後 HALF-OPEN 自動遷移
+scrape_circuit = pybreaker.CircuitBreaker(fail_max=5, reset_timeout=60)
+
+@scrape_circuit
+def fetch_race_card(race_id: str) -> bytes:
+    """Circuit Breaker 保護下での出馬表 HTML 取得"""
+    ...
+```
+
+**OPEN 時の挙動**:
+1. `gcs_paths.py` で定義された最終成功データの GCS パスからフォールバック表示
+2. フロントエンドに「データ更新中」バナーを表示（DEC-010 F-8）
+3. Slack Webhook で 5 分以内にアラート送信（DEC-010 F-9）
+
+### 6-2. 指数バックオフリトライ（tenacity）
+
+```python
+# scraper/scraper.py
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=4, min=4, max=60))
+def scrape_with_retry(url: str) -> bytes:
+    """最大 3 回リトライ（4s → 8s → 60s）"""
+    ...
+```
+
+### 6-3. scrape_runs テーブルへの Circuit Breaker 状態記録（DEC-010 F-22）
+
+```sql
+-- Circuit Breaker 対応のため status に 'circuit_open' を追加
+ALTER TABLE scrape_runs
+    ADD COLUMN circuit_state VARCHAR(15)
+        CHECK (circuit_state IN ('CLOSED','OPEN','HALF_OPEN'));
+```
+
+- Circuit Breaker 状態変化（CLOSED→OPEN 等）も `scrape_runs` テーブルに記録する
+- `/admin/circuit-status` エンドポイントでサーキット状態・失敗回数・最終失敗時刻を返す（DEC-010 F-21）
+
+### 6-4. データ鮮度チェック（DEC-010 F-23）
+
+API レスポンスに `data_freshness` フィールドを含める:
+
+| `FreshnessStatus` | 意味 |
+|---|---|
+| `FRESH` | 最新データ正常取得 |
+| `STALE` | 前バージョンデータ使用中（スクレイプ遅延） |
+| `STALE_CIRCUIT_OPEN` | Circuit OPEN 中・GCS フォールバック表示 |
+| `UNKNOWN` | 鮮度情報取得不可 |
