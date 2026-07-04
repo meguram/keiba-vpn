@@ -1,5 +1,5 @@
 # AREA-01 — アプリケーション要件
-**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001 (統合済み・削除), TASK-046 (データ分析機能要件定義書 統合済み)
+**Status**: FINAL | **Last Updated**: 2026-07-04 | **Consolidates**: DEC-001 (統合済み・削除), TASK-046 (データ分析機能要件定義書 統合済み)
 
 ---
 
@@ -45,16 +45,50 @@ netkeiba.com から収集した競馬データを用いて、出走馬ごとの 
 
 ## 3. データ要件
 
-### 3-1. データソース（netkeiba.com）
+### 3-1. データソース（実装準拠）
 
-| データ種別 | URL パターン | 更新タイミング |
+#### netkeiba.com（一次データソース）
+
+| スクレイプカテゴリ | 内容 | 取得タイミング（SLA） | GCS 格納パス |
+|---|---|---|---|
+| `race_shutuba` | 出馬表（枠順・馬番・騎手・馬体重・オッズ） | 前日 JST 18:00（SLA 1） | `netkeiba/pc/race_shutuba/{year}/{race_id}.json` |
+| `race_shutuba_past` | 馬柱（各馬の過去成績テーブル・調教） | 前日 JST 18:00（SLA 1） | `netkeiba/pc/race_shutuba_past/{year}/{race_id}.json` |
+| `race_oikiri` | 追い切りデータ（日時・コース・タイム・印象） | 前日 JST 18:00（SLA 1） | `netkeiba/pc/race_oikiri/{year}/{race_id}.json` |
+| `race_result` | 確定結果（着順・タイム・馬体重・コーナー・払戻） | 当日 JST 17:30（SLA 5） | `netkeiba/pc/race_result/{year}/{race_id}.json` |
+| `race_result_on_time` | 速報結果（発走後 T+15分） | T+15分（SLA 4） | `netkeiba/pc/race_result_on_time/{year}/{race_id}.json` |
+| `race_result_lap` | ラップ詳細・ペース・コーナー通過順 | 当日 JST 17:30（SLA 5） | `netkeiba/pc/race_result_lap/{year}/{race_id}.json` |
+| `race_index` | 速度指数（speed_max/avg/distance/course/recent） | 当日 JST 17:30（SLA 5） | `netkeiba/pc/race_index/{year}/{race_id}.json` |
+| `race_odds` | 単複オッズ（win_odds・place_odds_min/max・人気） | T-15バンドル（SLA 3） | `netkeiba/pc/race_odds/{year}/{race_id}.json` |
+| `race_pair_odds` | 連複オッズ（馬連・ワイド・馬単） | 当日 JST 17:30（SLA 5） | `netkeiba/pc/race_pair_odds/{year}/{race_id}.json` |
+| `race_paddock` | パドック評価（rank・コメント） | T-15バンドル（SLA 3） | `netkeiba/pc/race_paddock/{year}/{race_id}.json` |
+| `race_barometer` | バロメーター偏差値（total/start/chase/closing） | T-15バンドル（SLA 3） | `netkeiba/pc/race_barometer/{year}/{race_id}.json` |
+| `race_detail` | レース総合詳細（shutuba+index+past 統合） | T-15バンドル（SLA 3） | `netkeiba/pc/race_detail/{year}/{race_id}.json` |
+| `race_trainer_comment` | 調教師コメント | T-15バンドル（SLA 3） | `netkeiba/pc/race_trainer_comment/{year}/{race_id}.json` |
+| `race_performance` | パイプライン生成パフォーマンス指数 | 計算後 | `netkeiba/pc/race_performance/{year}/{race_id}.json` |
+| `horse_result` | 馬の全成績・プロフィール・重賞実績 | 週次（SLA 6）/ バックフィル | `netkeiba/pc/horse_result/{prefix}/{horse_id}.json` |
+| `horse_pedigree_5gen` | 5世代血統（ancestors・sire/dam/dam_sire） | バックフィル horse フェーズ | `netkeiba/pc/horse_pedigree_5gen/{prefix}/{horse_id}.json` |
+| `horse_training` | 馬調教履歴（日時・コース・条件・ライダー・時計） | 前日 JST 18:00（SLA 1） | `netkeiba/pc/horse_training/{prefix}/{horse_id}.json` |
+
+> `{prefix}` = horse_id の先頭4桁
+
+#### SmartRC（smartrc.jp、二次データソース）
+
+| スクレイプカテゴリ | 内容 | 取得タイミング（SLA） | GCS 格納パス |
+|---|---|---|---|
+| `smartrc_race` | SmartRC独自指標（cr_value・first_furlong_time・estimated_popularity） | T-15バンドル（SLA 3）+ 前日（SLA 1） | `netkeiba/pc/smartrc_race/{year}/{race_id}.json` |
+
+#### JRA 公式
+
+| スクレイプカテゴリ | 内容 | 取得タイミング（SLA） | GCS 格納パス |
+|---|---|---|---|
+| `jra_cushion` | クッション値・含水率（JRA PDF ライブ集約） | JST 05:00-08:50 毎10分（SLA 2） | `others/jra_cushion/{year}.json` |
+
+#### ローカルのみ（GCS 非使用）
+
+| カテゴリ | 内容 | ローカルパス |
 |---|---|---|
-| レース基本情報・出馬表 | `/race/shutuba/{race_id}/` | レース3日前〜 |
-| レース結果・ラップ・コーナー通過 | `/race/{race_id}/` | 発走後 約30分 |
-| 馬の過去成績 | `/horse/{horse_id}/` | 結果確定後30分 |
-| 騎手成績 | `/jockey/{jockey_id}/` | 結果確定後30分 |
-| 調教師成績 | `/trainer/{trainer_id}/` | 結果確定後30分 |
-| 単勝・複勝オッズ | `/odds/{race_id}/` | 発走当日〜数分毎 |
+| `race_lists` | 開催日別レース一覧 | `data/page_reference/race_lists/{YYYYMMDD}.json` |
+| `race_day_schedule` | 発走時刻スナップショット | `data/page_reference/race_day_schedule/{YYYYMMDD}.json` |
 
 ### 3-2. データ層アーキテクチャ（5層構造）
 
@@ -260,41 +294,51 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
   ON entries (horse_id, race_id);
 ```
 
-### 3-4. スクレイピング収集スケジュール
+### 3-4. スクレイピング収集スケジュール（Cron SLA）
 
-```yaml
-race_card:
-  trigger: "レース3日前 06:00 JST"
-  refresh: "毎日 06:00（発走まで）"
+システムタイムゾーン UTC。crontime は UTC 記述。
 
-odds_snapshot:
-  trigger: "発走当日 08:00〜発走時刻"
-  interval: "5分毎"
-  priority_windows:
-    - "発走30分前: 2分毎"
-    - "発走5分前: 1分毎"
+| SLA | cron（UTC） | JST | タスク名 | 取得内容 |
+|---|---|---|---|---|
+| SLA 0 | `0 22 * * *` | 07:00 毎日 | `daily-race-lists` | 今日〜カレンダー末尾の全開催日 race_lists 取得・更新 |
+| SLA 0 | `0 8 * * *` | 17:00 毎日 | `daily-race-lists` | 同上（夕方更新） |
+| SLA 1 | `0 9 * * *` | 18:00 毎日 | `raceday-eve` | 翌開催日: race_shutuba + race_shutuba_past + race_oikiri + horse_training + smartrc_race → 追走難度・最終オッズ precompute |
+| SLA 2 | `*/10 20-23 * * *` | 05:00-08:50 毎10分 | `jra-baba-morning` | jra_cushion ポーリング（開催日のみ実取得） |
+| SLA 3 | `30 22 * * *` | 07:30 開催日 | `raceday-runner` | 各レース T-15分: race_detail + race_odds + race_paddock + race_barometer + race_trainer_comment + smartrc_race + JRA馬場ライブ → AI 予測トリガ |
+| SLA 4 | `30 22 * * *` | 07:30 開催日 | `raceday-result-runner` | 各レース T+15分: race_result_on_time 速報取得 |
+| SLA 5 | `30 8 * * *` | 17:30 毎日 | `raceday-evening` | race_result + race_result_lap + race_index + race_pair_odds → 馬場速度指数計算トリガ |
+| SLA 6 | `30 8 * * 5` | 17:30 金曜 | `weekly-update` | horse_result（先週分）・指数・偏差値・馬情報更新 |
 
-results:
-  trigger: "発走予定時刻 + 35分"
-  retry: "5分間隔 × 最大6回"
+**バックフィル（夜間バッチ）**:
 
-horse_history:
-  trigger: "results 収集完了後"
-  note: "前走成績更新後に再取得（前走情報が変化するため）"
+| cron（UTC） | JST | 対象年 | フェーズ | 最大件数 |
+|---|---|---|---|---|
+| `0 15 * * *` | 00:00 | 2026 | fast（race_result + race_shutuba） | 7日分 |
+| `0 16〜19 * * *` | 01:00〜04:00 | 2025〜2022 | fast | 5日分 |
+| `0 21 * * *` | 06:00 | 全年 | horse（horse_result 一括） | 一括 |
+| `30 22〜0 * * *` | 07:30〜09:00 | 2026〜2024 | full（補助データ含む） | 3〜5日分 |
+| `0 17〜18 * * 1,2,4,5` | 02:00〜03:00 月火木金 | 2021・2020 | fast（週2回） | 5日分 |
+
+### 3-5. スクレイピング設定（実装値）
+
 ```
+netkeiba.com:
+  リクエスト間隔: 2.2〜4.0 秒（ランダム + ガウスジッター）
+  バースト制限: 14 req ごとに 6〜12 秒クールダウン
+  セッションクールダウン: 60 req ごとに 22〜40 秒
+  セッションリフレッシュ: 150 req ごとに TLS/Cookie 再構築
+  グローバル最大同時スロット: 4
+  UA ローテーション: Chrome/Firefox/Edge × Windows/Mac/Linux 8種
+  429/503 バックオフ: 初期 5s・係数 2.5・最大 3 リトライ
+  403: UA 即時ローテーション後リトライ
+  日次上限: 5,000 req / セッション上限: 500 req
 
-### 3-5. スクレイピング設定（netkeiba.com 向け）
-
-```python
-SCRAPING_CONFIG = {
-    "request_interval_sec": 2.0,
-    "jitter_sec": (0.5, 1.5),
-    "concurrent_workers": 1,
-    "session_rotate_interval": 50,
-    "retry_on_429": True,
-    "retry_backoff_base_sec": 30,
-    "user_agent_rotate": True,
-}
+SmartRC:
+  リクエスト間隔: 2.0〜5.0 秒
+  セッション上限: 200 req / 日次上限: 1,000 req
+  クールダウン: 60 秒
+  リトライ: 最大 3回、係数 2.0、対象: [429, 503]
+  robots.txt 準拠、ブロック検知時に即停止
 ```
 
 ---

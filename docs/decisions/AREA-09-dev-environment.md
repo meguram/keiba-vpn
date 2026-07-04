@@ -1,6 +1,6 @@
-# AREA-05 — 開発環境要件
+# AREA-09 — 開発環境要件
 
-**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001, DEC-007, DEC-008, DEC-009, DEC-010
+**Status**: FINAL | **Last Updated**: 2026-07-04 | **Consolidates**: DEC-001（統合済み）
 
 ---
 
@@ -85,59 +85,17 @@ SCRAPING_CONFIG = {
 
 ---
 
-## 6. 確定済み技術スタック（DEC-007/008/009/010 統合）
+## 6. 未定義事項（本仕様書の対象外）
 
-以下の事項は後続の DEC により確定済みである。
+DEC-001 には以下の事項が明示されていない。現時点では未定義であり、別途 DEC を作成して確定させる必要がある。
 
-### 6-1. 技術スタック全体
+- dev / stg / prod の環境分離方針（ローカル PC、GPU サーバー、VPS 等の割り当て）
+- docker-compose ファイルの具体的な設計（サービス定義、ネットワーク、ボリューム）
+- CI/CD パイプラインおよびデプロイフロー
+- 環境変数管理方法（`.env` ファイル、シークレット管理）
+- GPU 環境の要件（CUDA バージョン、GPU メモリ等）
+- VPS スペック・OS 要件
 
-| レイヤー | 技術 | 備考 |
-|---|---|---|
-| フロントエンド | **TypeScript / Next.js 14（App Router）** | DEC-001, DEC-007, DEC-008 |
-| フロントエンドホスティング | **Vercel Hobby（無料）** | DEC-007, DEC-008 |
-| バックエンド API | **Python 3.11 / Flask 3.x + Gunicorn 21.x** | DEC-007, DEC-008 |
-| Web サーバー | **Nginx**（リバースプロキシ、静的ファイル直配信、gzip, keepalive） | DEC-007 |
-| キャッシュ | **Redis 7**（VPS 内、maxmemory 256MB, allkeys-lru） | DEC-007, DEC-008 |
-| データストレージ | **GCS**（Parquet 形式）+ **PostgreSQL**（OLTP） | DEC-002, DEC-008 |
-| ML フレームワーク | **LightGBM**（初期）→ LSTM（Phase 4 以降） | DEC-001, DEC-008 |
-| スクレイピング | **Python requests/BeautifulSoup4**（cron on VPS） | DEC-007, DEC-008 |
-| バッチ実行 | **cron on VPS**（systemd unit 管理） | DEC-007, DEC-008 |
-| VPN | **WireGuard on VPS**（スクレイピング出口 IP 管理） | DEC-007, DEC-008 |
-| モデル週次再学習 | **Cloud Run Jobs**（2vCPU / 4GB、VPS 外） | DEC-010, DEC-012 |
-| アラート | **Slack Webhook** | DEC-008, DEC-010 |
-| 監視（外形） | **UptimeRobot 無料** | DEC-007 |
-| スキーママイグレーション | **Alembic** | DEC-001 |
+---
 
-### 6-2. VPS スペック（ConoHa）
-
-| 項目 | 値 |
-|---|---|
-| メモリ | 2 GB |
-| SSD | 100 GB |
-| 月額 | ¥1,320 |
-| 目的 | Flask API・AI 推論バッチ・cron・Redis・WireGuard 全同居 |
-
-### 6-3. GCS パス管理方針（DEC-010 確定）
-
-- `keiba-vpn/src/scraper/gcs_paths.py` を GCS パス定数の **Single Source of Truth（SSoT）** として確立
-- GCS バケット名: `keiba-vpn-data`
-- ETL・Feature Store・Inference Worker・Cloud Run Jobs の全コンポーネントは `gcs_paths.py` からインポートして参照
-- GCS パスのハードコードは静的解析（lint ルールまたはテスト）で **禁止**
-
-### 6-4. プロセス管理（systemd）
-
-```
-unit1: keiba-api.service       → Flask API（Gunicorn、常駐）
-unit2: keiba-inference.service → Inference Worker（バッチ、夜間のみ起動・完了後終了）
-cron:  keiba-scraper           → スクレイパー（04:00 JST）
-cron:  keiba-inference         → 推論バッチ（06:00 JST）
-```
-
-### 6-5. 残未定義事項
-
-以下は現時点でも未定義であり、将来の DEC で確定させる必要がある:
-
-- dev / stg / prod の環境分離方針（ローカル PC での開発環境 docker-compose 設計）
-- CI/CD パイプラインの自動化方法（GitHub Actions 等）
-- 環境変数・シークレット管理方法（`.env` ファイル、GCP Secret Manager 等）
-- GPU 環境の要件（LSTM 移行時に必要になる可能性）
+> **備考**: 本仕様書は DEC-001 のみを参照しており、開発環境要件の大部分が未決定の状態である。dev/stg/prod 環境設計、docker-compose 構成、デプロイフローを確定させる DEC の作成を推奨する。

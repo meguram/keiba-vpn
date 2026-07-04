@@ -1,5 +1,5 @@
-# AREA-09 — テスト要件（Unit/Integration/E2E/MLテスト, CI ゲート, カバレッジ目標, テストデータ管理）
-**Status**: FINAL | **Last Updated**: 2026-07-03 | **Consolidates**: DEC-001-本要件定義書の最重要事項はas_of_race_id-によるスナップショット管理でテンポラルリークを.md
+# AREA-08 — テスト要件（Unit/Integration/E2E/MLテスト, CI ゲート, カバレッジ目標, テストデータ管理）
+**Status**: FINAL | **Last Updated**: 2026-07-04 | **Consolidates**: DEC-001（統合済み）
 
 ---
 
