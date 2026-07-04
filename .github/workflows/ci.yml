@@ -43,7 +43,9 @@ jobs:
           cache: pip
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install 'pytest-cov>=4.1.0'
 
       - name: Alembic migration check
         run: alembic upgrade head
