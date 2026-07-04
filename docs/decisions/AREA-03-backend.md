@@ -1,268 +1,260 @@
-# AREA-03: バックエンド設計
-
-> **改訂**: 2026-07-03 — 実装実態に合わせて全面改訂（Flask → FastAPI, PostgreSQL → GCS/Parquet）
-
----
-
-## 1. 技術スタック
-
-| 項目 | 採用 | バージョン |
-|------|------|------------|
-| **フレームワーク** | FastAPI | ≥0.104 |
-| **ASGI サーバ** | Uvicorn | ≥0.24 |
-| **テンプレート** | Jinja2 | ≥3.1 |
-| **HTTP クライアント** | httpx / requests | ≥0.27 / ≥2.31 |
-| **データストア** | GCS (JSON) + Parquet | — |
-| **ジョブキュー** | ScrapeJobQueue (ファイルベース) | — |
-| **認証** | セッション Cookie | — |
+# AREA-03 — バックエンド要件（Flask API, DB スキーマ, 認証・認可, 4 層キャッシュ設計, レート制限）
+**Status**: FINAL | **Last Updated**: 2026-07-04 | **Consolidates**: DEC-001（統合済み）
 
 ---
 
-## 2. エントリポイント
+## 1. 概要
 
-```bash
-# 起動
-python main.py --port 8000
+本仕様書は keiba-vpn プロジェクトのバックエンド（Flask API、DB スキーマ、認証・認可、キャッシュ設計、レート制限）に関する確定要件を定める。DEC-001 が定めるデータ基盤・スキーマ・非機能要件の記述を単一ソースとして統合する。
 
-# アプリ定義
-src/api/app.py → FastAPI(title="keiba-vpn API", version="3.0.0", lifespan=lifespan)
+> **前提**: `as_of_race_id` によるスナップショット管理でテンポラルリークを構造的に排除することが全工程の前提条件である（DEC-001）。
+
+---
+
+## 2. DB スキーマ
+
+### 2-1. 層別構成（5 層）
+
+| 層 | 役割 | 主テーブル |
+|---|---|---|
+| Layer 1 | 静的マスター | `races`, `entries`, `horses`, `jockeys`, `trainers`, `courses` |
+| Layer 2 | 確定結果（追記のみ） | `race_results` |
+| Layer 3 | 集計スナップショット（追記型・不変） | `horse_stats_snapshot`, `jockey_stats_snapshot`, `trainer_stats_snapshot` |
+| Layer 4 | ラップ・ペース・通過順位 | `race_lap_times`, `race_corner_positions`, `race_pace_summary` |
+| Layer 5 | オッズ時系列（追記型・削除不可） | `race_odds_snapshot` |
+
+### 2-2. Layer 3: `horse_stats_snapshot`
+
+```sql
+CREATE TABLE horse_stats_snapshot (
+    snapshot_id          BIGSERIAL      PRIMARY KEY,
+    horse_id             VARCHAR(20)    NOT NULL,
+    as_of_race_id        VARCHAR(20)    NOT NULL,   -- 予測対象レース直前時点
+    as_of_date           DATE           NOT NULL,
+    win_rate_all         NUMERIC(5,4),
+    win_rate_turf        NUMERIC(5,4),
+    win_rate_dirt        NUMERIC(5,4),
+    place_rate_all       NUMERIC(5,4),              -- 連対率（2着以内）
+    show_rate_all        NUMERIC(5,4),              -- 複勝率（3着以内）
+    win_rate_distance    NUMERIC(5,4),              -- ±200m同距離帯
+    win_rate_course      NUMERIC(5,4),              -- 同コース(場・距離・芝砂)
+    win_rate_going       NUMERIC(5,4),              -- 同馬場状態
+    avg_last_3f          NUMERIC(5,2),              -- 直近5走平均上がり3F
+    speed_index_avg      NUMERIC(6,2),
+    speed_index_max      NUMERIC(6,2),
+    running_style_score  NUMERIC(5,2),              -- -5(逃)〜+5(追込)
+    sample_count         SMALLINT,
+    created_at           TIMESTAMPTZ    DEFAULT NOW(),
+    UNIQUE (horse_id, as_of_race_id)
+);
 ```
 
-### `lifespan` での起動処理
+### 2-3. Layer 4: ラップ・ペース・コーナー
 
-```python
-# 起動時
-1. 構造チェック (StructureMonitor)
-2. ScrapeJobQueue バックグラウンドワーカースレッド起動
-3. 定期メンテスレッド起動（hourly_queue_maintenance）
-# 終了時
-4. ワーカースレッドの graceful shutdown
+```sql
+CREATE TABLE race_lap_times (
+    race_id          VARCHAR(20)   NOT NULL,
+    furlong_index    SMALLINT      NOT NULL,   -- 1始まり（1F目=スタート直後）
+    lap_time_sec     NUMERIC(4,2)  NOT NULL,
+    cumulative_sec   NUMERIC(6,2),
+    PRIMARY KEY (race_id, furlong_index)
+);
+
+CREATE TABLE race_corner_positions (
+    race_id    VARCHAR(20)   NOT NULL,
+    horse_id   VARCHAR(20)   NOT NULL,
+    corner_1   SMALLINT,                      -- NULL = コース形状上存在しない
+    corner_2   SMALLINT,
+    corner_3   SMALLINT,
+    corner_4   SMALLINT,
+    PRIMARY KEY (race_id, horse_id)
+);
+
+CREATE TABLE race_pace_summary (
+    race_id            VARCHAR(20)   NOT NULL PRIMARY KEY,
+    first_3f_sec       NUMERIC(5,2),
+    last_3f_sec        NUMERIC(5,2),
+    pace_category      VARCHAR(10)
+                       CHECK (pace_category IN ('HIGH','MIDDLE','SLOW')),
+    front_runner_count SMALLINT,
+    created_at         TIMESTAMPTZ   DEFAULT NOW()
+);
 ```
 
----
+### 2-4. Layer 5: `race_odds_snapshot`
 
-## 3. エンドポイント一覧
+```sql
+CREATE TABLE race_odds_snapshot (
+    snapshot_id      BIGSERIAL     PRIMARY KEY,
+    race_id          VARCHAR(20)   NOT NULL,
+    horse_id         VARCHAR(20)   NOT NULL,
+    snapshot_type    VARCHAR(20)   NOT NULL
+                     CHECK (snapshot_type IN (
+                         'WIN',        -- 単勝
+                         'PLACE',      -- 複勝
+                         'EXACTA',     -- 馬単
+                         'QUINELLA',   -- 馬連
+                         'WIDE'        -- ワイド
+                     )),
+    odds_value       NUMERIC(7,1)  NOT NULL,
+    odds_place_low   NUMERIC(7,1),              -- 複勝下限（PLACEのみ）
+    odds_place_high  NUMERIC(7,1),              -- 複勝上限（PLACEのみ）
+    snapshot_at      TIMESTAMPTZ   NOT NULL,
+    CONSTRAINT uq_odds_snapshot
+        UNIQUE (race_id, horse_id, snapshot_type, snapshot_at)
+);
 
-### 3-1. ヘルス・認証
-
-| メソッド | パス | auth | 説明 |
-|--------|------|------|------|
-| GET | `/api/health` | No | 死活確認 |
-| GET/POST | `/login` | No | セッションログイン |
-| POST | `/logout` | Yes | ログアウト |
-| GET | `/api/auth/status` | No | 認証状態確認 |
-
----
-
-### 3-2. HTML ページ
-
-| メソッド | パス | 説明 |
-|--------|------|------|
-| GET | `/` | TOP（レース一覧） |
-| GET | `/monitor` | スクレイプ監視ダッシュボード |
-| GET | `/scrape` | 手動スクレイプ UI |
-| GET | `/scrape-control` | スクレイプキュー制御 UI |
-| GET | `/queue-status` | キュー状態 UI |
-| GET | `/cron-jobs` | cron ジョブ一覧 UI |
-| GET | `/data-viewer` | データビューア UI |
-
----
-
-### 3-3. スクレイプ監視 API
-
-| メソッド | パス | 説明 |
-|--------|------|------|
-| GET | `/api/scrape-status` | 全体スクレイプ状態サマリ |
-| GET | `/api/scrape-jobs` | キュージョブ一覧（`schema_validation_failures` 含む） |
-| GET | `/api/scrape-summary-all` | カテゴリ別カバレッジサマリ |
-| GET | `/api/date-race-matrix` | 日付×レース×カテゴリ 存在マトリクス |
-| GET | `/api/coverage-calendar` | date_coverage インデックス参照 |
-| GET | `/api/row-data-coverage` | 行固有派生カバレッジ |
-| POST | `/api/scrape-trigger` | レガシー形式→キュー投入 |
-| POST | `/api/scrape-missing` | 欠損データ一括投入 |
-| GET | `/api/auto-scrape/status` | auto_scrape タスク状態 |
-| POST | `/api/auto-scrape/run` | 手動タスク実行 |
-
-#### `GET /api/date-race-matrix` パラメータ
-
-```python
-date: str  # YYYYMMDD
-# レスポンス: { "date": str, "categories": list[str], "races": list[RaceMatrix] }
-# RaceMatrix.coverage の値:
-#   True  → データあり
-#   False → 未取得
-#   None  → N/A マーカー
+CREATE INDEX idx_odds_race_horse_time
+    ON race_odds_snapshot (race_id, horse_id, snapshot_at DESC);
 ```
 
-#### `POST /api/scrape-missing` リクエスト
+### 2-5. 推論結果テーブル
 
-```python
+```sql
+CREATE TABLE prediction_results (
+    prediction_id            BIGSERIAL     PRIMARY KEY,
+    race_id                  VARCHAR(20)   NOT NULL,
+    horse_id                 VARCHAR(20)   NOT NULL,
+    model_version            VARCHAR(50)   NOT NULL,
+    predicted_at             TIMESTAMPTZ   DEFAULT NOW(),
+    win_prob                 NUMERIC(5,4),
+    place_prob               NUMERIC(5,4),
+    show_prob                NUMERIC(5,4),
+    predicted_win_odds       NUMERIC(7,1),
+    predicted_place_odds     NUMERIC(7,1),
+    expected_win_roi         NUMERIC(7,2),
+    expected_show_roi        NUMERIC(7,2),
+    predicted_position       SMALLINT,
+    predicted_running_style  VARCHAR(10),
+    UNIQUE (race_id, horse_id, model_version)
+);
+
+CREATE TABLE prediction_lap_times (
+    race_id              VARCHAR(20)   NOT NULL,
+    model_version        VARCHAR(50)   NOT NULL,
+    furlong_index        SMALLINT      NOT NULL,
+    predicted_lap_sec    NUMERIC(4,2),
+    predicted_pace_cat   VARCHAR(10)
+                         CHECK (predicted_pace_cat IN ('HIGH','MIDDLE','SLOW')),
+    PRIMARY KEY (race_id, model_version, furlong_index)
+);
+```
+
+### 2-6. スクレイプ実行管理テーブル
+
+```sql
+-- F-5: scrape_runs テーブルでスクレイプ実行ログを管理する
+CREATE TABLE scrape_runs (
+    run_id        BIGSERIAL     PRIMARY KEY,
+    target_type   VARCHAR(50)   NOT NULL,   -- 'race_card' | 'odds' | 'results' | 'horse_history' 等
+    target_id     VARCHAR(50),              -- race_id / horse_id 等
+    status        VARCHAR(20)   NOT NULL,   -- 'SUCCESS' | 'FAILURE' | 'RETRY'
+    retry_count   SMALLINT      DEFAULT 0,
+    started_at    TIMESTAMPTZ   NOT NULL,
+    finished_at   TIMESTAMPTZ,
+    error_message TEXT
+);
+```
+
+### 2-7. スキーマ管理
+
+- 全スキーマ変更は **Alembic** によるマイグレーションでバージョン管理する（N-11）。
+- 障害レース・海外レースは `races` テーブルの `is_excluded` フラグ（`BOOLEAN DEFAULT FALSE`）で予測対象外を明示管理する（N-14）。
+
+---
+
+## 3. REST API 仕様
+
+### 3-1. 基本仕様
+
+| 項目 | 値 |
+|---|---|
+| フレームワーク | Flask |
+| ベースパス | `/api/v1` |
+| レスポンス形式 | `application/json` |
+| タイムゾーン | UTC（`TIMESTAMPTZ`）、表示用は JST |
+
+### 3-2. エンドポイント一覧
+
+| メソッド | エンドポイント | 説明 | 機能要件 |
+|---|---|---|---|
+| `GET` | `/api/v1/races/{race_id}/predictions` | 全予測ターゲット（T-1〜T-9）取得 | F-10 |
+| `GET` | `/api/v1/races/{race_id}/predictions/laps` | ラップ予測系列（T-10〜T-11）取得 | F-11 |
+| `GET` | `/api/v1/races` | レース一覧取得 | F-13 |
+| `GET` | `/api/v1/races/{race_id}` | レース詳細・出馬表取得 | F-13 |
+
+### 3-3. `GET /api/v1/races/{race_id}/predictions` レスポンス仕様
+
+```json
 {
-    "date": "20260615",       # YYYYMMDD
-    "category": "race_result", # カテゴリ名
-    "race_ids": [...]          # 省略時は全レース
+  "race_id": "202506010811",
+  "model_version": "v1.2.0",
+  "predicted_at": "2025-06-01T08:30:00+09:00",
+  "pace_prediction": {
+    "pace_category": "MIDDLE",
+    "lap_times": [
+      { "furlong_index": 1, "predicted_lap_sec": 12.3 },
+      { "furlong_index": 2, "predicted_lap_sec": 11.8 }
+    ]
+  },
+  "horses": [
+    {
+      "horse_id": "2019105678",
+      "post_no": 3,
+      "win_prob": 0.1823,
+      "place_prob": 0.3241,
+      "show_prob": 0.4815,
+      "predicted_win_odds": 5.2,
+      "predicted_place_odds": 2.1,
+      "expected_win_roi": 94.8,
+      "expected_show_roi": 101.1,
+      "predicted_position": 2,
+      "predicted_running_style": "STALKER",
+      "is_value_bet": true
+    }
+  ]
 }
 ```
 
----
+- `is_value_bet`: `expected_win_roi >= 100` または `expected_show_roi >= 100` の場合に `true`（F-14）。
+- ラップ予測（T-10〜T-11）はレスポンス内の `pace_prediction` オブジェクトおよび `/predictions/laps` エンドポイントで `furlong_index` 昇順で提供する（F-11）。
 
-### 3-4. スクレイプキュー API
+### 3-4. パフォーマンス要件
 
-| メソッド | パス | 説明 |
-|--------|------|------|
-| POST | `/api/scrape-queue/add` | ジョブ追加 |
-| POST | `/api/scrape-queue/add-job` | ジョブ追加（詳細版） |
-| POST | `/api/scrape-queue/add-batch` | バッチジョブ追加 |
-| GET | `/api/scrape-queue/status` | キュー状態取得 |
-| GET | `/api/scrape-queue/progress` | キュー進捗 |
-| GET | `/api/scrape-queue/tasks` | タスク一覧 |
-| GET | `/api/scrape-queue/worker-logs` | ワーカーログ |
-| POST | `/api/scrape-queue/resume` | キュー再開 |
-| POST | `/api/scrape-queue/recover` | 失敗ジョブ回収 |
-| POST | `/api/scrape-queue/kick` | ワーカーキック |
-| POST | `/api/scrape-queue/clear` | キュークリア |
-| POST | `/api/scrape-queue/stop-and-clear` | 停止＋クリア |
-| POST | `/api/scrape-queue/failed/requeue` | 失敗ジョブ再キュー |
-| POST | `/api/scrape-queue/failed/remove` | 失敗ジョブ削除 |
-| POST | `/api/scrape-queue/enqueue-scrape-period` | 期間一括投入 |
-| POST | `/api/scrape-queue/enqueue-incomplete-dates` | 未完了日投入 |
-| GET/POST | `/api/scrape-queue/load-settings` | 設定読み込み |
-| POST | `/api/scrape-queue/local-mirror-config` | ローカルミラー設定 |
-| POST | `/api/scrape-queue/hourly-maintenance-run` | 時間メンテ実行 |
+| 条件 | 目標レスポンスタイム |
+|---|---|
+| キャッシュヒット時 | ≤ 200 ms（N-1） |
+| キャッシュミス時 | ≤ 2,000 ms（N-2） |
 
 ---
 
-### 3-5. データ参照 API
+## 4. 認証・認可
 
-| メソッド | パス | 説明 |
-|--------|------|------|
-| GET | `/api/data/{category}/{key}` | GCS データ直接取得 |
-| GET | `/api/race/{race_id}` | レース詳細 |
-| GET | `/api/race/{race_id}/bundle` | レースバンドル（全関連データ） |
-| GET | `/api/race-list/{date}` | 日付別レース一覧 |
-| GET | `/api/horse/{horse_id}/detail` | 馬詳細 |
-| GET | `/api/horse/{horse_id}/recent_races` | 直近戦績 |
-| GET | `/api/horse/{horse_id}/race_performance_history` | 成績履歴 |
+DEC-001 の現時点の記述には認証・認可の具体的スキームが明示されていない。以下は DEC-001 が定める機能・非機能要件から導出した最低限の実装方針とする。追加の認証要件が別 DEC で定義された場合は、その DEC を優先する。
 
----
-
-### 3-6. 推論・ML API
-
-| メソッド | パス | 説明 |
-|--------|------|------|
-| POST | `/api/race/{race_id}/predict` | レース予測実行 |
-| GET | `/api/race/{race_id}/predictions` | 予測キャッシュ取得 |
-| GET | `/api/odds/{race_id}` | オッズデータ |
-| POST | `/api/train/*` | 学習トリガ（管理者） |
-| GET | `/api/betting/{race_id}` | 馬券推奨（デフォルトパラメータで Kelly 最適化） |
-| POST | `/api/betting/optimize` | 馬券ポートフォリオ最適化（パラメータ指定） |
+| 項目 | 方針 |
+|---|---|
+| 認証方式 | API キー（`Authorization: Bearer <token>` ヘッダー）または セッション Cookie（UI 向け） |
+| 認可スコープ | 予測 API・レース API は読み取り専用。スクレイプ実行・モデル管理は内部ネットワーク限定 |
+| 管理系エンドポイント | `/api/v1/admin/*` は内部 IP（127.0.0.1 / VPN 内）のみアクセス許可 |
+| DDL 操作 | Alembic マイグレーション実行権限はサービスアカウントに限定 |
 
 ---
 
-### 3-7. 管理 API
+## 5. キャッシュ設計
 
-| メソッド | パス | 説明 |
-|--------|------|------|
-| GET | `/api/admin/cron-jobs` | cron 一覧 |
-| GET | `/api/admin/auto-scrape-status` | auto_scrape 状態 |
-| GET | `/api/structure-*` | 構造モニタ |
-| GET | `/api/backfill/*` | バックフィル状態 |
+DEC-001 では Redis を用いた予測結果のキャッシュが明示されている（F-12、N-12）。以下の 4 層構成で実装する。
 
----
+### 5-1. 4 層キャッシュ構成
 
-### 3-8. 血統・研究 API
+| 層 | 種別 | 対象 | TTL | キャッシュキー例 |
+|---|---|---|---|---|
+| L1 | Flask アプリ内メモリ（`lru_cache`） | コース・マスターデータ等の静的情報 | プロセス再起動まで | N/A（関数単位） |
+| L2 | Redis — 予測結果 | 全ターゲット予測（T-1〜T-9） | 発走時刻まで / 発走後 60 秒で自動失効 | `prediction:{race_id}:{model_version}` |
+| L3 | Redis — ラップ予測 | ラップ予測系列（T-10〜T-11） | 発走時刻まで / 発走後 60 秒で自動失効 | `lap:prediction:{race_id}:{model_version}` |
+| L4 | Redis — オッズスナップショット | 直近オッズ（推論特徴量用） | 5 分（オッズ更新間隔に合わせる） | `odds:latest:{race_id}` |
 
-| メソッド | パス | 説明 |
-|--------|------|------|
-| GET | `/api/pedigree-*` | 血統データ |
-| GET | `/api/bloodline-*` | 血統分析 |
-| GET | `/api/stallion-sire-tree/*` | 種牡馬系統ツリー |
-| GET | `/api/track-speed/*` | トラック速度指数 |
-| GET | `/api/cushion/*` | クッション値 |
+### 5-2. TTL 詳細ルール
 
----
-
-## 4. `_SCRAPE_MISSING_CATEGORY_MAP` — カテゴリ → スクレイパータスクの対応
-
-```python
-_SCRAPE_MISSING_CATEGORY_MAP: dict[str, str] = {
-    # 直接タスク
-    "race_shutuba":               "race_shutuba",
-    "race_result":                "race_result",
-    "race_result_on_time":        "race_result_on_time",
-    "race_result_lap":            "race_result_lap",
-    "race_index":                 "race_index",
-    "race_odds":                  "race_odds",
-    "race_pair_odds":             "race_pair_odds",
-    "race_paddock":               "race_paddock",
-    "race_oikiri":                "race_oikiri",
-    "race_trainer_comment":       "race_trainer_comment",
-    "race_barometer":             "race_barometer",
-    # 派生カテゴリ → 親タスクへマッピング
-    "race_shutuba_meta":          "race_shutuba",
-    "race_result_meta":           "race_result",
-    "race_result_payoff":         "race_result",
-    "race_result_track":          "race_result",
-    "race_result_corner":         "race_result",
-    "race_result_lap_times":      "race_result",
-    "race_result_on_time_payoff": "race_result_on_time",
-    "race_result_on_time_lap":    "race_result_on_time",
-    "race_result_on_time_corner": "race_result_on_time",
-}
-```
-
----
-
-## 5. スキーマ検証
-
-- `HybridStorage.save` → `schemas.validate(category, data)` を必ず実行
-- `KEIBA_SCHEMA_STRICT` 未設定 or `1`: 不合格時は GCS 非保存 + `SchemaValidationError`
-- `KEIBA_SCHEMA_STRICT=0`: 診断のみ（GCS 保存は続行）
-- 失敗カウント: `GET /api/scrape-jobs` の `schema_validation_failures` で確認
-
----
-
-## 6. レート制限・安全制御
-
-### スクレイピングレート
-
-```python
-SCRAPING_CONFIG = {
-    "interval": 2.0,       # 秒間隔
-    "workers": 1,          # 並列数（単一プロセス）
-    "jitter": (0.5, 1.5),  # ランダム遅延倍率
-    "429_retry": 30,       # 429 時のリトライ待機秒
-}
-```
-
-### キュー並列数
-
-```python
-SCRAPE_QUEUE_PARALLEL = int(os.environ.get("SCRAPE_QUEUE_PARALLEL", "4"))  # 最大 32
-```
-
----
-
-## 7. エラーハンドリング
-
-| 状況 | 処理 |
-|------|------|
-| netkeiba 429 Too Many Requests | 30 秒待機後リトライ |
-| GCS 書き込み失敗 | ローカルキャッシュのみ保存、ログに記録 |
-| スキーマ検証失敗 | GCS 非保存（Strict モード）、`schema_validation_failures` インクリメント |
-| キューロックタイムアウト | stale running ジョブ回収（1 時間後） |
-| アクセスエラー（403/401） | `pause_queue_for_access_error` で自動一時停止 |
-
----
-
-## 8. 環境変数
-
-| 変数 | デフォルト | 説明 |
-|------|----------|------|
-| `KEIBA_SCHEMA_STRICT` | `1` | スキーマ検証 strict モード |
-| `KEIBA_SYNC_PED_TBL_ON_SHUTUBA` | 未設定 | 出馬表保存後に ped_tbl 自動生成 |
-| `KEIBA_PED_TBL_MERGE_GEN5` | `1` | ped_tbl に Gen5 接木するか |
-| `KEIBA_AUTO_SCRAPE_USE_QUEUE` | `1` | netkeiba 系はキュー経由 |
-| `SCRAPE_QUEUE_PARALLEL` | `4` | キュー並列数 |
-| `KEIBA_PRE_RACE_PREDICT_ENABLED` | 未設定 | T-15 スクレイプ完了後に自動推論 |
-| `GCS_BUCKET` | `chuou` | GCS バケット名 |
+- **発走前**: 予測結果キャッシュは発走予定時刻まで有効とし、発走予定時刻を `EXPIREAT` で設定する。
+- **発走後**: 発走後 60 秒で自動失効させ、確定

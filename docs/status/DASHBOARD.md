@@ -1,6 +1,6 @@
 # keiba-vpn — Agent Activity Dashboard
 
-_Last updated: 2026-07-03_
+_Last updated: 2026-07-04_
 
 ---
 
@@ -41,6 +41,7 @@ _Last updated: 2026-07-03_
 | DEC-005 | 全エージェント合意済みの要件定義書 v1.0 確定（F-26機能要件・N-15非機能要件） | 複数エージェント | 2026-07-02 |
 | DEC-006 | 運用コスト試算セクション追加（Phase 1〜3 月額費用を項目別に試算） | 複数エージェント | 2026-07-02 |
 | DEC-007 | ドメイン別技術スタック・レイテンシ SLO・コスト試算を要件定義書に統合（TASK-022/023） | 複数エージェント | 2026-07-03 |
+| DEC-008 | archive（既存コードベース）参照による仕様書リニューアル — GCS パス・Cron SLA・スクレイピング設定・UI を実装準拠に更新 | Orchestrator | 2026-07-04 |
 
 ---
 
@@ -87,14 +88,13 @@ _Last updated: 2026-07-03_
 
 ## Architecture Snapshot
 
-- **Frontend**: TypeScript / Next.js 14 (App Router) — Vercel ホスティング、Tailwind CSS、SWR
-- **Backend**: Python 3.11 / FastAPI — Cloud Run、Redis (TTL 60s キャッシュ)
-- **Database**: PostgreSQL 15 (VPS or Cloud SQL) + Redis (JWT blacklist / キャッシュ)
-- **Scraping**: Python 3.11 / httpx + BeautifulSoup4 — Cloud Scheduler + Cloud Run Jobs、WireGuard VPN 経由
-- **AI Model**: LightGBM / XGBoost (Python 3.11) — バッチ推論、モデル成果物は GCS 保存
-- **Object Storage**: GCS — raw HTML、モデル成果物、静的ファイル
-- **Hosting**: GCP (Cloud Run, Cloud Run Jobs, GCS, Cloud Scheduler, Cloud Monitoring)
-- **Estimated Monthly Cost**: 小規模 〜¥1,850 / 中規模 〜¥8,600 / 大規模 〜¥34,000
+- **Frontend**: TypeScript / Next.js 15 (App Router) — Tailwind CSS v3、Chart.js v4、D3.js v7
+- **Backend**: Python / Flask — ConoHa VPS（RAM 2GB 制約）、Redis（予測キャッシュ + JWT）
+- **Database**: PostgreSQL（VPS）+ Redis（キャッシュ・セッション）
+- **Scraping**: Python、netkeiba.com（一次）+ SmartRC（二次）+ JRA公式（jra_cushion）— Cron SLA 0〜6 + バックフィル
+- **AI Model**: LightGBM — keiba_lgbm / tracking_difficulty / final_odds / pace_predictor（MLflow 管理）
+- **Object Storage**: GCS（`gs://${GCS_BUCKET}/chuou/data/preprocessed/netkeiba/pc/`）— HybridStorage（L1メモリ→L2ディスク→L3 GCS）
+- **Data Sources**: netkeiba.com（17 カテゴリ）、SmartRC（smartrc_race）、JRA公式（jra_cushion）
 
 ## Next Actions
 
