@@ -233,7 +233,7 @@ def load_lightgbm_booster(
     """
     spec = get_model_spec(key)
     if spec.flavor != ModelFlavor.LIGHTGBM:
-        raise ValueError(f"{key} は LightGBM ではありません: {spec.flavor}")
+        return None
 
     now = time.time()
     if (
@@ -294,6 +294,9 @@ def booster_feature_names(key: str) -> list[str]:
 
 def infer_backend_label(key: str) -> str:
     """推論バックエンドのラベル（health / compute_meta 用）。"""
+    spec = get_model_spec(key)
+    if spec.flavor != ModelFlavor.LIGHTGBM:
+        return spec.flavor.value
     client = get_serve_client(key)
     if client is not None and client.is_available():
         return "mlflow_serve"
@@ -333,7 +336,11 @@ def model_health(key: str, *, force_serve_check: bool = False) -> dict:
         t0 = time.perf_counter()
         serve_ok = client.is_available(force_check=force_serve_check)
         serve_ms = round((time.perf_counter() - t0) * 1000, 1)
-    booster = load_lightgbm_booster(key)
+    booster = None
+    n_features = 0
+    if spec.flavor == ModelFlavor.LIGHTGBM:
+        booster = load_lightgbm_booster(key)
+        n_features = len(booster_feature_names(key)) if booster else 0
     return {
         "key": key,
         "title": spec.title,
@@ -344,7 +351,7 @@ def model_health(key: str, *, force_serve_check: bool = False) -> dict:
         "serve_ok": serve_ok,
         "serve_ms": serve_ms,
         "local_booster_loaded": booster is not None,
-        "n_features": len(booster_feature_names(key)) if booster else 0,
+        "n_features": n_features,
         "infer_backend": infer_backend_label(key),
         "cache_category": spec.cache_category,
     }

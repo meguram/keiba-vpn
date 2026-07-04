@@ -41,7 +41,7 @@ class TestBuildHorseEntityStore(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tdp = Path(td)
             y = "2024"
-            td_tables = tdp / "data" / "local" / "tables" / y
+            td_tables = tdp / "data" / "page_reference" / "tables" / y
             td_tables.mkdir(parents=True)
             pq.write_table(
                 pa.table(
@@ -67,19 +67,19 @@ class TestBuildHorseEntityStore(unittest.TestCase):
             man = build_horse_entity_store(base_dir=tdp, years=[y], overwrite=True)
             self.assertEqual(man["horse_id_universe"]["count"], 2)
 
-            r1 = tdp / "data" / "features" / "horse" / "result_tbl" / "2019" / "2019100001.parquet"
+            r1 = tdp / "data" / "local" / "features" / "horse" / "result_tbl" / "2019" / "2019100001.parquet"
             self.assertTrue(r1.is_file())
             df = pd.read_parquet(r1)
             self.assertEqual(len(df), 2)
 
-            p1 = tdp / "data" / "features" / "horse" / "ped_tbl" / "2019" / "2019100001.parquet"
+            p1 = tdp / "data" / "local" / "features" / "horse" / "ped_tbl" / "2019" / "2019100001.parquet"
             self.assertTrue(p1.is_file())
 
     def test_result_tbl_drops_nested_race_meta(self):
         with tempfile.TemporaryDirectory() as td:
             tdp = Path(td)
             y = "2024"
-            td_tables = tdp / "data" / "local" / "tables" / y
+            td_tables = tdp / "data" / "page_reference" / "tables" / y
             td_tables.mkdir(parents=True)
             df_rr = pd.DataFrame(
                 {
@@ -108,7 +108,9 @@ class TestBuildHorseEntityStore(unittest.TestCase):
             )
 
             build_horse_entity_store(base_dir=tdp, years=[y], overwrite=True)
-            out = pd.read_parquet(tdp / "data" / "features" / "horse" / "result_tbl" / "2019" / "2019100001.parquet")
+            out = pd.read_parquet(
+                tdp / "data" / "local" / "features" / "horse" / "result_tbl" / "2019" / "2019100001.parquet"
+            )
             for c in RESULT_TBL_DROP_NESTED_COLS:
                 self.assertNotIn(c, out.columns)
             self.assertIn("race_id", out.columns)
@@ -118,7 +120,7 @@ class TestBuildHorseEntityStore(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tdp = Path(td)
             y = "2024"
-            td_tables = tdp / "data" / "local" / "tables" / y
+            td_tables = tdp / "data" / "page_reference" / "tables" / y
             td_tables.mkdir(parents=True)
             pq.write_table(
                 pa.table({"race_id": ["202401010101"], "horse_id": ["2019100001"], "finish_position": [1]}),
@@ -143,7 +145,9 @@ class TestBuildHorseEntityStore(unittest.TestCase):
             man = build_horse_entity_store(base_dir=tdp, years=[y], overwrite=True, merge_gen5_sires=True)
             self.assertTrue(man["ped_tbl"]["merge_gen5_sires"])
 
-            pdf = pd.read_parquet(tdp / "data" / "features" / "horse" / "ped_tbl" / "2019" / "2019100001.parquet")
+            pdf = pd.read_parquet(
+                tdp / "data" / "local" / "features" / "horse" / "ped_tbl" / "2019" / "2019100001.parquet"
+            )
             self.assertIn("path_fm", pdf.columns)
             self.assertIn("source", pdf.columns)
             self.assertTrue((pdf["is_male_pedigree_slot"] == 1).all())

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from src.utils.horse_name_index import (
     canonical_horse_name_index_path,
@@ -14,31 +16,44 @@ from src.utils.horse_name_index import (
 )
 
 
+def _isolated_index_paths(base: Path) -> tuple[Path, ...]:
+    calc = base / "data" / "calculated_data" / "knowledge" / "horse_name_index.json"
+    legacy = base / "data" / "knowledge" / "horse_name_index.json"
+    return (calc, legacy)
+
+
 class TestHorseNameIndex(unittest.TestCase):
     def setUp(self) -> None:
         invalidate_horse_name_index_cache()
 
     def tearDown(self) -> None:
         invalidate_horse_name_index_cache()
+        os.environ.pop("KEIBA_CALCULATED_DATA_DIR", None)
 
     def test_upsert_writes_canonical_and_load_roundtrip(self) -> None:
         base = Path(self._temp())
-        kn = base / "data" / "knowledge"
-        kn.mkdir(parents=True, exist_ok=True)
-        upsert_horse_name_index_entry(base, "2099990001", "テスト馬アルファ", "Test Alpha")
-        p = canonical_horse_name_index_path(base)
-        self.assertTrue(p.is_file())
-        data = json.loads(p.read_text(encoding="utf-8"))
-        self.assertEqual(data["total_horses"], 1)
-        self.assertEqual(data["horses"][0]["horse_id"], "2099990001")
-        invalidate_horse_name_index_cache()
-        loaded = load_horse_name_index(base)
-        self.assertEqual(len(loaded.get("horses") or []), 1)
+        calc_root = base / "data" / "calculated_data"
+        os.environ["KEIBA_CALCULATED_DATA_DIR"] = str(calc_root)
+        with patch(
+            "src.utils.horse_name_index.horse_name_index_candidate_paths",
+            side_effect=lambda _b: _isolated_index_paths(base),
+        ):
+            upsert_horse_name_index_entry(base, "2099990001", "テスト馬アルファ", "Test Alpha")
+            p = canonical_horse_name_index_path(base)
+            self.assertTrue(p.is_file())
+            data = json.loads(p.read_text(encoding="utf-8"))
+            self.assertEqual(data["total_horses"], 1)
+            self.assertEqual(data["horses"][0]["horse_id"], "2099990001")
+            invalidate_horse_name_index_cache()
+            loaded = load_horse_name_index(base)
+            self.assertEqual(len(loaded.get("horses") or []), 1)
 
     def test_prefers_newer_file_between_knowledge_and_local(self) -> None:
         base = Path(self._temp())
+        calc_root = base / "data" / "calculated_data"
+        os.environ["KEIBA_CALCULATED_DATA_DIR"] = str(calc_root)
         old = base / "data" / "local" / "knowledge"
-        new = base / "data" / "knowledge"
+        new = base / "data" / "calculated_data" / "knowledge"
         old.mkdir(parents=True, exist_ok=True)
         new.mkdir(parents=True, exist_ok=True)
         old_file = old / "horse_name_index.json"
@@ -59,7 +74,11 @@ class TestHorseNameIndex(unittest.TestCase):
             encoding="utf-8",
         )
         invalidate_horse_name_index_cache()
-        loaded = load_horse_name_index(base)
+        with patch(
+            "src.utils.horse_name_index.horse_name_index_candidate_paths",
+            side_effect=lambda _b: (new_file, old_file),
+        ):
+            loaded = load_horse_name_index(base)
         names = {h["horse_name"] for h in loaded.get("horses") or []}
         self.assertIn("新しい", names)
         self.assertNotIn("古い", names)

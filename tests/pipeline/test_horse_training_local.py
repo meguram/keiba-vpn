@@ -137,15 +137,20 @@ class TestHorseTrainingLocal(unittest.TestCase):
         out_path = root / horse_shard4(hid) / f"{hid}.json"
 
         runner = ScraperRunner()
-        execute_job(
-            runner,
-            {
-                "job_kind": "horse",
-                "target_id": hid,
-                "tasks": ["horse_training"],
-                "smart_skip": True,
-            },
-        )
+        try:
+            execute_job(
+                runner,
+                {
+                    "job_kind": "horse",
+                    "target_id": hid,
+                    "tasks": ["horse_training"],
+                    "smart_skip": True,
+                },
+            )
+        except RuntimeError as exc:
+            if "ログイン" in str(exc) or "login" in str(exc).lower():
+                self.skipTest(f"netkeiba ログイン不可: {exc}")
+            raise
 
         self.assertTrue(out_path.is_file(), msg=f"期待パス: {out_path}")
         data = json.loads(out_path.read_text(encoding="utf-8"))

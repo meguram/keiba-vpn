@@ -32,7 +32,7 @@ class TestBuildRankTarget(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tdp = Path(td)
             y = "2024"
-            src = tdp / "data" / "local" / "tables" / y
+            src = tdp / "data" / "page_reference" / "tables" / y
             src.mkdir(parents=True)
             pq.write_table(
                 pa.table(
@@ -46,7 +46,7 @@ class TestBuildRankTarget(unittest.TestCase):
             )
             man = write_rank_target_parquets(base_dir=tdp, years=[y], overwrite=True)
             self.assertIn(y, man["files_written"])
-            p = tdp / "data" / "features" / "target" / "rank_tbl" / y / "rank.parquet"
+            p = tdp / "data" / "local" / "features" / "target" / "rank_tbl" / y / "rank.parquet"
             self.assertTrue(p.is_file())
             r = pd.read_parquet(p)
             self.assertListEqual(list(r.columns), ["race_id", "horse_id", "rank"])

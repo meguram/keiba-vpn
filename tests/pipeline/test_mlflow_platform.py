@@ -28,7 +28,8 @@ class TestModelCatalog(unittest.TestCase):
     def test_planned_models_exist(self):
         planned = list_model_keys(lifecycle=ModelLifecycle.PLANNED)
         self.assertIn("finish_order", planned)
-        self.assertIn("final_odds", planned)
+        self.assertIn("lap_predictor", planned)
+        self.assertIn("lap_lstm", planned)
 
     def test_get_model_spec_unknown_raises(self):
         with self.assertRaises(KeyError):
