@@ -5,8 +5,17 @@
 
 ## 0. 前提条件
 
-**対象環境**: ConoHa VPS — RAM 2GB 制約（AREA-01 §1）
 **監視対象**: keiba-vpn の全プロセス（API サーバー / MLflow / スクレイパー / Watchdog / PostgreSQL / Redis）
+
+### 環境マトリックス
+
+| 環境 | サーバー | RAM 制約 | 備考 |
+|---|---|---|---|
+| **prod** | ConoHa VPS | **2GB（ハード制約）** | §1-2・§5 のメモリ制限はすべて prod 専用 |
+| **stg** | 別サーバー（prod より大容量） | 制約なし（実測値で設定） | 2GB 制限設定を適用しないこと |
+| **dev** | 別サーバー（prod より大容量） | 制約なし（実測値で設定） | 2GB 制限設定を適用しないこと |
+
+> **注意**: 以下の §1-2（メモリしきい値）および §5（メモリ制約対応）は **prod 環境専用** の設定である。dev/stg 環境では RAM 容量に応じた独自のしきい値を運用判断で設定すること。
 
 ---
 
@@ -19,18 +28,20 @@
 | 平均 CPU 使用率（1分） | ≥ 70% | ≥ 90% | スクレイパー同時スロット数を削減 |
 | 推論バッチ実行中の CPU | ≥ 90%（一時的可） | ≥ 90% が 10分継続 | バッチ実行時間帯を見直し |
 
-### 1-2. メモリ（RAM 2GB 上限）
+### 1-2. メモリ（**prod 専用**: ConoHa VPS RAM 2GB 上限）
+
+> dev/stg は RAM 容量が異なるため、下記しきい値は適用しない。実環境の搭載 RAM に合わせて別途設定すること。
 
 | プロセス | 通常使用量目安 | 上限（kill 対象） | 備考 |
 |---|---|---|---|
 | Flask API（`flask_app.py`） | 80-120 MB | 300 MB | 推論結果 Redis キャッシュ効果込み |
-| PostgreSQL | 100-200 MB | 400 MB | `shared_buffers` 64MB 推奨 |
-| Redis | 30-80 MB | 150 MB | `maxmemory 128mb` 設定 |
+| PostgreSQL | 100-200 MB | 400 MB | `shared_buffers` 64MB 推奨（§5-2 参照） |
+| Redis | 30-80 MB | 150 MB | `maxmemory 128mb` 設定（§5-2 参照） |
 | MLflow サーバー×4 | 各 80-150 MB | 各 250 MB | keiba_lgbm / tracking_difficulty / final_odds / pace_predictor |
 | スクレイパー（SLA 3 T-15バンドル） | 60-100 MB | 200 MB | バンドル実行時はスパイクに注意 |
 | **合計上限目安** | 550-850 MB | **1,800 MB** | 残 200MB はカーネル・OS 予備 |
 
-**全体アラート**:
+**全体アラート（prod 専用）**:
 - 使用率 ≥ 80%（1,640 MB）: WARN — スクレイパー1スロット削減
 - 使用率 ≥ 90%（1,840 MB）: CRIT — 非必須プロセス（MLflow PLANNED）を停止
 
@@ -170,7 +181,9 @@ AREA-01 §5（N- 番号）との対応:
 
 ---
 
-## 5. VPS メモリ制約対応（ConoHa VPS 2GB）
+## 5. VPS メモリ制約対応（**prod 専用**: ConoHa VPS 2GB）
+
+> このセクションの設定はすべて **prod 環境のみ** に適用する。dev/stg には適用しないこと。
 
 ### 5-1. プロセス優先順位（OOM Kill 対象の順序）
 
@@ -186,24 +199,30 @@ AREA-01 §5（N- 番号）との対応:
 8. PostgreSQL（停止=サービス停止）
 9. Flask API（停止=サービス停止）
 
-### 5-2. メモリ節約設定
+### 5-2. メモリ節約設定（prod 環境のみ適用）
 
 ```
-# PostgreSQL: /etc/postgresql/*/main/postgresql.conf
-shared_buffers = 64MB          # デフォルト 128MB から削減
+# PostgreSQL: /etc/postgresql/*/main/postgresql.conf  [prod のみ]
+shared_buffers = 64MB          # デフォルト 128MB から削減（2GB 制約）
 work_mem = 4MB
 maintenance_work_mem = 32MB
-max_connections = 20           # デフォルト 100 から削減
+max_connections = 20           # デフォルト 100 から削減（2GB 制約）
 
-# Redis: /etc/redis/redis.conf
+# Redis: /etc/redis/redis.conf  [prod のみ]
 maxmemory 128mb
 maxmemory-policy allkeys-lru   # LRU でキャッシュ蒸発
 
-# Flask API: gunicorn workers
+# Flask API: gunicorn workers  [prod のみ]
 workers = 2                    # VPS 2GB では 2 workers 推奨
 worker_class = sync
 timeout = 120
 ```
+
+**dev/stg の設定**:
+- `shared_buffers`: PostgreSQL デフォルト（128MB）または搭載 RAM の 25% を目安に設定
+- `max_connections`: 負荷テストの実測値に応じて設定（デフォルト 100 が出発点）
+- `maxmemory`: Redis デフォルト（無制限）または搭載 RAM の 20-30% を目安に設定
+- `workers`: CPU コア数 × 2 + 1（gunicorn 推奨式）
 
 ---
 
