@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&family=Noto+Sans+JP:wght@400;600&display=swap';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0a0e17;
+  --surface: #131926;
+  --surface2: #1a2235;
+  --border: #243049;
+  --text: #c8d6e5;
+  --text-dim: #6b7d95;
+  --accent: #3b82f6;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --err: #ef4444;
+  --purple: #a78bfa;
+  --cyan: #06b6d4;
+  --teal: #2dd4bf;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, 'Noto Sans JP', sans-serif;
+}
+
+.card {
+  @apply rounded-xl border p-4;
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.btn {
+  @apply rounded-lg px-4 py-2 font-semibold;
+  background: var(--accent);
+  color: white;
+}
+
+.analysis-note {
+  @apply text-sm italic mt-4 p-3 rounded-lg;
+  color: var(--text-dim);
+  background: var(--surface2);
+}
