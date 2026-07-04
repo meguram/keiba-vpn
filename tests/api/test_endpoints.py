@@ -34,8 +34,8 @@ XSS_PAYLOAD = "<script>alert(1)</script>"
 SQLI_PAYLOAD = "'; DROP TABLE races; --"
 LONG_STRING = "A" * 1024
 UNICODE_PAYLOAD = "🐎競馬テスト🏇"
-# 存在しないが形式上正しいID群
-FAKE_RACE_ID = "202501010101"
+# 存在しないが形式上正しいID群（ローカル/GCS に実データが載らない ID）
+FAKE_RACE_ID = "999901019999"
 FAKE_HORSE_ID = "2020100001"
 FAKE_PERSON_ID = "00001"
 
