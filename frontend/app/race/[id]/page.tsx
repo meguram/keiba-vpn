@@ -32,20 +32,51 @@ export default function RaceDetailPage({ params }: { params: { id: string } }) {
         <pre className="card overflow-auto text-xs">{JSON.stringify((race.entries as unknown[]) || [], null, 2)}</pre>
       )}
       {tab === "ai" && pred && (
-        <table className="w-full text-sm">
-          <thead><tr><th>馬番</th><th>勝率</th><th>単ROI</th><th>複ROI</th><th>VB</th></tr></thead>
-          <tbody>
-            {pred.horses.map((h) => (
-              <tr key={h.horse_id} style={{ background: h.is_value_bet ? "rgba(34,197,94,0.15)" : undefined }}>
-                <td>{h.post_no}</td>
-                <td>{h.win_prob?.toFixed(3)}</td>
-                <td>{h.expected_win_roi}</td>
-                <td>{h.expected_show_roi}</td>
-                <td>{h.is_value_bet ? "✓" : ""}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          {pred.is_guest && (
+            <div
+              style={{
+                marginBottom: "1rem",
+                padding: "10px 14px",
+                borderRadius: 8,
+                background: "rgba(210,153,34,0.10)",
+                border: "1px solid rgba(210,153,34,0.40)",
+                borderLeft: "4px solid #d29922",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <span style={{ fontSize: 18 }}>🔒</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#d29922" }}>
+                  ゲスト閲覧モード — 上位 3 頭のみ表示
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                  全 {pred.total_horses} 頭の AI 予測を閲覧するには
+                  <a href="/login" style={{ color: "#58a6ff", marginLeft: 4, textDecoration: "underline" }}>
+                    ログイン
+                  </a>
+                  してください。
+                </div>
+              </div>
+            </div>
+          )}
+          <table className="w-full text-sm">
+            <thead><tr><th>馬番</th><th>勝率</th><th>単ROI</th><th>複ROI</th><th>VB</th></tr></thead>
+            <tbody>
+              {pred.horses.map((h) => (
+                <tr key={h.horse_id} style={{ background: h.is_value_bet ? "rgba(34,197,94,0.15)" : undefined }}>
+                  <td>{h.post_no}</td>
+                  <td>{h.win_prob?.toFixed(3)}</td>
+                  <td>{h.expected_win_roi}</td>
+                  <td>{h.expected_show_roi}</td>
+                  <td>{h.is_value_bet ? "✓" : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
     </PageShell>
   );

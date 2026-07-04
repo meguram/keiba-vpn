@@ -22,7 +22,13 @@ GCS_OTHERS = "chuou/data/others"
 
 
 def _gcs_bucket() -> str:
-    return os.environ.get("GCS_BUCKET", "")
+    bucket = os.environ.get("GCS_BUCKET")
+    if not bucket:
+        raise RuntimeError(
+            "GCS_BUCKET environment variable is not set. "
+            "Set it in .env or export GCS_BUCKET=<your-bucket-name>"
+        )
+    return bucket
 
 
 def race_path(category: str, race_id: str) -> str:

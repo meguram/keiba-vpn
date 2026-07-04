@@ -203,6 +203,12 @@ def upsert_odds_snapshot(
     odds_place_low: Optional[float] = None,
     odds_place_high: Optional[float] = None,
 ) -> None:
+    # TODO(未接続): この関数はどこからも呼ばれていない（Layer 5 ETL が未接続）。
+    #   race_odds カテゴリの GCS JSON を race_odds_snapshot テーブルに格納するには、
+    #   以下のいずれかから本関数を呼び出す必要がある:
+    #     - src/scraper/run.py の scrape_odds() / _scrape_odds_with_session() (リアルタイム)
+    #     - src/scripts/data/etl_ingest_race.py に "race_odds" ケースを追加 (バッチ取込)
+    #   呼び出し時は race_odds JSON の entries[] を走査し、horse_id・odds・snapshot_at を渡すこと。
     stmt = insert(RaceOddsSnapshot).values(
         race_id=race_id,
         horse_id=horse_id,

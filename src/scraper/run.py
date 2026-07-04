@@ -656,6 +656,14 @@ class ScraperRunner:
                 self.storage.save("race_odds", race_id, data)
                 logger.info("保存: race_odds/%s (%d件)", race_id,
                             len(data["entries"]))
+                # TODO(未接続): GCS save 成功後に scrape_runs テーブルへ INSERT されていない。
+                #   src/db/scrape_runs.py の log_scrape_run() を呼び出して実行ログを記録すること。
+                #   必要: get_session() でセッションを取得し、target_type="race_odds",
+                #   target_id=race_id, status="SUCCESS" で log_scrape_run() を呼ぶ。
+                # TODO(未接続): race_odds_snapshot テーブルへの ETL が未実装。
+                #   GCS に保存した race_odds JSON のオッズ値を src/db/etl/transform.py の
+                #   upsert_odds_snapshot() で race_odds_snapshot テーブルに INSERT すること。
+                #   snapshot_type="WIN" / "PLACE" を entries[] の odds 値から生成する。
                 return data
             else:
                 logger.warning("オッズデータなし: %s", race_id)
@@ -2108,6 +2116,9 @@ class ScraperRunner:
                 self.storage.save("race_odds", race_id, data)
                 logger.info("保存: race_odds/%s (%d件)", race_id,
                             len(data["entries"]))
+                # TODO(未接続): scrape_odds() と同様、以下が未実装:
+                #   1. scrape_runs テーブルへの INSERT（log_scrape_run() 呼び出し）
+                #   2. race_odds_snapshot テーブルへの ETL（upsert_odds_snapshot() 呼び出し）
                 return data
             else:
                 logger.warning("オッズデータなし: %s", race_id)

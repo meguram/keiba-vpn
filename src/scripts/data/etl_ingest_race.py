@@ -31,6 +31,27 @@ def ingest_race(category: str, race_id: str) -> None:
         elif category == "race_result_lap":
             upsert_lap_times(session, data)
             gcs_path = storage._gcs_blob_path(category, race_id)
+        # TODO(未接続): "race_odds" カテゴリが未サポート。
+        #   race_odds_snapshot テーブルへの ETL を追加する必要がある。
+        #   実装例:
+        #     elif category == "race_odds":
+        #         snapshot_at = datetime.fromtimestamp(
+        #             data.get("_meta", {}).get("scraped_at", 0), tz=timezone.utc
+        #         )
+        #         for entry in data.get("entries") or []:
+        #             if entry.get("odds"):
+        #                 upsert_odds_snapshot(
+        #                     session, race_id, entry["horse_id"],
+        #                     "WIN", entry["odds"], snapshot_at
+        #                 )
+        #             if entry.get("odds_place_low"):
+        #                 upsert_odds_snapshot(
+        #                     session, race_id, entry["horse_id"],
+        #                     "PLACE", entry["odds_place_low"], snapshot_at,
+        #                     odds_place_low=entry.get("odds_place_low"),
+        #                     odds_place_high=entry.get("odds_place_high"),
+        #                 )
+        #         gcs_path = storage._gcs_blob_path(category, race_id)
         else:
             raise ValueError(f"unsupported category: {category}")
 

@@ -623,7 +623,7 @@ GET  /api/v1/races/{race_id}/results         ← 着順・ラップ・コーナ�
 GET  /api/v1/races?date=YYYYMMDD             ← レース一覧
 
 # 分析
-GET  /api/v1/race/{id}/tracking-difficulty   ← 位置追跡難易度
+GET  /api/v1/races/{race_id}/tracking-difficulty   ← 位置追跡難易度
 GET  /api/v1/horse/{id}/growth-curve         ← 成長曲線
 GET  /api/v1/track-speed/day?date=X&venue=Y  ← TSI指数
 GET  /api/v1/race-quality/race?id=X          ← NNLS 分析

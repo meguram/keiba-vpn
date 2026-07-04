@@ -6,6 +6,7 @@ import os
 
 from flask import Flask, jsonify, request
 
+from src.api.auth import COOKIE_NAME, _verify_token
 from src.api.v1.services import (
     DEFAULT_MODEL_VERSION,
     build_laps_response,
@@ -15,6 +16,12 @@ from src.api.v1.services import (
 )
 from src.api.v1.routes.analytics import bp as analytics_bp
 from src.db.session import get_session, init_engine
+
+
+def _is_logged_in() -> bool:
+    """Flask request からセッション Cookie を読んでログイン状態を返す。"""
+    token = request.cookies.get(COOKIE_NAME, "")
+    return _verify_token(token)
 
 
 def create_app() -> Flask:
@@ -58,7 +65,20 @@ def create_app() -> Flask:
             payload = get_predictions_cached(session, race_id, model_version)
         if payload is None:
             return jsonify({"error": "predictions not found"}), 404
-        return jsonify(payload)
+
+        # ゲスト（未ログイン）は win_prob 降順 TOP3 のみ閲覧可能
+        horses: list = payload.get("horses") or []
+        total_horses = len(horses)
+        logged_in = _is_logged_in()
+        if not logged_in:
+            horses = sorted(horses, key=lambda x: x.get("win_prob") or 0, reverse=True)[:3]
+
+        return jsonify({
+            **payload,
+            "horses": horses,
+            "is_guest": not logged_in,
+            "total_horses": total_horses,
+        })
 
     @app.get("/api/v1/races/<race_id>/predictions/laps")
     def api_prediction_laps(race_id: str):

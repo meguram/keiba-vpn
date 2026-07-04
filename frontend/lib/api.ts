@@ -31,6 +31,10 @@ export type PredictionsResponse = {
   race_id: string;
   model_version: string;
   horses: PredictionHorse[];
+  /** ゲスト閲覧時は true（TOP3 のみ返却）*/
+  is_guest?: boolean;
+  /** レース全頭数（ゲスト制限前の頭数）*/
+  total_horses?: number;
   pace_prediction?: {
     pace_category?: string;
     lap_times?: { furlong_index: number; predicted_lap_sec: number }[];
