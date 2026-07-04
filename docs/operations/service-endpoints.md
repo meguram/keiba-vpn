@@ -9,12 +9,15 @@
 リポジトリルートで `./service_start` を実行すると、ローカル開発向けの HTTP サービスをまとめて起動します（実体: `scripts/server/service_start.sh`）。**既定は `--env dev`**（FastAPI ホットリロード・Flask debug・`next dev`）。
 
 ```bash
-# パターン A（既定）: dev — Flask :5100 + FastAPI :8000 + MLflow :5000 + Next.js :3000
+# パターン A（既定）: dev — Next.js モックのみ :3001（API 不要）
 ./service_start
 ./service_start --env dev          # 上記と同じ
 
+# dev 実 API 開発（ホットリロード）
+./service_start --env dev --full   # FastAPI :8000 + Flask :5100 + next dev
+
 # 環境プロファイル
-./service_start --env stg          # dev 同等 + KEIBA_ENV=stg（STG バッジ確認）
+./service_start --env stg          # 本番相当 + KEIBA_ENV=stg + meguai-stg トンネル
 ./service_start --env prod         # 本番相当（FastAPI --prod / next build+start）
 
 # 状態確認
@@ -26,24 +29,32 @@
 ./service_start --with-model-serve # Docker MLflow model serve（:5001 等）
 ```
 
-| プロファイル | FastAPI | Flask | Next.js | MLflow（ローカル） |
-|---|---|---|---|---|
-| `dev`（既定） | reload | `:5100` debug | `npm run dev` | `:5000` 起動 |
-| `stg` | reload + `KEIBA_ENV=stg` | `:5100` debug | `npm run dev` | `:5000` 起動 |
-| `prod` | `--prod` | `:5000` | `npm run build && start` | 既定オフ（ポート競合回避） |
+| プロファイル | 用途 | FastAPI | Flask | Next.js | MLflow（ローカル） | tcpexposer |
+|---|---|---|---|---|---|---|
+| `dev`（既定） | モック UI のみ | — | — | mock `:3001` | オフ | `meguai-dev` → :3001 |
+| `dev --full` | ホットリロード開発 | reload | `:5100` debug | `npm run dev` | オフ | `meguai-dev` → :3001 |
+| `stg` | 本 PC・本番相当 | `--prod` | `:5000` | `dev` `:3000` 実 API | 既定オフ | `meguai-stg` → :3000 |
+| `prod` | VPS 想定（stg クローン） | `--prod` | `:5000` | `build+start` `:3000` | 既定オフ | （将来） |
 
 ポート・URL の上書き: 環境変数、または `scripts/server/service_start.local.env`（`.example` をコピー）。
 
-| 起動後 URL（dev/stg） | サービス |
+| 起動後 URL（dev モック） | サービス |
+|---|---|
+| `http://127.0.0.1:3001` | Next.js モック（`NEXT_PUBLIC_MOCK=true`） |
+| `https://meguai-dev.tcpexposer.com/` | 上記の外部公開 |
+
+| 起動後 URL（stg / prod） | サービス |
 |---|---|
 | `http://127.0.0.1:8000` | FastAPI（レガシー UI / API） |
-| `http://127.0.0.1:5100` | Flask `/api/v1`（MLflow :5000 との競合回避） |
-| `http://127.0.0.1:3000` | Next.js（`KEIBA_API_URL=http://127.0.0.1:5100`） |
-| `http://127.0.0.1:5000` | MLflow Tracking |
+| `http://127.0.0.1:5000` | Flask `/api/v1` |
+| `http://127.0.0.1:3000` | Next.js（`KEIBA_API_URL=http://127.0.0.1:5000`） |
+| `https://meguai-stg.tcpexposer.com/` | stg 外部公開（Next.js :3000） |
 
 PostgreSQL（`:5432`）と Redis（`:6379`）はスクリプト対象外です。未起動の場合は警告を出します。ログは `logs/` に出力されます。
 
-**tcpexposer トンネル**: ワークスペースを開くと `.cursor/hooks.json`（`sessionStart`）と `.vscode/tasks.json`（`runOn: folderOpen`）経由で `scripts/server/tunnel_tcpexposer.sh autostart` が実行され、`https://meguai-dev.tcpexposer.com/` 向け SSH がバックグラウンド + 自動再接続で起動します。無効化: `KEIBA_AUTO_TCPEXPOSER=0`。手動: `./scripts/server/tunnel_tcpexposer.sh` / `stop` / `check`。
+**tcpexposer トンネル**: ワークスペース起動時に `tunnel_tcpexposer.sh autostart-all` で **dev**（`meguai-dev` → `:3001`）と **stg**（`meguai-stg` → `:3000`）を自動接続。無効化: `KEIBA_AUTO_TCPEXPOSER=0`。手動: `./scripts/server/tunnel_tcpexposer.sh stg check` / `dev stop` / `stg background`。
+
+**環境の役割**: **dev** = モック UI のみ。**stg** = 本 PC 上の本番相当（実 API・GCS・DB）。**prod**（将来）= stg 構成を VPS へクローン。
 
 ---
 
@@ -338,4 +349,4 @@ NEXT_PUBLIC_MOCK=true npm run dev
 |---|---|
 | 2026-07-04 | 初版作成（FastAPI / Flask / Next.js / MLflow / インフラ / ポート競合注意） |
 | 2026-07-04 | `./service_start` 一括起動スクリプト追加 |
-| 2026-07-04 | `service_start --env` プロファイル（dev / stg / prod）対応 |
+| 2026-07-04 | dev/stg 分離: dev モック :3001 / stg 本番相当 :3000 + `meguai-stg` トンネル |

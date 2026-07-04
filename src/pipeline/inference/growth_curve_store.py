@@ -21,6 +21,7 @@ logger = logging.getLogger("GrowthCurveStore")
 CACHE_VERSION = 1
 ARTIFACT_KEY = "growth_curve"
 _META_FILENAME = "_index_meta.json"
+_MAX_LOCAL_ID_LEN = 200
 
 
 def store_dir() -> Path:
@@ -33,6 +34,8 @@ def _path_for(horse_id: str) -> Path:
     safe = str(horse_id).strip()
     if not safe:
         raise ValueError("horse_id が空です")
+    if len(safe) > _MAX_LOCAL_ID_LEN:
+        raise ValueError("horse_id が長すぎます")
     return store_dir() / f"{safe}.json"
 
 
@@ -47,8 +50,11 @@ def _is_valid_meta(meta: dict | None) -> bool:
 
 
 def load_local(horse_id: str) -> dict | None:
-    path = _path_for(horse_id)
-    if not path.is_file():
+    try:
+        path = _path_for(horse_id)
+        if not path.is_file():
+            return None
+    except (ValueError, OSError):
         return None
     try:
         blob = json.loads(path.read_text(encoding="utf-8"))
@@ -75,8 +81,11 @@ def exists_local(horse_id: str) -> bool:
 
 def is_local_fresh(horse_id: str, *, max_age_days: float = 7.0) -> bool:
     """ローカル成長曲線が有効かつ max_age_days 以内に計算済みなら True。"""
-    path = _path_for(horse_id)
-    if not path.is_file():
+    try:
+        path = _path_for(horse_id)
+        if not path.is_file():
+            return False
+    except (ValueError, OSError):
         return False
     try:
         blob = json.loads(path.read_text(encoding="utf-8"))

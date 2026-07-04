@@ -17,6 +17,28 @@ TZ=Asia/Tokyo
 - `KEIBA_DEPLOYMENT_LABEL` … ナビ左のバッジ文言（省略時は `STG`）。
 - `APP_ENV=stg` でも同義（`KEIBA_ENV` が優先）。
 
+## 一括起動（stg）
+
+本番相当のスタックを起動し、`meguai-stg.tcpexposer.com` へトンネルします。
+
+```bash
+cd keiba-vpn
+./service_start --env stg
+# またはサービスのみ（トンネル手動）:
+./scripts/server/tunnel_tcpexposer.sh stg background
+./scripts/server/tunnel_tcpexposer.sh stg check
+```
+
+| 項目 | stg（本 PC） |
+|------|----------------|
+| Next.js | `:3000`（`npm run build && start`、実 API） |
+| Flask | `:5000` |
+| FastAPI | `:8000`（`--prod`） |
+| 公開 URL | `https://meguai-stg.tcpexposer.com/` |
+| 環境 | `KEIBA_ENV=stg`（STG バッジ・`X-Keiba-Env: stg`） |
+
+**dev** との違い: dev は `./service_start`（モック UI `:3001` のみ、`meguai-dev`）。stg は GCS・PostgreSQL・Redis を使う本番相当構成です。
+
 ## 一括検証（推奨）
 
 API が起動済み（例: `http://127.0.0.1:8000`）であることを確認してから（全サービスの URL・ポートは [operations/service-endpoints.md](operations/service-endpoints.md)）:

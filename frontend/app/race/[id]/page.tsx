@@ -1,25 +1,28 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import { fetchApi, PredictionsResponse } from "@/lib/api";
 import { PageShell } from "@/components/PageShell";
 
-export default function RaceDetailPage({ params }: { params: { id: string } }) {
+export default function RaceDetailPage() {
+  const routeParams = useParams();
+  const id = String(routeParams.id ?? "");
   const [tab, setTab] = useState<"shutuba" | "result" | "ai" | "horse">("shutuba");
   const [race, setRace] = useState<Record<string, unknown> | null>(null);
   const [pred, setPred] = useState<PredictionsResponse | null>(null);
 
   async function load() {
     const [r, p] = await Promise.all([
-      fetchApi<Record<string, unknown>>(`/api/v1/races/${params.id}`),
-      fetchApi<PredictionsResponse>(`/api/v1/races/${params.id}/predictions`).catch(() => null),
+      fetchApi<Record<string, unknown>>(`/api/v1/races/${id}`),
+      fetchApi<PredictionsResponse>(`/api/v1/races/${id}/predictions`).catch(() => null),
     ]);
     setRace(r);
     setPred(p);
   }
 
   return (
-    <PageShell title={`レース ${params.id}`}>
+    <PageShell title={`レース ${id}`}>
       <button type="button" className="btn mb-4" onClick={load}>読込</button>
       <div className="mb-4 flex gap-2">
         {(["shutuba", "result", "ai", "horse"] as const).map((t) => (
