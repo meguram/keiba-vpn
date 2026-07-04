@@ -9713,6 +9713,9 @@ async def api_bloodline_analyze(request: Request, background_tasks: BackgroundTa
     years = body.get("years")
     source = body.get("source", "gcs")
 
+    if source != "csv" and not years:
+        return JSONResponse({"error": "years は必須です"}, status_code=400)
+
     _bloodline_job["running"] = True
     _bloodline_job["started_at"] = datetime.now().isoformat()
     _bloodline_job["result"] = None
@@ -9725,6 +9728,10 @@ async def api_bloodline_analyze(request: Request, background_tasks: BackgroundTa
 
 def _run_bloodline_analysis(years: list[str] | None, source: str):
     try:
+        if source != "csv" and not years:
+            _bloodline_job["error"] = "years 未指定"
+            return
+
         from src.research.pedigree.bloodline_distance import BloodlineDistanceAnalyzer
 
         from src.config.data_paths import BLOODLINE_DIR
