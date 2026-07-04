@@ -1,14 +1,19 @@
 import Link from "next/link";
 import { fetchApi, RaceSummary } from "@/lib/api";
 import { PageShell } from "@/components/PageShell";
+import { USE_MOCK, MOCK_RACES } from "@/lib/mock";
 
 export default async function RacesPage() {
   let races: RaceSummary[] = [];
-  try {
-    const data = await fetchApi<{ races: RaceSummary[] }>("/api/v1/races");
-    races = data.races;
-  } catch {
-    races = [];
+  if (USE_MOCK) {
+    races = MOCK_RACES;
+  } else {
+    try {
+      const data = await fetchApi<{ races: RaceSummary[] }>("/api/v1/races");
+      races = data.races;
+    } catch {
+      races = [];
+    }
   }
 
   return (

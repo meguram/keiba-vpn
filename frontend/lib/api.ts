@@ -1,3 +1,5 @@
+import { USE_MOCK } from "@/lib/mock";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 export async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
@@ -5,6 +7,11 @@ export async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> 
   const res = await fetch(url, { ...init, cache: "no-store" });
   if (!res.ok) throw new Error(`${path}: ${res.status}`);
   return res.json() as Promise<T>;
+}
+
+export async function fetchMockOrApi<T>(mockData: T, path: string, init?: RequestInit): Promise<T> {
+  if (USE_MOCK) return mockData;
+  return fetchApi<T>(path, init);
 }
 
 export type RaceSummary = {
@@ -15,6 +22,7 @@ export type RaceSummary = {
   start_time?: string;
   surface?: string;
   distance?: number;
+  field_size?: number;
 };
 
 export type PredictionHorse = {

@@ -17,6 +17,7 @@ coverage.xml
 .env
 .env.*
 !.env.example
+!frontend/.env.local.example
 
 # IDE（共有したい設定のみ追跡）
 .vscode/*
@@ -63,6 +64,7 @@ data/page_reference/
 # Frontend
 frontend/node_modules/
 frontend/.next/
+frontend/tsconfig.tsbuildinfo
 
 # 資格情報
 *.pem

@@ -15,7 +15,7 @@ netkeiba.com および smartrc.jp から収集した競馬データを用いて�
 | 一次データソース | netkeiba.com |
 | 二次データソース | smartrc.jp（SmartRC 独自指標）、JRA 公式（クッション値・含水率） |
 | ユーザー種別 | ゲスト（予測上位3頭閲覧のみ） / ログイン済（全頭閲覧・マイ分析保存・馬券最適化） |
-| 主要制約 | ConoHa VPS 2GB — 2GB 以内での安定稼働を最優先 |
+| 主要制約 | ConoHa VPS 2GB（**prod 環境のみ**）— prod での 2GB 以内安定稼働を最優先 |
 
 ### 1-2. 最重要原則
 
@@ -547,7 +547,7 @@ def calculate_recovery_rate(
 
 | ID | カテゴリ | 項目 | 補足 |
 |---|---|---|---|
-| H-01 | インフラ | VPS メモリバジェット（各プロセスへの割り当て上限） | ConoHa VPS 2GB 制約内での LightGBM / Redis / PostgreSQL 割り当てを確定する必要がある |
+| H-01 | インフラ | VPS メモリバジェット（各プロセスへの割り当て上限） | prod: ConoHa VPS 2GB 制約内での割り当てを確定する必要がある。dev/stg は異なるサーバーのため制約なし（AREA-10 §0 参照） |
 | H-02 | インフラ | Circuit Breaker ライブラリ選定・閾値定義 | 候補: `pybreaker`・`tenacity`。連続失敗 N 回でオープン遷移 |
 | H-03 | 監視 | 監視基盤ツール選定 | 候補: Prometheus / Grafana / Sentry 等 |
 | H-04 | 監視 | アラート通知チャネル | 候補: Slack / PagerDuty 等 |

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { fetchApi, RaceSummary } from "@/lib/api";
+import { USE_MOCK, MOCK_RACES } from "@/lib/mock";
 
 async function getHealth() {
+  if (USE_MOCK) return "OK (mock)";
   try {
     await fetchApi<{ status: string }>("/api/v1/health");
     return "OK";
@@ -11,6 +13,7 @@ async function getHealth() {
 }
 
 async function getRaces(): Promise<RaceSummary[]> {
+  if (USE_MOCK) return MOCK_RACES.slice(0, 8);
   try {
     const data = await fetchApi<{ races: RaceSummary[] }>("/api/v1/races");
     return data.races.slice(0, 8);
