@@ -36,10 +36,14 @@ Thumbs.db
 .server.log
 *.log
 logs/
+.service_start.profile
+scripts/server/service_start.local.env
 
 # バックアップ・一時
 api/app.py.bak_*
 *.bak
+tmp/*
+!tmp/.gitkeep
 
 # ML（再生成可）
 catboost_info/
@@ -69,6 +73,8 @@ frontend/tsconfig.tsbuildinfo
 # 資格情報
 *.pem
 credentials.json
+keiba-vpn-local
+keiba-vpn-local.pub
 
 # プロセス横断スロットファイル（スクレイパー並列数制御用）
 data/meta/netkeiba_global_slots/

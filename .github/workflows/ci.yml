@@ -49,7 +49,7 @@ jobs:
         run: alembic upgrade head
 
       - name: No shuffle in time split (static)
-        run: python scripts/ci/check_no_shuffle.py
+        run: python -m src.scripts.ci.check_no_shuffle
 
       - name: Unit & integration tests
         run: |
