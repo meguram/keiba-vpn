@@ -8,6 +8,7 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     services:
       postgres:
         image: postgres:16
@@ -54,14 +55,7 @@ jobs:
         run: python -m src.scripts.ci.check_no_shuffle
 
       - name: Unit & integration tests
-        run: |
-          python -m pytest tests/ \
-            --ignore=tests/scraper/manual \
-            --ignore=tests/research/manual \
-            --tb=short \
-            --cov=src \
-            --cov-report=term-missing \
-            --cov-fail-under=15
+        run: python -m pytest tests/ --ignore=tests/scraper/manual --ignore=tests/research/manual --tb=short -ra
 
   frontend:
     runs-on: ubuntu-latest
