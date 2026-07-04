@@ -34,9 +34,13 @@ jobs:
       GCS_BUCKET: test-bucket
       DEV_PASSWORD: test-dev-password
       DEV_SECRET_KEY: test-secret
+      HORSE_NAME_INDEX_DISABLE_BOOTSTRAP: "1"
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install OS dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgomp1
 
       - uses: actions/setup-python@v5
         with:
@@ -55,7 +59,11 @@ jobs:
         run: python -m src.scripts.ci.check_no_shuffle
 
       - name: Unit & integration tests
-        run: python -m pytest tests/ --ignore=tests/scraper/manual --ignore=tests/research/manual --tb=short -ra
+        run: |
+          set -euxo pipefail
+          python -m pytest --version
+          python -m pytest tests/pipeline/test_build_rank_target.py -v --tb=short
+          python -m pytest tests/ --ignore=tests/scraper/manual --ignore=tests/research/manual --tb=short -ra
 
   frontend:
     runs-on: ubuntu-latest
