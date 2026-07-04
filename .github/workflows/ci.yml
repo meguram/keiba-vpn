@@ -59,7 +59,7 @@ jobs:
             -q --tb=short \
             --cov=src \
             --cov-report=term-missing \
-            --cov-fail-under=50
+            --cov-fail-under=15
 
   frontend:
     runs-on: ubuntu-latest

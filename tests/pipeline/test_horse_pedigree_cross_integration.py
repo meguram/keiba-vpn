@@ -46,7 +46,7 @@ class TestPedCrossIntegration(unittest.TestCase):
             self.assertGreaterEqual(int(deep.iloc[0]["ancestor_occurrence_global"]), 1)
 
     def test_real_parquet_if_present(self) -> None:
-        p = Path("data/features/horse/ped_tbl/2009/2009100502.parquet")
+        p = Path("data/local/features/horse/ped_tbl/2009/2009100502.parquet")
         if not p.is_file():
             self.skipTest(f"no sample file: {p}")
         df = pd.read_parquet(p)
