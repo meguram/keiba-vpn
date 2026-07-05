@@ -745,7 +745,9 @@ def _is_jra_race(race_id: str) -> bool:
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
-app.mount("/data/image", StaticFiles(directory=os.path.join(BASE_DIR, "data", "local", "image")), name="data_image")
+_image_dir = os.path.join(BASE_DIR, "data", "local", "image")
+os.makedirs(_image_dir, exist_ok=True)
+app.mount("/data/image", StaticFiles(directory=_image_dir), name="data_image")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 templates.env.globals["is_dev_check"] = is_developer
 templates.env.globals["keiba_staging_badge"] = keiba_staging_badge
