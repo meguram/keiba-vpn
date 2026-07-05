@@ -81,7 +81,7 @@ if [[ -z "$BRANCH" ]]; then
 fi
 
 if [[ "${KEIBA_GIT_PULL_ON_DIRTY:-0}" != "1" ]]; then
-  if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+  if [[ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
     log "skip (working tree dirty on branch=${BRANCH})"
     exit 0
   fi
