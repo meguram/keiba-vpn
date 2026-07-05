@@ -31,7 +31,7 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://keiba:keiba@localhost:5432/keiba
       REDIS_URL: redis://localhost:6379/0
-      GCS_BUCKET: test-bucket
+      GCS_BUCKET: ""
       DEV_PASSWORD: test-dev-password
       DEV_SECRET_KEY: test-secret
       HORSE_NAME_INDEX_DISABLE_BOOTSTRAP: "1"
