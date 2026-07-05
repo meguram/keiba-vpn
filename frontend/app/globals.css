@@ -26,6 +26,10 @@ body {
   font-family: Inter, 'Noto Sans JP', sans-serif;
 }
 
+.site-main:not(:has(.home-root)) {
+  @apply mx-auto max-w-6xl p-4;
+}
+
 .card {
   @apply rounded-xl border p-4;
   background: var(--surface);
