@@ -281,7 +281,7 @@ Nginx 経由の Keiba API 例: `http://127.0.0.1/keiba/api/health`
 | キューワーカー | FastAPI 内 / `data/queue/scrape_queue.json` | `/api/scrape-queue/*` で制御 |
 | Layer 3 スナップショット | `python -m src.db.batch.stats_snapshot` | DB 集計 |
 | ETL | `python -m src.scripts.data.etl_ingest_race race_shutuba {race_id}` | GCS → PostgreSQL |
-| git pull（1 時間ごと） | `scripts/cron/git_pull_hourly.sh` | cron: `setup_git_pull_cron.sh install` または `setup_all_cron.sh install`。ログ: `logs/git_pull.log` |
+| git pull（10 分ごと） | `scripts/cron/git_pull_hourly.sh` | cron: `setup_git_pull_cron.sh install` または `setup_all_cron.sh install`。ログ: `logs/git_pull.log` |
 
 ---
 

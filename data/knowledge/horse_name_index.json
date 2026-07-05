@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "total_horses": 37392,
-  "generated_at": "2026-06-30 07:26:23",
+  "total_horses": 37393,
+  "generated_at": "2026-07-05 09:46:47",
   "source": "race_shutuba_gcs",
   "horses": [
     {
@@ -39097,8 +39097,8 @@
     {
       "horse_id": "2017104262",
       "horse_name": "タシロ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Tasiro",
+      "year": "2026"
     },
     {
       "horse_id": "2017104264",
@@ -39115,8 +39115,8 @@
     {
       "horse_id": "2017104266",
       "horse_name": "カップッチョ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Cappuccio",
+      "year": "2026"
     },
     {
       "horse_id": "2017104267",
@@ -39319,8 +39319,8 @@
     {
       "horse_id": "2017104315",
       "horse_name": "ブレッシングレイン",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Blessing Rain",
+      "year": "2026"
     },
     {
       "horse_id": "2017104316",
@@ -39559,8 +39559,8 @@
     {
       "horse_id": "2017104415",
       "horse_name": "トーセンオリジン",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Tosen Origin",
+      "year": "2026"
     },
     {
       "horse_id": "2017104419",
@@ -40021,8 +40021,8 @@
     {
       "horse_id": "2017104560",
       "horse_name": "ブルーダイヤカフェ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Blue Dia Cafe",
+      "year": "2026"
     },
     {
       "horse_id": "2017104563",
@@ -40243,8 +40243,8 @@
     {
       "horse_id": "2017104623",
       "horse_name": "ハナビマンカイ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Hanabi Mankai",
+      "year": "2026"
     },
     {
       "horse_id": "2017104624",
@@ -40399,8 +40399,8 @@
     {
       "horse_id": "2017104652",
       "horse_name": "フィロロッソ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Filo Rosso",
+      "year": "2026"
     },
     {
       "horse_id": "2017104653",
@@ -40459,8 +40459,8 @@
     {
       "horse_id": "2017104666",
       "horse_name": "トランペットシェル",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Trumpet Shell",
+      "year": "2026"
     },
     {
       "horse_id": "2017104667",
@@ -40567,8 +40567,8 @@
     {
       "horse_id": "2017104685",
       "horse_name": "エアロロノア",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Air Lolonois",
+      "year": "2026"
     },
     {
       "horse_id": "2017104686",
@@ -40633,8 +40633,8 @@
     {
       "horse_id": "2017104698",
       "horse_name": "ジロー",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Jiro",
+      "year": "2026"
     },
     {
       "horse_id": "2017104699",
@@ -40645,8 +40645,8 @@
     {
       "horse_id": "2017104700",
       "horse_name": "ナリノモンターニュ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Narino Montagne",
+      "year": "2026"
     },
     {
       "horse_id": "2017104702",
@@ -40675,8 +40675,8 @@
     {
       "horse_id": "2017104706",
       "horse_name": "オメガエリタージュ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Omega Heritage",
+      "year": "2026"
     },
     {
       "horse_id": "2017104707",
@@ -40747,8 +40747,8 @@
     {
       "horse_id": "2017104719",
       "horse_name": "ファルコニア",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Falconia",
+      "year": "2026"
     },
     {
       "horse_id": "2017104721",
@@ -40789,8 +40789,8 @@
     {
       "horse_id": "2017104727",
       "horse_name": "エルバルーチェ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Erbaluce",
+      "year": "2026"
     },
     {
       "horse_id": "2017104729",
@@ -40849,8 +40849,8 @@
     {
       "horse_id": "2017104743",
       "horse_name": "サトノフウジン",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Satono Fujin",
+      "year": "2026"
     },
     {
       "horse_id": "2017104744",
@@ -40915,8 +40915,8 @@
     {
       "horse_id": "2017104756",
       "horse_name": "アラタ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Arata",
+      "year": "2026"
     },
     {
       "horse_id": "2017104757",
@@ -40963,8 +40963,8 @@
     {
       "horse_id": "2017104767",
       "horse_name": "エターナルボンド",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Eternal Bond",
+      "year": "2026"
     },
     {
       "horse_id": "2017104769",
@@ -40987,8 +40987,8 @@
     {
       "horse_id": "2017104773",
       "horse_name": "オルガンザ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Organza",
+      "year": "2026"
     },
     {
       "horse_id": "2017104774",
@@ -41185,8 +41185,8 @@
     {
       "horse_id": "2017104810",
       "horse_name": "ヴィアメント",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Vehement",
+      "year": "2026"
     },
     {
       "horse_id": "2017104812",
@@ -41203,8 +41203,8 @@
     {
       "horse_id": "2017104815",
       "horse_name": "ディープキング",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Deep King",
+      "year": "2026"
     },
     {
       "horse_id": "2017104818",
@@ -41359,8 +41359,8 @@
     {
       "horse_id": "2017104852",
       "horse_name": "キャプテンドレイク",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Captain Drake",
+      "year": "2026"
     },
     {
       "horse_id": "2017104856",
@@ -41413,8 +41413,8 @@
     {
       "horse_id": "2017104867",
       "horse_name": "ヒロイックテイル",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Heroic Tale",
+      "year": "2026"
     },
     {
       "horse_id": "2017104868",
@@ -41437,8 +41437,8 @@
     {
       "horse_id": "2017104873",
       "horse_name": "エグレムニ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Egremni",
+      "year": "2026"
     },
     {
       "horse_id": "2017104874",
@@ -41725,8 +41725,8 @@
     {
       "horse_id": "2017104936",
       "horse_name": "ヒートオンビート",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Heat on Beat",
+      "year": "2026"
     },
     {
       "horse_id": "2017104937",
@@ -41851,8 +41851,8 @@
     {
       "horse_id": "2017104961",
       "horse_name": "タイセイモンストル",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Taisei Monstre",
+      "year": "2026"
     },
     {
       "horse_id": "2017104962",
@@ -41905,8 +41905,8 @@
     {
       "horse_id": "2017104972",
       "horse_name": "レッドエランドール",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Red Elan d'Or",
+      "year": "2026"
     },
     {
       "horse_id": "2017104973",
@@ -41977,8 +41977,8 @@
     {
       "horse_id": "2017104985",
       "horse_name": "ナリタザクラ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Narita Zakura",
+      "year": "2026"
     },
     {
       "horse_id": "2017104986",
@@ -42175,8 +42175,8 @@
     {
       "horse_id": "2017105027",
       "horse_name": "エターナリー",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Eternally",
+      "year": "2026"
     },
     {
       "horse_id": "2017105028",
@@ -42379,8 +42379,8 @@
     {
       "horse_id": "2017105070",
       "horse_name": "チャーミングアクト",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Charming Act",
+      "year": "2026"
     },
     {
       "horse_id": "2017105072",
@@ -42397,8 +42397,8 @@
     {
       "horse_id": "2017105074",
       "horse_name": "クロミナンス",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Chrominance",
+      "year": "2026"
     },
     {
       "horse_id": "2017105075",
@@ -42529,8 +42529,8 @@
     {
       "horse_id": "2017105097",
       "horse_name": "グランデマーレ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Grande Mare",
+      "year": "2026"
     },
     {
       "horse_id": "2017105099",
@@ -42589,8 +42589,8 @@
     {
       "horse_id": "2017105109",
       "horse_name": "フライライクバード",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Fly Like Bird",
+      "year": "2026"
     },
     {
       "horse_id": "2017105110",
@@ -42637,8 +42637,8 @@
     {
       "horse_id": "2017105117",
       "horse_name": "クロスザルビコン",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Cross the Rubicon",
+      "year": "2026"
     },
     {
       "horse_id": "2017105118",
@@ -42733,8 +42733,8 @@
     {
       "horse_id": "2017105135",
       "horse_name": "アコルドエール",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Accordeur",
+      "year": "2026"
     },
     {
       "horse_id": "2017105136",
@@ -42937,8 +42937,8 @@
     {
       "horse_id": "2017105179",
       "horse_name": "アウサンガテ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Ausangate",
+      "year": "2026"
     },
     {
       "horse_id": "2017105180",
@@ -42949,8 +42949,8 @@
     {
       "horse_id": "2017105181",
       "horse_name": "サクセッション",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Succession",
+      "year": "2026"
     },
     {
       "horse_id": "2017105182",
@@ -43015,8 +43015,8 @@
     {
       "horse_id": "2017105194",
       "horse_name": "ラインベック",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Rhinebeck",
+      "year": "2026"
     },
     {
       "horse_id": "2017105195",
@@ -43117,8 +43117,8 @@
     {
       "horse_id": "2017105214",
       "horse_name": "アドマイヤビルゴ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Admire Virgo",
+      "year": "2026"
     },
     {
       "horse_id": "2017105215",
@@ -43153,8 +43153,8 @@
     {
       "horse_id": "2017105224",
       "horse_name": "キングダムウイナー",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Kingdom Winner",
+      "year": "2026"
     },
     {
       "horse_id": "2017105225",
@@ -43261,8 +43261,8 @@
     {
       "horse_id": "2017105248",
       "horse_name": "オールザワールド",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "All the World",
+      "year": "2026"
     },
     {
       "horse_id": "2017105249",
@@ -43285,8 +43285,8 @@
     {
       "horse_id": "2017105253",
       "horse_name": "コロンドール",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Colombe d'Or",
+      "year": "2026"
     },
     {
       "horse_id": "2017105254",
@@ -43309,8 +43309,8 @@
     {
       "horse_id": "2017105257",
       "horse_name": "トライフォーリアル",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Try for Real",
+      "year": "2026"
     },
     {
       "horse_id": "2017105259",
@@ -43369,8 +43369,8 @@
     {
       "horse_id": "2017105269",
       "horse_name": "ベレヌス",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Belenus",
+      "year": "2026"
     },
     {
       "horse_id": "2017105271",
@@ -43381,8 +43381,8 @@
     {
       "horse_id": "2017105272",
       "horse_name": "リレーションシップ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Relationship",
+      "year": "2026"
     },
     {
       "horse_id": "2017105273",
@@ -43423,8 +43423,8 @@
     {
       "horse_id": "2017105279",
       "horse_name": "アドマイヤルプス",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Admire Lupus",
+      "year": "2026"
     },
     {
       "horse_id": "2017105280",
@@ -43441,8 +43441,8 @@
     {
       "horse_id": "2017105282",
       "horse_name": "サイクロトロン",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Cyclotron",
+      "year": "2026"
     },
     {
       "horse_id": "2017105283",
@@ -43453,8 +43453,8 @@
     {
       "horse_id": "2017105285",
       "horse_name": "ダノンレガーロ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Danon Regalo",
+      "year": "2026"
     },
     {
       "horse_id": "2017105286",
@@ -43519,8 +43519,8 @@
     {
       "horse_id": "2017105298",
       "horse_name": "ストーンリッジ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Stone Ridge",
+      "year": "2026"
     },
     {
       "horse_id": "2017105300",
@@ -43627,8 +43627,8 @@
     {
       "horse_id": "2017105321",
       "horse_name": "アステロイドベルト",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Asteroid Belt",
+      "year": "2026"
     },
     {
       "horse_id": "2017105322",
@@ -43639,8 +43639,8 @@
     {
       "horse_id": "2017105323",
       "horse_name": "サトノヴィーナス",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Satono Venus",
+      "year": "2026"
     },
     {
       "horse_id": "2017105324",
@@ -43729,8 +43729,8 @@
     {
       "horse_id": "2017105339",
       "horse_name": "サトノシャローム",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Satono Shalom",
+      "year": "2026"
     },
     {
       "horse_id": "2017105340",
@@ -43837,8 +43837,8 @@
     {
       "horse_id": "2017105358",
       "horse_name": "ソウルユニバンス",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Soul Yunibansu",
+      "year": "2026"
     },
     {
       "horse_id": "2017105359",
@@ -43915,20 +43915,20 @@
     {
       "horse_id": "2017105374",
       "horse_name": "フィリオアレグロ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Figlio Allegro",
+      "year": "2026"
     },
     {
       "horse_id": "2017105375",
       "horse_name": "メリディアンローグ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Meridian Rogue",
+      "year": "2026"
     },
     {
       "horse_id": "2017105376",
       "horse_name": "ポタジェ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Potager",
+      "year": "2026"
     },
     {
       "horse_id": "2017105377",
@@ -43945,8 +43945,8 @@
     {
       "horse_id": "2017105379",
       "horse_name": "ディアスティマ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Diastima",
+      "year": "2026"
     },
     {
       "horse_id": "2017105380",
@@ -44017,8 +44017,8 @@
     {
       "horse_id": "2017105392",
       "horse_name": "スパークインザアイ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Spark in the Eye",
+      "year": "2026"
     },
     {
       "horse_id": "2017105393",
@@ -44077,8 +44077,8 @@
     {
       "horse_id": "2017105403",
       "horse_name": "グランスピード",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Grand Speed",
+      "year": "2026"
     },
     {
       "horse_id": "2017105404",
@@ -44107,8 +44107,8 @@
     {
       "horse_id": "2017105408",
       "horse_name": "ダノングロワール",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Danon Gloire",
+      "year": "2026"
     },
     {
       "horse_id": "2017105409",
@@ -44233,8 +44233,8 @@
     {
       "horse_id": "2017105433",
       "horse_name": "ヤウガウ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Yaugau",
+      "year": "2026"
     },
     {
       "horse_id": "2017105434",
@@ -44269,8 +44269,8 @@
     {
       "horse_id": "2017105439",
       "horse_name": "キングサーガ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "King Saga",
+      "year": "2026"
     },
     {
       "horse_id": "2017105441",
@@ -44371,8 +44371,8 @@
     {
       "horse_id": "2017105460",
       "horse_name": "ブラックマジック",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Black Magic",
+      "year": "2026"
     },
     {
       "horse_id": "2017105461",
@@ -44461,8 +44461,8 @@
     {
       "horse_id": "2017105477",
       "horse_name": "アイアンバローズ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Iron Barows",
+      "year": "2026"
     },
     {
       "horse_id": "2017105478",
@@ -44605,8 +44605,8 @@
     {
       "horse_id": "2017105506",
       "horse_name": "トラモント",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Tramonto",
+      "year": "2026"
     },
     {
       "horse_id": "2017105508",
@@ -44647,8 +44647,8 @@
     {
       "horse_id": "2017105517",
       "horse_name": "ルリアン",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Le Lien",
+      "year": "2026"
     },
     {
       "horse_id": "2017105518",
@@ -44677,8 +44677,8 @@
     {
       "horse_id": "2017105525",
       "horse_name": "アリストテレス",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Aristoteles",
+      "year": "2026"
     },
     {
       "horse_id": "2017105527",
@@ -44827,8 +44827,8 @@
     {
       "horse_id": "2017105558",
       "horse_name": "ピオノノ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Pionono",
+      "year": "2026"
     },
     {
       "horse_id": "2017105559",
@@ -44869,8 +44869,8 @@
     {
       "horse_id": "2017105567",
       "horse_name": "ヴェルトライゼンデ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Weltreisende",
+      "year": "2026"
     },
     {
       "horse_id": "2017105568",
@@ -44911,8 +44911,8 @@
     {
       "horse_id": "2017105574",
       "horse_name": "チュウワノキセキ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Chuwano Kiseki",
+      "year": "2026"
     },
     {
       "horse_id": "2017105576",
@@ -44971,14 +44971,14 @@
     {
       "horse_id": "2017105587",
       "horse_name": "ミッキーメテオ",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Mikki Meteo",
+      "year": "2026"
     },
     {
       "horse_id": "2017105588",
       "horse_name": "モーソンピーク",
-      "name_en": "",
-      "year": "2017"
+      "name_en": "Mawson Peak",
+      "year": "2026"
     },
     {
       "horse_id": "2017105589",
@@ -224355,6 +224355,12 @@
       "horse_name": "アイファーラピッド",
       "name_en": "",
       "year": "2024"
+    },
+    {
+      "horse_id": "2099990001",
+      "horse_name": "テスト馬アルファ",
+      "name_en": "Test Alpha",
+      "year": "2026"
     }
   ]
 }

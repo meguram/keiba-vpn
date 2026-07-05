@@ -101,8 +101,8 @@ PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin
 # ── ログローテーション ─────────── UTC: 19:30 / JST: 04:30 ──────── # KEIBA-VPN-ALL
 30 19 * * * TZ=Asia/Tokyo bash ${ROTATE_LOGS} >> ${LOG_DIR}/rotate_logs.log 2>&1 # KEIBA-VPN-WATCHDOG
 
-# ── git pull（1 時間ごと） ─────── UTC: 毎時0分 / JST: 毎時0分 ─── # KEIBA-VPN-ALL
-0 * * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GIT_PULL} # KEIBA_GIT_PULL
+# ── git pull（10 分ごと） ──────── UTC: */10 / JST: */10 ─────────── # KEIBA-VPN-ALL
+*/10 * * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GIT_PULL} # KEIBA_GIT_PULL
 
 # ── SLA 0: 毎日 レース一覧 朝取り ─ UTC: 22:00 / JST: 07:00 ──── # KEIBA-VPN-ALL
 0 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} daily-race-lists logs/daily_race_lists_am.log # KEIBA-VPN-ALL
@@ -213,7 +213,7 @@ cmd_install() {
     echo "  18:00       金曜:   horse-name-index"
     echo "  01:00–09:00 深夜:   backfill (年度別)"
     echo "  */3         常時:   watchdog (API + MLflow)"
-    echo "  毎時0分     常時:   git pull（リポジトリ最新化）"
+    echo "  */10        常時:   git pull（リポジトリ最新化）"
     echo ""
     echo "ログディレクトリ: ${LOG_DIR}/"
 }

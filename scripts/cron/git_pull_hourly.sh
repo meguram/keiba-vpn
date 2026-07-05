@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# リポジトリを 1 時間ごとに git pull で最新化（cron 用）
+# リポジトリを 10 分ごとに git pull で最新化（cron 用）
 #
 # Usage:
 #   bash scripts/cron/git_pull_hourly.sh

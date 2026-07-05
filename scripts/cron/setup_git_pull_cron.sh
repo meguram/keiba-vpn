@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# git pull 1 時間ごと cron セットアップ
+# git pull 10 分ごと cron セットアップ
 #
 # Usage:
 #   bash scripts/cron/setup_git_pull_cron.sh install
@@ -20,8 +20,8 @@ mkdir -p "$LOG_DIR"
 
 generate_entry() {
   cat <<EOF
-# ── git pull（1 時間ごと） ─────────────────────────────────────── ${CRON_TAG}
-0 * * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GIT_PULL} ${CRON_TAG}
+# ── git pull（10 分ごと） ──────────────────────────────────────── ${CRON_TAG}
+*/10 * * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GIT_PULL} ${CRON_TAG}
 EOF
 }
 
@@ -37,7 +37,7 @@ case "${1:-show}" in
       echo ""
       generate_entry
     } | crontab -
-    echo "✅ git pull 1 時間ごと cron を登録しました"
+    echo "✅ git pull 10 分ごと cron を登録しました"
     crontab -l | grep "$CRON_TAG" || true
     ;;
   remove)
