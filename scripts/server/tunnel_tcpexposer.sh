@@ -11,8 +11,8 @@
 #   ./scripts/server/tunnel_tcpexposer.sh stop-all
 #
 # プロファイル（省略時 dev）:
-#   dev  meguai-dev.tcpexposer.com  → localhost:3001  （モック UI）
-#   stg  meguai-stg.tcpexposer.com  → localhost:3000  （本番相当 Next.js）
+#   dev  meguai-dev.tcpexposer.com  → localhost:3000  （モック UI）
+#   stg  meguai-stg.tcpexposer.com  → localhost:3001  （本番相当 Next.js）
 #
 # 環境変数（任意）:
 #   KEIBA_TCPEXPOSER_USER=megukeiba
@@ -129,6 +129,7 @@ stop_tunnel() {
     fi
     rm -f "$PID_FILE"
   fi
+  pkill -f "ssh.*-R ${DOMAIN}:.*@tcpexposer.com" 2>/dev/null || true
   pkill -f "ssh.*-R ${DOMAIN}:.*localhost:${LOCAL_PORT}.*@tcpexposer.com" 2>/dev/null || true
 }
 
@@ -212,7 +213,11 @@ run_autostart() {
     pid=$(cat "$PID_FILE" 2>/dev/null || true)
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
       log "autostart スキップ (既に稼働 PID=${pid})"
-      return 0
+      if pgrep -f "ssh.*-R ${DOMAIN}:.*localhost:${LOCAL_PORT}.*@tcpexposer.com" >/dev/null 2>&1; then
+        return 0
+      fi
+      log "警告: ループは稼働中だが SSH が :${LOCAL_PORT} に未接続 — 再起動"
+      stop_tunnel
     fi
   fi
 

@@ -9,7 +9,7 @@
 リポジトリルートで `./service_start` を実行すると、ローカル開発向けの HTTP サービスをまとめて起動します（実体: `scripts/server/service_start.sh`）。**既定は `--env dev`**（FastAPI ホットリロード・Flask debug・`next dev`）。
 
 ```bash
-# パターン A（既定）: dev — Next.js モックのみ :3001（API 不要）
+# パターン A（既定）: dev — Next.js モックのみ :3000（API 不要）
 ./service_start
 ./service_start --env dev          # 上記と同じ
 
@@ -31,28 +31,28 @@
 
 | プロファイル | 用途 | FastAPI | Flask | Next.js | MLflow（ローカル） | tcpexposer |
 |---|---|---|---|---|---|---|
-| `dev`（既定） | モック UI のみ | — | — | mock `:3001` | オフ | `meguai-dev` → :3001 |
-| `dev --full` | ホットリロード開発 | reload | `:5100` debug | `npm run dev` | オフ | `meguai-dev` → :3001 |
-| `stg` | 本 PC・本番相当 | `--prod` | `:5000` | `dev` `:3000` 実 API | 既定オフ | `meguai-stg` → :3000 |
-| `prod` | VPS 想定（stg クローン） | `--prod` | `:5000` | `build+start` `:3000` | 既定オフ | （将来） |
+| `dev`（既定） | モック UI のみ | — | — | mock `:3000` | オフ | `meguai-dev` → :3000 |
+| `dev --full` | ホットリロード開発 | reload | `:5100` debug | `npm run dev` | オフ | `meguai-dev` → :3000 |
+| `stg` | 本 PC・本番相当 | `--prod` | `:5000` | `dev` `:3001` 実 API | 既定オフ | `meguai-stg` → :3001 |
+| `prod` | VPS 想定（stg クローン） | `--prod` | `:5000` | `build+start` `:3001` | 既定オフ | （将来） |
 
 ポート・URL の上書き: 環境変数、または `scripts/server/service_start.local.env`（`.example` をコピー）。
 
 | 起動後 URL（dev モック） | サービス |
 |---|---|
-| `http://127.0.0.1:3001` | Next.js モック（`NEXT_PUBLIC_MOCK=true`） |
+| `http://127.0.0.1:3000` | Next.js モック（`NEXT_PUBLIC_MOCK=true`） |
 | `https://meguai-dev.tcpexposer.com/` | 上記の外部公開 |
 
 | 起動後 URL（stg / prod） | サービス |
 |---|---|
 | `http://127.0.0.1:8000` | FastAPI（レガシー UI / API） |
 | `http://127.0.0.1:5000` | Flask `/api/v1` |
-| `http://127.0.0.1:3000` | Next.js（`KEIBA_API_URL=http://127.0.0.1:5000`） |
-| `https://meguai-stg.tcpexposer.com/` | stg 外部公開（Next.js :3000） |
+| `http://127.0.0.1:3001` | Next.js（`KEIBA_API_URL=http://127.0.0.1:5000`） |
+| `https://meguai-stg.tcpexposer.com/` | stg 外部公開（Next.js :3001） |
 
 PostgreSQL（`:5432`）と Redis（`:6379`）はスクリプト対象外です。未起動の場合は警告を出します。ログは `logs/` に出力されます。
 
-**tcpexposer トンネル**: ワークスペース起動時に `tunnel_tcpexposer.sh autostart-all` で **dev**（`meguai-dev` → `:3001`）と **stg**（`meguai-stg` → `:3000`）を自動接続。無効化: `KEIBA_AUTO_TCPEXPOSER=0`。手動: `./scripts/server/tunnel_tcpexposer.sh stg check` / `dev stop` / `stg background`。
+**tcpexposer トンネル**: ワークスペース起動時に `tunnel_tcpexposer.sh autostart-all` で **dev**（`meguai-dev` → `:3000`）と **stg**（`meguai-stg` → `:3001`）を自動接続。無効化: `KEIBA_AUTO_TCPEXPOSER=0`。手動: `./scripts/server/tunnel_tcpexposer.sh stg check` / `dev stop` / `stg background`。
 
 **環境の役割**: **dev** = モック UI のみ。**stg** = 本 PC 上の本番相当（実 API・GCS・DB）。**prod**（将来）= stg 構成を VPS へクローン。
 
@@ -69,14 +69,14 @@ curl -s http://127.0.0.1:8000/api/health | python3 -m json.tool   # FastAPI（�
 curl -s http://127.0.0.1:5000/api/v1/health | python3 -m json.tool # Flask（仕様準拠 /api/v1）
 
 # リッスン中ポート
-ss -tlnp | grep -E ':(3000|5000|5001|5010|5432|6379|8000)\s'
+ss -tlnp | grep -E ':(3000|3001|5000|5001|5010|5432|6379|8000)\s'
 ```
 
 | 確認項目 | 期待 |
 |---|---|
 | FastAPI 稼働 | `GET http://127.0.0.1:8000/api/health` → HTTP 200 |
 | Flask 稼働 | `GET http://127.0.0.1:5000/api/v1/health` → `{"status":"ok",...}` |
-| Next.js 稼働 | ブラウザで `http://127.0.0.1:3000/` が表示される |
+| Next.js 稼働 | ブラウザで `http://127.0.0.1:3001/`（stg）または `:3000`（dev モック）が表示される |
 | MLflow Tracking | `GET http://127.0.0.1:5000/health` または experiments API が 200 |
 | PostgreSQL | `DATABASE_URL` で接続可能 |
 | Redis | `REDIS_URL` で PING 応答 |
@@ -90,7 +90,8 @@ DEC-013 により **Flask `/api/v1`（:5000）が仕様上の正**です。
 
 ```
 ブラウザ
-  ├─ http://127.0.0.1:3000     Next.js（frontend）
+  ├─ http://127.0.0.1:3001     Next.js stg（frontend）
+  ├─ http://127.0.0.1:3000     Next.js dev モック
   │     └─ /api/v1/* ─rewrite─► Flask :5000（KEIBA_API_URL）
   │
   ├─ http://127.0.0.1:8000     FastAPI（UI + レガシー REST）
@@ -186,7 +187,7 @@ stg 表示: `.env` に `KEIBA_ENV=stg` → レスポンスヘッダ `X-Keiba-Env
 
 | 項目 | 値 |
 |---|---|
-| **URL（ローカル）** | `http://127.0.0.1:3000` |
+| **URL（ローカル）** | `http://127.0.0.1:3001`（stg） / `http://127.0.0.1:3000`（dev モック） |
 | **起動** | `cd frontend && npm run dev` |
 | **本番ビルド** | `cd frontend && npm run build && npm start` |
 | **API プロキシ** | `next.config.js` — `/api/v1/*` → `KEIBA_API_URL`（**既定 `http://127.0.0.1:5000`**） |

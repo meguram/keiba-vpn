@@ -1,8 +1,8 @@
 # shellcheck shell=bash
 # service_start.sh 用 — 実行プロファイル（dev / stg / prod）
 #
-# dev … モック UI のみ（:3001）。実 API は不要。
-# stg … 本 PC 上の本番相当（Flask :5000 / FastAPI :8000 / Next :3000 + KEIBA_ENV=stg）
+# dev … モック UI のみ（:3000）。実 API は不要。
+# stg … 本 PC 上の本番相当（Flask :5000 / FastAPI :8000 / Next :3001 + KEIBA_ENV=stg）
 # prod … stg と同構成（KEIBA_ENV=prod 想定）。将来 VPS へ stg をクローン。
 #
 # 環境変数で上書き可能（例: FLASK_PORT=5200 ./service_start --env dev --full）
@@ -24,14 +24,14 @@ apply_service_profile() {
 
   case "$profile" in
     dev)
-      # UI モック確認専用（tcpexposer: meguai-dev → :3001）
+      # UI モック確認専用（tcpexposer: meguai-dev → :3000）
       FASTAPI_MODE=dev
       FLASK_DEBUG=1
       FRONTEND_NPM_SCRIPT=dev
       FRONTEND_USE_MOCK=true
       : "${PORT:=8000}"
       : "${FLASK_PORT:=5100}"
-      FRONTEND_PORT="${FRONTEND_PORT:-3001}"
+      FRONTEND_PORT="${FRONTEND_PORT:-3000}"
       : "${NODE_ENV:=development}"
       TCPEXPOSER_PROFILE=dev
       START_MLFLOW_LOCAL=false
@@ -45,7 +45,7 @@ apply_service_profile() {
       FRONTEND_USE_MOCK=false
       : "${PORT:=8000}"
       : "${FLASK_PORT:=5000}"
-      FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+      FRONTEND_PORT="${FRONTEND_PORT:-3001}"
       : "${NODE_ENV:=development}"
       START_MLFLOW_LOCAL="${START_MLFLOW_LOCAL:-false}"
       PROFILE_EXPORT_KEYS=(KEIBA_ENV KEIBA_DEPLOYMENT_LABEL)
@@ -60,7 +60,7 @@ apply_service_profile() {
       FRONTEND_USE_MOCK=false
       : "${PORT:=8000}"
       : "${FLASK_PORT:=5000}"
-      FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+      FRONTEND_PORT="${FRONTEND_PORT:-3001}"
       : "${NODE_ENV:=production}"
       START_MLFLOW_LOCAL="${START_MLFLOW_LOCAL:-false}"
       TCPEXPOSER_PROFILE=prod

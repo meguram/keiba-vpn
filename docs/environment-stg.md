@@ -31,13 +31,13 @@ cd keiba-vpn
 
 | 項目 | stg（本 PC） |
 |------|----------------|
-| Next.js | `:3000`（`npm run build && start`、実 API） |
+| Next.js | `:3001`（`npm run dev`、実 API） |
 | Flask | `:5000` |
 | FastAPI | `:8000`（`--prod`） |
 | 公開 URL | `https://meguai-stg.tcpexposer.com/` |
 | 環境 | `KEIBA_ENV=stg`（STG バッジ・`X-Keiba-Env: stg`） |
 
-**dev** との違い: dev は `./service_start`（モック UI `:3001` のみ、`meguai-dev`）。stg は GCS・PostgreSQL・Redis を使う本番相当構成です。
+**dev** との違い: dev は `./service_start`（モック UI `:3000` のみ、`meguai-dev`）。stg は GCS・PostgreSQL・Redis を使う本番相当構成です。
 
 ## 一括検証（推奨）
 

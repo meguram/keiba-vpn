@@ -6,6 +6,10 @@ import os
 
 from flask import Flask, jsonify, request
 
+from src.utils.project_env import load_project_dotenv
+
+load_project_dotenv()
+
 from src.api.auth import COOKIE_NAME, _verify_token
 from src.api.v1.services import (
     DEFAULT_MODEL_VERSION,

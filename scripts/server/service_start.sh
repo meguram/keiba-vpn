@@ -2,7 +2,7 @@
 # keiba-vpn ローカル開発 — HTTP サービス一括起動
 #
 # Usage:
-#   ./service_start                      # 既定: --env dev（Next.js モック UI :3001）
+#   ./service_start                      # 既定: --env dev（Next.js モック UI :3000）
 #   ./service_start --env dev            # 上記と同じ（モックのみ）
 #   ./service_start --env dev --full     # ホットリロード開発（FastAPI + Flask + 実 API）
 #   ./service_start --env stg            # 本番相当 + KEIBA_ENV=stg + tcpexposer stg
@@ -14,7 +14,7 @@
 #   ./service_start --help
 #
 # 上書き: 環境変数 / scripts/server/service_start.local.env（任意）
-# ポート: dev モック :3001 / stg・prod Next.js :3000 / stg・prod Flask :5000 / dev Flask :5100
+# ポート: dev モック :3000 / stg・prod Next.js :3001 / stg・prod Flask :5000 / dev Flask :5100
 
 set -euo pipefail
 
@@ -515,6 +515,8 @@ mode_minimal() {
 mode_mock() {
   echo "[service_start] パターン C — Next.js モックのみ (${SERVICE_PROFILE})"
   describe_profile
+  # ログイン (/api/v1/auth/*) は Flask 経由のため、モック UI でも dev Flask を起動する
+  start_flask
   start_frontend true
   record_profile
   echo ""
@@ -532,9 +534,9 @@ print_help() {
   sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
   echo ""
   echo "プロファイル:"
-  echo "  dev   モック UI のみ (:3001) → meguai-dev.tcpexposer.com"
+  echo "  dev   モック UI のみ (:3000) → meguai-dev.tcpexposer.com"
   echo "  dev --full  FastAPI reload / Flask debug / next dev（実 API 開発）"
-  echo "  stg   本番相当 (:3000 Flask :5000) + KEIBA_ENV=stg → meguai-stg.tcpexposer.com"
+  echo "  stg   本番相当 (:3001 Flask :5000) + KEIBA_ENV=stg → meguai-stg.tcpexposer.com"
   echo "  prod  stg と同構成（VPS デプロイ想定）"
 }
 
