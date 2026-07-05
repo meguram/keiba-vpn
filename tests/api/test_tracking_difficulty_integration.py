@@ -19,8 +19,8 @@ def _get(path: str) -> dict:
 
 
 @unittest.skipUnless(
-    os.environ.get("KEIBA_RUN_LIVE_API_TESTS", "1") == "1",
-    "KEIBA_RUN_LIVE_API_TESTS=0 でスキップ",
+    os.environ.get("KEIBA_RUN_LIVE_API_TESTS", "0") == "1",
+    "KEIBA_RUN_LIVE_API_TESTS=1 でのみ実行（ライブサーバ必須）",
 )
 class TestTrackingDifficultyLiveApi(unittest.TestCase):
     def test_page_loads(self):
