@@ -17,7 +17,11 @@ from src.pipeline.recovery import calculate_recovery_rate, is_value_bet
 
 class TestDataPaths(unittest.TestCase):
     def setUp(self):
+        self._orig_gcs_bucket = os.environ.get("GCS_BUCKET", "")
         os.environ["GCS_BUCKET"] = "test-bucket"
+
+    def tearDown(self):
+        os.environ["GCS_BUCKET"] = self._orig_gcs_bucket
 
     def test_race_path(self):
         path = data_paths.race_path("race_shutuba", "202506010811")
