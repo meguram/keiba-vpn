@@ -34,10 +34,13 @@ def create_app() -> Flask:
 
     @app.get("/api/v1/races")
     def api_races():
-        init_engine()
         date_str = request.args.get("date")
-        with get_session() as session:
-            return jsonify({"races": list_races(session, date_str)})
+        try:
+            init_engine()
+            with get_session() as session:
+                return jsonify({"races": list_races(session, date_str)})
+        except Exception as exc:
+            return jsonify({"races": [], "error": "database unavailable", "detail": str(exc)}), 503
 
     @app.get("/api/v1/races/<race_id>")
     def api_race_detail(race_id: str):

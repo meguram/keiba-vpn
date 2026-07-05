@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# リポジトリを 10 分ごとに git pull で最新化（cron 用）
+# git pull 手動実行用スクリプト（UI ボタン / API から呼び出し）
 #
 # Usage:
 #   bash scripts/cron/git_pull_hourly.sh
@@ -11,8 +11,8 @@
 #   KEIBA_GIT_PULL_REMOTE  リモート名（既定 origin）
 #   KEIBA_GIT_PULL_ON_DIRTY  1 なら未コミット変更があっても pull を試行（既定 0 = スキップ）
 #
-# cron 登録: bash scripts/cron/setup_git_pull_cron.sh install
-#            または setup_all_cron.sh install
+# 手動実行: Next.js UI（開発者ログイン後）→ POST /api/v1/admin/git-pull
+# 旧 cron: bash scripts/cron/setup_git_pull_cron.sh install（非推奨・停止済み）
 # =============================================================================
 
 set -euo pipefail

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# git pull 10 分ごと cron セットアップ
+# git pull 手動実行用 cron セットアップ（既定は未登録・UI ボタンを使用）
 #
 # Usage:
 #   bash scripts/cron/setup_git_pull_cron.sh install
@@ -37,7 +37,7 @@ case "${1:-show}" in
       echo ""
       generate_entry
     } | crontab -
-    echo "✅ git pull 10 分ごと cron を登録しました"
+    echo "✅ git pull cron を登録しました（手動運用では remove 推奨）"
     crontab -l | grep "$CRON_TAG" || true
     ;;
   remove)

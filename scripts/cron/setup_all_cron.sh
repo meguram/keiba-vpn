@@ -39,14 +39,12 @@ RUNNER="${PROJECT_DIR}/scripts/cron/run_auto_scrape_logged.sh"
 WATCHDOG="${PROJECT_DIR}/scripts/server/server_watchdog.sh"
 UPDATE_JT="${PROJECT_DIR}/scripts/cron/update_jockey_trainer_stats.sh"
 ROTATE_LOGS="${PROJECT_DIR}/scripts/cron/rotate_logs.sh"
-GIT_PULL="${PROJECT_DIR}/scripts/cron/git_pull_hourly.sh"
 
 mkdir -p "$LOG_DIR"
 chmod +x "$RUNNER"     2>/dev/null || true
 chmod +x "$WATCHDOG"   2>/dev/null || true
 chmod +x "$UPDATE_JT"  2>/dev/null || true
 chmod +x "$ROTATE_LOGS" 2>/dev/null || true
-chmod +x "$GIT_PULL"   2>/dev/null || true
 
 # -------------------------------------------------------------------
 # 削除対象タグ (全 keiba-vpn cron エントリをまとめて除去)
@@ -100,9 +98,6 @@ PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin
 
 # ── ログローテーション ─────────── UTC: 19:30 / JST: 04:30 ──────── # KEIBA-VPN-ALL
 30 19 * * * TZ=Asia/Tokyo bash ${ROTATE_LOGS} >> ${LOG_DIR}/rotate_logs.log 2>&1 # KEIBA-VPN-WATCHDOG
-
-# ── git pull（10 分ごと） ──────── UTC: */10 / JST: */10 ─────────── # KEIBA-VPN-ALL
-*/10 * * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GIT_PULL} # KEIBA_GIT_PULL
 
 # ── SLA 0: 毎日 レース一覧 朝取り ─ UTC: 22:00 / JST: 07:00 ──── # KEIBA-VPN-ALL
 0 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} daily-race-lists logs/daily_race_lists_am.log # KEIBA-VPN-ALL
@@ -213,7 +208,7 @@ cmd_install() {
     echo "  18:00       金曜:   horse-name-index"
     echo "  01:00–09:00 深夜:   backfill (年度別)"
     echo "  */3         常時:   watchdog (API + MLflow)"
-    echo "  */10        常時:   git pull（リポジトリ最新化）"
+    echo "  git pull:    dev/stg UI（開発者ログイン後）→ POST /api/v1/admin/git-pull"
     echo ""
     echo "ログディレクトリ: ${LOG_DIR}/"
 }
@@ -339,8 +334,8 @@ assert now.tzinfo is not None
         "bash $0 show | grep -q 'backfill'"
     run_test "watchdog エントリが含まれる" \
         "bash $0 show | grep -q 'server_watchdog'"
-    run_test "git pull エントリが含まれる" \
-        "bash $0 show | grep -q 'git_pull_hourly'"
+    run_test "git pull cron が含まれない" \
+        "! bash $0 show | grep -q 'git_pull_hourly'"
 
     echo ""
     echo "============================================================"

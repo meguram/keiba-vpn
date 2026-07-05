@@ -59,7 +59,18 @@ def betting_optimize():
 
 @bp.get("/auth/status")
 def auth_status():
-    return jsonify({"logged_in": is_logged_in()})
+    logged = is_logged_in()
+    return jsonify({"logged_in": logged, "is_developer": logged})
+
+
+@bp.post("/admin/git-pull")
+@require_login
+def admin_git_pull():
+    from src.api.git_pull_runner import run_git_pull
+
+    result = run_git_pull()
+    code = 200 if result.get("status") in ("ok", "updated", "up_to_date", "skipped") else 500
+    return jsonify(result), code
 
 
 @bp.post("/auth/login")

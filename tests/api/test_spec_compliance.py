@@ -111,6 +111,45 @@ class TestFlaskApi(unittest.TestCase):
         self.assertEqual(body["race_id"], "202506010811")
         self.assertTrue(body["horses"][0]["is_value_bet"])
 
+    def test_auth_status_logged_out(self):
+        resp = self.client.get("/api/v1/auth/status")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.get_json()
+        self.assertFalse(body["logged_in"])
+        self.assertFalse(body["is_developer"])
+
+    def test_git_pull_requires_login(self):
+        resp = self.client.post("/api/v1/admin/git-pull")
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(resp.get_json()["error"], "login required")
+
+    @patch("src.api.git_pull_runner.run_git_pull")
+    def test_git_pull_with_login(self, mock_pull):
+        from src.api.auth import COOKIE_NAME, _make_token
+
+        mock_pull.return_value = {
+            "status": "up_to_date",
+            "message": "ok (already up to date)",
+            "before": "abc1234",
+            "after": "abc1234",
+            "exit_code": 0,
+        }
+        token = _make_token()
+        self.client.set_cookie(COOKIE_NAME, token)
+        resp = self.client.post("/api/v1/admin/git-pull")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.get_json()
+        self.assertEqual(body["status"], "up_to_date")
+        mock_pull.assert_called_once()
+
+    @patch("src.api.flask_app.init_engine", side_effect=OSError("connection refused"))
+    def test_races_db_unavailable_returns_503(self, _mock_init):
+        resp = self.client.get("/api/v1/races")
+        self.assertEqual(resp.status_code, 503)
+        body = resp.get_json()
+        self.assertEqual(body["races"], [])
+        self.assertEqual(body["error"], "database unavailable")
+
 
 if __name__ == "__main__":
     unittest.main()

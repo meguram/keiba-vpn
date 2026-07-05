@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { DevToolbar } from "@/components/DevToolbar";
 
 const groups = [
   { label: "Home", href: "/", color: "#c8d6e5" },
@@ -13,6 +15,15 @@ const groups = [
 
 export function Nav() {
   const path = usePathname();
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/v1/auth/status", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { logged_in: false }))
+      .then((d) => setLoggedIn(!!d.logged_in))
+      .catch(() => setLoggedIn(false));
+  }, [path]);
+
   return (
     <nav className="sticky top-0 z-50 flex h-11 items-center gap-4 border-b px-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <Link href="/" className="font-bold text-white">keiba-vpn</Link>
@@ -21,7 +32,12 @@ export function Nav() {
           {g.label}
         </Link>
       ))}
-      <Link href="/login" className="ml-auto text-sm" style={{ color: "var(--text-dim)" }}>ログイン</Link>
+      <DevToolbar loggedIn={loggedIn} />
+      {!loggedIn && (
+        <Link href="/login" className="ml-auto text-sm" style={{ color: "var(--text-dim)" }}>
+          ログイン
+        </Link>
+      )}
     </nav>
   );
 }

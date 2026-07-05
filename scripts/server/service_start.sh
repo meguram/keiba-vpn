@@ -111,6 +111,29 @@ frontend_node_modules_ok() {
   [[ "$size" -gt 20000 ]]
 }
 
+frontend_dev_cache_needs_reset() {
+  local next_dir="$ROOT/frontend/.next"
+  [[ -d "$next_dir" ]] || return 1
+  # production ビルド残骸や不完全キャッシュで next dev が 500 になるのを防ぐ
+  if [[ -f "$next_dir/required-server-files.json" ]]; then
+    return 0
+  fi
+  if [[ -f "$next_dir/routes-manifest.json" ]] && [[ ! -d "$next_dir/cache" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+prepare_frontend_dev_cache() {
+  if [[ "${FRONTEND_NPM_SCRIPT:-dev}" != "dev" ]]; then
+    return 0
+  fi
+  if frontend_dev_cache_needs_reset; then
+    echo "[service_start] frontend/.next をリセット（dev 起動のため production/不完全キャッシュを削除）..."
+    rm -rf "$ROOT/frontend/.next"
+  fi
+}
+
 ensure_frontend_node_modules() {
   local frontend="$ROOT/frontend"
   local nm="$frontend/node_modules"
@@ -212,8 +235,15 @@ show_status() {
   if [[ "$code" != "200" ]]; then
     code="$(http_code "http://127.0.0.1:${MLFLOW_PORT:-5000}/api/2.0/mlflow/experiments/search?max_results=1")"
   fi
+  local flask_on_mlflow_port=false
+  if [[ "${FLASK_PORT:-5000}" == "${MLFLOW_PORT:-5000}" ]] && \
+     [[ "$(http_code "http://127.0.0.1:${FLASK_PORT}/api/v1/health")" == "200" ]]; then
+    flask_on_mlflow_port=true
+  fi
   if [[ "$code" == "200" ]]; then
     echo "  [MLflow]   ✅  :${MLFLOW_PORT:-5000}"
+  elif $flask_on_mlflow_port; then
+    echo "  [MLflow]   ⏭️  :${MLFLOW_PORT:-5000}  （Flask が使用中・MLflow ローカル未起動）"
   else
     echo "  [MLflow]   ❌  :${MLFLOW_PORT:-5000}  HTTP=${code}"
   fi
@@ -347,6 +377,7 @@ start_frontend() {
   fi
 
   ensure_frontend_node_modules || return 1
+  prepare_frontend_dev_cache
 
   if [[ "$FRONTEND_NPM_SCRIPT" == "start" ]]; then
     echo "[service_start] Next.js 本番ビルド (npm run build)..."
@@ -373,6 +404,9 @@ start_frontend() {
       unset NEXT_PUBLIC_MOCK
     fi
     export KEIBA_API_URL="$KEIBA_API_URL"
+    if [[ "$FRONTEND_NPM_SCRIPT" == "dev" ]]; then
+      export NODE_ENV=development
+    fi
     run_with_profile_env nohup npm run "$FRONTEND_NPM_SCRIPT" -- -p "$FRONTEND_PORT" >>"$log_file" 2>&1 &
     echo $! >"$FRONTEND_PID_FILE"
   )
@@ -549,7 +583,11 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --status|-s)
-      apply_service_profile "${SERVICE_PROFILE:-dev}" || exit 1
+      prof="${SERVICE_PROFILE:-dev}"
+      if [[ -f "$PROFILE_FILE" ]]; then
+        prof="$(awk '{print $1}' "$PROFILE_FILE")"
+      fi
+      apply_service_profile "$prof" || exit 1
       show_status
       exit 0
       ;;

@@ -46,7 +46,7 @@ apply_service_profile() {
       : "${PORT:=8000}"
       : "${FLASK_PORT:=5000}"
       FRONTEND_PORT="${FRONTEND_PORT:-3000}"
-      : "${NODE_ENV:=production}"
+      : "${NODE_ENV:=development}"
       START_MLFLOW_LOCAL="${START_MLFLOW_LOCAL:-false}"
       PROFILE_EXPORT_KEYS=(KEIBA_ENV KEIBA_DEPLOYMENT_LABEL)
       KEIBA_ENV=stg

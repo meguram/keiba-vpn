@@ -1,9 +1,15 @@
 import { USE_MOCK } from "@/lib/mock";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+/** ブラウザは同一オリジン（rewrite 経由）。SSR は Flask へ直接。 */
+function apiBase(): string {
+  if (typeof window !== "undefined") {
+    return process.env.NEXT_PUBLIC_API_URL || "";
+  }
+  return process.env.KEIBA_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
+}
 
 export async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${API_BASE}${path}`;
+  const url = `${apiBase()}${path}`;
   const res = await fetch(url, { ...init, cache: "no-store" });
   if (!res.ok) throw new Error(`${path}: ${res.status}`);
   return res.json() as Promise<T>;

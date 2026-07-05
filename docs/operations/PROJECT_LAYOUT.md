@@ -50,7 +50,7 @@ keiba-vpn/
 | パス | 用途 |
 |------|------|
 | `scripts/server/` | API 起動・`service_start.sh`・tcpexposer トンネル |
-| `scripts/cron/` | crontab 投入・定期 git pull・ログローテーション |
+| `scripts/cron/` | crontab 投入・git pull 手動 API・ログローテーション |
 | `scripts/*.sh` | 運用ラッパ（`auto_scrape.sh` 等） |
 
 Python CLI は **`src/scripts/`** に集約。旧 `scripts/*.py` は移行済み。
