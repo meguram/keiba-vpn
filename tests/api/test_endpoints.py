@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import unittest
+import unittest.mock
 
 # Auth を無効化 + GCS を空にしてローカル動作を強制
 os.environ.setdefault("REQUIRE_AUTH", "false")
@@ -778,13 +779,15 @@ class TestPostEndpointsInvalidBody(unittest.TestCase):
         # BUG: api_cushion_scrape() calls `_cushion_job.update(... started_at=time.time())`
         # but `time` is not imported in this module — the module uses `_time` alias.
         # Fix: replace `time.time()` with `_time.time()` at line 9464.
-        r = client.post("/api/cushion/scrape", json={})
+        with unittest.mock.patch("src.api.app._run_cushion_scrape"):
+            r = client.post("/api/cushion/scrape", json={})
         # 409 (already running) / 2xx / 401 は全部 OK
         self.assertNotEqual(r.status_code, 500)
 
     def test_cushion_scrape_years_wrong_type_no_500(self):
         # BUG: same `time` NameError as above triggers on any call to this endpoint.
-        r = client.post("/api/cushion/scrape", json={"years": "not-a-list"})
+        with unittest.mock.patch("src.api.app._run_cushion_scrape"):
+            r = client.post("/api/cushion/scrape", json={"years": "not-a-list"})
         self.assertNotEqual(r.status_code, 500)
 
 
