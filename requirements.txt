@@ -21,6 +21,7 @@ redis>=5.0.0
 # Testing (AREA-08)
 pytest>=8.0.0
 pytest-cov>=4.1.0
+pytest-timeout>=2.0.0
 
 # Japanese text (馬名オートコンプリート等)
 pykakasi>=2.3.0
