@@ -612,7 +612,17 @@ class TestPedigreeRaceStatsQuery(unittest.TestCase):
     """pedigree-race-stats/query — パラメータ型・範囲エラー。"""
 
     def test_default_call_no_500(self):
-        r = client.get("/api/pedigree-race-stats/query")
+        import src.api.app as _app
+        _orig_cache = _app._ped_race_slim_df
+        _app._ped_race_slim_df = None
+        try:
+            with unittest.mock.patch(
+                "src.pipeline.data.bloodline_sqlite.get_connection",
+                side_effect=FileNotFoundError("bloodline.db absent in test"),
+            ):
+                r = client.get("/api/pedigree-race-stats/query")
+        finally:
+            _app._ped_race_slim_df = _orig_cache
         self.assertNotIn(r.status_code, [500, 502])
         self.assertTrue(_is_json(r))
 
