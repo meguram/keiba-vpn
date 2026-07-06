@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ログイン — keiba-vpn 監視ポータル</title>
+  <style>
+    :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --accent: #58a6ff; --danger: #f85149; --text: #c9d1d9; --muted: #8b949e; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 40px 36px; width: 360px; }
+    h1 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+    .sub { color: var(--muted); font-size: 12px; margin-bottom: 28px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+    input[type=password] {
+      width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      border-radius: 6px; padding: 10px 12px; font-size: 14px; outline: none;
+    }
+    input[type=password]:focus { border-color: var(--accent); }
+    .btn {
+      width: 100%; margin-top: 20px; background: var(--accent); color: #0d1117; border: none;
+      border-radius: 6px; padding: 10px; font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+    .btn:hover { opacity: .85; }
+    .error { color: var(--danger); font-size: 12px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <h1>⚙️ 監視ポータル</h1>
+    <p class="sub">keiba-vpn 開発者専用（ポート 9090）</p>
+    <form method="post">
+      <label for="pw">パスワード</label>
+      <input type="password" id="pw" name="password" autofocus placeholder="MONITOR_PASSWORD">
+      <button class="btn" type="submit">ログイン</button>
+      {% if error %}
+        <p class="error">⚠️ {{ error }}</p>
+      {% endif %}
+    </form>
+  </div>
+</body>
+</html>

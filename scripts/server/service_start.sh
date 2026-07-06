@@ -10,6 +10,7 @@
 #   ./service_start --minimal            # FastAPI + MLflow のみ（dev 時は reload）
 #   ./service_start --mock               # Next.js モックのみ
 #   ./service_start --with-model-serve   # Docker MLflow model serve（:5001 等）
+#   ./service_start --monitor            # 開発者監視ポータル :9090 も同時起動
 #   ./service_start --status             # 状態表示
 #   ./service_start --help
 #
@@ -543,6 +544,7 @@ print_help() {
 MODE=""
 SERVICE_PROFILE="${KEIBA_SERVICE_PROFILE:-dev}"
 WITH_MODEL_SERVE=false
+WITH_MONITOR=false
 DEV_FULL=false
 
 while [[ $# -gt 0 ]]; do
@@ -582,6 +584,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-model-serve)
       WITH_MODEL_SERVE=true
+      shift
+      ;;
+    --monitor)
+      WITH_MONITOR=true
       shift
       ;;
     --status|-s)
@@ -638,4 +644,10 @@ esac
 
 if $WITH_MODEL_SERVE; then
   start_model_serve_docker || true
+fi
+
+if $WITH_MONITOR; then
+  echo "[service_start] 監視ポータル (:9090) をバックグラウンド起動..."
+  bash "$ROOT/scripts/server/start_monitor.sh" --bg || \
+    echo "[service_start] 警告: 監視ポータルの起動に失敗（手動: bash scripts/server/start_monitor.sh）"
 fi

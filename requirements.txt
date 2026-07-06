@@ -11,6 +11,7 @@ ipywidgets>=8.0.0
 jinja2>=3.1.0
 pyyaml>=6.0.0
 requests>=2.31.0
+psutil>=5.9
 
 # Database / Cache (AREA-03 / AREA-06)
 sqlalchemy>=2.0.0

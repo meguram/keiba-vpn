@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% set active = "data-stores" %}
+{% block title %}データストア — keiba-vpn 監視{% endblock %}
+
+{% block content %}
+<style>
+  .store-section { margin-bottom: 28px; }
+  .store-section h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+  .store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+
+  .store-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .store-card h3 { font-size: 13px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .store-card .meta { font-size: 11px; color: var(--muted); margin-bottom: 10px; font-family: monospace; }
+
+  .tbl-list { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .tbl-list th { text-align: left; color: var(--muted); font-weight: 600; padding: 3px 6px; border-bottom: 1px solid var(--border); }
+  .tbl-list td { padding: 3px 6px; border-bottom: 1px solid rgba(48,54,61,.5); font-family: monospace; }
+  .tbl-list tr:last-child td { border-bottom: none; }
+  .tbl-list .num { text-align: right; }
+
+  .badge-ok   { background: rgba(63,185,80,.2);  color: #3fb950; border: 1px solid rgba(63,185,80,.4);  border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
+  .badge-err  { background: rgba(248,81,73,.2);  color: #f85149; border: 1px solid rgba(248,81,73,.4);  border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
+  .badge-skip { background: rgba(139,148,158,.15); color: var(--muted); border: 1px solid var(--border);  border-radius: 4px; padding: 1px 7px; font-size: 11px; }
+
+  .pg-dsn { font-family: monospace; font-size: 11px; color: var(--muted); background: rgba(0,0,0,.3); border-radius: 4px; padding: 4px 8px; word-break: break-all; margin-bottom: 10px; }
+
+  .parquet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .parquet-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
+  .parquet-card .name { font-size: 12px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+  .parquet-card .stat { font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+  .parquet-card .stat span { color: var(--text); }
+
+  .ts-bar { font-size: 11px; color: var(--muted); margin-bottom: 16px; }
+  .ts-bar button { font-size: 11px; background: rgba(88,166,255,.15); border: 1px solid rgba(88,166,255,.3); color: var(--accent); border-radius: 4px; padding: 2px 10px; cursor: pointer; margin-left: 10px; }
+  .ts-bar button:hover { background: rgba(88,166,255,.25); }
+
+  .null-val { color: var(--muted); font-style: italic; }
+</style>
+
+<h1 style="font-size:18px;font-weight:700;margin-bottom:6px;">🗄️ データストア</h1>
+<div class="ts-bar">
+  最終更新: <span id="ts">—</span>
+  <button onclick="load()">↺ 更新</button>
+</div>
+
+<!-- PostgreSQL -->
+<div class="store-section">
+  <h2>🐘 PostgreSQL <span id="pg-badge" class="badge-skip">確認中…</span></h2>
+  <div id="pg-content">
+    <div class="store-card">
+      <div class="meta">接続確認中…</div>
+    </div>
+  </div>
+</div>
+
+<!-- SQLite -->
+<div class="store-section">
+  <h2>🗃️ SQLite</h2>
+  <div class="store-grid" id="sqlite-content">
+    <div class="store-card"><div class="meta">読み込み中…</div></div>
+  </div>
+</div>
+
+<!-- Parquet 特徴量 -->
+<div class="store-section">
+  <h2>📦 Parquet 特徴量ストア</h2>
+  <div id="jt-manifest" style="font-size:11px;color:var(--muted);margin-bottom:10px;"></div>
+  <div class="parquet-grid" id="parquet-content">
+    <div class="parquet-card"><div class="name">読み込み中…</div></div>
+  </div>
+</div>
+
+<script>
+function fmt(n) {
+  if (n == null) return '<span class="null-val">—</span>';
+  return Number(n).toLocaleString();
+}
+
+function renderPg(pg) {
+  const badge = document.getElementById('pg-badge');
+  const cont  = document.getElementById('pg-content');
+
+  if (!pg.ok) {
+    badge.className = 'badge-err'; badge.textContent = 'ERROR';
+    cont.innerHTML = `<div class="store-card">
+      <h3>PostgreSQL <span class="badge-err">接続失敗</span></h3>
+      <div class="meta">${escHtml(pg.error || '')}</div>
+    </div>`;
+    return;
+  }
+
+  badge.className = 'badge-ok'; badge.textContent = 'OK';
+
+  const tables = pg.tables || {};
+  const rows = Object.entries(tables).map(([tbl, cnt]) => `
+    <tr>
+      <td>${escHtml(tbl)}</td>
+      <td class="num">${fmt(cnt)}</td>
+    </tr>`).join('');
+
+  cont.innerHTML = `<div class="store-card" style="max-width:480px;">
+    <h3>接続情報</h3>
+    <div class="pg-dsn">${escHtml(pg.dsn_masked || '')}</div>
+    ${pg.last_etl_at ? `<div class="meta" style="margin-bottom:10px;">最終 ETL: ${escHtml(pg.last_etl_at)}</div>` : ''}
+    <table class="tbl-list">
+      <thead><tr><th>テーブル</th><th style="text-align:right;">行数</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderSqlite(stores) {
+  const cont = document.getElementById('sqlite-content');
+  if (!stores || !stores.length) { cont.innerHTML = '<div class="store-card"><div class="meta">データなし</div></div>'; return; }
+
+  cont.innerHTML = stores.map(s => {
+    if (!s.ok) {
+      return `<div class="store-card">
+        <h3>${escHtml(s.label)} <span class="badge-err">ERROR</span></h3>
+        <div class="meta">${escHtml(s.path)}</div>
+        <div style="font-size:11px;color:var(--danger);">${escHtml(s.error || '')}</div>
+      </div>`;
+    }
+    const tables = s.tables || {};
+    const rows = Object.entries(tables).map(([tbl, cnt]) => `
+      <tr>
+        <td>${escHtml(tbl)}</td>
+        <td class="num">${fmt(cnt)}</td>
+      </tr>`).join('');
+
+    return `<div class="store-card">
+      <h3>${escHtml(s.label)} <span class="badge-ok">OK</span></h3>
+      <div class="meta">${escHtml(s.path)}<br>${s.size_mb} MB &nbsp;|&nbsp; 更新: ${escHtml(s.mtime || '—')}</div>
+      <table class="tbl-list">
+        <thead><tr><th>テーブル</th><th style="text-align:right;">行数</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+}
+
+function renderParquet(blocks, manifest) {
+  const cont = document.getElementById('parquet-content');
+  const mDiv = document.getElementById('jt-manifest');
+
+  if (manifest) {
+    mDiv.innerHTML = `JT 統計マニフェスト: 生成日時 <b>${escHtml(manifest.generated_at || '—')}</b>
+      &nbsp;|&nbsp; 全年計算: ${(manifest.years_all_computed || []).join(', ')}
+      &nbsp;|&nbsp; JT特徴量出力: ${(manifest.years_jt_features || []).join(', ')}`;
+  }
+
+  if (!blocks || !blocks.length) { cont.innerHTML = '<div class="parquet-card"><div class="name">データなし</div></div>'; return; }
+
+  cont.innerHTML = blocks.map(b => {
+    if (!b.ok) {
+      return `<div class="parquet-card">
+        <div class="name">${escHtml(b.block)}</div>
+        <div class="stat" style="color:var(--danger);">ERROR</div>
+      </div>`;
+    }
+    return `<div class="parquet-card">
+      <div class="name">${escHtml(b.block)}</div>
+      <div class="stat"><span>${fmt(b.rows)} 行</span><span>${b.files} ファイル</span><span>${b.size_mb} MB</span></div>
+      <div class="stat" style="margin-top:4px;font-size:10px;">更新: ${escHtml(b.mtime || '—')}</div>
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function load() {
+  try {
+    const res = await fetch('/api/internal/data-stores');
+    const d = await res.json();
+    document.getElementById('ts').textContent = d.timestamp || '';
+    renderPg(d.postgresql || {});
+    renderSqlite(d.sqlite || []);
+    renderParquet(d.parquet || [], d.jt_manifest);
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+load();
+</script>
+{% endblock %}

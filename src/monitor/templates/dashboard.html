@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}ダッシュボード — 監視ポータル{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">🏠</span> ダッシュボード</div>
+
+<!-- サービス死活 -->
+<div class="card">
+  <div class="card-title">サービス死活</div>
+  <div class="grid grid-3" id="svc-grid">
+    <div class="loading">読込中...</div>
+  </div>
+</div>
+
+<!-- キュー概要 -->
+<div class="card">
+  <div class="card-title">スクレイピングキュー</div>
+  <div class="grid grid-4" id="queue-grid">
+    <div class="loading">読込中...</div>
+  </div>
+</div>
+
+<!-- Git HEAD + システム -->
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-title">Git HEAD</div>
+    <div id="git-head"><span class="loading">読込中...</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">システム概要</div>
+    <div id="sys-mini"><span class="loading">読込中...</span></div>
+  </div>
+</div>
+
+<p class="last-updated">最終更新: <span id="last-ts">—</span>（30秒ごと自動更新）</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function mkSvcCard(label, data) {
+  const ok = data.ok;
+  const dotCls = ok ? 'dot-ok' : 'dot-error';
+  const badge = ok
+    ? `<span class="badge badge-ok">稼働中</span>`
+    : `<span class="badge badge-error">停止</span>`;
+  const ms = data.elapsed_ms >= 0 ? `${data.elapsed_ms}ms` : '—';
+  return `<div>
+    <div style="font-weight:600;margin-bottom:8px"><span class="dot ${dotCls}"></span>${label} ${badge}</div>
+    <div class="text-muted" style="font-size:12px">HTTP ${data.status || '—'} / ${ms}</div>
+  </div>`;
+}
+
+function mkQueueCell(label, num, cls) {
+  return `<div><div class="big-num ${cls}">${num}</div><div class="text-muted" style="margin-top:4px;font-size:12px">${label}</div></div>`;
+}
+
+function renderStatus(d) {
+  const s = d.services;
+  document.getElementById('svc-grid').innerHTML =
+    mkSvcCard('FastAPI :8000', s.fastapi) +
+    mkSvcCard('Flask :5100', s.flask) +
+    mkSvcCard('Next.js :3000', s.nextjs);
+
+  const q = d.queue;
+  if (q && Object.keys(q).length) {
+    document.getElementById('queue-grid').innerHTML =
+      mkQueueCell('Pending', q.pending, 'text-accent') +
+      mkQueueCell('Running', q.running, 'text-warn') +
+      mkQueueCell('Done', q.done, 'text-ok') +
+      mkQueueCell('Failed', q.failed, q.failed > 0 ? 'text-error' : 'text-muted');
+  } else {
+    document.getElementById('queue-grid').innerHTML = '<span class="text-muted">キュー情報取得失敗</span>';
+  }
+
+  const h = d.git_head;
+  if (h && h.hash) {
+    document.getElementById('git-head').innerHTML = `
+      <code class="text-accent">${h.hash}</code>
+      <div style="margin-top:6px;font-size:12px;color:var(--muted)">${h.message}</div>
+      <div style="margin-top:4px;font-size:11px;color:var(--muted)">${h.author} · ${h.date}</div>`;
+  } else {
+    document.getElementById('git-head').innerHTML = '<span class="text-muted">取得失敗</span>';
+  }
+
+  document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+
+function renderSys(d) {
+  document.getElementById('sys-mini').innerHTML = `
+    <div style="display:grid;gap:10px">
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span>CPU</span><span class="text-accent">${d.cpu_pct}%</span>
+        </div>
+        <div class="progress-wrap"><div class="progress-bar ${d.cpu_pct > 80 ? 'progress-error' : d.cpu_pct > 60 ? 'progress-warn' : 'progress-ok'}" style="width:${d.cpu_pct}%"></div></div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span>メモリ</span><span class="text-accent">${d.memory.used_gb}/${d.memory.total_gb} GB (${d.memory.pct}%)</span>
+        </div>
+        <div class="progress-wrap"><div class="progress-bar ${d.memory.pct > 85 ? 'progress-error' : d.memory.pct > 70 ? 'progress-warn' : 'progress-ok'}" style="width:${d.memory.pct}%"></div></div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span>ディスク</span><span class="text-accent">${d.disk.used_gb}/${d.disk.total_gb} GB (${d.disk.pct}%)</span>
+        </div>
+        <div class="progress-wrap"><div class="progress-bar ${d.disk.pct > 90 ? 'progress-error' : d.disk.pct > 75 ? 'progress-warn' : 'progress-ok'}" style="width:${d.disk.pct}%"></div></div>
+      </div>
+    </div>`;
+}
+
+async function refresh() {
+  try {
+    const [s, sys] = await Promise.all([
+      fetch('/api/internal/status').then(r => r.json()),
+      fetch('/api/internal/system').then(r => r.json()),
+    ]);
+    renderStatus(s);
+    renderSys(sys);
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+{% endblock %}

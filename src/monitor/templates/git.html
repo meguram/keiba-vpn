@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Git 状態 — 監視ポータル{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">🌿</span> Git 状態</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-title">最新コミット</div>
+    <div id="git-head-detail"><span class="loading">読込中...</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">ブランチ / 変更ファイル</div>
+    <div id="git-dirty"><span class="loading">読込中...</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">最終 git pull ログ</div>
+  <pre id="pull-log">読込中...</pre>
+</div>
+
+<p class="last-updated">最終更新: <span id="last-ts">—</span>（30秒ごと自動更新）</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function renderGit(d) {
+  const h = d.head || {};
+  document.getElementById('git-head-detail').innerHTML = h.hash ? `
+    <div style="margin-bottom:10px">
+      <code class="text-accent" style="font-size:14px">${h.hash}</code>
+    </div>
+    <div style="font-size:13px;margin-bottom:6px">${h.message || '—'}</div>
+    <div style="font-size:12px;color:var(--muted)">
+      <div>${h.author || '—'} &lt;${h.email || ''}&gt;</div>
+      <div>${h.date || '—'}</div>
+    </div>` : '<span class="text-muted">取得失敗</span>';
+
+  const dirtyEl = document.getElementById('git-dirty');
+  const branchBadge = d.branch
+    ? `<span class="badge badge-info" style="margin-bottom:10px;display:inline-block">🌿 ${d.branch}</span>`
+    : '';
+  if (d.dirty_count === 0) {
+    dirtyEl.innerHTML = `${branchBadge}<div class="text-ok">変更なし（clean）✅</div>`;
+  } else {
+    const rows = (d.dirty || []).slice(0, 30).map(l =>
+      `<div style="font-size:11px;font-family:monospace;padding:2px 0;border-bottom:1px solid var(--border)">${escHtml(l)}</div>`
+    ).join('');
+    dirtyEl.innerHTML = `${branchBadge}
+      <span class="badge badge-warn">${d.dirty_count} ファイル変更あり</span>
+      <div style="margin-top:10px">${rows}</div>`;
+  }
+
+  document.getElementById('pull-log').textContent = d.pull_log || '（ログなし）';
+  document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function refresh() {
+  try {
+    const d = await fetch('/api/internal/git').then(r => r.json());
+    renderGit(d);
+  } catch(e) { console.error(e); }
+}
+refresh();
+setInterval(refresh, 30000);
+</script>
+{% endblock %}

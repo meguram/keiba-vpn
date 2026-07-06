@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}システム — 監視ポータル{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">💻</span> システムメトリクス</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-title">CPU 使用率</div>
+    <div class="big-num" id="cpu-num">—</div>
+    <div class="progress-wrap" style="margin-top:10px"><div class="progress-bar" id="cpu-bar" style="width:0%"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">メモリ使用率</div>
+    <div class="big-num" id="mem-num">—</div>
+    <div class="progress-wrap" style="margin-top:10px"><div class="progress-bar" id="mem-bar" style="width:0%"></div></div>
+    <div class="text-muted" style="font-size:12px;margin-top:6px" id="mem-detail">—</div>
+  </div>
+</div>
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-title">ディスク使用率</div>
+    <div class="big-num" id="disk-num">—</div>
+    <div class="progress-wrap" style="margin-top:10px"><div class="progress-bar" id="disk-bar" style="width:0%"></div></div>
+    <div class="text-muted" style="font-size:12px;margin-top:6px" id="disk-detail">—</div>
+  </div>
+  <div class="card">
+    <div class="card-title">スワップ</div>
+    <div class="big-num" id="swap-num">—</div>
+    <div class="progress-wrap" style="margin-top:10px"><div class="progress-bar" id="swap-bar" style="width:0%"></div></div>
+    <div class="text-muted" style="font-size:12px;margin-top:6px" id="swap-detail">—</div>
+  </div>
+</div>
+
+<!-- プロセス一覧 -->
+<div class="card">
+  <div class="card-title">keiba-vpn 関連プロセス</div>
+  <div id="procs"><span class="loading">読込中...</span></div>
+</div>
+
+<p class="last-updated">最終更新: <span id="last-ts">—</span>（15秒ごと自動更新）</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function barClass(pct) {
+  return pct > 85 ? 'progress-error' : pct > 70 ? 'progress-warn' : 'progress-ok';
+}
+function colorClass(pct) {
+  return pct > 85 ? 'text-error' : pct > 70 ? 'text-warn' : 'text-ok';
+}
+
+function set(id, val) { document.getElementById(id).textContent = val; }
+
+function renderSys(d) {
+  // CPU
+  const cpuPct = d.cpu_pct;
+  document.getElementById('cpu-num').innerHTML = `<span class="${colorClass(cpuPct)}">${cpuPct}%</span>`;
+  const cpuBar = document.getElementById('cpu-bar');
+  cpuBar.style.width = cpuPct + '%';
+  cpuBar.className = `progress-bar ${barClass(cpuPct)}`;
+
+  // メモリ
+  const m = d.memory;
+  document.getElementById('mem-num').innerHTML = `<span class="${colorClass(m.pct)}">${m.pct}%</span>`;
+  const memBar = document.getElementById('mem-bar');
+  memBar.style.width = m.pct + '%';
+  memBar.className = `progress-bar ${barClass(m.pct)}`;
+  set('mem-detail', `${m.used_gb} / ${m.total_gb} GB`);
+
+  // ディスク
+  const dk = d.disk;
+  document.getElementById('disk-num').innerHTML = `<span class="${colorClass(dk.pct)}">${dk.pct}%</span>`;
+  const diskBar = document.getElementById('disk-bar');
+  diskBar.style.width = dk.pct + '%';
+  diskBar.className = `progress-bar ${barClass(dk.pct)}`;
+  set('disk-detail', `${dk.used_gb} / ${dk.total_gb} GB`);
+
+  // スワップ
+  const sw = d.swap;
+  document.getElementById('swap-num').innerHTML = `<span class="${colorClass(sw.pct)}">${sw.pct}%</span>`;
+  const swapBar = document.getElementById('swap-bar');
+  swapBar.style.width = (sw.pct || 0) + '%';
+  swapBar.className = `progress-bar ${barClass(sw.pct)}`;
+  set('swap-detail', `${sw.used_gb} / ${sw.total_gb} GB`);
+
+  // プロセス
+  const procs = d.processes || [];
+  if (procs.length) {
+    const rows = procs.map(p => `<tr>
+      <td>${p.pid}</td>
+      <td><code style="font-size:11px">${p.name}</code></td>
+      <td style="font-size:11px;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.cmd}</td>
+      <td>${p.cpu_pct ?? '—'}%</td>
+      <td>${p.mem_mb} MB</td>
+    </tr>`).join('');
+    document.getElementById('procs').innerHTML = `
+      <table>
+        <thead><tr><th>PID</th><th>名前</th><th>コマンド</th><th>CPU</th><th>メモリ</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } else {
+    document.getElementById('procs').innerHTML = '<span class="text-muted">プロセスなし</span>';
+  }
+
+  document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+
+async function refresh() {
+  try {
+    const d = await fetch('/api/internal/system').then(r => r.json());
+    if (d.error) {
+      document.getElementById('procs').textContent = d.error;
+      return;
+    }
+    renderSys(d);
+  } catch(e) { console.error(e); }
+}
+refresh();
+setInterval(refresh, 15000);
+</script>
+{% endblock %}

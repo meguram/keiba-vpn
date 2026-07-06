@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}ログ — 監視ポータル{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">📄</span> ログビューア</div>
+
+<div class="card">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+    <div class="card-title" style="margin-bottom:0">ファイル選択:</div>
+    <select id="file-sel">
+      <option value="">— 選択してください —</option>
+      {% for f in log_files %}
+        <option value="{{ f }}">{{ f }}</option>
+      {% endfor %}
+    </select>
+    <button onclick="loadLog()">読み込み</button>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-left:auto">
+      <input type="checkbox" id="auto-scroll" checked> 末尾自動スクロール
+    </label>
+  </div>
+  <div id="log-meta" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
+  <pre id="log-view">ファイルを選択してください</pre>
+</div>
+
+<p class="last-updated">最終更新: <span id="last-ts">—</span></p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentFile = '';
+let autoRefreshTimer = null;
+
+async function loadLog(file) {
+  file = file || document.getElementById('file-sel').value;
+  if (!file) return;
+  currentFile = file;
+  document.getElementById('file-sel').value = file;
+  try {
+    const d = await fetch(`/api/internal/logs?file=${encodeURIComponent(file)}`).then(r => r.json());
+    if (d.error) {
+      document.getElementById('log-view').textContent = 'エラー: ' + d.error;
+      return;
+    }
+    document.getElementById('log-meta').textContent =
+      `${d.file} — 総行数: ${d.total_lines} | 最終更新: ${d.mtime} | 表示: 末尾 ${d.lines.length} 行`;
+    const pre = document.getElementById('log-view');
+    pre.textContent = d.lines.join('\n');
+    if (document.getElementById('auto-scroll').checked) {
+      pre.scrollTop = pre.scrollHeight;
+    }
+    document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
+  } catch(e) {
+    document.getElementById('log-view').textContent = '取得失敗: ' + e.message;
+  }
+}
+
+document.getElementById('file-sel').addEventListener('change', function() {
+  if (this.value) loadLog(this.value);
+});
+
+// 選択中ファイルを 15 秒ごとに自動再読み込み
+setInterval(() => {
+  if (currentFile) loadLog(currentFile);
+}, 15000);
+</script>
+{% endblock %}

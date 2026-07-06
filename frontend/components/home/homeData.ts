@@ -135,13 +135,13 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
   },
 ];
 
-export const DEV_CATEGORIES: CategorySection[] = [
+export const ADMIN_CATEGORIES: CategorySection[] = [
   {
     num: "02",
     title: "💰 馬券の最適化",
     desc: "期待値・的中率・ROI の最適化",
     catColor: "var(--home-green)",
-    badge: "DEV",
+    badge: "ADMIN",
     singleRow: true,
     cards: [
       {
@@ -154,65 +154,4 @@ export const DEV_CATEGORIES: CategorySection[] = [
       },
     ],
   },
-  {
-    num: "01",
-    title: "🛠 開発者モード",
-    desc: "データ取得・チェック・運用ツール",
-    catColor: "#f59e0b",
-    badge: "DEV",
-    cards: [
-      {
-        href: "/monitor",
-        accent: "#f59e0b",
-        icon: "📡",
-        title: "モニター",
-        desc: "スクレイピング状況・取得済みデータの俯瞰ボード。日付別レース一覧から個別レース詳細に遷移。",
-        tags: ["monitor", "日付別"],
-      },
-      {
-        href: "/data-viewer",
-        accent: "#f59e0b",
-        icon: "🗄️",
-        title: "データビューア",
-        desc: "GCS / ローカル上の生 JSON・特徴量 parquet を構造化して閲覧。馬・レース・騎手 etc.",
-        tags: ["data-viewer", "parquet"],
-      },
-      {
-        href: "/queue-status",
-        accent: "#f59e0b",
-        icon: "⏳",
-        title: "スクレイピングキュー",
-        desc: "ジョブキュー・ワーカー稼働・進捗・失敗一覧を一覧表示。手動キックや再投入も可能。",
-        tags: ["queue", "workers"],
-      },
-      {
-        href: "/scrape-upcoming",
-        accent: "#f59e0b",
-        icon: "⏰",
-        title: "未来レース取得",
-        desc: "出馬表・カレンダーなど将来日のレース情報を先行取得。",
-        tags: ["upcoming", "出馬表"],
-      },
-      {
-        href: "/server-logs",
-        accent: "#f59e0b",
-        icon: "📜",
-        title: "サーバーログ",
-        desc: "logs/*.log の末尾を Web から確認、エラー原因をすぐに追跡。",
-        tags: ["logs", "tail"],
-      },
-    ],
-  },
-];
-
-export const API_ENDPOINTS = [
-  { method: "GET" as const, href: "/api/scrape-status?date=20260315", path: "/api/scrape-status", desc: "取得状況", external: true },
-  { method: "GET" as const, href: "/api/scrape-dates?raw_keys=1", path: "/api/scrape-dates?raw_keys=1", desc: "日付キー一覧", external: true },
-  { method: "GET" as const, href: "/api/scrape-jobs", path: "/api/scrape-jobs", desc: "ジョブ状況", external: true },
-  { method: "POST" as const, href: "#", path: "/api/odds/train", desc: "オッズ予測モデル学習", action: "startOddsTrain" as const },
-  { method: "GET" as const, href: "#", path: "/api/odds/train/status", desc: "オッズ学習状態（更新）", action: "pollOddsTrainOnce" as const },
-  { method: "POST" as const, href: "#", path: "/api/simulation/run", desc: "バランス最適化", action: "runSimulation" as const },
-  { method: "GET" as const, href: "/api/simulation/params", path: "/api/simulation/params", desc: "最適化結果", external: true },
-  { method: "GET" as const, href: "/api/structure-status", path: "/api/structure-status", desc: "構造チェック", external: true },
-  { method: "GET" as const, href: "/api/structure-fingerprints", path: "/api/structure-fingerprints", desc: "FP 情報", external: true },
 ];

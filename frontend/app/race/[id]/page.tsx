@@ -261,7 +261,7 @@ export default function RaceDetailPage() {
   }
 
   if (loadError) {
-    return (
+  return (
       <div style={{ padding: 24, textAlign: "center" }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
         <p style={{ color: "var(--err)", marginBottom: 12 }}>{loadError}</p>
@@ -296,7 +296,7 @@ export default function RaceDetailPage() {
           .filter(Boolean)
           .map((t, i) => (
             <span key={i} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 4, padding: "3px 10px", fontSize: 12 }}>{t}</span>
-          ))}
+        ))}
       </div>
     </div>
   ) : null;
@@ -402,8 +402,8 @@ export default function RaceDetailPage() {
           <strong style={{ color: "var(--text-dim)", marginLeft: 4 }}>82〜</strong> 標準 /
           <strong style={{ color: "#f87171", marginLeft: 4 }}>＜82</strong> 低調
         </span>
-      </div>
-    </div>
+                </div>
+              </div>
   );
 
   /* ── AI予測 ── */
@@ -436,8 +436,8 @@ export default function RaceDetailPage() {
       {!hasPred && (
         <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-dim)", padding: "10px 14px", borderRadius: 8, background: "rgba(36,48,73,0.4)" }}>
           予測結果がありません。「AI予測を実行」で算出できます。
-        </div>
-      )}
+            </div>
+          )}
 
       {sortedPreds.length > 0 ? (
         <div style={{ overflowX: "auto" }}>
@@ -474,7 +474,7 @@ export default function RaceDetailPage() {
                     <td style={{ ...TD, color: evColor(p.ev_place ?? p.expected_value), fontWeight: 600 }}>{(p.ev_place ?? p.expected_value) != null ? Number(p.ev_place ?? p.expected_value).toFixed(2) : "—"}</td>
                     <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: 11 }}>{p.buy_tier ?? "—"}</td>
                     <td style={{ ...TD, fontSize: 18, fontWeight: 800, color: mark.color }}>{mark.sym}</td>
-                  </tr>
+                </tr>
                 );
               })}
             </tbody>

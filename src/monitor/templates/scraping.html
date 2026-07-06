@@ -1,0 +1,428 @@
+{% extends "base.html" %}
+{% block title %}スクレイピング — 監視ポータル{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">🕷️</span> スクレイピング</div>
+
+<!-- キュー概要 -->
+<div class="card">
+  <div class="card-title">キュー状態</div>
+  <div class="grid grid-4" id="queue-nums">
+    <span class="loading">読込中...</span>
+  </div>
+</div>
+
+<!-- Cron ジョブ 最終成功日時 -->
+<div class="card">
+  <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+    <span>定期ジョブ — 最終成功日時</span>
+    <button onclick="expandAll()" style="font-size:11px;padding:3px 8px">すべて展開</button>
+  </div>
+  <div id="cron-jobs"><span class="loading">読込中...</span></div>
+</div>
+
+<!-- 直近失敗ジョブ -->
+<div class="card">
+  <div class="card-title">直近失敗ジョブ（最大 20 件）</div>
+  <div id="failed-jobs"><span class="loading">読込中...</span></div>
+</div>
+
+<!-- ページ品質チェック -->
+<div class="card">
+  <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span>ページ品質チェック — スキーマ整合性</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <select id="pq-date-select" style="font-size:11px;padding:2px 6px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px">
+        <option value="">最新</option>
+      </select>
+      <button onclick="runPageQuality()" id="pq-run-btn"
+              style="font-size:11px;padding:3px 10px;background:#238636;border:1px solid #2ea043;border-radius:4px;color:#fff;cursor:pointer">
+        ▶ 今すぐ実行
+      </button>
+    </div>
+  </div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+    毎朝 08:00 に各カテゴリの代表ページを実際に取得し、期待スキーマと照合します。
+    <strong style="color:#3fb950">safe</strong>＝問題なし、
+    <strong style="color:#d29922">caution</strong>＝新フィールドあり（後方互換）、
+    <strong style="color:#f85149">out</strong>＝必須フィールド欠損またはパースエラー
+  </div>
+  <div id="pq-summary" style="margin-bottom:12px"></div>
+  <div id="pq-results"><span class="loading">読込中...</span></div>
+</div>
+
+<!-- カバレッジカレンダー -->
+<div class="card">
+  <div class="card-title">カバレッジカレンダー（当年）</div>
+  <div id="calendar"><span class="loading">読込中...</span></div>
+</div>
+
+<p class="last-updated">最終更新: <span id="last-ts">—</span>（30秒ごと自動更新）</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function mkQueueCell(label, num, cls) {
+  return `<div><div class="big-num ${cls}">${num}</div><div class="text-muted" style="margin-top:4px;font-size:12px">${label}</div></div>`;
+}
+
+function elapsedLabel(isoTs) {
+  if (!isoTs) return '—';
+  const d = new Date(isoTs.replace(' ', 'T'));
+  const diffMs = Date.now() - d.getTime();
+  if (isNaN(diffMs)) return isoTs;
+  const h = Math.floor(diffMs / 3600000);
+  const m = Math.floor((diffMs % 3600000) / 60000);
+  if (h > 48) return `${Math.floor(h / 24)}日前`;
+  if (h > 0) return `${h}時間${m}分前`;
+  return `${m}分前`;
+}
+
+// ストレージタグの色定義（グローバル）
+const TAG_STYLE = {
+  'GCS':           {bg:'rgba(88,166,255,.15)',  border:'#58a6ff', text:'#58a6ff', icon:'☁️'},
+  'Local Cache':   {bg:'rgba(139,148,158,.12)', border:'#8b949e', text:'#8b949e', icon:'💾'},
+  'Local only':    {bg:'rgba(63,185,80,.15)',   border:'#3fb950', text:'#3fb950', icon:'📂'},
+  'Features Store':{bg:'rgba(188,140,255,.15)', border:'#bc8cff', text:'#bc8cff', icon:'⚙️'},
+  'System':        {bg:'rgba(210,153,34,.15)',  border:'#d29922', text:'#d29922', icon:'🔧'},
+  'Cache':         {bg:'rgba(139,148,158,.12)', border:'#8b949e', text:'#8b949e', icon:'💾'},
+};
+
+function tagPill(tagName) {
+  const s = TAG_STYLE[tagName] || {bg:'rgba(255,255,255,.1)',border:'#fff',text:'#fff',icon:'📦'};
+  return `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:10px;
+                border:1px solid ${s.border};background:${s.bg};color:${s.text};
+                font-size:10px;font-weight:600;white-space:nowrap">${s.icon} ${tagName}</span>`;
+}
+
+function renderTableRows(tables) {
+  return (tables || []).map(t => {
+    const tagHtml = (t.tags || []).map(tag => tagPill(tag)).join(' ');
+    const pathLines = (t.paths || []).map(p => {
+      const style = TAG_STYLE[p.tag] || {};
+      const safePath = (p.path || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return `<div style="display:flex;align-items:baseline;gap:6px;margin-top:3px;margin-left:2px">
+        <span style="font-size:9px;min-width:52px;text-align:right;color:${style.text||'#aaa'};font-weight:600">${p.tag}</span>
+        <code style="font-size:10px;color:#c9d1d9;word-break:break-all;
+                     background:rgba(255,255,255,.04);padding:1px 6px;border-radius:3px;cursor:pointer"
+              onclick="navigator.clipboard.writeText('${safePath}').then(()=>{this.style.outline='1px solid #3fb950';setTimeout(()=>this.style.outline='',1200)}).catch(()=>{})"
+              title="クリックでコピー">${p.path}</code>
+      </div>`;
+    }).join('');
+    return `
+      <div style="border:1px solid var(--border);border-radius:5px;padding:8px 12px;margin-bottom:6px;background:rgba(255,255,255,.02)">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <code style="font-size:12px;color:#e6edf3;font-weight:600">${t.name}</code>
+          <span style="font-size:11px;color:var(--muted)">${t.label}</span>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-left:4px">${tagHtml}</div>
+        </div>
+        ${t.description ? `<div style="font-size:10px;color:var(--muted);margin-top:4px">${t.description}</div>` : ''}
+        ${pathLines}
+      </div>`;
+  }).join('');
+}
+
+function renderCronJobs(d) {
+  const jobs = d.jobs || [];
+  if (!jobs.length) {
+    document.getElementById('cron-jobs').innerHTML = '<span class="text-muted">データなし</span>';
+    return;
+  }
+
+  const items = jobs.map(j => {
+    const ok = j.status === 'ok';
+    const unknown = j.status === 'unknown';
+    const statusBadge = ok
+      ? '<span class="badge badge-ok">✅ 成功</span>'
+      : unknown
+        ? '<span class="badge badge-muted">— 不明</span>'
+        : '<span class="badge badge-warn">⚠️ 未確認</span>';
+
+    const elapsed = j.last_success ? elapsedLabel(j.last_success) : '—';
+    const ts = j.last_success
+      ? `<span title="${j.last_success}" style="cursor:help">${elapsed}</span>`
+      : '<span style="color:var(--muted)">記録なし</span>';
+
+    let headerBg = '';
+    if (j.last_success) {
+      const diffH = (Date.now() - new Date(j.last_success.replace(' ', 'T')).getTime()) / 3600000;
+      if (diffH > 72) headerBg = 'background:rgba(248,81,73,.07)';
+      else if (diffH > 24) headerBg = 'background:rgba(210,153,34,.07)';
+    }
+
+    const urlRows = (j.sample_urls || []).map(u =>
+      `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+        <span style="font-size:10px;color:var(--muted);flex-shrink:0">URL</span>
+        <a href="${u}" target="_blank" rel="noopener"
+           style="font-size:11px;font-family:monospace;color:var(--accent);word-break:break-all;text-decoration:none"
+           onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'"
+        >${u}</a>
+      </div>`
+    ).join('');
+
+    const tableRows = renderTableRows(j.target_tables);
+
+    const hasDetail = j.description || (j.sample_urls && j.sample_urls.length) || (j.target_tables && j.target_tables.length);
+    const detailPanel = hasDetail ? `
+      <div class="cron-detail" id="detail-${j.id}" style="display:none;
+           border-top:1px solid var(--border);padding:14px 16px;background:rgba(0,0,0,.15)">
+        ${j.description ? `
+          <div style="font-size:12px;color:var(--text);margin-bottom:12px;line-height:1.6">
+            ${j.description}
+          </div>` : ''}
+        ${j.sla && j.sla !== '—' ? `
+          <div style="margin-bottom:10px">
+            <span class="badge badge-info">SLA: ${j.sla}</span>
+          </div>` : ''}
+        ${urlRows ? `
+          <div style="margin-bottom:12px">
+            <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;
+                        letter-spacing:.05em;margin-bottom:6px">スクレイピング対象 URL（サンプル）</div>
+            ${urlRows}
+          </div>` : ''}
+        ${tableRows ? `
+          <div>
+            <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;
+                        letter-spacing:.05em;margin-bottom:8px">保存先テーブル / カテゴリ（パスをクリックでコピー）</div>
+            ${tableRows}
+          </div>` : ''}
+        <div style="margin-top:12px;font-size:11px">
+          <a href="/logs?file=${encodeURIComponent(j.log_file)}"
+             style="color:var(--accent);text-decoration:none">
+            📄 ${j.log_file} を開く
+          </a>
+        </div>
+      </div>` : '';
+
+    const chevron = hasDetail ? `<span class="chevron" style="margin-left:auto;font-size:12px;color:var(--muted);transition:transform .2s">▼</span>` : '';
+
+    return `
+      <div class="cron-item" style="border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden">
+        <div class="cron-header" onclick="toggleCron('${j.id}', this)"
+             style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:${hasDetail ? 'pointer' : 'default'};${headerBg};user-select:none"
+             ${hasDetail ? 'title="クリックで詳細を展開"' : ''}>
+          <div style="min-width:160px;font-weight:600;font-size:13px">${j.label}</div>
+          <div style="min-width:190px;font-size:12px;color:var(--muted)">${j.schedule}</div>
+          <div style="min-width:90px">${statusBadge}</div>
+          <div style="font-size:12px">${ts}</div>
+          ${chevron}
+        </div>
+        ${detailPanel}
+      </div>`;
+  }).join('');
+
+  document.getElementById('cron-jobs').innerHTML = `<div style="margin-top:4px">${items}</div>`;
+}
+
+function toggleCron(id, headerEl) {
+  const detail = document.getElementById(`detail-${id}`);
+  if (!detail) return;
+  const isOpen = detail.style.display !== 'none';
+  detail.style.display = isOpen ? 'none' : 'block';
+  const chevron = headerEl.querySelector('.chevron');
+  if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+function expandAll() {
+  document.querySelectorAll('.cron-detail').forEach(el => {
+    el.style.display = 'block';
+  });
+  document.querySelectorAll('.chevron').forEach(el => {
+    el.style.transform = 'rotate(180deg)';
+  });
+}
+
+function renderScraping(d) {
+  const jobs = d.jobs || {};
+  document.getElementById('queue-nums').innerHTML =
+    mkQueueCell('Pending', jobs.pending_count ?? '—', 'text-accent') +
+    mkQueueCell('Running', jobs.running_count ?? '—', 'text-warn') +
+    mkQueueCell('Done', jobs.done_count ?? '—', 'text-ok') +
+    mkQueueCell('Failed', jobs.failed_count ?? '—', (jobs.failed_count > 0) ? 'text-error' : 'text-muted');
+
+  // 直近失敗ジョブ
+  const failures = jobs.recent_failures || jobs.failed_jobs || [];
+  if (failures.length) {
+    let rows = failures.slice(0, 20).map(f => `<tr>
+      <td><code style="font-size:11px">${f.job_id || f.id || '—'}</code></td>
+      <td>${f.category || '—'}</td>
+      <td>${f.failure_reason || f.reason || '—'}</td>
+      <td style="color:var(--muted);font-size:11px">${f.failed_at || f.updated_at || '—'}</td>
+    </tr>`).join('');
+    document.getElementById('failed-jobs').innerHTML = `
+      <table>
+        <thead><tr><th>Job ID</th><th>カテゴリ</th><th>失敗理由</th><th>日時</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } else if (jobs.failed_count === 0) {
+    document.getElementById('failed-jobs').innerHTML = '<span class="text-ok">失敗ジョブなし ✅</span>';
+  } else {
+    document.getElementById('failed-jobs').innerHTML = '<span class="text-muted">詳細データなし</span>';
+  }
+
+  // カバレッジカレンダー
+  const cal = d.calendar;
+  if (cal && typeof cal === 'object') {
+    const dates = Object.keys(cal).sort();
+    if (dates.length) {
+      const covered = dates.filter(d => cal[d]).length;
+      document.getElementById('calendar').innerHTML = `
+        <div style="margin-bottom:12px">
+          <span class="badge badge-ok">${covered} 日カバー済み</span>
+          <span class="badge badge-muted" style="margin-left:6px">${dates.length - covered} 日未取得</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px">
+          ${dates.map(d => `<div title="${d}" style="width:12px;height:12px;border-radius:2px;background:${cal[d] ? 'var(--accent2)' : 'var(--border)'};cursor:default"></div>`).join('')}
+        </div>`;
+    } else {
+      document.getElementById('calendar').innerHTML = '<span class="text-muted">データなし</span>';
+    }
+  } else {
+    document.getElementById('calendar').innerHTML = '<span class="text-muted">カレンダー取得失敗</span>';
+  }
+
+  document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+
+// ── ページ品質チェック ──────────────────────────────────────────────────────
+
+const PQ_TAG_STYLE = {
+  safe:    {bg:'rgba(63,185,80,.15)',  border:'#3fb950', text:'#3fb950', icon:'✅', label:'SAFE'},
+  caution: {bg:'rgba(210,153,34,.15)', border:'#d29922', text:'#d29922', icon:'⚠️', label:'CAUTION'},
+  out:     {bg:'rgba(248,81,73,.15)',  border:'#f85149', text:'#f85149', icon:'❌', label:'OUT'},
+  unknown: {bg:'rgba(139,148,158,.1)', border:'#8b949e', text:'#8b949e', icon:'—',  label:'不明'},
+};
+
+function pqTagBadge(tag) {
+  const s = PQ_TAG_STYLE[tag] || PQ_TAG_STYLE.unknown;
+  return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:12px;
+                border:1px solid ${s.border};background:${s.bg};color:${s.text};
+                font-size:11px;font-weight:700">${s.icon} ${s.label}</span>`;
+}
+
+function renderPageQuality(d) {
+  // 履歴セレクタの更新
+  const sel = document.getElementById('pq-date-select');
+  const curVal = sel.value;
+  sel.innerHTML = '<option value="">最新</option>' +
+    (d.history_dates || []).map(dt => `<option value="${dt}"${dt===curVal?' selected':''}>${dt}</option>`).join('');
+
+  // サマリーバー
+  const tag = d.summary_tag || 'unknown';
+  const s = PQ_TAG_STYLE[tag] || PQ_TAG_STYLE.unknown;
+  const runAt = d.run_at ? new Date(d.run_at).toLocaleString('ja-JP') : '—';
+  document.getElementById('pq-summary').innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+                padding:10px 14px;border-radius:6px;border:1px solid ${s.border};
+                background:${s.bg}">
+      <div style="font-size:18px;font-weight:700;color:${s.text}">${s.icon} 総合: ${s.label}</div>
+      <div style="font-size:12px;color:var(--muted)">実行日時: ${runAt}</div>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <span class="badge badge-ok">✅ SAFE: ${d.safe_count ?? 0}</span>
+        <span class="badge badge-warn">⚠️ CAUTION: ${d.caution_count ?? 0}</span>
+        <span class="badge badge-error">❌ OUT: ${d.out_count ?? 0}</span>
+      </div>
+    </div>
+    ${d.note ? `<div style="margin-top:8px;font-size:12px;color:var(--muted)">${d.note}</div>` : ''}`;
+
+  // 結果テーブル
+  const results = d.results || [];
+  if (!results.length) {
+    document.getElementById('pq-results').innerHTML = '<span class="text-muted">結果なし</span>';
+    return;
+  }
+
+  const rows = results.map(r => {
+    const rs = PQ_TAG_STYLE[r.tag] || PQ_TAG_STYLE.unknown;
+    const missing = (r.validation_summary?.top_missing || []);
+    const extraKeys = (r.extra_keys || []);
+    const errorText = r.error ? `<div style="font-size:10px;color:#f85149;margin-top:2px;font-family:monospace">${r.error}</div>` : '';
+    const missingText = missing.length
+      ? `<div style="font-size:10px;color:#f85149;margin-top:2px">必須フィールド欠損: ${missing.join(', ')}</div>` : '';
+    const cautionText = extraKeys.length
+      ? `<div style="font-size:10px;color:#d29922;margin-top:2px">新フィールド検出: ${extraKeys.join(', ')}</div>` : '';
+    const loginNote = r.requires_login
+      ? `<span style="font-size:9px;color:var(--muted);margin-left:4px">(要ログイン)</span>` : '';
+
+    return `<tr>
+      <td style="padding:8px 10px">
+        <div style="font-weight:600;font-size:13px">${r.label}${loginNote}</div>
+        <div style="font-size:10px;color:var(--muted);font-family:monospace;margin-top:2px;word-break:break-all">
+          <a href="${r.url}" target="_blank" rel="noopener"
+             style="color:var(--accent);text-decoration:none">${r.url}</a>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px">カテゴリ: <code>${r.category}</code></div>
+        ${errorText}${missingText}${cautionText}
+      </td>
+      <td style="padding:8px 10px;text-align:center;white-space:nowrap">${pqTagBadge(r.tag)}</td>
+      <td style="padding:8px 10px;text-align:right;font-size:11px;color:var(--muted);white-space:nowrap">
+        ${r.elapsed_sec != null ? r.elapsed_sec + 's' : '—'}
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('pq-results').innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border)">
+          <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--muted);font-weight:600">カテゴリ / URL</th>
+          <th style="padding:6px 10px;text-align:center;font-size:11px;color:var(--muted);font-weight:600">判定</th>
+          <th style="padding:6px 10px;text-align:right;font-size:11px;color:var(--muted);font-weight:600">所要時間</th>
+        </tr>
+      </thead>
+      <tbody style="border-top:1px solid var(--border)">${rows}</tbody>
+    </table>`;
+}
+
+async function loadPageQuality(dateStr) {
+  try {
+    const url = '/api/internal/page-quality' + (dateStr ? `?date=${dateStr}` : '');
+    const d = await fetch(url).then(r => r.json());
+    renderPageQuality(d);
+  } catch(e) {
+    document.getElementById('pq-results').innerHTML = `<span class="text-muted">取得失敗: ${e}</span>`;
+  }
+}
+
+async function runPageQuality() {
+  const btn = document.getElementById('pq-run-btn');
+  btn.disabled = true;
+  btn.textContent = '実行中...';
+  try {
+    const resp = await fetch('/api/internal/page-quality/run', {method:'POST'}).then(r => r.json());
+    if (resp.pid) {
+      btn.textContent = `起動済み (PID: ${resp.pid})`;
+      setTimeout(() => { btn.disabled=false; btn.textContent='▶ 今すぐ実行'; }, 5000);
+    } else {
+      btn.textContent = resp.error || 'エラー';
+      setTimeout(() => { btn.disabled=false; btn.textContent='▶ 今すぐ実行'; }, 3000);
+    }
+  } catch(e) {
+    btn.textContent = 'エラー';
+    setTimeout(() => { btn.disabled=false; btn.textContent='▶ 今すぐ実行'; }, 3000);
+  }
+}
+
+document.getElementById('pq-date-select').addEventListener('change', function() {
+  loadPageQuality(this.value);
+});
+
+// ── 全体リフレッシュ ──────────────────────────────────────────────────────
+
+async function refresh() {
+  try {
+    const [scraping, cronData] = await Promise.all([
+      fetch('/api/internal/scraping').then(r => r.json()),
+      fetch('/api/internal/cron-jobs').then(r => r.json()),
+    ]);
+    renderScraping(scraping);
+    renderCronJobs(cronData);
+  } catch(e) {
+    console.error(e);
+  }
+}
+refresh();
+loadPageQuality('');
+setInterval(refresh, 30000);
+</script>
+{% endblock %}

@@ -9,6 +9,7 @@
 | 領域 | 役割 |
 |------|------|
 | `src/api/` | FastAPI（`app.py`）。エントリは `python main.py` → `src.api.app:app` |
+| `src/monitor/` | **開発者専用監視ポータル**（スタンドアロン Flask :9090）。`app.py` + `templates/`。起動: `bash scripts/server/start_monitor.sh` / `service_start.sh --env dev --monitor`。仕様書: `docs/monitoring-portal.md` |
 | `src/scraper/` | netkeiba / SmartRC / JRA 取得・パース・キュー（CLI は `python -m src.scraper.X`） |
 | `src/pipeline/` | 学習・特徴量。`features/`（store/layout/builder/stats）・`models/`（学習・予測子）・`inference/`（race_day/betting/composite_optimizer）に分割。`build_*.py` などの CLI はルート（`python -m src.pipeline.build_X`） |
 | `src/research/` | リサーチ層。`pedigree/`（血統・種牡馬）、`genes/`（遺伝子マーカー）、`race/`（コース・トラック・レース品質）、`scripts/`（キュー投入等の CLI）に分類 |

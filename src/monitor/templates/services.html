@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}サービス詳細 — 監視ポータル{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">🔌</span> サービス詳細</div>
+
+<div class="card" id="svc-detail">
+  <span class="loading">読込中...</span>
+</div>
+
+<p class="last-updated">最終更新: <span id="last-ts">—</span>（30秒ごと自動更新）</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function pct(a, b) { return b > 0 ? Math.round(a / b * 100) : 0; }
+
+function renderSvc(d) {
+  const svcs = [
+    { key: 'fastapi', label: 'FastAPI', port: 8000, color: '#58a6ff' },
+    { key: 'flask',   label: 'Flask',   port: 5100, color: '#3fb950' },
+    { key: 'nextjs',  label: 'Next.js', port: 3000, color: '#bc8cff' },
+  ];
+
+  let html = '<div class="grid grid-3">';
+  for (const s of svcs) {
+    const info = d.services[s.key];
+    const ok = info.ok;
+    const statusBadge = ok
+      ? '<span class="badge badge-ok">✅ 稼働中</span>'
+      : '<span class="badge badge-error">❌ 停止</span>';
+    const ms = info.elapsed_ms >= 0 ? `${info.elapsed_ms} ms` : '—';
+    const body = info.body || {};
+
+    let detail = '';
+    if (s.key === 'fastapi' && body.uptime_seconds != null) {
+      const up = Math.floor(body.uptime_seconds);
+      const h = Math.floor(up / 3600), m = Math.floor((up % 3600) / 60);
+      detail = `<div style="margin-top:10px;font-size:12px;color:var(--muted)">
+        <div>環境: <span class="text-accent">${body.keiba_env || '—'}</span></div>
+        <div>起動時間: ${h}h ${m}m</div>
+        <div>GCS: ${body.gcs_bucket || '—'}</div>
+      </div>`;
+    } else if (s.key === 'flask' && body.version != null) {
+      detail = `<div style="margin-top:10px;font-size:12px;color:var(--muted)">
+        <div>バージョン: <span class="text-accent">${body.version}</span></div>
+        <div>環境: ${body.environment || '—'}</div>
+      </div>`;
+    }
+
+    html += `
+      <div style="border-left:3px solid ${s.color};padding-left:14px">
+        <div style="font-size:16px;font-weight:700;margin-bottom:4px">${s.label}</div>
+        <div style="color:var(--muted);font-size:12px;margin-bottom:10px">:${s.port}</div>
+        ${statusBadge}
+        <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+          <span>HTTP ${info.status || '—'}</span>
+          <span style="margin-left:12px">応答 ${ms}</span>
+        </div>
+        ${detail}
+      </div>`;
+  }
+  html += '</div>';
+  document.getElementById('svc-detail').innerHTML = html;
+  document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+
+async function refresh() {
+  try {
+    const d = await fetch('/api/internal/status').then(r => r.json());
+    renderSvc(d);
+  } catch(e) {
+    document.getElementById('svc-detail').innerHTML = '<span class="text-error">取得失敗</span>';
+  }
+}
+refresh();
+setInterval(refresh, 30000);
+</script>
+{% endblock %}

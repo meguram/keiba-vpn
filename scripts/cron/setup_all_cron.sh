@@ -104,6 +104,10 @@ PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin
 # ── SLA 0: 毎日 レース一覧 夕方 ─── UTC: 08:00 / JST: 17:00 ──── # KEIBA-VPN-ALL
 0 8 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} daily-race-lists logs/daily_race_lists_pm.log # KEIBA-VPN-ALL
 
+# ── ページ品質チェック ────────── UTC: 23:00 / JST: 08:00 ────────── # KEIBA-VPN-ALL
+# スクレイパーが各ページの期待スキーマを取得できるか毎朝確認する
+0 23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo ${PYTHON} -m src.monitor.page_quality_check >> ${LOG_DIR}/page_quality_check.log 2>&1 # KEIBA-VPN-ALL
+
 # ── SLA 2: JRA馬場情報 朝ポーリング UTC: 20:00-23:50 / JST: 05:00-08:50 # KEIBA-VPN-ALL
 # 開催日以外は自動スキップ
 */10 20-23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} jra-baba-morning logs/jra_baba_morning.log # KEIBA-VPN-ALL
@@ -207,7 +211,7 @@ cmd_install() {
     echo "  18:00       毎日:   raceday-eve (翌開催日のみ)"
     echo "  18:00       金曜:   horse-name-index"
     echo "  01:00–09:00 深夜:   backfill (年度別)"
-    echo "  */3         常時:   watchdog (API + MLflow)"
+    echo "  */3         常時:   watchdog (FastAPI + Flask + Next.js + MLflow)"
     echo "  git pull:    dev/stg UI（開発者ログイン後）→ POST /api/v1/admin/git-pull"
     echo ""
     echo "ログディレクトリ: ${LOG_DIR}/"

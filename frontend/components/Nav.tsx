@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { DevToolbar } from "@/components/DevToolbar";
 
-type NavGroup = { label: string; href?: string; color: string; children?: { label: string; href: string }[] };
+type NavItem = { label: string; href: string };
+type NavGroup = { label: string; href?: string; color: string; children?: NavItem[]; adminOnly?: boolean };
 
 const NAV_GROUPS: NavGroup[] = [
   { label: "Home", href: "/", color: "#c8d6e5" },
@@ -31,22 +31,15 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "馬券・予測", color: "#3fb950",
+    label: "AI予測", color: "#3fb950",
     children: [
       { label: "🤖 今週のAI予測", href: "/weekly-predictions" },
-      { label: "馬券最適化", href: "/betting" },
-      { label: "AIモデルSLA", href: "/ai-sla" },
     ],
   },
   {
-    label: "管理", color: "#f59e0b",
-    children: [
-      { label: "モニター", href: "/monitor" },
-      { label: "スクレイプ", href: "/scrape" },
-      { label: "データビューア", href: "/data-viewer" },
-      { label: "cronジョブ", href: "/cron-jobs" },
-      { label: "ログ", href: "/server-logs" },
-    ],
+    label: "💰 馬券最適化", color: "#3fb950",
+    href: "/betting",
+    adminOnly: true,
   },
 ];
 
@@ -104,54 +97,33 @@ function DropdownMenu({ group, path }: { group: NavGroup; path: string }) {
   );
 }
 
-function RaceJump() {
-  const router = useRouter();
-  const [val, setVal] = useState("");
-  function jump() {
-    const v = val.trim().replace(/\s/g, "");
-    if (v.length >= 8) { router.push(`/race/${v}`); setVal(""); }
-  }
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 8 }}>
-      <input
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && jump()}
-        placeholder="レースID"
-        style={{
-          background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)",
-          padding: "4px 8px", borderRadius: 5, fontSize: 11, width: 100,
-        }}
-      />
-      <button
-        onClick={jump}
-        style={{ background: "var(--accent)", color: "#fff", border: "none", padding: "4px 8px", borderRadius: 5, fontSize: 11, cursor: "pointer" }}
-      >
-        →
-      </button>
-    </div>
-  );
-}
-
 export function Nav() {
   const path = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
     fetch("/api/v1/auth/status", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : { logged_in: false }))
-      .then((d) => setLoggedIn(!!d.logged_in))
-      .catch(() => setLoggedIn(false));
+      .then((r) => (r.ok ? r.json() : { logged_in: false, is_admin: false }))
+      .then((d) => {
+        setLoggedIn(!!d.logged_in);
+        setIsAdmin(!!d.logged_in && !!d.is_admin);
+      })
+      .catch(() => { setLoggedIn(false); setIsAdmin(false); });
   }, [path]);
 
   return (
     <nav className="sticky top-0 z-50 flex h-11 items-center gap-4 border-b px-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <Link href="/" className="font-bold text-white text-sm">keiba-vpn</Link>
 
-      {NAV_GROUPS.map((g) =>
-        g.children ? (
-          <DropdownMenu key={g.label} group={g} path={path} />
-        ) : (
+      {NAV_GROUPS.map((g) => {
+        if (g.adminOnly && !isAdmin) return null;
+
+        if (g.children) {
+          return <DropdownMenu key={g.label} group={g} path={path} />;
+        }
+
+        return (
           <Link
             key={g.href}
             href={g.href!}
@@ -159,15 +131,15 @@ export function Nav() {
           >
             {g.label}
           </Link>
-        )
-      )}
-
-      <RaceJump />
+        );
+      })}
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-        <DevToolbar loggedIn={loggedIn} />
         {!loggedIn && (
           <Link href="/login" className="text-sm" style={{ color: "var(--text-dim)" }}>ログイン</Link>
+        )}
+        {loggedIn && (
+          <span className="text-sm" style={{ color: "var(--text-dim)", fontSize: 12 }}>管理者</span>
         )}
       </div>
     </nav>

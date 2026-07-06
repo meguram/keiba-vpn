@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}keiba-vpn 監視ポータル{% endblock %}</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+      --warn: #d29922;
+      --danger: #f85149;
+      --text: #c9d1d9;
+      --muted: #8b949e;
+      --nav-w: 200px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      display: flex;
+      min-height: 100vh;
+    }
+    /* ナビゲーション */
+    .nav {
+      width: var(--nav-w);
+      min-height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0;
+    }
+    .nav-brand {
+      padding: 16px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      letter-spacing: .05em;
+    }
+    .nav-brand span { display: block; color: var(--muted); font-weight: 400; font-size: 11px; margin-top: 2px; }
+    .nav-links { flex: 1; padding: 8px 0; }
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      transition: background .15s, color .15s;
+    }
+    .nav-link:hover { background: rgba(88,166,255,.1); color: var(--text); }
+    .nav-link.active { background: rgba(88,166,255,.15); color: var(--accent); font-weight: 600; }
+    .nav-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
+    .nav-footer a { color: var(--muted); text-decoration: none; font-size: 12px; }
+    .nav-footer a:hover { color: var(--danger); }
+    /* メインコンテンツ */
+    .main {
+      margin-left: var(--nav-w);
+      flex: 1;
+      padding: 24px;
+      max-width: 1200px;
+    }
+    .page-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .page-title .icon { font-size: 22px; }
+    /* カード */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 14px;
+    }
+    /* グリッド */
+    .grid { display: grid; gap: 16px; }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    /* バッジ */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .03em;
+    }
+    .badge-ok { background: rgba(63,185,80,.2); color: var(--accent2); }
+    .badge-warn { background: rgba(210,153,34,.2); color: var(--warn); }
+    .badge-error { background: rgba(248,81,73,.2); color: var(--danger); }
+    .badge-info { background: rgba(88,166,255,.2); color: var(--accent); }
+    .badge-muted { background: rgba(139,148,158,.15); color: var(--muted); }
+    /* ステータスドット */
+    .dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .dot-ok { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+    .dot-error { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+    .dot-warn { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+    /* プログレスバー */
+    .progress-wrap { background: var(--border); border-radius: 4px; height: 8px; margin-top: 6px; }
+    .progress-bar { height: 100%; border-radius: 4px; transition: width .5s; }
+    .progress-ok { background: var(--accent2); }
+    .progress-warn { background: var(--warn); }
+    .progress-error { background: var(--danger); }
+    /* テーブル */
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
+    th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+    /* ロード中 */
+    .loading { color: var(--muted); font-style: italic; }
+    /* 更新時刻 */
+    .last-updated { color: var(--muted); font-size: 11px; text-align: right; margin-top: 8px; }
+    /* コード */
+    pre, code {
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 12px;
+    }
+    pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 500px;
+      overflow-y: auto;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    /* ユーティリティ */
+    .text-ok { color: var(--accent2); }
+    .text-warn { color: var(--warn); }
+    .text-error { color: var(--danger); }
+    .text-muted { color: var(--muted); }
+    .text-accent { color: var(--accent); }
+    .big-num { font-size: 28px; font-weight: 700; line-height: 1; }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+    select, button {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    select:focus, button:focus { outline: 1px solid var(--accent); }
+    button:hover { border-color: var(--accent); color: var(--accent); }
+  </style>
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-brand">
+      ⚙️ Monitor<span>keiba-vpn :9090</span>
+    </div>
+    <div class="nav-links">
+      <a class="nav-link {% if active=='dashboard' %}active{% endif %}" href="/">🏠 ダッシュボード</a>
+      <a class="nav-link {% if active=='services' %}active{% endif %}" href="/services">🔌 サービス</a>
+      <a class="nav-link {% if active=='scraping' %}active{% endif %}" href="/scraping">🕷️ スクレイピング</a>
+      <a class="nav-link {% if active=='data' %}active{% endif %}" href="/data">📊 データ</a>
+      <a class="nav-link {% if active=='system' %}active{% endif %}" href="/system">💻 システム</a>
+      <a class="nav-link {% if active=='logs' %}active{% endif %}" href="/logs">📄 ログ</a>
+      <a class="nav-link {% if active=='git' %}active{% endif %}" href="/git">🌿 Git</a>
+      <a class="nav-link {% if active=='data-stores' %}active{% endif %}" href="/data-stores">🗄️ データストア</a>
+    </div>
+    <div class="nav-footer">
+      <a href="/logout">🚪 ログアウト</a>
+    </div>
+  </nav>
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

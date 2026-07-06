@@ -1,16 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageShell } from "@/components/PageShell";
 import { USE_MOCK, MOCK_KELLY } from "@/lib/mock";
 
-const isLoggedIn = USE_MOCK ? true : false;
-
 export default function BettingPage() {
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [bankroll, setBankroll] = useState("100000");
   const [result, setResult] = useState<typeof MOCK_KELLY | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (USE_MOCK) {
+      setIsAdmin(true);
+      return;
+    }
+    fetch("/api/v1/auth/status", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { logged_in: false, is_admin: false }))
+      .then((d) => setIsAdmin(!!d.logged_in && !!d.is_admin))
+      .catch(() => setIsAdmin(false));
+  }, []);
 
   async function optimize() {
     setLoading(true);
@@ -28,14 +38,24 @@ export default function BettingPage() {
     setLoading(false);
   }
 
-  if (!isLoggedIn) {
+  if (isAdmin === null) {
+    return (
+      <PageShell title="馬券最適化" description="Kelly 基準ポートフォリオ（AN-13）">
+        <div className="card flex flex-col items-center gap-4 py-12">
+          <p className="text-sm" style={{ color: "var(--text-dim)" }}>認証確認中…</p>
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (!isAdmin) {
     return (
       <PageShell title="馬券最適化" description="Kelly 基準ポートフォリオ（AN-13）">
         <div className="card flex flex-col items-center gap-4 py-12">
           <span style={{ fontSize: 40 }}>🔒</span>
-          <p className="font-semibold">ログインが必要です</p>
+          <p className="font-semibold">管理者専用ページ</p>
           <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-            馬券最適化機能はログインユーザー限定です。
+            馬券最適化機能は管理者限定です。
           </p>
           <Link href="/login" className="btn">ログインする</Link>
         </div>
