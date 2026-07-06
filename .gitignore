@@ -52,6 +52,9 @@ mlflow/data/
 mlflow/runs/
 mlruns
 
+# ランタイム生成データ（horse_result 保存時に自動更新されるため追跡しない）
+data/knowledge/horse_name_index.json
+
 # スクレイプ・キュー由来の生成物（GCS が正、ローカルは再取得可）
 data/cache/
 # Bloodline SQLite（サイズ大・ローカル生成。GitHub 100MB 制限対象のため追跡しない）
