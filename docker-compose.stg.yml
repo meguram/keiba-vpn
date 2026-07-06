@@ -1,0 +1,42 @@
+# Staging 環境用: PostgreSQL 15 + Redis 7 (dev と同時起動可能な別ポート)
+# 起動: docker compose -f docker-compose.stg.yml up -d
+# 停止: docker compose -f docker-compose.stg.yml down
+#
+# DATABASE_URL=postgresql+psycopg://keiba_user:keiba_pass@localhost:5433/keiba_db_stg
+# REDIS_URL=redis://localhost:6380/0
+# ※ dev と同時起動するためホスト側ポートをずらしています (5433 / 6380)
+
+services:
+  postgres-stg:
+    image: postgres:15-alpine
+    container_name: keiba-postgres-stg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: keiba_user
+      POSTGRES_PASSWORD: keiba_pass
+      POSTGRES_DB: keiba_db_stg
+    ports:
+      - "5433:5432"
+    volumes:
+      - keiba_pg_stg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keiba_user -d keiba_db_stg"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis-stg:
+    image: redis:7-alpine
+    container_name: keiba-redis-stg
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  keiba_pg_stg:
+    driver: local
