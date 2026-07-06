@@ -152,6 +152,41 @@ const TD: React.CSSProperties = {
   textAlign: "center", verticalAlign: "middle",
 };
 
+/* ── めぐ指数（モック） ── */
+/** 時刻文字列 "1:23.4" や "83.4" を秒に変換 */
+function parseTimeSec(t: string | undefined | null): number | null {
+  if (!t) return null;
+  const s = String(t).trim();
+  const m = s.match(/^(\d+):(\d+(?:\.\d+)?)$/);
+  if (m) return parseInt(m[1]) * 60 + parseFloat(m[2]);
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+/**
+ * めぐ指数（モック）
+ * 走破タイムとレース内最速タイムの差から暫定的な指数を算出。
+ * ※ 正式なロジックは後日置き換え予定
+ */
+function calcMeguIndex(timeSec: number | null, bestSec: number | null, fieldSize: number): number | null {
+  if (timeSec == null || bestSec == null || timeSec <= 0) return null;
+  const diff = timeSec - bestSec; // 秒差（0=1着タイム）
+  // ベース: 勝ちタイム=100, 頭数・距離にかかわらず1秒差≒-4pt（暫定）
+  const raw = 100 - diff * 4.0;
+  // フィールドサイズが大きいほど上位の評価を引き上げる（暫定補正）
+  const fieldBonus = diff < 0.3 ? (fieldSize - 8) * 0.3 : 0;
+  return Math.max(50, Math.min(120, Math.round((raw + fieldBonus) * 10) / 10));
+}
+
+function meguColor(v: number | null): { color: string; bg: string } {
+  if (v == null) return { color: "var(--text-dim)", bg: "transparent" };
+  if (v >= 105) return { color: "#22c55e", bg: "rgba(34,197,94,0.10)" };
+  if (v >= 98)  return { color: "#4ade80", bg: "rgba(74,222,128,0.07)" };
+  if (v >= 92)  return { color: "#60a5fa", bg: "rgba(96,165,250,0.07)" };
+  if (v >= 82)  return { color: "var(--text-dim)", bg: "transparent" };
+  return { color: "#f87171", bg: "rgba(239,68,68,0.07)" };
+}
+
 /* ── コンポーネント ── */
 export default function RaceDetailPage() {
   const { id: raceId } = useParams<{ id: string }>();
@@ -309,18 +344,32 @@ export default function RaceDetailPage() {
   /* ── レース結果 ── */
   const resultEntries = [...(rd?.race_result?.entries ?? [])].sort((a, b) => (Number(a.finish_position ?? a.position ?? 99)) - (Number(b.finish_position ?? b.position ?? 99)));
 
+  // めぐ指数計算用: フィールド内最速タイムを求める
+  const allTimes = resultEntries.map((e) => parseTimeSec(e.time as string | undefined)).filter((v): v is number => v != null && v > 0);
+  const bestTime = allTimes.length ? Math.min(...allTimes) : null;
+  const fieldSize = resultEntries.length;
+
   const ResultTbl = resultEntries.length === 0 ? (
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>🏆 レース結果データがありません</div>
   ) : (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
-          <tr>{["着順", "枠", "馬番", "馬名", "騎手", "タイム", "通過順", "上り3F", "単勝"].map(h => <th key={h} style={TH}>{h}</th>)}</tr>
+          <tr>
+            {["着順", "枠", "馬番", "馬名", "騎手", "タイム", "通過順", "上り3F", "単勝"].map(h => <th key={h} style={TH}>{h}</th>)}
+            <th style={{ ...TH, borderLeft: "2px solid rgba(167,139,250,0.3)", color: "#a78bfa" }}>
+              めぐ指数
+              <span style={{ fontSize: 9, verticalAlign: "super", marginLeft: 2, opacity: 0.7 }}>β</span>
+            </th>
+          </tr>
         </thead>
         <tbody>
           {resultEntries.map((e, i) => {
             const pos = Number(e.finish_position ?? e.position ?? 99);
             const placeColor = pos === 1 ? "#fbbf24" : pos === 2 ? "#94a3b8" : pos === 3 ? "#d97706" : "var(--text)";
+            const tSec = parseTimeSec(e.time as string | undefined);
+            const megu = calcMeguIndex(tSec, bestTime, fieldSize);
+            const { color: meguColor_, bg: meguBg } = meguColor(megu);
             return (
               <tr key={i} style={{ transition: "background 0.12s" }}>
                 <td style={{ ...TD, fontWeight: pos <= 3 ? 800 : 400, color: placeColor, fontSize: pos <= 3 ? 15 : 13 }}>{pos <= 0 || pos >= 99 ? "—" : pos}</td>
@@ -332,11 +381,28 @@ export default function RaceDetailPage() {
                 <td style={{ ...TD, fontSize: 11 }}>{e.passing_order ?? "—"}</td>
                 <td style={TD}>{e.last3f ?? "—"}</td>
                 <td style={{ ...TD, color: "var(--text-dim)", fontSize: 12 }}>{e.win_odds != null ? `${Number(e.win_odds).toFixed(1)}` : "—"}</td>
+                <td
+                  style={{ ...TD, borderLeft: "2px solid rgba(167,139,250,0.15)", fontWeight: megu != null ? 700 : 400, color: meguColor_, background: meguBg }}
+                  title="レースパフォーマンス指数（めぐ指数）β版 - 走破タイムベースの暫定算出"
+                >
+                  {megu != null ? megu.toFixed(1) : "—"}
+                </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      {/* めぐ指数の注釈 */}
+      <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span style={{ color: "#a78bfa", fontWeight: 600 }}>めぐ指数 β</span>
+        <span>走破タイムを基にしたレースパフォーマンス指数（暫定モック算出）。正式ロジックは後日更新予定。</span>
+        <span style={{ borderLeft: "1px solid var(--border)", paddingLeft: 10 }}>
+          <strong style={{ color: "#22c55e" }}>≥105</strong> 優秀 /
+          <strong style={{ color: "#60a5fa", marginLeft: 4 }}>98〜</strong> 良好 /
+          <strong style={{ color: "var(--text-dim)", marginLeft: 4 }}>82〜</strong> 標準 /
+          <strong style={{ color: "#f87171", marginLeft: 4 }}>＜82</strong> 低調
+        </span>
+      </div>
     </div>
   );
 

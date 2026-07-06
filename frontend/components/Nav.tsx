@@ -33,6 +33,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "馬券・予測", color: "#3fb950",
     children: [
+      { label: "🤖 今週のAI予測", href: "/weekly-predictions" },
       { label: "馬券最適化", href: "/betting" },
       { label: "AIモデルSLA", href: "/ai-sla" },
     ],
