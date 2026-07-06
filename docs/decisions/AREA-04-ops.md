@@ -1,11 +1,13 @@
 # AREA-04 — 運用最適化要件（Cron SLA / プロセス分離 / Circuit Breaker / 監視・アラート / デプロイ / ロールバック）
-**Status**: FINAL | **Last Updated**: 2026-07-06 | **Consolidates**: DEC-001（統合済み）
+**Status**: FINAL | **Last Updated**: 2026-07-06 | **Consolidates**: DEC-001（統合済み）, TASK-049（統合済み）
 
 ---
 
 ## 1. 概要
 
 本仕様書は keiba-vpn プロジェクトの運用最適化要件を定義する。Cron ジョブ SLA・プロセス分離・Circuit Breaker・監視・アラート・デプロイ・ロールバックを対象とする。
+
+ConoHa VPS 2GB 構成を前提に、UI の見た目を一切変えずに**パフォーマンス・可用性・運用コスト**の3軸を最大化する。フロントエンドのキャッシュ最適化・バンドル削減、バックエンドの N+1 解消・BFF 集約、インフラの OOM 防止設計の3方向で同時進行する。
 
 ---
 
@@ -103,9 +105,10 @@
 | 追走難度 precompute | `tracking_difficulty` キャッシュ事前計算 | raceday-eve 完了後に起動（`KEIBA_EVE_PRECOMPUTE_TRACKING=1`） |
 | 最終オッズ precompute | `final_odds_prediction` キャッシュ事前計算 | raceday-eve 完了後に起動（`KEIBA_EVE_PRECOMPUTE_FINAL_ODDS=1`） |
 | AI 予測トリガ | T-15バンドル完了後に Stage 1→2 推論実行 | `KEIBA_PRE_RACE_PREDICT_ENABLED=1` 時に起動 |
-| 推論バッチプロセス | Stage 1 → Stage 2 順次推論・結果書込 | 発走 3 時間前までに完了（N-9） |
-| API サーバー（Flask） | REST API 提供・Redis キャッシュ参照 | キャッシュヒット ≤ 200 ms（N-1）、ミス ≤ 2,000 ms（N-2） |
+| 推論バッチプロセス | Stage 1 → Stage 2 順次推論・結果書込 | 発走 3 時間前までに完了（N-9）; systemd MemoryMax=512M, CPUQuota=60% |
+| API サーバー（Flask / Gunicorn） | REST API 提供・Redis キャッシュ参照 | キャッシュヒット ≤ 200 ms（N-1）、ミス ≤ 2,000 ms（N-2）; systemd MemoryMax=384M |
 | DDL マイグレーションプロセス | Alembic スキーマバージョン管理 | デプロイ時に独立実行（N-11） |
+| ETL 集約バッチ | `aggregate_predictions.py` による馬単位ファイル → manifest.json → full.json 生成 | Phase 2 以降。`scrape_runs` テーブルに完了記録 |
 
 **シングル IP 環境制約**: netkeiba.com スクレイパーはグローバルスロット 4 以内を厳守し、IP ブロックを防止する。
 
@@ -113,12 +116,20 @@
 
 ## 4. VPS メモリバジェット
 
-DEC-001 には VPS のメモリ上限や具体的なメモリ割り当て数値の明示的な記述は存在しない。
+<!-- TASK-049 決定により具体的な割り当て値を追記。旧「要対応」記述を置き換え -->
 
-> **要対応**: 後続の DEC（運用インフラ決定文書）で以下を確定する必要がある。
-> - VPS スペック（RAM 上限）
-> - 各プロセス（API サーバー・推論バッチ・Redis・PostgreSQL）へのメモリ上限割り当て
-> - LightGBM / LSTM モデルのロード時メモリ見積もり
+ConoHa VPS 2GB 制約下での systemd MemoryMax 設定を以下の通り確定する。
+
+| プロセス | systemd サービス名 | MemoryMax | CPUQuota |
+|---|---|---|---|
+| 推論バッチ | `keiba-infer.service` | 512MB | 60% |
+| Web サーバー（Gunicorn） | `keiba-web.service` | 384MB | — |
+| Redis | `redis.conf` maxmemory | 128MB | — |
+| 全プロセス合計 | — | ≤ 1.5GB | — |
+
+> **注**: 残余 512MB は PostgreSQL・OS・その他プロセス向け。LightGBM / LSTM モデルロード時のメモリ見積もりは推論バッチ 512MB 上限内に収めること。
+>
+> **要対応 (OP-1)**: 各モデルロード時の実測メモリ使用量を計測し、512MB 制約との適合を確認すること（後続 DEC で報告）。
 
 ---
 
@@ -181,16 +192,22 @@ results:
 -- scrape_runs テーブル（スクレイプ実行ログ）
 -- カラム: target_type, status, retry_count
 -- 監視基盤はこのテーブルを参照して成功率・失敗率を集計すること
+-- Phase 2 以降: ETL 集約ステップ（aggregate_predictions.py）の完了もこのテーブルに記録する
 ```
 
-### 6-3. API パフォーマンス監視（N-1、N-2）
+### 6-3. API パフォーマンス監視
+
+<!-- TASK-049 により BFF エンドポイント追加に伴い項目を追記 -->
 
 | 項目 | SLO |
 |---|---|
 | キャッシュヒット時レスポンスタイム | ≤ 200 ms |
 | キャッシュミス時レスポンスタイム | ≤ 2,000 ms |
+| BFF エンドポイント `GET /api/v1/races/{race_id}/full` レスポンスタイム (p95) | ≤ 300 ms |
+| Redis キャッシュヒット率（`predictions:{race_id}:full`） | ≥ 80% |
+| Gunicorn OOM Kill 発生率 | 0件/月 |
 
-### 6-4. 推論バッチ完了監視（N-9）
+### 6-4. 推論バッチ完了監視
 
 - 発走 3 時間前までに推論バッチが完了していない場合はアラートを発報する。
 
@@ -200,16 +217,25 @@ results:
 - データドリフト検知
 - 障害・エラー通知アラートの整備
 
-### 6-6. テンポラルリーク検知（N-10）
+### 6-6. テンポラルリーク検知
 
 - CI パイプラインにおいてテストデータ時系列分割によるリーク検知テストを自動実行する。
 - `as_of_race_id` 紐付けの単体テストを必須化する（F-3 実装時）。
+
+### 6-7. フロントエンド性能監視（TASK-049 追加）
+
+| 項目 | 目標値 |
+|---|---|
+| 静的データ系 Flask への無駄リクエスト削減率 | ≥ 60% 削減 |
+| 初回 JS バンドルサイズ（チャートライブラリ分離後） | ≥ 30% 削減 |
+| モバイル LCP（dynamic import 適用後） | ≤ 2.5s |
+| GCS リクエスト数（full.json 一本化後） | N回 → 1回/レース |
 
 ---
 
 ## 7. デプロイ
 
-### 7-1. スキーママイグレーション（N-11）
+### 7-1. スキーママイグレーション
 
 - DDL 変更は **Alembic** でバージョン管理し、全スキーマ変更をマイグレーションファイルとして記録する。
 - デプロイ時はマイグレーションプロセスを API サーバー起動前に独立実行する。
@@ -219,61 +245,3 @@ results:
 ```
 1. DDL マイグレーション実行（Alembic）
 2. スクレイパープロセス起動
-3. オッズ収集スケジューラ起動
-4. 推論バッチプロセス起動
-5. API サーバー起動
-```
-
-### 7-3. フェーズ別リリース計画
-
-| Phase | 主要デプロイ対象 | 完了条件 |
-|---|---|---|
-| Phase 0 | scrape_runs テーブル・基本スキーマ | ラップデータ可用性確認完了 |
-| Phase 1 | Layer 1〜5 全テーブル DDL・スクレイパー群・集計バッチ | 過去 2 年分データ格納済み |
-| Phase 2 | 特徴量パイプライン・Stage 1 モデル・回収率計算ロジック | 勝率 Log Loss ベースライン比 −5% 改善 |
-| Phase 3 | Stage 2 モデル・REST API・Redis キャッシュ・UI | 全予測ターゲット T-1〜T-11 が API 経由で取得可能 |
-| Phase 4 | LSTM ラップモデル・自動再学習スケジューラ | 継続運用 |
-
-### 7-4. キャッシュ設定（F-12、N-12）
-
-```
-キャッシュキー: prediction:{race_id}:{model_version}
-キャッシュキー: lap:prediction:{race_id}:{model_version}
-TTL: 発走時刻まで有効 / 発走後 60 秒で自動失効
-```
-
----
-
-## 8. ロールバック
-
-### 8-1. モデルロールバック（F-16）
-
-- 学習済みモデルはバージョン管理基盤（MLflow 等）で管理し、古いバージョンへのロールバック機能を提供する（Phase 2 で基盤整備）。
-- `prediction_results` テーブルの `model_version` カラムにより、どのモデルバージョンによる推論結果かを追跡可能とする。
-
-### 8-2. スキーマロールバック
-
-- Alembic のダウングレード機能を用いてスキーマ変更を巻き戻す。
-- Layer 2〜5 テーブルは **追記型・不変（削除不可）** 設計のため、データ自体のロールバックは行わない。
-
-### 8-3. データロールバック非対応の設計原則
-
-| テーブル種別 | 更新ポリシー | ロールバック可否 |
-|---|---|---|
-| `race_results`（Layer 2） | 追記のみ | ✗ 不変 |
-| `*_stats_snapshot`（Layer 3） | 追記のみ（UNIQUE 制約） | ✗ 不変 |
-| `race_odds_snapshot`（Layer 5） | 追記のみ・削除不可 | ✗ 不変 |
-| `prediction_results` | UNIQUE(race_id, horse_id, model_version) | ✓ 旧 model_version を参照切替 |
-
----
-
-## 9. 未決定事項（後続 DEC で確定が必要な項目）
-
-| # | 項目 | 理由 |
-|---|---|---|
-| OP-1 | VPS メモリバジェット（各プロセスへの割り当て上限） | DEC-001 に記述なし |
-| OP-2 | Circuit Breaker ライブラリ選定・閾値定義 | DEC-001 はリトライ設定のみ定義、CB パターン未採用 |
-| OP-3 | 監視基盤ツール選定（Prometheus / Grafana / Sentry 等） | DEC-001 に記述なし |
-| OP-4 | アラート通知チャネル（Slack / PagerDuty 等） | DEC-001 に記述なし |
-| OP-5 | デプロイ自動化手段（GitHub Actions / Ansible 等） | DEC-001 に記述なし |
-| OP-6 | MLflow 以外のモデルレジストリ候補の評価 | DEC-001 は「MLflow 等」と記載のみ |
