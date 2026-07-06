@@ -6455,6 +6455,88 @@ async def api_precompute_tracking_difficulty(race_id: str):
         }, status_code=500)
 
 
+# ── レース質分析 (race_quality_model) ────────────────────────────────────
+
+@app.get("/api/race-quality/meta", response_class=JSONResponse)
+async def api_race_quality_meta():
+    """レース質 8 軸の定義・セグメントキー一覧など固定メタデータ。"""
+    def _run():
+        from src.research.race.race_quality_model import get_race_quality_meta
+        return get_race_quality_meta()
+
+    try:
+        return JSONResponse(await asyncio.to_thread(_run))
+    except Exception as e:
+        import traceback
+        return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+
+
+@app.get("/api/race-quality/day", response_class=JSONResponse)
+async def api_race_quality_day(date: str = ""):
+    """指定日（YYYYMMDD）の全 JRA レースのレース質を一括推定。"""
+    if not date:
+        return JSONResponse({"error": "date は必須です (例: 20240601)"}, status_code=400)
+    date_compact = date.replace("-", "")
+
+    def _run():
+        from src.research.race.race_quality_model import analyze_date
+        return analyze_date(_get_storage(), date_compact)
+
+    try:
+        return JSONResponse(await asyncio.to_thread(_run))
+    except Exception as e:
+        import traceback
+        return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+
+
+@app.get("/api/race-quality/race", response_class=JSONResponse)
+async def api_race_quality_race(race_id: str = ""):
+    """単一レースのレース質ベクトル（9 確率）とメタ情報。"""
+    if not race_id:
+        return JSONResponse({"error": "race_id は必須です"}, status_code=400)
+
+    def _run():
+        from src.research.race.race_quality_model import analyze_race
+        return analyze_race(_get_storage(), race_id.strip())
+
+    try:
+        result = await asyncio.to_thread(_run)
+        if result is None:
+            return JSONResponse(
+                {"error": "レース質を推定できません（結果未取得または頭数不足）"},
+                status_code=404,
+            )
+        return JSONResponse(result)
+    except Exception as e:
+        import traceback
+        return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+
+
+@app.get("/api/race-quality/entrants-aptitude", response_class=JSONResponse)
+async def api_race_quality_entrants_aptitude(race_id: str = "", refresh: bool = False):
+    """指定レースの出走馬ごとの 8 軸適性スコア（血統＋戦歴キャッシュ利用）。"""
+    if not race_id:
+        return JSONResponse({"error": "race_id は必須です"}, status_code=400)
+
+    def _run():
+        from src.research.race.race_quality_model import build_entrants_aptitude_response
+        return build_entrants_aptitude_response(
+            _get_storage(), race_id.strip(), force_refresh=refresh
+        )
+
+    try:
+        result = await asyncio.to_thread(_run)
+        if result is None:
+            return JSONResponse(
+                {"error": "出走馬データなし（出馬表・レース結果未取得）"},
+                status_code=404,
+            )
+        return JSONResponse(result)
+    except Exception as e:
+        import traceback
+        return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+
+
 @app.get("/api/race/{race_id}/final-odds", response_class=JSONResponse)
 async def api_final_odds(race_id: str, refresh: bool = False):
     """想定オッズ予測（storage キャッシュ優先、refresh=true で再計算）。"""
@@ -8315,6 +8397,16 @@ async def tracking_difficulty_page(request: Request):
 @app.get("/ai-sla", response_class=HTMLResponse)
 async def ai_sla_page(request: Request):
     return templates.TemplateResponse("analysis/ai_sla.html", {"request": request})
+
+
+@app.get("/race-quality", response_class=HTMLResponse)
+async def race_quality_page(request: Request):
+    """レース質分析ページ。"""
+    return templates.TemplateResponse("race/race_quality.html", {
+        "request": request,
+        "current_page": "race_quality",
+        "breadcrumbs": [],
+    })
 
 
 def _url_path_prefix_before_suffix(url_path: str, page_suffix: str) -> str:

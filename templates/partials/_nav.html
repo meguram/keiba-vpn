@@ -272,7 +272,7 @@
 
 {% set _is_dev = is_dev_check(request) %}
 {# ── カテゴリ → ページキー対応（active 判定に使用） ── #}
-{% set _ai_pages = ['tracking_difficulty', 'race_detail'] %}
+{% set _ai_pages = ['tracking_difficulty', 'race_detail', 'race_quality'] %}
 {% set _bloodline_pages = ['bloodline', 'bloodline_vector', 'pedigree_map', 'bloodline_cluster', 'pedigree_race_stats', 'myostatin'] %}
 {% set _analysis_pages = ['growth_curve', 'note_aptitude_race', 'track_speed'] %}
 {% set _dev_pages = ['monitor', 'data_viewer', 'queue_status', 'server_logs', 'scrape_upcoming', 'scrape_control', 'cron_jobs', 'scrape'] %}
@@ -320,6 +320,11 @@
         <a href="/tracking-difficulty" class="{% if current_page == 'tracking_difficulty' %}active{% endif %}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
           追走難度
+        </a>
+        <div class="gnav-menu-section">レース質分析</div>
+        <a href="/race-quality" class="{% if current_page == 'race_quality' %}active{% endif %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          レース質分析
         </a>
         <div class="gnav-menu-section">AI 予測結果（レース別）</div>
         <button type="button" class="gnav-menu-item" data-action="open-race-jump">
