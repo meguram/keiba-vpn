@@ -5,7 +5,6 @@ export type NavCardItem = {
   title: string;
   desc: string;
   tags: string[];
-  onClick?: "focusJump";
 };
 
 export type CategorySection = {
@@ -35,13 +34,12 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
         tags: ["ゲート", "脚質", "隣枠", "ML"],
       },
       {
-        href: "#",
+        href: "/weekly-predictions",
         accent: "var(--home-orange)",
         icon: "🏁",
-        title: "レース予測結果",
-        desc: "個別レースの出馬表・結果・オッズ・馬情報・「AI 予測」タブで推奨印 (◎○▲△☆) を確認。レース ID で直接移動可能。",
+        title: "今週のAI予測",
+        desc: "今週のレース別 AI 推奨印 (◎○▲△☆) を一覧表示。出馬表・オッズ・個別レース詳細へ遷移可能。",
         tags: ["出馬表", "オッズ", "AI 推奨印"],
-        onClick: "focusJump",
       },
     ],
   },
