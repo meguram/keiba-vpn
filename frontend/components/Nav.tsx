@@ -2,105 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
-
-type NavItem = { label: string; href: string };
-type NavGroup = { label: string; href?: string; color: string; children?: NavItem[]; adminOnly?: boolean };
-
-const NAV_GROUPS: NavGroup[] = [
-  { label: "Home", href: "/", color: "#c8d6e5" },
-  {
-    label: "分析", color: "#58a6ff",
-    children: [
-      { label: "追走難度分析", href: "/tracking-difficulty" },
-      { label: "レース質分析", href: "/race-quality" },
-      { label: "成長曲線", href: "/growth-curve" },
-      { label: "馬場速度", href: "/track-speed" },
-      { label: "適性3D", href: "/note-aptitude-race" },
-    ],
-  },
-  {
-    label: "血統", color: "#bc8cff",
-    children: [
-      { label: "血統研究", href: "/bloodline" },
-      { label: "血統ベクトル", href: "/bloodline-vector" },
-      { label: "メタクラスタ", href: "/bloodline-cluster" },
-      { label: "血統マップ", href: "/pedigree-map" },
-      { label: "血統構成分析", href: "/pedigree-race-stats" },
-      { label: "MSTN遺伝子", href: "/myostatin" },
-    ],
-  },
-  {
-    label: "AI予測", color: "#3fb950",
-    children: [
-      { label: "🤖 今週のAI予測", href: "/weekly-predictions" },
-    ],
-  },
-  {
-    label: "💰 馬券最適化", color: "#3fb950",
-    href: "/betting",
-    adminOnly: true,
-  },
-];
-
-function DropdownMenu({ group, path }: { group: NavGroup; path: string }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const isActive = group.children?.some((c) => path.startsWith(c.href)) ?? false;
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          background: "none", border: "none", cursor: "pointer",
-          fontSize: 13, color: isActive ? group.color : "var(--text-dim)",
-          padding: "0 4px", display: "flex", alignItems: "center", gap: 3,
-        }}
-      >
-        {group.label}
-        <span style={{ fontSize: 9, opacity: 0.6 }}>{open ? "▲" : "▼"}</span>
-      </button>
-      {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 100,
-          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
-          minWidth: 160, boxShadow: "0 8px 24px rgba(0,0,0,0.4)", overflow: "hidden",
-        }}>
-          {group.children?.map((c) => (
-            <Link
-              key={c.href} href={c.href}
-              onClick={() => setOpen(false)}
-              style={{
-                display: "block", padding: "9px 14px", fontSize: 13,
-                color: path.startsWith(c.href) ? group.color : "var(--text-dim)",
-                textDecoration: "none", transition: "background 0.1s",
-                background: path.startsWith(c.href) ? "rgba(59,130,246,0.06)" : "transparent",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(59,130,246,0.08)"; (e.currentTarget as HTMLElement).style.color = "#fff"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = path.startsWith(c.href) ? "rgba(59,130,246,0.06)" : "transparent"; (e.currentTarget as HTMLElement).style.color = path.startsWith(c.href) ? group.color : "var(--text-dim)"; }}
-            >
-              {c.label}
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+import { useEffect, useState } from "react";
 
 export function Nav() {
   const path = usePathname();
-  const [isAdmin, setIsAdmin] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     fetch("/api/v1/auth/status", { credentials: "include" })
@@ -112,34 +19,94 @@ export function Nav() {
       .catch(() => { setLoggedIn(false); setIsAdmin(false); });
   }, [path]);
 
+  const isHome = path === "/";
+
   return (
-    <nav className="sticky top-0 z-50 flex h-11 items-center gap-4 border-b px-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <Link href="/" className="font-bold text-white text-sm">keiba-vpn</Link>
+    <nav style={{
+      position: "sticky",
+      top: 0,
+      zIndex: 50,
+      display: "flex",
+      height: 44,
+      alignItems: "center",
+      padding: "0 20px",
+      background: "#0d1117",
+      borderBottom: "1px solid #21262d",
+    }}>
+      <Link href="/" style={{
+        fontWeight: 700,
+        fontSize: 14,
+        color: "#f0f6fc",
+        textDecoration: "none",
+        letterSpacing: "-0.3px",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+      }}>
+        <span style={{ fontSize: 16 }}>🏇</span>
+        <span>keiba-vpn</span>
+      </Link>
 
-      {NAV_GROUPS.map((g) => {
-        if (g.adminOnly && !isAdmin) return null;
+      {!isHome && (
+        <Link href="/" style={{
+          marginLeft: 16,
+          fontSize: 12,
+          color: "#6e7681",
+          textDecoration: "none",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          transition: "color 0.15s",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = "#c9d1d9")}
+        onMouseLeave={(e) => (e.currentTarget.style.color = "#6e7681")}
+        >
+          ← ホーム
+        </Link>
+      )}
 
-        if (g.children) {
-          return <DropdownMenu key={g.label} group={g} path={path} />;
-        }
-
-        return (
-          <Link
-            key={g.href}
-            href={g.href!}
-            style={{ color: path === "/" && g.href === "/" ? g.color : path.startsWith(g.href!) && g.href !== "/" ? g.color : "var(--text-dim)", fontSize: 13 }}
+      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+        {isAdmin && (
+          <Link href="/betting" style={{
+            fontSize: 12,
+            color: "#3fb950",
+            textDecoration: "none",
+            padding: "4px 10px",
+            borderRadius: 6,
+            border: "1px solid rgba(63,185,80,0.3)",
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(63,185,80,0.1)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
           >
-            {g.label}
+            💰 馬券
           </Link>
-        );
-      })}
-
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-        {!loggedIn && (
-          <Link href="/login" className="text-sm" style={{ color: "var(--text-dim)" }}>ログイン</Link>
         )}
-        {loggedIn && (
-          <span className="text-sm" style={{ color: "var(--text-dim)", fontSize: 12 }}>管理者</span>
+        {loggedIn ? (
+          <span style={{
+            fontSize: 12,
+            color: "#6e7681",
+            padding: "4px 10px",
+            borderRadius: 6,
+            border: "1px solid #21262d",
+          }}>
+            管理者
+          </span>
+        ) : (
+          <Link href="/login" style={{
+            fontSize: 12,
+            color: "#58a6ff",
+            textDecoration: "none",
+            padding: "4px 12px",
+            borderRadius: 6,
+            border: "1px solid rgba(88,166,255,0.3)",
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(88,166,255,0.1)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          >
+            ログイン
+          </Link>
         )}
       </div>
     </nav>
