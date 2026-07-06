@@ -1,5 +1,5 @@
 # AREA-07 — モデリング管理要件（LightGBM バッチ推論, 学習パイプライン, SHAP, ModelRegistry, バージョニング, CI ゲート）
-**Status**: FINAL | **Last Updated**: 2026-07-06 | **Consolidates**: DEC-001（統合済み）, TASK-052（依存関係・リスク D-1〜D-8 対策統合済み）
+**Status**: FINAL | **Last Updated**: 2026-07-06 | **Consolidates**: DEC-001（統合済み）, TASK-052（依存関係・リスク D-1〜D-8 対策統合済み）, DEC-022（予測タスク二値分類統一）, DEC-009（モデル保持ポリシー）, DEC-015（特徴量スキーマ正規定義整合）
 
 ---
 
@@ -17,9 +17,9 @@
 
 | ID | ターゲット名 | 問題設定 | 出力型 | Stage | データ収集元 | 収集状況 | DB格納Layer | 特徴量としての利用可否 | 推奨モデル | 主評価指標 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| T-1 | win_prob（勝率） | 多クラス分類（1着） | NUMERIC(5,4) | Stage 1 | — | ✅ 収集済み | Layer 3: `prediction_results` | ✅ **過去走のみ可** | LightGBM softmax | — |
-| T-2 | place_prob（連対率） | バイナリ分類（2着以内） | NUMERIC(5,4) | Stage 1 | — | ✅ 収集済み | Layer 3: `prediction_results` | ✅ **過去走のみ可** | LightGBM binary | — |
-| T-3 | show_prob（複勝率） | バイナリ分類（3着以内） | NUMERIC(5,4) | Stage 1 | — | ✅ 収集済み | Layer 3: `prediction_results` | ✅ **過去走のみ可** | LightGBM binary | — |
+| T-1 | win_probability（勝率） | 二値分類（1着=1, それ以外=0） | NUMERIC(5,4) | Stage 1 | — | ✅ 収集済み | Layer 3: `prediction_results` | ✅ **過去走のみ可** | LightGBM binary (objective='binary') | AUC、Log Loss |
+| T-2 | place_prob（連対率） | 二値分類（2着以内=1, それ以外=0） | NUMERIC(5,4) | Stage 1 | — | ✅ 収集済み | Layer 3: `prediction_results` | ✅ **過去走のみ可** | LightGBM binary (objective='binary') | AUC、Log Loss |
+| T-3 | show_prob（複勝率） | 二値分類（3着以内=1, それ以外=0） | NUMERIC(5,4) | Stage 1 | — | ✅ 収集済み | Layer 3: `prediction_results` | ✅ **過去走のみ可** | LightGBM binary (objective='binary') | AUC、Log Loss |
 | T-4 | 上り3Fタイム予測 | 回帰（秒） | `FLOAT` | Stage 2 | `race_results.last3f_sec` | ✅ 収集済み | Layer 3: `prediction_results` | ✅ **過去走のみ可**（当日走は禁止） | LightGBM Regressor | MAE（秒）、RMSE |
 | T-5 | 数値位置取り予測 | 順序回帰（1〜頭数） | `INT` | Stage 2 | `race_results.finish_pos` | ✅ 収集済み | Layer 3: `prediction_results` | ✅ **過去走のみ可**（当日走は禁止） | LightGBM（lambdarank損失） | Spearman相関、MAE |
 | T-6 | 脚質分類予測 | 4クラス分類（逃/先/差/追） | `ENUM` | Stage 1 | `horse_profiles.running_style` + `corner_pos`（自動補完） | ⚠️ 一部欠損（F-7で補完） | Layer 3: `prediction_results` | ✅ **過去走のみ可** | LightGBM Classifier | Accuracy、F1-macro |
@@ -54,6 +54,78 @@
 > FROM race_results
 > WHERE finish_time_sec IS NOT NULL AND last3f_sec IS NOT NULL;
 > ```
+
+### 2-1. T-1 出力ポストプロセス（DEC-022）
+
+<!-- DEC-022: T-1 を二値分類に統一。出力は softmax 正規化 → 勝率 p_i。連対率・複勝率は Harville 式で導出。 -->
+
+**モデル定義**:
+
+```python
+# LightGBM binary: ラベル 1着=1, それ以外=0
+params = {
+    "objective": "binary",
+    "metric": ["auc", "binary_logloss"],
+    "learning_rate": 0.05,
+    "num_leaves": 127,
+}
+# tansho_label: BOOLEAN（AREA-06 § 5-1 と整合）
+df["tansho_label"] = (df["finish_pos"] == 1).astype(int)  # BOOLEAN → 0/1
+```
+
+**出力ポストプロセス**:
+
+```python
+import numpy as np
+
+def postprocess_win_probs(raw_scores: list[float]) -> list[float]:
+    """
+    各馬の binary スコアを softmax 正規化して勝率 p_i を算出する。
+    raw_scores: LightGBM binary predict_proba の出力（レース内全馬）
+    """
+    exp_scores = np.exp(raw_scores - np.max(raw_scores))  # 数値安定化
+    return (exp_scores / exp_scores.sum()).tolist()
+
+def harville_place_prob(p: list[float]) -> list[float]:
+    """Harville 式による連対率（2着以内確率）"""
+    n = len(p)
+    place = []
+    for i in range(n):
+        # P(i が2着以内) = P(i が1着) + Σ_{j≠i} P(j が1着) × P(i が2着 | j が1着)
+        prob = p[i]
+        for j in range(n):
+            if j != i:
+                prob += p[j] * (p[i] / (1 - p[j] + 1e-9))
+        place.append(min(prob, 1.0))
+    return place
+
+def harville_show_prob(p: list[float]) -> list[float]:
+    """Harville 式による複勝率（3着以内確率）"""
+    n = len(p)
+    show = []
+    for i in range(n):
+        prob = p[i]
+        for j in range(n):
+            if j == i:
+                continue
+            pj_given_i = p[j] / (1 - p[i] + 1e-9)
+            for k in range(n):
+                if k == i or k == j:
+                    continue
+                prob += p[j] * pj_given_i * (p[i] / (1 - p[i] - p[j] + 1e-9))
+        show.append(min(prob, 1.0))
+    return show
+```
+
+**DB格納フィールド（AREA-02 整合）**:
+
+| フィールド | 旧名称 | 新名称 | 型 |
+|---|---|---|---|
+| 勝率 | `prediction_score` | `win_probability` | `FLOAT (0.0〜1.0)` |
+| 連対率 | — | `place_probability` | `FLOAT (0.0〜1.0)` |
+| 複勝率 | — | `show_probability` | `FLOAT (0.0〜1.0)` |
+
+> `tansho_label` は `BOOLEAN` 型（AREA-06 Layer 2 `race_results.tansho_label`）と整合。学習時は `int(0/1)` に変換して使用する。
 
 ---
 
@@ -118,8 +190,8 @@
 
 | ターゲット | アルゴリズム | 選定理由 |
 |---|---|---|
-| 勝率（T-1） | LightGBM softmax | 表形式データに最強、欠損耐性が高い |
-| 連対率・複勝率（T-2/3） | LightGBM binary | 同上 |
+| 勝率（T-1） | LightGBM binary (objective='binary') + softmax 正規化 | 二値分類で学習後、レース内確率を softmax 正規化して勝率 p_i を算出。Harville 式で連対率・複勝率を導出 |
+| 連対率・複勝率（T-2/3） | LightGBM binary (objective='binary') | T-1 の Harville 出力と組み合わせて最終確率を補正 |
 | 上り3Fタイム（T-4） | LightGBM Regressor | 連続値回帰、解釈性を重視 |
 | 位置取り予測（T-5） | LambdaMART（LightGBM lambdarank） | 相対順位を直接最適化できる（D-5対策） |
 | 脚質分類（T-6） | LightGBM Classifier | 4クラス・解釈性を重視 |
@@ -130,6 +202,10 @@
 ---
 
 ## 4. 特徴量定義
+
+<!-- DEC-015: カラム名の正規定義は AREA-06 § 5-1 を SSoT とする。本セクションの特徴量名は AREA-06 § 5-1 と一致させること。追加・変更は先に AREA-06 § 5-1 を更新し、本セクションへ伝播させる。 -->
+
+> **カラム名 SSoT**: AREA-06 § 5-1「主要特徴量カラム一覧」を参照。本セクションの特徴量名（`horse_past_results`, `jockey_stats`, `course_affinity`, `odds_win`, `odds_place`, `odds_change_rate`, `track_condition` 等）は AREA-06 と一致させること。
 
 ### 4-1. 基本特徴量（Layer 1〜2 由来）
 
@@ -213,8 +289,8 @@ df["pace_scenario_prior"] = (df["front_runner_count"] / df["horse_num"]) \
 
 1. 特徴量エンジニアリングパイプライン実行（脚質スコア・クロス特徴量・相対特徴量の自動生成）
 2. 時系列分割により train/validation/test セット構築
-3. LightGBM binary で連対率・複勝率モデル（T-2/T-3）を学習
-4. LightGBM softmax で勝率モデル（T-1）を学習
+3. LightGBM binary (objective='binary') で連対率モデル（T-2）・複勝率モデル（T-3）を学習
+4. LightGBM binary (objective='binary') で勝率モデル（T-1）を学習。出力を softmax 正規化し `win_probability` を算出後、Harville 式で `place_probability` / `show_probability` を導出（§ 2-1 参照）
 5. **T-6 脚質分類モデルを学習（前提: 自動ラベル一致率 > 80% の検証通過後・D-3対策）**
 6. 各モデルの評価指標を計算（後述）
 7. モデルを ModelRegistry へ登録・バージョニング
@@ -241,4 +317,32 @@ df["pace_scenario_prior"] = (df["front_runner_count"] / df["horse_num"]) \
 1. Stage 2 の出力を入力特徴量として受け渡し
 2. Layer 4（ラップ・ペース・コーナー通過）の特徴量を結合
 3. LightGBM per-furlong で 1F 毎ラップ予測モデル（T-7）を学習（初期実装）
-4. RMSE per furlong の閾値を下回れない場合は LSTM
+4. RMSE per furlong の閾値を下回れない場合は LSTM へ移行（Phase 4 判断）
+
+---
+
+## 6. モデル保持ポリシー（DEC-009）
+
+<!-- DEC-009: AREA-06 § 6 と同一ポリシー。GCS モデルストアの保持ルールを統一定義。 -->
+
+### 6-1. 複合保持ポリシー
+
+`gs://${GCS_BUCKET}/chuou/models/v{model_version}/` に格納されるすべてのモデルアーティファクトに以下を適用する：
+
+| ルール | 内容 |
+|---|---|
+| **最新バージョン保持** | 最新3バージョンを常時保持（削除不可） |
+| **経過日数による削除** | 作成日から 365 日経過したバージョンを削除 |
+| **優先順位** | 「最新3バージョン保持」が「365日削除」より優先（最新3件は365日超過でも保持） |
+
+> AREA-06 § 6 と同一ポリシー。GCS ライフサイクル設定の実装詳細は AREA-06 § 6-2 を参照。
+
+### 6-2. ModelRegistry バージョニング規則
+
+- モデルバージョンは `v{model_version}` 形式（例: `v1`, `v2`, `v3`）
+- 各バージョンに `_manifest_{YYYYMMDD}.json` を付与し、`created_at`・`feature_version`・`eval_metrics` を記録する
+- Stage 1 モデル（T-1/T-2/T-3/T-6）と Stage 2 モデル（T-4/T-5/T-8/T-9）は同一 `model_version` タグで管理し、セットで保持・削除する
+- CI ゲートは本番デプロイ前に以下を検証する：
+  - T-1: AUC ≥ 0.65、Log Loss ≤ 0.65
+  - T-4: RMSE < 0.3 秒（T-9 の本番投入条件）
+  - T-6: ラベル一致率 > 80%（D-3対策）

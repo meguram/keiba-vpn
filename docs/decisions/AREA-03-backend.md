@@ -1,5 +1,5 @@
 # AREA-03 — バックエンド要件（Flask API, DB スキーマ, 認証・認可, 4 層キャッシュ設計, レート制限）
-**Status**: FINAL | **Last Updated**: 2026-07-04 | **Consolidates**: DEC-001（統合済み）
+**Status**: REVISED | **Last Updated**: 2026-07-06 | **Consolidates**: DEC-001（統合済み）
 
 ---
 
@@ -156,7 +156,48 @@ CREATE TABLE scrape_runs (
 );
 ```
 
-### 2-7. スキーマ管理
+### 2-7. お気に入り馬テーブル（F-12）
+
+```sql
+CREATE TABLE user_favorites (
+    favorite_id   BIGSERIAL     PRIMARY KEY,
+    user_id       INTEGER       NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    horse_id      VARCHAR(20)   NOT NULL,
+    created_at    TIMESTAMPTZ   DEFAULT NOW(),
+    UNIQUE (user_id, horse_id)
+);
+
+CREATE INDEX idx_favorites_user ON user_favorites (user_id);
+```
+
+### 2-8. 通知設定・ログテーブル（F-09）
+
+```sql
+CREATE TABLE notification_settings (
+    user_id            INTEGER      PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+    email_enabled      BOOLEAN      NOT NULL DEFAULT FALSE,
+    notify_day_before  BOOLEAN      NOT NULL DEFAULT TRUE,   -- 前日 18:00 通知
+    notify_race_day    BOOLEAN      NOT NULL DEFAULT FALSE,  -- 当日 08:00 通知
+    updated_at         TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE TABLE notification_log (
+    log_id          BIGSERIAL     PRIMARY KEY,
+    user_id         INTEGER       NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    horse_id        VARCHAR(20)   NOT NULL,
+    race_id         VARCHAR(20)   NOT NULL,
+    notify_type     VARCHAR(20)   NOT NULL CHECK (notify_type IN ('DAY_BEFORE','RACE_DAY')),
+    sent_at         TIMESTAMPTZ   NOT NULL,
+    status          VARCHAR(20)   NOT NULL CHECK (status IN ('SENT','FAILED')),
+    error_message   TEXT
+);
+
+CREATE INDEX idx_notif_log_user ON notification_log (user_id, sent_at DESC);
+```
+
+> SendGrid API キーは環境変数 `SENDGRID_API_KEY` で管理する。メール本文テンプレートは `src/api/email_templates/` に保存。
+
+### 2-9. スキーマ管理
 
 - 全スキーマ変更は **Alembic** によるマイグレーションでバージョン管理する（N-11）。
 - 障害レース・海外レースは `races` テーブルの `is_excluded` フラグ（`BOOLEAN DEFAULT FALSE`）で予測対象外を明示管理する（N-14）。
@@ -176,12 +217,22 @@ CREATE TABLE scrape_runs (
 
 ### 3-2. エンドポイント一覧
 
-| メソッド | エンドポイント | 説明 | 機能要件 |
-|---|---|---|---|
-| `GET` | `/api/v1/races/{race_id}/predictions` | 全予測ターゲット（T-1〜T-9）取得 | F-10 |
-| `GET` | `/api/v1/races/{race_id}/predictions/laps` | ラップ予測系列（T-10〜T-11）取得 | F-11 |
-| `GET` | `/api/v1/races` | レース一覧取得 | F-13 |
-| `GET` | `/api/v1/races/{race_id}` | レース詳細・出馬表取得 | F-13 |
+| メソッド | エンドポイント | 説明 | 機能要件 | auth_required |
+|---|---|---|---|---|
+| `GET` | `/api/v1/races/today` | 本日のレース一覧取得 | F-13 | false |
+| `GET` | `/api/v1/races` | レース一覧取得（`?date=YYYYMMDD`） | F-13 | false |
+| `GET` | `/api/v1/races/{race_id}` | レース詳細・出馬表取得 | F-13 | false |
+| `GET` | `/api/v1/races/{race_id}/entries` | 出馬表取得 | F-13 | false |
+| `GET` | `/api/v1/races/{race_id}/results` | 着順・ラップ・コーナー取得 | F-13 | false |
+| `GET` | `/api/v1/races/{race_id}/predictions` | 全予測ターゲット（T-1〜T-9）取得 | F-10 | true |
+| `GET` | `/api/v1/races/{race_id}/predictions/laps` | ラップ予測系列（T-10〜T-11）取得 | F-11 | true |
+| `POST` | `/api/v1/filter/stats` | フィルタ条件による統計集計 | F-16 | true |
+| `POST` | `/api/v1/betting/optimize` | Kelly 基準馬券最適化 | F-08 | true |
+| `GET` | `/api/v1/favorites` | お気に入り馬一覧取得 | F-12 | true |
+| `POST` | `/api/v1/favorites` | お気に入り馬登録 | F-12 | true |
+| `DELETE` | `/api/v1/favorites/{horse_id}` | お気に入り馬登録解除 | F-12 | true |
+| `GET` | `/api/v1/notifications/settings` | 通知設定取得 | F-09 | true |
+| `PUT` | `/api/v1/notifications/settings` | 通知設定更新 | F-09 | true |
 
 ### 3-3. `GET /api/v1/races/{race_id}/predictions` レスポンス仕様
 
@@ -201,9 +252,8 @@ CREATE TABLE scrape_runs (
     {
       "horse_id": "2019105678",
       "post_no": 3,
-      "win_prob": 0.1823,
-      "place_prob": 0.3241,
-      "show_prob": 0.4815,
+      "win_probability": 0.1823,
+      "place_probability": 0.4815,
       "predicted_win_odds": 5.2,
       "predicted_place_odds": 2.1,
       "expected_win_roi": 94.8,
@@ -217,6 +267,8 @@ CREATE TABLE scrape_runs (
 ```
 
 - `is_value_bet`: `expected_win_roi >= 100` または `expected_show_roi >= 100` の場合に `true`（F-14）。
+- `win_probability`: DB カラム `win_prob` を API レスポンスでは `win_probability` として返す（DEC-022）。旧フィールド名 `prediction_score` は廃止。
+- `place_probability`: 複勝率（3着以内率）。DB カラム `show_prob` を API レスポンスでは `place_probability` として返す（DEC-022）。`float (0.0〜1.0)`。
 - ラップ予測（T-10〜T-11）はレスポンス内の `pace_prediction` オブジェクトおよび `/predictions/laps` エンドポイントで `furlong_index` 昇順で提供する（F-11）。
 
 ### 3-4. パフォーマンス要件
@@ -234,7 +286,7 @@ DEC-001 の現時点の記述には認証・認可の具体的スキームが明
 
 | 項目 | 方針 |
 |---|---|
-| 認証方式 | API キー（`Authorization: Bearer <token>` ヘッダー）または セッション Cookie（UI 向け） |
+| 認証方式 | JWT を HttpOnly Cookie（`access_token`）に保存して送受信。`Authorization: Bearer` ヘッダーは使用しない。CSRF 対策: SameSite=Strict + カスタム CSRF トークン（二重送信 Cookie パターン）。「30日間ログイン保持」有効時は Refresh Token を別 HttpOnly Cookie に保存し、アクセストークン（TTL=15分）を自動更新する。|
 | 認可スコープ | 予測 API・レース API は読み取り専用。スクレイプ実行・モデル管理は内部ネットワーク限定 |
 | 管理系エンドポイント | `/api/v1/admin/*` は内部 IP（127.0.0.1 / VPN 内）のみアクセス許可 |
 | DDL 操作 | Alembic マイグレーション実行権限はサービスアカウントに限定 |

@@ -1,5 +1,5 @@
 # AREA-08 — テスト要件（Unit/Integration/E2E/MLテスト, CI ゲート, カバレッジ目標, テストデータ管理）
-**Status**: FINAL | **Last Updated**: 2026-07-04 | **Consolidates**: DEC-001（統合済み）
+**Status**: ACTIVE | **Last Updated**: 2026-07-06 | **Consolidates**: DEC-001（統合済み）
 
 ---
 
@@ -44,12 +44,13 @@ DEC-001 が定める「`as_of_race_id` によるスナップショット管理�
 
 | シナリオ | 期待結果 |
 |---|---|
-| `GET /api/v1/races/{race_id}/predictions` （キャッシュヒット） | レスポンスタイム ≤ 200 ms、T-1〜T-9 全フィールドを含む JSON を返すこと（N-1） |
+| `GET /api/v1/races/{race_id}/predictions` （キャッシュヒット） | レスポンスタイム ≤ 500 ms (p95)、T-1〜T-9 全フィールドを含む JSON を返すこと（N-1） |
 | `GET /api/v1/races/{race_id}/predictions` （キャッシュミス） | レスポンスタイム ≤ 2,000 ms（N-2） |
 | ラップ予測エンドポイント | `pace_prediction.lap_times` に `furlong_index` 順の系列データが含まれること |
 | バリューベット候補フラグ | `expected_win_roi ≥ 100` または `expected_show_roi ≥ 100` の馬に `is_value_bet: true` が付与されること |
 | 障害レース除外 | 障害レースの `race_id` に対して予測対象外フラグが返され、推論が実行されないこと（N-14） |
 | 発走後 API レスポンス | 発走後 60 秒経過後は Redis キャッシュがなく DB から新鮮なデータが返ること |
+| F-6 レスポンシブテスト（Playwright） | モバイル・デスクトップ両ビューポートで主要画面（出馬表・予測結果・分析ダッシュボード）が崩れず表示されること（Playwright ブラウザ E2E） |
 
 ### 2-4. ML テスト
 
@@ -145,8 +146,17 @@ gates:
     targets:
       - tests/e2e/
     performance_checks:
-      - api_latency_cache_hit_ms: 200
+      - api_latency_cache_hit_p95_ms: 500
       - api_latency_cache_miss_ms: 2000
+
+  - name: responsive_tests        # F-6
+    blocking: true
+    tool: playwright
+    viewports:
+      - mobile                    # 例: 375×812 (iPhone 13)
+      - desktop                   # 例: 1280×800
+    targets:
+      - tests/e2e/responsive/
 ```
 
 ### 3-2. ブロッキング条件まとめ
@@ -158,7 +168,7 @@ gates:
 | 勝率 Log Loss 改善 < −5% | ✅ ブロック | N-4 の精度要件 |
 | Spearman ρ < 0.55 | ✅ ブロック | N-5 の精度要件 |
 | ラップ MAE > 0.3 秒 | ✅ ブロック | N-3 の精度要件 |
-| API レスポンス（キャッシュヒット）> 200 ms | ✅ ブロック | N-1 の非機能要件 |
+| API レスポンス（キャッシュヒット）> 500 ms (p95) | ✅ ブロック | N-1 の非機能要件 |
 | API レスポンス（キャッシュミス）> 2,000 ms | ✅ ブロック | N-2 の非機能要件 |
 | 時系列分割ランダムシャッフル検出 | ✅ ブロック | テンポラルリーク防止ルールの遵守 |
 

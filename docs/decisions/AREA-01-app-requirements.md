@@ -20,6 +20,7 @@ netkeiba.com から収集した競馬データを用いて、出走馬ごとの 
 | データソース | netkeiba.com |
 | ユーザー種別 | ゲスト（TOP3 閲覧のみ） / ログイン済（全頭閲覧・マイ分析保存） |
 | 主要制約 | ConoHa VPS 2GB — 2GB 以内での安定稼働を最優先 |
+| データベース | PostgreSQL **15** |
 
 ---
 
@@ -70,12 +71,6 @@ netkeiba.com から収集した競馬データを用いて、出走馬ごとの 
 | `horse_training` | 馬調教履歴（日時・コース・条件・ライダー・時計） | 前日 JST 18:00（SLA 1） | `netkeiba/pc/horse_training/{prefix}/{horse_id}.json` |
 
 > `{prefix}` = horse_id の先頭4桁
-
-#### SmartRC（smartrc.jp、二次データソース）
-
-| スクレイプカテゴリ | 内容 | 取得タイミング（SLA） | GCS 格納パス |
-|---|---|---|---|
-| `smartrc_race` | SmartRC独自指標（cr_value・first_furlong_time・estimated_popularity） | T-15バンドル（SLA 3）+ 前日（SLA 1） | `netkeiba/pc/smartrc_race/{year}/{race_id}.json` |
 
 #### JRA 公式
 
@@ -311,9 +306,9 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 |---|---|---|---|---|
 | SLA 0 | `0 22 * * *` | 07:00 毎日 | `daily-race-lists` | 今日〜カレンダー末尾の全開催日 race_lists 取得・更新 |
 | SLA 0 | `0 8 * * *` | 17:00 毎日 | `daily-race-lists` | 同上（夕方更新） |
-| SLA 1 | `0 9 * * *` | 18:00 毎日 | `raceday-eve` | 翌開催日: race_shutuba + race_shutuba_past + race_oikiri + horse_training + smartrc_race → 追走難度・最終オッズ precompute |
+| SLA 1 | `0 9 * * *` | 18:00 毎日 | `raceday-eve` | 翌開催日: race_shutuba + race_shutuba_past + race_oikiri + horse_training → 追走難度・最終オッズ precompute |
 | SLA 2 | `*/10 20-23 * * *` | 05:00-08:50 毎10分 | `jra-baba-morning` | jra_cushion ポーリング（開催日のみ実取得） |
-| SLA 3 | `30 22 * * *` | 07:30 開催日 | `raceday-runner` | 各レース T-15分: race_detail + race_odds + race_paddock + race_barometer + race_trainer_comment + smartrc_race + JRA馬場ライブ → AI 予測トリガ |
+| SLA 3 | `30 22 * * *` | 07:30 開催日 | `raceday-runner` | 各レース T-15分: race_detail + race_odds + race_paddock + race_barometer + race_trainer_comment + JRA馬場ライブ → AI 予測トリガ |
 | SLA 4 | `30 22 * * *` | 07:30 開催日 | `raceday-result-runner` | 各レース T+15分: race_result_on_time 速報取得 |
 | SLA 5 | `30 8 * * *` | 17:30 毎日 | `raceday-evening` | race_result + race_result_lap + race_index + race_pair_odds → 馬場速度指数計算トリガ |
 | SLA 6 | `30 8 * * 5` | 17:30 金曜 | `weekly-update` | horse_result（先週分）・指数・偏差値・馬情報更新 |
@@ -322,4 +317,15 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 
 | cron（UTC） | JST | 対象年 | フェーズ | 最大件数 |
 |---|---|---|---|---|
-| `0 15 * * *` | 00:00
+| `0 15 * * *` | 00:00 毎日 | 過去全年 | horse_result / horse_pedigree_5gen バックフィル | 200件/日 |
+
+---
+
+## 4. 非機能要件
+
+| ID | カテゴリ | 要件 | 指標・基準 | 備考 |
+|---|---|---|---|---|
+| N-01 | リソース | メモリ使用量 | ConoHa VPS 2GB 以内で安定稼働 | スパイク含む |
+| N-24 | AI 精度 | AI モデル 複勝的中率 | ≥ 40%（Phase 2 以降のデプロイ判断基準） | Phase 1 は動作確認優先のため精度ゲートなし |
+
+> N-24 は DEC-024 で決定。Phase 2 以降の本番デプロイ可否は複勝的中率 40% を最低基準とし、それ未満のモデルはステージング留め。

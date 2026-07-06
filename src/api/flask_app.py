@@ -46,6 +46,18 @@ def create_app() -> Flask:
         except Exception as exc:
             return jsonify({"races": [], "error": "database unavailable", "detail": str(exc)}), 503
 
+    @app.get("/api/v1/races/today")
+    def api_races_today():
+        """当日レース一覧（認証不要）。"""
+        from datetime import date
+        today = date.today().strftime("%Y-%m-%d")
+        try:
+            init_engine()
+            with get_session() as session:
+                return jsonify({"races": list_races(session, today), "date": today})
+        except Exception as exc:
+            return jsonify({"races": [], "error": "database unavailable", "detail": str(exc)}), 503
+
     @app.get("/api/v1/races/<race_id>")
     def api_race_detail(race_id: str):
         init_engine()

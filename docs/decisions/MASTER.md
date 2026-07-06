@@ -12,7 +12,7 @@ netkeiba.com から収集した競馬データを用いて、出走馬ごとの�
 | 項目 | 内容 |
 |---|---|
 | 対象競馬 | JRA（日本中央競馬会） |
-| データソース | netkeiba.com（一次）、SmartRC / smartrc.jp（二次）、JRA 公式 |
+| データソース | netkeiba.com（一次）、JRA 公式 |
 | ユーザー種別 | ゲスト（TOP3 閲覧のみ） / ログイン済（全頭閲覧・マイ分析保存） |
 | 主要制約 | ConoHa VPS 2GB — prod 環境 2GB 以内での安定稼働を最優先 |
 
@@ -170,12 +170,6 @@ Stage 3: LSTM / Transformer（T-7 ラップ系列、現時点フリーズ）
 | `horse_result` | 馬の全成績・プロフィール | 週次（SLA 6）/ バックフィル | `netkeiba/pc/horse_result/{prefix}/{horse_id}.json` |
 | `horse_pedigree_5gen` | 5世代血統 | バックフィル horse フェーズ | `netkeiba/pc/horse_pedigree_5gen/{prefix}/{horse_id}.json` |
 | `horse_training` | 馬調教履歴 | 前日 JST 18:00（SLA 1） | `netkeiba/pc/horse_training/{prefix}/{horse_id}.json` |
-
-#### SmartRC（二次）
-
-| スクレイプカテゴリ | 内容 | 取得タイミング（SLA） | GCS 格納パス |
-|---|---|---|---|
-| `smartrc_race` | cr_value・first_furlong_time・estimated_popularity | T-15バンドル（SLA 3）+ 前日（SLA 1） | `netkeiba/pc/smartrc_race/{year}/{race_id}.json` |
 
 #### JRA 公式
 

@@ -1,5 +1,5 @@
 # AREA-10 — インフラ・サーバーモニタリング要件
-**Status**: FINAL | **Last Updated**: 2026-07-04 | **Consolidates**: AREA-04 §6（監視・アラート）拡張
+**Status**: FINAL | **Last Updated**: 2026-07-06 | **Consolidates**: AREA-04 §6（監視・アラート）拡張
 
 ---
 
@@ -85,6 +85,7 @@ Watchdog（`server_watchdog`、cron `*/3 * * * *`）が以下を監視し、停�
 | MLflow pace_predictor（5004） | HTTP GET | ○ | WARN アラート |
 | PostgreSQL | `pg_isready` | △（`systemctl start`） | CRIT アラート |
 | Redis | `redis-cli ping` | △（`systemctl start`） | WARN アラート |
+| Flower（port 5555） | HTTP GET `http://localhost:5555` | △（再起動） | WARN アラート（Celery タスクキュー監視ツール） |
 
 ### 2-2. Watchdog が検出しない障害
 
@@ -109,7 +110,7 @@ Watchdog（`server_watchdog`、cron `*/3 * * * *`）が以下を監視し、停�
 | 重大度 | トリガー条件 | 期待対応時間 |
 |---|---|---|
 | CRIT | メモリ使用率 ≥ 90%、Flask API 再起動失敗、PostgreSQL 停止 | 即時（< 15分） |
-| WARN | メモリ使用率 ≥ 80%、任意 MLflow プロセス停止・再起動、scrape_runs FAILED 率 ≥ 5% | 当日中（< 4時間） |
+| WARN | メモリ使用率 ≥ 80%、任意 MLflow プロセス停止・再起動、scrape_runs FAILED 率 ≥ 5%、`api_latency_p95 > 500ms` 継続 | 当日中（< 4時間） |
 | INFO | Watchdog が自動再起動を実施、ディスク使用率 ≥ 70% | 翌日までに確認 |
 
 ### 3-2. ログ設計
@@ -128,7 +129,7 @@ Watchdog（`server_watchdog`、cron `*/3 * * * *`）が以下を監視し、停�
 
 ## 4. メトリクス収集実装（ツール未決定）
 
-> **未決定事項 OP-3**: 監視基盤ツール（Prometheus / Grafana / Sentry 等）は AREA-04 §9 参照。
+> **未決定事項 OP-3**: 監視基盤ツール（Prometheus / Grafana / Alertmanager / **Flower** (port 5555, Celery タスクキュー監視) / Sentry 等）は AREA-04 §9 参照。
 > 以下は収集すべきメトリクスの定義。ツール選定後に実装する。
 
 ### 4-1. 収集対象メトリクス
@@ -147,6 +148,7 @@ node_network_transmit_errors_total
 
 # アプリ系（1分間隔）
 keiba_api_response_time_p50_ms
+keiba_api_response_time_p95_ms   # アラート閾値: > 500ms で WARN
 keiba_api_response_time_p99_ms
 keiba_api_error_rate_percent
 keiba_scrape_success_rate_daily
@@ -173,6 +175,7 @@ AREA-01 §5（N- 番号）との対応:
 | SLO | 目標値 | メトリクス | 関連要件 |
 |---|---|---|---|
 | API キャッシュヒット時レスポンス | ≤ 200 ms | `keiba_api_response_time_p99_ms{cache="hit"}` | N-1 |
+| API レイテンシ (p95) アラート閾値 | ≤ 500 ms | `keiba_api_response_time_p95_ms` | アラート閾値（超過で WARN） |
 | API キャッシュミス時レスポンス | ≤ 2,000 ms | `keiba_api_response_time_p99_ms{cache="miss"}` | N-2 |
 | スクレイピング成功率 | ≥ 99% / 月 | `keiba_scrape_success_rate_monthly` | N-6 |
 | DB 反映遅延 | ≤ 10 分 | `keiba_etl_lag_minutes` | N-7 |
@@ -230,7 +233,7 @@ timeout = 120
 
 | # | 項目 | 関連 |
 |---|---|---|
-| MON-1 | 監視基盤ツール選定（Prometheus + Grafana / Sentry / Datadog / 自作スクリプト） | AREA-04 OP-3 |
+| MON-1 | 監視基盤ツール選定（Prometheus + Grafana + Alertmanager + **Flower** (port 5555) / Sentry / Datadog / 自作スクリプト） | AREA-04 OP-3 |
 | MON-2 | アラート通知チャネル（Slack / メール / LINE）と宛先 | AREA-04 OP-4 |
 | MON-3 | PostgreSQL `shared_buffers` 最適値（実負荷計測後に調整） | AREA-04 OP-1 |
 | MON-4 | `scrape_runs` テーブルの成長監視・VACUUM スケジュール設計 | AREA-06 DM-4 |

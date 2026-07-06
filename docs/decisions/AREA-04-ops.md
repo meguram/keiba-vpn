@@ -26,7 +26,6 @@ ConoHa VPS 2GB 構成を前提に、UI の見た目を一切変えずに**パフ
 | `race_shutuba_past` | `raceday-eve` | 18:00 前日 | 馬柱（過去5走） |
 | `race_oikiri` | `raceday-eve`・`backfill-full` | 18:00 前日 / 深夜 | 追い切りタイム |
 | `horse_training` | `raceday-eve` | 18:00 前日 | 調教師コメント |
-| `smartrc_race` | `raceday-eve`・`raceday-runner`・`raceday-evening`・`weekly-update` | 多段 | SmartRC 指数 |
 | `race_detail` | `raceday-runner`（T-15） | T-15分 各R | 出走確定情報 |
 | `race_odds` | `raceday-runner`（T-15）・`backfill-full` | T-15分 / 深夜 | 単勝・馬連オッズ |
 | `race_paddock` | `raceday-runner`（T-15） | T-15分 各R | パドックコメント |
@@ -60,14 +59,14 @@ ConoHa VPS 2GB 構成を前提に、UI の見た目を一切変えずに**パフ
 | SLA 0a | `0 22 * * *` | 07:00 | `daily-race-lists` | 今日〜末尾の全開催日 race_lists 取得・更新 | 実行（全曜日） |
 | SLA 0b | `0 8 * * *` | 17:00 | `daily-race-lists` | 同上（夕方更新） | 実行（全曜日） |
 | JT統計 | `30 20 * * *` | 05:30 | `update_jt_stats` | 騎手・調教師統計再生成 | 実行（全曜日） |
-| SLA 1 | `0 9 * * *` | 18:00 | `raceday-eve` | **翌日が開催日のみ**: race_shutuba + race_shutuba_past + race_oikiri + horse_training + smartrc_race → 追走難度・最終オッズ precompute | 即終了 |
+| SLA 1 | `0 9 * * *` | 18:00 | `raceday-eve` | **翌日が開催日のみ**: race_shutuba + race_shutuba_past + race_oikiri + horse_training → 追走難度・最終オッズ precompute | 即終了 |
 | SLA 2 | `*/10 20-23 * * *` | 05:00-08:50 毎10分 | `jra-baba-morning` | jra_cushion（クッション値・含水率）ポーリング | 開催日のみ実取得 |
 
 ### 2-3. 開催日リアルタイム
 
 | SLA | cron（UTC） | JST | タスク名 | 実行内容 |
 |---|---|---|---|---|
-| SLA 3 | `30 22 * * *` | 07:30 | `raceday-runner` | 開催日常駐。各R 発走 **T-15分** に T-15バンドル（race_detail + race_odds + race_paddock + race_barometer + race_trainer_comment + smartrc_race + JRA馬場ライブ）→ AI 予測トリガ |
+| SLA 3 | `30 22 * * *` | 07:30 | `raceday-runner` | 開催日常駐。各R 発走 **T-15分** に T-15バンドル（race_detail + race_odds + race_paddock + race_barometer + race_trainer_comment + JRA馬場ライブ）→ AI 予測トリガ |
 | SLA 4 | `30 22 * * *` | 07:30 | `raceday-result-runner` | 開催日常駐。各R 発走 **T+15分** に race_result_on_time（速報結果）取得 |
 | SLA 5 | `30 8 * * *` | 17:30 | `raceday-evening` | 確定結果（race_result）+ race_pair_odds + race_index → 馬場速度指数計算トリガ |
 
@@ -75,7 +74,7 @@ ConoHa VPS 2GB 構成を前提に、UI の見た目を一切変えずに**パフ
 
 | SLA | cron（UTC） | JST | タスク名 | 実行内容 |
 |---|---|---|---|---|
-| SLA 6 | `30 8 * * 5` | 17:30 金曜 | `weekly-update` | 先週全開催日: `race_result`（確定）・`race_pair_odds`・`race_index`・`smartrc`・`horse_result` 一括更新 → 指数/偏差値/成績集計再計算 |
+| SLA 6 | `30 8 * * 5` | 17:30 金曜 | `weekly-update` | 先週全開催日: `race_result`（確定）・`race_pair_odds`・`race_index`・`horse_result` 一括更新 → 指数/偏差値/成績集計再計算 |
 | — | `0 9 * * 5` | 18:00 金曜 | `horse-name-index` | 馬名リスト（`horse_name_index`）+ 成長曲線（`growth_curve`）→ `calculated_data` 一括更新 |
 
 ### 2-5. バックフィル（夜間 / 年度別）
@@ -100,7 +99,7 @@ ConoHa VPS 2GB 構成を前提に、UI の見た目を一切変えずに**パフ
 
 | プロセス種別 | 役割 | 備考 |
 |---|---|---|
-| スクレイパープロセス | netkeiba.com / smartrc.jp データ収集 | グローバル最大同時 4スロット、バースト制限付き |
+| スクレイパープロセス | netkeiba.com データ収集 | グローバル最大同時 4スロット、バースト制限付き |
 | スナップショット集計バッチ | `*_stats_snapshot` 生成 | `as_of_race_id` 紐付け、results 収集完了後に起動 |
 | 追走難度 precompute | `tracking_difficulty` キャッシュ事前計算 | raceday-eve 完了後に起動（`KEIBA_EVE_PRECOMPUTE_TRACKING=1`） |
 | 最終オッズ precompute | `final_odds_prediction` キャッシュ事前計算 | raceday-eve 完了後に起動（`KEIBA_EVE_PRECOMPUTE_FINAL_ODDS=1`） |
@@ -150,13 +149,6 @@ netkeiba.com:
   429/503 バックオフ: 初期 5s・係数 2.5・最大 3 リトライ
   403: UA 即時ローテーション後リトライ
   日次上限: 5,000 req / セッション上限: 500 req
-
-SmartRC:
-  リクエスト間隔: 2.0〜5.0 秒
-  セッション上限: 200 req / 日次上限: 1,000 req
-  クールダウン: 60 秒
-  リトライ: 最大 3回、係数 2.0、対象: [429, 503]
-  robots.txt 準拠、ブロック検知時に即停止
 ```
 
 ### 5-2. 結果スクレイパーのリトライ
@@ -245,3 +237,102 @@ results:
 ```
 1. DDL マイグレーション実行（Alembic）
 2. スクレイパープロセス起動
+3. API サーバー（Flask / Gunicorn）起動
+4. 推論バッチプロセス起動
+5. Cron ジョブ有効化
+```
+
+---
+
+## 8. Docker 構成
+
+ConoHa VPS 環境での Docker Compose 構成を以下の通り定義する。
+
+### 8-1. 使用イメージバージョン
+
+| サービス | ベースイメージ | 備考 |
+|---|---|---|
+| backend | `python:3.11-slim` | Python バージョンは **3.11** に統一 |
+| redis | `redis:7-alpine` | Redis 7 系（セキュリティ・パフォーマンス向上） |
+| nginx | `nginx:stable-alpine` | リバースプロキシ |
+
+> **注**: Python バージョンは `3.11` に統一する。`3.10` 以前の記述が他ファイルに残っている場合は `3.11` に修正すること。
+
+### 8-2. Python ライブラリバージョン
+
+| ライブラリ | バージョン | 備考 |
+|---|---|---|
+| lightgbm | `4.x`（4.0 以上） | LightGBM 4 系を使用。3.x 系の記述は `>=4.0,<5.0` に更新 |
+| Flask | `2.x` / `3.x` | 既存 flask_app.py に準拠 |
+
+### 8-3. nginx リバースプロキシ設定
+
+Flask（Gunicorn）は **5000 番ポート**で起動する。nginx upstream の `proxy_pass` は必ず `http://backend:5000` を指定すること。
+
+```nginx
+upstream backend_app {
+    server backend:5000;
+}
+
+server {
+    listen 80;
+
+    location /api/ {
+        proxy_pass http://backend:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location / {
+        proxy_pass http://backend:5000;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+> **注意（P1-4）**: `proxy_pass http://backend:8000` は誤り。Flask は 8000 番ではなく **5000 番**で起動するため、8000 のままにすると 502 Bad Gateway が発生する。必ず `backend:5000` を使用すること。
+
+### 8-4. Docker Compose サービス定義（抜粋）
+
+```yaml
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Flask / Gunicorn は 5000 番ポートで起動
+    expose:
+      - "5000"
+    environment:
+      - FLASK_ENV=production
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+
+  nginx:
+    image: nginx:stable-alpine
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+```
+
+### 8-5. Dockerfile（backend）
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 5000
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "src.api.flask_app:app"]
+```
+
+> `requirements.txt` に `lightgbm>=4.0,<5.0` を記述すること（3.x 系は非対応）。

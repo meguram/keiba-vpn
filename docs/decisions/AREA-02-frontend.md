@@ -1,5 +1,5 @@
 # AREA-02 — フロントエンド要件
-**Status**: REVISED | **Last Updated**: 2026-07-04 | **Consolidates**: 旧 AREA-05 (廃止), keiba-vpn-git 既存実装からの UI 継承
+**Status**: REVISED | **Last Updated**: 2026-07-06 | **Consolidates**: 旧 AREA-05 (廃止), keiba-vpn-git 既存実装からの UI 継承
 
 ---
 
@@ -123,8 +123,10 @@ Sticky top bar（44px）。5 カテゴリのドロップダウングループ。
 | マイ分析（条件保存） | ✗ | ○ |
 | 馬券最適化 | ✗ | ○ |
 | 血統ツール全機能 | ○ | ○ |
+| お気に入り馬登録・一覧（F-12） | ✗ | ○ |
+| レース出走メール通知（F-09） | ✗ | ○ |
 
-認証: パスワードのみ（ユーザー名なし）、「30日間ログイン保持」チェックボックス付きログイン画面。
+認証: パスワードのみ（ユーザー名なし）、「30日間ログイン保持」チェックボックス付きログイン画面。JWT を HttpOnly Cookie に保存、CSRF 対策付き（SameSite=Strict）。`Authorization: Bearer` ヘッダーは使用しない。
 
 ---
 
@@ -540,6 +542,45 @@ URL state: `?horse_id=X&limit=N`
 
 ---
 
+### 4-15. お気に入り馬機能 (`/favorites`) — F-12
+
+**目的**: ユーザーが馬をお気に入り登録し、一覧表示する（ログイン必須）。
+
+**機能要件**:
+- 馬名検索 / レース詳細出馬表から「お気に入り」ボタンで登録・解除
+- `/favorites` 一覧ページ: 登録馬のカード一覧（馬名・性齢・直近出走日・次走予定）
+- 各カードに「お気に入り解除」ボタン
+
+**UI 要素**:
+- ハートアイコンボタン（登録済=accent 塗りつぶし / 未登録=アウトライン）
+- 一覧は `--surface` カードグリッド、登録馬なし時は空状態イラスト＋案内テキスト
+
+**API 消費エンドポイント**:
+- `GET  /api/v1/favorites` (auth_required: true) — 登録馬一覧取得
+- `POST /api/v1/favorites` (auth_required: true) — 馬を登録
+- `DELETE /api/v1/favorites/{horse_id}` (auth_required: true) — 馬の登録解除
+
+---
+
+### 4-16. 通知設定 (`/notifications`) — F-09
+
+**目的**: お気に入り馬のレース出走時にメール通知を送信（SendGrid 使用）。
+
+**機能要件**:
+- 通知設定ページ: メール通知 ON/OFF トグル、通知タイミング選択（前日18時 / 当日08時）
+- F-12 お気に入り馬がレース出走予定に追加されたタイミングでメール送信
+
+**UI 要素**:
+- トグルスイッチ（accent=ON / 灰=OFF）
+- 送信先メールアドレス表示（変更不可）
+- 最近の通知送信履歴テーブル（日時・対象馬名・レース名・送信ステータス）
+
+**API 消費エンドポイント**:
+- `GET  /api/v1/notifications/settings` (auth_required: true) — 通知設定取得
+- `PUT  /api/v1/notifications/settings` (auth_required: true) — 通知設定更新
+
+---
+
 ## 5. 技術要件
 
 ### 5-1. フレームワーク・ライブラリ
@@ -609,32 +650,53 @@ URL state: `?horse_id=X&limit=N`
 /myostatin                  ← Myostatin 遺伝子ダッシュボード
 
 /betting                    ← 馬券最適化（Kelly 基準）
+
+/favorites                  ← お気に入り馬一覧（F-12、ログイン必須）
+/notifications              ← 通知設定（F-09、ログイン必須）
 ```
 
 ---
 
 ## 7. 主要 API エンドポイント（フロントエンド消費分）
 
+認証凡例: [public]=認証不要 (auth_required: false)、[auth]=ログイン必須 (auth_required: true)
+
 ```
 # レース
-GET  /api/v1/races/{race_id}/predictions     ← AI予測（T-1〜T-11）
-GET  /api/v1/races/{race_id}/entries         ← 出馬表
-GET  /api/v1/races/{race_id}/results         ← 着順・ラップ・コーナー
-GET  /api/v1/races?date=YYYYMMDD             ← レース一覧
+GET  /api/v1/races/today                              ← 本日のレース一覧 [public]
+GET  /api/v1/races?date=YYYYMMDD                      ← レース一覧 [public]
+GET  /api/v1/races/{race_id}                          ← レース詳細・出馬表 [public]
+GET  /api/v1/races/{race_id}/entries                  ← 出馬表 [public]
+GET  /api/v1/races/{race_id}/results                  ← 着順・ラップ・コーナー [public]
+GET  /api/v1/races/{race_id}/predictions              ← AI予測（T-1〜T-11）[auth]
+                                                         レスポンス: win_probability: float(0.0-1.0)
+                                                                     place_probability: float(0.0-1.0)
+
+# フィルタ・集計
+POST /api/v1/filter/stats                             ← フィルタ統計集計 [auth]
 
 # 分析
-GET  /api/v1/races/{race_id}/tracking-difficulty   ← 位置追跡難易度
-GET  /api/v1/horse/{id}/growth-curve         ← 成長曲線
-GET  /api/v1/track-speed/day?date=X&venue=Y  ← TSI指数
-GET  /api/v1/race-quality/race?id=X          ← NNLS 分析
+GET  /api/v1/races/{race_id}/tracking-difficulty      ← 位置追跡難易度 [public]
+GET  /api/v1/horse/{id}/growth-curve                  ← 成長曲線 [public]
+GET  /api/v1/track-speed/day?date=X&venue=Y           ← TSI指数 [public]
+GET  /api/v1/race-quality/race?id=X                   ← NNLS 分析 [public]
 
 # 血統
-GET  /api/v1/pedigree/race-note?race_id=X    ← 適性マップデータ
-GET  /api/v1/bloodline-cluster/lookup?q=X    ← クラスター検索
-GET  /api/v1/pedigree-race-stats/query       ← 種牡馬成績クエリ
+GET  /api/v1/pedigree/race-note?race_id=X             ← 適性マップデータ [public]
+GET  /api/v1/bloodline-cluster/lookup?q=X             ← クラスター検索 [public]
+GET  /api/v1/pedigree-race-stats/query                ← 種牡馬成績クエリ [public]
 
 # 馬券
-POST /api/v1/betting/optimize                ← Kelly 最適化
+POST /api/v1/betting/optimize                         ← Kelly 最適化 [auth]
+
+# お気に入り（F-12）
+GET    /api/v1/favorites                              ← 登録馬一覧 [auth]
+POST   /api/v1/favorites                              ← 馬を登録 [auth]
+DELETE /api/v1/favorites/{horse_id}                   ← 登録解除 [auth]
+
+# 通知（F-09）
+GET  /api/v1/notifications/settings                   ← 通知設定取得 [auth]
+PUT  /api/v1/notifications/settings                   ← 通知設定更新 [auth]
 ```
 
 ---
@@ -652,3 +714,5 @@ POST /api/v1/betting/optimize                ← Kelly 最適化
 | ease スコア | 位置追跡難易度の容易度スコア（0-100） |
 | MSTN遺伝子型 | CC=短距離型 / CT=中距離型 / TT=長距離型 |
 | Kelly 倍率 | Kelly 基準の分率（0.25 = Quarter Kelly） |
+| win_probability | AI予測レスポンスの勝率フィールド。`float (0.0〜1.0)`（旧: `prediction_score`）|
+| place_probability | AI予測レスポンスの複勝率フィールド。`float (0.0〜1.0)`（DEC-022 追加）|

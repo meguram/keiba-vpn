@@ -391,3 +391,43 @@ class CourseStatsCache(Base):
             name="uq_course_stats_cache",
         ),
     )
+
+
+# ── ユーザー拡張機能（F-12 / F-09）──────────────────────────────────────────
+
+
+class UserFavorite(Base):
+    """ユーザーのお気に入り馬（F-12）。"""
+    __tablename__ = "user_favorites"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    horse_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    horse_name: Mapped[Optional[str]] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "horse_id", name="uq_user_horse"),)
+
+
+class NotificationSetting(Base):
+    """ユーザーの通知設定（F-09）。"""
+    __tablename__ = "notification_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255))
+    notify_favorite_race: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class NotificationLog(Base):
+    """送信済み通知ログ（F-09）。"""
+    __tablename__ = "notification_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    race_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    horse_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    status: Mapped[str] = mapped_column(String(20), default="sent")

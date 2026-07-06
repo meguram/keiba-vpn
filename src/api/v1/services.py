@@ -74,8 +74,10 @@ def build_predictions_response(
                 "horse_id": p.horse_id,
                 "post_no": entry.post_no if entry else None,
                 "win_prob": _float(p.win_prob),
+                "win_probability": _float(p.win_prob),          # alias for win_prob
                 "place_prob": _float(p.place_prob),
                 "show_prob": _float(p.show_prob),
+                "place_probability": _float(p.show_prob),       # alias for show_prob (top-3 / 複勝)
                 "predicted_win_odds": _float(p.predicted_win_odds),
                 "predicted_place_odds": _float(p.predicted_place_odds),
                 "expected_win_roi": win_roi,
@@ -93,8 +95,10 @@ def build_predictions_response(
                 "horse_id": h.get("horse_id"),
                 "post_no": h.get("post_no") or h.get("horse_number"),
                 "win_prob": h.get("win_prob"),
+                "win_probability": h.get("win_prob"),           # alias for win_prob
                 "place_prob": h.get("place_prob"),
                 "show_prob": h.get("show_prob"),
+                "place_probability": h.get("show_prob"),        # alias for show_prob (top-3 / 複勝)
                 "predicted_win_odds": h.get("predicted_win_odds"),
                 "predicted_place_odds": h.get("predicted_place_odds"),
                 "expected_win_roi": win_roi,
