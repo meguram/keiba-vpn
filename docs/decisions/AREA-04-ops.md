@@ -1,5 +1,5 @@
 # AREA-04 — 運用最適化要件（Cron SLA / プロセス分離 / Circuit Breaker / 監視・アラート / デプロイ / ロールバック）
-**Status**: FINAL | **Last Updated**: 2026-07-04 | **Consolidates**: DEC-001（統合済み）
+**Status**: FINAL | **Last Updated**: 2026-07-06 | **Consolidates**: DEC-001（統合済み）
 
 ---
 
@@ -12,6 +12,34 @@
 ## 2. Cron スケジュール・SLA（実装準拠）
 
 システムタイムゾーン: UTC。cron 記述は UTC。実行スクリプトは `TZ=Asia/Tokyo` を付与して JST で動作。
+実装: `scripts/cron/setup_all_cron.sh`（マスター） + `src/scraper/auto_scrape.py`（タスク定義）
+
+### 2-0. スクレイピング対象カテゴリ × タスク対応表
+
+| ストレージカテゴリ | 書込タスク | タイミング（JST） | 備考 |
+|---|---|---|---|
+| `race_lists` | `daily-race-lists` | 07:00・17:00 毎日 | 今日〜14日先の全開催日 |
+| `jra_cushion` | `jra-baba-morning` | 05:00-08:50 毎10分（開催日のみ） | クッション値・含水率 |
+| `race_shutuba` | `raceday-eve`（主）・`raceday-runner`（FB） | 18:00 前日 / T-15分 | 出馬表（枠順・騎手確定版） |
+| `race_shutuba_past` | `raceday-eve` | 18:00 前日 | 馬柱（過去5走） |
+| `race_oikiri` | `raceday-eve`・`backfill-full` | 18:00 前日 / 深夜 | 追い切りタイム |
+| `horse_training` | `raceday-eve` | 18:00 前日 | 調教師コメント |
+| `smartrc_race` | `raceday-eve`・`raceday-runner`・`raceday-evening`・`weekly-update` | 多段 | SmartRC 指数 |
+| `race_detail` | `raceday-runner`（T-15） | T-15分 各R | 出走確定情報 |
+| `race_odds` | `raceday-runner`（T-15）・`backfill-full` | T-15分 / 深夜 | 単勝・馬連オッズ |
+| `race_paddock` | `raceday-runner`（T-15） | T-15分 各R | パドックコメント |
+| `race_barometer` | `raceday-runner`（T-15）・`backfill-full` | T-15分 / 深夜 | レースバロメーター |
+| `race_trainer_comment` | `raceday-runner`（T-15） | T-15分 各R | 調教師コメント（当日） |
+| `race_result_on_time` | `raceday-result-runner`（T+15） | T+15分 各R | 速報結果 |
+| `race_result` | `raceday-evening`・`weekly-update`・`backfill-fast` | 17:30 / 17:30金 / 深夜 | 確定着順・タイム |
+| `race_pair_odds` | `raceday-evening`・`weekly-update` | 17:30 | 馬連・3連複確定オッズ |
+| `race_index` | `raceday-evening`・`weekly-update`・`backfill-full` | 17:30 / 17:30金 / 深夜 | 速度指数・偏差値 |
+| `horse_result` | `weekly-update`・`backfill-horse` | 17:30 金曜 / 06:00 毎日 | 馬個別戦績 |
+| `horse_name_index` | `horse-name-index` | 18:00 金曜 | 馬名→horse_id マッピング |
+| `growth_curve` | `horse-name-index` | 18:00 金曜 | 成長曲線（calculated_data） |
+| 騎手・調教師統計 | `update_jt_stats` | 05:30 毎日 | `data/features/jockey_trainer_stats/` |
+
+---
 
 ### 2-1. 常時監視
 
@@ -45,8 +73,8 @@
 
 | SLA | cron（UTC） | JST | タスク名 | 実行内容 |
 |---|---|---|---|---|
-| SLA 6 | `30 8 * * 5` | 17:30 金曜 | `weekly-update` | 先週分 horse_result・指数・偏差値・馬情報一括更新 |
-| — | `0 9 * * 5` | 18:00 金曜 | `horse-name-index` | 馬名リスト + 成長曲線 → calculated_data 一括更新 |
+| SLA 6 | `30 8 * * 5` | 17:30 金曜 | `weekly-update` | 先週全開催日: `race_result`（確定）・`race_pair_odds`・`race_index`・`smartrc`・`horse_result` 一括更新 → 指数/偏差値/成績集計再計算 |
+| — | `0 9 * * 5` | 18:00 金曜 | `horse-name-index` | 馬名リスト（`horse_name_index`）+ 成長曲線（`growth_curve`）→ `calculated_data` 一括更新 |
 
 ### 2-5. バックフィル（夜間 / 年度別）
 
@@ -57,10 +85,10 @@
 | `0 17 * * *` | 02:00 | 2024 | fast | 5日分 |
 | `0 18 * * *` | 03:00 | 2023 | fast | 5日分 |
 | `0 19 * * *` | 04:00 | 2022 | fast | 5日分 |
-| `0 21 * * *` | 06:00 | 全年 | horse（horse_result 一括） | 一括 |
-| `30 22 * * *` | 07:30 | 2026 | full（補助データ含む） | 5日分 |
-| `0 23 * * *` | 08:00 | 2025 | full | 3日分 |
-| `0 0 * * *` | 09:00 | 2024 | full | 3日分 |
+| `0 21 * * *` | 06:00 | 全年 | horse（`horse_result` 一括） | 一括 |
+| `30 22 * * *` | 07:30 | 2026 | full（`race_index`・`race_odds`・`race_barometer`・`race_oikiri` 等補助データ） | 5日分 |
+| `0 23 * * *` | 08:00 | 2025 | full（同上） | 3日分 |
+| `0 0 * * *` | 09:00 | 2024 | full（同上） | 3日分 |
 | `0 17 * * 1,4` | 02:00 月木 | 2021 | fast（週2回） | 5日分 |
 | `0 18 * * 2,5` | 03:00 火金 | 2020 | fast（週2回） | 5日分 |
 
