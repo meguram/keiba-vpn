@@ -1,5 +1,5 @@
 # AREA-01 — アプリケーション要件
-**Status**: FINAL | **Last Updated**: 2026-07-04 | **Consolidates**: DEC-001 (統合済み・削除), TASK-046 (データ分析機能要件定義書 統合済み)
+**Status**: FINAL | **Last Updated**: 2026-07-06 | **Consolidates**: DEC-001 (統合済み・削除), TASK-046 (データ分析機能要件定義書 統合済み), TASK-048 (Phase 0-S 追加・実装ロードマップ更新 統合済み)
 
 ---
 
@@ -129,6 +129,15 @@ ALTER TABLE horses ADD COLUMN sire_id VARCHAR(20) REFERENCES sires(sire_id);
 CREATE INDEX idx_horses_sire_id ON horses (sire_id);
 ```
 
+#### Layer 1 追加: `entries` テーブル拡張（枠番対応）
+
+```sql
+-- Phase 0-S で entries.post_position が馬番・枠番どちらかを確認後、必要に応じて追加
+ALTER TABLE entries ADD COLUMN frame_no SMALLINT;  -- 枠番 (1-8)
+-- ⚠️ JRA では「枠番（1-8）」≠「馬番（1-18）」。post_position が馬番なら frame_no は別カラムとして必須
+CREATE INDEX idx_entries_frame_no ON entries (race_id, frame_no);
+```
+
 #### Layer 3: `horse_stats_snapshot`
 
 ```sql
@@ -212,19 +221,19 @@ CREATE INDEX idx_odds_race_horse_time
 
 ```sql
 CREATE TABLE prediction_results (
-    prediction_id          BIGSERIAL     PRIMARY KEY,
-    race_id                VARCHAR(20)   NOT NULL,
-    horse_id               VARCHAR(20)   NOT NULL,
-    model_version          VARCHAR(50)   NOT NULL,
-    predicted_at           TIMESTAMPTZ   DEFAULT NOW(),
-    win_prob               NUMERIC(5,4),
-    place_prob             NUMERIC(5,4),
-    show_prob              NUMERIC(5,4),
-    predicted_win_odds     NUMERIC(7,1),
-    predicted_place_odds   NUMERIC(7,1),
-    expected_win_roi       NUMERIC(7,2),
-    expected_show_roi      NUMERIC(7,2),
-    predicted_position     SMALLINT,
+    prediction_id           BIGSERIAL     PRIMARY KEY,
+    race_id                 VARCHAR(20)   NOT NULL,
+    horse_id                VARCHAR(20)   NOT NULL,
+    model_version           VARCHAR(50)   NOT NULL,
+    predicted_at            TIMESTAMPTZ   DEFAULT NOW(),
+    win_prob                NUMERIC(5,4),
+    place_prob              NUMERIC(5,4),
+    show_prob               NUMERIC(5,4),
+    predicted_win_odds      NUMERIC(7,1),
+    predicted_place_odds    NUMERIC(7,1),
+    win_roi                 NUMERIC(7,2),  -- 旧: expected_win_roi → archive §F に合わせ win_roi に統一
+    show_roi                NUMERIC(7,2),  -- 旧: expected_show_roi → archive §F に合わせ show_roi に統一
+    predicted_position      SMALLINT,
     predicted_running_style VARCHAR(10),
     UNIQUE (race_id, horse_id, model_version)
 );
@@ -313,116 +322,4 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 
 | cron（UTC） | JST | 対象年 | フェーズ | 最大件数 |
 |---|---|---|---|---|
-| `0 15 * * *` | 00:00 | 2026 | fast（race_result + race_shutuba） | 7日分 |
-| `0 16〜19 * * *` | 01:00〜04:00 | 2025〜2022 | fast | 5日分 |
-| `0 21 * * *` | 06:00 | 全年 | horse（horse_result 一括） | 一括 |
-| `30 22〜0 * * *` | 07:30〜09:00 | 2026〜2024 | full（補助データ含む） | 3〜5日分 |
-| `0 17〜18 * * 1,2,4,5` | 02:00〜03:00 月火木金 | 2021・2020 | fast（週2回） | 5日分 |
-
-### 3-5. スクレイピング設定（実装値）
-
-```
-netkeiba.com:
-  リクエスト間隔: 2.2〜4.0 秒（ランダム + ガウスジッター）
-  バースト制限: 14 req ごとに 6〜12 秒クールダウン
-  セッションクールダウン: 60 req ごとに 22〜40 秒
-  セッションリフレッシュ: 150 req ごとに TLS/Cookie 再構築
-  グローバル最大同時スロット: 4
-  UA ローテーション: Chrome/Firefox/Edge × Windows/Mac/Linux 8種
-  429/503 バックオフ: 初期 5s・係数 2.5・最大 3 リトライ
-  403: UA 即時ローテーション後リトライ
-  日次上限: 5,000 req / セッション上限: 500 req
-
-SmartRC:
-  リクエスト間隔: 2.0〜5.0 秒
-  セッション上限: 200 req / 日次上限: 1,000 req
-  クールダウン: 60 秒
-  リトライ: 最大 3回、係数 2.0、対象: [429, 503]
-  robots.txt 準拠、ブロック検知時に即停止
-```
-
----
-
-## 4. モデリング要件概要
-
-> 詳細 → **[AREA-07-modeling.md](AREA-07-modeling.md)**
-
-### 4-1. 2ステージ構成
-
-```
-Stage 1: 共有表現 マルチタスクモデル
-  入力: Layer 1〜3 特徴量（馬×レース単位）
-  出力: Head A（勝率/連対率/複勝率）/ Head B（ポジション）/ Head C（オッズ）
-
-Stage 2: ラップ・ペース予測モデル
-  入力: Layer 4 + Stage 1 ポジション予測 + コース形状特徴量
-  出力: ペースカテゴリ (HIGH/MIDDLE/SLOW) + 1F毎ラップ予測値
-```
-
-### 4-2. モデル選定
-
-| ターゲット | アルゴリズム |
-|---|---|
-| 勝率・連対率・複勝率 | LightGBM (binary/softmax) |
-| ポジション予測 | LambdaMART (LightGBM ranker) |
-| オッズ予測 | LightGBM regression |
-| ペースカテゴリ | LightGBM multiclass |
-| 1F 毎ラップ予測 | LightGBM per-furlong（初期）→ LSTM（拡張） |
-
-### 4-3. 回収率計算ロジック
-
-```python
-def calculate_recovery_rate(win_prob, win_odds, show_prob, place_odds_mid):
-    win_roi  = win_prob  * win_odds        * 100   # T-6
-    show_roi = show_prob * place_odds_mid  * 100   # T-7
-    return {"win_roi": round(win_roi, 2), "show_roi": round(show_roi, 2)}
-```
-
-### 4-4. テンポラルリーク防止ルール
-
-1. 訓練データの時系列分割：常に過去レースで学習 → 未来レースで評価（ランダムシャッフル禁止）
-2. スナップショットの `as_of_race_id` 参照：推論時も同レース ID のスナップショットのみ使用
-3. オッズ特徴量：推論時は「発走 N 分前の最終スナップショット」を固定使用
-4. 馬体重・馬場状態：レース当日の実測値を使用（出馬表確定後）
-
-### 4-5. MLパイプラインと分析バッチの時点整合性分離
-
-| 用途 | as_of 制約 | 集計範囲 | 理由 |
-|---|---|---|---|
-| AI予測モデル特徴量 | **必須**（`race_date < as_of_race_id`） | 予測時点以前のみ | テンポラルリーク防止 |
-| ユーザー向け分析UI | **不要** | 全期間またはUI選択 | 事後統計であり未来情報混入の問題なし |
-
-> **UIへの注記要件**: 分析画面に「※ この統計はリアルタイム集計です。AIモデルが予測に使用した時点の特徴量とは異なる場合があります。」を表示すること。
-
----
-
-## 5. 機能要件
-
-### 5-1. 予測機能
-
-| # | 要件 | 優先度 | 担当 |
-|---|---|---|---|
-| F-1 | netkeiba.com からレース基本情報・出馬表をスクレイピングして Layer 1 に格納する | 高 | data-engineer |
-| F-2 | レース結果・ラップタイム・コーナー通過順位をスクレイピングして Layer 2/4 に格納する | 高 | data-engineer |
-| F-3 | 馬・騎手・調教師の集計統計を `as_of_race_id` 付きスナップショットとして Layer 3 に格納する | 高 | data-engineer |
-| F-4 | オッズを指定スケジュール（発走前5分毎〜1分毎）でスナップショット取得し Layer 5 に格納する | 高 | data-engineer |
-| F-5 | スクレイプ実行ログを `scrape_runs` テーブルで管理する | 高 | backend-engineer |
-| F-6 | 特徴量パイプラインで脚質スコア・クロス特徴量・相対特徴量を自動生成する | 高 | data-engineer / ai-model-engineer |
-| F-7 | Stage 1 モデル（勝率/連対率/複勝率/ポジション/オッズ予測）を学習・推論する | 高 | ai-model-engineer |
-| F-8 | Stage 2 モデル（ペースカテゴリ/1F 毎ラップ予測）を Stage 1 出力を受けて学習・推論する | 高 | ai-model-engineer |
-| F-9 | 推論後に単回収率・複回収率を計算し `prediction_results` に保存する | 高 | ai-model-engineer / backend-engineer |
-| F-10 | 任意レースの予測結果（T-1〜T-11 全ターゲット）を REST API で提供する | 高 | backend-engineer |
-| F-11 | ラップ予測結果を系列形式（`furlong_index` 順）で API から提供する | 中 | backend-engineer |
-| F-12 | 予測結果を Redis にキャッシュし、同一リクエストの DB 再クエリを回避する | 中 | backend-engineer |
-| F-13 | レース一覧・出馬表・AI 予測を統合表示する UI を提供する | 中 | frontend-engineer |
-| F-14 | 回収率100以上の馬をバリューベット候補としてハイライト表示する | 中 | frontend-engineer |
-| F-15 | ラップ予測をグラフ（折れ線）で可視化する | 低 | frontend-engineer |
-| F-16 | 学習済みモデルのバージョン管理と古いモデルへのロールバック機能 | 中 | ai-model-engineer / operations-engineer |
-| F-17 | ラップデータ可用性の事前検証（サンプル10レースで手動確認） — Phase 0 前提条件 | 高 | data-engineer |
-
-### 5-2. データ分析機能
-
-| # | 機能名 | 優先度 | 担当 |
-|---|---|---|---|
-| AN-01 | 種牡馬成績多軸フィルタリング分析 | 高 | data-engineer / backend-engineer / frontend-engineer |
-| AN-02 | コース別・条件別統計
+| `0 15 * * *` | 00:00
