@@ -34,7 +34,7 @@ netkeiba.com から収集した競馬データを用いて、出走馬ごとの�
 | スキーマ管理 | Alembic | 全 DDL 変更をマイグレーションファイルで管理 |
 | ML フレームワーク | LightGBM（Stage 1/2）、LSTM（Stage 3 / Phase 4） | |
 | モデル管理 | MLflow | keiba_lgbm(5010) / tracking_difficulty(5001) / final_odds(5003) / pace_predictor(5004) |
-| ストレージ | GCS（永続 JSON）+ ローカルディスクキャッシュ | `GCS_BUCKET` 環境変数で注入 |
+| ストレージ | GCS（永続 JSON）+ ローカルディスクキャッシュ | `GCS_BUCKET` 環境変数で注入（本番値: `magu-keiba-horse-racing-ai`） |
 
 ### 2-2. フロントエンド
 
@@ -72,10 +72,11 @@ netkeiba.com から収集した競馬データを用いて、出走馬ごとの�
 
 ### 3-2. GCS ストレージ構造
 
-パス定義の SSoT は `data_paths.py`。バケット名は環境変数 `GCS_BUCKET` で注入（ハードコード禁止）。
+パス定義の SSoT は `data_paths.py`。バケット名は環境変数 `GCS_BUCKET` で注入（ハードコード禁止）。  
+**本番バケット**: `magu-keiba-horse-racing-ai` / **ルートプレフィックス**: `chuou/`
 
 ```
-gs://${GCS_BUCKET}/
+gs://magu-keiba-horse-racing-ai/          ← GCS_BUCKET=magu-keiba-horse-racing-ai
 └── chuou/data/preprocessed/netkeiba/pc/
     ├── {category}/{year}/{race_id}.json       ← レース単位データ
     └── {category}/{prefix}/{horse_id}.json    ← 馬単位データ（prefix = horse_id[:4]）
@@ -97,7 +98,7 @@ data/calculated_data/horse_names.json
 |---|---|---|---|
 | L1 | メモリ LRU キャッシュ | 3,600 秒 | 高頻度アクセスデータ |
 | L2 | ディスクキャッシュ（`data/cache/`） | レース系 12時間 / 馬系 2日 | GCS フォールバック前段 |
-| L3 | GCS（`gs://${GCS_BUCKET}/`） | 永続 | 単一永続 JSON ストア |
+| L3 | GCS（`gs://magu-keiba-horse-racing-ai/`） | 永続 | 単一永続 JSON ストア |
 
 読取フロー: L1 ヒット → 即返却 → L1 ミス → L2 → L3 フォールバック → L2/L1 ウォームアップ
 
@@ -548,7 +549,7 @@ WHERE finish_time_sec IS NOT NULL AND last3f_sec IS NOT NULL;
 | ConoHa VPS 2GB | prod サーバー全般 | 月額費用は未確定（AREA-05 未決定事項） |
 | PostgreSQL | Layer 1〜5 データ格納 | VPS 上でセルフホスト |
 | Redis | 予測結果キャッシュ | VPS 上でセルフホスト、maxmemory=128mb |
-| GCS | 永続 JSON ストア | `GCS_BUCKET` 環境変数で管理 |
+| GCS | 永続 JSON ストア | バケット: `magu-keiba-horse-racing-ai`（`GCS_BUCKET` 環境変数で注入） |
 | LightGBM | 推論（セルフホスト） | 外部 API 委託なし |
 | MLflow（×4プロセス） | モデルバージョン管理 | ports: 5001/5003/5004/5010 |
 

@@ -1,16 +1,18 @@
 # AREA-06 — データ管理要件（GCS パス設計 SSoT, ETL パイプライン, Feature Store, Redis TTL 設計）
-**Status**: FINAL | **Last Updated**: 2026-07-04 | **Consolidates**: DEC-001（統合済み）
+**Status**: FINAL | **Last Updated**: 2026-07-06 | **Consolidates**: DEC-001（統合済み）, TASK-055（GCSバケット名更新・モデリング仕様統合）
 
 ---
 
 ## 1. 概要
 
-本仕様書は keiba-vpn プロジェクトにおけるデータ管理要件を定義する。対象範囲は以下の4領域とする。
+本仕様書は keiba-vpn プロジェクトにおけるデータ管理要件を定義する。対象範囲は以下の6領域とする。
 
-1. **GCS パス設計（`gcs_paths.py` SSoT）**
+1. **GCS パス設計（`data_paths.py` SSoT）**
 2. **ETL パイプライン**
 3. **Feature Store（特徴量スナップショット管理）**
 4. **Redis TTL 設計**
+5. **ML モデリング仕様（アンサンブル・CV・2段階分解・ポストプロセス）**
+6. **推論パイプライン RAM 管理**
 
 全設計の大前提：**`as_of_race_id` によるスナップショット管理でテンポラルリーク（未来情報混入）を構造的に排除すること**。これはデータ基盤・モデリング・評価の全工程に適用される不変制約である。
 
@@ -34,15 +36,20 @@ ETL・Feature Store・GCS パス設計の全領域は以下の5層スキーマ�
 
 ### 3-1. 設計方針
 
+<!-- TASK-055: GCSバケット名を `keiba-vpn` から `magu-keiba-horse-racing-ai` に更新。バケットルートは環境変数 GCS_BUCKET で注入する従来方針を継続 -->
 - `data_paths.py` をパス定義の **Single Source of Truth（SSoT）** とし、全モジュールからインポートして使用する
 - バケット名は環境変数 `GCS_BUCKET` から注入する（ハードコード禁止）
+- **GCS バケット**: `magu-keiba-horse-racing-ai` / **ルートプレフィックス**: `chuou/`
 - スクレイピング済み JSON は **カテゴリ名ディレクトリ** 配下に配置する（layer 番号は使わない）
 - 生データと変換後データの区別はしない — GCS は「単一の永続 JSON ストア」として機能する
+- `race_id` / `venue_code` の命名規則は `gs://magu-keiba-horse-racing-ai/chuou/archive/jra/` 内の既存キーと必ず一致させること（FeatureReadyGate 参照ミス防止）
 
 ### 3-2. バケット構成（実装準拠）
 
+<!-- TASK-055: バケット名を magu-keiba-horse-racing-ai に更新。archive/features/models の3領域を統合管理 -->
+
 ```
-gs://${GCS_BUCKET}/
+gs://magu-keiba-horse-racing-ai/
 └── chuou/
     ├── data/
     │   └── preprocessed/
@@ -51,9 +58,33 @@ gs://${GCS_BUCKET}/
     │               ├── {category}/{year}/{race_id}.json      ← レース単位データ
     │               └── {category}/{prefix}/{horse_id}.json   ← 馬単位データ
     │                                                           (prefix = horse_id[:4])
-    └── data/
-        └── others/
-            └── {category}/{key}.json                         ← その他データ（jra_cushion 等）
+    ├── data/
+    │   └── others/
+    │       └── {category}/{key}.json                         ← その他データ（jra_cushion 等）
+    ├── archive/                                               ← 既存スクレイピング生データ（変更なし）
+    │   └── jra/
+    │       └── {YYYY}/{MM}/
+    │           ├── race_card_{YYYYMMDD}_{venue_code}.json
+    │           ├── race_result_{YYYYMMDD}_{venue_code}.json
+    │           └── odds_{YYYYMMDD}_{venue_code}_{race_no}.json
+    │           ⚠️ 上記 archive サブパス構造は推定値。
+    │              gsutil ls gs://magu-keiba-horse-racing-ai/chuou/archive/ で
+    │              実際の構造を確認し、features/models の命名を合わせること。
+    ├── features/                                              ← Feature Store（新規）
+    │   └── v{feature_version}/
+    │       └── {YYYY}/{MM}/{DD}/
+    │           ├── lag_{race_id}.parquet
+    │           ├── rolling_{race_id}.parquet
+    │           ├── group_agg_{YYYYMMDD}_{venue_code}.parquet
+    │           └── _READY_{race_id}                          ← FeatureReadyGate フラグ（write-last）
+    └── models/                                               ← Model Store（新規）
+        └── v{model_version}/
+            └── {YYYY}/{MM}/
+                ├── lgbm_{YYYYMMDD}.pkl
+                ├── xgb_{YYYYMMDD}.pkl
+                ├── catboost_{YYYYMMDD}.cbm
+                ├── feature_columns_{feature_version}.json
+                └── _manifest_{YYYYMMDD}.json
 ```
 
 **ローカルのみ（GCS 非使用）**:
@@ -70,13 +101,19 @@ data/calculated_data/
 
 ### 3-3. パス定数定義（実装準拠）
 
+<!-- TASK-055: GCS_BUCKET デフォルト参照先を magu-keiba-horse-racing-ai に更新。features/models パスを追加 -->
+
 ```python
 # data_paths.py  ── GCS / ローカルパス定義 SSoT
 import os
 
-GCS_BUCKET  = os.environ["GCS_BUCKET"]   # 環境変数必須
-GCS_BASE    = "chuou/data/preprocessed/netkeiba/pc"
-GCS_OTHERS  = "chuou/data/others"
+GCS_BUCKET  = os.environ["GCS_BUCKET"]   # 環境変数必須（本番値: magu-keiba-horse-racing-ai）
+GCS_ROOT    = "chuou"
+GCS_BASE    = f"{GCS_ROOT}/data/preprocessed/netkeiba/pc"
+GCS_OTHERS  = f"{GCS_ROOT}/data/others"
+GCS_ARCHIVE = f"{GCS_ROOT}/archive/jra"
+GCS_FEATURES = f"{GCS_ROOT}/features"
+GCS_MODELS   = f"{GCS_ROOT}/models"
 
 # ── レース単位データ（カテゴリ / 年 / race_id） ──────────────────
 def race_path(category: str, race_id: str) -> str:
@@ -91,6 +128,35 @@ def horse_path(category: str, horse_id: str) -> str:
 # ── その他データ（jra_cushion 等） ────────────────────────────────
 def others_path(category: str, key: str) -> str:
     return f"gs://{GCS_BUCKET}/{GCS_OTHERS}/{category}/{key}.json"
+
+# ── Feature Store パス ────────────────────────────────────────────
+def feature_lag_path(race_id: str, feature_version: str) -> str:
+    yyyy, mm, dd = race_id[:4], race_id[4:6], race_id[6:8]
+    return f"gs://{GCS_BUCKET}/{GCS_FEATURES}/v{feature_version}/{yyyy}/{mm}/{dd}/lag_{race_id}.parquet"
+
+def feature_rolling_path(race_id: str, feature_version: str) -> str:
+    yyyy, mm, dd = race_id[:4], race_id[4:6], race_id[6:8]
+    return f"gs://{GCS_BUCKET}/{GCS_FEATURES}/v{feature_version}/{yyyy}/{mm}/{dd}/rolling_{race_id}.parquet"
+
+def feature_group_agg_path(date_str: str, venue_code: str, feature_version: str) -> str:
+    yyyy, mm, dd = date_str[:4], date_str[4:6], date_str[6:8]
+    return f"gs://{GCS_BUCKET}/{GCS_FEATURES}/v{feature_version}/{yyyy}/{mm}/{dd}/group_agg_{date_str}_{venue_code}.parquet"
+
+def feature_ready_path(race_id: str, feature_version: str) -> str:
+    """FeatureReadyGate が確認するゼロバイトフラグファイル（write-last 原則）"""
+    yyyy, mm, dd = race_id[:4], race_id[4:6], race_id[6:8]
+    return f"gs://{GCS_BUCKET}/{GCS_FEATURES}/v{feature_version}/{yyyy}/{mm}/{dd}/_READY_{race_id}"
+
+# ── Model Store パス ──────────────────────────────────────────────
+def model_path(model_type: str, date_str: str, model_version: str) -> str:
+    """model_type: lgbm / xgb / catboost"""
+    yyyy, mm = date_str[:4], date_str[4:6]
+    ext = {"lgbm": "pkl", "xgb": "pkl", "catboost": "cbm"}.get(model_type, "pkl")
+    return f"gs://{GCS_BUCKET}/{GCS_MODELS}/v{model_version}/{yyyy}/{mm}/{model_type}_{date_str}.{ext}"
+
+def model_manifest_path(date_str: str, model_version: str) -> str:
+    yyyy, mm = date_str[:4], date_str[4:6]
+    return f"gs://{GCS_BUCKET}/{GCS_MODELS}/v{model_version}/{yyyy}/{mm}/_manifest_{date_str}.json"
 
 # ── ローカル: ページ参照系 ────────────────────────────────────────
 LOCAL_PAGE_REF = "data/page_reference"
@@ -107,20 +173,54 @@ LOCAL_CALC = "data/calculated_data"
 def horse_index_path(horse_id: str) -> str:
     prefix = horse_id[:4]
     return f"{LOCAL_CALC}/horse_index/{prefix}/{horse_id}.json"
+
+# ── GCS パス参照定数（コード内参照用） ───────────────────────────
+GCS_PATHS = {
+    "archive":  f"gs://{GCS_BUCKET}/{GCS_ARCHIVE}",
+    "features": f"gs://{GCS_BUCKET}/{GCS_FEATURES}/v{{feature_version}}",
+    "models":   f"gs://{GCS_BUCKET}/{GCS_MODELS}/v{{model_version}}",
+}
 ```
 
 **主要カテゴリとパス例**:
 
 | カテゴリ | パス例 |
 |---|---|
-| `race_detail` | `chuou/data/preprocessed/netkeiba/pc/race_detail/2025/202505010101.json` |
-| `race_result` | `chuou/data/preprocessed/netkeiba/pc/race_result/2025/202505010101.json` |
-| `race_odds` | `chuou/data/preprocessed/netkeiba/pc/race_odds/2025/202505010101.json` |
-| `race_shutuba` | `chuou/data/preprocessed/netkeiba/pc/race_shutuba/2025/202505010101.json` |
-| `horse_result` | `chuou/data/preprocessed/netkeiba/pc/horse_result/2000/2000110001.json` |
-| `horse_pedigree_5gen` | `chuou/data/preprocessed/netkeiba/pc/horse_pedigree_5gen/2000/2000110001.json` |
-| `smartrc_race` | `chuou/data/preprocessed/netkeiba/pc/smartrc_race/2025/202505010101.json` |
-| `jra_cushion` | `chuou/data/others/jra_cushion/2025.json` |
+| `race_detail` | `gs://magu-keiba-horse-racing-ai/chuou/data/preprocessed/netkeiba/pc/race_detail/2025/202505010101.json` |
+| `race_result` | `gs://magu-keiba-horse-racing-ai/chuou/data/preprocessed/netkeiba/pc/race_result/2025/202505010101.json` |
+| `race_odds` | `gs://magu-keiba-horse-racing-ai/chuou/data/preprocessed/netkeiba/pc/race_odds/2025/202505010101.json` |
+| `race_shutuba` | `gs://magu-keiba-horse-racing-ai/chuou/data/preprocessed/netkeiba/pc/race_shutuba/2025/202505010101.json` |
+| `horse_result` | `gs://magu-keiba-horse-racing-ai/chuou/data/preprocessed/netkeiba/pc/horse_result/2000/2000110001.json` |
+| `horse_pedigree_5gen` | `gs://magu-keiba-horse-racing-ai/chuou/data/preprocessed/netkeiba/pc/horse_pedigree_5gen/2000/2000110001.json` |
+| `smartrc_race` | `gs://magu-keiba-horse-racing-ai/chuou/data/preprocessed/netkeiba/pc/smartrc_race/2025/202505010101.json` |
+| `jra_cushion` | `gs://magu-keiba-horse-racing-ai/chuou/data/others/jra_cushion/2025.json` |
+| Feature Store lag | `gs://magu-keiba-horse-racing-ai/chuou/features/v3/2024/01/28/lag_20240128_nakayama_11.parquet` |
+| Model Store LGBM | `gs://magu-keiba-horse-racing-ai/chuou/models/v1/2024/01/lgbm_20240128.pkl` |
+
+**`race_id` 命名規則（archive と統一）**:
+
+```
+{YYYYMMDD}_{venue_code}_{race_no}
+例: 20240128_nakayama_11
+    20240128_kyoto_09
+
+venue_code: chuou/archive/jra 内の既存 venue_code と同一キーを使用すること
+```
+
+**`_manifest_{YYYYMMDD}.json` スキーマ**:
+
+```json
+{
+  "race_id":           "20240128_nakayama_11",
+  "feature_version":   "v3",
+  "layers_completed":  ["lag_features", "rolling_features", "group_agg_features"],
+  "completed_at":      "2024-01-28T08:30:00Z",
+  "row_count":         18,
+  "checksum":          "sha256:abc123..."
+}
+```
+
+> `checksum` は全 parquet ファイルの SHA-256 ハッシュ結合値。manifest 書き込みは全 parquet 書き込み後の最終ステップ（write-last 原則）。FeatureReadyGate は `_READY_` フラグファイルの存在と manifest の `checksum` を照合する。
 
 ### 3-4. ストレージ階層（HybridStorage）
 
@@ -133,7 +233,7 @@ L2: ディスクキャッシュ（data/cache/）
     TTL: レース系データ 12 時間 / 馬系データ 2 日
     容量上限: 週次アクセス 2回未満のファイルを自動削除（disk_cache_cleanup）
 
-L3: GCS（gs://${GCS_BUCKET}/）
+L3: GCS（gs://magu-keiba-horse-racing-ai/）
     永続ストレージ。L1/L2 ミス時に自動フォールバック。
     読取後に L2 → L1 の順でウォームアップ。
 ```
@@ -150,15 +250,24 @@ L3: GCS（gs://${GCS_BUCKET}/）
 netkeiba.com / SmartRC / JRA
     │ HTTP スクレイピング（SLA 0〜6 + バックフィル）
     ▼
-[Scrape]  スクレイパー → L1 メモリキャッシュ → L2 ディスクキャッシュ → L3 GCS JSON
+[Scrape]  スクレイパー → L1 メモリキャッシュ → L2 ディスクキャッシュ
+                          → L3 GCS JSON（gs://magu-keiba-horse-racing-ai/chuou/）
                           (HybridStorage、data_paths.py 経由)
     │
     ▼
 [Parse / Normalize]  JSON → 正規化レコード → PostgreSQL（Layer 1〜5 テーブル）
     │
     ▼
+[Feature Store ETL]  Layer 3 ラグ特徴・ローリング統計・グループ集約生成
+                     → GCS features/v{version}/ へ parquet 書き込み
+                     → _READY_{race_id} フラグ作成（write-last）
+    │
+    ▼
 [Snapshot Batch]  Layer 3 スナップショット生成（as_of_race_id 付与）
                   → PostgreSQL horse/jockey/trainer_stats_snapshot
+    │
+    ▼
+[FeatureReadyGate]  _READY_ フラグ + manifest checksum 検証
     │
     ▼
 [AI Trigger]  T-15バンドル完了 → 推論ジョブ起動（Stage 1 → Stage 2）
@@ -204,122 +313,4 @@ SmartRC:
 | `race_result` | 着順・タイム・馬体重・コーナー通過順 | GCS + PostgreSQL Layer 2 |
 | `race_result_lap` | 1F毎ラップ・ペース区分 | GCS + PostgreSQL Layer 4 |
 | `race_odds` | 単複オッズ・snapshot_at 付きレコード | GCS + PostgreSQL Layer 5 |
-| `horse_result` | 勝率・連対率・複勝率・脚質スコア集計 | GCS + PostgreSQL Layer 3 スナップショット |
-| `jra_cushion` | クッション値・含水率（PDF 解析） | GCS others/jra_cushion/{year}.json |
-| `smartrc_race` | cr_value / first_furlong_time / estimated_popularity | GCS + 推論特徴量 |
-
-### 4-5. 実行管理（`scrape_runs` テーブル）
-
-```sql
-CREATE TABLE scrape_runs (
-    run_id         BIGSERIAL    PRIMARY KEY,
-    target_type    VARCHAR(30)  NOT NULL,   -- 'race_card' / 'race_result' / 'odds' / 'horse_history'
-    target_id      VARCHAR(20)  NOT NULL,   -- race_id または horse_id
-    status         VARCHAR(10)  NOT NULL    -- 'SUCCESS' / 'FAILED' / 'RETRY'
-                   CHECK (status IN ('SUCCESS','FAILED','RETRY')),
-    retry_count    SMALLINT     DEFAULT 0,
-    started_at     TIMESTAMPTZ  NOT NULL,
-    finished_at    TIMESTAMPTZ,
-    error_message  TEXT,
-    gcs_path       TEXT                     -- 生データ保存先 GCS パス
-);
-```
-
-- スクレイピング成功率の目標値: **≥ 99% / 月**
-- DB 反映遅延の目標値: **≤ 10 分**（スクレイピング完了から）
-
----
-
-## 5. Feature Store（特徴量スナップショット管理）
-
-### 5-1. 設計原則
-
-- Layer 3 の集計値は必ず **`as_of_race_id`（予測対象レース）に紐付けて保存** し、そのレース以後の情報を含めない（テンポラルリーク防止の根幹）
-- スナップショットは **追記専用・不変（Immutable）** とし、更新・削除を禁止する
-- DB には `UNIQUE(entity_id, as_of_race_id)` 制約を設け、二重登録を防止する
-
-### 5-2. Feature Store テーブルスキーマ
-
-#### `horse_stats_snapshot`
-
-```sql
-CREATE TABLE horse_stats_snapshot (
-    snapshot_id          BIGSERIAL      PRIMARY KEY,
-    horse_id             VARCHAR(20)    NOT NULL,
-    as_of_race_id        VARCHAR(20)    NOT NULL,
-    as_of_date           DATE           NOT NULL,
-    win_rate_all         NUMERIC(5,4),
-    win_rate_turf        NUMERIC(5,4),
-    win_rate_dirt        NUMERIC(5,4),
-    place_rate_all       NUMERIC(5,4),
-    show_rate_all        NUMERIC(5,4),
-    win_rate_distance    NUMERIC(5,4),
-    win_rate_course      NUMERIC(5,4),
-    avg_last_3f          NUMERIC(5,2),
-    speed_index_avg      NUMERIC(6,2),
-    speed_index_max      NUMERIC(6,2),
-    running_style_score  NUMERIC(5,2),
-    sample_count         SMALLINT,
-    created_at           TIMESTAMPTZ    DEFAULT NOW(),
-    UNIQUE (horse_id, as_of_race_id)
-);
-```
-
-同様に `jockey_stats_snapshot`、`trainer_stats_snapshot` も `UNIQUE(entity_id, as_of_race_id)` 制約付きで定義する（スキーマ詳細は AREA-01-app-requirements.md を参照）。
-
-### 5-3. スナップショット生成バッチ
-
-- Layer 2 結果データ収集完了直後に自動トリガー
-- 対象: 直前の `as_of_race_id` に紐付いたエンティティ（馬・騎手・調教師）の集計
-- 集計期間: `race_date < as_of_race_id` の全過去成績（テンポラルリーク防止必須）
-- 完了後に `horse_stats_snapshot` テーブルに INSERT（`ON CONFLICT DO NOTHING`）
-
-### 5-4. テンポラルリーク防止チェックリスト
-
-| チェック項目 | 担保方法 |
-|---|---|
-| 訓練データの時系列分割 | 常に過去レースで学習・未来レースで評価（ランダムシャッフル禁止） |
-| スナップショット参照 | 推論時も同 race_id のスナップショットのみ使用 |
-| オッズ特徴量 | 発走 N 分前の最終スナップショット固定使用 |
-| CI テスト | テストデータ時系列分割によるリーク検知テスト自動実行（N-10） |
-
----
-
-## 6. Redis TTL 設計
-
-### 6-1. キャッシュキー体系
-
-```
-prediction:{race_id}:{model_version}       ← AI 予測結果
-lap:prediction:{race_id}:{model_version}   ← ラップ予測結果
-race:entries:{race_id}                     ← 出馬表
-race:results:{race_id}                     ← 着順・ラップ
-track:speed:{date}:{venue}                 ← TSI 指数
-```
-
-### 6-2. TTL ポリシー
-
-| キャッシュキー | TTL | 無効化タイミング |
-|---|---|---|
-| `prediction:*` | 発走時刻まで有効 / 発走後 60 秒で自動失効 | 発走時刻 + 60s |
-| `lap:prediction:*` | 同上 | 同上 |
-| `race:entries:*` | 3,600 秒（出馬確定後は変化小） | 再スクレイピング完了時に明示的削除 |
-| `race:results:*` | 300 秒（発走後 30 分で確定） | — |
-| `track:speed:*` | 86,400 秒 | — |
-
-### 6-3. キャッシュ整合性
-
-- 推論バッチ完了時にキャッシュを `SET ... EX {ttl}` で上書き（`prediction:*` のみ）
-- 出馬確定後の再スクレイピング完了時に `DEL race:entries:{race_id}` で強制削除
-- 発走後は `prediction:*` を 60 秒 TTL で自動失効させ、発走後の古い予測表示を防ぐ
-
----
-
-## 7. 未決定事項（後続 DEC で確定が必要な項目）
-
-| # | 項目 | 理由 |
-|---|---|---|
-| DM-1 | GCS バケット命名規則（本番・ステージング分離） | `GCS_BUCKET` は env var — 命名規則は運用決定事項 |
-| DM-2 | ディスクキャッシュ容量上限の明示 | 現状はアクセス頻度によるヒューリスティック削除のみ |
-| DM-3 | GCS への書き込み失敗時のリトライ・アラート設計 | HybridStorage の障害挙動が未定義 |
-| DM-4 | Feature Store の GCS バックアップ（DB スナップショット補完） | テーブルのみ永続化・GCS features/ は廃止した設計のため要確認 |
+|

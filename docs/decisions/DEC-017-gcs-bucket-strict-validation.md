@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |------|------|
-| **日付** | 2026-07-04 |
+| **日付** | 2026-07-04（更新: 2026-07-06） |
 | **ステータス** | accepted |
 | **担当** | Orchestrator |
 | **関連 AREA** | AREA-06 |
@@ -26,7 +26,7 @@ def _gcs_bucket() -> str:
     if not bucket:
         raise RuntimeError(
             "GCS_BUCKET environment variable is not set. "
-            "Set it in .env or export GCS_BUCKET=<your-bucket-name>"
+            "Set it in .env or export GCS_BUCKET=magu-keiba-horse-racing-ai"
         )
     return bucket
 ```
@@ -45,7 +45,7 @@ def _gcs_bucket() -> str:
 ### 影響範囲
 
 - `src/config/data_paths.py` の `_gcs_bucket()` 変更
-- `.env.example` に `GCS_BUCKET=<your-bucket-name>` の記載を追加・補足
+- `.env.example` に `GCS_BUCKET=magu-keiba-horse-racing-ai` の記載を追加・補足
 
 ---
 
