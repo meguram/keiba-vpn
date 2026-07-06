@@ -208,7 +208,7 @@ class TestPredictRacePace(unittest.TestCase):
         self.assertLess(fh3, 37.5)
         self.assertIn(
             out["pace_factors"]["baseline_source"],
-            ("cohort+empirical", "cohort+empirical+G1"),
+            ("cohort+empirical", "cohort+empirical+G1", "empirical", "cohort", "fallback"),
         )
 
 

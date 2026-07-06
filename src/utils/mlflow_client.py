@@ -47,9 +47,18 @@ def init_mlflow(tracking_uri: str | None = None) -> str:
     try:
         mlflow.set_tracking_uri(uri)
         if uri.startswith("http"):
-            # MLflow 3.x は /health を持たないため Python クライアントで疎通確認
-            from mlflow.tracking import MlflowClient as _C
-            _C(uri).search_experiments(max_results=1)
+            # search_experiments はurllib3が7回リトライするため、先に socket で疎通確認する
+            import socket
+            from urllib.parse import urlparse
+            parsed = urlparse(uri)
+            host = parsed.hostname or "localhost"
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            try:
+                sock.connect((host, port))
+            finally:
+                sock.close()
         logger.info("MLflow 接続: %s", uri)
     except Exception:
         fallback = os.path.join(os.path.dirname(__file__), "..", "..", "mlflow", "runs")
