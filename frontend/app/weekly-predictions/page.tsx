@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
-
 /* ── 型 ── */
 type RaceItem = {
   race_id: string;
@@ -426,13 +425,6 @@ export default function WeeklyPredictionsPage() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-
-      {/* devモック通知バナー */}
-      {USE_MOCK && (
-        <div style={{ background: "rgba(88,166,255,0.1)", borderBottom: "1px solid rgba(88,166,255,0.25)", padding: "8px 24px", fontSize: 12, color: "#58a6ff", textAlign: "center" }}>
-          🔧 開発モード（モックデータ表示中）— 実際のレースデータではありません
-        </div>
-      )}
 
       {/* ページヘッダー */}
       <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>

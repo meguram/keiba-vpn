@@ -169,14 +169,14 @@ export default function RaceQualityPage() {
   const probs0 = dayData?.day_summary?.probs ?? [];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#070910", color: "#e8edf5" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
       {/* ヘッダー */}
-      <div style={{ background: "#10141d", borderBottom: "1px solid #2a3142", padding: "16px 24px" }}>
-        <h1 style={{ fontSize: 23, fontWeight: 700, letterSpacing: "-0.03em", marginBottom: 8 }}>レース質分析</h1>
-        <p style={{ fontSize: 12, color: "#7b8698", lineHeight: 1.68, maxWidth: 900 }}>
-          <strong style={{ color: "#a8b4c8" }}>目的:</strong> 開催日・各レースが「どのタイプの馬に寄っていたか」を確率で可視化します。
-          教師ラベルは使わず、<strong style={{ color: "#a8b4c8" }}>血統因子・タイム指数・バロメーター・過去成績</strong>から作った 8 タイプの馬側スコアと
-          <strong style={{ color: "#a8b4c8" }}>実着順</strong>を NNLS で整合させます。
+      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "16px 24px" }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: "#f0f6fc", marginBottom: 6 }}>📊 レース質分析</h1>
+        <p style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.68, maxWidth: 900 }}>
+          <strong style={{ color: "var(--text)" }}>目的:</strong> 開催日・各レースが「どのタイプの馬に寄っていたか」を確率で可視化します。
+          教師ラベルを使わず、<strong style={{ color: "var(--text)" }}>血統因子・タイム指数・バロメーター・過去成績</strong>から作った 8 タイプの馬側スコアと
+          <strong style={{ color: "var(--text)" }}>実着順</strong>を NNLS で整合させます。
         </p>
       </div>
 
@@ -189,7 +189,7 @@ export default function RaceQualityPage() {
         statusMsg={loadingSingle ? "分析中…" : singleError || ""}
         extraControls={
           <button
-            style={{ background: "transparent", border: "1px solid rgba(167,139,250,0.35)", color: "#a78bfa", padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: loadingDay ? "not-allowed" : "pointer", opacity: loadingDay ? 0.5 : 1 }}
+            style={{ background: "transparent", border: "1px solid rgba(167,139,250,0.35)", color: "var(--purple)", padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: loadingDay ? "not-allowed" : "pointer", opacity: loadingDay ? 0.5 : 1 }}
             disabled={loadingDay}
             onClick={() => {
               const dateEl = document.querySelector<HTMLSelectElement>('[data-date-select]');
@@ -207,14 +207,14 @@ export default function RaceQualityPage() {
         {(singleData || singleError) && (
           <div style={panelStyle}>
             <h2 style={h2Style}>1レース分析結果</h2>
-            {singleError && <p style={{ color: "#fca5a5", fontSize: 12 }}>⚠️ {singleError}</p>}
+            {singleError && <p style={{ color: "var(--err)", fontSize: 12 }}>⚠️ {singleError}</p>}
             {singleData && (
               <>
                 <div style={{ marginBottom: 12 }}>
-                  <a href={`/race/${singleData.race_id}`} style={{ color: "#2dd4bf", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+                  <a href={`/race/${singleData.race_id}`} style={{ color: "var(--teal)", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
                     {singleData.race_name ?? singleData.race_id}
                   </a>
-                  <span style={{ fontSize: 11, color: "#7b8698", marginLeft: 12 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 12 }}>
                     {singleData.n_runners}頭 / R²={singleData.r2_fit}
                   </span>
                 </div>
@@ -232,7 +232,7 @@ export default function RaceQualityPage() {
         {/* 開催日エラー */}
         {dayError && (
           <div style={{ ...panelStyle, border: "1px solid rgba(239,68,68,0.3)" }}>
-            <p style={{ color: "#fca5a5", fontSize: 13 }}>⚠️ {dayError}</p>
+            <p style={{ color: "var(--err)", fontSize: 13 }}>⚠️ {dayError}</p>
           </div>
         )}
 
@@ -243,7 +243,7 @@ export default function RaceQualityPage() {
             {axes0.length > 0 && probs0.length > 0 && (
               <div style={panelStyle}>
                 <h2 style={h2Style}>その日の全体（√頭数加重平均）</h2>
-                <div style={{ marginBottom: 8, fontSize: 12, color: "#7b8698" }}>
+                <div style={{ marginBottom: 8, fontSize: 12, color: "var(--text-dim)" }}>
                   解析 {dayData.day_summary?.n_races}R · 日付 {dayData.date}
                 </div>
                 <StackedBar probs={probs0} labels={axes0.map((a) => a.label_ja ?? "")} height={40} />
@@ -264,8 +264,8 @@ export default function RaceQualityPage() {
                       const segProbs = seg.probs ?? [];
                       return (
                         <div key={key}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "#cbd5e1", marginBottom: 6 }}>
-                            {key} <span style={{ fontSize: 11, color: "#7b8698" }}>({seg.n_races}R)</span>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>
+                            {key} <span style={{ fontSize: 11, color: "var(--text-dim)" }}>({seg.n_races}R)</span>
                           </div>
                           {segProbs.length > 0 && (
                             <StackedBar probs={segProbs} labels={segAxes.map((a) => a.label_ja ?? "")} height={26} />
@@ -281,7 +281,7 @@ export default function RaceQualityPage() {
             {dayData.races && dayData.races.length > 0 && (
               <div style={panelStyle}>
                 <h2 style={h2Style}>レース一覧</h2>
-                <p style={{ fontSize: 11, color: "#7b8698", marginBottom: 8 }}>
+                <p style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 8 }}>
                   <strong>消</strong>=消耗寄り / <strong>溜</strong>=溜め瞬発寄り / <strong>均</strong>=均速リズム（消/溜/均 0〜100目安）
                 </p>
                 <div style={{ overflowX: "auto" }}>
@@ -289,7 +289,7 @@ export default function RaceQualityPage() {
                     <thead>
                       <tr>
                         {["条件帯", "場所", "距離・馬場", "消/溜/均", "レース", "頭", "R²", "上位傾向", "分布"].map((h) => (
-                          <th key={h} style={{ padding: "8px 10px", textAlign: "left", color: "#7b8698", fontWeight: 600, borderBottom: "1px solid #2a3142", whiteSpace: "nowrap", fontSize: 11 }}>{h}</th>
+                          <th key={h} style={{ padding: "8px 10px", textAlign: "left", color: "var(--text-dim)", fontWeight: 600, borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", fontSize: 11 }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -304,22 +304,22 @@ export default function RaceQualityPage() {
                           .map((a) => a.label)
                           .join(" > ");
                         return (
-                          <tr key={rc.race_id} style={{ borderBottom: "1px solid rgba(42,49,66,0.4)" }}>
-                            <td style={{ padding: "8px 10px", fontSize: 11, whiteSpace: "nowrap", color: "#8892a3" }}>{rc.segment_key ?? "—"}</td>
+                          <tr key={rc.race_id} style={{ borderBottom: "1px solid rgba(36,48,73,0.4)" }}>
+                            <td style={{ padding: "8px 10px", fontSize: 11, whiteSpace: "nowrap", color: "var(--text-dim)" }}>{rc.segment_key ?? "—"}</td>
                             <td style={{ padding: "8px 10px" }}>{rc.venue ?? "—"}</td>
                             <td style={{ padding: "8px 10px", fontSize: 11 }}>
                               {rc.distance}{rc.surface ? ` ${rc.surface}` : ""}
-                              {rc.track_condition && <span style={{ display: "block", fontSize: 10, color: "#8892a3" }}>{rc.track_condition}</span>}
+                              {rc.track_condition && <span style={{ display: "block", fontSize: 10, color: "var(--text-dim)" }}>{rc.track_condition}</span>}
                             </td>
-                            <td style={{ padding: "8px 10px", fontSize: 11, color: "#94a3b8", fontFamily: "monospace" }}>{PaceStr(rc.pace_shape)}</td>
+                            <td style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)", fontFamily: "monospace" }}>{PaceStr(rc.pace_shape)}</td>
                             <td style={{ padding: "8px 10px" }}>
-                              <a href={`/race/${rc.race_id}`} style={{ color: "#2dd4bf", textDecoration: "none" }}>
+                              <a href={`/race/${rc.race_id}`} style={{ color: "var(--teal)", textDecoration: "none" }}>
                                 {rc.race_name ?? rc.race_id}
                               </a>
                             </td>
                             <td style={{ padding: "8px 10px", textAlign: "center" }}>{rc.n_runners ?? "—"}</td>
                             <td style={{ padding: "8px 10px", textAlign: "center", fontSize: 11 }}>{rc.r2_fit ?? "—"}</td>
-                            <td style={{ padding: "8px 10px", fontSize: 11, color: "#a8b4c8" }}>{top3 || "—"}</td>
+                            <td style={{ padding: "8px 10px", fontSize: 11, color: "var(--text)" }}>{top3 || "—"}</td>
                             <td style={{ padding: "8px 10px", minWidth: 100 }}>
                               {rcProbs.length > 0 && (
                                 <StackedBar probs={rcProbs} labels={rcAxes.map((a) => a.label_ja ?? "")} height={16} />
@@ -338,15 +338,15 @@ export default function RaceQualityPage() {
 
         {/* 初期プレースホルダー */}
         {!dayData && !dayError && !singleData && !singleError && !loadingDay && !loadingSingle && (
-          <div style={{ textAlign: "center", padding: "60px 0", color: "#7b8698" }}>
+          <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-dim)" }}>
             <div style={{ fontSize: 40, marginBottom: 16 }}>📊</div>
             <p style={{ fontSize: 14 }}>開催日・会場・レースを選んで「1レースを分析」または「開催日まとめを読み込み」を押してください</p>
           </div>
         )}
 
         {(loadingDay || loadingSingle) && (
-          <div style={{ textAlign: "center", padding: "60px 0", color: "#7b8698" }}>
-            <div style={{ width: 40, height: 40, border: "3px solid #2a3142", borderTopColor: "#2dd4bf", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 16px" }} />
+          <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-dim)" }}>
+            <div style={{ width: 40, height: 40, border: "3px solid var(--border)", borderTopColor: "var(--teal)", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 16px" }} />
             <p style={{ fontSize: 14 }}>{loadingDay ? "全日計算中…" : "分析中…"}</p>
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
