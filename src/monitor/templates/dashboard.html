@@ -100,6 +100,54 @@ function dbRow(db, isMock) {
     </div>`;
 }
 
+function mkModelDataModeRow(label, info) {
+  if (!info) return '';
+  const mode = info.mode || 'no_data';
+  const badge = {
+    'mock':    '<span style="background:rgba(210,153,34,0.18);color:#d29922;border:1px solid rgba(210,153,34,0.4);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:600">モック</span>',
+    'real':    '<span style="background:rgba(63,185,80,0.15);color:#3fb950;border:1px solid rgba(63,185,80,0.4);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:600">実データ</span>',
+    'no_data': '<span style="background:rgba(110,118,129,0.15);color:#8b949e;border:1px solid rgba(110,118,129,0.3);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:600">データなし</span>',
+    'error':   '<span style="background:rgba(239,68,68,0.12);color:#f85149;border:1px solid rgba(239,68,68,0.3);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:600">エラー</span>',
+  }[mode] || '';
+  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 0">
+    <span style="font-size:11px;color:var(--muted)">${label}</span>
+    ${badge}
+  </div>`;
+}
+
+function mkModelDataSection(modelData) {
+  if (!modelData) return '';
+  const sampleId = modelData.sample_race_id
+    ? `<span style="font-size:10px;color:var(--muted)">サンプル: ${modelData.sample_race_id}</span>`
+    : '<span style="font-size:10px;color:var(--muted)">サンプルレースなし</span>';
+
+  // すべて実データなら緑、混在なら黄、すべてモックなら黄、データなし/エラーはグレー
+  const modes = ['predictions', 'tracking_difficulty', 'race_quality'].map(k => (modelData[k] || {}).mode);
+  const allReal = modes.every(m => m === 'real');
+  const allMock = modes.every(m => m === 'mock');
+  const hasError = modes.some(m => m === 'error');
+  const sectionBg = allReal
+    ? 'rgba(63,185,80,0.06)' : hasError
+    ? 'rgba(239,68,68,0.06)' : 'rgba(210,153,34,0.06)';
+  const sectionBorder = allReal
+    ? 'rgba(63,185,80,0.25)' : hasError
+    ? 'rgba(239,68,68,0.25)' : 'rgba(210,153,34,0.25)';
+  const titleColor = allReal ? '#3fb950' : hasError ? '#f85149' : '#d29922';
+
+  return `
+  <div style="margin-top:8px;border:1px solid ${sectionBorder};border-radius:6px;overflow:hidden;background:${sectionBg}">
+    <div style="padding:5px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid ${sectionBorder}">
+      <span style="font-size:11px;font-weight:600;color:${titleColor}">🤖 モデルデータモード</span>
+      ${sampleId}
+    </div>
+    <div style="padding:5px 10px">
+      ${mkModelDataModeRow('AI予測 (predictions)', modelData.predictions)}
+      ${mkModelDataModeRow('追走難度 (tracking-difficulty)', modelData.tracking_difficulty)}
+      ${mkModelDataModeRow('レース質 (race-quality)', modelData.race_quality)}
+    </div>
+  </div>`;
+}
+
 function mkEnvCard(env, data) {
   const color = data.color || '#6e7681';
   const allOk = data.all_ok;
@@ -133,6 +181,7 @@ function mkEnvCard(env, data) {
         ${svcRow('Next.js', data.next)}
         ${svcRow('Flask API', data.flask)}
         ${dbRow(data.db, data.mock_frontend)}
+        ${mkModelDataSection(data.model_data_mode || null)}
         <div style="margin-top:6px;font-size:11px;color:var(--muted)">
           Next: ${data.next.url} &nbsp;|&nbsp; Flask: ${data.flask.url}
         </div>

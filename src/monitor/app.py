@@ -226,6 +226,79 @@ def _db_ping(db_url: str) -> dict:
         return {"ok": False, "error": str(exc)[:200], "elapsed_ms": elapsed, "dsn": dsn_masked}
 
 
+def _check_model_data_mode(fastapi_url: str) -> dict:
+    """
+    stg/prod 環境向け: 予測・追走難度・レース質の各エンドポイントが
+    モックデータか実データかをサンプルチェックする。
+
+    代表レース ID は DB / GCS から最近の有効レースを取得する。
+    Returns:
+      {
+        "predictions":          {"mode": "mock"|"real"|"no_data"|"error", "race_id": ...},
+        "tracking_difficulty":  {"mode": "mock"|"real"|"no_data"|"error", "race_id": ...},
+        "race_quality":         {"mode": "mock"|"real"|"no_data"|"error", "race_id": ...},
+        "sample_race_id":       "202602010801",
+      }
+    """
+    import json as _json
+
+    # ① 代表レース ID を取得（race-list から直近の開催日の最初のレース）
+    sample_race_id = None
+    try:
+        code, body, _ = _http_get(
+            f"{fastapi_url}/api/scrape-dates?picker_past_days=30", timeout=5.0
+        )
+        if code == 200 and isinstance(body, dict):
+            dates = body.get("dates") or []
+            # 直近日から試す
+            for d in dates[:5]:
+                rc, rb, _ = _http_get(f"{fastapi_url}/api/race-list/{d}", timeout=5.0)
+                if rc == 200 and isinstance(rb, dict):
+                    races = rb.get("races") or []
+                    if races:
+                        sample_race_id = races[0].get("race_id")
+                        if sample_race_id:
+                            break
+    except Exception:
+        pass
+
+    if not sample_race_id:
+        return {
+            "predictions": {"mode": "no_data", "race_id": None},
+            "tracking_difficulty": {"mode": "no_data", "race_id": None},
+            "race_quality": {"mode": "no_data", "race_id": None},
+            "sample_race_id": None,
+        }
+
+    def _check_endpoint(path: str) -> str:
+        """エンドポイントを叩き mock/real/no_data/error を返す。"""
+        try:
+            code, body, _ = _http_get(f"{fastapi_url}{path}", timeout=8.0)
+            if code == 404:
+                return "no_data"
+            if code != 200 or not isinstance(body, dict):
+                return "error"
+            if body.get("_mock") is True:
+                return "mock"
+            # ステータスが not_found / no_entries の場合は no_data
+            if body.get("status") in ("not_found", "no_entries", "not_precomputed"):
+                return "no_data"
+            return "real"
+        except Exception:
+            return "error"
+
+    pred_mode = _check_endpoint(f"/api/race/{sample_race_id}/predictions")
+    td_mode   = _check_endpoint(f"/api/race/{sample_race_id}/tracking-difficulty")
+    rq_mode   = _check_endpoint(f"/api/race-quality/race?race_id={sample_race_id}")
+
+    return {
+        "predictions":         {"mode": pred_mode, "race_id": sample_race_id},
+        "tracking_difficulty": {"mode": td_mode,   "race_id": sample_race_id},
+        "race_quality":        {"mode": rq_mode,   "race_id": sample_race_id},
+        "sample_race_id": sample_race_id,
+    }
+
+
 def _check_env(env_key: str) -> dict:
     """指定環境（dev/stg/prod）の各サービス死活を返す。"""
     cfg = ENV_CONFIGS[env_key]
@@ -237,6 +310,15 @@ def _check_env(env_key: str) -> dict:
     else:
         db_result = _db_ping(cfg.get("db_url") or "")
     all_ok = next_code in (200, 304) and flask_code == 200
+
+    # stg/prod のみモデルデータモードをチェック（dev はフロントモックなので省略）
+    model_data_mode: dict | None = None
+    if env_key in ("stg", "prod") and not is_mock:
+        try:
+            model_data_mode = _check_model_data_mode(FASTAPI_URL)
+        except Exception:
+            model_data_mode = None
+
     return {
         "env": env_key,
         "label": cfg["label"],
@@ -258,6 +340,7 @@ def _check_env(env_key: str) -> dict:
         },
         "db": db_result,
         "all_ok": all_ok,
+        "model_data_mode": model_data_mode,
     }
 
 
