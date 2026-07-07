@@ -48,6 +48,10 @@ NEXT_URL = "http://127.0.0.1:3000"
 LOG_DIR = ROOT / "logs"
 
 # 環境ごとのサービスポート定義
+_SHARED_DB_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql+psycopg://keiba:keiba@localhost:5432/keiba",
+)
 ENV_CONFIGS = {
     "dev": {
         "label": "DEV",
@@ -55,6 +59,7 @@ ENV_CONFIGS = {
         "flask_url": "http://127.0.0.1:5100",
         "public_url": "https://meguai-dev.tcpexposer.com/",
         "color": "#58a6ff",
+        "db_url": os.environ.get("DEV_DATABASE_URL", _SHARED_DB_URL),
     },
     "stg": {
         "label": "STG",
@@ -62,6 +67,7 @@ ENV_CONFIGS = {
         "flask_url": "http://127.0.0.1:5000",
         "public_url": "https://meguai-stg.tcpexposer.com/",
         "color": "#3fb950",
+        "db_url": os.environ.get("STG_DATABASE_URL", _SHARED_DB_URL),
     },
     "prod": {
         "label": "PROD",
@@ -69,6 +75,7 @@ ENV_CONFIGS = {
         "flask_url": "http://127.0.0.1:5200",
         "public_url": None,
         "color": "#d29922",
+        "db_url": os.environ.get("PROD_DATABASE_URL", _SHARED_DB_URL),
     },
 }
 
@@ -182,11 +189,42 @@ def _http_get(url: str, timeout: float = 5.0) -> tuple[int, Any, float]:
         return 0, None, -1.0
 
 
+def _db_ping(db_url: str) -> dict:
+    """PostgreSQL への軽量 ping チェック（接続確立のみ、行数取得なし）。"""
+    if not db_url:
+        return {"ok": False, "error": "URL未設定", "elapsed_ms": -1}
+    t0 = time.monotonic()
+    try:
+        from sqlalchemy import create_engine, text
+        engine = create_engine(
+            db_url,
+            connect_args={"connect_timeout": 3},
+            pool_pre_ping=True,
+            pool_size=1,
+            max_overflow=0,
+        )
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        elapsed = round((time.monotonic() - t0) * 1000, 1)
+        # DSN マスク（パスワード部分を *** に置換）
+        try:
+            import re
+            dsn_masked = re.sub(r"://([^:@/]+):([^@/]+)@", r"://\1:***@", db_url)
+        except Exception:
+            dsn_masked = "***"
+        return {"ok": True, "elapsed_ms": elapsed, "dsn": dsn_masked}
+    except Exception as exc:
+        elapsed = round((time.monotonic() - t0) * 1000, 1)
+        return {"ok": False, "error": str(exc)[:200], "elapsed_ms": elapsed}
+
+
 def _check_env(env_key: str) -> dict:
     """指定環境（dev/stg/prod）の各サービス死活を返す。"""
     cfg = ENV_CONFIGS[env_key]
     next_code, _, next_ms = _http_get(cfg["next_url"])
     flask_code, flask_body, flask_ms = _http_get(f"{cfg['flask_url']}/api/v1/health")
+    db_result = _db_ping(cfg.get("db_url", ""))
+    all_ok = next_code in (200, 304) and flask_code == 200
     return {
         "env": env_key,
         "label": cfg["label"],
@@ -205,7 +243,8 @@ def _check_env(env_key: str) -> dict:
             "elapsed_ms": flask_ms,
             "body": flask_body,
         },
-        "all_ok": next_code in (200, 304) and flask_code == 200,
+        "db": db_result,
+        "all_ok": all_ok,
     }
 
 

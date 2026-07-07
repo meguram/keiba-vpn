@@ -67,10 +67,33 @@ function svcRow(label, svc) {
     </div>`;
 }
 
+function dbRow(db) {
+  if (!db) return '';
+  const dot = db.ok ? 'dot-ok' : 'dot-error';
+  const ms  = db.elapsed_ms >= 0 ? `${db.elapsed_ms}ms` : '—';
+  const detail = db.ok
+    ? `<span class="text-muted" style="font-size:11px">${ms}</span>`
+    : `<span style="color:var(--error);font-size:11px">${(db.error||'接続失敗').slice(0,60)}</span>`;
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px">
+        <span class="dot ${dot}" style="margin-right:4px"></span>PostgreSQL
+      </span>
+      <span style="display:flex;align-items:center;gap:8px">
+        ${statusBadge(db.ok)}
+        ${detail}
+      </span>
+    </div>`;
+}
+
 function mkEnvCard(env, data) {
   const color = data.color || '#6e7681';
   const allOk = data.all_ok;
-  const outerBorder = allOk ? '1px solid rgba(63,185,80,0.4)' : data.next.ok || data.flask.ok ? '1px solid rgba(210,153,34,0.4)' : '1px solid rgba(239,68,68,0.3)';
+  const anyOk = data.next.ok || data.flask.ok;
+  const outerBorder = allOk
+    ? '1px solid rgba(63,185,80,0.4)'
+    : anyOk ? '1px solid rgba(210,153,34,0.4)' : '1px solid rgba(239,68,68,0.3)';
   const headerBg = allOk ? 'rgba(63,185,80,0.08)' : 'rgba(239,68,68,0.06)';
 
   const publicLink = data.public_url
@@ -79,6 +102,10 @@ function mkEnvCard(env, data) {
          🔗 ${data.public_url.replace('https://', '')}
        </a>`
     : `<span class="text-muted" style="font-size:11px">公開URL未設定</span>`;
+
+  const dbDsn = data.db && data.db.dsn
+    ? `<span class="text-muted" style="font-size:10px;word-break:break-all">${data.db.dsn}</span>`
+    : '';
 
   return `
     <div style="border:${outerBorder};border-radius:10px;overflow:hidden">
@@ -92,9 +119,11 @@ function mkEnvCard(env, data) {
       <div style="padding:8px 14px 10px">
         ${svcRow('Next.js', data.next)}
         ${svcRow('Flask API', data.flask)}
+        ${dbRow(data.db)}
         <div style="margin-top:6px;font-size:11px;color:var(--muted)">
           Next: ${data.next.url} &nbsp;|&nbsp; Flask: ${data.flask.url}
         </div>
+        ${dbDsn}
       </div>
     </div>`;
 }
