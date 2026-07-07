@@ -218,6 +218,71 @@ export const MOCK_MYOSTATIN = [
 // ---------------------------------------------------------------------------
 // Kelly criterion result
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Weekly predictions mock
+// ---------------------------------------------------------------------------
+
+/** 今日を基準に直近3開催日（土日）の yyyyMMdd 形式リストを返す */
+export function getMockRaceDates(): string[] {
+  const result: string[] = [];
+  const today = new Date();
+  let cursor = new Date(today);
+  while (result.length < 3) {
+    const dow = cursor.getDay();
+    if (dow === 0 || dow === 6) {
+      const y = cursor.getFullYear();
+      const m = String(cursor.getMonth() + 1).padStart(2, "0");
+      const d = String(cursor.getDate()).padStart(2, "0");
+      result.push(`${y}${m}${d}`);
+    }
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return result;
+}
+
+export const MOCK_WEEKLY_RACES = [
+  { race_id: "m_r01", race_name: "東京メトロポリタンS", venue: "東京", round: 11, distance: 2000, surface: "芝", grade: "G3", field_size: 16 },
+  { race_id: "m_r02", race_name: "阪神マイルCS", venue: "阪神", round: 10, distance: 1600, surface: "芝", grade: "G2", field_size: 18 },
+  { race_id: "m_r03", race_name: "中京ダービー", venue: "中京", round: 9, distance: 1400, surface: "ダ", grade: "G3", field_size: 14 },
+  { race_id: "m_r04", race_name: "3歳未勝利", venue: "東京", round: 3, distance: 1800, surface: "芝", grade: "", field_size: 14 },
+  { race_id: "m_r05", race_name: "3歳未勝利", venue: "阪神", round: 4, distance: 1200, surface: "ダ", grade: "", field_size: 16 },
+  { race_id: "m_r06", race_name: "古馬1勝クラス", venue: "中京", round: 6, distance: 1600, surface: "芝", grade: "", field_size: 15 },
+  { race_id: "m_r07", race_name: "古馬2勝クラス", venue: "東京", round: 8, distance: 2200, surface: "芝", grade: "", field_size: 13 },
+  { race_id: "m_r08", race_name: "古馬3勝クラス", venue: "阪神", round: 7, distance: 1800, surface: "ダ", grade: "", field_size: 12 },
+];
+
+/** モック予測データ（MOCK_HORSES を予測形式に変換） */
+export function getMockPredictions(raceId: string) {
+  const seed = raceId.charCodeAt(raceId.length - 1);
+  return {
+    status: "ok",
+    has_prediction: true,
+    model_description: "MockModel v1.0（開発確認用ダミーデータ）",
+    total_horses: MOCK_HORSES.length,
+    predictions: MOCK_HORSES.map((h, i) => {
+      const rank = ((i + seed) % MOCK_HORSES.length) + 1;
+      const marks = ["honmei", "pair", "anchor", "show_val", "star"];
+      return {
+        horse_number: h.post_no,
+        horse_name: h.horse_name,
+        horse_id: h.horse_id,
+        mark_type: rank <= 5 ? marks[rank - 1] : "none",
+        pred_rank: rank,
+        composite_rank: rank,
+        win_prob: h.win_prob,
+        top2_prob: h.place_prob,
+        top3_prob: h.show_prob,
+        ev_win: h.win_roi,
+        ev_place: h.show_roi,
+        win_odds: h.predicted_win_odds,
+        place_odds_min: h.predicted_place_odds - 0.3,
+        place_odds_max: h.predicted_place_odds + 0.5,
+        buy_tier: h.is_value_bet ? "A" : rank <= 3 ? "B" : "C",
+      };
+    }),
+  };
+}
+
 export const MOCK_KELLY = {
   race_id: "r001",
   bankroll: 100000,

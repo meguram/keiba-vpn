@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
 
 /* ── 型 ── */
 type RaceItem = {
@@ -305,6 +306,13 @@ export default function WeeklyPredictionsPage() {
 
   /* 開催日一覧 */
   useEffect(() => {
+    if (USE_MOCK) {
+      const mockDates = getMockRaceDates();
+      setDates(mockDates);
+      setSelectedDate(mockDates[0]);
+      setLoadingDates(false);
+      return;
+    }
     (async () => {
       try {
         const res = await fetch("/api/scrape-dates?picker_past_days=30", { cache: "no-store" });
@@ -326,6 +334,12 @@ export default function WeeklyPredictionsPage() {
     setRacesError("");
     setRaces([]);
     setPreds({});
+    if (USE_MOCK) {
+      await new Promise((r) => setTimeout(r, 300));
+      setRaces(MOCK_WEEKLY_RACES.map((r) => ({ ...r, date })));
+      setLoadingRaces(false);
+      return;
+    }
     try {
       const res = await fetch(`/api/race-list/${date}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -346,6 +360,12 @@ export default function WeeklyPredictionsPage() {
   /* 個別レース予測取得 */
   const loadPred = useCallback(async (raceId: string) => {
     setLoadingPred((prev) => ({ ...prev, [raceId]: true }));
+    if (USE_MOCK) {
+      await new Promise((r) => setTimeout(r, 200));
+      setPreds((prev) => ({ ...prev, [raceId]: getMockPredictions(raceId) }));
+      setLoadingPred((prev) => ({ ...prev, [raceId]: false }));
+      return;
+    }
     try {
       const res = await fetch(`/api/race/${raceId}/predictions`);
       const d: PredData = res.ok ? await res.json() : { status: "error", predictions: [] };
@@ -367,6 +387,14 @@ export default function WeeklyPredictionsPage() {
       if (signal.aborted) break;
       if (preds[race.race_id]) continue;
       setLoadingPred((prev) => ({ ...prev, [race.race_id]: true }));
+      if (USE_MOCK) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (!signal.aborted) {
+          setPreds((prev) => ({ ...prev, [race.race_id]: getMockPredictions(race.race_id) }));
+        }
+        setLoadingPred((prev) => ({ ...prev, [race.race_id]: false }));
+        continue;
+      }
       try {
         const res = await fetch(`/api/race/${race.race_id}/predictions`, { signal });
         const d: PredData = res.ok ? await res.json() : { status: "error", predictions: [] };
@@ -399,12 +427,21 @@ export default function WeeklyPredictionsPage() {
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
+      {/* devモック通知バナー */}
+      {USE_MOCK && (
+        <div style={{ background: "rgba(88,166,255,0.1)", borderBottom: "1px solid rgba(88,166,255,0.25)", padding: "8px 24px", fontSize: 12, color: "#58a6ff", textAlign: "center" }}>
+          🔧 開発モード（モックデータ表示中）— 実際のレースデータではありません
+        </div>
+      )}
+
       {/* ページヘッダー */}
       <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#fff", marginBottom: 4 }}>🤖 今週のAI予測</h1>
-          <p style={{ fontSize: 12, color: "var(--text-dim)" }}>
-            開催日ごとに全レースの勝率・連対率・複勝率と想定オッズ期待値を一覧表示します
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
+          <Link href="/" style={{ fontSize: 12, color: "var(--text-dim)", textDecoration: "none" }}>← ホーム</Link>
+          <span style={{ color: "var(--border)" }}>/</span>
+          <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f0f6fc", margin: 0 }}>🤖 今週のAI予測</h1>
+          <p style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
+            開催日ごとの勝率・期待値を一覧表示
           </p>
         </div>
       </div>
