@@ -174,7 +174,7 @@ JP_STALLIONS: list[tuple[str, str, str]] = [
 INT_STALLIONS: list[tuple[str, str, str]] = [
     ("Acatenango", "german_line", "平坦巧者・急坂苦手・後世に伝えるの記述。"),
     ("Affirmed", "early_type", "米ダート中距離・早熟因子の記述。"),
-    ("Ahonoora", "eu_miler", "欧州軽スピード・日本マイル以下保管の記述。"),
+    ("Ahonoora", "eu_miler", "欧州軽スピード・日本マイル以下補完の記述。"),
     ("Alibhai", "eu_stayer", "長距離スタミナ・Dixieland Band クロスで長距離強化の記述。"),
     ("Alzao", "danzig_line", "Lyphard×Sir Ivor でパワースピード持続の記述。"),
     ("Alleged", "ribot_millreef", "Ribot 系欧州パワーの記述。"),
