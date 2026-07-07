@@ -2,7 +2,7 @@
 {% set active = "data-stores" %}
 {% block title %}データストア — keiba-vpn 監視{% endblock %}
 
-{% block content %}
+{% block head_extra %}
 <style>
   .store-section { margin-bottom: 28px; }
   .store-section h2 { font-size: 15px; font-weight: 700; margin-bottom: 12px; color: var(--accent); display: flex; align-items: center; gap: 8px; }
@@ -18,9 +18,10 @@
   .tbl-list tr:last-child td { border-bottom: none; }
   .tbl-list .num { text-align: right; }
 
-  .badge-ok   { background: rgba(63,185,80,.2);  color: #3fb950; border: 1px solid rgba(63,185,80,.4);  border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
-  .badge-err  { background: rgba(248,81,73,.2);  color: #f85149; border: 1px solid rgba(248,81,73,.4);  border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
-  .badge-skip { background: rgba(139,148,158,.15); color: var(--muted); border: 1px solid var(--border);  border-radius: 4px; padding: 1px 7px; font-size: 11px; }
+  /* store-card 専用バッジ（base.html の .badge-* に border を追加） */
+  .badge-ok   { border: 1px solid rgba(63,185,80,.4); }
+  .badge-error { border: 1px solid rgba(248,81,73,.4); }
+  .badge-muted { border: 1px solid var(--border); }
 
   .pg-dsn { font-family: monospace; font-size: 11px; color: var(--muted); background: rgba(0,0,0,.3); border-radius: 4px; padding: 4px 8px; word-break: break-all; margin-bottom: 10px; }
 
@@ -30,22 +31,16 @@
   .parquet-card .stat { font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
   .parquet-card .stat span { color: var(--text); }
 
-  .ts-bar { font-size: 11px; color: var(--muted); margin-bottom: 16px; }
-  .ts-bar button { font-size: 11px; background: rgba(88,166,255,.15); border: 1px solid rgba(88,166,255,.3); color: var(--accent); border-radius: 4px; padding: 2px 10px; cursor: pointer; margin-left: 10px; }
-  .ts-bar button:hover { background: rgba(88,166,255,.25); }
-
   .null-val { color: var(--muted); font-style: italic; }
 </style>
+{% endblock %}
 
-<h1 style="font-size:18px;font-weight:700;margin-bottom:6px;">🗄️ データストア</h1>
-<div class="ts-bar">
-  最終更新: <span id="ts">—</span>
-  <button onclick="load()">↺ 更新</button>
-</div>
+{% block content %}
+<div class="page-title"><span class="icon">🗄️</span> データストア</div>
 
 <!-- PostgreSQL -->
 <div class="store-section">
-  <h2>🐘 PostgreSQL <span id="pg-badge" class="badge-skip">確認中…</span></h2>
+  <h2>🐘 PostgreSQL <span id="pg-badge" class="badge badge-muted">確認中…</span></h2>
   <div id="pg-content">
     <div class="store-card">
       <div class="meta">接続確認中…</div>
@@ -70,6 +65,13 @@
   </div>
 </div>
 
+<p class="last-updated" style="display:flex;align-items:center;gap:12px">
+  最終更新: <span id="ts">—</span>
+  <button onclick="load()" style="font-size:11px;padding:2px 10px">↺ 更新</button>
+</p>
+{% endblock %}
+
+{% block scripts %}
 <script>
 function fmt(n) {
   if (n == null) return '<span class="null-val">—</span>';
@@ -81,15 +83,15 @@ function renderPg(pg) {
   const cont  = document.getElementById('pg-content');
 
   if (!pg.ok) {
-    badge.className = 'badge-err'; badge.textContent = 'ERROR';
+    badge.className = 'badge badge-error'; badge.textContent = 'ERROR';
     cont.innerHTML = `<div class="store-card">
-      <h3>PostgreSQL <span class="badge-err">接続失敗</span></h3>
+      <h3>PostgreSQL <span class="badge badge-error">接続失敗</span></h3>
       <div class="meta">${escHtml(pg.error || '')}</div>
     </div>`;
     return;
   }
 
-  badge.className = 'badge-ok'; badge.textContent = 'OK';
+  badge.className = 'badge badge-ok'; badge.textContent = 'OK';
 
   const tables = pg.tables || {};
   const rows = Object.entries(tables).map(([tbl, cnt]) => `
@@ -116,7 +118,7 @@ function renderSqlite(stores) {
   cont.innerHTML = stores.map(s => {
     if (!s.ok) {
       return `<div class="store-card">
-        <h3>${escHtml(s.label)} <span class="badge-err">ERROR</span></h3>
+        <h3>${escHtml(s.label)} <span class="badge badge-error">ERROR</span></h3>
         <div class="meta">${escHtml(s.path)}</div>
         <div style="font-size:11px;color:var(--danger);">${escHtml(s.error || '')}</div>
       </div>`;
@@ -129,7 +131,7 @@ function renderSqlite(stores) {
       </tr>`).join('');
 
     return `<div class="store-card">
-      <h3>${escHtml(s.label)} <span class="badge-ok">OK</span></h3>
+      <h3>${escHtml(s.label)} <span class="badge badge-ok">OK</span></h3>
       <div class="meta">${escHtml(s.path)}<br>${s.size_mb} MB &nbsp;|&nbsp; 更新: ${escHtml(s.mtime || '—')}</div>
       <table class="tbl-list">
         <thead><tr><th>テーブル</th><th style="text-align:right;">行数</th></tr></thead>
@@ -174,7 +176,7 @@ async function load() {
   try {
     const res = await fetch('/api/internal/data-stores');
     const d = await res.json();
-    document.getElementById('ts').textContent = d.timestamp || '';
+    document.getElementById('ts').textContent = d.timestamp || new Date().toLocaleTimeString('ja-JP');
     renderPg(d.postgresql || {});
     renderSqlite(d.sqlite || []);
     renderParquet(d.parquet || [], d.jt_manifest);
