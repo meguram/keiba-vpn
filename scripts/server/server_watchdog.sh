@@ -57,6 +57,10 @@ case "$ACTIVE_PROFILE" in
         FRONTEND_PORT="${FRONTEND_PORT:-3001}"
         FRONTEND_NPM_SCRIPT="dev"
         FRONTEND_USE_MOCK="false"
+        # stg/prod 用環境変数（.env.${ACTIVE_PROFILE} が存在すれば読み込む）
+        if [ -f "${PROJECT_DIR}/.env.${ACTIVE_PROFILE}" ]; then
+            set -a; source "${PROJECT_DIR}/.env.${ACTIVE_PROFILE}"; set +a
+        fi
         ;;
     *)  # dev またはプロファイル不明（dev 扱い）
         FLASK_PORT="${FLASK_PORT:-5100}"
