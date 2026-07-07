@@ -4,16 +4,22 @@
 {% block content %}
 <div class="page-title"><span class="icon">🏠</span> ダッシュボード</div>
 
-<!-- サービス死活 -->
-<div class="card">
-  <div class="card-title">サービス死活</div>
-  <div class="grid grid-3" id="svc-grid">
-    <div class="loading">読込中...</div>
+<!-- 環境別サービス状況 -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title" style="margin-bottom:16px">環境別サービス状況</div>
+  <div id="env-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+    <div class="loading" style="grid-column:1/-1">読込中...</div>
   </div>
 </div>
 
+<!-- FastAPI 共通 -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title">FastAPI :8000（全環境共通）</div>
+  <div id="fastapi-card" style="margin-top:8px"><span class="loading">読込中...</span></div>
+</div>
+
 <!-- キュー概要 -->
-<div class="card">
+<div class="card" style="margin-bottom:16px">
   <div class="card-title">スクレイピングキュー</div>
   <div class="grid grid-4" id="queue-grid">
     <div class="loading">読込中...</div>
@@ -21,7 +27,7 @@
 </div>
 
 <!-- Git HEAD + システム -->
-<div class="grid grid-2">
+<div class="grid grid-2" style="margin-bottom:16px">
   <div class="card">
     <div class="card-title">Git HEAD</div>
     <div id="git-head"><span class="loading">読込中...</span></div>
@@ -37,30 +43,89 @@
 
 {% block scripts %}
 <script>
-function mkSvcCard(label, data) {
-  const ok = data.ok;
-  const dotCls = ok ? 'dot-ok' : 'dot-error';
-  const badge = ok
+const ENV_LABELS = { dev: 'DEV', stg: 'STG', prod: 'PROD' };
+
+function statusBadge(ok) {
+  return ok
     ? `<span class="badge badge-ok">稼働中</span>`
     : `<span class="badge badge-error">停止</span>`;
-  const ms = data.elapsed_ms >= 0 ? `${data.elapsed_ms}ms` : '—';
-  return `<div>
-    <div style="font-weight:600;margin-bottom:8px"><span class="dot ${dotCls}"></span>${label} ${badge}</div>
-    <div class="text-muted" style="font-size:12px">HTTP ${data.status || '—'} / ${ms}</div>
-  </div>`;
+}
+
+function svcRow(label, svc) {
+  const dot = svc.ok ? 'dot-ok' : 'dot-error';
+  const ms  = svc.elapsed_ms >= 0 ? `${svc.elapsed_ms}ms` : '—';
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px">
+        <span class="dot ${dot}" style="margin-right:4px"></span>${label}
+      </span>
+      <span style="display:flex;align-items:center;gap:8px">
+        ${statusBadge(svc.ok)}
+        <span class="text-muted" style="font-size:11px">HTTP ${svc.status || '—'} / ${ms}</span>
+      </span>
+    </div>`;
+}
+
+function mkEnvCard(env, data) {
+  const color = data.color || '#6e7681';
+  const allOk = data.all_ok;
+  const outerBorder = allOk ? '1px solid rgba(63,185,80,0.4)' : data.next.ok || data.flask.ok ? '1px solid rgba(210,153,34,0.4)' : '1px solid rgba(239,68,68,0.3)';
+  const headerBg = allOk ? 'rgba(63,185,80,0.08)' : 'rgba(239,68,68,0.06)';
+
+  const publicLink = data.public_url
+    ? `<a href="${data.public_url}" target="_blank" style="font-size:11px;color:${color};text-decoration:none;opacity:0.8"
+         onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.8">
+         🔗 ${data.public_url.replace('https://', '')}
+       </a>`
+    : `<span class="text-muted" style="font-size:11px">公開URL未設定</span>`;
+
+  return `
+    <div style="border:${outerBorder};border-radius:10px;overflow:hidden">
+      <div style="background:${headerBg};padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-weight:700;font-size:15px;color:${color}">${data.label}</span>
+          ${statusBadge(allOk)}
+        </div>
+        ${publicLink}
+      </div>
+      <div style="padding:8px 14px 10px">
+        ${svcRow('Next.js', data.next)}
+        ${svcRow('Flask API', data.flask)}
+        <div style="margin-top:6px;font-size:11px;color:var(--muted)">
+          Next: ${data.next.url} &nbsp;|&nbsp; Flask: ${data.flask.url}
+        </div>
+      </div>
+    </div>`;
 }
 
 function mkQueueCell(label, num, cls) {
-  return `<div><div class="big-num ${cls}">${num}</div><div class="text-muted" style="margin-top:4px;font-size:12px">${label}</div></div>`;
+  return `<div>
+    <div class="big-num ${cls}">${num}</div>
+    <div class="text-muted" style="margin-top:4px;font-size:12px">${label}</div>
+  </div>`;
 }
 
 function renderStatus(d) {
-  const s = d.services;
-  document.getElementById('svc-grid').innerHTML =
-    mkSvcCard('FastAPI :8000', s.fastapi) +
-    mkSvcCard('Flask :5100', s.flask) +
-    mkSvcCard('Next.js :3000', s.nextjs);
+  // 環境別カード
+  const envs = d.envs || {};
+  if (Object.keys(envs).length) {
+    document.getElementById('env-grid').innerHTML =
+      ['dev', 'stg', 'prod'].map(k => mkEnvCard(k, envs[k])).join('');
+  }
 
+  // FastAPI 共通
+  const fa = d.services.fastapi;
+  const faDot = fa.ok ? 'dot-ok' : 'dot-error';
+  const faMs  = fa.elapsed_ms >= 0 ? `${fa.elapsed_ms}ms` : '—';
+  document.getElementById('fastapi-card').innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="dot ${faDot}"></span>
+      ${statusBadge(fa.ok)}
+      <span class="text-muted" style="font-size:12px">HTTP ${fa.status || '—'} / ${faMs}</span>
+    </div>`;
+
+  // スクレイピングキュー
   const q = d.queue;
   if (q && Object.keys(q).length) {
     document.getElementById('queue-grid').innerHTML =
@@ -72,6 +137,7 @@ function renderStatus(d) {
     document.getElementById('queue-grid').innerHTML = '<span class="text-muted">キュー情報取得失敗</span>';
   }
 
+  // Git HEAD
   const h = d.git_head;
   if (h && h.hash) {
     document.getElementById('git-head').innerHTML = `

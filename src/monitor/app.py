@@ -47,6 +47,31 @@ FLASK_URL = os.environ.get("KEIBA_API_URL", "http://127.0.0.1:5100")
 NEXT_URL = "http://127.0.0.1:3000"
 LOG_DIR = ROOT / "logs"
 
+# 環境ごとのサービスポート定義
+ENV_CONFIGS = {
+    "dev": {
+        "label": "DEV",
+        "next_url": "http://127.0.0.1:3000",
+        "flask_url": "http://127.0.0.1:5100",
+        "public_url": "https://meguai-dev.tcpexposer.com/",
+        "color": "#58a6ff",
+    },
+    "stg": {
+        "label": "STG",
+        "next_url": "http://127.0.0.1:3001",
+        "flask_url": "http://127.0.0.1:5000",
+        "public_url": "https://meguai-stg.tcpexposer.com/",
+        "color": "#3fb950",
+    },
+    "prod": {
+        "label": "PROD",
+        "next_url": "http://127.0.0.1:3002",
+        "flask_url": "http://127.0.0.1:5200",
+        "public_url": None,
+        "color": "#d29922",
+    },
+}
+
 app = Flask(__name__, template_folder="templates")
 app.secret_key = _secret_key
 app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
@@ -157,12 +182,41 @@ def _http_get(url: str, timeout: float = 5.0) -> tuple[int, Any, float]:
         return 0, None, -1.0
 
 
+def _check_env(env_key: str) -> dict:
+    """指定環境（dev/stg/prod）の各サービス死活を返す。"""
+    cfg = ENV_CONFIGS[env_key]
+    next_code, _, next_ms = _http_get(cfg["next_url"])
+    flask_code, flask_body, flask_ms = _http_get(f"{cfg['flask_url']}/api/v1/health")
+    return {
+        "env": env_key,
+        "label": cfg["label"],
+        "color": cfg["color"],
+        "public_url": cfg["public_url"],
+        "next": {
+            "url": cfg["next_url"],
+            "status": next_code,
+            "ok": next_code in (200, 304),
+            "elapsed_ms": next_ms,
+        },
+        "flask": {
+            "url": cfg["flask_url"],
+            "status": flask_code,
+            "ok": flask_code == 200,
+            "elapsed_ms": flask_ms,
+            "body": flask_body,
+        },
+        "all_ok": next_code in (200, 304) and flask_code == 200,
+    }
+
+
 @app.route("/api/internal/status")
 @require_auth
 def internal_status():
+    # FastAPI は全環境共通
     fastapi_code, fastapi_body, fastapi_ms = _http_get(f"{FASTAPI_URL}/api/health")
-    flask_code, flask_body, flask_ms = _http_get(f"{FLASK_URL}/api/v1/health")
-    next_code, _, next_ms = _http_get(NEXT_URL)
+
+    # 全環境チェック（並列化せず順次、タイムアウト 5s × 3env × 2svc = max 30s だが通常即応）
+    envs = {key: _check_env(key) for key in ("dev", "stg", "prod")}
 
     # スクレイピングキュー概要
     queue_summary: dict = {}
@@ -192,18 +246,11 @@ def internal_status():
                     "elapsed_ms": fastapi_ms,
                     "body": fastapi_body,
                 },
-                "flask": {
-                    "status": flask_code,
-                    "ok": flask_code == 200,
-                    "elapsed_ms": flask_ms,
-                    "body": flask_body,
-                },
-                "nextjs": {
-                    "status": next_code,
-                    "ok": next_code in (200, 304),
-                    "elapsed_ms": next_ms,
-                },
+                # 後方互換のため旧 flask/nextjs キーも残す（dev 値）
+                "flask": envs["dev"]["flask"],
+                "nextjs": envs["dev"]["next"],
             },
+            "envs": envs,
             "queue": queue_summary,
             "git_head": git_head,
         }
