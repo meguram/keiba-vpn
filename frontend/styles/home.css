@@ -39,9 +39,133 @@
 
 .home-root .hero {
   position: relative;
-  padding: 40px 40px 32px;
+  padding: 56px 40px 48px;
   text-align: center;
   overflow: hidden;
+}
+
+/* アイコン */
+.home-root .hero-icon-wrap {
+  display: inline-block;
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 24px;
+}
+
+.home-root .hero-icon-wrap .icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  filter: drop-shadow(0 2px 16px rgba(88, 166, 255, 0.5));
+  animation: home-hero-icon-float 5s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+  object-fit: cover;
+}
+
+.home-root .hero-icon-wrap .icon-ring {
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: conic-gradient(
+    from 0deg,
+    rgba(88, 166, 255, 0.5),
+    rgba(188, 140, 255, 0.5),
+    rgba(247, 120, 186, 0.4),
+    rgba(57, 210, 192, 0.4),
+    rgba(88, 166, 255, 0.5)
+  ) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: home-hero-ring-spin 8s linear infinite;
+  opacity: 0.8;
+}
+
+.home-root .hero-icon-wrap .icon-glow {
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(88, 166, 255, 0.18) 0%, transparent 70%);
+  animation: home-hero-glow-pulse 4s ease-in-out infinite;
+  z-index: 0;
+}
+
+/* キャッチコピー */
+.home-root .hero-catch {
+  font-size: 38px;
+  font-weight: 800;
+  color: var(--home-text-bright);
+  letter-spacing: -0.5px;
+  line-height: 1.25;
+  margin-bottom: 16px;
+  position: relative;
+}
+
+@media (max-width: 600px) {
+  .home-root .hero-catch { font-size: 26px; }
+}
+
+/* サブコピー */
+.home-root .hero-sub {
+  font-size: 15px;
+  color: var(--home-text-dim);
+  font-weight: 400;
+  line-height: 1.7;
+  margin-bottom: 32px;
+  position: relative;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* CTAボタン群 */
+.home-root .hero-cta {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.home-root .cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  letter-spacing: 0.2px;
+}
+
+.home-root .cta-primary {
+  background: var(--home-accent);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(88, 166, 255, 0.35);
+}
+
+.home-root .cta-primary:hover {
+  background: #79b8ff;
+  box-shadow: 0 6px 28px rgba(88, 166, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.home-root .cta-secondary {
+  background: transparent;
+  color: var(--home-text-dim);
+  border: 1px solid var(--home-border);
+}
+
+.home-root .cta-secondary:hover {
+  background: var(--home-surface2);
+  color: var(--home-text);
+  border-color: var(--home-border-hover);
+  transform: translateY(-1px);
 }
 
 .home-root .hero::before {
@@ -55,6 +179,7 @@
   pointer-events: none;
 }
 
+/* 旧 h1 スタイル（後方互換のため残す） */
 .home-root .hero h1 {
   font-size: 42px;
   font-weight: 800;
@@ -62,57 +187,6 @@
   letter-spacing: -0.5px;
   margin-bottom: 8px;
   position: relative;
-}
-
-.home-root .hero h1 .icon-wrap {
-  display: inline-block;
-  position: relative;
-  vertical-align: middle;
-  margin-right: 14px;
-  width: 56px;
-  height: 56px;
-}
-
-.home-root .hero h1 .icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  filter: drop-shadow(0 2px 12px rgba(88, 166, 255, 0.4));
-  transition: filter 0.3s ease, transform 0.3s ease;
-  animation: home-hero-icon-float 5s ease-in-out infinite;
-  position: relative;
-  z-index: 1;
-  object-fit: cover;
-}
-
-.home-root .hero h1 .icon-ring {
-  position: absolute;
-  inset: -6px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  background: conic-gradient(
-    from 0deg,
-    rgba(88, 166, 255, 0.4),
-    rgba(188, 140, 255, 0.4),
-    rgba(247, 120, 186, 0.4),
-    rgba(57, 210, 192, 0.3),
-    rgba(88, 166, 255, 0.4)
-  )
-    border-box;
-  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: home-hero-ring-spin 8s linear infinite;
-  opacity: 0.7;
-}
-
-.home-root .hero h1 .icon-glow {
-  position: absolute;
-  inset: -12px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(88, 166, 255, 0.15) 0%, transparent 70%);
-  animation: home-hero-glow-pulse 4s ease-in-out infinite;
-  z-index: 0;
 }
 
 @keyframes home-hero-icon-float {
@@ -143,41 +217,9 @@
   }
 }
 
-.home-root .hero h1:hover .icon {
-  filter: drop-shadow(0 4px 20px rgba(88, 166, 255, 0.7)) drop-shadow(0 0 30px rgba(188, 140, 255, 0.3));
-  transform: scale(1.05);
-  animation-play-state: paused;
-}
-
-.home-root .hero h1:hover .icon-ring {
-  animation-duration: 3s;
-  opacity: 1;
-}
-
-.home-root .hero h1:hover .icon-glow {
-  opacity: 1;
-  transform: scale(1.3);
-}
-
-.home-root .hero h1 .accent {
+.home-root .hero h1 .accent,
+.home-root .hero-catch .accent {
   color: var(--home-accent);
-}
-
-.home-root .hero .subtitle {
-  font-size: 15px;
-  color: var(--home-text-dim);
-  font-weight: 300;
-  letter-spacing: 2px;
-  margin-bottom: 28px;
-  position: relative;
-}
-
-.home-root .hero .status-row {
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-  flex-wrap: wrap;
-  position: relative;
 }
 
 .home-root .status-chip {

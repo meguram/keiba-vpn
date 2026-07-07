@@ -9,8 +9,6 @@ import {
   PUBLIC_CATEGORIES,
 } from "@/components/home/homeData";
 
-type GcsStatus = "green" | "orange" | "red";
-
 function NavCard({
   card,
 }: {
@@ -66,9 +64,6 @@ function CategoryBlock({
 
 export function HomeDashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [gcsStatus, setGcsStatus] = useState<GcsStatus>("green");
-  const [gcsLabel, setGcsLabel] = useState("GCS");
-  const [raceInfo, setRaceInfo] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/v1/auth/status", { credentials: "include" })
@@ -77,63 +72,28 @@ export function HomeDashboard() {
       .catch(() => setIsAdmin(false));
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/scrape-dates", { cache: "no-store" });
-        const data = await res.json();
-        if (cancelled) return;
-        const dates: string[] = data.dates || [];
-        if (data.gcs_enabled !== undefined) {
-          if (data.gcs_enabled) {
-            setGcsStatus("green");
-            setGcsLabel("GCS 接続中");
-          } else {
-            setGcsStatus("orange");
-            setGcsLabel("GCS 未接続");
-          }
-        }
-        if (dates.length > 0) {
-          setRaceInfo(`${dates.length}日分のデータ`);
-        }
-      } catch {
-        if (!cancelled) {
-          setGcsStatus("red");
-          setGcsLabel("GCS ?");
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   return (
     <div className="home-root">
       <div className="hero">
-        <h1>
-          <span className="icon-wrap">
-            <span className="icon-glow" />
-            <span className="icon-ring" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/data/image/icon.jpg" alt="Meguro" className="icon" />
-          </span>{" "}
-          ML-<span className="accent">AutoPilot</span> Keiba
+        <div className="hero-icon-wrap">
+          <span className="icon-glow" />
+          <span className="icon-ring" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/data/image/icon.jpg" alt="icon" className="icon" />
+        </div>
+        <h1 className="hero-catch">
+          AI が、競馬の<span className="accent">勝ち筋</span>を示す。
         </h1>
-        <p className="subtitle">MULTI-AGENT HORSE RACING AI PREDICTION SYSTEM</p>
-        <div className="status-row">
-          <span className="status-chip">
-            <span className={`dot ${gcsStatus}`} /> <span>{gcsLabel}</span>
-          </span>
-          <span className="status-chip">
-            <span className="dot green" /> <span>Server OK</span>
-          </span>
-          {raceInfo && (
-            <span className="status-chip">
-              <span className="dot green" /> <span>{raceInfo}</span>
-            </span>
-          )}
+        <p className="hero-sub">
+          血統・追走難度・レース傾向を多角分析。今週の注目馬をすぐ確認。
+        </p>
+        <div className="hero-cta">
+          <Link href="/weekly-predictions" className="cta-btn cta-primary">
+            今週のAI予測を見る →
+          </Link>
+          <Link href="/bloodline" className="cta-btn cta-secondary">
+            血統を調べる
+          </Link>
         </div>
       </div>
 
