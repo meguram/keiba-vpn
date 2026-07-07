@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { RacePicker } from "@/components/RacePicker";
+import { USE_MOCK, getMockTdData } from "@/lib/mock";
 
 /* ── 型定義 ── */
 type TdEntry = {
@@ -90,6 +91,7 @@ export default function TrackingDifficultyPage() {
     setData(null);
     setError("");
     setStatus("");
+    if (USE_MOCK) analyze(id);
   }, []);
 
   async function analyze(raceId: string) {
@@ -97,6 +99,13 @@ export default function TrackingDifficultyPage() {
     setError("");
     setStatus("分析中…");
     setData(null);
+    if (USE_MOCK) {
+      await new Promise((r) => setTimeout(r, 500));
+      setData(getMockTdData(raceId) as TdData);
+      setStatus("完了");
+      setAnalyzing(false);
+      return;
+    }
     try {
       const res = await fetch(`/api/race/${raceId}/tracking-difficulty`);
       if (!res.ok) {

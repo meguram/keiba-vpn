@@ -8,6 +8,7 @@ import {
   NavCardItem,
   PUBLIC_CATEGORIES,
 } from "@/components/home/homeData";
+import { USE_MOCK } from "@/lib/mock";
 
 function NavCard({
   card,
@@ -66,6 +67,7 @@ export function HomeDashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    if (USE_MOCK) return; // devモックではadmin不要（管理者セクションは非表示）
     fetch("/api/v1/auth/status", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { logged_in: false, is_admin: false }))
       .then((d) => setIsAdmin(!!d.logged_in && !!d.is_admin))

@@ -219,6 +219,174 @@ export const MOCK_MYOSTATIN = [
 // Kelly criterion result
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
+// Race detail mock  (/race/[id])
+// ---------------------------------------------------------------------------
+
+export function getMockRaceDetail(raceId: string) {
+  const race = MOCK_WEEKLY_RACES.find((r) => r.race_id === raceId) ?? MOCK_WEEKLY_RACES[0];
+  const baseSec = race.surface === "芝" ? (race.distance as number) / 1000 * 60 + 58.0 : (race.distance as number) / 1000 * 60 + 62.0;
+  return {
+    race_id: raceId,
+    race_name: race.race_name,
+    venue: race.venue,
+    round: race.round,
+    date: new Date().toISOString().slice(0, 10),
+    surface: race.surface,
+    distance: race.distance,
+    direction: "右",
+    weather: "晴",
+    track_condition: "良",
+    start_time: "15:30",
+    grade: race.grade,
+    race_shutuba: {
+      entries: MOCK_HORSES.slice(0, race.field_size ?? 16).map((h) => ({
+        horse_number: h.post_no,
+        bracket_number: Math.ceil(h.post_no / 2),
+        horse_name: h.horse_name,
+        horse_id: h.horse_id,
+        sex_age: h.post_no % 2 === 0 ? "牡4" : "牝4",
+        jockey_name: MOCK_JOCKEYS[h.post_no % MOCK_JOCKEYS.length].jockey_name,
+        trainer_name: "友道康夫",
+        jockey_weight: 55,
+        win_odds: h.predicted_win_odds,
+      })),
+    },
+    race_result: {
+      entries: MOCK_HORSES.slice(0, race.field_size ?? 16).map((h, i) => {
+        const mmm = Math.floor(baseSec / 60);
+        const sss = (baseSec % 60 + i * 0.3).toFixed(1);
+        return {
+          horse_number: h.post_no,
+          bracket_number: Math.ceil(h.post_no / 2),
+          horse_name: h.horse_name,
+          horse_id: h.horse_id,
+          finish_position: i + 1,
+          time: `${mmm}:${sss.padStart(4, "0")}`,
+          jockey_name: MOCK_JOCKEYS[h.post_no % MOCK_JOCKEYS.length].jockey_name,
+          win_odds: h.predicted_win_odds,
+          passing_order: ["1-1-1", "3-3-3", "5-5-4", "8-8-7", "2-2-2"][i % 5],
+          last3f: (33.8 + i * 0.25).toFixed(1),
+        };
+      }),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tracking difficulty mock  (/tracking-difficulty, /race/[id])
+// ---------------------------------------------------------------------------
+
+export function getMockTdData(raceId: string) {
+  const race = MOCK_WEEKLY_RACES.find((r) => r.race_id === raceId) ?? MOCK_WEEKLY_RACES[0];
+  const easeLabels = ["非常に楽", "楽", "普通", "やや困難", "困難"] as const;
+  return {
+    race_id: raceId,
+    race_name: race.race_name,
+    entries: MOCK_TRACKING_DIFFICULTY.map((td, i) => ({
+      horse_number: i + 1,
+      horse_id: td.horse_id,
+      horse_name: td.horse_name,
+      bracket_number: Math.ceil((i + 1) / 2),
+      tracking_difficulty: {
+        ease_score: td.ease_score,
+        ease_pct: td.ease_score,
+        ease_label: easeLabels[Math.min(4, Math.floor((100 - td.ease_score) / 20))],
+        flow_position: td.position_label,
+        flow_sub: td.pace_sensitivity < 0.3 ? "主導権" : "",
+        t1f_norm: td.pace_sensitivity,
+        expected_last3f: {
+          seconds: parseFloat((34.5 + (100 - td.ease_score) / 25).toFixed(1)),
+          delta_sec: parseFloat(((td.ease_score - 70) / -50).toFixed(2)),
+          rank: i + 1,
+          label: td.ease_score >= 70 ? "速" : "普通",
+        },
+      },
+      profile: {
+        style: td.position_label,
+        style_jra: td.position_label,
+      },
+    })),
+    pace_prediction: {
+      pace_type: "ミドルペース",
+      pace_comment: "先行馬が多く中団前目が有利。差し馬は後半の末脚を要求される。",
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Race quality mock  (/race-quality)
+// ---------------------------------------------------------------------------
+
+const MOCK_RACE_AXES = [
+  { label_ja: "スピード特化型" },
+  { label_ja: "持久力均衡型" },
+  { label_ja: "瞬発力炸裂型" },
+  { label_ja: "ダート巧者型" },
+  { label_ja: "長距離スタミナ型" },
+  { label_ja: "先行有利型" },
+  { label_ja: "差し追い込み型" },
+  { label_ja: "逃げ主導型" },
+  { label_ja: "ハンデ差崩し型" },
+];
+
+const BASE_PROBS = [0.22, 0.18, 0.15, 0.12, 0.10, 0.09, 0.07, 0.04, 0.03];
+
+function shiftProbs(seed: number): number[] {
+  return BASE_PROBS.map((p, i) => Math.max(0.01, p + ((seed + i) % 7 - 3) * 0.01));
+}
+
+export function getMockRaceQuality(raceId: string) {
+  const race = MOCK_WEEKLY_RACES.find((r) => r.race_id === raceId) ?? MOCK_WEEKLY_RACES[0];
+  const seed = raceId.charCodeAt(raceId.length - 1);
+  return {
+    race_id: raceId,
+    race_name: race.race_name,
+    axes: MOCK_RACE_AXES,
+    probs: shiftProbs(seed),
+    r2_fit: parseFloat((0.72 + (seed % 6) * 0.03).toFixed(2)),
+    n_runners: race.field_size ?? 14,
+  };
+}
+
+export function getMockRaceQualityDay(date: string) {
+  const seed = date ? date.charCodeAt(date.length - 1) : 3;
+  return {
+    date,
+    day_summary: {
+      axes: MOCK_RACE_AXES,
+      probs: shiftProbs(seed),
+      n_races: MOCK_WEEKLY_RACES.length,
+    },
+    by_segment: {
+      [`芝1600〜2000`]: {
+        n_races: 3,
+        axes: MOCK_RACE_AXES,
+        probs: shiftProbs(seed + 1),
+      },
+      [`ダート1400〜1800`]: {
+        n_races: 2,
+        axes: MOCK_RACE_AXES,
+        probs: shiftProbs(seed + 2),
+      },
+    },
+    races: MOCK_WEEKLY_RACES.map((race, idx) => ({
+      race_id: race.race_id,
+      race_name: race.race_name,
+      venue: race.venue,
+      distance: race.distance,
+      surface: race.surface,
+      track_condition: "良",
+      segment_key: `${race.surface}${race.distance}`,
+      n_runners: race.field_size ?? 14,
+      r2_fit: parseFloat((0.70 + idx * 0.02).toFixed(2)),
+      probs: shiftProbs(seed + idx),
+      axes: MOCK_RACE_AXES,
+      pace_shape: { grind_index: 0.45, burst_index: 0.38, lap_evenness: 0.62 },
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Weekly predictions mock
 // ---------------------------------------------------------------------------
 

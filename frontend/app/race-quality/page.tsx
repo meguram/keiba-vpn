@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { RacePicker } from "@/components/RacePicker";
+import { USE_MOCK, getMockRaceQuality, getMockRaceQualityDay } from "@/lib/mock";
 
 /* ── 型 ── */
 type AxisInfo = { label_ja?: string; p?: number; description?: string };
@@ -105,13 +106,23 @@ export default function RaceQualityPage() {
     setSelectedRaceId(id);
     setSingleData(null);
     setSingleError("");
+    if (USE_MOCK) {
+      setSingleData(getMockRaceQuality(id) as unknown as SingleData);
+    }
   }, []);
 
   async function loadDay() {
-    if (!selectedDate) return;
     setLoadingDay(true);
     setDayError("");
     setDayData(null);
+    if (USE_MOCK) {
+      await new Promise((r) => setTimeout(r, 300));
+      const date = selectedDate || new Date().toISOString().slice(0, 10);
+      setDayData(getMockRaceQualityDay(date) as unknown as DayData);
+      setLoadingDay(false);
+      return;
+    }
+    if (!selectedDate) { setLoadingDay(false); return; }
     try {
       const res = await fetch(`/api/race-quality/day?date=${encodeURIComponent(selectedDate)}`);
       const j = await res.json();
@@ -129,6 +140,12 @@ export default function RaceQualityPage() {
     setLoadingSingle(true);
     setSingleError("");
     setSingleData(null);
+    if (USE_MOCK) {
+      await new Promise((r) => setTimeout(r, 300));
+      setSingleData(getMockRaceQuality(selectedRaceId) as unknown as SingleData);
+      setLoadingSingle(false);
+      return;
+    }
     try {
       const res = await fetch(`/api/race-quality/race?race_id=${encodeURIComponent(selectedRaceId)}`);
       const j = await res.json();

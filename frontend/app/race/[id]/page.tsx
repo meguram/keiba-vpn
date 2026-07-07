@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+import { USE_MOCK, getMockRaceDetail, getMockPredictions, getMockTdData } from "@/lib/mock";
 
 /* ── 型 ── */
 type RaceEntry = {
@@ -202,6 +203,13 @@ export default function RaceDetailPage() {
     if (!raceId) return;
     setLoading(true);
     setLoadError("");
+    if (USE_MOCK) {
+      await new Promise((r) => setTimeout(r, 300));
+      setRaceData(getMockRaceDetail(raceId) as RaceData);
+      setTdData(getMockTdData(raceId) as unknown as Record<string, unknown>);
+      setLoading(false);
+      return;
+    }
     try {
       const [rRes, tdRes] = await Promise.allSettled([
         fetch(`/api/race/${raceId}`),
@@ -223,6 +231,10 @@ export default function RaceDetailPage() {
 
   const loadPrediction = useCallback(async () => {
     if (!raceId) return;
+    if (USE_MOCK) {
+      setPredData(getMockPredictions(raceId) as PredData);
+      return;
+    }
     try {
       const res = await fetch(`/api/race/${raceId}/predictions`);
       if (res.ok) setPredData(await res.json());
@@ -240,6 +252,12 @@ export default function RaceDetailPage() {
   async function runPrediction() {
     if (!raceId) return;
     setPredicting(true);
+    if (USE_MOCK) {
+      await new Promise((r) => setTimeout(r, 600));
+      setPredData(getMockPredictions(raceId) as PredData);
+      setPredicting(false);
+      return;
+    }
     try {
       const res = await fetch(`/api/race/${raceId}/predict`, { method: "POST" });
       const data = await res.json();
@@ -265,7 +283,7 @@ export default function RaceDetailPage() {
       <div style={{ padding: 24, textAlign: "center" }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
         <p style={{ color: "var(--err)", marginBottom: 12 }}>{loadError}</p>
-        <a href="/monitor" style={{ color: "var(--accent)" }}>← モニターへ</a>
+        <a href="/" style={{ color: "var(--accent)" }}>← ホームへ</a>
       </div>
     );
   }
@@ -550,8 +568,8 @@ export default function RaceDetailPage() {
   /* ── レンダー ── */
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)", padding: 24 }}>
-      <a href="/monitor" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-dim)", marginBottom: 16, textDecoration: "none" }}>
-        ← モニターへ
+      <a href="/" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-dim)", marginBottom: 16, textDecoration: "none" }}>
+        ← ホーム
       </a>
 
       {Header}

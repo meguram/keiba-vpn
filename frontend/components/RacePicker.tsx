@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { USE_MOCK, getMockRaceDates, MOCK_WEEKLY_RACES } from "@/lib/mock";
 
 export type RaceItem = {
   race_id: string;
@@ -59,6 +60,13 @@ export function RacePicker({
   const [loadingRaces, setLoadingRaces] = useState(false);
 
   useEffect(() => {
+    if (USE_MOCK) {
+      const mockDates = getMockRaceDates();
+      setDates(mockDates);
+      setSelectedDate(mockDates[0]);
+      setLoadingDates(false);
+      return;
+    }
     (async () => {
       try {
         const res = await fetch(`/api/scrape-dates?picker_past_days=14`, { cache: "no-store" });
@@ -80,6 +88,20 @@ export function RacePicker({
     setVenues([]);
     setSelectedVenue("");
     setSelectedRaceId("");
+    if (USE_MOCK) {
+      await new Promise((r) => setTimeout(r, 150));
+      const list: RaceItem[] = MOCK_WEEKLY_RACES.map((r) => ({ ...r, date, name: r.race_name }));
+      setRacesForDate(list);
+      const venueSet = [...new Set(list.map((r) => r.venue ?? "").filter(Boolean))];
+      setVenues(venueSet);
+      if (venueSet.length) {
+        setSelectedVenue(venueSet[0]);
+        const first = list.find((r) => r.venue === venueSet[0]);
+        if (first) { setSelectedRaceId(first.race_id); onRaceSelect(first.race_id, raceLabel(first)); }
+      }
+      setLoadingRaces(false);
+      return;
+    }
     try {
       const res = await fetch(`/api/race-list/${date}`);
       if (!res.ok) return;
