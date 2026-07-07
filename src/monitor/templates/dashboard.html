@@ -67,8 +67,21 @@ function svcRow(label, svc) {
     </div>`;
 }
 
-function dbRow(db) {
+function dbRow(db, isMock) {
   if (!db) return '';
+  // モック構成（dev）: DB接続チェック対象外
+  if (isMock || db.mock) {
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--muted)">
+          <span style="margin-right:6px;opacity:0.5">●</span>PostgreSQL
+        </span>
+        <span class="badge" style="background:rgba(88,166,255,0.12);color:#58a6ff;border:1px solid rgba(88,166,255,0.3)">
+          モック構成（DB不要）
+        </span>
+      </div>`;
+  }
   const dot = db.ok ? 'dot-ok' : 'dot-error';
   const ms  = db.elapsed_ms >= 0 ? `${db.elapsed_ms}ms` : '—';
   const detail = db.ok
@@ -119,7 +132,7 @@ function mkEnvCard(env, data) {
       <div style="padding:8px 14px 10px">
         ${svcRow('Next.js', data.next)}
         ${svcRow('Flask API', data.flask)}
-        ${dbRow(data.db)}
+        ${dbRow(data.db, data.mock_frontend)}
         <div style="margin-top:6px;font-size:11px;color:var(--muted)">
           Next: ${data.next.url} &nbsp;|&nbsp; Flask: ${data.flask.url}
         </div>

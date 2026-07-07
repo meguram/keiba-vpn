@@ -59,7 +59,9 @@ ENV_CONFIGS = {
         "flask_url": "http://127.0.0.1:5100",
         "public_url": "https://meguai-dev.tcpexposer.com/",
         "color": "#58a6ff",
-        "db_url": os.environ.get("DEV_DATABASE_URL", _SHARED_DB_URL),
+        # dev は NEXT_PUBLIC_MOCK=true のためフロントがAPIを呼ばない。DB接続チェック対象外。
+        "db_url": None,
+        "mock_frontend": True,
     },
     "stg": {
         "label": "STG",
@@ -68,6 +70,7 @@ ENV_CONFIGS = {
         "public_url": "https://meguai-stg.tcpexposer.com/",
         "color": "#3fb950",
         "db_url": os.environ.get("STG_DATABASE_URL", _SHARED_DB_URL),
+        "mock_frontend": False,
     },
     "prod": {
         "label": "PROD",
@@ -76,6 +79,7 @@ ENV_CONFIGS = {
         "public_url": None,
         "color": "#d29922",
         "db_url": os.environ.get("PROD_DATABASE_URL", _SHARED_DB_URL),
+        "mock_frontend": False,
     },
 }
 
@@ -223,13 +227,18 @@ def _check_env(env_key: str) -> dict:
     cfg = ENV_CONFIGS[env_key]
     next_code, _, next_ms = _http_get(cfg["next_url"])
     flask_code, flask_body, flask_ms = _http_get(f"{cfg['flask_url']}/api/v1/health")
-    db_result = _db_ping(cfg.get("db_url", ""))
+    is_mock = cfg.get("mock_frontend", False)
+    if is_mock:
+        db_result = {"ok": None, "mock": True}  # ok=None → モック構成（チェック対象外）
+    else:
+        db_result = _db_ping(cfg.get("db_url") or "")
     all_ok = next_code in (200, 304) and flask_code == 200
     return {
         "env": env_key,
         "label": cfg["label"],
         "color": cfg["color"],
         "public_url": cfg["public_url"],
+        "mock_frontend": is_mock,
         "next": {
             "url": cfg["next_url"],
             "status": next_code,
