@@ -72,6 +72,9 @@ data/page_reference/
 # Frontend
 frontend/node_modules/
 frontend/.next/
+frontend/.next-dev/
+frontend/.next-stg/
+frontend/.next-prod/
 frontend/tsconfig.tsbuildinfo
 
 # 資格情報

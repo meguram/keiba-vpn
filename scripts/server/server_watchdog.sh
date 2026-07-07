@@ -427,9 +427,25 @@ start_frontend() {
         }
     fi
 
+    # 環境別 distDir を決定し、古い production ビルド残骸をクリア
+    local keiba_env="${KEIBA_ENV:-dev}"
+    local dist_dir
+    case "$keiba_env" in
+        stg)  dist_dir=".next-stg"  ;;
+        prod) dist_dir=".next-prod" ;;
+        *)    dist_dir=".next-dev"  ;;
+    esac
+    local dist_path="${PROJECT_DIR}/frontend/${dist_dir}"
+    # production ビルド残骸（required-server-files.json）が dev 起動の妨げになる場合にクリア
+    if [ "$FRONTEND_NPM_SCRIPT" = "dev" ] && [ -f "${dist_path}/required-server-files.json" ]; then
+        log "[Next.js] 旧 production キャッシュを検出 — ${dist_dir} をクリアします"
+        rm -rf "$dist_path"
+    fi
+
     (
         cd "${PROJECT_DIR}/frontend"
         export KEIBA_API_URL="$KEIBA_API_URL"
+        export KEIBA_ENV="$keiba_env"
         if [ "$FRONTEND_USE_MOCK" = "true" ]; then
             export NEXT_PUBLIC_MOCK=true
         else
