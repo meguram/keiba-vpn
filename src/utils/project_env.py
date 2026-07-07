@@ -2,6 +2,12 @@
 Jupyter / 単発スクリプト向け: リポジトリルートの .env を確実に読み込む。
 
 カレントディレクトリが notebooks/feature_engineering/ などの配下でも、ルートの .env を探して load_dotenv する。
+
+環境別オーバーレイ:
+  KEIBA_ENV=stg  → .env を読んだ後 .env.stg を上書きマージ（存在する場合）
+  KEIBA_ENV=prod → .env を読んだ後 .env.prod を上書きマージ（存在する場合）
+
+これにより stg/prod それぞれの DATABASE_URL 等を独立して管理できる。
 """
 
 from __future__ import annotations
@@ -30,7 +36,11 @@ def load_project_dotenv(
     override: bool = False,
 ) -> Path | None:
     """
-    ルートの `.env` を `os.environ` に読み込む。
+    ルートの `.env` を読み込み、環境別オーバーレイ (.env.stg / .env.prod) を上書きマージする。
+
+    読み込み順序:
+      1. `.env`（共通設定・シークレット）
+      2. `.env.<KEIBA_ENV>`（stg/prod の DB URL 等を上書き）
 
     - `dotenv_path` 省略時: 環境変数 `KEIBA_DOTENV_PATH` があればそれを使用、なければ `<ルート>/.env`
     - ファイルが無い場合は読み込まず `None` を返す
@@ -43,7 +53,19 @@ def load_project_dotenv(
             path = Path(raw).expanduser().resolve()
         else:
             path = find_project_root() / ".env"
-    if not path.is_file():
-        return None
-    load_dotenv(path, override=override)
-    return path
+
+    loaded: Path | None = None
+    if path.is_file():
+        load_dotenv(path, override=override)
+        loaded = path
+
+    # 環境別オーバーレイ: .env.stg / .env.prod を上書きマージ
+    env_name = (os.environ.get("KEIBA_ENV") or "").strip().lower()
+    if env_name in ("stg", "prod"):
+        root = path.parent if path.is_file() else find_project_root()
+        overlay = root / f".env.{env_name}"
+        if overlay.is_file():
+            load_dotenv(overlay, override=True)  # 常に override=True で上書き
+            loaded = overlay
+
+    return loaded

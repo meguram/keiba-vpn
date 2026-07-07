@@ -69,7 +69,11 @@ ENV_CONFIGS = {
         "flask_url": "http://127.0.0.1:5000",
         "public_url": "https://meguai-stg.tcpexposer.com/",
         "color": "#3fb950",
-        "db_url": os.environ.get("STG_DATABASE_URL", _SHARED_DB_URL),
+        # stg は Docker PostgreSQL :5433 / DB=keiba_db_stg（setup_stg.sh 参照）
+        "db_url": os.environ.get(
+            "STG_DATABASE_URL",
+            "postgresql+psycopg://keiba_user:keiba_pass@localhost:5433/keiba_db_stg",
+        ),
         "mock_frontend": False,
     },
     "prod": {
@@ -195,8 +199,14 @@ def _http_get(url: str, timeout: float = 5.0) -> tuple[int, Any, float]:
 
 def _db_ping(db_url: str) -> dict:
     """PostgreSQL への軽量 ping チェック（接続確立のみ、行数取得なし）。"""
+    import re
     if not db_url:
-        return {"ok": False, "error": "URL未設定", "elapsed_ms": -1}
+        return {"ok": False, "error": "URL未設定", "elapsed_ms": -1, "dsn": ""}
+    # DSN マスク（パスワード部分を *** に置換）—成功・失敗に関わらず返す
+    try:
+        dsn_masked = re.sub(r"://([^:@/]+):([^@/]+)@", r"://\1:***@", db_url)
+    except Exception:
+        dsn_masked = "***"
     t0 = time.monotonic()
     try:
         from sqlalchemy import create_engine, text
@@ -210,16 +220,10 @@ def _db_ping(db_url: str) -> dict:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         elapsed = round((time.monotonic() - t0) * 1000, 1)
-        # DSN マスク（パスワード部分を *** に置換）
-        try:
-            import re
-            dsn_masked = re.sub(r"://([^:@/]+):([^@/]+)@", r"://\1:***@", db_url)
-        except Exception:
-            dsn_masked = "***"
         return {"ok": True, "elapsed_ms": elapsed, "dsn": dsn_masked}
     except Exception as exc:
         elapsed = round((time.monotonic() - t0) * 1000, 1)
-        return {"ok": False, "error": str(exc)[:200], "elapsed_ms": elapsed}
+        return {"ok": False, "error": str(exc)[:200], "elapsed_ms": elapsed, "dsn": dsn_masked}
 
 
 def _check_env(env_key: str) -> dict:
