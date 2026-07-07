@@ -22,9 +22,17 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
   {
     num: "04",
     title: "🤖 AI 予測",
-    desc: "追走難度・レース別予測ランキング",
+    desc: "今週の予測・追走難度・過去の予測結果",
     catColor: "var(--home-orange)",
     cards: [
+      {
+        href: "/weekly-predictions",
+        accent: "var(--home-orange)",
+        icon: "🏆",
+        title: "今週のAI予測",
+        desc: "今週のレース別 AI 推奨印 (◎○▲△☆) を一覧表示。出馬表・オッズ・個別レース詳細へ遷移可能。",
+        tags: ["出馬表", "オッズ", "AI 推奨印"],
+      },
       {
         href: "/tracking-difficulty",
         accent: "var(--home-orange)",
@@ -34,12 +42,12 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
         tags: ["ゲート", "脚質", "隣枠", "ML"],
       },
       {
-        href: "/weekly-predictions",
+        href: "/races",
         accent: "var(--home-orange)",
-        icon: "🏁",
-        title: "今週のAI予測",
-        desc: "今週のレース別 AI 推奨印 (◎○▲△☆) を一覧表示。出馬表・オッズ・個別レース詳細へ遷移可能。",
-        tags: ["出馬表", "オッズ", "AI 推奨印"],
+        icon: "📋",
+        title: "過去の予測結果",
+        desc: "過去レースの出馬表・レース結果・AI 予測との照合を確認。レース詳細ページから各馬の推奨印と実際の着順を比較。",
+        tags: ["レース一覧", "着順", "予測照合"],
       },
     ],
   },
