@@ -195,7 +195,7 @@ start_api() {
     log "[API] サーバー起動中 (port=${API_PORT})..."
     cd "$PROJECT_DIR"
 
-    nohup "$PYTHON" main.py --port "$API_PORT" --prod \
+    KEIBA_ENV="${KEIBA_ENV:-}" nohup "$PYTHON" main.py --port "$API_PORT" --prod \
         >> "${LOG_DIR}/server.log" 2>&1 &
     local new_pid=$!
     echo "$new_pid" > "$API_PID_FILE"

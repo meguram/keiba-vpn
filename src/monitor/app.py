@@ -72,7 +72,7 @@ ENV_CONFIGS = {
         # stg は Docker PostgreSQL :5433 / DB=keiba_db_stg（setup_stg.sh 参照）
         "db_url": os.environ.get(
             "STG_DATABASE_URL",
-            "postgresql+psycopg://keiba_user:keiba_pass@localhost:5433/keiba_db_stg",
+            "postgresql+psycopg://keiba_user:keiba_pass@localhost:5432/keiba_db_stg",
         ),
         "mock_frontend": False,
     },

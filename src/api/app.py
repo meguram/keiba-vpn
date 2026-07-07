@@ -6173,11 +6173,33 @@ _predict_lock = threading.Lock()
 
 @app.get("/api/race/{race_id}/predictions", response_class=JSONResponse)
 async def get_race_predictions(race_id: str):
-    """キャッシュ済みの予測結果を返す。なければ 404。"""
+    """キャッシュ済みの予測結果を返す。stg では GCS になければモックを返す。"""
     data = await asyncio.to_thread(
         lambda: _get_storage().load("race_predictions", race_id))
     if data:
         return JSONResponse(data)
+
+    # stg 環境: モック予測を返す
+    if _keiba_env() == "stg":
+        def _mock():
+            from src.api.stg_mock import mock_predictions
+            storage = _get_storage()
+            horse_ids: list[str] = []
+            try:
+                for cat in ("race_shutuba", "race_result"):
+                    card = storage.load(cat, race_id)
+                    if card:
+                        entries = card.get("entries") or card.get("results") or []
+                        ids = [e.get("horse_id", "") for e in entries if e.get("horse_id")]
+                        if ids:
+                            horse_ids = ids
+                            break
+            except Exception:
+                pass
+            return mock_predictions(race_id, horse_ids)
+        mock_data = await asyncio.to_thread(_mock)
+        return JSONResponse(mock_data)
+
     return JSONResponse({"status": "not_found"}, status_code=404)
 
 
@@ -6412,9 +6434,22 @@ async def api_tracking_difficulty(race_id: str, refresh: bool = False):
         result = await asyncio.to_thread(_run)
         payload = _tracking_difficulty_public_payload(result)
         if result.get("status") == "not_precomputed":
+            # stg 環境: モックを返す
+            if _keiba_env() == "stg":
+                from src.api.stg_mock import mock_tracking_difficulty
+                mock = await asyncio.to_thread(mock_tracking_difficulty, race_id, _get_storage())
+                return JSONResponse(mock)
             return JSONResponse(payload, status_code=404)
         return JSONResponse(payload)
     except Exception as e:
+        # stg 環境: 例外時もモックを返す
+        if _keiba_env() == "stg":
+            try:
+                from src.api.stg_mock import mock_tracking_difficulty
+                mock = await asyncio.to_thread(mock_tracking_difficulty, race_id, _get_storage())
+                return JSONResponse(mock)
+            except Exception:
+                pass
         import traceback
         return JSONResponse({
             "error": str(e),
@@ -6485,6 +6520,14 @@ async def api_race_quality_day(date: str = ""):
     try:
         return JSONResponse(await asyncio.to_thread(_run))
     except Exception as e:
+        # stg 環境: モックを返す
+        if _keiba_env() == "stg":
+            try:
+                from src.api.stg_mock import mock_race_quality_day
+                mock = await asyncio.to_thread(mock_race_quality_day, date_compact, _get_storage())
+                return JSONResponse(mock)
+            except Exception:
+                pass
         import traceback
         return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
 
@@ -6502,12 +6545,25 @@ async def api_race_quality_race(race_id: str = ""):
     try:
         result = await asyncio.to_thread(_run)
         if result is None:
+            # stg 環境: モックを返す
+            if _keiba_env() == "stg":
+                from src.api.stg_mock import mock_race_quality_race
+                mock = await asyncio.to_thread(mock_race_quality_race, race_id.strip(), _get_storage())
+                return JSONResponse(mock)
             return JSONResponse(
                 {"error": "レース質を推定できません（結果未取得または頭数不足）"},
                 status_code=404,
             )
         return JSONResponse(result)
     except Exception as e:
+        # stg 環境: 例外時もモックを返す
+        if _keiba_env() == "stg":
+            try:
+                from src.api.stg_mock import mock_race_quality_race
+                mock = await asyncio.to_thread(mock_race_quality_race, race_id.strip(), _get_storage())
+                return JSONResponse(mock)
+            except Exception:
+                pass
         import traceback
         return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
 

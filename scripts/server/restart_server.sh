@@ -114,8 +114,8 @@ start_server() {
     echo "[restart] 起動: ${PYTHON} main.py --port ${PORT}（reload）"
     nohup "$PYTHON" main.py --host 0.0.0.0 --port "$PORT" >>"$LOG_FILE" 2>&1 &
   else
-    echo "[restart] 起動: ${PYTHON} main.py --port ${PORT} --prod"
-    nohup "$PYTHON" main.py --host 0.0.0.0 --port "$PORT" --prod >>"$LOG_FILE" 2>&1 &
+    echo "[restart] 起動: ${PYTHON} main.py --port ${PORT} --prod KEIBA_ENV=${KEIBA_ENV:-}"
+    KEIBA_ENV="${KEIBA_ENV:-}" nohup "$PYTHON" main.py --host 0.0.0.0 --port "$PORT" --prod >>"$LOG_FILE" 2>&1 &
   fi
   echo $! >"$PID_FILE"
   echo "[restart] PID=$(cat "$PID_FILE") ログ=$LOG_FILE"
