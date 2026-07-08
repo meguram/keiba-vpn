@@ -22,6 +22,25 @@ set -euo pipefail
 
 export TZ="${TZ:-Asia/Tokyo}"
 
+# ── CLI 引数パース（--profile / --mode 等）──
+# --profile dev|stg|prod  → .service_start.profile を上書きして指定プロファイルを強制
+PROFILE_OVERRIDE=""
+_PASSTHROUGH_ARGS=()
+_skip_next=false
+for _arg in "$@"; do
+    if $_skip_next; then
+        PROFILE_OVERRIDE="$_arg"
+        _skip_next=false
+        continue
+    fi
+    case "$_arg" in
+        --profile=*) PROFILE_OVERRIDE="${_arg#--profile=}" ;;
+        --profile)   _skip_next=true ;;
+        *)           _PASSTHROUGH_ARGS+=("$_arg") ;;
+    esac
+done
+set -- "${_PASSTHROUGH_ARGS[@]+"${_PASSTHROUGH_ARGS[@]}"}"
+
 # ── 設定 ──
 # PROJECT_DIR: スクリプト自身の位置から動的に解決（ハードコード不要）
 PROJECT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
@@ -41,12 +60,14 @@ MLFLOW_BACKEND_STORE="${PROJECT_DIR}/mlflow/runs/mlflow.db"
 MLFLOW_ARTIFACT_ROOT="${PROJECT_DIR}/mlflow/runs/artifacts"
 
 # ── アクティブプロファイルの読み込み ──
-# service_start.sh が書き込む .service_start.profile から「dev/stg/prod」を取得し
-# Flask・Next.js の起動パラメータ（ポート・スクリプト・モック）を決定する。
+# --profile 引数があればそちらを優先、なければ .service_start.profile から読む。
 PROFILE_FILE="${PROJECT_DIR}/.service_start.profile"
-ACTIVE_PROFILE=""
-if [ -f "$PROFILE_FILE" ]; then
+if [ -n "$PROFILE_OVERRIDE" ]; then
+    ACTIVE_PROFILE="$PROFILE_OVERRIDE"
+elif [ -f "$PROFILE_FILE" ]; then
     ACTIVE_PROFILE=$(awk '{print $1}' "$PROFILE_FILE" 2>/dev/null || echo "")
+else
+    ACTIVE_PROFILE=""
 fi
 
 # プロファイル別デフォルト（service_start.profiles.sh と対応）
@@ -71,10 +92,18 @@ case "$ACTIVE_PROFILE" in
         ;;
 esac
 
-FLASK_PID_FILE="${PROJECT_DIR}/.flask.pid"
+# --profile が指定された場合は PID/カウンタファイルをプロファイル別にする
+# （複数プロファイルを同時に watchdog で監視しても競合しないように）
+if [ -n "$PROFILE_OVERRIDE" ]; then
+    PROFILE_SUFFIX="-${ACTIVE_PROFILE}"
+else
+    PROFILE_SUFFIX=""
+fi
+
+FLASK_PID_FILE="${PROJECT_DIR}/.flask${PROFILE_SUFFIX}.pid"
 FLASK_HEALTH_URL="http://127.0.0.1:${FLASK_PORT}/api/v1/health"
 
-FRONTEND_PID_FILE="${PROJECT_DIR}/.frontend.pid"
+FRONTEND_PID_FILE="${PROJECT_DIR}/.frontend${PROFILE_SUFFIX}.pid"
 FRONTEND_HEALTH_URL="http://127.0.0.1:${FRONTEND_PORT}/"
 NODE_ENV="${NODE_ENV:-development}"
 
@@ -219,7 +248,21 @@ check_api() {
     code=$(http_check "$API_HEALTH_URL")
 
     if [ "$code" = "200" ]; then
+        reset_counter "${LOG_DIR}/.api_fail_count"
         return 0
+    fi
+
+    # 5xx サーバーエラーは即時再起動
+    if [[ "$code" =~ ^5 ]]; then
+        log "[API] ALERT: サーバーエラー (HTTP=${code}) — 即時再起動"
+        stop_api
+        if start_api; then
+            reset_counter "${LOG_DIR}/.api_fail_count"
+            log "[API] 再起動成功"
+        else
+            log "[API] ERROR: 再起動後もヘルスチェック失敗"
+        fi
+        return 1
     fi
 
     log "[API] ALERT: 応答なし (HTTP=${code})"
@@ -332,12 +375,27 @@ check_mlflow() {
 
 # PID ファイルが存在する場合のみ監視対象とする（service_start が起動した場合のみ）
 flask_should_monitor() {
+    # プロファイル指定がある場合はプロファイル別 PID ファイルのみを参照
+    # （旧 .flask.pid への自動フォールバックは行わない: 別プロファイルの PID を誤殺するため）
     [ -f "$FLASK_PID_FILE" ]
 }
 
 stop_flask() {
     kill_by_pid_file "$FLASK_PID_FILE"
-    kill_by_pattern "main\.py.*--flask-api"
+    # プロファイル指定がある場合は当該ポートを使っているプロセスのみ停止する
+    # （kill_by_pattern は全 --flask-api プロセスを停止するため、別プロファイルを誤殺しない）
+    if [ -n "$PROFILE_SUFFIX" ]; then
+        local port_pid
+        port_pid=$(fuser -n tcp "${FLASK_PORT}" 2>/dev/null | tr -d ' \n' || true)
+        if [ -n "$port_pid" ]; then
+            log "  Flask ポート ${FLASK_PORT} の残存プロセスを停止 (PID=$port_pid)"
+            kill "$port_pid" 2>/dev/null || true
+            sleep 2
+            kill -9 "$port_pid" 2>/dev/null || true
+        fi
+    else
+        kill_by_pattern "main\.py.*--flask-api"
+    fi
 }
 
 start_flask() {
@@ -368,8 +426,21 @@ check_flask() {
     local code
     code=$(http_check "$FLASK_HEALTH_URL")
     if [ "$code" = "200" ]; then
-        reset_counter "${LOG_DIR}/.flask_fail_count"
+        reset_counter "${LOG_DIR}/.flask_fail_count${PROFILE_SUFFIX}"
         return 0
+    fi
+
+    # 5xx サーバーエラー → 即時再起動（起動中猶予なし）
+    if [[ "$code" =~ ^5 ]]; then
+        log "[Flask${PROFILE_SUFFIX}] ALERT: サーバーエラー (HTTP=${code}) — 即時再起動"
+        stop_flask
+        if start_flask; then
+            reset_counter "${LOG_DIR}/.flask_fail_count${PROFILE_SUFFIX}"
+            log "[Flask${PROFILE_SUFFIX}] 再起動成功"
+        else
+            log "[Flask${PROFILE_SUFFIX}] ERROR: 再起動後もヘルスチェック失敗"
+        fi
+        return 1
     fi
 
     # PID が生きているか確認
@@ -378,28 +449,28 @@ check_flask() {
     if is_pid_alive "$flask_pid"; then
         # プロセスは生きているが応答なし → まだ起動中かもしれない
         local fail_count
-        fail_count=$(increment_counter "${LOG_DIR}/.flask_fail_count")
+        fail_count=$(increment_counter "${LOG_DIR}/.flask_fail_count${PROFILE_SUFFIX}")
         if [ "$fail_count" -lt 3 ]; then
-            log "[Flask] 応答なし (HTTP=${code}, 連続${fail_count}回) — プロセスは生存中、様子見"
+            log "[Flask${PROFILE_SUFFIX}] 応答なし (HTTP=${code}, 連続${fail_count}回) — プロセスは生存中、様子見"
             return 0
         fi
     fi
 
-    log "[Flask] ALERT: 応答なし (HTTP=${code})"
+    log "[Flask${PROFILE_SUFFIX}] ALERT: 応答なし (HTTP=${code})"
     local fail_count
-    fail_count=$(increment_counter "${LOG_DIR}/.flask_fail_count")
+    fail_count=$(increment_counter "${LOG_DIR}/.flask_fail_count${PROFILE_SUFFIX}")
 
     if [ "$fail_count" -ge 5 ]; then
-        log "[Flask] ERROR: ${fail_count}回連続失敗 — 30秒待機後に再起動"
+        log "[Flask${PROFILE_SUFFIX}] ERROR: ${fail_count}回連続失敗 — 30秒待機後に再起動"
         sleep 30
     fi
 
     stop_flask
     if start_flask; then
-        reset_counter "${LOG_DIR}/.flask_fail_count"
-        log "[Flask] 再起動成功"
+        reset_counter "${LOG_DIR}/.flask_fail_count${PROFILE_SUFFIX}"
+        log "[Flask${PROFILE_SUFFIX}] 再起動成功"
     else
-        log "[Flask] ERROR: 再起動後もヘルスチェック失敗"
+        log "[Flask${PROFILE_SUFFIX}] ERROR: 再起動後もヘルスチェック失敗"
     fi
     return 1
 }
@@ -409,6 +480,8 @@ check_flask() {
 # ═══════════════════════════════════════════════════════
 
 frontend_should_monitor() {
+    # プロファイル指定がある場合はプロファイル別 PID ファイルのみを参照
+    # （旧 .frontend.pid への自動フォールバックは行わない: 別プロファイルの PID を誤殺するため）
     [ -f "$FRONTEND_PID_FILE" ]
 }
 
@@ -483,8 +556,21 @@ check_frontend() {
     local code
     code=$(http_check "$FRONTEND_HEALTH_URL")
     if [[ "$code" =~ ^(200|304)$ ]]; then
-        reset_counter "${LOG_DIR}/.frontend_fail_count"
+        reset_counter "${LOG_DIR}/.frontend_fail_count${PROFILE_SUFFIX}"
         return 0
+    fi
+
+    # 5xx サーバーエラー → 即時再起動
+    if [[ "$code" =~ ^5 ]]; then
+        log "[Next.js${PROFILE_SUFFIX}] ALERT: サーバーエラー (HTTP=${code}) — 即時再起動"
+        stop_frontend
+        if start_frontend; then
+            reset_counter "${LOG_DIR}/.frontend_fail_count${PROFILE_SUFFIX}"
+            log "[Next.js${PROFILE_SUFFIX}] 再起動成功"
+        else
+            log "[Next.js${PROFILE_SUFFIX}] ERROR: 再起動後もヘルスチェック失敗"
+        fi
+        return 1
     fi
 
     # PID が生きているか確認
@@ -492,28 +578,28 @@ check_frontend() {
     if [ -f "$FRONTEND_PID_FILE" ]; then front_pid=$(cat "$FRONTEND_PID_FILE" 2>/dev/null || echo ""); fi
     if is_pid_alive "$front_pid"; then
         local fail_count
-        fail_count=$(increment_counter "${LOG_DIR}/.frontend_fail_count")
+        fail_count=$(increment_counter "${LOG_DIR}/.frontend_fail_count${PROFILE_SUFFIX}")
         if [ "$fail_count" -lt 4 ]; then
-            log "[Next.js] 応答なし (HTTP=${code}, 連続${fail_count}回) — 起動中の可能性あり、様子見"
+            log "[Next.js${PROFILE_SUFFIX}] 応答なし (HTTP=${code}, 連続${fail_count}回) — 起動中の可能性あり、様子見"
             return 0
         fi
     fi
 
-    log "[Next.js] ALERT: 応答なし (HTTP=${code})"
+    log "[Next.js${PROFILE_SUFFIX}] ALERT: 応答なし (HTTP=${code})"
     local fail_count
-    fail_count=$(increment_counter "${LOG_DIR}/.frontend_fail_count")
+    fail_count=$(increment_counter "${LOG_DIR}/.frontend_fail_count${PROFILE_SUFFIX}")
 
     if [ "$fail_count" -ge 5 ]; then
-        log "[Next.js] ERROR: ${fail_count}回連続失敗 — 30秒待機後に再起動"
+        log "[Next.js${PROFILE_SUFFIX}] ERROR: ${fail_count}回連続失敗 — 30秒待機後に再起動"
         sleep 30
     fi
 
     stop_frontend
     if start_frontend; then
-        reset_counter "${LOG_DIR}/.frontend_fail_count"
-        log "[Next.js] 再起動成功"
+        reset_counter "${LOG_DIR}/.frontend_fail_count${PROFILE_SUFFIX}"
+        log "[Next.js${PROFILE_SUFFIX}] 再起動成功"
     else
-        log "[Next.js] ERROR: 再起動後もヘルスチェック失敗"
+        log "[Next.js${PROFILE_SUFFIX}] ERROR: 再起動後もヘルスチェック失敗"
     fi
     return 1
 }
@@ -636,7 +722,7 @@ check_frontend || frontend_ok=false
 check_mlflow   || mlflow_ok=false
 
 if $api_ok && $flask_ok && $frontend_ok && $mlflow_ok; then
-    local_count=$(increment_counter "${LOG_DIR}/.check_count")
+    local_count=$(increment_counter "${LOG_DIR}/.check_count${PROFILE_SUFFIX}")
     if [ $((local_count % 5)) -eq 0 ]; then
         log "OK: 全サービス正常 (FastAPI=:${API_PORT}, Flask=:${FLASK_PORT}, Next.js=:${FRONTEND_PORT}, profile=${ACTIVE_PROFILE:-?}, check#${local_count})"
     fi
