@@ -701,9 +701,9 @@ async def lifespan(app):
         logger.warning("weekly access flush 失敗: %s", _e)
 
 
-_app_title = "ML-AutoPilot Keiba"
+_app_title = "めぐ競馬"
 if _keiba_env() == "stg":
-    _app_title = "ML-AutoPilot Keiba [STG]"
+    _app_title = "めぐ競馬 [STG]"
 app = FastAPI(title=_app_title, version="3.0.0", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
@@ -771,10 +771,15 @@ def _compat_template_response(
             raise ValueError(
                 f"template {template_name!r}: 'request' is required in context"
             )
-        return _orig_template_response(req, template_name, ctx, **kwargs)
-    return _orig_template_response(
-        name_or_request, name_or_context, context, **kwargs
-    )
+        resp = _orig_template_response(req, template_name, ctx, **kwargs)
+    else:
+        resp = _orig_template_response(
+            name_or_request, name_or_context, context, **kwargs
+        )
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 templates.TemplateResponse = _compat_template_response  # type: ignore[method-assign]

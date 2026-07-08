@@ -1267,7 +1267,7 @@ class CourseBloodlineAnalyzer:
         return f"""<!DOCTYPE html>
 <html lang="ja"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>コース特性×血統 | ML-AutoPilot Keiba</title>
+<title>コース特性×血統 | めぐ競馬</title>
 <style>
 :root{{--bg:#0a0e17;--sf:#131926;--sf2:#1a2235;--sf3:#212d42;--bd:#243049;--tx:#c8d6e5;--txd:#6b7d95;--ac:#a78bfa;--acd:rgba(167,139,250,.15);--bl:#3b82f6;--gn:#22c55e;--yl:#f59e0b;--rd:#ef4444;--cy:#06b6d4;}}
 *{{margin:0;padding:0;box-sizing:border-box;}}
