@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { RacePicker } from "@/components/RacePicker";
-import { USE_MOCK, getMockTdData } from "@/lib/mock";
+import { USE_MOCK, getMockTdData, getMockRaceQuality } from "@/lib/mock";
 
 /* ── 型定義 ── */
 type TdEntry = {
@@ -33,6 +33,15 @@ type TdData = {
     pace_comment?: string;
     fps?: Record<string, unknown>;
   };
+  error?: string;
+};
+
+type RaceQualityData = {
+  axes?: { label_ja?: string }[];
+  probs?: number[];
+  r2_fit?: number | string;
+  n_runners?: number;
+  pace_shape?: { grind_index?: number; burst_index?: number; lap_evenness?: number };
   error?: string;
 };
 
@@ -75,6 +84,55 @@ function styleChip(style: string) {
   return s;
 }
 
+/* ── レース質分析 ユーティリティ ── */
+const RQ_COLORS = [
+  "#2dd4bf", "#a78bfa", "#f472b6", "#fb923c",
+  "#4ade80", "#facc15", "#94a3b8", "#f87171", "#475569",
+];
+
+function RqStackedBar({ probs, labels }: { probs: number[]; labels: string[] }) {
+  const total = probs.reduce((s, v) => s + Math.max(0, v), 0) || 1;
+  return (
+    <div style={{ display: "flex", height: 40, borderRadius: 8, overflow: "hidden", boxShadow: "inset 0 0 0 1px rgba(42,49,66,0.8)" }}>
+      {probs.map((v, i) => {
+        const pct = (Math.max(0, v) / total) * 100;
+        if (pct < 0.5) return null;
+        return (
+          <div
+            key={i}
+            style={{ flex: `0 0 ${pct}%`, background: RQ_COLORS[i % RQ_COLORS.length], display: "flex", alignItems: "center", justifyContent: "center" }}
+            title={`${labels[i] ?? `軸${i + 1}`}: ${pct.toFixed(1)}%`}
+          >
+            {pct >= 8 && <span style={{ fontSize: 9, fontWeight: 700, color: "rgba(0,0,0,0.75)" }}>{pct.toFixed(0)}%</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RqAxisLegend({ axes, probs }: { axes: { label_ja?: string }[]; probs: number[] }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: "5px 10px", fontSize: 11, marginTop: 10 }}>
+      {axes.map((a, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 2, background: RQ_COLORS[i % RQ_COLORS.length], flexShrink: 0, marginTop: 2 }} />
+          <span style={{ color: "var(--text-dim)" }}>
+            {a.label_ja ?? `軸${i + 1}`} — <strong style={{ color: "var(--text)" }}>{((probs[i] ?? 0) * 100).toFixed(1)}%</strong>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function paceShapeStr(ps: { grind_index?: number; burst_index?: number; lap_evenness?: number }): string {
+  const g = ps.grind_index != null ? (ps.grind_index * 100).toFixed(0) : "—";
+  const b = ps.burst_index != null ? (ps.burst_index * 100).toFixed(0) : "—";
+  const e = ps.lap_evenness != null ? (ps.lap_evenness * 100).toFixed(0) : "—";
+  return `${g} / ${b} / ${e}`;
+}
+
 /* ── メインコンポーネント ── */
 export default function TrackingDifficultyPage() {
   const [selectedRaceId, setSelectedRaceId] = useState("");
@@ -82,6 +140,7 @@ export default function TrackingDifficultyPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [status, setStatus] = useState("");
   const [data, setData] = useState<TdData | null>(null);
+  const [rqData, setRqData] = useState<RaceQualityData | null>(null);
   const [sortMode, setSortMode] = useState<"predicted" | "horse_number" | "ease">("predicted");
   const [error, setError] = useState("");
 
@@ -89,6 +148,7 @@ export default function TrackingDifficultyPage() {
     setSelectedRaceId(id);
     setRaceLabel(label);
     setData(null);
+    setRqData(null);
     setError("");
     setStatus("");
     if (USE_MOCK) analyze(id);
@@ -99,27 +159,36 @@ export default function TrackingDifficultyPage() {
     setError("");
     setStatus("分析中…");
     setData(null);
+    setRqData(null);
     if (USE_MOCK) {
       await new Promise((r) => setTimeout(r, 500));
       setData(getMockTdData(raceId) as TdData);
+      setRqData(getMockRaceQuality(raceId) as RaceQualityData);
       setStatus("完了");
       setAnalyzing(false);
       return;
     }
     try {
-      const res = await fetch(`/api/race/${raceId}/tracking-difficulty`);
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
+      const [tdRes, rqRes] = await Promise.all([
+        fetch(`/api/race/${raceId}/tracking-difficulty`),
+        fetch(`/api/race-quality/race?race_id=${encodeURIComponent(raceId)}`),
+      ]);
+      if (!tdRes.ok) {
+        let msg = `HTTP ${tdRes.status}`;
         try {
-          const body = await res.json();
+          const body = await tdRes.json();
           if (body.status === "not_precomputed") msg = "このレースの追走難度はまだ事前計算されていません。";
           else if (body.error) msg = body.error;
         } catch { /* ignore */ }
         throw new Error(msg);
       }
-      const result: TdData = await res.json();
+      const result: TdData = await tdRes.json();
       if (result.error && (!result.entries?.length)) throw new Error(result.error);
       setData(result);
+      if (rqRes.ok) {
+        const rq: RaceQualityData = await rqRes.json();
+        if (!rq.error) setRqData(rq);
+      }
       setStatus("完了");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -296,6 +365,35 @@ export default function TrackingDifficultyPage() {
                     <span style={{ fontSize: 13, color: "var(--text-dim)" }}>{data.pace_prediction.pace_comment}</span>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* レース質分析 */}
+            {rqData && rqData.axes && rqData.probs && (
+              <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "14px 18px", marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 600, color: "#2dd4bf" }}>レース質分析</h3>
+                  <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                    過去の統計 × 出走メンバー × ペース予測から想定されるレース傾向
+                  </span>
+                  <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                    {rqData.pace_shape && (
+                      <span style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "monospace" }}>
+                        <span style={{ color: "var(--text)" }}>消/溜/均</span> {paceShapeStr(rqData.pace_shape)}
+                      </span>
+                    )}
+                    {rqData.r2_fit != null && (
+                      <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                        R²={typeof rqData.r2_fit === "number" ? rqData.r2_fit.toFixed(2) : rqData.r2_fit}
+                      </span>
+                    )}
+                    {rqData.n_runners != null && (
+                      <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{rqData.n_runners}頭</span>
+                    )}
+                  </div>
+                </div>
+                <RqStackedBar probs={rqData.probs} labels={rqData.axes.map((a) => a.label_ja ?? "")} />
+                <RqAxisLegend axes={rqData.axes} probs={rqData.probs} />
               </div>
             )}
 

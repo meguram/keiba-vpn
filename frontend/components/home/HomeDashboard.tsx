@@ -83,20 +83,7 @@ export function HomeDashboard() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/data/image/icon.jpg" alt="icon" className="icon" />
         </div>
-        <h1 className="hero-catch">
-          AI が、競馬の<span className="accent">勝ち筋</span>を示す。
-        </h1>
-        <p className="hero-sub">
-          血統・追走難度・レース傾向を多角分析。今週の注目馬をすぐ確認。
-        </p>
-        <div className="hero-cta">
-          <Link href="/weekly-predictions" className="cta-btn cta-primary">
-            今週のAI予測を見る →
-          </Link>
-          <Link href="/bloodline" className="cta-btn cta-secondary">
-            血統を調べる
-          </Link>
-        </div>
+        <h1 className="hero-catch">🏇 めぐ競馬</h1>
       </div>
 
       <div className="main">

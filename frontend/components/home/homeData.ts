@@ -49,6 +49,14 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
         desc: "過去レースの出馬表・レース結果・AI 予測との照合を確認。レース詳細ページから各馬の推奨印と実際の着順を比較。",
         tags: ["レース一覧", "着順", "予測照合"],
       },
+      {
+        href: "/pedigree-race-stats",
+        accent: "var(--home-purple)",
+        icon: "🧬",
+        title: "今週の血統傾向分析",
+        desc: "予測されたレース質と出走馬の血統を照合し、各馬の血統適性スコアを点数化。対象レースでどれだけ血統的に優位かを可視化。",
+        tags: ["血統相性", "レース質", "スコア"],
+      },
     ],
   },
   {
@@ -73,37 +81,14 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
         desc: "種牡馬を血統ベクトルで埋め込み、2D マップ上で関係性を可視化。",
         tags: ["ベクトル", "UMAP"],
       },
+
       {
-        href: "/pedigree-map",
+        href: "/stallion-notes",
         accent: "var(--home-purple)",
-        icon: "🌳",
-        title: "血統構造（サイアー系図）",
-        desc: "種牡馬を父系で階層化して、サイアーライン全体を俯瞰。",
-        tags: ["サイアー系図", "階層"],
-      },
-      {
-        href: "/bloodline-cluster",
-        accent: "var(--home-purple)",
-        icon: "🪐",
-        title: "メタクラスタ判定",
-        desc: "馬名から血統メタクラスタを判定し、強み・弱みを推定。",
-        tags: ["クラスタ", "強み/弱み"],
-      },
-      {
-        href: "/pedigree-race-stats",
-        accent: "var(--home-purple)",
-        icon: "📈",
-        title: "血統構成分析",
-        desc: "レース別に出走馬の血統構成を集計し、共通する血統傾向を抽出。",
-        tags: ["構成", "クロス"],
-      },
-      {
-        href: "/myostatin",
-        accent: "var(--home-pink)",
-        icon: "🧪",
-        title: "MSTN 遺伝子",
-        desc: "マイオスタチン遺伝子型（C:C / C:T / T:T）の予測と距離適性。",
-        tags: ["遺伝子", "距離型"],
+        icon: "🐴",
+        title: "種牡馬メモ",
+        desc: "種牡馬・牝系ごとの血統ドメイン知識ベース。特徴・コース適性・配合傾向を整理。",
+        tags: ["種牡馬", "牝系", "知識ベース"],
       },
     ],
   },
@@ -114,20 +99,20 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
     catColor: "var(--home-cyan)",
     cards: [
       {
+        href: "/data-analysis",
+        accent: "var(--home-cyan)",
+        icon: "🔬",
+        title: "詳細データ分析",
+        desc: "着順・タイム・AI予測・ROI など複数指標を自由に組み合わせて集計・可視化。分布・散布・ランキング・時系列の4モード対応。PostgreSQL からリアルタイム集計。",
+        tags: ["分布分析", "散布図", "ランキング", "時系列"],
+      },
+      {
         href: "/growth-curve",
         accent: "var(--home-green)",
         icon: "📈",
         title: "成長曲線",
         desc: "馬ごとの年齢別パフォーマンスを成長曲線として可視化。早熟・晩成判定。",
         tags: ["年齢", "パフォーマンス"],
-      },
-      {
-        href: "/note-aptitude-race",
-        accent: "var(--home-pink)",
-        icon: "🎯",
-        title: "適性 3D（NOTE 軸）",
-        desc: "瞬発・持続・スタミナの 3D 空間で馬の適性ベクトルを可視化、レースとの相性を判定。",
-        tags: ["3D", "適性ベクトル"],
       },
       {
         href: "/track-speed",
@@ -142,6 +127,24 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
 ];
 
 export const ADMIN_CATEGORIES: CategorySection[] = [
+  {
+    num: "03",
+    title: "🧬 血統（開発者向け）",
+    desc: "開発者向けの高度な血統分析ツール",
+    catColor: "var(--home-purple)",
+    badge: "ADMIN",
+    singleRow: true,
+    cards: [
+      {
+        href: "/myostatin",
+        accent: "var(--home-pink)",
+        icon: "🧪",
+        title: "MSTN 遺伝子",
+        desc: "マイオスタチン遺伝子型（C:C / C:T / T:T）の予測と距離適性。",
+        tags: ["遺伝子", "距離型"],
+      },
+    ],
+  },
   {
     num: "02",
     title: "💰 馬券の最適化",

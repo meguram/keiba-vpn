@@ -1,5 +1,5 @@
 # AREA-02 — フロントエンド要件
-**Status**: REVISED | **Last Updated**: 2026-07-06 | **Consolidates**: 旧 AREA-05 (廃止), keiba-vpn-git 既存実装からの UI 継承
+**Status**: REVISED | **Last Updated**: 2026-07-08 | **Consolidates**: 旧 AREA-05 (廃止), keiba-vpn-git 既存実装からの UI 継承
 
 ---
 
@@ -97,9 +97,9 @@ Sticky top bar（44px）。5 カテゴリのドロップダウングループ。
 | カテゴリ | 色 | 主要ページ |
 |---|---|---|
 | Home | — | ダッシュボード (`/`) |
-| AI予測 | `#58a6ff`（青） | レース詳細、レース品質分析、位置追跡難易度、成長曲線 |
-| 血統 | `#bc8cff`（紫） | 血統分析、クラスター検索、血統ベクトル、血統マップ、適性マップ、Myostatin |
-| データ分析 | `#39d2c0`（シアン） | トラックスピード指数、AI SLA |
+| AI予測 | `#58a6ff`（青） | レース詳細、レース品質分析、位置追跡難易度、今週の血統傾向分析 |
+| 血統 | `#bc8cff`（紫） | 血統分析、血統ベクトル、血統適性マップ、種牡馬メモ |
+| データ分析 | `#39d2c0`（シアン） | 詳細データ分析、成長曲線、トラックスピード指数、AI SLA |
 | 馬券最適化 | `#3fb950`（緑） | Kelly 基準 馬券最適化 |
 
 ブランドロゴ: SVG 馬頭ロゴ + conic-gradient ring アニメーション
@@ -408,7 +408,9 @@ URL state: `?horse_id=X&limit=N`
 
 ---
 
-### 4-9. 血統: クラスター検索 (`/bloodline-cluster`)
+### ~~4-9. 血統: クラスター検索 (`/bloodline-cluster`)~~ — **廃止済み（2026-07-08）**
+
+> このページは UI として不要と判断し削除された。`frontend/app/bloodline-cluster/` ディレクトリ・ページファイルは削除済み。ホームダッシュボードおよび `/bloodline` ナビからも除去済み。以下の仕様は参考記録として保持。
 
 **目的**: 馬または種牡馬の血統クラスター分類と適性プロファイルを検索表示。
 
@@ -450,7 +452,9 @@ URL state: `?horse_id=X&limit=N`
 
 ---
 
-### 4-11. 血統: 血統マップ (`/pedigree-map`)
+### ~~4-11. 血統: 血統マップ (`/pedigree-map`)~~ — **廃止済み（2026-07-08）**
+
+> このページは UI として不要と判断し削除された。`frontend/app/pedigree-map/` ディレクトリ・ページファイルは削除済み。ホームダッシュボードおよび `/bloodline` ナビからも除去済み。DEC-018 で決定した D3.js フォースグラフ実装は未着手のまま廃止となった。以下の仕様は参考記録として保持。
 
 **目的**: 種牡馬系統全体の D3.js ツリー/フォースグラフ。フルビューポート3パネル。
 
@@ -473,9 +477,11 @@ URL state: `?horse_id=X&limit=N`
 
 ---
 
-### 4-12. 血統: 種牡馬成績クエリ (`/pedigree-race-stats`)
+### 4-12. AI予測: 今週の血統傾向分析 (`/pedigree-race-stats`) — **カテゴリ変更（2026-07-08）**
 
-**目的**: 多軸フィルタによる血統別成績統計（AN-01 要件の主要 UI）。
+> 旧: 「血統: 種牡馬成績クエリ」。ホームダッシュボードのカテゴリを「血統」→「AI予測」配下に移動し、名称を「今週の血統傾向分析」に変更。ページ URL・実装は継続。新目的: 予測されたレース質と出走馬の血統を照合し血統適性スコアを点数化する。
+
+**目的**: 予測されたレース質と出走馬の血統を照合し、各馬の血統的優位性をスコア化・可視化する。旧来の多軸フィルタ機能を拡張し、AI予測（レース質）との連携分析が主軸となる。
 
 **フィルターパネル**（グリッドレイアウト）:
 - 期間: 日付範囲 + 年クイック選択（複数選択可）
@@ -500,7 +506,9 @@ URL state: `?horse_id=X&limit=N`
 
 ---
 
-### 4-13. 血統: Myostatin 遺伝子 (`/myostatin`)
+### 4-13. 血統（開発者向け）: Myostatin 遺伝子 (`/myostatin`) — **表示制御変更（2026-07-08）**
+
+> ホームダッシュボードの表示制御を 🌐 → 🛠️（開発者のみ）に変更。`ADMIN_CATEGORIES` セクション「血統（開発者向け）」配下に移動。ページ自体は URL で直接アクセス可能だが、ホームナビには表示されない。
 
 **目的**: MSTN 遺伝子型（CC/CT/TT）ごとの距離適性を追跡・可視化。
 
@@ -581,6 +589,50 @@ URL state: `?horse_id=X&limit=N`
 
 ---
 
+### 4-17. 血統: 種牡馬メモ (`/stallion-notes`) — **新規追加（2026-07-08）**
+
+**目的**: 血統ドメイン知識ベース（274エントリ）を閲覧・編集できる内部リファレンスページ。
+
+**アクセス制御**:
+- 一般ユーザー: 種牡馬・牝系カテゴリのみ表示。編集・追加ボタン非表示。
+- 開発者モード（URL に `?dev=1` を付与 → sessionStorage に保持）: 全6カテゴリ表示・編集・追加・削除が可能。ヘッダーに「DEV MODE」バッジ表示。
+
+**カテゴリ構成**:
+- 🌐: 種牡馬、牝系
+- 🛠️: 各国の血統特徴、特定の海外レース、大枠分類、系統組み合わせ
+
+**レイアウト**: ヘッダー + 左サイドバー（240px）+ 右コンテンツエリア。サイドバーはカテゴリ折りたたみ + エントリ一覧 + 検索。
+
+**永続化**: 編集内容は localStorage（`ped_edit_{id}`）、カスタムエントリは localStorage（`ped_custom_entries`）に保存。
+
+---
+
+### 4-18. データ分析: 詳細データ分析 (`/data-analysis`) — **新規追加（2026-07-08）**
+
+**目的**: Target Frontier スタイルの多次元インタラクティブデータ分析。PostgreSQL からリアルタイムに集計・可視化する。
+
+**分析モード（4種）**:
+| モード | 説明 | チャート |
+|---|---|---|
+| 分布分析 | カテゴリ別集計値（avg/count/sum/min/max） | 水平棒グラフ（SVG） |
+| 散布図 | 2指標の相関 | 散布図（SVG、最大3,000点） |
+| ランキング | 馬別集計（3戦以上）の上位N件 | 水平棒グラフ（SVG） |
+| 時系列 | 月次集計トレンド | 折れ線グラフ（SVG） |
+
+**Y軸フィールド（数値）**: 着順、タイム、上がり3F、馬体重、斤量、AI勝率予測、AI複勝率予測、期待ROI（単勝/複勝）
+
+**X軸フィールド（カテゴリ）**: 馬場、馬場状態、グレード、競馬場、クラス、ペース（H/M/S）、距離帯（200m単位）、月、年
+
+**グループ分け（色分け）**: X軸と同じカテゴリフィールド群から任意選択
+
+**フィルター**: 日付範囲、馬場（芝/ダート）、距離 min/max、グレード（カンマ区切り）、最大件数
+
+**バックエンド API**: `GET /api/v1/data-analysis/query`（フィールド名ホワイトリスト管理、最大5,000件）、`GET /api/v1/data-analysis/schema`
+
+**レイアウト**: 左コントロールパネル（264px）+ 右メインエリア（チャート + データテーブル + クエリ詳細）
+
+---
+
 ## 5. 技術要件
 
 ### 5-1. フレームワーク・ライブラリ
@@ -636,23 +688,28 @@ URL state: `?horse_id=X&limit=N`
 /race/{race_id}             ← レース詳細（4タブ）
 
 /tracking-difficulty        ← 位置追跡難易度分析
-/growth-curve               ← 成長曲線
-/track-speed                ← トラックスピード指数
 /race-quality               ← レース品質 NNLS 分析
+/pedigree-race-stats        ← 今週の血統傾向分析（AI予測 × 血統スコア）★AI予測配下に移動
 /ai-sla                     ← AI パイプライン SLA ドキュメント
 
-/bloodline                  ← 血統 × 距離/コース研究（14分析タイプ）
-/bloodline-cluster          ← 血統クラスター検索
+/data-analysis              ← 詳細データ分析（Target Frontier スタイル）★新規追加
+/growth-curve               ← 成長曲線
+/track-speed                ← トラックスピード指数
+
+/bloodline                  ← 血統 × 距離/コース研究
 /bloodline-vector           ← 血統ベクトル空間
-/pedigree-map               ← 血統マップ（D3.js）
-/pedigree-race-stats        ← 種牡馬成績クエリ（AN-01）
 /note-aptitude-race         ← 血統適性マップ（SVG）
-/myostatin                  ← Myostatin 遺伝子ダッシュボード
+/stallion-notes             ← 種牡馬メモ（知識ベース）★新規追加
+/myostatin                  ← Myostatin 遺伝子ダッシュボード（🛠️ 開発者のみ）
 
 /betting                    ← 馬券最適化（Kelly 基準）
 
 /favorites                  ← お気に入り馬一覧（F-12、ログイン必須）
 /notifications              ← 通知設定（F-09、ログイン必須）
+
+# 廃止済み（2026-07-08）
+# /pedigree-map             ← 血統構造マップ（D3.js サイアー系図）→ 削除済み
+# /bloodline-cluster        ← メタクラスタ判定 → 削除済み
 ```
 
 ---
@@ -681,10 +738,14 @@ GET  /api/v1/horse/{id}/growth-curve                  ← 成長曲線 [public]
 GET  /api/v1/track-speed/day?date=X&venue=Y           ← TSI指数 [public]
 GET  /api/v1/race-quality/race?id=X                   ← NNLS 分析 [public]
 
+# データ分析
+GET  /api/v1/data-analysis/query                      ← 詳細データ分析クエリ [public]
+GET  /api/v1/data-analysis/schema                     ← 利用可能フィールド一覧 [public]
+
 # 血統
 GET  /api/v1/pedigree/race-note?race_id=X             ← 適性マップデータ [public]
-GET  /api/v1/bloodline-cluster/lookup?q=X             ← クラスター検索 [public]
-GET  /api/v1/pedigree-race-stats/query                ← 種牡馬成績クエリ [public]
+GET  /api/v1/bloodline-cluster/lookup?q=X             ← クラスター検索 [public] ※エンドポイントは残存
+GET  /api/v1/pedigree-race-stats/query                ← 今週の血統傾向分析クエリ [public]
 
 # 馬券
 POST /api/v1/betting/optimize                         ← Kelly 最適化 [auth]

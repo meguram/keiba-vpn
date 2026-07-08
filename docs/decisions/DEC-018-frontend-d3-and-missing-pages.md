@@ -3,10 +3,11 @@
 | 項目 | 内容 |
 |------|------|
 | **日付** | 2026-07-04 |
-| **ステータス** | accepted |
+| **ステータス** | ~~accepted~~ → **superseded（一部廃止）** |
 | **担当** | Orchestrator |
 | **関連 AREA** | AREA-02 |
 | **矛盾ID** | S-6-A/B/C |
+| **後続変更** | 2026-07-08: `/pedigree-map`・`/bloodline-cluster` 削除済み（下記参照） |
 
 ---
 
@@ -45,3 +46,16 @@ AREA-02 §5-1 は D3.js v7 を必須として血統マップ（`/pedigree-map`�
 ### 備考
 
 血統マップの完全な D3.js フォースグラフ実装は Phase 3 以降の作業。本 DEC は依存関係欠落とルーティングの404を解消することのみを対象とする。
+
+---
+
+### 後続変更（2026-07-08）
+
+本 DEC が対象とした2ページは、その後 UI として不要と判断され削除された。
+
+| ページ | 対応 |
+|--------|------|
+| `/pedigree-map`（血統構造マップ） | `frontend/app/pedigree-map/` ディレクトリごと削除。D3.js フォースグラフ実装は未着手のまま廃止。 |
+| `/bloodline-cluster`（メタクラスタ判定） | `frontend/app/bloodline-cluster/` ディレクトリごと削除。 |
+
+> この変更により本 DEC の決定事項「2. `/bloodline` は空の `page.tsx` を作成し URL を有効化する」のうち `/pedigree-map` と `/bloodline-cluster` に関する部分は実質無効となった。D3.js 依存の追加（決定事項1）および `/ai-sla` の静的ページ実装（決定事項3）は引き続き有効。

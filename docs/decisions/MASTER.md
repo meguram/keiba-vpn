@@ -1,5 +1,5 @@
 # keiba-vpn 競馬予測システム — マスター仕様書
-> 最終更新: 2026-07-06 | 参照: AREA-01〜AREA-10
+> 最終更新: 2026-07-08 | 参照: AREA-01〜AREA-10
 
 ---
 
@@ -378,18 +378,20 @@ CREATE POLICY saved_analyses_user_isolation
 | `/races?date=YYYYMMDD` | レース一覧 | 指定日の全レースカード |
 | `/race/{race_id}` | レース詳細 | 4タブ（出馬表・結果・AI予測・出走馬詳細） |
 | `/tracking-difficulty` | 位置追跡難易度 | ease スコア予測・可視化 |
+| `/race-quality` | レース品質分析 | NNLS 8アーキタイプ分類 |
+| `/pedigree-race-stats` | 今週の血統傾向分析 | 予測レース質×血統照合による血統適性スコア（AI予測配下） |
+| `/ai-sla` | AI SLA | パイプライン SLA ドキュメント |
+| `/data-analysis` | 詳細データ分析 | 分布・散布・ランキング・時系列の4モード Target Frontier 分析 ★新規 |
 | `/growth-curve` | 成長曲線 | キャリアアーク（馬体重×タイム指数）可視化 |
 | `/track-speed` | トラックスピード指数 | TSI（Z スコア正規化、50=標準）表示 |
-| `/race-quality` | レース品質分析 | NNLS 8アーキタイプ分類 |
-| `/ai-sla` | AI SLA | パイプライン SLA ドキュメント |
-| `/bloodline` | 血統分析 | 14分析タイプ（距離/コース研究） |
-| `/bloodline-cluster` | 血統クラスター検索 | 馬・種牡馬の血統クラスター分類 |
+| `/bloodline` | 血統分析 | 血統 × 距離/コース研究 |
 | `/bloodline-vector` | 血統ベクトル空間 | Canvas 描画 2D ベクトルマップ（PCA/UMAP/t-SNE） |
-| `/pedigree-map` | 血統マップ | D3.js ツリー/フォースグラフ |
-| `/pedigree-race-stats` | 種牡馬成績クエリ | 多軸フィルタによる血統別成績統計 |
 | `/note-aptitude-race` | 血統適性マップ | SVG パン/ズームマップ |
-| `/myostatin` | Myostatin 遺伝子 | MSTN 遺伝子型（CC/CT/TT）距離適性追跡 |
+| `/stallion-notes` | 種牡馬メモ | 種牡馬・牝系の血統ドメイン知識ベース ★新規 |
+| `/myostatin` | Myostatin 遺伝子 | MSTN 遺伝子型（CC/CT/TT）距離適性追跡（🛠️ 開発者のみ） |
 | `/betting` | 馬券最適化 | Kelly 基準（Quarter Kelly デフォルト）、ログイン必須 |
+
+> **廃止済み（2026-07-08）**: `/pedigree-map`（血統構造マップ）、`/bloodline-cluster`（メタクラスタ判定）は削除済み。
 
 ### 4-6. ユーザー種別とアクセス制御
 
@@ -612,8 +614,8 @@ Circuit Breaker ライブラリの選定（`pybreaker` / `tenacity` 等）、閾
 
 | AREA | ファイル名 | 内容 | Status | Last Updated |
 |---|---|---|---|---|
-| AREA-01 | `AREA-01-app-requirements.md` | アプリケーション要件（スクレイピング・DB スキーマ・予測ターゲット・ロードマップ） | FINAL | 2026-07-06 |
-| AREA-02 | `AREA-02-frontend.md` | フロントエンド要件（デザインシステム・ページカタログ・API 消費仕様） | REVISED | 2026-07-04 |
+| AREA-01 | `AREA-01-app-requirements.md` | アプリケーション要件（スクレイピング・DB スキーマ・予測ターゲット・ロードマップ） | FINAL | 2026-07-08 |
+| AREA-02 | `AREA-02-frontend.md` | フロントエンド要件（デザインシステム・ページカタログ・API 消費仕様） | REVISED | 2026-07-08 |
 | AREA-03 | `AREA-03-backend.md` | バックエンド要件（Flask API・DB スキーマ・認証・キャッシュ・レート制限） | FINAL | 2026-07-04 |
 | AREA-04 | `AREA-04-ops.md` | 運用最適化要件（Cron SLA・プロセス分離・Circuit Breaker・監視・デプロイ） | FINAL | 2026-07-06 |
 | AREA-05 | `AREA-05-cost.md` | コスト計算要件（月額費用・スケール判断基準・コスト削減方針） | FINAL | 2026-07-04 |

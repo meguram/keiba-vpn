@@ -19,6 +19,7 @@ from src.api.v1.services import (
     list_races,
 )
 from src.api.v1.routes.analytics import bp as analytics_bp
+from src.api.v1.routes.data_analysis import bp as data_analysis_bp
 from src.db.session import get_session, init_engine
 
 
@@ -31,6 +32,7 @@ def _is_logged_in() -> bool:
 def create_app() -> Flask:
     app = Flask(__name__)
     app.register_blueprint(analytics_bp, url_prefix="/api/v1")
+    app.register_blueprint(data_analysis_bp, url_prefix="/api/v1")
 
     @app.get("/api/v1/health")
     def health():
