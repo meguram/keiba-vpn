@@ -65,6 +65,67 @@ function CategoryBlock({
   );
 }
 
+function DevToolbar({ isAdmin }: { isAdmin: boolean }) {
+  if (!isAdmin) return null;
+
+  const monitorUrl =
+    typeof window !== "undefined"
+      ? (process.env.NEXT_PUBLIC_MONITOR_URL ||
+          `${window.location.protocol}//${window.location.hostname}:9090`)
+      : (process.env.NEXT_PUBLIC_MONITOR_URL || "http://localhost:9090");
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 20,
+        right: 20,
+        zIndex: 1000,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: 8,
+      }}
+    >
+      <a
+        href={monitorUrl}
+        target="_blank"
+        rel="noreferrer"
+        title="開発者監視ポータルを開く"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          padding: "8px 14px",
+          background: "rgba(30,30,40,0.92)",
+          border: "1px solid rgba(100,120,200,0.4)",
+          borderRadius: 10,
+          color: "#a0b4e8",
+          fontSize: 12,
+          fontWeight: 600,
+          textDecoration: "none",
+          backdropFilter: "blur(8px)",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+          transition: "border-color .15s, color .15s",
+          cursor: "pointer",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.borderColor = "rgba(120,160,255,0.7)";
+          (e.currentTarget as HTMLElement).style.color = "#c8d8ff";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.borderColor = "rgba(100,120,200,0.4)";
+          (e.currentTarget as HTMLElement).style.color = "#a0b4e8";
+        }}
+      >
+        <span style={{ fontSize: 14 }}>🖥️</span>
+        監視ポータル
+        <span style={{ fontSize: 10, opacity: 0.6 }}>↗</span>
+      </a>
+    </div>
+  );
+}
+
 export function HomeDashboard() {
   const { isAdmin, isMember } = useAuthStatus();
   const searchParams = useSearchParams();
@@ -77,6 +138,8 @@ export function HomeDashboard() {
       {showUpgradeModal && (
         <MemberUpgradeModal onClose={() => setShowUpgradeModal(false)} />
       )}
+
+      <DevToolbar isAdmin={isAdmin} />
 
       <div className="hero">
         <div className="hero-icon-wrap">
