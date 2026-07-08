@@ -522,6 +522,63 @@ def internal_git():
     )
 
 
+@app.route("/api/internal/git/pull", methods=["POST"])
+@require_auth
+def internal_git_pull():
+    """git pull origin <branch> を実行して結果を返す。"""
+    import time as _time_mod
+    started_at = _time_mod.time()
+    try:
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=ROOT, stderr=subprocess.DEVNULL, timeout=5,
+        ).decode().strip()
+    except Exception:
+        branch = "main"
+
+    try:
+        result = subprocess.run(
+            ["git", "pull", "origin", branch],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        stdout = result.stdout.strip()
+        stderr = result.stderr.strip()
+        output = "\n".join(filter(None, [stdout, stderr]))
+        success = result.returncode == 0
+    except subprocess.TimeoutExpired:
+        output = "タイムアウト（60秒）"
+        success = False
+    except Exception as e:
+        output = str(e)
+        success = False
+
+    elapsed = round(_time_mod.time() - started_at, 1)
+
+    # ログに記録
+    try:
+        log_path = LOG_DIR / "git_pull.log"
+        from datetime import datetime as _dt
+        entry = f"[{_dt.now().strftime('%Y-%m-%d %H:%M:%S')}] [monitor-manual] branch={branch} ok={success} ({elapsed}s)\n{output}\n"
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(entry + "\n")
+    except Exception:
+        pass
+
+    # pull 後の HEAD を取得
+    head_after = _git_head_short()
+
+    return jsonify({
+        "ok": success,
+        "branch": branch,
+        "output": output,
+        "elapsed_s": elapsed,
+        "head": head_after,
+    })
+
+
 @app.route("/api/internal/logs")
 @require_auth
 def internal_logs():

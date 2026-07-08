@@ -4,6 +4,21 @@
 {% block content %}
 <div class="page-title"><span class="icon">🌿</span> Git 状態</div>
 
+<!-- git pull ボタンカード -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-title" style="display:flex;align-items:center;gap:12px">
+    <span>🔄 git pull</span>
+    <button id="pull-btn" onclick="doPull()"
+      style="padding:6px 18px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:opacity .2s">
+      git pull origin
+    </button>
+    <span id="pull-status" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+  <div id="pull-result" style="display:none;margin-top:12px">
+    <pre id="pull-result-pre" style="font-size:12px;padding:10px 12px;background:var(--code-bg,#161b22);border-radius:6px;border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;max-height:260px;overflow-y:auto"></pre>
+  </div>
+</div>
+
 <div class="grid grid-2">
   <div class="card">
     <div class="card-title">最新コミット</div>
@@ -16,7 +31,7 @@
 </div>
 
 <div class="card">
-  <div class="card-title">最終 git pull ログ</div>
+  <div class="card-title">最終 git pull ログ（定期実行）</div>
   <pre id="pull-log">読込中...</pre>
 </div>
 
@@ -58,6 +73,43 @@ function renderGit(d) {
 
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function doPull() {
+  const btn = document.getElementById('pull-btn');
+  const statusEl = document.getElementById('pull-status');
+  const resultEl = document.getElementById('pull-result');
+  const preEl = document.getElementById('pull-result-pre');
+
+  btn.disabled = true;
+  btn.textContent = '実行中...';
+  statusEl.textContent = '';
+  resultEl.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/internal/git/pull', { method: 'POST' });
+    const d = await res.json();
+
+    preEl.textContent = d.output || '（出力なし）';
+    preEl.style.color = d.ok ? 'var(--ok, #3fb950)' : 'var(--err, #f85149)';
+    resultEl.style.display = 'block';
+
+    statusEl.textContent = d.ok
+      ? `✅ 成功 (${d.elapsed_s}s) ブランチ: ${d.branch}`
+      : `❌ 失敗 (${d.elapsed_s}s)`;
+    statusEl.style.color = d.ok ? 'var(--ok, #3fb950)' : 'var(--err, #f85149)';
+
+    // git 状態を再読み込み
+    if (d.ok) {
+      await refresh();
+    }
+  } catch(e) {
+    statusEl.textContent = '❌ リクエスト失敗: ' + e.message;
+    statusEl.style.color = 'var(--err, #f85149)';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'git pull origin';
+  }
 }
 
 async function refresh() {
