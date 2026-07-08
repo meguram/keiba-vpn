@@ -11,6 +11,7 @@ from src.utils.project_env import load_project_dotenv
 load_project_dotenv()
 
 from src.api.auth import COOKIE_NAME, _verify_token
+from src.api.flask_auth import require_internal
 from src.api.v1.services import (
     DEFAULT_MODEL_VERSION,
     build_laps_response,
@@ -87,12 +88,26 @@ def create_app() -> Flask:
         if payload is None:
             return jsonify({"error": "predictions not found"}), 404
 
-        # ゲスト（未ログイン）は win_prob 降順 TOP3 のみ閲覧可能
         horses: list = payload.get("horses") or []
         total_horses = len(horses)
         logged_in = _is_logged_in()
         if not logged_in:
-            horses = sorted(horses, key=lambda x: x.get("win_prob") or 0, reverse=True)[:3]
+            # 非メンバー: 全馬を返すが AI 予測フィールドを null に隠蔽し馬番順にソート
+            _REDACTED_FIELDS = (
+                "win_prob", "place_prob", "show_prob",
+                "predicted_win_odds", "predicted_place_odds",
+                "win_roi", "show_roi",
+                "predicted_position", "predicted_running_style",
+            )
+            redacted_horses = []
+            for h in horses:
+                h2 = dict(h)
+                for field in _REDACTED_FIELDS:
+                    if field in h2:
+                        h2[field] = None
+                h2["redacted"] = True
+                redacted_horses.append(h2)
+            horses = sorted(redacted_horses, key=lambda x: x.get("post_position") or 0)
 
         return jsonify({
             **payload,
@@ -165,6 +180,32 @@ def create_app() -> Flask:
         if not payload or payload.get("error"):
             return jsonify(payload or {"error": "growth curve not found"}), 404
         return jsonify(payload)
+
+    @app.post("/api/v1/admin/users/<user_id>/member")
+    @require_internal
+    def admin_set_member(user_id: str):
+        """管理者用: is_member を手動で ON/OFF する（MVP 用）。"""
+        body = request.get_json(silent=True) or {}
+        if "is_member" not in body:
+            return jsonify({"error": "is_member field required"}), 400
+        is_member_val = bool(body["is_member"])
+        try:
+            from uuid import UUID as _UUID
+            from sqlalchemy import select as _select
+            from src.db.models import User as _User
+            user_uuid = _UUID(user_id)
+            init_engine()
+            with get_session() as session:
+                user = session.scalars(_select(_User).where(_User.id == user_uuid)).first()
+                if user is None:
+                    return jsonify({"error": "user not found"}), 404
+                user.is_member = is_member_val
+                session.commit()
+            return jsonify({"user_id": user_id, "is_member": is_member_val})
+        except ValueError:
+            return jsonify({"error": "invalid user_id format"}), 400
+        except Exception as exc:
+            return jsonify({"error": "database error", "detail": str(exc)}), 503
 
     @app.get("/api/v1/track-speed/day")
     def api_track_speed_day():

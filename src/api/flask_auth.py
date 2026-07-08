@@ -60,3 +60,26 @@ def require_internal(f):
         return f(*args, **kwargs)
 
     return wrapper
+
+
+def require_member(f):
+    """デコレータ: メンバー必須 API。MVP では require_login と同等。"""
+    from functools import wraps
+
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        token = request.cookies.get(COOKIE_NAME, "")
+        if not _verify_token(token):
+            return jsonify({"error": "member required", "reason": "not_member"}), 401
+        return f(*args, **kwargs)
+
+    return wrapper
+
+
+def get_auth_status() -> dict:
+    """現在のリクエストの認証状態を返す。MVP では is_member == logged_in。"""
+    logged_in = is_logged_in()
+    return {
+        "logged_in": logged_in,
+        "is_member": logged_in,
+    }

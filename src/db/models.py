@@ -348,6 +348,10 @@ class User(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    is_member: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    subscription_status: Mapped[str] = mapped_column(String(20), default="none", server_default="'none'")
+    subscription_expires_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    payjp_customer_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
 
 class SavedAnalysis(Base):

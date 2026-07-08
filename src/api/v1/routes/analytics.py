@@ -60,7 +60,7 @@ def betting_optimize():
 @bp.get("/auth/status")
 def auth_status():
     logged = is_logged_in()
-    return jsonify({"logged_in": logged, "is_developer": logged, "is_admin": logged})
+    return jsonify({"logged_in": logged, "is_developer": logged, "is_admin": logged, "is_member": logged})
 
 
 @bp.post("/admin/git-pull")

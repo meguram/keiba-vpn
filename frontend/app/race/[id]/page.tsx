@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { USE_MOCK, getMockRaceDetail, getMockPredictions, getMockTdData } from "@/lib/mock";
+import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 
 /* ── 型 ── */
 type RaceEntry = {
@@ -68,6 +69,7 @@ type PredEntry = {
   win_odds?: number | null;
   place_odds_min?: number | null;
   place_odds_max?: number | null;
+  redacted?: boolean;
   [k: string]: unknown;
 };
 
@@ -198,6 +200,7 @@ export default function RaceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [predicting, setPredicting] = useState(false);
+  const { isMember } = useAuthStatus();
 
   const loadRace = useCallback(async () => {
     if (!raceId) return;
@@ -469,9 +472,22 @@ export default function RaceDetailPage() {
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>印</th>
               </tr>
               <tr>
-                {["馬番","馬名","勝率","連対率","複勝率","単勝","複勝","勝期待値","複期待値","推奨","印"].map((h, i) => (
-                  <th key={h} style={{ ...TH, borderLeft: [2,5,7,9,11].includes(i) ? "1px solid rgba(36,48,73,0.5)" : undefined }}>{h}</th>
-                ))}
+                {(["馬番","馬名","勝率","連対率","複勝率","単勝","複勝","勝期待値","複期待値","推奨","印"] as string[]).map((h, i) => {
+                  // AI columns: indices 2–8
+                  const isAiCol = i >= 2 && i <= 8;
+                  return (
+                    <th
+                      key={h}
+                      style={{
+                        ...TH,
+                        borderLeft: [2,5,7,9,11].includes(i) ? "1px solid rgba(36,48,73,0.5)" : undefined,
+                        color: isAiCol && !isMember ? "var(--text-dim)" : TH.color,
+                      }}
+                    >
+                      {isAiCol && !isMember ? <span style={{ marginRight: 3 }}>🔒</span> : null}{h}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -483,13 +499,30 @@ export default function RaceDetailPage() {
                   <tr key={p.horse_number ?? i} style={{ background: rowBg, transition: "background 0.12s" }}>
                     <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "—"}</td>
                     <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left", whiteSpace: "nowrap" }}>{p.horse_name ?? "—"}</td>
-                    <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)" }}>{p.win_prob != null ? `${(p.win_prob * 100).toFixed(1)}%` : "—"}</td>
-                    <td style={TD}>{p.top2_prob != null ? `${(p.top2_prob * 100).toFixed(1)}%` : "—"}</td>
-                    <td style={TD}>{p.top3_prob != null ? `${(p.top3_prob * 100).toFixed(1)}%` : "—"}</td>
-                    <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: "var(--text-dim)" }}>{p.win_odds != null ? `${Number(p.win_odds).toFixed(1)}倍` : "—"}</td>
-                    <td style={{ ...TD, color: "var(--text-dim)", fontSize: 11 }}>{p.place_odds_min != null && p.place_odds_max != null ? `${Number(p.place_odds_min).toFixed(1)}〜${Number(p.place_odds_max).toFixed(1)}` : "—"}</td>
-                    <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: evColor(p.ev_win), fontWeight: 600 }}>{p.ev_win != null ? p.ev_win.toFixed(2) : "—"}</td>
-                    <td style={{ ...TD, color: evColor(p.ev_place ?? p.expected_value), fontWeight: 600 }}>{(p.ev_place ?? p.expected_value) != null ? Number(p.ev_place ?? p.expected_value).toFixed(2) : "—"}</td>
+                    {/* AI columns — redact when null or entry.redacted === true */}
+                    <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: (p.redacted || p.win_prob == null) ? "var(--text-dim)" : undefined }}>
+                      {(p.redacted || p.win_prob == null) ? "●●%" : `${(p.win_prob * 100).toFixed(1)}%`}
+                    </td>
+                    <td style={{ ...TD, color: (p.redacted || p.top2_prob == null) ? "var(--text-dim)" : undefined }}>
+                      {(p.redacted || p.top2_prob == null) ? "●●%" : `${(p.top2_prob * 100).toFixed(1)}%`}
+                    </td>
+                    <td style={{ ...TD, color: (p.redacted || p.top3_prob == null) ? "var(--text-dim)" : undefined }}>
+                      {(p.redacted || p.top3_prob == null) ? "●●%" : `${(p.top3_prob * 100).toFixed(1)}%`}
+                    </td>
+                    <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: "var(--text-dim)" }}>
+                      {(p.redacted || p.win_odds == null) ? "●●倍" : `${Number(p.win_odds).toFixed(1)}倍`}
+                    </td>
+                    <td style={{ ...TD, color: "var(--text-dim)", fontSize: 11 }}>
+                      {(p.redacted || p.place_odds_min == null || p.place_odds_max == null)
+                        ? "●●〜●●"
+                        : `${Number(p.place_odds_min).toFixed(1)}〜${Number(p.place_odds_max).toFixed(1)}`}
+                    </td>
+                    <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: (p.redacted || p.ev_win == null) ? "var(--text-dim)" : evColor(p.ev_win), fontWeight: 600 }}>
+                      {(p.redacted || p.ev_win == null) ? "●●" : p.ev_win.toFixed(2)}
+                    </td>
+                    <td style={{ ...TD, color: (p.redacted || (p.ev_place ?? p.expected_value) == null) ? "var(--text-dim)" : evColor(p.ev_place ?? p.expected_value), fontWeight: 600 }}>
+                      {(p.redacted || (p.ev_place ?? p.expected_value) == null) ? "●●" : Number(p.ev_place ?? p.expected_value).toFixed(2)}
+                    </td>
                     <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: 11 }}>{p.buy_tier ?? "—"}</td>
                     <td style={{ ...TD, fontSize: 18, fontWeight: 800, color: mark.color }}>{mark.sym}</td>
                 </tr>
