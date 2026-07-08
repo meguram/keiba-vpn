@@ -1355,6 +1355,58 @@ def page_data_stores():
     return render_template("data_stores.html")
 
 
+DOCS_DIR = ROOT / "docs" / "decisions"
+
+
+def _specs_file_groups() -> dict:
+    """docs/decisions/ の .md ファイルを AREA / DEC / その他 に分類して返す。"""
+    if not DOCS_DIR.exists():
+        return {"master": [], "area": [], "dec": []}
+    all_files = sorted(f.name for f in DOCS_DIR.glob("*.md") if f.name != "DEC-TEMPLATE.md")
+    return {
+        "master": [f for f in all_files if not f.startswith("AREA-") and not f.startswith("DEC-")],
+        "area":   [f for f in all_files if f.startswith("AREA-")],
+        "dec":    [f for f in all_files if f.startswith("DEC-")],
+    }
+
+
+@app.route("/specs")
+@require_auth
+def specs():
+    return render_template(
+        "specs.html",
+        active="specs",
+        groups=_specs_file_groups(),
+        content=None,
+        current_file=None,
+    )
+
+
+@app.route("/specs/<path:filename>")
+@require_auth
+def specs_file(filename: str):
+    target = (DOCS_DIR / filename).resolve()
+    if not str(target).startswith(str(DOCS_DIR.resolve())):
+        return "不正なパスです", 403
+    if not target.exists() or target.suffix != ".md":
+        return "ファイルが見つかりません", 404
+
+    import markdown as md_lib
+    raw = target.read_text(encoding="utf-8")
+    content_html = md_lib.markdown(
+        raw,
+        extensions=["tables", "fenced_code", "toc", "nl2br"],
+    )
+
+    return render_template(
+        "specs.html",
+        active="specs",
+        groups=_specs_file_groups(),
+        content=content_html,
+        current_file=filename,
+    )
+
+
 @app.route("/api/internal/data-stores")
 @require_auth
 def internal_data_stores():
