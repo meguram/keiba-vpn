@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import ENTRIES_RAW from "./entries.json";
+import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 
 /* ── 型 ── */
 type Entry = {
@@ -69,6 +70,27 @@ function loadCustomEntries(): Entry[] {
   } catch { return []; }
 }
 
+/* ── サーバー API ── */
+async function fetchServerOverrides(): Promise<Record<string, string>> {
+  try {
+    const res = await fetch("/api/v1/stallion-notes/overrides");
+    if (res.ok) return await res.json();
+  } catch {}
+  return {};
+}
+
+async function saveServerOverride(id: string, content: string): Promise<boolean> {
+  try {
+    const res = await fetch("/api/v1/stallion-notes/overrides", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id, content }),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
 /* ── 追加モーダル（開発者のみ） ── */
 function AddModal({
   defaultCat, cats, onAdd, onClose,
@@ -124,6 +146,7 @@ function AddModal({
 
 /* ── メインコンポーネント ── */
 export default function StallionNotesPage() {
+  const { isAdmin } = useAuthStatus();
   const [entries, setEntries] = useState<Entry[]>(BASE_ENTRIES);
   const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
   const [isDev, setIsDev] = useState(false);
@@ -138,7 +161,8 @@ export default function StallionNotesPage() {
 
   /* 初期化 */
   useEffect(() => {
-    setLocalEdits(loadEdits());
+    const localEditsMap = loadEdits();
+    setLocalEdits(localEditsMap);
     const custom = loadCustomEntries();
     if (custom.length > 0) setEntries([...BASE_ENTRIES, ...custom.map(e => ({ ...e, isCustom: true }))]);
 
@@ -150,7 +174,23 @@ export default function StallionNotesPage() {
     try {
       setIsDev(sessionStorage.getItem(LS_DEV) === "1");
     } catch {}
+
+    /* サーバー保存済み上書きをマージ（サーバー側が優先） */
+    fetchServerOverrides().then(serverOverrides => {
+      if (Object.keys(serverOverrides).length > 0) {
+        setLocalEdits(prev => ({ ...prev, ...serverOverrides }));
+        // localStorage にも反映
+        try {
+          for (const [id, content] of Object.entries(serverOverrides)) {
+            localStorage.setItem(LS_PREFIX + id, content);
+          }
+        } catch {}
+      }
+    });
   }, []);
+
+  /* isAdmin になった瞬間も編集モードを有効化 */
+  const canEdit = isDev || isAdmin;
 
   /* カテゴリごとにグループ化 */
   const catMap = entries.reduce<Record<string, Entry[]>>((acc, e) => {
@@ -161,7 +201,7 @@ export default function StallionNotesPage() {
   const allCats = [...CAT_ORDER.filter(c => catMap[c]), ...Object.keys(catMap).filter(c => !CAT_ORDER.includes(c))];
 
   /* 表示するカテゴリ */
-  const visibleCats = isDev ? allCats : allCats.filter(c => USER_VISIBLE_CATS.has(c));
+  const visibleCats = canEdit ? allCats : allCats.filter(c => USER_VISIBLE_CATS.has(c));
 
   /* コンテンツ取得 */
   function getContent(id: string): string {
@@ -185,13 +225,23 @@ export default function StallionNotesPage() {
     });
   }
 
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   /* 編集保存 */
-  function saveEdit() {
+  async function saveEdit() {
     if (!editingId) return;
     const newEdits = { ...localEdits, [editingId]: editText };
     setLocalEdits(newEdits);
     try { localStorage.setItem(LS_PREFIX + editingId, editText); } catch {}
     setEditingId(null);
+
+    // サーバーへ保存
+    setSavingId(editingId);
+    setSaveError(null);
+    const ok = await saveServerOverride(editingId, editText);
+    setSavingId(null);
+    if (!ok) setSaveError("サーバー保存に失敗しました（ローカルには保存済み）");
   }
 
   /* 編集リセット */
@@ -242,7 +292,7 @@ export default function StallionNotesPage() {
           <span style={{ fontSize: 11, color: "var(--text-dim)" }}>血統ドメイン知識ベース — サイドバーから馬名を選択</span>
         </div>
 
-        {isDev && (
+        {canEdit && (
           <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: "rgba(245,158,11,0.15)", color: "var(--warn)", border: "1px solid rgba(245,158,11,0.3)", fontWeight: 700 }}>
             DEV MODE
           </span>
@@ -281,7 +331,7 @@ export default function StallionNotesPage() {
         {/* サイドバー */}
         <nav style={{ width: 240, background: "var(--surface)", borderRight: "1px solid var(--border)", overflowY: "auto", flexShrink: 0, paddingBottom: 16 }}>
           {visibleCats.map(cat => {
-            const items = (catMap[cat] ?? []).filter(e => isDev || !e.isCustom || USER_VISIBLE_CATS.has(e.cat));
+                  const items = (catMap[cat] ?? []).filter(e => canEdit || !e.isCustom || USER_VISIBLE_CATS.has(e.cat));
             const expanded = expandedCats.has(cat);
             return (
               <div key={cat} style={{ borderBottom: "1px solid rgba(36,48,73,0.5)" }}>
@@ -292,7 +342,7 @@ export default function StallionNotesPage() {
                     <span style={{ fontSize: 10, color: "var(--text-dim)", background: "rgba(107,125,149,0.15)", borderRadius: 10, padding: "1px 7px" }}>{items.length}</span>
                     <span style={{ fontSize: 10, color: "var(--text-dim)", display: "inline-block", transform: expanded ? "rotate(180deg)" : "none", transition: "transform .2s" }}>▾</span>
                   </button>
-                  {isDev && (
+                  {canEdit && (
                     <button onClick={() => { setAddModalCat(cat); setShowAddModal(true); }}
                       style={{ width: 28, background: "none", border: "none", borderLeft: "1px solid rgba(36,48,73,0.5)", cursor: "pointer", color: "var(--text-dim)", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}
                       title={`${cat}に追加`}>+</button>
@@ -314,7 +364,7 @@ export default function StallionNotesPage() {
                             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                           }}>
                           <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{e.name || "（無題）"}</span>
-                          {isDev && localEdits[e.id] !== undefined && (
+                          {canEdit && localEdits[e.id] !== undefined && (
                             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} title="ローカル編集済み" />
                           )}
                         </button>
@@ -343,10 +393,10 @@ export default function StallionNotesPage() {
                 <span>🏠</span><span style={{ color: "var(--text-dim)" }}>›</span>
                 <span>{selectedEntry.cat}</span><span style={{ color: "var(--text-dim)" }}>›</span>
                 <span style={{ color: "var(--text)", fontWeight: 600 }}>{selectedEntry.name}</span>
-                {isDev && localEdits[selectedEntry.id] !== undefined && (
+                {canEdit && localEdits[selectedEntry.id] !== undefined && (
                   <span style={{ fontSize: 10, color: "#22c55e", background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 10, padding: "1px 8px", marginLeft: 4 }}>✏ 編集済み</span>
                 )}
-                {isDev && selectedEntry.isCustom && (
+                {canEdit && selectedEntry.isCustom && (
                   <span style={{ fontSize: 10, color: "var(--warn)", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 10, padding: "1px 7px", marginLeft: 4 }}>カスタム</span>
                 )}
               </div>
@@ -355,7 +405,7 @@ export default function StallionNotesPage() {
               <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: "22px 26px", boxShadow: "0 1px 4px rgba(0,0,0,.2)" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
                   <span style={{ fontSize: 22, fontWeight: 700, color: "#fff", lineHeight: 1.3 }}>{selectedEntry.name || "（無題）"}</span>
-                  {isDev && editingId !== selectedEntry.id && (
+                  {canEdit && editingId !== selectedEntry.id && (
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       <button
                         onClick={() => { setEditingId(selectedEntry.id); setEditText(getContent(selectedEntry.id)); }}
@@ -389,7 +439,7 @@ export default function StallionNotesPage() {
                 <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "0 0 14px" }} />
 
                 {/* コンテンツ */}
-                {isDev && editingId === selectedEntry.id ? (
+                {canEdit && editingId === selectedEntry.id ? (
                   <div>
                     <textarea
                       value={editText}
@@ -397,7 +447,10 @@ export default function StallionNotesPage() {
                       style={{ width: "100%", minHeight: 280, padding: "12px 14px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 13, lineHeight: 1.75, resize: "vertical", outline: "none" }}
                     />
                     <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
-                      <button onClick={saveEdit} style={{ padding: "7px 18px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 5, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>保存</button>
+                      <button onClick={saveEdit} disabled={savingId === selectedEntry.id}
+                        style={{ padding: "7px 18px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 5, fontSize: 13, fontWeight: 600, cursor: savingId ? "default" : "pointer", opacity: savingId ? 0.7 : 1 }}>
+                        {savingId === selectedEntry.id ? "保存中..." : "保存"}
+                      </button>
                       <button onClick={() => setEditingId(null)} style={{ padding: "7px 14px", background: "transparent", border: "1px solid var(--border)", color: "var(--text-dim)", borderRadius: 5, fontSize: 13, cursor: "pointer" }}>キャンセル</button>
                       {localEdits[selectedEntry.id] !== undefined && (
                         <button onClick={() => resetEdit(selectedEntry.id)}
@@ -406,6 +459,7 @@ export default function StallionNotesPage() {
                         </button>
                       )}
                     </div>
+                    {saveError && <p style={{ fontSize: 12, color: "var(--err)", marginTop: 6 }}>{saveError}</p>}
                   </div>
                 ) : (
                   <div style={{ fontSize: 13.5, lineHeight: 1.85, color: "#c8cdd6" }}>
@@ -419,7 +473,7 @@ export default function StallionNotesPage() {
       </div>
 
       {/* 追加モーダル（開発者のみ） */}
-      {isDev && showAddModal && (
+      {canEdit && showAddModal && (
         <AddModal
           defaultCat={addModalCat}
           cats={allCats}

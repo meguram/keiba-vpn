@@ -315,3 +315,51 @@ def update_notification_settings():
             setting.notify_favorite_race = bool(body["notify_favorite_race"])
         session.flush()
     return jsonify({"status": "ok"})
+
+
+# ── 種牡馬メモ 上書き保存 ─────────────────────────────────────────────────
+
+import json as _json
+from pathlib import Path as _Path
+
+_STALLION_OVERRIDES_PATH = _Path(__file__).parents[4] / "data" / "local" / "stallion_notes_overrides.json"
+
+
+def _load_stallion_overrides() -> dict:
+    try:
+        if _STALLION_OVERRIDES_PATH.exists():
+            return _json.loads(_STALLION_OVERRIDES_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _save_stallion_overrides(data: dict) -> None:
+    _STALLION_OVERRIDES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _STALLION_OVERRIDES_PATH.write_text(
+        _json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+@bp.get("/stallion-notes/overrides")
+def get_stallion_overrides():
+    """サーバー側に保存された種牡馬メモ上書きを返す。"""
+    return jsonify(_load_stallion_overrides())
+
+
+@bp.post("/stallion-notes/overrides")
+@require_login
+def save_stallion_override():
+    """特定エントリの content を上書き保存（管理者のみ）。"""
+    body = request.get_json(silent=True) or {}
+    entry_id = body.get("id", "").strip()
+    content = body.get("content")
+    if not entry_id:
+        return jsonify({"error": "id が必要です"}), 400
+    overrides = _load_stallion_overrides()
+    if content is None:
+        overrides.pop(entry_id, None)
+    else:
+        overrides[entry_id] = str(content)
+    _save_stallion_overrides(overrides)
+    return jsonify({"status": "ok", "id": entry_id, "saved": content is not None})
