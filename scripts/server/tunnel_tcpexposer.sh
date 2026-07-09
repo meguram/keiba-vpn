@@ -11,8 +11,9 @@
 #   ./scripts/server/tunnel_tcpexposer.sh stop-all
 #
 # プロファイル（省略時 dev）:
-#   dev  meguai-dev.tcpexposer.com  → localhost:3000  （モック UI）
-#   stg  meguai-stg.tcpexposer.com  → localhost:3001  （本番相当 Next.js）
+#   dev     meguai-dev.tcpexposer.com     → localhost:3000  （モック UI）
+#   stg     meguai-stg.tcpexposer.com     → localhost:3001  （本番相当 Next.js）
+#   monitor meguai-monitor.tcpexposer.com → localhost:9090  （監視ポータル）
 #
 # 環境変数（任意）:
 #   KEIBA_TCPEXPOSER_USER=megukeiba
@@ -38,7 +39,7 @@ ACTION=""
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      dev|stg|prod)
+      dev|stg|monitor|prod)
         TCPEXPOSER_PROFILE="$1"
         shift
         ;;
@@ -100,7 +101,7 @@ ensure_key_permissions() {
 check_local() {
   local code
   code=$(curl -s -m 5 -o /dev/null -w "%{http_code}" "http://127.0.0.1:${LOCAL_PORT}/" 2>/dev/null || echo "000")
-  if [[ "$code" =~ ^(200|304)$ ]]; then
+  if [[ "$code" =~ ^(200|301|302|304)$ ]]; then
     log "OK ローカル :${LOCAL_PORT} → HTTP ${code}"
     return 0
   fi
@@ -108,6 +109,7 @@ check_local() {
   case "$TCPEXPOSER_PROFILE" in
     dev) log "  → ./service_start --env dev" ;;
     stg) log "  → ./service_start --env stg" ;;
+    monitor) log "  → python -m src.monitor.app（port 9090）" ;;
   esac
   return 1
 }
@@ -116,7 +118,7 @@ check_external() {
   local code
   code=$(curl -s -m 8 -o /dev/null -w "%{http_code}" "$PUBLIC_URL" 2>/dev/null || echo "000")
   log "外部 ${PUBLIC_URL} → HTTP ${code}"
-  [[ "$code" =~ ^(200|304)$ ]]
+  [[ "$code" =~ ^(200|301|302|304)$ ]]
 }
 
 stop_tunnel() {
@@ -266,11 +268,13 @@ run_autostart_all() {
   fi
   "$0" dev autostart
   "$0" stg autostart
+  "$0" monitor autostart
 }
 
 run_stop_all() {
   "$0" dev stop
   "$0" stg stop
+  "$0" monitor stop
 }
 
 case "${ACTION:-foreground}" in

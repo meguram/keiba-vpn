@@ -495,6 +495,7 @@ mode_full() {
     case "$TCPEXPOSER_PROFILE" in
       dev) echo "  tcpexposer  https://meguai-dev.tcpexposer.com/" ;;
       stg) echo "  tcpexposer  https://meguai-stg.tcpexposer.com/" ;;
+      monitor) echo "  tcpexposer  https://meguai-monitor.tcpexposer.com/" ;;
     esac
   fi
 }
@@ -527,6 +528,7 @@ mode_mock() {
     case "$TCPEXPOSER_PROFILE" in
       dev) echo "  公開 URL: https://meguai-dev.tcpexposer.com/" ;;
       stg) echo "  公開 URL: https://meguai-stg.tcpexposer.com/" ;;
+      monitor) echo "  公開 URL: https://meguai-monitor.tcpexposer.com/" ;;
     esac
   fi
 }
@@ -650,4 +652,8 @@ if $WITH_MONITOR; then
   echo "[service_start] 監視ポータル (:9090) をバックグラウンド起動..."
   bash "$ROOT/scripts/server/start_monitor.sh" --bg || \
     echo "[service_start] 警告: 監視ポータルの起動に失敗（手動: bash scripts/server/start_monitor.sh）"
+  echo "[service_start] tcpexposer monitor トンネルを起動..."
+  bash "$ROOT/scripts/server/tunnel_tcpexposer.sh" monitor autostart || \
+    echo "[service_start] 警告: tcpexposer monitor の起動に失敗（手動: ./scripts/server/tunnel_tcpexposer.sh monitor background）"
+  echo "  監視ポータル URL: https://meguai-monitor.tcpexposer.com/"
 fi
