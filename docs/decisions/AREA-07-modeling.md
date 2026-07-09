@@ -1,5 +1,5 @@
 # AREA-07 — モデリング管理要件（LightGBM バッチ推論, 学習パイプライン, SHAP, ModelRegistry, バージョニング, CI ゲート）
-**Status**: FINAL | **Last Updated**: 2026-07-06 | **Consolidates**: DEC-001（統合済み）, TASK-052（依存関係・リスク D-1〜D-8 対策統合済み）, DEC-022（予測タスク二値分類統一）, DEC-009（モデル保持ポリシー）, DEC-015（特徴量スキーマ正規定義整合）
+**Status**: FINAL | **Last Updated**: 2026-07-09 | **Consolidates**: DEC-001（統合済み）, TASK-052（依存関係・リスク D-1〜D-8 対策統合済み）, DEC-022（予測タスク二値分類統一）, DEC-009（モデル保持ポリシー）, DEC-015（特徴量スキーマ正規定義整合）, **AREA-11**（めぐ指数特徴量統合）
 
 ---
 
@@ -43,6 +43,31 @@
 > Stage 2: T-8（ペースカテゴリ） → T-4（上り3F） → T-5（位置取り） → T-9（走破タイム）
 >       ※ Stage 2内の実行順序: T-8完了 → T-4/T-5 同時実行可 → T-9（T-4完了後）
 > Stage 3: T-7（ラップ系列、Phase 4）
+> ```
+
+> **特徴量統合フロー（最終勝率予測への連鎖）**:
+> ```
+> ┌─────────────────────────────────────────────────────────────────┐
+> │ 入力特徴量（T-1 勝率モデルへの入力）                              │
+> │                                                                 │
+> │  [基本特徴量]  距離・馬場・枠番・斤量・馬齢・…（§4-1）           │
+> │  [集計特徴量]  勝率・タイム指数・騎手勝率・…（§4-2）             │
+> │  [めぐ指数]    megu_index_b / _a / _c / _last / _trend（§4-5）  │
+> │  [クロス特徴量] 脚質×コース・相対オッズ順・…（§4-3）             │
+> │  [T-6 出力]   脚質分類予測値（Stage 1 先行実行済み）             │
+> │                                                                 │
+> │        ↓ LightGBM binary → softmax 正規化                       │
+> │                                                                 │
+> │  T-1: win_probability（勝率 p_i）                               │
+> │        ↓ Harville 式                                            │
+> │  T-2: place_probability（連対率）                                │
+> │  T-3: show_probability（複勝率）                                 │
+> └─────────────────────────────────────────────────────────────────┘
+>
+> ※ T-4（上り3F）・T-5（位置取り）・T-8（ペース）・T-9（走破タイム）も
+>    同一の入力特徴量セット（めぐ指数含む）+ T-6/T-8 の先行出力 を受け取る。
+> ※ めぐ指数統計値（§4-5）は「補正済みパフォーマンス」として
+>    speed_index_avg（§4-2）と相補的に使用し、勝率精度の向上に寄与する。
 > ```
 
 > **教師データ生成クエリ（L3F地点タイム）**:
@@ -140,6 +165,7 @@ def harville_show_prob(p: list[float]) -> list[float]:
 │ Stage 1: 共有表現マルチタスクモデル                          │
 │                                                             │
 │  入力: Layer 1〜3 特徴量（馬×レース単位）                    │
+│       + めぐ指数特徴量（megu_index テーブル: §4-5）          │
 │                                                             │
 │  ┌─────────────────────────────┐                           │
 │  │  Shared Encoder (LightGBM)  │                           │
@@ -159,6 +185,7 @@ def harville_show_prob(p: list[float]) -> list[float]:
 │ Stage 2: ラップ・ペース・タイム予測モデル                     │
 │                                                             │
 │  入力: Layer 3/4 + Stage 1 T-6 出力 + コース形状特徴量       │
+│       + めぐ指数特徴量（megu_index テーブル: §4-5）          │
 │                                                             │
 │  ┌────────────────────────────────────────────────────┐   │
 │  │  実行順序:                                           │   │
@@ -237,6 +264,11 @@ def harville_show_prob(p: list[float]) -> list[float]:
 | running_style_score | 脚質スコア（−5=逃 〜 +5=追込） |
 | jockey.win_rate_all | 騎手勝率 |
 | trainer.win_rate_all | 調教師勝率 |
+| megu_index_b | 直近5走加重平均めぐ指数（パターンB・デフォルト）（AREA-11 §6 参照） |
+| megu_index_a | 直近5走最大めぐ指数（パターンA・潜在能力上限） |
+| megu_index_c | 同距離帯×馬場種別での直近3走最大めぐ指数（パターンC・条件特化） |
+| megu_index_last | 直近1走のめぐ指数（最新パフォーマンス） |
+| megu_index_trend | 直近3走の指数変化傾向（最新走 − 3走前） |
 
 > **必須制約**: Layer 3 集計値は必ず `as_of_race_id = 予測対象レース ID` のスナップショットを参照すること。そのレース以後の情報を含めることを禁止する。Feature Store API の `get_snapshot(race_id, as_of=race_id)` 呼び出し時に `window_end=as_of_race_id` を必須引数として渡すこと（D-4対策）。
 
@@ -275,6 +307,27 @@ df["pace_scenario_prior"] = (df["front_runner_count"] / df["horse_num"]) \
 | T-8 ペースカテゴリ予測値 | ハイペース時は前半が速く後半が遅い | T-8 出力（Stage 2、T-4より先行実行済み） ✅ |
 | 騎手別 l3f オフセット | 騎手の前半ペース傾向 | `as_of_race_id` より前のみ ✅ |
 
+### 4-5. めぐ指数特徴量（megu_index テーブル由来・AREA-11）
+
+<!-- AREA-11: めぐ指数（ペース・馬場・斤量・レースレベルを統合回帰除去した絶対スケール指数）
+     SLA 5（確定結果取得後）にバッチ算出。T-1（勝率）を含む全予測ターゲットの入力特徴量として使用。 -->
+
+めぐ指数は **1点 = 0.1秒差** の絶対スケールで走破パフォーマンスを表現する独自指数（詳細: AREA-11）。SLA 5 で `megu_index` テーブルに書込まれ、T-1〜T-9 全ターゲットの入力特徴量として利用する。
+
+| 特徴量名 | 説明 | 算出元 | 時点制約 |
+|---|---|---|---|
+| `megu_index_b` | 直近5走加重平均めぐ指数（パターンB: 直近ウェイト高・デフォルト） | `megu_index` テーブル | `as_of_race_id` 以前の走のみ ✅ |
+| `megu_index_a` | 直近5走最大めぐ指数（パターンA: 潜在能力上限） | `megu_index` テーブル | `as_of_race_id` 以前の走のみ ✅ |
+| `megu_index_c` | 同距離帯×馬場種別での直近3走最大めぐ指数（パターンC: 条件特化・外れ値耐性） | `megu_index` テーブル | `as_of_race_id` 以前の走のみ ✅ |
+| `megu_index_last` | 直近1走のめぐ指数（最新パフォーマンス） | `megu_index` テーブル | `as_of_race_id` 以前の走のみ ✅ |
+| `megu_index_trend` | 直近3走の指数変化傾向（最新走 − 3走前） | `megu_index` テーブル | `as_of_race_id` 以前の走のみ ✅ |
+
+> **NULL処理**: 新馬・走破タイム未記録走のめぐ指数は `NULL`。LightGBM の `nan` ネイティブ処理に委ねる（明示的な `-1` 埋めは行わない）。
+
+> **テンポラルリーク制約（D-4 対策）**: めぐ指数は SLA 5（確定結果取得後）に計算される。予測対象レース当日以降の走のめぐ指数を特徴量に含めることは厳禁。Feature Store API の `get_snapshot(race_id, as_of=race_id)` を呼ぶ際は `window_end=as_of_race_id` を必須引数として渡すこと。
+
+> **特徴量利用の対象 Stage**: Stage 1（T-1/T-2/T-3/T-6）および Stage 2（T-4/T-5/T-8/T-9）の全モデルで入力特徴量として使用可。Stage 3（T-7・Phase 4）も同様。
+
 ---
 
 ## 5. 学習パイプライン
@@ -300,20 +353,21 @@ df["pace_scenario_prior"] = (df["front_runner_count"] / df["horse_num"]) \
 
 ### 5-2. Stage 1 学習手順
 
-1. 特徴量エンジニアリングパイプライン実行（脚質スコア・クロス特徴量・相対特徴量の自動生成）
-2. 時系列分割により train/validation/test セット構築
-3. LightGBM binary (objective='binary') で連対率モデル（T-2）・複勝率モデル（T-3）を学習
-4. LightGBM binary (objective='binary') で勝率モデル（T-1）を学習。出力を softmax 正規化し `win_probability` を算出後、Harville 式で `place_probability` / `show_probability` を導出（§ 2-1 参照）
-5. **T-6 脚質分類モデルを学習（前提: 自動ラベル一致率 > 80% の検証通過後・D-3対策）**
-6. 各モデルの評価指標を計算（後述）
-7. モデルを ModelRegistry へ登録・バージョニング
+1. **めぐ指数特徴量の結合**: `megu_index` テーブルから `as_of_race_id` 以前の集計値（`megu_index_b / _a / _c / _last / _trend`）を Feature Store スナップショット経由で取得し、基本・集計特徴量と結合する（§4-5 参照・D-4対策）
+2. 特徴量エンジニアリングパイプライン実行（脚質スコア・クロス特徴量・相対特徴量の自動生成）
+3. 時系列分割により train/validation/test セット構築
+4. LightGBM binary (objective='binary') で連対率モデル（T-2）・複勝率モデル（T-3）を学習
+5. LightGBM binary (objective='binary') で勝率モデル（T-1）を学習。出力を softmax 正規化し `win_probability` を算出後、Harville 式で `place_probability` / `show_probability` を導出（§ 2-1 参照）
+6. **T-6 脚質分類モデルを学習（前提: 自動ラベル一致率 > 80% の検証通過後・D-3対策）**
+7. 各モデルの評価指標を計算（後述）
+8. モデルを ModelRegistry へ登録・バージョニング
 
 ### 5-3. Stage 2 学習手順
 
 <!-- TASK-052: 旧 Stage 2 手順を T-4〜T-9 定義に合わせて全面更新。 -->
 
 1. Stage 1 の T-6（脚質分類）出力を入力特徴量として受け渡し
-2. Layer 3/4 + コース形状特徴量を結合
+2. Layer 3/4 + コース形状特徴量 + **めぐ指数特徴量（§4-5）** を結合
 3. **LightGBM Classifier でペースカテゴリモデル（T-8）を学習**（Phase Gate A 通過後）
 4. **LightGBM Regressor で上り3Fタイムモデル（T-4）を学習**（Feature Store テンポラルリークテスト PASS 後）
 5. **LightGBM lambdarank で位置取り順序回帰モデル（T-5）を学習**（D-5対策）
