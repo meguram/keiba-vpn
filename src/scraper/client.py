@@ -139,7 +139,7 @@ _REFERER_MAP: dict[str, str] = {
     "www.smartrc.jp": "https://www.smartrc.jp/",
 }
 
-_LOGIN_URL = "https://regist.netkeiba.com/account/"
+_LOGIN_URL = "https://regist.netkeiba.com/"
 
 SMARTRC_BASE_URL = "https://www.smartrc.jp/"
 
@@ -777,7 +777,7 @@ class NetkeibaClient:
         self._throttle()
         logger.info("ログイン中... (%s)", uid[:6] + "***")
 
-        self._session.headers["Referer"] = "https://regist.netkeiba.com/account/"
+        self._session.headers["Referer"] = "https://regist.netkeiba.com/?pid=login"
 
         try:
             resp = self._session.post(
@@ -785,8 +785,7 @@ class NetkeibaClient:
                 data={
                     "pid": "login",
                     "action": "auth",
-                    "return_url2": "",
-                    "mem_tp": "",
+                    "rtn_url": "",
                     "login_id": uid,
                     "pswd": pw,
                 },
