@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { USE_MOCK, getMockRaceDetail, getMockPredictions, getMockTdData } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 
@@ -286,7 +287,7 @@ export default function RaceDetailPage() {
       <div style={{ padding: 24, textAlign: "center" }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
         <p style={{ color: "var(--err)", marginBottom: 12 }}>{loadError}</p>
-        <a href="/" style={{ color: "var(--accent)" }}>← ホームへ</a>
+        <Link href="/" style={{ color: "var(--accent)" }}>← ホームへ</Link>
       </div>
     );
   }
@@ -601,9 +602,9 @@ export default function RaceDetailPage() {
   /* ── レンダー ── */
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)", padding: 24 }}>
-      <a href="/" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-dim)", marginBottom: 16, textDecoration: "none" }}>
+      <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-dim)", marginBottom: 16, textDecoration: "none" }}>
         ← ホーム
-      </a>
+      </Link>
 
       {Header}
 
