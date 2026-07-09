@@ -157,6 +157,75 @@ def create_app() -> Flask:
             return jsonify(data)
         return jsonify(result_payload)
 
+    @app.get("/api/v1/races/<race_id>/megu-index")
+    def api_megu_index(race_id: str):
+        """レース内全馬のめぐ指数を返す。"""
+        init_engine()
+        from sqlalchemy import select
+        from src.db.models import MeguIndex
+
+        with get_session() as session:
+            rows = session.scalars(
+                select(MeguIndex)
+                .where(MeguIndex.race_id == race_id)
+                .order_by(MeguIndex.megu_index.desc())
+            ).all()
+            if not rows:
+                return jsonify({"race_id": race_id, "megu_index": [], "source": "none"}), 404
+            return jsonify({
+                "race_id": race_id,
+                "model_version": rows[0].model_version,
+                "source": "db",
+                "megu_index": [
+                    {
+                        "horse_id": r.horse_id,
+                        "megu_index": float(r.megu_index),
+                        "finish_time_sec": float(r.finish_time_sec) if r.finish_time_sec else None,
+                        "par_time_sec": float(r.par_time_sec) if r.par_time_sec else None,
+                        "adjusted_time_sec": float(r.adjusted_time_sec) if r.adjusted_time_sec else None,
+                        "delta_pace_sec": float(r.delta_pace_sec),
+                        "delta_track_sec": float(r.delta_track_sec),
+                        "delta_weight_sec": float(r.delta_weight_sec),
+                        "delta_level_sec": float(r.delta_level_sec),
+                    }
+                    for r in rows
+                ],
+            })
+
+    @app.get("/api/v1/horse/<horse_id>/megu-index-history")
+    def api_horse_megu_index_history(horse_id: str):
+        """馬の直近めぐ指数履歴（最大20走）。"""
+        init_engine()
+        from sqlalchemy import select
+        from src.db.models import MeguIndex, Race
+
+        with get_session() as session:
+            rows = session.execute(
+                select(MeguIndex, Race.race_date, Race.venue, Race.surface,
+                       Race.distance, Race.track_condition)
+                .join(Race, Race.race_id == MeguIndex.race_id)
+                .where(MeguIndex.horse_id == horse_id)
+                .order_by(Race.race_date.desc())
+                .limit(20)
+            ).all()
+            return jsonify({
+                "horse_id": horse_id,
+                "history": [
+                    {
+                        "race_id": r.MeguIndex.race_id,
+                        "race_date": str(r.race_date),
+                        "venue": r.venue,
+                        "surface": r.surface,
+                        "distance": r.distance,
+                        "track_condition": r.track_condition,
+                        "megu_index": float(r.MeguIndex.megu_index),
+                        "finish_time_sec": float(r.MeguIndex.finish_time_sec) if r.MeguIndex.finish_time_sec else None,
+                        "par_time_sec": float(r.MeguIndex.par_time_sec) if r.MeguIndex.par_time_sec else None,
+                    }
+                    for r in rows
+                ],
+            })
+
     @app.get("/api/v1/races/<race_id>/tracking-difficulty")
     def api_tracking_difficulty(race_id: str):
         try:

@@ -464,3 +464,69 @@ class NotificationLog(Base):
     horse_id: Mapped[str] = mapped_column(String(20), nullable=False)
     sent_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     status: Mapped[str] = mapped_column(String(20), default="sent")
+
+
+# ── めぐ指数（AREA-11）───────────────────────────────────────────────────────
+
+
+class MeguParTime(Base):
+    """基準タイムマスター（セル別）。"""
+    __tablename__ = "megu_par_time"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    distance: Mapped[int] = mapped_column(Integer, nullable=False)
+    course: Mapped[str] = mapped_column(String(20), nullable=False)
+    surface: Mapped[str] = mapped_column(String(10), nullable=False)
+    track_condition: Mapped[str] = mapped_column(String(10), nullable=False)
+    par_time_sec: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False)
+    par_front_split_sec: Mapped[Optional[float]] = mapped_column(Numeric(5, 2))
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    model_version: Mapped[str] = mapped_column(String(20), nullable=False, default="stg-v1")
+    computed_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("distance", "course", "surface", "track_condition", "model_version",
+                         name="uq_megu_par_time"),
+    )
+
+
+class MeguRegressionParams(Base):
+    """OLS 回帰係数（β1〜β4）。"""
+    __tablename__ = "megu_regression_params"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    param_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    param_value: Mapped[float] = mapped_column(Numeric(10, 6), nullable=False)
+    std_error: Mapped[Optional[float]] = mapped_column(Numeric(10, 6))
+    sample_count: Mapped[Optional[int]] = mapped_column(Integer)
+    model_version: Mapped[str] = mapped_column(String(20), nullable=False, default="stg-v1")
+    fitted_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("param_name", "model_version", name="uq_megu_reg_params"),
+    )
+
+
+class MeguIndex(Base):
+    """馬×レース単位のめぐ指数。"""
+    __tablename__ = "megu_index"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    race_id: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    horse_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    finish_time_sec: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False)
+    par_time_sec: Mapped[Optional[float]] = mapped_column(Numeric(6, 2))
+    delta_pace_sec: Mapped[float] = mapped_column(Numeric(5, 3), nullable=False, default=0)
+    delta_track_sec: Mapped[float] = mapped_column(Numeric(5, 3), nullable=False, default=0)
+    delta_weight_sec: Mapped[float] = mapped_column(Numeric(5, 3), nullable=False, default=0)
+    delta_level_sec: Mapped[float] = mapped_column(Numeric(5, 3), nullable=False, default=0)
+    adjusted_time_sec: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False)
+    megu_index: Mapped[float] = mapped_column(Numeric(6, 1), nullable=False)
+    field_quality: Mapped[Optional[float]] = mapped_column(Numeric(14, 0))
+    model_version: Mapped[str] = mapped_column(String(20), nullable=False, default="stg-v1")
+    computed_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("race_id", "horse_id", "model_version", name="uq_megu_index"),
+        Index("idx_megu_index_horse", "horse_id", "computed_at"),
+    )

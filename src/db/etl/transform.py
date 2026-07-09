@@ -114,18 +114,28 @@ def _birth_year_from_age(age: int | None, race_date: str | None) -> int | None:
 def upsert_results(session: Session, data: dict[str, Any]) -> None:
     race_id = data["race_id"]
     for row in data.get("results") or data.get("entries") or []:
-        if row.get("finish_pos") is None and row.get("rank") is None:
+        finish = row.get("finish_pos") or row.get("rank") or row.get("finish_position")
+        if finish is None:
             continue
-        finish = row.get("finish_pos") or row.get("rank")
         stmt = insert(RaceResult).values(
             race_id=race_id,
             horse_id=row["horse_id"],
             finish_pos=finish,
             finish_time_sec=row.get("time_sec") or row.get("finish_time_sec"),
+            margin=row.get("margin"),
             last_3f_sec=row.get("last_3f") or row.get("last_3f_sec"),
             weight=row.get("weight"),
             jockey_id=row.get("jockey_id"),
-        ).on_conflict_do_nothing(constraint="uq_race_results_race_horse")
+        ).on_conflict_do_update(
+            constraint="uq_race_results_race_horse",
+            set_={
+                "finish_pos": finish,
+                "finish_time_sec": row.get("time_sec") or row.get("finish_time_sec"),
+                "margin": row.get("margin"),
+                "last_3f_sec": row.get("last_3f") or row.get("last_3f_sec"),
+                "weight": row.get("weight"),
+            },
+        )
         session.execute(stmt)
 
 

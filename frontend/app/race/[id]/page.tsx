@@ -201,6 +201,8 @@ export default function RaceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [predicting, setPredicting] = useState(false);
+  const [meguData, setMeguData] = useState<Record<string, number | null>>({});
+  const [meguSource, setMeguSource] = useState<"db" | "mock">("mock");
   const { isMember } = useAuthStatus();
 
   const loadRace = useCallback(async () => {
@@ -252,6 +254,24 @@ export default function RaceDetailPage() {
   useEffect(() => {
     if (raceData) loadPrediction();
   }, [raceData, loadPrediction]);
+
+  // めぐ指数をAPIから取得（結果タブ表示時）
+  useEffect(() => {
+    if (!raceId || USE_MOCK) return;
+    fetch(`/api/v1/races/${raceId}/megu-index`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.megu_index?.length) {
+          const map: Record<string, number | null> = {};
+          for (const item of data.megu_index) {
+            map[item.horse_id] = item.megu_index ?? null;
+          }
+          setMeguData(map);
+          setMeguSource("db");
+        }
+      })
+      .catch(() => { /* APIなければモックフォールバック */ });
+  }, [raceId]);
 
   async function runPrediction() {
     if (!raceId) return;
@@ -366,10 +386,21 @@ export default function RaceDetailPage() {
   /* ── レース結果 ── */
   const resultEntries = [...(rd?.race_result?.entries ?? [])].sort((a, b) => (Number(a.finish_position ?? a.position ?? 99)) - (Number(b.finish_position ?? b.position ?? 99)));
 
-  // めぐ指数計算用: フィールド内最速タイムを求める
+  // めぐ指数計算用: フィールド内最速タイムを求める（APIデータなし時のフォールバック用）
   const allTimes = resultEntries.map((e) => parseTimeSec(e.time as string | undefined)).filter((v): v is number => v != null && v > 0);
   const bestTime = allTimes.length ? Math.min(...allTimes) : null;
   const fieldSize = resultEntries.length;
+
+  // APIからのめぐ指数、またはモック計算
+  function getMeguValue(entry: RaceEntry): number | null {
+    const horseId = entry.horse_id as string | undefined;
+    if (meguSource === "db" && horseId && meguData[horseId] !== undefined) {
+      return meguData[horseId];
+    }
+    // フォールバック: モック計算
+    const tSec = parseTimeSec(entry.time as string | undefined);
+    return calcMeguIndex(tSec, bestTime, fieldSize);
+  }
 
   const ResultTbl = resultEntries.length === 0 ? (
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>🏆 レース結果データがありません</div>
@@ -390,7 +421,8 @@ export default function RaceDetailPage() {
             const pos = Number(e.finish_position ?? e.position ?? 99);
             const placeColor = pos === 1 ? "#fbbf24" : pos === 2 ? "#94a3b8" : pos === 3 ? "#d97706" : "var(--text)";
             const tSec = parseTimeSec(e.time as string | undefined);
-            const megu = calcMeguIndex(tSec, bestTime, fieldSize);
+            void tSec; // getMeguValue 内で使用
+            const megu = getMeguValue(e);
             const { color: meguColor_, bg: meguBg } = meguColor(megu);
             return (
               <tr key={i} style={{ transition: "background 0.12s" }}>
@@ -405,7 +437,7 @@ export default function RaceDetailPage() {
                 <td style={{ ...TD, color: "var(--text-dim)", fontSize: 12 }}>{e.win_odds != null ? `${Number(e.win_odds).toFixed(1)}` : "—"}</td>
                 <td
                   style={{ ...TD, borderLeft: "2px solid rgba(167,139,250,0.15)", fontWeight: megu != null ? 700 : 400, color: meguColor_, background: meguBg }}
-                  title="レースパフォーマンス指数（めぐ指数）β版 - 走破タイムベースの暫定算出"
+                  title={meguSource === "db" ? "めぐ指数（統計的基準タイム比較）" : "めぐ指数 β（暫定モック算出）"}
                 >
                   {megu != null ? megu.toFixed(1) : "—"}
                 </td>
@@ -416,16 +448,21 @@ export default function RaceDetailPage() {
       </table>
       {/* めぐ指数の注釈 */}
       <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <span style={{ color: "#a78bfa", fontWeight: 600 }}>めぐ指数 β</span>
-        <span>走破タイムを基にしたレースパフォーマンス指数（暫定モック算出）。正式ロジックは後日更新予定。</span>
+        <span style={{ color: "#a78bfa", fontWeight: 600 }}>めぐ指数</span>
+        {meguSource === "db"
+          ? <span>基準タイムとの差から算出したパフォーマンス指数（実データ）。1点 ≈ 0.1秒差。</span>
+          : <span>走破タイムを基にしたパフォーマンス指数（β版モック算出）。</span>
+        }
         <span style={{ borderLeft: "1px solid var(--border)", paddingLeft: 10 }}>
           <strong style={{ color: "#22c55e" }}>≥105</strong> 優秀 /
           <strong style={{ color: "#60a5fa", marginLeft: 4 }}>98〜</strong> 良好 /
           <strong style={{ color: "var(--text-dim)", marginLeft: 4 }}>82〜</strong> 標準 /
           <strong style={{ color: "#f87171", marginLeft: 4 }}>＜82</strong> 低調
         </span>
-                </div>
-              </div>
+        {meguSource === "db" && <span style={{ color: "#a78bfa", fontSize: 10, background: "rgba(167,139,250,0.15)", borderRadius: 4, padding: "1px 6px" }}>実データ</span>}
+        {meguSource === "mock" && <span style={{ color: "#94a3b8", fontSize: 10, background: "rgba(148,163,184,0.15)", borderRadius: 4, padding: "1px 6px" }}>β版</span>}
+      </div>
+    </div>
   );
 
   /* ── AI予測 ── */

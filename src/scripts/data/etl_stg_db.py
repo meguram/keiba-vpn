@@ -171,10 +171,10 @@ def _upsert_race_result(session, race_id: str, horse_id: str, result: dict):
     vals = {
         "race_id": race_id,
         "horse_id": horse_id,
-        "finish_pos": result.get("finish_pos") or result.get("rank"),
-        "finish_time_sec": result.get("finish_time_sec"),
+        "finish_pos": result.get("finish_pos") or result.get("rank") or result.get("finish_position"),
+        "finish_time_sec": result.get("finish_time_sec") or result.get("time_sec"),
         "margin": (result.get("margin") or "")[:20],
-        "last_3f_sec": result.get("last_3f_sec"),
+        "last_3f_sec": result.get("last_3f_sec") or result.get("last_3f"),
         "weight": result.get("weight"),
         "jockey_id": result.get("jockey_id"),
     }
