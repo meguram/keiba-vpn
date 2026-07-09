@@ -217,3 +217,66 @@ def mock_race_quality_day(date_str: str, storage=None) -> dict[str, Any]:
         "races": results,
         "_mock": True,
     }
+
+
+_MOCK_SIRES = [
+    "ロードカナロア", "ドゥラメンテ", "エピファネイア", "ハーツクライ", "ディープインパクト",
+    "キタサンブラック", "スクリーンヒーロー", "モーリス", "オルフェーヴル", "ゴールドシップ",
+    "ルーラーシップ", "ジャスタウェイ", "キングカメハメハ", "スタニングローズ", "リアルスティール",
+]
+
+_MOCK_DAM_SIRES = [
+    "キングカメハメハ", "クロフネ", "フレンチデピュティ", "ブラックタイド", "ダンスインザダーク",
+    "ウォーエンブレム", "サンデーサイレンス", "マンハッタンカフェ", "シンボリクリスエス", "メイショウサムソン",
+    "アグネスタキオン", "タキオン", "ネオユニヴァース", "スペシャルウィーク", "タニノギムレット",
+]
+
+
+def mock_bloodline_aptitude(
+    race_id: str,
+    entries: list[dict],
+    surface: str = "芝",
+    distance_band: str = "middle",
+    track_condition: str = "良",
+) -> dict[str, Any]:
+    """dev 環境用: 血統適性モックデータ。"""
+    rng = _rng(race_id + "ba")
+
+    def _aptitude_stats(seed_extra: str) -> dict[str, Any]:
+        r = _rng(race_id + seed_extra)
+        n_runs = r.randint(40, 350)
+        win_rate = round(r.uniform(0.06, 0.18), 4)
+        place_rate = round(win_rate * r.uniform(2.5, 3.8), 4)
+        place_rate = min(place_rate, 0.70)
+        roi_win = round(r.uniform(0.55, 1.30), 4)
+        roi_place = round(r.uniform(0.62, 1.10), 4)
+        return {
+            "n_runs": n_runs,
+            "win_rate": win_rate,
+            "place_rate": place_rate,
+            "roi_win": roi_win,
+            "roi_place": roi_place,
+        }
+
+    result_entries = []
+    for e in entries:
+        hn = e.get("horse_number") or e.get("post_no") or 0
+        name = e.get("horse_name") or e.get("name") or f"馬{hn}"
+        sire_name = rng.choice(_MOCK_SIRES)
+        dam_sire_name = rng.choice(_MOCK_DAM_SIRES)
+        result_entries.append({
+            "horse_number": hn,
+            "horse_name": name,
+            "sire": {"name": sire_name, **_aptitude_stats(f"sire{hn}{sire_name}")},
+            "dam_sire": {"name": dam_sire_name, **_aptitude_stats(f"dam{hn}{dam_sire_name}")},
+        })
+
+    return {
+        "race_id": race_id,
+        "surface": surface,
+        "distance_band": distance_band,
+        "track_condition": track_condition,
+        "week_label": "MOCK",
+        "is_mock": True,
+        "entries": result_entries,
+    }

@@ -24,6 +24,14 @@
     transform: scale(1.08);
     animation: none;
   }
+  .gnav-ai-text {
+    background: linear-gradient(135deg, #58a6ff 0%, #bc8cff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-style: italic;
+    letter-spacing: 0.02em;
+  }
   .gnav-env-stg {
     display: inline-flex;
     align-items: center;
@@ -296,7 +304,7 @@
       <!-- mane highlight -->
       <path d="M22 13 C23 12 25 11 26 12" stroke="#f778ba" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
     </svg>
-    <span>めぐ競馬</span>
+    <span>めぐ<span class="gnav-ai-text">AI</span></span>
   </a>
   {% if keiba_staging_badge() %}
   <span class="gnav-env-stg" title="KEIBA_ENV=stg（GCS は .env のバケット・prefix のまま。本番データ直結の検証用）">{{ keiba_staging_badge() }}</span>

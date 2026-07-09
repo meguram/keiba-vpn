@@ -139,6 +139,15 @@ _daily_shutuba_state: dict[str, Any] = {
 }
 _daily_shutuba_lock = threading.Lock()
 
+# ── 毎週月曜 父・母父 舞台適性集計（stg/prod、リーダーのみ） ──
+_weekly_sire_agg_thread: threading.Thread | None = None
+_weekly_sire_agg_stop = threading.Event()
+_weekly_sire_agg_state: dict[str, Any] = {
+    "running": False, "last_run": None, "last_result": None,
+    "next_run": None, "run_count": 0,
+}
+_weekly_sire_agg_lock = threading.Lock()
+
 
 _AUTO_RESUME_DELAY = 120  # アクセス一時停止後の自動復帰待機（秒）
 
@@ -441,6 +450,54 @@ def _scheduler_loop():
                 _scheduler_state["running"] = False
 
 
+def _weekly_sire_agg_loop():
+    """毎週月曜 06:00 JST に父・母父 舞台適性を集計するデーモンスレッド（stg/prod のみ）。"""
+    from datetime import timezone as _tz, timedelta as _td, datetime as _dt
+    _JST = _tz(_td(hours=9))
+    _log = logging.getLogger("scheduler.sire_agg")
+
+    _log.info("父・母父 週次集計スケジューラ起動 (毎週月曜 06:00 JST)")
+
+    while not _weekly_sire_agg_stop.is_set():
+        now = _dt.now(_JST)
+        # 次の月曜 06:00 JST を計算
+        days_until_monday = (7 - now.weekday()) % 7  # weekday: 0=月
+        if days_until_monday == 0 and now.hour >= 6:
+            days_until_monday = 7
+        target = now.replace(hour=6, minute=0, second=0, microsecond=0) + _td(days=days_until_monday)
+
+        wait_seconds = (target - now).total_seconds()
+        with _weekly_sire_agg_lock:
+            _weekly_sire_agg_state["next_run"] = target.isoformat()
+
+        _log.info("次回 父・母父 集計: %s (%.0f秒後)", target.strftime("%Y-%m-%d %H:%M JST"), wait_seconds)
+
+        if _weekly_sire_agg_stop.wait(timeout=wait_seconds):
+            break
+
+        _log.info("=== 週次 父・母父 舞台適性集計 開始 ===")
+        with _weekly_sire_agg_lock:
+            _weekly_sire_agg_state["running"] = True
+
+        try:
+            from src.scraper.storage import HybridStorage
+            from src.scripts.maintenance.aggregate_sire_aptitude import run_aggregation, _current_week_label
+            storage = HybridStorage()
+            result = run_aggregation(storage, _current_week_label())
+            with _weekly_sire_agg_lock:
+                _weekly_sire_agg_state["last_run"] = _dt.now(_JST).isoformat()
+                _weekly_sire_agg_state["last_result"] = result
+                _weekly_sire_agg_state["run_count"] += 1
+            _log.info("週次集計完了: %s", result.get("status"))
+        except Exception as _e:
+            _log.error("週次集計失敗: %s", _e)
+            with _weekly_sire_agg_lock:
+                _weekly_sire_agg_state["last_result"] = {"status": "error", "error": str(_e)}
+        finally:
+            with _weekly_sire_agg_lock:
+                _weekly_sire_agg_state["running"] = False
+
+
 def _try_acquire_queue_runner_leader() -> bool:
     """
     Uvicorn 複数ワーカーそれぞれがキューループを回すと同一 JSON を壊すため、
@@ -471,7 +528,7 @@ def _try_acquire_queue_runner_leader() -> bool:
 
 @asynccontextmanager
 async def lifespan(app):
-    global _scheduler_thread, _queue_worker_threads, _queue_runner_leader_fh, _disk_cache_cleanup_thread, _queue_maintain_thread, _logs_retention_thread, _log_retention_leader_fh, _daily_shutuba_thread
+    global _scheduler_thread, _queue_worker_threads, _queue_runner_leader_fh, _disk_cache_cleanup_thread, _queue_maintain_thread, _logs_retention_thread, _log_retention_leader_fh, _daily_shutuba_thread, _weekly_sire_agg_thread
 
     try:
         logger.info("Deployment %s", _deployment_info())
@@ -579,6 +636,20 @@ async def lifespan(app):
         _daily_shutuba_thread = None
         logger.info("出馬表 毎日自動取得は別プロセスが担当")
 
+    # 週次 父・母父 舞台適性集計（stg/prod・リーダーのみ）
+    global _weekly_sire_agg_thread
+    if _queue_is_leader and _keiba_env() in ("stg", "prod"):
+        _weekly_sire_agg_stop.clear()
+        _weekly_sire_agg_thread = threading.Thread(
+            target=_weekly_sire_agg_loop,
+            daemon=True,
+            name="weekly-sire-agg",
+        )
+        _weekly_sire_agg_thread.start()
+        logger.info("週次 父・母父 舞台適性集計スレッド起動（毎週月曜 06:00 JST）")
+    else:
+        _weekly_sire_agg_thread = None
+
     try:
         from src.scraper.queue_worker_log import ensure_queue_worker_log_handler
 
@@ -668,6 +739,7 @@ async def lifespan(app):
     _queue_maintain_stop.set()
     _logs_retention_stop.set()
     _daily_shutuba_stop.set()
+    _weekly_sire_agg_stop.set()
 
     if _scheduler_thread:
         _scheduler_thread.join(timeout=5)
@@ -682,6 +754,8 @@ async def lifespan(app):
         _logs_retention_thread.join(timeout=5)
     if _daily_shutuba_thread:
         _daily_shutuba_thread.join(timeout=5)
+    if _weekly_sire_agg_thread:
+        _weekly_sire_agg_thread.join(timeout=5)
     if _log_retention_leader_fh:
         try:
             _log_retention_leader_fh.close()
@@ -6206,6 +6280,147 @@ async def get_race_predictions(race_id: str):
         return JSONResponse(mock_data)
 
     return JSONResponse({"status": "not_found"}, status_code=404)
+
+
+@app.get("/api/race/{race_id}/bloodline-aptitude", response_class=JSONResponse)
+async def get_bloodline_aptitude(race_id: str):
+    """父・母父の舞台適性を返す。dev=モック / stg=DB集計値。"""
+    def _load() -> dict:
+        storage = _get_storage()
+
+        # レース基本情報（surface / distance / track_condition）を取得
+        surface = "芝"
+        distance = 0
+        track_condition = "良"
+        entries_raw: list[dict] = []
+
+        for cat in ("race_shutuba", "race_result"):
+            try:
+                card = storage.load(cat, race_id)
+                if card and isinstance(card, dict):
+                    surface = card.get("surface", surface) or surface
+                    distance = card.get("distance", distance) or distance
+                    track_condition = card.get("track_condition", track_condition) or track_condition
+                    raw_entries = card.get("entries") or card.get("results") or []
+                    if raw_entries:
+                        entries_raw = raw_entries
+                        break
+            except Exception:
+                pass
+
+        from src.utils.distance_band import distance_group_key, distance_group_label_ja
+        distance_band = distance_group_key(distance)
+        distance_band_label = distance_group_label_ja(distance_band)
+
+        # dev 環境: モックを返す
+        if _keiba_env() not in ("stg", "prod"):
+            from src.api.stg_mock import mock_bloodline_aptitude
+            mock_entries = [
+                {
+                    "horse_number": e.get("horse_number") or e.get("post_no") or i + 1,
+                    "horse_name": e.get("horse_name") or e.get("name") or f"馬{i+1}",
+                }
+                for i, e in enumerate(entries_raw)
+            ]
+            result = mock_bloodline_aptitude(
+                race_id, mock_entries, surface, distance_band, track_condition
+            )
+            result["distance_band_label"] = distance_band_label
+            return result
+
+        # stg / prod: DB から集計値を引く
+        try:
+            from src.db.session import get_session, init_engine
+            from src.db.models import SireAptitudeCache
+            from sqlalchemy import select
+
+            init_engine()
+
+            # 各馬の父・母父を horse_result から取得
+            horse_ids = [e.get("horse_id", "") for e in entries_raw if e.get("horse_id")]
+            horse_sires: dict[str, tuple[str, str]] = {}
+            for hid in horse_ids:
+                try:
+                    hr = storage.load("horse_result", hid) or {}
+                    horse_sires[hid] = (
+                        (hr.get("sire") or "").strip(),
+                        (hr.get("dam_sire") or "").strip(),
+                    )
+                except Exception:
+                    horse_sires[hid] = ("", "")
+
+            # 集計 DB から対象週の最新レコードを取得
+            def _fetch_stats(sire_name: str, sire_type: str) -> dict:
+                if not sire_name:
+                    return {}
+                with get_session() as session:
+                    row = session.execute(
+                        select(SireAptitudeCache)
+                        .where(
+                            SireAptitudeCache.sire_name == sire_name,
+                            SireAptitudeCache.sire_type == sire_type,
+                            SireAptitudeCache.surface == surface,
+                            SireAptitudeCache.distance_band == distance_band,
+                            SireAptitudeCache.track_condition == track_condition,
+                        )
+                        .order_by(SireAptitudeCache.computed_at.desc())
+                        .limit(1)
+                    ).scalar_one_or_none()
+                if row is None:
+                    return {"name": sire_name, "n_runs": None}
+                return {
+                    "name": sire_name,
+                    "n_runs": row.n_runs,
+                    "win_rate": float(row.win_rate) if row.win_rate is not None else None,
+                    "place_rate": float(row.place_rate) if row.place_rate is not None else None,
+                    "roi_win": float(row.roi_win) if row.roi_win is not None else None,
+                    "roi_place": float(row.roi_place) if row.roi_place is not None else None,
+                }
+
+            result_entries = []
+            for i, e in enumerate(entries_raw):
+                hn = e.get("horse_number") or e.get("post_no") or i + 1
+                horse_name = e.get("horse_name") or f"馬{hn}"
+                hid = e.get("horse_id", "")
+                sire_n, dam_sire_n = horse_sires.get(hid, ("", ""))
+                result_entries.append({
+                    "horse_number": hn,
+                    "horse_name": horse_name,
+                    "sire": _fetch_stats(sire_n, "sire"),
+                    "dam_sire": _fetch_stats(dam_sire_n, "dam_sire"),
+                })
+
+            from src.scripts.maintenance.aggregate_sire_aptitude import _current_week_label
+            return {
+                "race_id": race_id,
+                "surface": surface,
+                "distance_band": distance_band,
+                "distance_band_label": distance_band_label,
+                "track_condition": track_condition,
+                "week_label": _current_week_label(),
+                "is_mock": False,
+                "entries": result_entries,
+            }
+
+        except Exception as exc:
+            logger.warning("bloodline-aptitude DB fallback to mock: %s", exc)
+            from src.api.stg_mock import mock_bloodline_aptitude
+            mock_entries = [
+                {
+                    "horse_number": e.get("horse_number") or e.get("post_no") or i + 1,
+                    "horse_name": e.get("horse_name") or e.get("name") or f"馬{i+1}",
+                }
+                for i, e in enumerate(entries_raw)
+            ]
+            result = mock_bloodline_aptitude(
+                race_id, mock_entries, surface, distance_band, track_condition
+            )
+            result["distance_band_label"] = distance_band_label
+            result["_fallback"] = True
+            return result
+
+    data = await asyncio.to_thread(_load)
+    return JSONResponse(data)
 
 
 @app.post("/api/race/{race_id}/predict", response_class=JSONResponse)

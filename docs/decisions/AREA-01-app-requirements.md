@@ -1,5 +1,5 @@
 # AREA-01 — アプリケーション要件
-**Status**: FINAL | **Last Updated**: 2026-07-08 | **Consolidates**: DEC-001 (統合済み・削除), TASK-046 (データ分析機能要件定義書 統合済み), TASK-048 (Phase 0-S 追加・実装ロードマップ更新 統合済み)
+**Status**: FINAL | **Last Updated**: 2026-07-09 | **Consolidates**: DEC-001 (統合済み・削除), TASK-046 (データ分析機能要件定義書 統合済み), TASK-048 (Phase 0-S 追加・実装ロードマップ更新 統合済み)
 
 ---
 
@@ -12,7 +12,7 @@
 
 ## 1. システム概要
 
-netkeiba.com から収集した競馬データを用いて、出走馬ごとの **勝率・連対率・複勝率・オッズ予測・単複回収率・ポジション予測・脚質予測**、ならびに **逃げ馬ペース予測・1F 単位ラップ予測** を実現する競馬予測 Web アプリ。加えて、**ユーザーが予想の根拠を自ら探索・検証するためのデータ分析機能**（種牡馬成績分析・コース統計ダッシュボード・騎手/調教師成績分析・マイ分析）を提供する。
+netkeiba.com から収集した競馬データを用いて、出走馬ごとの **勝率・連対率・複勝率・オッズ予測・単複回収率・ポジション予測・脚質予測**、ならびに **逃げ馬ペース予測・1F 単位ラップ予測** を実現する競馬予測 Web アプリ。加えて、**ユーザーが予想の根拠を自ら探索・検証するためのデータ分析機能**（種牡馬成績分析・コース統計ダッシュボード・騎手/調教師成績分析・マイ分析・**めぐ指数**）を提供する。
 
 | 項目 | 内容 |
 |---|---|
@@ -310,7 +310,7 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 | SLA 2 | `*/10 20-23 * * *` | 05:00-08:50 毎10分 | `jra-baba-morning` | jra_cushion ポーリング（開催日のみ実取得） |
 | SLA 3 | `30 22 * * *` | 07:30 開催日 | `raceday-runner` | 各レース T-15分: race_detail + race_odds + race_paddock + race_barometer + race_trainer_comment + JRA馬場ライブ → AI 予測トリガ |
 | SLA 4 | `30 22 * * *` | 07:30 開催日 | `raceday-result-runner` | 各レース T+15分: race_result_on_time 速報取得 |
-| SLA 5 | `30 8 * * *` | 17:30 毎日 | `raceday-evening` | race_result + race_result_lap + race_index + race_pair_odds → 馬場速度指数計算トリガ |
+| SLA 5 | `30 8 * * *` | 17:30 毎日 | `raceday-evening` | race_result + race_result_lap + race_index + race_pair_odds → 馬場速度指数計算トリガ + **めぐ指数計算トリガ** |
 | SLA 6 | `30 8 * * 5` | 17:30 金曜 | `weekly-update` | horse_result（先週分）・指数・偏差値・馬情報更新 |
 
 **バックフィル（夜間バッチ）**:
@@ -321,7 +321,23 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 
 ---
 
-## 4. 非機能要件
+## 4. めぐ指数（レースパフォーマンス評価指数）
+
+本アプリ独自の競走馬パフォーマンス評価指数。詳細仕様は **[AREA-11-megu-index.md](AREA-11-megu-index.md)** を参照。
+
+| 項目 | 内容 |
+|---|---|
+| 定義 | 1点 = 0.1秒差。ペース・馬場・斤量・レースレベルを統合回帰で補正した絶対指数 |
+| 粒度 | 馬 × レース |
+| 基準値 | 100 = 同条件（距離×コース×芝/ダート×馬場カテゴリ）の補正後平均 |
+| 算出タイミング | SLA 5（確定結果取得後）に自動トリガー |
+| GCS パス | `netkeiba/pc/race_performance/{year}/{race_id}.json`（既存パス活用） |
+| DB テーブル | `megu_index`, `megu_par_time`, `megu_regression_params` |
+| 派生機能 | 今週のめぐ指数（A: 最大値 / B: 加重平均〈デフォルト〉 / C: 条件絞り最大値） |
+
+---
+
+## 5. 非機能要件
 
 | ID | カテゴリ | 要件 | 指標・基準 | 備考 |
 |---|---|---|---|---|
@@ -332,7 +348,7 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 
 ---
 
-## 5. 提供サービス一覧（ルートページ起点のエンドポイント）
+## 6. 提供サービス一覧（ルートページ起点のエンドポイント）
 
 ルートページ（`/`）のナビゲーションおよびトップダッシュボードカードから到達できる全エンドポイントを機能カテゴリ別に整理する。
 
@@ -343,7 +359,7 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 
 ---
 
-### 5-1. AI 予測
+### 6-1. AI 予測
 
 | URL | ページ名 | ユーザーへの提供価値 | 表示 |
 |---|---|---|---|
@@ -356,7 +372,7 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 
 ---
 
-### 5-2. 血統分析
+### 6-2. 血統分析
 
 | URL | ページ名 | ユーザーへの提供価値 | 表示 |
 |---|---|---|---|
@@ -370,7 +386,7 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 
 ---
 
-### 5-3. データ分析
+### 6-3. データ分析
 
 | URL | ページ名 | ユーザーへの提供価値 | 表示 |
 |---|---|---|---|
@@ -380,7 +396,7 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 
 ---
 
-### 5-4. 馬券最適化
+### 6-4. 馬券最適化
 
 | URL | ページ名 | ユーザーへの提供価値 | 表示 |
 |---|---|---|---|
@@ -388,7 +404,7 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 
 ---
 
-### 5-5. 開発者ツール
+### 6-5. 開発者ツール
 
 通常ユーザーには非表示。`is_dev` フラグが true の場合のみナビに表示される。
 

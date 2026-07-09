@@ -373,6 +373,35 @@ class SavedAnalysis(Base):
     last_run_at: Mapped[Optional[datetime]] = mapped_column()
 
 
+class SireAptitudeCache(Base):
+    """父・母父の舞台適性統計キャッシュ（毎週月曜集計）。"""
+    __tablename__ = "sire_aptitude_cache"
+    __table_args__ = (
+        UniqueConstraint(
+            "sire_name", "sire_type", "surface", "distance_band", "track_condition", "week_label",
+            name="uq_sire_aptitude_cache",
+        ),
+        Index("idx_sire_aptitude_lookup", "sire_name", "sire_type", "surface", "distance_band"),
+        CheckConstraint("sire_type IN ('sire', 'dam_sire')", name="ck_sire_type"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    sire_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    sire_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    surface: Mapped[str] = mapped_column(String(10), nullable=False)
+    distance_band: Mapped[str] = mapped_column(String(10), nullable=False)
+    track_condition: Mapped[str] = mapped_column(String(10), nullable=False)
+    n_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    n_wins: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    n_place: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    win_rate: Mapped[Optional[float]] = mapped_column(Numeric(6, 4))
+    place_rate: Mapped[Optional[float]] = mapped_column(Numeric(6, 4))
+    roi_win: Mapped[Optional[float]] = mapped_column(Numeric(7, 4))
+    roi_place: Mapped[Optional[float]] = mapped_column(Numeric(7, 4))
+    week_label: Mapped[str] = mapped_column(String(10), nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class CourseStatsCache(Base):
     __tablename__ = "course_stats_cache"
 

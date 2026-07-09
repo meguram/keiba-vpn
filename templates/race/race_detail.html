@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>レース詳細 | めぐ競馬</title>
+<title>レース詳細 | めぐAI</title>
 <style>
   :root {
     --bg: #0a0e17;
@@ -1213,6 +1213,117 @@
   .pred-rank-2 { color: var(--silver); }
   .pred-rank-3 { color: var(--bronze); }
 
+  /* ── 血統適性タブ ── */
+  .bloodline-aptitude-wrap {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  table.bloodline-aptitude {
+    width: 100%;
+    min-width: 880px;
+    border-collapse: collapse;
+    background: var(--surface);
+    font-size: 13px;
+  }
+  table.bloodline-aptitude thead { background: var(--surface2); }
+  table.bloodline-aptitude th.ba-th-group {
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: #e2e8f0;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+  table.bloodline-aptitude th.ba-th-group.grp-horse { background: rgba(71,85,105,0.35); }
+  table.bloodline-aptitude th.ba-th-group.grp-sire { background: rgba(188,140,255,0.14); }
+  table.bloodline-aptitude th.ba-th-group.grp-dam-sire { background: rgba(57,210,192,0.12); }
+  table.bloodline-aptitude th.ba-th-sub {
+    padding: 8px 10px;
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.bloodline-aptitude td {
+    padding: 9px 10px;
+    border-bottom: 1px solid rgba(36,48,73,0.5);
+    text-align: center;
+    vertical-align: middle;
+    font-size: 13px;
+  }
+  table.bloodline-aptitude td.ba-grp-start,
+  table.bloodline-aptitude th.ba-grp-start {
+    border-left: 2px solid rgba(188,140,255,0.3);
+  }
+  table.bloodline-aptitude td.ba-grp-dam-start,
+  table.bloodline-aptitude th.ba-grp-dam-start {
+    border-left: 2px solid rgba(57,210,192,0.3);
+  }
+  table.bloodline-aptitude tbody tr:hover { background: rgba(188,140,255,0.04); }
+  .ba-sire-name {
+    font-weight: 600;
+    color: #c4b5fd;
+    text-align: left !important;
+    font-size: 12px;
+    max-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ba-dam-sire-name {
+    font-weight: 600;
+    color: #5eead4;
+    text-align: left !important;
+    font-size: 12px;
+    max-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ba-stat-ok { color: var(--ok); font-weight: 700; }
+  .ba-stat-warn { color: var(--warn); font-weight: 600; }
+  .ba-stat-dim { color: var(--text-dim); }
+  .ba-stat-na { color: var(--text-dim); font-size: 12px; }
+  .ba-notice {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+  .ba-mock-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: rgba(245,158,11,0.12);
+    color: var(--warn);
+    border: 1px solid rgba(245,158,11,0.3);
+    margin-bottom: 12px;
+  }
+  .ba-context-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .ba-context-bar .tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 12px;
+  }
+
   /* ── Responsive ── */
   @media (max-width: 768px) {
     .race-content { padding: 16px; }
@@ -1267,12 +1378,14 @@
   <button class="tab active" data-tab="shutuba">出馬表</button>
   <button class="tab" data-tab="result">レース結果</button>
   <button class="tab" data-tab="predict">🤖 AI予測</button>
+  <button class="tab" data-tab="bloodline">🧬 血統適性</button>
   <button class="tab" data-tab="horses">出走馬詳細</button>
 </div>
 
 <div id="tabShutuba" class="tab-content active"></div>
 <div id="tabResult" class="tab-content"></div>
 <div id="tabPredict" class="tab-content"></div>
+<div id="tabBloodline" class="tab-content"></div>
 <div id="tabHorses" class="tab-content"></div>
 
 <div id="loadingState" class="loading">
@@ -1328,7 +1441,7 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 
 function capitalize(s) {
-  const map = { shutuba: 'Shutuba', result: 'Result', predict: 'Predict', horses: 'Horses' };
+  const map = { shutuba: 'Shutuba', result: 'Result', predict: 'Predict', bloodline: 'Bloodline', horses: 'Horses' };
   return map[s] || s;
 }
 
@@ -1357,6 +1470,7 @@ async function loadRace() {
     initRaceDetailTableSort();
     renderPredictionPanel(null);
     loadCachedPrediction();
+    loadBloodlineAptitude();
   } catch (e) {
     document.getElementById('loadingState').innerHTML =
       `<div class="empty-state"><div class="icon">⚠️</div><p>データの読み込みに失敗しました</p>
@@ -1376,6 +1490,108 @@ async function loadCachedPrediction() {
   } catch {
     renderPredictionPanel(null);
   }
+}
+
+async function loadBloodlineAptitude() {
+  const container = document.getElementById('tabBloodline');
+  container.innerHTML = '<div class="loading"><div class="load-spinner"></div><p>血統適性データを読み込み中...</p></div>';
+  try {
+    const res = await fetch(`/api/race/${RACE_ID}/bloodline-aptitude`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderBloodlineAptitude(data);
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">🧬</div><p>血統適性データの取得に失敗しました<br><small style="color:var(--text-dim)">${escHtml(e.message)}</small></p></div>`;
+  }
+}
+
+const BA_NA = '—';
+
+function fmtBaRate(v, threshHigh, threshMid) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return { html: `<span class="ba-stat-na">${BA_NA}</span>`, cls: '' };
+  const pct = (n * 100).toFixed(1) + '%';
+  const cls = n >= threshHigh ? 'ba-stat-ok' : n >= threshMid ? 'ba-stat-warn' : 'ba-stat-dim';
+  return { html: `<span class="${cls}">${pct}</span>`, cls };
+}
+
+function fmtBaRoi(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return { html: `<span class="ba-stat-na">${BA_NA}</span>`, bg: '' };
+  const pct = Math.round(n * 100) + '%';
+  const color = n >= 1.0 ? 'var(--ok)' : n >= 0.8 ? 'var(--warn)' : 'var(--text-dim)';
+  const bg = n >= 1.0 ? 'var(--ok-dim)' : n >= 0.8 ? 'var(--warn-dim)' : '';
+  return { html: `<span style="color:${color};font-weight:${n >= 1.0 ? 700 : 600}">${pct}</span>`, bg };
+}
+
+function renderBloodlineAptitudeEntry(e, sireKey, grpStartClass) {
+  const s = e[sireKey] || {};
+  const sName = s.name || BA_NA;
+  const nameCls = sireKey === 'sire' ? 'ba-sire-name' : 'ba-dam-sire-name';
+  const winR  = fmtBaRate(s.win_rate, 0.15, 0.08);
+  const placeR = fmtBaRate(s.place_rate, 0.35, 0.20);
+  const roiW  = fmtBaRoi(s.roi_win);
+  const roiP  = fmtBaRoi(s.roi_place);
+  const nRuns = (s.n_runs != null) ? s.n_runs : BA_NA;
+  let html = `<td class="${nameCls} ${grpStartClass}" title="${escAttr(sName)}">${escHtml(sName)}</td>`;
+  html += `<td>${winR.html}</td>`;
+  html += `<td>${placeR.html}</td>`;
+  html += `<td${roiW.bg ? ` style="background:${roiW.bg}"` : ''}>${roiW.html}</td>`;
+  html += `<td${roiP.bg ? ` style="background:${roiP.bg}"` : ''}>${roiP.html}</td>`;
+  html += `<td style="font-size:11px;color:var(--text-dim)">${nRuns === BA_NA ? BA_NA : nRuns.toLocaleString()}</td>`;
+  return html;
+}
+
+function renderBloodlineAptitude(data) {
+  const container = document.getElementById('tabBloodline');
+  const entries = data.entries || [];
+
+  let html = '<div class="ba-context-bar">';
+  if (data.surface) html += `<span class="tag">🌱 ${escHtml(data.surface)}</span>`;
+  if (data.distance_band_label) html += `<span class="tag">📏 ${escHtml(data.distance_band_label)}</span>`;
+  if (data.track_condition) html += `<span class="tag">🏇 馬場: ${escHtml(data.track_condition)}</span>`;
+  if (data.week_label && data.week_label !== 'MOCK') html += `<span style="margin-left:auto;font-size:11px">集計: ${escHtml(data.week_label)}</span>`;
+  html += '</div>';
+
+  if (data.is_mock || data._fallback) {
+    html += `<div class="ba-mock-badge">⚠ ${data._fallback ? 'DB未集計（モックデータを表示）' : 'モックデータ（dev環境）'}</div>`;
+  }
+
+  if (!entries.length) {
+    html += '<div class="empty-state"><div class="icon">🧬</div><p>出走馬データがありません</p></div>';
+    container.innerHTML = html;
+    return;
+  }
+
+  html += '<div class="bloodline-aptitude-wrap"><table class="bloodline-aptitude"><thead>';
+  html += '<tr>';
+  html += '<th colspan="2" class="ba-th-group grp-horse">出走馬</th>';
+  html += '<th colspan="6" class="ba-th-group grp-sire ba-grp-start">父 舞台適性</th>';
+  html += '<th colspan="6" class="ba-th-group grp-dam-sire ba-grp-dam-start">母父 舞台適性</th>';
+  html += '</tr><tr>';
+  html += '<th class="ba-th-sub">馬番</th><th class="ba-th-sub">馬名</th>';
+  html += '<th class="ba-th-sub ba-grp-start">父名</th><th class="ba-th-sub">勝率</th><th class="ba-th-sub">複勝率</th><th class="ba-th-sub" title="単回収率">単回収</th><th class="ba-th-sub" title="複回収率">複回収</th><th class="ba-th-sub" title="集計サンプル数">件数</th>';
+  html += '<th class="ba-th-sub ba-grp-dam-start">母父名</th><th class="ba-th-sub">勝率</th><th class="ba-th-sub">複勝率</th><th class="ba-th-sub" title="単回収率">単回収</th><th class="ba-th-sub" title="複回収率">複回収</th><th class="ba-th-sub" title="集計サンプル数">件数</th>';
+  html += '</tr></thead><tbody>';
+
+  const sorted = [...entries].sort((a, b) => (a.horse_number || 0) - (b.horse_number || 0));
+  sorted.forEach(e => {
+    html += '<tr>';
+    html += `<td>${e.horse_number || BA_NA}</td>`;
+    html += `<td class="horse-name">${escHtml(e.horse_name || BA_NA)}</td>`;
+    html += renderBloodlineAptitudeEntry(e, 'sire', 'ba-grp-start');
+    html += renderBloodlineAptitudeEntry(e, 'dam_sire', 'ba-grp-dam-start');
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  html += `<p class="ba-notice">
+    色: <span style="color:var(--ok)">緑=良好</span> / <span style="color:var(--warn)">橙=普通</span> / <span style="color:var(--text-dim)">灰=低め</span>。
+    単回収・複回収は 100% 以上で回収率プラス。件数はこの舞台条件での集計サンプル数。
+    集計基準は現レースの馬場種別・距離帯・馬場状態と一致。
+  </p>`;
+
+  container.innerHTML = html;
 }
 
 async function runPrediction() {
