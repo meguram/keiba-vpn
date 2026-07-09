@@ -363,3 +363,70 @@ def save_stallion_override():
         overrides[entry_id] = str(content)
     _save_stallion_overrides(overrides)
     return jsonify({"status": "ok", "id": entry_id, "saved": content is not None})
+
+
+# ── 種牡馬メモ カスタムエントリ管理 ──────────────────────────────────────
+
+_STALLION_CUSTOM_PATH = _Path(__file__).parents[4] / "data" / "local" / "stallion_notes_custom.json"
+
+
+def _load_stallion_custom() -> list:
+    try:
+        if _STALLION_CUSTOM_PATH.exists():
+            return _json.loads(_STALLION_CUSTOM_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+
+def _save_stallion_custom(entries: list) -> None:
+    _STALLION_CUSTOM_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _STALLION_CUSTOM_PATH.write_text(
+        _json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+@bp.get("/stallion-notes/custom")
+def get_stallion_custom():
+    """サーバーに保存されたカスタムエントリ一覧を返す。"""
+    return jsonify(_load_stallion_custom())
+
+
+@bp.post("/stallion-notes/custom")
+@require_login
+def add_stallion_custom():
+    """カスタムエントリを追加・上書き保存する（id 一致なら更新）。"""
+    body = request.get_json(silent=True) or {}
+    entry_id = (body.get("id") or "").strip()
+    if not entry_id:
+        return jsonify({"error": "id が必要です"}), 400
+    entries = _load_stallion_custom()
+    existing = next((i for i, e in enumerate(entries) if e.get("id") == entry_id), None)
+    new_entry = {
+        "id": entry_id,
+        "name": body.get("name", entry_id),
+        "cat": body.get("cat", "種牡馬"),
+        "badgeColor": body.get("badgeColor", "#2e7d32"),
+        "badgeLabel": body.get("badgeLabel", body.get("cat", "種牡馬")),
+        "nkUrl": body.get("nkUrl", ""),
+        "content": body.get("content", ""),
+        "isCustom": True,
+    }
+    if existing is not None:
+        entries[existing] = new_entry
+    else:
+        entries.append(new_entry)
+    _save_stallion_custom(entries)
+    return jsonify({"status": "ok", "id": entry_id, "action": "updated" if existing is not None else "created"})
+
+
+@bp.delete("/stallion-notes/custom/<path:entry_id>")
+@require_login
+def delete_stallion_custom(entry_id: str):
+    """カスタムエントリを削除する。"""
+    entries = _load_stallion_custom()
+    new_entries = [e for e in entries if e.get("id") != entry_id]
+    if len(new_entries) == len(entries):
+        return jsonify({"error": "エントリが見つかりません"}), 404
+    _save_stallion_custom(new_entries)
+    return jsonify({"status": "ok", "id": entry_id})

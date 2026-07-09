@@ -91,6 +91,36 @@ async function saveServerOverride(id: string, content: string): Promise<boolean>
   } catch { return false; }
 }
 
+async function fetchServerCustom(): Promise<Entry[]> {
+  try {
+    const res = await fetch("/api/v1/stallion-notes/custom");
+    if (res.ok) return await res.json();
+  } catch {}
+  return [];
+}
+
+async function saveServerCustom(entry: Omit<Entry, "isCustom">): Promise<boolean> {
+  try {
+    const res = await fetch("/api/v1/stallion-notes/custom", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(entry),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
+async function deleteServerCustom(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/v1/stallion-notes/custom/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
 /* ── 追加モーダル（開発者のみ） ── */
 function AddModal({
   defaultCat, cats, onAdd, onClose,
@@ -179,12 +209,23 @@ export default function StallionNotesPage() {
     fetchServerOverrides().then(serverOverrides => {
       if (Object.keys(serverOverrides).length > 0) {
         setLocalEdits(prev => ({ ...prev, ...serverOverrides }));
-        // localStorage にも反映
         try {
           for (const [id, content] of Object.entries(serverOverrides)) {
             localStorage.setItem(LS_PREFIX + id, content);
           }
         } catch {}
+      }
+    });
+
+    /* サーバーからカスタムエントリをロード（localStorage より優先） */
+    fetchServerCustom().then(serverCustom => {
+      if (serverCustom.length > 0) {
+        setEntries(prev => {
+          const serverIds = new Set(serverCustom.map((e: Entry) => e.id));
+          const localOnly = prev.filter(e => e.isCustom && !serverIds.has(e.id));
+          return [...BASE_ENTRIES, ...serverCustom.map((e: Entry) => ({ ...e, isCustom: true as const })), ...localOnly];
+        });
+        try { localStorage.setItem(LS_CUSTOM, JSON.stringify(serverCustom)); } catch {}
       }
     });
   }, []);
@@ -253,7 +294,9 @@ export default function StallionNotesPage() {
   }
 
   /* カスタムエントリ追加 */
-  function addEntry(e: Omit<Entry, "isCustom">) {
+  const [addingEntry, setAddingEntry] = useState(false);
+
+  async function addEntry(e: Omit<Entry, "isCustom">) {
     const newEntry: Entry = { ...e, isCustom: true };
     const newEntries = [...entries, newEntry];
     setEntries(newEntries);
@@ -261,14 +304,19 @@ export default function StallionNotesPage() {
     setExpandedCats(prev => new Set([...prev, e.cat]));
     selectEntry(e.id);
     setShowAddModal(false);
+    // サーバーへ保存
+    setAddingEntry(true);
+    await saveServerCustom(e);
+    setAddingEntry(false);
   }
 
   /* カスタムエントリ削除 */
-  function deleteEntry(id: string) {
+  async function deleteEntry(id: string) {
     const newEntries = entries.filter(e => e.id !== id);
     setEntries(newEntries);
     try { localStorage.setItem(LS_CUSTOM, JSON.stringify(newEntries.filter(x => x.isCustom))); } catch {}
     if (selectedId === id) setSelectedId(null);
+    await deleteServerCustom(id);
   }
 
   /* 検索（表示カテゴリ内のみ） */
@@ -330,6 +378,19 @@ export default function StallionNotesPage() {
 
         {/* サイドバー */}
         <nav style={{ width: 240, background: "var(--surface)", borderRight: "1px solid var(--border)", overflowY: "auto", flexShrink: 0, paddingBottom: 16 }}>
+          {/* 種牡馬/牝系 追加ボタン */}
+          {canEdit && (
+            <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(36,48,73,0.5)", display: "flex", gap: 6 }}>
+              <button
+                onClick={() => { setAddModalCat("種牡馬"); setShowAddModal(true); }}
+                style={{ flex: 1, padding: "5px 0", background: "rgba(46,125,50,0.12)", border: "1px solid rgba(46,125,50,0.35)", borderRadius: 5, color: "#4caf50", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
+              >＋ 種牡馬</button>
+              <button
+                onClick={() => { setAddModalCat("牝系"); setShowAddModal(true); }}
+                style={{ flex: 1, padding: "5px 0", background: "rgba(156,39,176,0.1)", border: "1px solid rgba(156,39,176,0.35)", borderRadius: 5, color: "#ce93d8", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
+              >＋ 牝系</button>
+            </div>
+          )}
           {visibleCats.map(cat => {
                   const items = (catMap[cat] ?? []).filter(e => canEdit || !e.isCustom || USER_VISIBLE_CATS.has(e.cat));
             const expanded = expandedCats.has(cat);
@@ -472,11 +533,11 @@ export default function StallionNotesPage() {
         </div>
       </div>
 
-      {/* 追加モーダル（開発者のみ） */}
+      {/* 追加モーダル */}
       {canEdit && showAddModal && (
         <AddModal
           defaultCat={addModalCat}
-          cats={allCats}
+          cats={["種牡馬", "牝系", ...allCats.filter(c => c !== "種牡馬" && c !== "牝系")]}
           onAdd={addEntry}
           onClose={() => setShowAddModal(false)}
         />
