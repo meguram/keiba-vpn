@@ -102,6 +102,54 @@ def _load_result_flat(year: int) -> pd.DataFrame:
     return df
 
 
+def _load_result_flat_for_date_from_db(date_str: str) -> pd.DataFrame:
+    """
+    指定日のレースデータを DB の race_results + races テーブルから直接構築する。
+    race_result_flat.parquet に対象日が存在しない場合のフォールバック。
+    """
+    from src.db.session import get_session
+    from sqlalchemy import text
+
+    sql = text("""
+        SELECT
+            rr.race_id,
+            rr.horse_id,
+            rr.finish_time_sec       AS time_sec,
+            rr.finish_pos,
+            rr.jockey_id,
+            NULL::text               AS jockey_weight,
+            NULL::text               AS sex_age,
+            NULL::text               AS lap_times,
+            NULL::text               AS pace,
+            r.surface,
+            r.distance,
+            r.direction,
+            r.track_condition,
+            CAST(SUBSTRING(r.race_id, 5, 2) AS TEXT) AS venue_code,
+            TO_CHAR(r.race_date, 'YYYY-MM-DD')        AS date
+        FROM race_results rr
+        JOIN races r ON rr.race_id = r.race_id
+        WHERE TO_CHAR(r.race_date, 'YYYY-MM-DD') = :date_str
+          AND rr.finish_time_sec IS NOT NULL
+          AND rr.finish_time_sec > 0
+          AND r.surface IN ('芝', 'ダート')
+          AND r.distance > 0
+    """)
+    try:
+        with get_session() as session:
+            rows = session.execute(sql, {"date_str": date_str}).fetchall()
+            if not rows:
+                return pd.DataFrame()
+            cols = ["race_id", "horse_id", "time_sec", "finish_pos",
+                    "jockey_id", "jockey_weight", "sex_age", "lap_times", "pace",
+                    "surface", "distance", "direction", "track_condition",
+                    "venue_code", "date"]
+            return pd.DataFrame(rows, columns=cols)
+    except Exception as e:
+        logger.error("DB からの result_flat 読み込みエラー: %s", e)
+        return pd.DataFrame()
+
+
 def _load_cushion(year: int) -> pd.DataFrame:
     p = CUSHION_DIR / f"cushion_{year}.json"
     if not p.exists():
@@ -391,6 +439,101 @@ def aggregate_horse_megu(df_all: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 公開 API（外部モジュールから直接呼び出し用）
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_for_date(date_str: str, model_version: str = MODEL_VERSION) -> dict:
+    """
+    指定日（YYYY-MM-DD）の全レースについてめぐ指数を計算しDB保存する。
+
+    auto_scrape.py の raceday-evening タスク等から直接呼び出せる。
+
+    Parameters
+    ----------
+    date_str : "YYYY-MM-DD" 形式の日付文字列
+    model_version : DBに保存する model_version キー
+
+    Returns
+    -------
+    dict with keys:
+        status       : "ok" | "skipped" | "error"
+        megu_valid   : 保存した valid レコード数
+        megu_oor     : 保存した out_of_range レコード数
+        date         : date_str
+        error        : エラーメッセージ（エラー時のみ）
+    """
+    logger.info("めぐ指数計算 開始: %s", date_str)
+    try:
+        from src.db.session import get_session, init_engine
+        init_engine()
+
+        year = int(date_str[:4])
+        with get_session() as session:
+            params = _load_regression_params(session)
+            df_par = _load_par_time(session)
+
+        if not params:
+            logger.warning("回帰パラメータ未登録 – めぐ指数をスキップ")
+            return {"status": "skipped", "reason": "no_params", "date": date_str,
+                    "megu_valid": 0, "megu_oor": 0}
+
+        df_flat = _load_result_flat(year)
+        if df_flat.empty:
+            logger.warning("race_result_flat が空: year=%d", year)
+            return {"status": "skipped", "reason": "no_flat_data", "date": date_str,
+                    "megu_valid": 0, "megu_oor": 0}
+
+        # 日付フィルタ
+        df_flat["date_str"] = pd.to_datetime(df_flat["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        df_flat = df_flat[df_flat["date_str"] == date_str]
+        if df_flat.empty:
+            logger.info("parquet に対象日なし → DB から直接ロード: %s", date_str)
+            df_flat = _load_result_flat_for_date_from_db(date_str)
+            if df_flat.empty:
+                logger.info("対象日のデータなし: %s", date_str)
+                return {"status": "skipped", "reason": "no_data_on_date", "date": date_str,
+                        "megu_valid": 0, "megu_oor": 0}
+            df_flat["date_str"] = date_str
+        else:
+            df_flat["date_str"] = date_str
+
+        # cushion マージ
+        df_cushion = _load_cushion(year)
+        if not df_cushion.empty:
+            df_flat["venue_code"] = df_flat["venue_code"].astype(str).str.strip()
+            c_merge = df_cushion[["date_str", "venue_code", "cushion_value", "dirt_moisture_goal"]] \
+                .drop_duplicates(subset=["date_str", "venue_code"])
+            df_flat = df_flat.merge(c_merge, on=["date_str", "venue_code"], how="left")
+            tsi_mean = params.get("tsi_mean", 0.0)
+            df_flat["tsi_raw"] = np.where(
+                df_flat["surface"] == "芝",
+                df_flat["cushion_value"].fillna(tsi_mean),
+                -df_flat["dirt_moisture_goal"].fillna(-tsi_mean),
+            )
+
+        df_result = compute_for_dataframe(df_flat, params, df_par)
+        # valid + out_of_range 両方を保存（par_time があるものに限る）
+        df_save = df_result[df_result["par_time_final"].notna()].copy()
+
+        if df_save.empty:
+            return {"status": "skipped", "reason": "no_results_after_compute", "date": date_str,
+                    "megu_valid": 0, "megu_oor": 0}
+
+        with get_session() as session:
+            saved = _upsert_batch(session, df_save)
+
+        n_valid = int((df_save["computation_status"] == "valid").sum())
+        n_oor   = int((df_save["computation_status"] == "out_of_range").sum())
+        logger.info("めぐ指数 保存完了: valid=%d, out_of_range=%d", n_valid, n_oor)
+        return {"status": "ok", "date": date_str, "megu_valid": n_valid, "megu_oor": n_oor}
+
+    except Exception as e:
+        logger.error("めぐ指数計算エラー: %s", e, exc_info=True)
+        return {"status": "error", "date": date_str, "error": str(e),
+                "megu_valid": 0, "megu_oor": 0}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CLI エントリポイント
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -475,16 +618,19 @@ def main() -> None:
 
     # めぐ指数計算
     df_result = compute_for_dataframe(df_all, params, df_par)
-    df_result = df_result[df_result["megu_index"].notna()]
-    logger.info("計算済み: %d 行  megu_index avg=%.2f", len(df_result), df_result["megu_index"].mean())
+    # valid + out_of_range 両方保存（par_time があるもの）
+    df_save = df_result[df_result["par_time_final"].notna()].copy()
+    n_valid = int((df_save["computation_status"] == "valid").sum())
+    n_oor   = int((df_save["computation_status"] == "out_of_range").sum())
+    logger.info("計算済み: valid=%d, out_of_range=%d", n_valid, n_oor)
 
     if args.dry_run:
-        print(df_result.head(20).to_string())
+        print(df_save.head(20).to_string())
         return
 
     # DB 保存
     with get_session() as session:
-        saved = _upsert_batch(session, df_result)
+        saved = _upsert_batch(session, df_save)
     logger.info("DB 保存完了: %d 件", saved)
 
 

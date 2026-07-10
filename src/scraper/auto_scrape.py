@@ -900,6 +900,19 @@ def run_raceday_evening_for_date(date_str: str) -> dict:
                 stats["result_on_time"], stats["odds"], stats["pair_odds"], stats["smartrc"])
     logger.info("=" * 60)
 
+    # ── めぐ指数計算（スクレイプ完了後に実行） ─────────────────────────────
+    try:
+        from src.pipeline.megu_index.compute import compute_for_date
+        megu_result = compute_for_date(date_str)
+        stats["megu_index"] = megu_result
+        logger.info("  めぐ指数: status=%s, valid=%d, out_of_range=%d",
+                    megu_result.get("status"),
+                    megu_result.get("megu_valid", 0),
+                    megu_result.get("megu_oor", 0))
+    except Exception as e:
+        logger.error("  めぐ指数計算で予期しないエラー（スクレイプには影響なし）: %s", e)
+        stats["megu_index"] = {"status": "error", "error": str(e)}
+
     if stats["result_on_time"] > 0:
         _trigger_track_speed_for_date(date_str)
 
