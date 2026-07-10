@@ -401,3 +401,477 @@ Feature Store API 呼び出し時は必ず `get_snapshot(race_id, as_of=race_id)
 - モデル登録時に `created_at` タイムスタンプと `version_tag` を `_manifest_{YYYYMMDD}.json` に記録する
 - CI ゲートは本番投入前に「最新3バージョン以内か」を検証する
 - 保持対象外のアーティファクトは `model_cleanup_job`（週次）が GCS ライフサイクルと連携して削除する
+
+---
+
+## 7. PostgreSQL データベース スキーマ定義（データディクショナリ）
+
+**対象 DB**: `keiba_db_stg`（keiba_db_dev / keiba_db_prod も同一スキーマ。Alembic で管理）  
+**テーブル総数**: 25（`alembic_version` 除く）  
+**SSoT**: `src/db/models.py` + `alembic/versions/`
+
+> 表記ルール: **PK** = 主キー / **FK→X.Y** = 外部キー（X テーブルの Y 列参照） / **NN** = NOT NULL / `*` = デフォルト値あり
+
+---
+
+### 7-1. Layer 1 — 静的マスター
+
+#### `races` — レースマスター
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `race_id` | VARCHAR(20) | PK, NN | レース識別子（例: `202406010101`、12桁） |
+| `race_name` | VARCHAR(200) | | レース名（例: 「春のステークス」） |
+| `course` | VARCHAR(20) | | コース識別子 |
+| `venue` | VARCHAR(20) | | 開催場（例: 東京、中山、阪神） |
+| `surface` | VARCHAR(10) | | 馬場種別（`芝` / `ダート`） |
+| `distance` | INTEGER | | 距離（m） |
+| `direction` | VARCHAR(10) | | 回り（`右` / `左` / `直線`） |
+| `weather` | VARCHAR(20) | | 天気 |
+| `track_condition` | VARCHAR(10) | | 馬場状態（`良` / `稍重` / `重` / `不良`） |
+| `start_time` | TIME | | 発走予定時刻 |
+| `race_date` | DATE | | 開催日 |
+| `field_size` | SMALLINT | | 出走頭数 |
+| `grade` | VARCHAR(20) | | グレード（`G1` / `G2` / `G3` / `未勝利` 等） |
+| `race_class` | VARCHAR(100) | | クラス詳細 |
+| `weight_rule` | VARCHAR(50) | | 斤量ルール（`馬齢` / `別定` / `ハンデ` 等） |
+| `is_excluded` | BOOLEAN | `*false` | 除外フラグ（障害・地方など除外対象） |
+| `created_at` | TIMESTAMPTZ | `*now()` | レコード作成日時 |
+
+#### `horses` — 馬マスター
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `horse_id` | VARCHAR(20) | PK, NN | 馬識別子（netkeiba 馬 ID） |
+| `horse_name` | VARCHAR(100) | NN | 馬名（日本語） |
+| `sex` | VARCHAR(5) | | 性別（`牡` / `牝` / `セ`） |
+| `birth_year` | SMALLINT | | 生年 |
+| `sire_id` | VARCHAR(20) | FK→sires.sire_id | 父馬 ID |
+| `dam_sire` | VARCHAR(100) | | 母父名（テキスト） |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+#### `jockeys` — 騎手マスター
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `jockey_id` | VARCHAR(20) | PK, NN | 騎手識別子 |
+| `jockey_name` | VARCHAR(100) | NN | 騎手名 |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+#### `trainers` — 調教師マスター
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `trainer_id` | VARCHAR(20) | PK, NN | 調教師識別子 |
+| `trainer_name` | VARCHAR(100) | NN | 調教師名 |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+#### `sires` — 種牡馬マスター
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `sire_id` | VARCHAR(20) | PK, NN | 種牡馬 ID |
+| `sire_name` | VARCHAR(100) | NN | 種牡馬名 |
+| `sire_line` | VARCHAR(50) | | 系統（例: サンデー系、ノーザンダンサー系） |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+#### `courses` — コースマスター
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `course_id` | VARCHAR(20) | PK, NN | コース識別子 |
+| `course_name` | VARCHAR(50) | NN | コース名 |
+| `region` | VARCHAR(20) | | 地域 |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+#### `entries` — 出走表（出馬表）
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `entry_id` | BIGINT | PK, NN | エントリ識別子（連番） |
+| `race_id` | VARCHAR(20) | NN, FK→races.race_id | レース ID |
+| `horse_id` | VARCHAR(20) | NN, FK→horses.horse_id | 馬 ID |
+| `post_no` | SMALLINT | | 馬番 |
+| `bracket_number` | SMALLINT | | 枠番（1〜8） |
+| `jockey_id` | VARCHAR(20) | FK→jockeys.jockey_id | 騎手 ID |
+| `trainer_id` | VARCHAR(20) | FK→trainers.trainer_id | 調教師 ID |
+| `jockey_weight` | NUMERIC(4,1) | | 斤量（kg） |
+| `weight` | SMALLINT | | 馬体重（kg） |
+| `weight_change` | SMALLINT | | 馬体重増減（kg、前走比） |
+| `sex_age` | VARCHAR(10) | | 性齢テキスト（例: `牡3`） |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+> **UNIQUE**: `(race_id, horse_id)` — 同一レース内での馬の重複登録を防止
+
+---
+
+### 7-2. Layer 2 — 確定結果
+
+#### `race_results` — レース確定結果（着順・タイム）
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `result_id` | BIGINT | PK, NN | 結果識別子（連番） |
+| `race_id` | VARCHAR(20) | NN, FK→races.race_id | レース ID |
+| `horse_id` | VARCHAR(20) | NN, FK→horses.horse_id | 馬 ID |
+| `finish_pos` | SMALLINT | | 着順（1〜。着外は NULL） |
+| `finish_time_sec` | NUMERIC(7,2) | | 走破タイム（秒、例: `68.50`） |
+| `margin` | VARCHAR(20) | | 着差テキスト（例: `1.1/2`） |
+| `last_3f_sec` | NUMERIC(5,2) | | 上り3ハロン（秒） |
+| `weight` | SMALLINT | | 馬体重（kg、当日計測値） |
+| `jockey_id` | VARCHAR(20) | FK→jockeys.jockey_id | 騎手 ID |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+> **UNIQUE**: `(race_id, horse_id)` — 1レース1頭につき1レコード
+
+---
+
+### 7-3. Layer 3 — 集計特徴量スナップショット
+
+> **重要**: `as_of_race_id` によるテンポラルスナップショット管理。  
+> 対象レースの直前時点の統計のみを保持し、未来情報の混入を構造的に排除する（§ 5-2 参照）。
+
+#### `horse_stats_snapshot` — 馬の統計スナップショット
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `snapshot_id` | BIGINT | PK, NN | スナップショット識別子 |
+| `horse_id` | VARCHAR(20) | NN | 馬 ID |
+| `as_of_race_id` | VARCHAR(20) | NN | 集計基準レース ID（このレース直前時点） |
+| `as_of_date` | DATE | NN | 集計基準日 |
+| `win_rate_all` | NUMERIC(5,4) | | 通算勝率（全条件） |
+| `place_rate_all` | NUMERIC(5,4) | | 通算連対率 |
+| `show_rate_all` | NUMERIC(5,4) | | 通算複勝率 |
+| `sample_count` | SMALLINT | | 集計サンプル数 |
+| `win_rate_turf` | NUMERIC(5,4) | | 芝勝率 |
+| `win_rate_dirt` | NUMERIC(5,4) | | ダート勝率 |
+| `win_rate_distance` | NUMERIC(5,4) | | 同距離帯勝率 |
+| `win_rate_course` | NUMERIC(5,4) | | 同コース勝率 |
+| `win_rate_going` | NUMERIC(5,4) | | 同馬場状態勝率 |
+| `avg_last_3f` | NUMERIC(5,2) | | 平均上り3F（秒） |
+| `speed_index_avg` | NUMERIC(6,2) | | スピード指数平均 |
+| `speed_index_max` | NUMERIC(6,2) | | スピード指数最大値 |
+| `running_style_score` | NUMERIC(5,2) | | 脚質スコア（逃=1 → 追=4） |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+#### `jockey_stats_snapshot` — 騎手の統計スナップショット
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `snapshot_id` | BIGINT | PK, NN | |
+| `jockey_id` | VARCHAR(20) | NN | 騎手 ID |
+| `as_of_race_id` | VARCHAR(20) | NN | 集計基準レース ID |
+| `as_of_date` | DATE | NN | |
+| `win_rate_all` | NUMERIC(5,4) | | 通算勝率 |
+| `place_rate_all` | NUMERIC(5,4) | | 通算連対率 |
+| `show_rate_all` | NUMERIC(5,4) | | 通算複勝率 |
+| `sample_count` | SMALLINT | | 集計サンプル数 |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+#### `trainer_stats_snapshot` — 調教師の統計スナップショット
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `snapshot_id` | BIGINT | PK, NN | |
+| `trainer_id` | VARCHAR(20) | NN | 調教師 ID |
+| `as_of_race_id` | VARCHAR(20) | NN | 集計基準レース ID |
+| `as_of_date` | DATE | NN | |
+| `win_rate_all` | NUMERIC(5,4) | | 通算勝率 |
+| `place_rate_all` | NUMERIC(5,4) | | 通算連対率 |
+| `show_rate_all` | NUMERIC(5,4) | | 通算複勝率 |
+| `sample_count` | SMALLINT | | 集計サンプル数 |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+---
+
+### 7-4. Layer 4 — ラップ・ペース・コーナー
+
+#### `race_lap_times` — 1Fごとラップタイム
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `race_id` | VARCHAR(20) | PK, NN | レース ID |
+| `furlong_index` | SMALLINT | PK, NN | ハロン番号（1〜、後ろからカウント） |
+| `lap_time_sec` | NUMERIC(4,2) | NN | そのハロンのラップタイム（秒） |
+| `cumulative_sec` | NUMERIC(6,2) | | 累積タイム（秒） |
+
+#### `race_corner_positions` — コーナー通過順
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `race_id` | VARCHAR(20) | PK, NN | レース ID |
+| `horse_id` | VARCHAR(20) | PK, NN | 馬 ID |
+| `corner_1` | SMALLINT | | 1コーナー通過順位 |
+| `corner_2` | SMALLINT | | 2コーナー通過順位 |
+| `corner_3` | SMALLINT | | 3コーナー通過順位 |
+| `corner_4` | SMALLINT | | 4コーナー通過順位 |
+
+#### `race_pace_summary` — レースペースサマリー
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `race_id` | VARCHAR(20) | PK, NN | レース ID |
+| `first_3f_sec` | NUMERIC(5,2) | | 前半3F タイム（秒） |
+| `last_3f_sec` | NUMERIC(5,2) | | 後半3F タイム（秒） |
+| `pace_category` | VARCHAR(10) | | ペース区分（`S` / `M` / `H`） |
+| `front_runner_count` | SMALLINT | | 逃げ・先行馬数 |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+---
+
+### 7-5. Layer 5 — オッズ時系列
+
+#### `race_odds_snapshot` — オッズスナップショット
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `snapshot_id` | BIGINT | PK, NN | スナップショット識別子 |
+| `race_id` | VARCHAR(20) | NN | レース ID |
+| `horse_id` | VARCHAR(20) | NN | 馬 ID |
+| `snapshot_type` | VARCHAR(20) | NN | 種別（`win` / `place` 等） |
+| `odds_value` | NUMERIC(7,1) | NN | 単勝オッズ |
+| `odds_place_low` | NUMERIC(7,1) | | 複勝オッズ下限 |
+| `odds_place_high` | NUMERIC(7,1) | | 複勝オッズ上限 |
+| `snapshot_at` | TIMESTAMPTZ | NN | スナップショット取得日時 |
+
+> `snapshot_at` が発走時刻より前のレコードのみ学習・推論に使用可（§ 5-2 参照）
+
+---
+
+### 7-6. めぐ指数（AREA-11）
+
+#### `megu_index` — 馬×レース単位のめぐ指数
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | BIGINT | PK, NN | |
+| `race_id` | VARCHAR(20) | NN | レース ID |
+| `horse_id` | VARCHAR(20) | NN | 馬 ID |
+| `finish_time_sec` | NUMERIC(6,2) | NN | 走破タイム（秒） |
+| `par_time_sec` | NUMERIC(6,2) | | 基準タイム（セル別中央値） |
+| `delta_pace_sec` | NUMERIC(5,3) | NN, `*0` | ペース補正量（秒） |
+| `delta_track_sec` | NUMERIC(5,3) | NN, `*0` | 馬場補正量（秒） |
+| `delta_weight_sec` | NUMERIC(5,3) | NN, `*0` | 斤量補正量（秒） |
+| `delta_level_sec` | NUMERIC(5,3) | NN, `*0` | レースレベル補正量（秒） |
+| `adjusted_time_sec` | NUMERIC(6,2) | NN | 補正後タイム（秒） |
+| `megu_index` | NUMERIC(6,1) | NN | めぐ指数値（100 = par、1点 ≈ 0.1秒） |
+| `field_quality` | NUMERIC(14,0) | | フィールドクオリティ（FQ、円単位） |
+| `model_version` | VARCHAR(20) | NN, `*stg-v1` | モデルバージョン |
+| `computed_at` | TIMESTAMPTZ | `*now()` | 算出日時 |
+
+> **UNIQUE**: `(race_id, horse_id, model_version)`  
+> **INDEX**: `(horse_id, computed_at DESC)` — 馬の直近指数取得用
+
+#### `megu_par_time` — 基準タイムマスター
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | INTEGER | PK, NN | |
+| `distance` | INTEGER | NN | 距離（m） |
+| `course` | VARCHAR(20) | NN | 会場（例: 東京、中山） |
+| `surface` | VARCHAR(10) | NN | 馬場種別（`芝` / `ダート`） |
+| `track_condition` | VARCHAR(10) | NN | 馬場状態 |
+| `par_time_sec` | NUMERIC(6,2) | NN | 基準タイム（秒） |
+| `par_front_split_sec` | NUMERIC(5,2) | | 基準前半スプリット（秒） |
+| `sample_count` | INTEGER | NN | 集計サンプル数 |
+| `model_version` | VARCHAR(20) | NN, `*stg-v1` | モデルバージョン |
+| `computed_at` | TIMESTAMPTZ | `*now()` | |
+
+> **UNIQUE**: `(distance, course, surface, track_condition, model_version)`
+
+#### `megu_regression_params` — OLS 回帰係数
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | INTEGER | PK, NN | |
+| `param_name` | VARCHAR(50) | NN | 係数名（`beta_pace` / `beta_track` / `beta_weight` / `beta_level`） |
+| `param_value` | NUMERIC(10,6) | NN | 係数値 |
+| `std_error` | NUMERIC(10,6) | | 標準誤差 |
+| `sample_count` | INTEGER | | 学習サンプル数 |
+| `model_version` | VARCHAR(20) | NN, `*stg-v1` | モデルバージョン |
+| `fitted_at` | TIMESTAMPTZ | `*now()` | 学習日時 |
+
+> **UNIQUE**: `(param_name, model_version)`
+
+---
+
+### 7-7. AI 予測結果
+
+#### `prediction_results` — AI 予測出力
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `prediction_id` | BIGINT | PK, NN | |
+| `race_id` | VARCHAR(20) | NN | レース ID |
+| `horse_id` | VARCHAR(20) | NN | 馬 ID |
+| `model_version` | VARCHAR(50) | NN | モデルバージョン（例: `stg-mock-v1`） |
+| `predicted_at` | TIMESTAMPTZ | `*now()` | 予測実行日時 |
+| `win_prob` | NUMERIC(5,4) | | 勝率（0.0〜1.0） |
+| `place_prob` | NUMERIC(5,4) | | 連対率 |
+| `show_prob` | NUMERIC(5,4) | | 複勝率 |
+| `predicted_win_odds` | NUMERIC(7,1) | | 予測単勝オッズ |
+| `predicted_place_odds` | NUMERIC(7,1) | | 予測複勝オッズ |
+| `expected_win_roi` | NUMERIC(7,2) | | 期待単勝回収率 |
+| `expected_show_roi` | NUMERIC(7,2) | | 期待複勝回収率 |
+| `predicted_position` | SMALLINT | | 予測着順 |
+| `predicted_running_style` | VARCHAR(10) | | 予測脚質（`逃` / `先` / `差` / `追`） |
+
+#### `prediction_lap_times` — ラップタイム予測
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `race_id` | VARCHAR(20) | PK, NN | レース ID |
+| `model_version` | VARCHAR(50) | PK, NN | モデルバージョン |
+| `furlong_index` | SMALLINT | PK, NN | ハロン番号 |
+| `predicted_lap_sec` | NUMERIC(4,2) | | 予測ラップタイム（秒） |
+| `predicted_pace_cat` | VARCHAR(10) | | 予測ペース区分 |
+
+---
+
+### 7-8. コース統計キャッシュ
+
+#### `course_stats_cache` — コース別成績統計キャッシュ
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | INTEGER | PK, NN | |
+| `track` | VARCHAR(20) | NN | コース名 |
+| `distance` | INTEGER | NN | 距離（m） |
+| `surface` | VARCHAR(10) | NN | 馬場種別 |
+| `track_condition` | VARCHAR(10) | NN | 馬場状態 |
+| `stat_type` | VARCHAR(30) | NN | 統計種別（例: `jockey` / `trainer` / `horse`） |
+| `stat_key` | VARCHAR(50) | NN | 統計対象 ID |
+| `n_runs` | INTEGER | | サンプル数 |
+| `win_rate` | NUMERIC(5,4) | | 勝率 |
+| `place_rate` | NUMERIC(5,4) | | 連対率 |
+| `roi_win` | NUMERIC(7,4) | | 単勝回収率 |
+| `computed_at` | TIMESTAMPTZ | `*now()` | 算出日時 |
+
+---
+
+### 7-9. 運用・ユーザー管理
+
+#### `scrape_runs` — スクレイピング実行ログ
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `run_id` | BIGINT | PK, NN | 実行 ID |
+| `target_type` | VARCHAR(30) | NN | 対象カテゴリ（例: `race_result`） |
+| `target_id` | VARCHAR(20) | NN | 対象 ID（race_id 等） |
+| `status` | VARCHAR(10) | NN | 状態（`ok` / `error` / `skip`） |
+| `retry_count` | SMALLINT | `*0` | リトライ回数 |
+| `started_at` | TIMESTAMPTZ | NN | 開始日時 |
+| `finished_at` | TIMESTAMPTZ | | 終了日時 |
+| `error_message` | TEXT | | エラーメッセージ |
+| `gcs_path` | TEXT | | 保存先 GCS パス |
+
+#### `users` — ユーザー
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | UUID | PK, NN, `*gen_random_uuid()` | ユーザー ID |
+| `password_hash` | VARCHAR(255) | NN | パスワードハッシュ |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+#### `user_favorites` — お気に入り馬
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | INTEGER | PK, NN | |
+| `user_id` | UUID | NN, FK→users.id | ユーザー ID |
+| `horse_id` | VARCHAR(20) | NN | 馬 ID |
+| `horse_name` | VARCHAR(100) | | 馬名（非正規化コピー） |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+
+> **UNIQUE**: `(user_id, horse_id)`
+
+#### `saved_analyses` — 保存済み分析条件
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | UUID | PK, NN, `*gen_random_uuid()` | |
+| `user_id` | UUID | FK→users.id | ユーザー ID |
+| `name` | VARCHAR(100) | NN | 分析名 |
+| `analysis_type` | VARCHAR(20) | NN | 分析種別 |
+| `filter_conditions` | JSONB | NN | フィルタ条件（JSON） |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+| `last_run_at` | TIMESTAMPTZ | | 最終実行日時 |
+
+#### `notification_settings` — 通知設定（F-09）
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | INTEGER | PK, NN | |
+| `user_id` | UUID | NN, FK→users.id | ユーザー ID |
+| `email` | VARCHAR(255) | | 通知先メールアドレス |
+| `notify_favorite_race` | BOOLEAN | `*true` | お気に入り馬出走通知フラグ |
+| `created_at` | TIMESTAMPTZ | `*now()` | |
+| `updated_at` | TIMESTAMPTZ | `*now()` | |
+
+#### `notification_logs` — 通知送信ログ（F-09）
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | INTEGER | PK, NN | |
+| `user_id` | UUID | NN, FK→users.id | ユーザー ID |
+| `race_id` | VARCHAR(20) | NN | 通知対象レース ID |
+| `horse_id` | VARCHAR(20) | NN | 通知対象馬 ID |
+| `sent_at` | TIMESTAMPTZ | `*now()` | 送信日時 |
+| `status` | VARCHAR(20) | `*sent` | 送信状態（`sent` / `failed`） |
+
+---
+
+### 7-10. テーブル関連図（主要 FK）
+
+```
+users ──────────────────────────────────────────────────┐
+  │ id                                                   │
+  ├── user_favorites.user_id                             │
+  ├── saved_analyses.user_id                             │
+  ├── notification_settings.user_id                      │
+  └── notification_logs.user_id                          │
+                                                         │
+races ──────────────────────────────────────────────────┤
+  │ race_id                                              │
+  ├── entries.race_id                                    │
+  ├── race_results.race_id                               │
+  ├── race_lap_times.race_id                             │
+  ├── race_corner_positions.race_id                      │
+  ├── race_pace_summary.race_id                          │
+  ├── race_odds_snapshot.race_id                         │
+  ├── megu_index.race_id                                 │
+  └── prediction_results.race_id                         │
+                                                         │
+horses ─────────────────────────────────────────────────┤
+  │ horse_id                                             │
+  ├── entries.horse_id                                   │
+  ├── race_results.horse_id                              │
+  ├── race_corner_positions.horse_id                     │
+  ├── race_odds_snapshot.horse_id                        │
+  ├── horse_stats_snapshot.horse_id                      │
+  ├── megu_index.horse_id                                │
+  └── prediction_results.horse_id                        │
+                                                         │
+sires ──────────────────────────────────────────────────┘
+  │ sire_id
+  └── horses.sire_id
+
+jockeys
+  │ jockey_id
+  ├── entries.jockey_id
+  ├── race_results.jockey_id
+  └── jockey_stats_snapshot.jockey_id (非 FK・論理参照)
+
+trainers
+  │ trainer_id
+  ├── entries.trainer_id
+  └── trainer_stats_snapshot.trainer_id (非 FK・論理参照)
+```
+
+### 7-11. Alembic マイグレーション履歴
+
+| バージョン | 内容 |
+|---|---|
+| `001_initial` | Layer 1〜5 + スナップショット + 予測結果 + ユーザー基本テーブル |
+| `002_user_favorites_notifications` | user_favorites / notification_settings / notification_logs（F-12/F-09） |
+| `003_megu_index` | megu_index / megu_par_time / megu_regression_params（AREA-11） |
