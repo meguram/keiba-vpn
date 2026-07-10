@@ -241,10 +241,34 @@ def compute_for_dataframe(
     )
     df["megu_index"] = 100.0 + (df["par_time_final"] - df["adjusted_time_sec"]) * 10.0
 
+    # ── 【最適化】2着基準 out_of_range フラグ ──────────────────────────────
+    finish_pos_col = "finish_position" if "finish_position" in df.columns else "finish_pos"
+    if finish_pos_col in df.columns:
+        df["finish_pos_num"] = pd.to_numeric(df[finish_pos_col], errors="coerce")
+        df_2nd = (
+            df[df["finish_pos_num"] == 2][["race_id", "finish_time_sec"]]
+            .rename(columns={"finish_time_sec": "time_2nd"})
+        )
+        df_1st = (
+            df[df["finish_pos_num"] == 1][["race_id", "finish_time_sec"]]
+            .rename(columns={"finish_time_sec": "time_1st"})
+        )
+        df_2nd = df_2nd.merge(df_1st, on="race_id", how="outer")
+        df_2nd["time_2nd"] = df_2nd["time_2nd"].fillna(df_2nd["time_1st"])
+        df = df.merge(df_2nd[["race_id", "time_2nd"]], on="race_id", how="left")
+        df["out_of_range"] = (
+            (df["finish_pos_num"] > 2) &
+            (df["finish_time_sec"] > df["time_2nd"].fillna(np.inf) + 2.0)
+        )
+        df.loc[df["out_of_range"], "megu_index"] = np.nan
+        df["computation_status"] = np.where(df["out_of_range"], "out_of_range", "valid")
+    else:
+        df["computation_status"] = "valid"
+
     result_cols = [
         "race_id", "horse_id", "finish_time_sec", "par_time_final",
         "delta_pace_sec", "delta_track_sec", "delta_weight_sec", "delta_level_sec",
-        "adjusted_time_sec", "megu_index",
+        "adjusted_time_sec", "megu_index", "computation_status",
         "front_split_sec", "split_point_m", "tsi_raw",
     ]
     return df[[c for c in result_cols if c in df.columns]].copy()
@@ -264,10 +288,10 @@ def _upsert_batch(session, df_result: pd.DataFrame, batch_size: int = 500) -> in
                        delta_pace_sec, delta_track_sec, delta_weight_sec, delta_level_sec,
                        adjusted_time_sec, megu_index, field_quality,
                        front_split_sec, split_point_m, tsi_raw,
-                       model_version, computed_at)
+                       computation_status, model_version, computed_at)
                     VALUES
                       (:rid, :hid, :ft, :pt, :dp, :dt, :dw, :dl,
-                       :at, :mi, :fq, :fsp, :spm, :tsi, :mv, NOW())
+                       :at, :mi, :fq, :fsp, :spm, :tsi, :cs, :mv, NOW())
                     ON CONFLICT (race_id, horse_id, model_version) DO UPDATE
                     SET finish_time_sec  = EXCLUDED.finish_time_sec,
                         par_time_sec     = EXCLUDED.par_time_sec,
@@ -280,6 +304,7 @@ def _upsert_batch(session, df_result: pd.DataFrame, batch_size: int = 500) -> in
                         front_split_sec  = EXCLUDED.front_split_sec,
                         split_point_m    = EXCLUDED.split_point_m,
                         tsi_raw          = EXCLUDED.tsi_raw,
+                        computation_status = EXCLUDED.computation_status,
                         computed_at      = NOW()
                 """),
                 {
@@ -297,6 +322,7 @@ def _upsert_batch(session, df_result: pd.DataFrame, batch_size: int = 500) -> in
                     "fsp":  _to_float(row.get("front_split_sec")),
                     "spm":  int(row["split_point_m"]) if pd.notna(row.get("split_point_m")) else None,
                     "tsi":  _to_float(row.get("tsi_raw")),
+                    "cs":   str(row.get("computation_status", "valid")),
                     "mv":   MODEL_VERSION,
                 },
             )
