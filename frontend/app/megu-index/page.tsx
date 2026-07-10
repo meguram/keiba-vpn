@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockMeguPredicted } from "@/lib/mock";
 
 /* ── 型定義 ── */
 type RaceItem = {
@@ -416,6 +417,13 @@ export default function MeguIndexPage() {
   const [racesError, setRacesError] = useState("");
 
   useEffect(() => {
+    if (USE_MOCK) {
+      const list = getMockRaceDates();
+      setDates(list);
+      if (list.length) setSelectedDate(list[0]);
+      setLoadingDates(false);
+      return;
+    }
     (async () => {
       try {
         const res = await fetch("/api/scrape-dates?picker_past_days=30", { cache: "no-store" });
@@ -437,10 +445,22 @@ export default function MeguIndexPage() {
     setRaces([]);
     setMeguMap({});
     try {
-      const res = await fetch(`/api/race-list/${date}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json();
-      setRaces(d.races ?? d ?? []);
+      if (USE_MOCK) {
+        setRaces(MOCK_WEEKLY_RACES.map(r => ({
+          race_id: r.race_id,
+          race_name: r.race_name,
+          venue: r.venue,
+          round: r.round,
+          distance: r.distance,
+          surface: r.surface,
+          grade: r.grade,
+        })));
+      } else {
+        const res = await fetch(`/api/race-list/${date}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const d = await res.json();
+        setRaces(d.races ?? d ?? []);
+      }
     } catch (e: unknown) {
       setRacesError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -455,6 +475,12 @@ export default function MeguIndexPage() {
   const loadMegu = useCallback(async (raceId: string) => {
     setLoadingMegu(prev => ({ ...prev, [raceId]: true }));
     try {
+      if (USE_MOCK) {
+        await new Promise(r => setTimeout(r, 300));
+        const d = getMockMeguPredicted(raceId) as MeguPredicted;
+        setMeguMap(prev => ({ ...prev, [raceId]: d }));
+        return;
+      }
       const res = await fetch(`/api/v1/races/${raceId}/megu-index-predicted`);
       const d: MeguPredicted = res.ok ? await res.json() : {
         race_id: raceId,

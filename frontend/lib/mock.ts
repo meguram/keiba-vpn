@@ -451,6 +451,93 @@ export function getMockPredictions(raceId: string) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Megu index predicted mock  (/megu-index)
+// ---------------------------------------------------------------------------
+
+const MOCK_COND_SCENARIOS = [
+  { type: "none",     label: null,          delta_mean: null,  delta_std: null,  transfer_sample_count: undefined as number | undefined },
+  { type: "none",     label: null,          delta_mean: null,  delta_std: null,  transfer_sample_count: undefined as number | undefined },
+  { type: "none",     label: null,          delta_mean: null,  delta_std: null,  transfer_sample_count: undefined as number | undefined },
+  { type: "surface",  label: "芝→ダ初",     delta_mean: -5.2,  delta_std: 3.1,   transfer_sample_count: 42 as number | undefined },
+  { type: "distance", label: "+700m",        delta_mean: -3.8,  delta_std: 2.4,   transfer_sample_count: 67 as number | undefined },
+  { type: "none",     label: null,          delta_mean: null,  delta_std: null,  transfer_sample_count: undefined as number | undefined },
+  { type: "both",     label: "芝→ダ+800m",  delta_mean: -8.1,  delta_std: 4.2,   transfer_sample_count: 18 as number | undefined },
+  { type: "none",     label: null,          delta_mean: null,  delta_std: null,  transfer_sample_count: undefined as number | undefined },
+];
+
+function mockDistBand(d: number): string {
+  if (d <= 1400) return "sprint";
+  if (d <= 1800) return "mile";
+  if (d <= 2200) return "middle";
+  return "long";
+}
+
+export function getMockMeguPredicted(raceId: string) {
+  const race = MOCK_WEEKLY_RACES.find(r => r.race_id === raceId) ?? MOCK_WEEKLY_RACES[0];
+  const isTurf = race.surface === "芝";
+  const parSec = isTurf
+    ? (race.distance as number) / 1000 * 60 + 58.0
+    : (race.distance as number) / 1000 * 62.0 + 4.0;
+
+  const HIST_VENUES = ["東京", "阪神", "中京", "京都", "新潟"];
+  const HIST_SURFACES = ["芝", "芝", "芝", "ダ", "芝"];
+  const HIST_DATES = ["2026-06-28", "2026-06-07", "2026-05-18", "2026-04-27", "2026-03-29"];
+  const HIST_DISTS = [1600, 2000, 1800, 1400, 2200];
+
+  const horses = MOCK_HORSES.slice(0, (race.field_size as number) ?? 16).map((h, i) => {
+    const baseMegu = parseFloat((88 + h.win_prob * 80 + (i % 4) * 1.5).toFixed(1));
+    const cc = MOCK_COND_SCENARIOS[i % MOCK_COND_SCENARIOS.length];
+    const adjustedMegu = cc.delta_mean != null
+      ? parseFloat((baseMegu + cc.delta_mean).toFixed(1))
+      : baseMegu;
+    const finishSec = parseFloat((parSec + i * 0.3).toFixed(1));
+
+    return {
+      horse_id: h.horse_id,
+      horse_name: h.horse_name,
+      horse_number: h.post_no,
+      jockey_weight: 55 + (i % 5 === 0 ? 2 : 0),
+      finish_time_sec: finishSec,
+      actual_megu: null as number | null,
+      base_megu: baseMegu,
+      megu_adjusted: adjustedMegu,
+      condition_change: {
+        type: cc.type,
+        label: cc.label,
+        delta_mean: cc.delta_mean,
+        delta_std: cc.delta_std,
+        transfer_sample_count: cc.transfer_sample_count,
+      },
+      history: HIST_DATES.map((date, j) => ({
+        race_id: `hist_${h.horse_id}_${j}`,
+        race_date: date,
+        venue: HIST_VENUES[j],
+        surface: HIST_SURFACES[j],
+        distance: HIST_DISTS[j],
+        megu_index: parseFloat((baseMegu - j * 1.8 + (i % 3) * 0.5).toFixed(1)),
+        finish_pos: (j + i % 5) % 8 + 1,
+      })),
+    };
+  });
+
+  return {
+    race_id: raceId,
+    race_info: {
+      race_name: race.race_name,
+      venue: race.venue,
+      surface: race.surface,
+      distance: race.distance as number,
+      dist_band: mockDistBand(race.distance as number),
+      track_condition: "良",
+      grade: (race.grade as string) || null,
+      race_date: "2026-07-12",
+    },
+    model_version: "mock-v1",
+    horses,
+  };
+}
+
 export const MOCK_KELLY = {
   race_id: "r001",
   bankroll: 100000,
