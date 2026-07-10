@@ -1,0 +1,466 @@
+"""
+めぐ指数 計算・DB 保存スクリプト
+
+実行方法:
+    # STG 環境で単一レースを再計算
+    KEIBA_ENV=stg python -m src.pipeline.megu_index.compute --race-id 2026010101010
+
+    # STG 環境で指定日程の全レースを計算
+    KEIBA_ENV=stg python -m src.pipeline.megu_index.compute --date 2026-06-01
+
+    # STG 環境で年全体を再計算（バッチ）
+    KEIBA_ENV=stg python -m src.pipeline.megu_index.compute --year 2026
+
+    # prod 環境（KEIBA_ENV=prod を設定するだけで DB 接続先が変わる）
+    KEIBA_ENV=prod python -m src.pipeline.megu_index.compute --date 2026-06-15
+
+設計上の注意:
+    - 本スクリプトは DB の megu_regression_params / megu_par_time に保存済みの係数を使う。
+    - 係数の再推定（NB-02）は年次または四半期で別途実施（AREA-11 §8 スケジュール参照）。
+    - prod 環境への移行: KEIBA_ENV=prod で実行するだけで prod DB に書き込まれる。
+      データソース（page_reference）は環境非依存のため別途 rsync/GCS 経由でコピーしておく。
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import math
+import os
+from datetime import datetime, date
+from pathlib import Path
+from typing import Optional
+
+import numpy as np
+import pandas as pd
+from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+TABLES_DIR   = PROJECT_ROOT / "data/page_reference/tables"
+CUSHION_DIR  = PROJECT_ROOT / "data/page_reference/cushion"
+MODEL_VERSION = "v1"
+
+# パターンB ウェイト [U-1]
+WEIGHTS_B = [0.35, 0.25, 0.20, 0.12, 0.08]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ユーティリティ
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _parse_lap_times(lap_json, distance: int) -> dict[int, float]:
+    """lap_times JSON → {cumulative_distance_m: cumulative_sec}"""
+    if not lap_json or (isinstance(lap_json, float) and math.isnan(lap_json)):
+        return {}
+    try:
+        laps = json.loads(lap_json) if isinstance(lap_json, str) else lap_json
+        if not laps:
+            return {}
+        seg_len = distance / len(laps)
+        result: dict[int, float] = {}
+        cumtime = 0.0
+        cumdist = 0.0
+        for t in laps:
+            cumtime += t
+            cumdist += seg_len
+            result[round(cumdist)] = round(cumtime, 2)
+        return result
+    except Exception:
+        return {}
+
+
+def _select_split_point(distance: int, available_dists: list[int]) -> Optional[int]:
+    """距離の 50% 以下で最近傍のスプリット点を返す (AREA-11 §4-1)"""
+    target = distance * 0.5
+    cands = [d for d in sorted(available_dists) if d <= target]
+    return max(cands) if cands else None
+
+
+def _to_float(v) -> Optional[float]:
+    if v is None:
+        return None
+    try:
+        f = float(v)
+        return None if math.isnan(f) else f
+    except (TypeError, ValueError):
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# データ読み込み
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_result_flat(year: int) -> pd.DataFrame:
+    p = TABLES_DIR / str(year) / "race_result_flat.parquet"
+    if not p.exists():
+        logger.warning("race_result_flat not found: %s", p)
+        return pd.DataFrame()
+    df = pd.read_parquet(p)
+    return df
+
+
+def _load_cushion(year: int) -> pd.DataFrame:
+    p = CUSHION_DIR / f"cushion_{year}.json"
+    if not p.exists():
+        return pd.DataFrame()
+    data = json.loads(p.read_text())
+    df = pd.DataFrame(data)
+    df = df[df["is_race_day"] == True].copy()
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date"])
+    df["date_str"] = df["date"].dt.strftime("%Y-%m-%d")
+    df["venue_code"] = df["venue_code"].astype(str).str.strip()
+    return df
+
+
+def _load_regression_params(session) -> dict[str, float]:
+    rows = session.execute(
+        text("SELECT param_name, param_value FROM megu_regression_params WHERE model_version=:mv"),
+        {"mv": MODEL_VERSION},
+    ).fetchall()
+    return {r[0]: float(r[1]) for r in rows}
+
+
+def _load_par_time(session) -> pd.DataFrame:
+    rows = session.execute(
+        text("""
+            SELECT distance, course, surface, track_condition, par_time_sec, par_front_split_sec
+            FROM megu_par_time WHERE model_version=:mv
+        """),
+        {"mv": MODEL_VERSION},
+    ).fetchall()
+    df = pd.DataFrame(rows, columns=["distance", "course", "surface", "track_condition",
+                                      "par_time_sec", "par_front_split_sec"])
+    df["par_time_sec"] = df["par_time_sec"].astype(float)
+    return df
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# めぐ指数計算
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_for_dataframe(
+    df_flat: pd.DataFrame,
+    params: dict[str, float],
+    df_par: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    race_result_flat DataFrame → めぐ指数 DataFrame を返す。
+
+    Parameters
+    ----------
+    df_flat : race_result_flat（cushion 列マージ済みのもの）
+    params  : megu_regression_params の dict
+    df_par  : megu_par_time DataFrame
+
+    Returns
+    -------
+    DataFrame with columns:
+        race_id, horse_id, finish_time_sec, par_time_sec,
+        delta_pace_sec, delta_track_sec, delta_weight_sec, delta_level_sec,
+        adjusted_time_sec, megu_index,
+        front_split_sec, split_point_m, tsi_raw
+    """
+    beta_pace   = params.get("beta_pace",   0.0)
+    beta_track  = params.get("beta_track",  0.0)
+    beta_weight = params.get("beta_weight", 0.0)
+    tsi_mean    = params.get("tsi_mean",    0.0)
+
+    df = df_flat.copy()
+    df = df[df["surface"].isin(["芝", "ダート"])]
+    df["finish_time_sec"] = pd.to_numeric(df["time_sec"], errors="coerce")
+    df = df[df["finish_time_sec"].notna() & (df["finish_time_sec"] > 0)]
+    df["distance"] = pd.to_numeric(df["distance"], errors="coerce")
+    df = df[df["distance"] > 0]
+
+    # ── 前半スプリット ──────────────────────────────────────────────────
+    splits = []
+    for _, row in df[["race_id", "distance", "lap_times"]].drop_duplicates("race_id").iterrows():
+        lap_dict = _parse_lap_times(row["lap_times"], int(row["distance"]))
+        if not lap_dict:
+            splits.append({"race_id": row["race_id"], "front_split_sec": np.nan, "split_point_m": np.nan})
+            continue
+        sp = _select_split_point(int(row["distance"]), list(lap_dict.keys()))
+        if sp is None:
+            splits.append({"race_id": row["race_id"], "front_split_sec": np.nan, "split_point_m": np.nan})
+        else:
+            splits.append({"race_id": row["race_id"], "front_split_sec": lap_dict[sp], "split_point_m": sp})
+    df_splits = pd.DataFrame(splits)
+    df = df.merge(df_splits, on="race_id", how="left")
+
+    # ── TSI ────────────────────────────────────────────────────────────
+    if "tsi_raw" not in df.columns:
+        df["tsi_raw"] = tsi_mean
+    df["tsi_normalized"] = df["tsi_raw"].fillna(tsi_mean) - tsi_mean
+
+    # ── 斤量偏差 ───────────────────────────────────────────────────────
+    df["sex"] = df["sex_age"].str.extract(r"^(牡|牝|セン)", expand=False).fillna("牡")
+    df["base_weight"] = np.where(df["sex"] == "牝", 53.0, 55.0)
+    df["jockey_weight_num"] = pd.to_numeric(df["jockey_weight"], errors="coerce")
+    df["weight_dev"] = df["jockey_weight_num"] - df["base_weight"]
+    df["dist_scale"] = df["distance"] / 2000.0
+
+    # ── track_cat ──────────────────────────────────────────────────────
+    track_map = {"良": "良", "稍重": "稍重", "重": "重・不良", "不良": "重・不良"}
+    df["track_cat"] = df["track_condition"].map(track_map).fillna("良")
+
+    # ── par_time マージ ────────────────────────────────────────────────
+    df_par_key = df_par.rename(columns={"course": "direction", "track_condition": "track_cat"})
+    df = df.merge(
+        df_par_key[["distance", "surface", "direction", "track_cat", "par_time_sec", "par_front_split_sec"]],
+        on=["distance", "surface", "direction", "track_cat"],
+        how="left",
+    )
+    # フォールバック: distance × surface × track_cat 平均（方向なし）
+    par_fallback = (
+        df_par_key.groupby(["distance", "surface", "track_cat"])["par_time_sec"].mean()
+        .reset_index().rename(columns={"par_time_sec": "par_time_fallback"})
+    )
+    df = df.merge(par_fallback, on=["distance", "surface", "track_cat"], how="left")
+    df["par_time_final"] = df["par_time_sec"].fillna(df["par_time_fallback"])
+
+    # ── front_split_dev ────────────────────────────────────────────────
+    df["front_split_dev"] = df["front_split_sec"] - df["par_front_split_sec"]
+
+    # ── 各補正値 ───────────────────────────────────────────────────────
+    df["delta_pace_sec"]   = beta_pace  * df["front_split_dev"].fillna(0)
+    df["delta_track_sec"]  = -beta_track * df["tsi_normalized"].fillna(0)
+    df["delta_weight_sec"] = beta_weight * df["weight_dev"].fillna(0) * df["dist_scale"].fillna(1)
+    df["delta_level_sec"]  = 0.0  # FQ 未実装
+
+    # ── 補正済みタイム & めぐ指数 ─────────────────────────────────────
+    df["adjusted_time_sec"] = (
+        df["finish_time_sec"]
+        - df["delta_pace_sec"]
+        - df["delta_track_sec"]
+        - df["delta_weight_sec"]
+        - df["delta_level_sec"]
+    )
+    df["megu_index"] = 100.0 + (df["par_time_final"] - df["adjusted_time_sec"]) * 10.0
+
+    result_cols = [
+        "race_id", "horse_id", "finish_time_sec", "par_time_final",
+        "delta_pace_sec", "delta_track_sec", "delta_weight_sec", "delta_level_sec",
+        "adjusted_time_sec", "megu_index",
+        "front_split_sec", "split_point_m", "tsi_raw",
+    ]
+    return df[[c for c in result_cols if c in df.columns]].copy()
+
+
+def _upsert_batch(session, df_result: pd.DataFrame, batch_size: int = 500) -> int:
+    """めぐ指数 DataFrame を megu_index テーブルに UPSERT する。"""
+    total = len(df_result)
+    saved = 0
+    for start in range(0, total, batch_size):
+        batch = df_result.iloc[start : start + batch_size]
+        for _, row in batch.iterrows():
+            session.execute(
+                text("""
+                    INSERT INTO megu_index
+                      (race_id, horse_id, finish_time_sec, par_time_sec,
+                       delta_pace_sec, delta_track_sec, delta_weight_sec, delta_level_sec,
+                       adjusted_time_sec, megu_index, field_quality,
+                       front_split_sec, split_point_m, tsi_raw,
+                       model_version, computed_at)
+                    VALUES
+                      (:rid, :hid, :ft, :pt, :dp, :dt, :dw, :dl,
+                       :at, :mi, :fq, :fsp, :spm, :tsi, :mv, NOW())
+                    ON CONFLICT (race_id, horse_id, model_version) DO UPDATE
+                    SET finish_time_sec  = EXCLUDED.finish_time_sec,
+                        par_time_sec     = EXCLUDED.par_time_sec,
+                        delta_pace_sec   = EXCLUDED.delta_pace_sec,
+                        delta_track_sec  = EXCLUDED.delta_track_sec,
+                        delta_weight_sec = EXCLUDED.delta_weight_sec,
+                        delta_level_sec  = EXCLUDED.delta_level_sec,
+                        adjusted_time_sec = EXCLUDED.adjusted_time_sec,
+                        megu_index       = EXCLUDED.megu_index,
+                        front_split_sec  = EXCLUDED.front_split_sec,
+                        split_point_m    = EXCLUDED.split_point_m,
+                        tsi_raw          = EXCLUDED.tsi_raw,
+                        computed_at      = NOW()
+                """),
+                {
+                    "rid":  str(row["race_id"]),
+                    "hid":  str(row["horse_id"]),
+                    "ft":   _to_float(row.get("finish_time_sec")),
+                    "pt":   _to_float(row.get("par_time_final")),
+                    "dp":   _to_float(row.get("delta_pace_sec", 0)),
+                    "dt":   _to_float(row.get("delta_track_sec", 0)),
+                    "dw":   _to_float(row.get("delta_weight_sec", 0)),
+                    "dl":   _to_float(row.get("delta_level_sec", 0)),
+                    "at":   _to_float(row.get("adjusted_time_sec")),
+                    "mi":   _to_float(row.get("megu_index")),
+                    "fq":   None,
+                    "fsp":  _to_float(row.get("front_split_sec")),
+                    "spm":  int(row["split_point_m"]) if pd.notna(row.get("split_point_m")) else None,
+                    "tsi":  _to_float(row.get("tsi_raw")),
+                    "mv":   MODEL_VERSION,
+                },
+            )
+            saved += 1
+        session.commit()
+        logger.info("upserted %d / %d", min(start + batch_size, total), total)
+    return saved
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 集計（今週のめぐ指数 A/B/C）
+# ─────────────────────────────────────────────────────────────────────────────
+
+def aggregate_horse_megu(df_all: pd.DataFrame) -> pd.DataFrame:
+    """
+    horse_id ごとに直近5走のめぐ指数を集計して A/B/C 3パターンを返す。
+
+    Parameters
+    ----------
+    df_all : megu_index テーブルの全行（race_id, horse_id, megu_index, 
+              surface, distance, date 列を含む）
+
+    Returns
+    -------
+    DataFrame: horse_id, megu_a, megu_b, megu_c
+    """
+    df = df_all.copy()
+    df["race_date"] = pd.to_datetime(df.get("date", df.get("computed_at")), errors="coerce")
+    df = df.sort_values(["horse_id", "race_date"])
+
+    dist_bands = {"sprint": (0, 1499), "mile": (1500, 1799), "middle": (1800, 2399), "long": (2400, 99999)}
+
+    def band(d):
+        for name, (lo, hi) in dist_bands.items():
+            if lo <= d <= hi:
+                return name
+        return "middle"
+
+    results = []
+    for horse_id, grp in df.groupby("horse_id"):
+        grp = grp.sort_values("race_date", ascending=False)
+        recent = grp.head(5)
+        if len(recent) == 0:
+            continue
+
+        # A: 最大
+        megu_a = float(recent["megu_index"].max())
+
+        # B: 加重平均 [U-1]
+        w = np.array(WEIGHTS_B[: len(recent)])
+        w = w / w.sum()
+        megu_b = float((recent["megu_index"].values * w).sum())
+
+        # C: 同距離帯 × 同馬場 直近3走最大
+        if "surface" in grp.columns and "distance" in grp.columns:
+            surf0 = grp.iloc[0]["surface"]
+            db0   = band(grp.iloc[0]["distance"])
+            cond  = grp[(grp["surface"] == surf0) & (grp["distance"].apply(band) == db0)].head(3)
+            megu_c = float(cond["megu_index"].max()) if len(cond) > 0 else np.nan
+        else:
+            megu_c = np.nan
+
+        results.append({"horse_id": horse_id, "megu_a": megu_a, "megu_b": megu_b, "megu_c": megu_c})
+
+    return pd.DataFrame(results)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CLI エントリポイント
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="めぐ指数計算スクリプト")
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument("--race-id",  help="単一 race_id を計算（例: 2026010101010）")
+    group.add_argument("--date",     help="指定日（YYYY-MM-DD）の全レースを計算")
+    group.add_argument("--year",     type=int, help="指定年全体を計算（例: 2026）")
+    p.add_argument("--dry-run", action="store_true", help="DB に書き込まず計算結果のみ表示")
+    p.add_argument("--model-version", default=MODEL_VERSION)
+    return p
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(message)s")
+    args = _build_parser().parse_args()
+
+    # DB 初期化
+    from src.db.session import get_session, init_engine
+    init_engine()
+
+    with get_session() as session:
+        params  = _load_regression_params(session)
+        df_par  = _load_par_time(session)
+
+    if not params:
+        logger.error("回帰パラメータが DB に存在しません。NB-02 を先に実行してください。")
+        raise SystemExit(1)
+
+    logger.info("パラメータ: %s", params)
+
+    # 対象年の特定
+    if args.race_id:
+        year = int(args.race_id[:4])
+        years = [year]
+    elif args.date:
+        year = int(args.date[:4])
+        years = [year]
+    else:
+        years = [args.year]
+
+    # データロード
+    dfs = []
+    for yr in years:
+        df_flat = _load_result_flat(yr)
+        if df_flat.empty:
+            continue
+
+        # 対象を絞り込む
+        if args.race_id:
+            df_flat = df_flat[df_flat["race_id"] == args.race_id]
+        elif args.date:
+            df_flat["date_str"] = pd.to_datetime(df_flat["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+            df_flat = df_flat[df_flat["date_str"] == args.date]
+
+        # cushion マージ
+        df_cushion = _load_cushion(yr)
+        if not df_cushion.empty:
+            df_flat["date_str"] = pd.to_datetime(df_flat["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+            df_flat["venue_code"] = df_flat["venue_code"].astype(str).str.strip()
+            c_merge = df_cushion[["date_str", "venue_code", "cushion_value", "dirt_moisture_goal"]].drop_duplicates(
+                subset=["date_str", "venue_code"]
+            )
+            df_flat = df_flat.merge(c_merge, on=["date_str", "venue_code"], how="left")
+            tsi_mean = params.get("tsi_mean", 0.0)
+            df_flat["tsi_raw"] = np.where(
+                df_flat["surface"] == "芝",
+                df_flat["cushion_value"].fillna(tsi_mean),
+                -df_flat["dirt_moisture_goal"].fillna(-tsi_mean),
+            )
+
+        dfs.append(df_flat)
+
+    if not dfs:
+        logger.warning("対象データなし")
+        return
+
+    df_all = pd.concat(dfs, ignore_index=True)
+    logger.info("入力データ: %d 行", len(df_all))
+
+    # めぐ指数計算
+    df_result = compute_for_dataframe(df_all, params, df_par)
+    df_result = df_result[df_result["megu_index"].notna()]
+    logger.info("計算済み: %d 行  megu_index avg=%.2f", len(df_result), df_result["megu_index"].mean())
+
+    if args.dry_run:
+        print(df_result.head(20).to_string())
+        return
+
+    # DB 保存
+    with get_session() as session:
+        saved = _upsert_batch(session, df_result)
+    logger.info("DB 保存完了: %d 件", saved)
+
+
+if __name__ == "__main__":
+    main()
