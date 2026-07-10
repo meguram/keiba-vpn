@@ -403,7 +403,7 @@ export function getMockRaceDates(): string[] {
       const d = String(cursor.getDate()).padStart(2, "0");
       result.push(`${y}${m}${d}`);
     }
-    cursor.setDate(cursor.getDate() - 1);
+    cursor.setDate(cursor.getDate() + 1);
   }
   return result;
 }
@@ -485,6 +485,15 @@ export function getMockMeguPredicted(raceId: string) {
   const HIST_DATES = ["2026-06-28", "2026-06-07", "2026-05-18", "2026-04-27", "2026-03-29"];
   const HIST_DISTS = [1600, 2000, 1800, 1400, 2200];
 
+  const MOCK_SEX_AGE = [
+    { sex: "牡", age: 4 }, { sex: "牝", age: 3 }, { sex: "セ", age: 5 },
+    { sex: "牡", age: 3 }, { sex: "牝", age: 4 }, { sex: "牡", age: 5 },
+    { sex: "セ", age: 6 }, { sex: "牝", age: 3 }, { sex: "牡", age: 4 },
+    { sex: "牝", age: 5 }, { sex: "セ", age: 4 }, { sex: "牡", age: 3 },
+    { sex: "牝", age: 6 }, { sex: "牡", age: 4 }, { sex: "セ", age: 3 },
+    { sex: "牝", age: 4 },
+  ];
+
   const horses = MOCK_HORSES.slice(0, (race.field_size as number) ?? 16).map((h, i) => {
     const baseMegu = parseFloat((88 + h.win_prob * 80 + (i % 4) * 1.5).toFixed(1));
     const cc = MOCK_COND_SCENARIOS[i % MOCK_COND_SCENARIOS.length];
@@ -492,11 +501,14 @@ export function getMockMeguPredicted(raceId: string) {
       ? parseFloat((baseMegu + cc.delta_mean).toFixed(1))
       : baseMegu;
     const finishSec = parseFloat((parSec + i * 0.3).toFixed(1));
+    const sa = MOCK_SEX_AGE[i % MOCK_SEX_AGE.length];
 
     return {
       horse_id: h.horse_id,
       horse_name: h.horse_name,
       horse_number: h.post_no,
+      sex: sa.sex,
+      age: sa.age,
       jockey_weight: 55 + (i % 5 === 0 ? 2 : 0),
       finish_time_sec: finishSec,
       actual_megu: null as number | null,

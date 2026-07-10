@@ -28,6 +28,8 @@ type MeguHorse = {
   horse_id: string;
   horse_name: string | null;
   horse_number: number | null;
+  sex?: string | null;
+  age?: number | null;
   jockey_weight: number | null;
   finish_time_sec: number | null;
   actual_megu: number | null;
@@ -177,6 +179,11 @@ function HorseRow({
           <CondBadge cc={cc} />
         </td>
 
+        {/* 性齢 */}
+        <td style={{ ...TDc, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+          {horse.sex ?? "—"}{horse.age != null ? horse.age : ""}
+        </td>
+
         {/* 斤量 */}
         <td style={{ ...TDc, color: "var(--text-dim)", background: sortKey === "jockey_weight" ? "rgba(59,130,246,0.04)" : undefined }}>
           {horse.jockey_weight != null ? `${horse.jockey_weight}kg` : "—"}
@@ -212,7 +219,7 @@ function HorseRow({
       {/* 履歴展開行 */}
       {open && (
         <tr>
-          <td colSpan={6} style={{ background: "rgba(12,18,32,0.7)", padding: "8px 16px 12px 40px" }}>
+          <td colSpan={7} style={{ background: "rgba(12,18,32,0.7)", padding: "8px 16px 12px 40px" }}>
             <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 5 }}>直近{horse.history.length}走</div>
             <table style={{ borderCollapse: "collapse", fontSize: 11 }}>
               <tbody>
@@ -325,7 +332,7 @@ function RaceCard({
                 {horses.length > 0 ? `✓ ${horses.length}頭` : "データなし"}
               </span>
             )}
-            <Link href={`/race/${race.race_id}`} onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: "var(--accent)", textDecoration: "none", border: "1px solid rgba(59,130,246,0.3)", padding: "3px 8px", borderRadius: 4 }}>
+            <Link href={`/race/${race.race_id}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: "var(--accent)", textDecoration: "none", border: "1px solid rgba(59,130,246,0.3)", padding: "3px 8px", borderRadius: 4 }}>
               詳細 →
             </Link>
             <span style={{ fontSize: 14, color: "var(--text-dim)", userSelect: "none" }}>{expanded ? "▲" : "▼"}</span>
@@ -381,6 +388,7 @@ function RaceCard({
                   <tr>
                     <SortTh label="馬番" sortKey="horse_number" current={sortKey} dir={sortDir} onSort={handleSort} style={{ width: 52 }} />
                     <th style={{ ...TH, width: 160 }}>馬名</th>
+                    <th style={{ ...TH, width: 52, textAlign: "center" }}>性齢</th>
                     <SortTh label="斤量" sortKey="jockey_weight" current={sortKey} dir={sortDir} onSort={handleSort} style={{ width: 68 }} />
                     <SortTh label="走破タイム" sortKey="finish_time_sec" current={sortKey} dir={sortDir} onSort={handleSort} style={{ width: 100 }} />
                     <SortTh label="めぐ指数" sortKey="megu_adjusted" current={sortKey} dir={sortDir} onSort={handleSort} style={{ width: 100 }} />
@@ -426,7 +434,7 @@ export default function MeguIndexPage() {
     }
     (async () => {
       try {
-        const res = await fetch("/api/scrape-dates?picker_past_days=30", { cache: "no-store" });
+        const res = await fetch("/api/scrape-dates?upcoming_days=14", { cache: "no-store" });
         if (!res.ok) return;
         const d = await res.json();
         const list: string[] = d.dates ?? d ?? [];
@@ -522,7 +530,7 @@ export default function MeguIndexPage() {
           <Link href="/" style={{ fontSize: 12, color: "var(--text-dim)", textDecoration: "none" }}>← ホーム</Link>
           <span style={{ color: "var(--border)" }}>/</span>
           <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f0f6fc", margin: 0 }}>📊 今週のめぐ指数</h1>
-          <p style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>馬番 / 馬名 / 斤量 / 走破タイム / めぐ指数</p>
+          <p style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>馬番 / 馬名 / 性齢 / 斤量 / 走破タイム / めぐ指数</p>
         </div>
       </div>
 
