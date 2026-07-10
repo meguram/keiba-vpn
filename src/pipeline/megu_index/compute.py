@@ -182,7 +182,8 @@ def _load_par_time(session) -> pd.DataFrame:
     ).fetchall()
     df = pd.DataFrame(rows, columns=["distance", "course", "surface", "track_condition",
                                       "par_time_sec", "par_front_split_sec"])
-    df["par_time_sec"] = df["par_time_sec"].astype(float)
+    df["par_time_sec"] = pd.to_numeric(df["par_time_sec"], errors="coerce")
+    df["par_front_split_sec"] = pd.to_numeric(df["par_front_split_sec"], errors="coerce")
     return df
 
 

@@ -244,7 +244,7 @@ def create_app() -> Flask:
         from sqlalchemy import text as sa_text
         from src.db.models import MeguConditionTransfer, Race  # noqa: F401
 
-        _MODEL_VERSION = "stg-v1"
+        _MODEL_VERSION = "v1"
         _BASE_RACES = 3
         _HISTORY_LIMIT = 5
         _MAJOR_DIST = 600
@@ -331,7 +331,7 @@ def create_app() -> Flask:
             ).fetchall()
             actual_map = {
                 r.horse_id: {
-                    "megu_index": float(r.megu_index),
+                    "megu_index": float(r.megu_index) if r.megu_index is not None else None,
                     "finish_time_sec": float(r.finish_time_sec) if r.finish_time_sec is not None else None,
                     "finish_pos": int(r.finish_pos) if r.finish_pos is not None else None,
                 }
@@ -404,9 +404,10 @@ def create_app() -> Flask:
                 finish_time_sec = actual.get("finish_time_sec") or result.get("finish_time_sec")
 
                 recent = hist[:_BASE_RACES]
+                recent_valid = [r for r in recent if r.megu_index is not None]
                 base_megu = round(
-                    sum(float(r.megu_index) for r in recent) / len(recent), 1
-                ) if recent else None
+                    sum(float(r.megu_index) for r in recent_valid) / len(recent_valid), 1
+                ) if recent_valid else None
 
                 cond_change: dict = {"type": "none", "label": None}
                 megu_adjusted = base_megu
@@ -459,7 +460,7 @@ def create_app() -> Flask:
                             "venue": r.venue,
                             "surface": r.surface,
                             "distance": r.distance,
-                            "megu_index": float(r.megu_index),
+                            "megu_index": float(r.megu_index) if r.megu_index is not None else None,
                             "finish_pos": r.finish_pos,
                         }
                         for r in hist[:_HISTORY_LIMIT]
