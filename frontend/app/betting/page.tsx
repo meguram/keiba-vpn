@@ -24,17 +24,27 @@ export default function BettingPage() {
 
   async function optimize() {
     setLoading(true);
+    let r: typeof MOCK_KELLY;
     if (USE_MOCK) {
-      await new Promise((r) => setTimeout(r, 400));
-      setResult({ ...MOCK_KELLY, bankroll: Number(bankroll) });
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      r = { ...MOCK_KELLY, bankroll: Number(bankroll) };
     } else {
       const res = await fetch("/api/v1/betting/optimize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ race_id: "r001", bankroll: Number(bankroll) }),
       });
-      setResult(await res.json());
+      r = await res.json();
     }
+    setResult(r);
+    localStorage.setItem("betting_last_optimize", JSON.stringify({
+      race_id:        r.race_id,
+      win_prob:       (r.bets as Array<{win_prob?: number}>)[0]?.win_prob ?? null,
+      win_odds:       (r.bets as Array<{win_odds?: number}>)[0]?.win_odds ?? null,
+      kelly_fraction: r.kelly_fraction,
+      bankroll:       r.bankroll,
+      saved_at:       new Date().toISOString(),
+    }));
     setLoading(false);
   }
 

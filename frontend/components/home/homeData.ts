@@ -169,6 +169,14 @@ export const ADMIN_CATEGORIES: CategorySection[] = [
         desc: "AI 予測ランキング × オッズから、期待値最大の券種・買い目をシミュレートし、ROI を可視化。バックテストとの整合も確認。",
         tags: ["期待値", "ROI", "バックテスト", "複合最適化"],
       },
+      {
+        href: "/betting-simulation",
+        accent: "var(--home-green)",
+        icon: "🎰",
+        title: "馬券シミュレーション",
+        desc: "Kelly 基準の買い戦略を買い続けた場合の軍資金推移をモンテカルロシミュレーションで可視化。破産確率・最大ドローダウン・期待成長率を評価。",
+        tags: ["モンテカルロ", "破産確率", "ドローダウン", "期待値"],
+      },
     ],
   },
 ];

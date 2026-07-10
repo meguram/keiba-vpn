@@ -550,3 +550,16 @@ export const MOCK_KELLY = {
     { horse_id: "h10", horse_name: "サンライズキング", bet_type: "複勝", stake: 4000, kelly_f: 0.040, edge: 0.051 },
   ],
 };
+
+// ---------------------------------------------------------------------------
+// Betting simulation mock params  (/betting-simulation)
+// ---------------------------------------------------------------------------
+export const MOCK_SIMULATION_PARAMS = {
+  bankroll:       100_000,
+  win_prob:       0.200,   // 20%
+  win_odds:       5.5,     // 5.5倍
+  kelly_fraction: 0.25,    // Quarter Kelly
+  n_races:        100,
+  n_trials:       1_000,
+  ruin_threshold: 0.10,    // 初期軍資金の10%
+};
