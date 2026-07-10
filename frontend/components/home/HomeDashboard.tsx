@@ -8,6 +8,8 @@ import {
   CategorySection,
   NavCardItem,
   PUBLIC_CATEGORIES,
+  TabbedCardItem,
+  isTabbedCard,
 } from "@/components/home/homeData";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberUpgradeModal } from "@/components/upgrade/MemberUpgradeModal";
@@ -41,6 +43,78 @@ function NavCard({
   );
 }
 
+function TabbedNavCard({ card }: { card: TabbedCardItem }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const active = card.tabs[activeIdx];
+
+  return (
+    <div
+      className="nav-card"
+      style={{ ["--card-accent" as string]: active.accent, padding: 0, cursor: "default" }}
+    >
+      {/* Tab bar */}
+      <div
+        style={{
+          display: "flex",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--surface2)",
+          borderRadius: "var(--card-radius, 12px) var(--card-radius, 12px) 0 0",
+          overflow: "hidden",
+        }}
+      >
+        {card.tabs.map((tab, i) => (
+          <button
+            key={tab.href}
+            type="button"
+            onClick={() => setActiveIdx(i)}
+            style={{
+              flex: 1,
+              padding: "9px 4px",
+              fontSize: 11,
+              fontWeight: i === activeIdx ? 700 : 500,
+              color: i === activeIdx ? tab.accent : "var(--text-dim)",
+              background: "transparent",
+              border: "none",
+              borderBottom: i === activeIdx ? `2px solid ${tab.accent}` : "2px solid transparent",
+              cursor: "pointer",
+              transition: "color .15s, border-color .15s",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {tab.icon} {tab.title.replace("今週の", "")}
+          </button>
+        ))}
+      </div>
+
+      {/* Card body — navigates to active tab's page */}
+      <Link
+        href={active.href}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          padding: "16px",
+          textDecoration: "none",
+          color: "inherit",
+        }}
+      >
+        <span className="card-icon">{active.icon}</span>
+        <div className="card-title">
+          {active.title} <span className="arrow">→</span>
+        </div>
+        <div className="card-desc">{active.desc}</div>
+        <div className="card-tags">
+          {active.tags.map((tag) => (
+            <span key={tag} className="tag">{tag}</span>
+          ))}
+        </div>
+      </Link>
+    </div>
+  );
+}
+
 function CategoryBlock({
   section,
 }: {
@@ -57,9 +131,13 @@ function CategoryBlock({
         <span className="category-desc">{section.desc}</span>
       </div>
       <div className={`nav-grid${section.singleRow ? " single-card-row" : ""}`}>
-        {section.cards.map((card) => (
-          <NavCard key={card.title} card={card} />
-        ))}
+        {section.cards.map((card) =>
+          isTabbedCard(card) ? (
+            <TabbedNavCard key={card.title} card={card} />
+          ) : (
+            <NavCard key={card.title} card={card} />
+          )
+        )}
       </div>
     </div>
   );

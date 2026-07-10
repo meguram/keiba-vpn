@@ -7,6 +7,27 @@ export type NavCardItem = {
   tags: string[];
 };
 
+export type TabbedNavTab = {
+  href: string;
+  accent: string;
+  icon: string;
+  title: string;
+  desc: string;
+  tags: string[];
+};
+
+export type TabbedCardItem = {
+  tabbed: true;
+  title: string;
+  tabs: TabbedNavTab[];
+};
+
+export function isTabbedCard(
+  card: NavCardItem | TabbedCardItem
+): card is TabbedCardItem {
+  return (card as TabbedCardItem).tabbed === true;
+}
+
 export type CategorySection = {
   num: string;
   numStyle?: string;
@@ -15,7 +36,7 @@ export type CategorySection = {
   catColor: string;
   badge?: string;
   singleRow?: boolean;
-  cards: NavCardItem[];
+  cards: (NavCardItem | TabbedCardItem)[];
 };
 
 export const PUBLIC_CATEGORIES: CategorySection[] = [
@@ -26,12 +47,34 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
     catColor: "var(--home-orange)",
     cards: [
       {
-        href: "/weekly-predictions",
-        accent: "var(--home-orange)",
-        icon: "🏆",
-        title: "今週のAI予測",
-        desc: "今週のレース別 AI 推奨印 (◎○▲△☆) を一覧表示。出馬表・オッズ・個別レース詳細へ遷移可能。",
-        tags: ["出馬表", "オッズ", "AI 推奨印"],
+        tabbed: true as const,
+        title: "今週の予測",
+        tabs: [
+          {
+            href: "/weekly-predictions",
+            accent: "var(--home-orange)",
+            icon: "🏆",
+            title: "今週のAI予測",
+            desc: "今週のレース別 AI 推奨印 (◎○▲△☆) を一覧表示。出馬表・オッズ・個別レース詳細へ遷移可能。",
+            tags: ["出馬表", "オッズ", "AI 推奨印"],
+          },
+          {
+            href: "/megu-index",
+            accent: "var(--home-cyan)",
+            icon: "📊",
+            title: "今週のめぐ指数",
+            desc: "開催日ごとの全レースについて、めぐ指数の高い馬順にランキング表示。各馬のパフォーマンス指数を一覧で比較できる。",
+            tags: ["めぐ指数", "ランキング", "パフォーマンス"],
+          },
+          {
+            href: "/pedigree-race-stats",
+            accent: "var(--home-purple)",
+            icon: "🧬",
+            title: "今週の血統傾向分析",
+            desc: "予測されたレース質と出走馬の血統を照合し、各馬の血統適性スコアを点数化。対象レースでどれだけ血統的に優位かを可視化。",
+            tags: ["血統相性", "レース質", "スコア"],
+          },
+        ],
       },
       {
         href: "/tracking-difficulty",
@@ -48,22 +91,6 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
         title: "過去の予測結果",
         desc: "過去レースの出馬表・レース結果・AI 予測との照合を確認。レース詳細ページから各馬の推奨印と実際の着順を比較。",
         tags: ["レース一覧", "着順", "予測照合"],
-      },
-      {
-        href: "/pedigree-race-stats",
-        accent: "var(--home-purple)",
-        icon: "🧬",
-        title: "今週の血統傾向分析",
-        desc: "予測されたレース質と出走馬の血統を照合し、各馬の血統適性スコアを点数化。対象レースでどれだけ血統的に優位かを可視化。",
-        tags: ["血統相性", "レース質", "スコア"],
-      },
-      {
-        href: "/megu-index",
-        accent: "var(--home-cyan)",
-        icon: "📊",
-        title: "今週のめぐ指数",
-        desc: "開催日ごとの全レースについて、めぐ指数の高い馬順にランキング表示。各馬のパフォーマンス指数を一覧で比較できる。",
-        tags: ["めぐ指数", "ランキング", "パフォーマンス"],
       },
     ],
   },
