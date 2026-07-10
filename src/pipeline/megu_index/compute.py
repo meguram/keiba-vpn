@@ -382,8 +382,69 @@ def _upsert_batch(session, df_result: pd.DataFrame, batch_size: int = 500) -> in
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 集計（今週のめぐ指数 A/B/C）
+# GCS バックアップ保存（ローカル parquet + GCS upload）
 # ─────────────────────────────────────────────────────────────────────────────
+
+_MEGU_PARQUET_COLS = [
+    "race_id", "horse_id", "megu_index", "computation_status",
+    "finish_time_sec", "par_time_final", "adjusted_time_sec",
+    "delta_pace_sec", "delta_track_sec", "delta_weight_sec", "delta_level_sec",
+]
+_GCS_MEGU_BLOB_TPL = "chuou/data/preprocessed/netkeiba/pc/megu_index/{year}/megu_index_flat.parquet"
+
+
+def _save_megu_parquet_backup(df_save: pd.DataFrame, year: int) -> None:
+    """
+    計算済み megu_index DataFrame をローカル parquet (TABLES_DIR/{year}/megu_index_flat.parquet)
+    に追記・上書き保存し、GCS にバックアップアップロードする。
+
+    - DB が一次ストア。parquet / GCS はバックアップ（stg→prod 再現用）。
+    - 同一 (race_id, horse_id) の重複は「新しい行を優先」で解消する。
+    - GCS 接続が無い環境（dev / CI）ではローカル保存のみで正常終了する。
+    """
+    save_cols = [c for c in _MEGU_PARQUET_COLS if c in df_save.columns]
+    df_new = df_save[save_cols].copy()
+
+    out_dir = TABLES_DIR / str(year)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "megu_index_flat.parquet"
+
+    # 既存 parquet とマージ（重複は新データを優先）
+    if out_path.exists():
+        try:
+            df_existing = pd.read_parquet(out_path)
+            df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+            df_combined = df_combined.drop_duplicates(
+                subset=["race_id", "horse_id"], keep="last"
+            )
+        except Exception as e:
+            logger.warning("既存 parquet 読み込み失敗、上書き保存: %s", e)
+            df_combined = df_new
+    else:
+        df_combined = df_new
+
+    df_combined.to_parquet(out_path, index=False)
+    logger.info("megu_index parquet 保存: %s (%d 行)", out_path, len(df_combined))
+
+    # GCS アップロード（失敗してもDBは保存済みなので警告のみ）
+    try:
+        from src.scraper.storage import HybridStorage
+        storage = HybridStorage(str(PROJECT_ROOT))
+        if storage.gcs_enabled:
+            gcs_blob = _GCS_MEGU_BLOB_TPL.format(year=year)
+            bucket = storage._get_bucket()
+            blob = bucket.blob(gcs_blob)
+            blob.upload_from_filename(str(out_path), content_type="application/octet-stream")
+            logger.info(
+                "megu_index GCS バックアップ完了: gs://%s/%s",
+                storage._bucket_name, gcs_blob,
+            )
+        else:
+            logger.debug("GCS 無効（ローカル parquet のみ保存）")
+    except Exception as exc:
+        logger.warning("GCS バックアップ失敗（DBは保存済み）: %s", exc)
+
+
 
 def aggregate_horse_megu(df_all: pd.DataFrame) -> pd.DataFrame:
     """
@@ -523,6 +584,9 @@ def compute_for_date(date_str: str, model_version: str = MODEL_VERSION) -> dict:
         with get_session() as session:
             saved = _upsert_batch(session, df_save)
 
+        # GCS バックアップ保存（DB 保存後に実行、失敗しても DB は確定済み）
+        _save_megu_parquet_backup(df_save, year)
+
         n_valid = int((df_save["computation_status"] == "valid").sum())
         n_oor   = int((df_save["computation_status"] == "out_of_range").sum())
         logger.info("めぐ指数 保存完了: valid=%d, out_of_range=%d", n_valid, n_oor)
@@ -633,6 +697,11 @@ def main() -> None:
     with get_session() as session:
         saved = _upsert_batch(session, df_save)
     logger.info("DB 保存完了: %d 件", saved)
+
+    # GCS バックアップ保存（年単位バッチでも同様に実行）
+    for yr in set(years):
+        df_yr = df_save[pd.to_datetime(df_all["date"], errors="coerce").dt.year == yr] if len(years) > 1 else df_save
+        _save_megu_parquet_backup(df_yr, yr)
 
 
 if __name__ == "__main__":
