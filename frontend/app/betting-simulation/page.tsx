@@ -235,7 +235,7 @@ export default function BettingSimulationPage() {
   const nBins = Math.ceil(Math.log2(nTrials)) + 1;
   const hist  = result ? buildHist(result.finalDist, nBins, result.ruinLevel, bankroll) : null;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const trajData: any = result ? {
     labels: result.labels,
     datasets: [
@@ -249,11 +249,10 @@ export default function BettingSimulationPage() {
     ],
   } : null;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const trajOptions: any = {
     responsive: true, maintainAspectRatio: false, animation: false,
     plugins: { legend: { display: false }, tooltip: { callbacks: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       label: (ctx: any) => ctx.datasetIndex === 4 ? `p50: ¥${FMT.format(Math.round(ctx.parsed.y))}` : "",
     }}},
     scales: {
@@ -266,9 +265,9 @@ export default function BettingSimulationPage() {
     },
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const histData: any = hist ? { labels: hist.labels, datasets: [{ data: hist.counts, backgroundColor: hist.colors, borderWidth: 0 }] } : null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const histOptions: any = {
     responsive: true, maintainAspectRatio: false, animation: false,
     plugins: { legend: { display: false } },
