@@ -103,7 +103,10 @@ function RaceSummaryBadges({ preds }: { preds: PredEntry[] }) {
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
       {honmei && (
         <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "rgba(239,68,68,0.12)", color: "#ef4444" }}>
-          ◎ {honmei.horse_name ?? `馬番${honmei.horse_number}`}
+          ◎ {honmei.horse_id
+            ? <a href={`/horse/${honmei.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "none" }}>{honmei.horse_name ?? `馬番${honmei.horse_number}`}</a>
+            : (honmei.horse_name ?? `馬番${honmei.horse_number}`)
+          }
         </span>
       )}
       {evGreat > 0 && (
@@ -169,7 +172,7 @@ function PredTable({ preds, hasPred }: { preds: PredEntry[]; hasPred: boolean })
                 <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "—"}</td>
                 <td style={{ ...TD, textAlign: "left", fontWeight: 600, color: "#fff", whiteSpace: "nowrap" }}>
                   {p.horse_id ? (
-                    <Link href={`#horse-${p.horse_id}`} style={{ color: "#fff", textDecoration: "none" }}>{p.horse_name ?? "—"}</Link>
+                    <Link href={`/horse/${p.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{p.horse_name ?? "—"}</Link>
                   ) : (p.horse_name ?? "—")}
                 </td>
                 <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontWeight: hasPred ? 600 : 400, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.win_prob)}</td>

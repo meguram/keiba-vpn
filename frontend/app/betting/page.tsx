@@ -110,7 +110,11 @@ export default function BettingPage() {
               <tbody>
                 {result.bets.map((b) => (
                   <tr key={`${b.horse_id}-${b.bet_type}`} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td className="py-2 px-3">{b.horse_name}</td>
+                    <td className="py-2 px-3">
+                      {b.horse_id
+                        ? <a href={`/horse/${b.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "none" }}>{b.horse_name}</a>
+                        : b.horse_name}
+                    </td>
                     <td className="py-2 px-3 text-center">{b.bet_type}</td>
                     <td className="py-2 px-3 text-right">¥{b.stake.toLocaleString()}</td>
                     <td className="py-2 px-3 text-right font-mono">{(b.kelly_f * 100).toFixed(1)}%</td>

@@ -368,7 +368,7 @@ export default function RaceDetailPage() {
                 <td style={TD}>{e.bracket_number ?? "—"}</td>
                 <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{hn}</td>
                 <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
-                  {e.horse_id ? <a href={`#horse-${e.horse_id}`} style={{ color: "#fff" }}>{e.horse_name ?? "—"}</a> : (e.horse_name ?? "—")}
+                  {e.horse_id ? <a href={`/horse/${e.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{e.horse_name ?? "—"}</a> : (e.horse_name ?? "—")}
                 </td>
                 <td style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "sex_age") || `${pick(e, "sex")}${pick(e, "age")}` || "—"}</td>
                 <td style={TD}>{pick(e, "jockey_weight", "weight", "impost") || "—"}</td>
@@ -429,7 +429,9 @@ export default function RaceDetailPage() {
                 <td style={{ ...TD, fontWeight: pos <= 3 ? 800 : 400, color: placeColor, fontSize: pos <= 3 ? 15 : 13 }}>{pos <= 0 || pos >= 99 ? "—" : pos}</td>
                 <td style={TD}>{e.bracket_number ?? "—"}</td>
                 <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{String(e.horse_number ?? e.number ?? "—")}</td>
-                <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>{e.horse_name ?? "—"}</td>
+                <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
+                  {e.horse_id ? <a href={`/horse/${e.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{e.horse_name ?? "—"}</a> : (e.horse_name ?? "—")}
+                </td>
                 <td style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "jockey_name", "jockey") || "—"}</td>
                 <td style={TD}>{e.time ?? "—"}</td>
                 <td style={{ ...TD, fontSize: 11 }}>{e.passing_order ?? "—"}</td>
@@ -536,7 +538,9 @@ export default function RaceDetailPage() {
                 return (
                   <tr key={p.horse_number ?? i} style={{ background: rowBg, transition: "background 0.12s" }}>
                     <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "—"}</td>
-                    <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left", whiteSpace: "nowrap" }}>{p.horse_name ?? "—"}</td>
+                    <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left", whiteSpace: "nowrap" }}>
+                      {p.horse_id ? <a href={`/horse/${p.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{p.horse_name ?? "—"}</a> : (p.horse_name ?? "—")}
+                    </td>
                     {/* AI columns — redact when null or entry.redacted === true */}
                     <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: (p.redacted || p.win_prob == null) ? "var(--text-dim)" : undefined }}>
                       {(p.redacted || p.win_prob == null) ? "●●%" : `${(p.win_prob * 100).toFixed(1)}%`}
@@ -610,7 +614,8 @@ export default function RaceDetailPage() {
         return (
           <div key={e.horse_id ?? e.horse_number} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "12px 14px" }}>
             <div style={{ fontWeight: 700, color: "#fff", fontSize: 13, marginBottom: 8 }}>
-              <span style={{ color: "#7dd3fc", marginRight: 6 }}>{e.horse_number}.</span>{e.horse_name}
+              <span style={{ color: "#7dd3fc", marginRight: 6 }}>{e.horse_number}.</span>
+              {e.horse_id ? <a href={`/horse/${e.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{e.horse_name}</a> : e.horse_name}
             </div>
             <div style={{ fontSize: 11, marginBottom: 6 }}>
               <span style={{ color: "var(--text-dim)" }}>追走容易度: </span>

@@ -321,7 +321,9 @@ export default function TrackingDifficultyPage() {
                             <span style={{ fontWeight: 800, fontSize: 13, color: "#7dd3fc" }}>{e.horse_number}</span>
                           </td>
                           <td style={{ padding: "9px 10px", borderBottom: "1px solid rgba(36,48,73,0.45)", fontWeight: 600, color: "#fff", verticalAlign: "middle", whiteSpace: "nowrap" }}>
-                            <a href={`/race/${selectedRaceId}`} style={{ color: "#fff", textDecoration: "none" }}>{e.horse_name}</a>
+                            {e.horse_id
+                              ? <a href={`/horse/${e.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{e.horse_name}</a>
+                              : e.horse_name}
                           </td>
                           <td style={{ padding: "9px 10px", borderBottom: "1px solid rgba(36,48,73,0.45)", verticalAlign: "middle" }}>
                             {e.profile?.style && (
@@ -413,7 +415,11 @@ export default function TrackingDifficultyPage() {
                       <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--border)" }}>
                         <span style={wakuStyle(e.bracket_number ?? e.horse_number)}>{e.bracket_number ?? e.horse_number}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.horse_name}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {e.horse_id
+                              ? <a href={`/horse/${e.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{e.horse_name}</a>
+                              : e.horse_name}
+                          </div>
                           {e.profile?.style && (
                             <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 3, fontWeight: 600, display: "inline-block", marginTop: 2, ...sty }}>{e.profile.style}</span>
                           )}

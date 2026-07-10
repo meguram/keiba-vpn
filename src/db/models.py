@@ -530,3 +530,31 @@ class MeguIndex(Base):
         UniqueConstraint("race_id", "horse_id", "model_version", name="uq_megu_index"),
         Index("idx_megu_index_horse", "horse_id", "computed_at"),
     )
+
+
+class MeguConditionTransfer(Base):
+    """条件転換係数テーブル（距離バンド × 馬場種別 × 方向別）。
+
+    delta_mean: 転換後の megu_index - 転換前の megu_index の平均値（加算補正）。
+    例: 芝mile → ダートmile で delta_mean = -3.2 なら、
+        megu_adjusted = base_megu + (-3.2)
+    """
+    __tablename__ = "megu_condition_transfer"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    surface_from: Mapped[str] = mapped_column(String(10), nullable=False)
+    surface_to: Mapped[str] = mapped_column(String(10), nullable=False)
+    dist_band_from: Mapped[str] = mapped_column(String(10), nullable=False)   # sprint/mile/middle/long
+    dist_band_to: Mapped[str] = mapped_column(String(10), nullable=False)
+    delta_mean: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False)
+    delta_std: Mapped[Optional[float]] = mapped_column(Numeric(6, 2))
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    model_version: Mapped[str] = mapped_column(String(20), nullable=False, default="stg-v1")
+    computed_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "surface_from", "surface_to", "dist_band_from", "dist_band_to", "model_version",
+            name="uq_megu_condition_transfer",
+        ),
+    )

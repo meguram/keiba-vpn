@@ -226,6 +226,267 @@ def create_app() -> Flask:
                 ],
             })
 
+    @app.get("/api/v1/races/<race_id>/megu-index-predicted")
+    def api_megu_index_predicted(race_id: str):
+        """
+        出走馬ごとの予測めぐ指数。条件代わりがある場合は転換係数を適用する。
+
+        レスポンス構造:
+          race_info: レース条件（surface, distance, dist_band, race_date）
+          horses[]: 出走馬ごとの予測データ
+            actual_megu   : このレースの実測値（計算済みの場合のみ）
+            base_megu     : 直近3走の megu 平均（予測ベース）
+            megu_adjusted : 条件代わり補正後の予測値（変更なし時は base_megu と同値）
+            condition_change: 条件代わりの種類・転換係数情報
+            history       : 直近5走の megu 履歴
+        """
+        init_engine()
+        from sqlalchemy import text as sa_text
+        from src.db.models import MeguConditionTransfer, Race  # noqa: F401
+
+        _MODEL_VERSION = "stg-v1"
+        _BASE_RACES = 3
+        _HISTORY_LIMIT = 5
+        _MAJOR_DIST = 600
+
+        def _dist_band(d: int) -> str:
+            if d <= 1400:
+                return "sprint"
+            if d <= 1800:
+                return "mile"
+            if d <= 2200:
+                return "middle"
+            return "long"
+
+        def _change_label(sf: str, st: str, dist_change: int) -> str:
+            if sf != st:
+                return f"{sf}→{st}"
+            if dist_change <= -_MAJOR_DIST:
+                return "距離大幅短縮"
+            return "距離大幅延長"
+
+        with get_session() as session:
+            # 1. レース情報
+            race = session.get(Race, race_id)
+            if not race:
+                return jsonify({"error": "race not found"}), 404
+
+            race_dist_band = _dist_band(race.distance)
+
+            # 2. 出走馬一覧（horse_name・斤量を horses/entries テーブルから JOIN）
+            entry_rows = session.execute(
+                sa_text("""
+                    SELECT e.horse_id, e.post_no, h.horse_name, e.jockey_weight
+                    FROM entries e
+                    LEFT JOIN horses h ON h.horse_id = e.horse_id
+                    WHERE e.race_id = :race_id
+                    ORDER BY e.post_no
+                """),
+                {"race_id": race_id},
+            ).fetchall()
+
+            if not entry_rows:
+                return jsonify({"error": "no entries found"}), 404
+
+            horse_ids = [r.horse_id for r in entry_rows]
+            horse_meta = {
+                r.horse_id: {
+                    "number": r.post_no,
+                    "name": r.horse_name,
+                    "jockey_weight": float(r.jockey_weight) if r.jockey_weight is not None else None,
+                }
+                for r in entry_rows
+            }
+
+            # 3. 各馬の megu 履歴を一括取得（このレース自身を除く直近）
+            hist_rows = session.execute(
+                sa_text("""
+                    SELECT
+                        mi.horse_id, mi.race_id, mi.megu_index,
+                        r.race_date, r.venue, r.surface, r.distance,
+                        rr.finish_pos
+                    FROM megu_index mi
+                    JOIN races r ON r.race_id = mi.race_id
+                    LEFT JOIN race_results rr
+                        ON rr.race_id = mi.race_id AND rr.horse_id = mi.horse_id
+                    WHERE mi.horse_id = ANY(:horse_ids)
+                      AND mi.model_version = :mv
+                      AND mi.race_id != :race_id
+                    ORDER BY mi.horse_id, r.race_date DESC, mi.race_id DESC
+                """),
+                {"horse_ids": horse_ids, "mv": _MODEL_VERSION, "race_id": race_id},
+            ).fetchall()
+
+            # 4. このレースの実測 megu と走破タイム（計算済みなら存在する）
+            actual_rows = session.execute(
+                sa_text("""
+                    SELECT mi.horse_id, mi.megu_index,
+                           rr.finish_time_sec, rr.finish_pos
+                    FROM megu_index mi
+                    LEFT JOIN race_results rr
+                        ON rr.race_id = mi.race_id AND rr.horse_id = mi.horse_id
+                    WHERE mi.race_id = :race_id AND mi.model_version = :mv
+                """),
+                {"race_id": race_id, "mv": _MODEL_VERSION},
+            ).fetchall()
+            actual_map = {
+                r.horse_id: {
+                    "megu_index": float(r.megu_index),
+                    "finish_time_sec": float(r.finish_time_sec) if r.finish_time_sec is not None else None,
+                    "finish_pos": int(r.finish_pos) if r.finish_pos is not None else None,
+                }
+                for r in actual_rows
+            }
+
+            # 4b. レース結果のみ（megu未計算でも走破タイムは取れる）
+            result_rows = session.execute(
+                sa_text("""
+                    SELECT horse_id, finish_time_sec, finish_pos
+                    FROM race_results
+                    WHERE race_id = :race_id
+                """),
+                {"race_id": race_id},
+            ).fetchall()
+            result_map = {
+                r.horse_id: {
+                    "finish_time_sec": float(r.finish_time_sec) if r.finish_time_sec is not None else None,
+                    "finish_pos": int(r.finish_pos) if r.finish_pos is not None else None,
+                }
+                for r in result_rows
+            }
+
+            # 5. 馬ごとに履歴を整理（horse_id → list[row]）
+            from collections import defaultdict
+            hist_by_horse: dict = defaultdict(list)
+            for r in hist_rows:
+                hist_by_horse[r.horse_id].append(r)
+
+            # 6. 必要な転換ペアを特定して一括 DB 取得
+            transfer_keys: set = set()
+            prev_cond: dict = {}  # horse_id -> (surface, distance, dist_band)
+            for hid in horse_ids:
+                hist = hist_by_horse[hid]
+                if hist:
+                    p = hist[0]
+                    db_from = _dist_band(int(p.distance))
+                    prev_cond[hid] = (p.surface, int(p.distance), db_from)
+                    if p.surface != race.surface or abs(int(p.distance) - race.distance) >= _MAJOR_DIST:
+                        transfer_keys.add((p.surface, db_from, race.surface, race_dist_band))
+
+            transfer_map: dict = {}
+            for (sf, dbf, st, dbt) in transfer_keys:
+                tr = session.execute(
+                    sa_text("""
+                        SELECT delta_mean, delta_std, sample_count
+                        FROM megu_condition_transfer
+                        WHERE surface_from = :sf AND dist_band_from = :dbf
+                          AND surface_to = :st AND dist_band_to = :dbt
+                          AND model_version = :mv
+                    """),
+                    {"sf": sf, "dbf": dbf, "st": st, "dbt": dbt, "mv": _MODEL_VERSION},
+                ).fetchone()
+                if tr:
+                    transfer_map[(sf, dbf, st, dbt)] = {
+                        "delta_mean": float(tr.delta_mean),
+                        "delta_std": float(tr.delta_std) if tr.delta_std is not None else None,
+                        "sample_count": int(tr.sample_count),
+                    }
+
+            # 7. 各馬の予測値を組み立て
+            result_horses = []
+            for hid in horse_ids:
+                meta = horse_meta[hid]
+                hist = hist_by_horse[hid]
+                actual = actual_map.get(hid, {})
+                result = result_map.get(hid, {})
+                actual_megu = actual.get("megu_index")
+                # 走破タイムは megu テーブル優先、なければ race_results 直接
+                finish_time_sec = actual.get("finish_time_sec") or result.get("finish_time_sec")
+
+                recent = hist[:_BASE_RACES]
+                base_megu = round(
+                    sum(float(r.megu_index) for r in recent) / len(recent), 1
+                ) if recent else None
+
+                cond_change: dict = {"type": "none", "label": None}
+                megu_adjusted = base_megu
+
+                if hid in prev_cond:
+                    sf, pd_dist, db_from = prev_cond[hid]
+                    dist_change = race.distance - pd_dist
+                    surface_changed = sf != race.surface
+                    dist_major = abs(dist_change) >= _MAJOR_DIST
+
+                    if surface_changed or dist_major:
+                        change_type = (
+                            "both" if surface_changed and dist_major
+                            else ("surface" if surface_changed else "distance")
+                        )
+                        cond_change = {
+                            "type": change_type,
+                            "label": _change_label(sf, race.surface, dist_change),
+                            "surface_from": sf,
+                            "surface_to": race.surface,
+                            "dist_band_from": db_from,
+                            "dist_band_to": race_dist_band,
+                            "dist_change": dist_change,
+                            "delta_mean": None,
+                            "delta_std": None,
+                            "transfer_sample_count": 0,
+                        }
+                        tr_key = (sf, db_from, race.surface, race_dist_band)
+                        if tr_key in transfer_map and base_megu is not None:
+                            tr = transfer_map[tr_key]
+                            megu_adjusted = round(base_megu + tr["delta_mean"], 1)
+                            cond_change["delta_mean"] = tr["delta_mean"]
+                            cond_change["delta_std"] = tr["delta_std"]
+                            cond_change["transfer_sample_count"] = tr["sample_count"]
+
+                result_horses.append({
+                    "horse_id": hid,
+                    "horse_name": meta["name"],
+                    "horse_number": meta["number"],
+                    "jockey_weight": meta["jockey_weight"],
+                    "finish_time_sec": finish_time_sec,
+                    "actual_megu": actual_megu,
+                    "base_megu": base_megu,
+                    "megu_adjusted": megu_adjusted,
+                    "condition_change": cond_change,
+                    "history": [
+                        {
+                            "race_id": r.race_id,
+                            "race_date": str(r.race_date),
+                            "venue": r.venue,
+                            "surface": r.surface,
+                            "distance": r.distance,
+                            "megu_index": float(r.megu_index),
+                            "finish_pos": r.finish_pos,
+                        }
+                        for r in hist[:_HISTORY_LIMIT]
+                    ],
+                })
+
+            result_horses.sort(
+                key=lambda h: h["megu_adjusted"] if h["megu_adjusted"] is not None else -999,
+                reverse=True,
+            )
+
+            return jsonify({
+                "race_id": race_id,
+                "race_info": {
+                    "race_name": race.race_name,
+                    "venue": race.venue,
+                    "surface": race.surface,
+                    "distance": race.distance,
+                    "dist_band": race_dist_band,
+                    "track_condition": race.track_condition,
+                    "grade": race.grade,
+                    "race_date": str(race.race_date) if race.race_date else None,
+                },
+                "model_version": _MODEL_VERSION,
+                "horses": result_horses,
+            })
+
     @app.get("/api/v1/races/<race_id>/tracking-difficulty")
     def api_tracking_difficulty(race_id: str):
         try:
