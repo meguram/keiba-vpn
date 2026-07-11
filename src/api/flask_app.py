@@ -21,7 +21,12 @@ from src.api.v1.services import (
 )
 from src.api.v1.routes.analytics import bp as analytics_bp
 from src.api.v1.routes.data_analysis import bp as data_analysis_bp
+from pathlib import Path
+
 from src.db.session import get_session, init_engine
+
+# race_result_flat.parquet ディレクトリ（sex_age 補完用）
+_FLAT_DIR = Path(__file__).resolve().parents[2] / "data/page_reference/tables"
 
 
 def _is_logged_in() -> bool:
@@ -286,9 +291,11 @@ def create_app() -> Flask:
             race_dist_band = _dist_band(race.distance)
 
             # 2. 出走馬一覧（horse_name・斤量を horses/entries テーブルから JOIN）
+            # sex_age の優先順位: entries.sex_age (非空) → horses.sex (非NULL)
             entry_rows = session.execute(
                 sa_text("""
-                    SELECT e.horse_id, e.post_no, h.horse_name, e.jockey_weight, e.sex_age
+                    SELECT e.horse_id, e.post_no, h.horse_name, e.jockey_weight,
+                           COALESCE(NULLIF(e.sex_age, ''), h.sex) AS sex_age
                     FROM entries e
                     LEFT JOIN horses h ON h.horse_id = e.horse_id
                     WHERE e.race_id = :race_id
@@ -296,6 +303,26 @@ def create_app() -> Flask:
                 """),
                 {"race_id": race_id},
             ).fetchall()
+
+            if not entry_rows:
+                # entries テーブルにない場合は megu_index + race_results から馬リストを構築
+                entry_rows = session.execute(
+                    sa_text("""
+                        SELECT
+                            mi.horse_id,
+                            rr.finish_pos   AS post_no,
+                            h.horse_name,
+                            NULL::numeric   AS jockey_weight,
+                            h.sex           AS sex_age
+                        FROM megu_index mi
+                        LEFT JOIN race_results rr
+                            ON rr.race_id = mi.race_id AND rr.horse_id = mi.horse_id
+                        LEFT JOIN horses h ON h.horse_id = mi.horse_id
+                        WHERE mi.race_id = :race_id AND mi.model_version = :mv
+                        ORDER BY rr.finish_pos NULLS LAST, mi.horse_id
+                    """),
+                    {"race_id": race_id, "mv": _MODEL_VERSION},
+                ).fetchall()
 
             if not entry_rows:
                 return jsonify({"error": "no entries found"}), 404
@@ -306,10 +333,35 @@ def create_app() -> Flask:
                     "number": r.post_no,
                     "name": r.horse_name,
                     "jockey_weight": float(r.jockey_weight) if r.jockey_weight is not None else None,
-                    "sex_age": r.sex_age,
+                    "sex_age": r.sex_age if r.sex_age else None,
                 }
                 for r in entry_rows
             }
+
+            # sex_age が未取得の馬は race_result_flat.parquet から補完
+            missing_sex_age = [hid for hid, m in horse_meta.items() if not m["sex_age"]]
+            if missing_sex_age:
+                try:
+                    year = int(race_id[:4])
+                    flat_path = (
+                        _FLAT_DIR / str(year) / "race_result_flat.parquet"
+                    )
+                    if flat_path.exists():
+                        import pandas as _pd
+                        df_flat = _pd.read_parquet(
+                            flat_path,
+                            columns=["race_id", "horse_id", "sex_age", "horse_name"],
+                        )
+                        race_flat = df_flat[df_flat["race_id"] == race_id]
+                        for _, row in race_flat.iterrows():
+                            hid = str(row["horse_id"])
+                            if hid in horse_meta:
+                                if not horse_meta[hid]["sex_age"] and row.get("sex_age"):
+                                    horse_meta[hid]["sex_age"] = str(row["sex_age"])
+                                if not horse_meta[hid]["name"] and row.get("horse_name"):
+                                    horse_meta[hid]["name"] = str(row["horse_name"])
+                except Exception as _e:
+                    pass  # parquet 補完失敗は無視
 
             # 3. 各馬の megu 履歴を一括取得（このレース自身を除く直近）
             hist_rows = session.execute(

@@ -215,7 +215,7 @@ function HorseRow({
 
         {/* 性齢 */}
         <td style={{ ...TDc, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
-          {horse.sex_age ?? "—"}
+          {horse.sex_age || "—"}
         </td>
 
         {/* 斤量 */}
