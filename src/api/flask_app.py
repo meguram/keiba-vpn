@@ -32,6 +32,18 @@ def _is_logged_in() -> bool:
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    # UTF-8 日本語を \uXXXX にエスケープしない（文字化け防止）
+    app.config["JSON_ENSURE_ASCII"] = False
+    app.json.ensure_ascii = False
+
+    @app.after_request
+    def set_charset(response):
+        """JSONレスポンスに charset=utf-8 を明示する。"""
+        ct = response.content_type or ""
+        if "application/json" in ct and "charset" not in ct:
+            response.content_type = "application/json; charset=utf-8"
+        return response
+
     app.register_blueprint(analytics_bp, url_prefix="/api/v1")
     app.register_blueprint(data_analysis_bp, url_prefix="/api/v1")
 
