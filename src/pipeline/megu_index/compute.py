@@ -46,6 +46,14 @@ MODEL_VERSION = "v1"
 # パターンB ウェイト [U-1]
 WEIGHTS_B = [0.35, 0.25, 0.20, 0.12, 0.08]
 
+# ── career_prize モジュールをインポート ─────────────────────────────────────
+from src.pipeline.megu_index.career_prize import (
+    classify_grade,
+    estimate_prize,
+    compute_level_feature,
+    build_career_prizes_from_flat,
+)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ユーティリティ
@@ -79,6 +87,109 @@ def _select_split_point(distance: int, available_dists: list[int]) -> Optional[i
     return max(cands) if cands else None
 
 
+def _compute_delta_level(
+    df: pd.DataFrame,
+    df_hist: Optional[pd.DataFrame],
+    beta_level: float,
+) -> pd.Series:
+    """
+    各馬の累積獲得賞金推計から delta_level_sec を計算する。
+
+    beta_level = 0 の場合はゼロを返す（未学習フェーズ）。
+    df_hist が None の場合もゼロを返す。
+
+    Returns:
+        pd.Series (float), df と同じインデックス
+    """
+    if beta_level == 0.0 or df_hist is None or df_hist.empty:
+        return pd.Series(0.0, index=df.index)
+
+    try:
+        # ── 1. df_hist から馬 × 日付別の累積賞金テーブルを構築 ─────────────
+        df_h = df_hist.copy()
+        df_h["date_parsed"] = pd.to_datetime(df_h["date"], errors="coerce")
+
+        # finish_pos 列の統一
+        fp_col = "finish_position" if "finish_position" in df_h.columns else "finish_pos"
+        df_h["finish_pos_num"] = pd.to_numeric(df_h.get(fp_col, pd.Series(dtype=float)), errors="coerce")
+
+        # grade 正規化（vectorized: apply を一回）
+        df_h["grade_norm"] = df_h.apply(
+            lambda r: classify_grade(r.get("grade"), r.get("race_name"), r.get("race_class")),
+            axis=1,
+        )
+
+        # 賞金推計（vectorized）
+        prize_table_grades = list({g for g in df_h["grade_norm"].unique()})
+        prize_lookup = {
+            (g, pos): estimate_prize(g, pos)
+            for g in prize_table_grades
+            for pos in range(1, 6)
+        }
+        df_h["prize_est"] = df_h.apply(
+            lambda r: prize_lookup.get(
+                (r["grade_norm"], int(r["finish_pos_num"]) if pd.notna(r["finish_pos_num"]) else 0),
+                0.0,
+            ),
+            axis=1,
+        )
+
+        # horse_id 別に日付順 cumsum
+        df_h_sorted = df_h.sort_values(["horse_id", "date_parsed"])
+        df_h_sorted["cum_prize"] = df_h_sorted.groupby("horse_id")["prize_est"].cumsum()
+
+        # ── 2. df の各行 (horse_id, race_date) に対して事前累積賞金を付与 ──
+        df_work = df[["horse_id", "date", "grade", "race_name", "race_class"]].copy() \
+            if "race_name" in df.columns else df[["horse_id", "date", "grade"]].copy()
+        df_work["race_dt"] = pd.to_datetime(df_work["date"], errors="coerce")
+        df_work["grade_norm"] = df_work.apply(
+            lambda r: classify_grade(r.get("grade"), r.get("race_name"), r.get("race_class")),
+            axis=1,
+        )
+
+        # merge_asof を活用: horse_id でグループ化し各馬の hist を検索
+        # 計算量: O(n_hist log n_hist) + O(n_target)
+        prize_by_horse: dict[str, np.ndarray] = {}
+        date_by_horse: dict[str, np.ndarray] = {}
+        for horse_id, grp in df_h_sorted.groupby("horse_id"):
+            prize_by_horse[horse_id] = grp["cum_prize"].values
+            date_by_horse[horse_id] = grp["date_parsed"].values
+
+        career_prizes = np.zeros(len(df_work), dtype=float)
+        for i, (_, row) in enumerate(df_work.iterrows()):
+            hid = str(row["horse_id"])
+            if hid not in date_by_horse:
+                continue
+            target_dt = row["race_dt"]
+            if pd.isna(target_dt):
+                continue
+            dates = date_by_horse[hid]
+            prizes = prize_by_horse[hid]
+            # target_dt より前の最後の cum_prize
+            mask = dates < target_dt.to_datetime64()
+            if mask.any():
+                career_prizes[i] = float(prizes[mask][-1])
+
+        # ── 3. level_feature 計算 ────────────────────────────────────────────
+        from src.pipeline.megu_index.career_prize import CAREER_PRIZE_REFERENCE
+        grade_norms = df_work["grade_norm"].values
+        level_features = np.array([
+            compute_level_feature(float(cp), str(gn))
+            for cp, gn in zip(career_prizes, grade_norms)
+        ])
+
+        logger.info(
+            "delta_level: career_prize avg=%.0f 万円, level_feature avg=%.3f",
+            career_prizes.mean(),
+            level_features.mean(),
+        )
+        return pd.Series(beta_level * level_features, index=df.index)
+
+    except Exception as e:
+        logger.warning("delta_level 計算失敗、ゼロ代入: %s", e)
+        return pd.Series(0.0, index=df.index)
+
+
 def _to_float(v) -> Optional[float]:
     if v is None:
         return None
@@ -100,6 +211,60 @@ def _load_result_flat(year: int) -> pd.DataFrame:
         return pd.DataFrame()
     df = pd.read_parquet(p)
     return df
+
+
+def _load_history_flat_for_level(cutoff_date: str) -> pd.DataFrame:
+    """
+    delta_level_sec 計算用の過去レース履歴を返す。
+
+    TABLES_DIR 配下の全年の race_result_flat.parquet を結合し、
+    cutoff_date（YYYYMMDD）より前の分を返す。
+
+    大量のデータになるため、必要最小限のカラムのみロードして省メモリ化する。
+
+    Args:
+        cutoff_date: "YYYYMMDD" 形式。この日付以降のデータは除外。
+
+    Returns:
+        DataFrame (horse_id, race_id, date, grade, race_name,
+                   race_class, finish_position, finish_pos)
+    """
+    HIST_COLS = [
+        "horse_id", "race_id", "date",
+        "grade", "race_name", "race_class",
+        "finish_position", "finish_pos",
+    ]
+    cutoff_dt = pd.to_datetime(cutoff_date, format="%Y%m%d", errors="coerce")
+    if pd.isna(cutoff_dt):
+        return pd.DataFrame()
+
+    dfs = []
+    for year_dir in sorted(TABLES_DIR.iterdir()):
+        if not year_dir.is_dir():
+            continue
+        try:
+            year = int(year_dir.name)
+        except ValueError:
+            continue
+        p = year_dir / "race_result_flat.parquet"
+        if not p.exists():
+            continue
+        try:
+            # 利用可能なカラムのみ読み込み（pyarrow でスキーマチェック）
+            import pyarrow.parquet as pq
+            available = set(pq.read_schema(p).names)
+            use_cols = [c for c in HIST_COLS if c in available]
+            df_y = pd.read_parquet(p, columns=use_cols)
+            df_y["date_parsed"] = pd.to_datetime(df_y["date"], errors="coerce")
+            df_y = df_y[df_y["date_parsed"] < cutoff_dt]
+            if not df_y.empty:
+                dfs.append(df_y)
+        except Exception as e:
+            logger.debug("history flat load skip [%d]: %s", year, e)
+
+    if not dfs:
+        return pd.DataFrame()
+    return pd.concat(dfs, ignore_index=True)
 
 
 def _load_result_flat_for_date_from_db(date_str: str) -> pd.DataFrame:
@@ -195,6 +360,7 @@ def compute_for_dataframe(
     df_flat: pd.DataFrame,
     params: dict[str, float],
     df_par: pd.DataFrame,
+    df_hist: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """
     race_result_flat DataFrame → めぐ指数 DataFrame を返す。
@@ -204,6 +370,9 @@ def compute_for_dataframe(
     df_flat : race_result_flat（cushion 列マージ済みのもの）
     params  : megu_regression_params の dict
     df_par  : megu_par_time DataFrame
+    df_hist : 過去レース結果 (race_result_flat 形式)。
+              省略時は delta_level_sec = 0.0 のまま。
+              horse_id ごとの累積獲得賞金を推計して delta_level_sec に使用。
 
     Returns
     -------
@@ -278,7 +447,13 @@ def compute_for_dataframe(
     df["delta_pace_sec"]   = beta_pace  * df["front_split_dev"].fillna(0)
     df["delta_track_sec"]  = -beta_track * df["tsi_normalized"].fillna(0)
     df["delta_weight_sec"] = beta_weight * df["weight_dev"].fillna(0) * df["dist_scale"].fillna(1)
-    df["delta_level_sec"]  = 0.0  # FQ 未実装
+
+    # ── レベル補正 (delta_level_sec) ─────────────────────────────────────────
+    # 馬の累積獲得賞金推計を用いて level_feature を計算し、
+    # beta_level * level_feature を delta_level_sec として使う。
+    # beta_level が 0 の場合（未学習）は事実上ゼロになる。
+    beta_level = params.get("beta_level", 0.0)
+    df["delta_level_sec"] = _compute_delta_level(df, df_hist, beta_level)
 
     # ── 補正済みタイム & めぐ指数 ─────────────────────────────────────
     df["adjusted_time_sec"] = (
@@ -573,7 +748,9 @@ def compute_for_date(date_str: str, model_version: str = MODEL_VERSION) -> dict:
                 -df_flat["dirt_moisture_goal"].fillna(-tsi_mean),
             )
 
-        df_result = compute_for_dataframe(df_flat, params, df_par)
+        # 過去レース履歴（delta_level 用）: 当該日より前の全年データをロード
+        df_hist = _load_history_flat_for_level(date_str)
+        df_result = compute_for_dataframe(df_flat, params, df_par, df_hist=df_hist)
         # valid + out_of_range 両方を保存（par_time があるものに限る）
         df_save = df_result[df_result["par_time_final"].notna()].copy()
 
@@ -681,8 +858,13 @@ def main() -> None:
     df_all = pd.concat(dfs, ignore_index=True)
     logger.info("入力データ: %d 行", len(df_all))
 
+    # 過去レース履歴（delta_level 用）
+    target_year = args.year
+    hist_cutoff = f"{target_year}0101"
+    df_hist = _load_history_flat_for_level(hist_cutoff)
+
     # めぐ指数計算
-    df_result = compute_for_dataframe(df_all, params, df_par)
+    df_result = compute_for_dataframe(df_all, params, df_par, df_hist=df_hist)
     # valid + out_of_range 両方保存（par_time があるもの）
     df_save = df_result[df_result["par_time_final"].notna()].copy()
     n_valid = int((df_save["computation_status"] == "valid").sum())
