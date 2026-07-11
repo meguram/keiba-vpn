@@ -28,8 +28,7 @@ type MeguHorse = {
   horse_id: string;
   horse_name: string | null;
   horse_number: number | null;
-  sex?: string | null;
-  age?: number | null;
+  sex_age?: string | null;
   jockey_weight: number | null;
   finish_time_sec: number | null;
   actual_megu: number | null;
@@ -181,7 +180,7 @@ function HorseRow({
 
         {/* 性齢 */}
         <td style={{ ...TDc, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
-          {horse.sex ?? "—"}{horse.age != null ? horse.age : ""}
+          {horse.sex_age ?? "—"}
         </td>
 
         {/* 斤量 */}

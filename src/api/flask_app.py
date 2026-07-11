@@ -288,7 +288,7 @@ def create_app() -> Flask:
             # 2. 出走馬一覧（horse_name・斤量を horses/entries テーブルから JOIN）
             entry_rows = session.execute(
                 sa_text("""
-                    SELECT e.horse_id, e.post_no, h.horse_name, e.jockey_weight
+                    SELECT e.horse_id, e.post_no, h.horse_name, e.jockey_weight, e.sex_age
                     FROM entries e
                     LEFT JOIN horses h ON h.horse_id = e.horse_id
                     WHERE e.race_id = :race_id
@@ -306,6 +306,7 @@ def create_app() -> Flask:
                     "number": r.post_no,
                     "name": r.horse_name,
                     "jockey_weight": float(r.jockey_weight) if r.jockey_weight is not None else None,
+                    "sex_age": r.sex_age,
                 }
                 for r in entry_rows
             }
@@ -459,6 +460,7 @@ def create_app() -> Flask:
                     "horse_id": hid,
                     "horse_name": meta["name"],
                     "horse_number": meta["number"],
+                    "sex_age": meta.get("sex_age"),
                     "jockey_weight": meta["jockey_weight"],
                     "finish_time_sec": finish_time_sec,
                     "actual_megu": actual_megu,
