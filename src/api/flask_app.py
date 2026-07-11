@@ -486,6 +486,31 @@ def create_app() -> Flask:
                 reverse=True,
             )
 
+            # ── レースレベル（2着馬の実測めぐ指数で分類）──
+            def _race_level(megu: float | None) -> str:
+                if megu is None:
+                    return "?"
+                if megu >= 120:
+                    return "S"
+                if megu >= 108:
+                    return "A"
+                if megu >= 95:
+                    return "B"
+                if megu >= 85:
+                    return "C"
+                return "D"
+
+            second_megu: float | None = None
+            for a in actual_map.values():
+                if a.get("finish_pos") == 2 and a.get("megu_index") is not None:
+                    second_megu = a["megu_index"]
+                    break
+
+            race_level_info = {
+                "class": _race_level(second_megu),
+                "megu_2nd": second_megu,
+            }
+
             return jsonify({
                 "race_id": race_id,
                 "race_info": {
@@ -498,6 +523,7 @@ def create_app() -> Flask:
                     "grade": race.grade,
                     "race_date": str(race.race_date) if race.race_date else None,
                 },
+                "race_level": race_level_info,
                 "model_version": _MODEL_VERSION,
                 "horses": result_horses,
             })

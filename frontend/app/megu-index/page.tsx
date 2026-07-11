@@ -57,9 +57,15 @@ type RaceInfo = {
   race_date: string | null;
 };
 
+type RaceLevel = {
+  class: "S" | "A" | "B" | "C" | "D" | "?";
+  megu_2nd: number | null;
+};
+
 type MeguPredicted = {
   race_id: string;
   race_info: RaceInfo;
+  race_level?: RaceLevel;
   model_version: string;
   horses: MeguHorse[];
 };
@@ -75,6 +81,35 @@ function meguColor(v: number | null): { color: string; bg: string } {
   if (v >= 92)  return { color: "#60a5fa", bg: "rgba(96,165,250,0.07)" };
   if (v >= 82)  return { color: "var(--text-dim)", bg: "transparent" };
   return { color: "#f87171", bg: "rgba(239,68,68,0.07)" };
+}
+
+const RACE_LEVEL_STYLE: Record<string, { color: string; bg: string; border: string }> = {
+  S: { color: "#fbbf24", bg: "rgba(251,191,36,0.15)",  border: "rgba(251,191,36,0.5)" },
+  A: { color: "#f87171", bg: "rgba(239,68,68,0.12)",   border: "rgba(239,68,68,0.4)" },
+  B: { color: "#60a5fa", bg: "rgba(96,165,250,0.12)",  border: "rgba(96,165,250,0.4)" },
+  C: { color: "#4ade80", bg: "rgba(74,222,128,0.10)",  border: "rgba(74,222,128,0.35)" },
+  D: { color: "#94a3b8", bg: "rgba(148,163,184,0.10)", border: "rgba(148,163,184,0.3)" },
+  "?": { color: "var(--text-dim)", bg: "transparent",  border: "var(--border)" },
+};
+
+function RaceLevelBadge({ level }: { level?: RaceLevel }) {
+  if (!level || level.class === "?") return null;
+  const s = RACE_LEVEL_STYLE[level.class] ?? RACE_LEVEL_STYLE["?"];
+  const tooltip = level.megu_2nd != null
+    ? `2着馬めぐ指数: ${level.megu_2nd.toFixed(1)}`
+    : undefined;
+  return (
+    <span
+      title={tooltip}
+      style={{
+        fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 4,
+        background: s.bg, color: s.color, border: `1px solid ${s.border}`,
+        letterSpacing: "0.05em", cursor: tooltip ? "help" : undefined,
+      }}
+    >
+      {level.class}級
+    </span>
+  );
 }
 
 function fmtTime(sec: number | null): string {
@@ -355,6 +390,7 @@ function RaceCard({
               馬場: {ri.track_condition}
             </span>
           )}
+          {data?.race_level && <RaceLevelBadge level={data.race_level} />}
         </div>
       </div>
 
