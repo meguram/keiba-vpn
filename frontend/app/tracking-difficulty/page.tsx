@@ -63,9 +63,16 @@ function easeLabel(label: string | undefined): { bg: string; color: string } {
   return { bg: "rgba(239,68,68,0.15)", color: "var(--err)" };
 }
 
+/* JRA公式枠色: 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃 */
 const WAKU_COLORS: [string, string][] = [
-  ["#fff", "#555"], ["#000", "#fff"], ["#c0392b", "#fff"], ["#2471a3", "#fff"],
-  ["#f1c40f", "#333"], ["#27ae60", "#fff"], ["#e67e22", "#fff"], ["#f39c12", "#333"],
+  ["#fff",    "#333"], // 1枠: 白
+  ["#1a1a1a", "#fff"], // 2枠: 黒
+  ["#c0392b", "#fff"], // 3枠: 赤
+  ["#1a5fa0", "#fff"], // 4枠: 青
+  ["#e8b800", "#333"], // 5枠: 黄
+  ["#1e8449", "#fff"], // 6枠: 緑
+  ["#e36c00", "#fff"], // 7枠: 橙
+  ["#e0479e", "#fff"], // 8枠: 桃（ピンク）
 ];
 
 function wakuStyle(bn: number): React.CSSProperties {

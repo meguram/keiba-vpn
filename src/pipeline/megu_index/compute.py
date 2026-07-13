@@ -41,18 +41,15 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 TABLES_DIR   = PROJECT_ROOT / "data/page_reference/tables"
 CUSHION_DIR  = PROJECT_ROOT / "data/page_reference/cushion"
-MODEL_VERSION = "v1"
+MODEL_VERSION = "v2"
 
 # パターンB ウェイト [U-1]
 WEIGHTS_B = [0.35, 0.25, 0.20, 0.12, 0.08]
 
 # ── career_prize モジュールをインポート ─────────────────────────────────────
-from src.pipeline.megu_index.career_prize import (
-    classify_grade,
-    estimate_prize,
-    compute_level_feature,
-    build_career_prizes_from_flat,
-)
+from src.pipeline.megu_index.class_bucket import par_class_bucket
+from src.pipeline.megu_index.field_quality import attach_fq_and_delta_level
+from src.pipeline.megu_index.par_time_resolve import attach_par_time_with_fallback
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -329,24 +326,37 @@ def _load_cushion(year: int) -> pd.DataFrame:
     return df
 
 
-def _load_regression_params(session) -> dict[str, float]:
+def _load_regression_params(session, model_version: str | None = None) -> dict[str, float]:
+    mv = model_version or MODEL_VERSION
     rows = session.execute(
         text("SELECT param_name, param_value FROM megu_regression_params WHERE model_version=:mv"),
-        {"mv": MODEL_VERSION},
+        {"mv": mv},
     ).fetchall()
-    return {r[0]: float(r[1]) for r in rows}
+    params = {r[0]: float(r[1]) for r in rows}
+    if params:
+        return params
+    if mv != "v1":
+        rows = session.execute(
+            text("SELECT param_name, param_value FROM megu_regression_params WHERE model_version='v1'"),
+        ).fetchall()
+        return {r[0]: float(r[1]) for r in rows}
+    return {}
 
 
-def _load_par_time(session) -> pd.DataFrame:
+def _load_par_time(session, model_version: str | None = None) -> pd.DataFrame:
+    mv = model_version or MODEL_VERSION
     rows = session.execute(
         text("""
-            SELECT distance, course, surface, track_condition, par_time_sec, par_front_split_sec
+            SELECT distance, course, surface, track_condition, class_bucket,
+                   par_time_sec, par_front_split_sec
             FROM megu_par_time WHERE model_version=:mv
         """),
-        {"mv": MODEL_VERSION},
+        {"mv": mv},
     ).fetchall()
-    df = pd.DataFrame(rows, columns=["distance", "course", "surface", "track_condition",
-                                      "par_time_sec", "par_front_split_sec"])
+    df = pd.DataFrame(rows, columns=[
+        "distance", "course", "surface", "track_condition", "class_bucket",
+        "par_time_sec", "par_front_split_sec",
+    ])
     df["par_time_sec"] = pd.to_numeric(df["par_time_sec"], errors="coerce")
     df["par_front_split_sec"] = pd.to_numeric(df["par_front_split_sec"], errors="coerce")
     return df
@@ -355,6 +365,42 @@ def _load_par_time(session) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # めぐ指数計算
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _enrich_flat_from_gcs_race_result(df: pd.DataFrame) -> pd.DataFrame:
+    """flat の distance=0 / surface 欠損を GCS race_result で補完。"""
+    if df.empty or "race_id" not in df.columns:
+        return df
+
+    from src.utils.race_card_merge import load_merged_race_card
+
+    dist = pd.to_numeric(df.get("distance"), errors="coerce").fillna(0)
+    surf = df.get("surface")
+    bad_surf = surf.isna() if surf is not None else pd.Series(True, index=df.index)
+    if surf is not None:
+        bad_surf = bad_surf | ~surf.astype(str).isin(["芝", "ダート"])
+    need_ids = df.loc[(dist <= 0) | bad_surf, "race_id"].astype(str).unique()
+    if len(need_ids) == 0:
+        return df
+
+    out = df.copy()
+    for race_id in need_ids:
+        card = load_merged_race_card(race_id)
+        if not card:
+            continue
+        mask = out["race_id"].astype(str) == race_id
+        card_dist = int(card.get("distance") or 0)
+        card_surf = card.get("surface")
+        if card_dist > 0:
+            out.loc[mask, "distance"] = card_dist
+        if card_surf in ("芝", "ダート"):
+            out.loc[mask, "surface"] = card_surf
+        for col in ("track_condition", "venue", "race_name", "grade", "race_class", "direction"):
+            if col in out.columns and card.get(col):
+                empty = out.loc[mask, col].isna() | (out.loc[mask, col].astype(str).str.strip() == "")
+                if empty.any():
+                    out.loc[mask & empty, col] = card[col]
+    return out
+
 
 def compute_for_dataframe(
     df_flat: pd.DataFrame,
@@ -388,6 +434,7 @@ def compute_for_dataframe(
     tsi_mean    = params.get("tsi_mean",    0.0)
 
     df = df_flat.copy()
+    df = _enrich_flat_from_gcs_race_result(df)
     df = df[df["surface"].isin(["芝", "ダート"])]
     df["finish_time_sec"] = pd.to_numeric(df["time_sec"], errors="coerce")
     df = df[df["finish_time_sec"].notna() & (df["finish_time_sec"] > 0)]
@@ -407,7 +454,11 @@ def compute_for_dataframe(
         else:
             splits.append({"race_id": row["race_id"], "front_split_sec": lap_dict[sp], "split_point_m": sp})
     df_splits = pd.DataFrame(splits)
-    df = df.merge(df_splits, on="race_id", how="left")
+    if df_splits.empty or "race_id" not in df_splits.columns:
+        df["front_split_sec"] = np.nan
+        df["split_point_m"] = np.nan
+    else:
+        df = df.merge(df_splits, on="race_id", how="left")
 
     # ── TSI ────────────────────────────────────────────────────────────
     if "tsi_raw" not in df.columns:
@@ -424,21 +475,16 @@ def compute_for_dataframe(
     # ── track_cat ──────────────────────────────────────────────────────
     track_map = {"良": "良", "稍重": "稍重", "重": "重・不良", "不良": "重・不良"}
     df["track_cat"] = df["track_condition"].map(track_map).fillna("良")
+    if "direction" not in df.columns:
+        df["direction"] = df.get("course", "")
 
-    # ── par_time マージ ────────────────────────────────────────────────
-    df_par_key = df_par.rename(columns={"course": "direction", "track_condition": "track_cat"})
-    df = df.merge(
-        df_par_key[["distance", "surface", "direction", "track_cat", "par_time_sec", "par_front_split_sec"]],
-        on=["distance", "surface", "direction", "track_cat"],
-        how="left",
+    df["class_bucket"] = df.apply(
+        lambda r: par_class_bucket(r.get("grade"), r.get("race_name"), r.get("race_class")),
+        axis=1,
     )
-    # フォールバック: distance × surface × track_cat 平均（方向なし）
-    par_fallback = (
-        df_par_key.groupby(["distance", "surface", "track_cat"])["par_time_sec"].mean()
-        .reset_index().rename(columns={"par_time_sec": "par_time_fallback"})
-    )
-    df = df.merge(par_fallback, on=["distance", "surface", "track_cat"], how="left")
-    df["par_time_final"] = df["par_time_sec"].fillna(df["par_time_fallback"])
+
+    # ── par_time マージ（v2: クラス別 + 階層フォールバック）────────────────
+    df = attach_par_time_with_fallback(df, df_par)
 
     # ── front_split_dev ────────────────────────────────────────────────
     df["front_split_dev"] = df["front_split_sec"] - df["par_front_split_sec"]
@@ -448,12 +494,10 @@ def compute_for_dataframe(
     df["delta_track_sec"]  = -beta_track * df["tsi_normalized"].fillna(0)
     df["delta_weight_sec"] = beta_weight * df["weight_dev"].fillna(0) * df["dist_scale"].fillna(1)
 
-    # ── レベル補正 (delta_level_sec) ─────────────────────────────────────────
-    # 馬の累積獲得賞金推計を用いて level_feature を計算し、
-    # beta_level * level_feature を delta_level_sec として使う。
-    # beta_level が 0 の場合（未学習）は事実上ゼロになる。
+    # ── レベル補正 (FQ ベース, AREA-11 §5) ───────────────────────────────
     beta_level = params.get("beta_level", 0.0)
-    df["delta_level_sec"] = _compute_delta_level(df, df_hist, beta_level)
+    par_log_fq = params.get("par_log_fq")
+    df = attach_fq_and_delta_level(df, df_hist, beta_level, par_log_fq=par_log_fq)
 
     # ── 補正済みタイム & めぐ指数 ─────────────────────────────────────
     df["adjusted_time_sec"] = (
@@ -492,13 +536,13 @@ def compute_for_dataframe(
     result_cols = [
         "race_id", "horse_id", "finish_time_sec", "par_time_final",
         "delta_pace_sec", "delta_track_sec", "delta_weight_sec", "delta_level_sec",
-        "adjusted_time_sec", "megu_index", "computation_status",
+        "adjusted_time_sec", "megu_index", "field_quality", "computation_status",
         "front_split_sec", "split_point_m", "tsi_raw",
     ]
     return df[[c for c in result_cols if c in df.columns]].copy()
 
 
-def _upsert_batch(session, df_result: pd.DataFrame, batch_size: int = 500) -> int:
+def _upsert_batch(session, df_result: pd.DataFrame, batch_size: int = 500, model_version: str = MODEL_VERSION) -> int:
     """めぐ指数 DataFrame を megu_index テーブルに UPSERT する。"""
     total = len(df_result)
     saved = 0
@@ -525,6 +569,7 @@ def _upsert_batch(session, df_result: pd.DataFrame, batch_size: int = 500) -> in
                         delta_level_sec  = EXCLUDED.delta_level_sec,
                         adjusted_time_sec = EXCLUDED.adjusted_time_sec,
                         megu_index       = EXCLUDED.megu_index,
+                        field_quality    = EXCLUDED.field_quality,
                         front_split_sec  = EXCLUDED.front_split_sec,
                         split_point_m    = EXCLUDED.split_point_m,
                         tsi_raw          = EXCLUDED.tsi_raw,
@@ -542,12 +587,12 @@ def _upsert_batch(session, df_result: pd.DataFrame, batch_size: int = 500) -> in
                     "dl":   _to_float(row.get("delta_level_sec", 0)),
                     "at":   _to_float(row.get("adjusted_time_sec")),
                     "mi":   _to_float(row.get("megu_index")),
-                    "fq":   None,
+                    "fq":   _to_float(row.get("field_quality")),
                     "fsp":  _to_float(row.get("front_split_sec")),
                     "spm":  int(row["split_point_m"]) if pd.notna(row.get("split_point_m")) else None,
                     "tsi":  _to_float(row.get("tsi_raw")),
                     "cs":   str(row.get("computation_status", "valid")),
-                    "mv":   MODEL_VERSION,
+                    "mv":   model_version,
                 },
             )
             saved += 1
@@ -706,8 +751,8 @@ def compute_for_date(date_str: str, model_version: str = MODEL_VERSION) -> dict:
 
         year = int(date_str[:4])
         with get_session() as session:
-            params = _load_regression_params(session)
-            df_par = _load_par_time(session)
+            params = _load_regression_params(session, model_version)
+            df_par = _load_par_time(session, model_version)
 
         if not params:
             logger.warning("回帰パラメータ未登録 – めぐ指数をスキップ")
@@ -759,7 +804,7 @@ def compute_for_date(date_str: str, model_version: str = MODEL_VERSION) -> dict:
                     "megu_valid": 0, "megu_oor": 0}
 
         with get_session() as session:
-            saved = _upsert_batch(session, df_save)
+            saved = _upsert_batch(session, df_save, model_version=model_version)
 
         # GCS バックアップ保存（DB 保存後に実行、失敗しても DB は確定済み）
         _save_megu_parquet_backup(df_save, year)
@@ -800,8 +845,8 @@ def main() -> None:
     init_engine()
 
     with get_session() as session:
-        params  = _load_regression_params(session)
-        df_par  = _load_par_time(session)
+        params = _load_regression_params(session, args.model_version)
+        df_par = _load_par_time(session, args.model_version)
 
     if not params:
         logger.error("回帰パラメータが DB に存在しません。NB-02 を先に実行してください。")
@@ -823,15 +868,28 @@ def main() -> None:
     dfs = []
     for yr in years:
         df_flat = _load_result_flat(yr)
-        if df_flat.empty:
-            continue
 
         # 対象を絞り込む
         if args.race_id:
-            df_flat = df_flat[df_flat["race_id"] == args.race_id]
+            if not df_flat.empty:
+                df_flat = df_flat[df_flat["race_id"] == args.race_id]
+            if df_flat.empty:
+                logger.info("parquet に %s なし → DB から直接ロード", args.race_id)
+                df_flat = _load_result_flat_for_date_from_db(
+                    args.race_id[0:4] + "-" + args.race_id[4:6] + "-" + args.race_id[6:8]
+                )
+                if not df_flat.empty:
+                    df_flat = df_flat[df_flat["race_id"] == args.race_id]
         elif args.date:
-            df_flat["date_str"] = pd.to_datetime(df_flat["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-            df_flat = df_flat[df_flat["date_str"] == args.date]
+            if not df_flat.empty:
+                df_flat["date_str"] = pd.to_datetime(df_flat["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+                df_flat = df_flat[df_flat["date_str"] == args.date]
+            if df_flat.empty:
+                logger.info("parquet に %s なし → DB から直接ロード", args.date)
+                df_flat = _load_result_flat_for_date_from_db(args.date)
+
+        if df_flat.empty:
+            continue
 
         # cushion マージ
         df_cushion = _load_cushion(yr)
@@ -877,7 +935,7 @@ def main() -> None:
 
     # DB 保存
     with get_session() as session:
-        saved = _upsert_batch(session, df_save)
+        saved = _upsert_batch(session, df_save, model_version=args.model_version)
     logger.info("DB 保存完了: %d 件", saved)
 
     # GCS バックアップ保存（年単位バッチでも同様に実行）

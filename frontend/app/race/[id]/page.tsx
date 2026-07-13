@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { USE_MOCK, getMockRaceDetail, getMockPredictions, getMockTdData } from "@/lib/mock";
+import { USE_MOCK, getMockRaceDetail, getMockPredictions, getMockTdData, getMockMeguPredicted } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 
 /* ── 型 ── */
@@ -31,6 +31,65 @@ type RaceEntry = {
 };
 
 type RaceOddsEntry = { horse_number?: number | string; odds?: number };
+type MeguHorseData = { megu_final: number | null; actual_megu: number | null };
+
+/* JRA公式枠色: 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃 */
+const WAKU_COLORS: [string, string][] = [
+  ["#fff",    "#333"], // 1枠: 白
+  ["#1a1a1a", "#fff"], // 2枠: 黒
+  ["#c0392b", "#fff"], // 3枠: 赤
+  ["#1a5fa0", "#fff"], // 4枠: 青
+  ["#e8b800", "#333"], // 5枠: 黄
+  ["#1e8449", "#fff"], // 6枠: 緑
+  ["#e36c00", "#fff"], // 7枠: 橙
+  ["#e0479e", "#fff"], // 8枠: 桃（ピンク）
+];
+
+function BracketBadge({ bn }: { bn: number | string | undefined | null }) {
+  const n = bn != null ? Number(bn) : null;
+  if (n == null || isNaN(n) || n < 1 || n > 8) {
+    return <span style={{ color: "var(--text-dim)" }}>{bn ?? "—"}</span>;
+  }
+  const [bg, color] = WAKU_COLORS[n - 1];
+  return (
+    <span style={{
+      background: bg, color, border: bg === "#fff" ? "1px solid #ccc" : "none",
+      width: 22, height: 22, borderRadius: "50%",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      fontSize: 11, fontWeight: 800, lineHeight: 1,
+    }}>
+      {n}
+    </span>
+  );
+}
+
+function indexMeguHorses(
+  horses: { horse_id?: string; horse_number?: number | null; megu_final?: number | null; actual_megu?: number | null }[],
+): { byId: Record<string, MeguHorseData>; byNumber: Record<string, MeguHorseData> } {
+  const byId: Record<string, MeguHorseData> = {};
+  const byNumber: Record<string, MeguHorseData> = {};
+  for (const h of horses) {
+    const row: MeguHorseData = {
+      megu_final: h.megu_final ?? null,
+      actual_megu: h.actual_megu ?? null,
+    };
+    if (h.horse_id) byId[String(h.horse_id)] = row;
+    if (h.horse_number != null) byNumber[String(h.horse_number)] = row;
+  }
+  return { byId, byNumber };
+}
+
+function lookupMegu(
+  entry: RaceEntry,
+  byId: Record<string, MeguHorseData>,
+  byNumber: Record<string, MeguHorseData>,
+): MeguHorseData | null {
+  const horseId = entry.horse_id != null ? String(entry.horse_id) : "";
+  if (horseId && byId[horseId]) return byId[horseId];
+  const num = entry.horse_number ?? entry.number;
+  if (num != null && byNumber[String(num)]) return byNumber[String(num)];
+  return null;
+}
 type RaceData = {
   race_id?: string;
   race_name?: string;
@@ -195,13 +254,15 @@ function meguColor(v: number | null): { color: string; bg: string } {
 export default function RaceDetailPage() {
   const { id: raceId } = useParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>("shutuba");
+  const [tabInitialized, setTabInitialized] = useState(false);
   const [raceData, setRaceData] = useState<RaceData | null>(null);
   const [predData, setPredData] = useState<PredData | null>(null);
   const [tdData, setTdData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [predicting, setPredicting] = useState(false);
-  const [meguData, setMeguData] = useState<Record<string, number | null>>({});
+  const [meguById, setMeguById] = useState<Record<string, MeguHorseData>>({});
+  const [meguByNumber, setMeguByNumber] = useState<Record<string, MeguHorseData>>({});
   const [meguSource, setMeguSource] = useState<"db" | "mock">("mock");
   const { isMember } = useAuthStatus();
 
@@ -255,18 +316,32 @@ export default function RaceDetailPage() {
     if (raceData) loadPrediction();
   }, [raceData, loadPrediction]);
 
-  // めぐ指数をAPIから取得（結果タブ表示時）
   useEffect(() => {
-    if (!raceId || USE_MOCK) return;
-    fetch(`/api/v1/races/${raceId}/megu-index`)
+    if (!raceData || tabInitialized) return;
+    if ((raceData.race_result?.entries?.length ?? 0) > 0) {
+      setTab("result");
+    }
+    setTabInitialized(true);
+  }, [raceData, tabInitialized]);
+
+  // めぐ指数（想定・実測）を API から取得
+  useEffect(() => {
+    if (!raceId) return;
+    if (USE_MOCK) {
+      const mock = getMockMeguPredicted(raceId) as { horses?: { horse_id: string; horse_number?: number | null; megu_final?: number | null; actual_megu?: number | null }[] };
+      const { byId, byNumber } = indexMeguHorses(mock.horses ?? []);
+      setMeguById(byId);
+      setMeguByNumber(byNumber);
+      setMeguSource("mock");
+      return;
+    }
+    fetch(`/api/v1/races/${raceId}/megu-index-predicted`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.megu_index?.length) {
-          const map: Record<string, number | null> = {};
-          for (const item of data.megu_index) {
-            map[item.horse_id] = item.megu_index ?? null;
-          }
-          setMeguData(map);
+        if (data?.horses?.length) {
+          const { byId, byNumber } = indexMeguHorses(data.horses);
+          setMeguById(byId);
+          setMeguByNumber(byNumber);
           setMeguSource("db");
         }
       })
@@ -350,22 +425,60 @@ export default function RaceDetailPage() {
     if (o.horse_number != null && o.odds != null) oddsMap[String(o.horse_number)] = o.odds;
   });
 
+  /* ── レース結果 ── */
+  const resultEntries = [...(rd?.race_result?.entries ?? [])].sort((a, b) => (Number(a.finish_position ?? a.position ?? 99)) - (Number(b.finish_position ?? b.position ?? 99)));
+  const allTimes = resultEntries.map((e) => parseTimeSec(e.time as string | undefined)).filter((v): v is number => v != null && v > 0);
+  const bestTime = allTimes.length ? Math.min(...allTimes) : null;
+  const fieldSize = resultEntries.length;
+
+  function getMeguValues(entry: RaceEntry): MeguHorseData {
+    const fromApi = lookupMegu(entry, meguById, meguByNumber);
+    if (fromApi) return fromApi;
+    // APIデータなし: 実測値のみ走破タイムから推算。想定値は表示しない
+    const tSec = parseTimeSec(entry.time as string | undefined);
+    const calcActual = calcMeguIndex(tSec, bestTime, fieldSize);
+    return { megu_final: null, actual_megu: calcActual };
+  }
+
+  function MeguCell({ value, title, borderLeft = true }: { value: number | null; title: string; borderLeft?: boolean }) {
+    const { color, bg } = meguColor(value);
+    return (
+      <td
+        style={{
+          ...TD,
+          borderLeft: borderLeft ? "2px solid rgba(167,139,250,0.15)" : undefined,
+          fontWeight: value != null ? 700 : 400,
+          color,
+          background: bg,
+        }}
+        title={title}
+      >
+        {value != null ? value.toFixed(1) : "—"}
+      </td>
+    );
+  }
+
   const ShutubaTbl = shutubaEntries.length === 0 ? (
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>📋 出馬表データがありません</div>
   ) : (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
-          <tr>{["枠", "馬番", "馬名", "性齢", "斤量", "騎手", "調教師", "単勝"].map(h => <th key={h} style={TH}>{h}</th>)}</tr>
+          <tr>
+            {["枠", "馬番", "馬名", "性齢", "斤量", "騎手", "調教師", "単勝"].map(h => <th key={h} style={TH}>{h}</th>)}
+            <th style={{ ...TH, borderLeft: "2px solid rgba(167,139,250,0.3)", color: "#a78bfa" }}>想定めぐ指数</th>
+            <th style={{ ...TH, color: "#a78bfa" }}>実測めぐ指数</th>
+          </tr>
         </thead>
         <tbody>
           {shutubaEntries.map((e, i) => {
             const hn = String(e.horse_number ?? e.number ?? i + 1);
             const oddVal = e.win_odds ?? oddsMap[hn];
             const { text: oddsText, cls: oddsColorClass } = fmtOdds(oddVal as number | undefined);
+            const megu = getMeguValues(e);
             return (
               <tr key={hn} style={{ transition: "background 0.12s" }}>
-                <td style={TD}>{e.bracket_number ?? "—"}</td>
+                <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={e.bracket_number} /></td>
                 <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{hn}</td>
                 <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
                   {e.horse_id ? <a href={`/horse/${e.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{e.horse_name ?? "—"}</a> : (e.horse_name ?? "—")}
@@ -375,6 +488,8 @@ export default function RaceDetailPage() {
                 <td style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "jockey_name", "jockey") || "—"}</td>
                 <td style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "trainer_name", "trainer") || "—"}</td>
                 <td style={{ ...TD, fontWeight: 600, color: oddsColorClass.includes("red") ? "#f87171" : oddsColorClass.includes("yellow") ? "#fbbf24" : "var(--text-dim)" }}>{oddsText}</td>
+                <MeguCell value={megu.megu_final} title="想定めぐ指数（過去走から推定）" />
+                <MeguCell value={megu.actual_megu} title="実測めぐ指数（レース後）" borderLeft={false} />
               </tr>
             );
           })}
@@ -382,25 +497,6 @@ export default function RaceDetailPage() {
       </table>
     </div>
   );
-
-  /* ── レース結果 ── */
-  const resultEntries = [...(rd?.race_result?.entries ?? [])].sort((a, b) => (Number(a.finish_position ?? a.position ?? 99)) - (Number(b.finish_position ?? b.position ?? 99)));
-
-  // めぐ指数計算用: フィールド内最速タイムを求める（APIデータなし時のフォールバック用）
-  const allTimes = resultEntries.map((e) => parseTimeSec(e.time as string | undefined)).filter((v): v is number => v != null && v > 0);
-  const bestTime = allTimes.length ? Math.min(...allTimes) : null;
-  const fieldSize = resultEntries.length;
-
-  // APIからのめぐ指数、またはモック計算
-  function getMeguValue(entry: RaceEntry): number | null {
-    const horseId = entry.horse_id as string | undefined;
-    if (meguSource === "db" && horseId && meguData[horseId] !== undefined) {
-      return meguData[horseId];
-    }
-    // フォールバック: モック計算
-    const tSec = parseTimeSec(entry.time as string | undefined);
-    return calcMeguIndex(tSec, bestTime, fieldSize);
-  }
 
   const ResultTbl = resultEntries.length === 0 ? (
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>🏆 レース結果データがありません</div>
@@ -410,10 +506,8 @@ export default function RaceDetailPage() {
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
             {["着順", "枠", "馬番", "馬名", "騎手", "タイム", "通過順", "上り3F", "単勝"].map(h => <th key={h} style={TH}>{h}</th>)}
-            <th style={{ ...TH, borderLeft: "2px solid rgba(167,139,250,0.3)", color: "#a78bfa" }}>
-              めぐ指数
-              <span style={{ fontSize: 9, verticalAlign: "super", marginLeft: 2, opacity: 0.7 }}>β</span>
-            </th>
+            <th style={{ ...TH, borderLeft: "2px solid rgba(167,139,250,0.3)", color: "#a78bfa" }}>想定めぐ指数</th>
+            <th style={{ ...TH, color: "#a78bfa" }}>実測めぐ指数</th>
           </tr>
         </thead>
         <tbody>
@@ -421,13 +515,12 @@ export default function RaceDetailPage() {
             const pos = Number(e.finish_position ?? e.position ?? 99);
             const placeColor = pos === 1 ? "#fbbf24" : pos === 2 ? "#94a3b8" : pos === 3 ? "#d97706" : "var(--text)";
             const tSec = parseTimeSec(e.time as string | undefined);
-            void tSec; // getMeguValue 内で使用
-            const megu = getMeguValue(e);
-            const { color: meguColor_, bg: meguBg } = meguColor(megu);
+            void tSec;
+            const megu = getMeguValues(e);
             return (
               <tr key={i} style={{ transition: "background 0.12s" }}>
                 <td style={{ ...TD, fontWeight: pos <= 3 ? 800 : 400, color: placeColor, fontSize: pos <= 3 ? 15 : 13 }}>{pos <= 0 || pos >= 99 ? "—" : pos}</td>
-                <td style={TD}>{e.bracket_number ?? "—"}</td>
+                <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={e.bracket_number} /></td>
                 <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{String(e.horse_number ?? e.number ?? "—")}</td>
                 <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
                   {e.horse_id ? <a href={`/horse/${e.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{e.horse_name ?? "—"}</a> : (e.horse_name ?? "—")}
@@ -437,12 +530,14 @@ export default function RaceDetailPage() {
                 <td style={{ ...TD, fontSize: 11 }}>{e.passing_order ?? "—"}</td>
                 <td style={TD}>{e.last3f ?? "—"}</td>
                 <td style={{ ...TD, color: "var(--text-dim)", fontSize: 12 }}>{e.win_odds != null ? `${Number(e.win_odds).toFixed(1)}` : "—"}</td>
-                <td
-                  style={{ ...TD, borderLeft: "2px solid rgba(167,139,250,0.15)", fontWeight: megu != null ? 700 : 400, color: meguColor_, background: meguBg }}
-                  title={meguSource === "db" ? "めぐ指数（統計的基準タイム比較）" : "めぐ指数 β（暫定モック算出）"}
-                >
-                  {megu != null ? megu.toFixed(1) : "—"}
-                </td>
+                <MeguCell
+                  value={megu.megu_final}
+                  title={meguSource === "db" ? "想定めぐ指数（出走前予測）" : "想定めぐ指数（β版モック）"}
+                />
+                <MeguCell
+                  value={megu.actual_megu}
+                  title={meguSource === "db" ? "実測めぐ指数（レース後算出）" : "実測めぐ指数（β版モック）"}
+                />
               </tr>
             );
           })}
@@ -452,8 +547,8 @@ export default function RaceDetailPage() {
       <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <span style={{ color: "#a78bfa", fontWeight: 600 }}>めぐ指数</span>
         {meguSource === "db"
-          ? <span>基準タイムとの差から算出したパフォーマンス指数（実データ）。1点 ≈ 0.1秒差。</span>
-          : <span>走破タイムを基にしたパフォーマンス指数（β版モック算出）。</span>
+          ? <span>想定＝過去5走 megu 加重平均（能力推定）／ 実測＝レース後算出。当日の走りとの差は約10点前後が典型（1点≒0.1秒）。</span>
+          : <span>β版モック算出（API 未取得時のフォールバック）。</span>
         }
         <span style={{ borderLeft: "1px solid var(--border)", paddingLeft: 10 }}>
           <strong style={{ color: "#22c55e" }}>≥105</strong> 優秀 /

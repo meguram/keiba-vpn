@@ -2429,12 +2429,73 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
     def _load():
         from src.utils.race_result_availability import batch_race_result_status
 
+        def _ymd_sql(ymd: str) -> str:
+            return f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:8]}"
+
+        def _round_from_race_id(race_id: str) -> int:
+            try:
+                return int(str(race_id)[-2:])
+            except (TypeError, ValueError):
+                return 0
+
+        def _load_db_races(sess) -> list[dict]:
+            from sqlalchemy import text as sa_text
+
+            rows = sess.execute(
+                sa_text(
+                    """
+                    SELECT r.race_id, r.venue, r.race_name, r.surface, r.distance,
+                           r.grade, r.track_condition, r.start_time,
+                           (SELECT COUNT(*)::int FROM entries e WHERE e.race_id = r.race_id)
+                               AS entries_count
+                    FROM races r
+                    WHERE r.race_date = :d
+                    ORDER BY r.venue, r.race_id
+                    """
+                ),
+                {"d": _ymd_sql(date)},
+            ).fetchall()
+            out: list[dict] = []
+            for row in rows:
+                if not _is_jra_race(row.race_id):
+                    continue
+                st_val = row.start_time
+                out.append({
+                    "race_id": row.race_id,
+                    "round": _round_from_race_id(row.race_id),
+                    "venue": row.venue or "",
+                    "race_name": row.race_name or "",
+                    "surface": row.surface or None,
+                    "distance": int(row.distance) if row.distance else None,
+                    "grade": row.grade or None,
+                    "track_condition": row.track_condition or None,
+                    "start_time": st_val.strftime("%H:%M") if st_val else None,
+                    "entries_count": int(row.entries_count or 0) or None,
+                })
+            return out
+
         storage = _get_storage()
         data = storage.load("race_lists", date)
-        if not data:
-            return {"date": date, "venues": [], "races": []}
-        raw = data.get("races", [])
+        raw = data.get("races", []) if data else []
         jra = [r for r in raw if r.get("race_id") and _is_jra_race(r["race_id"])]
+
+        db_races: list[dict] = []
+        try:
+            from src.db.session import get_session, init_engine
+
+            init_engine()
+            with get_session() as sess:
+                db_races = _load_db_races(sess)
+        except Exception:
+            pass
+
+        # race_lists の日付キーと中身がずれていることがある → DB に開催があれば DB を正とする
+        if db_races:
+            jra = db_races
+
+        if not jra:
+            return {"date": date, "venues": [], "races": []}
+
         venues = sorted(set(r.get("venue", "") for r in jra if r.get("venue")))
         race_ids = [r["race_id"] for r in jra]
         status_map = (
@@ -2442,15 +2503,73 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
             if with_result_status and race_ids
             else {}
         )
+
+        # DB から surface / distance / grade / track_condition / start_time を補完
+        db_info: dict[str, dict] = {}
+        try:
+            from src.db.session import get_session, init_engine
+            from sqlalchemy import text as sa_text
+            init_engine()
+            with get_session() as sess:
+                rows = sess.execute(
+                    sa_text(
+                        "SELECT race_id, venue, race_name, surface, distance, grade, track_condition,"
+                        " start_time FROM races WHERE race_id = ANY(:ids)"
+                    ),
+                    {"ids": race_ids},
+                ).fetchall()
+                for row in rows:
+                    st_val = row.start_time
+                    db_info[row.race_id] = {
+                        "venue": row.venue or None,
+                        "race_name": row.race_name or None,
+                        "surface": row.surface or None,
+                        "distance": int(row.distance) if row.distance else None,
+                        "grade": row.grade or None,
+                        "track_condition": row.track_condition or None,
+                        "start_time": st_val.strftime("%H:%M") if st_val else None,
+                    }
+        except Exception:
+            pass  # DB 未接続時でも race_lists の基本情報で継続
+
+        from src.utils.race_card_merge import (
+            is_plausible_label,
+            load_merged_race_card,
+            pick_better_text,
+            race_meta_from_card,
+        )
+
+        gcs_info: dict[str, dict] = {}
+        for rid in race_ids:
+            db = db_info.get(rid, {})
+            need = (
+                not db.get("distance")
+                or int(db.get("distance") or 0) <= 0
+                or not db.get("surface")
+            )
+            raw_r = next((x for x in jra if x.get("race_id") == rid), {})
+            if need or not is_plausible_label(raw_r.get("race_name")):
+                card = load_merged_race_card(rid)
+                if card:
+                    gcs_info[rid] = race_meta_from_card(card)
+
         races = []
         for r in sorted(jra, key=lambda x: (x.get("venue", ""), x.get("round", 0))):
             rid = r["race_id"]
             st = status_map.get(rid, {})
+            db = {**db_info.get(rid, {}), **gcs_info.get(rid, {})}
+            race_name = pick_better_text(r.get("race_name"), db.get("race_name")) or r.get("race_name", "")
             row = {
                 "race_id": rid,
-                "round": r.get("round", 0),
-                "venue": r.get("venue", ""),
-                "race_name": r.get("race_name", ""),
+                "round": r.get("round", 0) or _round_from_race_id(rid),
+                "venue": r.get("venue", "") or db.get("venue") or "",
+                "race_name": race_name,
+                "surface": db.get("surface") or r.get("surface"),
+                "distance": db.get("distance") if db.get("distance") else r.get("distance"),
+                "grade": db.get("grade") or r.get("grade"),
+                "track_condition": db.get("track_condition") or r.get("track_condition"),
+                "start_time": db.get("start_time") or r.get("start_time"),
+                "entries_count": r.get("entries_count"),
             }
             if with_result_status:
                 row["has_race_result"] = bool(st.get("has_confirmed"))
@@ -2462,6 +2581,38 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
         return {"date": date, "venues": venues, "races": races}
     result = await asyncio.to_thread(_load)
     return JSONResponse(result)
+
+
+@app.get("/api/megu-index-dates", response_class=JSONResponse)
+async def get_megu_index_dates(limit: int = Query(120, ge=1, le=365)):
+    """めぐ指数が計算済みの開催日一覧（UI デフォルト日付用）。"""
+
+    def _load():
+        from sqlalchemy import text as sa_text
+
+        from src.db.session import get_session, init_engine
+
+        init_engine()
+        with get_session() as sess:
+            rows = sess.execute(
+                sa_text("""
+                    SELECT to_char(r.race_date, 'YYYYMMDD') AS d,
+                           COUNT(DISTINCT mi.race_id) AS n_races
+                    FROM megu_index mi
+                    JOIN races r ON r.race_id = mi.race_id
+                    WHERE mi.model_version = 'v2'
+                      AND mi.computation_status = 'valid'
+                      AND r.race_date IS NOT NULL
+                    GROUP BY r.race_date
+                    HAVING COUNT(DISTINCT mi.race_id) >= 3
+                    ORDER BY r.race_date DESC
+                    LIMIT :lim
+                """),
+                {"lim": int(limit)},
+            ).fetchall()
+        return {"dates": [str(r.d) for r in rows if r.d]}
+
+    return JSONResponse(await asyncio.to_thread(_load), headers=_NO_STORE_HEADERS)
 
 
 _scrape_summary_cache: dict = {"data": None, "ts": 0.0, "gen": 0}

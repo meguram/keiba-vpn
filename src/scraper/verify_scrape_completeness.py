@@ -273,10 +273,10 @@ def is_date_task_satisfied(
 
     try:
         if t == "race_list":
+            from src.scraper.race_list_completeness import is_race_list_complete
+
             d = storage.load("race_lists", dk)
-            if not d or not isinstance(d, dict):
-                return False
-            return "races" in d
+            return is_race_list_complete(d)
 
         rids = _jra_race_ids_on_date(storage, dk)
         if not rids and t in ("date_results", "date_cards", "date_all"):

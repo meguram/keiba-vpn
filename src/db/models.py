@@ -478,6 +478,7 @@ class MeguParTime(Base):
     course: Mapped[str] = mapped_column(String(20), nullable=False)
     surface: Mapped[str] = mapped_column(String(10), nullable=False)
     track_condition: Mapped[str] = mapped_column(String(10), nullable=False)
+    class_bucket: Mapped[str] = mapped_column(String(10), nullable=False, default="")
     par_time_sec: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False)
     par_front_split_sec: Mapped[Optional[float]] = mapped_column(Numeric(5, 2))
     sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -485,8 +486,10 @@ class MeguParTime(Base):
     computed_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     __table_args__ = (
-        UniqueConstraint("distance", "course", "surface", "track_condition", "model_version",
-                         name="uq_megu_par_time"),
+        UniqueConstraint(
+            "distance", "course", "surface", "track_condition", "class_bucket", "model_version",
+            name="uq_megu_par_time",
+        ),
     )
 
 
@@ -535,9 +538,7 @@ class MeguIndex(Base):
 class MeguConditionTransfer(Base):
     """条件転換係数テーブル（距離バンド × 馬場種別 × 方向別）。
 
-    delta_mean: 転換後の megu_index - 転換前の megu_index の平均値（加算補正）。
-    例: 芝mile → ダートmile で delta_mean = -3.2 なら、
-        megu_adjusted = base_megu + (-3.2)
+    delta_mean: adjusted_time（秒）の変化量平均。予測時は ability_adj に加算。
     """
     __tablename__ = "megu_condition_transfer"
 
@@ -546,7 +547,7 @@ class MeguConditionTransfer(Base):
     surface_to: Mapped[str] = mapped_column(String(10), nullable=False)
     dist_band_from: Mapped[str] = mapped_column(String(10), nullable=False)   # sprint/mile/middle/long
     dist_band_to: Mapped[str] = mapped_column(String(10), nullable=False)
-    delta_mean: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False)
+    delta_mean: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False)  # 秒（adjusted_time 差）
     delta_std: Mapped[Optional[float]] = mapped_column(Numeric(6, 2))
     sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
     model_version: Mapped[str] = mapped_column(String(20), nullable=False, default="stg-v1")

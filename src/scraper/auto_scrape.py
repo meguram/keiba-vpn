@@ -173,6 +173,7 @@ def _missing_past_race_dates(calendar: dict, since: str | None = None) -> list[s
     yesterday = (_today_jst() - timedelta(days=1)).isoformat()
     start = since or f"{_today_jst().year}-01-01"
     from src.config.data_paths import RACE_LISTS_DIR
+    from src.scraper.race_list_completeness import is_race_list_complete
 
     race_list_dir = RACE_LISTS_DIR
 
@@ -185,7 +186,15 @@ def _missing_past_race_dates(calendar: dict, since: str | None = None) -> list[s
     missing: list[str] = []
     for d in calendar_past:
         stem = d.replace("-", "")
-        if not (race_list_dir / f"{stem}.json").exists():
+        path = race_list_dir / f"{stem}.json"
+        if not path.is_file():
+            missing.append(d)
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not is_race_list_complete(data):
+                missing.append(d)
+        except Exception:
             missing.append(d)
     return missing
 

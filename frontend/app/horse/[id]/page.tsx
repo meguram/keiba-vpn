@@ -64,6 +64,8 @@ type MeguHistory = {
   distance: number;
   track_condition: string;
   megu_index: number;
+  actual_megu?: number | null;
+  megu_final?: number | null;
   finish_time_sec?: number | null;
 };
 
@@ -267,10 +269,13 @@ function IndexTab({ horseId }: { horseId: string }) {
   const TH: React.CSSProperties = { padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textAlign: "left", borderBottom: "1px solid var(--border)", background: "var(--surface2)", whiteSpace: "nowrap" };
   const TD: React.CSSProperties = { padding: "9px 10px", borderBottom: "1px solid rgba(36,48,73,0.4)", fontSize: 12 };
 
-  const avg = data.reduce((s, r) => s + r.megu_index, 0) / data.length;
-  const max = Math.max(...data.map(r => r.megu_index));
+  const actualVal = (r: MeguHistory) => r.actual_megu ?? r.megu_index;
+  const predictedVal = (r: MeguHistory) => r.megu_final ?? null;
+
+  const avg = data.reduce((s, r) => s + actualVal(r), 0) / data.length;
+  const max = Math.max(...data.map(r => actualVal(r)));
   const recent3 = data.slice(0, 3);
-  const recentAvg = recent3.reduce((s, r) => s + r.megu_index, 0) / recent3.length;
+  const recentAvg = recent3.reduce((s, r) => s + actualVal(r), 0) / recent3.length;
 
   return (
     <div>
@@ -294,13 +299,14 @@ function IndexTab({ horseId }: { horseId: string }) {
 
       {/* 簡易スパークライン（CSS バーチャート） */}
       <div style={{ background: "var(--surface2)", borderRadius: 8, padding: "12px 16px", marginBottom: 16 }}>
-        <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 8 }}>めぐ指数推移（古い順 →）</div>
+        <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 8 }}>実測めぐ指数推移（古い順 →）</div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 60 }}>
           {[...data].reverse().map((r, i) => {
-            const pct = Math.max(5, Math.min(100, ((r.megu_index - 60) / 60) * 100));
-            const c = meguColor(r.megu_index);
+            const v = actualVal(r);
+            const pct = Math.max(5, Math.min(100, ((v - 60) / 60) * 100));
+            const c = meguColor(v);
             return (
-              <div key={i} title={`${r.race_date} ${r.megu_index.toFixed(1)}`}
+              <div key={i} title={`${r.race_date} 実測${v.toFixed(1)}${predictedVal(r) != null ? ` / 想定${predictedVal(r)!.toFixed(1)}` : ""}`}
                 style={{ flex: 1, height: `${pct}%`, background: c.color, borderRadius: "2px 2px 0 0", minWidth: 4, opacity: 0.85 }} />
             );
           })}
@@ -315,19 +321,26 @@ function IndexTab({ horseId }: { horseId: string }) {
               <th style={TH}>日付</th>
               <th style={TH}>競馬場</th>
               <th style={TH}>条件</th>
-              <th style={{ ...TH, textAlign: "right" }}>めぐ指数</th>
+              <th style={{ ...TH, textAlign: "right" }}>想定めぐ指数</th>
+              <th style={{ ...TH, textAlign: "right" }}>実測めぐ指数</th>
               <th style={TH}>走破タイム</th>
             </tr>
           </thead>
           <tbody>
             {data.map((r) => {
-              const c = meguColor(r.megu_index);
+              const actual = actualVal(r);
+              const predicted = predictedVal(r);
+              const ac = meguColor(actual);
+              const pc = meguColor(predicted);
               return (
                 <tr key={r.race_id}>
                   <td style={{ ...TD, color: "var(--text-dim)" }}>{r.race_date}</td>
                   <td style={TD}>{r.venue}</td>
                   <td style={{ ...TD, fontSize: 11, color: "var(--text-dim)" }}>{r.surface}{r.distance}m {r.track_condition}</td>
-                  <td style={{ ...TD, textAlign: "right", fontWeight: 800, color: c.color, background: c.bg }}>{r.megu_index.toFixed(1)}</td>
+                  <td style={{ ...TD, textAlign: "right", fontWeight: 700, color: pc.color, background: pc.bg }}>
+                    {predicted != null ? predicted.toFixed(1) : "—"}
+                  </td>
+                  <td style={{ ...TD, textAlign: "right", fontWeight: 800, color: ac.color, background: ac.bg }}>{actual.toFixed(1)}</td>
                   <td style={{ ...TD, color: "var(--text-dim)" }}>{r.finish_time_sec != null ? `${r.finish_time_sec}s` : "—"}</td>
                 </tr>
               );

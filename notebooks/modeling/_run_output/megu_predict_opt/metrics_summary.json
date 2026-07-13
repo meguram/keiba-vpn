@@ -1,0 +1,70 @@
+{
+  "config_path": "/home/jovyan/work/keiba-vpn/config/megu_predict_params.json",
+  "metrics": [
+    {
+      "split": "train_sample",
+      "mae": 15.799562062062062,
+      "rmse": 41.975479057326936,
+      "mean_spearman": -0.014739421670076153,
+      "score": 15.829040905402215,
+      "n_pairs": 7992,
+      "n_races": 724
+    },
+    {
+      "split": "train_full",
+      "mae": 15.891314848216197,
+      "rmse": 38.80735764396245,
+      "mean_spearman": -0.02051691690521821,
+      "score": 15.932348682026634,
+      "n_pairs": 32711,
+      "n_races": 2993
+    },
+    {
+      "split": "valid",
+      "mae": 18.493070743137693,
+      "rmse": 65.65020797349185,
+      "mean_spearman": 0.006870609667429768,
+      "score": 18.479329523802832,
+      "n_pairs": 17924,
+      "n_races": 1637
+    },
+    {
+      "split": "test",
+      "mae": 19.724578225512804,
+      "rmse": 76.19042636253276,
+      "mean_spearman": -0.04497200977404043,
+      "score": 19.814522245060886,
+      "n_pairs": 16478,
+      "n_races": 1491
+    },
+    {
+      "split": "all",
+      "mae": 17.527337475600852,
+      "rmse": 57.53585153235892,
+      "mean_spearman": -0.01911163784142168,
+      "score": 17.565560751283694,
+      "n_pairs": 67113,
+      "n_races": 6121
+    }
+  ],
+  "best_params": {
+    "tuning": {
+      "par_blend": 0.0,
+      "ability_bias_sec": 0.9,
+      "transfer_strength": 0.0
+    },
+    "condition_weights": {
+      "w_match": 1.0,
+      "w_surface_only": 0.85,
+      "w_distance_only": 0.4,
+      "w_both": 0.1
+    },
+    "history_weights": [
+      0.5,
+      0.25,
+      0.15,
+      0.07,
+      0.03
+    ]
+  }
+}

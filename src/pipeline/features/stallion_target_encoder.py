@@ -168,7 +168,11 @@ def _prior_group_cumstats(
     DataFrame: group_cols + ["_prior_starts", "_prior_wins", "_prior_top3",
                               "_prior_fp_norm_sum", "_prior_pass1_sum", "_prior_pass1_cnt"]
     """
-    work = df[group_cols + sort_cols + [win_col, top3_col, fp_norm_col, pass_col]].copy()
+    # カラムリストの重複を除去しながら順序を保持
+    _needed = group_cols + sort_cols + [win_col, top3_col, fp_norm_col, pass_col]
+    _seen: set = set()
+    _unique_cols = [c for c in _needed if not (c in _seen or _seen.add(c))]  # type: ignore[func-returns-value]
+    work = df[_unique_cols].copy()
     work = work.sort_values(group_cols + sort_cols, kind="mergesort")
 
     g = work.groupby(group_cols, sort=False)
@@ -178,10 +182,14 @@ def _prior_group_cumstats(
     cnt     = g.cumcount()
 
     # pass_col: NaN を除いた和とカウントを別途計算
-    pass_valid = work[pass_col].notna()
-    work["_pass_v"] = work[pass_col].fillna(0.0)
-    cs_pass = g["_pass_v"].cumsum()
-    cs_pass_cnt = g[pass_valid.astype(int)].cumsum()
+    # object dtype の可能性があるため pd.to_numeric で float に変換してから fillna
+    _pass_numeric = pd.to_numeric(work[pass_col], errors="coerce")
+    pass_valid = _pass_numeric.notna()
+    work = work.assign(_pass_v=_pass_numeric.fillna(0.0).astype(float))
+    cs_pass = work.groupby(group_cols, sort=False)["_pass_v"].cumsum()
+    pass_valid_int = pass_valid.astype(int)
+    work = work.assign(_pass_valid_int=pass_valid_int.astype(int))
+    cs_pass_cnt = work.groupby(group_cols, sort=False)["_pass_valid_int"].cumsum()
 
     result = work[group_cols + sort_cols].copy()
     result["_prior_starts"]      = cnt.to_numpy()
@@ -189,7 +197,7 @@ def _prior_group_cumstats(
     result["_prior_top3"]        = (cs_top3 - work[top3_col]).to_numpy()
     result["_prior_fp_norm_sum"] = (cs_fp   - work[fp_norm_col].fillna(0)).to_numpy()
     result["_prior_pass1_sum"]   = (cs_pass - work["_pass_v"]).to_numpy()
-    result["_prior_pass1_cnt"]   = (cs_pass_cnt - pass_valid.astype(int)).to_numpy()
+    result["_prior_pass1_cnt"]   = (cs_pass_cnt - pass_valid_int).to_numpy()
 
     return result
 
@@ -296,7 +304,7 @@ def build_sire_stats(
     all_pass_s = g_all["__all_pass_sum"].to_numpy().astype(float)
     all_pass_c = g_all["__all_pass_cnt"].to_numpy().astype(float)
 
-    base = rr[["race_id", "horse_number", "_entity", "_surface_cat", "_dist_band", "_grade_b", "_venue_code", "race_id"] + sort_key].copy()
+    base = rr[["race_id", "horse_number", "_entity", "_surface_cat", "_dist_band", "_grade_b", "_venue_code"]].copy()
     base[f"{prefix}_prior_starts"]          = n_all
     base[f"{prefix}_prior_win_rate"]        = bayesian_shrink(all_wins, n_all, G_WIN,  C_GLOBAL)
     base[f"{prefix}_prior_top3_rate"]       = bayesian_shrink(all_top3, n_all, G_TOP3, C_GLOBAL)

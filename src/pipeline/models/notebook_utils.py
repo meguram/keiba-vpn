@@ -410,9 +410,13 @@ def oof_predict(
 def eval_classification(y_true, y_pred, task: str = "binary") -> dict[str, float]:
     """task: 'binary' or 'multiclass'"""
     metrics: dict[str, float] = {}
-    valid = pd.Series(y_true).notna() & pd.Series(y_pred).notna()
-    yt = np.array(y_true)[valid]
-    yp = np.array(y_pred)[valid]
+    # numpy 変換してインデックス非整合を防ぐ
+    yt = np.asarray(y_true, dtype=object).ravel()
+    yp = np.asarray(y_pred, dtype=object).ravel()
+    valid = np.array([v is not None and v == v for v in yt]) & \
+            np.array([v is not None and v == v for v in yp])
+    yt = np.array(yt[valid], dtype=float)
+    yp = np.array(yp[valid], dtype=float)
 
     if task == "binary":
         # AUC
@@ -427,9 +431,12 @@ def eval_classification(y_true, y_pred, task: str = "binary") -> dict[str, float
 
 
 def eval_regression(y_true, y_pred) -> dict[str, float]:
-    valid = pd.Series(y_true).notna() & pd.Series(y_pred).notna()
-    yt = np.array(y_true)[valid]
-    yp = np.array(y_pred)[valid]
+    # numpy 変換してインデックス非整合を防ぐ
+    yt_arr = np.asarray(y_true, dtype=float).ravel()
+    yp_arr = np.asarray(y_pred, dtype=float).ravel()
+    valid = ~np.isnan(yt_arr) & ~np.isnan(yp_arr)
+    yt = yt_arr[valid]
+    yp = yp_arr[valid]
     return {
         "mae":  float(mean_absolute_error(yt, yp)),
         "rmse": float(np.sqrt(mean_squared_error(yt, yp))),
@@ -449,7 +456,11 @@ def save_oof(
 ) -> Path:
     """OOF 予測を parquet に保存して返す。"""
     keys = key_cols or ["race_id", "horse_number"]
-    out = df[keys + [pred_col]].copy()
+    # 重複除去しながら順序を保持（pred_col が key_cols にある場合も対応）
+    _all = keys + [pred_col]
+    _seen: set = set()
+    unique_cols = [c for c in _all if not (c in _seen or _seen.add(c))]  # type: ignore[func-returns-value]
+    out = df[unique_cols].copy()
     p = OOF_DIR / f"{model_name}_oof.parquet"
     out.to_parquet(p, index=False)
     logger.info("OOF saved: %s  shape=%s", p, out.shape)

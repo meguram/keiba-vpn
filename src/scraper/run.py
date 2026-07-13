@@ -1195,12 +1195,39 @@ class ScraperRunner:
         sub_html: str | None = None
 
         def _save_and_return(rlist: list[dict], source: str) -> list[dict]:
-            payload: dict = {"date": date, "races": rlist}
-            if source:
-                payload["_meta"] = {"race_list_source": source}
+            from src.scraper.race_list_completeness import (
+                merge_race_list_payload,
+                race_list_stats,
+                should_replace_race_list,
+            )
+
+            payload = merge_race_list_payload(
+                date, rlist, source=source, extra_meta=dict(list_meta)
+            )
+            existing = self.storage.load("race_lists", date) or {}
+            if not should_replace_race_list(existing, payload):
+                ex_st = race_list_stats(existing)
+                new_st = race_list_stats(payload)
+                logger.info(
+                    "レース一覧保存スキップ: %s 既存=%d件(%s) 新規=%d件(%s)",
+                    date,
+                    ex_st.jra_count,
+                    ex_st.reason,
+                    new_st.jra_count,
+                    new_st.reason,
+                )
+                return list((existing.get("races") or []))
+
             self.storage.save("race_lists", date, payload)
             self._persist_race_day_schedule_snapshot_optional(date)
-            logger.info("レース一覧取得: %s - %d レース (%s)", date, len(rlist), source)
+            st = race_list_stats(payload)
+            logger.info(
+                "レース一覧取得: %s - %d レース (%s) [%s]",
+                date,
+                len(rlist),
+                source,
+                st.reason,
+            )
             return rlist
 
         prefer_top = kaisai_date_in_top_priority_window(date)
@@ -1254,11 +1281,16 @@ class ScraperRunner:
                 logger.debug("race_lists アーカイブ(top) スキップ: %s", e)
 
         if not races:
-            payload = {"date": date, "races": [], "_meta": {}}
-            if list_meta:
-                payload["_meta"].update(list_meta)
-            self.storage.save("race_lists", date, payload)
-            self._persist_race_day_schedule_snapshot_optional(date)
+            from src.scraper.race_list_completeness import (
+                merge_race_list_payload,
+                should_replace_race_list,
+            )
+
+            payload = merge_race_list_payload(date, [], extra_meta=dict(list_meta))
+            existing = self.storage.load("race_lists", date) or {}
+            if should_replace_race_list(existing, payload):
+                self.storage.save("race_lists", date, payload)
+                self._persist_race_day_schedule_snapshot_optional(date)
             logger.info("レース一覧取得: %s - 0 レース", date)
             return []
 

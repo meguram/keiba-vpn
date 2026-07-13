@@ -154,8 +154,8 @@ class RaceResultParser:
         data_tag = self._RACE_DATA.select_one(soup)
         data_text = safe_text(data_tag) if data_tag else ""
 
-        # 「芝左1600m」「ダ右1200m」等のパターン
-        m = re.search(r"(芝|ダート?|障)(左|右|直)?\s*(\d{3,5})\s*m", data_text)
+        # 「芝左1600m」「ダ右1200m」「ダ1200m」「ダート右1200m」等のパターン
+        m = re.search(r"(芝|ダート?|ダ|障)(左|右|直)?\s*(\d{3,5})\s*m", data_text)
         if m:
             surface_raw = m.group(1)
             info["surface"] = "ダート" if surface_raw.startswith("ダ") else surface_raw
@@ -556,16 +556,19 @@ class RaceResultOnTimeParser(RaceResultParser):
         data1_tag = self._RACE_DATA1_LIVE.select_one(soup)
         data1 = data1_tag.get_text(" ", strip=True) if data1_tag else ""
 
-        # race.netkeiba.com RaceData01 format: "10:05発走 / 芝1600m(左) / 天候:晴 / 馬場:良"
-        m = re.search(r"(芝|ダ|ダート|障)\s*(\d{3,5})\s*m", data1)
+        # race.netkeiba.com RaceData01 旧形式: "10:05発走 / 芝1600m(左) / 天候:晴 / 馬場:良"
+        # race.netkeiba.com RaceData01 新形式: "ダ右1000m / 天候 : 曇 / ダート : 良 / 発走 : 10:20"
+        m = re.search(r"(芝|ダ|ダート|障)\s*(左|右|直)?\s*(\d{3,5})\s*m", data1)
         if m:
             surface_raw = m.group(1)
             info["surface"] = "ダート" if surface_raw.startswith("ダ") else surface_raw
-            info["distance"] = int(m.group(2))
+            info["distance"] = int(m.group(3))
         else:
             info["surface"], info["distance"] = "", 0
 
-        m_dir = re.search(r"\d+m\s*\(?\s*(左|右|直)\s*\)?", data1)
+        m_dir = re.search(r"(?:芝|ダ|ダート|障)(左|右|直)\s*\d+m", data1)
+        if not m_dir:
+            m_dir = re.search(r"\d+m\s*\(?\s*(左|右|直)\s*\)?", data1)
         info["direction"] = m_dir.group(1) if m_dir else ""
 
         m_w = re.search(r"天候\s*[:：]\s*([^\s/]+)", data1)
@@ -576,7 +579,9 @@ class RaceResultOnTimeParser(RaceResultParser):
             m_t = re.search(r"(?:芝|ダート?|障)\s*[:：]\s*(\S+)", data1)
         info["track_condition"] = m_t.group(1) if m_t else ""
 
-        m_start = re.search(r"(\d{1,2}:\d{2})\s*発走", data1)
+        m_start = re.search(r"発走\s*[:：]?\s*(\d{1,2}:\d{2})", data1)
+        if not m_start:
+            m_start = re.search(r"(\d{1,2}:\d{2})\s*発走", data1)
         info["start_time"] = m_start.group(1) if m_start else ""
 
         data2_tag = self._RACE_DATA2_LIVE.select_one(soup)
@@ -683,6 +688,9 @@ class RaceCardParser:
         "div.RaceData01",
         "span.RaceData01",
         "div[class*='RaceData']",
+        "diary_snap_cut",
+        "dl.racedata dd p",
+        "dl.racedata dd",
     ])
     _RACE_DATA2 = SelectorChain("card_race_data2", [
         "div.RaceData02",
@@ -704,28 +712,38 @@ class RaceCardParser:
         name_tag = self._RACE_NAME.select_one(soup)
         info["race_name"] = safe_text(name_tag)
 
-        # RaceData01: "10:05発走 / ダ1200m(右) / 天候:晴 / 馬場:良"
+        # RaceData01 旧形式: "10:05発走 / ダ1200m(右) / 天候:晴 / 馬場:良"
+        # RaceData01 新形式: "ダ右1000m / 天候 : 曇 / ダート : 良 / 発走 : 10:20"
         data1_tag = self._RACE_DATA1.select_one(soup)
         data1 = data1_tag.get_text(" ", strip=True) if data1_tag else ""
 
-        m = re.search(r"(芝|ダ|ダート|障)\s*(\d{3,5})\s*m", data1)
+        # 新形式 "ダ右1000m" にも対応（方角が距離の前に入る）
+        m = re.search(r"(芝|ダ|ダート|障)\s*(左|右|直)?\s*(\d{3,5})\s*m", data1)
         if m:
             surface_raw = m.group(1)
             info["surface"] = "ダート" if surface_raw.startswith("ダ") else surface_raw
-            info["distance"] = int(m.group(2))
+            info["distance"] = int(m.group(3))
         else:
             info["surface"], info["distance"] = "", 0
 
-        m_dir = re.search(r"\d+m\s*\(?\s*(左|右|直)\s*\)?", data1)
+        # 方角: 新形式 "ダ右1000m" と旧形式 "ダ1200m(右)" の両方に対応
+        m_dir = re.search(r"(?:芝|ダ|ダート|障)(左|右|直)\s*\d+m", data1)
+        if not m_dir:
+            m_dir = re.search(r"\d+m\s*\(?\s*(左|右|直)\s*\)?", data1)
         info["direction"] = m_dir.group(1) if m_dir else ""
 
         m_w = re.search(r"天候\s*[:：]\s*([^\s/]+)", data1)
         info["weather"] = m_w.group(1) if m_w else ""
 
         m_t = re.search(r"馬場\s*[:：]\s*([^\s/]+)", data1)
+        if not m_t:
+            m_t = re.search(r"(?:芝|ダート?|障)\s*[:：]\s*(\S+)", data1)
         info["track_condition"] = m_t.group(1) if m_t else ""
 
-        m_start = re.search(r"(\d{1,2}:\d{2})\s*発走", data1)
+        # 発走時刻: 新形式 "発走 : 10:20" と旧形式 "10:05発走" の両方に対応
+        m_start = re.search(r"発走\s*[:：]?\s*(\d{1,2}:\d{2})", data1)
+        if not m_start:
+            m_start = re.search(r"(\d{1,2}:\d{2})\s*発走", data1)
         info["start_time"] = m_start.group(1) if m_start else ""
 
         # RaceData02: "1回中山1日目 サラ系３歳 未勝利 [指] 馬齢 16頭 ..."

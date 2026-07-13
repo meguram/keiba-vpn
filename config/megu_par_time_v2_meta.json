@@ -1,0 +1,14 @@
+{
+  "model_version": "v2",
+  "train_years": [
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "n_cells": 593,
+  "min_samples": 5,
+  "params_source": "v1"
+}

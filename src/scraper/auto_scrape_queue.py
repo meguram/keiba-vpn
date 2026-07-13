@@ -642,9 +642,11 @@ def task_daily_race_lists() -> None:
     for d in target_dates:
         ymd = d.replace("-", "")[:8]
         rl = storage.load("race_lists", ymd)
-        if rl and rl.get("races"):
+        from src.scraper.race_list_completeness import is_race_list_complete
+
+        if is_race_list_complete(rl):
             ok_dates.append(d)
-            total_races += len(rl.get("races") or [])
+            total_races += len((rl or {}).get("races") or [])
         else:
             fail_dates.append(d)
 

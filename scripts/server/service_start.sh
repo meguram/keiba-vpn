@@ -112,8 +112,18 @@ frontend_node_modules_ok() {
   [[ "$size" -gt 20000 ]]
 }
 
+frontend_next_dist_dir() {
+  case "${KEIBA_ENV:-dev}" in
+    stg)  echo ".next-stg" ;;
+    prod) echo ".next-prod" ;;
+    *)    echo ".next-dev" ;;
+  esac
+}
+
 frontend_dev_cache_needs_reset() {
-  local next_dir="$ROOT/frontend/.next"
+  local dist_name
+  dist_name="$(frontend_next_dist_dir)"
+  local next_dir="$ROOT/frontend/$dist_name"
   [[ -d "$next_dir" ]] || return 1
   # production ビルド残骸や不完全キャッシュで next dev が 500 になるのを防ぐ
   if [[ -f "$next_dir/required-server-files.json" ]]; then
@@ -130,7 +140,13 @@ prepare_frontend_dev_cache() {
     return 0
   fi
   if frontend_dev_cache_needs_reset; then
-    echo "[service_start] frontend/.next をリセット（dev 起動のため production/不完全キャッシュを削除）..."
+    local dist_name
+    dist_name="$(frontend_next_dist_dir)"
+    echo "[service_start] frontend/${dist_name} をリセット（dev 起動のため production/不完全キャッシュを削除）..."
+    rm -rf "$ROOT/frontend/$dist_name"
+  fi
+  # 旧 .next（distDir 分離前の残骸）も削除
+  if [[ -d "$ROOT/frontend/.next" ]]; then
     rm -rf "$ROOT/frontend/.next"
   fi
 }

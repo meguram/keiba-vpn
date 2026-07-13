@@ -22,6 +22,10 @@ def database_url() -> str:
 
 def init_engine(url: str | None = None):
     global _engine, _SessionLocal
+    if url is None and not os.environ.get("DATABASE_URL"):
+        from src.utils.project_env import load_project_dotenv
+
+        load_project_dotenv()
     _engine = create_engine(url or database_url(), pool_pre_ping=True)
     _SessionLocal = sessionmaker(bind=_engine, autoflush=False, autocommit=False)
     return _engine

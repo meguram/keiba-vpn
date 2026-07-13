@@ -1,6 +1,14 @@
 export const USE_MOCK = process.env.NEXT_PUBLIC_MOCK === "true";
 
 // ---------------------------------------------------------------------------
+// ユーティリティ
+// ---------------------------------------------------------------------------
+/** JRA公式枠番計算: 1枠=1番、2枠=2-3番、…、8枠=14-16番 */
+function calcBracket(horseNumber: number): number {
+  return Math.min(Math.ceil((horseNumber + 1) / 2), 8);
+}
+
+// ---------------------------------------------------------------------------
 // Races
 // ---------------------------------------------------------------------------
 export const MOCK_RACES = [
@@ -241,7 +249,7 @@ export function getMockRaceDetail(raceId: string) {
     race_shutuba: {
       entries: MOCK_HORSES.slice(0, race.field_size ?? 16).map((h) => ({
         horse_number: h.post_no,
-        bracket_number: Math.ceil(h.post_no / 2),
+        bracket_number: calcBracket(h.post_no),
         horse_name: h.horse_name,
         horse_id: h.horse_id,
         sex_age: h.post_no % 2 === 0 ? "牡4" : "牝4",
@@ -257,7 +265,7 @@ export function getMockRaceDetail(raceId: string) {
         const sss = (baseSec % 60 + i * 0.3).toFixed(1);
         return {
           horse_number: h.post_no,
-          bracket_number: Math.ceil(h.post_no / 2),
+          bracket_number: calcBracket(h.post_no),
           horse_name: h.horse_name,
           horse_id: h.horse_id,
           finish_position: i + 1,
@@ -286,7 +294,7 @@ export function getMockTdData(raceId: string) {
       horse_number: i + 1,
       horse_id: td.horse_id,
       horse_name: td.horse_name,
-      bracket_number: Math.ceil((i + 1) / 2),
+      bracket_number: calcBracket(i + 1),
       tracking_difficulty: {
         ease_score: td.ease_score,
         ease_pct: td.ease_score,
@@ -503,17 +511,30 @@ export function getMockMeguPredicted(raceId: string) {
     const finishSec = parseFloat((parSec + i * 0.3).toFixed(1));
     const sa = MOCK_SEX_AGE[i % MOCK_SEX_AGE.length];
 
+    const jockeyWeight = 55 + (i % 5 === 0 ? 2 : 0);
+    const weightDelta = jockeyWeight > 55 ? -parseFloat(((jockeyWeight - 55) * 6.1).toFixed(1)) : 0;
+    const meguFinal = parseFloat((adjustedMegu + weightDelta).toFixed(1));
+    // モック: 1R目のみ結果確定済みとして実測値を付与（想定との差を再現）
+    const actualMegu = raceId === "m_r01"
+      ? parseFloat((meguFinal + (i % 3 === 0 ? 2.5 : i % 3 === 1 ? -1.8 : 0.6)).toFixed(1))
+      : null;
+
     return {
       horse_id: h.horse_id,
       horse_name: h.horse_name,
       horse_number: h.post_no,
+      bracket_number: calcBracket(h.post_no),
+      sex_age: `${sa.sex}${sa.age}`,
       sex: sa.sex,
       age: sa.age,
-      jockey_weight: 55 + (i % 5 === 0 ? 2 : 0),
-      finish_time_sec: finishSec,
-      actual_megu: null as number | null,
+      jockey_weight: jockeyWeight,
+      finish_time_sec: raceId === "m_r01" ? finishSec : null,
+      finish_pos: raceId === "m_r01" ? i + 1 : null,
+      actual_megu: actualMegu,
       base_megu: baseMegu,
       megu_adjusted: adjustedMegu,
+      weight_megu_delta: weightDelta,
+      megu_final: meguFinal,
       condition_change: {
         type: cc.type,
         label: cc.label,
@@ -533,6 +554,14 @@ export function getMockMeguPredicted(raceId: string) {
     };
   });
 
+  const mockLevelLabel =
+    race.grade === "G1" ? "G1級"
+    : race.grade === "G2" || race.grade === "G3" ? "重賞級"
+    : race.grade === "OP" ? "3勝級"
+    : race.grade === "2勝" ? "2勝級"
+    : race.grade === "1勝" ? "1勝級"
+    : "3勝級";
+
   return {
     race_id: raceId,
     race_info: {
@@ -545,6 +574,7 @@ export function getMockMeguPredicted(raceId: string) {
       grade: (race.grade as string) || null,
       race_date: "2026-07-12",
     },
+    race_level: { label: mockLevelLabel, field_avg_megu: 102.4 },
     model_version: "mock-v1",
     horses,
   };

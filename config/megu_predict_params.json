@@ -1,0 +1,106 @@
+{
+  "history_weights": [
+    0.5,
+    0.25,
+    0.15,
+    0.07,
+    0.03
+  ],
+  "condition_weights": {
+    "w_match": 1.0,
+    "w_surface_only": 0.85,
+    "w_distance_only": 0.4,
+    "w_both": 0.1
+  },
+  "tuning": {
+    "par_blend": 0.0,
+    "ability_bias_sec": 0.9,
+    "transfer_strength": 0.0
+  },
+  "meta": {
+    "model_version": "v2",
+    "year_start": 2024,
+    "year_end": 2025,
+    "split": {
+      "train_end": "2024-12-31",
+      "valid_end": "2025-06-30",
+      "train_sample": 8000
+    },
+    "baseline": [
+      {
+        "split": "train",
+        "mae": 17.87398734370701,
+        "rmse": 39.83208133290066,
+        "mean_spearman": -0.037074958492310926,
+        "score": 17.948137260691635,
+        "n_pairs": 32711,
+        "n_races": 2993
+      },
+      {
+        "split": "valid",
+        "mae": 21.235689578219148,
+        "rmse": 66.72082153771905,
+        "mean_spearman": -0.005439326296839886,
+        "score": 21.246568230812827,
+        "n_pairs": 17924,
+        "n_races": 1637
+      },
+      {
+        "split": "test",
+        "mae": 21.292650807136788,
+        "rmse": 76.71028103382483,
+        "mean_spearman": -0.06666206121045265,
+        "score": 21.425974929557693,
+        "n_pairs": 16478,
+        "n_races": 1491
+      }
+    ],
+    "optimized": [
+      {
+        "split": "train_sample",
+        "mae": 15.799562062062062,
+        "rmse": 41.975479057326936,
+        "mean_spearman": -0.014739421670076153,
+        "score": 15.829040905402215,
+        "n_pairs": 7992,
+        "n_races": 724
+      },
+      {
+        "split": "train_full",
+        "mae": 15.891314848216197,
+        "rmse": 38.80735764396245,
+        "mean_spearman": -0.02051691690521821,
+        "score": 15.932348682026634,
+        "n_pairs": 32711,
+        "n_races": 2993
+      },
+      {
+        "split": "valid",
+        "mae": 18.493070743137693,
+        "rmse": 65.65020797349185,
+        "mean_spearman": 0.006870609667429768,
+        "score": 18.479329523802832,
+        "n_pairs": 17924,
+        "n_races": 1637
+      },
+      {
+        "split": "test",
+        "mae": 19.724578225512804,
+        "rmse": 76.19042636253276,
+        "mean_spearman": -0.04497200977404043,
+        "score": 19.814522245060886,
+        "n_pairs": 16478,
+        "n_races": 1491
+      },
+      {
+        "split": "all",
+        "mae": 17.527337475600852,
+        "rmse": 57.53585153235892,
+        "mean_spearman": -0.01911163784142168,
+        "score": 17.565560751283694,
+        "n_pairs": 67113,
+        "n_races": 6121
+      }
+    ]
+  }
+}

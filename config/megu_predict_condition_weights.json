@@ -1,0 +1,30 @@
+{
+  "weights": {
+    "w_match": 1.0,
+    "w_surface_only": 0.55,
+    "w_distance_only": 0.7,
+    "w_both": 0.3
+  },
+  "meta": {
+    "year_start": 2024,
+    "year_end": 2025,
+    "baseline": {
+      "mae": 11.42615568777946,
+      "mean_spearman": 0.28201845956371174,
+      "n_pairs": 28403
+    },
+    "default_weights": {
+      "mae": 11.418124845966975,
+      "mean_spearman": 0.28326040132418606
+    },
+    "optimized": {
+      "mae": 11.418124845966975,
+      "rmse": 14.842900262480729,
+      "mean_spearman": 0.28326040132418606,
+      "score": 10.001822839346044,
+      "n_pairs": 28403,
+      "n_races": 2995
+    },
+    "spearman_weight_in_objective": 5.0
+  }
+}

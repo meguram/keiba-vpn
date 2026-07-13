@@ -256,16 +256,11 @@ def get_race_ids_for_dates(target_dates: list[str]) -> list[str]:
 
 
 def load_race_card_from_gcs(race_id: str) -> dict | None:
-    """GCS から race_shutuba を取得。"""
+    """GCS から race_shutuba / race_result をマージして取得。"""
     try:
-        from src.scraper.storage import HybridStorage
-        storage = HybridStorage()
-        card = storage.load("race_shutuba", race_id)
-        if card:
-            return card
-        # フォールバック: race_result から基本情報を取得
-        result = storage.load("race_result", race_id)
-        return result
+        from src.utils.race_card_merge import load_merged_race_card
+
+        return load_merged_race_card(race_id)
     except Exception as e:
         logger.debug("GCS load エラー %s: %s", race_id, e)
         return None
