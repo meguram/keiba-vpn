@@ -1,5 +1,6 @@
 # AREA-11 — めぐ指数（レースパフォーマンス評価指数）
-**Status**: DECIDED | **Last Updated**: 2026-07-10
+**Status**: ~~DECIDED~~ **ARCHIVED** | **Last Updated**: 2026-07-10
+> ⚠️ このドキュメントはアーカイブです。現行仕様は `AREA-11-megu-index-v3.md` を参照してください。
 
 ---
 
