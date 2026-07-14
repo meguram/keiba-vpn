@@ -48,6 +48,7 @@ WEIGHTS_B = [0.35, 0.25, 0.20, 0.12, 0.08]
 
 # ── career_prize モジュールをインポート ─────────────────────────────────────
 from src.pipeline.megu_index.class_bucket import par_class_bucket
+from src.pipeline.megu_index.common import adjusted_time_to_megu
 from src.pipeline.megu_index.field_quality import attach_fq_and_delta_level
 from src.pipeline.megu_index.par_time_resolve import attach_par_time_with_fallback
 
@@ -56,32 +57,8 @@ from src.pipeline.megu_index.par_time_resolve import attach_par_time_with_fallba
 # ユーティリティ
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _parse_lap_times(lap_json, distance: int) -> dict[int, float]:
-    """lap_times JSON → {cumulative_distance_m: cumulative_sec}"""
-    if not lap_json or (isinstance(lap_json, float) and math.isnan(lap_json)):
-        return {}
-    try:
-        laps = json.loads(lap_json) if isinstance(lap_json, str) else lap_json
-        if not laps:
-            return {}
-        seg_len = distance / len(laps)
-        result: dict[int, float] = {}
-        cumtime = 0.0
-        cumdist = 0.0
-        for t in laps:
-            cumtime += t
-            cumdist += seg_len
-            result[round(cumdist)] = round(cumtime, 2)
-        return result
-    except Exception:
-        return {}
-
-
-def _select_split_point(distance: int, available_dists: list[int]) -> Optional[int]:
-    """距離の 50% 以下で最近傍のスプリット点を返す (AREA-11 §4-1)"""
-    target = distance * 0.5
-    cands = [d for d in sorted(available_dists) if d <= target]
-    return max(cands) if cands else None
+from src.pipeline.megu_index.lap_splits import parse_lap_times as _parse_lap_times
+from src.pipeline.megu_index.lap_splits import select_split_point as _select_split_point
 
 
 def _compute_delta_level(
@@ -491,6 +468,7 @@ def compute_for_dataframe(
 
     # ── 各補正値 ───────────────────────────────────────────────────────
     df["delta_pace_sec"]   = beta_pace  * df["front_split_dev"].fillna(0)
+    # 芝・ダートのみ馬場補正（障害は surface フィルタで対象外）
     df["delta_track_sec"]  = -beta_track * df["tsi_normalized"].fillna(0)
     df["delta_weight_sec"] = beta_weight * df["weight_dev"].fillna(0) * df["dist_scale"].fillna(1)
 
@@ -507,7 +485,10 @@ def compute_for_dataframe(
         - df["delta_weight_sec"]
         - df["delta_level_sec"]
     )
-    df["megu_index"] = 100.0 + (df["par_time_final"] - df["adjusted_time_sec"]) * 10.0
+    df["megu_index"] = df.apply(
+        lambda r: adjusted_time_to_megu(r["adjusted_time_sec"], r["par_time_final"]),
+        axis=1,
+    )
 
     # ── 【最適化】2着基準 out_of_range フラグ ──────────────────────────────
     finish_pos_col = "finish_position" if "finish_position" in df.columns else "finish_pos"

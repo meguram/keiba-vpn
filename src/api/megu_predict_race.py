@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,23 @@ from src.utils.race_card_merge import (
 
 _MODEL_VERSION = "v2"
 _HISTORY_LIMIT = 5
+_EMPTY_PRED: dict[str, Any] = {
+    "base_megu": None,
+    "megu_adjusted": None,
+    "megu_final": None,
+    "weight_megu_delta": None,
+    "condition_change": {"type": "none", "label": None},
+}
+
+
+def megu_predict_enabled() -> bool:
+    """想定めぐ指数の API 計算を有効化するか（MEGU_PREDICT_ENABLED=0 で無効）。"""
+    return os.environ.get("MEGU_PREDICT_ENABLED", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
 _TRACK_CAT_MAP = {"良": "良", "稍重": "稍重", "重": "重・不良", "不良": "重・不良"}
 _FLAT_DIR = Path(__file__).resolve().parents[2] / "data/page_reference/tables"
 
@@ -232,8 +250,8 @@ def build_race_megu_predictions(session: Session, race_id: str, model_version: s
 
     beta_weight = load_beta_weight(session, model_version)
     par_time_target = lookup_par_time(session, race, model_version)
-    transfer_map = load_transfer_map(session, model_version)
-    predict_params = load_predict_params()
+    transfer_map = load_transfer_map(session, model_version) if megu_predict_enabled() else {}
+    predict_params = load_predict_params() if megu_predict_enabled() else None
 
     entry_rows = session.execute(
         sa_text("""
@@ -356,12 +374,10 @@ def build_race_megu_predictions(session: Session, race_id: str, model_version: s
 
         hist_dicts = [_hist_row_to_dict(r) for r in hist[:_HISTORY_LIMIT]]
 
-        if par_time_target is None:
-            pred = {
-                "base_megu": None, "megu_adjusted": None, "megu_final": None,
-                "weight_megu_delta": None,
-                "condition_change": {"type": "none", "label": None},
-            }
+        if not megu_predict_enabled():
+            pred = dict(_EMPTY_PRED)
+        elif par_time_target is None:
+            pred = dict(_EMPTY_PRED)
         else:
             pred = predict_megu_scores(
                 hist_dicts,
@@ -414,12 +430,22 @@ def build_race_megu_predictions(session: Session, race_id: str, model_version: s
             ],
         })
 
-    result_horses.sort(
-        key=lambda h: h["megu_final"] if h["megu_final"] is not None else -999,
-        reverse=True,
-    )
+    if megu_predict_enabled():
+        result_horses.sort(
+            key=lambda h: h["megu_final"] if h["megu_final"] is not None else -999,
+            reverse=True,
+        )
+    else:
+        result_horses.sort(
+            key=lambda h: h["actual_megu"] if h["actual_megu"] is not None else -999,
+            reverse=True,
+        )
 
-    top_pred = next((h["megu_final"] for h in result_horses if h["megu_final"] is not None), None)
+    top_pred = (
+        next((h["megu_final"] for h in result_horses if h["megu_final"] is not None), None)
+        if megu_predict_enabled()
+        else None
+    )
     top_actual = next((h["actual_megu"] for h in result_horses if h["actual_megu"] is not None), None)
     for h in result_horses:
         pf, af = h.get("megu_final"), h.get("actual_megu")
@@ -531,8 +557,12 @@ def build_race_megu_predictions(session: Session, race_id: str, model_version: s
         "race_level": race_level,
         "model_version": model_version,
         "index_note": (
-            "想定・実測ともペース・馬場・斤量・レースレベル補正後。"
-            "指数1点=0.1秒。想定着差は想定めぐ1位との差。"
+            "実測めぐ指数はペース・馬場・斤量・レースレベル補正後（1点=0.1秒）。"
+            + (
+                " 想定・実測とも補正後。想定着差は想定めぐ1位との差。"
+                if megu_predict_enabled()
+                else " 想定めぐ指数は現在リセット中のため表示しません。"
+            )
         ),
         "horses": result_horses,
     }

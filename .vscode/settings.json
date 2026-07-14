@@ -1,5 +1,12 @@
 {
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python.terminal.activateEnvironment": true,
-  "jupyter.kernels.excludePythonEnvironments": []
+  "jupyter.kernels.excludePythonEnvironments": [],
+
+  "livePreview.useIntegratedBrowser": true,
+  "livePreview.openPreviewTarget": "Embedded Preview",
+  "livePreview.autoRefreshPreview": "On Changes to Saved Files",
+  "livePreview.showServerStatusNotifications": false,
+  "livePreview.serverRoot": "${workspaceFolder}",
+  "livePreview.portNumber": 3000
 }

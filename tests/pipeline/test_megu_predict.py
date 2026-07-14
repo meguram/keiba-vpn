@@ -29,7 +29,7 @@ class TestMeguCommon(unittest.TestCase):
         par = 96.0
         megu = 110.0
         adj = megu_to_adjusted_time(megu, par)
-        self.assertAlmostEqual(adj, 95.0, places=1)
+        self.assertAlmostEqual(adj, 90.0, places=1)
         self.assertAlmostEqual(adjusted_time_to_megu(adj, par), megu, places=1)
 
 

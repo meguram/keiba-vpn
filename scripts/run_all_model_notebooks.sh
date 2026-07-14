@@ -76,7 +76,7 @@ run_nb "$NB_DIR/nb-07-t9-finish-time.ipynb"
 run_nb "$NB_DIR/nb-08-t1-win-prob.ipynb"
 
 # ─── Step 5: めぐ指数 β係数再推定 ─────────────────────────────────────────
-run_nb "$MEGU_DIR/nb-02-unified-regression.ipynb"
+run_nb "$MEGU_DIR/nb-02-pace-and-partime.ipynb"
 
 echo "" | tee -a "$LOG_FILE"
 echo "============================================================" | tee -a "$LOG_FILE"

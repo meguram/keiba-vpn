@@ -217,11 +217,12 @@ def create_app() -> Flask:
         from src.api.megu_predict_race import (
             load_beta_weight,
             load_transfer_map,
+            megu_predict_enabled,
             predict_megu_final_for_horse_race,
         )
         from src.db.models import Race
 
-        _MODEL_VERSION = "v1"
+        _MODEL_VERSION = "v2"
 
         with get_session() as session:
             full_rows = session.execute(
@@ -246,8 +247,8 @@ def create_app() -> Flask:
             if not full_rows:
                 return jsonify({"horse_id": horse_id, "history": []})
 
-            beta_weight = load_beta_weight(session, _MODEL_VERSION)
-            transfer_map = load_transfer_map(session, _MODEL_VERSION)
+            beta_weight = load_beta_weight(session, _MODEL_VERSION) if megu_predict_enabled() else 0.0
+            transfer_map = load_transfer_map(session, _MODEL_VERSION) if megu_predict_enabled() else {}
             display_rows = full_rows[:20]
             history = []
 
@@ -271,7 +272,7 @@ def create_app() -> Flask:
                 jockey_weight = float(entry.jockey_weight) if entry and entry.jockey_weight is not None else None
                 sex_age = entry.sex_age if entry and entry.sex_age else None
                 megu_final = None
-                if race:
+                if megu_predict_enabled() and race:
                     megu_final = predict_megu_final_for_horse_race(
                         session,
                         horse_id=horse_id,
