@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>めぐ指数パイプライン フロー図 (NB-01 / NB-02)</title>
+<script src="../static/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    --nb01: #2563eb;
+    --nb01-light: #dbeafe;
+    --nb01-mid: #93c5fd;
+    --nb02: #7c3aed;
+    --nb02-light: #ede9fe;
+    --nb02-mid: #c4b5fd;
+    --save: #059669;
+    --save-light: #d1fae5;
+    --input: #d97706;
+    --input-light: #fef3c7;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --muted: #64748b;
+    --arrow: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background:var(--bg); color:var(--text); padding:24px; line-height:1.5; }
+  h1 { text-align:center; font-size:1.6rem; font-weight:700; margin-bottom:6px; }
+  .subtitle { text-align:center; color:var(--muted); margin-bottom:32px; font-size:.9rem; }
+
+  /* LEGEND */
+  .legend { display:flex; gap:16px; justify-content:center; margin-bottom:32px; flex-wrap:wrap; }
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:.82rem; color:var(--muted); }
+  .legend-dot { width:12px; height:12px; border-radius:3px; }
+
+  /* PIPELINE */
+  .pipeline { max-width:1200px; margin:0 auto; display:flex; flex-direction:column; gap:0; }
+
+  /* NB HEADER */
+  .nb-header { border-radius:12px 12px 0 0; padding:14px 24px; font-weight:700; font-size:1rem;
+    letter-spacing:.03em; color:#fff; display:flex; align-items:center; gap:10px; }
+  .nb-header.nb01 { background:var(--nb01); }
+  .nb-header.nb02 { background:var(--nb02); margin-top:40px; }
+  .nb-badge { background:rgba(255,255,255,.25); border-radius:6px; padding:2px 10px; font-size:.78rem; font-weight:600; }
+
+  /* STEP */
+  .steps-container { background:#fff; border:1.5px solid var(--border); border-top:none;
+    border-radius:0 0 12px 12px; padding:24px; display:flex; flex-direction:column; gap:0; }
+  .step-row { display:flex; align-items:flex-start; gap:16px; }
+  .step-col { display:flex; flex-direction:column; align-items:center; flex-shrink:0; width:40px; }
+  .step-icon { width:40px; height:40px; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; font-weight:700; font-size:.9rem; color:#fff; flex-shrink:0;
+    box-shadow:0 2px 6px rgba(0,0,0,.15); z-index:1; }
+  .step-icon.nb01 { background:var(--nb01); }
+  .step-icon.nb02 { background:var(--nb02); }
+  .step-icon.save { background:var(--save); }
+  .step-icon.input { background:var(--input); }
+  .connector { width:2px; flex:1; min-height:20px; background:var(--border); margin:4px 0; }
+  .connector.nb01 { background:var(--nb01-mid); }
+  .connector.nb02 { background:var(--nb02-mid); }
+  .step-content { flex:1; padding-bottom:24px; }
+  .step-card { border:1.5px solid var(--border); border-radius:10px; overflow:hidden; background:var(--card); transition:box-shadow .2s; }
+  .step-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.08); }
+  .step-card-header { padding:10px 16px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border); }
+  .step-card-header.nb01 { background:var(--nb01-light); }
+  .step-card-header.nb02 { background:var(--nb02-light); }
+  .step-card-header.save-h { background:var(--save-light); }
+  .step-card-header.input-h { background:var(--input-light); }
+  .step-title { font-weight:700; font-size:.95rem; }
+  .step-tag { font-size:.73rem; padding:1px 8px; border-radius:20px; font-weight:600; margin-left:auto; white-space:nowrap; }
+  .tag-nb01 { background:var(--nb01); color:#fff; }
+  .tag-nb02 { background:var(--nb02); color:#fff; }
+  .tag-save { background:var(--save); color:#fff; }
+  .tag-input { background:var(--input); color:#fff; }
+  .step-body { padding:14px 16px; display:flex; flex-direction:column; gap:12px; }
+  .step-desc { font-size:.88rem; color:var(--muted); }
+
+  /* DATA SAMPLE */
+  .data-sample { border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .data-sample-label { background:#f1f5f9; padding:5px 12px; font-size:.75rem; font-weight:600;
+    color:var(--muted); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .data-rows { font-size:.74rem; color:var(--text); overflow-x:auto; }
+  table.sample-tbl { width:100%; border-collapse:collapse; white-space:nowrap; }
+  table.sample-tbl thead tr { background:#f8fafc; }
+  table.sample-tbl th { padding:5px 10px; text-align:left; font-weight:600; font-size:.72rem;
+    color:var(--muted); border-bottom:1px solid var(--border); }
+  table.sample-tbl td { padding:4px 10px; border-bottom:1px solid #f1f5f9; font-size:.73rem; }
+  table.sample-tbl tbody tr:hover { background:#f8fafc; }
+  table.sample-tbl tbody tr:last-child td { border-bottom:none; }
+  .highlight-col { background:#fefce8 !important; font-weight:600; }
+
+  /* ADDED COLS */
+  .added-cols { display:flex; flex-wrap:wrap; gap:6px; }
+  .col-chip { font-size:.73rem; padding:2px 10px; border-radius:20px; border:1px solid var(--border);
+    background:#f1f5f9; color:var(--text); font-family:'Consolas','Monaco',monospace; }
+  .col-chip.new-nb01 { background:var(--nb01-light); border-color:var(--nb01-mid); color:var(--nb01); }
+  .col-chip.new-nb02 { background:var(--nb02-light); border-color:var(--nb02-mid); color:var(--nb02); }
+  .col-chip.key { background:var(--input-light); border-color:#fcd34d; color:#92400e; }
+
+  /* STATS */
+  .stats-row { display:flex; gap:10px; flex-wrap:wrap; }
+  .stat-badge { background:#f1f5f9; border:1px solid var(--border); border-radius:8px; padding:6px 12px;
+    font-size:.78rem; display:flex; flex-direction:column; gap:2px; }
+  .stat-label { color:var(--muted); font-size:.7rem; }
+  .stat-value { font-weight:700; font-size:.9rem; color:var(--text); }
+
+  /* FORMULA */
+  .formula-box { background:#f8fafc; border-left:3px solid var(--nb01); padding:8px 14px;
+    border-radius:0 8px 8px 0; font-family:'Consolas',monospace; font-size:.82rem; color:var(--text); }
+  .formula-box.nb02 { border-left-color:var(--nb02); }
+
+  /* FILE CARDS */
+  .file-cards { display:flex; gap:12px; flex-wrap:wrap; }
+  .file-card { flex:1; min-width:200px; border:1.5px solid var(--save); border-radius:10px; overflow:hidden; background:var(--save-light); }
+  .file-card-header { background:var(--save); padding:8px 14px; color:#fff; font-weight:700; font-size:.82rem; display:flex; align-items:center; gap:6px; }
+  .file-card-body { padding:10px 14px; font-size:.78rem; color:#064e3b; }
+  .file-card-body ul { padding-left:14px; line-height:1.8; }
+
+  /* INTER-NB ARROW */
+  .inter-nb-arrow { display:flex; flex-direction:column; align-items:center; padding:16px 0; gap:4px; color:var(--muted); font-size:.82rem; }
+  .inter-nb-arrow svg { opacity:.5; }
+
+  /* OVERVIEW */
+  .overview { max-width:1200px; margin:0 auto 36px; background:#fff; border:1.5px solid var(--border); border-radius:12px; padding:20px 28px; }
+  .overview-title { font-size:.82rem; font-weight:700; color:var(--muted); margin-bottom:14px; text-transform:uppercase; letter-spacing:.05em; }
+  .overview-flow { display:flex; align-items:center; gap:0; flex-wrap:wrap; overflow-x:auto; }
+  .ov-node { display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 14px;
+    border-radius:8px; font-size:.78rem; font-weight:600; min-width:90px; text-align:center; }
+  .ov-node.input-node { background:var(--input-light); color:#92400e; border:1.5px solid #fcd34d; }
+  .ov-node.nb01-node { background:var(--nb01-light); color:var(--nb01); border:1.5px solid var(--nb01-mid); }
+  .ov-node.nb02-node { background:var(--nb02-light); color:var(--nb02); border:1.5px solid var(--nb02-mid); }
+  .ov-node.save-node { background:var(--save-light); color:var(--save); border:1.5px solid #6ee7b7; }
+  .ov-arrow { font-size:1.3rem; color:var(--arrow); padding:0 4px; flex-shrink:0; }
+  .ov-icon { font-size:1.3rem; }
+  .ov-sub { font-size:.65rem; font-weight:400; color:var(--muted); margin-top:2px; }
+
+  /* ── COLLAPSIBLE VIZ ── */
+  .viz-details { margin-top:14px; border:1.5px solid var(--nb01-mid); border-radius:10px; overflow:hidden; }
+  /* Chrome 131+ が追加した <details> ネイティブアニメーションを無効化。
+     アニメーション中は content-visibility:hidden が掛かり Plotly が 0px で描画される。 */
+  .viz-details::details-content { transition: none !important; }
+  .viz-summary { padding:10px 16px; cursor:pointer; font-size:.875rem; font-weight:700; color:var(--nb01);
+    background:var(--nb01-light); display:flex; align-items:center; gap:8px; user-select:none; list-style:none; }
+  .viz-summary::-webkit-details-marker { display:none; }
+  .viz-summary::before { content:"▶"; font-size:.72rem; transition:transform .2s; display:inline-block; }
+  details[open] > .viz-summary::before { transform:rotate(90deg); }
+  .viz-summary:hover { background:#bfdbfe; }
+  .viz-body { padding:16px; border-top:1px solid var(--nb01-mid); background:#fff; display:flex; flex-direction:column; gap:14px; }
+  .viz-controls { display:flex; gap:6px; flex-wrap:wrap; align-items:center; font-size:.82rem; }
+  .viz-btn { padding:4px 14px; border-radius:20px; border:1.5px solid var(--border); background:#f1f5f9;
+    color:var(--text); cursor:pointer; font-size:.78rem; font-weight:600; transition:all .15s; }
+  .viz-btn.surf-active { background:var(--nb01); color:#fff; border-color:var(--nb01); }
+  .viz-btn.sex-active  { background:#7c3aed; color:#fff; border-color:#7c3aed; }
+  .viz-btn.src-active  { background:var(--save); color:#fff; border-color:var(--save); }
+  .viz-btn:not(.surf-active):not(.sex-active):not(.src-active):hover { background:#e2e8f0; }
+  .viz-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media(max-width:768px){ .viz-grid{ grid-template-columns:1fr; } }
+  .viz-chart { width:100%; height:320px; }
+  .viz-note { font-size:.78rem; color:var(--muted); background:#f8fafc; border-left:3px solid var(--nb01-mid); padding:6px 12px; border-radius:0 6px 6px 0; }
+  .viz-section-title { font-size:.78rem; font-weight:700; color:var(--muted); margin-bottom:4px; }
+  table.viz-tbl { width:100%; border-collapse:collapse; font-size:.75rem; }
+  table.viz-tbl th { background:var(--nb01-light); color:var(--nb01); padding:4px 8px; text-align:center; font-weight:700; border-bottom:2px solid var(--nb01-mid); white-space:nowrap; }
+  table.viz-tbl td { padding:4px 8px; text-align:center; border-bottom:1px solid #f1f5f9; }
+  table.viz-tbl tr:hover td { background:#f0f7ff; }
+  .src-theory { color:#2563eb; font-weight:600; }
+  .src-ols    { color:#7c3aed; font-weight:600; }
+</style>
+</head>
+<body>
+
+<h1>めぐ指数パイプライン フロー図</h1>
+<p class="subtitle">NB-01: データ探索・前処理 → NB-02: ペース係数・クラス別 par_time 推定</p>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--input)"></div>入力データ</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--nb01)"></div>NB-01 処理ステップ</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--nb02)"></div>NB-02 処理ステップ</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--save)"></div>保存・出力ファイル</div>
+</div>
+
+<div class="overview">
+  <div class="overview-title">全体データフロー概要</div>
+  <div class="overview-flow">
+    <div class="ov-node input-node"><div class="ov-icon">📂</div>race_result_flat<div class="ov-sub">2020–2026 (311K行)</div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-node nb01-node"><div class="ov-icon">⚙️</div>NB-01<div class="ov-sub">斤量補正・馬場指数・外れ値除去</div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-node save-node"><div class="ov-icon">💾</div>megu_dataset<div class="ov-sub">302K行 × 39列</div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-node nb02-node"><div class="ov-icon">📐</div>NB-02<div class="ov-sub">ペース係数・par_time推定</div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-node save-node"><div class="ov-icon">💾</div>coeff_pace<div class="ov-sub">126行</div></div>
+    <div class="ov-arrow">+</div>
+    <div class="ov-node save-node"><div class="ov-icon">💾</div>par_time_class<div class="ov-sub">868行</div></div>
+  </div>
+</div>
+
+<!-- =================== NB-01 =================== -->
+<div class="pipeline">
+
+  <div class="nb-header nb01">
+    <span class="nb-badge">NB-01</span>
+    データ探索・前処理 — <span style="font-weight:400;font-size:.9rem;margin-left:6px">race_result_flat → megu_dataset.parquet + par_splits.parquet を生成</span>
+  </div>
+
+  <div class="steps-container">
+
+    <!-- INPUT -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon input">📂</div><div class="connector nb01"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header input-h"><span class="step-title">入力データ: race_result_flat.parquet</span><span class="step-tag tag-input">INPUT</span></div>
+          <div class="step-body">
+            <div class="step-desc">各年（2020〜2026）の出走結果を1行＝1頭で収録したフラットテーブル。7年分を年ループで読み込んで結合する。</div>
+            <div class="stats-row">
+              <div class="stat-badge"><div class="stat-label">合計行数</div><div class="stat-value">311,337 行</div></div>
+              <div class="stat-badge"><div class="stat-label">surface 内訳</div><div class="stat-value">芝 149,776 / ダート 155,013 / 障害 2,133</div></div>
+              <div class="stat-badge"><div class="stat-label">期間</div><div class="stat-value">2020-01-05 〜 2026-07-05</div></div>
+            </div>
+            <div class="data-sample">
+              <div class="data-sample-label"><span>df_raw — サンプル（先頭3行）</span><span style="font-weight:400">1行 = 1頭</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr>
+                    <th>race_id</th><th>date</th><th>venue</th><th>surface</th><th>distance</th>
+                    <th>horse_id</th><th>sex_age</th><th>jockey_weight</th><th>finish_position</th>
+                    <th>time_sec</th><th>lap_times (先頭)</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr><td>202001010101</td><td>2020-07-25</td><td>札幌</td><td>芝</td><td>1800</td><td>2018101626</td><td>牝2</td><td>54.0</td><td>1</td><td>109.7</td><td>[12.4, 11.3, 12.4, ...]</td></tr>
+                    <tr><td>202001010101</td><td>2020-07-25</td><td>札幌</td><td>芝</td><td>1800</td><td>2018105193</td><td>牡2</td><td>54.0</td><td>2</td><td>110.0</td><td>[12.4, 11.3, 12.4, ...]</td></tr>
+                    <tr><td>202001010101</td><td>2020-07-25</td><td>札幌</td><td>芝</td><td>1800</td><td>2018104800</td><td>牡2</td><td>54.0</td><td>3</td><td>110.1</td><td>[12.4, 11.3, 12.4, ...]</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §1+補正 -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb01">⚖️</div><div class="connector nb01"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb01"><span class="step-title">§1+補正 — 斤量補正タイム (adjusted_time_sec) 算出</span><span class="step-tag tag-nb01">NB-01</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              騎手の斤量差が走破タイムに与える影響を <strong>OLS（レース内偏差）</strong>で推定し、全馬のタイムを固定基準斤量に換算する。<br>
+              <strong>基準斤量: 牡・セン 55 kg / 牝 53 kg（年齢・月によらず固定）</strong>。
+              この固定基準により、すべての馬のタイムが「55/53 kg で走った場合の能力」として統一され、年齢・クラスを跨いだ公平な比較が可能になる。<br>
+              5着以内のデータで <code>surface × distance × sex_group</code> ごとに <code>weight_sec_per_kg</code>（sec/kg）を OLS 推定。
+            </div>
+            <div class="formula-box">
+              adjusted_time_sec = time_sec − weight_dev_kg × weight_sec_per_kg<br>
+              weight_dev_kg = jockey_weight − base_weight　（牡・セン 55 kg / 牝 53 kg）<br>
+              weight_sec_per_kg ≈ 0.18 sec/kg（芝1800m 牡） ← OLS 推定<br>
+              フォールバック: セルサンプル不足時 → 理論値 0.2 sec/kg × (distance / 2000)
+            </div>
+            <div class="step-desc" style="margin-top:2px">
+              <strong>最終利用フロー:</strong> この adjusted_time_sec の過去履歴から「55/53 kg 基準での想定パフォーマンス」を推定し、
+              当日の実斤量との差分 <code>(actual_weight − 55 or 53) × weight_sec_per_kg</code> だけ補正して最終予測値とする。
+            </div>
+            <div class="data-sample">
+              <div class="data-sample-label"><span>斤量補正の例（芝1800m 牡2歳・実斤量54kg → 基準55kgへ換算）</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr>
+                    <th>horse</th><th>sex_age</th><th>jockey_weight</th><th>base_weight</th>
+                    <th>weight_dev_kg</th><th>weight_sec_per_kg</th><th>delta_weight_sec</th>
+                    <th>time_sec</th><th class="highlight-col">adjusted_time_sec</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr><td>牝2歳(1着)</td><td>牝2</td><td>54.0</td><td>53.0</td><td>+1.0</td><td>0.18</td><td>+0.18</td><td>109.7</td><td class="highlight-col">109.52</td></tr>
+                    <tr><td>牡2歳(2着)</td><td>牡2</td><td>54.0</td><td>55.0</td><td>−1.0</td><td>0.18</td><td>−0.18</td><td>110.0</td><td class="highlight-col">110.18</td></tr>
+                    <tr><td>牡2歳(3着)</td><td>牡2</td><td>54.0</td><td>55.0</td><td>−1.0</td><td>0.18</td><td>−0.18</td><td>110.1</td><td class="highlight-col">110.28</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="added-cols">
+              <span class="col-chip new-nb01">adjusted_time_sec ★</span>
+              <span class="col-chip new-nb01">delta_weight_sec</span>
+              <span class="col-chip new-nb01">weight_sec_per_kg</span>
+              <span class="col-chip new-nb01">weight_dev_kg</span>
+              <span class="col-chip new-nb01">sex_group</span>
+              <span class="col-chip new-nb01">dist_scale</span>
+            </div>
+
+            <!-- ▼ 折り畳み: 距離別 斤量補正係数グラフ -->
+            <details class="viz-details" id="det-wcoef">
+              <summary class="viz-summary">📊 距離・コース別 斤量1kg差の補正量グラフ（クリックで展開）</summary>
+              <div class="viz-body">
+                <div style="font-size:.74rem;padding:6px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span style="color:var(--muted);font-weight:600;white-space:nowrap">データソース:</span>
+                  <button id="btn-src-stg"  class="viz-btn"
+                    onclick="switchToStg().then(() => wcoefRender())">STGデータ</button>
+                  <button id="btn-src-mock" class="viz-btn src-active"
+                    onclick="switchToMock(); wcoefRender()">モックデータ</button>
+                  <span id="wcoef-data-status" style="color:var(--muted)">モックデータを使用中</span>
+                </div>
+                <div class="step-desc">
+                  OLS 推定の <code>weight_sec_per_kg</code>（斤量1kgあたりのタイム変化 秒）を距離・馬場・性別ごとに可視化。
+                  推定サンプル不足のセルは「フォールバック（理論値 0.2 sec/kg × d/2000）」を使用。
+                </div>
+                <div class="viz-controls">
+                  <span style="font-weight:600;color:var(--text);font-size:.82rem">馬場:</span>
+                  <button class="viz-btn surf-active" data-surf="芝" onclick="wcoefSetSurf(this)">芝</button>
+                  <button class="viz-btn" data-surf="ダート" onclick="wcoefSetSurf(this)">ダート</button>
+                  <span style="margin-left:10px;font-weight:600;color:var(--text);font-size:.82rem">性別:</span>
+                  <button class="viz-btn sex-active" data-sex="牡" onclick="wcoefSetSex(this)">牡・セン</button>
+                  <button class="viz-btn" data-sex="牝" onclick="wcoefSetSex(this)">牝</button>
+                  <button class="viz-btn" style="margin-left:auto;font-size:.72rem;opacity:.8"
+                    onclick="wcoefRender()" title="グラフが表示されない場合にクリック">🔄 再描画</button>
+                </div>
+                <div class="viz-grid">
+                  <div>
+                    <div class="viz-section-title">① 斤量1kgあたりの補正量（sec/kg）</div>
+                    <div id="chart-wcoef-bar" class="viz-chart"></div>
+                  </div>
+                  <div>
+                    <div class="viz-section-title">② 斤量差（Δkg）→ タイム換算（秒）</div>
+                    <div id="chart-wcoef-delta" class="viz-chart"></div>
+                  </div>
+                </div>
+                <div class="viz-note">
+                  <strong>読み方:</strong>
+                  フォールバック（青）は理論値スケール <code>0.2 × d/2000</code>。OLS推定（紫）は実データから直接推定した値。
+                  例: 芝1800m 牡 = <strong>0.180 sec/kg</strong> → 実斤量が基準55kgより +2kg なら
+                  <code>adjusted_time = time − 2 × 0.180 = time − 0.360秒</code>（実際より速い能力として評価）。
+                </div>
+                <div class="viz-section-title" style="margin-top:4px">③ 主要距離 補正量テーブル</div>
+                <div style="overflow-x:auto">
+                  <table class="viz-tbl" id="tbl-wcoef">
+                    <thead>
+                      <tr>
+                        <th>距離</th><th>sec/kg</th><th>ソース</th>
+                        <th>−3kg</th><th>−2kg</th><th>−1kg</th>
+                        <th>+1kg</th><th>+2kg</th><th>+3kg</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-wcoef"></tbody>
+                  </table>
+                </div>
+              </div>
+            </details>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §2 front_split_sec -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb01">⏱</div><div class="connector nb01"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb01"><span class="step-title">§2 — 実測前半スプリット (front_split_sec) 算出 → df_flat</span><span class="step-tag tag-nb01">NB-01</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              障害を除外し <strong>芝・ダートのみ</strong>に絞った後（→ df_flat）、ラップタイムから
+              <strong>レース距離の50%に最も近い累積距離点</strong>までの前半タイムを算出してレースにマージする。
+            </div>
+            <div class="formula-box">
+              split_point_m ≈ distance × 0.5（最近傍の200m刻み点）<br>
+              front_split_sec = Σ lap_times[0 → split_point_m]
+            </div>
+            <div class="data-sample">
+              <div class="data-sample-label"><span>距離別 split_point_m の分布（上位）</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr><th>race_id</th><th>distance</th><th class="highlight-col">split_point_m</th><th class="highlight-col">front_split_sec</th><th>備考</th></tr></thead>
+                  <tbody>
+                    <tr><td>202001010101</td><td>1800m</td><td class="highlight-col">800m</td><td class="highlight-col">48.8</td><td>距離×0.44 → 800m</td></tr>
+                    <tr><td>202001010102</td><td>1800m</td><td class="highlight-col">900m</td><td class="highlight-col">54.8</td><td>距離×0.50 → 900m</td></tr>
+                    <tr><td>202001010105</td><td>1200m</td><td class="highlight-col">600m</td><td class="highlight-col">35.6</td><td>距離×0.50 → 600m</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="stats-row">
+              <div class="stat-badge"><div class="stat-label">計算レース数</div><div class="stat-value">22,041 レース</div></div>
+              <div class="stat-badge"><div class="stat-label">カバレッジ</div><div class="stat-value">97.1%</div></div>
+              <div class="stat-badge"><div class="stat-label">最多 split_point_m</div><div class="stat-value">800m (7,788) / 600m (6,957)</div></div>
+            </div>
+            <div class="added-cols">
+              <span class="col-chip new-nb01">front_split_sec ★</span>
+              <span class="col-chip new-nb01">split_point_m</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §3 tsi_raw -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb01">🏟</div><div class="connector nb01"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb01"><span class="step-title">§3 — 馬場速度指数 (tsi_raw) 算出</span><span class="step-tag tag-nb01">NB-01</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              学習期（2020〜2024）の <strong>2着馬 adjusted_time_sec の平均</strong>を「基準2着タイム」とし、
+              当日・競馬場・馬場別のタイム乖離を推定する。乖離がマイナス（実際が速い）なら
+              <strong>tsi_raw が正</strong>＝「時計の出やすい馬場」を意味する。
+            </div>
+            <div class="formula-box">
+              race_track_dev_sec = 当レース2着 adjusted_time_sec − par_2nd_adj_sec<br>
+              track_dev_sec = 日×競馬場×馬場の race_track_dev 平均<br>
+              tsi_raw = −track_dev_sec　（正 = 速い馬場）
+            </div>
+            <div class="data-sample">
+              <div class="data-sample-label"><span>day_course_tbl — 日×競馬場×馬場の集計（サンプル）</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr>
+                    <th>date_str</th><th>venue</th><th>surface</th><th>n_races</th>
+                    <th>track_dev_sec (正=遅い)</th><th class="highlight-col">tsi_raw (正=速い)</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr><td>2020-01-05</td><td>中山</td><td>ダート</td><td>7</td><td>+0.64</td><td class="highlight-col">−0.64</td></tr>
+                    <tr><td>2020-01-05</td><td>中山</td><td>芝</td><td>5</td><td>−0.40</td><td class="highlight-col">+0.40 ✓速い</td></tr>
+                    <tr><td>2020-04-18</td><td>中山</td><td>芝</td><td>4</td><td>+5.82</td><td class="highlight-col">−5.82 ✗遅い</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="added-cols">
+              <span class="col-chip new-nb01">tsi_raw ★</span>
+              <span class="col-chip new-nb01">track_dev_sec</span>
+              <span class="col-chip new-nb01">race_track_dev_sec</span>
+              <span class="col-chip new-nb01">race_t2nd_sec</span>
+              <span class="col-chip new-nb01">par_2nd_adj_sec</span>
+              <span class="col-chip new-nb01">class_group</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §4 df_main -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb01">🔧</div><div class="connector nb01"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb01"><span class="step-title">§4 — マスターデータセット組み立て (df_main)</span><span class="step-tag tag-nb01">NB-01</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              front_split_sec をレース単位でマージし、列名を下流分析用に統一する。
+              <strong>finish_time_sec = adjusted_time_sec</strong>（斤量補正済みタイムが分析ベース）。
+              距離帯・馬場カテゴリを付与して下流の外れ値検出に備える。
+            </div>
+            <div class="data-sample">
+              <div class="data-sample-label"><span>距離帯・馬場カテゴリの付与ルール</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr><th>条件</th><th>distance_band</th><th>track_condition</th><th>track_cat</th></tr></thead>
+                  <tbody>
+                    <tr><td>distance ≤ 1499m</td><td>sprint</td><td>良</td><td>良</td></tr>
+                    <tr><td>1500–1799m</td><td>mile</td><td>稍重</td><td>稍重</td></tr>
+                    <tr><td>1800–2399m</td><td>middle</td><td>重</td><td>重・不良</td></tr>
+                    <tr><td>≥ 2400m</td><td>long</td><td>不良</td><td>重・不良</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="stats-row">
+              <div class="stat-badge"><div class="stat-label">行数</div><div class="stat-value">304,789 行</div></div>
+              <div class="stat-badge"><div class="stat-label">距離帯</div><div class="stat-value">sprint 116K / middle 112K / mile 57K / long 19K</div></div>
+            </div>
+            <div class="added-cols">
+              <span class="col-chip new-nb01">distance_band</span>
+              <span class="col-chip new-nb01">track_cat</span>
+              <span class="col-chip new-nb01">finish_time_sec</span>
+              <span class="col-chip new-nb01">finish_time_raw_sec</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §5 outlier -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb01">🧹</div><div class="connector nb01"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb01"><span class="step-title">§5 — 外れ値除去 (df_clean)</span><span class="step-tag tag-nb01">NB-01</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              <code>distance_band × surface × track_cat</code> のセル内で斤量補正後タイムの
+              <strong>z-score を算出</strong>し、|z| > 3.5 の行を除去する（落馬・競走中止など異常レコードを排除）。
+            </div>
+            <div class="formula-box">
+              time_z = (finish_time_sec − セル内平均) / セル内標準偏差<br>
+              除去条件: |time_z| > 3.5  →  0.80% (2,432 行) を除去
+            </div>
+            <div class="stats-row">
+              <div class="stat-badge"><div class="stat-label">除去行数</div><div class="stat-value">2,432 行 (0.80%)</div></div>
+              <div class="stat-badge"><div class="stat-label">残存行数</div><div class="stat-value">302,357 行</div></div>
+            </div>
+            <div class="added-cols">
+              <span class="col-chip new-nb01">time_z</span>
+              <span class="col-chip new-nb01">time_mean</span>
+              <span class="col-chip new-nb01">time_std</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §6 par_front_split -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb01">📐</div><div class="connector nb01"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb01"><span class="step-title">§6 — 基準前半スプリット (par_front_split_sec) 推定</span><span class="step-tag tag-nb01">NB-01</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              <strong>当レースの2着馬タイム（race_t2nd_sec）に線形で対応する基準前半タイム</strong>を OLS で推定する。<br>
+              学習データ: 2020〜2024 の2着馬のみ。セル = distance × surface。n &lt; 30 は surface プールで補完。<br>
+              これが NB-02 でペース偏差 <code>front_split_dev</code> を算出する基準値になる。
+            </div>
+            <div class="formula-box">
+              par_front_split_sec = par_intercept + par_slope × (race_t2nd_sec − t2nd_ref)<br>
+              例: 芝1800m → intercept=48.67, slope=0.54, t2nd_ref=108.28<br>
+              → race_t2nd=108.28 なら par=48.67秒
+            </div>
+            <div class="data-sample">
+              <div class="data-sample-label"><span>par_split_full — OLS係数テーブル（芝サンプル）</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr>
+                    <th>distance</th><th>surface</th><th>par_intercept</th><th>par_slope</th>
+                    <th>t2nd_ref</th><th>n_fit</th><th>model</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr><td>1200m</td><td>芝</td><td>34.04</td><td>0.45</td><td>69.28</td><td>1548</td><td>cell</td></tr>
+                    <tr><td>1400m</td><td>芝</td><td>34.80</td><td>0.41</td><td>81.52</td><td>819</td><td>cell</td></tr>
+                    <tr><td>1600m</td><td>芝</td><td>47.65</td><td>0.61</td><td>94.54</td><td>1469</td><td>cell</td></tr>
+                    <tr><td>1800m</td><td>芝</td><td>48.67</td><td>0.54</td><td>108.28</td><td>1523</td><td>cell</td></tr>
+                    <tr><td>2000m</td><td>芝</td><td>61.41</td><td>0.59</td><td>121.30</td><td>1708</td><td>cell</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="added-cols">
+              <span class="col-chip new-nb01">par_front_split_sec ★</span>
+              <span class="col-chip new-nb01">par_intercept</span>
+              <span class="col-chip new-nb01">par_slope</span>
+              <span class="col-chip new-nb01">t2nd_ref</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §7 SAVE NB-01 -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon save">💾</div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header save-h"><span class="step-title">§7 — 保存</span><span class="step-tag tag-save">OUTPUT</span></div>
+          <div class="step-body">
+            <div class="file-cards">
+              <div class="file-card">
+                <div class="file-card-header">💾 megu_dataset.parquet</div>
+                <div class="file-card-body"><ul>
+                  <li>302,357 行 × 39 列</li>
+                  <li>df_clean から SAVE_COLS 抽出</li>
+                  <li>NB-02/03/04 で使用</li>
+                  <li>主要列: adjusted_time_sec, front_split_sec, par_front_split_sec, tsi_raw, weight_dev</li>
+                </ul></div>
+              </div>
+              <div class="file-card">
+                <div class="file-card-header">💾 par_splits.parquet</div>
+                <div class="file-card-body"><ul>
+                  <li>29 セル（distance × surface）</li>
+                  <li>OLS 係数: par_intercept, par_slope, t2nd_ref</li>
+                  <li>NB-02 で front_split_dev の基準値として参照</li>
+                </ul></div>
+              </div>
+            </div>
+            <div class="data-sample" style="margin-top:12px">
+              <div class="data-sample-label"><span>megu_dataset.parquet — 主要列一覧（グループ別）</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr><th>グループ</th><th>主な列</th></tr></thead>
+                  <tbody>
+                    <tr><td>キー・条件</td><td>race_id, date, year, venue, surface, distance, distance_band, track_cat, grade</td></tr>
+                    <tr><td>馬</td><td>horse_id, sex, age_num, jockey_weight_num, finish_pos</td></tr>
+                    <tr><td>タイム</td><td>finish_time_raw_sec, finish_time_sec (=adjusted), last_3f</td></tr>
+                    <tr><td>ペース</td><td>front_split_sec, split_point_m, race_t2nd_sec, <strong>par_front_split_sec</strong></td></tr>
+                    <tr><td>馬場指数</td><td>par_2nd_adj_sec, race_track_dev_sec, track_dev_sec, <strong>tsi_raw</strong></td></tr>
+                    <tr><td>斤量</td><td>weight_dev, weight_sec_per_kg, delta_weight_sec</td></tr>
+                    <tr><td>品質</td><td>time_z</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /steps-container NB-01 -->
+
+  <div class="inter-nb-arrow">
+    <svg width="24" height="32" viewBox="0 0 24 32"><path d="M12 0 L12 24 M6 18 L12 28 L18 18" stroke="#94a3b8" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span style="color:var(--muted);font-size:.8rem">megu_dataset.parquet + par_splits.parquet を引き渡し</span>
+  </div>
+
+  <!-- =================== NB-02 =================== -->
+  <div class="nb-header nb02">
+    <span class="nb-badge">NB-02</span>
+    ペース係数・クラス別 par_time 推定 — <span style="font-weight:400;font-size:.9rem;margin-left:6px">coeff_pace.parquet + par_time_class.parquet を生成</span>
+  </div>
+
+  <div class="steps-container">
+
+    <!-- INPUT NB-02 -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon input">📂</div><div class="connector nb02"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header input-h"><span class="step-title">入力: megu_dataset.parquet + par_splits.parquet</span><span class="step-tag tag-input">INPUT</span></div>
+          <div class="step-body">
+            <div class="stats-row">
+              <div class="stat-badge"><div class="stat-label">megu_dataset</div><div class="stat-value">302,357 行 × 39 列</div></div>
+              <div class="stat-badge"><div class="stat-label">par_splits</div><div class="stat-value">29 セル (distance × surface)</div></div>
+              <div class="stat-badge"><div class="stat-label">学習データ (year≤2024)</div><div class="stat-value">234,570 行</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §2 front_split_dev -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb02">📏</div><div class="connector nb02"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb02"><span class="step-title">§2 — front_split_dev（ペース偏差）算出</span><span class="step-tag tag-nb02">NB-02</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              実測前半スプリット（front_split_sec）と NB-01 で推定した基準値（par_front_split_sec）の差を計算する。<br>
+              <strong>正 = 前半が基準より速い（ハイペース）</strong>、負 = スローペース。
+            </div>
+            <div class="formula-box nb02">
+              front_split_dev = front_split_sec − par_front_split_final<br>
+              par_front_split_final = par_intercept + par_slope × (race_t2nd_sec − t2nd_ref)
+            </div>
+            <div class="data-sample">
+              <div class="data-sample-label"><span>front_split_dev 統計（全行）</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr><th>count</th><th>mean</th><th>std</th><th>min</th><th>25%</th><th>50%</th><th>75%</th><th>max</th></tr></thead>
+                  <tbody>
+                    <tr><td>302,357</td><td>−0.04</td><td>0.83</td><td>−6.35</td><td>−0.52</td><td>−0.03</td><td>+0.44</td><td>+10.99</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="added-cols">
+              <span class="col-chip new-nb02">front_split_dev ★</span>
+              <span class="col-chip new-nb02">par_front_split_final</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §3 coeff_pace -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb02">📈</div><div class="connector nb02"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb02"><span class="step-title">§3 — Δpace 係数推定 (coeff_pace) — Ridge + 経験的ベイズ縮約</span><span class="step-tag tag-nb02">NB-02</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              <strong>front_split_dev（ペース偏差）が走破タイムに与える影響係数</strong>を venue × surface × distance 単位で推定する。<br>
+              Ridge 回帰 + 縮約（n/(n+30)）で小サンプルセルを補完。<br>
+              フォールバック順: cell_shrink → pool_distband → pool_surface → 理論値 0.5
+            </div>
+            <div class="formula-box nb02">
+              finish_time_sec ≈ α + coeff_pace × front_split_dev + ...<br>
+              coeff_pace ∈ [0.3, 1.5] にクリップ
+            </div>
+            <div class="data-sample">
+              <div class="data-sample-label"><span>coeff_pace.parquet — サンプル（先頭5行）</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr><th>venue</th><th>surface</th><th>distance</th><th class="highlight-col">coeff_pace</th><th>n_fit</th><th>source</th></tr></thead>
+                  <tbody>
+                    <tr><td>中京</td><td>ダート</td><td>1200</td><td class="highlight-col">1.04</td><td>234</td><td>pool_surface</td></tr>
+                    <tr><td>中京</td><td>芝</td><td>1200</td><td class="highlight-col">0.42</td><td>121</td><td>cell_shrink</td></tr>
+                    <tr><td>東京</td><td>芝</td><td>1600</td><td class="highlight-col">0.61</td><td>892</td><td>cell_shrink</td></tr>
+                    <tr><td>阪神</td><td>ダート</td><td>1800</td><td class="highlight-col">0.88</td><td>545</td><td>cell_shrink</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="stats-row">
+              <div class="stat-badge"><div class="stat-label">出力セル数</div><div class="stat-value">126 行</div></div>
+              <div class="stat-badge"><div class="stat-label">source内訳</div><div class="stat-value">cell_shrink / pool_distband / pool_surface</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §4 class_rank -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb02">🏷</div><div class="connector nb02"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb02"><span class="step-title">§4 — クラスランク付与 + 世代戦除外 → df_open</span><span class="step-tag tag-nb02">NB-02</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              grade / race_class から <strong>class_rank (1〜7)</strong> を付与し、
+              <strong>2歳・3歳限定戦（世代戦）を除外</strong>して混合条件戦のみに絞る。
+            </div>
+            <div class="data-sample">
+              <div class="data-sample-label"><span>class_rank の定義</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr><th>class_rank</th><th>対応するクラス</th><th>行数（全体）</th></tr></thead>
+                  <tbody>
+                    <tr><td>1</td><td>未勝利・新馬</td><td>136,970</td></tr>
+                    <tr><td>2</td><td>1勝クラス</td><td>77,454</td></tr>
+                    <tr><td>3</td><td>2勝クラス</td><td>40,766</td></tr>
+                    <tr><td>4</td><td>3勝クラス</td><td>19,909</td></tr>
+                    <tr><td>5</td><td>OP・L（リステッド）</td><td>14,747</td></tr>
+                    <tr><td>6</td><td>G3・G2</td><td>9,917</td></tr>
+                    <tr><td>7</td><td>G1</td><td>2,594</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="stats-row">
+              <div class="stat-badge"><div class="stat-label">全データ</div><div class="stat-value">302,357 行</div></div>
+              <div class="stat-badge"><div class="stat-label">世代戦除外</div><div class="stat-value">140,884 行 (46.6%)</div></div>
+              <div class="stat-badge"><div class="stat-label">df_open（混合戦）</div><div class="stat-value">161,473 行</div></div>
+            </div>
+            <div class="added-cols"><span class="col-chip new-nb02">class_rank</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §5 par_time_class -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb02">🎯</div><div class="connector nb02"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb02"><span class="step-title">§5 — par_time_class 推定（Ridge + クラス縮約）</span><span class="step-tag tag-nb02">NB-02</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              <strong>venue × surface × distance × class_rank</strong> 単位の「クラス別基準タイム」を、
+              2着馬 adjusted_time_sec の Ridge 線形回帰で推定する。<br>
+              β（クラスごとのタイム差）は pool_distband_beta へ縮約し、β≥0（クラス上昇でタイム悪化）は prior のみ。
+            </div>
+            <div class="formula-box nb02">
+              par_time_sec(rank) = alpha + beta × rank<br>
+              beta &lt; 0（高 rank = 高クラス = タイムが速い）<br>
+              例: 東京芝2000m → alpha=121.24, beta=−0.52<br>
+              　rank1(未勝利)=120.72、rank7(G1)=117.59
+            </div>
+            <div class="data-sample">
+              <div class="data-sample-label"><span>par_time_class — 東京 芝 2000m のサンプル</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr>
+                    <th>venue</th><th>surface</th><th>distance</th><th>class_rank</th><th>クラス名</th>
+                    <th class="highlight-col">par_time_sec</th><th>alpha</th><th>beta</th><th>n_fit</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr><td>東京</td><td>芝</td><td>2000m</td><td>1</td><td>未勝利</td><td class="highlight-col">120.72</td><td>121.24</td><td>−0.52</td><td>100</td></tr>
+                    <tr><td>東京</td><td>芝</td><td>2000m</td><td>2</td><td>1勝</td><td class="highlight-col">120.20</td><td>121.24</td><td>−0.52</td><td>100</td></tr>
+                    <tr><td>東京</td><td>芝</td><td>2000m</td><td>4</td><td>3勝</td><td class="highlight-col">119.15</td><td>121.24</td><td>−0.52</td><td>100</td></tr>
+                    <tr><td>東京</td><td>芝</td><td>2000m</td><td>7</td><td>G1</td><td class="highlight-col">117.59</td><td>121.24</td><td>−0.52</td><td>100</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="stats-row">
+              <div class="stat-badge"><div class="stat-label">出力行数</div><div class="stat-value">868 行</div></div>
+              <div class="stat-badge"><div class="stat-label">セル数 (venue×surf×dist)</div><div class="stat-value">124 セル</div></div>
+              <div class="stat-badge"><div class="stat-label">グローバル β</div><div class="stat-value">−0.394 (sec/rank)</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §6 SAVE NB-02 -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon save">💾</div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header save-h"><span class="step-title">§6 — 保存</span><span class="step-tag tag-save">OUTPUT</span></div>
+          <div class="step-body">
+            <div class="file-cards">
+              <div class="file-card">
+                <div class="file-card-header">💾 coeff_pace.parquet</div>
+                <div class="file-card-body"><ul>
+                  <li>126 行</li>
+                  <li>venue × surface × distance 単位</li>
+                  <li>列: venue, surface, distance, <strong>coeff_pace</strong>, n_fit, source</li>
+                  <li>NB-04 のΔpace項に使用</li>
+                </ul></div>
+              </div>
+              <div class="file-card">
+                <div class="file-card-header">💾 par_time_class.parquet</div>
+                <div class="file-card-body"><ul>
+                  <li>868 行 (124 セル × 7 class_rank)</li>
+                  <li>venue × surface × distance × class_rank 単位</li>
+                  <li>列: venue, surface, distance, class_rank, <strong>par_time_sec</strong>, alpha, beta, n_fit, source</li>
+                  <li>NB-04 のΔclassレベル補正に使用</li>
+                </ul></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /steps-container NB-02 -->
+
+</div><!-- /pipeline -->
+
+<!-- DOWNSTREAM -->
+<div style="max-width:1200px;margin:32px auto 0;background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:20px 28px;">
+  <div style="font-size:.82rem;font-weight:700;color:var(--muted);margin-bottom:14px;text-transform:uppercase;letter-spacing:.05em;">下流パイプラインへの接続</div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:200px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:14px;">
+      <div style="font-weight:700;margin-bottom:8px;font-size:.9rem;">NB-03: Δtrack 算出</div>
+      <div style="font-size:.8rem;color:var(--muted);">megu_dataset の tsi_raw / race_track_dev_sec と par_splits を使って馬場補正量を推定</div>
+    </div>
+    <div style="flex:1;min-width:200px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:14px;">
+      <div style="font-weight:700;margin-bottom:8px;font-size:.9rem;">NB-04: めぐ指数算出</div>
+      <div style="font-size:.8rem;color:var(--muted);">
+        coeff_pace × front_split_dev + par_time_class + Δtrack などを統合して最終スコアを生成。<br>
+        当日の実斤量との差分 <code>(actual − 55/53) × weight_sec_per_kg</code> で最終補正。
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center;color:var(--muted);font-size:.75rem;margin:28px 0 8px;">
+  Generated from nb-01-data-exploration.ipynb / nb-02-pace-and-partime.ipynb
+</div>
+
+<!-- ================================================================
+     斤量補正係数グラフ JS
+     ================================================================ -->
+<script>
+// ── DATA SOURCE CONFIG ───────────────────────────────────────────────────
+// stgデータから生成した JSON ファイルへのパスを設定する。
+// ファイルが存在しない / 取得失敗の場合は MOCK_WCOEF にフォールバックする。
+//
+// JSON 生成コマンド（NB-01 実行後、output/nb01/ に parquet が存在する状態で）:
+//   python -c "
+//   import pandas as pd, numpy as np, json
+//   df = pd.read_parquet('../output/nb01/megu_dataset.parquet')
+//   key = ['surface','distance','sex_group']
+//   g = df.drop_duplicates(subset=key)[key + ['weight_sec_per_kg']].copy()
+//   g['source'] = np.where(
+//       np.isclose(g['weight_sec_per_kg'], 0.2 * g['distance'] / 2000, rtol=1e-6),
+//       'fallback', 'ols')
+//   g = g.sort_values(['surface','distance','sex_group'])
+//   out = [[r.surface, int(r.distance), r.sex_group, round(r.weight_sec_per_kg,6), r.source]
+//          for r in g.itertuples()]
+//   print(json.dumps(out))
+//   " > ../output/nb01/wcoef_data.json
+//
+// 期待する JSON フォーマット (各要素: [surface, distance, sex_group, sec_per_kg, source]):
+//   [["芝", 1200, "牡", 0.12, "fallback"], ["芝", 1800, "牡", 0.18, "fallback"], ...]
+//
+const DATA_SOURCES = {
+  wcoef: "../output/nb01/wcoef_data.json",
+};
+
+// フォールバック用データ（output/nb01/megu_dataset.parquet から生成した実データ）
+// 再生成: python -c "..." > output/nb01/wcoef_data.json  (HTMLコメント内のコマンド参照)
+const MOCK_WCOEF = [
+  ["ダート",1000,"牝",0.030372,"ols"],
+  ["ダート",1000,"牡",0.031782,"ols"],
+  ["ダート",1150,"牝",0.018662,"ols"],
+  ["ダート",1150,"牡",0.015054,"ols"],
+  ["ダート",1200,"牝",0.006524,"ols"],
+  ["ダート",1200,"牡",0.002532,"ols"],
+  ["ダート",1300,"牝",0.029147,"ols"],
+  ["ダート",1300,"牡",0.054100,"ols"],
+  ["ダート",1400,"牝",0.007295,"ols"],
+  ["ダート",1400,"牡",0.140000,"fallback"],
+  ["ダート",1600,"牝",0.009630,"ols"],
+  ["ダート",1600,"牡",0.160000,"fallback"],
+  ["ダート",1700,"牝",0.017661,"ols"],
+  ["ダート",1700,"牡",0.013074,"ols"],
+  ["ダート",1800,"牝",0.010833,"ols"],
+  ["ダート",1800,"牡",0.180000,"fallback"],
+  ["ダート",1900,"牝",0.076206,"ols"],
+  ["ダート",1900,"牡",0.190000,"fallback"],
+  ["ダート",2000,"牝",0.012037,"ols"],
+  ["ダート",2000,"牡",0.006666,"ols"],
+  ["ダート",2100,"牝",0.064862,"ols"],
+  ["ダート",2100,"牡",0.013248,"ols"],
+  ["ダート",2400,"牝",0.061762,"ols"],
+  ["ダート",2400,"牡",0.024872,"ols"],
+  ["ダート",2500,"牝",0.015046,"ols"],
+  ["ダート",2500,"牡",0.030849,"ols"],
+  ["ダート",2880,"牝",0.017333,"ols"],
+  ["ダート",2880,"牡",0.288000,"fallback"],
+  ["ダート",2910,"牝",0.017514,"ols"],
+  ["ダート",2910,"牡",0.291000,"fallback"],
+  ["ダート",2970,"牝",0.017875,"ols"],
+  ["ダート",2970,"牡",0.297000,"fallback"],
+  ["ダート",3000,"牝",0.018056,"ols"],
+  ["ダート",3000,"牡",0.300000,"fallback"],
+  ["ダート",3100,"牡",0.310000,"fallback"],
+  ["ダート",3110,"牝",0.018718,"ols"],
+  ["ダート",3110,"牡",0.311000,"fallback"],
+  ["ダート",3170,"牝",0.019079,"ols"],
+  ["ダート",3170,"牡",0.317000,"fallback"],
+  ["ダート",3200,"牝",0.320000,"fallback"],
+  ["ダート",3200,"牡",0.107237,"ols"],
+  ["芝",1000,"牝",0.001758,"ols"],
+  ["芝",1000,"牡",0.100000,"fallback"],
+  ["芝",1200,"牝",0.120000,"fallback"],
+  ["芝",1200,"牡",0.120000,"fallback"],
+  ["芝",1400,"牝",0.140000,"fallback"],
+  ["芝",1400,"牡",0.140000,"fallback"],
+  ["芝",1500,"牝",0.018716,"ols"],
+  ["芝",1500,"牡",0.150000,"fallback"],
+  ["芝",1600,"牝",0.160000,"fallback"],
+  ["芝",1600,"牡",0.160000,"fallback"],
+  ["芝",1800,"牝",0.180000,"fallback"],
+  ["芝",1800,"牡",0.180000,"fallback"],
+  ["芝",2000,"牝",0.200000,"fallback"],
+  ["芝",2000,"牡",0.200000,"fallback"],
+  ["芝",2200,"牝",0.002107,"ols"],
+  ["芝",2200,"牡",0.036519,"ols"],
+  ["芝",2300,"牝",0.230000,"fallback"],
+  ["芝",2300,"牡",0.230000,"fallback"],
+  ["芝",2400,"牝",0.006468,"ols"],
+  ["芝",2400,"牡",0.033230,"ols"],
+  ["芝",2500,"牝",0.104572,"ols"],
+  ["芝",2500,"牡",0.001417,"ols"],
+  ["芝",2600,"牝",0.001353,"ols"],
+  ["芝",2600,"牡",0.017395,"ols"],
+  ["芝",2750,"牝",0.275000,"fallback"],
+  ["芝",2750,"牡",0.275000,"fallback"],
+  ["芝",2770,"牝",0.277000,"fallback"],
+  ["芝",2770,"牡",0.277000,"fallback"],
+  ["芝",2860,"牝",0.286000,"fallback"],
+  ["芝",2860,"牡",0.286000,"fallback"],
+  ["芝",3000,"牝",0.026072,"ols"],
+  ["芝",3000,"牡",0.300000,"fallback"],
+  ["芝",3110,"牝",0.311000,"fallback"],
+  ["芝",3110,"牡",0.311000,"fallback"],
+  ["芝",3140,"牝",0.314000,"fallback"],
+  ["芝",3140,"牡",0.186290,"ols"],
+  ["芝",3200,"牝",0.320000,"fallback"],
+  ["芝",3200,"牡",0.320000,"fallback"],
+  ["芝",3210,"牝",0.321000,"fallback"],
+  ["芝",3210,"牡",0.342424,"ols"],
+  ["芝",3300,"牝",0.330000,"fallback"],
+  ["芝",3300,"牡",0.003352,"ols"],
+  ["芝",3330,"牝",0.333000,"fallback"],
+  ["芝",3330,"牡",0.333000,"fallback"],
+  ["芝",3350,"牝",0.335000,"fallback"],
+  ["芝",3350,"牡",0.335000,"fallback"],
+  ["芝",3380,"牝",0.338000,"fallback"],
+  ["芝",3380,"牡",0.338000,"fallback"],
+  ["芝",3390,"牝",0.339000,"fallback"],
+  ["芝",3390,"牡",0.339000,"fallback"],
+  ["芝",3400,"牝",0.340000,"fallback"],
+  ["芝",3400,"牡",0.340000,"fallback"],
+  ["芝",3570,"牝",0.357000,"fallback"],
+  ["芝",3570,"牡",0.357000,"fallback"],
+  ["芝",3600,"牝",0.360000,"fallback"],
+  ["芝",3600,"牡",0.360000,"fallback"],
+  ["芝",3900,"牝",0.390000,"fallback"],
+  ["芝",3900,"牡",0.390000,"fallback"],
+  ["芝",3930,"牝",0.393000,"fallback"],
+  ["芝",3930,"牡",0.393000,"fallback"],
+  ["芝",4100,"牡",0.410000,"fallback"]
+];
+
+// ── STATE ────────────────────────────────────────────────────────────────
+let WCOEF = MOCK_WCOEF;    // デフォルト: モックデータで即描画
+let curSurf = "芝", curSex = "牡";
+
+// ── HELPERS ──────────────────────────────────────────────────────────────
+function setSourceActive(id) {
+  ["btn-src-stg","btn-src-mock"].forEach(bid =>
+    document.getElementById(bid).classList.toggle("src-active", bid === id)
+  );
+}
+
+// ── DATA SWITCHERS ───────────────────────────────────────────────────────
+async function switchToStg() {
+  setSourceActive("btn-src-stg");
+  const st = document.getElementById("wcoef-data-status");
+  st.textContent = "読み込み中…";
+  try {
+    const resp = await fetch(DATA_SOURCES.wcoef);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    WCOEF = await resp.json();
+    st.innerHTML =
+      `<span style="color:#059669;font-weight:700">✓ STGデータ</span>` +
+      `<span style="color:#94a3b8"> — ${DATA_SOURCES.wcoef}</span>`;
+  } catch(e) {
+    WCOEF = MOCK_WCOEF;
+    setSourceActive("btn-src-mock");
+    st.innerHTML =
+      `<span style="color:#dc2626;font-weight:700">取得失敗</span>` +
+      `<span style="color:#94a3b8"> (${e.message}) — モックにフォールバック</span>`;
+  }
+}
+
+function switchToMock() {
+  setSourceActive("btn-src-mock");
+  WCOEF = MOCK_WCOEF;
+  document.getElementById("wcoef-data-status").innerHTML =
+    `<span style="color:#d97706;font-weight:700">● モックデータ</span>` +
+    `<span style="color:#94a3b8"> — ハードコード値を使用</span>`;
+}
+
+// ── CHART / TABLE RENDERERS ──────────────────────────────────────────────
+function getRows(surf, sex) {
+  return WCOEF.filter(r => r[0]===surf && r[2]===sex).sort((a,b)=>a[1]-b[1]);
+}
+
+function renderBar(surf, sex) {
+  const rows = getRows(surf, sex);
+  const labels = rows.map(r => r[1]+"m");
+  const vals   = rows.map(r => r[3]);
+  const colors = rows.map(r => r[4]==="fallback" ? "#2563eb" : "#7c3aed");
+  const hover  = rows.map(r =>
+    `${r[0]} ${r[1]}m ${r[2]}<br>sec/kg: <b>${r[3].toFixed(4)}</b><br>`+
+    `1kg差 → ${r[3].toFixed(3)}秒<br>`+
+    (r[4]==="fallback" ? "フォールバック（理論値）" : "OLS推定")
+  );
+  const theoY = rows.map(r => +(0.2*r[1]/2000).toFixed(4));
+
+  Plotly.purge("chart-wcoef-bar");
+  Plotly.newPlot("chart-wcoef-bar", [
+    { x:labels, y:vals, type:"bar", name:"推定 sec/kg",
+      marker:{color:colors}, text:vals.map(v=>v.toFixed(3)), textposition:"outside",
+      hovertemplate: hover.map(h=>h+"<extra></extra>") },
+    { x:labels, y:theoY, type:"scatter", mode:"lines+markers", name:"理論値 (0.2×d/2000)",
+      line:{color:"#f59e0b",width:2,dash:"dash"}, marker:{size:5},
+      hovertemplate: labels.map((l,i)=>`理論値 ${l}: ${theoY[i].toFixed(4)} sec/kg<extra></extra>`) }
+  ], {
+    margin:{t:16,b:56,l:50,r:16},
+    xaxis:{title:"距離",tickangle:-30},
+    yaxis:{title:"sec / kg"},
+    legend:{orientation:"h",y:-0.28},
+    bargap:0.3,
+    plot_bgcolor:"#fff", paper_bgcolor:"#fff"
+  }, {responsive:true, displayModeBar:false});
+}
+
+function renderDelta(surf, sex) {
+  const rows = getRows(surf, sex);
+  const labels = rows.map(r => r[1]+"m");
+  const deltas = [-3,-2,-1,1,2,3];
+  const pal = ["#1d4ed8","#3b82f6","#93c5fd","#f97316","#ea580c","#9a3412"];
+
+  const traces = deltas.map((kg,i) => ({
+    x:labels,
+    y:rows.map(r => +(kg*r[3]).toFixed(4)),
+    type:"scatter", mode:"lines+markers", name:`${kg>0?"+":""}${kg}kg`,
+    line:{color:pal[i],width:2}, marker:{size:5},
+    hovertemplate: rows.map(r =>
+      `${r[0]} ${r[1]}m<br>${kg>0?"+":""}${kg}kg → <b>${(kg*r[3]).toFixed(3)}秒</b><extra></extra>`
+    )
+  }));
+
+  Plotly.purge("chart-wcoef-delta");
+  Plotly.newPlot("chart-wcoef-delta", traces, {
+    margin:{t:16,b:56,l:56,r:16},
+    xaxis:{title:"距離",tickangle:-30},
+    yaxis:{title:"タイム変化 (秒)",zeroline:true,zerolinecolor:"#94a3b8"},
+    legend:{orientation:"h",y:-0.28},
+    plot_bgcolor:"#fff", paper_bgcolor:"#fff"
+  }, {responsive:true, displayModeBar:false});
+}
+
+function renderTable(surf, sex) {
+  const rows = getRows(surf, sex);
+  document.getElementById("tbody-wcoef").innerHTML = rows.map(r => {
+    const [,dist,,coef,src] = r;
+    const srcHtml = src==="fallback"
+      ? `<span class="src-theory">理論値</span>`
+      : `<span class="src-ols">OLS</span>`;
+    const dCells = [-3,-2,-1,1,2,3].map(kg => {
+      const v = (kg*coef).toFixed(3);
+      return `<td style="color:${kg<0?"#2563eb":"#dc2626"}">${v}s</td>`;
+    }).join("");
+    return `<tr><td><b>${dist}m</b></td><td style="font-family:monospace">${coef.toFixed(4)}</td><td>${srcHtml}</td>${dCells}</tr>`;
+  }).join("");
+}
+
+function wcoefRender() {
+  if (!WCOEF) { console.warn('[wcoefRender] WCOEF not ready'); return; }
+  if (typeof Plotly === 'undefined') {
+    const msg = 'Plotlyライブラリが読み込まれていません。<br>ブラウザのコンソール(F12)を確認してください。<br><small style="color:#94a3b8">パス: ../static/plotly-2.35.2.min.js</small>';
+    ["chart-wcoef-bar","chart-wcoef-delta"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = `<div style="padding:32px;text-align:center;color:#dc2626;font-size:.85rem">${msg}</div>`;
+    });
+    return;
+  }
+  try {
+    renderBar(curSurf, curSex);
+    renderDelta(curSurf, curSex);
+    renderTable(curSurf, curSex);
+  } catch(e) {
+    console.error('[wcoefRender]', e);
+    const el = document.getElementById('chart-wcoef-bar');
+    if (el) el.innerHTML = `<div style="padding:20px;color:#dc2626;font-size:.85rem">描画エラー: ${e.message}</div>`;
+  }
+}
+
+// ── CONTROLS ─────────────────────────────────────────────────────────────
+function wcoefSetSurf(btn) {
+  document.querySelectorAll("[data-surf]").forEach(b => b.classList.remove("surf-active"));
+  btn.classList.add("surf-active");
+  curSurf = btn.dataset.surf;
+  wcoefRender();
+}
+function wcoefSetSex(btn) {
+  document.querySelectorAll("[data-sex]").forEach(b => b.classList.remove("sex-active"));
+  btn.classList.add("sex-active");
+  curSex = btn.dataset.sex;
+  wcoefRender();
+}
+
+// ── DETAILS TOGGLE ────────────────────────────────────────────────────────
+(function() {
+  const det = document.getElementById("det-wcoef");
+  if (!det) { console.error("det-wcoef not found"); return; }
+
+  det.addEventListener("toggle", function() {
+    if (!this.open) return;
+    // 即時試行
+    requestAnimationFrame(() => { requestAnimationFrame(() => { wcoefRender(); }); });
+    // Chrome 131+ アニメーション完了後の保険（800ms）
+    setTimeout(() => { if (det.open) wcoefRender(); }, 800);
+  });
+
+  // ページロード時にすでに開いている場合（ブラウザセッション復元等）
+  document.addEventListener("DOMContentLoaded", () => {
+    if (det.open) setTimeout(() => wcoefRender(), 200);
+  });
+})();
+
+// ウィンドウリサイズ時もリフレッシュ
+window.addEventListener("resize", () => {
+  if (document.getElementById("det-wcoef").open) wcoefRender();
+});
+</script>
+
+<script>
+// ── PLOTLY CDN フォールバック ───────────────────────────────────────────────
+// ローカル ../static/plotly-2.35.2.min.js の読み込みに失敗した場合（WSL2 UNC パス、
+// VS Code プレビュー等）、CDN から再取得してチャートを自動再描画する。
+(function() {
+  if (typeof Plotly !== 'undefined') return; // すでにロード済み
+  console.warn('[plotly-fallback] ローカルファイル読み込み失敗 → CDN から取得します');
+  var s = document.createElement('script');
+  s.src = 'https://cdn.plot.ly/plotly-2.35.2.min.js';
+  s.onload = function() {
+    console.log('[plotly-fallback] CDN 読み込み完了 (v' + Plotly.version + ')');
+    // エラー表示をクリア
+    ["chart-wcoef-bar", "chart-wcoef-delta"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el && el.querySelector('[style*="dc2626"]')) el.innerHTML = '';
+    });
+    // セクションが開いていれば再描画
+    var det = document.getElementById('det-wcoef');
+    if (det && det.open) {
+      setTimeout(function() { wcoefRender(); }, 100);
+    }
+  };
+  s.onerror = function() {
+    console.error('[plotly-fallback] CDN 読み込みも失敗しました');
+    ["chart-wcoef-bar", "chart-wcoef-delta"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = '<div style="padding:24px;text-align:center;color:#dc2626;font-size:.83rem">'
+        + 'Plotly の読み込みに失敗しました（ローカル + CDN）。<br>'
+        + 'ブラウザで直接ファイルを開くか、Jupyter Lab で「新しいタブで開く」を選択してください。</div>';
+    });
+  };
+  document.head.appendChild(s);
+})();
+</script>
+</body>
+</html>
