@@ -8,5 +8,8 @@
   "livePreview.autoRefreshPreview": "On Changes to Saved Files",
   "livePreview.showServerStatusNotifications": false,
   "livePreview.serverRoot": "${workspaceFolder}",
-  "livePreview.portNumber": 3000
+  "livePreview.portNumber": 3000,
+
+  "liveServer.settings.donotShowInfoMsg": true,
+  "liveServer.settings.donotVerifyTags": true
 }
