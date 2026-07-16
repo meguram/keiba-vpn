@@ -339,10 +339,11 @@ def run_nb01(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
             splits.append({"race_id": row["race_id"], "front_split_sec": lap_dict[sp], "split_point_m": int(sp)})
     df_splits = pd.DataFrame(splits)
 
-    # ── §3 馬場速度指数 ───────────────────────────────────────────────────
+    # ── §3 馬場速度指数（3層設計）────────────────────────────────────────
     train_years = [2020, 2021, 2022, 2023, 2024]
     df_flat, race_track_tbl, day_course_tbl = attach_track_speed_to_horses(
-        df_flat, train_years=train_years, min_samples=3
+        df_flat, train_years=train_years, min_samples=3,
+        splits_df=df_splits,  # Layer 1 ペースフィルタ用
     )
 
     # ── §4 マスターデータセット ───────────────────────────────────────────
@@ -463,12 +464,13 @@ def check_nb01(df_clean: pd.DataFrame, par_split_full: pd.DataFrame) -> None:
     else:
         fail("行数が少なすぎる", f"got {n}")
 
-    # 必須列
+    # 必須列（3層設計で追加された front_split_dev / n_valid_races を含む）
     required = [
         "adjusted_time_sec", "finish_time_sec", "front_split_sec",
         "race_t2nd_sec", "par_front_split_sec", "tsi_raw", "track_dev_sec",
         "weight_dev", "base_weight_kg", "race_month", "time_z",
         "distance_band", "track_cat",
+        "front_split_dev", "n_valid_races",
     ]
     missing_cols = [c for c in required if c not in df_clean.columns]
     if not missing_cols:
@@ -528,6 +530,39 @@ def check_nb01(df_clean: pd.DataFrame, par_split_full: pd.DataFrame) -> None:
             ok(f"5歳以上 base_weight 最小 {min_bw:.1f} kg (56 kg以上 ✓)")
         else:
             fail("5歳以上 base_weight が低すぎる", f"min={min_bw:.1f}")
+
+    # class_group が 6区分に収まっているか
+    valid_groups = {"G1orG2", "G3orOP", "3勝", "2勝", "1勝", "未勝利"}
+    actual_groups = set(df_clean["class_group"].dropna().unique())
+    unexpected = actual_groups - valid_groups
+    if not unexpected:
+        ok(f"class_group が 6区分内のみ ({sorted(actual_groups)})")
+    else:
+        fail(f"class_group に想定外の値あり: {unexpected}")
+
+    # n_valid_races <= n_races_track
+    if "n_valid_races" in df_clean.columns and "n_races_track" in df_clean.columns:
+        bad = df_clean.dropna(subset=["n_valid_races", "n_races_track"])
+        excess = (bad["n_valid_races"] > bad["n_races_track"]).sum()
+        if excess == 0:
+            ok("n_valid_races <= n_races_track（全行）")
+        else:
+            fail("n_valid_races > n_races_track の行あり", str(excess))
+
+    # 収縮確認: track_dev_sec が race_track_dev_sec の単純平均と一致しない（収縮が効いている）
+    day_grp = (
+        df_clean.dropna(subset=["race_track_dev_sec", "track_dev_sec"])
+        .groupby(["date_str", "venue", "surface"])
+        .agg(raw_mean=("race_track_dev_sec", "mean"),
+             shrunken=("track_dev_sec", "first"),
+             n=("race_track_dev_sec", "count"))
+        .reset_index()
+    )
+    shrunken_ok = (day_grp["shrunken"].abs() <= day_grp["raw_mean"].abs() + 0.01).mean() >= 0.5
+    if shrunken_ok:
+        ok("収縮推定: |track_dev_sec| は |raw_mean| 以下（多数のセルで収縮確認）")
+    else:
+        fail("収縮が機能していない可能性あり")
 
     # par_split_full
     if len(par_split_full) >= 3:

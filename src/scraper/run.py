@@ -233,6 +233,20 @@ def _update_local_pedigree_10gen(horse_id: str, rec5gen: dict, base_dir) -> None
         logger.warning("10gen ローカル更新失敗 [%s]: %s", horse_id, e)
 
 
+def _upsert_sires_background(html: str) -> None:
+    """blood_table HTML から種牡馬系統を抽出して sires テーブルへ UPSERT する。
+
+    DB 未接続でも scraping を止めないよう、エラーはすべて WARNING として吸収する。
+    """
+    try:
+        from src.db.etl.upsert_sires import safe_upsert_sires_from_html
+        n = safe_upsert_sires_from_html(html)
+        if n > 0:
+            logger.debug("sires UPSERT: %d 頭", n)
+    except Exception as exc:
+        logger.warning("sires UPSERT スキップ: %s", exc)
+
+
 def _enqueue_pedigree_retry(horse_ids: list[str], base_dir=None) -> None:
     """Phase 2b/2c で失敗した馬の horse_pedigree_5gen を個別キュージョブとして再投入する。"""
     try:
@@ -914,6 +928,7 @@ class ScraperRunner:
             "保存: horse_pedigree_5gen/%s (%d頭)", horse_id, len(ancestors)
         )
         _update_local_pedigree_10gen(horse_id, rec, self.storage._base_dir)
+        _upsert_sires_background(html)
         return rec
 
     # ── 調教タイム (全ページ結合) ────────────────────────────

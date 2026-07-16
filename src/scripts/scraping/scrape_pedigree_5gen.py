@@ -126,6 +126,15 @@ class StopFlag:
         return self._stop
 
 
+def _try_upsert_sires(html: str) -> None:
+    """blood_table HTML から種牡馬系統を sires テーブルへ UPSERT する（失敗しても継続）。"""
+    try:
+        from src.db.etl.upsert_sires import safe_upsert_sires_from_html
+        safe_upsert_sires_from_html(html)
+    except Exception as exc:
+        logger.debug("sires UPSERT スキップ: %s", exc)
+
+
 def _scrape_one(
     horse_id: str,
     client: NetkeibaClient,
@@ -148,6 +157,7 @@ def _scrape_one(
         sex = parse_horse_sex_from_ped_html(html, horse_id)
         record = build_pedigree_record(horse_id, ancestors, source=source, sex=sex)
         storage.save("horse_pedigree_5gen", horse_id, record)
+        _try_upsert_sires(html)
         return (horse_id, True, "")
     except Exception as e:
         err_str = str(e)

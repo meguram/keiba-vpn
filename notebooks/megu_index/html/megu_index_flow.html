@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>めぐ指数パイプライン フロー図 (NB-01 / NB-02)</title>
+<title>めぐ指数パイプライン フロー図 (NB-01 / NB-02 / NB-03 / NB-04)</title>
 <script src="../static/plotly-2.35.2.min.js"></script>
 <style>
   :root {
@@ -13,6 +13,12 @@
     --nb02: #7c3aed;
     --nb02-light: #ede9fe;
     --nb02-mid: #c4b5fd;
+    --nb03: #0d9488;
+    --nb03-light: #ccfbf1;
+    --nb03-mid: #5eead4;
+    --nb04: #db2777;
+    --nb04-light: #fce7f3;
+    --nb04-mid: #f9a8d4;
     --save: #059669;
     --save-light: #d1fae5;
     --input: #d97706;
@@ -42,6 +48,8 @@
     letter-spacing:.03em; color:#fff; display:flex; align-items:center; gap:10px; }
   .nb-header.nb01 { background:var(--nb01); }
   .nb-header.nb02 { background:var(--nb02); margin-top:40px; }
+  .nb-header.nb03 { background:var(--nb03); margin-top:40px; }
+  .nb-header.nb04 { background:var(--nb04); margin-top:40px; }
   .nb-badge { background:rgba(255,255,255,.25); border-radius:6px; padding:2px 10px; font-size:.78rem; font-weight:600; }
 
   /* STEP */
@@ -54,23 +62,31 @@
     box-shadow:0 2px 6px rgba(0,0,0,.15); z-index:1; }
   .step-icon.nb01 { background:var(--nb01); }
   .step-icon.nb02 { background:var(--nb02); }
+  .step-icon.nb03 { background:var(--nb03); }
+  .step-icon.nb04 { background:var(--nb04); }
   .step-icon.save { background:var(--save); }
   .step-icon.input { background:var(--input); }
   .connector { width:2px; flex:1; min-height:20px; background:var(--border); margin:4px 0; }
   .connector.nb01 { background:var(--nb01-mid); }
   .connector.nb02 { background:var(--nb02-mid); }
+  .connector.nb03 { background:var(--nb03-mid); }
+  .connector.nb04 { background:var(--nb04-mid); }
   .step-content { flex:1; padding-bottom:24px; }
   .step-card { border:1.5px solid var(--border); border-radius:10px; overflow:hidden; background:var(--card); transition:box-shadow .2s; }
   .step-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.08); }
   .step-card-header { padding:10px 16px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border); }
   .step-card-header.nb01 { background:var(--nb01-light); }
   .step-card-header.nb02 { background:var(--nb02-light); }
+  .step-card-header.nb03 { background:var(--nb03-light); }
+  .step-card-header.nb04 { background:var(--nb04-light); }
   .step-card-header.save-h { background:var(--save-light); }
   .step-card-header.input-h { background:var(--input-light); }
   .step-title { font-weight:700; font-size:.95rem; }
   .step-tag { font-size:.73rem; padding:1px 8px; border-radius:20px; font-weight:600; margin-left:auto; white-space:nowrap; }
   .tag-nb01 { background:var(--nb01); color:#fff; }
   .tag-nb02 { background:var(--nb02); color:#fff; }
+  .tag-nb03 { background:var(--nb03); color:#fff; }
+  .tag-nb04 { background:var(--nb04); color:#fff; }
   .tag-save { background:var(--save); color:#fff; }
   .tag-input { background:var(--input); color:#fff; }
   .step-body { padding:14px 16px; display:flex; flex-direction:column; gap:12px; }
@@ -96,6 +112,8 @@
     background:#f1f5f9; color:var(--text); font-family:'Consolas','Monaco',monospace; }
   .col-chip.new-nb01 { background:var(--nb01-light); border-color:var(--nb01-mid); color:var(--nb01); }
   .col-chip.new-nb02 { background:var(--nb02-light); border-color:var(--nb02-mid); color:var(--nb02); }
+  .col-chip.new-nb03 { background:var(--nb03-light); border-color:var(--nb03-mid); color:var(--nb03); }
+  .col-chip.new-nb04 { background:var(--nb04-light); border-color:var(--nb04-mid); color:var(--nb04); }
   .col-chip.key { background:var(--input-light); border-color:#fcd34d; color:#92400e; }
 
   /* STATS */
@@ -109,6 +127,36 @@
   .formula-box { background:#f8fafc; border-left:3px solid var(--nb01); padding:8px 14px;
     border-radius:0 8px 8px 0; font-family:'Consolas',monospace; font-size:.82rem; color:var(--text); }
   .formula-box.nb02 { border-left-color:var(--nb02); }
+  .formula-box.nb03 { border-left-color:var(--nb03); }
+  .formula-box.nb04 { border-left-color:var(--nb04); }
+  .var-table.nb04 td:first-child { color:var(--nb04); }
+
+  /* LAYER FLOW (§3 tsi_raw 3層設計) */
+  .layer-flow-wrap { display:flex; flex-direction:column; gap:4px; }
+  .layer-flow-item { display:flex; gap:10px; align-items:flex-start; }
+  .layer-badge { flex-shrink:0; background:var(--nb01); color:#fff; border-radius:6px;
+    padding:3px 10px; font-size:.71rem; font-weight:700; white-space:nowrap;
+    text-align:center; margin-top:2px; min-width:58px; }
+  .layer-title { font-weight:700; font-size:.83rem; color:var(--text); margin-bottom:3px; }
+  .layer-problem { font-size:.73rem; color:#6366f1; font-weight:600; margin-bottom:4px; }
+  .layer-note-sm { font-size:.73rem; color:var(--muted); margin-top:4px; line-height:1.6; }
+  .layer-sep { display:flex; align-items:center; gap:6px; padding-left:38px; margin:2px 0; color:#94a3b8; }
+  .layer-sep::before { content:'▼'; font-size:.68rem; }
+  .layer-sep-text { font-size:.71rem; font-style:italic; }
+
+  .var-table { width:100%; border-collapse:collapse; font-size:.78rem; }
+  .var-table thead tr { background:#f0f4ff; }
+  .var-table th { padding:5px 10px; text-align:left; font-weight:700; font-size:.72rem;
+    border-bottom:2px solid #dde4f0; color:#334155; }
+  .var-table td { padding:5px 10px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+  .var-table td:first-child { font-family:'Consolas',monospace; font-weight:600;
+    color:var(--nb01); white-space:nowrap; }
+  .var-table tbody tr:hover { background:#f8fafc; }
+  .var-table tbody tr:last-child td { border-bottom:none; }
+  .var-table-wrap { background:#fcfcff; border:1px solid #e8edf5; border-radius:8px;
+    padding:10px 14px; }
+  .var-table-label { font-size:.72rem; font-weight:700; color:var(--muted);
+    letter-spacing:.04em; margin-bottom:6px; }
 
   /* FILE CARDS */
   .file-cards { display:flex; gap:12px; flex-wrap:wrap; }
@@ -130,6 +178,8 @@
   .ov-node.input-node { background:var(--input-light); color:#92400e; border:1.5px solid #fcd34d; }
   .ov-node.nb01-node { background:var(--nb01-light); color:var(--nb01); border:1.5px solid var(--nb01-mid); }
   .ov-node.nb02-node { background:var(--nb02-light); color:var(--nb02); border:1.5px solid var(--nb02-mid); }
+  .ov-node.nb03-node { background:var(--nb03-light); color:var(--nb03); border:1.5px solid var(--nb03-mid); }
+  .ov-node.nb04-node { background:var(--nb04-light); color:var(--nb04); border:1.5px solid var(--nb04-mid); }
   .ov-node.save-node { background:var(--save-light); color:var(--save); border:1.5px solid #6ee7b7; }
   .ov-arrow { font-size:1.3rem; color:var(--arrow); padding:0 4px; flex-shrink:0; }
   .ov-icon { font-size:1.3rem; }
@@ -165,17 +215,39 @@
   table.viz-tbl tr:hover td { background:#f0f7ff; }
   .src-theory { color:#2563eb; font-weight:600; }
   .src-ols    { color:#7c3aed; font-weight:600; }
+
+  /* NB-04 VISUALIZATION */
+  .viz-details.nb04 { border-color:var(--nb04-mid); }
+  .viz-summary.nb04 { color:var(--nb04); background:var(--nb04-light); }
+  .viz-summary.nb04:hover { background:#fda4af; }
+  .viz-body.nb04 { border-top-color:var(--nb04-mid); }
+  .viz-note.nb04 { border-left-color:var(--nb04-mid); }
+  .calib-bar { display:flex; align-items:center; gap:8px; margin:3px 0; }
+  .calib-label { width:28px; text-align:right; font-size:.78rem; font-weight:700; color:var(--muted); flex-shrink:0; }
+  .calib-track { flex:1; height:18px; background:#f1f5f9; border-radius:4px; overflow:hidden; position:relative; }
+  .calib-fill { height:100%; border-radius:4px; display:flex; align-items:center; justify-content:flex-end; padding-right:6px;
+    font-size:.7rem; font-weight:700; color:#fff; white-space:nowrap; transition:width .4s; }
+  .megu-chip { display:inline-block; padding:2px 8px; border-radius:12px; font-size:.73rem; font-weight:700;
+    background:var(--nb04-light); color:var(--nb04); border:1px solid var(--nb04-mid); font-family:monospace; }
+  .megu-hi { background:#dcfce7; color:#166534; border-color:#86efac; }
+  .megu-lo { background:#fce7f3; color:#9d174d; border-color:#f9a8d4; }
+  .status-valid   { color:#059669; font-size:.72rem; font-weight:600; }
+  .status-oor     { color:#dc2626; font-size:.72rem; font-weight:600; }
+  table.viz-tbl.nb04 th { background:var(--nb04-light); color:var(--nb04); border-bottom-color:var(--nb04-mid); }
+  table.viz-tbl.nb04 tr:hover td { background:#fff0f6; }
 </style>
 </head>
 <body>
 
 <h1>めぐ指数パイプライン フロー図</h1>
-<p class="subtitle">NB-01: データ探索・前処理 → NB-02: ペース係数・クラス別 par_time 推定</p>
+<p class="subtitle">NB-01: データ探索・前処理 → NB-02: ペース係数・par_time 推定 → NB-03: 馬場差 (Δtrack) 算出 → NB-04: めぐ指数算出</p>
 
 <div class="legend">
   <div class="legend-item"><div class="legend-dot" style="background:var(--input)"></div>入力データ</div>
   <div class="legend-item"><div class="legend-dot" style="background:var(--nb01)"></div>NB-01 処理ステップ</div>
   <div class="legend-item"><div class="legend-dot" style="background:var(--nb02)"></div>NB-02 処理ステップ</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--nb03)"></div>NB-03 処理ステップ</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--nb04)"></div>NB-04 処理ステップ</div>
   <div class="legend-item"><div class="legend-dot" style="background:var(--save)"></div>保存・出力ファイル</div>
 </div>
 
@@ -193,6 +265,14 @@
     <div class="ov-node save-node"><div class="ov-icon">💾</div>coeff_pace<div class="ov-sub">126行</div></div>
     <div class="ov-arrow">+</div>
     <div class="ov-node save-node"><div class="ov-icon">💾</div>par_time_class<div class="ov-sub">868行</div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-node nb03-node"><div class="ov-icon">🏇</div>NB-03<div class="ov-sub">馬場差 (Δtrack) 算出</div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-node save-node"><div class="ov-icon">💾</div>delta_track<div class="ov-sub">日×会場×馬場</div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-node nb04-node"><div class="ov-icon">🎯</div>NB-04<div class="ov-sub">めぐ指数算出</div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-node save-node"><div class="ov-icon">💾</div>megu_index<div class="ov-sub">1馬 1行 スコア</div></div>
   </div>
 </div>
 
@@ -403,31 +483,175 @@
           <div class="step-card-header nb01"><span class="step-title">§3 — 馬場速度指数 (tsi_raw) 算出</span><span class="step-tag tag-nb01">NB-01</span></div>
           <div class="step-body">
             <div class="step-desc">
-              学習期（2020〜2024）の <strong>2着馬 adjusted_time_sec の平均</strong>を「基準2着タイム」とし、
-              当日・競馬場・馬場別のタイム乖離を推定する。乖離がマイナス（実際が速い）なら
-              <strong>tsi_raw が正</strong>＝「時計の出やすい馬場」を意味する。
+              学習期（2020〜2024）の <strong>2着馬 adjusted_time_sec の平均</strong>を「基準2着タイム（par_2nd_adj_sec）」として、
+              当日・競馬場・馬場種別のタイム乖離を推定する。
+              1日あたりのレース数が少ない条件では<strong>外れ値・小サンプルの両方に対処</strong>するため、
+              <strong>3層設計</strong>（ペースフィルタ → 中央値 → 収縮推定）で tsi_raw を算出する。
             </div>
-            <div class="formula-box">
-              race_track_dev_sec = 当レース2着 adjusted_time_sec − par_2nd_adj_sec<br>
-              track_dev_sec = 日×競馬場×馬場の race_track_dev 平均<br>
-              tsi_raw = −track_dev_sec　（正 = 速い馬場）
-            </div>
+
+            <!-- ── 3層パイプライン ─────────────────────────── -->
+            <div class="layer-flow-wrap">
+
+              <!-- Layer 1 -->
+              <div class="layer-flow-item">
+                <div class="layer-badge">Layer 1</div>
+                <div style="flex:1">
+                  <div class="layer-title">ペース異常レースの除外</div>
+                  <div class="layer-problem">▸ ハイペース／スローペース展開による最終タイムの歪みは馬場情報ではなく展開ノイズ</div>
+                  <div class="formula-box">
+                    front_split_dev = front_split_sec − front_split_median[distance, surface]<br>
+                    除外条件 : |front_split_dev| &gt; 2 × front_split_sigma[distance, surface]
+                  </div>
+                  <div class="layer-note-sm">
+                    front_split_median・front_split_sigma は学習期（2020–2024）の distance × surface 別に事前計算（§3 冒頭）。<br>
+                    §2 で算出済みの front_split_sec をそのまま参照するため、処理の重複なし。<br>
+                    除外後の有効レース数を <strong>n_valid_races</strong> として記録する。
+                  </div>
+                </div>
+              </div>
+
+              <div class="layer-sep"><span class="layer-sep-text">n_valid_races 件が通過 → race_track_dev_sec の集計へ</span></div>
+
+              <!-- Layer 2 -->
+              <div class="layer-flow-item">
+                <div class="layer-badge">Layer 2</div>
+                <div style="flex:1">
+                  <div class="layer-title">ロバスト集計（中央値）</div>
+                  <div class="layer-problem">▸ 平均では残った1件の外れ値にも引っ張られるため、中央値を使う</div>
+                  <div class="formula-box">
+                    race_track_dev_observed = median(race_track_dev_sec)　— 有効レース n_valid_races 件の中央値<br>
+                    ※ n_valid_races = 0 の場合は Layer 3 の tsi_prior をそのまま使用
+                  </div>
+                </div>
+              </div>
+
+              <div class="layer-sep"><span class="layer-sep-text">観測値確定 → 小サンプル安定化へ</span></div>
+
+              <!-- Layer 3 -->
+              <div class="layer-flow-item">
+                <div class="layer-badge">Layer 3</div>
+                <div style="flex:1">
+                  <div class="layer-title">収縮推定（小サンプル安定化）</div>
+                  <div class="layer-problem">▸ n_valid_races が 3〜5 件では中央値も統計的に不安定。過去の実績値に寄せて安定させる</div>
+                  <div class="formula-box">
+                    w = n_valid_races ÷ (n_valid_races + k)<br>
+                    track_dev_sec = w × race_track_dev_observed + (1−w) × tsi_prior<br>
+                    tsi_raw = −track_dev_sec　（正 = 速い馬場）
+                  </div>
+                  <div class="layer-note-sm">
+                    k（収縮強度）= σ²_within ÷ σ²_between（学習期の日内・日間ばらつき比から推定、目安 4〜6）<br>
+                    tsi_prior = 学習期における同 venue × surface の平均 track_dev_sec（未設定時は 0）<br>
+                    k・tsi_prior はいずれも学習期データから自動推定。手動チューニング不要。
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- /layer-flow-wrap -->
+
+            <!-- 収縮重みの参考表 -->
             <div class="data-sample">
-              <div class="data-sample-label"><span>day_course_tbl — 日×競馬場×馬場の集計（サンプル）</span></div>
+              <div class="data-sample-label"><span>収縮重み w の参考値（k=5 の場合）</span></div>
               <div class="data-rows">
                 <table class="sample-tbl">
                   <thead><tr>
-                    <th>date_str</th><th>venue</th><th>surface</th><th>n_races</th>
-                    <th>track_dev_sec (正=遅い)</th><th class="highlight-col">tsi_raw (正=速い)</th>
+                    <th>n_valid_races（有効レース数）</th>
+                    <th>w（当日への重み）</th>
+                    <th>振る舞い</th>
                   </tr></thead>
                   <tbody>
-                    <tr><td>2020-01-05</td><td>中山</td><td>ダート</td><td>7</td><td>+0.64</td><td class="highlight-col">−0.64</td></tr>
-                    <tr><td>2020-01-05</td><td>中山</td><td>芝</td><td>5</td><td>−0.40</td><td class="highlight-col">+0.40 ✓速い</td></tr>
-                    <tr><td>2020-04-18</td><td>中山</td><td>芝</td><td>4</td><td>+5.82</td><td class="highlight-col">−5.82 ✗遅い</td></tr>
+                    <tr><td>0（全レース除外）</td><td>0.00</td><td>tsi_prior のみ使用</td></tr>
+                    <tr><td>2</td><td>0.29</td><td>prior 寄り（データ不足）</td></tr>
+                    <tr><td>4</td><td>0.44</td><td>prior・当日ほぼ半々</td></tr>
+                    <tr><td>6</td><td class="highlight-col">0.55</td><td>当日データがやや優勢</td></tr>
+                    <tr><td>10</td><td class="highlight-col">0.67</td><td>当日主体</td></tr>
                   </tbody>
                 </table>
               </div>
             </div>
+
+            <!-- 変数定義 -->
+            <div class="var-table-wrap">
+              <div class="var-table-label">変数定義</div>
+              <table class="var-table">
+                <thead><tr><th>変数名</th><th>意味・定義</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td>class_group</td>
+                    <td>レースのクラスグループ（6区分）：<strong>G1orG2</strong>（G1・G2）/ <strong>G3orOP</strong>（G3・L・OP）/ <strong>3勝</strong> / <strong>2勝</strong> / <strong>1勝</strong> / <strong>未勝利</strong>。<br>
+                        par_2nd_adj_sec を算出する際のグルーピング単位。<br>
+                        <em>新馬</em> および <em>2歳・3歳世代限定戦</em> は除外（class_group = NaN）。
+                        これらは絶対タイムが古馬混合戦と比較できないため、基準タイムの計算プールから外す。</td>
+                  </tr>
+                  <tr>
+                    <td>par_2nd_adj_sec</td>
+                    <td>「基準2着タイム」。学習期（2020〜2024）の2着馬 adjusted_time_sec を<br>
+                        <em>class_group × 距離 × 競馬場 × 馬場種別（芝/ダート）</em> 別に集計した平均タイム。<br>
+                        馬場の速さを比較するときの「ものさし」となる基準値。<br>
+                        <small>※ 馬場状態（良/稍重/重/不良）は含まない。良→稍重でタイムが改善するケースもあり、
+                        良馬場が必ずしも速いとは限らないため。</small></td>
+                  </tr>
+                  <tr>
+                    <td>race_t2nd_sec</td>
+                    <td>当レースの2着馬 adjusted_time_sec（斤量補正済みタイム）の実測値。<br>
+                        1着ではなく2着を使うのは、1着はペース戦術・展開の影響を受けやすく外れ値になりやすいため。</td>
+                  </tr>
+                  <tr>
+                    <td>race_track_dev_sec</td>
+                    <td>当レースの2着タイムと基準の差（= race_t2nd_sec − par_2nd_adj_sec）。<br>
+                        <strong>正</strong> = 基準より遅い（馬場が重い・渋い）、<strong>負</strong> = 基準より速い（馬場が軽い・良い）。<br>
+                        Layer 1 フィルタ通過後の値のみ Layer 2・3 の集計に使用される。</td>
+                  </tr>
+                  <tr>
+                    <td>front_split_dev</td>
+                    <td>当レースのペース偏差（= front_split_sec − front_split_median[distance, surface]）。<br>
+                        正 = 前半が遅かった（スロー）、負 = 前半が速かった（ハイ）。<br>
+                        Layer 1 の除外判定に使用。<strong>|front_split_dev| &gt; 2σ のレースは集計から除外</strong>する。</td>
+                  </tr>
+                  <tr>
+                    <td>n_valid_races</td>
+                    <td>Layer 1 のペースフィルタ通過後の有効レース数。<br>
+                        収縮重み w = n_valid_races ÷ (n_valid_races + k) の分子になる。<br>
+                        小さいほど tsi_prior への収縮が強くなり、推定が保守的になる。</td>
+                  </tr>
+                  <tr>
+                    <td>track_dev_sec</td>
+                    <td>日×競馬場×馬場種別の馬場乖離（収縮推定後の最終値）。<br>
+                        Layer 2 の中央値（race_track_dev_observed）を Layer 3 で tsi_prior へ収縮させた値。<br>
+                        <strong>正 = 全体的に遅い馬場</strong>、<strong>負 = 速い馬場</strong>。</td>
+                  </tr>
+                  <tr>
+                    <td>tsi_raw</td>
+                    <td>馬場速度指数の生値（= − track_dev_sec）。track_dev_sec の符号を反転させることで<br>
+                        「正 = 時計が出やすい（速い）馬場、負 = 時計が出にくい（遅い）馬場」と直感的な向きに変換する。<br>
+                        下流でクリッピング・正規化して最終的な馬場指数に加工される。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- サンプルデータ -->
+            <div class="data-sample">
+              <div class="data-sample-label"><span>day_course_tbl — 日×競馬場×馬場の集計（新アルゴリズムのイメージ）</span></div>
+              <div class="data-rows">
+                <table class="sample-tbl">
+                  <thead><tr>
+                    <th>date_str</th><th>venue</th><th>surface</th>
+                    <th>n_races</th><th>n_valid</th>
+                    <th>track_dev_sec（収縮後）</th><th class="highlight-col">tsi_raw</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr><td>2020-01-05</td><td>中山</td><td>ダート</td><td>7</td><td>6</td><td>+0.58</td><td class="highlight-col">−0.58</td></tr>
+                    <tr><td>2020-01-05</td><td>中山</td><td>芝</td><td>5</td><td>5</td><td>−0.36</td><td class="highlight-col">+0.36 ✓速い</td></tr>
+                    <tr><td>2020-04-18</td><td>中山</td><td>芝</td><td>4</td><td>2</td><td>+1.24</td><td class="highlight-col">−1.24 ✗遅い（旧: −5.82）</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div style="font-size:.72rem;color:var(--muted);margin-top:5px;">
+                ※ 3行目は旧アルゴリズムで tsi_raw=−5.82 だったが、ペースフィルタで n_valid=2 に絞られ、
+                収縮推定（w=0.29）により −1.24 へ補正されるイメージ。実行値はノートブック再実行後に更新する。
+              </div>
+            </div>
+
             <div class="added-cols">
               <span class="col-chip new-nb01">tsi_raw ★</span>
               <span class="col-chip new-nb01">track_dev_sec</span>
@@ -435,6 +659,8 @@
               <span class="col-chip new-nb01">race_t2nd_sec</span>
               <span class="col-chip new-nb01">par_2nd_adj_sec</span>
               <span class="col-chip new-nb01">class_group</span>
+              <span class="col-chip new-nb01">front_split_dev</span>
+              <span class="col-chip new-nb01">n_valid_races</span>
             </div>
           </div>
         </div>
@@ -829,28 +1055,625 @@
 
   </div><!-- /steps-container NB-02 -->
 
-</div><!-- /pipeline -->
+<!-- =================== NB-03 =================== -->
+<div class="nb-header nb03">
+  <span class="nb-badge">NB-03</span>
+  馬場差 (Δtrack) 算出 — <span style="font-weight:400;font-size:.9rem;margin-left:6px">delta_track.parquet を生成</span>
+  <span style="color:rgba(255,255,255,.7);font-size:.8rem;margin-left:auto">入力: megu_dataset.parquet + coeff_pace.parquet + par_time_class.parquet</span>
+</div>
+<div class="steps-container">
 
-<!-- DOWNSTREAM -->
-<div style="max-width:1200px;margin:32px auto 0;background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:20px 28px;">
-  <div style="font-size:.82rem;font-weight:700;color:var(--muted);margin-bottom:14px;text-transform:uppercase;letter-spacing:.05em;">下流パイプラインへの接続</div>
-  <div style="display:flex;gap:12px;flex-wrap:wrap;">
-    <div style="flex:1;min-width:200px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:14px;">
-      <div style="font-weight:700;margin-bottom:8px;font-size:.9rem;">NB-03: Δtrack 算出</div>
-      <div style="font-size:.8rem;color:var(--muted);">megu_dataset の tsi_raw / race_track_dev_sec と par_splits を使って馬場補正量を推定</div>
-    </div>
-    <div style="flex:1;min-width:200px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:14px;">
-      <div style="font-weight:700;margin-bottom:8px;font-size:.9rem;">NB-04: めぐ指数算出</div>
-      <div style="font-size:.8rem;color:var(--muted);">
-        coeff_pace × front_split_dev + par_time_class + Δtrack などを統合して最終スコアを生成。<br>
-        当日の実斤量との差分 <code>(actual − 55/53) × weight_sec_per_kg</code> で最終補正。
+  <!-- INPUT NB-03 -->
+  <div class="step-row">
+    <div class="step-col"><div class="step-icon input">📂</div><div class="connector nb03"></div></div>
+    <div class="step-content">
+      <div class="step-card">
+        <div class="step-card-header input-h"><span class="step-title">入力: megu_dataset.parquet + coeff_pace.parquet + par_time_class.parquet</span><span class="step-tag tag-input">INPUT</span></div>
+        <div class="step-body">
+          <div style="display:flex;gap:20px;flex-wrap:wrap;">
+            <div>
+              <div class="data-sample-label"><span>megu_dataset.parquet（NB-01 出力）</span></div>
+              <ul class="detail-list">
+                <li>302K行 × 39列</li>
+                <li>主要列: adjusted_time_sec, front_split_sec, <strong>par_front_split_sec</strong>, class_group, tsi_raw, weight_dev …</li>
+              </ul>
+            </div>
+            <div>
+              <div class="data-sample-label"><span>coeff_pace.parquet（NB-02 出力）</span></div>
+              <ul class="detail-list">
+                <li>126行 (venue × surface × distance)</li>
+                <li>列: venue, surface, distance, <strong>coeff_pace</strong>, n_fit, source</li>
+              </ul>
+            </div>
+            <div>
+              <div class="data-sample-label"><span>par_time_class.parquet（NB-02 出力）</span></div>
+              <ul class="detail-list">
+                <li>868行 (venue × surface × distance × class_rank)</li>
+                <li>列: venue, surface, distance, class_rank, <strong>par_time_sec</strong>, beta, source</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
-</div>
+
+  <!-- §2 coeff_pace merge -->
+  <div class="step-row">
+    <div class="step-col"><div class="step-icon nb03">🔗</div><div class="connector nb03"></div></div>
+    <div class="step-content">
+      <div class="step-card">
+        <div class="step-card-header nb03"><span class="step-title">§2 — coeff_pace マージ</span><span class="step-tag tag-nb03">NB-03</span></div>
+        <div class="step-body">
+          <p class="step-desc">megu_dataset に <code>coeff_pace</code> を <code>venue × surface × distance</code> キーで LEFT JOIN する。</p>
+          <ul class="detail-list">
+            <li>欠損時は後続 §6 で <code>fillna(0.0)</code> → ペース補正なし扱い</li>
+            <li>マッチ率は通常 95%+ （par_splits の distance セット依存）</li>
+          </ul>
+          <div class="added-cols-label">付与列</div>
+          <div class="added-cols">
+            <span class="col-chip new-nb03">coeff_pace</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- §3 class_rank -->
+  <div class="step-row">
+    <div class="step-col"><div class="step-icon nb03">🏅</div><div class="connector nb03"></div></div>
+    <div class="step-content">
+      <div class="step-card">
+        <div class="step-card-header nb03"><span class="step-title">§3 — class_rank 付与</span><span class="step-tag tag-nb03">NB-03</span></div>
+        <div class="step-body">
+          <p class="step-desc">
+            <code>assign_class_rank(grade, race_class)</code>（<code>track_speed.py</code> 共通関数）を使い、
+            NB-01 / NB-02 と同一の整数ランクを付与する。独自 CLASS_RANK 辞書を定義すると NB-02 の <code>par_time_class</code> とのマージキーがずれるため厳禁。
+          </p>
+          <div class="formula-box nb03" style="border-left-color:var(--nb03);">
+            G1=8 / G2=7 / G3=6 / OP・L=5 / 3勝=4 / 2勝=3 / 1勝=2 / 未勝利=1<br>
+            新馬 → None → fillna(2)（1勝クラス相当として扱う）
+          </div>
+          <div class="added-cols-label">付与列</div>
+          <div class="added-cols">
+            <span class="col-chip new-nb03">class_rank</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- §4 par_time merge -->
+  <div class="step-row">
+    <div class="step-col"><div class="step-icon nb03">📋</div><div class="connector nb03"></div></div>
+    <div class="step-content">
+      <div class="step-card">
+        <div class="step-card-header nb03"><span class="step-title">§4 — par_time_class マージ → df_valid</span><span class="step-tag tag-nb03">NB-03</span></div>
+        <div class="step-body">
+          <p class="step-desc">
+            <code>par_time_sec</code> を <code>venue × surface × distance × class_rank</code> の4キーで LEFT JOIN する。
+            <code>par_time_sec</code> が欠損した行（セルに学習データがなかった等）は Δtrack 算出対象から除外し <code>df_valid</code> として絞り込む。
+          </p>
+          <ul class="detail-list">
+            <li><code>par_time_sec</code>: そのクラス帯・会場・距離の標準的な斤量補正後タイム（秒）</li>
+            <li>欠損除外後 → <code>df_valid</code>（通常 98%+ 残存）</li>
+          </ul>
+          <div class="added-cols-label">付与列</div>
+          <div class="added-cols">
+            <span class="col-chip new-nb03">par_time_sec</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- §5 front_split_dev -->
+  <div class="step-row">
+    <div class="step-col"><div class="step-icon nb03">🏃</div><div class="connector nb03"></div></div>
+    <div class="step-content">
+      <div class="step-card">
+        <div class="step-card-header nb03"><span class="step-title">§5 — front_split_dev 算出（ペース偏差）</span><span class="step-tag tag-nb03">NB-03</span></div>
+        <div class="step-body">
+          <p class="step-desc">
+            NB-01 §6 で保存済みの <code>par_front_split_sec</code>（OLS 連続モデルによる基準前半スプリット）と、
+            実測値 <code>front_split_sec</code> の差を計算する。
+          </p>
+          <div class="formula-box nb03" style="border-left-color:var(--nb03);">
+            front_split_dev = front_split_sec − par_front_split_sec<br>
+            <span style="font-size:.8rem;color:var(--muted);">正 = 基準より遅いペース（後半型）／ 負 = 基準より速いペース（前傾型）</span><br>
+            欠損（front_split_sec 未取得レース）→ 0.0 補完（ペース補正なし扱い）
+          </div>
+          <div style="margin-top:8px;font-size:.8rem;color:var(--muted);background:#f0fdf4;border-left:3px solid var(--nb03-mid);padding:6px 10px;border-radius:0 6px 6px 0;">
+            ⚠️ NB-01 §3 の <code>front_split_dev</code>（ペースフィルタ用の生偏差）とは別物。
+            こちらは OLS モデルによる基準値との偏差（ペース補正に使用）。
+          </div>
+          <div class="added-cols-label">付与列</div>
+          <div class="added-cols">
+            <span class="col-chip new-nb03">front_split_dev</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- §6 Δpace -->
+  <div class="step-row">
+    <div class="step-col"><div class="step-icon nb03">⚡</div><div class="connector nb03"></div></div>
+    <div class="step-content">
+      <div class="step-card">
+        <div class="step-card-header nb03"><span class="step-title">§6 — Δpace 適用 → time_after_pace</span><span class="step-tag tag-nb03">NB-03</span></div>
+        <div class="step-body">
+          <p class="step-desc">
+            ペース偏差 <code>front_split_dev</code> を係数 <code>coeff_pace</code> でタイム換算し、
+            斤量補正後タイムから差し引いてペース補正後タイムを得る。
+          </p>
+          <div class="formula-box nb03" style="border-left-color:var(--nb03);">
+            Δpace_sec = coeff_pace × front_split_dev<br>
+            time_after_pace = adjusted_time_sec − Δpace_sec<br>
+            <span style="font-size:.8rem;color:var(--muted);">
+              ハイペース（front_split_dev &lt; 0）→ Δpace_sec &lt; 0 → time_after_pace が増加（遅く補正）<br>
+              スローペース（front_split_dev &gt; 0）→ Δpace_sec &gt; 0 → time_after_pace が減少（速く補正）
+            </span>
+          </div>
+          <ul class="detail-list" style="margin-top:8px">
+            <li><code>coeff_pace</code> 欠損時は 0.0 補完 → ペース補正なし</li>
+            <li><code>coeff_pace</code> ∈ [0.3, 1.5] にクリップ済み（NB-02 §3）</li>
+          </ul>
+          <div class="added-cols-label">付与列</div>
+          <div class="added-cols">
+            <span class="col-chip new-nb03">delta_pace_sec</span>
+            <span class="col-chip new-nb03">time_after_pace ★</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- §7 Δtrack -->
+  <div class="step-row">
+    <div class="step-col"><div class="step-icon nb03">🌿</div><div class="connector nb03"></div></div>
+    <div class="step-content">
+      <div class="step-card">
+        <div class="step-card-header nb03"><span class="step-title">§7 — Δtrack 算出（日 × 会場 × 馬場種別）</span><span class="step-tag tag-nb03">NB-03</span></div>
+        <div class="step-body">
+
+          <!-- 7-1 G1除外 -->
+          <div style="font-weight:700;font-size:.82rem;color:var(--nb03);margin-bottom:4px;">7-1 対象レースフィルタ（G1 除外）</div>
+          <p class="step-desc">
+            G1 レースは特殊な馬場整備・出走馬層のため馬場差推定対象から除外する。
+            <code>class_rank ≤ 7</code>（未勝利〜G2）を <code>track_target</code> として使用。
+          </p>
+          <div class="formula-box nb03" style="border-left-color:var(--nb03);margin-bottom:12px">
+            track_target = df_valid[ class_rank ≤ 7 ]<br>
+            <span style="font-size:.8rem;color:var(--muted);">
+              NB-01 定義: G3=6, G2=7, G1=8 → &lt;=7 で G1 のみ除外
+            </span>
+          </div>
+
+          <!-- 7-2 集計 -->
+          <div style="font-weight:700;font-size:.82rem;color:var(--nb03);margin-bottom:4px;">7-2 日 × 会場 × 馬場種別で集計</div>
+          <p class="step-desc">
+            <code>date × venue × surface</code> グループ内で全出走馬の <code>time_after_pace</code> と <code>par_time_sec</code> の平均をそれぞれ計算し、差を馬場差とする。
+          </p>
+          <div class="formula-box nb03" style="border-left-color:var(--nb03);margin-bottom:12px">
+            Δtrack_sec = mean(time_after_pace) − mean(par_time_sec)<br>
+            <span style="font-size:.8rem;color:var(--muted);">
+              正 = 遅い馬場 / 負 = 速い馬場<br>
+              全出走馬（着順不問）を使用 ← tsi_raw（NB-01）の 2着馬基準と異なる点
+            </span>
+          </div>
+
+          <!-- 7-3 Sparse -->
+          <div style="font-weight:700;font-size:.82rem;color:var(--nb03);margin-bottom:4px;">7-3 Sparse 対策</div>
+          <p class="step-desc">
+            当日のレース数が少ない場合（例: 開催場が1〜2レースのみ）は推定が不安定になる。
+          </p>
+          <div class="formula-box nb03" style="border-left-color:var(--nb03);">
+            n_races &lt; 3 → Δtrack_sec = 0, is_fallback = True<br>
+            <span style="font-size:.8rem;color:var(--muted);">
+              0 = 「馬場差なし（標準）」とみなす簡素化。tsi_raw の収縮推定（Layer 3）とは非対称だが意図的な簡素化。<br>
+              is_fallback フラグを後段で参照して扱いを変えることが可能。
+            </span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- §8 OUTPUT -->
+  <div class="step-row">
+    <div class="step-col"><div class="step-icon save">💾</div></div>
+    <div class="step-content">
+      <div class="step-card">
+        <div class="step-card-header save-h"><span class="step-title">§8 — 保存</span><span class="step-tag tag-save">OUTPUT</span></div>
+        <div class="step-body">
+          <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:280px;">
+              <div class="file-card">
+                <div class="file-card-header">💾 delta_track.parquet</div>
+                <ul class="detail-list">
+                  <li>単位: 日 × 会場 × 馬場種別</li>
+                  <li>列: date, venue, surface, <strong>delta_track_sec</strong>, n_races, is_fallback</li>
+                  <li>NB-04 の馬場差補正項として使用</li>
+                </ul>
+              </div>
+            </div>
+            <div style="flex:1;min-width:280px;">
+              <div class="data-sample-label"><span>delta_track.parquet — サンプル</span></div>
+              <table class="data-table">
+                <thead><tr><th>date</th><th>venue</th><th>surface</th><th class="highlight-col">delta_track_sec</th><th>n_races</th><th>is_fallback</th></tr></thead>
+                <tbody>
+                  <tr><td>2024-01-06</td><td>中山</td><td>芝</td><td class="highlight-col">+0.42</td><td>8</td><td>False</td></tr>
+                  <tr><td>2024-01-06</td><td>中山</td><td>ダート</td><td class="highlight-col">−0.18</td><td>6</td><td>False</td></tr>
+                  <tr><td>2024-01-06</td><td>京都</td><td>芝</td><td class="highlight-col">0.00</td><td>2</td><td>True</td></tr>
+                  <tr><td>2024-01-06</td><td>京都</td><td>ダート</td><td class="highlight-col">−0.61</td><td>5</td><td>False</td></tr>
+                  <tr><td>2024-01-07</td><td>中山</td><td>芝</td><td class="highlight-col">+0.08</td><td>9</td><td>False</td></tr>
+                </tbody>
+              </table>
+              <div style="margin-top:8px;font-size:.78rem;color:var(--muted);">正 = 遅い馬場 / 負 = 速い馬場 / is_fallback=True は n_races&lt;3 でΔtrack=0</div>
+            </div>
+          </div>
+
+          <!-- 変数定義 -->
+          <div class="var-table-wrap" style="margin-top:16px;">
+            <div class="var-table-label">delta_track.parquet 列定義</div>
+            <table class="var-table">
+              <thead><tr><th>列名</th><th>型</th><th>説明</th></tr></thead>
+              <tbody>
+                <tr><td><code>date</code></td><td>str</td><td>開催日（YYYY-MM-DD）</td></tr>
+                <tr><td><code>venue</code></td><td>str</td><td>開催場（東京・中山 …）</td></tr>
+                <tr><td><code>surface</code></td><td>str</td><td>馬場種別（芝 / ダート）</td></tr>
+                <tr><td><code>delta_track_sec</code></td><td>float</td><td>馬場差（秒）。正=遅い、負=速い。is_fallback=True 時は 0</td></tr>
+                <tr><td><code>n_races</code></td><td>int</td><td>集計に使ったレース数</td></tr>
+                <tr><td><code>is_fallback</code></td><td>bool</td><td>n_races &lt; 3 で Δtrack=0 に設定した場合 True</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /steps-container NB-03 -->
+
+</div><!-- /pipeline -->
+
+<!-- =================== NB-04 =================== -->
+<div class="pipeline" style="margin-top:40px">
+
+  <div class="nb-header nb04">
+    <span class="nb-badge">NB-04</span>
+    実測めぐ指数の計算 — <span style="font-weight:400;font-size:.9rem;margin-left:6px">megu_dataset + coeff_pace + par_time_class + delta_track → megu_index.parquet</span>
+  </div>
+
+  <div class="steps-container">
+
+    <!-- INPUT NB-04 -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon input">📂</div><div class="connector nb04"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header input-h"><span class="step-title">入力データ（4ファイル）</span><span class="step-tag tag-input">INPUT</span></div>
+          <div class="step-body">
+            <div class="step-desc">NB-01〜NB-03 の成果物を統合して各馬のめぐ指数を算出する。</div>
+            <div class="file-cards">
+              <div class="file-card" style="border-color:var(--nb01);background:var(--nb01-light);">
+                <div class="file-card-header" style="background:var(--nb01);">💾 megu_dataset.parquet <span style="font-size:.75rem;font-weight:400;margin-left:6px">(NB-01)</span></div>
+                <div class="file-card-body" style="color:#1e3a5f;"><ul>
+                  <li>adjusted_time_sec（斤量補正済）</li>
+                  <li>front_split_sec, par_front_split_sec</li>
+                  <li>grade, race_class → class_rank 付与元</li>
+                </ul></div>
+              </div>
+              <div class="file-card" style="border-color:var(--nb02);background:var(--nb02-light);">
+                <div class="file-card-header" style="background:var(--nb02);">💾 coeff_pace.parquet + par_time_class.parquet <span style="font-size:.75rem;font-weight:400;margin-left:6px">(NB-02)</span></div>
+                <div class="file-card-body" style="color:#2e1065;"><ul>
+                  <li>coeff_pace: ペース補正係数 (venue×surface×distance)</li>
+                  <li>par_time_class: クラス別基準タイム (venue×surface×distance×class_rank)</li>
+                </ul></div>
+              </div>
+              <div class="file-card" style="border-color:var(--nb03);background:var(--nb03-light);">
+                <div class="file-card-header" style="background:var(--nb03);">💾 delta_track.parquet <span style="font-size:.75rem;font-weight:400;margin-left:6px">(NB-03)</span></div>
+                <div class="file-card-body" style="color:#134e4a;"><ul>
+                  <li>delta_track_sec: 馬場差 (date×venue×surface)</li>
+                  <li>正値=遅い馬場、負値=速い馬場</li>
+                </ul></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §2-1: class_rank -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb04">①</div><div class="connector nb04"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb04"><span class="step-title">§2-1 — class_rank 付与</span><span class="step-tag tag-nb04">NB-04</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              <strong>NB-01/NB-02 共通関数</strong> <code>assign_class_rank(grade, race_class)</code>（<code>track_speed.py</code> 定義）を使用。<br>
+              独自 CLASS_RANK_MAP を定義すると par_time_class のキーとずれて G2/G1 に誤った par_time が当たるため、必ず共通関数を呼ぶ。
+            </div>
+            <div class="formula-box nb04">class_rank: 未勝利=1, 1勝=2, 2勝=3, 3勝=4, OP/L=5, G3=6, G2=7, G1=8</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §2-2 + §2-3 + §2-4: front_split_dev / delta_pace -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb04">②</div><div class="connector nb04"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb04"><span class="step-title">§2-2〜§2-4 — ペース補正値 (Δpace) 計算</span><span class="step-tag tag-nb04">NB-04</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              coeff_pace を venue×surface×distance でマージ後、前半スプリット偏差からペース補正量を算出する。
+            </div>
+            <div class="formula-box nb04" style="display:flex;flex-direction:column;gap:4px;">
+              <div><span style="color:var(--muted)">coeff_pace マージ</span>: LEFT JOIN on (venue, surface, distance)</div>
+              <div><span style="color:var(--nb04);font-weight:700">front_split_dev</span> = front_split_sec − par_front_split_sec &nbsp;<span style="color:var(--muted);font-size:.78rem">（欠損→0補完）</span></div>
+              <div><span style="color:var(--nb04);font-weight:700">delta_pace_sec</span> &nbsp;&nbsp;= coeff_pace × front_split_dev</div>
+            </div>
+            <div class="step-desc" style="font-size:.78rem;background:#fff8f0;border:1px solid #fcd34d;border-radius:6px;padding:6px 10px;">
+              <strong>注意:</strong> ここでの <code>front_split_dev</code> は NB-03 §7 の「ペースフィルタ用偏差」とは別物。
+              NB-04 では「ペース補正量を求めるための偏差」として使う（同名だが意味が異なる）。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §2-5: delta_track merge -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb04">③</div><div class="connector nb04"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb04"><span class="step-title">§2-5 — 馬場補正値 (Δtrack) マージ</span><span class="step-tag tag-nb04">NB-04</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              NB-03 が算出した <code>delta_track.parquet</code> を date×venue×surface でマージ。欠損は 0 補完（補正なし扱い）。
+            </div>
+            <div class="formula-box nb04">
+              LEFT JOIN on (date, venue, surface) &nbsp;→&nbsp; delta_track_sec &nbsp;(欠損→0)
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §2-6 + §2-7: par_time + corrected_time -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb04">④</div><div class="connector nb04"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb04"><span class="step-title">§2-6〜§2-7 — par_time_class_sec マージ & corrected_time 算出</span><span class="step-tag tag-nb04">NB-04</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              クラス別基準タイムをマージして、ペース補正・馬場補正を施した補正タイムを算出する。
+            </div>
+            <div class="formula-box nb04" style="display:flex;flex-direction:column;gap:4px;">
+              <div><span style="color:var(--muted)">par_time_class_sec マージ</span>: LEFT JOIN on (venue, surface, distance, class_rank)</div>
+              <div><span style="color:var(--nb04);font-weight:700">corrected_time</span> = adjusted_time_sec − delta_pace_sec − delta_track_sec</div>
+            </div>
+            <div class="var-table-wrap" style="margin-top:8px;">
+              <div class="var-table-label">補正量の意味</div>
+              <table class="var-table nb04">
+                <thead><tr><th>変数</th><th>方向</th><th>補正の意味</th></tr></thead>
+                <tbody>
+                  <tr><td>delta_pace_sec</td><td>引く</td><td>ハイペースで実タイムが速くなった分を取り除く（補正後タイムを「標準ペース換算」にする）</td></tr>
+                  <tr><td>delta_track_sec</td><td>引く</td><td>遅い馬場で実タイムが遅くなった分を取り除く（正値=遅い馬場→引くと速く評価）</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §3: out_of_range -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb04">⑤</div><div class="connector nb04"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb04"><span class="step-title">§3 — out_of_range フィルタ</span><span class="step-tag tag-nb04">NB-04</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              完走できなかった・脱落した馬のタイムは信頼できないため、<code>megu_index = None</code> とし <code>computation_status = "out_of_range"</code> に設定する。
+            </div>
+            <div class="formula-box nb04">out_of_range: finish_pos &gt; 2  AND  adjusted_time_sec &gt; time_2nd + 2.0 秒</div>
+            <div class="var-table-wrap" style="margin-top:8px;">
+              <div class="var-table-label">computation_status の3値</div>
+              <table class="var-table nb04">
+                <thead><tr><th>値</th><th>条件</th><th>megu_index</th></tr></thead>
+                <tbody>
+                  <tr><td>valid</td><td>通常完走（out_of_range 非該当 かつ par_time あり）</td><td>算出される</td></tr>
+                  <tr><td>out_of_range</td><td>3着以下 かつ 2着から 2秒超の差</td><td>None</td></tr>
+                  <tr><td>no_par</td><td>par_time_class_sec が欠損（稀なクラス×距離×会場）</td><td>None</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §4: megu_index -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb04">⑥</div><div class="connector nb04"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb04"><span class="step-title">§4 — 実測めぐ指数 (megu_index) 算出</span><span class="step-tag tag-nb04">NB-04</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              クラス基準タイムとの差を指数化。<strong>1勝クラスの2着馬相当で 50</strong>。0.1秒速い = +1点のスケール。
+            </div>
+            <div class="formula-box nb04" style="font-size:.9rem;display:flex;flex-direction:column;gap:4px;">
+              <div style="color:var(--nb04);font-weight:700;font-size:1rem;">megu_index = 50.0 + ( par_time_class_sec − corrected_time ) × 10.0</div>
+              <div style="color:var(--muted);font-size:.78rem;">基準: 1勝クラス 2着馬が par_time_class_sec と同タイムで走った場合 → corrected_time ≈ par_time_class_sec → megu_index ≈ 50</div>
+            </div>
+            <div class="step-desc" style="margin-top:4px;">
+              <span style="font-weight:600;">解釈：</span>
+              megu_index &gt; 50 → クラス基準より速い（上位クラス相当）。
+              megu_index &lt; 50 → クラス基準より遅い。
+              0.5秒の差 = 5ポイント差。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §5: Visualization (mock data) -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon nb04">⑦</div><div class="connector nb04"></div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header nb04"><span class="step-title">§5 — 検証・可視化（モックデータ）</span><span class="step-tag tag-nb04">NB-04</span></div>
+          <div class="step-body">
+            <div class="step-desc">
+              モックデータ（1,200レース / 14,400頭）で全パイプラインを実行し、めぐ指数の分布を確認する。<br>
+              <strong>キャリブレーション基準:</strong> 1勝クラス 2着馬の megu_index 平均 ≈ 50。
+            </div>
+
+            <!-- Overall stats (dynamic) -->
+            <div class="stats-row" id="nb04-stats-row">
+              <div class="stat-badge" style="background:var(--nb04-light);border-color:var(--nb04-mid);">
+                <div class="stat-label">算出レコード</div>
+                <div class="stat-value" style="color:var(--nb04);" id="nb04-stat-records">13,786 valid / 611 oor</div>
+              </div>
+              <div class="stat-badge" style="background:var(--nb04-light);border-color:var(--nb04-mid);">
+                <div class="stat-label">全体平均</div>
+                <div class="stat-value" style="color:var(--nb04);" id="nb04-stat-mean">43.46</div>
+              </div>
+              <div class="stat-badge" style="background:var(--nb04-light);border-color:var(--nb04-mid);">
+                <div class="stat-label">全体 std</div>
+                <div class="stat-value" style="color:var(--nb04);" id="nb04-stat-std">10.37</div>
+              </div>
+              <div class="stat-badge" style="background:#dcfce7;border-color:#86efac;">
+                <div class="stat-label">1勝クラス 2着馬 平均</div>
+                <div class="stat-value" style="color:#166534;" id="nb04-stat-calib">50.54 ≈ 50 ✓</div>
+              </div>
+            </div>
+
+            <!-- Viz: box plot + calibration + 2着馬分布 -->
+            <details class="viz-details nb04" id="det-nb04-viz">
+              <summary class="viz-summary nb04">▶ 可視化を展開する</summary>
+              <div class="viz-body nb04">
+
+                <!-- Data source toggle -->
+                <div style="font-size:.74rem;padding:6px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span style="color:var(--muted);font-weight:600;white-space:nowrap">データソース:</span>
+                  <button id="nb04-btn-stg"  class="viz-btn"
+                    onclick="switchNb04ToStg().then(() => renderAllNb04())">STGデータ</button>
+                  <button id="nb04-btn-mock" class="viz-btn src-active"
+                    onclick="switchNb04ToMock(); renderAllNb04()">モックデータ</button>
+                  <span id="nb04-data-status" style="color:var(--muted)">モックデータを使用中</span>
+                  <button class="viz-btn" style="margin-left:auto;font-size:.72rem;opacity:.8"
+                    onclick="renderAllNb04()" title="グラフが表示されない場合にクリック">🔄 再描画</button>
+                </div>
+
+                <!-- ① 全馬 box plot -->
+                <div class="viz-section-title" style="margin-top:8px;">① クラスランク別 megu_index 分布 — 全出走馬（箱ひげ図）</div>
+                <div id="chart-nb04-box" class="viz-chart" style="height:360px;"></div>
+                <div class="viz-note nb04" style="font-size:.75rem;" id="nb04-note-box">
+                  世代限定戦（2歳未勝利・3歳未勝利）を含む。未勝利クラスは母集団が最大のため分布が広い。
+                  G2/G1 は par_time の対応不足でモックでは no_par。
+                </div>
+
+                <!-- ② 2着馬 box plot (NEW) -->
+                <div class="viz-section-title" style="margin-top:16px;">② クラスランク別 megu_index 分布 — <span style="color:var(--nb04);font-weight:700;">2着馬のみ</span></div>
+                <div id="chart-nb04-2nd" class="viz-chart" style="height:360px;"></div>
+                <div class="viz-note nb04" style="font-size:.75rem;">
+                  基準: 各クラスの 2着馬が <span class="megu-chip">50.0</span> 付近に集まればキャリブレーション良好。
+                  クラスが高いほど par_time が速くなるため、各クラスで独立に 50 周辺になるよう設計されている。
+                </div>
+
+                <!-- ③ Calibration bar chart -->
+                <div class="viz-section-title" style="margin-top:16px;">③ キャリブレーション — 1勝クラス 着順別 megu_index 平均</div>
+                <div id="chart-nb04-calib" class="viz-chart" style="height:280px;"></div>
+                <div class="viz-note nb04" style="font-size:.75rem;">
+                  基準点: <span class="megu-chip">50.0</span> = 1勝クラス 2着馬相当。
+                  1着 &gt; 2着（≈50） &gt; 3着以降と単調減少していれば着順との整合が確認できる。
+                </div>
+
+                <!-- ④ Sample race table -->
+                <div class="viz-section-title" style="margin-top:16px;">④ サンプルレース — 1勝クラス 芝1600m</div>
+                <div class="data-sample">
+                  <div class="data-sample-label">
+                    <span>各馬のめぐ指数内訳</span>
+                    <span id="nb04-sample-par-label" style="font-weight:400;color:var(--nb04);">par_time = — sec</span>
+                  </div>
+                  <div class="data-rows">
+                    <table class="viz-tbl nb04">
+                      <thead><tr>
+                        <th>着順</th><th>adj_time (s)</th><th>Δpace (s)</th><th>Δtrack (s)</th><th>corr_time (s)</th><th>par_time (s)</th><th>megu_index</th><th>status</th>
+                      </tr></thead>
+                      <tbody id="nb04-sample-tbody"></tbody>
+                    </table>
+                  </div>
+                </div>
+
+              </div><!-- /viz-body -->
+            </details>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- §6: OUTPUT -->
+    <div class="step-row">
+      <div class="step-col"><div class="step-icon save">💾</div></div>
+      <div class="step-content">
+        <div class="step-card">
+          <div class="step-card-header save-h"><span class="step-title">§6 — 出力: megu_index.parquet</span><span class="step-tag tag-save">OUTPUT</span></div>
+          <div class="step-body">
+            <div class="step-desc">1行 = 1頭 で全出走馬のめぐ指数を保存。</div>
+            <div class="added-cols">
+              <span class="col-chip new-nb04">race_id</span>
+              <span class="col-chip new-nb04">horse_id</span>
+              <span class="col-chip new-nb04">date</span>
+              <span class="col-chip new-nb04">venue</span>
+              <span class="col-chip new-nb04">surface</span>
+              <span class="col-chip new-nb04">distance</span>
+              <span class="col-chip new-nb04">class_rank</span>
+              <span class="col-chip new-nb04">finish_pos</span>
+              <span class="col-chip new-nb04">adjusted_time_sec</span>
+              <span class="col-chip new-nb04">delta_pace_sec</span>
+              <span class="col-chip new-nb04">delta_track_sec</span>
+              <span class="col-chip new-nb04">corrected_time</span>
+              <span class="col-chip new-nb04">par_time_class_sec</span>
+              <span class="col-chip key">megu_index</span>
+              <span class="col-chip new-nb04">computation_status</span>
+            </div>
+            <div class="var-table-wrap" style="margin-top:10px;">
+              <div class="var-table-label">出力スキーマ</div>
+              <table class="var-table nb04">
+                <thead><tr><th>列名</th><th>型</th><th>説明</th></tr></thead>
+                <tbody>
+                  <tr><td>megu_index</td><td>float64 / null</td><td>実測めぐ指数 (50=1勝2着基準)</td></tr>
+                  <tr><td>corrected_time</td><td>float64</td><td>ペース・馬場補正後タイム</td></tr>
+                  <tr><td>delta_pace_sec</td><td>float64</td><td>ペース補正量 (coeff_pace × front_split_dev)</td></tr>
+                  <tr><td>delta_track_sec</td><td>float64</td><td>馬場補正量 (日×会場×コース)</td></tr>
+                  <tr><td>par_time_class_sec</td><td>float64 / null</td><td>クラス別基準タイム</td></tr>
+                  <tr><td>computation_status</td><td>str</td><td>valid / out_of_range / no_par</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /steps-container NB-04 -->
+
+</div><!-- /pipeline NB-04 -->
 
 <div style="text-align:center;color:var(--muted);font-size:.75rem;margin:28px 0 8px;">
-  Generated from nb-01-data-exploration.ipynb / nb-02-pace-and-partime.ipynb
+  Generated from nb-01-data-exploration.ipynb / nb-02-pace-and-partime.ipynb / nb-03-delta-track.ipynb / nb-04-megu-index-compute.ipynb
 </div>
 
 <!-- ================================================================
@@ -881,6 +1704,7 @@
 //
 const DATA_SOURCES = {
   wcoef: "../output/nb01/wcoef_data.json",
+  megu_index_chart: "../output/nb04/megu_index_chart_data.json",
 };
 
 // フォールバック用データ（output/nb01/megu_dataset.parquet から生成した実データ）
@@ -1166,6 +1990,273 @@ window.addEventListener("resize", () => {
 });
 </script>
 
+<!-- ================================================================
+     NB-04 めぐ指数 可視化 JS  (STG / モック 切り替え対応)
+     ================================================================ -->
+<script>
+// ── モックデータ (gen_mock_nb04_data.py で生成) ──────────────────────────
+const NB04_MOCK = {
+  overall: {n_total:14397, n_valid:13786, n_oor:611, n_no_par:0, mean:43.46, std:10.37, rank2_2nd_mean:50.54},
+  class_boxes: [
+    {rank:1, label:"未勝利", q1:35.86, median:42.95, q3:50.06, lo:14.56, hi:70.91, mean:42.80, n:6894,
+     outliers:[9.52,10.18,11.46,14.04,14.05,13.79,9.35,7.35,13.45,12.21,13.59,10.05,6.24,12.59,4.22,13.95,14.27,14.27,10.61,6.03,10.20,77.65,77.86,74.52,74.15,73.21,73.21,75.13,73.28,74.14]},
+    {rank:2, label:"1勝",   q1:37.84, median:45.11, q3:51.92, lo:16.79, hi:72.48, mean:44.76, n:1740,
+     outliers:[77.93,73.89,16.19,12.31]},
+    {rank:3, label:"2勝",   q1:37.33, median:44.65, q3:51.83, lo:16.05, hi:73.11, mean:44.48, n:1732,
+     outliers:[13.33,14.91,77.08,15.26,13.60,14.42,14.58,6.92,7.52,76.90,15.15]},
+    {rank:4, label:"3勝",   q1:38.13, median:44.78, q3:51.28, lo:19.10, hi:70.96, mean:44.66, n:1707,
+     outliers:[75.51,15.06,13.06,16.44,7.75,72.60,17.93,17.66,12.71,75.17,13.63]},
+    {rank:5, label:"OP/L",  q1:35.56, median:42.03, q3:49.05, lo:16.21, hi:69.12, mean:42.53, n:1713,
+     outliers:[15.32,13.94,14.28,70.26,71.86,71.23,69.79,72.95,74.63,70.38,70.99,72.62,72.59,72.75]}
+  ],
+  class_2nd_boxes: [
+    {rank:1, label:"未勝利", q1:42.80, median:49.28, q3:55.13, lo:24.63, hi:70.82, mean:48.79, n:600,
+     outliers:[23.04,23.29,21.93,19.61,74.52,74.14,18.06]},
+    {rank:2, label:"1勝",   q1:43.58, median:50.93, q3:56.70, lo:29.55, hi:72.32, mean:50.54, n:150,
+     outliers:[77.93,22.94]},
+    {rank:3, label:"2勝",   q1:44.36, median:50.98, q3:56.37, lo:26.65, hi:69.93, mean:50.59, n:150,
+     outliers:[25.30,76.90]},
+    {rank:4, label:"3勝",   q1:45.86, median:50.84, q3:55.94, lo:32.01, hi:70.79, mean:51.07, n:150,
+     outliers:[29.38,27.71,30.29,75.17]},
+    {rank:5, label:"OP/L",  q1:43.12, median:47.70, q3:54.10, lo:30.34, hi:70.26, mean:48.94, n:150,
+     outliers:[71.86,72.95,70.99,72.75]}
+  ],
+  calib: [
+    {pos:1, mean:54.59, median:54.81, n:150},
+    {pos:2, mean:50.54, median:50.93, n:150},
+    {pos:3, mean:49.08, median:49.19, n:150},
+    {pos:4, mean:47.77, median:47.91, n:150},
+    {pos:5, mean:46.32, median:46.34, n:149},
+    {pos:6, mean:45.22, median:45.11, n:149}
+  ],
+  sample_race: [
+    {pos:1, time_adj:90.36, d_pace:0.117, d_track:0.0, corr_time:90.24, par_time:91.90, megu:66.6, status:"valid"},
+    {pos:2, time_adj:90.03, d_pace:0.117, d_track:0.0, corr_time:89.91, par_time:91.90, megu:69.9, status:"valid"},
+    {pos:3, time_adj:90.93, d_pace:0.117, d_track:0.0, corr_time:90.81, par_time:91.90, megu:60.9, status:"valid"},
+    {pos:4, time_adj:90.82, d_pace:0.117, d_track:0.0, corr_time:90.70, par_time:91.90, megu:62.0, status:"valid"},
+    {pos:5, time_adj:91.45, d_pace:0.117, d_track:0.0, corr_time:91.34, par_time:91.90, megu:55.7, status:"valid"},
+    {pos:6, time_adj:91.56, d_pace:0.117, d_track:0.0, corr_time:91.44, par_time:91.90, megu:54.6, status:"valid"},
+    {pos:7, time_adj:91.49, d_pace:0.117, d_track:0.0, corr_time:91.37, par_time:91.90, megu:55.3, status:"valid"},
+    {pos:8, time_adj:91.95, d_pace:0.117, d_track:0.0, corr_time:91.83, par_time:91.90, megu:50.7, status:"valid"},
+    {pos:9, time_adj:91.92, d_pace:0.117, d_track:0.0, corr_time:91.80, par_time:91.90, megu:51.0, status:"valid"},
+    {pos:11,time_adj:91.95, d_pace:0.117, d_track:0.0, corr_time:91.84, par_time:91.90, megu:50.7, status:"valid"}
+  ]
+};
+
+// ── 現在のデータ ─────────────────────────────────────────────────────────
+let NB04_DATA = NB04_MOCK;
+
+// ── DATA SOURCE STATE ────────────────────────────────────────────────────
+function nb04SetSourceActive(id) {
+  ["nb04-btn-stg","nb04-btn-mock"].forEach(bid =>
+    document.getElementById(bid).classList.toggle("src-active", bid === id)
+  );
+}
+
+async function switchNb04ToStg() {
+  nb04SetSourceActive("nb04-btn-stg");
+  const st = document.getElementById("nb04-data-status");
+  st.textContent = "読み込み中…";
+  try {
+    const resp = await fetch(DATA_SOURCES.megu_index_chart);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    NB04_DATA = await resp.json();
+    st.innerHTML =
+      `<span style="color:#059669;font-weight:700">✓ STGデータ</span>` +
+      `<span style="color:#94a3b8"> — ${DATA_SOURCES.megu_index_chart}</span>`;
+  } catch(e) {
+    NB04_DATA = NB04_MOCK;
+    nb04SetSourceActive("nb04-btn-mock");
+    st.innerHTML =
+      `<span style="color:#dc2626;font-weight:700">取得失敗</span>` +
+      `<span style="color:#94a3b8"> (${e.message}) — モックにフォールバック</span>`;
+  }
+}
+
+function switchNb04ToMock() {
+  nb04SetSourceActive("nb04-btn-mock");
+  NB04_DATA = NB04_MOCK;
+  document.getElementById("nb04-data-status").innerHTML =
+    `<span style="color:#d97706;font-weight:700">● モックデータ</span>` +
+    `<span style="color:#94a3b8"> — ハードコード値を使用</span>`;
+}
+
+// ── STATS ROW 更新 ────────────────────────────────────────────────────────
+function renderNb04StatsRow() {
+  const o = NB04_DATA.overall;
+  if (!o) return;
+  const elRec   = document.getElementById("nb04-stat-records");
+  const elMean  = document.getElementById("nb04-stat-mean");
+  const elStd   = document.getElementById("nb04-stat-std");
+  const elCalib = document.getElementById("nb04-stat-calib");
+  if (elRec)   elRec.textContent   = `${(o.n_valid||0).toLocaleString()} valid / ${(o.n_oor||0).toLocaleString()} oor`;
+  if (elMean)  elMean.textContent  = (o.mean||0).toFixed(2);
+  if (elStd)   elStd.textContent   = (o.std||0).toFixed(2);
+  if (elCalib) elCalib.textContent = o.rank2_2nd_mean != null ? `${o.rank2_2nd_mean.toFixed(2)} ≈ 50 ✓` : "—";
+}
+
+// ── 箱ひげ図ヘルパー ──────────────────────────────────────────────────────
+function _nb04BoxTraces(boxes, color, fillcolor) {
+  return boxes.map(b => ({
+    type: "box",
+    name: `${b.label}<br><span style='font-size:9px'>n=${b.n.toLocaleString()}</span>`,
+    q1: [b.q1], median: [b.median], q3: [b.q3],
+    lowerfence: [b.lo], upperfence: [b.hi],
+    mean: [b.mean],
+    x: [b.label],
+    boxpoints: "outliers",
+    y: b.outliers || [],
+    marker: {color, size: 3, opacity: 0.5},
+    line: {color, width: 1.8},
+    fillcolor,
+    whiskerwidth: 0.5,
+    showlegend: false,
+  }));
+}
+
+function _nb04RefLine(boxes, label) {
+  return {
+    type: "scatter", mode: "lines",
+    x: boxes.map(b => b.label),
+    y: boxes.map(() => 50),
+    name: label || "基準値 50",
+    line: {color: "#dc2626", dash: "dash", width: 2},
+    showlegend: true,
+  };
+}
+
+// ── ① 全馬 box plot ───────────────────────────────────────────────────────
+function renderNb04BoxPlot() {
+  const el = document.getElementById("chart-nb04-box");
+  if (!el || typeof Plotly === 'undefined') return;
+  const boxes = NB04_DATA.class_boxes || [];
+  if (!boxes.length) { el.innerHTML = '<div style="padding:32px;text-align:center;color:#94a3b8">データなし</div>'; return; }
+  Plotly.purge(el);
+  Plotly.newPlot(el, [..._nb04BoxTraces(boxes,"#db2777","#fce7f3"), _nb04RefLine(boxes,"基準値 50 (1勝2着)")], {
+    margin:{t:16, b:64, l:56, r:16},
+    yaxis:{title:"megu_index", zeroline:false, gridcolor:"#f1f5f9"},
+    xaxis:{title:"クラスランク"},
+    legend:{orientation:"h", y:-0.22},
+    plot_bgcolor:"#fff", paper_bgcolor:"#fff"
+  }, {responsive:true, displayModeBar:false});
+}
+
+// ── ② 2着馬 box plot ──────────────────────────────────────────────────────
+function renderNb04_2ndBoxPlot() {
+  const el = document.getElementById("chart-nb04-2nd");
+  if (!el || typeof Plotly === 'undefined') return;
+  const boxes = NB04_DATA.class_2nd_boxes || [];
+  if (!boxes.length) { el.innerHTML = '<div style="padding:32px;text-align:center;color:#94a3b8">データなし</div>'; return; }
+  Plotly.purge(el);
+  Plotly.newPlot(el, [..._nb04BoxTraces(boxes,"#7c3aed","#ede9fe"), _nb04RefLine(boxes,"基準値 50 (各クラス2着馬相当)")], {
+    margin:{t:16, b:64, l:56, r:16},
+    yaxis:{title:"megu_index (2着馬)", zeroline:false, gridcolor:"#f1f5f9"},
+    xaxis:{title:"クラスランク"},
+    legend:{orientation:"h", y:-0.22},
+    plot_bgcolor:"#fff", paper_bgcolor:"#fff"
+  }, {responsive:true, displayModeBar:false});
+}
+
+// ── ③ キャリブレーション棒グラフ ──────────────────────────────────────────
+function renderNb04Calib() {
+  const el = document.getElementById("chart-nb04-calib");
+  if (!el || typeof Plotly === 'undefined') return;
+  const calib = NB04_DATA.calib || [];
+  if (!calib.length) { el.innerHTML = '<div style="padding:32px;text-align:center;color:#94a3b8">データなし</div>'; return; }
+  const labels = calib.map(c => `${c.pos}着 (n=${c.n})`);
+  const means  = calib.map(c => c.mean);
+  Plotly.purge(el);
+  Plotly.newPlot(el, [
+    {type:"bar", x:labels, y:means,
+     marker:{color: means.map(v => v >= 50 ? "#db2777" : "#94a3b8")},
+     name:"megu_index 平均",
+     text: means.map(v => v.toFixed(1)), textposition:"outside",
+     textfont:{size:11, color:"#1e293b"}},
+    {type:"scatter", mode:"lines",
+     x:labels, y:means.map(()=>50),
+     name:"基準値 50",
+     line:{color:"#dc2626", dash:"dash", width:2}}
+  ], {
+    margin:{t:16, b:64, l:56, r:16},
+    yaxis:{title:"megu_index 平均", range:[40,60], zeroline:false, gridcolor:"#f1f5f9"},
+    xaxis:{title:"1勝クラス 着順"},
+    legend:{orientation:"h", y:-0.25},
+    plot_bgcolor:"#fff", paper_bgcolor:"#fff", bargap:0.35
+  }, {responsive:true, displayModeBar:false});
+}
+
+// ── ④ サンプルレース表 ──────────────────────────────────────────────────
+function renderNb04SampleTable() {
+  const tbody = document.getElementById("nb04-sample-tbody");
+  if (!tbody) return;
+  const sample = NB04_DATA.sample_race || [];
+  const parLbl = document.getElementById("nb04-sample-par-label");
+  if (parLbl && sample.length) {
+    parLbl.textContent = `par_time = ${sample[0].par_time.toFixed(2)} sec`;
+  }
+  if (!sample.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">データなし</td></tr>'; return; }
+  tbody.innerHTML = sample.map(r => {
+    const mc = r.megu == null
+      ? `<td><span style="color:#94a3b8">—</span></td>`
+      : `<td><span class="megu-chip ${r.megu>=55?'megu-hi':r.megu<45?'megu-lo':''}">${r.megu.toFixed(1)}</span></td>`;
+    const sc = `<td><span class="${r.status==='valid'?'status-valid':'status-oor'}">${r.status}</span></td>`;
+    return `<tr>
+      <td style="font-weight:700">${r.pos}着</td>
+      <td style="font-family:monospace">${r.time_adj.toFixed(2)}</td>
+      <td style="font-family:monospace;color:${r.d_pace>0?'#dc2626':'#2563eb'}">${r.d_pace>0?'+':''}${r.d_pace.toFixed(3)}</td>
+      <td style="font-family:monospace;color:${r.d_track>0?'#dc2626':r.d_track<0?'#2563eb':'#94a3b8'}">${r.d_track.toFixed(3)}</td>
+      <td style="font-family:monospace;font-weight:600">${r.corr_time.toFixed(2)}</td>
+      <td style="font-family:monospace;color:var(--muted)">${r.par_time.toFixed(2)}</td>
+      ${mc}${sc}
+    </tr>`;
+  }).join("");
+}
+
+// ── 全グラフ一括描画 ──────────────────────────────────────────────────────
+function renderAllNb04() {
+  renderNb04StatsRow();
+  renderNb04SampleTable();
+  if (typeof Plotly !== 'undefined') {
+    renderNb04BoxPlot();
+    renderNb04_2ndBoxPlot();
+    renderNb04Calib();
+  }
+}
+
+// ── DETAILS TOGGLE ────────────────────────────────────────────────────────
+(function() {
+  const det = document.getElementById("det-nb04-viz");
+  if (!det) return;
+  let rendered = false;
+
+  function doRender() {
+    if (!det.open) return;
+    renderNb04SampleTable();
+    if (typeof Plotly !== 'undefined') {
+      renderNb04BoxPlot();
+      renderNb04_2ndBoxPlot();
+      renderNb04Calib();
+      rendered = true;
+    }
+  }
+
+  det.addEventListener("toggle", function() {
+    requestAnimationFrame(() => { requestAnimationFrame(() => { doRender(); }); });
+    setTimeout(() => { if (det.open) doRender(); }, 800);
+  });
+
+  document.addEventListener("DOMContentLoaded", () => {
+    if (det.open) { renderNb04SampleTable(); setTimeout(doRender, 200); }
+  });
+
+  window.addEventListener("resize", () => {
+    if (det.open && rendered && typeof Plotly !== 'undefined') {
+      renderNb04BoxPlot(); renderNb04_2ndBoxPlot(); renderNb04Calib();
+    }
+  });
+})();
+</script>
+
 <script>
 // ── PLOTLY CDN フォールバック ───────────────────────────────────────────────
 // ローカル ../static/plotly-2.35.2.min.js の読み込みに失敗した場合（WSL2 UNC パス、
@@ -1187,10 +2278,15 @@ window.addEventListener("resize", () => {
     if (det && det.open) {
       setTimeout(function() { wcoefRender(); }, 100);
     }
+    // NB-04 charts
+    var det04 = document.getElementById('det-nb04-viz');
+    if (det04 && det04.open) {
+      setTimeout(function() { renderNb04BoxPlot(); renderNb04Calib(); }, 150);
+    }
   };
   s.onerror = function() {
     console.error('[plotly-fallback] CDN 読み込みも失敗しました');
-    ["chart-wcoef-bar", "chart-wcoef-delta"].forEach(function(id) {
+    ["chart-wcoef-bar", "chart-wcoef-delta", "chart-nb04-box", "chart-nb04-2nd", "chart-nb04-calib"].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.innerHTML = '<div style="padding:24px;text-align:center;color:#dc2626;font-size:.83rem">'
         + 'Plotly の読み込みに失敗しました（ローカル + CDN）。<br>'

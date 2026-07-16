@@ -1,5 +1,5 @@
 # AREA-06 — データ管理要件（GCS パス設計 SSoT, ETL パイプライン, Feature Store, Redis TTL 設計）
-**Status**: FINAL | **Last Updated**: 2026-07-06 | **Consolidates**: DEC-001（統合済み）, TASK-055（GCSバケット名更新・モデリング仕様統合）, DEC-009（モデル保持ポリシー）, DEC-015（特徴量スキーマ正規定義）
+**Status**: FINAL | **Last Updated**: 2026-07-16 | **Consolidates**: DEC-001（統合済み）, TASK-055（GCSバケット名更新・モデリング仕様統合）, DEC-009（モデル保持ポリシー）, DEC-015（特徴量スキーマ正規定義）
 
 ---
 
@@ -407,7 +407,7 @@ Feature Store API 呼び出し時は必ず `get_snapshot(race_id, as_of=race_id)
 ## 7. PostgreSQL データベース スキーマ定義（データディクショナリ）
 
 **対象 DB**: `keiba_db_stg`（keiba_db_dev / keiba_db_prod も同一スキーマ。Alembic で管理）  
-**テーブル総数**: 25（`alembic_version` 除く）  
+**テーブル総数**: 26（`alembic_version` 除く）  
 **SSoT**: `src/db/models.py` + `alembic/versions/`
 
 > 表記ルール: **PK** = 主キー / **FK→X.Y** = 外部キー（X テーブルの Y 列参照） / **NN** = NOT NULL / `*` = デフォルト値あり
@@ -656,6 +656,10 @@ Feature Store API 呼び出し時は必ず `get_snapshot(race_id, as_of=race_id)
 | `adjusted_time_sec` | NUMERIC(6,2) | NN | 補正後タイム（秒） |
 | `megu_index` | NUMERIC(6,1) | NN | めぐ指数値（100 = par、1点 ≈ 0.1秒） |
 | `field_quality` | NUMERIC(14,0) | | フィールドクオリティ（FQ、円単位） |
+| `front_split_sec` | NUMERIC(5,2) | | 実測前半スプリット（秒）（migration 004） |
+| `split_point_m` | INTEGER | | スプリット計測距離（m）（migration 004） |
+| `tsi_raw` | NUMERIC(6,3) | | 馬場速度指数（TSI）の生値（migration 004） |
+| `computation_status` | VARCHAR(20) | | 算出ステータス（`valid` / `out_of_range` / `no_par`）（migration 005） |
 | `model_version` | VARCHAR(20) | NN, `*stg-v1` | モデルバージョン |
 | `computed_at` | TIMESTAMPTZ | `*now()` | 算出日時 |
 
@@ -674,10 +678,11 @@ Feature Store API 呼び出し時は必ず `get_snapshot(race_id, as_of=race_id)
 | `par_time_sec` | NUMERIC(6,2) | NN | 基準タイム（秒） |
 | `par_front_split_sec` | NUMERIC(5,2) | | 基準前半スプリット（秒） |
 | `sample_count` | INTEGER | NN | 集計サンプル数 |
+| `class_bucket` | VARCHAR(10) | NN, `*""` | クラスバケット（migration 006）。未勝利/1勝/... 等の区分 |
 | `model_version` | VARCHAR(20) | NN, `*stg-v1` | モデルバージョン |
 | `computed_at` | TIMESTAMPTZ | `*now()` | |
 
-> **UNIQUE**: `(distance, course, surface, track_condition, model_version)`
+> **UNIQUE**: `(distance, course, surface, track_condition, class_bucket, model_version)`（migration 006 で `class_bucket` を追加）
 
 #### `megu_regression_params` — OLS 回帰係数
 
@@ -692,6 +697,32 @@ Feature Store API 呼び出し時は必ず `get_snapshot(race_id, as_of=race_id)
 | `fitted_at` | TIMESTAMPTZ | `*now()` | 学習日時 |
 
 > **UNIQUE**: `(param_name, model_version)`
+
+#### `megu_delta_track` — 日 × 会場 × 馬場種別の馬場補正値（migration 007）
+
+NB-03 が算出した `delta_track_sec` を `date × venue × surface` のキーで保持する独立テーブル。  
+`megu_index.delta_track_sec`（per-horse 列）の導出元であり、馬場状態の時系列分析・開催間比較などの副次的分析に使用する。
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | INTEGER | PK, NN | |
+| `date` | DATE | NN | 開催日 |
+| `venue` | VARCHAR(10) | NN | 会場（例: 東京、阪神） |
+| `surface` | VARCHAR(10) | NN | 馬場種別（`芝` / `ダート`） |
+| `delta_track_sec` | NUMERIC(6,3) | NULL 可 | 馬場補正値（秒）。正=重馬場（タイム遅化）、負=軽馬場（タイム速化）。`is_fallback=true` のとき NULL |
+| `n_races` | INTEGER | NN | 算出に使用したレース数 |
+| `is_fallback` | BOOLEAN | NN, `*false` | `n_races < 3` のため補正値を 0 で代替したとき `true` |
+| `model_version` | VARCHAR(20) | NN, `*stg-v1` | モデルバージョン |
+| `computed_at` | TIMESTAMPTZ | `*now()` | 算出日時 |
+
+> **UNIQUE**: `(date, venue, surface, model_version)`  
+> **INDEX**: `(date, venue)` — 開催日 × 会場での時系列クエリ用
+
+**DB への保存**: `src/pipeline/megu_index/save_delta_track.py`  
+```bash
+python -m src.pipeline.megu_index.save_delta_track \
+    --parquet notebooks/megu_index/output/nb03/delta_track.parquet
+```
 
 ---
 
@@ -875,3 +906,7 @@ trainers
 | `001_initial` | Layer 1〜5 + スナップショット + 予測結果 + ユーザー基本テーブル |
 | `002_user_favorites_notifications` | user_favorites / notification_settings / notification_logs（F-12/F-09） |
 | `003_megu_index` | megu_index / megu_par_time / megu_regression_params（AREA-11） |
+| `004_megu_index_split_columns` | megu_index に `front_split_sec`, `split_point_m`, `tsi_raw` を追加 |
+| `005_megu_index_computation_status` | megu_index に `computation_status` を追加、`delta_track_sec` を NULL 許容に変更 |
+| `006_megu_par_class_bucket` | megu_par_time に `class_bucket` を追加、UNIQUE 制約を `class_bucket` 含む形に更新 |
+| `007_megu_delta_track` | megu_delta_track テーブルを新規追加（date × venue × surface の馬場補正値） |

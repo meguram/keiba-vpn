@@ -535,6 +535,46 @@ class MeguIndex(Base):
     )
 
 
+class MeguDeltaTrack(Base):
+    """日 × 会場 × 馬場種別 単位の馬場補正値テーブル。
+
+    NB-03 で算出した delta_track_sec（正=重馬場=タイム遅化、負=軽馬場=タイム速化）を
+    date × venue × surface のキーで保持する。
+    megu_index テーブルの per-horse delta_track_sec はこのテーブルから導出される。
+
+    副次的な分析用途:
+      - 馬場状態の時系列推移（開催期間中の悪化・回復）
+      - 会場別・季節別の馬場傾向比較
+      - 特定日の馬場が他の開催日と比較してどの程度速かったかのルックアップ
+    """
+    __tablename__ = "megu_delta_track"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    date: Mapped[datetime] = mapped_column(Date, nullable=False)
+    venue: Mapped[str] = mapped_column(String(10), nullable=False)
+    surface: Mapped[str] = mapped_column(String(10), nullable=False)     # '芝' or 'ダート'
+    delta_track_sec: Mapped[Optional[float]] = mapped_column(
+        Numeric(6, 3),
+        nullable=True,
+        comment="馬場補正値(秒)。正=重馬場(タイム遅化)、負=軽馬場(タイム速化)。n_races<3のときNULL",
+    )
+    n_races: Mapped[int] = mapped_column(
+        Integer, nullable=False,
+        comment="delta_track_sec 算出に使用したレース数",
+    )
+    is_fallback: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False,
+        comment="n_races < 3 のため delta_track_sec を 0 で代替したとき True",
+    )
+    model_version: Mapped[str] = mapped_column(String(20), nullable=False, default="stg-v1")
+    computed_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("date", "venue", "surface", "model_version", name="uq_megu_delta_track"),
+        Index("idx_megu_delta_track_date_venue", "date", "venue"),
+    )
+
+
 class MeguConditionTransfer(Base):
     """条件転換係数テーブル（距離バンド × 馬場種別 × 方向別）。
 
