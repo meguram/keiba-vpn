@@ -96,6 +96,27 @@ def include_date_in_monitor_summary(
     return True
 
 
+def date_has_at_least_one_jra_race(
+    date_compact: str,
+    raw_races: list[dict[str, Any]] | None,
+    meta: dict[str, Any] | None,
+) -> bool:
+    """
+    開催日セレクタ（めぐ指数ページ等）用: JRA レースが 1 件以上ある日のみ True。
+
+    no_race_scheduled プレースホルダ・JRA 0 件の日は False。
+    """
+    _ = date_compact  # API 互換のため引数は残す
+    meta = meta or {}
+    if meta.get("note") == "no_race_scheduled":
+        return False
+    jra = [
+        r for r in (raw_races or [])
+        if r.get("race_id") and is_jra_race_id(str(r["race_id"]))
+    ]
+    return len(jra) >= 1
+
+
 def include_date_in_data_viewer_race_list(
     date_compact: str,
     raw_races: list[dict[str, Any]] | None,

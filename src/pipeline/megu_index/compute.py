@@ -343,39 +343,90 @@ def _load_par_time(session, model_version: str | None = None) -> pd.DataFrame:
 # めぐ指数計算
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _enrich_flat_from_gcs_race_result(df: pd.DataFrame) -> pd.DataFrame:
-    """flat の distance=0 / surface 欠損を GCS race_result で補完。"""
+def _infer_distance_from_lap_times(lap_times_raw) -> int | None:
+    """ハロン数 × 200m で距離を推定（flat の distance 欠損時）。"""
+    lap_dict = _parse_lap_times(lap_times_raw, 9999)
+    if not lap_dict:
+        return None
+    dist = len(lap_dict) * 200
+    return dist if dist > 0 else None
+
+
+def _venue_distance_surface_lookup(df_ref: pd.DataFrame) -> dict[tuple[str, int], str]:
+    """同一年 flat の (venue, distance) → 最多 surface。"""
+    if df_ref.empty or "venue" not in df_ref.columns:
+        return {}
+    ref = df_ref.copy()
+    ref["distance"] = pd.to_numeric(ref.get("distance"), errors="coerce")
+    ref = ref[ref["surface"].isin(["芝", "ダート"]) & ref["distance"].notna() & (ref["distance"] > 0)]
+    if ref.empty:
+        return {}
+    counts = (
+        ref.groupby(["venue", "distance", "surface"], dropna=False)
+        .size()
+        .reset_index(name="n")
+    )
+    best = counts.sort_values("n", ascending=False).drop_duplicates(["venue", "distance"])
+    return {
+        (str(row["venue"]).strip(), int(row["distance"])): str(row["surface"])
+        for _, row in best.iterrows()
+        if str(row["venue"]).strip()
+    }
+
+
+def _enrich_flat_from_gcs_race_result(df: pd.DataFrame, df_ref: pd.DataFrame | None = None) -> pd.DataFrame:
+    """flat の distance=0 / surface 欠損を GCS race_result・lap 推定・参照 flat で補完。"""
     if df.empty or "race_id" not in df.columns:
         return df
 
     from src.utils.race_card_merge import load_merged_race_card
 
-    dist = pd.to_numeric(df.get("distance"), errors="coerce").fillna(0)
-    surf = df.get("surface")
-    bad_surf = surf.isna() if surf is not None else pd.Series(True, index=df.index)
-    if surf is not None:
-        bad_surf = bad_surf | ~surf.astype(str).isin(["芝", "ダート"])
-    need_ids = df.loc[(dist <= 0) | bad_surf, "race_id"].astype(str).unique()
-    if len(need_ids) == 0:
-        return df
-
     out = df.copy()
-    for race_id in need_ids:
-        card = load_merged_race_card(race_id)
-        if not card:
-            continue
+    out["distance"] = pd.to_numeric(out.get("distance"), errors="coerce").fillna(0)
+    surf = out.get("surface")
+    if surf is None:
+        out["surface"] = None
+    else:
+        out["surface"] = surf.where(surf.astype(str).isin(["芝", "ダート"]), None)
+
+    dist_bad = out["distance"] <= 0
+    surf_bad = out["surface"].isna()
+    if not (dist_bad | surf_bad).any():
+        return out
+
+    surface_lookup = _venue_distance_surface_lookup(df_ref if df_ref is not None else out)
+
+    for race_id in out.loc[dist_bad | surf_bad, "race_id"].astype(str).unique():
         mask = out["race_id"].astype(str) == race_id
-        card_dist = int(card.get("distance") or 0)
-        card_surf = card.get("surface")
-        if card_dist > 0:
-            out.loc[mask, "distance"] = card_dist
-        if card_surf in ("芝", "ダート"):
-            out.loc[mask, "surface"] = card_surf
-        for col in ("track_condition", "venue", "race_name", "grade", "race_class", "direction"):
-            if col in out.columns and card.get(col):
-                empty = out.loc[mask, col].isna() | (out.loc[mask, col].astype(str).str.strip() == "")
-                if empty.any():
-                    out.loc[mask & empty, col] = card[col]
+        card = load_merged_race_card(race_id)
+        if card:
+            card_dist = int(card.get("distance") or 0)
+            card_surf = card.get("surface")
+            if card_dist > 0:
+                out.loc[mask, "distance"] = card_dist
+            if card_surf in ("芝", "ダート"):
+                out.loc[mask, "surface"] = card_surf
+            for col in ("track_condition", "venue", "race_name", "grade", "race_class", "direction"):
+                if col in out.columns and card.get(col):
+                    empty = out.loc[mask, col].isna() | (out.loc[mask, col].astype(str).str.strip() == "")
+                    if empty.any():
+                        out.loc[mask & empty, col] = card[col]
+
+        if (out.loc[mask, "distance"] <= 0).any():
+            sample_laps = out.loc[mask, "lap_times"].dropna()
+            if not sample_laps.empty:
+                inferred = _infer_distance_from_lap_times(sample_laps.iloc[0])
+                if inferred:
+                    out.loc[mask, "distance"] = inferred
+
+        if out.loc[mask, "surface"].isna().any():
+            venue = str(out.loc[mask, "venue"].dropna().iloc[0]).strip() if out.loc[mask, "venue"].notna().any() else ""
+            dist_val = int(out.loc[mask, "distance"].max() or 0)
+            if venue and dist_val > 0:
+                guessed = surface_lookup.get((venue, dist_val))
+                if guessed in ("芝", "ダート"):
+                    out.loc[mask, "surface"] = guessed
+
     return out
 
 
@@ -384,6 +435,7 @@ def compute_for_dataframe(
     params: dict[str, float],
     df_par: pd.DataFrame,
     df_hist: Optional[pd.DataFrame] = None,
+    df_ref: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """
     race_result_flat DataFrame → めぐ指数 DataFrame を返す。
@@ -411,7 +463,7 @@ def compute_for_dataframe(
     tsi_mean    = params.get("tsi_mean",    0.0)
 
     df = df_flat.copy()
-    df = _enrich_flat_from_gcs_race_result(df)
+    df = _enrich_flat_from_gcs_race_result(df, df_ref=df_ref if df_ref is not None else df_flat)
     df = df[df["surface"].isin(["芝", "ダート"])]
     df["finish_time_sec"] = pd.to_numeric(df["time_sec"], errors="coerce")
     df = df[df["finish_time_sec"].notna() & (df["finish_time_sec"] > 0)]
@@ -486,7 +538,10 @@ def compute_for_dataframe(
         - df["delta_level_sec"]
     )
     df["megu_index"] = df.apply(
-        lambda r: adjusted_time_to_megu(r["adjusted_time_sec"], r["par_time_final"]),
+        lambda r: adjusted_time_to_megu(
+            r["adjusted_time_sec"] if pd.notna(r["adjusted_time_sec"]) else float("nan"),
+            r["par_time_final"] if pd.notna(r["par_time_final"]) else float("nan"),
+        ),
         axis=1,
     )
 
@@ -737,14 +792,16 @@ def compute_for_date(date_str: str, model_version: str = MODEL_VERSION) -> dict:
 
         if not params:
             logger.warning("回帰パラメータ未登録 – めぐ指数をスキップ")
-            return {"status": "skipped", "reason": "no_params", "date": date_str,
-                    "megu_valid": 0, "megu_oor": 0}
+            pol = {"reason": "no_params", "legitimate_skip": False, "action": "register_regression_params_v2"}
+            return {"status": "skipped", **pol, "date": date_str, "megu_valid": 0, "megu_oor": 0}
 
         df_flat = _load_result_flat(year)
         if df_flat.empty:
             logger.warning("race_result_flat が空: year=%d", year)
-            return {"status": "skipped", "reason": "no_flat_data", "date": date_str,
-                    "megu_valid": 0, "megu_oor": 0}
+            pol = {"reason": "no_flat_data", "legitimate_skip": False, "action": "export_race_result_flat"}
+            return {"status": "skipped", **pol, "date": date_str, "megu_valid": 0, "megu_oor": 0}
+
+        df_year_ref = df_flat.copy()
 
         # 日付フィルタ
         df_flat["date_str"] = pd.to_datetime(df_flat["date"], errors="coerce").dt.strftime("%Y-%m-%d")
@@ -754,8 +811,8 @@ def compute_for_date(date_str: str, model_version: str = MODEL_VERSION) -> dict:
             df_flat = _load_result_flat_for_date_from_db(date_str)
             if df_flat.empty:
                 logger.info("対象日のデータなし: %s", date_str)
-                return {"status": "skipped", "reason": "no_data_on_date", "date": date_str,
-                        "megu_valid": 0, "megu_oor": 0}
+                pol = {"reason": "no_data_on_date", "legitimate_skip": True, "action": "verify_meeting_or_scrape"}
+                return {"status": "skipped", **pol, "date": date_str, "megu_valid": 0, "megu_oor": 0}
             df_flat["date_str"] = date_str
         else:
             df_flat["date_str"] = date_str
@@ -776,13 +833,13 @@ def compute_for_date(date_str: str, model_version: str = MODEL_VERSION) -> dict:
 
         # 過去レース履歴（delta_level 用）: 当該日より前の全年データをロード
         df_hist = _load_history_flat_for_level(date_str)
-        df_result = compute_for_dataframe(df_flat, params, df_par, df_hist=df_hist)
+        df_result = compute_for_dataframe(df_flat, params, df_par, df_hist=df_hist, df_ref=df_year_ref)
         # valid + out_of_range 両方を保存（par_time があるものに限る）
         df_save = df_result[df_result["par_time_final"].notna()].copy()
 
         if df_save.empty:
-            return {"status": "skipped", "reason": "no_results_after_compute", "date": date_str,
-                    "megu_valid": 0, "megu_oor": 0}
+            pol = {"reason": "no_results_after_compute", "legitimate_skip": False, "action": "repair_flat_metadata"}
+            return {"status": "skipped", **pol, "date": date_str, "megu_valid": 0, "megu_oor": 0}
 
         with get_session() as session:
             saved = _upsert_batch(session, df_save, model_version=model_version)
@@ -847,8 +904,10 @@ def main() -> None:
 
     # データロード
     dfs = []
+    df_refs: list[pd.DataFrame] = []
     for yr in years:
-        df_flat = _load_result_flat(yr)
+        df_year_ref = _load_result_flat(yr)
+        df_flat = df_year_ref.copy() if not df_year_ref.empty else pd.DataFrame()
 
         # 対象を絞り込む
         if args.race_id:
@@ -889,12 +948,15 @@ def main() -> None:
             )
 
         dfs.append(df_flat)
+        if not df_year_ref.empty:
+            df_refs.append(df_year_ref)
 
     if not dfs:
         logger.warning("対象データなし")
         return
 
     df_all = pd.concat(dfs, ignore_index=True)
+    df_ref = pd.concat(df_refs, ignore_index=True) if df_refs else df_all
     logger.info("入力データ: %d 行", len(df_all))
 
     # 過去レース履歴（delta_level 用）
@@ -903,7 +965,7 @@ def main() -> None:
     df_hist = _load_history_flat_for_level(hist_cutoff)
 
     # めぐ指数計算
-    df_result = compute_for_dataframe(df_all, params, df_par, df_hist=df_hist)
+    df_result = compute_for_dataframe(df_all, params, df_par, df_hist=df_hist, df_ref=df_ref)
     # valid + out_of_range 両方保存（par_time があるもの）
     df_save = df_result[df_result["par_time_final"].notna()].copy()
     n_valid = int((df_save["computation_status"] == "valid").sum())

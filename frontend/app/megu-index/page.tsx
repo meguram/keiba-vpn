@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockMeguPredicted } from "@/lib/mock";
 
@@ -73,10 +73,17 @@ type RaceLevel = {
   field_avg_megu: number | null;
 };
 
+type ResultStats = {
+  finisher_count: number;
+  actual_megu_displayed_count: number;
+  megu_coverage_ok?: boolean;
+};
+
 type MeguPredicted = {
   race_id: string;
   race_info: RaceInfo;
   race_level?: RaceLevel;
+  result_stats?: ResultStats;
   model_version: string;
   index_note?: string;
   horses: MeguHorse[];
@@ -288,8 +295,33 @@ function winnerTimeSec(horses: MeguHorse[]): number | null {
   return times.length ? Math.min(...times) : null;
 }
 
+function isPastOrTodayYmd(ymd: string): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return parseYmd(ymd) <= today;
+}
+
 function predictedMegu(horse: MeguHorse): number | null {
   return horse.megu_final;
+}
+
+function isRaceFinisher(horse: MeguHorse): boolean {
+  return (
+    horse.finish_pos != null
+    && horse.finish_pos > 0
+    && horse.finish_time_sec != null
+    && horse.finish_time_sec > 0
+  );
+}
+
+/** 実測めぐ列に数値または「圏外」が表示されるか */
+function isActualMeguDisplayed(horse: MeguHorse): boolean {
+  if (horse.actual_megu != null) return true;
+  return horse.actual_status === "valid" || horse.actual_status === "out_of_range";
+}
+
+function topMeguScore(horse: MeguHorse): number | null {
+  return predictedMegu(horse) ?? horse.actual_megu;
 }
 
 function fmtMeguMargin(sec: number | null | undefined): string {
@@ -608,7 +640,9 @@ function RaceCard({
   const surface = race.surface ?? ri?.surface ?? null;
   const winSec = winnerTimeSec(horses);
   const predCount = horses.filter(h => h.megu_final != null).length;
-  const actualCount = horses.filter(h => h.actual_megu != null).length;
+  const actualCount = horses.filter(h => isActualMeguDisplayed(h)).length;
+  const finisherCount = data?.result_stats?.finisher_count ?? horses.filter(isRaceFinisher).length;
+  const meguCoverageOk = data?.result_stats?.megu_coverage_ok ?? (finisherCount === 0 || finisherCount === actualCount);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -658,8 +692,8 @@ function RaceCard({
 
   const topHorse = horses.length > 0
     ? [...horses].sort((a, b) => {
-        const va = predictedMegu(a) ?? -999;
-        const vb = predictedMegu(b) ?? -999;
+        const va = topMeguScore(a) ?? -999;
+        const vb = topMeguScore(b) ?? -999;
         return vb - va;
       })[0]
     : null;
@@ -688,17 +722,27 @@ function RaceCard({
             {gradeChip(ri?.grade ?? race.grade)}
           </span>
           {raceLevel && <RaceLevelBadge level={raceLevel} />}
-          {topHorse && (
+          {topHorse && topMeguScore(topHorse) != null && (
             <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "rgba(34,197,94,0.10)", color: "#22c55e", marginLeft: 4 }}>
               Top: {topHorse.horse_name ?? "—"}{" "}
-              {(predictedMegu(topHorse) ?? 0).toFixed(1)}
+              {(topMeguScore(topHorse) ?? 0).toFixed(1)}
             </span>
           )}
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
             {data && horses.length > 0 && (
-              <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 3, background: "rgba(34,197,94,0.12)", color: "var(--ok)" }}>
-                {horses.length}頭 ／ 想定{predCount} 実測{actualCount}
+              <span
+                title={`入着${finisherCount}頭 / 実測めぐ表示${actualCount}頭（圏外含む）`}
+                style={{
+                  fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 3,
+                  background: meguCoverageOk ? "rgba(34,197,94,0.12)" : "rgba(251,146,60,0.12)",
+                  color: meguCoverageOk ? "var(--ok)" : "#fb923c",
+                }}
+              >
+                入着{finisherCount} ／ 実測{actualCount}{predCount > 0 ? ` 想定${predCount}` : ""}
               </span>
+            )}
+            {loading && !data && (
+              <span style={{ fontSize: 10, color: "var(--text-dim)" }}>取得中…</span>
             )}
             <Link href={`/race/${race.race_id}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: "var(--accent)", textDecoration: "none", border: "1px solid rgba(59,130,246,0.3)", padding: "3px 8px", borderRadius: 4 }}>
               詳細 →
@@ -759,9 +803,19 @@ function RaceCard({
           {data && horses.length === 0 && (
             <p style={{ padding: "14px 18px", fontSize: 12, color: "var(--text-dim)" }}>出走馬のデータがありません。</p>
           )}
+          {data && horses.length > 0 && !meguCoverageOk && (
+            <p style={{ padding: "8px 18px", fontSize: 11, color: "#fb923c", background: "rgba(251,146,60,0.08)" }}>
+              入着{finisherCount}頭に対し実測めぐ表示が{actualCount}頭です（未計算またはデータ欠損）。
+            </p>
+          )}
           {data && horses.length > 0 && predCount === 0 && actualCount === 0 && (
             <p style={{ padding: "10px 18px", fontSize: 11, color: "var(--text-dim)", background: "rgba(107,125,149,0.06)" }}>
-              このレースは出走歴のない馬が多く、めぐ指数を算出できませんでした（パータイム・履歴不足）。
+              このレースは実測めぐ指数が未計算です（surface/distance 欠損・パータイム不足など）。
+            </p>
+          )}
+          {data && horses.length > 0 && predCount === 0 && actualCount > 0 && (
+            <p style={{ padding: "8px 18px", fontSize: 11, color: "var(--text-dim)", background: "rgba(59,130,246,0.06)" }}>
+              実測めぐ {actualCount}頭（想定めぐは履歴不足等で未表示の場合があります）。
             </p>
           )}
           {data && horses.length > 0 && (
@@ -812,6 +866,14 @@ export default function MeguIndexPage() {
   const [loadingRaces, setLoadingRaces] = useState(false);
   const [racesError, setRacesError] = useState("");
 
+  const selectedDateRef = useRef("");
+  const meguLoadGenRef = useRef(0);
+  const meguLoadedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    selectedDateRef.current = selectedDate;
+  }, [selectedDate]);
+
   useEffect(() => {
     if (USE_MOCK) {
       const list = getMockRaceDates();
@@ -825,7 +887,7 @@ export default function MeguIndexPage() {
         const [resMegu, resFast, resFull] = await Promise.all([
           fetch("/api/megu-index-dates", { cache: "no-store" }),
           fetch("/api/scrape-dates?picker_past_days=120", { cache: "no-store" }),
-          fetch("/api/scrape-dates", { cache: "no-store" }),
+          fetch("/api/scrape-dates?filter=meeting", { cache: "no-store" }),
         ]);
         const dMegu = resMegu.ok ? await resMegu.json() : {};
         const dFast = resFast.ok ? await resFast.json() : {};
@@ -833,10 +895,16 @@ export default function MeguIndexPage() {
         const megu: string[] = Array.isArray(dMegu?.dates) ? dMegu.dates : [];
         const fast: string[] = Array.isArray(dFast?.dates) ? dFast.dates : [];
         const full: string[] = Array.isArray(dFull?.dates) ? dFull.dates : [];
-        const list = [...new Set([...megu, ...full, ...fast])].sort().reverse();
+        const merged = [...new Set([...megu, ...full, ...fast])]
+          .filter(d => /^\d{8}$/.test(d) && isPastOrTodayYmd(d))
+          .sort()
+          .reverse();
+        const list = merged.length
+          ? merged
+          : [...new Set([...megu, ...full, ...fast])].filter(d => /^\d{8}$/.test(d)).sort().reverse();
         if (!list.length) throw new Error("開催日データが空です（API・FastAPI を確認してください）");
         setDates(list);
-        setSelectedDate(pickDefaultMeguDate(list, megu));
+        setSelectedDate(pickDefaultMeguDate(list, megu.filter(isPastOrTodayYmd)));
       } catch (e: unknown) {
         setDatesError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -847,13 +915,12 @@ export default function MeguIndexPage() {
 
   const loadRaces = useCallback(async (date: string) => {
     if (!date) return;
+    const loadGen = ++meguLoadGenRef.current;
     setLoadingRaces(true);
     setRacesError("");
-    setRaces([]);
-    setMeguMap({});
     try {
       if (USE_MOCK) {
-        setRaces(MOCK_WEEKLY_RACES.map(r => ({
+        const list = MOCK_WEEKLY_RACES.map(r => ({
           race_id: r.race_id,
           race_name: r.race_name,
           venue: r.venue,
@@ -861,18 +928,31 @@ export default function MeguIndexPage() {
           distance: r.distance,
           surface: r.surface,
           grade: r.grade,
-        })));
+        }));
+        if (loadGen !== meguLoadGenRef.current || selectedDateRef.current !== date) return;
+        meguLoadedRef.current = new Set();
+        setMeguMap({});
+        setLoadingMegu({});
+        setRaces(list);
       } else {
-        const res = await fetch(`/api/race-list/${date}`);
+        const res = await fetch(`/api/race-list/${date}`, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const d = await res.json();
-        const list = d.races ?? d ?? [];
-        setRaces(Array.isArray(list) ? list : []);
+        const list = Array.isArray(d.races ?? d) ? (d.races ?? d) : [];
+        if (loadGen !== meguLoadGenRef.current || selectedDateRef.current !== date) return;
+        meguLoadedRef.current = new Set();
+        setMeguMap({});
+        setLoadingMegu({});
+        setRaces(list);
       }
     } catch (e: unknown) {
+      if (loadGen !== meguLoadGenRef.current || selectedDateRef.current !== date) return;
       setRacesError(e instanceof Error ? e.message : String(e));
+      setRaces([]);
     } finally {
-      setLoadingRaces(false);
+      if (loadGen === meguLoadGenRef.current && selectedDateRef.current === date) {
+        setLoadingRaces(false);
+      }
     }
   }, []);
 
@@ -880,48 +960,82 @@ export default function MeguIndexPage() {
     if (selectedDate) loadRaces(selectedDate);
   }, [selectedDate, loadRaces]);
 
-  const loadMegu = useCallback(async (raceId: string) => {
+  const loadMegu = useCallback(async (raceId: string, date: string, loadGen: number) => {
+    if (meguLoadedRef.current.has(raceId)) return;
     setLoadingMegu(prev => ({ ...prev, [raceId]: true }));
     try {
       if (USE_MOCK) {
         await new Promise(r => setTimeout(r, 300));
+        if (loadGen !== meguLoadGenRef.current || selectedDateRef.current !== date) return;
         const d = getMockMeguPredicted(raceId) as MeguPredicted;
+        meguLoadedRef.current.add(raceId);
         setMeguMap(prev => ({ ...prev, [raceId]: d }));
         return;
       }
-      const res = await fetch(`/api/v1/races/${raceId}/megu-index-predicted`);
+      const res = await fetch(`/api/v1/races/${raceId}/megu-index-predicted`, { cache: "no-store" });
+      if (loadGen !== meguLoadGenRef.current || selectedDateRef.current !== date) return;
       const d: MeguPredicted = res.ok ? await res.json() : {
         race_id: raceId,
         race_info: { race_name: null, venue: null, surface: null, distance: null, dist_band: null, track_condition: null, grade: null, race_date: null },
         model_version: "",
         horses: [],
       };
+      meguLoadedRef.current.add(raceId);
       setMeguMap(prev => ({ ...prev, [raceId]: d }));
     } catch {
-      setMeguMap(prev => ({ ...prev, [raceId]: null }));
+      if (loadGen !== meguLoadGenRef.current || selectedDateRef.current !== date) return;
+      // 失敗時は null にせず再試行可能に（loaded セットに入れない）
     } finally {
-      setLoadingMegu(prev => ({ ...prev, [raceId]: false }));
+      if (loadGen === meguLoadGenRef.current && selectedDateRef.current === date) {
+        setLoadingMegu(prev => ({ ...prev, [raceId]: false }));
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (!races.length || loadingRaces) return;
-    for (const race of races) {
-      if (!meguMap[race.race_id] && !loadingMegu[race.race_id]) {
-        void loadMegu(race.race_id);
+    if (!races.length || loadingRaces || !selectedDate) return;
+    const loadGen = meguLoadGenRef.current;
+    const date = selectedDate;
+    let cancelled = false;
+    const pending = races.map(r => r.race_id).filter(id => !meguLoadedRef.current.has(id));
+    const concurrency = 6;
+
+    async function worker() {
+      while (!cancelled) {
+        const raceId = pending.shift();
+        if (!raceId) break;
+        if (meguLoadedRef.current.has(raceId)) continue;
+        await loadMegu(raceId, date, loadGen);
       }
     }
-  }, [races, loadingRaces, loadMegu, meguMap, loadingMegu]);
+
+    void Promise.all(Array.from({ length: Math.min(concurrency, pending.length || 1) }, worker));
+    return () => { cancelled = true; };
+  }, [races, loadingRaces, selectedDate, loadMegu]);
 
   async function loadAll() {
+    const loadGen = meguLoadGenRef.current;
+    const date = selectedDate;
     for (const race of races) {
-      if (meguMap[race.race_id]) continue;
-      await loadMegu(race.race_id);
+      if (meguLoadedRef.current.has(race.race_id)) continue;
+      await loadMegu(race.race_id, date, loadGen);
     }
   }
 
-  const loadedCount = Object.keys(meguMap).length;
+  const handleLoadMegu = useCallback((raceId: string) => {
+    if (!selectedDate) return;
+    void loadMegu(raceId, selectedDate, meguLoadGenRef.current);
+  }, [selectedDate, loadMegu]);
+
+  const loadedCount = races.filter(r => meguMap[r.race_id] != null).length;
   const dataCount = Object.values(meguMap).filter(m => (m?.horses?.length ?? 0) > 0).length;
+  const coverageOkCount = Object.values(meguMap).filter(m =>
+    m?.result_stats?.megu_coverage_ok ?? (
+      (m?.horses ?? []).filter(isRaceFinisher).length === 0
+      || (m?.horses ?? []).filter(isActualMeguDisplayed).length
+        === (m?.horses ?? []).filter(isRaceFinisher).length
+    )
+  ).length;
   const changedCount = Object.values(meguMap).flatMap(m => m?.horses ?? []).filter(h => h.condition_change.type !== "none").length;
 
   const SEL: React.CSSProperties = {
@@ -993,6 +1107,11 @@ export default function MeguIndexPage() {
                   データあり: {dataCount}R
                 </span>
               )}
+              {dataCount > 0 && coverageOkCount < dataCount && (
+                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, background: "rgba(251,146,60,0.12)", color: "#fb923c" }}>
+                  実測不足: {dataCount - coverageOkCount}R
+                </span>
+              )}
               {changedCount > 0 && (
                 <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, background: "rgba(251,146,60,0.12)", color: "#fb923c" }}>
                   ⚠ 条件代わり: {changedCount}頭
@@ -1052,7 +1171,7 @@ export default function MeguIndexPage() {
                 race={race}
                 data={meguMap[race.race_id] ?? null}
                 loading={loadingMegu[race.race_id] ?? false}
-                onLoad={loadMegu}
+                onLoad={handleLoadMegu}
                 defaultExpanded={idx === 0}
               />
             ))}

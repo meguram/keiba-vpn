@@ -2005,21 +2005,25 @@ async def get_date_race_matrix(date: str = ""):
 
     def _build():
         from src.scraper.date_coverage import TRACK_CATEGORIES, load_date_coverage
+        from src.utils.race_list_for_date import load_jra_race_ids_for_opening_date
 
         cov = load_date_coverage(date)
-        if cov:
-            race_ids = cov.get("race_ids") or []
+        race_ids = load_jra_race_ids_for_opening_date(date)
+        if cov and race_ids:
+            updated_at = cov.get("updated_at", "")
+        elif cov:
             updated_at = cov.get("updated_at", "")
         else:
-            # フォールバック: race_lists から取得
+            updated_at = ""
+        if not race_ids:
+            # フォールバック: race_lists ファイル直読み（非JRAフィルタ前）
             from pathlib import Path
             import json
             rl_path = Path("data/page_reference/race_lists") / f"{date}.json"
-            if not rl_path.exists():
-                return {"error": f"{date} の race_list が見つかりません", "race_ids": []}
-            rl = json.loads(rl_path.read_text(encoding="utf-8"))
-            race_ids = [r["race_id"] for r in rl.get("races", []) if r.get("race_id")]
-            updated_at = ""
+            if rl_path.exists():
+                rl = json.loads(rl_path.read_text(encoding="utf-8"))
+                race_ids = [r["race_id"] for r in rl.get("races", []) if r.get("race_id")]
+            updated_at = (cov or {}).get("updated_at", "")
 
         if not race_ids:
             return {"date": date, "race_ids": [], "categories": TRACK_CATEGORIES,
@@ -2086,6 +2090,177 @@ async def get_date_race_matrix(date: str = ""):
 
     result = await asyncio.to_thread(_build)
     return JSONResponse(result)
+
+
+@app.get("/api/monitor/context", response_class=JSONResponse)
+async def get_monitor_context():
+    """モニター UI 向け: 環境・GCS/DB 接続・集計モード。"""
+    from src.api.monitor_coverage import monitor_context
+
+    storage = _get_storage()
+    db_ok = False
+    try:
+        from src.db.session import get_session, init_engine
+
+        init_engine()
+        with get_session() as sess:
+            from sqlalchemy import text as sa_text
+            sess.execute(sa_text("SELECT 1"))
+            db_ok = True
+    except Exception:
+        pass
+
+    return JSONResponse(
+        monitor_context(gcs_enabled=storage.gcs_enabled, db_available=db_ok)
+    )
+
+
+@app.get("/api/date-raw-matrix", response_class=JSONResponse)
+async def get_date_raw_matrix(date: str = "", view: str = "stg"):
+    """
+    Raw データカバレッジ: GCS 存在 + PostgreSQL（STG）または要件+ローカル（DEV）。
+    GCS は batch_list_blobs のみ（JSON download なし）。
+    """
+    if not date or not (date.isdigit() and len(date) == 8):
+        return JSONResponse({"error": "日付(YYYYMMDD)を指定してください"}, status_code=400)
+
+    view_norm = (view or "stg").strip().lower()
+    if view_norm not in ("dev", "stg"):
+        return JSONResponse({"error": "view は dev または stg"}, status_code=400)
+
+    def _build():
+        from src.api.monitor_coverage import build_raw_matrix
+
+        storage = _get_storage()
+        return build_raw_matrix(date, view=view_norm, storage=storage)
+
+    return JSONResponse(await asyncio.to_thread(_build))
+
+
+@app.get("/api/date-calculated-matrix", response_class=JSONResponse)
+async def get_date_calculated_matrix(date: str = "", view: str = "stg"):
+    """
+    Calculated データカバレッジ: megu_index / flat parquet（PG + ローカル、GCS 不使用）。
+    """
+    if not date or not (date.isdigit() and len(date) == 8):
+        return JSONResponse({"error": "日付(YYYYMMDD)を指定してください"}, status_code=400)
+
+    view_norm = (view or "stg").strip().lower()
+    if view_norm not in ("dev", "stg"):
+        return JSONResponse({"error": "view は dev または stg"}, status_code=400)
+
+    def _build():
+        from src.api.monitor_coverage import build_calculated_matrix
+
+        return build_calculated_matrix(date, view=view_norm)
+
+    return JSONResponse(await asyncio.to_thread(_build))
+
+
+class QualityCheckEnqueueBody(BaseModel):
+    date: str
+    check_type: str
+
+
+@app.post("/api/quality-check/enqueue", response_class=JSONResponse)
+async def post_quality_check_enqueue(body: QualityCheckEnqueueBody):
+    from src.api.quality_check_queue import enqueue
+
+    try:
+        result = await asyncio.to_thread(enqueue, body.date, body.check_type)
+        return JSONResponse(result)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.get("/api/quality-check/jobs", response_class=JSONResponse)
+async def get_quality_check_jobs():
+    from src.api.quality_check_queue import list_jobs
+
+    return JSONResponse({"jobs": await asyncio.to_thread(list_jobs)})
+
+
+@app.get("/api/quality-check/health", response_class=JSONResponse)
+async def get_quality_check_health(date: str = ""):
+    if not date or not (date.isdigit() and len(date) == 8):
+        return JSONResponse({"error": "date は YYYYMMDD"}, status_code=400)
+
+    def _load():
+        from src.api.quality_health import get_health_view
+
+        return get_health_view(date)
+
+    return JSONResponse(await asyncio.to_thread(_load))
+
+
+@app.get("/api/monitor/opening-date-info", response_class=JSONResponse)
+async def get_opening_date_info(date: str = ""):
+    """開催日種別（非開催=対象外ラベル用）。"""
+    if not date or not (date.isdigit() and len(date) == 8):
+        return JSONResponse({"error": "date は YYYYMMDD"}, status_code=400)
+
+    def _load():
+        from src.utils.race_list_for_date import opening_date_display
+
+        return opening_date_display(date)
+
+    return JSONResponse(await asyncio.to_thread(_load))
+
+
+class QualityRemediateBody(BaseModel):
+    date: str
+    dry_run: bool = False
+    force: bool = False
+
+
+@app.post("/api/quality-check/remediate", response_class=JSONResponse)
+async def post_quality_check_remediate(body: QualityRemediateBody):
+    if not body.date or not (body.date.isdigit() and len(body.date) == 8):
+        return JSONResponse({"error": "date は YYYYMMDD"}, status_code=400)
+
+    def _run():
+        from src.api.quality_auto_remediation import remediate_date
+
+        return remediate_date(
+            body.date,
+            dry_run=body.dry_run,
+            force=body.force,
+            kick=not body.dry_run,
+        )
+
+    try:
+        return JSONResponse(await asyncio.to_thread(_run))
+    except Exception as e:
+        logger.exception("quality remediate failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/quality-check/calendar", response_class=JSONResponse)
+async def get_quality_check_calendar(year: str = ""):
+    def _load():
+        from src.api.quality_health import load_year_health
+
+        y = int(year) if year and year.isdigit() else datetime.now().year
+        health = load_year_health(y)
+        from src.utils.race_list_for_date import opening_date_display
+
+        dates_out = []
+        for dt, row in sorted(health.items()):
+            od = opening_date_display(dt)
+            dates_out.append({
+                "date": dt,
+                "overall_status": row.get("overall_status"),
+                "overall_checked_at": row.get("overall_checked_at"),
+                "checks": row.get("checks"),
+                "opening_kind": od["kind"],
+                "opening_label": od["label"],
+            })
+        return {
+            "year": y,
+            "dates": dates_out,
+        }
+
+    return JSONResponse(await asyncio.to_thread(_load))
 
 
 # カテゴリ → スクレイピング対象タスク名のマッピング
@@ -2311,11 +2486,15 @@ def _cached_race_list_stems(storage) -> list[str]:
 async def get_scraped_dates(
     meeting_only: str | None = Query(None),
     raw_keys: str | None = Query(None),
+    filter_mode: str | None = Query(
+        None,
+        description="meeting=JRA1件以上, data_viewer=厳しめ（既定）",
+    ),
     picker_past_days: int | None = Query(
         None,
         ge=1,
         le=150,
-        description="UI 用: 直近 N 日は data/page_reference/race_lists のファイル存在だけ確認（全件 glob しない）",
+        description="UI 用: 直近 N 日は race_lists を日付ごとに読み JRA≥1 の日のみ（全件 glob しない）",
     ),
 ):
     """
@@ -2341,28 +2520,31 @@ async def get_scraped_dates(
             return JSONResponse(pd["data"], headers=_NO_STORE_HEADERS)
 
         def _picker_dates_only():
-            """直近 N 日を 1 日ずつ path.exists() のみ（race_lists 全件 glob / list_keys を避ける）。"""
+            """直近 N 日を 1 日ずつ race_lists を読み、JRA レース≥1 の日のみ返す。"""
             from datetime import datetime, timedelta
-            from pathlib import Path
 
-            from src.config.data_paths import RACE_LISTS_DIR
+            from src.scraper.monitor_future_eligible import date_has_at_least_one_jra_race
 
             storage = _get_storage()
             today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            race_dir = RACE_LISTS_DIR
             n = int(picker_past_days)
             out: list[str] = []
             for i in range(1, n + 1):
                 d = today - timedelta(days=i)
                 stem = d.strftime("%Y%m%d")
-                if (race_dir / f"{stem}.json").is_file():
+                rl = storage.load("race_lists", stem)
+                if not rl:
+                    continue
+                raw = rl.get("races") or []
+                meta = rl.get("_meta") if isinstance(rl, dict) else None
+                if date_has_at_least_one_jra_race(stem, raw, meta):
                     out.append(stem)
             return {
                 "dates": out,
                 "gcs_enabled": storage.gcs_enabled,
                 "picker_past_days": n,
                 "picker_fast": True,
-                "picker_source": "local_exists",
+                "picker_source": "race_lists_jra_ge1",
             }
 
         result = await asyncio.to_thread(_picker_dates_only)
@@ -2394,13 +2576,22 @@ async def get_scraped_dates(
 
         from concurrent.futures import ThreadPoolExecutor
 
-        from src.scraper.monitor_future_eligible import include_date_in_data_viewer_race_list
+        from src.scraper.monitor_future_eligible import (
+            date_has_at_least_one_jra_race,
+            include_date_in_data_viewer_race_list,
+        )
+
+        use_meeting_filter = str(filter_mode or "").strip().lower() == "meeting"
 
         def _check_one(d: str) -> tuple[str, bool]:
             rl = storage.load("race_lists", d)
             raw = (rl.get("races") or []) if rl else []
             meta = rl.get("_meta") if isinstance(rl, dict) else None
-            return (d, include_date_in_data_viewer_race_list(d, raw, meta))
+            if use_meeting_filter:
+                ok = date_has_at_least_one_jra_race(d, raw, meta)
+            else:
+                ok = include_date_in_data_viewer_race_list(d, raw, meta)
+            return (d, ok)
 
         with ThreadPoolExecutor(max_workers=16) as pool:
             results = list(pool.map(_check_one, keys))
@@ -2410,7 +2601,7 @@ async def get_scraped_dates(
             "dates": dates,
             "gcs_enabled": storage.gcs_enabled,
             "raceday_filtered": True,
-            "filter": "data_viewer_raceday",
+            "filter": "meeting_jra_ge1" if use_meeting_filter else "data_viewer_raceday",
         }
 
     result = await asyncio.to_thread(_load)
@@ -2603,6 +2794,7 @@ async def get_megu_index_dates(limit: int = Query(120, ge=1, le=365)):
                     WHERE mi.model_version = 'v2'
                       AND mi.computation_status = 'valid'
                       AND r.race_date IS NOT NULL
+                      AND r.race_date <= CURRENT_DATE
                     GROUP BY r.race_date
                     HAVING COUNT(DISTINCT mi.race_id) >= 3
                     ORDER BY r.race_date DESC
@@ -2828,6 +3020,8 @@ async def get_coverage_calendar(year: str = ""):
             local_cov = load_year_coverage(y)
 
             if local_cov:
+                from src.utils.race_list_for_date import OPENING_KIND_LABELS, opening_date_kind
+
                 # ── ローカルインデックスから読む ──────────────────────────
                 for dt, cov in sorted(local_cov.items()):
                     total = cov.get("total_races", 0)
@@ -2835,12 +3029,15 @@ async def get_coverage_calendar(year: str = ""):
                     cats = TRACK_CATEGORIES
                     vals = [per_cat.get(c, 0) for c in cats if total > 0]
                     pct = round(sum(v / total * 100 for v in vals) / len(cats), 1) if (vals and total) else 0.0
+                    kind = "meeting" if total > 0 else opening_date_kind(dt)
                     result_dates.append({
                         "date": dt,
                         "total_races": total,
                         "per_cat": {c: per_cat.get(c, 0) for c in cats},
                         "pct": pct,
                         "source": "local",
+                        "opening_kind": kind,
+                        "opening_label": OPENING_KIND_LABELS.get(kind, kind),
                     })
                 sources_used.add("local_index")
             else:
@@ -2849,18 +3046,24 @@ async def get_coverage_calendar(year: str = ""):
                 all_dates = summary.get("dates") or []
                 year_str = str(y)
                 cats_fallback = _SUMMARY_SOURCES
+                from src.utils.race_list_for_date import OPENING_KIND_LABELS, opening_date_kind
+
                 for row in all_dates:
                     dt = row.get("date", "")
                     if not dt.startswith(year_str):
                         continue
                     prog = row.get("progress") or {}
                     per_cat = prog.get("per_cat") or {}
+                    total = row.get("total_races", 0)
+                    kind = "meeting" if total > 0 else opening_date_kind(dt)
                     result_dates.append({
                         "date": dt,
-                        "total_races": row.get("total_races", 0),
+                        "total_races": total,
                         "per_cat": {c: per_cat.get(c, 0) for c in cats_fallback},
                         "pct": prog.get("pct", 0),
                         "source": "cache",
+                        "opening_kind": kind,
+                        "opening_label": OPENING_KIND_LABELS.get(kind, kind),
                     })
                 sources_used.add("gcs_cache")
 

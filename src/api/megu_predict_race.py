@@ -21,6 +21,7 @@ from src.utils.race_card_merge import (
 
 _MODEL_VERSION = "v2"
 _HISTORY_LIMIT = 5
+_FINISHER_STATUSES = frozenset({"valid", "out_of_range"})
 _EMPTY_PRED: dict[str, Any] = {
     "base_megu": None,
     "megu_adjusted": None,
@@ -137,6 +138,23 @@ def lookup_par_time(session: Session, race, model_version: str = _MODEL_VERSION)
     return float(fb.pt) if fb and fb.pt is not None else None
 
 
+def is_race_finisher(finish_pos: int | None, finish_time_sec: float | None) -> bool:
+    """入着（除外・取消以外）。"""
+    return (
+        finish_pos is not None
+        and int(finish_pos) > 0
+        and finish_time_sec is not None
+        and float(finish_time_sec) > 0
+    )
+
+
+def is_actual_megu_displayed(actual_megu: float | None, computation_status: str | None) -> bool:
+    """実測めぐ列に数値または「圏外」が出るか。"""
+    if actual_megu is not None:
+        return True
+    return (computation_status or "") in _FINISHER_STATUSES
+
+
 def _hist_row_to_dict(row) -> dict[str, Any]:
     return {
         "race_id": row.race_id,
@@ -201,6 +219,35 @@ def _enrich_horse_meta_from_gcs(race_id: str, horse_meta: dict) -> None:
         pass
 
 
+def _enrich_finish_from_flat(race_id: str, result_map: dict) -> None:
+    """race_results が空のとき flat から入着・タイムを補完。"""
+    try:
+        year = int(race_id[:4])
+        flat_path = _FLAT_DIR / str(year) / "race_result_flat.parquet"
+        if not flat_path.exists():
+            return
+        import pandas as pd
+
+        df_flat = pd.read_parquet(
+            flat_path,
+            columns=["race_id", "horse_id", "finish_position", "time_sec"],
+        )
+        race_flat = df_flat[df_flat["race_id"] == race_id]
+        for _, row in race_flat.iterrows():
+            hid = str(row["horse_id"])
+            pos = row.get("finish_position")
+            tsec = row.get("time_sec")
+            if hid not in result_map:
+                result_map[hid] = {"finish_pos": None, "finish_time_sec": None}
+            cur = result_map[hid]
+            if cur.get("finish_pos") is None and pd.notna(pos) and int(pos) > 0:
+                cur["finish_pos"] = int(pos)
+            if cur.get("finish_time_sec") is None and pd.notna(tsec) and float(tsec) > 0:
+                cur["finish_time_sec"] = float(tsec)
+    except Exception:
+        pass
+
+
 def _enrich_horse_meta_from_flat(race_id: str, horse_meta: dict) -> None:
     try:
         year = int(race_id[:4])
@@ -253,17 +300,44 @@ def build_race_megu_predictions(session: Session, race_id: str, model_version: s
     transfer_map = load_transfer_map(session, model_version) if megu_predict_enabled() else {}
     predict_params = load_predict_params() if megu_predict_enabled() else None
 
+    # 結果確定済みなら入着馬のみ（除外・取消 finish_pos<=0 は載せない）
     entry_rows = session.execute(
         sa_text("""
-            SELECT e.horse_id, e.post_no, e.bracket_number, h.horse_name, e.jockey_weight,
-                   COALESCE(NULLIF(e.sex_age, ''), h.sex) AS sex_age
-            FROM entries e
-            LEFT JOIN horses h ON h.horse_id = e.horse_id
-            WHERE e.race_id = :race_id
-            ORDER BY e.bracket_number NULLS LAST, e.post_no NULLS LAST, e.horse_id
+            SELECT rr.horse_id,
+                   e.post_no,
+                   e.bracket_number,
+                   h.horse_name,
+                   e.jockey_weight,
+                   COALESCE(NULLIF(e.sex_age, ''), h.sex) AS sex_age,
+                   rr.finish_pos,
+                   rr.finish_time_sec
+            FROM race_results rr
+            LEFT JOIN entries e
+                ON e.race_id = rr.race_id AND e.horse_id = rr.horse_id
+            LEFT JOIN horses h ON h.horse_id = rr.horse_id
+            WHERE rr.race_id = :race_id
+              AND rr.finish_pos > 0
+              AND rr.finish_time_sec IS NOT NULL
+              AND rr.finish_time_sec > 0
+            ORDER BY rr.finish_pos NULLS LAST, e.post_no NULLS LAST, rr.horse_id
         """),
         {"race_id": race_id},
     ).fetchall()
+
+    if not entry_rows:
+        entry_rows = session.execute(
+            sa_text("""
+                SELECT e.horse_id, e.post_no, e.bracket_number, h.horse_name, e.jockey_weight,
+                       COALESCE(NULLIF(e.sex_age, ''), h.sex) AS sex_age,
+                       NULL::smallint AS finish_pos,
+                       NULL::numeric AS finish_time_sec
+                FROM entries e
+                LEFT JOIN horses h ON h.horse_id = e.horse_id
+                WHERE e.race_id = :race_id
+                ORDER BY e.bracket_number NULLS LAST, e.post_no NULLS LAST, e.horse_id
+            """),
+            {"race_id": race_id},
+        ).fetchall()
 
     if not entry_rows:
         entry_rows = session.execute(
@@ -274,7 +348,9 @@ def build_race_megu_predictions(session: Session, race_id: str, model_version: s
                     NULL::smallint AS bracket_number,
                     h.horse_name,
                     NULL::numeric   AS jockey_weight,
-                    h.sex           AS sex_age
+                    h.sex           AS sex_age,
+                    NULL::smallint AS finish_pos,
+                    NULL::numeric AS finish_time_sec
                 FROM megu_index mi
                 LEFT JOIN horses h ON h.horse_id = mi.horse_id
                 WHERE mi.race_id = :race_id AND mi.model_version = :mv
@@ -358,6 +434,8 @@ def build_race_megu_predictions(session: Session, race_id: str, model_version: s
         }
         for r in result_rows
     }
+    if not any(is_race_finisher(v.get("finish_pos"), v.get("finish_time_sec")) for v in result_map.values()):
+        _enrich_finish_from_flat(race_id, result_map)
 
     hist_by_horse: dict = defaultdict(list)
     for r in hist_rows:
@@ -541,8 +619,24 @@ def build_race_megu_predictions(session: Session, race_id: str, model_version: s
         field_avg_megu,
     )
 
+    finisher_count = sum(
+        1
+        for h in result_horses
+        if is_race_finisher(h.get("finish_pos"), h.get("finish_time_sec"))
+    )
+    actual_displayed_count = sum(
+        1
+        for h in result_horses
+        if is_actual_megu_displayed(h.get("actual_megu"), h.get("actual_status"))
+    )
+
     return {
         "race_id": race_id,
+        "result_stats": {
+            "finisher_count": finisher_count,
+            "actual_megu_displayed_count": actual_displayed_count,
+            "megu_coverage_ok": finisher_count == actual_displayed_count,
+        },
         "race_info": {
             "race_name": race.race_name,
             "venue": race.venue,

@@ -49,6 +49,14 @@ MOCK_MODEL_VERSION = "stg-mock-v1"
 RACE_LISTS_DIR = PROJECT_ROOT / "data" / "page_reference" / "race_lists"
 
 
+def _normalize_fk_id(value: str | None) -> str | None:
+    """FK 参照用 ID。空文字は NULL 扱い（entries_jockey_id_fkey 回避）。"""
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s if s else None
+
+
 def _get_engine():
     from sqlalchemy import create_engine
 
@@ -149,8 +157,8 @@ def _upsert_entry(session, race_id: str, entry: dict):
         "horse_id": horse_id,
         "post_no": entry.get("post_no") or entry.get("horse_number"),
         "bracket_number": entry.get("bracket_number") or entry.get("bracket_no"),
-        "jockey_id": entry.get("jockey_id"),
-        "trainer_id": entry.get("trainer_id"),
+        "jockey_id": _normalize_fk_id(entry.get("jockey_id")),
+        "trainer_id": _normalize_fk_id(entry.get("trainer_id")),
         "sex_age": (entry.get("sex_age") or "")[:10],
         "weight": entry.get("weight"),
         "weight_change": entry.get("weight_change"),
@@ -176,7 +184,7 @@ def _upsert_race_result(session, race_id: str, horse_id: str, result: dict):
         "margin": (result.get("margin") or "")[:20],
         "last_3f_sec": result.get("last_3f_sec") or result.get("last_3f"),
         "weight": result.get("weight"),
-        "jockey_id": result.get("jockey_id"),
+        "jockey_id": _normalize_fk_id(result.get("jockey_id")),
     }
     stmt = insert(RaceResult).values(**vals)
     stmt = stmt.on_conflict_do_update(
@@ -304,11 +312,11 @@ def process_race(session, race_id: str, dry_run: bool = False) -> dict:
             sex = entry.get("sex") or entry.get("sex_age", "")
             _upsert_horse(session, horse_id, horse_name, sex=sex[:5] if sex else None)
 
-            jockey_id = entry.get("jockey_id")
+            jockey_id = _normalize_fk_id(entry.get("jockey_id"))
             if jockey_id:
                 _upsert_jockey(session, jockey_id, entry.get("jockey_name") or jockey_id)
 
-            trainer_id = entry.get("trainer_id")
+            trainer_id = _normalize_fk_id(entry.get("trainer_id"))
             if trainer_id:
                 _upsert_trainer(session, trainer_id, entry.get("trainer_name") or trainer_id)
 
@@ -325,6 +333,9 @@ def process_race(session, race_id: str, dry_run: bool = False) -> dict:
                 if horse_id not in horse_ids:
                     _upsert_horse(session, horse_id, re.get("horse_name") or horse_id)
                     horse_ids.append(horse_id)
+                jockey_id = _normalize_fk_id(re.get("jockey_id"))
+                if jockey_id:
+                    _upsert_jockey(session, jockey_id, re.get("jockey_name") or jockey_id)
                 _upsert_race_result(session, race_id, horse_id, re)
 
         # mock predictions

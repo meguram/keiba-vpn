@@ -32,6 +32,11 @@ class TestMeguCommon(unittest.TestCase):
         self.assertAlmostEqual(adj, 90.0, places=1)
         self.assertAlmostEqual(adjusted_time_to_megu(adj, par), megu, places=1)
 
+    def test_adjusted_time_to_megu_nan_safe(self):
+        import math
+        self.assertTrue(math.isnan(adjusted_time_to_megu(float("nan"), 96.0)))
+        self.assertTrue(math.isnan(adjusted_time_to_megu(90.0, float("nan"))))
+
 
 class TestMeguPredict(unittest.TestCase):
     def test_one_point_equals_point_one_sec(self):

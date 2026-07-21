@@ -29,7 +29,14 @@ def megu_to_adjusted_time(megu_index: float, par_time_sec: float) -> float:
 
 def adjusted_time_to_megu(adjusted_time_sec: float, par_time_sec: float) -> float:
     """補正後タイム → 指数。"""
-    return MEGU_BASE + (float(par_time_sec) - float(adjusted_time_sec)) * MEGU_POINTS_PER_SEC
+    try:
+        adj = float(adjusted_time_sec)
+        par = float(par_time_sec)
+    except (TypeError, ValueError):
+        return float("nan")
+    if adj != adj or par != par:  # NaN
+        return float("nan")
+    return MEGU_BASE + (par - adj) * MEGU_POINTS_PER_SEC
 
 
 def is_major_condition_change(

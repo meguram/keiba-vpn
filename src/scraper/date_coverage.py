@@ -73,6 +73,28 @@ TRACK_CATEGORIES: list[str] = [
     "race_barometer",       # 走行データ/タイム指数  (SLA 6 / db.netkeiba.com 翌週金曜公開)
 ]
 
+# 独立 blob を持たず親カテゴリに内包される派生カテゴリ
+DERIVED_CATEGORY_PARENT: dict[str, str] = {
+    "race_shutuba_meta": "race_shutuba",
+    "race_result_on_time_payoff": "race_result_on_time",
+    "race_result_on_time_lap": "race_result_on_time",
+    "race_result_on_time_corner": "race_result_on_time",
+    "race_result_meta": "race_result",
+    "race_result_payoff": "race_result",
+    "race_result_track": "race_result",
+    "race_result_corner": "race_result",
+    "race_result_lap_times": "race_result",
+}
+
+
+def apply_derived_category_na(row: dict[str, bool | None]) -> dict[str, bool | None]:
+    """派生カテゴリ欠損を親が充足なら N/A (None) に降格。"""
+    out = dict(row)
+    for derived, parent in DERIVED_CATEGORY_PARENT.items():
+        if out.get(derived) is False and out.get(parent) is True:
+            out[derived] = None
+    return out
+
 
 NOT_AVAILABLE_DIR = _PROJECT_ROOT / "data/local/meta/not_available"
 

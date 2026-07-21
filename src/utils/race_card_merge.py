@@ -119,6 +119,31 @@ def merge_race_card(shutuba: dict | None, result: dict | None) -> dict | None:
     return card
 
 
+def patch_result_metadata_from_shutuba(result: dict | None, shutuba: dict | None) -> dict | None:
+    """race_result の surface/distance 等を race_shutuba（いずれもスクレイプ正本）で補完。"""
+    if not result:
+        return result
+    if not shutuba:
+        return result
+    out = dict(result)
+    for key in RACE_META_KEYS:
+        rv = out.get(key)
+        sv = shutuba.get(key)
+        if sv is None or sv == "":
+            continue
+        if key == "distance":
+            if int(out.get("distance") or 0) <= 0 and int(sv) > 0:
+                out["distance"] = sv
+            continue
+        if key == "surface":
+            if str(out.get("surface") or "").strip() not in ("芝", "ダート") and sv in ("芝", "ダート"):
+                out["surface"] = sv
+            continue
+        if not rv or rv == "":
+            out[key] = sv
+    return out
+
+
 def load_merged_race_card(race_id: str) -> dict | None:
     """GCS から shutuba / result を読み、マージしたレースカードを返す。"""
     try:
