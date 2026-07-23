@@ -9,7 +9,7 @@
 #   SLA 3 → raceday-runner     (07:30 JST 常駐, T-15 各R)
 #   SLA 4 → raceday-result-runner (07:30 JST 常駐, T+15 各R)
 #   SLA 5 → raceday-evening    (17:30 JST)
-#   SLA 6 → weekly-update      (17:30 JST 金曜)
+#   SLA 6 → weekly-update      (18:00 JST 金曜 — db.netkeiba 確定反映後)
 #   SLA 7 → raceday-eve 連動 (horse_result 等は raceday-eve 内で取得)
 #
 # 注意: システム TZ は UTC。スケジュール時刻はすべて UTC 換算で記述する（JST = UTC+9）。
@@ -39,12 +39,14 @@ RUNNER="${PROJECT_DIR}/scripts/cron/run_auto_scrape_logged.sh"
 WATCHDOG="${PROJECT_DIR}/scripts/server/server_watchdog.sh"
 UPDATE_JT="${PROJECT_DIR}/scripts/cron/update_jockey_trainer_stats.sh"
 ROTATE_LOGS="${PROJECT_DIR}/scripts/cron/rotate_logs.sh"
+SYNC_PG="${PROJECT_DIR}/scripts/cron/sync_pg_from_gcs.sh"
 
 mkdir -p "$LOG_DIR"
 chmod +x "$RUNNER"     2>/dev/null || true
 chmod +x "$WATCHDOG"   2>/dev/null || true
 chmod +x "$UPDATE_JT"  2>/dev/null || true
 chmod +x "$ROTATE_LOGS" 2>/dev/null || true
+chmod +x "$SYNC_PG" 2>/dev/null || true
 
 # -------------------------------------------------------------------
 # 削除対象タグ (全 keiba-vpn cron エントリをまとめて除去)
@@ -55,6 +57,7 @@ ALL_TAGS=(
     "KEIBA_BACKFILL"
     "KEIBA_JT_STATS"
     "KEIBA_GIT_PULL"
+    "KEIBA_PG_SYNC"
     "KEIBA-VPN-ALL"
 )
 
@@ -126,14 +129,20 @@ PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin
 # ── SLA 5: 開催日夕方 速報まとめ ── UTC: 08:30 / JST: 17:30 ──────── # KEIBA-VPN-ALL
 30 8 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} raceday-evening logs/raceday_evening.log # KEIBA-VPN-ALL
 
-# ── SLA 6: 金曜週次更新 ─────────── UTC: 08:30 Fri / JST: 17:30 Fri # KEIBA-VPN-ALL
-30 8 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} weekly-update logs/weekly_update.log # KEIBA-VPN-ALL
+# ── SLA 6: 金曜週次更新 ─────────── UTC: 09:00 Fri / JST: 18:00 Fri # KEIBA-VPN-ALL
+# db.netkeiba 確定結果は金曜 16–17 時頃反映のため 18:00 実行
+0 9 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} weekly-update logs/weekly_update.log # KEIBA-VPN-ALL
+
+# ── GCS → PostgreSQL 増分同期 ─── UTC: 15:00 / JST: 00:00 ───────── # KEIBA-VPN-ALL
+# 直近7日・PG充足済みは GCS download スキップ。開催日の即時反映はスクレイプ後フック担当。
+0 15 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${SYNC_PG} >> ${LOG_DIR}/sync_pg_from_gcs_nightly.log 2>&1 # KEIBA_PG_SYNC
 
 # ── SLA 1: 前日夕方 出馬表・馬柱 ── UTC: 09:00 / JST: 18:00 ──────── # KEIBA-VPN-ALL
 0 9 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} raceday-eve logs/raceday_eve.log # KEIBA-VPN-RACEDAY-EVE
 
-# ── 金曜 馬名インデックス ─────── UTC: 09:00 Fri / JST: 18:00 Fri ─── # KEIBA-VPN-ALL
-0 9 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} horse-name-index logs/horse_name_index.log # KEIBA-VPN-RACEDAY-EVE
+# ── 金曜 馬名インデックス ─────── UTC: 09:30 Fri / JST: 18:30 Fri ─── # KEIBA-VPN-ALL
+# weekly-update 開始後に実行（馬名リストは週次結果反映後）
+30 9 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} horse-name-index logs/horse_name_index.log # KEIBA-VPN-RACEDAY-EVE
 
 # ── 過去データ Backfill (深夜) ────────────────────────────────── # KEIBA-VPN-ALL
 # Phase fast: レース結果+出馬表
@@ -207,9 +216,10 @@ cmd_install() {
     echo "  07:30       毎日:   raceday-runner + raceday-result-runner (開催日のみ常駐)"
     echo "  17:00       毎日:   daily-race-lists (夕方更新)"
     echo "  17:30       毎日:   raceday-evening (開催日のみ)"
-    echo "  17:30       金曜:   weekly-update"
+    echo "  18:00       金曜:   weekly-update（db.netkeiba 確定結果）"
+    echo "  00:00       毎日:   GCS→PostgreSQL 増分同期（直近7日・スクレイプ後フック併用）"
     echo "  18:00       毎日:   raceday-eve (翌開催日のみ)"
-    echo "  18:00       金曜:   horse-name-index"
+    echo "  18:30       金曜:   horse-name-index"
     echo "  01:00–09:00 深夜:   backfill (年度別)"
     echo "  */3         常時:   watchdog (FastAPI + Flask + Next.js + MLflow)"
     echo "  git pull:    dev/stg UI（開発者ログイン後）→ POST /api/v1/admin/git-pull"
@@ -338,6 +348,8 @@ assert now.tzinfo is not None
         "bash $0 show | grep -q 'backfill'"
     run_test "watchdog エントリが含まれる" \
         "bash $0 show | grep -q 'server_watchdog'"
+    run_test "pg sync エントリが含まれる" \
+        "bash $0 show | grep -q 'sync_pg_from_gcs'"
     run_test "git pull cron が含まれない" \
         "! bash $0 show | grep -q 'git_pull_hourly'"
 

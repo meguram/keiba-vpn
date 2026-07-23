@@ -311,7 +311,7 @@ CREATE INDEX CONCURRENTLY idx_entries_horse_race
 | SLA 3 | `30 22 * * *` | 07:30 開催日 | `raceday-runner` | 各レース T-15分: race_detail + race_odds + race_paddock + race_barometer + race_trainer_comment + JRA馬場ライブ → AI 予測トリガ |
 | SLA 4 | `30 22 * * *` | 07:30 開催日 | `raceday-result-runner` | 各レース T+15分: race_result_on_time 速報取得 |
 | SLA 5 | `30 8 * * *` | 17:30 毎日 | `raceday-evening` | race_result + race_result_lap + race_index + race_pair_odds → 馬場速度指数計算トリガ + **めぐ指数計算トリガ** |
-| SLA 6 | `30 8 * * 5` | 17:30 金曜 | `weekly-update` | horse_result（先週分）・指数・偏差値・馬情報更新 |
+| SLA 6 | `0 9 * * 5` | 18:00 金曜 | `weekly-update` | **直近10日**開催日: horse_result・指数・偏差値・馬情報更新 → 完了後 めぐ指数 GCS 正本保存・PG 増分同期 |
 
 **バックフィル（夜間バッチ）**:
 

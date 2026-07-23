@@ -30,7 +30,7 @@ import math
 import os
 from datetime import datetime, date
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -45,6 +45,11 @@ MODEL_VERSION = "v2"
 
 # パターンB ウェイト [U-1]
 WEIGHTS_B = [0.35, 0.25, 0.20, 0.12, 0.08]
+
+# 品質ガード（AREA-11 v3: megu は corrected_time = finish − pace − track − weight）
+MAX_DELTA_PACE_SEC = 5.0
+PAR_FINISH_RATIO_MIN = 0.85
+PAR_FINISH_RATIO_MAX = 1.15
 
 # ── career_prize モジュールをインポート ─────────────────────────────────────
 from src.pipeline.megu_index.class_bucket import par_class_bucket
@@ -465,6 +470,10 @@ def compute_for_dataframe(
     df = df_flat.copy()
     df = _enrich_flat_from_gcs_race_result(df, df_ref=df_ref if df_ref is not None else df_flat)
     df = df[df["surface"].isin(["芝", "ダート"])]
+    if "race_name" in df.columns:
+        from src.pipeline.megu_index.flat_metadata import is_obstacle_race_name
+
+        df = df[~df["race_name"].apply(is_obstacle_race_name)]
     df["finish_time_sec"] = pd.to_numeric(df["time_sec"], errors="coerce")
     df = df[df["finish_time_sec"].notna() & (df["finish_time_sec"] > 0)]
     df["distance"] = pd.to_numeric(df["distance"], errors="coerce")
@@ -514,12 +523,16 @@ def compute_for_dataframe(
 
     # ── par_time マージ（v2: クラス別 + 階層フォールバック）────────────────
     df = attach_par_time_with_fallback(df, df_par)
+    df = df.loc[:, ~df.columns.duplicated()].copy()
+    df.reset_index(drop=True, inplace=True)
 
     # ── front_split_dev ────────────────────────────────────────────────
     df["front_split_dev"] = df["front_split_sec"] - df["par_front_split_sec"]
 
     # ── 各補正値 ───────────────────────────────────────────────────────
-    df["delta_pace_sec"]   = beta_pace  * df["front_split_dev"].fillna(0)
+    df["delta_pace_sec"] = (
+        beta_pace * df["front_split_dev"].fillna(0)
+    ).clip(-MAX_DELTA_PACE_SEC, MAX_DELTA_PACE_SEC)
     # 芝・ダートのみ馬場補正（障害は surface フィルタで対象外）
     df["delta_track_sec"]  = -beta_track * df["tsi_normalized"].fillna(0)
     df["delta_weight_sec"] = beta_weight * df["weight_dev"].fillna(0) * df["dist_scale"].fillna(1)
@@ -530,16 +543,17 @@ def compute_for_dataframe(
     df = attach_fq_and_delta_level(df, df_hist, beta_level, par_log_fq=par_log_fq)
 
     # ── 補正済みタイム & めぐ指数 ─────────────────────────────────────
-    df["adjusted_time_sec"] = (
+    # v3: megu は level 除外の corrected_time。par 構築（build_par_time）と定義を揃える。
+    df["corrected_time_sec"] = (
         df["finish_time_sec"]
         - df["delta_pace_sec"]
         - df["delta_track_sec"]
         - df["delta_weight_sec"]
-        - df["delta_level_sec"]
     )
+    df["adjusted_time_sec"] = df["corrected_time_sec"] - df["delta_level_sec"]
     df["megu_index"] = df.apply(
         lambda r: adjusted_time_to_megu(
-            r["adjusted_time_sec"] if pd.notna(r["adjusted_time_sec"]) else float("nan"),
+            r["corrected_time_sec"] if pd.notna(r["corrected_time_sec"]) else float("nan"),
             r["par_time_final"] if pd.notna(r["par_time_final"]) else float("nan"),
         ),
         axis=1,
@@ -547,15 +561,18 @@ def compute_for_dataframe(
 
     # ── 【最適化】2着基準 out_of_range フラグ ──────────────────────────────
     finish_pos_col = "finish_position" if "finish_position" in df.columns else "finish_pos"
+    df["computation_status"] = "valid"
     if finish_pos_col in df.columns:
         df["finish_pos_num"] = pd.to_numeric(df[finish_pos_col], errors="coerce")
         df_2nd = (
             df[df["finish_pos_num"] == 2][["race_id", "finish_time_sec"]]
             .rename(columns={"finish_time_sec": "time_2nd"})
+            .drop_duplicates("race_id")
         )
         df_1st = (
             df[df["finish_pos_num"] == 1][["race_id", "finish_time_sec"]]
             .rename(columns={"finish_time_sec": "time_1st"})
+            .drop_duplicates("race_id")
         )
         df_2nd = df_2nd.merge(df_1st, on="race_id", how="outer")
         df_2nd["time_2nd"] = df_2nd["time_2nd"].fillna(df_2nd["time_1st"])
@@ -565,15 +582,24 @@ def compute_for_dataframe(
             (df["finish_time_sec"] > df["time_2nd"].fillna(np.inf) + 2.0)
         )
         df.loc[df["out_of_range"], "megu_index"] = np.nan
-        df["computation_status"] = np.where(df["out_of_range"], "out_of_range", "valid")
-    else:
-        df["computation_status"] = "valid"
+        df.loc[df["out_of_range"], "computation_status"] = "out_of_range"
+
+    par_sec = pd.to_numeric(df["par_time_final"], errors="coerce")
+    finish_sec = pd.to_numeric(df["finish_time_sec"], errors="coerce")
+    par_ratio = par_sec / finish_sec
+    bad_par = (
+        par_sec.isna()
+        | (par_ratio < PAR_FINISH_RATIO_MIN)
+        | (par_ratio > PAR_FINISH_RATIO_MAX)
+    ).fillna(True)
+    df.loc[bad_par, "megu_index"] = np.nan
+    df.loc[bad_par & (df["computation_status"] == "valid"), "computation_status"] = "no_par"
 
     result_cols = [
         "race_id", "horse_id", "finish_time_sec", "par_time_final",
         "delta_pace_sec", "delta_track_sec", "delta_weight_sec", "delta_level_sec",
-        "adjusted_time_sec", "megu_index", "field_quality", "computation_status",
-        "front_split_sec", "split_point_m", "tsi_raw",
+        "corrected_time_sec", "adjusted_time_sec", "megu_index", "field_quality",
+        "computation_status", "front_split_sec", "split_point_m", "tsi_raw",
     ]
     return df[[c for c in result_cols if c in df.columns]].copy()
 
@@ -643,20 +669,23 @@ def _upsert_batch(session, df_result: pd.DataFrame, batch_size: int = 500, model
 
 _MEGU_PARQUET_COLS = [
     "race_id", "horse_id", "megu_index", "computation_status",
-    "finish_time_sec", "par_time_final", "adjusted_time_sec",
+    "finish_time_sec", "par_time_final", "corrected_time_sec", "adjusted_time_sec",
     "delta_pace_sec", "delta_track_sec", "delta_weight_sec", "delta_level_sec",
 ]
 _GCS_MEGU_BLOB_TPL = "chuou/data/preprocessed/netkeiba/pc/megu_index/{year}/megu_index_flat.parquet"
 
 
-def _save_megu_parquet_backup(df_save: pd.DataFrame, year: int) -> None:
+def _save_megu_parquet_backup(
+    df_save: pd.DataFrame,
+    year: int,
+    *,
+    gcs_canonical: bool = False,
+) -> dict[str, Any]:
     """
-    計算済み megu_index DataFrame をローカル parquet (TABLES_DIR/{year}/megu_index_flat.parquet)
-    に追記・上書き保存し、GCS にバックアップアップロードする。
+    計算済み megu_index をローカル parquet + GCS に保存する。
 
-    - DB が一次ストア。parquet / GCS はバックアップ（stg→prod 再現用）。
-    - 同一 (race_id, horse_id) の重複は「新しい行を優先」で解消する。
-    - GCS 接続が無い環境（dev / CI）ではローカル保存のみで正常終了する。
+    gcs_canonical=True のとき GCS 保存を正本とみなし、gcs_enabled なら失敗時に例外。
+    DB は API 参照用の二次ストア（compute_for_date 内で別途 upsert）。
     """
     save_cols = [c for c in _MEGU_PARQUET_COLS if c in df_save.columns]
     df_new = df_save[save_cols].copy()
@@ -665,7 +694,6 @@ def _save_megu_parquet_backup(df_save: pd.DataFrame, year: int) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "megu_index_flat.parquet"
 
-    # 既存 parquet とマージ（重複は新データを優先）
     if out_path.exists():
         try:
             df_existing = pd.read_parquet(out_path)
@@ -682,23 +710,36 @@ def _save_megu_parquet_backup(df_save: pd.DataFrame, year: int) -> None:
     df_combined.to_parquet(out_path, index=False)
     logger.info("megu_index parquet 保存: %s (%d 行)", out_path, len(df_combined))
 
-    # GCS アップロード（失敗してもDBは保存済みなので警告のみ）
+    gcs_uri = ""
+    gcs_status = "skipped"
     try:
         from src.scraper.storage import HybridStorage
+
         storage = HybridStorage(str(PROJECT_ROOT))
         if storage.gcs_enabled:
             gcs_blob = _GCS_MEGU_BLOB_TPL.format(year=year)
             bucket = storage._get_bucket()
             blob = bucket.blob(gcs_blob)
             blob.upload_from_filename(str(out_path), content_type="application/octet-stream")
-            logger.info(
-                "megu_index GCS バックアップ完了: gs://%s/%s",
-                storage._bucket_name, gcs_blob,
-            )
+            gcs_uri = f"gs://{storage._bucket_name}/{gcs_blob}"
+            gcs_status = "ok"
+            logger.info("megu_index GCS 正本保存: %s", gcs_uri)
+        elif gcs_canonical:
+            raise RuntimeError("GCS 無効のため megu_index 正本を保存できません")
         else:
             logger.debug("GCS 無効（ローカル parquet のみ保存）")
     except Exception as exc:
+        if gcs_canonical:
+            raise
         logger.warning("GCS バックアップ失敗（DBは保存済み）: %s", exc)
+        gcs_status = "error"
+
+    return {
+        "local_path": str(out_path),
+        "gcs_uri": gcs_uri,
+        "gcs_status": gcs_status,
+        "rows": len(df_combined),
+    }
 
 
 
@@ -760,7 +801,12 @@ def aggregate_horse_megu(df_all: pd.DataFrame) -> pd.DataFrame:
 # 公開 API（外部モジュールから直接呼び出し用）
 # ─────────────────────────────────────────────────────────────────────────────
 
-def compute_for_date(date_str: str, model_version: str = MODEL_VERSION) -> dict:
+def compute_for_date(
+    date_str: str,
+    model_version: str = MODEL_VERSION,
+    *,
+    gcs_canonical: bool = False,
+) -> dict:
     """
     指定日（YYYY-MM-DD）の全レースについてめぐ指数を計算しDB保存する。
 
@@ -844,18 +890,74 @@ def compute_for_date(date_str: str, model_version: str = MODEL_VERSION) -> dict:
         with get_session() as session:
             saved = _upsert_batch(session, df_save, model_version=model_version)
 
-        # GCS バックアップ保存（DB 保存後に実行、失敗しても DB は確定済み）
-        _save_megu_parquet_backup(df_save, year)
+        gcs_info = _save_megu_parquet_backup(
+            df_save, year, gcs_canonical=gcs_canonical
+        )
 
         n_valid = int((df_save["computation_status"] == "valid").sum())
         n_oor   = int((df_save["computation_status"] == "out_of_range").sum())
-        logger.info("めぐ指数 保存完了: valid=%d, out_of_range=%d", n_valid, n_oor)
-        return {"status": "ok", "date": date_str, "megu_valid": n_valid, "megu_oor": n_oor}
+        n_no_par = int((df_save["computation_status"] == "no_par").sum())
+        logger.info(
+            "めぐ指数 保存完了: valid=%d, out_of_range=%d, no_par=%d",
+            n_valid, n_oor, n_no_par,
+        )
+        return {
+            "status": "ok",
+            "date": date_str,
+            "megu_valid": n_valid,
+            "megu_oor": n_oor,
+            "megu_no_par": n_no_par,
+            "gcs": gcs_info,
+        }
 
     except Exception as e:
         logger.error("めぐ指数計算エラー: %s", e, exc_info=True)
         return {"status": "error", "date": date_str, "error": str(e),
                 "megu_valid": 0, "megu_oor": 0}
+
+
+def compute_megu_for_opening_dates(
+    dates: list[str],
+    *,
+    model_version: str = MODEL_VERSION,
+    gcs_canonical: bool = True,
+) -> dict[str, Any]:
+    """
+    開催日（YYYYMMDD）リストについてめぐ指数を計算し GCS 正本 + DB に保存。
+
+    weekly-update 完了後バッチから呼び出す。
+    """
+    normalized = sorted({d.replace("-", "") for d in dates if d and len(d.replace("-", "")) == 8})
+    per_date: dict[str, dict] = {}
+    total_valid = 0
+    total_oor = 0
+    errors: list[str] = []
+
+    for d in normalized:
+        iso = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+        r = compute_for_date(iso, model_version=model_version, gcs_canonical=gcs_canonical)
+        per_date[d] = r
+        total_valid += int(r.get("megu_valid") or 0)
+        total_oor += int(r.get("megu_oor") or 0)
+        if r.get("status") == "error":
+            errors.append(d)
+
+    if errors:
+        status = "partial" if total_valid + total_oor > 0 else "error"
+    elif any(r.get("status") == "skipped" for r in per_date.values()):
+        status = "partial" if total_valid + total_oor > 0 else "skipped"
+    else:
+        status = "ok"
+
+    return {
+        "status": status,
+        "dates": normalized,
+        "per_date": per_date,
+        "megu_valid": total_valid,
+        "megu_oor": total_oor,
+        "errors": errors,
+        "gcs_canonical": gcs_canonical,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

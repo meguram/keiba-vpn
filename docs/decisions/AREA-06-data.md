@@ -288,6 +288,8 @@ netkeiba.com / JRA
 [Calculated Data]  馬指数・偏差値・馬名インデックス → data/calculated_data/
 ```
 
+**GCS → PostgreSQL の運用詳細**（補完ロジック・対応表・cron 未設定の対策・モニター）は **[DEC-025-gcs-postgresql-sync-and-monitoring.md](./DEC-025-gcs-postgresql-sync-and-monitoring.md)** を参照。
+
 ### 4-2. スクレイピング収集スケジュール
 
 Cron SLA の詳細定義は **[AREA-04-ops.md](AREA-04-ops.md) セクション 2** を参照。本セクションでは ETL 観点での収集パターンのみ示す。

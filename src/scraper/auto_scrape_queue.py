@@ -558,7 +558,7 @@ def run_weekly_update_for_dates(target_dates: list[str]) -> dict[str, Any]:
         except Exception as e:
             logger.warning("週次更新後の馬名インデックス再構築をスキップ: %s", e)
 
-    return total_stats
+    return _as.finalize_weekly_update(target_dates, total_stats)
 
 
 def run_catchup_for_dates(target_dates: list[str]) -> dict[str, Any]:

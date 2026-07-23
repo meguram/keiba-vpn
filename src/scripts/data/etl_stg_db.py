@@ -10,6 +10,8 @@ PostgreSQL stg DB の races / jockeys / trainers / horses / entries / race_resul
 Usage:
   python3 -m src.scripts.data.etl_stg_db [--year 2026] [--recent-days 90]
   python3 -m src.scripts.data.etl_stg_db --recent-days 30 --dry-run
+  python3 -m src.scripts.data.etl_stg_db --dates 20260718,20260719
+  python3 -m src.scripts.data.etl_stg_db --force  # PG 充足済みも再同期
 """
 
 from __future__ import annotations
@@ -47,6 +49,17 @@ _DB_URL = (
 
 MOCK_MODEL_VERSION = "stg-mock-v1"
 RACE_LISTS_DIR = PROJECT_ROOT / "data" / "page_reference" / "race_lists"
+ETL_SYNC_DIR = PROJECT_ROOT / "data" / "local" / "meta" / "etl_sync"
+
+
+def _should_gen_mock_predictions() -> bool:
+    env = (os.environ.get("KEIBA_ENV") or "dev").strip().lower()
+    if env == "prod":
+        return False
+    flag = (os.environ.get("KEIBA_ETL_MOCK_PREDICTIONS") or "").strip().lower()
+    if flag in ("0", "false", "no"):
+        return False
+    return env in ("stg", "dev") or flag in ("1", "true", "yes")
 
 
 def _normalize_fk_id(value: str | None) -> str | None:
@@ -338,8 +351,7 @@ def process_race(session, race_id: str, dry_run: bool = False) -> dict:
                     _upsert_jockey(session, jockey_id, re.get("jockey_name") or jockey_id)
                 _upsert_race_result(session, race_id, horse_id, re)
 
-        # mock predictions
-        if horse_ids:
+        if horse_ids and _should_gen_mock_predictions():
             _upsert_mock_predictions(session, race_id, horse_ids)
 
         session.flush()
@@ -351,8 +363,16 @@ def process_race(session, race_id: str, dry_run: bool = False) -> dict:
         return {"race_id": race_id, "status": "error", "error": str(e)}
 
 
-def get_target_dates(year: int | None, recent_days: int | None) -> list[str]:
+def get_target_dates(
+    year: int | None,
+    recent_days: int | None,
+    *,
+    dates: list[str] | None = None,
+) -> list[str]:
     """対象日付リストを生成（YYYYMMDD 文字列のリスト）。"""
+    if dates:
+        return sorted({d.strip() for d in dates if d and len(d.strip()) == 8 and d.strip().isdigit()})
+
     available = sorted(
         p.stem for p in RACE_LISTS_DIR.glob("*.json")
         if p.stem.isdigit() and len(p.stem) == 8
@@ -372,76 +392,296 @@ def get_target_dates(year: int | None, recent_days: int | None) -> list[str]:
     return [d for d in available if d.startswith("2026")]
 
 
-def main():
-    parser = argparse.ArgumentParser(description="stg DB ETL: GCS → PostgreSQL")
-    parser.add_argument("--year", type=int, default=None, help="対象年 (例: 2026)")
-    parser.add_argument("--recent-days", type=int, default=None, help="直近N日分")
-    parser.add_argument("--dry-run", action="store_true", help="DB書き込みをスキップ")
-    parser.add_argument("--workers", type=int, default=4, help="並列GCS取得スレッド数")
-    parser.add_argument("--batch-size", type=int, default=50, help="DBコミット単位")
-    args = parser.parse_args()
+def query_pg_status_batch(engine, race_ids: list[str]) -> dict[str, dict[str, int | bool]]:
+    """race_id ごとの PG 充足状況（GCS download なし）。"""
+    if not race_ids:
+        return {}
 
-    target_dates = get_target_dates(args.year, args.recent_days)
-    logger.info("対象日付数: %d", len(target_dates))
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT r.race_id,
+                       1 AS has_race,
+                       (SELECT COUNT(*) FROM entries e WHERE e.race_id = r.race_id) AS entry_cnt,
+                       (SELECT COUNT(*) FROM race_results rr
+                        WHERE rr.race_id = r.race_id
+                          AND rr.finish_pos > 0 AND rr.finish_time_sec > 0) AS finisher_cnt
+                FROM races r
+                WHERE r.race_id = ANY(:ids)
+            """),
+            {"ids": race_ids},
+        ).fetchall()
+
+    out: dict[str, dict[str, int | bool]] = {}
+    for row in rows:
+        out[row.race_id] = {
+            "has_race": bool(row.has_race),
+            "entry_cnt": int(row.entry_cnt or 0),
+            "finisher_cnt": int(row.finisher_cnt or 0),
+        }
+    return out
+
+
+def load_gcs_race_keys(years: set[str]) -> tuple[set[str], set[str]]:
+    """GCS list のみで race_shutuba / race_result の race_id 集合を取得。"""
+    from src.scraper.storage import HybridStorage
+
+    storage = HybridStorage()
+    shutuba: set[str] = set()
+    results: set[str] = set()
+    for year in sorted(years):
+        try:
+            shutuba |= set(storage.batch_list_blobs("race_shutuba", year).keys())
+        except Exception as e:
+            logger.warning("batch_list race_shutuba %s: %s", year, e)
+        try:
+            results |= set(storage.batch_list_blobs("race_result", year).keys())
+        except Exception as e:
+            logger.warning("batch_list race_result %s: %s", year, e)
+    return shutuba, results
+
+
+def filter_races_needing_sync(
+    race_ids: list[str],
+    pg_status: dict[str, dict[str, int | bool]],
+    gcs_shutuba: set[str],
+    gcs_results: set[str],
+    *,
+    skip_if_complete: bool = True,
+) -> tuple[list[str], dict[str, str]]:
+    """同期対象 race_id とスキップ理由を返す。"""
+    to_sync: list[str] = []
+    skipped: dict[str, str] = {}
+
+    for rid in race_ids:
+        if rid not in gcs_shutuba:
+            skipped[rid] = "no_gcs_shutuba"
+            continue
+
+        if not skip_if_complete:
+            to_sync.append(rid)
+            continue
+
+        pg = pg_status.get(rid, {})
+        has_race = bool(pg.get("has_race"))
+        entry_cnt = int(pg.get("entry_cnt") or 0)
+        finisher_cnt = int(pg.get("finisher_cnt") or 0)
+        has_gcs_result = rid in gcs_results
+
+        if not has_race or entry_cnt == 0:
+            to_sync.append(rid)
+            continue
+
+        if has_gcs_result and finisher_cnt == 0:
+            to_sync.append(rid)
+            continue
+
+        if not has_gcs_result:
+            skipped[rid] = "pg_entries_ok_no_gcs_result"
+            continue
+
+        skipped[rid] = "pg_complete"
+
+    return to_sync, skipped
+
+
+def save_etl_sync_run(
+    target_dates: list[str],
+    *,
+    stats: dict[str, int],
+    skipped: int,
+    reason: str = "",
+) -> None:
+    """日次 ETL 実行サマリをローカルに記録（再 download 判定用）。"""
+    payload = {
+        "target_dates": target_dates,
+        "stats": stats,
+        "skipped_races": skipped,
+        "reason": reason,
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    stamp = datetime.now().strftime("%Y%m%d")
+    path = ETL_SYNC_DIR / stamp[:4] / f"{stamp}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def run_etl(
+    *,
+    year: int | None = None,
+    recent_days: int | None = None,
+    dates: list[str] | None = None,
+    dry_run: bool = False,
+    batch_size: int = 50,
+    skip_if_pg_complete: bool = True,
+    reason: str = "",
+) -> dict[str, Any]:
+    """GCS → PostgreSQL 増分 ETL の共通エントリ。"""
+    target_dates = get_target_dates(year, recent_days, dates=dates)
+    logger.info(
+        "ETL 開始 reason=%s dates=%d recent_days=%s skip_if_complete=%s",
+        reason or "-",
+        len(target_dates),
+        recent_days,
+        skip_if_pg_complete,
+    )
 
     race_ids = get_race_ids_for_dates(target_dates)
-    logger.info("対象レース数: %d", len(race_ids))
-
+    logger.info("race_lists レース数: %d", len(race_ids))
     if not race_ids:
-        logger.warning("対象レースが見つかりません")
-        return
+        return {"status": "skipped", "reason": "no_race_ids", "target_dates": target_dates}
 
-    if args.dry_run:
-        logger.info("[DRY RUN] 最初の5件確認:")
-        for rid in race_ids[:5]:
-            card = load_race_card_from_gcs(rid)
-            if card:
-                entries = card.get("entries") or []
-                logger.info("  %s: %s (%d頭)", rid, card.get("race_name", "?"), len(entries))
-            else:
-                logger.info("  %s: GCS データなし", rid)
-        return
+    if dry_run:
+        pg_status: dict[str, dict[str, int | bool]] = {}
+        try:
+            engine = _get_engine()
+            pg_status = query_pg_status_batch(engine, race_ids)
+        except Exception as e:
+            logger.warning("PG 未接続のため skip 判定なし（全件候補）: %s", e)
+        years = {rid[:4] for rid in race_ids}
+        gcs_shutuba, gcs_results = load_gcs_race_keys(years)
+        to_sync, skipped_map = filter_races_needing_sync(
+            race_ids,
+            pg_status,
+            gcs_shutuba,
+            gcs_results,
+            skip_if_complete=skip_if_pg_complete and bool(pg_status),
+        )
+        logger.info(
+            "[DRY RUN] sync=%d skip=%d (sample sync: %s)",
+            len(to_sync),
+            len(skipped_map),
+            to_sync[:5],
+        )
+        return {
+            "status": "dry_run",
+            "target_dates": target_dates,
+            "total_races": len(race_ids),
+            "to_sync": len(to_sync),
+            "skipped": len(skipped_map),
+        }
+
+    engine = _get_engine()
+    pg_status = query_pg_status_batch(engine, race_ids)
+    years = {rid[:4] for rid in race_ids}
+    gcs_shutuba, gcs_results = load_gcs_race_keys(years)
+    to_sync, skipped_map = filter_races_needing_sync(
+        race_ids,
+        pg_status,
+        gcs_shutuba,
+        gcs_results,
+        skip_if_complete=skip_if_pg_complete,
+    )
+    logger.info(
+        "同期対象: %d / %d (skip=%d)",
+        len(to_sync),
+        len(race_ids),
+        len(skipped_map),
+    )
+
+    if not to_sync:
+        save_etl_sync_run(target_dates, stats={"ok": 0, "error": 0, "no_data": 0}, skipped=len(skipped_map), reason=reason)
+        return {
+            "status": "ok",
+            "target_dates": target_dates,
+            "total_races": len(race_ids),
+            "synced": 0,
+            "skipped": len(skipped_map),
+            "stats": {"ok": 0, "error": 0, "no_data": 0},
+        }
 
     from sqlalchemy.orm import Session as SASession
 
-    engine = _get_engine()
     stats = {"ok": 0, "error": 0, "no_data": 0}
-
-    logger.info("DB投入開始 (workers=%d, batch=%d)...", args.workers, args.batch_size)
-
-    # バッチ処理
     with engine.connect() as conn:
         batch: list[str] = []
 
-        def flush_batch(batch: list[str]):
-            if not batch:
+        def flush_batch(batch_ids: list[str]) -> None:
+            if not batch_ids:
                 return
             with SASession(conn) as session:
-                for rid in batch:
+                for rid in batch_ids:
                     r = process_race(session, rid, dry_run=False)
-                    stats[r["status"] if r["status"] in stats else "error"] += 1
+                    key = r["status"] if r["status"] in stats else "error"
+                    stats[key] += 1
                 try:
                     session.commit()
                     logger.info(
                         "コミット %d件 (ok=%d err=%d no_data=%d)",
-                        len(batch), stats["ok"], stats["error"], stats["no_data"]
+                        len(batch_ids),
+                        stats["ok"],
+                        stats["error"],
+                        stats["no_data"],
                     )
                 except Exception as e:
                     logger.error("コミットエラー: %s", e)
                     session.rollback()
 
-        for i, race_id in enumerate(race_ids):
+        for race_id in to_sync:
             batch.append(race_id)
-            if len(batch) >= args.batch_size:
+            if len(batch) >= batch_size:
                 flush_batch(batch)
                 batch = []
-
         if batch:
             flush_batch(batch)
 
+    save_etl_sync_run(target_dates, stats=stats, skipped=len(skipped_map), reason=reason)
     logger.info(
-        "完了: ok=%d error=%d no_data=%d (total=%d)",
-        stats["ok"], stats["error"], stats["no_data"], len(race_ids),
+        "ETL 完了: ok=%d error=%d no_data=%d synced=%d skipped=%d",
+        stats["ok"],
+        stats["error"],
+        stats["no_data"],
+        len(to_sync),
+        len(skipped_map),
+    )
+    return {
+        "status": "ok",
+        "target_dates": target_dates,
+        "total_races": len(race_ids),
+        "synced": len(to_sync),
+        "skipped": len(skipped_map),
+        "stats": stats,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="stg DB ETL: GCS → PostgreSQL")
+    parser.add_argument("--year", type=int, default=None, help="対象年 (例: 2026)")
+    parser.add_argument("--recent-days", type=int, default=None, help="直近N日分")
+    parser.add_argument(
+        "--dates",
+        type=str,
+        default=None,
+        help="対象日 YYYYMMDD カンマ区切り",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="DB書き込みをスキップ")
+    parser.add_argument("--batch-size", type=int, default=50, help="DBコミット単位")
+    parser.add_argument(
+        "--skip-if-pg-complete",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="PG 充足済みレースは GCS download をスキップ（デフォルト: 有効）",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="--no-skip-if-pg-complete と同義（全件再同期）",
+    )
+    args = parser.parse_args()
+
+    dates = [d.strip() for d in args.dates.split(",")] if args.dates else None
+    skip_if_complete = args.skip_if_pg_complete and not args.force
+
+    run_etl(
+        year=args.year,
+        recent_days=args.recent_days,
+        dates=dates,
+        dry_run=args.dry_run,
+        batch_size=args.batch_size,
+        skip_if_pg_complete=skip_if_complete,
+        reason="cli",
     )
 
 

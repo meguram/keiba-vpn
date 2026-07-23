@@ -74,8 +74,8 @@ ConoHa VPS 2GB 構成を前提に、UI の見た目を一切変えずに**パフ
 
 | SLA | cron（UTC） | JST | タスク名 | 実行内容 |
 |---|---|---|---|---|
-| SLA 6 | `30 8 * * 5` | 17:30 金曜 | `weekly-update` | 先週全開催日: `race_result`（確定）・`race_pair_odds`・`race_index`・`horse_result` 一括更新 → 指数/偏差値/成績集計再計算 |
-| — | `0 9 * * 5` | 18:00 金曜 | `horse-name-index` | 馬名リスト（`horse_name_index`）+ 成長曲線（`growth_curve`）→ `calculated_data` 一括更新 |
+| SLA 6 | `0 9 * * 5` | 18:00 金曜 | `weekly-update` | **直近10日**の開催日: `race_result`（確定）・`race_pair_odds`・`race_index`・`horse_result` 一括更新 → 完了後 `date_coverage` / めぐ指数→GCS / PG 増分同期 |
+| — | `30 9 * * 5` | 18:30 金曜 | `horse-name-index` | 馬名リスト（`horse_name_index`）+ 成長曲線（`growth_curve`）→ `calculated_data` 一括更新 |
 
 ### 2-5. バックフィル（夜間 / 年度別）
 

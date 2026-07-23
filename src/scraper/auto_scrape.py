@@ -33,12 +33,10 @@ JRA 馬場ライブ・馬名インデックス・成長曲線はキュー対象�
 │                    │              │            │ + 確定オッズ  │
 │                    │              │            │ + SmartRC     │
 ├────────────────────┼──────────────┼────────────┼───────────────┤
-│  weekly-update     │ 金 17:30     │ 毎週金曜   │ 先週分        │
-│                    │              │            │ 結果・指数・偏差値は上書き再取得 │
-│                    │              │            │ 馬成績ページ上書き・血統は別ジョブ │
-│                    │              │            │ （未保持のみキュー・既存スキップ） │
+│  weekly-update     │ 金 18:00     │ 毎週金曜   │ 直近10日開催日 │
+│                    │              │            │ 確定結果+めぐ→GCS │
 ├────────────────────┼──────────────┼────────────┼───────────────┤
-│  horse-name-index  │ 金 18:00     │ 毎週金曜   │ 馬名リスト    │
+│  horse-name-index  │ 金 18:30     │ 毎週金曜   │ 馬名リスト    │
 │                    │              │            │ (成長曲線用)  │
 ├────────────────────┼──────────────┼────────────┼───────────────┤
 │  daily-race-lists  │ 毎日 07:00   │ 毎日       │ 今日+14日先   │
@@ -74,8 +72,8 @@ Usage:
   python -m src.scraper.auto_scrape --task raceday-runner          # 開催日常駐 T-15 (cron 07:30)
   python -m src.scraper.auto_scrape --task raceday-result-runner   # 開催日常駐 T+15速報 (cron 07:30)
   python -m src.scraper.auto_scrape --task raceday-evening         # 結果取得 (cron 17:30)
-  python -m src.scraper.auto_scrape --task weekly-update       # 週次更新 (cron 金 17:30)
-  python -m src.scraper.auto_scrape --task horse-name-index    # 馬名リスト (cron 金 18:00)
+  python -m src.scraper.auto_scrape --task weekly-update       # 週次更新 (cron 金 18:00)
+  python -m src.scraper.auto_scrape --task horse-name-index    # 馬名リスト (cron 金 18:30)
   python -m src.scraper.auto_scrape --task daily-race-lists    # 日次race_lists更新 (cron 07:00)
   python -m src.scraper.auto_scrape --status
 """
@@ -119,6 +117,7 @@ def _now_jst_iso() -> str:
 LEAD_MINUTES = 15    # 発走何分前にスクレイプするか
 RESULT_OFFSET_MINUTES = 15  # 発走何分後に速報結果を取得するか
 RACE_LIST_FETCH_DAYS_AHEAD = 14  # daily-race-lists で先読みする日数
+WEEKLY_LOOKBACK_DAYS = 10  # 金曜 weekly-update: 直近 N 日以内の開催日
 
 
 def _load_race_calendar(output_dir: str = "data/page_reference/cushion") -> dict:
@@ -141,6 +140,7 @@ def _get_race_day_venues(calendar: dict, target: str | None = None) -> list[str]
 
 
 def _last_week_race_dates(calendar: dict) -> list[str]:
+    """後方互換: 先週月曜〜日曜の開催日。新規は _recent_opening_dates を使用。"""
     today = _today_jst()
     last_sunday = today - timedelta(days=today.weekday() + 1)
     last_monday = last_sunday - timedelta(days=6)
@@ -150,6 +150,29 @@ def _last_week_race_dates(calendar: dict) -> list[str]:
         d["date"].replace("-", "")
         for d in calendar.get("race_days", [])
         if start <= d["date"] <= end
+    )
+
+
+def _recent_opening_dates(
+    calendar: dict,
+    days: int = WEEKLY_LOOKBACK_DAYS,
+    *,
+    anchor: date | None = None,
+    include_anchor: bool = False,
+) -> list[str]:
+    """
+    anchor（既定: 今日）から直近 days 日以内の開催日を YYYYMMDD で返す。
+
+    weekly-update（金曜）では include_anchor=False（前日まで）が既定。
+    """
+    anchor = anchor or _today_jst()
+    end_d = anchor if include_anchor else anchor - timedelta(days=1)
+    start_d = anchor - timedelta(days=days)
+    start_s, end_s = start_d.isoformat(), end_d.isoformat()
+    return sorted(
+        d["date"].replace("-", "")
+        for d in calendar.get("race_days", [])
+        if start_s <= d["date"] <= end_s
     )
 
 
@@ -257,6 +280,105 @@ def _update_dates_coverage_bg(dates: list[str]) -> None:
             update_year_coverage(y, runner.storage, dates=ds)
     except Exception as e:
         logger.warning("coverage 一括更新スキップ: %s", e)
+
+
+def _trigger_megu_batch_for_dates(dates: list[str], *, reason: str) -> dict:
+    """weekly 完了後: 対象開催日のめぐ指数を計算し GCS 正本に保存。"""
+    import os as _os
+
+    if _os.environ.get("KEIBA_WEEKLY_MEGU_BATCH", "1").strip().lower() in (
+        "0",
+        "false",
+        "no",
+    ):
+        return {"status": "skipped", "reason": "disabled"}
+
+    normalized = sorted({d.replace("-", "") for d in dates if d})
+    if not normalized:
+        return {"status": "skipped", "reason": "no-dates"}
+
+    try:
+        from src.pipeline.megu_index.compute import compute_megu_for_opening_dates
+
+        logger.info("めぐ指数バッチ開始 (%s): %s", reason, ", ".join(normalized))
+        result = compute_megu_for_opening_dates(normalized, gcs_canonical=True)
+        logger.info(
+            "めぐ指数バッチ完了 (%s): status=%s valid=%s oor=%s",
+            reason,
+            result.get("status"),
+            result.get("megu_valid"),
+            result.get("megu_oor"),
+        )
+        return result
+    except Exception as e:
+        logger.warning("めぐ指数バッチ失敗 (%s): %s", reason, e)
+        return {"status": "error", "error": str(e)}
+
+
+def finalize_weekly_update(target_dates: list[str], result: dict) -> dict:
+    """
+    weekly-update スクレイプ完了後の後処理:
+      1. date_coverage 索引更新
+      2. めぐ指数計算 → GCS 正本保存
+      3. PostgreSQL 増分同期（任意）
+    """
+    out = dict(result)
+    out["target_dates"] = target_dates
+    out["lookback_days"] = WEEKLY_LOOKBACK_DAYS
+
+    _update_dates_coverage_bg(target_dates)
+
+    megu = _trigger_megu_batch_for_dates(target_dates, reason="weekly-update")
+    out["megu_batch"] = megu
+
+    pg_sync = _trigger_pg_sync_for_dates(target_dates, reason="weekly-update")
+    out["pg_sync"] = pg_sync
+
+    out["last_run"] = _now_jst_iso()
+    if megu.get("status") == "error" and out.get("status") == "ok":
+        out["status"] = "partial"
+    return out
+
+
+def _trigger_pg_sync_for_dates(dates: list[str], *, reason: str) -> dict:
+    """
+    スクレイピング完了後、対象開催日を PostgreSQL に増分同期する。
+    KEIBA_PG_SYNC_AFTER_SCRAPE=0 で無効化可能。
+    """
+    import os as _os
+
+    if _os.environ.get("KEIBA_PG_SYNC_AFTER_SCRAPE", "1").strip().lower() in (
+        "0",
+        "false",
+        "no",
+    ):
+        return {"status": "skipped", "reason": "disabled"}
+
+    normalized = sorted({d.replace("-", "") for d in dates if d})
+    if not normalized:
+        return {"status": "skipped", "reason": "no-dates"}
+
+    try:
+        from src.scripts.data.etl_stg_db import run_etl
+
+        logger.info("PG 増分同期開始 (%s): %s", reason, ", ".join(normalized))
+        result = run_etl(
+            dates=normalized,
+            skip_if_pg_complete=True,
+            batch_size=30,
+            reason=reason,
+        )
+        logger.info(
+            "PG 増分同期完了 (%s): synced=%s skipped=%s stats=%s",
+            reason,
+            result.get("synced"),
+            result.get("skipped"),
+            result.get("stats"),
+        )
+        return result
+    except Exception as e:
+        logger.warning("PG 増分同期失敗 (%s): %s", reason, e)
+        return {"status": "error", "error": str(e)}
 
 
 def _save_status(task: str, result: dict):
@@ -739,6 +861,7 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
 
     _update_date_coverage_bg(race_date_str)
 
+    pg_sync = _trigger_pg_sync_for_dates([race_date_str], reason="raceday-eve")
     return {
         "status": "ok",
         "date": date_iso,
@@ -746,6 +869,7 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
         "error_count": len(stats["errors"]),
         "tracking_precompute": precompute_stats,
         "final_odds_precompute": final_odds_precompute_stats,
+        "pg_sync": pg_sync,
     }
 
 
@@ -927,9 +1051,11 @@ def run_raceday_evening_for_date(date_str: str) -> dict:
 
     _update_date_coverage_bg(date_str)
 
+    pg_sync = _trigger_pg_sync_for_dates([date_fmt], reason="raceday-evening")
     return {"status": "ok", "date": date_str, "venues": venues,
             **{k: v for k, v in stats.items() if k != "errors"},
-            "error_count": len(stats["errors"])}
+            "error_count": len(stats["errors"]),
+            "pg_sync": pg_sync}
 
 
 def run_weekly_update_for_dates(target_dates: list[str]) -> dict:
@@ -1029,11 +1155,15 @@ def run_weekly_update_for_dates(target_dates: list[str]) -> dict:
                 total_stats["horses_updated"])
     logger.info("=" * 60)
 
-    _update_dates_coverage_bg(target_dates)
-
-    return {"status": "ok", "target_dates": target_dates,
+    return finalize_weekly_update(
+        target_dates,
+        {
+            "status": "ok",
+            "target_dates": target_dates,
             **{k: v for k, v in total_stats.items() if k != "errors"},
-            "error_count": len(total_stats["errors"])}
+            "error_count": len(total_stats["errors"]),
+        },
+    )
 
 
 def task_raceday_evening():
@@ -1055,7 +1185,7 @@ def task_raceday_evening():
 # ═══════════════════════════════════════════════════════════════════
 
 def task_weekly_update():
-    """毎週金曜17:30に実行 (cron)。db.netkeiba が先週分を更新した後に取得。"""
+    """毎週金曜 18:00 に実行 (cron)。db.netkeiba 確定結果（16–17 時反映）取得後。"""
     today = _today_jst()
     if today.weekday() != 4:
         logger.info("今日 (%s) は金曜ではありません", today.isoformat())
@@ -1063,11 +1193,18 @@ def task_weekly_update():
         return
 
     calendar = _load_race_calendar()
-    target_dates = _last_week_race_dates(calendar)
+    target_dates = _recent_opening_dates(calendar, WEEKLY_LOOKBACK_DAYS)
 
     if not target_dates:
-        logger.info("先週の開催日なし")
-        _save_status("weekly-update", {"status": "skipped", "reason": "no-races-last-week"})
+        logger.info("直近 %d 日以内の開催日なし", WEEKLY_LOOKBACK_DAYS)
+        _save_status(
+            "weekly-update",
+            {
+                "status": "skipped",
+                "reason": "no-races-in-lookback",
+                "lookback_days": WEEKLY_LOOKBACK_DAYS,
+            },
+        )
         return
 
     result = run_weekly_update_for_dates(target_dates)
@@ -1214,9 +1351,9 @@ def show_status():
         "raceday-runner":        "開催日ランナー (出馬表・オッズ各R 15分前)",
         "raceday-result-runner": "速報結果ランナー (各R発走15分後に速報取得)",
         "raceday-evening":       "開催日夕 (結果・確定オッズ)",
-        "weekly-update":         "金曜週次 (結果・指数・馬情報)",
-        "horse-name-index":      "金曜18:00 馬名リスト+成長曲線",
-        "growth-curve-weekly":   "金曜18:00 成長曲線一括",
+        "weekly-update":         "金曜18:00 週次 (直近10日・結果+めぐGCS)",
+        "horse-name-index":      "金曜18:30 馬名リスト+成長曲線",
+        "growth-curve-weekly":   "金曜18:30 成長曲線一括",
         "catchup-missing":       "過去欠損補完 (race_listsなし開催日)",
         "daily-race-lists":      "日次レース一覧 (今日〜カレンダー末尾)",
         "jra-baba-morning":      "JRA馬場情報 (朝ポーリング 05:00-09:00)",
@@ -1267,8 +1404,8 @@ def show_status():
     nf = today + timedelta(days=(4 - today.weekday()) % 7)
     if nf == today and datetime.now(_JST).hour >= 18:
         nf += timedelta(days=7)
-    print(f"  次の金曜: {nf.isoformat()} 17:30 → 週次更新 (db.netkeiba反映後)")
-    print(f"  次の金曜: {nf.isoformat()} 18:00 → 馬名インデックス (成長曲線オートコンプリート)")
+    print(f"  次の金曜: {nf.isoformat()} 18:00 → 週次更新 (db.netkeiba 確定結果)")
+    print(f"  次の金曜: {nf.isoformat()} 18:30 → 馬名インデックス (成長曲線オートコンプリート)")
 
 
 # ═══════════════════════════════════════════════════════════════════

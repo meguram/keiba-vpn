@@ -307,12 +307,14 @@ race_result（SLA 5: 確定結果）
   （megu_regression_params + megu_par_time を参照）
         │
         ▼
-  megu_index テーブル（DB）
-  race_performance GCS（既存パス活用）
-  └─ netkeiba/pc/race_performance/{year}/{race_id}.json
+  megu_index テーブル（DB・API 参照用）+ GCS 正本 parquet
+  └─ chuou/data/preprocessed/netkeiba/pc/megu_index/{year}/megu_index_flat.parquet
 ```
 
-**実行タイミング**: SLA 5（JST 17:30 確定結果取得後）に自動トリガー
+**実行タイミング**:
+
+- 開催日夕方 `raceday-evening` 後: 当日分の速報ベース計算（任意）
+- **金曜 `weekly-update` 完了後**: 直近 10 日開催日を `compute_megu_for_opening_dates()` で一括計算 → **GCS 正本保存**（`gcs_canonical=True`）
 
 ### モデル再推定スケジュール【確定 U-5】
 

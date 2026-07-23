@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from src.api.monitor_coverage import build_db_coverage_cache_for_date
 from src.scraper.date_coverage import load_year_coverage
+from src.scripts.data.etl_stg_db import get_target_dates
 from src.utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger(__name__)
@@ -25,10 +26,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="db_coverage キャッシュ構築（prod 向け）")
     parser.add_argument("--year", type=int, help="対象年（省略時は当年）")
     parser.add_argument("--date", type=str, help="単日 YYYYMMDD")
+    parser.add_argument("--recent-days", type=int, help="直近 N 日（race_lists ベース）")
     args = parser.parse_args()
 
     if args.date:
         dates = [args.date]
+    elif args.recent_days is not None:
+        dates = get_target_dates(None, args.recent_days)
     else:
         year = args.year or datetime.now(JST).year
         cov = load_year_coverage(year)
