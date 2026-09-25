@@ -77,7 +77,7 @@ stg でも **GCS パスは .env のまま**です。負荷を抑えたい場合�
 
 - **時刻**: ホストが UTC の場合、`crontab` の「何時に動くか」は **`CRON_TZ=Asia/Tokyo`** がないと UTC 解釈になります。`scripts/cron/setup_*.sh` で投入するブロックには `CRON_TZ=Asia/Tokyo` を含めています。既存の crontab は `install` を再実行するか、手動で各ブロック先頭に追記してください。
 - **外部 cron とキュー**: `auto_scrape --task …` の **netkeiba 取得は既定で** `data/queue/scrape_queue.json` に投入され、キューワーカーが実行します（`KEIBA_AUTO_SCRAPE_USE_QUEUE=0` で従来の直取得に戻せます）。JRA 馬場ライブ・馬名インデックス・成長曲線はキュー対象外です。`python3 -m src.scripts.scraping.run_external_cron_month_coverage` は **金曜 `weekly-update` と同一の** `run_weekly_update_for_dates`（レース `race_result` / 指数は上書き再取得、`horse_profile` は成績・プロフィール上書き・血統ページは別ジョブ、`horse_pedigree_5gen` は未保持のみキュー投入・既存はスキップ）を窓内の全開催日に対して実行したうえで、`race_shutuba` / `smartrc` をキューへ載せます。「デイリ出馬表」APIトリガも利用できます。
-- 定期実行: `scripts/cron/setup_raceday_eve_cron.sh`
+- 定期実行: `scripts/cron/setup_all_cron.sh`（raceday-eve を含む全 SLA タスクを一括登録。個別スクリプトは廃止済み）
 - 状態ファイル: `data/local/meta/auto_scrape_status.json`（管理画面 `/cron-jobs` と同期）。`last_run` は **+09:00 付きの日本時間**で記録されます。
 
 ## 本番へ戻すとき

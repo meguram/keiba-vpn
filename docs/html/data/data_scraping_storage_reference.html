@@ -272,11 +272,12 @@
     デフォルトでは <strong>6 並列</strong>でジョブを処理します（<code>SCRAPE_QUEUE_PARALLEL</code> 環境変数で変更可能）。
   </p>
 
-  <h3>1-3. jra_baba_live（systemd デーモン — 旧仕様）</h3>
+  <h3>1-3. jra_baba_live（systemd デーモン — 廃止済み旧仕様）</h3>
   <p>
-    <code>scripts/cron/setup_baba_cron.sh</code> で登録する <code>jra-baba-watch.service</code> は、
-    JRA 馬場情報を 5 分ごとにポーリングするデーモンです。<br>
-    <strong>2026-05 以降は raceday-runner の T-15 バンドルに統合済みです。二重取得を避けるため、停止を推奨します。</strong>
+    旧 <code>scripts/cron/setup_baba_cron.sh</code>（削除済み）で登録していた <code>jra-baba-watch.service</code> は、
+    JRA 馬場情報を 5 分ごとにポーリングするデーモンでした。<br>
+    <strong>2026-05 以降は raceday-runner の T-15 バンドルに統合済みです。まだ古い systemd サービスが残っている場合は
+    <code>systemctl --user disable --now jra-baba-watch.service</code> で停止してください（二重取得防止）。</strong>
   </p>
 </section>
 

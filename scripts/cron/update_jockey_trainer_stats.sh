@@ -9,7 +9,7 @@
 #   bash scripts/cron/update_jockey_trainer_stats.sh
 #   bash scripts/cron/update_jockey_trainer_stats.sh --nar   # 地方開催も含める
 #
-# cron 例は scripts/cron/setup_jockey_trainer_stats_cron.sh を参照。
+# cron 登録は scripts/cron/setup_all_cron.sh で一括管理。
 # =============================================================================
 
 set -euo pipefail

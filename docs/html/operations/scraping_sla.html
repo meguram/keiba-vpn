@@ -296,7 +296,7 @@ flowchart LR
     CR1["cron: 07:30 JST<br/>raceday-runner"]
     CR2["cron: 17:30 JST<br/>raceday-evening"]
     CR3["cron: 金 17:30 JST<br/>weekly-update"]
-    CR4["(legacy) setup_baba_cron.sh<br/>jra_baba_live --watch<br/>→ T-15 統合で非推奨"]
+    CR4["(廃止済み) 旧 setup_baba_cron.sh<br/>jra_baba_live --watch<br/>→ T-15 統合により削除済み"]
     CR5["cron: 0 1-4,6,8,9 *<br/>backfill"]
     CR6["cron: 30 5 * * *<br/>jockey/trainer 統計"]
     CR7["cron: */3 * * * *<br/>watchdog"]
@@ -484,21 +484,21 @@ flowchart LR
     </tbody>
   </table>
 
-  <h3>4.2 補完・バックフィル系 cron（<code>setup_*.sh install</code> で登録可能）</h3>
+  <h3>4.2 補完・バックフィル系 cron（<code>scripts/cron/setup_all_cron.sh install</code> で一括登録）</h3>
   <table>
     <thead><tr>
       <th>ジョブ名</th><th>cron 設定</th><th>実行内容</th><th>登録スクリプト</th>
     </tr></thead>
     <tbody>
-      <tr><td><code>backfill 2025 fast</code></td><td><code>0 1 * * *</code></td><td>当年の race_list / result / shutuba 系を補完します。</td><td rowspan="6"><code>scripts/cron/setup_backfill_cron.sh install</code></td></tr>
+      <tr><td><code>backfill 2025 fast</code></td><td><code>0 1 * * *</code></td><td>当年の race_list / result / shutuba 系を補完します。</td><td rowspan="6"><code>scripts/cron/setup_all_cron.sh install</code></td></tr>
       <tr><td><code>backfill 2024 fast</code></td><td><code>0 2 * * *</code></td><td>前年の同上を補完します。</td></tr>
       <tr><td><code>backfill 2023 fast</code></td><td><code>0 3 * * *</code></td><td>2023 年の同上を補完します。</td></tr>
       <tr><td><code>backfill 2022 fast</code></td><td><code>0 4 * * *</code></td><td>2022 年の同上を補完します。</td></tr>
       <tr><td><code>backfill horse</code></td><td><code>0 6 * * *</code></td><td>horse_result / horse_pedigree_5gen の欠損を補完します。</td></tr>
       <tr><td><code>backfill 2025 full</code></td><td><code>0 8 * * *</code></td><td>指数・追切など処理負荷の高い補助カテゴリを補完します。</td></tr>
-      <tr><td><code>jockey/trainer 統計</code></td><td><code>30 5 * * *</code></td><td>ローカルの特徴量を再計算します（Web巡回収集ではなくローカル集計です）。</td><td><code>scripts/cron/setup_jockey_trainer_stats_cron.sh install</code></td></tr>
+      <tr><td><code>jockey/trainer 統計</code></td><td><code>30 5 * * *</code></td><td>ローカルの特徴量を再計算します（Web巡回収集ではなくローカル集計です）。</td><td><code>scripts/cron/setup_all_cron.sh install</code></td></tr>
       <tr><td><code>JRA 馬場ライブ</code></td><td><strong>raceday-runner T-15 内で実行</strong></td><td>各レースの発走 15 分前バンドルと同時に <code>jra_baba_live.scrape()</code> を呼び出します（2 分以内の重複取得は自動で抑制します）。</td><td><code>src/scraper/raceday_pre_race_pipeline.py</code></td></tr>
-      <tr><td><code>watchdog（3 分ごと）</code></td><td><code>*/3 * * * *</code></td><td>API / MLflow のヘルスチェックと自動再起動を行います。</td><td rowspan="3"><code>scripts/cron/setup_watchdog_cron.sh install</code></td></tr>
+      <tr><td><code>watchdog（3 分ごと）</code></td><td><code>*/3 * * * *</code></td><td>API / MLflow のヘルスチェックと自動再起動を行います。</td><td rowspan="3"><code>scripts/cron/setup_all_cron.sh install</code></td></tr>
       <tr><td><code>watchdog（起動時）</code></td><td><code>@reboot</code></td><td>マシン起動時に全サービスを起動します。</td></tr>
       <tr><td><code>logs ローテート</code></td><td><code>0 0 * * 1</code></td><td>50MB を超えたログファイルを週次で truncate します。</td></tr>
     </tbody>
@@ -873,7 +873,7 @@ sequenceDiagram
 
   <h3>9.2 JRA 馬場ライブの統合について</h3>
   <ul>
-    <li><strong>旧方式:</strong> <code>setup_baba_cron.sh</code> の systemd サービスで開催窓内 5 分ごとにポーリング（<code>jra_baba_live --watch</code>）していました。</li>
+    <li><strong>旧方式（削除済み）:</strong> <code>setup_baba_cron.sh</code> の systemd サービスで開催窓内 5 分ごとにポーリング（<code>jra_baba_live --watch</code>）していました。T-15 統合後は不要となり、スクリプト自体も削除済みです。</li>
     <li><strong>新方式:</strong> 各レースの T-15 バンドル内で <code>JRABabaLiveScraper().scrape()</code> を呼び出し、netkeiba 取得と同タイミングで最新馬場情報をキャッチアップします。</li>
     <li>同一バッチで複数レースを処理する際、<code>KEIBA_BABA_REFRESH_MIN_SEC</code>（既定 120 秒）で重複取得を自動的に抑制します。</li>
   </ul>
@@ -898,9 +898,10 @@ export KEIBA_PRE_RACE_PREDICT_ENABLED=1
 export KEIBA_BABA_REFRESH_MIN_SEC=120</code></pre>
 
   <div class="callout warn">
-    <strong>既存の systemd 馬場サービスについて</strong>
-    既存の <code>setup_baba_cron.sh install</code> は legacy として残しますが、
-    T-15 統合運用では <strong>二重取得を避けるため停止する</strong>ことを推奨します。
+    <strong>旧 systemd 馬場サービスについて</strong>
+    <code>setup_baba_cron.sh</code> は T-15 統合により不要となり、リポジトリから削除済みです。
+    まだ古い systemd ユーザーサービス（<code>jra-baba-watch.service</code> 等）が残っている場合は、
+    <code>systemctl --user disable --now jra-baba-watch.service</code> で停止・無効化してください（二重取得防止）。
   </div>
 </section>
 
@@ -1027,20 +1028,12 @@ export KEIBA_BABA_REFRESH_MIN_SEC=120</code></pre>
     </thead>
     <tbody>
       <tr>
-        <td><code>scripts/cron/setup_backfill_cron.sh</code></td>
-        <td></td>
+        <td><code>scripts/cron/setup_all_cron.sh</code></td>
+        <td>backfill・jockey/trainer 統計・watchdog・raceday-eve・rotate_logs・sync_pg_from_gcs を一括登録（旧来の個別 <code>setup_*_cron.sh</code> は廃止・統合済み）</td>
       </tr>
       <tr>
-        <td><code>scripts/cron/setup_jockey_trainer_stats_cron.sh</code></td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><code>scripts/cron/setup_baba_cron.sh</code></td>
-        <td>systemd ユーザサービス</td>
-      </tr>
-      <tr>
-        <td><code>scripts/cron/setup_watchdog_cron.sh</code></td>
-        <td></td>
+        <td><code>scripts/cron/setup_git_pull_cron.sh</code></td>
+        <td>git pull 定期実行のみ独立管理（<code>setup_all_cron.sh</code> の対象外）</td>
       </tr>
       <tr>
         <td><code>auto_scrape.py</code> 用は無し</td>
@@ -1096,11 +1089,10 @@ python -m src.scraper.auto_scrape --task raceday-evening   # 結果取得
 python -m src.scraper.auto_scrape --task weekly-update      # 金曜実行 (先週分)
 python -m src.scraper.auto_scrape --status                  # 状態確認
 
-# cron 一括登録
-bash scripts/cron/setup_backfill_cron.sh install
-bash scripts/cron/setup_jockey_trainer_stats_cron.sh install
-bash scripts/cron/setup_baba_cron.sh
-bash scripts/cron/setup_watchdog_cron.sh
+# cron 一括登録（backfill・jockey/trainer 統計・watchdog・raceday-eve 等）
+bash scripts/cron/setup_all_cron.sh install
+bash scripts/cron/setup_all_cron.sh show     # 登録内容の確認
+bash scripts/cron/setup_all_cron.sh test     # スモークテスト
 
 # crontab 確認
 crontab -l | grep KEIBA

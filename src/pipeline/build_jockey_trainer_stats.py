@@ -6,8 +6,8 @@
 
 既定は JRA（venue_code 01–10）のみ。地方を含める場合は ``--nar``。
 
-定期実行はリポジトリの ``scripts/cron/update_jockey_trainer_stats.sh`` と
-``scripts/cron/setup_jockey_trainer_stats_cron.sh``（``install``）を利用。
+定期実行はリポジトリの ``scripts/cron/update_jockey_trainer_stats.sh`` を
+``scripts/cron/setup_all_cron.sh``（cron 一括登録）経由で利用。
 """
 
 from __future__ import annotations

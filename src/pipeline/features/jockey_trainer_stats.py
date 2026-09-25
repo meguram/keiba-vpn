@@ -5,8 +5,8 @@
 lookup は ``jockey_tbl`` / ``trainer_tbl``（単一ファイル）。
 マニフェスト・マージ仕様 JSON は ``data/features/jockey_trainer_stats/``。
 
-定期更新: ``scripts/cron/update_jockey_trainer_stats.sh``（``flock`` で多重起動防止）と
-``scripts/cron/setup_jockey_trainer_stats_cron.sh``（cron 登録ヘルパ）。
+定期更新: ``scripts/cron/update_jockey_trainer_stats.sh``（``flock`` で多重起動防止）。
+cron 登録は ``scripts/cron/setup_all_cron.sh`` で一括管理。
 
 1. ``jt_race_features.parquet``（各年ディレクトリ内）
    **主マージキー** ``race_id``, ``horse_id``（``JT_RACE_FEATURES_PRIMARY_KEYS``）— 出馬表ベース行への一次 join 用。

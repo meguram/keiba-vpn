@@ -69,7 +69,7 @@ ENV_CONFIGS = {
         "flask_url": "http://127.0.0.1:5000",
         "public_url": "https://meguai-stg.tcpexposer.com/",
         "color": "#3fb950",
-        # stg は Docker PostgreSQL :5433 / DB=keiba_db_stg（setup_stg.sh 参照）
+        # stg はネイティブ PostgreSQL :5432 / DB=keiba_db_stg（scripts/server/setup_stg.sh 参照）
         "db_url": os.environ.get(
             "STG_DATABASE_URL",
             "postgresql+psycopg://keiba_user:keiba_pass@localhost:5432/keiba_db_stg",
