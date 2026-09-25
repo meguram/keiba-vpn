@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DEC-026 モデリング戦略と馬券戦略（EV・Kelly最適化）の整合 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 26px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.revised { background: rgba(251,191,36,.14); color: #fbbf24; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+.decision-card { background: linear-gradient(180deg, #182747, #131f3c); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; margin: 14px 0; border-left: 4px solid var(--accent); }
+.decision-title { font-size: 1rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · DEC-026</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <a href="AREA-07-modeling.html">→ AREA-07（モデリング）</a>
+      <a href="AREA-12-betting-simulation.html">→ AREA-12（馬券シミュレーション）</a>
+      <h4>DEC-026</h4>
+      <a href="#context">1. コンテキスト</a>
+      <a href="#decisions">2. 決定事項</a>
+      <a class="toc-h3" href="#d1">D-1 キャリブレーション評価</a>
+      <a class="toc-h3" href="#d2">D-2 市場対比評価</a>
+      <a class="toc-h3" href="#d3">D-3 不確実性Kelly</a>
+      <a class="toc-h3" href="#d4">D-4 ポートフォリオ相関</a>
+      <a class="toc-h3" href="#d5">D-5 ROI二次評価指標</a>
+      <a href="#options">3. 選択肢と比較</a>
+      <a href="#impact">4. 影響範囲</a>
+      <a href="#notes">5. 備考</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · DEC-026</div>
+      <h1>DEC-026: モデリング戦略と馬券戦略（EV・Kelly最適化）の整合</h1>
+      <p class="meta">
+        <span class="badge revised">PROPOSED</span>
+        日付: 2026-09-26　|　関連 AREA: AREA-07（モデリング管理要件）, AREA-12（馬券シミュレーション）
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<h2 id="context">1. コンテキスト</h2>
+<p>
+現行のモデリング仕様（<a href="AREA-07-modeling.html">AREA-07</a> Stage 1〜3: T-1〜T-9）は、AUC・Log Loss・RMSE・Spearman相関といった
+<b>汎用的な機械学習評価指標</b>でCIゲート判定されている（AREA-07 §6-2「T-1: AUC ≥ 0.65、Log Loss ≤ 0.65」）。
+一方、馬券適用（AREA-07 §10 Stage 4: Betting Strategy）は、Stage 1〜3の出力を「与えられた入力」として受け取り、
+EV計算・Kelly基準・段階的RL投入を行う、<b>完全に独立した後段レイヤー</b>として設計されている。
+</p>
+<p>この分離設計には、以下の構造的なリスクがある。</p>
+
+<div class="callout danger">
+  <h4>リスク1: キャリブレーション未保証</h4>
+  <p>AUCは順位の分離度（discrimination）を測る指標であり、確率値の絶対的な正確さ（calibration）を保証しない。
+  <code>EV = 確率 × オッズ</code> という計算はキャリブレーションされた確率を前提とするため、AUC 0.65 を通過したモデルでも、
+  確率の絶対値が歪んでいれば EV 計算・Kelly 比率が体系的に誤る。</p>
+</div>
+
+<div class="callout danger">
+  <h4>リスク2: 市場対比評価の欠如</h4>
+  <p>馬券で利益を出すには「オッズに内包された市場予想」より優れている必要があるが、現行のCIゲートはモデルの絶対精度のみを見ており、
+  市場（オッズ由来の implied probability）との相対比較を評価指標に含めていない。的中率が高くても市場と同程度の予測であれば、
+  控除率（約20〜25%）分だけ負ける。</p>
+</div>
+
+<div class="callout warn">
+  <h4>リスク3: 不確実性の未定量化とKellyの過信リスク</h4>
+  <p>AREA-07 §10-6 の Kelly 実装は固定 Fractional Kelly（<code>fraction=0.25</code>）であり、個々の予測の確信度
+  （分散・信頼区間）を反映していない。モデルが実際より過信した確率を出す局面（データが薄いレース条件等）でも同じ 0.25 倍で賭けてしまい、
+  過大なドローダウンリスクを抱える。</p>
+</div>
+
+<div class="callout warn">
+  <h4>リスク4: レース内ベット間の相関未考慮</h4>
+  <p>単勝・複勝・馬連・ワイド・馬単は同一レースの同じ確率分布から派生する高相関な賭けである。AREA-07 §10-7 の的中率バランス制約は
+  「1レース最大5件・同一馬券種最大2件」という<b>件数フィルタのみ</b>で、複数ベットの相関によるポートフォリオ全体のリスク集中を
+  考慮していない。</p>
+</div>
+
+<div class="callout info">
+  <h4>リスク5: モデル選定の目的関数がROIと未接続</h4>
+  <p>Stage 1-3 のハイパーパラメータ探索（<code>docs/html/modeling/hyperparameter_tuning_workflow.html</code>）は AUC / Log Loss
+  の改善を目的関数としているが、最終的な事業目標は馬券利益であるため、AUC 改善が必ずしも ROI 改善と一致しない
+  （favorite-longshot bias 等により識別力と収益性が分離するケースがある）。</p>
+</div>
+
+<h2 id="decisions">2. 決定事項</h2>
+<p>上記5つのリスクに対応する5つの決定を行う。すべて<b>既存の Phase 5a/5b/5c 段階投入方針（AREA-07 §10-1-2）と両立する形</b>で、
+段階的に追加する。</p>
+
+<div class="decision-card" id="d1">
+  <div class="decision-title">D-1: T-1〜T-3 にキャリブレーション評価を追加のCIゲートとする</div>
+  <p>Brier スコアおよび reliability diagram の傾き（または Expected Calibration Error）を、既存の AUC / Log Loss に加えた
+  必須評価指標とする。閾値は初期運用データから設定し、モデル再学習ごとに算出・記録する。</p>
+</div>
+
+<div class="decision-card" id="d2">
+  <div class="decision-title">D-2: 「市場対比優位性」を主要評価軸に追加する</div>
+  <p>オッズから導出した implied probability（<code>1/オッズ</code>を正規化）をベースラインとし、モデルの予測がこのベースラインに
+  対して Log Loss 差分・Brier 差分で優位であるかを評価する。Stage 4 のバックテスト ROI 評価（AREA-07 §10-9-3 ROIゲート）は
+  この考え方を部分的に体現しているが、<b>Stage 1-3 のモデル選定・アーキテクチャ比較の段階でも同様の市場対比指標を用いる</b>。</p>
+</div>
+
+<div class="decision-card" id="d3">
+  <div class="decision-title">D-3: Kelly比率をモデルの不確実性に応じて動的に調整する（Uncertainty-scaled Kelly）</div>
+  <p>固定 <code>fraction=0.25</code> に加え、アンサンブル分散（LightGBM の複数シード学習や bootstrap）から推定した予測の
+  信頼区間の広さに応じて fraction を縮小する仕組みを、Phase 5a〜5b のいずれかの段階で導入する。信頼区間が広い
+  （データが薄い）レースほどベット比率を抑える。</p>
+</div>
+
+<div class="decision-card" id="d4">
+  <div class="decision-title">D-4: レース内ポートフォリオでのリスク集中を制御する</div>
+  <p>AREA-07 §10-7 の的中率バランス制約に加え、同一レース内で選択された複数ベットの相関（例: 単勝と馬連は同じ馬の1着確率に
+  強く依存）を簡易的にペナルティ化する仕組みを追加する。厳密な相関行列によるポートフォリオ最適化は複雑化するため、まずは
+  「同じ馬を含む複数ベットの合計Kelly比率に上限を設ける」程度の簡易ルールから始める。</p>
+</div>
+
+<div class="decision-card" id="d5">
+  <div class="decision-title">D-5: Stage 1-3 のハイパーパラメータ探索に、バックテストROI（またはKelly成長率）を二次評価指標として追加する</div>
+  <p>主目的関数は AUC / Log Loss（学習の安定性・解釈性を保つため）のまま維持するが、複数候補モデルの最終選定時に、
+  簡易バックテスト（過去データでの EV・ROI 計算）を通過基準に加える。AUC が同等な複数モデルがある場合、ROI が高い方を採用する。</p>
+</div>
+
+<h2 id="options">3. 選択肢と比較</h2>
+<table>
+<tr><th>選択肢</th><th>メリット</th><th>デメリット</th></tr>
+<tr>
+  <td>A. 現状維持（Stage1-3は汎用指標のみ、Stage4のみEV/Kelly）</td>
+  <td>実装がシンプル、既存パイプライン変更不要</td>
+  <td>モデルが市場に対して優位かを保証しない。Kelly過信によるドローダウンリスクを抱えたまま本番投入することになる</td>
+</tr>
+<tr>
+  <td><b>B.（採用）D-1〜D-5 を段階的に追加</b></td>
+  <td>馬券戦略との整合性が向上し、過学習・過信リスクを低減。既存の Phase 5a/5b/5c 段階投入方針とも両立可能</td>
+  <td>追加の評価パイプライン実装コスト（キャリブレーション計測・市場対比評価・簡易バックテスト）</td>
+</tr>
+<tr>
+  <td>C. Stage1-3をKelly成長率でend-to-end最適化する</td>
+  <td>理論上最も馬券戦略と整合する</td>
+  <td>学習の複雑化・解釈性低下・VPS 2GB での学習コスト増。現状のプロジェクト規模・運用体制には時期尚早</td>
+</tr>
+</table>
+<p><b>採用: B。</b> C は将来的な発展方向として §5 に記録するが、現段階では A と C の中間である段階的強化が最も費用対効果が高い。</p>
+
+<h2 id="impact">4. 影響範囲</h2>
+<ul>
+<li><code>AREA-07-modeling.html</code> §6-2 CIゲート表にキャリブレーション指標・市場対比指標を追加</li>
+<li><code>AREA-07-modeling.html</code> §10-6 Kelly計算式にUncertainty-scaled Kellyの拡張余地を明記</li>
+<li><code>AREA-07-modeling.html</code> §10-7 的中率バランス制約にレース内相関ペナルティを追加</li>
+<li><code>AREA-12-betting-simulation.html</code>（現在 DRAFT）のシミュレーションアルゴリズムに、D-3・D-4 を反映する必要あり
+    （<b>DRAFT解消の前提条件の一つとする</b>）</li>
+<li>将来実装: <code>src/pipeline/mlflow/calibration_eval.py</code>（キャリブレーション計測）、
+    <code>src/pipeline/inference/market_baseline.py</code>（implied probability計算）等の新規モジュールが必要になる見込み
+    （本DECでは設計のみ、実装は別タスクとして起票する）</li>
+</ul>
+
+<h2 id="notes">5. 備考</h2>
+<ul>
+<li>Phase 5a（EV-onlyの本番投入）を開始する前に、最低限 <b>D-1（キャリブレーション）・D-2（市場対比評価）</b> の2点は
+    解決しておくことが望ましい。D-3（不確実性Kelly）・D-4（ポートフォリオ相関）は Phase 5b 以降でも許容範囲。</li>
+<li>選択肢Cの「end-to-endのKelly最適化」は、Stage 1-3モデルの再学習コスト・解釈性のトレードオフから、Phase 5c（RL投入）以降に
+    BettingTransformer / PPO の学習目的関数として部分的に実現する方向性の方が現実的
+    （AREA-07 §10-3 の <code>estimate_roi()</code> がその布石）。将来の再検討事項として記録する。</li>
+<li>本DECは AREA-07・AREA-12 の両方に影響するため、次に AREA-12 を DRAFT から FINAL へ更新する際は、
+    本DECの D-3 / D-4 の反映状況を確認すること。</li>
+</ul>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

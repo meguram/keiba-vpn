@@ -542,6 +542,11 @@ df["pace_scenario_prior"] = (df["front_runner_count"] / df["horse_num"]) \
   </ul>
 </li>
 </ul>
+<div class="callout warn">
+  <p><b>DEC-026 追加予定</b>: T-1〜T-3 にキャリブレーション評価（Brierスコア等）と市場対比評価（implied probabilityとのLog Loss差分）を
+  追加のCIゲートとする方針が決定されている（<a href="DEC-026-modeling-betting-strategy-alignment.html">DEC-026</a> D-1/D-2）。
+  Phase 5a 本番投入前の必須対応。</p>
+</div>
 
 <h2 id="10">10. 馬券選択モデリング基盤（Stage 4: Betting Strategy）</h2>
 <!-- AREA-07 T-10 / AREA-01 T-12 として追加。
@@ -1004,6 +1009,11 @@ PPO_CONFIG = {
     # Kelly = (EV - 1) / (odds - 1)
     full_kelly = (ev - 1.0) / (odds - 1.0)
     return min(full_kelly * fraction, 0.25)  # 上限 25%</code></pre>
+<div class="callout warn">
+  <p><b>DEC-026 拡張予定</b>: 上記は固定 <code>fraction=0.25</code> のみ。予測の不確実性（アンサンブル分散等）に応じて
+  fraction を動的に縮小する Uncertainty-scaled Kelly への拡張が決定されている
+  （<a href="DEC-026-modeling-betting-strategy-alignment.html">DEC-026</a> D-3）。Phase 5a〜5bのいずれかで導入。</p>
+</div>
 
 <h3 id="10-7">10-7. 的中率バランス制約</h3>
 
@@ -1059,6 +1069,11 @@ def apply_balance_filter(candidates: List[BetCandidate],
     result = [c for cs in by_type.values() for c in cs]
     # 全体で EV 上位 k 件
     return sorted(result, key=lambda x: x.ev_score, reverse=True)[:k]</code></pre>
+<div class="callout warn">
+  <p><b>DEC-026 拡張予定</b>: 上記フィルタは件数制限のみで、同一レース内の複数ベット間の相関（例: 単勝と馬連が同じ馬の1着確率に依存）
+  によるリスク集中を考慮していない。「同じ馬を含む複数ベットの合計Kelly比率に上限を設ける」簡易ルールの追加が決定されている
+  （<a href="DEC-026-modeling-betting-strategy-alignment.html">DEC-026</a> D-4）。</p>
+</div>
 
 <h3 id="10-8">10-8. DB スキーマ・API 設計</h3>
 

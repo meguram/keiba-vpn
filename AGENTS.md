@@ -48,7 +48,7 @@
 ## 環境
 
 - Python: `requirements.txt`、`.env.example` → `.env`（認証はユーザー環境）。
-- テスト一式: リポジトリルートで `python3 -m unittest discover -s tests -t . -p 'test_*.py' -v`
+- テスト一式: リポジトリルートで `make test`（内部で `.github/workflows/ci.yml` と同じ pytest 実行順序・除外設定を再現。DB/Redis 未起動でも大半は動く）。Makefile を使わない場合は `python3 -m pytest tests/ --ignore=tests/scraper/manual --ignore=tests/research/manual`
 - 騎手・調教師統計のマージキー検証: `python3 -m unittest tests.pipeline.test_jockey_trainer_stats -v`
 - netkeiba 実 HTML を叩く手動スモーク（unittest 対象外）: `tests/scraper/manual/netkeiba_horse_page_smoke.py`, `tests/scraper/manual/netkeiba_speed_index_smoke.py`
 - 血統メタクラスタの手動検証（unittest 対象外）: `tests/research/manual/verify_*.py`。バックテスト・仮説検証バッチ: `src/research/pedigree/backtest_*.py`, `*_evidence.py`（中間 Parquet は `data/analysis/pedigree/`）
