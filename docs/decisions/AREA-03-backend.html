@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AREA-03 バックエンド要件 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.revised { background: rgba(251,191,36,.14); color: #fbbf24; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · AREA-03</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <h4>AREA-03</h4>
+      <a href="#1">1. 概要</a>
+      <a href="#2">2. DB スキーマ</a>
+      <a class="toc-h3" href="#2-1">2-1 層別構成（5 層）</a>
+      <a class="toc-h3" href="#2-2">2-2 Layer 3: horse_stats_snapshot</a>
+      <a class="toc-h3" href="#2-3">2-3 Layer 4: ラップ・ペース・コーナー</a>
+      <a class="toc-h3" href="#2-4">2-4 Layer 5: race_odds_snapshot</a>
+      <a class="toc-h3" href="#2-5">2-5 推論結果テーブル</a>
+      <a class="toc-h3" href="#2-6">2-6 スクレイプ実行管理テーブル</a>
+      <a class="toc-h3" href="#2-7">2-7 お気に入り馬テーブル（F-12）</a>
+      <a class="toc-h3" href="#2-8">2-8 通知設定・ログテーブル（F-09）</a>
+      <a class="toc-h3" href="#2-9">2-9 スキーマ管理</a>
+      <a href="#3">3. REST API 仕様</a>
+      <a class="toc-h3" href="#3-1">3-1 基本仕様</a>
+      <a class="toc-h3" href="#3-2">3-2 エンドポイント一覧</a>
+      <a class="toc-h3" href="#3-3">3-3 predictions レスポンス仕様</a>
+      <a class="toc-h3" href="#3-4">3-4 パフォーマンス要件</a>
+      <a href="#4">4. 認証・認可</a>
+      <a href="#5">5. キャッシュ設計</a>
+      <a class="toc-h3" href="#5-1">5-1 4 層キャッシュ構成</a>
+      <a class="toc-h3" href="#5-2">5-2 TTL 詳細ルール</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · AREA-03</div>
+      <h1>AREA-03 — バックエンド要件（Flask API, DB スキーマ, 認証・認可, 4 層キャッシュ設計, レート制限）</h1>
+      <p class="meta">
+        <span class="badge revised">REVISED</span>
+        最終更新: 2026-07-06　|　統合: DEC-001（統合済み）
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<h2 id="1">1. 概要</h2>
+<p>本仕様書は keiba-vpn プロジェクトのバックエンド（Flask API、DB スキーマ、認証・認可、キャッシュ設計、レート制限）に関する確定要件を定める。DEC-001 が定めるデータ基盤・スキーマ・非機能要件の記述を単一ソースとして統合する。</p>
+<div class="callout info">
+  <h4>前提</h4>
+  <p><code>as_of_race_id</code> によるスナップショット管理でテンポラルリークを構造的に排除することが全工程の前提条件である（DEC-001）。</p>
+</div>
+
+<h2 id="2">2. DB スキーマ</h2>
+
+<h3 id="2-1">2-1. 層別構成（5 層）</h3>
+<table>
+<tr><th>層</th><th>役割</th><th>主テーブル</th></tr>
+<tr><td>Layer 1</td><td>静的マスター</td><td><code>races</code>, <code>entries</code>, <code>horses</code>, <code>jockeys</code>, <code>trainers</code>, <code>courses</code></td></tr>
+<tr><td>Layer 2</td><td>確定結果（追記のみ）</td><td><code>race_results</code></td></tr>
+<tr><td>Layer 3</td><td>集計スナップショット（追記型・不変）</td><td><code>horse_stats_snapshot</code>, <code>jockey_stats_snapshot</code>, <code>trainer_stats_snapshot</code></td></tr>
+<tr><td>Layer 4</td><td>ラップ・ペース・通過順位</td><td><code>race_lap_times</code>, <code>race_corner_positions</code>, <code>race_pace_summary</code></td></tr>
+<tr><td>Layer 5</td><td>オッズ時系列（追記型・削除不可）</td><td><code>race_odds_snapshot</code></td></tr>
+</table>
+
+<h3 id="2-2">2-2. Layer 3: <code>horse_stats_snapshot</code></h3>
+<pre><code>CREATE TABLE horse_stats_snapshot (
+    snapshot_id          BIGSERIAL      PRIMARY KEY,
+    horse_id             VARCHAR(20)    NOT NULL,
+    as_of_race_id        VARCHAR(20)    NOT NULL,   -- 予測対象レース直前時点
+    as_of_date           DATE           NOT NULL,
+    win_rate_all         NUMERIC(5,4),
+    win_rate_turf        NUMERIC(5,4),
+    win_rate_dirt        NUMERIC(5,4),
+    place_rate_all       NUMERIC(5,4),              -- 連対率（2着以内）
+    show_rate_all        NUMERIC(5,4),              -- 複勝率（3着以内）
+    win_rate_distance    NUMERIC(5,4),              -- ±200m同距離帯
+    win_rate_course      NUMERIC(5,4),              -- 同コース(場・距離・芝砂)
+    win_rate_going       NUMERIC(5,4),              -- 同馬場状態
+    avg_last_3f          NUMERIC(5,2),              -- 直近5走平均上がり3F
+    speed_index_avg      NUMERIC(6,2),
+    speed_index_max      NUMERIC(6,2),
+    running_style_score  NUMERIC(5,2),              -- -5(逃)〜+5(追込)
+    sample_count         SMALLINT,
+    created_at           TIMESTAMPTZ    DEFAULT NOW(),
+    UNIQUE (horse_id, as_of_race_id)
+);</code></pre>
+
+<h3 id="2-3">2-3. Layer 4: ラップ・ペース・コーナー</h3>
+<pre><code>CREATE TABLE race_lap_times (
+    race_id          VARCHAR(20)   NOT NULL,
+    furlong_index    SMALLINT      NOT NULL,   -- 1始まり（1F目=スタート直後）
+    lap_time_sec     NUMERIC(4,2)  NOT NULL,
+    cumulative_sec   NUMERIC(6,2),
+    PRIMARY KEY (race_id, furlong_index)
+);
+
+CREATE TABLE race_corner_positions (
+    race_id    VARCHAR(20)   NOT NULL,
+    horse_id   VARCHAR(20)   NOT NULL,
+    corner_1   SMALLINT,                      -- NULL = コース形状上存在しない
+    corner_2   SMALLINT,
+    corner_3   SMALLINT,
+    corner_4   SMALLINT,
+    PRIMARY KEY (race_id, horse_id)
+);
+
+CREATE TABLE race_pace_summary (
+    race_id            VARCHAR(20)   NOT NULL PRIMARY KEY,
+    first_3f_sec       NUMERIC(5,2),
+    last_3f_sec        NUMERIC(5,2),
+    pace_category      VARCHAR(10)
+                       CHECK (pace_category IN ('HIGH','MIDDLE','SLOW')),
+    front_runner_count SMALLINT,
+    created_at         TIMESTAMPTZ   DEFAULT NOW()
+);</code></pre>
+
+<h3 id="2-4">2-4. Layer 5: <code>race_odds_snapshot</code></h3>
+<pre><code>CREATE TABLE race_odds_snapshot (
+    snapshot_id      BIGSERIAL     PRIMARY KEY,
+    race_id          VARCHAR(20)   NOT NULL,
+    horse_id         VARCHAR(20)   NOT NULL,
+    snapshot_type    VARCHAR(20)   NOT NULL
+                     CHECK (snapshot_type IN (
+                         'WIN',        -- 単勝
+                         'PLACE',      -- 複勝
+                         'EXACTA',     -- 馬単
+                         'QUINELLA',   -- 馬連
+                         'WIDE'        -- ワイド
+                     )),
+    odds_value       NUMERIC(7,1)  NOT NULL,
+    odds_place_low   NUMERIC(7,1),              -- 複勝下限（PLACEのみ）
+    odds_place_high  NUMERIC(7,1),              -- 複勝上限（PLACEのみ）
+    snapshot_at      TIMESTAMPTZ   NOT NULL,
+    CONSTRAINT uq_odds_snapshot
+        UNIQUE (race_id, horse_id, snapshot_type, snapshot_at)
+);
+
+CREATE INDEX idx_odds_race_horse_time
+    ON race_odds_snapshot (race_id, horse_id, snapshot_at DESC);</code></pre>
+
+<h3 id="2-5">2-5. 推論結果テーブル</h3>
+<pre><code>CREATE TABLE prediction_results (
+    prediction_id            BIGSERIAL     PRIMARY KEY,
+    race_id                  VARCHAR(20)   NOT NULL,
+    horse_id                 VARCHAR(20)   NOT NULL,
+    model_version            VARCHAR(50)   NOT NULL,
+    predicted_at             TIMESTAMPTZ   DEFAULT NOW(),
+    win_prob                 NUMERIC(5,4),
+    place_prob               NUMERIC(5,4),
+    show_prob                NUMERIC(5,4),
+    predicted_win_odds       NUMERIC(7,1),
+    predicted_place_odds     NUMERIC(7,1),
+    expected_win_roi         NUMERIC(7,2),
+    expected_show_roi        NUMERIC(7,2),
+    predicted_position       SMALLINT,
+    predicted_running_style  VARCHAR(10),
+    UNIQUE (race_id, horse_id, model_version)
+);
+
+CREATE TABLE prediction_lap_times (
+    race_id              VARCHAR(20)   NOT NULL,
+    model_version        VARCHAR(50)   NOT NULL,
+    furlong_index        SMALLINT      NOT NULL,
+    predicted_lap_sec    NUMERIC(4,2),
+    predicted_pace_cat   VARCHAR(10)
+                         CHECK (predicted_pace_cat IN ('HIGH','MIDDLE','SLOW')),
+    PRIMARY KEY (race_id, model_version, furlong_index)
+);</code></pre>
+
+<h3 id="2-6">2-6. スクレイプ実行管理テーブル</h3>
+<pre><code>-- F-5: scrape_runs テーブルでスクレイプ実行ログを管理する
+CREATE TABLE scrape_runs (
+    run_id        BIGSERIAL     PRIMARY KEY,
+    target_type   VARCHAR(50)   NOT NULL,   -- 'race_card' | 'odds' | 'results' | 'horse_history' 等
+    target_id     VARCHAR(50),              -- race_id / horse_id 等
+    status        VARCHAR(20)   NOT NULL,   -- 'SUCCESS' | 'FAILURE' | 'RETRY'
+    retry_count   SMALLINT      DEFAULT 0,
+    started_at    TIMESTAMPTZ   NOT NULL,
+    finished_at   TIMESTAMPTZ,
+    error_message TEXT
+);</code></pre>
+
+<h3 id="2-7">2-7. お気に入り馬テーブル（F-12）</h3>
+<pre><code>CREATE TABLE user_favorites (
+    favorite_id   BIGSERIAL     PRIMARY KEY,
+    user_id       INTEGER       NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    horse_id      VARCHAR(20)   NOT NULL,
+    created_at    TIMESTAMPTZ   DEFAULT NOW(),
+    UNIQUE (user_id, horse_id)
+);
+
+CREATE INDEX idx_favorites_user ON user_favorites (user_id);</code></pre>
+
+<h3 id="2-8">2-8. 通知設定・ログテーブル（F-09）</h3>
+<pre><code>CREATE TABLE notification_settings (
+    user_id            INTEGER      PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+    email_enabled      BOOLEAN      NOT NULL DEFAULT FALSE,
+    notify_day_before  BOOLEAN      NOT NULL DEFAULT TRUE,   -- 前日 18:00 通知
+    notify_race_day    BOOLEAN      NOT NULL DEFAULT FALSE,  -- 当日 08:00 通知
+    updated_at         TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE TABLE notification_log (
+    log_id          BIGSERIAL     PRIMARY KEY,
+    user_id         INTEGER       NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    horse_id        VARCHAR(20)   NOT NULL,
+    race_id         VARCHAR(20)   NOT NULL,
+    notify_type     VARCHAR(20)   NOT NULL CHECK (notify_type IN ('DAY_BEFORE','RACE_DAY')),
+    sent_at         TIMESTAMPTZ   NOT NULL,
+    status          VARCHAR(20)   NOT NULL CHECK (status IN ('SENT','FAILED')),
+    error_message   TEXT
+);
+
+CREATE INDEX idx_notif_log_user ON notification_log (user_id, sent_at DESC);</code></pre>
+<div class="callout info">
+  <h4>実装メモ</h4>
+  <p>SendGrid API キーは環境変数 <code>SENDGRID_API_KEY</code> で管理する。メール本文テンプレートは <code>src/api/email_templates/</code> に保存。</p>
+</div>
+
+<h3 id="2-9">2-9. スキーマ管理</h3>
+<ul>
+<li>全スキーマ変更は <b>Alembic</b> によるマイグレーションでバージョン管理する（N-11）。</li>
+<li>障害レース・海外レースは <code>races</code> テーブルの <code>is_excluded</code> フラグ（<code>BOOLEAN DEFAULT FALSE</code>）で予測対象外を明示管理する（N-14）。</li>
+</ul>
+
+<h2 id="3">3. REST API 仕様</h2>
+
+<h3 id="3-1">3-1. 基本仕様</h3>
+<table>
+<tr><th>項目</th><th>値</th></tr>
+<tr><td>フレームワーク</td><td>Flask</td></tr>
+<tr><td>ベースパス</td><td><code>/api/v1</code></td></tr>
+<tr><td>レスポンス形式</td><td><code>application/json</code></td></tr>
+<tr><td>タイムゾーン</td><td>UTC（<code>TIMESTAMPTZ</code>）、表示用は JST</td></tr>
+</table>
+
+<h3 id="3-2">3-2. エンドポイント一覧</h3>
+<table>
+<tr><th>メソッド</th><th>エンドポイント</th><th>説明</th><th>機能要件</th><th>auth_required</th></tr>
+<tr><td><code>GET</code></td><td><code>/api/v1/races/today</code></td><td>本日のレース一覧取得</td><td>F-13</td><td>false</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/v1/races</code></td><td>レース一覧取得（<code>?date=YYYYMMDD</code>）</td><td>F-13</td><td>false</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/v1/races/{race_id}</code></td><td>レース詳細・出馬表取得</td><td>F-13</td><td>false</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/v1/races/{race_id}/entries</code></td><td>出馬表取得</td><td>F-13</td><td>false</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/v1/races/{race_id}/results</code></td><td>着順・ラップ・コーナー取得</td><td>F-13</td><td>false</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/v1/races/{race_id}/predictions</code></td><td>全予測ターゲット（T-1〜T-9）取得</td><td>F-10</td><td>true</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/v1/races/{race_id}/predictions/laps</code></td><td>ラップ予測系列（T-10〜T-11）取得</td><td>F-11</td><td>true</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/v1/filter/stats</code></td><td>フィルタ条件による統計集計</td><td>F-16</td><td>true</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/v1/betting/optimize</code></td><td>Kelly 基準馬券最適化</td><td>F-08</td><td>true</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/v1/favorites</code></td><td>お気に入り馬一覧取得</td><td>F-12</td><td>true</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/v1/favorites</code></td><td>お気に入り馬登録</td><td>F-12</td><td>true</td></tr>
+<tr><td><code>DELETE</code></td><td><code>/api/v1/favorites/{horse_id}</code></td><td>お気に入り馬登録解除</td><td>F-12</td><td>true</td></tr>
+<tr><td><code>GET</code></td><td><code>/api/v1/notifications/settings</code></td><td>通知設定取得</td><td>F-09</td><td>true</td></tr>
+<tr><td><code>PUT</code></td><td><code>/api/v1/notifications/settings</code></td><td>通知設定更新</td><td>F-09</td><td>true</td></tr>
+</table>
+
+<h3 id="3-3">3-3. <code>GET /api/v1/races/{race_id}/predictions</code> レスポンス仕様</h3>
+<pre><code>{
+  "race_id": "202506010811",
+  "model_version": "v1.2.0",
+  "predicted_at": "2025-06-01T08:30:00+09:00",
+  "pace_prediction": {
+    "pace_category": "MIDDLE",
+    "lap_times": [
+      { "furlong_index": 1, "predicted_lap_sec": 12.3 },
+      { "furlong_index": 2, "predicted_lap_sec": 11.8 }
+    ]
+  },
+  "horses": [
+    {
+      "horse_id": "2019105678",
+      "post_no": 3,
+      "win_probability": 0.1823,
+      "place_probability": 0.4815,
+      "predicted_win_odds": 5.2,
+      "predicted_place_odds": 2.1,
+      "expected_win_roi": 94.8,
+      "expected_show_roi": 101.1,
+      "predicted_position": 2,
+      "predicted_running_style": "STALKER",
+      "is_value_bet": true
+    }
+  ]
+}</code></pre>
+<ul>
+<li><code>is_value_bet</code>: <code>expected_win_roi &gt;= 100</code> または <code>expected_show_roi &gt;= 100</code> の場合に <code>true</code>（F-14）。</li>
+<li><code>win_probability</code>: DB カラム <code>win_prob</code> を API レスポンスでは <code>win_probability</code> として返す（DEC-022）。旧フィールド名 <code>prediction_score</code> は廃止。</li>
+<li><code>place_probability</code>: 複勝率（3着以内率）。DB カラム <code>show_prob</code> を API レスポンスでは <code>place_probability</code> として返す（DEC-022）。<code>float (0.0〜1.0)</code>。</li>
+<li>ラップ予測（T-10〜T-11）はレスポンス内の <code>pace_prediction</code> オブジェクトおよび <code>/predictions/laps</code> エンドポイントで <code>furlong_index</code> 昇順で提供する（F-11）。</li>
+</ul>
+
+<h3 id="3-4">3-4. パフォーマンス要件</h3>
+<table>
+<tr><th>条件</th><th>目標レスポンスタイム</th></tr>
+<tr><td>キャッシュヒット時</td><td>≤ 200 ms（N-1）</td></tr>
+<tr><td>キャッシュミス時</td><td>≤ 2,000 ms（N-2）</td></tr>
+</table>
+
+<h2 id="4">4. 認証・認可</h2>
+<p>DEC-001 の現時点の記述には認証・認可の具体的スキームが明示されていない。以下は DEC-001 が定める機能・非機能要件から導出した最低限の実装方針とする。追加の認証要件が別 DEC で定義された場合は、その DEC を優先する。</p>
+<table>
+<tr><th>項目</th><th>方針</th></tr>
+<tr><td>認証方式</td><td>JWT を HttpOnly Cookie（<code>access_token</code>）に保存して送受信。<code>Authorization: Bearer</code> ヘッダーは使用しない。CSRF 対策: SameSite=Strict + カスタム CSRF トークン（二重送信 Cookie パターン）。「30日間ログイン保持」有効時は Refresh Token を別 HttpOnly Cookie に保存し、アクセストークン（TTL=15分）を自動更新する。</td></tr>
+<tr><td>認可スコープ</td><td>予測 API・レース API は読み取り専用。スクレイプ実行・モデル管理は内部ネットワーク限定</td></tr>
+<tr><td>管理系エンドポイント</td><td><code>/api/v1/admin/*</code> は内部 IP（127.0.0.1 / VPN 内）のみアクセス許可</td></tr>
+<tr><td>DDL 操作</td><td>Alembic マイグレーション実行権限はサービスアカウントに限定</td></tr>
+</table>
+
+<h2 id="5">5. キャッシュ設計</h2>
+<p>DEC-001 では Redis を用いた予測結果のキャッシュが明示されている（F-12、N-12）。以下の 4 層構成で実装する。</p>
+
+<h3 id="5-1">5-1. 4 層キャッシュ構成</h3>
+<table>
+<tr><th>層</th><th>種別</th><th>対象</th><th>TTL</th><th>キャッシュキー例</th></tr>
+<tr><td>L1</td><td>Flask アプリ内メモリ（<code>lru_cache</code>）</td><td>コース・マスターデータ等の静的情報</td><td>プロセス再起動まで</td><td>N/A（関数単位）</td></tr>
+<tr><td>L2</td><td>Redis — 予測結果</td><td>全ターゲット予測（T-1〜T-9）</td><td>発走時刻まで / 発走後 60 秒で自動失効</td><td><code>prediction:{race_id}:{model_version}</code></td></tr>
+<tr><td>L3</td><td>Redis — ラップ予測</td><td>ラップ予測系列（T-10〜T-11）</td><td>発走時刻まで / 発走後 60 秒で自動失効</td><td><code>lap:prediction:{race_id}:{model_version}</code></td></tr>
+<tr><td>L4</td><td>Redis — オッズスナップショット</td><td>直近オッズ（推論特徴量用）</td><td>5 分（オッズ更新間隔に合わせる）</td><td><code>odds:latest:{race_id}</code></td></tr>
+</table>
+
+<h3 id="5-2">5-2. TTL 詳細ルール</h3>
+<ul>
+<li><b>発走前</b>: 予測結果キャッシュは発走予定時刻まで有効とし、発走予定時刻を <code>EXPIREAT</code> で設定する。</li>
+<li><b>発走後</b>: 発走後 60 秒で自動失効させ、確定</li>
+</ul>
+<div class="callout warn">
+  <h4>元ファイルの欠落について</h4>
+  <p>元の Markdown（<code>AREA-03-backend.md</code>）は「5-2. TTL 詳細ルール」の2項目目「発走後」の説明文が「発走後 60 秒で自動失効させ、確定」で文章が途切れた状態（末尾も改行なしでファイルが終了）で保存されている。本 HTML は原文をそのまま転記しており、内容の補完・削除は行っていない。</p>
+</div>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

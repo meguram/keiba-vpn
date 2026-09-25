@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AREA-11 めぐ指数 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · AREA-11</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <h4>AREA-11</h4>
+      <a href="#0">0. バージョン履歴</a>
+      <a href="#1">1. 基本原則</a>
+      <a href="#2">2. 指数の種類</a>
+      <a href="#3">3. 全体計算フロー</a>
+      <a href="#4">4. par_time の構築</a>
+      <a class="toc-h3" href="#4-1">4-1 使用データ</a>
+      <a class="toc-h3" href="#4-2">4-2 クラス階層</a>
+      <a class="toc-h3" href="#4-3">4-3 回帰モデル</a>
+      <a class="toc-h3" href="#4-4">4-4 par_time の算出</a>
+      <a class="toc-h3" href="#4-5">4-5 Sparse対策</a>
+      <a href="#5">5. Δpace（ペース補正）</a>
+      <a href="#6">6. Δtrack（馬場差補正）</a>
+      <a href="#7">7. データ品質フィルタ</a>
+      <a class="toc-h3" href="#out_of_range">out_of_range フラグ</a>
+      <a href="#8">8. 指数の読み方</a>
+      <a href="#9">9. ノートブック実装計画</a>
+      <a href="#10">10. 未決定事項</a>
+      <a href="#11">11. 想定めぐ指数（megu_final）</a>
+      <a class="toc-h3" href="#11-1">11-1 学習済みチューニング</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · AREA-11</div>
+      <h1>AREA-11 — めぐ指数（実測めぐ指数・設計仕様）</h1>
+      <p class="meta">
+        <span class="badge final">DECIDED</span>
+        Date: 2026-07-13（v3 統合版）
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<h2 id="0">0. バージョン履歴</h2>
+<table>
+<tr><th>バージョン</th><th>内容</th><th>状態</th></tr>
+<tr><td>v1</td><td>距離×芝ダ×方向×馬場のみの par_time</td><td>本文書 v3 に統合・置換済み（旧ファイルは削除済み）</td></tr>
+<tr><td>v2 par補足</td><td>class_bucket（6段階）による par_time 補正</td><td>本文書 §4 に統合・置換済み（旧ファイルは削除済み）</td></tr>
+<tr><td>v2.1 想定指数</td><td>megu_final 推定モデル・チューニング</td><td>本文書 §11 に統合済み</td></tr>
+<tr><td><b>v3（本文書）</b></td><td>クラス別線形回帰による par_time 再設計</td><td><b>CURRENT</b></td></tr>
+</table>
+
+<h2 id="1">1. 基本原則</h2>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>スケール</td><td><b>1点 = 0.1秒差</b></td></tr>
+<tr><td>基準値</td><td><b>50 = 1勝クラス2着馬相当のパフォーマンス</b></td></tr>
+<tr><td>すべての補正</td><td>秒単位で統一し、等価性を保つ</td></tr>
+<tr><td>障害レース</td><td>除外（平地レースのみ対象）</td></tr>
+</table>
+
+<h2 id="2">2. 指数の種類</h2>
+<table>
+<tr><th>指数名</th><th>計算タイミング</th><th>内容</th><th>UI表示</th></tr>
+<tr><td><b>実測めぐ指数</b></td><td>レース確定後（事後）</td><td>ペース・馬場・斤量・クラスを補正した実走パフォーマンス</td><td>○</td></tr>
+<tr><td><b>想定めぐ指数</b></td><td>レース前</td><td>過去の実測めぐ指数を集計した出走時の予測値</td><td>○</td></tr>
+</table>
+
+<h2 id="3">3. 全体計算フロー</h2>
+<pre><code>raw_time（走破タイム）
+    ↓ 斤量補正（NB-01計算済み）
+adjusted_time_sec
+    ↓ Δpace（ペース補正）
+    ↓ Δtrack（馬場差補正）
+corrected_time = adjusted_time_sec − Δpace − Δtrack
+    ↓
+実測めぐ指数 = 50 + (par_time_class − corrected_time) × 10</code></pre>
+
+<h2 id="4">4. par_time の構築（クラス別線形回帰）</h2>
+
+<h3 id="4-1">4-1. 使用データ</h3>
+<table>
+<tr><th>項目</th><th>仕様</th></tr>
+<tr><td>対象馬</td><td><b>2着馬のみ</b></td></tr>
+<tr><td>対象レース</td><td>3歳以上・4歳以上の<b>混合条件戦のみ</b>（2歳のみ・3歳のみの世代戦を除外）</td></tr>
+<tr><td>使用タイム</td><td><code>adjusted_time_sec</code>（斤量補正後タイム）</td></tr>
+</table>
+
+<h3 id="4-2">4-2. クラス階層</h3>
+<table>
+<tr><th>rank</th><th>クラス</th></tr>
+<tr><td>1</td><td>未勝利</td></tr>
+<tr><td>2</td><td>1勝クラス</td></tr>
+<tr><td>3</td><td>2勝クラス</td></tr>
+<tr><td>4</td><td>3勝クラス</td></tr>
+<tr><td>5</td><td>OP</td></tr>
+<tr><td>6</td><td>重賞（G2/G3）</td></tr>
+<tr><td>7</td><td>G1</td></tr>
+</table>
+
+<h3 id="4-3">4-3. 回帰モデル</h3>
+<p>グループ単位：<b>開催場 × コース(芝/ダ) × 距離</b></p>
+<pre><code>avg_2nd_time(venue, surface, distance, class_rank)
+    = α(venue, surface, distance)  +  β(venue, surface, distance) × class_rank</code></pre>
+<ul>
+<li>β は負（クラスが上がるほど平均タイムが速くなる）</li>
+<li>基準点：1勝クラス（rank=2）→ <code>α + β × 2</code> = 実測めぐ指数50点に対応</li>
+</ul>
+
+<h3 id="4-4">4-4. par_time の算出</h3>
+<pre><code>par_time_class(venue, surface, distance, class_rank) = α + β × class_rank</code></pre>
+
+<h3 id="4-5">4-5. Sparse対策</h3>
+<table>
+<tr><th>状況</th><th>対処</th></tr>
+<tr><td>セルのクラスデータが2水準未満</td><td><code>surface × 距離帯</code> のプーリングβを使用</td></tr>
+<tr><td>それも不足</td><td>Ridge回帰でグローバルβへ縮小</td></tr>
+</table>
+
+<h2 id="5">5. Δpace（ペース補正）</h2>
+<table>
+<tr><th>項目</th><th>仕様</th></tr>
+<tr><td>目的</td><td>ペース差による最終タイムの変動を除去</td></tr>
+<tr><td>係数推定条件</td><td><b>開催場 × コース(芝/ダ) × 距離</b></td></tr>
+<tr><td>推定方法</td><td>セル内OLS：<code>front_split_dev</code>（実スプリット − par_front_split）→ <code>adjusted_time_sec</code></td></tr>
+<tr><td>適用式</td><td><code>Δpace = coeff_pace(venue, surface, distance) × front_split_dev</code></td></tr>
+<tr><td>Sparse対策</td><td>30件未満 → <code>surface × 距離帯</code> → <code>surface</code> 全体の順でフォールバック</td></tr>
+<tr><td>データ欠損時</td><td><code>front_split_sec</code> が NULL → <code>Δpace = 0</code></td></tr>
+</table>
+
+<h2 id="6">6. Δtrack（馬場差補正）</h2>
+<table>
+<tr><th>項目</th><th>仕様</th></tr>
+<tr><td>目的</td><td>当日の時計水準の偏りを除去（同一馬場状態区分内での日別ズレ）</td></tr>
+<tr><td>係数算出条件</td><td><b>開催日 × 開催場 × コース(芝/ダ)</b></td></tr>
+<tr><td>対象レース</td><td><b>未勝利〜G3</b>（G1を除外）</td></tr>
+<tr><td>算出式</td><td><code>Δtrack = mean(adjusted_time_sec − Δpace) − mean(par_time_class)</code></td></tr>
+<tr><td>符号の直感</td><td>速い馬場の日 → Δtrack &lt; 0 → corrected_time から引くと上昇（時計的優位を除去）</td></tr>
+<tr><td>計算タイミング</td><td>当日の対象レース全確定後の<b>事後計算</b></td></tr>
+<tr><td>Sparse対策</td><td>当日対象レースが3件未満 → <code>Δtrack = 0</code></td></tr>
+</table>
+
+<h2 id="7">7. データ品質フィルタ</h2>
+
+<h3 id="out_of_range">out_of_range フラグ</h3>
+<table>
+<tr><th>項目</th><th>仕様</th></tr>
+<tr><td>条件</td><td>3着以降 かつ <code>finish_time_sec &gt; time_2nd + 2.0秒</code></td></tr>
+<tr><td>処理</td><td><code>megu_index = NULL</code>、<code>computation_status = 'out_of_range'</code></td></tr>
+<tr><td>対象外</td><td>1着・2着は無条件に計算対象</td></tr>
+<tr><td>根拠</td><td>着差2秒超は競走不成立相当（出遅れ・故障・明らかな競走意欲喪失）であり、補正後タイムの信頼性が著しく低い</td></tr>
+</table>
+
+<h2 id="8">8. 指数の読み方</h2>
+<table>
+<tr><th>値</th><th>意味</th></tr>
+<tr><td><b>50</b></td><td>出走クラスの2着馬相当（= par）</td></tr>
+<tr><td>55</td><td>parより0.5秒速い</td></tr>
+<tr><td>60</td><td>parより1.0秒速い</td></tr>
+<tr><td>45</td><td>parより0.5秒遅い</td></tr>
+<tr><td>40</td><td>parより1.0秒遅い</td></tr>
+</table>
+<p>実走1着馬は概ね50〜55、G1好走馬で60台が想定される範囲。</p>
+
+<h2 id="9">9. ノートブック実装計画</h2>
+<table>
+<tr><th>NB</th><th>目的</th><th>主要入力</th><th>主要出力</th></tr>
+<tr><td>NB-01</td><td>データ前処理・斤量補正</td><td>race_result_flat, cushion</td><td>adjusted_time_sec, par_splits</td></tr>
+<tr><td>NB-02</td><td>Δpace係数推定 &amp; par_time回帰</td><td>NB-01出力</td><td>coeff_pace, par_time_class</td></tr>
+<tr><td>NB-03</td><td>Δtrack算出</td><td>NB-02出力</td><td>Δtrack per (date, venue, surface)</td></tr>
+<tr><td>NB-04</td><td>実測めぐ指数の計算・検証</td><td>NB-02/03出力</td><td>megu_index 全件</td></tr>
+<tr><td>NB-05</td><td>想定めぐ指数の集計・検証</td><td>NB-04出力</td><td>megu_final</td></tr>
+<tr><td>NB-06</td><td>有効性検証</td><td>NB-04/05出力</td><td>着順相関・回収率レポート</td></tr>
+</table>
+
+<h2 id="10">10. 未決定事項</h2>
+<table>
+<tr><th>#</th><th>項目</th><th>備考</th></tr>
+<tr><td>T-2</td><td>Δtrack の馬場状態カテゴリ（良/稍重/重・不良）による分離の要否</td><td>データ密度と要相談</td></tr>
+</table>
+
+<h2 id="11">11. 想定めぐ指数（megu_final）— 推定モデル v2.1（2026-07）</h2>
+<p>旧 <code>AREA-11-megu-index-v2-par.md</code> から統合。実測 <code>megu_index</code>（§1〜9）が確定した後、過去走の実測値を集計してレース前の推定値を作るモデル。</p>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>base</td><td>過去走 megu → 各走 par で補正済みタイムに戻し加重平均 → 今回 par に換算</td></tr>
+<tr><td>条件転換</td><td>芝↔ダート・距離±600m 超で <code>megu_condition_transfer</code> を加算（final に反映）</td></tr>
+<tr><td>斤量</td><td>今回 <code>jockey_weight</code> の <code>weight_megu_delta</code> を final に反映</td></tr>
+<tr><td>実測との比較</td><td>ともにペース・馬場・斤量・レベル補正後。1点=0.1秒で着差想定可能</td></tr>
+</table>
+
+<h3 id="11-1">11-1. 学習済みチューニング（<code>config/megu_predict_params.json</code>）</h3>
+<p>2024–2025 実測との MAE 最小化（1点=0.1秒は不変。調整は秒空間のみ）。</p>
+<pre><code>KEIBA_ENV=stg python3 -m src.pipeline.megu_index.optimize_predict --year-start 2024 --year-end 2025</code></pre>
+<table>
+<tr><th>パラメータ</th><th>最適値（例）</th><th>意味</th></tr>
+<tr><td><code>par_blend</code></td><td>0.0</td><td>過去 megu 加重平均（par 換算ブレンドなし）</td></tr>
+<tr><td><code>ability_bias_sec</code></td><td>1.0</td><td>能力推定に +1.0秒補正（指数 +10点）</td></tr>
+<tr><td><code>transfer_strength</code></td><td>0.0</td><td>条件転換 Δ をオフ（MAE 悪化のため）</td></tr>
+<tr><td><code>history_weights</code></td><td>0.50/0.25/0.15/0.07/0.03</td><td>直近走重視</td></tr>
+<tr><td>full MAE</td><td><b>17.5</b></td><td>ベースライン 22.5 から改善（67k ペア）</td></tr>
+</table>
+<div class="callout warn">
+  <h4>要フォローアップ</h4>
+  <p>§4 の par_time はクラス別線形回帰（class_rank）に置き換わったため、上記チューニング値は §4 の新 par_time 定義に対する再検証が望ましい（T-2 と同様、要フォローアップ）。</p>
+</div>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

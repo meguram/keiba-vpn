@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DEC-023 VPS ファーストアーキテクチャ & 月額予算上限 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · DEC-023</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <a href="AREA-05-cost.html">→ AREA-05 コスト</a>
+      <a href="AREA-06-data.html">→ AREA-06 データ</a>
+      <a href="AREA-10-infra-monitoring.html">→ AREA-10 インフラ監視</a>
+      <h4>DEC-023</h4>
+      <a href="#context">コンテキスト</a>
+      <a href="#decision">決定事項</a>
+      <a class="toc-h3" href="#infra">インフラ方針: VPS ファースト</a>
+      <a class="toc-h3" href="#budget">予算上限</a>
+      <a class="toc-h3" href="#cost-estimate">月額コスト試算</a>
+      <a class="toc-h3" href="#cost-measures">コスト施策</a>
+      <a class="toc-h3" href="#scraping-constraint">スクレイピング制約</a>
+      <a href="#impact">影響範囲</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · DEC-023</div>
+      <h1>DEC-023: VPS ファーストアーキテクチャ &amp; 月額予算上限</h1>
+      <p class="meta">
+        <span class="badge final">ACCEPTED</span>
+        2026-07-06　|　担当: Orchestrator（TASK-056 エスカレーション確認）　|　関連: DEC-001, DEC-003, DEC-006, DEC-010, AREA-05, AREA-06, AREA-10
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<table>
+<tr><td>日付</td><td>2026-07-06</td></tr>
+<tr><td>ステータス</td><td><span class="badge final">ACCEPTED</span></td></tr>
+<tr><td>担当</td><td>Orchestrator（TASK-056 エスカレーション確認）</td></tr>
+<tr><td>関連</td><td>DEC-001, DEC-003, DEC-006, DEC-010, AREA-05, AREA-06, AREA-10</td></tr>
+<tr><td>Supersedes</td><td>DEC-006（デプロイターゲット選定）の GCP マネージドサービス前提部分</td></tr>
+</table>
+
+<h2 id="context">コンテキスト</h2>
+<p>
+AREA-05〜07 のコスト試算は GCP マネージドサービス（Cloud Run / Cloud SQL / BigQuery）を前提に $100/月（〜15,000円）で作られていたが、実際のシステムは ConoHa VPS で稼働しており実態と乖離していた。また想定リクエスト数が最大 50,000 req/日（1,000 req/レース × 36レース）であることが確認され、月額予算を 1,000〜3,000円以内とする要件が明確化された。
+</p>
+
+<h2 id="decision">決定事項</h2>
+
+<h4 id="infra">インフラ方針: VPS ファースト</h4>
+<table>
+<tr><th>サービス</th><th>旧仕様書（GCP前提）</th><th>採用構成</th></tr>
+<tr><td>Web サーバ</td><td>Cloud Run</td><td><b>ConoHa VPS（Flask + Nginx + Gunicorn）</b></td></tr>
+<tr><td>データベース</td><td>Cloud SQL（PostgreSQL）</td><td><b>VPS 上のローカル PostgreSQL</b></td></tr>
+<tr><td>タスクキュー</td><td>Cloud Run Jobs + Cloud Scheduler</td><td><b>VPS 上の Celery + cron</b></td></tr>
+<tr><td>分析基盤</td><td>BigQuery</td><td><b>廃止 → PostgreSQL に集約</b></td></tr>
+<tr><td>オブジェクトストレージ</td><td>GCS（全データ）</td><td><b>GCS は冷ストレージのみ</b>（HybridStorage で L1メモリ→L2ディスク→L3 GCS）</td></tr>
+<tr><td>モニタリング</td><td>Google Cloud Monitoring</td><td><b>Prometheus + Grafana on VPS</b>（AREA-10 準拠）</td></tr>
+</table>
+
+<h4 id="budget">予算上限</h4>
+<ul>
+<li><b>目標</b>: 1,000円/月以内</li>
+<li><b>上限（絶対守る）</b>: 3,000円/月</li>
+</ul>
+
+<h4 id="cost-estimate">月額コスト試算（VPS ベース）</h4>
+<table>
+<tr><th>項目</th><th>月額</th></tr>
+<tr><td>ConoHa VPS 2GB RAM / 2vCPU</td><td>~1,030円</td></tr>
+<tr><td>GCS ストレージ（50〜100GB 冷ストレージ）</td><td>~170〜350円</td></tr>
+<tr><td>GCS API 呼び出し（HybridStorage キャッシュ活用）</td><td>~100〜200円</td></tr>
+<tr><td><b>合計</b></td><td><b>~1,300〜1,580円</b> ✅</td></tr>
+</table>
+
+<h4 id="cost-measures">コスト施策</h4>
+<ol>
+<li><b>BigQuery を廃止</b> — PostgreSQL で特徴量・分析クエリをすべて処理</li>
+<li><b>Cloud Run / Cloud SQL / Cloud Scheduler を廃止</b> — VPS cron + ローカル DB</li>
+<li><b>GCS 読み取りを最小化</b> — HybridStorage（L1メモリ→L2ディスク→L3 GCS）で重複 GCS アクセスを防ぐ</li>
+<li><b>ML 特徴量を VPS ディスクにキャッシュ</b> — 毎回 GCS から読まない</li>
+<li><b>スクレイピングは逐次処理</b> — 同サイトへの並列リクエスト禁止（後述）</li>
+</ol>
+
+<h4 id="scraping-constraint">スクレイピング制約</h4>
+<p>
+netkeiba.com および JRA公式サイトへの<b>並列リクエストは禁止</b>とする（逐次処理のみ）。
+</p>
+<ul>
+<li><code>NETKEIBA_MAX_CONCURRENT_REQUESTS=1</code> を <code>.env</code> で強制</li>
+<li>利用規約確認済み（2026-07-06）</li>
+</ul>
+
+<h2 id="impact">影響範囲</h2>
+<ul>
+<li>DEC-006（Cloud Run）の GCP マネージドサービス選定は本決定で実態ベースに上書きされる</li>
+<li>DEC-010（$100/月）の予算上限は本決定の 3,000円（約 $20）に更新される</li>
+<li>DEC-003（Cloud Run Jobs）のバッチ実行基盤は VPS cron に変更される</li>
+<li>AREA-05 のコスト試算を VPS ベース構成に全面改訂する</li>
+<li>AREA-06 の BigQuery テーブル定義（ml_features 等）を PostgreSQL スキーマに変更する</li>
+<li>50,000 req/日は HybridStorage キャッシュにより VPS 2GB で対応可能</li>
+</ul>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

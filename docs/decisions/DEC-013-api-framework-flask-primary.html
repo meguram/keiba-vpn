@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DEC-013 APIフレームワーク統一: Flask を正として FastAPI を段階廃止 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · DEC-013</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <a href="AREA-03-backend.html">関連: AREA-03</a>
+      <h4>DEC-013</h4>
+      <a href="#context">コンテキスト</a>
+      <a href="#decision">決定事項</a>
+      <a href="#options">選択肢と比較</a>
+      <a href="#impact">影響範囲</a>
+      <a href="#notes">備考</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · DEC-013</div>
+      <h1>DEC-013: APIフレームワーク統一: Flask を正として FastAPI を段階廃止</h1>
+      <p class="meta">
+        <span class="badge final">ACCEPTED</span>
+        日付: 2026-07-04　|　担当: Orchestrator　|　関連 AREA: AREA-03　|　矛盾ID: S-1-A
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<table>
+<tr><td><b>日付</b></td><td>2026-07-04</td></tr>
+<tr><td><b>ステータス</b></td><td>accepted</td></tr>
+<tr><td><b>担当</b></td><td>Orchestrator</td></tr>
+<tr><td><b>関連 AREA</b></td><td>AREA-03</td></tr>
+<tr><td><b>矛盾ID</b></td><td>S-1-A</td></tr>
+</table>
+
+<h2 id="context">コンテキスト</h2>
+<p>
+仕様書（AREA-03・MASTER.html）はバックエンドフレームワークとして Flask を明記しているが、実装では <code>src/api/app.py</code> が FastAPI で稼働し、<code>src/api/flask_app.py</code> が Flask の別実装として並存している。CI テストは <code>flask_app.py</code>（Flask）を対象としており、本番稼働コードと乖離している。
+</p>
+
+<h2 id="decision">決定事項</h2>
+<p>
+Flask（<code>src/api/flask_app.py</code>）を唯一の本番 API として確定する。FastAPI（<code>src/api/app.py</code>）は <code>archive/src/api/app.py</code> に移動し、廃止マークを付ける。フロントエンドの <code>KEIBA_API_URL</code> デフォルトは port 5000（Flask）のまま維持する。<code>src/api/auth.py</code> の <code>PUBLIC_API_PREFIXES</code> は <code>/api/v1/</code> ベースに統一する。
+</p>
+
+<h2 id="options">選択肢と比較</h2>
+<table>
+<tr><th>選択肢</th><th>メリット</th><th>デメリット</th></tr>
+<tr><td>Flask（採用）</td><td>仕様書との整合・CIがすでに対象</td><td>非同期IO非対応</td></tr>
+<tr><td>FastAPI</td><td>非同期・Pydantic型安全</td><td>仕様書と乖離・二重メンテ</td></tr>
+</table>
+
+<h2 id="impact">影響範囲</h2>
+<ul>
+<li><code>src/api/app.py</code> を廃止（<code>archive/</code> へ移動）</li>
+<li><code>src/api/auth.py</code> の <code>PUBLIC_API_PREFIXES</code> を <code>/api/v1/</code> ベースに修正</li>
+<li><code>wsgi.py</code>・<code>main.py</code> のエントリポイントを <code>flask_app.py</code> に統一</li>
+<li>CI の対象は現在のまま（<code>tests/e2e/test_api_v1.py</code> の <code>create_app</code> = Flask の <code>flask_app</code>）</li>
+</ul>
+
+<h2 id="notes">備考</h2>
+<p>
+FastAPI（<code>app.py</code>）が持つ血統・分析エンドポイントのうち、<code>flask_app.py</code> に未移植のものは DEC-014 フォローで移植またはプロキシ対応とする。
+</p>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

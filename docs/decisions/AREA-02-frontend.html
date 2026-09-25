@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AREA-02 フロントエンド要件 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.revised { background: rgba(251,191,36,.14); color: #fbbf24; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · AREA-02</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <h4>AREA-02</h4>
+      <a href="#0">0. 改訂方針</a>
+      <a href="#1">1. デザインシステム</a>
+      <a class="toc-h3" href="#1-1">1-1 カラーパレット</a>
+      <a class="toc-h3" href="#1-2">1-2 フォント</a>
+      <a class="toc-h3" href="#1-3">1-3 枠番カラーシステム</a>
+      <a class="toc-h3" href="#1-4">1-4 共通コンポーネントパターン</a>
+      <a class="toc-h3" href="#1-5">1-5 レイアウト原則</a>
+      <a href="#2">2. ナビゲーション構造</a>
+      <a class="toc-h3" href="#2-1">2-1 グローバルナビ</a>
+      <a class="toc-h3" href="#2-2">2-2 ページ内ナビ</a>
+      <a href="#3">3. ユーザー種別とアクセス制御</a>
+      <a href="#4">4. ページカタログ</a>
+      <a class="toc-h3" href="#4-1">4-1 ダッシュボード</a>
+      <a class="toc-h3" href="#4-2">4-2 レース一覧</a>
+      <a class="toc-h3" href="#4-3">4-3 レース詳細</a>
+      <a class="toc-h3" href="#4-4">4-4 位置追跡難易度</a>
+      <a class="toc-h3" href="#4-5">4-5 成長曲線</a>
+      <a class="toc-h3" href="#4-6">4-6 トラックスピード指数</a>
+      <a class="toc-h3" href="#4-7">4-7 レース品質分析</a>
+      <a class="toc-h3" href="#4-8">4-8 血統適性マップ</a>
+      <a class="toc-h3" href="#4-9">4-9 血統クラスター検索（廃止）</a>
+      <a class="toc-h3" href="#4-10">4-10 血統ベクトル空間</a>
+      <a class="toc-h3" href="#4-11">4-11 血統マップ（廃止）</a>
+      <a class="toc-h3" href="#4-12">4-12 今週の血統傾向分析</a>
+      <a class="toc-h3" href="#4-13">4-13 Myostatin遺伝子</a>
+      <a class="toc-h3" href="#4-14">4-14 馬券最適化</a>
+      <a class="toc-h3" href="#4-15">4-15 お気に入り馬機能</a>
+      <a class="toc-h3" href="#4-16">4-16 通知設定</a>
+      <a class="toc-h3" href="#4-17">4-17 種牡馬メモ</a>
+      <a class="toc-h3" href="#4-18">4-18 詳細データ分析</a>
+      <a href="#5">5. 技術要件</a>
+      <a class="toc-h3" href="#5-1">5-1 フレームワーク・ライブラリ</a>
+      <a class="toc-h3" href="#5-2">5-2 レンダリング戦略</a>
+      <a class="toc-h3" href="#5-3">5-3 パフォーマンス目標</a>
+      <a class="toc-h3" href="#5-4">5-4 アクセシビリティ・品質目標</a>
+      <a href="#6">6. ページ階層サマリー</a>
+      <a href="#7">7. 主要 API エンドポイント</a>
+      <a href="#8">8. 用語定義</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · AREA-02</div>
+      <h1>AREA-02 — フロントエンド要件</h1>
+      <p class="meta">
+        <span class="badge revised">REVISED</span>
+        最終更新: 2026-07-08　|　統合: 旧 AREA-05 (廃止), keiba-vpn-git 既存実装からの UI 継承
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<h2 id="0">0. 改訂方針</h2>
+<p>本ドキュメントは <code>keiba-vpn-git</code> 既存実装のUIを基準として、新アーキテクチャ（AREA-01 仕様）向けに再定義する。</p>
+<p><b>継承対象</b>: デザインシステム・ページ構成・ユーザー向け情報提示・インタラクションパターン</p>
+<p><b>非継承対象</b>: DB スキーマ・スクレイピング実装・ML パイプライン（AREA-01/03/06/07 で管理）</p>
+<p>管理者専用ツール（スクレイプ操作・キュー監視・ログ閲覧）はユーザー機能ではないため本仕様に含めない。</p>
+
+<h2 id="1">1. デザインシステム</h2>
+
+<h3 id="1-1">1-1. カラーパレット（ダーク Navy テーマ）</h3>
+<pre><code>/* ベース */
+--bg:        #0a0e17;  /* ページ背景 */
+--surface:   #131926;  /* カード・パネル背景 */
+--surface2:  #1a2235;  /* ネストされた要素背景 */
+--border:    #243049;  /* ボーダー全般 */
+
+/* テキスト */
+--text:      #c8d6e5;  /* 本文 */
+--text-dim:  #6b7d95;  /* 補足・ラベル */
+
+/* アクセント */
+--accent:    #3b82f6;  /* 主要アクション・アクティブ状態 */
+--ok:        #22c55e;  /* 成功・良好 */
+--warn:      #f59e0b;  /* 警告 */
+--err:       #ef4444;  /* エラー・危険 */
+--purple:    #a78bfa;  /* 副アクセント（血統機能） */
+--cyan:      #06b6d4;  /* データ分析系 */
+--teal:      #2dd4bf;  /* トラックスピード系 */</code></pre>
+<div class="callout info">
+  <h4>ページ固有の例外</h4>
+  <p>
+  ・血統ベクトル空間・血統マップ: <code>--accent: #ff6b35</code> (orange), <code>--accent2: #00d4aa</code> (teal)<br>
+  ・Myostatin ページ: GitHub exact palette (<code>--bg: #0d1117</code>, <code>--accent: #58a6ff</code>)<br>
+  ・レース品質分析: teal系アクセント + 9系列グラフカラー (<code>--c0</code>〜<code>--c8</code>)
+  </p>
+</div>
+
+<h3 id="1-2">1-2. フォント</h3>
+<table>
+<tr><th>用途</th><th>フォント</th></tr>
+<tr><td>本文・UI全般</td><td>Inter</td></tr>
+<tr><td>日本語テキスト</td><td>Noto Sans JP</td></tr>
+<tr><td>血統ページの見出し</td><td>Shippori Mincho（セリフ）</td></tr>
+<tr><td>数値・コード・ID</td><td>JetBrains Mono / SFMono-Regular</td></tr>
+</table>
+
+<h3 id="1-3">1-3. 枠番カラーシステム（全ページ共通）</h3>
+<p>馬番の枠色は全ページで統一する。</p>
+<table>
+<tr><th>枠番</th><th>色</th><th>備考</th></tr>
+<tr><td>1</td><td>白 (<code>#ffffff</code>) + 黒枠</td><td></td></tr>
+<tr><td>2</td><td>黒 (<code>#1a1a1a</code>)</td><td>白文字</td></tr>
+<tr><td>3</td><td>赤 (<code>#ef4444</code>)</td><td>白文字</td></tr>
+<tr><td>4</td><td>青 (<code>#3b82f6</code>)</td><td>白文字</td></tr>
+<tr><td>5</td><td>黄 (<code>#f59e0b</code>)</td><td>黒文字</td></tr>
+<tr><td>6</td><td>緑 (<code>#22c55e</code>)</td><td>白文字</td></tr>
+<tr><td>7</td><td>オレンジ (<code>#f97316</code>)</td><td>白文字</td></tr>
+<tr><td>8</td><td>ピンク (<code>#ec4899</code>)</td><td>白文字</td></tr>
+</table>
+
+<h3 id="1-4">1-4. 共通コンポーネントパターン</h3>
+<table>
+<tr><th>コンポーネント</th><th>仕様</th></tr>
+<tr><td>カード</td><td><code>background: --surface</code>, <code>border: 1px solid --border</code>, <code>border-radius: 10-12px</code>, <code>padding: 16px</code></td></tr>
+<tr><td>ステータスバッジ</td><td>インライン pill、状態別 bg+color（ok/warn/err/accent）</td></tr>
+<tr><td>テーブル</td><td><code>border-collapse: collapse</code>, sticky thead、<code>tr:hover</code> ハイライト</td></tr>
+<tr><td>ボタン</td><td><code>.btn</code>（accent bg、角丸）、<code>.btn-outline</code>（透明 + border）、<code>.btn-sm</code>、<code>.btn-secondary</code></td></tr>
+<tr><td>プログレスバー</td><td>細い水平 fill bar in <code>.bar-bg</code> コンテナ</td></tr>
+<tr><td>スピナー</td><td>CSS <code>border-top-color</code> + <code>@keyframes spin</code></td></tr>
+<tr><td>トースト通知</td><td>右下固定、4秒で自動消去</td></tr>
+<tr><td>ツールチップ</td><td>CSS <code>::after + content:attr(data-tip)</code> またはカスタム floating div</td></tr>
+</table>
+
+<h3 id="1-5">1-5. レイアウト原則</h3>
+<ul>
+<li>全ページで <code>--bg</code> ダーク背景</li>
+<li>ナビゲーション高さ: 44px 固定（sticky top）</li>
+<li>モバイル対応: ナビをブランド下に全幅ストリップとして折りたたむ</li>
+<li>右下透かしロゴ: 40×40px、opacity 0.12、pulse アニメーション</li>
+</ul>
+
+<h2 id="2">2. ナビゲーション構造</h2>
+
+<h3 id="2-1">2-1. グローバルナビ（全ページ共通）</h3>
+<p>Sticky top bar（44px）。5 カテゴリのドロップダウングループ。</p>
+<table>
+<tr><th>カテゴリ</th><th>色</th><th>主要ページ</th></tr>
+<tr><td>Home</td><td>—</td><td>ダッシュボード (<code>/</code>)</td></tr>
+<tr><td>AI予測</td><td><code>#58a6ff</code>（青）</td><td>レース詳細、レース品質分析、位置追跡難易度、今週の血統傾向分析</td></tr>
+<tr><td>血統</td><td><code>#bc8cff</code>（紫）</td><td>血統分析、血統ベクトル、血統適性マップ、種牡馬メモ</td></tr>
+<tr><td>データ分析</td><td><code>#39d2c0</code>（シアン）</td><td>詳細データ分析、成長曲線、トラックスピード指数、AI SLA</td></tr>
+<tr><td>馬券最適化</td><td><code>#3fb950</code>（緑）</td><td>Kelly 基準 馬券最適化</td></tr>
+</table>
+<p>ブランドロゴ: SVG 馬頭ロゴ + conic-gradient ring アニメーション</p>
+
+<h3 id="2-2">2-2. ページ内ナビ</h3>
+<ul>
+<li>レース詳細: 4タブ（出馬表・レース結果・AI予測・出走馬詳細）</li>
+<li>データ分析ページ: ページ内サブタブ（種別ごと）</li>
+<li>血統分析: 2タブグループ（距離適性・コース特性）</li>
+</ul>
+
+<h2 id="3">3. ユーザー種別とアクセス制御</h2>
+<table>
+<tr><th>機能</th><th>ゲスト</th><th>ログイン済</th></tr>
+<tr><td>レース一覧・基本情報</td><td>○</td><td>○</td></tr>
+<tr><td>AI予測（全頭）</td><td>上位3頭のみ</td><td>○</td></tr>
+<tr><td>出走馬過去成績（10走）</td><td>✗</td><td>○</td></tr>
+<tr><td>データ分析全機能</td><td>○</td><td>○</td></tr>
+<tr><td>マイ分析（条件保存）</td><td>✗</td><td>○</td></tr>
+<tr><td>馬券最適化</td><td>✗</td><td>○</td></tr>
+<tr><td>血統ツール全機能</td><td>○</td><td>○</td></tr>
+<tr><td>お気に入り馬登録・一覧（F-12）</td><td>✗</td><td>○</td></tr>
+<tr><td>レース出走メール通知（F-09）</td><td>✗</td><td>○</td></tr>
+</table>
+<p>認証: パスワードのみ（ユーザー名なし）、「30日間ログイン保持」チェックボックス付きログイン画面。JWT を HttpOnly Cookie に保存、CSRF 対策付き（SameSite=Strict）。<code>Authorization: Bearer</code> ヘッダーは使用しない。</p>
+
+<h2 id="4">4. ページカタログ</h2>
+
+<h3 id="4-1">4-1. ダッシュボード (<code>/</code>)</h3>
+<p><b>目的</b>: 中央ハブ。最新開催日・レース一覧へのクイックアクセス。</p>
+<p><b>表示要素:</b></p>
+<ul>
+<li>5カテゴリのカードグリッド（各カテゴリ色でハイライト）</li>
+<li>サーバー接続ステータスチップ（green=OK / red=ERROR）</li>
+<li>最新8開催日チップ（クリックで当日レース一覧へ）</li>
+<li>本日または直近のレース一覧パネル</li>
+</ul>
+
+<h3 id="4-2">4-2. レース一覧</h3>
+<p><b>目的</b>: 指定日の全レースカード表示。</p>
+<p><b>フィルタ</b>: 開催場（東京/阪神/中京 等）</p>
+<p><b>レースカード表示項目</b>:</p>
+<ul>
+<li>開催場・R（ラウンド）番号、開始時刻</li>
+<li>グレードバッジ（G1=赤、G2=青、G3=緑）</li>
+<li>レース名</li>
+<li>芝/ダート・距離・馬場状態・頭数</li>
+<li>「AI予測 あり」インジケータ（予測データ存在時）</li>
+</ul>
+
+<h3 id="4-3">4-3. レース詳細 (<code>/race/{race_id}</code>)</h3>
+<p><b>目的</b>: 単一レースの全情報ハブ。<b>4タブ構成</b>。</p>
+
+<h4>レースヘッダー（全タブ共通）</h4>
+<ul>
+<li>ラウンドバッジ、グレードバッジ</li>
+<li>レース名</li>
+<li>日時、開催場、芝/ダート・距離・回り、天候・馬場状態、発走時刻</li>
+<li>netkeiba 外部リンクボタン</li>
+</ul>
+
+<h4>タブ1: 出馬表 (shutuba)</h4>
+<p>ソート可能テーブル。</p>
+<table>
+<tr><th>カラム</th><th>説明</th></tr>
+<tr><td>枠番</td><td>枠番カラーシステムの丸</td></tr>
+<tr><td>馬番</td><td></td></tr>
+<tr><td>馬名</td><td></td></tr>
+<tr><td>性齢</td><td></td></tr>
+<tr><td>斤量</td><td></td></tr>
+<tr><td>騎手</td><td></td></tr>
+<tr><td>調教師</td><td></td></tr>
+<tr><td>単勝オッズ</td><td><code>&lt;5.0</code>=赤、<code>&lt;20</code>=橙、それ以上=暗色</td></tr>
+</table>
+
+<h4>タブ2: レース結果</h4>
+<p><b>(a) ペース・ラップパネル</b></p>
+<ul>
+<li>キーパスタイム: 1F・前3F・後3F・上り3F タイムカード</li>
+<li>ラップストリップ: 各ハロンをカラーセル（high=赤/黄、mid=灰、slow=青）+ 上に SVG 折れ線グラフオーバーレイ</li>
+<li>ペースパターンバッジ: slow_burst（青）/ consuming（赤）/ sustained（緑）/ standard（灰）</li>
+</ul>
+<p><b>(b) コーナー通過順位パネル</b></p>
+<ul>
+<li>1〜4角ごとにグループ化、位置差をスペーシングで表現</li>
+<li>馬ピル: 枠番カラー色付き丸バッジ。クリックで対応着順行へスクロール。</li>
+</ul>
+<p><b>(c) 着順テーブル</b></p>
+<table>
+<tr><th>カラム</th><th>説明</th></tr>
+<tr><td>着順</td><td>1=金、2=銀、3=銅 ハイライト</td></tr>
+<tr><td>枠・馬番</td><td>枠番カラー</td></tr>
+<tr><td>馬名</td><td></td></tr>
+<tr><td>性齢・斤量・騎手</td><td></td></tr>
+<tr><td>タイム・着差</td><td></td></tr>
+<tr><td>通過順</td><td></td></tr>
+<tr><td>上り3F</td><td></td></tr>
+<tr><td>人気・単勝</td><td></td></tr>
+</table>
+<p><b>(d) 払戻金セクション</b></p>
+<ul>
+<li>馬券種別カードグリッド: 単勝・複勝・枠連・馬連・ワイド・馬単・3連複・3連単</li>
+<li>各カード: 組み合わせ（枠番カラーの数字ピル）＋ 払戻額</li>
+</ul>
+
+<h4>タブ3: AI予測</h4>
+<div class="callout info">
+  <h4>F-13/F-14 統合</h4>
+  <p>F-13/F-14 要件はここに統合。ゲストは上位3頭のみ表示。</p>
+</div>
+<p>グループヘッダー付きカラム構成:</p>
+<table>
+<tr><th>グループ</th><th>カラム</th></tr>
+<tr><td>出走馬</td><td>馬番、馬名</td></tr>
+<tr><td>予測確率（T-1〜T-3）</td><td>勝率%、連対率%、複勝率%</td></tr>
+<tr><td>想定オッズ（T-4〜T-5）</td><td>単勝(倍)、複勝↓(倍)、複勝↑(倍)</td></tr>
+<tr><td>期待値（T-6〜T-7）</td><td>単回収率、複回収率</td></tr>
+<tr><td>位置・脚質（T-8〜T-9）</td><td>予測着順、脚質予測</td></tr>
+<tr><td>印</td><td>◎本命・○対抗・▲単穴・★推奨</td></tr>
+</table>
+<ul>
+<li>回収率 ≥ 100: 緑太字 + 行ハイライト（バリューベット、F-14）</li>
+<li>1着予測行 = 金背景、2着 = 銀背景、3着 = 銅背景</li>
+<li>ペースカテゴリ（T-10）: HIGH=赤バッジ / MIDDLE=青バッジ / SLOW=緑バッジ</li>
+<li>ラップ予測グラフ（T-11、F-15）: 折れ線（X=ハロン番号、Y=ラップ秒）、Chart.js</li>
+</ul>
+<p><b>ゲスト制限バナー</b>: 上位3頭表示の旨＋ログインリンク。</p>
+<p><b>注釈</b>: 「※ この統計はリアルタイム集計です。AIモデルが予測に使用した時点の特徴量とは異なる場合があります。」</p>
+
+<h4>タブ4: 出走馬詳細</h4>
+<ul>
+<li>左サイドバー: 馬ピッカーリスト（枠番カラー丸 + 馬名）</li>
+<li>右パネル:
+  <ul>
+  <li>プロフィール DL: 性別・生年月日・調教師・馬主・生産者・父・母・母父・獲得賞金</li>
+  <li>近10走テーブル: 日付・場所・レース名・着順・距離・タイム・馬場・騎手</li>
+  </ul>
+</li>
+</ul>
+
+<h3 id="4-4">4-4. AI予測: 位置追跡難易度 (<code>/tracking-difficulty</code>)</h3>
+<p><b>目的</b>: 出走馬ごとの位置取りのしやすさ（ease スコア）を予測・可視化。</p>
+<p><b>コントロール</b>: 日付選択、開催場選択、レース選択、分析実行ボタン</p>
+<p><b>ローディング UI</b>:</p>
+<ul>
+<li>ステップインジケーター（準備→取得→計算→表示）付きスピナーカード</li>
+<li>shimmer スケルトンカード</li>
+<li>経過タイマー</li>
+</ul>
+<p><b>表示パネル一覧</b>:</p>
+<p><b>(a) Gate Ease テーブル</b> — ソート可能</p>
+<table>
+<tr><th>カラム</th><th>説明</th></tr>
+<tr><td>枠・馬番・馬名</td><td>枠番カラー</td></tr>
+<tr><td>脚質</td><td>逃げ/先行/差し/追込 バッジ</td></tr>
+<tr><td>想定ポジション</td><td></td></tr>
+<tr><td>想定展開フロー</td><td></td></tr>
+<tr><td>想定上り3F</td><td></td></tr>
+<tr><td>容易度バー + ラベル</td><td>非常に楽=緑 / 楽=青 / 普通=灰 / やや困難=橙 / 困難=赤</td></tr>
+</table>
+<p><b>(b) マスター馬テーブル</b>（ソート4モード）</p>
+<table>
+<tr><th>カラム</th><th>説明</th></tr>
+<tr><td>枠・馬番・馬名</td><td></td></tr>
+<tr><td>脚質</td><td>バッジ</td></tr>
+<tr><td>容易度</td><td>バー + ラベル</td></tr>
+<tr><td>温存</td><td>スタミナ指数</td></tr>
+<tr><td>序→中→終</td><td>ポジションフロー</td></tr>
+<tr><td>上り3F予測</td><td></td></tr>
+<tr><td>展開パターン</td><td>フローバッジ</td></tr>
+<tr><td>最前位置%</td><td></td></tr>
+<tr><td>コース</td><td>距離変化 + 馬場一致</td></tr>
+</table>
+<p><b>(c) 前走位置取り（5段階）分布</b></p>
+<ul>
+<li>ポジション分布 bins に枠番カラーの馬ピル</li>
+</ul>
+<p><b>(d) ペース予想パネル</b></p>
+<ul>
+<li>ペースバッジ（ハイ=赤 / ミドル=青 / スロー=緑）</li>
+<li>ペースメーターバー</li>
+<li>テキスト叙述コメント</li>
+<li>判定 + 馬券ヒント</li>
+</ul>
+<p><b>(e) 序盤ポジション(1-3F)ラダー</b></p>
+<ul>
+<li>縦軸=ポジション帯（1-3位、4-6位、7-9位 等）、各バンドに枠番カラーの馬ピル</li>
+</ul>
+<p>馬名クリック: モーダルで近10走履歴テーブル表示。</p>
+
+<h3 id="4-5">4-5. AI予測: 成長曲線 (<code>/growth-curve</code>)</h3>
+<p><b>目的</b>: 1頭の馬のキャリアアーク（馬体重・タイム指数の推移）を可視化。</p>
+<p><b>コントロール</b>:</p>
+<ul>
+<li>馬名オートコンプリート検索（300ms デバウンス）</li>
+<li>表示件数選択（5/10/20/30/50/全て）</li>
+<li>強制再読み込みボタン</li>
+</ul>
+<p><b>サマリーカード</b>: 最高着順、平均着順、総出走数、馬体重変動幅、デビュー体重、直近3戦平均、デビューとの体重差</p>
+<p><b>フィルターバー</b>: 馬場種別チップ（芝=緑 / ダート=橙 / 障害=紫）、距離 min/max、自動生成プリセット</p>
+<p><b>グラフ1 — 馬体重 × タイム指数</b>（Chart.js v4、デュアルY軸 棒+折れ線）</p>
+<ul>
+<li>棒グラフ = 馬体重（馬場種別 × 距離で色相変化: 芝=142°/ダート=30°/障害=270°）</li>
+<li>折れ線 = タイム指数（金 <code>#d29922</code>）</li>
+<li>閾値ゾーン: 100（緑）、110（黄）</li>
+<li>着順バッジ（オーバーレイ）</li>
+</ul>
+<p><b>グラフ2 — レース間隔 × タイム指数</b></p>
+<ul>
+<li>棒グラフ = 間隔週数（&lt;2週=赤 / &gt;13週=青 / 通常=灰）</li>
+<li>折れ線 = タイム指数</li>
+<li>着順バッジ</li>
+</ul>
+<p><b>レーステーブル</b>: 日付・競馬場・レース名・コース（馬場+距離）・着順（金/銀/銅）・馬体重・増減・間隔・タイム・指数</p>
+<p>URL state: <code>?horse_id=X&amp;limit=N</code></p>
+
+<h3 id="4-6">4-6. データ分析: トラックスピード指数 (<code>/track-speed</code>)</h3>
+<p><b>目的</b>: 競馬場・馬場ごとの速度レベルを Z スコア正規化指数（TSI）で表示。50=標準、高=速い。</p>
+<p><b>コントロール</b>: 日付選択、開催場選択、表示ボタン</p>
+<p><b>スピードレベル凡例（5段階）</b>:</p>
+<table>
+<tr><th>レベル</th><th>名称</th><th>色</th></tr>
+<tr><td>5</td><td>超高速</td><td><code>#ef4444</code>（赤）</td></tr>
+<tr><td>4</td><td>高速</td><td><code>#f97316</code>（橙）</td></tr>
+<tr><td>3</td><td>標準</td><td><code>#a3a3a3</code>（灰）</td></tr>
+<tr><td>2</td><td>低速</td><td><code>#3b82f6</code>（青）</td></tr>
+<tr><td>1</td><td>超低速</td><td><code>#8b5cf6</code>（紫）</td></tr>
+</table>
+<p><b>表示セクション</b>:</p>
+<ul>
+<li><b>日付別タイムライン</b>（折りたたみ可能）: 日付ラベル・曜日（土=青/日=赤）・開催場バッジ（TSI値 + スピードレベルバッジ + サンプル数）</li>
+<li><b>開催場詳細パネル</b>（展開可能）: レース別テーブル（R・距離・グレード・タイム・基準タイム・Z値・ペース補正後Z・TSI）。芝行=緑左枠 / ダート行=橙左枠。</li>
+<li><b>メインレーステーブル</b>: R・コース・グレード・馬場状態・レース名（netkeiba リンク）・タイム・基準・Z値・ペース補正・TSI指数・PF指数・PF(2000m)。ソート可・行クリックで馬別サブテーブル展開（着順: 1着=金/2着=accent色）。</li>
+<li><b>コースカテゴリ検索</b>: 開催場+馬場+スピードカテゴリ選択、結果テーブル（ページネーション付き）</li>
+<li><b>分布チャートセクション</b>: 開催場別 SVG スパークチャート（TSI 経時変化）</li>
+</ul>
+
+<h3 id="4-7">4-7. データ分析: レース品質分析 (<code>/race-quality</code>)</h3>
+<p><b>目的</b>: NNLS（非負最小二乗法）による8アーキタイプのレース分類。</p>
+<p><b>コントロール</b>: 日付選択・開催場フィルタ・レース選択・手動日付入力・開催日まとめ読み込みボタン・単レース分析ボタン</p>
+<p><b>表示モード</b>:</p>
+<ul>
+<li><b>日単位ビュー</b>: 水平スタック棒グラフ（√頭数 加重平均、1棒=1開催日）</li>
+<li><b>セグメントビュー</b>: 馬場・距離セグメント別スタック棒グラフ</li>
+</ul>
+<p><b>レーステーブルカラム</b>:</p>
+<ul>
+<li>条件帯・場所・距離/馬場/コース</li>
+<li>消/溜/均 ペース形状（0-100）</li>
+<li>レース名（<code>/race/{id}</code> リンク）・頭数・R²</li>
+<li>上位傾向（上位3アーキタイプラベル + %）</li>
+<li>分布（ミニスタック棒グラフ）</li>
+</ul>
+<p><b>単レースビュー</b>: アーキタイプ別確率バー行（% + R² + ペース形状）</p>
+<p><b>適性マトリクスパネル</b>: 馬 × 8軸 ヒートマップ（レース選択時自動表示）</p>
+
+<h3 id="4-8">4-8. 血統: 適性マップ (<code>/note-aptitude-race</code>)</h3>
+<p><b>目的</b>: 特定レースの馬ごとの血統適性を SVG パン/ズームマップで可視化。</p>
+<p><b>3パネルレイアウト</b>（フルビューポート）:</p>
+<ul>
+<li><b>左サイドバー (260px)</b>: 日付→開催場グループのレースリスト。コース情報カード（馬場ピル・距離ピル・状態ピル）。</li>
+<li><b>中央 SVG マップ</b> (<code>viewBox="-8 -6 16 12"</code>、ホイールズーム・ドラッグパン):
+  <ul>
+  <li>背景グリッドライン</li>
+  <li>クラスター楕円（緑=適合良 / 赤=適合不良）</li>
+  <li>ベストゾーン楕円（青破線）</li>
+  <li>同日傾向楕円（橙破線）</li>
+  <li>馬ドット（枠番カラー丸、上位3頭=金/銀/銅リング）</li>
+  <li>軸ラベル</li>
+  </ul>
+</li>
+<li><b>右パネル (290px)</b>: <code>course_match</code> スコア順に馬カード
+  <ul>
+  <li>ランクバッジ・枠番丸・馬名・L2クラスターラベル（色付き）</li>
+  <li>父・母父名</li>
+  <li>コース適性バー + スコア</li>
+  <li>状態リフトタグ（緑=プラス / 赤=マイナス）</li>
+  <li>上位3頭サマリーバー</li>
+  </ul>
+</li>
+</ul>
+<p><b>ホバーツールチップ</b>: 馬名・L2クラスター・父・母父・母父系統・コース適合スコア・状態リフト</p>
+
+<h3 id="4-9"><s>4-9. 血統: クラスター検索 (<code>/bloodline-cluster</code>)</s> — <b>廃止済み（2026-07-08）</b></h3>
+<div class="callout warn">
+  <h4>廃止済み（2026-07-08）</h4>
+  <p>このページは UI として不要と判断し削除された。<code>frontend/app/bloodline-cluster/</code> ディレクトリ・ページファイルは削除済み。ホームダッシュボードおよび <code>/bloodline</code> ナビからも除去済み。以下の仕様は参考記録として保持。</p>
+</div>
+<p><b>目的</b>: 馬または種牡馬の血統クラスター分類と適性プロファイルを検索表示。</p>
+<p><b>コントロール</b>: オートコンプリート検索入力（馬名サジェスト）、例チップ</p>
+<p><b>検索結果 — 適性プロファイルカード</b>:</p>
+<ul>
+<li>馬名 + メタ（性別・年齢）</li>
+<li>上位 L2 クラスター行（水平バー + スコア）</li>
+<li>2カラムグリッド: 血統テーブル（位置・世代・L2ラベル）| 成績統計（勝利数・複勝・主要条件）</li>
+<li>統計バッジ: 総出走・勝率・複勝率・最良距離/馬場</li>
+<li>注目パターンセクション: 期待値から大きくズレる条件のグリッド</li>
+<li>レース記録詳細（折りたたみ可）: 条件グループ別テーブル（馬場×距離×クラス）、複勝率・サンプル数・P値マーカー</li>
+</ul>
+
+<h3 id="4-10">4-10. 血統: 血統ベクトル空間 (<code>/bloodline-vector</code>)</h3>
+<p><b>目的</b>: L2 血統サブグループの 2D ベクトル空間マップ（Canvas 描画）。フルビューポート3パネル。</p>
+<p><b>左パネル (280px)</b>:</p>
+<ul>
+<li>配置基底ボタン（PCA / UMAP / t-SNE）</li>
+<li>色分けモード: スーパーグループ / 主流×非主流 / 距離支配 / 馬場支配 / 道悪適性</li>
+<li>類似度モード: 適性類似 / 血統構造類似 / ブレンド（推奨）</li>
+<li>PCA ローディング情報ボックス</li>
+<li>凡例</li>
+<li>馬/グループ検索入力（インメモリ）</li>
+</ul>
+<p><b>Canvas（HTML5 Canvas、バニラ JS）</b>:</p>
+<ul>
+<li>ノード = L2 サブグループ、radius = <code>8 + sqrt(n_members) * 2.2</code>（クランプ 10-36）</li>
+<li>ホバーツールチップ: グループ名・スーパーグループ・距離支配・馬場支配・道悪ラベル・メンバー数・上位馬名</li>
+<li>クリック → 選択ハイライト + 右パネルに類似グループ表示（コサイン類似度スコア）</li>
+<li>ドラッグパン・ホイールズーム・+/-ボタン</li>
+</ul>
+<p><b>カラーパレット（5モード×最大5色）</b>:</p>
+<ul>
+<li>スーパーグループ: 青/紫/橙/緑/赤</li>
+<li>距離支配: 赤(短距離) / 橙(マイル) / 緑(中距離) / 青(長距離)</li>
+<li>馬場支配: 緑(芝) / 橙(ダート)</li>
+<li>道悪適性: 紫(巧者) / 灰(中立) / 橙(苦手)</li>
+</ul>
+
+<h3 id="4-11"><s>4-11. 血統: 血統マップ (<code>/pedigree-map</code>)</s> — <b>廃止済み（2026-07-08）</b></h3>
+<div class="callout warn">
+  <h4>廃止済み（2026-07-08）</h4>
+  <p>このページは UI として不要と判断し削除された。<code>frontend/app/pedigree-map/</code> ディレクトリ・ページファイルは削除済み。ホームダッシュボードおよび <code>/bloodline</code> ナビからも除去済み。DEC-018 で決定した D3.js フォースグラフ実装は未着手のまま廃止となった。以下の仕様は参考記録として保持。</p>
+</div>
+<p><b>目的</b>: 種牡馬系統全体の D3.js ツリー/フォースグラフ。フルビューポート3パネル。</p>
+<p><b>系統カラー（固定）</b>:</p>
+<table>
+<tr><th>系統</th><th>色</th></tr>
+<tr><td>SS（サンデーサイレンス）</td><td><code>#e63946</code></td></tr>
+<tr><td>KK（キングカメハメハ）</td><td><code>#457b9d</code></td></tr>
+<tr><td>RB（ロベルト）</td><td><code>#2a9d8f</code></td></tr>
+<tr><td>ND（ノーザンダンサー）</td><td><code>#e9c46a</code></td></tr>
+<tr><td>DH（ダンシングブレーヴ）</td><td><code>#f4a261</code></td></tr>
+</table>
+<p><b>表示モード</b>:</p>
+<ul>
+<li>探索モード（2カラム: 320px フォーム + キャンバス）:
+  <ul>
+  <li>検索フォーム: 期間・開催場・馬場・距離・馬場状態・クラス/グレード・着順・人気・オッズ・血統世代</li>
+  <li>結果テーブル: 種牡馬統計（勝率/複勝率/ROI タブ切り替え）</li>
+  </ul>
+</li>
+<li>研究モード: 異なる3パネルレイアウト</li>
+</ul>
+<p><b>右パネル（ノードクリック時）</b>: 種牡馬名（Shippori Mincho フォント）・系統タグチップ・統計グリッド（総出走・勝率・複勝率・平均距離）・類似種牡馬リスト・近親交配クロス・適性タグチップ</p>
+
+<h3 id="4-12">4-12. AI予測: 今週の血統傾向分析 (<code>/pedigree-race-stats</code>) — <b>カテゴリ変更（2026-07-08）</b></h3>
+<div class="callout info">
+  <h4>カテゴリ変更（2026-07-08）</h4>
+  <p>旧: 「血統: 種牡馬成績クエリ」。ホームダッシュボードのカテゴリを「血統」→「AI予測」配下に移動し、名称を「今週の血統傾向分析」に変更。ページ URL・実装は継続。新目的: 予測されたレース質と出走馬の血統を照合し血統適性スコアを点数化する。</p>
+</div>
+<p><b>目的</b>: 予測されたレース質と出走馬の血統を照合し、各馬の血統的優位性をスコア化・可視化する。旧来の多軸フィルタ機能を拡張し、AI予測（レース質）との連携分析が主軸となる。</p>
+<p><b>フィルターパネル</b>（グリッドレイアウト）:</p>
+<ul>
+<li>期間: 日付範囲 + 年クイック選択（複数選択可）</li>
+<li>開催場: トグルボタン（複数選択）</li>
+<li>馬場種別: 芝/ダート/障害</li>
+<li>距離: min-max 数値ペア</li>
+<li>馬場状態: 良/稍重/重/不良 トグル</li>
+<li>クラス: グレードトグル（複数選択）</li>
+<li>着順: 範囲</li>
+<li>人気: 範囲</li>
+<li>単勝オッズ: 範囲</li>
+<li>血統世代: 1-10 範囲</li>
+<li>検索ボタン・リセットボタン</li>
+</ul>
+<p><b>結果テーブル</b>:</p>
+<ul>
+<li>統計行: 総レコード数・ユニーク種牡馬数・検索時間</li>
+<li>タブ: 勝率系 / 複勝率系 / 回収率系</li>
+<li>テーブルカラム: ランク・種牡馬名 + 各カテゴリ統計列</li>
+</ul>
+<p><b>ROI パネル（回収率）</b>:</p>
+<ul>
+<li>ハイライト: 単勝 ROI 上位=青 / 複勝 ROI 上位=紫 / 両方上位=金グラデーション</li>
+</ul>
+
+<h3 id="4-13">4-13. 血統（開発者向け）: Myostatin 遺伝子 (<code>/myostatin</code>) — <b>表示制御変更（2026-07-08）</b></h3>
+<div class="callout info">
+  <h4>表示制御変更（2026-07-08）</h4>
+  <p>ホームダッシュボードの表示制御を 🌐 → 🛠️（開発者のみ）に変更。<code>ADMIN_CATEGORIES</code> セクション「血統（開発者向け）」配下に移動。ページ自体は URL で直接アクセス可能だが、ホームナビには表示されない。</p>
+</div>
+<p><b>目的</b>: MSTN 遺伝子型（CC/CT/TT）ごとの距離適性を追跡・可視化。</p>
+<p><b>遺伝子型カラー</b>:</p>
+<ul>
+<li>CC = 赤（短距離型）</li>
+<li>CT = 金（中距離型）</li>
+<li>TT = 緑（長距離型）</li>
+</ul>
+<p><b>表示内容</b>:</p>
+<ul>
+<li>統計行: CC・CT・TT・Total カウントカード</li>
+<li><b>散布図</b> (Chart.js v4): X=平均勝利距離(m)、Y=Cアレル確率、遺伝子型別カラー、信頼度別ドットサイズ（confirmed=10px, highly_likely=8px, estimated=6px, inferred=5px）</li>
+<li><b>遺伝子型分布（ドーナツグラフ×3）</b>: ナレッジベース / 実測 / オープンクラス</li>
+<li><b>育種シミュレーター</b>: 父・母父入力（datalist オートコンプリート）・距離入力 → CC/CT/TT 確率バー + 適合メッセージ</li>
+<li><b>最新知見パネル</b>: 日付バッジ付き研究更新カード＋影響タグ</li>
+<li><b>馬テーブル</b>: 馬名・英名・型バッジ・信頼度バッジ・C%・T%・平均勝距離・系統・根拠（展開可）。ソート可・検索ボックス・フィルターボタン。</li>
+<li><b>系統別遺伝子型分布（積み上げ棒グラフ）</b>: 種牡馬系統別 CC/CT/TT 積み上げ</li>
+</ul>
+
+<h3 id="4-14">4-14. 馬券最適化 (<code>/betting</code>)</h3>
+<p><b>目的</b>: Kelly 基準による最適馬券ポートフォリオ生成（ログイン必須）。</p>
+<p><b>入力フォーム</b>:</p>
+<ul>
+<li>レース ID（12桁）</li>
+<li>資金（bankroll、デフォルト 100,000円）</li>
+<li>Kelly 倍率（デフォルト 0.25、範囲 0.05-1.0）</li>
+<li>最低 EV 閾値（デフォルト 1.05）</li>
+<li>馬券種別チェックボックス: 単勝・複勝・馬連・ワイド・馬単</li>
+</ul>
+<p><b>結果パネル</b>:</p>
+<ul>
+<li>統計行: 投票総額・期待回収額（プラス=緑/中立=橙/マイナス=赤）・期待 ROI・残資金・投票数</li>
+<li><b>投票ポートフォリオ</b>（左）:
+  <ul>
+  <li>配分バー（馬券種別ごとのスタックセグメント）</li>
+  <li>テーブル: 種別バッジ・組み合わせ・オッズ・確率・EV バー（≥1.5=緑 / ≥1.1=橙 / 他=赤）・Kelly%・投票額・期待回収</li>
+  </ul>
+</li>
+<li><b>馬ごとの勝率バー + Kelly 配分チャート</b>（右）</li>
+</ul>
+<p><b>馬券種別バッジカラー</b>: 単勝=赤 / 複勝=緑 / 馬連=青 / ワイド=紫 / 馬単=橙</p>
+
+<h3 id="4-15">4-15. お気に入り馬機能 (<code>/favorites</code>) — F-12</h3>
+<p><b>目的</b>: ユーザーが馬をお気に入り登録し、一覧表示する（ログイン必須）。</p>
+<p><b>機能要件</b>:</p>
+<ul>
+<li>馬名検索 / レース詳細出馬表から「お気に入り」ボタンで登録・解除</li>
+<li><code>/favorites</code> 一覧ページ: 登録馬のカード一覧（馬名・性齢・直近出走日・次走予定）</li>
+<li>各カードに「お気に入り解除」ボタン</li>
+</ul>
+<p><b>UI 要素</b>:</p>
+<ul>
+<li>ハートアイコンボタン（登録済=accent 塗りつぶし / 未登録=アウトライン）</li>
+<li>一覧は <code>--surface</code> カードグリッド、登録馬なし時は空状態イラスト＋案内テキスト</li>
+</ul>
+<p><b>API 消費エンドポイント</b>:</p>
+<ul>
+<li><code>GET  /api/v1/favorites</code> (auth_required: true) — 登録馬一覧取得</li>
+<li><code>POST /api/v1/favorites</code> (auth_required: true) — 馬を登録</li>
+<li><code>DELETE /api/v1/favorites/{horse_id}</code> (auth_required: true) — 馬の登録解除</li>
+</ul>
+
+<h3 id="4-16">4-16. 通知設定 (<code>/notifications</code>) — F-09</h3>
+<p><b>目的</b>: お気に入り馬のレース出走時にメール通知を送信（SendGrid 使用）。</p>
+<p><b>機能要件</b>:</p>
+<ul>
+<li>通知設定ページ: メール通知 ON/OFF トグル、通知タイミング選択（前日18時 / 当日08時）</li>
+<li>F-12 お気に入り馬がレース出走予定に追加されたタイミングでメール送信</li>
+</ul>
+<p><b>UI 要素</b>:</p>
+<ul>
+<li>トグルスイッチ（accent=ON / 灰=OFF）</li>
+<li>送信先メールアドレス表示（変更不可）</li>
+<li>最近の通知送信履歴テーブル（日時・対象馬名・レース名・送信ステータス）</li>
+</ul>
+<p><b>API 消費エンドポイント</b>:</p>
+<ul>
+<li><code>GET  /api/v1/notifications/settings</code> (auth_required: true) — 通知設定取得</li>
+<li><code>PUT  /api/v1/notifications/settings</code> (auth_required: true) — 通知設定更新</li>
+</ul>
+
+<h3 id="4-17">4-17. 血統: 種牡馬メモ (<code>/stallion-notes</code>) — <b>新規追加（2026-07-08）</b></h3>
+<p><b>目的</b>: 血統ドメイン知識ベース（274エントリ）を閲覧・編集できる内部リファレンスページ。</p>
+<p><b>アクセス制御</b>:</p>
+<ul>
+<li>一般ユーザー: 種牡馬・牝系カテゴリのみ表示。編集・追加ボタン非表示。</li>
+<li>開発者モード（URL に <code>?dev=1</code> を付与 → sessionStorage に保持）: 全6カテゴリ表示・編集・追加・削除が可能。ヘッダーに「DEV MODE」バッジ表示。</li>
+</ul>
+<p><b>カテゴリ構成</b>:</p>
+<ul>
+<li>🌐: 種牡馬、牝系</li>
+<li>🛠️: 各国の血統特徴、特定の海外レース、大枠分類、系統組み合わせ</li>
+</ul>
+<p><b>レイアウト</b>: ヘッダー + 左サイドバー（240px）+ 右コンテンツエリア。サイドバーはカテゴリ折りたたみ + エントリ一覧 + 検索。</p>
+<p><b>永続化</b>: 編集内容は localStorage（<code>ped_edit_{id}</code>）、カスタムエントリは localStorage（<code>ped_custom_entries</code>）に保存。</p>
+
+<h3 id="4-18">4-18. データ分析: 詳細データ分析 (<code>/data-analysis</code>) — <b>新規追加（2026-07-08）</b></h3>
+<p><b>目的</b>: Target Frontier スタイルの多次元インタラクティブデータ分析。PostgreSQL からリアルタイムに集計・可視化する。</p>
+<p><b>分析モード（4種）</b>:</p>
+<table>
+<tr><th>モード</th><th>説明</th><th>チャート</th></tr>
+<tr><td>分布分析</td><td>カテゴリ別集計値（avg/count/sum/min/max）</td><td>水平棒グラフ（SVG）</td></tr>
+<tr><td>散布図</td><td>2指標の相関</td><td>散布図（SVG、最大3,000点）</td></tr>
+<tr><td>ランキング</td><td>馬別集計（3戦以上）の上位N件</td><td>水平棒グラフ（SVG）</td></tr>
+<tr><td>時系列</td><td>月次集計トレンド</td><td>折れ線グラフ（SVG）</td></tr>
+</table>
+<p><b>Y軸フィールド（数値）</b>: 着順、タイム、上がり3F、馬体重、斤量、AI勝率予測、AI複勝率予測、期待ROI（単勝/複勝）</p>
+<p><b>X軸フィールド（カテゴリ）</b>: 馬場、馬場状態、グレード、競馬場、クラス、ペース（H/M/S）、距離帯（200m単位）、月、年</p>
+<p><b>グループ分け（色分け）</b>: X軸と同じカテゴリフィールド群から任意選択</p>
+<p><b>フィルター</b>: 日付範囲、馬場（芝/ダート）、距離 min/max、グレード（カンマ区切り）、最大件数</p>
+<p><b>バックエンド API</b>: <code>GET /api/v1/data-analysis/query</code>（フィールド名ホワイトリスト管理、最大5,000件）、<code>GET /api/v1/data-analysis/schema</code></p>
+<p><b>レイアウト</b>: 左コントロールパネル（264px）+ 右メインエリア（チャート + データテーブル + クエリ詳細）</p>
+
+<h2 id="5">5. 技術要件</h2>
+
+<h3 id="5-1">5-1. フレームワーク・ライブラリ</h3>
+<table>
+<tr><th>項目</th><th>採用</th><th>理由</th></tr>
+<tr><td>フレームワーク</td><td>Next.js 15（App Router）</td><td>SSR/ISR/CSR 混在、既存 Next.js 環境踏襲</td></tr>
+<tr><td>チャートライブラリ</td><td>Chart.js v4</td><td>既存実装との継続性（成長曲線・ラップ・Myostatin）</td></tr>
+<tr><td>グラフ（D3）</td><td>D3.js v7</td><td>血統マップのフォースレイアウト・SVG 操作</td></tr>
+<tr><td>スタイリング</td><td>Tailwind CSS v3 + CSS Variables</td><td>デザインシステム変数管理</td></tr>
+<tr><td>国際化</td><td>日本語専用（i18n 不要）</td><td></td></tr>
+</table>
+
+<h3 id="5-2">5-2. レンダリング戦略</h3>
+<table>
+<tr><th>ページ</th><th>戦略</th><th>理由</th></tr>
+<tr><td>ダッシュボード (<code>/</code>)</td><td>ISR（revalidate 60s）</td><td>開催日リストは頻繁に変わらない</td></tr>
+<tr><td>レース一覧</td><td>ISR（revalidate 120s）</td><td>発走まで数日間安定</td></tr>
+<tr><td>レース詳細 — 出馬表タブ</td><td>ISR（revalidate 3600s）</td><td>出馬確定後ほぼ変化なし</td></tr>
+<tr><td>レース詳細 — 結果タブ</td><td>ISR（revalidate 300s）</td><td>発走後30分で確定</td></tr>
+<tr><td>レース詳細 — AI予測タブ</td><td>CSR（SWR、TTL=発走まで）</td><td>オッズ連動でリアルタイム性必要</td></tr>
+<tr><td>成長曲線・馬詳細</td><td>CSR</td><td>ユーザー操作依存</td></tr>
+<tr><td>血統ベクトル空間</td><td>SSG（Server-injected JSON）</td><td>事前計算データのみ</td></tr>
+<tr><td>血統マップ</td><td>CSR + SSG</td><td>D3 描画はクライアント</td></tr>
+<tr><td>トラックスピード</td><td>CSR</td><td>日付選択による動的ロード</td></tr>
+</table>
+
+<h3 id="5-3">5-3. パフォーマンス目標（AREA-01 N-1/N-2 準拠）</h3>
+<table>
+<tr><th>シナリオ</th><th>目標</th></tr>
+<tr><td>API レスポンス（キャッシュヒット時）</td><td>≤ 200 ms</td></tr>
+<tr><td>API レスポンス（キャッシュミス時）</td><td>≤ 2,000 ms</td></tr>
+<tr><td>LCP（Largest Contentful Paint）</td><td>≤ 2.5s（3G）</td></tr>
+<tr><td>CLS（Cumulative Layout Shift）</td><td>≤ 0.1</td></tr>
+</table>
+
+<h3 id="5-4">5-4. アクセシビリティ・品質目標</h3>
+<table>
+<tr><th>指標</th><th>目標</th></tr>
+<tr><td>Lighthouse Performance</td><td>≥ 85</td></tr>
+<tr><td>Lighthouse Accessibility</td><td>≥ 90</td></tr>
+<tr><td>モバイル対応</td><td>必須（ナビ折りたたみ実装）</td></tr>
+</table>
+
+<h2 id="6">6. ページ階層サマリー</h2>
+<pre><code>/                           ← ダッシュボード
+/login                      ← ログイン（パスワード認証）
+
+/races?date=YYYYMMDD        ← レース一覧（日付フィルタ）
+/race/{race_id}             ← レース詳細（4タブ）
+
+/tracking-difficulty        ← 位置追跡難易度分析
+/race-quality               ← レース品質 NNLS 分析
+/pedigree-race-stats        ← 今週の血統傾向分析（AI予測 × 血統スコア）★AI予測配下に移動
+/ai-sla                     ← AI パイプライン SLA ドキュメント
+
+/data-analysis              ← 詳細データ分析（Target Frontier スタイル）★新規追加
+/growth-curve               ← 成長曲線
+/track-speed                ← トラックスピード指数
+
+/bloodline                  ← 血統 × 距離/コース研究
+/bloodline-vector           ← 血統ベクトル空間
+/note-aptitude-race         ← 血統適性マップ（SVG）
+/stallion-notes             ← 種牡馬メモ（知識ベース）★新規追加
+/myostatin                  ← Myostatin 遺伝子ダッシュボード（🛠️ 開発者のみ）
+
+/betting                    ← 馬券最適化（Kelly 基準）
+
+/favorites                  ← お気に入り馬一覧（F-12、ログイン必須）
+/notifications              ← 通知設定（F-09、ログイン必須）
+
+# 廃止済み（2026-07-08）
+# /pedigree-map             ← 血統構造マップ（D3.js サイアー系図）→ 削除済み
+# /bloodline-cluster        ← メタクラスタ判定 → 削除済み</code></pre>
+
+<h2 id="7">7. 主要 API エンドポイント（フロントエンド消費分）</h2>
+<p>認証凡例: [public]=認証不要 (auth_required: false)、[auth]=ログイン必須 (auth_required: true)</p>
+<pre><code># レース
+GET  /api/v1/races/today                              ← 本日のレース一覧 [public]
+GET  /api/v1/races?date=YYYYMMDD                      ← レース一覧 [public]
+GET  /api/v1/races/{race_id}                          ← レース詳細・出馬表 [public]
+GET  /api/v1/races/{race_id}/entries                  ← 出馬表 [public]
+GET  /api/v1/races/{race_id}/results                  ← 着順・ラップ・コーナー [public]
+GET  /api/v1/races/{race_id}/predictions              ← AI予測（T-1〜T-11）[auth]
+                                                         レスポンス: win_probability: float(0.0-1.0)
+                                                                     place_probability: float(0.0-1.0)
+
+# フィルタ・集計
+POST /api/v1/filter/stats                             ← フィルタ統計集計 [auth]
+
+# 分析
+GET  /api/v1/races/{race_id}/tracking-difficulty      ← 位置追跡難易度 [public]
+GET  /api/v1/horse/{id}/growth-curve                  ← 成長曲線 [public]
+GET  /api/v1/track-speed/day?date=X&venue=Y           ← TSI指数 [public]
+GET  /api/v1/race-quality/race?id=X                   ← NNLS 分析 [public]
+
+# データ分析
+GET  /api/v1/data-analysis/query                      ← 詳細データ分析クエリ [public]
+GET  /api/v1/data-analysis/schema                     ← 利用可能フィールド一覧 [public]
+
+# 血統
+GET  /api/v1/pedigree/race-note?race_id=X             ← 適性マップデータ [public]
+GET  /api/v1/bloodline-cluster/lookup?q=X             ← クラスター検索 [public] ※エンドポイントは残存
+GET  /api/v1/pedigree-race-stats/query                ← 今週の血統傾向分析クエリ [public]
+
+# 馬券
+POST /api/v1/betting/optimize                         ← Kelly 最適化 [auth]
+
+# お気に入り（F-12）
+GET    /api/v1/favorites                              ← 登録馬一覧 [auth]
+POST   /api/v1/favorites                              ← 馬を登録 [auth]
+DELETE /api/v1/favorites/{horse_id}                   ← 登録解除 [auth]
+
+# 通知（F-09）
+GET  /api/v1/notifications/settings                   ← 通知設定取得 [auth]
+PUT  /api/v1/notifications/settings                   ← 通知設定更新 [auth]</code></pre>
+
+<h2 id="8">8. 用語定義（フロントエンド関連）</h2>
+<table>
+<tr><th>用語</th><th>定義</th></tr>
+<tr><td>バリューベット</td><td>回収率 ≥ 100 の馬</td></tr>
+<tr><td>TSI</td><td>Track Speed Index。Z スコア正規化馬場速度指数（50=標準）</td></tr>
+<tr><td>PF 指数</td><td>コース内相対評価速度指数</td></tr>
+<tr><td>PF(2000m)</td><td>全コース横断比較用標準化指数（2000m 基準）</td></tr>
+<tr><td>L2クラスター</td><td>2段階血統クラスタリングの第2層サブグループ</td></tr>
+<tr><td>course_match</td><td>血統適性マップにおけるコース適合スコア</td></tr>
+<tr><td>ease スコア</td><td>位置追跡難易度の容易度スコア（0-100）</td></tr>
+<tr><td>MSTN遺伝子型</td><td>CC=短距離型 / CT=中距離型 / TT=長距離型</td></tr>
+<tr><td>Kelly 倍率</td><td>Kelly 基準の分率（0.25 = Quarter Kelly）</td></tr>
+<tr><td>win_probability</td><td>AI予測レスポンスの勝率フィールド。<code>float (0.0〜1.0)</code>（旧: <code>prediction_score</code>）</td></tr>
+<tr><td>place_probability</td><td>AI予測レスポンスの複勝率フィールド。<code>float (0.0〜1.0)</code>（DEC-022 追加）</td></tr>
+</table>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

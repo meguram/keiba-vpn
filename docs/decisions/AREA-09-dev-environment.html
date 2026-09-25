@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AREA-09 開発環境要件 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · AREA-09</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <h4>AREA-09</h4>
+      <a href="#overview">概要</a>
+      <a href="#1">1. 実行環境に関する前提条件</a>
+      <a href="#2">2. コンポーネント構成（推定）</a>
+      <a href="#3">3. Redis キャッシュ設定</a>
+      <a href="#4">4. スクレイパー実行設定</a>
+      <a href="#5">5. 推論バッチ実行スケジュール</a>
+      <a href="#6">6. 未定義事項（本仕様書の対象外）</a>
+      <a href="#7">7. 環境変数マスターリスト（DEC-017）</a>
+      <a class="toc-h3" href="#7-1">7-1 必須環境変数</a>
+      <a class="toc-h3" href="#7-2">7-2 .env.example テンプレート</a>
+      <a class="toc-h3" href="#7-3">7-3 変数名の注意事項</a>
+      <a href="#8">8. Python バージョン（3.11 統一）</a>
+      <a class="toc-h3" href="#8-1">8-1 バージョン固定ファイル</a>
+      <a class="toc-h3" href="#8-2">8-2 各ツールでのバージョン指定</a>
+      <a class="toc-h3" href="#8-3">8-3 型ヒント・構文</a>
+      <a href="#9">9. CI ワークフロー設定（ci.yml 統合）</a>
+      <a class="toc-h3" href="#9-1">9-1 ファイル統合方針</a>
+      <a class="toc-h3" href="#9-2">9-2 ci.yml 全体構成例</a>
+      <a class="toc-h3" href="#9-3">9-3 PostgreSQL 環境変数の説明</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · AREA-09</div>
+      <h1>AREA-09 — 開発環境要件</h1>
+      <p class="meta">
+        <span class="badge final">FINAL</span>
+        最終更新: 2026-07-06　|　統合: DEC-001（統合済み）, DEC-017（環境変数正規化）
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<h2 id="overview">概要</h2>
+<p>DEC-001 は競馬予測システム（keiba-vpn）のデータ要件・モデリング要件を定義した文書であり、開発環境固有の仕様（dev/stg/prod 環境分離、docker-compose 設計、デプロイフロー等）に関する記述は含まれていない。</p>
+<p>以下に、DEC-001 から抽出できる <b>開発環境要件に直接関連する情報</b> と、DEC-017 で確定した環境変数正規名・Python バージョン・CI 設定を統合して記載する。</p>
+
+<h2 id="1">1. 実行環境に関する前提条件</h2>
+<p>DEC-001 から読み取れる環境要件は以下の通り。</p>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>データベース</td><td>PostgreSQL（<code>BIGSERIAL</code>、<code>TIMESTAMPTZ</code>、<code>NUMERIC</code>、<code>ARRAY</code> 型を使用）</td></tr>
+<tr><td>キャッシュ</td><td>Redis（TTL 管理付き、キャッシュキー: <code>prediction:{race_id}:{model_version}</code>、<code>lap:prediction:{race_id}:{model_version}</code>）</td></tr>
+<tr><td>スキーママイグレーション</td><td>Alembic 等の DDL バージョン管理ツールを使用（N-11）</td></tr>
+<tr><td>モデル管理</td><td>MLflow 等のモデルバージョン管理基盤（F-16）</td></tr>
+<tr><td>ML フレームワーク</td><td>LightGBM（初期実装）、LSTM（Phase 4 以降）</td></tr>
+<tr><td>API</td><td>REST API（<code>GET /api/v1/races/{race_id}/predictions</code> 等）</td></tr>
+</table>
+
+<h2 id="2">2. コンポーネント構成（推定）</h2>
+<p>DEC-001 の機能要件・非機能要件から導出されるサービスコンポーネント。</p>
+<pre><code>┌──────────────────────────────────────────────────────┐
+│ keiba-vpn システム構成（DEC-001 から導出）              │
+│                                                        │
+│  scraper        ── netkeiba.com スクレイパー           │
+│  db (PostgreSQL) ── Layer 1〜5 データ格納              │
+│  redis          ── 予測結果キャッシュ                  │
+│  api            ── REST API（/api/v1/...）             │
+│  ml-worker      ── 特徴量生成・モデル学習・推論バッチ  │
+│  mlflow         ── モデルバージョン管理                │
+│  frontend       ── レース一覧・予測表示 UI             │
+└──────────────────────────────────────────────────────┘</code></pre>
+
+<h2 id="3">3. Redis キャッシュ設定</h2>
+<table>
+<tr><th>項目</th><th>値</th></tr>
+<tr><td>キャッシュキー（予測結果）</td><td><code>prediction:{race_id}:{model_version}</code></td></tr>
+<tr><td>キャッシュキー（ラップ予測）</td><td><code>lap:prediction:{race_id}:{model_version}</code></td></tr>
+<tr><td>TTL</td><td>発走まで有効 / 発走後 60 秒で自動失効</td></tr>
+</table>
+
+<h2 id="4">4. スクレイパー実行設定</h2>
+<pre><code>SCRAPING_CONFIG = {
+    "request_interval_sec": 2.0,
+    "jitter_sec": (0.5, 1.5),
+    "concurrent_workers": 1,          # シングルIP環境では並列1推奨
+    "session_rotate_interval": 50,
+    "retry_on_429": True,
+    "retry_backoff_base_sec": 30,
+    "user_agent_rotate": True,
+}</code></pre>
+
+<h2 id="5">5. 推論バッチ実行スケジュール</h2>
+<table>
+<tr><th>ジョブ</th><th>実行タイミング</th><th>完了目標</th></tr>
+<tr><td>出馬表取得</td><td>レース3日前 06:00 JST / 毎日 06:00 更新</td><td>—</td></tr>
+<tr><td>オッズスナップショット</td><td>発走当日 08:00 〜 発走時刻・5分毎（発走30分前は2分毎、5分前は1分毎）</td><td>—</td></tr>
+<tr><td>結果・ラップ取得</td><td>発走予定時刻 + 35分（5分間隔・最大6回リトライ）</td><td>—</td></tr>
+<tr><td>馬過去成績取得</td><td>結果収集完了後</td><td>—</td></tr>
+<tr><td>推論バッチ</td><td>—</td><td>発走3時間前までに完了（N-9）</td></tr>
+</table>
+
+<h2 id="6">6. 未定義事項（本仕様書の対象外）</h2>
+<p>以下の事項は引き続き未定義であり、別途 DEC を作成して確定させる必要がある。</p>
+<ul>
+<li>dev / stg / prod の環境分離方針（ローカル PC、GPU サーバー、VPS 等の割り当て）</li>
+<li>docker-compose ファイルの具体的な設計（サービス定義、ネットワーク、ボリューム）</li>
+<li>CD（継続的デプロイ）パイプラインおよびデプロイフロー</li>
+<li>GPU 環境の要件（CUDA バージョン、GPU メモリ等）</li>
+<li>VPS スペック・OS 要件</li>
+</ul>
+<div class="callout info">
+  <h4>備考</h4>
+  <p>環境変数管理・Python バージョン・CI ワークフローは下記セクション 7〜9 で確定済み（DEC-017）。</p>
+</div>
+
+<h2 id="7">7. 環境変数マスターリスト（DEC-017 — 正規名確定）</h2>
+<p>AREA-03/04 等に散在していた環境変数定義を本セクションに集約する。<b>本リストが正規名の唯一の参照源</b>とし、他の AREA 文書は本セクションを参照すること。</p>
+
+<h3 id="7-1">7-1. 必須環境変数</h3>
+<table>
+<tr><th>変数名</th><th>用途</th><th>例（example 値）</th></tr>
+<tr><td><code>DATABASE_URL</code></td><td>PostgreSQL 接続 URL</td><td><code>postgresql://keiba_user:keiba_pass@localhost:5432/keiba_db</code></td></tr>
+<tr><td><code>APP_SECRET_KEY</code></td><td>Flask セッション秘密鍵</td><td><code>change-me-in-production-use-random-32bytes</code></td></tr>
+<tr><td><code>JWT_SECRET</code></td><td>JWT 署名用秘密鍵</td><td><code>jwt-secret-change-me-in-production</code></td></tr>
+<tr><td><code>GCS_BUCKET</code></td><td>GCS バケット名</td><td><code>keiba-vpn-data</code></td></tr>
+<tr><td><code>REDIS_URL</code></td><td>Redis 接続 URL</td><td><code>redis://localhost:6379/0</code></td></tr>
+<tr><td><code>NETKEIBA_MAX_CONCURRENT_REQUESTS</code></td><td>スクレイピング並列数（=1 固定）</td><td><code>1</code></td></tr>
+<tr><td><code>MLFLOW_TRACKING_URI</code></td><td>MLflow トラッキングサーバー URL</td><td><code>http://localhost:5000</code></td></tr>
+<tr><td><code>FLASK_ENV</code></td><td>Flask 実行環境 (development/production)</td><td><code>development</code></td></tr>
+</table>
+
+<h3 id="7-2">7-2. <code>.env.example</code> テンプレート</h3>
+<p>プロジェクトルートに <code>.env.example</code> を配置し、開発者が <code>.env</code> を作成する際の雛形とする。実際の秘密値は <code>.env</code> に記載し、<code>.gitignore</code> でコミット対象から除外すること。</p>
+<pre><code># --- Database ---
+# PostgreSQL 接続 URL（Alembic・SQLAlchemy 共通）
+DATABASE_URL=postgresql://keiba_user:keiba_pass@localhost:5432/keiba_db
+
+# --- Flask ---
+# Flask セッション秘密鍵（本番では必ず強いランダム値に変更）
+APP_SECRET_KEY=change-me-in-production-use-random-32bytes
+
+# Flask 実行環境: development | production
+FLASK_ENV=development
+
+# --- Auth ---
+# JWT 署名用秘密鍵（本番では必ず強いランダム値に変更）
+JWT_SECRET=jwt-secret-change-me-in-production
+
+# --- Storage ---
+# Google Cloud Storage バケット名
+GCS_BUCKET=keiba-vpn-data
+
+# --- Cache ---
+# Redis 接続 URL（DB 番号 /0 を使用）
+REDIS_URL=redis://localhost:6379/0
+
+# --- Scraping ---
+# netkeiba スクレイピング並列数（シングルIP環境では 1 固定）
+NETKEIBA_MAX_CONCURRENT_REQUESTS=1
+
+# --- MLflow ---
+# MLflow トラッキングサーバー URL
+MLFLOW_TRACKING_URI=http://localhost:5000</code></pre>
+
+<h3 id="7-3">7-3. 変数名の注意事項</h3>
+<ul>
+<li>他 AREA 文書で <code>SECRET_KEY</code> と記載されている箇所は <code>APP_SECRET_KEY</code> に読み替えること。</li>
+<li><code>POSTGRES_*</code> 系の変数（<code>POSTGRES_USER</code>、<code>POSTGRES_PASSWORD</code>、<code>POSTGRES_DB</code>）は CI/docker-compose 専用であり、アプリケーションコードからは <code>DATABASE_URL</code> を使用すること（セクション 9 参照）。</li>
+</ul>
+
+<h2 id="8">8. Python バージョン（P2-1 — 3.11 統一）</h2>
+<p>プロジェクト全体で Python <b>3.11</b> を使用する。3.10 以下の記述がある場合は 3.11 に更新すること。</p>
+
+<h3 id="8-1">8-1. バージョン固定ファイル</h3>
+<p>プロジェクトルートに <code>.python-version</code> を配置して pyenv によるバージョン固定を行う。</p>
+<pre><code># .python-version
+3.11</code></pre>
+
+<h3 id="8-2">8-2. 各ツールでのバージョン指定</h3>
+<table>
+<tr><th>ツール</th><th>設定箇所</th><th>記述例</th></tr>
+<tr><td>pyenv</td><td><code>.python-version</code></td><td><code>3.11</code></td></tr>
+<tr><td>Docker</td><td><code>Dockerfile</code></td><td><code>FROM python:3.11-slim</code></td></tr>
+<tr><td>GitHub Actions</td><td><code>ci.yml</code></td><td><code>python-version: "3.11"</code></td></tr>
+<tr><td><code>pyproject.toml</code></td><td><code>[tool.poetry.dependencies]</code></td><td><code>python = "^3.11"</code></td></tr>
+</table>
+
+<h3 id="8-3">8-3. 型ヒント・構文</h3>
+<p>Python 3.11 で利用可能な構文を積極的に使用する。</p>
+<ul>
+<li><code>X | Y</code> 型ユニオン（<code>Optional[X]</code> の代わり）</li>
+<li><code>tomllib</code>（標準ライブラリ）</li>
+<li><code>ExceptionGroup</code> / <code>except*</code>（必要に応じて）</li>
+</ul>
+
+<h2 id="9">9. CI ワークフロー設定（P2-5 — <code>ci.yml</code> 統合）</h2>
+
+<h3 id="9-1">9-1. ファイル統合方針</h3>
+<p>複数の GitHub Actions ワークフローファイルが存在する場合は <b>ci.yml に統合</b>する。</p>
+<pre><code>.github/workflows/
+└── ci.yml          ← 単一ファイルに統合（lint / test / build を含む）</code></pre>
+
+<h3 id="9-2">9-2. <code>ci.yml</code> 全体構成例</h3>
+<pre><code>name: CI
+
+on:
+  push:
+    branches: [main, feature/**]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: keiba_user       # アプリ用 DB ユーザー
+          POSTGRES_PASSWORD: keiba_pass   # アプリ用 DB パスワード
+          POSTGRES_DB: keiba_db           # アプリ用 DB 名
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run lint
+        run: |
+          pip install ruff
+          ruff check src/
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://keiba_user:keiba_pass@localhost:5432/keiba_db
+          REDIS_URL: redis://localhost:6379/0
+          APP_SECRET_KEY: ci-test-secret-key
+          JWT_SECRET: ci-test-jwt-secret
+          FLASK_ENV: development
+          MLFLOW_TRACKING_URI: http://localhost:5000
+          NETKEIBA_MAX_CONCURRENT_REQUESTS: 1
+        run: |
+          pytest src/ -v --tb=short</code></pre>
+
+<h3 id="9-3">9-3. PostgreSQL 環境変数の説明</h3>
+<p>CI services ブロックで使用する <code>POSTGRES_*</code> 変数は Docker 公式イメージの初期化用であり、アプリケーション接続には <code>DATABASE_URL</code>（セクション 7 参照）を使用する。</p>
+<table>
+<tr><th>変数名</th><th>値</th><th>役割</th></tr>
+<tr><td><code>POSTGRES_USER</code></td><td><code>keiba_user</code></td><td>作成される DB ユーザー名</td></tr>
+<tr><td><code>POSTGRES_PASSWORD</code></td><td><code>keiba_pass</code></td><td>上記ユーザーのパスワード</td></tr>
+<tr><td><code>POSTGRES_DB</code></td><td><code>keiba_db</code></td><td>作成されるデータベース名</td></tr>
+</table>
+<p style="color:var(--muted); font-size:13px;">これらは <code>DATABASE_URL=postgresql://keiba_user:keiba_pass@localhost:5432/keiba_db</code> と対応する。</p>
+
+<div class="callout info">
+  <h4>備考</h4>
+  <p>本仕様書は DEC-001 および DEC-017 を参照している。dev/stg/prod 環境分離・docker-compose 構成・CD パイプラインは未決定であり、別途 DEC の作成を推奨する。</p>
+</div>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DEC-025 GCS→PostgreSQL データ補完・対応表・定期実行・モニタリング — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · DEC-025</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <a href="AREA-04-ops.html">→ AREA-04</a>
+      <a href="AREA-06-data.html">→ AREA-06</a>
+      <a href="AREA-10-infra-monitoring.html">→ AREA-10</a>
+      <h4>DEC-025</h4>
+      <a href="#1">1. この文書の目的</a>
+      <a href="#2">2. 全体像（2段パイプライン）</a>
+      <a href="#3">3. GCS→PG 補完ロジック</a>
+      <a class="toc-h3" href="#3-1">3-1 バッチ ETL（etl_stg_db）</a>
+      <a class="toc-h3" href="#3-2">3-2 単体 ETL（etl_ingest_race）</a>
+      <a class="toc-h3" href="#3-3">3-3 品質修復時の自動 PG 同期</a>
+      <a class="toc-h3" href="#3-4">3-4 めぐ指数（PG 直書き）</a>
+      <a href="#4">4. GCS↔PostgreSQL 対応表</a>
+      <a class="toc-h3" href="#4-1">4-1 GCS 物理パス</a>
+      <a class="toc-h3" href="#4-2">4-2 カテゴリ→テーブル対応</a>
+      <a class="toc-h3" href="#4-3">4-3 環境と DB の対応</a>
+      <a href="#5">5. 定期実行（cron）の現状と戦略</a>
+      <a class="toc-h3" href="#5-1">5-1 現状サマリ</a>
+      <a class="toc-h3" href="#5-2">5-2 増分 ETL の skip ロジック</a>
+      <a href="#6">6. モニタリング</a>
+      <a class="toc-h3" href="#6-1">6-1 モニターポータル /monitor</a>
+      <a class="toc-h3" href="#6-2">6-2 品質ヘルス 3 段チェック</a>
+      <a class="toc-h3" href="#6-3">6-3 ローカル索引</a>
+      <a class="toc-h3" href="#6-4">6-4 開催日・開催場・データポイント</a>
+      <a class="toc-h3" href="#6-5">6-5 モニタリングのギャップ</a>
+      <a href="#7">7. 運用チェックリスト</a>
+      <a href="#8">8. 関連ドキュメント</a>
+      <a href="#9">9. 決定事項（要約）</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · DEC-025</div>
+      <h1>DEC-025: GCS → PostgreSQL データ補完・対応表・定期実行・モニタリング</h1>
+      <p class="meta">
+        <span class="badge final">ACCEPTED</span>
+        日付: 2026-07-23　|　関連 AREA: AREA-04（cron / SLA）, AREA-06（GCS / ETL / PG スキーマ）, AREA-10（監視）
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<table>
+<tr><td><b>日付</b></td><td>2026-07-23</td></tr>
+<tr><td><b>ステータス</b></td><td><span class="badge final">accepted</span>（現状整理 + 推奨運用）</td></tr>
+<tr><td><b>関連 AREA</b></td><td>AREA-04（cron / SLA）, AREA-06（GCS / ETL / PG スキーマ）, AREA-10（監視）</td></tr>
+<tr><td><b>実装の正</b></td><td><code>src/scripts/data/etl_stg_db.py</code>, <code>src/scripts/data/etl_ingest_race.py</code>, <code>src/db/etl/transform.py</code>, <code>src/api/monitor_coverage.py</code>, <code>src/api/quality_health.py</code></td></tr>
+</table>
+
+<h2 id="1">1. この文書の目的</h2>
+<p>競馬データ基盤において、次の 4 点を <b>誰でも追えるレベル</b> で整理する。</p>
+<ol>
+<li>GCS から STG / PROD の PostgreSQL へデータが <b>どのロジックで補完されるか</b></li>
+<li>各 GCS データ（パス）が PostgreSQL の <b>どの DB・どのテーブル</b> に紐づくか（理想は 1 対 1）</li>
+<li>GCS → PostgreSQL の補完が <b>毎日の cron で走っているか</b>。未設定なら <b>GCS read コストを抑えた戦略</b></li>
+<li>GCS / PostgreSQL の <b>開催日・開催場・データポイント</b> が <b>どうモニタリングされているか</b></li>
+</ol>
+<div class="callout info">
+  <h4>用語</h4>
+  <ul>
+    <li><b>GCS</b>: Google Cloud Storage。スクレイピング結果 JSON の永続ストア（<code>HybridStorage</code> 経由）。</li>
+    <li><b>PostgreSQL（PG）</b>: アプリ・めぐ指数・モニターが参照する RDBMS。環境変数 <code>DATABASE_URL</code> で接続先が決まる。</li>
+    <li><b>STG / PROD</b>: スキーマは同一（Alembic 管理）。DB 名例: <code>keiba_db_stg</code>, <code>keiba_db_prod</code>（<code>.env.stg</code> / <code>.env.prod</code>）。</li>
+    <li><b>補完</b>: GCS にある JSON を読み、PG テーブルに upsert すること。</li>
+  </ul>
+</div>
+
+<h2 id="2">2. 全体像（2 段パイプライン）</h2>
+<p>データは <b>必ずしも GCS 保存と同時に PG へ入らない</b>。現状は次の 2 段構成である。</p>
+<pre><code>[段階 A] スクレイピング cron（SLA 0〜6 + バックフィル）
+    netkeiba → HybridStorage.save() → GCS JSON
+    （同時にローカル索引 date_coverage / quality_health を更新）
+
+[段階 B] ETL（GCS → PostgreSQL）  ← ★ cron 未設定。手動 / 品質修復時のみ
+    race_lists から対象 race_id を列挙
+    → GCS から JSON を load（race_shutuba + race_result をマージ）
+    → PG へ upsert（races, entries, horses, …, race_results）</code></pre>
+<p><b>重要</b>: 7/18・7/19 の事例でも、<b>段階 A（cron）は成功</b>していたが、<b>段階 B（確定結果の PG 反映）は weekly-update 待ち + ETL 未実行</b>のため PG が空のままだった。GCS と PG のズレは「障害」ではなく <b>設計上の非同期</b> が主因である。</p>
+
+<h2 id="3">3. GCS → PostgreSQL 補完ロジック（詳細）</h2>
+
+<h2 id="3-1">3-1. バッチ ETL（STG 運用の主経路）— <code>etl_stg_db.py</code></h2>
+<p><b>コマンド例</b></p>
+<pre><code># STG DB へ投入（DATABASE_URL が keiba_db_stg を指すこと）
+KEIBA_ENV=stg python3 -m src.scripts.data.etl_stg_db --recent-days 30
+python3 -m src.scripts.data.etl_stg_db --year 2026 --batch-size 50
+python3 -m src.scripts.data.etl_stg_db --dry-run   # GCS 読み取りのみ確認</code></pre>
+<p><b>処理フロー（1 レース = <code>process_race()</code>）</b></p>
+<table>
+<tr><th>順</th><th>処理</th><th>入力</th><th>出力（PG テーブル）</th></tr>
+<tr><td>1</td><td>対象日付の列挙</td><td><code>data/page_reference/race_lists/{YYYYMMDD}.json</code></td><td>—</td></tr>
+<tr><td>2</td><td>対象 race_id 一覧</td><td>上記 JSON の <code>races[].race_id</code>（JRA のみは race_lists 側でフィルタ）</td><td>—</td></tr>
+<tr><td>3</td><td>出走表 + メタのマージ読込</td><td>GCS <code>race_shutuba</code> + GCS <code>race_result</code> → <code>load_merged_race_card()</code></td><td>—</td></tr>
+<tr><td>4</td><td>レースマスタ upsert</td><td>マージ済み card</td><td><code>races</code></td></tr>
+<tr><td>5</td><td>出走馬・関係者 upsert</td><td>card.entries[]</td><td><code>horses</code>, <code>jockeys</code>, <code>trainers</code>, <code>entries</code></td></tr>
+<tr><td>6</td><td>確定結果 upsert</td><td>GCS <code>race_result</code> を別途 load</td><td><code>race_results</code></td></tr>
+<tr><td>7</td><td>（STG のみ）モック予測</td><td>出走馬 ID 一覧</td><td><code>prediction_results</code>（<code>model_version=stg-mock-v1</code>）</td></tr>
+</table>
+<p><b>マージの意味</b> (<code>src/utils/race_card_merge.py</code>)</p>
+<ul>
+<li><code>race_shutuba</code> を正本とし、<code>race_result</code> で <b>レース名・馬名・性齢などの文字化け・欠損</b> を補完する。</li>
+<li>PG へ入る <code>races</code> / <code>entries</code> は <b>マージ後の card</b> がソースである。</li>
+</ul>
+<p><b>対象日付の決め方</b></p>
+<ul>
+<li><code>--recent-days N</code>: race_lists に存在し、今日から N 日以内の日付のみ。</li>
+<li><code>--year YYYY</code>: その年の race_lists ファイルすべて。</li>
+<li>デフォルト（引数なし）: race_lists 上の <b>2026 年全日</b>（重いので本番 cron では <code>--recent-days</code> 推奨）。</li>
+</ul>
+<p><b>接続先 DB</b></p>
+<ul>
+<li><code>DATABASE_URL</code> 環境変数（未設定時 <code>keiba_db_stg</code>）。</li>
+<li><b>STG も PROD も同じコード</b>。<code>.env.stg</code> / <code>.env.prod</code> の <code>DATABASE_URL</code> だけが違う。</li>
+</ul>
+<p><b>初回 STG 構築時</b></p>
+<ul>
+<li><code>scripts/server/setup_stg.sh</code> がバックグラウンドで <code>etl_stg_db --year 2026</code> を <b>1 回</b> 起動する（デプロイ時のブートストラップ。<b>毎日 cron ではない</b>）。</li>
+</ul>
+
+<h2 id="3-2">3-2. 単体 ETL（設計上の Layer 1〜5 経路）— <code>etl_ingest_race.py</code></h2>
+<p>AREA-06 §4 で定義された <b>カテゴリ単位の正規 ETL</b>。1 race_id ずつ GCS を読み、<code>src/db/etl/transform.py</code> で PG に upsert する。</p>
+<pre><code>python3 -m src.scripts.data.etl_ingest_race race_shutuba 202602011101
+python3 -m src.scripts.data.etl_ingest_race race_result 202602011101
+python3 -m src.scripts.data.etl_ingest_race race_result_lap 202602011101</code></pre>
+<table>
+<tr><th>category 引数</th><th>transform 関数</th><th>PG テーブル（Layer）</th></tr>
+<tr><td><code>race_shutuba</code></td><td><code>transform_shutuba()</code></td><td><code>races</code>, <code>entries</code>, <code>horses</code>, <code>jockeys</code>, <code>trainers</code>（Layer 1）</td></tr>
+<tr><td><code>race_result</code>, <code>race_result_on_time</code></td><td><code>upsert_results()</code></td><td><code>race_results</code>（Layer 2）</td></tr>
+<tr><td><code>race_result_lap</code></td><td><code>upsert_lap_times()</code> 等</td><td><code>race_lap_times</code>, <code>race_corner_positions</code>, <code>race_pace_summary</code>（Layer 4）</td></tr>
+<tr><td><code>race_odds</code></td><td><b>未実装（TODO）</b></td><td><code>race_odds_snapshot</code>（Layer 5）</td></tr>
+</table>
+<p>各成功 run は <code>scrape_runs</code> テーブルに <code>SUCCESS</code> ログが残る（監査用）。</p>
+<p><b>現状</b>: バッチ運用の主経路は <b>3-1 の <code>etl_stg_db</code> のみ</b>。3-2 は手動・将来の完全 ETL 用。</p>
+
+<h2 id="3-3">3-3. 品質修復時の自動 PG 同期 — <code>quality_auto_remediation.py</code></h2>
+<p><code>/monitor</code> の品質チェック（STG）で fail/warn になった日について、修復プラン実行時に <b>限定的に PG 同期</b> する。</p>
+<pre><code>修復順: GCS メタ補完 → スクレイプキュー投入 → sync_db → megu 再計算</code></pre>
+<ul>
+<li><code>sync_db</code>: <code>etl_stg_db.process_race()</code> を <b>最大 50 race_id</b> まで逐次実行（1 件 commit）。</li>
+<li><b>リアクティブ</b>（品質 NG 時のみ）。全開催日の定期同期ではない。</li>
+</ul>
+
+<h2 id="3-4">3-4. めぐ指数（Calculated）— GCS ではなく PG 直書き</h2>
+<p><code>megu_index</code> テーブルは GCS JSON から ETL するのではなく、<b>パイプラインが PG に直接 upsert</b> する。</p>
+<ul>
+<li>入力: <code>data/page_reference/tables/{年}/race_result_flat.parquet</code>（ローカル flat）+ PG の <code>race_results</code></li>
+<li>実行: <code>src/pipeline/megu_index/compute.py</code>（<code>raceday-evening</code> 後・品質修復後など）</li>
+<li>モニター Calculated タブ: <code>megu_index</code>（<code>model_version='v2'</code>）の頭数カバレッジを SQL 集計</li>
+</ul>
+
+<h2 id="4">4. GCS パス ↔ PostgreSQL 対応表</h2>
+
+<h2 id="4-1">4-1. GCS 物理パス（SSoT: <code>src/config/data_paths.py</code>）</h2>
+<table>
+<tr><th>種別</th><th>blob パス（バケット内相対）</th><th>例</th></tr>
+<tr><td>レース単位</td><td><code>chuou/data/preprocessed/netkeiba/pc/{category}/{year}/{race_id}.json</code></td><td><code>.../race_result/2026/202602011101.json</code></td></tr>
+<tr><td>馬単位</td><td><code>chuou/data/preprocessed/netkeiba/pc/{category}/{prefix}/{horse_id}.json</code></td><td><code>.../horse_profile/2024/2024109107.json</code></td></tr>
+<tr><td>その他</td><td><code>chuou/data/others/{category}/{key}.json</code></td><td><code>jra_cushion</code> 等</td></tr>
+</table>
+<p>フル URI: <code>gs://${GCS_BUCKET}/chuou/data/preprocessed/netkeiba/pc/...</code><br>
+（本番バケット例: <code>magu-keiba-horse-racing-ai</code>）</p>
+<p><b>GCS に載らない（ローカル正本）</b></p>
+<table>
+<tr><th>パス</th><th>用途</th></tr>
+<tr><td><code>data/page_reference/race_lists/{YYYYMMDD}.json</code></td><td>開催日・race_id 一覧（ETL の日付軸）</td></tr>
+<tr><td><code>data/page_reference/race_day_schedule/{YYYYMMDD}.json</code></td><td>発走時刻</td></tr>
+<tr><td><code>data/local/meta/date_coverage/{YYYY}/{YYYYMMDD}.json</code></td><td>カテゴリ別充足率索引（GCS list 結果のキャッシュ）</td></tr>
+<tr><td><code>data/page_reference/tables/{YYYY}/race_result_flat.parquet</code></td><td>flat 特徴量（めぐ指数・モニター Calculated）</td></tr>
+</table>
+
+<h2 id="4-2">4-2. スクレイピングカテゴリ → PostgreSQL テーブル（1 対 1 理想 vs 現状）</h2>
+<p>凡例: <b>✅ ETL 実装済</b> / <b>△ 部分（etl_stg_db のみ等）</b> / <b>❌ GCS のみ（PG 未接続）</b> / <b>📁 ローカルのみ</b></p>
+
+<h3 id="4-2-race">レース単位（Raw）</h3>
+<table>
+<tr><th>GCS category</th><th>GCS パスキー</th><th>PostgreSQL（理想 1:1）</th><th>現状 ETL</th><th>備考</th></tr>
+<tr><td><code>race_shutuba</code></td><td><code>{race_id}</code></td><td><code>races</code> + <code>entries</code> + マスタ</td><td>✅ △</td><td><code>etl_stg_db</code> / <code>etl_ingest_race</code></td></tr>
+<tr><td><code>race_result</code></td><td><code>{race_id}</code></td><td><code>race_results</code></td><td>✅ △</td><td>確定結果。weekly-update 後に GCS 充足</td></tr>
+<tr><td><code>race_result_on_time</code></td><td><code>{race_id}</code></td><td>（理想: <code>race_results</code> 速報用）</td><td>❌</td><td>PG には通常 <code>race_result</code> のみ反映</td></tr>
+<tr><td><code>race_result_lap</code></td><td><code>{race_id}</code></td><td><code>race_lap_times</code>, <code>race_corner_positions</code>, <code>race_pace_summary</code></td><td>△</td><td><code>etl_ingest_race</code> のみ。バッチ ETL 未接続</td></tr>
+<tr><td><code>race_odds</code></td><td><code>{race_id}</code></td><td><code>race_odds_snapshot</code></td><td>❌</td><td>transform に TODO</td></tr>
+<tr><td><code>race_pair_odds</code></td><td><code>{race_id}</code></td><td>（専用テーブルなし）</td><td>❌</td><td>現状 PG 未設計</td></tr>
+<tr><td><code>race_index</code></td><td><code>{race_id}</code></td><td>（専用テーブルなし）</td><td>❌</td><td>タイム指数 JSON。PG 未接続</td></tr>
+<tr><td><code>race_paddock</code></td><td><code>{race_id}</code></td><td>（専用テーブルなし）</td><td>❌</td><td></td></tr>
+<tr><td><code>race_barometer</code></td><td><code>{race_id}</code></td><td>（専用テーブルなし）</td><td>❌</td><td>netkeiba 未掲載レースあり</td></tr>
+<tr><td><code>race_oikiri</code></td><td><code>{race_id}</code></td><td>（専用テーブルなし）</td><td>❌</td><td></td></tr>
+<tr><td><code>race_trainer_comment</code></td><td><code>{race_id}</code></td><td>（専用テーブルなし）</td><td>❌</td><td></td></tr>
+<tr><td><code>race_shutuba_past</code></td><td><code>{race_id}</code></td><td>（専用テーブルなし）</td><td>❌</td><td></td></tr>
+<tr><td><code>smartrc</code> / <code>smartrc_race</code></td><td><code>{race_id}</code></td><td>（専用テーブルなし）</td><td>❌</td><td>SmartRC 連携 JSON</td></tr>
+</table>
+
+<h3 id="4-2-horse">馬単位</h3>
+<table>
+<tr><th>GCS category</th><th>GCS パスキー</th><th>PostgreSQL（理想）</th><th>現状</th></tr>
+<tr><td><code>horse_profile</code></td><td><code>{horse_id}</code></td><td><code>horses</code> 拡張</td><td>❌（週次は GCS のみ更新）</td></tr>
+<tr><td><code>horse_result</code></td><td><code>{horse_id}</code></td><td>出走歴（将来 <code>horse_past_races</code> 等）</td><td>❌</td></tr>
+<tr><td><code>horse_ped</code> / <code>horse_pedigree_5gen</code></td><td><code>{horse_id}</code></td><td>血統（将来）</td><td>❌</td></tr>
+</table>
+
+<h3 id="4-2-calc">計算・派生（GCS 外）</h3>
+<table>
+<tr><th>データ</th><th>保存先</th><th>PostgreSQL</th><th>備考</th></tr>
+<tr><td>めぐ指数 v2</td><td>PG 直</td><td><code>megu_index</code></td><td><code>compute_for_date()</code></td></tr>
+<tr><td>めぐ PAR / 回帰係数</td><td>PG</td><td><code>megu_par_time</code>, <code>megu_regression_params</code> 等</td><td>別バッチ</td></tr>
+<tr><td>flat レース結果</td><td>ローカル parquet</td><td>間接（megu 計算入力）</td><td>GCS read 不使用</td></tr>
+<tr><td>STG モック予測</td><td>—</td><td><code>prediction_results</code></td><td>ETL 時に自動生成（本番モデルではない）</td></tr>
+</table>
+
+<h3 id="4-2-derived">派生カテゴリ（物理 blob なし）</h3>
+<p><code>race_result_meta</code>, <code>race_result_lap_times</code> 等は <b>親 JSON から抽出</b> された別パス blob。PG への独立 ETL は未整備。モニター上は <b>親があれば N/A</b> 扱い（<code>DERIVED_CATEGORY_PARENT</code>）。</p>
+
+<h2 id="4-3">4-3. 環境と DB の対応</h2>
+<table>
+<tr><th>環境</th><th><code>KEIBA_ENV</code></th><th>PostgreSQL</th><th>GCS</th></tr>
+<tr><td>dev</td><td><code>dev</code></td><td>任意（ローカル <code>keiba_db</code>）</td><td>通常オフ / ローカル JSON</td></tr>
+<tr><td>stg</td><td><code>stg</code></td><td><code>keiba_db_stg</code>（<code>.env.stg</code>）</td><td>オン</td></tr>
+<tr><td>prod</td><td><code>prod</code></td><td><code>keiba_db_prod</code>（<code>.env.prod</code>）</td><td>オン（同一バケット or 環境別は <code>.env</code> 次第）</td></tr>
+</table>
+<p style="color:var(--muted); font-size:13px;"><b>スキーマ</b>: 3 環境とも Alembic 同一。テーブル定義の SSoT は <code>src/db/models.py</code>。</p>
+
+<h2 id="5">5. 定期実行（cron）の現状と推奨戦略</h2>
+
+<h2 id="5-1">5-1. 現状サマリ（2026-07-23 実装済み）</h2>
+<table>
+<tr><th>ジョブ種別</th><th>cron 有無</th><th>内容</th><th>GCS → PG</th></tr>
+<tr><td>スクレイピング SLA 0〜6</td><td>✅ 毎日</td><td>GCS へ JSON 保存</td><td>同期は別ジョブ</td></tr>
+<tr><td><b><code>sync_pg_from_gcs.sh</code>（日次）</b></td><td><b>✅ 毎日 00:00 JST</b></td><td>直近 <b>7</b> 日を増分 ETL</td><td><b>実施</b></td></tr>
+<tr><td><b>スクレイプ後フック</b></td><td><b>✅ イベント駆動</b></td><td>eve / evening / weekly 完了後</td><td><b>対象日のみ</b></td></tr>
+<tr><td><b>weekly 後処理</b></td><td><b>✅ weekly 内蔵</b></td><td>① date_coverage ② めぐ→GCS ③ PG ETL</td><td><b>直近10日開催日</b></td></tr>
+<tr><td>品質修復 <code>sync_db</code></td><td>△ イベント駆動</td><td>fail/warn 日・最大 50R</td><td>部分的</td></tr>
+<tr><td>めぐ指数 <code>compute_for_date</code></td><td>△</td><td>evening / 修復後</td><td>PG 直（GCS read 最小）</td></tr>
+</table>
+<p><b>実装ファイル</b></p>
+<ul>
+<li>ETL: <code>src/scripts/data/etl_stg_db.py</code>（<code>run_etl()</code>, <code>--skip-if-pg-complete</code>）</li>
+<li>cron: <code>scripts/cron/sync_pg_from_gcs.sh</code> → <code>setup_all_cron.sh</code> の <code>KEIBA_PG_SYNC</code></li>
+<li>スクレイプ連動: <code>src/scraper/auto_scrape.py</code> の <code>_trigger_pg_sync_for_dates()</code></li>
+<li>prod モニターキャッシュ: ETL 後に <code>build_db_coverage_cache --recent-days</code></li>
+</ul>
+<p><b>無効化</b></p>
+<ul>
+<li>スクレイプ後同期: <code>KEIBA_PG_SYNC_AFTER_SCRAPE=0</code></li>
+<li>cron 環境: <code>KEIBA_PG_SYNC_ENVS=stg</code>（デフォルト）。prod も同期する場合 <code>KEIBA_PG_SYNC_ENVS="stg prod"</code></li>
+</ul>
+
+<h2 id="5-2">5-2. 増分 ETL の skip ロジック（GCS read 最小化）</h2>
+
+<h3 id="5-2-policy">方針（実装済み）</h3>
+<ol>
+<li><b>対象を「直近 N 日の開催日」に限定</b>（デフォルト <code>--recent-days 7</code> / <code>KEIBA_PG_SYNC_RECENT_DAYS=7</code>）。</li>
+<li><b>PG 側で充足している race_id はスキップ</b>（<code>query_pg_status_batch</code> + <code>filter_races_needing_sync</code>）。</li>
+<li><b>GCS JSON download は <code>process_race()</code> 内のみ</b>。存在確認は <code>batch_list_blobs</code>（list のみ、年単位 2 カテゴリ）。</li>
+<li><b>実行タイミング</b>: 毎日 <b>00:00 JST</b> cron 1 回 + スクレイプ完了直後（eve / evening / weekly）。夕方 cron（旧 18:15）はコスト削減のため廃止。</li>
+</ol>
+<p><b>コスト目安（GCS 金銭）</b>: 定常時は list のみで <b>月 $0.1 未満</b>。主コストは ETL CPU 時間。<code>recent-days=7</code> + cron 1 回/日で list 判定は <b>約 75% 削減</b>（旧: 14 日 × 2 回/日）。</p>
+
+<h3 id="5-2-skip">skip 条件（<code>--skip-if-pg-complete</code> デフォルト ON）</h3>
+<table>
+<tr><th>PG 状態</th><th>GCS race_result</th><th>動作</th></tr>
+<tr><td>races/entries なし</td><td>shutuba あり</td><td><b>同期</b>（GCS download）</td></tr>
+<tr><td>entries あり</td><td>result あり、finishers 0</td><td><b>同期</b>（結果投入）</td></tr>
+<tr><td>finishers あり</td><td>result あり</td><td><b>スキップ</b></td></tr>
+<tr><td>entries あり</td><td>result なし</td><td><b>スキップ</b>（結果未公開）</td></tr>
+<tr><td>shutuba なし</td><td>—</td><td><b>スキップ</b></td></tr>
+</table>
+<p>実行サマリ: <code>data/local/meta/etl_sync/{YYYY}/{YYYYMMDD}.json</code></p>
+
+<h3 id="5-2-cron">cron 登録</h3>
+<pre><code>bash scripts/cron/setup_all_cron.sh install
+# 手動: KEIBA_ENV=stg bash scripts/cron/sync_pg_from_gcs.sh</code></pre>
+
+<h3 id="5-2-future">将来改善（read コストさらに削減）</h3>
+<table>
+<tr><th>施策</th><th>効果</th></tr>
+<tr><td><code>data/local/meta/etl_sync/{YYYYMMDD}.json</code> に最終同期 race_id を記録</td><td>同一 race の再 download 回避</td></tr>
+<tr><td><code>scrape_runs</code> / GCS <code>_meta.scraped_at</code> と PG <code>race_results.updated_at</code> 比較</td><td>変更分のみ ETL</td></tr>
+<tr><td><code>etl_stg_db</code> に <code>--skip-if-pg-complete</code> フラグ追加</td><td>PG に finishers ありなら GCS load スキップ</td></tr>
+<tr><td>Layer 4・5 は <code>etl_ingest_race</code> を週次 1 回のみ</td><td>odds / lap の read 削減</td></tr>
+</table>
+
+<h3 id="5-2-weekly">weekly-update との役割分担（再確認）</h3>
+<table>
+<tr><th>タイミング</th><th>担当</th><th>GCS</th><th>PG</th></tr>
+<tr><td>開催日 17:30 <code>raceday-evening</code></td><td>速報 + オッズ</td><td><code>race_result_on_time</code> 等</td><td><b>増分 ETL</b>（<code>KEIBA_PG_SYNC_AFTER_SCRAPE=1</code>）</td></tr>
+<tr><td>金曜 18:00 <code>weekly-update</code></td><td>確定 <code>race_result</code> 等（<b>直近10日</b>開催日）</td><td>GCS 更新</td><td><b>増分 ETL</b> + <b>めぐ指数 GCS 正本</b></td></tr>
+<tr><td><b>（推奨）ETL cron</b></td><td>GCS → PG</td><td>読む</td><td><b>upsert</b>（<code>recent-days=7</code>）</td></tr>
+</table>
+<p><b>weekly 後処理</b>（<code>finalize_weekly_update</code>）:</p>
+<ol>
+<li><code>date_coverage</code> 一括更新（対象開催日）</li>
+<li><code>compute_megu_for_opening_dates(..., gcs_canonical=True)</code> → GCS 正本 parquet</li>
+<li><code>_trigger_pg_sync_for_dates</code> → 対象日のみ ETL</li>
+</ol>
+<p>無効化: <code>KEIBA_WEEKLY_MEGU_BATCH=0</code> / <code>KEIBA_PG_SYNC_AFTER_SCRAPE=0</code></p>
+
+<h2 id="6">6. モニタリング</h2>
+
+<h2 id="6-1">6-1. モニターポータル <code>/monitor</code></h2>
+<table>
+<tr><th>UI</th><th>API</th><th>見ているもの</th></tr>
+<tr><td>Raw タブ（STG）</td><td><code>GET /api/date-raw-matrix?view=stg</code></td><td><b>GCS 存在</b> + <b>PG 行数</b></td></tr>
+<tr><td>Calculated タブ</td><td><code>GET /api/date-calculated-matrix?view=stg</code></td><td>flat parquet + <b>megu_index</b></td></tr>
+<tr><td>品質ヘルス</td><td><code>GET /api/quality-check/health?date=</code></td><td>3 段チェック結果</td></tr>
+<tr><td>カバレッジカレンダー</td><td><code>GET /api/coverage-calendar</code></td><td>日別 GCS 充足率（ローカル索引）</td></tr>
+<tr><td>非開催日</td><td><code>GET /api/monitor/opening-date-info</code></td><td>「非開催（対象外）」ラベル</td></tr>
+</table>
+<p><b>STG Raw マトリクスの列</b></p>
+<ul>
+<li><b>GCS 側</b>: <code>TRACK_CATEGORIES</code> 各カテゴリについて、レース行が ✅ / ❌ / N/A（派生・障害等）。</li>
+<li><b>PG 側</b>: <code>pg_races</code>（races 行あり）, <code>pg_entries</code>（頭数）, <code>pg_race_results</code>（着順+タイムあり頭数）。</li>
+</ul>
+<p><b>課金安全設計</b>（<code>monitor_coverage.py</code> 先頭コメント）</p>
+<ul>
+<li>GCS: <b><code>batch_list_blobs</code> のみ</b>（JSON download しない）。</li>
+<li>PG: STG/DEV は <b>リアルタイム SQL</b>。</li>
+<li>PROD: <b><code>data/local/meta/db_coverage/{YYYY}/{YYYYMMDD}.json</code> キャッシュ</b>（日次更新想定）。</li>
+</ul>
+
+<h2 id="6-2">6-2. 品質ヘルス 3 段チェック</h2>
+<p>保存先: <code>data/local/meta/quality_health/{YYYY}/{YYYYMMDD}.json</code></p>
+<table>
+<tr><th>チェック</th><th>内容</th><th>GCS</th><th>PG</th></tr>
+<tr><td>① presence</td><td>カテゴリ存在 + PG 結果行</td><td>list ベース充足率</td><td><code>pg_race_results &gt; 0</code></td></tr>
+<tr><td>② raw_content</td><td>race_result の必須フィールド・文字化け</td><td><b>load</b>（内容検査）</td><td>間接</td></tr>
+<tr><td>③ calculated</td><td>入着馬の megu カバレッジ</td><td>不使用</td><td><code>megu_index</code> SQL</td></tr>
+</table>
+<p>非開催日（<code>opening_kind=no_meeting</code>）は <b>対象外（na）</b> として表示。修復ボタン無効。</p>
+
+<h2 id="6-3">6-3. ローカル索引（スクレイプ完了時更新）</h2>
+<table>
+<tr><th>ファイル</th><th>更新タイミング</th><th>用途</th></tr>
+<tr><td><code>date_coverage/{YYYY}/{YYYYMMDD}.json</code></td><td>スクレイプ / evening 後</td><td>カレンダー色・カテゴリ別件数</td></tr>
+<tr><td><code>quality_health/...</code></td><td>品質チェック実行後</td><td>品質ドット</td></tr>
+<tr><td><code>not_available/{category}/{year}.json</code></td><td>空レスポンス記録</td><td>未取得 vs 存在しないの区別</td></tr>
+<tr><td><code>db_coverage/...</code></td><td>（手動 / 将来 cron）</td><td>PROD PG キャッシュ</td></tr>
+</table>
+
+<h2 id="6-4">6-4. 開催日・開催場・データポイントの見え方</h2>
+<ol>
+<li><b>開催日</b>: <code>race_lists/{YYYYMMDD}.json</code> が正本。モニター日付一覧は <b>JRA 開催日のみ</b> フィルタ（非開催は「対象外」）。</li>
+<li><b>開催場</b>: race_id の venue コード（例: <code>202602011101</code> → 函館）+ <code>races.venue</code>。</li>
+<li><b>データポイント</b>: Raw マトリクスが <b>レース × カテゴリ</b> のセル。PG は <b>レース × (races/entries/results)</b>。</li>
+</ol>
+
+<h2 id="6-5">6-5. モニタリングのギャップ（改善余地）</h2>
+<table>
+<tr><th>ギャップ</th><th>影響</th><th>改善案</th></tr>
+<tr><td>PG ETL 未 cron</td><td>GCS–PG ズレが長期化</td><td>§5-2 の日次 ETL</td></tr>
+<tr><td>Layer 4/5 が PG マトリクスに未表示</td><td>lap/odds の PG 充足が見えない</td><td>Calculated / 別タブ拡張</td></tr>
+<tr><td>PROD db_coverage 自動更新なし</td><td>prod モニターが stale</td><td>日次 <code>build_db_coverage_cache_for_date</code> cron</td></tr>
+<tr><td>アラート通知未決（AREA-10 OP-4）</td><td>サイレント劣化</td><td>Slack 等 + 品質 fail 連携</td></tr>
+</table>
+
+<h2 id="7">7. 運用チェックリスト（開催週）</h2>
+<ol>
+<li><b>土日開催後</b>: <code>/monitor</code> で対象日 Raw タブ → GCS 100% / PG <code>pg_race_results</code> 100% を確認。</li>
+<li><b>金曜 weekly-update 後</b>: 直近10日開催日の <code>race_result</code> が GCS 100% であること、<code>auto_scrape_status.json</code> の <code>megu_batch</code> / <code>pg_sync</code> を確認（<code>logs/weekly_update.log</code>）。</li>
+<li><b>PG が遅れている場合</b>:
+<pre><code>KEIBA_ENV=stg python3 -m src.scripts.data.etl_stg_db --recent-days 7</code></pre>
+</li>
+<li><b>品質 fail 時</b>: STG で「自動修復」→ <code>sync_db</code> + 再チェック（<code>quality_auto_remediation</code>）。</li>
+<li><b>ログ</b>: <code>logs/raceday_*.log</code>（GCS）、<code>logs/etl_stg_*.log</code>（PG、手動時）。</li>
+</ol>
+
+<h2 id="8">8. 関連ドキュメント</h2>
+<ul>
+<li><a href="AREA-06-data.html">AREA-06-data.html</a> — GCS パス SSoT・5 層スキーマ・ETL パイプライン全体像</li>
+<li><a href="AREA-04-ops.html">AREA-04-ops.html</a> — cron SLA 0〜6 スケジュール</li>
+<li><a href="AREA-10-infra-monitoring.html">AREA-10-infra-monitoring.html</a> — Watchdog・リソース監視</li>
+<li><a href="DEC-014-db-schema-alignment.html">DEC-014-db-schema-alignment.html</a> — PG スキーマ正本</li>
+<li><a href="../operations/service-endpoints.md">docs/operations/service-endpoints.md</a> — API・CLI 一覧</li>
+</ul>
+
+<h2 id="9">9. 決定事項（要約）</h2>
+<ol>
+<li><b>GCS → PG の主経路は <code>etl_stg_db.run_etl()</code></b>（shutuba+result マージ → Layer 1/2）。完全 Layer 1〜5 は <code>etl_ingest_race</code> が将来経路。</li>
+<li><b>日次 cron + スクレイプ後フックで PG を自動追従</b>（<code>sync_pg_from_gcs.sh</code> / <code>_trigger_pg_sync_for_dates</code>）。</li>
+<li><b><code>--skip-if-pg-complete</code> で GCS download を最小化</b>（list + PG SQL のみで skip 判定）。</li>
+<li><b>モニタリング</b>は <code>/monitor</code>（GCS list + PG SQL + 品質 3 段）で開催日単位。非開催は「対象外」表示。</li>
+<li><b>1 対 1 対応</b>は Raw カテゴリのうち <b><code>race_shutuba</code>→entries系・<code>race_result</code>→race_results のみ実装済</b>。他カテゴリは GCS のみが正。</li>
+</ol>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

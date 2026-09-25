@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AREA-08 テスト要件 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · AREA-08</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <h4>AREA-08</h4>
+      <a href="#1">1. 概要</a>
+      <a href="#2">2. テストレベル定義</a>
+      <a class="toc-h3" href="#2-1">2-1 Unit テスト</a>
+      <a class="toc-h3" href="#2-2">2-2 Integration テスト</a>
+      <a class="toc-h3" href="#2-3">2-3 E2E テスト</a>
+      <a class="toc-h3" href="#2-4">2-4 ML テスト</a>
+      <a href="#3">3. CI ゲート</a>
+      <a class="toc-h3" href="#3-1">3-1 ゲート構成</a>
+      <a class="toc-h3" href="#3-2">3-2 ブロッキング条件まとめ</a>
+      <a href="#4">4. カバレッジ目標</a>
+      <a class="toc-h3" href="#4-1">4-1 全体目標</a>
+      <a class="toc-h3" href="#4-2">4-2 重点カバレッジ対象</a>
+      <a href="#5">5. テストデータ管理</a>
+      <a class="toc-h3" href="#5-1">5-1 テストデータの種類と用途</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · AREA-08</div>
+      <h1>AREA-08 — テスト要件（Unit/Integration/E2E/MLテスト, CI ゲート, カバレッジ目標, テストデータ管理）</h1>
+      <p class="meta">
+        <span class="badge final">ACTIVE</span>
+        最終更新: 2026-07-06　|　統合: DEC-001（統合済み）
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<h2 id="1">1. 概要</h2>
+<p>本仕様書は keiba-vpn プロジェクトにおけるテスト戦略全体を定義する。</p>
+<div class="callout info">
+  <h4>最重要テスト観点</h4>
+  <p>DEC-001 が定める「<code>as_of_race_id</code> によるスナップショット管理でテンポラルリークを構造的に排除すること」を最重要テスト観点とし、すべてのテストレベルでこの前提条件の遵守を検証する。</p>
+</div>
+
+<h2 id="2">2. テストレベル定義</h2>
+
+<h3 id="2-1">2-1. Unit テスト</h3>
+<p>対象コンポーネントと検証事項を以下に示す。</p>
+<table>
+<tr><th>対象モジュール</th><th>主要テストケース</th></tr>
+<tr><td><code>horse_stats_snapshot</code> 集計バッチ</td><td><code>as_of_race_id</code> に対して対象レース以後の情報が含まれないこと（テンポラルリーク検知）</td></tr>
+<tr><td><code>jockey_stats_snapshot</code> / <code>trainer_stats_snapshot</code> 集計バッチ</td><td>同上</td></tr>
+<tr><td><code>calculate_recovery_rate()</code></td><td><code>win_roi = win_prob × win_odds × 100</code>、<code>show_roi = show_prob × place_odds_mid × 100</code> の計算精度（小数点2桁）</td></tr>
+<tr><td>特徴量パイプライン</td><td><code>running_style_score</code>（−5〜+5 の範囲）、<code>front_runner_count</code>、<code>pace_scenario_prior</code>、<code>rel_speed_index</code>、<code>rel_odds_rank</code> の生成値が仕様通りであること</td></tr>
+<tr><td><code>race_pace_summary</code> 生成ロジック</td><td><code>pace_category</code> が <code>HIGH</code> / <code>MIDDLE</code> / <code>SLOW</code> のいずれかであること</td></tr>
+<tr><td>スクレイパー HTML パーサー</td><td>各 URL パターン（<code>/race/shutuba/{race_id}/</code>、<code>/race/{race_id}/</code>、<code>/horse/{horse_id}/</code>、<code>/jockey/{jockey_id}/</code>、<code>/trainer/{trainer_id}/</code>、<code>/odds/{race_id}/</code>）に対してフィールド抽出が正しいこと</td></tr>
+<tr><td><code>scrape_runs</code> 実行管理</td><td><code>target_type</code>・<code>status</code>・<code>retry_count</code> の記録が正確であること</td></tr>
+<tr><td>Redis キャッシュキー生成</td><td><code>prediction:{race_id}:{model_version}</code> / <code>lap:prediction:{race_id}:{model_version}</code> の形式が正しいこと</td></tr>
+</table>
+
+<h3 id="2-2">2-2. Integration テスト</h3>
+<table>
+<tr><th>テスト対象</th><th>検証内容</th></tr>
+<tr><td>スクレイパー → Layer 1〜5 DB 格納フロー</td><td>スクレイプ後 10 分以内に対象テーブルへ反映されること（N-7: ≤ 10 分）</td></tr>
+<tr><td>Layer 3 スナップショット → Stage 1 モデル 特徴量ロード</td><td><code>as_of_race_id = 対象レースID</code> のスナップショットのみが特徴量として読み込まれること</td></tr>
+<tr><td>Stage 1 出力（ポジション予測）→ Stage 2 入力連携</td><td><code>predicted_position</code> が Stage 2 の入力特徴量として正しく受け渡されること</td></tr>
+<tr><td>推論パイプライン → <code>prediction_results</code> 保存</td><td>T-1〜T-9 全フィールドが <code>prediction_results</code> テーブルに <code>UNIQUE(race_id, horse_id, model_version)</code> 制約を満たして保存されること</td></tr>
+<tr><td>推論パイプライン → <code>prediction_lap_times</code> 保存</td><td><code>furlong_index</code> 順に <code>predicted_lap_sec</code> / <code>predicted_pace_cat</code> が保存されること</td></tr>
+<tr><td>オッズスナップショット → 推論時特徴量選択</td><td>「発走 N 分前の最終スナップショット」が一意に選択されること</td></tr>
+<tr><td>Redis キャッシュ TTL</td><td>発走前はキャッシュが有効であり、発走後 60 秒で自動失効すること</td></tr>
+<tr><td>Alembic マイグレーション</td><td>全 DDL マイグレーションが冪等に適用・ロールバックできること</td></tr>
+</table>
+
+<h3 id="2-3">2-3. E2E テスト</h3>
+<table>
+<tr><th>シナリオ</th><th>期待結果</th></tr>
+<tr><td><code>GET /api/v1/races/{race_id}/predictions</code> （キャッシュヒット）</td><td>レスポンスタイム ≤ 500 ms (p95)、T-1〜T-9 全フィールドを含む JSON を返すこと（N-1）</td></tr>
+<tr><td><code>GET /api/v1/races/{race_id}/predictions</code> （キャッシュミス）</td><td>レスポンスタイム ≤ 2,000 ms（N-2）</td></tr>
+<tr><td>ラップ予測エンドポイント</td><td><code>pace_prediction.lap_times</code> に <code>furlong_index</code> 順の系列データが含まれること</td></tr>
+<tr><td>バリューベット候補フラグ</td><td><code>expected_win_roi ≥ 100</code> または <code>expected_show_roi ≥ 100</code> の馬に <code>is_value_bet: true</code> が付与されること</td></tr>
+<tr><td>障害レース除外</td><td>障害レースの <code>race_id</code> に対して予測対象外フラグが返され、推論が実行されないこと（N-14）</td></tr>
+<tr><td>発走後 API レスポンス</td><td>発走後 60 秒経過後は Redis キャッシュがなく DB から新鮮なデータが返ること</td></tr>
+<tr><td>F-6 レスポンシブテスト（Playwright）</td><td>モバイル・デスクトップ両ビューポートで主要画面（出馬表・予測結果・分析ダッシュボード）が崩れず表示されること（Playwright ブラウザ E2E）</td></tr>
+</table>
+
+<h3 id="2-4">2-4. ML テスト</h3>
+<p>ML テストは「テンポラルリーク防止」を最優先とし、以下を実施する。</p>
+
+<h4>2-4-1. テンポラルリーク検知テスト（CI 必須）</h4>
+<pre><code>def test_no_temporal_leak_in_snapshot():
+    """
+    horse_stats_snapshot の各レコードについて、
+    as_of_race_id のレース開催日より新しい race_result が
+    集計に含まれていないことを検証する。
+    """
+    for snapshot in fetch_all_snapshots():
+        race_date = get_race_date(snapshot.as_of_race_id)
+        assert snapshot.as_of_date &lt;= race_date, (
+            f"Temporal leak detected: snapshot for horse {snapshot.horse_id} "
+            f"as_of {snapshot.as_of_race_id} contains future data"
+        )</code></pre>
+
+<h4>2-4-2. 時系列分割テスト</h4>
+<ul>
+<li>学習データの最終レース開催日 &lt; 検証データの最初のレース開催日 &lt; テストデータの最初のレース開催日 であることをアサート</li>
+<li>ランダムシャッフルによる分割がコードパスに存在しないことを静的チェック（<code>train_test_split(shuffle=True)</code> の使用禁止）</li>
+</ul>
+
+<h4>2-4-3. モデル精度ゲート</h4>
+<div class="callout warn">
+  <h4>デプロイブロック条件</h4>
+  <p>CI パイプラインで以下の閾値を下回った場合はデプロイをブロックする。</p>
+</div>
+<table>
+<tr><th>ターゲット</th><th>指標</th><th>合格閾値</th></tr>
+<tr><td>勝率 (T-1)</td><td>Log Loss（ベースライン比）</td><td>ベースライン比 −5% 以上改善（N-4）</td></tr>
+<tr><td>ポジション予測 (T-8)</td><td>Spearman ρ</td><td>≥ 0.55（N-5）</td></tr>
+<tr><td>ラップタイム (T-11)</td><td>MAE（秒）</td><td>≤ 0.3 秒（N-3）</td></tr>
+<tr><td>回収率バックテスト</td><td>通算 ROI</td><td>プラス、かつ Sharpe Ratio を記録</td></tr>
+</table>
+
+<h4>2-4-4. 評価指標テスト</h4>
+<table>
+<tr><th>ターゲット</th><th>検証する評価指標</th><th>補助指標</th></tr>
+<tr><td>勝率 (T-1)</td><td>Log Loss</td><td>Calibration Error, Top-1 Accuracy</td></tr>
+<tr><td>連対率・複勝率 (T-2/3)</td><td>Binary Log Loss</td><td>AUC-ROC, Calibration</td></tr>
+<tr><td>ポジション (T-8)</td><td>Spearman ρ</td><td>MAE</td></tr>
+<tr><td>オッズ予測 (T-4/5)</td><td>MAE（オッズ単位）</td><td>RMSE</td></tr>
+<tr><td>ラップタイム (T-11)</td><td>MAE（秒）</td><td>RMSE per furlong</td></tr>
+<tr><td>ペースカテゴリ (T-10)</td><td>Accuracy</td><td>Macro F1</td></tr>
+</table>
+
+<h2 id="3">3. CI ゲート</h2>
+
+<h3 id="3-1">3-1. ゲート構成</h3>
+<pre><code># CI パイプライン ゲート定義（概要）
+gates:
+  - name: lint_and_static_analysis
+    blocking: true
+    checks:
+      - no_shuffle_in_time_split   # train_test_split(shuffle=True) 禁止
+      - schema_migration_valid     # Alembic マイグレーション構文チェック
+
+  - name: unit_tests
+    blocking: true
+    coverage_threshold: 80        # カバレッジ目標（後述）
+    targets:
+      - scraper/
+      - feature_pipeline/
+      - models/
+      - api/
+
+  - name: temporal_leak_detection
+    blocking: true                # テンポラルリーク検知は必須ゲート
+    targets:
+      - tests/ml/test_temporal_leak.py
+
+  - name: integration_tests
+    blocking: true
+    targets:
+      - tests/integration/
+
+  - name: ml_quality_gates
+    blocking: true
+    checks:
+      - logloss_improvement_vs_baseline  # ≥ −5%
+      - spearman_rho                     # ≥ 0.55
+      - lap_mae                          # ≤ 0.3 秒
+
+  - name: e2e_tests
+    blocking: true
+    targets:
+      - tests/e2e/
+    performance_checks:
+      - api_latency_cache_hit_p95_ms: 500
+      - api_latency_cache_miss_ms: 2000
+
+  - name: responsive_tests        # F-6
+    blocking: true
+    tool: playwright
+    viewports:
+      - mobile                    # 例: 375×812 (iPhone 13)
+      - desktop                   # 例: 1280×800
+    targets:
+      - tests/e2e/responsive/</code></pre>
+
+<h3 id="3-2">3-2. ブロッキング条件まとめ</h3>
+<table>
+<tr><th>ゲート</th><th>ブロッキング</th><th>理由</th></tr>
+<tr><td>テンポラルリーク検知テスト失敗</td><td>✅ ブロック</td><td>DEC-001 の最重要事項（<code>as_of_race_id</code> リーク排除）の違反</td></tr>
+<tr><td>Unit テストカバレッジ &lt; 80%</td><td>✅ ブロック</td><td>N-13 の要件（スクレイパー・特徴量パイプライン ≥ 80%）</td></tr>
+<tr><td>勝率 Log Loss 改善 &lt; −5%</td><td>✅ ブロック</td><td>N-4 の精度要件</td></tr>
+<tr><td>Spearman ρ &lt; 0.55</td><td>✅ ブロック</td><td>N-5 の精度要件</td></tr>
+<tr><td>ラップ MAE &gt; 0.3 秒</td><td>✅ ブロック</td><td>N-3 の精度要件</td></tr>
+<tr><td>API レスポンス（キャッシュヒット）&gt; 500 ms (p95)</td><td>✅ ブロック</td><td>N-1 の非機能要件</td></tr>
+<tr><td>API レスポンス（キャッシュミス）&gt; 2,000 ms</td><td>✅ ブロック</td><td>N-2 の非機能要件</td></tr>
+<tr><td>時系列分割ランダムシャッフル検出</td><td>✅ ブロック</td><td>テンポラルリーク防止ルールの遵守</td></tr>
+</table>
+
+<h2 id="4">4. カバレッジ目標</h2>
+
+<h3 id="4-1">4-1. 全体目標</h3>
+<p>DEC-001 N-13 に基づき、以下のカバレッジ目標を設定する。</p>
+<table>
+<tr><th>対象モジュール</th><th>カバレッジ目標</th><th>計測ツール</th></tr>
+<tr><td>スクレイパー（<code>scraper/</code>）</td><td><b>≥ 80%</b></td><td>pytest-cov</td></tr>
+<tr><td>特徴量パイプライン（<code>feature_pipeline/</code>）</td><td><b>≥ 80%</b></td><td>pytest-cov</td></tr>
+<tr><td>モデル学習・推論（<code>models/</code>）</td><td><b>≥ 80%</b></td><td>pytest-cov</td></tr>
+<tr><td>API レイヤー（<code>api/</code>）</td><td><b>≥ 80%</b></td><td>pytest-cov</td></tr>
+<tr><td>データ集計バッチ（<code>batch/</code>）</td><td><b>≥ 80%</b></td><td>pytest-cov</td></tr>
+</table>
+
+<h3 id="4-2">4-2. 重点カバレッジ対象</h3>
+<p>以下のコードパスは 100% カバレッジを目指す（テンポラルリーク防止の中核ロジック）。</p>
+<ul>
+<li><code>horse_stats_snapshot</code> / <code>jockey_stats_snapshot</code> / <code>trainer_stats_snapshot</code> の <code>as_of_race_id</code> フィルタリングロジック</li>
+<li><code>calculate_recovery_rate()</code> 関数</li>
+<li>オッズスナップショット「発走 N 分前の最終スナップショット」選択ロジック</li>
+</ul>
+
+<h2 id="5">5. テストデータ管理</h2>
+
+<h3 id="5-1">5-1. テストデータの種類と用途</h3>
+<table>
+<tr><th>データ種別</th><th>用途</th><th>管理方法</th></tr>
+<tr><td>フィクスチャ（静的 JSON/CSV）</td><td>Unit テスト・テンポラルリーク検知テスト</td><td><code>tests/fixtures/</code> 以下に版管理（Git）</td></tr>
+<tr><td>サンプルスクレイプ HTML</td><td>スクレイパー Unit テスト</td><td><code>tests/fixtures/html/</code> 以下に静的保存（実サイト非依存）</td></tr>
+<tr><td>ヒストリカルレースデータ（2〜3 年分）</td><td>Stage 1/2 モデル学習・バックテスト</td><td>DB（本番と別の <code>test</code> スキーマ）に格納</td></tr>
+<tr><td>時系列分割検証データセット</td><td>ML テスト（時系列分割正当性確認）</td><td><code>tests/data/split/</code> 以下に版管理</td></tr>
+<tr><td>Phase 0 検証用サンプル（10 レース）</td><td>ラップデータ可用性確認（F-17）</td><td><code>tests/phase0/</code> 以下に手動格納・レビュー対象</td></tr>
+</table>
+
+<div class="callout danger">
+  <h4>原文ファイルはここで途切れている</h4>
+  <p>元の Markdown（<code>AREA-08-testing.md</code>）はこの直後、見出し「<code>### 5-</code>」の途中（212行目、改行なし）で終了しており、以降の内容は元ファイルに存在しない。欠落分の補完は本変換の範囲外。</p>
+</div>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

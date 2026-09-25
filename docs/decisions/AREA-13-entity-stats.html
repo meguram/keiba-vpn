@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AREA-13 エンティティ統計特徴量管理 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · AREA-13</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <h4>AREA-13</h4>
+      <a href="#1">1. 概要</a>
+      <a class="toc-h3" href="#1-1">設計の3原則</a>
+      <a href="#2">2. 特徴量グループ一覧</a>
+      <a class="toc-h3" href="#2-1">グループ A/B: 騎手・調教師</a>
+      <a class="toc-h3" href="#2-2">グループ C/D: 7日間ローリング</a>
+      <a class="toc-h3" href="#2-3">グループ E/F: venue×surface Bayesian</a>
+      <a class="toc-h3" href="#2-4">グループ G/H: 種牡馬・母父統計</a>
+      <a href="#3">3. Bayesian Shrinkage 式</a>
+      <a class="toc-h3" href="#3-1">階層フォールバック</a>
+      <a class="toc-h3" href="#3-2">サンプル数ゼロの扱い</a>
+      <a href="#4">4. リーク防止実装</a>
+      <a class="toc-h3" href="#4-1">cumsum - self パターン</a>
+      <a class="toc-h3" href="#4-2">7日間ローリング (O(n²) アルゴリズム)</a>
+      <a href="#5">5. ファイル構成</a>
+      <a href="#6">6. 生成コマンド</a>
+      <a class="toc-h3" href="#6-1">学習用（全年）</a>
+      <a class="toc-h3" href="#6-2">本番推論用スナップショット更新</a>
+      <a href="#7">7. 本番推論での使用方法</a>
+      <a href="#8">8. 関連ドキュメント</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · AREA-13</div>
+      <h1>AREA-13 — エンティティ統計特徴量管理</h1>
+      <p class="meta">
+        <span class="badge final">ACTIVE</span>
+        最終更新: 2026-07-10　|　旧 AREA-08 から改番（2026-09、<code>AREA-08-testing.md</code> との番号重複のため）
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<div class="callout info">
+  <h4>改番の経緯（旧 AREA-08）</h4>
+  <p>本ドキュメントはもともと <code>AREA-08-entity-stats.md</code> というファイル名だったが、<code>AREA-08-testing.md</code>（テスト要件）と番号が重複していたため、2026-09 に <b>AREA-13</b> へ改番された。内容自体に変更はない。</p>
+</div>
+
+<h2 id="1">1. 概要</h2>
+<p>
+本ドキュメントは、競馬予測モデルで使用する <b>騎手・調教師・種牡馬・母父</b> の
+パフォーマンス統計特徴量の定義・計算方法・パイプライン設計・本番運用を定義する。
+</p>
+
+<h3 id="1-1">設計の3原則</h3>
+<ol>
+<li><b>時系列リーク防止</b>: 各レース行に付与する統計は「そのレースより前」の成績のみ使用</li>
+<li><b>スパース対策 (Bayesian Shrinkage)</b>: 少サンプルの条件別統計は上位粒度に引き寄せ</li>
+<li><b>本番再現性</b>: 学習時と同一のロジックで推論スナップショットを生成できる</li>
+</ol>
+
+<hr>
+
+<h2 id="2">2. 特徴量グループ一覧</h2>
+
+<h3 id="2-1">グループ A/B: 騎手・調教師 (既存 <code>jt_race_features</code>)</h3>
+<p>
+ファイル: <code>data/local/features/race_horse_tbl/&lt;YYYY&gt;/jt_race_features.parquet</code><br>
+生成コマンド: <code>python -m src.pipeline.build_jockey_trainer_stats</code>
+</p>
+<table>
+<tr><th>カラムパターン</th><th>内容</th></tr>
+<tr><td><code>jk_prior_all_*</code> / <code>tr_prior_all_*</code></td><td>通算成績（直前累計）</td></tr>
+<tr><td><code>jk_roll5/10/30_*</code> / <code>tr_roll5/10/30_*</code></td><td>直近 5/10/30 走</td></tr>
+<tr><td><code>jk_cal90/365_*</code> / <code>tr_cal90/365_*</code></td><td>カレンダー 90日/1年</td></tr>
+<tr><td><code>jk_at_venue_*</code> / <code>tr_at_venue_*</code></td><td>競馬場別直前累計</td></tr>
+<tr><td><code>jk_at_surface_*</code> / <code>tr_at_surface_*</code></td><td>馬場別直前累計</td></tr>
+<tr><td><code>jk_at_dist_*</code> / <code>tr_at_dist_*</code></td><td>距離帯別直前累計</td></tr>
+<tr><td><code>jk_at_grade_*</code> / <code>tr_at_grade_*</code></td><td>グレード別直前累計</td></tr>
+<tr><td><code>jk_at_season_*</code> / <code>tr_at_season_*</code></td><td>季節別直前累計</td></tr>
+<tr><td><code>jk_at_track_cond_*</code> / <code>tr_at_track_cond_*</code></td><td>馬場状態別直前累計</td></tr>
+<tr><td><code>jk_at_weight_bin_*</code> / <code>tr_at_weight_bin_*</code></td><td>斤量帯別直前累計</td></tr>
+<tr><td><code>jk_same_day_*</code> / <code>tr_same_day_*</code></td><td>当日直前（同日複数レース）</td></tr>
+<tr><td><code>jk_prior_all_avg_pass_*</code> / <code>tr_prior_all_avg_pass_*</code></td><td>位置取り平均（先頭・区間・正規化）</td></tr>
+</table>
+<p>計 174 列。各統計には <code>_starts</code>, <code>_wins</code>, <code>_top3</code>, <code>_win_rate</code>, <code>_top3_rate</code>, <code>_avg_finish</code> を含む。</p>
+
+<h3 id="2-2">グループ C/D: 騎手・調教師 7 日間ローリング (NEW)</h3>
+<p>モジュール: <code>src/pipeline/features/stallion_target_encoder.py</code> &gt; <code>build_jt_extended_stats()</code></p>
+<table>
+<tr><th>カラム</th><th>内容</th></tr>
+<tr><td><code>jk_last7d_starts</code></td><td>直近 7 日間の出走数</td></tr>
+<tr><td><code>jk_last7d_wins</code></td><td>直近 7 日間の勝利数</td></tr>
+<tr><td><code>jk_last7d_top3</code></td><td>直近 7 日間の複勝圏内数</td></tr>
+<tr><td><code>tr_last7d_*</code></td><td>調教師版（同上）</td></tr>
+</table>
+<p><b>用途</b>: 週末の乗り替わり直後の好調・不調を捉える。<code>jk_cal90</code> より細粒度な短期フォーム指標。</p>
+
+<h3 id="2-3">グループ E/F: 騎手・調教師 venue×surface Bayesian 勝率 (NEW)</h3>
+<p>モジュール: <code>src/pipeline/features/stallion_target_encoder.py</code> &gt; <code>build_jt_extended_stats()</code></p>
+<table>
+<tr><th>カラム</th><th>内容</th><th>スパース対策</th></tr>
+<tr><td><code>jk_venue_sf_win_rate_bayes</code></td><td>競馬場×馬場別勝率</td><td>Bayesian C=50 (surface 勝率ベース)</td></tr>
+<tr><td><code>jk_venue_sf_starts</code></td><td>競馬場×馬場の累計出走数</td><td>—</td></tr>
+<tr><td><code>tr_venue_sf_win_rate_bayes</code></td><td>調教師版</td><td>Bayesian C=50</td></tr>
+<tr><td><code>tr_venue_sf_starts</code></td><td>調教師版出走数</td><td>—</td></tr>
+</table>
+<p><b>用途</b>: 既存の <code>jk_at_venue_*</code> + <code>jk_at_surface_*</code> を組み合わせたインタラクション特徴量。
+例: 「Aという騎手は東京芝が特に得意」という情報を単一特徴量で捉える。</p>
+
+<h3 id="2-4">グループ G/H: 種牡馬・母父統計 (NEW)</h3>
+<p>モジュール: <code>src/pipeline/features/stallion_target_encoder.py</code> &gt; <code>build_all_sire_stats()</code></p>
+<table>
+<tr><th>カラム</th><th>内容</th><th>C (平滑化)</th></tr>
+<tr><td><code>sire_prior_starts</code></td><td>産駒直前累計出走数</td><td>—</td></tr>
+<tr><td><code>sire_prior_win_rate</code></td><td>全体勝率 (Bayesian)</td><td>30</td></tr>
+<tr><td><code>sire_prior_top3_rate</code></td><td>全体複勝率</td><td>30</td></tr>
+<tr><td><code>sire_prior_avg_finish_norm</code></td><td>平均着順 / 頭数 (0=1着, 1=最下位)</td><td>30</td></tr>
+<tr><td><code>sire_prior_avg_pass</code></td><td>平均先頭コーナー通過順 (走法傾向)</td><td>—</td></tr>
+<tr><td><code>sire_prior_win_rate_surface</code></td><td>馬場別勝率</td><td>20</td></tr>
+<tr><td><code>sire_prior_top3_rate_surface</code></td><td>馬場別複勝率</td><td>20</td></tr>
+<tr><td><code>sire_prior_avg_finish_norm_surface</code></td><td>馬場別平均着順正規化</td><td>20</td></tr>
+<tr><td><code>sire_prior_avg_pass_surface</code></td><td>馬場別走法傾向</td><td>—</td></tr>
+<tr><td><code>sire_prior_win_rate_dist</code></td><td>距離帯別勝率</td><td>25</td></tr>
+<tr><td><code>sire_prior_top3_rate_dist</code></td><td>距離帯別複勝率</td><td>25</td></tr>
+<tr><td><code>sire_prior_win_rate_venue_sf</code></td><td>競馬場×馬場別勝率（高 Bayesian）</td><td>50</td></tr>
+<tr><td><code>sire_prior_top3_rate_venue_sf</code></td><td>競馬場×馬場別複勝率</td><td>50</td></tr>
+<tr><td><code>sire_prior_win_rate_grade</code></td><td>グレード別勝率</td><td>30</td></tr>
+<tr><td><code>sire_prior_top3_rate_grade</code></td><td>グレード別複勝率</td><td>30</td></tr>
+<tr><td><code>dam_sire_*</code></td><td>母父版（全て同上）</td><td>同上</td></tr>
+</table>
+<p>計 30 列（sire 15 + dam_sire 15）。</p>
+
+<hr>
+
+<h2 id="3">3. Bayesian Shrinkage 式</h2>
+<pre><code>encoded = (C × μ_prior + Σ_local) / (C + n_local)</code></pre>
+<ul>
+<li><code>C</code>: 平滑化定数（表中の値）</li>
+<li><code>μ_prior</code>: 上位粒度の推定値（階層フォールバック）</li>
+<li><code>n_local</code>: そのストラタのサンプル数</li>
+</ul>
+
+<h3 id="3-1">階層フォールバック</h3>
+<pre><code>venue × surface × entity  (C=50)
+       ↓ n_local が小さいとき
+surface × entity           (C=20)
+       ↓
+entity × global            (C=30)
+       ↓
+データ全体の global mean</code></pre>
+
+<h3 id="3-2">サンプル数ゼロの扱い</h3>
+<p><code>starts=0</code> の行（初産駒 or 新種牡馬）は <code>rate</code> 系を <b>NaN</b> にする（global_mean を入れない）。
+モデルには <code>is_new_sire = (sire_prior_starts == 0)</code> フラグを別途付与して
+「新種牡馬であること」自体を特徴量として扱う設計を推奨。</p>
+
+<hr>
+
+<h2 id="4">4. リーク防止実装</h2>
+
+<h3 id="4-1">cumsum - self パターン</h3>
+<pre><code>g = df.sort_values(["entity_id", "race_id"]).groupby("entity_id")
+cs_win = g["win"].cumsum()
+prior_wins = cs_win - df["win"]  # 自身を除く直前累計</code></pre>
+<ul>
+<li><code>race_id = YYYYMMDDVVRR</code> なのでアルファベット昇順 = 日付昇順</li>
+<li>同日複数レースは <code>race_id</code> の小さい（= 発走の早い）ものが先になる</li>
+<li>→ 同日同時刻の参照はされない（厳密には会場コードが小さい方が先だが、同会場の複数レースは race_number で分離）</li>
+</ul>
+
+<h3 id="4-2">7 日間ローリング (O(n²) アルゴリズム)</h3>
+<p>各騎手グループ内でループし、各行 <code>i</code> に対して <code>i-7days &lt;= date &lt; date[i]</code> の範囲を集計。
+計算量が問題になる場合は年単位でチャンク分割して実行。</p>
+
+<hr>
+
+<h2 id="5">5. ファイル構成</h2>
+<pre><code>data/local/
+├── features/
+│   ├── race_horse_tbl/&lt;YYYY&gt;/jt_race_features.parquet  (グループ A/B)
+│   └── entity_stats_snapshot.parquet                   (本番推論用スナップショット)
+└── modeling/
+    └── entity_stats/
+        ├── entity_stats_full.parquet     (全期間)
+        ├── entity_stats_train.parquet
+        ├── entity_stats_valid.parquet
+        ├── entity_stats_test.parquet
+        └── entity_stats.meta.json</code></pre>
+
+<hr>
+
+<h2 id="6">6. 生成コマンド</h2>
+
+<h3 id="6-1">学習用（全年）</h3>
+<pre><code># Step 1: 既存 jt_race_features を再生成（グループ A/B）
+python -m src.pipeline.build_jockey_trainer_stats
+
+# Step 2: 種牡馬統計 + 拡張統計 + マスターデータセット結合（グループ C〜H）
+jupyter nbconvert --to notebook --execute notebooks/modeling/nb-02-entity-stats.ipynb</code></pre>
+
+<h3 id="6-2">本番推論用スナップショット更新</h3>
+<pre><code># scripts/cron/update_entity_stats_snapshot.sh
+python -m src.scripts.data.update_entity_stats_snapshot</code></pre>
+<p>スクリプトは毎朝 6:00 に cron で実行し、<code>entity_stats_snapshot.parquet</code> を更新する。
+推論 API 起動時にこのファイルをメモリにロードして使用する。</p>
+
+<hr>
+
+<h2 id="7">7. 本番推論での使用方法</h2>
+<pre><code>from src.pipeline.features.stallion_target_encoder import (
+    build_all_sire_stats,
+    build_jt_extended_stats,
+)
+
+# 予測対象レース当日以前の全レース結果
+rr_history = load_race_results(until_date="2025-07-06")
+rr_with_sire = rr_history.merge(shutuba_history[["race_id","horse_number","sire","dam_sire"]],
+                                  on=["race_id","horse_number"], how="left")
+
+# スナップショット生成
+sire_snap = build_all_sire_stats(rr_with_sire)
+jt_ext    = build_jt_extended_stats(rr_with_sire)
+
+# 当日出馬表に結合
+prediction_input = shutuba_today.merge(sire_snap, on=["race_id","horse_number"], how="left")
+prediction_input = prediction_input.merge(jt_ext,   on=["race_id","horse_number"], how="left")</code></pre>
+
+<hr>
+
+<h2 id="8">8. 関連ドキュメント</h2>
+<ul>
+<li><code>AREA-07-modeling.md</code> §4 — 特徴量ホワイトリスト</li>
+<li><code>src/pipeline/features/jockey_trainer_stats.py</code> — グループ A/B 実装</li>
+<li><code>src/pipeline/features/stallion_target_encoder.py</code> — グループ C〜H 実装</li>
+<li><code>notebooks/modeling/nb-02-entity-stats.ipynb</code> — 実装デモ・動作確認</li>
+</ul>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

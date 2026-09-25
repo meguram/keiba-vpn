@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DEC-022 予測タスク種別の確定 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · DEC-022</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <a href="AREA-06-data.html">AREA-06 データ管理</a>
+      <a href="AREA-07-modeling.html">AREA-07 モデリング</a>
+      <h4>DEC-022</h4>
+      <a href="#context">コンテキスト</a>
+      <a href="#decision">決定事項</a>
+      <a href="#impact">影響範囲</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · DEC-022</div>
+      <h1>DEC-022: 予測タスク種別（二値分類 + Harville 導出）</h1>
+      <p class="meta">
+        <span class="badge final">ACCEPTED</span>
+        日付: 2026-07-06　|　担当: Orchestrator（TASK-056 エスカレーション確認）　|　関連: <code>DEC-005</code>, <code>DEC-015</code>, <code>DEC-016</code>, <code>AREA-06</code>, <code>AREA-07</code>
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<table>
+<tr><td>日付</td><td>2026-07-06</td></tr>
+<tr><td>ステータス</td><td>accepted</td></tr>
+<tr><td>担当</td><td>Orchestrator（TASK-056 エスカレーション確認）</td></tr>
+<tr><td>関連</td><td><code>DEC-005</code>, <code>DEC-015</code>, <code>DEC-016</code>, <code>AREA-06</code>, <code>AREA-07</code></td></tr>
+</table>
+
+<h2 id="context">コンテキスト</h2>
+<p>
+AREA-07 の単勝予測タスク定義が「回帰問題（連続値スコア）」と「二値分類（binary classification）」の両方で記述されており内部矛盾が発生していた。また連対率・複勝率の確率計算ロジックが未定義だった。
+</p>
+
+<h2 id="decision">決定事項</h2>
+<p><b>二値分類（Binary Classification）+ softmax 正規化 + Harville 式導出</b> を採用する。</p>
+
+<h4>ステップ 1: 基礎スコア算出</h4>
+<p>
+LightGBM <code>objective='binary'</code> で各馬の生スコアを出力する。<br>
+ラベル: 1着 = 1、それ以外 = 0
+</p>
+
+<h4>ステップ 2: 勝率（単勝確率）</h4>
+<p>レース内の全馬スコアを <b>softmax 正規化</b> して勝率 $p_i$ を得る。</p>
+<pre><code>p_i = \frac{e^{s_i}}{\sum_j e^{s_j}}, \quad \sum_i p_i = 1</code></pre>
+
+<h4>ステップ 3: 連対率（top-2確率）— Harville 式</h4>
+<pre><code>P_i^{(top2)} = p_i + \sum_{j \neq i} p_j \cdot \frac{p_i}{1 - p_j}, \quad \sum_i P_i^{(top2)} = 2</code></pre>
+
+<h4>ステップ 4: 複勝率（top-3確率）— Harville 式</h4>
+<pre><code>P_i^{(top3)} = P_i^{(top2)} + \sum_{j \neq i} \sum_{\substack{k \neq i \\ k \neq j}} p_j \cdot \frac{p_k}{1-p_j} \cdot \frac{p_i}{1-p_j-p_k}, \quad \sum_i P_i^{(top3)} = 3</code></pre>
+
+<h4>オッズ</h4>
+<p>最終オッズは発走直前まで確定しないため、予測時点の暫定オッズを特徴量として使用する。</p>
+
+<h2 id="impact">影響範囲</h2>
+<ul>
+<li>AREA-07 の「回帰問題」記述を削除し、本決定に統一する</li>
+<li>AREA-06 の <code>tansho_label</code> を <code>BOOLEAN</code>（1着/否）として維持</li>
+<li>AREA-02 の <code>prediction_score</code> フィールドは <code>win_probability: float (0.0〜1.0)</code> として定義</li>
+<li>DEC-016 の「AI上位3頭ハイライト」は <code>place_probability</code>（複勝率）の降順で選定する</li>
+<li>18頭立てでの Harville 計算量は現実的（<code>O(n^2)</code> 〜 <code>O(n^3)</code>）</li>
+</ul>
+<p style="color:var(--muted); font-size:13px;">Last updated: 2026-07-06</p>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

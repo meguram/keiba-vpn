@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>サーバーアーキテクチャ — keiba-vpn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, sans-serif;
+  background: var(--bg); color: var(--text);
+  line-height: 1.8; font-size: 15px;
+  padding: 40px 56px 96px; max-width: 980px; margin: 0 auto;
+}
+code, pre { font-family: "JetBrains Mono", monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.back { font-size: 13px; color: var(--muted); margin-bottom: 28px; display: inline-block; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px; margin-bottom: 36px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.eyebrow {
+  color: var(--accent-2); font-size: 11px; letter-spacing: .22em;
+  font-weight: 700; text-transform: uppercase; margin-bottom: 8px;
+}
+header.hero h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.35; }
+header.hero p { color: var(--muted); font-size: 13px; margin: 0; line-height: 1.7; }
+h2 { font-size: 1.2rem; margin: 2.2em 0 0.7em; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border); color: #e8eeff; }
+h3 { font-size: 1.05rem; color: var(--accent-2); margin: 1.6em 0 0.5em; }
+p { margin: 0.7em 0; }
+pre { background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px; overflow-x: auto;
+  font-size: 12.5px; line-height: 1.55; }
+code { background: #1a2748; border: 1px solid var(--border);
+  border-radius: 5px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+pre code { background: none; border: none; padding: 0; color: #c9d8ff; }
+table { width: 100%; border-collapse: collapse; margin: 1.2em 0;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; font-size: 13px; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; }
+tr:last-child td { border-bottom: 0; }
+td.mono { font-family: "JetBrains Mono", monospace; font-size: 12px; }
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px 22px; margin: 14px 0;
+  box-shadow: var(--shadow);
+}
+.badge {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px; letter-spacing: .06em;
+  background: rgba(79,139,255,.15); color: var(--accent-2);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 2px 8px;
+}
+.badge.green { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.amber { background: rgba(251,191,36,.14); color: #fbbf24; }
+.badge.red { background: rgba(248,113,113,.14); color: #f87171; }
+.callout {
+  border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+  padding: 12px 16px; border-radius: 8px; margin: 12px 0;
+}
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+ul.bullets { list-style: none; padding: 0; margin: 6px 0; }
+ul.bullets li { position: relative; padding-left: 18px; margin: 4px 0; font-size: 14px; }
+ul.bullets li::before {
+  content: ""; position: absolute; left: 4px; top: 11px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+.diagram {
+  background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px 24px; overflow-x: auto;
+  font-family: "JetBrains Mono", monospace; font-size: 12.5px;
+  line-height: 1.7; color: #c9d8ff; white-space: pre;
+}
+.svc {
+  border-radius: 10px; padding: 12px 16px; margin: 8px 0;
+  border: 1px solid var(--border); background: #182747;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; flex-wrap: wrap;
+}
+.svc .name { font-weight: 700; font-size: 13.5px; }
+.svc .port { font-family: "JetBrains Mono", monospace; color: var(--accent-2); font-size: 12.5px; }
+.checklist { list-style: none; padding: 0; margin: 10px 0; }
+.checklist li {
+  position: relative; padding: 6px 0 6px 26px; font-size: 13.5px;
+}
+.checklist li::before {
+  content: "✓"; position: absolute; left: 0; top: 6px;
+  color: #34d399; font-weight: 700;
+}
+</style>
+</head>
+<body>
+
+<a class="back" href="../html/index.html">← ドキュメント一覧へ</a>
+
+<header class="hero">
+  <div class="eyebrow">OPERATIONS · SERVER ARCHITECTURE</div>
+  <h1>サーバーアーキテクチャ</h1>
+  <p>
+    keiba-vpn のローカル開発〜stg 運用で動いている全サーバーコンポーネント（FastAPI / Flask / Next.js / MLflow / PostgreSQL / Redis / GCS）の役割・ポート・起動方法をまとめたページです。
+    起動コマンドの詳細は <code>docs/operations/service-endpoints.md</code>、ディレクトリ構成は <code>docs/operations/PROJECT_LAYOUT.md</code> を参照してください。
+  </p>
+</header>
+
+<h2>全体構成図</h2>
+
+<div class="diagram">ブラウザ
+  │
+  ├─ http://127.0.0.1:3001  Next.js (stg) ──/api/v1/*──►┐
+  ├─ http://127.0.0.1:3000  Next.js (dev mock)          │
+  ├─ http://127.0.0.1:8000  FastAPI（Jinja2 UI + レガシー REST）
+  │                                                       │
+  └─ http://127.0.0.1:5000  Flask /api/v1（仕様準拠 REST）◄┘  ※既定ポートは MLflow と衝突
+
+推論・学習
+  ├─ MLflow Tracking       :5000  （Flask の既定ポートと同じ → 片方を移動）
+  └─ MLflow Model Serving  :5001-5006, :5010
+
+データ基盤
+  ├─ PostgreSQL  :5432   （Layer 1〜5 / predictions）
+  ├─ Redis       :6379   （予測キャッシュ L2〜L4）
+  └─ GCS         gs://&lt;bucket&gt;/chuou/...   （生データ SSoT・非 HTTP）</div>
+
+<div class="callout info">
+  <h4>仕様上の正</h4>
+  <p>DEC-013 により <b>Flask <code>/api/v1</code>（:5000）が仕様上の正</b>。FastAPI（:8000）は Jinja2 UI・管理画面・レガシー <code>/api/*</code> を担い、段階的に廃止予定です。</p>
+</div>
+
+<h2>サービス一覧</h2>
+
+<div class="svc">
+  <div><span class="name">FastAPI</span> — レガシー Web + 管理 API <span class="badge">watchdog監視対象</span></div>
+  <div class="port">:8000</div>
+</div>
+<div class="svc">
+  <div><span class="name">Flask</span> — 仕様準拠 REST（<code>/api/v1</code>） <span class="badge amber">watchdog対象外</span></div>
+  <div class="port">:5000（既定）</div>
+</div>
+<div class="svc">
+  <div><span class="name">Next.js</span> — フロントエンド（App Router）</div>
+  <div class="port">:3001 stg / :3000 dev mock</div>
+</div>
+<div class="svc">
+  <div><span class="name">MLflow Tracking</span> — 実験管理 UI/API</div>
+  <div class="port">:5000</div>
+</div>
+<div class="svc">
+  <div><span class="name">MLflow Model Serving</span> — 各モデルの推論サーバ</div>
+  <div class="port">:5001〜:5006, :5010</div>
+</div>
+<div class="svc">
+  <div><span class="name">PostgreSQL</span> — Layer 1〜5・predictions</div>
+  <div class="port">:5432</div>
+</div>
+<div class="svc">
+  <div><span class="name">Redis</span> — 予測キャッシュ L2〜L4</div>
+  <div class="port">:6379</div>
+</div>
+
+<h2>起動方法</h2>
+
+<div class="grid-2">
+  <div class="card">
+    <h3 style="margin-top:0">一括起動（推奨）</h3>
+    <pre><code># dev — Next.js モックのみ（API不要）
+./service_start
+
+# dev 実API開発（ホットリロード）
+./service_start --env dev --full
+
+# stg — 本PC上の本番相当（実API・GCS・DB）
+./service_start --env stg
+
+# prod プロファイル
+./service_start --env prod
+
+# 状態確認
+./service_start --status</code></pre>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">個別起動</h3>
+    <pre><code># FastAPI
+python main.py --host 0.0.0.0 --port 8000 [--prod]
+
+# Flask（ポート衝突時は FLASK_PORT を変更）
+FLASK_PORT=5100 python main.py --flask-api
+
+# Next.js
+cd frontend && npm run dev -- -p 3001
+
+# Watchdog（FastAPI + MLflow を監視・自動再起動）
+./scripts/server/server_watchdog.sh</code></pre>
+  </div>
+</div>
+
+<h2>ヘルスチェック</h2>
+
+<pre><code># FastAPI
+curl -s http://127.0.0.1:8000/api/health | python3 -m json.tool
+
+# Flask（ポートを変更した場合は番号を合わせる）
+curl -s http://127.0.0.1:5100/api/v1/health | python3 -m json.tool
+
+# Next.js（200が返れば起動済み）
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:3001/
+
+# リッスン中ポート一覧
+ss -tlnp | grep -E ':(3000|3001|5000|5001|5010|5100|5432|6379|8000)\s'</code></pre>
+
+<h2>運用ノート / 既知の問題</h2>
+
+<div class="callout danger">
+  <h4>⚠ ポート 5000 は他プロジェクトと衝突しやすい</h4>
+  <p>
+    このマシンでは <b>別プロジェクト（<code>daily_news</code>）の <code>src/app.py</code></b> が常時ポート <code>:5000</code> を占有していることがあります。
+    Flask 起動時に <code>Address already in use</code> が出た場合、まず <code>ss -tlnp | grep :5000</code> でプロセスの出自を確認し、無関係なプロセスなら keiba-vpn 側を
+    <code>FLASK_PORT=5100</code> 等の別ポートで起動してください（他プロジェクトの常駐プロセスを誤って kill しない）。
+    Next.js から Flask へ向ける場合は <code>KEIBA_API_URL=http://127.0.0.1:5100</code> を合わせて設定します。
+  </p>
+</div>
+
+<div class="callout warn">
+  <h4>⚠ frontend/node_modules が壊れたシンボリックリンクになっている場合がある</h4>
+  <p>
+    <code>frontend/node_modules</code> が実体ではなく <code>/tmp/&lt;tmpdir&gt;/node_modules</code> のようなシンボリックリンクになっていて、リンク先が
+    <code>/tmp</code> のクリア等で消えていることがあります（<code>service_start.sh</code> の <code>frontend_node_modules_ok</code> チェックに失敗し、フロントエンドが無言で起動しない）。
+    その場合はリンクを削除して <code>npm install</code> を実行し、実体の <code>node_modules</code> を作り直してください。
+  </p>
+  <pre><code>cd frontend
+rm node_modules
+npm install</code></pre>
+</div>
+
+<div class="callout warn">
+  <h4>⚠ MLflow Tracking（:5000）と Flask（既定 :5000）はポート競合する</h4>
+  <p>同時起動する場合は Flask を <code>FLASK_PORT=5100</code> 等に変更するか、MLflow を Docker 内のみに閉じてホスト側 Flask を :5000 のまま使う。</p>
+</div>
+
+<h2>起動後チェックリスト</h2>
+
+<ul class="checklist">
+  <li>FastAPI: <code>GET /api/health</code> が <code>200</code></li>
+  <li>Flask: <code>GET /api/v1/health</code> が <code>{"status":"ok"}</code></li>
+  <li>Next.js: トップページが <code>200</code> で返る</li>
+  <li>PostgreSQL / Redis の警告が出ていないか（出ていれば別途起動）</li>
+  <li>意図しないポート衝突（他プロジェクトの常駐プロセス等）がないか <code>ss -tlnp</code> で確認</li>
+</ul>
+
+<h2>関連ドキュメント</h2>
+
+<ul class="bullets">
+  <li><code>docs/operations/service-endpoints.md</code> — エンドポイント・環境変数の詳細一覧</li>
+  <li><code>docs/operations/PROJECT_LAYOUT.md</code> — ディレクトリ構成</li>
+  <li><code>docs/decisions/DEC-013-api-framework-flask-primary.md</code> — Flask を仕様上の正とする決定</li>
+  <li><code>docs/environment-stg.md</code> — stg 環境の詳細</li>
+</ul>
+
+</body>
+</html>

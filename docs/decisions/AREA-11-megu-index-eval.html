@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AREA-11 めぐ指数 性能評価レポート（v1） — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · AREA-11 EVAL</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <a href="AREA-11-megu-index.html">↑ AREA-11 現行仕様</a>
+      <h4>AREA-11 EVAL</h4>
+      <a href="#1">1. 算出ロジックの概要</a>
+      <a class="toc-h3" href="#1-1">2着基準フィルタ（v1 最適化）</a>
+      <a href="#2">2. 回帰モデル（NB-02）</a>
+      <a class="toc-h3" href="#2-1">推定係数</a>
+      <a class="toc-h3" href="#2-2">回帰モデル性能</a>
+      <a href="#3">3. par_time セル統計</a>
+      <a href="#4">4. 指数分布（STG 2026年・障害除外後）</a>
+      <a class="toc-h3" href="#4-1">全体統計</a>
+      <a class="toc-h3" href="#4-2">旧版（上位5着平均）との比較</a>
+      <a href="#5">5. 着順予測性能</a>
+      <a class="toc-h3" href="#5-1">レース内相関（最重要指標）</a>
+      <a class="toc-h3" href="#5-2">距離帯・馬場別内訳</a>
+      <a href="#6">6. computation_status スキーマ設計</a>
+      <a href="#7">7. 既知の制限事項</a>
+      <a href="#8">8. 今後の改善ポイント</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · AREA-11 EVAL</div>
+      <h1>めぐ指数 — 性能評価レポート</h1>
+      <p class="meta">
+        モデルバージョン: v1　|　評価実施日: 2026-07-10
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<p style="color:var(--muted); font-size:13px;">対象データ: STG 環境 2026年レース（芝・ダート）</p>
+<div class="callout warn">
+  <h4>算出根拠仕様（当時）</h4>
+  <p>v1 仕様（本文書と同時点）。現行仕様は <a href="AREA-11-megu-index.html">AREA-11-megu-index.html</a> §1〜9 を参照。基準値・par_time 算出方法が v3 で変更されており、下記の数値は v1 当時のものである点に注意。</p>
+</div>
+
+<h2 id="1">1. 算出ロジックの概要</h2>
+<pre><code>めぐ指数 = 100 + (par_time − adjusted_time) × 10
+adjusted_time = finish_time − (Δpace + Δtrack + Δweight + Δlevel)</code></pre>
+<p><b>1点 = 0.1秒差</b>。par_time（基準タイム）は同距離・馬場・コース条件の <b>2着馬</b> 補正済みタイムの平均値。</p>
+
+<h3 id="1-1">2着基準フィルタ（v1 最適化）</h3>
+<table>
+<tr><th>対象</th><th>扱い</th></tr>
+<tr><td>1着・2着</td><td>常に regression / par_time 算出に利用</td></tr>
+<tr><td>3着以降 かつ 2着タイム＋<b>2秒以内</b></td><td>正常計算</td></tr>
+<tr><td>3着以降 かつ 2着タイム＋<b>2秒超</b></td><td><code>out_of_range</code>（megu_index = NULL）</td></tr>
+<tr><td>データ自体なし</td><td>DB にレコードなし（欠損）</td></tr>
+</table>
+<p style="color:var(--muted); font-size:13px;">勝ち馬が余裕で勝つ場合や、後方大差馬のノイズによる誤差拡大を抑制するため、2着タイムを基準に設定。</p>
+
+<h2 id="2">2. 回帰モデル（NB-02）</h2>
+
+<h3 id="2-1">推定係数</h3>
+<table>
+<tr><th>パラメータ</th><th>値</th><th>意味</th></tr>
+<tr><td>β₁ (beta_pace)</td><td><b>0.8760 sec/sec偏差</b></td><td>前半スプリット偏差 1秒 → 0.876秒補正</td></tr>
+<tr><td>β₂ (beta_track)</td><td><b>0.1965 sec/TSI単位</b></td><td>TSI（馬場状態指標）1単位 → 0.197秒補正</td></tr>
+<tr><td>β₃ (beta_weight)</td><td><b>0.5498 sec/(kg×距離スケール)</b></td><td>斤量偏差1kg×2000m → 0.550秒補正</td></tr>
+<tr><td>β₄ (beta_level)</td><td>0.0（暫定）</td><td>FQ データ未整備のため0設定</td></tr>
+<tr><td>TSI 平均値</td><td>3.309</td><td>正規化の基準値</td></tr>
+</table>
+
+<h3 id="2-2">回帰モデル性能</h3>
+<table>
+<tr><th>指標</th><th>値</th></tr>
+<tr><td>学習サンプル数</td><td>145,924 行（175,472 行から17%除外）</td></tr>
+<tr><td>訓練データ期間</td><td>2020–2024年</td></tr>
+<tr><td>adjusted R²</td><td><b>0.9393</b></td></tr>
+<tr><td>多重共線性（最大VIF）</td><td>1.004（問題なし）</td></tr>
+<tr><td>標準誤差種別</td><td>HC3 ロバスト標準誤差</td></tr>
+</table>
+<p style="color:var(--muted); font-size:13px;">β₃ = 0.550 の妥当性確認: 55kg × 0.550 × (2000/2000) ≈ 30.2秒（2000mでの斤量寄与の全走破タイム換算）</p>
+
+<h2 id="3">3. par_time セル統計</h2>
+<table>
+<tr><th>馬場</th><th>セル数</th><th>使用レース数</th><th>平均サンプル/セル</th><th>最小</th><th>最大</th></tr>
+<tr><td>芝</td><td>105</td><td>7,839</td><td>74.7</td><td>1</td><td>934</td></tr>
+<tr><td>ダート</td><td>69</td><td>5,222</td><td>75.7</td><td>1</td><td>652</td></tr>
+</table>
+<p>セル定義: <code>distance × surface × direction × track_cat</code>（良/稍重/重・不良）</p>
+
+<h2 id="4">4. 指数分布（STG 2026年・障害除外後）</h2>
+
+<h3 id="4-1">全体統計</h3>
+<table>
+<tr><th>指標</th><th>値</th></tr>
+<tr><td>valid 件数</td><td><b>5,862</b></td></tr>
+<tr><td>out_of_range 件数</td><td><b>585</b>（着差2秒超）</td></tr>
+<tr><td>平均 (mean)</td><td>106.78</td></tr>
+<tr><td>標準偏差 (std)</td><td><b>16.52</b></td></tr>
+<tr><td>最小値</td><td>−15.1</td></tr>
+<tr><td>最大値</td><td>159.4</td></tr>
+<tr><td>P5 / P25 / P50 / P75 / P95 / P99</td><td>79.1 / 96.0 / 107.1 / 118.4 / 132.7 / 141.2</td></tr>
+</table>
+
+<h3 id="4-2">旧版（上位5着平均）との比較</h3>
+<table>
+<tr><th>指標</th><th>旧版</th><th><b>v1（2着基準）</b></th><th>変化</th></tr>
+<tr><td>学習サンプル</td><td>175,472</td><td>145,924</td><td>−17%</td></tr>
+<tr><td>調整 R²</td><td>—</td><td>0.9393</td><td>—</td></tr>
+<tr><td>最大値</td><td>2,361.1</td><td><b>159.4</b></td><td>−93% 改善</td></tr>
+<tr><td>標準偏差</td><td>19.26</td><td><b>16.52</b></td><td>−14% 改善</td></tr>
+<tr><td>out_of_range 明示</td><td>なし</td><td><b>585件</b></td><td>新規導入</td></tr>
+</table>
+
+<h2 id="5">5. 着順予測性能</h2>
+
+<h3 id="5-1">レース内相関（最重要指標）</h3>
+<p>1レースごとに「めぐ指数順位 vs 実際の着順」の相関を計算し、308レース分を集計。</p>
+<table>
+<tr><th>指標</th><th>値</th></tr>
+<tr><td>平均レース内 Pearson 相関</td><td><b>0.8051</b></td></tr>
+<tr><td>中央値（P50）</td><td>0.8436</td></tr>
+<tr><td>P25</td><td>0.7132</td></tr>
+<tr><td>P75</td><td>0.9373</td></tr>
+<tr><td>評価レース数</td><td>308（5頭以上 valid 完走）</td></tr>
+</table>
+<p style="color:var(--muted); font-size:13px;">レース内での速さ順位付けとして <b>80%の一致率</b> は実用的な水準。出走頭数が多く条件差が大きいレースほど精度が高い傾向（P75=0.937）。</p>
+
+<h3 id="5-2">距離帯・馬場別内訳</h3>
+<table>
+<tr><th>馬場</th><th>距離帯</th><th>valid件数</th><th>out_of_range</th><th>平均</th><th>標準偏差</th><th>中央値</th></tr>
+<tr><td>芝</td><td>sprint（〜1200m）</td><td>1,075</td><td>60</td><td>103.7</td><td>13.4</td><td>103.7</td></tr>
+<tr><td>芝</td><td>mile（〜1600m）</td><td>1,120</td><td>74</td><td>105.4</td><td>15.3</td><td>105.7</td></tr>
+<tr><td>芝</td><td>middle（〜2000m）</td><td>2,278</td><td>267</td><td>107.1</td><td>17.1</td><td>107.4</td></tr>
+<tr><td>芝</td><td>long（2001m+）</td><td>415</td><td>71</td><td>110.6</td><td>17.3</td><td>110.5</td></tr>
+</table>
+<p style="color:var(--muted); font-size:13px;">長距離ほど平均・標準偏差が高い傾向（条件差が大きい）。ダートは <code>races.surface</code> 未整備のため JOIN 集計外だが、計算は正常実施。</p>
+
+<h2 id="6">6. computation_status スキーマ設計</h2>
+<table>
+<tr><th><code>computation_status</code></th><th><code>megu_index</code></th><th>意味</th></tr>
+<tr><td><code>'valid'</code></td><td>数値あり</td><td>正常計算済み</td></tr>
+<tr><td><code>'out_of_range'</code></td><td>NULL</td><td>2着タイム+2秒超（測定範囲外）</td></tr>
+<tr><td>レコードなし</td><td>—</td><td>データ自体欠損（scratch 等）</td></tr>
+</table>
+<pre><code>-- 絞り込み例
+SELECT * FROM megu_index WHERE computation_status = 'valid';           -- 有効
+SELECT * FROM megu_index WHERE computation_status = 'out_of_range';   -- 着差大
+-- LEFT JOIN で出現しないレコード → データ欠損</code></pre>
+
+<h2 id="7">7. 既知の制限事項</h2>
+<table>
+<tr><th>項目</th><th>現状</th><th>対応方針</th></tr>
+<tr><td>β₄ (level / FQ)</td><td>0固定</td><td>FQ（賞金合計）データ整備後に再推定</td></tr>
+<tr><td>ダート races.surface</td><td>空文字列のため JOIN 集計不可</td><td>races テーブル surface 正規化</td></tr>
+<tr><td>2026年以前データ</td><td>計算未実施</td><td><code>compute.py --year 2025</code> 等で拡張可能</td></tr>
+<tr><td>前スプリット欠損</td><td>カバレッジ 92.7%</td><td>欠損時は Δpace=0 で対応中</td></tr>
+</table>
+
+<h2 id="8">8. 今後の改善ポイント</h2>
+<ol>
+<li><b>FQ（総賞金）データの整備</b> → β₄ を有効化してレベル補正を追加</li>
+<li><b>2020–2025年分の指数算出</b> → 長期トレンド分析・モデリング特徴量として活用</li>
+<li><b>races.surface 正規化</b> → ダートの集計・UIへの反映</li>
+<li><b>指数の時系列変化追跡</b> → 同馬の成長・衰えを可視化</li>
+</ol>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>
