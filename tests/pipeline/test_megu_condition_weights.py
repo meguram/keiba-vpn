@@ -8,6 +8,7 @@ from src.pipeline.megu_index.condition_weights import (
     condition_mismatch_multiplier,
 )
 from src.pipeline.megu_index.predict import predict_megu_scores
+from src.pipeline.megu_index.predict_params import PredictTuning
 
 
 class TestConditionWeights(unittest.TestCase):
@@ -55,7 +56,14 @@ class TestConditionWeights(unittest.TestCase):
         self.assertGreater(nw[0], nw[1])
 
     def test_predict_surface_mismatch_lowers_final(self):
-        """芝のみの過去走 → ダート予測では指数が下がる（重み割引）。"""
+        """芝のみの過去走 → ダート予測では指数が下がる（重み割引）。
+
+        tuning=PredictTuning() を明示して ability_bias_sec 等をゼロに固定する。
+        省略すると config/megu_predict_params.json の本番チューニング値（月次で
+        再調整される運用値、AREA-11 §11-1）が暗黙に混入し、このテストが検証したい
+        「条件不一致重みのみ」の効果と無関係な値のずれで assertEqual が壊れる。
+        """
+        neutral_tuning = PredictTuning()
         hist = [{"megu_index": 110.0, "par_time_sec": 96.0, "surface": "芝", "distance": 1600}]
         no_disc = predict_megu_scores(
             hist, par_time_target=96.0, surface_target="ダート", distance_target=1600,
@@ -64,6 +72,7 @@ class TestConditionWeights(unittest.TestCase):
                 "w_match": 1.0, "w_surface_only": 1.0,
                 "w_distance_only": 1.0, "w_both": 1.0,
             },
+            tuning=neutral_tuning,
         )
         discounted = predict_megu_scores(
             hist, par_time_target=96.0, surface_target="ダート", distance_target=1600,
@@ -72,6 +81,7 @@ class TestConditionWeights(unittest.TestCase):
                 "w_match": 1.0, "w_surface_only": 0.3,
                 "w_distance_only": 0.5, "w_both": 0.1,
             },
+            tuning=neutral_tuning,
         )
         # 1走のみなら重み割引しても値は同じ（正規化で100%がその1走）
         self.assertEqual(no_disc["megu_final"], 110.0)
@@ -87,6 +97,7 @@ class TestConditionWeights(unittest.TestCase):
                 "w_match": 1.0, "w_surface_only": 1.0,
                 "w_distance_only": 1.0, "w_both": 1.0,
             },
+            tuning=neutral_tuning,
         )
         p1 = predict_megu_scores(
             hist2, par_time_target=96.0, surface_target="ダート", distance_target=1600,
@@ -95,6 +106,7 @@ class TestConditionWeights(unittest.TestCase):
                 "w_match": 1.0, "w_surface_only": 0.2,
                 "w_distance_only": 0.5, "w_both": 0.1,
             },
+            tuning=neutral_tuning,
         )
         # 芝の高めぐが混ざると過大評価 → 割引でダート寄りに下がる
         self.assertGreater(p0["megu_final"] or 0, p1["megu_final"] or 0)

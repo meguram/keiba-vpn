@@ -149,10 +149,7 @@ def build_remediation_plan(date: str, health: dict | None = None) -> dict:
     """品質ヘルス JSON から修復アクション一覧を生成。"""
     from src.scraper.date_coverage import load_not_available
     from src.scraper.storage import HybridStorage
-    from src.utils.race_quality_rules import (
-        OBSTACLE_PRESENCE_NA_CATEGORIES,
-        is_obstacle_race,
-    )
+    from src.utils.race_quality_rules import is_obstacle_race
 
     storage = HybridStorage()
     obstacle_cache: dict[str, bool] = {}
@@ -194,10 +191,12 @@ def build_remediation_plan(date: str, health: dict | None = None) -> dict:
                 continue
             kind = issue.get("kind")
             if kind == "gcs_missing":
+                # 障害レースは直前の _is_obstacle(rid) で既に continue 済みのため、
+                # ここで OBSTACLE_PRESENCE_NA_CATEGORIES を再度除外すると、通常レースの
+                # race_result_lap 等が誤って修復対象から漏れる（二重フィルタのバグ）。
                 cats = [
                     c for c in (issue.get("categories") or [])
-                    if c not in OBSTACLE_PRESENCE_NA_CATEGORIES
-                    and rid not in load_not_available(c, year)
+                    if rid not in load_not_available(c, year)
                 ]
                 tasks = _tasks_for_categories(cats)
                 if tasks:
