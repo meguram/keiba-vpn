@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>フルスタック・アーキテクチャ全体図 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+main.content { padding: 48px 56px 96px; max-width: 1080px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+article.html-body .mermaid { background: #0b1428; border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin: 1em 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.ok { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.warn { background: rgba(251,191,36,.14); color: #fbbf24; }
+.badge.bad { background: rgba(248,113,113,.14); color: #f87171; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+.priority-card { background: linear-gradient(180deg, #182747, #131f3c); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; margin: 14px 0; border-left: 4px solid var(--accent); }
+.priority-card.p1 { border-left-color: #f87171; }
+.priority-card.p2 { border-left-color: #fbbf24; }
+.priority-card.p3 { border-left-color: #34d399; }
+.priority-title { font-size: 1rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Design · Full-Stack</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+      <h4>フルスタック全体図</h4>
+      <a href="#1">1. 全体構成図</a>
+      <a href="#2">2. コンポーネント一覧</a>
+      <a href="#3">3. キャッシュ階層の実態</a>
+      <a href="#4">4. 既知の課題（実装調査で確認済み）</a>
+      <a href="#5">5. 未決定事項（ドキュメント上）</a>
+      <a href="#6">6. 推奨アクション（優先順位付き）</a>
+      <a href="#7">7. 新機能を追加する際の指針</a>
+      <h4>関連ドキュメント</h4>
+      <a href="LAYER_DESIGN.html">レイヤー設計（旧・FastAPI系）</a>
+      <a href="ARCHITECTURE.html">ML-AutoPilot システム仕様書</a>
+      <a href="../../decisions/MASTER.html">マスター仕様書</a>
+      <a href="../../decisions/AREA-06-data.html">AREA-06 データ管理要件</a>
+      <a href="../../operations/server_architecture.html">サーバー起動・ポート一覧</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DESIGN · FULL-STACK OVERVIEW</div>
+      <h1>フルスタック・アーキテクチャ全体図</h1>
+      <p class="meta">
+        フロントエンド（Next.js）・バックエンド（FastAPI / Flask）・データベース（PostgreSQL / Redis）・
+        永続ストレージ（GCS）を横断した現状構成図。2026-09 時点のコード実態に基づき作成（既存の
+        <code>LAYER_DESIGN.html</code> / <code>ARCHITECTURE.html</code> はいずれも Next.js・PostgreSQL・Redis
+        導入前の旧設計のまま更新されていなかったため、本ページで統合・更新する）。
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<h2 id="1">1. 全体構成図</h2>
+<div class="mermaid">
+flowchart TB
+  subgraph CLIENT["クライアント"]
+    BROWSER["ブラウザ"]
+  end
+
+  subgraph FRONTEND["フロントエンド"]
+    NEXT_DEV["Next.js dev mock<br/>:3000"]
+    NEXT_STG["Next.js stg<br/>:3001（実API）"]
+  end
+
+  subgraph BACKEND["バックエンド"]
+    FASTAPI["FastAPI :8000<br/>レガシー UI + 管理API<br/>(src/api/app.py)"]
+    FLASK["Flask :5000<br/>/api/v1（仕様上の正・DEC-013）<br/>(src/api/flask_app.py, api/v1/*)"]
+  end
+
+  subgraph CACHE["キャッシュ層"]
+    L1["L1: プロセス内メモリ<br/>HybridStorage._load_cache<br/>TTL 3600s"]
+    L2["L2: ローカルディスク<br/>data/cache/<br/>週次アクセス2回以上でのみ書込"]
+    REDIS["Redis<br/>PredictionCache<br/>予測結果TTL=発走まで+60s"]
+  end
+
+  subgraph PERSIST["永続層"]
+    GCS["GCS（正典 JSON）<br/>gs://GCS_BUCKET/chuou/..."]
+    PG["PostgreSQL<br/>Layer1〜5 テーブル"]
+  end
+
+  subgraph ML["推論"]
+    MLFLOW["MLflow Model Serving<br/>:5001-5006,5010"]
+  end
+
+  BROWSER --> NEXT_DEV
+  BROWSER --> NEXT_STG
+  NEXT_STG -- "/api/v1/*" --> FLASK
+  BROWSER -.->|レガシーUI直アクセス| FASTAPI
+
+  FASTAPI --> L1
+  FLASK --> L1
+  L1 -->|miss| L2
+  L2 -->|miss/TTL切れ| GCS
+  FASTAPI --> PG
+  FLASK --> PG
+  FASTAPI --> REDIS
+  FLASK --> REDIS
+  FASTAPI --> MLFLOW
+  FLASK --> MLFLOW
+
+  style L1 fill:#182747,stroke:#f87171,color:#e6ecff
+  style L2 fill:#182747,stroke:#fbbf24,color:#e6ecff
+</div>
+<div class="callout danger">
+  <h4>図中の赤枠（L1）について</h4>
+  <p>L1メモリキャッシュは<b>FastAPI側では process 起動時シングルトンとして機能している</b>が、
+  <b>Flask（/api/v1）側は現状リクエスト毎に新規インスタンスを生成しており、L1が実質機能していない</b>。
+  詳細は §4 参照。</p>
+</div>
+
+<h2 id="2">2. コンポーネント一覧</h2>
+<table>
+<tr><th>コンポーネント</th><th>役割</th><th>ポート</th><th>エントリ / 主要ファイル</th><th>状態</th></tr>
+<tr><td>Next.js（dev mock）</td><td>API無しのUI確認用モック</td><td>:3000</td><td><code>frontend/app/</code>, <code>NEXT_PUBLIC_MOCK=true</code></td><td><span class="badge ok">運用中</span></td></tr>
+<tr><td>Next.js（stg）</td><td>実API接続の本番相当フロント</td><td>:3001</td><td><code>next.config.js</code>（<code>/api/v1/*</code> を Flask へ rewrite）</td><td><span class="badge ok">運用中</span></td></tr>
+<tr><td>FastAPI</td><td>レガシー Jinja2 UI・管理画面・段階的廃止予定のREST</td><td>:8000</td><td><code>src/api/app.py</code>（13,000行超）</td><td><span class="badge warn">段階廃止予定（DEC-013）</span></td></tr>
+<tr><td>Flask</td><td><b>仕様上の正</b>の REST API（<code>/api/v1</code>）</td><td>:5000</td><td><code>src/api/flask_app.py</code>, <code>src/api/v1/services.py</code>, <code>delegates.py</code></td><td><span class="badge ok">現行主力（DEC-013）</span></td></tr>
+<tr><td>HybridStorage</td><td>L1/L2/L3統合ストレージアクセサ</td><td>—</td><td><code>src/scraper/storage.py</code>（1,430行、クラス定義69行目）</td><td><span class="badge warn">Flask側で毎回再生成（§4）</span></td></tr>
+<tr><td>PredictionCache</td><td>Redis予測結果キャッシュ</td><td>:6379</td><td><code>src/api/cache/redis_cache.py</code></td><td><span class="badge warn">部分実装（§4）</span></td></tr>
+<tr><td>PostgreSQL</td><td>Layer1〜5 正規化テーブル</td><td>:5432</td><td><code>src/db/models.py</code>, Alembic migrations</td><td><span class="badge ok">運用中</span></td></tr>
+<tr><td>GCS</td><td>スクレイピング結果JSONの正典（SSoT）</td><td>—</td><td><code>data_paths.py</code>, バケット: <code>magu-keiba-horse-racing-ai</code></td><td><span class="badge ok">運用中</span></td></tr>
+<tr><td>MLflow Model Serving</td><td>推論モデルサービング</td><td>:5001-5006,5010</td><td><code>src/pipeline/mlflow/catalog.py</code></td><td><span class="badge ok">一部モデルのみ active</span></td></tr>
+</table>
+
+<h2 id="3">3. キャッシュ階層の実態</h2>
+<p>ドキュメント上の設計（<code>docs/decisions/MASTER.html</code> §3-3）と実装（<code>src/scraper/storage.py</code>）を突き合わせた結果。</p>
+<table>
+<tr><th>層</th><th>設計上の説明</th><th>実装の実態</th><th>差分・注意点</th></tr>
+<tr><td>L1（メモリ）</td><td>3,600秒TTLのプロセス内LRU</td><td><code>_load_cache</code>（dict）、TTL=<code>LOAD_CACHE_TTL_SEC</code>（既定3600s）、上限<code>LOAD_CACHE_MAX_ENTRIES</code>（既定8000）</td><td><b>HybridStorageインスタンスが生存する間だけ有効</b>。FastAPIはプロセス起動時シングルトン化済みで機能するが、Flaskはリクエスト毎に新規生成されるため<b>実質無効化</b>されている</td></tr>
+<tr><td>L2（ディスク）</td><td>GCSフォールバック前段の単純キャッシュ、TTL既定2日</td><td><code>data/cache/{category}/{prefix}/{key}.json</code>。<b>週次アクセス回数が <code>DISK_L2_MIN_WEEKLY_ACCESSES</code>（既定2回）に達するまで書込されない適応的ゲート方式</b></td><td>低頻度キー（例: 過去の単発レース詳細）はL2を経由せず、TTL切れ後は常にL3(GCS)直撃になる。ドキュメントには明記されていない挙動</td></tr>
+<tr><td>L3（GCS）</td><td>永続正典ストア</td><td><code>blob.download_as_text(timeout=5, retry=Retry(deadline=10))</code></td><td>設計通り。クライアント（<code>storage.Client()</code>）自体はHybridStorageインスタンス内でダブルロック方式により1回だけ生成・再利用される</td></tr>
+<tr><td>Redis（予測結果）</td><td><code>prediction:{race_id}:{model_version}</code> 等、発走時刻までTTL</td><td><code>PredictionCache</code> クラスで get/set・TTL算出（<code>ttl_until_post_time()</code>）まで実装済み</td><td>ただし <code>PredictionCache()</code> 自体も呼び出し毎に新規生成されており、Redis接続の再利用効率という点でHybridStorageと同種の問題を抱える</td></tr>
+<tr><td>Redis（entries/results）</td><td><code>race:entries:{race_id}</code>（3,600s）、<code>race:results:{race_id}</code>（300s）</td><td>キー生成関数のみ存在（<code>race_entries_key()</code> 等）。対応する <code>get_race_entries</code>/<code>set_race_entries</code> 等のメソッドが<b>未実装</b></td><td>設計はあるが実装が追いついていない。ドキュメントと実装のどちらかを合わせる必要あり</td></tr>
+</table>
+
+<h2 id="4">4. 既知の課題（実装調査で確認済み）</h2>
+
+<div class="priority-card p1">
+  <div class="priority-title">🔴 P1: Flask（/api/v1）が HybridStorage / PredictionCache をリクエスト毎に再生成している</div>
+  <p>
+    <code>src/api/v1/services.py:195,260</code>、<code>src/api/v1/delegates.py:21,76,103</code>、
+    <code>src/api/flask_app.py:167,336,349</code> がいずれも関数内ローカルで <code>HybridStorage()</code> を new している。
+    <code>src/api/v1/services.py:171</code> の <code>PredictionCache()</code> も同様。
+  </p>
+  <p>
+    対照的に <code>src/api/app.py:1016</code> の <code>_get_storage()</code> はプロセス起動時シングルトンとして実装され、
+    FastAPI側の60箇所以上で使われている。<b>DEC-013で「仕様上の正」と定義されたFlask側にこの最適化が反映されていない</b>。
+  </p>
+  <p style="color:var(--muted); font-size:13px;">
+    影響: L1メモリキャッシュ（GCS往復を防ぐ主目的の層）が Flask 経由のリクエストで実質機能せず、
+    毎リクエストで L2/L3（ディスク・GCS）まで到達する確率が上がる。レイテンシ・GCS負荷の両方に直結する、
+    今回調査で見つかった中で最もインパクトの大きい課題。
+  </p>
+</div>
+
+<div class="priority-card p2">
+  <div class="priority-title">🟡 P2: L2ディスクキャッシュの「週次2回」ゲートが低頻度アクセスを排除している</div>
+  <p><code>src/scraper/storage.py:303-309</code> の <code>_weekly_disk_l2_maybe_write()</code>。
+  過去レースの単発参照など低頻度アクセスのキーはL2を経由せず、L1のTTL(1時間)切れ後は毎回GCSに戻る。</p>
+</div>
+
+<div class="priority-card p2">
+  <div class="priority-title">🟡 P2: Redis <code>race:entries</code> / <code>race:results</code> キーが未実装</div>
+  <p>MASTER.html §5-3 に設計はあるが、<code>PredictionCache</code> に対応する get/set メソッドが無い。
+  設計と実装のどちらかに合わせて解消する必要がある。</p>
+</div>
+
+<div class="priority-card p3">
+  <div class="priority-title">🟢 P3: L1/L2ヒット率を計測する仕組みが無い</div>
+  <p><code>_gcs_call_count</code>（GCS呼び出し回数）はあるが、L1/L2のヒット数を数える対応するカウンタが無く、
+  ヒット率（全アクセス中の%）を算出できない。P1修正の効果を測定するためにも先に計測基盤が必要。</p>
+</div>
+
+<div class="callout warn">
+  <h4>ドキュメント自体も二重化している</h4>
+  <p><code>docs/html/design/LAYER_DESIGN.html</code>（2026-05更新、FastAPI中心・HybridStorage記述）と
+  <code>docs/decisions/MASTER.html</code>/<code>AREA-06-data.html</code>（2026-07更新、PostgreSQL+Redis中心・Flask="正"）が、
+  統合や役割分担の説明なしに並存している。本ページはこの2系統を実装の実態に基づいて統合したものだが、
+  元の2ファイルは古い記述のまま残っているため、閲覧者が混乱しないよう将来的に統合・アーカイブ注記が必要。</p>
+</div>
+
+<h2 id="5">5. 未決定事項（ドキュメント上・MASTER.html §8 より抜粋）</h2>
+<table>
+<tr><th>ID</th><th>項目</th><th>レイテンシ/GCS負荷との関係</th></tr>
+<tr><td>DM-1</td><td>GCSバケット命名規則（本番・stg分離）</td><td>stg環境がGCS本番バケットを直接叩いており負荷分離ができていない</td></tr>
+<tr><td>DM-2</td><td>ディスクキャッシュ（L2）容量上限が未設定</td><td>肥大化リスク。§4 P2のゲート方式見直しと合わせて設計すべき</td></tr>
+<tr><td>DM-3</td><td>GCS書き込み失敗時のリトライ・アラート設計</td><td>再取得コスト（＝追加GCS負荷）に直結</td></tr>
+<tr><td>DM-4</td><td>Feature StoreのGCSバックアップ設計</td><td>推論パイプラインのGCS読み込み頻度に影響</td></tr>
+<tr><td>MON-3</td><td>PostgreSQL <code>shared_buffers</code> 最適値が未計測</td><td>DB読み取りレイテンシに影響</td></tr>
+</table>
+
+<h2 id="6">6. 推奨アクション（優先順位付き）</h2>
+<ol>
+<li><b>[P1] Flask側のHybridStorage/PredictionCacheをプロセス単位シングルトン化する</b> — <code>src/scraper/storage.py</code> に <code>get_default_storage()</code> のようなモジュールレベルのシングルトン関数を追加し、<code>services.py</code>・<code>delegates.py</code>・<code>flask_app.py</code>・（可能なら<code>app.py</code>の<code>_get_storage</code>も統一）から参照する。追加コスト無しでL1キャッシュが機能し始める、最も費用対効果の高い改善。</li>
+<li><b>[計測] L1/L2ヒット率メトリクスを追加する</b> — 上記修正の効果を数値で確認するため、修正前にベースラインを取得しておくのが望ましい。</li>
+<li><b>[P2] L2ディスクキャッシュの週次アクセスゲートを見直す</b> — 閾値を下げる、または初回アクセス時は無条件で書き込む方式との比較検討。</li>
+<li><b>[整合] Redis <code>race:entries</code>/<code>race:results</code> の実装を完了するか、設計から削除する</b> — 設計と実装の食い違いを解消。</li>
+<li><b>[ドキュメント統合] LAYER_DESIGN.html と MASTER.html/AREA-06 のキャッシュ設計記述を本ページに統合し、旧ページには「本ページを参照」の注記を追加する。</b></li>
+</ol>
+
+<h2 id="7">7. 新機能を追加する際の指針</h2>
+<div class="callout info">
+  <p>今後 API エンドポイントや推論パイプラインを追加する際は、以下を守ること:</p>
+  <ul>
+    <li>GCS/ディスクアクセスは必ず <code>HybridStorage</code> 経由にし、リクエストハンドラ内で <code>HybridStorage()</code> を直接 new しない（§4 P1 対応後は共有シングルトンを使う）。</li>
+    <li>レース単位・馬単位で複数件取得する場合は <code>batch_list_blobs()</code> / <code>batch_check_keys()</code> のようなバッチAPIを優先し、1件ずつの <code>load()</code> ループ（N+1）を避ける。</li>
+    <li>予測結果など発走時刻に依存するデータは Redis の <code>PredictionCache</code>（TTL=発走時刻まで+60秒）を使い、GCSへの直接アクセスを避ける。</li>
+    <li>Flask（<code>/api/v1</code>）が仕様上の正（DEC-013）。新規エンドポイントは基本的にFlask側に実装し、FastAPI側には追加しない。</li>
+    <li>新しいキャッシュ層・TTL値を追加する場合は、本ページ §3 の表と <code>MASTER.html</code> §5-3 を両方更新する。</li>
+  </ul>
+</div>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

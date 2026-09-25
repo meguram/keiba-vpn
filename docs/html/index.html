@@ -200,10 +200,13 @@ body {
           <span class="ch-arrow">▶</span>
         </div>
         <div class="ch-items">
-          <span class="doc-item" data-src="design/LAYER_DESIGN.html"      data-title="レイヤー設計 — 全体アーキテクチャ">レイヤー設計 — 全体アーキテクチャ</span>
+          <span class="doc-item" data-src="design/FULLSTACK_ARCHITECTURE.html" data-title="フルスタック・アーキテクチャ全体図">フルスタック・アーキテクチャ全体図 ★最新</span>
+          <span class="doc-item" data-src="design/LAYER_DESIGN.html"      data-title="レイヤー設計 — 全体アーキテクチャ">レイヤー設計 — 全体アーキテクチャ（旧）</span>
           <span class="doc-item" data-src="design/ARCHITECTURE.html"    data-title="ML-AutoPilot システム仕様書">ML-AutoPilot システム仕様書</span>
           <span class="doc-item" data-src="design/mlflow_platform.html" data-title="MLflow モデリング・推論プラットフォーム">MLflow モデリング・推論プラットフォーム</span>
           <span class="doc-item" data-src="design/inference_services.html" data-title="推論サービス設計">推論サービス設計</span>
+          <span class="doc-item" data-src="design/ml_pipeline.html" data-title="ML パイプライン概要">ML パイプライン概要</span>
+          <span class="doc-item" data-src="design/cost.html" data-title="GCS コスト分析">GCS コスト分析</span>
         </div>
       </div>
 
@@ -220,18 +223,7 @@ body {
         </div>
       </div>
 
-      <!-- Ch3: ML パイプライン -->
-      <div class="chapter open" id="ch3">
-        <div class="ch-header" onclick="toggleChapter('ch3')">
-          <span class="ch-label">Ch3 · ML パイプライン</span>
-          <span class="ch-arrow">▶</span>
-        </div>
-        <div class="ch-items">
-          <span class="doc-item" data-src="ml_pipeline/index.html" data-title="ML パイプライン概要">ML パイプライン概要</span>
-        </div>
-      </div>
-
-      <!-- Ch4: モデリング仕様 -->
+<!-- Ch4: モデリング仕様 -->
       <div class="chapter open" id="ch4">
         <div class="ch-header" onclick="toggleChapter('ch4')">
           <span class="ch-label">Ch4 · モデリング仕様</span>
@@ -246,28 +238,18 @@ body {
           <span class="doc-item" data-src="modeling/train_valid_test_split_strategy.html"  data-title="Train/Valid/Test 分割戦略">Train/Valid/Test 分割戦略</span>
           <span class="doc-item" data-src="modeling/hyperparameter_tuning_workflow.html"   data-title="ハイパーパラメータ調整工程">ハイパーパラメータ調整工程</span>
           <span class="doc-item" data-src="modeling/modeling_coding_strategy.html"         data-title="モデリング実装戦略">モデリング実装戦略</span>
-          <span class="doc-item" data-src="modeling/race_performance_rating_system.html"   data-title="レースパフォーマンス算出設計">レースパフォーマンス算出設計</span>
+          <span class="doc-item" data-src="modeling/race_performance_rating_system.html"   data-title="レースパフォーマンス算出システム（完全版）">レースパフォーマンス算出システム（完全版）</span>
           <span class="doc-item" data-src="modeling/track_bias_pedigree_pipeline.html"     data-title="血統×馬場傾向パイプライン">血統×馬場傾向パイプライン</span>
           <span class="doc-item" data-src="modeling/horse_pedigree_10gen_merge_design.html" data-title="血統10世代マージ設計">血統10世代マージ設計</span>
           <span class="doc-item" data-src="modeling/final_odds_model.html"                  data-title="最終オッズ予測モデル">最終オッズ予測モデル</span>
           <span class="doc-item" data-src="modeling/betting_backtest_dataset_spec.html"    data-title="betting_backtest_dataset 仕様">betting_backtest_dataset 仕様</span>
           <span class="doc-item" data-src="modeling/pedigree_stage_research_notes.html"    data-title="血統研究方針メモ">血統研究方針メモ</span>
           <span class="doc-item" data-src="modeling/reference_insights.html"               data-title="参考資料反映メモ">参考資料反映メモ</span>
+          <span class="doc-item" data-src="modeling/betting_policy_reinforcement_learning.html" data-title="馬券推奨 × 強化学習">馬券推奨 × 強化学習</span>
         </div>
       </div>
 
-      <!-- Ch5: レースパフォーマンス -->
-      <div class="chapter open" id="ch5">
-        <div class="ch-header" onclick="toggleChapter('ch5')">
-          <span class="ch-label">Ch5 · レースパフォーマンス</span>
-          <span class="ch-arrow">▶</span>
-        </div>
-        <div class="ch-items">
-          <span class="doc-item" data-src="race_performance/index.html" data-title="レースパフォーマンス">レースパフォーマンス</span>
-        </div>
-      </div>
-
-      <!-- Ch6: 血統研究 -->
+<!-- Ch6: 血統研究 -->
       <div class="chapter open" id="ch6">
         <div class="ch-header" onclick="toggleChapter('ch6')">
           <span class="ch-label">Ch6 · 血統研究</span>
@@ -293,20 +275,6 @@ body {
         </div>
       </div>
 
-      <!-- 付録 -->
-      <div class="chapter open" id="ch8">
-        <div class="ch-header" onclick="toggleChapter('ch8')">
-          <span class="ch-label">付録</span>
-          <span class="ch-arrow">▶</span>
-        </div>
-        <div class="ch-items">
-          <span class="doc-item" data-src="appendix/data_storage_platform_comparison.html" data-title="ストレージ比較">ストレージ比較</span>
-          <span class="doc-item" data-src="appendix/cost.html"                             data-title="GCS コスト分析">GCS コスト分析</span>
-          <span class="doc-item" data-src="modeling/betting_policy_reinforcement_learning.html" data-title="馬券推奨 × 強化学習">馬券推奨 × 強化学習</span>
-          <span class="doc-item" data-src="appendix/betting_rl_policy.html"               data-title="RL 馬券ポリシー">RL 馬券ポリシー</span>
-        </div>
-      </div>
-
     </div><!-- /sidebar-inner -->
   </nav>
 
@@ -323,13 +291,13 @@ body {
            <code>docs/html/</code> 以下の全ドキュメントをひとつのビューで閲覧できます。</p>
       </div>
       <div class="quick-grid">
-        <div class="quick-card" data-src="design/LAYER_DESIGN.html" data-title="レイヤー設計 — 全体アーキテクチャ">
+        <div class="quick-card" data-src="design/FULLSTACK_ARCHITECTURE.html" data-title="フルスタック・アーキテクチャ全体図">
           <div class="ch">Ch1 · システム設計</div>
-          <div class="qt">レイヤー設計</div>
-          <div class="qs">L1〜L5 の5層構造、SQLite bloodline DB、InferenceCacheMixin、MLflow 構成を網羅。</div>
+          <div class="qt">フルスタック・アーキテクチャ全体図</div>
+          <div class="qs">Next.js・FastAPI/Flask・PostgreSQL/Redis・GCSを横断した現状構成図。キャッシュ実装の既知課題も掲載。</div>
         </div>
-        <div class="quick-card" data-src="ml_pipeline/index.html" data-title="ML パイプライン概要">
-          <div class="ch">Ch3 · ML パイプライン</div>
+        <div class="quick-card" data-src="design/ml_pipeline.html" data-title="ML パイプライン概要">
+          <div class="ch">Ch1 · システム設計</div>
           <div class="qt">ML パイプライン概要</div>
           <div class="qs">学習〜推論〜API の全体フロー。</div>
         </div>

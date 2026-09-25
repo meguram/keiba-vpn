@@ -313,8 +313,8 @@
       <h4>Engineering</h4>
       <a href="#coding">15. コーディング戦略</a>
       <a href="#artifacts">16. 中間成果物・版管理</a>
-      <a href="../feature_engineering/index.html">特徴量探索（HTML）</a>
-      <a href="../data_features/index.html">データ・特徴量（現行）</a>
+      <a href="../modeling/feature_engineering_exploration.html">特徴量探索（HTML）</a>
+      <a href="../data/data_features_reference.html">データ・特徴量（現行）</a>
 
       <h4>Betting</h4>
       <a href="#betting">17. 馬券最適化テーブル</a>
@@ -561,7 +561,7 @@ flowchart TD
             <ul class="bullets">
               <li><code class="inline">race_performance_rating_system</code> 由来の <code class="inline">run_performance_final</code> 系履歴</li>
               <li><code class="inline">horse_pre_rating_pre_race</code> / <code class="inline">field_relative_pre_rating</code></li>
-              <li><a href="../race_performance/index.html">→ レースパフォーマンス算出システム HTML へ</a></li>
+              <li><a href="../modeling/race_performance_rating_system.html">→ レースパフォーマンス算出システム（完全版）へ</a></li>
             </ul>
           </div>
         </div>
@@ -796,7 +796,7 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
           <li><code class="inline">horse_probability_table</code> + <code class="inline">horse_market_snapshot</code> + <code class="inline">pair_market_snapshot</code> + <code class="inline">payout_table</code> を結合する</li>
           <li>Stage6 までは市場情報を使わずモデルを完成させる。市場との統合は Stage7 のみで行う</li>
           <li>高オッズ帯ほど <code class="inline">buffer</code> を厚くし、<code class="inline">safe_ev &gt; 0</code> を最低条件とする</li>
-          <li>推奨印・券種・資金配分の戦略層は、教師あり ML の延長ではなく <b>強化学習（方策）</b> を想定。詳細は <code class="inline">betting_policy_reinforcement_learning.html</code>、要約 HTML は <a href="../appendix/betting_rl_policy.html">betting_rl_policy</a>。</li>
+          <li>推奨印・券種・資金配分の戦略層は、教師あり ML の延長ではなく <b>強化学習（方策）</b> を想定。詳細は <code class="inline">betting_policy_reinforcement_learning.html</code>。</li>
         </ul>
       </div>
     </section>
@@ -1535,12 +1535,12 @@ flowchart TD
           <tr><td>ML テクニック</td><td class="mono">docs/html/modeling/advanced_modeling_techniques.html</td></tr>
           <tr><td>コーディング戦略</td><td class="mono">docs/html/modeling/modeling_coding_strategy.html</td></tr>
           <tr><td>馬券最適化（データ契約）</td><td class="mono">docs/html/modeling/betting_backtest_dataset_spec.html</td></tr>
-          <tr><td>馬券推奨 × RL（方策設計）</td><td class="mono">docs/html/modeling/betting_policy_reinforcement_learning.html（<a href="../appendix/betting_rl_policy.html">HTML</a>）</td></tr>
-          <tr><td>レースパフォーマンス</td><td class="mono">docs/html/modeling/race_performance_rating_system.html (<a href="../race_performance/index.html">HTML</a>)</td></tr>
+          <tr><td>馬券推奨 × RL（方策設計）</td><td class="mono">docs/html/modeling/betting_policy_reinforcement_learning.html</td></tr>
+          <tr><td>レースパフォーマンス</td><td class="mono">docs/html/modeling/race_performance_rating_system.html（完全版）</td></tr>
           <tr><td>次アクション・議論整理</td><td class="mono">（未作成）</td></tr>
           <tr><td>チューニング工程 SOP</td><td class="mono">docs/html/modeling/hyperparameter_tuning_workflow.html</td></tr>
-          <tr><td>特徴量探索（LayerA）</td><td class="mono">docs/html/modeling/feature_engineering_exploration.html（<a href="../feature_engineering/index.html">HTML</a>）</td></tr>
-          <tr><td>データ・特徴量一覧（現段階）</td><td class="mono">docs/html/data_features/index.html</td></tr>
+          <tr><td>特徴量探索（LayerA）</td><td class="mono">docs/html/modeling/feature_engineering_exploration.html</td></tr>
+          <tr><td>データ・特徴量一覧（現段階）</td><td class="mono">docs/html/data/data_features_reference.html</td></tr>
           <tr><td>参考資料反映</td><td class="mono">docs/html/modeling/reference_insights.html</td></tr>
         </tbody>
       </table>
