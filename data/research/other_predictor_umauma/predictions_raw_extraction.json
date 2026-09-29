@@ -1,0 +1,1974 @@
+[
+  {
+    "article_key": "nd969eb0fe61c",
+    "date": "2021-09-09",
+    "price": 0,
+    "title": "㊗️京成杯AHの穴馬発掘note㊗️(9087文字)",
+    "races": [
+      {
+        "race_name": "京成杯オータムハンデキャップ",
+        "venue": "中山",
+        "surface": null,
+        "distance_m": 1600,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "○",
+            "horse_name": "カテドラル",
+            "popularity": 7,
+            "result_position": 1
+          },
+          {
+            "mark": "◉",
+            "horse_name": "コントラチェック",
+            "popularity": 11,
+            "result_position": 2
+          },
+          {
+            "mark": "二推し",
+            "horse_name": "マルターズディオサ",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "二推し",
+            "horse_name": "マイスタイル",
+            "popularity": 12,
+            "result_position": null
+          },
+          {
+            "mark": "二推し",
+            "horse_name": "ワイドファラオ",
+            "popularity": 14,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "7人気1着カテドラル(○)、11人気2着コントラチェック(◉)が的中し、穴馬共通点および最後の絞り込み項目までクリアした馬が結果に結びついたと報告。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n57d653d08582",
+    "date": "2021-09-10",
+    "price": 0,
+    "title": "㊗️紫苑Sの小言note㊗️",
+    "races": [
+      {
+        "race_name": "紫苑ステークス",
+        "venue": "中山",
+        "surface": null,
+        "distance_m": 2000,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "穴馬",
+            "horse_name": "ホウオウラスカーズ",
+            "popularity": 10,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "ミスフィガロ",
+            "popularity": 12,
+            "result_position": 3
+          }
+        ],
+        "author_outcome_comment": "推した穴馬ミスフィガロが12番人気で3着と好走したことを報告。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n7d9bbb2dfb00",
+    "date": "2021-09-17",
+    "price": 0,
+    "title": "㊗️ローズSの小言note㊗️",
+    "races": [
+      {
+        "race_name": "ローズステークス",
+        "venue": null,
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "アンドヴァラナウト",
+            "popularity": 4,
+            "result_position": 1
+          },
+          {
+            "mark": "○",
+            "horse_name": "イリマ",
+            "popularity": 8,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "激推しの本命◉アンドヴァラナウトが見事1着になったと報告。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n57e473f6fe1b",
+    "date": "2021-10-15",
+    "price": 0,
+    "title": "✨秋華賞出走馬のレース診断✨(1万3000文字)",
+    "races": [
+      {
+        "race_name": "秋華賞",
+        "venue": "阪神",
+        "surface": null,
+        "distance_m": 2000,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "最終候補",
+            "horse_name": "ソダシ",
+            "popularity": 1,
+            "result_position": null
+          },
+          {
+            "mark": "最終候補",
+            "horse_name": "アンドヴァラナウト",
+            "popularity": 3,
+            "result_position": null
+          },
+          {
+            "mark": "最終候補",
+            "horse_name": "アカイトリノムスメ",
+            "popularity": 4,
+            "result_position": null
+          },
+          {
+            "mark": "最終候補",
+            "horse_name": "サルファーコスモス",
+            "popularity": 13,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "上位人気での決着となり穴馬(サルファーコスモス等)の出番はなかったが、人気馬に対する見解は大方合っていたとし悔いはないと総括。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n491999f6c048",
+    "date": "2021-12-27",
+    "price": 0,
+    "title": "✨ホープフルSの本命の小言✨",
+    "races": [
+      {
+        "race_name": "ホープフルステークス",
+        "venue": "中山",
+        "surface": null,
+        "distance_m": 2000,
+        "grade": "G1",
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "フィデル",
+            "popularity": 7,
+            "result_position": null
+          },
+          {
+            "mark": "相手",
+            "horse_name": "サトノヘリオス",
+            "popularity": 6,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "本命フィデルは上位にも見劣らない競馬をしたが、運が足りなかったとコメント。具体的な着順の記載はなし。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n4d5f8b4d719b",
+    "date": "2022-01-04",
+    "price": 0,
+    "title": "㊗️中山金杯の③着内馬共通点㊗️",
+    "races": [
+      {
+        "race_name": "中山金杯",
+        "venue": "中山",
+        "surface": null,
+        "distance_m": null,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "オールクリア",
+            "horse_name": "ヒートオンビート",
+            "popularity": 1,
+            "result_position": null
+          },
+          {
+            "mark": "オールクリア",
+            "horse_name": "ヴィクティファルス",
+            "popularity": 3,
+            "result_position": null
+          },
+          {
+            "mark": "オールクリア",
+            "horse_name": "スカーフェイス",
+            "popularity": 7,
+            "result_position": null
+          },
+          {
+            "mark": "候補",
+            "horse_name": "レッドガラン",
+            "popularity": 8,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "③着以内馬共通点オールクリアの2頭が的中し、加えて8人気のレッドガランも③着以内に入り概ねOKと評価。来年への改良の余地があるとコメント。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "ne3ca445937ae",
+    "date": "2022-01-21",
+    "price": 0,
+    "title": "✨AJCC本命予想note(簡易)✨",
+    "races": [
+      {
+        "race_name": "アメリカジョッキークラブカップ(AJCC)",
+        "venue": "中山",
+        "surface": null,
+        "distance_m": 2200,
+        "grade": "G2",
+        "marks": [
+          {
+            "mark": "本命",
+            "horse_name": "ダンビュライト",
+            "popularity": 9,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "実際の結果は1着キングオブコージ、2着マイネルファンロン、3着ボッケリーニ。本命ダンビュライトの着順は本文に記載なし。マイネルファンロンの❌2項目を来年の共通点改良に活かすとコメント。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n03a92c7d1c2f",
+    "date": "2022-01-28",
+    "price": 0,
+    "title": "✨根岸Sの穴馬共通点予想✨",
+    "races": [
+      {
+        "race_name": "根岸ステークス",
+        "venue": "東京",
+        "surface": "ダート",
+        "distance_m": 1400,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "穴馬",
+            "horse_name": "タイムフライヤー",
+            "popularity": null,
+            "result_position": 6
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "ジャスパープリンス",
+            "popularity": 9,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "パーフェクトクリア馬タイムフライヤーは不完全燃焼の6着に終わった(デムーロ騎手のレース後コメントでも言及)。1着はテイエムサウスダン((1-4-1)で❌は1つのみ)。来年に向けて共通点の改良を検討するとコメント。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "nce9164e8159d",
+    "date": "2022-02-01",
+    "price": 0,
+    "title": "㊗️川崎記念の小言note㊗️",
+    "races": [
+      {
+        "race_name": "川崎記念",
+        "venue": "川崎",
+        "surface": null,
+        "distance_m": 2100,
+        "grade": "Jpn1",
+        "marks": [
+          {
+            "mark": "とても買いたい",
+            "horse_name": "チュウワウィザード",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "とても買いたい",
+            "horse_name": "サルサディオーネ",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "買いたい",
+            "horse_name": "カジノフォンテン",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "買いたい",
+            "horse_name": "エルデュクラージュ",
+            "popularity": 9,
+            "result_position": 2
+          },
+          {
+            "mark": "抑えておきたい",
+            "horse_name": "ヴェルテックス",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "推し穴馬エルデュクラージュが道中3番手から4角1番手に進出する好騎乗を見せ、単勝85倍9人気から2着に入ったと報告。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n0639d00087d0",
+    "date": "2022-02-04",
+    "price": 0,
+    "title": "✨東京新聞杯の小言note✨",
+    "races": [
+      {
+        "race_name": "東京新聞杯",
+        "venue": "東京",
+        "surface": null,
+        "distance_m": 1600,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "本命",
+            "horse_name": "ダーリントンホール",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "買いたい人気馬",
+            "horse_name": "ホウオウアマゾン",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "買いたい推し穴馬",
+            "horse_name": "アオイクレアトール",
+            "popularity": 10,
+            "result_position": null
+          },
+          {
+            "mark": "抑えても良い穴馬",
+            "horse_name": "トーラスジェミニ",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "抑えても良い穴馬",
+            "horse_name": "カテドラル",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "結果は人気決着で馬券は外れたが、穴馬共通点note自体は正解と総括(オールクリアで唯一推していたダーリントンホールが除外された時点で「荒れない」ことを示唆していたため)。次点の❌1つ馬アオイクレアトールに欲を出して手を出したのは自身の失態であり、共通点のロジック自体のミスではないと反省。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n7e61dbc8e96f",
+    "date": "2022-02-10",
+    "price": 0,
+    "title": "㊗️推し馬✖️３重賞の見解㊗️(共同通信杯🎯クイーンC🎯)",
+    "races": [
+      {
+        "race_name": "クイーンC",
+        "venue": null,
+        "surface": null,
+        "distance_m": null,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "プレサージュリフト",
+            "popularity": 2,
+            "result_position": null
+          },
+          {
+            "mark": "◉",
+            "horse_name": "ベルクレスタ",
+            "popularity": 3,
+            "result_position": null
+          },
+          {
+            "mark": "3頭目",
+            "horse_name": "スターズオンアース",
+            "popularity": 1,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "モカフラワー",
+            "popularity": 5,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "スタティスティクス",
+            "popularity": 10,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "アオイモエ",
+            "popularity": 9,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "ハピネスアゲン",
+            "popularity": 14,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "",
+        "data_completeness": "no_recap_found"
+      },
+      {
+        "race_name": "京都記念",
+        "venue": "阪神",
+        "surface": null,
+        "distance_m": 2200,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "レッドガラン",
+            "popularity": 7,
+            "result_position": null
+          },
+          {
+            "mark": "○",
+            "horse_name": "サンレイポケット",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "▲",
+            "horse_name": "タガノディアマンテ",
+            "popularity": 10,
+            "result_position": null
+          },
+          {
+            "mark": "？",
+            "horse_name": "ディアマンミノル",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "？",
+            "horse_name": "レッドジェネシス",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "",
+        "data_completeness": "no_recap_found"
+      },
+      {
+        "race_name": "共同通信杯",
+        "venue": "東京",
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "ダノンベルーガ",
+            "popularity": 4,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "ジュンブロッサム",
+            "popularity": 8,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "",
+        "data_completeness": "no_recap_found"
+      }
+    ]
+  },
+  {
+    "article_key": "n9238696f2018",
+    "date": "2022-02-24",
+    "price": 0,
+    "title": "㊗️阪急杯㊗️と中山記念の小言🐎",
+    "races": [
+      {
+        "race_name": "阪急杯",
+        "venue": "阪神",
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "穴馬",
+            "horse_name": "トゥラヴェスーラ",
+            "popularity": 9,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "グルーヴィット",
+            "popularity": 10,
+            "result_position": null
+          },
+          {
+            "mark": "抑え",
+            "horse_name": "ミッキーブリランテ",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "穴馬共通点をパーフェクトクリアしたトゥラヴェスーラ(9番人気)が頑張ったが、馬券は外れた(著者曰く「下手くそで」外した)。共通点の的中傾向自体は見事だったとしている。",
+        "data_completeness": "full"
+      },
+      {
+        "race_name": "中山記念",
+        "venue": "中山",
+        "surface": null,
+        "distance_m": 1800,
+        "grade": "G2",
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "パンサラッサ",
+            "popularity": null,
+            "result_position": 1
+          }
+        ],
+        "author_outcome_comment": "例年の傾向(前決着・4角6番手以下+4人気内)通りだが、2.3.4人気の人気決着となり穴馬は絡めず。本命◉パンサラッサは見事に①着だった。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "ndf8cba79ac5b",
+    "date": "2022-03-01",
+    "price": 0,
+    "title": "㊗️エンプレス杯の小言と穴馬㊗️",
+    "races": [
+      {
+        "race_name": "エンプレス杯",
+        "venue": "川崎",
+        "surface": null,
+        "distance_m": 2100,
+        "grade": "JpnII",
+        "marks": [
+          {
+            "mark": "穴馬",
+            "horse_name": "シャイニングアカリ",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "展開はほぼ予想通りだったが、本来内前を取れるはずだった穴馬シャイニングアカリは前を取れずに「とんで」しまい、人気馬同士の決着となった。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "nb06ef89736c5",
+    "date": "2022-03-04",
+    "price": 0,
+    "title": "✨３重賞✖️推し馬の小言✨(㊗️弥生賞の記載内容は㊗️)",
+    "races": [
+      {
+        "race_name": "チューリップ賞",
+        "venue": "阪神",
+        "surface": null,
+        "distance_m": 1600,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "オーソレミオ",
+            "popularity": 11,
+            "result_position": 8
+          },
+          {
+            "mark": "○",
+            "horse_name": "ナミュール",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "▲",
+            "horse_name": "サークルオブライフ",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "△",
+            "horse_name": "アンジェリーナ",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "推した上位人気(ナミュール・サークルオブライフ)が①着③着(順不明)だったが、本命◉に推した昆厩舎のオーソレミオは❽着、△アンジェリーナは競走中止となり、昆厩舎推しは完敗だった。",
+        "data_completeness": "full"
+      },
+      {
+        "race_name": "弥生賞",
+        "venue": "中山",
+        "surface": "芝",
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "アスクビクターモア",
+            "popularity": 5,
+            "result_position": 1
+          }
+        ],
+        "author_outcome_comment": "本命◉アスクビクターモアが①着で的中。",
+        "data_completeness": "full"
+      },
+      {
+        "race_name": "オーシャンS",
+        "venue": "中山",
+        "surface": "芝",
+        "distance_m": 1200,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "マリアズハート",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "○",
+            "horse_name": "ファストフォース",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "▲",
+            "horse_name": "マイネルジェロディ",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "△",
+            "horse_name": null,
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "△",
+            "horse_name": null,
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "6人気以下の穴馬共通点は、5人気以内での決着だったため参考外(ノーカウント)となった。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n555b6bbf78f2",
+    "date": "2022-03-18",
+    "price": 0,
+    "title": "㊗️阪神大賞典の小言note㊗️",
+    "races": [
+      {
+        "race_name": "阪神大賞典",
+        "venue": "阪神",
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "1着予想",
+            "horse_name": "ディープボンド",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "2着予想",
+            "horse_name": "アイアンバローズ",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "3着候補",
+            "horse_name": "ダンビュライト",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "3着候補",
+            "horse_name": "シルヴァーソニック",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "3着候補",
+            "horse_name": "トーセンカンビーナ",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "①着②着に予想した2頭(ディープボンド・アイアンバローズ)がそのままワンツーフィニッシュ(順不明)。③着候補3頭(ダンビュライト・シルヴァーソニック・トーセンカンビーナ)のうち1頭が③着に入り、3連単的中の「完全勝利」。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n27aa8e55277e",
+    "date": "2022-03-27",
+    "price": 0,
+    "title": "㊗️ドバイゴールデン&ターフ㊗️",
+    "races": [
+      {
+        "race_name": "ドバイゴールデンシャヒーン",
+        "venue": null,
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [],
+        "author_outcome_comment": "近5年、馬番②番の複勝率100%というデータが今年も継続。馬番二桁×二桁人気の日本馬、馬番②×1人気馬という条件で決着した。",
+        "data_completeness": "full"
+      },
+      {
+        "race_name": "ドバイターフ",
+        "venue": null,
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "軸",
+            "horse_name": "バルザロ",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "近4年、バルザロの複勝率100%というパターンが継続し、今年も馬券に穴をあけた。相手は馬番⑤⑥⑦+1人気を想定していたが、実際は馬番⑧+2人気馬というニアピンだった。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "na01bc23f7e8f",
+    "date": "2022-04-15",
+    "price": 0,
+    "title": "🌀皐月賞の推し穴馬の小言っ🌀",
+    "races": [
+      {
+        "race_name": "皐月賞",
+        "venue": "中山",
+        "surface": "芝",
+        "distance_m": 2000,
+        "grade": "G1",
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "ダノンベルーガ",
+            "popularity": 3,
+            "result_position": 4
+          },
+          {
+            "mark": "○",
+            "horse_name": "デシエルト",
+            "popularity": 6,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "◉ダノンベルーガは外伸び馬場に負け、最内1枠から④着(「負けて強し」との評)。○デシエルトはスタートで躓いて逃げられず、自分の競馬をできずに大敗した。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n260b0326a41d",
+    "date": "2022-04-28",
+    "price": 0,
+    "title": "✨阪神の春天を読みとくnote✨",
+    "races": [
+      {
+        "race_name": "天皇賞・春",
+        "venue": "阪神",
+        "surface": null,
+        "distance_m": 3200,
+        "grade": "G1",
+        "marks": [
+          {
+            "mark": "共通点クリア馬",
+            "horse_name": "ディープボンド",
+            "popularity": 1,
+            "result_position": 2
+          },
+          {
+            "mark": "共通点クリア馬",
+            "horse_name": "タイトルホルダー",
+            "popularity": 2,
+            "result_position": 1
+          },
+          {
+            "mark": "共通点クリア馬",
+            "horse_name": "アイアンバローズ",
+            "popularity": 4,
+            "result_position": null
+          },
+          {
+            "mark": "共通点クリア馬",
+            "horse_name": "ヒートオンビート",
+            "popularity": 7,
+            "result_position": null
+          },
+          {
+            "mark": "共通点クリア馬",
+            "horse_name": "タガノディアマンテ",
+            "popularity": 8,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "共通点を突破した5頭の決着は①②④⑤着(タガノディアマンテのみ失速)。スタート直後の落馬による空馬の影響で、楽に逃げられたタイトルホルダーが①着、先行ライバルが減ったディープボンドが②着となったが、落馬の恩恵があったことは無視できないとしている。著者の推し馬タガノディアマンテはこの空馬の影響でレースが成立しなかった。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "nd3d5e4ae9fd1",
+    "date": "2022-05-06",
+    "price": 0,
+    "title": "㊗️新潟大賞典の穴馬共通点㊗️",
+    "races": [
+      {
+        "race_name": "新潟大賞典",
+        "venue": "新潟",
+        "surface": null,
+        "distance_m": 2000,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "穴馬",
+            "horse_name": "ヤシャマル",
+            "popularity": 5,
+            "result_position": 3
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "プレシャスブルー",
+            "popularity": 10,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "穴馬共通点を満点クリアした2頭のうち、直前で5人気になったヤシャマルが③着と好走。もう一頭の推しプレシャスブルーは「出負け」の代表的なスタートとなり凡走。予想note的には的中傾向だったが、馬券自体は外したとしている。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "ndc5b3b8081b2",
+    "date": "2022-05-20",
+    "price": 0,
+    "title": "✨優駿牝馬(ｵｰｸｽ)予想note✨",
+    "races": [
+      {
+        "race_name": "優駿牝馬",
+        "venue": "東京",
+        "surface": null,
+        "distance_m": 2400,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "サークルオブライフ",
+            "popularity": 1,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "ピンハイ",
+            "popularity": 11,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "パーソナルハイ",
+            "popularity": 12,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "ゲート入りの遅延等のアクシデントもあった中、◉サークルオブライフは出遅れて最後方となり不完全燃焼だった。推しの穴馬2頭(ピンハイ・パーソナルハイ)は④着⑤着(順不明)の大健闘だったが、3着以内には入らず的中とはならなかった。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "na9722084e31f",
+    "date": "2022-12-09",
+    "price": 0,
+    "title": "㊗️阪神JFの本当に小言㊗️",
+    "races": [
+      {
+        "race_name": "阪神ジュベナイルフィリーズ",
+        "venue": "阪神",
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "ドゥアイズ",
+            "popularity": 10,
+            "result_position": 3
+          },
+          {
+            "mark": "○",
+            "horse_name": "ドゥーラ",
+            "popularity": 6,
+            "result_position": null
+          },
+          {
+            "mark": "▲",
+            "horse_name": "ラヴェル",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "▲",
+            "horse_name": "リバティアイランド",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "▲",
+            "horse_name": "モリアーナ",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "冒頭で「note📖にて推させて頂いた大穴‼️◉ドゥアイズが、10人気③着になりましたぁー」と報告されており、本命◉に推した大穴が3着に激走したことを喜んでいる。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n8d10e9fd376c",
+    "date": "2022-12-15",
+    "price": 0,
+    "title": "🏆朝日杯FSの小言note！🏆",
+    "races": [
+      {
+        "race_name": "朝日杯フューチュリティステークス",
+        "venue": null,
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "穴馬",
+            "horse_name": "グラニット",
+            "popularity": 12,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "",
+        "data_completeness": "no_recap_found"
+      }
+    ]
+  },
+  {
+    "article_key": "nfb48f4b049e5",
+    "date": "2023-01-12",
+    "price": 0,
+    "title": "㊗️愛知杯の穴馬共通点予想🤩㊗️( 1万1600文字)",
+    "races": [
+      {
+        "race_name": "愛知杯",
+        "venue": "中京",
+        "surface": null,
+        "distance_m": 2000,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "本命",
+            "horse_name": "アイコンテーラー",
+            "popularity": 9,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "アブレイズ",
+            "popularity": 10,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "冒頭で「穴馬共通点オールクリアしたのは、2頭のみ‼️その2頭の穴馬が…見事に激走してくれました…①着②着③着④着と完全勝利ですっ」と報告されているが、アイコンテーラー・アブレイズそれぞれ個別の着順までは本文に明記されていない。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n8cf5302a51e2",
+    "date": "2025-01-10",
+    "price": 0,
+    "title": "✨シンザン記念の推し馬✨",
+    "races": [
+      {
+        "race_name": "シンザン記念",
+        "venue": "中京",
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "推し",
+            "horse_name": "リラエンブレム",
+            "popularity": 3,
+            "result_position": 1
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "ラージギャラリー",
+            "popularity": 9,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "冒頭で「①着㊗️✨リラエンブレム‼️(3人気)でしたー！！完勝でしたね！」と報告。穴馬推しのラージギャラリーは「出遅れが響きましたね…松山騎手の大捲りで煽られたのが、再度きびしくなる展開になりましたね。能力負けというより、出遅れと展開の負け」と総括されており、具体的な着順は明記されていない。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n4f94ac541cbf",
+    "date": "2025-02-14",
+    "price": 0,
+    "title": "㊗️週末の推し馬note (京都記念・共同通信・クイーンC)㊗️",
+    "races": [
+      {
+        "race_name": "共同通信杯",
+        "venue": "東京",
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "カラマティアノス",
+            "popularity": 6,
+            "result_position": 2
+          },
+          {
+            "mark": "推し",
+            "horse_name": "リトルジャイアンツ",
+            "popularity": 4,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "冒頭で「共同通信杯にて穴推しした本命◉の→6人気🔥②着㊗️カラマティアノス」と的中報告。もう一頭の推し馬リトルジャイアンツの結果は本文に記載なし。",
+        "data_completeness": "full"
+      },
+      {
+        "race_name": "京都記念",
+        "venue": "京都",
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "ヨーホーレイク",
+            "popularity": 5,
+            "result_position": 1
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "ショウナンバシット",
+            "popularity": 8,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "冒頭で「京都記念で穴推しした本命◉の→5人気🔥①着㊗️ヨーホーレイク」と的中報告。もう一頭の穴推し候補ショウナンバシットは出走馬確定後に回避となり「私の京都記念の結論は、荒れない❗️になりました」と総括している。",
+        "data_completeness": "full"
+      },
+      {
+        "race_name": "クイーンカップ",
+        "venue": null,
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "エストゥペンダ",
+            "popularity": 6,
+            "result_position": 3
+          },
+          {
+            "mark": "推し",
+            "horse_name": "ティラートーレ",
+            "popularity": 8,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "冒頭で「クイーンCで穴推しした本命◉の→6人気🔥③着㊗️エストゥペンダ」と的中報告。もう一頭の推し馬ティラートーレの結果は本文に記載なし。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "nd7157abff4c9",
+    "date": "2025-11-21",
+    "price": 250,
+    "title": "🐎マイルCSの好走馬(穴馬)の共通点🐎( １万６０００文字)",
+    "races": [
+      {
+        "race_name": "マイルチャンピオンシップ",
+        "venue": "京都",
+        "surface": null,
+        "distance_m": 1600,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "ゴールデンポジション",
+            "horse_name": "ジャンタルマンタル",
+            "popularity": null,
+            "result_position": 1
+          },
+          {
+            "mark": "ゴールデンポジション",
+            "horse_name": "ガイアフォース",
+            "popularity": null,
+            "result_position": 2
+          },
+          {
+            "mark": "ゴールデンポジション",
+            "horse_name": "エルトンバローズ",
+            "popularity": null,
+            "result_position": 5
+          }
+        ],
+        "author_outcome_comment": "冒頭で、ゴールデンポジションに挙げた3頭中ジャンタルマンタル1着・ガイアフォース2着でワンツー的中、エルトンバローズは3着と0.1秒差の5着と報告。ウインマーベルは11番手まで下げ最後方付近でゴールする不可解な内容だったとされ、共通点予想はウォーターリヒトを拾えず「負け」と総括されている。本文は有料部分の直前で切れており、実際の印(◉○▲△等)やオッズは確認できない。",
+        "data_completeness": "preview_only"
+      }
+    ]
+  },
+  {
+    "article_key": "ne5cc870bc186",
+    "date": "2025-12-05",
+    "price": 0,
+    "title": "🔥チャンピオンズCの穴馬予想🔥",
+    "races": [
+      {
+        "race_name": "チャンピオンズカップ",
+        "venue": "中京",
+        "surface": "ダート",
+        "distance_m": 1800,
+        "grade": "G1",
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "メイショウハリオ",
+            "popularity": 8,
+            "result_position": 4
+          }
+        ],
+        "author_outcome_comment": "冒頭で「悶絶の、④着…穴馬共通点クリア💯✨で本命◉の、🐴メイショウハリオは、僅差の④着🥺惜しすぎて、叫び、泣きました」と報告。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n602963a6af0e",
+    "date": "2025-12-26",
+    "price": 0,
+    "title": "🌀有馬記念の予想note🌀",
+    "races": [
+      {
+        "race_name": "有馬記念",
+        "venue": "中山",
+        "surface": null,
+        "distance_m": 2500,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "推し",
+            "horse_name": "ダノンデサイル",
+            "popularity": 1,
+            "result_position": null
+          },
+          {
+            "mark": "推し",
+            "horse_name": "レガレイラ",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "推し",
+            "horse_name": "アドマイヤテラ",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "本命",
+            "horse_name": "サンライズアース",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "冒頭は「完敗です。また来年に、下記の共通点を改良して、挑みたいと思います」の一言のみで、個別馬の着順は本文に記載なし。最終的な推奨馬はダノンデサイル(想定1人気)・レガレイラ・アドマイヤテラの3頭で、本命予定だった穴馬サンライズアースは回避した。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n8a8c274381a3",
+    "date": "2026-01-02",
+    "price": 0,
+    "title": "✨中山金杯の共通点予想note✨",
+    "races": [
+      {
+        "race_name": "中山金杯",
+        "venue": "中山",
+        "surface": null,
+        "distance_m": null,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "要注目",
+            "horse_name": "グランディア",
+            "popularity": 4,
+            "result_position": 3
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "リフレーミング",
+            "popularity": 13,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "冒頭で「ただ1頭、唯一の共通点パーフェクトクリア💯グランディアが③着✨好走しました！しかし、4人気でしたので強調するほどではなく、穴馬カラマティアノスは取れてないので、改善の余地はあり」と報告。もう一方の穴馬候補リフレーミング(13人気)の結果は本文に記載なし。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "ne7aa14c3989c",
+    "date": "2026-01-09",
+    "price": 0,
+    "title": "㊗️フェアリーS㊗️(シンザンは❌)の穴馬！",
+    "races": [
+      {
+        "race_name": "シンザン記念",
+        "venue": null,
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "推し",
+            "horse_name": "モノポリオ",
+            "popularity": 2,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "フレイムスター",
+            "popularity": 13,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "冒頭の結果報告は「シンザン記念は、完敗です🙇‍♂️🙇‍♂️🙇‍♂️🙇‍♂️💦」のみで、個別馬の着順は本文に記載なし。",
+        "data_completeness": "full"
+      },
+      {
+        "race_name": "フェアリーステークス",
+        "venue": null,
+        "surface": null,
+        "distance_m": null,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "穴馬",
+            "horse_name": "マカレイ",
+            "popularity": 7,
+            "result_position": null
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "ビッグカレンルーフ",
+            "popularity": 10,
+            "result_position": 2
+          }
+        ],
+        "author_outcome_comment": "冒頭で「フェアリーS🧚‍♀️は、推し穴🔥のビッグカレンルーフが、→10人気🔥②着㊗️に好走しました！馬連177.4倍、枠連33.2倍、ワイド48.5倍と、高配当💰ゲット」と報告。もう一頭の穴馬マカレイの結果は本文に記載なし。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n6db7b6058072",
+    "date": "2026-01-23",
+    "price": 250,
+    "title": "🐎プロキオンＳの穴馬予想note🐎",
+    "races": [
+      {
+        "race_name": "プロキオンステークス",
+        "venue": "京都",
+        "surface": "ダート",
+        "distance_m": 1800,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "イチ推し",
+            "horse_name": "ペイシャエス",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "狙い目",
+            "horse_name": "ロードクロンヌ",
+            "popularity": 1,
+            "result_position": 1
+          },
+          {
+            "mark": "狙い目",
+            "horse_name": "サンデーファンデー",
+            "popularity": 11,
+            "result_position": 2
+          }
+        ],
+        "author_outcome_comment": "note記載の狙い目(外枠で1〜5番手につけた馬)通りに1着ロードクロンヌ(1人気)・2着サンデーファンデー(11人気)が決まり的中。誤算はイチ推しだったペイシャエスが出遅れて終わってしまったこと(具体的着順の記載なし)。",
+        "data_completeness": "preview_only"
+      }
+    ]
+  },
+  {
+    "article_key": "n7f529eac1b45",
+    "date": "2026-01-30",
+    "price": 0,
+    "title": "✨根岸Sの穴馬の共通点予想✨",
+    "races": [
+      {
+        "race_name": "根岸ステークス",
+        "venue": "東京",
+        "surface": "ダート",
+        "distance_m": 1400,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "共通点クリア",
+            "horse_name": "ロードフォンス",
+            "popularity": null,
+            "result_position": 1
+          },
+          {
+            "mark": "推し馬",
+            "horse_name": "オメガギネス",
+            "popularity": 5,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "6人気以下で唯一の穴馬共通点クリア馬ロードフォンスが1着(人気は「6人気以下」とのみ記載、具体数値なし)。note執筆時は上位人気想定でオメガギネスを穴馬の共通点クリア馬(満点)として推していたが、実際はオメガギネスが5人気になり想定と逆転し、結果もそれに伴った(オメガギネス自身の着順は本文に記載なし)。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "nbadc1f2f51db",
+    "date": "2026-02-19",
+    "price": 0,
+    "title": "🐎フェブラリーSの穴馬予想→1.2.3人気決着❗️",
+    "races": [
+      {
+        "race_name": "フェブラリーステークス",
+        "venue": "東京",
+        "surface": "ダート",
+        "distance_m": 1600,
+        "grade": "G1",
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "ペリエール",
+            "popularity": 11,
+            "result_position": null
+          },
+          {
+            "mark": "○",
+            "horse_name": "コスタノヴァ",
+            "popularity": 1,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "穴馬予想note だったが、実際のレースは1.2.3人気の上位人気馬による決着となり、穴馬(本命◉ペリエール等)の好走は無く「来年に持ち越し」との記載。具体的な着順は本文に記載なし。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "nf6d96c5c7822",
+    "date": "2026-02-20",
+    "price": 250,
+    "title": "㊗️小倉大賞典の穴馬予想㊗️  ( １万4500文字)",
+    "races": [
+      {
+        "race_name": "小倉大賞典",
+        "venue": "小倉",
+        "surface": "芝",
+        "distance_m": 1800,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "ショウナンアデイブ",
+            "popularity": 10,
+            "result_position": 3
+          }
+        ],
+        "author_outcome_comment": "唯一の穴馬共通点クリア馬として本命◉にしたショウナンアデイブが10人気③着で好走。本文では「本命◉と対抗○と合わせて好走し、後半に追記した狙うべきポジションと馬も2.3.4.5着と合わせて好走してくれました」とあるが、対抗○や追記馬の具体的な馬名は有料部分の途中で本文が切れており確認できず。",
+        "data_completeness": "preview_only"
+      }
+    ]
+  },
+  {
+    "article_key": "n53132b5948ed",
+    "date": "2026-03-05",
+    "price": 0,
+    "title": "✨中山牝馬Sの穴馬予想✨",
+    "races": [
+      {
+        "race_name": "中山牝馬ステークス",
+        "venue": "中山",
+        "surface": null,
+        "distance_m": 1800,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "推し穴馬",
+            "horse_name": "エセルフリーダ",
+            "popularity": 8,
+            "result_position": 1
+          },
+          {
+            "mark": "推し穴馬",
+            "horse_name": "ポルカリズム",
+            "popularity": 10,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "①着は穴馬共通点クリアの推し穴馬エセルフリーダ(8人気)。もう一頭の推し穴馬ポルカリズム(10人気)については結果の記載なし。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n5b8c410eecfd",
+    "date": "2026-04-02",
+    "price": 0,
+    "title": "㊗️ダービー卿CTの穴馬予想note㊗️",
+    "races": [
+      {
+        "race_name": "ダービー卿チャレンジトロフィー",
+        "venue": "中山",
+        "surface": null,
+        "distance_m": 1600,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "スズハローム",
+            "popularity": 10,
+            "result_position": 1
+          },
+          {
+            "mark": "推奨穴馬",
+            "horse_name": "エンペラーズソード",
+            "popularity": 8,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "穴馬共通点クリアで本命◉にしたスズハロームが10人気①着(note本文中の推し穴馬紹介時点では11人気想定だったが結果報告では10人気)。ダービー卿CTは本命◉が6年連続で好走中と記載。もう一頭の推奨穴馬エンペラーズソード(8人気)の結果は記載なし。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n1c14cb58c4a0",
+    "date": "2026-04-16",
+    "price": 0,
+    "title": "✨アンタレスSの穴馬予想note✨",
+    "races": [
+      {
+        "race_name": "アンタレスステークス",
+        "venue": "阪神",
+        "surface": "ダート",
+        "distance_m": 1800,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "推し穴馬",
+            "horse_name": "サイモンザナドゥ",
+            "popularity": 9,
+            "result_position": null
+          },
+          {
+            "mark": "共通点クリア",
+            "horse_name": "モックモック",
+            "popularity": 7,
+            "result_position": 2
+          },
+          {
+            "mark": "共通点クリア",
+            "horse_name": "ハピ",
+            "popularity": 12,
+            "result_position": null
+          },
+          {
+            "mark": "ニアピン",
+            "horse_name": "ハグ",
+            "popularity": 14,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "共通点クリア馬3頭(モックモック・サイモンザナドゥ・ハピ)のうちモックモック(7人気)が②着で好走。しかし本文で推し穴馬とした本命格のサイモンザナドゥは回避疑惑通り全く追わず終いで着外(具体着順記載なし)、ハピも前残りの展開で差し馬として出番なし(着順記載なし)。購入を控えたため的中とは言えないとの記載。大穴のハグ(14人気)は共通点(5-0-1)のニアピンで好走(具体着順記載なし)。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n3fba213e213d",
+    "date": "2026-04-17",
+    "price": 250,
+    "title": "🐎福島牝馬Sの穴馬予想🐎",
+    "races": [
+      {
+        "race_name": "福島牝馬ステークス",
+        "venue": "福島",
+        "surface": null,
+        "distance_m": 1800,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "勝馬(穴馬)",
+            "horse_name": "コガネノソラ",
+            "popularity": null,
+            "result_position": 1
+          },
+          {
+            "mark": "穴馬",
+            "horse_name": "パレハ",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "勝馬は「追記の最強データ」該当の穴馬コガネノソラ(共通点は5-0-1のニアピンだった)で①着。もう一頭のパレハは直線で良い脚を見せたが完全に脚を余し、内枠で前が壁になってハズレとの記載(具体着順なし)。有料部分の本文は共通点分析の途中で切れており、当年の推奨馬選定の詳細は確認できず。",
+        "data_completeness": "preview_only"
+      }
+    ]
+  },
+  {
+    "article_key": "n63ca8f13fd77",
+    "date": "2026-04-30",
+    "price": 0,
+    "title": "🐎天皇賞・春の穴馬予想note🐎",
+    "races": [
+      {
+        "race_name": "天皇賞・春",
+        "venue": "京都",
+        "surface": null,
+        "distance_m": 3200,
+        "grade": "G1",
+        "marks": [
+          {
+            "mark": "共通点クリア推奨馬",
+            "horse_name": "ヴェルミセル",
+            "popularity": null,
+            "result_position": null
+          },
+          {
+            "mark": "本命(結果報告)",
+            "horse_name": "ヴェルテンベルク",
+            "popularity": null,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "結果報告冒頭では「ヴェルテンベルクは完敗です」とのみ記載(具体着順なし)。一方、本文中で穴馬共通点を唯一クリアした推奨馬として名前が挙がっているのはヴェルミセル(9〜10人気想定)であり、両者の関係・ヴェルミセルの結果については本文に明記なし。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n60da0f258bf3",
+    "date": "2026-05-13",
+    "price": 0,
+    "title": "㊗️新潟大賞典の穴馬予想㊗️",
+    "races": [
+      {
+        "race_name": "新潟大賞典",
+        "venue": "新潟",
+        "surface": null,
+        "distance_m": 2000,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "バレエマスター",
+            "popularity": 12,
+            "result_position": 2
+          },
+          {
+            "mark": "推奨穴馬",
+            "horse_name": "ガイアメンテ",
+            "popularity": 12,
+            "result_position": null
+          },
+          {
+            "mark": "共通点クリア(非推奨)",
+            "horse_name": "ホールネス",
+            "popularity": 8,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "穴馬共通点を満点クリアし本命◉にしたバレエマスターが12人気②着で好走(note本文の推し穴馬紹介時点では14人気想定だったが結果報告では12人気)。共通点クリアだった他の候補馬(ガイアメンテ、ホールネス)の結果は記載なし。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n6be188e773c0",
+    "date": "2026-05-14",
+    "price": 250,
+    "title": "🏆ヴィクトリアマイルの穴馬予想🏆 ( ２万文字)",
+    "races": [
+      {
+        "race_name": "ヴィクトリアマイル",
+        "venue": "東京",
+        "surface": "芝",
+        "distance_m": 1600,
+        "grade": "G1",
+        "marks": [
+          {
+            "mark": "▲",
+            "horse_name": "エンブロイダリー",
+            "popularity": 1,
+            "result_position": 1
+          },
+          {
+            "mark": "△",
+            "horse_name": "カムニャック",
+            "popularity": 2,
+            "result_position": 2
+          },
+          {
+            "mark": "○",
+            "horse_name": "クイーンズウォーク",
+            "popularity": 3,
+            "result_position": 3
+          },
+          {
+            "mark": "◉",
+            "horse_name": "ココナッツブラウン",
+            "popularity": null,
+            "result_position": 5
+          }
+        ],
+        "author_outcome_comment": "1・2・3番人気による上位人気決着となり、本命の穴馬◉ココナッツブラウンはハナ差及ばず5着に惜敗。届かなかったことを非常に悔しがっている。",
+        "data_completeness": "preview_only"
+      }
+    ]
+  },
+  {
+    "article_key": "nee241b037a5a",
+    "date": "2026-06-12",
+    "price": 0,
+    "title": "🏆宝塚記念の穴馬予想🏆",
+    "races": [
+      {
+        "race_name": "宝塚記念",
+        "venue": "阪神",
+        "surface": "芝",
+        "distance_m": 2200,
+        "grade": "G1",
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "タガノデュード",
+            "popularity": 10,
+            "result_position": 5
+          }
+        ],
+        "author_outcome_comment": "結果は1・2・3番人気による上位人気決着だったが、雨の中を最後方から上がり最速で追い込んだ本命◉タガノデュード(10人気)の5着は強い内容だったと評価している。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "na19fe4598560",
+    "date": "2026-07-10",
+    "price": 0,
+    "title": "🎋七夕賞の穴馬予想note🎋",
+    "races": [
+      {
+        "race_name": "七夕賞",
+        "venue": "福島",
+        "surface": "芝",
+        "distance_m": 2000,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "推し穴",
+            "horse_name": "コントラポスト",
+            "popularity": 7,
+            "result_position": null
+          },
+          {
+            "mark": "推し穴",
+            "horse_name": "センツブラッド",
+            "popularity": 11,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "",
+        "data_completeness": "no_recap_found"
+      }
+    ]
+  },
+  {
+    "article_key": "n78378e0026c2",
+    "date": "2026-07-16",
+    "price": 0,
+    "title": "㊗️小倉記念の穴馬予想note㊗️",
+    "races": [
+      {
+        "race_name": "小倉記念",
+        "venue": "小倉",
+        "surface": "芝",
+        "distance_m": 2000,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "ゼンダンハヤブサ",
+            "popularity": 10,
+            "result_position": 1
+          }
+        ],
+        "author_outcome_comment": "登録19頭のうち共通点をクリアしたのはゼンダンハヤブサのみで、本命◉としてその馬が10人気で1着。適性舞台とメンバー構成が完全に噛み合った勝利だったと総括している。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n65e6470e89ff",
+    "date": "2026-07-29",
+    "price": 0,
+    "title": "✨アイビスSDの予想note✨",
+    "races": [
+      {
+        "race_name": "アイビスサマーダッシュ",
+        "venue": "新潟",
+        "surface": "芝",
+        "distance_m": 1000,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "クムシラコ",
+            "popularity": 8,
+            "result_position": null
+          },
+          {
+            "mark": "共通点クリア",
+            "horse_name": "ピューロマジック",
+            "popularity": 1,
+            "result_position": 1
+          },
+          {
+            "mark": "共通点クリア",
+            "horse_name": "アメリカンステージ",
+            "popularity": 2,
+            "result_position": null
+          },
+          {
+            "mark": "共通点クリア",
+            "horse_name": "エコロレジーナ",
+            "popularity": 3,
+            "result_position": null
+          },
+          {
+            "mark": "共通点クリア",
+            "horse_name": "アタリダイキチ",
+            "popularity": 12,
+            "result_position": null
+          },
+          {
+            "mark": "共通点クリア",
+            "horse_name": "ロードトレイル",
+            "popularity": 14,
+            "result_position": 2
+          }
+        ],
+        "author_outcome_comment": "共通点クリア馬の中から1人気①着ピューロマジックと14人気②着ロードトレイルがワンツーフィニッシュ。3着までは押さえられなかったが、共通点❌の馬が内枠に集まった点を来年への反省点としている。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "nca22eaecab0b",
+    "date": "2026-07-30",
+    "price": 250,
+    "title": "㊗️クイーンSの穴馬予想note㊗️( １万4000文字)",
+    "races": [
+      {
+        "race_name": "クイーンステークス",
+        "venue": "札幌",
+        "surface": "芝",
+        "distance_m": 1800,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "ヴーレヴー",
+            "popularity": 4,
+            "result_position": 3
+          }
+        ],
+        "author_outcome_comment": "本命◉ヴーレヴーが3着。レース直前まで8人気だったが、最終的に4人気まで支持を集めていた。ワイドや3連単も的中し、W的中で終えられたと満足している。",
+        "data_completeness": "preview_only"
+      }
+    ]
+  },
+  {
+    "article_key": "nd3cee60e9834",
+    "date": "2026-08-06",
+    "price": 0,
+    "title": "🌀レパードSの穴馬予想🌀",
+    "races": [
+      {
+        "race_name": "レパードステークス",
+        "venue": "新潟",
+        "surface": "ダート",
+        "distance_m": 1800,
+        "grade": null,
+        "marks": [
+          {
+            "mark": "推し穴",
+            "horse_name": "ファイアマン",
+            "popularity": 9,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "推し穴馬ファイアマンはスタートで大きく躓き出遅れてしまい、不完全燃焼のまま終わった。来年は実力を発揮できるスムーズな競馬を期待するとしている。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n17c6b4eb1eed",
+    "date": "2026-08-13",
+    "price": 0,
+    "title": "㊗️中京記念の穴馬予想note㊗️",
+    "races": [
+      {
+        "race_name": "中京記念",
+        "venue": "中京",
+        "surface": "芝",
+        "distance_m": 1600,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "推し穴",
+            "horse_name": "ミニトランザット",
+            "popularity": 5,
+            "result_position": 3
+          }
+        ],
+        "author_outcome_comment": "出走馬19頭の中で唯一共通点をクリアしていたミニトランザットが5人気3着に好走。相手は1・2番人気の上位人気馬で、共通点noteとして完璧な結果だったとしている。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "ne7633c0ad6e4",
+    "date": "2026-08-28",
+    "price": 0,
+    "title": "🌀新潟記念の穴馬予想←人気決着😑",
+    "races": [
+      {
+        "race_name": "新潟記念",
+        "venue": "新潟",
+        "surface": "芝",
+        "distance_m": 2000,
+        "grade": "G3",
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "バレエマスター",
+            "popularity": 10,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "1・2・3番人気による上位人気決着となり、本命◉バレエマスター(10人気)を含め穴馬の出番はなかった。また来年に持ち越しとしている。",
+        "data_completeness": "full"
+      }
+    ]
+  },
+  {
+    "article_key": "n8037feb51be3",
+    "date": "2026-09-25",
+    "price": 0,
+    "title": "㊗️スプリンターズSの穴馬🔥予想㊗️( １万5000文字！)",
+    "races": [
+      {
+        "race_name": "スプリンターズステークス",
+        "venue": "中山",
+        "surface": "芝",
+        "distance_m": 1200,
+        "grade": "G1",
+        "marks": [
+          {
+            "mark": "◉",
+            "horse_name": "サウンドモリアーナ",
+            "popularity": 12,
+            "result_position": 3
+          },
+          {
+            "mark": "▲",
+            "horse_name": "ピューロマジック",
+            "popularity": 9,
+            "result_position": 2
+          },
+          {
+            "mark": "○",
+            "horse_name": null,
+            "popularity": null,
+            "result_position": 1
+          },
+          {
+            "mark": "推し穴",
+            "horse_name": "ペアポルックス",
+            "popularity": 13,
+            "result_position": null
+          }
+        ],
+        "author_outcome_comment": "文句なしの完全的中。◉サウンドモリアーナ(12人気)が3着、▲ピューロマジック(9人気)が2着となり、◉○▲の上位3つの印で1・2・3着を完全的中させたとしている。",
+        "data_completeness": "full"
+      }
+    ]
+  }
+]

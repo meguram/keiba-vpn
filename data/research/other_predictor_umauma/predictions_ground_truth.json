@@ -1,0 +1,1684 @@
+[
+  {
+    "article_key": "nd969eb0fe61c",
+    "date": "2021-09-09",
+    "price": 0,
+    "race_name": "京成杯オータムハンデキャップ",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G3",
+    "honmei": "コントラチェック",
+    "marks_verified": [
+      {
+        "horse_name": "コントラチェック",
+        "result_position": 2,
+        "popularity": 12
+      },
+      {
+        "horse_name": "カテドラル",
+        "result_position": 1,
+        "popularity": 7
+      }
+    ],
+    "hit_level": 4,
+    "hit_level_label": "複数的中(本命2-3着+他1頭)",
+    "hit_level_note": "◉=コントラチェック",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n57d653d08582",
+    "date": "2021-09-10",
+    "price": 0,
+    "race_name": "紫苑ステークス",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G3",
+    "honmei": "ミスフィガロ",
+    "marks_verified": [
+      {
+        "horse_name": "ミスフィガロ",
+        "result_position": 3,
+        "popularity": 12
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n7d9bbb2dfb00",
+    "date": "2021-09-17",
+    "price": 0,
+    "race_name": "ローズステークス",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 1800,
+    "grade": "G2",
+    "honmei": "アンドヴァラナウト",
+    "marks_verified": [
+      {
+        "horse_name": "アンドヴァラナウト",
+        "result_position": 1,
+        "popularity": 4
+      }
+    ],
+    "hit_level": 5,
+    "hit_level_label": "軸的中(本命1着)",
+    "hit_level_note": "",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n57e473f6fe1b",
+    "date": "2021-10-15",
+    "price": 0,
+    "race_name": "秋華賞",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G1",
+    "honmei": "サルファーコスモス",
+    "marks_verified": [
+      {
+        "horse_name": "サルファーコスモス",
+        "result_position": 12,
+        "popularity": 11
+      },
+      {
+        "horse_name": "ソダシ",
+        "result_position": 10,
+        "popularity": 1
+      },
+      {
+        "horse_name": "アンドヴァラナウト",
+        "result_position": 3,
+        "popularity": 3
+      },
+      {
+        "horse_name": "アカイトリノムスメ",
+        "result_position": 1,
+        "popularity": 4
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "著者の穴馬着目馬=サルファーコスモス。他3頭は比較評価対象で単一の推奨馬ではない",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n491999f6c048",
+    "date": "2021-12-27",
+    "price": 0,
+    "race_name": "ホープフルステークス",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G1",
+    "honmei": "フィデル",
+    "marks_verified": [
+      {
+        "horse_name": "フィデル",
+        "result_position": 4,
+        "popularity": 7
+      },
+      {
+        "horse_name": "サトノヘリオス",
+        "result_position": 13,
+        "popularity": 3
+      }
+    ],
+    "hit_level": 2,
+    "hit_level_label": "ニアピン(本命4-5着)",
+    "hit_level_note": "",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n4d5f8b4d719b",
+    "date": "2022-01-04",
+    "price": 0,
+    "race_name": "中山金杯",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G3",
+    "honmei": "ヒートオンビート",
+    "marks_verified": [
+      {
+        "horse_name": "ヒートオンビート",
+        "result_position": 3,
+        "popularity": 1
+      },
+      {
+        "horse_name": "ヴィクティファルス",
+        "result_position": 13,
+        "popularity": 3
+      },
+      {
+        "horse_name": "スカーフェイス",
+        "result_position": 2,
+        "popularity": 7
+      },
+      {
+        "horse_name": "レッドガラン",
+        "result_position": 1,
+        "popularity": 4
+      }
+    ],
+    "hit_level": 7,
+    "hit_level_label": "完全的中(順不同)",
+    "hit_level_note": "オールクリア3頭+候補1頭、3頭的中でbox成立のため honmei問わずLv7",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "ne3ca445937ae",
+    "date": "2022-01-21",
+    "price": 0,
+    "race_name": "アメリカジョッキークラブカップ",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 2200,
+    "grade": "G2",
+    "honmei": "ダンビュライト",
+    "marks_verified": [
+      {
+        "horse_name": "ダンビュライト",
+        "result_position": 12,
+        "popularity": 10
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n03a92c7d1c2f",
+    "date": "2022-01-28",
+    "price": 0,
+    "race_name": "根岸ステークス",
+    "venue": "東京",
+    "surface": "ダート",
+    "distance_m": 1400,
+    "grade": "G3",
+    "honmei": "タイムフライヤー",
+    "marks_verified": [
+      {
+        "horse_name": "タイムフライヤー",
+        "result_position": 6,
+        "popularity": 7
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nce9164e8159d",
+    "date": "2022-02-01",
+    "price": 0,
+    "race_name": "川崎記念",
+    "venue": "川崎",
+    "surface": "ダート",
+    "distance_m": 2100,
+    "grade": "Jpn1",
+    "honmei": "エルデュクラージュ",
+    "marks_verified": [
+      {
+        "horse_name": "エルデュクラージュ",
+        "result_position": 2,
+        "popularity": 9
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n0639d00087d0",
+    "date": "2022-02-04",
+    "price": 0,
+    "race_name": "東京新聞杯",
+    "venue": "東京",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G3",
+    "honmei": "ダーリントンホール",
+    "marks_verified": [
+      {
+        "horse_name": "ダーリントンホール",
+        "result_position": null,
+        "popularity": null
+      },
+      {
+        "horse_name": "ホウオウアマゾン",
+        "result_position": 12,
+        "popularity": 3
+      },
+      {
+        "horse_name": "アオイクレアトール",
+        "result_position": 9,
+        "popularity": 7
+      },
+      {
+        "horse_name": "トーラスジェミニ",
+        "result_position": 14,
+        "popularity": 10
+      },
+      {
+        "horse_name": "カテドラル",
+        "result_position": 8,
+        "popularity": 5
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "本命の着順不明・不的中扱い",
+    "hit_level_note": "本命は除外(出走取消)",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n7e61dbc8e96f",
+    "date": "2022-02-10",
+    "price": 0,
+    "race_name": "クイーンカップ",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G3",
+    "honmei": "プレサージュリフト",
+    "marks_verified": [
+      {
+        "horse_name": "プレサージュリフト",
+        "result_position": 1,
+        "popularity": 2
+      },
+      {
+        "horse_name": "ベルクレスタ",
+        "result_position": 3,
+        "popularity": 3
+      },
+      {
+        "horse_name": "スターズオンアース",
+        "result_position": 2,
+        "popularity": 1
+      }
+    ],
+    "hit_level": 7,
+    "hit_level_label": "完全的中(順不同)",
+    "hit_level_note": "◉2頭+3頭目、3頭でbox成立→Lv7",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n7e61dbc8e96f",
+    "date": "2022-02-10",
+    "price": 0,
+    "race_name": "共同通信杯",
+    "venue": "東京",
+    "surface": "芝",
+    "distance_m": 1800,
+    "grade": "G3",
+    "honmei": "ダノンベルーガ",
+    "marks_verified": [
+      {
+        "horse_name": "ダノンベルーガ",
+        "result_position": 1,
+        "popularity": 3
+      },
+      {
+        "horse_name": "ジュンブロッサム",
+        "result_position": 4,
+        "popularity": 6
+      }
+    ],
+    "hit_level": 5,
+    "hit_level_label": "軸的中(本命1着)",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n7e61dbc8e96f",
+    "date": "2022-02-10",
+    "price": 0,
+    "race_name": "京都記念(阪神代替)",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 2200,
+    "grade": "G2",
+    "honmei": "レッドガラン",
+    "marks_verified": [
+      {
+        "horse_name": "レッドガラン",
+        "result_position": 6,
+        "popularity": 3
+      },
+      {
+        "horse_name": "サンレイポケット",
+        "result_position": 3,
+        "popularity": 5
+      },
+      {
+        "horse_name": "タガノディアマンテ",
+        "result_position": 2,
+        "popularity": 8
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "◉=レッドガラン(外れ)。○▲2頭は的中だが本命基準でLv1",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n9238696f2018",
+    "date": "2022-02-24",
+    "price": 0,
+    "race_name": "阪急杯",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 1200,
+    "grade": "G3",
+    "honmei": "トゥラヴェスーラ",
+    "marks_verified": [
+      {
+        "horse_name": "トゥラヴェスーラ",
+        "result_position": 2,
+        "popularity": 9
+      },
+      {
+        "horse_name": "グルーヴィット",
+        "result_position": 7,
+        "popularity": 5
+      },
+      {
+        "horse_name": "ミッキーブリランテ",
+        "result_position": 6,
+        "popularity": 12
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "パーフェクトクリア馬=本命相当",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n9238696f2018",
+    "date": "2022-02-24",
+    "price": 0,
+    "race_name": "中山記念",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 1800,
+    "grade": "G2",
+    "honmei": "パンサラッサ",
+    "marks_verified": [
+      {
+        "horse_name": "パンサラッサ",
+        "result_position": 1,
+        "popularity": 2
+      }
+    ],
+    "hit_level": 5,
+    "hit_level_label": "軸的中(本命1着)",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "ndf8cba79ac5b",
+    "date": "2022-03-01",
+    "price": 0,
+    "race_name": "エンプレス杯",
+    "venue": "川崎",
+    "surface": "ダート",
+    "distance_m": 2100,
+    "grade": "JpnII",
+    "honmei": "シャイニングアカリ",
+    "marks_verified": [
+      {
+        "horse_name": "シャイニングアカリ",
+        "result_position": 10,
+        "popularity": 9
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nb06ef89736c5",
+    "date": "2022-03-04",
+    "price": 0,
+    "race_name": "弥生賞",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G2",
+    "honmei": "アスクビクターモア",
+    "marks_verified": [
+      {
+        "horse_name": "アスクビクターモア",
+        "result_position": 1,
+        "popularity": 3
+      }
+    ],
+    "hit_level": 5,
+    "hit_level_label": "軸的中(本命1着)",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nb06ef89736c5",
+    "date": "2022-03-04",
+    "price": 0,
+    "race_name": "オーシャンステークス",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 1200,
+    "grade": "G3",
+    "honmei": null,
+    "marks_verified": [
+      {
+        "horse_name": "マリアズハート",
+        "result_position": 7,
+        "popularity": 6
+      },
+      {
+        "horse_name": "ファストフォース",
+        "result_position": 9,
+        "popularity": 3
+      },
+      {
+        "horse_name": "マイネルジェロディ",
+        "result_position": 14,
+        "popularity": 7
+      }
+    ],
+    "hit_level": 0,
+    "hit_level_label": "対象外/判定不能",
+    "hit_level_note": "5人気以内決着のため対象外(著者による除外)",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nb06ef89736c5",
+    "date": "2022-03-04",
+    "price": 0,
+    "race_name": "チューリップ賞",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G3",
+    "honmei": "オーソレミオ",
+    "marks_verified": [
+      {
+        "horse_name": "オーソレミオ",
+        "result_position": 8,
+        "popularity": 10
+      },
+      {
+        "horse_name": "アンジェリーナ",
+        "result_position": null,
+        "popularity": 9
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "アンジェリーナは競走中止",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n555b6bbf78f2",
+    "date": "2022-03-18",
+    "price": 0,
+    "race_name": "阪神大賞典",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 3000,
+    "grade": "G2",
+    "honmei": "ディープボンド",
+    "marks_verified": [
+      {
+        "horse_name": "ディープボンド",
+        "result_position": 1,
+        "popularity": 1
+      },
+      {
+        "horse_name": "アイアンバローズ",
+        "result_position": 2,
+        "popularity": 5
+      },
+      {
+        "horse_name": "シルヴァーソニック",
+        "result_position": 3,
+        "popularity": 3
+      },
+      {
+        "horse_name": "トーセンカンビーナ",
+        "result_position": 7,
+        "popularity": 7
+      },
+      {
+        "horse_name": "ダンビュライト",
+        "result_position": 13,
+        "popularity": 9
+      }
+    ],
+    "hit_level": 8,
+    "hit_level_label": "完全的中(順序一致)",
+    "hit_level_note": "1着予想=ディープボンド→実際1着、2着予想=アイアンバローズ→実際2着、3着候補群の1頭シルヴァーソニックが実際3着。予想の優先順位と着順が完全一致",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n27aa8e55277e",
+    "date": "2022-03-27",
+    "price": 0,
+    "race_name": "ドバイゴールデンシャヒーン",
+    "venue": "メイダン(UAE)",
+    "surface": "ダート",
+    "distance_m": 1200,
+    "grade": "G1",
+    "honmei": "軸(馬番パターン)",
+    "marks_verified": [
+      {
+        "horse_name": "軸(馬番パターン)",
+        "result_position": 3,
+        "popularity": null
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "海外レース。netkeiba検証対象外。noteの『複勝100%継続』を単独的中(3着相当)として保守的に採用",
+    "data_source": "note self-report only (international race, not netkeiba-verified)",
+    "verification_status": "unverified_international"
+  },
+  {
+    "article_key": "n27aa8e55277e",
+    "date": "2022-03-27",
+    "price": 0,
+    "race_name": "ドバイターフ",
+    "venue": "メイダン(UAE)",
+    "surface": "芝",
+    "distance_m": 1800,
+    "grade": "G1",
+    "honmei": "バルザロ",
+    "marks_verified": [
+      {
+        "horse_name": "バルザロ",
+        "result_position": 3,
+        "popularity": null
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "海外レース。netkeiba検証対象外。noteの『馬券に穴をあけた』を単独的中として保守的に採用",
+    "data_source": "note self-report only (international race, not netkeiba-verified)",
+    "verification_status": "unverified_international"
+  },
+  {
+    "article_key": "na01bc23f7e8f",
+    "date": "2022-04-15",
+    "price": 0,
+    "race_name": "皐月賞",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G1",
+    "honmei": "ダノンベルーガ",
+    "marks_verified": [
+      {
+        "horse_name": "ダノンベルーガ",
+        "result_position": 4,
+        "popularity": 2
+      },
+      {
+        "horse_name": "デシエルト",
+        "result_position": 16,
+        "popularity": 7
+      }
+    ],
+    "hit_level": 2,
+    "hit_level_label": "ニアピン(本命4-5着)",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n260b0326a41d",
+    "date": "2022-04-28",
+    "price": 0,
+    "race_name": "天皇賞・春(阪神代替)",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 3200,
+    "grade": "G1",
+    "honmei": "タガノディアマンテ",
+    "marks_verified": [
+      {
+        "horse_name": "タガノディアマンテ",
+        "result_position": 17,
+        "popularity": 9
+      },
+      {
+        "horse_name": "ディープボンド",
+        "result_position": 2,
+        "popularity": 1
+      },
+      {
+        "horse_name": "タイトルホルダー",
+        "result_position": 1,
+        "popularity": 2
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "著者の推し馬=タガノディアマンテ(事故で大敗)。共通点クリア馬2頭は的中だが著者の本命ではない",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nd3d5e4ae9fd1",
+    "date": "2022-05-06",
+    "price": 0,
+    "race_name": "新潟大賞典",
+    "venue": "新潟",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G3",
+    "honmei": "ヤシャマル",
+    "marks_verified": [
+      {
+        "horse_name": "ヤシャマル",
+        "result_position": 3,
+        "popularity": 5
+      },
+      {
+        "horse_name": "プレシャスブルー",
+        "result_position": 12,
+        "popularity": 12
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "満点クリア馬の1頭",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "ndc5b3b8081b2",
+    "date": "2022-05-20",
+    "price": 0,
+    "race_name": "優駿牝馬(オークス)",
+    "venue": "東京",
+    "surface": "芝",
+    "distance_m": 2400,
+    "grade": "G1",
+    "honmei": "サークルオブライフ",
+    "marks_verified": [
+      {
+        "horse_name": "サークルオブライフ",
+        "result_position": 12,
+        "popularity": 1
+      },
+      {
+        "horse_name": "ピンハイ",
+        "result_position": 4,
+        "popularity": 13
+      },
+      {
+        "horse_name": "パーソナルハイ",
+        "result_position": 16,
+        "popularity": 11
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "na9722084e31f",
+    "date": "2022-12-09",
+    "price": 0,
+    "race_name": "阪神ジュベナイルフィリーズ",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G1",
+    "honmei": "ドゥアイズ",
+    "marks_verified": [
+      {
+        "horse_name": "ドゥアイズ",
+        "result_position": 3,
+        "popularity": 10
+      },
+      {
+        "horse_name": "ドゥーラ",
+        "result_position": 6,
+        "popularity": 6
+      },
+      {
+        "horse_name": "ラヴェル",
+        "result_position": 11,
+        "popularity": 4
+      },
+      {
+        "horse_name": "リバティアイランド",
+        "result_position": 1,
+        "popularity": 1
+      },
+      {
+        "horse_name": "モリアーナ",
+        "result_position": 12,
+        "popularity": 2
+      }
+    ],
+    "hit_level": 4,
+    "hit_level_label": "複数的中(本命2-3着+他1頭)",
+    "hit_level_note": "◉ドゥアイズ3着+▲リバティアイランド1着が的中(検証により、当初『前号の振り返り』と判断していたが実際は阪神JF自身の結果と確認)",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n8d10e9fd376c",
+    "date": "2022-12-15",
+    "price": 0,
+    "race_name": "朝日杯フューチュリティステークス",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G1",
+    "honmei": "グラニット",
+    "marks_verified": [
+      {
+        "horse_name": "グラニット",
+        "result_position": 10,
+        "popularity": 9
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nfb48f4b049e5",
+    "date": "2023-01-12",
+    "price": 0,
+    "race_name": "愛知杯",
+    "venue": "中京",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G3",
+    "honmei": "アイコンテーラー",
+    "marks_verified": [
+      {
+        "horse_name": "アイコンテーラー",
+        "result_position": 2,
+        "popularity": 7
+      },
+      {
+        "horse_name": "アブレイズ",
+        "result_position": 4,
+        "popularity": 11
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "本命(検証により実際の愛知杯結果と確認)",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n8cf5302a51e2",
+    "date": "2025-01-10",
+    "price": 0,
+    "race_name": "シンザン記念",
+    "venue": "中京",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G3",
+    "honmei": "リラエンブレム",
+    "marks_verified": [
+      {
+        "horse_name": "リラエンブレム",
+        "result_position": 1,
+        "popularity": 3
+      },
+      {
+        "horse_name": "ラージギャラリー",
+        "result_position": 8,
+        "popularity": 10
+      }
+    ],
+    "hit_level": 5,
+    "hit_level_label": "軸的中(本命1着)",
+    "hit_level_note": "推し",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n4f94ac541cbf",
+    "date": "2025-02-14",
+    "price": 0,
+    "race_name": "京都記念",
+    "venue": "京都",
+    "surface": "芝",
+    "distance_m": 2200,
+    "grade": "G2",
+    "honmei": "ヨーホーレイク",
+    "marks_verified": [
+      {
+        "horse_name": "ヨーホーレイク",
+        "result_position": 1,
+        "popularity": 5
+      },
+      {
+        "horse_name": "ショウナンバシット",
+        "result_position": null,
+        "popularity": null
+      }
+    ],
+    "hit_level": 5,
+    "hit_level_label": "軸的中(本命1着)",
+    "hit_level_note": "◉。ショウナンバシットは回避",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n4f94ac541cbf",
+    "date": "2025-02-14",
+    "price": 0,
+    "race_name": "共同通信杯",
+    "venue": "東京",
+    "surface": "芝",
+    "distance_m": 1800,
+    "grade": "G3",
+    "honmei": "カラマティアノス",
+    "marks_verified": [
+      {
+        "horse_name": "カラマティアノス",
+        "result_position": 2,
+        "popularity": 6
+      },
+      {
+        "horse_name": "リトルジャイアンツ",
+        "result_position": 3,
+        "popularity": 4
+      }
+    ],
+    "hit_level": 4,
+    "hit_level_label": "複数的中(本命2-3着+他1頭)",
+    "hit_level_note": "◉。もう一頭リトルジャイアンツも的中(3着)で2頭馬券内",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n4f94ac541cbf",
+    "date": "2025-02-14",
+    "price": 0,
+    "race_name": "クイーンカップ",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G3",
+    "honmei": "エストゥペンダ",
+    "marks_verified": [
+      {
+        "horse_name": "エストゥペンダ",
+        "result_position": 3,
+        "popularity": 6
+      },
+      {
+        "horse_name": "ティラートーレ",
+        "result_position": 8,
+        "popularity": 7
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nd7157abff4c9",
+    "date": "2025-11-21",
+    "price": 250,
+    "race_name": "マイルチャンピオンシップ",
+    "venue": "京都",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G1",
+    "honmei": "ジャンタルマンタル",
+    "marks_verified": [
+      {
+        "horse_name": "ジャンタルマンタル",
+        "result_position": 1,
+        "popularity": 1
+      },
+      {
+        "horse_name": "ガイアフォース",
+        "result_position": 2,
+        "popularity": 4
+      },
+      {
+        "horse_name": "エルトンバローズ",
+        "result_position": 5,
+        "popularity": null
+      }
+    ],
+    "hit_level": 6,
+    "hit_level_label": "軸複数的中(本命1着+他1頭)",
+    "hit_level_note": "ゴールデンポジション3頭中2頭的中(検証により実際のマイルCS結果と確認)",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "ne5cc870bc186",
+    "date": "2025-12-05",
+    "price": 0,
+    "race_name": "チャンピオンズカップ",
+    "venue": "中京",
+    "surface": "ダート",
+    "distance_m": 1800,
+    "grade": "G1",
+    "honmei": "メイショウハリオ",
+    "marks_verified": [
+      {
+        "horse_name": "メイショウハリオ",
+        "result_position": 4,
+        "popularity": 8
+      }
+    ],
+    "hit_level": 2,
+    "hit_level_label": "ニアピン(本命4-5着)",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n602963a6af0e",
+    "date": "2025-12-26",
+    "price": 0,
+    "race_name": "有馬記念",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 2500,
+    "grade": "G1",
+    "honmei": "ダノンデサイル",
+    "marks_verified": [
+      {
+        "horse_name": "ダノンデサイル",
+        "result_position": 3,
+        "popularity": 2
+      },
+      {
+        "horse_name": "レガレイラ",
+        "result_position": 4,
+        "popularity": 1
+      },
+      {
+        "horse_name": "アドマイヤテラ",
+        "result_position": 11,
+        "popularity": 9
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "本命候補群の中で最有力=ダノンデサイル(サンライズアースは回避)",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n8a8c274381a3",
+    "date": "2026-01-02",
+    "price": 0,
+    "race_name": "中山金杯",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G3",
+    "honmei": "グランディア",
+    "marks_verified": [
+      {
+        "horse_name": "グランディア",
+        "result_position": 3,
+        "popularity": 4
+      },
+      {
+        "horse_name": "カラマティアノス",
+        "result_position": 1,
+        "popularity": 7
+      }
+    ],
+    "hit_level": 4,
+    "hit_level_label": "複数的中(本命2-3着+他1頭)",
+    "hit_level_note": "共通点パーフェクトクリア=グランディア。カラマティアノスも穴馬候補として的中(1着)",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "ne7aa14c3989c",
+    "date": "2026-01-09",
+    "price": 0,
+    "race_name": "フェアリーステークス",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G3",
+    "honmei": "ビッグカレンルーフ",
+    "marks_verified": [
+      {
+        "horse_name": "ビッグカレンルーフ",
+        "result_position": 2,
+        "popularity": 10
+      },
+      {
+        "horse_name": "マカレイ",
+        "result_position": 4,
+        "popularity": 8
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "推し穴",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "ne7aa14c3989c",
+    "date": "2026-01-09",
+    "price": 0,
+    "race_name": "シンザン記念",
+    "venue": "中京",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G3",
+    "honmei": "モノポリオ",
+    "marks_verified": [
+      {
+        "horse_name": "モノポリオ",
+        "result_position": 5,
+        "popularity": 1
+      },
+      {
+        "horse_name": "フレイムスター",
+        "result_position": 15,
+        "popularity": 13
+      }
+    ],
+    "hit_level": 2,
+    "hit_level_label": "ニアピン(本命4-5着)",
+    "hit_level_note": "推し",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n6db7b6058072",
+    "date": "2026-01-23",
+    "price": 250,
+    "race_name": "プロキオンステークス",
+    "venue": "京都",
+    "surface": "ダート",
+    "distance_m": 1800,
+    "grade": "G3",
+    "honmei": "ペイシャエス",
+    "marks_verified": [
+      {
+        "horse_name": "ペイシャエス",
+        "result_position": 8,
+        "popularity": 12
+      },
+      {
+        "horse_name": "ロードクロンヌ",
+        "result_position": 1,
+        "popularity": 1
+      },
+      {
+        "horse_name": "サンデーファンデー",
+        "result_position": 2,
+        "popularity": 11
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "イチ推し=ペイシャエス(著者本命格、出遅れ失敗)。狙い目2頭は別枠の的中だが本命ではない",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n7f529eac1b45",
+    "date": "2026-01-30",
+    "price": 0,
+    "race_name": "根岸ステークス",
+    "venue": "東京",
+    "surface": "ダート",
+    "distance_m": 1400,
+    "grade": "G3",
+    "honmei": "ロードフォンス",
+    "marks_verified": [
+      {
+        "horse_name": "ロードフォンス",
+        "result_position": 1,
+        "popularity": 6
+      },
+      {
+        "horse_name": "オメガギネス",
+        "result_position": 4,
+        "popularity": 5
+      }
+    ],
+    "hit_level": 5,
+    "hit_level_label": "軸的中(本命1着)",
+    "hit_level_note": "共通点クリア馬",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nbadc1f2f51db",
+    "date": "2026-02-19",
+    "price": 0,
+    "race_name": "フェブラリーステークス",
+    "venue": "東京",
+    "surface": "ダート",
+    "distance_m": 1600,
+    "grade": "G1",
+    "honmei": "ペリエール",
+    "marks_verified": [
+      {
+        "horse_name": "ペリエール",
+        "result_position": 10,
+        "popularity": 9
+      },
+      {
+        "horse_name": "コスタノヴァ",
+        "result_position": 1,
+        "popularity": 2
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nf6d96c5c7822",
+    "date": "2026-02-20",
+    "price": 250,
+    "race_name": "小倉大賞典",
+    "venue": "小倉",
+    "surface": "芝",
+    "distance_m": 1800,
+    "grade": "G3",
+    "honmei": "ショウナンアデイブ",
+    "marks_verified": [
+      {
+        "horse_name": "ショウナンアデイブ",
+        "result_position": 3,
+        "popularity": 10
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n53132b5948ed",
+    "date": "2026-03-05",
+    "price": 0,
+    "race_name": "中山牝馬ステークス",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 1800,
+    "grade": "G3",
+    "honmei": "エセルフリーダ",
+    "marks_verified": [
+      {
+        "horse_name": "エセルフリーダ",
+        "result_position": 1,
+        "popularity": 6
+      },
+      {
+        "horse_name": "ポルカリズム",
+        "result_position": 9,
+        "popularity": 10
+      }
+    ],
+    "hit_level": 5,
+    "hit_level_label": "軸的中(本命1着)",
+    "hit_level_note": "推し穴馬",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n5b8c410eecfd",
+    "date": "2026-04-02",
+    "price": 0,
+    "race_name": "ダービー卿チャレンジトロフィー",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G3",
+    "honmei": "スズハローム",
+    "marks_verified": [
+      {
+        "horse_name": "スズハローム",
+        "result_position": 1,
+        "popularity": 10
+      },
+      {
+        "horse_name": "エンペラーズソード",
+        "result_position": 8,
+        "popularity": 11
+      }
+    ],
+    "hit_level": 5,
+    "hit_level_label": "軸的中(本命1着)",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n1c14cb58c4a0",
+    "date": "2026-04-16",
+    "price": 0,
+    "race_name": "アンタレスステークス",
+    "venue": "阪神",
+    "surface": "ダート",
+    "distance_m": 1800,
+    "grade": "G3",
+    "honmei": "サイモンザナドゥ",
+    "marks_verified": [
+      {
+        "horse_name": "サイモンザナドゥ",
+        "result_position": 14,
+        "popularity": 9
+      },
+      {
+        "horse_name": "モックモック",
+        "result_position": 2,
+        "popularity": 7
+      },
+      {
+        "horse_name": "ハピ",
+        "result_position": 7,
+        "popularity": 10
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "本命格=サイモンザナドゥ(著者名指し、着外)。モックモックは共通点クリア馬の的中だが本命ではない",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n3fba213e213d",
+    "date": "2026-04-17",
+    "price": 250,
+    "race_name": "福島牝馬ステークス",
+    "venue": "福島",
+    "surface": "芝",
+    "distance_m": 1800,
+    "grade": "G3",
+    "honmei": "パレハ",
+    "marks_verified": [
+      {
+        "horse_name": "パレハ",
+        "result_position": 9,
+        "popularity": 8
+      },
+      {
+        "horse_name": "コガネノソラ",
+        "result_position": 1,
+        "popularity": 9
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "著者の推奨穴馬=パレハ(外れ)。コガネノソラは事後的に共通点ニアピンと言及された勝ち馬で著者のピックではない",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n63ca8f13fd77",
+    "date": "2026-04-30",
+    "price": 0,
+    "race_name": "天皇賞・春",
+    "venue": "京都",
+    "surface": "芝",
+    "distance_m": 3200,
+    "grade": "G1",
+    "honmei": "ヴェルミセル",
+    "marks_verified": [
+      {
+        "horse_name": "ヴェルミセル",
+        "result_position": 9,
+        "popularity": 9
+      },
+      {
+        "horse_name": "ヴェルテンベルク",
+        "result_position": 2,
+        "popularity": 12
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "共通点クリア推奨馬=ヴェルミセル(外れ)。ヴェルテンベルクの『完敗』言及は別レースの誤帰属の可能性が高いが、いずれにせよ推奨馬ヴェルミセルは着外",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n60da0f258bf3",
+    "date": "2026-05-13",
+    "price": 0,
+    "race_name": "新潟大賞典",
+    "venue": "新潟",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G3",
+    "honmei": "バレエマスター",
+    "marks_verified": [
+      {
+        "horse_name": "バレエマスター",
+        "result_position": 2,
+        "popularity": 12
+      },
+      {
+        "horse_name": "ホールネス",
+        "result_position": 8,
+        "popularity": 10
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "◉。ガイアメンテは出走せず",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n6be188e773c0",
+    "date": "2026-05-14",
+    "price": 250,
+    "race_name": "ヴィクトリアマイル",
+    "venue": "東京",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G1",
+    "honmei": "ココナッツブラウン",
+    "marks_verified": [
+      {
+        "horse_name": "ココナッツブラウン",
+        "result_position": 5,
+        "popularity": 7
+      },
+      {
+        "horse_name": "エンブロイダリー",
+        "result_position": 1,
+        "popularity": 1
+      },
+      {
+        "horse_name": "カムニャック",
+        "result_position": 2,
+        "popularity": 2
+      },
+      {
+        "horse_name": "クイーンズウォーク",
+        "result_position": 3,
+        "popularity": 3
+      }
+    ],
+    "hit_level": 7,
+    "hit_level_label": "完全的中(順不同)",
+    "hit_level_note": "◉は5着だが、▲△○の3頭が1-2-3着を占め box成立",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nee241b037a5a",
+    "date": "2026-06-12",
+    "price": 0,
+    "race_name": "宝塚記念",
+    "venue": "阪神",
+    "surface": "芝",
+    "distance_m": 2200,
+    "grade": "G1",
+    "honmei": "タガノデュード",
+    "marks_verified": [
+      {
+        "horse_name": "タガノデュード",
+        "result_position": 5,
+        "popularity": 10
+      }
+    ],
+    "hit_level": 2,
+    "hit_level_label": "ニアピン(本命4-5着)",
+    "hit_level_note": "本命穴馬",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "na19fe4598560",
+    "date": "2026-07-10",
+    "price": 0,
+    "race_name": "七夕賞",
+    "venue": "福島",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G3",
+    "honmei": "センツブラッド",
+    "marks_verified": [
+      {
+        "horse_name": "センツブラッド",
+        "result_position": 4,
+        "popularity": 7
+      },
+      {
+        "horse_name": "コントラポスト",
+        "result_position": 9,
+        "popularity": 8
+      }
+    ],
+    "hit_level": 2,
+    "hit_level_label": "ニアピン(本命4-5着)",
+    "hit_level_note": "本文で明示的に推奨理由が述べられているのはセンツブラッド",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n78378e0026c2",
+    "date": "2026-07-16",
+    "price": 0,
+    "race_name": "小倉記念",
+    "venue": "小倉",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G3",
+    "honmei": "ゼンダンハヤブサ",
+    "marks_verified": [
+      {
+        "horse_name": "ゼンダンハヤブサ",
+        "result_position": 1,
+        "popularity": 10
+      }
+    ],
+    "hit_level": 5,
+    "hit_level_label": "軸的中(本命1着)",
+    "hit_level_note": "◉、唯一の共通点クリア馬",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n65e6470e89ff",
+    "date": "2026-07-29",
+    "price": 0,
+    "race_name": "アイビスサマーダッシュ",
+    "venue": "新潟",
+    "surface": "芝",
+    "distance_m": 1000,
+    "grade": "特別",
+    "honmei": "ピューロマジック",
+    "marks_verified": [
+      {
+        "horse_name": "ピューロマジック",
+        "result_position": 1,
+        "popularity": 1
+      },
+      {
+        "horse_name": "ロードトレイル",
+        "result_position": 2,
+        "popularity": 14
+      }
+    ],
+    "hit_level": 6,
+    "hit_level_label": "軸複数的中(本命1着+他1頭)",
+    "hit_level_note": "共通点クリア2頭のうち先に言及",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nca22eaecab0b",
+    "date": "2026-07-30",
+    "price": 250,
+    "race_name": "クイーンステークス",
+    "venue": "札幌",
+    "surface": "芝",
+    "distance_m": 1800,
+    "grade": "G3",
+    "honmei": "ヴーレヴー",
+    "marks_verified": [
+      {
+        "horse_name": "ヴーレヴー",
+        "result_position": 3,
+        "popularity": 5
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "nd3cee60e9834",
+    "date": "2026-08-06",
+    "price": 0,
+    "race_name": "レパードステークス",
+    "venue": "新潟",
+    "surface": "ダート",
+    "distance_m": 1800,
+    "grade": "G3",
+    "honmei": "ファイアマン",
+    "marks_verified": [
+      {
+        "horse_name": "ファイアマン",
+        "result_position": 11,
+        "popularity": 8
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "推し穴",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n17c6b4eb1eed",
+    "date": "2026-08-13",
+    "price": 0,
+    "race_name": "中京記念",
+    "venue": "中京",
+    "surface": "芝",
+    "distance_m": 1600,
+    "grade": "G3",
+    "honmei": "ミニトランザット",
+    "marks_verified": [
+      {
+        "horse_name": "ミニトランザット",
+        "result_position": 2,
+        "popularity": 5
+      }
+    ],
+    "hit_level": 3,
+    "hit_level_label": "単独的中(本命2-3着)",
+    "hit_level_note": "唯一の共通点クリア馬",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "ne7633c0ad6e4",
+    "date": "2026-08-28",
+    "price": 0,
+    "race_name": "新潟記念",
+    "venue": "新潟",
+    "surface": "芝",
+    "distance_m": 2000,
+    "grade": "G3",
+    "honmei": "バレエマスター",
+    "marks_verified": [
+      {
+        "horse_name": "バレエマスター",
+        "result_position": 10,
+        "popularity": 9
+      }
+    ],
+    "hit_level": 1,
+    "hit_level_label": "不的中",
+    "hit_level_note": "◉",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  },
+  {
+    "article_key": "n8037feb51be3",
+    "date": "2026-09-25",
+    "price": 0,
+    "race_name": "スプリンターズステークス",
+    "venue": "中山",
+    "surface": "芝",
+    "distance_m": 1200,
+    "grade": "G1",
+    "honmei": "サウンドモリアーナ",
+    "marks_verified": [
+      {
+        "horse_name": "サウンドモリアーナ",
+        "result_position": 3,
+        "popularity": 11
+      },
+      {
+        "horse_name": "ピューロマジック",
+        "result_position": 1,
+        "popularity": 9
+      }
+    ],
+    "hit_level": 4,
+    "hit_level_label": "複数的中(本命2-3着+他1頭)",
+    "hit_level_note": "◉=サウンドモリアーナ。▲ピューロマジックは実際は1着(note記載の2着は誤り)",
+    "data_source": "netkeiba.com verified (web search)",
+    "verification_status": "verified"
+  }
+]

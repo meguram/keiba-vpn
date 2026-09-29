@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>「うまうまー」ペルソナ予想パイプライン — 事前EDA計画</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2438; --border:#2a3450;
+    --text:#e8ecf6; --muted:#9aa7c7; --accent:#5b8cff; --accent2:#8ab4ff;
+    --ok:#3ecf8e; --okbg:rgba(62,207,142,.14);
+    --new:#e8b64f; --newbg:rgba(232,182,79,.14);
+    --gap:#f0616b; --gapbg:rgba(240,97,107,.14);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,-apple-system,sans-serif;
+    line-height:1.75; font-size:15.5px;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:40px 24px 100px}
+  header.hero{
+    padding:40px 32px; border-radius:16px; margin-bottom:36px;
+    background:linear-gradient(135deg,#1a2340,#141b30 60%,#0f1420);
+    border:1px solid var(--border);
+  }
+  header.hero h1{margin:0 0 8px; font-size:25px; letter-spacing:.02em}
+  header.hero p{margin:4px 0; color:var(--muted); font-size:14.5px}
+  header.hero .badges{margin-top:16px; display:flex; gap:8px; flex-wrap:wrap}
+  .pill{
+    display:inline-block; padding:4px 12px; border-radius:999px;
+    font-size:12.5px; border:1px solid var(--border); color:var(--muted);
+    background:rgba(255,255,255,.03);
+  }
+  h2{
+    font-size:20px; margin:56px 0 18px; padding-bottom:10px;
+    border-bottom:1px solid var(--border); color:var(--accent2);
+    display:flex; align-items:center; gap:10px;
+  }
+  h2 .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:8px; background:var(--accent);
+    color:#0b1020; font-size:13px; font-weight:700; flex-shrink:0;
+  }
+  h3{font-size:16.5px; margin:28px 0 10px; color:var(--text); display:flex; align-items:center; gap:8px}
+  h4{font-size:14.5px; margin:20px 0 8px; color:var(--accent2)}
+  p{margin:0 0 12px}
+  .muted{color:var(--muted)}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:20px 22px; margin-bottom:16px;
+  }
+  .card.tight{padding:16px 18px}
+  .phase-card{border-left:4px solid var(--accent)}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media (max-width:800px){.grid2{grid-template-columns:1fr}}
+
+  table{width:100%; border-collapse:collapse; font-size:13.6px}
+  th,td{padding:9px 10px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top}
+  th{color:var(--muted); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:.03em}
+  tr:hover td{background:rgba(255,255,255,.02)}
+  code{background:#0d1220; padding:1px 6px; border-radius:5px; font-size:.92em; border:1px solid var(--border)}
+  pre{
+    background:#0d1220; border:1px solid var(--border); border-radius:10px; padding:16px 18px;
+    overflow-x:auto; font-size:12.8px; line-height:1.65; color:#c9d4ee; margin:10px 0 16px;
+  }
+  .tag{display:inline-block; padding:2px 9px; border-radius:6px; font-size:12px; font-weight:600; white-space:nowrap}
+  .tag.ok{color:var(--ok); background:var(--okbg)}
+  .tag.new{color:var(--new); background:var(--newbg)}
+  .tag.gap{color:var(--gap); background:var(--gapbg)}
+  .tag.phase{color:var(--accent2); background:rgba(91,140,255,.14)}
+
+  .insight{
+    border-left:3px solid var(--ok); padding:12px 16px; margin:14px 0;
+    background:var(--okbg); border-radius:0 8px 8px 0; font-size:14.5px;
+  }
+  .caution{
+    border-left:3px solid var(--new); padding:12px 16px; margin:14px 0;
+    background:var(--newbg); border-radius:0 8px 8px 0; font-size:14px;
+  }
+  .critical{
+    border-left:3px solid var(--gap); padding:12px 16px; margin:14px 0;
+    background:var(--gapbg); border-radius:0 8px 8px 0; font-size:14.5px;
+  }
+  ul{padding-left:22px} li{margin-bottom:6px}
+  ol{padding-left:22px} ol li{margin-bottom:8px}
+  .toc{display:flex; flex-wrap:wrap; gap:8px}
+  .toc a{
+    color:var(--accent2); text-decoration:none; font-size:13px;
+    padding:6px 12px; background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+  }
+  .toc a:hover{border-color:var(--accent)}
+  .scroll-x{overflow-x:auto}
+  .kv{display:grid; grid-template-columns:110px 1fr; gap:6px 14px; font-size:13.8px; margin-bottom:10px}
+  .kv .k{color:var(--muted)}
+  .depgraph{font-family:monospace; font-size:13px; color:#c9d4ee; background:#0d1220; border:1px solid var(--border); border-radius:10px; padding:16px 20px; white-space:pre; overflow-x:auto}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>「うまうまー」ペルソナ予想パイプライン — 事前EDA計画</h1>
+    <p>予測パイプライン（<a href="./umauma_persona_pipeline.html" style="color:var(--accent2)">umauma_persona_pipeline.html</a>）を組む前に、そこで使う各種情報・仮説を定量的に検証・整備するためのEDA計画。必要データと分析手法を疑似コードでまとめる。</p>
+    <p class="muted">位置づけ: <a href="./index.html" style="color:var(--accent2)">①分析レポート</a>（うまうまーの手法を読み解いた） → <a href="./umauma_persona_pipeline.html" style="color:var(--accent2)">②パイプライン設計</a>（機械学習化の設計） → <strong>③本ドキュメント（EDA計画）</strong> → 実装、という順序で読む。</p>
+    <div class="badges">
+      <span class="pill">6フェーズ構成</span>
+      <span class="pill">既存モジュールの妥当性検証が中心</span>
+      <span class="pill">「人気」の扱い方針を最初に確定する</span>
+    </div>
+  </header>
+
+  <nav class="card tight">
+    <div class="toc">
+      <a href="#why">① なぜEDAが先に必要か</a>
+      <a href="#roadmap">② EDAロードマップ</a>
+      <a href="#phase0">Phase 0: データ棚卸し</a>
+      <a href="#phase1">Phase 1: 既存エンジンの妥当性検証</a>
+      <a href="#phase2">Phase 2: 欠けている特徴量の作成</a>
+      <a href="#phase3">Phase 3: 「人気」の扱い方針</a>
+      <a href="#phase4">Phase 4: セグメント別事前確率の構造化</a>
+      <a href="#phase5">Phase 5: リーク検証</a>
+      <a href="#phase6">Phase 6: 特徴量スクリーニング</a>
+      <a href="#dod">③ Definition of Done</a>
+    </div>
+  </nav>
+
+  <section id="why">
+    <h2><span class="num">1</span>なぜEDAが先に必要か</h2>
+    <div class="card">
+      <p>前回の設計書（②）では、うまうまーの着眼点の大部分が <code>track_speed_engine.py</code> / <code>race_quality_model.py</code> / <code>perf_index.py</code> / <code>course_bloodline.py</code> / <code>track_bias_pedigree.py</code> / L2血統クラスタなど、既存資産で代替できるという仮説を立てた。しかしこれらは<strong>別の目的で作られた既存モジュール</strong>であり、「うまうまーの手動判断と実際にどれだけ一致するか」「このペルソナの用途でカバレッジ・精度が十分か」はまだ検証していない。</p>
+      <p>さらにコード調査で、以下の<strong>設計上の緊張関係</strong>が新たに判明した。これはモデル構築前に方針を確定しておく必要がある。</p>
+      <div class="critical">
+        <strong>重要な発見：</strong> <code>src/pipeline/features/feature_builder.py</code> には「当日オッズ・人気など市場由来の指標は原則使用しない」という明文化された方針があり、<code>popularity</code> / <code>popularity_rank</code> は <code>_PUBLIC_INDICATOR_COLUMNS</code> として明示的にモデル特徴量から除外されている（許容されるのは前走オッズ・前走人気から作った派生特徴量 <code>prev{i}_pop_rank_diff</code> / <code>prev{i}_upset_flag</code> / <code>popularity_trend_slope</code> のみ）。<br><br>
+        一方、うまうまーの「穴馬」という定義そのものが<strong>当日の人気（6人気以下）</strong>に依存する。したがって、当日人気を「モデルの入力特徴量」として使うのか、「モデルの外側でスコープを絞るビジネスロジック（後処理フィルタ）」として使うのかを、Phase 3で明確に決める必要がある。
+      </div>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <h2><span class="num">2</span>EDAロードマップ（依存関係）</h2>
+    <div class="card">
+      <p>各フェーズの目的と、パイプライン設計書（②）のどの節に対応するかを示す。</p>
+      <div class="depgraph">Phase 0  データ棚卸し・カバレッジ確認
+   │   (全フェーズの前提：どのテーブルが年ごとにどれだけ揃っているか)
+   ├──▶ Phase 1  既存エンジンの妥当性検証（②-2節「既存」項目の検証）
+   ├──▶ Phase 2  欠けている特徴量の作成とEDA（②-2節「新規/拡張」項目）
+   ├──▶ Phase 3  「人気」の扱い方針の検証・確定（②-1節の前提を固める）
+   │        │
+   │        ▼
+   ├──▶ Phase 4  セグメント別事前確率の構造化（②-5節 confidence の元データ作り）
+   │        （Phase 3で決めた人気の扱い方針に依存）
+   ├──▶ Phase 5  ラベル・タイミングのリーク検証（②-4節 分割戦略の前提）
+   └──▶ Phase 6  特徴量スクリーニング（Phase 1・2・3の出力を使い、モデル構築前の当たりを取る）
+</div>
+      <p class="muted">Phase 0以外は並行して着手可能。ただしPhase 4とPhase 6はPhase 3（人気の扱い方針）の結論を前提とするため、Phase 3は優先度を上げる。</p>
+    </div>
+  </section>
+
+  <section id="phase0">
+    <h2><span class="num">P0</span>Phase 0: データ棚卸し・カバレッジ確認</h2>
+    <div class="card phase-card">
+      <div class="kv"><span class="k">目的</span><span>各特徴量ソースが年・レース種別・グレードごとにどれだけ揃っているかを確認し、後続フェーズの前提を作る。</span></div>
+      <div class="kv"><span class="k">必要データ</span><span>
+        <code>data/features/race_horse_tbl/&lt;year&gt;/*.parquet</code>、
+        <code>data/features/target/rank_tbl/&lt;year&gt;/rank.parquet</code>、
+        <code>data/knowledge/course_profiles.json</code>、
+        <code>data/features/jockey_trainer_stats/</code>
+      </span></div>
+      <pre>for year in YEARS:                                   # 2015-2026 等、利用可能な全年
+    df = load_race_horse_tbl(year)
+    rank = load_rank_target(year)
+    coverage_row = {
+        "year": year,
+        "n_races": df["race_id"].nunique(),
+        "n_horses": len(df),
+        "missing_rate": df.isna().mean().to_dict(),      # 列ごとの欠損率
+        "grade_dist": df["grade"].value_counts(normalize=True).to_dict(),
+        "surface_dist": df["surface"].value_counts(normalize=True).to_dict(),
+        "label_join_rate": inner_join(df, rank, on=["race_id","horse_id"]).shape[0] / len(df),
+    }
+    append(coverage_report, coverage_row)
+
+save_parquet(coverage_report, "data/analysis/persona_umauma/eda_coverage_report.parquet")
+plot_missingness_heatmap(coverage_report)   # 年 × 列 の欠損率ヒートマップ</pre>
+      <p><strong>出力：</strong> <code>data/analysis/persona_umauma/eda_coverage_report.parquet</code> ＋ 欠損率ヒートマップ（HTML）。</p>
+    </div>
+  </section>
+
+  <section id="phase1">
+    <h2><span class="num">P1</span>Phase 1: 既存分析エンジンの妥当性検証</h2>
+    <p class="muted">「既存資産で代替できる」という仮説を、うまうまー記事内の具体的な言及（50記事の分析結果）と照合して検証する。</p>
+
+    <div class="card phase-card">
+      <h3>1-1. <code>track_speed_engine.py</code>（馬場速度・前傾/後傾ラップ）</h3>
+      <div class="kv"><span class="k">目的</span><span>馬場速度指数・ペース補正が、うまうまーの「前傾ラップ／後傾ラップ」という手動判断と整合するか。</span></div>
+      <div class="kv"><span class="k">データ</span><span><code>data/knowledge/track_speed_baselines.parquet</code>、<code>data/analysis/track_speed/races_&lt;year&gt;.parquet</code></span></div>
+      <pre>known_cases = [
+    # (venue, surface, distance, 著者の手動判断)
+    ("中山","芝",1200,"前傾（下り坂スタート）"),
+    ("東京","ダート",1400,"前後半とも脚を使うタフ設計"),
+    ("新潟","芝",2000,"外回り・ラスト1000m下り→加速→失速"),
+    ("阪神","ダート",1800,"平均より前傾（坂を2回登る）"),
+    # ... 分析レポート③節から抽出した約15件
+]
+
+for venue, surface, distance, manual_label in known_cases:
+    races = filter(track_speed_races, venue, surface, distance)
+    rpci_diff = mean(races["rpci"] - races["agari_3f_time"])   # 前傾/後傾の定量指標
+    predicted_label = "前傾" if rpci_diff > threshold else "後傾"
+    agree = (predicted_label == parse(manual_label))
+    report.append((venue, surface, distance, predicted_label, manual_label, agree))
+
+agreement_rate = mean([r.agree for r in report])</pre>
+      <p><strong>出力：</strong> 既知ケースとの一致率レポート。一致率が低い競馬場・距離があれば、うまうまー特有の「開催時期」「馬場状態」要因が抜けている可能性があるため個別に深掘りする。</p>
+    </div>
+
+    <div class="card phase-card">
+      <h3>1-2. <code>race_quality_model.py</code>（瞬発型／持続型／消耗型のレース質推定）</h3>
+      <div class="kv"><span class="k">目的</span><span>NNLSで推定される8軸の混合比の主成分が、うまうまーの手動タグ（瞬発力型・持続力型・消耗型）とどれだけ一致するか。</span></div>
+      <div class="kv"><span class="k">データ</span><span>race_quality_model 出力、50記事から抽出した「レース質」手動タグ（分析レポート③節の記述を race_id 単位でラベル化）</span></div>
+      <pre>manual_quality_labels = {
+    race_id_of("宝塚記念",2026): "持続力型（非根幹距離）",
+    race_id_of("スプリンターズS",2026): "タフ型（前傾+急坂）",
+    race_id_of("新潟大賞典",2022): "持続力型（長い直線+下り坂加速）",
+    # ... note記事で明言されている全レース分
+}
+
+for race_id, manual_label in manual_quality_labels.items():
+    axis_vector = race_quality_model.get_axis_mixture(race_id)   # 8軸の混合比
+    dominant_axis = argmax(axis_vector)
+    mapped_label = AXIS_TO_UMAUMA_LABEL[dominant_axis]           # 対応表（要定義）
+    agree = (mapped_label == manual_label)
+    report.append((race_id, dominant_axis, mapped_label, manual_label, agree))
+
+agreement_rate = mean([r.agree for r in report])
+build_axis_mapping_table(report)   # 8軸 → うまうまー用語 の対応表を確定</pre>
+      <p><strong>出力：</strong> 8軸→うまうまー用語のマッピング表（<code>data/knowledge/persona_umauma_axis_mapping.json</code>）＋一致率。</p>
+    </div>
+
+    <div class="card phase-card">
+      <h3>1-3. <code>race_performance.py</code> / <code>perf_index.py</code>（個別馬の好走度定量化）</h3>
+      <div class="kv"><span class="k">目的</span><span>うまうまーが「不利を受けたが強い走り」と手動評価した馬（度外視法の対象馬）が、定量指標でも高く評価されているか。</span></div>
+      <div class="kv"><span class="k">データ</span><span><code>data/features/race_performance/&lt;year&gt;.parquet</code>、<code>perf_index</code> 出力</span></div>
+      <pre>manual_cases = [
+    # 分析レポートから抽出した「度外視法」対象馬
+    (horse_id_of("タガノディアマンテ"), race_id_of("天皇賞春",2022), "不利多数だが評価は高い"),
+    (horse_id_of("ヴェルミセル"), race_id_of("天皇賞春",2026), "推奨した穴馬"),
+    # ...
+]
+
+correlation_pairs = []
+for horse_id, race_id, manual_note in manual_cases:
+    pi = perf_index.lookup(horse_id, race_id)
+    finish_pos = rank_target.lookup(horse_id, race_id)
+    correlation_pairs.append((pi, finish_pos, manual_note))
+
+scatter_plot(correlation_pairs)   # perf_index と 着順 の関係を可視化
+corr = correlation([p[0] for p in correlation_pairs], [p[1] for p in correlation_pairs])</pre>
+      <p><strong>出力：</strong> perf_index／run_performance と実際の着順・手動評価の相関散布図。相関が弱ければ「うまうまー独自の観点（展開・不利の程度）」を追加特徴量として補う必要がある。</p>
+    </div>
+
+    <div class="card phase-card">
+      <h3>1-4. <code>course_bloodline.py</code> / <code>track_bias_pedigree.py</code>（血統×コース適性）</h3>
+      <div class="kv"><span class="k">目的</span><span>種牡馬別コース適性スコアが、既知の適性認識（例：ロードカナロア系＝内回り高速、ハーツクライ系＝持続力型中距離）と整合するか。</span></div>
+      <pre>known_sire_aptitude = {
+    "ロードカナロア": "内回り高速",
+    "ハーツクライ":   "持続力型中距離",
+    "ルーラーシップ": "内回り長距離型",
+    # ... L2クラスタ代表産駒（メモリ project_l2_cluster_redesign 準拠）
+}
+
+scores = course_bloodline.compute_sire_course_scores()
+for sire, expected in known_sire_aptitude.items():
+    top_condition = scores.loc[sire].sort_values(ascending=False).index[0]
+    agree = matches(top_condition, expected)
+    report.append((sire, top_condition, expected, agree))</pre>
+      <p><strong>出力：</strong> 種牡馬×コース適性の整合率レポート。既にL2クラスタ命名（<code>project_l2_cluster_redesign</code>メモリ参照）と一致するはずなので、大きく矛盾する場合はデータ結合ミスの疑いとして先に潰す。</p>
+    </div>
+
+    <div class="card phase-card">
+      <h3>1-5. L2血統クラスタ（<code>win_fast</code>/<code>win_slow</code>/<code>win_outer</code>/<code>win_inner</code>）</h3>
+      <div class="kv"><span class="k">目的</span><span>4次元スコアが実際の複勝率・コース条件と相関するかを確認し、コース類似度プロキシ（Phase 2）の土台として使える精度かを判定。</span></div>
+      <pre>unified = load_parquet("unified.parquet")           # L2クラスタのwin_*列を含む
+merged = join(unified, race_horse_tbl, on="horse_id")
+merged = join(merged, rank_target, on=["race_id","horse_id"])
+merged["is_top3"] = merged["rank"] <= 3
+
+for dim, course_condition_filter in [
+    ("win_fast", lambda df: df["track_speed_index"] >= 56.5),   # 高速馬場
+    ("win_slow", lambda df: df["track_speed_index"] <= 43.5),   # 低速馬場
+    ("win_outer", lambda df: df["course_shape"] == "外回り"),
+    ("win_inner", lambda df: df["course_shape"] == "内回り"),
+]:
+    subset = course_condition_filter(merged)
+    corr = point_biserial_correlation(subset[dim], subset["is_top3"])
+    report.append((dim, corr, len(subset)))</pre>
+      <p><strong>出力：</strong> 各次元の的中相関表。相関が十分（目安：|r| ≥ 0.05〜0.1、サンプル十分）であれば、パイプライン設計書②-3節の「コース類似度プロキシ」の根拠として採用してよい。</p>
+    </div>
+  </section>
+
+  <section id="phase2">
+    <h2><span class="num">P2</span>Phase 2: 欠けている特徴量の作成とEDA</h2>
+
+    <div class="card phase-card">
+      <h3>2-1. 生産牧場フラグ <span class="tag ok">breeder列は既存確認済み</span></h3>
+      <div class="kv"><span class="k">目的</span><span><code>breeder</code>列（生データに実在確認済み。例："ノーザンファーム"）の表記ゆれを正規化し、フラグ化する。</span></div>
+      <div class="kv"><span class="k">データ</span><span><code>horse_profile</code> カテゴリ（<code>src/scraper/parsers.py</code> の生産者抽出結果）の <code>breeder</code> 列</span></div>
+      <pre>breeders = load_column("breeder", horse_profile_table)
+value_counts = breeders.value_counts()
+
+# 表記ゆれの洗い出し（EDA的には value_counts の上位・下位両方を目視確認）
+northern_farm_variants = fuzzy_match(value_counts.index, target="ノーザンファーム", threshold=0.85)
+shadai_variants = fuzzy_match(value_counts.index, targets=["社台ファーム","社台コーポレーション","社台牧場"], threshold=0.85)
+
+coverage = {
+    "northern_farm_rate": breeders.isin(northern_farm_variants).mean(),
+    "shadai_rate": breeders.isin(shadai_variants).mean(),
+    "unmatched_rate": (~breeders.isin(northern_farm_variants + shadai_variants) & breeders.notna()).mean(),
+}
+save_json(northern_farm_variants + shadai_variants, "data/knowledge/breeder_normalize_dict.json")</pre>
+      <p><strong>出力：</strong> <code>breeder_normalize_dict.json</code>（表記ゆれ辞書）＋カバレッジレポート。分析レポートでは「ノーザンファーム系穴馬は❌」（ダービー卿CT等）という<strong>逆方向の相性</strong>も言及されていたため、フラグは「ノーザンファーム系か否か」の2値で十分。</p>
+    </div>
+
+    <div class="card phase-card">
+      <h3>2-2. 鞍上乗り替わりフラグ</h3>
+      <div class="kv"><span class="k">目的</span><span>各馬の前走騎手と今回騎手を比較し、継続騎乗／乗り替わりを判定する列を作る。</span></div>
+      <div class="kv"><span class="k">データ</span><span><code>race_horse_tbl</code> の <code>horse_id</code>, <code>race_id</code>, <code>date</code>, <code>jockey_id</code></span></div>
+      <pre>df = load_all_years(race_horse_tbl)[["horse_id","race_id","date","jockey_id"]]
+df = df.sort_values(["horse_id","date"])
+df["prev_jockey_id"] = df.groupby("horse_id")["jockey_id"].shift(1)
+df["jockey_changed"] = (df["jockey_id"] != df["prev_jockey_id"]) & df["prev_jockey_id"].notna()
+
+coverage = df["prev_jockey_id"].notna().mean()   # 初出走馬はNaNになる想定
+
+# 記事内の明言例で検証（例：中山牝馬S 2026「継続騎乗は12年間で1度も好走なし」）
+validate_cases = [
+    (horse_id_of("エセルフリーダ"), race_id_of("中山牝馬S",2026), "乗り替わり"),
+]
+for horse_id, race_id, expected in validate_cases:
+    actual = df.lookup(horse_id, race_id, "jockey_changed")
+    assert matches(actual, expected)</pre>
+      <p><strong>出力：</strong> <code>jockey_changed</code> 列のカバレッジレポート＋記事内明言例との整合確認。</p>
+    </div>
+
+    <div class="card phase-card">
+      <h3>2-3. 非根幹距離フラグ</h3>
+      <div class="kv"><span class="k">目的</span><span>「400m単位でない距離＝非根幹距離」という静的ルールを適用し、分布を確認する（分析自体は軽微だが、芝・ダート・直線コースでルールが破綻しないか確認が必要）。</span></div>
+      <pre>distances = race_tbl[["venue","surface","distance"]].drop_duplicates()
+distances["is_hikonkan"] = (distances["distance"] % 400 != 0)
+
+# 既知の非根幹距離（宝塚記念2200・エリザベス女王杯2200・有馬記念2500・菊花賞3000・チャンピオンズC1800等）と一致するか確認
+known_hikonkan = ["宝塚記念","エリザベス女王杯","有馬記念","菊花賞","チャンピオンズC"]
+for race_name in known_hikonkan:
+    d = get_distance(race_name)
+    assert distances.loc[distances.distance==d, "is_hikonkan"].all()
+
+distance_dist_by_surface = distances.groupby(["surface","is_hikonkan"]).size()</pre>
+      <p><strong>出力：</strong> 芝／ダート別の根幹・非根幹距離分布表。直線コース（新潟1000m等）は特殊ケースとして別フラグ（<code>is_straight_course</code>）で扱う。</p>
+    </div>
+
+    <div class="card phase-card">
+      <h3>2-4. コース類似度プロキシ</h3>
+      <div class="kv"><span class="k">目的</span><span>L2クラスタの4次元から作るコース間コサイン類似度が、うまうまーが明言する類似コース判断（例：中京≈阪神外回り、中山1600m≠中山1800/2000m）と一致するか。</span></div>
+      <pre>course_vectors = {}
+for (venue, surface, distance_bucket), group in groupby(unified, ["venue","surface","distance_bucket"]):
+    course_vectors[(venue,surface,distance_bucket)] = mean(group[["win_fast","win_slow","win_outer","win_inner"]])
+
+sim_matrix = cosine_similarity_matrix(course_vectors)
+
+known_pairs = [
+    (("中京","芝","マイル"), ("阪神","芝","マイル外"), "類似のはず（うまうまー: 中京記念で明言）"),
+    (("中山","芝","マイル"), ("中山","芝","中距離"), "非類似のはず（うまうまー: 坂の位置が別物と明言）"),
+    (("新潟","芝","中距離外"), ("東京","芝","中距離"), "類似のはず（直線が長い＝持続力型）"),
+]
+for course_a, course_b, expected in known_pairs:
+    sim = sim_matrix[course_a][course_b]
+    report.append((course_a, course_b, sim, expected))</pre>
+      <p><strong>出力：</strong> コース類似度行列（<code>data/knowledge/course_similarity_matrix.parquet</code>）＋既知ペアとの整合率。整合率が低ければ、4次元だけでは不十分と判断し、<code>track_speed_engine</code>の指標（前傾/後傾）を次元に追加する。</p>
+    </div>
+  </section>
+
+  <section id="phase3">
+    <h2><span class="num">P3</span>Phase 3: 「人気」の扱い方針の検証・確定</h2>
+    <div class="card phase-card">
+      <div class="kv"><span class="k">目的</span><span>プロジェクトの既存方針（当日オッズ・人気はモデル特徴量として使わない）と、うまうまーペルソナの「穴馬＝人気6位以下」という定義をどう両立させるかを、データで検証してから確定する。</span></div>
+      <div class="kv"><span class="k">データ</span><span><code>final_odds_features.py</code> / <code>final_odds_predictor.py</code> の出力、<code>race_horse_tbl</code> の <code>popularity</code> 列</span></div>
+      <h4>検証A：人気だけのベースライン精度（比較対象を作る）</h4>
+      <pre>df = load_race_horse_tbl_with_label()   # is_top3 付き
+label_by_popularity = df.groupby("popularity_rank")["is_top3"].mean()
+plot(label_by_popularity)   # 「人気1位は複勝率60%、人気10位は複勝率8%」のような曲線
+
+# うまうまー方式の母集団だけを見た場合の絶対的な的中確率（何もしなくても当たる下限）
+underdog_base_rate = df[df.popularity_rank >= 6]["is_top3"].mean()</pre>
+      <h4>検証B：現在人気を特徴量に使う場合と使わない場合の情報量比較</h4>
+      <pre>model_with_pop = train_lightgbm(features_including_popularity, label)
+model_without_pop = train_lightgbm(features_excluding_popularity, label)
+
+auc_with = evaluate(model_with_pop, valid_set)
+auc_without = evaluate(model_without_pop, valid_set)
+lift = auc_with - auc_without   # 人気を入れることで説明力がどれだけ上がるか（＝市場に対する非独立性の大きさ）</pre>
+      <div class="insight">
+        <strong>推奨方針（検証で確認すべき仮説）：</strong> 当日人気は<strong>モデルの入力特徴量には含めず</strong>、既存の <code>feature_builder.py</code> 方針を継承する。人気は「レース内で誰が穴馬候補か」を決める<strong>後処理フィルタ</strong>としてのみ使う。うまうまー自身も「共通点クリア」を先に判定し、その後で人気を見て「これは人気馬だから対象外」と絞り込む順序で分析しており、この設計は著者の実際の思考プロセスとも整合する。前走の人気（<code>prev_popularity</code>系）は既存方針どおり派生特徴量として使用可。
+      </div>
+      <p class="caution">上記は「推奨」であり、検証Bの結果次第で見直す。人気を入れたモデルが著しく強い場合（市場情報に強く依存しないと精度が出ない場合）は、そもそもこのペルソナが「市場を超える独立シグナル」を持っているか自体を疑う必要がある。</p>
+    </div>
+  </section>
+
+  <section id="phase4">
+    <h2><span class="num">P4</span>Phase 4: セグメント別事前確率の構造化</h2>
+    <div class="card phase-card">
+      <div class="kv"><span class="k">目的</span><span>①分析レポートで手作業で行った「50記事の的中/不的中の自己申告データ」を機械可読なテーブルに構造化し、セグメント別（グレード×芝ダ×距離帯）事前確率を再現可能にする。</span></div>
+      <div class="kv"><span class="k">データ</span><span>note記事本文（<code>/tmp/notes_text/*.txt</code> 相当。永続化する場合は <code>data/external/umauma_notes/</code> 等に保存）、レース名→実際の <code>race_id</code> の対応付け</span></div>
+      <h4>ステップ1：記事→race_idの対応付け（最重要サブタスク）</h4>
+      <pre>candidates = []
+for article in umauma_articles:
+    race_name_guess = extract_race_name_from_title(article.title)     # 例:"京成杯AH"
+    date_guess = article.publish_date
+    match = fuzzy_search_race_tbl(
+        name=race_name_guess,
+        date_window=(date_guess - 10days, date_guess + 3days),        # 有料記事は開催前公開のため前後を広めに
+    )
+    candidates.append((article, match))
+
+# 一致度が低い/複数候補ある場合は人手で確認するキューに落とす
+ambiguous = [c for c in candidates if c.match_score < 0.9 or c.n_candidates > 1]
+review_manually(ambiguous)</pre>
+      <h4>ステップ2：自己申告結果の抽出とラベル化（①レポートの手法を再利用）</h4>
+      <pre>records = []
+for article, race_id in resolved_matches:
+    outcome = classify_self_reported_outcome(article.body)   # 的中/不的中/部分的中/判定不能
+    race_meta = lookup_race_meta(race_id)                     # grade, surface, distance, venue, date
+    records.append({**race_meta, "race_id": race_id, "outcome": outcome})
+
+df = DataFrame(records)
+df = df[df.outcome != "判定不能"]</pre>
+      <h4>ステップ3：セグメント別集計（事前確率テーブルの生成）</h4>
+      <pre>segment_stats = df.groupby(["grade","surface","distance_bucket"]).agg(
+    n=("outcome","size"),
+    hit_rate=("outcome", lambda s: mean(s == "的中")),
+    partial_rate=("outcome", lambda s: mean(s == "部分的中")),
+)
+
+# サンプルが小さいセグメントはempirical Bayesで全体平均へ縮小
+overall_rate = df["outcome"].eq("的中").mean()
+segment_stats["shrunk_hit_rate"] = (
+    (segment_stats["n"] * segment_stats["hit_rate"] + K * overall_rate) / (segment_stats["n"] + K)
+)   # K: 縮小の強さを決める疑似サンプルサイズ（例: K=10）
+
+save_json(segment_stats, "data/knowledge/persona_umauma_segment_priors.json")</pre>
+      <p><strong>出力：</strong> <code>persona_umauma_segment_priors.json</code>。①レポートの手計算結果（G1≈8%、G2≈83%、G3≈62%等）を初期値として、以後は本パイプラインで再現可能な形にする。<strong>記事が増えるたびに再実行できるバッチ化</strong>が前提。</p>
+    </div>
+  </section>
+
+  <section id="phase5">
+    <h2><span class="num">P5</span>Phase 5: ラベル・タイミングのリーク検証</h2>
+    <div class="card phase-card">
+      <div class="kv"><span class="k">目的</span><span>「当該レースより前のみ」の原則が実際に守られているかを、コードレビューだけでなくデータで再確認する（temporal-leak safety）。</span></div>
+      <h4>検証A：特徴量のタイムスタンプ整合性</h4>
+      <pre>sample_races = random_sample(race_horse_tbl, n=200)
+for race in sample_races:
+    for feature_col in PERSONA_FEATURE_COLUMNS:
+        source_timestamp = get_feature_source_timestamp(race, feature_col)
+        assert source_timestamp < race.start_datetime, f"leak: {feature_col} in {race.race_id}"</pre>
+      <h4>検証B：historical_entity_stats等の累計統計の境界確認</h4>
+      <pre>horse = pick_horse_with_many_starts()
+history = load_race_horse_tbl_for_horse(horse)
+for i, row in enumerate(history.sort_values("date")):
+    expected_prior_wins = count(history[:i], "is_win")   # i番目より前だけの勝数
+    actual = row["historical_wins"]
+    assert actual == expected_prior_wins</pre>
+      <h4>検証C：ラベル分布・クラス不均衡の確認</h4>
+      <pre>label_rate_overall = df["is_top3"].mean()               # 全体の3着内率（フィールドサイズに依存）
+label_rate_by_field_size = df.groupby("field_size")["is_top3"].mean()
+label_rate_by_popularity = df.groupby("popularity_rank")["is_top3"].mean()   # Phase3の検証Aと同じ図を再利用</pre>
+      <p><strong>出力：</strong> リーク検証レポート（違反があれば <code>race_id</code> を特定してブロッキング issue にする）＋ラベル分布図。</p>
+    </div>
+  </section>
+
+  <section id="phase6">
+    <h2><span class="num">P6</span>Phase 6: 特徴量スクリーニング（モデル構築前の当たりを取る）</h2>
+    <div class="card phase-card">
+      <div class="kv"><span class="k">目的</span><span>本格的なモデル（LightGBM等）を組む前に、各ペルソナ特徴量が「人気6位以下の的中」に対して本当にシグナルを持つかを単純な統計で確認する。</span></div>
+      <pre>underdogs = df[df.popularity_rank >= 6]   # うまうまーの母集団に合わせる
+
+candidate_features = [
+    "corner_pos_last", "agari_3f_rank_last", "track_speed_fit",       # track_speed_engine由来
+    "race_quality_axis_match",                                        # race_quality_model由来
+    "perf_index_last", "run_performance_last",                        # perf_index/race_performance由来
+    "course_bloodline_score", "track_bias_pedigree_score",            # course_bloodline/track_bias_pedigree由来
+    "win_fast","win_slow","win_outer","win_inner",                    # L2クラスタ由来
+    "is_northern_farm","jockey_changed","is_hikonkan","course_similarity_proxy",  # Phase2新規列
+]
+
+screening = []
+for f in candidate_features:
+    corr = point_biserial_correlation(underdogs[f], underdogs["is_top3"])
+    screening.append((f, corr, underdogs[f].notna().mean()))
+
+screening_df = DataFrame(screening, columns=["feature","corr","coverage"]).sort_values("corr", key=abs, ascending=False)
+
+# 単純なロジスティック回帰でベースラインの説明力を見る（多重共線性は後回し、まずは当たりを取る）
+baseline_model = LogisticRegression()
+baseline_model.fit(underdogs[candidate_features].fillna(0), underdogs["is_top3"])
+coef_report = zip(candidate_features, baseline_model.coef_)</pre>
+      <p><strong>出力：</strong> 特徴量スクリーニング表（相関・カバレッジ・簡易回帰係数）。相関が弱く欠損率も高い特徴量は、本番パイプラインに入れる前に定義を見直す（Phase 1・2に戻る）。</p>
+      <div class="caution">この時点の指標はあくまで「単純な相関・線形の当たり」であり、GBDTでの非線形な交互作用効果は別。ここでの目的は「明らかにシグナルがない・欠損しすぎている特徴を早期に落とす」こと。</div>
+    </div>
+  </section>
+
+  <section id="dod">
+    <h2><span class="num">3</span>Definition of Done（EDA完了の判定基準）</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>フェーズ</th><th>完了基準</th></tr></thead>
+        <tbody>
+          <tr><td>Phase 0</td><td>全特徴量ソースの年別カバレッジ・欠損率レポートが完成し、パイプラインで使う年範囲を確定できる。</td></tr>
+          <tr><td>Phase 1</td><td>既存5エンジンそれぞれについて、うまうまーの手動判断との一致率が算出され、著しく低い（目安70%未満）ケースの原因が説明できる、または追加特徴で補う計画がある。</td></tr>
+          <tr><td>Phase 2</td><td>生産牧場フラグ・鞍上変化フラグ・非根幹距離フラグ・コース類似度が生成され、カバレッジと既知ケースとの整合が確認済み。</td></tr>
+          <tr><td>Phase 3</td><td>当日人気の扱い方針（特徴量に入れるか、後処理フィルタに限定するか）が検証結果に基づいて確定している。</td></tr>
+          <tr><td>Phase 4</td><td><code>persona_umauma_segment_priors.json</code> が生成され、記事→race_id対応の精度（曖昧例の割合）が記録されている。</td></tr>
+          <tr><td>Phase 5</td><td>リーク検証（特徴量タイムスタンプ・累計統計の境界）に違反が無い、またはすべて修正済み。</td></tr>
+          <tr><td>Phase 6</td><td>候補特徴量のうち、人気だけのベースラインを上回るシグナルを持つものが最低限確認できている。</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">全フェーズ完了後、<a href="./umauma_persona_pipeline.html" style="color:var(--accent2)">パイプライン設計書（②）</a>の実装ロードマップ（⑨節）Step1「ベースライン確立」に着手する。</p>
+    </div>
+  </section>
+
+  <footer>
+    本ドキュメントは <a href="./index.html" style="color:var(--accent2)">①うまうまー分析レポート</a> と <a href="./umauma_persona_pipeline.html" style="color:var(--accent2)">②パイプライン設計書</a> を前提とした、実装前のEDA計画書。疑似コードは実装方針の共有を目的としたものであり、実際の関数名・引用APIはリポジトリの既存コーディング規約（<code>src/pipeline/</code> / <code>src/research/race/</code>）に合わせて実装時に確定する。
+  </footer>
+
+</div>
+</body>
+</html>

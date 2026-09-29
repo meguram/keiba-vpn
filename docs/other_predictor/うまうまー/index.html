@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>note予想家「うまうまー」分析レポート — 舞台別予想手法と的中傾向</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2438; --border:#2a3450;
+    --text:#e8ecf6; --muted:#9aa7c7; --accent:#5b8cff; --accent2:#8ab4ff;
+    --hit:#3ecf8e; --hitbg:rgba(62,207,142,.14);
+    --miss:#f0616b; --missbg:rgba(240,97,107,.14);
+    --partial:#e8b64f; --partialbg:rgba(232,182,79,.14);
+    --na:#6b7690; --nabg:rgba(107,118,144,.12);
+    --lvl8:#14b866; --lvl8bg:rgba(20,184,102,.18);
+    --lvl7:#22c55e; --lvl7bg:rgba(34,197,94,.16);
+    --lvl6:#3ecf8e; --lvl6bg:rgba(62,207,142,.14);
+    --lvl5:#6bd66a; --lvl5bg:rgba(107,214,106,.14);
+    --lvl4:#8bd450; --lvl4bg:rgba(139,212,80,.14);
+    --lvl3:#a9c93f; --lvl3bg:rgba(169,201,63,.14);
+    --lvl2:#e8b64f; --lvl2bg:rgba(232,182,79,.14);
+    --lvl1:#f0616b; --lvl1bg:rgba(240,97,107,.14);
+    --lvl0:#6b7690; --lvl0bg:rgba(107,118,144,.12);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,-apple-system,sans-serif;
+    line-height:1.75; font-size:15.5px;
+  }
+  .wrap{max-width:1140px; margin:0 auto; padding:40px 24px 100px}
+  header.hero{
+    padding:40px 32px; border-radius:16px; margin-bottom:36px;
+    background:linear-gradient(135deg,#1a2340,#141b30 60%,#0f1420);
+    border:1px solid var(--border);
+  }
+  header.hero h1{margin:0 0 8px; font-size:26px; letter-spacing:.02em}
+  header.hero p{margin:4px 0; color:var(--muted); font-size:14.5px}
+  header.hero .badges{margin-top:16px; display:flex; gap:8px; flex-wrap:wrap}
+  .pill{
+    display:inline-block; padding:4px 12px; border-radius:999px;
+    font-size:12.5px; border:1px solid var(--border); color:var(--muted);
+    background:rgba(255,255,255,.03);
+  }
+  h2{
+    font-size:20px; margin:56px 0 18px; padding-bottom:10px;
+    border-bottom:1px solid var(--border); color:var(--accent2);
+    display:flex; align-items:center; gap:10px;
+  }
+  h2 .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:8px; background:var(--accent);
+    color:#0b1020; font-size:13px; font-weight:700;
+  }
+  h3{font-size:16.5px; margin:28px 0 10px; color:var(--text)}
+  h4{font-size:14.5px; margin:20px 0 8px; color:var(--accent2)}
+  p{margin:0 0 12px}
+  .muted{color:var(--muted)}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:20px 22px; margin-bottom:16px;
+  }
+  .card.tight{padding:16px 18px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px}
+  @media (max-width:800px){.grid2,.grid3{grid-template-columns:1fr}}
+
+  .stat{
+    background:var(--panel2); border:1px solid var(--border); border-radius:12px;
+    padding:16px 18px; text-align:center;
+  }
+  .stat .n{font-size:26px; font-weight:700; color:var(--accent2)}
+  .stat .l{font-size:12.5px; color:var(--muted); margin-top:4px}
+
+  table{width:100%; border-collapse:collapse; font-size:13.8px}
+  th,td{padding:9px 10px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top}
+  th{color:var(--muted); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:.03em}
+  tr:hover td{background:rgba(255,255,255,.02)}
+  .num-col{text-align:right; white-space:nowrap}
+
+  .tag{
+    display:inline-block; padding:2px 9px; border-radius:6px; font-size:12px; font-weight:600;
+    white-space:nowrap;
+  }
+  .tag.hit{color:var(--hit); background:var(--hitbg)}
+  .tag.miss{color:var(--miss); background:var(--missbg)}
+  .tag.partial{color:var(--partial); background:var(--partialbg)}
+  .tag.na{color:var(--na); background:var(--nabg)}
+  .tag.lvl8{color:var(--lvl8); background:var(--lvl8bg); font-weight:700}
+  .tag.lvl7{color:var(--lvl7); background:var(--lvl7bg); font-weight:700}
+  .tag.lvl6{color:var(--lvl6); background:var(--lvl6bg)}
+  .tag.lvl5{color:var(--lvl5); background:var(--lvl5bg)}
+  .tag.lvl4{color:var(--lvl4); background:var(--lvl4bg)}
+  .tag.lvl3{color:var(--lvl3); background:var(--lvl3bg)}
+  .tag.lvl2{color:var(--lvl2); background:var(--lvl2bg)}
+  .tag.lvl1{color:var(--lvl1); background:var(--lvl1bg)}
+  .tag.lvl0{color:var(--lvl0); background:var(--lvl0bg)}
+  .levelbar{display:flex; height:22px; border-radius:6px; overflow:hidden; border:1px solid var(--border)}
+  .levelbar .seg{height:100%}
+  .scale-row{display:grid; grid-template-columns:90px 1fr; gap:14px; align-items:start; padding:10px 0; border-bottom:1px solid var(--border)}
+  .scale-row:last-child{border-bottom:none}
+  .scale-row .badge{font-size:13px; font-weight:700; padding:3px 10px; border-radius:6px; text-align:center; white-space:nowrap}
+  .scale-row .desc{font-size:13.8px; color:var(--muted)}
+  .scale-row .desc strong{color:var(--text)}
+  .tag.surf-t{color:#7fd0ff; background:rgba(127,208,255,.12)}
+  .tag.surf-d{color:#d9a86c; background:rgba(217,168,108,.14)}
+
+  .bar-row{display:flex; align-items:center; gap:12px; margin:10px 0}
+  .bar-row .label{width:190px; font-size:13.5px; color:var(--text); flex-shrink:0}
+  .bar-row .track{flex:1; height:20px; background:#0d1220; border-radius:6px; overflow:hidden; border:1px solid var(--border); display:flex}
+  .bar-row .seg{height:100%}
+  .bar-row .seg.hit{background:var(--hit)}
+  .bar-row .seg.partial{background:var(--partial)}
+  .bar-row .seg.miss{background:var(--miss)}
+  .bar-row .n{width:110px; font-size:12.5px; color:var(--muted); text-align:right; flex-shrink:0}
+
+  .legend{display:flex; gap:16px; margin:10px 0 20px; font-size:12.5px; color:var(--muted)}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .legend i{width:10px; height:10px; border-radius:3px; display:inline-block}
+  .legend i.hit{background:var(--hit)} .legend i.partial{background:var(--partial)} .legend i.miss{background:var(--miss)}
+
+  .quote{
+    border-left:3px solid var(--accent); padding:8px 14px; margin:10px 0;
+    background:rgba(91,140,255,.06); font-size:14px; color:var(--muted); border-radius:0 8px 8px 0;
+  }
+  .insight{
+    border-left:3px solid var(--hit); padding:12px 16px; margin:14px 0;
+    background:var(--hitbg); border-radius:0 8px 8px 0; font-size:14.5px;
+  }
+  .caution{
+    border-left:3px solid var(--partial); padding:12px 16px; margin:14px 0;
+    background:var(--partialbg); border-radius:0 8px 8px 0; font-size:14px;
+  }
+  ul{padding-left:22px} li{margin-bottom:6px}
+  code{background:#0d1220; padding:1px 6px; border-radius:5px; font-size:.92em; border:1px solid var(--border)}
+  .toc{display:flex; flex-wrap:wrap; gap:8px}
+  .toc a{
+    color:var(--accent2); text-decoration:none; font-size:13px;
+    padding:6px 12px; background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+  }
+  .toc a:hover{border-color:var(--accent)}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:12.5px}
+  .scroll-x{overflow-x:auto}
+  .src-note{font-size:12px; color:var(--na); margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>note予想家「うまうまー」(@yupo1004) 分析レポート</h1>
+    <p>舞台（コース・距離・グレード）ごとの予想手法の違いと、的中／不的中の自己申告データから見える傾向の整理</p>
+    <p class="muted">対象: note.com 公開記事50件（2021-09〜2023-01の直近23件 ＋ 2025-01〜2026-09の全27件）／作成日: 2026-09-29</p>
+    <div class="badges">
+      <span class="pill">記事数 50</span>
+      <span class="pill">分析対象レース 59件（うち判定可能58件）</span>
+      <span class="pill">全期間投稿数 69件</span>
+      <span class="pill">着順・人気: netkeiba.com 実データ検証済み</span>
+    </div>
+  </header>
+
+  <nav class="card tight">
+    <div class="toc">
+      <a href="#overview">① 対象と前提</a>
+      <a href="#framework">② 予想手法の全体像</a>
+      <a href="#by-stage">③ 舞台別の予想手法</a>
+      <a href="#accuracy">④ 的中レベル（6段階）の傾向分析</a>
+      <a href="#confidence">⑤ 信頼度スコア化への示唆</a>
+      <a href="#list">⑥ 記事一覧（50件）</a>
+      <a href="#limits">⑦ データの限界・注意点</a>
+    </div>
+  </nav>
+
+  <section id="overview">
+    <h2><span class="num">1</span>対象と前提</h2>
+    <div class="card">
+      <p>note.com のプロフィール <code>https://note.com/yupo1004</code>（表示名「うまうまー」）は、2019年から競馬の重賞予想note（主に「穴馬」＝人気薄で好走する馬の発掘）を投稿している。全投稿69件のうち<strong>2025年1月以降の投稿は27件</strong>しかなく、2023年1月〜2025年1月には約2年間の投稿空白期間がある。</p>
+      <p>ユーザーの指示により、「2025年以降の記事」27件に加えて、<strong>2023年以前の直近23件を遡って合計50件</strong>を分析対象とした（2021-09-09〜2023-01-12の23件 ＋ 2025-01-10〜2026-09-25の27件）。</p>
+      <p>本文取得は note.com の公開APIを利用し、HTMLタグを除去したテキストとして50記事すべてを取得した。うち<strong>7記事は有料note（¥100〜250）</strong>のため、課金の壁より先の本文は取得できず、無料プレビュー部分のみを分析対象とした。</p>
+    </div>
+  </section>
+
+  <section id="framework">
+    <h2><span class="num">2</span>予想手法の全体像</h2>
+    <div class="card">
+      <h3>基本フレームワーク：「穴馬共通点」分析</h3>
+      <p>特に2025年以降の記事で完全に定型化されている中核ロジックは以下の通り。</p>
+      <ol>
+        <li>対象レースの<strong>過去10〜15年分</strong>を遡り、「6番人気以下（レースにより4〜5番人気以下）から3着以内に好走した馬」を全頭リストアップする（穴馬プール、多くは9〜24頭程度）。</li>
+        <li>それら穴馬に共通する特徴を<strong>4〜8項目</strong>抽出する。項目は主に：前走の4角（コーナー）通過順位、前走の上がり3F順位・秒数、対象コース／類似コースでの実績、距離実績、年齢、斤量比、鞍上（乗り替わりか継続騎乗か）、馬体重（増減・馬格）、生産牧場（ノーザンファーム／社台系か否か）など。</li>
+        <li>各項目に⭕️（合格）／🔺（一部合格）／❌（不合格）を割り当て、<strong>全項目クリア（オールクリア）</strong>の馬を「今年の推奨穴馬・本命」として選出する。</li>
+        <li>各項目の設定根拠は必ず「コース形状（坂の位置・数、コーナー角度、直線の長さ）から逆算したラップの前傾／後傾傾向」に紐づけて説明される（後述③）。</li>
+      </ol>
+      <div class="caution">
+        <strong>時代による違い：</strong> 2021〜2023年の記事では、上記の定量的「共通点」分析と、個々の馬のレース映像を見て「不利を受けた／能力を出し切れていない」ことを評価する<strong>定性的な「推し馬・小言」分析</strong>（前走を度外視する手法）が混在していた。特に3歳限定戦・トライアル競走（クイーンC、共同通信杯、チューリップ賞、皐月賞、秋華賞、オークスなど）では、サンプル数が少ないため定量分析が使えず、映像ベースの個別評価が中心になる傾向がある。2025年以降はほぼ全レースで定量「共通点」方式に統一されている。
+      </div>
+    </div>
+  </section>
+
+  <section id="by-stage">
+    <h2><span class="num">3</span>舞台別の予想手法</h2>
+    <p class="muted">「舞台」（芝／ダート・距離帯・コースの坂やコーナー構造）によって、著者がどのような着眼点を設定しているかを整理した。共通するのは、必ず「コースのラップ特性（前半が速いか、中盤が緩むか、直線に坂があるか）」から逆算して「前走のどんな内容の馬が向くか」を導く、という論理展開である。</p>
+
+    <h3>芝・短距離（〜1400m前後）</h3>
+    <div class="card">
+      <p><strong>代表例：</strong> スプリンターズS（中山1200）、阪急杯（阪神1200）、オーシャンS（中山1200）、アイビスサマーダッシュ（新潟1000直線）</p>
+      <ul>
+        <li>共通して「スタート直後が下り坂で前半が速い（前傾ラップ）→中盤も減速しない→直線の急坂で上がりがかかる」という3段構成でレースを分解し、<strong>スピードだけでなく持続力・スタミナが必要な「タフな短距離戦」</strong>という結論を導くパターンが多い（スプリンターズS、阪急杯）。</li>
+        <li>短距離は決着パターンが「前有利（4角1〜5番手）」か「大外一気の後方一気（11番手以下）」の二極化しやすいと分析（阪急杯）。</li>
+        <li>アイビスSD（新潟1000m直線）は特殊コースとして別枠扱い：<strong>枠順（外枠が複勝率3〜4倍高い）と前走千直実績の秒差</strong>を最重視し、枠確定後に追記する2段階公開構成をとる。「前走ダート使用馬は全滅」という珍しいネガティブ条件も特徴的。</li>
+      </ul>
+    </div>
+
+    <h3>芝・マイル（1500〜1700m）</h3>
+    <div class="card">
+      <p><strong>代表例：</strong> 京成杯AH、東京新聞杯、チューリップ賞、クイーンC、シンザン記念、フェアリーS、ダービー卿CT、中京記念、ヴィクトリアマイル</p>
+      <ul>
+        <li>同じ「1600m」でも競馬場ごとにロジックが大きく異なる点を強調するのが特徴。例：<strong>中山1600m（ダービー卿CT）</strong>は「下り坂スタート＋外回り」で中山1800/2000m（上り坂スタート＋内回り）とは別物、<strong>東京ダート1400m</strong>は「砂スタート＋前後半とも脚を使う国内最長級の直線」など、同一競馬場・同一距離帯でも大きく区別する。</li>
+        <li>中京記念は「通常の中京マイルは前半ゆったり」なのに「中京記念だけは前傾ラップになる罠」があると指摘し、短距離実績よりも<strong>阪神外回り実績を代替指標</strong>として使うなど、コース類似性による転用ロジックが目立つ。</li>
+        <li>血統（ディープインパクト産駒の東京新聞杯における人気薄での複勝率0%等）に言及する例もある。</li>
+      </ul>
+    </div>
+
+    <h3>芝・中距離（1800〜2200m）</h3>
+    <div class="card">
+      <p><strong>代表例：</strong> ローズS、紫苑S、中山記念、弥生賞、新潟大賞典、中山牝馬S、福島牝馬S、宝塚記念、小倉記念、新潟記念、クイーンS</p>
+      <ul>
+        <li>「非根幹距離（1800m・2200m等）」という概念を重視し、日本のG1でも非根幹距離（宝塚記念・エリザベス女王杯・有馬記念・菊花賞・チャンピオンズC）は総じて「荒れる・タフ・持続力型」という共通仮説を持つ。</li>
+        <li>直線が長い競馬場（新潟外回り・東京・京都外）では「瞬発力ではなく直線後半の失速をどこまで防げるかという“スピードの持続力”」を求め、逆に小回りローカル（札幌・函館・福島・小倉）実績も同じ持続力の裏付けとして両方を評価軸に採用するのが新潟大賞典型のロジック。</li>
+        <li>新潟記念・新潟大賞典では「前走馬体重470kg以上」という<strong>馬格基準</strong>を、開催後半で荒れた馬場に対応するパワー要件として導入している点が特徴的。</li>
+      </ul>
+    </div>
+
+    <h3>芝・長距離（2400m以上）</h3>
+    <div class="card">
+      <p><strong>代表例：</strong> 天皇賞・春（阪神3200／京都3200）、有馬記念（2500）、オークス（2400）、阪神大賞典（3000）</p>
+      <ul>
+        <li>「3角からの下り坂を起点に4F以上のロングスパート合戦が始まる」ため、<strong>前半から異常にペースが速くなる</strong>のが長距離戦の共通認識（天皇賞・春の平均1000m通過が同条件の他レースより明確に速いことをデータで示す）。</li>
+        <li>そのため「瞬発力の速さ」ではなく「前半から脚を使わされても最後まで踏ん張れる持続力」を求め、<strong>4角での位置取り（前優勢）</strong>が短距離以上に重要という結論になりやすい。</li>
+        <li>阪神大賞典（3000m）では内枠絶対有利（過去10年の③着馬の馬番が①〜⑥に集中）という物理的なコース形状論も加わる。</li>
+        <li>同じ「阪神3200m」でも開催が変則（京都改修時のみ阪神施行）だと過去データが使えないため、類似コース（阪神大賞典・松籟S）からゼロベースで基準を再構築する、という応用力も見られる。</li>
+      </ul>
+    </div>
+
+    <h3>ダート全般</h3>
+    <div class="card">
+      <p><strong>代表例：</strong> 根岸S（東京1400）、川崎記念／エンプレス杯（川崎2100）、アンタレスS（阪神1800）、チャンピオンズC（中京1800）、フェブラリーS（東京1600）、レパードS（新潟1800）、プロキオンS（京都1800）</p>
+      <ul>
+        <li>ダートは芝以上に<strong>コーナー角度と内外枠の有利不利</strong>への言及が具体的（川崎2100mは「コーナー角が日本一急」で内枠絶対有利、複勝率データまで提示）。</li>
+        <li>東京ダート（1400m・1600m）は「芝スタート＋下り坂」で前傾ラップになりやすいうえ、直線が501m（国内ダート最長）で上り坂発端という「前後半とも脚を使わされるタフな設計」という説明が繰り返される。</li>
+        <li>阪神ダート1800m（アンタレスS）は「坂を2回登る」難コースで、レースによって平均的な阪神ダート戦より明確に速い前傾ラップになるといった、レース固有の“罠”を毎回検証する姿勢が特徴。</li>
+        <li>ダートは芝に比べて<strong>所属（関東馬／関西馬）や生産牧場の相性差</strong>への言及が多い（東西の輸送・馬場適性の違いが大きいという前提）。</li>
+      </ul>
+    </div>
+
+    <h3>3歳限定・トライアル戦（芝マイル〜中距離）</h3>
+    <div class="card">
+      <p><strong>代表例：</strong> クイーンC、共同通信杯、チューリップ賞、皐月賞、秋華賞、オークス</p>
+      <ul>
+        <li>過去の対戦成績が少ないため定量「共通点」分析が使えず、<strong>前走のレース映像を逐次読み解く個別評価</strong>（不利・進路・展開を能力とは別に評価する「度外視法」）が中心になる。</li>
+        <li>「前走で不利を受けたが着順以上に強かった」「4角で壁になって進路がなかった」といった<strong>展開・トラックバイアスの再評価</strong>を多用し、桜花賞・オークスの間では「桜花賞で外を回して詰めた馬はオークスで上方修正すべき」といった路線間のバイアス連鎖分析も行う。</li>
+        <li>関西馬と関東馬の成績差（秋華賞で過去10年 関西9-7-9-81 vs 関東1-3-1-66等）のような、<strong>所属厩舎・地域差</strong>への言及もこの路線で目立つ。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="accuracy">
+    <h2><span class="num">4</span>的中レベル（9段階）の傾向分析</h2>
+    <div class="card">
+      <p><strong>データ取得方針の変更：</strong> note本文の自己申告（結果報告の追記文）は着順が曖昧・省略されているケースが多く、また「前号や別レースの振り返りとの混同」も複数見つかった。そのため、<strong>各記事の予想印（◉○▲△等）に対応する馬名を、実際にnetkeiba.comのレース結果ページで検索・照合</strong>し、確認済みの着順・単勝人気を正解データの根拠として採用する方式に切り替えた。note本文は「どの馬に印を付けたか」の同定にのみ使用し、着順の根拠にはしていない。</p>
+      <p>あわせて的中レベルの定義を、<strong>本命（◉相当）の着順</strong>を軸に、他の印馬が何頭絡んだかで細分化した<strong>9段階（Lv.0〜Lv.8）</strong>に再設計した。データは <code>data/research/other_predictor_umauma/predictions_ground_truth.json</code>（<code>marks_verified</code> にnetkeiba確認済みの着順・人気、<code>hit_level</code> に9段階評価を格納）に永続化している。</p>
+      <p class="src-note">本命（honmei）の同定ルール: ①◉/◎の記号がある馬 → ②「本命」「本命格」と明示された馬 → ③「イチ推し」「推し馬」等で単独名指しされた馬 → ④本文で最初に言及される印馬、の優先順位で判定（詳細は <code>_meta.json</code> の <code>honmei_identification_rule</code>）。この切り替えにより、旧版で「判定不能」としていた9件のうち8件（阪神ジュベナイルフィリーズ・愛知杯・共同通信杯2022・クイーンカップ2022・京都記念2022・マイルCS・七夕賞・ホープフルS等）で実際の的中レベルを確定できた。</p>
+    </div>
+
+    <div class="card">
+      <h3>的中レベルの定義（最高レベルはユーザー指定の基準）</h3>
+      <div class="scale-row">
+        <span class="badge tag lvl8">Lv.8</span>
+        <div class="desc"><strong>完全的中（順序一致）</strong> — 優先順位付き予想の通りに1-2-3着が決まる（1着予想→実際1着、2着予想→実際2着、3着候補→実際3着）。三連単的中に相当する最高評価。<br><span class="muted">実例（2022-03-18 阪神大賞典）: 「1着予想」ディープボンド→実際1着、「2着予想」アイアンバローズ→実際2着、3着候補群の1頭シルヴァーソニック→実際3着。netkeiba確認済み。</span></div>
+      </div>
+      <div class="scale-row">
+        <span class="badge tag lvl7">Lv.7</span>
+        <div class="desc"><strong>完全的中（順不同）</strong> — 3頭以上の印馬が1-2-3着を占めるが、優先順位と着順は一致しない。三連複的中に相当。<br><span class="muted">実例（2022-01-04 中山金杯／2022-02-10 クイーンカップ／2026-05-14 ヴィクトリアマイル）。</span></div>
+      </div>
+      <div class="scale-row">
+        <span class="badge tag lvl6">Lv.6</span>
+        <div class="desc"><strong>軸複数的中（本命1着＋他1頭）</strong> — 本命が1着、かつ他の印馬1頭も3着以内（本命含め2頭が馬券内）。</div>
+      </div>
+      <div class="scale-row">
+        <span class="badge tag lvl5">Lv.5</span>
+        <div class="desc"><strong>軸的中（本命1着）</strong> — 本命が1着、他の印は3着以内に絡まない。<strong>ご指定の「軸的中」の定義：本命1着のときのみ</strong>。</div>
+      </div>
+      <div class="scale-row">
+        <span class="badge tag lvl4">Lv.4</span>
+        <div class="desc"><strong>複数的中（本命2-3着＋他1頭）</strong> — 本命が2着または3着、かつ他の印馬1頭も3着以内（本命含め2頭が馬券内）。</div>
+      </div>
+      <div class="scale-row">
+        <span class="badge tag lvl3">Lv.3</span>
+        <div class="desc"><strong>単独的中（本命2-3着）</strong> — 本命が2着または3着、他の印は絡まない。全59レース中で最も多い評価帯。</div>
+      </div>
+      <div class="scale-row">
+        <span class="badge tag lvl2">Lv.2</span>
+        <div class="desc"><strong>ニアピン（本命4-5着）</strong> — 本命が4着または5着。</div>
+      </div>
+      <div class="scale-row">
+        <span class="badge tag lvl1">Lv.1</span>
+        <div class="desc"><strong>不的中</strong> — 本命が6着以下で大敗、または上位人気馬のみで決着し穴馬の出番がなかった場合。</div>
+      </div>
+      <div class="scale-row">
+        <span class="badge tag lvl0">Lv.0</span>
+        <div class="desc"><strong>判定不能／対象外</strong> — 本命に該当する印がない、または著者自身がそのレースを分析対象外と明言している。59件中1件（オーシャンステークス＝5人気以内での決着のため著者が参考外と明記）のみ。</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>全体（判定可能 n=58 / 全59レース中 Lv.0は1件）</h3>
+      <div class="legend">
+        <span><i style="background:var(--lvl8)"></i>8</span><span><i style="background:var(--lvl7)"></i>7</span>
+        <span><i style="background:var(--lvl6)"></i>6</span><span><i style="background:var(--lvl5)"></i>5</span>
+        <span><i style="background:var(--lvl4)"></i>4</span><span><i style="background:var(--lvl3)"></i>3</span>
+        <span><i style="background:var(--lvl2)"></i>2</span><span><i style="background:var(--lvl1)"></i>1</span>
+      </div>
+      <div class="levelbar">
+        <div class="seg" style="width:29.3%;background:var(--lvl1)"></div>
+        <div class="seg" style="width:10.3%;background:var(--lvl2)"></div>
+        <div class="seg" style="width:24.1%;background:var(--lvl3)"></div>
+        <div class="seg" style="width:8.6%;background:var(--lvl4)"></div>
+        <div class="seg" style="width:17.2%;background:var(--lvl5)"></div>
+        <div class="seg" style="width:3.4%;background:var(--lvl6)"></div>
+        <div class="seg" style="width:5.2%;background:var(--lvl7)"></div>
+        <div class="seg" style="width:1.7%;background:var(--lvl8)"></div>
+      </div>
+      <p class="src-note" style="margin-top:8px">Lv.1:17件(29%) / Lv.2:6件(10%) / Lv.3:14件(24%) / Lv.4:5件(9%) / Lv.5:10件(17%) / Lv.6:2件(3%) / Lv.7:3件(5%) / Lv.8:1件(2%)。平均レベル 3.14/8.0。Lv.3以上（本命が3着以内に入った、または複数馬的中）の割合は 35/58 ＝ <strong>60%</strong>。</p>
+      <div class="caution">
+        <strong>旧集計からの再訂正：</strong> 初版（3値集計）はG1的中率を「約8%」、第2版（6段階・note自己申告ベース）は「36%」としていたが、netkeiba実データで検証した結果、G1の的中率（Lv.3以上）は<strong>41%</strong>に再訂正される。過去2版はいずれも精度不足（自己申告の曖昧さ・前号との混同）による過小評価だった。特に「判定不能」としていたレースの大半（阪神ジュベナイルフィリーズ＝Lv.4、愛知杯＝Lv.3、共同通信杯2022＝Lv.5、クイーンカップ2022＝Lv.7 等）が、実際には的中〜完全的中だったことが判明している。
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>グレード別（Lv.3以上の割合 / 平均レベル）</h3>
+        <div class="bar-row"><div class="label">G1（n=17）</div><div class="track"><div class="seg miss" style="width:58.8%"></div><div class="seg hit" style="width:41.2%"></div></div><div class="n">41% / 2.59</div></div>
+        <div class="bar-row"><div class="label">G2（n=7）</div><div class="track"><div class="seg miss" style="width:28.6%"></div><div class="seg hit" style="width:71.4%"></div></div><div class="n">71% / 4.29</div></div>
+        <div class="bar-row"><div class="label">G3（n=31）</div><div class="track"><div class="seg miss" style="width:32.3%"></div><div class="seg hit" style="width:67.7%"></div></div><div class="n">68% / 3.16</div></div>
+        <div class="bar-row"><div class="label">Jpn1（地方・n=1）</div><div class="track"><div class="seg hit" style="width:100%"></div></div><div class="n">100% / 3.00</div></div>
+        <div class="bar-row"><div class="label">JpnII（地方・n=1）</div><div class="track"><div class="seg miss" style="width:100%"></div></div><div class="n">0% / 1.00</div></div>
+        <div class="bar-row"><div class="label">特別（アイビスSD・n=1）</div><div class="track"><div class="seg hit" style="width:100%"></div></div><div class="n">100% / 6.00</div></div>
+        <p class="insight"><strong>G1は的中率（41%）・平均レベル（2.59）とも他グレードより明確に低い。</strong>G2は的中率71%だが平均レベル4.29と非常に高く（サンプル7件中に阪神大賞典のLv.8・共同通信杯2025のLv.4を含む）、的中したときの「質」も高い傾向。G3（n=31、的中率68%）が全体の中核。G1でフィールドが手厚く上位人気馬の信頼度が高いため「穴馬理論」が機能しにくい、という構造的な解釈は3版を通じて一貫している。</p>
+      </div>
+
+      <div class="card">
+        <h3>芝／ダート別</h3>
+        <div class="bar-row"><div class="label">芝（n=48）</div><div class="track"><div class="seg miss" style="width:33.3%"></div><div class="seg hit" style="width:66.7%"></div></div><div class="n">67% / 3.40</div></div>
+        <div class="bar-row"><div class="label">ダート（n=10）</div><div class="track"><div class="seg miss" style="width:70%"></div><div class="seg hit" style="width:30%"></div></div><div class="n">30% / 1.90</div></div>
+        <p class="caution">netkeiba実データで検証した結果、<strong>芝（67%）とダート（30%）の差は旧集計より拡大した</strong>（旧: 65% vs 50%）。うまうまーの手法はダートよりも芝で機能しやすい可能性が高い。ダートはn=10と少なく引き続き参考値だが、方向性は3版を通じて一貫。</p>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>距離帯別</h3>
+        <div class="bar-row"><div class="label">短距離 〜1400m（n=6）</div><div class="track"><div class="seg miss" style="width:16.7%"></div><div class="seg hit" style="width:83.3%"></div></div><div class="n">83% / 3.67</div></div>
+        <div class="bar-row"><div class="label">マイル 1500-1699m（n=15）</div><div class="track"><div class="seg miss" style="width:33.3%"></div><div class="seg hit" style="width:66.7%"></div></div><div class="n">67% / 3.53</div></div>
+        <div class="bar-row"><div class="label">中距離 1700-2200m（n=32）</div><div class="track"><div class="seg miss" style="width:43.8%"></div><div class="seg hit" style="width:56.2%"></div></div><div class="n">56% / 2.91</div></div>
+        <div class="bar-row"><div class="label">長距離 2300m以上（n=5）</div><div class="track"><div class="seg miss" style="width:60%"></div><div class="seg hit" style="width:40%"></div></div><div class="n">40% / 2.80</div></div>
+        <p class="caution">短距離（83%）・マイル（67%）が中距離（56%）・長距離（40%）より的中率が高い傾向。長距離5件中3件がG1（天皇賞春×2・阪神大賞典はG2）のため、依然<strong>グレードとの交絡</strong>が濃厚で、距離帯単独の効果としては扱えない。</p>
+      </div>
+
+      <div class="card">
+        <h3>時代（手法変遷）別</h3>
+        <div class="bar-row"><div class="label">2021-23年（混合手法期・n=28）</div><div class="track"><div class="seg miss" style="width:42.9%"></div><div class="seg hit" style="width:57.1%"></div></div><div class="n">57% / 3.04</div></div>
+        <div class="bar-row"><div class="label">2025年以降（定量共通点定型期・n=30）</div><div class="track"><div class="seg miss" style="width:36.7%"></div><div class="seg hit" style="width:63.3%"></div></div><div class="n">63% / 3.23</div></div>
+        <p class="insight">netkeiba実データ検証後も、2025年以降の定型化された「⭕️🔺❌共通点スコアリング」期の的中率（63%）は混合手法期（57%）よりやや高いが、平均レベル（3.04→3.23）の差は小さい。<strong>手法の定型化による改善はあるが、劇的なものではない</strong>という結論は3版を通じて一貫している。</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>季節別（参考）</h3>
+      <div class="bar-row"><div class="label">秋 9-11月（n=6）</div><div class="track"><div class="seg miss" style="width:16.7%"></div><div class="seg hit" style="width:83.3%"></div></div><div class="n">83% / 3.83</div></div>
+      <div class="bar-row"><div class="label">冬 12-2月（n=27）</div><div class="track"><div class="seg miss" style="width:37%"></div><div class="seg hit" style="width:63%"></div></div><div class="n">63% / 3.15</div></div>
+      <div class="bar-row"><div class="label">春 3-5月（n=17）</div><div class="track"><div class="seg miss" style="width:47.1%"></div><div class="seg hit" style="width:52.9%"></div></div><div class="n">53% / 3.00</div></div>
+      <div class="bar-row"><div class="label">夏 6-8月（n=8）</div><div class="track"><div class="seg miss" style="width:50%"></div><div class="seg hit" style="width:50%"></div></div><div class="n">50% / 2.88</div></div>
+      <p class="caution">季節別の傾向は旧集計とほぼ同方向（秋が高く、春・夏が中位）。n=6〜27と小さく、グレード構成の偏りとの交絡が疑われる点は変わらない。</p>
+      <p class="src-note">※本節の集計はすべて <code>data/research/other_predictor_umauma/predictions_ground_truth.json</code>（判定可能58件）を集計スクリプトで再現可能。</p>
+    </div>
+  </section>
+
+  <section id="confidence">
+    <h2><span class="num">5</span>信頼度スコア化への示唆</h2>
+    <div class="card">
+      <p>「予測結果に対する信頼度を統計的に計算する」という今後の方針に向けて、今回のデータから読み取れる材料を整理する。</p>
+      <h4>① 最も強い予測因子：レースグレード</h4>
+      <ul>
+        <li>G1（Lv.3以上41%）とG2/G3（68〜71%）の差は、今回の全指標の中で最も大きい。信頼度スコアの<strong>最重要変数として「グレード」を採用</strong>すべき。特に「G1では推奨馬の信頼度を大きく割り引く」というルールは、サンプルが少ない現状でも導入する価値がある。</li>
+      </ul>
+      <h4>② 芝／ダートは「中程度」の補助因子、距離帯はグレードと交絡</h4>
+      <ul>
+        <li>芝（67%）＞ダート（30%）の差はnetkeiba実データ検証後に拡大しており、グレード以外では最も明確な差。距離帯（短距離・マイル＞中距離・長距離）はグレードとの交絡（長距離＝G1が多い等）が疑われるため、<strong>グレードで調整した後の残差としてどれだけ効くか</strong>を今後さらにデータを積んでから判断すべき。</li>
+      </ul>
+      <h4>③ 有料／無料や手法の定型化は、今のところ的中率に大差なし</h4>
+      <ul>
+        <li>有料記事（本命度が高いはずのプレミアム予想）と無料記事の的中率に明確な差は見られなかった。「課金＝信頼度が高い」という前提は、現時点のデータでは支持されない。</li>
+        <li>2025年以降の定型化された「⭕️🔺❌共通点スコアリング」も、2021-23年の混合手法期と比べて的中率が大きく向上したわけではない。<strong>手法自体の精度よりも、対象レースの選び方（掲載するレースの荒れやすさ）が結果を左右している可能性</strong>が高い。</li>
+      </ul>
+      <h4>④ 次のステップとして使える定量特徴量</h4>
+      <ul>
+        <li>本文中で毎回言及される<strong>「⭕️（共通点クリア数）」の数</strong>は、記事ごとに定量抽出できる特徴量である。「全項目オールクリア」か「1〜2項目未達」かで信頼度が変わる可能性が高く、今後は本文（有料記事は購入前提）から共通点の⭕️🔺❌スコアを自動抽出し、的中レベルとの相関を検証する価値がある。</li>
+        <li>同様に「推奨馬の想定人気（オッズ帯）」「共通点母数（過去N年で何頭が該当したか）」も、著者が毎回明記する定量情報であり、特徴量として使える。<code>predictions_ground_truth.json</code> の <code>marks_verified</code> にnetkeiba確認済みの人気が既に含まれている。</li>
+        <li>モデル化する場合の候補特徴量：<code>グレード</code>・<code>芝/ダート</code>・<code>距離帯</code>・<code>非根幹距離か否か</code>・<code>推奨馬の人気帯</code>・<code>共通点クリア率（⭕️数／全項目数）</code>・<code>有料/無料</code>・<code>開催時期</code>。目的変数は本節の<strong>9段階hit_level（0-8、または連続値化したLv./8）</strong>を使うと、単純な的中/不的中の2値分類より情報量が多く回帰・順序ロジットにも展開しやすい。</li>
+      </ul>
+      <div class="caution">
+        <strong>残る制約：</strong> サンプルが判定可能58件と少なく、netkeiba実データで検証済みとはいえ的中レベルの「本命（honmei）」の同定はルールベースの判断（<code>_meta.json</code> の <code>honmei_identification_rule</code>）に依存している。信頼度スコアを本格的に運用するなら、①記事数をさらに積む（毎週継続的に本文を取得・記録する仕組み）、②race_idを正式に解決してnetkeiba照合を自動化する仕組み、の2点が次の優先課題になる。
+      </div>
+    </div>
+  </section>
+
+  <section id="list">
+    <h2><span class="num">6</span>記事一覧（分析対象50件・netkeiba検証済み）</h2>
+    <p class="src-note">「結果」列は<strong>netkeiba.comで確認した実際の着順・人気</strong>に基づく（note本文の自己申告のみに基づく旧版から更新）。括弧内は本命（honmei）の着順・人気。</p>
+    <div class="card scroll-x">
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th><th>レース</th><th>舞台</th><th>グレード</th><th>手法</th><th class="num-col">結果（本命の着順・人気）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>2021-09-09</td><td>京成杯AH</td><td><span class="tag surf-t">芝1600</span> 中山</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl4">Lv.4</span> 複数的中(2着12人気+他1頭1着)</td></tr>
+          <tr><td>2021-09-10</td><td>紫苑S</td><td><span class="tag surf-t">芝2000</span> 中山</td><td>G3</td><td>個別馬評価</td><td class="num-col"><span class="tag lvl3">Lv.3</span> 単独的中(3着12人気)</td></tr>
+          <tr><td>2021-09-17</td><td>ローズS</td><td><span class="tag surf-t">芝1800</span> 阪神</td><td>G2</td><td>個別馬評価</td><td class="num-col"><span class="tag lvl5">Lv.5</span> 軸的中(1着4人気)</td></tr>
+          <tr><td>2021-10-15</td><td>秋華賞</td><td><span class="tag surf-t">芝2000</span> 阪神</td><td>G1</td><td>個別馬総合評価</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(穴馬サルファーコスモス12着)</td></tr>
+          <tr><td>2021-12-27</td><td>ホープフルS</td><td><span class="tag surf-t">芝2000</span> 中山</td><td>G1</td><td>個別馬評価(度外視法)</td><td class="num-col"><span class="tag lvl2">Lv.2</span> ニアピン(4着7人気)</td></tr>
+          <tr><td>2022-01-04</td><td>中山金杯</td><td><span class="tag surf-t">芝2000</span> 中山</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl7">Lv.7</span> 完全的中(順不同・3頭box)</td></tr>
+          <tr><td>2022-01-21</td><td>AJCC</td><td><span class="tag surf-t">芝2200</span> 中山</td><td>G2</td><td>共通点+度外視法</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(12着10人気)</td></tr>
+          <tr><td>2022-01-28</td><td>根岸S</td><td><span class="tag surf-d">ダート1400</span> 東京</td><td>G3</td><td>共通点+度外視法</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(6着7人気)</td></tr>
+          <tr><td>2022-02-01</td><td>川崎記念</td><td><span class="tag surf-d">ダート2100</span> 川崎</td><td>Jpn1</td><td>簡易共通点(隊列予想)</td><td class="num-col"><span class="tag lvl3">Lv.3</span> 単独的中(2着9人気)</td></tr>
+          <tr><td>2022-02-04</td><td>東京新聞杯</td><td><span class="tag surf-t">芝1600</span> 東京</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(本命は出走取消、他馬も全滅)</td></tr>
+          <tr><td>2022-02-10</td><td>クイーンC/共同通信杯/京都記念</td><td>芝各1600-2200</td><td>G2/G3</td><td>個別馬評価</td><td class="num-col"><span class="tag lvl7">Lv.7</span>(3頭box) / <span class="tag lvl5">Lv.5</span>(1着) / <span class="tag lvl1">Lv.1</span>(6着)</td></tr>
+          <tr><td>2022-02-24</td><td>阪急杯 / 中山記念</td><td><span class="tag surf-t">芝1200</span>阪神 / <span class="tag surf-t">芝1800</span>中山</td><td>G3 / G2</td><td>共通点+ラップ分析</td><td class="num-col"><span class="tag lvl3">Lv.3</span>(2着9人気) / <span class="tag lvl5">Lv.5</span>(1着2人気)</td></tr>
+          <tr><td>2022-03-01</td><td>エンプレス杯</td><td><span class="tag surf-d">ダート2100</span> 川崎</td><td>JpnII</td><td>同条件レース類推</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(10着9人気)</td></tr>
+          <tr><td>2022-03-04</td><td>弥生賞 / オーシャンS / チューリップ賞</td><td>芝2000中山 / 芝1200中山 / 芝1600阪神</td><td>G2/G3/G3</td><td>個別馬評価+共通点</td><td class="num-col"><span class="tag lvl5">Lv.5</span>(1着) / <span class="tag lvl0">Lv.0対象外</span> / <span class="tag lvl1">Lv.1</span>(8着)</td></tr>
+          <tr><td>2022-03-18</td><td>阪神大賞典</td><td><span class="tag surf-t">芝3000</span> 阪神</td><td>G2</td><td>共通点(連対馬ベース)</td><td class="num-col"><span class="tag lvl8">Lv.8</span> 完全的中(順序一致：1着予想→1着,2着予想→2着,3着候補→3着)</td></tr>
+          <tr><td>2022-03-27</td><td>ドバイG.シャヒーン/ターフ</td><td>ダート/芝 メイダン</td><td>G1(国際)</td><td>データ蓄積メモ</td><td class="num-col"><span class="tag lvl3">Lv.3</span> / <span class="tag lvl3">Lv.3</span>（海外レースのため未検証・note記述に基づく暫定値）</td></tr>
+          <tr><td>2022-04-15</td><td>皐月賞</td><td><span class="tag surf-t">芝2000</span> 中山</td><td>G1</td><td>個別馬評価(調教・意気込み)</td><td class="num-col"><span class="tag lvl2">Lv.2</span> ニアピン(4着2人気)</td></tr>
+          <tr><td>2022-04-28</td><td>天皇賞・春</td><td><span class="tag surf-t">芝3200</span> 阪神</td><td>G1</td><td>コース分解型共通点</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(推し馬タガノディアマンテ17着、事故で大敗)</td></tr>
+          <tr><td>2022-05-06</td><td>新潟大賞典</td><td><span class="tag surf-t">芝2000</span> 新潟外</td><td>G3</td><td>共通点(馬格軸)</td><td class="num-col"><span class="tag lvl3">Lv.3</span> 単独的中(3着5人気)</td></tr>
+          <tr><td>2022-05-20</td><td>優駿牝馬(オークス)</td><td><span class="tag surf-t">芝2400</span> 東京</td><td>G1</td><td>バイアス再評価+共通点</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(本命12着、単勝1人気で大敗)</td></tr>
+          <tr><td>2022-12-09</td><td>阪神JF</td><td><span class="tag surf-t">芝1600</span> 阪神</td><td>G1</td><td>推し馬(個別)</td><td class="num-col"><span class="tag lvl4">Lv.4</span> 複数的中(◉3着10人気+リバティアイランド1着)</td></tr>
+          <tr><td>2022-12-15</td><td>朝日杯FS</td><td><span class="tag surf-t">芝1600</span> 阪神</td><td>G1</td><td>推し馬(個別)</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(10着9人気)</td></tr>
+          <tr><td>2023-01-12</td><td>愛知杯</td><td><span class="tag surf-t">芝2000</span> 中京</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl3">Lv.3</span> 単独的中(本命2着7人気)</td></tr>
+          <tr><td>2025-01-10</td><td>シンザン記念</td><td><span class="tag surf-t">芝1600</span> 中京</td><td>G3</td><td>推し馬(個別)</td><td class="num-col"><span class="tag lvl5">Lv.5</span> 軸的中(1着3人気)</td></tr>
+          <tr><td>2025-02-14</td><td>京都記念/共同通信杯/クイーンC</td><td>芝各1600-2200</td><td>G2/G3/G3</td><td>推し馬(個別)</td><td class="num-col"><span class="tag lvl5">Lv.5</span>(1着) / <span class="tag lvl4">Lv.4</span>(2着+他1頭3着) / <span class="tag lvl3">Lv.3</span>(3着)</td></tr>
+          <tr><td>2025-11-21</td><td>マイルCS</td><td><span class="tag surf-t">芝1600</span> 京都</td><td>G1</td><td>共通点(定量・有料)</td><td class="num-col"><span class="tag lvl6">Lv.6</span> 軸複数的中(1着1人気+他1頭2着)</td></tr>
+          <tr><td>2025-12-05</td><td>チャンピオンズC</td><td><span class="tag surf-d">ダート1800</span> 中京</td><td>G1</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl2">Lv.2</span> ニアピン(4着8人気)</td></tr>
+          <tr><td>2025-12-26</td><td>有馬記念</td><td><span class="tag surf-t">芝2500</span> 中山</td><td>G1</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl3">Lv.3</span> 単独的中(3着2人気)</td></tr>
+          <tr><td>2026-01-02</td><td>中山金杯</td><td><span class="tag surf-t">芝2000</span> 中山</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl4">Lv.4</span> 複数的中(3着4人気+他1頭1着)</td></tr>
+          <tr><td>2026-01-09</td><td>フェアリーS / シンザン記念</td><td>芝1600中山 / 芝1600中京</td><td>G3 / G3</td><td>推し馬(個別)</td><td class="num-col"><span class="tag lvl3">Lv.3</span>(2着) / <span class="tag lvl2">Lv.2</span>(5着1人気)</td></tr>
+          <tr><td>2026-01-23</td><td>プロキオンS</td><td><span class="tag surf-d">ダート1800</span> 京都</td><td>G3</td><td>共通点(有料)</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(イチ推しペイシャエス8着)</td></tr>
+          <tr><td>2026-01-30</td><td>根岸S</td><td><span class="tag surf-d">ダート1400</span> 東京</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl5">Lv.5</span> 軸的中(1着)</td></tr>
+          <tr><td>2026-02-19</td><td>フェブラリーS</td><td><span class="tag surf-d">ダート1600</span> 東京</td><td>G1</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(10着9人気)</td></tr>
+          <tr><td>2026-02-20</td><td>小倉大賞典</td><td><span class="tag surf-t">芝1800</span> 小倉</td><td>G3</td><td>共通点(有料)</td><td class="num-col"><span class="tag lvl3">Lv.3</span> 単独的中(3着10人気)</td></tr>
+          <tr><td>2026-03-05</td><td>中山牝馬S</td><td><span class="tag surf-t">芝1800</span> 中山</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl5">Lv.5</span> 軸的中(1着6人気)</td></tr>
+          <tr><td>2026-04-02</td><td>ダービー卿CT</td><td><span class="tag surf-t">芝1600</span> 中山</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl5">Lv.5</span> 軸的中(1着10人気・6年連続)</td></tr>
+          <tr><td>2026-04-16</td><td>アンタレスS</td><td><span class="tag surf-d">ダート1800</span> 阪神</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(本命格サイモンザナドゥ14着)</td></tr>
+          <tr><td>2026-04-17</td><td>福島牝馬S</td><td><span class="tag surf-t">芝1800</span> 福島</td><td>G3</td><td>共通点(有料)</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(推奨穴馬パレハ9着)</td></tr>
+          <tr><td>2026-04-30</td><td>天皇賞・春</td><td><span class="tag surf-t">芝3200</span> 京都</td><td>G1</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(推奨馬ヴェルミセル9着)</td></tr>
+          <tr><td>2026-05-13</td><td>新潟大賞典</td><td><span class="tag surf-t">芝2000</span> 新潟外</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl3">Lv.3</span> 単独的中(2着12人気)</td></tr>
+          <tr><td>2026-05-14</td><td>ヴィクトリアマイル</td><td><span class="tag surf-t">芝1600</span> 東京</td><td>G1</td><td>共通点(有料)</td><td class="num-col"><span class="tag lvl7">Lv.7</span> 完全的中(順不同・本命は5着だが他3頭が1-2-3着box)</td></tr>
+          <tr><td>2026-06-12</td><td>宝塚記念</td><td><span class="tag surf-t">芝2200</span> 阪神</td><td>G1</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl2">Lv.2</span> ニアピン(5着10人気)</td></tr>
+          <tr><td>2026-07-10</td><td>七夕賞</td><td><span class="tag surf-t">芝2000</span> 福島</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl2">Lv.2</span> ニアピン(4着7人気)</td></tr>
+          <tr><td>2026-07-16</td><td>小倉記念</td><td><span class="tag surf-t">芝2000</span> 小倉</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl5">Lv.5</span> 軸的中(1着10人気)</td></tr>
+          <tr><td>2026-07-29</td><td>アイビスSD</td><td><span class="tag surf-t">芝1000直</span> 新潟</td><td>特別</td><td>共通点(枠×人気)</td><td class="num-col"><span class="tag lvl6">Lv.6</span> 軸複数的中(1着1人気+他1頭2着)</td></tr>
+          <tr><td>2026-07-30</td><td>クイーンS</td><td><span class="tag surf-t">芝1800</span> 札幌</td><td>G3</td><td>共通点(有料)</td><td class="num-col"><span class="tag lvl3">Lv.3</span> 単独的中(3着5人気)</td></tr>
+          <tr><td>2026-08-06</td><td>レパードS</td><td><span class="tag surf-d">ダート1800</span> 新潟</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(11着、出遅れ)</td></tr>
+          <tr><td>2026-08-13</td><td>中京記念</td><td><span class="tag surf-t">芝1600</span> 中京</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl3">Lv.3</span> 単独的中(2着5人気)</td></tr>
+          <tr><td>2026-08-28</td><td>新潟記念</td><td><span class="tag surf-t">芝2000</span> 新潟</td><td>G3</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl1">Lv.1</span> 不的中(10着9人気)</td></tr>
+          <tr><td>2026-09-25</td><td>スプリンターズS</td><td><span class="tag surf-t">芝1200</span> 中山</td><td>G1</td><td>共通点(定量)</td><td class="num-col"><span class="tag lvl4">Lv.4</span> 複数的中(3着11人気+他1頭1着)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="limits">
+    <h2><span class="num">7</span>データの限界・注意点</h2>
+    <div class="card">
+      <ul>
+        <li><strong>的中レベルはnetkeiba.comで確認した実際の着順・単勝人気に基づく</strong>（初版・第2版は note本文の自己申告テキストのみに基づいていたが、本版で実データ検証に切り替えた）。note本文は「どの馬に印を付けたか」の同定にのみ使用している。構造化データは <code>data/research/other_predictor_umauma/predictions_ground_truth.json</code> に永続化しており、再現・再検証が可能。</li>
+        <li>実データ検証により、<strong>note本文の自己申告と実際の結果が食い違うケース</strong>が複数見つかった（例: スプリンターズS2026は本文で「▲が2着」と記載されていたが実際は1着、フェブラリーS2026は本命が「上位人気決着」とだけ記載され具体的な着順は書かれていなかった等）。的中レベルは常に<strong>netkeiba側の実データを優先</strong>している。</li>
+        <li><strong>本命（honmei）の同定はルールベースの判断</strong>（◉/◎の記号 → 「本命」明示 → 「イチ推し」等の単独名指し → 本文最初の言及、の優先順位。詳細は <code>_meta.json</code>）。複数の印が同格で言及されるレースでは解釈の余地が残る。</li>
+        <li><strong>海外レース2件（ドバイゴールデンシャヒーン・ドバイターフ、2022年）はnetkeiba.comで確認できず</strong>、note自身の記述のみに基づく暫定的な的中レベルである（<code>verification_status: unverified_international</code>）。</li>
+        <li><strong>有料記事（7件）は課金前のプレビュー部分のみ</strong>取得可能で、共通点の具体的な数値基準（⭕️🔺❌の合否条件）が読めないケースが複数あった。結果報告自体はプレビュー部分に含まれることが多く、そこは分析に利用できた。</li>
+        <li>サンプルサイズは記事50件・判定可能レース58件（全59レース言及中）と小さく、グレード×舞台のようなクロス集計はセルあたり1〜数件程度になるため、④節の傾向は<strong>「確定した統計」ではなく「今後検証すべき仮説」</strong>として扱うべき。</li>
+        <li>2023年以前の23件は「2025年以降」という当初条件を満たさないため、時系列で厳密に連続したデータではない（2023-01〜2025-01の約2年間は欠測）。</li>
+        <li>race_name・venue・date は自然キーであり、netkeiba/JRA公式の <code>race_id</code> への直接対応付け（レースIDカラムとしての保存）は未実施（<a href="./eda_plan.html" style="color:var(--accent2)">EDA計画書 Phase4</a>参照）。</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    データソース: note.com 公開API（<code>https://note.com/api/v2/creators/yupo1004/contents</code> / <code>https://note.com/api/v3/notes/&lt;key&gt;</code>）。本レポートは分析目的で作成した内部ドキュメントであり、note記事本文の転載を目的としたものではない。
+  </footer>
+
+</div>
+</body>
+</html>

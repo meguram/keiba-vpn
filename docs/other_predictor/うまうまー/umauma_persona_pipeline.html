@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>「うまうまー」ペルソナ予想パイプライン設計</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2438; --border:#2a3450;
+    --text:#e8ecf6; --muted:#9aa7c7; --accent:#5b8cff; --accent2:#8ab4ff;
+    --ok:#3ecf8e; --okbg:rgba(62,207,142,.14);
+    --new:#e8b64f; --newbg:rgba(232,182,79,.14);
+    --gap:#f0616b; --gapbg:rgba(240,97,107,.14);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,-apple-system,sans-serif;
+    line-height:1.75; font-size:15.5px;
+  }
+  .wrap{max-width:1140px; margin:0 auto; padding:40px 24px 100px}
+  header.hero{
+    padding:40px 32px; border-radius:16px; margin-bottom:36px;
+    background:linear-gradient(135deg,#1a2340,#141b30 60%,#0f1420);
+    border:1px solid var(--border);
+  }
+  header.hero h1{margin:0 0 8px; font-size:25px; letter-spacing:.02em}
+  header.hero p{margin:4px 0; color:var(--muted); font-size:14.5px}
+  header.hero .badges{margin-top:16px; display:flex; gap:8px; flex-wrap:wrap}
+  .pill{
+    display:inline-block; padding:4px 12px; border-radius:999px;
+    font-size:12.5px; border:1px solid var(--border); color:var(--muted);
+    background:rgba(255,255,255,.03);
+  }
+  h2{
+    font-size:20px; margin:56px 0 18px; padding-bottom:10px;
+    border-bottom:1px solid var(--border); color:var(--accent2);
+    display:flex; align-items:center; gap:10px;
+  }
+  h2 .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:8px; background:var(--accent);
+    color:#0b1020; font-size:13px; font-weight:700; flex-shrink:0;
+  }
+  h3{font-size:16.5px; margin:28px 0 10px; color:var(--text)}
+  h4{font-size:14.5px; margin:20px 0 8px; color:var(--accent2)}
+  p{margin:0 0 12px}
+  .muted{color:var(--muted)}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:20px 22px; margin-bottom:16px;
+  }
+  .card.tight{padding:16px 18px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media (max-width:800px){.grid2{grid-template-columns:1fr}}
+
+  table{width:100%; border-collapse:collapse; font-size:13.6px}
+  th,td{padding:9px 10px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top}
+  th{color:var(--muted); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:.03em}
+  tr:hover td{background:rgba(255,255,255,.02)}
+  code{background:#0d1220; padding:1px 6px; border-radius:5px; font-size:.92em; border:1px solid var(--border)}
+  pre{
+    background:#0d1220; border:1px solid var(--border); border-radius:10px; padding:16px 18px;
+    overflow-x:auto; font-size:13px; line-height:1.6; color:#c9d4ee;
+  }
+  .tag{display:inline-block; padding:2px 9px; border-radius:6px; font-size:12px; font-weight:600; white-space:nowrap}
+  .tag.ok{color:var(--ok); background:var(--okbg)}
+  .tag.new{color:var(--new); background:var(--newbg)}
+  .tag.gap{color:var(--gap); background:var(--gapbg)}
+
+  .insight{
+    border-left:3px solid var(--ok); padding:12px 16px; margin:14px 0;
+    background:var(--okbg); border-radius:0 8px 8px 0; font-size:14.5px;
+  }
+  .caution{
+    border-left:3px solid var(--new); padding:12px 16px; margin:14px 0;
+    background:var(--newbg); border-radius:0 8px 8px 0; font-size:14px;
+  }
+  ul{padding-left:22px} li{margin-bottom:6px}
+  ol{padding-left:22px} ol li{margin-bottom:8px}
+  .toc{display:flex; flex-wrap:wrap; gap:8px}
+  .toc a{
+    color:var(--accent2); text-decoration:none; font-size:13px;
+    padding:6px 12px; background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+  }
+  .toc a:hover{border-color:var(--accent)}
+  .scroll-x{overflow-x:auto}
+  .flow{display:flex; flex-direction:column; gap:0}
+  .flow .step{
+    display:grid; grid-template-columns:34px 1fr; gap:14px; padding:14px 0;
+    border-bottom:1px dashed var(--border);
+  }
+  .flow .step:last-child{border-bottom:none}
+  .flow .step .dot{
+    width:34px; height:34px; border-radius:10px; background:var(--panel2);
+    border:1px solid var(--border); display:flex; align-items:center; justify-content:center;
+    color:var(--accent2); font-weight:700; font-size:14px;
+  }
+  .flow .step h4{margin:0 0 4px}
+  .flow .step p{margin:0; font-size:13.8px; color:var(--muted)}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:12.5px}
+  .legend{display:flex; gap:16px; margin:6px 0 16px; font-size:12.5px; color:var(--muted); flex-wrap:wrap}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>「うまうまー」ペルソナ予想パイプライン設計</h1>
+    <p>note予想家「うまうまー」の予想ロジック（<a href="./index.html" style="color:var(--accent2)">分析レポートを参照</a>）をテーブルコンペ型の機械学習パイプラインに翻訳し、<code>race_id</code> を渡すだけでペルソナに則った予測と確信度を返す仕組みの設計</p>
+    <p class="muted">前提: LLMによる生成予測ではなく、特徴量エンジニアリング → 学習（GBDT等）→ 推論、という従来型テーブルコンペのワークフローで構成する。keiba-vpn の既存 <code>src/pipeline/</code> ／ <code>src/research/race/</code> 資産の再利用を最優先する。</p>
+    <div class="badges">
+      <span class="pill">最終目標: race_id → 予想＋確信度</span>
+      <span class="pill">既存資産の再利用を最優先</span>
+      <span class="pill">解釈可能性（⭕️🔺❌相当）を保持</span>
+    </div>
+  </header>
+
+  <nav class="card tight">
+    <div class="toc">
+      <a href="#scope">① 問題設定</a>
+      <a href="#mapping">② 特徴量マッピング</a>
+      <a href="#new">③ 新規に作るもの</a>
+      <a href="#target">④ ターゲット・評価設計</a>
+      <a href="#confidence">⑤ 確信度スコアの合成</a>
+      <a href="#explain">⑥ 解釈可能性の再現</a>
+      <a href="#pipeline">⑦ 推論パイプライン</a>
+      <a href="#layout">⑧ ファイル配置案</a>
+      <a href="#roadmap">⑨ 実装ロードマップ</a>
+      <a href="#ops">⑩ 運用・保守</a>
+    </div>
+  </nav>
+
+  <section id="scope">
+    <h2><span class="num">1</span>問題設定（ペルソナの形式化）</h2>
+    <div class="card">
+      <p>うまうまー方式の核心は「過去10〜15年、対象レースで6人気以下から3着以内に好走した馬」を母集団にした<strong>穴馬発掘</strong>である。これをテーブルコンペの型に落とすと以下のようになる。</p>
+      <table>
+        <thead><tr><th>要素</th><th>定義</th></tr></thead>
+        <tbody>
+          <tr><td>予測対象</td><td>レース内の各出走馬について「3着以内に入るか」の確率（<code>is_top3</code>）。人気（6人気以下フィルタ）は特徴量／後段のビジネスロジックとして扱い、モデル自体は汎用の3着内予測とする（再利用性を優先）。</td></tr>
+          <tr><td>タスク形式</td><td>グループ内ランキング（<code>race_id</code> をクエリグループとした LightGBM <code>lambdarank</code>）、または二値分類＋レース内softmax正規化。いずれもテーブルコンペで標準的な型。</td></tr>
+          <tr><td>「穴馬」ビュー</td><td>推論後、レース内順位が高く、かつ想定人気が6位以下の馬を「推奨穴馬」として抽出。人気1〜5位が上位を占めた場合は「穴馬の出番なし」と判定（うまうまー記事の「人気決着」表現に対応）。</td></tr>
+          <tr><td>出力単位</td><td><code>race_id</code> 1件につき、出走馬ごとの予測スコア・確信度・根拠タグのリスト。</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">
+        設計方針：<strong>うまうまー固有のロジックは「特徴量」「ラベルの見方（人気フィルタ）」「事後の確信度補正」の3か所に閉じ込め、モデル本体は汎用の3着内予測モデルとする。</strong>これにより既存の <code>race_horse_tbl</code> / 学習パイプラインとの二重管理を避けられる。
+      </div>
+    </div>
+  </section>
+
+  <section id="mapping">
+    <h2><span class="num">2</span>特徴量マッピング：うまうまー基準 → 既存資産</h2>
+    <p class="muted">リポジトリ調査の結果、うまうまーが記事で使う着眼点の大部分は、<code>src/research/race/</code> と <code>src/pipeline/features/</code> に<strong>既に定量化された資産が存在する</strong>ことを確認した。新規開発ではなく「つなぎ込み」が中心になる。</p>
+    <div class="legend">
+      <span class="tag ok">既存（そのまま利用）</span>
+      <span class="tag new">拡張（既存＋軽微な追加）</span>
+      <span class="tag gap">新規（存在せず要開発）</span>
+    </div>
+    <div class="card scroll-x">
+      <table>
+        <thead><tr><th>うまうまーの着眼点</th><th>対応する既存資産</th><th>状態</th></tr></thead>
+        <tbody>
+          <tr><td>コースの坂位置・直線長さ・非根幹距離</td><td><code>data/knowledge/course_profiles.json</code>（<code>course_bloodline.py</code> が既に利用）</td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>前傾／後傾ラップ・馬場速度傾向</td><td><code>src/research/race/track_speed_engine.py</code>（馬場指数・RPCI比較・ペース補正）</td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>レース質（瞬発型／持続型／消耗型）</td><td><code>src/research/race/race_quality_model.py</code>（8軸NNLS混合比推定）</td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>「不利を受けたが強い走り」の個別馬評価（度外視法）</td><td><code>src/pipeline/features/race_performance.py</code>（<code>run_performance</code>）／<code>src/research/race/perf_index.py</code></td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>当日・前日の馬場バイアス×血統</td><td><code>src/pipeline/features/track_bias_pedigree.py</code></td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>血統×コース適性スコア</td><td><code>src/research/race/course_bloodline.py</code></td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>外枠外有利／内枠内有利、高速／低速馬場適性</td><td>L2血統クラスタ <code>win_fast</code>/<code>win_slow</code>/<code>win_outer</code>/<code>win_inner</code>（<code>unified.parquet</code>）</td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>騎手継続騎乗／乗り替わり・厩舎相性</td><td><code>jt_race_features.parquet</code>（<code>jk_</code>/<code>tr_</code>接頭辞、<code>*_avg_pass_*</code>）</td><td><span class="tag ok">既存（乗り替わりフラグの明示列は要確認）</span></td></tr>
+          <tr><td>馬・騎手・調教師の直前までの累計成績（リークなし）</td><td><code>src/pipeline/features/historical_entity_stats.py</code></td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>年齢・斤量比・馬体重変化</td><td><code>race_horse_tbl</code> の raw 列（<code>raw_table_features.py</code> 経由）</td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>想定人気・オッズ</td><td><code>final_odds_features.py</code> / <code>final_odds_predictor.py</code></td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>着順ラベル（3着以内フラグの元）</td><td><code>target/rank_tbl/&lt;年&gt;/rank.parquet</code>（<code>build_rank_target.py</code>）</td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>生産牧場（ノーザンファーム／社台系）フラグ</td><td>該当の明示列は未確認。<code>horse/ped_tbl</code> 内の生産者情報から軽量に導出可能</td><td><span class="tag new">拡張</span></td></tr>
+          <tr><td>「非根幹距離」フラグ（400m単位でない距離）</td><td>course_profiles.json の距離から静的ルールで導出可能（未実装）</td><td><span class="tag new">拡張</span></td></tr>
+          <tr><td>類似コース代替実績（例：中京≈阪神外回り）</td><td>L2クラスタの <code>win_*</code> 次元のコサイン類似度で近似可能。専用の「コース類似度テーブル」は未整備</td><td><span class="tag new">拡張</span></td></tr>
+          <tr><td>「6人気以下→3着内」の穴馬フィルタという母集団定義そのもの</td><td>既存モデルは全馬対象の相対評価が中心で、人気軸の穴馬ターゲティングは未整備</td><td><span class="tag gap">新規</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="caution">
+      重要な発見：うまうまーが手作業で行っている「コース形状→ラップ傾向→前走内容の合否判定」という論理展開は、<strong><code>track_speed_engine.py</code>（馬場速度）＋ <code>race_quality_model.py</code>（レース質推定）の組み合わせでほぼ自動化できる</strong>。ゼロから作るのではなく、これらの出力をペルソナ特徴量として「読み替える」ことが最優先タスクになる。
+    </div>
+  </section>
+
+  <section id="new">
+    <h2><span class="num">3</span>新規に作るもの</h2>
+    <div class="card">
+      <h3>3-1. ペルソナ特徴量ビルダー</h3>
+      <p><code>src/pipeline/features/persona_umauma_features.py</code>（新規）</p>
+      <ul>
+        <li>上記マッピング表の既存資産を読み込み、うまうまー視点で列名・単位を整理した「ペルソナ特徴量セット」を組み立てる薄いラッパー層。</li>
+        <li>出力先: <code>data/features/race_horse_tbl/&lt;YYYY&gt;/persona_umauma_features.parquet</code>（既存の年別マージキー規約 <code>MERGE_KEYS_RACE_HORSE_TBL</code> に準拠）。</li>
+        <li>既存特徴に無い列をここで新規追加する：
+          <ul>
+            <li><code>is_northern_farm</code> / <code>is_shadai_group</code>（生産牧場フラグ）</li>
+            <li><code>jockey_changed</code>（前走からの乗り替わり判定）</li>
+            <li><code>is_hikonkan_distance</code>（非根幹距離フラグ、400m非整数判定）</li>
+            <li><code>course_similarity_proxy</code>（L2クラスタの <code>win_*</code> 次元コサイン類似度による類似コース代替スコア）</li>
+          </ul>
+        </li>
+      </ul>
+      <h3>3-2. 人気条件付きターゲットビュー</h3>
+      <p>学習ラベルは汎用の <code>is_top3</code> のまま保持し、評価・推論後処理の段階で <code>popularity_rank &gt;= 6</code> の条件を掛けた「穴馬ビュー」を作る（モデルの再学習なしで済むように分離）。</p>
+    </div>
+  </section>
+
+  <section id="target">
+    <h2><span class="num">4</span>ターゲット・評価設計（テーブルコンペのプロトコル）</h2>
+    <div class="card">
+      <h3>ラベル</h3>
+      <p><code>target/rank_tbl</code> の <code>rank</code> 列から <code>is_top3 = (rank &lt;= 3)</code> を生成。人気（オッズ順位）は特徴量として保持し、ラベルには混ぜない。</p>
+      <h3>分割戦略</h3>
+      <ul>
+        <li><strong>時系列 GroupKFold</strong>：<code>race_id</code> 単位でグループ化し、年をまたいで train / valid を分離（同一レースが学習・検証両方に混ざらないようにする）。</li>
+        <li>直近1シーズンを最終 holdout test として確保し、モデル選定には使わない。</li>
+        <li>既存の <code>historical_entity_stats.py</code> / <code>jt_race_features</code> と同じ「当該レースより前のみ」原則（temporal-leak safety）を全特徴量で厳守する。</li>
+      </ul>
+      <h3>モデル</h3>
+      <ul>
+        <li>ベースライン：LightGBM <code>objective=lambdarank</code>、<code>group=race_id</code>（レース内ランキング学習）。</li>
+        <li>比較対象：二値分類（<code>binary</code>）＋レース内 softmax 正規化。テーブルコンペでの定番の型で、どちらが効くかをまず検証する。</li>
+      </ul>
+      <h3>評価指標</h3>
+      <ul>
+        <li>全体：NDCG@3 / Precision@3（レース内）。</li>
+        <li><strong>うまうまー的指標</strong>：「想定人気6位以下の推奨馬が3着以内に入った割合」（穴馬サブセットでの Precision）。</li>
+        <li>グレード別・芝ダ別・距離帯別に集計し、<a href="./index.html" style="color:var(--accent2)">分析レポート（④節）</a>で明らかになった「G1は的中率が低く、G2/G3は高い」という傾向と比較する。モデルが同じ弱点を持つか、克服できているかを継続的に検証する。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="confidence">
+    <h2><span class="num">5</span>確信度スコアの合成（前回分析結果の活用）</h2>
+    <div class="card">
+      <p>モデルの生スコアをそのまま「確信度」として使うのではなく、分析レポートで判明したセグメント別の的中傾向を<strong>事前分布（prior）</strong>として組み込む。</p>
+      <pre>confidence = calibrated_model_prob(horse)
+             × shrinkage( prior_reliability[segment], n_segment )</pre>
+      <ul>
+        <li><code>calibrated_model_prob</code>：Platt / Isotonic Regression でキャリブレーションしたモデル出力確率。</li>
+        <li><code>prior_reliability[segment]</code>：<code>data/knowledge/persona_umauma_segment_priors.json</code>（新規）に保存する、グレード×芝ダ×距離帯単位の的中率事前値（分析レポートの集計値を初期値として投入：G1≈8%、G2≈83%、G3≈62%、芝57.5%、ダート33%等）。</li>
+        <li><code>shrinkage</code>：セグメントのサンプル数 <code>n_segment</code> が小さいほど prior への縮小を強くする経験ベイズ的な重み付け（少数データのセグメントで過信しないようにする）。</li>
+      </ul>
+      <div class="caution">
+        分析レポートのセグメント別統計はn=49件ベースで小さいため、<code>persona_umauma_segment_priors.json</code> は<strong>継続的に再計算するバッチジョブ</strong>とし、記事データが増える・実際の予測結果が蓄積するごとに更新する前提で設計する。
+      </div>
+    </div>
+  </section>
+
+  <section id="explain">
+    <h2><span class="num">6</span>解釈可能性の再現（⭕️🔺❌ペルソナらしさ）</h2>
+    <div class="card">
+      <p>うまうまー記事の価値は予測結果そのものより「なぜその馬を推すか」の説明にある。これを保つため、ブラックボックスな確率だけでなく<strong>SHAP値ベースの根拠タグ</strong>を出力に含める。</p>
+      <ol>
+        <li>学習済みモデルに対し、推論時に各出走馬のSHAP値を計算する。</li>
+        <li>特徴量名 → 日本語ラベルの対応表（例：<code>corner_pos_last</code> → 「前走4角位置」、<code>agari_3f_rank_last</code> → 「前走上がり3F順位」）を用意する。</li>
+        <li>SHAP値の符号・大きさに応じて ⭕️（強く支持）／🔺（弱く支持）／❌（マイナス要因）のアイコンを割り当て、上位3〜5項目を「根拠タグ」として出力する。</li>
+      </ol>
+      <p class="muted">※ 予測の意思決定自体はテーブルモデルのままであり、LLMは使わない。説明文を自然文化する層（テンプレート整形、あるいは将来的な生成AI活用）はあくまで表示レイヤーの拡張として、コア予測ロジックとは分離する。</p>
+    </div>
+  </section>
+
+  <section id="pipeline">
+    <h2><span class="num">7</span>推論パイプライン（race_id → 予測）</h2>
+    <div class="card">
+      <div class="flow">
+        <div class="step"><div class="dot">1</div><div><h4>レース情報取得</h4><p><code>race_id</code> から <code>race_tbl</code> / <code>race_shutuba</code> を参照し、出走馬一覧・競馬場・距離・芝ダ・グレード・開催日を取得。</p></div></div>
+        <div class="step"><div class="dot">2</div><div><h4>ペルソナ特徴量計算</h4><p>当日時点で確定済みの情報のみを使い、<code>persona_umauma_features.py</code> 経由で②節の特徴量を各出走馬に付与（historical_entity_stats と同じリーク防止規約を継承）。</p></div></div>
+        <div class="step"><div class="dot">3</div><div><h4>モデルスコアリング</h4><p>MLflow レジストリ（<code>docs/mlflow_platform.md</code> 準拠）から学習済みモデルをロードし、各馬の <code>is_top3</code> スコアを算出。</p></div></div>
+        <div class="step"><div class="dot">4</div><div><h4>レース内正規化・順位付け</h4><p>同一レース内でスコアを正規化し、出走馬を順位付け。</p></div></div>
+        <div class="step"><div class="dot">5</div><div><h4>穴馬フィルタ適用</h4><p>想定人気6位以下かつ上位スコアの馬を「推奨穴馬」として抽出。上位人気馬のみが並んだ場合は「穴馬の出番なし」と判定。</p></div></div>
+        <div class="step"><div class="dot">6</div><div><h4>確信度合成</h4><p>⑤節のセグメント別事前信頼度を合成し、最終 confidence を付与。</p></div></div>
+        <div class="step"><div class="dot">7</div><div><h4>根拠タグ生成</h4><p>SHAP値から⑥節の ⭕️🔺❌ 形式の根拠タグを生成。</p></div></div>
+        <div class="step"><div class="dot">8</div><div><h4>出力</h4><p><code>race_id</code>、推奨馬リスト（<code>horse_id</code>, 予測スコア, confidence, 根拠タグ）をJSONで返す。</p></div></div>
+      </div>
+      <pre>python -m src.pipeline.inference.persona_umauma_predict --race-id &lt;RACE_ID&gt;</pre>
+      <p class="muted">既存の <code>race_prediction_service.py</code> / <code>inference_pipeline.py</code> と同様のサービス層の型に合わせ、CLI／内部API双方から呼べる構成にする。</p>
+    </div>
+  </section>
+
+  <section id="layout">
+    <h2><span class="num">8</span>ファイル配置案（既存の命名規則に準拠）</h2>
+    <div class="card scroll-x">
+      <table>
+        <thead><tr><th>役割</th><th>パス</th><th>状態</th></tr></thead>
+        <tbody>
+          <tr><td>ペルソナ特徴量ビルダー</td><td><code>src/pipeline/features/persona_umauma_features.py</code></td><td><span class="tag gap">新規</span></td></tr>
+          <tr><td>ターゲット生成</td><td><code>src/pipeline/build_rank_target.py</code></td><td><span class="tag ok">既存を再利用</span></td></tr>
+          <tr><td>学習スクリプト</td><td><code>src/pipeline/models/train_persona_umauma.py</code></td><td><span class="tag gap">新規（既存 <code>trainer.py</code> の型を継承）</span></td></tr>
+          <tr><td>セグメント事前信頼度</td><td><code>data/knowledge/persona_umauma_segment_priors.json</code></td><td><span class="tag gap">新規</span></td></tr>
+          <tr><td>推論サービス／CLI</td><td><code>src/pipeline/inference/persona_umauma_predict.py</code></td><td><span class="tag gap">新規（既存 <code>race_prediction_service.py</code> の型を継承）</span></td></tr>
+          <tr><td>コース物理特性</td><td><code>data/knowledge/course_profiles.json</code></td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>馬場速度・ラップ傾向</td><td><code>src/research/race/track_speed_engine.py</code></td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>レース質推定</td><td><code>src/research/race/race_quality_model.py</code></td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>個別馬パフォーマンス</td><td><code>src/pipeline/features/race_performance.py</code> / <code>src/research/race/perf_index.py</code></td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>馬場バイアス×血統</td><td><code>src/pipeline/features/track_bias_pedigree.py</code></td><td><span class="tag ok">既存</span></td></tr>
+          <tr><td>評価・仕様ドキュメント</td><td><code>docs/html/modeling/</code> に本設計と対応する仕様書を追加</td><td><span class="tag gap">新規</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <h2><span class="num">9</span>実装ロードマップ</h2>
+    <div class="card">
+      <ol>
+        <li><strong>ベースライン確立</strong>：既存の <code>race_horse_tbl</code> 特徴＋<code>target/rank_tbl</code> ラベルだけで LightGBM ランキングモデルを学習し、まず動くパイプラインを確立する（ペルソナ固有特徴はまだ入れない）。</li>
+        <li><strong>ベースライン評価</strong>：グレード・芝ダ・距離帯別に精度を集計し、分析レポート（④節）の傾向と比較。モデルの強み・弱みの初期プロファイルを取る。</li>
+        <li><strong>ペルソナ特徴量の追加</strong>：<code>track_speed_engine</code> / <code>race_quality_model</code> / <code>perf_index</code> / <code>course_bloodline</code> / <code>track_bias_pedigree</code> / L2クラスタ由来の特徴を追加し、精度向上を確認。</li>
+        <li><strong>新規特徴の追加</strong>：生産牧場フラグ・鞍上変化フラグ・非根幹距離フラグ・コース類似度を追加。</li>
+        <li><strong>解釈可能性層の実装</strong>：SHAPベースの根拠タグ生成、セグメント別確信度の合成。</li>
+        <li><strong>推論CLI／サービス化</strong>：<code>persona_umauma_predict.py</code> を実装し、MLflow レジストリに登録。</li>
+        <li><strong>継続評価の運用化</strong>：分析レポートと同形式のダッシュボードを定期更新し、セグメント別的中率のドリフトを監視。</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="ops">
+    <h2><span class="num">10</span>運用・保守</h2>
+    <div class="card">
+      <ul>
+        <li><strong>再学習カデンス</strong>：シーズン単位（3ヶ月程度）で再学習。<code>historical_entity_stats</code> / <code>jt_race_features</code> の定期更新（<code>scripts/cron/update_jockey_trainer_stats.sh</code>）と同じタイミングに乗せる。</li>
+        <li><strong>コースプロファイル・L2クラスタの追随</strong>：<code>build_l2_fine_clusters.py</code> 等のクラスタ再構築が行われた際は、ペルソナ特徴量ビルダー側の <code>course_similarity_proxy</code> も再計算する。</li>
+        <li><strong>セグメント事前信頼度の更新</strong>：実際の予測結果（的中/不的中）を蓄積し、<code>persona_umauma_segment_priors.json</code> を定期的に再計算するバッチジョブを設ける。</li>
+        <li><strong>著者の手法変化の追随</strong>：うまうまーの note 記事を半年〜1年おきに再分析し、新しい着眼点が追加されていないか（②節のマッピング表）を確認・更新する。</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    本ドキュメントは <a href="./index.html" style="color:var(--accent2)">うまうまー分析レポート（index.html）</a> の的中傾向分析を踏まえた設計書であり、実装前の合意形成用ドキュメントとして作成した。実装時は本設計をベースに、既存の <code>src/pipeline/</code> ／ <code>src/research/race/</code> のコーディング規約・命名規則に従うこと。
+  </footer>
+
+</div>
+</body>
+</html>
