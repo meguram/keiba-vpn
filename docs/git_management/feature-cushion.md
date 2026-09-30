@@ -2,19 +2,12 @@
 
 **対象領域**: クッション値（トラックコンディション）
 **分岐元**: `main` @ `e7e9e17`（2026-09-30）
-**対象エンドポイント数**: 8（`src/api/app.py`, FastAPI legacy, :8000）
+**対象ページURL数**: 0（`src/api/app.py`, FastAPI legacy, :8000。ブラウザで直接開く画面のURLのみを対象とし、画面から呼ばれる `/api/*` のJSON APIはここでは数えない）
 
-このブランチは2026-09-30時点で `main` から分岐した時点では差分を持たない（`main` と同一コミット）。今後、下表のエンドポイント群に関する変更はこのブランチで行い、レビュー後に `main` へPRでマージすること。
+このブランチは2026-09-30時点で `main` から分岐した時点では差分を持たない（`main` と同一コミット）。今後、下表のページURLに関する変更（画面・および画面を支える`/api/*`実装を含む）はこのブランチで行い、レビュー後に `main` へPRでマージすること。
 
-## 対象エンドポイント
+> **2026-09-30 注記**: 本ブランチの機能領域には、ユーザがブラウザで直接開くページURL（`/api/`を含まないHTMLルート）が存在しない（JSON APIのみで構成される機能領域のため）。ページURL基準では対象が無いが、2026-09-30時点でユーザの判断により本ブランチは削除せず保持することとした（`/api/*` のみで完結する機能領域として維持）。
 
-| Method | Path | Handler |
-|---|---|---|
-| POST | `/api/cushion/admin/sync-gcs` | `api_cushion_admin_sync_gcs` (L11639) |
-| POST | `/api/cushion/admin/sync-preprocessed` | `api_cushion_admin_sync_preprocessed` (L11668) |
-| GET | `/api/cushion/data` | `api_cushion_data` (L11553) |
-| POST | `/api/cushion/live` | `api_cushion_live` (L11723) |
-| GET | `/api/cushion/live/check` | `api_cushion_live_check` (L11799) |
-| GET | `/api/cushion/live/status` | `api_cushion_live_status` (L11755) |
-| GET | `/api/cushion/schedule` | `api_cushion_schedule` (L11809) |
-| GET | `/api/cushion/stats` | `api_cushion_stats` (L11575) |
+## 対象ページURL
+
+（無し）

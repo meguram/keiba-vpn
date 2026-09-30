@@ -2,21 +2,14 @@
 
 **対象領域**: コアプラットフォーム（ヘルス/認証/ダッシュボード）
 **分岐元**: `main` @ `e7e9e17`（2026-09-30）
-**対象エンドポイント数**: 10（`src/api/app.py`, FastAPI legacy, :8000）
+**対象ページURL数**: 3（`src/api/app.py`, FastAPI legacy, :8000。ブラウザで直接開く画面のURLのみを対象とし、画面から呼ばれる `/api/*` のJSON APIはここでは数えない）
 
-このブランチは2026-09-30時点で `main` から分岐した時点では差分を持たない（`main` と同一コミット）。今後、下表のエンドポイント群に関する変更はこのブランチで行い、レビュー後に `main` へPRでマージすること。
+このブランチは2026-09-30時点で `main` から分岐した時点では差分を持たない（`main` と同一コミット）。今後、下表のページURLに関する変更（画面・および画面を支える`/api/*`実装を含む）はこのブランチで行い、レビュー後に `main` へPRでマージすること。
 
-## 対象エンドポイント
+## 対象ページURL
 
-| Method | Path | Handler |
-|---|---|---|
-| GET | `/` | `dashboard` (L962) |
-| GET | `/api/auth/status` | `auth_status` (L951) |
-| GET | `/api/data/{category}/{key}` | `get_raw_data` (L3166) |
-| GET | `/api/gcs-stats` | `get_gcs_stats` (L980) |
-| GET | `/api/health` | `health_check` (L880) |
-| POST | `/api/html-archive/cleanup` | `html_archive_cleanup` (L896) |
-| GET | `/api/inference/health` | `api_inference_health` (L7232) |
-| GET | `/login` | `login_page` (L914) |
-| POST | `/login` | `login_submit` (L928) |
-| GET | `/logout` | `logout` (L946) |
+| Path | Handler |
+|---|---|
+| `/` | `dashboard`(L962) |
+| `/login` | `login_page`(L914), `login_submit`(L928) |
+| `/logout` | `logout`(L946) |
