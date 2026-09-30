@@ -16,26 +16,29 @@
 
 Flask `/api/v1`（DEC-013仕様上の正）・monitorポータルは対象外（FastAPI legacyの主要機能別）。
 
+各ブランチの「現状の実装」「既知の課題」「手動追記用TODO」は [`todo/`](./todo/) 配下に1ファイルずつ用意している
+（一覧は [todo/README.md](./todo/README.md)）。
+
 ## ブランチ一覧
 
-| ブランチ | 対象領域 | ページURL数 | 検証結果 | 詳細 |
-|---|---|---|---|---|
-| `feature/admin-ops` | 管理者運用（cron・構造チェック・システム統計・ログ） | 3 | 問題なし | [feature-admin-ops.md](./feature-admin-ops.md) |
-| `feature/betting` | 馭券戦略 | 1 | 問題なし | [feature-betting.md](./feature-betting.md) |
-| `feature/bloodline-pedigree` | 血統・種牡馬クラスタ | 7 | 問題なし | [feature-bloodline-pedigree.md](./feature-bloodline-pedigree.md) |
-| `feature/core-platform` | コアプラットフォーム（ヘルス/認証/ダッシュボード） | 3 | 問題なし | [feature-core-platform.md](./feature-core-platform.md) |
-| `feature/cushion` | クッション値（トラックコンディション） | 0 | 解決済み・feature/に復帰 | [feature-cushion.md](./feature-cushion.md) |
-| `feature/growth-curve` | 成長曲線 | 1 | 問題なし | [feature-growth-curve.md](./feature-growth-curve.md) |
-| `feature/horse-profile` | 馬プロフィール・馬名検索・関係者統計 | 0 | 問題なし | [feature-horse-profile.md](./feature-horse-profile.md) |
-| `feature/model-training` | モデル学習・シミュレーション・バックフィル | 0 | 問題なし | [feature-model-training.md](./feature-model-training.md) |
-| `feature/monitor-quality` | 監視・データ品質チェック | 2 | 問題なし | [feature-monitor-quality.md](./feature-monitor-quality.md) |
-| `feature/myostatin` | ミオスタチン遺伝子解析 | 1 | 問題なし | [feature-myostatin.md](./feature-myostatin.md) |
-| `feature/odds-final-odds` | オッズ・最終オッズ | 0 | 解決済み・feature/に復帰 | [feature-odds-final-odds.md](./feature-odds-final-odds.md) |
-| `feature/race-detail` | レース詳細・予測表示 | 1 | 解決済み・feature/に復帰 | [feature-race-detail.md](./feature-race-detail.md) |
-| `feature/race-quality` | レース質分析 | 1 | 問題なし | [feature-race-quality.md](./feature-race-quality.md) |
-| `feature/scraping-queue` | スクレイピング・キュー管理 | 4 | 解決済み・feature/に復帰 | [feature-scraping-queue.md](./feature-scraping-queue.md) |
-| `feature/track-speed` | トラックスピード指標 | 2 | 問題なし | [feature-track-speed.md](./feature-track-speed.md) |
-| `feature/tracking-difficulty` | 追走難度 | 1 | 解決済み・feature/に復帰 | [feature-tracking-difficulty.md](./feature-tracking-difficulty.md) |
+| ブランチ | 対象領域 | ページURL数 | 検証結果 | 詳細 | TODO |
+|---|---|---|---|---|---|
+| `feature/admin-ops` | 管理者運用（cron・構造チェック・システム統計・ログ） | 3 | 問題なし | [feature-admin-ops.md](./feature-admin-ops.md) | [todo/admin-ops.md](./todo/admin-ops.md) |
+| `feature/betting` | 馭券戦略 | 1 | 問題なし | [feature-betting.md](./feature-betting.md) | [todo/betting.md](./todo/betting.md) |
+| `feature/bloodline-pedigree` | 血統・種牡馬クラスタ | 7 | 問題なし | [feature-bloodline-pedigree.md](./feature-bloodline-pedigree.md) | [todo/bloodline-pedigree.md](./todo/bloodline-pedigree.md) |
+| `feature/core-platform` | コアプラットフォーム（ヘルス/認証/ダッシュボード） | 3 | 問題なし | [feature-core-platform.md](./feature-core-platform.md) | [todo/core-platform.md](./todo/core-platform.md) |
+| `feature/cushion` | クッション値（トラックコンディション） | 0 | 解決済み・feature/に復帰 | [feature-cushion.md](./feature-cushion.md) | [todo/cushion.md](./todo/cushion.md) |
+| `feature/growth-curve` | 成長曲線 | 1 | 問題なし | [feature-growth-curve.md](./feature-growth-curve.md) | [todo/growth-curve.md](./todo/growth-curve.md) |
+| `feature/horse-profile` | 馬プロフィール・馬名検索・関係者統計 | 0 | 問題なし | [feature-horse-profile.md](./feature-horse-profile.md) | [todo/horse-profile.md](./todo/horse-profile.md) |
+| `feature/model-training` | モデル学習・シミュレーション・バックフィル | 0 | 問題なし | [feature-model-training.md](./feature-model-training.md) | [todo/model-training.md](./todo/model-training.md) |
+| `feature/monitor-quality` | 監視・データ品質チェック | 2 | 問題なし | [feature-monitor-quality.md](./feature-monitor-quality.md) | [todo/monitor-quality.md](./todo/monitor-quality.md) |
+| `feature/myostatin` | ミオスタチン遺伝子解析 | 1 | 問題なし | [feature-myostatin.md](./feature-myostatin.md) | [todo/myostatin.md](./todo/myostatin.md) |
+| `feature/odds-final-odds` | オッズ・最終オッズ | 0 | 解決済み・feature/に復帰 | [feature-odds-final-odds.md](./feature-odds-final-odds.md) | [todo/odds-final-odds.md](./todo/odds-final-odds.md) |
+| `feature/race-detail` | レース詳細・予測表示 | 1 | 解決済み・feature/に復帰 | [feature-race-detail.md](./feature-race-detail.md) | [todo/race-detail.md](./todo/race-detail.md) |
+| `feature/race-quality` | レース質分析 | 1 | 問題なし | [feature-race-quality.md](./feature-race-quality.md) | [todo/race-quality.md](./todo/race-quality.md) |
+| `feature/scraping-queue` | スクレイピング・キュー管理 | 4 | 解決済み・feature/に復帰 | [feature-scraping-queue.md](./feature-scraping-queue.md) | [todo/scraping-queue.md](./todo/scraping-queue.md) |
+| `feature/track-speed` | トラックスピード指標 | 2 | 問題なし | [feature-track-speed.md](./feature-track-speed.md) | [todo/track-speed.md](./todo/track-speed.md) |
+| `feature/tracking-difficulty` | 追走難度 | 1 | 解決済み・feature/に復帰 | [feature-tracking-difficulty.md](./feature-tracking-difficulty.md) | [todo/tracking-difficulty.md](./todo/tracking-difficulty.md) |
 
 合計: 27 ページURL（`src/api/app.py` 全体では228ルート定義・225ユニークURLパスあり、うち`/api/*`のJSON APIが198件、ページが27件〈`/login`のGET/POSTを1件と数えると27件〉）
 
