@@ -5,6 +5,10 @@
 > **2026-09-30 ブランチ命名の変更**: 検証の過程で機能領域の分類ミス（パス文字列の部分一致による誤分類）が実際に見つかり
 > 修正した5ブランチは `feature/XXX` → `hotfix/XXX` にリネームした（`race-detail`・`tracking-difficulty`・
 > `odds-final-odds`・`scraping-queue`・`cushion`）。分類ミスが見つからなかった11ブランチは `feature/XXX` のまま。
+> `hotfix/XXX` は「分類ミスの修正」だけでなく「その機能領域に残る設計・実装上の問題」も解決した上で
+> `feature/XXX` に戻す運用とする（一つずつ対応中: 進捗は下表の「検証結果」列を参照）。
+> `tracking-difficulty` は2026-09-30に解決済みで `feature/tracking-difficulty` に復帰した
+> （残り: `race-detail`・`odds-final-odds`・`scraping-queue`・`cushion`）。
 
 `src/api/app.py`（FastAPI legacy, :8000）の主要機能ごとに `feature/XXX` ブランチを作成し、`main`（`e7e9e17`, 2026-09-30）から分岐した。全ブランチは分岐時点で `main` と同一コミットであり、今後の変更はこのブランチ単位で行い、レビュー後に `main` へマージする運用とする。
 
@@ -31,7 +35,7 @@ Flask `/api/v1`（DEC-013仕様上の正）・monitorポータルは対象外（
 | `feature/race-quality` | レース質分析 | 1 | 問題なし | [feature-race-quality.md](./feature-race-quality.md) |
 | `hotfix/scraping-queue` | スクレイピング・キュー管理 | 4 | 分類ミスを修正 | [hotfix-scraping-queue.md](./hotfix-scraping-queue.md) |
 | `feature/track-speed` | トラックスピード指標 | 2 | 問題なし | [feature-track-speed.md](./feature-track-speed.md) |
-| `hotfix/tracking-difficulty` | 追走難度 | 1 | 分類ミスを修正 | [hotfix-tracking-difficulty.md](./hotfix-tracking-difficulty.md) |
+| `feature/tracking-difficulty` | 追走難度 | 1 | 解決済み・feature/に復帰 | [feature-tracking-difficulty.md](./feature-tracking-difficulty.md) |
 
 合計: 27 ページURL（`src/api/app.py` 全体では228ルート定義・225ユニークURLパスあり、うち`/api/*`のJSON APIが198件、ページが27件〈`/login`のGET/POSTを1件と数えると27件〉）
 
