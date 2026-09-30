@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>debug-refactor 作業ログ — 2026-09-30</title>
+<style>
+  :root {
+    --page-plane:   #f9f9f7;
+    --surface:      #fcfcfb;
+    --surface-alt:  #f3f2ee;
+    --ink-primary:  #0b0b0b;
+    --ink-secondary:#52514e;
+    --ink-muted:    #898781;
+    --gridline:     #e1e0d9;
+    --success-text: #006300;
+  }
+  body { font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+         max-width: 900px; margin: 0 auto; padding: 32px 16px 40px;
+         background: var(--page-plane); color: var(--ink-primary); line-height: 1.6; }
+  h1 { font-size: 1.4em; margin-bottom: 4px; }
+  .meta { color: var(--ink-secondary); font-size: 0.9em; margin-bottom: 20px; }
+  h2 { border-bottom: 1px solid var(--gridline); padding-bottom: 4px; margin-top: 28px; font-size: 1.1em; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 20px; font-size: 0.92em; background: var(--surface); }
+  th, td { border: 1px solid var(--gridline); padding: 5px 9px; text-align: left; vertical-align: top; }
+  th { background: var(--surface-alt); color: var(--ink-secondary); }
+  code { background: var(--surface-alt); padding: 1px 5px; border-radius: 4px; }
+  .status-ok { color: var(--success-text); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>debug-refactor 作業ログ</h1>
+<div class="meta">実行日: 2026-09-30（同日再実行・上書き） ／ 対象コミット: <code>a69c505</code> ／
+目的: evaluate-keiba-architecture スキルの検出事項への修正がリグレッションを起こしていないかの検証</div>
+
+<h2>対象</h2>
+<p>調査（リグレッション確認）。<code>evaluate-keiba-architecture</code> スキルのレポートで検出された
+問題に対して行った以下の修正が、既存の挙動・テストを壊していないかを確認する。</p>
+
+<h2>確認対象の修正</h2>
+<table>
+<thead><tr><th>ファイル</th><th>変更内容</th></tr></thead>
+<tbody>
+<tr><td><code>src/api/flask_app.py</code></td>
+    <td>HybridStorage() 直接生成3箇所（<code>api_race_results</code>/<code>api_tracking_difficulty</code>/
+        <code>api_growth_curve</code>）を <code>src/api/app.py</code> と同じ <code>_get_storage()</code>
+        シングルトンパターンに統一</td></tr>
+<tr><td><code>config/settings.yaml</code></td>
+    <td>未使用の <code>paths:</code> セクション（<code>data/raw</code> 等）を削除</td></tr>
+<tr><td><code>AGENTS.md</code></td>
+    <td>ドキュメント参照パス2件を実ファイル位置に修正（<code>docs/mlflow_platform.md</code> →
+        <code>docs/html/design/mlflow_platform.html</code> 等）</td></tr>
+<tr><td><code>.gitignore</code></td>
+    <td><code>data/page_reference/</code> → <code>data/page_reference/*</code>（否定パターンが
+        機能していなかった不備の修正）</td></tr>
+<tr><td><code>data/page_reference/BUNDLE.md</code>（新規）</td>
+    <td>プレースホルダーとして新規作成</td></tr>
+<tr><td><code>docs/monitoring-portal.md</code> / <code>docs/operations/service-endpoints.md</code></td>
+    <td>monitorポータルの未記載ルート追記、既知の重複エンドポイントの文書化</td></tr>
+</tbody>
+</table>
+
+<h2>プロジェクト特有の落とし穴チェック（本スキル§2）</h2>
+<p><b>HybridStorage のインスタンス化</b>: 今回の修正はこの既知課題（P1）を悪化させるのではなく
+<b>解消する</b>方向の変更であることを確認済み（リクエストハンドラ内の直接 <code>new</code> を撤廃）。
+その他の項目（テンポラルリーク・shuffle・Flask仕様上の正・スキーマ検証・モジュール境界・馬券戦略整合）は
+今回の変更範囲に該当なし。</p>
+
+<h2>検証結果</h2>
+<p><code>make test</code></p>
+<p class="status-ok">439 passed, 5 skipped, 0 failed（4 warnings はdeprecation警告のみ、既存・無関係）</p>
+<p>加えて <code>python3 -c "from src.api.flask_app import create_app; create_app()"</code> で
+Flaskアプリの実構築を確認（41ルート、エラー無し）。<code>python3 -c "import yaml; yaml.safe_load(open('config/settings.yaml'))"</code>
+で settings.yaml のYAML妥当性も確認済み。リグレッションは検出されなかった。</p>
+
+<h2>追加対応（同日3回目・全警告解消）</h2>
+<p>ユーザーの指示（本番未運用のため進めてよい）を受け、残っていた重複エンドポイント警告7件に対応した。</p>
+<table>
+<thead><tr><th>対応</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>growth-curve / tracking-difficulty のパリティ追加</td>
+    <td><code>src/api/flask_app.py</code> のv1側ハンドラに、legacyが持つ追加パラメータ
+        （<code>force_refresh</code>・<code>fetch_speed_index</code>・<code>allow_compute</code>・
+        <code>jra_only</code>・<code>limit</code>・<code>refresh</code>）と
+        <code>POST /api/v1/races/&lt;race_id&gt;/tracking-difficulty/precompute</code>（新規）を追加。
+        既存呼び出しに影響しない追加のみの変更</td></tr>
+<tr><td>race predictions の実態調査</td>
+    <td>legacy/v1でレスポンス形状が異なる（<code>predictions</code>キー vs <code>horses</code>キー）ため
+        コード統合は見送り。<code>crontab -l</code> 等で3系統の書き込みパスすべてが未稼働（手動トリガのみ）
+        であることを確認し、現状は実害無しと判断。<code>docs/operations/service-endpoints.md</code>に
+        判断根拠と将来の再検討条件を記録</td></tr>
+</tbody>
+</table>
+<p><code>make test</code> 再実行: <span class="status-ok">439 passed, 5 skipped, 0 failed</span>（リグレッション無し）。
+<code>evaluate-keiba-architecture</code> の再実行で総268エンドポイントすべてOK（警告0・重大0）を確認。</p>
+
+</body>
+</html>
