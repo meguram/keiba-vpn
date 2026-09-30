@@ -7,8 +7,8 @@
 > `odds-final-odds`・`scraping-queue`・`cushion`）。分類ミスが見つからなかった11ブランチは `feature/XXX` のまま。
 > `hotfix/XXX` は「分類ミスの修正」だけでなく「その機能領域に残る設計・実装上の問題」も解決した上で
 > `feature/XXX` に戻す運用とする（一つずつ対応中: 進捗は下表の「検証結果」列を参照）。
-> `tracking-difficulty`・`race-detail`・`odds-final-odds`・`scraping-queue` は2026-09-30に解決済みで `feature/XXX` に復帰した
-> （残り: `cushion`）。
+> `race-detail`・`tracking-difficulty`・`odds-final-odds`・`scraping-queue`・`cushion` の5ブランチ全て
+> 2026-09-30に解決済みで `feature/XXX` に復帰した。`hotfix/XXX` は現在0本。
 
 `src/api/app.py`（FastAPI legacy, :8000）の主要機能ごとに `feature/XXX` ブランチを作成し、`main`（`e7e9e17`, 2026-09-30）から分岐した。全ブランチは分岐時点で `main` と同一コミットであり、今後の変更はこのブランチ単位で行い、レビュー後に `main` へマージする運用とする。
 
@@ -24,7 +24,7 @@ Flask `/api/v1`（DEC-013仕様上の正）・monitorポータルは対象外（
 | `feature/betting` | 馭券戦略 | 1 | 問題なし | [feature-betting.md](./feature-betting.md) |
 | `feature/bloodline-pedigree` | 血統・種牡馬クラスタ | 7 | 問題なし | [feature-bloodline-pedigree.md](./feature-bloodline-pedigree.md) |
 | `feature/core-platform` | コアプラットフォーム（ヘルス/認証/ダッシュボード） | 3 | 問題なし | [feature-core-platform.md](./feature-core-platform.md) |
-| `hotfix/cushion` | クッション値（トラックコンディション） | 0 | 分類ミスを修正 | [hotfix-cushion.md](./hotfix-cushion.md) |
+| `feature/cushion` | クッション値（トラックコンディション） | 0 | 解決済み・feature/に復帰 | [feature-cushion.md](./feature-cushion.md) |
 | `feature/growth-curve` | 成長曲線 | 1 | 問題なし | [feature-growth-curve.md](./feature-growth-curve.md) |
 | `feature/horse-profile` | 馬プロフィール・馬名検索・関係者統計 | 0 | 問題なし | [feature-horse-profile.md](./feature-horse-profile.md) |
 | `feature/model-training` | モデル学習・シミュレーション・バックフィル | 0 | 問題なし | [feature-model-training.md](./feature-model-training.md) |
@@ -46,7 +46,7 @@ Flask `/api/v1`（DEC-013仕様上の正）・monitorポータルは対象外（
 
 - `feature/odds-final-odds`（解決済み・保持継続）
 - `feature/model-training`
-- `hotfix/cushion`
+- `feature/cushion`（解決済み・保持継続）
 - `feature/horse-profile`
 
 ## 運用ルール
