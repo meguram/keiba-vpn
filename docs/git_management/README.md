@@ -7,8 +7,8 @@
 > `odds-final-odds`・`scraping-queue`・`cushion`）。分類ミスが見つからなかった11ブランチは `feature/XXX` のまま。
 > `hotfix/XXX` は「分類ミスの修正」だけでなく「その機能領域に残る設計・実装上の問題」も解決した上で
 > `feature/XXX` に戻す運用とする（一つずつ対応中: 進捗は下表の「検証結果」列を参照）。
-> `tracking-difficulty`・`race-detail` は2026-09-30に解決済みで `feature/XXX` に復帰した
-> （残り: `odds-final-odds`・`scraping-queue`・`cushion`）。
+> `tracking-difficulty`・`race-detail`・`odds-final-odds` は2026-09-30に解決済みで `feature/XXX` に復帰した
+> （残り: `scraping-queue`・`cushion`）。
 
 `src/api/app.py`（FastAPI legacy, :8000）の主要機能ごとに `feature/XXX` ブランチを作成し、`main`（`e7e9e17`, 2026-09-30）から分岐した。全ブランチは分岐時点で `main` と同一コミットであり、今後の変更はこのブランチ単位で行い、レビュー後に `main` へマージする運用とする。
 
@@ -30,7 +30,7 @@ Flask `/api/v1`（DEC-013仕様上の正）・monitorポータルは対象外（
 | `feature/model-training` | モデル学習・シミュレーション・バックフィル | 0 | 問題なし | [feature-model-training.md](./feature-model-training.md) |
 | `feature/monitor-quality` | 監視・データ品質チェック | 2 | 問題なし | [feature-monitor-quality.md](./feature-monitor-quality.md) |
 | `feature/myostatin` | ミオスタチン遺伝子解析 | 1 | 問題なし | [feature-myostatin.md](./feature-myostatin.md) |
-| `hotfix/odds-final-odds` | オッズ・最終オッズ | 0 | 分類ミスを修正 | [hotfix-odds-final-odds.md](./hotfix-odds-final-odds.md) |
+| `feature/odds-final-odds` | オッズ・最終オッズ | 0 | 解決済み・feature/に復帰 | [feature-odds-final-odds.md](./feature-odds-final-odds.md) |
 | `feature/race-detail` | レース詳細・予測表示 | 1 | 解決済み・feature/に復帰 | [feature-race-detail.md](./feature-race-detail.md) |
 | `feature/race-quality` | レース質分析 | 1 | 問題なし | [feature-race-quality.md](./feature-race-quality.md) |
 | `hotfix/scraping-queue` | スクレイピング・キュー管理 | 4 | 分類ミスを修正 | [hotfix-scraping-queue.md](./hotfix-scraping-queue.md) |
@@ -44,7 +44,7 @@ Flask `/api/v1`（DEC-013仕様上の正）・monitorポータルは対象外（
 以下のブランチは対象領域が `/api/*` のみで構成されており、ページURL基準では対象が無い。
 削除候補として提示したが、2026-09-30時点でユーザの判断により削除せず保持することとした:
 
-- `hotfix/odds-final-odds`
+- `feature/odds-final-odds`（解決済み・保持継続）
 - `feature/model-training`
 - `hotfix/cushion`
 - `feature/horse-profile`
