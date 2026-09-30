@@ -110,6 +110,47 @@ DEC-013 により **Flask `/api/v1`（:5000）が仕様上の正**です。
 > 同時起動する場合は **Flask を `FLASK_PORT=5100` 等に変更**するか、MLflow を Docker 内のみに閉じ、ホスト側 Flask を :5000 にします。  
 > Watchdog（`server_watchdog.sh`）は **FastAPI :8000 + MLflow :5000** の組み合わせを監視します（Flask は対象外）。
 
+### 既知の重複エンドポイント（DEC-013 移行負債）
+
+`evaluate-keiba-architecture` スキルによるヘルスチェック（`data/skill_logs/architecture_eval/20260930.html`）で検出。
+FastAPI legacy と Flask `/api/v1` の両方に同一機能が実装されている件について、2026-09-30 に以下の対応を行った。
+
+| 機能 | FastAPI legacy（:8000） | Flask v1（:5000） | 状態 |
+|---|---|---|---|
+| 成長曲線 | `GET /api/growth-curve/{horse_id}` | `GET /api/v1/horse/<horse_id>/growth-curve` | **パリティ対応済み**。同じ `growth_curve_service.get_growth_curve` を呼び、v1にも `force_refresh`/`fetch_speed_index`/`allow_compute`/`jra_only`/`limit` を追加しlegacyと同等の機能に |
+| 追走難度 | `GET /api/race/{race_id}/tracking-difficulty` + `POST .../precompute` | `GET /api/v1/races/<race_id>/tracking-difficulty` + `POST .../precompute`（新規追加） | **パリティ対応済み**。同じ `tracking_difficulty_service.get_or_compute` を呼び、v1に`refresh`パラメータとprecomputeエンドポイントを追加 |
+| レース予測 | `GET /api/race/{race_id}/predictions`（GCS `race_predictions` カテゴリ） | `GET /api/v1/races/<race_id>/predictions`（PostgreSQL `get_predictions_cached`、GCSフォールバック付き） | **調査完了・現状は許容**。下記「レース予測の書き込みパスが3系統ある」を参照 |
+
+成長曲線・追走難度は「同一サービス関数を呼ぶ薄いルーティング層が2つ存在する」状態であり、DEC-013移行が完了するまでの
+意図的な並行運用として問題ない（今後どちらかを変更する際は両方に反映すること）。
+
+#### レース予測の書き込みパスが3系統ある（調査完了・2026-09-30）
+
+調査の結果、レース予測データには**互換性のない3つの書き込みパス**が存在することが判明した（単純な2層重複ではない）。
+
+| # | 書き込み元 | 書き込み先 | 起動方法 | レスポンス形状 |
+|---|---|---|---|---|
+| 1 | `src/pipeline/inference/inference_pipeline.py`（`run_inference_for_race`） | PostgreSQL `PredictionResult` | `scripts/server/run_inference.sh`（コメント上は「T-15トリガ相当」）。**crontab確認済み: 未登録（実行されていない）** | `{"horses": [...]}`（v1が読む） |
+| 2 | `src/api/app.py` の `POST /api/race/{race_id}/predict`（`run_race_prediction`） | GCS `race_predictions` カテゴリ | 開発者権限(`is_developer`)必須の**手動**トリガ（legacy管理UI用） | `{"predictions": [...]}`（legacyのUIが読む形） |
+| 3 | `src/scripts/maintenance/batch_inference_all_races.py` | GCS `race_predictions` カテゴリ（`save_race_pred_cached`） | **手動**CLI実行。crontab確認済み: 未登録 | `{"predictions": [...]}` |
+
+**レスポンス形状は異なる**（v1は`horses`キー、legacyは`predictions`キー。`templates/race/race_detail.html`のJSは
+`apiData.predictions`を前提にレンダリングするため、v1の形状をそのまま流し込むとlegacy画面が壊れる）。
+
+**現状の結論**: `crontab -l` / `/etc/cron.d/` / systemd timer を確認した結果、上記3系統とも**自動実行されているものは無く、
+すべて開発者による手動トリガのみ**（2026-09-30時点）。さらに `src/pipeline/inference/pre_race_predict_trigger.py`
+（T-15自動トリガの実装本体）は docstring 上も明確に未完成（`最終版は後補完`、既定 `mock=True`）であり、
+`src/scripts/data/etl_stg_db.py` の PostgreSQL側予測データも `dev`/`stg` では意図的なモック生成（`_gen_mock_predictions`、
+`race_id`シードの乱数）である。つまり**現時点でリアルタイムに競合する自動書き込みは存在しない**ため、
+2層が同一race_idで無断に食い違う実害は今のところ発生しない。レスポンス形状の違いを理由に、無理な統合は行わなかった。
+
+**今後、以下のいずれかに着手する前に、本節を必ず更新・再検討すること**:
+- `pre_race_predict_trigger.py` の `mock=False` 本実装、または `run_inference.sh` のcron登録
+- `sync_pg_from_gcs.sh`（`_gen_mock_predictions` を含む）のcron登録
+- legacy `/api/race/{race_id}/predictions` の廃止、またはv1への統合
+
+実際に統合・削除する場合はDEC-013/DEC-015を更新すること。
+
 ---
 
 ## 1. HTTP サービス

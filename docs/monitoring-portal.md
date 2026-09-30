@@ -110,6 +110,30 @@ Monitor App :9090          （スタンドアロン Flask）
 | 最終 git pull 結果 | `logs/git_pull_hourly.log` 末尾 |
 | ブランチ名 | `git rev-parse --abbrev-ref HEAD` |
 
+### 4.8 データストア `/data-stores`
+
+**目的**: PostgreSQL / SQLite（`bloodline.db`・MLflow tracking DB）/ Parquet 各データストアの状態を一覧表示する。
+
+| 表示項目 | データ源 |
+|----------|---------|
+| PostgreSQL 接続状態・テーブル一覧・最終ETL時刻 | `/api/internal/data-stores` |
+| SQLite 各DB（存在・サイズ・テーブル一覧） | 同上 |
+| Parquet ブロック（存在・件数・サイズ） | 同上 |
+| jockey_trainer_stats manifest | 同上 |
+
+### 4.9 仕様書ビューア `/specs`, `/specs/<filename>`
+
+**目的**: `docs/decisions/` 配下の Markdown 仕様書（MASTER / AREA-xx / DEC-xxx）を、開発機を離れず
+ブラウザ上で閲覧する。
+
+| 表示項目 | データ源 |
+|----------|---------|
+| ファイル一覧（MASTER / AREA / DEC に分類） | `docs/decisions/*.md` のディレクトリ列挙 |
+| 選択したファイルのレンダリング結果（表・コード・目次対応） | `markdown` ライブラリで変換（`/specs/<filename>`） |
+
+`filename` は `docs/decisions/` 配下への path traversal を防ぐため、解決後のパスが
+`docs/decisions/` 配下であることをチェックしている。
+
 ---
 
 ## 5. ファイル構成
@@ -128,6 +152,8 @@ src/monitor/
     system.html        # /system
     logs.html          # /logs
     git.html           # /git
+    data_stores.html   # /data-stores
+    specs.html         # /specs, /specs/<filename>
 
 scripts/server/
   start_monitor.sh     # 単体起動スクリプト（port 9090）
@@ -184,8 +210,15 @@ bash scripts/server/service_start.sh --env stg --monitor
 | `GET /api/internal/status` | 全サービス死活 + キュー概要 + Git HEAD |
 | `GET /api/internal/system` | psutil メトリクス（CPU/Mem/Disk/Swap）|
 | `GET /api/internal/git` | Git 詳細（log / status / pull ログ）|
+| `POST /api/internal/git/pull` | `git pull origin <branch>` を実行して結果を返す |
 | `GET /api/internal/logs?file=<name>` | 指定ログファイルの末尾 200 行 |
 | `GET /api/internal/scraping` | スクレイピング詳細（キュー + カバレッジ）|
+| `GET /api/internal/coverage/month?year=&month=` | 年月指定のカレンダーデータ（日別ステータス）|
+| `GET /api/internal/coverage/date-matrix?date=YYYYMMDD` | 指定日の race×category カバレッジマトリクス（FastAPI `/api/date-race-matrix` を中継）|
+| `GET /api/internal/cron-jobs` | 各定期ジョブ（cron）の最終成功日時・次回予定 |
+| `GET /api/internal/page-quality?date=YYYY-MM-DD` | ページ品質チェック結果（省略時は最新）|
+| `POST /api/internal/page-quality/run` | ページ品質チェックをオンデマンド実行 |
+| `GET /api/internal/data-stores` | PostgreSQL / SQLite / Parquet データストア状態（`/data-stores` ページ用）|
 
 ---
 

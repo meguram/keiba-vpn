@@ -45,13 +45,6 @@ data_sources:
       stop_on_block: true
       log_path: "data/meta/logs/smartrc_access.log"
 
-paths:
-  raw_data: "data/raw"
-  processed_data: "data/processed"
-  mock_data: "data/mock"
-  models: "models"
-  pipelines: "pipelines"
-
 model:
   task_type: "classification"
   target_variable: "finish_position_top3"

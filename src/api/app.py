@@ -6606,7 +6606,13 @@ _predict_lock = threading.Lock()
 
 @app.get("/api/race/{race_id}/predictions", response_class=JSONResponse)
 async def get_race_predictions(race_id: str):
-    """キャッシュ済みの予測結果を返す。stg では GCS になければモックを返す。"""
+    """キャッシュ済みの予測結果を返す。stg では GCS になければモックを返す。
+
+    Flask v1 の GET /api/v1/races/<race_id>/predictions（PostgreSQL経由）とはデータソース・
+    レスポンス形状が異なる（本関数はGCS、v1はhorsesキー／本関数はpredictionsキー）。
+    2026-09-30調査: 両者とも自動書き込みパスは未稼働（手動トリガのみ）のため実害は無い。
+    詳細・今後の判断基準は docs/operations/service-endpoints.md「レース予測の書き込みパスが3系統ある」参照。
+    """
     data = await asyncio.to_thread(
         lambda: _get_storage().load("race_predictions", race_id))
     if data:
@@ -6992,7 +6998,12 @@ async def api_tracking_difficulty_status():
 
 @app.get("/api/race/{race_id}/tracking-difficulty", response_class=JSONResponse)
 async def api_tracking_difficulty(race_id: str, refresh: bool = False):
-    """追走難度・ペース・位置取り（calculated_data 事前計算を返す。refresh=true で再計算）。"""
+    """追走難度・ペース・位置取り（calculated_data 事前計算を返す。refresh=true で再計算）。
+
+    Flask v1 の GET /api/v1/races/<race_id>/tracking-difficulty はパリティ対応済み
+    （同じ tracking_difficulty_service.get_or_compute を利用、refresh/precomputeも同等）。
+    DEC-013移行完了までの意図的な並行実装。docs/operations/service-endpoints.md参照。
+    """
     def _run():
         from src.pipeline.inference.tracking_difficulty_service import get_or_compute
 
@@ -12675,6 +12686,10 @@ async def growth_curve_data(
     未計算時は ``allow_compute=true`` で horse_result から 1 回だけ計算可能。
     ``force_refresh=true`` で再計算。``fetch_speed_index=true`` は race_index 補完（GCS 増）。
     デフォルトは中央競馬のみ（``jra_only=false`` で地方・海外を含む全会場）。
+
+    Flask v1 の GET /api/v1/horse/<horse_id>/growth-curve はパリティ対応済み
+    （同じ growth_curve_service.get_growth_curve を利用、パラメータも同等）。
+    DEC-013移行完了までの意図的な並行実装。docs/operations/service-endpoints.md参照。
     """
     def _run():
         from src.pipeline.inference.growth_curve_service import get_growth_curve

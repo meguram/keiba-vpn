@@ -62,7 +62,7 @@ data/bloodline/
 data/calculated_data/
 data/local/
 data/queue/
-data/page_reference/
+data/page_reference/*
 !data/page_reference/BUNDLE.md
 *.pre_page_ref_bak/
 

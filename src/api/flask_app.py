@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 
 from flask import Flask, jsonify, request
 
@@ -27,6 +28,24 @@ from src.db.session import get_session, init_engine
 
 # race_result_flat.parquet ディレクトリ（sex_age 補完用）
 _FLAT_DIR = Path(__file__).resolve().parents[2] / "data/page_reference/tables"
+
+_BASE_DIR = Path(__file__).resolve().parents[2]
+_storage_lock = threading.Lock()
+
+
+def _get_storage():
+    """HybridStorage のプロセス単位シングルトン（src/api/app.py の _get_storage と同じパターン）。
+
+    リクエスト毎の再生成はL1メモリキャッシュを無効化するため、ここで一箇所に集約する
+    （data/skill_logs/architecture_eval/20260930.html で検出された既知課題への対応）。
+    """
+    from src.scraper.storage import HybridStorage
+
+    if not hasattr(_get_storage, "_inst"):
+        with _storage_lock:
+            if not hasattr(_get_storage, "_inst"):
+                _get_storage._inst = HybridStorage(_BASE_DIR)
+    return _get_storage._inst
 
 
 def _is_logged_in() -> bool:
@@ -98,6 +117,9 @@ def create_app() -> Flask:
 
     @app.get("/api/v1/races/<race_id>/predictions")
     def api_predictions(race_id: str):
+        # legacy GET /api/race/{race_id}/predictions（GCS経由）とはデータソース・レスポンス形状が異なる
+        # （本ハンドラはPostgreSQL経由、horsesキー）。2026-09-30調査: 自動書き込みパスは未稼働のため実害は無い。
+        # docs/operations/service-endpoints.md「レース予測の書き込みパスが3系統ある」参照。
         init_engine()
         model_version = request.args.get("model_version", DEFAULT_MODEL_VERSION)
         with get_session() as session:
@@ -164,7 +186,7 @@ def create_app() -> Flask:
                 ],
             } if rows else None
         if not rows:
-            storage = __import__("src.scraper.storage", fromlist=["HybridStorage"]).HybridStorage()
+            storage = _get_storage()
             try:
                 data = storage.load("race_result", race_id) or storage.load("race_result_on_time", race_id)
             except Exception:
@@ -327,26 +349,70 @@ def create_app() -> Flask:
                 return jsonify({"error": "race not found or no entries"}), 404
             return jsonify(payload)
 
+    def _truthy(param: str) -> bool:
+        return request.args.get(param, "").strip().lower() in ("1", "true", "yes")
+
     @app.get("/api/v1/races/<race_id>/tracking-difficulty")
     def api_tracking_difficulty(race_id: str):
+        # legacy GET /api/race/{race_id}/tracking-difficulty と同じサービス関数・同じパラメータ体系
+        # （refresh）で完全パリティ。docs/operations/service-endpoints.md「既知の重複エンドポイント」参照。
         try:
             from src.pipeline.inference.tracking_difficulty_service import get_or_compute
-            from src.scraper.storage import HybridStorage
 
-            storage = HybridStorage()
-            payload = get_or_compute(storage, race_id)
+            refresh = _truthy("refresh")
+            payload = get_or_compute(
+                _get_storage(),
+                race_id,
+                force_refresh=refresh,
+                allow_scrape=refresh,
+                allow_compute_on_miss=refresh,
+            )
             if payload.get("status") == "not_precomputed":
                 return jsonify(payload), 404
             return jsonify(payload)
         except Exception as exc:
             return jsonify({"error": "tracking difficulty unavailable", "detail": str(exc)}), 503
 
+    @app.post("/api/v1/races/<race_id>/tracking-difficulty/precompute")
+    @require_internal
+    def api_precompute_tracking_difficulty(race_id: str):
+        """追走難度をバッチ計算して storage に保存する（legacy版と同ロジック、v1版として新規追加）。"""
+        try:
+            from src.pipeline.inference.tracking_difficulty_service import (
+                build_tracking_difficulty_response,
+                save_cached_response,
+            )
+
+            storage = _get_storage()
+            payload = build_tracking_difficulty_response(race_id, storage, allow_scrape=False)
+            if payload.get("entries"):
+                save_cached_response(storage, race_id, payload, source="precompute_api_v1")
+                from src.pipeline.inference.tracking_difficulty_store import update_index_meta
+
+                update_index_meta(batch_source="precompute_api_v1")
+            out = {k: v for k, v in payload.items() if not str(k).startswith("_")}
+            out["precompute"] = True
+            return jsonify(out)
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
     @app.get("/api/v1/horse/<horse_id>/growth-curve")
     def api_growth_curve(horse_id: str):
+        # legacy GET /api/growth-curve/{horse_id} と同じサービス関数・同じパラメータ体系で完全パリティ。
+        # docs/operations/service-endpoints.md「既知の重複エンドポイント」参照。
         from src.pipeline.inference.growth_curve_service import get_growth_curve
-        from src.scraper.storage import HybridStorage
 
-        payload = get_growth_curve(HybridStorage(), horse_id)
+        force_refresh = _truthy("force_refresh")
+        payload = get_growth_curve(
+            _get_storage(),
+            horse_id,
+            fetch_speed_index=_truthy("fetch_speed_index") or force_refresh,
+            force_refresh=force_refresh,
+            allow_compute_on_miss=(request.args.get("allow_compute", "true").strip().lower()
+                                    in ("1", "true", "yes")) or force_refresh,
+            jra_only=request.args.get("jra_only", "true").strip().lower() in ("1", "true", "yes"),
+            limit=(int(request.args["limit"]) if request.args.get("limit", "").strip() else None),
+        )
         if not payload or payload.get("error"):
             return jsonify(payload or {"error": "growth curve not found"}), 404
         return jsonify(payload)
