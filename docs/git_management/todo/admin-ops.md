@@ -54,8 +54,9 @@
       `/api/admin/cron-jobs`が対象とする4ジョブ（disk_cache_cleanup/queue_maintain/logs_retention/
       daily_shutuba）の失敗時（`except`ブロック）に通知呼び出しを追加。`SLACK_WEBHOOK_URL`未設定時は
       無害に何もしない（既存動作に影響なし）。`.env.example`に変数を追記。テスト:
-      `tests/utils/test_notify.py`（3件）。**残作業**: 実際のSlack Incoming Webhook URLを
-      `.env`に設定し、本番投入前に送信テストを行うこと（未設定のため今回は動作未確認）。
+      `tests/utils/test_notify.py`（3件）。2026-09-30に実際のSlack Incoming Webhook URLを
+      `.env`（gitignore対象・未コミット）に設定し、`notify_slack()`の実送信テストに成功済み
+      （送信結果 True）。
       なお `scripts/cron/*.sh`（git_pull_hourly等、現状crontab未登録）と
       `src/monitor/app.py`のCRON_JOBS（ログパターン一致で成否判定している自動スクレイプ系）は
       本ブランチのスコープ外のため対象外とした（下のTODOに切り出し）。
