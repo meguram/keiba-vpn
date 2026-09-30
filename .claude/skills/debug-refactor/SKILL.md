@@ -64,4 +64,16 @@ DB接続が必要なテストだけ失敗する場合は `make db-up && make db-
 
 - `docs/html/design/FULLSTACK_ARCHITECTURE.html` §4: Flask側 HybridStorage/PredictionCache のシングルトン化未対応、L2ディスクキャッシュの週次アクセスゲート、Redis `race:entries`/`race:results` 未実装
 - `docs/decisions/DEC-026-modeling-betting-strategy-alignment.html`: モデリング評価指標にキャリブレーション・市場対比評価が未導入
-- `tests/utils/test_race_list_for_date.py` 他4件: `make test` 実行時にDB無しでも失敗する既知の未解決テスト（本Skill作成時点で原因未特定。着手する場合はまずこの5件の失敗原因を切り分けること）
+- ~~`tests/utils/test_race_list_for_date.py` 他4件の `make test` 失敗~~ → コミット `3dba03b`（2026-09-26）で解消済み。`build_remediation_plan` の障害レース二重除外、`test_megu_condition_weights.py` の本番チューニング値混入、`test_race_list_for_date.py` の `data/page_reference/race_lists/` 実データ依存をそれぞれ修正。2026-09-30時点で `make test` は 439 passed / 5 skipped（0 failed）。
+
+## 6. 作業ログの保存
+
+作業完了後、`data/skill_logs/debug_refactor/<yyyymmdd>.html`（日本時間の実行日、例 `20260930.html`）に簡潔な作業ログを保存する。
+同日に複数回実行した場合は追記せず上書きしてよい（過去日のファイルは残す）。ディレクトリが無ければ作成する。
+
+含める内容: 対象（バグ修正/リファクタリング）・原因/スコープ・変更したファイル・検証結果（`make test` 等）を短くまとめる。
+凝った装飾は不要（見出しと簡単な表程度）。`evaluate-keiba-architecture` スキルの `data/skill_logs/architecture_eval/<yyyymmdd>.html` と保存場所の親ディレクトリ（`data/skill_logs/`）とファイル名の命名規則（`<yyyymmdd>.html`）を揃えること。
+
+**配色**: 独自に色を決めない。`.claude/skills/evaluate-keiba-architecture/templates/report_template.html` の `<style>` 内 CSS変数
+（`--page-plane`/`--surface`/`--ink-*`/`--status-*`、ステータスは色ドット+黒系ラベルで表現）をそのままコピーして使う。
+彩度の高い背景色にテキストを乗せない（警告色はコントラスト不足で視認性が悪いため、`dataviz` skillの`references/palette.md`で検証済み）。
