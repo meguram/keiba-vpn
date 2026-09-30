@@ -25,6 +25,9 @@
 - ログ確認: `/api/admin/server-logs`（開発者セッション必須）、`/server-logs`ページ
 - `POST /api/admin/invalidate-race-list-caches`: race_lists関連インメモリキャッシュの即時クリア（dev-only、daily-race-lists cronから呼ばれる）
 - ページ: `/ai-sla`・`/cron-jobs`・`/server-logs`
+- `src/utils/notify.py`（2026-09-30追加）: `notify_slack()`。`/api/admin/cron-jobs`が対象とする
+  4ジョブ（disk_cache_cleanup/queue_maintain/logs_retention/daily_shutuba）の失敗時にSlack通知
+  （`SLACK_WEBHOOK_URL`未設定なら無害にスキップ）
 
 ## 目標（推測）
 
@@ -46,8 +49,19 @@
 
 <!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
 
-- [ ] cronジョブ失敗時の通知（Slack等）を追加する（現状は画面（`/api/admin/cron-jobs`）を
-      見に行かないと失敗に気づけない）
+- [x] cronジョブ失敗時の通知（Slack等）を追加する（現状は画面（`/api/admin/cron-jobs`）を
+      見に行かないと失敗に気づけない） — 2026-09-30実装: `src/utils/notify.py`に`notify_slack()`を追加し、
+      `/api/admin/cron-jobs`が対象とする4ジョブ（disk_cache_cleanup/queue_maintain/logs_retention/
+      daily_shutuba）の失敗時（`except`ブロック）に通知呼び出しを追加。`SLACK_WEBHOOK_URL`未設定時は
+      無害に何もしない（既存動作に影響なし）。`.env.example`に変数を追記。テスト:
+      `tests/utils/test_notify.py`（3件）。**残作業**: 実際のSlack Incoming Webhook URLを
+      `.env`に設定し、本番投入前に送信テストを行うこと（未設定のため今回は動作未確認）。
+      なお `scripts/cron/*.sh`（git_pull_hourly等、現状crontab未登録）と
+      `src/monitor/app.py`のCRON_JOBS（ログパターン一致で成否判定している自動スクレイプ系）は
+      本ブランチのスコープ外のため対象外とした（下のTODOに切り出し）。
+- [ ] `scripts/cron/*.sh`・`src/monitor/app.py`のCRON_JOBS（auto_scrape系）にもSlack通知を追加するか検討する
+      （現状はログファイルのパターン一致で事後的に成否判定しているだけで、push型の通知は無い。
+      `src/monitor/app.py`の`_parse_last_success()`が`status == "error"`を判定した箇所が候補）
 - [ ] 実際にサーバー運用で発生する障害対応のうち、本画面だけで完結できていない作業を棚卸しする
       （SSH/直接ログ確認が必要な場面が残っていないか）
 - [ ] `/api/structure-check`（構造チェック）の自動スケジュール実行状況を確認する

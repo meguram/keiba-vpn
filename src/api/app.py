@@ -1066,6 +1066,8 @@ def _disk_cache_cleanup_loop():
             with _disk_cache_cleanup_lock:
                 _disk_cache_cleanup_state["last_run"] = _dt2.now(_JST2).isoformat()
                 _disk_cache_cleanup_state["last_result"] = {"error": str(e)}
+            from src.utils.notify import notify_slack
+            notify_slack(f"[keiba-vpn] cron失敗: disk_cache_cleanup — {e}")
         finally:
             with _disk_cache_cleanup_lock:
                 _disk_cache_cleanup_state["running"] = False
@@ -1135,6 +1137,8 @@ def _queue_hourly_maintain_loop():
             with _queue_maintain_lock:
                 _queue_maintain_state["last_run"] = _dt3.now(_JST3).isoformat()
                 _queue_maintain_state["last_result"] = {"error": str(e)}
+            from src.utils.notify import notify_slack
+            notify_slack(f"[keiba-vpn] cron失敗: queue_maintain — {e}")
         finally:
             with _queue_maintain_lock:
                 _queue_maintain_state["running"] = False
@@ -1233,6 +1237,8 @@ def _logs_retention_loop():
             with _logs_retention_lock:
                 _logs_retention_state["last_run"] = _dt.now(_JST).isoformat()
                 _logs_retention_state["last_result"] = {"error": str(e)}
+            from src.utils.notify import notify_slack
+            notify_slack(f"[keiba-vpn] cron失敗: logs_retention — {e}")
         finally:
             with _logs_retention_lock:
                 _logs_retention_state["running"] = False
@@ -1332,6 +1338,8 @@ def _daily_shutuba_enqueue_loop() -> None:
             with _daily_shutuba_lock:
                 _daily_shutuba_state["last_run"] = _dt.now(_JST).isoformat()
                 _daily_shutuba_state["last_result"] = {"error": str(e)}
+            from src.utils.notify import notify_slack
+            notify_slack(f"[keiba-vpn] cron失敗: daily_shutuba — {e}")
             _write_cron_state("daily_shutuba", {
                 "last_run": _daily_shutuba_state["last_run"],
                 "last_result": _daily_shutuba_state["last_result"],
