@@ -1,4 +1,4 @@
-# feature/cushion
+# hotfix/cushion
 
 **対象領域**: クッション値（トラックコンディション）
 **分岐元**: `main` @ `e7e9e17`（2026-09-30）

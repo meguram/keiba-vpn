@@ -1,4 +1,4 @@
-# feature/scraping-queue
+# hotfix/scraping-queue
 
 **対象領域**: スクレイピング・キュー管理
 **分岐元**: `main` @ `e7e9e17`（2026-09-30）

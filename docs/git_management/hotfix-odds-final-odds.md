@@ -1,4 +1,4 @@
-# feature/odds-final-odds
+# hotfix/odds-final-odds
 
 **対象領域**: オッズ・最終オッズ
 **分岐元**: `main` @ `e7e9e17`（2026-09-30）

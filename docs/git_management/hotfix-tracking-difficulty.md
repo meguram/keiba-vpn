@@ -1,6 +1,6 @@
-# feature/race-detail
+# hotfix/tracking-difficulty
 
-**対象領域**: レース詳細・予測表示
+**対象領域**: 追走難度
 **分岐元**: `main` @ `e7e9e17`（2026-09-30）
 **対象ページURL数**: 1（`src/api/app.py`, FastAPI legacy, :8000。ブラウザで直接開く画面のURLのみを対象とし、画面から呼ばれる `/api/*` のJSON APIはここでは数えない）
 
@@ -10,4 +10,4 @@
 
 | Path | Handler |
 |---|---|
-| `/race/{race_id}` | `race_detail_page`(L6479) |
+| `/tracking-difficulty` | `tracking_difficulty_page`(L9030) |
