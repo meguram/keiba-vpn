@@ -81,6 +81,14 @@
 
 ## TODO（手動追記用）
 
-- [ ]
+<!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
+
+- [ ] bloodline-cluster / pedigree-map / stallion-sire-tree 等、複数アーティファクトの
+      定期rebuildスケジュールの有無を確認し、無ければ整備する（現状はいずれも手動`POST rebuild`系）
+- [ ] `/bloodline`・`/bloodline-cluster`・`/pedigree-map`・`/note-aptitude-race` 等、
+      サブテーマごとに別ページに分かれているUIの統合・ナビゲーション改善を検討する
+      （`/course-bloodline`は既に`/bloodline`へリダイレクト統合済み）
+- [ ] 5代血統整備（race-ensure-5gen系）が未完了の馬の割合を計測し、必要なら
+      `batch-race-ensure-5gen`の定期実行を整備する
 
 ## メモ

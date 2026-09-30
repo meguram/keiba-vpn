@@ -48,6 +48,11 @@
 
 ## TODO（手動追記用）
 
-- [ ]
+<!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
+
+- [ ] predictions のGCS/PostgreSQL二重経路について、`docs/operations/service-endpoints.md`の
+      再検討条件（自動化着手）に該当する変更が無いか定期的に確認する（既知の課題を参照）
+- [ ] `/api/race/{race_id}/predictions` が「表示されない/古い」場合の検知（モニタリング）を追加する
+- [ ] `/api/race/{race_id}/bloodline-aptitude`（dev=モック/stg=DB集計値）のstg実データ精度を検証する
 
 ## メモ
