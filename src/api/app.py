@@ -3259,12 +3259,17 @@ async def get_raw_data(category: str, key: str):
 
 @app.get("/api/horse/{horse_id}/detail", response_class=JSONResponse)
 async def api_horse_detail(horse_id: str, race_id: str = ""):
-    """馬詳細情報 (netkeiba + SmartRC + 統計) を集約して返す。"""
+    """馬詳細情報 (netkeiba + SmartRC + 統計) を集約して返す。
+
+    他ブランチ（race-detail等）から参照されるため、個々の内部処理の例外で
+    レスポンス全体が非JSONの500になり呼び出し側の表示が崩れることを避ける
+    （horse-profile 共通TODO対応）。致命的でない失敗は空データで継続する。
+    """
     def _load():
         storage = _get_storage()
         result: dict[str, Any] = {"horse_id": horse_id}
         hr = storage.load("horse_result", horse_id)
-        if hr:
+        if hr and isinstance(hr, dict):
             meta = hr.pop("_meta", {})
             result["info"] = {
                 k: v for k, v in hr.items() if k != "race_history"
@@ -3272,17 +3277,21 @@ async def api_horse_detail(horse_id: str, race_id: str = ""):
             result["race_history"] = hr.get("race_history", [])
             result["_meta_netkeiba"] = meta
         else:
+            hr = None
             result["info"] = {}
             result["race_history"] = []
         smartrc_horse = None
         smartrc_fullresults: list[dict] = []
         if race_id:
-            smartrc = storage.load("smartrc_race", race_id)
-            if smartrc:
-                horses_dict = smartrc.get("horses", {})
+            try:
+                smartrc = storage.load("smartrc_race", race_id)
+            except Exception:
+                smartrc = None
+            if smartrc and isinstance(smartrc, dict):
+                horses_dict = smartrc.get("horses", {}) or {}
                 smartrc_horse = horses_dict.get(horse_id)
-                fr_dict = smartrc.get("fullresults", {})
-                smartrc_fullresults = fr_dict.get(horse_id, [])
+                fr_dict = smartrc.get("fullresults", {}) or {}
+                smartrc_fullresults = fr_dict.get(horse_id, []) or []
         result["smartrc_horse"] = smartrc_horse
         result["smartrc_fullresults"] = smartrc_fullresults
         ped5 = None
@@ -3290,13 +3299,23 @@ async def api_horse_detail(horse_id: str, race_id: str = ""):
             ped5 = storage.load("horse_pedigree_5gen", horse_id)
         except Exception:
             ped5 = None
-        pedigree = _build_pedigree(hr, smartrc_horse, ped5)
-        result["pedigree"] = pedigree
-        stats = _calc_horse_stats(result["race_history"], smartrc_fullresults)
-        result["stats"] = stats
+        try:
+            result["pedigree"] = _build_pedigree(hr, smartrc_horse, ped5)
+        except Exception:
+            logger.warning("馬詳細 pedigree 構築に失敗: horse_id=%s", horse_id, exc_info=True)
+            result["pedigree"] = {"sire": {}, "dam": {}}
+        try:
+            result["stats"] = _calc_horse_stats(result["race_history"], smartrc_fullresults)
+        except Exception:
+            logger.warning("馬詳細 stats 計算に失敗: horse_id=%s", horse_id, exc_info=True)
+            result["stats"] = {}
         return result
 
-    result = await asyncio.to_thread(_load)
+    try:
+        result = await asyncio.to_thread(_load)
+    except Exception as e:
+        logger.error("馬詳細取得エラー: horse_id=%s err=%s", horse_id, e, exc_info=True)
+        return JSONResponse({"error": str(e), "horse_id": horse_id}, status_code=500)
     return JSONResponse(result)
 
 
@@ -13028,8 +13047,29 @@ def _katakana_to_hiragana(text: str) -> str:
     return ''.join(result)
 
 
+# カタカナ表記ゆれ吸収用: 小書き文字(拗音・促音)を大書きに畳み込み、ヴ行をバ行に畳み込む。
+# 例: 「ドゥラメンテ」⇔「ドウラメンテ」、「ヴァイオレット」⇔「バイオレット」
+_VU_DIGRAPH_FOLD = (
+    ("ヴァ", "バ"), ("ヴィ", "ビ"), ("ヴゥ", "ブ"), ("ヴェ", "ベ"), ("ヴォ", "ボ"),
+)
+_SMALL_KANA_FOLD_TABLE = str.maketrans({
+    "ァ": "ア", "ィ": "イ", "ゥ": "ウ", "ェ": "エ", "ォ": "オ",
+    "ッ": "ツ", "ャ": "ヤ", "ュ": "ユ", "ョ": "ヨ", "ヮ": "ワ",
+})
+
+
+def _fold_kana_variant(text: str) -> str:
+    """小書き文字・ヴ行の表記ゆれをゆるく畳み込む（カタカナ/ひらがな両対応）。"""
+    folded = text
+    for src, dst in _VU_DIGRAPH_FOLD:
+        folded = folded.replace(src, dst)
+    folded = folded.replace("ヴ", "ブ")
+    folded = folded.translate(_SMALL_KANA_FOLD_TABLE)
+    return folded
+
+
 def _normalize_search_text(text: str) -> list:
-    """検索用に正規化（ひらがな、カタカナ、元の文字列）"""
+    """検索用に正規化（ひらがな、カタカナ、元の文字列、小書き/ヴ表記ゆれ吸収版）"""
     text = text.strip()
     variants = [text]
     hiragana = _katakana_to_hiragana(text)
@@ -13038,6 +13078,11 @@ def _normalize_search_text(text: str) -> list:
         variants.append(hiragana)
     if katakana not in variants:
         variants.append(katakana)
+    # 表記ゆれ対策（例: 「ドゥ」⇔「ドウ」、「ヴァ」⇔「バ」）を追加候補として重畳
+    for v in list(variants):
+        folded = _fold_kana_variant(v)
+        if folded not in variants:
+            variants.append(folded)
     return variants
 
 

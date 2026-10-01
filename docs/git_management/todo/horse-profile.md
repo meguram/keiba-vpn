@@ -12,14 +12,20 @@
   - 完了したTODOは削除せず [x] にチェックして残す（履歴として）。
 -->
 
-## 現状の実装（2026-09-30時点）
+## 現状の実装（2026-10-02時点）
 
-- `/api/horse/{horse_id}/detail`: 馬詳細情報（netkeiba + SmartRC + 統計）を集約して返す
+- `/api/horse/{horse_id}/detail`: 馬詳細情報（netkeiba + SmartRC + 統計）を集約して返す。
+  2026-10-02: `smartrc_race`ロード・`_build_pedigree`・`_calc_horse_stats`を個別にtry/exceptで保護し、
+  想定外の例外時も空データで継続 or `JSONResponse({"error": ...}, 500)`でJSON応答を返すよう修正
+  （非JSONの素の500による呼び出し元の表示崩れを防止）
 - `/api/horse/{horse_id}/recent_races`: horse_resultのrace_historyから直近N走（新しい順）
 - `/api/horse/{horse_id}/race_performance_history`: 戦績のうちrace_performance生成済みのものだけを返す
 - `/api/person/{ptype}/{person_id}/stats`: 騎手・調教師の成績情報
 - `/api/horse-names/index-meta`: 馬名インデックスの参照用メタ（パス・頭数・生成時刻）
-- `/api/horse-names/search`: 馬名検索・候補返却
+- `/api/horse-names/search`: 馬名検索・候補返却。NFKC正規化・ひらがな/カタカナ変換・
+  （かな入力時の）pykakasi読み照合に加え、2026-10-02に小書き文字（拗音・促音）とヴ行の
+  表記ゆれ畳み込み（`_fold_kana_variant`）を追加し、「ドゥラメンテ」⇔「ドウラメンテ」等の
+  カタカナ表記違いも検索候補にヒットするようにした
 - ページURLは無し（`/api/*`のみで構成される機能領域）
 
 ## 目標（推測）
@@ -53,9 +59,42 @@
 
 ### 共通TODO（ホスト方式に関係ない）
 
-- [ ] 馬名検索（`/api/horse-names/search`）の表記ゆれ対応（旧馬名・カタカナ表記違い等）を検証する
-- [ ] 他ブランチ（race-detail等）からの参照時に、本APIのタイムアウト・エラーが連鎖的に
+- [x] 馬名検索（`/api/horse-names/search`）の表記ゆれ対応（旧馬名・カタカナ表記違い等）を検証する
+      — 2026-10-02対応: 本番の `data/knowledge/horse_name_index.json`（37,393頭、読み取り専用）を
+      直接ロードし、`_normalize_search_text`/`_is_kana_only_query` と同一ロジックを `/tmp` 上の
+      スタンドアロンスクリプトで再現して検証（本番ファイルへの書き込みは一切なし）。
+      既存実装はNFKC正規化・ひらがな/カタカナ変換・（かな入力時の）pykakasi読み照合まで対応済みと
+      確認。一方で「ドゥラメンテ」⇔「ドウラメンテ」、「ヴァイオレット」⇔「バイオレット」のような
+      小書き文字（拗音・促音）・ヴ行の表記ゆれは未吸収でヒットしないことを確認したため、
+      `src/api/app.py` の `_normalize_search_text` に小書き文字→大書き・ヴ→ブの畳み込み変換
+      （`_fold_kana_variant` / `_VU_DIGRAPH_FOLD` / `_SMALL_KANA_FOLD_TABLE`）を追加し、
+      検索候補に重畳させる形で対応。新規依存ライブラリは追加していない。
+      なお「ディープインパクト」「キタサンブラック」等の引退済み大物馬がインデックスに
+      含まれていない事象を確認したが、これは表記ゆれではなく、インデックスが
+      `horse_result` キャッシュ（走査対象: `data/cache/horse_result` 等）から構築される
+      データ網羅性の制約（既知の限界）であり、本TODOの対応範囲外と判断した。
+      旧馬名（改名履歴）はそもそもインデックスのスキーマに保持されておらず、同様に
+      データ構造上の制約として別途の設計検討が必要（本TODOでは対応せず）。
+      既存テスト（`tests/api/test_endpoints.py` のhorse_names系、`tests/utils/test_horse_name_index*.py`）は
+      全て通過を確認。
+- [x] 他ブランチ（race-detail等）からの参照時に、本APIのタイムアウト・エラーが連鎖的に
       表示崩れを起こしていないか確認する
+      — 2026-10-02対応: `feature/race-detail` ブランチの `templates/race/race_detail.html` を
+      `git show` で確認した結果、`/api/horse-names/search` や `/api/horse/{horse_id}/detail` を
+      直接fetchしておらず、`/api/race/{race_id}` レスポンスに同梱された `horses` から
+      馬詳細カードを構築していることを確認（連鎖呼び出しは発生しない）。
+      一方 `templates/analysis/growth_curve.html`・`templates/analysis/tracking_difficulty.html`・
+      `templates/admin/data_viewer.html` は両APIをfetchしているが、いずれも `resp.ok` を
+      チェックしてから `try/catch` で個別のモーダル・パネル内にエラー表示する実装済みで、
+      ページ全体への連鎖崩れは起きない構造であることをコードから確認した。
+      サーバ側では `HybridStorage.load` がGCSタイムアウト・リトライを内包し失敗時は
+      `None`/stale ローカルキャッシュへフォールバックする設計のため、通常は例外を上げない。
+      ただし `/api/horse/{horse_id}/detail` のみ、集計処理（`_build_pedigree`/`_calc_horse_stats`）や
+      `smartrc_race` ロードが未保護で、万一の例外発生時にJSON化できない500（素のテキスト応答）に
+      なり得る実装だったため、`/api/race/{race_id}` 等の他エンドポイントと同様の防御的
+      try/except（各ステップを個別に保護し、失敗時は空データで継続。最終的に例外が残っても
+      `JSONResponse({"error": ...}, status_code=500)` を返す）を追加した。
+      既存テスト（`tests/api/test_endpoints.py` のhorse_detail系）は全て通過を確認。
 
 ### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
 
