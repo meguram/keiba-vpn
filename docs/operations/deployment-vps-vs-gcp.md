@@ -1,4 +1,6 @@
-# デプロイ構成: ConoHa VPS（公開・サービング） + GCP（スクレイピング・ML・スケジュール実行）
+# デプロイ構成: ConoHa VPS（公開・サービング） + GCP（データ・集計ジョブ） + 学習PC（データ準備・学習）
+
+> **2026-10-02 更新**: 過去データの収集・特徴量生成・学習は**学習PC**、開催日の当日分の取得はVPS、定期集計ジョブはGCP Cloud Run Jobs。下の本文に残る「GCP=スクレイピング・ML学習」は初期案の記述で、[vps-gcp-responsibilities.md](./vps-gcp-responsibilities.md) を正とする。
 
 **対象領域**: デプロイ・インフラ全体（cron・常駐プロセス・ストレージ・ネットワーク公開）
 **関連ドキュメント**: [service-endpoints.md](./service-endpoints.md)・[server_architecture.html](./server_architecture.html)・
@@ -60,15 +62,15 @@ BigQuery等すべてのGCPクライアントへ共通で渡す（本ドキュメ
 | race-quality | **VPS**（配信）/ **GCP**（day一括推定の実行） | 日次一括推定はGCP側のCloud Scheduler+Jobsで事前計算、配信はVPSがGCSから読むだけ |
 | tracking-difficulty | **VPS**（配信）/ **GCP**（precomputeバッチ） | 同上パターン |
 | track-speed | **VPS**（配信）/ **GCP**（rebuild-baselines） | 同上パターン |
-| odds-final-odds | **VPS**（配信・snapshot記録）/ **別PC**（モデル学習） | 学習は別PC。snapshot記録はスクレイピング系のためVPS |
+| odds-final-odds | **VPS**（配信・snapshot記録）/ **学習PC**（モデル学習） | 学習は学習PC。snapshot記録はスクレイピング系のためVPS |
 | betting | **VPS** | optimizeはリクエスト同期の軽量計算（オッズ無い場合のスクレイピング呼び出しのみ要注意） |
 | growth-curve | **VPS** | 読み取り系API、計算もリクエスト同期で軽量 |
 | myostatin | **VPS**（配信）/ **GCP**（recalculate定期実行） | 再計算バッチはGCP、knowledge参照・predictはVPS |
 | bloodline-pedigree | **VPS**（配信）/ **GCP**（アーティファクトrebuild） | 65エンドポイントの大半は読み取り系でVPS、`POST rebuild`系の重い再構築処理はGCP |
 | cushion | **VPS**（スクレイピング・ライブ取得・配信） / **GCP**（GCS同期は要検討） | スクレイピング系はVPSのcron（案A確定） |
-| scraping-queue | **VPS** | **2026-10-02確定（案A）**: netkeibaスクレイピングとキュー・cronはVPSに残す（スクレイパーは起動時約40MBと軽量、VPSは契約済みで追加費用0、送信元IPがVPS固定のまま、Cloud NAT不要）。本運用前にVPSから試験取得して遮断されないことを確認する |
+| scraping-queue | **学習PC**（過去データ収集）/ **VPS**（開催日の当日分） | **2026-10-02更新（案A・範囲縮小）**: 過去データの収集は学習PC、当日分の取得cronとキューはVPSに残す（スクレイパーは起動時約40MBと軽量、VPSは契約済みで追加費用0、送信元IPがVPS固定のまま、Cloud NAT不要）。本運用前にVPSから試験取得して遮断されないことを確認する |
 | monitor-quality | **VPS** | 運用者向け監視画面・品質チェック結果表示（品質チェック自体がスクレイピング済みデータの検証なので軽量、VPSに残してよい） |
-| model-training | **別PC（ローカル）** | **2026-10-02確定**: 学習・アンサンブル・バックテストは別PCで実施し、学習済みモデルをGCSへ公開（`model_registry`）。GCP/VPSでは学習しない |
+| model-training | **学習PC（ローカル）** | **2026-10-02確定**: 学習・アンサンブル・バックテストは学習PCで実施し、学習済みモデルをGCSへ公開（`model_registry`）。GCP/VPSでは学習しない |
 | admin-ops | **VPS**（画面・ログ閲覧・スクレイピング系cron）/ **GCP**（重い集計ジョブの実体） | `/cron-jobs`等の管理画面はVPSに残す。重い集計・再構築ジョブ（Cloud Run Jobs＋Scheduler）はGCP、スクレイピング系cronはVPS |
 
 ## ブリッジが必要な点（分担により新たに生じる課題）

@@ -1,6 +1,6 @@
 """学習済みモデルの公開と配布（バージョン付き・検証付き）。
 
-学習は別PC（ローカル）で行い、できたモデルを ``publish_model`` でストアへ公開する。
+学習は学習PC（ローカル）で行い、できたモデルを ``publish_model`` でストアへ公開する。
 定期実行側（VPS/GCP）は ``fetch_latest`` で現行版を取得して使う。
 
 ストア上のレイアウト::
@@ -217,7 +217,7 @@ def publish_model(
     metrics: dict | None = None,
     set_latest: bool = True,
 ) -> dict:
-    """``model_dir`` をストアへ ``<version>/`` として公開する（別PCの学習後に実行）。
+    """``model_dir`` をストアへ ``<version>/`` として公開する（学習PCの学習後に実行）。
 
     ``feature_names`` 省略時は ``ensemble_meta.json`` の ``feature_names`` を使う。
     """
