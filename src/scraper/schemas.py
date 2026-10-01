@@ -517,6 +517,32 @@ _HORSE_PEDIGREE_5GEN: dict[str, Any] = {
         "dam_sire": {"type": "str"},
         "ancestor_count": {"type": "int"},
         "source": {"type": "str"},
+        # 母馬ページ(own.netkeiba)由来の種付け日。種付け年 = 生まれ年 - 1 で対応付け（yyyy-mm-dd）
+        "mating_date": {"type": "str", "pattern": r"^\d{4}-\d{2}-\d{2}$"},
+        "mating_year": {"type": "int"},
+        "mating_match": {"type": "str"},
+        "mating_dam_id": {"type": "str"},
+    },
+}
+
+_BROODMARE_MATING: dict[str, Any] = {
+    "top_required": {
+        "horse_id": {"type": "str", "non_empty": True},
+        "matings": {"type": "list"},
+    },
+    "top_optional": {
+        "mating_count": {"type": "int"},
+        "source": {"type": "str"},
+        "fetched_at": {"type": "str"},
+    },
+    "entry_list_key": "matings",
+    "entry_required": {
+        "mating_year": {"type": "int", "min": 2000},
+        "mating_date": {"type": "str", "pattern": r"^\d{4}-\d{2}-\d{2}$"},
+    },
+    "entry_optional": {
+        "sire_name": {"type": "str"},
+        "sire_id": {"type": "str"},
     },
 }
 
@@ -789,6 +815,7 @@ SCHEMAS: dict[str, dict[str, Any]] = {
     "race_detail": _RACE_DETAIL,
     "horse_result": _HORSE_RESULT,
     "horse_pedigree_5gen": _HORSE_PEDIGREE_5GEN,
+    "broodmare_mating": _BROODMARE_MATING,
     "horse_training": _HORSE_TRAINING,
     "smartrc_race": _SMARTRC_RACE,
     "requirement_row_trace": _REQUIREMENT_ROW_TRACE,

@@ -56,6 +56,15 @@ from src.scraper.horse_training_local import (
 )
 from src.scraper.storage import HybridStorage
 from src.scraper.html_archive import HtmlArchive
+from src.scraper.broodmare_mating import (
+    BROODMARE_MATING_URL,
+    build_broodmare_mating_record,
+    dam_id_from_ancestors,
+    is_mating_lookup_eligible,
+    match_foal_mating,
+    parse_broodmare_mating,
+    sire_from_ancestors,
+)
 
 from src.utils.keiba_logging import script_basic_config
 
@@ -896,6 +905,8 @@ class ScraperRunner:
             except Exception:
                 ped_html_ok = False
             if ex and len(anc) >= 5 and ped_html_ok:
+                if is_mating_lookup_eligible(horse_id) and "mating_match" not in ex:
+                    self._attach_mating_and_resave(horse_id, ex)
                 self._last_pedigree_5gen_skip = True
                 logger.info("スキップ (既存): horse_pedigree_5gen/%s", horse_id)
                 return ex
@@ -918,6 +929,7 @@ class ScraperRunner:
         rec = build_pedigree_record(
             horse_id, ancestors, source="queue_horse_pedigree_5gen"
         )
+        self.attach_mating_date(horse_id, rec)
         saved = self.storage.save("horse_pedigree_5gen", horse_id, rec)
         if not saved:
             logger.warning(
@@ -929,6 +941,103 @@ class ScraperRunner:
         )
         _update_local_pedigree_10gen(horse_id, rec, self.storage._base_dir)
         _upsert_sires_background(html)
+        return rec
+
+    # ── 母馬の種付け情報（own.netkeiba）→ 産駒の種付け日 ───────────
+
+    MATING_RECORD_REFRESH_DAYS = 7
+
+    def scrape_broodmare_mating(self, dam_id: str, *, for_foal_id: str = "") -> dict | None:
+        """母馬ページの種付け表を取得・パースし ``broodmare_mating`` に保存する。
+
+        既存レコードに ``for_foal_id`` の種付け年の行がある、または取得から
+        ``MATING_RECORD_REFRESH_DAYS`` 日以内なら再取得しない。取得失敗時は None。
+        """
+        ex = self.storage.load("broodmare_mating", dam_id)
+        if ex is not None:
+            if for_foal_id and match_foal_mating(ex.get("matings") or [], for_foal_id)["mating_match"] != "no_record":
+                return ex
+            try:
+                age = datetime.now(timezone.utc) - datetime.fromisoformat(ex.get("fetched_at", ""))
+                if age < timedelta(days=self.MATING_RECORD_REFRESH_DAYS):
+                    return ex
+            except ValueError:
+                pass
+
+        url = BROODMARE_MATING_URL.format(horse_id=dam_id)
+        try:
+            html = self.client.fetch(url)
+        except Exception as e:
+            from src.scraper.scrape_access_pause import is_block_suspect_http_400
+            logger.error("取得失敗 [broodmare_mating/%s]: %s", dam_id, e)
+            if is_block_suspect_http_400(e):
+                raise
+            return None
+        self.archive.save("broodmare_mating", dam_id, html)
+        rec = build_broodmare_mating_record(dam_id, parse_broodmare_mating(html))
+        if not self.storage.save("broodmare_mating", dam_id, rec):
+            logger.warning("broodmare_mating GCS未保存 (バックオフ/GCS無効): %s", dam_id)
+        else:
+            logger.info("保存: broodmare_mating/%s (%d件)", dam_id, rec["mating_count"])
+        return rec
+
+    def attach_mating_date(self, foal_id: str, rec: dict) -> dict:
+        """血統レコード ``rec`` に産駒の種付け日（``mating_date`` = yyyy-mm-dd）等を付ける。
+
+        種付け年 = 生まれ年 - 1 で母馬ページの表と対応付ける。種付け情報の範囲外（2024年より前の
+        生まれ）は何もしない。母馬ページの取得に失敗しても ``rec`` はそのまま返す（血統保存を妨げない）。
+        """
+        if not is_mating_lookup_eligible(foal_id):
+            return rec
+        ancestors = rec.get("ancestors") or []
+        dam_id = dam_id_from_ancestors(ancestors)
+        if not dam_id:
+            rec["mating_match"] = "no_dam"
+            return rec
+        try:
+            dam_rec = self.scrape_broodmare_mating(dam_id, for_foal_id=foal_id)
+        except Exception as e:
+            from src.scraper.scrape_access_pause import is_block_suspect_http_400
+            if is_block_suspect_http_400(e):
+                raise
+            logger.warning("種付け情報の取得に失敗 [%s dam=%s]: %s", foal_id, dam_id, e)
+            return rec
+        if dam_rec is None:
+            return rec
+        sire_id, sire_name = sire_from_ancestors(ancestors)
+        res = match_foal_mating(dam_rec.get("matings") or [], foal_id, sire_id=sire_id, sire_name=sire_name)
+        rec["mating_dam_id"] = dam_id
+        rec["mating_match"] = res["mating_match"]
+        if res["mating_year"] is not None:
+            rec["mating_year"] = res["mating_year"]
+        if res["mating_date"]:
+            rec["mating_date"] = res["mating_date"]
+        else:
+            rec.pop("mating_date", None)
+        return rec
+
+    def _attach_mating_and_resave(self, foal_id: str, rec: dict) -> bool:
+        """保存済みの血統レコードに種付け日を付けて保存し直す。付与できなければ False。"""
+        before = rec.get("mating_match")
+        self.attach_mating_date(foal_id, rec)
+        if rec.get("mating_match") is None or rec.get("mating_match") == before:
+            return False
+        if not self.storage.save("horse_pedigree_5gen", foal_id, rec):
+            return False
+        _update_local_pedigree_10gen(foal_id, rec, self.storage._base_dir)
+        return True
+
+    def scrape_horse_mating_date(self, foal_id: str, skip_existing: bool = True) -> dict | None:
+        """キュータスク ``horse_mating_date``: 産駒の血統レコードに種付け日を付ける（血統が無ければ先に取得）。"""
+        if not is_mating_lookup_eligible(foal_id):
+            logger.info("種付け情報の対象外 (2024年より前の生まれ): %s", foal_id)
+            return None
+        rec = self.storage.load("horse_pedigree_5gen", foal_id)
+        if not rec:
+            return self.scrape_horse_pedigree_5gen(foal_id, skip_existing=False)
+        if skip_existing and rec.get("mating_match") in ("matched", "sire_mismatch", "ambiguous", "no_dam"):
+            return rec
+        self._attach_mating_and_resave(foal_id, rec)
         return rec
 
     # ── 調教タイム (全ページ結合) ────────────────────────────

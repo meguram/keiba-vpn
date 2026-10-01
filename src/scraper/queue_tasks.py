@@ -41,6 +41,12 @@ TASK_CATALOG: list[dict[str, Any]] = [
     {"id": "smartrc", "entity": "race", "label": "SmartRC 一式", "hint": "smartrc_race（開催日はジョブの date 推奨）"},
     {"id": "horse_profile", "entity": "horse", "label": "馬ページ（成績HTML）", "hint": "horse_result + アーカイブ。血統は skip_pedigree または horse_pedigree_5gen で別管理"},
     {"id": "horse_pedigree_5gen", "entity": "horse", "label": "5世代血統JSON（db.netkeiba /horse/ped/）", "hint": "horse_pedigree_5gen カテゴリへ保存"},
+    {
+        "id": "horse_mating_date",
+        "entity": "horse",
+        "label": "種付け日（母馬ページ own.netkeiba）",
+        "hint": "broodmare_mating + horse_pedigree_5gen.mating_date。2024年以降生まれの馬のみ対象",
+    },
     {"id": "horse_training", "entity": "horse", "label": "調教タイム全ページ", "hint": "horse_training（要ログイン）"},
     {"id": "race_list", "entity": "date", "label": "その日のレース一覧", "hint": "race_lists"},
     {"id": "date_results", "entity": "date", "label": "その日の結果一括", "hint": "scrape_date_results"},
@@ -293,6 +299,9 @@ def _horse_task(
         runner.scrape_horse_pedigree_5gen(horse_id, skip_existing=smart_skip)
         if smart_skip and getattr(runner, "_last_pedigree_5gen_skip", False):
             return True
+        return False
+    if task == "horse_mating_date":
+        runner.scrape_horse_mating_date(horse_id, skip_existing=smart_skip)
         return False
     if task in ("horse_profile", "horse_pedigree"):
         runner.scrape_horse(

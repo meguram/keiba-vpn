@@ -112,6 +112,8 @@ class HybridStorage:
         "race_trainer_comment": "race",
         "horse_training": "horse",
         "horse_pedigree_5gen": "horse",
+        # 母馬の種付け情報（own.netkeiba、キーは母馬の horse_id）
+        "broodmare_mating": "horse",
         # クッション値・含水率（JRA PDF/ライブ集約）— GCS: chuou/data/others/jra_cushion/{年}.json
         "jra_cushion": "other",
         # パイプライン生成パフォーマンス指数 — GCS: chuou/data/preprocessed/netkeiba/pc/race_performance/{年}/{race_id}.json

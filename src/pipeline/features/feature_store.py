@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -436,8 +437,8 @@ class FeatureStore:
         """特徴量のメタ情報。"""
         return self._registry.get(name)
 
-    def load_column(self, name: str, years: list[str | int] | None = None) -> pd.DataFrame:
-        """単一の特徴量列を読み込む。年分割ストアでは ``years`` 指定で該当年のみ読む。"""
+    def _resolve_column_paths(self, name: str, years: list[str | int] | None = None) -> list[Path]:
+        """列ファイルのパス一覧。年分割ストアでは ``years`` 指定で該当年のファイルのみ。"""
         meta = self._registry.get(name)
         paths: list[Path] = []
         if meta and meta.get("year_partitioned") and meta.get("year_paths"):
@@ -456,6 +457,11 @@ class FeatureStore:
                 paths.append(p)
         else:
             paths = self._discover_paths_for_column(name, years=years)
+        return paths
+
+    def load_column(self, name: str, years: list[str | int] | None = None) -> pd.DataFrame:
+        """単一の特徴量列を読み込む。年分割ストアでは ``years`` 指定で該当年のみ読む。"""
+        paths = self._resolve_column_paths(name, years)
 
         if not paths:
             raise FileNotFoundError(f"特徴量なし: {name}")
@@ -538,6 +544,52 @@ class FeatureStore:
             return pd.DataFrame()
 
         return base_df
+
+    def load_rows_for_keys(
+        self,
+        names: list[str],
+        race_ids: Iterable[str],
+        years: list[str | int] | None = None,
+    ) -> pd.DataFrame:
+        """**推論向け**: 指定した ``race_id`` の行だけを各列ファイルから読み、列方向に連結して返す。
+
+        ``load_columns`` は列ファイルの全行を読み、列ごとに outer 結合を重ねるため、約1000列では
+        メモリ・時間が大きい。こちらは行をフィルタしてから読み（parquet の述語プッシュダウン）、
+        結合も1回の ``concat`` で済ませる。同一マージキーの列のみ指定できる（``load_columns`` と同じ制約）。
+        ``years`` 省略時は ``race_id`` の先頭4桁（年）から決める。該当行の無い列は NaN になる。
+        """
+        ids = sorted({str(r) for r in race_ids if str(r)})
+        if not names or not ids:
+            return pd.DataFrame()
+        keys0 = self._merge_keys_for_column(names[0])
+        if "race_id" not in keys0:
+            raise ValueError(f"race_id をキーに持たない列は行フィルタ読み込みできません: {names[0]!r} {keys0}")
+        use_years = [str(y) for y in years] if years else sorted({i[:4] for i in ids})
+
+        series: list[pd.Series] = []
+        for name in names:
+            keys = self._merge_keys_for_column(name)
+            if keys != keys0:
+                raise ValueError(f"同一マージキーのみ: {names[0]!r} は {keys0}, {name!r} は {keys}")
+            paths = self._resolve_column_paths(name, use_years)
+            if not paths:
+                if not self._resolve_column_paths(name):
+                    raise FileNotFoundError(f"特徴量なし: {name}")
+                continue  # 列はあるが、指定年のデータが無い
+            parts = []
+            for p in paths:
+                tb = pq.read_table(p, filters=[("race_id", "in", ids)])
+                if tb.num_rows:
+                    parts.append(tb.to_pandas())
+            if not parts:
+                continue
+            df = pd.concat(parts, ignore_index=True).drop_duplicates(subset=keys0, keep="last")
+            indexed = df.set_index(keys0)
+            series.extend(indexed[c] for c in indexed.columns)
+
+        if not series:
+            return pd.DataFrame(columns=keys0)
+        return pd.concat(series, axis=1).reset_index()
 
     # ── 学習用マトリクス構築 ──────────────────────────
 

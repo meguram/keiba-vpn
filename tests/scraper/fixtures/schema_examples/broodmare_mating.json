@@ -1,0 +1,14 @@
+{
+  "horse_id": "2017101417",
+  "matings": [
+    {
+      "mating_year": 2025,
+      "mating_date": "2025-05-17",
+      "sire_name": "ウインブライト",
+      "sire_id": "2014100222"
+    }
+  ],
+  "mating_count": 1,
+  "source": "own_netkeiba",
+  "fetched_at": "2026-10-02T00:00:00+00:00"
+}

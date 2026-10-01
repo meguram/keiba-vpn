@@ -48,6 +48,7 @@ CATEGORY_ID_TYPE = {
     "horse_profile": "horse",
     "horse_result_html": "horse",
     "horse_ped": "horse",
+    "broodmare_mating": "horse",
     "horse_training": "horse",
 }
 
@@ -120,6 +121,9 @@ ESSENTIAL_SELECTORS: dict[str, list[str]] = {
     "horse_ped": [
         "table.blood_table", "table[class*='blood']",
         "table[summary*='血統']",
+    ],
+    "broodmare_mating": [
+        "table.NkOwnersTable01",
     ],
     "race_lists": [
         "a[href*='/race/']",

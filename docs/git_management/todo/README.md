@@ -60,6 +60,8 @@ horse-profile・odds-final-odds）の「既知の課題」に個別の背景を�
 | [growth-curve.md](./growth-curve.md) | `feature/growth-curve` | 成長曲線 |
 | [horse-profile.md](./horse-profile.md) | `feature/horse-profile` | 馬プロフィール・馬名検索・関係者統計 |
 
+機能領域ではなく**作業する環境（開発PC / 学習PC / VPS / GCP）**で並べ直した一覧は [environment-tasks.md](./environment-tasks.md)。
+
 各ファイルの「対象エンドポイント」の正確な一覧（method/path/handler/行番号）は
 `../feature-<branch>.md`（ページURL）および
 `.claude/skills/evaluate-keiba-architecture/scripts/collect_endpoints.py` の出力（全`/api/*`含む）を参照。

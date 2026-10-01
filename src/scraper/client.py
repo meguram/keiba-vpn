@@ -136,6 +136,7 @@ _REFERER_MAP: dict[str, str] = {
     "db.netkeiba.com": "https://db.netkeiba.com/",
     "race.netkeiba.com": "https://race.netkeiba.com/",
     "regist.netkeiba.com": "https://regist.netkeiba.com/",
+    "own.netkeiba.com": "https://own.netkeiba.com/",
     "www.smartrc.jp": "https://www.smartrc.jp/",
 }
 
