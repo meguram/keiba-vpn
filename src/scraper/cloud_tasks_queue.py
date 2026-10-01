@@ -14,16 +14,16 @@ netkeibaスクレイピングのキュー投入経路を切り替えるための
 
 環境変数（``.env.example`` の「GCP側（スクレイピング・ML・スケジュール実行）専用設定」参照）:
     KEIBA_QUEUE_BACKEND          ``cloud_tasks`` のときのみ Cloud Tasks 経路を使う（既定local）
-    GCP_PROJECT_ID                GCPプロジェクトID（必須）
+    GCS_PROJECT_ID / GCP_PROJECT_ID  GCPプロジェクトID（必須。``GCS_PROJECT_ID`` 優先）
     CLOUD_TASKS_QUEUE             Cloud Tasksキュー名（既定 ``keiba-scrape-queue``）
     CLOUD_TASKS_LOCATION          リージョン（既定 ``asia-northeast1``）
     CLOUD_RUN_JOBS_WORKER_URL     Cloud TasksがPUSHするワーカーURL（必須）
     CLOUD_TASKS_OIDC_SERVICE_ACCOUNT  設定時はタスクにOIDCトークンを付与（任意）
 
-GCP接続自体は疎通している前提で実装する。``src.config.gcp_credentials.
-ensure_google_application_credentials()`` を呼べば ``config/gcp-service-account.json``
-からADC認証される（実ファイルは開発環境には無いため、本モジュールの単体テストは
-``google.cloud.tasks_v2.CloudTasksClient`` をモックして検証する）。
+GCP接続自体は疎通している前提で実装する。認証は``.env``（dev）/``.env.stg``/``.env.prod``の
+``GCS_*``サービスアカウント情報から``src.config.gcp_credentials.build_gcp_credentials()``で
+構築し、``CloudTasksClient``へ明示的に渡す（本モジュールの単体テストは
+``google.cloud.tasks_v2.CloudTasksClient``をモックして検証する）。
 """
 
 from __future__ import annotations
@@ -63,13 +63,11 @@ def enqueue_via_cloud_tasks(
     """
     from google.cloud import tasks_v2
 
-    from src.config.gcp_credentials import ensure_google_application_credentials
+    from src.config.gcp_credentials import build_gcp_credentials, gcp_project_id
 
-    ensure_google_application_credentials()
-
-    project_id = os.environ.get("GCP_PROJECT_ID", "").strip()
+    project_id = gcp_project_id()
     if not project_id:
-        raise ValueError("GCP_PROJECT_ID が未設定です（Cloud Tasksキューには必須）")
+        raise ValueError("GCS_PROJECT_ID / GCP_PROJECT_ID が未設定です（Cloud Tasksキューには必須）")
 
     queue_name = (
         queue or os.environ.get("CLOUD_TASKS_QUEUE") or DEFAULT_CLOUD_TASKS_QUEUE
@@ -87,7 +85,7 @@ def enqueue_via_cloud_tasks(
             "CLOUD_RUN_JOBS_WORKER_URL が未設定です（Cloud TasksのPush先ワーカーURLが必須）"
         )
 
-    client = tasks_v2.CloudTasksClient()
+    client = tasks_v2.CloudTasksClient(credentials=build_gcp_credentials())
     parent = client.queue_path(project_id, location_name, queue_name)
 
     body_bytes = json.dumps(job_payload, ensure_ascii=False, default=str).encode("utf-8")

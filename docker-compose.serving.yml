@@ -14,9 +14,9 @@
 # PostgreSQL はこの構成には含めない（Cloud SQLへ移行する方針のため。
 # VPS側は .env の DATABASE_URL / KEIBA_DB_BACKEND=cloud_sql でCloud SQLに接続する）。
 #
-# VPS上で実際に必要になるファイルは、本ファイル・.env・
-# config/gcp-service-account.json（またはenv別ファイル）程度で済む
-# （詳細は docs/operations/cicd-design.md）。
+# VPS上で実際に必要になるファイルは、本ファイルと .env（dev共通ベース）・
+# .env.<環境>（stg/prod の差分。GCP認証情報 GCS_* もここに書く）程度で済む
+# （詳細は docs/operations/cicd-design.md）。GCP認証はファイルではなく .env 管理。
 #
 # 起動（VPS上）:
 #   docker compose -f docker-compose.serving.yml pull
@@ -42,16 +42,17 @@ services:
     ports:
       - "8000:8000"
     env_file:
+      # .env（共通ベース）→ .env.<KEIBA_ENV>（stg/prod の差分）の順で読み、後者が優先される。
+      # 環境別ファイルが無い場合は無視（required: false は Docker Compose v2.24+ が必要）。
       - .env
+      - path: .env.${KEIBA_ENV:-prod}
+        required: false
     environment:
-      # main.py 内の ensure_google_application_credentials() が既定で
-      # config/gcp-service-account.json を自動解決するため、.env側で明示指定しない場合は
-      # 下記マウント先と一致させておく（環境別ファイルを使う場合は .env の KEIBA_ENV に
-      # 応じて config/gcp-service-account.<env>.json を同様にマウントする）。
+      # アプリ側の load_project_dotenv() も KEIBA_ENV で同じオーバーレイを選ぶ。
+      KEIBA_ENV: ${KEIBA_ENV:-prod}
       TZ: Asia/Tokyo
     volumes:
-      # GCPサービスアカウント認証ファイル（.gitignore済み。VPS上に別途配置し読み取り専用でマウント）
-      - ./config/gcp-service-account.json:/app/config/gcp-service-account.json:ro
+      # GCP認証は .env の GCS_* で管理するため、認証ファイルのマウントは不要。
       # ローカルログを永続化したい場合（任意。無くても動く・GCS/Cloud Loggingが本流）
       - keiba_api_logs:/app/logs
     depends_on:

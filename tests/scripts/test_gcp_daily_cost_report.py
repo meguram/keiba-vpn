@@ -119,8 +119,8 @@ class TestMain(unittest.TestCase):
             os.environ, {"GCP_BILLING_BQ_TABLE": "proj.dataset.table"}, clear=False
         ):
             with mock.patch(
-                "src.config.gcp_credentials.ensure_google_application_credentials",
-                return_value=True,
+                "src.utils.project_env.load_project_dotenv",
+                return_value=None,
             ), mock.patch(
                 "src.scripts.cloud_jobs.gcp_daily_cost_report.fetch_daily_cost",
                 side_effect=RuntimeError("bigquery boom"),
@@ -140,8 +140,8 @@ class TestMain(unittest.TestCase):
             os.environ, {"GCP_BILLING_BQ_TABLE": "proj.dataset.table"}, clear=False
         ):
             with mock.patch(
-                "src.config.gcp_credentials.ensure_google_application_credentials",
-                return_value=True,
+                "src.utils.project_env.load_project_dotenv",
+                return_value=None,
             ), mock.patch(
                 "src.scripts.cloud_jobs.gcp_daily_cost_report.fetch_daily_cost",
                 return_value={
@@ -168,8 +168,8 @@ class TestMain(unittest.TestCase):
             os.environ, {"GCP_BILLING_BQ_TABLE": "proj.dataset.table"}, clear=False
         ):
             with mock.patch(
-                "src.config.gcp_credentials.ensure_google_application_credentials",
-                return_value=True,
+                "src.utils.project_env.load_project_dotenv",
+                return_value=None,
             ), mock.patch(
                 "src.scripts.cloud_jobs.gcp_daily_cost_report.fetch_daily_cost",
                 return_value={"date": "x", "rows": [], "total": 0.0},

@@ -30,9 +30,10 @@ VPSは`docker compose pull`でこの**完成済みイメージ**を取得する�
 チェックアウトもビルドも一切発生しない。VPS上に実際に置く必要があるのは次の3種類のみ:
 
 1. [`docker-compose.serving.yml`](../../docker-compose.serving.yml)
-2. `.env`（本番用の環境変数。`.env.example`を元にVPS側で作成）
-3. `config/gcp-service-account.json`（またはenv別の`config/gcp-service-account.<env>.json`。
-   GCS/Cloud SQL/Cloud Tasks等への疎通に必要なサービスアカウント鍵。`.gitignore`済み）
+2. `.env`（共通ベース。`.env.example`を元にVPS側で作成）
+3. `.env.stg` または `.env.prod`（`KEIBA_ENV`に対応する差分。GCS/Cloud SQL/Cloud Tasks等への
+   疎通に必要なGCPサービスアカウント情報`GCS_*`もここに書く。GCP認証は鍵ファイルではなく
+   `.env`管理。`.gitignore`済み）
 
 イメージの中身は`main.py`・`src/`・`templates/`・`static/`・`requirements.txt`のみで、
 `notebooks/`・`docs/`・`tests/`・`scripts/`・`data/`・`mlflow/`は含まれない
@@ -83,8 +84,7 @@ VPS上の作業ディレクトリ（例: `~/keiba-vpn-serving/`）に置くの�
 ~/keiba-vpn-serving/
 ├── docker-compose.serving.yml
 ├── .env
-└── config/
-    └── gcp-service-account.json   (または .<env>.json。.gitignore済み・別途配置)
+└── .env.prod                      (または .env.stg。GCS_* のGCP認証情報を含む。.gitignore済み・別途配置)
 ```
 
 `git clone`やフルのソースチェックアウトは不要。`docker-compose.serving.yml`の`api`サービスは
@@ -151,7 +151,7 @@ GHCRへのpush自体は`${{ secrets.GITHUB_TOKEN }}`（GitHub Actionsが自動�
    CI側のデプロイで配布する運用に寄せることもできるが、本対応ではCIはイメージのpushのみ
    行い、`docker-compose.serving.yml`自体の配布は含めていない点に注意。初回・ファイル更新時は
    手動配置が必要）。
-3. VPS上に`.env`（本番用）と`config/gcp-service-account.json`を配置する。
+3. VPS上に`.env`（共通ベース）と`.env.prod`（または`.env.stg`。GCP認証情報`GCS_*`を含む）を配置する。
 4. GitHub Secrets（上記一覧）を設定する。
 5. `stg`または`master`ブランチへpushすると、`deploy-vps.yml`が自動的にイメージをビルドして
    GHCRへpush、VPSへSSHして`docker compose -f docker-compose.serving.yml pull && up -d`を
@@ -172,10 +172,10 @@ GHCRへのpush自体は`${{ secrets.GITHUB_TOKEN }}`（GitHub Actionsが自動�
   既存の自己ホストPostgreSQLを指すままでよいが、その場合はVPS上に
   `docker-compose.dev.yml`のPostgreSQLコンテナ（またはそれに相当するもの）を別途
   起動したままにしておく必要がある。
-- `GOOGLE_APPLICATION_CREDENTIALS`は`src.config.gcp_credentials.ensure_google_application_credentials()`
-  が未設定時に`config/gcp-service-account.json`（またはenv別ファイル）を自動解決するため、
-  `docker-compose.serving.yml`のボリュームマウント先パス（`/app/config/gcp-service-account.json`）
-  とコンテナ内の既定探索パスが一致していることを確認する。
+- GCP認証は`.env`の`GCS_*`から`src.config.gcp_credentials.build_gcp_credentials()`が構築するため、
+  鍵ファイルのボリュームマウントは不要。`docker-compose.serving.yml`は`env_file`で`.env`と
+  `.env.${KEIBA_ENV:-prod}`（任意・後者が優先）を読み込む（`required: false`にはDocker Compose
+  v2.24+が必要）。
 
 ## GCP側（Cloud Run Jobs）のデプロイ
 

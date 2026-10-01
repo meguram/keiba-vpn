@@ -52,12 +52,12 @@ def test_backend_disabled_for_other_values(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _no_real_gcp_credentials(monkeypatch):
-    # ensure_google_application_credentials が副作用（環境変数の実書き込み等）を
-    # 起こさないようにする（実認証ファイルは本テスト環境に無い前提）。
+    # .env の実サービスアカウント情報を使わない（ADC相当のNoneで CloudTasksClient を呼ぶ）。
     monkeypatch.setattr(
-        "src.config.gcp_credentials.ensure_google_application_credentials",
-        lambda *a, **k: True,
+        "src.config.gcp_credentials.build_gcp_credentials",
+        lambda *a, **k: None,
     )
+    monkeypatch.delenv("GCS_PROJECT_ID", raising=False)
 
 
 def test_enqueue_via_cloud_tasks_calls_create_task_with_expected_params(monkeypatch):

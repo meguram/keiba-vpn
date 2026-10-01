@@ -137,7 +137,7 @@
       `KEIBA_CLOUD_TASKS_VERIFY_OIDC=1`のときのみBearerヘッダ有無を見る簡易スタブ
       （既定は無効=検証スキップ。本番相当のJWT署名検証は別途必要）。
       `requirements.txt`に`google-cloud-tasks>=2.0.0`を追加。実GCP接続はまだ無く
-      （`config/gcp-service-account.json`は本番配置物）、テストは
+      （認証は`.env`の`GCS_*`で管理、実値はユーザー側設定）、テストは
       `google.cloud.tasks_v2.CloudTasksClient`をモックして検証した
       （`tests/scraper/test_cloud_tasks_queue.py`: enqueue_via_cloud_tasksのパラメータ・
       backend分岐・add_job未設定時のローカルキューregressionなしを確認、

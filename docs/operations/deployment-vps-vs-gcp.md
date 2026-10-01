@@ -14,10 +14,14 @@
   VPSのCPU/メモリが軽量なため、重い処理はすべてここに移す。
 
 共有バックボーンは既存の**GCS**（`HybridStorage`が既にsource of truthとして利用）。
-サービスアカウント認証ファイルを `config/gcp-service-account.json`
-（`.gitignore`済み、`GOOGLE_APPLICATION_CREDENTIALS`が未設定ならこのパスを自動的に使う）
-に配置すれば、GCS/Cloud Tasks/Cloud SQL/Cloud Logging等すべてのGCPクライアントが
-疎通する前提で設計・実装する（本ドキュメント・関連コードは疎通済みを仮定して進める）。
+GCPサービスアカウント認証情報は**ファイルではなく `.env` で管理**する
+（2026-10-02決定）。`.env`（dev）・`.env.stg`（stg）・`.env.prod`（prod）の構成で、
+`KEIBA_ENV=stg|prod` のとき `.env` の後に該当ファイルを上書きマージする
+（`src/utils/project_env.load_project_dotenv()`）。サービスアカウントの各フィールドは
+既存GCS接続と同じ `GCS_*` 環境変数（`GCS_PRIVATE_KEY`等）に書き、
+`src/config/gcp_credentials.py` の `build_gcp_credentials()` がGCS/Cloud Tasks/Cloud SQL/
+BigQuery等すべてのGCPクライアントへ共通で渡す（本ドキュメント・関連コードは
+疎通済みを仮定して進める）。
 
 <!--
   このファイルの構成: 現状／役割分担マッピング／ブリッジが必要な点／比較表／TODO。
@@ -82,9 +86,8 @@
 4. **スクレイピング・推論の手動トリガー**: 現状`/api/scrape-trigger`・`POST .../predict`等の
    dev-only手動トリガーはVPS上で即時実行する設計。分担後は、VPS側のトリガーはGCP側の
    Cloud Run Jobs/Cloud Tasksを呼び出すプロキシに変える必要がある。
-5. **GCS経由の疎通**: サービスアカウント認証ファイル（`config/gcp-service-account.json`、
-   `GOOGLE_APPLICATION_CREDENTIALS`未設定時はこのパスを自動利用）を両環境に配置すれば、
-   GCS/Cloud Tasks/Cloud SQL/Cloud Logging等のGCPクライアントはすべて疎通する前提で進める。
+5. **GCS経由の疎通**: サービスアカウント認証情報を両環境の `.env`（`GCS_*`）に設定すれば、
+   GCS/Cloud Tasks/Cloud SQL/BigQuery等のGCPクライアントはすべて疎通する前提で進める。
 
 ## ユーザーリクエスト起点の計算処理をどこで実行するか（2026-10-02決定）
 
@@ -136,8 +139,8 @@ GCP側に投げるべきか、という論点について、コスト・レイ�
 - **VPSにgitリポジトリ全体をpull/checkoutさせない**。代わりにCI側でサービング専用の
   軽量Dockerイメージ（[`Dockerfile.serving`](../../Dockerfile.serving)）をビルドし、
   VPSはそのイメージだけを受け取って動かす（[`docker-compose.serving.yml`](../../docker-compose.serving.yml)）。
-  VPS上に実際に必要なファイルは`docker-compose.serving.yml`・`.env`・
-  `config/gcp-service-account.json`程度まで減る。
+  VPS上に実際に必要なファイルは`docker-compose.serving.yml`・`.env`・`.env.<環境>`
+  程度まで減る（GCP認証情報は`.env`内の`GCS_*`）。
 - イメージは`main.py`・`src/`・`templates/`・`static/`・`requirements.txt`のみを含む
   （`notebooks/`・`docs/`・`tests/`・`scripts/`・`data/`・`mlflow/`は含めない）。
   `src/api/app.py`の実際のimportをgrepした結果、`src/scraper`・`src/research`・
@@ -171,8 +174,8 @@ billing/cost関連の仕組みが存在しないことを確認済み）。GCP�
 ### 整理・設計系の共通TODO
 - [x] 役割分担（VPS=サービング、GCP=スクレイピング/ML/スケジュール実行）を決定し、
       機能領域ごとのマッピングを作成する — 2026-10-02対応: 上記「役割分担マッピング」表を作成
-- [ ] GCPサービスアカウント認証ファイル（`config/gcp-service-account.json`）を実際に配置する
-      （本ドキュメント・関連実装は配置済みを前提に進めているが、実ファイルの配置はユーザー側作業）
+- [ ] GCPサービスアカウント認証情報を各環境の `.env` / `.env.stg` / `.env.prod` の `GCS_*` に設定する
+      （本ドキュメント・関連実装は設定済みを前提に進めているが、実際の値の設定はユーザー側作業）
 - [ ] Cloud SQLインスタンスを作成し、VPS・GCP双方からの接続情報（接続名・IP許可・認証情報）を
       `.env`に設定する — 2026-10-01対応: 接続実装（`src/db/cloud_sql.py`の
       `get_cloud_sql_engine()`、`src/db/session.py`の`KEIBA_DB_BACKEND=cloud_sql`分岐、

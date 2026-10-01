@@ -5,14 +5,17 @@ VPS（サービング）・GCP（スクレイピング/ML/スケジュール実�
 ``DATABASE_URL`` 直結の代わりに Cloud SQL Python Connector を使う経路を提供する。
 
 ``src/db/session.py`` から ``KEIBA_DB_BACKEND=cloud_sql`` のときのみ呼ばれる。
-GCP 認証は事前に ``src.config.gcp_credentials.ensure_google_application_credentials()``
-が呼ばれ、ADC（Application Default Credentials）が利用可能になっている前提。
+GCP 認証は ``.env``（dev）/``.env.stg``/``.env.prod`` の ``GCS_*`` サービスアカウント情報から
+``src.config.gcp_credentials.build_gcp_credentials()`` で構築し ``Connector`` へ渡す
+（未設定時は ``None`` → ADCへフォールバック）。
 """
 
 from __future__ import annotations
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+
+from src.config.gcp_credentials import build_gcp_credentials
 
 
 def get_cloud_sql_engine(
@@ -35,7 +38,7 @@ def get_cloud_sql_engine(
     """
     from google.cloud.sql.connector import Connector
 
-    connector = Connector()
+    connector = Connector(credentials=build_gcp_credentials())
 
     def getconn():
         return connector.connect(

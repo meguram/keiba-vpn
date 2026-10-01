@@ -247,25 +247,9 @@ class HtmlArchive:
 
     @staticmethod
     def _build_credentials():
-        private_key = os.environ.get("GCS_PRIVATE_KEY", "")
-        if not private_key:
-            return None
-        private_key = private_key.replace("\\n", "\n")
-        info = {
-            "type": os.environ.get("GCS_TYPE", "service_account"),
-            "project_id": os.environ.get("GCS_PROJECT_ID", ""),
-            "private_key_id": os.environ.get("GCS_PRIVATE_KEY_ID", ""),
-            "private_key": private_key,
-            "client_email": os.environ.get("GCS_CLIENT_EMAIL", ""),
-            "client_id": os.environ.get("GCS_CLIENT_ID", ""),
-            "auth_uri": os.environ.get("GCS_AUTH_URI", ""),
-            "token_uri": os.environ.get("GCS_TOKEN_URI", ""),
-            "auth_provider_x509_cert_url": os.environ.get("GCS_AUTH_PROVIDER_CERT_URL", ""),
-            "client_x509_cert_url": os.environ.get("GCS_CLIENT_CERT_URL", ""),
-            "universe_domain": os.environ.get("GCS_UNIVERSE_DOMAIN", "googleapis.com"),
-        }
-        from google.oauth2 import service_account
-        return service_account.Credentials.from_service_account_info(info)
+        """``.env``の``GCS_*``からサービスアカウント認証情報を構築する（共通ヘルパーに委譲）。"""
+        from src.config.gcp_credentials import build_gcp_credentials
+        return build_gcp_credentials()
 
     def _get_bucket(self):
         if self._gcs_bucket is None:

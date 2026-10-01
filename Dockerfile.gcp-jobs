@@ -45,9 +45,9 @@ COPY --from=builder /install /usr/local
 
 # スクレイピング本体・学習コードを含む src/ 全体（notebooks/docs/tests/scripts/dataは含めない）
 COPY src/ ./src/
-# settings.yaml・megu_* 等の非シークレット設定（gcp-service-account*.jsonは
-# Dockerfile.gcp-jobs.dockerignoreで除外。GCP側はCloud Run Jobsの実行サービスアカウントの
-# ADCを使う運用を想定し、通常はファイル配置不要。環境別ファイルを使う場合のみ別途マウント/配置する）
+# settings.yaml・megu_* 等の非シークレット設定。.env* はDockerfile.gcp-jobs.dockerignoreで除外。
+# GCP側はCloud Run Jobsの実行サービスアカウントのADCを使うのが基本で、
+# 明示的に認証したい場合のみ環境変数（GCS_*）をジョブ側に設定する（鍵ファイルは使わない）
 COPY config/ ./config/
 COPY requirements.txt ./requirements.txt
 

@@ -34,8 +34,8 @@ def _scrub_nan(obj: Any) -> Any:
         return [_scrub_nan(v) for v in obj]
     return obj
 
-from dotenv import load_dotenv as _load_dotenv
-_load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
+from src.utils.project_env import load_project_dotenv as _load_project_dotenv
+_load_project_dotenv()
 
 # KEIBA_PROFILE で省メモリ設定を一括適用（.env の値は上書きしない）
 from src.config.profiles import apply_profile as _apply_profile

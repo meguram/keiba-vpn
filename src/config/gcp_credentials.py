@@ -1,63 +1,77 @@
 """
-GCPサービスアカウント認証ファイルの既定パス解決。
+GCPサービスアカウント認証情報を ``.env`` から構築する（ファイル配置は使わない）。
 
-``GOOGLE_APPLICATION_CREDENTIALS`` が未設定でも、リポジトリ既定パスにファイルが
-置かれていれば自動的に ``GOOGLE_APPLICATION_CREDENTIALS`` を設定する。これにより
-google-cloud-* の各クライアント（Storage/Logging/Tasks/SQL Connector等）は
-Application Default Credentials (ADC) の仕組みでそのまま認証ファイルを読む。
+このプロジェクトのGCP認証は .env 管理に統一する:
+  - 共通設定: ``.env``（dev）
+  - 環境別オーバーレイ: ``.env.stg`` / ``.env.prod``
+    （``KEIBA_ENV=stg|prod`` のとき ``src.utils.project_env.load_project_dotenv()`` が
+    ``.env`` を読んだ後に上書きマージする。dev/stg/prodで別々のGCPプロジェクト・
+    サービスアカウントを使う場合は、各 ``.env.<env>`` に異なる値を書けばよい）
 
-dev/stg/prod で別々のGCPプロジェクト・サービスアカウントを使う場合に備え、
-``KEIBA_ENV``/``APP_ENV``（`src.config.deployment.keiba_env()`で正規化）に応じて
-環境別ファイル ``config/gcp-service-account.<env>.json`` を優先的に探す
-（例: ``config/gcp-service-account.dev.json``・``.stg.json``・``.prod.json``）。
-環境別ファイルが無ければ、環境を問わない既定ファイル ``config/gcp-service-account.json``
-にフォールバックする（単一GCPプロジェクトで全環境を共有する場合はこれだけでよい）。
+サービスアカウントの各フィールドは、既存の ``src.scraper.storage.HybridStorage`` が
+GCS接続に使っている ``GCS_*`` 環境変数（``GCS_TYPE`` / ``GCS_PROJECT_ID`` /
+``GCS_PRIVATE_KEY_ID`` / ``GCS_PRIVATE_KEY`` / ``GCS_CLIENT_EMAIL`` / ``GCS_CLIENT_ID`` 等）
+をそのまま再利用する。GCS・Cloud Tasks・Cloud SQL・BigQuery・Cloud Logging等、
+このプロジェクトが使うGCPサービスは同一のサービスアカウントを前提にしているため、
+認証情報を二重管理しない。
 
-VPS側（サービング）・GCP側（スクレイピング/ML/スケジュール実行）どちらでも、
-この関数を起動時に一度呼ぶだけでGCPクライアントが疎通する前提で各モジュールを実装する。
+``config/gcp-service-account*.json`` のようなファイル配置は使わない
+（.gitignoreのパターンは誤配置時の保険として残すが、積極的な利用は想定しない）。
 """
 
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
-DEFAULT_GCP_CREDENTIALS_PATH = Path("config/gcp-service-account.json")
-
-
-def _env_specific_credentials_path(base_dir: str | Path) -> Path:
-    from src.config.deployment import keiba_env
-
-    env = keiba_env()
-    return Path(base_dir) / "config" / f"gcp-service-account.{env}.json"
+try:
+    from google.oauth2 import service_account as _service_account
+except ImportError:  # pragma: no cover - google-auth未インストール環境向けの保険
+    _service_account = None
 
 
-def candidate_gcp_credentials_paths(base_dir: str | Path = ".") -> tuple[Path, ...]:
-    """探索順（環境別 → 共通既定）でパス候補を返す。"""
-    return (
-        _env_specific_credentials_path(base_dir),
-        Path(base_dir) / DEFAULT_GCP_CREDENTIALS_PATH,
-    )
+def gcp_service_account_info() -> dict[str, str] | None:
+    """``GCS_*`` 環境変数からサービスアカウント情報dictを組み立てる。
 
-
-def ensure_google_application_credentials(base_dir: str | Path = ".") -> bool:
-    """``GOOGLE_APPLICATION_CREDENTIALS`` 未設定時に既定パス（環境別優先）を探して設定する。
-
-    Returns:
-        認証ファイルが（既存設定または既定パスで）利用可能になったかどうか。
+    ``GCS_PRIVATE_KEY`` が未設定の場合は ``None`` を返す（ADCへフォールバックする想定）。
     """
-    existing = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
-    if existing:
-        return Path(existing).is_file()
+    private_key = os.environ.get("GCS_PRIVATE_KEY", "").strip()
+    if not private_key:
+        return None
+    private_key = private_key.replace("\\n", "\n")
 
-    for candidate in candidate_gcp_credentials_paths(base_dir):
-        if candidate.is_file():
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(candidate.resolve())
-            return True
-    return False
+    return {
+        "type": os.environ.get("GCS_TYPE", "service_account"),
+        "project_id": os.environ.get("GCS_PROJECT_ID", ""),
+        "private_key_id": os.environ.get("GCS_PRIVATE_KEY_ID", ""),
+        "private_key": private_key,
+        "client_email": os.environ.get("GCS_CLIENT_EMAIL", ""),
+        "client_id": os.environ.get("GCS_CLIENT_ID", ""),
+        "auth_uri": os.environ.get("GCS_AUTH_URI", "https://accounts.google.com/o/oauth2/auth"),
+        "token_uri": os.environ.get("GCS_TOKEN_URI", "https://oauth2.googleapis.com/token"),
+        "auth_provider_x509_cert_url": os.environ.get("GCS_AUTH_PROVIDER_CERT_URL", ""),
+        "client_x509_cert_url": os.environ.get("GCS_CLIENT_CERT_URL", ""),
+        "universe_domain": os.environ.get("GCS_UNIVERSE_DOMAIN", "googleapis.com"),
+    }
+
+
+def build_gcp_credentials():
+    """``.env``のサービスアカウント情報から ``google.auth.credentials.Credentials`` を構築する。
+
+    ``GCS_PRIVATE_KEY`` 未設定時は ``None`` を返す。呼び出し側はこの場合、各クライアントの
+    既定コンストラクタ（``credentials=None``）に渡してADC（Cloud Run実行時に自動付与される
+    サービスアカウント等）へフォールバックすること。
+    """
+    info = gcp_service_account_info()
+    if not info or _service_account is None:
+        return None
+    return _service_account.Credentials.from_service_account_info(info)
+
+
+def gcp_project_id() -> str:
+    """``GCS_PROJECT_ID``（未設定時は``GCP_PROJECT_ID``）を返す。"""
+    return os.environ.get("GCS_PROJECT_ID", "").strip() or os.environ.get("GCP_PROJECT_ID", "").strip()
 
 
 def gcp_credentials_available() -> bool:
-    """現在のプロセスでGCP認証ファイルが利用可能かどうか（副作用なし）。"""
-    path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
-    return bool(path) and Path(path).is_file()
+    """``.env``からGCPサービスアカウント認証情報を構築できるかどうか（副作用なし）。"""
+    return gcp_service_account_info() is not None

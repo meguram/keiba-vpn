@@ -18,6 +18,7 @@ coverage.xml
 .env.*
 !.env.example
 !.env.stg.example
+!.env.prod.example
 !frontend/.env.local.example
 
 # IDE（共有したい設定のみ追跡）

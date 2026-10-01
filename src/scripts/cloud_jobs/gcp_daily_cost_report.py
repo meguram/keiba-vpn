@@ -78,7 +78,13 @@ def fetch_daily_cost(date: str, table: str) -> dict:
         ]
     )
 
-    client = bigquery.Client()
+    from src.config.gcp_credentials import build_gcp_credentials, gcp_project_id
+
+    credentials = build_gcp_credentials()
+    client = bigquery.Client(
+        credentials=credentials,
+        project=gcp_project_id() or None,
+    )
     query_job = client.query(query, job_config=job_config)
 
     rows: list[dict] = []
@@ -115,6 +121,10 @@ def main(argv: list[str] | None = None) -> int:
 
     target_date = args.date.strip() or _default_target_date()
 
+    from src.utils.project_env import load_project_dotenv
+
+    load_project_dotenv()
+
     from src.utils.notify import notify_slack
 
     table = os.environ.get("GCP_BILLING_BQ_TABLE", "").strip()
@@ -128,10 +138,6 @@ def main(argv: list[str] | None = None) -> int:
         print(message, file=sys.stderr)
         notify_slack(message)
         return 0
-
-    from src.config.gcp_credentials import ensure_google_application_credentials
-
-    ensure_google_application_credentials()
 
     try:
         result = fetch_daily_cost(target_date, table)

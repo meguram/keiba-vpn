@@ -76,9 +76,9 @@ COPY wsgi.py ./wsgi.py
 COPY src/ ./src/
 COPY templates/ ./templates/
 COPY static/ ./static/
-# settings.yaml・megu_* 等の非シークレット設定（gcp-service-account*.json は
-# Dockerfile.serving.dockerignore で除外し、実行時に docker-compose.serving.yml で
-# 読み取り専用マウントする）
+# settings.yaml・megu_* 等の非シークレット設定。GCP認証情報は.envのGCS_*で管理し、
+# .env* はDockerfile.serving.dockerignoreでイメージから除外、実行時にdocker-compose.serving.ymlの
+# env_fileで注入する（鍵ファイルは使わない）
 COPY config/ ./config/
 
 # ログ出力先（logs/*.log）。本番は Cloud Logging 相当の集約を別途検討

@@ -34,7 +34,8 @@ class TestGetCloudSqlEngine(unittest.TestCase):
             self.assertIsInstance(engine, Engine)
             # creator パターン: URLはドライバのみでホスト情報を持たない
             self.assertEqual(str(engine.url), "postgresql+pg8000://")
-            mock_connector_cls.assert_called_once_with()
+            # .env の GCS_* が未設定なので credentials=None（ADCへフォールバック）で渡される
+            mock_connector_cls.assert_called_once_with(credentials=None)
 
     def test_creator_calls_connector_connect_with_expected_args(self):
         from src.db.cloud_sql import get_cloud_sql_engine
