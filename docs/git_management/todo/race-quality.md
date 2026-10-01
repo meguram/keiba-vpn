@@ -34,16 +34,32 @@
 
 ## 既知の課題
 
-（無し）
+- 下記TODOの「`/api/race-quality/day`の自動実行（バッチ/cron）整備」は、VPSなら既存のOS
+  crontab方式に乗せればよい。GCPへ移行する場合も、Compute Engineでのリフト&シフトなら
+  同方式を継続できるが、Cloud Run等のサーバーレス構成を選ぶ場合はCloud Scheduler+Cloud Run
+  Jobsでの実装が前提になる（採用するGCPサービスにより対応が変わる）。詳細は
+  [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)。
+  現時点ではVPS運用継続が方針のため、本ファイルのTODOはそのまま進めてよい。
 
 ## TODO（手動追記用）
 
 <!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
 
-- [ ] `/api/race-quality/day`（日次一括推定）が自動実行（バッチ/cron）されているか確認し、
-      無ければ整備する（現状はAPI呼び出しのみで、いつ計算されるかが不明）
+### 共通TODO（ホスト方式に関係ない）
+
 - [ ] 血統・戦歴データが欠損している馬について、entrants-aptitude がエラー落ちせず
       妥当なフォールバック値を返すか確認する
 - [ ] レース質推定の精度（実際の決着との相関）を検証する
+
+### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+
+- [ ] `/api/race-quality/day`（日次一括推定）が自動実行（バッチ/cron）されているか確認し、
+      無ければOS crontab方式で整備する（現状はAPI呼び出しのみで、いつ計算されるかが不明）
+
+### GCPサーバーレス（Cloud Run等）移行時のTODO
+
+- [ ] 上記の自動実行整備は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
+      実装が前提になる。詳細は
+      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
 
 ## メモ

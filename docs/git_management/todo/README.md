@@ -3,6 +3,21 @@
 `feature/XXX` 各ブランチの「現状の実装」「目標（推測）」「削除してよいライン」「既知の課題」「TODO」を
 1ファイルずつ管理する。
 
+**VPS運用 vs GCP運用について**: 定期実行・常駐プロセス・ログ・スクレイピングのIP安定性等、
+デプロイ基盤（VPS/GCP）によって現状・TODOの前提が変わる領域がある。GCPは **Cloud Runに
+限定せず、Compute Engineでのリフト&シフトも含めたコスト最適な組み合わせ**で検討している
+（本ワークロードは常時稼働のdaemon thread・cron・安定IP必須のスクレイピングが中心のため、
+Compute Engineの方がコスト面で有利になりやすいと推測。詳細は比較ドキュメント参照）。
+該当ファイル（admin-ops・scraping-queue・core-platform・monitor-quality・bloodline-pedigree・
+cushion・model-training・race-quality・race-detail・tracking-difficulty・track-speed・myostatin・
+horse-profile・odds-final-odds）の「既知の課題」に個別の差分を記載している。
+2026-10-01時点では、各ファイルの「TODO（手動追記用）」セクションも、ホスト方式への依存度に応じて
+**「共通TODO（ホスト方式に関係ない）」「常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO」
+「GCPサーバーレス（Cloud Run等）移行時のTODO」**の3分類に再構成済み（依存が無いTODOファイル
+=betting・growth-curveは共通TODOのみ）。全体の比較・移行時のTODOは
+[`../../operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+を参照（2026-10-01時点ではVPS運用継続が方針、GCP移行は未決定）。
+
 ## 各セクションの意味
 
 - **現状の実装**: 2026-09-30時点でコード上できていること（docstring・実装読解ベース）。

@@ -50,9 +50,23 @@
 
 <!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
 
+### 共通TODO（ホスト方式に関係ない）
+
 - [ ] predictions のGCS/PostgreSQL二重経路について、`docs/operations/service-endpoints.md`の
       再検討条件（自動化着手）に該当する変更が無いか定期的に確認する（既知の課題を参照）
 - [ ] `/api/race/{race_id}/predictions` が「表示されない/古い」場合の検知（モニタリング）を追加する
 - [ ] `/api/race/{race_id}/bloodline-aptitude`（dev=モック/stg=DB集計値）のstg実データ精度を検証する
+
+### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+
+- [ ] `pre_race_predict_trigger.py`の本実装（cron登録含む）に着手する場合、VPS継続か
+      GCP Compute Engineかに関わらずOS crontabのまま実装できる
+
+### GCPサーバーレス（Cloud Run等）移行時のTODO
+
+- [ ] `pre_race_predict_trigger.py`の本実装にCloud Run等のサーバーレス構成を選ぶ場合は
+      Cloud Scheduler+Cloud Run Jobsでの実装が前提になる。着手前にVPS継続かGCP移行か、
+      移行する場合はどちらのコンピュート方式かの方針を確認すること。詳細は
+      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
 
 ## メモ

@@ -39,15 +39,34 @@
 
 （無し。以前 `/api/cushion/scrape`(+status) が `scraping-queue` に誤分類されていたが移動済み。
 v1側との重複実装や`HybridStorage()`直接生成も無いことを確認済み）
+- 下記TODOの「ポーリングスケジュールの稼働確認」「sync-gcs等の実行頻度確認」は、VPSなら
+  既存のOS crontab/daemon thread方式を前提に調査すればよい。GCPへ移行する場合も、
+  Compute Engineでのリフト&シフトなら同方式を前提に調査できるが、Cloud Run等の
+  サーバーレス構成を選ぶ場合はスケジュール自体がCloud Scheduler+Cloud Run Jobsに
+  置き換わる前提になる（採用するGCPサービスにより対応が変わる）。詳細は
+  [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)。
+  現時点ではVPS運用継続が方針のため、本ファイルのTODOはそのまま進めてよい。
 
 ## TODO（手動追記用）
 
 <!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
 
-- [ ] `POST /api/cushion/live` のポーリングスケジュール（`/schedule`で確認できる想定）が
-      実際に稼働しているか確認する
+### 共通TODO（ホスト方式に関係ない）
+
 - [ ] JRA公式ページの構造変更でライブ取得が失敗した場合の検知・アラートを追加する
+      （検知ロジック自体はホスト方式に依存しない）
+
+### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+
+- [ ] `POST /api/cushion/live` のポーリングスケジュール（`/schedule`で確認できる想定）が
+      実際に稼働しているか、現行のOS crontab/daemon thread方式を前提に確認する
 - [ ] `admin/sync-gcs`・`admin/sync-preprocessed` の実行頻度を確認し、履歴データの欠損期間が
-      無いか点検する
+      無いか点検する（現行の定期実行方式を前提にした点検）
+
+### GCPサーバーレス（Cloud Run等）移行時のTODO
+
+- [ ] 上記2件のスケジュール確認は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsの
+      実行ログを前提にした確認に置き換わる。詳細は
+      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
 
 ## メモ

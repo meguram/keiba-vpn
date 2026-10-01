@@ -39,14 +39,34 @@
 ## 既知の課題
 
 （無し）
+- 騎手・調教師統計（`/api/person/{ptype}/{person_id}/stats`が参照するデータ）の生成は
+  `scripts/cron/update_jockey_trainer_stats.sh`によるOS crontab定期実行が前提。GCPへ移行する場合、
+  Compute Engineでのリフト&シフトなら同方式を継続できるが、Cloud Run等のサーバーレス構成を
+  選ぶ場合はCloud Scheduler+Cloud Run Jobsでの再設計が必要になる（採用するGCPサービスにより
+  対応が変わる）。詳細は
+  [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)。
+  現時点ではVPS運用継続が方針のため、本ファイルのTODOはそのまま進めてよい。
 
 ## TODO（手動追記用）
 
 <!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
 
+### 共通TODO（ホスト方式に関係ない）
+
 - [ ] 馬名検索（`/api/horse-names/search`）の表記ゆれ対応（旧馬名・カタカナ表記違い等）を検証する
 - [ ] 他ブランチ（race-detail等）からの参照時に、本APIのタイムアウト・エラーが連鎖的に
       表示崩れを起こしていないか確認する
+
+### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+
 - [ ] 騎手・調教師統計（`/api/person/{ptype}/{person_id}/stats`）の集計対象期間・更新頻度を明記する
+      （`src.pipeline.build_jockey_trainer_stats`は現状OS crontab
+      `scripts/cron/update_jockey_trainer_stats.sh`で定期実行。この前提での更新頻度を明記する）
+
+### GCPサーバーレス（Cloud Run等）移行時のTODO
+
+- [ ] 上記の統計更新頻度は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
+      実行頻度に置き換わる。詳細は
+      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
 
 ## メモ

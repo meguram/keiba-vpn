@@ -43,15 +43,42 @@
 ## 既知の課題
 
 （無し。以前 `/api/cushion/scrape`(+status) が誤ってここに分類されていたが `feature/cushion` へ移動済み）
+- `job_queue.py`のキューはローカルJSONファイル＋ファイルロック（`_LOCK_TIMEOUT`30分）を前提に、
+  常駐ワーカースレッドが継続処理する設計（VPS運用前提）。また netkeiba スクレイピングは
+  `NETKEIBA_MAX_CONCURRENT_REQUESTS=1`等の低負荷・低頻度設計で単一の安定した送信元IPからの
+  アクセスを前提にしている。GCPへ移行する場合、**Compute Engineでのリフト&シフトなら
+  現行方式のまま、予約静的IPでIP安定性も低コストに継続できる**。一方、Cloud Run等の
+  サーバーレス構成を選ぶ場合はキュー基盤自体の再設計（Cloud Tasks等）と、outbound IP固定化
+  （Serverless VPC Connector+Cloud NAT。netkeiba側のブロック・CAPTCHAリスク対策として重要、
+  かつCompute Engineの予約IPより固定費が高くなりやすい）の両方が必要になる。
+  本ワークロードの形状（常時稼働・安定IP必須）からはCompute Engineの方がコスト面で
+  有利になりやすい。詳細は
+  [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)。
+  現時点ではVPS運用継続が方針のため、本ファイルのTODOはそのまま進めてよい。
 
 ## TODO（手動追記用）
 
 <!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
+
+### 共通TODO（ホスト方式に関係ない）
 
 - [ ] `kick`/`recover`/`stop-and-clear`等の緊急系エンドポイントの実際の使用頻度を計測する
       （頻発しているなら自動リカバリ側の改善が必要）
 - [ ] データ欠損検出（`/api/scrape-missing`）から再取得までの自動化率を確認する
       （現状は手動トリガー系エンドポイントが多く残っており、自動化しきれていない可能性がある）
 - [ ] 欠損が一定時間解消されない場合のアラート通知（Slack等）の追加を検討する
+      （通知を送る判断ロジック自体はホスト方式に関係ないが、実装先は下記を参照）
+
+### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+
+- [ ] 上記アラート通知を追加する場合、現行の`job_queue.py`常駐ワーカースレッド内に
+      そのまま実装できる
+
+### GCPサーバーレス（Cloud Run等）移行時のTODO
+
+- [ ] `job_queue.py`（ローカルJSONファイル+ファイルロック）のキュー基盤をCloud Tasks等へ
+      置き換えてからでないと、上記アラート通知も含めた機能追加の前提が変わる。
+      netkeibaスクレイピングのoutbound IP固定化（Cloud NAT等）も合わせて必要。詳細は
+      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
 
 ## メモ

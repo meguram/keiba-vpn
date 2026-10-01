@@ -38,14 +38,31 @@
 
 ## 既知の課題
 
-（無し）
+- 下記TODOの「`rebuild-baselines`の定期実行有無の確認」は、VPSなら既存のOS crontab方式に
+  乗せればよい。GCPへ移行する場合も、Compute Engineでのリフト&シフトなら同方式を継続できるが、
+  Cloud Run等のサーバーレス構成を選ぶ場合はCloud Scheduler+Cloud Run Jobsでの実装が前提になる
+  （採用するGCPサービスにより対応が変わる）。詳細は
+  [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)。
+  現時点ではVPS運用継続が方針のため、本ファイルのTODOはそのまま進めてよい。
 
 ## TODO（手動追記用）
 
 <!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
 
-- [ ] `POST /api/track-speed/rebuild-baselines` の実行トリガーが手動のみか、定期実行があるかを確認する
+### 共通TODO（ホスト方式に関係ない）
+
 - [ ] `perf_index`が付与されていない馬・レースの割合を計測し、`assign`の対象範囲に漏れが無いか確認する
 - [ ] `/track-speed/dev`（開発用ページ、ログイン必須）の役割を整理し、本番ページとの差異を明記する
+
+### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+
+- [ ] `POST /api/track-speed/rebuild-baselines` の実行トリガーが手動のみか、定期実行があるかを
+      現行のOS crontab/daemon thread方式を前提に確認する
+
+### GCPサーバーレス（Cloud Run等）移行時のTODO
+
+- [ ] 上記の定期実行確認・整備は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsの
+      実行ログを前提にした確認に置き換わる。詳細は
+      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
 
 ## メモ

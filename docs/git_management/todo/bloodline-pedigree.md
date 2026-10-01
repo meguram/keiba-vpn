@@ -78,17 +78,36 @@
 ## 既知の課題
 
 （無し。ページURL・API双方とも他ブランチとの分類重複は見つかっていない）
+- 下記TODOの「定期rebuildスケジュールの整備」は、VPSなら既存のOS crontab/daemon thread方式
+  でそのまま整備できる。GCPへ移行する場合も、Compute Engineでのリフト&シフトなら同じ方式を
+  概ねそのまま使えるが、Cloud Run等のサーバーレス構成を選ぶ場合はCloud Scheduler+Cloud Run
+  Jobsでの再設計が必要になる（採用するGCPサービスにより対応が変わる）。方式検討前に
+  [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)を参照。
+  現時点ではVPS運用継続が方針のため、本ファイルのTODOはそのまま進めてよい。
 
 ## TODO（手動追記用）
 
 <!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
 
-- [ ] bloodline-cluster / pedigree-map / stallion-sire-tree 等、複数アーティファクトの
-      定期rebuildスケジュールの有無を確認し、無ければ整備する（現状はいずれも手動`POST rebuild`系）
+### 共通TODO（ホスト方式に関係ない）
+
 - [ ] `/bloodline`・`/bloodline-cluster`・`/pedigree-map`・`/note-aptitude-race` 等、
       サブテーマごとに別ページに分かれているUIの統合・ナビゲーション改善を検討する
       （`/course-bloodline`は既に`/bloodline`へリダイレクト統合済み）
-- [ ] 5代血統整備（race-ensure-5gen系）が未完了の馬の割合を計測し、必要なら
-      `batch-race-ensure-5gen`の定期実行を整備する
+- [ ] 5代血統整備（race-ensure-5gen系）が未完了の馬の割合を計測する
+      （計測自体はホスト方式に依存しない。計測後の定期実行整備は下記を参照）
+
+### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+
+- [ ] bloodline-cluster / pedigree-map / stallion-sire-tree 等、複数アーティファクトの
+      定期rebuildスケジュールの有無を確認し、無ければOS crontab/daemon thread方式で整備する
+      （現状はいずれも手動`POST rebuild`系）
+- [ ] 5代血統整備が未完了の馬が多い場合、`batch-race-ensure-5gen`の定期実行をOS crontab方式で整備する
+
+### GCPサーバーレス（Cloud Run等）移行時のTODO
+
+- [ ] 上記2件の定期実行整備は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
+      実装が前提になる。詳細は
+      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
 
 ## メモ

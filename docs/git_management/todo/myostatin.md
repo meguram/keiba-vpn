@@ -34,15 +34,31 @@
 
 ## 既知の課題
 
-（無し）
+- 下記TODOの「`recalculate`の定期実行有無の確認・スケジュール化」は、VPSなら既存のOS crontab
+  方式に乗せればよい。GCPへ移行する場合も、Compute Engineでのリフト&シフトなら同方式を
+  概ね継続できるが、Cloud Run等のサーバーレス構成を選ぶ場合はCloud Scheduler+Cloud Run Jobs
+  での再設計が必要になる（採用するGCPサービスにより対応が変わる）。詳細は
+  [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)。
+  現時点ではVPS運用継続が方針のため、本ファイルのTODOはそのまま進めてよい。
 
 ## TODO（手動追記用）
 
 <!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
 
+### 共通TODO（ホスト方式に関係ない）
+
 - [ ] 主要種牡馬のうちミオスタチン遺伝子型情報が「不明」になっている割合を計測する
-- [ ] `POST /api/myostatin/recalculate`（未確定馬の再計算）が定期実行されているか確認し、
-      無ければスケジュール化する
 - [ ] 予測（`/api/myostatin/predict`）の根拠・信頼度をユーザに分かりやすく提示できているか確認する
+
+### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+
+- [ ] `POST /api/myostatin/recalculate`（未確定馬の再計算）が定期実行されているか確認し、
+      無ければOS crontab方式でスケジュール化する
+
+### GCPサーバーレス（Cloud Run等）移行時のTODO
+
+- [ ] 上記のスケジュール化は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
+      実装が前提になる。詳細は
+      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
 
 ## メモ

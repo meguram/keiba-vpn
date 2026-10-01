@@ -38,14 +38,31 @@ legacy/v1どちらの画面から見ても同じ追走難度が表示される�
 ## 既知の課題
 
 （無し。2026-09-30時点でv1パリティ・HybridStorageシングルトン化ともに解決済み。`make test` 439 passed で確認）
+- 下記TODOの「precomputeバッチの実行スケジュール整備」は、VPSなら既存のOS crontab方式に
+  乗せればよい。GCPへ移行する場合も、Compute Engineでのリフト&シフトなら同方式を継続できるが、
+  Cloud Run等のサーバーレス構成を選ぶ場合はCloud Scheduler+Cloud Run Jobsでの実装が前提になる
+  （採用するGCPサービスにより対応が変わる）。詳細は
+  [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)。
+  現時点ではVPS運用継続が方針のため、本ファイルのTODOはそのまま進めてよい。
 
 ## TODO（手動追記用）
 
 <!-- 「現状の実装」と「削除してよいライン」の差分から推測したTODO。実態を確認して要不要を判断すること。 -->
 
+### 共通TODO（ホスト方式に関係ない）
+
 - [ ] legacy/v1で追走難度の値が一致することを確認する自動テストを追加する（現状は手動確認のみ）
-- [ ] 事前計算（`precompute`）バッチの実行スケジュール有無を確認し、無ければ整備する
-      （現状は手動トリガーのみに見える）
 - [ ] 「未計算（not_precomputed）」に当たる頻度を計測する
+
+### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+
+- [ ] 事前計算（`precompute`）バッチの実行スケジュール有無を確認し、無ければOS crontab方式で
+      整備する（現状は手動トリガーのみに見える）
+
+### GCPサーバーレス（Cloud Run等）移行時のTODO
+
+- [ ] 上記のバッチ実行整備は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
+      実装が前提になる。詳細は
+      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
 
 ## メモ
