@@ -86,6 +86,7 @@ keiba-vpn-local.pub
 # プロセス横断スロットファイル（スクレイパー並列数制御用）
 data/meta/netkeiba_global_slots/
 gcp-service-account.json
+gcp-service-account.*.json
 
 # bloodline DB
 data/research/bloodline/*.db

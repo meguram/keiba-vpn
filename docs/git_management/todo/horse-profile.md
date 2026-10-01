@@ -96,16 +96,28 @@
       `JSONResponse({"error": ...}, status_code=500)` を返す）を追加した。
       既存テスト（`tests/api/test_endpoints.py` のhorse_detail系）は全て通過を確認。
 
-### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+### VPS側（サービング）に残るTODO
 
-- [ ] 騎手・調教師統計（`/api/person/{ptype}/{person_id}/stats`）の集計対象期間・更新頻度を明記する
-      （`src.pipeline.build_jockey_trainer_stats`は現状OS crontab
-      `scripts/cron/update_jockey_trainer_stats.sh`で定期実行。この前提での更新頻度を明記する）
+- [x] 騎手・調教師統計（`/api/person/{ptype}/{person_id}/stats`）の集計対象期間・更新頻度を明記する
+      — 2026-10-02対応: 現状は`scripts/cron/update_jockey_trainer_stats.sh`経由のOS crontabで
+      `python -m src.pipeline.build_jockey_trainer_stats`を定期実行（更新頻度は同スクリプトの
+      cron設定に準拠）。配信=VPS、統計生成の実行=GCPの方針のため、同コマンドをGCP側Cloud
+      Scheduler + Cloud Run Jobsの実行コマンドとして
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)の
+      ジョブ#5に記録済み（既存コマンドのまま、新規実装は不要だった）。
 
-### GCPサーバーレス（Cloud Run等）移行時のTODO
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
 
-- [ ] 上記の統計更新頻度は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
+- [x] 上記の統計更新頻度は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
       実行頻度に置き換わる。詳細は
       [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+      — 2026-10-01対応: `scripts/cron/update_jockey_trainer_stats.sh`が呼んでいる既存CLI
+      `python -m src.pipeline.build_jockey_trainer_stats`（新規ファイル追加は不要。AGENTS.md
+      記載の正式エントリ）を確認し、実行コマンド・想定頻度（現行OS crontab`30 20 * * *`UTC=
+      毎日05:30 JSTと同一）・リソース目安・`gcloud scheduler jobs create http`登録コマンド例を
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)に
+      まとめた。デプロイ設計図は
+      [`scripts/gcp/deploy_cloud_run_jobs.sh`](../../../scripts/gcp/deploy_cloud_run_jobs.sh)。
+      実デプロイ・スケジューラ登録はユーザー側作業として残る
 
 ## メモ

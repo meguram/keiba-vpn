@@ -107,16 +107,43 @@
       閾値0での無効化を検証）。`python3 -m pytest tests/ --ignore=tests/scraper/manual
       --ignore=tests/research/manual` で既存460件+新規5件が全てpass。
 
-### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+### VPS側（サービング）に残るTODO
 
-- [ ] 上記アラート通知を追加する場合、現行の`job_queue.py`常駐ワーカースレッド内に
+- [x] 上記アラート通知を追加する場合、現行の`job_queue.py`常駐ワーカースレッド内に
       そのまま実装できる
+      — 2026-10-01対応済み: `check_stale_failed_jobs_and_notify()`を`job_queue.py`に実装し、
+      既存の`run_hourly_queue_maintenance()`（VPS常駐ワーカー内）から呼ばれる形で完了済み
+      （上記「共通TODO」3件目を参照）。ローカルJSONキュー・Cloud Tasks経由のどちらでも
+      ジョブ状態は同じ`job_queue.py`のストアで管理されるため、バックエンドに関わらず動作する。
 
-### GCPサーバーレス（Cloud Run等）移行時のTODO
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
 
-- [ ] `job_queue.py`（ローカルJSONファイル+ファイルロック）のキュー基盤をCloud Tasks等へ
+- [x] `job_queue.py`（ローカルJSONファイル+ファイルロック）のキュー基盤をCloud Tasks等へ
       置き換えてからでないと、上記アラート通知も含めた機能追加の前提が変わる。
       netkeibaスクレイピングのoutbound IP固定化（Cloud NAT等）も合わせて必要。詳細は
       [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+      — 2026-10-01対応: ジョブ投入経路だけをCloud Tasksへ切り替え可能にした（ローカルJSON
+      キューと排他ではなく環境変数で分岐する最小実装）。新規`src/scraper/cloud_tasks_queue.py`
+      に`is_cloud_tasks_backend_enabled()`（`KEIBA_QUEUE_BACKEND=cloud_tasks`判定）と
+      `enqueue_via_cloud_tasks()`（`google.cloud.tasks_v2.CloudTasksClient`で
+      `GCP_PROJECT_ID`/`CLOUD_TASKS_QUEUE`/`CLOUD_TASKS_LOCATION`/`CLOUD_RUN_JOBS_WORKER_URL`
+      からHTTP POSTタスクを作成）を実装。`job_queue.py`の`ScrapeJobQueue.add_job`冒頭で
+      backend判定し、`cloud_tasks`のときはローカルJSONキューに触れずCloud Tasksへ投入する
+      （未設定時は従来通りローカルJSON+ファイルロック、VPS側の既存動作は無変更）。
+      実行側は新規エンドポイント`POST /api/internal/cloud-tasks/process-job`
+      （`src/api/app.py`）がCloud TasksのPushを受け、既存の`src.scraper.queue_tasks.execute_job`
+      +`ScraperRunner`（`_process_claimed_job`/`_execute_scraping`と同じ実行経路）を
+      同期的に1回呼ぶのみで、新規の実行ロジックは書いていない。認証は
+      `KEIBA_CLOUD_TASKS_VERIFY_OIDC=1`のときのみBearerヘッダ有無を見る簡易スタブ
+      （既定は無効=検証スキップ。本番相当のJWT署名検証は別途必要）。
+      `requirements.txt`に`google-cloud-tasks>=2.0.0`を追加。実GCP接続はまだ無く
+      （`config/gcp-service-account.json`は本番配置物）、テストは
+      `google.cloud.tasks_v2.CloudTasksClient`をモックして検証した
+      （`tests/scraper/test_cloud_tasks_queue.py`: enqueue_via_cloud_tasksのパラメータ・
+      backend分岐・add_job未設定時のローカルキューregressionなしを確認、
+      `tests/api/test_cloud_tasks_internal_endpoint.py`: 内部エンドポイントの統合テスト）。
+      `python3 -m pytest tests/ --ignore=tests/scraper/manual --ignore=tests/research/manual`
+      で既存506件+新規17件が全てpass（regressionなし）。
+      netkeibaスクレイピングのoutbound IP固定化（Cloud NAT等）は別課題として未対応のまま。
 
 ## メモ

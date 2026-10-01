@@ -89,15 +89,28 @@ legacy/v1どちらの画面から見ても同じ追走難度が表示される�
       `python3 -m src.scripts.maintenance.measure_tracking_difficulty_coverage` を実行し、
       対象レース数・計算済み件数・未計算率(%) をこの行に追記すること。
 
-### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+### VPS側（サービング）に残るTODO
 
-- [ ] 事前計算（`precompute`）バッチの実行スケジュール有無を確認し、無ければOS crontab方式で
-      整備する（現状は手動トリガーのみに見える）
+- [x] 事前計算（`precompute`）バッチの実行スケジュール有無を確認し、無ければ整備する
+      — 2026-10-02対応: 現状は手動トリガーのみと確認。配信=VPS、precomputeバッチの実行=GCPの
+      方針のため、既存の`python -m src.scripts.maintenance.precompute_tracking_difficulty_all
+      --skip-existing`をGCP側Cloud Scheduler + Cloud Run Jobsの実行コマンドとして
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)の
+      ジョブ#7に記録済み。
 
-### GCPサーバーレス（Cloud Run等）移行時のTODO
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
 
-- [ ] 上記のバッチ実行整備は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
+- [x] 上記のバッチ実行整備は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
       実装が前提になる。詳細は
       [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+      — 2026-10-01対応: `POST /api/race/{race_id}/tracking-difficulty/precompute`と同じ
+      `build_tracking_difficulty_response()`/`save_cached_response()`を使う既存のバッチ CLI
+      `python -m src.scripts.maintenance.precompute_tracking_difficulty_all --skip-existing`
+      （新規ファイル追加は不要）を確認し、実行コマンド・想定頻度（元は固定cron無し。提案値:
+      毎日08:00 JST）・リソース目安・`gcloud scheduler jobs create http`登録コマンド例を
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)に
+      まとめた。デプロイ設計図は
+      [`scripts/gcp/deploy_cloud_run_jobs.sh`](../../../scripts/gcp/deploy_cloud_run_jobs.sh)。
+      実デプロイ・スケジューラ登録はユーザー側作業として残る
 
 ## メモ

@@ -16,6 +16,10 @@ import argparse
 import os
 import sys
 
+from src.config.gcp_credentials import ensure_google_application_credentials
+
+ensure_google_application_credentials()
+
 
 def run_server(host: str = "0.0.0.0", port: int = 8000,
                workers: int = 1, reload: bool = True):

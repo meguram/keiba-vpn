@@ -628,7 +628,37 @@ class ScrapeJobQueue:
 
         新形式: job_kind, target_id, tasks[]
         旧形式: race_id（race_all 相当）
+
+        ``KEIBA_QUEUE_BACKEND=cloud_tasks`` のときはローカルJSONキュー（本クラスの
+        ファイルベースの仕組み）を使わず、Cloud Tasks（GCP側）へジョブ仕様をそのまま
+        投入する（`docs/operations/deployment-vps-vs-gcp.md`）。未設定時（既定）は
+        従来通りローカルキューへ投入し、VPS側の既存動作に影響しない。
         """
+        from src.scraper.cloud_tasks_queue import (
+            enqueue_via_cloud_tasks,
+            is_cloud_tasks_backend_enabled,
+        )
+
+        if is_cloud_tasks_backend_enabled():
+            normalized = self._normalize_incoming_job(job)
+            job_id = f"ct_{int(time.time())}_{secrets.token_hex(4)}"
+            payload = dict(job)
+            payload["job_kind"] = normalized["job_kind"]
+            payload["target_id"] = normalized["target_id"]
+            payload["tasks"] = normalized["tasks"]
+            payload["dedupe_key"] = normalized["dedupe_key"]
+            payload["job_id"] = job_id
+            task_name = enqueue_via_cloud_tasks(payload)
+            return {
+                "status": "queued",
+                "position": 0,
+                "job_id": job_id,
+                "action": "created",
+                "job_status": "pending",
+                "backend": "cloud_tasks",
+                "cloud_tasks_task_name": task_name,
+            }
+
         with _exclusive_queue_json_lock():
             jobs = self._load_queue_nolock()
             normalized = self._normalize_incoming_job(job)

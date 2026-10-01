@@ -22,11 +22,25 @@ def database_url() -> str:
 
 def init_engine(url: str | None = None):
     global _engine, _SessionLocal
-    if url is None and not os.environ.get("DATABASE_URL"):
+    if url is None and not os.environ.get("DATABASE_URL") and not os.environ.get("KEIBA_DB_BACKEND"):
         from src.utils.project_env import load_project_dotenv
 
         load_project_dotenv()
-    _engine = create_engine(url or database_url(), pool_pre_ping=True)
+
+    backend = os.environ.get("KEIBA_DB_BACKEND", "").strip().lower()
+    if url is None and backend == "cloud_sql":
+        from src.db.cloud_sql import get_cloud_sql_engine
+
+        _engine = get_cloud_sql_engine(
+            instance_connection_name=os.environ["CLOUD_SQL_INSTANCE_CONNECTION_NAME"],
+            user=os.environ["CLOUD_SQL_DB_USER"],
+            password=os.environ["CLOUD_SQL_DB_PASSWORD"],
+            db=os.environ["CLOUD_SQL_DB_NAME"],
+        )
+    else:
+        # 既定（KEIBA_DB_BACKEND 未設定）: 従来通り DATABASE_URL から直結する。
+        _engine = create_engine(url or database_url(), pool_pre_ping=True)
+
     _SessionLocal = sessionmaker(bind=_engine, autoflush=False, autocommit=False)
     return _engine
 

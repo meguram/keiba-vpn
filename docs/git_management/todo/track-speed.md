@@ -62,15 +62,29 @@
       **`/track-speed/dev`（開発用）**: `is_developer`でなければ`/login?next=/track-speed/dev`へリダイレクト（`src/api/app.py:12107-12112`）、開発者専用。`templates/analysis/track_speed_dev.html`は`fetch()`呼び出しが0件の完全な静的解説ページで、日次データ表示・運用操作ボタンを一切持たない。内容はパイプライン概要図とStep1〜5（ペース特徴量抽出→OLS補正→ベースラインZ→テンポラルプーリング→PF指数+速度水準ラベル）の計算ロジック解説、数式・サンプル値、データアーティファクト一覧、設計メモ/制約のドキュメントのみ。
       **差異まとめ**: 想定役割は「本番＝データ閲覧＋運用操作（無認証）」 vs 「dev＝アルゴリズム解説専用の静的ドキュメント（開発者限定）」。ただし運用操作ボタン（rebuild-baselines/assign）が無認証の本番ページ側に置かれている点は、ページの役割分担の前提（本番=閲覧用、dev=開発者専用）とは矛盾しており、別途セキュリティ観点のTODO化を検討する価値がある（本TODOの対応範囲外のため指摘のみ）。
 
-### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+### VPS側（サービング）に残るTODO
 
-- [ ] `POST /api/track-speed/rebuild-baselines` の実行トリガーが手動のみか、定期実行があるかを
-      現行のOS crontab/daemon thread方式を前提に確認する
+- [x] `POST /api/track-speed/rebuild-baselines` の実行トリガーが手動のみか、定期実行があるかを確認する
+      — 2026-10-02対応: 手動トリガーのみと確認。配信=VPS、ベースライン再構築の実行=GCPの方針
+      のため、既存の`python -m src.research.race.build_track_speed_baselines`をGCP側Cloud
+      Scheduler + Cloud Run Jobsの実行コマンドとして
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)の
+      ジョブ#8に記録済み。
 
-### GCPサーバーレス（Cloud Run等）移行時のTODO
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
 
-- [ ] 上記の定期実行確認・整備は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsの
+- [x] 上記の定期実行確認・整備は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsの
       実行ログを前提にした確認に置き換わる。詳細は
       [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+      — 2026-10-01対応: `POST /api/track-speed/rebuild-baselines`と同じ
+      `TrackSpeedEngine.build_baselines()`を呼ぶ既存CLI
+      `python -m src.research.race.build_track_speed_baselines`（新規ファイル追加は不要）を
+      確認し、実行コマンド・想定頻度（元はUI手動トリガーのみで固定cron無し。提案値: 毎週日曜
+      04:00 JST）・リソース目安・`gcloud scheduler jobs create http`登録コマンド例を
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)に
+      まとめた（本バッチはサービング側プロセスの`invalidate_sigma_cache()`は呼ばないため、
+      VPS側での再読込手順が別途必要になる点も記載）。デプロイ設計図は
+      [`scripts/gcp/deploy_cloud_run_jobs.sh`](../../../scripts/gcp/deploy_cloud_run_jobs.sh)。
+      実デプロイ・スケジューラ登録はユーザー側作業として残る
 
 ## メモ

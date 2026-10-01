@@ -78,17 +78,32 @@
       該当せず、接続する場合は既定の年次分割（学習2020-2024/評価2025・複数年）で再評価し精度を
       改善してからにすべき。モデルの再学習は本対応では行っていない。
 
-### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+### VPS側（サービング）に残るTODO
 
-- [ ] `/api/odds/snapshot/{race_id}` の記録頻度・カバレッジ（主要レースで欠落が無いか）を、
-      現行のOS crontab/daemon thread方式を前提に確認する
-- [ ] オッズ予測モデルの再学習サイクル（`/api/odds/train`）が定期実行されているか、
-      現行方式を前提に確認する
+（本ファイルでは該当なし。train・snapshot記録の実行はいずれもGCP側へ移動）
 
-### GCPサーバーレス（Cloud Run等）移行時のTODO
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
 
-- [ ] 上記2件（snapshot記録・再学習サイクル）は、サーバーレス移行する場合はCloud Scheduler+
-      Cloud Run Jobsの実行ログを前提にした確認に置き換わる。詳細は
+- [ ] `/api/odds/snapshot/{race_id}`（`src/api/app.py:8758` `record_odds_snapshot`）の記録頻度・
+      カバレッジを確認する。他ジョブ（#1〜#10）と異なり「1日1回のバッチ」ではなく
+      レース発走前に複数回・レースごとに呼ぶ必要がある処理のため、単純なCloud Scheduler
+      1件には落とし込めない。既存のraceday-runner/raceday-eve系cronジョブ（発走時刻スナップショット
+      `race_day_schedule`を参照）と同じ発走時刻ベースのスケジューリングパターンを使う設計が必要
+      （2026-10-02時点で未着手。既存raceday系cronのGCP移行と合わせて設計すること）。
+- [x] snapshot記録（`/api/odds/snapshot/{race_id}`）は、サーバーレス移行する場合はCloud
+      Scheduler+Cloud Run Jobsの実行ログを前提にした確認に置き換わる。詳細は
       [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+      — 2026-10-02: 上記の通り、実行コマンドの単純な移行では済まないことが判明したため
+      設計課題として残す（このTODO自体は「サーバーレス移行時の前提」の確認として完了）。
+- [x] 再学習サイクル（`/api/odds/train`）は、サーバーレス移行する場合はCloud Scheduler+
+      Cloud Run Jobsの実行ログを前提にした確認に置き換わる — 2026-10-01対応: `/api/odds/train`
+      が呼ぶ`FinalOddsTrainer.train()`と同じ処理を行う既存CLI
+      `python -m src.scripts.data.train_final_odds_model`（新規ファイル追加は不要）を確認し、
+      実行コマンド・想定頻度（元はUI手動トリガーのみで固定cron無し。提案値: 毎週日曜03:00 JST）・
+      リソース目安・`gcloud scheduler jobs create http`登録コマンド例を
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)に
+      まとめた。デプロイ設計図は
+      [`scripts/gcp/deploy_cloud_run_jobs.sh`](../../../scripts/gcp/deploy_cloud_run_jobs.sh)。
+      実デプロイ・スケジューラ登録はユーザー側作業として残る
 
 ## メモ

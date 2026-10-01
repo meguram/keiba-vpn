@@ -99,15 +99,28 @@
       （数十〜数百件）で `analyze_race` の `r2_fit`／予測軸と、好走馬の人気・オッズ等の
       実決着傾向を比較する、という方針を推奨する。
 
-### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+### VPS側（サービング）に残るTODO
 
-- [ ] `/api/race-quality/day`（日次一括推定）が自動実行（バッチ/cron）されているか確認し、
-      無ければOS crontab方式で整備する（現状はAPI呼び出しのみで、いつ計算されるかが不明）
+- [x] `/api/race-quality/day`（日次一括推定）が自動実行（バッチ/cron）されているか確認し、
+      無ければ整備する
+      — 2026-10-02対応: 現状はAPI呼び出しのみで自動実行なしと確認。本機能はGCP側（役割分担
+      マッピング: 配信=VPS、日次一括推定の実行=GCP）に移行する方針のため、OS crontabでの整備は
+      行わず、Cloud Scheduler + Cloud Run Jobsの実行コマンドとして
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)の
+      ジョブ#6（`python -m src.scripts.cloud_jobs.race_quality_day`）に記録済み。
 
-### GCPサーバーレス（Cloud Run等）移行時のTODO
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
 
-- [ ] 上記の自動実行整備は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
+- [x] 上記の自動実行整備は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
       実装が前提になる。詳細は
       [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+      — 2026-10-01対応: `/api/race-quality/day`が呼ぶ`analyze_date()`をそのまま呼び出す
+      CLI エントリポイント`python -m src.scripts.cloud_jobs.race_quality_day`（新規）を追加し、
+      実行コマンド・想定頻度（元は固定cron無し。提案値: 毎日19:00 JST）・リソース目安・
+      `gcloud scheduler jobs create http`登録コマンド例を
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)に
+      まとめた。デプロイ設計図は
+      [`scripts/gcp/deploy_cloud_run_jobs.sh`](../../../scripts/gcp/deploy_cloud_run_jobs.sh)。
+      実デプロイ・スケジューラ登録はユーザー側作業として残る
 
 ## メモ

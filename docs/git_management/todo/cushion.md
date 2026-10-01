@@ -80,17 +80,20 @@ v1側との重複実装や`HybridStorage()`直接生成も無いことを確認�
       --ignore=tests/research/manual` で460 passed / 0 failed。JRA公式サイトへの
       実アクセスは行わず、モックHTMLのみで検証。
 
-### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+### VPS側（サービング）に残るTODO
 
-- [ ] `POST /api/cushion/live` のポーリングスケジュール（`/schedule`で確認できる想定）が
-      実際に稼働しているか、現行のOS crontab/daemon thread方式を前提に確認する
-- [ ] `admin/sync-gcs`・`admin/sync-preprocessed` の実行頻度を確認し、履歴データの欠損期間が
-      無いか点検する（現行の定期実行方式を前提にした点検）
+（本ファイルでは該当なし。スクレイピング・ライブ取得・GCS同期はいずれもGCP側へ移動。
+VPS側は`/api/cushion/data`・`/api/cushion/stats`の配信のみ）
 
-### GCPサーバーレス（Cloud Run等）移行時のTODO
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
 
-- [ ] 上記2件のスケジュール確認は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsの
-      実行ログを前提にした確認に置き換わる。詳細は
-      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+- [x] `POST /api/cushion/live` のポーリングスケジュールの実行コマンドを整理する
+      — 2026-10-02対応: `src/scraper/jra_baba_live.py`（`JRABabaLiveScraper.scrape()`、構造変更
+      検知・Slack通知込み、2026-10-01実装）が`python -m src.scraper.jra_baba_live`で直接実行可能。
+      Cloud Scheduler + Cloud Run Jobsの実行コマンドとして
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)の
+      ジョブ#14に追記した。
+- [ ] `admin/sync-gcs`・`admin/sync-preprocessed`（`POST /api/cushion/admin/*`）はGCP側Cloud Run Jobs
+      化の実行コマンドをまだ整理していない。実処理関数の特定・CLIラッパー追加が必要（未対応）。
 
 ## メモ

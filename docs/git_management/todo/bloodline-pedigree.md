@@ -124,17 +124,28 @@
       比率がそのまま未完了率になる）:
       `python3 -m src.scraper.verify_horse_scrape_completeness --start-date 20250101 --end-date 20251001 --tasks horse_pedigree_5gen`
 
-### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+### VPS側（サービング）に残るTODO
 
-- [ ] bloodline-cluster / pedigree-map / stallion-sire-tree 等、複数アーティファクトの
-      定期rebuildスケジュールの有無を確認し、無ければOS crontab/daemon thread方式で整備する
-      （現状はいずれも手動`POST rebuild`系）
-- [ ] 5代血統整備が未完了の馬が多い場合、`batch-race-ensure-5gen`の定期実行をOS crontab方式で整備する
+（本ファイルでは該当なし。アーティファクトrebuild・5代血統整備はいずれも重い処理のためGCP側へ移動。
+VPS側は読み取り系配信のみ）
 
-### GCPサーバーレス（Cloud Run等）移行時のTODO
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
 
-- [ ] 上記2件の定期実行整備は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
-      実装が前提になる。詳細は
-      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+- [x] bloodline-cluster / pedigree-map / stallion-sire-tree 等、複数アーティファクトの
+      定期rebuildスケジュールの有無を確認し、無ければ整備する
+      — 2026-10-02対応: `src/api/app.py`の`_BLOODLINE_ARTIFACTS`に列挙された各rebuilderモジュール
+      （`build_pair_lift_profiles`・`build_role_lift_profiles`等）・種牡馬ツリー
+      （`build_full_sire_tree`）はいずれも既存の`python -m`直接実行に対応済みであることを確認し、
+      Cloud Scheduler + Cloud Run Jobsの実行コマンドとして
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)の
+      ジョブ#11・#12に追記した。種牡馬ツリーの`relevant_stallion_ids`再生成ステップ
+      （`src/api/app.py`内のprivate関数`_regenerate_relevant_stallion_ids`）はCLI化未対応のまま
+      残っており、別途切り出しが必要（既知の課題として記録）。
+- [x] 5代血統整備が未完了の馬が多い場合、`batch-race-ensure-5gen`の定期実行を整備する
+      — 2026-10-02対応: 実処理関数`batch_race_pedigree_5gen_date_range`
+      （`src/research/pedigree/race_pedigree_5gen_prefetch.py`）を特定し、
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)の
+      ジョブ#13として記録。直接呼べるCLIラッパーは未作成（`python -c`呼び出しか
+      `src/scripts/cloud_jobs/`への薄いラッパー追加が今後必要）。
 
 ## メモ

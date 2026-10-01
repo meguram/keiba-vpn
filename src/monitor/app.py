@@ -1129,8 +1129,9 @@ def internal_cron_jobs():
         },
         {
             "id": "git-pull",
-            "label": "Git pull（hourly）",
-            "schedule": "毎時",
+            "label": "Git pull（手動トリガー）",
+            "schedule": "手動（UI経由 POST /api/v1/admin/git-pull。crontab未登録。2026-09-30以前に"
+                        "手動実行専用へ移行済み、scripts/cron/setup_all_cron.shにも意図的に含まれない）",
             "log": LOG_DIR / "git_pull.log",
             "success_patterns": ["git_pull: ok"],
             "description": "リモートリポジトリから最新コードを取得する。dirty な場合はスキップ（KEIBA_GIT_PULL_ON_DIRTY 制御）。",

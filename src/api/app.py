@@ -5435,6 +5435,62 @@ async def scrape_queue_add_generic_job(request: Request):
         }, status_code=500)
 
 
+@app.post("/api/internal/cloud-tasks/process-job", response_class=JSONResponse)
+async def internal_cloud_tasks_process_job(request: Request):
+    """
+    Cloud Tasks（GCP側キュー基盤）がPUSHするワーカー用の内部エンドポイント。
+
+    `src.scraper.cloud_tasks_queue.enqueue_via_cloud_tasks` がCloud Tasksキューに積んだ
+    タスクのbody（``job_kind``/``target_id``/``tasks`` 形式のジョブ仕様）を受け取り、
+    `src.scraper.queue_tasks.execute_job` で同期的に1件実行する。ローカルJSONキュー
+    （`ScrapeJobQueue`）には触れず、既存の `_process_claimed_job` / `_execute_scraping`
+    と同じ実行ロジック（`ScraperRunner` + `execute_job`）を再利用する。
+
+    認証: 本番ではCloud TasksからのOIDCトークン（Authorizationヘッダ）を検証する想定。
+    `KEIBA_CLOUD_TASKS_VERIFY_OIDC=1` のときのみ簡易チェック（Bearerヘッダの有無）を
+    有効化するスタブで、既定（未設定）では検証をスキップする。本番相当の厳密なJWT署名検証
+    （issuer/audience/署名を見る `google.oauth2.id_token.verify_oauth2_token` 等）は未実装。
+    """
+    if os.environ.get("KEIBA_CLOUD_TASKS_VERIFY_OIDC", "").strip() == "1":
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            return JSONResponse({"error": "missing bearer token"}, status_code=401)
+        # NOTE: 簡易スタブ。本番相当にするなら上記トークンをGoogleの公開鍵で検証すること。
+
+    try:
+        job_payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+
+    if not isinstance(job_payload, dict):
+        return JSONResponse(
+            {"error": "job payload must be a JSON object"}, status_code=400
+        )
+
+    try:
+        from src.scraper.queue_tasks import execute_job
+        from src.scraper.run import ScraperRunner
+
+        runner = ScraperRunner()
+        await asyncio.to_thread(execute_job, runner, job_payload)
+        return JSONResponse(
+            {"status": "completed", "job_id": job_payload.get("job_id")}
+        )
+    except Exception as e:
+        import traceback
+
+        logger.error("cloud tasks process-job 失敗: %s", e, exc_info=True)
+        # Cloud Tasksはpushレスポンスが非2xxだとリトライするため、失敗時は意図的に500を返す
+        return JSONResponse(
+            {
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+                "job_id": job_payload.get("job_id"),
+            },
+            status_code=500,
+        )
+
+
 @app.post("/api/scrape-queue/enqueue-incomplete-dates", response_class=JSONResponse)
 async def scrape_queue_enqueue_incomplete_dates(request: Request):
     """
@@ -8289,6 +8345,14 @@ def _run_training():
         _training_job["result"] = result
         _training_job["error"] = result.get("error")
         _training_job["traceback"] = None
+        if not _training_job["error"]:
+            try:
+                from src.pipeline.models.model_sync import upload_model_to_gcs
+                uploaded = upload_model_to_gcs()
+                _training_job["gcs_uploaded"] = uploaded
+            except Exception as _e_upload:
+                logger.warning("学習済みモデルのGCSアップロードに失敗（学習自体は成功扱い）: %s", _e_upload)
+                _training_job["gcs_uploaded"] = False
     except Exception as e:
         import traceback as tb
         _training_job["error"] = str(e)
@@ -8493,6 +8557,28 @@ async def get_model_info():
         })
     except Exception as e:
         return JSONResponse({"registered": False, "error": str(e)})
+
+
+@app.post("/api/admin/model/sync-from-gcs", response_class=JSONResponse)
+async def api_admin_model_sync_from_gcs(request: Request):
+    """GCS 上の最新モデルをローカル `models/keiba_model.pkl` へ同期する（開発者専用）。
+
+    VPS 側（サービング）で手動または定期実行する想定。ライブ推論
+    (`race_prediction_service.build_race_prediction_response`) はローカル
+    `models/keiba_model.pkl` を直接読み込む実装のため、GCP 側で学習したモデルを
+    GCS 経由でこのエンドポイントから反映する。GCS 無効・ネットワーク障害時も
+    例外は出さず `synced: false` を返す。
+    """
+    if not is_developer(request):
+        return JSONResponse({"error": "開発者セッションが必要です"}, status_code=403)
+    try:
+        from src.pipeline.models.model_sync import sync_latest_model_from_gcs
+
+        synced = await asyncio.to_thread(sync_latest_model_from_gcs)
+        return JSONResponse({"synced": synced})
+    except Exception as e:
+        logger.warning("モデル同期API失敗: %s", e)
+        return JSONResponse({"synced": False, "error": str(e)})
 
 
 @app.get("/api/train/compare", response_class=JSONResponse)
@@ -12703,159 +12789,22 @@ async def myostatin_recalculate():
     """
     全ての未確定馬のミオスタチン遺伝子型を血統から再計算する。
     メンデルの法則に基づいてアレル確率を計算し、JSONファイルを更新する。
+
+    実処理は src.research.genes.myostatin.recalculate_myostatin_genotypes に切り出し済み
+    （src/scripts/cloud_jobs/myostatin_recalculate.py の Cloud Scheduler + Cloud Run Jobs
+    用 CLI からも同じ関数を呼ぶ）。
     """
-    import json
-    import os
-    from pathlib import Path
-
     try:
-        # JSONファイルのパス (app.py は src/api/ に在り、project root は parents[2])
-        json_path = Path(__file__).resolve().parents[2] / "data" / "local" / "knowledge" / "myostatin_genes.json"
+        from src.research.genes.myostatin import recalculate_myostatin_genotypes
 
-        # 読み込み
-        with open(json_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        # 名前→遺伝子型のマップを作成
-        stallion_map = {}
-        for s in data["stallions"]:
-            stallion_map[s["name"]] = s
-            if s.get("name_en"):
-                stallion_map[s["name_en"]] = s
-
-        def get_alleles(name):
-            """種牡馬のアレル確率を取得"""
-            if name in stallion_map:
-                s = stallion_map[name]
-                return s.get("allele_c", 0.5), s.get("allele_t", 0.5)
-            return 0.5, 0.5  # デフォルト
-
-        def calculate_offspring_genotype(sire_c, sire_t, dam_c, dam_t):
-            """
-            父と母のアレル確率から、子のCC/CT/TT確率を計算
-
-            Args:
-                sire_c: 父がCアレルを渡す確率
-                sire_t: 父がTアレルを渡す確率
-                dam_c: 母がCアレルを渡す確率
-                dam_t: 母がTアレルを渡す確率
-
-            Returns:
-                (allele_c, allele_t, genotype, confidence)
-            """
-            # CC確率 = 父C × 母C
-            prob_cc = sire_c * dam_c
-            # TT確率 = 父T × 母T
-            prob_tt = sire_t * dam_t
-            # CT確率 = 残り
-            prob_ct = 1.0 - prob_cc - prob_tt
-
-            # 子のアレル確率
-            child_c = prob_cc + prob_ct * 0.5
-            child_t = prob_tt + prob_ct * 0.5
-
-            # 遺伝子型を推定
-            if prob_cc > 0.9:
-                genotype = "CC"
-                confidence = "highly_likely"
-            elif prob_tt > 0.9:
-                genotype = "TT"
-                confidence = "highly_likely"
-            elif prob_cc > 0.7:
-                genotype = "C?"
-                confidence = "estimated"
-            elif prob_tt > 0.7:
-                genotype = "?T"
-                confidence = "estimated"
-            elif prob_ct > 0.6:
-                genotype = "CT"
-                confidence = "estimated"
-            elif child_c > 0.6:
-                genotype = "C?"
-                confidence = "estimated"
-            elif child_t > 0.6:
-                genotype = "?T"
-                confidence = "estimated"
-            else:
-                genotype = "??"
-                confidence = "inferred"
-
-            return round(child_c, 3), round(child_t, 3), genotype, confidence
-
-        # 再計算
-        updates = []
-        for i, stallion in enumerate(data["stallions"]):
-            # 確定している場合はスキップ
-            if stallion["confidence"] == "confirmed":
-                continue
-
-            # 父の情報
-            sire_name = stallion.get("sire", "")
-            if not sire_name:
-                continue
-
-            sire_c, sire_t = get_alleles(sire_name)
-
-            # 母父の情報（母のアレル確率の推定に使用）
-            dam_sire_name = stallion.get("dam_sire", "")
-            if dam_sire_name:
-                dam_sire_c, dam_sire_t = get_alleles(dam_sire_name)
-                # 母のアレル確率は母父から推定（簡易版：母父のアレル確率を使用）
-                dam_c, dam_t = dam_sire_c, dam_sire_t
-            else:
-                # 母父不明の場合はデフォルト
-                dam_c, dam_t = 0.5, 0.5
-
-            # 子のアレル確率を計算
-            child_c, child_t, genotype, confidence = calculate_offspring_genotype(
-                sire_c, sire_t, dam_c, dam_t
-            )
-
-            # 既存より確実性が高い場合のみ更新
-            old_gt = stallion.get("genotype", "??")
-            old_conf = stallion.get("confidence", "inferred")
-
-            # 確実性のランク
-            conf_rank = {"confirmed": 4, "highly_likely": 3, "estimated": 2, "inferred": 1}
-            old_rank = conf_rank.get(old_conf, 0)
-            new_rank = conf_rank.get(confidence, 0)
-
-            # より確実な情報の場合、または同等で遺伝子型が変わる場合のみ更新
-            if new_rank >= old_rank:
-                data["stallions"][i]["genotype"] = genotype
-                data["stallions"][i]["confidence"] = confidence
-                data["stallions"][i]["allele_c"] = child_c
-                data["stallions"][i]["allele_t"] = child_t
-
-                reason = f"父{sire_name}(C={sire_c:.2f},T={sire_t:.2f})"
-                if dam_sire_name:
-                    reason += f" × 母父{dam_sire_name}(C={dam_sire_c:.2f},T={dam_sire_t:.2f})"
-
-                data["stallions"][i]["source"] = f"確率計算による推測: {reason}"
-
-                if old_gt != genotype or old_conf != confidence:
-                    updates.append({
-                        "name": stallion["name"],
-                        "old": f"{old_gt} ({old_conf})",
-                        "new": f"{genotype} ({confidence})",
-                        "allele_c": child_c,
-                        "allele_t": child_t
-                    })
-
-        # メタデータを更新
-        data["_meta"]["version"] = "2.3.2"
-        data["_meta"]["last_updated"] = "2026-03-24"
-
-        # 保存
-        with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-
+        result = await asyncio.to_thread(recalculate_myostatin_genotypes)
+        updates = result.get("updates", [])
         return JSONResponse({
             "success": True,
-            "updated_count": len(updates),
-            "total_stallions": len(data["stallions"]),
+            "updated_count": result.get("updated_count", 0),
+            "total_stallions": result.get("total_stallions", 0),
             "updates": updates[:20],  # 最初の20件のみ返す
-            "message": f"{len(updates)}頭の遺伝子型を再計算しました"
+            "message": f"{result.get('updated_count', 0)}頭の遺伝子型を再計算しました"
         })
 
     except Exception as e:

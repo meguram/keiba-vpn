@@ -1,202 +1,195 @@
-# デプロイ戦略: VPS運用 vs GCP運用（コスト最適なサービス選定）
+# デプロイ構成: ConoHa VPS（公開・サービング） + GCP（スクレイピング・ML・スケジュール実行）
 
 **対象領域**: デプロイ・インフラ全体（cron・常駐プロセス・ストレージ・ネットワーク公開）
 **関連ドキュメント**: [service-endpoints.md](./service-endpoints.md)・[server_architecture.html](./server_architecture.html)・
 [../git_management/todo/admin-ops.md](../git_management/todo/admin-ops.md) ほか各TODOファイル
-**最終更新**: 2026-10-01
+**最終更新**: 2026-10-02
 
-**位置づけ**: 2026-10-01時点ではVPS運用が確定方針。GCPへの移行は「場合によっては」の
-検討段階であり、まだ意思決定していない。本ファイルは移行するかどうかを決めるための
-整理用メモであり、GCP側のTODOは**移行が決まってから着手する**。VPS側のTODOは現行方針の
-まま改善を続けてよい。**GCP = Cloud Runに限定しない**。本ワークロードの特性
-（常時起動の daemon thread・OS cron・安定した送信元IPが必要なスクレイピング）を踏まえ、
-Compute Engineでのリフト&シフトも含めてコスト最適な組み合わせを検討する。
+**位置づけ（2026-10-02決定）**: VPS/GCPのどちらか一方を選ぶのではなく、**役割分担する**方針が
+決定した。
+- **ConoHa VPS**（2GB・軽量シェアードコア）: ページ公開・ユーザー向けAPIサービング専用。
+  必要最低限のファイルデータのみ置く（大半はGCS参照）。重い処理（スクレイピング・ML学習・
+  定期バッチ）は乗せない。
+- **GCP**: スクレイピング・ML学習・スケジュール実行（定期バッチ）専用。
+  VPSのCPU/メモリが軽量なため、重い処理はすべてここに移す。
+
+共有バックボーンは既存の**GCS**（`HybridStorage`が既にsource of truthとして利用）。
+サービスアカウント認証ファイルを `config/gcp-service-account.json`
+（`.gitignore`済み、`GOOGLE_APPLICATION_CREDENTIALS`が未設定ならこのパスを自動的に使う）
+に配置すれば、GCS/Cloud Tasks/Cloud SQL/Cloud Logging等すべてのGCPクライアントが
+疎通する前提で設計・実装する（本ドキュメント・関連コードは疎通済みを仮定して進める）。
 
 <!--
-  このファイルの構成は docs/git_management/todo/*.md と揃えている
-  （現状の実装／ベストプラクティス／比較表／TODO）。
-  コードや運用方針・GCPの価格体系が変わったら「現状」「比較表」も合わせて更新する。
+  このファイルの構成: 現状／役割分担マッピング／ブリッジが必要な点／比較表／TODO。
+  コードや運用方針が変わったら「役割分担マッピング」も合わせて更新する。
 -->
 
-## 現状（2026-10-01調査、VPS運用の実態）
+## 現状（2026-10-01調査、分担前のVPS運用の実態）
 
 - エントリ: `main.py` が uvicorn で `src.api.app:app`（FastAPI, :8000）を起動。
-  `scripts/server/service_start.sh` が dev/stg/prod を一括起動する入口（プロファイルは
-  `service_start.profiles.sh`）。prodプロファイルは「将来VPSへクローン想定」のコメントあり。
-- **Flask `/api/v1`(:5000) が仕様上の正、FastAPI(:8000)はJinja2 UI・管理画面・レガシーREST
-  で段階的廃止予定**（`docs/operations/service-endpoints.md` の DEC-013）。
-- 定期実行はOS crontab（`scripts/cron/setup_all_cron.sh`が生成。watchdog・ログローテ・
-  daily-race-lists・raceday系・weekly-update・GCS→Postgres同期・backfill等、十数エントリ）。
-- 加えて `src/api/app.py` 内に **daemon thread が7種以上**（`_scheduler_loop`構造チェック・
-  `_weekly_sire_agg_loop`・`_disk_cache_cleanup_loop`・`_queue_hourly_maintain_loop`・
-  `_logs_retention_loop`・`_daily_shutuba_enqueue_loop`・キューワーカー `_queue_slot_worker`等）。
-  これらは**FastAPIプロセスが継続起動していることが前提**で、プロセスが落ちると停止する
-  （`*/3 * * * *` の watchdog cronがプロセスダウンを検知して再起動する役割）。
-- スクレイピングキューはローカルJSONファイル＋ファイルロック（`src/scraper/job_queue.py`、
-  `_LOCK_TIMEOUT=1800秒`）で、常駐ワーカースレッドが継続処理する設計。
-- netkeibaスクレイピングは`NETKEIBA_MAX_CONCURRENT_REQUESTS=1`・低頻度リクエスト間隔
-  （1.0〜4.0秒）という低負荷設計で、**単一の安定した送信元IPからの低頻度アクセス**を
-  前提にしていると見られる。
-- ストレージはGCSを唯一のsource of truthとする設計（`HybridStorage`）。
-  `.env.example`に「本番サーバー側の`.env`にGCS認証情報を設定、ローカル開発では
-  `KEIBA_GCS_ENABLED=false`推奨」と明記 — **GCS実利用はVPS本番のみ。つまりストレージ層は
-  既にGCP（GCS）そのもので、「VPS vs GCP」は実質的にはコンピュート層とDB/キャッシュ層の
-  話に限られる**。
-- ログは`logs/`配下のローカルファイル出力のみ（GCSやクラウドログへの転送機構は無し）。
-  `/server-logs`・`/api/admin/server-logs`はこのローカルファイルを読む前提。
-- PostgreSQL・RedisはいずれもDocker Compose（`docker-compose.dev.yml`）のローカルコンテナ
-  （マネージドサービスではない）。
-- MLflowも`mlflow/server/docker-compose.yml`でTracking(SQLite backend)・モデル別Serving・
-  nginxリバースプロキシを同一ホスト上にDocker Composeで構成。
-- 認証はIP制限ではなくHMAC署名付きクッキー（`src/api/auth.py`、`DEV_SECRET_KEY`+`DEV_PASSWORD`）。
-  **VPN接続前提の設計は見当たらない**。外部公開は開発用途では`tcpexposer`という逆トンネル
-  サービス（SSH鍵ベース）を使っている（本番VPSでの公開方法は追加調査が必要）。
-- PID管理（`.server.pid`・`.monitor.pid`等）もローカルファイルシステム前提。
+  Flask `/api/v1`(:5000) が仕様上の正、FastAPI(:8000)はJinja2 UI・管理画面・レガシーREST
+  （`docs/operations/service-endpoints.md` の DEC-013）。
+- 定期実行はOS crontab + `src/api/app.py`内のdaemon thread 7種以上
+  （`_scheduler_loop`構造チェック・`_weekly_sire_agg_loop`・`_disk_cache_cleanup_loop`・
+  `_queue_hourly_maintain_loop`・`_logs_retention_loop`・`_daily_shutuba_enqueue_loop`・
+  キューワーカー `_queue_slot_worker`等）。すべて同一プロセス内で常時稼働。
+- スクレイピングキューはローカルJSONファイル＋ファイルロック（`src/scraper/job_queue.py`）。
+- ストレージはGCSが唯一のsource of truth（`HybridStorage`）。
+- PostgreSQL・RedisはいずれもDocker Compose（`docker-compose.dev.yml`）のローカルコンテナ。
+- MLflowも`mlflow/server/docker-compose.yml`で同一ホスト上にDocker Compose構成。
+- 認証はHMAC署名付きクッキー（`src/api/auth.py`）。
+- ライブ推論（`race_prediction_service`）はMLflow Registryを経由せず**ローカルpklファイル**
+  （`models/keiba_model.pkl`）を直接読む実装（2026-10-01調査で判明）。
 
-## このワークロードの特性（GCPサービス選定の前提）
+## 役割分担マッピング（機能領域 → 担当環境）
 
-GCPのどのサービスがコスト最適かは、ワークロードの形状に強く依存する。本プロジェクトは
-以下の特性を持つ:
+`docs/git_management/todo/*.md` の16機能領域を、今回決定した役割分担にマッピングする。
+「表示/配信=VPS、実行=GCP」の形になる領域は両方に分かれる。
 
-- **常時バックグラウンド処理が主体**（cron・daemon thread・スクレイピングキューが24時間
-  継続稼働）。ユーザーからの同時アクセスはスパイクせず、むしろ裏側の定期処理の方が負荷の
-  大半を占める。
-- **スクレイピング対象（netkeiba）がレート制限・ブロックに敏感**で、安定した単一の送信元IP
-  からの低頻度アクセスを前提にした設計になっている。
-- **単一運用者規模**（個人〜小規模チーム）で、マネージドサービスの運用負荷軽減より
-  月額コストの最小化が優先度として高いと推測される。
+| 機能領域（TODOファイル） | 担当環境 | 理由・移行対象 |
+|---|---|---|
+| core-platform | **VPS** | 認証・ダッシュボード・ヘルスチェックはサービングの一部 |
+| horse-profile | **VPS** | 馬名検索・馬詳細はリクエスト同期の読み取りAPI |
+| race-detail | **VPS**（配信）/ **GCP**（予測実行） | 予測結果の配信はVPS、`POST .../predict`の実行自体はGCPのCloud Run Jobsに委譲しGCSへ書き込む方針に変更 |
+| race-quality | **VPS**（配信）/ **GCP**（day一括推定の実行） | 日次一括推定はGCP側のCloud Scheduler+Jobsで事前計算、配信はVPSがGCSから読むだけ |
+| tracking-difficulty | **VPS**（配信）/ **GCP**（precomputeバッチ） | 同上パターン |
+| track-speed | **VPS**（配信）/ **GCP**（rebuild-baselines） | 同上パターン |
+| odds-final-odds | **VPS**（配信）/ **GCP**（train・snapshot記録） | 学習・定期スナップショットはGCP、配信はVPS |
+| betting | **VPS** | optimizeはリクエスト同期の軽量計算（オッズ無い場合のスクレイピング呼び出しのみ要注意） |
+| growth-curve | **VPS** | 読み取り系API、計算もリクエスト同期で軽量 |
+| myostatin | **VPS**（配信）/ **GCP**（recalculate定期実行） | 再計算バッチはGCP、knowledge参照・predictはVPS |
+| bloodline-pedigree | **VPS**（配信）/ **GCP**（アーティファクトrebuild） | 65エンドポイントの大半は読み取り系でVPS、`POST rebuild`系の重い再構築処理はGCP |
+| cushion | **GCP**（スクレイピング・ライブ取得・GCS同期） / **VPS**（data/statsの配信） | スクレイピングはGCP、配信のみVPS |
+| scraping-queue | **GCP** | job_queue.py自体・netkeibaスクレイピング全体をGCPへ移動（VPSのCPU負荷を避ける主目的） |
+| monitor-quality | **VPS** | 運用者向け監視画面・品質チェック結果表示（品質チェック自体がスクレイピング済みデータの検証なので軽量、VPSに残してよい） |
+| model-training | **GCP** | 学習・アンサンブル・バックテスト・バックフィルは最も重い処理。VPSには絶対に乗せない |
+| admin-ops | **VPS**（画面・ログ閲覧）/ **GCP**（cronジョブの実体） | `/cron-jobs`等の管理画面はVPSに残すが、disk-cache-cleanup以外のジョブ実体（スクレイピング系）はGCPへ。VPS側に残るのは軽量なdisk-cache-cleanup・logs-retention程度 |
 
-→ この形状は「リクエスト駆動でスパイクし、アイドル時は$0にしたい」というCloud Runが
-得意な領域とは異なり、**「ほぼ24時間稼働し続ける1プロセス」**というCompute Engine
-（通常のVMインスタンス）が得意な領域に近い。
+## ブリッジが必要な点（分担により新たに生じる課題）
 
-## VPSで運用する場合のベストプラクティス（現行方針を続ける場合の改善点）
+1. **PostgreSQL**: VPS（サービング）とGCP（バッチ）の両方からアクセスする必要が生じる。
+   VPS上の自己ホストDocker ComposeのままではGCP側からの到達性確保（ファイアウォール開放等）
+   が必要になり運用が複雑。**Cloud SQLへ移行するのが素直**（公開IP+SSL、または
+   Cloud SQL Auth Proxy/Python Connectorで両側から接続）。これはコスト最適化の話ではなく、
+   分担構成そのものに必要な変更。
+2. **Redis**: サービング側（VPS）のリクエストキャッシュとして使われており、低レイテンシが
+   重要。Memorystoreはデフォルトで同一VPC内からしかアクセスできずクロスクラウド接続が
+   複雑なため、**VPS側に自己ホストのまま残す**のが現実的（GCP側のバッチ処理はRedisを
+   直接必要としない設計のため問題にならない）。
+3. **モデル配信**: ライブ推論は現状ローカルpklファイル（`models/keiba_model.pkl`）を直接
+   読む実装。学習をGCPに移すと、学習済みモデルをGCS経由でVPSへ同期する仕組みが新規に必要
+   （学習→GCS保存→VPS側が定期的に最新モデルをGCSから取得してローカルに配置、という経路）。
+4. **スクレイピング・推論の手動トリガー**: 現状`/api/scrape-trigger`・`POST .../predict`等の
+   dev-only手動トリガーはVPS上で即時実行する設計。分担後は、VPS側のトリガーはGCP側の
+   Cloud Run Jobs/Cloud Tasksを呼び出すプロキシに変える必要がある。
+5. **GCS経由の疎通**: サービスアカウント認証ファイル（`config/gcp-service-account.json`、
+   `GOOGLE_APPLICATION_CREDENTIALS`未設定時はこのパスを自動利用）を両環境に配置すれば、
+   GCS/Cloud Tasks/Cloud SQL/Cloud Logging等のGCPクライアントはすべて疎通する前提で進める。
 
-- OS crontab・daemon thread・ローカルディスクを前提にした現在の設計はVPSでは自然であり、
-  大きな再設計は不要。改善の余地があるのは可観測性・耐障害性の運用面:
-  - Postgres/Redisのバックアップ・リストア手順を明文化する（現状Docker Composeの
-    ローカルコンテナのみで、スナップショット運用の有無が未確認）
-  - watchdog（3分毎のプロセス死活監視）に加えて、ディスク容量・メモリ（`KEIBA_PROFILE=vps`
-    の省メモリ設定が機能しているか）のアラートを整備する
-  - 開発用トンネル（tcpexposer）を本番公開でも使っていないか再確認し、本番は
-    nginx等の恒久的なリバースプロキシ＋TLSに統一する
-  - admin-ops.mdに記録済みの既知の課題（`git-pull`表示のstale化、OS crontab系への
-    Slack通知未対応、SSH runbook不在）を順次解消する
+## ユーザーリクエスト起点の計算処理をどこで実行するか（2026-10-02決定）
 
-## GCPで運用する場合のベストプラクティス（コスト最適な組み合わせを検討）
+ページアクセス時にユーザーが起点となって何らかの計算を発生させるAPI（on-demand compute）を
+GCP側に投げるべきか、という論点について、コスト・レイテンシの両面から以下を結論とする。
 
-GCPには複数のコンピュート選択肢があり、コスト最適解はワークロードの形状で変わる。
-Cloud Run前提で全面再設計するのが常に正解ではないため、以下を比較候補とする。
+- **同期・軽量な計算（数ms〜数十ms、スクレイピングを伴わない）はVPSに残す**。
+  例: growth-curveのオンデマンド計算（実測2〜4ms程度）、race-qualityのフォールバック計算、
+  myostatin predict。VPS→GCPへの同期呼び出しは、ネットワーク往復（数十ms〜）に加えCloud Run
+  のコールドスタート（スケールtoゼロ時は最大数秒）が乗るリスクがあり、ユーザーがページ表示を
+  待っている最中に発生すると体感レイテンシが悪化する。常時ウォーム（min-instances≥1）に
+  すればコールドスタートは避けられるが、スケールtoゼロのコストメリットが消え、かつ元の処理が
+  数msで終わる以上GCPに移すコスト削減効果もほぼ無い。**レイテンシ・コストどちらの観点でも
+  VPS側に残すのが正解**。
+- **重い処理（学習・バックテスト・大量再計算・precompute系）は既存の非同期ジョブパターンを
+  徹底する**: VPSはジョブ投入（Cloud Tasks経由）とジョブIDの返却のみを行い、即座にレスポンスする。
+  実際の計算はGCP側（Cloud Run Jobs）で実行し、結果をGCSへ書き込む。ユーザーは`/status`ポーリング
+  または次回アクセス時に結果を受け取る。この方式なら重い処理の実行時間がユーザーの初回リクエストの
+  レイテンシに影響せず、かつ計算コストはGCPのpay-per-use（Cloud Run Jobsは実行時間のみ課金）に
+  収まる。`POST /api/race/{race_id}/predict`・`POST /api/track-speed/rebuild-baselines`・
+  `POST /api/bloodline/analyze`等、既に「投入→`/status`確認」の形になっているAPIはこの方針と
+  整合している。
+- **既知のギャップ（要修正）**: 以下のAPIは「GCSに結果が無ければその場で同期的にスクレイピングを
+  実行する」フォールバックを持っており、VPSが直接スクレイピングしない方針と矛盾する。
+  GCP側へのジョブ委譲（Cloud Tasks経由で投入し、取得完了まではキャッシュ無し/pending応答を返す）
+  に変更する必要がある:
+  - `/api/betting/pair-odds/{race_id}`（GCSに無い場合にスクレイピングを実行）
+  - `/api/growth-curve/{horse_id}?fetch_speed_index=true`（race_index補完でGCS増時にスクレイピングが
+    発生し得る経路）
+  - `POST /api/bloodline/analyze`（内部でのスクレイピング発生有無を要確認）
 
-### 選択肢A: Compute Engine（VMでのリフト&シフト）
+## 比較表（移行前後の対比）
 
-現在のVPSとほぼ同じ構成（1台の常時起動VM上でFastAPI/Flask・daemon thread・OS crontab・
-Docker Compose上のPostgres/Redis/MLflowをそのまま稼働）をGCP上のVMで再現する案。
-
-- **メリット**: アーキテクチャの再設計がほぼ不要（daemon thread・ファイルロック式キュー・
-  OS crontab・Docker Composeすべてそのまま動く）。移行コスト・リスクが最小。
-  静的外部IP（予約IP、時間課金数円/時間程度）を割り当てればスクレイピングの送信元IP安定性も
-  VPSと同様に確保できる。
-- **コスト最適化の余地**: e2-small/e2-medium等の小型シェアードコアVMで十分
-  （既存の`KEIBA_PROFILE=vps`の省メモリ設定がそのまま活きる）。1年/3年の委託利用割引
-  （CUD）や自動適用される継続利用割引（SUD）でさらに下げられる。日次バックフィル等の
-  中断可能なバッチだけをSpot VM（通常の数割〜最大9割引、プリエンプション前提）に
-  切り出すことも検討できる。
-- PostgreSQL・Redis・MLflowは同一VM上のDocker Composeのまま運用を継続すれば、
-  マネージドサービス（Cloud SQL・Memorystore）の最低利用料がかからず、現状のVPSと
-  同程度のコスト感を維持できる。
-- ログはCloud Logging用の**Ops Agent**をVMに入れるだけで、アプリ側のコード変更なしに
-  ローカルログをCloud Loggingへ転送できる（少量ログなら無料枠内に収まりやすい）。
-- 定期実行は、OS crontabのままでも良いが、実行状況の一覧性を上げたい場合のみ
-  Cloud Scheduler（ジョブ単価が非常に安い）からVM上のHTTPエンドポイントを叩く形に
-  一部切り替えることも低コストで可能（VM自体の構成変更は不要）。
-
-### 選択肢B: Cloud Run（サービス/ジョブ）によるサーバーレス分解
-
-- **メリット**: リクエストが無い間は$0（スケールtoゼロ）。負荷がスパイク的で、
-  アイドル時間が長いワークロードには有利。
-- **本プロジェクトでの制約**: 常時稼働が必要なdaemon thread・ファイルロック式キュー・
-  ローカルログ・ローカルSQLite(MLflow)はCloud Runのステートレス・マルチインスタンス
-  モデルと相性が悪く、以下の再設計コストが発生する:
-  - daemon thread群 → Cloud Scheduler + Cloud Run Jobsへの分離（設計コスト）
-  - `job_queue.py`のファイルロック式キュー → Cloud Tasks等への置き換え（設計コスト）
-  - スクレイピングの送信元IP安定化 → Serverless VPC Connector + Cloud NAT
-    （固定費が時間課金で発生。概算で月数千円〜。VMの予約IPより高くなりやすい）
-  - ログ → Cloud Loggingへの統一自体は無料枠内で収まりやすいが、`/server-logs`実装の
-    変更が必要
-  - PostgreSQL/Redis/MLflowを自己ホストし続けられないため、Cloud SQL・Memorystore等の
-    マネージドサービスへ移行する必要があり、低トラフィックでも**最低利用料金**が発生する
-    （自己ホストなら実質0円増のところ、月数千円〜のベースコストが乗る）
-- **結論**: 24時間動くdaemon thread・cron・安定IP必須のスクレイピングという現在の
-  ワークロード形状では、Cloud Run化によるスケールtoゼロの恩恵よりも、Cloud NAT・
-  Cloud Tasks・Cloud SQL・Memorystoreの最低利用料金の方が上回りやすく、**トータルコストでは
-  Compute Engineより高くなる可能性が高い**。採用するなら、常時稼働部分はVM/選択肢Aに残し、
-  バックフィル等の「スパイクして終わる」バッチ処理だけをCloud Run Jobsに切り出す
-  **ハイブリッド構成**が現実的。
-
-### 選択肢C: GKE（Kubernetes）
-
-単一アプリ・単一運用者規模ではオーケストレーションの運用負荷・クラスタコストに対して
-得られるメリットが小さく、コスト最適の観点では現時点では推奨しない
-（将来、複数サービスへの分割・水平スケールが本格的に必要になった場合に再検討）。
-
-### データ層（コスト視点の補足）
-
-- **GCS**: 既に本番で利用中。追加の移行コストは無い。
-- **Cloud SQL / Memorystore for Redis**: 低トラフィックな単一アプリでは、自己ホスト
-  （VM上のDocker Compose）に比べて最低利用料金分だけ割高になりやすい。信頼性・自動バックアップ
-  等の運用負荷軽減とのトレードオフとして、コスト最優先なら自己ホスト継続、運用負荷軽減を
-  優先するなら移行、という判断軸になる。
-- **Vertex AI**（モデル学習・推論エンドポイント）: 現在MLflowで自己ホストしている学習・
-  配信をVertex AIに置き換えると、常時稼働エンドポイントや学習ジョブのノード時間課金が
-  発生する。AutoMLや大規模分散学習等の明確な必要性が出るまでは、コスト最適の観点では
-  現状のMLflow自己ホスト継続が有利。
-
-## 比較表
-
-| 項目 | VPS（現状） | GCP: Compute Engine（推奨候補） | GCP: Cloud Run（サーバーレス分解） |
-|---|---|---|---|
-| アーキテクチャ変更 | 不要 | ほぼ不要（リフト&シフト） | 大（daemon thread・キュー・ログ・DBの再設計） |
-| 常駐daemon thread | そのまま動く | そのまま動く | 不可。Cloud Scheduler+Jobsへ分離必須 |
-| 定期実行 | OS crontab | OS crontabのまま、または低コストでCloud Scheduler併用可 | Cloud Scheduler必須 |
-| スクレイピングキュー | ローカルJSON+ファイルロック | そのまま動く | 要再設計（Cloud Tasks等） |
-| スクレイピングIP安定性 | 固定IP前提、低コスト | 予約静的IPで同等に確保、低コスト | Cloud NAT必須、月数千円〜の固定費 |
-| ログ | ローカル`logs/*.log` | Ops AgentでCloud Loggingへ転送可（コード変更不要） | Cloud Logging必須、ビューア実装も変更必要 |
-| PostgreSQL/Redis/MLflow | 自己ホスト（Docker Compose） | 自己ホスト継続可（コスト最小） | マネージド移行必須（最低利用料金が乗る） |
-| 月額コストの傾向 | VPSプラン料金 | 小型VM1台分（CUD/SUDで圧縮可）とほぼ同等 | 常時稼働ワークロードには割高になりやすい |
-| 向いているワークロード形状 | 24時間稼働の単一プロセス | 24時間稼働の単一プロセス | リクエストがスパイクしアイドル時間が長い処理 |
+| 項目 | 分担前（VPSのみ） | 分担後 |
+|---|---|---|
+| 常駐daemon thread | VPS上のFastAPIプロセス内 | 軽量なもの（disk-cache-cleanup等）のみVPS継続、重いもの（構造チェック・daily-shutuba・週次集計等）はGCPのCloud Scheduler+Cloud Run Jobsへ |
+| スクレイピングキュー | VPS上のローカルJSON+ファイルロック | GCPへ移動（Cloud Tasks + Cloud Run Jobs、または専用Compute Engine） |
+| モデル学習・バックテスト・バックフィル | VPS上でバックグラウンド実行 | GCPのCloud Run Jobs（長時間ジョブ対応） |
+| PostgreSQL | VPS上の自己ホスト | Cloud SQL（両環境から到達可能にするため） |
+| Redis | VPS上の自己ホスト | 変更なし（VPS継続、サービング用途のため） |
+| モデル配信 | ローカルpklファイル直接読み込み | 変更なし＋GCSからの同期経路を追加 |
+| ログ | VPSローカル`logs/*.log` | VPS側はそのまま。GCP側のジョブはCloud Loggingへ出力 |
 
 ## TODO（手動追記用）
 
-### 方針確定前の共通TODO
-- [ ] VPS継続かGCP移行かを、いつまでに・何を基準に決定するか決める
-      （コスト・スクレイピングのブロックリスク・運用負荷・移行作業コストが主な論点になりそう）
-- [ ] GCPへ移行する場合、Compute Engine（リフト&シフト）とCloud Run（サーバーレス分解）の
-      実コスト見積り（想定リクエスト数・常時稼働時間・ログ量等を入れたGCP Pricing Calculator
-      ベースの比較）を作成し、本ドキュメントの「比較表」の推測を実数で裏付ける
-- [ ] 本番VPSの外部公開方法（tcpexposerが本番でも使われていないか、nginx等の恒久構成か）を確認する
+### 整理・設計系の共通TODO
+- [x] 役割分担（VPS=サービング、GCP=スクレイピング/ML/スケジュール実行）を決定し、
+      機能領域ごとのマッピングを作成する — 2026-10-02対応: 上記「役割分担マッピング」表を作成
+- [ ] GCPサービスアカウント認証ファイル（`config/gcp-service-account.json`）を実際に配置する
+      （本ドキュメント・関連実装は配置済みを前提に進めているが、実ファイルの配置はユーザー側作業）
+- [ ] Cloud SQLインスタンスを作成し、VPS・GCP双方からの接続情報（接続名・IP許可・認証情報）を
+      `.env`に設定する — 2026-10-01対応: 接続実装（`src/db/cloud_sql.py`の
+      `get_cloud_sql_engine()`、`src/db/session.py`の`KEIBA_DB_BACKEND=cloud_sql`分岐、
+      `tests/db/test_cloud_sql.py`）は完了。実インスタンスの作成・`.env`への接続情報設定は
+      ユーザー側作業として残る
 
-### VPS継続する場合のTODO
-- [ ] PostgreSQL/Redisのバックアップ・リストア手順を整備する
-- [ ] `docs/git_management/todo/admin-ops.md`に記録済みの既知の課題
-      （git-pull表示のstale化・OS crontab系へのSlack通知未対応・SSH runbook不在）を順次解消する
+### VPS側（サービング）のTODO
+- [ ] `admin-ops.md`・`scraping-queue.md`等に残る「VPS上の軽量ジョブ」（disk-cache-cleanup・
+      logs-retention等）以外のdaemon thread・cronをGCP側へ切り出した後、不要になった
+      VPS側のコード・crontabエントリを削除する
+- [x] モデル配信: GCSから最新モデル（`models/keiba_model.pkl`相当）を定期取得・反映する
+      仕組みを実装する（新規） — 2026-10-01対応: `src/pipeline/models/model_sync.py`に
+      `sync_latest_model_from_gcs()`（GCS側が新しい場合のみダウンロード。GCS無効・エラー時は
+      例外を出さずFalseを返す）と、学習側（GCP側）用の`upload_model_to_gcs()`を実装。
+      VPS側で手動または定期実行するための開発者専用エンドポイント
+      `POST /api/admin/model/sync-from-gcs`（`src/api/app.py`）を追加し、
+      `/api/train`の学習完了時（`_run_training()`）に`upload_model_to_gcs()`の呼び出しを追加
+      （失敗してもログ警告のみで学習処理自体は失敗させない）。
+      テスト: `tests/pipeline/test_model_sync.py`（`google.cloud.storage.Client`をモック）
+- [ ] スクレイピング・予測実行の手動トリガー系エンドポイント（`/api/scrape-trigger`・
+      `POST .../predict`等）を、GCP側Cloud Run Jobs/Cloud Tasksを呼び出すプロキシに変更する
 
-### GCPへ移行する場合のTODO（移行決定後に着手）
-- [ ] まずCompute Engineでのリフト&シフト（アーキテクチャ変更最小）を優先候補として検証する
-      （上記「選択肢A」）。Cloud Runへの全面移行は、常時稼働部分の再設計コストと
-      Cloud NAT等の固定費がリフト&シフトのVMコストを上回る可能性が高いため、
-      バックフィル等のスパイク的バッチ処理のみを対象にした部分採用（ハイブリッド構成）を
-      優先検討する
-- [ ] （Compute Engine採用時）予約静的IPでスクレイピングの送信元IP安定性を確保する
-- [ ] （Compute Engine採用時）Ops AgentでCloud Loggingへのログ転送を設定する
-      （アプリ側コード変更なしで導入できる想定）
-- [ ] （Cloud Run系を一部採用する場合）`job_queue.py`のキュー基盤をCloud Tasks等へ
-      置き換える設計を作る
-- [ ] （Cloud Run系を一部採用する場合）`src/api/app.py`内の対象daemon threadを
-      Cloud Scheduler + Cloud Run Jobsへ分離する設計を作る
-- [ ] PostgreSQL/Redis/MLflowを自己ホスト継続するかCloud SQL/Memorystore/Vertex AIへ
-      移行するかを、コスト（最低利用料金）と運用負荷軽減のトレードオフで判断する
-- [ ] 認証をHMACクッキー+tcpexposerから、採用するコンピュート選択肢に応じた
-      GCP標準機構（IAP等）へ移行するか検討する
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
+- [x] `job_queue.py`のキュー基盤をCloud Tasks + Cloud Run Jobsへ移行する
+      — 2026-10-01対応: ジョブ投入経路を環境変数で分岐する最小実装（ローカルJSONキューと
+      排他構成）。新規`src/scraper/cloud_tasks_queue.py`の`enqueue_via_cloud_tasks()`
+      （`google.cloud.tasks_v2.CloudTasksClient`、`GCP_PROJECT_ID`/`CLOUD_TASKS_QUEUE`/
+      `CLOUD_TASKS_LOCATION`/`CLOUD_RUN_JOBS_WORKER_URL`を使用）と`is_cloud_tasks_backend_enabled()`
+      （`KEIBA_QUEUE_BACKEND=cloud_tasks`判定）を実装し、`ScrapeJobQueue.add_job`の冒頭で
+      分岐（未設定時は従来通りローカルJSON+ファイルロック、VPS側は無変更）。Cloud Run Jobs/
+      サービス側のPushワーカーは新規`POST /api/internal/cloud-tasks/process-job`
+      （`src/api/app.py`）が受け、既存の`src.scraper.queue_tasks.execute_job`+`ScraperRunner`
+      をそのまま呼ぶ（新規の実行ロジックは書いていない）。OIDC検証は
+      `KEIBA_CLOUD_TASKS_VERIFY_OIDC=1`時のみ有効化する簡易スタブ（既定は無効）。
+      `requirements.txt`に`google-cloud-tasks>=2.0.0`を追加。実GCP接続は本環境に
+      認証ファイルが無いためモックで検証（`tests/scraper/test_cloud_tasks_queue.py`、
+      `tests/api/test_cloud_tasks_internal_endpoint.py`）。
+      `python3 -m pytest tests/ --ignore=tests/scraper/manual --ignore=tests/research/manual`
+      で既存506件+新規17件が全てpass。netkeibaのoutbound IP固定化は下記の別TODOとして残る
+- [x] `src/api/app.py`内の重いdaemon thread（`_scheduler_loop`・`_weekly_sire_agg_loop`・
+      `_daily_shutuba_enqueue_loop`等）をCloud Scheduler + Cloud Run Jobsへ分離する
+      — 2026-10-01対応: 上記3種に加え、`run_hourly_queue_maintenance`・レース質日次一括推定・
+      追走難度precompute・track-speedベースライン再構築・ミオスタチン再計算・オッズ予測モデル
+      学習を含む計10ジョブについて、Cloud Scheduler + Cloud Run Jobsから起動できる CLI
+      エントリポイント（既存コマンドがあるものはそれを採用、無いものは新規
+      `src/scripts/cloud_jobs/`パッケージを追加）を整備した。各ジョブの実行コマンド・頻度・
+      リソース目安・スケジューラ登録コマンド例は
+      [`docs/operations/gcp-cloud-run-jobs.md`](./gcp-cloud-run-jobs.md)、デプロイ設計図は
+      [`scripts/gcp/deploy_cloud_run_jobs.sh`](../../scripts/gcp/deploy_cloud_run_jobs.sh)。
+      daemon thread 自体のコード削除・実際のGCPデプロイ・スケジューラ登録はこの対応では
+      行っていない（CLI整備のみ。削除は上記VPS側TODO「不要になったVPS側のコード・crontab
+      エントリを削除する」で別途対応）
+- [ ] モデル学習・アンサンブル・バックテスト・バックフィルをCloud Run Jobsで実行する構成に移行する
+- [ ] netkeibaスクレイピングのoutbound IP固定化（Serverless VPC Connector + Cloud NAT、
+      またはCompute Engineの予約静的IP）を設定する
+- [ ] 各バッチ処理のログをCloud Loggingへ出力する
 
 ## メモ

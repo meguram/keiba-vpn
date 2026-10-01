@@ -33,7 +33,11 @@
 
 ## 既知の課題
 
-（無し）
+- `/api/betting/pair-odds/{race_id}` はGCSに無い場合、その場で同期的にスクレイピングを実行する
+  フォールバックを持つ。2026-10-02決定のVPS/GCP役割分担（VPSは直接スクレイピングしない）と
+  矛盾するため、GCP側（Cloud Tasks）へのジョブ委譲に変更する必要がある。詳細は
+  [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+  の「ユーザーリクエスト起点の計算処理をどこで実行するか」を参照。
 
 ## TODO（手動追記用）
 

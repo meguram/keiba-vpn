@@ -342,6 +342,167 @@ def _genotype_distance_score(probs: dict[str, float], distance_m: int) -> float:
     return round(min(score, 1.0), 4)
 
 
+# ─── 遺伝子型再計算（ナレッジベース更新） ──────────────────
+
+def recalculate_myostatin_genotypes(json_path: str | Path | None = None) -> dict[str, Any]:
+    """
+    全ての未確定馬のミオスタチン遺伝子型を血統から再計算し、ナレッジベース JSON を更新する。
+
+    メンデルの法則に基づいてアレル確率を計算する。元は FastAPI の
+    ``/api/myostatin/recalculate`` (``src/api/app.py``) ハンドラ内に直接書かれていた処理を
+    そのまま移動したもの。同エンドポイントと ``src/scripts/cloud_jobs/myostatin_recalculate.py``
+    （Cloud Scheduler + Cloud Run Jobs 用 CLI）の両方から共通で呼ばれる。
+
+    Returns:
+        {"updated_count": int, "total_stallions": int, "updates": [...]}
+    """
+    path = Path(json_path) if json_path else _KB_PATH
+
+    # 読み込み
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # 名前→遺伝子型のマップを作成
+    stallion_map: dict[str, dict] = {}
+    for s in data["stallions"]:
+        stallion_map[s["name"]] = s
+        if s.get("name_en"):
+            stallion_map[s["name_en"]] = s
+
+    def get_alleles(name):
+        """種牡馬のアレル確率を取得"""
+        if name in stallion_map:
+            s = stallion_map[name]
+            return s.get("allele_c", 0.5), s.get("allele_t", 0.5)
+        return 0.5, 0.5  # デフォルト
+
+    def calculate_offspring_genotype(sire_c, sire_t, dam_c, dam_t):
+        """
+        父と母のアレル確率から、子のCC/CT/TT確率を計算
+
+        Args:
+            sire_c: 父がCアレルを渡す確率
+            sire_t: 父がTアレルを渡す確率
+            dam_c: 母がCアレルを渡す確率
+            dam_t: 母がTアレルを渡す確率
+
+        Returns:
+            (allele_c, allele_t, genotype, confidence)
+        """
+        # CC確率 = 父C × 母C
+        prob_cc = sire_c * dam_c
+        # TT確率 = 父T × 母T
+        prob_tt = sire_t * dam_t
+        # CT確率 = 残り
+        prob_ct = 1.0 - prob_cc - prob_tt
+
+        # 子のアレル確率
+        child_c = prob_cc + prob_ct * 0.5
+        child_t = prob_tt + prob_ct * 0.5
+
+        # 遺伝子型を推定
+        if prob_cc > 0.9:
+            genotype = "CC"
+            confidence = "highly_likely"
+        elif prob_tt > 0.9:
+            genotype = "TT"
+            confidence = "highly_likely"
+        elif prob_cc > 0.7:
+            genotype = "C?"
+            confidence = "estimated"
+        elif prob_tt > 0.7:
+            genotype = "?T"
+            confidence = "estimated"
+        elif prob_ct > 0.6:
+            genotype = "CT"
+            confidence = "estimated"
+        elif child_c > 0.6:
+            genotype = "C?"
+            confidence = "estimated"
+        elif child_t > 0.6:
+            genotype = "?T"
+            confidence = "estimated"
+        else:
+            genotype = "??"
+            confidence = "inferred"
+
+        return round(child_c, 3), round(child_t, 3), genotype, confidence
+
+    # 再計算
+    updates: list[dict[str, Any]] = []
+    for i, stallion in enumerate(data["stallions"]):
+        # 確定している場合はスキップ
+        if stallion["confidence"] == "confirmed":
+            continue
+
+        # 父の情報
+        sire_name = stallion.get("sire", "")
+        if not sire_name:
+            continue
+
+        sire_c, sire_t = get_alleles(sire_name)
+
+        # 母父の情報（母のアレル確率の推定に使用）
+        dam_sire_name = stallion.get("dam_sire", "")
+        if dam_sire_name:
+            dam_sire_c, dam_sire_t = get_alleles(dam_sire_name)
+            # 母のアレル確率は母父から推定（簡易版：母父のアレル確率を使用）
+            dam_c, dam_t = dam_sire_c, dam_sire_t
+        else:
+            # 母父不明の場合はデフォルト
+            dam_c, dam_t = 0.5, 0.5
+
+        # 子のアレル確率を計算
+        child_c, child_t, genotype, confidence = calculate_offspring_genotype(
+            sire_c, sire_t, dam_c, dam_t
+        )
+
+        # 既存より確実性が高い場合のみ更新
+        old_gt = stallion.get("genotype", "??")
+        old_conf = stallion.get("confidence", "inferred")
+
+        # 確実性のランク
+        conf_rank = {"confirmed": 4, "highly_likely": 3, "estimated": 2, "inferred": 1}
+        old_rank = conf_rank.get(old_conf, 0)
+        new_rank = conf_rank.get(confidence, 0)
+
+        # より確実な情報の場合、または同等で遺伝子型が変わる場合のみ更新
+        if new_rank >= old_rank:
+            data["stallions"][i]["genotype"] = genotype
+            data["stallions"][i]["confidence"] = confidence
+            data["stallions"][i]["allele_c"] = child_c
+            data["stallions"][i]["allele_t"] = child_t
+
+            reason = f"父{sire_name}(C={sire_c:.2f},T={sire_t:.2f})"
+            if dam_sire_name:
+                reason += f" × 母父{dam_sire_name}(C={dam_sire_c:.2f},T={dam_sire_t:.2f})"
+
+            data["stallions"][i]["source"] = f"確率計算による推測: {reason}"
+
+            if old_gt != genotype or old_conf != confidence:
+                updates.append({
+                    "name": stallion["name"],
+                    "old": f"{old_gt} ({old_conf})",
+                    "new": f"{genotype} ({confidence})",
+                    "allele_c": child_c,
+                    "allele_t": child_t,
+                })
+
+    # メタデータを更新
+    data["_meta"]["version"] = "2.3.2"
+    data["_meta"]["last_updated"] = "2026-03-24"
+
+    # 保存
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    return {
+        "updated_count": len(updates),
+        "total_stallions": len(data["stallions"]),
+        "updates": updates,
+    }
+
+
 # ─── シングルトン ──────────────────────────────────
 
 _instance: MyostatinLookup | None = None

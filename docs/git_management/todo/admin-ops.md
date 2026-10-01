@@ -114,29 +114,46 @@
 
 （本ファイルでは該当なし。残りの開TODOはいずれもOS crontab・常駐プロセスの有無に依存する）
 
-### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+### VPS側（サービング）に残るTODO
 
-- [ ] `src/monitor/app.py`の`CRON_JOBS`一覧から実態と合っていない`git-pull`（毎時）表示を削除・修正する
-      （「既知の課題」参照。表示のみの問題で動作には影響しないため優先度は低いが、運用者が誤認する
-      ため解消が望ましい。OS crontabが存在する常時稼働ホスト方式でのみ発生する問題）
-- [ ] 本番環境で`SLACK_WEBHOOK_URL`設定済みの状態で、`structure_check`のCRITICAL検知時に実際に
-      Slack通知が届くことを確認する（2026-09-30に元4ジョブで実施した実送信テストと同種の確認が
-      `structure_check`側では未実施。コードは2026-10-01に修正済みだが実環境での動作確認はまだ。
-      `src/api/app.py`内のdaemon thread方式を前提にした確認）
-- [ ] 「このラインまで実装できたらブランチを消してよい」の基準（SSH/直接ログ確認がほぼ不要になる）
+- [x] `src/monitor/app.py`の`CRON_JOBS`一覧から実態と合っていない`git-pull`（毎時）表示を削除・修正する
+      — 2026-10-02対応: `schedule`表示を「毎時」から「手動（UI経由 POST /api/v1/admin/git-pull。
+      crontab未登録）」に修正（`src/monitor/app.py`の`git-pull`エントリ）。
+- [x] 本番環境で`SLACK_WEBHOOK_URL`設定済みの状態で、`structure_check`のCRITICAL検知時に実際に
+      Slack通知が届くことを確認する
+      — 2026-10-02更新: `structure_check`はGCP側のCloud Run Jobs（`python -m src.scraper.run
+      structure-check`、下記GCP側TODO参照）へ移行する方針のため、VPS上のdaemon thread
+      （`_scheduler_loop`）前提での確認は意味を失った。通知ロジック自体（`notify_slack()`呼び出し）は
+      どちらの実行環境でも同じPython関数内にあるため変更不要。実際の送信確認は、GCP側で
+      `SLACK_WEBHOOK_URL`を設定した上でCloud Run Jobsとして実行された後に行う（本項目はVPS側の
+      確認としては対応不要と判断してクローズ、GCP側TODOへ引き継ぎ）。
+- [x] 「このラインまで実装できたらブランチを消してよい」の基準（SSH/直接ログ確認がほぼ不要になる）
       に対し、障害対応runbookの不在・OSレベル診断（プロセス/ポート/ディスク確認等）の手動実行が
-      残っているギャップは2026-10-01時点で未解消（棚卸しのみ実施、対応は見送り）。
-      runbookを作成して解消するか、基準自体を「ログ・cron・構造チェックの可視化に限定する」等に
-      見直すか、方針を決める（SSH前提のrunbookとして書く場合はこのホスト方式専用になる）
+      残っているギャップをどう解消するか方針を決める
+      — 2026-10-02決定: VPS/GCP役割分担により、構造チェック・キュー処理・バッチ系の重い診断対象は
+      GCP側（gcloud CLI/Cloud Console/Cloud Loggingで診断）へ移った。VPS側に残るのは
+      disk-cache-cleanup・logs-retention・ダッシュボード・ログ閲覧という軽量な範囲のみになるため、
+      基準を「VPS側はログ・/cron-jobs表示・ダッシュボードの可視化で完結する範囲に限定し、
+      GCP側のジョブ診断はgcloud CLI/Cloud Loggingベースの別runbookに委ねる」に見直す。
+      SSH前提の重厚なrunbookを新規作成する対応は不要と判断（VPS側の診断範囲が小さくなったため）。
+      GCP側の診断手順書は未作成（別タスク）。
 
-### GCPサーバーレス（Cloud Run等）移行時のTODO
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
 
-- [ ] 上記3項目はいずれもサーバーレス移行で前提が変わる: git-pull表示問題はOS crontab自体が
+- [x] 上記3項目はいずれもサーバーレス移行で前提が変わる: git-pull表示問題はOS crontab自体が
       無くなるため実質解消（代わりにCloud Scheduler側の一覧表示を別途整備する）、
       structure_checkの通知確認はCloud Scheduler+Cloud Run Jobsへの移行後に同種の確認を
       改めて実施する、runbookはSSH前提ではなくgcloud CLI/Cloud Console/Cloud Loggingベースの
       診断手順に作り直す必要がある。全体方針は
       [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)の
-      GCP移行TODOを参照
+      GCP移行TODOを参照 — 2026-10-01対応: structure_check を Cloud Scheduler + Cloud Run Jobs
+      から起動するための CLI エントリポイント（既存の `python -m src.scraper.run
+      structure-check`。新規ファイル追加は不要だった）を確認し、実行コマンド・想定頻度
+      （毎朝06:00 JST）・リソース目安・`gcloud scheduler jobs create http`登録コマンド例を
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)に
+      まとめた。デプロイ設計図は
+      [`scripts/gcp/deploy_cloud_run_jobs.sh`](../../../scripts/gcp/deploy_cloud_run_jobs.sh)。
+      実デプロイ・スケジューラ登録・移行後の通知再確認、git-pull表示問題・runbook刷新は
+      本対応の範囲外のまま残る（ユーザー側作業）
 
 ## メモ

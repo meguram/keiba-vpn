@@ -50,6 +50,9 @@
       （推論パイプライン・legacy手動トリガ・バッチCLI）はいずれも自動実行されておらず現状は実害無しと判断し
       対応を保留中（2026-09-30ユーザ確認済み）。`pre_race_predict_trigger.py`の本実装や関連cron登録に
       着手する前に `docs/operations/service-endpoints.md`「レース予測の書き込みパスが3系統ある」を再確認すること。
+      2026-10-01追記: VPS/GCP分担に伴うCloud SQL接続自体（`src/db/cloud_sql.py`・
+      `src/db/session.py`の`KEIBA_DB_BACKEND=cloud_sql`分岐）は実装済み。本項目（GCS/PostgreSQL
+      二重経路の整理そのもの）は未解決のまま。
 
 ## TODO（手動追記用）
 
@@ -89,16 +92,19 @@
       なお実際のstg PostgreSQL（`sire_aptitude_cache`実データ）への接続検証は、本環境に`.env`/GCS認証情報
       および既存のPostgreSQL起動が無く実行不可のためスキップ（ロジックの妥当性確認で代替、との方針どおり）。
 
-### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+### VPS側（サービング）に残るTODO
 
-- [ ] `pre_race_predict_trigger.py`の本実装（cron登録含む）に着手する場合、VPS継続か
-      GCP Compute Engineかに関わらずOS crontabのまま実装できる
+（本ファイルでは該当なし。予測の実行はGCP側、配信（GCSから結果を読む）のみVPS側に残る）
 
-### GCPサーバーレス（Cloud Run等）移行時のTODO
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
 
-- [ ] `pre_race_predict_trigger.py`の本実装にCloud Run等のサーバーレス構成を選ぶ場合は
-      Cloud Scheduler+Cloud Run Jobsでの実装が前提になる。着手前にVPS継続かGCP移行か、
-      移行する場合はどちらのコンピュート方式かの方針を確認すること。詳細は
-      [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+- [ ] `pre_race_predict_trigger.py`の本実装（cron登録含む）に着手する。2026-10-02決定の
+      役割分担・設計方針（[`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+      「ユーザーリクエスト起点の計算処理をどこで実行するか」参照）により、予測実行はGCP側
+      Cloud Scheduler + Cloud Run Jobsで行い、結果をGCSへ書き込む設計に確定。VPS側は
+      `/api/race/{race_id}/predictions`でGCSから結果を読んで配信するだけでよい（既存の
+      `POST /api/race/{race_id}/predict`手動トリガーも、将来的にはVPS側からGCP側Cloud Tasksへ
+      ジョブを委譲するプロキシに変更する想定）。本体の実装（`pre_race_predict_trigger.py`の
+      具体的なロジック）自体は2026-10-02時点で未着手。
 
 ## メモ

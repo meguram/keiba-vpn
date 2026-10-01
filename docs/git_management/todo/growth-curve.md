@@ -40,6 +40,11 @@
 ## 既知の課題
 
 （無し。2026-09-30時点でv1パリティ・HybridStorageシングルトン化ともに解決済み。`make test` 439 passed で確認）
+- `/api/growth-curve/{horse_id}?fetch_speed_index=true`はrace_index補完でGCS増時にスクレイピングが
+  発生し得る経路。2026-10-02決定のVPS/GCP役割分担（VPSは直接スクレイピングしない）と矛盾するため、
+  GCP側（Cloud Tasks）へのジョブ委譲に変更する必要がある。詳細は
+  [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+  の「ユーザーリクエスト起点の計算処理をどこで実行するか」を参照。
 
 ## TODO（手動追記用）
 

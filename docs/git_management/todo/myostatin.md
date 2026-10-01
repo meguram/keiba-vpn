@@ -79,15 +79,35 @@
       実サーバーで父=ディープインパクト/母父=ロードカナロア、父がKB未登録のケース、母父省略のケースの3パターンを
       `curl`で確認し、意図通り`confidence`と`basis`が返ることを確認済み。
 
-### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
+### VPS側（サービング）に残るTODO
 
-- [ ] `POST /api/myostatin/recalculate`（未確定馬の再計算）が定期実行されているか確認し、
-      無ければOS crontab方式でスケジュール化する
+- [x] `POST /api/myostatin/recalculate`（未確定馬の再計算）が定期実行されているか確認し、
+      無ければスケジュール化する
+      — 2026-10-02対応: 定期実行なし（手動トリガーのみ）と確認。配信=VPS、再計算の実行=GCPの
+      方針のため、ロジックを`src/research/genes/myostatin.py`の`recalculate_myostatin_genotypes()`
+      に切り出し（2026-10-01、`src/api/app.py`のハードコードされた誤パス
+      `data/local/knowledge/myostatin_genes.json`を`MYOSTATIN_GENES_JSON`に統一するバグ修正も
+      同時実施）、GCP側Cloud Scheduler + Cloud Run Jobsの実行コマンド
+      `python -m src.scripts.cloud_jobs.myostatin_recalculate`として
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)の
+      ジョブ#9に記録済み。
 
-### GCPサーバーレス（Cloud Run等）移行時のTODO
+### GCP側（スクレイピング・ML・スケジュール実行）のTODO
 
-- [ ] 上記のスケジュール化は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
+- [x] 上記のスケジュール化は、サーバーレス移行する場合はCloud Scheduler+Cloud Run Jobsでの
       実装が前提になる。詳細は
       [`docs/operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)
+      — 2026-10-01対応: `POST /api/myostatin/recalculate`のハンドラ内に直接書かれていた
+      再計算ロジックを`src.research.genes.myostatin.recalculate_myostatin_genotypes()`に
+      切り出し（API・CLI共通化。合わせて、同ハンドラがハードコードしていた
+      `data/local/knowledge/myostatin_genes.json`という存在しないパスを、同モジュール内の
+      他エンドポイントと同じ`src.config.data_paths.MYOSTATIN_GENES_JSON`に統一する不整合修正も
+      実施）、新規CLI`python -m src.scripts.cloud_jobs.myostatin_recalculate`を追加した。
+      実行コマンド・想定頻度（元はUI手動トリガーのみで固定cron無し。提案値: 毎月1日05:00 JST）・
+      リソース目安・`gcloud scheduler jobs create http`登録コマンド例を
+      [`docs/operations/gcp-cloud-run-jobs.md`](../../operations/gcp-cloud-run-jobs.md)に
+      まとめた。デプロイ設計図は
+      [`scripts/gcp/deploy_cloud_run_jobs.sh`](../../../scripts/gcp/deploy_cloud_run_jobs.sh)。
+      実デプロイ・スケジューラ登録はユーザー側作業として残る
 
 ## メモ
