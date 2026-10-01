@@ -41,12 +41,56 @@
 
 ### 共通TODO（ホスト方式に関係ない）
 
-- [ ] 馬券ポートフォリオ最適化の結果を実際のレース結果でバックテストし、EVが実際にプラスに
+- [x] 馬券ポートフォリオ最適化の結果を実際のレース結果でバックテストし、EVが実際にプラスに
       なっているか検証する（現状、実績評価の仕組みが見当たらない）
-- [ ] `/api/betting/pair-odds/{race_id}` がGCSに無くスクレイピングが必要な場合の
+      — 2026-10-01対応: `src/pipeline/inference/betting.py` には `BetSimulator`/`simulate_batch`
+      というバックテスト機構自体は既に実装済みだったが、実データに接続して実行する箇所が
+      どこにも無かった（オーファン実装、`grep -rn "BetSimulator"` でヒットなし）。本開発環境は
+      `.env` にGCS認証情報が無く、ローカルにも race_shutuba/race_odds/race_pair_odds/race_result
+      が0件（`HybridStorage.list_keys()` で確認済み）のため、実レース・実オッズでのROI検証は
+      この環境では実行不可能だった（ライブスクレイピング禁止のため代替も不可）。代わりに
+      `src/pipeline/inference/betting_backtest.py` を新規作成し、(1) `_single_prob`/`_pair_prob`
+      の近似精度をPlackett-Luceモンテカルロ真値と比較（馬連・馬単は平均誤差0.1~0.2pt台と良好、
+      ワイドは平均誤差1.1pt・最大9.9pt、複勝は平均誤差3.6pt・最大46ptと誤差が大きい）、
+      (2) 合成データ（実データではない）で `BetSimulator.simulate_batch` を実行しモデル優位性
+      (edge)別のROI感度を確認、を実施。(2)の過程で `_compute_probabilities` が `pred_score` に
+      softmaxを適用する設計は、`pred_score` が本番の `race_prediction_service` で使われる
+      `model.predict_proba()` 由来の確率値（0~1）である場合、確率分布を過度に平坦化し期待値推定
+      を歪める可能性があることが判明した（`pred_score` をlogitスケールに変換すると
+      モデル優位性に応じたROIの序列が期待通り現れた）。実データでの最終検証は、GCSアクセス可能な
+      本番/VPS環境で `betting_backtest.py` の `load_real_races()`（新規追加、実データ読込用）に
+      実在する race_id を渡して再実行する必要がある。
+- [x] `/api/betting/pair-odds/{race_id}` がGCSに無くスクレイピングが必要な場合の
       レイテンシ・失敗率を確認する（リクエスト同期のオンデマンド処理であり、定期実行や
       常駐プロセスには依存しないためホスト方式に関係ない）
-- [ ] 対応馬券種（単勝/複勝/馬連/ワイド/馬単）以外（3連複・3連単等）の追加要否を検討する
+      — 2026-10-01対応: 実アクセスは本番外部アクセス厳禁のため実行せず、コードから理論値のみ調査。
+      `ScraperRunner.scrape_pair_odds`（`src/scraper/run.py:689`）は馬連/ワイド/馬単の3種の
+      JSON API（`api_get_jra_odds.html?type=4/5/6`）を順に呼ぶが、`OddsParser.parse_pair_odds_from_api`
+      （`src/scraper/parsers.py:1811`）は `self.client._session.get()` を直接呼んでおり、
+      スロットリング（`NETKEIBA_THROTTLE_MIN/MAX`=2.2~4.0秒）・429/503の指数バックオフリトライ・
+      UAローテーションを行う `NetkeibaClient._get_with_backoff`/`fetch()` 経路を経由しない。
+      各呼び出しは `timeout=15` 秒・失敗時は該当券種のみ空リストで握り潰す
+      （例外も `except Exception: pass`）ため、理論上のレイテンシは正常時で3回合計1~数秒程度だが、
+      応答が遅い場合はtimeout上限まで粘って最大45秒かかる。3種すべて失敗すると `None` を返し
+      APIは404 (`odds not found`) を返すため、「まだ発売されていない」ケースと
+      「スクレイピングがブロックされた」ケースを区別できない。本経路はスロットリング/バックオフ
+      保護が無い稀なスクレイパ経路であり、同時アクセスが重なった場合の失敗率は他の経路より
+      理論上高くなりうる。実測には本番相当の環境・実際のアクセスが必要でローカルでは安全に実測
+      できないため、理論値の調査に留める。
+- [x] 対応馬券種（単勝/複勝/馬連/ワイド/馬単）以外（3連複・3連単等）の追加要否を検討する
+      — 2026-10-01対応: netkeibaのオッズAPI（`api_get_jra_odds.html?type=`）は
+      type=1(単勝)/2(複勝)/4(馬連)/5(ワイド)/6(馬単) の命名規則から、type=7(3連複)/8(3連単)も
+      同一APIで取得可能と推測され、スクレイピング自体の追加難易度は低い。一方で
+      (a) `BetCandidate.pair` が `tuple[int,int]` 固定で `pair_label` 等も2頭前提のため、
+      `BettingOptimizer` 側は3頭組み合わせ用に型・ロジックの拡張が必要、
+      (b) 3頭の同時的中確率は正確な計算が必要だが、現行の2頭ワイド近似 `_wide_prob` でさえ
+      本調査（項目1）のモンテカルロ検証で最大9.9ptの誤差があり、3連系に単純延長すると誤差が
+      さらに拡大しやすい、(c) 3連複・3連単はJRAの主要券種の中でも取得率（テイクアウト）が高い
+      部類で、確率推定誤差の影響を最も受けやすい高オッズ帯の券種である、
+      (d) `docs/html/modeling/betting_backtest_dataset_spec.html` で設計されている校正済み確率・
+      safe_evの仕組み自体がまだ実装されておらず、既存5券種でもEVの信頼性が項目1の調査で
+      十分確認できていない、という理由から、**現時点での追加は非推奨**。既存5券種の確率校正・
+      実データでのEV検証（項目1）が完了してから再検討すべき。
 
 （本ファイルの開TODOはいずれもVPS/GCPのどちらでホストしても内容が変わらない。
 インフラ選定の影響は無し）

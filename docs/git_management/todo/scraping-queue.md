@@ -24,6 +24,7 @@
 - 未来レースカレンダー収集: `/api/fetch-future-calendar`（+`/status`）
 - 自動スクレイプ（外部cron連携）: `/api/auto-scrape/status`・`/api/auto-scrape/run`（dev-only手動実行）・`/api/auto-scrape/run-status`
 - 管理画面ページ4つ: `/scrape`・`/scrape-control`・`/queue-status`・`/scrape-upcoming`
+- **2026-10-01追加**: `job_queue.py` の `update_job_status` が `failed` 遷移時に `first_failed_at` を記録（`requeue_failed_jobs` で `pending` に戻っても保持）。既存の常駐メンテループ（`app.py` の `_queue_hourly_maintain_loop` → `run_hourly_queue_maintenance`）内で `check_stale_failed_jobs_and_notify`（既定6時間、`KEIBA_QUEUE_STALE_FAILED_ALERT_HOURS` で変更可）を毎回実行し、`first_failed_at` から閾値を超えて解消していない `failed` ジョブを `notify_slack`（`src/utils/notify.py`）で通知する。同一ジョブへの再通知は24時間（または閾値の大きい方）間隔を空ける（`data/queue/queue_stale_failed_alert_state.json`）。テスト: `tests/scraper/test_queue_stale_failed_alert.py`。
 
 ## 目標（推測）
 
@@ -64,10 +65,47 @@
 
 - [ ] `kick`/`recover`/`stop-and-clear`等の緊急系エンドポイントの実際の使用頻度を計測する
       （頻発しているなら自動リカバリ側の改善が必要）
-- [ ] データ欠損検出（`/api/scrape-missing`）から再取得までの自動化率を確認する
+      （2026-10-01: スキップ。理由: 本番アクセスログ・呼び出し履歴がローカルに存在せず計測不可。
+      `logs/`配下には`auto_scrape*.log`等のcronタスクログのみで、FastAPI側のアクセスログ
+      （uvicorn access log 相当）や`job_queue.py`内のエンドポイント呼び出しカウンタは実装されておらず、
+      ローカル環境から実測できる手段が無い。計測するには `/api/admin/server-logs` 相当のアクセスログ
+      記録（エンドポイント別カウンタ等）を新規実装する必要がある。モックデータでの頻度計測は
+      実態を反映しないため作成しなかった。）
+- [x] データ欠損検出（`/api/scrape-missing`）から再取得までの自動化率を確認する
       （現状は手動トリガー系エンドポイントが多く残っており、自動化しきれていない可能性がある）
-- [ ] 欠損が一定時間解消されない場合のアラート通知（Slack等）の追加を検討する
+      — 2026-10-01対応: コードベース調査の結果、**定常運用は完全自動化済み**と判断。
+      `scripts/cron/setup_all_cron.sh` が登録する全SLAタスク（`daily-race-lists`・`raceday-eve`・
+      `raceday-runner`・`raceday-result-runner`・`raceday-evening`・`weekly-update`等）は
+      `scripts/cron/run_auto_scrape_logged.sh` 経由で `python -m src.scraper.auto_scrape --task <T>`
+      を直接実行し、`src/scraper/auto_scrape.py` は `_via_queue()`（既定True、env
+      `KEIBA_AUTO_SCRAPE_USE_QUEUE`）が真の場合 `src/scraper/auto_scrape_queue.py` の
+      各タスク関数が **HTTP API を経由せず** `ScrapeJobQueue.add_job`/`kick_process_queue_background`
+      をin-processで直接呼び出してキュー投入・起動する。つまり「検出→キュー投入→起動」の
+      一連の流れはcronだけで完結しており、`/api/scrape-missing`・`/api/scrape-queue/add`・
+      `/api/scrape-queue/kick`等のHTTPエンドポイントを人間やcronが呼ぶ必要は無い。
+      `/api/scrape-missing`・`/api/scrape-queue/enqueue-incomplete-dates`は
+      `templates/admin/scrape.html`・`scrape_control.html`・`queue_status.html`からのみ
+      参照されており（cronスクリプトからの呼び出しは`grep`で0件）、運用者が手動で補完確認・
+      ピンポイント再取得する際のUI向け補助エンドポイントという位置づけ。したがって
+      「手動トリガー系が多く残っている」こと自体は事実だが、それは自動化不足ではなく、
+      定常フローとは別に人間向けの可視化・手動介入手段を提供する設計意図によるもの。
+      自動化率としては定常SLAタスクの範囲でほぼ100%（cron以外の人手を要しない）と結論。
+- [x] 欠損が一定時間解消されない場合のアラート通知（Slack等）の追加を検討する
       （通知を送る判断ロジック自体はホスト方式に関係ないが、実装先は下記を参照）
+      — 2026-10-01対応: 実装した。既存の常駐メンテループ（`app.py` の
+      `_queue_hourly_maintain_loop` → `job_queue.run_hourly_queue_maintenance`、既定1時間毎）に
+      新規追加した `check_stale_failed_jobs_and_notify()` を組み込んだ（新規の常駐監視ループは
+      作らず、既存スレッドに乗せたため小規模な変更で収まった）。`update_job_status` が
+      `failed`遷移時に`first_failed_at`を記録し、hourly maintenanceの`requeue_failed_jobs`で
+      `pending`に戻っても`first_failed_at`は保持されるため、「初めて失敗した時刻からの経過時間」
+      で判定できる。閾値（既定6時間、`KEIBA_QUEUE_STALE_FAILED_ALERT_HOURS`で変更可）を超えて
+      `failed`のまま（アクセス一時停止中で`pending`に戻せていないケースも含む）のジョブを
+      `src/utils/notify.py`の`notify_slack()`で通知する。同一ジョブの再通知は24時間
+      （または閾値の大きい方）間隔を空ける（`data/queue/queue_stale_failed_alert_state.json`で
+      抑制状態を保持）。テスト追加: `tests/scraper/test_queue_stale_failed_alert.py`
+      （`update_job_status`のfirst_failed_at付与・クリア、閾値超過時の通知、再通知抑制、
+      閾値0での無効化を検証）。`python3 -m pytest tests/ --ignore=tests/scraper/manual
+      --ignore=tests/research/manual` で既存460件+新規5件が全てpass。
 
 ### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
 

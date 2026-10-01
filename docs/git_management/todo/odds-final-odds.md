@@ -51,8 +51,32 @@
 
 ### 共通TODO（ホスト方式に関係ない）
 
-- [ ] 想定オッズ予測の精度を実測し、`feature/betting`のEV計算に使える精度水準かを検証する
+- [x] 想定オッズ予測の精度を実測し、`feature/betting`のEV計算に使える精度水準かを検証する
       （現状、精度の定量評価が見当たらない）
+      — 2026-10-01対応: 本環境では GCS が VPC Service Controls のポリシーで403拒否され
+      （`storage.googleapis.com`への実アクセスで `Request is prohibited by organization's policy`）、
+      ローカルにも `race_shutuba`/`race_result`/`race_odds` 等のキャッシュが無く（起動中の実サーバ
+      `:8000` 経由でも同症状を確認）、過去レースの確定オッズに対する独立したMAE・相関の再実測は
+      本環境では実行不可能だった。代わりに (1) 既存の学習済みバンドル
+      `models/final_odds_bundle.json`（`trained_at=2026-05-21T14:30:57`）に記録済みの保留データ精度
+      ＝単勝 MAPE 49.2%・RMSE(log)=0.4708、複勝下限 MAPE 48.1%、複勝上限 MAPE 58.6%
+      （ただし `train_years=eval_years=["2025"]` で同年内チェーン末尾15%の内部ホールドアウトであり、
+      `src/scripts/data/train_final_odds_model.py` が想定する既定の学習2020-2024/評価2025の
+      年次分割では検証されていない）、(2) `feature/betting`のEV計算実体の配線確認、の2点から結論。
+      配線確認の結果、`src/pipeline/inference/betting.py`の`BettingOptimizer`
+      （`POST /api/betting/optimize`）はEV計算の単勝/複勝オッズを`final_odds_predictor`からではなく
+      ライブ取得の`race_odds`（無ければその場スクレイプ）または`race_shutuba`+`race_odds`の
+      フォールバックから取得しており、`src/pipeline/models/final_odds_predictor.py`を一切参照して
+      いない。並行する価値ベット判定（`src/pipeline/inference/inference_pipeline.py`の
+      `is_value_bet`/`calculate_recovery_rate`）も、着順予測モデルの勝率から導いた理論オッズ
+      （`1/win_prob`）を使っており、同様に`final_odds_predictor`とは無関係。つまり想定オッズ予測は
+      現状、`feature/betting`のEV計算パスに全く接続されておらず（`想定オッズ`表示列・
+      `/api/race/{race_id}/final-odds`・Flask v1 `/final-odds` のための表示専用）、「使えるか」という
+      問いは実装上まだ該当しない。かつ既存の保留データ精度（単勝オッズで平均約49%の誤差）は、
+      `min_ev=1.05`のような閾値判定を容易に覆す規模であり、将来EV計算に接続する場合でも
+      現状の精度のままでは実用に耐えない。結論: 現時点ではEV計算に未接続のため精度要件自体が
+      該当せず、接続する場合は既定の年次分割（学習2020-2024/評価2025・複数年）で再評価し精度を
+      改善してからにすべき。モデルの再学習は本対応では行っていない。
 
 ### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
 

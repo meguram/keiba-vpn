@@ -65,6 +65,7 @@ from src.api.auth import (
     verify_password,
     create_session_response,
     clear_session_response,
+    classify_session,
     COOKIE_NAME,
 )
 from src.utils.keiba_logging import standard_log_formatter
@@ -797,14 +798,30 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path
         if requires_auth(path) and not is_developer(request):
+            reason = classify_session(request)  # "none" | "expired" | "invalid"
             if path.startswith("/api/"):
+                messages = {
+                    "expired": "セッションの有効期限が切れました。再度ログインしてください。",
+                    "invalid": "セッション情報を確認できませんでした。再度ログインしてください。",
+                    "none": "認証が必要です。開発者ログインしてください。",
+                }
                 return JSONResponse(
-                    {"error": "認証が必要です", "login_url": "/login"},
+                    {
+                        "error": messages.get(reason, "認証が必要です"),
+                        "reason": reason,
+                        "login_url": "/login",
+                    },
                     status_code=401,
                 )
             from fastapi.responses import RedirectResponse
+            from urllib.parse import quote
+
+            next_path = path
+            if request.url.query:
+                next_path = f"{path}?{request.url.query}"
             return RedirectResponse(
-                url=f"/login?next={path}", status_code=302
+                url=f"/login?next={quote(next_path, safe='')}&reason={reason}",
+                status_code=302,
             )
         return await call_next(request)
 
@@ -912,8 +929,14 @@ async def html_archive_cleanup(dry_run: bool = False, keep: int = 10):
 # 既存エンドポイント
 # ═══════════════════════════════════════════════════════
 
+_SESSION_REASON_MESSAGES = {
+    "expired": "セッションの有効期限が切れました。もう一度ログインしてください。",
+    "invalid": "セッション情報を確認できませんでした。もう一度ログインしてください。",
+}
+
+
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, next: str = "/"):
+async def login_page(request: Request, next: str = "/", reason: str = ""):
     if is_developer(request):
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=next, status_code=302)
@@ -923,6 +946,7 @@ async def login_page(request: Request, next: str = "/"):
         "breadcrumbs": [],
         "next_url": next,
         "error": "",
+        "session_notice": _SESSION_REASON_MESSAGES.get(reason, ""),
     })
 
 
@@ -941,6 +965,7 @@ async def login_submit(request: Request):
         "breadcrumbs": [],
         "next_url": next_url,
         "error": "パスワードが正しくありません",
+        "session_notice": "",
     })
 
 
@@ -6599,6 +6624,27 @@ async def get_race_detail(race_id: str):
             "html": False,
         }
         result["data_availability"] = data_availability
+
+        # データ品質チェック（/api/quality-check/*）が warn/fail を記録している
+        # 開催日は、ユーザ表示側にも軽量な警告バッジ用情報を添付する（ブロックはしない）。
+        # チェック自体が未実行（unknown）の日は何も付与しない — 検知済みの問題だけ知らせる。
+        try:
+            raw_date = (result.get("date") or "").replace("-", "")
+            if raw_date.isdigit() and len(raw_date) == 8:
+                from src.api.quality_health import get_health_view
+
+                health = get_health_view(raw_date)
+                status = health.get("overall_display_status") or health.get("overall_status")
+                if status in ("warn", "fail"):
+                    # 既存の _meta.data_quality（レコード単位の完全性レベル）とは別概念のため
+                    # quality_health_warning という名前にしている。
+                    result["quality_health_warning"] = {
+                        "status": status,
+                        "checked_at": health.get("overall_checked_at"),
+                    }
+        except Exception:
+            logger.exception("quality_health_warning lookup failed for race %s", race_id)
+
         return result
 
     result = await asyncio.to_thread(_load)
@@ -6613,6 +6659,48 @@ async def get_race_detail(race_id: str):
 
 _predict_lock = threading.Lock()
 
+# 予測の「古さ」検知しきい値（時間）。超過時は _meta.scraped_at から age_hours を算出し
+# レスポンスに freshness フラグを付与する（表示されない/古い事象のモニタリング用）。
+# 2026-10-01追加: docs/git_management/todo/race-detail.md 共通TODO対応。
+_PREDICTION_STALE_HOURS = float(os.environ.get("KEIBA_PREDICTION_STALE_HOURS", "24"))
+
+
+def _prediction_freshness(data: dict) -> dict:
+    """予測データの _meta.scraped_at から鮮度情報を算出する。
+
+    フロントは追加キーを無視して安全に動作する（race_detail.html は
+    `{...apiData, ...}` 形式でスプレッドしており既知キーのみ参照するため）。
+    閾値超過時は logger.warning でログにも残し、`/monitor` 等からの事後確認を可能にする。
+    """
+    scraped_at = float((data or {}).get("_meta", {}).get("scraped_at", 0) or 0)
+    if scraped_at <= 0:
+        return {
+            "scraped_at": 0,
+            "scraped_at_jst": "",
+            "age_hours": None,
+            "is_stale": None,
+            "stale_threshold_hours": _PREDICTION_STALE_HOURS,
+            "note": "scraped_at 不明（旧データ or _meta 欠落）",
+        }
+    from datetime import timezone as _tz, timedelta as _td
+    _JST = _tz(_td(hours=9))
+    now = _time.time()
+    age_hours = round((now - scraped_at) / 3600, 2)
+    is_stale = age_hours > _PREDICTION_STALE_HOURS
+    scraped_jst = datetime.fromtimestamp(scraped_at, tz=_JST).strftime("%Y-%m-%d %H:%M:%S")
+    if is_stale:
+        logger.warning(
+            "[predictions freshness] race_id=%s age_hours=%.1f > threshold=%.1f (古い予測を返却)",
+            data.get("race_id", ""), age_hours, _PREDICTION_STALE_HOURS,
+        )
+    return {
+        "scraped_at": scraped_at,
+        "scraped_at_jst": scraped_jst,
+        "age_hours": age_hours,
+        "is_stale": is_stale,
+        "stale_threshold_hours": _PREDICTION_STALE_HOURS,
+    }
+
 
 @app.get("/api/race/{race_id}/predictions", response_class=JSONResponse)
 async def get_race_predictions(race_id: str):
@@ -6622,10 +6710,15 @@ async def get_race_predictions(race_id: str):
     レスポンス形状が異なる（本関数はGCS、v1はhorsesキー／本関数はpredictionsキー）。
     2026-09-30調査: 両者とも自動書き込みパスは未稼働（手動トリガのみ）のため実害は無い。
     詳細・今後の判断基準は docs/operations/service-endpoints.md「レース予測の書き込みパスが3系統ある」参照。
+
+    2026-10-01: 「表示されない/古い」事象の検知用に `freshness` フィールド
+    （age_hours / is_stale 等）を付与。既存クライアントは未知キーを無視するため後方互換。
     """
     data = await asyncio.to_thread(
         lambda: _get_storage().load("race_predictions", race_id))
     if data:
+        data = dict(data)
+        data["freshness"] = _prediction_freshness(data)
         return JSONResponse(data)
 
     # stg 環境: モック予測を返す
@@ -8176,9 +8269,12 @@ def _run_training():
         result = trainer.train()
         _training_job["result"] = result
         _training_job["error"] = result.get("error")
+        _training_job["traceback"] = None
     except Exception as e:
+        import traceback as tb
         _training_job["error"] = str(e)
-        logger.error("学習ジョブ失敗: %s", e)
+        _training_job["traceback"] = tb.format_exc()
+        logger.error("学習ジョブ失敗: %s\n%s", e, _training_job["traceback"])
     finally:
         _training_job["running"] = False
         _training_job["finished_at"] = datetime.now().isoformat()
@@ -8186,13 +8282,14 @@ def _run_training():
 
 @app.get("/api/train/status", response_class=JSONResponse)
 async def get_training_status():
-    """学習ジョブの現在の状態を返す。"""
+    """学習ジョブの現在の状態を返す。失敗時は`traceback`にスタックトレースを含む。"""
     return JSONResponse({
         "running": _training_job.get("running", False),
         "started_at": _training_job.get("started_at", ""),
         "finished_at": _training_job.get("finished_at", ""),
         "result": _training_job.get("result"),
         "error": _training_job.get("error"),
+        "traceback": _training_job.get("traceback"),
     })
 
 
@@ -8241,8 +8338,11 @@ def _run_ensemble_training():
         result = trainer.train()
         _ensemble_job["result"] = _serialize_metrics(result)
         _ensemble_job["error"] = result.get("error")
+        _ensemble_job["traceback"] = None
     except Exception as e:
+        import traceback as tb
         _ensemble_job["error"] = str(e)
+        _ensemble_job["traceback"] = tb.format_exc()
         logger.error("アンサンブル学習ジョブ失敗: %s", e, exc_info=True)
     finally:
         _ensemble_job["running"] = False
@@ -8277,19 +8377,33 @@ def _serialize_metrics(result: dict) -> dict:
 
 @app.get("/api/train/ensemble/status", response_class=JSONResponse)
 async def get_ensemble_training_status():
-    """アンサンブル学習ジョブの現在の状態を返す。"""
+    """アンサンブル学習ジョブの現在の状態を返す。失敗時は`traceback`にスタックトレースを含む。"""
     return JSONResponse({
         "running": _ensemble_job.get("running", False),
         "started_at": _ensemble_job.get("started_at", ""),
         "finished_at": _ensemble_job.get("finished_at", ""),
         "result": _ensemble_job.get("result"),
         "error": _ensemble_job.get("error"),
+        "traceback": _ensemble_job.get("traceback"),
     })
 
 
 @app.get("/api/model/info", response_class=JSONResponse)
 async def get_model_info():
-    """MLflow に登録されているモデル情報を返す。"""
+    """
+    MLflow に登録されているモデル情報と、実際の推論経路との対応関係を返す。
+
+    `model_name`（既定: `ModelTrainer.MODEL_NAME` = "keiba-lgbm-nopi"、`POST /api/train` が
+    登録する大衆指標排除モデル）の最新バージョン情報に加えて、以下を併せて返す:
+      - `used_by`: この登録名を実際に読み込んでいるコードパスの既知リスト
+      - `catalog_models`: `src/pipeline/mlflow/catalog.py` の MODEL_CATALOG 全キーについて、
+        Serving / ローカル Booster / ヒューリスティックのどれが使われているか（`infer_backend`）
+      - `notes`: `model_name`（学習済みモデル）と catalog の `keiba_lgbm`（registry名
+        `keiba-lgbm`）が別エンティティであることの注記。現状、ライブAPIのレース予測応答
+        (`race_prediction_service.build_race_prediction_response`) は MLflow を経由せず
+        ローカル `models/keiba_model.pkl`（無ければヒューリスティック）を使っており、
+        catalog の `keiba_lgbm`（`keiba-lgbm`）エントリは本番推論から未参照。
+    """
     try:
         import mlflow
         mlflow.set_tracking_uri("http://localhost:5000")
@@ -8303,8 +8417,38 @@ async def get_model_info():
         except Exception:
             versions = []
 
+        # catalog 全モデルの Serving / ローカル Booster / ヒューリスティック対応状況
+        # （本番推論でどのモデルが実際に使われているかの一覧）
+        try:
+            from src.pipeline.mlflow.runtime import platform_health
+            catalog_models = platform_health()["models"]
+        except Exception as e:
+            catalog_models = []
+            logger.warning("platform_health 取得失敗: %s", e)
+
+        notes = (
+            "model_name（%s）は RaceDayPipeline（CLI/バッチ本番推論）と "
+            "composite_optimizer（バックテスト）が読み込む登録モデル名と一致する。"
+            "一方 catalog.py の model_key='keiba_lgbm'（registry名='keiba-lgbm'）は別エンティティ。"
+            "ライブAPIのレース予測応答（race_prediction_service.build_race_prediction_response）は"
+            "現状 MLflow Registry を経由せず、ローカル models/keiba_model.pkl（無ければ"
+            "ヒューリスティック）を使用しており、catalog の 'keiba_lgbm' エントリは"
+            "本番推論から未参照。詳細: catalog_models[].infer_backend を参照。"
+        ) % model_name
+
+        used_by = [
+            "src/pipeline/inference/race_day.py (RaceDayPipeline, CLI/バッチ本番推論)",
+            "src/pipeline/inference/composite_optimizer.py (バックテストシミュレーション)",
+        ]
+
         if not versions:
-            return JSONResponse({"registered": False, "model_name": model_name})
+            return JSONResponse({
+                "registered": False,
+                "model_name": model_name,
+                "used_by": used_by,
+                "catalog_models": catalog_models,
+                "notes": notes,
+            })
 
         latest = sorted(versions, key=lambda v: int(v.version), reverse=True)[0]
 
@@ -8324,9 +8468,121 @@ async def get_model_info():
             "params": params,
             "tags": {k: v for k, v in tags.items() if not k.startswith("mlflow.")},
             "public_indicators_excluded": tags.get("public_indicators") == "excluded",
+            "used_by": used_by,
+            "catalog_models": catalog_models,
+            "notes": notes,
         })
     except Exception as e:
         return JSONResponse({"registered": False, "error": str(e)})
+
+
+@app.get("/api/train/compare", response_class=JSONResponse)
+async def compare_training_results(models: str = "", versions: int = 3):
+    """
+    複数モデル・複数バージョンの学習結果と、現在のジョブ状態を並べて比較する。
+
+    Query params:
+      - models: カンマ区切りの model_key（省略時は MODEL_CATALOG 全体）
+      - versions: 各モデルで比較する直近バージョン数（既定3）
+
+    各モデルについて Registry 上の直近バージョンの metrics/params を並べ、
+    学習・アンサンブル学習・バックテストシミュレーションの現在のジョブ状態も併せて返す。
+    """
+    try:
+        import mlflow
+        from src.pipeline.mlflow.catalog import MODEL_CATALOG, get_model_spec
+
+        mlflow.set_tracking_uri("http://localhost:5000")
+        client = mlflow.MlflowClient()
+
+        keys = [k.strip() for k in models.split(",") if k.strip()] or sorted(MODEL_CATALOG)
+        n_versions = max(1, min(int(versions), 20))
+
+        model_comparisons: list[dict] = []
+        for key in keys:
+            try:
+                spec = get_model_spec(key)
+            except KeyError:
+                model_comparisons.append({"key": key, "error": "未知のモデルキー"})
+                continue
+
+            entry: dict[str, Any] = {
+                "key": key,
+                "title": spec.title,
+                "lifecycle": spec.lifecycle.value,
+                "registered_name": spec.registered_name,
+            }
+            try:
+                all_versions = client.search_model_versions(f"name='{spec.registered_name}'")
+            except Exception as e:
+                entry["error"] = str(e)
+                entry["versions"] = []
+                model_comparisons.append(entry)
+                continue
+
+            sorted_versions = sorted(all_versions, key=lambda v: int(v.version), reverse=True)
+            entry["n_versions_total"] = len(sorted_versions)
+
+            run_rows = []
+            for v in sorted_versions[:n_versions]:
+                row: dict[str, Any] = {
+                    "version": int(v.version),
+                    "run_id": v.run_id,
+                    "status": v.status,
+                    "created_at": str(v.creation_timestamp),
+                }
+                try:
+                    run = client.get_run(v.run_id)
+                    row["metrics"] = run.data.metrics
+                    row["params"] = run.data.params
+                except Exception as e:
+                    row["error"] = str(e)
+                run_rows.append(row)
+            entry["versions"] = run_rows
+            model_comparisons.append(entry)
+
+        jobs = {
+            "train": {
+                "running": _training_job.get("running", False),
+                "started_at": _training_job.get("started_at", ""),
+                "finished_at": _training_job.get("finished_at", ""),
+                "error": _training_job.get("error"),
+                "result": _training_job.get("result"),
+            },
+            "ensemble": {
+                "running": _ensemble_job.get("running", False),
+                "started_at": _ensemble_job.get("started_at", ""),
+                "finished_at": _ensemble_job.get("finished_at", ""),
+                "error": _ensemble_job.get("error"),
+                "result": _ensemble_job.get("result"),
+            },
+            "simulation": {
+                "running": _sim_job.get("running", False),
+                "started_at": _sim_job.get("started_at", ""),
+                "finished_at": _sim_job.get("finished_at", ""),
+                "error": _sim_job.get("error"),
+                "result": _sim_job.get("result"),
+            },
+        }
+
+        # バックテストの複数パラメータ組み合わせ比較（直近 optimize() 実行内の上位結果）
+        backtest_top_combinations = None
+        try:
+            from src.pipeline.inference.composite_optimizer import OPTIM_RESULT_PATH
+            if OPTIM_RESULT_PATH.exists():
+                with open(OPTIM_RESULT_PATH, encoding="utf-8") as f:
+                    backtest_top_combinations = json.load(f).get("top_combinations")
+        except Exception:
+            pass
+
+        return JSONResponse({
+            "models": model_comparisons,
+            "jobs": jobs,
+            "backtest_top_combinations": backtest_top_combinations,
+        })
+    except Exception as e:
+        import traceback as tb
+        return JSONResponse({"error": str(e), "traceback": tb.format_exc()}, status_code=500)
 
 
 # ── オッズ予測 API ──────────────────────────────────────
@@ -8503,10 +8759,12 @@ def _run_simulation(max_races: int):
             "n_races": result.n_races,
             "n_bets": result.n_bets,
         }
+        _sim_job["traceback"] = None
     except Exception as e:
         import traceback as tb
         _sim_job["error"] = str(e)
-        logger.error("シミュレーション失敗: %s\n%s", e, tb.format_exc())
+        _sim_job["traceback"] = tb.format_exc()
+        logger.error("シミュレーション失敗: %s\n%s", e, _sim_job["traceback"])
     finally:
         _sim_job["running"] = False
         _sim_job["finished_at"] = datetime.now().isoformat()
@@ -8514,13 +8772,14 @@ def _run_simulation(max_races: int):
 
 @app.get("/api/simulation/status", response_class=JSONResponse)
 async def get_simulation_status():
-    """シミュレーションジョブの現在の状態を返す。"""
+    """シミュレーションジョブの現在の状態を返す。失敗時は`traceback`にスタックトレースを含む。"""
     return JSONResponse({
         "running": _sim_job.get("running", False),
         "started_at": _sim_job.get("started_at", ""),
         "finished_at": _sim_job.get("finished_at", ""),
         "result": _sim_job.get("result"),
         "error": _sim_job.get("error"),
+        "traceback": _sim_job.get("traceback"),
     })
 
 
@@ -11764,6 +12023,8 @@ def _run_baba_live_scrape():
         import traceback
         _baba_live_job["error"] = str(e)
         traceback.print_exc()
+        from src.utils.notify import notify_slack
+        notify_slack(f"[keiba-vpn] cushion/live スクレイプ失敗 — {e}")
     finally:
         _baba_live_job["running"] = False
         _baba_live_job["finished_at"] = datetime.now().isoformat()
@@ -12401,11 +12662,16 @@ async def myostatin_predict(request: Request):
     if not sire:
         return JSONResponse({"error": "sire is required"}, status_code=400)
     mstn = MyostatinLookup()
+    basis_info = mstn.predict_offspring_with_basis(sire, dam_sire) if dam_sire else None
     result = {
         "sire_info": mstn.get_sire_info(sire),
         "dam_sire_info": mstn.get_sire_info(dam_sire) if dam_sire else None,
         "offspring": mstn.predict_offspring(sire, dam_sire) if dam_sire else None,
         "features": mstn.offspring_features(sire, dam_sire, distance) if dam_sire else None,
+        # 根拠・信頼度（ユーザー向け表示用。offspring/featuresの数値だけでは
+        # 「KB未登録で集団平均を使っただけ」等が分からないため追加）
+        "confidence": basis_info["confidence"] if basis_info else None,
+        "basis": basis_info["basis"] if basis_info else None,
     }
     return JSONResponse(result)
 

@@ -7,9 +7,12 @@ import unittest
 import numpy as np
 
 from src.research.race.race_quality_model import (
+    build_entrants_aptitude_response,
+    build_horse_aptitude_cache_payload,
     compute_pace_shape,
     distance_surface_segment,
     extract_lap_times_from_blob,
+    get_horse_aptitude_cache,
     get_race_quality_meta,
     going_archetype_multiplier,
     history_distance_band,
@@ -20,6 +23,40 @@ from src.research.race.race_quality_model import (
     _nine_probs,
     _parse_lap_string,
 )
+
+
+class _FakeStorageMissingAptitude:
+    """血統(horse_pedigree_5gen)・戦歴(horse_result)が未取得の馬を模すストレージ。
+
+    GCS 未接続・未取得時と同じく load() は None を返す（HybridStorage.load の
+    実挙動に合わせる）。entrants-aptitude のフォールバック経路を検証する。
+    """
+
+    RACE_WITH_MISSING_HORSES = "RACE_MISSING_TEST"
+
+    def __init__(self) -> None:
+        self.saved: dict[tuple[str, str], dict] = {}
+
+    def load(self, category: str, key: str, bypass_cache: bool = False):
+        if category == "race_result" and key == self.RACE_WITH_MISSING_HORSES:
+            return {
+                "race_name": "テスト(血統・戦歴欠損馬あり)",
+                "field_size": 3,
+                "distance": 2000,
+                "surface": "芝",
+                "track_condition": "良",
+                "entries": [
+                    {"horse_id": "2020999999", "horse_number": 1, "bracket_number": 1, "finish_position": 1},
+                    {"horse_id": "2020888888", "horse_number": 2, "bracket_number": 2, "finish_position": 2},
+                    {"horse_id": "2020777777", "horse_number": 3, "bracket_number": 3, "finish_position": 3},
+                ],
+            }
+        # horse_result / horse_pedigree_5gen / race_index / race_barometer /
+        # race_lap / race_result_lap / horse_race_quality_aptitude すべて未取得を模す
+        return None
+
+    def save(self, category: str, key: str, payload: dict) -> None:
+        self.saved[(category, key)] = payload
 
 
 class TestRaceQualityModel(unittest.TestCase):
@@ -86,6 +123,48 @@ class TestRaceQualityModel(unittest.TestCase):
         self.assertEqual(m["version"], 1)
         self.assertEqual(len(m["axes"]), 9)
         self.assertIn("api", m)
+
+    def test_aptitude_payload_missing_pedigree_and_history_has_fallback(self):
+        """血統・戦歴が未取得(storage.load が None)でも例外を出さず既定値を返す。"""
+        storage = _FakeStorageMissingAptitude()
+        payload = build_horse_aptitude_cache_payload(
+            storage, "2020999999", stats_data={"sires": {}, "axes": [], "meta": {}}
+        )
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload["pedigree_vector"], [0.0] * 8)
+        self.assertEqual(payload["history"]["starts"], 0.0)
+        self.assertEqual(payload["history"]["last3f_fast"], 0.5)
+
+        cache, from_store = get_horse_aptitude_cache(
+            storage, "2020999999", stats_data={"sires": {}, "axes": [], "meta": {}}
+        )
+        self.assertIsNotNone(cache)
+        self.assertFalse(from_store)
+
+    def test_entrants_aptitude_response_no_crash_when_all_entrants_missing_data(self):
+        """出走馬全員の血統・戦歴が未取得でも entrants-aptitude がエラー落ちせず
+        妥当なフォールバック(ゼロ寄りの8軸・既定の戦歴統計)を返す。"""
+        storage = _FakeStorageMissingAptitude()
+        resp = build_entrants_aptitude_response(
+            storage,
+            storage.RACE_WITH_MISSING_HORSES,
+            stats_data={"sires": {}, "axes": [], "meta": {}},
+        )
+        self.assertIsNotNone(resp)
+        self.assertEqual(len(resp["entrants"]), 3)
+        self.assertEqual(resp["cache_hits"], 0)
+        self.assertEqual(resp["cache_misses"], 3)
+        for entrant in resp["entrants"]:
+            self.assertEqual(len(entrant["base_row"]), 8)
+            self.assertTrue(all(v >= 0.0 for v in entrant["base_row"]))
+
+    def test_entrants_aptitude_response_none_for_unknown_race(self):
+        """出馬表・結果が未取得の race_id は None（API 層で 404 として扱われる）。"""
+        storage = _FakeStorageMissingAptitude()
+        resp = build_entrants_aptitude_response(
+            storage, "RACE_DOES_NOT_EXIST", stats_data={"sires": {}, "axes": [], "meta": {}}
+        )
+        self.assertIsNone(resp)
 
 
 if __name__ == "__main__":

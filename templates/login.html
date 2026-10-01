@@ -98,6 +98,11 @@
     color: var(--err); padding: 10px 14px; border-radius: 8px;
     font-size: 13px; margin-bottom: 16px; text-align: center;
   }
+  .login-notice {
+    background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.3);
+    color: var(--text); padding: 10px 14px; border-radius: 8px;
+    font-size: 13px; margin-bottom: 16px; text-align: center;
+  }
   .login-btn {
     width: 100%; background: var(--accent); color: #fff; border: none;
     padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 600;
@@ -149,6 +154,9 @@
     <h1 class="login-title">開発者ログイン</h1>
     <p class="login-subtitle">管理機能にアクセスするにはパスワードを入力してください</p>
 
+    {% if session_notice %}
+    <div class="login-notice">{{ session_notice }}</div>
+    {% endif %}
     {% if error %}
     <div class="login-error">{{ error }}</div>
     {% endif %}

@@ -21,7 +21,10 @@
 - `POST /api/tracking-difficulty/train`: 追走難度モデルの学習実行
 - Flask v1 (`/api/v1/races/<race_id>/tracking-difficulty` + `.../precompute`) と2026-09-30にパラメータ完全パリティ化済み
   （legacy/v1どちらも同じ`tracking_difficulty_service.get_or_compute`を利用。v1側の`HybridStorage()`直接生成も
-  `_get_storage()`シングルトンに統一済み）
+  `_get_storage()`シングルトンに統一済み）。2026-10-01に自動テスト `tests/api/test_tracking_difficulty_legacy_v1_parity.py`
+  を追加し、値の一致を継続的に検証できるようにした。
+- 事前計算カバレッジ（未計算率）の計測スクリプト: `src/scripts/maintenance/measure_tracking_difficulty_coverage.py`
+  （2026-10-01追加。対象レース定義は既存バッチと同じ `race_shutuba` ベース、中央競馬・直近365日）
 
 ## 目標（推測）
 
@@ -51,8 +54,40 @@ legacy/v1どちらの画面から見ても同じ追走難度が表示される�
 
 ### 共通TODO（ホスト方式に関係ない）
 
-- [ ] legacy/v1で追走難度の値が一致することを確認する自動テストを追加する（現状は手動確認のみ）
-- [ ] 「未計算（not_precomputed）」に当たる頻度を計測する
+- [x] legacy/v1で追走難度の値が一致することを確認する自動テストを追加する（現状は手動確認のみ）
+      — 2026-10-01対応: `tests/api/test_tracking_difficulty_legacy_v1_parity.py` を新規追加。
+      `tracking_difficulty_service.get_or_compute` をモックし、legacy
+      (`fastapi.testclient.TestClient` 経由で `/api/race/{race_id}/tracking-difficulty`) と v1
+      (`src.api.flask_app.create_app().test_client()` 経由で
+      `/api/v1/races/<race_id>/tracking-difficulty`) に同一ペイロードを返させて、公開フィールド
+      （race_date/race_name/venue/surface/distance/track_condition/field_size/pace_prediction/
+      position_flow/entries 等。entries 内の horse_number ごとの tracking_difficulty 値も含む）が
+      完全一致することを検証する統合テスト。加えて `refresh=true` 時に両エンドポイントが
+      `get_or_compute` へ渡す `force_refresh`/`allow_scrape`/`allow_compute_on_miss` が同一であること、
+      未計算時に両方とも 404 + `status=not_precomputed` を返すことも確認。
+      `python3 -m pytest tests/api/test_tracking_difficulty_legacy_v1_parity.py -v` で3件とも成功
+      （`python3 -m pytest tests/api/ -q` でも既存169件+新規3件すべて成功、回帰無し）。
+      なお v1 側は内部メタキー（`_compute_meta` 等 `_` prefix）を剥がさずそのまま返す実装のため
+      レスポンスボディの"キー集合"は legacy と完全一致ではない（legacyは `_` prefix を除去）が、
+      表示に使う公開フィールドの値は一致する。この差異自体は実害が無いため今回は対応不要と判断。
+- [x] 「未計算（not_precomputed）」に当たる頻度を計測する
+      — 2026-10-01対応: `src/scripts/maintenance/measure_tracking_difficulty_coverage.py` を新規追加し
+      実行した。対象レースの定義は既存バッチ（`precompute_tracking_difficulty_all.py` /
+      `batch_inference_all_races.collect_race_ids`）と同じ `storage.list_keys("race_shutuba")` を基点に、
+      中央競馬（race_id の venue code 01-10）かつ直近365日（各レースの実際の `date` フィールドで判定）
+      に絞り込んだもの。計算済みの定義は `tracking_difficulty_store.exists_local(race_id)`。
+      `python3 -m src.scripts.maintenance.measure_tracking_difficulty_coverage` で実行可能
+      （`--days` で期間、`--no-jra-only` で地方競馬も含める、`--no-probe-dates` で粗い年プレフィックス
+      判定に切替可能）。
+      **実測結果**: このエージェント実行環境（ユーザーのVPS/本番ホストではない開発用チェックアウト）には
+      `data/calculated_data/tracking_difficulty/` が存在せず（0件）、`race_shutuba` のローカルデータも
+      GCSアクセス権も無いため、対象レース数0件・計測不可という結果になった
+      （`GCS_BUCKET` 未設定、かつ `gsutil ls` も403で確認済み）。したがって実際の本番/VPSでの
+      未計算率はこの環境からは測定できなかった。スクリプト自体は実行して正常に完了すること・
+      0件時に計測不可であることを明示するフォールバック表示を確認済み。
+      **次のアクション（本番ホストで実行して埋めるべき実測値）**: VPS/本番ホスト上で
+      `python3 -m src.scripts.maintenance.measure_tracking_difficulty_coverage` を実行し、
+      対象レース数・計算済み件数・未計算率(%) をこの行に追記すること。
 
 ### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
 

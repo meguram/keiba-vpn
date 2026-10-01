@@ -68,6 +68,35 @@ def is_developer(request: Request) -> bool:
     return _verify_token(token)
 
 
+def classify_session(request: Request) -> str:
+    """セッションクッキーの状態を分類する（ユーザ向けメッセージ分岐用）。
+
+    - "valid": 有効なセッション
+    - "none": クッキー自体が無い（未ログイン、初回アクセス等）
+    - "expired": 署名は正しいが有効期限（30日）切れ
+    - "invalid": クッキーが存在するが形式不正・署名検証失敗（改ざん・別環境のクッキー等）
+    """
+    token = request.cookies.get(COOKIE_NAME, "")
+    if not token:
+        return "none"
+    try:
+        parts = token.split(":")
+        if len(parts) != 3:
+            return "invalid"
+        role, ts_str, sig = parts
+        if role != "dev":
+            return "invalid"
+        ts = int(ts_str)
+        expected = _sign(f"{role}:{ts_str}")
+        if not hmac.compare_digest(sig, expected):
+            return "invalid"
+        if time.time() - ts > COOKIE_MAX_AGE:
+            return "expired"
+        return "valid"
+    except Exception:
+        return "invalid"
+
+
 def _request_is_secure(request: Request) -> bool:
     if request.url.scheme == "https":
         return True

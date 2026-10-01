@@ -20,6 +20,10 @@
 - `/bloodline`（統合Viewer）・`/bloodline-cluster`・`/bloodline-vector`（血統ベクトル空間v2）・
   `/pedigree-map`・`/note-aptitude-race`・`/pedigree-race-stats`
 - `/course-bloodline`: 旧ページ、`/bloodline`へ308リダイレクト
+- ナビゲーション: 全ページ共通の `templates/partials/_nav.html`（全血統・pedigreeテンプレートが`{% include %}`済み）に
+  常設グローバルナビがあり、「血統」ドロップダウンから`/bloodline`・`/bloodline-vector`・`/pedigree-map`・
+  `/bloodline-cluster`・`/pedigree-race-stats`・`/myostatin`・`/note-aptitude-race`（2026-10-01追加）に、
+  「データ分析」ドロップダウンからも`/note-aptitude-race`に遷移できる（相互リンク済み）。
 
 ### 血統分析（bloodline/*）
 - `POST /api/bloodline/analyze`（バックグラウンド実行）・`/status`・`/surfaces`・
@@ -91,11 +95,34 @@
 
 ### 共通TODO（ホスト方式に関係ない）
 
-- [ ] `/bloodline`・`/bloodline-cluster`・`/pedigree-map`・`/note-aptitude-race` 等、
+- [x] `/bloodline`・`/bloodline-cluster`・`/pedigree-map`・`/note-aptitude-race` 等、
       サブテーマごとに別ページに分かれているUIの統合・ナビゲーション改善を検討する
       （`/course-bloodline`は既に`/bloodline`へリダイレクト統合済み）
+      — 2026-10-01対応: 調査の結果、全ページは既に共通の`templates/partials/_nav.html`を
+      `{% include %}`しており（`bloodline.html`・`bloodline_cluster.html`・`bloodline_vector.html`・
+      `pedigree_map.html`・`pedigree_race_stats.html`・`race/note_aptitude_race.html`で確認）、
+      常設グローバルナビの「血統」ドロップダウンから相互に1クリックで遷移可能だった。
+      新規ページ作成・ルーティング再設計は不要と判断。唯一のギャップとして、
+      `/note-aptitude-race`は血統メタクラスタベースの機能であるにもかかわらず
+      「データ分析」ドロップダウンにのみ掲載されていたため、`_nav.html`の「血統」ドロップダウンにも
+      同ページへのクロスリンクを追加した（`templates/partials/_nav.html`編集、新規ページ・新規ルート無し）。
+      結論として「現状のグローバルナビ構成を維持しつつ1件のクロスリンクを追加」が適切な対応。
 - [ ] 5代血統整備（race-ensure-5gen系）が未完了の馬の割合を計測する
       （計測自体はホスト方式に依存しない。計測後の定期実行整備は下記を参照）
+      — 2026-10-01調査: 計測ロジック自体は既存の`src/scraper/verify_horse_scrape_completeness.py`
+      （`verify_horses_for_race_period(..., tasks=["horse_pedigree_5gen"])`、`horse_pedigree_5gen`の
+      `ancestors[]`が5件以上あるかで判定）がそのまま使えると確認した。しかし本対応を行った作業環境では
+      実データにアクセスできず計測を完走できなかった: (1) `data/`配下に`horse_pedigree_5gen`・
+      `data/features/horse/ped_tbl`等の実体が存在しない（`data/local/`は`image`/`meta`のみ、
+      `data/page_reference/`も`BUNDLE.md`のみでレース一覧すら無い）、(2) `.env`に`GCS_BUCKET`等の
+      GCS認証情報が設定されていない、(3) `gcloud auth list`では既存アカウントが認証済みだったが
+      `gsutil`での対象バケット読み取りは403で拒否された、(4) `data/queue/scrape_queue.json`に
+      残っていたジョブはヘルスチェック用のダミーレース（`race_id=999901019999`等）のみで実馬データではない。
+      以上により母集団（直近1年の出走馬など）を定義して計測する前提のデータ自体が本環境に無く、
+      「計測不可能なほどデータが欠けている」ケースと判断してスキップした。GCS権限のあるVPS/本番環境では
+      下記コマンドで即座に測定できる（`total_horses`に対する`missing_count_by_task.horse_pedigree_5gen`の
+      比率がそのまま未完了率になる）:
+      `python3 -m src.scraper.verify_horse_scrape_completeness --start-date 20250101 --end-date 20251001 --tasks horse_pedigree_5gen`
 
 ### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
 

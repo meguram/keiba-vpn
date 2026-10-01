@@ -1368,6 +1368,7 @@
   <div class="top-row">
     <span class="round-badge" id="roundBadge"></span>
     <span class="grade-badge" id="gradeBadge" style="display:none"></span>
+    <span class="grade-badge" id="qualityWarnBadge" style="display:none"></span>
     <a id="netkeibaLink" class="netkeiba-link" href="#" target="_blank">🔗 netkeiba</a>
   </div>
   <h1 style="display:flex;align-items:center;gap:0"><img src="/data/image/icon.jpg" alt="" class="page-brand-icon"><span id="raceName"></span></h1>
@@ -2169,6 +2170,19 @@ function renderHeader() {
     if (grade === 'G1') gb.style.background = 'rgba(239,68,68,0.2)', gb.style.color = '#ef4444';
     else if (grade === 'G2') gb.style.background = 'rgba(59,130,246,0.2)', gb.style.color = '#60a5fa';
     else if (grade === 'G3') gb.style.background = 'rgba(34,197,94,0.2)', gb.style.color = '#22c55e';
+  }
+
+  const qwb = document.getElementById('qualityWarnBadge');
+  const dq = d.quality_health_warning;
+  if (dq && (dq.status === 'warn' || dq.status === 'fail')) {
+    const isFail = dq.status === 'fail';
+    qwb.textContent = isFail ? '⚠ データ品質: 要確認' : '△ データ品質: 確認推奨';
+    qwb.title = 'この開催日のデータ品質チェックで異常が検知されています（運用者により修復中の場合があります）';
+    qwb.style.display = 'inline-block';
+    qwb.style.background = isFail ? 'rgba(239,68,68,0.15)' : 'var(--warn-dim)';
+    qwb.style.color = isFail ? 'var(--err)' : 'var(--warn)';
+  } else {
+    qwb.style.display = 'none';
   }
 
   document.getElementById('netkeibaLink').href = `https://race.netkeiba.com/race/shutuba.html?race_id=${RACE_ID}`;

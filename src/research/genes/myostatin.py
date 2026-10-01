@@ -186,6 +186,97 @@ class MyostatinLookup:
 
         return result
 
+    _CONFIDENCE_RANK: dict[str, int] = {
+        "confirmed": 4,
+        "highly_likely": 3,
+        "estimated": 2,
+        "inferred": 1,
+        "population_default": 0,
+    }
+
+    def predict_offspring_with_basis(
+        self,
+        sire_name: str,
+        dam_sire_name: str,
+    ) -> dict[str, Any]:
+        """
+        子馬の遺伝子型確率推定に、根拠（どの情報から推定したか）と
+        総合信頼度を付与して返す。`/api/myostatin/predict` のレスポンス拡充用。
+
+        母自身の遺伝子型は常にナレッジベース外（集団デフォルト値）で補完されるため、
+        総合信頼度は「父」「母父」それぞれのKB登録状況・信頼度のうち最も低いものと、
+        母由来の不確実性を踏まえた値になる（KB登録済みでも confirmed には届かない）。
+
+        Returns:
+          {
+            "probs": {"CC": p, "CT": p, "TT": p},
+            "confidence": "confirmed" | "highly_likely" | "estimated" | "inferred" | "population_default",
+            "sire_known": bool,
+            "dam_sire_known": bool,
+            "basis": [str, ...],  # 推定根拠の説明（日本語）
+          }
+        """
+        sire_info = self.get_sire_info(sire_name)
+        dam_sire_info = self.get_sire_info(dam_sire_name) if dam_sire_name else None
+        sire_known = sire_info is not None
+        dam_sire_known = dam_sire_info is not None
+
+        sire_conf = sire_info.get("confidence", "population_default") if sire_info else "population_default"
+        dam_sire_conf = (
+            dam_sire_info.get("confidence", "population_default")
+            if dam_sire_info
+            else ("population_default" if dam_sire_name else "population_default")
+        )
+
+        probs = self.predict_offspring(sire_name, dam_sire_name)
+
+        # 母自身の遺伝子型は常に集団デフォルトで補完される(母方入力の半分は推定値)ため、
+        # 父・母父がどれだけ確定していても総合信頼度は "highly_likely" が上限となる。
+        rank = min(
+            self._CONFIDENCE_RANK.get(sire_conf, 0),
+            self._CONFIDENCE_RANK.get(dam_sire_conf, 0),
+            self._CONFIDENCE_RANK["highly_likely"],
+        )
+        overall_confidence = next(
+            (k for k, v in self._CONFIDENCE_RANK.items() if v == rank),
+            "population_default",
+        )
+
+        basis: list[str] = []
+        if sire_known:
+            basis.append(
+                f"父『{sire_name}』: KB登録済み "
+                f"{sire_info.get('genotype', '不明')}型(信頼度: {sire_conf})。"
+                f"根拠: {sire_info.get('source', '-')}"
+            )
+        else:
+            basis.append(
+                f"父『{sire_name}』: ナレッジベース未登録のため集団平均値を代用"
+                f"（C={self._defaults.get('japanese_thoroughbred_avg', {}).get('allele_c', 0.4)}, "
+                f"T={self._defaults.get('japanese_thoroughbred_avg', {}).get('allele_t', 0.6)}）"
+            )
+        if dam_sire_name:
+            if dam_sire_known:
+                basis.append(
+                    f"母父『{dam_sire_name}』: KB登録済み "
+                    f"{dam_sire_info.get('genotype', '不明')}型(信頼度: {dam_sire_conf})。"
+                    f"根拠: {dam_sire_info.get('source', '-')}"
+                )
+            else:
+                basis.append(f"母父『{dam_sire_name}』: ナレッジベース未登録のため集団平均値を代用")
+        basis.append(
+            "母自身の遺伝子型は未検査のため、母方は母父由来の確率と血統集団平均値を"
+            "50:50で混合した推定値（不確実性あり）"
+        )
+
+        return {
+            "probs": probs,
+            "confidence": overall_confidence,
+            "sire_known": sire_known,
+            "dam_sire_known": dam_sire_known,
+            "basis": basis,
+        }
+
     def sire_allele_features(self, sire_name: str) -> dict[str, float]:
         """パイプライン向け: 父馬のアレル特徴量を dict で返す。"""
         c, t = self.get_allele_probs(sire_name)

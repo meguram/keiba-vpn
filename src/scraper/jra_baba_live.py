@@ -69,6 +69,30 @@ class JRABabaLiveScraper:
                           "AppleWebKit/537.36 (KHTML, like Gecko) "
                           "Chrome/120.0.0.0 Safari/537.36",
         })
+        # scrape() 1回分の構造変更の疑い（_report_structure_anomaly で蓄積し、
+        # scrape() の最後にまとめて1通だけSlack通知する）。
+        self._structure_anomalies: list[str] = []
+
+    def _report_structure_anomaly(self, message: str) -> None:
+        """JRA公式ページのHTML構造変更が疑われる事象を記録する。
+
+        個別のCSSセレクタ単位では「このページ/この開催場だけ今回は該当データが無い」
+        という正常系と区別できないため、ここでは記録のみ行い、実際の通知は
+        scrape() 完了時に `_notify_structure_anomalies()` でまとめて送る。
+        """
+        logger.warning("構造変更の疑い: %s", message)
+        self._structure_anomalies.append(message)
+
+    def _notify_structure_anomalies(self) -> None:
+        if not self._structure_anomalies:
+            return
+        from src.utils.notify import notify_slack
+        detail = "\n".join(f"- {m}" for m in self._structure_anomalies)
+        notify_slack(
+            "[keiba-vpn] JRA公式馬場情報ページ (https://www.jra.go.jp/keiba/baba/) "
+            "でHTML構造変更の疑いを検知しました。パース結果を確認してください。\n"
+            f"{detail}"
+        )
 
     # ═══════════════════════════════════════════════════════════════
     #  Public API
@@ -76,23 +100,27 @@ class JRABabaLiveScraper:
 
     def scrape(self) -> list[dict]:
         """全開催場のデータを取得して保存する。"""
-        cushion_map = self._fetch_cushion_data()
-        if not cushion_map:
-            logger.info("クッション値データなし (開催なしの可能性)")
-            return []
+        self._structure_anomalies = []
+        try:
+            cushion_map = self._fetch_cushion_data()
+            if not cushion_map:
+                logger.info("クッション値データなし (開催なしの可能性)")
+                return []
 
-        venue_info = self._fetch_venue_info()
-        moisture_map = self._fetch_moisture_data()
+            venue_info = self._fetch_venue_info()
+            moisture_map = self._fetch_moisture_data()
 
-        all_records = self._merge_data(cushion_map, venue_info, moisture_map)
+            all_records = self._merge_data(cushion_map, venue_info, moisture_map)
 
-        if all_records:
-            self._save_records(all_records)
-            logger.info("合計 %d レコード保存完了", len(all_records))
-        else:
-            logger.info("マージ結果: 0 レコード")
+            if all_records:
+                self._save_records(all_records)
+                logger.info("合計 %d レコード保存完了", len(all_records))
+            else:
+                logger.info("マージ結果: 0 レコード")
 
-        return all_records
+            return all_records
+        finally:
+            self._notify_structure_anomalies()
 
     def has_new_data(self) -> bool:
         """
@@ -136,22 +164,35 @@ class JRABabaLiveScraper:
         soup = BeautifulSoup(resp.text, "html.parser")
         result: dict[str, list[dict]] = {}
 
-        for rc_div in soup.select("[id^='rc']"):
+        rc_divs = soup.select("[id^='rc']")
+        for rc_div in rc_divs:
             venue_name = rc_div.get("title", "")
             if not venue_name:
                 continue
             entries = []
-            for unit in rc_div.select(".unit"):
+            units = rc_div.select(".unit")
+            unit_parse_failures = 0
+            for unit in units:
                 time_el = unit.select_one(".time")
                 cushion_el = unit.select_one(".cushion")
                 if not time_el or not cushion_el:
+                    unit_parse_failures += 1
                     continue
                 time_text = time_el.get_text(strip=True)
                 try:
                     cv = float(cushion_el.get_text(strip=True))
                 except (ValueError, TypeError):
+                    unit_parse_failures += 1
                     continue
                 entries.append({"time": time_text, "cushion": cv})
+            if units and unit_parse_failures == len(units):
+                # .unit (日ごとの外枠) は存在するのに .time/.cushion が1件も
+                # 取れない → 内部マークアップ (クラス名等) が変わった可能性が高い。
+                self._report_structure_anomaly(
+                    f"{venue_name}: .unit が{len(units)}件あるが "
+                    ".time/.cushion を1件も取得できませんでした"
+                    "（_data_cushion.html の内部マークアップ変更の可能性）"
+                )
             if entries:
                 result[venue_name] = entries
                 logger.info("  クッション値: %s → %d エントリ", venue_name, len(entries))
@@ -163,6 +204,8 @@ class JRABabaLiveScraper:
 
     def _fetch_venue_info(self) -> dict[str, dict]:
         result: dict[str, dict] = {}
+        header_parse_failures = 0
+        headers_found = 0
         for vp in VENUE_PAGES:
             url = f"{BASE_URL}/{vp}"
             try:
@@ -177,8 +220,10 @@ class JRABabaLiveScraper:
             if not h2:
                 continue
             header_text = h2.get_text(strip=True)
+            headers_found += 1
             info = self._parse_header(header_text)
             if not info:
+                header_parse_failures += 1
                 continue
             course_pos = ""
             for dl in soup.select(".data_line_list.wide"):
@@ -193,6 +238,16 @@ class JRABabaLiveScraper:
             logger.info("  開催情報: %s 第%d回第%d日 %s %sコース",
                         info["venue_name"], info["kai"], info["race_day"],
                         info["date"], course_pos)
+
+        if headers_found and header_parse_failures == headers_found and not result:
+            # .contents_header h2 自体は取得できている（ページ構造は健在）のに、
+            # 想定フォーマット（第N回○○競馬第M日 ... (曜日)）が1件もマッチしない
+            # → ヘッダーテキストのフォーマットが変わった可能性が高い。
+            self._report_structure_anomaly(
+                f".contents_header h2 は{headers_found}件取得できたが、"
+                "すべて開催情報の想定フォーマットに一致しませんでした"
+                "（開催ヘッダーのテキスト形式変更の可能性）"
+            )
         return result
 
     # ═══════════════════════════════════════════════════════════════
@@ -611,6 +666,20 @@ def run_cron_job(output_dir: str = "data/page_reference/cushion") -> int:
 
     records = scraper.scrape()
     logger.info("cron: スクレイプ完了 %d レコード", len(records))
+
+    if not records:
+        # _data_cushion.html のハッシュは変化した（新データがあるはず）のに、
+        # フルスクレイプの結果が0件 → JRA公式ページのHTML構造が変わり、既存の
+        # セレクタがマッチしなくなった可能性が高い（開催なし週ならそもそも
+        # has_new_data() がTrueになりにくく、ここには到達しにくい）。
+        from src.utils.notify import notify_slack
+        notify_slack(
+            "[keiba-vpn] JRA馬場情報ライブ取得: 更新検知後のフルスクレイプが0件でした "
+            f"({entry['date']} [{entry['type']}] {venues})。"
+            "JRA公式ページのHTML構造が変わり、パースに失敗している可能性があります。"
+            "src/scraper/jra_baba_live.py のセレクタを確認してください。"
+        )
+
     return len(records)
 
 

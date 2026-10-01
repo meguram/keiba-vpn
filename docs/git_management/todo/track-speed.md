@@ -51,8 +51,16 @@
 
 ### 共通TODO（ホスト方式に関係ない）
 
-- [ ] `perf_index`が付与されていない馬・レースの割合を計測し、`assign`の対象範囲に漏れが無いか確認する
-- [ ] `/track-speed/dev`（開発用ページ、ログイン必須）の役割を整理し、本番ページとの差異を明記する
+- [x] `perf_index`が付与されていない馬・レースの割合を計測し、`assign`の対象範囲に漏れが無いか確認する
+      — 2026-10-01対応: 本サンドボックスには実データが一切存在しない（`data/`は4.5MBのみで`race_result`等のparquetが無く、`GCS_BUCKET`未設定、稼働中のAPIも`GET /api/track-speed/meta`が`baselines_ready:false, dates_count:0`を返す）ため、実測によるパーセンテージ計測は不可能だった。代わりにコードを精査し、構造的な漏れを特定した。
+      **主要な漏れ（高確度）**: ベースライン学習期間は`build_track_speed_baselines.py`既定で2020-2025年（改修後）だが、`perf_index`付与（`assign_races`）を呼ぶ経路は①CLI `assign_track_speed.py`（`--date-from`既定`2026-01-01`）と②`/track-speed`画面の「2026〜振り分け」ボタン（`templates/analysis/track_speed.html:1169` `fetch('/api/track-speed/assign?date_from=2026-01-01', ...)`、`date_to`無し）の2つのみで、両方とも2026-01-01以降しか対象にしない。さらに`scripts/`配下にこれを定期実行するcron/daemonは存在せず（`grep -rl assign_track_speed scripts/`で0件）、手動クリック以外に実行経路が無い。したがって2020-2025年の過去レースはベースライン計算の母集団にのみ使われ、`perf_index`自体は（過去に誰かが`--date-from 2020-01-01`等で手動実行していない限り）1件も付与されていない可能性が高い。これは本ファイル「目標（推測）」の『全馬にperf_index欠損なく付与』という前提と、実装が暗黙的に『2026年以降のレースのみ』にスコープを絞っている点の不整合であり、意図的な設計（2026年以降のみをユーザ提供対象とする）か見落としかは要件側で確認が必要。
+      **その他の除外要因（`src/research/race/track_speed_engine.py`）**: `load_races_from_parquet`（L823-905）はJRA中央競馬場・芝/ダートのみに絞り障害レースと改修日以前のレースを除外（意図的）。`score_race`（L1077-1216）は`track_condition`が`COND_CANDIDATES={良,稍重,重,不良}`（L65-70）以外の場合、および対象venue×layout×surface×distance×class_band×cond_pool（ALL会場フォールバック・クラス±2ランクフォールバック含む）に`MIN_BASELINE_N=12`件以上のベースラインが無い場合、`None`を返しそのレースを`assign`対象から静かに除外する。両ケースとも同じ`None`返却のため、ログ上で「track_condition不正」と「ベースライン不足」を区別できない。
+      **フォローアップ**: 正確な付与率・除外件数は実データにアクセスできるホスト（本番VPS/GCS接続環境）で `load_races_from_parquet()` の母集団件数と `assign_races()` 内で `score_race()` が `None` を返した件数を比較するログを仕込んで計測するのが望ましい（本対応では大規模バッチ実行はしない方針のため見送り）。
+- [x] `/track-speed/dev`（開発用ページ、ログイン必須）の役割を整理し、本番ページとの差異を明記する
+      — 2026-10-01対応: `src/api/app.py`のルーティング（L12098-12117）と両テンプレートを比較した。
+      **`/track-speed`（本番）**: 認証チェック無し（誰でもアクセス可、`track_speed_page`に`is_developer`判定は無い）。インタラクティブな馬場速度ダッシュボード本体で、`templates/analysis/track_speed.html`は`fetch()`を10箇所で呼び`/api/track-speed/meta|dates|venues|day|status|rebuild-baselines|assign|validate-perf|race-horses|by-category`を網羅する。加えて運用操作ボタン「基準データ再構築」（`POST /api/track-speed/rebuild-baselines`）と「2026〜振り分け」（`POST /api/track-speed/assign?date_from=2026-01-01`）がページ上に直接存在し（L419-420）、これらのボタン自体・対応するPOSTハンドラ（`src/api/app.py` L12193, L12299）にも認証チェックが無いため非ログインユーザでも実行トリガーできる。開発者ログイン済みの場合のみ、JS側で`/api/auth/status`の`is_developer`を見て右下に`/track-speed/dev`への浮動リンクを動的追加する（`track_speed.html:1300-1324`）。
+      **`/track-speed/dev`（開発用）**: `is_developer`でなければ`/login?next=/track-speed/dev`へリダイレクト（`src/api/app.py:12107-12112`）、開発者専用。`templates/analysis/track_speed_dev.html`は`fetch()`呼び出しが0件の完全な静的解説ページで、日次データ表示・運用操作ボタンを一切持たない。内容はパイプライン概要図とStep1〜5（ペース特徴量抽出→OLS補正→ベースラインZ→テンポラルプーリング→PF指数+速度水準ラベル）の計算ロジック解説、数式・サンプル値、データアーティファクト一覧、設計メモ/制約のドキュメントのみ。
+      **差異まとめ**: 想定役割は「本番＝データ閲覧＋運用操作（無認証）」 vs 「dev＝アルゴリズム解説専用の静的ドキュメント（開発者限定）」。ただし運用操作ボタン（rebuild-baselines/assign）が無認証の本番ページ側に置かれている点は、ページの役割分担の前提（本番=閲覧用、dev=開発者専用）とは矛盾しており、別途セキュリティ観点のTODO化を検討する価値がある（本TODOの対応範囲外のため指摘のみ）。
 
 ### 常時稼働ホスト（VPS / GCP Compute Engine）の場合のTODO
 

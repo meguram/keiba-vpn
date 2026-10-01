@@ -64,6 +64,8 @@ def _horse_pedigree_5gen_complete_in_index(
 QUEUE_DIR = Path(__file__).parents[2] / "data" / "queue"
 QUEUE_DIR.mkdir(parents=True, exist_ok=True)
 QUEUE_HOURLY_MAINTAIN_STATE = QUEUE_DIR / "queue_hourly_maintain_state.json"
+# 失敗が長時間解消しないジョブへの Slack 再通知抑制用（job_id -> 直近通知時刻）
+QUEUE_STALE_FAILED_ALERT_STATE = QUEUE_DIR / "queue_stale_failed_alert_state.json"
 
 LOCK_FILE = QUEUE_DIR / ".scrape.lock"
 LOCK_FILE_URGENT = QUEUE_DIR / ".scrape_urgent.lock"
@@ -1060,6 +1062,8 @@ class ScrapeJobQueue:
                     if status == "completed":
                         job["error"] = None
                         job.pop("failure_reason", None)
+                        # 解消済み: 「いつから失敗し続けているか」の起点をクリア
+                        job.pop("first_failed_at", None)
                     elif status == "failed":
                         if error:
                             job["error"] = error
@@ -1067,6 +1071,10 @@ class ScrapeJobQueue:
                             job["failure_reason"] = failure_reason
                         else:
                             job.pop("failure_reason", None)
+                        # 定期メンテで pending に戻って再失敗しても、最初に失敗した時刻は保持する
+                        # （check_stale_failed_jobs_and_notify が「一定時間解消しない失敗」を判定するため）
+                        if not job.get("first_failed_at"):
+                            job["first_failed_at"] = datetime.now().isoformat()
                     elif error:
                         job["error"] = error
                     break
@@ -1797,17 +1805,137 @@ def kick_urgent_process_queue_background() -> None:
     threading.Thread(target=_run, daemon=True, name="queue-kick-urgent").start()
 
 
+def _stale_failed_alert_threshold_hours() -> float:
+    """``KEIBA_QUEUE_STALE_FAILED_ALERT_HOURS``（既定 6 時間）。0 以下なら通知無効。"""
+    try:
+        return float(os.environ.get("KEIBA_QUEUE_STALE_FAILED_ALERT_HOURS", "6"))
+    except (TypeError, ValueError):
+        return 6.0
+
+
+def _read_stale_failed_alert_state() -> dict[str, Any]:
+    if not QUEUE_STALE_FAILED_ALERT_STATE.exists():
+        return {}
+    try:
+        with open(QUEUE_STALE_FAILED_ALERT_STATE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _write_stale_failed_alert_state(state: dict[str, Any]) -> None:
+    tmp = QUEUE_STALE_FAILED_ALERT_STATE.with_suffix(".json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+    tmp.replace(QUEUE_STALE_FAILED_ALERT_STATE)
+
+
+def check_stale_failed_jobs_and_notify(*, threshold_hours: float | None = None) -> dict[str, Any]:
+    """
+    ``status=failed`` のまま ``first_failed_at`` から ``threshold_hours``
+    （既定 ``KEIBA_QUEUE_STALE_FAILED_ALERT_HOURS`` 、未設定時6時間）経過したジョブを検出し、
+    Slack 通知する（データ欠損がリトライ上限超過・アクセス一時停止等で長時間解消しないケースを
+    運用者に知らせる目的）。
+
+    hourly maintenance の ``requeue_failed_jobs`` で failed→pending に戻っても
+    ``first_failed_at`` は消えない（``update_job_status`` 側で保持）ため、本関数は
+    「初めて失敗した時刻からの経過時間」で判定できる。
+    同一ジョブへの再通知は ``threshold_hours`` と24時間の大きい方の間隔を空ける（スパム防止）。
+    閾値が0以下なら無効化（何もしない）。
+    """
+    try:
+        if threshold_hours is None:
+            threshold_hours = _stale_failed_alert_threshold_hours()
+        if threshold_hours <= 0:
+            return {"ok": True, "alerted": 0, "disabled": True, "stale_job_ids": []}
+
+        from src.utils.notify import notify_slack
+
+        now = datetime.now()
+        threshold = timedelta(hours=threshold_hours)
+        renotify_after = timedelta(hours=max(threshold_hours, 24.0))
+
+        jobs = ScrapeJobQueue().load_queue()
+        alert_state = _read_stale_failed_alert_state()
+        stale_job_ids: list[str] = []
+        alerted_job_ids: list[str] = []
+        active_job_ids: set[str] = set()
+
+        for job in jobs:
+            if job.get("status") != "failed":
+                continue
+            first_failed_raw = job.get("first_failed_at")
+            if not first_failed_raw:
+                continue
+            try:
+                first_failed_at = datetime.fromisoformat(first_failed_raw)
+            except (TypeError, ValueError):
+                continue
+            if now - first_failed_at < threshold:
+                continue
+
+            job_id = str(job.get("job_id") or "")
+            if not job_id:
+                continue
+            stale_job_ids.append(job_id)
+            active_job_ids.add(job_id)
+
+            last_alerted_raw = alert_state.get(job_id)
+            should_alert = True
+            if last_alerted_raw:
+                try:
+                    should_alert = (now - datetime.fromisoformat(last_alerted_raw)) >= renotify_after
+                except (TypeError, ValueError):
+                    should_alert = True
+            if not should_alert:
+                continue
+
+            label = job.get("job_label") or job.get("target_id") or job.get("race_id") or job_id
+            elapsed_hours = (now - first_failed_at).total_seconds() / 3600.0
+            notify_slack(
+                f"[keiba-vpn] スクレイピングジョブが{elapsed_hours:.1f}時間失敗を解消できていません: "
+                f"{label} (job_id={job_id}, tasks={job.get('tasks') or job.get('job_kind')}, "
+                f"error={job.get('error') or '不明'})"
+            )
+            alert_state[job_id] = now.isoformat()
+            alerted_job_ids.append(job_id)
+
+        # 解消済み（もう failed に存在しない）ジョブの再通知抑制状態は掃除する
+        for jid in list(alert_state.keys()):
+            if jid not in active_job_ids:
+                alert_state.pop(jid, None)
+        _write_stale_failed_alert_state(alert_state)
+
+        return {
+            "ok": True,
+            "alerted": len(alerted_job_ids),
+            "alerted_job_ids": alerted_job_ids,
+            "stale_job_ids": stale_job_ids,
+        }
+    except Exception as e:
+        logger.warning("check_stale_failed_jobs_and_notify 失敗: %s", e, exc_info=True)
+        return {"ok": False, "error": str(e), "alerted": 0, "stale_job_ids": []}
+
+
 def run_hourly_queue_maintenance() -> dict[str, Any]:
     """
     ストール中（running のまま放置）のジョブを回収し、完了レコードをキューから除去する。
     HTTP 400 ブロックによる一時停止中は failed ジョブを pending に戻さない（ユーザーが
     「再開」ボタンを押すまで failed のまま保持）。
     終了目安 (queue_eta) は get_status 取得時に pending+running から都度再計算される。
+
+    あわせて、failed のまま長時間（既定6時間）解消していないジョブを検出し Slack 通知する
+    （``check_stale_failed_jobs_and_notify``）。failed→pending に戻す前に判定するため、
+    アクセス一時停止中で failed が保持され続けるケースも対象になる。
     """
     from src.scraper.scrape_access_pause import read_access_pause
 
     q = ScrapeJobQueue()
     stale_recovered = q.requeue_stale_running_jobs(assume_lock_holder=False)
+
+    # pending に戻す前に、長時間解消していない failed ジョブを検出・通知する
+    stale_failed_alert = check_stale_failed_jobs_and_notify()
 
     # アクセス一時停止中は failed→pending の自動復元をスキップ（ユーザー手動再開待ち）
     pause = read_access_pause()
@@ -1818,6 +1946,7 @@ def run_hourly_queue_maintenance() -> dict[str, Any]:
             "completed_removed": 0,
             "stale_recovered": stale_recovered,
             "skipped_requeue": True,
+            "stale_failed_alert": stale_failed_alert,
             "error": None,
         }
         _write_queue_hourly_maintain_state(out)
@@ -1831,6 +1960,7 @@ def run_hourly_queue_maintenance() -> dict[str, Any]:
             "requeued": 0,
             "completed_removed": 0,
             "stale_recovered": stale_recovered,
+            "stale_failed_alert": stale_failed_alert,
         }
         _write_queue_hourly_maintain_state(out)
         return out
@@ -1841,6 +1971,7 @@ def run_hourly_queue_maintenance() -> dict[str, Any]:
         "completed_removed": removed,
         "stale_recovered": stale_recovered,
         "skipped_requeue": False,
+        "stale_failed_alert": stale_failed_alert,
         "error": None,
     }
     _write_queue_hourly_maintain_state(out)

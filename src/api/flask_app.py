@@ -403,14 +403,20 @@ def create_app() -> Flask:
         from src.pipeline.inference.growth_curve_service import get_growth_curve
 
         force_refresh = _truthy("force_refresh")
+        fetch_speed_index = _truthy("fetch_speed_index") or force_refresh
         payload = get_growth_curve(
             _get_storage(),
             horse_id,
-            fetch_speed_index=_truthy("fetch_speed_index") or force_refresh,
+            fetch_speed_index=fetch_speed_index,
             force_refresh=force_refresh,
             allow_compute_on_miss=(request.args.get("allow_compute", "true").strip().lower()
                                     in ("1", "true", "yes")) or force_refresh,
             jra_only=request.args.get("jra_only", "true").strip().lower() in ("1", "true", "yes"),
+            # legacy (src/api/app.py growth_curve_data) と同じ導出規則で race_index_gcs /
+            # enqueue_missing を明示的に渡す。省略すると get_growth_curve 側のデフォルト
+            # (環境変数 KEIBA_GROWTH_CURVE_RACE_INDEX_GCS 依存) に落ちて legacy と挙動がずれるため。
+            race_index_gcs=fetch_speed_index,
+            enqueue_missing=force_refresh,
             limit=(int(request.args["limit"]) if request.args.get("limit", "").strip() else None),
         )
         if not payload or payload.get("error"):
