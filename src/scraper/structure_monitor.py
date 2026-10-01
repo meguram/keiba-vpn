@@ -882,4 +882,12 @@ def run_daily_check(
     summary_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
     logger.info("=== 構造チェック完了 [%s] ===", severity)
+
+    if notify and severity == "CRITICAL":
+        from src.utils.notify import notify_slack
+        notify_slack(
+            f"[keiba-vpn] 構造チェックでCRITICALな変化を検出: {', '.join(critical_cats)}"
+            f"（再パース対象: {len(result['reparsed_categories'])}件）"
+        )
+
     return result

@@ -2,7 +2,7 @@
 
 **対象領域**: 管理者運用（cron・構造チェック・システム統計・ログ）
 **関連ドキュメント**: [../feature-admin-ops.md](../feature-admin-ops.md)
-**最終更新**: 2026-09-30
+**最終更新**: 2026-10-01
 
 <!--
   このファイルの構成:
@@ -27,7 +27,13 @@
 - ページ: `/ai-sla`・`/cron-jobs`・`/server-logs`
 - `src/utils/notify.py`（2026-09-30追加）: `notify_slack()`。`/api/admin/cron-jobs`が対象とする
   4ジョブ（disk_cache_cleanup/queue_maintain/logs_retention/daily_shutuba）の失敗時にSlack通知
-  （`SLACK_WEBHOOK_URL`未設定なら無害にスキップ）
+  （`SLACK_WEBHOOK_URL`未設定なら無害にスキップ）。2026-10-01: 上記4ジョブの**手動トリガー版**
+  （`/api/admin/cron-jobs/{job}/trigger`）にも失敗時のSlack通知を追加（従来は自動ループ版のみ
+  通知され非対称だった）。また`structure_check`の自動スケジューラ（`_scheduler_loop`、毎朝6:00 JST）
+  の例外発生時にも通知を追加。
+- `src/scraper/structure_monitor.run_daily_check()`の`notify`引数（2026-10-01修正）: 従来は未使用の
+  deadパラメータで、CRITICALな構造変化を検知しても通知が一切発生しないバグだった。
+  `notify=True`かつ`severity=="CRITICAL"`のときに`notify_slack()`を呼ぶよう修正。
 
 ## 目標（推測）
 
@@ -43,7 +49,21 @@
 
 ## 既知の課題
 
-（無し）
+- `src/monitor/app.py`の`CRON_JOBS`一覧にある`git-pull`（表示上は「毎時」）は実際のcrontabには
+  存在しない。`scripts/cron/git_pull_hourly.sh`は2026-09-30以前に手動実行専用（UI経由
+  `POST /api/v1/admin/git-pull`）に移行済みで、`scripts/cron/setup_all_cron.sh`にも意図的に
+  含まれていない。monitorの表示が実態とズレている（stale）が、本TODOのスコープ外のため未修正。
+- `scripts/cron/*.sh`（OS crontab起動のバッチ）および`src/monitor/app.py`のCRON_JOBS表示
+  （auto_scrape系・daily-race-lists等）には、失敗時のpush通知（Slack等）は無い。ログファイルの
+  パターン一致による事後判定のみ（`_parse_last_success()`）。FastAPIプロセス内で動く
+  disk_cache_cleanup等4ジョブ+structure_checkとはアーキテクチャが異なり（OS cronで独立起動する
+  シェルスクリプト）、通知を追加するには各スクリプト自体の変更が必要になる。2026-10-01時点では
+  対応を見送り（下記TODO参照）。
+- 障害対応専用のrunbook（incident response手順書）は`docs/`配下に存在しない。
+  `docs/operations/service-endpoints.md`・`server_architecture.html`にローカル実行コマンド
+  （起動・ヘルスチェック・既知の問題）の記載はあるが、SSH前提の遠隔運用手順書ではない。
+  `/server-logs`・`/api/admin/server-logs`はSSH不要で`logs/*.log`を閲覧できるが、対象はログ
+  ファイルに限定され、プロセス確認・ポート確認・ディスク等のOSレベル診断は手動実行が前提。
 
 ## TODO（手動追記用）
 
@@ -60,11 +80,36 @@
       なお `scripts/cron/*.sh`（git_pull_hourly等、現状crontab未登録）と
       `src/monitor/app.py`のCRON_JOBS（ログパターン一致で成否判定している自動スクレイプ系）は
       本ブランチのスコープ外のため対象外とした（下のTODOに切り出し）。
-- [ ] `scripts/cron/*.sh`・`src/monitor/app.py`のCRON_JOBS（auto_scrape系）にもSlack通知を追加するか検討する
-      （現状はログファイルのパターン一致で事後的に成否判定しているだけで、push型の通知は無い。
-      `src/monitor/app.py`の`_parse_last_success()`が`status == "error"`を判定した箇所が候補）
-- [ ] 実際にサーバー運用で発生する障害対応のうち、本画面だけで完結できていない作業を棚卸しする
-      （SSH/直接ログ確認が必要な場面が残っていないか）
-- [ ] `/api/structure-check`（構造チェック）の自動スケジュール実行状況を確認する
+- [x] `scripts/cron/*.sh`・`src/monitor/app.py`のCRON_JOBS（auto_scrape系）にもSlack通知を追加するか検討する
+      — 2026-10-01検討結果: **今回は追加しない**。これらはFastAPIプロセス内のdaemon thread
+      （disk_cache_cleanup等）とは異なり、OS crontabから独立起動するシェルスクリプトであり、
+      通知を追加するには本番運用中のcronスクリプト自体を変更する必要があり対象範囲外と判断。
+      代わりに、同じ「検討する」調査の過程で、スコープ的に地続きだった`structure_check`
+      （`/api/admin/cron-jobs`の対象5件目で、FastAPIプロセス内スレッドとして動く）の
+      通知がdeadパラメータのせいで実際には飛んでいないバグを発見し修正した。また元の4ジョブの
+      手動トリガー版にも通知が無い非対称を発見し修正した（詳細は「現状の実装」参照）。
+      OS crontab起動スクリプト側の課題は「既知の課題」に記録。
+- [x] 実際にサーバー運用で発生する障害対応のうち、本画面だけで完結できていない作業を棚卸しする
+      — 2026-10-01調査結果（「既知の課題」に記録）: `/server-logs`はSSH不要で`logs/*.log`を
+      閲覧できるが対象はログファイルに限定。プロセス確認・ポート確認・ディスク等のOSレベル診断は
+      `docs/operations/*`記載のコマンドを手動実行する前提で、専用runbookは存在しない。
+      今回はrunbook新規作成は見送り（追加実装なしで棚卸しのみ完了とする）。
+- [x] `/api/structure-check`（構造チェック）の自動スケジュール実行状況を確認する
+      — 2026-10-01調査結果: 実体はcronではなくFastAPIプロセス内のdaemon thread（`_scheduler_loop`、
+      毎朝6:00 JST、`src/api/app.py`）で、プロセスが6:00 JSTを跨いで継続起動していないと実行されない。
+      調査時点では`data/local/meta/structure/`が空で過去の実行実績は確認できなかった。
+      その過程で`run_daily_check(notify=True)`の`notify`引数が未使用のdeadパラメータという
+      実バグを発見し修正済み（CRITICAL検知時に実際にSlack通知が飛ぶようにした）。
+- [ ] `src/monitor/app.py`の`CRON_JOBS`一覧から実態と合っていない`git-pull`（毎時）表示を削除・修正する
+      （「既知の課題」参照。表示のみの問題で動作には影響しないため優先度は低いが、運用者が誤認する
+      ため解消が望ましい）
+- [ ] 本番環境で`SLACK_WEBHOOK_URL`設定済みの状態で、`structure_check`のCRITICAL検知時に実際に
+      Slack通知が届くことを確認する（2026-09-30に元4ジョブで実施した実送信テストと同種の確認が
+      `structure_check`側では未実施。コードは2026-10-01に修正済みだが実環境での動作確認はまだ）
+- [ ] 「このラインまで実装できたらブランチを消してよい」の基準（SSH/直接ログ確認がほぼ不要になる）
+      に対し、障害対応runbookの不在・OSレベル診断（プロセス/ポート/ディスク確認等）の手動実行が
+      残っているギャップは2026-10-01時点で未解消（棚卸しのみ実施、対応は見送り）。
+      runbookを作成して解消するか、基準自体を「ログ・cron・構造チェックの可視化に限定する」等に
+      見直すか、方針を決める
 
 ## メモ

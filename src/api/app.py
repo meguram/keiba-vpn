@@ -445,6 +445,8 @@ def _scheduler_loop():
             with _scheduler_lock:
                 _scheduler_state["last_run"] = _dt.now(_JST).isoformat()
                 _scheduler_state["last_result"] = {"status": "error", "error": str(e)}
+            from src.utils.notify import notify_slack
+            notify_slack(f"[keiba-vpn] cron失敗: structure_check — {e}")
         finally:
             with _scheduler_lock:
                 _scheduler_state["running"] = False
@@ -7685,6 +7687,8 @@ async def trigger_disk_cache_cleanup():
             with _disk_cache_cleanup_lock:
                 _disk_cache_cleanup_state["last_run"] = _dt.now(_JST).isoformat()
                 _disk_cache_cleanup_state["last_result"] = {"error": str(e)}
+            from src.utils.notify import notify_slack
+            notify_slack(f"[keiba-vpn] cron失敗: disk_cache_cleanup（手動実行） — {e}")
         finally:
             with _disk_cache_cleanup_lock:
                 _disk_cache_cleanup_state["running"] = False
@@ -7715,6 +7719,8 @@ async def trigger_queue_maintain():
             with _queue_maintain_lock:
                 _queue_maintain_state["last_run"] = _dt.now(_JST).isoformat()
                 _queue_maintain_state["last_result"] = {"error": str(e)}
+            from src.utils.notify import notify_slack
+            notify_slack(f"[keiba-vpn] cron失敗: queue_maintain（手動実行） — {e}")
         finally:
             with _queue_maintain_lock:
                 _queue_maintain_state["running"] = False
@@ -7745,6 +7751,8 @@ async def trigger_logs_retention():
             with _logs_retention_lock:
                 _logs_retention_state["last_run"] = _dt.now(_JST).isoformat()
                 _logs_retention_state["last_result"] = {"error": str(e)}
+            from src.utils.notify import notify_slack
+            notify_slack(f"[keiba-vpn] cron失敗: logs_retention（手動実行） — {e}")
         finally:
             with _logs_retention_lock:
                 _logs_retention_state["running"] = False
@@ -7801,6 +7809,8 @@ async def trigger_daily_shutuba():
                 "last_run": _daily_shutuba_state["last_run"],
                 "last_result": _daily_shutuba_state["last_result"],
             })
+            from src.utils.notify import notify_slack
+            notify_slack(f"[keiba-vpn] cron失敗: daily_shutuba（手動実行） — {e}")
         finally:
             with _daily_shutuba_lock:
                 _daily_shutuba_state["running"] = False
