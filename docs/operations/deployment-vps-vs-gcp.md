@@ -128,6 +128,44 @@ GCP側に投げるべきか、という論点について、コスト・レイ�
 | モデル配信 | ローカルpklファイル直接読み込み | 変更なし＋GCSからの同期経路を追加 |
 | ログ | VPSローカル`logs/*.log` | VPS側はそのまま。GCP側のジョブはCloud Loggingへ出力 |
 
+## CI/CD（2026-10-02決定）
+
+「VPSは必要最低限のファイルだけ」を実際に実現するためのCI/CD設計を決定した。詳細設計は
+[cicd-design.md](./cicd-design.md)。要点のみここに記す。
+
+- **VPSにgitリポジトリ全体をpull/checkoutさせない**。代わりにCI側でサービング専用の
+  軽量Dockerイメージ（[`Dockerfile.serving`](../../Dockerfile.serving)）をビルドし、
+  VPSはそのイメージだけを受け取って動かす（[`docker-compose.serving.yml`](../../docker-compose.serving.yml)）。
+  VPS上に実際に必要なファイルは`docker-compose.serving.yml`・`.env`・
+  `config/gcp-service-account.json`程度まで減る。
+- イメージは`main.py`・`src/`・`templates/`・`static/`・`requirements.txt`のみを含む
+  （`notebooks/`・`docs/`・`tests/`・`scripts/`・`data/`・`mlflow/`は含めない）。
+  `src/api/app.py`の実際のimportをgrepした結果、`src/scraper`・`src/research`・
+  `src/pipeline`の大半が開発者専用の管理画面・手動トリガー系エンドポイントから遅延import
+  されており安全に分離できなかったため、現時点では`src/`全体を含めている
+  （将来整理の余地ありと`Dockerfile.serving`内にコメントで明記）。
+- サービング用イメージ: [`.github/workflows/deploy-vps.yml`](../../.github/workflows/deploy-vps.yml)が
+  `stg`/`master`へのpushでビルドしGHCR（ghcr.io）へpushし、VPSへSSHして
+  `docker compose pull && up -d`相当を実行する。
+- GCP用バッチイメージ: [`.github/workflows/deploy-gcp.yml`](../../.github/workflows/deploy-gcp.yml)が
+  `stg`/`master`へのpushでビルドしArtifact Registryへpushし、既存の
+  [`scripts/gcp/deploy_cloud_run_jobs.sh`](../../scripts/gcp/deploy_cloud_run_jobs.sh)を
+  呼んでCloud Run Jobs/Cloud Schedulerを更新する。
+- 既存の`scripts/cron/git_pull_hourly.sh`・`scripts/server/service_start.sh`等の
+  「git pullしてVPS上でPythonを直接動かす」運用スクリプトは**変更・削除せず残す**
+  （段階的移行の前提。Docker化は新たな選択肢として追加しただけ）。
+- 必要なGitHub Secrets（VPS用・GCP用）・移行手順は`cicd-design.md`参照。本対応時点では
+  いずれも未設定であり、ワークフロー自体の作成のみ行っている（実行時にSecrets未設定で
+  失敗するのは許容・ユーザー側の今後の設定作業）。
+
+## GCPコストモニタリング
+
+2026-10-01時点ではGCPコストモニタリングの既存設計・実装は無かった（`src/`・`docs/`に
+billing/cost関連の仕組みが存在しないことを確認済み）。GCP利用の本格化に備え、Cloud Billing
+のBigQuery課金エクスポートをクエリして日次コストをSlackへ通知する
+`python -m src.scripts.cloud_jobs.gcp_daily_cost_report`（詳細・前提条件は
+[gcp-cloud-run-jobs.md の#15](./gcp-cloud-run-jobs.md)）を新規実装した。
+
 ## TODO（手動追記用）
 
 ### 整理・設計系の共通TODO

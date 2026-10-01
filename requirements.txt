@@ -57,3 +57,6 @@ google-cloud-storage>=2.0.0
 
 # Cloud Tasks（GCP側キュー基盤。KEIBA_QUEUE_BACKEND=cloud_tasks のときのみ使用）
 google-cloud-tasks>=2.0.0
+
+# BigQuery（GCPコストモニタリング。Cloud Billing課金エクスポートの集計に使用）
+google-cloud-bigquery>=3.0.0

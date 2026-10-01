@@ -1,0 +1,96 @@
+# =============================================================================
+# Dockerfile.serving — VPS（ConoHa, 2GB軽量）向けサービング専用イメージ
+# =============================================================================
+#
+# 目的: VPSに git リポジトリ全体（notebooks/docs/tests/scripts/cron 用スクリプト等）を
+# 置かず、「サービングに必要なものだけ」を含んだ単一のビルド成果物を作る。
+# VPS側はこのイメージ（docker-compose.serving.yml 経由）だけを受け取って動かせばよい。
+#
+# 設計の背景・詳細は docs/operations/cicd-design.md を参照。
+#
+# ビルド:
+#   docker build -f Dockerfile.serving -t keiba-vpn-serving:local .
+# 実行確認:
+#   docker run --rm -p 8000:8000 --env-file .env keiba-vpn-serving:local
+#
+# 含めるもの: main.py / src/（下記注記のとおり全体） / templates/ / static/ / requirements.txt
+# 含めないもの: notebooks/ docs/ tests/ scripts/ data/ mlflow/ frontend/ .git/ 等
+#   （Dockerfile.serving.dockerignore でビルドコンテキストからも除外する）
+#
+# 注記（import 調査の結果・2026-10-02）:
+#   当初の想定は「src/scraper/ のスクレイピング実行コード本体（run.py・job_queue.py 等）は
+#   除外する」だったが、実際に src/api/app.py を grep したところ、開発者専用の管理画面・
+#   手動トリガー系エンドポイント（/api/scrape-trigger、backfill、queue 管理、cushion/baba live
+#   取得、構造チェック等）が src.scraper.run / job_queue / backfill / client / auto_scrape /
+#   queue_tasks / period_runners など scraper パッケージの大半を遅延 import（関数内 import）で
+#   直接参照していた。同様に src.research（pedigree/race/genes 配下）・src.pipeline（features/
+#   models/inference/mlflow）・src.db・src.scripts.maintenance も app.py から広く遅延 import
+#   されている。依存関係が入り組んでおり、一部だけを安全に取り除くのは本対応の範囲では
+#   リスクが高いため、安全重視で **src/ 全体を含める**。
+#   → 将来的にサービング専用に整理する余地あり（例: 管理者専用の手動スクレイピングトリガー系
+#      エンドポイントをGCP Cloud Run Jobs呼び出しのプロキシに置き換えたうえで、
+#      src/scraper の実行コード本体を src/pipeline/inference 等から完全に分離する）。
+#
+# requirements.txt について:
+#   タスク方針により全量インストールで構わないため分割していない。lightgbm/xgboost/catboost/
+#   optuna 等の学習系パッケージ、pymupdf/playwright 等のスクレイピング系パッケージもサービングには
+#   不要だが、import 関係の複雑さ（上記）を踏まえ、まずは全量を入れて確実に動かすことを優先する。
+#   → 将来的に requirements-serving.txt（サービングに必要な最小集合）を切り出す余地あり。
+#
+# =============================================================================
+
+# ---- Stage 1: builder（依存関係のインストールのみ） --------------------------------
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+# lightgbm 等のネイティブ依存（CI の .github/workflows/ci.yml と同様に libgomp1 が必要）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ---- Stage 2: runtime（実行に必要な最小ランタイムのみ） -----------------------------
+FROM python:3.11-slim AS runtime
+
+# lightgbm 等の実行時ネイティブ依存
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 keiba
+
+WORKDIR /app
+
+# builder でインストールした Python パッケージのみコピー（ビルドツール類は持ち込まない）
+COPY --from=builder /install /usr/local
+
+# --- アプリケーションコード（サービングに必要な最小限） ---
+COPY main.py ./main.py
+COPY wsgi.py ./wsgi.py
+# src/ 全体を含める（上記「注記」参照。notebooks/docs/tests/scripts/data/mlflow は
+# Dockerfile.serving.dockerignore でそもそもビルドコンテキストに入らない）
+COPY src/ ./src/
+COPY templates/ ./templates/
+COPY static/ ./static/
+# settings.yaml・megu_* 等の非シークレット設定（gcp-service-account*.json は
+# Dockerfile.serving.dockerignore で除外し、実行時に docker-compose.serving.yml で
+# 読み取り専用マウントする）
+COPY config/ ./config/
+
+# ログ出力先（logs/*.log）。本番は Cloud Logging 相当の集約を別途検討
+RUN mkdir -p /app/logs /app/data/local/image && chown -R keiba:keiba /app
+
+USER keiba
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    TZ=Asia/Tokyo
+
+EXPOSE 8000
+
+# main.py --prod は reload=False・workers 指定可（uvicorn 経由で src.api.app:app を起動）
+CMD ["python", "main.py", "--prod", "--host", "0.0.0.0", "--port", "8000"]

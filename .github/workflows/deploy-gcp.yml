@@ -1,0 +1,124 @@
+# =============================================================================
+# deploy-gcp.yml — GCP Cloud Run Jobs（スクレイピング・ML学習・定期バッチ）デプロイ
+# =============================================================================
+#
+# 目的: Dockerfile.gcp-jobs から src/scripts/cloud_jobs/ ほかバッチ用コードを含む
+# イメージをビルドしArtifact Registryへpush、既存の
+# scripts/gcp/deploy_cloud_run_jobs.sh を呼んでCloud Run Jobs / Cloud Schedulerを
+# 更新する（事前に `bash scripts/gcp/deploy_cloud_run_jobs.sh --help` でスクリプトの
+# 使い方・前提を確認済み: `--apply <job-name>` は1件ずつ明示指定が必須で、全件一括適用は
+# 安全のためサポートされていない。そのため本ワークフローではジョブ名一覧
+# （`deploy_cloud_run_jobs.sh list`）をループしてジョブごとに --apply する）。
+#
+# トリガー: stg / master ブランチへのpush（将来これらにコードが入った時点で有効化）。
+#
+# 認証: google-github-actions/auth を使用。本ワークフローではシンプルな
+# サービスアカウントJSONキー方式（GCP_SA_KEY）を既定として実装しているが、
+# Workload Identity連携（鍵レスでより安全）に切り替える場合は、下記
+# `google-github-actions/auth` ステップの `credentials_json` を
+# `workload_identity_provider` + `service_account` に置き換える
+# （詳細: https://github.com/google-github-actions/auth#setup ）。
+#
+# 必要なGitHub Secrets（本ワークフロー作成時点では未設定の前提。設定はユーザー側の
+# 今後の作業。詳細は docs/operations/cicd-design.md）:
+#   - GCP_SA_KEY            : サービスアカウントJSONキー（base64不要、JSON文字列そのまま）
+#   - GCP_PROJECT_ID        : GCPプロジェクトID
+#   - GCP_REGION            : （任意）既定 asia-northeast1
+#   - GCP_RUN_SA_EMAIL      : （任意）Cloud Run Jobs実行用サービスアカウント
+#   - GCP_SCHEDULER_SA_EMAIL: （任意）Cloud Scheduler呼び出し用サービスアカウント
+#
+# Workload Identity連携を使う場合に追加で必要なSecrets（GCP_SA_KEYの代わり）:
+#   - GCP_WORKLOAD_IDENTITY_PROVIDER
+#   - GCP_SERVICE_ACCOUNT
+# =============================================================================
+
+name: Deploy GCP (cloud-jobs)
+
+on:
+  push:
+    branches: [stg, master]
+
+env:
+  REGION: ${{ secrets.GCP_REGION || 'asia-northeast1' }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image URI (Artifact Registry, branch + short SHA)
+        id: meta
+        run: |
+          short_sha="$(echo "${{ github.sha }}" | cut -c1-12)"
+          echo "image=${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/keiba-vpn/cloud-jobs:${{ github.ref_name }}-${short_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          # シンプルな方: サービスアカウントJSONキー。
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          # Workload Identity連携を使う場合は上記2行を削除し、以下を有効化する:
+          # workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          # service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Artifact Registry auth for Docker
+        run: gcloud auth configure-docker "${{ env.REGION }}-docker.pkg.dev" --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push cloud-jobs image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.gcp-jobs
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/keiba-vpn/cloud-jobs:${{ github.ref_name }}-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-cloud-run-jobs:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    # Secrets未設定の環境ではここで失敗する想定（ユーザー側の今後の設定作業）。
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Apply each Cloud Run Job + Cloud Scheduler entry
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REGION: ${{ env.REGION }}
+          IMAGE: ${{ needs.build-and-push.outputs.image }}
+          SCHEDULER_SA_EMAIL: ${{ secrets.GCP_SCHEDULER_SA_EMAIL }}
+          RUN_SA_EMAIL: ${{ secrets.GCP_RUN_SA_EMAIL }}
+        run: |
+          set -euo pipefail
+          # deploy_cloud_run_jobs.sh --apply は安全のため1件ずつの明示指定を要求する
+          # （全件一括適用は未サポート。--help で確認済み）ため、list の出力をループする。
+          for job in $(bash scripts/gcp/deploy_cloud_run_jobs.sh list); do
+            echo "::group::deploy ${job}"
+            bash scripts/gcp/deploy_cloud_run_jobs.sh --apply "${job}"
+            echo "::endgroup::"
+          done

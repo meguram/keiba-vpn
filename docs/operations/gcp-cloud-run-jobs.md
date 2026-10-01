@@ -36,6 +36,7 @@ OS crontab で動いている定期ジョブ群を、GCP の **Cloud Scheduler +
 | 12 | 種牡馬ツリー再構築 | `python -m src.research.pedigree.build_full_sire_tree` | 既存（`relevant_stallion_ids`再生成は`src/api/app.py`の`_regenerate_relevant_stallion_ids`に private実装のまま残存。CLI化する場合は切り出しが別途必要、未対応） |
 | 13 | 5代血統整備（開催日範囲一括） | `python -c "from src.research.pedigree.race_pedigree_5gen_prefetch import batch_race_pedigree_5gen_date_range; ..."`（`/api/pedigree/batch-race-ensure-5gen`と同じ関数） | 既存（直接呼べるCLIラッパーは無し、簡易`python -c`呼び出しか`src/scripts/cloud_jobs/`への薄いラッパー追加が必要。未作成） |
 | 14 | クッション値ライブ取得 | `python -m src.scraper.jra_baba_live`（`JRABabaLiveScraper.scrape()`、構造変更検知・Slack通知込み） | 既存 |
+| 15 | GCP日次コストレポート | `python -m src.scripts.cloud_jobs.gcp_daily_cost_report` | 新規 |
 
 ---
 
@@ -265,6 +266,32 @@ OS crontab で動いている定期ジョブ群を、GCP の **Cloud Scheduler +
     --schedule="0 3 * * 0" \
     --time-zone="Asia/Tokyo" \
     --uri="https://${REGION}-run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/odds-train:run" \
+    --http-method=POST \
+    --oauth-service-account-email="${SCHEDULER_SA_EMAIL}" \
+    --location="${REGION}"
+  ```
+
+### 15. GCP日次コストレポート
+
+- **実行コマンド**: `python -m src.scripts.cloud_jobs.gcp_daily_cost_report`
+  （`fetch_daily_cost()` が Cloud Billing の BigQuery 課金エクスポートテーブル
+  （環境変数 `GCP_BILLING_BQ_TABLE`）をクエリし、`format_cost_report()` で日本語の
+  サービス別コストレポートに整形して `src.utils.notify.notify_slack()` で通知する。
+  `--date` 省略時は前日 JST）
+- **前提条件**: GCPコンソールの「お支払い」→「課金データのエクスポート」→
+  「BigQueryにエクスポート」を事前に有効化し、作成されたエクスポート先テーブルを
+  `GCP_BILLING_BQ_TABLE`（`.env.example` 参照）に設定しておく必要がある
+  （GCPコンソール側の作業であり、コードでは自動化できない）。未設定・クエリ失敗時は
+  その旨をSlackに通知した上でジョブ自体は正常終了する（サイレント障害防止）。
+- **想定実行頻度**: 毎日 07:00 JST（課金データの反映遅延を踏まえ、前日分を朝に通知）。
+- **リソース目安**: メモリ 256MiB、タイムアウト 120秒（2分）。BigQueryへの集計クエリ
+  1件のみの軽量処理。
+- **Cloud Scheduler 設定コマンド例**:
+  ```bash
+  gcloud scheduler jobs create http gcp-daily-cost-report \
+    --schedule="0 7 * * *" \
+    --time-zone="Asia/Tokyo" \
+    --uri="https://${REGION}-run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/gcp-daily-cost-report:run" \
     --http-method=POST \
     --oauth-service-account-email="${SCHEDULER_SA_EMAIL}" \
     --location="${REGION}"

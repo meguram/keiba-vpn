@@ -1,0 +1,85 @@
+# =============================================================================
+# docker-compose.serving.yml — VPS（ConoHa）上の本番サービング構成
+# =============================================================================
+#
+# 役割分担（docs/operations/deployment-vps-vs-gcp.md）に従い、VPSには
+# 「ページ公開・ユーザー向けAPIサービング」に必要な最小構成のみを置く。
+#
+#   - api   : Dockerfile.serving でビルドしたイメージ（本番は GHCR からpull。
+#             ローカル確認時のみ `build:` を使う）
+#   - redis : サービング側のリクエストキャッシュ。自己ホストのまま継続
+#             （docs/operations/deployment-vps-vs-gcp.md「ブリッジが必要な点」2.参照。
+#             Memorystoreへのクロスクラウド接続が複雑なためVPS側に残す決定）
+#
+# PostgreSQL はこの構成には含めない（Cloud SQLへ移行する方針のため。
+# VPS側は .env の DATABASE_URL / KEIBA_DB_BACKEND=cloud_sql でCloud SQLに接続する）。
+#
+# VPS上で実際に必要になるファイルは、本ファイル・.env・
+# config/gcp-service-account.json（またはenv別ファイル）程度で済む
+# （詳細は docs/operations/cicd-design.md）。
+#
+# 起動（VPS上）:
+#   docker compose -f docker-compose.serving.yml pull
+#   docker compose -f docker-compose.serving.yml up -d --remove-orphans
+#
+# 停止:
+#   docker compose -f docker-compose.serving.yml down
+#
+# =============================================================================
+
+services:
+  api:
+    # 本番運用時は CI (.github/workflows/deploy-vps.yml) が GHCR へ push した
+    # イメージを参照する。タグは実運用時に書き換える（または .env の IMAGE_TAG を使う）。
+    image: ${KEIBA_SERVING_IMAGE:-ghcr.io/OWNER/keiba-vpn-serving:latest}
+    # ローカルでビルドして確認したい場合は上の image をコメントアウトし、
+    # 以下の build を有効にして `docker compose -f docker-compose.serving.yml build` する。
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.serving
+    container_name: keiba-api-serving
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # main.py 内の ensure_google_application_credentials() が既定で
+      # config/gcp-service-account.json を自動解決するため、.env側で明示指定しない場合は
+      # 下記マウント先と一致させておく（環境別ファイルを使う場合は .env の KEIBA_ENV に
+      # 応じて config/gcp-service-account.<env>.json を同様にマウントする）。
+      TZ: Asia/Tokyo
+    volumes:
+      # GCPサービスアカウント認証ファイル（.gitignore済み。VPS上に別途配置し読み取り専用でマウント）
+      - ./config/gcp-service-account.json:/app/config/gcp-service-account.json:ro
+      # ローカルログを永続化したい場合（任意。無くても動く・GCS/Cloud Loggingが本流）
+      - keiba_api_logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: keiba-redis-serving
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - keiba_redis_serving_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  keiba_api_logs:
+    driver: local
+  keiba_redis_serving_data:
+    driver: local

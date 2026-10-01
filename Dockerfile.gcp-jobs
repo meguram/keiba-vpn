@@ -1,0 +1,63 @@
+# =============================================================================
+# Dockerfile.gcp-jobs — GCP Cloud Run Jobs（スクレイピング・ML学習・定期バッチ）用イメージ
+# =============================================================================
+#
+# docs/operations/deployment-vps-vs-gcp.md の役割分担どおり、重い処理
+# （スクレイピング・ML学習・バックテスト・定期バッチ）はすべてGCP側で実行する。
+# このイメージは scripts/gcp/deploy_cloud_run_jobs.sh が生成する
+# `gcloud run jobs deploy --image=... --command=python3 --args=-m,<module>,...`
+# から呼び出される（起動コマンドはgcloud側で明示指定されるため、本イメージの
+# CMD/ENTRYPOINTは実質上書きされる。ローカル確認用に素のpythonを既定にしている）。
+#
+# Dockerfile.serving と異なり、こちらは src/ 配下のスクレイピング本体・学習コードも
+# すべて必要（例: src.scraper.run structure-check、src.pipeline.build_jockey_trainer_stats、
+# src.scripts.cloud_jobs.* 等。詳細は docs/operations/gcp-cloud-run-jobs.md のジョブ一覧）。
+# notebooks/docs/tests は不要なため含めない。
+#
+# ビルド例:
+#   docker build -f Dockerfile.gcp-jobs \
+#     -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/keiba-vpn/cloud-jobs:latest .
+# =============================================================================
+
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+FROM python:3.11-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 keiba
+
+WORKDIR /app
+
+COPY --from=builder /install /usr/local
+
+# スクレイピング本体・学習コードを含む src/ 全体（notebooks/docs/tests/scripts/dataは含めない）
+COPY src/ ./src/
+# settings.yaml・megu_* 等の非シークレット設定（gcp-service-account*.jsonは
+# Dockerfile.gcp-jobs.dockerignoreで除外。GCP側はCloud Run Jobsの実行サービスアカウントの
+# ADCを使う運用を想定し、通常はファイル配置不要。環境別ファイルを使う場合のみ別途マウント/配置する）
+COPY config/ ./config/
+COPY requirements.txt ./requirements.txt
+
+RUN mkdir -p /app/logs /app/data/local/image && chown -R keiba:keiba /app
+
+USER keiba
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    TZ=Asia/Tokyo
+
+# gcloud run jobs deploy が --command/--args で上書きする想定。ローカル確認用の既定値。
+CMD ["python3", "--version"]

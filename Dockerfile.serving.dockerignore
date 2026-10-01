@@ -1,0 +1,47 @@
+# Dockerfile.serving 専用の .dockerignore（BuildKit: "<Dockerfile名>.dockerignore" は
+# 既定の .dockerignore より優先される）。
+#
+# 目的: サービング用イメージのビルドコンテキストに、重い・不要なディレクトリや
+# シークレットを一切含めない。Dockerfile.serving 側は `COPY src/ ./src/` 等の
+# ディレクトリ単位コピーを使っているため、ここで除外しておかないとビルドコンテキスト
+# 転送時に取り込まれてしまう。
+
+# VCS
+.git/
+.github/
+
+# サービングに不要な大物ディレクトリ
+notebooks/
+docs/
+tests/
+scripts/
+data/
+mlflow/
+frontend/
+migrations/
+alembic/
+output/
+models/
+logs/
+tmp/
+.cursor/
+.vscode/
+.claude/
+.pytest_cache/
+
+# シークレット・環境ファイル（docker-compose.serving.yml 側でマウントする）
+.env
+.env.*
+!requirements.txt
+config/gcp-service-account.json
+config/gcp-service-account.*.json
+
+# Python / Node 生成物
+**/__pycache__/
+**/*.pyc
+frontend/node_modules/
+*.egg-info/
+
+# その他
+*.md
+*.ipynb
