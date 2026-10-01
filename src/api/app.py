@@ -5468,6 +5468,18 @@ async def internal_cloud_tasks_process_job(request: Request):
         )
 
     try:
+        if job_payload.get("job_kind") == "predict_race":
+            # 開催日のT-45予測（race_day_workflow.enqueue_race_day_tasks が予約配信で登録したタスク）。
+            # 出馬表未取得などで失敗したときは500を返し、Cloud Tasksに再試行させる。
+            from src.pipeline.inference.race_day_workflow import handle_predict_job
+
+            result = await asyncio.to_thread(handle_predict_job, job_payload, _get_storage())
+            ok = result.get("status") == "success"
+            return JSONResponse(
+                {"status": "completed" if ok else "failed", "race_id": result.get("race_id"), "error": result.get("error")},
+                status_code=200 if ok else 500,
+            )
+
         from src.scraper.queue_tasks import execute_job
         from src.scraper.run import ScraperRunner
 

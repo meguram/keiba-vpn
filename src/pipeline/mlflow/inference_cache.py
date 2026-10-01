@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import os
 import time
 from datetime import datetime, timezone
@@ -90,9 +92,10 @@ class InferenceCacheMixin:
         payload: dict,
         *,
         source: str = "api",
-    ) -> None:
+    ) -> bool:
+        """キャッシュを保存する。実際に保存できたら True、無効化・保存不可（GCS未接続等）なら False。"""
         if not cls.cache_enabled():
-            return
+            return False
         wrapped = dict(payload)
         wrapped["_cache_meta"] = {
             "version": cls.cache_version,
@@ -102,10 +105,14 @@ class InferenceCacheMixin:
             "source": source,
             "entity_id": entity_id,
         }
-        storage.save(cls.cache_category(), entity_id, wrapped)
-        logger.info(
-            "推論キャッシュ保存 [%s]: %s source=%s",
+        saved = storage.save(cls.cache_category(), entity_id, wrapped)
+        persisted = saved is not False  # HybridStorage は GCS 未接続等で False を返す
+        logger.log(
+            logging.INFO if persisted else logging.WARNING,
+            "推論キャッシュ%s [%s]: %s source=%s",
+            "保存" if persisted else "未保存(GCS未接続等)",
             cls.model_key,
             entity_id,
             source,
         )
+        return persisted

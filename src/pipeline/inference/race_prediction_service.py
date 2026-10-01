@@ -28,8 +28,8 @@ def load_cached(storage, race_id: str) -> dict | None:
     return RacePredictionCache.load_cached(storage, race_id)
 
 
-def save_cached(storage, race_id: str, payload: dict, *, source: str = "batch") -> None:
-    RacePredictionCache.save_cached(storage, race_id, payload, source=source)
+def save_cached(storage, race_id: str, payload: dict, *, source: str = "batch") -> bool:
+    return RacePredictionCache.save_cached(storage, race_id, payload, source=source)
 
 
 def build_race_data_from_storage(race_id: str, storage) -> dict[str, Any]:

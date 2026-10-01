@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,8 @@ def enqueue_via_cloud_tasks(
     queue: str | None = None,
     location: str | None = None,
     worker_url: str | None = None,
+    schedule_time: datetime | None = None,
+    task_id: str | None = None,
 ) -> str:
     """
     ``job_payload``（``ScrapeJobQueue.add_job`` と同形式のジョブ仕様 dict）を
@@ -57,6 +60,10 @@ def enqueue_via_cloud_tasks(
     ``queue`` / ``location`` / ``worker_url`` を渡すと、同名の環境変数
     （``CLOUD_TASKS_QUEUE`` / ``CLOUD_TASKS_LOCATION`` / ``CLOUD_RUN_JOBS_WORKER_URL``）
     より優先される。
+
+    ``schedule_time``（tz付き推奨）を渡すと、その時刻までCloud Tasksが配信を保留する
+    （予約配信。最大30日先まで）。``task_id`` を渡すとタスク名が固定され、同じ名前の
+    二重登録は ``AlreadyExists`` になる（冪等な登録に使う）。
 
     Returns:
         作成されたタスクのフルリソース名（``projects/.../locations/.../queues/.../tasks/...``）。
@@ -103,7 +110,16 @@ def enqueue_via_cloud_tasks(
     if service_account_email:
         http_request["oidc_token"] = {"service_account_email": service_account_email}
 
-    task = {"http_request": http_request}
+    task: dict = {"http_request": http_request}
+    if schedule_time is not None:
+        from google.protobuf import timestamp_pb2
+
+        when = schedule_time if schedule_time.tzinfo else schedule_time.astimezone()
+        ts = timestamp_pb2.Timestamp()
+        ts.FromDatetime(when.astimezone(timezone.utc).replace(tzinfo=None))
+        task["schedule_time"] = ts
+    if task_id:
+        task["name"] = client.task_path(project_id, location_name, queue_name, task_id)
 
     response = client.create_task(request={"parent": parent, "task": task})
     logger.info(

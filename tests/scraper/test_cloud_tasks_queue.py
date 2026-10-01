@@ -231,3 +231,49 @@ def test_add_job_cloud_tasks_backend_skips_local_queue_file(queue_paths, monkeyp
 
     # ローカルキューファイルは作られない（Cloud Tasks経路のみ使われたこと）
     assert not queue_file.exists()
+
+
+def test_enqueue_sets_schedule_time_and_fixed_task_name(monkeypatch):
+    """予約配信(schedule_time)とタスク名固定(task_id)が create_task に渡される。"""
+    from datetime import datetime, timezone
+
+    from src.scraper import cloud_tasks_queue as ctq
+
+    with mock.patch("google.cloud.tasks_v2.CloudTasksClient") as mock_client_cls:
+        mock_client = mock_client_cls.return_value
+        mock_client.queue_path.return_value = "projects/p/locations/l/queues/q"
+        mock_client.task_path.return_value = "projects/p/locations/l/queues/q/tasks/predict-202605030811"
+        mock_client.create_task.return_value.name = "projects/p/locations/l/queues/q/tasks/predict-202605030811"
+
+        monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
+        monkeypatch.setenv("CLOUD_RUN_JOBS_WORKER_URL", "https://worker.example.com/x")
+        monkeypatch.delenv("CLOUD_TASKS_OIDC_SERVICE_ACCOUNT", raising=False)
+
+        when = datetime(2026, 10, 4, 0, 10, tzinfo=timezone.utc)  # = 09:10 JST
+        ctq.enqueue_via_cloud_tasks(
+            {"job_kind": "predict_race", "race_id": "202605030811"},
+            schedule_time=when,
+            task_id="predict-202605030811",
+        )
+
+        mock_client.task_path.assert_called_once_with("test-project", "asia-northeast1", "keiba-scrape-queue", "predict-202605030811")
+        _, kwargs = mock_client.create_task.call_args
+        task = kwargs["request"]["task"]
+        assert task["name"].endswith("/tasks/predict-202605030811")
+        assert task["schedule_time"].ToDatetime() == datetime(2026, 10, 4, 0, 10)
+
+
+def test_enqueue_without_schedule_time_has_no_schedule_or_name(monkeypatch):
+    from src.scraper import cloud_tasks_queue as ctq
+
+    with mock.patch("google.cloud.tasks_v2.CloudTasksClient") as mock_client_cls:
+        mock_client = mock_client_cls.return_value
+        mock_client.queue_path.return_value = "projects/p/locations/l/queues/q"
+        mock_client.create_task.return_value.name = "n"
+        monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
+        monkeypatch.setenv("CLOUD_RUN_JOBS_WORKER_URL", "https://worker.example.com/x")
+        monkeypatch.delenv("CLOUD_TASKS_OIDC_SERVICE_ACCOUNT", raising=False)
+
+        ctq.enqueue_via_cloud_tasks({"job_kind": "race"})
+        task = mock_client.create_task.call_args.kwargs["request"]["task"]
+        assert "schedule_time" not in task and "name" not in task

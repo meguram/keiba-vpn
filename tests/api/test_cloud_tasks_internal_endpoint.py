@@ -125,3 +125,43 @@ class TestCloudTasksProcessJobEndpoint(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPredictRaceJobDispatch(unittest.TestCase):
+    """job_kind=predict_race（開催日のT-45予測）がワーカーで予測ワークフローに振り分けられる。"""
+
+    def test_success_returns_200_completed(self):
+        with unittest.mock.patch(
+            "src.pipeline.inference.race_day_workflow.handle_predict_job",
+            return_value={"status": "success", "race_id": "202605030811", "persisted": True},
+        ) as handler:
+            resp = client.post(
+                "/api/internal/cloud-tasks/process-job",
+                json={"job_kind": "predict_race", "race_id": "202605030811"},
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["status"], "completed")
+        handler.assert_called_once()
+
+    def test_failure_returns_500_so_cloud_tasks_retries(self):
+        with unittest.mock.patch(
+            "src.pipeline.inference.race_day_workflow.handle_predict_job",
+            return_value={"status": "error", "race_id": "202605030811", "error": "出馬表データがありません"},
+        ):
+            resp = client.post(
+                "/api/internal/cloud-tasks/process-job",
+                json={"job_kind": "predict_race", "race_id": "202605030811"},
+            )
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.json()["status"], "failed")
+
+    def test_scraping_jobs_are_not_routed_to_prediction(self):
+        with unittest.mock.patch("src.pipeline.inference.race_day_workflow.handle_predict_job") as handler, \
+             unittest.mock.patch("src.scraper.run.ScraperRunner"), \
+             unittest.mock.patch("src.scraper.queue_tasks.execute_job"):
+            resp = client.post(
+                "/api/internal/cloud-tasks/process-job",
+                json={"job_kind": "race", "target_id": "202501010101", "tasks": ["race_shutuba"]},
+            )
+        self.assertEqual(resp.status_code, 200)
+        handler.assert_not_called()

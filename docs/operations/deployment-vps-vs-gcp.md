@@ -47,6 +47,8 @@ BigQuery等すべてのGCPクライアントへ共通で渡す（本ドキュメ
 
 ## 役割分担マッピング（機能領域 → 担当環境）
 
+> **プロセス・ジョブ単位の詳細な分類は [vps-gcp-responsibilities.md](./vps-gcp-responsibilities.md) を正とする**（本表は機能領域単位の概要。スクレイピング系の置き場所は同ファイルの「論点A」で再検討中）。
+
 `docs/git_management/todo/*.md` の16機能領域を、今回決定した役割分担にマッピングする。
 「表示/配信=VPS、実行=GCP」の形になる領域は両方に分かれる。
 
@@ -54,20 +56,20 @@ BigQuery等すべてのGCPクライアントへ共通で渡す（本ドキュメ
 |---|---|---|
 | core-platform | **VPS** | 認証・ダッシュボード・ヘルスチェックはサービングの一部 |
 | horse-profile | **VPS** | 馬名検索・馬詳細はリクエスト同期の読み取りAPI |
-| race-detail | **VPS**（配信）/ **GCP**（予測実行） | 予測結果の配信はVPS、`POST .../predict`の実行自体はGCPのCloud Run Jobsに委譲しGCSへ書き込む方針に変更 |
+| race-detail | **VPS**（配信・T-45の推論）/ **GCP**（メモリ不足時の推論切替先） | 開催日の各レース発走45分前に予測を起動し、結果を保存→VPSが配信。推論は**まずVPS**、実測でメモリ不足ならGCP（Cloud Tasks＋Cloud Run）へ切替（実装は両対応）。詳細は [vps-gcp-responsibilities.md](./vps-gcp-responsibilities.md) |
 | race-quality | **VPS**（配信）/ **GCP**（day一括推定の実行） | 日次一括推定はGCP側のCloud Scheduler+Jobsで事前計算、配信はVPSがGCSから読むだけ |
 | tracking-difficulty | **VPS**（配信）/ **GCP**（precomputeバッチ） | 同上パターン |
 | track-speed | **VPS**（配信）/ **GCP**（rebuild-baselines） | 同上パターン |
-| odds-final-odds | **VPS**（配信）/ **GCP**（train・snapshot記録） | 学習・定期スナップショットはGCP、配信はVPS |
+| odds-final-odds | **VPS**（配信・snapshot記録）/ **別PC**（モデル学習） | 学習は別PC。snapshot記録はスクレイピング系のためVPS |
 | betting | **VPS** | optimizeはリクエスト同期の軽量計算（オッズ無い場合のスクレイピング呼び出しのみ要注意） |
 | growth-curve | **VPS** | 読み取り系API、計算もリクエスト同期で軽量 |
 | myostatin | **VPS**（配信）/ **GCP**（recalculate定期実行） | 再計算バッチはGCP、knowledge参照・predictはVPS |
 | bloodline-pedigree | **VPS**（配信）/ **GCP**（アーティファクトrebuild） | 65エンドポイントの大半は読み取り系でVPS、`POST rebuild`系の重い再構築処理はGCP |
-| cushion | **GCP**（スクレイピング・ライブ取得・GCS同期） / **VPS**（data/statsの配信） | スクレイピングはGCP、配信のみVPS |
-| scraping-queue | **GCP** | job_queue.py自体・netkeibaスクレイピング全体をGCPへ移動（VPSのCPU負荷を避ける主目的） |
+| cushion | **VPS**（スクレイピング・ライブ取得・配信） / **GCP**（GCS同期は要検討） | スクレイピング系はVPSのcron（案A確定） |
+| scraping-queue | **VPS** | **2026-10-02確定（案A）**: netkeibaスクレイピングとキュー・cronはVPSに残す（スクレイパーは起動時約40MBと軽量、VPSは契約済みで追加費用0、送信元IPがVPS固定のまま、Cloud NAT不要）。本運用前にVPSから試験取得して遮断されないことを確認する |
 | monitor-quality | **VPS** | 運用者向け監視画面・品質チェック結果表示（品質チェック自体がスクレイピング済みデータの検証なので軽量、VPSに残してよい） |
-| model-training | **GCP** | 学習・アンサンブル・バックテスト・バックフィルは最も重い処理。VPSには絶対に乗せない |
-| admin-ops | **VPS**（画面・ログ閲覧）/ **GCP**（cronジョブの実体） | `/cron-jobs`等の管理画面はVPSに残すが、disk-cache-cleanup以外のジョブ実体（スクレイピング系）はGCPへ。VPS側に残るのは軽量なdisk-cache-cleanup・logs-retention程度 |
+| model-training | **別PC（ローカル）** | **2026-10-02確定**: 学習・アンサンブル・バックテストは別PCで実施し、学習済みモデルをGCSへ公開（`model_registry`）。GCP/VPSでは学習しない |
+| admin-ops | **VPS**（画面・ログ閲覧・スクレイピング系cron）/ **GCP**（重い集計ジョブの実体） | `/cron-jobs`等の管理画面はVPSに残す。重い集計・再構築ジョブ（Cloud Run Jobs＋Scheduler）はGCP、スクレイピング系cronはVPS |
 
 ## ブリッジが必要な点（分担により新たに生じる課題）
 
@@ -168,6 +170,31 @@ billing/cost関連の仕組みが存在しないことを確認済み）。GCP�
 のBigQuery課金エクスポートをクエリして日次コストをSlackへ通知する
 `python -m src.scripts.cloud_jobs.gcp_daily_cost_report`（詳細・前提条件は
 [gcp-cloud-run-jobs.md の#15](./gcp-cloud-run-jobs.md)）を新規実装した。
+
+## 固定費を抑える設計（2026-10-02決定）
+
+毎月必ずかかる費用（固定費）を抑える方針。金額は概算で、採用前にGCP料金計算ツールで確認すること。
+**月額の積み上げ（固定費・従量費・合計）は [cost-estimate.md](./cost-estimate.md) にまとめている。**
+
+### 採用した削減策
+| 対象 | 方針 | 効果（概算） |
+|---|---|---|
+| Cloud SQL | stg と prod で **1インスタンスを共用**（DB名 `keiba_db` / `keiba_db_stg`、ユーザーも分離）。`.env.stg.example` / `.env.prod.example` は同じインスタンス接続名を指す | インスタンス2台→1台（月$10〜15程度の削減） |
+| Cloud SQL 構成 | 最小ティア `db-f1-micro`・HDD 10GB・単一ゾーン（HAなし）・バックアップ3世代・ストレージ自動拡張に上限50GB。`scripts/gcp/setup_cloud_sql.sh`（既定は表示のみ、`--apply`で実行） | 月$10前後に収まる見込み。HA構成の約半額 |
+| dev 環境 | ローカルの docker-compose.dev.yml の Postgres/Redis を使用（Cloud SQL を使わない） | dev は固定費ゼロ |
+| Cloud Tasks / Cloud Run Jobs / BigQuery / Logging | 無料枠内で収まる使い方（日次バッチ中心） | 実質$0〜数ドル |
+| Cloud Scheduler | 15〜約35ジョブ（無料は3ジョブまで、超過分は1ジョブ月$0.10。対象は gcp-cloud-run-jobs.md） | 月$1〜3前後 |
+
+### 検討したが採用しなかったもの（理由）
+- **PostgreSQL を VPS(2GB) に同居**: 約30テーブルの分析DB（`races`/`race_results`/`megu_index`/`users` 等）で、アプリ本体・Redisと同居するとメモリ不足になりやすく現実的でない。また GCP 側のバッチからも書き込むため、VPS の DB を外部公開する必要が生じる。
+- **Redis を Memorystore に移行**: 最低でも月$35前後かかる上、同一VPC内からしか届かず ConoHa からの接続が複雑。Redis は VPS 側に残す（キャッシュなので再構築可能）。
+- **Cloud NAT による固定送信IP**: 月約$32+の固定費。スクレイピングの送信元IP固定が本当に必要になるまで導入しない。必要になった場合は、固定IPを付けた小型VM（`e2-micro`は一部リージョンで無料枠あり）で実行する案を先に検討する。
+- **stg 専用の Cloud SQL を別に立てて停止運用**: 共用にした時点で停止できない（prod も使うため）。stg を完全に分けたい場合のみ `--activation-policy=NEVER` で停止する運用が可能。
+
+### 共用に伴う注意
+- stg の負荷（大きなETL・バックフィル）が prod のレスポンスに影響し得る。重い処理は prod の利用が少ない時間帯に実行する。
+- `db-f1-micro` は RAM 約0.6GB・SLA なし。クエリが遅くなったら `db-g1-small` へ変更する（月額は約2〜3倍、再起動あり）。
+- 実際の課金額は日次コストのSlack通知（`gcp_daily_cost_report`）で確認できる。
 
 ## TODO（手動追記用）
 

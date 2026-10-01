@@ -202,18 +202,74 @@ check_redis() {
   port_open 6379
 }
 
+# .env から非秘密キーだけを安全に読む（bash で source しない方針）。
+# 優先順: 環境変数 > .env.<KEIBA_ENV> > .env（アプリの load_project_dotenv と同じ重ね順）
+dotenv_get() {
+  local key="$1" val="${!1:-}" env_name f line
+  if [[ -n "$val" ]]; then
+    printf '%s' "$val"
+    return 0
+  fi
+  env_name="${KEIBA_ENV:-}"
+  if [[ -z "$env_name" && -f "$ROOT/.env" ]]; then
+    env_name="$(grep -E '^KEIBA_ENV=' "$ROOT/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)"
+  fi
+  for f in "$ROOT/.env.${env_name}" "$ROOT/.env"; do
+    [[ "$f" == "$ROOT/.env." ]] && continue
+    [[ -f "$f" ]] || continue
+    line="$(grep -E "^${key}=" "$f" 2>/dev/null | tail -n1 || true)"
+    if [[ -n "$line" ]]; then
+      val="${line#*=}"
+      val="${val%\"}"; val="${val#\"}"; val="${val%\'}"; val="${val#\'}"
+      printf '%s' "$val"
+      return 0
+    fi
+  done
+  return 0
+}
+
+# Cloud SQL 利用時（stg/prod の既定）はローカル PostgreSQL :5432 は不要。
+uses_cloud_sql() {
+  [[ "$(dotenv_get KEIBA_DB_BACKEND | tr '[:upper:]' '[:lower:]')" == "cloud_sql" ]]
+}
+
+# ローカルの Postgres/Redis が未起動なら docker-compose.dev.yml から自動起動する（無効化: KEIBA_AUTO_START_INFRA=0）
+start_infra_docker() {
+  local service="$1"
+  [[ "${KEIBA_AUTO_START_INFRA:-1}" == "0" ]] && return 1
+  command -v docker >/dev/null 2>&1 || return 1
+  docker info >/dev/null 2>&1 || return 1
+  [[ -f "$ROOT/docker-compose.dev.yml" ]] || return 1
+  (cd "$ROOT" && docker compose -f docker-compose.dev.yml up -d "$service") >/dev/null 2>&1
+}
+
+wait_until() {
+  local fn="$1" i
+  for i in $(seq 1 30); do
+    "$fn" && return 0
+    sleep 1
+  done
+  return 1
+}
+
 warn_infra() {
   local ok=true
-  if check_postgres; then
+  if uses_cloud_sql; then
+    echo "[service_start] PostgreSQL — Cloud SQL を使用（KEIBA_DB_BACKEND=cloud_sql）のためローカル :5432 は不要"
+  elif check_postgres; then
     echo "[service_start] PostgreSQL :5432 — 接続可能"
+  elif start_infra_docker postgres && wait_until check_postgres; then
+    echo "[service_start] PostgreSQL :5432 — docker compose (docker-compose.dev.yml) で自動起動しました"
   else
-    echo "[service_start] 警告: PostgreSQL :5432 に接続できません（別途起動してください）"
+    echo "[service_start] 警告: PostgreSQL :5432 に接続できません（docker compose -f docker-compose.dev.yml up -d postgres で起動してください）"
     ok=false
   fi
   if check_redis; then
     echo "[service_start] Redis :6379 — 接続可能"
+  elif start_infra_docker redis && wait_until check_redis; then
+    echo "[service_start] Redis :6379 — docker compose (docker-compose.dev.yml) で自動起動しました"
   else
-    echo "[service_start] 警告: Redis :6379 に接続できません（別途起動してください）"
+    echo "[service_start] 警告: Redis :6379 に接続できません（docker compose -f docker-compose.dev.yml up -d redis で起動してください）"
     ok=false
   fi
   $ok
@@ -265,7 +321,9 @@ show_status() {
     echo "  [MLflow]   ❌  :${MLFLOW_PORT:-5000}  HTTP=${code}"
   fi
 
-  if check_postgres; then
+  if uses_cloud_sql; then
+    echo "  [Postgres] ☁️   Cloud SQL（ローカル :5432 は不要）"
+  elif check_postgres; then
     echo "  [Postgres] ✅  :5432"
   else
     echo "  [Postgres] ❌  :5432"

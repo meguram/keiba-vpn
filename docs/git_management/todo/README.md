@@ -8,6 +8,7 @@
 （必要最低限のファイルデータのみ）、GCPはスクレイピング・ML学習・スケジュール実行（定期バッチ）
 専用。機能領域ごとの担当環境マッピング・ブリッジが必要な点（Cloud SQL化・モデル配信同期等）は
 [`../../operations/deployment-vps-vs-gcp.md`](../../operations/deployment-vps-vs-gcp.md)を参照。
+ジョブ・プロセス単位の責務分担表は[`../../operations/vps-gcp-responsibilities.md`](../../operations/vps-gcp-responsibilities.md)。
 該当ファイル（admin-ops・scraping-queue・core-platform・monitor-quality・bloodline-pedigree・
 cushion・model-training・race-quality・race-detail・tracking-difficulty・track-speed・myostatin・
 horse-profile・odds-final-odds）の「既知の課題」に個別の背景を記載している。各ファイルの
