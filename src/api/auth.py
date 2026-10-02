@@ -20,14 +20,30 @@ from typing import Optional
 from fastapi import Request
 from fastapi.responses import RedirectResponse
 
+from src.config.deployment import keiba_env_raw
+
 logger = logging.getLogger("api.auth")
 
 COOKIE_NAME = "keiba_dev_session"
 COOKIE_MAX_AGE = 30 * 24 * 3600  # 30日
 
 
+_INSECURE_DEV_SECRET = "keiba-dev-default-secret-2026"
+_warned_insecure_secret = False
+
+
 def _get_secret_key() -> str:
-    return os.environ.get("DEV_SECRET_KEY", "keiba-dev-default-secret-2026")
+    """セッション Cookie の署名鍵。stg/prod では DEV_SECRET_KEY 必須（既定値だと Cookie を偽造できる）。"""
+    global _warned_insecure_secret
+    key = os.environ.get("DEV_SECRET_KEY", "")
+    if key:
+        return key
+    if keiba_env_raw() in ("stg", "staging", "prod", "production"):
+        raise RuntimeError("DEV_SECRET_KEY が未設定です。stg/prod ではランダムな値を .env.<env> に設定してください")
+    if not _warned_insecure_secret:
+        logger.warning("DEV_SECRET_KEY 未設定: 開発用の固定鍵を使用します（dev 専用。公開環境では使わないこと）")
+        _warned_insecure_secret = True
+    return _INSECURE_DEV_SECRET
 
 
 def _get_dev_password() -> str:
@@ -250,7 +266,28 @@ def is_dev_only_path(path: str) -> bool:
     return False
 
 
-def requires_auth(path: str) -> bool:
+_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _to_v1_path(path: str) -> str | None:
+    """FastAPI の旧ルート `/api/X` を、許可リストの基準である `/api/v1/X` に読み替える。"""
+    if path.startswith("/api/") and not path.startswith("/api/v1/"):
+        return "/api/v1/" + path[len("/api/"):]
+    return None
+
+
+def requires_auth(path: str, method: str = "GET") -> bool:
+    """開発者ログインが必要か。
+
+    許可リストは `/api/v1/...` 前置きで書かれているが、FastAPI の実ルートは `/api/...`。
+    旧ルートの読み取り（監視ポータル等が Cookie 無しで呼ぶ）は従来どおり通し、
+    書き込み系メソッドだけ `/api/v1/` 相当の判定を適用する。
+    """
     if is_public_path(path):
         return False
-    return is_dev_only_path(path)
+    if is_dev_only_path(path):
+        return True
+    legacy = _to_v1_path(path)
+    if legacy is not None and method.upper() in _WRITE_METHODS:
+        return not is_public_path(legacy) and is_dev_only_path(legacy)
+    return False

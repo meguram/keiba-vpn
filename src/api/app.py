@@ -797,7 +797,7 @@ class KeibaDeploymentMiddleware(BaseHTTPMiddleware):
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path
-        if requires_auth(path) and not is_developer(request):
+        if requires_auth(path, request.method) and not is_developer(request):
             reason = classify_session(request)  # "none" | "expired" | "invalid"
             if path.startswith("/api/"):
                 messages = {
