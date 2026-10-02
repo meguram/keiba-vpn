@@ -14,39 +14,37 @@ def _softmax_win_probs(scores: np.ndarray) -> np.ndarray:
     return exp_s / s if s > 0 else np.ones(len(scores)) / len(scores)
 
 
+_EPS = 1e-9
+
+
 def harville_top2_prob(win_probs: np.ndarray) -> np.ndarray:
-    """各馬の連対（1〜2着以内）確率。"""
-    n = len(win_probs)
-    top2 = np.copy(win_probs)
-    for i in range(n):
-        for j in range(n):
-            if j == i:
-                continue
-            denom = 1.0 - win_probs[j]
-            if denom > 1e-9:
-                top2[i] += win_probs[j] * win_probs[i] / denom
+    """各馬の連対（1〜2着以内）確率。O(n)。"""
+    p = np.asarray(win_probs, dtype=float)
+    d = 1.0 - p
+    ratio = np.where(d > _EPS, p / np.where(d > _EPS, d, 1.0), 0.0)  # p_j / (1 - p_j)
+    # top2_i = p_i + p_i * sum_{j != i} p_j / (1 - p_j)
+    top2 = p + p * (ratio.sum() - ratio)
     return np.minimum(top2, 1.0)
 
 
 def harville_top3_prob(win_probs: np.ndarray) -> np.ndarray:
-    """各馬の複勝（1〜3着以内）確率。"""
-    top2 = harville_top2_prob(win_probs)
-    n = len(win_probs)
-    top3 = np.copy(top2)
-    for i in range(n):
-        for j in range(n):
-            if j == i:
-                continue
-            d1 = 1.0 - win_probs[j]
-            if d1 < 1e-9:
-                continue
-            for k in range(n):
-                if k in (i, j):
-                    continue
-                d2 = 1.0 - win_probs[j] - win_probs[k]
-                if d2 > 1e-9:
-                    top3[i] += win_probs[j] * (win_probs[k] / d1) * (win_probs[i] / d2)
-    return np.minimum(top3, 1.0)
+    """各馬の複勝（1〜3着以内）確率。三重ループを避けた O(n^2)。
+
+    3着項 sum_{j!=i} sum_{k!=i,j} p_j * p_k/(1-p_j) * p_i/(1-p_j-p_k) は、
+    i に依存するのは p_i だけなので、ペア行列 A[j,k] を 1 度作って
+    i を含むペアの行和・列和を引けばよい。
+    """
+    p = np.asarray(win_probs, dtype=float)
+    top2 = harville_top2_prob(p)
+    n = len(p)
+    if n < 3:
+        return top2
+    d1 = 1.0 - p[:, None]                       # 1 - p_j
+    d2 = 1.0 - p[:, None] - p[None, :]          # 1 - p_j - p_k
+    ok = (d1 > _EPS) & (d2 > _EPS) & ~np.eye(n, dtype=bool)
+    a = np.where(ok, p[:, None] * p[None, :] / np.where(ok, d1 * d2, 1.0), 0.0)
+    extra = p * (a.sum() - a.sum(axis=1) - a.sum(axis=0))
+    return np.minimum(top2 + extra, 1.0)
 
 
 def derive_race_probabilities(scores: list[float]) -> list[dict[str, float]]:

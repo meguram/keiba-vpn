@@ -81,3 +81,74 @@ class TestRaceProbabilities(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _loop_top2(w):
+    """旧実装（三重ループ）。ベクトル化版との数値一致を固定するための参照。"""
+    import numpy as np
+
+    n = len(w)
+    top2 = np.copy(w)
+    for i in range(n):
+        for j in range(n):
+            if j != i and 1.0 - w[j] > 1e-9:
+                top2[i] += w[j] * w[i] / (1.0 - w[j])
+    return np.minimum(top2, 1.0)
+
+
+def _loop_top3(w):
+    import numpy as np
+
+    n = len(w)
+    top3 = np.copy(_loop_top2(w))
+    for i in range(n):
+        for j in range(n):
+            if j == i:
+                continue
+            d1 = 1.0 - w[j]
+            if d1 < 1e-9:
+                continue
+            for k in range(n):
+                if k in (i, j):
+                    continue
+                d2 = 1.0 - w[j] - w[k]
+                if d2 > 1e-9:
+                    top3[i] += w[j] * (w[k] / d1) * (w[i] / d2)
+    return np.minimum(top3, 1.0)
+
+
+class TestVectorizedHarville(unittest.TestCase):
+    def test_matches_loop_reference(self):
+        import numpy as np
+
+        from src.utils.race_probabilities import (
+            _softmax_win_probs,
+            harville_top2_prob,
+            harville_top3_prob,
+        )
+
+        rng = np.random.default_rng(42)
+        for n in (1, 2, 3, 5, 12, 18):
+            for scale in (0.3, 1.0, 3.0):
+                w = _softmax_win_probs(rng.normal(scale=scale, size=n))
+                with self.subTest(n=n, scale=scale):
+                    np.testing.assert_allclose(harville_top2_prob(w), _loop_top2(w), atol=1e-12)
+                    np.testing.assert_allclose(harville_top3_prob(w), _loop_top3(w), atol=1e-12)
+
+    def test_sums_match_harville_identities(self):
+        import numpy as np
+
+        from src.utils.race_probabilities import _softmax_win_probs, harville_top2_prob, harville_top3_prob
+
+        w = _softmax_win_probs(np.array([2.0, 1.0, 0.5, 0.0, -0.5, -1.0]))
+        self.assertAlmostEqual(float(harville_top2_prob(w).sum()), 2.0, places=9)
+        self.assertAlmostEqual(float(harville_top3_prob(w).sum()), 3.0, places=9)
+
+    def test_degenerate_inputs(self):
+        import numpy as np
+
+        from src.utils.race_probabilities import harville_top2_prob, harville_top3_prob
+
+        one = np.array([1.0])
+        np.testing.assert_allclose(harville_top3_prob(one), [1.0])
+        self.assertEqual(len(harville_top3_prob(np.array([]))), 0)

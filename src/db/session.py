@@ -20,6 +20,26 @@ def database_url() -> str:
     )
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, default))
+    except ValueError:
+        return default
+
+
+def engine_options(url: str) -> dict:
+    """直結 PostgreSQL 向けのエンジン設定。
+
+    接続・プール待ちに上限を置き、DB 不調時にリクエストが既定の 30 秒以上固まるのを防ぐ。
+    PostgreSQL 以外（テストの SQLite など）には何も足さない。
+    """
+    opts: dict = {"pool_pre_ping": True}
+    if url.startswith("postgresql"):
+        opts["pool_timeout"] = _env_int("DB_POOL_TIMEOUT_SEC", 10)
+        opts["connect_args"] = {"connect_timeout": _env_int("DB_CONNECT_TIMEOUT_SEC", 5)}
+    return opts
+
+
 def init_engine(url: str | None = None):
     global _engine, _SessionLocal
     if url is None and not os.environ.get("DATABASE_URL") and not os.environ.get("KEIBA_DB_BACKEND"):
@@ -39,7 +59,8 @@ def init_engine(url: str | None = None):
         )
     else:
         # 既定（KEIBA_DB_BACKEND 未設定）: 従来通り DATABASE_URL から直結する。
-        _engine = create_engine(url or database_url(), pool_pre_ping=True)
+        target = url or database_url()
+        _engine = create_engine(target, **engine_options(target))
 
     _SessionLocal = sessionmaker(bind=_engine, autoflush=False, autocommit=False)
     return _engine

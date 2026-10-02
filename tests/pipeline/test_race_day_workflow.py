@@ -273,3 +273,27 @@ class RaceDayWorkflowTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FormatPredictionsProbabilityTest(unittest.TestCase):
+    """T-45 の保存形式に、画面が読む win/place/show 確率が入る（T-029）。"""
+
+    def test_probabilities_present_and_consistent(self):
+        import numpy as np
+        import pandas as pd
+
+        meta = pd.DataFrame(
+            {
+                "horse_number": range(1, 9),
+                "horse_name": [f"H{i}" for i in range(1, 9)],
+                "horse_id": [f"id{i}" for i in range(1, 9)],
+            }
+        )
+        preds = wf._format_predictions(meta, np.array([2.0, 1.2, 0.7, 0.1, -0.4, -1.0, -1.5, -2.0]))
+        for p in preds:
+            self.assertLessEqual(p["win_prob"], p["place_prob"])
+            self.assertLessEqual(p["place_prob"], p["show_prob"])
+            self.assertLessEqual(p["show_prob"], 1.0)
+            self.assertAlmostEqual(p["win_prob"], p["normalized_score"], places=4)
+        self.assertAlmostEqual(sum(p["place_prob"] for p in preds), 2.0, delta=5e-3)
+        self.assertAlmostEqual(sum(p["show_prob"] for p in preds), 3.0, delta=5e-3)

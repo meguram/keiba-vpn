@@ -7,6 +7,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
+import numpy as np
+
 from src.api.cache.redis_cache import PredictionCache
 from src.api.v1.services import DEFAULT_MODEL_VERSION
 from src.db.batch.stats_snapshot import build_snapshots_for_race
@@ -20,6 +22,7 @@ from src.pipeline.inference.race_prediction_service import (
     save_cached,
 )
 from src.scraper.storage import HybridStorage
+from src.utils.race_probabilities import harville_top2_prob, harville_top3_prob
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +30,6 @@ logger = logging.getLogger(__name__)
 def _softmax_probs(scores: list[float]) -> list[float]:
     if not scores:
         return []
-    import numpy as np
-
     arr = np.array(scores, dtype=float)
     centered = arr - arr.mean()
     exp = np.exp(centered / max(centered.std(), 1e-6))
@@ -44,11 +45,16 @@ def _map_stage1_to_spec(
     scores = [p.get("pred_score", p.get("normalized_score", 0)) for p in preds]
     win_probs = _softmax_probs(scores) if scores else [p.get("normalized_score", 0) for p in preds]
 
+    # 連対率・複勝率は同じ勝率分布から Harville 式で導く（DEC-022。固定倍率は使わない）
+    win_arr = np.array([float(win_probs[i]) if i < len(win_probs) else 0.0 for i in range(len(preds))])
+    place_arr = harville_top2_prob(win_arr)
+    show_arr = harville_top3_prob(win_arr)
+
     horses = []
     for i, p in enumerate(preds):
-        win_prob = float(win_probs[i]) if i < len(win_probs) else 0.0
-        place_prob = min(1.0, win_prob * 2.2)
-        show_prob = min(1.0, win_prob * 3.0)
+        win_prob = float(win_arr[i])
+        place_prob = float(place_arr[i])
+        show_prob = float(show_arr[i])
         pred_win_odds = round(1.0 / max(win_prob, 0.01), 1)
         pred_place_odds = round(1.0 / max(show_prob / 3, 0.05), 1)
         roi = calculate_recovery_rate(win_prob, pred_win_odds, show_prob, pred_place_odds)

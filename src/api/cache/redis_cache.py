@@ -7,6 +7,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
+from src.utils.circuit_breaker import CircuitBreaker
+
 try:
     import redis
 except ImportError:  # pragma: no cover
@@ -20,10 +22,36 @@ def _redis_url() -> str:
     return os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except ValueError:
+        return default
+
+
 def get_redis_client():
+    """短いタイムアウトで接続する。無応答の Redis でリクエストが数分固まるのを防ぐ。"""
     if redis is None:
         raise RuntimeError("redis package is not installed")
-    return redis.from_url(_redis_url(), decode_responses=True)
+    return redis.from_url(
+        _redis_url(),
+        decode_responses=True,
+        socket_connect_timeout=_env_float("REDIS_CONNECT_TIMEOUT_SEC", 0.3),
+        socket_timeout=_env_float("REDIS_SOCKET_TIMEOUT_SEC", 0.5),
+    )
+
+
+_TRIP_ON: tuple[type[BaseException], ...] = (OSError,) + (
+    (redis.exceptions.RedisError,) if redis is not None else ()
+)
+
+# キャッシュは補助なので、Redis 障害中は触らずキャッシュミス扱いにする（プロセス共有）
+_REDIS_BREAKER = CircuitBreaker(
+    "redis",
+    failure_threshold=3,
+    recovery_timeout=_env_float("REDIS_BREAKER_RECOVERY_SEC", 10.0),
+    trip_on=_TRIP_ON,
+)
 
 
 def prediction_key(race_id: str, model_version: str) -> str:
@@ -66,8 +94,15 @@ def ttl_until_post_time(post_time: datetime | None) -> int:
 class PredictionCache:
     """L2/L3 Redis — 予測・ラップ予測キャッシュ。"""
 
-    def __init__(self, client=None):
+    def __init__(self, client=None, breaker: CircuitBreaker | None = None):
         self._client = client
+        self._breaker = breaker or _REDIS_BREAKER
+
+    def _get(self, key: str) -> str | None:
+        return self._breaker.call(lambda: self.client.get(key), fallback=lambda: None)
+
+    def _setex(self, key: str, ttl: int, value: str) -> None:
+        self._breaker.call(lambda: self.client.setex(key, ttl, value), fallback=lambda: None)
 
     @property
     def client(self):
@@ -76,7 +111,7 @@ class PredictionCache:
         return self._client
 
     def get_prediction(self, race_id: str, model_version: str) -> dict[str, Any] | None:
-        raw = self.client.get(prediction_key(race_id, model_version))
+        raw = self._get(prediction_key(race_id, model_version))
         return json.loads(raw) if raw else None
 
     def set_prediction(
@@ -87,14 +122,14 @@ class PredictionCache:
         post_time: datetime | None = None,
     ) -> None:
         ttl = ttl_until_post_time(post_time)
-        self.client.setex(
+        self._setex(
             prediction_key(race_id, model_version),
             ttl,
             json.dumps(payload, ensure_ascii=False, default=str),
         )
 
     def get_lap_prediction(self, race_id: str, model_version: str) -> dict[str, Any] | None:
-        raw = self.client.get(lap_prediction_key(race_id, model_version))
+        raw = self._get(lap_prediction_key(race_id, model_version))
         return json.loads(raw) if raw else None
 
     def set_lap_prediction(
@@ -105,22 +140,22 @@ class PredictionCache:
         post_time: datetime | None = None,
     ) -> None:
         ttl = ttl_until_post_time(post_time)
-        self.client.setex(
+        self._setex(
             lap_prediction_key(race_id, model_version),
             ttl,
             json.dumps(payload, ensure_ascii=False, default=str),
         )
 
     def get_odds_snapshot(self, race_id: str) -> dict[str, Any] | None:
-        raw = self.client.get(odds_latest_key(race_id))
+        raw = self._get(odds_latest_key(race_id))
         return json.loads(raw) if raw else None
 
     def set_odds_snapshot(self, race_id: str, payload: dict[str, Any]) -> None:
-        self.client.setex(
+        self._setex(
             odds_latest_key(race_id),
             ODDS_TTL_SEC,
             json.dumps(payload, ensure_ascii=False, default=str),
         )
 
     def invalidate_entries(self, race_id: str) -> None:
-        self.client.delete(race_entries_key(race_id))
+        self._breaker.call(lambda: self.client.delete(race_entries_key(race_id)), fallback=lambda: None)

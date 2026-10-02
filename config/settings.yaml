@@ -86,6 +86,12 @@ mlflow:
     pace_predictor:
       serve_uri: "http://localhost:5004"
       serve_port: 5004
+    lap_predictor:
+      serve_uri: "http://localhost:5005"
+      serve_port: 5005
+    lap_lstm:
+      serve_uri: "http://localhost:5006"
+      serve_port: 5006
   # 後方互換（tracking_difficulty.serve_uri を参照）
   serve_tracking_uri: "http://localhost:5001"
   serve_tracking_model: "models:/tracking-difficulty-lgbm/latest"

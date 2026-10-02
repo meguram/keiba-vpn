@@ -27,6 +27,8 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 
+from src.utils.race_probabilities import harville_top2_prob, harville_top3_prob
+
 logger = logging.getLogger("pipeline.inference.race_day_workflow")
 
 _JST = ZoneInfo("Asia/Tokyo")
@@ -80,6 +82,11 @@ def _format_predictions(meta_df, scores: np.ndarray) -> list[dict]:
     exp_scores = np.exp(centered / max(centered.std(), 1e-6))
     meta["softmax_prob"] = exp_scores / exp_scores.sum()
 
+    # 画面と API が読む確率。保存前に 1 度だけ計算する（読み出しのたびに再計算しない）
+    win = meta["softmax_prob"].values.astype(float)
+    place = harville_top2_prob(win)
+    show = harville_top3_prob(win)
+
     return [
         {
             "pred_rank": int(r["pred_rank"]),
@@ -88,8 +95,11 @@ def _format_predictions(meta_df, scores: np.ndarray) -> list[dict]:
             "horse_id": r["horse_id"],
             "pred_score": round(float(r["pred_score"]), 4),
             "normalized_score": round(float(r["softmax_prob"]), 4),
+            "win_prob": round(float(win[i]), 4),
+            "place_prob": round(float(place[i]), 4),
+            "show_prob": round(float(show[i]), 4),
         }
-        for _, r in meta.iterrows()
+        for i, (_, r) in enumerate(meta.iterrows())
     ]
 
 
