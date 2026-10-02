@@ -38,7 +38,7 @@ DB接続が必要なテストだけ失敗する場合は `make db-up && make db-
 | **`train_test_split(shuffle=True)`** | 時系列データは絶対にランダムシャッフルしない | `check_no_shuffle` がブロック。学習・評価の前提が崩れる |
 | **HybridStorage のインスタンス化** | `src/api/v1/services.py` / `delegates.py` / `flask_app.py` で新しいコードを書くとき、リクエストハンドラ内で `HybridStorage()` を直接 `new` **しない**。既知の問題（`docs/html/design/FULLSTACK_ARCHITECTURE.html` §4 P1）として、Flask側は現在リクエスト毎に再生成しておりL1メモリキャッシュが機能していない。新規コードでこれを悪化させないこと。可能なら `src/api/app.py` の `_get_storage()` と同様のプロセス単位シングルトンパターンを使う | L1キャッシュが効かず、GCS呼び出し・レイテンシが不要に増える |
 | **Flask (`/api/v1`) が仕様上の正** | DEC-013により、新規APIエンドポイントは `src/api/flask_app.py` / `src/api/v1/` 側に実装する。`src/api/app.py`（FastAPI, レガシー）には追加しない | 段階的廃止予定のレイヤーに機能が増え、移行コストが増す |
-| **GCS保存前スキーマ検証** | `HybridStorage.save` は `schemas.validate` を必ず実行する（`KEIBA_SCHEMA_STRICT` 既定1）。保存データの形を変える変更は `data/requirements/data/schemas/json/` のスキーマ側も更新する | 保存が `SchemaValidationError` で失敗し、キューが `failure_reason=schema_validation` になる |
+| **GCS保存前スキーマ検証** | `HybridStorage.save` は `schemas.validate` を必ず実行する（`KEIBA_SCHEMA_STRICT` 既定1）。保存データの形を変える変更は `docs/requirements/data/schemas/json/` のスキーマ側も更新する | 保存が `SchemaValidationError` で失敗し、キューが `failure_reason=schema_validation` になる |
 | **モジュール境界** | `AGENTS.md` のレイアウト表に沿う。`src/scraper/` `src/pipeline/` `src/research/` `src/api/` `src/scripts/` の役割を混在させない | 既存の命名・分割規則から逸脱し、後続の変更が追跡しにくくなる |
 | **馬券戦略との整合** | モデリング関連の変更（評価指標・CIゲート等）を行う場合は `docs/decisions/DEC-026-modeling-betting-strategy-alignment.html` を確認。キャリブレーション・市場対比評価の方針と矛盾しないか確認する | モデルの精度指標だけを見て、馬券適用時のEV/Kelly計算に悪影響を与える変更を通してしまう |
 

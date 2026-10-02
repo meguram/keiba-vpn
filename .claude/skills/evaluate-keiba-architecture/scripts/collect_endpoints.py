@@ -31,6 +31,8 @@ LAYERS = [
         "port": 5000,
         "framework": "flask",
         "note": "DEC-013により仕様上の正。新規APIはここに追加する。",
+        "blueprint_glob": "src/api/v1/routes/*.py",
+        "blueprint_prefix": "/api/v1",
     },
     {
         "layer": "monitor",
@@ -67,7 +69,7 @@ def extract_routes(path: Path) -> list[dict]:
                 continue
             if attr in HTTP_METHOD_ATTRS:
                 methods = [attr.upper()]
-            elif attr == "route":
+            elif attr in ("route", "api_route"):
                 methods = ["GET"]
                 for kw in dec.keywords:
                     if kw.arg == "methods":
@@ -97,6 +99,15 @@ def main() -> None:
             entry["routes"] = []
         else:
             routes = extract_routes(fp)
+            # ブループリント配下のルート（flask_app.py の register_blueprint(url_prefix=...) 経由）
+            if layer.get("blueprint_glob"):
+                for bp_file in sorted(ROOT.glob(layer["blueprint_glob"])):
+                    if bp_file.name.startswith("__"):
+                        continue
+                    for r in extract_routes(bp_file):
+                        r["path"] = layer["blueprint_prefix"] + r["path"]
+                        r["source_file"] = str(bp_file.relative_to(ROOT))
+                        routes.append(r)
             entry["routes"] = routes
             entry["route_count"] = len(routes)
         result.append(entry)

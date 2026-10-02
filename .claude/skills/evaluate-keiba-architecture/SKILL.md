@@ -1,6 +1,6 @@
 ---
 name: evaluate-keiba-architecture
-description: Runs a periodic architecture health check across keiba-vpn's three HTTP route layers (FastAPI legacy src/api/app.py :8000, Flask /api/v1 src/api/flask_app.py+src/api/v1/ :5000, monitor src/monitor/app.py :9090), checks data/config path consistency, flags redundant or duplicated designs, and writes an HTML report to data/skill_logs/architecture_eval/<yyyymmdd>.html. Use when the user asks for an architecture health check, endpoint/route audit, path consistency check, or a periodic review of routing/data-path integrity across the whole app.
+description: Runs a periodic architecture health check across keiba-vpn's three HTTP route layers (FastAPI legacy src/api/app.py :8000, Flask /api/v1 src/api/flask_app.py+src/api/v1/ :5000, monitor src/monitor/app.py :9090), checks data/config path consistency, flags redundant or duplicated designs, and writes an HTML report to data/skill_logs/architecture_eval/yyyymmdd.html. Use when the user asks for an architecture health check, endpoint/route audit, path consistency check, or a periodic review of routing/data-path integrity across the whole app.
 ---
 
 このリポジトリ（keiba-vpn）は3層のHTTPルーティングとGCS/ローカルの二重データストレージを持つ、複雑度の高いアプリケーションです。

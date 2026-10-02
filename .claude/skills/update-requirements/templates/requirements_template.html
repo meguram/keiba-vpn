@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="requirements-commit" content="{{COMMIT}}" />
+<meta name="requirements-updated" content="{{DATE}}" />
+<title>keiba-vpn 要件定義書（最新状態）</title>
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --panel-2: #1a2748; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff; --accent-2: #7aa9ff;
+  --code-bg: #0b1428; --shadow: 0 8px 28px rgba(0,0,0,.35);
+  /* ステータス色は「ドット」「左ボーダー」専用。文字色・背景には使わない（必ずラベル文字を併記する） */
+  --st-done: #34d399; --st-partial: #fbbf24; --st-mock: #a78bfa; --st-todo: #f87171; --st-dep: #7a8ab0;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px; -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-size: 12.5px; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.6; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 26px 20px;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%); border-right: 1px solid var(--border);
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.brand .logo { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #4f8bff, #a78bfa); display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 13px; }
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+.stamp { color: var(--muted); font-size: 11px; margin-bottom: 18px; }
+nav.toc a { display: block; color: var(--text); padding: 5px 10px; border-radius: 8px; margin: 1px 0; border-left: 2px solid transparent; font-size: 13px; line-height: 1.4; }
+nav.toc a:hover, nav.toc a.active { background: rgba(79,139,255,.10); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.sub { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 44px 56px 110px; max-width: 1080px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px; margin-bottom: 30px; border: 1px solid var(--border); box-shadow: var(--shadow);
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%), linear-gradient(180deg, #16213f, #111a36);
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 11px; letter-spacing: .2em; font-weight: 700; }
+header.hero h1 { margin: 8px 0 10px; font-size: 26px; line-height: 1.35; }
+header.hero p { color: var(--muted); margin: 0; }
+section { margin-top: 54px; scroll-margin-top: 20px; }
+h2 { font-size: 22px; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+h2 .no { color: var(--accent-2); font-family: "JetBrains Mono", monospace; margin-right: 8px; }
+h3 { font-size: 16px; margin: 26px 0 8px; color: var(--accent-2); }
+p, li { color: var(--text); }
+.muted { color: var(--muted); }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; font-size: 13px; }
+th, td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; vertical-align: top; }
+th { background: var(--panel-2); color: var(--muted); font-weight: 700; font-size: 12px; white-space: nowrap; }
+td { background: rgba(21,33,60,.55); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 12px 0 18px; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.card .lbl { color: var(--muted); font-size: 11px; letter-spacing: .06em; }
+.card .num { font-size: 26px; font-weight: 700; font-family: "JetBrains Mono", monospace; }
+.card .note { color: var(--muted); font-size: 12px; }
+.callout { border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 14px 0; }
+.callout.warn { border-left-color: var(--st-partial); }
+.callout.todo { border-left-color: var(--st-todo); }
+
+/* ステータスタグ: 色ドット + 常にラベル文字 */
+.tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; letter-spacing: .03em; padding: 1px 9px 1px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--code-bg); white-space: nowrap; }
+.tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--st-dep); }
+.tag.done::before { background: var(--st-done); }
+.tag.partial::before { background: var(--st-partial); }
+.tag.mock::before { background: var(--st-mock); }
+.tag.todo::before { background: var(--st-todo); }
+.tag.dep::before { background: var(--st-dep); }
+.legend { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0 14px; }
+
+/* フロー図 (CSS のみ・外部依存なし) */
+.flow { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; margin: 14px 0 20px; }
+.flow .node { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-width: 150px; max-width: 220px; font-size: 12.5px; }
+.flow .node b { display: block; font-size: 13px; margin-bottom: 2px; }
+.flow .node .tag { margin-top: 6px; }
+.flow .node.is-todo { border-style: dashed; border-color: var(--st-todo); }
+.flow .node.is-mock { border-style: dashed; border-color: var(--st-mock); }
+.flow .arrow { align-self: center; color: var(--muted); padding: 0 8px; font-family: "JetBrains Mono", monospace; }
+.lanes { margin: 14px 0 20px; }
+.lane { display: grid; grid-template-columns: 140px 1fr; border: 1px solid var(--border); border-bottom: none; }
+.lane:last-child { border-bottom: 1px solid var(--border); }
+.lane .lane-name { background: var(--panel-2); padding: 10px 12px; font-weight: 700; font-size: 12.5px; }
+.lane .lane-body { padding: 10px 12px; background: rgba(21,33,60,.55); display: flex; gap: 8px; flex-wrap: wrap; }
+.lane .lane-body .node { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; }
+.lane .lane-body .node.is-todo { border-style: dashed; border-color: var(--st-todo); }
+.lane .lane-body .node.is-mock { border-style: dashed; border-color: var(--st-mock); }
+
+/* スケジューリング表 */
+tr.todo-row td:first-child { border-left: 3px solid var(--st-todo); }
+tr.todo-row[data-kind="MOCK"] td:first-child { border-left-color: var(--st-mock); }
+tr.todo-row[data-status="done"] td:first-child { border-left-color: var(--st-done); }
+tr.todo-row[data-status="done"] td { color: var(--muted); }
+.phase-head td { background: var(--panel-2); font-weight: 700; color: var(--accent-2); }
+footer.page-footer { margin-top: 70px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } aside.sidebar { position: static; height: auto; } main.content { padding: 28px 20px 80px; } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<aside class="sidebar">
+  <div class="brand"><div class="logo">KV</div><div><div class="title">keiba-vpn</div><div class="sub">要件定義書（最新状態）</div></div></div>
+  <div class="stamp">更新: {{DATE}} / commit <span class="mono">{{COMMIT}}</span> ({{BRANCH}})</div>
+  <nav class="toc">
+    <a href="#summary">0. エグゼクティブサマリー</a>
+    <a href="#overview">1. プロダクト概要・ユーザー</a>
+    <a href="#requirements">2. 要件（機能／非機能）</a>
+    <a href="#kpi">3. 達成 KPI</a>
+    <a href="#architecture">4. アーキテクチャ全体図</a>
+    <a href="#data-flow">5. データ収集〜特徴量ワークフロー</a>
+    <a href="#ml-flow">6. モデリング・推論ワークフロー</a>
+    <a href="#delivery">7. ユーザーへのデータ提供フロー</a>
+    <a href="#infra">8. インフラ・運用・コスト</a>
+    <a href="#quality">9. 品質保証・テスト</a>
+    <a href="#decisions">10. 意思決定ログ</a>
+    <a href="#status-matrix">11. 実装状況マトリクス</a>
+    <a href="#risks">12. リスク・既知課題</a>
+    <a href="#related-docs">13. 関連ドキュメント</a>
+    <a href="#scheduling">14. スケジューリング（TODO）</a>
+  </nav>
+</aside>
+
+<main class="content">
+
+<header class="hero">
+  <div class="eyebrow">REQUIREMENTS · SINGLE SOURCE OF TRUTH</div>
+  <h1>keiba-vpn 要件定義書</h1>
+  <p>{{HERO_ONE_LINER}}<br />この 1 ページでプロダクトの目的・要件・KPI・構成・データ提供フロー・未着手事項を把握できます。<code>/update-requirements</code> で随時再生成されます（最終: {{DATE}} / commit <span class="mono">{{COMMIT}}</span>）。</p>
+</header>
+
+<!-- GUIDE: ステータス凡例。全セクション共通。消さない -->
+<div class="legend">
+  <span class="tag done">実装済</span>
+  <span class="tag partial">部分実装</span>
+  <span class="tag mock">MOCK（モック/仮データ）</span>
+  <span class="tag todo">TODO（設計/実装未了）</span>
+  <span class="tag dep">廃止予定</span>
+</div>
+
+<section id="summary">
+  <h2><span class="no">0</span>エグゼクティブサマリー</h2>
+  <!-- GUIDE: 5〜8 行で「何を・誰に・どこまで出来ていて・次に何をやるか」。cards の数字は §11 の表の「行数」（1 行 = 1 つの状況タグ）と一致させる（validate が data-card と §11 内タグ数を突き合わせる）。廃止予定(dep)はカードに含めず本文で別記 -->
+  <div class="cards">
+    <div class="card"><div class="lbl">実装済</div><div class="num" data-card="done">{{N_DONE}}</div><div class="note">§11 の行数</div></div>
+    <div class="card"><div class="lbl">部分実装</div><div class="num" data-card="partial">{{N_PARTIAL}}</div><div class="note">§11 の行数</div></div>
+    <div class="card"><div class="lbl">MOCK</div><div class="num" data-card="mock">{{N_MOCK}}</div><div class="note">§11 の行数</div></div>
+    <div class="card"><div class="lbl">TODO</div><div class="num" data-card="todo">{{N_TODO}}</div><div class="note">§11 の行数（作業項目は §14）</div></div>
+  </div>
+  {{SUMMARY_BODY}}
+</section>
+
+<section id="overview">
+  <h2><span class="no">1</span>プロダクト概要・ユーザー</h2>
+  <!-- GUIDE: 目的 / 解決する課題 / ペルソナ（エンドユーザー・ゲスト・開発者）/ 提供価値 / スコープ内外 / 用語集（めぐ指数 等）。根拠: AREA-01, DEC-016, DEC-022, DEC-024 -->
+  {{OVERVIEW_BODY}}
+</section>
+
+<section id="requirements">
+  <h2><span class="no">2</span>要件（機能／非機能）</h2>
+  <!-- GUIDE: 要件 ID（FR-xx / NFR-xx）付きの表。列: ID | 要件 | 根拠(DEC/AREA) | 実装状況タグ | 実装の証拠(ファイルパス) 。モック/未設計は必ず MOCK/TODO タグ＋§14 の TODO-ID を併記 -->
+  <h3>2.1 機能要件</h3>
+  {{FR_TABLE}}
+  <h3>2.2 非機能要件（性能・可用性・セキュリティ・コスト・保守性）</h3>
+  {{NFR_TABLE}}
+</section>
+
+<section id="kpi">
+  <h2><span class="no">3</span>達成 KPI</h2>
+  <!-- GUIDE: 列: KPI | 目標値 | 現状値 | 測定方法/出典 | 判定タグ。現状値は評価レポート・ログ・メトリクスで裏が取れたものだけ。測れていない KPI は現状値を「未計測」とし TODO タグ + §14 に計測基盤 TODO を立てる。数値を推測で書かない -->
+  {{KPI_TABLE}}
+</section>
+
+<section id="architecture">
+  <h2><span class="no">4</span>アーキテクチャ全体図</h2>
+  <!-- GUIDE: .lanes でレイヤー図（クライアント / API / サービス・推論 / データストア / 収集 / 運用）。未実装ノードは class="node is-todo"、モックは "node is-mock"。各ノードに実在のパス/ポートを併記 -->
+  {{ARCH_DIAGRAM}}
+  <h3>4.1 コンポーネント一覧</h3>
+  {{COMPONENT_TABLE}}
+  <h3>4.2 API 層（3 層ルーティング）</h3>
+  {{API_LAYER_TABLE}}
+</section>
+
+<section id="data-flow">
+  <h2><span class="no">5</span>データ収集〜特徴量ワークフロー</h2>
+  <!-- GUIDE: .flow で「ソース → スクレイパ → 検証 → 保存(GCS/ローカル) → 特徴量ストア → 学習データセット」を描く。データソース表・保存カテゴリ・更新頻度(cron)・スキーマ検証を記載 -->
+  {{DATA_FLOW_DIAGRAM}}
+  {{DATA_FLOW_TABLES}}
+</section>
+
+<section id="ml-flow">
+  <h2><span class="no">6</span>モデリング・推論ワークフロー</h2>
+  <!-- GUIDE: モデル一覧（MLflow catalog の全キー）: 目的 / 入力 / 出力 / 学習状況 / 推論経路 / タグ。多段階確率 → EV → 馬券最適化までの流れを .flow で。モックモデルは MOCK タグ必須 -->
+  {{ML_FLOW_DIAGRAM}}
+  {{MODEL_TABLE}}
+</section>
+
+<section id="delivery">
+  <h2><span class="no">7</span>ユーザーへのデータ提供フロー</h2>
+  <!-- GUIDE: 「生データ→特徴量→推論→キャッシュ→API→フロント画面」をユーザー視点で。画面（frontend/app の全 page）× 使う API × データ出所 × 認可(ゲスト/ユーザー) × 状況タグの表。更新タイミング（T-45 等）と鮮度 SLA -->
+  {{DELIVERY_FLOW_DIAGRAM}}
+  {{PAGE_TABLE}}
+  {{AUTH_AND_FRESHNESS}}
+</section>
+
+<section id="infra">
+  <h2><span class="no">8</span>インフラ・運用・コスト</h2>
+  <!-- GUIDE: 環境(dev/stg/prod)・VPS/GCP の責務分担・cron・CI/CD・監視・月額コスト見積と予算上限。根拠: DEC-023, docs/operations/* -->
+  {{INFRA_BODY}}
+</section>
+
+<section id="quality">
+  <h2><span class="no">9</span>品質保証・テスト</h2>
+  <!-- GUIDE: テスト構成（tests/ 配下の規模）・CI ゲート(DEC-021)・スキーマ検証・時系列リーク対策・カバレッジの現状 -->
+  {{QUALITY_BODY}}
+</section>
+
+<section id="decisions">
+  <h2><span class="no">10</span>意思決定ログ</h2>
+  <!-- GUIDE: DEC-xxx / AREA-xx の一覧: ID | 決定内容(1 行) | ステータス | 本書での反映セクション。superseded は明記 -->
+  {{DECISION_TABLE}}
+</section>
+
+<section id="status-matrix">
+  <h2><span class="no">11</span>実装状況マトリクス</h2>
+  <!-- GUIDE: 領域別（収集/特徴量/モデル/推論/API/フロント画面/運用/テスト）を 1 行 1 項目で一覧。各行に状況タグをちょうど 1 つ付ける（§11 内に他のタグ・凡例を置かない）。判定理由と証拠パス必須。§0 のカードはこの表のタグ数と一致させる -->
+  {{STATUS_MATRIX}}
+</section>
+
+<section id="risks">
+  <h2><span class="no">12</span>リスク・既知課題</h2>
+  <!-- GUIDE: 時系列リーク / データ欠損 / 3 層 API 二重化 / 単一障害点 / コスト超過 等。各リスクに影響・対策・関連 TODO-ID -->
+  {{RISK_TABLE}}
+</section>
+
+<section id="related-docs">
+  <h2><span class="no">13</span>関連ドキュメント</h2>
+  <!-- GUIDE: docs/html/** と docs/decisions/** の全ドキュメントへの相対リンク一覧（旧ポータルの代替ナビ）。章ごとに分類。リンク先の実在を validate で検査する -->
+  {{RELATED_DOCS}}
+</section>
+
+<section id="scheduling">
+  <h2><span class="no">14</span>スケジューリング（TODO 一覧）</h2>
+  <!-- GUIDE: 本書の最後のセクション（これより後ろに section を置かない）。並び順ルール: ①依存先が必ず依存元より上 ②同じ波(phase)内は優先度 P0→P3 ③同優先度は効果/規模の高い順。完了済みは done で残し、取り消し線でなく data-status="done" にする -->
+  <p class="muted">並び順: 依存関係（先行タスクが上）→ 優先度（P0 が最優先）→ 効果/規模。種別 <span class="tag todo">TODO</span> は設計/実装未了、<span class="tag mock">MOCK</span> はモック・仮データからの置換。規模は S(〜1日) / M(〜1週) / L(1週超)。</p>
+  <table id="todo-table">
+    <thead><tr><th>順</th><th>ID</th><th>優先度</th><th>種別</th><th>項目</th><th>依存</th><th>根拠（証拠パス）</th><th>規模</th><th>状態</th></tr></thead>
+    <tbody>
+      <!-- GUIDE: 1 TODO = 1 行。属性は validate_requirements.py が検査する。
+      <tr class="phase-head"><td colspan="9">Phase 1 — {{フェーズ名}}</td></tr>
+      <tr class="todo-row" data-todo-id="T-001" data-priority="P0" data-kind="TODO" data-depends="" data-order="1" data-status="open">
+        <td>1</td><td class="mono">T-001</td><td>P0</td><td><span class="tag todo">TODO</span></td><td>…</td><td>—</td><td><code>path/to/file.py</code></td><td>M</td><td>未着手</td>
+      </tr>
+      data-kind は TODO | MOCK、data-status は open | doing | done、data-depends はカンマ区切り TODO-ID。 -->
+      {{TODO_ROWS}}
+    </tbody>
+  </table>
+</section>
+
+<footer class="page-footer">
+  この文書は <code>/update-requirements</code>（<code>.claude/skills/update-requirements/</code>）が生成します。手で編集した内容は次回更新時に事実（コード・設計・git）と突き合わせて上書きされます。
+</footer>
+
+</main>
+</div>
+<script>
+(function () {
+  var links = [].slice.call(document.querySelectorAll("nav.toc a"));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute("href")); });
+  function spy() {
+    var y = window.scrollY + 80, cur = 0;
+    secs.forEach(function (s, i) { if (s && s.offsetTop <= y) cur = i; });
+    links.forEach(function (a, i) { a.classList.toggle("active", i === cur); });
+  }
+  window.addEventListener("scroll", spy, { passive: true }); spy();
+})();
+</script>
+</body>
+</html>
