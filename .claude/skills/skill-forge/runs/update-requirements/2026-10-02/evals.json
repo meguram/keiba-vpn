@@ -1,0 +1,14 @@
+{
+  "skill_name": "update-requirements",
+  "evals": [
+    {"id": 1, "name": "first-generation",
+     "prompt": "/update-requirements  （docs/html/index.html は旧ドキュメントポータルのまま。初回生成）",
+     "expected_output": "15セクション構成の要件書が生成され、validate_requirements.py が通り、MOCK/TODO が §14 に依存順で並ぶ"},
+    {"id": 2, "name": "incremental-update-with-previous",
+     "prompt": "/update-requirements  （前回版あり: commit=HEAD~6, T-001..T-004 を含む）",
+     "expected_output": "前回 TODO の ID が継続され、新規は T-005 以降、完了済みは done のまま残る"},
+    {"id": 3, "name": "corrupt-previous-doc-edge",
+     "prompt": "/update-requirements  （前回版が壊れている: 存在しない commit、依存先欠落、循環依存）",
+     "expected_output": "差分比較を諦めて全体再生成し、依存グラフを修復して validator を通す"}
+  ]
+}
