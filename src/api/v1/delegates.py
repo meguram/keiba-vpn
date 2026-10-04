@@ -63,7 +63,7 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
         "bankroll": body.get("bankroll", 100000),
         "total_bet": portfolio["total_bet"],
         "expected_return": portfolio["expected_return"],
-        "roi_pct": portfolio["roi_pct"],
+        "roi_pct": round(portfolio["expected_roi"] * 100, 1),
         "candidates": candidates_out,
     }, 200
 
