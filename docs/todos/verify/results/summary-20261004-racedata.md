@@ -8,10 +8,7 @@
 
 `.env` をテンプレート形式へ作り直した際（前回チャット）、PEM の 1 文字（`6`）を書き漏らしており、`cryptography` の PEM パースが `InvalidByte(1621, 61)` で失敗 → GCS 接続不可（ローカルのみモードにフォールバック）になっていた。
 
-```diff
-- NzCYexJjl495j5flLpOv4a7jFiYVmP0frY+zDhO9YfXoty7CEWIvvPtpHETKEyF
-+ NzCYexJjl495j5flLpOv4a7j6FiYVmP0frY+zDhO9YfXoty7CEWIvvPtpHETKEyF
-```
+PEM の該当行（鍵の内容は記録しない）で 1 文字が欠落していたため、欠けた 1 文字を補った。
 
 修正後、`src/config/gcp_credentials.build_gcp_credentials()` 経由で GCS バケットへの接続・`bucket.exists()` を確認済み。
 

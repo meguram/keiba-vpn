@@ -101,3 +101,13 @@ bash docs/todos/verify/T-055_circuit_breaker.sh
 | T-061（新規） 勝率 softmax の統一 | 学習済みモデルの出力尺度の確認が必要（学習PCで実モデルを使って判断） |
 
 TODO 全体の一覧と優先順位は `docs/html/index.html` の §14 を参照してください。
+
+## 7. 実行結果（学習PC・2026-10-02〜04）
+
+結果の要約は `docs/todos/verify/results/` にあります（`summary-20261002-163452.md` 初回、`summary-20261004-135912.md` 修復再実行、`summary-20261004-racedata.md` 実データ確認）。
+
+- 7 項目すべて OK（T-011 / T-032 は初回 NG → 原因は Windows マウント上の `node_modules` 破損。ネイティブ Linux 側で `npm ci` して解消）。
+- 実データ確認で `POST /api/v1/betting/optimize` の `KeyError: 'roi_pct'` を検出・修正済み。回帰テスト: `tests/api/test_optimize_betting.py`。
+- **未実施（次にやること）**: T-055 の「健全な Redis への復旧確認」。Redis が起動していなかったため、復旧の往復確認は失敗表示のまま。
+  `make db-up` などで Redis を起動して `bash docs/todos/verify/T-055_circuit_breaker.sh` を再実行し、`復旧後の往復` が表示されることを確認する。
+- 結果ファイルに **鍵・パスワード・トークンを書かない**（差分やログを貼るときは値をマスクする）。
