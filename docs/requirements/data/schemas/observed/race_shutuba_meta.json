@@ -2,39 +2,45 @@
  "category": "race_shutuba_meta",
  "conformance": {
   "failures": {},
-  "passed": 1,
-  "validated": 1
+  "passed": 201,
+  "validated": 201
  },
  "keys": {
-  "max": "202309030811",
-  "min": "202309030811"
+  "max": "202610010708",
+  "min": "202001010101"
  },
  "lists": {},
  "nested": {},
- "records": 1,
+ "records": 201,
  "runs": [
   {
    "at": "2026-10-06T05:19:46+00:00",
    "host": "JP-CG4QN94",
    "records": 1,
    "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
   }
  ],
  "top": {
   "course_type": {
-   "empty": 1,
+   "empty": 201,
    "len_max": 0,
    "len_min": 0,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "empty": 1
+    "empty": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "": 1
+    "": 201
    },
    "values_overflow": false
   },
@@ -42,91 +48,117 @@
    "empty": 0,
    "len_max": 10,
    "len_min": 10,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "date-iso": 1
+    "date-iso": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false
   },
   "direction": {
-   "empty": 0,
+   "empty": 6,
    "len_max": 1,
-   "len_min": 1,
-   "n": 1,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 6,
+    "text": 195
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "右": 1
+    "": 6,
+    "右": 124,
+    "左": 68,
+    "直": 3
    },
    "values_overflow": false
   },
   "distance": {
    "empty": 0,
-   "max": 2200,
-   "min": 2200,
-   "n": 1,
+   "max": 3390,
+   "min": 1000,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false
   },
   "field_size": {
    "empty": 0,
-   "max": 17,
-   "min": 17,
-   "n": 1,
+   "max": 18,
+   "min": 6,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false
   },
   "grade": {
-   "empty": 0,
-   "len_max": 2,
-   "len_min": 2,
-   "n": 1,
+   "empty": 38,
+   "len_max": 3,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 38,
+    "text": 163
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "OP": 1
+    "": 38,
+    "1勝": 48,
+    "2勝": 9,
+    "OP": 17,
+    "新馬": 11,
+    "未勝利": 78
    },
    "values_overflow": false
   },
   "race_class": {
-   "empty": 0,
-   "len_max": 12,
-   "len_min": 12,
-   "n": 1,
+   "empty": 6,
+   "len_max": 13,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 6,
+    "text": 195
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "サラ系３歳以上 オープン": 1
+    "": 6,
+    "サラ系２歳 オープン": 2,
+    "サラ系２歳 新馬": 7,
+    "サラ系２歳 未勝利": 22,
+    "サラ系３歳 オープン": 2,
+    "サラ系３歳 新馬": 4,
+    "サラ系３歳 未勝利": 53,
+    "サラ系３歳 １勝クラス": 12,
+    "サラ系３歳以上 オープン": 6,
+    "サラ系３歳以上 １勝クラス": 28,
+    "サラ系３歳以上 ２勝クラス": 10,
+    "サラ系３歳以上 ３勝クラス": 8,
+    "サラ系４歳以上 オープン": 4,
+    "サラ系４歳以上 １勝クラス": 20,
+    "サラ系４歳以上 ２勝クラス": 10,
+    "サラ系４歳以上 ３勝クラス": 7
    },
    "values_overflow": false
   },
@@ -134,43 +166,67 @@
    "empty": 0,
    "len_max": 12,
    "len_min": 12,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "digits12": 1
+    "digits12": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false
   },
   "race_name": {
    "empty": 0,
-   "len_max": 4,
-   "len_min": 4,
-   "n": 1,
+   "len_max": 9,
+   "len_min": 3,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "宝塚記念": 1
+    "2歳新馬": 7,
+    "2歳未勝利": 22,
+    "3歳1勝クラス": 9,
+    "3歳以上1勝クラス": 23,
+    "3歳以上2勝クラス": 4,
+    "3歳未勝利": 53,
+    "4歳以上1勝クラス": 16,
+    "4歳以上2勝クラス": 5,
+    "ジューンS": 1,
+    "セプテンバーS": 1,
+    "乙訓特別": 1,
+    "北斗特別": 1,
+    "北海HC": 1,
+    "境港特別": 1,
+    "天王寺特別": 1,
+    "安田記念": 1,
+    "宝塚記念": 1,
+    "弥彦S": 1,
+    "日進特別": 1,
+    "春日山特別": 1,
+    "礼文特別": 1,
+    "秋華賞": 1,
+    "秋陽JS": 1,
+    "美浦S": 1,
+    "飯豊特別": 1
    },
-   "values_overflow": false
+   "values_overflow": true
   },
   "round": {
    "empty": 0,
-   "max": 11,
-   "min": 11,
-   "n": 1,
+   "max": 12,
+   "min": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false
@@ -179,48 +235,55 @@
    "empty": 0,
    "len_max": 5,
    "len_min": 5,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "time-hhmm": 1
+    "time-hhmm": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false
   },
   "surface": {
    "empty": 0,
-   "len_max": 1,
+   "len_max": 3,
    "len_min": 1,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "芝": 1
+    "ダート": 94,
+    "芝": 101,
+    "障": 6
    },
    "values_overflow": false
   },
   "track_condition": {
-   "empty": 0,
+   "empty": 2,
    "len_max": 1,
-   "len_min": 1,
-   "n": 1,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 2,
+    "text": 199
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "良": 1
+    "": 2,
+    "不": 6,
+    "稍": 37,
+    "良": 141,
+    "重": 15
    },
    "values_overflow": false
   },
@@ -228,50 +291,67 @@
    "empty": 0,
    "len_max": 2,
    "len_min": 2,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "阪神": 1
+    "中京": 22,
+    "中山": 30,
+    "京都": 21,
+    "函館": 8,
+    "小倉": 18,
+    "新潟": 19,
+    "札幌": 9,
+    "東京": 32,
+    "福島": 12,
+    "阪神": 30
    },
    "values_overflow": false
   },
   "weather": {
-   "empty": 0,
-   "len_max": 1,
-   "len_min": 1,
-   "n": 1,
+   "empty": 2,
+   "len_max": 2,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 2,
+    "text": 199
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "曇": 1
+    "": 2,
+    "小雨": 7,
+    "晴": 117,
+    "曇": 56,
+    "雨": 19
    },
    "values_overflow": false
   },
   "weight_rule": {
    "empty": 0,
-   "len_max": 2,
+   "len_max": 3,
    "len_min": 2,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "定量": 1
+    "ハンデ": 12,
+    "別定": 11,
+    "定量": 77,
+    "馬齢": 101
    },
    "values_overflow": false
   }

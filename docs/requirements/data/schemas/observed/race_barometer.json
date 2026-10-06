@@ -2,25 +2,25 @@
  "category": "race_barometer",
  "conformance": {
   "failures": {},
-  "passed": 1,
-  "validated": 1
+  "passed": 201,
+  "validated": 201
  },
  "keys": {
-  "max": "202309030811",
-  "min": "202309030811"
+  "max": "202610011102",
+  "min": "202001010101"
  },
  "lists": {
   "entries": {
    "fields": {
     "finish_order": {
      "empty": 0,
-     "max": 17,
-     "min": 1,
-     "n": 17,
+     "max": 18,
+     "min": 0,
+     "n": 1027,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 1027
      },
      "values": {},
      "values_overflow": false
@@ -29,13 +29,13 @@
      "empty": 0,
      "len_max": 10,
      "len_min": 10,
-     "n": 17,
+     "n": 1027,
      "null": 0,
      "patterns": {
-      "digits10": 17
+      "digits10": 1027
      },
      "types": {
-      "str": 17
+      "str": 1027
      },
      "values": {},
      "values_overflow": false
@@ -43,84 +43,92 @@
     "horse_name": {
      "empty": 0,
      "len_max": 9,
-     "len_min": 3,
-     "n": 17,
+     "len_min": 2,
+     "n": 1027,
      "null": 0,
      "patterns": {
-      "text": 17
+      "text": 1027
      },
      "types": {
-      "str": 17
+      "str": 1027
      },
      "values": {
       "アスクビクターモア": 1,
       "イクイノックス": 1,
+      "ウインマイティー": 1,
       "カラテ": 1,
+      "ゴールドエクリプス": 1,
+      "シンシアウィッシュ": 1,
       "ジェラルディーナ": 1,
       "ジオグリフ": 1,
       "ジャスティンパレス": 1,
+      "ストーリア": 1,
       "スルーセブンシーズ": 1,
       "ダノンザキッド": 1,
       "ディープボンド": 1,
       "ドゥラエレーデ": 1,
+      "ビジン": 1,
+      "ビッグリボン": 1,
       "ブレークアップ": 1,
       "プラダリア": 1,
+      "ホウオウエミーズ": 1,
       "ボッケリーニ": 1,
       "モズベッロ": 1,
       "ユニコーンライオン": 1,
       "ライラック": 1,
+      "ランスオブアース": 1,
       "ヴェラアズール": 1
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "horse_number": {
      "empty": 0,
-     "max": 17,
+     "max": 18,
      "min": 1,
-     "n": 17,
+     "n": 1027,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 1027
      },
      "values": {},
      "values_overflow": false
     },
     "index_chase": {
      "empty": 0,
-     "max": 112,
-     "min": 104,
-     "n": 17,
+     "max": 122,
+     "min": 0,
+     "n": 1027,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 1027
      },
      "values": {},
      "values_overflow": false
     },
     "index_closing": {
      "empty": 0,
-     "max": 108,
-     "min": 91,
-     "n": 17,
+     "max": 119,
+     "min": -13,
+     "n": 1027,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 1027
      },
      "values": {},
      "values_overflow": false
     },
     "index_start": {
      "empty": 0,
-     "max": 109,
-     "min": 100,
-     "n": 17,
+     "max": 111,
+     "min": 0,
+     "n": 1027,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 1027
      },
      "values": {},
      "values_overflow": false
@@ -128,41 +136,47 @@
     "index_total": {
      "empty": 0,
      "max": 114,
-     "min": 102,
-     "n": 17,
+     "min": -52,
+     "n": 1027,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 1027
      },
      "values": {},
      "values_overflow": false
     }
    },
-   "items": 17,
-   "records": 1
+   "items": 1027,
+   "records": 80
   }
  },
  "nested": {},
- "records": 1,
+ "records": 201,
  "runs": [
   {
    "at": "2026-10-06T05:19:46+00:00",
    "host": "JP-CG4QN94",
    "records": 1,
    "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
   }
  ],
  "top": {
   "entries": {
-   "empty": 0,
-   "len_max": 17,
-   "len_min": 17,
-   "n": 1,
+   "empty": 121,
+   "len_max": 18,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "list": 1
+    "list": 201
    },
    "values": {},
    "values_overflow": false
@@ -171,13 +185,13 @@
    "empty": 0,
    "len_max": 12,
    "len_min": 12,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "digits12": 1
+    "digits12": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false

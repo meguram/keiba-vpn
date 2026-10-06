@@ -2,12 +2,12 @@
  "category": "race_result_lap",
  "conformance": {
   "failures": {},
-  "passed": 1,
-  "validated": 1
+  "passed": 201,
+  "validated": 201
  },
  "keys": {
-  "max": "202309030811",
-  "min": "202309030811"
+  "max": "202610010708",
+  "min": "202001010101"
  },
  "lists": {
   "corner_passing": {
@@ -16,11 +16,11 @@
      "empty": 0,
      "max": 4,
      "min": 0,
-     "n": 5,
+     "n": 771,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 5
+      "int": 771
      },
      "values": {},
      "values_overflow": false
@@ -29,43 +29,67 @@
      "empty": 0,
      "len_max": 5,
      "len_min": 4,
-     "n": 5,
+     "n": 771,
      "null": 0,
      "patterns": {
-      "text": 5
+      "text": 771
      },
      "types": {
-      "str": 5
+      "str": 771
      },
      "values": {
-      "1コーナー": 1,
-      "2コーナー": 1,
-      "3コーナー": 1,
-      "4コーナー": 1,
-      "馬場指数": 1
+      "1コーナー": 89,
+      "2コーナー": 98,
+      "3コーナー": 198,
+      "4コーナー": 198,
+      "馬場指数": 188
      },
      "values_overflow": false
     },
     "order_text": {
      "empty": 0,
-     "len_max": 49,
-     "len_min": 6,
-     "n": 5,
+     "len_max": 56,
+     "len_min": 5,
+     "n": 771,
      "null": 0,
      "patterns": {
-      "text": 5
+      "text": 771
      },
      "types": {
-      "str": 5
+      "str": 771
      },
      "values": {
-      "-7 (?)": 1
+      "(*1,3)6,2,4,5": 1,
+      "(*2,4)(3,6)1(5,7)": 1,
+      "(*4,6,1)(2,5)(3,7)": 1,
+      "-11 (?)": 8,
+      "-13 (?)": 4,
+      "-15 (?)": 8,
+      "-20 (?)": 9,
+      "-3 (?)": 9,
+      "-5 (?)": 10,
+      "-6 (?)": 9,
+      "-7 (?)": 1,
+      "-9 (?)": 10,
+      "0 (?)": 7,
+      "1,3(2,5)6-4": 1,
+      "1,3(2,5)6=4": 1,
+      "1,3(6,2)4=5": 1,
+      "2(4,6)(3,1)(5,7)": 1,
+      "2,4(3,6)1(5,7)": 1,
+      "2 (?)": 3,
+      "3 (?)": 5,
+      "4-(5,8)9-6-3(1,2)7": 1,
+      "4-5,9(8,3)6(1,2)7": 1,
+      "4-5-(8,9)-6-3(1,2)7": 1,
+      "4 (?)": 4,
+      "7 (?)": 4
      },
-     "values_overflow": false
+     "values_overflow": true
     }
    },
-   "items": 5,
-   "records": 1
+   "items": 771,
+   "records": 200
   },
   "entries_lap": {
    "fields": {
@@ -73,13 +97,13 @@
      "empty": 0,
      "len_max": 10,
      "len_min": 10,
-     "n": 17,
+     "n": 2772,
      "null": 0,
      "patterns": {
-      "digits10": 17
+      "digits10": 2772
      },
      "types": {
-      "str": 17
+      "str": 2772
      },
      "values": {},
      "values_overflow": false
@@ -87,22 +111,30 @@
     "horse_name": {
      "empty": 0,
      "len_max": 9,
-     "len_min": 3,
-     "n": 17,
+     "len_min": 2,
+     "n": 2772,
      "null": 0,
      "patterns": {
-      "text": 17
+      "text": 2772
      },
      "types": {
-      "str": 17
+      "str": 2772
      },
      "values": {
+      "アイフレンズ": 1,
       "アスクビクターモア": 1,
+      "アークライト": 1,
       "イクイノックス": 1,
+      "ウインルーア": 2,
+      "エスコバル": 2,
+      "エフフォーリア": 1,
       "カラテ": 1,
+      "キタノマンゲツ": 1,
+      "ギャラントウォリア": 1,
       "ジェラルディーナ": 1,
       "ジオグリフ": 1,
       "ジャスティンパレス": 1,
+      "ジュンブーケ": 1,
       "スルーセブンシーズ": 1,
       "ダノンザキッド": 1,
       "ディープボンド": 1,
@@ -115,48 +147,51 @@
       "ライラック": 1,
       "ヴェラアズール": 1
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "horse_number": {
      "empty": 0,
-     "max": 17,
+     "max": 18,
      "min": 1,
-     "n": 17,
+     "n": 2772,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 2772
      },
      "values": {},
      "values_overflow": false
     },
     "last_3f": {
      "empty": 0,
-     "max": 36.9,
-     "min": 34.6,
-     "n": 17,
+     "max": 46.9,
+     "min": 0.0,
+     "n": 2772,
      "null": 0,
      "patterns": {},
      "types": {
-      "float": 17
+      "float": 2772
      },
      "values": {},
      "values_overflow": false
     },
     "passing_order": {
-     "empty": 0,
+     "empty": 11,
      "len_max": 11,
-     "len_min": 7,
-     "n": 17,
+     "len_min": 0,
+     "n": 2772,
      "null": 0,
      "patterns": {
-      "text": 17
+      "digits1": 19,
+      "digits2": 15,
+      "empty": 11,
+      "text": 2727
      },
      "types": {
-      "str": 17
+      "str": 2772
      },
      "values": {
-      "1-1-1-1": 1,
+      "1-1-1-1": 63,
       "10-10-13-12": 1,
       "11-10-11-12": 1,
       "12-10-13-16": 1,
@@ -165,161 +200,176 @@
       "14-14-6-3": 1,
       "16-16-13-9": 1,
       "17-17-16-12": 1,
-      "2-2-2-2": 1,
+      "2-2-2-1": 9,
+      "2-2-2-2": 54,
+      "3-3-2-2": 11,
       "3-3-3-3": 1,
+      "3-3-4-3": 3,
+      "3-3-6-6": 1,
       "4-3-4-6": 1,
       "4-5-4-3": 1,
       "4-5-6-9": 1,
+      "5-5-3-3": 2,
+      "5-5-4-2": 1,
+      "6-6-5-5": 6,
+      "6-6-6-4": 1,
+      "6-6-6-6": 10,
       "7-7-8-12": 1,
       "7-7-8-6": 2
      },
-     "values_overflow": false
+     "values_overflow": true
     }
    },
-   "items": 17,
-   "records": 1
+   "items": 2772,
+   "records": 201
   }
  },
  "nested": {
   "pace": {
    "first_half_3f": {
     "empty": 0,
-    "max": 34.0,
-    "min": 34.0,
-    "n": 1,
+    "max": 39.2,
+    "min": 28.9,
+    "n": 194,
     "null": 0,
     "patterns": {},
     "types": {
-     "float": 1
+     "float": 194
     },
     "values": {},
     "values_overflow": false
    },
    "l1f": {
     "empty": 0,
-    "max": 11.8,
-    "min": 11.8,
-    "n": 1,
+    "max": 14.7,
+    "min": 11.0,
+    "n": 194,
     "null": 0,
     "patterns": {},
     "types": {
-     "float": 1
+     "float": 194
     },
     "values": {},
     "values_overflow": false
    },
    "l3f": {
     "empty": 0,
-    "max": 35.5,
-    "min": 35.5,
-    "n": 1,
+    "max": 41.0,
+    "min": 32.6,
+    "n": 194,
     "null": 0,
     "patterns": {},
     "types": {
-     "float": 1
+     "float": 194
     },
     "values": {},
     "values_overflow": false
    },
    "second_half_3f": {
     "empty": 0,
-    "max": 35.5,
-    "min": 35.5,
-    "n": 1,
+    "max": 41.0,
+    "min": 32.6,
+    "n": 194,
     "null": 0,
     "patterns": {},
     "types": {
-     "float": 1
+     "float": 194
     },
     "values": {},
     "values_overflow": false
    },
    "t1f": {
     "empty": 0,
-    "max": 12.4,
-    "min": 12.4,
-    "n": 1,
+    "max": 13.3,
+    "min": 6.7,
+    "n": 194,
     "null": 0,
     "patterns": {},
     "types": {
-     "float": 1
+     "float": 194
     },
     "values": {},
     "values_overflow": false
    },
    "t3f": {
     "empty": 0,
-    "max": 34.0,
-    "min": 34.0,
-    "n": 1,
+    "max": 39.2,
+    "min": 28.9,
+    "n": 194,
     "null": 0,
     "patterns": {},
     "types": {
-     "float": 1
+     "float": 194
     },
     "values": {},
     "values_overflow": false
    }
   }
  },
- "records": 1,
+ "records": 201,
  "runs": [
   {
    "at": "2026-10-06T05:19:46+00:00",
    "host": "JP-CG4QN94",
    "records": 1,
    "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
   }
  ],
  "top": {
   "corner_passing": {
-   "empty": 0,
+   "empty": 1,
    "len_max": 5,
-   "len_min": 5,
-   "n": 1,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "list": 1
+    "list": 201
    },
    "values": {},
    "values_overflow": false
   },
   "entries_lap": {
    "empty": 0,
-   "len_max": 17,
-   "len_min": 17,
-   "n": 1,
+   "len_max": 18,
+   "len_min": 5,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "list": 1
+    "list": 201
    },
    "values": {},
    "values_overflow": false
   },
   "lap_times": {
-   "empty": 0,
-   "len_max": 11,
-   "len_min": 11,
-   "n": 1,
+   "empty": 7,
+   "len_max": 13,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "list": 1
+    "list": 201
    },
    "values": {},
    "values_overflow": false
   },
   "pace": {
-   "empty": 0,
+   "empty": 7,
    "len_max": 6,
-   "len_min": 6,
-   "n": 1,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "dict": 1
+    "dict": 201
    },
    "values": {},
    "values_overflow": false
@@ -328,13 +378,13 @@
    "empty": 0,
    "len_max": 12,
    "len_min": 12,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "digits12": 1
+    "digits12": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false

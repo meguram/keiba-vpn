@@ -1,0 +1,289 @@
+{
+ "category": "final_odds_prediction",
+ "conformance": {
+  "failures": {},
+  "passed": 0,
+  "validated": 0
+ },
+ "keys": {
+  "max": "202610020811",
+  "min": "202001010101"
+ },
+ "lists": {
+  "entries": {
+   "fields": {
+    "horse_number": {
+     "empty": 0,
+     "max": 18,
+     "min": 0,
+     "n": 2684,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2684
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "predicted_place_odds_max": {
+     "empty": 0,
+     "max": 87.9,
+     "min": 1.2,
+     "n": 2684,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2684
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "predicted_place_odds_min": {
+     "empty": 0,
+     "max": 48.8,
+     "min": 1.0,
+     "n": 2684,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2684
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "predicted_win_odds": {
+     "empty": 0,
+     "max": 68.8,
+     "min": 58.5,
+     "n": 2684,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2684
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "source": {
+     "empty": 0,
+     "len_max": 13,
+     "len_min": 13,
+     "n": 2684,
+     "null": 0,
+     "patterns": {
+      "text": 2684
+     },
+     "types": {
+      "str": 2684
+     },
+     "values": {
+      "final_odds_ml": 2684
+     },
+     "values_overflow": false
+    }
+   },
+   "items": 2684,
+   "records": 200
+  }
+ },
+ "nested": {
+  "_cache_meta": {
+   "computed_at": {
+    "empty": 0,
+    "len_max": 32,
+    "len_min": 32,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "text": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "computed_at_epoch": {
+    "empty": 0,
+    "max": 1785488910.4519565,
+    "min": 1779428343.8293345,
+    "n": 200,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "entity_id": {
+    "empty": 0,
+    "len_max": 12,
+    "len_min": 12,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "digits12": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "model_key": {
+    "empty": 0,
+    "len_max": 10,
+    "len_min": 10,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "text": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {
+     "final_odds": 200
+    },
+    "values_overflow": false
+   },
+   "source": {
+    "empty": 0,
+    "len_max": 22,
+    "len_min": 15,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "text": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {
+     "batch_inference": 20
+    },
+    "values_overflow": false
+   },
+   "version": {
+    "empty": 0,
+    "max": 1,
+    "min": 1,
+    "n": 200,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "int": 200
+    },
+    "values": {},
+    "values_overflow": false
+   }
+  }
+ },
+ "records": 200,
+ "runs": [
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "_cache_meta": {
+   "empty": 0,
+   "len_max": 6,
+   "len_min": 6,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "elapsed_sec": {
+   "empty": 0,
+   "max": 6.68,
+   "min": 0.07,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "float": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "entries": {
+   "empty": 0,
+   "len_max": 29,
+   "len_min": 6,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "digits12": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_name": {
+   "empty": 0,
+   "len_max": 19,
+   "len_min": 2,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "text": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "2歳新馬": 7,
+    "2歳未勝利": 1,
+    "2罩恰�育Μ": 7,
+    "2罩恰��������": 11,
+    "3歳以上1勝クラス": 12,
+    "3歳以上2勝クラス": 2,
+    "3歳未勝利": 33,
+    "3罩割札筝�1������������": 22,
+    "3罩恰��������": 33,
+    "HTB賞": 1,
+    "TVh莖�": 1,
+    "しらかばS": 1,
+    "函館スプリントS": 1,
+    "函館日刊スポーツ杯": 1,
+    "利尻特別": 1,
+    "松前特別": 1,
+    "津軽海峡特別": 1,
+    "知床特別": 1,
+    "紊у��絮援�劫��": 1,
+    "罅������劫��": 1,
+    "羚�羌���劫��": 1,
+    "臂���延����劫��": 1,
+    "���絏悟�劫��": 1,
+    "��������若��S": 1,
+    "���������絣句�劫��": 1
+   },
+   "values_overflow": true
+  }
+ }
+}

@@ -2,12 +2,12 @@
  "category": "race_result_on_time",
  "conformance": {
   "failures": {},
-  "passed": 1,
-  "validated": 1
+  "passed": 201,
+  "validated": 201
  },
  "keys": {
-  "max": "202309030811",
-  "min": "202309030811"
+  "max": "202610011107",
+  "min": "202001010101"
  },
  "lists": {
   "entries": {
@@ -16,41 +16,50 @@
      "empty": 0,
      "max": 8,
      "min": 1,
-     "n": 17,
+     "n": 2744,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 2744
      },
      "values": {},
      "values_overflow": false
     },
     "finish_position": {
      "empty": 0,
-     "max": 17,
-     "min": 1,
-     "n": 17,
+     "max": 18,
+     "min": -1,
+     "n": 2744,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 2744
      },
      "values": {},
      "values_overflow": false
     },
     "finish_time": {
-     "empty": 0,
+     "empty": 13,
      "len_max": 6,
-     "len_min": 6,
-     "n": 17,
+     "len_min": 0,
+     "n": 2744,
      "null": 0,
      "patterns": {
-      "text": 17
+      "empty": 13,
+      "text": 2731
      },
      "types": {
-      "str": 17
+      "str": 2744
      },
      "values": {
+      "1:43.3": 2,
+      "1:43.4": 1,
+      "1:49.7": 8,
+      "1:50.0": 4,
+      "1:50.1": 6,
+      "1:50.5": 2,
+      "1:51.0": 4,
+      "1:52.7": 7,
       "2:11.2": 2,
       "2:11.4": 2,
       "2:11.6": 2,
@@ -58,44 +67,60 @@
       "2:11.9": 2,
       "2:12.3": 3,
       "2:12.6": 4,
-      "2:12.7": 1
+      "2:12.7": 1,
+      "2:35.4": 1,
+      "2:36.0": 1,
+      "2:36.6": 2,
+      "2:37.1": 1,
+      "2:37.4": 1,
+      "2:37.5": 1,
+      "2:38.1": 1,
+      "2:38.6": 1,
+      "2:38.7": 1
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "horse_id": {
      "empty": 0,
      "len_max": 10,
      "len_min": 10,
-     "n": 17,
+     "n": 2744,
      "null": 0,
      "patterns": {
-      "digits10": 17
+      "digits10": 2744
      },
      "types": {
-      "str": 17
+      "str": 2744
      },
      "values": {},
      "values_overflow": false
     },
     "horse_name": {
      "empty": 0,
-     "len_max": 9,
-     "len_min": 3,
-     "n": 17,
+     "len_max": 25,
+     "len_min": 2,
+     "n": 2744,
      "null": 0,
      "patterns": {
-      "text": 17
+      "text": 2744
      },
      "types": {
-      "str": 17
+      "str": 2744
      },
      "values": {
+      "アイフレンズ": 1,
       "アスクビクターモア": 1,
+      "アークライト": 1,
       "イクイノックス": 1,
+      "ウインルーア": 1,
       "カラテ": 1,
+      "キタノマンゲツ": 1,
+      "ギャラントウォリア": 1,
+      "クロカドッグ": 1,
       "ジェラルディーナ": 1,
       "ジオグリフ": 1,
       "ジャスティンパレス": 1,
+      "ジュンブーケ": 1,
       "スルーセブンシーズ": 1,
       "ダノンザキッド": 1,
       "ディープボンド": 1,
@@ -106,19 +131,20 @@
       "モズベッロ": 1,
       "ユニコーンライオン": 1,
       "ライラック": 1,
+      "リュードマン": 1,
       "ヴェラアズール": 1
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "horse_number": {
      "empty": 0,
-     "max": 17,
+     "max": 18,
      "min": 1,
-     "n": 17,
+     "n": 2744,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 2744
      },
      "values": {},
      "values_overflow": false
@@ -127,128 +153,149 @@
      "empty": 0,
      "len_max": 5,
      "len_min": 5,
-     "n": 17,
+     "n": 2744,
      "null": 0,
      "patterns": {
-      "digits5": 17
+      "digits5": 2744
      },
      "types": {
-      "str": 17
+      "str": 2744
      },
      "values": {},
      "values_overflow": false
     },
     "jockey_name": {
      "empty": 0,
-     "len_max": 3,
+     "len_max": 10,
      "len_min": 1,
-     "n": 17,
+     "n": 2744,
      "null": 0,
      "patterns": {
-      "text": 17
+      "text": 2744
      },
      "types": {
-      "str": 17
+      "str": 2744
      },
      "values": {
-      "ルメー": 1,
+      "▲山田": 3,
+      "▲秋山稔": 5,
+      "△亀田": 4,
+      "ルメー": 38,
+      "丹内": 49,
       "北村友": 1,
+      "吉田隼": 32,
       "和田竜": 1,
-      "坂井": 1,
+      "坂井": 44,
+      "大野": 29,
       "岩田望": 1,
       "川田": 1,
       "幸": 1,
       "松山": 1,
-      "横山武": 1,
+      "横山武": 40,
       "武豊": 1,
-      "池添": 1,
+      "池添": 27,
       "浜中": 1,
       "菅原明": 1,
-      "菱田": 1,
+      "菱田": 34,
+      "藤岡康": 25,
       "角田河": 1,
       "鮫島駿": 1,
+      "黛": 20,
       "Ｍデム": 1
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "jockey_weight": {
      "empty": 0,
-     "max": 58.0,
-     "min": 53.0,
-     "n": 17,
+     "max": 62.0,
+     "min": 49.0,
+     "n": 2744,
      "null": 0,
      "patterns": {},
      "types": {
-      "float": 17
+      "float": 2744
      },
      "values": {},
      "values_overflow": false
     },
     "last_3f": {
      "empty": 0,
-     "max": 36.9,
-     "min": 34.6,
-     "n": 17,
+     "max": 111.8,
+     "min": 0.0,
+     "n": 2744,
      "null": 0,
      "patterns": {},
      "types": {
-      "float": 17
+      "float": 2744
      },
      "values": {},
      "values_overflow": false
     },
     "margin": {
-     "empty": 1,
-     "len_max": 5,
+     "empty": 214,
+     "len_max": 7,
      "len_min": 0,
-     "n": 17,
+     "n": 2744,
      "null": 0,
      "patterns": {
-      "digits1": 3,
-      "empty": 1,
-      "text": 13
+      "digits1": 538,
+      "digits2": 9,
+      "empty": 214,
+      "text": 1983
      },
      "types": {
-      "str": 17
+      "str": 2744
      },
      "values": {
-      "": 1,
-      "1.1/2": 1,
-      "1.1/4": 1,
-      "1/2": 1,
-      "アタマ": 2,
-      "クビ": 5,
-      "ハナ": 3
+      "": 214,
+      "1.1/2": 108,
+      "1.1/4": 205,
+      "1.3/4": 109,
+      "1/2": 288,
+      "2.1/2": 137,
+      "3.1/2": 70,
+      "3/4": 211,
+      "アタマ": 134,
+      "クビ": 471,
+      "ハナ": 176,
+      "同着": 1,
+      "大": 52,
+      "��≪�帥��": 3,
+      "������": 18
      },
      "values_overflow": false
     },
     "odds": {
      "empty": 0,
-     "max": 480.4,
-     "min": 1.3,
-     "n": 17,
+     "max": 861.9,
+     "min": 0.0,
+     "n": 2744,
      "null": 0,
      "patterns": {},
      "types": {
-      "float": 17
+      "float": 2744
      },
      "values": {},
      "values_overflow": false
     },
     "passing_order": {
-     "empty": 0,
+     "empty": 16,
      "len_max": 11,
-     "len_min": 7,
-     "n": 17,
+     "len_min": 0,
+     "n": 2744,
      "null": 0,
      "patterns": {
-      "text": 17
+      "digits1": 19,
+      "digits2": 17,
+      "empty": 16,
+      "text": 2692
      },
      "types": {
-      "str": 17
+      "str": 2744
      },
      "values": {
-      "1-1-1-1": 1,
+      "1-1-1-1": 66,
+      "10-10-10-8": 1,
       "10-10-13-12": 1,
       "11-10-11-12": 1,
       "12-10-13-16": 1,
@@ -257,61 +304,87 @@
       "14-14-6-3": 1,
       "16-16-13-9": 1,
       "17-17-16-12": 1,
-      "2-2-2-2": 1,
+      "2-2-1-1": 8,
+      "2-2-2-2": 57,
       "3-3-3-3": 1,
+      "3-3-4-3": 3,
+      "3-3-6-6": 1,
       "4-3-4-6": 1,
       "4-5-4-3": 1,
       "4-5-6-9": 1,
+      "5-5-3-2": 2,
+      "5-5-3-3": 6,
+      "6-6-5-5": 6,
+      "7-6-3-2": 1,
       "7-7-8-12": 1,
-      "7-7-8-6": 2
+      "7-7-8-6": 2,
+      "9-9-6-4": 1
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "popularity": {
      "empty": 0,
-     "max": 17,
-     "min": 1,
-     "n": 17,
+     "max": 18,
+     "min": 0,
+     "n": 2744,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 2744
      },
      "values": {},
      "values_overflow": false
     },
     "sex_age": {
      "empty": 0,
-     "len_max": 2,
+     "len_max": 4,
      "len_min": 2,
-     "n": 17,
+     "n": 2744,
      "null": 0,
      "patterns": {
-      "text": 17
+      "text": 2744
      },
      "types": {
-      "str": 17
+      "str": 2744
      },
      "values": {
-      "牝4": 1,
-      "牝5": 2,
-      "牡3": 1,
-      "牡4": 5,
-      "牡5": 2,
-      "牡6": 2,
-      "牡7": 4
+      "セ12": 1,
+      "セ2": 1,
+      "セ3": 33,
+      "セ4": 29,
+      "セ5": 24,
+      "セ6": 25,
+      "セ7": 4,
+      "セ8": 8,
+      "セ9": 3,
+      "牝2": 216,
+      "牝3": 430,
+      "牝4": 221,
+      "牝5": 115,
+      "牝6": 32,
+      "牝7": 10,
+      "牝9": 2,
+      "牡10": 1,
+      "牡2": 241,
+      "牡3": 649,
+      "牡4": 253,
+      "牡5": 196,
+      "牡6": 104,
+      "牡7": 55,
+      "牡8": 14,
+      "牡9": 3
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "time_sec": {
      "empty": 0,
-     "max": 132.7,
-     "min": 131.2,
-     "n": 17,
+     "max": 218.3,
+     "min": 0.0,
+     "n": 2744,
      "null": 0,
      "patterns": {},
      "types": {
-      "float": 17
+      "float": 2744
      },
      "values": {},
      "values_overflow": false
@@ -320,37 +393,44 @@
      "empty": 0,
      "len_max": 5,
      "len_min": 5,
-     "n": 17,
+     "n": 2744,
      "null": 0,
      "patterns": {
-      "digits5": 17
+      "digits5": 2744
      },
      "types": {
-      "str": 17
+      "str": 2744
      },
      "values": {},
      "values_overflow": false
     },
     "trainer_name": {
      "empty": 0,
-     "len_max": 3,
-     "len_min": 2,
-     "n": 17,
+     "len_max": 9,
+     "len_min": 1,
+     "n": 2744,
      "null": 0,
      "patterns": {
-      "text": 17
+      "text": 2744
      },
      "types": {
-      "str": 17
+      "str": 2744
      },
      "values": {
+      "中尾": 18,
+      "中川": 17,
+      "中野": 12,
       "吉岡": 1,
+      "坂口": 15,
       "大久保": 1,
       "安田隆": 1,
       "尾関": 1,
+      "平田": 22,
       "斉藤崇": 1,
       "木村": 2,
       "杉山晴": 1,
+      "村山": 9,
+      "森": 11,
       "森田": 1,
       "池江": 1,
       "池添": 2,
@@ -358,191 +438,213 @@
       "田村": 1,
       "相沢": 1,
       "矢作": 1,
-      "辻野": 1
+      "竹内": 15,
+      "藤沢和": 7,
+      "辻野": 1,
+      "青木": 20
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "weight": {
      "empty": 0,
-     "max": 538,
-     "min": 430,
-     "n": 17,
+     "max": 580,
+     "min": 0,
+     "n": 2744,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 2744
      },
      "values": {},
      "values_overflow": false
     },
     "weight_change": {
      "empty": 0,
-     "max": 4,
-     "min": -8,
-     "n": 17,
+     "max": 38,
+     "min": -32,
+     "n": 2744,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 17
+      "int": 2744
      },
      "values": {},
      "values_overflow": false
     }
    },
-   "items": 17,
-   "records": 1
+   "items": 2744,
+   "records": 201
   }
  },
  "nested": {
   "pace": {},
   "payoff": {}
  },
- "records": 1,
+ "records": 201,
  "runs": [
   {
    "at": "2026-10-06T05:19:46+00:00",
    "host": "JP-CG4QN94",
    "records": 1,
    "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
   }
  ],
  "top": {
   "corner_passing": {
-   "empty": 1,
+   "empty": 201,
    "len_max": 0,
    "len_min": 0,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "list": 1
+    "list": 201
    },
    "values": {},
    "values_overflow": false
   },
   "date": {
-   "empty": 0,
+   "empty": 5,
    "len_max": 10,
-   "len_min": 10,
-   "n": 1,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "date-iso": 1
+    "date-iso": 196,
+    "empty": 5
    },
    "types": {
-    "str": 1
+    "str": 201
    },
-   "values": {},
+   "values": {
+    "": 5
+   },
    "values_overflow": false
   },
   "direction": {
-   "empty": 0,
+   "empty": 7,
    "len_max": 1,
-   "len_min": 1,
-   "n": 1,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 7,
+    "text": 194
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "右": 1
+    "": 7,
+    "右": 122,
+    "左": 70,
+    "直": 2
    },
    "values_overflow": false
   },
   "distance": {
    "empty": 0,
-   "max": 2200,
-   "min": 2200,
-   "n": 1,
+   "max": 3300,
+   "min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false
   },
   "entries": {
    "empty": 0,
-   "len_max": 17,
-   "len_min": 17,
-   "n": 1,
+   "len_max": 18,
+   "len_min": 6,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "list": 1
+    "list": 201
    },
    "values": {},
    "values_overflow": false
   },
   "field_size": {
    "empty": 0,
-   "max": 17,
-   "min": 17,
-   "n": 1,
+   "max": 18,
+   "min": 6,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false
   },
   "grade": {
-   "empty": 0,
-   "len_max": 2,
-   "len_min": 2,
-   "n": 1,
+   "empty": 48,
+   "len_max": 3,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 48,
+    "text": 153
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "OP": 1
+    "": 48,
+    "1勝": 47,
+    "2勝": 4,
+    "OP": 16,
+    "新馬": 11,
+    "未勝利": 75
    },
    "values_overflow": false
   },
   "lap_times": {
-   "empty": 1,
+   "empty": 201,
    "len_max": 0,
    "len_min": 0,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "list": 1
+    "list": 201
    },
    "values": {},
    "values_overflow": false
   },
   "pace": {
-   "empty": 1,
+   "empty": 201,
    "len_max": 0,
    "len_min": 0,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "dict": 1
+    "dict": 201
    },
    "values": {},
    "values_overflow": false
   },
   "payoff": {
-   "empty": 1,
+   "empty": 201,
    "len_max": 0,
    "len_min": 0,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "dict": 1
+    "dict": 201
    },
    "values": {},
    "values_overflow": false
@@ -551,127 +653,179 @@
    "empty": 0,
    "len_max": 12,
    "len_min": 12,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "digits12": 1
+    "digits12": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false
   },
   "race_name": {
    "empty": 0,
-   "len_max": 4,
-   "len_min": 4,
-   "n": 1,
+   "len_max": 19,
+   "len_min": 3,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "宝塚記念": 1
+    "2歳新馬": 11,
+    "2歳未勝利": 21,
+    "3歳1勝クラス": 5,
+    "3歳以上1勝クラス": 21,
+    "3歳以上2勝クラス": 1,
+    "3歳未勝利": 53,
+    "4歳以上1勝クラス": 21,
+    "4歳以上2勝クラス": 3,
+    "かささぎ賞": 1,
+    "ながつきS": 1,
+    "アンタレスS": 1,
+    "アンドロメダS": 1,
+    "ライラック賞": 1,
+    "七夕賞": 1,
+    "三浦特別": 1,
+    "佐渡S": 1,
+    "八雲特別": 1,
+    "安土城S": 1,
+    "宝塚記念": 1,
+    "市原特別": 1,
+    "檜山特別": 1,
+    "白嶺S": 1,
+    "豊明S": 1,
+    "貴船S": 1,
+    "赤松賞": 1
    },
-   "values_overflow": false
+   "values_overflow": true
   },
   "round": {
    "empty": 0,
-   "max": 11,
-   "min": 11,
-   "n": 1,
+   "max": 12,
+   "min": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false
   },
   "start_time": {
-   "empty": 0,
+   "empty": 5,
    "len_max": 5,
-   "len_min": 5,
-   "n": 1,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "time-hhmm": 1
+    "empty": 5,
+    "time-hhmm": 196
    },
    "types": {
-    "str": 1
+    "str": 201
    },
-   "values": {},
+   "values": {
+    "": 5
+   },
    "values_overflow": false
   },
   "surface": {
-   "empty": 0,
-   "len_max": 1,
-   "len_min": 1,
-   "n": 1,
+   "empty": 5,
+   "len_max": 3,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 5,
+    "text": 196
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "芝": 1
+    "": 5,
+    "ダート": 102,
+    "芝": 92,
+    "障": 2
    },
    "values_overflow": false
   },
   "track_condition": {
-   "empty": 0,
+   "empty": 5,
    "len_max": 1,
-   "len_min": 1,
-   "n": 1,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 5,
+    "text": 196
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "良": 1
+    "": 5,
+    "不": 8,
+    "稍": 36,
+    "良": 129,
+    "重": 23
    },
    "values_overflow": false
   },
   "venue": {
-   "empty": 0,
+   "empty": 5,
    "len_max": 2,
-   "len_min": 2,
-   "n": 1,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 5,
+    "text": 196
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "阪神": 1
+    "": 5,
+    "中京": 24,
+    "中山": 27,
+    "京都": 21,
+    "函館": 7,
+    "小倉": 15,
+    "新潟": 19,
+    "札幌": 10,
+    "東京": 30,
+    "福島": 13,
+    "阪神": 30
    },
    "values_overflow": false
   },
   "weather": {
-   "empty": 0,
-   "len_max": 1,
-   "len_min": 1,
-   "n": 1,
+   "empty": 5,
+   "len_max": 2,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 5,
+    "text": 196
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "曇": 1
+    "": 5,
+    "小雨": 12,
+    "晴": 110,
+    "曇": 61,
+    "雨": 13
    },
    "values_overflow": false
   }

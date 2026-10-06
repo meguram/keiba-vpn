@@ -1,0 +1,1125 @@
+{
+ "category": "horse_result",
+ "conformance": {
+  "failures": {},
+  "passed": 200,
+  "validated": 200
+ },
+ "keys": {
+  "max": "2024106880",
+  "min": "2020100004"
+ },
+ "lists": {
+  "race_history": {
+   "fields": {
+    "bracket_number": {
+     "empty": 0,
+     "max": 8,
+     "min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "date": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "date-slash": 2733
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "distance": {
+     "empty": 0,
+     "max": 3390,
+     "min": 800,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "field_size": {
+     "empty": 0,
+     "max": 18,
+     "min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "finish_position": {
+     "empty": 0,
+     "max": 18,
+     "min": -1,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "finish_time": {
+     "empty": 35,
+     "len_max": 6,
+     "len_min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "empty": 35,
+      "text": 2698
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {
+      "": 35,
+      "0:51.5": 3,
+      "0:52.2": 2,
+      "0:53.2": 2,
+      "1:00.8": 3,
+      "1:01.0": 3,
+      "1:02.0": 5,
+      "1:02.3": 2,
+      "1:13.6": 6,
+      "1:14.6": 7,
+      "1:15.1": 4,
+      "1:16.3": 3,
+      "1:16.7": 4,
+      "1:17.5": 3,
+      "1:18.6": 2,
+      "1:24.8": 11,
+      "1:25.1": 2,
+      "1:29.2": 3,
+      "1:29.3": 3,
+      "1:29.4": 3,
+      "1:29.8": 5,
+      "1:31.1": 13,
+      "1:33.1": 11,
+      "1:33.2": 13,
+      "1:42.4": 7
+     },
+     "values_overflow": true
+    },
+    "horse_number": {
+     "empty": 0,
+     "max": 18,
+     "min": 1,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "jockey_name": {
+     "empty": 0,
+     "len_max": 4,
+     "len_min": 2,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "text": 2733
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {
+      "丹内祐次": 30,
+      "保園翔也": 3,
+      "加藤聡一": 11,
+      "吉原寛人": 14,
+      "国分優作": 7,
+      "大坪慎": 26,
+      "大畑慧悟": 16,
+      "宮下瞳": 24,
+      "富田暁": 11,
+      "小林凌": 24,
+      "小林凌大": 10,
+      "岡部誠": 29,
+      "岩本怜": 5,
+      "川須栄彦": 13,
+      "柴田勇真": 3,
+      "横山琉人": 19,
+      "永野猛蔵": 7,
+      "渡辺竜也": 12,
+      "石川裕紀": 10,
+      "秋山稔樹": 5,
+      "菅原辰徳": 36,
+      "葛山晃平": 1,
+      "藤岡康太": 6,
+      "藤田弘治": 3,
+      "鈴木祐": 12
+     },
+     "values_overflow": true
+    },
+    "jockey_weight": {
+     "empty": 0,
+     "max": 60.0,
+     "min": 50.0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "last_3f": {
+     "empty": 0,
+     "max": 120.0,
+     "min": 0.0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "margin": {
+     "empty": 35,
+     "len_max": 4,
+     "len_min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "empty": 35,
+      "numeric-str": 2698
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {
+      "": 35
+     },
+     "values_overflow": false
+    },
+    "odds": {
+     "empty": 0,
+     "max": 765.1,
+     "min": 0.0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "passing_order": {
+     "empty": 1783,
+     "len_max": 3,
+     "len_min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "digits1": 3,
+      "digits2": 576,
+      "digits3": 21,
+      "empty": 1783,
+      "numeric-str": 7,
+      "text": 343
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {
+      "": 1783,
+      "**": 343
+     },
+     "values_overflow": false
+    },
+    "popularity": {
+     "empty": 0,
+     "max": 18,
+     "min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "race_id": {
+     "empty": 0,
+     "len_max": 12,
+     "len_min": 12,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "digits12": 2729,
+      "text": 4
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {
+      "2024H1120808": 1,
+      "2024J0033008": 1,
+      "2025H1010108": 1,
+      "2025J0010107": 1
+     },
+     "values_overflow": false
+    },
+    "race_name": {
+     "empty": 0,
+     "len_max": 18,
+     "len_min": 2,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "text": 2733
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {
+      "2歳6": 2,
+      "2歳新馬": 137,
+      "2歳未勝利": 160,
+      "3歳60万円以下": 1,
+      "3歳C1一組": 7,
+      "3歳C1二組": 6,
+      "3歳C2一組": 7,
+      "4歳以上1勝クラス": 37,
+      "C1": 45,
+      "C19組": 8,
+      "C1七組": 1,
+      "C1四組": 5,
+      "C2": 72,
+      "C2四組": 3,
+      "アイスランドポピー賞(C1)": 1,
+      "カッパ淵賞(C1)": 1,
+      "デイジー賞(1勝クラス)": 1,
+      "ノースポール賞(2歳以下)": 2,
+      "フローラルウォーク賞(1勝クラス)": 1,
+      "マチカネ競馬会賞(3歳)": 1,
+      "今宵は何月だ。ライブ(3歳)": 1,
+      "山王岩賞(C1)": 1,
+      "岩手伝統工芸浄法寺塗(C1)": 1,
+      "白菊賞(1勝クラス)": 1,
+      "豊間根川源流賞(C1)": 1
+     },
+     "values_overflow": true
+    },
+    "race_round": {
+     "empty": 0,
+     "max": 12,
+     "min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "surface": {
+     "empty": 0,
+     "len_max": 1,
+     "len_min": 1,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "text": 2733
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {
+      "ダ": 2099,
+      "芝": 624,
+      "障": 10
+     },
+     "values_overflow": false
+    },
+    "time_index": {
+     "empty": 0,
+     "max": 115,
+     "min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "time_sec": {
+     "empty": 0,
+     "max": 230.2,
+     "min": 0.0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "track_condition": {
+     "empty": 6,
+     "len_max": 1,
+     "len_min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "empty": 6,
+      "text": 2727
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {
+      "": 6,
+      "不": 219,
+      "稍": 493,
+      "良": 1672,
+      "重": 343
+     },
+     "values_overflow": false
+    },
+    "venue": {
+     "empty": 0,
+     "len_max": 5,
+     "len_min": 2,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "text": 2733
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {
+      "1中山6": 4,
+      "1中山8": 6,
+      "1函館3": 8,
+      "1小倉7": 5,
+      "1新潟4": 9,
+      "1福島1": 5,
+      "1阪神3": 6,
+      "2中京4": 4,
+      "2中山2": 3,
+      "2札幌6": 1,
+      "2東京5": 4,
+      "2東京8": 9,
+      "4新潟1": 2,
+      "4新潟6": 4,
+      "4東京5": 5,
+      "4阪神1": 4,
+      "4阪神7": 2,
+      "5阪神8": 2,
+      "佐賀": 262,
+      "名古屋": 317,
+      "園田": 119,
+      "大井": 134,
+      "水沢": 117,
+      "盛岡": 129,
+      "金沢": 59
+     },
+     "values_overflow": true
+    },
+    "weather": {
+     "empty": 10,
+     "len_max": 2,
+     "len_min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "empty": 10,
+      "text": 2723
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {
+      "": 10,
+      "小雨": 106,
+      "小雪": 3,
+      "晴": 1597,
+      "曇": 860,
+      "雨": 154,
+      "雪": 3
+     },
+     "values_overflow": false
+    },
+    "weight": {
+     "empty": 0,
+     "max": 562,
+     "min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "weight_change": {
+     "empty": 0,
+     "max": 38,
+     "min": -32,
+     "n": 2733,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2733
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "winner": {
+     "empty": 35,
+     "len_max": 4,
+     "len_min": 0,
+     "n": 2733,
+     "null": 0,
+     "patterns": {
+      "empty": 35,
+      "numeric-str": 2698
+     },
+     "types": {
+      "str": 2733
+     },
+     "values": {
+      "": 35
+     },
+     "values_overflow": false
+    }
+   },
+   "items": 2733,
+   "records": 200
+  }
+ },
+ "nested": {},
+ "records": 200,
+ "runs": [
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "age": {
+   "empty": 0,
+   "max": 6,
+   "min": 2,
+   "n": 67,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 67
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "birthday": {
+   "empty": 0,
+   "len_max": 10,
+   "len_min": 9,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "text": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "2020年1月23日": 1,
+    "2020年2月21日": 2,
+    "2020年2月22日": 1,
+    "2020年2月25日": 1,
+    "2020年2月2日": 1,
+    "2020年2月5日": 1,
+    "2020年2月6日": 1,
+    "2020年3月10日": 2,
+    "2020年3月12日": 1,
+    "2020年3月20日": 1,
+    "2020年3月22日": 1,
+    "2020年3月28日": 1,
+    "2020年3月29日": 1,
+    "2020年3月9日": 1,
+    "2020年4月10日": 1,
+    "2020年4月12日": 1,
+    "2020年4月21日": 2,
+    "2020年4月22日": 1,
+    "2020年4月29日": 1,
+    "2020年4月30日": 3,
+    "2020年4月4日": 2,
+    "2020年4月8日": 1,
+    "2020年4月9日": 2,
+    "2020年5月13日": 2,
+    "2020年5月2日": 3
+   },
+   "values_overflow": true
+  },
+  "birthplace": {
+   "empty": 0,
+   "len_max": 5,
+   "len_min": 1,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "text": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "むかわ町": 2,
+    "千歳市": 11,
+    "安平町": 22,
+    "平取町": 5,
+    "愛": 1,
+    "新ひだか町": 41,
+    "新冠": 1,
+    "新冠町": 29,
+    "日高": 1,
+    "日高町": 33,
+    "栃木県": 1,
+    "洞爺湖町": 2,
+    "浦河": 1,
+    "浦河町": 37,
+    "清水町": 1,
+    "登別": 1,
+    "白老町": 5,
+    "米": 3,
+    "青森県": 1,
+    "鹿児島県": 2
+   },
+   "values_overflow": false
+  },
+  "breeder": {
+   "empty": 0,
+   "len_max": 35,
+   "len_min": 3,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "text": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "エスティファーム": 2,
+    "キヨタケ牧場": 2,
+    "ケイアイファーム": 1,
+    "シンボリ牧場": 1,
+    "ダーレー・ジャパン・ファーム": 3,
+    "ナカノファーム": 1,
+    "ノーザンファーム": 21,
+    "ヤナガワ牧場": 2,
+    "レイクヴィラファーム": 2,
+    "中田浩美": 1,
+    "坂東牧場": 1,
+    "山際牧場": 2,
+    "岡田スタッド": 4,
+    "広田牧場": 1,
+    "村下清志": 1,
+    "桑田牧場": 2,
+    "沖田牧場": 1,
+    "渋谷健作": 1,
+    "碧雲牧場": 1,
+    "社台コーポレーション白老ファーム": 5,
+    "社台ファーム": 11,
+    "谷岡牧場": 1,
+    "静内白井牧場": 1,
+    "飯岡牧場": 1,
+    "高岸順一": 1
+   },
+   "values_overflow": true
+  },
+  "career": {
+   "empty": 0,
+   "len_max": 18,
+   "len_min": 14,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "text": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "10戦3勝 [3-2-1-4]": 1,
+    "11戦4勝 [4-1-2-4]": 1,
+    "12戦4勝 [4-0-2-6]": 1,
+    "12戦5勝 [5-3-1-3]": 1,
+    "14戦4勝 [4-1-2-7]": 1,
+    "15戦0勝 [0-1-2-12]": 1,
+    "16戦1勝 [1-2-1-12]": 1,
+    "19戦2勝 [2-1-0-16]": 1,
+    "21戦2勝 [2-4-3-12]": 1,
+    "23戦3勝 [3-2-2-16]": 1,
+    "24戦2勝 [2-0-2-20]": 1,
+    "25戦10勝 [10-1-2-12]": 1,
+    "33戦4勝 [4-4-2-23]": 1,
+    "34戦2勝 [2-3-0-29]": 1,
+    "39戦1勝 [1-8-5-25]": 1,
+    "39戦7勝 [7-14-3-15]": 1,
+    "43戦10勝 [10-8-1-24]": 1,
+    "4戦0勝 [0-0-0-4]": 6,
+    "4戦0勝 [0-0-1-3]": 2,
+    "4戦1勝 [1-2-0-1]": 1,
+    "5戦0勝 [0-0-0-5]": 10,
+    "6戦0勝 [0-0-0-6]": 4,
+    "6戦1勝 [1-0-0-5]": 1,
+    "78戦2勝 [2-7-6-63]": 1,
+    "7戦2勝 [2-1-3-1]": 1
+   },
+   "values_overflow": true
+  },
+  "career_record": {
+   "empty": 0,
+   "len_max": 4,
+   "len_min": 4,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "color": {
+   "empty": 0,
+   "len_max": 3,
+   "len_min": 2,
+   "n": 67,
+   "null": 0,
+   "patterns": {
+    "text": 67
+   },
+   "types": {
+    "str": 67
+   },
+   "values": {
+    "栗毛": 11,
+    "芦毛": 3,
+    "青鹿毛": 3,
+    "鹿毛": 34,
+    "黒鹿毛": 16
+   },
+   "values_overflow": false
+  },
+  "dam": {
+   "empty": 77,
+   "len_max": 29,
+   "len_min": 0,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "empty": 77,
+    "text": 123
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "": 77,
+    "エバーブロッサム": 1,
+    "カレンオプシス": 1,
+    "グローブ": 1,
+    "コウユーユメダンス": 1,
+    "サイモンガーランド": 1,
+    "サウスエンピリカル": 1,
+    "シェアザストーリー": 1,
+    "ジヴェルニーアート": 1,
+    "スウェアトウショウ": 1,
+    "スプリングレイン": 1,
+    "センシュアルドレス": 1,
+    "ニシノカザブエ": 1,
+    "ノワゼット": 1,
+    "ハッピーパウダー": 1,
+    "ファンシーリシェス": 1,
+    "フォレガFolega(英)": 1,
+    "ベネフィット": 1,
+    "マジカルデイ": 1,
+    "ムーンハウリング": 1,
+    "ライゼリート": 1,
+    "リリークラウン": 1,
+    "ルアンジュ": 1,
+    "レッドラフィーネ": 1,
+    "レティセントガール": 1
+   },
+   "values_overflow": true
+  },
+  "dam_sire": {
+   "empty": 77,
+   "len_max": 31,
+   "len_min": 0,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "empty": 77,
+    "text": 123
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "": 77,
+    "Dubai Millennium(英)": 1,
+    "Giant's Causeway(米)": 2,
+    "Oasis Dream(英)": 1,
+    "アグネスタキオン": 2,
+    "ウォーニングWarning(英)": 1,
+    "キングカメハメハ": 5,
+    "クロフネ": 2,
+    "ゴールドアリュール": 1,
+    "サクラバクシンオー": 3,
+    "サムライハート": 1,
+    "ステイゴールド": 7,
+    "スマートボーイ": 1,
+    "ゼンノロブロイ": 2,
+    "ダイワメジャー": 3,
+    "ダンスインザダーク": 1,
+    "ディープインパクト": 8,
+    "ディープスカイ": 2,
+    "ネオユニヴァース": 4,
+    "ハーツクライ": 1,
+    "ハービンジャーHarbinger(英)": 1,
+    "フジキセキ": 2,
+    "ブラックタイド": 2,
+    "マンハッタンカフェ": 3,
+    "メジロマックイーン": 1
+   },
+   "values_overflow": true
+  },
+  "horse_id": {
+   "empty": 0,
+   "len_max": 10,
+   "len_min": 10,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "digits10": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "horse_name": {
+   "empty": 0,
+   "len_max": 9,
+   "len_min": 2,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "text": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "アスコルティアーモ": 1,
+    "アムレート": 1,
+    "オンザスカイ": 1,
+    "オーシャントライブ": 1,
+    "カレンパンピナップ": 1,
+    "ゴッドメリフルアス": 1,
+    "サイモンブーケ": 1,
+    "サトノスヴニール": 1,
+    "シェアザグローリー": 1,
+    "スマートソニック": 1,
+    "セイウンリフレ": 1,
+    "チャパリータ": 1,
+    "トーセンコルネリオ": 1,
+    "ナイトインロンドン": 1,
+    "バズッチ": 1,
+    "バージャンフォース": 1,
+    "ヒサメ": 1,
+    "ピュアゴールド": 1,
+    "フィレット": 1,
+    "プレザントアンクル": 1,
+    "ムーンプライド": 1,
+    "メローラ": 1,
+    "リバティアイランド": 1,
+    "リーア": 1,
+    "レッドルキフェル": 1
+   },
+   "values_overflow": true
+  },
+  "major_wins": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "name_en": {
+   "empty": 0,
+   "len_max": 18,
+   "len_min": 3,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "text": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "Amuleto": 1,
+    "Ascoltiamo": 1,
+    "Burgeon Forth": 1,
+    "Buzzutchi": 1,
+    "Chaparrita": 1,
+    "Curren Pump It Up": 1,
+    "Fillet": 1,
+    "God Mellifluous": 1,
+    "Hisame": 1,
+    "Leah": 1,
+    "Liberty Island": 1,
+    "Melora": 1,
+    "Moon Pride": 1,
+    "Night in London": 1,
+    "Ocean Tribe": 1,
+    "On the Sky": 1,
+    "Pleasant Uncle": 1,
+    "Pure Gold": 1,
+    "Red Lucifer": 1,
+    "Saimon Bouquet": 1,
+    "Satono Souvenir": 1,
+    "Seiun Refle": 1,
+    "Share the Glory": 1,
+    "Smart Sonic": 1,
+    "Tosen Cornelio": 1
+   },
+   "values_overflow": true
+  },
+  "owner": {
+   "empty": 0,
+   "len_max": 18,
+   "len_min": 3,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "text": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "ゴドルフィン": 4,
+    "サンデーレーシング": 8,
+    "シグラップ・マネジメ": 1,
+    "ロードホースクラブ": 1,
+    "久保田定": 1,
+    "佐々木雄二": 1,
+    "冨田藤男": 1,
+    "前田良平": 2,
+    "安田功夫": 2,
+    "宮崎吉二": 1,
+    "密山根成": 1,
+    "小原準一郎": 1,
+    "小橋亮太": 3,
+    "小泉修": 1,
+    "島川隆哉": 1,
+    "広瀬将嗣": 1,
+    "東京ホースレーシング": 1,
+    "渋谷健作": 1,
+    "澤田昭紀": 1,
+    "窪田芳郎": 1,
+    "藤田好紀": 1,
+    "遠藤喜和": 1,
+    "里見治": 1,
+    "鈴木隆司": 1,
+    "（同）ＪＰＮ技研": 7
+   },
+   "values_overflow": true
+  },
+  "race_history": {
+   "empty": 0,
+   "len_max": 80,
+   "len_min": 1,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "sex": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 67,
+   "null": 0,
+   "patterns": {
+    "text": 67
+   },
+   "types": {
+    "str": 67
+   },
+   "values": {
+    "セ": 2,
+    "牝": 31,
+    "牡": 34
+   },
+   "values_overflow": false
+  },
+  "sire": {
+   "empty": 77,
+   "len_max": 32,
+   "len_min": 0,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "empty": 77,
+    "text": 123
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "": 77,
+    "アドマイヤムーン": 2,
+    "エピファネイア": 4,
+    "オルフェーヴル": 3,
+    "オーシャンブルー": 1,
+    "カレンブラックヒル": 3,
+    "グレーターロンドン": 1,
+    "サトノクラウン": 4,
+    "スクリーンヒーロー": 1,
+    "タニノギムレット": 1,
+    "ダイワメジャー": 3,
+    "デクラレーションオブウォー": 1,
+    "トーセンラー": 2,
+    "ノボジャック": 1,
+    "バゴBago(仏)": 2,
+    "ビッグアーサー": 1,
+    "ベストウォーリア": 1,
+    "モンテロッソMonterosso(英)": 1,
+    "モーリス": 3,
+    "ラブリーデイ": 1,
+    "リアルスティール": 3,
+    "リオンディーズ": 2,
+    "ルーラーシップ": 1,
+    "ロードカナロア": 2,
+    "ワンアンドオンリー": 1
+   },
+   "values_overflow": true
+  },
+  "status": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 67,
+   "null": 0,
+   "patterns": {
+    "text": 67
+   },
+   "types": {
+    "str": 67
+   },
+   "values": {
+    "現役": 67
+   },
+   "values_overflow": false
+  },
+  "total_earnings": {
+   "empty": 0,
+   "max": 74444,
+   "min": 0,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "trainer": {
+   "empty": 0,
+   "len_max": 4,
+   "len_min": 2,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "text": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {
+    "中内田充": 1,
+    "九日俊光": 2,
+    "伊藤強一": 2,
+    "佐々木由": 2,
+    "佐藤悠太": 2,
+    "大竹正博": 2,
+    "小久保智": 3,
+    "小崎憲": 4,
+    "山口浩幸": 2,
+    "後藤正義": 1,
+    "新子雅司": 1,
+    "月岡健二": 1,
+    "杉山佳明": 2,
+    "林徹": 2,
+    "梅田智之": 2,
+    "永田幸宏": 1,
+    "池田忠好": 1,
+    "田中剛": 1,
+    "田中博康": 1,
+    "萩原清": 1,
+    "藤ヶ崎一": 1,
+    "藤岡健一": 2,
+    "角川秀樹": 1,
+    "飯田弘道": 1,
+    "高柳大輔": 1
+   },
+   "values_overflow": true
+  }
+ }
+}

@@ -2,66 +2,87 @@
  "category": "horse_training",
  "conformance": {
   "failures": {},
-  "passed": 1,
-  "validated": 1
+  "passed": 201,
+  "validated": 201
  },
  "keys": {
-  "max": "2019105219",
+  "max": "2023109140",
   "min": "2019105219"
  },
  "lists": {
   "entries": {
    "fields": {
     "comment": {
-     "empty": 46,
+     "empty": 5080,
      "len_max": 36,
      "len_min": 0,
-     "n": 55,
+     "n": 5483,
      "null": 0,
      "patterns": {
-      "empty": 46,
-      "text": 9
+      "empty": 5080,
+      "text": 403
      },
      "types": {
-      "str": 55
+      "str": 5483
      },
      "values": {
-      "": 46
+      "": 5080
      },
      "values_overflow": false
     },
     "course": {
-     "empty": 0,
-     "len_max": 2,
-     "len_min": 2,
-     "n": 55,
+     "empty": 42,
+     "len_max": 6,
+     "len_min": 0,
+     "n": 5483,
      "null": 0,
      "patterns": {
-      "text": 55
+      "empty": 42,
+      "text": 5441
      },
      "types": {
-      "str": 55
+      "str": 5483
      },
      "values": {
-      "南Ｗ": 21,
-      "栗坂": 2,
-      "美坂": 23,
-      "美Ｗ": 6,
-      "ＣＷ": 3
+      "": 42,
+      "函ダ": 9,
+      "函芝": 5,
+      "函Ｗ": 169,
+      "南ダ": 21,
+      "南ダ一番時計": 2,
+      "南芝": 2,
+      "南芝一番時計": 2,
+      "南Ｗ": 315,
+      "南Ｗ一番時計": 4,
+      "小ダ": 20,
+      "札ダ": 75,
+      "札芝": 4,
+      "栗坂": 1773,
+      "栗芝": 6,
+      "栗芝一番時計": 9,
+      "栗Ｂ一番時計": 4,
+      "栗Ｅ": 24,
+      "美坂": 937,
+      "美坂一番時計": 4,
+      "美Ｐ": 57,
+      "美Ｗ": 1060,
+      "ＣＷ": 816,
+      "ＤＰ": 66,
+      "ＤＰ一番時計": 7
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "date": {
      "empty": 0,
      "len_max": 10,
      "len_min": 10,
-     "n": 55,
+     "n": 5483,
      "null": 0,
      "patterns": {
-      "date-iso": 55
+      "date-iso": 5483
      },
      "types": {
-      "str": 55
+      "str": 5483
      },
      "values": {},
      "values_overflow": false
@@ -70,19 +91,22 @@
      "empty": 0,
      "len_max": 1,
      "len_min": 1,
-     "n": 55,
+     "n": 5483,
      "null": 0,
      "patterns": {
-      "text": 55
+      "text": 5483
      },
      "types": {
-      "str": 55
+      "str": 5483
      },
      "values": {
-      "土": 1,
-      "日": 25,
-      "木": 4,
-      "水": 25
+      "土": 158,
+      "日": 1617,
+      "月": 122,
+      "木": 853,
+      "水": 2479,
+      "火": 35,
+      "金": 219
      },
      "values_overflow": false
     },
@@ -90,94 +114,111 @@
      "empty": 0,
      "len_max": 4,
      "len_min": 2,
-     "n": 55,
+     "n": 5483,
      "null": 0,
      "patterns": {
-      "text": 55
+      "text": 5483
      },
      "types": {
-      "str": 55
+      "str": 5483
      },
      "values": {
+      "まずまず": 189,
+      "仕上るも": 32,
+      "伸び一息": 55,
+      "余力有り": 63,
+      "出来は良": 66,
+      "動き一息": 10,
       "動き良化": 1,
-      "動き軽快": 1,
-      "好気配": 7,
+      "動き軽快": 172,
+      "好気合": 18,
+      "好気配": 109,
       "好調子": 1,
       "態勢万全": 2,
       "態勢整う": 2,
       "本調子": 1,
-      "気配上々": 1,
+      "気配上々": 92,
       "気配抜群": 6,
+      "発馬練習": 20,
+      "目立たず": 159,
+      "素軽い": 52,
+      "素軽さ出": 29,
+      "軽め順調": 27,
       "迫力十分": 1,
       "迫力満点": 1,
       "追毎良化": 1,
-      "順調": 30
+      "順調": 2318
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "lap_times": {
-     "empty": 0,
+     "empty": 60,
      "len_max": 5,
-     "len_min": 4,
-     "n": 55,
+     "len_min": 0,
+     "n": 5483,
      "null": 0,
      "patterns": {},
      "types": {
-      "list": 55
+      "list": 5483
      },
      "values": {},
      "values_overflow": false
     },
     "leg_color": {
-     "empty": 0,
+     "empty": 76,
      "len_max": 2,
-     "len_min": 2,
-     "n": 55,
+     "len_min": 0,
+     "n": 5483,
      "null": 0,
      "patterns": {
-      "text": 55
+      "empty": 76,
+      "text": 5407
      },
      "types": {
-      "str": 55
+      "str": 5483
      },
      "values": {
-      "一杯": 1,
-      "直強": 1,
-      "馬也": 50,
-      "Ｇ一": 1,
-      "Ｇ強": 2
+      "": 76,
+      "一杯": 762,
+      "仕掛": 289,
+      "強め": 528,
+      "直一": 5,
+      "直強": 10,
+      "馬也": 3638,
+      "Ｇ一": 29,
+      "Ｇ強": 146
      },
      "values_overflow": false
     },
     "position": {
-     "empty": 26,
+     "empty": 2158,
      "len_max": 1,
      "len_min": 0,
-     "n": 55,
+     "n": 5483,
      "null": 0,
      "patterns": {
-      "digits1": 29,
-      "empty": 26
+      "digits1": 3325,
+      "empty": 2158
      },
      "types": {
-      "str": 55
+      "str": 5483
      },
      "values": {
-      "": 26
+      "": 2158
      },
      "values_overflow": false
     },
     "race_info": {
      "empty": 0,
-     "len_max": 36,
-     "len_min": 29,
-     "n": 55,
+     "len_max": 37,
+     "len_min": 27,
+     "n": 5483,
      "null": 0,
      "patterns": {
-      "text": 55
+      "text": 5483
      },
      "types": {
-      "str": 55
+      "str": 5483
      },
      "values": {},
      "values_overflow": false
@@ -186,101 +227,158 @@
      "empty": 0,
      "len_max": 1,
      "len_min": 1,
-     "n": 55,
+     "n": 5483,
      "null": 0,
      "patterns": {
-      "text": 55
+      "text": 5483
      },
      "types": {
-      "str": 55
+      "str": 5483
      },
      "values": {
-      "A": 10,
-      "B": 15,
-      "C": 30
+      "A": 56,
+      "B": 1675,
+      "C": 3604,
+      "D": 148
      },
      "values_overflow": false
     },
     "rider": {
-     "empty": 2,
+     "empty": 833,
      "len_max": 3,
      "len_min": 0,
-     "n": 55,
+     "n": 5483,
      "null": 0,
      "patterns": {
-      "empty": 2,
-      "text": 53
+      "empty": 833,
+      "text": 4650
      },
      "types": {
-      "str": 55
+      "str": 5483
      },
      "values": {
-      "": 2,
+      "": 833,
       "ルメー": 8,
-      "助手": 45
+      "中村": 14,
+      "丸山": 9,
+      "伊藤": 21,
+      "助手": 3400,
+      "原": 6,
+      "吉田豊": 5,
+      "小崎": 20,
+      "小林脩": 13,
+      "岩部": 12,
+      "嶋田": 26,
+      "師": 74,
+      "戸崎圭": 2,
+      "木幡巧": 38,
+      "松田": 1,
+      "松若": 1,
+      "森裕": 5,
+      "横山琉": 8,
+      "永野": 10,
+      "田中健": 27,
+      "石橋脩": 6,
+      "菅原明": 2,
+      "見習": 47,
+      "鮫島良": 17
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "time_raw": {
      "empty": 0,
      "len_max": 28,
-     "len_min": 21,
-     "n": 55,
+     "len_min": 12,
+     "n": 5483,
      "null": 0,
      "patterns": {
-      "text": 55
+      "text": 5483
      },
      "types": {
-      "str": 55
-     },
-     "values": {},
-     "values_overflow": false
-    },
-    "track_condition": {
-     "empty": 0,
-     "len_max": 1,
-     "len_min": 1,
-     "n": 55,
-     "null": 0,
-     "patterns": {
-      "text": 55
-     },
-     "types": {
-      "str": 55
+      "str": 5483
      },
      "values": {
-      "不": 1,
-      "稍": 9,
-      "良": 38,
-      "重": 7
+      "- - - - ゲート13.4": 1,
+      "- - - - 中間軽め": 19,
+      "- - - - 連闘のため中間軽め": 23,
+      "- - - 42.3 12.5": 1,
+      "- - - ゲート12.9 14.9": 1,
+      "- - - ゲート14.5 14.2": 1,
+      "- - 50.9 36.2 11.4": 1,
+      "- - 51.2 36.4 11.7": 1,
+      "- - 51.2 37.2 12.0": 1,
+      "- - 51.9 37.1 11.9": 1,
+      "- - 53.0 36.9 11.5": 1,
+      "- - 53.1 38.7 12.4": 1,
+      "- - 55.9 38.5 11.2": 1,
+      "- - 55.9 40.6 12.7": 1,
+      "- - 56.2 41.1 12.9": 1,
+      "- - 56.4 41.5 12.9": 1,
+      "- - 56.7 39.1 12.2": 1,
+      "- - 57.1 43.2 13.1": 1,
+      "- - 57.4 40.8 12.9": 1,
+      "- - 57.5 42.1 13.1": 1,
+      "- - 57.8 42.1 13.3": 1,
+      "- - 58.2 43.2 13.7": 1,
+      "- - 58.7 43.9 14.1": 1,
+      "- - 60.3 44.5 13.4": 1,
+      "- - 61.6 46.0 14.2": 1
+     },
+     "values_overflow": true
+    },
+    "track_condition": {
+     "empty": 43,
+     "len_max": 1,
+     "len_min": 0,
+     "n": 5483,
+     "null": 0,
+     "patterns": {
+      "empty": 43,
+      "text": 5440
+     },
+     "types": {
+      "str": 5483
+     },
+     "values": {
+      "": 43,
+      "不": 7,
+      "稍": 744,
+      "良": 3983,
+      "重": 706
      },
      "values_overflow": false
     }
    },
-   "items": 55,
-   "records": 1
+   "items": 5483,
+   "records": 201
   }
  },
  "nested": {},
- "records": 1,
+ "records": 201,
  "runs": [
   {
    "at": "2026-10-06T05:19:46+00:00",
    "host": "JP-CG4QN94",
    "records": 1,
    "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
   }
  ],
  "top": {
   "entries": {
    "empty": 0,
-   "len_max": 55,
-   "len_min": 55,
-   "n": 1,
+   "len_max": 113,
+   "len_min": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "list": 1
+    "list": 201
    },
    "values": {},
    "values_overflow": false
@@ -289,39 +387,39 @@
    "empty": 0,
    "len_max": 10,
    "len_min": 10,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "digits10": 1
+    "digits10": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false
   },
   "pages_fetched": {
    "empty": 0,
-   "max": 1,
+   "max": 5,
    "min": 1,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false
   },
   "total_items": {
    "empty": 0,
-   "max": 9,
-   "min": 9,
-   "n": 1,
+   "max": 41,
+   "min": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false

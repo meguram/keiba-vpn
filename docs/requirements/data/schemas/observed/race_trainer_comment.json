@@ -1,0 +1,258 @@
+{
+ "category": "race_trainer_comment",
+ "conformance": {
+  "failures": {},
+  "passed": 200,
+  "validated": 200
+ },
+ "keys": {
+  "max": "202610011107",
+  "min": "202001010101"
+ },
+ "lists": {
+  "entries": {
+   "fields": {
+    "bracket_number": {
+     "empty": 0,
+     "max": 8,
+     "min": 1,
+     "n": 396,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 396
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "comment": {
+     "empty": 0,
+     "len_max": 195,
+     "len_min": 39,
+     "n": 396,
+     "null": 0,
+     "patterns": {
+      "text": 396
+     },
+     "types": {
+      "str": 396
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "evaluation": {
+     "empty": 396,
+     "len_max": 0,
+     "len_min": 0,
+     "n": 396,
+     "null": 0,
+     "patterns": {
+      "empty": 396
+     },
+     "types": {
+      "str": 396
+     },
+     "values": {
+      "": 396
+     },
+     "values_overflow": false
+    },
+    "horse_id": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 396,
+     "null": 0,
+     "patterns": {
+      "digits10": 396
+     },
+     "types": {
+      "str": 396
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_name": {
+     "empty": 0,
+     "len_max": 25,
+     "len_min": 2,
+     "n": 396,
+     "null": 0,
+     "patterns": {
+      "text": 396
+     },
+     "types": {
+      "str": 396
+     },
+     "values": {
+      "イキオイ": 1,
+      "ウィズ": 1,
+      "エンジェルカナ": 1,
+      "カステヘルミ": 1,
+      "グランチェイサー": 1,
+      "シゲルベンガルトラ": 1,
+      "シャワークライム": 1,
+      "シュエットヌーベル": 1,
+      "ショウナンマッシブ": 1,
+      "シルヴェーヌ": 1,
+      "セイラブミー": 1,
+      "セントセシリア": 1,
+      "タイキラトナンジュ": 1,
+      "ダイワクンナナ": 1,
+      "ディアセオリー": 1,
+      "デルマカトリーナ": 2,
+      "トップソリスト": 1,
+      "ネバーランド": 1,
+      "ビターエンダー": 1,
+      "ピースマインド": 1,
+      "プッシュアゲン": 1,
+      "ベッラヴォルタ": 1,
+      "ポタジェ": 1,
+      "ライレローズ": 1,
+      "リゲイン": 1
+     },
+     "values_overflow": true
+    },
+    "horse_number": {
+     "empty": 0,
+     "max": 18,
+     "min": 1,
+     "n": 396,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 396
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "questioner": {
+     "empty": 274,
+     "len_max": 5,
+     "len_min": 0,
+     "n": 396,
+     "null": 0,
+     "patterns": {
+      "empty": 274,
+      "text": 122
+     },
+     "types": {
+      "str": 396
+     },
+     "values": {
+      "": 274,
+      "三浦助手": 2,
+      "中村助手": 1,
+      "佐藤助手": 2,
+      "内山助手": 1,
+      "吉岡厩務員": 1,
+      "吉田厩務員": 1,
+      "大江助手": 3,
+      "安藤助手": 2,
+      "安藤厩務員": 1,
+      "小島良助手": 1,
+      "小関助手": 1,
+      "岡田助手": 1,
+      "平井助手": 1,
+      "政厩務員": 1,
+      "杉山助手": 1,
+      "村山助手": 1,
+      "清水亮助手": 2,
+      "白浜助手": 1,
+      "篠原助手": 1,
+      "粕谷助手": 1,
+      "西園翔助手": 1,
+      "辻厩務員": 1,
+      "高島助手": 2,
+      "高石助手": 1
+     },
+     "values_overflow": true
+    },
+    "trainer_name": {
+     "empty": 109,
+     "len_max": 4,
+     "len_min": 0,
+     "n": 396,
+     "null": 0,
+     "patterns": {
+      "empty": 109,
+      "text": 287
+     },
+     "types": {
+      "str": 396
+     },
+     "values": {
+      "": 109,
+      "中舘師": 2,
+      "中野師": 4,
+      "伊藤大師": 4,
+      "古賀慎師": 2,
+      "国枝師": 3,
+      "宮本師": 3,
+      "岩戸師": 4,
+      "手塚師": 4,
+      "斉藤崇師": 5,
+      "杉浦師": 2,
+      "松山師": 5,
+      "水野師": 4,
+      "牧浦師": 5,
+      "田中剛師": 3,
+      "相沢師": 6,
+      "矢野師": 1,
+      "菊沢師": 2,
+      "萱野師": 2,
+      "金成師": 4,
+      "音無師": 1,
+      "高木師": 4,
+      "高橋忠師": 4,
+      "高橋文師": 1,
+      "高橋裕師": 2
+     },
+     "values_overflow": true
+    }
+   },
+   "items": 396,
+   "records": 66
+  }
+ },
+ "nested": {},
+ "records": 200,
+ "runs": [
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "entries": {
+   "empty": 134,
+   "len_max": 18,
+   "len_min": 0,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "digits12": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

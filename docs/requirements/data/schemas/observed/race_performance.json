@@ -1,0 +1,989 @@
+{
+ "category": "race_performance",
+ "conformance": {
+  "failures": {},
+  "passed": 0,
+  "validated": 0
+ },
+ "keys": {
+  "max": "202205030504",
+  "min": "202001010101"
+ },
+ "lists": {
+  "entries": {
+   "fields": {
+    "adjusted_finish_time": {
+     "empty": 0,
+     "max": 316.8,
+     "min": 59.1233,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "baseline_mean_time": {
+     "empty": 0,
+     "max": 304.0333,
+     "min": 58.7952,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "class_group": {
+     "empty": 0,
+     "len_max": 3,
+     "len_min": 1,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "text": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {
+      "1勝": 726,
+      "2勝": 277,
+      "3勝": 177,
+      "G": 141,
+      "OP": 145,
+      "新馬": 244,
+      "未勝利": 1007
+     },
+     "values_overflow": false
+    },
+    "current_weight_advantage_points": {
+     "empty": 0,
+     "max": 12.25,
+     "min": -8.125,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "distance": {
+     "empty": 0,
+     "max": 4250,
+     "min": 1000,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "distance_band": {
+     "empty": 0,
+     "len_max": 12,
+     "len_min": 4,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "text": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {
+      "extended": 113,
+      "intermediate": 378,
+      "long": 119,
+      "mile": 1190,
+      "sprint": 917
+     },
+     "values_overflow": false
+    },
+    "field_relative_pre_rating": {
+     "empty": 0,
+     "max": 140.0625,
+     "min": -258.1834,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "field_size": {
+     "empty": 0,
+     "max": 18,
+     "min": 6,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "field_strength_contrib": {
+     "empty": 0,
+     "max": 140.0625,
+     "min": -258.1834,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "field_top3_gap": {
+     "empty": 0,
+     "max": 82.7353,
+     "min": -341.2311,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "finish_position": {
+     "empty": 0,
+     "max": 18,
+     "min": 1,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "future_emergence_score": {
+     "empty": 0,
+     "max": 215.0964,
+     "min": -559.2492,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_id": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "digits10": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_name": {
+     "empty": 0,
+     "len_max": 9,
+     "len_min": 2,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "text": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {
+      "アイフレンズ": 1,
+      "アークライト": 1,
+      "インディナート": 2,
+      "ウインアグライア": 1,
+      "ウインルーア": 1,
+      "カランドゥーラ": 1,
+      "キタノマンゲツ": 1,
+      "ギャラントウォリア": 1,
+      "コスモアシュラ": 2,
+      "コニャック": 1,
+      "シンタロウ": 1,
+      "ジュンブーケ": 1,
+      "タスマンハイウェイ": 1,
+      "デンプシーロール": 1,
+      "ニシノカオリード": 2,
+      "バニシングポイント": 2,
+      "バルネージュ": 2,
+      "フィルメーザ": 1,
+      "フォルテデイマルミ": 2,
+      "マテンロウスタイル": 2,
+      "モリノオーシャン": 1,
+      "ライフサイエンス": 2,
+      "ラッキードリーム": 1,
+      "リュミエール": 1,
+      "リーブラテソーロ": 2
+     },
+     "values_overflow": true
+    },
+    "horse_number": {
+     "empty": 0,
+     "max": 18,
+     "min": 1,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_pre_rating_neutral": {
+     "empty": 0,
+     "max": 162.0454,
+     "min": -271.2051,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_pre_rating_pre_race": {
+     "empty": 0,
+     "max": 163.7954,
+     "min": -269.4551,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "margin_adjusted_figure": {
+     "empty": 0,
+     "max": 3.8445,
+     "min": -320.0,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "normalized_weight_carried": {
+     "empty": 0,
+     "max": 63.0,
+     "min": 51.0,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "pace_adjusted_figure": {
+     "empty": 0,
+     "max": 0.7204,
+     "min": -0.3602,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "pace_shape_class": {
+     "empty": 0,
+     "len_max": 8,
+     "len_min": 5,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "text": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {
+      "balanced": 1982,
+      "burst": 13,
+      "grind": 616,
+      "unknown": 106
+     },
+     "values_overflow": false
+    },
+    "race_date": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "date-iso": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "race_id": {
+     "empty": 0,
+     "len_max": 12,
+     "len_min": 12,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "digits12": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "race_level_pre_race": {
+     "empty": 0,
+     "max": 107.3132,
+     "min": -41.2325,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "race_level_retrospective": {
+     "empty": 0,
+     "max": 107.3132,
+     "min": -41.2325,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "race_uncertainty": {
+     "empty": 0,
+     "max": 0.22,
+     "min": 0.0,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "reference_weight_equivalent": {
+     "empty": 0,
+     "max": 58.0,
+     "min": 55.0,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "run_performance_final": {
+     "empty": 0,
+     "max": 215.0964,
+     "min": -559.2492,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "run_performance_final_pct": {
+     "empty": 0,
+     "max": 1.0,
+     "min": 0.0005,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "run_performance_final_std": {
+     "empty": 0,
+     "max": 2.6929,
+     "min": -6.5091,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "run_performance_raw": {
+     "empty": 0,
+     "max": 215.0964,
+     "min": -588.6834,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "surface": {
+     "empty": 0,
+     "len_max": 3,
+     "len_min": 1,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "text": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {
+      "ダート": 1254,
+      "芝": 1429,
+      "障": 34
+     },
+     "values_overflow": false
+    },
+    "time_figure": {
+     "empty": 0,
+     "max": 205.3463,
+     "min": -542.25,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "track_condition": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 1,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "text": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {
+      "不良": 153,
+      "稍重": 435,
+      "良": 1940,
+      "重": 189
+     },
+     "values_overflow": false
+    },
+    "track_variant": {
+     "empty": 0,
+     "max": 6.3637,
+     "min": -8.8868,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "track_variant_online": {
+     "empty": 0,
+     "max": 3.3972,
+     "min": -7.1906,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "venue": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 2,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "text": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {
+      "中京": 240,
+      "中山": 353,
+      "京都": 136,
+      "函館": 125,
+      "小倉": 218,
+      "新潟": 379,
+      "札幌": 151,
+      "東京": 492,
+      "福島": 223,
+      "阪神": 400
+     },
+     "values_overflow": false
+    },
+    "venue_code": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 2,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "digits2": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "venue_era": {
+     "empty": 0,
+     "len_max": 18,
+     "len_min": 10,
+     "n": 2717,
+     "null": 0,
+     "patterns": {
+      "text": 2717
+     },
+     "types": {
+      "str": 2717
+     },
+     "values": {
+      "01_default": 151,
+      "02_default": 125,
+      "03_default": 223,
+      "04_default": 379,
+      "05_default": 492,
+      "06_default": 353,
+      "07_default": 240,
+      "09_default": 400,
+      "10_default": 218,
+      "kyoto_pre_20230422": 136
+     },
+     "values_overflow": false
+    },
+    "weight_adjusted_figure": {
+     "empty": 0,
+     "max": 8.125,
+     "min": -12.25,
+     "n": 2717,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2717
+     },
+     "values": {},
+     "values_overflow": false
+    }
+   },
+   "items": 2717,
+   "records": 200
+  }
+ },
+ "nested": {
+  "meta": {
+   "class_group": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 1,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "text": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {
+     "1勝": 55,
+     "2勝": 22,
+     "3勝": 12,
+     "G": 9,
+     "OP": 12,
+     "新馬": 19,
+     "未勝利": 71
+    },
+    "values_overflow": false
+   },
+   "distance": {
+    "empty": 0,
+    "max": 4250,
+    "min": 1000,
+    "n": 200,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "int": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "distance_band": {
+    "empty": 0,
+    "len_max": 12,
+    "len_min": 4,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "text": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {
+     "extended": 9,
+     "intermediate": 31,
+     "long": 9,
+     "mile": 87,
+     "sprint": 64
+    },
+    "values_overflow": false
+   },
+   "field_size": {
+    "empty": 0,
+    "max": 18,
+    "min": 6,
+    "n": 200,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "int": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "pace_shape_class": {
+    "empty": 0,
+    "len_max": 8,
+    "len_min": 5,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "text": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {
+     "balanced": 147,
+     "burst": 1,
+     "grind": 43,
+     "unknown": 9
+    },
+    "values_overflow": false
+   },
+   "race_date": {
+    "empty": 0,
+    "len_max": 10,
+    "len_min": 10,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "date-iso": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "race_id": {
+    "empty": 0,
+    "len_max": 12,
+    "len_min": 12,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "digits12": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "race_level_pre_race": {
+    "empty": 0,
+    "max": 107.3132,
+    "min": -41.2325,
+    "n": 200,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "race_level_retrospective": {
+    "empty": 0,
+    "max": 107.3132,
+    "min": -41.2325,
+    "n": 200,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "race_uncertainty": {
+    "empty": 0,
+    "max": 0.22,
+    "min": 0.0,
+    "n": 200,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "surface": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 1,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "text": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {
+     "ダート": 92,
+     "芝": 105,
+     "障": 3
+    },
+    "values_overflow": false
+   },
+   "track_condition": {
+    "empty": 0,
+    "len_max": 2,
+    "len_min": 1,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "text": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {
+     "不良": 11,
+     "稍重": 32,
+     "良": 144,
+     "重": 13
+    },
+    "values_overflow": false
+   },
+   "track_variant": {
+    "empty": 0,
+    "max": 6.3637,
+    "min": -8.8868,
+    "n": 200,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "venue": {
+    "empty": 0,
+    "len_max": 2,
+    "len_min": 2,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "text": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {
+     "中京": 20,
+     "中山": 25,
+     "京都": 11,
+     "函館": 10,
+     "小倉": 15,
+     "新潟": 26,
+     "札幌": 13,
+     "東京": 34,
+     "福島": 16,
+     "阪神": 30
+    },
+    "values_overflow": false
+   },
+   "venue_code": {
+    "empty": 0,
+    "len_max": 2,
+    "len_min": 2,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "digits2": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "venue_era": {
+    "empty": 0,
+    "len_max": 18,
+    "len_min": 10,
+    "n": 200,
+    "null": 0,
+    "patterns": {
+     "text": 200
+    },
+    "types": {
+     "str": 200
+    },
+    "values": {
+     "01_default": 13,
+     "02_default": 10,
+     "03_default": 16,
+     "04_default": 26,
+     "05_default": 34,
+     "06_default": 25,
+     "07_default": 20,
+     "09_default": 30,
+     "10_default": 15,
+     "kyoto_pre_20230422": 11
+    },
+    "values_overflow": false
+   }
+  }
+ },
+ "records": 200,
+ "runs": [
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "entries": {
+   "empty": 0,
+   "len_max": 18,
+   "len_min": 6,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "meta": {
+   "empty": 0,
+   "len_max": 16,
+   "len_min": 16,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "digits12": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "year": {
+   "empty": 0,
+   "len_max": 4,
+   "len_min": 4,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "digits4": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

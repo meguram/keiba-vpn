@@ -2,12 +2,12 @@
  "category": "race_paddock",
  "conformance": {
   "failures": {},
-  "passed": 1,
-  "validated": 1
+  "passed": 201,
+  "validated": 201
  },
  "keys": {
-  "max": "202309030811",
-  "min": "202309030811"
+  "max": "202610011107",
+  "min": "202001010101"
  },
  "lists": {
   "entries": {
@@ -16,47 +16,67 @@
      "empty": 0,
      "len_max": 10,
      "len_min": 10,
-     "n": 5,
+     "n": 410,
      "null": 0,
      "patterns": {
-      "digits10": 5
+      "digits10": 410
      },
      "types": {
-      "str": 5
+      "str": 410
      },
      "values": {},
      "values_overflow": false
     },
     "horse_name": {
      "empty": 0,
-     "len_max": 9,
-     "len_min": 7,
-     "n": 5,
+     "len_max": 24,
+     "len_min": 2,
+     "n": 410,
      "null": 0,
      "patterns": {
-      "text": 5
+      "text": 410
      },
      "types": {
-      "str": 5
+      "str": 410
      },
      "values": {
       "アスクビクターモア": 1,
+      "アミュリオン": 1,
+      "アラモードバイオ": 1,
+      "アールバロン": 1,
       "イクイノックス": 1,
+      "エールブラーヴ": 1,
+      "オオゾラ": 1,
+      "オブデュモンド": 1,
+      "グラスデスティーノ": 1,
+      "グログラン": 1,
+      "ココニアル": 1,
+      "シティレインボー": 1,
       "ジェラルディーナ": 1,
       "ジャスティンパレス": 1,
-      "ディープボンド": 1
+      "ジンフラッシュ": 1,
+      "スノームーン": 1,
+      "ディープボンド": 1,
+      "ハイエログリフ": 1,
+      "バルバレスコ": 1,
+      "ヒューミリティ": 1,
+      "ピクシーメイデン": 1,
+      "フジノロケット": 1,
+      "プレフェリータ": 1,
+      "ペイルライダー": 1,
+      "ラヴィンジャー": 1
      },
-     "values_overflow": false
+     "values_overflow": true
     },
     "horse_number": {
      "empty": 0,
-     "max": 6,
-     "min": 3,
-     "n": 5,
+     "max": 8,
+     "min": 1,
+     "n": 410,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 5
+      "int": 410
      },
      "values": {},
      "values_overflow": false
@@ -64,61 +84,95 @@
     "paddock_comment": {
      "empty": 0,
      "len_max": 24,
-     "len_min": 21,
-     "n": 5,
+     "len_min": 11,
+     "n": 410,
      "null": 0,
      "patterns": {
-      "text": 5
+      "text": 410
      },
      "types": {
-      "str": 5
-     },
-     "values": {},
-     "values_overflow": false
-    },
-    "paddock_rank": {
-     "empty": 0,
-     "len_max": 1,
-     "len_min": 1,
-     "n": 5,
-     "null": 0,
-     "patterns": {
-      "text": 5
-     },
-     "types": {
-      "str": 5
+      "str": 410
      },
      "values": {
-      "A": 2,
-      "B": 3
+      "リズムよく活気のある周回。調子はいい": 1,
+      "上積みはどうかも状態としては問題なし": 1,
+      "仕上がりは問題なく、元気さも感じられる": 1,
+      "体つきＯＫ。脚どりも力強さあって気配上々": 1,
+      "体はデキている。歩様にも勢いがある": 1,
+      "元気な周回で好調キープ": 1,
+      "前走時に近い体つきと周回。状態は安定": 1,
+      "力強い歩様。体も問題なく仕上がっている": 1,
+      "夏の疲れ見られず元気ある。状態キープ": 1,
+      "大きな動作で歩く姿に好感。気配は良好": 1,
+      "大型馬でもスッキリ見せる。状態はＯＫ": 1,
+      "大型馬でも締まった体つきで状態キープ": 1,
+      "数字以上に迫力を感じる。好気配": 1,
+      "歩様に勢いがある。好状態": 1,
+      "気配としてはさほど目立たないが、及第点": 1,
+      "活気あって馬体もよく仕上がっている": 1,
+      "脚さばきに力強さ。造りもこれで良さそうだ": 1,
+      "脚どりに力強さがある。いい仕上がり": 1,
+      "良い意味で前走時と変わりない。状態は安定": 2,
+      "馬体が締まってきた。上積みありそうだ": 1,
+      "馬体に張りがあり、脚どりも力強い": 1,
+      "馬体はバランスが良く、いい仕上がりだ": 1,
+      "馬体増でも力は出せる体の造り。好気配": 1,
+      "馬体増でも太くない。仕上がりは良さそうだ": 1,
+      "３戦目でだいぶ馬体が締まってきた": 1
+     },
+     "values_overflow": true
+    },
+    "paddock_rank": {
+     "empty": 355,
+     "len_max": 1,
+     "len_min": 0,
+     "n": 410,
+     "null": 0,
+     "patterns": {
+      "empty": 355,
+      "text": 55
+     },
+     "types": {
+      "str": 410
+     },
+     "values": {
+      "": 355,
+      "A": 21,
+      "B": 34
      },
      "values_overflow": false
     }
    },
-   "items": 5,
-   "records": 1
+   "items": 410,
+   "records": 82
   }
  },
  "nested": {},
- "records": 1,
+ "records": 201,
  "runs": [
   {
    "at": "2026-10-06T05:19:46+00:00",
    "host": "JP-CG4QN94",
    "records": 1,
    "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
   }
  ],
  "top": {
   "entries": {
-   "empty": 0,
+   "empty": 119,
    "len_max": 5,
-   "len_min": 5,
-   "n": 1,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "list": 1
+    "list": 201
    },
    "values": {},
    "values_overflow": false
@@ -127,13 +181,13 @@
    "empty": 0,
    "len_max": 12,
    "len_min": 12,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "digits12": 1
+    "digits12": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false

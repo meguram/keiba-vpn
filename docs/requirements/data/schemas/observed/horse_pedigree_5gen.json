@@ -2,11 +2,11 @@
  "category": "horse_pedigree_5gen",
  "conformance": {
   "failures": {},
-  "passed": 1,
-  "validated": 1
+  "passed": 201,
+  "validated": 201
  },
  "keys": {
-  "max": "2019105219",
+  "max": "2024106880",
   "min": "2019105219"
  },
  "lists": {
@@ -16,11 +16,11 @@
      "empty": 0,
      "max": 5,
      "min": 1,
-     "n": 62,
+     "n": 12462,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 62
+      "int": 12462
      },
      "values": {},
      "values_overflow": false
@@ -29,39 +29,39 @@
      "empty": 0,
      "len_max": 10,
      "len_min": 10,
-     "n": 62,
+     "n": 12462,
      "null": 0,
      "patterns": {
-      "digits10": 13,
-      "text": 49
+      "digits10": 1422,
+      "text": 11040
      },
      "types": {
-      "str": 62
+      "str": 12462
      },
      "values": {
       "000a0000cc": 1,
       "000a000258": 1,
-      "000a00033a": 1,
+      "000a00033a": 217,
       "000a000355": 1,
       "000a000364": 1,
       "000a0003a2": 1,
       "000a00058e": 1,
       "000a00062c": 1,
       "000a000d30": 1,
-      "000a000e04": 1,
+      "000a000e04": 267,
       "000a000e0d": 1,
-      "000a000f2b": 2,
+      "000a000f2b": 207,
       "000a001205": 3,
-      "000a0012bf": 2,
-      "000a0019b6": 1,
+      "000a0012bf": 257,
+      "000a0019b6": 159,
       "000a001cb4": 1,
-      "000a007459": 2,
+      "000a007459": 171,
       "000a007c8d": 1,
       "000a008341": 1,
       "000a008824": 1,
       "000a008aad": 1,
-      "000a008c1d": 1,
-      "000a008c1e": 1,
+      "000a008c1d": 159,
+      "000a008c1e": 215,
       "000a009170": 1,
       "000a00922c": 1
      },
@@ -69,30 +69,30 @@
     },
     "name": {
      "empty": 0,
-     "len_max": 29,
-     "len_min": 4,
-     "n": 62,
+     "len_max": 33,
+     "len_min": 2,
+     "n": 12462,
      "null": 0,
      "patterns": {
-      "text": 62
+      "text": 12462
      },
      "types": {
-      "str": 62
+      "str": 12462
      },
      "values": {
       "Alzao": 1,
       "Burghclere": 1,
       "Busted": 1,
-      "Cosmah": 2,
-      "Hail to Reason": 2,
-      "Halo": 2,
+      "Cosmah": 171,
+      "Hail to Reason": 207,
+      "Halo": 257,
       "Highclere": 1,
       "Honest Pleasure": 1,
       "Lady Rebecca": 1,
       "Lyphard": 3,
-      "Mountain Flower": 1,
-      "Understanding": 1,
-      "Wishing Well": 1,
+      "Mountain Flower": 159,
+      "Understanding": 159,
+      "Wishing Well": 215,
       "アンジェリカ": 1,
       "オトメゴコロ": 1,
       "キタサンブラック": 1,
@@ -112,48 +112,54 @@
      "empty": 0,
      "max": 31,
      "min": 0,
-     "n": 62,
+     "n": 12462,
      "null": 0,
      "patterns": {},
      "types": {
-      "int": 62
+      "int": 12462
      },
      "values": {},
      "values_overflow": false
     },
     "sex": {
-     "empty": 48,
+     "empty": 3312,
      "len_max": 1,
      "len_min": 0,
-     "n": 62,
+     "n": 4278,
      "null": 0,
      "patterns": {
-      "empty": 48,
-      "text": 14
+      "empty": 3312,
+      "text": 966
      },
      "types": {
-      "str": 62
+      "str": 4278
      },
      "values": {
-      "": 48,
-      "牝": 7,
-      "牡": 7
+      "": 3312,
+      "牝": 483,
+      "牡": 483
      },
      "values_overflow": false
     }
    },
-   "items": 62,
-   "records": 1
+   "items": 12462,
+   "records": 201
   }
  },
  "nested": {},
- "records": 1,
+ "records": 201,
  "runs": [
   {
    "at": "2026-10-06T05:19:46+00:00",
    "host": "JP-CG4QN94",
    "records": 1,
    "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
   }
  ],
  "top": {
@@ -161,11 +167,11 @@
    "empty": 0,
    "max": 62,
    "min": 62,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false
@@ -174,111 +180,186 @@
    "empty": 0,
    "len_max": 62,
    "len_min": 62,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "list": 1
+    "list": 201
    },
    "values": {},
    "values_overflow": false
   },
   "dam": {
    "empty": 0,
-   "len_max": 9,
-   "len_min": 9,
-   "n": 1,
+   "len_max": 30,
+   "len_min": 3,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "シャトーブランシュ": 1
+    "アスコルティ": 1,
+    "エバーブロッサム": 1,
+    "カレンオプシス": 1,
+    "グローブ": 1,
+    "コウユーユメダンス": 1,
+    "サイモンガーランド": 1,
+    "サウスエンピリカル": 1,
+    "シェアザストーリー": 1,
+    "シャトーブランシュ": 1,
+    "ジヴェルニーアート": 1,
+    "スウェアトウショウ": 1,
+    "スプリングレイン": 1,
+    "センシュアルドレス": 1,
+    "ニシノカザブエ": 1,
+    "ハッピーパウダー": 1,
+    "パープルセイル": 1,
+    "フォレガFolega(英)": 1,
+    "ベネフィット": 1,
+    "マジカルデイ": 1,
+    "マチカネハヤテ": 1,
+    "ムーンハウリング": 1,
+    "ライゼリート": 1,
+    "リリークラウン": 1,
+    "ルアンジュ": 1,
+    "レティセントガール": 1
    },
-   "values_overflow": false
+   "values_overflow": true
   },
   "dam_sire": {
    "empty": 0,
-   "len_max": 7,
-   "len_min": 7,
-   "n": 1,
+   "len_max": 32,
+   "len_min": 3,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "キングヘイロー": 1
+    "All American": 1,
+    "Danehill Dancer(愛)": 1,
+    "Dubai Millennium(英)": 1,
+    "Giant's Causeway(米)": 2,
+    "Mayakovsky": 1,
+    "Oasis Dream(英)": 1,
+    "アグネスタキオン": 4,
+    "ウォーニングWarning(英)": 1,
+    "キングカメハメハ": 7,
+    "キングヘイロー": 1,
+    "クロフネ": 4,
+    "ゴールドアリュール": 4,
+    "サクラバクシンオー": 3,
+    "サムライハート": 1,
+    "ステイゴールド": 3,
+    "ゼンノロブロイ": 4,
+    "ダイワメジャー": 3,
+    "ダンスインザダーク": 1,
+    "ディープインパクト": 11,
+    "ネオユニヴァース": 7,
+    "ハーツクライ": 5,
+    "ハービンジャーHarbinger(英)": 1,
+    "フジキセキ": 3,
+    "マンハッタンカフェ": 6,
+    "メジロマックイーン": 1
    },
-   "values_overflow": false
+   "values_overflow": true
   },
   "horse_id": {
    "empty": 0,
    "len_max": 10,
    "len_min": 10,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "digits10": 1
+    "digits10": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false
   },
   "sex": {
-   "empty": 1,
+   "empty": 69,
    "len_max": 0,
    "len_min": 0,
-   "n": 1,
+   "n": 69,
    "null": 0,
    "patterns": {
-    "empty": 1
+    "empty": 69
    },
    "types": {
-    "str": 1
+    "str": 69
    },
    "values": {
-    "": 1
+    "": 69
    },
    "values_overflow": false
   },
   "sire": {
    "empty": 0,
-   "len_max": 8,
-   "len_min": 8,
-   "n": 1,
+   "len_max": 32,
+   "len_min": 3,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "キタサンブラック": 1
+    "アドマイヤムーン": 2,
+    "エピファネイア": 4,
+    "オルフェーヴル": 2,
+    "カレンブラックヒル": 2,
+    "キタサンブラック": 6,
+    "グレーターロンドン": 1,
+    "サトノクラウン": 3,
+    "スクリーンヒーロー": 1,
+    "タニノギムレット": 1,
+    "ダイワメジャー": 1,
+    "デクラレーションオブウォー": 2,
+    "トーセンラー": 2,
+    "ドゥラメンテ": 2,
+    "ノボジャック": 1,
+    "バゴBago(仏)": 3,
+    "ビッグアーサー": 2,
+    "モンテロッソMonterosso(英)": 1,
+    "ラブリーデイ": 1,
+    "リアルインパクト": 1,
+    "リアルスティール": 3,
+    "リオンディーズ": 5,
+    "ルーラーシップ": 3,
+    "ロードカナロア": 2,
+    "ワンアンドオンリー": 1,
+    "ヴィクトワールピサ": 2
    },
-   "values_overflow": false
+   "values_overflow": true
   },
   "source": {
    "empty": 0,
    "len_max": 25,
-   "len_min": 25,
-   "n": 1,
+   "len_min": 6,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
-   "values": {},
+   "values": {
+    "netkeiba": 1,
+    "phase1": 8
+   },
    "values_overflow": false
   }
  }

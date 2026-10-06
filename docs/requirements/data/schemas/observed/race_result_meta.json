@@ -2,22 +2,28 @@
  "category": "race_result_meta",
  "conformance": {
   "failures": {},
-  "passed": 1,
-  "validated": 1
+  "passed": 201,
+  "validated": 201
  },
  "keys": {
-  "max": "202309030811",
-  "min": "202309030811"
+  "max": "202610010708",
+  "min": "202001010101"
  },
  "lists": {},
  "nested": {},
- "records": 1,
+ "records": 201,
  "runs": [
   {
    "at": "2026-10-06T05:19:46+00:00",
    "host": "JP-CG4QN94",
    "records": 1,
    "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
   }
  ],
  "top": {
@@ -25,74 +31,86 @@
    "empty": 0,
    "len_max": 10,
    "len_min": 10,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "date-iso": 1
+    "date-iso": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false
   },
   "direction": {
-   "empty": 0,
+   "empty": 128,
    "len_max": 1,
-   "len_min": 1,
-   "n": 1,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 128,
+    "text": 73
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "右": 1
+    "": 128,
+    "右": 40,
+    "左": 33
    },
    "values_overflow": false
   },
   "distance": {
    "empty": 0,
-   "max": 2200,
-   "min": 2200,
-   "n": 1,
+   "max": 3390,
+   "min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false
   },
   "field_size": {
    "empty": 0,
-   "max": 17,
-   "min": 17,
-   "n": 1,
+   "max": 18,
+   "min": 6,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false
   },
   "grade": {
    "empty": 0,
-   "len_max": 2,
-   "len_min": 2,
-   "n": 1,
+   "len_max": 3,
+   "len_min": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "G1": 1
+    "1勝": 60,
+    "2勝": 21,
+    "3勝": 15,
+    "G1": 4,
+    "G2": 2,
+    "G3": 2,
+    "L": 1,
+    "OP": 8,
+    "新馬": 11,
+    "未勝利": 77
    },
    "values_overflow": false
   },
@@ -100,43 +118,67 @@
    "empty": 0,
    "len_max": 12,
    "len_min": 12,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "digits12": 1
+    "digits12": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false
   },
   "race_name": {
    "empty": 0,
-   "len_max": 8,
-   "len_min": 8,
-   "n": 1,
+   "len_max": 18,
+   "len_min": 4,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "第64回宝塚記念": 1
+    "2歳新馬": 7,
+    "2歳未勝利": 22,
+    "3歳1勝クラス": 9,
+    "3歳以上1勝クラス": 23,
+    "3歳以上2勝クラス": 4,
+    "3歳未勝利": 53,
+    "4歳以上1勝クラス": 16,
+    "4歳以上2勝クラス": 5,
+    "ジューンステークス(3勝)": 1,
+    "セプテンバーS(3勝)": 1,
+    "乙訓特別(2勝)": 1,
+    "北斗特別(1勝)": 1,
+    "北海ハンデキャップ(2勝)": 1,
+    "境港特別(2勝)": 1,
+    "天王寺特別(2勝)": 1,
+    "弥彦ステークス(3勝)": 1,
+    "日進特別(2勝)": 1,
+    "春日山特別(1勝)": 1,
+    "礼文特別(1勝)": 1,
+    "秋陽ジャンプS(OP)": 1,
+    "第25回秋華賞": 1,
+    "第64回宝塚記念": 1,
+    "第70回安田記念": 1,
+    "美浦ステークス(3勝)": 1,
+    "飯豊特別(2勝)": 1
    },
-   "values_overflow": false
+   "values_overflow": true
   },
   "round": {
    "empty": 0,
    "max": 0,
    "min": 0,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {},
    "types": {
-    "int": 1
+    "int": 201
    },
    "values": {},
    "values_overflow": false
@@ -145,31 +187,34 @@
    "empty": 0,
    "len_max": 5,
    "len_min": 5,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "time-hhmm": 1
+    "time-hhmm": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {},
    "values_overflow": false
   },
   "surface": {
-   "empty": 0,
-   "len_max": 1,
-   "len_min": 1,
-   "n": 1,
+   "empty": 124,
+   "len_max": 3,
+   "len_min": 0,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "empty": 124,
+    "text": 77
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "芝": 1
+    "": 124,
+    "ダート": 2,
+    "芝": 75
    },
    "values_overflow": false
   },
@@ -177,16 +222,25 @@
    "empty": 0,
    "len_max": 2,
    "len_min": 2,
-   "n": 1,
+   "n": 201,
    "null": 0,
    "patterns": {
-    "text": 1
+    "text": 201
    },
    "types": {
-    "str": 1
+    "str": 201
    },
    "values": {
-    "阪神": 1
+    "中京": 22,
+    "中山": 30,
+    "京都": 21,
+    "函館": 8,
+    "小倉": 18,
+    "新潟": 19,
+    "札幌": 9,
+    "東京": 32,
+    "福島": 12,
+    "阪神": 30
    },
    "values_overflow": false
   }

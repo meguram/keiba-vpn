@@ -60,6 +60,9 @@
     },
     "corner_passing": {
      "type": "list"
+    },
+    "race_class": {
+     "type": "str"
     }
    },
    "entry_required": {
@@ -132,15 +135,15 @@
    "entry_list_key": "entries",
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610011104",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -148,6 +151,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -283,15 +292,15 @@
    "entry_list_key": "entries",
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610011107",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -299,6 +308,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -348,15 +363,15 @@
    "entry_list_key": "races",
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "20230625",
-     "min": "20230625"
+     "max": "20261206",
+     "min": "20200101"
     },
     "runs": [
      {
@@ -364,6 +379,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -482,15 +503,15 @@
    "entry_list_key": "entries",
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610011106",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -498,6 +519,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -540,9 +567,26 @@
    },
    "entry_list_key": "entries",
    "_provenance": {
-    "source": "hand-written",
-    "samples": 0,
-    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+    "source": "observed",
+    "samples": 200,
+    "conformance": {
+     "failures": {},
+     "passed": 200,
+     "validated": 200
+    },
+    "key_range": {
+     "max": "202610011107",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
    }
   },
   "race_index": {
@@ -601,15 +645,15 @@
    "entry_list_key": "entries",
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610011205",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -617,6 +661,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -655,15 +705,15 @@
    "entry_list_key": "entries",
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610011107",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -671,6 +721,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -744,9 +800,26 @@
     }
    },
    "_provenance": {
-    "source": "hand-written",
-    "samples": 0,
-    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+    "source": "observed",
+    "samples": 200,
+    "conformance": {
+     "failures": {},
+     "passed": 200,
+     "validated": 200
+    },
+    "key_range": {
+     "max": "202610011107",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
    }
   },
   "race_paddock": {
@@ -784,15 +857,15 @@
    "entry_list_key": "entries",
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610011107",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -800,6 +873,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -849,15 +928,15 @@
    "entry_list_key": "entries",
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610011102",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -865,6 +944,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -922,9 +1007,28 @@
    },
    "entry_list_key": "entries",
    "_provenance": {
-    "source": "hand-written",
-    "samples": 0,
-    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+    "source": "observed",
+    "samples": 200,
+    "conformance": {
+     "failures": {
+      "entry_constraint:horse_number": 97
+     },
+     "passed": 185,
+     "validated": 200
+    },
+    "key_range": {
+     "max": "202610011107",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
    }
   },
   "race_result_lap": {
@@ -952,15 +1056,15 @@
    },
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610010708",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -968,6 +1072,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -1014,9 +1124,26 @@
    },
    "entry_list_key": "entries",
    "_provenance": {
-    "source": "hand-written",
-    "samples": 0,
-    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+    "source": "observed",
+    "samples": 200,
+    "conformance": {
+     "failures": {},
+     "passed": 200,
+     "validated": 200
+    },
+    "key_range": {
+     "max": "202610011107",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
    }
   },
   "race_detail": {
@@ -1149,9 +1276,26 @@
    },
    "entry_list_key": "entries",
    "_provenance": {
-    "source": "hand-written",
-    "samples": 0,
-    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202602010802",
+     "min": "202602010802"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 1,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
    }
   },
   "horse_result": {
@@ -1305,9 +1449,26 @@
    },
    "entry_list_key": "race_history",
    "_provenance": {
-    "source": "hand-written",
-    "samples": 0,
-    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+    "source": "observed",
+    "samples": 200,
+    "conformance": {
+     "failures": {},
+     "passed": 200,
+     "validated": 200
+    },
+    "key_range": {
+     "max": "2024106880",
+     "min": "2020100004"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
    }
   },
   "horse_pedigree_5gen": {
@@ -1356,14 +1517,14 @@
    },
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "2019105219",
+     "max": "2024106880",
      "min": "2019105219"
     },
     "runs": [
@@ -1372,6 +1533,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -1487,14 +1654,14 @@
    "entry_list_key": "entries",
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "2019105219",
+     "max": "2023109140",
      "min": "2019105219"
     },
     "runs": [
@@ -1503,6 +1670,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -1532,9 +1705,26 @@
     }
    },
    "_provenance": {
-    "source": "hand-written",
-    "samples": 0,
-    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+    "source": "observed",
+    "samples": 200,
+    "conformance": {
+     "failures": {},
+     "passed": 200,
+     "validated": 200
+    },
+    "key_range": {
+     "max": "202610010104",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
    }
   },
   "requirement_row_trace": {
@@ -1718,15 +1908,15 @@
    },
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610010708",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -1734,6 +1924,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -1752,9 +1948,26 @@
     }
    },
    "_provenance": {
-    "source": "hand-written",
-    "samples": 0,
-    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+    "source": "observed",
+    "samples": 200,
+    "conformance": {
+     "failures": {},
+     "passed": 200,
+     "validated": 200
+    },
+    "key_range": {
+     "max": "202610010708",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
    }
   },
   "race_result_on_time_lap": {
@@ -1773,9 +1986,26 @@
     }
    },
    "_provenance": {
-    "source": "hand-written",
-    "samples": 0,
-    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+    "source": "observed",
+    "samples": 200,
+    "conformance": {
+     "failures": {},
+     "passed": 200,
+     "validated": 200
+    },
+    "key_range": {
+     "max": "202610010708",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
    }
   },
   "race_result_on_time_corner": {
@@ -1791,9 +2021,26 @@
     }
    },
    "_provenance": {
-    "source": "hand-written",
-    "samples": 0,
-    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+    "source": "observed",
+    "samples": 200,
+    "conformance": {
+     "failures": {},
+     "passed": 200,
+     "validated": 200
+    },
+    "key_range": {
+     "max": "202610010708",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
    }
   },
   "horse_profile": {
@@ -1864,14 +2111,14 @@
    },
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "2019105219",
+     "max": "2024105884",
      "min": "2019105219"
     },
     "runs": [
@@ -1880,6 +2127,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -1984,14 +2237,14 @@
    "entry_list_key": "race_history",
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "2019105219",
+     "max": "2024105884",
      "min": "2019105219"
     },
     "runs": [
@@ -2000,6 +2253,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -2046,15 +2305,15 @@
    },
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610010708",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -2062,6 +2321,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -2081,15 +2346,15 @@
    },
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610010708",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -2097,6 +2362,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -2125,15 +2396,15 @@
    },
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610010708",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -2141,6 +2412,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -2160,15 +2437,15 @@
    },
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610010708",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -2176,6 +2453,12 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -2198,15 +2481,15 @@
    },
    "_provenance": {
     "source": "observed",
-    "samples": 1,
+    "samples": 201,
     "conformance": {
      "failures": {},
-     "passed": 1,
-     "validated": 1
+     "passed": 201,
+     "validated": 201
     },
     "key_range": {
-     "max": "202309030811",
-     "min": "202309030811"
+     "max": "202610010708",
+     "min": "202001010101"
     },
     "runs": [
      {
@@ -2214,6 +2497,914 @@
       "host": "JP-CG4QN94",
       "records": 1,
       "source": "samples"
+     },
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "final_odds_prediction": {
+   "top_required": {
+    "_cache_meta": {
+     "type": "dict"
+    },
+    "elapsed_sec": {
+     "type": "float"
+    },
+    "entries": {
+     "type": "list",
+     "min_length": 1
+    },
+    "race_id": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{12}$"
+    },
+    "race_name": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "top_optional": {},
+   "entry_required": {
+    "horse_number": {
+     "type": "int"
+    },
+    "predicted_place_odds_max": {
+     "type": "float"
+    },
+    "predicted_place_odds_min": {
+     "type": "float"
+    },
+    "predicted_win_odds": {
+     "type": "float"
+    },
+    "source": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "entry_optional": {},
+   "advisory": true,
+   "_provenance": {
+    "source": "observed",
+    "samples": 200,
+    "conformance": {
+     "failures": {},
+     "passed": 0,
+     "validated": 0
+    },
+    "key_range": {
+     "max": "202610020811",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "horse_lap": {
+   "top_required": {
+    "1F_posi_in_out": {
+     "type": "dict"
+    },
+    "1F_posi_posi": {
+     "type": "dict"
+    },
+    "1F_time": {
+     "type": "dict"
+    },
+    "2F_posi_in_out": {
+     "type": "dict"
+    },
+    "2F_posi_posi": {
+     "type": "dict"
+    },
+    "2F_time": {
+     "type": "dict"
+    },
+    "3F_posi_in_out": {
+     "type": "dict"
+    },
+    "3F_posi_posi": {
+     "type": "dict"
+    },
+    "3F_time": {
+     "type": "dict"
+    },
+    "4F_posi_in_out": {
+     "type": "dict"
+    },
+    "4F_posi_posi": {
+     "type": "dict"
+    },
+    "4F_time": {
+     "type": "dict"
+    },
+    "5F_posi_in_out": {
+     "type": "dict"
+    },
+    "5F_posi_posi": {
+     "type": "dict"
+    },
+    "5F_time": {
+     "type": "dict"
+    },
+    "6F_posi_in_out": {
+     "type": "dict"
+    },
+    "6F_posi_posi": {
+     "type": "dict"
+    },
+    "6F_time": {
+     "type": "dict"
+    },
+    "7F_posi_in_out": {
+     "type": "dict"
+    },
+    "7F_posi_posi": {
+     "type": "dict"
+    },
+    "7F_time": {
+     "type": "dict"
+    },
+    "8F_posi_in_out": {
+     "type": "dict"
+    },
+    "8F_posi_posi": {
+     "type": "dict"
+    },
+    "8F_time": {
+     "type": "dict"
+    },
+    "horse_id": {
+     "type": "dict"
+    }
+   },
+   "top_optional": {
+    "10F_posi_in_out": {
+     "type": "dict"
+    },
+    "10F_posi_posi": {
+     "type": "dict"
+    },
+    "10F_time": {
+     "type": "dict"
+    },
+    "11F_posi_in_out": {
+     "type": "dict"
+    },
+    "11F_posi_posi": {
+     "type": "dict"
+    },
+    "11F_time": {
+     "type": "dict"
+    },
+    "12F_posi_in_out": {
+     "type": "dict"
+    },
+    "12F_posi_posi": {
+     "type": "dict"
+    },
+    "12F_time": {
+     "type": "dict"
+    },
+    "13F_posi_in_out": {
+     "type": "dict"
+    },
+    "13F_posi_posi": {
+     "type": "dict"
+    },
+    "13F_time": {
+     "type": "dict"
+    },
+    "14F_posi_in_out": {
+     "type": "dict"
+    },
+    "14F_posi_posi": {
+     "type": "dict"
+    },
+    "14F_time": {
+     "type": "dict"
+    },
+    "15F_posi_in_out": {
+     "type": "dict"
+    },
+    "15F_posi_posi": {
+     "type": "dict"
+    },
+    "15F_time": {
+     "type": "dict"
+    },
+    "9F_posi_in_out": {
+     "type": "dict"
+    },
+    "9F_posi_posi": {
+     "type": "dict"
+    },
+    "9F_time": {
+     "type": "dict"
+    }
+   },
+   "advisory": true,
+   "_provenance": {
+    "source": "observed",
+    "samples": 42,
+    "conformance": {
+     "failures": {},
+     "passed": 0,
+     "validated": 0
+    },
+    "key_range": {
+     "max": "202508040412",
+     "min": "202503030301"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 42,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "jra_cushion": {
+   "top_required": {
+    "records": {
+     "type": "list",
+     "min_length": 1
+    }
+   },
+   "top_optional": {},
+   "entry_list_key": "records",
+   "entry_required": {
+    "course_position": {
+     "type": "str"
+    },
+    "cushion_value": {
+     "type": "float"
+    },
+    "date": {
+     "type": "str"
+    },
+    "is_race_day": {
+     "type": "bool"
+    },
+    "kai": {
+     "type": "int"
+    },
+    "race_day": {
+     "type": "int"
+    },
+    "venue_code": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{2}$"
+    },
+    "venue_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "weekday": {
+     "type": "str",
+     "non_empty": true
+    },
+    "year": {
+     "type": "int"
+    }
+   },
+   "entry_optional": {
+    "dirt_moisture_4corner": {
+     "type": "float"
+    },
+    "dirt_moisture_goal": {
+     "type": "float"
+    },
+    "measurement_time": {
+     "type": "str"
+    },
+    "pair_index": {
+     "type": "int"
+    },
+    "scraped_at": {
+     "type": "str"
+    },
+    "turf_moisture_4corner": {
+     "type": "float"
+    },
+    "turf_moisture_goal": {
+     "type": "float"
+    }
+   },
+   "advisory": true,
+   "_provenance": {
+    "source": "observed",
+    "samples": 49,
+    "conformance": {
+     "failures": {},
+     "passed": 0,
+     "validated": 0
+    },
+    "key_range": {
+     "max": "2026",
+     "min": "2020"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 49,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_lap_on_time": {
+   "top_required": {
+    "1000": {
+     "type": "dict"
+    },
+    "1200": {
+     "type": "dict"
+    },
+    "200": {
+     "type": "dict"
+    },
+    "400": {
+     "type": "dict"
+    },
+    "600": {
+     "type": "dict"
+    },
+    "800": {
+     "type": "dict"
+    },
+    "race_id": {
+     "type": "dict"
+    },
+    "タイトル": {
+     "type": "dict"
+    }
+   },
+   "top_optional": {
+    "1400": {
+     "type": "dict"
+    },
+    "1600": {
+     "type": "dict"
+    },
+    "1800": {
+     "type": "dict"
+    },
+    "2000": {
+     "type": "dict"
+    },
+    "2200": {
+     "type": "dict"
+    },
+    "2400": {
+     "type": "dict"
+    },
+    "2600": {
+     "type": "dict"
+    }
+   },
+   "advisory": true,
+   "_provenance": {
+    "source": "observed",
+    "samples": 69,
+    "conformance": {
+     "failures": {},
+     "passed": 0,
+     "validated": 0
+    },
+    "key_range": {
+     "max": "202508040412",
+     "min": "202503030301"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 69,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_performance": {
+   "top_required": {
+    "entries": {
+     "type": "list",
+     "min_length": 1
+    },
+    "meta": {
+     "type": "dict"
+    },
+    "race_id": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{12}$"
+    },
+    "year": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{4}$"
+    }
+   },
+   "top_optional": {},
+   "entry_required": {
+    "adjusted_finish_time": {
+     "type": "float"
+    },
+    "baseline_mean_time": {
+     "type": "float"
+    },
+    "class_group": {
+     "type": "str",
+     "non_empty": true
+    },
+    "current_weight_advantage_points": {
+     "type": "float"
+    },
+    "distance": {
+     "type": "int"
+    },
+    "distance_band": {
+     "type": "str",
+     "non_empty": true
+    },
+    "field_relative_pre_rating": {
+     "type": "float"
+    },
+    "field_size": {
+     "type": "int"
+    },
+    "field_strength_contrib": {
+     "type": "float"
+    },
+    "field_top3_gap": {
+     "type": "float"
+    },
+    "finish_position": {
+     "type": "int"
+    },
+    "future_emergence_score": {
+     "type": "float"
+    },
+    "horse_id": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{10}$"
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_number": {
+     "type": "int"
+    },
+    "horse_pre_rating_neutral": {
+     "type": "float"
+    },
+    "horse_pre_rating_pre_race": {
+     "type": "float"
+    },
+    "margin_adjusted_figure": {
+     "type": "float"
+    },
+    "normalized_weight_carried": {
+     "type": "float"
+    },
+    "pace_adjusted_figure": {
+     "type": "float"
+    },
+    "pace_shape_class": {
+     "type": "str",
+     "non_empty": true
+    },
+    "race_date": {
+     "type": "str",
+     "non_empty": true
+    },
+    "race_id": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{12}$"
+    },
+    "race_level_pre_race": {
+     "type": "float"
+    },
+    "race_level_retrospective": {
+     "type": "float"
+    },
+    "race_uncertainty": {
+     "type": "float"
+    },
+    "reference_weight_equivalent": {
+     "type": "float"
+    },
+    "run_performance_final": {
+     "type": "float"
+    },
+    "run_performance_final_pct": {
+     "type": "float"
+    },
+    "run_performance_final_std": {
+     "type": "float"
+    },
+    "run_performance_raw": {
+     "type": "float"
+    },
+    "surface": {
+     "type": "str",
+     "non_empty": true
+    },
+    "time_figure": {
+     "type": "float"
+    },
+    "track_condition": {
+     "type": "str",
+     "non_empty": true
+    },
+    "track_variant": {
+     "type": "float"
+    },
+    "track_variant_online": {
+     "type": "float"
+    },
+    "venue": {
+     "type": "str",
+     "non_empty": true
+    },
+    "venue_code": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{2}$"
+    },
+    "venue_era": {
+     "type": "str",
+     "non_empty": true
+    },
+    "weight_adjusted_figure": {
+     "type": "float"
+    }
+   },
+   "entry_optional": {},
+   "advisory": true,
+   "_provenance": {
+    "source": "observed",
+    "samples": 200,
+    "conformance": {
+     "failures": {},
+     "passed": 0,
+     "validated": 0
+    },
+    "key_range": {
+     "max": "202205030504",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 200,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_predictions": {
+   "top_required": {
+    "distance": {
+     "type": "int"
+    },
+    "elapsed_sec": {
+     "type": "float"
+    },
+    "model_type": {
+     "type": "str",
+     "non_empty": true
+    },
+    "predictions": {
+     "type": "list",
+     "min_length": 1
+    },
+    "race_id": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{12}$"
+    },
+    "race_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "round": {
+     "type": "int"
+    },
+    "status": {
+     "type": "str",
+     "non_empty": true
+    },
+    "surface": {
+     "type": "str",
+     "non_empty": true
+    },
+    "total_horses": {
+     "type": "int"
+    },
+    "track_condition": {
+     "type": "str",
+     "non_empty": true
+    },
+    "venue": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "top_optional": {
+    "_cache_meta": {
+     "type": "dict"
+    },
+    "_compute_meta": {
+     "type": "dict"
+    },
+    "bet_suggestion": {
+     "type": "dict"
+    },
+    "composite_params": {
+     "type": "dict"
+    },
+    "feature_highlights": {
+     "type": "list"
+    },
+    "mark_method": {
+     "type": "str"
+    },
+    "model_description": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "predictions",
+   "entry_required": {
+    "horse_id": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{10}$"
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_number": {
+     "type": "int"
+    },
+    "normalized_score": {
+     "type": "float"
+    },
+    "pred_rank": {
+     "type": "int"
+    },
+    "pred_score": {
+     "type": "float"
+    }
+   },
+   "entry_optional": {
+    "buy_tier": {
+     "type": "str"
+    },
+    "composite_rank": {
+     "type": "int"
+    },
+    "composite_score": {
+     "type": "float"
+    },
+    "estimated_prob": {
+     "type": "float"
+    },
+    "ev_place": {
+     "type": "float"
+    },
+    "ev_top2": {
+     "type": "float"
+    },
+    "ev_win": {
+     "type": "float"
+    },
+    "expected_value": {
+     "type": "float"
+    },
+    "mark_type": {
+     "type": "str"
+    },
+    "odds_confidence": {
+     "type": "float"
+    },
+    "odds_source": {
+     "type": "str"
+    },
+    "place_odds_avg": {
+     "type": "float"
+    },
+    "place_odds_max": {
+     "type": "float"
+    },
+    "place_odds_min": {
+     "type": "float"
+    },
+    "recommendation": {
+     "type": "str"
+    },
+    "top2_odds_est": {
+     "type": "float"
+    },
+    "top2_prob": {
+     "type": "float"
+    },
+    "top3_prob": {
+     "type": "float"
+    },
+    "win_odds": {
+     "type": "float"
+    },
+    "win_prob": {
+     "type": "float"
+    }
+   },
+   "advisory": true,
+   "_provenance": {
+    "source": "observed",
+    "samples": 36,
+    "conformance": {
+     "failures": {},
+     "passed": 0,
+     "validated": 0
+    },
+    "key_range": {
+     "max": "202606020609",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 36,
+      "source": "storage"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "tracking_difficulty": {
+   "top_required": {
+    "_cache_meta": {
+     "type": "dict"
+    },
+    "_compute_meta": {
+     "type": "dict"
+    },
+    "distance": {
+     "type": "int"
+    },
+    "entries": {
+     "type": "list",
+     "min_length": 1
+    },
+    "field_prev_stats": {
+     "type": "dict"
+    },
+    "field_size": {
+     "type": "int"
+    },
+    "pace_prediction": {
+     "type": "dict"
+    },
+    "position_flow": {
+     "type": "list",
+     "min_length": 1
+    },
+    "race_date": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{8}$"
+    },
+    "race_id": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{12}$"
+    },
+    "race_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "result_viewable": {
+     "type": "bool"
+    },
+    "surface": {
+     "type": "str",
+     "non_empty": true
+    },
+    "track_condition": {
+     "type": "str",
+     "non_empty": true
+    },
+    "venue": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "top_optional": {
+    "result_kind": {
+     "type": "str"
+    },
+    "result_view_url": {
+     "type": "str"
+    }
+   },
+   "entry_required": {
+    "bracket_number": {
+     "type": "int"
+    },
+    "course_comparison": {
+     "type": "dict"
+    },
+    "field_factors": {
+     "type": "dict"
+    },
+    "form": {
+     "type": "dict"
+    },
+    "gate_factors": {
+     "type": "dict"
+    },
+    "horse_id": {
+     "type": "str",
+     "non_empty": true,
+     "pattern": "^\\d{10}$"
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_number": {
+     "type": "int"
+    },
+    "neighbor_factors": {
+     "type": "dict"
+    },
+    "prev_race": {
+     "type": "dict"
+    },
+    "profile": {
+     "type": "dict"
+    },
+    "recent_3": {
+     "type": "dict"
+    },
+    "tracking_difficulty": {
+     "type": "dict"
+    }
+   },
+   "entry_optional": {
+    "position_ability": {
+     "type": "dict"
+    }
+   },
+   "advisory": true,
+   "_provenance": {
+    "source": "observed",
+    "samples": 183,
+    "conformance": {
+     "failures": {},
+     "passed": 0,
+     "validated": 0
+    },
+    "key_range": {
+     "max": "202610011212",
+     "min": "202001010101"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T14:54:24+00:00",
+      "host": "961fd3e51b1a",
+      "records": 183,
+      "source": "storage"
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
@@ -2221,29 +3412,9 @@
   }
  },
  "no_schema_reason": {
-  "race_predictions": {
-   "status": "pending",
-   "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される（保存元: api/app.py・inference_pipeline。payload は predictions / horses の2形式が混在）"
-  },
-  "tracking_difficulty": {
-   "status": "pending",
-   "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される"
-  },
-  "final_odds_prediction": {
-   "status": "pending",
-   "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される"
-  },
   "finish_order_prediction": {
    "status": "pending",
    "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される"
-  },
-  "race_performance": {
-   "status": "pending",
-   "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される"
-  },
-  "jra_cushion": {
-   "status": "pending",
-   "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される（保存元: jra_cushion_storage / jra_cushion_sync。年別 {records:[…]}）"
   },
   "horse_name": {
    "status": "unused",
@@ -2257,10 +3428,6 @@
    "status": "unused",
    "note": "書き込み箇所なし（予約）"
   },
-  "horse_lap": {
-   "status": "unused",
-   "note": "書き込み箇所なし（予約）"
-  },
   "race_info": {
    "status": "unused",
    "note": "書き込み箇所なし（race_result_meta / race_shutuba_meta に置換）"
@@ -2268,10 +3435,6 @@
   "race_lap": {
    "status": "unused",
    "note": "書き込み箇所なし（race_result_lap に置換）"
-  },
-  "race_lap_on_time": {
-   "status": "unused",
-   "note": "書き込み箇所なし（race_result_on_time_lap に置換）"
   },
   "race_return": {
    "status": "unused",
