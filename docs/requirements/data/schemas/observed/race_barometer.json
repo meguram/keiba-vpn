@@ -1,0 +1,186 @@
+{
+ "category": "race_barometer",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "202309030811",
+  "min": "202309030811"
+ },
+ "lists": {
+  "entries": {
+   "fields": {
+    "finish_order": {
+     "empty": 0,
+     "max": 17,
+     "min": 1,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_id": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "digits10": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_name": {
+     "empty": 0,
+     "len_max": 9,
+     "len_min": 3,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "text": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {
+      "アスクビクターモア": 1,
+      "イクイノックス": 1,
+      "カラテ": 1,
+      "ジェラルディーナ": 1,
+      "ジオグリフ": 1,
+      "ジャスティンパレス": 1,
+      "スルーセブンシーズ": 1,
+      "ダノンザキッド": 1,
+      "ディープボンド": 1,
+      "ドゥラエレーデ": 1,
+      "ブレークアップ": 1,
+      "プラダリア": 1,
+      "ボッケリーニ": 1,
+      "モズベッロ": 1,
+      "ユニコーンライオン": 1,
+      "ライラック": 1,
+      "ヴェラアズール": 1
+     },
+     "values_overflow": false
+    },
+    "horse_number": {
+     "empty": 0,
+     "max": 17,
+     "min": 1,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "index_chase": {
+     "empty": 0,
+     "max": 112,
+     "min": 104,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "index_closing": {
+     "empty": 0,
+     "max": 108,
+     "min": 91,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "index_start": {
+     "empty": 0,
+     "max": 109,
+     "min": 100,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "index_total": {
+     "empty": 0,
+     "max": 114,
+     "min": 102,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    }
+   },
+   "items": 17,
+   "records": 1
+  }
+ },
+ "nested": {},
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  }
+ ],
+ "top": {
+  "entries": {
+   "empty": 0,
+   "len_max": 17,
+   "len_min": 17,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits12": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

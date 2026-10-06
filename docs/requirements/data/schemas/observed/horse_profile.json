@@ -1,0 +1,266 @@
+{
+ "category": "horse_profile",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "2019105219",
+  "min": "2019105219"
+ },
+ "lists": {},
+ "nested": {},
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  }
+ ],
+ "top": {
+  "birthday": {
+   "empty": 0,
+   "len_max": 10,
+   "len_min": 10,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "2019年3月23日": 1
+   },
+   "values_overflow": false
+  },
+  "birthplace": {
+   "empty": 0,
+   "len_max": 3,
+   "len_min": 3,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "安平町": 1
+   },
+   "values_overflow": false
+  },
+  "breeder": {
+   "empty": 0,
+   "len_max": 8,
+   "len_min": 8,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "ノーザンファーム": 1
+   },
+   "values_overflow": false
+  },
+  "career": {
+   "empty": 0,
+   "len_max": 15,
+   "len_min": 15,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "10戦8勝 [8-2-0-0]": 1
+   },
+   "values_overflow": false
+  },
+  "career_record": {
+   "empty": 0,
+   "len_max": 4,
+   "len_min": 4,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "dam": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "dam_sire": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "horse_id": {
+   "empty": 0,
+   "len_max": 10,
+   "len_min": 10,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits10": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "horse_name": {
+   "empty": 0,
+   "len_max": 7,
+   "len_min": 7,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "イクイノックス": 1
+   },
+   "values_overflow": false
+  },
+  "major_wins": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "name_en": {
+   "empty": 0,
+   "len_max": 7,
+   "len_min": 7,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "Equinox": 1
+   },
+   "values_overflow": false
+  },
+  "owner": {
+   "empty": 0,
+   "len_max": 8,
+   "len_min": 8,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "シルクレーシング": 1
+   },
+   "values_overflow": false
+  },
+  "sire": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "total_earnings": {
+   "empty": 0,
+   "max": 175655,
+   "min": 175655,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "trainer": {
+   "empty": 0,
+   "len_max": 4,
+   "len_min": 4,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "木村哲也": 1
+   },
+   "values_overflow": false
+  }
+ }
+}

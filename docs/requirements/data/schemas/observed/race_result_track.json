@@ -1,0 +1,74 @@
+{
+ "category": "race_result_track",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "202309030811",
+  "min": "202309030811"
+ },
+ "lists": {},
+ "nested": {},
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  }
+ ],
+ "top": {
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits12": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "track_condition": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "良": 1
+   },
+   "values_overflow": false
+  },
+  "weather": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "曇": 1
+   },
+   "values_overflow": false
+  }
+ }
+}

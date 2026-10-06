@@ -1,0 +1,160 @@
+{
+ "category": "race_result_payoff",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "202309030811",
+  "min": "202309030811"
+ },
+ "lists": {},
+ "nested": {
+  "payoff": {
+   "ワイド": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 3,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "list": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "三連単": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 3,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "三連複": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 3,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "単勝": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 3,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "枠連": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 3,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "複勝": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 3,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "list": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "馬単": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 3,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "馬連": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 3,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 1
+    },
+    "values": {},
+    "values_overflow": false
+   }
+  }
+ },
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  }
+ ],
+ "top": {
+  "payoff": {
+   "empty": 0,
+   "len_max": 8,
+   "len_min": 8,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits12": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

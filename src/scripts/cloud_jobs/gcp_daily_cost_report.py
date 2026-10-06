@@ -61,6 +61,9 @@ def fetch_daily_cost(date: str, table: str) -> dict:
         ``{"date": date, "rows": [{"service": str, "cost": float}, ...], "total": float}``。
         ``rows`` はコスト降順。
     """
+    from src.config.gcp_guard import assert_gcp_allowed
+
+    assert_gcp_allowed("BigQuery")
     from google.cloud import bigquery
 
     query = f"""

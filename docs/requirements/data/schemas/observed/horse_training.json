@@ -1,0 +1,330 @@
+{
+ "category": "horse_training",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "2019105219",
+  "min": "2019105219"
+ },
+ "lists": {
+  "entries": {
+   "fields": {
+    "comment": {
+     "empty": 46,
+     "len_max": 36,
+     "len_min": 0,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "empty": 46,
+      "text": 9
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {
+      "": 46
+     },
+     "values_overflow": false
+    },
+    "course": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 2,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "text": 55
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {
+      "南Ｗ": 21,
+      "栗坂": 2,
+      "美坂": 23,
+      "美Ｗ": 6,
+      "ＣＷ": 3
+     },
+     "values_overflow": false
+    },
+    "date": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "date-iso": 55
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "day_of_week": {
+     "empty": 0,
+     "len_max": 1,
+     "len_min": 1,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "text": 55
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {
+      "土": 1,
+      "日": 25,
+      "木": 4,
+      "水": 25
+     },
+     "values_overflow": false
+    },
+    "evaluation": {
+     "empty": 0,
+     "len_max": 4,
+     "len_min": 2,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "text": 55
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {
+      "動き良化": 1,
+      "動き軽快": 1,
+      "好気配": 7,
+      "好調子": 1,
+      "態勢万全": 2,
+      "態勢整う": 2,
+      "本調子": 1,
+      "気配上々": 1,
+      "気配抜群": 6,
+      "迫力十分": 1,
+      "迫力満点": 1,
+      "追毎良化": 1,
+      "順調": 30
+     },
+     "values_overflow": false
+    },
+    "lap_times": {
+     "empty": 0,
+     "len_max": 5,
+     "len_min": 4,
+     "n": 55,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "list": 55
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "leg_color": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 2,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "text": 55
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {
+      "一杯": 1,
+      "直強": 1,
+      "馬也": 50,
+      "Ｇ一": 1,
+      "Ｇ強": 2
+     },
+     "values_overflow": false
+    },
+    "position": {
+     "empty": 26,
+     "len_max": 1,
+     "len_min": 0,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "digits1": 29,
+      "empty": 26
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {
+      "": 26
+     },
+     "values_overflow": false
+    },
+    "race_info": {
+     "empty": 0,
+     "len_max": 36,
+     "len_min": 29,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "text": 55
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "rank": {
+     "empty": 0,
+     "len_max": 1,
+     "len_min": 1,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "text": 55
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {
+      "A": 10,
+      "B": 15,
+      "C": 30
+     },
+     "values_overflow": false
+    },
+    "rider": {
+     "empty": 2,
+     "len_max": 3,
+     "len_min": 0,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "empty": 2,
+      "text": 53
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {
+      "": 2,
+      "ルメー": 8,
+      "助手": 45
+     },
+     "values_overflow": false
+    },
+    "time_raw": {
+     "empty": 0,
+     "len_max": 28,
+     "len_min": 21,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "text": 55
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "track_condition": {
+     "empty": 0,
+     "len_max": 1,
+     "len_min": 1,
+     "n": 55,
+     "null": 0,
+     "patterns": {
+      "text": 55
+     },
+     "types": {
+      "str": 55
+     },
+     "values": {
+      "不": 1,
+      "稍": 9,
+      "良": 38,
+      "重": 7
+     },
+     "values_overflow": false
+    }
+   },
+   "items": 55,
+   "records": 1
+  }
+ },
+ "nested": {},
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  }
+ ],
+ "top": {
+  "entries": {
+   "empty": 0,
+   "len_max": 55,
+   "len_min": 55,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "horse_id": {
+   "empty": 0,
+   "len_max": 10,
+   "len_min": 10,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits10": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "pages_fetched": {
+   "empty": 0,
+   "max": 1,
+   "min": 1,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "total_items": {
+   "empty": 0,
+   "max": 9,
+   "min": 9,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

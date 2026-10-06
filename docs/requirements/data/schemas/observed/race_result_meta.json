@@ -1,0 +1,194 @@
+{
+ "category": "race_result_meta",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "202309030811",
+  "min": "202309030811"
+ },
+ "lists": {},
+ "nested": {},
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  }
+ ],
+ "top": {
+  "date": {
+   "empty": 0,
+   "len_max": 10,
+   "len_min": 10,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "date-iso": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "direction": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "右": 1
+   },
+   "values_overflow": false
+  },
+  "distance": {
+   "empty": 0,
+   "max": 2200,
+   "min": 2200,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "field_size": {
+   "empty": 0,
+   "max": 17,
+   "min": 17,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "grade": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "G1": 1
+   },
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits12": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_name": {
+   "empty": 0,
+   "len_max": 8,
+   "len_min": 8,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "第64回宝塚記念": 1
+   },
+   "values_overflow": false
+  },
+  "round": {
+   "empty": 0,
+   "max": 0,
+   "min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "start_time": {
+   "empty": 0,
+   "len_max": 5,
+   "len_min": 5,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "time-hhmm": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "surface": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "芝": 1
+   },
+   "values_overflow": false
+  },
+  "venue": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "阪神": 1
+   },
+   "values_overflow": false
+  }
+ }
+}

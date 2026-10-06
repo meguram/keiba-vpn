@@ -1,0 +1,365 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>データ存在チェック／ヘルスチェック — 確認できること</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f172a;--panel:#15213c;--border:#243358;--text:#e6ecff;--muted:#9aa7c7;--accent:#4f8bff;--accent2:#7aa9ff;--code:#0b1428;--shadow:0 8px 28px rgba(0,0,0,.35)}
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:"Noto Sans JP",system-ui,-apple-system,"Segoe UI",sans-serif;background:linear-gradient(180deg,#0b1226,#0f172a 60%,#0b1226);color:var(--text);line-height:1.7;font-size:14px}
+code,pre{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace}
+a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+.layout{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+aside{position:sticky;top:0;height:100vh;overflow-y:auto;background:linear-gradient(180deg,#0a1124,#0d1632);border-right:1px solid var(--border);padding:24px 18px}
+aside .t{font-weight:700;font-size:14px;margin-bottom:14px}
+aside a{display:block;color:var(--text);padding:5px 10px;border-radius:8px;margin:2px 0;font-size:12.5px;border-left:2px solid transparent}
+aside a:hover{background:rgba(79,139,255,.1);border-left-color:var(--accent);text-decoration:none}
+aside a.s{padding-left:22px;color:var(--muted);font-size:12px}
+main{padding:40px 44px 96px;min-width:0}
+.hero{padding:26px 30px;border-radius:18px;background:radial-gradient(1000px 360px at 0 0,rgba(79,139,255,.18),transparent 60%),radial-gradient(700px 360px at 100% 100%,rgba(167,139,250,.18),transparent 60%),#131d3a;border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:28px}
+.hero .eye{color:var(--accent2);font-size:12px;letter-spacing:.2em;font-weight:700}
+.hero h1{margin:6px 0 8px;font-size:26px}.hero p{margin:4px 0;color:var(--muted);font-size:13px}
+h2{font-size:1.25rem;margin:2.2em 0 .6em;padding-bottom:6px;border-bottom:1px solid var(--border);scroll-margin-top:16px}
+h3{font-size:1.05rem;margin:1.8em 0 .4em;color:var(--accent2);scroll-margin-top:16px}
+h4{margin:0}
+p{margin:.6em 0}
+code{background:#1a2748;border:1px solid var(--border);border-radius:6px;padding:0 5px;font-size:11.5px;color:#cfe2ff;word-break:break-all}
+.wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;margin:.8em 0}
+table{width:100%;border-collapse:collapse;background:var(--panel);font-size:12.5px}
+th,td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+th{background:#1a2748;color:var(--muted);font-size:11px;letter-spacing:.05em;white-space:nowrap;position:sticky;top:0}
+tr:last-child td{border-bottom:0}tr:hover td{background:rgba(79,139,255,.04)}
+td small{color:var(--muted)}
+td.id{font-family:"JetBrains Mono",monospace;color:var(--accent2);white-space:nowrap}
+td.envc{min-width:170px;max-width:260px}.note{font-size:11.5px;color:#c3cdea;margin-top:3px}
+.b{display:inline-block;min-width:26px;text-align:center;border-radius:6px;padding:0 6px;font-weight:700;font-size:12px}
+.b-ok{background:#12452f;color:#5ff0a2}.b-exp{background:#163a6b;color:#8ec1ff}.b-part{background:#55400f;color:#ffd166}
+.b-ng{background:#5a1a24;color:#ff8a98}.b-ban{background:#3a2a6b;color:#c3a8ff}.b-na{background:#2a3350;color:#9aa7c7}.b-none{background:#2a3350;color:#b6c0dc}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:1em 0}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.card h4{color:var(--accent2);font-size:1.1rem}.card .sub{color:var(--muted);font-size:12px;margin-bottom:8px}
+.chips{display:flex;flex-direction:column;gap:4px}.chip{font-size:12px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin:.8em 0}
+.legend div{font-size:12px}
+.callout{border-left:3px solid var(--accent);background:rgba(79,139,255,.08);border-radius:0 8px 8px 0;padding:10px 14px;margin:1em 0}
+.callout.warn{border-left-color:#ffd166;background:rgba(255,209,102,.07)}
+.callout.bad{border-left-color:#ff8a98;background:rgba(255,138,152,.07)}
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;margin:1em 0}
+.flow .n{flex:1 1 150px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px}
+.flow .n b{display:block;color:var(--accent2);margin-bottom:2px}
+.flow .ar{align-self:center;color:var(--muted)}
+ol.gaps li{margin:.6em 0}
+.pri{display:inline-block;font-size:11px;font-weight:700;border-radius:5px;padding:0 6px;margin-right:4px}
+.p0{background:#5a1a24;color:#ff8a98}.p1{background:#55400f;color:#ffd166}.p2{background:#163a6b;color:#8ec1ff}
+@media(max-width:1000px){.layout{grid-template-columns:1fr}aside{display:none}.cards{grid-template-columns:1fr}main{padding:20px}}
+.lv{display:inline-block;min-width:38px;text-align:center;border-radius:6px;padding:0 6px;font-weight:700;font-size:11.5px}
+</style></head><body><div class="layout"><aside><div class="t">データヘルス</div>
+<a href="#what">1. 何が確認できるか（全体像）</a>
+<a href="#run">2. 使い方・環境ごとの設定</a>
+<a href="#env">3. 環境ごとの違い</a>
+<a href="#infra">4. インフラのヘルスチェック</a>
+<a href="#race">5. レースの健全性カバレッジ</a>
+<a href="#horse">6. 馬の存在カバレッジ</a>
+<a href="#artifact">7. 派生データの存在</a>
+<a href="#calendar">8. カレンダー・鮮度・スキーマ</a>
+<a href="#plan">9. スクレイピング計画</a>
+<a href="#complete">9.5 完全性（stg の受け入れ判定）</a>
+<a href="#violations">9.6 スキーマ違反の記録</a>
+<a href="#judge">10. 判定ロジック</a>
+<a href="#out">11. 結果の環境別管理・出力の読み方</a>
+<a href="#example">12. 実行例（dev）</a>
+<a href="#limits">13. 確認できないこと・制約</a>
+<a href="#files">14. 関連ファイル</a>
+</aside><main>
+<header class="hero"><div class="eye">DATA HEALTH</div><h1>データ存在チェック／ヘルスチェック — 確認できること</h1>
+<p>dev / stg / prod のそれぞれで「どの時期・どのデータが足りないか」「どこをスクレイピングすべきか」「基盤は疎通しているか」を1コマンドで可視化する。</p>
+<p>実装：<code>src/data_health/</code> ／ 実行：<code>make data-health</code> ／ 作成：2026-10-06 ／ 関連：<a href="DATASET_CATALOG.html">DATASET_CATALOG.html</a>（データセット一覧と環境別アクセス状況）</p></header>
+<div class="callout"><b>前提</b><ul><li><b>netkeiba プレミアム認証は完了している</b>（stg・prod とも <code>netkeiba_id</code> / <code>netkeiba_pw</code> 設定済み）。認証が要るカテゴリ（タイム指数・調子偏差値・パドック・個別ラップ）も、認証を理由に免除せず、通常のカテゴリとして不足を判定します。</li><li><b>GCS のアクセスポイント（バケット・prefix）は stg と prod で同一</b>です。GCS 上のデータの「有無」と「スキーマ適合」の結果は、<b>どちらの環境で測っても同じ</b>になります。環境で変わるのは、そこへ<b>到達できるか</b>（鍵・権限・ネットワーク）とローカルの派生データです。</li><li>したがって<b>全件の健全性検証は stg（学習PC）で行えば足りる</b>。prod（VPS）は到達性と直近分の確認（<code>DATA_HEALTH_VALIDATE=sample</code>）でよく、GCS からの download 量と VPS の負荷を抑えられます。結果は <code>--import</code> で相互に取り込めます（§11）。</li></ul></div>
+<h2 id="what">1. 何が確認できるか（全体像）</h2>
+<div class="wrap"><table><tr><th>領域</th><th>確認できること</th><th>データの出所</th><th>GCS 課金</th></tr>
+<tr><td>インフラ疎通</td><td>環境変数の設定、GCS 接続とバケット内オブジェクト、PostgreSQL、Redis、スクレイプキュー、ディスク空き、dev の GCP 遮断とモック</td><td>各サービスへの接続試行（SELECT 1 / PING / bucket.exists）</td><td>exists 1〜2 回・list 1 件</td></tr>
+<tr><td>レースの健全性</td><td>カテゴリ（出馬表・結果・オッズ等）×レース×期間で <b>健全（スキーマ適合）／不適合／未検証／不足／期限前の待機／取得不可</b> を判定。月別・年別ヒートマップ、race_id の配列、キーテーブル</td><td>GCS（dev は data/dev_mock）のキー一覧 ＋ race_lists ＋ 全件検証（台帳で差分だけ download）</td><td>list ＋ 未検証分の download（1 回の上限あり）</td></tr>
+<tr><td>馬の存在</td><td>直近30日〜14日先に出走する馬の <code>horse_result</code>・<code>horse_pedigree_5gen</code>・<code>horse_training</code> の有無</td><td>出馬表（評価窓）の出走馬 × GCS のキー一覧</td><td>出馬表の download（最大300レース）＋ list</td></tr>
+<tr><td>派生データ</td><td>特徴量・血統成果物・外部データ年別・手動ナレッジ・設定・モデルがローカルにあるか。<b>年ごとの不足年</b>も表示</td><td>ローカルファイル（glob）</td><td>なし</td></tr>
+<tr><td>カレンダー</td><td>race_lists の不完全（12R×会場でない日）と、直近の土日に記録が無い日</td><td>data/page_reference/race_lists 等</td><td>なし</td></tr>
+<tr><td>鮮度</td><td>カテゴリごとの最新保存時刻と経過時間</td><td>list に含まれる更新時刻</td><td>なし（list の副産物）</td></tr>
+<tr><td>スクレイピング計画</td><td>不足から、キュー投入できるジョブ（spec）を生成。実行場所（学習PC／VPS cron）付き</td><td>上記の不足</td><td>なし</td></tr>
+</table></div>
+<div class="callout"><b>「あるか」と「健全か」の両方を見ます。</b>2020 年以降のレース単位データについて、存在するだけでなく<b>スキーマ（<code>schema_defs.json</code>）に適合するか</b>まで検証し、カテゴリ×レースごとに <b>健全／不適合／未検証／不足／待機／取得不可</b> を判定します（§5）。どのレースが揃っていないかは <b>race_id の配列</b>（<code>race_ids/*.txt</code>）と、race_id ↔ 開催日・場・R・レース名の<b>キーテーブル</b>（<code>race_keys.csv</code>）で確認できます（§11）。内容の妥当性（スキーマで表せない値の意味、モデルがロードできるか等）は対象外です（§13）。</div>
+<h2 id="run">2. 使い方</h2>
+<pre><code># 開発PC（dev。GCP に接続せず data/dev_mock を評価）
+make data-health
+
+# 学習PC（stg）
+KEIBA_ENV=stg make data-health
+
+# VPS（prod）
+KEIBA_ENV=prod make data-health
+
+# dev PC で stg の要件を評価する dry-run（データの存在のみ。結果は stg@dev に保存され、本物の stg と混ざらない）
+python -m src.data_health --env stg
+
+# 学習PC／VPS の結果を手元（dev PC）に取り込む（GCP には触れない）
+python -m src.data_health --import ~/Downloads/stg_latest.json
+python -m src.data_health --index-only           # 全環境の一覧（index.html）だけ作り直す
+
+# オプション例
+python -m src.data_health --since 2024-01-01 --until 2026-10-20
+python -m src.data_health --no-infra            # DB/Redis/GCS 疎通を省く
+python -m src.data_health --no-horses           # 出馬表の download を伴う馬チェックを省く
+python -m src.data_health --include-optional    # optional カテゴリも計画に含める
+python -m src.data_health --fail-on warn        # warn でも終了コード 2（cron/CI 向け）</code></pre>
+<div class="wrap"><table><tr><th>オプション</th><th>既定</th><th>内容</th></tr><tr><td><code>--since / --until</code></td><td>stg・prod=2020-01-01〜<b>実行日の前日</b> ／ dev=90日前〜実行日の前日</td><td>評価する期間（2020 は要件書・派生カテゴリの保存範囲の起点）</td></tr><tr><td><code>--env</code></td><td>DATA_HEALTH_ENV → KEIBA_ENV</td><td>評価する要件プロファイル（dev / stg / prod）。実行環境（GCP に接続できるか）とは別</td></tr>
+  <tr><td><code>--out-dir</code></td><td><code>data/local/meta/data_health</code></td><td>結果の保存ルート。直下に環境キーのディレクトリを作る（§11）</td></tr>
+  <tr><td><code>--import FILE / --index-only</code></td><td>—</td><td>他 PC の <code>latest.json</code> を取り込む／全環境の一覧だけ更新（§11）</td></tr><tr><td><code>--fail-on</code></td><td>fail</td><td>終了コード 2 にする重大度（fail / warn / never）</td></tr><tr><td><code>--no-infra / --no-horses / --include-optional / --quiet / --now</code></td><td>—</td><td>上記のとおり。<code>--now</code> は時刻固定（テスト用）</td></tr></table></div>
+<p>環境は <code>KEIBA_ENV</code> で決まります（起動時に <code>.env</code> と <code>.env.&lt;env&gt;</code> を読んでから判定）。<b>未設定は prod 扱い</b>なので、dev の <code>.env</code> には <code>KEIBA_ENV=dev</code> が必要です。</p>
+<h3>2.1 環境ごとの設定（環境変数 <code>DATA_HEALTH_*</code>）</h3>
+<p>優先順位は <b>CLI 引数 &gt; 環境変数 &gt; 既定値</b>。環境ごとに変えたい値は <code>.env.stg</code> / <code>.env.prod</code> に書けば、<code>KEIBA_ENV</code> に応じて自動で切り替わります（1 つの <code>.env</code> に書く場合は <code>DATA_HEALTH_LEVELS_STG</code> のように環境名を付ける）。雛形は <code>.env.example</code> 末尾、<code>.env.stg.example</code>、<code>.env.prod.example</code>。</p>
+<div class="wrap"><table><tr><th>変数</th><th>既定</th><th>内容</th></tr>
+<tr><td><code>DATA_HEALTH_ENV</code></td><td>KEIBA_ENV</td><td>評価する要件プロファイル（dev|stg|prod）</td></tr>
+<tr><td><code>DATA_HEALTH_SINCE</code> / <code>_UNTIL</code></td><td>stg・prod=2020-01-01 ／ dev=90日前。終わりはいずれも<b>実行日の前日</b></td><td>評価期間（YYYY-MM-DD）</td></tr>
+<tr><td><code>DATA_HEALTH_FAIL_ON</code></td><td>fail</td><td>終了コード 2 にする重大度（fail|warn|never）</td></tr>
+<tr><td><code>DATA_HEALTH_OUT_DIR</code></td><td>data/local/meta/data_health</td><td>結果の保存ルート</td></tr>
+<tr><td><code>DATA_HEALTH_LEVELS</code></td><td>なし</td><td>重要度の上書き。<code>ID=レベル</code> をカンマ区切り。レベルは required / recommended / optional / skip。例：<code>race_barometer=required,C07=optional,infra.redis=optional</code></td></tr>
+<tr><td><code>DATA_HEALTH_LEVELS_&lt;DEV|STG|PROD&gt;</code></td><td>なし</td><td>その環境のときだけ有効な上書き（汎用より優先）</td></tr>
+<tr><td><code>DATA_HEALTH_SKIP</code></td><td>なし</td><td>評価しない ID（<code>ID=skip</code> の短縮）。例：<code>infra.redis,C07</code></td></tr>
+<tr><td><code>DATA_HEALTH_SCHEMA_SAMPLE</code></td><td>20</td><td>sample モードの検証件数（カテゴリごとの最新 N 件）</td></tr>
+<tr><td><code>DATA_HEALTH_VALIDATE</code></td><td>full</td><td>健全性（スキーマ適合）の検証範囲 off / sample / full（§5.2.1）</td></tr>
+<tr><td><code>DATA_HEALTH_VALIDATE_BUDGET</code></td><td>5000（dev は 0）</td><td>full のとき 1 回の実行で download する最大件数（0 = 無制限）</td></tr>
+<tr><td><code>DATA_HEALTH_VALIDATE_WORKERS</code></td><td>8</td><td>検証の並列数</td></tr>
+<tr><td><code>DATA_HEALTH_COMPLETE_LEVELS</code></td><td>required,recommended</td><td>「完全性」(<code>--require-complete</code>) に含める重要度（§9.5）</td></tr>
+<tr><td><code>DATA_HEALTH_HORSE_PAST_DAYS</code> / <code>_FUTURE_DAYS</code> / <code>_RACES_MAX</code></td><td>30 / 14 / 300</td><td>馬の評価窓（過去・先の日数、最大レース数）</td></tr></table></div>
+<p>上書きできる ID は、レース・馬のカテゴリ名（<code>race_odds</code> 等）、派生データの ID（<code>C07</code> 等）、インフラの ID（<code>infra.redis</code>、<code>gcs.connect</code>、<code>gcs.F02</code> 等。§4 の表）です。綴りが違う ID は無視され、レポートに警告が出ます。値が不正（日付形式・レベル名など）なときは起動時にエラーで止まります。実際に適用された上書きは、レポート冒頭と <code>latest.json</code> の <code>settings</code> に残ります。</p>
+<div class="callout"><b>例：VPS（prod）は配信専用なので、学習側の派生データを評価から外す</b><br><code>.env.prod</code> に <code>DATA_HEALTH_SKIP=C07,D01b,D02,D05</code> と書く。コードの変更は不要です。</div>
+<div class="callout warn"><b>プロファイルと実行環境は別物です。</b>GCP に接続できるかは実行環境（<code>KEIBA_ENV</code>）で決まり、dev PC は常に遮断されます。dev PC で <code>--env stg</code> を指定した場合は、インフラ疎通を省いて<b>手元のデータが stg の要件をどれだけ満たすか</b>だけを評価し、スクレイピング計画も出しません（結果キーは <code>stg@dev</code>）。本物の stg の結果は学習PC で実行して <code>--import</code> してください。</div>
+
+<h2 id="env">3. 環境ごとの違い</h2>
+<div class="wrap"><table><tr><th>観点</th><th>dev（開発PC）</th><th>stg（学習PC）</th><th>prod（GCP＋VPS）</th></tr><tr><td>GCS のアクセスポイント</td><td>接続しない（遮断）</td><td colspan="2" style="text-align:center">同一のバケット・prefix（結果は環境によらず共通。違いは到達できるか）</td></tr><tr><td>データの読み元</td><td><code>data/dev_mock</code>（GCS 不使用・GCP 遮断）</td><td>GCS（list）</td><td>GCS（list）</td></tr><tr><td>要件の考え方</td><td>モックで動くこと（スキーマ定義済みの<b>全カテゴリ</b>にスキーマ適合のサンプルがあること。派生データ・特徴量は対象外）</td><td>全データに到達できること</td><td>配信に要るデータに到達できること（推論・画面）</td></tr><tr><td>連番からの欠損推定</td><td>しない（モックは部分的なため）</td><td>する</td><td>する</td></tr><tr><td>スクレイピング計画</td><td>出さない（不足は <code>make dev-mock</code> で解消）</td><td>出す</td><td>出す</td></tr><tr><td>健全性の検証範囲（推奨）</td><td>full（ローカルなので無制限）</td><td>full（全件。ここで 1 回やれば GCS 上のデータ全体を確認したことになる）</td><td>sample（到達性と直近分。<code>.env.prod</code> に <code>DATA_HEALTH_VALIDATE=sample</code>）</td></tr><tr><td>GCS 接続・DB・Redis</td><td>GCS は「遮断されているか」を確認。DB は推奨、Redis は任意</td><td>GCS・DB・Redis とも必須</td><td>同左</td></tr><tr><td>カレンダー不完全</td><td>INFO（モックは 1 会場 4R のため常に出る）</td><td>WARN</td><td>WARN</td></tr></table></div>
+<h2 id="infra">4. インフラのヘルスチェック</h2>
+<p>重要度（必須／推奨／任意）が問題時の重大度を決めます：必須→FAIL、推奨→WARN、任意→INFO。</p>
+<div class="wrap"><table><tr><th>ID</th><th>確認内容</th><th>OK の条件</th><th>対象環境</th><th>重要度</th></tr>
+<tr><td class="id">env.keiba_env</td><td>KEIBA_ENV</td><td>設定されている（未設定は WARN：prod 扱いになるため）</td><td>全環境</td><td>—</td></tr>
+<tr><td class="id">env.gcs_bucket</td><td>GCS_BUCKET</td><td>空でない</td><td>stg・prod</td><td><span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">env.gcs_credentials</td><td>GCS 認証情報</td><td>GCS_* サービスアカウントがある（ADC のみは WARN、どちらも無いと FAIL）</td><td>stg・prod</td><td><span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">env.dev_secret_key</td><td>DEV_SECRET_KEY</td><td>32 文字以上（T-010）</td><td>stg・prod</td><td><span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">dev.gcp_blocked</td><td>dev の GCP 遮断</td><td><code>GcpAccessForbidden</code> が有効</td><td>dev</td><td><span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">dev.mock</td><td>dev モックデータ</td><td><code>data/dev_mock</code> に JSON がある（無ければ <code>make dev-mock</code>）</td><td>dev</td><td><span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">gcs.connect</td><td>GCS 接続</td><td><code>bucket.exists()</code> が真で、データ prefix に 1 件以上 list できる（応答 ms も表示）</td><td>stg・prod</td><td><span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">gcs.F02</td><td>models/ensemble/latest.json</td><td>公開済みアンサンブルが GCS にある（T-005/T-006 未実施なら FAIL/WARN）</td><td>stg=推奨 / prod=必須</td><td><span class="lv b-part">推奨</span> / <span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">infra.db</td><td>PostgreSQL</td><td><code>SELECT 1</code> が通る（Cloud SQL または DATABASE_URL）</td><td>全環境</td><td>dev=<span class="lv b-part">推奨</span> stg・prod=<span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">infra.redis</td><td>Redis</td><td>PING が通る</td><td>全環境</td><td>dev=<span class="lv b-exp">任意</span> stg・prod=<span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">infra.queue</td><td>スクレイプキュー</td><td>ローカルの scrape_queue.json のジョブ数を状態別に集計。failed があれば WARN（Cloud Tasks バックエンドの stg/prod は対象外）</td><td>全環境</td><td><span class="lv b-part">推奨</span></td></tr>
+<tr><td class="id">infra.disk</td><td>ディスク空き</td><td>空き 10GB 以上かつ 10% 以上（VPS 100GB 前提のキャッシュ上限設計の監視用）</td><td>全環境</td><td><span class="lv b-part">推奨</span></td></tr>
+<tr><td class="id">data.upcoming_calendar</td><td>直近7日の race_lists</td><td>今日から7日先までの土日に、race_lists（開催あり／なしの記録）がある</td><td>stg・prod</td><td><span class="lv b-part">推奨</span></td></tr>
+</table></div>
+<h2 id="race">5. レースの健全性カバレッジ（スキーマ適合まで）</h2>
+<p>対象は JRA 10 場のレース。各レース×カテゴリを判定し、年別・月別に集計します（日付が判明しないレースは <code>YYYY-??</code> 行）。</p>
+<div class="callout"><b>評価期間</b>：既定は <b>2020-01-01（dev は 90 日前）〜 実行日の前日</b>。実行当日以降のレース（結果・オッズ等がまだ揃わない）は、カバレッジ・完全性には含めません。ただし運用上の先読みは別に見ます：<b>馬の出走予定</b>（今日から 14 日先の出走馬）と<b>直近の race_lists</b>（今日〜7 日先の土日）。</div>
+<h3>5.1 カテゴリと環境別の重要度</h3>
+<div class="wrap"><table><tr><th>カテゴリ</th><th>内容</th><th>期限ルール</th><th>再取得タスク</th><th>dev</th><th>stg</th><th>prod</th></tr>
+<tr><td class="id">race_shutuba</td><td>出馬表</td><td>前日 18:00（SLA1）</td><td><code>race_shutuba</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">race_result</td><td>確定結果</td><td>レース後最初の金曜 18:30（SLA6）</td><td><code>race_result</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">race_index</td><td>タイム指数</td><td>前日 18:00（SLA1）</td><td><code>race_index</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-part">推奨</span></td></tr>
+<tr><td class="id">race_odds</td><td>単複オッズ</td><td>当日 19:00（SLA3〜5）</td><td><code>race_odds</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-part">推奨</span></td></tr>
+<tr><td class="id">race_result_lap</td><td>個別ラップ</td><td>レース後最初の金曜 18:30（SLA6）</td><td><code>race_result_lap</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-part">推奨</span></td></tr>
+<tr><td class="id">race_barometer</td><td>調子偏差値</td><td>レース後最初の金曜 18:30（SLA6）</td><td><code>race_barometer</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-part">推奨</span></td></tr>
+<tr><td class="id">race_paddock</td><td>パドック</td><td>当日 19:00（SLA3〜5）</td><td><code>race_paddock</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-exp">任意</span></td><td><span class="lv b-exp">任意</span></td></tr>
+<tr><td class="id">race_pair_odds</td><td>2連系オッズ</td><td>当日 19:00（SLA3〜5）</td><td><code>race_pair_odds</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-exp">任意</span></td><td><span class="lv b-exp">任意</span></td></tr>
+<tr><td class="id">race_result_on_time</td><td>速報結果</td><td>当日 19:00（SLA3〜5）</td><td><code>race_result_on_time</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-exp">任意</span></td><td><span class="lv b-exp">任意</span></td></tr>
+<tr><td class="id">race_predictions</td><td>AI予測<br><small>直近 45 日〜14 日先のみ評価（生成物）</small></td><td>前日 18:00（SLA1）</td><td><code>—</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-ng">必須</span></td></tr>
+</table></div>
+<h3>5.2 レースごとの判定</h3>
+<div class="wrap"><table><tr><th>判定</th><th>意味</th></tr>
+<tr><td>健全（healthy）</td><td>存在し、<b>スキーマ定義（<code>schema_defs.json</code>）に適合</b>することを検証済み</td></tr>
+<tr><td>不適合（invalid）</td><td>存在するが<b>スキーマに合わない</b>（必須キー欠落・型／制約違反・要素の欠落）、または読み込めない。原因は <code>top_missing:race_id</code> 等のコードで記録</td></tr>
+<tr><td>未検証（unvalidated）</td><td>存在するが、まだ download して検証していない（full モードで 1 回の上限に達した分。実行を重ねると減る）</td></tr>
+<tr><td>存在（present）</td><td>存在する（スキーマ未定義のカテゴリ、または検証を行わないモード）</td></tr>
+<tr><td>待機（pending）</td><td>無いが、期限（上表）をまだ過ぎていない。不足には数えない</td></tr>
+<tr><td>不足（missing）</td><td>無く、期限を過ぎている。日付が不明なレースは期限判定できないので不足扱い</td></tr>
+<tr><td>取得不可（na）</td><td>取得を試みたが存在しないと記録済み（<code>data/local/meta/not_available</code>）。不足に数えない</td></tr></table></div>
+<div class="wrap"><table><tr><th>判定</th><th>意味</th></tr><tr><td>存在（present）</td><td>キー一覧にある</td></tr><tr><td>待機（pending）</td><td>無いが、期限（上表）をまだ過ぎていない。不足には数えない</td></tr><tr><td>不足（missing）</td><td>無く、期限を過ぎている。日付が不明なレースは期限判定できないので不足扱い</td></tr><tr><td>取得不可（na）</td><td>取得を試みたが存在しないと記録済み（<code>data/local/meta/not_available</code>）。不足に数えない</td></tr></table></div>
+<p>セルの数字は <b>(健全＋存在) ÷ (健全＋存在＋不適合＋未検証＋不足)</b>。待機と取得不可は分母に入りません。ヒートマップは 100%＝緑、90% 以上＝黄、未満＝赤で、セル内に不適合・未検証・待機の件数を併記します。</p>
+<h3>5.2.1 健全性の検証範囲（<code>DATA_HEALTH_VALIDATE</code>）</h3>
+<div class="wrap"><table><tr><th>モード</th><th>内容</th><th>download</th></tr>
+<tr><td><b>full</b>（既定）</td><td>範囲内（既定 2020 年以降）の<b>全データ</b>を検証。結果を<b>台帳</b>（環境ごとのローカル <code>ledger/</code>）に保存し、<b>ファイルの更新時刻とカテゴリ定義のハッシュが変わらない限り再検証しない</b>。新しい race_id から順に検証</td><td>未検証分だけ。1 回の上限 <code>DATA_HEALTH_VALIDATE_BUDGET</code>（stg・prod 既定 5000、dev は無制限）。複数回の実行で全件に到達し、到達後は更新分だけ</td></tr>
+<tr><td>sample</td><td>カテゴリごとの最新 N 件（<code>DATA_HEALTH_SCHEMA_SAMPLE</code>、既定 20）だけ検証。残りは「存在」扱い</td><td>N × カテゴリ数</td></tr>
+<tr><td>off</td><td>存在のみ（検証しない）</td><td>なし</td></tr></table></div>
+<div class="callout warn"><b>初回の全件検証は download 量が大きい</b>（2020 年以降で数十万ファイル規模の見込み。GCP 外の学習PC からは送信課金 約 $0.12/GB）。既定の上限 5000 件/回なら 1 回あたり数十 MB〜百数十 MB 程度です。一気に進めたいときは <code>DATA_HEALTH_VALIDATE_BUDGET=0</code>（無制限）で、できれば GCP 内（Cloud Run Jobs 等。送信無料）で実行してください。</div>
+<h3>5.2.2 キーテーブル（race_id ↔ いつのどのレースか）</h3>
+<p>race_id は「年＋場＋開催回＋日目＋R」で<b>暦日を含みません</b>。そこで race_id と <b>開催日・場・R・レース名・グレード・コース・距離</b>の対応表（<code>race_keys.csv</code>）を環境ごとに持ちます。</p>
+<ul><li>情報源：<b>race_lists</b>（開催日ごとの一覧。優先）→ 検証で読んだ JSON の中身（出馬表・結果の <code>date</code> / <code>venue</code> / <code>round</code> / <code>race_name</code>）。全件検証は各 JSON をどのみち読むので、<b>副産物として表が育ち</b>、race_lists に無いレースの日付も分かっていきます（月別ヒートマップの「YYYY-??」行が減る）。</li>
+<li>各行に、カテゴリごとの状態（healthy / invalid / unvalidated / missing / pending / present / na）が並ぶので、「このレースは何が揃っていないか」を 1 行で見られます。</li>
+<li>行に日付の根拠（<code>date_source</code>: race_lists / data）と、対象レースの根拠（<code>key_confidence</code>: confirmed / present / inferred）を持ちます。</li></ul>
+<h3>5.3 対象レースの決め方と推定</h3>
+<div class="wrap"><table><tr><th>根拠</th><th>意味</th></tr><tr><td>確認済み（confirmed）</td><td>race_lists に載っているレース（日付が分かる）</td></tr><tr><td>データのみ（present）</td><td>race_lists には無いが、出馬表か結果のキーがあるレース（日付不明）</td></tr><tr><td>推定（inferred）</td><td>同じ「年＋場＋開催回」の中で、観測した最大の日までは 1 日目から連続し、各日は 1〜12R と仮定して、抜けている日・Rを補ったもの（stg・prod のみ）</td></tr></table></div>
+<div class="callout warn"><b>推定の仮定</b>：開催回の日は 1 日目から連続、各日 12R。11R 以下の日や、最終日より後の欠損は検出できません（race_lists があればそちらが優先されます）。レポートでは根拠を「推定」と明示します。</div>
+<h2 id="horse">6. 馬の存在カバレッジ</h2>
+<p>評価窓は <b>今日の30日前〜14日先</b>に開催されるレース（最大 300 レース）。出馬表を読み、出走馬ごとに次を確認します。</p>
+<div class="wrap"><table><tr><th>カテゴリ</th><th>内容</th><th>再取得タスク</th><th>dev</th><th>stg</th><th>prod</th></tr>
+<tr><td class="id">horse_result</td><td>馬情報・戦績</td><td><code>horse_profile</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">horse_pedigree_5gen</td><td>5世代血統</td><td><code>horse_pedigree_5gen</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-ng">必須</span></td></tr>
+<tr><td class="id">horse_training</td><td>調教</td><td><code>horse_training</code></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-exp">任意</span></td><td><span class="lv b-exp">任意</span></td></tr>
+</table></div><p>全期間の馬の網羅性は見ません（課金と時間のため）。範囲外の馬は馬ジョブの一括補完（<code>horse_pedigree_5gen_bulk</code> 等）で別途対応します。</p>
+<h2 id="artifact">7. 派生データの存在</h2>
+<p>ローカルの glob で確認。「年別」は race_result のある年ごとに存在を見て、<b>不足している年</b>を列挙します。特徴量の置き場は <code>data/features</code> と <code>data/local/features</code> の両方を探します（文書と実装の表記揺れ）。</p>
+<div class="wrap"><table><tr><th>ID</th><th>名称</th><th>グループ</th><th>検索パターン</th><th>年別</th><th>dev</th><th>stg</th><th>prod</th><th>生成コマンド</th></tr>
+<tr><td class="id">C01</td><td>race_result_flat</td><td>特徴量</td><td><code>data/page_reference/tables/{Y}/race_result_flat.parquet</code><br><code>data/local/tables/{Y}/race_result_flat.parquet</code></td><td>○</td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-part">推奨</span></td><td><small>python -m src.scraper.export_tables</small></td></tr>
+<tr><td class="id">C02</td><td>base_tbl</td><td>特徴量</td><td><code>{F}/base_tbl/{Y}/*.parquet</code></td><td>○</td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-part">推奨</span></td><td><small>python -m src.pipeline.register_raw_table_features</small></td></tr>
+<tr><td class="id">C03a</td><td>race_tbl</td><td>特徴量</td><td><code>{F}/race_tbl/{Y}/*.parquet</code></td><td>○</td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-part">推奨</span></td><td><small>python -m src.pipeline.register_raw_table_features</small></td></tr>
+<tr><td class="id">C03b</td><td>race_horse_tbl</td><td>特徴量</td><td><code>{F}/race_horse_tbl/{Y}/*.parquet</code></td><td>○</td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-part">推奨</span></td><td><small>python -m src.pipeline.register_raw_table_features</small></td></tr>
+<tr><td class="id">C03c</td><td>horse_tbl</td><td>特徴量</td><td><code>{F}/horse_tbl/**/*.parquet</code></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-part">推奨</span></td><td><small>python -m src.pipeline.register_raw_table_features</small></td></tr>
+<tr><td class="id">C04a</td><td>race_jockey_tbl</td><td>特徴量</td><td><code>{F}/race_jockey_tbl/{Y}/*.parquet</code></td><td>○</td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-exp">任意</span></td><td><small>python -m src.pipeline.build_jockey_trainer_stats</small></td></tr>
+<tr><td class="id">C04b</td><td>race_trainer_tbl</td><td>特徴量</td><td><code>{F}/race_trainer_tbl/{Y}/*.parquet</code></td><td>○</td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-exp">任意</span></td><td><small>python -m src.pipeline.build_jockey_trainer_stats</small></td></tr>
+<tr><td class="id">C04c</td><td>jockey_tbl / trainer_tbl</td><td>特徴量</td><td><code>{F}/jockey_tbl/**/*.parquet</code><br><code>{F}/trainer_tbl/**/*.parquet</code><br><small>2 ファイル以上</small></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-exp">任意</span></td><td><small>python -m src.pipeline.build_jockey_trainer_stats</small></td></tr>
+<tr><td class="id">C05</td><td>target/rank_tbl（着順ラベル）</td><td>特徴量</td><td><code>{F}/target/rank_tbl/{Y}/rank.parquet</code></td><td>○</td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-exp">任意</span></td><td><small>python -m src.pipeline.build_rank_target</small></td></tr>
+<tr><td class="id">C06a</td><td>horse/ped_tbl</td><td>特徴量</td><td><code>{F}/horse/ped_tbl/*/*.parquet</code></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-part">推奨</span></td><td><small>python -m src.pipeline.build_horse_entity_store</small></td></tr>
+<tr><td class="id">C06b</td><td>horse/result_tbl</td><td>特徴量</td><td><code>{F}/horse/result_tbl/*/*.parquet</code></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-exp">任意</span></td><td><small>python -m src.pipeline.build_horse_entity_store</small></td></tr>
+<tr><td class="id">C07</td><td>layer_a_train</td><td>特徴量</td><td><code>data/modeling/layer_a_train.parquet</code><br><code>data/local/modeling/layer_a_train.parquet</code></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-exp">任意</span></td><td><small>python3 -m src.pipeline.build_layer_a_dataset</small></td></tr>
+<tr><td class="id">D01</td><td>horse_pedigree_5gen（ローカル）</td><td>血統</td><td><code>data/local/horse_pedigree_5gen/*/*.json</code></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-exp">任意</span></td><td><small>python -m src.scraper.horse_pedigree_5gen_bulk mirror-local</small></td></tr>
+<tr><td class="id">D01b</td><td>horse_pedigree_10gen</td><td>血統</td><td><code>data/local/horse_pedigree_10gen/*/*.json</code></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-exp">任意</span></td><td><small>python -m src.research.pedigree.build_horse_pedigree_10gen --skip-existing</small></td></tr>
+<tr><td class="id">D02</td><td>pedigree_10gen index</td><td>血統</td><td><code>data/research/pedigree_10gen/meta.json</code></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-exp">任意</span></td><td><small>python -m src.research.pedigree.build_pedigree_10gen_index</small></td></tr>
+<tr><td class="id">D03</td><td>pedigree_race_index</td><td>血統</td><td><code>data/research/pedigree_race_index/*</code><br><code>data/page_reference/pedigree_race_index/*</code></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-part">推奨</span></td><td><small>python -m src.research.pedigree.build_pedigree_race_index</small></td></tr>
+<tr><td class="id">D04</td><td>note_aptitude_race</td><td>血統</td><td><code>data/page_reference/note_aptitude_race/*</code></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-part">推奨</span></td><td><small>python -m src.research.pedigree.note_aptitude_race_map</small></td></tr>
+<tr><td class="id">D05</td><td>bloodline_meta_cluster</td><td>血統</td><td><code>data/research/bloodline_meta_cluster/unified.parquet</code></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-part">推奨</span></td><td><small>python -m src.research.pedigree.build_meta_cluster_artifacts</small></td></tr>
+<tr><td class="id">D07</td><td>sire_factor_stats / race_quality_priors</td><td>血統</td><td><code>data/research/sire_factor_stats.json</code><br><code>data/research/race_quality_priors.json</code><br><small>2 ファイル以上</small></td><td></td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-exp">任意</span></td><td><small>src/research の sire_factor_stats.py / tune_race_quality_priors.py</small></td></tr>
+<tr><td class="id">A17</td><td>jra_cushion（年別）</td><td>外部データ</td><td><code>data/page_reference/cushion/cushion_{Y}.json</code></td><td>○</td><td><span class="lv b-na">対象外</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-part">推奨</span></td><td><small>JRA 馬場: python -m src.scraper.jra_baba_live（または sync_cushion_from_preprocessed）</small></td></tr>
+<tr><td class="id">E01</td><td>myostatin_genes.json（手動）</td><td>手動作成</td><td><code>data/calculated_data/knowledge/myostatin_genes.json</code></td><td></td><td><span class="lv b-exp">任意</span></td><td><span class="lv b-part">推奨</span></td><td><span class="lv b-part">推奨</span></td><td><small>手動作成ナレッジ。他 PC からコピー</small></td></tr>
+<tr><td class="id">E04</td><td>config（settings.yaml / megu_*.json）</td><td>設定</td><td><code>config/settings.yaml</code><br><code>config/megu_par_time_v2_meta.json</code><br><code>config/megu_predict_condition_weights.json</code><br><code>config/megu_predict_params.json</code><br><small>4 ファイル以上</small></td><td></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-ng">必須</span></td><td><small>git から取得</small></td></tr>
+<tr><td class="id">F01</td><td>models/（ローカル Booster）</td><td>モデル</td><td><code>models/keiba_model.pkl</code><br><code>models/label_encoders.pkl</code><br><code>models/final_odds_bundle.json</code><br><code>models/pace_predictor/model_1f.txt</code><br><small>4 ファイル以上</small></td><td></td><td><span class="lv b-exp">任意</span></td><td><span class="lv b-ng">必須</span></td><td><span class="lv b-ng">必須</span></td><td><small>git から取得（学習PCで再学習→コミット）</small></td></tr>
+</table></div>
+<p><code>{F}</code> = <code>data/features</code> または <code>data/local/features</code>、<code>{Y}</code> = 年。</p>
+<h2 id="calendar">8. カレンダー・鮮度・スキーマ</h2>
+<ul><li><b>race_lists の不完全</b>：JSON 破損、または「会場ごとに 1〜12R が揃っていない／合計が 12 の倍数でない」日を列挙（判定は既存の <code>race_list_stats</code>）。開催なしと記録された日は正常。stg・prod は WARN、dev は INFO。</li><li><b>直近の土日</b>：今日〜7日先の土日に記録が無ければ WARN（daily-race-lists の取り逃がし検知）。</li><li><b>鮮度</b>：カテゴリごとの件数・最新保存時刻・経過時間（list の更新時刻から算出。download 不要）。保存が止まっているカテゴリの発見に使う。</li></ul>
+<h3>スキーマの確認</h3>
+<ul><li><b>全環境で同一か</b>：定義の正本 <code>src/scraper/schema_defs.json</code> は git 管理です。レポートに <b>schema fingerprint</b>（定義全体のハッシュ）を記録し、環境キーごとの一覧（<code>index.html</code>）で<b>環境間で異なると警告</b>します。差が出たら、その環境の commit が古い（pull していない）ということです。</li>
+<li><b>実データの適合率</b>：評価対象の race カテゴリごとに最新 N 件（既定 20、<code>DATA_HEALTH_SCHEMA_SAMPLE</code> / <code>--schema-sample</code>、0 で無効）を読み込み、<code>schemas.validate</code> にかけます。不適合は「要対応」に出し、主な原因（必須キー欠落・型／制約・要素の欠落）と例のキーを表示します。重大度は、そのカテゴリが必須なら FAIL、それ以外は WARN。<code>advisory</code> のカテゴリは常に WARN。</li>
+<li><b>スキーマ未定義のカテゴリ</b>：理由（観測待ち pending ／ 未使用 unused ／ JSON でない not_json）を一覧表示。理由も無い（missing）ものは WARN。stg・prod では「観測待ち」を INFO で出します。</li>
+<li>定義そのものを実データから作り直す手順は <a href="../../requirements/data/schemas/README.md">docs/requirements/data/schemas/README.md</a>（<code>python -m src.scraper.schema_infer</code>）。</li></ul>
+
+<h2 id="plan">9. スクレイピング計画</h2>
+<p>不足（必須・推奨）から、既存キューにそのまま投入できる形式の spec を <code>scrape_plan.json</code> に出力します。<code>ScrapeJobQueue.bulk_add_jobs</code> や <code>POST /api/scrape/enqueue</code> と同じ項目で、<b>smart_skip=true・overwrite=false</b>（既存は上書きしない）です。</p>
+<div class="wrap"><table><tr><th>不足の状況</th><th>生成するジョブ</th></tr><tr><td>1 開催日で 6 レース以上に不足</td><td><code>date</code> / <code>date_all</code>（その日の一式。smart_skip で欠けた分だけ補う）</td></tr><tr><td>それ未満、または日付不明</td><td><code>race</code> / 不足カテゴリに対応するタスク（例 <code>race_result</code>, <code>race_index</code>）</td></tr><tr><td>race_lists の不完全</td><td><code>date</code> / <code>race_list</code></td></tr><tr><td>評価窓の馬の不足</td><td><code>horse</code> / <code>horse_profile</code>・<code>horse_pedigree_5gen</code>・<code>horse_training</code></td></tr><tr><td>生成物（race_predictions）の不足</td><td>ジョブは作らず notes に記録（予測の再生成が必要）</td></tr></table></div>
+<p>実行場所の目安：<b>14 日より新しい日付は「VPS cron（当日取得）」、それ以前は「学習PC（過去分の補完）」</b>（2026-10-02 の環境タスク決定に沿う）。今日以降のレースは優先度を高くします。dev では計画を出しません。</p>
+<h2 id="complete">9.5 完全性 — 2020 年以降がすべて揃っているか（stg の受け入れ判定）</h2>
+<p>レポートの先頭に <b>完全性 OK / NG</b> を出し、<code>--require-complete</code> では NG のとき<b>終了コード 3</b> にします（cron・CI・手順書から合否で使える）。</p>
+<div class="wrap"><table><tr><th>OK の条件（すべて満たす）</th><th>NG の理由コード</th></tr>
+<tr><td>評価期間が <b>2020-01-01 以前から</b>（実行日の前日まで）</td><td><code>range</code></td></tr>
+<tr><td>健全性を<b>全件</b>検証している（<code>DATA_HEALTH_VALIDATE=full</code>）かつ検証が最後まで終わっている</td><td><code>validate_mode</code> / <code>validate_incomplete</code></td></tr>
+<tr><td>対象カテゴリ（重要度が <code>DATA_HEALTH_COMPLETE_LEVELS</code>。既定 required・recommended）で、<b>不足 0・スキーマ不適合 0・未検証 0</b></td><td><code>gap</code> / <code>invalid</code> / <code>unvalidated</code></td></tr>
+<tr><td>直近〜出走予定の馬（horse_result / horse_pedigree_5gen 等）に不足が無い</td><td><code>horse</code></td></tr>
+<tr><td>派生データ（特徴量・血統・モデル・設定）が FAIL/WARN でない</td><td><code>artifact</code></td></tr>
+<tr><td>インフラ（GCS・DB・Redis 等）に FAIL が無い</td><td><code>infra</code></td></tr>
+<tr><td>race_lists に不完全な日が無い（dev は対象外）</td><td><code>calendar</code></td></tr></table></div>
+<pre><code># 学習PC（stg）での受け入れ判定
+bash docs/todos/verify/stg_data_complete.sh
+BUDGET=5000 MAX_RUNS=100 bash docs/todos/verify/stg_data_complete.sh   # 1 回 5000 件ずつ、全件になるまで繰り返す（途中で止めても台帳から再開）
+KEIBA_ENV=stg python -m src.data_health --require-complete              # 直接呼ぶ場合（0=完全 / 3=未達 / 2=FAIL）</code></pre>
+<p><b>GCS のアクセスポイントは stg と prod で同一</b>なので、stg で完全性 OK なら、GCS 上のデータは prod から見ても揃っています（prod で別に確認するのは VPS から GCS に到達できること）。</p><p>未達のときは <code>race_ids/*.txt</code>（揃っていない race_id）、<code>race_keys.csv</code>（race_id ↔ 開催日・場・R・レース名 ＋ 状態）、<code>scrape_plan.json</code>（再取得の計画）で原因と対処を確認します。optional（パドック等）まで含めたいときは <code>DATA_HEALTH_COMPLETE_LEVELS=required,recommended,optional</code>。</p>
+<div class="callout warn"><b>dev では常に NG になります。</b>dev の評価期間は直近 90 日（モックのため）なので <code>range</code> に該当します。dev は <code>--since 2020-01-01</code> を付ければモックの完全性を確認できます（テストで使用）。<br>
+<b>既存の確認スクリプトとの関係</b>：<code>check_completeness.py</code>（2021〜2025、JSON を出すのみ）と <code>gcs_coverage_check_2020_2026.py</code>（期間が 2026-05-20 で固定、キャッシュ利用、合否なし）は<b>合否を返さず、スキーマ適合も見ません</b>。<code>verify_stg_smoke.py</code> は HTTP の疎通確認です。今回の <code>stg_data_complete.sh</code> が、2020 年以降・全データポイント・スキーマ適合までを合否で判定する唯一のスクリプトです。</div>
+
+<h2 id="violations">9.6 スキーマ違反の記録 — どの値で引っかかったか</h2>
+<p>スクレイピングしたデータを保存するとき（<code>HybridStorage.save</code>）は、全カテゴリで<b>保存前に必ずスキーマ検証</b>します（厳格モード既定。不合格は保存しない）。不合格のときは、<b>どの項目が・どの規則に・どの値で</b>引っかかったかを残します。</p>
+<div class="wrap"><table><tr><th>記録先</th><th>内容</th></tr>
+<tr><td><code>data/local/meta/schema_violations/&lt;category&gt;.jsonl</code></td><td>不合格 1 回につき 1 行。日時・key・判断・環境・スキーマ版、違反の一覧（最大 12 件）。5MB で 1 世代ローテーション</td></tr>
+<tr><td><code>data/local/quarantine/&lt;category&gt;/&lt;key&gt;.json</code></td><td>拒否して保存しなかった<b>データ本体</b>＋違反。原因調査とスキーマ再構成（<code>schema_infer</code>）に使う。同じ key が後で合格して保存されたら自動で削除</td></tr>
+<tr><td>保存した JSON の <code>_meta.schema_validation.violations</code></td><td>advisory／lenient（<code>KEIBA_SCHEMA_STRICT=0</code>）で保存した場合は、データ自体にも残る</td></tr>
+<tr><td>キューのジョブ失敗メッセージ</td><td><code>failure_reason=schema_validation</code> のジョブのエラー文に、違反の中身（先頭 3 件）が入る</td></tr></table></div>
+<p>1 件の違反には次が入ります：<code>field</code>（例 <code>entries[].win_odds</code>）／<code>rule</code>（missing・null・type・non_empty・min・max・min_length・pattern）／<code>expected</code>／<code>actual</code>（<b>実際の値</b>。120 文字で切る）／<code>actual_type</code>／<code>index</code>（何番目の要素か）／<code>where</code>（馬番・horse_id など、どの要素か）。1 レコード 50 件まで。</p>
+<pre><code>entries[1].horse_number: type（期待 int / 実際 str '２'） ※horse_number=２,horse_id=y
+date: pattern（期待 str /\d{4}-\d{2}-\d{2}/ / 実際 str '2026/10/01'）</code></pre>
+<pre><code>python -m src.scraper.schema_violations summary [--category C] [--days 30]   # 項目×規則ごとに、何回・何 key・どの値で（上位）
+python -m src.scraper.schema_violations show race_odds 202605010101          # 1 件の違反と隔離データ
+python -m src.scraper.schema_violations tail -n 20</code></pre>
+<ul><li>データヘルスのレポートにも反映されます：<b>保存時の拒否（直近30日）</b>を「要対応」に出し、スキーマの節に<b>どの値で引っかかったか</b>の表と、不適合レースごとの原因（<code>race_ids/invalid_detail.json</code>）を載せます。</li>
+<li>記録の失敗（書き込み不可など）で保存処理を止めることはありません。無効化は <code>KEIBA_SCHEMA_VIOLATION_LOG=0</code> / <code>KEIBA_SCHEMA_QUARANTINE=0</code>。</li>
+<li>検証を通らない保存経路：<code>sire_factor_stats</code>・<code>megu_index</code>・<code>bloodline_sqlite</code> などの<b>研究・集計の成果物</b>（スクレイプのカテゴリではない）と、生 HTML アーカイブ（JSON ではない）。スクレイピングで取得・保存する JSON カテゴリは（スキーマ未定義のものも検証の対象として素通しにならず「検証なし」と記録され）すべて <code>save()</code> を通ります。</li></ul>
+
+<h2 id="judge">10. 判定ロジック</h2>
+<div class="wrap"><table><tr><th>状態</th><th>意味</th></tr><tr><td><span class="lv b-ok">OK</span></td><td>問題なし</td></tr><tr><td><span class="lv b-part">WARN</span></td><td>推奨データの不足、推奨インフラの不調</td></tr><tr><td><span class="lv b-ng">FAIL</span></td><td>必須データ／必須インフラの不足・不通</td></tr><tr><td><span class="lv b-exp">INFO</span></td><td>任意データの不足（参考）</td></tr><tr><td><span class="lv b-na">SKIP</span></td><td>その環境では評価しない</td></tr></table></div>
+<ul><li><b>総合判定</b>：「要対応」に FAIL が 1 件でもあれば FAIL、無くて WARN があれば WARN、それ以外は OK。</li><li><b>終了コード</b>：総合が FAIL のとき 2（<code>--fail-on warn</code> なら WARN でも 2）。cron／CI から呼べます。</li><li><b>レース不足の重大度</b>：そのカテゴリの重要度（環境別）で決まる。例：stg で race_result の不足は FAIL、race_barometer は WARN。</li><li><b>dev でも</b>モックの必須カテゴリが欠ければ FAIL（例：race_shutuba の 1 件を消すと検出）。</li></ul>
+<h2 id="out">11. 結果の環境別管理・出力の読み方</h2>
+<p>結果は環境ごとに分けて保存されます。保存ルート（既定 <code>data/local/meta/data_health/</code>、<code>--out-dir</code> / <code>DATA_HEALTH_OUT_DIR</code> で変更）の直下に<b>環境キー</b>のディレクトリができます。</p>
+<pre><code>data/local/meta/data_health/
+├── index.html / index.json      ← 全環境の最新結果の一覧（総合判定・FAIL/WARN 件数・経過時間・実行ホスト・commit・推移）
+├── dev/                         ← この PC（dev）の結果
+├── stg/                         ← 学習PC の結果（--import で取り込んだもの、またはこの PC が stg のとき）
+├── prod/                        ← VPS の結果（同上）
+└── stg@dev/                     ← dev PC で stg の要件を評価した dry-run（本物の stg と混ざらない）
+      ├── latest.html / latest.json / scrape_plan.json
+      ├── race_keys.csv          ← キーテーブル: race_id ↔ 開催日・場・R・レース名 ＋ カテゴリ別の状態（healthy/invalid/missing/…）
+      ├── race_ids/              ← 揃っていない race_id の配列（1 行 1 race_id）
+      │     ├── missing_&lt;category&gt;.txt / invalid_&lt;category&gt;.txt / unvalidated_&lt;category&gt;.txt
+      │     └── by_race.json    ← race_id → 揃っていないカテゴリと状態（不適合は原因コード付き）
+      ├── ledger/                ← 検証の台帳（&lt;category&gt;.json）とキーテーブル本体（race_keys.json）。ローカル専用
+      ├── history.jsonl          ← 実行ごとの 1 行サマリ（推移の表示に使用）
+      └── report_YYYYMMDDTHHMMSS.json   ← 全結果の履歴（最新 20 件）</code></pre>
+<div class="wrap"><table><tr><th>仕組み</th><th>内容</th></tr>
+<tr><td>環境キー</td><td>評価プロファイル。実行環境と違う場合は <code>&lt;プロファイル&gt;@&lt;実行環境&gt;</code>。どのホスト・どの commit で実行したかも結果に記録</td></tr>
+<tr><td>前回比</td><td>保存時に前回の <code>latest.json</code> と比べ、総合判定の変化、FAIL/WARN/INFO の増減、<b>新規</b>・<b>解消</b>・<b>変化</b>した要対応をレポート冒頭に表示</td></tr>
+<tr><td>推移</td><td><code>history.jsonl</code> から直近 10 回（総合・FAIL・WARN・不足レース数・計画ジョブ数）を <code>index.html</code> に表示</td></tr>
+<tr><td>他 PC の結果の取り込み</td><td>dev PC は GCP に接続できないため、学習PC／VPS で得た <code>latest.json</code> を持ち込み <code>--import</code>。環境キーの場所に保存し、HTML は現在の形式で再生成。<b>古い結果は最新を上書きせず履歴にだけ</b>残す</td></tr>
+<tr><td>古さの表示</td><td>一覧の「経過」列に生成からの時間を表示。48 時間を超えると「（古い）」</td></tr></table></div>
+<p>各環境で定期的に実行すれば（学習PC は手動または cron、VPS は cron）、その環境の結果が蓄積されます。GCS への結果の保存・共有は現状ありません（必要なら stg・prod の <code>latest.json</code> を GCS に置き、dev へ手動で取り込む運用を想定）。</p>
+<h3>出力ファイル</h3>
+<div class="wrap"><table><tr><th>ファイル</th><th>内容</th></tr>
+<tr><td><code>latest.html</code></td><td>人が見るレポート。総合判定 → 実行情報・設定の上書き → 前回比 → 要対応（重大順） → インフラ → 派生データ → レース年別／月別ヒートマップ → 鮮度 → 不足レース一覧 → 馬 → スクレイピング計画</td></tr>
+<tr><td><code>latest.json</code></td><td>全結果（<code>meta</code> / <code>settings</code> / <code>checks</code> / <code>artifacts</code> / <code>race_coverage</code> / <code>horse_coverage</code> / <code>calendar</code> / <code>plan</code> / <code>findings</code> / <code>summary</code> / <code>diff</code>）。他ツール連携・<code>--import</code> 用</td></tr>
+<tr><td><code>scrape_plan.json</code></td><td>キュー投入用 spec の全件。スキーマ不適合は <b>overwrite=true</b>（存在するので smart_skip では直らない）、不足は smart_skip=true・overwrite=false</td></tr>
+<tr><td><code>race_keys.csv</code></td><td>race_id 1 行 = 1 レース。開催日・場・R・レース名・グレード・コース・距離、日付の根拠、カテゴリ別の状態。Excel で開ける（BOM 付き UTF-8）</td></tr>
+<tr><td><code>race_ids/*.txt</code>, <code>by_race.json</code></td><td>揃っていない race_id の配列。<code>missing_race_result.txt</code> のように<b>カテゴリ×状態</b>ごと。他のスクリプト（キュー投入・再取得）にそのまま渡せる。JSON の <code>race_ids</code> にも同じ内容</td></tr></table></div>
+<pre><code># 例: 確定結果が不足している race_id を確認して、その分だけ再取得する
+cat data/local/meta/data_health/stg/race_ids/missing_race_result.txt
+# スキーマ不適合（存在するが壊れている）race_id
+cat data/local/meta/data_health/stg/race_ids/invalid_race_odds.txt
+# あるレースの何が揃っていないか
+python3 -c "import json;print(json.load(open('data/local/meta/data_health/stg/race_ids/by_race.json'))['202605030201'])"</code></pre>
+<p>ヒートマップのセルは <b>存在数/期限到来分</b>とパーセント、下に青字で「待機 n」。<code>–</code> は対象外または 0 件です。</p>
+
+<h2 id="example">12. 実行例（dev、2026-10-06）</h2>
+<pre><code>データヘルス [dev] OK  fail=0 warn=0 info=2  計画ジョブ=0  （2026-07-08 〜 2026-10-20）
+
+■ 派生データ
+  [OK] E01 myostatin_genes.json（手動）: 1 ファイル（更新 2026-10-01）
+  [OK] E04 config（settings.yaml / megu_*.json）: 4 ファイル
+  [OK] F01 models/（ローカル Booster）: 4 ファイル
+
+■ レース存在カバレッジ（対象 16 レース: confirmed 16）
+  2026: race_shutuba=16/16  race_result=8/8(待機8)  race_index=16/16  race_odds=16/16
+        race_result_lap=8/8(待機8)  race_predictions=16/16
+
+■ 馬（20260906〜20261020 の出走馬 64 頭）
+  horse_result: 不足 0/64
+  horse_pedigree_5gen: 不足 0/64
+
+■ 要対応
+  [INFO] (カレンダー) 20261004: race_lists 不完全: 合計8件（12の倍数でない）
+  [INFO] (カレンダー) 20261010: race_lists 不完全: 合計8件（12の倍数でない）</code></pre>
+<p>読み方：モック 16 レースはすべて揃っている。確定結果（race_result）は 10/4 分が「待機 8」＝金曜（10/9）18:30 までは不足扱いにしない。INFO 2 件はモックが 1 会場 4R のための想定どおりの表示。<code>--no-infra</code> なしで実行すると、この PC では PostgreSQL 未起動が WARN、redis パッケージ未導入が INFO として出る。</p>
+<p>stg・prod での実行結果はまだありません（dev PC の <code>index.html</code> には dev だけが並びます）。学習PC／VPS で実行した結果を得たら、重要度（<code>spec.py</code>）と期限を実態に合わせて調整します。</p>
+<h2 id="limits">13. 確認できないこと・制約</h2>
+<ul>
+<li><b>検証できるのはスキーマで表せる範囲</b>：必須キー・型・簡単な制約（非空・最小最大・最小長・パターン）。値の意味（例：確率が 0〜1 か、頭数と一致するか）、特徴量 Parquet の列・行数、モデルのロード可否は見ません。例：<code>models/keiba_model.pkl</code> は特徴量次元の不一致で読めない既知の問題（T-062）があるが、F01 は「ファイルがあるか」だけなので OK になる。</li>
+<li><b>スキーマ未定義のカテゴリは「存在」止まり</b>：race_predictions / tracking_difficulty / final_odds_prediction / finish_order_prediction / race_performance / jra_cushion は、実データを観測してから定義します（§8。dev のモックは形式が暫定）。</li>
+<li><b>健全性の検証は race 単位のカテゴリが中心</b>：馬単位（horse_result 等）は評価窓の出走馬の<b>存在</b>のみで、全馬のスキーマ適合は未対応です。</li>
+<li><b>派生 11 カテゴリ</b>（race_shutuba_meta 等）と <code>requirement_row_trace</code>、<code>horse_name</code> は対象外。親カテゴリが揃えば再生成できるため。</li>
+<li><b>対象外のカテゴリ</b>：SmartRC（取得中止）、<code>race_trainer_comment</code>、<code>broodmare_mating</code>（種付け日 T-019 未着手）、<code>race_detail</code> / <code>race_performance</code>。</li>
+<li><b>推定の限界</b>：§5.3 の仮定（12R・1 日目から連続）。race_lists が無く、まだ検証もしていないレースの日付は分からず、年別と「YYYY-??」行にまとまる（検証が進むと月に振り分けられる）。</li>
+<li><b>台帳はローカル</b>：検証結果は環境ごとのローカル（<code>&lt;環境&gt;/ledger/</code>）にあり、他の環境とは共有しません。GCS は stg と prod で同一なので、prod でも全件検証すると stg と同じ結果を重複して得る（download 量が二重になる）ため、prod は sample を推奨します。台帳を消すと全件の再検証になります。</li>
+<li><b>馬は評価窓のみ</b>：直近〜出走予定の馬だけ。</li>
+<li><b>stg／prod は未実行</b>：GCS・Cloud SQL・Redis に対する実機確認はフェイクのストレージによるテストのみ。本番の GCS では list 件数や応答時間が想定と違う可能性がある。</li>
+<li><b>GCS 課金</b>：list（カテゴリ×年）＋ 未検証分の download（1 回の上限あり）＋ 馬の評価窓の出馬表（最大300件）。list は毎回取り直す（キャッシュ無効化）ため、頻繁な自動実行は避け、日次程度を推奨。</li>
+<li><b>監視ポータルとの重複</b>：<code>/monitor</code> の日付別マトリクス（<code>monitor_coverage.py</code>）は開催日ごとの詳細表示用。本ツールは環境別の要件・期間横断の不足・計画生成を担い、連携はしていない。</li>
+<li><code>/monitor</code> 側の <code>current_keiba_env()</code> は未設定を dev 扱い、アプリ本体は prod 扱いで食い違いがある（本ツールは後者に合わせた）。</li>
+</ul>
+
+<h2 id="files">14. 関連ファイル</h2>
+<div class="wrap"><table><tr><th>ファイル</th><th>役割</th></tr><tr><td><code>src/data_health/spec.py</code></td><td>環境別の要件（カテゴリ・派生データ・GCS オブジェクト・期限ルール・評価窓）。<b>重要度を変えるときはここ</b></td></tr><tr><td><code>src/data_health/coverage.py</code></td><td>期限計算、カレンダー、対象レース、存在判定、鮮度、馬</td></tr><tr><td><code>src/data_health/checks.py</code></td><td>インフラ疎通と派生データの存在</td></tr><tr><td><code>src/data_health/plan.py</code></td><td>スクレイピング計画</td></tr><tr><td><code>src/data_health/runner.py</code></td><td>実行本体・要対応一覧・総合判定</td></tr><tr><td><code>src/data_health/report.py</code></td><td>コンソール／JSON／HTML 出力</td></tr><tr><td><code>src/data_health/config.py</code></td><td>環境変数 <code>DATA_HEALTH_*</code> の読み込みと検証、重要度の上書き</td></tr>
+  <tr><td><code>src/data_health/schema_check.py</code></td><td>スキーマ fingerprint・全件検証（台帳・予算・並列）・未定義カテゴリ</td></tr>
+  <tr><td><code>src/scraper/schema_defs.json</code> / <code>schema_infer.py</code></td><td>スキーマ定義の正本（git 管理）と、実データからの再構成ツール</td></tr>
+  <tr><td><code>src/data_health/keytable.py</code></td><td>キーテーブル（race_id ↔ 開催日・場・R・レース名）と CSV 出力</td></tr>
+  <tr><td><code>src/scraper/schema_violations.py</code></td><td>保存時のスキーマ違反の記録・隔離・集計（CLI: summary / show / tail）</td></tr>
+  <tr><td><code>docs/todos/verify/stg_data_complete.sh</code></td><td>stg の受け入れ判定（2020 年以降・全データポイント・スキーマ適合）</td></tr>
+  <tr><td><code>src/data_health/store.py</code></td><td>環境別の保存・履歴・前回比・全環境の一覧・<code>--import</code></td></tr>
+  <tr><td><code>src/data_health/__main__.py</code></td><td>CLI</td></tr><tr><td><code>tests/data_health/test_data_health.py</code></td><td>期限・推定・stg 相当のシナリオ・馬・派生データ・dev モックの検証（14 件）</td></tr>
+  <tr><td><code>tests/data_health/test_config_store.py</code></td><td>設定（変数・環境別・不正値）、重要度の上書き、環境別の結果管理、取り込み、CLI</td></tr>
+  <tr><td><code>tests/data_health/test_validation.py</code></td><td>健全／不適合／未検証、段階検証と台帳の再開・更新検知、キーテーブル、race_id 配列と CSV、再取得計画（overwrite）、dev モックの全件健全</td></tr><tr><td><code>docs/html/data/DATASET_CATALOG.html</code></td><td>データセット一覧と環境別アクセス状況（本ツールの要件の元）</td></tr></table></div>
+</main></div></body></html>

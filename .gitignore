@@ -93,3 +93,6 @@ gcp-service-account.*.json
 data/research/bloodline/*.db
 data/research/bloodline/*.db-shm
 data/research/bloodline/*.db-wal
+
+# dev 用モック（make dev-mock で生成）
+data/dev_mock/

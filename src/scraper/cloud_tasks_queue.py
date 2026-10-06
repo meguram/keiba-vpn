@@ -33,6 +33,8 @@ import logging
 import os
 from datetime import datetime, timezone
 
+from src.config.gcp_guard import assert_gcp_allowed, gcp_forbidden
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_CLOUD_TASKS_QUEUE = "keiba-scrape-queue"
@@ -40,8 +42,13 @@ DEFAULT_CLOUD_TASKS_LOCATION = "asia-northeast1"
 
 
 def is_cloud_tasks_backend_enabled() -> bool:
-    """``KEIBA_QUEUE_BACKEND=cloud_tasks`` のとき True（既定はローカルJSONキュー）。"""
-    return os.environ.get("KEIBA_QUEUE_BACKEND", "").strip().lower() == "cloud_tasks"
+    """``KEIBA_QUEUE_BACKEND=cloud_tasks`` のとき True（既定はローカルJSONキュー）。dev では常に False。"""
+    if os.environ.get("KEIBA_QUEUE_BACKEND", "").strip().lower() != "cloud_tasks":
+        return False
+    if gcp_forbidden():
+        logger.warning("KEIBA_ENV=dev では Cloud Tasks を使えません。ローカル JSON キューを使います")
+        return False
+    return True
 
 
 def enqueue_via_cloud_tasks(
@@ -68,6 +75,7 @@ def enqueue_via_cloud_tasks(
     Returns:
         作成されたタスクのフルリソース名（``projects/.../locations/.../queues/.../tasks/...``）。
     """
+    assert_gcp_allowed("Cloud Tasks")
     from google.cloud import tasks_v2
 
     from src.config.gcp_credentials import build_gcp_credentials, gcp_project_id

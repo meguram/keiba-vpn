@@ -28,6 +28,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from src.config.gcp_guard import assert_gcp_allowed, gcp_forbidden
+
 logger = logging.getLogger("scraper.html_archive")
 
 GCS_RAW_BASE = "chuou/data/raw/html"
@@ -239,6 +241,8 @@ class HtmlArchive:
 
     @property
     def gcs_enabled(self) -> bool:
+        if gcp_forbidden():
+            return False
         if self._gcs_available is None:
             self._gcs_available = bool(self._bucket_name)
             if self._gcs_available:
@@ -257,6 +261,7 @@ class HtmlArchive:
 
     def _get_bucket(self):
         if self._gcs_bucket is None:
+            assert_gcp_allowed("GCS (HTML アーカイブ)")
             from google.cloud import storage as gcs_lib
             creds = self._build_credentials()
             if creds:

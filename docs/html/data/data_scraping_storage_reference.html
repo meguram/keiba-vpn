@@ -734,6 +734,7 @@
 <!-- ════════════════════ §4 ストレージアーキテクチャ ════════════════════ -->
 <section id="s4">
   <h2>§4 ストレージ構成</h2>
+  <p><b>前提：GCS のアクセスポイント（バケット <code>GCS_BUCKET</code>・prefix <code>chuou/data/…</code>）は stg と prod で同一</b>です（dev は GCS に接続せず <code>data/dev_mock</code> を使う）。stg の書き込みはそのまま prod の読み取り対象になります。netkeiba のプレミアム認証（<code>netkeiba_id</code> / <code>netkeiba_pw</code>）は完了済みの前提で、認証が要るカテゴリ（タイム指数・調子偏差値・パドック・個別ラップ等）も通常の取得対象です。</p>
   <p>Google Cloud Storage（GCS）をメイン置き場とし、ローカルに複数の階層キャッシュを持つ構成です。</p>
 
   <div class="tbl-wrap">

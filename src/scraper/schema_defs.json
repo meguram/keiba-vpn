@@ -1,0 +1,2281 @@
+{
+ "schema_version": 2,
+ "categories": {
+  "race_result": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    },
+    "race_name": {
+     "type": "str"
+    },
+    "date": {
+     "type": "str",
+     "pattern": "\\d{4}-\\d{2}-\\d{2}"
+    },
+    "venue": {
+     "type": "str"
+    },
+    "entries": {
+     "type": "list",
+     "min_length": 1
+    }
+   },
+   "top_optional": {
+    "round": {
+     "type": "int"
+    },
+    "surface": {
+     "type": "str"
+    },
+    "distance": {
+     "type": "int"
+    },
+    "field_size": {
+     "type": "int"
+    },
+    "grade": {
+     "type": "str"
+    },
+    "direction": {
+     "type": "str"
+    },
+    "weather": {
+     "type": "str"
+    },
+    "track_condition": {
+     "type": "str"
+    },
+    "start_time": {
+     "type": "str"
+    },
+    "payoff": {
+     "type": "dict"
+    },
+    "lap_times": {
+     "type": "list"
+    },
+    "pace": {
+     "type": "dict"
+    },
+    "corner_passing": {
+     "type": "list"
+    }
+   },
+   "entry_required": {
+    "horse_number": {
+     "type": "int",
+     "min": 1
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "bracket_number": {
+     "type": "int"
+    }
+   },
+   "entry_optional": {
+    "finish_position": {
+     "type": "any"
+    },
+    "sex_age": {
+     "type": "str"
+    },
+    "jockey_weight": {
+     "type": "any"
+    },
+    "jockey_name": {
+     "type": "str"
+    },
+    "jockey_id": {
+     "type": "str"
+    },
+    "finish_time": {
+     "type": "str"
+    },
+    "time_sec": {
+     "type": "float"
+    },
+    "margin": {
+     "type": "str"
+    },
+    "passing_order": {
+     "type": "any"
+    },
+    "last_3f": {
+     "type": "any"
+    },
+    "odds": {
+     "type": "any"
+    },
+    "popularity": {
+     "type": "any"
+    },
+    "weight": {
+     "type": "any"
+    },
+    "weight_change": {
+     "type": "any"
+    },
+    "trainer_name": {
+     "type": "str"
+    },
+    "trainer_id": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_result_on_time": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    },
+    "race_name": {
+     "type": "str"
+    },
+    "entries": {
+     "type": "list",
+     "min_length": 1
+    }
+   },
+   "top_optional": {
+    "round": {
+     "type": "int"
+    },
+    "surface": {
+     "type": "str"
+    },
+    "distance": {
+     "type": "int"
+    },
+    "field_size": {
+     "type": "int"
+    },
+    "grade": {
+     "type": "str"
+    },
+    "direction": {
+     "type": "str"
+    },
+    "weather": {
+     "type": "str"
+    },
+    "track_condition": {
+     "type": "str"
+    },
+    "start_time": {
+     "type": "str"
+    },
+    "payoff": {
+     "type": "dict"
+    },
+    "lap_times": {
+     "type": "list"
+    },
+    "pace": {
+     "type": "dict"
+    },
+    "corner_passing": {
+     "type": "list"
+    },
+    "date": {
+     "type": "str"
+    },
+    "venue": {
+     "type": "str"
+    }
+   },
+   "entry_required": {
+    "horse_number": {
+     "type": "int",
+     "min": 1
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "bracket_number": {
+     "type": "int"
+    }
+   },
+   "entry_optional": {
+    "finish_position": {
+     "type": "any"
+    },
+    "sex_age": {
+     "type": "str"
+    },
+    "jockey_weight": {
+     "type": "any"
+    },
+    "jockey_name": {
+     "type": "str"
+    },
+    "jockey_id": {
+     "type": "str"
+    },
+    "finish_time": {
+     "type": "str"
+    },
+    "time_sec": {
+     "type": "float"
+    },
+    "margin": {
+     "type": "str"
+    },
+    "passing_order": {
+     "type": "any"
+    },
+    "last_3f": {
+     "type": "any"
+    },
+    "odds": {
+     "type": "any"
+    },
+    "popularity": {
+     "type": "any"
+    },
+    "weight": {
+     "type": "any"
+    },
+    "weight_change": {
+     "type": "any"
+    },
+    "trainer_name": {
+     "type": "str"
+    },
+    "trainer_id": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_lists": {
+   "top_required": {
+    "date": {
+     "type": "str",
+     "non_empty": true
+    },
+    "races": {
+     "type": "list"
+    }
+   },
+   "top_optional": {
+    "_meta": {
+     "type": "dict"
+    }
+   },
+   "entry_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "entry_optional": {
+    "round": {
+     "type": "any"
+    },
+    "venue": {
+     "type": "str"
+    },
+    "race_name": {
+     "type": "str"
+    },
+    "entries_count": {
+     "type": "any"
+    },
+    "date": {
+     "type": "str"
+    },
+    "list_grade_icon": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "races",
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "20230625",
+     "min": "20230625"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_shutuba": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    },
+    "race_name": {
+     "type": "str"
+    },
+    "entries": {
+     "type": "list"
+    }
+   },
+   "top_optional": {
+    "date": {
+     "type": "str"
+    },
+    "venue": {
+     "type": "str"
+    },
+    "round": {
+     "type": "int"
+    },
+    "surface": {
+     "type": "str"
+    },
+    "distance": {
+     "type": "int"
+    },
+    "direction": {
+     "type": "str"
+    },
+    "weather": {
+     "type": "str"
+    },
+    "track_condition": {
+     "type": "str"
+    },
+    "start_time": {
+     "type": "str"
+    },
+    "field_size": {
+     "type": "int"
+    },
+    "grade": {
+     "type": "str"
+    },
+    "race_class": {
+     "type": "str"
+    },
+    "weight_rule": {
+     "type": "str"
+    },
+    "course_type": {
+     "type": "str"
+    }
+   },
+   "entry_required": {
+    "horse_number": {
+     "type": "int"
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "entry_optional": {
+    "bracket_number": {
+     "type": "int"
+    },
+    "sex_age": {
+     "type": "str"
+    },
+    "jockey_weight": {
+     "type": "any"
+    },
+    "jockey_name": {
+     "type": "str"
+    },
+    "jockey_id": {
+     "type": "str"
+    },
+    "trainer_name": {
+     "type": "str"
+    },
+    "trainer_id": {
+     "type": "str"
+    },
+    "weight": {
+     "type": "any"
+    },
+    "weight_change": {
+     "type": "any"
+    },
+    "odds": {
+     "type": "any"
+    },
+    "popularity": {
+     "type": "any"
+    },
+    "sire": {
+     "type": "str"
+    },
+    "dam_sire": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_shutuba_past": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    },
+    "entries": {
+     "type": "list"
+    }
+   },
+   "top_optional": {
+    "training": {
+     "type": "list"
+    }
+   },
+   "entry_required": {
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "past_races": {
+     "type": "list"
+    }
+   },
+   "entry_optional": {
+    "bracket_number": {
+     "type": "int"
+    },
+    "horse_number": {
+     "type": "int"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "race_index": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    },
+    "entries": {
+     "type": "list"
+    }
+   },
+   "top_optional": {},
+   "entry_required": {
+    "horse_number": {
+     "type": "int",
+     "min": 1
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "entry_optional": {
+    "time_index_m": {
+     "type": "any"
+    },
+    "speed_max": {
+     "type": "any"
+    },
+    "speed_avg": {
+     "type": "any"
+    },
+    "speed_distance": {
+     "type": "any"
+    },
+    "speed_course": {
+     "type": "any"
+    },
+    "speed_recent": {
+     "type": "list"
+    },
+    "all_txt_c": {
+     "type": "list"
+    },
+    "odds": {
+     "type": "any"
+    },
+    "popularity": {
+     "type": "any"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_odds": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    },
+    "entries": {
+     "type": "list"
+    }
+   },
+   "top_optional": {},
+   "entry_required": {
+    "horse_number": {
+     "type": "int",
+     "min": 1
+    }
+   },
+   "entry_optional": {
+    "win_odds": {
+     "type": "any"
+    },
+    "place_odds_min": {
+     "type": "any"
+    },
+    "place_odds_max": {
+     "type": "any"
+    },
+    "popularity": {
+     "type": "any"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_pair_odds": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    }
+   },
+   "top_optional": {
+    "umaren": {
+     "type": "list"
+    },
+    "wide": {
+     "type": "list"
+    },
+    "umatan": {
+     "type": "list"
+    }
+   },
+   "lists": {
+    "umaren": {
+     "entry_required": {
+      "pair": {
+       "type": "list"
+      },
+      "odds": {
+       "type": "any"
+      }
+     },
+     "entry_optional": {
+      "popularity": {
+       "type": "any"
+      }
+     }
+    },
+    "wide": {
+     "entry_required": {
+      "pair": {
+       "type": "list"
+      }
+     },
+     "entry_optional": {
+      "odds_min": {
+       "type": "any"
+      },
+      "odds_max": {
+       "type": "any"
+      },
+      "popularity": {
+       "type": "any"
+      }
+     }
+    },
+    "umatan": {
+     "entry_required": {
+      "pair": {
+       "type": "list"
+      },
+      "odds": {
+       "type": "any"
+      }
+     },
+     "entry_optional": {
+      "popularity": {
+       "type": "any"
+      }
+     }
+    }
+   },
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "race_paddock": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    },
+    "entries": {
+     "type": "list"
+    }
+   },
+   "top_optional": {},
+   "entry_required": {
+    "horse_number": {
+     "type": "int",
+     "min": 1
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "entry_optional": {
+    "paddock_rank": {
+     "type": "any"
+    },
+    "paddock_comment": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_barometer": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    },
+    "entries": {
+     "type": "list"
+    }
+   },
+   "top_optional": {},
+   "entry_required": {
+    "horse_number": {
+     "type": "int",
+     "min": 1
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "entry_optional": {
+    "finish_order": {
+     "type": "any"
+    },
+    "index_total": {
+     "type": "any"
+    },
+    "index_start": {
+     "type": "any"
+    },
+    "index_chase": {
+     "type": "any"
+    },
+    "index_closing": {
+     "type": "any"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_oikiri": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    },
+    "entries": {
+     "type": "list"
+    }
+   },
+   "top_optional": {},
+   "entry_required": {
+    "horse_number": {
+     "type": "int",
+     "min": 1
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "entry_optional": {
+    "training_date": {
+     "type": "str"
+    },
+    "course": {
+     "type": "str"
+    },
+    "condition": {
+     "type": "str"
+    },
+    "rider": {
+     "type": "str"
+    },
+    "lap_times": {
+     "type": "str"
+    },
+    "impression": {
+     "type": "str"
+    },
+    "evaluation": {
+     "type": "str"
+    },
+    "comment": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "race_result_lap": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    }
+   },
+   "top_optional": {
+    "lap_times": {
+     "type": "list"
+    },
+    "pace": {
+     "type": "dict"
+    },
+    "corner_passing": {
+     "type": "list"
+    },
+    "entries_lap": {
+     "type": "list"
+    },
+    "horse_laptime_table": {
+     "type": "dict"
+    }
+   },
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_trainer_comment": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    },
+    "entries": {
+     "type": "list"
+    }
+   },
+   "top_optional": {},
+   "entry_required": {
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "entry_optional": {
+    "bracket_number": {
+     "type": "int"
+    },
+    "horse_number": {
+     "type": "int"
+    },
+    "horse_id": {
+     "type": "str"
+    },
+    "comment": {
+     "type": "str"
+    },
+    "evaluation": {
+     "type": "str"
+    },
+    "trainer_name": {
+     "type": "str"
+    },
+    "questioner": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "race_detail": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    },
+    "race_name": {
+     "type": "str"
+    },
+    "entries": {
+     "type": "list"
+    }
+   },
+   "top_optional": {
+    "date": {
+     "type": "str"
+    },
+    "venue": {
+     "type": "str"
+    },
+    "round": {
+     "type": "int"
+    },
+    "surface": {
+     "type": "str"
+    },
+    "distance": {
+     "type": "int"
+    },
+    "direction": {
+     "type": "str"
+    },
+    "weather": {
+     "type": "str"
+    },
+    "track_condition": {
+     "type": "str"
+    },
+    "start_time": {
+     "type": "str"
+    },
+    "field_size": {
+     "type": "int"
+    },
+    "grade": {
+     "type": "str"
+    },
+    "race_class": {
+     "type": "str"
+    },
+    "weight_rule": {
+     "type": "str"
+    },
+    "course_type": {
+     "type": "str"
+    }
+   },
+   "entry_required": {
+    "horse_number": {
+     "type": "int"
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "entry_optional": {
+    "bracket_number": {
+     "type": "int"
+    },
+    "sex_age": {
+     "type": "str"
+    },
+    "jockey_weight": {
+     "type": "any"
+    },
+    "jockey_name": {
+     "type": "str"
+    },
+    "jockey_id": {
+     "type": "str"
+    },
+    "trainer_name": {
+     "type": "str"
+    },
+    "trainer_id": {
+     "type": "str"
+    },
+    "weight": {
+     "type": "any"
+    },
+    "weight_change": {
+     "type": "any"
+    },
+    "odds": {
+     "type": "any"
+    },
+    "popularity": {
+     "type": "any"
+    },
+    "sire": {
+     "type": "str"
+    },
+    "dam_sire": {
+     "type": "str"
+    },
+    "speed_max": {
+     "type": "any"
+    },
+    "speed_avg": {
+     "type": "any"
+    },
+    "speed_distance": {
+     "type": "any"
+    },
+    "speed_course": {
+     "type": "any"
+    },
+    "speed_recent": {
+     "type": "list"
+    },
+    "past_races": {
+     "type": "list"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "horse_result": {
+   "top_required": {
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_name": {
+     "type": "str",
+     "non_empty": true
+    },
+    "race_history": {
+     "type": "list"
+    }
+   },
+   "top_optional": {
+    "name_en": {
+     "type": "str"
+    },
+    "status": {
+     "type": "str"
+    },
+    "sex": {
+     "type": "str"
+    },
+    "age": {
+     "type": "any"
+    },
+    "color": {
+     "type": "str"
+    },
+    "birthday": {
+     "type": "str"
+    },
+    "trainer": {
+     "type": "str"
+    },
+    "owner": {
+     "type": "str"
+    },
+    "breeder": {
+     "type": "str"
+    },
+    "birthplace": {
+     "type": "str"
+    },
+    "total_earnings": {
+     "type": "any"
+    },
+    "career": {
+     "type": "str"
+    },
+    "career_record": {
+     "type": "list"
+    },
+    "major_wins": {
+     "type": "list"
+    },
+    "sire": {
+     "type": "str"
+    },
+    "dam": {
+     "type": "str"
+    },
+    "dam_sire": {
+     "type": "str"
+    }
+   },
+   "entry_required": {
+    "date": {
+     "type": "str"
+    },
+    "race_id": {
+     "type": "str"
+    }
+   },
+   "entry_optional": {
+    "venue": {
+     "type": "str"
+    },
+    "weather": {
+     "type": "str"
+    },
+    "race_round": {
+     "type": "any"
+    },
+    "race_name": {
+     "type": "str"
+    },
+    "field_size": {
+     "type": "any"
+    },
+    "bracket_number": {
+     "type": "any"
+    },
+    "horse_number": {
+     "type": "any"
+    },
+    "odds": {
+     "type": "any"
+    },
+    "popularity": {
+     "type": "any"
+    },
+    "finish_position": {
+     "type": "any"
+    },
+    "jockey_name": {
+     "type": "str"
+    },
+    "jockey_weight": {
+     "type": "any"
+    },
+    "surface": {
+     "type": "str"
+    },
+    "distance": {
+     "type": "any"
+    },
+    "time_index": {
+     "type": "any"
+    },
+    "track_condition": {
+     "type": "str"
+    },
+    "finish_time": {
+     "type": "str"
+    },
+    "time_sec": {
+     "type": "float"
+    },
+    "margin": {
+     "type": "str"
+    },
+    "passing_order": {
+     "type": "any"
+    },
+    "last_3f": {
+     "type": "any"
+    },
+    "weight": {
+     "type": "any"
+    },
+    "weight_change": {
+     "type": "any"
+    },
+    "winner": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "race_history",
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "horse_pedigree_5gen": {
+   "top_required": {
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "ancestors": {
+     "type": "list",
+     "min_length": 1
+    }
+   },
+   "top_optional": {
+    "sire": {
+     "type": "str"
+    },
+    "dam": {
+     "type": "str"
+    },
+    "dam_sire": {
+     "type": "str"
+    },
+    "ancestor_count": {
+     "type": "int"
+    },
+    "source": {
+     "type": "str"
+    },
+    "mating_date": {
+     "type": "str",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "mating_year": {
+     "type": "int"
+    },
+    "mating_match": {
+     "type": "str"
+    },
+    "mating_dam_id": {
+     "type": "str"
+    },
+    "sex": {
+     "type": "str"
+    }
+   },
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "2019105219",
+     "min": "2019105219"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "broodmare_mating": {
+   "top_required": {
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "matings": {
+     "type": "list"
+    }
+   },
+   "top_optional": {
+    "mating_count": {
+     "type": "int"
+    },
+    "source": {
+     "type": "str"
+    },
+    "fetched_at": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "matings",
+   "entry_required": {
+    "mating_year": {
+     "type": "int",
+     "min": 2000
+    },
+    "mating_date": {
+     "type": "str",
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    }
+   },
+   "entry_optional": {
+    "sire_name": {
+     "type": "str"
+    },
+    "sire_id": {
+     "type": "str"
+    }
+   },
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "horse_training": {
+   "top_required": {
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "entries": {
+     "type": "list"
+    }
+   },
+   "top_optional": {
+    "total_items": {
+     "type": "int"
+    },
+    "pages_fetched": {
+     "type": "int"
+    }
+   },
+   "entry_required": {
+    "date": {
+     "type": "str"
+    }
+   },
+   "entry_optional": {
+    "race_info": {
+     "type": "str"
+    },
+    "day_of_week": {
+     "type": "str"
+    },
+    "course": {
+     "type": "str"
+    },
+    "track_condition": {
+     "type": "str"
+    },
+    "rider": {
+     "type": "str"
+    },
+    "time_raw": {
+     "type": "str"
+    },
+    "lap_times": {
+     "type": "any"
+    },
+    "position": {
+     "type": "any"
+    },
+    "leg_color": {
+     "type": "str"
+    },
+    "evaluation": {
+     "type": "str"
+    },
+    "rank": {
+     "type": "any"
+    },
+    "comment": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "entries",
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "2019105219",
+     "min": "2019105219"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "smartrc_race": {
+   "top_required": {
+    "race_id": {
+     "type": "str"
+    }
+   },
+   "top_optional": {
+    "rcode": {
+     "type": "str"
+    },
+    "source": {
+     "type": "str"
+    },
+    "runners": {
+     "type": "list"
+    },
+    "horses": {
+     "type": "dict"
+    },
+    "fullresults": {
+     "type": "dict"
+    }
+   },
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "requirement_row_trace": {
+   "top_required": {
+    "row_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "trace_key": {
+     "type": "str",
+     "non_empty": true
+    },
+    "scope": {
+     "type": "str",
+     "non_empty": true
+    },
+    "primary_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "canonical": {
+     "type": "list",
+     "min_length": 1
+    }
+   },
+   "top_optional": {
+    "title_ja": {
+     "type": "str"
+    },
+    "raw_html": {
+     "type": "list"
+    }
+   },
+   "entry_required": {
+    "category": {
+     "type": "str",
+     "non_empty": true
+    },
+    "key": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "entry_optional": {
+    "role": {
+     "type": "str"
+    },
+    "present": {
+     "type": "bool"
+    },
+    "note": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "canonical",
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "race_day_schedule": {
+   "top_required": {
+    "date_fmt": {
+     "type": "str",
+     "pattern": "\\d{8}"
+    },
+    "slots": {
+     "type": "list"
+    }
+   },
+   "top_optional": {
+    "iso_date": {
+     "type": "str"
+    }
+   },
+   "entry_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "post_time_iso": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "entry_optional": {
+    "venue": {
+     "type": "str"
+    },
+    "round": {
+     "type": "any"
+    },
+    "race_name": {
+     "type": "str"
+    },
+    "start_time_str": {
+     "type": "str"
+    },
+    "time_source": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "slots",
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "nk_race_day_schedule",
+     "min": "nk_race_day_schedule"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_shutuba_meta": {
+   "top_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "race_name": {
+     "type": "str"
+    }
+   },
+   "top_optional": {
+    "date": {
+     "type": "str"
+    },
+    "venue": {
+     "type": "str"
+    },
+    "round": {
+     "type": "int"
+    },
+    "surface": {
+     "type": "str"
+    },
+    "distance": {
+     "type": "int"
+    },
+    "direction": {
+     "type": "str"
+    },
+    "weather": {
+     "type": "str"
+    },
+    "track_condition": {
+     "type": "str"
+    },
+    "start_time": {
+     "type": "str"
+    },
+    "field_size": {
+     "type": "int"
+    },
+    "grade": {
+     "type": "str"
+    },
+    "race_class": {
+     "type": "str"
+    },
+    "weight_rule": {
+     "type": "str"
+    },
+    "course_type": {
+     "type": "str"
+    }
+   },
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_result_on_time_payoff": {
+   "top_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "top_optional": {
+    "payoff": {
+     "type": "dict"
+    }
+   },
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "race_result_on_time_lap": {
+   "top_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "top_optional": {
+    "lap_times": {
+     "type": "list"
+    },
+    "pace": {
+     "type": "dict"
+    }
+   },
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "race_result_on_time_corner": {
+   "top_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "top_optional": {
+    "corner_passing": {
+     "type": "list"
+    }
+   },
+   "_provenance": {
+    "source": "hand-written",
+    "samples": 0,
+    "note": "初期の手書き定義。python -m src.scraper.schema_infer で実データと突き合わせて再構成する"
+   }
+  },
+  "horse_profile": {
+   "top_required": {
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_name": {
+     "type": "str"
+    }
+   },
+   "top_optional": {
+    "name_en": {
+     "type": "str"
+    },
+    "status": {
+     "type": "str"
+    },
+    "sex": {
+     "type": "str"
+    },
+    "age": {
+     "type": "any"
+    },
+    "color": {
+     "type": "str"
+    },
+    "birthday": {
+     "type": "str"
+    },
+    "trainer": {
+     "type": "str"
+    },
+    "trainer_id": {
+     "type": "str"
+    },
+    "owner": {
+     "type": "str"
+    },
+    "breeder": {
+     "type": "str"
+    },
+    "birthplace": {
+     "type": "str"
+    },
+    "total_earnings": {
+     "type": "any"
+    },
+    "career": {
+     "type": "str"
+    },
+    "career_record": {
+     "type": "list"
+    },
+    "major_wins": {
+     "type": "list"
+    },
+    "sire": {
+     "type": "str"
+    },
+    "dam": {
+     "type": "str"
+    },
+    "dam_sire": {
+     "type": "str"
+    }
+   },
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "2019105219",
+     "min": "2019105219"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "horse_race_history": {
+   "top_required": {
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "horse_name": {
+     "type": "str"
+    },
+    "race_history": {
+     "type": "list"
+    }
+   },
+   "top_optional": {},
+   "entry_required": {
+    "date": {
+     "type": "str"
+    },
+    "race_id": {
+     "type": "str"
+    }
+   },
+   "entry_optional": {
+    "venue": {
+     "type": "str"
+    },
+    "weather": {
+     "type": "str"
+    },
+    "race_round": {
+     "type": "any"
+    },
+    "race_name": {
+     "type": "str"
+    },
+    "field_size": {
+     "type": "any"
+    },
+    "bracket_number": {
+     "type": "any"
+    },
+    "horse_number": {
+     "type": "any"
+    },
+    "odds": {
+     "type": "any"
+    },
+    "popularity": {
+     "type": "any"
+    },
+    "finish_position": {
+     "type": "any"
+    },
+    "jockey_name": {
+     "type": "str"
+    },
+    "jockey_weight": {
+     "type": "any"
+    },
+    "surface": {
+     "type": "str"
+    },
+    "distance": {
+     "type": "any"
+    },
+    "time_index": {
+     "type": "any"
+    },
+    "track_condition": {
+     "type": "str"
+    },
+    "finish_time": {
+     "type": "str"
+    },
+    "time_sec": {
+     "type": "float"
+    },
+    "margin": {
+     "type": "str"
+    },
+    "passing_order": {
+     "type": "any"
+    },
+    "last_3f": {
+     "type": "any"
+    },
+    "weight": {
+     "type": "any"
+    },
+    "weight_change": {
+     "type": "any"
+    },
+    "winner": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "race_history",
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "2019105219",
+     "min": "2019105219"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_result_meta": {
+   "top_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "race_name": {
+     "type": "str"
+    }
+   },
+   "top_optional": {
+    "date": {
+     "type": "str"
+    },
+    "venue": {
+     "type": "str"
+    },
+    "round": {
+     "type": "int"
+    },
+    "surface": {
+     "type": "str"
+    },
+    "distance": {
+     "type": "int"
+    },
+    "direction": {
+     "type": "str"
+    },
+    "grade": {
+     "type": "str"
+    },
+    "field_size": {
+     "type": "int"
+    },
+    "start_time": {
+     "type": "str"
+    }
+   },
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_result_payoff": {
+   "top_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "top_optional": {
+    "payoff": {
+     "type": "dict"
+    }
+   },
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_result_track": {
+   "top_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "top_optional": {
+    "weather": {
+     "type": "str"
+    },
+    "track_condition": {
+     "type": "str"
+    },
+    "track_condition_turf": {
+     "type": "str"
+    },
+    "track_condition_dirt": {
+     "type": "str"
+    }
+   },
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_result_corner": {
+   "top_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "top_optional": {
+    "corner_passing": {
+     "type": "list"
+    }
+   },
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "race_result_lap_times": {
+   "top_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    }
+   },
+   "top_optional": {
+    "lap_times": {
+     "type": "list"
+    },
+    "pace": {
+     "type": "dict"
+    }
+   },
+   "_provenance": {
+    "source": "observed",
+    "samples": 1,
+    "conformance": {
+     "failures": {},
+     "passed": 1,
+     "validated": 1
+    },
+    "key_range": {
+     "max": "202309030811",
+     "min": "202309030811"
+    },
+    "runs": [
+     {
+      "at": "2026-10-06T05:19:46+00:00",
+      "host": "JP-CG4QN94",
+      "records": 1,
+      "source": "samples"
+     }
+    ],
+    "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  }
+ },
+ "no_schema_reason": {
+  "race_predictions": {
+   "status": "pending",
+   "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される（保存元: api/app.py・inference_pipeline。payload は predictions / horses の2形式が混在）"
+  },
+  "tracking_difficulty": {
+   "status": "pending",
+   "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される"
+  },
+  "final_odds_prediction": {
+   "status": "pending",
+   "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される"
+  },
+  "finish_order_prediction": {
+   "status": "pending",
+   "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される"
+  },
+  "race_performance": {
+   "status": "pending",
+   "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される"
+  },
+  "jra_cushion": {
+   "status": "pending",
+   "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される（保存元: jra_cushion_storage / jra_cushion_sync。年別 {records:[…]}）"
+  },
+  "horse_name": {
+   "status": "unused",
+   "note": "save() 元なし。馬名索引は data/calculated_data/knowledge/horse_name_index.json で管理"
+  },
+  "horse_ped": {
+   "status": "not_json",
+   "note": "生 HTML アーカイブ（HtmlArchive）のカテゴリで JSON ではない"
+  },
+  "horse_ped_line": {
+   "status": "unused",
+   "note": "書き込み箇所なし（予約）"
+  },
+  "horse_lap": {
+   "status": "unused",
+   "note": "書き込み箇所なし（予約）"
+  },
+  "race_info": {
+   "status": "unused",
+   "note": "書き込み箇所なし（race_result_meta / race_shutuba_meta に置換）"
+  },
+  "race_lap": {
+   "status": "unused",
+   "note": "書き込み箇所なし（race_result_lap に置換）"
+  },
+  "race_lap_on_time": {
+   "status": "unused",
+   "note": "書き込み箇所なし（race_result_on_time_lap に置換）"
+  },
+  "race_return": {
+   "status": "unused",
+   "note": "書き込み箇所なし（race_result_payoff に置換）"
+  }
+ }
+}

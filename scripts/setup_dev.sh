@@ -13,6 +13,12 @@ else
     echo "[setup] .env は既に存在します（スキップ）。"
 fi
 
+# ── 1b. dev 用モックデータ（GCS 不要。KEIBA_ENV=dev は GCP へ一切接続しない）──
+if command -v python3 &>/dev/null; then
+    echo "[setup] dev 用モックデータを生成します..."
+    python3 -m src.scripts.data.make_dev_mock || echo "[setup] WARN: モック生成に失敗しました（make dev-mock で再実行できます）。"
+fi
+
 # ── 2. Docker ────────────────────────────────────────────────────────────────
 echo "[setup] Docker コンテナを起動します..."
 docker compose -f docker-compose.dev.yml up -d

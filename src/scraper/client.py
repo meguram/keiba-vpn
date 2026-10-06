@@ -468,6 +468,22 @@ def _build_browser_headers(ua_entry: dict[str, str]) -> dict[str, str]:
     return headers
 
 
+# ── 応答オブザーバ（アクセス制限の検知など。登録が無ければ何もしない）─────────────────
+_RESPONSE_OBSERVERS: list = []
+
+
+def add_response_observer(fn) -> None:
+    """全 GET 応答（ステータス判定の前）に ``fn(url, response)`` を呼ぶ。fn が例外を送出すればそのリクエストを中断できる。
+    fn が ``on_error(url, exc)`` を持てば、応答を得られなかった通信エラーのときにも呼ぶ。"""
+    if fn not in _RESPONSE_OBSERVERS:
+        _RESPONSE_OBSERVERS.append(fn)
+
+
+def remove_response_observer(fn) -> None:
+    if fn in _RESPONSE_OBSERVERS:
+        _RESPONSE_OBSERVERS.remove(fn)
+
+
 class NetkeibaClient:
     """
     netkeiba.com / smartrc.jp 専用 HTTPクライアント。
@@ -684,8 +700,17 @@ class NetkeibaClient:
                     attempt + 1,
                     _BACKOFF_MAX_RETRIES + 1,
                 )
-                resp = self._session.get(url, timeout=self.timeout)
+                try:
+                    resp = self._session.get(url, timeout=self.timeout)
+                except Exception as _exc:          # 接続エラー・タイムアウト等。オブザーバ（アクセス制限の検知）に知らせてから従来どおり送出
+                    for _observer in tuple(_RESPONSE_OBSERVERS):
+                        _on_error = getattr(_observer, "on_error", None)
+                        if _on_error is not None:
+                            _on_error(url, _exc)
+                    raise
             last_resp = resp
+            for _observer in tuple(_RESPONSE_OBSERVERS):
+                _observer(url, resp)
 
             if resp.status_code in (429, 503):
                 if attempt < _BACKOFF_MAX_RETRIES:

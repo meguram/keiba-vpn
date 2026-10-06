@@ -1,0 +1,343 @@
+{
+ "category": "race_result_lap",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "202309030811",
+  "min": "202309030811"
+ },
+ "lists": {
+  "corner_passing": {
+   "fields": {
+    "corner": {
+     "empty": 0,
+     "max": 4,
+     "min": 0,
+     "n": 5,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 5
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "label": {
+     "empty": 0,
+     "len_max": 5,
+     "len_min": 4,
+     "n": 5,
+     "null": 0,
+     "patterns": {
+      "text": 5
+     },
+     "types": {
+      "str": 5
+     },
+     "values": {
+      "1コーナー": 1,
+      "2コーナー": 1,
+      "3コーナー": 1,
+      "4コーナー": 1,
+      "馬場指数": 1
+     },
+     "values_overflow": false
+    },
+    "order_text": {
+     "empty": 0,
+     "len_max": 49,
+     "len_min": 6,
+     "n": 5,
+     "null": 0,
+     "patterns": {
+      "text": 5
+     },
+     "types": {
+      "str": 5
+     },
+     "values": {
+      "-7 (?)": 1
+     },
+     "values_overflow": false
+    }
+   },
+   "items": 5,
+   "records": 1
+  },
+  "entries_lap": {
+   "fields": {
+    "horse_id": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "digits10": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_name": {
+     "empty": 0,
+     "len_max": 9,
+     "len_min": 3,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "text": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {
+      "アスクビクターモア": 1,
+      "イクイノックス": 1,
+      "カラテ": 1,
+      "ジェラルディーナ": 1,
+      "ジオグリフ": 1,
+      "ジャスティンパレス": 1,
+      "スルーセブンシーズ": 1,
+      "ダノンザキッド": 1,
+      "ディープボンド": 1,
+      "ドゥラエレーデ": 1,
+      "ブレークアップ": 1,
+      "プラダリア": 1,
+      "ボッケリーニ": 1,
+      "モズベッロ": 1,
+      "ユニコーンライオン": 1,
+      "ライラック": 1,
+      "ヴェラアズール": 1
+     },
+     "values_overflow": false
+    },
+    "horse_number": {
+     "empty": 0,
+     "max": 17,
+     "min": 1,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "last_3f": {
+     "empty": 0,
+     "max": 36.9,
+     "min": 34.6,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "passing_order": {
+     "empty": 0,
+     "len_max": 11,
+     "len_min": 7,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "text": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {
+      "1-1-1-1": 1,
+      "10-10-13-12": 1,
+      "11-10-11-12": 1,
+      "12-10-13-16": 1,
+      "12-13-11-9": 1,
+      "14-14-16-16": 1,
+      "14-14-6-3": 1,
+      "16-16-13-9": 1,
+      "17-17-16-12": 1,
+      "2-2-2-2": 1,
+      "3-3-3-3": 1,
+      "4-3-4-6": 1,
+      "4-5-4-3": 1,
+      "4-5-6-9": 1,
+      "7-7-8-12": 1,
+      "7-7-8-6": 2
+     },
+     "values_overflow": false
+    }
+   },
+   "items": 17,
+   "records": 1
+  }
+ },
+ "nested": {
+  "pace": {
+   "first_half_3f": {
+    "empty": 0,
+    "max": 34.0,
+    "min": 34.0,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "l1f": {
+    "empty": 0,
+    "max": 11.8,
+    "min": 11.8,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "l3f": {
+    "empty": 0,
+    "max": 35.5,
+    "min": 35.5,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "second_half_3f": {
+    "empty": 0,
+    "max": 35.5,
+    "min": 35.5,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "t1f": {
+    "empty": 0,
+    "max": 12.4,
+    "min": 12.4,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "t3f": {
+    "empty": 0,
+    "max": 34.0,
+    "min": 34.0,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 1
+    },
+    "values": {},
+    "values_overflow": false
+   }
+  }
+ },
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  }
+ ],
+ "top": {
+  "corner_passing": {
+   "empty": 0,
+   "len_max": 5,
+   "len_min": 5,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "entries_lap": {
+   "empty": 0,
+   "len_max": 17,
+   "len_min": 17,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "lap_times": {
+   "empty": 0,
+   "len_max": 11,
+   "len_min": 11,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "pace": {
+   "empty": 0,
+   "len_max": 6,
+   "len_min": 6,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits12": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

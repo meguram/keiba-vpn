@@ -32,6 +32,8 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any, Protocol
 
+from src.config.gcp_guard import assert_gcp_allowed
+
 logger = logging.getLogger("pipeline.models.model_registry")
 
 MANIFEST_NAME = "manifest.json"
@@ -94,6 +96,7 @@ class GcsModelStore:
         if bucket is not None:  # テスト用の注入
             self._bucket = bucket
         else:
+            assert_gcp_allowed("モデルストア (GCS)")
             from google.cloud import storage as gcs_lib
 
             from src.config.gcp_credentials import build_gcp_credentials

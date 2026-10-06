@@ -111,3 +111,13 @@ TODO 全体の一覧と優先順位は `docs/html/index.html` の §14 を参照
 - **未実施（次にやること）**: T-055 の「健全な Redis への復旧確認」。Redis が起動していなかったため、復旧の往復確認は失敗表示のまま。
   `make db-up` などで Redis を起動して `bash docs/todos/verify/T-055_circuit_breaker.sh` を再実行し、`復旧後の往復` が表示されることを確認する。
 - 結果ファイルに **鍵・パスワード・トークンを書かない**（差分やログを貼るときは値をマスクする）。
+
+## 8. データ網羅性・スキーマの検証（別手順）
+
+2020 年以降の全データポイントが GCS に揃い、スキーマに適合しているかの確認は、本書とは別に
+[`learning_env/data_check.md`](learning_env/data_check.md) にまとめています（`bash docs/todos/verify/stg_data_complete.sh`、
+`python -m src.scraper.schema_infer`、`python -m src.data_health`）。前提は「netkeiba プレミアム認証は完了」「GCS のアクセスポイントは stg と prod で同一」です。
+
+スクレイピング（不足データの取得）も同じ手順書の手順 5 にあります: `bash docs/todos/verify/stg_scrape_missing.sh`（既定はドライラン）。
+エラーには敏感に対応し、「ページが存在しない」以外はアクセス制限とみなして即終了 → その時点のデータチェック → 制限解除後に `RESUME=1` で再開します。
+スキーマで弾かれたサンプルの保存先は同手順書の 5-B にまとめています。

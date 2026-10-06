@@ -38,6 +38,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from src.config.gcp_guard import assert_gcp_allowed, gcp_forbidden
+from src.scraper import schema_violations
+from src.scraper.dev_store import DevStore, dev_mock_root
+
 JST = timezone(timedelta(hours=9))
 
 logger = logging.getLogger("scraper.storage")
@@ -166,6 +170,13 @@ class HybridStorage:
         self._meta_dir.mkdir(parents=True, exist_ok=True)
 
         self._bucket_name = bucket_name or os.environ.get("GCS_BUCKET", "")
+        # dev は GCS に一切触れず、ローカルのモック（data/dev_mock）だけを読み書きする
+        self._dev_store: DevStore | None = None
+        if gcp_forbidden():
+            if self._bucket_name:
+                logger.warning("KEIBA_ENV=dev のため GCS_BUCKET=%s を無視します（ローカルモードで動作）", self._bucket_name)
+            self._bucket_name = ""
+            self._dev_store = DevStore(dev_mock_root(self._base_dir))
         self._gcs_client = None
         self._gcs_bucket = None
         self._gcs_available: bool | None = None
@@ -379,6 +390,7 @@ class HybridStorage:
         if self._gcs_bucket is None:
             with self._gcs_init_lock:
                 if self._gcs_bucket is None:
+                    assert_gcp_allowed("GCS バケット")
                     from google.cloud import storage as gcs_lib
                     credentials = self._build_credentials()
                     if credentials:
@@ -479,11 +491,25 @@ class HybridStorage:
             "off",
             "no",
         )
-        if strict and not vr.get("passed") and "skipped" not in vr:
-            raise schemas.SchemaValidationError(category, key, vr)
+        if not vr.get("passed") and "skipped" not in vr:
+            # どの項目がどの値で引っかかったかを必ず記録する（拒否した場合はデータ本体も隔離）
+            rejected = strict and not vr.get("advisory")
+            decision = "rejected" if rejected else "saved_advisory" if vr.get("advisory") else "saved_lenient"
+            schema_violations.record(self._base_dir, category, key, vr, decision, payload=data if rejected else None)
+            if rejected:
+                raise schemas.SchemaValidationError(category, key, vr)
+            logger.warning("スキーマ不適合（%s）: %s/%s :: %s", decision, category, key,
+                           " | ".join(schemas.describe_violation(v) for v in (vr.get("violations") or [])[:3]))
+        elif vr.get("passed"):
+            schema_violations.resolve(self._base_dir, category, key)
 
         if self._is_local_only(category):
             self._save_local(category, key, data)
+            return True
+
+        if self._dev_store is not None:
+            self._dev_store.write(category, key, self.CATEGORY_MAP.get(category, "race"), data)
+            self._cache_put(f"{category}/{key}", data)
             return True
 
         gated = self._is_locally_cached(category)
@@ -633,6 +659,9 @@ class HybridStorage:
         if self._is_local_only(category):
             return self._load_local(category, key)
 
+        if self._dev_store is not None:
+            return self._dev_load(category, key, bypass_cache)
+
         cache_key = f"{category}/{key}"
         if not bypass_cache:
             with self._load_cache_lock:
@@ -693,6 +722,19 @@ class HybridStorage:
                     self._weekly_disk_l2_maybe_write(category, key, stale)
                     return stale
         return None
+
+    def _dev_load(self, category: str, key: str, bypass_cache: bool) -> dict[str, Any] | None:
+        """dev: data/dev_mock から読む（GCS・ディスク L2 は使わない）。見つからない場合は None。"""
+        cache_key = f"{category}/{key}"
+        if not bypass_cache:
+            with self._load_cache_lock:
+                cached = self._load_cache.get(cache_key)
+            if cached and cached[1] is not None and (_time.time() - cached[0]) < self._mem_cache_ttl:
+                return cached[1]
+        data = self._dev_store.read(category, key, self.CATEGORY_MAP.get(category, "race"))
+        if data is not None:
+            self._cache_put(cache_key, data)
+        return data
 
     def _cache_put(self, cache_key: str, data: dict | None):
         """LRU キャッシュにデータを格納する。上限超過時は最古エントリを削除。"""
@@ -923,6 +965,9 @@ class HybridStorage:
                 paths.append(legacy)
             return any(p.exists() for p in paths)
 
+        if self._dev_store is not None:
+            return self._dev_store.exists(category, key, self.CATEGORY_MAP.get(category, "race"))
+
         cache_key = f"{category}/{key}"
         with self._load_cache_lock:
             cached = self._load_cache.get(cache_key)
@@ -1023,6 +1068,11 @@ class HybridStorage:
         if self._is_local_only(category):
             return {}
 
+        if self._dev_store is not None:
+            id_type = self.CATEGORY_MAP.get(category, "race")
+            return self._dev_store.mtimes(
+                category, id_type, self._dev_store.list_keys(category, id_type, year))
+
         cache_key = f"{category}/{year}"
         with self._blob_list_lock:
             cached = self._blob_list_cache.get(cache_key)
@@ -1100,6 +1150,8 @@ class HybridStorage:
         指定キー群の存在 + 更新日時をバッチ取得する。
         year ごとにグループ化して batch_list_blobs を並列で呼ぶ。
         """
+        if self._dev_store is not None and not self._is_local_only(category):
+            return self._dev_store.mtimes(category, self.CATEGORY_MAP.get(category, "race"), keys)
         if not self.gcs_enabled or self._is_local_only(category):
             return {}
         years: dict[str, list[str]] = {}
@@ -1285,6 +1337,9 @@ class HybridStorage:
         """キー一覧を返す。local_only はローカル、それ以外は GCS。"""
         if self._is_local_only(category):
             return self._list_keys_local(category)
+
+        if self._dev_store is not None:
+            return self._dev_store.list_keys(category, self.CATEGORY_MAP.get(category, "race"), year)
 
         if self.gcs_enabled and self._gcs_healthy:
             try:

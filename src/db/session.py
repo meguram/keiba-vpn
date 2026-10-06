@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import contextmanager
 from typing import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+
+from src.config.gcp_guard import gcp_forbidden
+
+logger = logging.getLogger(__name__)
 
 _engine = None
 _SessionLocal: sessionmaker[Session] | None = None
@@ -48,6 +53,9 @@ def init_engine(url: str | None = None):
         load_project_dotenv()
 
     backend = os.environ.get("KEIBA_DB_BACKEND", "").strip().lower()
+    if backend == "cloud_sql" and gcp_forbidden():
+        logger.warning("KEIBA_ENV=dev では Cloud SQL を使えません。DATABASE_URL（ローカル）に接続します")
+        backend = ""
     if url is None and backend == "cloud_sql":
         from src.db.cloud_sql import get_cloud_sql_engine
 

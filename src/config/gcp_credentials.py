@@ -61,6 +61,9 @@ def build_gcp_credentials():
     既定コンストラクタ（``credentials=None``）に渡してADC（Cloud Run実行時に自動付与される
     サービスアカウント等）へフォールバックすること。
     """
+    from src.config.gcp_guard import assert_gcp_allowed
+
+    assert_gcp_allowed("GCP 認証情報の構築")
     info = gcp_service_account_info()
     if not info or _service_account is None:
         return None

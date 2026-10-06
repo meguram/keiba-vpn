@@ -1,0 +1,142 @@
+{
+ "category": "race_paddock",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "202309030811",
+  "min": "202309030811"
+ },
+ "lists": {
+  "entries": {
+   "fields": {
+    "horse_id": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 5,
+     "null": 0,
+     "patterns": {
+      "digits10": 5
+     },
+     "types": {
+      "str": 5
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_name": {
+     "empty": 0,
+     "len_max": 9,
+     "len_min": 7,
+     "n": 5,
+     "null": 0,
+     "patterns": {
+      "text": 5
+     },
+     "types": {
+      "str": 5
+     },
+     "values": {
+      "アスクビクターモア": 1,
+      "イクイノックス": 1,
+      "ジェラルディーナ": 1,
+      "ジャスティンパレス": 1,
+      "ディープボンド": 1
+     },
+     "values_overflow": false
+    },
+    "horse_number": {
+     "empty": 0,
+     "max": 6,
+     "min": 3,
+     "n": 5,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 5
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "paddock_comment": {
+     "empty": 0,
+     "len_max": 24,
+     "len_min": 21,
+     "n": 5,
+     "null": 0,
+     "patterns": {
+      "text": 5
+     },
+     "types": {
+      "str": 5
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "paddock_rank": {
+     "empty": 0,
+     "len_max": 1,
+     "len_min": 1,
+     "n": 5,
+     "null": 0,
+     "patterns": {
+      "text": 5
+     },
+     "types": {
+      "str": 5
+     },
+     "values": {
+      "A": 2,
+      "B": 3
+     },
+     "values_overflow": false
+    }
+   },
+   "items": 5,
+   "records": 1
+  }
+ },
+ "nested": {},
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  }
+ ],
+ "top": {
+  "entries": {
+   "empty": 0,
+   "len_max": 5,
+   "len_min": 5,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits12": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

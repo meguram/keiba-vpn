@@ -1,0 +1,111 @@
+{
+ "category": "race_result_corner",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "202309030811",
+  "min": "202309030811"
+ },
+ "lists": {
+  "corner_passing": {
+   "fields": {
+    "corner": {
+     "empty": 0,
+     "max": 4,
+     "min": 0,
+     "n": 5,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 5
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "label": {
+     "empty": 0,
+     "len_max": 5,
+     "len_min": 4,
+     "n": 5,
+     "null": 0,
+     "patterns": {
+      "text": 5
+     },
+     "types": {
+      "str": 5
+     },
+     "values": {
+      "1コーナー": 1,
+      "2コーナー": 1,
+      "3コーナー": 1,
+      "4コーナー": 1,
+      "馬場指数": 1
+     },
+     "values_overflow": false
+    },
+    "order_text": {
+     "empty": 0,
+     "len_max": 49,
+     "len_min": 6,
+     "n": 5,
+     "null": 0,
+     "patterns": {
+      "text": 5
+     },
+     "types": {
+      "str": 5
+     },
+     "values": {
+      "-7 (?)": 1
+     },
+     "values_overflow": false
+    }
+   },
+   "items": 5,
+   "records": 1
+  }
+ },
+ "nested": {},
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  }
+ ],
+ "top": {
+  "corner_passing": {
+   "empty": 0,
+   "len_max": 5,
+   "len_min": 5,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits12": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

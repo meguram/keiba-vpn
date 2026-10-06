@@ -29,14 +29,14 @@ from __future__ import annotations
 
 import copy
 import json
+from pathlib import Path
 import re
 from typing import Any
 
-SCHEMA_VERSION = 2
 
 
 class SchemaValidationError(RuntimeError):
-    """カテゴリスキーマ検証に不合格（厳格モードで保存前に送出）。"""
+    """カテゴリスキーマ検証に不合格（厳格モードで保存前に送出）。メッセージに「どの値で」引っかかったかを含める。"""
 
     def __init__(self, category: str, key: str, report: dict[str, Any]) -> None:
         self.category = category
@@ -46,7 +46,25 @@ class SchemaValidationError(RuntimeError):
             f"[schema_validation] {category}/{key} "
             f"schema_version={report.get('schema_version')!r} passed=False"
         )
+        vs = report.get("violations") or []
+        if vs:
+            msg += " :: " + " | ".join(describe_violation(v) for v in vs[:3])
+            if len(vs) > 3:
+                msg += f" | …他 {len(vs) - 3} 件"
         super().__init__(msg)
+
+
+MAX_VIOLATIONS = 50          # 1 レコードあたり記録する違反の上限
+MAX_VALUE_CHARS = 120        # 記録する「実際の値」の最大文字数
+_IDENTIFYING_KEYS = ("horse_number", "horse_id", "horse_name", "date", "race_id", "generation", "position", "corner")
+
+
+def describe_violation(v: dict[str, Any]) -> str:
+    """違反 1 件を 1 行にする。例: entries[3].win_odds: type（期待 float / 実際 str '—'）[horse_number=4]"""
+    where = ",".join(f"{k}={w}" for k, w in (v.get("where") or {}).items())
+    field = v["field"].replace("[]", f"[{v['index']}]") if v.get("index") is not None else v["field"]
+    return (f"{field}: {v['rule']}（期待 {v.get('expected')} / 実際 {v.get('actual_type')} {v.get('actual')}）"
+            + (f" ※{where}" if where else ""))
 
 
 def validation_report_for_meta(report: dict[str, Any]) -> dict[str, Any]:
@@ -67,780 +85,48 @@ _TYPE_MAP: dict[str, type | tuple[type, ...]] = {
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# レース系スキーマ
+# スキーマ定義（正本: schema_defs.json。git 管理され、全環境で同一）
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# 各カテゴリ: top_required / top_optional / entry_list_key / entry_required / entry_optional / lists
+#   advisory=True … 不合格でも保存を止めない（_meta に記録のみ）。実データでの検証を経て厳格化する。
+#   _provenance   … 定義の根拠（source / samples / period など）。検証には使わない。
+# 実データからの再構成: python -m src.scraper.schema_infer --help
 
-_RACE_RESULT: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-        "race_name": {"type": "str"},
-        "date": {"type": "str", "pattern": r"\d{4}-\d{2}-\d{2}"},
-        "venue": {"type": "str"},
-        "entries": {"type": "list", "min_length": 1},
-    },
-    "top_optional": {
-        "round": {"type": "int"},
-        "surface": {"type": "str"},
-        "distance": {"type": "int"},
-        "field_size": {"type": "int"},
-        "grade": {"type": "str"},
-        "direction": {"type": "str"},
-        "weather": {"type": "str"},
-        "track_condition": {"type": "str"},
-        "start_time": {"type": "str"},
-        "payoff": {"type": "dict"},
-        "lap_times": {"type": "list"},
-        "pace": {"type": "dict"},
-        "corner_passing": {"type": "list"},
-    },
-    "entry_required": {
-        "horse_number": {"type": "int", "min": 1},
-        "horse_name": {"type": "str", "non_empty": True},
-        "horse_id": {"type": "str", "non_empty": True},
-        "bracket_number": {"type": "int"},
-    },
-    "entry_optional": {
-        "finish_position": {"type": "any"},
-        "sex_age": {"type": "str"},
-        "jockey_weight": {"type": "any"},
-        "jockey_name": {"type": "str"},
-        "jockey_id": {"type": "str"},
-        "finish_time": {"type": "str"},
-        "time_sec": {"type": "float"},
-        "margin": {"type": "str"},
-        "passing_order": {"type": "any"},
-        "last_3f": {"type": "any"},
-        "odds": {"type": "any"},
-        "popularity": {"type": "any"},
-        "weight": {"type": "any"},
-        "weight_change": {"type": "any"},
-        "trainer_name": {"type": "str"},
-        "trainer_id": {"type": "str"},
-    },
-    "entry_list_key": "entries",
-}
-
-_RACE_SHUTUBA: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-        "race_name": {"type": "str"},
-        "entries": {"type": "list"},
-    },
-    "top_optional": {
-        "date": {"type": "str"},
-        "venue": {"type": "str"},
-        "round": {"type": "int"},
-        "surface": {"type": "str"},
-        "distance": {"type": "int"},
-        "direction": {"type": "str"},
-        "weather": {"type": "str"},
-        "track_condition": {"type": "str"},
-        "start_time": {"type": "str"},
-        "field_size": {"type": "int"},
-        "grade": {"type": "str"},
-        "race_class": {"type": "str"},
-        "weight_rule": {"type": "str"},
-        "course_type": {"type": "str"},
-    },
-    "entry_required": {
-        "horse_number": {"type": "int"},
-        "horse_name": {"type": "str", "non_empty": True},
-        "horse_id": {"type": "str", "non_empty": True},
-    },
-    "entry_optional": {
-        "bracket_number": {"type": "int"},
-        "sex_age": {"type": "str"},
-        "jockey_weight": {"type": "any"},
-        "jockey_name": {"type": "str"},
-        "jockey_id": {"type": "str"},
-        "trainer_name": {"type": "str"},
-        "trainer_id": {"type": "str"},
-        "weight": {"type": "any"},
-        "weight_change": {"type": "any"},
-        "odds": {"type": "any"},
-        "popularity": {"type": "any"},
-        "sire": {"type": "str"},
-        "dam_sire": {"type": "str"},
-    },
-    "entry_list_key": "entries",
-}
-
-_RACE_SHUTUBA_PAST: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-        "entries": {"type": "list"},
-    },
-    "top_optional": {
-        "training": {"type": "list"},
-    },
-    "entry_required": {
-        "horse_name": {"type": "str", "non_empty": True},
-        "horse_id": {"type": "str", "non_empty": True},
-        "past_races": {"type": "list"},
-    },
-    "entry_optional": {
-        "bracket_number": {"type": "int"},
-        "horse_number": {"type": "int"},
-    },
-    "entry_list_key": "entries",
-}
-
-_RACE_INDEX: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-        "entries": {"type": "list"},
-    },
-    "top_optional": {},
-    "entry_required": {
-        "horse_number": {"type": "int", "min": 1},
-        "horse_name": {"type": "str", "non_empty": True},
-        "horse_id": {"type": "str", "non_empty": True},
-    },
-    "entry_optional": {
-        "time_index_m": {"type": "any"},
-        "speed_max": {"type": "any"},
-        "speed_avg": {"type": "any"},
-        "speed_distance": {"type": "any"},
-        "speed_course": {"type": "any"},
-        "speed_recent": {"type": "list"},
-        "all_txt_c": {"type": "list"},
-        "odds": {"type": "any"},
-        "popularity": {"type": "any"},
-    },
-    "entry_list_key": "entries",
-}
-
-_RACE_ODDS: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-        "entries": {"type": "list"},
-    },
-    "top_optional": {},
-    "entry_required": {
-        "horse_number": {"type": "int", "min": 1},
-    },
-    "entry_optional": {
-        "win_odds": {"type": "any"},
-        "place_odds_min": {"type": "any"},
-        "place_odds_max": {"type": "any"},
-        "popularity": {"type": "any"},
-    },
-    "entry_list_key": "entries",
-}
-
-_RACE_PAIR_ODDS: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-    },
-    "top_optional": {
-        "umaren": {"type": "list"},
-        "wide": {"type": "list"},
-        "umatan": {"type": "list"},
-    },
-    "lists": {
-        "umaren": {
-            "entry_required": {"pair": {"type": "list"}, "odds": {"type": "any"}},
-            "entry_optional": {"popularity": {"type": "any"}},
-        },
-        "wide": {
-            "entry_required": {"pair": {"type": "list"}},
-            "entry_optional": {"odds_min": {"type": "any"}, "odds_max": {"type": "any"}, "popularity": {"type": "any"}},
-        },
-        "umatan": {
-            "entry_required": {"pair": {"type": "list"}, "odds": {"type": "any"}},
-            "entry_optional": {"popularity": {"type": "any"}},
-        },
-    },
-}
-
-_RACE_PADDOCK: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-        "entries": {"type": "list"},
-    },
-    "top_optional": {},
-    "entry_required": {
-        "horse_number": {"type": "int", "min": 1},
-        "horse_name": {"type": "str", "non_empty": True},
-        "horse_id": {"type": "str", "non_empty": True},
-    },
-    "entry_optional": {
-        "paddock_rank": {"type": "any"},
-        "paddock_comment": {"type": "str"},
-    },
-    "entry_list_key": "entries",
-}
-
-_RACE_BAROMETER: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-        "entries": {"type": "list"},
-    },
-    "top_optional": {},
-    "entry_required": {
-        "horse_number": {"type": "int", "min": 1},
-        "horse_name": {"type": "str", "non_empty": True},
-        "horse_id": {"type": "str", "non_empty": True},
-    },
-    "entry_optional": {
-        "finish_order": {"type": "any"},
-        "index_total": {"type": "any"},
-        "index_start": {"type": "any"},
-        "index_chase": {"type": "any"},
-        "index_closing": {"type": "any"},
-    },
-    "entry_list_key": "entries",
-}
-
-_RACE_OIKIRI: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-        "entries": {"type": "list"},
-    },
-    "top_optional": {},
-    "entry_required": {
-        "horse_number": {"type": "int", "min": 1},
-        "horse_name": {"type": "str", "non_empty": True},
-        "horse_id": {"type": "str", "non_empty": True},
-    },
-    "entry_optional": {
-        "training_date": {"type": "str"},
-        "course": {"type": "str"},
-        "condition": {"type": "str"},
-        "rider": {"type": "str"},
-        "lap_times": {"type": "str"},
-        "impression": {"type": "str"},
-        "evaluation": {"type": "str"},
-        "comment": {"type": "str"},
-    },
-    "entry_list_key": "entries",
-}
-
-_RACE_RESULT_LAP: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-    },
-    "top_optional": {
-        "lap_times": {"type": "list"},
-        "pace": {"type": "dict"},
-        "corner_passing": {"type": "list"},
-        "entries_lap": {"type": "list"},
-        "horse_laptime_table": {"type": "dict"},
-    },
-}
-
-_RACE_TRAINER_COMMENT: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-        "entries": {"type": "list"},
-    },
-    "top_optional": {},
-    "entry_required": {
-        "horse_name": {"type": "str", "non_empty": True},
-    },
-    "entry_optional": {
-        "bracket_number": {"type": "int"},
-        "horse_number": {"type": "int"},
-        "horse_id": {"type": "str"},
-        "comment": {"type": "str"},
-        "evaluation": {"type": "str"},
-        "trainer_name": {"type": "str"},
-        "questioner": {"type": "str"},
-    },
-    "entry_list_key": "entries",
-}
-
-_RACE_DETAIL: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-        "race_name": {"type": "str"},
-        "entries": {"type": "list"},
-    },
-    "top_optional": {
-        "date": {"type": "str"},
-        "venue": {"type": "str"},
-        "round": {"type": "int"},
-        "surface": {"type": "str"},
-        "distance": {"type": "int"},
-        "direction": {"type": "str"},
-        "weather": {"type": "str"},
-        "track_condition": {"type": "str"},
-        "start_time": {"type": "str"},
-        "field_size": {"type": "int"},
-        "grade": {"type": "str"},
-        "race_class": {"type": "str"},
-        "weight_rule": {"type": "str"},
-        "course_type": {"type": "str"},
-    },
-    "entry_required": {
-        "horse_number": {"type": "int"},
-        "horse_name": {"type": "str", "non_empty": True},
-        "horse_id": {"type": "str", "non_empty": True},
-    },
-    "entry_optional": {
-        "bracket_number": {"type": "int"},
-        "sex_age": {"type": "str"},
-        "jockey_weight": {"type": "any"},
-        "jockey_name": {"type": "str"},
-        "jockey_id": {"type": "str"},
-        "trainer_name": {"type": "str"},
-        "trainer_id": {"type": "str"},
-        "weight": {"type": "any"},
-        "weight_change": {"type": "any"},
-        "odds": {"type": "any"},
-        "popularity": {"type": "any"},
-        "sire": {"type": "str"},
-        "dam_sire": {"type": "str"},
-        "speed_max": {"type": "any"},
-        "speed_avg": {"type": "any"},
-        "speed_distance": {"type": "any"},
-        "speed_course": {"type": "any"},
-        "speed_recent": {"type": "list"},
-        "past_races": {"type": "list"},
-    },
-    "entry_list_key": "entries",
-}
-
-# race.netkeiba.com 速報結果（db 確定版 `race_result` より日付・払戻・ラップが欠けることがある）
-_RACE_RESULT_ON_TIME: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-        "race_name": {"type": "str"},
-        "entries": {"type": "list", "min_length": 1},
-    },
-    "top_optional": {
-        **{
-            k: v
-            for k, v in _RACE_RESULT["top_optional"].items()
-            if k != "date"
-        },
-        "date": {"type": "str"},
-    },
-    "entry_required": copy.deepcopy(_RACE_RESULT["entry_required"]),
-    "entry_optional": copy.deepcopy(_RACE_RESULT["entry_optional"]),
-    "entry_list_key": "entries",
-}
-
-# scrape_race_list が保存するペイロード（`races` は 0 件もあり得る）
-_RACE_LISTS: dict[str, Any] = {
-    "top_required": {
-        "date": {"type": "str", "non_empty": True},
-        "races": {"type": "list"},
-    },
-    "top_optional": {
-        "_meta": {"type": "dict"},
-    },
-    "entry_required": {
-        "race_id": {"type": "str", "non_empty": True},
-    },
-    "entry_optional": {
-        "round": {"type": "any"},
-        "venue": {"type": "str"},
-        "race_name": {"type": "str"},
-        "entries_count": {"type": "any"},
-        "date": {"type": "str"},
-        "list_grade_icon": {"type": "str"},
-    },
-    "entry_list_key": "races",
-}
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 馬系スキーマ
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-_HORSE_RESULT: dict[str, Any] = {
-    "top_required": {
-        "horse_id": {"type": "str", "non_empty": True},
-        "horse_name": {"type": "str", "non_empty": True},
-        "race_history": {"type": "list"},
-    },
-    "top_optional": {
-        "name_en": {"type": "str"},
-        "status": {"type": "str"},
-        "sex": {"type": "str"},
-        "age": {"type": "any"},
-        "color": {"type": "str"},
-        "birthday": {"type": "str"},
-        "trainer": {"type": "str"},
-        "owner": {"type": "str"},
-        "breeder": {"type": "str"},
-        "birthplace": {"type": "str"},
-        "total_earnings": {"type": "any"},
-        "career": {"type": "str"},
-        "career_record": {"type": "list"},
-        "major_wins": {"type": "list"},
-        "sire": {"type": "str"},
-        "dam": {"type": "str"},
-        "dam_sire": {"type": "str"},
-    },
-    "entry_required": {
-        "date": {"type": "str"},
-        "race_id": {"type": "str"},
-    },
-    "entry_optional": {
-        "venue": {"type": "str"},
-        "weather": {"type": "str"},
-        "race_round": {"type": "any"},
-        "race_name": {"type": "str"},
-        "field_size": {"type": "any"},
-        "bracket_number": {"type": "any"},
-        "horse_number": {"type": "any"},
-        "odds": {"type": "any"},
-        "popularity": {"type": "any"},
-        "finish_position": {"type": "any"},
-        "jockey_name": {"type": "str"},
-        "jockey_weight": {"type": "any"},
-        "surface": {"type": "str"},
-        "distance": {"type": "any"},
-        "time_index": {"type": "any"},
-        "track_condition": {"type": "str"},
-        "finish_time": {"type": "str"},
-        "time_sec": {"type": "float"},
-        "margin": {"type": "str"},
-        "passing_order": {"type": "any"},
-        "last_3f": {"type": "any"},
-        "weight": {"type": "any"},
-        "weight_change": {"type": "any"},
-        "winner": {"type": "str"},
-    },
-    "entry_list_key": "race_history",
-}
-
-_HORSE_PEDIGREE_5GEN: dict[str, Any] = {
-    "top_required": {
-        "horse_id": {"type": "str", "non_empty": True},
-        "ancestors": {"type": "list", "min_length": 1},
-    },
-    "top_optional": {
-        "sire": {"type": "str"},
-        "dam": {"type": "str"},
-        "dam_sire": {"type": "str"},
-        "ancestor_count": {"type": "int"},
-        "source": {"type": "str"},
-        # 母馬ページ(own.netkeiba)由来の種付け日。種付け年 = 生まれ年 - 1 で対応付け（yyyy-mm-dd）
-        "mating_date": {"type": "str", "pattern": r"^\d{4}-\d{2}-\d{2}$"},
-        "mating_year": {"type": "int"},
-        "mating_match": {"type": "str"},
-        "mating_dam_id": {"type": "str"},
-    },
-}
-
-_BROODMARE_MATING: dict[str, Any] = {
-    "top_required": {
-        "horse_id": {"type": "str", "non_empty": True},
-        "matings": {"type": "list"},
-    },
-    "top_optional": {
-        "mating_count": {"type": "int"},
-        "source": {"type": "str"},
-        "fetched_at": {"type": "str"},
-    },
-    "entry_list_key": "matings",
-    "entry_required": {
-        "mating_year": {"type": "int", "min": 2000},
-        "mating_date": {"type": "str", "pattern": r"^\d{4}-\d{2}-\d{2}$"},
-    },
-    "entry_optional": {
-        "sire_name": {"type": "str"},
-        "sire_id": {"type": "str"},
-    },
-}
-
-_HORSE_TRAINING: dict[str, Any] = {
-    "top_required": {
-        "horse_id": {"type": "str", "non_empty": True},
-        "entries": {"type": "list"},
-    },
-    "top_optional": {
-        "total_items": {"type": "int"},
-        "pages_fetched": {"type": "int"},
-    },
-    "entry_required": {
-        "date": {"type": "str"},
-    },
-    "entry_optional": {
-        "race_info": {"type": "str"},
-        "day_of_week": {"type": "str"},
-        "course": {"type": "str"},
-        "track_condition": {"type": "str"},
-        "rider": {"type": "str"},
-        "time_raw": {"type": "str"},
-        "lap_times": {"type": "any"},
-        "position": {"type": "any"},
-        "leg_color": {"type": "str"},
-        "evaluation": {"type": "str"},
-        "rank": {"type": "any"},
-        "comment": {"type": "str"},
-    },
-    "entry_list_key": "entries",
-}
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 外部系スキーマ
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-_SMARTRC_RACE: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str"},
-    },
-    "top_optional": {
-        "rcode": {"type": "str"},
-        "source": {"type": "str"},
-        "runners": {"type": "list"},
-        "horses": {"type": "dict"},
-        "fullresults": {"type": "dict"},
-    },
-}
-
-_REQUIREMENT_ROW_TRACE: dict[str, Any] = {
-    "top_required": {
-        "row_id": {"type": "str", "non_empty": True},
-        "trace_key": {"type": "str", "non_empty": True},
-        "scope": {"type": "str", "non_empty": True},
-        "primary_id": {"type": "str", "non_empty": True},
-        "canonical": {"type": "list", "min_length": 1},
-    },
-    "top_optional": {
-        "title_ja": {"type": "str"},
-        "raw_html": {"type": "list"},
-    },
-    "entry_required": {
-        "category": {"type": "str", "non_empty": True},
-        "key": {"type": "str", "non_empty": True},
-    },
-    "entry_optional": {
-        "role": {"type": "str"},
-        "present": {"type": "bool"},
-        "note": {"type": "str"},
-    },
-    "entry_list_key": "canonical",
-}
-
-_RACE_DAY_SCHEDULE: dict[str, Any] = {
-    "top_required": {
-        "date_fmt": {"type": "str", "pattern": r"\d{8}"},
-        "slots": {"type": "list"},
-    },
-    "top_optional": {
-        "iso_date": {"type": "str"},
-    },
-    "entry_required": {
-        "race_id": {"type": "str", "non_empty": True},
-        "post_time_iso": {"type": "str", "non_empty": True},
-    },
-    "entry_optional": {
-        "venue": {"type": "str"},
-        "round": {"type": "any"},
-        "race_name": {"type": "str"},
-        "start_time_str": {"type": "str"},
-        "time_source": {"type": "str"},
-    },
-    "entry_list_key": "slots",
-}
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 行固有派生カテゴリのスキーマ
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-_RACE_SHUTUBA_META: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str", "non_empty": True},
-        "race_name": {"type": "str"},
-    },
-    "top_optional": {
-        "date": {"type": "str"},
-        "venue": {"type": "str"},
-        "round": {"type": "int"},
-        "surface": {"type": "str"},
-        "distance": {"type": "int"},
-        "direction": {"type": "str"},
-        "weather": {"type": "str"},
-        "track_condition": {"type": "str"},
-        "start_time": {"type": "str"},
-        "field_size": {"type": "int"},
-        "grade": {"type": "str"},
-        "race_class": {"type": "str"},
-        "weight_rule": {"type": "str"},
-        "course_type": {"type": "str"},
-    },
-}
-
-_RACE_RESULT_ON_TIME_PAYOFF: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str", "non_empty": True},
-    },
-    "top_optional": {
-        "payoff": {"type": "dict"},
-    },
-}
-
-_RACE_RESULT_ON_TIME_LAP: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str", "non_empty": True},
-    },
-    "top_optional": {
-        "lap_times": {"type": "list"},
-        "pace": {"type": "dict"},
-    },
-}
-
-_RACE_RESULT_ON_TIME_CORNER: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str", "non_empty": True},
-    },
-    "top_optional": {
-        "corner_passing": {"type": "list"},
-    },
-}
-
-_HORSE_PROFILE: dict[str, Any] = {
-    "top_required": {
-        "horse_id": {"type": "str", "non_empty": True},
-        "horse_name": {"type": "str"},
-    },
-    "top_optional": {
-        "name_en": {"type": "str"},
-        "status": {"type": "str"},
-        "sex": {"type": "str"},
-        "age": {"type": "any"},
-        "color": {"type": "str"},
-        "birthday": {"type": "str"},
-        "trainer": {"type": "str"},
-        "trainer_id": {"type": "str"},
-        "owner": {"type": "str"},
-        "breeder": {"type": "str"},
-        "birthplace": {"type": "str"},
-        "total_earnings": {"type": "any"},
-        "career": {"type": "str"},
-        "career_record": {"type": "list"},
-        "major_wins": {"type": "list"},
-        "sire": {"type": "str"},
-        "dam": {"type": "str"},
-        "dam_sire": {"type": "str"},
-    },
-}
-
-_HORSE_RACE_HISTORY: dict[str, Any] = {
-    "top_required": {
-        "horse_id": {"type": "str", "non_empty": True},
-        "horse_name": {"type": "str"},
-        "race_history": {"type": "list"},
-    },
-    "top_optional": {},
-    "entry_required": {
-        "date": {"type": "str"},
-        "race_id": {"type": "str"},
-    },
-    "entry_optional": copy.deepcopy(_HORSE_RESULT["entry_optional"]),
-    "entry_list_key": "race_history",
-}
-
-_RACE_RESULT_META: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str", "non_empty": True},
-        "race_name": {"type": "str"},
-    },
-    "top_optional": {
-        "date": {"type": "str"},
-        "venue": {"type": "str"},
-        "round": {"type": "int"},
-        "surface": {"type": "str"},
-        "distance": {"type": "int"},
-        "direction": {"type": "str"},
-        "grade": {"type": "str"},
-        "field_size": {"type": "int"},
-        "start_time": {"type": "str"},
-    },
-}
-
-_RACE_RESULT_PAYOFF: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str", "non_empty": True},
-    },
-    "top_optional": {
-        "payoff": {"type": "dict"},
-    },
-}
-
-_RACE_RESULT_TRACK: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str", "non_empty": True},
-    },
-    "top_optional": {
-        "weather": {"type": "str"},
-        "track_condition": {"type": "str"},
-        "track_condition_turf": {"type": "str"},
-        "track_condition_dirt": {"type": "str"},
-    },
-}
-
-_RACE_RESULT_CORNER: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str", "non_empty": True},
-    },
-    "top_optional": {
-        "corner_passing": {"type": "list"},
-    },
-}
-
-_RACE_RESULT_LAP_TIMES: dict[str, Any] = {
-    "top_required": {
-        "race_id": {"type": "str", "non_empty": True},
-    },
-    "top_optional": {
-        "lap_times": {"type": "list"},
-        "pace": {"type": "dict"},
-    },
-}
+_DEFS_PATH = Path(__file__).with_name("schema_defs.json")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 全スキーマ登録
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-SCHEMAS: dict[str, dict[str, Any]] = {
-    "race_result": _RACE_RESULT,
-    "race_result_on_time": _RACE_RESULT_ON_TIME,
-    "race_lists": _RACE_LISTS,
-    "race_shutuba": _RACE_SHUTUBA,
-    "race_shutuba_past": _RACE_SHUTUBA_PAST,
-    "race_index": _RACE_INDEX,
-    "race_odds": _RACE_ODDS,
-    "race_pair_odds": _RACE_PAIR_ODDS,
-    "race_paddock": _RACE_PADDOCK,
-    "race_barometer": _RACE_BAROMETER,
-    "race_oikiri": _RACE_OIKIRI,
-    "race_result_lap": _RACE_RESULT_LAP,
-    "race_trainer_comment": _RACE_TRAINER_COMMENT,
-    "race_detail": _RACE_DETAIL,
-    "horse_result": _HORSE_RESULT,
-    "horse_pedigree_5gen": _HORSE_PEDIGREE_5GEN,
-    "broodmare_mating": _BROODMARE_MATING,
-    "horse_training": _HORSE_TRAINING,
-    "smartrc_race": _SMARTRC_RACE,
-    "requirement_row_trace": _REQUIREMENT_ROW_TRACE,
-    "race_day_schedule": _RACE_DAY_SCHEDULE,
-    # 行固有派生カテゴリ
-    "race_shutuba_meta": _RACE_SHUTUBA_META,
-    "race_result_on_time_payoff": _RACE_RESULT_ON_TIME_PAYOFF,
-    "race_result_on_time_lap": _RACE_RESULT_ON_TIME_LAP,
-    "race_result_on_time_corner": _RACE_RESULT_ON_TIME_CORNER,
-    "horse_profile": _HORSE_PROFILE,
-    "horse_race_history": _HORSE_RACE_HISTORY,
-    "race_result_meta": _RACE_RESULT_META,
-    "race_result_payoff": _RACE_RESULT_PAYOFF,
-    "race_result_track": _RACE_RESULT_TRACK,
-    "race_result_corner": _RACE_RESULT_CORNER,
-    "race_result_lap_times": _RACE_RESULT_LAP_TIMES,
-}
+def _load_defs(path: Path = _DEFS_PATH) -> dict[str, Any]:
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# バリデーションエンジン
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+_DEFS = _load_defs()
+SCHEMA_VERSION = _DEFS["schema_version"]
+SCHEMAS: dict[str, dict[str, Any]] = _DEFS["categories"]
 
-def _check_field(value: Any, spec: dict[str, Any]) -> str | None:
-    """フィールド値を spec に照らし合わせ、最初のエラーメッセージを返す。None = OK."""
+# スキーマを持たない理由（CATEGORY_MAP の全カテゴリは SCHEMAS か、ここのどちらかに載せる）
+NO_SCHEMA_REASON: dict[str, str] = _DEFS.get("no_schema_reason", {})
+
+
+def category_fingerprint(category: str) -> str:
+    """1 カテゴリの定義のハッシュ。定義が変わったカテゴリだけ再検証するために使う。"""
+    import hashlib
+
+    canon = json.dumps({"v": SCHEMA_VERSION, "s": SCHEMAS.get(category)}, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:12]
+
+
+def schema_fingerprint() -> str:
+    """定義全体のハッシュ。環境間で同一であること（git で共有されていること）の確認に使う。"""
+    import hashlib
+
+    canon = json.dumps({"v": SCHEMA_VERSION, "c": SCHEMAS, "n": NO_SCHEMA_REASON}, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:12]
+
+
+def _field_error(value: Any, spec: dict[str, Any]) -> tuple[str, str] | None:
+    """フィールド値を spec に照らし、最初の違反を (規則, メッセージ) で返す。None = OK。"""
     expected_type = spec.get("type", "any")
     if expected_type == "any":
         return None
@@ -850,38 +136,77 @@ def _check_field(value: Any, spec: dict[str, Any]) -> str | None:
         if not isinstance(py_types, tuple):
             py_types = (py_types,)
         if value is not None and not isinstance(value, py_types):
-            return f"expected {expected_type}, got {type(value).__name__}"
+            return "type", f"expected {expected_type}, got {type(value).__name__}"
 
     if spec.get("non_empty") and (value is None or (isinstance(value, str) and not value.strip())):
-        return "non_empty violated"
+        return "non_empty", "non_empty violated"
 
     if expected_type in ("int", "float") and isinstance(value, (int, float)):
         lo = spec.get("min")
         hi = spec.get("max")
         if lo is not None and value < lo:
-            return f"min={lo}, got {value}"
+            return "min", f"min={lo}, got {value}"
         if hi is not None and value > hi:
-            return f"max={hi}, got {value}"
+            return "max", f"max={hi}, got {value}"
 
     if expected_type == "list" and isinstance(value, list):
         ml = spec.get("min_length")
         if ml is not None and len(value) < ml:
-            return f"min_length={ml}, got {len(value)}"
+            return "min_length", f"min_length={ml}, got {len(value)}"
 
     if expected_type == "str" and isinstance(value, str):
         pat = spec.get("pattern")
         if pat and not re.search(pat, value):
-            return f"pattern {pat!r} not matched"
+            return "pattern", f"pattern {pat!r} not matched"
 
     return None
+
+
+def _check_field(value: Any, spec: dict[str, Any]) -> str | None:
+    """フィールド値を spec に照らし合わせ、最初のエラーメッセージを返す。None = OK."""
+    err = _field_error(value, spec)
+    return err[1] if err else None
+
+
+def _expected_text(rule: str, spec: dict[str, Any]) -> str:
+    t = spec.get("type", "any")
+    return {"type": t, "non_empty": f"{t} 非空", "min": f"{t} ≥ {spec.get('min')}", "max": f"{t} ≤ {spec.get('max')}",
+            "min_length": f"list 長さ ≥ {spec.get('min_length')}", "pattern": f"{t} /{spec.get('pattern')}/",
+            "missing": t, "null": t}.get(rule, t)
+
+
+def _show(value: Any) -> str:
+    """違反した「実際の値」を、長さを抑えて文字列にする。"""
+    if isinstance(value, (list, dict)):
+        text = f"{type(value).__name__}(len={len(value)}) " + json.dumps(value, ensure_ascii=False, default=str)
+    else:
+        text = repr(value)
+    return text if len(text) <= MAX_VALUE_CHARS else text[:MAX_VALUE_CHARS] + "…"
+
+
+def _violation(field: str, rule: str, spec: dict[str, Any], value: Any, *, absent: bool = False, index: int | None = None,
+               item: dict[str, Any] | None = None, message: str = "") -> dict[str, Any]:
+    v: dict[str, Any] = {"field": field, "rule": rule, "expected": _expected_text(rule, spec),
+                         "actual": "<キー無し>" if absent else _show(value),
+                         "actual_type": "absent" if absent else type(value).__name__}
+    if message:
+        v["message"] = message
+    if index is not None:
+        v["index"] = index
+    if item:
+        where = {k: item[k] for k in _IDENTIFYING_KEYS if k in item and not isinstance(item[k], (list, dict))}
+        if where:
+            v["where"] = dict(list(where.items())[:3])
+    return v
 
 
 def _validate_entries(
     data: dict[str, Any],
     schema: dict[str, Any],
     list_key: str,
+    violations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """entry_required / entry_optional に基づきエントリ群を検査する。"""
+    """entry_required / entry_optional に基づきエントリ群を検査する。違反の中身は violations に追加する。"""
     items = data.get(list_key)
     if not isinstance(items, list):
         return {"entry_count": 0, "entry_issues": {}}
@@ -891,19 +216,28 @@ def _validate_entries(
     type_error_counts: dict[str, int] = {}
     constraint_error_counts: dict[str, int] = {}
 
-    for item in items:
+    def add(v: dict[str, Any]) -> None:
+        if violations is not None and len(violations) < MAX_VIOLATIONS:
+            violations.append(v)
+
+    for i, item in enumerate(items):
         if not isinstance(item, dict):
             continue
         for field, spec in req.items():
+            name = f"{list_key}[].{field}"
             if field not in item or item[field] is None:
                 missing_counts[field] = missing_counts.get(field, 0) + 1
+                add(_violation(name, "missing" if field not in item else "null", spec, None, absent=field not in item,
+                               index=i, item=item))
                 continue
-            err = _check_field(item[field], spec)
+            err = _field_error(item[field], spec)
             if err:
-                if err.startswith("expected "):
+                rule, msg = err
+                if msg.startswith("expected "):
                     type_error_counts[field] = type_error_counts.get(field, 0) + 1
                 else:
                     constraint_error_counts[field] = constraint_error_counts.get(field, 0) + 1
+                add(_violation(name, rule, spec, item[field], index=i, item=item, message=msg))
 
     return {
         "entry_count": len(items),
@@ -931,6 +265,9 @@ def validate(category: str, data: dict[str, Any] | None) -> dict[str, Any]:
       top_constraint_errors : list[dict]
       entry_count      : int
       entry_issues     : dict
+      violations       : list[dict] — 違反ごとの中身（field / rule / expected / actual / actual_type / index / where）。
+                         1 レコード MAX_VIOLATIONS 件まで、実際の値は MAX_VALUE_CHARS 文字まで
+      violations_total : int  — 上限で切る前の違反数の目安（件数ベース）
     """
     base: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -940,6 +277,7 @@ def validate(category: str, data: dict[str, Any] | None) -> dict[str, Any]:
         "top_constraint_errors": [],
         "entry_count": 0,
         "entry_issues": {},
+        "violations": [],
     }
 
     schema = SCHEMAS.get(category)
@@ -951,25 +289,32 @@ def validate(category: str, data: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(data, dict):
         base["passed"] = False
         base["top_missing"] = list(schema.get("top_required", {}).keys())
+        base["violations"] = [{"field": "(全体)", "rule": "type", "expected": "dict", "actual": _show(data),
+                               "actual_type": type(data).__name__}]
         return base
+
+    violations: list[dict[str, Any]] = base["violations"]
 
     # ── top-level required ──
     for field, spec in schema.get("top_required", {}).items():
         if field not in data:
             base["top_missing"].append(field)
+            violations.append(_violation(field, "missing", spec, None, absent=True))
             continue
-        err = _check_field(data[field], spec)
+        err = _field_error(data[field], spec)
         if err:
-            rec = {"field": field, "expected": spec.get("type", "any"), "got": str(type(data[field]).__name__), "detail": err}
-            if err.startswith("expected "):
+            rule, msg = err
+            rec = {"field": field, "expected": spec.get("type", "any"), "got": str(type(data[field]).__name__), "detail": msg}
+            if msg.startswith("expected "):
                 base["top_type_errors"].append(rec)
             else:
                 base["top_constraint_errors"].append(rec)
+            violations.append(_violation(field, rule, spec, data[field], message=msg))
 
     # ── entry-level validation ──
     list_key = schema.get("entry_list_key", "entries")
     if "entry_required" in schema:
-        entry_result = _validate_entries(data, schema, list_key)
+        entry_result = _validate_entries(data, schema, list_key, violations)
         base["entry_count"] = entry_result["entry_count"]
         base["entry_issues"] = entry_result["entry_issues"]
 
@@ -981,7 +326,7 @@ def validate(category: str, data: dict[str, Any] | None) -> dict[str, Any]:
             items = data.get(lkey)
             if not isinstance(items, list):
                 continue
-            sub = _validate_entries(data, lschema, lkey)
+            sub = _validate_entries(data, lschema, lkey, violations)
             if sub["entry_issues"]:
                 multi_issues[lkey] = sub
         if multi_issues:
@@ -996,5 +341,10 @@ def validate(category: str, data: dict[str, Any] | None) -> dict[str, Any]:
         or base.get("multi_list_issues")
     )
     base["passed"] = not has_issues
+    if schema.get("advisory"):
+        base["advisory"] = True     # 診断のみ。不合格でも保存は止めない
+    if len(violations) >= MAX_VIOLATIONS:
+        base["violations_truncated"] = True
+    del violations[MAX_VIOLATIONS:]
 
     return base

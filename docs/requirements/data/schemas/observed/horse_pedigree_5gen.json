@@ -1,0 +1,285 @@
+{
+ "category": "horse_pedigree_5gen",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "2019105219",
+  "min": "2019105219"
+ },
+ "lists": {
+  "ancestors": {
+   "fields": {
+    "generation": {
+     "empty": 0,
+     "max": 5,
+     "min": 1,
+     "n": 62,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 62
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_id": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 62,
+     "null": 0,
+     "patterns": {
+      "digits10": 13,
+      "text": 49
+     },
+     "types": {
+      "str": 62
+     },
+     "values": {
+      "000a0000cc": 1,
+      "000a000258": 1,
+      "000a00033a": 1,
+      "000a000355": 1,
+      "000a000364": 1,
+      "000a0003a2": 1,
+      "000a00058e": 1,
+      "000a00062c": 1,
+      "000a000d30": 1,
+      "000a000e04": 1,
+      "000a000e0d": 1,
+      "000a000f2b": 2,
+      "000a001205": 3,
+      "000a0012bf": 2,
+      "000a0019b6": 1,
+      "000a001cb4": 1,
+      "000a007459": 2,
+      "000a007c8d": 1,
+      "000a008341": 1,
+      "000a008824": 1,
+      "000a008aad": 1,
+      "000a008c1d": 1,
+      "000a008c1e": 1,
+      "000a009170": 1,
+      "000a00922c": 1
+     },
+     "values_overflow": true
+    },
+    "name": {
+     "empty": 0,
+     "len_max": 29,
+     "len_min": 4,
+     "n": 62,
+     "null": 0,
+     "patterns": {
+      "text": 62
+     },
+     "types": {
+      "str": 62
+     },
+     "values": {
+      "Alzao": 1,
+      "Burghclere": 1,
+      "Busted": 1,
+      "Cosmah": 2,
+      "Hail to Reason": 2,
+      "Halo": 2,
+      "Highclere": 1,
+      "Honest Pleasure": 1,
+      "Lady Rebecca": 1,
+      "Lyphard": 3,
+      "Mountain Flower": 1,
+      "Understanding": 1,
+      "Wishing Well": 1,
+      "アンジェリカ": 1,
+      "オトメゴコロ": 1,
+      "キタサンブラック": 1,
+      "クリアアンバー": 1,
+      "サクラハゴロモ": 1,
+      "サクラバクシンオー": 1,
+      "サクラユタカオー": 1,
+      "シュガーハート": 1,
+      "ジャッジアンジェルーチ": 1,
+      "テスコボーイ": 1,
+      "ノーザンテースト": 1,
+      "ブラックタイド": 1
+     },
+     "values_overflow": true
+    },
+    "position": {
+     "empty": 0,
+     "max": 31,
+     "min": 0,
+     "n": 62,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 62
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "sex": {
+     "empty": 48,
+     "len_max": 1,
+     "len_min": 0,
+     "n": 62,
+     "null": 0,
+     "patterns": {
+      "empty": 48,
+      "text": 14
+     },
+     "types": {
+      "str": 62
+     },
+     "values": {
+      "": 48,
+      "牝": 7,
+      "牡": 7
+     },
+     "values_overflow": false
+    }
+   },
+   "items": 62,
+   "records": 1
+  }
+ },
+ "nested": {},
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  }
+ ],
+ "top": {
+  "ancestor_count": {
+   "empty": 0,
+   "max": 62,
+   "min": 62,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "ancestors": {
+   "empty": 0,
+   "len_max": 62,
+   "len_min": 62,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "dam": {
+   "empty": 0,
+   "len_max": 9,
+   "len_min": 9,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "シャトーブランシュ": 1
+   },
+   "values_overflow": false
+  },
+  "dam_sire": {
+   "empty": 0,
+   "len_max": 7,
+   "len_min": 7,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "キングヘイロー": 1
+   },
+   "values_overflow": false
+  },
+  "horse_id": {
+   "empty": 0,
+   "len_max": 10,
+   "len_min": 10,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits10": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "sex": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "sire": {
+   "empty": 0,
+   "len_max": 8,
+   "len_min": 8,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "キタサンブラック": 1
+   },
+   "values_overflow": false
+  },
+  "source": {
+   "empty": 0,
+   "len_max": 25,
+   "len_min": 25,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

@@ -16,6 +16,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
 from src.config.gcp_credentials import build_gcp_credentials
+from src.config.gcp_guard import assert_gcp_allowed
 
 
 def get_cloud_sql_engine(
@@ -36,6 +37,7 @@ def get_cloud_sql_engine(
         ``postgresql+pg8000://`` ドライバで Cloud SQL Connector 経由に
         接続する SQLAlchemy ``Engine``。
     """
+    assert_gcp_allowed("Cloud SQL")
     from google.cloud.sql.connector import Connector
 
     connector = Connector(credentials=build_gcp_credentials())

@@ -39,6 +39,7 @@ _load_project_dotenv()
 
 # KEIBA_PROFILE で省メモリ設定を一括適用（.env の値は上書きしない）
 from src.config.profiles import apply_profile as _apply_profile
+from src.config.gcp_guard import gcp_forbidden
 _apply_profile()
 
 from src.config.deployment import (
@@ -4636,6 +4637,8 @@ async def get_upcoming_races(
     """
     now = _time.time()
     skip_remote = str(local_only or "").strip().lower() in ("1", "true", "yes", "on")
+    if gcp_forbidden():
+        skip_remote = True  # dev はローカルの race_lists（モック）だけで完結させる
     default_window = start_date is None and end_date is None
     if default_window and not skip_remote:
         uc = _UPCOMING_RACES_DEFAULT_CACHE

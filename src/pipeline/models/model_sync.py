@@ -27,6 +27,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.config.gcp_guard import gcp_forbidden
+
 logger = logging.getLogger("pipeline.models.model_sync")
 
 DEFAULT_LOCAL_MODEL_PATH = "models/keiba_model.pkl"
@@ -40,7 +42,7 @@ def _get_bucket_name() -> str:
 def _build_gcs_bucket():
     """GCS バケットオブジェクトを構築する。GCS 無効・認証不可時は None を返す（例外は出さない）。"""
     bucket_name = _get_bucket_name()
-    if not bucket_name:
+    if not bucket_name or gcp_forbidden():
         return None
     try:
         from google.cloud import storage as gcs_lib

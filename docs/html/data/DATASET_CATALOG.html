@@ -1,0 +1,1810 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>データセット一覧・環境別アクセス状況 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f172a;--panel:#15213c;--border:#243358;--text:#e6ecff;--muted:#9aa7c7;--accent:#4f8bff;--accent2:#7aa9ff;--code:#0b1428;--shadow:0 8px 28px rgba(0,0,0,.35)}
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:"Noto Sans JP",system-ui,-apple-system,"Segoe UI",sans-serif;background:linear-gradient(180deg,#0b1226,#0f172a 60%,#0b1226);color:var(--text);line-height:1.7;font-size:14px}
+code,pre{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace}
+a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+.layout{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+aside{position:sticky;top:0;height:100vh;overflow-y:auto;background:linear-gradient(180deg,#0a1124,#0d1632);border-right:1px solid var(--border);padding:24px 18px}
+aside .t{font-weight:700;font-size:14px;margin-bottom:14px}
+aside a{display:block;color:var(--text);padding:5px 10px;border-radius:8px;margin:2px 0;font-size:12.5px;border-left:2px solid transparent}
+aside a:hover{background:rgba(79,139,255,.1);border-left-color:var(--accent);text-decoration:none}
+aside a.s{padding-left:22px;color:var(--muted);font-size:12px}
+main{padding:40px 44px 96px;min-width:0}
+.hero{padding:26px 30px;border-radius:18px;background:radial-gradient(1000px 360px at 0 0,rgba(79,139,255,.18),transparent 60%),radial-gradient(700px 360px at 100% 100%,rgba(167,139,250,.18),transparent 60%),#131d3a;border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:28px}
+.hero .eye{color:var(--accent2);font-size:12px;letter-spacing:.2em;font-weight:700}
+.hero h1{margin:6px 0 8px;font-size:26px}.hero p{margin:4px 0;color:var(--muted);font-size:13px}
+h2{font-size:1.25rem;margin:2.2em 0 .6em;padding-bottom:6px;border-bottom:1px solid var(--border);scroll-margin-top:16px}
+h3{font-size:1.05rem;margin:1.8em 0 .4em;color:var(--accent2);scroll-margin-top:16px}
+h4{margin:0}
+p{margin:.6em 0}
+code{background:#1a2748;border:1px solid var(--border);border-radius:6px;padding:0 5px;font-size:11.5px;color:#cfe2ff;word-break:break-all}
+.wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;margin:.8em 0}
+table{width:100%;border-collapse:collapse;background:var(--panel);font-size:12.5px}
+th,td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+th{background:#1a2748;color:var(--muted);font-size:11px;letter-spacing:.05em;white-space:nowrap;position:sticky;top:0}
+tr:last-child td{border-bottom:0}tr:hover td{background:rgba(79,139,255,.04)}
+td small{color:var(--muted)}
+td.id{font-family:"JetBrains Mono",monospace;color:var(--accent2);white-space:nowrap}
+td.envc{min-width:170px;max-width:260px}.note{font-size:11.5px;color:#c3cdea;margin-top:3px}
+.b{display:inline-block;min-width:26px;text-align:center;border-radius:6px;padding:0 6px;font-weight:700;font-size:12px}
+.b-ok{background:#12452f;color:#5ff0a2}.b-exp{background:#163a6b;color:#8ec1ff}.b-part{background:#55400f;color:#ffd166}
+.b-ng{background:#5a1a24;color:#ff8a98}.b-ban{background:#3a2a6b;color:#c3a8ff}.b-na{background:#2a3350;color:#9aa7c7}.b-none{background:#2a3350;color:#b6c0dc}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:1em 0}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.card h4{color:var(--accent2);font-size:1.1rem}.card .sub{color:var(--muted);font-size:12px;margin-bottom:8px}
+.chips{display:flex;flex-direction:column;gap:4px}.chip{font-size:12px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin:.8em 0}
+.legend div{font-size:12px}
+.callout{border-left:3px solid var(--accent);background:rgba(79,139,255,.08);border-radius:0 8px 8px 0;padding:10px 14px;margin:1em 0}
+.callout.warn{border-left-color:#ffd166;background:rgba(255,209,102,.07)}
+.callout.bad{border-left-color:#ff8a98;background:rgba(255,138,152,.07)}
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;margin:1em 0}
+.flow .n{flex:1 1 150px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px}
+.flow .n b{display:block;color:var(--accent2);margin-bottom:2px}
+.flow .ar{align-self:center;color:var(--muted)}
+ol.gaps li{margin:.6em 0}
+.pri{display:inline-block;font-size:11px;font-weight:700;border-radius:5px;padding:0 6px;margin-right:4px}
+.p0{background:#5a1a24;color:#ff8a98}.p1{background:#55400f;color:#ffd166}.p2{background:#163a6b;color:#8ec1ff}
+@media(max-width:1000px){.layout{grid-template-columns:1fr}aside{display:none}.cards{grid-template-columns:1fr}main{padding:20px}}
+
+
+
+
+
+
+
+
+
+/* smp-begin */
+tr.ds{cursor:pointer}tr.ds:hover td{background:rgba(79,139,255,.08)}
+tr.ds td.id::before{content:"▸ ";color:var(--accent-2)}tr.ds.open td.id::before{content:"▾ "}
+tr.sample td{padding:0;background:#0d1730;border-bottom:1px solid var(--border)}
+tr.sample details{padding:4px 14px}tr.sample summary{cursor:pointer;color:var(--muted);font-size:12px;padding:4px 0}
+.smp-p{margin:8px 0 14px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:#0b1428}
+.smp-h{font-size:13px}.smp-src{font-size:11px;color:var(--muted);margin-left:8px}
+.smp-n{font-size:12px;color:#c9d6ff;margin:2px 0}.smp-t{font-size:11px;color:var(--muted);margin-top:4px}
+pre.smp{max-height:420px;overflow:auto;margin:4px 0 0;font-size:12px;background:#08101f;border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space:nowrap}
+.smp-note{font-size:12.5px;color:#c9d6ff;margin:8px 0}.smp-hint{font-size:13px}
+.smp-hint button{margin-left:8px;background:#1a2748;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:2px 10px;cursor:pointer}
+/* smp-end */
+</style></head><body><div class="layout"><aside><div class="t">データセット一覧</div>
+<a href="#overview">1. 概要・凡例</a>
+<a href="#env">2. 環境定義とアクセス方針</a>
+<a href="#flow">3. データの流れ</a>
+<a href="#catalog">4. データセット一覧</a>
+<a class="s" href="#cat-A">A. 外部サイトから取得する生データ</a>
+<a class="s" href="#cat-B">B. 取得済みデータから自動派生するデータ</a>
+<a class="s" href="#cat-C">C. 特徴量ストア・学習データセット</a>
+<a class="s" href="#cat-D">D. 血統・研究系データ</a>
+<a class="s" href="#cat-E">E. 手動作成・設定データ</a>
+<a class="s" href="#cat-F">F. モデル成果物・予測結果</a>
+<a class="s" href="#cat-G">G. 運用メタ・DB・キュー</a>
+<a href="#matrix">5. 環境別アクセス可否</a>
+<a class="s" href="#mat-A">A. 外部サイトから取得する生データ</a>
+<a class="s" href="#mat-B">B. 取得済みデータから自動派生するデータ</a>
+<a class="s" href="#mat-C">C. 特徴量ストア・学習データセット</a>
+<a class="s" href="#mat-D">D. 血統・研究系データ</a>
+<a class="s" href="#mat-E">E. 手動作成・設定データ</a>
+<a class="s" href="#mat-F">F. モデル成果物・予測結果</a>
+<a class="s" href="#mat-G">G. 運用メタ・DB・キュー</a>
+<a href="#gaps">6. 要対応ギャップ</a><a href="#paths">7. パス表記の揺れ</a><a href="#refs">8. 出典・検証メモ</a></aside><main>
+<header class="hero"><div class="eye">DATASET CATALOG</div><h1>AI パイプライン／分析に必要なデータセット一覧と環境別アクセス状況</h1>
+<p>どのデータが・何の用途で・どこから取得され（URL or 手動）・どこに保存され・dev / stg / prod のどこで使えるか。</p>
+<p>作成：2026-10-06 ／ 基にした文書：<code>docs/requirements/data/scrape_process.md</code>、<code>docs/html/data/DATASOURCES.html</code>、<code>docs/html/data/data_scraping_storage_reference.html</code>、<code>docs/todos/README.md</code> ほか（§8）</p></header>
+<h2 id="overview">1. 概要・凡例</h2>
+<div class="callout"><b>前提</b><ul><li><b>netkeiba プレミアム認証は完了している</b>（stg＝学習PC・prod＝VPS の <code>.env.&lt;env&gt;</code> に <code>netkeiba_id</code> / <code>netkeiba_pw</code> 設定済み）。タイム指数・調子偏差値・パドック・個別ラップなど「プレミアム要」のカテゴリも、認証エラーを理由にした欠落とは扱わず、通常の取得対象として不足を判定する。</li><li><b>GCS のアクセスポイントは stg と prod で同一</b>（同じバケット <code>magu-keiba-horse-racing-ai</code>・同じ prefix <code>chuou/data/…</code>）。したがって「GCS 上のデータが揃っているか・スキーマに適合しているか」は<b>どちらの環境から見ても同じ結果</b>で、環境の違いは<b>そこへ到達できるか（鍵・権限・ネットワーク）</b>と、ローカルに置く派生データだけ。dev は GCS に接続しない。</li></ul></div><p>対象は <b>54 件</b>のデータセット（A〜G の 7 群）。各環境での到達状況を次の記号で示す。「確認済み」は実機・ls・テスト結果で裏付けがあるもののみ。記録が無いものは「設計上可」までに留めている。</p>
+<div class="legend"><div><span class="b b-ok" title="確認済み">◎</span> <b>確認済み</b>：実機・ls・テストで確認できた</div><div><span class="b b-exp" title="設計上可">○</span> <b>設計上可</b>：設計・設定上は到達可能だが実機未検証</div><div><span class="b b-part" title="一部/MOCK/手動">△</span> <b>一部/MOCK/手動</b>：一部のみ・MOCK・手動運用・他タスク待ち</div><div><span class="b b-ng" title="未整備">✕</span> <b>未整備</b>：未設定・未作成・未着手で現状到達不可</div><div><span class="b b-ban" title="禁止">禁</span> <b>禁止</b>：方針上アクセス禁止（dev から GCP/VPS）</div><div><span class="b b-na" title="不要/対象外">－</span> <b>不要/対象外</b>：この環境では不要、または取得対象外</div><div><span class="b b-none" title="未配置">空</span> <b>未配置</b>：この PC に実体なし（ls で確認）。不要なら問題なし</div></div>
+<h3>環境別サマリ（データセット数）</h3><div class="cards"><div class="card"><h4>dev</h4><div class="sub">開発PC（この PC）</div><div class="chips"><span class="chip"><span class="b b-ok" title="確認済み">◎</span> 確認済み <b>34</b></span><span class="chip"><span class="b b-part" title="一部/MOCK/手動">△</span> 一部/MOCK/手動 <b>2</b></span><span class="chip"><span class="b b-none" title="未配置">空</span> 未配置 <b>17</b></span><span class="chip"><span class="b b-na" title="不要/対象外">－</span> 不要/対象外 <b>1</b></span></div></div><div class="card"><h4>stg</h4><div class="sub">学習PC</div><div class="chips"><span class="chip"><span class="b b-ok" title="確認済み">◎</span> 確認済み <b>5</b></span><span class="chip"><span class="b b-exp" title="設計上可">○</span> 設計上可 <b>24</b></span><span class="chip"><span class="b b-part" title="一部/MOCK/手動">△</span> 一部/MOCK/手動 <b>20</b></span><span class="chip"><span class="b b-ng" title="未整備">✕</span> 未整備 <b>3</b></span><span class="chip"><span class="b b-na" title="不要/対象外">－</span> 不要/対象外 <b>2</b></span></div></div><div class="card"><h4>prod</h4><div class="sub">GCP ＋ VPS</div><div class="chips"><span class="chip"><span class="b b-ok" title="確認済み">◎</span> 確認済み <b>2</b></span><span class="chip"><span class="b b-exp" title="設計上可">○</span> 設計上可 <b>3</b></span><span class="chip"><span class="b b-part" title="一部/MOCK/手動">△</span> 一部/MOCK/手動 <b>24</b></span><span class="chip"><span class="b b-ng" title="未整備">✕</span> 未整備 <b>22</b></span><span class="chip"><span class="b b-na" title="不要/対象外">－</span> 不要/対象外 <b>3</b></span></div></div></div>
+<div class="callout warn"><b>読み方の注意</b>：stg／prod の「確認済み」が少ないのは、記録に残っている実機検証が 2026-10-02〜04 の学習PC検証（7 項目＋実レース 1 件）に限られるため。GCS 上のデータは stg と prod で共通なので、学習PC で確認できた事実は prod のデータにも当てはまる（prod で別に残るのは VPS からの到達性）。「未整備」は <code>docs/todos</code> と <code>environment-tasks.md</code> に記載された未着手・未設定 TODO に基づく。</div>
+<h2 id="env">2. 環境定義とアクセス方針</h2>
+<div class="wrap"><table><tr><th>環境</th><th>実体</th><th>役割</th><th>GCP／VPS へのアクセス</th><th>必要なデータ到達範囲</th></tr>
+<tr><td><b>dev</b></td><td>開発PC（この PC）</td><td>実装とモック確認。docker の Postgres／Redis</td><td><span class="b b-ban">禁</span> GCS・Cloud SQL・Cloud Tasks・BigQuery・VPS への<b>読み書きとも禁止</b></td><td>全データは不要。ローカルのサンプル／モックで動くこと</td></tr>
+<tr><td><b>stg</b></td><td>学習PC（常時起動ではない）</td><td>過去データのスクレイピング、特徴量生成、学習、モデル公開（<code>KEIBA_ENV=stg</code>、<code>.env.stg</code>）</td><td>GCP に接続できる<b>唯一の開発系環境</b>。GCS（<b>prod と同一のバケット・prefix</b>）・Cloud SQL（DB <code>keiba_db_stg</code>）</td><td><b>全データに到達できる必要あり</b></td></tr>
+<tr><td><b>prod</b></td><td>GCP ＋ VPS（ConoHa 2GB）</td><td>VPS：配信専用（ページ・API・Redis・監視・当日取得 cron・T-45 推論）／GCP：GCS（正本）・Cloud SQL・Cloud Run Jobs</td><td>VPS→GCS（<b>stg と同一のバケット・prefix</b>）／Cloud SQL（VPS 用サービスアカウントが必要）</td><td><b>配信に要るデータ（A・C・F の一部、D の成果物）に到達できる必要あり</b></td></tr></table></div>
+<h3>リソース別のアクセス可否と強制状況</h3>
+<div class="wrap"><table><tr><th>リソース</th><th>dev</th><th>stg</th><th>prod</th><th>dev 禁止のコード上の強制</th></tr>
+<tr><td>GCS バケット<br><code>magu-keiba-horse-racing-ai</code></td><td class="envc"><span class="b b-ban" title="禁止">禁</span><div class="note">R/W とも禁止（コードで強制）。GCS_BUCKET を設定しても無視し、ローカルの data/dev_mock を読む</div></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">R/W 可（接続確認 2026-10-04）。prod と同一のバケット</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">stg と同一のバケット（データは共通）。VPS は GCS_* 未設定で未接続（T-003）</div></td><td><b>強制済み（2026-10-06）</b>。dev では <code>HybridStorage</code> が <code>GCS_BUCKET</code> を無視し、<code>_get_bucket()</code>・<code>build_gcp_credentials()</code> が <code>GcpAccessForbidden</code> を送出（<code>src/config/gcp_guard.py</code>）</td></tr>
+<tr><td>Cloud SQL（PostgreSQL）</td><td class="envc"><span class="b b-ban" title="禁止">禁</span><div class="note">docker のローカル PG のみ</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">インスタンス未作成（T-016）</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">同左（stg と同一インスタンス共用）</div></td><td><b>強制済み</b>。dev では <code>cloud_sql</code> を無視して <code>DATABASE_URL</code>（ローカル）に接続。<code>get_cloud_sql_engine()</code> は例外</td></tr>
+<tr><td>Cloud Tasks／Cloud Run Jobs</td><td class="envc"><span class="b b-ban" title="禁止">禁</span><div class="note">ローカル JSON キューのみ</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">キュー投入設計あり・ワーカー未デプロイ（T-015）</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">同左</div></td><td><b>強制済み</b>。dev では <code>is_cloud_tasks_backend_enabled()</code> が常に False、キュー投入関数は例外</td></tr>
+<tr><td>BigQuery（課金エクスポート）</td><td class="envc"><span class="b b-ban" title="禁止">禁</span><div class="note">不要</div></td><td class="envc"><span class="b b-na" title="不要/対象外">－</span><div class="note">不要</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">未設定（T-036）</div></td><td><b>強制済み</b>。BigQuery クライアント生成前に例外（<code>GCP_BILLING_BQ_TABLE</code> 未設定でも無効）</td></tr>
+<tr><td>VPS（デプロイ・SSH）</td><td class="envc"><span class="b b-ban" title="禁止">禁</span><div class="note">書込禁止</div></td><td class="envc"><span class="b b-na" title="不要/対象外">－</span><div class="note">—</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">CD は定義のみ、Secrets 未登録（T-052）</div></td><td>コード上の制御なし（運用ルール）</td></tr>
+<tr><td>netkeiba 取得</td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">dev はスクレイピングしない（認証情報は空のまま）</div></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">プレミアム認証済みで実行（過去分）</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">プレミアム認証は完了。VPS の IP からの接続可否（遮断の有無）は未試験（T-007）</div></td><td>—</td></tr>
+</table></div>
+<div class="callout"><b>dev の GCP 遮断はコードで強制されました（2026-10-06）。</b><code>KEIBA_ENV=dev</code> のとき、GCS・Cloud SQL・Cloud Tasks・BigQuery のクライアント生成箇所が <code>GcpAccessForbidden</code> を送出します（回避フラグなし）。<b>ただし <code>KEIBA_ENV</code> 未設定は prod 扱い</b>（<code>src/config/deployment.py</code>）なので、dev の <code>.env</code> には <code>KEIBA_ENV=dev</code> が必須です（この PC の .env に追記済み。<code>.env.example</code> にも記載）。stg／prod は起動時に <code>KEIBA_ENV=stg|prod</code> を指定して <code>.env</code> を上書きします。</div><h3>dev のデータ参照（モック）</h3><p><code>make dev-mock</code>（<code>python -m src.scripts.data.make_dev_mock</code>）で最小のモックを生成し、dev の <code>HybridStorage</code> はこれだけを読み書きします。架空の馬・騎手・レースで、スキーマ検証（<code>schemas.validate</code>）を通る形です。</p><ul><li>規模：開催 2 日（直近の過去日曜＝結果あり／次の土曜＝結果なし）× 2 場 × 4R × 8 頭、馬 64 頭（約 4MB）</li><li>カテゴリ：<b>スキーマ定義済みの全 32 カテゴリ</b>（元データ 14 種・馬 3 種・母馬 1 種・派生 11 種・requirement_row_trace など）＋スキーマ未定義の生成物 6 種 → <code>data/dev_mock/{category}/{年 or 先頭4桁}/{key}.json</code></li><li>local_only：race_lists／race_day_schedule → <code>data/page_reference/</code>（既存の実データは上書きしない）</li><li><b>2026-10-06 以降、スキーマ定義済みの全カテゴリ（32）にスキーマ適合のサンプルがある</b>（派生 11 カテゴリは本番と同じ抽出ロジックで生成。スキーマ未定義の生成物 6 種は形式が暫定）。</li><li><code>save()</code> は dev では <code>data/dev_mock</code> に書く（<code>make dev-mock-clean</code> は <code>_meta.dev_mock</code> 付きのファイルだけ削除）。</li></ul>
+<h2 id="flow">3. データの流れ</h2>
+<div class="flow"><div class="n"><b>外部ソース</b>netkeiba（一部プレミアム。認証済みの前提）／JRA 公式／手動ナレッジ</div><div class="ar">→</div><div class="n"><b>取得（A）</b>学習PC（過去分）<br>VPS cron（当日分）</div><div class="ar">→</div><div class="n"><b>GCS 正本</b>preprocessed/…/pc<br>（local_only は除く）</div><div class="ar">→</div><div class="n"><b>派生・特徴量（B,C,D）</b>学習PCで生成<br>page_reference / features</div><div class="ar">→</div><div class="n"><b>学習・公開（F）</b>MLflow → models/ensemble → GCS</div><div class="ar">→</div><div class="n"><b>配信（VPS）</b>T-45 推論 → race_predictions → 画面・API</div></div>
+<p><b>流れが途切れている箇所</b>：(1) <code>local_only</code>（race_lists／race_day_schedule／tables）と page_reference／calculated_data は GCS を経由せず、VPS へは手動コピー。(2) 特徴量ストア（C）・血統成果物（D）→ VPS の配布経路が未定義（T-001）。(3) 学習済みモデルの公開（<code>publish_model</code>）が未実装（T-005）。</p>
+<h2 id="catalog">4. データセット一覧（用途・取得元・保存先）</h2><p class="smp-hint">各データの行をクリックすると<b>サンプル</b>が折り畳みで開きます（JSON は辞書型、特徴量などは表）。<button type="button" id="smpAll">すべて開く</button><button type="button" id="smpNone">すべて閉じる</button><br><small>サンプルの出所：<b>実データ</b>（2026-06-12 に実スクレイプして保存したもの。1 レース・1 頭分）／<b>dev モック</b>（架空。スキーマ適合）／設定ファイルなど。長いリストは先頭だけに短縮しています。「サンプルなし」は dev に無い・形式が未確定のものです。再生成: <code>python -m src.scripts.docs.embed_catalog_samples</code></small></p>
+<p>「取得元」は <b>URL</b>＝外部サイトから自動取得、<b>生成</b>＝コマンドで作る、<b>手動</b>＝人が作る、のいずれか。</p>
+<h3 id="cat-A">A. 外部サイトから取得する生データ（スクレイピング）</h3><p>netkeiba / JRA 公式。認証が要るものは netkeiba プレミアム（<code>.env</code> の <code>netkeiba_id</code> / <code>netkeiba_pw</code>。<b>認証は完了済みの前提</b>）。保存先の <code>GCS_BASE</code> = <code>chuou/data/preprocessed/netkeiba/pc</code>、<code>OTHERS</code> = <code>chuou/data/others</code>（バケット <code>GCS_BUCKET</code>）。race 系は <code>/{年4桁}/{race_id}.json</code>、horse 系は <code>/{horse_id先頭4桁}/{horse_id}.json</code>。生 HTML は <code>chuou/data/raw/html/{category}/{shard}/{key}.html.gz</code>（件数上限あり）。</p>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>用途</th><th>取得元（URL／手動／生成）</th><th>保存先</th><th>更新・SLA</th><th>書込主体</th></tr>
+<tr class="ds" data-id="A01"><td class="id">A01</td><td><b>race_lists<br><small>開催日別レース一覧</small></b></td><td>日付軸。全取得ジョブの起点（race_id 列挙）、発走時刻表の材料</td><td>URL<br><code>https://race.netkeiba.com/top/race_list.html?kaisai_date={YYYYMMDD}</code></td><td><code>data/page_reference/race_lists/{YYYYMMDD}.json</code><br><b>GCS 非対象（local_only）</b><br>HTML 断片のみ GCS raw/html/race_lists</td><td>毎日 17:00・向こう14日分（要件書 SLA7）<br><small>旧リファレンスは 07:00 と記載 → 要統一</small></td><td>学習PC（過去分）／VPS cron（当日分, T-038 未着手）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_lists/20230625.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">races は 36 件中 先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;date&quot;: &quot;20230625&quot;,
+  &quot;races&quot;: [
+    {
+      &quot;race_id&quot;: &quot;202302010601&quot;,
+      &quot;round&quot;: 1,
+      &quot;venue&quot;: &quot;函館&quot;,
+      &quot;race_name&quot;: &quot;3歳未勝利&quot;
+    },
+    {
+      &quot;race_id&quot;: &quot;202302010602&quot;,
+      &quot;round&quot;: 2,
+      &quot;venue&quot;: &quot;函館&quot;,
+      &quot;race_name&quot;: &quot;3歳未勝利&quot;
+    },
+    &quot;…（他 34 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;race_list_source&quot;: &quot;db.netkeiba.com&quot;,
+    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:43:24&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A02"><td class="id">A02</td><td><b>race_day_schedule<br><small>発走時刻スナップショット</small></b></td><td>開催日ランナーの T-15、T-45 推論の基準時刻</td><td><b>生成</b>：race_lists ＋ race_shutuba の start_time から合成<br><code>KEIBA_WRITE_RACE_DAY_SCHEDULE_ON_RACE_LIST=1</code> または <code>materialize_requirement_row_traces --schedule-date</code></td><td><code>data/page_reference/race_day_schedule/{YYYYMMDD}.json</code>（local_only）</td><td>A01 保存直後</td><td>A01 と同じ</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_day_schedule/20230625.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">slots は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;date_fmt&quot;: &quot;20230625&quot;,
+  &quot;iso_date&quot;: &quot;2023-06-25&quot;,
+  &quot;slots&quot;: [
+    {
+      &quot;race_id&quot;: &quot;202302010601&quot;,
+      &quot;venue&quot;: &quot;函館&quot;,
+      &quot;round&quot;: 1,
+      &quot;race_name&quot;: &quot;3歳未勝利&quot;,
+      &quot;start_time_str&quot;: &quot;09:50&quot;,
+      &quot;post_time_iso&quot;: &quot;2023-06-25T09:50:00+09:00&quot;,
+      &quot;time_source&quot;: &quot;shutuba&quot;
+    },
+    {
+      &quot;race_id&quot;: &quot;202305030801&quot;,
+      &quot;venue&quot;: &quot;東京&quot;,
+      &quot;round&quot;: 1,
+      &quot;race_name&quot;: &quot;2歳未勝利&quot;,
+      &quot;start_time_str&quot;: &quot;09:55&quot;,
+      &quot;post_time_iso&quot;: &quot;2023-06-25T09:55:00+09:00&quot;,
+      &quot;time_source&quot;: &quot;shutuba&quot;
+    },
+    &quot;…（他 34 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;source&quot;: &quot;synthesized&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A03"><td class="id">A03</td><td><b>race_shutuba<br><small>出馬表＋レース情報</small></b></td><td>予測スパイン（base_tbl）、T-45 推論、出馬表画面</td><td>URL<br><code>https://race.netkeiba.com/race/shutuba.html?race_id={race_id}</code></td><td>GCS <code>GCS_BASE/race_shutuba/{年}/{race_id}.json</code><br>raw HTML gz あり</td><td>SLA1 前日17:00 ／ SLA3 発走10分前</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_shutuba/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">entries は 17 頭中 先頭 2 頭に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;race_name&quot;: &quot;宝塚記念&quot;,
+  &quot;surface&quot;: &quot;芝&quot;,
+  &quot;distance&quot;: 2200,
+  &quot;direction&quot;: &quot;右&quot;,
+  &quot;weather&quot;: &quot;曇&quot;,
+  &quot;track_condition&quot;: &quot;良&quot;,
+  &quot;start_time&quot;: &quot;15:40&quot;,
+  &quot;venue&quot;: &quot;阪神&quot;,
+  &quot;field_size&quot;: 17,
+  &quot;date&quot;: &quot;2023-06-25&quot;,
+  &quot;round&quot;: 11,
+  &quot;grade&quot;: &quot;OP&quot;,
+  &quot;race_class&quot;: &quot;サラ系３歳以上 オープン&quot;,
+  &quot;weight_rule&quot;: &quot;定量&quot;,
+  &quot;course_type&quot;: &quot;&quot;,
+  &quot;entries&quot;: [
+    {
+      &quot;horse_number&quot;: 1,
+      &quot;bracket_number&quot;: 1,
+      &quot;horse_name&quot;: &quot;ライラック&quot;,
+      &quot;horse_id&quot;: &quot;2019103588&quot;,
+      &quot;sex_age&quot;: &quot;牝4&quot;,
+      &quot;jockey_weight&quot;: 56.0,
+      &quot;jockey_name&quot;: &quot;Ｍデムーロ&quot;,
+      &quot;jockey_id&quot;: &quot;05212&quot;,
+      &quot;trainer_name&quot;: &quot;相沢&quot;,
+      &quot;trainer_id&quot;: &quot;01020&quot;,
+      &quot;weight&quot;: 430,
+      &quot;weight_change&quot;: -8,
+      &quot;…&quot;: &quot;他 4 キー&quot;
+    },
+    {
+      &quot;horse_number&quot;: 2,
+      &quot;bracket_number&quot;: 1,
+      &quot;horse_name&quot;: &quot;カラテ&quot;,
+      &quot;horse_id&quot;: &quot;2016106606&quot;,
+      &quot;sex_age&quot;: &quot;牡7&quot;,
+      &quot;jockey_weight&quot;: 58.0,
+      &quot;jockey_name&quot;: &quot;菅原明&quot;,
+      &quot;jockey_id&quot;: &quot;01179&quot;,
+      &quot;trainer_name&quot;: &quot;辻野&quot;,
+      &quot;trainer_id&quot;: &quot;01183&quot;,
+      &quot;weight&quot;: 538,
+      &quot;weight_change&quot;: 0,
+      &quot;…&quot;: &quot;他 4 キー&quot;
+    },
+    &quot;…（他 15 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:19&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A04"><td class="id">A04</td><td><b>race_odds<br><small>単複オッズ</small></b></td><td>直前オッズ特徴、期待値（EV）、馬券最適化</td><td>URL（API）<br><code>https://race.netkeiba.com/odds/index.html?race_id={race_id}</code></td><td>GCS <code>…/race_odds/{年}/</code>（生 HTML なし）</td><td>SLA3 発走10分前（＋当日 17:30）</td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_odds/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;entries&quot;: [
+    {
+      &quot;horse_number&quot;: 1,
+      &quot;win_odds&quot;: 158.9,
+      &quot;place_odds_min&quot;: 12.3,
+      &quot;place_odds_max&quot;: 30.5,
+      &quot;popularity&quot;: 13
+    },
+    {
+      &quot;horse_number&quot;: 2,
+      &quot;win_odds&quot;: 180.2,
+      &quot;place_odds_min&quot;: 14.5,
+      &quot;place_odds_max&quot;: 36.1,
+      &quot;popularity&quot;: 15
+    },
+    &quot;…（他 15 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:27&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A05"><td class="id">A05</td><td><b>race_pair_odds<br><small>2連系オッズ</small></b></td><td>馬連・ワイド等の馬券最適化</td><td>URL<br><code>odds/index.html?race_id=…&amp;type=b4〜b8</code></td><td>GCS <code>…/race_pair_odds/{年}/</code></td><td>T-15 バンドル＋当日 17:30<br><small>※旧リファレンスのみ記載。要件書に行なし</small></td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_pair_odds/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">umaren / wide / umatan は各先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;umaren&quot;: [
+    {
+      &quot;pair&quot;: [
+        4,
+        5
+      ],
+      &quot;odds&quot;: 3.4,
+      &quot;popularity&quot;: 1
+    },
+    {
+      &quot;pair&quot;: [
+        2,
+        4
+      ],
+      &quot;odds&quot;: 9.6,
+      &quot;popularity&quot;: 2
+    },
+    &quot;…（他 4 件）&quot;
+  ],
+  &quot;wide&quot;: [
+    {
+      &quot;pair&quot;: [
+        4,
+        5
+      ],
+      &quot;odds_min&quot;: 1.2,
+      &quot;odds_max&quot;: 1.9,
+      &quot;popularity&quot;: 1
+    },
+    {
+      &quot;pair&quot;: [
+        2,
+        4
+      ],
+      &quot;odds_min&quot;: 3.4,
+      &quot;odds_max&quot;: 5.5,
+      &quot;popularity&quot;: 2
+    },
+    &quot;…（他 4 件）&quot;
+  ],
+  &quot;umatan&quot;: [
+    {
+      &quot;pair&quot;: [
+        4,
+        5
+      ],
+      &quot;odds&quot;: 6.8,
+      &quot;popularity&quot;: 1
+    },
+    {
+      &quot;pair&quot;: [
+        2,
+        4
+      ],
+      &quot;odds&quot;: 19.1,
+      &quot;popularity&quot;: 2
+    },
+    &quot;…（他 4 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A06"><td class="id">A06</td><td><b>race_paddock<br><small>パドック評価</small></b></td><td>直前の馬体・気配特徴</td><td>URL（<b>プレミアム要・認証済み前提</b>）<br><code>https://race.netkeiba.com/race/paddock.html?race_id={race_id}</code></td><td>GCS <code>…/race_paddock/{年}/</code></td><td>SLA3 発走10分前</td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_paddock/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;entries&quot;: [
+    {
+      &quot;horse_number&quot;: 3,
+      &quot;horse_name&quot;: &quot;イクイノックス&quot;,
+      &quot;horse_id&quot;: &quot;2019105219&quot;,
+      &quot;paddock_rank&quot;: &quot;B&quot;,
+      &quot;paddock_comment&quot;: &quot;有馬記念時と比べると見劣るが、体は仕上がっている&quot;
+    },
+    {
+      &quot;horse_number&quot;: 5,
+      &quot;horse_name&quot;: &quot;ジャスティンパレス&quot;,
+      &quot;horse_id&quot;: &quot;2019105346&quot;,
+      &quot;paddock_rank&quot;: &quot;A&quot;,
+      &quot;paddock_comment&quot;: &quot;キョロキョロして周回。踏み込み上々で好状態&quot;
+    },
+    &quot;…（他 3 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:27&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A07"><td class="id">A07</td><td><b>race_index<br><small>タイム指数</small></b></td><td>能力指標特徴（過去走の指数）</td><td>URL（<b>プレミアム要・認証済み前提</b>）<br><code>https://race.netkeiba.com/race/speed.html?race_id={race_id}</code></td><td>GCS <code>…/race_index/{年}/</code></td><td>SLA1 前日17:00／確定は金曜17:00</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_index/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;entries&quot;: [
+    {
+      &quot;horse_number&quot;: 1,
+      &quot;horse_name&quot;: &quot;ライラック&quot;,
+      &quot;horse_id&quot;: &quot;2019103588&quot;,
+      &quot;time_index_m&quot;: 109,
+      &quot;speed_max&quot;: 110,
+      &quot;speed_avg&quot;: 102,
+      &quot;speed_distance&quot;: 110,
+      &quot;speed_course&quot;: 110,
+      &quot;speed_recent&quot;: [
+        94,
+        109,
+        &quot;…（他 1 件）&quot;
+      ],
+      &quot;all_txt_c&quot;: [
+        4
+      ],
+      &quot;odds&quot;: 158.9,
+      &quot;popularity&quot;: 13
+    },
+    {
+      &quot;horse_number&quot;: 2,
+      &quot;horse_name&quot;: &quot;カラテ&quot;,
+      &quot;horse_id&quot;: &quot;2016106606&quot;,
+      &quot;time_index_m&quot;: 110,
+      &quot;speed_max&quot;: 110,
+      &quot;speed_avg&quot;: 103,
+      &quot;speed_distance&quot;: 85,
+      &quot;speed_course&quot;: 97,
+      &quot;speed_recent&quot;: [
+        87,
+        110,
+        &quot;…（他 1 件）&quot;
+      ],
+      &quot;all_txt_c&quot;: [
+        7
+      ],
+      &quot;odds&quot;: 180.2,
+      &quot;popularity&quot;: 15
+    },
+    &quot;…（他 15 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:22&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A08"><td class="id">A08</td><td><b>race_barometer<br><small>調子偏差値</small></b></td><td>調子特徴</td><td>URL（<b>プレミアム要・認証済み前提</b>、API）<br><code>https://race.sp.netkeiba.com/barometer/score.html?race_id={race_id}</code></td><td>GCS <code>…/race_barometer/{年}/</code>（生 HTML なし）</td><td>SLA1／金曜確定</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_barometer/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;entries&quot;: [
+    {
+      &quot;horse_number&quot;: 5,
+      &quot;horse_name&quot;: &quot;イクイノックス&quot;,
+      &quot;horse_id&quot;: &quot;2019105219&quot;,
+      &quot;finish_order&quot;: 1,
+      &quot;index_total&quot;: 113,
+      &quot;index_start&quot;: 102,
+      &quot;index_chase&quot;: 104,
+      &quot;index_closing&quot;: 106
+    },
+    {
+      &quot;horse_number&quot;: 6,
+      &quot;horse_name&quot;: &quot;スルーセブンシーズ&quot;,
+      &quot;horse_id&quot;: &quot;2018105269&quot;,
+      &quot;finish_order&quot;: 2,
+      &quot;index_total&quot;: 114,
+      &quot;index_start&quot;: 100,
+      &quot;index_chase&quot;: 104,
+      &quot;index_closing&quot;: 108
+    },
+    &quot;…（他 15 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:23&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A09"><td class="id">A09</td><td><b>race_trainer_comment<br><small>厩舎コメント</small></b></td><td>直前コメント特徴（任意）</td><td>URL<br><code>race.netkeiba.com/race/comment.html?race_id=…</code></td><td>GCS <code>…/race_trainer_comment/{年}/</code></td><td>キュー投入時<br><small>※旧リファレンスのみ記載。要件書に行なし</small></td><td>キューワーカー</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_trainer_comment/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;entries&quot;: [
+    {
+      &quot;horse_name&quot;: &quot;モックウマ07&quot;,
+      &quot;horse_number&quot;: 1,
+      &quot;comment&quot;: &quot;模擬コメント: 順調に調整できている&quot;
+    },
+    {
+      &quot;horse_name&quot;: &quot;モックウマ62&quot;,
+      &quot;horse_number&quot;: 2,
+      &quot;comment&quot;: &quot;模擬コメント: 順調に調整できている&quot;
+    },
+    &quot;…（他 6 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A10"><td class="id">A10</td><td><b>race_result_on_time<br><small>当日速報結果</small></b></td><td>AI 予測の再現・検証（確定版と別パスで保持）</td><td>URL<br><code>https://race.netkeiba.com/race/result.html?race_id={race_id}</code></td><td>GCS <code>…/race_result_on_time/{年}/</code></td><td>SLA4 発走30分後／SLA5 当日18:00</td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_result_on_time/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;race_name&quot;: &quot;宝塚記念&quot;,
+  &quot;surface&quot;: &quot;芝&quot;,
+  &quot;distance&quot;: 2200,
+  &quot;direction&quot;: &quot;右&quot;,
+  &quot;weather&quot;: &quot;曇&quot;,
+  &quot;track_condition&quot;: &quot;良&quot;,
+  &quot;start_time&quot;: &quot;15:40&quot;,
+  &quot;venue&quot;: &quot;阪神&quot;,
+  &quot;date&quot;: &quot;2023-06-25&quot;,
+  &quot;round&quot;: 11,
+  &quot;grade&quot;: &quot;OP&quot;,
+  &quot;entries&quot;: [
+    {
+      &quot;finish_position&quot;: 1,
+      &quot;bracket_number&quot;: 3,
+      &quot;horse_number&quot;: 5,
+      &quot;horse_name&quot;: &quot;イクイノックス&quot;,
+      &quot;horse_id&quot;: &quot;2019105219&quot;,
+      &quot;sex_age&quot;: &quot;牡4&quot;,
+      &quot;jockey_weight&quot;: 58.0,
+      &quot;jockey_name&quot;: &quot;ルメー&quot;,
+      &quot;jockey_id&quot;: &quot;05339&quot;,
+      &quot;finish_time&quot;: &quot;2:11.2&quot;,
+      &quot;time_sec&quot;: 131.2,
+      &quot;margin&quot;: &quot;&quot;,
+      &quot;…&quot;: &quot;他 8 キー&quot;
+    },
+    {
+      &quot;finish_position&quot;: 2,
+      &quot;bracket_number&quot;: 3,
+      &quot;horse_number&quot;: 6,
+      &quot;horse_name&quot;: &quot;スルーセブンシーズ&quot;,
+      &quot;horse_id&quot;: &quot;2018105269&quot;,
+      &quot;sex_age&quot;: &quot;牝5&quot;,
+      &quot;jockey_weight&quot;: 56.0,
+      &quot;jockey_name&quot;: &quot;池添&quot;,
+      &quot;jockey_id&quot;: &quot;01032&quot;,
+      &quot;finish_time&quot;: &quot;2:11.2&quot;,
+      &quot;time_sec&quot;: 131.2,
+      &quot;margin&quot;: &quot;クビ&quot;,
+      &quot;…&quot;: &quot;他 8 キー&quot;
+    },
+    &quot;…（他 15 件）&quot;
+  ],
+  &quot;field_size&quot;: 17,
+  &quot;payoff&quot;: {},
+  &quot;lap_times&quot;: [],
+  &quot;pace&quot;: {},
+  &quot;corner_passing&quot;: [],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:46&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A11"><td class="id">A11</td><td><b>race_result<br><small>確定結果（着順・払戻・ラップ・通過・馬場）</small></b></td><td>学習ラベル、race_result_flat、各種指数の元</td><td>URL<br><code>https://db.netkeiba.com/race/{race_id}/</code></td><td>GCS <code>…/race_result/{年}/{race_id}.json</code><br>raw HTML gz あり</td><td>SLA6 レース後の金曜17:00（上書き再取得）</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_result/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">entries は先頭 2 頭、payoff・corner_passing も短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;race_name&quot;: &quot;第64回宝塚記念&quot;,
+  &quot;grade&quot;: &quot;G1&quot;,
+  &quot;surface&quot;: &quot;芝&quot;,
+  &quot;direction&quot;: &quot;右&quot;,
+  &quot;distance&quot;: 2200,
+  &quot;weather&quot;: &quot;曇&quot;,
+  &quot;track_condition&quot;: &quot;良&quot;,
+  &quot;start_time&quot;: &quot;15:40&quot;,
+  &quot;date&quot;: &quot;2023-06-25&quot;,
+  &quot;venue&quot;: &quot;阪神&quot;,
+  &quot;round&quot;: 0,
+  &quot;entries&quot;: [
+    {
+      &quot;finish_position&quot;: 1,
+      &quot;bracket_number&quot;: 3,
+      &quot;horse_number&quot;: 5,
+      &quot;horse_name&quot;: &quot;イクイノックス&quot;,
+      &quot;horse_id&quot;: &quot;2019105219&quot;,
+      &quot;sex_age&quot;: &quot;牡4&quot;,
+      &quot;jockey_weight&quot;: 58.0,
+      &quot;jockey_name&quot;: &quot;ルメール&quot;,
+      &quot;jockey_id&quot;: &quot;05339&quot;,
+      &quot;finish_time&quot;: &quot;2:11.2&quot;,
+      &quot;time_sec&quot;: 131.2,
+      &quot;margin&quot;: &quot;&quot;,
+      &quot;…&quot;: &quot;他 8 キー&quot;
+    },
+    {
+      &quot;finish_position&quot;: 2,
+      &quot;bracket_number&quot;: 3,
+      &quot;horse_number&quot;: 6,
+      &quot;horse_name&quot;: &quot;スルーセブンシーズ&quot;,
+      &quot;horse_id&quot;: &quot;2018105269&quot;,
+      &quot;sex_age&quot;: &quot;牝5&quot;,
+      &quot;jockey_weight&quot;: 56.0,
+      &quot;jockey_name&quot;: &quot;池添謙一&quot;,
+      &quot;jockey_id&quot;: &quot;01032&quot;,
+      &quot;finish_time&quot;: &quot;2:11.2&quot;,
+      &quot;time_sec&quot;: 131.2,
+      &quot;margin&quot;: &quot;クビ&quot;,
+      &quot;…&quot;: &quot;他 8 キー&quot;
+    },
+    &quot;…（他 15 件）&quot;
+  ],
+  &quot;field_size&quot;: 17,
+  &quot;payoff&quot;: {
+    &quot;単勝&quot;: {
+      &quot;numbers&quot;: &quot;5&quot;,
+      &quot;payout&quot;: &quot;130&quot;,
+      &quot;popularity&quot;: &quot;1&quot;
+    },
+    &quot;複勝&quot;: [
+      {
+        &quot;numbers&quot;: &quot;5&quot;,
+        &quot;payout&quot;: &quot;110&quot;,
+        &quot;popularity&quot;: &quot;1&quot;
+      },
+      {
+        &quot;numbers&quot;: &quot;6&quot;,
+        &quot;payout&quot;: &quot;560&quot;,
+        &quot;popularity&quot;: &quot;10&quot;
+      },
+      &quot;…（他 1 件）&quot;
+    ],
+    &quot;枠連&quot;: {
+      &quot;numbers&quot;: &quot;3 - 3&quot;,
+      &quot;payout&quot;: &quot;2,280&quot;,
+      &quot;popularity&quot;: &quot;8&quot;
+    },
+    &quot;馬連&quot;: {
+      &quot;numbers&quot;: &quot;5 - 6&quot;,
+      &quot;payout&quot;: &quot;2,340&quot;,
+      &quot;popularity&quot;: &quot;8&quot;
+    },
+    &quot;ワイド&quot;: [
+      {
+        &quot;numbers&quot;: &quot;5 - 6&quot;,
+        &quot;payout&quot;: &quot;970&quot;,
+        &quot;popularity&quot;: &quot;11&quot;
+      },
+      {
+        &quot;numbers&quot;: &quot;5 - 9&quot;,
+        &quot;payout&quot;: &quot;240&quot;,
+        &quot;popularity&quot;: &quot;1&quot;
+      },
+      &quot;…（他 1 件）&quot;
+    ],
+    &quot;馬単&quot;: {
+      &quot;numbers&quot;: &quot;5 → 6&quot;,
+      &quot;payout&quot;: &quot;2,660&quot;,
+      &quot;popularity&quot;: &quot;9&quot;
+    },
+    &quot;三連複&quot;: {
+      &quot;numbers&quot;: &quot;5 - 6 - 9&quot;,
+      &quot;payout&quot;: &quot;4,030&quot;,
+      &quot;popularity&quot;: &quot;14&quot;
+    },
+    &quot;三連単&quot;: {
+      &quot;numbers&quot;: &quot;5 → 6 → 9&quot;,
+      &quot;payout&quot;: &quot;13,630&quot;,
+      &quot;popularity&quot;: &quot;36&quot;
+    }
+  },
+  &quot;lap_times&quot;: [
+    12.4,
+    10.5,
+    &quot;…（他 9 件）&quot;
+  ],
+  &quot;pace&quot;: {
+    &quot;first_half_3f&quot;: 34.0,
+    &quot;second_half_3f&quot;: 35.5,
+    &quot;t1f&quot;: 12.4,
+    &quot;t3f&quot;: 34.0,
+    &quot;l1f&quot;: 11.8,
+    &quot;l3f&quot;: 35.5
+  },
+  &quot;corner_passing&quot;: [
+    {
+      &quot;corner&quot;: 0,
+      &quot;label&quot;: &quot;馬場指数&quot;,
+      &quot;order_text&quot;: &quot;-7 (?)&quot;
+    },
+    {
+      &quot;corner&quot;: 1,
+      &quot;label&quot;: &quot;1コーナー&quot;,
+      &quot;order_text&quot;: &quot;(*15,17)14(2,3,12)(1,10,13)16,7(4,9)(8,11)5,6&quot;
+    },
+    &quot;…（他 3 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:43:28&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A12"><td class="id">A12</td><td><b>race_result_lap<br><small>個別ラップ（各馬200m）</small></b></td><td>ペース・ラップモデル（pace / lap_predictor）</td><td>URL ＋ AJAX（<b>プレミアム要・認証済み前提</b>）<br>A11 と同一ページ ＋ <code>ajax_race_result_horse_laptime</code></td><td>GCS <code>…/race_result_lap/{年}/</code></td><td>SLA6（race_result 取得時に同時生成）</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_result_lap/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;lap_times&quot;: [
+    12.4,
+    10.5,
+    &quot;…（他 9 件）&quot;
+  ],
+  &quot;pace&quot;: {
+    &quot;first_half_3f&quot;: 34.0,
+    &quot;second_half_3f&quot;: 35.5,
+    &quot;t1f&quot;: 12.4,
+    &quot;t3f&quot;: 34.0,
+    &quot;l1f&quot;: 11.8,
+    &quot;l3f&quot;: 35.5
+  },
+  &quot;corner_passing&quot;: [
+    {
+      &quot;corner&quot;: 0,
+      &quot;label&quot;: &quot;馬場指数&quot;,
+      &quot;order_text&quot;: &quot;-7 (?)&quot;
+    },
+    {
+      &quot;corner&quot;: 1,
+      &quot;label&quot;: &quot;1コーナー&quot;,
+      &quot;order_text&quot;: &quot;(*15,17)14(2,3,12)(1,10,13)16,7(4,9)(8,11)5,6&quot;
+    },
+    &quot;…（他 3 件）&quot;
+  ],
+  &quot;entries_lap&quot;: [
+    {
+      &quot;horse_number&quot;: 5,
+      &quot;horse_id&quot;: &quot;2019105219&quot;,
+      &quot;horse_name&quot;: &quot;イクイノックス&quot;,
+      &quot;passing_order&quot;: &quot;16-16-13-9&quot;,
+      &quot;last_3f&quot;: 34.8
+    },
+    {
+      &quot;horse_number&quot;: 6,
+      &quot;horse_id&quot;: &quot;2018105269&quot;,
+      &quot;horse_name&quot;: &quot;スルーセブンシーズ&quot;,
+      &quot;passing_order&quot;: &quot;17-17-16-12&quot;,
+      &quot;last_3f&quot;: 34.6
+    },
+    &quot;…（他 15 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:13:01&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A13"><td class="id">A13</td><td><b>horse_result<br><small>馬プロフィール＋全戦績</small></b></td><td>馬特徴、horse/result_tbl、馬詳細画面</td><td>URL<br><code>https://db.netkeiba.com/horse/{horse_id}/</code><br><code>…/horse/result/{horse_id}/</code></td><td>GCS <code>…/horse_result/{先頭4桁}/{horse_id}.json</code></td><td>SLA7 出走馬（7日以内はスキップ）</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>horse_result/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">race_history は先頭 2 件に短縮。実データは horse_profile ＋ horse_race_history（B01 に実サンプル）</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;horse_id&quot;: &quot;2021100001&quot;,
+  &quot;horse_name&quot;: &quot;モックウマ01&quot;,
+  &quot;name_en&quot;: &quot;Mock Horse 01&quot;,
+  &quot;sex&quot;: &quot;牡&quot;,
+  &quot;birthday&quot;: &quot;2021年2月3日&quot;,
+  &quot;trainer&quot;: &quot;モック調教師ア&quot;,
+  &quot;owner&quot;: &quot;モックオーナー&quot;,
+  &quot;breeder&quot;: &quot;モック牧場&quot;,
+  &quot;birthplace&quot;: &quot;モック町&quot;,
+  &quot;total_earnings&quot;: 1800,
+  &quot;career&quot;: &quot;6戦1勝 [1-0-1-4]&quot;,
+  &quot;career_record&quot;: [
+    1,
+    0,
+    &quot;…（他 2 件）&quot;
+  ],
+  &quot;major_wins&quot;: [],
+  &quot;sire&quot;: &quot;モックサイアー03&quot;,
+  &quot;dam&quot;: &quot;モックダム07&quot;,
+  &quot;dam_sire&quot;: &quot;モックサイアー16&quot;,
+  &quot;race_history&quot;: [
+    {
+      &quot;date&quot;: &quot;2026/10/04&quot;,
+      &quot;venue&quot;: &quot;5東京2&quot;,
+      &quot;weather&quot;: &quot;晴&quot;,
+      &quot;race_round&quot;: 9,
+      &quot;race_name&quot;: &quot;3歳以上2勝クラス&quot;,
+      &quot;race_id&quot;: &quot;202605030209&quot;,
+      &quot;field_size&quot;: 8,
+      &quot;bracket_number&quot;: 4,
+      &quot;horse_number&quot;: 4,
+      &quot;odds&quot;: 8.7,
+      &quot;popularity&quot;: 3,
+      &quot;finish_position&quot;: 5,
+      &quot;…&quot;: &quot;他 14 キー&quot;
+    },
+    {
+      &quot;date&quot;: &quot;2026/08/29&quot;,
+      &quot;venue&quot;: &quot;5東京6&quot;,
+      &quot;weather&quot;: &quot;晴&quot;,
+      &quot;race_round&quot;: 9,
+      &quot;race_name&quot;: &quot;モック過去戦&quot;,
+      &quot;race_id&quot;: &quot;202605020205&quot;,
+      &quot;field_size&quot;: 12,
+      &quot;bracket_number&quot;: 6,
+      &quot;horse_number&quot;: 4,
+      &quot;odds&quot;: 24.5,
+      &quot;popularity&quot;: 11,
+      &quot;finish_position&quot;: 1,
+      &quot;…&quot;: &quot;他 14 キー&quot;
+    },
+    &quot;…（他 4 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A14"><td class="id">A14</td><td><b>horse_pedigree_5gen<br><small>5世代血統</small></b></td><td>血統適性・10gen 展開・ped_tbl の元（不変データ）</td><td>URL<br><code>https://db.netkeiba.com/horse/ped/{horse_id}/</code></td><td>GCS <code>…/horse_pedigree_5gen/{先頭4桁}/</code><br>ローカル <code>data/local/horse_pedigree_5gen/</code></td><td>未取得のみ（取得済みはスキップ）</td><td>学習PC（一括）／キュー</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>horse_pedigree_5gen/2019/2019105219.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">ancestors は 62 件中 先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;horse_id&quot;: &quot;2019105219&quot;,
+  &quot;sex&quot;: &quot;&quot;,
+  &quot;sire&quot;: &quot;キタサンブラック&quot;,
+  &quot;dam&quot;: &quot;シャトーブランシュ&quot;,
+  &quot;dam_sire&quot;: &quot;キングヘイロー&quot;,
+  &quot;ancestors&quot;: [
+    {
+      &quot;generation&quot;: 1,
+      &quot;position&quot;: 0,
+      &quot;name&quot;: &quot;キタサンブラック&quot;,
+      &quot;horse_id&quot;: &quot;2012102013&quot;,
+      &quot;sex&quot;: &quot;牡&quot;
+    },
+    {
+      &quot;generation&quot;: 2,
+      &quot;position&quot;: 0,
+      &quot;name&quot;: &quot;ブラックタイド&quot;,
+      &quot;horse_id&quot;: &quot;2001103312&quot;,
+      &quot;sex&quot;: &quot;牡&quot;
+    },
+    &quot;…（他 60 件）&quot;
+  ],
+  &quot;ancestor_count&quot;: 62,
+  &quot;source&quot;: &quot;queue_horse_pedigree_5gen&quot;,
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:43:10&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A15"><td class="id">A15</td><td><b>horse_training<br><small>調教（追い切り）履歴</small></b></td><td>調教特徴（horse/training_tbl）</td><td>URL<br><code>https://db.netkeiba.com/horse/training.html?id={horse_id}</code></td><td>GCS <code>…/horse_training/{先頭4桁}/</code><br>ローカルミラー <code>data/local/horse_training/</code></td><td>手動キュー投入／期間一括</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>horse_training/2019/2019105219.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">entries は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;horse_id&quot;: &quot;2019105219&quot;,
+  &quot;total_items&quot;: 9,
+  &quot;pages_fetched&quot;: 1,
+  &quot;entries&quot;: [
+    {
+      &quot;race_info&quot;: &quot;2023/11/26  東京12R ジャパンカップ 結果 ： 1着&quot;,
+      &quot;date&quot;: &quot;2023-11-22&quot;,
+      &quot;day_of_week&quot;: &quot;水&quot;,
+      &quot;course&quot;: &quot;美Ｗ&quot;,
+      &quot;track_condition&quot;: &quot;良&quot;,
+      &quot;rider&quot;: &quot;助手&quot;,
+      &quot;time_raw&quot;: &quot;84.6 67.5 52.4 37.8 11.3&quot;,
+      &quot;lap_times&quot;: [
+        84.6,
+        67.5,
+        &quot;…（他 3 件）&quot;
+      ],
+      &quot;position&quot;: &quot;3&quot;,
+      &quot;leg_color&quot;: &quot;馬也&quot;,
+      &quot;evaluation&quot;: &quot;気配抜群&quot;,
+      &quot;rank&quot;: &quot;A&quot;,
+      &quot;…&quot;: &quot;他 1 キー&quot;
+    },
+    {
+      &quot;race_info&quot;: &quot;2023/11/26  東京12R ジャパンカップ 結果 ： 1着&quot;,
+      &quot;date&quot;: &quot;2023-11-19&quot;,
+      &quot;day_of_week&quot;: &quot;日&quot;,
+      &quot;course&quot;: &quot;美坂&quot;,
+      &quot;track_condition&quot;: &quot;良&quot;,
+      &quot;rider&quot;: &quot;助手&quot;,
+      &quot;time_raw&quot;: &quot;- 52.7 38.4 25.2 12.3&quot;,
+      &quot;lap_times&quot;: [
+        52.7,
+        38.4,
+        &quot;…（他 2 件）&quot;
+      ],
+      &quot;position&quot;: &quot;&quot;,
+      &quot;leg_color&quot;: &quot;馬也&quot;,
+      &quot;evaluation&quot;: &quot;順調&quot;,
+      &quot;rank&quot;: &quot;C&quot;,
+      &quot;…&quot;: &quot;他 1 キー&quot;
+    },
+    &quot;…（他 53 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:43:17&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A16"><td class="id">A16</td><td><b>broodmare_mating<br><small>母馬の種付け情報</small></b></td><td>種付け日に基づく特徴（T-019）</td><td>URL：要確認（own.netkeiba 系。キーは母馬 horse_id）</td><td>GCS <code>…/broodmare_mating/{先頭4桁}/</code></td><td><b>未着手（T-019）</b></td><td>学習PC（予定）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>broodmare_mating/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;horse_id&quot;: &quot;1991000000&quot;,
+  &quot;matings&quot;: [
+    {
+      &quot;mating_year&quot;: 2020,
+      &quot;mating_date&quot;: &quot;2020-01-10&quot;
+    }
+  ],
+  &quot;mating_count&quot;: 1,
+  &quot;source&quot;: &quot;dev_mock&quot;,
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A17"><td class="id">A17</td><td><b>jra_cushion<br><small>クッション値・含水率</small></b></td><td>馬場速度指数、めぐ指数、馬場画面</td><td>URL<br><code>https://www.jra.go.jp/keiba/baba/</code><br>含水率は Playwright（Chromium）が必要</td><td><code>data/page_reference/cushion/cushion_values.json</code>・<code>cushion_{YYYY}.json</code><br>GCS <code>OTHERS/jra_cushion/{YYYY}.json</code></td><td>開催日 T-15 ごと（SLA2）</td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>jra_cushion/2026.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">records は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;records&quot;: [
+    {
+      &quot;year&quot;: 2026,
+      &quot;venue_code&quot;: &quot;05&quot;,
+      &quot;venue_name&quot;: &quot;東京&quot;,
+      &quot;kai&quot;: 3,
+      &quot;is_race_day&quot;: true,
+      &quot;date&quot;: &quot;2026-10-04&quot;,
+      &quot;cushion_value&quot;: 9.4,
+      &quot;turf_moisture_goal&quot;: 11.0,
+      &quot;turf_moisture_4corner&quot;: 11.6,
+      &quot;dirt_moisture_goal&quot;: 2.4,
+      &quot;dirt_moisture_4corner&quot;: 2.9
+    },
+    {
+      &quot;year&quot;: 2026,
+      &quot;venue_code&quot;: &quot;09&quot;,
+      &quot;venue_name&quot;: &quot;阪神&quot;,
+      &quot;kai&quot;: 3,
+      &quot;is_race_day&quot;: true,
+      &quot;date&quot;: &quot;2026-10-04&quot;,
+      &quot;cushion_value&quot;: 9.4,
+      &quot;turf_moisture_goal&quot;: 11.0,
+      &quot;turf_moisture_4corner&quot;: 11.6,
+      &quot;dirt_moisture_goal&quot;: 2.4,
+      &quot;dirt_moisture_4corner&quot;: 2.9
+    },
+    &quot;…（他 2 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A18"><td class="id">A18</td><td><b>smartrc_*<br><small>SmartRC（独自指標）</small></b></td><td><b>取得中止</b>（IP ブロック・DEC-024）。コード・config に残骸あり（T-034）</td><td><code>smartrc.jp/v3/smartrc.php/…</code>（要別アカウント）</td><td>—</td><td>—</td><td>—</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>smartrc_race/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">取得中止のカテゴリ。スキーマ上の最小形のみ</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;source&quot;: &quot;dev_mock&quot;,
+  &quot;runners&quot;: [],
+  &quot;horses&quot;: [],
+  &quot;fullresults&quot;: [],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+</table></div>
+<h3 id="cat-B">B. 取得済みデータから自動派生するデータ</h3><p>追加のスクレイピングは不要。親 JSON／HTML から機械的に生成される。</p>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>用途</th><th>取得元（URL／手動／生成）</th><th>保存先</th><th>更新・SLA</th><th>書込主体</th></tr>
+<tr class="ds" data-id="B01"><td class="id">B01</td><td><b>行固有派生 11 カテゴリ<br><small>race_shutuba_meta / race_result_on_time_payoff・_lap・_corner / horse_profile / horse_race_history / race_result_meta・_payoff・_track / race_result_corner / race_result_lap_times</small></b></td><td>要件表 1 行 = 1 GCS パスの原則を満たすため、親 JSON から必要フィールドだけを抽出</td><td><b>生成</b><br><code>python3 -m src.scripts.scraping.migrate_row_data_to_unique_paths --year-start 2020 --year-end 2026 --include-horses</code><br>（<code>src/scraper/row_data_extractor.py</code>）</td><td>GCS <code>GCS_BASE/{category}/…</code><br>2020–2026 で 261,173 件保存（AGENTS.md 記載）</td><td>取得後に随時／バックフィル</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON・8 種）</summary><div class="smp-p"><div class="smp-h"><b>race_shutuba_meta</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;race_name&quot;: &quot;宝塚記念&quot;,
+  &quot;surface&quot;: &quot;芝&quot;,
+  &quot;distance&quot;: 2200,
+  &quot;direction&quot;: &quot;右&quot;,
+  &quot;weather&quot;: &quot;曇&quot;,
+  &quot;track_condition&quot;: &quot;良&quot;,
+  &quot;start_time&quot;: &quot;15:40&quot;,
+  &quot;venue&quot;: &quot;阪神&quot;,
+  &quot;field_size&quot;: 17,
+  &quot;date&quot;: &quot;2023-06-25&quot;,
+  &quot;round&quot;: 11,
+  &quot;grade&quot;: &quot;OP&quot;,
+  &quot;race_class&quot;: &quot;サラ系３歳以上 オープン&quot;,
+  &quot;weight_rule&quot;: &quot;定量&quot;,
+  &quot;course_type&quot;: &quot;&quot;
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_meta</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;race_name&quot;: &quot;第64回宝塚記念&quot;,
+  &quot;grade&quot;: &quot;G1&quot;,
+  &quot;surface&quot;: &quot;芝&quot;,
+  &quot;direction&quot;: &quot;右&quot;,
+  &quot;distance&quot;: 2200,
+  &quot;start_time&quot;: &quot;15:40&quot;,
+  &quot;date&quot;: &quot;2023-06-25&quot;,
+  &quot;venue&quot;: &quot;阪神&quot;,
+  &quot;round&quot;: 0,
+  &quot;field_size&quot;: 17
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_payoff</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;payoff&quot;: {
+    &quot;単勝&quot;: {
+      &quot;numbers&quot;: &quot;5&quot;,
+      &quot;payout&quot;: &quot;130&quot;,
+      &quot;popularity&quot;: &quot;1&quot;
+    },
+    &quot;複勝&quot;: [
+      {
+        &quot;numbers&quot;: &quot;5&quot;,
+        &quot;payout&quot;: &quot;110&quot;,
+        &quot;popularity&quot;: &quot;1&quot;
+      },
+      {
+        &quot;numbers&quot;: &quot;6&quot;,
+        &quot;payout&quot;: &quot;560&quot;,
+        &quot;popularity&quot;: &quot;10&quot;
+      },
+      &quot;…（他 1 件）&quot;
+    ],
+    &quot;枠連&quot;: {
+      &quot;numbers&quot;: &quot;3 - 3&quot;,
+      &quot;payout&quot;: &quot;2,280&quot;,
+      &quot;popularity&quot;: &quot;8&quot;
+    },
+    &quot;馬連&quot;: {
+      &quot;numbers&quot;: &quot;5 - 6&quot;,
+      &quot;payout&quot;: &quot;2,340&quot;,
+      &quot;popularity&quot;: &quot;8&quot;
+    },
+    &quot;ワイド&quot;: [
+      {
+        &quot;numbers&quot;: &quot;5 - 6&quot;,
+        &quot;payout&quot;: &quot;970&quot;,
+        &quot;popularity&quot;: &quot;11&quot;
+      },
+      {
+        &quot;numbers&quot;: &quot;5 - 9&quot;,
+        &quot;payout&quot;: &quot;240&quot;,
+        &quot;popularity&quot;: &quot;1&quot;
+      },
+      &quot;…（他 1 件）&quot;
+    ],
+    &quot;馬単&quot;: {
+      &quot;numbers&quot;: &quot;5 → 6&quot;,
+      &quot;payout&quot;: &quot;2,660&quot;,
+      &quot;popularity&quot;: &quot;9&quot;
+    },
+    &quot;三連複&quot;: {
+      &quot;numbers&quot;: &quot;5 - 6 - 9&quot;,
+      &quot;payout&quot;: &quot;4,030&quot;,
+      &quot;popularity&quot;: &quot;14&quot;
+    },
+    &quot;三連単&quot;: {
+      &quot;numbers&quot;: &quot;5 → 6 → 9&quot;,
+      &quot;payout&quot;: &quot;13,630&quot;,
+      &quot;popularity&quot;: &quot;36&quot;
+    }
+  }
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_track</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;weather&quot;: &quot;曇&quot;,
+  &quot;track_condition&quot;: &quot;良&quot;
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_corner</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;corner_passing&quot;: [
+    {
+      &quot;corner&quot;: 0,
+      &quot;label&quot;: &quot;馬場指数&quot;,
+      &quot;order_text&quot;: &quot;-7 (?)&quot;
+    },
+    {
+      &quot;corner&quot;: 1,
+      &quot;label&quot;: &quot;1コーナー&quot;,
+      &quot;order_text&quot;: &quot;(*15,17)14(2,3,12)(1,10,13)16,7(4,9)(8,11)5,6&quot;
+    },
+    &quot;…（他 3 件）&quot;
+  ]
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_lap_times</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;lap_times&quot;: [
+    12.4,
+    10.5,
+    &quot;…（他 9 件）&quot;
+  ],
+  &quot;pace&quot;: {
+    &quot;first_half_3f&quot;: 34.0,
+    &quot;second_half_3f&quot;: 35.5,
+    &quot;t1f&quot;: 12.4,
+    &quot;t3f&quot;: 34.0,
+    &quot;l1f&quot;: 11.8,
+    &quot;l3f&quot;: 35.5
+  }
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>horse_profile</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;horse_id&quot;: &quot;2019105219&quot;,
+  &quot;horse_name&quot;: &quot;イクイノックス&quot;,
+  &quot;name_en&quot;: &quot;Equinox&quot;,
+  &quot;birthday&quot;: &quot;2019年3月23日&quot;,
+  &quot;trainer&quot;: &quot;木村哲也&quot;,
+  &quot;owner&quot;: &quot;シルクレーシング&quot;,
+  &quot;breeder&quot;: &quot;ノーザンファーム&quot;,
+  &quot;birthplace&quot;: &quot;安平町&quot;,
+  &quot;total_earnings&quot;: 175655,
+  &quot;career&quot;: &quot;10戦8勝 [8-2-0-0]&quot;,
+  &quot;career_record&quot;: [
+    8,
+    2,
+    &quot;…（他 2 件）&quot;
+  ],
+  &quot;major_wins&quot;: [
+    &quot;23&#x27;ジャパンC(G1)&quot;
+  ],
+  &quot;sire&quot;: &quot;&quot;,
+  &quot;dam&quot;: &quot;&quot;,
+  &quot;dam_sire&quot;: &quot;&quot;
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>horse_race_history</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">race_history は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;horse_id&quot;: &quot;2019105219&quot;,
+  &quot;horse_name&quot;: &quot;イクイノックス&quot;,
+  &quot;race_history&quot;: [
+    {
+      &quot;date&quot;: &quot;2023/11/26&quot;,
+      &quot;venue&quot;: &quot;5東京8&quot;,
+      &quot;weather&quot;: &quot;曇&quot;,
+      &quot;race_round&quot;: 12,
+      &quot;race_name&quot;: &quot;ジャパンC(GI)&quot;,
+      &quot;race_id&quot;: &quot;202305050812&quot;,
+      &quot;field_size&quot;: 18,
+      &quot;bracket_number&quot;: 1,
+      &quot;horse_number&quot;: 2,
+      &quot;odds&quot;: 1.3,
+      &quot;popularity&quot;: 1,
+      &quot;finish_position&quot;: 1,
+      &quot;…&quot;: &quot;他 14 キー&quot;
+    },
+    {
+      &quot;date&quot;: &quot;2023/10/29&quot;,
+      &quot;venue&quot;: &quot;4東京9&quot;,
+      &quot;weather&quot;: &quot;晴&quot;,
+      &quot;race_round&quot;: 11,
+      &quot;race_name&quot;: &quot;天皇賞(秋)(GI)&quot;,
+      &quot;race_id&quot;: &quot;202305040911&quot;,
+      &quot;field_size&quot;: 11,
+      &quot;bracket_number&quot;: 6,
+      &quot;horse_number&quot;: 7,
+      &quot;odds&quot;: 1.3,
+      &quot;popularity&quot;: 1,
+      &quot;finish_position&quot;: 1,
+      &quot;…&quot;: &quot;他 14 キー&quot;
+    },
+    &quot;…（他 8 件）&quot;
+  ]
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="B02"><td class="id">B02</td><td><b>requirement_row_trace</b></td><td>要件表の行 ↔ 保存パスの整合参照</td><td><b>生成</b> <code>python3 -m src.scripts.scraping.materialize_requirement_row_traces</code></td><td>GCS <code>OTHERS/requirement_row_trace/</code></td><td>バックフィル時</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>requirement_row_trace/race_…_nk_shutuba_entries.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;row_id&quot;: &quot;nk_shutuba_entries&quot;,
+  &quot;trace_key&quot;: &quot;race_202605030201_nk_shutuba_entries&quot;,
+  &quot;scope&quot;: &quot;race&quot;,
+  &quot;primary_id&quot;: &quot;202605030201&quot;,
+  &quot;canonical&quot;: [
+    {
+      &quot;category&quot;: &quot;race_shutuba&quot;,
+      &quot;key&quot;: &quot;202605030201&quot;
+    }
+  ],
+  &quot;title_ja&quot;: &quot;出馬表HTML（モック）&quot;,
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="B03"><td class="id">B03</td><td><b>horse_name<br><small>馬名レジストリ</small></b></td><td>馬名 → ID 検索</td><td><b>副次生成</b>（horse_result 保存のたび）</td><td>GCS <code>OTHERS/horse_name/{key}.json</code></td><td>A13 と同時</td><td>A13 と同じ</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><p class="smp-note">horse_name カテゴリ自体は save() 元が無く、馬名の検索は次の索引（data/calculated_data/knowledge/horse_name_index.json）で代替しています。</p><div class="smp-p"><div class="smp-h"><b>horse_name_index.json</b> <span class="smp-src">実データ（この PC の索引。37393 頭）</span></div><div class="smp-n">horses は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;version&quot;: &quot;1.0&quot;,
+  &quot;total_horses&quot;: 37393,
+  &quot;generated_at&quot;: &quot;2026-07-05 09:46:47&quot;,
+  &quot;source&quot;: &quot;race_shutuba_gcs&quot;,
+  &quot;horses&quot;: [
+    {
+      &quot;horse_id&quot;: &quot;2009100502&quot;,
+      &quot;horse_name&quot;: &quot;メイショウオトコギ&quot;,
+      &quot;name_en&quot;: &quot;&quot;,
+      &quot;year&quot;: &quot;2009&quot;
+    },
+    {
+      &quot;horse_id&quot;: &quot;2009102606&quot;,
+      &quot;horse_name&quot;: &quot;サンマルデューク&quot;,
+      &quot;name_en&quot;: &quot;&quot;,
+      &quot;year&quot;: &quot;2009&quot;
+    },
+    &quot;…（他 37391 件）&quot;
+  ]
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="B04"><td class="id">B04</td><td><b>race_detail / race_performance</b></td><td>レース詳細（旧）／パイプライン生成パフォーマンス指数</td><td><b>副次生成・パイプライン生成</b>（race_detail は shutuba 同一 HTML ＋ race_index マージ）</td><td>GCS <code>…/race_detail/{年}/</code>、<code>…/race_performance/{年}/</code></td><td>キュー／バッチ</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON・2 種）</summary><div class="smp-p"><div class="smp-h"><b>race_detail/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">entries は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;race_name&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;surface&quot;: &quot;ダ&quot;,
+  &quot;distance&quot;: 1400,
+  &quot;direction&quot;: &quot;右&quot;,
+  &quot;weather&quot;: &quot;晴&quot;,
+  &quot;track_condition&quot;: &quot;良&quot;,
+  &quot;start_time&quot;: &quot;10:05&quot;,
+  &quot;venue&quot;: &quot;東京&quot;,
+  &quot;field_size&quot;: 8,
+  &quot;date&quot;: &quot;2026-10-04&quot;,
+  &quot;round&quot;: 1,
+  &quot;grade&quot;: &quot;&quot;,
+  &quot;race_class&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;weight_rule&quot;: &quot;馬齢&quot;,
+  &quot;course_type&quot;: &quot;&quot;,
+  &quot;entries&quot;: [
+    {
+      &quot;horse_number&quot;: 1,
+      &quot;bracket_number&quot;: 1,
+      &quot;horse_name&quot;: &quot;モックウマ07&quot;,
+      &quot;horse_id&quot;: &quot;2021100007&quot;,
+      &quot;sex_age&quot;: &quot;牝5&quot;,
+      &quot;jockey_weight&quot;: 58.0,
+      &quot;jockey_name&quot;: &quot;モック騎手オ&quot;,
+      &quot;jockey_id&quot;: &quot;90005&quot;,
+      &quot;trainer_name&quot;: &quot;モック調教師キ&quot;,
+      &quot;trainer_id&quot;: &quot;91007&quot;,
+      &quot;weight&quot;: 483,
+      &quot;weight_change&quot;: 2,
+      &quot;…&quot;: &quot;他 5 キー&quot;
+    },
+    {
+      &quot;horse_number&quot;: 2,
+      &quot;bracket_number&quot;: 2,
+      &quot;horse_name&quot;: &quot;モックウマ62&quot;,
+      &quot;horse_id&quot;: &quot;2022100062&quot;,
+      &quot;sex_age&quot;: &quot;セ4&quot;,
+      &quot;jockey_weight&quot;: 57.0,
+      &quot;jockey_name&quot;: &quot;モック騎手キ&quot;,
+      &quot;jockey_id&quot;: &quot;90007&quot;,
+      &quot;trainer_name&quot;: &quot;モック調教師カ&quot;,
+      &quot;trainer_id&quot;: &quot;91006&quot;,
+      &quot;weight&quot;: 470,
+      &quot;weight_change&quot;: -3,
+      &quot;…&quot;: &quot;他 5 キー&quot;
+    },
+    &quot;…（他 6 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_performance/…json（スキーマ未定義・形式は暫定）</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">実データ観測後に置き換える</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;horses&quot;: [
+    {
+      &quot;horse_number&quot;: 1,
+      &quot;horse_id&quot;: &quot;2021100007&quot;,
+      &quot;performance_rating&quot;: 95.1
+    },
+    {
+      &quot;horse_number&quot;: 2,
+      &quot;horse_id&quot;: &quot;2022100062&quot;,
+      &quot;performance_rating&quot;: 103.6
+    },
+    &quot;…（他 6 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+</table></div>
+<h3 id="cat-C">C. 特徴量ストア・学習データセット</h3><p>生成元は A 群（主に race_result／race_shutuba／horse_result）。<b>パス表記に揺れあり</b>：AGENTS.md は <code>data/features/</code>、実装（<code>feature_layout.py:20</code>）は <code>data/local/features</code>。ここでは論理パスで記す（§7 参照）。</p>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>用途</th><th>取得元（URL／手動／生成）</th><th>保存先</th><th>更新・SLA</th><th>書込主体</th></tr>
+<tr class="ds" data-id="C01"><td class="id">C01</td><td><b>race_result_flat.parquet</b></td><td>全特徴量・めぐ指数・ラベルの元表（flat）</td><td><b>生成</b> <code>python -m src.scraper.export_tables</code>（スクレイプ後に増分）</td><td><code>data/page_reference/tables/{YYYY}/race_result_flat.parquet</code></td><td>raceday-evening 後に増分</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>race_result_flat.parquet（先頭 3 行・先頭 14 列）</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">全 39 列。export_tables の変換ロジック（_data_to_flat_rows）を実サンプルに適用した結果</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>date</th><th>venue</th><th>surface</th><th>distance</th><th>direction</th><th>grade</th><th>race_class</th><th>weather</th><th>track_condition</th><th>start_time</th><th>field_size</th><th>race_name</th><th>venue_code</th></tr><tr><td>202309030811</td><td>2023-06-25</td><td>阪神</td><td>芝</td><td>2200</td><td>右</td><td>G1</td><td></td><td>曇</td><td>良</td><td>15:40</td><td>17</td><td>第64回宝塚記念</td><td>09</td></tr><tr><td>202309030811</td><td>2023-06-25</td><td>阪神</td><td>芝</td><td>2200</td><td>右</td><td>G1</td><td></td><td>曇</td><td>良</td><td>15:40</td><td>17</td><td>第64回宝塚記念</td><td>09</td></tr><tr><td>202309030811</td><td>2023-06-25</td><td>阪神</td><td>芝</td><td>2200</td><td>右</td><td>G1</td><td></td><td>曇</td><td>良</td><td>15:40</td><td>17</td><td>第64回宝塚記念</td><td>09</td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="C02"><td class="id">C02</td><td><b>base_tbl<br><small>shutuba 4キー</small></b></td><td>予測スパイン（race_id, horse_id, jockey_id, trainer_id）</td><td><b>生成</b> <code>python -m src.pipeline.register_raw_table_features</code></td><td><code>data/features/base_tbl/{YYYY}/shutuba.parquet</code></td><td>出馬表取得後</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>base_tbl/2020/shutuba.parquet（先頭 3 行）</b> <span class="smp-src">実データ（data_features_reference.html に掲載の先頭行）</span></div><div class="smp-n">4 キーのみ（race_id, horse_id, jockey_id, trainer_id）</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>horse_id</th><th>jockey_id</th><th>trainer_id</th></tr><tr><td>202001010101</td><td>2018102410</td><td>01176</td><td>00427</td></tr><tr><td>202001010101</td><td>2018105193</td><td>05339</td><td>00386</td></tr><tr><td>202001010101</td><td>2018104800</td><td>01032</td><td>01082</td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="C03"><td class="id">C03</td><td><b>race_tbl / race_horse_tbl / horse_tbl</b></td><td>レース単位・レース×馬・馬単位（血統・プロフィール）の特徴量</td><td><b>生成</b> 同上（選別は <code>_raw_table_feature_selection.json</code>、<code>raw_table_features.py</code>）</td><td><code>data/features/{race_tbl,race_horse_tbl,horse_tbl}/</code></td><td>再構築時</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>race_horse_tbl 系: raw flat 由来の列（先頭 3 行・先頭 10 列）</b> <span class="smp-src">実データ（data_features_reference.html に掲載の先頭行）</span></div><div class="smp-n">race_tbl / race_horse_tbl / horse_tbl の全列は data_features_reference.html の「登録列一覧」参照</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>horse_id</th><th>jockey_id</th><th>trainer_id</th><th>shutuba_horse_id_present</th><th>shutuba_jockey_id_present</th><th>shutuba_trainer_id_present</th><th>shutuba_distance</th><th>shutuba_surface</th><th>shutuba_venue_code</th></tr><tr><td>202001010101</td><td>2018102410</td><td>01176</td><td>00427</td><td>1</td><td>1</td><td>1</td><td>1800</td><td>芝</td><td>01</td></tr><tr><td>202001010101</td><td>2018105193</td><td>05339</td><td>00386</td><td>1</td><td>1</td><td>1</td><td>1800</td><td>芝</td><td>01</td></tr><tr><td>202001010101</td><td>2018104800</td><td>01032</td><td>01082</td><td>1</td><td>1</td><td>1</td><td>1800</td><td>芝</td><td>01</td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="C04"><td class="id">C04</td><td><b>race_jockey_tbl / race_trainer_tbl / jockey_tbl / trainer_tbl / jockey_trainer_stats</b></td><td>騎手・調教師の成績統計特徴（マージキー検証付き）</td><td><b>生成</b> <code>python -m src.pipeline.build_jockey_trainer_stats [--years …] [--nar]</code><br>cron：<code>scripts/cron/update_jockey_trainer_stats.sh</code></td><td><code>data/features/{jockey_tbl,trainer_tbl,jockey_trainer_stats}/</code></td><td>定期（cron）</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>jt_race_features.parquet（先頭 3 行・先頭 12 列）</b> <span class="smp-src">実データ（data_features_reference.html に掲載の先頭行）</span></div><div class="smp-n">空欄は履歴が無い（初出走など）ための欠損</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>horse_id</th><th>jt_row_jockey_id</th><th>jt_row_trainer_id</th><th>jt_result_date</th><th>jt_race_datetime</th><th>jk_prior_all_starts</th><th>jk_prior_all_win_rate</th><th>jk_prior_all_avg_pass_first</th><th>jk_roll10_avg_pass_first</th><th>tr_prior_all_starts</th><th>tr_prior_all_win_rate</th></tr><tr><td>202006010101</td><td>2017100847</td><td>01164</td><td>01141</td><td>2020-01-05</td><td>2020-01-05 09:55:00</td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td>202006010101</td><td>2017101464</td><td>01119</td><td>01132</td><td>2020-01-05</td><td>2020-01-05 09:55:00</td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td>202006010101</td><td>2017101747</td><td>01173</td><td>01031</td><td>2020-01-05</td><td>2020-01-05 09:55:00</td><td></td><td></td><td></td><td></td><td></td><td></td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="C05"><td class="id">C05</td><td><b>target/rank_tbl<br><small>着順ラベル</small></b></td><td>学習ラベル（race_id, horse_id, rank）</td><td><b>生成</b> <code>python -m src.pipeline.build_rank_target [--years] [--overwrite]</code></td><td><code>data/features/target/rank_tbl/{YYYY}/rank.parquet</code></td><td>結果確定後</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>target/rank_tbl/2023/rank.parquet（先頭 3 行）</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">build_rank_target と同じ定義（rank = finish_position を数値化）を実サンプルに適用</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>horse_id</th><th>rank</th></tr><tr><td>202309030811</td><td>2019105219</td><td>1.0</td></tr><tr><td>202309030811</td><td>2018105269</td><td>2.0</td></tr><tr><td>202309030811</td><td>2019105346</td><td>3.0</td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="C06"><td class="id">C06</td><td><b>horse/ped_tbl・result_tbl・training_tbl</b></td><td>馬単位エンティティ（血統ロング表／全成績／調教）</td><td><b>生成</b> <code>python -m src.pipeline.build_horse_entity_store</code>、増分 <code>sync_ped_tbl_for_horses --horse-ids …</code></td><td><code>data/features/horse/{ped_tbl,result_tbl,training_tbl}/{先頭4桁}/{horse_id}.parquet</code></td><td>再構築／出馬表保存後（<code>KEIBA_SYNC_PED_TBL_ON_SHUTUBA=1</code> 時）</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>horse/ped_tbl/2019/2019105219.parquet（先頭 4 行・先頭 10 列）</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">全 26 列（牡スロットのみのロング形式）。build_horse_entity_store の変換（_flatten_pedigree_json）を実サンプルに適用</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>subject_horse_id</th><th>subject_horse_name</th><th>generation</th><th>position</th><th>path_fm</th><th>merged_global_depth</th><th>source</th><th>anchor_horse_id</th><th>ancestor_horse_id</th><th>ancestor_name</th></tr><tr><td>2019105219</td><td></td><td>1</td><td>0</td><td>F</td><td>1</td><td>primary</td><td></td><td>2012102013</td><td>キタサンブラック</td></tr><tr><td>2019105219</td><td></td><td>2</td><td>0</td><td>FF</td><td>2</td><td>primary</td><td></td><td>2001103312</td><td>ブラックタイド</td></tr><tr><td>2019105219</td><td></td><td>3</td><td>0</td><td>FFF</td><td>3</td><td>primary</td><td></td><td>000a00033a</td><td>サンデーサイレンスSunday Silence(米)</td></tr><tr><td>2019105219</td><td></td><td>4</td><td>0</td><td>FFFF</td><td>4</td><td>primary</td><td></td><td>000a0012bf</td><td>Halo</td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="C07"><td class="id">C07</td><td><b>layer_a_train / dataset_split_manifest</b></td><td>Layer A 学習データセットと train/valid/test 分割定義</td><td><b>生成</b> <code>python3 -m src.pipeline.build_layer_a_dataset [--years]</code></td><td><code>data/modeling/layer_a_train.parquet</code>（＋ <code>.meta.json</code>）／<code>data/local/meta/modeling/dataset_split_manifest.json</code></td><td>学習前</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: layer_a_train.parquet は列数が多く、dev に未生成です（python3 -m src.pipeline.build_layer_a_dataset で学習PCに生成）。</p></details></td></tr>
+</table></div>
+<h3 id="cat-D">D. 血統・研究系データ（src/research）</h3><p>元データは A14（5gen）と C01（flat）。すべて再生成可能。クラスタ再構築の経緯は project memory「L2 Cluster Redesign」参照。</p>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>用途</th><th>取得元（URL／手動／生成）</th><th>保存先</th><th>更新・SLA</th><th>書込主体</th></tr>
+<tr class="ds" data-id="D01"><td class="id">D01</td><td><b>horse_pedigree_10gen</b></td><td>5gen 祖先の 5gen を接木して 10 世代相当に展開（適性・類似度の入力）</td><td><b>生成</b> <code>python -m src.research.pedigree.build_horse_pedigree_10gen --skip-existing</code></td><td><code>data/local/horse_pedigree_10gen/{先頭4桁}/</code></td><td>5gen 保存のたび／一括</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: 10gen は 5gen（A14）の祖先に 6〜10 世代を接木した JSON（via で接木元を追跡）。dev に未生成です。</p></details></td></tr>
+<tr class="ds" data-id="D02"><td class="id">D02</td><td><b>pedigree_10gen(_3view) index</b></td><td>祖先×馬の長形式索引</td><td><b>生成</b> <code>build_pedigree_10gen_index</code>／<code>build_pedigree_10gen_3view_index</code></td><td><code>data/research/pedigree_10gen/</code>、<code>…_3view/</code></td><td>一括</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: dev に未生成の成果物です（学習PCで生成）。生成コマンドは一覧の「取得元」列を参照。</p></details></td></tr>
+<tr class="ds" data-id="D03"><td class="id">D03</td><td><b>pedigree_race_index</b></td><td>種牡馬ツリー・BMS・sire/damsire・race_result_slim</td><td><b>生成</b> <code>build_pedigree_race_index</code>、<code>build_full_sire_tree</code></td><td><code>data/research/pedigree_race_index/</code>（UI 用 <code>data/page_reference/pedigree_race_index/</code>）</td><td>一括</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: dev に未生成の成果物です（学習PCで生成）。生成コマンドは一覧の「取得元」列を参照。</p></details></td></tr>
+<tr class="ds" data-id="D04"><td class="id">D04</td><td><b>note_aptitude_race / role_lift_profiles</b></td><td>適性 3D のレース記録と lift プロファイル</td><td><b>生成</b> <code>note_aptitude_race_map</code>、<code>build_role_lift_profiles</code></td><td><code>data/page_reference/note_aptitude_race/</code></td><td>一括</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: dev に未生成の成果物です（学習PCで生成）。生成コマンドは一覧の「取得元」列を参照。</p></details></td></tr>
+<tr class="ds" data-id="D05"><td class="id">D05</td><td><b>bloodline_meta_cluster（L2/L3）</b></td><td>血統クラスタ（win_fast/slow/outer/inner 次元）</td><td><b>生成</b> <code>build_ancestor_vectors</code> → <code>build_l2_fine_clusters</code> → <code>build_l3_clusters</code> → <code>build_meta_cluster_artifacts</code></td><td><code>data/research/bloodline_meta_cluster/</code>（ancestor_vectors / unified / l2_* / scaler*.json）</td><td>再構築時</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: dev に未生成の成果物です（学習PCで生成）。生成コマンドは一覧の「取得元」列を参照。</p></details></td></tr>
+<tr class="ds" data-id="D06"><td class="id">D06</td><td><b>クラスタ名称ファイル<br><small>l2_names.json 等</small></b></td><td>クラスタの表示名</td><td><b>生成</b> <code>generate_l2_fine_names</code>／<code>generate_l3_names</code>（LLM 生成か手動補正かは<b>要確認</b>）</td><td>D05 と同ディレクトリ</td><td>D05 再構築後</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: dev に未生成の成果物です（学習PCで生成）。生成コマンドは一覧の「取得元」列を参照。</p></details></td></tr>
+<tr class="ds" data-id="D07"><td class="id">D07</td><td><b>sire_factor_stats / race_quality_priors / maternal_stallion_stage_stats / track_bias_weight_best</b></td><td>種牡馬ファクター、レース品質事前分布、母父ステージ統計、馬場バイアス重み</td><td><b>生成</b> <code>sire_factor_stats.py</code>、<code>tune_race_quality_priors.py</code>、<code>build_maternal_stallion_stage_stats</code>、<code>tune_track_bias_weights</code></td><td><code>data/research/*.json</code>、<code>data/meta/modeling/</code></td><td>チューニング時</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: dev に未生成の成果物です（学習PCで生成）。生成コマンドは一覧の「取得元」列を参照。</p></details></td></tr>
+<tr class="ds" data-id="D08"><td class="id">D08</td><td><b>horse_pedigree_factors / horse_aptitude</b></td><td>馬ごとの血統ファクターと適性（コース適合スコア）</td><td><b>生成</b> <code>pedigree_factor_table</code>、<code>build_horse_aptitude_index</code></td><td><code>data/modeling/horse_pedigree_factors.parquet</code>、<code>data/local/research/horse_aptitude</code></td><td>一括</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: dev に未生成の成果物です（学習PCで生成）。生成コマンドは一覧の「取得元」列を参照。</p></details></td></tr>
+<tr class="ds" data-id="D09"><td class="id">D09</td><td><b>growth_curve / tracking_difficulty（calculated_data）</b></td><td>成長曲線・追走難度の集計結果（API が primary read）</td><td><b>生成</b>（集計ジョブ）／<code>src/scripts/data/sync_calculated_data_bundle.py</code> で page_reference から同期</td><td><code>data/calculated_data/{growth_curve,tracking_difficulty,…}/</code>（<b>.gitignore 済み</b>）</td><td>バッチ</td><td>学習PC<br><small>GCS 化は未対応（T-001）</small></td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: data/calculated_data/{growth_curve,tracking_difficulty}/ は dev が空です（集計ジョブで学習PCに生成）。</p></details></td></tr>
+</table></div>
+<h3 id="cat-E">E. 手動作成・設定データ（人手が介在するもの）</h3><p>自動生成できない、または人が決めるデータ。<b>誤りが結果に直結するため出典を明記</b>。</p>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>用途</th><th>取得元（URL／手動／生成）</th><th>保存先</th><th>更新・SLA</th><th>書込主体</th></tr>
+<tr class="ds" data-id="E01"><td class="id">E01</td><td><b>myostatin_genes.json<br><small>ミオスタチン遺伝子型ナレッジ</small></b></td><td>遺伝子マーカー特徴、ミオスタチン画面</td><td><b>手動作成・更新</b>（v2.3.2 / 2026-03-24。SNS 上の報告等から種牡馬型を逆算）</td><td><code>data/calculated_data/knowledge/myostatin_genes.json</code></td><td>知見が増えたとき</td><td>開発PC（手動）→ 配布</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>myostatin_genes.json</b> <span class="smp-src">実データ（手動作成ナレッジ。この PC）</span></div><div class="smp-n">stallions は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;_meta&quot;: {
+    &quot;version&quot;: &quot;2.3.2&quot;
+  },
+  &quot;stallions&quot;: [
+    {
+      &quot;name&quot;: &quot;サンデーサイレンス&quot;,
+      &quot;name_en&quot;: &quot;Sunday Silence&quot;,
+      &quot;genotype&quot;: &quot;TT&quot;,
+      &quot;confidence&quot;: &quot;highly_likely&quot;,
+      &quot;allele_c&quot;: 0.0,
+      &quot;allele_t&quot;: 1.0,
+      &quot;sire&quot;: &quot;Halo&quot;,
+      &quot;dam_sire&quot;: &quot;Understanding&quot;,
+      &quot;avg_win_dist&quot;: 1950,
+      &quot;source&quot;: &quot;産駒にディープインパクト(TT確定)等TT型多数。CC型産駒の報告なし&quot;,
+      &quot;line&quot;: &quot;サンデーサイレンス系&quot;
+    },
+    {
+      &quot;name&quot;: &quot;ディープインパクト&quot;,
+      &quot;name_en&quot;: &quot;Deep Impact&quot;,
+      &quot;genotype&quot;: &quot;TT&quot;,
+      &quot;confidence&quot;: &quot;confirmed&quot;,
+      &quot;allele_c&quot;: 0.0,
+      &quot;allele_t&quot;: 1.0,
+      &quot;sire&quot;: &quot;サンデーサイレンス&quot;,
+      &quot;dam_sire&quot;: &quot;Alzao&quot;,
+      &quot;avg_win_dist&quot;: 1811,
+      &quot;source&quot;: &quot;画像データ更新 (2026-03-24) - avg_win_dist=1811m&quot;,
+      &quot;line&quot;: &quot;サンデーサイレンス系&quot;
+    },
+    &quot;…（他 227 件）&quot;
+  ],
+  &quot;population_defaults&quot;: {
+    &quot;description&quot;: &quot;ナレッジベースに種牡馬が見つからない場合のデフォルト値&quot;,
+    &quot;japanese_thoroughbred_avg&quot;: {
+      &quot;allele_c&quot;: 0.4,
+      &quot;allele_t&quot;: 0.6
+    },
+    &quot;unknown_mare_avg&quot;: {
+      &quot;allele_c&quot;: 0.45,
+      &quot;allele_t&quot;: 0.55
+    },
+    &quot;note&quot;: &quot;日本のサラブレッド全体ではTアレルが多数派 (約60%)&quot;
+  },
+  &quot;population_statistics&quot;: {
+    &quot;description&quot;: &quot;栗東トレーニングセンター所属馬の遺伝子型分布 (n=433)&quot;,
+    &quot;source&quot;: &quot;LRCスピード遺伝子検査データ&quot;,
+    &quot;all_horses&quot;: {
+      &quot;CC&quot;: 0.17,
+      &quot;CT&quot;: 0.56,
+      &quot;TT&quot;: 0.27
+    },
+    &quot;open_class&quot;: {
+      &quot;CC&quot;: 0.16,
+      &quot;CT&quot;: 0.7,
+      &quot;TT&quot;: 0.14
+    },
+    &quot;note&quot;: &quot;オープンクラス馬ではCT型が70%を占め、競走成績との強い相関を示す&quot;
+  },
+  &quot;key_findings&quot;: [
+    {
+      &quot;date&quot;: &quot;2024-07&quot;,
+      &quot;finding&quot;: &quot;サトノカルナバル(父キタサンブラック)のCC型が遺伝子検査で確定・公表。キタサンブラックのCアレル保有が確定&quot;,
+      &quot;impact&quot;: [
+        &quot;キタサンブラック: TT排除→CT推定&quot;,
+        &quot;ブラックタイド系にもCアレルが存在&quot;
+      ],
+      &quot;reference&quot;: &quot;https://chunichi.co.jp/article/926345&quot;
+    },
+    {
+      &quot;date&quot;: &quot;2024&quot;,
+      &quot;finding&quot;: &quot;ゴールドシップ産駒クエストフォーワンダー&#x27;24にCC型確認。ゴールドシップのTT説否定&quot;,
+      &quot;impact&quot;: [
+        &quot;ゴールドシップ: TT→CT推定&quot;,
+        &quot;ステイゴールド: TT→CT可能性浮上&quot;,
+        &quot;…（他 2 件）&quot;
+      ],
+      &quot;reference&quot;: &quot;https://bbs.animanch.com/board/5293291/&quot;
+    },
+    &quot;…（他 1 件）&quot;
+  ],
+  &quot;update_log&quot;: [
+    {
+      &quot;date&quot;: &quot;2026-03-24&quot;,
+      &quot;version&quot;: &quot;2.3.0&quot;,
+      &quot;changes&quot;: [
+        &quot;画像データから種牡馬情報を大量更新: 50頭更新, 95頭新規追加&quot;,
+        &quot;産駒平均勝利距離データを追加・更新&quot;,
+        &quot;…（他 5 件）&quot;
+      ]
+    },
+    {
+      &quot;date&quot;: &quot;2026-03-24&quot;,
+      &quot;version&quot;: &quot;2.2.0&quot;,
+      &quot;changes&quot;: [
+        &quot;@Plucky_Liege遺伝子検査データ大量追加(https://x.com/Plucky_Liege/status/1946876506543956395)&quot;,
+        &quot;遺伝子検査confirmed馬を29頭追加（画像データから抽出）&quot;,
+        &quot;…（他 8 件）&quot;
+      ]
+    },
+    &quot;…（他 2 件）&quot;
+  ]
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="E02"><td class="id">E02</td><td><b>other_predictor_umauma<br><small>外部予想家の予想</small></b></td><td>自モデルとの突合・検証分析</td><td><b>手動／LLM 補助</b>（note 記事テキスト → 抽出 JSON。取得手順は<b>要確認</b>）</td><td><code>data/research/other_predictor_umauma/</code>（raw_notes / predictions_*.json / articles_manifest.json）</td><td>随時</td><td>開発PC（手動）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON・2 種）</summary><div class="smp-p"><div class="smp-h"><b>_meta.json</b> <span class="smp-src">実データ（この PC）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;source&quot;: &quot;note.com creator yupo1004 (「うまうまー」)&quot;,
+  &quot;source_api&quot;: [
+    &quot;https://note.com/api/v2/creators/yupo1004/contents&quot;,
+    &quot;https://note.com/api/v3/notes/&lt;key&gt;&quot;
+  ],
+  &quot;collected_at&quot;: &quot;2026-09-29&quot;,
+  &quot;n_articles&quot;: 50,
+  &quot;n_races&quot;: 59,
+  &quot;article_range&quot;: &quot;2021-09-09 to 2023-01-12 (23 most recent pre-2025 articles) + 2025-01-10 to 2026-09-25 (all 27 articles from 2025 onward)&quot;,
+  &quot;methodology_version&quot;: 3,
+  &quot;methodology_note&quot;: &quot;v1/v2は note本文の自己申告テキストのみから着順を抽出していたが、v3では各レースの予想印(◉○▲△等)に対応する馬名を実際にnetkeiba.comの結果ページで検索・照合し、確認済みの着順・単勝人気を正解データとして採用している(ユーザー指示: &#x27;レース結果はnote上というよりは実際のネット検索で見つける方が確実&#x27;）。note自身の自己申告文はhit_level_noteの説明にのみ利用し、着順の根拠には使用しない。この切り替えにより、note側の記述だけでは同定できなかった複数レース(阪神ジュベナイルフィリーズ・愛知杯・共同通信杯2022・クイーンカップ2022・京都記念2022等)の的中レベルを確定でき、判定不能(Lv0)は59件中1件(オーシャンステークス、著者が明示的に対象外とした回)まで減少した。&quot;,
+  &quot;files&quot;: {
+    &quot;articles_manifest.json&quot;: &quot;50件の記事メタ情報 (key, title, date, price)&quot;,
+    &quot;raw_notes/&quot;: &quot;note.com APIから取得したHTMLタグ除去後の本文プレーンテキスト。有料記事は課金前プレビュー部分のみ。予想印・馬名の同定に使用（着順の根拠には使用しない）。&quot;,
+    &quot;predictions_raw_extraction.json&quot;: &quot;v1/v2時点の中間出力(article単位、note本文からの抽出)。参考用に保持。&quot;,
+    &quot;predictions_ground_truth.json&quot;: &quot;race単位(59件)の正解データ。honmei・marks_verified（netkeiba確認済み着順・人気）・hit_level(0-8)・データ出所を含む。docs/other_predictor/うまうまー/index.html の集計の元データ。&quot;
+  },
+  &quot;hit_level_schema&quot;: {
+    &quot;8&quot;: &quot;完全的中（順序一致）: 優先順位付き予想の通りに1-2-3着が決まる（1着予想→実際1着、2着予想→実際2着、3着候補→実際3着）。三連単的中相当。&quot;,
+    &quot;7&quot;: &quot;完全的中（順不同）: 3頭以上の印馬が1-2-3着を占めるが、優先順位と着順は一致しない。三連複的中相当。&quot;,
+    &quot;6&quot;: &quot;軸複数的中（本命1着+他1頭）: 本命が1着、かつ他の印馬1頭も3着以内（本命含め2頭馬券内）。&quot;,
+    &quot;5&quot;: &quot;軸的中（本命1着）: 本命が1着、他の印は3着以内に絡まない。&quot;,
+    &quot;4&quot;: &quot;複数的中（本命2-3着+他1頭）: 本命が2着または3着、かつ他の印馬1頭も3着以内（本命含め2頭馬券内）。&quot;,
+    &quot;3&quot;: &quot;単独的中（本命2-3着）: 本命が2着または3着、他の印は絡まない。&quot;,
+    &quot;2&quot;: &quot;ニアピン（本命4-5着）: 本命が4着または5着。&quot;,
+    &quot;1&quot;: &quot;不的中: 本命が6着以下で大敗、または人気決着で穴馬の出番なし。&quot;,
+    &quot;0&quot;: &quot;判定不能/対象外: 本命に該当する印がない、または著者自身がそのレースを分析対象外と明言している（例: オーシャンステークス＝5人気以内での決着のため参考外と著者が明記）。&quot;
+  },
+  &quot;honmei_identification_rule&quot;: [
+    &quot;1. 本文中に◉/◎の記号がある場合はその馬を本命とする。&quot;,
+    &quot;2. 記号がない場合、本文中に明示的な「本命」「本命格」の言及がある馬を本命とする。&quot;,
+    &quot;…（他 3 件）&quot;
+  ],
+  &quot;known_limitations&quot;: [
+    &quot;netkeiba.comの結果ページはWebFetchによるHTML→自然言語要約経由で取得しているため、着順・馬名の取得ミスは複数のクエリ・複数取得での整合性確認で低減しているが、単勝人気の数値等に軽微な誤りが残る可能性がある。&quot;,
+    &quot;ドバイゴールデンシャヒーン・ドバイターフ（2022年、海外G1）はnetkeiba.comでの確認ができず、note自身の記述（複勝率100%継続等）のみに基づく暫定的なhit_levelである（verification_status: unverified_international）。&quot;,
+    &quot;…（他 2 件）&quot;
+  ]
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>articles_manifest.json</b> <span class="smp-src">実データ（この PC）</span></div><div class="smp-n">先頭 2 件に短縮</div><div class="smp-t">リスト（list）</div><pre class="smp"><code>[
+  {
+    &quot;key&quot;: &quot;nd969eb0fe61c&quot;,
+    &quot;title&quot;: &quot;㊗️京成杯AHの穴馬発掘note㊗️(9087文字)&quot;,
+    &quot;date&quot;: &quot;2021-09-09&quot;,
+    &quot;price&quot;: 0
+  },
+  {
+    &quot;key&quot;: &quot;n57d653d08582&quot;,
+    &quot;title&quot;: &quot;㊗️紫苑Sの小言note㊗️&quot;,
+    &quot;date&quot;: &quot;2021-09-10&quot;,
+    &quot;price&quot;: 0
+  },
+  &quot;…（他 48 件）&quot;
+]</code></pre></div></details></td></tr>
+<tr class="ds" data-id="E03"><td class="id">E03</td><td><b>meta/person<br><small>騎手・調教師プロフィール</small></b></td><td>騎手・調教師画面、統計の名寄せ</td><td>生成元スクリプトは<b>要確認</b>（dev にはサンプル 2 件のみ）</td><td><code>data/page_reference/meta/person/</code>（dev は <code>data/calculated_data/meta/person/</code>）</td><td>不明</td><td>不明</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>meta/person/jockey_00001.json</b> <span class="smp-src">実データ（dev にあるサンプル。yearly_stats は空）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;person_id&quot;: &quot;00001&quot;,
+  &quot;type&quot;: &quot;jockey&quot;,
+  &quot;yearly_stats&quot;: [],
+  &quot;_fetched_at&quot;: 1791259743.904757
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="E04"><td class="id">E04</td><td><b>config/settings.yaml</b></td><td>データソース・rate limit・MLflow モデル別 serve URI・feature_policy（リーク防止のホワイトリスト）</td><td><b>手動</b>（git 管理）</td><td><code>config/settings.yaml</code></td><td>変更時</td><td>開発PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>config/settings.yaml（抜粋）</b> <span class="smp-src">設定ファイル（git 管理）</span></div><div class="smp-n">先頭 4 セクションを抜粋。dict に変換して表示</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;project&quot;: {
+    &quot;name&quot;: &quot;ML-AutoPilot Keiba&quot;,
+    &quot;version&quot;: &quot;1.0.0&quot;,
+    &quot;description&quot;: &quot;競馬予測マルチエージェントMLシステム&quot;
+  },
+  &quot;data_source&quot;: {
+    &quot;base_url&quot;: &quot;https://db.netkeiba.com/&quot;,
+    &quot;race_url&quot;: &quot;https://db.netkeiba.com/race/&quot;,
+    &quot;horse_url&quot;: &quot;https://db.netkeiba.com/horse/&quot;,
+    &quot;jockey_url&quot;: &quot;https://db.netkeiba.com/jockey/&quot;,
+    &quot;trainer_url&quot;: &quot;https://db.netkeiba.com/trainer/&quot;,
+    &quot;request_interval_sec&quot;: 1.0
+  },
+  &quot;data_sources&quot;: {
+    &quot;netkeiba&quot;: {
+      &quot;base_url&quot;: &quot;https://db.netkeiba.com/&quot;,
+      &quot;enabled&quot;: true,
+      &quot;urls&quot;: {
+        &quot;race&quot;: &quot;https://db.netkeiba.com/race/&quot;,
+        &quot;horse&quot;: &quot;https://db.netkeiba.com/horse/&quot;,
+        &quot;jockey&quot;: &quot;https://db.netkeiba.com/jockey/&quot;,
+        &quot;trainer&quot;: &quot;https://db.netkeiba.com/trainer/&quot;
+      },
+      &quot;rate_limit&quot;: {
+        &quot;min_interval_sec&quot;: 1.0,
+        &quot;max_interval_sec&quot;: 3.0,
+        &quot;session_request_limit&quot;: 500,
+        &quot;daily_request_limit&quot;: 5000
+      }
+    },
+    &quot;smartrc&quot;: {
+      &quot;base_url&quot;: &quot;https://www.smartrc.jp/&quot;,
+      &quot;enabled&quot;: true,
+      &quot;id_protocol&quot;: &quot;netkeiba_compatible&quot;,
+      &quot;rate_limit&quot;: {
+        &quot;min_interval_sec&quot;: 2.0,
+        &quot;max_interval_sec&quot;: 5.0,
+        &quot;session_request_limit&quot;: 200,
+        &quot;daily_request_limit&quot;: 1000,
+        &quot;cooldown_on_limit_sec&quot;: 60
+      },
+      &quot;retry&quot;: {
+        &quot;max_attempts&quot;: 3,
+        &quot;backoff_factor&quot;: 2.0,
+        &quot;retry_on_status&quot;: [
+          429,
+          503
+        ]
+      },
+      &quot;access_policy&quot;: {
+        &quot;respect_robots_txt&quot;: true,
+        &quot;stop_on_block&quot;: true,
+        &quot;log_path&quot;: &quot;data/meta/logs/smartrc_access.log&quot;
+      }
+    }
+  },
+  &quot;model&quot;: {
+    &quot;task_type&quot;: &quot;classification&quot;,
+    &quot;target_variable&quot;: &quot;finish_position_top3&quot;,
+    &quot;evaluation_metrics&quot;: [
+      &quot;accuracy&quot;,
+      &quot;f1_score&quot;,
+      &quot;…（他 1 件）&quot;
+    ],
+    &quot;test_size&quot;: 0.2,
+    &quot;random_state&quot;: 42,
+    &quot;n_optuna_trials&quot;: 50
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="E05"><td class="id">E05</td><td><b>config/megu_*.json（3 件）</b></td><td>めぐ指数のパータイム v2・条件重み・予測パラメータ</td><td><b>最適化の出力を手動で反映</b>（<code>build_par_time</code>、<code>optimize_condition_weights</code>、<code>optimize_predict</code>）</td><td><code>config/megu_par_time_v2_meta.json</code> ほか（git 管理）</td><td>再チューニング時</td><td>学習PC → git</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>config/megu_predict_params.json</b> <span class="smp-src">設定ファイル（git 管理）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;history_weights&quot;: [
+    0.5,
+    0.25,
+    &quot;…（他 3 件）&quot;
+  ],
+  &quot;condition_weights&quot;: {
+    &quot;w_match&quot;: 1.0,
+    &quot;w_surface_only&quot;: 0.85,
+    &quot;w_distance_only&quot;: 0.4,
+    &quot;w_both&quot;: 0.1
+  },
+  &quot;tuning&quot;: {
+    &quot;par_blend&quot;: 0.0,
+    &quot;ability_bias_sec&quot;: 0.9,
+    &quot;transfer_strength&quot;: 0.0
+  },
+  &quot;meta&quot;: {
+    &quot;model_version&quot;: &quot;v2&quot;,
+    &quot;year_start&quot;: 2024,
+    &quot;year_end&quot;: 2025,
+    &quot;split&quot;: {
+      &quot;train_end&quot;: &quot;2024-12-31&quot;,
+      &quot;valid_end&quot;: &quot;2025-06-30&quot;,
+      &quot;train_sample&quot;: 8000
+    },
+    &quot;baseline&quot;: [
+      {
+        &quot;split&quot;: &quot;train&quot;,
+        &quot;mae&quot;: 17.87398734370701,
+        &quot;rmse&quot;: 39.83208133290066,
+        &quot;mean_spearman&quot;: -0.037074958492310926,
+        &quot;score&quot;: 17.948137260691635,
+        &quot;n_pairs&quot;: 32711,
+        &quot;n_races&quot;: 2993
+      },
+      {
+        &quot;split&quot;: &quot;valid&quot;,
+        &quot;mae&quot;: 21.235689578219148,
+        &quot;rmse&quot;: 66.72082153771905,
+        &quot;mean_spearman&quot;: -0.005439326296839886,
+        &quot;score&quot;: 21.246568230812827,
+        &quot;n_pairs&quot;: 17924,
+        &quot;n_races&quot;: 1637
+      },
+      &quot;…（他 1 件）&quot;
+    ],
+    &quot;optimized&quot;: [
+      {
+        &quot;split&quot;: &quot;train_sample&quot;,
+        &quot;mae&quot;: 15.799562062062062,
+        &quot;rmse&quot;: 41.975479057326936,
+        &quot;mean_spearman&quot;: -0.014739421670076153,
+        &quot;score&quot;: 15.829040905402215,
+        &quot;n_pairs&quot;: 7992,
+        &quot;n_races&quot;: 724
+      },
+      {
+        &quot;split&quot;: &quot;train_full&quot;,
+        &quot;mae&quot;: 15.891314848216197,
+        &quot;rmse&quot;: 38.80735764396245,
+        &quot;mean_spearman&quot;: -0.02051691690521821,
+        &quot;score&quot;: 15.932348682026634,
+        &quot;n_pairs&quot;: 32711,
+        &quot;n_races&quot;: 2993
+      },
+      &quot;…（他 3 件）&quot;
+    ]
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="E06"><td class="id">E06</td><td><b>.env / .env.stg / .env.prod</b></td><td>接続情報・シークレット（GCS 鍵、netkeiba、Cloud SQL、JWT 等）</td><td><b>手動</b>（テンプレ <code>.env*.example</code>。<b>git 管理外</b>）</td><td>リポジトリ直下</td><td>環境構築時</td><td>各環境で個別に作成</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>.env（キー名の例。秘密の値は伏せる）</b> <span class="smp-src">テンプレート .env.example から（値はダミー）</span></div><div class="smp-n">先頭 24 キー。.env 自体は git 管理外</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;KEIBA_ENV&quot;: &quot;dev&quot;,
+  &quot;KEIBA_DEPLOYMENT_LABEL&quot;: &quot;DEV&quot;,
+  &quot;FLASK_ENV&quot;: &quot;development&quot;,
+  &quot;TZ&quot;: &quot;Asia/Tokyo&quot;,
+  &quot;FLASK_PORT&quot;: &quot;5000&quot;,
+  &quot;APP_SECRET_KEY&quot;: &quot;&lt;秘密&gt;&quot;,
+  &quot;JWT_SECRET&quot;: &quot;&lt;秘密&gt;&quot;,
+  &quot;DEV_PASSWORD&quot;: &quot;&lt;秘密&gt;&quot;,
+  &quot;DEV_SECRET_KEY&quot;: &quot;&lt;秘密&gt;&quot;,
+  &quot;MONITOR_PASSWORD&quot;: &quot;&lt;秘密&gt;&quot;,
+  &quot;MONITOR_SECRET_KEY&quot;: &quot;&lt;秘密&gt;&quot;,
+  &quot;DATABASE_URL&quot;: &quot;postgresql+psycopg://keiba_user:keiba_pass@localhost:5432/keiba_db&quot;,
+  &quot;REDIS_URL&quot;: &quot;redis://localhost:6379/0&quot;,
+  &quot;KEIBA_DB_BACKEND&quot;: &quot;local&quot;,
+  &quot;GCS_BUCKET&quot;: &quot;&quot;,
+  &quot;GCS_TYPE&quot;: &quot;service_account&quot;,
+  &quot;GCS_PROJECT_ID&quot;: &quot;&quot;,
+  &quot;GCS_PRIVATE_KEY_ID&quot;: &quot;&lt;秘密&gt;&quot;,
+  &quot;GCS_PRIVATE_KEY&quot;: &quot;&lt;秘密&gt;&quot;,
+  &quot;GCS_CLIENT_EMAIL&quot;: &quot;&quot;,
+  &quot;GCS_CLIENT_ID&quot;: &quot;&quot;,
+  &quot;GCS_CLIENT_CERT_URL&quot;: &quot;&quot;,
+  &quot;KEIBA_QUEUE_BACKEND&quot;: &quot;local&quot;,
+  &quot;MLFLOW_TRACKING_URI&quot;: &quot;http://localhost:5000&quot;
+}</code></pre></div></details></td></tr>
+</table></div>
+<h3 id="cat-F">F. モデル成果物・予測結果</h3><p>モデル一覧とキーは <code>src/pipeline/mlflow/catalog.py</code>（keiba_lgbm / tracking_difficulty / final_odds / pace_predictor が active、finish_order / lap_predictor / lap_lstm が planned）。</p>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>用途</th><th>取得元（URL／手動／生成）</th><th>保存先</th><th>更新・SLA</th><th>書込主体</th></tr>
+<tr class="ds" data-id="F01"><td class="id">F01</td><td><b>models/ ローカル Booster 一式</b></td><td>keiba_lgbm 等のフォールバック推論（git 管理の 5.8MB）</td><td><b>学習の成果物をコミット</b>（<code>keiba_model.pkl</code> / <code>label_encoders.pkl</code> / <code>encoder.json</code> / <code>final_odds_bundle.json</code> / <code>pace_predictor/</code>）</td><td><code>models/</code>（git 管理）</td><td>再学習時</td><td>学習PC → git</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>models/ のファイル</b> <span class="smp-src">実データ（git 管理のモデル成果物）</span></div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>ファイル</th><th>サイズ</th></tr><tr><td>encoder.json</td><td>4,605 B</td></tr><tr><td>final_odds_bundle.json</td><td>4,617,884 B</td></tr><tr><td>keiba_model.pkl</td><td>393,508 B</td></tr><tr><td>label_encoders.pkl</td><td>2,621 B</td></tr><tr><td>pace_predictor/model_1f.txt</td><td>631,397 B</td></tr><tr><td>pace_predictor/model_3f.txt</td><td>403,344 B</td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="F02"><td class="id">F02</td><td><b>models/ensemble/&lt;version&gt;/ ＋ latest.json</b></td><td>本番配信用アンサンブルモデル（学習PC → GCS 公開 → VPS が取得）</td><td><b>生成</b> 学習PCで学習、<code>publish_model</code>（CLI 化は T-005）</td><td>GCS <code>gs://{bucket}/models/ensemble/&lt;version&gt;/</code></td><td>再学習時</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: アンサンブルの公開（publish_model の CLI 化 T-005）が未実装のため、latest.json の実物がありません。</p></details></td></tr>
+<tr class="ds" data-id="F03"><td class="id">F03</td><td><b>MLflow（runs / artifacts / registry）</b></td><td>実験管理・モデルカタログ</td><td><b>生成</b>（学習時に自動記録）</td><td><code>mlflow/data/</code>（Docker サーバ）／<code>mlflow/runs/</code>（ローカル）。どちらも git 管理外</td><td>学習のたび</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: MLflow の runs / artifacts は dev に無く、学習PC で生成されます（形式は MLflow の標準）。</p></details></td></tr>
+<tr class="ds" data-id="F04"><td class="id">F04</td><td><b>race_predictions<br><small>AI 予測結果</small></b></td><td>T-45 予測（win/place/show 確率）・予測画面・馬券最適化</td><td><b>生成</b> <code>trigger_pre_race_predict()</code>（T-15 バンドル完了後）</td><td>GCS <code>…/race_predictions/{年}/{race_id}.json</code>（キャッシュ TTL 24h）</td><td>開催日 T-45／T-15</td><td>VPS（または GCP）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_predictions/2026/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">horses は先頭 2 頭に短縮。スキーマ未定義のため形式は暫定（実データ観測後に確定）</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;model_version&quot;: &quot;dev-mock-v1&quot;,
+  &quot;predicted_at&quot;: &quot;2026-10-06T00:00:00+00:00&quot;,
+  &quot;pace_prediction&quot;: {
+    &quot;pace_category&quot;: &quot;MIDDLE&quot;,
+    &quot;lap_times&quot;: [
+      {
+        &quot;furlong_index&quot;: 1,
+        &quot;predicted_lap_sec&quot;: 13.91
+      },
+      {
+        &quot;furlong_index&quot;: 2,
+        &quot;predicted_lap_sec&quot;: 14.09
+      },
+      &quot;…（他 8 件）&quot;
+    ]
+  },
+  &quot;horses&quot;: [
+    {
+      &quot;horse_id&quot;: &quot;2021100007&quot;,
+      &quot;post_no&quot;: 1,
+      &quot;win_prob&quot;: 0.1818,
+      &quot;win_probability&quot;: 0.1818,
+      &quot;place_prob&quot;: 0.3999,
+      &quot;show_prob&quot;: 0.5199,
+      &quot;place_probability&quot;: 0.5199,
+      &quot;predicted_win_odds&quot;: 5.5,
+      &quot;predicted_place_odds&quot;: 2.5,
+      &quot;expected_win_roi&quot;: 0.57,
+      &quot;expected_show_roi&quot;: 0.37,
+      &quot;predicted_position&quot;: 1,
+      &quot;…&quot;: &quot;他 2 キー&quot;
+    },
+    {
+      &quot;horse_id&quot;: &quot;2022100062&quot;,
+      &quot;post_no&quot;: 2,
+      &quot;win_prob&quot;: 0.1642,
+      &quot;win_probability&quot;: 0.1642,
+      &quot;place_prob&quot;: 0.3612,
+      &quot;show_prob&quot;: 0.4696,
+      &quot;place_probability&quot;: 0.4696,
+      &quot;predicted_win_odds&quot;: 6.1,
+      &quot;predicted_place_odds&quot;: 2.8,
+      &quot;expected_win_roi&quot;: 0.07,
+      &quot;expected_show_roi&quot;: -0.09,
+      &quot;predicted_position&quot;: 2,
+      &quot;…&quot;: &quot;他 2 キー&quot;
+    },
+    &quot;…（他 6 件）&quot;
+  ],
+  &quot;_mock&quot;: true,
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="F05"><td class="id">F05</td><td><b>tracking_difficulty / final_odds_prediction / finish_order_prediction</b></td><td>追走難度・最終オッズ・着順の各予測出力</td><td><b>生成</b>（各予測子）</td><td>GCS <code>…/{category}/{年}/{race_id}.json</code></td><td>開催日</td><td>VPS／学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON・3 種）</summary><div class="smp-p"><div class="smp-h"><b>tracking_difficulty/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">スキーマ未定義のため形式は暫定</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;pace_category&quot;: &quot;high&quot;,
+  &quot;pace_score&quot;: 84.0,
+  &quot;field_difficulty&quot;: 62.4,
+  &quot;entries&quot;: [
+    {
+      &quot;horse_id&quot;: &quot;2021100007&quot;,
+      &quot;post_no&quot;: 1,
+      &quot;horse_name&quot;: &quot;馬1&quot;,
+      &quot;tracking_score&quot;: 51.7,
+      &quot;pace_score&quot;: 77.6,
+      &quot;position_score&quot;: 63.6,
+      &quot;difficulty_rank&quot;: 1,
+      &quot;running_style&quot;: &quot;逃&quot;,
+      &quot;pace_aptitude&quot;: &quot;high&quot;,
+      &quot;corner_positions&quot;: [
+        1,
+        2,
+        &quot;…（他 2 件）&quot;
+      ]
+    },
+    {
+      &quot;horse_id&quot;: &quot;2022100062&quot;,
+      &quot;post_no&quot;: 2,
+      &quot;horse_name&quot;: &quot;馬2&quot;,
+      &quot;tracking_score&quot;: 74.0,
+      &quot;pace_score&quot;: 85.7,
+      &quot;position_score&quot;: 52.2,
+      &quot;difficulty_rank&quot;: 2,
+      &quot;running_style&quot;: &quot;差&quot;,
+      &quot;pace_aptitude&quot;: &quot;slow&quot;,
+      &quot;corner_positions&quot;: [
+        8,
+        7,
+        &quot;…（他 2 件）&quot;
+      ]
+    },
+    &quot;…（他 6 件）&quot;
+  ],
+  &quot;_mock&quot;: true,
+  &quot;_mock_model&quot;: &quot;stg-mock-v1&quot;,
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>final_odds_prediction/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">スキーマ未定義のため形式は暫定</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;model_version&quot;: &quot;dev-mock-v1&quot;,
+  &quot;predictions&quot;: [
+    {
+      &quot;horse_number&quot;: 1,
+      &quot;horse_id&quot;: &quot;2021100007&quot;,
+      &quot;predicted_final_win_odds&quot;: 18.2
+    },
+    {
+      &quot;horse_number&quot;: 2,
+      &quot;horse_id&quot;: &quot;2022100062&quot;,
+      &quot;predicted_final_win_odds&quot;: 22.1
+    },
+    &quot;…（他 6 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>finish_order_prediction/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">スキーマ未定義のため形式は暫定</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;model_version&quot;: &quot;dev-mock-v1&quot;,
+  &quot;predictions&quot;: [
+    {
+      &quot;horse_number&quot;: 1,
+      &quot;horse_id&quot;: &quot;2021100007&quot;,
+      &quot;predicted_rank&quot;: 1
+    },
+    {
+      &quot;horse_number&quot;: 2,
+      &quot;horse_id&quot;: &quot;2022100062&quot;,
+      &quot;predicted_rank&quot;: 2
+    },
+    &quot;…（他 6 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+</table></div>
+<h3 id="cat-G">G. 運用メタ・DB・キュー</h3><p>データそのものではなく、取得・配信を回すための状態。</p>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>用途</th><th>取得元（URL／手動／生成）</th><th>保存先</th><th>更新・SLA</th><th>書込主体</th></tr>
+<tr class="ds" data-id="G01"><td class="id">G01</td><td><b>scrape_queue.json ＋ 状態ファイル</b></td><td>取得ジョブキュー（dev=ローカル JSON、stg/prod は Cloud Tasks 設計）</td><td><b>生成</b>（<code>POST /api/scrape/enqueue</code>、auto_scrape）</td><td><code>data/queue/</code>／Cloud Tasks キュー <code>keiba-scrape-queue</code></td><td>常時</td><td>各環境</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>data/queue/scrape_queue.json の jobs[0]（投入時の正規化結果）</b> <span class="smp-src">コードの正規化結果（ScrapeJobQueue）</span></div><div class="smp-n">実行後は status / started_at / retry_count などが付く。ファイル全体は {&quot;jobs&quot;: [...], &quot;updated_at&quot;: ...}</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;job_kind&quot;: &quot;race&quot;,
+  &quot;target_id&quot;: &quot;202605030211&quot;,
+  &quot;tasks&quot;: [
+    &quot;race_result&quot;
+  ],
+  &quot;dedupe_key&quot;: &quot;race:202605030211:race_result&quot;,
+  &quot;job_label&quot;: &quot;race:202605030211 [race_result]&quot;,
+  &quot;date&quot;: &quot;&quot;,
+  &quot;venue&quot;: &quot;&quot;,
+  &quot;round&quot;: 0,
+  &quot;race_name&quot;: &quot;&quot;,
+  &quot;smart_skip&quot;: false,
+  &quot;overwrite&quot;: false,
+  &quot;priority&quot;: 0,
+  &quot;skip_local_mirror&quot;: false,
+  &quot;skip_pedigree&quot;: false
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="G02"><td class="id">G02</td><td><b>auto_scrape_status.json / structure / not_available</b></td><td>cron 最終実行状態、HTML 構造フィンガープリント、取得不可記録</td><td><b>生成</b>（実行時）</td><td><code>data/local/meta/</code>（資料により <code>data/meta/</code> と揺れ）</td><td>常時</td><td>各環境</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: auto_scrape_status.json は cron 実行後に生成されます（dev にはありません）。</p></details></td></tr>
+<tr class="ds" data-id="G03"><td class="id">G03</td><td><b>ディスク L2 キャッシュ／ローカルミラー</b></td><td>GCS 読み取りの高速化（TTL 2日／12時間）、オフライン研究用コピー</td><td><b>自動</b>（週2回以上参照で書込）／<code>local_mirror_config.json</code></td><td><code>data/cache/</code>、<code>data/local/mirror/</code></td><td>随時</td><td>各環境</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: キャッシュ・ミラーは GCS の JSON と同一内容のコピーです（例は A 群を参照）。</p></details></td></tr>
+<tr class="ds" data-id="G04"><td class="id">G04</td><td><b>PostgreSQL（keiba_db / keiba_db_stg）</b></td><td>GCS → PG の ETL（DEC-025）、ユーザー・馬券等の業務 DB</td><td><b>生成</b> ETL（cron 未設定・手動実行）</td><td>dev：docker <code>localhost:5432</code>／stg・prod：Cloud SQL 1 インスタンス共用（DB 名・ユーザーで分離）</td><td>ETL 手動</td><td>各環境</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>PostgreSQL のテーブル（SQLAlchemy モデルから）</b> <span class="smp-src">コードのモデル定義（src/db/models）</span></div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>テーブル</th><th>列数</th><th>先頭の列</th></tr><tr><td>course_stats_cache</td><td>12</td><td>id, track, distance, surface, track_condition, stat_type, stat_key</td></tr><tr><td>courses</td><td>4</td><td>course_id, course_name, region, created_at</td></tr><tr><td>horse_stats_snapshot</td><td>18</td><td>snapshot_id, horse_id, as_of_race_id, as_of_date, win_rate_all, win_rate_turf, win_rate_dirt</td></tr><tr><td>jockey_stats_snapshot</td><td>9</td><td>snapshot_id, jockey_id, as_of_race_id, as_of_date, win_rate_all, place_rate_all, show_rate_all</td></tr><tr><td>jockeys</td><td>3</td><td>jockey_id, jockey_name, created_at</td></tr><tr><td>megu_condition_transfer</td><td>10</td><td>id, surface_from, surface_to, dist_band_from, dist_band_to, delta_mean, delta_std</td></tr><tr><td>megu_delta_track</td><td>9</td><td>id, date, venue, surface, delta_track_sec, n_races, is_fallback</td></tr><tr><td>megu_index</td><td>14</td><td>id, race_id, horse_id, finish_time_sec, par_time_sec, delta_pace_sec, delta_track_sec</td></tr><tr><td>megu_par_time</td><td>11</td><td>id, distance, course, surface, track_condition, class_bucket, par_time_sec</td></tr><tr><td>megu_regression_params</td><td>7</td><td>id, param_name, param_value, std_error, sample_count, model_version, fitted_at</td></tr><tr><td>prediction_lap_times</td><td>5</td><td>race_id, model_version, furlong_index, predicted_lap_sec, predicted_pace_cat</td></tr><tr><td>prediction_results</td><td>14</td><td>prediction_id, race_id, horse_id, model_version, predicted_at, win_prob, place_prob</td></tr><tr><td>race_corner_positions</td><td>6</td><td>race_id, horse_id, corner_1, corner_2, corner_3, corner_4</td></tr><tr><td>race_lap_times</td><td>4</td><td>race_id, furlong_index, lap_time_sec, cumulative_sec</td></tr><tr><td>race_odds_snapshot</td><td>8</td><td>snapshot_id, race_id, horse_id, snapshot_type, odds_value, odds_place_low, odds_place_high</td></tr><tr><td>race_pace_summary</td><td>6</td><td>race_id, first_3f_sec, last_3f_sec, pace_category, front_runner_count, created_at</td></tr><tr><td>races</td><td>17</td><td>race_id, race_name, course, venue, surface, distance, direction</td></tr><tr><td>scrape_runs</td><td>9</td><td>run_id, target_type, target_id, status, retry_count, started_at, finished_at</td></tr><tr><td>sire_aptitude_cache</td><td>15</td><td>id, sire_name, sire_type, surface, distance_band, track_condition, n_runs</td></tr><tr><td>sires</td><td>4</td><td>sire_id, sire_name, sire_line, created_at</td></tr><tr><td>trainer_stats_snapshot</td><td>9</td><td>snapshot_id, trainer_id, as_of_race_id, as_of_date, win_rate_all, place_rate_all, show_rate_all</td></tr><tr><td>trainers</td><td>3</td><td>trainer_id, trainer_name, created_at</td></tr><tr><td>users</td><td>7</td><td>id, password_hash, created_at, is_member, subscription_status, subscription_expires_at, payjp_customer_id</td></tr><tr><td>horses</td><td>7</td><td>horse_id, horse_name, sex, birth_year, sire_id, dam_sire, created_at</td></tr><tr><td>notification_logs</td><td>6</td><td>id, user_id, race_id, horse_id, sent_at, status</td></tr><tr><td>notification_settings</td><td>6</td><td>id, user_id, email, notify_favorite_race, created_at, updated_at</td></tr><tr><td>saved_analyses</td><td>7</td><td>id, user_id, name, analysis_type, filter_conditions, created_at, last_run_at</td></tr><tr><td>user_favorites</td><td>5</td><td>id, user_id, horse_id, horse_name, created_at</td></tr><tr><td>entries</td><td>12</td><td>entry_id, race_id, horse_id, post_no, bracket_number, jockey_id, trainer_id</td></tr><tr><td>race_results</td><td>10</td><td>result_id, race_id, horse_id, finish_pos, finish_time_sec, margin, last_3f_sec</td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="G05"><td class="id">G05</td><td><b>Redis</b></td><td>キャッシュ・サーキットブレーカー（T-055）</td><td>—</td><td>dev：docker／stg：<code>localhost:6379</code>／prod：VPS の <code>docker-compose.serving.yml</code></td><td>常時</td><td>各環境</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: Redis には整形済みの API レスポンス等が短時間キャッシュされます（キー名は src/api/cache/redis_cache.py）。</p></details></td></tr>
+</table></div>
+<div class="callout"><b>SLA の番号</b>（scrape_process.md）：0=毎日17:00／1=レース前日17:00／2=当日 8:00・8:30・9:00／3=発走10分前／4=発走30分後／5=当日18:00／6=レース後の最初の金曜17:00／7=依存するもの。</div>
+
+<h2 id="matrix">5. 環境別アクセス可否（dev / stg / prod）</h2>
+<p>同じ ID の環境別状況。dev は全データ不要（ただし GCP／VPS は禁止）、stg／prod は到達必須。<b>stg／prod で ✕・△ の行が、要件未達の箇所</b>。</p>
+<h3 id="mat-A">A. 外部サイトから取得する生データ</h3>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>dev（開発PC）</th><th>stg（学習PC）</th><th>prod（GCP＋VPS）</th></tr>
+<tr><td class="id">A01</td><td><b>race_lists</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/page_reference（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">学習PCで取得・保持（local_only）</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">GCS 非対象のため VPS が自前取得（T-038 未着手）するか手動コピーが必要</div></td></tr>
+<tr><td class="id">A02</td><td><b>race_day_schedule</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/page_reference（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">A01 と同様</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">A01 と同様。T-15 ランナー前提（T-009 は mock=True）</div></td></tr>
+<tr><td class="id">A03</td><td><b>race_shutuba</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">RACE_ID=202606020609 で GCS 実在を確認（2026-10-04。prod と同一バケット）</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定で未接続（T-003）。当日取得 cron 未着手（T-038）</div></td></tr>
+<tr><td class="id">A04</td><td><b>race_odds</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可（鍵あり・2026-10-04 接続確認）。prod と同一バケットなので内容も共通。網羅性は未検証</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定で未接続（T-003）。当日取得 cron 未着手（T-038）</div></td></tr>
+<tr><td class="id">A05</td><td><b>race_pair_odds</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可（鍵あり・2026-10-04 接続確認）。prod と同一バケットなので内容も共通。網羅性は未検証</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定で未接続（T-003）。当日取得 cron 未着手（T-038）</div></td></tr>
+<tr><td class="id">A06</td><td><b>race_paddock</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">プレミアム認証は完了済み。GCS 読取可（prod と同一バケット）。網羅性は未検証</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS の IP から netkeiba に接続できるか（遮断の有無）は未試験（T-007）</div></td></tr>
+<tr><td class="id">A07</td><td><b>race_index</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">プレミアム認証は完了済み。GCS 読取可（prod と同一バケット）。網羅性は未検証</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS の IP から netkeiba に接続できるか（遮断の有無）は未試験（T-007）</div></td></tr>
+<tr><td class="id">A08</td><td><b>race_barometer</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">プレミアム認証は完了済み。GCS 読取可（prod と同一バケット）。網羅性は未検証</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS の IP から netkeiba に接続できるか（遮断の有無）は未試験（T-007）</div></td></tr>
+<tr><td class="id">A09</td><td><b>race_trainer_comment</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可（鍵あり・2026-10-04 接続確認）。prod と同一バケットなので内容も共通。網羅性は未検証</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定で未接続（T-003）。当日取得 cron 未着手（T-038）</div></td></tr>
+<tr><td class="id">A10</td><td><b>race_result_on_time</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可（鍵あり・2026-10-04 接続確認）。prod と同一バケットなので内容も共通。網羅性は未検証</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定で未接続（T-003）。当日取得 cron 未着手（T-038）</div></td></tr>
+<tr><td class="id">A11</td><td><b>race_result</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可（鍵あり・2026-10-04 接続確認）。prod と同一バケットなので内容も共通。網羅性は未検証</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定で未接続（T-003）。当日取得 cron 未着手（T-038）</div></td></tr>
+<tr><td class="id">A12</td><td><b>race_result_lap</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">プレミアム認証は完了済み。GCS 読取可（prod と同一バケット）。網羅性は未検証</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS の IP から netkeiba に接続できるか（遮断の有無）は未試験（T-007）</div></td></tr>
+<tr><td class="id">A13</td><td><b>horse_result</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可（鍵あり・2026-10-04 接続確認）。prod と同一バケットなので内容も共通。網羅性は未検証</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定で未接続（T-003）。当日取得 cron 未着手（T-038）</div></td></tr>
+<tr><td class="id">A14</td><td><b>horse_pedigree_5gen</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS＋ローカル 5gen。一括ミラー <code>horse_pedigree_5gen_bulk mirror-local</code> で取得</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定で未接続（T-003）。当日取得 cron 未着手（T-038）</div></td></tr>
+<tr><td class="id">A15</td><td><b>horse_training</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可（鍵あり・2026-10-04 接続確認）。prod と同一バケットなので内容も共通。網羅性は未検証</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定で未接続（T-003）。当日取得 cron 未着手（T-038）</div></td></tr>
+<tr><td class="id">A16</td><td><b>broodmare_mating</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">未着手（T-019）</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">未着手（T-019）</div></td></tr>
+<tr><td class="id">A17</td><td><b>jra_cushion</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">page_reference/cushion に 12KB、旧配置 data/jra_baba に 2020–2026 あり（読取のみ）</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">学習PCで取得可</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">VPS の T-15 取得が前提。含水率は Chromium 未導入で ERROR（2026-06-12 テスト）</div></td></tr>
+<tr><td class="id">A18</td><td><b>smartrc_*</b></td><td class="envc"><span class="b b-na" title="不要/対象外">－</span><div class="note">取得中止</div></td><td class="envc"><span class="b b-na" title="不要/対象外">－</span><div class="note">取得中止</div></td><td class="envc"><span class="b b-na" title="不要/対象外">－</span><div class="note">取得中止</div></td></tr>
+</table></div>
+<h3 id="mat-B">B. 取得済みデータから自動派生するデータ</h3>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>dev（開発PC）</th><th>stg（学習PC）</th><th>prod（GCP＋VPS）</th></tr>
+<tr><td class="id">B01</td><td><b>行固有派生 11 カテゴリ</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可・網羅性未検証（B01 は 2020–2026 で 261,173 件保存と AGENTS.md に記載）</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定（T-003）</div></td></tr>
+<tr><td class="id">B02</td><td><b>requirement_row_trace</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可・網羅性未検証（B01 は 2020–2026 で 261,173 件保存と AGENTS.md に記載）</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定（T-003）</div></td></tr>
+<tr><td class="id">B03</td><td><b>horse_name</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可・網羅性未検証（B01 は 2020–2026 で 261,173 件保存と AGENTS.md に記載）</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定（T-003）</div></td></tr>
+<tr><td class="id">B04</td><td><b>race_detail / race_performance</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可・網羅性未検証（B01 は 2020–2026 で 261,173 件保存と AGENTS.md に記載）</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">データは stg と同一バケット（共通）。VPS は GCS_* 未設定（T-003）</div></td></tr>
+</table></div>
+<h3 id="mat-C">C. 特徴量ストア・学習データセット</h3>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>dev（開発PC）</th><th>stg（学習PC）</th><th>prod（GCP＋VPS）</th></tr>
+<tr><td class="id">C01</td><td><b>race_result_flat.parquet</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置（data/features 空）。不要：dev は MOCK／疑似特徴量ビルダー（乱数, T-004）で代替</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">実データは学習PCに存在（index.html §11 の記載）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">VPS 推論に必要だが GCS/配布経路が未整備（T-001）。現状 VPS に実体なし</div></td></tr>
+<tr><td class="id">C02</td><td><b>base_tbl</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置（data/features 空）。不要：dev は MOCK／疑似特徴量ビルダー（乱数, T-004）で代替</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">実データは学習PCに存在（index.html §11 の記載）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">VPS 推論に必要だが GCS/配布経路が未整備（T-001）。現状 VPS に実体なし</div></td></tr>
+<tr><td class="id">C03</td><td><b>race_tbl / race_horse_tbl / horse_tbl</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置（data/features 空）。不要：dev は MOCK／疑似特徴量ビルダー（乱数, T-004）で代替</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">実データは学習PCに存在（index.html §11 の記載）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">VPS 推論に必要だが GCS/配布経路が未整備（T-001）。現状 VPS に実体なし</div></td></tr>
+<tr><td class="id">C04</td><td><b>race_jockey_tbl / race_trainer_tbl / jockey_tbl / trainer_tbl / jockey_trainer_stats</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置（data/features 空）。不要：dev は MOCK／疑似特徴量ビルダー（乱数, T-004）で代替</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">実データは学習PCに存在（index.html §11 の記載）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">GCS 化が必要（T-001 対象）。cron はローカルファイル出力のみ</div></td></tr>
+<tr><td class="id">C05</td><td><b>target/rank_tbl</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置（data/features 空）。不要：dev は MOCK／疑似特徴量ビルダー（乱数, T-004）で代替</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">実データは学習PCに存在（index.html §11 の記載）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">VPS 推論に必要だが GCS/配布経路が未整備（T-001）。現状 VPS に実体なし</div></td></tr>
+<tr><td class="id">C06</td><td><b>horse/ped_tbl・result_tbl・training_tbl</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置（data/features 空）。不要：dev は MOCK／疑似特徴量ビルダー（乱数, T-004）で代替</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">実データは学習PCに存在（index.html §11 の記載）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">VPS 推論に必要だが GCS/配布経路が未整備（T-001）。現状 VPS に実体なし</div></td></tr>
+<tr><td class="id">C07</td><td><b>layer_a_train / dataset_split_manifest</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置（data/features 空）。不要：dev は MOCK／疑似特徴量ビルダー（乱数, T-004）で代替</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">実データは学習PCに存在（index.html §11 の記載）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">VPS 推論に必要だが GCS/配布経路が未整備（T-001）。現状 VPS に実体なし</div></td></tr>
+</table></div>
+<h3 id="mat-D">D. 血統・研究系データ</h3>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>dev（開発PC）</th><th>stg（学習PC）</th><th>prod（GCP＋VPS）</th></tr>
+<tr><td class="id">D01</td><td><b>horse_pedigree_10gen</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置。不要</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">学習PCで生成・保持（記録上）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">page_reference/calculated_data は手動コピー運用（BUNDLE.md はプレースホルダー）。GCS 化未対応（T-001）</div></td></tr>
+<tr><td class="id">D02</td><td><b>pedigree_10gen(_3view) index</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置。不要</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">学習PCで生成・保持（記録上）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">page_reference/calculated_data は手動コピー運用（BUNDLE.md はプレースホルダー）。GCS 化未対応（T-001）</div></td></tr>
+<tr><td class="id">D03</td><td><b>pedigree_race_index</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置。不要</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">学習PCで生成・保持（記録上）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">page_reference/calculated_data は手動コピー運用（BUNDLE.md はプレースホルダー）。GCS 化未対応（T-001）</div></td></tr>
+<tr><td class="id">D04</td><td><b>note_aptitude_race / role_lift_profiles</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置。不要</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">学習PCで生成・保持（記録上）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">page_reference/calculated_data は手動コピー運用（BUNDLE.md はプレースホルダー）。GCS 化未対応（T-001）</div></td></tr>
+<tr><td class="id">D05</td><td><b>bloodline_meta_cluster（L2/L3）</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置。不要</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">学習PCで生成・保持（記録上）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">page_reference/calculated_data は手動コピー運用（BUNDLE.md はプレースホルダー）。GCS 化未対応（T-001）</div></td></tr>
+<tr><td class="id">D06</td><td><b>クラスタ名称ファイル</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置。不要</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">学習PCで生成・保持（記録上）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">page_reference/calculated_data は手動コピー運用（BUNDLE.md はプレースホルダー）。GCS 化未対応（T-001）</div></td></tr>
+<tr><td class="id">D07</td><td><b>sire_factor_stats / race_quality_priors / maternal_stallion_stage_stats / track_bias_weight_best</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置。不要</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">学習PCで生成・保持（記録上）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">page_reference/calculated_data は手動コピー運用（BUNDLE.md はプレースホルダー）。GCS 化未対応（T-001）</div></td></tr>
+<tr><td class="id">D08</td><td><b>horse_pedigree_factors / horse_aptitude</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">未配置。不要</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">学習PCで生成・保持（記録上）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">page_reference/calculated_data は手動コピー運用（BUNDLE.md はプレースホルダー）。GCS 化未対応（T-001）</div></td></tr>
+<tr><td class="id">D09</td><td><b>growth_curve / tracking_difficulty（calculated_data）</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">growth_curve / tracking_difficulty が data/calculated_data にあり（ls 確認）</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">学習PCで生成・保持（記録上）。個別の充足は未検証</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">page_reference/calculated_data は手動コピー運用（BUNDLE.md はプレースホルダー）。GCS 化未対応（T-001）</div></td></tr>
+</table></div>
+<h3 id="mat-E">E. 手動作成・設定データ</h3>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>dev（開発PC）</th><th>stg（学習PC）</th><th>prod（GCP＋VPS）</th></tr>
+<tr><td class="id">E01</td><td><b>myostatin_genes.json</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">data/calculated_data/knowledge にあり（.gitignore 済み＝git では配布されない）</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">手動コピーが必要</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">配布経路なし（手動コピー）。T-001 対象</div></td></tr>
+<tr><td class="id">E02</td><td><b>other_predictor_umauma</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">data/research/other_predictor_umauma にあり</div></td><td class="envc"><span class="b b-na" title="不要/対象外">－</span><div class="note">不要（分析用）</div></td><td class="envc"><span class="b b-na" title="不要/対象外">－</span><div class="note">不要（分析用）</div></td></tr>
+<tr><td class="id">E03</td><td><b>meta/person</b></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">サンプル 2 件のみ。<b>テスト由来の不正ファイル名</b> <code>jockey_'; DROP TABLE races; --.json</code> が残存</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">学習PCで保持（記録上）</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">配布経路なし（手動コピー）</div></td></tr>
+<tr><td class="id">E04</td><td><b>config/settings.yaml</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">git 管理</div></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">git 管理（T-060 検証済み 2026-10-04）</div></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">git 管理（デプロイで配布）</div></td></tr>
+<tr><td class="id">E05</td><td><b>config/megu_*.json（3 件）</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">git 管理</div></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">git 管理</div></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">git 管理</div></td></tr>
+<tr><td class="id">E06</td><td><b>.env / .env.stg / .env.prod</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">.env のみ。GCS_BUCKET 未設定・GCS 鍵／netkeiba 認証は空（禁止方針を維持）</div></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">GCS 接続確認済み（.env の GCS_PRIVATE_KEY の 1 文字欠落を 2026-10-04 に修復）。<code>.env.stg</code> は要作成（この PC には無い）</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">VPS：GCS_* 未設定（T-003）。<code>DEV_SECRET_KEY</code> 32文字以上が必須（T-010）</div></td></tr>
+</table></div>
+<h3 id="mat-F">F. モデル成果物・予測結果</h3>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>dev（開発PC）</th><th>stg（学習PC）</th><th>prod（GCP＋VPS）</th></tr>
+<tr><td class="id">F01</td><td><b>models/ ローカル Booster 一式</b></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">あるが <code>keiba_model.pkl</code> は特徴量次元の不一致で読めず fallback_heuristic（T-062）</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">同左（2026-10-04 確認）</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">同左（git で配布）。未検証</div></td></tr>
+<tr><td class="id">F02</td><td><b>models/ensemble/&lt;version&gt;/ ＋ latest.json</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">アンサンブル学習（T-006）・publish_model（T-005）とも未実施</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">公開物なし。VPS からの取得経路も未検証</div></td></tr>
+<tr><td class="id">F03</td><td><b>MLflow（runs / artifacts / registry）</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">mlflow/data・runs なし。不要</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note"><code>MLFLOW_TRACKING_URI=localhost:5000</code> 想定。稼働は未検証</div></td><td class="envc"><span class="b b-na" title="不要/対象外">－</span><div class="note">VPS は配信専用（MLflow 不要の設計）</div></td></tr>
+<tr><td class="id">F04</td><td><b>race_predictions</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">モック有：data/dev_mock（make dev-mock）。GCS は遮断</div></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">race_predictions を新規作成し確認（2026-10-04）。既存 3 件は TTL 24h 超過</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note"><code>pre_race_predict_trigger</code> は mock=True（T-009）。確率は固定倍率（place=win×2.2 等）経路も残る</div></td></tr>
+<tr><td class="id">F05</td><td><b>tracking_difficulty / final_odds_prediction / finish_order_prediction</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">tracking_difficulty のみ calculated_data にあり（他は GCS 禁止）</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">GCS 読取可</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">VPS 未接続（T-003）</div></td></tr>
+</table></div>
+<h3 id="mat-G">G. 運用メタ・DB・キュー</h3>
+<div class="wrap"><table><tr><th>ID</th><th>データ</th><th>dev（開発PC）</th><th>stg（学習PC）</th><th>prod（GCP＋VPS）</th></tr>
+<tr><td class="id">G01</td><td><b>scrape_queue.json ＋ 状態ファイル</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">ローカル JSON キュー（<code>KEIBA_QUEUE_BACKEND=local</code>）。data/queue あり</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">設計は Cloud Tasks ＋ Cloud Run Jobs だが、ジョブ側のデプロイ未実施（T-015）。環境タスク上は学習PC が過去分を取得</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">同左。VPS 当日取得 cron は未着手（T-038）</div></td></tr>
+<tr><td class="id">G02</td><td><b>auto_scrape_status.json / structure / not_available</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">data/local/meta に queue 進捗・structure・not_available が少量あり</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">学習PCで生成</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">各ホストで生成</div></td></tr>
+<tr><td class="id">G03</td><td><b>ディスク L2 キャッシュ／ローカルミラー</b></td><td class="envc"><span class="b b-none" title="未配置">空</span><div class="note">data/cache なし。不要</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">随時生成</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">随時生成</div></td></tr>
+<tr><td class="id">G04</td><td><b>PostgreSQL（keiba_db / keiba_db_stg）</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">docker の localhost:5432（Cloud SQL 禁止）</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">Cloud SQL インスタンス未作成（T-016）。DB 名 keiba_db_stg</div></td><td class="envc"><span class="b b-ng" title="未整備">✕</span><div class="note">同一インスタンス未作成（T-016）。GCS→PG 同期の稼働確認は T-017 待ち</div></td></tr>
+<tr><td class="id">G05</td><td><b>Redis</b></td><td class="envc"><span class="b b-ok" title="確認済み">◎</span><div class="note">docker の localhost:6379</div></td><td class="envc"><span class="b b-part" title="一部/MOCK/手動">△</span><div class="note">T-055 の健全 Redis への復旧往復が未確認（Redis 未起動だった）</div></td><td class="envc"><span class="b b-exp" title="設計上可">○</span><div class="note">VPS の docker-compose.serving.yml。未検証</div></td></tr>
+</table></div>
+<h2 id="gaps">6. 要対応ギャップ</h2><ol class="gaps">
+<li><span class="pri p2">解消</span><b>G1 dev の GCP 遮断を強制するガードが無い（2026-10-06 解消）</b><br><code>src/config/gcp_guard.py</code> を各クライアント生成箇所に導入。残課題：<code>KEIBA_ENV</code> 未設定が prod 扱いのため、dev の <code>.env</code> に <code>KEIBA_ENV=dev</code> が無いと遮断されない。未設定時の既定値を変えると既存デプロイに影響するので、<code>.env.example</code> と <code>setup_dev.sh</code> 経由のセットアップで担保している。</li>
+<li><span class="pri p2">前提</span><b>G2 stg と prod は同一の GCS アクセスポイント（バケット・prefix）と Cloud SQL インスタンスを使う</b><br>これは設計上の前提であり、GCS 上のデータは環境で分かれない（学習PC で確認したデータの有無・スキーマ適合は prod にもそのまま当てはまる）。注意点：(1) <b>stg の書き込みはそのまま prod が読むデータになる</b>ため、stg での検証・再取得は上書きに注意する（データヘルスの再取得計画は既定で <code>smart_skip=true・overwrite=false</code>、スキーマ不適合だけ <code>overwrite=true</code>）。(2) 環境ごとに差が出るのは、GCS に<b>到達できるか</b>（サービスアカウント・ネットワーク。VPS は未設定 T-003）と、ローカルの派生データ（特徴量・血統成果物など）。(3) GCS 上のデータの全件検証は<b>どちらか一方（stg）で行えば足りる</b>。prod は到達性と直近分の確認でよい（<a href="DATA_HEALTH.html#env">DATA_HEALTH.html §3</a>）。(4) Cloud SQL は同一インスタンスで DB 名とユーザー（<code>keiba_db</code> / <code>keiba_db_stg</code>）で分離。</li>
+<li><span class="pri p0">P0</span><b>G3 VPS が GCP に未接続</b><br><code>GCS_*</code> 未設定（T-003）、Cloud SQL 未作成（T-016）、netkeiba 試験取得未実施（T-007）。prod の「配信に要るデータ」が現状ほぼ届かない。</li>
+<li><span class="pri p0">P0</span><b>G4 特徴量・血統成果物・page_reference を VPS に届ける経路が無い</b><br>C／D／E01／E03／tables は GCS 対象外か GCS 化未対応（T-001）。<code>data/page_reference/BUNDLE.md</code> はプレースホルダーで、CD にも同期手順が無い。</li>
+<li><span class="pri p1">P1</span><b>G5 モデル公開経路が未完</b><br><code>publish_model</code> CLI 化（T-005）と アンサンブル学習（T-006）が未実施。<code>models/keiba_model.pkl</code> は特徴量次元不一致でロード不可（T-062）、特徴量ビルダーは乱数の疑似実装（T-004）。</li>
+<li><span class="pri p1">P1</span><b>G6 取得の実行場所に関する記述が食い違う</b><br><code>.env.stg/.prod.example</code> は「実行は GCP の Cloud Run Jobs」、<code>environment-tasks.md</code>（2026-10-02 決定）は「学習PC と VPS cron」。A 群の「書込主体」は後者で記載した。</li>
+<li><span class="pri p1">P1</span><b>G7 SmartRC の残骸</b><br>取得中止（DEC-024）だが <code>config/settings.yaml</code> に <code>smartrc_whitelist_features</code> 等が残り、コードも約 20 ファイル（T-034）。特徴量の入力契約として矛盾する。</li>
+<li><span class="pri p2">P2</span><b>G8 文書の食い違い</b><br><code>docs/environment-stg.md</code>／<code>service-endpoints.md</code> は「stg＝本 PC」、本書の定義（stg＝学習PC）と不一致。DEC-023 の「Cloud SQL 廃止」は 2026-10-02 決定（Cloud SQL 共用 1 台）と矛盾。race_lists の SLA も 17:00（要件書）と 07:00（旧リファレンス）で不一致。A05／A09 は旧リファレンスにしか無い。</li>
+<li><span class="pri p2">P2</span><b>G9 dev 上のテスト由来ゴミ</b><br><code>data/calculated_data/meta/person/</code> に <code>jockey_'; DROP TABLE races; --.json</code>。無害だが、ファイル名をそのままクエリに使う処理が無いことの確認と削除を推奨。</li>
+</ol>
+<h2 id="paths">7. パス表記の揺れ（論理パスの読み方）</h2>
+<div class="wrap"><table><tr><th>対象</th><th>表記 1</th><th>表記 2</th><th>正の候補</th></tr>
+<tr><td>特徴量ストア</td><td><code>data/features/</code>（AGENTS.md、build_rank_target の docstring）</td><td><code>data/local/features</code>（<code>feature_layout.py:20</code> の <code>FEATURES_DIR</code>）</td><td>実装＝<code>data/local/features</code></td></tr>
+<tr><td>flat テーブル</td><td><code>data/page_reference/tables</code>（<code>local_tables.py:54</code>）</td><td><code>data/local/tables</code>（build_horse_entity_store の docstring）</td><td>実装＝page_reference</td></tr>
+<tr><td>研究成果物</td><td><code>data/research/…</code></td><td><code>data/local/research/…</code></td><td>要確認</td></tr>
+<tr><td>page_reference</td><td><code>data/page_reference/</code></td><td><code>data/calculated_data/</code>（API の primary read。<code>sync_calculated_data_bundle.py</code> で同期）</td><td>読み取りは calculated_data、配布は page_reference</td></tr></table></div>
+<p>本書の保存先は AGENTS.md の論理パスで記載した。実際の配置は上表の「正の候補」を確認すること。<code>src/config/data_paths.py</code> を SSoT として統一するのが望ましい。</p>
+<h2 id="refs">8. 出典・検証メモ</h2><ul>
+<li>既存データ要件：<code>docs/requirements/data/scrape_process.md</code>（取得 URL・SLA・行固有パス）、<code>docs/html/data/DATASOURCES.html</code>、<code>docs/html/data/data_scraping_storage_reference.html</code>（カテゴリ・キュー・ローカル研究ファイル）、<code>docs/html/data/data_features_reference.html</code>（特徴量ストア）。</li>
+<li>環境・現況：<code>docs/todos/README.md</code> と <code>docs/todos/verify/results/</code>（2026-10-02〜04 学習PC検証）、<code>docs/git_management/todo/environment-tasks.md</code>、<code>docs/operations/vps-gcp-responsibilities.md</code>・<code>deployment-vps-vs-gcp.md</code>、<code>.env*.example</code>、<code>docs/html/index.html</code> §11。</li>
+<li>コードで直接確認：<code>src/scraper/storage.py</code>（CATEGORY_MAP・gcs_enabled）、<code>src/config/data_paths.py</code>、<code>KEIBA_GCS_ENABLED</code> の grep（src・scripts に参照なし）、この PC の <code>.env</code>（キー有無のみ、値は未出力）、<code>ls</code>／<code>du</code>（data/ は約 15MB）。</li>
+<li><b>未検証</b>：stg（学習PC）・prod（VPS／GCP）の実ファイル有無は、この PC からは確認できないため記録上の状況のみ。学習PC で <code>find data/features data/page_reference -maxdepth 2</code> 等を実行して「確認済み」を増やすこと。</li>
+<li><b>要確認</b>：A16 の URL、D06 の名称付与方法、E02／E03 の生成手順、各モデルの学習期間・入力特徴量（<code>docs/html/modeling/</code> を参照）。</li>
+</ul></main></div><script>
+(function(){
+  var rows=document.querySelectorAll('tr.ds');
+  function det(tr){var n=tr.nextElementSibling;return n&&n.classList.contains('sample')?n.querySelector('details'):null;}
+  function set(tr,open){var d=det(tr);if(d){d.open=open;tr.classList.toggle('open',open);}}
+  rows.forEach(function(tr){
+    tr.addEventListener('click',function(e){if(e.target.closest('a'))return;var d=det(tr);if(d)set(tr,!d.open);});
+    var d=det(tr);if(d)d.addEventListener('toggle',function(){tr.classList.toggle('open',d.open);});
+  });
+  var all=document.getElementById('smpAll'),none=document.getElementById('smpNone');
+  if(all)all.onclick=function(){rows.forEach(function(t){set(t,true);});};
+  if(none)none.onclick=function(){rows.forEach(function(t){set(t,false);});};
+})();
+</script>
+</body></html>

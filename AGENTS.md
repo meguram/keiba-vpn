@@ -32,7 +32,7 @@
 
 **ped_tbl 増分**: `python -m src.pipeline.sync_ped_tbl_for_horses --horse-ids …`（ローカル `horse_pedigree_5gen` 参照）。出馬表 `race_shutuba` 保存直後の自動生成は `.env` で `KEIBA_SYNC_PED_TBL_ON_SHUTUBA=1` のときのみ。接木は `KEIBA_PED_TBL_MERGE_GEN5`（未設定時 1）。
 
-**保存前スキーマ検証**: `HybridStorage.save` が `schemas.validate` を必ず実行。`KEIBA_SCHEMA_STRICT` 未設定または `1` で不合格時は GCS 非保存・`SchemaValidationError`（キューは `failure_reason=schema_validation`）。診断のみ許容する場合は `KEIBA_SCHEMA_STRICT=0`。モニター `/monitor` と `GET /api/scrape-jobs` の `schema_validation_failures` を参照。
+**保存前スキーマ検証**: `HybridStorage.save` が `schemas.validate` を必ず実行。**不合格のときは「どの項目がどの値で」を記録する**（`data/local/meta/schema_violations/<category>.jsonl`、拒否したデータ本体は `data/local/quarantine/`、保存した場合は `_meta.schema_validation.violations`）。確認は `python -m src.scraper.schema_violations summary|show`。`KEIBA_SCHEMA_STRICT` 未設定または `1` で不合格時は GCS 非保存・`SchemaValidationError`（キューは `failure_reason=schema_validation`）。診断のみ許容する場合は `KEIBA_SCHEMA_STRICT=0`。モニター `/monitor` と `GET /api/scrape-jobs` の `schema_validation_failures` を参照。
 
 **要件表↔ストレージの行単位整合**: `docs/requirements/data/scrape_process.md` の netkeiba 表は `src/scraper/requirement_row_catalog.py` の `row_id` と対応。参照 JSON は `requirement_row_trace`（GCS `others/`）。発走時刻スナップショットは `race_day_schedule`（`data/page_reference/race_day_schedule/`）。バックフィル: `python3 -m src.scripts.scraping.materialize_requirement_row_traces`。
 
@@ -48,7 +48,11 @@
 ## 環境
 
 - Python: `requirements.txt`、`.env.example` → `.env`（認証はユーザー環境）。
+- **dev（開発PC）は GCP へ一切接続しない**: `.env` に `KEIBA_ENV=dev` が必須（未設定は prod 扱い）。dev では `HybridStorage` が `GCS_BUCKET` を無視して `data/dev_mock/` を読み書きし、GCS・Cloud SQL・Cloud Tasks・BigQuery のクライアント生成は `GcpAccessForbidden`（`src/config/gcp_guard.py`）。モックは `make dev-mock`（`src.scripts.data.make_dev_mock`）で生成し、スキーマ定義済みの**全カテゴリ**にスキーマ適合のサンプルを持つ（派生 11 カテゴリは本番と同じ `row_data_extractor` で生成。新スキーマを足したらモック生成も足す。`tests/scraper/test_dev_mode.py` が検出）。テストは `tests/conftest.py` が `KEIBA_ENV` を空にして CI と同条件で走らせる（dev の挙動テストは `tests/scraper/test_dev_mode.py`）。
 - テスト一式: リポジトリルートで `make test`（内部で `.github/workflows/ci.yml` と同じ pytest 実行順序・除外設定を再現。DB/Redis 未起動でも大半は動く）。Makefile を使わない場合は `python3 -m pytest tests/ --ignore=tests/scraper/manual --ignore=tests/research/manual`
+- **スキーマ**: 正本は `src/scraper/schema_defs.json`（git 管理・全環境同一）。実データからの再構成は `python -m src.scraper.schema_infer collect|report|apply`（観測プロファイル `docs/requirements/data/schemas/observed/` も git 管理。dev のモックは推論に使わない）。新カテゴリを `CATEGORY_MAP` に足したら、スキーマか `no_schema_reason` を必ず追加（`tests/scraper/test_schema_infer.py` が検出）。
+- **stg の受け入れ判定（2020 年以降が全件揃い、スキーマに適合）**: `bash docs/todos/verify/stg_data_complete.sh`（= `KEIBA_ENV=stg python -m src.data_health --require-complete`。未達は終了コード 3）。
+- **データ存在チェック／ヘルスチェック**: `make data-health`（= `python -m src.data_health`。stg は `KEIBA_ENV=stg make data-health`）。環境別の要件は `src/data_health/spec.py`、出力は `{latest.html,latest.json,scrape_plan.json,history.jsonl}`（不足期間のヒートマップ・インフラ疎通・スクレイピング計画）。2020 年以降の全データについて**スキーマ適合（健全性）**まで検証し（`DATA_HEALTH_VALIDATE=full` 既定。台帳で差分のみ再検証、1 回の download 件数は `DATA_HEALTH_VALIDATE_BUDGET`）、race_id ↔ 開催日・場・R・レース名のキーテーブル（`race_keys.csv`）と、不足・不適合・未検証の race_id 配列（`race_ids/*.txt`）を出す。設定は `DATA_HEALTH_*`（`src/data_health/config.py`、`.env.example` 末尾）・`--env`、結果は環境別に `data/local/meta/data_health/<環境キー>/` へ保存し全環境の一覧は同 `index.html`（他 PC の結果は `--import`）。テスト: `tests/data_health/`。
 - 騎手・調教師統計のマージキー検証: `python3 -m unittest tests.pipeline.test_jockey_trainer_stats -v`
 - netkeiba 実 HTML を叩く手動スモーク（unittest 対象外）: `tests/scraper/manual/netkeiba_horse_page_smoke.py`, `tests/scraper/manual/netkeiba_speed_index_smoke.py`
 - 血統メタクラスタの手動検証（unittest 対象外）: `tests/research/manual/verify_*.py`。バックテスト・仮説検証バッチ: `src/research/pedigree/backtest_*.py`, `*_evidence.py`（中間 Parquet は `data/analysis/pedigree/`）

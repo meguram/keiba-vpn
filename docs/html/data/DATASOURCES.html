@@ -319,7 +319,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </tbody>
 </table>
 <blockquote>
-<p><strong>認証「要」</strong>: netkeiba プレミアム会員のログインが必要です。認証情報は <code>.env</code> の <code>netkeiba_id</code> / <code>netkeiba_pw</code> で管理します。</p>
+<p><strong>認証「要」</strong>: netkeiba プレミアム会員のログインが必要です（<b>認証は完了している前提</b>）。認証情報は <code>.env</code> の <code>netkeiba_id</code> / <code>netkeiba_pw</code> で管理します。</p>
 </blockquote>
 <h3 id="smartrc-smartrcjp">SmartRC (smartrc.jp)</h3>
 <table>
@@ -535,7 +535,7 @@ APIのアドレス（ベース）: <code>https://www.smartrc.jp/v3/smartrc.php/{
 </tbody>
 </table>
 <hr />
-<h2 id="_3">ストレージ構成</h2>
+<h2 id="_3">ストレージ構成</h2><p><b>GCS のアクセスポイント（バケット・prefix）は stg と prod で同一</b>です（dev は GCS に接続しない）。</p>
 <h3 id="gcs-source-of-truth">Google Cloud Storage（GCS）— 正データ置き場</h3>
 <pre><code>gs://{BUCKET}/chuou/data/
   ├── race_result/{race_id}.json       # レース結果

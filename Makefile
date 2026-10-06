@@ -1,4 +1,4 @@
-.PHONY: setup-dev setup-stg setup-prod \
+.PHONY: setup-dev dev-mock dev-mock-clean data-health setup-stg setup-prod \
 	db-up db-down db-migrate db-reset \
 	stg-migrate \
 	test test-frontend test-all \
@@ -9,6 +9,9 @@ help:
 	@echo ""
 	@echo "  [dev]"
 	@echo "  setup-dev    .env コピー + Docker 起動 + DB マイグレーション (初回)"
+	@echo "  dev-mock     dev 用モックデータを生成 (data/dev_mock と page_reference。GCS 不要)"
+	@echo "  dev-mock-clean  生成済みモックのみ削除"
+	@echo "  data-health  データ存在チェック/ヘルスチェック (現在の KEIBA_ENV。stg/prod は KEIBA_ENV=stg make data-health)"
 	@echo "  db-up        Docker コンテナ起動 (PostgreSQL:5432 / Redis:6379)"
 	@echo "  db-down      Docker コンテナ停止"
 	@echo "  db-migrate   alembic upgrade head (dev)"
@@ -30,6 +33,15 @@ help:
 
 setup-dev:
 	@bash scripts/setup_dev.sh
+
+dev-mock:
+	python3 -m src.scripts.data.make_dev_mock
+
+dev-mock-clean:
+	python3 -m src.scripts.data.make_dev_mock --clean
+
+data-health:
+	python3 -m src.data_health
 
 db-up:
 	docker compose -f docker-compose.dev.yml up -d

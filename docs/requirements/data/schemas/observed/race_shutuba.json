@@ -1,0 +1,589 @@
+{
+ "category": "race_shutuba",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "202309030811",
+  "min": "202309030811"
+ },
+ "lists": {
+  "entries": {
+   "fields": {
+    "bracket_number": {
+     "empty": 0,
+     "max": 8,
+     "min": 1,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "dam_sire": {
+     "empty": 17,
+     "len_max": 0,
+     "len_min": 0,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "empty": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {
+      "": 17
+     },
+     "values_overflow": false
+    },
+    "horse_id": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "digits10": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_name": {
+     "empty": 0,
+     "len_max": 9,
+     "len_min": 3,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "text": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {
+      "アスクビクターモア": 1,
+      "イクイノックス": 1,
+      "カラテ": 1,
+      "ジェラルディーナ": 1,
+      "ジオグリフ": 1,
+      "ジャスティンパレス": 1,
+      "スルーセブンシーズ": 1,
+      "ダノンザキッド": 1,
+      "ディープボンド": 1,
+      "ドゥラエレーデ": 1,
+      "ブレークアップ": 1,
+      "プラダリア": 1,
+      "ボッケリーニ": 1,
+      "モズベッロ": 1,
+      "ユニコーンライオン": 1,
+      "ライラック": 1,
+      "ヴェラアズール": 1
+     },
+     "values_overflow": false
+    },
+    "horse_number": {
+     "empty": 0,
+     "max": 17,
+     "min": 1,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "jockey_id": {
+     "empty": 0,
+     "len_max": 5,
+     "len_min": 5,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "digits5": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "jockey_name": {
+     "empty": 0,
+     "len_max": 5,
+     "len_min": 1,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "text": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {
+      "ルメール": 1,
+      "北村友": 1,
+      "和田竜": 1,
+      "坂井": 1,
+      "岩田望": 1,
+      "川田": 1,
+      "幸": 1,
+      "松山": 1,
+      "横山武": 1,
+      "武豊": 1,
+      "池添": 1,
+      "浜中": 1,
+      "菅原明": 1,
+      "菱田": 1,
+      "角田河": 1,
+      "鮫島駿": 1,
+      "Ｍデムーロ": 1
+     },
+     "values_overflow": false
+    },
+    "jockey_weight": {
+     "empty": 0,
+     "max": 58.0,
+     "min": 53.0,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "odds": {
+     "empty": 0,
+     "max": 0.0,
+     "min": 0.0,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "popularity": {
+     "empty": 0,
+     "max": 0,
+     "min": 0,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "sex_age": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 2,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "text": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {
+      "牝4": 1,
+      "牝5": 2,
+      "牡3": 1,
+      "牡4": 5,
+      "牡5": 2,
+      "牡6": 2,
+      "牡7": 4
+     },
+     "values_overflow": false
+    },
+    "sire": {
+     "empty": 17,
+     "len_max": 0,
+     "len_min": 0,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "empty": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {
+      "": 17
+     },
+     "values_overflow": false
+    },
+    "trainer_id": {
+     "empty": 0,
+     "len_max": 5,
+     "len_min": 5,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "digits5": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "trainer_name": {
+     "empty": 0,
+     "len_max": 3,
+     "len_min": 2,
+     "n": 17,
+     "null": 0,
+     "patterns": {
+      "text": 17
+     },
+     "types": {
+      "str": 17
+     },
+     "values": {
+      "吉岡": 1,
+      "大久保": 1,
+      "安田隆": 1,
+      "尾関": 1,
+      "斉藤崇": 1,
+      "木村": 2,
+      "杉山晴": 1,
+      "森田": 1,
+      "池江": 1,
+      "池添": 2,
+      "渡辺": 1,
+      "田村": 1,
+      "相沢": 1,
+      "矢作": 1,
+      "辻野": 1
+     },
+     "values_overflow": false
+    },
+    "weight": {
+     "empty": 0,
+     "max": 538,
+     "min": 430,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "weight_change": {
+     "empty": 0,
+     "max": 4,
+     "min": -8,
+     "n": 17,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17
+     },
+     "values": {},
+     "values_overflow": false
+    }
+   },
+   "items": 17,
+   "records": 1
+  }
+ },
+ "nested": {},
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  }
+ ],
+ "top": {
+  "course_type": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "date": {
+   "empty": 0,
+   "len_max": 10,
+   "len_min": 10,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "date-iso": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "direction": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "右": 1
+   },
+   "values_overflow": false
+  },
+  "distance": {
+   "empty": 0,
+   "max": 2200,
+   "min": 2200,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "entries": {
+   "empty": 0,
+   "len_max": 17,
+   "len_min": 17,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "field_size": {
+   "empty": 0,
+   "max": 17,
+   "min": 17,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "grade": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "OP": 1
+   },
+   "values_overflow": false
+  },
+  "race_class": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "サラ系３歳以上 オープン": 1
+   },
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits12": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_name": {
+   "empty": 0,
+   "len_max": 4,
+   "len_min": 4,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "宝塚記念": 1
+   },
+   "values_overflow": false
+  },
+  "round": {
+   "empty": 0,
+   "max": 11,
+   "min": 11,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "start_time": {
+   "empty": 0,
+   "len_max": 5,
+   "len_min": 5,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "time-hhmm": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "surface": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "芝": 1
+   },
+   "values_overflow": false
+  },
+  "track_condition": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "良": 1
+   },
+   "values_overflow": false
+  },
+  "venue": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "阪神": 1
+   },
+   "values_overflow": false
+  },
+  "weather": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "曇": 1
+   },
+   "values_overflow": false
+  },
+  "weight_rule": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "定量": 1
+   },
+   "values_overflow": false
+  }
+ }
+}
