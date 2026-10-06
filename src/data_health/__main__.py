@@ -44,7 +44,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--quiet", action="store_true", help="コンソール要約を出さない")
     ap.add_argument("--now", help="現在時刻を固定（YYYY-MM-DDTHH:MM, JST。テスト用）")
     ap.add_argument("--import", dest="import_path", metavar="LATEST_JSON", help="他 PC の latest.json を環境別ディレクトリへ取り込む")
-    ap.add_argument("--index-only", action="store_true", help="全環境の一覧（index.html）だけ作り直す")
+    ap.add_argument("--index-only", action="store_true", help="全環境の一覧（index.html）とダッシュボード（dashboard.html）だけ作り直す")
+    ap.add_argument("--dashboard", action="store_true", help="ダッシュボード(dashboard.html)を作り直して場所を表示（チェックは実行しない）")
     args = ap.parse_args(argv)
 
     from src.config.deployment import keiba_env
@@ -66,17 +67,32 @@ def main(argv: list[str] | None = None) -> int:
         print(f"取り込みました: {res['key']}（{'最新として反映' if res['latest_updated'] else '既存の方が新しいため履歴のみ'}）")
         print(f"一覧: {store.base_dir(cfg.out_dir) / 'index.html'}")
         return 0
-    if args.index_only:
-        print(f"一覧を更新しました: {store.rebuild_index(store.base_dir(cfg.out_dir))['html']}")
+    if args.index_only or args.dashboard:
+        idx = store.rebuild_index(store.base_dir(cfg.out_dir))
+        print(f"一覧を更新しました: {idx['html']}\nダッシュボード（ブラウザで開く。サーバ不要・自動更新）: {idx['dashboard']}")
         return 0
 
     now = datetime.fromisoformat(args.now).replace(tzinfo=JST) if args.now else None
-    report = run_health(settings=cfg, now=now, infra=not args.no_infra, horses=not args.no_horses,
-                        include_optional_in_plan=args.include_optional, actual_env=keiba_env())
-    paths = store.save(report, cfg.out_dir)
+    from src.data_health import dashboard
+
+    base, key = store.base_dir(cfg.out_dir), store.env_key(cfg.env, keiba_env())
+
+    def progress(phase, done=None, total=None, detail=""):      # ダッシュボードに「実行中」を出す
+        dashboard.write_run_status(base, key, phase, done, total, detail)
+
+    progress("データチェックを開始")
+    try:
+        report = run_health(settings=cfg, now=now, infra=not args.no_infra, horses=not args.no_horses,
+                            include_optional_in_plan=args.include_optional, actual_env=keiba_env(), progress=progress)
+        paths = store.save(report, cfg.out_dir)
+    except BaseException:
+        dashboard.finish_run_status(base, key, "失敗（中断）")
+        raise
+    dashboard.finish_run_status(base, key, "完了", detail=f"総合判定 {report['summary']['overall']}")
     if not args.quiet:
         print(render_text(report))
-        print(f"\nレポート: {paths['html']}\n計画  : {paths['plan']}\n一覧  : {paths['index']}")
+        print(f"\nレポート: {paths['html']}\n計画  : {paths['plan']}\n一覧  : {paths['index']}\n"
+              f"ダッシュボード（ブラウザで開く。サーバ不要・約30秒ごとに自動更新）: {paths['dashboard']}")
     comp = report["completeness"]
     if args.require_complete or not args.quiet:
         print(f"\n完全性（{comp['scope']}）: " + ("OK ─ 対象範囲のすべてが揃い、スキーマに適合" if comp["complete"] else

@@ -30,7 +30,7 @@ def run_health(*, env: str | None = None, storage: Any = None, now: datetime | N
                since: date | None = None, until: date | None = None, root: Path = ROOT,
                infra: bool = True, include_optional_in_plan: bool = False, dev_root: Path | None = None,
                horses: bool = True, settings: Settings | None = None, actual_env: str | None = None,
-               ledger_dir: Path | None = None) -> dict[str, Any]:
+               ledger_dir: Path | None = None, progress: Any = None) -> dict[str, Any]:
     """``env`` は評価する要件プロファイル、``actual_env`` は実際の実行環境（GCP 遮断・接続可否を決める）。"""
     actual = actual_env or keiba_env()
     env = env or (settings.env if settings else None) or actual
@@ -40,12 +40,16 @@ def run_health(*, env: str | None = None, storage: Any = None, now: datetime | N
         if ledger_dir is None and settings is not None:
             ledger_dir = store.base_dir(cfg.out_dir) / store.env_key(env, actual) / "ledger"
         return _run(env, actual, storage, now, since, until, root, infra, include_optional_in_plan, dev_root, horses,
-                    cfg, levels, ledger_dir)
+                    cfg, levels, ledger_dir, progress)
 
 
 def _run(env: str, actual: str, storage: Any, now: datetime | None, since: date | None, until: date | None,
          root: Path, infra: bool, include_optional_in_plan: bool, dev_root: Path | None, horses: bool,
-         cfg: Settings, levels: dict[str, str], ledger_dir: Path | None) -> dict[str, Any]:
+         cfg: Settings, levels: dict[str, str], ledger_dir: Path | None, progress: Any = None) -> dict[str, Any]:
+    def step(phase: str, done: int | None = None, total: int | None = None, detail: str = "") -> None:
+        if progress is not None:
+            progress(phase, done, total, detail)
+
     now = now or datetime.now(JST)
     since = since or cfg.since
     until = until or cfg.until
@@ -73,11 +77,13 @@ def _run(env: str, actual: str, storage: Any, now: datetime | None, since: date 
     for needed in ("race_shutuba", "race_result"):
         if needed not in cats:
             cats.append(needed)
+    step("格納状況の一覧を取得（GCS の list）")
     present = V.collect_presence(storage, cats, years)
     beyond = {rid for rid, row in keytable.rows.items() if (row.get("date") or "") > until_ymd}      # 評価期間より後のレース
     health, vstats = schema_check.validate_scope(
         env, storage, present, mode=cfg.validate, sample=cfg.schema_sample, budget=cfg.validate_budget,
-        workers=cfg.validate_workers, ledger_dir=ledger_dir, keytable=keytable, skip_keys=beyond)
+        workers=cfg.validate_workers, ledger_dir=ledger_dir, keytable=keytable, skip_keys=beyond, progress=progress)
+    step("集計・計画の作成")
     keytable.save()                                            # 検証の副産物（日付・場・R・レース名）を保存
     universe_all = V.build_universe(cal, present, years, infer=(actual != "dev" and env != "dev"), keytable=keytable)
     universe = {rid: r for rid, r in universe_all.items() if not (r.date and r.date > until_ymd)}
@@ -216,6 +222,8 @@ def build_findings(r: dict[str, Any]) -> list[dict]:
                     f"{top.get('field')} [{top.get('rule')}] {vals}",
                     "hint": "python -m src.scraper.schema_violations summary ／ 隔離データは data/local/quarantine/"})
     for a in r["calendar"]["anomalies"][:20]:
+        if env == "dev" and a["problem"].startswith("race_lists 不完全"):     # dev のモックは 1 日 8 レースと小さく、取得もできないので対象外
+            continue
         out.append({"severity": "info" if env == "dev" else "warn", "area": "カレンダー",
                     "message": f"{a['date']}: {a['problem']}", "hint": "race_list を再取得"})
     out.sort(key=lambda f: -_rank(f["severity"]))

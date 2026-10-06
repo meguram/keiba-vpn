@@ -204,11 +204,15 @@ RESUME=1 CLEAR_PAUSE=1 MAX_JOBS=10 bash docs/todos/verify/stg_scrape_missing.sh
 ```bash
 # 学習PC
 ls data/local/meta/data_health/stg/latest.json
-# 開発PC（latest.json を scp 等で持ち込み。GCP には触れない）
-python3 -m src.data_health --import ~/Downloads/stg_latest.json
-# → data/local/meta/data_health/index.html に stg の最新結果と推移が並ぶ
+# 開発PC（結果ディレクトリごと scp 等で持ち込み。GCP には触れない。latest.json 単体でも取り込めるが概要のみ）
+python3 -m src.data_health --import ~/Downloads/stg/
+# → data/local/meta/data_health/index.html と dashboard.html に stg の最新結果と推移が並ぶ
 ```
 
+- **ダッシュボードで見る**: 学習PC・開発PCとも `data/local/meta/data_health/dashboard.html` をブラウザで開くだけ（サーバ不要）。dev / stg(=prod) をタブで切り替え、ヒートマップのセルをクリックすると該当のレース一覧に絞り込まれる。
+  手順 4・5 の実行中は、健全性の検証やスクレイピングの進捗が自動で表示される（画面は約 30 秒ごとに自動更新。更新されるのは**チェックを実行した時点の結果**で、ブラウザから GCS は見ない）。
+  開発PCで stg のレース単位まで見るには、`latest.json` 単体ではなく**結果ディレクトリごと**取り込む: `python3 -m src.data_health --import ~/Downloads/stg/`（`race_keys.csv`・`access_restriction.json`・`scrape_runs/` も入る）。
+  常に新しく保ちたい場合は cron で `DATA_HEALTH_VALIDATE=sample python3 -m src.data_health` を定期実行する。
 - VPS（prod）は GCS が**同一**なので全件検証は不要。到達性と直近分だけ確認する（別 TODO: VPS の `GCS_*` 設定 T-003 のあと）:
   `KEIBA_ENV=prod DATA_HEALTH_VALIDATE=sample python3 -m src.data_health`
 
@@ -237,7 +241,7 @@ python3 -m src.data_health --import ~/Downloads/stg_latest.json
 - [ ] 手順 4: `race_ids/` に `missing_*` / `invalid_*` / `unvalidated_*` が無い（または対応済みの記録がある）
 - [ ] 手順 5: ドライラン → 少数実行（`MAX_JOBS=20`）で取得・再チェックの流れを確認し、本実行で完全性 OK になった（残りがあれば理由を記録）
 - [ ] 手順 5-A: アクセス制限の疑いが出た場合は、即終了 → 再開手順で続きを実行できた（出なかった場合は未確認として記録）
-- [ ] 手順 6: stg の結果を開発PCの `index.html` に取り込んだ
+- [ ] 手順 6: stg の結果を開発PCの `index.html`・`dashboard.html` に取り込んだ
 
 ## 4. 既知の制約（この検証で分からないこと）
 

@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>データ格納状況ダッシュボード</title>
+<style>
+:root{--bg:#0f172a;--panel:#15213c;--border:#243358;--text:#e6ecff;--muted:#9aa7c7;--acc:#7aa9ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 "Noto Sans JP",system-ui,sans-serif}
+a{color:var(--acc)}code{background:#1a2748;border:1px solid var(--border);border-radius:5px;padding:0 5px;font-size:12px}
+header{position:sticky;top:0;z-index:5;background:#0b1226;border-bottom:1px solid var(--border);padding:10px 24px}
+header h1{font-size:17px;margin:0 16px 0 0;display:inline-block}
+.tabs{display:inline-flex;gap:6px;flex-wrap:wrap;vertical-align:middle}
+.tab{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:4px 12px;cursor:pointer;font-size:13px}
+.tab.on{background:#1f3a78;border-color:var(--acc)}
+.tab .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.meta{color:var(--muted);font-size:12px;margin-top:4px}
+main{padding:18px 24px 80px;max-width:1500px}
+h2{font-size:16px;margin:26px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px}.card b{font-size:22px;display:block}
+.card small{color:var(--muted)}
+.wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin:8px 0}
+table{border-collapse:collapse;width:100%;background:var(--panel);font-size:12.5px}
+th,td{padding:5px 9px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;white-space:nowrap}
+th{background:#1a2748;color:var(--muted);font-size:11px;position:sticky;top:0}
+td.wrapn{white-space:normal}
+.b{display:inline-block;min-width:46px;text-align:center;border-radius:6px;padding:0 7px;font-weight:700;font-size:11px}
+.ok{background:#12452f;color:#5ff0a2}.warn{background:#55400f;color:#ffd166}.fail{background:#5a1a24;color:#ff8a98}.info{background:#163a6b;color:#8ec1ff}.skip{background:#2a3350;color:#9aa7c7}
+.banner{border-radius:10px;padding:10px 14px;margin:10px 0;border:1px solid}
+.banner.bad{background:#3a1420;border-color:#ff8a98}.banner.good{background:#0f2e22;border-color:#5ff0a2}.banner.note{background:#1a2748;border-color:var(--border)}
+.chip{display:inline-block;width:20px;text-align:center;border-radius:4px;font-size:11px;font-weight:700;margin-right:2px}
+.c-h{background:#12452f;color:#5ff0a2}.c-p{background:#1d3b2c;color:#9fe6bf}.c-i{background:#5a1a24;color:#ff8a98}.c-u{background:#55400f;color:#ffd166}
+.c-m{background:#7a1f2c;color:#ffb3bd}.c-w{background:#163a6b;color:#8ec1ff}.c-n{background:#2a3350;color:#9aa7c7}.c-x{background:#1a2748;color:#555}
+.hm td.c{text-align:center;cursor:pointer;min-width:84px;font-variant-numeric:tabular-nums}.hm td.c:hover{outline:2px solid var(--acc)}
+.g0{background:#12452f;color:#bff5d8}.g1{background:#55400f;color:#ffe29a}.g2{background:#5a1a24;color:#ffc2cb}.gn{background:#1d2742;color:#6f7ba0}
+.sub{color:var(--muted);font-size:11px;display:block}
+.bar{height:8px;background:#1d2742;border-radius:4px;overflow:hidden;margin-top:4px}.bar i{display:block;height:100%;background:#4f8bff}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+select,input,button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:12.5px}
+button{cursor:pointer}button:hover{border-color:var(--acc)}
+details{margin:6px 0}summary{cursor:pointer;color:var(--acc);font-size:13px}
+.toggle button.on{background:#1f3a78;border-color:var(--acc)}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+.pager{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>データ格納状況</h1><span class="tabs" id="tabs"></span>
+  <div class="meta" id="meta"></div>
+  <div id="runstatus"></div>
+</header>
+<main id="main"><div class="empty">読み込み中…</div></main>
+
+<script src="dashboard_data.js"></script>
+<script src="run_status.js"></script>
+<script>
+"use strict";
+/* サーバ不要のダッシュボード。dashboard_data.js（結果）と run_status.js（実行中の進捗）を読み、定期的に読み直す。 */
+var CODE_LABEL = {h:"健全", p:"存在", i:"不適合", u:"未検証", m:"不足", w:"待機", n:"取得不可"};
+var CHIP = {h:"健", p:"在", i:"不", u:"未", m:"欠", w:"待", n:"除"};
+var BAD = {i:1, u:1, m:1};
+var QS = new URLSearchParams(location.search), DATA_REFRESH_MS = +QS.get("refresh") || 30000, STATUS_REFRESH_MS = Math.min(3000, DATA_REFRESH_MS), PAGE = 100;   // ?refresh=ミリ秒 で更新間隔を変えられる
+var S = {tab: null, gran: "month", period: "", cat: "", state: "bad", venue: "", q: "", page: 0, open: {}};
+
+function D(){ return window.__DATA_HEALTH__ || {envs: []}; }
+function esc(v){ return String(v == null ? "" : v).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function badge(st){ var m = {ok:"OK", warn:"WARN", fail:"FAIL", info:"INFO", skip:"SKIP"}; return '<span class="b ' + st + '">' + (m[st] || st) + "</span>"; }
+function lastTab(){ try { return localStorage.getItem("dh-tab"); } catch (e) { return null; } }
+function curEnv(){ var e = D().envs; for (var i = 0; i < e.length; i++) if (e[i].key === S.tab) return e[i]; return e[0]; }
+
+/* ── 純粋関数（テストから直接呼ぶ）────────────────────────────────── */
+function okTotal(v){ var ok = (v.present||0) + (v.healthy||0); return [ok, ok + (v.invalid||0) + (v.unvalidated||0) + (v.missing||0)]; }
+function periodOf(row){ var d = row[1]; return d ? d.slice(0,4) + "-" + d.slice(4,6) : row[0].slice(0,4) + "-??"; }
+function colIndex(races){ var m = {}; races.columns.forEach(function(c, i){ m[c] = i; }); return m; }
+function filterRows(env, f){
+  var r = env.races; if (!r) return [];
+  var ci = colIndex(r), cats = r.columns.slice(r.fixed), out = [];
+  var want = (f.state && f.state !== "all" && f.state !== "bad") ? f.state : null;
+  r.rows.forEach(function(row){
+    if (f.period){ var p = periodOf(row); if (f.period.length === 4 ? p.slice(0,4) !== f.period : p !== f.period) return; }
+    if (f.venue && row[ci.venue] !== f.venue) return;
+    if (f.q){ var q = f.q.toLowerCase(); if (row[0].toLowerCase().indexOf(q) < 0 && String(row[ci.race_name]||"").toLowerCase().indexOf(q) < 0) return; }
+    var pick = f.cat ? [f.cat] : cats, hit = false;
+    for (var k = 0; k < pick.length; k++){
+      var code = row[ci[pick[k]]];
+      if (f.state === "all" || (f.state === "bad" ? BAD[code] : code === want)) { hit = true; break; }
+    }
+    if (hit) out.push(row);
+  });
+  out.sort(function(a, b){ return (b[1] || "0").localeCompare(a[1] || "0") || a[0].localeCompare(b[0]); });
+  return out;
+}
+function toCsv(env, rows){
+  var r = env.races, head = r.columns.join(","), esc2 = function(s){ s = String(s == null ? "" : s); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  return "﻿" + head + "\n" + rows.map(function(row){
+    return row.map(function(v, i){ return esc2(i >= r.fixed ? (CODE_LABEL[v] || v) : v); }).join(",");
+  }).join("\n");
+}
+function ageText(iso){
+  if (!iso) return "–";
+  var sec = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (!isFinite(sec)) return "–";
+  if (sec < 90) return Math.max(0, Math.round(sec)) + " 秒前";
+  if (sec < 5400) return Math.round(sec / 60) + " 分前";
+  if (sec < 172800) return Math.round(sec / 3600) + " 時間前";
+  return Math.round(sec / 86400) + " 日前";
+}
+
+/* ── 描画 ──────────────────────────────────────────────────────── */
+function renderTabs(){
+  var envs = D().envs, h = "";
+  envs.forEach(function(e){
+    var ov = e.report.summary.overall, col = {ok:"#5ff0a2", warn:"#ffd166", fail:"#ff8a98"}[ov] || "#9aa7c7";
+    h += '<button class="tab' + (e.key === S.tab ? " on" : "") + '" data-tab="' + esc(e.key) + '"><span class="dot" style="background:' + col + '"></span>' + esc(e.label) + "</button>";
+  });
+  document.getElementById("tabs").innerHTML = h || "";
+}
+function renderMeta(){
+  var e = curEnv(), el = document.getElementById("meta");
+  if (!e){ el.textContent = ""; return; }
+  var m = e.report.meta || {};
+  el.innerHTML = "最終チェック: <b>" + esc(ageText(e.report.generated_at)) + "</b>（" + esc(e.report.generated_at) + "） ／ 実行ホスト " + esc(m.host || "–") +
+    " ／ commit <code>" + esc(m.commit || "-") + "</code> ／ スキーマ <code>" + esc(m.schema_fingerprint || "-") + "</code> ／ 画面は約 30 秒ごとに自動更新";
+}
+function renderRunStatus(){
+  var st = window.__RUN_STATUS__ || {}, e = curEnv(), el = document.getElementById("runstatus");
+  var s = e && st[e.key];
+  if (!s || s.state !== "running"){ el.innerHTML = ""; return; }
+  var stale = (Date.now() - new Date(s.updated_at).getTime()) / 1000 > 600;
+  var pct = (s.total ? Math.min(100, Math.round(100 * s.done / s.total)) : null);
+  el.innerHTML = '<div class="banner ' + (stale ? "bad" : "note") + '" style="margin:6px 0 0"><b>' + (stale ? "停止した可能性: " : "実行中: ") + esc(s.phase) + "</b> " +
+    (s.total ? esc(s.done) + " / " + esc(s.total) + "（" + pct + "%）" : "") + " " + esc(s.detail || "") + ' <span class="sub" style="display:inline">更新 ' + esc(ageText(s.updated_at)) + "</span>" +
+    (pct !== null ? '<div class="bar"><i style="width:' + pct + '%"></i></div>' : "") + "</div>";
+}
+function compOf(e){      // 画面上だけ: dev は 2020 年以降を求めない（期間が短いことを未達にしない）。CLI の --require-complete の判定は変えない
+  var c = e.report.completeness || {}, dev = e.report.env === "dev" && e.key.indexOf("@") < 0;
+  var reasons = (c.reasons || []).filter(function(x){ return !(dev && x.code === "range"); });
+  return {dev: dev, complete: reasons.length === 0, scope: c.scope || "", reasons: reasons};
+}
+function cardsHtml(e){
+  var r = e.report, rc = r.race_coverage, u = rc.universe || {}, sum = function(o){ return Object.keys(o || {}).reduce(function(a, k){ return a + o[k]; }, 0); };
+  var comp = compOf(e), tot = u.races || 0;
+  var card = function(n, l, cls){ return '<div class="card"><b' + (cls ? ' class="' + cls + '" style="background:none"' : "") + ">" + n + "</b><small>" + l + "</small></div>"; };
+  return '<div class="cards">' + card(badge(r.summary.overall), "総合判定") +
+    card(comp.complete ? '<span class="b ok">OK</span>' : '<span class="b fail">NG</span>', (comp.dev ? "完全性（dev: 直近のみ " : "完全性（") + esc(comp.scope || "") + "）") +
+    card(tot.toLocaleString(), "対象レース数") + card(sum(rc.gap_total).toLocaleString(), "不足（取得が必要）") +
+    card(sum(rc.invalid_total).toLocaleString(), "スキーマ不適合") + card(sum(rc.unvalidated_total).toLocaleString(), "未検証") +
+    card(((r.plan || {}).total || 0).toLocaleString(), "再取得の計画（ジョブ）") + "</div>";
+}
+function heatmapHtml(e){
+  var rc = e.report.race_coverage, src = S.gran === "year" ? rc.by_year : rc.by_period, cats = rc.categories || [], keys = Object.keys(src || {}).sort().reverse();
+  if (!keys.length) return '<div class="empty">対象レースがありません</div>';
+  var head = cats.map(function(c){ return '<th title="' + esc(c.label) + '">' + esc(c.name) + '<span class="sub">' + esc(c.level) + "</span></th>"; }).join("");
+  var body = keys.map(function(p){
+    var cells = cats.map(function(c){
+      var v = src[p][c.name]; if (!v) return '<td class="c gn">–</td>';
+      var t = okTotal(v), ok = t[0], tot = t[1], notes = [];
+      if (v.invalid) notes.push("不適合 " + v.invalid); if (v.unvalidated) notes.push("未検証 " + v.unvalidated); if (v.pending) notes.push("待機 " + v.pending);
+      if (!tot) return '<td class="c gn">–<span class="sub">' + notes.join(" / ") + "</span></td>";
+      var pct = Math.round(100 * ok / tot), cls = ok === tot ? "g0" : pct >= 90 ? "g1" : "g2";
+      return '<td class="c ' + cls + '" data-period="' + esc(p) + '" data-cat="' + esc(c.name) + '">' + ok + "/" + tot + '<span class="sub">' + pct + "%" + (notes.length ? " · " + notes.join(" / ") : "") + "</span></td>";
+    }).join("");
+    return '<tr><td><b class="plink" data-period="' + esc(p) + '" style="cursor:pointer;color:#7aa9ff">' + esc(p) + "</b></td>" + cells + "</tr>";
+  }).join("");
+  return '<div class="wrap"><table class="hm"><tr><th>期間</th>' + head + "</tr>" + body + "</table></div>";
+}
+function chipHtml(cat, code, why){
+  return code ? '<span class="chip c-' + code + '" title="' + esc(cat) + ": " + esc(CODE_LABEL[code]) + (why ? "\n" + esc(why) : "") + '">' + CHIP[code] + "</span>" : '<span class="chip c-x" title="' + esc(cat) + '">·</span>';
+}
+function racesHtml(e){
+  var r = e.races;
+  if (!r) return '<div class="empty">この環境には race_keys.csv がありません（チェックを実行するか、結果ディレクトリごと --import してください）</div>';
+  var ci = colIndex(r), cats = r.columns.slice(r.fixed), rows = filterRows(e, S), pages = Math.max(1, Math.ceil(rows.length / PAGE));
+  S.page = Math.min(S.page, pages - 1);
+  var venues = {}; r.rows.forEach(function(x){ venues[x[ci.venue]] = 1; });
+  var opt = function(v, l, cur){ return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(l) + "</option>"; };
+  var periods = Object.keys(e.report.race_coverage.by_period || {}).sort().reverse();
+  var f = '<div class="filters">期間 <select data-f="period">' + opt("", "すべて", S.period) + periods.map(function(p){ return opt(p, p, S.period); }).join("") + "</select>" +
+    ' カテゴリ <select data-f="cat">' + opt("", "すべて", S.cat) + cats.map(function(c){ return opt(c, c, S.cat); }).join("") + "</select>" +
+    ' 状態 <select data-f="state">' + opt("bad", "揃っていない（不足・不適合・未検証）", S.state) + opt("all", "すべて", S.state) +
+      Object.keys(CODE_LABEL).map(function(k){ return opt(k, CODE_LABEL[k], S.state); }).join("") + "</select>" +
+    ' 場 <select data-f="venue">' + opt("", "すべて", S.venue) + Object.keys(venues).sort().map(function(v){ return opt(v, v, S.venue); }).join("") + "</select>" +
+    ' race_id / レース名 <input data-f="q" value="' + esc(S.q) + '" placeholder="検索" size="16">' +
+    ' <button id="btn-reset">条件をクリア</button> <button id="btn-csv">表示中を CSV で保存</button></div>';
+  var legend = Object.keys(CODE_LABEL).map(function(k){ return '<span class="chip c-' + k + '">' + CHIP[k] + "</span>" + CODE_LABEL[k]; }).join("　");
+  var pager = '<div class="pager">' + rows.length.toLocaleString() + " 件 ／ ページ " + (S.page + 1) + " / " + pages +
+    ' <button data-page="-1">前へ</button><button data-page="1">次へ</button>　' + legend + "</div>";
+  var head = ["race_id", "日付", "場", "R", "レース名", "コース", "距離"].map(function(h){ return "<th>" + h + "</th>"; }).join("") +
+    '<th title="' + esc(cats.join(" / ")) + '">状態（左から ' + esc(cats.map(function(c){ return c.replace(/^race_/, ""); }).join(" / ")) + ")</th>";
+  var body = rows.slice(S.page * PAGE, (S.page + 1) * PAGE).map(function(row){
+    var d = row[1] ? row[1].slice(0, 4) + "-" + row[1].slice(4, 6) + "-" + row[1].slice(6, 8) : "不明";
+    var cells = [row[0], d, row[ci.venue], row[ci.round], row[ci.race_name], row[ci.surface], row[ci.distance]];
+    return "<tr>" + cells.map(function(c){ return "<td>" + esc(c) + "</td>"; }).join("") + "<td>" + cats.map(function(c){ var w = row[ci[c]] === "i" && e.invalid_detail && e.invalid_detail[c] ? (e.invalid_detail[c][row[0]] || []).join(" / ") : ""; return chipHtml(c, row[ci[c]], w); }).join("") + "</td></tr>";
+  }).join("");
+  var none = rows.length ? "" : '<div class="empty">' + (S.state === "bad" ? "揃っていないレースはありません（条件に合うものが 0 件）。状態を「すべて」にすると全件を表示します。" : "条件に合うレースはありません。") + "</div>";
+  return f + pager + '<div class="wrap"><table><tr>' + head + "</tr>" + body + "</table></div>" + none + (rows.length > PAGE ? pager : "");
+}
+function det(id, title, html, open){
+  var isOpen = S.open[id] != null ? S.open[id] : open;
+  return '<details data-id="' + id + '"' + (isOpen ? " open" : "") + "><summary>" + title + "</summary>" + html + "</details>";
+}
+function tbl(heads, rows){ return '<div class="wrap"><table><tr>' + heads.map(function(h){ return "<th>" + h + "</th>"; }).join("") + "</tr>" + rows.map(function(r){ return "<tr>" + r.map(function(c){ return "<td class=\"wrapn\">" + c + "</td>"; }).join("") + "</tr>"; }).join("") + "</table></div>"; }
+function findingsHtml(e){
+  var f = e.report.findings || [];
+  return f.length ? tbl(["重大度", "領域", "内容", "対処"], f.slice(0, 80).map(function(x){ return [badge(x.severity), esc(x.area), esc(x.message), esc(x.hint)]; })) : "<p>要対応はありません。</p>";
+}
+function render(){
+  var envs = D().envs, main = document.getElementById("main");
+  if (!envs.length){ main.innerHTML = '<div class="empty">データがありません。<code>python -m src.data_health</code> を実行してください（dev はこの PC、stg は学習PC で実行し、結果を <code>--import</code> で取り込みます）。</div>'; renderTabs(); renderMeta(); return; }
+  if (!S.tab || !envs.some(function(e){ return e.key === S.tab; })) S.tab = (location.hash || "").slice(1) || lastTab() || envs[0].key;
+  if (!envs.some(function(e){ return e.key === S.tab; })) S.tab = envs[0].key;
+  var e = curEnv(), r = e.report, comp = compOf(e), h = "";
+  var sy = window.scrollY;
+  if (e.restriction){
+    h += '<div class="banner bad"><b>アクセス制限の疑いで中断しています</b>（' + esc(e.restriction.detected_at) + '）: ' + esc(e.restriction.reason) + "<br>再開: <code>" + esc(e.restriction.resume_command) +
+      "</code>（制限が解けたことを確認し、<code>--clear-pause</code> を付ける）。残りの再取得: " + esc(JSON.stringify((e.restriction.remaining || {}).by_runner || e.restriction.remaining || {})) + "</div>";
+  }
+  h += comp.complete ? '<div class="banner good"><b>完全性 OK</b>（' + esc(comp.scope) + '）: 対象範囲のすべてが揃い、スキーマに適合しています。' +
+      (comp.dev ? "<br><small>dev は直近の範囲（モック）だけを確認します。2020 年以降の完全性は stg で判定します。</small>" : "") + "</div>" :
+    '<div class="banner bad"><b>完全性 NG</b>（' + esc(comp.scope) + "）: " + (comp.reasons || []).length + " 項目が未達<ul style=\"margin:4px 0 0\">" +
+    (comp.reasons || []).slice(0, 8).map(function(x){ return "<li>" + esc(x.message) + "</li>"; }).join("") + "</ul></div>";
+  if (e.key.indexOf("@") < 0 && e.key === "stg") h += '<div class="banner note">stg と prod は同じ GCS（バケット・prefix）を使うため、この結果は prod から見ても同じです（prod で別に見るのは VPS から GCS に届くか）。</div>';
+  h += cardsHtml(e);
+  h += "<h2>期間 × カテゴリ　<span class=\"toggle\"><button data-gran=\"month\" class=\"" + (S.gran === "month" ? "on" : "") + "\">月別</button><button data-gran=\"year\" class=\"" + (S.gran === "year" ? "on" : "") + "\">年別</button></span>" +
+       '<span class="sub" style="display:inline"> セルをクリックすると、下の一覧がその条件に絞り込まれます</span></h2>' + heatmapHtml(e);
+  h += '<h2 id="races-h">レース一覧（race_id ごとの状態）</h2>' + racesHtml(e);
+  h += "<h2>要対応（重大順）</h2>" + findingsHtml(e);
+  h += det("infra", "インフラのヘルスチェック", tbl(["状態", "項目", "詳細", "対処"], (r.checks || []).map(function(c){ return [badge(c.status), esc(c.label), esc(c.detail), esc(c.hint)]; })), false);
+  h += det("art", "派生データ（特徴量・血統・モデル・設定）", tbl(["状態", "ID", "名称", "重要度", "詳細"], (r.artifacts || []).map(function(a){ return [badge(a.status), esc(a.id), esc(a.label), esc(a.level), esc(a.detail)]; })), false);
+  var hc = r.horse_coverage || {};
+  h += det("horse", "馬（直近〜出走予定の出走馬 " + esc(hc.horses || 0) + " 頭）", tbl(["カテゴリ", "重要度", "対象", "不足"], (hc.categories || []).map(function(c){ return [esc(c.name), esc(c.level), esc(c.expected), esc(c.missing)]; })), false);
+  var sc = r.schema || {};
+  h += det("schema", "スキーマ（fingerprint " + esc(sc.fingerprint) + " ／ 定義 " + esc(sc.defined) + " カテゴリ ／ 検証 " + esc(sc.mode) + "）",
+    tbl(["カテゴリ", "適合", "モード", "どの値で（例）"], Object.keys(sc.categories || {}).map(function(k){ var v = sc.categories[k]; return [esc(k), v.passed + "/" + v.sampled, v.advisory ? "advisory" : "厳格", esc((v.examples || []).join(" / "))]; })) +
+    "<h3 style=\"font-size:13px\">スキーマ未定義のカテゴリ</h3>" + tbl(["カテゴリ", "状態", "理由"], (sc.undefined || []).map(function(u){ return [esc(u.category), esc(u.status), esc(u.note)]; })), false);
+  var sl = r.schema_log || {};
+  h += det("viol", "保存時にスキーマで弾かれた記録（直近30日 " + esc(sl.records || 0) + " 回）", (sl.groups || []).length ? tbl(["カテゴリ", "項目", "規則", "回数/key", "どの値で（上位）", "最後"], sl.groups.map(function(g){
+    return [esc(g.category), "<code>" + esc(g.field) + "</code>", esc(g.rule + "（" + g.expected + "）"), g.count + " / " + g.keys, esc(g.values.slice(0, 3).map(function(v){ return v[0] + " ×" + v[1]; }).join(" ; ")), esc(g.last)]; })) : "<p>記録はありません。</p>", false);
+  var pl = r.plan || {}, c = pl.counts || {};
+  h += det("plan", "再取得の計画（" + esc(pl.total || 0) + " ジョブ ／ " + esc(JSON.stringify(c.by_runner || {})) + "）", tbl(["実行場所", "種別", "対象", "タスク", "状態", "根拠", "理由"], (pl.specs || []).map(function(s){
+    return [esc(s.runner), esc(s.job_kind), "<code>" + esc(s.target_id) + "</code>", esc((s.tasks || []).join(", ")), esc(s.status), esc(s.confidence), esc(s.reason)]; })) + ((pl.total || 0) > (pl.specs || []).length ? "<p class=\"sub\">先頭 " + (pl.specs || []).length + " 件のみ表示（全件は scrape_plan.json）</p>" : ""), false);
+  h += det("runs", "スクレイピングの実行履歴", (e.scrape_runs || []).length ? tbl(["開始", "終了コード", "実行", "再開", "ラウンド", "対象ジョブ", "スキーマ拒否", "アクセス制限"], e.scrape_runs.map(function(x){
+    return [esc(x.started_at), esc(x.exit_code), x.execute ? "実行" : "ドライラン", x.resume ? "再開" : "", esc(x.rounds), esc(x.selected_jobs), esc(x.rejections), esc(x.restriction ? x.restriction.reason : "")]; })) : "<p>実行履歴はありません。</p>", false);
+  h += det("hist", "チェック結果の推移", tbl(["生成時刻", "総合", "FAIL", "WARN", "不足レース", "計画ジョブ", "ホスト"], (e.history || []).slice().reverse().map(function(x){
+    return [esc(x.generated_at), badge(x.overall), esc((x.counts || {}).fail || 0), esc((x.counts || {}).warn || 0), esc(x.missing_races || 0), esc(x.planned_jobs || 0), esc(x.host)]; })), false);
+  main.innerHTML = h;
+  renderTabs(); renderMeta(); renderRunStatus();
+  window.scrollTo(0, sy);
+}
+
+/* ── 操作 ──────────────────────────────────────────────────────── */
+document.addEventListener("click", function(ev){
+  var t = ev.target, el;
+  if ((el = t.closest("[data-tab]"))){ S.tab = el.getAttribute("data-tab"); location.hash = S.tab; try { localStorage.setItem("dh-tab", S.tab); } catch (x) {} S.page = 0; render(); return; }
+  if ((el = t.closest("[data-gran]"))){ S.gran = el.getAttribute("data-gran"); render(); return; }
+  if ((el = t.closest("td.c[data-cat]"))){ S.period = el.getAttribute("data-period"); S.cat = el.getAttribute("data-cat"); S.state = "bad"; S.page = 0; render(); document.getElementById("races-h").scrollIntoView(); return; }
+  if ((el = t.closest(".plink"))){ S.period = el.getAttribute("data-period"); S.cat = ""; S.state = "bad"; S.page = 0; render(); document.getElementById("races-h").scrollIntoView(); return; }
+  if ((el = t.closest("[data-page]"))){ S.page = Math.max(0, S.page + parseInt(el.getAttribute("data-page"), 10)); render(); return; }
+  if (t.id === "btn-reset"){ S.period = ""; S.cat = ""; S.state = "bad"; S.venue = ""; S.q = ""; S.page = 0; render(); return; }
+  if (t.id === "btn-csv"){
+    var e = curEnv(), blob = new Blob([toCsv(e, filterRows(e, S))], {type: "text/csv"}), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "data_health_" + e.key + "_filtered.csv"; a.click(); return;
+  }
+});
+document.addEventListener("change", function(ev){ var el = ev.target.closest("[data-f]"); if (el){ S[el.getAttribute("data-f")] = el.value; S.page = 0; render(); } });
+document.addEventListener("input", function(ev){ var el = ev.target; if (el.getAttribute && el.getAttribute("data-f") === "q"){ S.q = el.value; S.page = 0; clearTimeout(S._t); S._t = setTimeout(function(){ var p = el.selectionStart; render(); var n = document.querySelector('[data-f="q"]'); if (n){ n.focus(); n.setSelectionRange(p, p); } }, 250); } });
+document.addEventListener("toggle", function(ev){ var d = ev.target; if (d.tagName === "DETAILS" && d.getAttribute("data-id")) S.open[d.getAttribute("data-id")] = d.open; }, true);
+
+/* ── 自動更新（データファイルを読み直す。サーバ不要）──────────────────── */
+function reload(id, src, cb){
+  var s = document.createElement("script"); s.id = id + "-new"; s.src = src + "?t=" + Date.now();
+  s.onload = function(){ var old = document.getElementById(id); if (old) old.remove(); s.id = id; cb(); };
+  s.onerror = function(){ s.remove(); };
+  document.head.appendChild(s);
+}
+var lastGen = (D().generated_at || "");
+setInterval(function(){ reload("dh-data", "dashboard_data.js", function(){ var g = D().generated_at || ""; if (g !== lastGen){ lastGen = g; render(); } else renderMeta(); }); }, DATA_REFRESH_MS);
+setInterval(function(){ reload("dh-status", "run_status.js", renderRunStatus); }, STATUS_REFRESH_MS);
+setInterval(renderMeta, 15000);
+window.addEventListener("hashchange", function(){ S.tab = (location.hash || "").slice(1) || S.tab; render(); });
+window.__dh = {filterRows: filterRows, okTotal: okTotal, periodOf: periodOf, toCsv: toCsv, ageText: ageText, S: S, render: render};
+render();
+</script>
+</body>
+</html>

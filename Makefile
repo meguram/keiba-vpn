@@ -1,4 +1,4 @@
-.PHONY: setup-dev dev-mock dev-mock-clean data-health setup-stg setup-prod \
+.PHONY: setup-dev dev-mock dev-mock-clean data-health data-health-dashboard setup-stg setup-prod \
 	db-up db-down db-migrate db-reset \
 	stg-migrate \
 	test test-frontend test-all \
@@ -12,6 +12,7 @@ help:
 	@echo "  dev-mock     dev 用モックデータを生成 (data/dev_mock と page_reference。GCS 不要)"
 	@echo "  dev-mock-clean  生成済みモックのみ削除"
 	@echo "  data-health  データ存在チェック/ヘルスチェック (現在の KEIBA_ENV。stg/prod は KEIBA_ENV=stg make data-health)"
+	@echo "  data-health-dashboard  ダッシュボード(dashboard.html)を作り直す。ブラウザで開くだけ(サーバ不要・自動更新)"
 	@echo "  db-up        Docker コンテナ起動 (PostgreSQL:5432 / Redis:6379)"
 	@echo "  db-down      Docker コンテナ停止"
 	@echo "  db-migrate   alembic upgrade head (dev)"
@@ -39,6 +40,9 @@ dev-mock:
 
 dev-mock-clean:
 	python3 -m src.scripts.data.make_dev_mock --clean
+
+data-health-dashboard:
+	python3 -m src.data_health --dashboard
 
 data-health:
 	python3 -m src.data_health

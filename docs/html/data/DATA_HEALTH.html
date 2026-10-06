@@ -65,6 +65,7 @@ ol.gaps li{margin:.6em 0}
 <a href="#violations">9.6 スキーマ違反の記録</a>
 <a href="#judge">10. 判定ロジック</a>
 <a href="#out">11. 結果の環境別管理・出力の読み方</a>
+<a href="#dashboard">11.5 ダッシュボード（サーバ不要・自動更新）</a>
 <a href="#example">12. 実行例（dev）</a>
 <a href="#limits">13. 確認できないこと・制約</a>
 <a href="#files">14. 関連ファイル</a>
@@ -314,6 +315,31 @@ cat data/local/meta/data_health/stg/race_ids/invalid_race_odds.txt
 python3 -c "import json;print(json.load(open('data/local/meta/data_health/stg/race_ids/by_race.json'))['202605030201'])"</code></pre>
 <p>ヒートマップのセルは <b>存在数/期限到来分</b>とパーセント、下に青字で「待機 n」。<code>–</code> は対象外または 0 件です。</p>
 
+<h2 id="dashboard">11.5 ダッシュボード（サーバ不要・自動更新）</h2>
+<p>データ格納状況を<b>専用サーバなし</b>で見るための画面です。保存ルートの <code>dashboard.html</code> を<b>ブラウザで開くだけ</b>（<code>file://</code> で動作）。<b>dev / stg(= prod) をタブで切り替え</b>ます（stg と prod は同じ GCS なので 1 つのタブ。VPS からの確認結果を取り込んだ場合は prod タブも出ます。dev PC で stg の要件を評価した dry-run は <code>stg@dev</code>）。</p>
+<pre><code>data/local/meta/data_health/
+├── dashboard.html        ← 画面（固定）。開くだけ
+├── dashboard_data.js     ← 全環境の最新結果。チェックを実行するたびに更新（置き換え方式）
+└── run_status.js         ← 実行中の進捗（チェック・検証・スクレイピング中に数秒ごとに更新）
+
+# 開き方
+make data-health-dashboard        # 画面とデータを作り直す（チェックの実行時にも自動で更新される）
+# → 上の dashboard.html をブラウザで開く（WSL なら explorer.exe dashboard.html など）
+# URL の末尾に #stg を付けるとそのタブで開く。?refresh=5000 で更新間隔（ミリ秒）を変えられる</code></pre>
+<div class="wrap"><table><tr><th>見られるもの</th><th>内容</th></tr>
+<tr><td>概要</td><td>総合判定、対象レース数、健全・不足・不適合・未検証・待機の件数、完全性（OK / 未達の理由）、最終チェックからの経過、実行ホスト・commit・スキーマ fingerprint</td></tr>
+<tr><td>ヒートマップ</td><td>カテゴリ × 期間（年／月）。<b>セルをクリックすると下のレース一覧がその条件に絞り込まれる</b></td></tr>
+<tr><td>レース一覧</td><td>race_id ごとの開催日・場・R・レース名とカテゴリ別の状態。状態・期間・カテゴリ・場・race_id で絞り込み、CSV 出力、ページ送り。スキーマ不適合の印（赤）にカーソルを載せると原因（項目と値）が出る</td></tr>
+<tr><td>実行中の表示</td><td>データチェックの各段階（GCS の list → 健全性の検証 n / N → 集計）と、スクレイピングの進捗（ジョブ n / N）が帯とバーで出る。10 分以上更新が無ければ「停止した可能性」</td></tr>
+<tr><td>アクセス制限</td><td>スクレイピングが制限を検知して止まっているときは、環境タブ上部に URL・ステータス・時刻・再開コマンドを表示</td></tr>
+<tr><td>そのほか</td><td>要対応（重大順）、インフラ・派生データ・馬・スキーマの状態、保存時にスキーマで弾かれた記録、スクレイピング計画（先頭 300 件）、推移、直近のスクレイピング実行（前回比は <code>latest.html</code> 側）</td></tr></table></div>
+<p><b>「動的」の意味と限界（重要）</b></p>
+<ul>
+<li>画面は約 30 秒ごと（進捗は約 3 秒ごと）に <code>dashboard_data.js</code> / <code>run_status.js</code> を読み直すので、<b>チェックやスクレイピングが走れば画面を開いたままで反映</b>されます。</li>
+<li>ブラウザは GCS に直接アクセスしません（認証情報を持たせない・課金を避ける・dev は GCP 遮断のため）。<b>「最新」とは最後にデータチェックを実行した時点</b>です。常に新しくしたければ cron で <code>python -m src.data_health</code>（sample モードなら download 少量）を定期実行します。</li>
+<li>dev PC で stg の状況を見るには、学習PC の結果ディレクトリをコピーして <code>python -m src.data_health --import &lt;結果ディレクトリ&gt;</code>。ディレクトリごと渡すと <code>race_keys.csv</code> などの副ファイルも入り、レース単位の掘り下げまで dev PC で見られます（<code>latest.json</code> 単体だと概要のみ）。</li>
+<li>同じディレクトリを共有フォルダや静的ホスティングに置けば複数人で見られますが、レース名・race_id を含むため公開範囲には注意してください。</li></ul>
+
 <h2 id="example">12. 実行例（dev、2026-10-06）</h2>
 <pre><code>データヘルス [dev] OK  fail=0 warn=0 info=2  計画ジョブ=0  （2026-07-08 〜 2026-10-20）
 
@@ -359,6 +385,8 @@ python3 -c "import json;print(json.load(open('data/local/meta/data_health/stg/ra
   <tr><td><code>src/scraper/schema_violations.py</code></td><td>保存時のスキーマ違反の記録・隔離・集計（CLI: summary / show / tail）</td></tr>
   <tr><td><code>docs/todos/verify/stg_data_complete.sh</code></td><td>stg の受け入れ判定（2020 年以降・全データポイント・スキーマ適合）</td></tr>
   <tr><td><code>src/data_health/store.py</code></td><td>環境別の保存・履歴・前回比・全環境の一覧・<code>--import</code></td></tr>
+  <tr><td><code>src/data_health/dashboard.py</code> / <code>dashboard.html</code></td><td>ダッシュボード（データ生成と画面）。<code>--dashboard</code> / <code>make data-health-dashboard</code></td></tr>
+  <tr><td><code>tests/data_health/test_dashboard.py</code></td><td>ダッシュボードのデータ生成、ブラウザ（Playwright があるとき）でのタブ・絞り込み・自動更新</td></tr>
   <tr><td><code>src/data_health/__main__.py</code></td><td>CLI</td></tr><tr><td><code>tests/data_health/test_data_health.py</code></td><td>期限・推定・stg 相当のシナリオ・馬・派生データ・dev モックの検証（14 件）</td></tr>
   <tr><td><code>tests/data_health/test_config_store.py</code></td><td>設定（変数・環境別・不正値）、重要度の上書き、環境別の結果管理、取り込み、CLI</td></tr>
   <tr><td><code>tests/data_health/test_validation.py</code></td><td>健全／不適合／未検証、段階検証と台帳の再開・更新検知、キーテーブル、race_id 配列と CSV、再取得計画（overwrite）、dev モックの全件健全</td></tr><tr><td><code>docs/html/data/DATASET_CATALOG.html</code></td><td>データセット一覧と環境別アクセス状況（本ツールの要件の元）</td></tr></table></div>

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import socket
 import subprocess
 from datetime import datetime
@@ -128,13 +129,17 @@ def save(report: dict, out_dir: str | Path | None = None) -> dict[str, Path]:
     report["diff"] = compute_diff(load_json(env_dir / "latest.json"), report)
     paths = R.write_outputs(report, env_dir)
     _append_history(env_dir, report)
-    paths["index"] = rebuild_index(base)["html"]
+    idx = rebuild_index(base)
+    paths["index"], paths["dashboard"] = idx["html"], idx["dashboard"]
     return paths
 
 
 def import_report(path: str | Path, out_dir: str | Path | None = None) -> dict[str, Any]:
     """他 PC で得た latest.json を環境別ディレクトリへ取り込む。古いものは履歴にだけ残す。"""
-    data = load_json(Path(path))
+    src = Path(path)
+    if src.is_dir():                        # 結果ディレクトリごと渡す（race_keys.csv など副ファイルも一緒に取り込める）
+        src = src / "latest.json"
+    data = load_json(src)
     if not data or data.get("env") not in ENVS or "summary" not in data or "generated_at" not in data:
         raise ValueError(f"{path} はデータヘルスの latest.json ではありません（env / summary / generated_at が必要）")
     base = base_dir(out_dir)
@@ -144,6 +149,11 @@ def import_report(path: str | Path, out_dir: str | Path | None = None) -> dict[s
     if newer:
         data["diff"] = compute_diff(current, data)
         paths = R.write_outputs(data, env_dir)
+        for name in ("race_keys.csv", "access_restriction.json"):          # ダッシュボードの掘り下げ・制限バナーに使う副ファイル
+            if (src.parent / name).is_file():
+                shutil.copy2(src.parent / name, env_dir / name)
+        if (src.parent / "scrape_runs").is_dir():
+            shutil.copytree(src.parent / "scrape_runs", env_dir / "scrape_runs", dirs_exist_ok=True)
     else:
         env_dir.mkdir(parents=True, exist_ok=True)
         stamp = data["generated_at"].replace(":", "").replace("-", "")[:15]
@@ -175,4 +185,7 @@ def rebuild_index(base: Path) -> dict[str, Path]:
     paths = {"json": base / "index.json", "html": base / "index.html"}
     paths["json"].write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
     paths["html"].write_text(R.render_index(entries), encoding="utf-8")
+    from src.data_health import dashboard
+
+    paths["dashboard"] = dashboard.write_dashboard(base)["html"]       # 全環境を切り替えて見られるダッシュボード（サーバ不要）
     return paths

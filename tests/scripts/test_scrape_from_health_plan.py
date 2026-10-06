@@ -343,3 +343,27 @@ def test_real_plan_specs_are_accepted_by_the_real_queue_normalizer(stg_env):
     assert M.dedupe_key(specs[0]) == ScrapeJobQueue._normalize_incoming_job(None, specs[0])["dedupe_key"]
     sel = M.select_specs(specs, status="invalid")
     assert sel and all(s["overwrite"] for s in sel)
+
+
+def _run_status(key: str = "stg") -> dict:
+    from src.data_health import store
+
+    p = store.base_dir(None) / "run_status.json"
+    return json.loads(p.read_text(encoding="utf-8")).get(key, {}) if p.exists() else {}
+
+
+def test_execute_reports_progress_to_the_dashboard_and_finishes_idle(env):
+    code, _, _, _ = go(["--execute"], reports=[report([S()]), report([], complete=True)])
+    st = _run_status()
+    assert code == M.EXIT_COMPLETE and st["state"] == "idle" and st["phase"] == "完了"
+
+
+def test_restriction_is_shown_as_interrupted_on_the_dashboard(env):
+    go(["--execute"], queue=FakeQueue(_trip()), reports=[report([S()]), report([S()])])
+    st = _run_status()
+    assert st["state"] == "idle" and st["phase"] == "中断"
+
+
+def test_dry_run_does_not_touch_the_dashboard_status(env):
+    go([], reports=[report([S()])])
+    assert _run_status() == {}

@@ -131,16 +131,19 @@ def _validate_one(storage: Any, category: str, key: str) -> tuple[bool, list[str
 
 
 def refresh_ledger(storage: Any, ledger: Ledger, keys: dict[str, float], todo: list[str], *, limit: int | None, workers: int,
-                   keytable: KeyTable | None = None) -> int:
+                   keytable: KeyTable | None = None, on_progress: Any = None) -> int:
     """todo のうち limit 件（None = 全件）を download して検証し、台帳へ記録する。検証した件数を返す。"""
     batch = todo if limit is None else todo[:max(limit, 0)]
     if not batch:
         return 0
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        for key, (ok, issues, meta, examples, na) in zip(batch, pool.map(lambda k: _validate_one(storage, ledger.category, k), batch)):
+        for i, (key, (ok, issues, meta, examples, na)) in enumerate(
+                zip(batch, pool.map(lambda k: _validate_one(storage, ledger.category, k), batch)), 1):
             ledger.record(key, keys[key], ok, issues, examples, na)
             if keytable is not None and meta:
                 keytable.update(key, meta, "data")
+            if on_progress is not None and i % 100 == 0:
+                on_progress(i)
     return len(batch)
 
 
@@ -148,7 +151,7 @@ def refresh_ledger(storage: Any, ledger: Ledger, keys: dict[str, float], todo: l
 
 def validate_scope(env: str, storage: Any, present: dict[str, dict[str, dict[str, float]]], *, mode: str, sample: int,
                    budget: int, workers: int, ledger_dir: Path | None, categories: list[str] | None = None,
-                   keytable: KeyTable | None = None, skip_keys: set[str] | None = None
+                   keytable: KeyTable | None = None, skip_keys: set[str] | None = None, progress: Any = None
                    ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     """返り値: (health, stats)。
     health[cat] = {"ok": set, "bad": {key: issues}, "scope": set}  … 台帳で最新と確認できた分と、評価の範囲
@@ -162,6 +165,7 @@ def validate_scope(env: str, storage: Any, present: dict[str, dict[str, dict[str
     names = categories if categories is not None else [
         c.name for c in RACE_CATEGORIES if c.level[env] != "skip" and c.name in schemas.SCHEMAS]
     left = budget
+    plan: list[tuple[str, dict[str, float], Ledger, set[str], list[str]]] = []
     for cat in names:
         if cat not in schemas.SCHEMAS:
             continue
@@ -174,8 +178,18 @@ def validate_scope(env: str, storage: Any, present: dict[str, dict[str, dict[str
         else:
             scope = set(keys)
         todo = sorted((k for k in scope if ledger.state(k, keys[k]) is None), reverse=True)     # 新しい race_id から
+        plan.append((cat, keys, ledger, scope, todo))
+    grand = sum(len(t) for *_, t in plan)
+    grand = min(grand, budget) if (mode == "full" and budget > 0) else grand                    # 進捗表示用の総数
+    finished = 0
+    for cat, keys, ledger, scope, todo in plan:
         limit = None if (mode == "sample" or budget <= 0) else min(len(todo), max(left, 0))     # None = 無制限
-        done = refresh_ledger(storage, ledger, keys, todo, limit=limit, workers=workers, keytable=keytable)
+        base_done = finished
+        cb = (lambda n, c=cat, b=base_done: progress("健全性の検証", b + n, grand, c)) if progress and grand else None
+        done = refresh_ledger(storage, ledger, keys, todo, limit=limit, workers=workers, keytable=keytable, on_progress=cb)
+        finished += done
+        if progress and grand:
+            progress("健全性の検証", finished, grand, cat)
         if mode == "full" and budget > 0:
             left -= done
         ledger.save()

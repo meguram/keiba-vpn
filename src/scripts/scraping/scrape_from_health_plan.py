@@ -37,6 +37,7 @@ import argparse
 import json
 import os
 import sys
+import threading
 import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -173,6 +174,21 @@ def resume_preconditions(args: argparse.Namespace, out: Callable[[str], None], p
             out("  まだアクセスできない可能性があります。時間をおいて再実行してください（確認を省くなら --skip-probe）。")
             return EXIT_BLOCKED
     return None
+
+
+def status_writer(env: str) -> Callable[..., None]:
+    """ダッシュボード(run_status.js)へ進捗を書く関数を返す。"""
+    from src.data_health import dashboard, store
+
+    base = store.base_dir(None)
+
+    def write(phase: str, done: int | None, total: int | None, detail: str, finished: bool = False) -> None:
+        if finished:
+            dashboard.finish_run_status(base, env, phase, detail)
+        else:
+            dashboard.write_run_status(base, env, phase, done, total, detail)
+
+    return write
 
 
 # ── 事前確認 ─────────────────────────────────────────────────────────────
@@ -347,7 +363,29 @@ def run(args: argparse.Namespace, *, queue: Any = None, check: Callable[[argpars
                            "filters": {k: getattr(args, k) for k in ("runner", "status", "category", "since", "until", "max_jobs", "rounds")},
                            "rounds": []}
 
+    _progress = status_writer(env) if args.execute else None      # ドライランは「実行中」表示を出さない
+
+    def _status(kind: str, **kw: Any) -> None:
+        """ダッシュボードの「実行中」表示を更新する（失敗しても本処理は止めない）。"""
+        if _progress is None:
+            return
+        try:
+            if kind == "start":
+                _progress("スクレイピング実行を開始", None, None, "事前確認 OK")
+            elif kind == "check":
+                _progress(f"データチェック（ラウンド {kw['rnd']}/{args.rounds}）", None, None, "")
+            elif kind == "scrape":
+                _progress(f"スクレイピング中（ラウンド {kw['rnd']}/{args.rounds}）", 0, kw["total"], "ジョブ")
+            elif kind == "tick":
+                _progress(f"スクレイピング中（ラウンド {kw['rnd']}/{args.rounds}）", kw["done"], kw["total"], kw.get("detail", ""))
+            elif kind == "done":
+                ok = kw["code"] in (EXIT_COMPLETE, EXIT_REMAINING)
+                _progress("完了" if ok else "中断", None, None, f"終了コード {kw['code']}", finished=True)
+        except Exception:  # noqa: BLE001
+            pass
+
     def finish(code: int) -> int:
+        _status("done", code=code)
         log["exit_code"] = code
         log["finished_at"] = datetime.now(JST).isoformat(timespec="seconds")
         if code in (EXIT_COMPLETE, EXIT_REMAINING) and args.resume and state_path().exists():
@@ -372,11 +410,13 @@ def run(args: argparse.Namespace, *, queue: Any = None, check: Callable[[argpars
         log["preflight"] = problems
         return finish(EXIT_PREFLIGHT)
     out("事前確認: OK（GCS 接続・netkeiba 認証情報・ワーカー停止中・アクセス制限なし）")
+    _status("start")
 
     prev_remaining: int | None = None
     confirmed = bool(args.yes)
     for rnd in range(1, max(1, args.rounds) + 1):
         out(f"\n===== ラウンド {rnd}/{args.rounds}: データチェック =====")
+        _status("check", rnd=rnd)
         if args.plan and rnd == 1:
             report = load_plan_file(args.plan)
             out(f"保存済みの計画を使用: {args.plan}")
@@ -450,13 +490,30 @@ def run(args: argparse.Namespace, *, queue: Any = None, check: Callable[[argpars
             + ("（存在しないページを除く）" if not args.strict_not_found else "（存在しないページも含む）")
             + f"・通信エラー・制限ページを {args.stop_after} 回連続で受けたら直ちに終了します")
         t0 = time.time()
+        _status("scrape", rnd=rnd, total=len(specs))
         guard = AccessGuard(stop_statuses, args.stop_after, exempt_not_found=not args.strict_not_found) if stop_statuses != set() else None
+        poll_stop = threading.Event()
+
+        def poll() -> None:                       # 取得中、数秒ごとにジョブの進み具合をダッシュボードへ
+            while not poll_stop.wait(5.0):
+                try:
+                    st = outcome(queue, specs)["statuses"]
+                    done = sum(st.get(k, 0) for k in ("completed", "failed"))
+                    _status("tick", rnd=rnd, done=done, total=len(specs), detail=" / ".join(f"{k} {v}" for k, v in sorted(st.items())))
+                except Exception:  # noqa: BLE001
+                    pass
+
+        poller = threading.Thread(target=poll, daemon=True)
+        poller.start()
         try:
-            if guard is None:
-                queue.process_queue()
-            else:
-                with guard:
+            try:
+                if guard is None:
                     queue.process_queue()
+                else:
+                    with guard:
+                        queue.process_queue()
+            finally:
+                poll_stop.set()
         except AccessRestrictionDetected as e:
             rnd_log["stopped"] = "access_restriction"
             rnd_log["seconds"] = round(time.time() - t0)
