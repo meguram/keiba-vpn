@@ -1300,6 +1300,18 @@ class ScraperRunner:
 
     # ── レース一覧 ──────────────────────────────────────
 
+    @staticmethod
+    def _is_past_or_today_jst(date_compact: str) -> bool:
+        """YYYYMMDD が JST の今日以前（当日含む）かどうか。"""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        try:
+            rd = datetime.strptime(date_compact, "%Y%m%d").date()
+        except ValueError:
+            return False
+        return rd <= datetime.now(ZoneInfo("Asia/Tokyo")).date()
+
     def scrape_race_list(self, date: str) -> list[dict]:
         """
         日付別レース一覧を保存する。
@@ -1410,7 +1422,16 @@ class ScraperRunner:
                 should_replace_race_list,
             )
 
-            payload = merge_race_list_payload(date, [], extra_meta=dict(list_meta))
+            final_meta = dict(list_meta)
+            if self._is_past_or_today_jst(date):
+                # db.netkeiba / top いずれも 0 件で、かつ開催日程が確定済み（未来ではない）
+                # ときだけ「確認済みの非開催日」として記録する。未来日はまだ発表待ちの
+                # 可能性があるため note を付けず、次回以降も再確認の対象に残す
+                # （data_health 側が「JRAレース0件」= 不完全として永久に再取得対象にして
+                # しまう不具合の再発防止。詳細: docs/todos 参照 / 2026-10-09 修正）。
+                final_meta["note"] = "no_race_scheduled"
+
+            payload = merge_race_list_payload(date, [], extra_meta=final_meta)
             existing = self.storage.load("race_lists", date) or {}
             if should_replace_race_list(existing, payload):
                 self.storage.save("race_lists", date, payload)
