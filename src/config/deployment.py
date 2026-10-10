@@ -29,6 +29,20 @@ def keiba_env() -> str:
     return r or "prod"
 
 
+def require_explicit_env() -> None:
+    """KEIBA_ENV が未指定（空文字含む）なら起動を拒否する。暗黙の prod 起動を防ぐ。"""
+    if keiba_env_raw():
+        return
+    if os.environ.get("KEIBA_ALLOW_IMPLICIT_PROD", "").strip() == "1":
+        return
+    raise SystemExit(
+        "KEIBA_ENV が未設定（または空文字）のため起動を中止しました（未設定は prod 扱いになるため）。\n"
+        "  .env か環境変数で KEIBA_ENV=dev|stg|prod を明示してください。\n"
+        "  空文字の KEIBA_ENV が export されていると .env の値も上書きされるので unset してください。\n"
+        "  意図的に暗黙 prod で起動する場合のみ KEIBA_ALLOW_IMPLICIT_PROD=1。"
+    )
+
+
 def is_staging() -> bool:
     return keiba_env() == "stg"
 

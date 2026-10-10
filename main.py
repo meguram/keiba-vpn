@@ -62,6 +62,12 @@ def main():
 
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+    from src.config.deployment import require_explicit_env
+    from src.utils.project_env import load_project_dotenv
+
+    load_project_dotenv()
+    require_explicit_env()
+
     if args.flask_api:
         from src.api.flask_app import main as flask_main
         flask_main()
