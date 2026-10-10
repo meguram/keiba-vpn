@@ -539,6 +539,19 @@ async def lifespan(app):
     except Exception:
         pass
 
+    # バックグラウンドスレッド起動前に src.scraper パッケージを事前 import する。
+    # 起動直後に動く _disk_cache_cleanup_loop（別スレッド）が _get_storage() 経由で
+    # `from src.scraper.storage import HybridStorage` を実行するため、メインスレッドの
+    # 後続 import（queue_worker_log 等、src.scraper パッケージ経由）と競合すると
+    # 「partially initialized module」ImportError になることがある
+    # （CPython の per-module import lock がスレッド間の循環待ちを検出した場合の挙動）。
+    # ここで先に完全 import しておけば sys.modules に確定済みモジュールとして載るため、
+    # 後続スレッドからの import は競合なく即座に成功する。
+    try:
+        import src.scraper  # noqa: F401
+    except Exception:
+        logger.exception("src.scraper の事前 import に失敗")
+
     # 構造チェックスケジューラ起動
     _scheduler_stop.clear()
     _scheduler_thread = threading.Thread(target=_scheduler_loop, daemon=True, name="structure-scheduler")
