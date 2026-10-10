@@ -333,28 +333,162 @@ def history_row(e: dict[str, Any], rid: str, meta: dict[str, Any], day: date, pl
     }
 
 
-def _put_schemaless(put: Any, rid: str, field: list[dict[str, Any]], rng: random.Random) -> None:
+def _mock_tracking_difficulty_category(
+    rid: str, meta: dict[str, Any], day: date, field: list[dict[str, Any]], rng: random.Random
+) -> dict[str, Any]:
+    """``tracking_difficulty``（GCS 保存カテゴリ。コース巧拙の計算結果）形式のモックデータ。
+
+    ``src.api.stg_mock.mock_tracking_difficulty`` は API レスポンス用の別形式（同名だが別物）
+    のため、ここでは ``src/scraper/schema_defs.json`` の ``tracking_difficulty`` スキーマ
+    （top_required / entry_required）に適合する形式を独自に生成する。
+    """
+    n = len(field)
+    entries = []
+    for i, h in enumerate(field):
+        entries.append({
+            "horse_id": h["horse_id"],
+            "horse_name": h["horse_name"],
+            "horse_number": i + 1,
+            "bracket_number": (i % 8) + 1,
+            "course_comparison": {"score": round(rng.uniform(0, 100), 1)},
+            "field_factors": {"pace_aptitude": rng.choice(["high", "middle", "slow"])},
+            "form": {"recent_form": rng.choice(["良", "普通", "不調"])},
+            "gate_factors": {"bias": round(rng.uniform(-1, 1), 2)},
+            "neighbor_factors": {"inside_pressure": rng.choice([True, False])},
+            "prev_race": {"finish_position": rng.randint(1, 14)},
+            "profile": {"running_style": rng.choice(["逃", "先", "差", "追"])},
+            "recent_3": {"avg_position": round(rng.uniform(1, 14), 1)},
+            "tracking_difficulty": {"score": round(rng.uniform(0, 100), 1), "rank": i + 1},
+        })
+    return {
+        "race_id": rid,
+        "race_date": day.strftime("%Y%m%d"),
+        "race_name": meta["race_name"],
+        "venue": meta["venue"],
+        "surface": meta["surface"],
+        "distance": meta["distance"],
+        "track_condition": meta["track_condition"],
+        "field_size": n,
+        "result_viewable": False,
+        "_cache_meta": {"cached": True, "model_version": "dev-mock-v1"},
+        "_compute_meta": {"computed_at": day.isoformat(), "model_version": "dev-mock-v1"},
+        "field_prev_stats": {"avg_ability": round(rng.uniform(0, 100), 1)},
+        "pace_prediction": {"category": rng.choice(["high", "middle", "slow"])},
+        "position_flow": [rng.randint(1, max(1, n)) for _ in range(4)],
+        "entries": entries,
+    }
+
+
+def _mock_race_predictions_category(
+    rid: str, meta: dict[str, Any], field: list[dict[str, Any]], rng: random.Random
+) -> dict[str, Any]:
+    """``race_predictions``（予測結果。モデルの出走馬別スコア）形式のモックデータ。
+
+    ``src.api.stg_mock.mock_predictions`` は API レスポンス用の別形式のため、ここでは
+    ``src/scraper/schema_defs.json`` の ``race_predictions`` スキーマに適合する形式を生成する。
+    """
+    n = len(field)
+    scores = sorted((round(rng.uniform(0.1, 1.0), 4) for _ in range(n)), reverse=True)
+    predictions = []
+    for i, h in enumerate(field):
+        predictions.append({
+            "horse_id": h["horse_id"], "horse_name": h["horse_name"], "horse_number": i + 1,
+            "pred_rank": i + 1, "pred_score": scores[i], "normalized_score": round(scores[i] / scores[0], 4),
+        })
+    return {
+        "race_id": rid, "race_name": meta["race_name"], "venue": meta["venue"], "surface": meta["surface"],
+        "distance": meta["distance"], "track_condition": meta["track_condition"], "round": meta.get("round", 1),
+        "total_horses": n, "status": "ok", "model_type": "dev-mock-v1", "elapsed_sec": round(rng.uniform(0.2, 3.0), 2),
+        "predictions": predictions,
+    }
+
+
+def _put_schemaless(
+    put: Any, rid: str, meta: dict[str, Any], day: date, field: list[dict[str, Any]], rng: random.Random
+) -> None:
     """スキーマ未定義（pending）の生成物。形式は暫定で、実データの観測後に置き換える。"""
-    from src.api.stg_mock import mock_tracking_difficulty
-
-    class _Shim:
-        def load(self, category: str, key: str) -> dict[str, Any] | None:
-            return {"entries": [{"horse_id": h["horse_id"]} for h in field]} if category == "race_shutuba" else None
-
-    put("tracking_difficulty", rid, mock_tracking_difficulty(rid, _Shim()))
-    put("final_odds_prediction", rid, {"race_id": rid, "model_version": "dev-mock-v1", "predictions": [
-        {"horse_number": i + 1, "horse_id": h["horse_id"], "predicted_final_win_odds": round(rng.uniform(1.5, 60), 1)}
-        for i, h in enumerate(field)]})
+    put("tracking_difficulty", rid, _mock_tracking_difficulty_category(rid, meta, day, field, rng))
+    put("final_odds_prediction", rid, {
+        "race_id": rid, "race_name": meta["race_name"], "elapsed_sec": round(rng.uniform(0.2, 2.5), 2),
+        "_cache_meta": {"cached": True, "model_version": "dev-mock-v1"},
+        "entries": [
+            {"horse_number": i + 1, "source": "dev-mock",
+             "predicted_win_odds": round(rng.uniform(1.5, 60), 1),
+             "predicted_place_odds_min": round(rng.uniform(1.1, 10), 1),
+             "predicted_place_odds_max": round(rng.uniform(1.2, 15), 1)}
+            for i, h in enumerate(field)],
+    })
     put("finish_order_prediction", rid, {"race_id": rid, "model_version": "dev-mock-v1", "predictions": [
         {"horse_number": i + 1, "horse_id": h["horse_id"], "predicted_rank": i + 1} for i, h in enumerate(field)]})
-    put("race_performance", rid, {"race_id": rid, "horses": [
-        {"horse_number": i + 1, "horse_id": h["horse_id"], "performance_rating": round(rng.uniform(80, 120), 1)}
-        for i, h in enumerate(field)]})
+    # horse_lap: 各馬ラップ表（db.netkeiba ajax_race_result_horse_laptime）を馬番キーの列指向で
+    # 保持するカテゴリ。実際の取得コードが未実装のため形式は schema_defs.json の型のみに合わせた仮値。
+    horse_lap_data: dict[str, Any] = {"race_id": rid, "horse_id": {str(i + 1): h["horse_id"] for i, h in enumerate(field)}}
+    for f in range(1, 9):
+        horse_lap_data[f"{f}F_time"] = {str(i + 1): round(rng.uniform(11.0, 13.5), 1) for i in range(len(field))}
+        horse_lap_data[f"{f}F_posi_posi"] = {str(i + 1): rng.randint(1, len(field)) for i in range(len(field))}
+        horse_lap_data[f"{f}F_posi_in_out"] = {str(i + 1): rng.choice(["内", "中", "外"]) for i in range(len(field))}
+    put("horse_lap", rid, horse_lap_data)
+    # race_lap_on_time: db.netkeiba「ラップタイム」表（距離区間キー→通過タイム等の列指向）の仮値。
+    lap_on_time: dict[str, Any] = {"race_id": {"1": rid}, "タイトル": {"1": meta["race_name"]}}
+    for dist in (200, 400, 600, 800, 1000, 1200):
+        lap_on_time[str(dist)] = {"1": round(rng.uniform(11.0, 13.5), 1)}
+    put("race_lap_on_time", rid, lap_on_time)
+    venue_code = str(rid[4:6]) if len(rid) >= 6 else "01"
+    put("race_performance", rid, {
+        "race_id": rid, "year": str(day.year), "meta": meta,
+        "entries": [
+            {
+                "race_id": rid, "horse_id": h["horse_id"], "horse_name": h["horse_name"], "horse_number": i + 1,
+                "race_date": day.strftime("%Y%m%d"), "surface": meta["surface"], "distance": meta["distance"],
+                "distance_band": f"{(meta['distance'] // 400) * 400}-{(meta['distance'] // 400) * 400 + 399}",
+                "track_condition": meta["track_condition"], "venue": meta["venue"], "venue_code": venue_code,
+                "venue_era": f"{meta['venue']}_{day.year}", "finish_position": i + 1, "field_size": len(field),
+                "class_group": meta.get("race_class", meta["race_name"]),
+                "pace_shape_class": rng.choice(["ハイペース", "ミドルペース", "スローペース"]),
+                "adjusted_finish_time": round(meta["distance"] / 16.4 + rng.uniform(-1, 1), 2),
+                "baseline_mean_time": round(meta["distance"] / 16.4, 2),
+                "current_weight_advantage_points": round(rng.uniform(-2, 2), 2),
+                "field_relative_pre_rating": round(rng.uniform(-5, 5), 2),
+                "field_strength_contrib": round(rng.uniform(-3, 3), 2),
+                "field_top3_gap": round(rng.uniform(0, 3), 2),
+                "future_emergence_score": round(rng.uniform(0, 100), 2),
+                "horse_pre_rating_neutral": round(rng.uniform(40, 90), 2),
+                "horse_pre_rating_pre_race": round(rng.uniform(40, 90), 2),
+                "margin_adjusted_figure": round(rng.uniform(-3, 3), 2),
+                "normalized_weight_carried": round(rng.uniform(52, 58), 1),
+                "pace_adjusted_figure": round(rng.uniform(-3, 3), 2),
+                "race_level_pre_race": round(rng.uniform(40, 90), 2),
+                "race_level_retrospective": round(rng.uniform(40, 90), 2),
+                "race_uncertainty": round(rng.uniform(0, 1), 3),
+                "reference_weight_equivalent": round(rng.uniform(52, 58), 1),
+                "run_performance_final": round(rng.uniform(40, 90), 2),
+                "run_performance_final_pct": round(rng.uniform(0, 1), 3),
+                "run_performance_final_std": round(rng.uniform(0, 10), 2),
+                "run_performance_raw": round(rng.uniform(40, 90), 2),
+                "time_figure": round(rng.uniform(40, 90), 2),
+                "track_variant": round(rng.uniform(-2, 2), 2),
+                "track_variant_online": round(rng.uniform(-2, 2), 2),
+                "weight_adjusted_figure": round(rng.uniform(-3, 3), 2),
+            }
+            for i, h in enumerate(field)
+        ],
+    })
 
 
 def pick_days(today: date) -> tuple[date, date]:
+    """確定結果ありの過去日と、未確定の直近土曜（開催予定日）を選ぶ。
+
+    ``past_day = upcoming - 6日`` は ``today`` が日曜のときだけ ``upcoming`` が 6 日先
+    （次の土曜）になり、``past_day`` が ``today`` 自身と一致してしまっていた。
+    結果「過去日のはずが SLA 期限（dayof: 当日19時）がまだ来ていない」扱いになり、
+    race_result_on_time 等が誤って「不足」と判定される不具合があったため、
+    past_day が today 以降になるケースだけ 1 週間繰り下げる（他の曜日の挙動は変えない）。
+    """
     upcoming = today + timedelta(days=(5 - today.weekday()) % 7)
-    return upcoming - timedelta(days=6), upcoming
+    past_day = upcoming - timedelta(days=6)
+    if past_day >= today:
+        past_day -= timedelta(days=7)
+    return past_day, upcoming
 
 
 def _page_ref_dir() -> Path:
@@ -421,8 +555,6 @@ def generate(today: date, root: Path) -> dict[str, int]:
     plan = [(past_day, 3, 2, True), (upcoming, 4, 1, False)]
     ran: dict[str, list[dict[str, Any]]] = {h["horse_id"]: [] for h in horses}
 
-    from src.api.stg_mock import mock_predictions
-
     for day, kai, dayn, with_result in plan:
         order = list(range(N_HORSES))
         rng.shuffle(order)
@@ -441,7 +573,7 @@ def generate(today: date, root: Path) -> dict[str, int]:
                                ("race_trainer_comment", "trainer_comment"), ("race_shutuba_past", "shutuba_past"),
                                ("race_pair_odds", "pair_odds"), ("race_detail", "detail"), ("smartrc_race", "smartrc")):
                     put(cat, rid, r[k])
-                _put_schemaless(put, rid, field, rng)
+                _put_schemaless(put, rid, r["meta"], day, field, rng)
                 if with_result:
                     put("race_result", rid, r["result"])
                     put("race_result_on_time", rid, r["on_time"])
@@ -449,9 +581,7 @@ def generate(today: date, root: Path) -> dict[str, int]:
                     for h in field:
                         ran[h["horse_id"]].append(
                             history_row(r["finish"][h["horse_id"]], rid, r["meta"], day, place, venue, FIELD, dayn))
-                pred = mock_predictions(rid, [h["horse_id"] for h in field])
-                pred["model_version"] = "dev-mock-v1"
-                put("race_predictions", rid, pred)
+                put("race_predictions", rid, _mock_race_predictions_category(rid, r["meta"], field, rng))
                 races_listing.append({"race_id": rid, "round": rr, "venue": venue, "race_name": RACE_SPECS[rr]["name"]})
                 schedule_slots.append({
                     "race_id": rid, "venue": venue, "round": rr, "race_name": RACE_SPECS[rr]["name"],
@@ -483,9 +613,10 @@ def generate(today: date, root: Path) -> dict[str, int]:
             "row_id": "nk_shutuba_entries", "trace_key": f"race_{rid}_nk_shutuba_entries", "scope": "race", "primary_id": rid,
             "canonical": [{"category": "race_shutuba", "key": rid}], "title_ja": "出馬表HTML（モック）"})
     put("jra_cushion", str(upcoming.year), {"records": [
-        {"year": upcoming.year, "venue_code": pl, "venue_name": v, "kai": 3, "is_race_day": True, "date": d.isoformat(),
+        {"year": upcoming.year, "venue_code": pl, "venue_name": v, "kai": 3, "race_day": 1,
+         "weekday": ("土", "日")[i % 2], "is_race_day": True, "date": d.isoformat(), "course_position": "内",
          "cushion_value": 9.4, "turf_moisture_goal": 11.0, "turf_moisture_4corner": 11.6, "dirt_moisture_goal": 2.4,
-         "dirt_moisture_4corner": 2.9} for d in (past_day, upcoming) for pl, v in VENUES]})
+         "dirt_moisture_4corner": 2.9} for i, d in enumerate((past_day, upcoming)) for pl, v in VENUES]})
     return counts
 
 

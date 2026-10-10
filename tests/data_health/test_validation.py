@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 
@@ -277,7 +277,11 @@ def test_cli_require_complete_exit_codes(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("KEIBA_CALCULATED_DATA_DIR", str(tmp_path / "calc"))
     monkeypatch.setenv("DATA_HEALTH_OUT_DIR", str(tmp_path / "health"))
     monkeypatch.setenv("DATA_HEALTH_SKIP", NO_ART)
-    make_dev_mock.generate(date.today(), make_dev_mock.dev_mock_root())
+    # `make_dev_mock` の CLI 既定と同じ JST 基準の日付を使う（UTC の date.today() だと
+    # JST 深夜〜朝（UTC 前日 15 時〜24 時）に実行した場合、SLA 期限判定が 1 日ずれて
+    # race_result_on_time 等が「待機」でなく「不足」と誤判定されることがある）。
+    today_jst = datetime.now(make_dev_mock.JST).date()
+    make_dev_mock.generate(today_jst, make_dev_mock.dev_mock_root())
     assert main(["--since", "2020-01-01", "--no-infra", "--no-horses", "--require-complete", "--quiet"]) == 0   # モックは全件健全
     assert "完全性" in capsys.readouterr().out
     assert main(["--no-infra", "--no-horses", "--require-complete", "--quiet"]) == 3                             # 既定(90日)は 2020 年より後

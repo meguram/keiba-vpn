@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -23,7 +24,16 @@ def _sample_value(field: str, spec: dict, key: str):
     if field == "race_id":
         return key
     if pat:
-        return "2025-01-01" if r"\d{4}-" in pat else "20250101" if r"\d{8}" in pat else "1"
+        if r"\d{4}-" in pat:
+            return "2025-01-01"
+        if r"\d{8}" in pat:
+            return "20250101"
+        # 汎用: `^\d{N}$` のような桁数固定パターンは N 桁のゼロ埋め数字文字列にする
+        # （horse_id の `^\d{10}$` 等。固定長に満たない "1" だと pattern 不一致になる）。
+        m = re.search(r"\\d\{(\d+)\}", pat)
+        if m:
+            return "1".zfill(int(m.group(1)))
+        return "1"
     return {"str": "x", "int": max(spec.get("min", 1), 1), "float": 1.0, "list": [], "dict": {}, "bool": True}.get(t, "x")
 
 
