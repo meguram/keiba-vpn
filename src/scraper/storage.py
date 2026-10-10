@@ -59,15 +59,28 @@ def _is_gcs_not_found(exc: BaseException) -> bool:
 
 
 def _load_env():
-    env_path = Path(__file__).resolve().parents[2] / ".env"
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                key, _, val = line.partition("=")
-                os.environ.setdefault(key.strip(), val.strip())
+    """``.env`` を読み込み、``KEIBA_ENV=stg|prod`` のときは ``.env.stg`` / ``.env.prod`` を
+    上書きマージする（``src.utils.project_env.load_project_dotenv`` と同じ重ね順）。
+
+    以前はこの関数が独自に ``.env`` だけを素朴にパースしており、
+    stg/prod のオーバーレイ（``DATABASE_URL`` / ``GCS_BUCKET`` / シークレット等）が
+    一切適用されない不具合があったため、共通ローダーに統一する。
+    """
+    try:
+        from src.utils.project_env import load_project_dotenv
+
+        load_project_dotenv()
+    except Exception:
+        # プロジェクトルートが見つからない等でも、素朴なフォールバックで最低限 .env は読む。
+        env_path = Path(__file__).resolve().parents[2] / ".env"
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, _, val = line.partition("=")
+                    os.environ.setdefault(key.strip(), val.strip())
 
 
 class HybridStorage:
