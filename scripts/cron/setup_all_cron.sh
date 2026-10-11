@@ -154,8 +154,11 @@ PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin
 0 19 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo ${PYTHON} -m src.scraper.backfill --year 2022 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2022.log 2>&1 # KEIBA_BACKFILL
 # Phase horse: 馬情報一括   UTC: 21:00 / JST: 06:00
 0 21 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo ${PYTHON} -m src.scraper.backfill --phase horse >> ${LOG_DIR}/backfill_horse.log 2>&1 # KEIBA_BACKFILL
-# Phase full: 補助データ (race_result_on_time 含む)  UTC: 22:30=JST:07:30 / 23:00=JST:08:00 / 00:00=JST:09:00
-30 22 * * *  cd ${PROJECT_DIR} && TZ=Asia/Tokyo ${PYTHON} -m src.scraper.backfill --year 2026 --phase full --max-dates 5 >> ${LOG_DIR}/backfill_full_2026.log 2>&1 # KEIBA_BACKFILL
+# Phase full: 補助データ (race_result_on_time 含む)  UTC: 22:50=JST:07:50 / 23:00=JST:08:00 / 00:00=JST:09:00
+# 2026 だけ元々 UTC 22:30(JST 07:30) だったが、SLA3/SLA4 (raceday-runner / raceday-result-runner) も
+# 同時刻にキック（T-070）されており、netkeiba への同時アクセスが増えアクセス制限の一因になり得るため
+# 20 分ずらす（2025/2024 は raceday-runner 自体の netkeiba アクセスが落ち着く時間帯のため現状維持）。
+50 22 * * *  cd ${PROJECT_DIR} && TZ=Asia/Tokyo ${PYTHON} -m src.scraper.backfill --year 2026 --phase full --max-dates 5 >> ${LOG_DIR}/backfill_full_2026.log 2>&1 # KEIBA_BACKFILL
 0 23 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo ${PYTHON} -m src.scraper.backfill --year 2025 --phase full --max-dates 3 >> ${LOG_DIR}/backfill_full_2025.log 2>&1 # KEIBA_BACKFILL
 0  0 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo ${PYTHON} -m src.scraper.backfill --year 2024 --phase full --max-dates 3 >> ${LOG_DIR}/backfill_full_2024.log 2>&1 # KEIBA_BACKFILL
 # 古い年度: 週2回  UTC: 17:00=JST:02:00(月木) / 18:00=JST:03:00(火金)
