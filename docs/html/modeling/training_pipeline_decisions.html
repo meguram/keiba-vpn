@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>学習パイプライン 確定事項ログ — keiba-vpn docs</title>
+<style>
+  :root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.75 "Noto Sans JP",system-ui,sans-serif; }
+  main { max-width:980px; margin:0 auto; padding:40px 28px 96px; }
+  h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:20px; margin:44px 0 10px; padding-top:18px; border-top:1px solid var(--border); }
+  h3 { font-size:15px; color:var(--accent); margin:22px 0 6px; }
+  p, li { color:var(--text); } .muted { color:var(--muted); font-size:13px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0 16px; font-size:13.5px; }
+  th, td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--panel); color:var(--muted); font-weight:600; }
+  code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12.5px; }
+  .ok { color:var(--ok); font-weight:600; } .warn { color:var(--warn); font-weight:600; }
+  .box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>学習パイプライン 確定事項ログ</h1>
+<p class="muted">notebook <code>notebooks/modeling/training_pipeline/tp-NN-*.ipynb</code> が完成するたびに、そのフローで確定した事項を追記する。各項目には根拠（コミット・MLflow run・成果物）を添える。実行はホスト PC（stg）。最終更新: 2026-10-14（tp-00・tp-01）。</p>
+
+<div class="box">
+<b>運用ルール</b>
+<ul>
+  <li>確定した事項だけを書く。実測値と推測を区別し、未確定のものは「申し送り」に分ける。</li>
+  <li>数値は notebook の実行結果から転記し、実行時のコミットと MLflow run を併記する。</li>
+  <li>前の節の確定事項を変更するときは、変更理由と日付を該当節に追記する（書き換えて消さない）。</li>
+</ul>
+</div>
+
+<h2>0. 全体フローと状態</h2>
+<table>
+<tr><th>#</th><th>notebook</th><th>役割</th><th>状態</th></tr>
+<tr><td>00</td><td><code>tp-00-env-check</code></td><td>環境・接続・データ・計算資源の確認</td><td class="ok">完了</td></tr>
+<tr><td>01</td><td><code>tp-01-dataset-split</code></td><td>母表構築・分割・分布検証</td><td class="ok">完了</td></tr>
+<tr><td>02</td><td><code>tp-02-feature-build</code></td><td>特徴量生成（リーク検査つき）</td><td>未作成</td></tr>
+<tr><td>03</td><td><code>tp-03-feature-ablation</code></td><td>特徴量グループの採否</td><td>未作成</td></tr>
+<tr><td>04</td><td><code>tp-04-stage-models</code></td><td>前段モデル（脚質・ペース・上がり3F・位置取り・走破タイム）</td><td>未作成</td></tr>
+<tr><td>05</td><td><code>tp-05-final-train-tune</code></td><td>p_win・p_top2・p_top3 の学習と調整</td><td>未作成</td></tr>
+<tr><td>06</td><td><code>tp-06-calibration-eval</code></td><td>確率較正・評価（test は一度だけ）</td><td>未作成</td></tr>
+<tr><td>07</td><td><code>tp-07-register-verify</code></td><td>最終再学習・登録・推論の一致確認</td><td>未作成</td></tr>
+</table>
+
+<h2>1. tp-00 環境チェック</h2>
+<p class="muted">根拠: コミット <code>9d824b6</code> でホスト PC 実行、全 13 項目 OK。実行結果は <code>data/local/modeling/training_pipeline/runs/tp-00-env-check.ipynb</code>（ホスト PC）。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>項目</th><th>確定内容</th></tr>
+<tr><td>実行場所</td><td>ホスト PC（<code>/home/jovyan/work/keiba-vpn</code>、<code>KEIBA_ENV=stg</code>）。コードはこの PC で書き、git（<code>origin/develop</code>）経由で反映する。</td></tr>
+<tr><td>MLflow</td><td><code>http://127.0.0.1:23230</code>（ホスト PC 上）。<code>require_tracking_server()</code> で接続できなければ停止し、ローカルファイルへは退避しない。</td></tr>
+<tr><td>学習対象年</td><td>2020〜2025 年のみ。2026 年は不完全なため、学習・検証・テスト・履歴集計のいずれにも使わない（<code>TRAINING_YEARS</code>）。</td></tr>
+<tr><td>分割ルール</td><td><code>config/modeling/dataset_split_manifest.json</code>（version 1、git 管理）。2020-23 train / 2024 valid / 2025 test、レース単位で完全分離。</td></tr>
+<tr><td>必須ソース</td><td><code>race_shutuba</code>(33 列)、<code>race_result</code>(38 列)、<code>race_index</code>(26 列)、<code>race_shutuba_past</code>(20 列)。</td></tr>
+<tr><td>計算資源</td><td>CPU 24 スレッド（他ジョブ用に 4 を空け、学習は 20）、GPU は RTX 4070 Ti 12GB、RAM 90GB。XGBoost(CUDA) と CatBoost(GPU) は GPU で動作確認済み。LightGBM は CPU のみ。CatBoost は CPU/GPU で <code>border_count=254</code> に固定。</td></tr>
+</table>
+<h3>申し送り</h3>
+<ul>
+  <li>GCS（恒久保存先）は未接続。認証情報がなく、<code>KEIBA_GCS_ENABLED=false</code>。認証方式の決定待ち。</li>
+  <li>MLflow サーバーは <code>nohup</code> 起動のみで、ホスト PC の再起動後は自動復帰しない。</li>
+</ul>
+
+<h2>2. tp-01 データセット構築・分割・分布検証</h2>
+<p class="muted">根拠: コミット <code>7f53678</code>、MLflow 実験 <code>keiba-tp-dataset</code> の run <code>5a81ac35155340eebd0bcc69c3cf5a61</code>。成果物は <code>data/local/modeling/training_pipeline/</code> の <code>layer_a.parquet</code> と <code>eda/</code>（ホスト PC）。実行時間 約 27 秒、プロセス常駐メモリ約 1.1GB。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>項目</th><th>確定内容</th></tr>
+<tr><td>母表</td><td><code>build_layer_a_dataframe(years=2020–2025, jra_only=True)</code>。134,556 行 / 18,925 レース / 70 列。オッズ・人気は含まない。開催年別レース数は 3,151〜3,159 で安定。</td></tr>
+<tr><td>split</td><td>train 12,622 レース・88,077 行（2020-01-05〜2023-12-28）／valid 3,152 レース・23,463 行（2024）／test 3,151 レース・23,016 行（2025）。同一レースが複数 split に跨らないことを検査済み。</td></tr>
+<tr><td>時系列 CV</td><td>valid を 2022・2023・2024 の 1 暦年とする expanding window。学習は valid 開始日の 10 日前（purge 7 日 + embargo 3 日）より前に限る。学習／検証行数: 2022 → 43,139 / 21,994、2023 → 65,175 / 22,297、2024 → 87,506 / 23,463。実装は <code>src/pipeline/models/time_split.py</code>。</td></tr>
+<tr><td>ラベルの偏り</td><td>勝率 train 7.30% / valid 7.36% / test 7.32%、連対率 14.61% / 14.81% / 14.62%、複勝率 21.88% / 22.41% / 21.88%。split 間でほぼ一致。</td></tr>
+<tr><td>季節（月別構成比）</td><td>split 間のずれは最大でも約 2.3 ポイント（例: 1 月 train 8.6% / test 6.8%、8 月 train 7.9% / test 10.2%）。年単位の分割では季節の偏りは小さい。</td></tr>
+<tr><td>芝・ダート</td><td>芝 45.9〜47.2%、ダート 49.0〜50.1%、障害 3.8〜4.0% で split 間のずれは小さい。</td></tr>
+</table>
+<h3>確認された分布差（特徴量・評価の設計に反映する）</h3>
+<table>
+<tr><th>項目</th><th>train</th><th>valid</th><th>test</th><th>備考</th></tr>
+<tr><td>京都（08）の構成比</td><td>5.7%</td><td>20.3%</td><td>13.4%</td><td>京都の改修期間に阪神が代替開催したことによる開催場の偏りと見られる</td></tr>
+<tr><td>阪神（09）の構成比</td><td>17.3%</td><td>6.1%</td><td>13.6%</td><td>同上</td></tr>
+<tr><td>不良馬場の割合</td><td>5.1%</td><td>2.2%</td><td>2.2%</td><td>良馬場: 年別で 2024 年が 77.3% と突出</td></tr>
+<tr><td>平均出走頭数（年別）</td><td colspan="3">2020 年 11.37 → 2025 年 11.58 と緩やかに増加</td><td>勝率は年別で 7.1〜7.4% で安定</td></tr>
+</table>
+<h3>adversarial validation（train とそれ以外を見分ける AUC）</h3>
+<table>
+<tr><th>比較</th><th>月なし</th><th>月あり</th></tr>
+<tr><td>train vs valid</td><td>0.661</td><td>0.749</td></tr>
+<tr><td>train vs test</td><td>0.668</td><td>0.780</td></tr>
+<tr><td>valid vs test</td><td>0.690</td><td>0.792</td></tr>
+</table>
+<p>解釈: 月を加えると AUC が 0.08〜0.11 上がるが、月別の構成比のずれは小さい。月と開催場・距離の組み合わせが、年ごとの開催日程の違いを拾っている可能性が高く、純粋な季節偏りの大きさとは読めない。</p>
+<h3>申し送り（tp-02 以降で対応）</h3>
+<ul>
+  <li>「京都改修後」フラグ（<code>venue_era</code>）を特徴量に加え、京都改修後の評価を別枠で見る（分割ルールの <code>special_sets</code> にも定義あり）。</li>
+  <li>騎手・調教師の拡張統計（<code>include_jockey_trainer_stats</code>）は未結合（既定 False）。</li>
+  <li>この母表（18,925 レース）は、旧 <code>master_dataset_full</code>（20,733 レース）とは構成が異なる。差の原因は未調査。</li>
+  <li>データチェックで 2024-08、2024-11、2025-05 に各 1 レースの欠損がある。</li>
+  <li>adversarial validation の AUC を、特徴量追加後も同じ手順で追跡する。</li>
+</ul>
+
+<h2>3. 以降の節</h2>
+<p class="muted">tp-02〜tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
+</main>
+</body>
+</html>
