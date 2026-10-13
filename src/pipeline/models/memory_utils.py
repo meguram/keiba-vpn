@@ -38,7 +38,7 @@ def downcast_frame(df: pd.DataFrame, *, keep: Iterable[str] = (), max_category_r
             out[col] = s.astype(np.float32)
         elif pd.api.types.is_integer_dtype(s) and not pd.api.types.is_bool_dtype(s):
             out[col] = pd.to_numeric(s, downcast="integer")
-        elif s.dtype == object and pd.api.types.infer_dtype(s, skipna=True) == "string":
+        elif (s.dtype == object or pd.api.types.is_string_dtype(s)) and pd.api.types.infer_dtype(s, skipna=True) == "string":  # pandas 3 は str dtype
             if s.nunique(dropna=True) <= max_category_ratio * max(len(s), 1):
                 out[col] = s.astype("category")
     return out

@@ -26,7 +26,7 @@ def test_downcast_shrinks_and_keeps_protected_columns():
     assert out["x1"].dtype == np.float32
     assert out["cnt"].dtype == np.int8
     assert out["venue"].dtype.name == "category"
-    assert out["race_id"].dtype == object
+    assert out["race_id"].dtype == df["race_id"].dtype  # keep 列は変えない（pandas 2 は object / 3 は str）
     assert out["past"].dtype == object  # リスト列は触らない
     assert out["flag"].dtype == bool
     assert frame_mb(out) < frame_mb(df)
