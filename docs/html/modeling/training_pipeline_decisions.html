@@ -52,7 +52,8 @@
 <table>
 <tr><th>項目</th><th>確定内容</th></tr>
 <tr><td>実行場所</td><td>ホスト PC（<code>/home/jovyan/work/keiba-vpn</code>、<code>KEIBA_ENV=stg</code>）。コードはこの PC で書き、git（<code>origin/develop</code>）経由で反映する。</td></tr>
-<tr><td>MLflow</td><td><code>http://127.0.0.1:23230</code>（ホスト PC 上）。<code>require_tracking_server()</code> で接続できなければ停止し、ローカルファイルへは退避しない。</td></tr>
+<tr><td>MLflow</td><td><code>http://127.0.0.1:23230</code>（ホスト PC 上）。<code>.env</code> と <code>.env.stg</code> の両方で同じ値に統一（<code>.env.stg</code> が <code>.env</code> を上書きするため、片方だけでは効かない）。<code>require_tracking_server()</code> で接続できなければ停止し、ローカルファイルへは退避しない。</td></tr>
+<tr><td>GCS（恒久保存先）</td><td>ホスト PC から接続できる（2026-10-14 確認）。認証は <code>.env</code> の <code>GCS_*</code>（サービスアカウント。<code>src/config/gcp_credentials.py</code>）で、読み込みは <code>load_project_dotenv()</code>。<code>.env.stg</code> の <code>KEIBA_GCS_ENABLED=true</code> が有効。バケット <code>magu-keiba-horse-racing-ai</code> の構成は <code>chuou/data/{raw,preprocessed,others,snapshots}</code> と <code>chuou/models/gs_level</code>（ほかに <code>chihou/</code>、<code>tmp/</code>）。</td></tr>
 <tr><td>学習対象年</td><td>2020〜2025 年のみ。2026 年は不完全なため、学習・検証・テスト・履歴集計のいずれにも使わない（<code>TRAINING_YEARS</code>）。</td></tr>
 <tr><td>分割ルール</td><td><code>config/modeling/dataset_split_manifest.json</code>（version 1、git 管理）。2020-23 train / 2024 valid / 2025 test、レース単位で完全分離。</td></tr>
 <tr><td>必須ソース</td><td><code>race_shutuba</code>(33 列)、<code>race_result</code>(38 列)、<code>race_index</code>(26 列)、<code>race_shutuba_past</code>(20 列)。</td></tr>
@@ -60,7 +61,7 @@
 </table>
 <h3>申し送り</h3>
 <ul>
-  <li>GCS（恒久保存先）は未接続。認証情報がなく、<code>KEIBA_GCS_ENABLED=false</code>。認証方式の決定待ち。</li>
+  <li>notebook の環境読み込みは <code>load_project_dotenv()</code> に統一する（標準の <code>storage.Client()</code> や <code>.env</code> 単体の読み込みでは GCS 認証が見つからない）。</li>
   <li>MLflow サーバーは <code>nohup</code> 起動のみで、ホスト PC の再起動後は自動復帰しない。</li>
 </ul>
 
