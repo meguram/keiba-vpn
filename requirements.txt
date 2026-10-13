@@ -38,6 +38,7 @@ schedule>=1.2.0
 # ML Pipeline
 pandas>=2.0.0
 pyarrow>=14.0.0
+polars>=1.0.0
 numpy>=1.24.0
 matplotlib>=3.8.0
 scipy>=1.11.0
