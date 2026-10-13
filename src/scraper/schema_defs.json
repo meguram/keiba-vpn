@@ -681,7 +681,17 @@
      "type": "list"
     }
    },
-   "top_optional": {},
+   "top_optional": {
+    "phase": {
+     "type": "str"
+    },
+    "snapshot_at": {
+     "type": "str"
+    },
+    "snapshots": {
+     "type": "list"
+    }
+   },
    "entry_required": {
     "horse_number": {
      "type": "int",
@@ -747,6 +757,18 @@
     },
     "umatan": {
      "type": "list"
+    },
+    "phase": {
+     "type": "str"
+    },
+    "snapshot_at": {
+     "type": "str"
+    },
+    "snapshots": {
+     "type": "list"
+    },
+    "sanrenpuku": {
+     "type": "list"
     }
    },
    "lists": {
@@ -786,6 +808,21 @@
     "umatan": {
      "entry_required": {
       "pair": {
+       "type": "list"
+      },
+      "odds": {
+       "type": "any"
+      }
+     },
+     "entry_optional": {
+      "popularity": {
+       "type": "any"
+      }
+     }
+    },
+    "sanrenpuku": {
+     "entry_required": {
+      "combo": {
        "type": "list"
       },
       "odds": {

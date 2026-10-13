@@ -9,7 +9,7 @@
 | 領域 | 役割 |
 |------|------|
 | `src/api/` | FastAPI（`app.py`）。エントリは `python main.py` → `src.api.app:app` |
-| `src/monitor/` | **開発者専用監視ポータル**（スタンドアロン Flask :9090）。`app.py` + `templates/`。起動: `bash scripts/server/start_monitor.sh` / `service_start.sh --env dev --monitor`。仕様書: `docs/monitoring-portal.md` |
+| `src/monitor/` | **開発者専用監視ポータル**（スタンドアロン Flask。ポートは `config/ports.env`）。`app.py` + `templates/`。起動: `bash scripts/server/start_monitor.sh` / `service_start.sh --env dev --monitor`。仕様書: `docs/monitoring-portal.md` |
 | `src/scraper/` | netkeiba / SmartRC / JRA 取得・パース・キュー（CLI は `python -m src.scraper.X`） |
 | `src/pipeline/` | 学習・特徴量。`features/`（store/layout/builder/stats）・`models/`（学習・予測子）・`inference/`（race_day/betting/composite_optimizer）に分割。`build_*.py` などの CLI はルート（`python -m src.pipeline.build_X`） |
 | `src/research/` | リサーチ層。`pedigree/`（血統・種牡馬）、`genes/`（遺伝子マーカー）、`race/`（コース・トラック・レース品質）、`scripts/`（キュー投入等の CLI）に分類 |
@@ -28,7 +28,13 @@
 | `mlflow/` | MLflow 関連。`data/`（Docker サーバの DB + artifacts、`.gitignore`）・`runs/`（ローカルフォールバックのファイルストア、`.gitignore`）・`server/`（Docker Compose / Nginx / `setup.sh`）。**モデル一覧・追加手順**: `docs/html/design/mlflow_platform.html` / `src/pipeline/mlflow/catalog.py` |
 | `config/` | `settings.yaml`（MLflow モデルキー等。`src/config/` はコード側プロファイル） |
 | `tests/` | unittest（`api/` `pipeline/` `research/` `scraper/`） |
-| `main.py` | サーバエントリ（`python main.py --port 8000`） |
+| `main.py` | サーバエントリ（`python main.py`。ポート省略時は `config/ports.env`） |
+| `frontend/lib/features.ts` | **UI 機能フラグの唯一の正**。現在の UI のゴールは「AI予測表示 → 期待値 → 推奨馬券」の最小構成で、それ以外の画面は `enabled:false`（コード残置・ホーム/ナビ/直リンクで非表示、直リンクは `/` へリダイレクト）。一時有効化は `NEXT_PUBLIC_ENABLE_FEATURES=all` または `megu-index,growth-curve`。新画面を足したら必ずここに登録 |
+| オッズの時点別運用 | `race_odds` / `race_pair_odds`（馬連・ワイド・馬単・**3連複**）はトップが最新で `phase`(t60/t15)・`snapshot_at`・履歴 `snapshots`（`src/scraper/odds_snapshot.py`）。開催日ランナー（キュー版）が各R **T-60 でオッズのみ、T-15 でバンドル**を取得（`auto_scrape_queue.build_odds_events`）。推奨は `odds_mode=auto/actual/predicted`（`src/pipeline/inference/odds_source.py`、予測オッズは単勝・複勝のみ）。**実データ取得シナリオ + 所要時間計測（T-X 判断用）**: `python3 tests/scraper/manual/live_odds_scenarios.py --date YYYYMMDD --timing --yes`（`--timing-only` / `--offline` / `--capture-dev`、結果は `data/local/meta/scrape_timing/`）。3連複 API(type=7)の応答形式は未検証 |
+| dev の表示データ | dev の UI は既定で **dev ストア（`data/dev_mock` + `data/page_reference`）をバックエンド経由で表示**（フロント内蔵モックに戻すなら `KEIBA_DEV_UI_MOCK=1`）。ストアの一部は実データ: `python3 -m src.scripts.scraping.capture_dev_day --date YYYYMMDD --yes`（実アクセスあり・36R で約30分・再開可。現在は 2026-09-06 の36R取り込み済み。AI予測/予測オッズはその実馬・実オッズに対するモック `_meta.mock_prediction`）。`make dev-mock` は `_meta.dev_mock` のモックだけを作り直し、実データは消さない。**別 PC でも同じ表示にする最小データは git 管理**: `dev_fixture/real_day.tar.gz`（実データ 1 開催日の UI 最小カテゴリ。約 0.3MB・再現可能な形式）+ `MANIFEST.json`。`git pull` 後は `make dev-data`（= `python3 -m src.scripts.data.dev_fixture ensure`。モック生成 + 実データ日の展開、冪等）、または dev 自動起動（`autostart_dev.sh`）が自動で行う。取り込み直したら `make dev-fixture-pack DATE=YYYYMMDD`。中身は netkeiba 取得データの抜粋なので社外に出るリポジトリへ置かない（DEC-024）。dev はこの PC からの直アクセスを**自動ログイン済み**として扱う（`src/api/auth.py` `dev_auto_login_applies`。KEIBA_ENV=dev・ループバック・Host が localhost のときだけ。公開トンネル経由は対象外。止めるなら `KEIBA_DEV_AUTO_LOGIN=0`）。週間予測の既定日は `NEXT_PUBLIC_DEFAULT_RACE_DATE`（`service_start.profiles.sh`）。推奨馬券の購入上限は UI で指定（既定 1R 合計 2,000 円、空欄/0 で上限なし。API は `max_total_bet`、`src/api/v1/delegates.py` の `DEFAULT_MAX_TOTAL_BET`） |
+| 馬連・ワイド・3連複の確率 | `src/pipeline/inference/exotic_probabilities.py`（勝率・連対率・複勝率に整合する割引 Harville＝Benter 型。α はレースごとに連対率・複勝率へ当てはめ）。仕様・文献・検証: `docs/html/modeling/exotic_bet_probabilities.html`。学習済みモデルの出力での検証・調整: `python3 -m src.scripts.data.validate_exotic_probabilities predictions --from YYYYMMDD --to YYYYMMDD [--write-config]`（モック予測は除外、200R 未満は書かない） |
+| レース選択の価値表示・買い目の流し表示 | レース詳細の R チップ/週間予測カードは、推奨ポートフォリオの**期待回収率**で色分け（★オレンジ=150%以上かつその日の上位20%、緑=125%以上、青=105%以上、灰=見送り）。API: `GET /api/v1/betting/race-values?date=YYYYMMDD`（`delegates.race_value_summary`、30秒キャッシュ・ログイン必須）、フロント: `frontend/lib/raceValue.ts`。推奨買い目の表は券種ごと＋同じ軸から流せるものは流し表示（`frontend/lib/betGrouping.ts`。馬連/ワイド=軸1頭、馬単=1着/2着軸、3連複=軸1頭の全組合せ or 軸2頭。金額・確率は変えず表示だけまとめる）。確率が未検証なので価値表示も目安 |
+| `config/ports.env` | **全ローカルサーバのポートの唯一の正**（dev=231xx / stg=232xx / prod=233xx / monitor=23900）。bash は `scripts/server/ports.sh`、Python は `src/config/ports.py`。クリックで開ける一覧は `docs/monitoring-portal.md` §0。dev は IDE を開くと `scripts/server/autostart_dev.sh` が自動起動（Claude Code `.claude/settings.json` / Cursor `.cursor/hooks.json`） |
 
 **ped_tbl 増分**: `python -m src.pipeline.sync_ped_tbl_for_horses --horse-ids …`（ローカル `horse_pedigree_5gen` 参照）。出馬表 `race_shutuba` 保存直後の自動生成は `.env` で `KEIBA_SYNC_PED_TBL_ON_SHUTUBA=1` のときのみ。接木は `KEIBA_PED_TBL_MERGE_GEN5`（未設定時 1）。
 

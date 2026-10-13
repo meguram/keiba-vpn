@@ -1,20 +1,36 @@
 # サービス・エンドポイント一覧
 
-> **最終更新**: 2026-07-04  
+> **最終更新**: 2026-10-13  
 > **用途**: ローカル開発・stg/prod 運用時に「何をどの URL / ポートで起動するか」を一覧する。  
 > **関連**: [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md) · [environment-stg.md](../environment-stg.md) · [DEC-013 Flask 正](../decisions/DEC-013-api-framework-flask-primary.md) · `scripts/server/` · `.env.example`
+
+## ポート割り当て（正: `config/ports.env`）
+
+他アプリが既定で使う 3000 / 5000 / 5432 / 6379 / 8000 / 9090 を避け、`23xxx` に集約した。環境変数 `KEIBA_PORT_*` で上書き可。クリックで開ける一覧は [`docs/monitoring-portal.md` §0](../monitoring-portal.md#0-サーバ一覧クリックで各サーバの画面へ)。
+
+| 環境 | Next.js | Flask `/api/v1` | FastAPI | MLflow Tracking |
+|---|---|---|---|---|
+| dev | 23100 | 23110 | 23120 | 23130 |
+| stg | 23200 | 23210 | 23220 | 23230 |
+| prod | 23300 | 23310 | 23320 | 23330 |
+| 共通 | 監視ポータル 23900 | | | |
+
+PostgreSQL（5432）/ Redis（6379）、`docker-compose.serving.yml`・`mlflow/server/`（VPS デプロイ用）、MLflow Model Serve（5001〜5010）は従来のポートのまま。以降の本文中の旧番号（3000/3001/5000/5100/8000/9090）は dev=231xx / stg=232xx / prod=233xx に読み替える（VPS・model serve の節を除く）。
+
+**dev は IDE を開くと自動起動**（Claude Code / Cursor のセッション開始フック → `scripts/server/autostart_dev.sh`）。状態確認: `bash scripts/server/autostart_dev.sh --status`。
 
 ## 一括起動
 
 リポジトリルートで `./service_start` を実行すると、ローカル開発向けの HTTP サービスをまとめて起動します（実体: `scripts/server/service_start.sh`）。**既定は `--env dev`**（FastAPI ホットリロード・Flask debug・`next dev`）。
 
 ```bash
-# パターン A（既定）: dev — Next.js モックのみ :3000（API 不要）
+# パターン A（既定）: dev — Next.js モック + Flask（ログイン用）
 ./service_start
 ./service_start --env dev          # 上記と同じ
 
 # dev 実 API 開発（ホットリロード）
-./service_start --env dev --full   # FastAPI :8000 + Flask :5100 + next dev
+./service_start --env dev --full   # FastAPI + Flask + next dev（実 API）
+./service_start --env dev --mock --with-fastapi   # モック UI + Flask + FastAPI（autostart_dev.sh が使う構成）
 
 # 環境プロファイル
 ./service_start --env stg          # 本番相当 + KEIBA_ENV=stg + meguai-stg トンネル
@@ -31,28 +47,28 @@
 
 | プロファイル | 用途 | FastAPI | Flask | Next.js | MLflow（ローカル） | tcpexposer |
 |---|---|---|---|---|---|---|
-| `dev`（既定） | モック UI のみ | — | — | mock `:3000` | オフ | `meguai-dev` → :3000 |
-| `dev --full` | ホットリロード開発 | reload | `:5100` debug | `npm run dev` | オフ | `meguai-dev` → :3000 |
-| `stg` | 本 PC・本番相当 | `--prod` | `:5000` | `dev` `:3001` 実 API | 既定オフ | `meguai-stg` → :3001 |
-| `prod` | VPS 想定（stg クローン） | `--prod` | `:5000` | `build+start` `:3001` | 既定オフ | （将来） |
+| `dev`（既定） | モック UI | `--with-fastapi` 時のみ :23120 | :23110 | mock `:23100` | オフ | `meguai-dev` → :23100 |
+| `dev --full` | ホットリロード開発 | reload :23120 | `:23110` debug | `npm run dev` | オフ | `meguai-dev` → :23100 |
+| `stg` | 本 PC・本番相当 | `--prod` :23220 | `:23210` | `dev` `:23200` 実 API | 既定オフ | `meguai-stg` → :23200 |
+| `prod` | VPS 想定（stg クローン） | `--prod` :23320 | `:23310` | `build+start` `:23300` | 既定オフ | （将来） |
 
-ポート・URL の上書き: 環境変数、または `scripts/server/service_start.local.env`（`.example` をコピー）。
+ポート・URL の上書き: `KEIBA_PORT_*` 環境変数（`config/ports.env` が既定）、または `scripts/server/service_start.local.env`（`.example` をコピー）。
 
 | 起動後 URL（dev モック） | サービス |
 |---|---|
-| `http://127.0.0.1:3000` | Next.js モック（`NEXT_PUBLIC_MOCK=true`） |
+| `http://127.0.0.1:23100` | Next.js モック（`NEXT_PUBLIC_MOCK=true`） |
 | `https://meguai-dev.tcpexposer.com/` | 上記の外部公開 |
 
 | 起動後 URL（stg / prod） | サービス |
 |---|---|
-| `http://127.0.0.1:8000` | FastAPI（レガシー UI / API） |
-| `http://127.0.0.1:5000` | Flask `/api/v1` |
-| `http://127.0.0.1:3001` | Next.js（`KEIBA_API_URL=http://127.0.0.1:5000`） |
-| `https://meguai-stg.tcpexposer.com/` | stg 外部公開（Next.js :3001） |
+| `http://127.0.0.1:23220` | FastAPI（レガシー UI / API） |
+| `http://127.0.0.1:23210` | Flask `/api/v1` |
+| `http://127.0.0.1:23200` | Next.js（`KEIBA_API_URL=http://127.0.0.1:23210`） |
+| `https://meguai-stg.tcpexposer.com/` | stg 外部公開（Next.js :23200） |
 
 PostgreSQL（`:5432`）と Redis（`:6379`）はスクリプト対象外です。未起動の場合は警告を出します。ログは `logs/` に出力されます。
 
-**tcpexposer トンネル**: ワークスペース起動時に `tunnel_tcpexposer.sh autostart-all` で **dev**（`meguai-dev` → `:3000`）と **stg**（`meguai-stg` → `:3001`）を自動接続。無効化: `KEIBA_AUTO_TCPEXPOSER=0`。手動: `./scripts/server/tunnel_tcpexposer.sh stg check` / `dev stop` / `stg background`。
+**tcpexposer トンネル**: ワークスペース起動時に `tunnel_tcpexposer.sh autostart-all` で **dev**（`meguai-dev` → `:23100`）と **stg**（`meguai-stg` → `:23200`）を自動接続。無効化: `KEIBA_AUTO_TCPEXPOSER=0`。手動: `./scripts/server/tunnel_tcpexposer.sh stg check` / `dev stop` / `stg background`。
 
 **環境の役割**: **dev** = モック UI のみ。**stg** = 本 PC 上の本番相当（実 API・GCS・DB）。**prod**（将来）= stg 構成を VPS へクローン。
 
@@ -61,23 +77,23 @@ PostgreSQL（`:5432`）と Redis（`:6379`）はスクリプト対象外です�
 ## 状態確認（クイック）
 
 ```bash
-# Watchdog 経由（FastAPI :8000 + MLflow Tracking :5000）
+# Watchdog 経由（FastAPI + MLflow Tracking。ポートはプロファイル別）
 ./scripts/server/server_watchdog.sh --status
 
 # 主要 HTTP ヘルス
-curl -s http://127.0.0.1:8000/api/health | python3 -m json.tool   # FastAPI（レガシー UI/API）
-curl -s http://127.0.0.1:5000/api/v1/health | python3 -m json.tool # Flask（仕様準拠 /api/v1）
+curl -s http://127.0.0.1:23120/api/health | python3 -m json.tool   # FastAPI dev（レガシー UI/API）
+curl -s http://127.0.0.1:23110/api/v1/health | python3 -m json.tool # Flask dev（仕様準拠 /api/v1）
 
 # リッスン中ポート
-ss -tlnp | grep -E ':(3000|3001|5000|5001|5010|5432|6379|8000)\s'
+ss -tlnp | grep -E ':(231[0-3]0|232[0-3]0|233[0-3]0|23900|5001|5010|5432|6379)\s'
 ```
 
 | 確認項目 | 期待 |
 |---|---|
-| FastAPI 稼働 | `GET http://127.0.0.1:8000/api/health` → HTTP 200 |
-| Flask 稼働 | `GET http://127.0.0.1:5000/api/v1/health` → `{"status":"ok",...}` |
-| Next.js 稼働 | ブラウザで `http://127.0.0.1:3001/`（stg）または `:3000`（dev モック）が表示される |
-| MLflow Tracking | `GET http://127.0.0.1:5000/health` または experiments API が 200 |
+| FastAPI 稼働 | `GET http://127.0.0.1:23120/api/health`（dev）→ HTTP 200 |
+| Flask 稼働 | `GET http://127.0.0.1:23110/api/v1/health`（dev）→ `{"status":"ok",...}` |
+| Next.js 稼働 | ブラウザで `http://127.0.0.1:23200/`（stg）または `:23100`（dev モック）が表示される |
+| MLflow Tracking | `GET http://127.0.0.1:23130/health`（dev）または experiments API が 200 |
 | PostgreSQL | `DATABASE_URL` で接続可能 |
 | Redis | `REDIS_URL` で PING 応答 |
 
@@ -337,8 +353,7 @@ Nginx 経由の Keiba API 例: `http://127.0.0.1/keiba/api/health`
 # 1. インフラ（別途 Docker 等）
 # PostgreSQL :5432, Redis :6379
 
-# 2. Flask 仕様 API（MLflow と競合する場合は FLASK_PORT=5100）
-export FLASK_PORT=5100
+# 2. Flask 仕様 API（ポートは config/ports.env。FLASK_PORT で上書き可）
 ./scripts/server/start_flask_api.sh &
 
 # 3. FastAPI レガシー UI
@@ -349,13 +364,13 @@ export FLASK_PORT=5100
 
 # 5. フロント
 cd frontend
-KEIBA_API_URL=http://127.0.0.1:5100 npm run dev
+KEIBA_API_URL=http://127.0.0.1:23110 npm run dev
 ```
 
 ### パターン B — VPS / stg 最小（Watchdog 準拠）
 
 ```bash
-# FastAPI :8000 + MLflow :5000 を watchdog が監視・自動再起動
+# FastAPI + MLflow（プロファイル別ポート）を watchdog が監視・自動再起動
 ./scripts/server/server_watchdog.sh
 # cron: */3 * * * * .../server_watchdog.sh
 ```
@@ -365,7 +380,7 @@ KEIBA_API_URL=http://127.0.0.1:5100 npm run dev
 ```bash
 cd frontend
 NEXT_PUBLIC_MOCK=true npm run dev
-# → http://127.0.0.1:3000 （API 不要）
+# → http://127.0.0.1:3000 （API 不要。`-p 23100` を付ければ割り当てポートで起動）
 ```
 
 ---
@@ -374,10 +389,11 @@ NEXT_PUBLIC_MOCK=true npm run dev
 
 | 変数 | 既定 | 説明 |
 |---|---|---|
-| `PORT` | `8000` | FastAPI（`main.py`） |
-| `FLASK_PORT` | `5000` | Flask `/api/v1` |
-| `KEIBA_API_URL` | `http://127.0.0.1:5000` | Next.js → Flask プロキシ先 |
-| `MLFLOW_TRACKING_URI` | `http://localhost:5000` | MLflow クライアント |
+| `PORT` | `config/ports.env`（dev=23120） | FastAPI（`main.py`） |
+| `FLASK_PORT` | `config/ports.env`（dev=23110） | Flask `/api/v1` |
+| `KEIBA_API_URL` | `http://127.0.0.1:<Flask ポート>` | Next.js → Flask プロキシ先 |
+| `MLFLOW_TRACKING_URI` | 現環境のローカル MLflow（dev=`http://localhost:23130`） | MLflow クライアント |
+| `KEIBA_PORT_*` | `config/ports.env` | 各サーバのポート上書き |
 | `KEIBA_LEGACY_API` | （未設定） | Flask → FastAPI ブリッジ |
 | `DATABASE_URL` | — | PostgreSQL |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis |

@@ -3,10 +3,11 @@
 # keiba-vpn 全サービス監視 & 自動再起動スクリプト
 #
 # 監視対象:
-#   1) keiba-vpn FastAPI サーバー (port 8000)
-#   2) MLflow Tracking サーバー   (port 5000)
-#   3) Flask API サーバー         (port 5100 dev / 5000 stg/prod)
-#   4) Next.js フロントエンド     (port 3000 dev / 3001 stg/prod)
+#   1) keiba-vpn FastAPI サーバー
+#   2) MLflow Tracking サーバー
+#   3) Flask API サーバー
+#   4) Next.js フロントエンド
+#   ※ ポートは config/ports.env（プロファイルごと）
 #
 # cron から定期実行される（*/3 * * * *）。
 # 各サービスのヘルスチェックを行い、ダウン時は自動再起動する。
@@ -48,16 +49,10 @@ LOG_DIR="${PROJECT_DIR}/logs"
 LOG_FILE="${LOG_DIR}/watchdog.log"
 MAX_LOG_LINES=5000
 
-# サービス定義
-API_PORT=8000
-API_PID_FILE="${PROJECT_DIR}/.server.pid"
-API_HEALTH_URL="http://127.0.0.1:${API_PORT}/api/health"
-
-MLFLOW_PORT=5000
-MLFLOW_PID_FILE="${PROJECT_DIR}/.mlflow.pid"
-MLFLOW_HEALTH_URL="http://127.0.0.1:${MLFLOW_PORT}/health"
-MLFLOW_BACKEND_STORE="${PROJECT_DIR}/mlflow/runs/mlflow.db"
-MLFLOW_ARTIFACT_ROOT="${PROJECT_DIR}/mlflow/runs/artifacts"
+# ポート定義の正は config/ports.env（環境変数 KEIBA_PORT_* で上書き可）
+# shellcheck source=ports.sh
+source "${PROJECT_DIR}/scripts/server/ports.sh"
+load_keiba_ports "$PROJECT_DIR"
 
 # ── アクティブプロファイルの読み込み ──
 # --profile 引数があればそちらを優先、なければ .service_start.profile から読む。
@@ -73,9 +68,10 @@ fi
 # プロファイル別デフォルト（service_start.profiles.sh と対応）
 case "$ACTIVE_PROFILE" in
     stg|prod)
-        FLASK_PORT="${FLASK_PORT:-5000}"
+        PROFILE_KEY="$ACTIVE_PROFILE"
+        FLASK_PORT="${FLASK_PORT:-$(keiba_port "$PROFILE_KEY" flask)}"
         FLASK_DEBUG_MODE=0
-        FRONTEND_PORT="${FRONTEND_PORT:-3001}"
+        FRONTEND_PORT="${FRONTEND_PORT:-$(keiba_port "$PROFILE_KEY" frontend)}"
         FRONTEND_NPM_SCRIPT="dev"
         FRONTEND_USE_MOCK="false"
         # stg/prod 用環境変数（.env.${ACTIVE_PROFILE} が存在すれば読み込む）
@@ -84,13 +80,25 @@ case "$ACTIVE_PROFILE" in
         fi
         ;;
     *)  # dev またはプロファイル不明（dev 扱い）
-        FLASK_PORT="${FLASK_PORT:-5100}"
+        PROFILE_KEY=dev
+        FLASK_PORT="${FLASK_PORT:-$KEIBA_PORT_DEV_FLASK}"
         FLASK_DEBUG_MODE=1
-        FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+        FRONTEND_PORT="${FRONTEND_PORT:-$KEIBA_PORT_DEV_FRONTEND}"
         FRONTEND_NPM_SCRIPT="dev"
         FRONTEND_USE_MOCK="true"
         ;;
 esac
+
+# サービス定義（プロファイル別ポート）
+API_PORT="$(keiba_port "$PROFILE_KEY" fastapi)"
+API_PID_FILE="${PROJECT_DIR}/.server-${API_PORT}.pid"
+API_HEALTH_URL="http://127.0.0.1:${API_PORT}/api/health"
+
+MLFLOW_PORT="$(keiba_port "$PROFILE_KEY" mlflow)"
+MLFLOW_PID_FILE="${PROJECT_DIR}/.mlflow.pid"
+MLFLOW_HEALTH_URL="http://127.0.0.1:${MLFLOW_PORT}/health"
+MLFLOW_BACKEND_STORE="${PROJECT_DIR}/mlflow/runs/mlflow.db"
+MLFLOW_ARTIFACT_ROOT="${PROJECT_DIR}/mlflow/runs/artifacts"
 
 # --profile が指定された場合は PID/カウンタファイルをプロファイル別にする
 # （複数プロファイルを同時に watchdog で監視しても競合しないように）

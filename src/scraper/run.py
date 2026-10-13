@@ -665,8 +665,14 @@ class ScraperRunner:
             logger.error("馬柱取得失敗 [%s]: %s", race_id, e)
             return None
 
-    def scrape_odds(self, race_id: str, skip_existing: bool = True) -> dict | None:
-        """オッズを JSON API から取得する (HTML は JS 動的レンダリングのため)。"""
+    def scrape_odds(
+        self, race_id: str, skip_existing: bool = True, phase: str | None = None,
+    ) -> dict | None:
+        """オッズを JSON API から取得する (HTML は JS 動的レンダリングのため)。
+
+        phase（"t60" / "t15" 等）を指定すると phase/snapshot_at を付け、既存文書の別 phase を
+        snapshots に履歴化して保存する（odds_snapshot.merge_snapshot）。None なら従来どおり上書き保存。
+        """
         if skip_existing and self.storage.exists("race_odds", race_id):
             logger.info("スキップ (既存): race_odds/%s", race_id)
             return self.storage.load("race_odds", race_id)
@@ -676,9 +682,15 @@ class ScraperRunner:
                 self.client._session, race_id
             )
             if data.get("entries"):
+                if phase:
+                    from src.scraper.odds_snapshot import ODDS_PAYLOAD_KEYS, merge_snapshot
+
+                    data = merge_snapshot(
+                        self.storage.load("race_odds", race_id), data, phase, ODDS_PAYLOAD_KEYS,
+                    )
                 self.storage.save("race_odds", race_id, data)
-                logger.info("保存: race_odds/%s (%d件)", race_id,
-                            len(data["entries"]))
+                logger.info("保存: race_odds/%s (%d件%s)", race_id,
+                            len(data["entries"]), f", phase={phase}" if phase else "")
                 # TODO(未接続): GCS save 成功後に scrape_runs テーブルへ INSERT されていない。
                 #   src/db/scrape_runs.py の log_scrape_run() を呼び出して実行ログを記録すること。
                 #   必要: get_session() でセッションを取得し、target_type="race_odds",
@@ -695,8 +707,10 @@ class ScraperRunner:
             logger.error("オッズ取得失敗 [%s]: %s", race_id, e)
             return None
 
-    def scrape_pair_odds(self, race_id: str, skip_existing: bool = True) -> dict | None:
-        """2連系オッズ (馬連/ワイド/馬単) を JSON API から取得する。"""
+    def scrape_pair_odds(
+        self, race_id: str, skip_existing: bool = True, phase: str | None = None,
+    ) -> dict | None:
+        """2連系オッズ (馬連/ワイド/馬単) と 3連複を JSON API から取得する。phase の扱いは scrape_odds と同じ。"""
         if skip_existing and self.storage.exists("race_pair_odds", race_id):
             logger.info("スキップ (既存): race_pair_odds/%s", race_id)
             return self.storage.load("race_pair_odds", race_id)
@@ -708,10 +722,19 @@ class ScraperRunner:
             n_umaren = len(data.get("umaren", []))
             n_wide = len(data.get("wide", []))
             n_umatan = len(data.get("umatan", []))
-            if n_umaren or n_wide or n_umatan:
+            n_sanrenpuku = len(data.get("sanrenpuku", []))
+            if n_umaren or n_wide or n_umatan or n_sanrenpuku:
+                if phase:
+                    from src.scraper.odds_snapshot import PAIR_ODDS_PAYLOAD_KEYS, merge_snapshot
+
+                    data = merge_snapshot(
+                        self.storage.load("race_pair_odds", race_id), data, phase,
+                        PAIR_ODDS_PAYLOAD_KEYS,
+                    )
                 self.storage.save("race_pair_odds", race_id, data)
-                logger.info("保存: race_pair_odds/%s (馬連=%d, ワイド=%d, 馬単=%d)",
-                            race_id, n_umaren, n_wide, n_umatan)
+                logger.info("保存: race_pair_odds/%s (馬連=%d, ワイド=%d, 馬単=%d, 3連複=%d%s)",
+                            race_id, n_umaren, n_wide, n_umatan, n_sanrenpuku,
+                            f", phase={phase}" if phase else "")
                 return data
             else:
                 logger.warning("2連系オッズデータなし: %s", race_id)
@@ -2518,6 +2541,18 @@ class ScraperRunner:
         login_status = "✓ ログイン済" if self.client.is_logged_in else "✗ 未ログイン"
         print(f"\n  認証状態: {login_status}")
         print()
+
+
+def _install_timing() -> None:
+    """ScraperRunner.scrape_* を実測時間の記録付きにする（src/scraper/timing_stats.py）。"""
+    from src.scraper.timing_stats import timed_scrape
+
+    for name, fn in list(vars(ScraperRunner).items()):
+        if name.startswith("scrape_") and callable(fn) and not getattr(fn, "__wrapped__", None):
+            setattr(ScraperRunner, name, timed_scrape(fn))
+
+
+_install_timing()
 
 
 def main():

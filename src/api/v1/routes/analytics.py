@@ -57,6 +57,27 @@ def betting_optimize():
     return jsonify(payload), code
 
 
+@bp.get("/betting/race-values")
+@require_login
+def betting_race_values():
+    """開催日の各レースの推奨期待回収率とレベル（hot/good/ok/pass/none）。レース選択の強調表示用。"""
+    from src.api.v1.delegates import DEFAULT_MAX_TOTAL_BET, race_value_summary
+
+    date = request.args.get("date", "")
+    if not (len(date) == 8 and date.isdigit()):
+        return jsonify({"error": "date=YYYYMMDD が必要です"}), 400
+    raw_cap = request.args.get("max_total_bet")
+    cap = DEFAULT_MAX_TOTAL_BET
+    if raw_cap is not None:
+        cap = None if raw_cap in ("", "0", "null") else int(raw_cap) if raw_cap.isdigit() else -1
+        if cap is not None and cap < 100:
+            return jsonify({"error": "max_total_bet は 100 円以上の整数（上限なしは 0）"}), 400
+    return jsonify(race_value_summary(
+        date, odds_mode=request.args.get("odds_mode", "auto"), odds_phase=request.args.get("odds_phase", "latest"),
+        max_total_bet=cap,
+    ))
+
+
 @bp.get("/auth/status")
 def auth_status():
     logged = is_logged_in()

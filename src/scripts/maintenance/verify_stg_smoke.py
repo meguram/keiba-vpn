@@ -2,7 +2,7 @@
 """
 stg / 本番同等のローカル起動に対し、API と主要 HTML ページが閲覧可能か一括確認する。
 
-  KEIBA_STG_BASE=http://127.0.0.1:8000 python3 -m src.scripts.maintenance.verify_stg_smoke
+  KEIBA_STG_BASE=http://127.0.0.1:<stg FastAPI ポート> python3 -m src.scripts.maintenance.verify_stg_smoke
 
 - /api/health に keiba_env 等が含まれること（stg 想定時は keiba_env=stg）
 - 公開 HTML が 200 かつ HTML らしき本文
@@ -22,8 +22,9 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(ROOT / ".env")
 
 import requests  # noqa: E402
+from src.config.ports import local_url  # noqa: E402
 
-BASE = os.environ.get("KEIBA_STG_BASE", "http://127.0.0.1:8000").rstrip("/")
+BASE = (os.environ.get("KEIBA_STG_BASE") or local_url("fastapi", "stg")).rstrip("/")
 TIMEOUT = 45
 
 

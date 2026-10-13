@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 
 from src.config.data_paths import MODELING_META_DIR
+from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 logger = logging.getLogger("pipeline.models.trainer")
 
@@ -40,11 +41,11 @@ class ModelTrainer:
 
     def __init__(
         self,
-        mlflow_tracking_uri: str = "http://localhost:5000",
+        mlflow_tracking_uri: str | None = None,
         encoder_path: str = "models/encoder.json",
         config: dict[str, Any] | None = None,
     ):
-        self.mlflow_uri = mlflow_tracking_uri
+        self.mlflow_uri = mlflow_tracking_uri or _default_mlflow_uri()
         self.encoder_path = encoder_path
         self.config: dict[str, Any] = config if config is not None else {}
 

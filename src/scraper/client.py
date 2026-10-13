@@ -561,6 +561,9 @@ class NetkeibaClient:
         session.mount("https://", adapter)
         session.mount("http://", adapter)
 
+        from src.scraper.timing_stats import wrap_session_get
+
+        session.get = wrap_session_get(session.get)  # 実測時間の蓄積（timing_stats）
         return session
 
     def _refresh_session(self) -> None:
@@ -853,11 +856,37 @@ class NetkeibaClient:
                 return enc
         return "UTF-8"
 
+    @staticmethod
+    def _declared_charset(resp: requests.Response) -> str | None:
+        """応答が宣言している文字コード（Content-Type → <meta charset>）。Python が知らない名前は無視する。
+
+        race.netkeiba.com は UTF-8、db.netkeiba.com は EUC-JP と混在し、サイト側の変更で入れ替わりうるため、
+        ホスト別の固定値（_ENCODING_MAP）より宣言を優先する。
+        """
+        import codecs
+        import re
+
+        cands: list[str] = []
+        m = re.search(r"charset=([\w\-]+)", resp.headers.get("Content-Type", ""), re.I)
+        if m:
+            cands.append(m.group(1))
+        m = re.search(rb"<meta[^>]+charset=[\"']?([A-Za-z0-9_\-]+)", (resp.content or b"")[:4096], re.I)
+        if m:
+            cands.append(m.group(1).decode("ascii", "ignore"))
+        for c in cands:
+            try:
+                codecs.lookup(c)
+                return c
+            except LookupError:
+                continue
+        return None
+
     def _cache_key(self, url: str) -> Path | None:
         if not self.cache_dir:
             return None
         suffix = "_auth" if self._logged_in else ""
-        h = hashlib.md5((url + suffix).encode()).hexdigest()
+        # "|enc2": race.netkeiba.com を EUC-JP と誤判定して保存した文字化けキャッシュを使わないための版数
+        h = hashlib.md5((url + suffix + "|enc2").encode()).hexdigest()
         return Path(self.cache_dir) / f"{h}.html"
 
     # ------------------------------------------------------------------
@@ -873,7 +902,7 @@ class NetkeibaClient:
 
         encoding:
             指定時はレスポンスの解釈にそのエンコーディングを使う（例: top の race_list 断片は UTF-8）。
-            未指定時はホストに応じた既定（race.netkeiba.com は EUC-JP など）。
+            未指定時は応答が宣言する文字コード（Content-Type / <meta>）、無ければホスト別の既定。
         """
         cache_path = self._cache_key(url)
 
@@ -886,7 +915,7 @@ class NetkeibaClient:
             self._check_burst()
             resp = self._get_with_backoff(url)
 
-        enc = encoding or self._detect_encoding(url)
+        enc = encoding or self._declared_charset(resp) or self._detect_encoding(url)
         resp.encoding = enc
         html = resp.text
 

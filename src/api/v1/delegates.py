@@ -3,14 +3,30 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# 1 レースの購入合計の既定上限（円）。UI の既定値と揃える（frontend/components/BetRecommend.tsx）。
+DEFAULT_MAX_TOTAL_BET = 2000
+
+
+def _predicted_odds_for(c, predicted: dict | None) -> float | None:
+    """単勝・複勝候補の予測オッズ（複勝は下限、既存の fukusho_use_min_odds 方針）。"""
+    if not predicted or c.bet_type not in ("tansho", "fukusho"):
+        return None
+    for e in predicted.get("entries") or []:
+        if e.get("horse_number") == c.pair[0]:
+            v = e.get("win_odds") if c.bet_type == "tansho" else e.get("place_odds_min")
+            return float(v) if v else None
+    return None
+
 
 def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
     from src.pipeline.inference.betting import BettingConfig, BettingOptimizer
+    from src.pipeline.inference.odds_source import predicted_single_odds, resolve_odds
     from src.pipeline.inference.race_prediction_service import load_cached
     from src.scraper.storage import HybridStorage
 
@@ -24,11 +40,45 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
     if not predictions:
         return {"error": "予測結果がありません。先に推論を実行してください"}, 404
 
+    odds_mode = str(body.get("odds_mode") or "auto").lower()
+    odds_phase = str(body.get("odds_phase") or "latest").lower()
+    odds = resolve_odds(storage, race_id, mode=odds_mode, phase=odds_phase)
+    if odds["source"] is None and odds_mode in ("actual", "predicted"):
+        what = "実オッズ" if odds_mode == "actual" else "予測オッズ"
+        return {
+            "error": f"{what}がありません（odds_mode={odds_mode}）。{odds['note']}",
+            "available_odds": odds["available"],
+        }, 404
+
     bet_types = body.get("bet_types", ["tansho", "fukusho", "umaren", "wide"])
-    pair_odds = storage.load("race_pair_odds", race_id) or {}
-    single_odds = storage.load("race_odds", race_id)
+    allowed = odds["allowed_bet_types"]
+    if allowed is not None:
+        bet_types = [b for b in bet_types if b in allowed]
+        if not bet_types:
+            return {
+                "error": "予測オッズでは単勝・複勝のみ評価できます。bet_types に tansho / fukusho を含めてください",
+                "available_odds": odds["available"],
+            }, 400
+
+    pair_odds = odds["pair_odds"]
+    single_odds = odds["single_odds"]
+    if odds["source"] is None:  # auto でオッズ無し: 従来どおり predictions 内のオッズ欄にフォールバック
+        pair_odds = storage.load("race_pair_odds", race_id) or {}
+        single_odds = storage.load("race_odds", race_id)
+
+    # 1 レースの購入合計の上限（円）。未指定は 2000 円。null / 0 は上限なし。
+    raw_cap = body.get("max_total_bet", DEFAULT_MAX_TOTAL_BET)
+    max_total_bet: int | None = None
+    if raw_cap not in (None, 0):
+        try:
+            max_total_bet = int(raw_cap)
+        except (TypeError, ValueError):
+            max_total_bet = -1
+        if max_total_bet < 100:
+            return {"error": "max_total_bet は 100 円以上の整数で指定してください（上限なしは null か 0）"}, 400
 
     config = BettingConfig(
+        max_total_bet=max_total_bet,
         bet_types=bet_types,
         kelly_fraction=body.get("kelly_fraction", 0.25),
         min_ev=body.get("min_ev", 1.05),
@@ -43,8 +93,14 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
         body.get("bankroll", 100000),
         single_odds=single_odds,
     )
-    candidates_out = [
-        {
+
+    predicted = None
+    if odds["source"] == "actual":
+        predicted = predicted_single_odds(storage, race_id)
+
+    candidates_out = []
+    for c in portfolio["candidates"]:
+        item = {
             "bet_type": c.bet_type,
             "pair": list(c.pair),
             "pair_label": c.pair_label,
@@ -56,16 +112,126 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
             "bet_amount": c.bet_amount,
             "expected_return": c.expected_return,
         }
-        for c in portfolio["candidates"]
-    ]
+        pred_odds = _predicted_odds_for(c, predicted)
+        if pred_odds:
+            item["predicted_odds"] = pred_odds
+            item["odds_gap"] = round(c.odds / pred_odds - 1, 3)
+        candidates_out.append(item)
+
     return {
         "race_id": race_id,
         "bankroll": body.get("bankroll", 100000),
         "total_bet": portfolio["total_bet"],
         "expected_return": portfolio["expected_return"],
         "roi_pct": round(portfolio["expected_roi"] * 100, 1),
+        "max_total_bet": max_total_bet,
+        "probability_model": portfolio.get("probability_model"),
         "candidates": candidates_out,
+        "odds_source": odds["source"],
+        "odds_phase": odds["phase"],
+        "odds_as_of": odds["as_of"],
+        "available_odds": odds["available"],
+        "odds_note": odds["note"],
     }, 200
+
+
+# ── レースの「価値」一覧（レース選択の見た目用） ──
+
+# 推奨ポートフォリオの期待回収率（= Σ金額×期待値 / 購入合計）でレースを 4 段階にする。
+# hot: 特に高い / good: 高い / ok: プラス期待 / pass: 見送り水準（買い目なし・期待回収率が基準未満）
+VALUE_LEVELS: tuple[tuple[str, float], ...] = (("hot", 1.5), ("good", 1.25), ("ok", 1.05))
+_VALUE_CACHE: dict[tuple, tuple[float, dict]] = {}
+_VALUE_TTL_SEC = 20.0
+
+
+def value_level(expected_roi: float | None, n_bets: int) -> str:
+    if not n_bets or expected_roi is None:
+        return "pass"
+    for name, floor in VALUE_LEVELS:
+        if expected_roi >= floor:
+            return name
+    return "pass"
+
+
+def _value_row(race: dict[str, Any], payload: dict[str, Any], code: int) -> dict[str, Any]:
+    rid = race["race_id"]
+    base = {"race_id": rid, "round": race.get("round"), "venue": race.get("venue"), "race_name": race.get("race_name")}
+    if code != 200:
+        return {**base, "level": "none", "reason": payload.get("error", "計算できません"), "expected_roi": None, "n_bets": 0}
+    cands = payload.get("candidates") or []
+    total = payload.get("total_bet") or 0
+    roi = (payload.get("expected_return") or 0) / total if total else None
+    top = max(cands, key=lambda c: c.get("ev") or 0) if cands else None
+    return {
+        **base,
+        "level": value_level(roi, len(cands)),
+        "expected_roi": None if roi is None else round(roi, 3),
+        "max_ev": None if top is None else round(top["ev"], 3),
+        "n_bets": len(cands),
+        "total_bet": total,
+        "top_bet": None if top is None else {"bet_type": top["bet_type"], "label": top["pair_label"], "ev": round(top["ev"], 3)},
+        "odds_source": payload.get("odds_source"),
+        "odds_phase": payload.get("odds_phase"),
+    }
+
+
+HOT_TOP_FRACTION = 0.2  # hot にできるのは、その日の期待回収率が上位 20% のレースだけ
+
+
+def _apply_day_ranking(rows: list[dict[str, Any]]) -> None:
+    """その日の期待回収率で順位を付け、hot は「絶対水準を超え、かつ上位 20%」に絞る（全レースが hot になって区別できなくなるのを防ぐ）。"""
+    ranked = sorted((r for r in rows if r.get("expected_roi") is not None), key=lambda r: -r["expected_roi"])
+    cutoff = max(1, math.ceil(len(ranked) * HOT_TOP_FRACTION))
+    for i, r in enumerate(ranked, 1):
+        r["rank"] = i
+        if r["level"] == "hot" and i > cutoff:
+            r["level"] = "good"
+    for r in rows:
+        r.setdefault("rank", None)
+
+
+def race_value_summary(
+    date: str,
+    *,
+    odds_mode: str = "auto",
+    odds_phase: str = "latest",
+    max_total_bet: int | None = DEFAULT_MAX_TOTAL_BET,
+) -> dict[str, Any]:
+    """開催日の全レースについて、推奨買い目の期待回収率とレベルを返す（レース選択の強調表示に使う）。"""
+    import time
+
+    from src.scraper.storage import HybridStorage
+
+    key = (date, odds_mode, odds_phase, max_total_bet)
+    hit = _VALUE_CACHE.get(key)
+    if hit and time.time() - hit[0] < _VALUE_TTL_SEC:
+        return hit[1]
+
+    storage = HybridStorage()
+    races = (storage.load("race_lists", date) or {}).get("races") or []
+    rows = []
+    for r in races:
+        if not r.get("race_id"):
+            continue
+        body: dict[str, Any] = {
+            "race_id": r["race_id"], "bankroll": 100000, "odds_mode": odds_mode, "odds_phase": odds_phase,
+            "max_total_bet": max_total_bet, "bet_types": ["tansho", "fukusho", "umaren", "wide", "sanrenpuku"],
+        }
+        try:
+            payload, code = optimize_betting(body)
+        except Exception as exc:  # 1 レースの失敗で一覧全体を落とさない
+            logger.warning("race value 計算失敗 %s: %s", r["race_id"], exc)
+            payload, code = {"error": str(exc)}, 500
+        rows.append(_value_row(r, payload, code))
+    _apply_day_ranking(rows)
+    out = {
+        "date": date,
+        "levels": [{"level": n, "min_roi": f} for n, f in VALUE_LEVELS],
+        "max_total_bet": max_total_bet,
+        "races": rows,
+    }
+    _VALUE_CACHE[key] = (time.time(), out)
+    return out
 
 
 def get_final_odds(race_id: str, refresh: bool = False) -> dict[str, Any]:

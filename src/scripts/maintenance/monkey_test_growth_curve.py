@@ -3,7 +3,7 @@
 
 Usage:
   python3 -m src.scripts.maintenance.monkey_test_growth_curve
-  python3 -m src.scripts.maintenance.monkey_test_growth_curve --n 40 --base-url http://127.0.0.1:8000
+  python3 -m src.scripts.maintenance.monkey_test_growth_curve --n 40 --base-url http://127.0.0.1:<FastAPI ポート>
   python3 -m src.scripts.maintenance.monkey_test_growth_curve --use-testclient
 """
 from __future__ import annotations
@@ -24,6 +24,8 @@ sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv
 
 load_dotenv(ROOT / ".env")
+
+from src.config.ports import local_url  # noqa: E402
 
 INDEX_PATH = ROOT / "data" / "calculated_data" / "knowledge" / "horse_name_index.json"
 CACHE_HR = ROOT / "data" / "cache" / "horse_result"
@@ -116,7 +118,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--n", type=int, default=50, help="テスト件数")
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--base-url", default=os.environ.get("MONKEY_BASE_URL", "http://127.0.0.1:8000"))
+    p.add_argument("--base-url", default=os.environ.get("MONKEY_BASE_URL") or local_url("fastapi"))
     p.add_argument("--use-testclient", action="store_true")
     p.add_argument("--fetch-speed-index", action="store_true", help="タイム指数補完あり")
     args = p.parse_args()

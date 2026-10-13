@@ -488,6 +488,9 @@ def task_raceday_runner():
     2. 各レースの発走15分前まで待機
     3. 15分前になったら出馬表+オッズ+馬柱+追切+SmartRCをスクレイプ
     4. 全レース完了で終了
+
+    注: T-60 のオッズ取得（phase=t60 スナップショット）はキュー版（auto_scrape_queue）のみ。
+    この直接版（KEIBA_AUTO_SCRAPE_USE_QUEUE=0 の切り戻し経路）は T-15 のみ。
     """
     if _via_queue():
         from src.scraper import auto_scrape_queue as _asq

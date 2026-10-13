@@ -70,7 +70,10 @@ bash "$ROOT/scripts/server/service_start.sh" --env stg 2>&1
 
 echo ""
 echo "=== stg セットアップ完了 ==="
-echo "  FastAPI  http://127.0.0.1:8000/"
-echo "  Flask    http://127.0.0.1:5000/api/v1/health"
-echo "  Next.js  http://127.0.0.1:3001/"
+# shellcheck source=ports.sh
+source "$ROOT/scripts/server/ports.sh"
+load_keiba_ports "$ROOT"
+echo "  FastAPI  http://127.0.0.1:${KEIBA_PORT_STG_FASTAPI}/"
+echo "  Flask    http://127.0.0.1:${KEIBA_PORT_STG_FLASK}/api/v1/health"
+echo "  Next.js  http://127.0.0.1:${KEIBA_PORT_STG_FRONTEND}/"
 echo "  stg URL  https://meguai-stg.tcpexposer.com/"

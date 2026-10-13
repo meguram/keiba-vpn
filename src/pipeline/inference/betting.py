@@ -9,11 +9,12 @@
   - 複数候補に対する並列資金配分を最適化
 
 馬券種別:
-  tansho  — 単勝 (1着)
-  fukusho — 複勝 (3着以内)
-  umaren  — 馬連 (2頭の組み合わせ、着順不問、1-2着)
-  wide    — ワイド (2頭の組み合わせ、着順不問、1-3着)
-  umatan  — 馬単 (2頭の順序あり、1着→2着)
+  tansho     — 単勝 (1着)
+  fukusho    — 複勝 (3着以内)
+  umaren     — 馬連 (2頭の組み合わせ、着順不問、1-2着)
+  wide       — ワイド (2頭の組み合わせ、着順不問、1-3着)
+  umatan     — 馬単 (2頭の順序あり、1着→2着)
+  sanrenpuku — 3連複 (3頭の組み合わせ、着順不問、1-3着。確率は Harville の6順列合計)
 """
 
 from __future__ import annotations
@@ -33,8 +34,8 @@ logger = logging.getLogger("pipeline.inference.betting")
 class BetCandidate:
     """1つの馬券候補"""
     bet_type: str
-    pair: tuple[int, int]
-    horse_names: tuple[str, str]
+    pair: tuple[int, ...]
+    horse_names: tuple[str, ...]
     odds: float
     prob: float
     ev: float
@@ -47,11 +48,12 @@ class BetCandidate:
         if self.bet_type in ("tansho", "fukusho"):
             return f"{self.pair[0]}"
         sep = "→" if self.bet_type == "umatan" else "-"
-        return f"{self.pair[0]}{sep}{self.pair[1]}"
+        return sep.join(str(h) for h in self.pair)
 
 
 SINGLE_BET_TYPES = {"tansho", "fukusho"}
 PAIR_BET_TYPES = {"umaren", "wide", "umatan"}
+TRIO_BET_TYPES = {"sanrenpuku"}
 
 
 @dataclass
@@ -69,6 +71,65 @@ class BettingConfig:
     wide_use_min_odds: bool = True
     fukusho_use_min_odds: bool = True
     top_n_for_pairs: int = 6
+    """3連複は予測確率の上位この頭数からの C(n,3) 通りだけを評価する（組合せ爆発の抑制）。"""
+    prob_model: str = "auto"
+    """確率モデル。auto: 予測に win_prob があれば割引 Harville（勝率・連対率・複勝率に整合。exotic_probabilities.py）、
+    無ければ pred_score の softmax + Harville。softmax: 常に後者（従来動作）。"""
+    max_total_bet: int | None = None
+    """1 レースの購入合計の上限（円）。None は上限なし。100 円単位で、Kelly 比率に応じて配分する。"""
+
+
+class _RankContext:
+    """割引 Harville の着順分布と、馬番 → index の対応。単勝・複勝・馬連・ワイド・馬単・3連複の確率を同じ分布から返す。"""
+
+    def __init__(self, predictions: list[dict]):
+        from src.pipeline.inference.exotic_probabilities import fit_rank_distribution, normalize_marginal
+
+        rows = [p for p in predictions if p.get("horse_number") is not None]
+        self.idx = {int(p["horse_number"]): i for i, p in enumerate(rows)}
+        win = [float(p["win_prob"]) for p in rows]
+
+        def col(key: str):
+            vals = [p.get(key) for p in rows]
+            return [float(v) for v in vals] if all(v is not None for v in vals) else None
+
+        top2, top3 = col("top2_prob"), col("top3_prob")
+        self.dist, self.report = fit_rank_distribution(win, top2, top3)
+        # 複勝率はモックでなくモデルの出力（総和 3 に正規化したもの）を優先。無ければ着順分布の周辺確率
+        self.top3 = normalize_marginal(top3, 3.0) if top3 is not None else self.dist.top3()
+
+    @staticmethod
+    def usable(predictions: list[dict]) -> bool:
+        rows = [p for p in predictions if p.get("horse_number") is not None]
+        return len(rows) >= 4 and all(p.get("win_prob") is not None and float(p["win_prob"]) > 0 for p in rows)
+
+    def prob(self, bet_type: str, key: tuple[int, ...]) -> float:
+        try:
+            ii = [self.idx[h] for h in key]
+        except KeyError:
+            return 0.0
+        if bet_type == "tansho":
+            return float(self.dist.win[ii[0]])
+        if bet_type == "fukusho":
+            return float(self.top3[ii[0]])
+        if bet_type == "umaren":
+            return self.dist.umaren(*ii)
+        if bet_type == "umatan":
+            return self.dist.umatan(*ii)
+        if bet_type == "wide":
+            return self.dist.wide(*ii)
+        if bet_type == "sanrenpuku":
+            return self.dist.sanrenpuku(*ii)
+        return 0.0
+
+    def describe(self) -> dict[str, Any]:
+        r = self.report
+        return {
+            "kind": "discounted_harville", "alpha2": round(r.alpha2, 3), "alpha3": round(r.alpha3, 3),
+            "fitted_to": [n for n, u in (("top2", r.used_top2), ("top3", r.used_top3)) if u],
+            "top2_rmse": None if r.top2_rmse_after is None else round(r.top2_rmse_after, 4),
+            "top3_rmse": None if r.top3_rmse_after is None else round(r.top3_rmse_after, 4),
+        }
 
 
 class BettingOptimizer:
@@ -116,11 +177,20 @@ class BettingOptimizer:
                 "prob_distribution": {horse_number: prob},
             }
         """
-        probs = self._compute_probabilities(predictions)
+        rank = _RankContext(predictions) if (
+            self.config.prob_model == "auto" and _RankContext.usable(predictions)) else None
+        if rank is not None:
+            probs = {hn: float(rank.dist.win[i]) for hn, i in rank.idx.items()}
+        else:
+            probs = self._compute_probabilities(predictions)
         name_map = {p["horse_number"]: p.get("horse_name", f"#{p['horse_number']}")
                     for p in predictions}
 
         all_odds = self._build_odds_map(pair_odds, predictions, single_odds)
+
+        trio_pool = set(
+            h for h, _ in sorted(probs.items(), key=lambda x: -x[1])[:max(3, self.config.top_n_for_pairs)]
+        )
 
         candidates: list[BetCandidate] = []
 
@@ -133,11 +203,16 @@ class BettingOptimizer:
 
                 if bet_type in SINGLE_BET_TYPES:
                     hn = key[0]
-                    prob = self._single_prob(probs, hn, bet_type)
+                    prob = rank.prob(bet_type, key) if rank else self._single_prob(probs, hn, bet_type)
                     names = (name_map.get(hn, "?"), "")
+                elif bet_type in TRIO_BET_TYPES:
+                    if len(key) != 3 or not set(key) <= trio_pool:
+                        continue
+                    prob = rank.prob(bet_type, key) if rank else self._sanrenpuku_prob(probs, *key)
+                    names = tuple(name_map.get(h, "?") for h in key)
                 else:
                     h1, h2 = key
-                    prob = self._pair_prob(probs, h1, h2, bet_type)
+                    prob = rank.prob(bet_type, key) if rank else self._pair_prob(probs, h1, h2, bet_type)
                     names = (name_map.get(h1, "?"), name_map.get(h2, "?"))
 
                 if prob < self.config.min_prob:
@@ -180,6 +255,7 @@ class BettingOptimizer:
             "prob_distribution": {
                 hn: round(p, 4) for hn, p in probs.items()
             },
+            "probability_model": rank.describe() if rank else {"kind": "softmax_harville"},
         }
 
     # ── 確率推定 ──
@@ -279,6 +355,25 @@ class BettingOptimizer:
         return 0.0
 
     @staticmethod
+    def _sanrenpuku_prob(probs: dict[int, float], h1: int, h2: int, h3: int) -> float:
+        """
+        3連複的中確率: h1,h2,h3 が (順不同で) 1-3着を占める確率。
+        Harville: 順序 (a,b,c) の確率 = pa · pb/(1-pa) · pc/(1-pa-pb) を6順列で合計する。
+        全 C(n,3) 通りの総和は 1 になる。
+        """
+        ps = [probs.get(h, 0.0) for h in (h1, h2, h3)]
+        if min(ps) <= 0 or len({h1, h2, h3}) < 3:
+            return 0.0
+        total = 0.0
+        for a, b, c in permutations(ps, 3):
+            d1 = 1.0 - a
+            d2 = 1.0 - a - b
+            if d1 <= 1e-10 or d2 <= 1e-10:
+                continue
+            total += a * (b / d1) * (c / d2)
+        return max(0.0, min(total, 1.0))
+
+    @staticmethod
     def _wide_prob(probs: dict[int, float], h1: int, h2: int) -> float:
         """
         ワイド的中確率: h1, h2 が共に3着以内に入る確率。
@@ -371,6 +466,12 @@ class BettingOptimizer:
         if total_kelly <= 0:
             return candidates
 
+        cap = self.config.max_total_bet
+        if cap is not None:
+            # 上限は“上限”であって目標額ではない: Kelly が示す総額（Σ f×資金）が上限より小さいレースはそちらに留める
+            budget = min(int(cap), bankroll, int(total_kelly * bankroll))
+            return self._allocate_capped(candidates, budget, total_kelly)
+
         max_total = bankroll * self.config.max_bet_ratio * len(candidates)
         available = min(bankroll, max_total)
 
@@ -391,6 +492,26 @@ class BettingOptimizer:
         candidates = [c for c in candidates if c.bet_amount > 0]
         return candidates
 
+    @staticmethod
+    def _allocate_capped(candidates: list[BetCandidate], budget: int, total_kelly: float) -> list[BetCandidate]:
+        """購入合計が budget 以下になるよう 100 円単位で Kelly 比率配分する（最大剰余法）。
+
+        100 円に満たない候補は買わない。予算が少ないときは Kelly 比率の高い候補から順に残る。
+        """
+        units = max(0, budget // 100)
+        if units == 0:
+            return []
+        raw = [units * c.kelly_fraction / total_kelly for c in candidates]
+        alloc = [int(x) for x in raw]
+        left = units - sum(alloc)
+        order = sorted(range(len(candidates)), key=lambda i: (raw[i] - alloc[i], candidates[i].kelly_fraction), reverse=True)
+        for i in order[:left]:
+            alloc[i] += 1
+        for c, u in zip(candidates, alloc):
+            c.bet_amount = u * 100
+            c.expected_return = round(c.bet_amount * c.ev, 0)
+        return [c for c in candidates if c.bet_amount > 0]
+
     # ── オッズマップ構築 ──
 
     def _build_odds_map(
@@ -401,7 +522,7 @@ class BettingOptimizer:
     ) -> dict[str, dict[tuple[int, ...], float]]:
         """
         全馬券種のオッズを統一形式 {bet_type: {key: odds}} に変換。
-        key は単勝/複勝なら (hn,)、2連系なら (h1, h2)。
+        key は単勝/複勝なら (hn,)、2連系なら (h1, h2)、3連複なら (h1, h2, h3) 昇順。
         """
         result: dict[str, dict] = {}
 
@@ -453,6 +574,15 @@ class BettingOptimizer:
                 if odds > 0:
                     m[pair] = odds
             result[key] = m
+
+        # ── 3連複（combo: 3頭、昇順タプルをキーにする）──
+        trio: dict[tuple[int, ...], float] = {}
+        for e in (pair_odds.get("sanrenpuku", []) if pair_odds else []):
+            combo = e.get("combo") or e.get("pair") or []
+            odds = e.get("odds", 0.0)
+            if len(combo) == 3 and odds and odds > 0:
+                trio[tuple(sorted(int(h) for h in combo))] = odds
+        result["sanrenpuku"] = trio
 
         wide_entries = pair_odds.get("wide", []) if pair_odds else []
         m = {}
@@ -536,6 +666,8 @@ class BetSimulator:
                 hit = bet.pair[0] == first and bet.pair[1] == second
             elif bet.bet_type == "wide":
                 hit = {bet.pair[0], bet.pair[1]}.issubset(top3)
+            elif bet.bet_type == "sanrenpuku":
+                hit = len(top3) == 3 and set(bet.pair) == top3
 
             if hit:
                 payout = int(bet.bet_amount * bet.odds)

@@ -34,6 +34,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 logger = logging.getLogger("pipeline.ensemble")
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -47,12 +48,12 @@ class EnsembleTrainer:
 
     def __init__(
         self,
-        mlflow_tracking_uri: str = "http://localhost:5000",
+        mlflow_tracking_uri: str | None = None,
         encoder_path: str = "models/encoder.json",
         config: dict[str, Any] | None = None,
         n_folds: int = 5,
     ):
-        self.mlflow_uri = mlflow_tracking_uri
+        self.mlflow_uri = mlflow_tracking_uri or _default_mlflow_uri()
         self.encoder_path = encoder_path
         self.config = config or {}
         self.n_folds = n_folds

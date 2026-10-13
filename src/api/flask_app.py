@@ -11,7 +11,7 @@ from src.utils.project_env import load_project_dotenv
 
 load_project_dotenv()
 
-from src.api.auth import COOKIE_NAME, _verify_token
+from src.api.auth import COOKIE_NAME, _verify_token, dev_auto_login_applies
 from src.api.flask_auth import require_internal
 from src.api.v1.services import (
     DEFAULT_MODEL_VERSION,
@@ -50,6 +50,8 @@ def _get_storage():
 
 def _is_logged_in() -> bool:
     """Flask request からセッション Cookie を読んでログイン状態を返す。"""
+    if dev_auto_login_applies(request.remote_addr, request.headers):
+        return True
     token = request.cookies.get(COOKIE_NAME, "")
     return _verify_token(token)
 
@@ -467,7 +469,9 @@ def create_app() -> Flask:
 
 
 def main():
-    port = int(os.environ.get("FLASK_PORT", os.environ.get("PORT", "5000")))
+    from src.config.ports import port as _service_port
+
+    port = int(os.environ.get("FLASK_PORT") or os.environ.get("PORT") or _service_port("flask"))
     app = create_app()
     # リローダ子プロセスは DATABASE_URL を引き継がないため use_reloader=False
     app.run(host="0.0.0.0", port=port, debug=os.environ.get("FLASK_DEBUG") == "1", use_reloader=False)

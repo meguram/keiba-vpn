@@ -21,14 +21,14 @@ LAYERS = [
     {
         "layer": "fastapi_legacy",
         "file": "src/api/app.py",
-        "port": 8000,
+        "port": 23120,  # dev。正は config/ports.env
         "framework": "fastapi",
         "note": "DEC-013により段階廃止予定。新規ルートを追加しないこと。",
     },
     {
         "layer": "flask_v1",
         "file": "src/api/flask_app.py",
-        "port": 5000,
+        "port": 23110,  # dev。正は config/ports.env
         "framework": "flask",
         "note": "DEC-013により仕様上の正。新規APIはここに追加する。",
         "blueprint_glob": "src/api/v1/routes/*.py",
@@ -37,7 +37,7 @@ LAYERS = [
     {
         "layer": "monitor",
         "file": "src/monitor/app.py",
-        "port": 9090,
+        "port": 23900,  # 正は config/ports.env
         "framework": "flask",
         "note": "開発者専用監視ポータル。エンドユーザー非公開。",
     },

@@ -18,7 +18,9 @@ export function useAuthStatus(): AuthStatus {
 
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_MOCK === "true") {
-      setStatus({ loading: false, loggedIn: false, isAdmin: false, isMember: false });
+      // フロント内蔵モックにはバックエンドが無い。dev の自動ログインが有効ならログイン済み表示にする
+      const auto = process.env.NEXT_PUBLIC_DEV_AUTO_LOGIN === "1";
+      setStatus({ loading: false, loggedIn: auto, isAdmin: auto, isMember: auto });
       return;
     }
     fetch("/api/v1/auth/status", { credentials: "include" })

@@ -5,6 +5,10 @@
       {
         "command": ".cursor/hooks/start_tcpexposer_tunnel.sh",
         "timeout": 30
+      },
+      {
+        "command": ".cursor/hooks/start_dev_servers.sh",
+        "timeout": 15
       }
     ]
   }

@@ -49,7 +49,7 @@ def year_to_date_range(year: int) -> tuple[str, str]:
 
 def default_task_ids_for_entity(entity: str) -> list[str]:
     e = str(entity).strip().lower()
-    return [t["id"] for t in TASK_CATALOG if t.get("entity") == e]
+    return [t["id"] for t in TASK_CATALOG if t.get("entity") == e and not t.get("scheduled")]
 
 
 def _normalize_horse_task_list(tasks: list[str] | None) -> list[str]:
@@ -73,7 +73,7 @@ def _parse_race_tasks_for_verify(user_tasks: list[str] | None) -> tuple[list[str
     - user に race_all が含まれる場合は RACE_ALL_ATOMIC に展開して走査。投入時は race_all 1 本にまとめられる。
     """
     if not user_tasks:
-        u = [t["id"] for t in TASK_CATALOG if t.get("entity") == "race"]
+        u = [t["id"] for t in TASK_CATALOG if t.get("entity") == "race" and not t.get("scheduled")]
     else:
         u = [str(x).strip() for x in user_tasks if str(x).strip()]
 
@@ -109,6 +109,10 @@ def _race_task_storage_category(task: str) -> str:
         "race_shutuba": "race_shutuba",
         "race_odds": "race_odds",
         "race_pair_odds": "race_pair_odds",
+        "race_odds_t60": "race_odds",
+        "race_pair_odds_t60": "race_pair_odds",
+        "race_odds_t15": "race_odds",
+        "race_pair_odds_t15": "race_pair_odds",
         "race_index": "race_index",
         "race_shutuba_past": "race_shutuba_past",
         "race_paddock": "race_paddock",

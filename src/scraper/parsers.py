@@ -1699,6 +1699,7 @@ class OddsParser:
     UMAREN_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=4"
     WIDE_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=5"
     UMATAN_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=6"
+    SANRENPUKU_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=7"
 
     def parse_from_api(self, session, race_id: str) -> dict[str, Any]:
         """HTTP session を使って JSON API からオッズを取得・パースする。"""
@@ -1810,31 +1811,37 @@ class OddsParser:
 
     def parse_pair_odds_from_api(self, session, race_id: str) -> dict[str, Any]:
         """
-        2連系オッズ (馬連/ワイド/馬単) を JSON API から取得・パースする。
+        2連系オッズ (馬連/ワイド/馬単) と 3連複オッズを JSON API から取得・パースする。
 
         API レスポンス:
           type=4 (馬連): キー "4", 値 {"NNMM": [odds, "", popularity]}
           type=5 (ワイド): キー "5", 値 {"NNMM": [min_odds, max_odds, popularity]}
           type=6 (馬単): キー "6", 値 {"NNMM": [odds, "", popularity]}
+          type=7 (3連複): キー "7", 値 {"AABBCC": [odds, "", popularity]}
           NN=1着馬番(2桁), MM=2着馬番(2桁)
           馬連/ワイド: NN < MM (非順序)、馬単: NN→MM (順序あり)
+
+        注意: type=7 の形式は馬連系からの推定（組合せキー6桁・値は [odds, "", popularity]）。
+        実サンプル未検証のため、形式が違う場合は sanrenpuku が空になるだけで他券種には影響しない。
 
         出力:
         {
           "race_id": "...",
           "umaren": [{"pair": [1,2], "odds": 12.3, "popularity": 5}, ...],
           "wide":   [{"pair": [1,2], "odds_min": 3.1, "odds_max": 5.2, "popularity": 5}, ...],
-          "umatan": [{"pair": [1,2], "odds": 25.1, "popularity": 10}, ...]
+          "umatan": [{"pair": [1,2], "odds": 25.1, "popularity": 10}, ...],
+          "sanrenpuku": [{"combo": [1,2,3], "odds": 45.6, "popularity": 12}, ...]
         }
         """
         result: dict[str, Any] = {
-            "race_id": race_id, "umaren": [], "wide": [], "umatan": [],
+            "race_id": race_id, "umaren": [], "wide": [], "umatan": [], "sanrenpuku": [],
         }
 
         API_MAP = [
             (self.UMAREN_API, "4", "umaren"),
             (self.WIDE_API,   "5", "wide"),
             (self.UMATAN_API, "6", "umatan"),
+            (self.SANRENPUKU_API, "7", "sanrenpuku"),
         ]
 
         for url_tpl, resp_key, out_key in API_MAP:
@@ -1850,25 +1857,33 @@ class OddsParser:
                 for combo_key, arr in raw.items():
                     if not isinstance(arr, list) or len(arr) < 1:
                         continue
-                    if len(combo_key) != 4 or not combo_key.isdigit():
+                    key_len = 6 if out_key == "sanrenpuku" else 4
+                    if len(combo_key) != key_len or not combo_key.isdigit():
                         continue
-                    h1 = int(combo_key[:2])
-                    h2 = int(combo_key[2:])
-                    if h1 == 0 or h2 == 0:
+                    nums = [int(combo_key[i:i + 2]) for i in range(0, key_len, 2)]
+                    if any(n == 0 for n in nums):
                         continue
 
                     pop = self._safe_int(arr[2]) if len(arr) > 2 else 0
 
-                    if out_key == "wide":
+                    if out_key == "sanrenpuku":
+                        if len(set(nums)) != 3:
+                            continue
                         result[out_key].append({
-                            "pair": [h1, h2],
+                            "combo": sorted(nums),
+                            "odds": self._safe_float(arr[0]),
+                            "popularity": pop,
+                        })
+                    elif out_key == "wide":
+                        result[out_key].append({
+                            "pair": nums,
                             "odds_min": self._safe_float(arr[0]),
                             "odds_max": self._safe_float(arr[1]) if len(arr) > 1 else 0.0,
                             "popularity": pop,
                         })
                     else:
                         result[out_key].append({
-                            "pair": [h1, h2],
+                            "pair": nums,
                             "odds": self._safe_float(arr[0]),
                             "popularity": pop,
                         })
@@ -1877,6 +1892,7 @@ class OddsParser:
 
         for key in ("umaren", "wide", "umatan"):
             result[key].sort(key=lambda e: (e["pair"][0], e["pair"][1]))
+        result["sanrenpuku"].sort(key=lambda e: tuple(e["combo"]))
 
         return result
 

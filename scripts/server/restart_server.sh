@@ -4,13 +4,13 @@
 # Usage:
 #   ./scripts/server/restart_server.sh           # 本番相当: main.py --prod（複数ワーカー）
 #   ./scripts/server/restart_server.sh dev       # 開発: ホットリロード（単一ワーカー）
-#   PORT=9000 ./scripts/server/restart_server.sh
+#   PORT=23999 ./scripts/server/restart_server.sh
 #
 # ステージング表示: .env に KEIBA_ENV=stg（docs/environment-stg.md）。GCS パスは同一でも可。
 #
 # ログ: logs/server_YYYYMMDD_HHMMSS.log（起動のたびに新規。日付・時刻をファイル名に含む）
 #      logs/server_latest.log へ同じファイルへのシンボリックリンク（直近1本）
-# PID:  .server.pid（watchdog と同じファイル。競合する場合はどちらか一方だけ使う）
+# PID:  .server-<PORT>.pid（watchdog と同じファイル。ポートごとに分け、別環境のサーバを止めない）
 
 set -euo pipefail
 
@@ -19,7 +19,11 @@ cd "$ROOT"
 # ログファイル名・起動ログ行を日本時間に（ホストが UTC の stg 等）
 export TZ="${TZ:-Asia/Tokyo}"
 
-PORT="${PORT:-8000}"
+# ポート既定は config/ports.env の dev 用 FastAPI（環境変数 PORT で上書き）
+# shellcheck source=ports.sh
+source "$ROOT/scripts/server/ports.sh"
+load_keiba_ports "$ROOT"
+PORT="${PORT:-$KEIBA_PORT_DEV_FASTAPI}"
 # 既定は venv（本番は /opt/venv やプロジェクト .venv）。システム python だと uvicorn 未導入で落ちるのを避ける。
 if [[ -z "${PYTHON:-}" ]]; then
   if [[ -x "$ROOT/.venv/bin/python" ]]; then
@@ -31,7 +35,7 @@ if [[ -z "${PYTHON:-}" ]]; then
   fi
 fi
 LOG_DIR="$ROOT/logs"
-PID_FILE="$ROOT/.server.pid"
+PID_FILE="$ROOT/.server-${PORT}.pid"
 TS="$(date +%Y%m%d_%H%M%S)"
 LOG_BASENAME="server_${TS}.log"
 LOG_FILE="$LOG_DIR/$LOG_BASENAME"
@@ -79,13 +83,13 @@ stop_server() {
     fi
   fi
 
-  pids=$(pgrep -f "uvicorn.*api\.app:app" 2>/dev/null || true)
+  pids=$(pgrep -f "uvicorn.*api\.app:app.*--port[[:space:]]*${PORT}" 2>/dev/null || true)
   if [[ -n "$pids" ]]; then
     echo "[restart] uvicorn を停止: $pids"
     # shellcheck disable=SC2086
     kill $pids 2>/dev/null || true
     sleep 2
-    pids=$(pgrep -f "uvicorn.*api\.app:app" 2>/dev/null || true)
+    pids=$(pgrep -f "uvicorn.*api\.app:app.*--port[[:space:]]*${PORT}" 2>/dev/null || true)
     if [[ -n "$pids" ]]; then
       # shellcheck disable=SC2086
       kill -9 $pids 2>/dev/null || true

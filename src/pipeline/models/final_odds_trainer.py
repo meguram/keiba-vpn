@@ -23,6 +23,7 @@ from src.pipeline.models.final_odds_dataset import (
 from src.pipeline.models.final_odds_features import select_model_feature_columns
 from src.pipeline.models.final_odds_progress import FinalOddsProgress
 from src.utils.logger import get_logger
+from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 logger = get_logger("FinalOddsTrainer")
 
@@ -50,7 +51,7 @@ class FinalOddsTrainer:
     def __init__(self, mlflow_tracking_uri: str | None = None):
         spec = get_model_spec(MLFLOW_MODEL_KEY)
         self.spec = spec
-        self.mlflow_uri = mlflow_tracking_uri or "http://localhost:5000"
+        self.mlflow_uri = mlflow_tracking_uri or _default_mlflow_uri()
 
     def train(
         self,

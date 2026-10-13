@@ -1,6 +1,6 @@
 ---
 name: evaluate-keiba-architecture
-description: Runs a periodic architecture health check across keiba-vpn's three HTTP route layers (FastAPI legacy src/api/app.py :8000, Flask /api/v1 src/api/flask_app.py+src/api/v1/ :5000, monitor src/monitor/app.py :9090), checks data/config path consistency, flags redundant or duplicated designs, and writes an HTML report to data/skill_logs/architecture_eval/yyyymmdd.html. Use when the user asks for an architecture health check, endpoint/route audit, path consistency check, or a periodic review of routing/data-path integrity across the whole app.
+description: Runs a periodic architecture health check across keiba-vpn's three HTTP route layers (FastAPI legacy src/api/app.py :23120(dev), Flask /api/v1 src/api/flask_app.py+src/api/v1/ :23110(dev), monitor src/monitor/app.py :23900; ports in config/ports.env), checks data/config path consistency, flags redundant or duplicated designs, and writes an HTML report to data/skill_logs/architecture_eval/yyyymmdd.html. Use when the user asks for an architecture health check, endpoint/route audit, path consistency check, or a periodic review of routing/data-path integrity across the whole app.
 ---
 
 このリポジトリ（keiba-vpn）は3層のHTTPルーティングとGCS/ローカルの二重データストレージを持つ、複雑度の高いアプリケーションです。
@@ -13,9 +13,9 @@ description: Runs a periodic architecture health check across keiba-vpn's three 
 
 | 層 | ファイル | ポート | 位置づけ |
 |---|---|---|---|
-| FastAPI legacy | `src/api/app.py`（1万行超） | :8000 | DEC-013により段階廃止予定。新規ルート追加禁止 |
-| Flask `/api/v1` | `src/api/flask_app.py` + `src/api/v1/services.py` / `delegates.py` | :5000 | 仕様上の正。新規APIはここに追加する |
-| monitor | `src/monitor/app.py` | :9090 | 開発者専用監視ポータル（エンドユーザー非公開）。仕様書 `docs/monitoring-portal.md` |
+| FastAPI legacy | `src/api/app.py`（1万行超） | :23120 (dev) | DEC-013により段階廃止予定。新規ルート追加禁止 |
+| Flask `/api/v1` | `src/api/flask_app.py` + `src/api/v1/services.py` / `delegates.py` | :23110 (dev) | 仕様上の正。新規APIはここに追加する |
+| monitor | `src/monitor/app.py` | :23900 | 開発者専用監視ポータル（エンドユーザー非公開）。仕様書 `docs/monitoring-portal.md` |
 
 ゴール: 各層の**全エンドポイント一覧** + **ヘルス判定** + **パス/データ整合性チェック** + **冗長設計の指摘と解決策**を1本のHTMLレポートにまとめる。
 

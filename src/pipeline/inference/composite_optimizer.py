@@ -32,6 +32,7 @@ import numpy as np
 import pandas as pd
 
 from src.utils.logger import get_logger
+from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 logger = get_logger("CompositeOptimizer")
 
@@ -151,7 +152,7 @@ class CompositeOptimizer:
                         pipe = RaceDayPipeline(PipelineConfig(
                             model_name="keiba-lgbm-nopi",
                             model_stage="latest",
-                            mlflow_tracking_uri="http://localhost:5000",
+                            mlflow_tracking_uri=_default_mlflow_uri(),
                         ))
                         meta = pipe._predict(features_df)
                     except Exception:

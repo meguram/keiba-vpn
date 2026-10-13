@@ -69,8 +69,8 @@ def run_t15_pre_race_bundle(runner: Any, race: dict) -> PreRaceBundleResult:
 
     tasks: list[tuple[str, Callable[[], Any]]] = [
         ("出馬表",    lambda: runner.scrape_race_card(rid, skip_existing=True)),
-        ("単複オッズ", lambda: runner.scrape_odds(rid, skip_existing=False)),
-        ("2連オッズ", lambda: runner.scrape_pair_odds(rid, skip_existing=False)),
+        ("単複オッズ", lambda: runner.scrape_odds(rid, skip_existing=False, phase="t15")),
+        ("2連・3連複オッズ", lambda: runner.scrape_pair_odds(rid, skip_existing=False, phase="t15")),
         # 馬柱・調教 / 追い切りは前日 raceday-eve で取得済みが前提。
         # 前日取得に失敗した場合のフォールバックとして skip_existing=True で残す。
         ("馬柱・調教", lambda: runner.scrape_shutuba_past(rid, skip_existing=True)),

@@ -1,7 +1,41 @@
 # 開発者監視ポータル 仕様書
 
 > **対象者**: 開発者のみ。エンドユーザーには非公開。  
-> **ポート**: `9090`（FastAPI :8000 / Flask :5100 / Next.js :3000 とは完全独立）
+> **ポート**: `23900`（FastAPI / Flask / Next.js とは完全独立。番号の正は [`config/ports.env`](../config/ports.env)）
+
+---
+
+## 0. サーバ一覧（クリックで各サーバの画面へ）
+
+> リンクは **dev（開発 PC）で起動中**のときに開ける。ブラウザは WSL と同じ PC で開くこと。
+> ポート番号は [`config/ports.env`](../config/ports.env) が唯一の正。`KEIBA_PORT_*` 環境変数で上書きできる（一覧を変えたらこの節も更新）。
+> 方針: 3000 / 5000 / 5432 / 6379 / 8000 / 9090 など他アプリが既定で使うポートを避け、ephemeral 範囲（32768 以上）の外の `23xxx` に集約。dev=`231xx` / stg=`232xx` / prod=`233xx` / 共通=`239xx`。
+
+### dev（モック UI 確認用・IDE を開くと自動起動）
+
+| サーバ | ポート | 開く（クリック） | 備考 |
+|--------|--------|------------------|------|
+| Next.js モック UI | 23100 | [http://127.0.0.1:23100/](http://127.0.0.1:23100/) | `NEXT_PUBLIC_MOCK=true`。ユーザー向け UI |
+| Flask `/api/v1` | 23110 | [ヘルス](http://127.0.0.1:23110/api/v1/health) | ログイン等。Next.js から `/api/v1/*` を中継 |
+| FastAPI（レガシー UI / API） | 23120 | [UI](http://127.0.0.1:23120/) ・ [ヘルス](http://127.0.0.1:23120/api/health) ・ [API 仕様 (/docs)](http://127.0.0.1:23120/docs) | `data/dev_mock/` を読む |
+| 監視ポータル（本書） | 23900 | [ダッシュボード](http://127.0.0.1:23900/) | `127.0.0.1` のみ bind。要ログイン |
+| MLflow Tracking | 23130 | [http://127.0.0.1:23130/](http://127.0.0.1:23130/) | 既定ではオフ（`START_MLFLOW_LOCAL=true` で起動） |
+
+監視ポータルの各ページ: [ダッシュボード `/`](http://127.0.0.1:23900/) ・ [サービス `/services`](http://127.0.0.1:23900/services) ・ [スクレイピング `/scraping`](http://127.0.0.1:23900/scraping) ・ [データ `/data`](http://127.0.0.1:23900/data) ・ [システム `/system`](http://127.0.0.1:23900/system) ・ [ログ `/logs`](http://127.0.0.1:23900/logs) ・ [Git `/git`](http://127.0.0.1:23900/git) ・ [データストア `/data-stores`](http://127.0.0.1:23900/data-stores) ・ [仕様書 `/specs`](http://127.0.0.1:23900/specs)
+
+### stg / prod（該当環境で起動したときのみ有効）
+
+| 環境 | Next.js | Flask | FastAPI | MLflow |
+|------|---------|-------|---------|--------|
+| stg | [23200](http://127.0.0.1:23200/) | [23210](http://127.0.0.1:23210/api/v1/health) | [23220](http://127.0.0.1:23220/api/health) | [23230](http://127.0.0.1:23230/) |
+| prod | [23300](http://127.0.0.1:23300/) | [23310](http://127.0.0.1:23310/api/v1/health) | [23320](http://127.0.0.1:23320/api/health) | [23330](http://127.0.0.1:23330/) |
+
+### 自動起動と手動操作
+
+- **自動起動**: Claude Code（`.claude/settings.json` の SessionStart フック）と Cursor（`.cursor/hooks.json` の sessionStart）でプロジェクトを開くと [`scripts/server/autostart_dev.sh`](../scripts/server/autostart_dev.sh) が走り、上の dev 4 サーバのうち落ちているものを起動する（冪等・バックグラウンド・ログは `logs/autostart_dev.log`）。`KEIBA_ENV=dev` 以外では何もしない。無効化: `KEIBA_AUTOSTART_DEV=0`。
+- **状態確認**: `bash scripts/server/autostart_dev.sh --status`
+- **手動起動**: `bash scripts/server/autostart_dev.sh`（または `bash scripts/server/service_start.sh --env dev --mock --with-fastapi`）
+- **対象外**: PostgreSQL（5432）/ Redis（6379）は `DATABASE_URL` / `REDIS_URL` で明示設定する基盤サービスのため標準ポートのまま。`docker-compose.serving.yml` と `mlflow/server/`（VPS デプロイ用スタック）も従来のポート。
 
 ---
 
@@ -19,17 +53,17 @@ FastAPI・Flask・Next.js のサービス死活、スクレイピングキュー
 ブラウザ（開発者）
       │
       ▼
-Monitor App :9090          （スタンドアロン Flask）
+Monitor App :23900         （スタンドアロン Flask）
       │
-      ├─► FastAPI :8000    （内部 HTTP）
-      ├─► Flask   :5100    （内部 HTTP）
-      ├─► Next.js :3000    （内部 HTTP ヘルスチェック）
+      ├─► FastAPI :23120   （内部 HTTP。ポートは現在の KEIBA_ENV）
+      ├─► Flask   :23110   （内部 HTTP）
+      ├─► Next.js :23100   （内部 HTTP ヘルスチェック）
       ├─► psutil           （CPU / メモリ / ディスク）
       └─► subprocess(git)  （Git 状態）
 ```
 
 - `src/monitor/app.py` は既存の `src/api/flask_app.py` とは完全に独立した Flask インスタンスを起動する。
-- ポート 9090 は外部から直接アクセスしないこと（tcpexposer トンネルには含めない）。
+- ポート 23900 は外部から直接アクセスしないこと（tcpexposer トンネルには含めない）。
 
 ---
 
@@ -156,7 +190,7 @@ src/monitor/
     specs.html         # /specs, /specs/<filename>
 
 scripts/server/
-  start_monitor.sh     # 単体起動スクリプト（port 9090）
+  start_monitor.sh     # 単体起動スクリプト（port は config/ports.env）
 
 docs/
   monitoring-portal.md # 本ファイル
@@ -169,11 +203,11 @@ docs/
 ### 単体起動
 
 ```bash
-# デフォルトポート 9090
+# 既定ポート（config/ports.env の KEIBA_PORT_MONITOR = 23900）
 bash scripts/server/start_monitor.sh
 
-# ポート指定
-bash scripts/server/start_monitor.sh --port 9191
+# ポート・bind アドレス指定
+bash scripts/server/start_monitor.sh --port 23999 --host 127.0.0.1
 ```
 
 ### service_start.sh との連携
@@ -198,6 +232,8 @@ bash scripts/server/service_start.sh --env stg --monitor
 | `MONITOR_SECRET_KEY` | 必須 | Flask セッション署名キー（ランダム 32 文字以上推奨）|
 
 既存の `DEV_PASSWORD` / `DEV_SECRET_KEY` とは別管理（目的・権限が異なるため）。
+
+> `MONITOR_PASSWORD` が未設定だと空パスワードでログインできてしまう。dev の自動起動は `127.0.0.1` のみに bind するが、必ず `.env` に設定すること。
 
 ---
 

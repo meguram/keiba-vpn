@@ -2,20 +2,21 @@
 # keiba-vpn ローカル開発 — HTTP サービス一括起動
 #
 # Usage:
-#   ./service_start                      # 既定: --env dev（Next.js モック UI :3000）
+#   ./service_start                      # 既定: --env dev（Next.js モック UI。ポートは config/ports.env）
 #   ./service_start --env dev            # 上記と同じ（モックのみ）
 #   ./service_start --env dev --full     # ホットリロード開発（FastAPI + Flask + 実 API）
 #   ./service_start --env stg            # 本番相当 + KEIBA_ENV=stg + tcpexposer stg
 #   ./service_start --env prod           # 本番相当（FastAPI --prod / next build+start）
 #   ./service_start --minimal            # FastAPI + MLflow のみ（dev 時は reload）
-#   ./service_start --mock               # Next.js モックのみ
+#   ./service_start --mock               # Next.js モック + Flask（ログイン用）
+#   ./service_start --mock --with-fastapi # 上記 + FastAPI（レガシー UI / モックデータ API）
 #   ./service_start --with-model-serve   # Docker MLflow model serve（:5001 等）
-#   ./service_start --monitor            # 開発者監視ポータル :9090 も同時起動
+#   ./service_start --monitor            # 開発者監視ポータル（KEIBA_PORT_MONITOR）も同時起動
 #   ./service_start --status             # 状態表示
 #   ./service_start --help
 #
 # 上書き: 環境変数 / scripts/server/service_start.local.env（任意）
-# ポート: dev モック :3000 / stg・prod Next.js :3001 / stg・prod Flask :5000 / dev Flask :5100
+# ポート: config/ports.env が唯一の正（dev=231xx / stg=232xx / prod=233xx / monitor=23900）
 
 set -euo pipefail
 
@@ -186,20 +187,25 @@ ensure_frontend_node_modules() {
   fi
 }
 
+pg_port() { echo 5432; }
+redis_port() { echo 6379; }
+
 check_postgres() {
+  local port; port="$(pg_port)"
   if command -v pg_isready >/dev/null 2>&1; then
-    pg_isready -h localhost -p 5432 -q 2>/dev/null
+    pg_isready -h localhost -p "$port" -q 2>/dev/null
     return $?
   fi
-  port_open 5432
+  port_open "$port"
 }
 
 check_redis() {
+  local port; port="$(redis_port)"
   if command -v redis-cli >/dev/null 2>&1; then
-    [[ "$(redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null || true)" == "PONG" ]]
+    [[ "$(redis-cli -h 127.0.0.1 -p "$port" ping 2>/dev/null || true)" == "PONG" ]]
     return $?
   fi
-  port_open 6379
+  port_open "$port"
 }
 
 # .env から非秘密キーだけを安全に読む（bash で source しない方針）。
@@ -257,19 +263,19 @@ warn_infra() {
   if uses_cloud_sql; then
     echo "[service_start] PostgreSQL — Cloud SQL を使用（KEIBA_DB_BACKEND=cloud_sql）のためローカル :5432 は不要"
   elif check_postgres; then
-    echo "[service_start] PostgreSQL :5432 — 接続可能"
+    echo "[service_start] PostgreSQL :$(pg_port) — 接続可能"
   elif start_infra_docker postgres && wait_until check_postgres; then
-    echo "[service_start] PostgreSQL :5432 — docker compose (docker-compose.dev.yml) で自動起動しました"
+    echo "[service_start] PostgreSQL :$(pg_port) — docker compose (docker-compose.dev.yml) で自動起動しました"
   else
-    echo "[service_start] 警告: PostgreSQL :5432 に接続できません（docker compose -f docker-compose.dev.yml up -d postgres で起動してください）"
+    echo "[service_start] 警告: PostgreSQL :$(pg_port) に接続できません（docker compose -f docker-compose.dev.yml up -d postgres で起動してください）"
     ok=false
   fi
   if check_redis; then
-    echo "[service_start] Redis :6379 — 接続可能"
+    echo "[service_start] Redis :$(redis_port) — 接続可能"
   elif start_infra_docker redis && wait_until check_redis; then
-    echo "[service_start] Redis :6379 — docker compose (docker-compose.dev.yml) で自動起動しました"
+    echo "[service_start] Redis :$(redis_port) — docker compose (docker-compose.dev.yml) で自動起動しました"
   else
-    echo "[service_start] 警告: Redis :6379 に接続できません（docker compose -f docker-compose.dev.yml up -d redis で起動してください）"
+    echo "[service_start] 警告: Redis :$(redis_port) に接続できません（docker compose -f docker-compose.dev.yml up -d redis で起動してください）"
     ok=false
   fi
   $ok
@@ -283,56 +289,51 @@ show_status() {
   echo ""
 
   local code
-  code="$(http_code "http://127.0.0.1:${PORT:-8000}/api/health")"
+  code="$(http_code "http://127.0.0.1:${PORT}/api/health")"
   if [[ "$code" == "200" ]]; then
-    echo "  [FastAPI]  ✅  :${PORT:-8000}  GET /api/health → 200"
+    echo "  [FastAPI]  ✅  :${PORT}  GET /api/health → 200"
   else
-    echo "  [FastAPI]  ❌  :${PORT:-8000}  HTTP=${code}"
+    echo "  [FastAPI]  ❌  :${PORT}  HTTP=${code}"
   fi
 
-  code="$(http_code "http://127.0.0.1:${FLASK_PORT:-5100}/api/v1/health")"
+  code="$(http_code "http://127.0.0.1:${FLASK_PORT}/api/v1/health")"
   if [[ "$code" == "200" ]]; then
-    echo "  [Flask]    ✅  :${FLASK_PORT:-5100}  GET /api/v1/health → 200"
+    echo "  [Flask]    ✅  :${FLASK_PORT}  GET /api/v1/health → 200"
   else
-    echo "  [Flask]    ❌  :${FLASK_PORT:-5100}  HTTP=${code}"
+    echo "  [Flask]    ❌  :${FLASK_PORT}  HTTP=${code}"
   fi
 
-  code="$(http_code "http://127.0.0.1:${FRONTEND_PORT:-3000}/")"
+  code="$(http_code "http://127.0.0.1:${FRONTEND_PORT}/")"
   if [[ "$code" =~ ^(200|304)$ ]]; then
-    echo "  [Next.js]  ✅  :${FRONTEND_PORT:-3000}"
+    echo "  [Next.js]  ✅  :${FRONTEND_PORT}"
   else
-    echo "  [Next.js]  ❌  :${FRONTEND_PORT:-3000}  HTTP=${code}"
+    echo "  [Next.js]  ❌  :${FRONTEND_PORT}  HTTP=${code}"
   fi
 
-  code="$(http_code "http://127.0.0.1:${MLFLOW_PORT:-5000}/health")"
+  code="$(http_code "http://127.0.0.1:${MLFLOW_PORT}/health")"
   if [[ "$code" != "200" ]]; then
-    code="$(http_code "http://127.0.0.1:${MLFLOW_PORT:-5000}/api/2.0/mlflow/experiments/search?max_results=1")"
-  fi
-  local flask_on_mlflow_port=false
-  if [[ "${FLASK_PORT:-5000}" == "${MLFLOW_PORT:-5000}" ]] && \
-     [[ "$(http_code "http://127.0.0.1:${FLASK_PORT}/api/v1/health")" == "200" ]]; then
-    flask_on_mlflow_port=true
+    code="$(http_code "http://127.0.0.1:${MLFLOW_PORT}/api/2.0/mlflow/experiments/search?max_results=1")"
   fi
   if [[ "$code" == "200" ]]; then
-    echo "  [MLflow]   ✅  :${MLFLOW_PORT:-5000}"
-  elif $flask_on_mlflow_port; then
-    echo "  [MLflow]   ⏭️  :${MLFLOW_PORT:-5000}  （Flask が使用中・MLflow ローカル未起動）"
+    echo "  [MLflow]   ✅  :${MLFLOW_PORT}"
+  elif [[ "${START_MLFLOW_LOCAL}" != "true" ]]; then
+    echo "  [MLflow]   ⏭️  :${MLFLOW_PORT}  （このプロファイルではローカル MLflow を起動しない）"
   else
-    echo "  [MLflow]   ❌  :${MLFLOW_PORT:-5000}  HTTP=${code}"
+    echo "  [MLflow]   ❌  :${MLFLOW_PORT}  HTTP=${code}"
   fi
 
   if uses_cloud_sql; then
     echo "  [Postgres] ☁️   Cloud SQL（ローカル :5432 は不要）"
   elif check_postgres; then
-    echo "  [Postgres] ✅  :5432"
+    echo "  [Postgres] ✅  :$(pg_port)"
   else
-    echo "  [Postgres] ❌  :5432"
+    echo "  [Postgres] ❌  :$(pg_port)"
   fi
 
   if check_redis; then
-    echo "  [Redis]    ✅  :6379"
+    echo "  [Redis]    ✅  :$(redis_port)"
   else
-    echo "  [Redis]    ❌  :6379"
+    echo "  [Redis]    ❌  :$(redis_port)"
   fi
 
   echo ""
@@ -389,9 +390,9 @@ start_mlflow() {
 start_fastapi() {
   echo "[service_start] FastAPI (:${PORT}) mode=${FASTAPI_MODE}..."
   if [[ "$FASTAPI_MODE" == "dev" ]]; then
-    run_with_profile_env env PORT="$PORT" PYTHON="$PYTHON" "$ROOT/scripts/server/restart_server.sh" dev
+    run_with_profile_env env PORT="$PORT" PYTHON="$PYTHON" bash "$ROOT/scripts/server/restart_server.sh" dev
   else
-    run_with_profile_env env PORT="$PORT" PYTHON="$PYTHON" "$ROOT/scripts/server/restart_server.sh"
+    run_with_profile_env env PORT="$PORT" PYTHON="$PYTHON" bash "$ROOT/scripts/server/restart_server.sh"
   fi
 }
 
@@ -521,37 +522,11 @@ start_tcpexposer_tunnel() {
     echo "[service_start] 警告: tcpexposer ${profile} の起動に失敗（手動: ./scripts/server/tunnel_tcpexposer.sh ${profile} background）"
 }
 
-free_flask_port_if_needed() {
-  if [[ "${FLASK_PORT}" != "5000" ]]; then
-    return 0
-  fi
-  if [[ "$(http_code "http://127.0.0.1:5000/api/v1/health")" == "200" ]]; then
-    return 0
-  fi
-  if [[ -f "$MLFLOW_PID_FILE" ]]; then
-    local mpid
-    mpid="$(cat "$MLFLOW_PID_FILE" 2>/dev/null || true)"
-    if is_pid_alive "$mpid"; then
-      echo "[service_start] Flask :5000 のため MLflow (PID=${mpid}) を停止..."
-      kill "$mpid" 2>/dev/null || true
-      sleep 1
-    fi
-    rm -f "$MLFLOW_PID_FILE"
-  fi
-  if [[ "$(http_code "http://127.0.0.1:5000/health")" == "200" ]] || \
-     [[ "$(http_code "http://127.0.0.1:5000/api/v1/health")" != "200" ]]; then
-    pkill -f "mlflow server.*--port 5000" 2>/dev/null || true
-    pkill -f "uvicorn.*port 5000.*mlflow" 2>/dev/null || true
-    sleep 1
-  fi
-}
-
 mode_full() {
   echo "[service_start] パターン A — フルセット (${SERVICE_PROFILE})"
   describe_profile
   warn_infra || true
   start_mlflow
-  free_flask_port_if_needed
   start_flask
   start_fastapi
   start_frontend false
@@ -593,10 +568,13 @@ mode_mock() {
   describe_profile
   # ログイン (/api/v1/auth/*) は Flask 経由のため、モック UI でも dev Flask を起動する
   start_flask
-  start_frontend true
+  if $WITH_FASTAPI; then
+    start_fastapi
+  fi
+  start_frontend "$FRONTEND_USE_MOCK"
   record_profile
   echo ""
-  echo "[service_start] 起動完了 → http://127.0.0.1:${FRONTEND_PORT}/ （NEXT_PUBLIC_MOCK=true）"
+  echo "[service_start] 起動完了 → http://127.0.0.1:${FRONTEND_PORT}/ （mock=${FRONTEND_USE_MOCK}。false は dev ストアのデータを表示）"
   if [[ -n "${TCPEXPOSER_PROFILE:-}" ]]; then
     start_tcpexposer_tunnel "$TCPEXPOSER_PROFILE"
     case "$TCPEXPOSER_PROFILE" in
@@ -611,9 +589,9 @@ print_help() {
   sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
   echo ""
   echo "プロファイル:"
-  echo "  dev   モック UI のみ (:3000) → meguai-dev.tcpexposer.com"
+  echo "  dev   モック UI (:${KEIBA_PORT_DEV_FRONTEND}) → meguai-dev.tcpexposer.com"
   echo "  dev --full  FastAPI reload / Flask debug / next dev（実 API 開発）"
-  echo "  stg   本番相当 (:3001 Flask :5000) + KEIBA_ENV=stg → meguai-stg.tcpexposer.com"
+  echo "  stg   本番相当 (Next :${KEIBA_PORT_STG_FRONTEND} Flask :${KEIBA_PORT_STG_FLASK}) + KEIBA_ENV=stg → meguai-stg.tcpexposer.com"
   echo "  prod  stg と同構成（VPS デプロイ想定）"
 }
 
@@ -621,6 +599,7 @@ MODE=""
 SERVICE_PROFILE="${KEIBA_SERVICE_PROFILE:-dev}"
 WITH_MODEL_SERVE=false
 WITH_MONITOR=false
+WITH_FASTAPI=false
 DEV_FULL=false
 
 while [[ $# -gt 0 ]]; do
@@ -660,6 +639,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-model-serve)
       WITH_MODEL_SERVE=true
+      shift
+      ;;
+    --with-fastapi)
+      WITH_FASTAPI=true
       shift
       ;;
     --monitor)
@@ -723,7 +706,7 @@ if $WITH_MODEL_SERVE; then
 fi
 
 if $WITH_MONITOR; then
-  echo "[service_start] 監視ポータル (:9090) をバックグラウンド起動..."
+  echo "[service_start] 監視ポータル (:${KEIBA_PORT_MONITOR}) をバックグラウンド起動..."
   bash "$ROOT/scripts/server/start_monitor.sh" --bg || \
     echo "[service_start] 警告: 監視ポータルの起動に失敗（手動: bash scripts/server/start_monitor.sh）"
   echo "[service_start] tcpexposer monitor トンネルを起動..."

@@ -445,6 +445,7 @@ export function getMockPredictions(raceId: string) {
         mark_type: rank <= 5 ? marks[rank - 1] : "none",
         pred_rank: rank,
         composite_rank: rank,
+        pred_score: h.win_prob,
         win_prob: h.win_prob,
         top2_prob: h.place_prob,
         top3_prob: h.show_prob,
@@ -605,3 +606,111 @@ export const MOCK_SIMULATION_PARAMS = {
   n_trials:       1_000,
   ruin_threshold: 0.10,    // 初期軍資金の10%
 };
+
+// ---------------------------------------------------------------------------
+// 推奨馬券 mock  (/race/[id] の「推奨馬券」タブ)
+// 期待値 = 的中確率 × オッズ。Kelly 基準 f=(p·o-1)/(o-1) に 1/4 を掛けた賭け金（実 API と同じ考え方）
+// 実オッズは予測オッズに決定論的なずれを乗せた疑似値（T-60 → T-15 でずれが変わる）
+// ---------------------------------------------------------------------------
+export type MockOddsMode = "auto" | "actual" | "predicted";
+export type MockOddsPhase = "latest" | "t60" | "t15";
+
+function mockNoise(key: string, phase: "t60" | "t15"): number {
+  let h = phase === "t60" ? 2166136261 : 16777619;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  return -0.12 + (((h >>> 0) % 1000) / 1000) * 0.5; // -12% 〜 +38%
+}
+
+function harvilleTrio(p: number[], i: number, j: number, k: number): number {
+  const ord = (a: number, b: number, c: number) => p[a] * (p[b] / (1 - p[a])) * (p[c] / (1 - p[a] - p[b]));
+  return ord(i, j, k) + ord(i, k, j) + ord(j, i, k) + ord(j, k, i) + ord(k, i, j) + ord(k, j, i);
+}
+
+export function getMockBetRecommendation(raceId: string, bankroll: number, mode: MockOddsMode = "auto", phase: MockOddsPhase = "latest", maxTotalBet: number | null = 2000) {
+  const preds = getMockPredictions(raceId).predictions;
+  const MIN_EV = 1.05, KELLY = 0.25, MAX_RATIO = 0.1, TOP_N = 6;
+  const source: "actual" | "predicted" = mode === "predicted" ? "predicted" : "actual";
+  const usePhase: "t60" | "t15" = phase === "t60" ? "t60" : "t15";
+  const asOf = usePhase === "t60" ? "13:05" : "14:15";
+  const odds = (key: string, fair: number) => (source === "predicted" ? fair : fair * (1 + mockNoise(key, usePhase)));
+
+  type Row = { bet_type: string; label: string; names: string[]; prob: number; odds: number; predicted_odds?: number };
+  const rows: Row[] = [];
+  for (const p of preds) {
+    const horse = MOCK_HORSES.find((h) => h.post_no === p.horse_number);
+    if (!horse) continue;
+    const win = odds(`w${p.horse_number}`, p.win_odds);
+    rows.push({ bet_type: "tansho", label: String(p.horse_number), names: [p.horse_name], prob: p.win_prob, odds: win, predicted_odds: p.win_odds });
+    const pl = odds(`p${p.horse_number}`, horse.predicted_place_odds);
+    rows.push({ bet_type: "fukusho", label: String(p.horse_number), names: [p.horse_name], prob: p.top3_prob, odds: pl, predicted_odds: horse.predicted_place_odds });
+  }
+  if (source === "actual") {
+    const top = [...preds].sort((a, b) => b.win_prob - a.win_prob).slice(0, TOP_N);
+    const sum = preds.reduce((s, x) => s + x.win_prob, 0);
+    const pn = top.map((x) => x.win_prob / sum);
+    const TAKE = 0.95; // モック表示用（実際の控除率はもっと厳しい）
+    for (let i = 0; i < top.length; i++) {
+      for (let j = i + 1; j < top.length; j++) {
+        const pair = [top[i], top[j]].sort((a, b) => a.horse_number - b.horse_number);
+        const ids = `${pair[0].horse_number}-${pair[1].horse_number}`;
+        const ord = (a: number, b: number) => pn[a] * (pn[b] / (1 - pn[a]));
+        const umaren = ord(i, j) + ord(j, i);
+        let wide = 0;
+        for (let k = 0; k < top.length; k++) if (k !== i && k !== j) wide += harvilleTrio(pn, i, j, k);
+        rows.push({ bet_type: "umaren", label: ids, names: pair.map((x) => x.horse_name), prob: umaren, odds: odds(`u${ids}`, TAKE / umaren) });
+        rows.push({ bet_type: "wide", label: ids, names: pair.map((x) => x.horse_name), prob: wide, odds: odds(`d${ids}`, TAKE / wide) });
+        for (let k = j + 1; k < top.length; k++) {
+          const tri = [top[i], top[j], top[k]].sort((a, b) => a.horse_number - b.horse_number);
+          const tid = tri.map((x) => x.horse_number).join("-");
+          const tp = harvilleTrio(pn, i, j, k);
+          rows.push({ bet_type: "sanrenpuku", label: tid, names: tri.map((x) => x.horse_name), prob: tp, odds: odds(`s${tid}`, TAKE / tp) });
+        }
+      }
+    }
+  }
+  const priced = rows
+    .map((r) => {
+      const ev = r.prob * r.odds;
+      const f = r.odds > 1 ? Math.max(0, (ev - 1) / (r.odds - 1)) * KELLY : 0;
+      return {
+        bet_type: r.bet_type, pair_label: r.label, pair: r.label.split("-").map(Number), horse_names: r.names, odds: r.odds, prob: r.prob, ev,
+        kelly_fraction: Math.min(f, MAX_RATIO), bet_amount: 0, expected_return: 0,
+        predicted_odds: source === "actual" ? r.predicted_odds : undefined,
+        odds_gap: source === "actual" && r.predicted_odds ? r.odds / r.predicted_odds - 1 : undefined,
+      };
+    })
+    .filter((c) => c.ev >= MIN_EV && c.kelly_fraction > 0)
+    .sort((a, b) => b.ev - a.ev)
+    .slice(0, 15);
+  // 購入上限: 100 円単位で Kelly 比率配分（最大剰余法）。上限は“上限”で、Kelly 総額（Σf×資金）が小さいレースはそちらに留める
+  const totalKelly = priced.reduce((s, c) => s + c.kelly_fraction, 0);
+  if (maxTotalBet == null) {
+    priced.forEach((c) => { c.bet_amount = Math.floor(c.kelly_fraction * bankroll / 100) * 100; });
+  } else {
+    const units = Math.floor(Math.min(maxTotalBet, bankroll, totalKelly * bankroll) / 100);
+    const raw = priced.map((c) => (totalKelly > 0 ? (units * c.kelly_fraction) / totalKelly : 0));
+    const alloc = raw.map((x) => Math.floor(x));
+    const order = raw.map((x, i) => i).sort((i, j) => (raw[j] - alloc[j]) - (raw[i] - alloc[i]) || priced[j].kelly_fraction - priced[i].kelly_fraction);
+    for (const i of order.slice(0, units - alloc.reduce((s, x) => s + x, 0))) alloc[i] += 1;
+    priced.forEach((c, i) => { c.bet_amount = alloc[i] * 100; });
+  }
+  priced.forEach((c) => { c.expected_return = c.bet_amount * c.ev; });
+  const candidates = priced.filter((c) => c.bet_amount >= 100);
+  // モック表示では券種の偏りを避け、各券種の上位 3 点まで
+  const perType: Record<string, number> = {};
+  const picked = candidates.filter((c) => (perType[c.bet_type] = (perType[c.bet_type] ?? 0) + 1) <= 3);
+  candidates.length = 0;
+  candidates.push(...picked);
+  const total_bet = candidates.reduce((s, c) => s + c.bet_amount, 0);
+  const expected_return = candidates.reduce((s, c) => s + c.expected_return, 0);
+  return {
+    race_id: raceId, bankroll, max_total_bet: maxTotalBet, total_bet, expected_return,
+    roi_pct: total_bet > 0 ? Math.round((expected_return / total_bet - 1) * 1000) / 10 : 0,
+    candidates,
+    odds_source: source,
+    odds_phase: source === "actual" ? usePhase : null,
+    odds_as_of: source === "actual" ? `2026-10-13T${asOf}:00+09:00` : null,
+    available_odds: [{ phase: "t60", as_of: "2026-10-13T13:05:00+09:00" }, { phase: "t15", as_of: "2026-10-13T14:15:00+09:00" }],
+    odds_note: source === "predicted" ? "予測オッズ（前日時点のモデル出力）。単勝・複勝のみ" : null,
+  };
+}

@@ -64,6 +64,8 @@ class InferenceCacheMixin:
             return False
         if meta.get("model_key") != cls.model_key:
             return False
+        if meta.get("source") == "dev_mock" and os.environ.get("KEIBA_ENV", "").strip().lower() == "dev":
+            return True  # dev の取り込みデータ（capture_dev_day / make_dev_mock）は期限切れにしない
         ts = meta.get("computed_at_epoch")
         if ts is None:
             return False

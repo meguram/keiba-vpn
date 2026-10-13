@@ -1,4 +1,4 @@
-"""追走難度 API / 位置取り反映のスモーク（サーバ localhost:8000 要）。"""
+"""追走難度 API / 位置取り反映のスモーク（サーバ起動要。ポートは config/ports.env）。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,9 @@ import unittest
 import urllib.error
 import urllib.request
 
-BASE = os.environ.get("KEIBA_TEST_API_BASE", "http://localhost:8000")
+from src.config.ports import local_url
+
+BASE = os.environ.get("KEIBA_TEST_API_BASE") or local_url("fastapi")
 RACE_ID = os.environ.get("KEIBA_TEST_RACE_ID", "202605021012")
 
 
