@@ -125,7 +125,10 @@ def build_layer_a_dataframe(
     ]
     past = store.load_source("race_shutuba_past", years=use_years, columns=past_cols)
 
-    m = sb.merge(ix, on=["race_id", "horse_number"], how="inner")
+    # race_index は 1 レースあたり約半数の馬分しか無い。inner だと出走馬の約半分が母表から落ちるため left にする。
+    ix = ix.assign(has_speed_index=True)
+    m = sb.merge(ix, on=["race_id", "horse_number"], how="left")
+    m["has_speed_index"] = m["has_speed_index"].eq(True)
     m = m.merge(past, on=["race_id", "horse_number"], how="left")
 
     if jra_only:
