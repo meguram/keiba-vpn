@@ -518,6 +518,7 @@ class NetkeibaClient:
         self._max_retries = max_retries
         self._last_request_time: float = 0
         self._logged_in = False
+        self._premium_ok: bool | None = None  # 会員状態が実ページで効いているか（None=未確認）
         self._env_path = env_path
 
         self._request_count: int = 0
@@ -851,6 +852,8 @@ class NetkeibaClient:
             if "nkauth" in cookies:
                 self._logged_in = True
                 logger.info("ログイン成功 (cookies: %s)", cookies)
+                if os.environ.get("KEIBA_VERIFY_LOGIN", "1") != "0":
+                    self._premium_ok = self._verify_premium()
                 return True
             else:
                 logger.error("ログイン失敗 (nkauth cookie なし, cookies: %s)", cookies)
@@ -859,6 +862,30 @@ class NetkeibaClient:
             logger.error("ログイン失敗: %s", e)
             return False
 
+    def _verify_premium(self) -> bool | None:
+        """会員限定ページ（タイム指数）で全頭分の表が返るかを 1 リクエストで確認する。
+
+        ``nkauth`` クッキーがあっても会員状態が反映されず、指数表が数頭分しか返らないことがあったため。
+        確認自体に失敗したときは None（不明）として扱い、取得は止めない。
+        """
+        from bs4 import BeautifulSoup
+
+        rid = os.environ.get("KEIBA_LOGIN_PROBE_RACE_ID", "202509040410")
+        try:
+            html = self.fetch(
+                f"https://race.netkeiba.com/race/speed.html?race_id={rid}", use_cache=False
+            )
+        except Exception as e:
+            logger.warning("ログイン有効性の確認に失敗（不明として続行）: %s", e)
+            return None
+        rows = len(BeautifulSoup(html, "html.parser").select(
+            "table.SpeedIndex_Table tbody tr, table[class*='SpeedIndex'] tbody tr"))
+        if rows >= 5:
+            logger.info("ログイン有効性 OK (指数表 %d 行)", rows)
+            return True
+        logger.error("ログインは成功したが会員状態が反映されていない可能性 (指数表 %d 行)", rows)
+        return False
+
     # ------------------------------------------------------------------
     # プロパティ
     # ------------------------------------------------------------------
@@ -866,6 +893,11 @@ class NetkeibaClient:
     @property
     def is_logged_in(self) -> bool:
         return self._logged_in
+
+    @property
+    def premium_ok(self) -> bool | None:
+        """会員限定ページが全頭分返ることを確認できたか。False のときは要ログインの取得を見送る。"""
+        return self._premium_ok
 
     @property
     def request_count(self) -> int:

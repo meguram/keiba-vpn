@@ -468,6 +468,9 @@ class ScraperRunner:
             if not self.client.login():
                 logger.warning("%s の取得にはログインが必要ですが、ログインに失敗しました", category)
                 return None
+        if need_login and getattr(self.client, "premium_ok", None) is False:
+            logger.warning("%s/%s: ログインが実質的に効いていないため取得を見送ります（部分的なデータを保存しない）", category, key)
+            return None
 
         try:
             # skip_existing=False（上書き・強制再取得）のときは HTTP キャッシュを使わない。
