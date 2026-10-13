@@ -1,0 +1,27 @@
+# keiba-vpn スクレイピング cron 雛形（マシンのローカル TZ が JST の PC 用）
+#
+# setup_all_cron.sh は UTC マシン前提で時刻を書いているため、JST の PC にそのまま install すると 9 時間ずれる。
+# JST の PC ではこのファイルを参考に crontab -e で登録する（既存の他プロジェクト行は残す）。
+#   登録: (crontab -l | grep -v KEIBA-VPN-JST; sed -e 's#__PROJECT__#'"$PWD"'#g' scripts/cron/crontab.jst.example | grep -v '^#' | grep -v '^$') | crontab -
+#
+# 設計メモ:
+#  - 全ジョブは scripts/auto_scrape.sh 経由（conda の python を使う）。cron から python3 を直接呼ぶと
+#    PATH 上の python3 に bs4 が無く import で失敗する。
+#  - runner / result_runner / raceday は土日だけでなく毎日起動する（非開催日は数秒でスキップ終了）。
+#    月曜（祝日）開催など土日以外の開催日を取りこぼさないため。
+#  - eve も毎日（翌日が開催日のときだけ動く）。日曜・月曜開催の前日夕方に出馬表・馬柱・追い切りを取る。
+#  - 時刻は setup_all_cron.sh の設計（JST）に揃えた。
+
+0 7  * * *  __PROJECT__/scripts/auto_scrape.sh race_lists >> __PROJECT__/logs/auto_scrape_race_lists.log 2>&1 # KEIBA-VPN-JST
+0 17 * * *  __PROJECT__/scripts/auto_scrape.sh race_lists >> __PROJECT__/logs/auto_scrape_race_lists.log 2>&1 # KEIBA-VPN-JST
+*/10 5-9 * * *  __PROJECT__/scripts/auto_scrape.sh baba >> __PROJECT__/logs/jra_baba.log 2>&1 # KEIBA-VPN-JST
+30 7 * * *  __PROJECT__/scripts/auto_scrape.sh runner >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+30 7 * * *  __PROJECT__/scripts/auto_scrape.sh result_runner >> __PROJECT__/logs/auto_scrape_result.log 2>&1 # KEIBA-VPN-JST
+30 17 * * * __PROJECT__/scripts/auto_scrape.sh raceday >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+0 18 * * *  __PROJECT__/scripts/auto_scrape.sh eve >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+0 18 * * 5  __PROJECT__/scripts/auto_scrape.sh weekly >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+30 18 * * 5 __PROJECT__/scripts/auto_scrape.sh name_index >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+30 19 * * 5 __PROJECT__/scripts/auto_scrape.sh barometer >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+30 8 * * *  __PROJECT__/scripts/auto_scrape.sh barometer >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+0 9  * * *  __PROJECT__/scripts/auto_scrape.sh catchup >> __PROJECT__/logs/auto_scrape_catchup.log 2>&1 # KEIBA-VPN-JST
+30 5 * * *  __PROJECT__/scripts/cron/update_jockey_trainer_stats.sh >> __PROJECT__/logs/jockey_trainer_stats.log 2>&1 # KEIBA-VPN-JST

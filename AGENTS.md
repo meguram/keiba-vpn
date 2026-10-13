@@ -44,6 +44,8 @@
 
 **行固有派生カテゴリ（物理分割済み）**: 複数行が共有していた canonical JSON（`race_shutuba` / `race_result_on_time` / `race_result` / `race_result_lap` / `horse_result`）から必要フィールドを抽出した派生カテゴリが GCS に存在する（2020-2026 年・全馬）。抽出ロジック: `src/scraper/row_data_extractor.py`。カテゴリ一覧: `race_shutuba_meta` / `race_result_on_time_payoff` / `_lap` / `_corner` / `horse_profile` / `horse_race_history` / `race_result_meta` / `_payoff` / `_track` / `race_result_corner` / `race_result_lap_times`（合計 11 カテゴリ、261,173 件保存）。追加・再実行: `python3 -m src.scripts.scraping.migrate_row_data_to_unique_paths --year-start 2020 --year-end 2026 --include-horses`。
 
+**スクレイピング SLA・スケジュール**: 各エンドポイントの公開時期と定期取得の対応は `src/scraper/sla_spec.py`（テスト `tests/scraper/test_sla_spec.py` が `TASK_CATALOG` とタスクリストの食い違いを検出）、監査結果・穴の一覧は `docs/operations/scraping_sla_audit_20261013.md`。cron は **`scripts/auto_scrape.sh <mode>` 経由**（cron から python3 を直接呼ぶと bs4 無しで失敗）。JST マシンの雛形は `scripts/cron/crontab.jst.example`（`setup_all_cron.sh` は UTC マシン前提）。公開時刻の実測は `python3 -m src.scraper.availability_watch --auto --yes`（dev 専用）。バロメーターは `barometer-retry`（公開済み・未取得のみ）。
+
 ## 作業の指針（短く）
 
 - 既存の命名・モジュール分割に合わせ、**依頼範囲だけ**変更する。

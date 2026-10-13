@@ -37,6 +37,8 @@ TASK_CATALOG: list[dict[str, Any]] = [
     # 発走前の時点別スナップショット（開催日ランナーが T-60 / T-15 に投入）。保存先は race_odds / race_pair_odds。
     {"id": "race_odds_t60", "entity": "race", "scheduled": True, "label": "単複オッズ (T-60)", "hint": "race_odds — phase=t60 として履歴化"},
     {"id": "race_pair_odds_t60", "entity": "race", "scheduled": True, "label": "2連系・3連複オッズ (T-60)", "hint": "race_pair_odds — phase=t60 として履歴化"},
+    {"id": "race_odds_final", "entity": "race", "scheduled": True, "label": "単複オッズ (確定)", "hint": "race_odds — phase=final として履歴化（発走後の確定値。T-60/T-15 は snapshots に残る）"},
+    {"id": "race_pair_odds_final", "entity": "race", "scheduled": True, "label": "2連系・3連複オッズ (確定)", "hint": "race_pair_odds — phase=final として履歴化"},
     {"id": "race_odds_t15", "entity": "race", "scheduled": True, "label": "単複オッズ (T-15)", "hint": "race_odds — phase=t15 として履歴化"},
     {"id": "race_pair_odds_t15", "entity": "race", "scheduled": True, "label": "2連系・3連複オッズ (T-15)", "hint": "race_pair_odds — phase=t15 として履歴化"},
     {"id": "race_index", "entity": "race", "label": "タイム指数", "hint": "race_index"},
@@ -70,6 +72,8 @@ _ODDS_PHASE_TASKS: dict[str, str] = {
     "race_pair_odds_t60": "t60",
     "race_odds_t15": "t15",
     "race_pair_odds_t15": "t15",
+    "race_odds_final": "final",
+    "race_pair_odds_final": "final",
 }
 
 
@@ -262,6 +266,8 @@ def _race_task(
         "race_pair_odds_t60": "scrape_pair_odds",
         "race_odds_t15": "scrape_odds",
         "race_pair_odds_t15": "scrape_pair_odds",
+        "race_odds_final": "scrape_odds",
+        "race_pair_odds_final": "scrape_pair_odds",
         "race_index": "scrape_speed_index",
         "race_paddock": "scrape_paddock",
         "race_barometer": "scrape_barometer",

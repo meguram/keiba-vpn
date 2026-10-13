@@ -2059,9 +2059,15 @@ class BarometerParser:
             resp.encoding = "euc-jp"
             if resp.status_code != 200 or len(resp.text) < 100:
                 return result
-            return self.parse(resp.text, race_id=race_id)
+            parsed = self.parse(resp.text, race_id=race_id)
+            if not parsed["entries"] and self.NOT_PUBLISHED_MARKER in resp.text:
+                # 「レース翌週の金曜日18時頃に公開予定です。※障害レースを除く」— データが無いのではなく未公開（または障害で対象外）
+                parsed["not_published"] = True
+            return parsed
         except Exception:
             return result
+
+    NOT_PUBLISHED_MARKER = "公開予定"
 
     def parse(self, html: str, race_id: str = "") -> dict[str, Any]:
         """AJAX レスポンス HTML をパースする。"""

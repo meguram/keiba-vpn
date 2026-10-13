@@ -665,6 +665,19 @@ class ScraperRunner:
             logger.error("馬柱取得失敗 [%s]: %s", race_id, e)
             return None
 
+    @staticmethod
+    def _effective_odds_phase(existing: dict | None, phase: str | None) -> str | None:
+        """phase 指定なしの再取得（夕方の確定オッズ・backfill など）が T-60/T-15 の履歴を消さないようにする。
+
+        既存文書が phase/snapshots を持つとき（= 発走前スナップショットがある）は "final" として履歴に積む。
+        履歴の無い旧形式の文書への phase 無し取得は従来どおり上書き。
+        """
+        if phase:
+            return phase
+        if isinstance(existing, dict) and (existing.get("phase") or existing.get("snapshots")):
+            return "final"
+        return None
+
     def scrape_odds(
         self, race_id: str, skip_existing: bool = True, phase: str | None = None,
     ) -> dict | None:
@@ -682,12 +695,12 @@ class ScraperRunner:
                 self.client._session, race_id
             )
             if data.get("entries"):
+                existing = self.storage.load("race_odds", race_id)
+                phase = self._effective_odds_phase(existing, phase)
                 if phase:
                     from src.scraper.odds_snapshot import ODDS_PAYLOAD_KEYS, merge_snapshot
 
-                    data = merge_snapshot(
-                        self.storage.load("race_odds", race_id), data, phase, ODDS_PAYLOAD_KEYS,
-                    )
+                    data = merge_snapshot(existing, data, phase, ODDS_PAYLOAD_KEYS)
                 self.storage.save("race_odds", race_id, data)
                 logger.info("保存: race_odds/%s (%d件%s)", race_id,
                             len(data["entries"]), f", phase={phase}" if phase else "")
@@ -724,13 +737,12 @@ class ScraperRunner:
             n_umatan = len(data.get("umatan", []))
             n_sanrenpuku = len(data.get("sanrenpuku", []))
             if n_umaren or n_wide or n_umatan or n_sanrenpuku:
+                existing = self.storage.load("race_pair_odds", race_id)
+                phase = self._effective_odds_phase(existing, phase)
                 if phase:
                     from src.scraper.odds_snapshot import PAIR_ODDS_PAYLOAD_KEYS, merge_snapshot
 
-                    data = merge_snapshot(
-                        self.storage.load("race_pair_odds", race_id), data, phase,
-                        PAIR_ODDS_PAYLOAD_KEYS,
-                    )
+                    data = merge_snapshot(existing, data, phase, PAIR_ODDS_PAYLOAD_KEYS)
                 self.storage.save("race_pair_odds", race_id, data)
                 logger.info("保存: race_pair_odds/%s (馬連=%d, ワイド=%d, 馬単=%d, 3連複=%d%s)",
                             race_id, n_umaren, n_wide, n_umatan, n_sanrenpuku,
@@ -757,6 +769,20 @@ class ScraperRunner:
             logger.info("スキップ (既存): race_barometer/%s", race_id)
             return self.storage.load("race_barometer", race_id)
 
+        # 障害レースは対象外、平地レースも「レース翌週の金曜18時頃」まで未公開。無駄なリクエストをしない
+        race_date, steeplechase = self._race_date_and_steeplechase(race_id)
+        if steeplechase:
+            logger.info("バロメーター対象外(障害レース): %s", race_id)
+            self._save_not_available_marker("race_barometer", race_id, reason="steeplechase", force=True)
+            return None
+        if race_date is not None:
+            from datetime import datetime, timedelta, timezone
+
+            publish_at = self.barometer_publish_at(race_date)
+            if datetime.now(timezone(timedelta(hours=9))) < publish_at:
+                logger.info("バロメーター未公開のため取得しません: %s（公開予定 %s）", race_id, publish_at.strftime("%m/%d %H:%M"))
+                return None
+
         if not self.client.is_logged_in:
             if not self.client.login():
                 logger.warning("バロメーター取得にはログインが必要です")
@@ -771,6 +797,10 @@ class ScraperRunner:
                 logger.info("保存: race_barometer/%s (%d件)", race_id,
                             len(data["entries"]))
                 return data
+            elif data.get("not_published"):
+                # 公開時刻の見込み違い（18時頃が前後した等）。N/A にはせず、次回の取得に任せる
+                logger.info("バロメーターは未公開です(公開予定の表示): %s", race_id)
+                return None
             else:
                 logger.warning("バロメーターデータなし: %s", race_id)
                 self._save_not_available_marker("race_barometer", race_id,
@@ -780,16 +810,56 @@ class ScraperRunner:
             logger.error("バロメーター取得失敗 [%s]: %s", race_id, e)
             return None
 
+    @staticmethod
+    def barometer_publish_at(race_date):
+        """バロメーター(走行データ)の公開予定: レース翌週の金曜 18:00 JST（race_date はレース当日の date）。
+
+        土・日・月（祝日開催）は同じ開催週末として、その翌週の金曜とみなす。月曜開催が週末分と同じ金曜に出るのか
+        は未確認。外れても応答の「公開予定」表示で未公開と判定され、次回の取得に回るだけ（N/A にはしない）。
+        """
+        from datetime import datetime, time as dtime, timedelta, timezone
+
+        wd = race_date.weekday()
+        if wd in (5, 6, 0):
+            friday = race_date - timedelta(days=(wd - 5) % 7) + timedelta(days=6)
+        else:
+            friday = race_date - timedelta(days=wd) + timedelta(days=7 + 4)
+        return datetime.combine(friday, dtime(18, 0), tzinfo=timezone(timedelta(hours=9)))
+
+    def _race_date_and_steeplechase(self, race_id: str):
+        """保存済みの出馬表/結果から (レース日, 障害レースか) を返す。分からなければ (None, False)。"""
+        from datetime import date
+
+        for cat in ("race_result", "race_shutuba", "race_result_on_time"):
+            try:
+                d = self.storage.load(cat, race_id) or {}
+            except Exception:
+                continue
+            if not d:
+                continue
+            ds = str(d.get("date") or "")[:10]
+            race_date = None
+            if len(ds) == 10 and ds[4] == "-" and ds[7] == "-":
+                try:
+                    race_date = date(int(ds[:4]), int(ds[5:7]), int(ds[8:10]))
+                except ValueError:
+                    race_date = None
+            steeple = str(d.get("surface") or "").startswith("障") or "障害" in str(d.get("race_name") or "")
+            if race_date is not None or steeple:
+                return race_date, steeple
+        return None, False
+
     def _save_not_available_marker(
-        self, category: str, race_id: str, reason: str = "empty_response"
+        self, category: str, race_id: str, reason: str = "empty_response", force: bool = False
     ) -> None:
         """1ヶ月以上前のレースで空レスポンスの場合に N/A マーカーを保存する。
 
         - GCS にスタブ JSON（entries:[] + _meta.not_available=True）を保存して
           次回スクレイプをスキップさせる。
         - ローカル N/A インデックスにも記録して matrix 表示で区別できるようにする。
+        - force=True は恒久的に対象外と分かっている場合（例: 障害レースのバロメーター）で、レースの古さを問わない。
         """
-        if not self._is_race_old(race_id, days=30):
+        if not force and not self._is_race_old(race_id, days=30):
             return
 
         from src.scraper.date_coverage import record_not_available

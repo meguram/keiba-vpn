@@ -113,6 +113,8 @@ def _race_task_storage_category(task: str) -> str:
         "race_pair_odds_t60": "race_pair_odds",
         "race_odds_t15": "race_odds",
         "race_pair_odds_t15": "race_pair_odds",
+        "race_odds_final": "race_odds",
+        "race_pair_odds_final": "race_pair_odds",
         "race_index": "race_index",
         "race_shutuba_past": "race_shutuba_past",
         "race_paddock": "race_paddock",

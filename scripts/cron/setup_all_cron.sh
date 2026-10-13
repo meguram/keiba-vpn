@@ -140,6 +140,12 @@ PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin
 # ── SLA 1: 前日夕方 出馬表・馬柱 ── UTC: 09:00 / JST: 18:00 ──────── # KEIBA-VPN-ALL
 0 9 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} raceday-eve logs/raceday_eve.log # KEIBA-VPN-RACEDAY-EVE
 
+# ── バロメーター取り直し ─────── UTC: 23:30 毎日 + 10:30 Fri / JST: 08:30 毎日 + 19:30 Fri ── # KEIBA-VPN-ALL
+# 公開は「レース翌週の金曜 18 時頃」。weekly-update(金 18:00) で取れなかった分を、公開済み・未取得のものだけ取り直す
+# （取得済み・障害レース・未公開は無リクエストでスキップ）。
+30 23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} barometer-retry logs/barometer_retry.log # KEIBA-VPN-ALL
+30 10 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} barometer-retry logs/barometer_retry.log # KEIBA-VPN-ALL
+
 # ── 金曜 馬名インデックス ─────── UTC: 09:30 Fri / JST: 18:30 Fri ─── # KEIBA-VPN-ALL
 # weekly-update 開始後に実行（馬名リストは週次結果反映後）
 30 9 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} horse-name-index logs/horse_name_index.log # KEIBA-VPN-RACEDAY-EVE
@@ -223,6 +229,7 @@ cmd_install() {
     echo "  00:00       毎日:   GCS→PostgreSQL 増分同期（直近7日・スクレイプ後フック併用）"
     echo "  18:00       毎日:   raceday-eve (翌開催日のみ)"
     echo "  18:30       金曜:   horse-name-index"
+    echo "  08:30 毎日 / 19:30 金曜: barometer-retry（公開済み・未取得のバロメーター）"
     echo "  01:00–09:00 深夜:   backfill (年度別)"
     echo "  */3         常時:   watchdog (FastAPI + Flask + Next.js + MLflow)"
     echo "  git pull:    dev/stg UI（開発者ログイン後）→ POST /api/v1/admin/git-pull"

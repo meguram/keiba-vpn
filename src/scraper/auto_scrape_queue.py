@@ -41,6 +41,12 @@ T15_RACE_TASKS: list[str] = [
 # T-60 はオッズ（単複・馬連・ワイド・馬単・3連複）のみ。馬場ライブ・予測トリガは呼ばない。
 ODDS_T60_TASKS: list[str] = ["race_odds_t60", "race_pair_odds_t60"]
 
+# 前日夕方（raceday-eve）: 出馬表・馬柱・追い切り・SmartRC
+EVE_TASKS: list[str] = ["race_shutuba", "race_shutuba_past", "race_oikiri", "smartrc"]
+
+# 開催日夕方（raceday-evening）: 速報結果・確定オッズ（履歴を壊さないよう phase=final 固定）・SmartRC
+EVENING_TASKS: list[str] = ["race_result_on_time", "race_odds_final", "race_pair_odds_final", "smartrc"]
+
 
 def build_odds_events(
     schedule: list[dict],
@@ -333,7 +339,7 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict[str, Any]:
     if not specs:
         return {"status": "error", "reason": "no-races", "date": date_iso}
 
-    tasks = ["race_shutuba", "race_shutuba_past", "race_oikiri", "smartrc"]
+    tasks = list(EVE_TASKS)
     full = [
         {
             **sp,
@@ -402,7 +408,8 @@ def run_raceday_evening_for_date(date_str: str) -> dict[str, Any]:
     if not specs:
         return {"status": "error", "reason": "no-races", "date": iso_day}
 
-    tasks = ["race_result_on_time", "race_odds", "race_pair_odds", "smartrc"]
+    # 確定オッズは phase=final で履歴化（T-60/T-15 のスナップショットを上書きで失わない）
+    tasks = list(EVENING_TASKS)
     full = [
         {**sp, "tasks": tasks, "smart_skip": False, "date": date_fmt} for sp in specs
     ]

@@ -256,3 +256,73 @@ def test_queue_task_passes_phase_to_runner():
     for task in ("race_odds_t60", "race_pair_odds_t15"):
         queue_tasks._race_task(R(), "202605010101", task, "20260502", smart_skip=False)
     assert calls == [("odds", "202605010101", False, "t60"), ("pair", "202605010101", False, "t15")]
+
+
+# ── phase 指定なしの再取得（夕方の確定オッズ・backfill）が履歴を壊さない ──
+
+def _runner_with(existing_odds=None, existing_pair=None):
+    from types import SimpleNamespace
+
+    from src.scraper import run as R
+
+    r = R.ScraperRunner.__new__(R.ScraperRunner)
+    saved: dict = {}
+
+    class S:
+        def exists(self, cat, key):
+            return False
+
+        def load(self, cat, key):
+            return {"race_odds": existing_odds, "race_pair_odds": existing_pair}.get(cat)
+
+        def save(self, cat, key, data):
+            saved[cat] = data
+            return True
+
+    class P:
+        def parse_from_api(self, session, rid):
+            return {"race_id": rid, "entries": [{"horse_number": 1, "win_odds": 3.0}]}
+
+        def parse_pair_odds_from_api(self, session, rid):
+            return {"race_id": rid, "umaren": [{"pair": [1, 2], "odds": 9.0}], "wide": [], "umatan": [], "sanrenpuku": []}
+
+    r.storage, r.odds_parser, r.client = S(), P(), SimpleNamespace(_session=object())
+    return r, saved
+
+
+T15_DOC = {"race_id": "r", "entries": [{"horse_number": 1, "win_odds": 5.0}], "phase": "t15", "snapshot_at": "2026-10-11T14:15:00+09:00",
+           "snapshots": [{"phase": "t60", "snapshot_at": "2026-10-11T13:00:00+09:00", "entries": [{"horse_number": 1, "win_odds": 6.0}]}]}
+
+
+def test_phaseless_refetch_keeps_history_as_final():
+    r, saved = _runner_with(existing_odds=T15_DOC)
+    r.scrape_odds("r", skip_existing=False)  # 夕方 raceday-evening / backfill 相当
+    doc = saved["race_odds"]
+    assert doc["phase"] == "final" and doc["entries"][0]["win_odds"] == 3.0
+    assert sorted(s["phase"] for s in doc["snapshots"]) == ["t15", "t60"]  # 発走前の履歴が残る
+
+
+def test_phaseless_pair_refetch_keeps_history_as_final():
+    existing = {"race_id": "r", "umaren": [{"pair": [1, 2], "odds": 12.0}], "wide": [], "umatan": [], "sanrenpuku": [],
+                "phase": "t15", "snapshot_at": "x", "snapshots": [{"phase": "t60", "snapshot_at": "y", "umaren": [], "wide": [], "umatan": [], "sanrenpuku": []}]}
+    r, saved = _runner_with(existing_pair=existing)
+    r.scrape_pair_odds("r", skip_existing=False)
+    doc = saved["race_pair_odds"]
+    assert doc["phase"] == "final" and sorted(s["phase"] for s in doc["snapshots"]) == ["t15", "t60"]
+
+
+def test_phaseless_refetch_of_legacy_doc_is_plain_overwrite():
+    r, saved = _runner_with(existing_odds={"race_id": "r", "entries": [{"horse_number": 1, "win_odds": 9.0}]})
+    r.scrape_odds("r", skip_existing=False)
+    assert "phase" not in saved["race_odds"] and "snapshots" not in saved["race_odds"]
+    r2, saved2 = _runner_with(existing_odds=None)
+    r2.scrape_odds("r", skip_existing=False)
+    assert "phase" not in saved2["race_odds"]
+
+
+def test_evening_job_uses_final_phase_tasks():
+    from src.scraper import auto_scrape_queue as Q, queue_tasks as QT
+
+    src = open(Q.__file__, encoding="utf-8").read()
+    assert '"race_odds_final", "race_pair_odds_final"' in src
+    assert QT._ODDS_PHASE_TASKS["race_odds_final"] == "final" == QT._ODDS_PHASE_TASKS["race_pair_odds_final"]
