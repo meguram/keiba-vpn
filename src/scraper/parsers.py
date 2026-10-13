@@ -103,6 +103,8 @@ class RaceResultParser:
         result: dict[str, Any] = {"race_id": race_id}
 
         result.update(self._parse_race_info(soup))
+        if not result.get("round") and re.fullmatch(r"\d{12}", race_id or ""):
+            result["round"] = int(race_id[-2:])
         result["entries"] = self._parse_entries(soup)
         result["field_size"] = len(result["entries"])
         result["payoff"] = self._parse_payoff(soup)
@@ -198,12 +200,50 @@ class RaceResultParser:
             return False
         return bool(re.match(r"^[\d\-]+$", t.replace(" ", "")))
 
+    @staticmethod
+    def _header_offsets(table: Any, n_cols: int) -> dict[str, int] | None:
+        """ヘッダー行の列名から通過・上り・単勝・人気・馬体重の列位置を決める。
+
+        通過・上りはプレミアム列で、非会員表示だと空欄や ``**`` になる。値の見た目で表の種類を推定すると
+        既定の列位置に落ちて指数列などを読んでしまうため、列名を優先する。ヘッダーとセル数が合わなければ None。
+        """
+        head = None
+        for tr in table.select("tr"):
+            ths = tr.find_all("th")
+            if len(ths) >= 10:
+                head = ths
+                break
+        if not head or len(head) != n_cols:
+            return None
+        names = [re.sub(r"\s+", "", safe_text(th)) for th in head]
+
+        def find(*keys: str) -> int | None:
+            for i, nm in enumerate(names):
+                if "指数" in nm:  # 「上がり指数」「ﾀｲﾑ指数」などの指数列を上り・通過と取り違えない
+                    continue
+                if any(k in nm for k in keys):
+                    return i
+            return None
+
+        idx = {
+            "passing": find("通過"),
+            "last_3f": find("上り", "上がり", "後3F"),
+            "odds": find("単勝"),
+            "popularity": find("人気"),
+            "weight_text": find("馬体重"),
+        }
+        return idx if all(v is not None for v in idx.values()) else None
+
     @classmethod
     def _entry_column_offsets(
         cls, cols: list, table: Any = None,
     ) -> dict[str, int]:
-        """db.netkeiba の指数列拡張表 (通過=14列目付近) と race.netkeiba RaceTable01 を切り替える。"""
+        """列位置を返す。ヘッダー名が使えればそれを優先し、無ければ表の種類から推定する。"""
         n = len(cols)
+        if table is not None:
+            by_header = cls._header_offsets(table, n)
+            if by_header is not None:
+                return by_header
         cls_attr = ""
         tid = ""
         if table is not None:
