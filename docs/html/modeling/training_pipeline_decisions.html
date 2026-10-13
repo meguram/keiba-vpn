@@ -38,7 +38,7 @@
 <tr><th>#</th><th>notebook</th><th>役割</th><th>状態</th></tr>
 <tr><td>00</td><td><code>tp-00-env-check</code></td><td>環境・接続・データ・計算資源の確認</td><td class="ok">完了</td></tr>
 <tr><td>01</td><td><code>tp-01-dataset-split</code></td><td>母表構築・分割・分布検証</td><td class="ok">完了</td></tr>
-<tr><td>02</td><td><code>tp-02-feature-build</code></td><td>特徴量生成（リーク検査つき）</td><td>作成済み・ホスト PC で実行中</td></tr>
+<tr><td>02</td><td><code>tp-02-feature-build</code></td><td>特徴量生成（リーク検査つき）</td><td class="ok">完了</td></tr>
 <tr><td>03</td><td><code>tp-03-feature-ablation</code></td><td>特徴量グループの採否</td><td>未作成</td></tr>
 <tr><td>04</td><td><code>tp-04-stage-models</code></td><td>前段モデル（脚質・ペース・上がり3F・位置取り・走破タイム）</td><td>未作成</td></tr>
 <tr><td>05</td><td><code>tp-05-final-train-tune</code></td><td>p_win・p_top2・p_top3 の学習と調整</td><td>未作成</td></tr>
@@ -105,8 +105,62 @@
   <li>adversarial validation の AUC を、特徴量追加後も同じ手順で追跡する（tp-02 で実施）。</li>
 </ul>
 
-<h2>3. 以降の節</h2>
-<p class="muted">tp-02〜tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
+<h2>3. tp-02 特徴量生成（馬の過去走履歴プロファイル）</h2>
+<p class="muted">根拠: コミット <code>323df4a</code>、MLflow 実験 <code>keiba-tp-features</code> の run <code>b4090806dfda4c10b2951c227be11ff8</code>。実装は <code>src/pipeline/features/horse_history/</code>（common・elo・profile・match・builder）。成果物は <code>data/local/modeling/training_pipeline/features/</code>（<code>train_table.parquet</code>、<code>horse_history.parquet</code>、<code>fit_params.json</code>、<code>feature_families.json</code>、<code>adversarial_sets.json</code> ほか）。</p>
+<p class="muted">設計の根拠: 文献調査（Benter 型・Elo/Glicko/TrueSkill・経験ベイズ・Beyer 型の馬場差）、人間の予想手法のウェブ調査（上がりの補正、コース適性、相手関係、展開とのマッチ）、ホスト PC の実データでの試作検証。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>項目</th><th>確定内容</th></tr>
+<tr><td>入力</td><td><code>race_result_flat</code>（2020〜2025 年、JRA の完走馬 283,714 走）。<code>last_3f</code> と馬体重の復元には母表の <code>past_races</code> を使う。<b>2020 年より前の走は取得できない</b>（<code>race_result_flat</code>・<code>horse/result_tbl</code> とも 2020-01-05 以降）。</td></tr>
+<tr><td>特徴量数</td><td>94 個: A 上がり 14 / B 得意な舞台 17 / C レースの質 17 / D 休養・体重 10 / E 信頼度 3 / F1 条件類似度 4 / F2 展開 17 / F3 Elo 9 / F5 クラスタ 3。母表との被覆率 100%（283,714 行すべて）。</td></tr>
+<tr><td>時点ルール</td><td>対象レース日より前のみ。同日の他レースも使わない。Elo は 1 日分をまとめて更新し、当日は前日までのレーティングで評価する。</td></tr>
+<tr><td>全体フィット</td><td>縮約強度・分位点・クラスタ・類似度の重みは <code>FIT_END = 2021-12-21</code> 以前のデータだけで決め、全 fold で固定（最初の fold の学習終端 2021-12-22 より前）。Elo は K=300（fit 期間で勝ち馬の対数尤度が最小）。値は <code>fit_params.json</code>。</td></tr>
+<tr><td>リーク検査</td><td>切り詰め不変性（2023-07-01 以降を消して再計算）: 166,265 行 × 94 特徴量で不一致 0。結果入れ替え不変性（2023-07-01 以降の結果をレース内で入れ替え）: 429 行 × 94 特徴量で不一致 0。notebook は不一致があれば停止する。検査の過程で、直前走の値の <code>shift(1)</code> が馬ごとの窓の外に出て別の馬の値を拾うバグを見つけて修正済み。</td></tr>
+<tr><td>除外した特徴量</td><td>F5 の <code>f5_n</code>（クラスタ別の全期間累積件数）は時間とともに単調に増え、時代を見分ける最大の原因だったため出力から外した。</td></tr>
+</table>
+<h3>試作検証での効果（参考。採否は tp-03 で確定）</h3>
+<p class="muted">条件: valid 2022/2023/2024・3 seed・LightGBM 固定・オッズなし・p_win の LogLoss。ベースライン B0（事前統計＋レース条件）は 0.23258。seed 間のばらつきは約 0.0001。FIT_END が 2021-12-31 の試作での値。</p>
+<table>
+<tr><th>構成</th><th>LogLoss</th><th>B0 との差</th></tr>
+<tr><td>B0 + F3（Elo・相手関係）</td><td>0.22496</td><td>−0.0076</td></tr>
+<tr><td>B0 + C（レースの質）</td><td>0.22520</td><td>−0.0074</td></tr>
+<tr><td>B0 + A（上がり・脚質）</td><td>0.22929</td><td>−0.0033</td></tr>
+<tr><td>B0 + D / B / F2</td><td>–</td><td>−0.0038 / −0.0043 / −0.0033</td></tr>
+<tr><td>B0 + E / F1 / F5</td><td>–</td><td>−0.0003 / −0.0004 / −0.0003</td></tr>
+<tr><td>全部</td><td>0.22208</td><td>−0.0105</td></tr>
+</table>
+<p>B0 + F3 に上乗せした場合、全 fold で改善したのは A（−0.0013）・D（−0.0008）・C（−0.0006）・E（−0.0005）・B（−0.0004）・F2a（−0.0003）・F5（−0.0003）。F1 は +0.0002 と悪化、F4（距離適性曲線）と F2b（ペース別成績）はほぼゼロ。Elo の K は 24 では残差の自己相関が 0.31 残り、300 が最適。</p>
+<h3>カバレッジと取得データの不備</h3>
+<table>
+<tr><th>年</th><th>A 上がり</th><th>D 馬体重</th><th>C レースの質</th><th><code>last_3f</code> 正常率（生値）</th></tr>
+<tr><td>2020</td><td>0.734</td><td>0.756</td><td>0.756</td><td>0.969</td></tr>
+<tr><td>2021</td><td>0.874</td><td>0.900</td><td>0.900</td><td>0.970</td></tr>
+<tr><td>2022</td><td>0.874</td><td>0.900</td><td>0.900</td><td>0.971</td></tr>
+<tr><td>2023</td><td>0.837</td><td>0.807</td><td>0.899</td><td class="warn">0.787</td></tr>
+<tr><td>2024</td><td>0.804</td><td>0.892</td><td>0.895</td><td>0.971</td></tr>
+<tr><td>2025</td><td class="warn">0.611</td><td class="warn">0.530</td><td>0.895</td><td class="warn">0.376</td></tr>
+</table>
+<p><code>race_result_flat</code> の <code>last_3f</code> と馬体重が、3,468 レース（全体の約 16.6%、2023 年 756・2025 年 2,207・他の年は各約 125）で列ずれしている。<code>past_races</code> から復元できる分は復元しているが、2025 年は復元後でも非欠損率が 5 割台。原因は取得側の不具合と思われる。再取得すべき race_id の一覧はホスト PC の <code>scratch/bad_l3f_weight_races.txt</code>。</p>
+<h3>特徴量を足した後の adversarial validation（train と評価期間の見分けやすさ）</h3>
+<table>
+<tr><th>特徴量の範囲</th><th>train vs valid</th><th>train vs test</th><th>上位の特徴量</th></tr>
+<tr><td>全部（94）</td><td>0.899</td><td>0.940</td><td>f5_win、c_rq_ewm2、f5_aff、c_cls_ewm2、f2_pressure</td></tr>
+<tr><td>F5 を除く（91）</td><td>0.837</td><td>0.894</td><td>c_rq_ewm2、c_cls_ewm2、d_career_days、d_nprior、f2_pressure</td></tr>
+<tr><td>F5 と件数系を除く（78）</td><td>0.800</td><td>0.884</td><td>c_rq_ewm2、c_cls_ewm2、d_wt_dev、f2_pressure</td></tr>
+</table>
+<p>解釈: 特徴量を足す前（tp-01 の属性のみ）の 0.62〜0.68 より大幅に高く、時代を見分けられる特徴量が含まれている。F5 の累積系を外しても 0.80〜0.89 残る。残る原因の候補は次のとおり（いずれも未検証）。(1) <code>c_rq_ewm2</code>・<code>c_cls_ewm2</code>: クラス・相手関係の基準が時代で動く。(2) <code>f2_pressure</code> 系: 脚質が分かる馬の割合が、2020 年起点の集計開始により時間とともに増える。(3) <code>d_wt_*</code>: 馬体重の欠損の出方が年で違う（上表）。(4) <code>d_career_days</code>・<code>d_nprior</code>: 2020 年以降の走だけを数えるため、ベテラン馬ほど時間とともに値が大きくなる。</p>
+<h3>申し送り（tp-03 以降で対応）</h3>
+<ul>
+  <li>採用候補: F3・C・A・D・B・F2a・E。小さい／要再確認: F5。見送り候補: F1・F4・F2b。最終判断は tp-03 の ablation（3 fold、採否基準は「全 fold で悪化せず平均が改善」）。</li>
+  <li>時代を見分ける特徴量への対処を ablation で比べる: (a) 助走期間（2020〜2021 年）の行を学習から外す、(b) 問題の特徴量の除外または年内標準化、(c) 取得不備による欠損の年差のマスク。</li>
+  <li><code>last_3f</code>・馬体重の列ずれ 3,468 レースの扱い（再取得するか、マスクするか）はユーザー判断待ち。</li>
+  <li>「京都改修後」フラグ（<code>venue_era</code>）は未実装。</li>
+  <li>騎手・調教師の拡張統計（<code>jk_*</code> / <code>tr_*</code>）は未結合。</li>
+  <li>特徴量を LayerA の既存列（<code>horse_prior_*</code>、速度指数など）と合わせた状態での効果比較は tp-03 で行う。</li>
+</ul>
+
+<h2>4. 以降の節</h2>
+<p class="muted">tp-03〜tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
 </html>
