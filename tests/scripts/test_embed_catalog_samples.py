@@ -42,7 +42,7 @@ def test_json_samples_are_dicts_and_valid_json(catalog):
     M.embed(catalog)
     s = catalog.read_text(encoding="utf-8")
     blocks = [html.unescape(b) for b in re.findall(r'<pre class="smp"><code>(.*?)</code></pre>', s, re.S)]
-    assert len(blocks) > 40
+    assert len(blocks) > 35  # git 管理外のサンプル(馬名索引など)が無い CI でも満たせる下限
     kinds = [type(json.loads(b)) for b in blocks]
     assert kinds.count(dict) >= len(blocks) - 1                                          # ほぼすべて辞書型（最上位がリストの実ファイルは 1 つだけ）
     assert s.count("辞書型（dict）") == kinds.count(dict) and "リスト（list）" in s

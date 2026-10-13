@@ -81,9 +81,8 @@ class TestInitEngineBackendBranching(unittest.TestCase):
                 mock_create_engine.return_value = MagicMock(spec=Engine)
                 engine = session.init_engine()
 
-                mock_create_engine.assert_called_once_with(
-                    "postgresql+psycopg://u:p@localhost:5432/db", pool_pre_ping=True
-                )
+                url = "postgresql+psycopg://u:p@localhost:5432/db"
+                mock_create_engine.assert_called_once_with(url, **session.engine_options(url))
                 self.assertIs(engine, mock_create_engine.return_value)
 
     def test_unset_backend_defaults_to_database_url_even_if_cloud_sql_vars_present(self):

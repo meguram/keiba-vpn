@@ -122,6 +122,8 @@ def _build_samples(tmp: Path) -> dict[str, list[dict[str, Any]]]:
             d["_meta"] = {**d["_meta"], "scraped_at_jst": "2026-10-06 00:00:00"}
         if "predicted_at" in d:
             d["predicted_at"] = "2026-10-06T00:00:00+00:00"
+        if isinstance(d.get("_cache_meta"), dict) and "computed_at_epoch" in d["_cache_meta"]:
+            d["_cache_meta"] = {**d["_cache_meta"], "computed_at_epoch": 1791244800.0}  # 2026-10-06 00:00 JST 相当
         return d
 
     def real(name: str) -> dict[str, Any]:
@@ -205,14 +207,20 @@ def _build_samples(tmp: Path) -> dict[str, list[dict[str, Any]]]:
     S["D01"] = [N("サンプルなし: 10gen は 5gen（A14）の祖先に 6〜10 世代を接木した JSON（via で接木元を追跡）。dev に未生成です。")]
     S["D09"] = [N("サンプルなし: data/calculated_data/{growth_curve,tracking_difficulty}/ は dev が空です（集計ジョブで学習PCに生成）。")]
 
-    my = jload("data/calculated_data/knowledge/myostatin_genes.json")
-    if isinstance(my.get("stallions"), dict):
-        my["stallions"] = dict(list(my["stallions"].items())[:2])
-    S["E01"] = [P("myostatin_genes.json", my, "実データ（手動作成ナレッジ。この PC）", "stallions は先頭 2 件に短縮")]
+    if (ROOT / "data/calculated_data/knowledge/myostatin_genes.json").exists():  # data/calculated_data は git 管理外（CI には無い）
+        my = jload("data/calculated_data/knowledge/myostatin_genes.json")
+        if isinstance(my.get("stallions"), dict):
+            my["stallions"] = dict(list(my["stallions"].items())[:2])
+        S["E01"] = [P("myostatin_genes.json", my, "実データ（手動作成ナレッジ。この PC）", "stallions は先頭 2 件に短縮")]
+    else:
+        S["E01"] = [N("サンプルなし: myostatin_genes.json は手動作成ナレッジ（git 管理外）で、この環境に無いため載せていません。")]
     S["E02"] = [P("_meta.json", jload("data/research/other_predictor_umauma/_meta.json"), "実データ（この PC）"),
                 P("articles_manifest.json", jload("data/research/other_predictor_umauma/articles_manifest.json"), "実データ（この PC）", "先頭 2 件に短縮")]
-    S["E03"] = [P("meta/person/jockey_00001.json", jload("data/calculated_data/meta/person/jockey_00001.json"),
-                  "実データ（dev にあるサンプル。yearly_stats は空）")]
+    if (ROOT / "data/calculated_data/meta/person/jockey_00001.json").exists():
+        S["E03"] = [P("meta/person/jockey_00001.json", jload("data/calculated_data/meta/person/jockey_00001.json"),
+                      "実データ（dev にあるサンプル。yearly_stats は空）")]
+    else:
+        S["E03"] = [N("サンプルなし: meta/person/ は API が初回アクセス時に作るキャッシュ（git 管理外）で、この環境に無いため載せていません。")]
     cfg = yaml.safe_load((ROOT / "config/settings.yaml").read_text(encoding="utf-8"))
     S["E04"] = [P("config/settings.yaml（抜粋）", {k: cfg[k] for k in list(cfg)[:4]}, "設定ファイル（git 管理）", "先頭 4 セクションを抜粋。dict に変換して表示")]
     S["E05"] = [P("config/megu_predict_params.json", jload("config/megu_predict_params.json"), "設定ファイル（git 管理）")]
