@@ -124,8 +124,7 @@ def clusters(F, P, k=24):
     J = T.join_asof(D, on="date", by=keys, strategy="backward", allow_exact_matches=False).sort("ti")
     cn = J["cn"].fill_null(0).to_numpy().astype(float); cs = J["cs"].fill_null(0).to_numpy().astype(float); cw = J["cw"].fill_null(0).to_numpy().astype(float)
     ok = F["f5_cl"].to_numpy() >= 0
-    return F.with_columns(pl.Series("f5_aff", np.where(ok, cs / (cn + 30.0), np.nan)), pl.Series("f5_win", np.where(ok, (cw + 0.07 * 50) / (cn + 50.0), np.nan)),
-                          pl.Series("f5_n", np.where(ok, cn, np.nan)))
+    return F.with_columns(pl.Series("f5_aff", np.where(ok, cs / (cn + 30.0), np.nan)), pl.Series("f5_win", np.where(ok, (cw + 0.07 * 50) / (cn + 50.0), np.nan)))  # 累積件数 cn は時間で単調増加するため出力しない
 
 
 def build_all(runs_rep, elo):
