@@ -759,6 +759,32 @@ class NetkeibaClient:
                 cause = classify_400_cause(resp)
                 tier = get_recovery_tier(attempt, cause, monitor)
 
+                # サーキットブレーカー: 400 が短時間に多発したら自動で一時停止し、これ以上アクセスしない。
+                # (CONTENT_NOT_FOUND は正規の「無いページ」なので判定から除外する。0 を指定すると無効)
+                try:
+                    _cb_limit = int(os.environ.get("NETKEIBA_400_CIRCUIT_BREAKER", "12") or 0)
+                except ValueError:
+                    _cb_limit = 12
+                if (
+                    _cb_limit > 0
+                    and cause.value != "content_not_found"
+                    and monitor.rate_count() >= _cb_limit
+                ):
+                    from src.scraper.scrape_access_pause import read_access_pause, write_access_pause
+
+                    if not read_access_pause().get("active"):
+                        write_access_pause(
+                            reason=(
+                                f"HTTP 400 が直近 5 分間に {monitor.rate_count()} 回発生したため自動停止しました"
+                                f"(サーキットブレーカー)。最後の URL: {url[:200]}"
+                            )
+                        )
+                        logger.error(
+                            "HTTP 400 多発 (%d 回/5 分) — アクセス一時停止フラグを立てました: %s",
+                            monitor.rate_count(), url,
+                        )
+                    resp.raise_for_status()
+
                 if tier < 0:
                     # CONTENT_NOT_FOUND でリトライ上限: 404 相当として扱う
                     logger.warning(

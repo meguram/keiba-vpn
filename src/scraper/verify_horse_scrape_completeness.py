@@ -126,10 +126,33 @@ def wait_until_queue_idle(
     *,
     timeout_sec: float = 3600.0,
     poll_sec: float = 3.0,
+    pause_grace_sec: float = 600.0,
 ) -> tuple[bool, str, dict[str, int | str]]:
+    """キューが空になるまで待つ。
+
+    アクセス一時停止 (scrape_access_pause) が ``pause_grace_sec`` 秒を超えて続いたら、
+    本来の ``timeout_sec`` (最大 20 時間) を待たずに ``(False, "paused", last)`` で戻る。
+    一時停止中に常駐タスクが長時間ぶら下がって重複する問題への対処 (T-071)。
+    0 以下を指定すると、この早期リターンは無効になる。
+    """
+    from src.scraper.scrape_access_pause import read_access_pause
+
     t0 = time.time()
+    pause_since: float | None = None
     last: dict[str, int | str] = {}
     while (time.time() - t0) < timeout_sec:
+        if pause_grace_sec > 0:
+            try:
+                paused = bool(read_access_pause().get("active"))
+            except Exception:
+                paused = False
+            if paused:
+                if pause_since is None:
+                    pause_since = time.time()
+                elif (time.time() - pause_since) >= pause_grace_sec:
+                    return False, "paused", last
+            else:
+                pause_since = None
         try:
             st = queue.get_status()
         except Exception as e:
