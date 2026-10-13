@@ -35,14 +35,17 @@ def init_mlflow(tracking_uri: str | None = None) -> str:
     """
     MLflow を初期化する。
 
-    tracking_uri が指定されなければ settings.yaml から読み込む。
+    tracking_uri が指定されなければ settings.yaml の tracking_uri → 環境変数 MLFLOW_TRACKING_URI →
+    config/ports.env の現環境ローカル MLflow の順に決める。
     サーバーに接続できなければローカルファイルストアにフォールバック。
 
     Returns:
         使用中の tracking URI
     """
     cfg = _load_mlflow_config()
-    uri = tracking_uri or cfg.get("tracking_uri", "mlflow/runs")
+    from src.config.ports import mlflow_tracking_uri
+
+    uri = tracking_uri or cfg.get("tracking_uri") or mlflow_tracking_uri()
 
     try:
         mlflow.set_tracking_uri(uri)

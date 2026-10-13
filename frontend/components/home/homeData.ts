@@ -1,3 +1,5 @@
+import { pathEnabled } from "@/lib/features";
+
 export type NavCardItem = {
   href: string;
   accent: string;
@@ -38,6 +40,20 @@ export type CategorySection = {
   singleRow?: boolean;
   cards: (NavCardItem | TabbedCardItem)[];
 };
+
+/** 無効化中の機能（lib/features.ts）に属するカード/タブを除き、空になったカテゴリも落とす */
+export function filterEnabledCategories(sections: CategorySection[]): CategorySection[] {
+  return sections
+    .map((s) => ({
+      ...s,
+      cards: s.cards
+        .map((c) =>
+          isTabbedCard(c) ? { ...c, tabs: c.tabs.filter((t) => pathEnabled(t.href)) } : c
+        )
+        .filter((c) => (isTabbedCard(c) ? c.tabs.length > 0 : pathEnabled(c.href))),
+    }))
+    .filter((s) => s.cards.length > 0);
+}
 
 export const PUBLIC_CATEGORIES: CategorySection[] = [
   {

@@ -79,7 +79,68 @@ def _verify_token(token: str) -> bool:
         return False
 
 
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+
+
+def _hostname(value: str) -> str:
+    v = (value or "").strip().lower()
+    if v.startswith("["):  # [::1]:23100
+        return v.split("]")[0] + "]"
+    return v.split(":")[0]
+
+
+def _is_loopback(addr: str | None) -> bool:
+    """127.0.0.0/8・::1・IPv4 射影（::ffff:127.0.0.1）をループバックとみなす。解釈できなければ False。"""
+    import ipaddress
+
+    s = (addr or "").strip().strip("[]")
+    if not s:
+        return False
+    try:
+        ip = ipaddress.ip_address(s)
+    except ValueError:
+        return False
+    if getattr(ip, "ipv4_mapped", None) is not None:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback
+
+
+def dev_auto_login_applies(remote_addr: str | None, headers) -> bool:
+    """dev 環境で、この PC 上のブラウザからのリクエストなら自動的にログイン済みとして扱う。
+
+    次を全て満たすときだけ True（それ以外は通常の Cookie 認証）:
+      - KEIBA_ENV が明示的に dev（未設定は prod 扱いなので対象外）かつ KEIBA_DEV_AUTO_LOGIN が 0 でない
+      - 接続元がループバック（127.0.0.1 / ::1）
+      - Host / X-Forwarded-Host が localhost 系、X-Forwarded-For があればループバックのみ
+        （tcpexposer 等の公開トンネル経由は Host が公開ドメインになるため対象外）
+    """
+    import os
+
+    if (os.environ.get("KEIBA_ENV") or "").strip().lower() not in ("dev", "development", "local"):
+        return False
+    if (os.environ.get("KEIBA_DEV_AUTO_LOGIN") or "1").strip().lower() in ("0", "false", "no", "off"):
+        return False
+    if not _is_loopback(remote_addr):
+        return False
+
+    def h(name: str) -> str:
+        return (headers.get(name) or "").strip()
+
+    for name in ("x-forwarded-host", "host"):
+        v = h(name)
+        if v and _hostname(v.split(",")[0]) not in _LOCAL_HOSTS:
+            return False
+    if h("forwarded"):
+        return False
+    xff = h("x-forwarded-for")
+    if xff and not all(_is_loopback(x) for x in xff.split(",")):
+        return False
+    return True
+
+
 def is_developer(request: Request) -> bool:
+    if dev_auto_login_applies(getattr(request.client, "host", None), request.headers):
+        return True
     token = request.cookies.get(COOKIE_NAME, "")
     return _verify_token(token)
 
@@ -92,6 +153,8 @@ def classify_session(request: Request) -> str:
     - "expired": 署名は正しいが有効期限（30日）切れ
     - "invalid": クッキーが存在するが形式不正・署名検証失敗（改ざん・別環境のクッキー等）
     """
+    if dev_auto_login_applies(getattr(request.client, "host", None), request.headers):
+        return "valid"
     token = request.cookies.get(COOKIE_NAME, "")
     if not token:
         return "none"

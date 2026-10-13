@@ -96,3 +96,4 @@ data/research/bloodline/*.db-wal
 
 # dev 用モック（make dev-mock で生成）
 data/dev_mock/
+.autostart_dev.lock

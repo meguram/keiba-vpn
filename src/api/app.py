@@ -70,6 +70,7 @@ from src.api.auth import (
     COOKIE_NAME,
 )
 from src.utils.keiba_logging import standard_log_formatter
+from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 
 # ── 毎朝の構造チェックスケジューラ ──────────────────────
@@ -7045,7 +7046,7 @@ async def run_race_prediction(request: Request, race_id: str):
             pipe = RaceDayPipeline(PipelineConfig(
                 model_name="keiba-lgbm-nopi",
                 model_stage="latest",
-                mlflow_tracking_uri="http://localhost:5000",
+                mlflow_tracking_uri=_default_mlflow_uri(),
             ))
             model = pipe._load_model()
             if model is not None:
@@ -8368,7 +8369,7 @@ def _run_training():
                 _cfg = yaml.safe_load(f) or {}
         except Exception:
             pass
-        trainer = ModelTrainer(mlflow_tracking_uri="http://localhost:5000", config=_cfg)
+        trainer = ModelTrainer(mlflow_tracking_uri=_default_mlflow_uri(), config=_cfg)
         result = trainer.train()
         _training_job["result"] = result
         _training_job["error"] = result.get("error")
@@ -8444,7 +8445,7 @@ def _run_ensemble_training():
         except Exception:
             pass
         trainer = EnsembleTrainer(
-            mlflow_tracking_uri="http://localhost:5000", config=_cfg,
+            mlflow_tracking_uri=_default_mlflow_uri(), config=_cfg,
         )
         result = trainer.train()
         _ensemble_job["result"] = _serialize_metrics(result)
@@ -8517,7 +8518,7 @@ async def get_model_info():
     """
     try:
         import mlflow
-        mlflow.set_tracking_uri("http://localhost:5000")
+        mlflow.set_tracking_uri(_default_mlflow_uri())
         client = mlflow.MlflowClient()
 
         from src.pipeline.models.trainer import ModelTrainer
@@ -8625,7 +8626,7 @@ async def compare_training_results(models: str = "", versions: int = 3):
         import mlflow
         from src.pipeline.mlflow.catalog import MODEL_CATALOG, get_model_spec
 
-        mlflow.set_tracking_uri("http://localhost:5000")
+        mlflow.set_tracking_uri(_default_mlflow_uri())
         client = mlflow.MlflowClient()
 
         keys = [k.strip() for k in models.split(",") if k.strip()] or sorted(MODEL_CATALOG)

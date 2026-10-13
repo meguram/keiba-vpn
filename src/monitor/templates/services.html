@@ -17,9 +17,9 @@ function pct(a, b) { return b > 0 ? Math.round(a / b * 100) : 0; }
 
 function renderSvc(d) {
   const svcs = [
-    { key: 'fastapi', label: 'FastAPI', port: 8000, color: '#58a6ff' },
-    { key: 'flask',   label: 'Flask',   port: 5100, color: '#3fb950' },
-    { key: 'nextjs',  label: 'Next.js', port: 3000, color: '#bc8cff' },
+    { key: 'fastapi', label: 'FastAPI', port: {{ ports.fastapi }}, color: '#58a6ff' },
+    { key: 'flask',   label: 'Flask',   port: {{ ports.flask }}, color: '#3fb950' },
+    { key: 'nextjs',  label: 'Next.js', port: {{ ports.frontend }}, color: '#bc8cff' },
   ];
 
   let html = '<div class="grid grid-3">';

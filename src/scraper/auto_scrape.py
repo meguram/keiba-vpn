@@ -86,7 +86,7 @@ import logging
 import random
 import sys
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -488,6 +488,9 @@ def task_raceday_runner():
     2. 各レースの発走15分前まで待機
     3. 15分前になったら出馬表+オッズ+馬柱+追切+SmartRCをスクレイプ
     4. 全レース完了で終了
+
+    注: T-60 のオッズ取得（phase=t60 スナップショット）はキュー版（auto_scrape_queue）のみ。
+    この直接版（KEIBA_AUTO_SCRAPE_USE_QUEUE=0 の切り戻し経路）は T-15 のみ。
     """
     if _via_queue():
         from src.scraper import auto_scrape_queue as _asq
@@ -1286,6 +1289,62 @@ def task_catchup_missing_dates():
     _save_status("catchup-missing", result)
 
 
+BAROMETER_RETRY_LOOKBACK_DAYS = 35
+
+
+def barometer_due_dates(calendar: dict, now: datetime | None = None, lookback_days: int = BAROMETER_RETRY_LOOKBACK_DAYS) -> list[str]:
+    """バロメーターの公開時刻（レース翌週金曜 18:00 JST）を過ぎた直近の開催日を YYYYMMDD で返す（純関数）。"""
+    from src.scraper.run import ScraperRunner
+
+    now = now or datetime.now(timezone(timedelta(hours=9)))
+    oldest = (now - timedelta(days=lookback_days)).date().isoformat()
+    out: list[str] = []
+    for d in calendar.get("race_days", []):
+        ds = d["date"]
+        if ds < oldest:
+            continue
+        if now >= ScraperRunner.barometer_publish_at(date.fromisoformat(ds)):
+            out.append(ds.replace("-", ""))
+    return sorted(out)
+
+
+def task_barometer_retry():
+    """公開済みなのに未取得のバロメーター（走行データ）を取りに行く（毎日 cron 想定）。
+
+    週次更新（金曜 18:00）は公開時刻ちょうどに走るため、公開が遅れた週は取りこぼす。
+    取得済み・障害レース・未公開は ``scrape_barometer`` が無リクエストでスキップする。
+    """
+    calendar = _load_race_calendar()
+    dates = barometer_due_dates(calendar)
+    if not dates:
+        _save_status("barometer-retry", {"status": "skipped", "reason": "no-due-dates"})
+        return
+
+    from src.scraper.run import ScraperRunner
+    runner = ScraperRunner()
+    saved, pending, errors = 0, 0, 0
+    for date_str in dates:
+        rl = runner.storage.load("race_lists", date_str) or {}
+        for race in rl.get("races", []):
+            rid = race["race_id"]
+            if runner.storage.exists("race_barometer", rid):
+                continue
+            try:
+                if runner.scrape_barometer(rid, skip_existing=False):
+                    saved += 1
+                    time.sleep(random.uniform(2.0, 5.0))
+                else:
+                    pending += 1
+            except Exception as e:
+                logger.error("barometer-retry 失敗 [%s]: %s", rid, e)
+                errors += 1
+    _save_status("barometer-retry", {
+        "status": "ok" if not errors else "partial",
+        "dates": dates, "saved": saved, "pending": pending, "error_count": errors,
+        "last_run": _now_jst_iso(),
+    })
+
+
 def task_daily_race_lists():
     """毎日 07:00 に実行 (cron)。今日〜カレンダー末尾までの全開催日の race_lists を取得・更新する。"""
     if _via_queue():
@@ -1355,6 +1414,7 @@ def show_status():
         "horse-name-index":      "金曜18:30 馬名リスト+成長曲線",
         "growth-curve-weekly":   "金曜18:30 成長曲線一括",
         "catchup-missing":       "過去欠損補完 (race_listsなし開催日)",
+        "barometer-retry":       "バロメーター未取得の取り直し (公開済み分)",
         "daily-race-lists":      "日次レース一覧 (今日〜カレンダー末尾)",
         "jra-baba-morning":      "JRA馬場情報 (朝ポーリング 05:00-09:00)",
     }
@@ -1448,6 +1508,7 @@ TASKS = {
     "raceday-evening":        task_raceday_evening,
     "weekly-update":          task_weekly_update,
     "catchup-missing":        task_catchup_missing_dates,
+    "barometer-retry":        task_barometer_retry,
     "daily-race-lists":       task_daily_race_lists,
     "jra-baba-morning":       task_jra_baba_morning,
 }

@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 logger = logging.getLogger("pipeline.models.pace_predictor")
 
@@ -322,8 +323,8 @@ def build_training_dataset_from_parquet(years: list[str] | None = None) -> pd.Da
 class PacePredictorTrainer:
     """ペース予測モデルの学習とMLflow登録"""
 
-    def __init__(self, mlflow_tracking_uri: str = "http://localhost:5000"):
-        self.mlflow_uri = mlflow_tracking_uri
+    def __init__(self, mlflow_tracking_uri: str | None = None):
+        self.mlflow_uri = mlflow_tracking_uri or _default_mlflow_uri()
 
     def train(
         self,

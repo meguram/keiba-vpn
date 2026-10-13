@@ -33,7 +33,14 @@ TASK_CATALOG: list[dict[str, Any]] = [
     },
     {"id": "race_oikiri", "entity": "race", "label": "追い切り", "hint": "race_oikiri"},
     {"id": "race_odds", "entity": "race", "label": "単複オッズ", "hint": "race_odds"},
-    {"id": "race_pair_odds", "entity": "race", "label": "2連系オッズ", "hint": "race_pair_odds"},
+    {"id": "race_pair_odds", "entity": "race", "label": "2連系・3連複オッズ", "hint": "race_pair_odds"},
+    # 発走前の時点別スナップショット（開催日ランナーが T-60 / T-15 に投入）。保存先は race_odds / race_pair_odds。
+    {"id": "race_odds_t60", "entity": "race", "scheduled": True, "label": "単複オッズ (T-60)", "hint": "race_odds — phase=t60 として履歴化"},
+    {"id": "race_pair_odds_t60", "entity": "race", "scheduled": True, "label": "2連系・3連複オッズ (T-60)", "hint": "race_pair_odds — phase=t60 として履歴化"},
+    {"id": "race_odds_final", "entity": "race", "scheduled": True, "label": "単複オッズ (確定)", "hint": "race_odds — phase=final として履歴化（発走後の確定値。T-60/T-15 は snapshots に残る）"},
+    {"id": "race_pair_odds_final", "entity": "race", "scheduled": True, "label": "2連系・3連複オッズ (確定)", "hint": "race_pair_odds — phase=final として履歴化"},
+    {"id": "race_odds_t15", "entity": "race", "scheduled": True, "label": "単複オッズ (T-15)", "hint": "race_odds — phase=t15 として履歴化"},
+    {"id": "race_pair_odds_t15", "entity": "race", "scheduled": True, "label": "2連系・3連複オッズ (T-15)", "hint": "race_pair_odds — phase=t15 として履歴化"},
     {"id": "race_index", "entity": "race", "label": "タイム指数", "hint": "race_index"},
     {"id": "race_paddock", "entity": "race", "label": "パドック", "hint": "race_paddock"},
     {"id": "race_barometer", "entity": "race", "label": "偏差値", "hint": "race_barometer"},
@@ -57,6 +64,17 @@ TASK_CATALOG: list[dict[str, Any]] = [
 
 def catalog_for_api() -> list[dict[str, Any]]:
     return list(TASK_CATALOG)
+
+
+# 時点別オッズタスク → phase（odds_snapshot の phase 値）
+_ODDS_PHASE_TASKS: dict[str, str] = {
+    "race_odds_t60": "t60",
+    "race_pair_odds_t60": "t60",
+    "race_odds_t15": "t15",
+    "race_pair_odds_t15": "t15",
+    "race_odds_final": "final",
+    "race_pair_odds_final": "final",
+}
 
 
 def normalize_tasks(task_list: list[str] | None) -> list[str]:
@@ -244,6 +262,12 @@ def _race_task(
         "race_shutuba": "scrape_race_card",
         "race_odds": "scrape_odds",
         "race_pair_odds": "scrape_pair_odds",
+        "race_odds_t60": "scrape_odds",
+        "race_pair_odds_t60": "scrape_pair_odds",
+        "race_odds_t15": "scrape_odds",
+        "race_pair_odds_t15": "scrape_pair_odds",
+        "race_odds_final": "scrape_odds",
+        "race_pair_odds_final": "scrape_pair_odds",
         "race_index": "scrape_speed_index",
         "race_paddock": "scrape_paddock",
         "race_barometer": "scrape_barometer",
@@ -271,6 +295,9 @@ def _race_task(
     if task == "race_result_on_time":
         od = meta_date.strip() if len(meta_date.strip()) == 8 and meta_date.strip().isdigit() else None
         runner.scrape_race_result_on_time(race_id, skip_existing=smart_skip, opening_date=od)
+        return False
+    if task in _ODDS_PHASE_TASKS:
+        fn(race_id, skip_existing=smart_skip, phase=_ODDS_PHASE_TASKS[task])
         return False
     fn(race_id, skip_existing=smart_skip)
     return False

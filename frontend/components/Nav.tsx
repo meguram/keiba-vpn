@@ -11,7 +11,13 @@ export function Nav() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    if (USE_MOCK) return; // mockモードではFlask認証不要
+    if (USE_MOCK) {
+      // mockモードではFlask認証不要。dev の自動ログインが有効ならログイン済み表示にする
+      const auto = process.env.NEXT_PUBLIC_DEV_AUTO_LOGIN === "1";
+      setLoggedIn(auto);
+      setIsAdmin(auto);
+      return;
+    }
     fetch("/api/v1/auth/status", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { logged_in: false, is_admin: false }))
       .then((d) => {

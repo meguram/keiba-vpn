@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import pandas as pd
+from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 logger = logging.getLogger("pipeline.inference.race_day")
 
@@ -40,7 +41,7 @@ class PipelineConfig:
     skip_existing_scrape: bool = True
     model_name: str = "keiba-lgbm-nopi"
     model_stage: str = "latest"
-    mlflow_tracking_uri: str = "http://localhost:5000"
+    mlflow_tracking_uri: str = field(default_factory=_default_mlflow_uri)
     output_dir: str = "data/predictions"
     parallel_horses: int = 1
     max_retries: int = 2

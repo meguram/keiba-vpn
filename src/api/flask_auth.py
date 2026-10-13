@@ -5,6 +5,7 @@ from __future__ import annotations
 from flask import Request, jsonify, request
 
 from src.api.auth import (
+    dev_auto_login_applies,
     COOKIE_MAX_AGE,
     COOKIE_NAME,
     _make_token,
@@ -15,6 +16,8 @@ from src.api.auth import (
 
 def is_logged_in(req: Request | None = None) -> bool:
     req = req or request
+    if dev_auto_login_applies(req.remote_addr, req.headers):
+        return True
     token = req.cookies.get(COOKIE_NAME, "")
     return _verify_token(token)
 
@@ -69,7 +72,7 @@ def require_member(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         token = request.cookies.get(COOKIE_NAME, "")
-        if not _verify_token(token):
+        if not dev_auto_login_applies(request.remote_addr, request.headers) and not _verify_token(token):
             return jsonify({"error": "member required", "reason": "not_member"}), 401
         return f(*args, **kwargs)
 

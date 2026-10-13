@@ -12,7 +12,7 @@
 
 `data/modeling/layer_a_train.parquet` があれば最優先で読み込む。
 `dataset_split_manifest.json` が存在すれば自動で 2020-23 / 2024 / 2025 分割を使用。
-MLflow が localhost:5000 で待機している前提（未起動時は記録のみ警告）。
+ローカル MLflow（ポートは config/ports.env）が待機している前提（未起動時は記録のみ警告）。
 """
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ if str(ROOT) not in sys.path:
 
 from src.pipeline.models.trainer import ModelTrainer  # noqa: E402
 from src.utils.keiba_logging import script_basic_config  # noqa: E402
+from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 
 def main() -> None:
@@ -55,7 +56,7 @@ def main() -> None:
     )
     ap.add_argument(
         "--mlflow-uri",
-        default="http://localhost:5000",
+        default=_default_mlflow_uri(),
         help="MLflow tracking URI",
     )
     args = ap.parse_args()

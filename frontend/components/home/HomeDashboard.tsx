@@ -9,8 +9,10 @@ import {
   NavCardItem,
   PUBLIC_CATEGORIES,
   TabbedCardItem,
+  filterEnabledCategories,
   isTabbedCard,
 } from "@/components/home/homeData";
+import { FeatureId, featureEnabled } from "@/lib/features";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberUpgradeModal } from "@/components/upgrade/MemberUpgradeModal";
 
@@ -149,8 +151,8 @@ function DevToolbar({ isAdmin }: { isAdmin: boolean }) {
   const monitorUrl =
     typeof window !== "undefined"
       ? (process.env.NEXT_PUBLIC_MONITOR_URL ||
-          `${window.location.protocol}//${window.location.hostname}:9090`)
-      : (process.env.NEXT_PUBLIC_MONITOR_URL || "http://localhost:9090");
+          `${window.location.protocol}//${window.location.hostname}:${process.env.NEXT_PUBLIC_MONITOR_PORT}`)
+      : (process.env.NEXT_PUBLIC_MONITOR_URL || `http://localhost:${process.env.NEXT_PUBLIC_MONITOR_PORT}`);
 
   return (
     <div
@@ -204,6 +206,16 @@ function DevToolbar({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
+const VISIBLE_PUBLIC = filterEnabledCategories(PUBLIC_CATEGORIES);
+const VISIBLE_ADMIN = filterEnabledCategories(ADMIN_CATEGORIES);
+
+const PLAN_FEATURES: [string, FeatureId][] = [
+  ["AI予測（全馬の勝率・複勝率・回収率）", "predictions"],
+  ["血統分析・種牡馬メモ", "bloodline"],
+  ["詳細データ分析", "data-analysis"],
+  ["馬券最適化", "betting"],
+];
+
 export function HomeDashboard() {
   const { isAdmin, isMember } = useAuthStatus();
   const searchParams = useSearchParams();
@@ -230,13 +242,13 @@ export function HomeDashboard() {
       </div>
 
       <div className="main">
-        {PUBLIC_CATEGORIES.map((section) => (
+        {VISIBLE_PUBLIC.map((section) => (
           <CategoryBlock key={section.num} section={section} />
         ))}
 
         {isAdmin && (
           <>
-            {ADMIN_CATEGORIES.map((section) => (
+            {VISIBLE_ADMIN.map((section) => (
               <CategoryBlock key={section.num} section={section} />
             ))}
           </>
@@ -296,12 +308,7 @@ export function HomeDashboard() {
                 textAlign: "left",
               }}
             >
-              {[
-                "AI予測（全馬の勝率・複勝率・回収率）",
-                "血統分析・種牡馬メモ",
-                "詳細データ分析",
-                "馬券最適化",
-              ].map((feat) => (
+              {PLAN_FEATURES.filter(([, id]) => featureEnabled(id)).map(([feat]) => (
                 <li
                   key={feat}
                   style={{

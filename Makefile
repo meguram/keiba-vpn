@@ -1,4 +1,4 @@
-.PHONY: setup-dev dev-mock dev-mock-clean data-health data-health-dashboard setup-stg setup-prod \
+.PHONY: setup-dev dev-mock dev-mock-clean dev-data dev-fixture-pack data-health data-health-dashboard setup-stg setup-prod \
 	db-up db-down db-migrate db-reset \
 	stg-migrate \
 	test test-frontend test-all \
@@ -11,6 +11,8 @@ help:
 	@echo "  setup-dev    .env コピー + Docker 起動 + DB マイグレーション (初回)"
 	@echo "  dev-mock     dev 用モックデータを生成 (data/dev_mock と page_reference。GCS 不要)"
 	@echo "  dev-mock-clean  生成済みモックのみ削除"
+	@echo "  dev-data     dev の UI 表示データを揃える (モック生成 + dev_fixture/ の実データ日を展開。冪等)"
+	@echo "  dev-fixture-pack  dev_fixture/ を作り直す (DATE=YYYYMMDD。capture_dev_day で取り込み直した後)"
 	@echo "  data-health  データ存在チェック/ヘルスチェック (現在の KEIBA_ENV。stg/prod は KEIBA_ENV=stg make data-health)"
 	@echo "  data-health-dashboard  ダッシュボード(dashboard.html)を作り直す。ブラウザで開くだけ(サーバ不要・自動更新)"
 	@echo "  db-up        Docker コンテナ起動 (PostgreSQL:5432 / Redis:6379)"
@@ -40,6 +42,14 @@ dev-mock:
 
 dev-mock-clean:
 	python3 -m src.scripts.data.make_dev_mock --clean
+
+# dev の UI 表示データを揃える（モック生成 + git 配布の実データ日 dev_fixture/ の展開）。どの PC でも同じ表示になる
+dev-data:
+	python3 -m src.scripts.data.dev_fixture ensure
+
+# 実データを取り込み直したあとに dev_fixture/ を作り直す（例: make dev-fixture-pack DATE=20260906）
+dev-fixture-pack:
+	python3 -m src.scripts.data.dev_fixture pack --date $(DATE)
 
 data-health-dashboard:
 	python3 -m src.data_health --dashboard

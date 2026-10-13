@@ -1,12 +1,12 @@
 """
-開発者専用 監視ポータル — ポート 9090
+開発者専用 監視ポータル — ポートは config/ports.env（KEIBA_PORT_MONITOR）
 
-既存の FastAPI(:8000) / Flask(:5100) / Next.js(:3000) とは完全独立した
+既存の FastAPI / Flask / Next.js とは完全独立した
 スタンドアロン Flask アプリ。MONITOR_PASSWORD による Cookie 認証で保護する。
 
 起動:
     bash scripts/server/start_monitor.sh
-    python3 -m src.monitor.app --port 9090
+    python3 -m src.monitor.app            # ポートは config/ports.env の KEIBA_PORT_MONITOR
 """
 from __future__ import annotations
 
@@ -36,15 +36,17 @@ load_project_dotenv()
 # ── 設定 ────────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent.parent.parent
 
+from src.config.ports import local_url as _local_url, monitor_port as _monitor_port  # noqa: E402
+
 _secret_key = os.environ.get("MONITOR_SECRET_KEY", "")
 if not _secret_key:
     import secrets
     _secret_key = secrets.token_hex(32)
 
 MONITOR_PASSWORD = os.environ.get("MONITOR_PASSWORD", "")
-FASTAPI_URL = os.environ.get("KEIBA_FASTAPI_URL", "http://127.0.0.1:8000")
-FLASK_URL = os.environ.get("KEIBA_API_URL", "http://127.0.0.1:5100")
-NEXT_URL = "http://127.0.0.1:3000"
+FASTAPI_URL = os.environ.get("KEIBA_FASTAPI_URL") or _local_url("fastapi")
+FLASK_URL = os.environ.get("KEIBA_API_URL") or _local_url("flask")
+NEXT_URL = _local_url("frontend")
 LOG_DIR = ROOT / "logs"
 
 # 環境ごとのサービスポート定義
@@ -55,8 +57,9 @@ _SHARED_DB_URL = os.environ.get(
 ENV_CONFIGS = {
     "dev": {
         "label": "DEV",
-        "next_url": "http://127.0.0.1:3000",
-        "flask_url": "http://127.0.0.1:5100",
+        "next_url": _local_url("frontend", "dev"),
+        "flask_url": _local_url("flask", "dev"),
+        "fastapi_url": _local_url("fastapi", "dev"),
         "public_url": "https://meguai-dev.tcpexposer.com/",
         "color": "#58a6ff",
         # dev は NEXT_PUBLIC_MOCK=true のためフロントがAPIを呼ばない。DB接続チェック対象外。
@@ -65,8 +68,9 @@ ENV_CONFIGS = {
     },
     "stg": {
         "label": "STG",
-        "next_url": "http://127.0.0.1:3001",
-        "flask_url": "http://127.0.0.1:5000",
+        "next_url": _local_url("frontend", "stg"),
+        "flask_url": _local_url("flask", "stg"),
+        "fastapi_url": _local_url("fastapi", "stg"),
         "public_url": "https://meguai-stg.tcpexposer.com/",
         "color": "#3fb950",
         # stg はネイティブ PostgreSQL :5432 / DB=keiba_db_stg（scripts/server/setup_stg.sh 参照）
@@ -78,8 +82,9 @@ ENV_CONFIGS = {
     },
     "prod": {
         "label": "PROD",
-        "next_url": "http://127.0.0.1:3002",
-        "flask_url": "http://127.0.0.1:5200",
+        "next_url": _local_url("frontend", "prod"),
+        "flask_url": _local_url("flask", "prod"),
+        "fastapi_url": _local_url("fastapi", "prod"),
         "public_url": None,
         "color": "#d29922",
         "db_url": os.environ.get("PROD_DATABASE_URL", _SHARED_DB_URL),
@@ -91,6 +96,18 @@ app = Flask(__name__, template_folder="templates")
 app.secret_key = _secret_key
 app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
 app.config["PERMANENT_SESSION_LIFETIME"] = 43200  # 12 時間
+
+
+@app.context_processor
+def _inject_ports() -> dict:
+    return {
+        "ports": {
+            "monitor": _monitor_port(),
+            "fastapi": int(FASTAPI_URL.rsplit(":", 1)[-1].split("/")[0]),
+            "flask": int(FLASK_URL.rsplit(":", 1)[-1].split("/")[0]),
+            "frontend": int(NEXT_URL.rsplit(":", 1)[-1].split("/")[0]),
+        }
+    }
 
 # ── 認証 ────────────────────────────────────────────────────────────────────
 
@@ -1528,7 +1545,7 @@ def internal_data_stores():
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="keiba-vpn 監視ポータル")
-    parser.add_argument("--port", type=int, default=9090)
+    parser.add_argument("--port", type=int, default=_monitor_port())
     parser.add_argument("--host", default="0.0.0.0")
     args = parser.parse_args()
 

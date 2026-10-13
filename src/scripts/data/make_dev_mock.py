@@ -581,7 +581,18 @@ def generate(today: date, root: Path) -> dict[str, int]:
                     for h in field:
                         ran[h["horse_id"]].append(
                             history_row(r["finish"][h["horse_id"]], rid, r["meta"], day, place, venue, FIELD, dayn))
-                put("race_predictions", rid, _mock_race_predictions_category(rid, r["meta"], field, rng))
+                # UI/馬券推奨が読む形式（win/top2/top3・期待値・印つき。実馬・実オッズ由来の capture_dev_day と同じ生成器）
+                from src.pipeline.inference.race_prediction_service import RacePredictionCache
+                from src.scripts.scraping.capture_dev_day import build_mock_prediction
+
+                pred = build_mock_prediction(rid, r["shutuba"], r["odds"], r["meta"])
+                if pred:
+                    pred["_cache_meta"] = {"version": RacePredictionCache.cache_version, "model_key": RacePredictionCache.model_key,
+                                           "source": "dev_mock", "computed_at_epoch": datetime.now(JST).timestamp()}
+                    pred["_meta"] = {}
+                    put("race_predictions", rid, pred)
+                else:
+                    put("race_predictions", rid, _mock_race_predictions_category(rid, r["meta"], field, rng))
                 races_listing.append({"race_id": rid, "round": rr, "venue": venue, "race_name": RACE_SPECS[rr]["name"]})
                 schedule_slots.append({
                     "race_id": rid, "venue": venue, "round": rr, "race_name": RACE_SPECS[rr]["name"],

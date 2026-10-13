@@ -19,6 +19,7 @@ import sys
 from src.pipeline.models.final_odds_progress import STATUS_PATH, load_status_file
 from src.pipeline.models.final_odds_trainer import FinalOddsTrainer
 from src.utils.logger import get_logger
+from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 logger = get_logger("train_final_odds")
 
@@ -54,7 +55,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--mlflow-uri",
-        default="http://localhost:5000",
+        default=_default_mlflow_uri(),
         help="MLflow tracking URI",
     )
     parser.add_argument(

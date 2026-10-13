@@ -24,17 +24,77 @@ logger = logging.getLogger("scraper.auto_scrape_queue")
 _JST = ZoneInfo("Asia/Tokyo")
 
 LEAD_MINUTES = 15
+T60_LEAD_MINUTES = 60
 RESULT_OFFSET_MINUTES = 15
 
 # T-15 バンドル相当（smart_skip=False で直 pending。直前オッズ再取得を優先）
+# オッズは phase=t15 として保存され、T-60 のスナップショットは snapshots に履歴化される。
 T15_RACE_TASKS: list[str] = [
     "race_shutuba",
-    "race_odds",
-    "race_pair_odds",
+    "race_odds_t15",
+    "race_pair_odds_t15",
     "race_shutuba_past",
     "race_oikiri",
     "smartrc",
 ]
+
+# T-60 はオッズ（単複・馬連・ワイド・馬単・3連複）のみ。馬場ライブ・予測トリガは呼ばない。
+ODDS_T60_TASKS: list[str] = ["race_odds_t60", "race_pair_odds_t60"]
+
+# 前日夕方（raceday-eve）: 出馬表・馬柱・追い切り・SmartRC
+EVE_TASKS: list[str] = ["race_shutuba", "race_shutuba_past", "race_oikiri", "smartrc"]
+
+# 開催日夕方（raceday-evening）: 速報結果・確定オッズ（履歴を壊さないよう phase=final 固定）・SmartRC
+EVENING_TASKS: list[str] = ["race_result_on_time", "race_odds_final", "race_pair_odds_final", "smartrc"]
+
+
+def build_odds_events(
+    schedule: list[dict],
+    lead_t60: int = T60_LEAD_MINUTES,
+    lead_t15: int = LEAD_MINUTES,
+) -> list[dict[str, Any]]:
+    """各レースの T-60 / T-15 イベントを時刻順に並べて返す（純粋関数）。
+
+    要素: ``{"kind": "t60"|"t15", "at": 実行時刻, "t15_at": そのレースの T-15 時刻, "race": race}``。
+    同時刻なら t60 → t15 の順、それも同じなら schedule の並び順。
+    """
+    events: list[dict[str, Any]] = []
+    for idx, race in enumerate(schedule):
+        post = race["post_time"]
+        t15_at = post - timedelta(minutes=lead_t15)
+        events.append({"kind": "t60", "at": post - timedelta(minutes=lead_t60),
+                       "t15_at": t15_at, "race": race, "_i": idx})
+        events.append({"kind": "t15", "at": t15_at, "t15_at": t15_at, "race": race, "_i": idx})
+    events.sort(key=lambda e: (e["at"], 0 if e["kind"] == "t60" else 1, e["_i"]))
+    for e in events:
+        del e["_i"]
+    return events
+
+
+def select_due_events(
+    events: list[dict[str, Any]],
+    done: set[tuple[str, str]],
+    now: datetime,
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """``now`` までに到達した未処理イベントを (t60, t15, skipped_t60) に振り分ける（純粋関数）。
+
+    既に T-15 時刻を過ぎたレースの T-60 は取得する意味が薄い（T-15 が同じデータを取る）ため skipped。
+    返した全イベントは呼び出し側が ``done`` に追加する想定。
+    """
+    t60: list[dict] = []
+    t15: list[dict] = []
+    skipped: list[dict] = []
+    for e in events:
+        key = (e["race"]["race_id"], e["kind"])
+        if key in done or e["at"] > now:
+            continue
+        if e["kind"] == "t15":
+            t15.append(e)
+        elif e["t15_at"] <= now:
+            skipped.append(e)
+        else:
+            t60.append(e)
+    return t60, t15, skipped
 
 
 def use_queue() -> bool:
@@ -279,7 +339,7 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict[str, Any]:
     if not specs:
         return {"status": "error", "reason": "no-races", "date": date_iso}
 
-    tasks = ["race_shutuba", "race_shutuba_past", "race_oikiri", "smartrc"]
+    tasks = list(EVE_TASKS)
     full = [
         {
             **sp,
@@ -348,7 +408,8 @@ def run_raceday_evening_for_date(date_str: str) -> dict[str, Any]:
     if not specs:
         return {"status": "error", "reason": "no-races", "date": iso_day}
 
-    tasks = ["race_result_on_time", "race_odds", "race_pair_odds", "smartrc"]
+    # 確定オッズは phase=final で履歴化（T-60/T-15 のスナップショットを上書きで失わない）
+    tasks = list(EVENING_TASKS)
     full = [
         {**sp, "tasks": tasks, "smart_skip": False, "date": date_fmt} for sp in specs
     ]
@@ -665,6 +726,10 @@ def task_daily_race_lists() -> None:
 
 
 def task_raceday_runner() -> None:
+    """開催日常駐ランナー（キュー版）。各レース T-60 でオッズのみ、T-15 でバンドル（オッズ含む）を取得する。
+
+    T-60 のオッズ取得はこのキュー版のみ（KEIBA_AUTO_SCRAPE_USE_QUEUE=0 の直接版は従来どおり T-15 のみ）。
+    """
     from src.scraper import auto_scrape as _as
     from src.scraper.raceday_pre_race_pipeline import (
         PreRaceBundleResult,
@@ -696,31 +761,50 @@ def task_raceday_runner() -> None:
         return
 
     logger.info("  開催日ランナー (キュー経由): %s 全%dレース", today_str, len(schedule))
-    stats = {"races": len(schedule), "scraped": 0, "errors": []}
-    scraped_ids: set[str] = set()
+    stats = {"races": len(schedule), "scraped": 0, "odds_t60": 0, "errors": []}
+    events = build_odds_events(schedule)
+    done: set[tuple[str, str]] = set()
 
-    for i, race in enumerate(schedule):
-        target_time = race["post_time"] - timedelta(minutes=LEAD_MINUTES)
+    for ev in events:
+        if (ev["race"]["race_id"], ev["kind"]) in done:
+            continue
         now = datetime.now(_JST)
-        if now < target_time:
-            wait_sec = (target_time - now).total_seconds()
+        if now < ev["at"]:
+            wait_sec = (ev["at"] - now).total_seconds()
             logger.info(
-                "[%d/%d] %s まで待機 (あと %.0f分)",
-                i + 1,
-                len(schedule),
-                target_time.strftime("%H:%M"),
+                "[%s] %s まで待機 (あと %.0f分)",
+                ev["kind"].upper(),
+                ev["at"].strftime("%H:%M"),
                 wait_sec / 60,
             )
             time.sleep(wait_sec)
 
-        batch = []
-        for r in schedule:
-            if r["race_id"] in scraped_ids:
-                continue
-            r_target = r["post_time"] - timedelta(minutes=LEAD_MINUTES)
-            if datetime.now(_JST) >= r_target:
-                batch.append(r)
+        t60_batch, t15_batch, skipped = select_due_events(events, done, datetime.now(_JST))
+        for x in skipped:
+            done.add((x["race"]["race_id"], "t60"))
+            logger.info("T-60 スキップ（既に T-15 時刻を過ぎた）: %s", x["race"]["race_id"])
 
+        if t60_batch:
+            specs = [
+                {
+                    "job_kind": "race",
+                    "target_id": x["race"]["race_id"],
+                    "date": date_fmt,
+                    "tasks": list(ODDS_T60_TASKS),
+                    "smart_skip": False,
+                }
+                for x in t60_batch
+            ]
+            queue.bulk_add_jobs(specs)
+            ok, msg, _ = _kick_and_wait(queue, timeout_sec=72000.0)
+            if not ok:
+                logger.error("T-60 キュー待機失敗: %s", msg)
+                stats["errors"].append(msg)
+            for x in t60_batch:
+                done.add((x["race"]["race_id"], "t60"))
+                stats["odds_t60"] += 1
+
+        batch = [x["race"] for x in t15_batch]
         specs = [
             {
                 "job_kind": "race",
@@ -738,14 +822,14 @@ def task_raceday_runner() -> None:
                 logger.error("T-15 キュー待機失敗: %s", msg)
                 stats["errors"].append(msg)
 
-        baba_ok = refresh_jra_baba_live()
-        for r in batch:
-            rid = r["race_id"]
-            bundle = PreRaceBundleResult(race_id=rid, jra_baba_refreshed=baba_ok, ok=True)
-            trigger_pre_race_predict(r, bundle_result=bundle)
-            scraped_ids.add(rid)
-            stats["scraped"] += 1
-            time.sleep(random.uniform(1.0, 3.0))
+            baba_ok = refresh_jra_baba_live()
+            for r in batch:
+                rid = r["race_id"]
+                bundle = PreRaceBundleResult(race_id=rid, jra_baba_refreshed=baba_ok, ok=True)
+                trigger_pre_race_predict(r, bundle_result=bundle)
+                done.add((rid, "t15"))
+                stats["scraped"] += 1
+                time.sleep(random.uniform(1.0, 3.0))
 
     _as._save_status(
         "raceday-runner",
@@ -755,6 +839,7 @@ def task_raceday_runner() -> None:
             "venues": venues,
             "races": stats["races"],
             "scraped": stats["scraped"],
+            "odds_t60": stats["odds_t60"],
             "error_count": len(stats["errors"]),
         },
     )

@@ -11,9 +11,9 @@
 #   ./scripts/server/tunnel_tcpexposer.sh stop-all
 #
 # プロファイル（省略時 dev）:
-#   dev     meguai-dev.tcpexposer.com     → localhost:3000  （モック UI）
-#   stg     meguai-stg.tcpexposer.com     → localhost:3001  （本番相当 Next.js）
-#   monitor meguai-monitor.tcpexposer.com → localhost:9090  （監視ポータル）
+#   dev     meguai-dev.tcpexposer.com     → localhost:<dev フロントエンド>  （モック UI）
+#   stg     meguai-stg.tcpexposer.com     → localhost:<stg フロントエンド>  （本番相当 Next.js）
+#   monitor meguai-monitor.tcpexposer.com → localhost:<監視ポータル>  （ポートは config/ports.env）
 #
 # 環境変数（任意）:
 #   KEIBA_TCPEXPOSER_USER=megukeiba
@@ -109,7 +109,7 @@ check_local() {
   case "$TCPEXPOSER_PROFILE" in
     dev) log "  → ./service_start --env dev" ;;
     stg) log "  → ./service_start --env stg" ;;
-    monitor) log "  → python -m src.monitor.app（port 9090）" ;;
+    monitor) log "  → python -m src.monitor.app（port は config/ports.env の KEIBA_PORT_MONITOR）" ;;
   esac
   return 1
 }

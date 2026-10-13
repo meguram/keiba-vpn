@@ -42,9 +42,10 @@ class OptimizeBettingTest(unittest.TestCase):
     def test_success_payload_has_expected_keys(self):
         payload, code = _call({"race_id": "202606010101", "bankroll": 50000}, self.PRED)
         self.assertEqual(code, 200)
+        required = {"bankroll", "candidates", "expected_return", "race_id", "roi_pct", "total_bet"}
+        self.assertTrue(required <= set(payload), required - set(payload))
         self.assertEqual(
-            sorted(payload),
-            ["bankroll", "candidates", "expected_return", "race_id", "roi_pct", "total_bet"],
+            {"odds_source", "odds_phase", "odds_as_of", "available_odds", "odds_note"} - set(payload), set(),
         )
         self.assertEqual(payload["bankroll"], 50000)
 

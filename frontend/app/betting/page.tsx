@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageShell } from "@/components/PageShell";
 import { USE_MOCK, MOCK_KELLY } from "@/lib/mock";
+import { featureEnabled } from "@/lib/features";
 
 type Display = typeof MOCK_KELLY;
 
@@ -205,7 +206,7 @@ export default function BettingPage() {
                 {result.bets.map((b) => (
                   <tr key={`${b.horse_id}-${b.horse_name}-${b.bet_type}`} style={{ borderTop: "1px solid var(--border)" }}>
                     <td className="py-2 px-3">
-                      {b.horse_id
+                      {b.horse_id && featureEnabled("horse-detail")
                         ? <a href={`/horse/${b.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "none" }}>{b.horse_name}</a>
                         : b.horse_name}
                     </td>

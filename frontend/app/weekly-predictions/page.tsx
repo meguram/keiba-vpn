@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
+import { featureEnabled } from "@/lib/features";
+import { LEVEL_STYLE, RaceValue, useRaceValues, valueTitle } from "@/lib/raceValue";
+
+const SHOW_HORSE_LINK = featureEnabled("horse-detail");
 /* ── 型 ── */
 type RaceItem = {
   race_id: string;
@@ -103,7 +107,7 @@ function RaceSummaryBadges({ preds }: { preds: PredEntry[] }) {
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
       {honmei && (
         <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "rgba(239,68,68,0.12)", color: "#ef4444" }}>
-          ◎ {honmei.horse_id
+          ◎ {honmei.horse_id && SHOW_HORSE_LINK
             ? <a href={`/horse/${honmei.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "none" }}>{honmei.horse_name ?? `馬番${honmei.horse_number}`}</a>
             : (honmei.horse_name ?? `馬番${honmei.horse_number}`)
           }
@@ -171,7 +175,7 @@ function PredTable({ preds, hasPred }: { preds: PredEntry[]; hasPred: boolean })
                 <td style={{ ...TD, fontSize: 16, fontWeight: 800, color: mark.color }}>{mark.sym}</td>
                 <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "—"}</td>
                 <td style={{ ...TD, textAlign: "left", fontWeight: 600, color: "#fff", whiteSpace: "nowrap" }}>
-                  {p.horse_id ? (
+                  {p.horse_id && SHOW_HORSE_LINK ? (
                     <Link href={`/horse/${p.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{p.horse_name ?? "—"}</Link>
                   ) : (p.horse_name ?? "—")}
                 </td>
@@ -207,18 +211,28 @@ function RaceCard({
   pred,
   loading,
   onLoad,
+  value,
 }: {
   race: RaceItem;
   pred: PredData | null;
   loading: boolean;
   onLoad: (id: string) => void;
+  value?: RaceValue;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasPred = pred?.has_prediction === true && (pred.predictions?.some((p) => p.win_prob != null) ?? false);
   const preds = pred?.predictions ?? [];
 
   return (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", marginBottom: 12 }}>
+    <div
+      title={valueTitle(value)}
+      style={{
+        background: value?.level === "hot" ? "linear-gradient(90deg, rgba(249,115,22,0.10), var(--surface) 40%)" : "var(--surface)",
+        border: "1px solid var(--border)", borderLeft: `4px solid ${value ? LEVEL_STYLE[value.level].border : "var(--border)"}`,
+        borderRadius: 10, overflow: "hidden", marginBottom: 12,
+        boxShadow: value?.level === "hot" ? "0 0 12px rgba(249,115,22,0.25)" : undefined,
+      }}
+    >
       {/* ヘッダー */}
       <div
         style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", flexWrap: "wrap" }}
@@ -237,6 +251,18 @@ function RaceCard({
         <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
           {race.venue} {race.distance && `${race.distance}m`} {race.surface}
         </span>
+
+        {value && value.level !== "none" && (
+          <span
+            style={{
+              fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 6, whiteSpace: "nowrap",
+              border: `1px solid ${LEVEL_STYLE[value.level].border}`, background: LEVEL_STYLE[value.level].bg, color: LEVEL_STYLE[value.level].color,
+              boxShadow: LEVEL_STYLE[value.level].glow,
+            }}
+          >
+            {value.level === "hot" ? "★ " : ""}推奨 {value.expected_roi != null ? `${(value.expected_roi * 100).toFixed(0)}%` : "見送り"}
+          </span>
+        )}
 
         {/* 予測サマリー */}
         {hasPred && <RaceSummaryBadges preds={preds} />}
@@ -305,6 +331,35 @@ export default function WeeklyPredictionsPage() {
   const [racesError, setRacesError] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const bulkAbort = useRef<AbortController | null>(null);
+  const raceValues = useRaceValues(selectedDate);
+  const [selectedVenue, setSelectedVenue] = useState("");
+
+  /* 開催場ごとに 12R を切り替える（URL の ?venue= で共有・再読込しても維持） */
+  const venues = useMemo(() => {
+    // JRA の競馬場コード順（race_id の 5〜6 桁目: 札幌01 函館02 福島03 新潟04 東京05 中山06 中京07 京都08 阪神09 小倉10）
+    const code = new Map<string, string>();
+    for (const r of races) if (r.venue && !code.has(r.venue)) code.set(r.venue, r.race_id.slice(4, 6));
+    return [...code.keys()].sort((a, b) => (code.get(a) ?? "").localeCompare(code.get(b) ?? ""));
+  }, [races]);
+  const activeVenue = venues.includes(selectedVenue) ? selectedVenue : (venues[0] ?? "");
+  const visibleRaces = useMemo(
+    () => races
+      .filter((r) => !activeVenue || r.venue === activeVenue)
+      .sort((a, b) => Number(a.round ?? 0) - Number(b.round ?? 0)),
+    [races, activeVenue],
+  );
+
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get("venue");
+    if (v) setSelectedVenue(v);
+  }, []);
+
+  function chooseVenue(v: string) {
+    setSelectedVenue(v);
+    const u = new URL(window.location.href);
+    u.searchParams.set("venue", v);
+    window.history.replaceState(null, "", u.toString());
+  }
 
   /* 開催日一覧 */
   useEffect(() => {
@@ -317,12 +372,16 @@ export default function WeeklyPredictionsPage() {
     }
     (async () => {
       try {
-        const res = await fetch("/api/scrape-dates?picker_past_days=30", { cache: "no-store" });
+        const days = Number(process.env.NEXT_PUBLIC_PICKER_PAST_DAYS) || 30;
+        const res = await fetch(`/api/scrape-dates?picker_past_days=${days}`, { cache: "no-store" });
         if (!res.ok) return;
         const d = await res.json();
         const list: string[] = d.dates ?? d ?? [];
         setDates(list);
-        if (list.length) setSelectedDate(list[0]);
+        // dev は実データを取り込んだ開催日を既定表示にできる（NEXT_PUBLIC_DEFAULT_RACE_DATE）
+        const fromUrl = new URLSearchParams(window.location.search).get("date") ?? undefined;
+        const preferred = fromUrl && list.includes(fromUrl) ? fromUrl : process.env.NEXT_PUBLIC_DEFAULT_RACE_DATE;
+        if (list.length) setSelectedDate(preferred && list.includes(preferred) ? preferred : list[0]);
       } catch { /* ignore */ } finally {
         setLoadingDates(false);
       }
@@ -381,11 +440,11 @@ export default function WeeklyPredictionsPage() {
 
   /* 全レース一括取得 */
   async function loadAllPreds() {
-    if (!races.length) return;
+    if (!visibleRaces.length) return;
     setBulkLoading(true);
     bulkAbort.current = new AbortController();
     const signal = bulkAbort.current.signal;
-    for (const race of races) {
+    for (const race of visibleRaces) {
       if (signal.aborted) break;
       if (preds[race.race_id]) continue;
       setLoadingPred((prev) => ({ ...prev, [race.race_id]: true }));
@@ -414,10 +473,11 @@ export default function WeeklyPredictionsPage() {
   }
 
   /* 統計 */
-  const loadedCount = Object.keys(preds).length;
-  const predOkCount = Object.values(preds).filter((p) => p?.has_prediction).length;
-  const totalEVOk = Object.values(preds)
-    .flatMap((p) => p?.predictions ?? [])
+  const visiblePreds = visibleRaces.map((r) => preds[r.race_id]).filter((p): p is PredData => !!p);
+  const loadedCount = visiblePreds.length;
+  const predOkCount = visiblePreds.filter((p) => p.has_prediction).length;
+  const totalEVOk = visiblePreds
+    .flatMap((p) => p.predictions ?? [])
     .filter((h) => (h.ev_win ?? 0) >= 1.0).length;
 
   const SEL: React.CSSProperties = {
@@ -457,14 +517,14 @@ export default function WeeklyPredictionsPage() {
             }
           </select>
 
-          {races.length > 0 && (
+          {visibleRaces.length > 0 && (
             <>
               {!bulkLoading ? (
                 <button
                   style={{ background: "#1e3a5f", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)", padding: "7px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                   onClick={loadAllPreds}
                 >
-                  🤖 全{races.length}レースの予測を取得
+                  🤖 {activeVenue} 全{visibleRaces.length}レースの予測を取得
                 </button>
               ) : (
                 <button
@@ -481,7 +541,7 @@ export default function WeeklyPredictionsPage() {
           {loadedCount > 0 && (
             <div style={{ display: "flex", gap: 8, marginLeft: 4, flexWrap: "wrap" }}>
               <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, background: "rgba(107,125,149,0.12)", color: "var(--text-dim)" }}>
-                {loadedCount}/{races.length}R 取得済
+                {loadedCount}/{visibleRaces.length}R 取得済
               </span>
               {predOkCount > 0 && (
                 <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, background: "rgba(34,197,94,0.10)", color: "var(--ok)" }}>
@@ -534,17 +594,42 @@ export default function WeeklyPredictionsPage() {
 
         {!loadingRaces && races.length > 0 && (
           <>
+            {venues.length > 1 && (
+              <div role="tablist" aria-label="開催場" style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+                {venues.map((v) => {
+                  const n = races.filter((r) => r.venue === v).length;
+                  const on = v === activeVenue;
+                  return (
+                    <button
+                      key={v}
+                      role="tab"
+                      aria-selected={on}
+                      onClick={() => chooseVenue(v)}
+                      style={{
+                        padding: "8px 18px", borderRadius: 8, fontSize: 14, fontWeight: on ? 700 : 500, cursor: "pointer",
+                        border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
+                        background: on ? "rgba(59,130,246,0.15)" : "var(--surface)",
+                        color: on ? "var(--accent)" : "var(--text-dim)",
+                      }}
+                    >
+                      {v} <span style={{ fontSize: 11, opacity: 0.7 }}>{n}R</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-dim)" }}>
-              {selectedDate} — {races.length}レース
+              {selectedDate}{activeVenue ? ` ${activeVenue}` : ""} — {visibleRaces.length}レース
               {bulkLoading && <span style={{ marginLeft: 8, color: "var(--accent)" }}>⏳ 取得中…</span>}
             </div>
-            {races.map((race) => (
+            {visibleRaces.map((race) => (
               <RaceCard
                 key={race.race_id}
                 race={race}
                 pred={preds[race.race_id] ?? null}
                 loading={loadingPred[race.race_id] ?? false}
                 onLoad={loadPred}
+                value={raceValues.get(race.race_id)}
               />
             ))}
           </>

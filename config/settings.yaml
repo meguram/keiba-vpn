@@ -61,10 +61,10 @@ lightgbm:
 
 api:
   host: "0.0.0.0"
-  port: 8000
+  port: 23120  # 参考値。実際のポートは config/ports.env（main.py は --port 省略時にそちらを使う）
 
 mlflow:
-  tracking_uri: "http://localhost:5000"
+  # tracking_uri は未指定 → MLFLOW_TRACKING_URI、なければ config/ports.env の現環境 MLflow ポート
   # 後方互換（keiba_lgbm と同義）
   experiment_name: "keiba-prediction"
   registered_model_name: "keiba-lgbm"

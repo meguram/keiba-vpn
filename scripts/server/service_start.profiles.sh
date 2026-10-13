@@ -1,12 +1,17 @@
 # shellcheck shell=bash
 # service_start.sh 用 — 実行プロファイル（dev / stg / prod）
 #
-# dev … モック UI のみ（:3000）。実 API は不要。
-# stg … 本 PC 上の本番相当（Flask :5000 / FastAPI :8000 / Next :3001 + KEIBA_ENV=stg）
+# dev … モック UI 確認用（Next.js モック + Flask + FastAPI）。
+# stg … 本 PC 上の本番相当（KEIBA_ENV=stg）
 # prod … stg と同構成（KEIBA_ENV=prod 想定）。将来 VPS へ stg をクローン。
 #
-# 環境変数で上書き可能（例: FLASK_PORT=5200 ./service_start --env dev --full）
+# ポート番号は config/ports.env が唯一の正（scripts/server/ports.sh で読み込み）。
+# 環境変数で上書き可能（例: FLASK_PORT=23999 ./service_start --env dev --full）
 # ローカル上書き: scripts/server/service_start.local.env（git 管理外・任意）
+
+# shellcheck source=ports.sh
+source "$(dirname "${BASH_SOURCE[0]}")/ports.sh"
+load_keiba_ports "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 apply_service_profile() {
   local profile="${1:-dev}"
@@ -16,7 +21,7 @@ apply_service_profile() {
   FLASK_DEBUG=0
   FRONTEND_NPM_SCRIPT=dev
   FRONTEND_USE_MOCK=false
-  MLFLOW_PORT=5000
+  MLFLOW_PORT="$(keiba_port "$profile" mlflow)"
   MLFLOW_HOST=127.0.0.1
   START_MLFLOW_LOCAL=false
   PROFILE_EXPORT_KEYS=()
@@ -24,14 +29,21 @@ apply_service_profile() {
 
   case "$profile" in
     dev)
-      # UI モック確認専用（tcpexposer: meguai-dev → :3000）
+      # dev: dev ストアのデータを表示（tcpexposer: meguai-dev）
       FASTAPI_MODE=dev
       FLASK_DEBUG=1
       FRONTEND_NPM_SCRIPT=dev
-      FRONTEND_USE_MOCK=true
-      : "${PORT:=8000}"
-      : "${FLASK_PORT:=5100}"
-      FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+      # 既定は dev ストア（data/dev_mock = 実データ取り込み + モック）をバックエンド経由で表示。
+      # フロント内蔵のモックだけで見たいときは KEIBA_DEV_UI_MOCK=1
+      if [[ "${KEIBA_DEV_UI_MOCK:-0}" == "1" ]]; then FRONTEND_USE_MOCK=true; else FRONTEND_USE_MOCK=false; fi
+      : "${NEXT_PUBLIC_PICKER_PAST_DAYS:=150}"
+      : "${NEXT_PUBLIC_DEFAULT_RACE_DATE:=20260906}"
+      # dev はこの PC からの直アクセスを自動でログイン済みにする（公開トンネル経由は対象外）。止めるなら KEIBA_DEV_AUTO_LOGIN=0
+      if [[ "${KEIBA_DEV_AUTO_LOGIN:-1}" == "0" ]]; then NEXT_PUBLIC_DEV_AUTO_LOGIN=0; else NEXT_PUBLIC_DEV_AUTO_LOGIN=1; fi
+      PROFILE_EXPORT_KEYS=(NEXT_PUBLIC_PICKER_PAST_DAYS NEXT_PUBLIC_DEFAULT_RACE_DATE NEXT_PUBLIC_DEV_AUTO_LOGIN)
+      : "${PORT:=$KEIBA_PORT_DEV_FASTAPI}"
+      : "${FLASK_PORT:=$KEIBA_PORT_DEV_FLASK}"
+      FRONTEND_PORT="${FRONTEND_PORT:-$KEIBA_PORT_DEV_FRONTEND}"
       : "${NODE_ENV:=development}"
       TCPEXPOSER_PROFILE=dev
       START_MLFLOW_LOCAL=false
@@ -43,9 +55,9 @@ apply_service_profile() {
       # PC stg は next dev（実 API）。VPS prod は npm run start。
       FRONTEND_NPM_SCRIPT=dev
       FRONTEND_USE_MOCK=false
-      : "${PORT:=8000}"
-      : "${FLASK_PORT:=5000}"
-      FRONTEND_PORT="${FRONTEND_PORT:-3001}"
+      : "${PORT:=$KEIBA_PORT_STG_FASTAPI}"
+      : "${FLASK_PORT:=$KEIBA_PORT_STG_FLASK}"
+      FRONTEND_PORT="${FRONTEND_PORT:-$KEIBA_PORT_STG_FRONTEND}"
       : "${NODE_ENV:=development}"
       START_MLFLOW_LOCAL="${START_MLFLOW_LOCAL:-false}"
       PROFILE_EXPORT_KEYS=(KEIBA_ENV KEIBA_DEPLOYMENT_LABEL)
@@ -58,9 +70,9 @@ apply_service_profile() {
       FLASK_DEBUG=0
       FRONTEND_NPM_SCRIPT=start
       FRONTEND_USE_MOCK=false
-      : "${PORT:=8000}"
-      : "${FLASK_PORT:=5000}"
-      FRONTEND_PORT="${FRONTEND_PORT:-3001}"
+      : "${PORT:=$KEIBA_PORT_PROD_FASTAPI}"
+      : "${FLASK_PORT:=$KEIBA_PORT_PROD_FLASK}"
+      FRONTEND_PORT="${FRONTEND_PORT:-$KEIBA_PORT_PROD_FRONTEND}"
       : "${NODE_ENV:=production}"
       START_MLFLOW_LOCAL="${START_MLFLOW_LOCAL:-false}"
       TCPEXPOSER_PROFILE=prod
@@ -72,6 +84,8 @@ apply_service_profile() {
   esac
 
   KEIBA_API_URL="${KEIBA_API_URL:-http://127.0.0.1:${FLASK_PORT}}"
+  KEIBA_FASTAPI_URL="${KEIBA_FASTAPI_URL:-http://127.0.0.1:${PORT}}"
+  NEXT_PUBLIC_MONITOR_URL="${NEXT_PUBLIC_MONITOR_URL:-http://localhost:${KEIBA_PORT_MONITOR}}"
 }
 
 profile_exports_for_child() {
@@ -86,6 +100,7 @@ profile_exports_for_child() {
   if [[ -n "${NODE_ENV:-}" ]]; then
     args+=(NODE_ENV="$NODE_ENV")
   fi
+  args+=(KEIBA_API_URL="$KEIBA_API_URL" KEIBA_FASTAPI_URL="$KEIBA_FASTAPI_URL" NEXT_PUBLIC_MONITOR_URL="$NEXT_PUBLIC_MONITOR_URL")
   if [[ "${FRONTEND_USE_MOCK}" == "true" ]]; then
     args+=(NEXT_PUBLIC_MOCK=true)
   fi

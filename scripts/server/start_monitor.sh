@@ -2,9 +2,10 @@
 # keiba-vpn 開発者監視ポータル 起動スクリプト
 #
 # Usage:
-#   bash scripts/server/start_monitor.sh             # デフォルト :9090
-#   bash scripts/server/start_monitor.sh --port 9191 # ポート指定
+#   bash scripts/server/start_monitor.sh             # config/ports.env の KEIBA_PORT_MONITOR
+#   bash scripts/server/start_monitor.sh --port 23999 # ポート指定
 #   bash scripts/server/start_monitor.sh --bg        # バックグラウンド起動
+#   bash scripts/server/start_monitor.sh --bg --host 127.0.0.1  # ローカルのみ公開
 #
 # 前提: .env に MONITOR_PASSWORD / MONITOR_SECRET_KEY が設定済みであること
 
@@ -13,15 +14,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
 cd "$ROOT"
 
-PORT=9090
+# shellcheck source=ports.sh
+source "$ROOT/scripts/server/ports.sh"
+load_keiba_ports "$ROOT"
+
+PORT="$KEIBA_PORT_MONITOR"
+HOST=0.0.0.0
 BG=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --port|-p) PORT="$2"; shift 2 ;;
+    --host)    HOST="$2"; shift 2 ;;
     --bg)      BG=true; shift ;;
     --help|-h)
-      echo "Usage: $0 [--port PORT] [--bg]"
+      echo "Usage: $0 [--port PORT] [--host HOST] [--bg]"
       exit 0
       ;;
     *) shift ;;
@@ -64,11 +71,11 @@ if $BG; then
   fi
 
   echo "[monitor] バックグラウンド起動 (port=${PORT}) ログ=${LOG_FILE}"
-  nohup "$PYTHON" -m src.monitor.app --host 0.0.0.0 --port "$PORT" \
+  nohup "$PYTHON" -m src.monitor.app --host "$HOST" --port "$PORT" \
     >> "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
   echo "[monitor] PID=$(cat "$PID_FILE") — http://127.0.0.1:${PORT}/"
 else
   echo "[monitor] 起動: http://127.0.0.1:${PORT}/"
-  exec "$PYTHON" -m src.monitor.app --host 0.0.0.0 --port "$PORT"
+  exec "$PYTHON" -m src.monitor.app --host "$HOST" --port "$PORT"
 fi
