@@ -91,10 +91,15 @@ def build_layer_a_dataframe(
     from src.pipeline.features.feature_store import FeatureStore
 
     store = FeatureStore(base_dir=base_dir)
-    avail = store.available_years()
+    from src.pipeline.models.time_split import TRAINING_YEARS
+
+    avail = [y for y in store.available_years() if y in TRAINING_YEARS]
     if not avail:
-        raise FileNotFoundError("data/local/tables/<年>/ に Parquet がありません。")
+        raise FileNotFoundError("data/local/tables/<年>/ に学習対象年の Parquet がありません。")
     use_years = [str(y) for y in years] if years else avail
+    excluded = [y for y in use_years if y not in avail]
+    if excluded:
+        logger.warning("学習対象外の年を除外: %s（対象年: %s）", excluded, list(TRAINING_YEARS))
     use_years = [y for y in use_years if y in avail]
     if not use_years:
         raise ValueError(f"指定年 {years} にデータがありません。利用可能: {avail}")

@@ -14,7 +14,12 @@ import pandas as pd
 
 from src.config.data_paths import MODELING_META_DIR
 
-DEFAULT_MANIFEST = MODELING_META_DIR / "dataset_split_manifest.json"
+TRACKED_MANIFEST = Path(__file__).resolve().parents[3] / "config" / "modeling" / "dataset_split_manifest.json"
+DEFAULT_MANIFEST = (
+    TRACKED_MANIFEST
+    if TRACKED_MANIFEST.is_file()
+    else MODELING_META_DIR / "dataset_split_manifest.json"
+)
 
 
 def race_calendar_year(race_id: Any) -> str:

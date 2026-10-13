@@ -19,6 +19,18 @@ from src.utils.mlflow_client import init_mlflow
 logger = get_logger("MLflowTrain")
 
 
+def require_tracking_server(tracking_uri: str | None = None) -> str:
+    """MLflow サーバーに接続できなければ例外にする（ローカルファイルへの黙った退避を防ぐ）。"""
+    uri = init_mlflow(tracking_uri)
+    if not uri.startswith("http"):
+        raise RuntimeError(
+            f"MLflow サーバーに接続できません（ローカルストア {uri} に退避しました）。"
+            "MLFLOW_TRACKING_URI とサーバーの起動を確認してください。"
+        )
+    mlflow.MlflowClient().search_experiments(max_results=1)
+    return uri
+
+
 def start_training_run(
     spec: ModelSpec | str,
     *,
