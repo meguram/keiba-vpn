@@ -57,15 +57,36 @@ def main(argv: list[str] | None = None) -> int:
 
     runner = ScraperRunner(interval=1.0, auto_login=False)
     args.progress.parent.mkdir(parents=True, exist_ok=True)
-    saved = gain_rows = no_gain_streak = 0
+    saved = gain_rows = no_gain_streak = partial_streak = 0
     t0 = time.time()
-    for n, rid in enumerate(todo, 1):
-        old = runner.storage.load("race_index", rid)
-        n_old = len((old or {}).get("entries") or [])
-        data = runner._fetch_parse_save(
+
+    def fetch(rid: str, n_old: int):
+        return runner._fetch_parse_save(
             "race_index", rid, runner.SPEED_INDEX_URL.format(race_id=rid), runner.speed_parser,
             {"race_id": rid}, skip_existing=False, need_login=True, min_entries=n_old + 1,
         )
+
+    def relogin() -> bool:
+        """同一アカウントの別ログインでセッションが無効になった疑い。入り直して会員状態を確認する。"""
+        c = runner.client
+        c._logged_in, c._premium_ok = False, None
+        return bool(c.login()) and c.premium_ok is not False
+
+    for n, rid in enumerate(todo, 1):
+        old = runner.storage.load("race_index", rid)
+        n_old = len((old or {}).get("entries") or [])
+        data = fetch(rid, n_old)
+        if not data and n_old <= 3:
+            partial_streak += 1
+            if partial_streak >= 3:  # 部分的な状態(3頭以下)のまま増えない結果が続く → 再ログインして 1 回だけやり直す
+                print(f"[{n}] 3 回連続で増えず。再ログインして再試行します", flush=True)
+                if not relogin():
+                    print("再ログイン後も会員状態が確認できないため停止します", file=sys.stderr)
+                    return 3
+                partial_streak = 0
+                data = fetch(rid, n_old)
+        else:
+            partial_streak = 0
         n_new = len((data or {}).get("entries") or []) if data else None
         status = "saved" if data else "no_gain"
         saved += status == "saved"
