@@ -88,3 +88,27 @@ def test_same_day_results_do_not_leak(built):
     cols = sorted({c for v in feature_columns(F.columns).values() for c in v})
     rep = permutation_check(runs, rm, F, date(2023, 7, 1), cols)
     assert rep["rows"] > 0 and rep["mismatch"] == {}
+
+
+def test_on_time_repairs_corrupted_race(built):
+    tables, la, _, _ = built
+    runs, rm = load_runs(tables), build_repair_map(la)
+    truth = apply_repair(runs, rm)
+    rid = runs.filter(pl.col("date") >= date(2023, 10, 20))["race_id"][0]
+    bad = runs.with_columns(
+        pl.when(pl.col("race_id") == rid).then(pl.lit("105")).otherwise(pl.col("passing_order")).alias("passing_order"),
+        pl.when(pl.col("race_id") == rid).then(94.0).otherwise(pl.col("last_3f")).alias("last_3f"),
+        pl.when(pl.col("race_id") == rid).then(1.0).otherwise(pl.col("weight")).alias("weight"),
+    )
+    ot = (
+        runs.filter(pl.col("race_id") == rid)
+        .select("race_id", "horse_number", pl.col("last_3f").alias("ot_l3f"),
+                pl.col("passing_order").alias("ot_passing_order"), pl.col("weight").alias("ot_weight"))
+    )
+    key = ["race_id", "horse_number"]
+    cols = ["l3f", "wt", "pos_early", "pos_late"]
+    want = truth.filter(pl.col("race_id") == rid).sort(key).select(cols)
+    broken = apply_repair(bad, rm).filter(pl.col("race_id") == rid).sort(key).select(cols)
+    fixed = apply_repair(bad, rm, ot).filter(pl.col("race_id") == rid).sort(key).select(cols)
+    assert broken["l3f"].is_null().all() and broken["pos_early"].is_null().all()  # 補正なしでは壊れた値を使わない
+    assert fixed.equals(want)

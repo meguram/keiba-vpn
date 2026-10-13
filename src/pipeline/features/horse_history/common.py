@@ -35,18 +35,14 @@ def load_runs(tables_dir: str | Path | None = None) -> pl.DataFrame:
         pl.col("grade").replace_strict(CLASS_LEVEL, default=1.0, return_dtype=pl.Float64).alias("class_level"),
         pl.col("sex_age").str.slice(1).cast(pl.Int32, strict=False).alias("age"),
         pl.col("sex_age").str.slice(0, 1).alias("sex"),
-        pl.col("passing_order").str.extract(r"^(\d+)", 1).cast(pl.Float64).alias("po_first"),
-        pl.col("passing_order").str.extract(r"(\d+)$", 1).cast(pl.Float64).alias("po_last"),
         pl.col("pace").str.json_path_match("$.first_half_3f").cast(pl.Float64, strict=False).alias("pace_first"),
         pl.col("pace").str.json_path_match("$.second_half_3f").cast(pl.Float64, strict=False).alias("pace_second"),
         (pl.col("distance").cast(pl.Float64) / 1600.0).log().alias("logd"),
     ).with_columns(
         pl.when(pl.col("distance") <= 1200).then(0).when(pl.col("distance") <= 1500).then(1)
         .when(pl.col("distance") <= 1900).then(2).when(pl.col("distance") <= 2400).then(3).otherwise(4).alias("dist_band"),
-        ((pl.col("po_first") - 1) / (pl.col("n_fin") - 1)).clip(0, 1).alias("pos_early"),
-        ((pl.col("po_last") - 1) / (pl.col("n_fin") - 1)).clip(0, 1).alias("pos_late"),
         (pl.col("pace_first") - pl.col("pace_second")).alias("pace_bal"),
-    ).drop("pace", "passing_order")
+    ).drop("pace")
     return df.sort(["date", "start_time", "race_id", "horse_number"])
 
 
@@ -75,14 +71,47 @@ def build_repair_map(layer_a_path: str | Path) -> pl.DataFrame:
     return rm.sort("src_date").unique(["horse_id", "run_date"], keep="first")
 
 
-def apply_repair(runs: pl.DataFrame, rm: pl.DataFrame, max_date: date | None = None) -> pl.DataFrame:
+_PO_RE = r"^\d+(-\d+)*$"
+
+
+def _valid_passing(n_fin_col: str, col: str) -> pl.Expr:
+    """通過順が '3-3-2' 形式で、全ての数字が完走頭数以内であること（'105' や '' は不正）。"""
+    nums = pl.col(col).str.extract_all(r"\d+").list.eval(pl.element().cast(pl.Int64, strict=False))
+    return pl.col(col).str.contains(_PO_RE).fill_null(False) & (nums.list.max() <= pl.col(n_fin_col)).fill_null(False)
+
+
+def apply_repair(runs: pl.DataFrame, rm: pl.DataFrame, on_time: pl.DataFrame | None = None,
+                 max_date: date | None = None) -> pl.DataFrame:
+    """last_3f・馬体重・通過順の不正値を補う。優先順: 生値 → race_result_on_time → past_races。
+    on_time は (race_id, horse_number, ot_l3f, ot_passing_order, ot_weight)。いずれも当該レース自身の公式結果で、
+    以降のレースの履歴としてだけ使われるため as-of 安全。"""
     if max_date is not None:
         rm = rm.filter(pl.col("src_date") <= max_date)
     j = runs.join(rm.rename({"run_date": "date"}), on=["horse_id", "date"], how="left")
+    if on_time is not None and on_time.height:
+        ot = on_time.with_columns(pl.col("horse_number").cast(pl.Int64))
+        j = j.with_columns(pl.col("horse_number").cast(pl.Int64)).join(ot, on=["race_id", "horse_number"], how="left")
+    else:
+        j = j.with_columns(pl.lit(None, pl.Float64).alias("ot_l3f"), pl.lit(None, pl.Utf8).alias("ot_passing_order"),
+                           pl.lit(None, pl.Float64).alias("ot_weight"))
     ok = lambda c: (pl.col(c) >= 30) & (pl.col(c) <= 50)
-    okw = (pl.col("weight") >= 300) & (pl.col("weight") <= 700)
-    return j.with_columns(
-        pl.when(ok("last_3f")).then(pl.col("last_3f")).when(ok("l3f_fix")).then(pl.col("l3f_fix")).otherwise(None).alias("l3f"),
-        pl.when(okw).then(pl.col("weight")).when(pl.col("weight_fix").is_between(300, 700)).then(pl.col("weight_fix")).otherwise(None).alias("wt"),
+    okw = lambda c: (pl.col(c) >= 300) & (pl.col(c) <= 700)
+    j = j.with_columns(
+        pl.when(ok("last_3f")).then(pl.col("last_3f")).when(ok("ot_l3f")).then(pl.col("ot_l3f"))
+        .when(ok("l3f_fix")).then(pl.col("l3f_fix")).otherwise(None).alias("l3f"),
+        pl.when(okw("weight")).then(pl.col("weight")).when(okw("ot_weight")).then(pl.col("ot_weight"))
+        .when(okw("weight_fix")).then(pl.col("weight_fix")).otherwise(None).alias("wt"),
         ok("last_3f").alias("l3f_raw_ok"),
-    ).drop("last_3f", "weight")
+        _valid_passing("n_fin", "passing_order").alias("po_raw_ok"),
+    )
+    j = j.with_columns(
+        pl.when(pl.col("po_raw_ok")).then(pl.col("passing_order"))
+        .when(_valid_passing("n_fin", "ot_passing_order")).then(pl.col("ot_passing_order")).otherwise(None).alias("po"),
+    ).with_columns(
+        pl.col("po").str.extract(r"^(\d+)", 1).cast(pl.Float64).alias("po_first"),
+        pl.col("po").str.extract(r"(\d+)$", 1).cast(pl.Float64).alias("po_last"),
+    ).with_columns(
+        ((pl.col("po_first") - 1) / (pl.col("n_fin") - 1)).clip(0, 1).alias("pos_early"),
+        ((pl.col("po_last") - 1) / (pl.col("n_fin") - 1)).clip(0, 1).alias("pos_late"),
+    )
+    return j.drop("last_3f", "weight", "l3f_fix", "weight_fix", "ot_l3f", "ot_passing_order", "ot_weight", "po", "passing_order")

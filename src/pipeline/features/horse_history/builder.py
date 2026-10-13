@@ -14,15 +14,16 @@ from .match import build_all, families
 from .profile import KEY
 
 
-def build_from_runs(runs: pl.DataFrame, repair_map: pl.DataFrame) -> tuple[pl.DataFrame, dict]:
-    return build_all(apply_repair(runs, repair_map), run_elo(runs))
+def build_from_runs(runs: pl.DataFrame, repair_map: pl.DataFrame,
+                    on_time: pl.DataFrame | None = None) -> tuple[pl.DataFrame, dict]:
+    return build_all(apply_repair(runs, repair_map, on_time), run_elo(runs))
 
 
 def build_horse_history(
-    layer_a_path: str | Path, tables_dir: str | Path | None = None
+    layer_a_path: str | Path, tables_dir: str | Path | None = None, on_time: pl.DataFrame | None = None
 ) -> tuple[pl.DataFrame, dict]:
     """2020〜2025 年の全走から特徴量表と全体フィット値を作る。"""
-    return build_from_runs(load_runs(tables_dir), build_repair_map(layer_a_path))
+    return build_from_runs(load_runs(tables_dir), build_repair_map(layer_a_path), on_time)
 
 
 def feature_columns(columns: list[str]) -> dict[str, list[str]]:
@@ -46,19 +47,21 @@ def _compare(a_df: pl.DataFrame, b_df: pl.DataFrame, cols: list[str], expr: pl.E
 
 
 def truncation_check(
-    runs: pl.DataFrame, repair_map: pl.DataFrame, F: pl.DataFrame, cut: date, cols: list[str]
+    runs: pl.DataFrame, repair_map: pl.DataFrame, F: pl.DataFrame, cut: date, cols: list[str],
+    on_time: pl.DataFrame | None = None,
 ) -> dict:
     """cut 以降のデータを消して再計算しても、cut より前のレースの特徴量が変わらないこと。"""
-    Ft, _ = build_from_runs(runs.filter(pl.col("date") < cut), repair_map.filter(pl.col("src_date") < cut))
+    Ft, _ = build_from_runs(runs.filter(pl.col("date") < cut), repair_map.filter(pl.col("src_date") < cut), on_time)
     rows, bad = _compare(F, Ft, cols, pl.col("date") < cut)
     return {"cut": str(cut), "rows": rows, "features": len(cols), "mismatch": bad}
 
 
 def permutation_check(
-    runs: pl.DataFrame, repair_map: pl.DataFrame, F: pl.DataFrame, cut: date, cols: list[str], seed: int = 1
+    runs: pl.DataFrame, repair_map: pl.DataFrame, F: pl.DataFrame, cut: date, cols: list[str], seed: int = 1,
+    on_time: pl.DataFrame | None = None,
 ) -> dict:
     """cut 以降の全レースで結果をレース内で入れ替えても、cut 以降の最初の開催日の特徴量が変わらないこと。"""
-    outcome_cols = ["finish_position", "time_sec", "last_3f", "po_first", "po_last", "pos_early", "pos_late"]
+    outcome_cols = ["finish_position", "time_sec", "last_3f", "passing_order"]
     rng = np.random.default_rng(seed)
     d = runs.with_row_index("ri")
     post = d.filter(pl.col("date") >= cut)
@@ -76,7 +79,7 @@ def permutation_check(
     d2 = d.join(new, on="ri", how="left")
     d2 = d2.with_columns([pl.coalesce(pl.col(c + "_n"), pl.col(c)).alias(c) for c in outcome_cols])
     d2 = d2.drop([c + "_n" for c in outcome_cols] + ["ri"])
-    Fp, _ = build_from_runs(d2, repair_map)
+    Fp, _ = build_from_runs(d2, repair_map, on_time)
     first = runs.filter(pl.col("date") >= cut)["date"].min()
     rows, bad = _compare(F, Fp, cols, pl.col("date") == first)
     return {"day": str(first), "rows": rows, "features": len(cols), "mismatch": bad}
