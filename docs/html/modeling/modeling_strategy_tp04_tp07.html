@@ -50,7 +50,7 @@
 <tr><td>タスク番号</td><td>AREA-07 の T-xx と DEC-019 の T-xx が一致しない（T-8 = ペース／T-10 = ペース、など）。AREA-07 の T-5 は内部で矛盾。</td><td>本書は特徴量戦略書の P1〜P7 を正とし、旧 T 番号との対応表を付ける（§12）。</td></tr>
 <tr><td>単調制約・サンプル重み・不均衡対策</td><td>どの文書にも規定がなく、<code>trainer.py</code>・<code>ensemble_trainer.py</code> にも使用箇所がない。</td><td>新規の検証項目として扱う（実験 C・D）。</td></tr>
 <tr><td>保存モデルの一致確認</td><td>「保存モデルを読み直して OOF と一致を確認する」手順は、どの文書にも規定がない。</td><td>tp-07 で新設（§8）。</td></tr>
-<tr><td>推論側の特徴量</td><td><code>race_prediction_service.py</code> は <code>keiba_model.pkl</code> と <code>encoder.json</code> を使う。tp-02 の 125 列を推論時に作る実装は見当たらない。</td><td>学習と推論で同じ as-of 計算を使うための共通化が必要。tp-07 の後続課題（§11）。</td></tr>
+<tr><td>推論側の特徴量</td><td><code>race_prediction_service.py</code> は <code>keiba_model.pkl</code> と <code>encoder.json</code> を使う。tp-02 の 127 列を推論時に作る実装は見当たらない。</td><td>学習と推論で同じ as-of 計算を使うための共通化が必要。tp-07 の後続課題（§11）。</td></tr>
 <tr><td>SmartRC</td><td>DEC-024 は除外。<code>settings.yaml</code> に <code>smartrc.enabled: true</code> と whitelist が残る。</td><td>使わない（tp-02 の入力にも含めていない）。設定の整理は別件。</td></tr>
 <tr><td>既存 notebook</td><td>gold-medal はモック母表・<code>PurgedGroupTimeSeriesSplit</code>・オッズを使う特徴量・AUC 目的。nb-08 は層化分割と、<code>GroupKFold</code> の OOF（時間リーク）、valid を early stopping に使いながら test を直接評価。</td><td>骨格のみ再利用（§7）。分割・母表・目的関数・OOF は作り直す。</td></tr>
 </table>
@@ -266,11 +266,11 @@
 <rect x="270" y="70" width="210" height="112" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
 <text x="375.0" y="106.2" text-anchor="middle" font-size="12" fill="#e6ecff" font-weight="700">tier 1 を追加で計算</text>
 <text x="375.0" y="122.2" text-anchor="middle" font-size="11" fill="#b9c6e8">馬場状態・クッション値・含水率</text>
-<text x="375.0" y="138.2" text-anchor="middle" font-size="11" fill="#b9c6e8">当日の馬場差 P7（先行レース）</text>
+<text x="375.0" y="138.2" text-anchor="middle" font-size="11" fill="#b9c6e8">P7 馬場差(90分前の同日R)</text>
 <text x="375.0" y="154.2" text-anchor="middle" font-size="11" fill="#b9c6e8">P3 の更新</text>
 <rect x="520" y="18" width="210" height="40" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
-<text x="625.0" y="34.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">T-60（馬体重の発表後）</text>
-<text x="625.0" y="51.05" text-anchor="middle" font-size="12" fill="#b9c6e8">ここで初めて予測を回す</text>
+<text x="625.0" y="34.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">T-60 前後（馬体重の検知後）</text>
+<text x="625.0" y="51.05" text-anchor="middle" font-size="12" fill="#b9c6e8">T-75 から確認・期限 T-30</text>
 <rect x="520" y="70" width="210" height="112" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
 <text x="625.0" y="106.2" text-anchor="middle" font-size="12" fill="#e6ecff" font-weight="700">tier 2 を計算</text>
 <text x="625.0" y="122.2" text-anchor="middle" font-size="11" fill="#b9c6e8">馬体重・増減（d_wt_*、sr_load_*）</text>
@@ -292,7 +292,7 @@
 <tr><th>tier</th><th>確定する時点</th><th>該当する特徴量・予測量</th></tr>
 <tr><td><b>tier 0</b></td><td>前日まで（出走馬・枠順・斤量の確定後）</td><td>馬の履歴に基づく A・B・C・E・G（<code>pc_*</code> の履歴部分）・H の能力部分（<code>sr_perf_*</code>）、Elo（<code>f3_*</code>。出走馬が決まった後）、F1・F2・F5（出走馬の構成に依存）、D のうち休養日数など、P1・P2、P3 の事前版。枠順・馬番・斤量に依存するものは、枠順確定後に計算できる。</td></tr>
 <tr><td><b>tier 1</b></td><td>当日朝（馬場状態・天候の発表後）</td><td>馬場状態（<code>going</code>）に依存する特徴量、クッション値・含水率、当日の馬場差 P7（同日の先行レースが終わるたびに更新）、P3 の更新。</td></tr>
-<tr><td><b>tier 2</b></td><td>T-60（馬体重の発表後）</td><td>馬体重・増減（<code>d_wt_dev</code>、<code>d_wt_chg_now</code> など）、<code>sr_load_*</code> と <code>sr_exp</code>・<code>sr_exp6</code>・<code>sr_exp_rel</code> の確定、馬体重に依存する前段予測（P4〜P6）、最終モデルの推論、較正。</td></tr>
+<tr><td><b>tier 2</b></td><td>T-60 前後（馬体重の検知後）</td><td>馬体重・増減（<code>d_wt_dev</code>、<code>d_wt_chg_now</code> など）、<code>sr_load_*</code> と <code>sr_exp</code>・<code>sr_exp6</code>・<code>sr_exp_rel</code> の確定、馬体重に依存する前段予測（P4〜P6）、最終モデルの推論、較正。</td></tr>
 </table>
 <h3>10.2 実装方針</h3>
 <ul>
@@ -303,12 +303,30 @@
   <li><b>前日のキャッシュ:</b> 出走馬や斤量が前日以降に変わる（出走取消、騎手変更）場合は、該当レースの tier 0 を再計算する。</li>
 </ul>
 
+<h3>10.3 T-X での成立性の調査結果（2026-10-14）</h3>
+<div class="box"><b>結論:</b> この方針は<b>現行の実装では成立しない</b>が、修正すれば成立する見込み。詳細（実装が各 T-X で行うこと、データの可用時点の根拠、ノード別の判定、食い違い、修正案、時間予算）は <a href="feature_strategy_tp03_tp04.html">特徴量戦略書</a> 末尾の「図の実運用での成立性」。</div>
+<ul>
+  <li>T-60 の取得はオッズのみで、馬体重を含む出馬表は T-15 まで入らない。予測の起動点も T-15（モック）と T-45（疑似ビルダー）で、tp-02 の特徴量を使っていない。</li>
+  <li>当日の出走馬を結果なしの行として履歴に足す推論モードと、tier ごとの分割が未実装。</li>
+  <li>馬体重の発表時刻の実績が無い。→ 固定時刻ではなく<b>馬体重の検知で起動</b>する（T-75 から 3 分間隔で確認、9 割以上の馬に馬体重が入った時点で予測、期限は T-30。入らなければ前走の馬体重で代替し <code>has_*</code> を付ける）。</li>
+  <li>P7 は、T-60 に使える同日の先行レースが「発走 90 分以上前」のものだけ。実データで先行レースが使えるのは全体の 62%（第 1〜3R は 0%）。使えないレースは前の開催日の値で補う。学習側も同じ制約で作った（<code>sr_var_today</code>）。</li>
+  <li>時間予算は約 30 秒を目標、上限 120 秒。予測の公開期限は T-30（LayerB の T-15 より前）。</li>
+</ul>
+<h4>本番ランナーの変更（承認後に実施）</h4>
+<ol>
+  <li>T-60 の取得に出馬表（<code>race_shutuba</code>）を足す。</li>
+  <li>馬体重の検知による予測の起動（T-75〜T-30）。</li>
+  <li>推論モード（朝に tier 0・1 をキャッシュ、T-60 は tier 2 だけ）。</li>
+  <li><code>export_tables</code> の定期化。予測の起動点の一本化。馬体重の発表時刻の実測（<code>availability_watch</code> を 10/17〜18 に実行）。</li>
+</ol>
+<p class="muted">注: 本番の cron（<code>daily-race-lists</code> など）が同じ netkeiba アカウントで繰り返しログインしている。取り直しスクレイピングのセッションが無効になる要因になりうる（調査中。第 5 章のリスク欄）。</p>
+
 <h2>11. 計算資源、リスク、確認したいこと</h2>
 <table>
 <tr><th>項目</th><th>内容</th></tr>
 <tr><td>計算資源</td><td>ホスト PC は CPU 24 スレッド（学習は 20）、RTX 4070 Ti 12GB、RAM 90GB。XGBoost（<code>device=cuda</code>）と CatBoost（GPU）は動作確認済み。LightGBM は CPU のみ。<b>PyTorch（torch 2.6.0 + CUDA 12.4）を 2026-10-14 に導入済み</b>（GPU で行列積と簡易な MLP 学習を確認。XGBoost の CUDA、CatBoost の GPU、LightGBM、polars、MLflow が引き続き動くことも確認）。Optuna の並列数は <code>compute.optuna_workers</code> で決める。</td></tr>
 <tr><td>リスク: 実験数の増加</td><td>比較する手法が多く、CV への過剰適合のおそれ。スクリーニング／確認／最終の分離と、信頼区間・補正で抑える。</td></tr>
-<tr><td>リスク: 推論側の特徴量</td><td>tp-02 の 125 列を推論時に作る実装がない。学習と推論で同じ as-of 計算を使えるよう共通化が必要（tp-07 の後続）。</td></tr>
+<tr><td>リスク: 推論側の特徴量</td><td>tp-02 の 127 列を推論時に作る実装がない。学習と推論で同じ as-of 計算を使えるよう共通化が必要（tp-07 の後続）。</td></tr>
 <tr><td>リスク: データ</td><td><code>race_index</code>・調教師コメントの取り直しが未完了。完了後に tp-01・tp-02 を再実行してから tp-03 以降に進む。</td></tr>
 <tr><td>決定済み</td><td>(1) 予測は馬体重の発表後（T-60）のみ。前日までに用意できる部分は先に計算する（§10）。(2) NN の検証のために、ホスト PC に PyTorch（CUDA 版）を導入する（導入済み）。</td></tr>
 <tr><td>リスク: 馬体重の発表時刻</td><td>T-60 の時点で発表されていないレースの扱いが未確定（§10.2）。</td></tr>
