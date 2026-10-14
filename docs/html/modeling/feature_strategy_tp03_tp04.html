@@ -30,6 +30,7 @@
 <ul>
   <li>tp-02（特徴量生成。実装済み）の設計原則・特徴量ファミリーの定義・根拠。</li>
   <li>tp-03（特徴量の ablation。未作成）の比較手順と採否基準。</li>
+  <li>前段予測量（ペース・位置取り・上がりなど）と、それを使う第 2 段の特徴量（§4）。</li>
   <li>tp-04（前段モデル。未作成）の目的変数・OOF の作り方・リーク防止。</li>
   <li>未実装・未確認の項目（正直に区別して載せる）。</li>
 </ul>
@@ -43,7 +44,7 @@
 <tr><td>学習対象年</td><td>2020〜2025 年のみ。2026 年は不完全なため、学習・検証・テスト・履歴集計のいずれにも使わない。</td><td><code>time_split.py</code> の <code>TRAINING_YEARS</code>。</td></tr>
 <tr><td>オッズ・人気は使わない</td><td>LayerA（市場独立の確率推定）には入れない。市場との合成（Benter 型の 2 段階ロジット）は LayerB（tp-06 以降）で扱う。</td><td><code>pre_race_feature_whitelist.html</code>。学習時と運用時でオッズの時点が違うと劣化した事例（出典 L13）。</td></tr>
 <tr><td>欠損の扱い</td><td>欠損は 0 で埋めず NA のままにする。疎なデータには <code>has_*</code> フラグを付ける（例: <code>has_speed_index</code>）。</td><td>ホワイトリスト。木モデルは NA を扱える。</td></tr>
-<tr><td>時代ずれへの対処</td><td>年そのもの、時間とともに単調に増える累積件数、2020 年からの集計の始まりに由来する特徴量は、時代を見分ける手がかりになる。adversarial validation で追跡する。</td><td><code>f5_n</code>（全期間の累積件数）は出力から外した。残る候補への対処は tp-03（§6）。</td></tr>
+<tr><td>時代ずれへの対処</td><td>年そのもの、時間とともに単調に増える累積件数、2020 年からの集計の始まりに由来する特徴量は、時代を見分ける手がかりになる。adversarial validation で追跡する。</td><td><code>f5_n</code>（全期間の累積件数）は出力から外した。残る候補への対処は tp-03（§7）。</td></tr>
 <tr><td>取得データの不備の補正</td><td>結果ページの <code>last_3f</code>・通過順・馬体重が壊れたレースは、優先順に (1) 生値、(2) GCS の <code>race_result_on_time</code>、(3) 母表の <code>past_races</code> で補う。</td><td><code>common.py</code> の <code>apply_repair</code>、<code>repair.py</code>。</td></tr>
 </table>
 
@@ -84,11 +85,13 @@
 <tr><td><b>F1 条件類似度</b></td><td>4</td>
 <td>今回の条件と過去走の条件の距離（log 距離、同場、同芝ダ、馬場、回り、クラス、頭数、経過年数）の重み付き和 <code>d</code> から <code>w = exp(−d)</code> を作り、過去走の残差を重み付き平均する。重みの係数は <code>FIT_END</code> 以前で探索。有効サンプル数も出す。</td>
 <td><code>f1_sim_res</code>、<code>f1_sw</code>、<code>f1_neff</code>、<code>f1_sim_z</code></td>
-<td>出走レースと各馬の過去履歴とのマッチ度（ユーザーの着想）。距離適性の考え方は出典 L1。<b>効果は不安定</b>（§5）。</td></tr>
+<td>出走レースと各馬の過去履歴とのマッチ度（ユーザーの着想）。距離適性の考え方は出典 L1。<b>効果は不安定</b>（§6）。</td></tr>
 <tr><td><b>F2 展開・脚質マッチ</b></td><td>17</td>
-<td>各レースの出走馬の脚質（<code>a_style</code>）から、先行馬の頭数・割合（<code>pressure</code>）・出走馬内の前からの順位を作る。先行馬の頻度から想定ペース区分を決め、実際のペース区分（前半 3F − 後半 3F の分位）との対応表を <code>FIT_END</code> 以前で推定する。馬ごとに、前傾・平均・後傾の各ペースでの過去成績（縮約）を持ち、想定ペースの確率で重み付けした「展開マッチ」を出す。脚質×先行馬割合、単騎逃げのフラグ。</td>
+<td><b>前傾／後傾ラップへの相性を含む。</b>各レースの実際のペースを「前半 3F − 後半 3F」（距離帯ごとの分位で 3 区分）に分ける: 区分 0 = 前傾（前半が速い）、1 = 平均、2 = 後傾（後半が速い）。馬ごとに、過去走をこの 3 区分に分けた「区分別の相対成績」（<code>f2_a_reg0/1/2</code>、縮約済み）と、その過去走数（<code>f2_n_reg0/1/2</code>）を持つ。前傾に強いか後傾に強いかの差が <code>f2_pace_adv</code>（区分 0 − 区分 2）。<br>
+今回のレースの想定ペースは、出走馬の脚質（<code>a_style</code>）から先行馬の頭数・割合（<code>f2_pressure</code>）を数え、3 区分に分けた先行馬圧力 <code>f2_bin</code> から、<code>FIT_END</code> 以前で推定した対応表 <code>P(実際のペース区分 | f2_bin)</code> で確率にする（<code>f2_p_fast</code> = 前傾の確率）。この確率で区分別の成績を重み付けしたものが <code>f2_pace_match</code>（展開マッチ）。ほかに、先行馬の頭数、出走馬内の前からの順位、脚質×先行馬割合、単騎逃げのフラグ。</td>
 <td><code>f2_nfront</code>、<code>f2_nfront40</code>、<code>f2_nknown</code>、<code>f2_early_rank</code>、<code>f2_pressure</code>、<code>f2_bin</code>、<code>f2_a_reg0/1/2</code>、<code>f2_n_reg*</code>、<code>f2_pace_match</code>、<code>f2_pace_adv</code>、<code>f2_p_fast</code>、<code>f2_style_x_press</code>、<code>f2_lone_front</code></td>
-<td>逃げ馬が 1 頭ならスロー、同型が 5 頭以上なら前崩れ（S7、S12）。逃げはスローで有利、先行はハイペースで消耗（S2）。実測では、想定ペースの確率はほぼ一様（約 1/3）で、展開予測としては弱い。</td></tr>
+<td>逃げ馬が 1 頭ならスロー、同型が 5 頭以上なら前崩れ（S7、S12）。逃げはスローで有利、先行はハイペースで消耗（S2）。<br>
+<b>限界:</b> 想定ペースの確率がほぼ一様（約 1/3 ずつ）で、展開の予測としては弱い。ペース区分は前半・後半の差だけで決めており、中盤の緩みなどラップの形は見ていない。試作検証でもペース別成績（F2b）の効果はほぼゼロだった（§6）。<b>ペースを専用に予測する前段が必要</b>（§4）。</td></tr>
 <tr><td><b>F3 Elo（相手関係付きレーティング）</b></td><td>9</td>
 <td>多頭数 Elo。順位から <code>S = (N − 順位)/(N − 1)</code>、期待値 <code>E</code> は全ペアの勝率の平均。K=300（fit 期間で勝ち馬の対数尤度が最小。K=24 では残差の自己相関が 0.31 残った）、初期値 1500、過去走 3 未満は K を 1.5 倍。レース前のレーティング、相手の平均・上位 3 頭・標準差、自分との差、レース内順位、過去走数。</td>
 <td><code>f3_r</code>、<code>f3_E</code>、<code>f3_fs_mean/top3/std</code>、<code>f3_r_gap</code>、<code>f3_r_gap_top3</code>、<code>f3_r_rank</code>、<code>f3_n_pre</code></td>
@@ -96,10 +99,53 @@
 <tr><td><b>F5 プロファイル近傍</b></td><td>3</td>
 <td>馬のプロファイル（脚質、上がり、距離、芝比率、湿り、クラス）を標準化して KMeans（k=24、<code>FIT_END</code> 以前で学習）でクラスタ化し、(クラスタ×芝ダ×距離帯) ごとの過去の好走率・残差を日付までの累積で出す。</td>
 <td><code>f5_cl</code>、<code>f5_aff</code>、<code>f5_win</code></td>
-<td>類似馬の好走率（F1 の延長）。<b>効果は小さく、時代ずれの原因になりやすい</b>（§5・§6）。</td></tr>
+<td>類似馬の好走率（F1 の延長）。<b>効果は小さく、時代ずれの原因になりやすい</b>（§6・§7）。</td></tr>
 </table>
 
-<h2>4. 未実装・次の拡張（tp-02b 以降の候補）</h2>
+<h2>4. 前段予測量（ステージ予測）と特徴量への組み込み</h2>
+<h3>4.1 なぜ必要か</h3>
+<ul>
+  <li>馬とレースの「マッチ」は、<b>そのレースの展開の予測</b>と<b>馬の得意な展開</b>の組み合わせで決まる。前者の精度が、マッチ特徴量の効きの上限になる。</li>
+  <li>現状（F2）の想定ペースは、過去走の脚質から先行馬を数えて 3 区分に分け、対応表で確率にするだけの簡易版。実測では確率がほぼ一様で、前傾・後傾への相性（<code>f2_a_reg0/1/2</code>）を活かしきれていない。</li>
+  <li>上がり・位置取り・走破タイムも同じで、「今回の条件・展開の下での期待値」を先に予測してから、後段の特徴量にする方が、過去走の平均だけを渡すより情報が多い。</li>
+  <li>例: <b>ペース予測を先に出し、その確率で区分別成績を重み付けする。</b>先行馬の頭数も、過去の脚質の平均ではなく、位置取り予測から数える。</li>
+</ul>
+<h3>4.2 前段予測量の一覧</h3>
+<table>
+<tr><th>ID</th><th>予測量</th><th>粒度</th><th>ラベル（結果由来。学習専用）</th><th>入力（すべて as-of）</th><th>後段での使い道</th><th>対応</th></tr>
+<tr><td>P1</td><td>位置取り（初角・最終角の順位の正規化）</td><td>馬</td><td>当該レースの <code>pos_early</code>・<code>pos_late</code></td><td>A 系（<code>a_style</code>、<code>a_style_late</code>）、枠・馬番、騎手・調教師の傾向（逃げ・先行率）、距離、芝ダ、場、クラス、頭数、休養、馬体重</td><td>先行馬頭数の予測、単騎逃げ確率、自馬が最前かどうか、脚質×展開</td><td>tp-04（T-6・T-5）</td></tr>
+<tr><td>P2</td><td>隊列の集計（予測先行馬頭数、先行力の上位 2〜3 頭の拮抗、逃げ候補の数）</td><td>レース</td><td>なし（P1 の集計。モデル不要）</td><td>P1 の出走馬分</td><td>P3 の入力、<code>s_nfront_pred</code></td><td>tp-04（集計）</td></tr>
+<tr><td>P3</td><td><b>ペース予測</b>: 前傾／平均／後傾の確率と、期待 <code>pace_bal</code>（前半 3F − 後半 3F）</td><td>レース</td><td>実際の <code>pace_bal</code> とその 3 区分（距離帯別の分位、<code>FIT_END</code> 以前で決定）</td><td>P2、出走馬の Elo の分布、クラス、距離、芝ダ、場（コース形状）、馬場状態、頭数、当日の馬場傾向</td><td>展開マッチの重み（<code>m_pace_match</code>）、上がり予測の条件</td><td>tp-04（T-8）</td></tr>
+<tr><td>P4</td><td>上がり 3F の予測（<b>ペース別の条件付き</b>: 前傾・平均・後傾の各仮定下）</td><td>馬</td><td>当該レースの上り 3F（レース内 z）</td><td>A 系、P1、P3 の仮定、距離、馬場、F3 の Elo</td><td>予測ペースで重み付けした上がり期待値、レース内での相対位置</td><td>tp-04（T-4）</td></tr>
+<tr><td>P5</td><td>走破タイム（または時計指数）の予測</td><td>馬</td><td>当該レースの <code>time_sec</code></td><td>A・B・C・F3、距離、馬場</td><td>相手との能力差の予測（最良予測との差）</td><td>tp-04（T-9）</td></tr>
+<tr><td>P6</td><td>正規化着順の予測</td><td>馬</td><td>当該レースの正規化着順</td><td>全特徴量 + P1・P3・P4・P5</td><td>最終モデル（tp-05）への入力</td><td>tp-04（T-5）</td></tr>
+<tr><td>P7</td><td>当日の馬場差（トラックバリアント）の事前推定</td><td>レース</td><td>なし（同日の先行レースの結果から as-of で算出。ルールベース）</td><td>同日・前日の先行レースの上がり・勝ち時計</td><td>上がりの補正、P3・P4 の入力</td><td>tp-02b（<code>track_variant_online</code>）</td></tr>
+<tr><td>P8</td><td>隊列シミュレーション（拡張案）</td><td>レース</td><td>なし</td><td>P1 の確率分布</td><td>展開をモンテカルロでサンプルし、馬ごとの「恵まれ度」の分布を作る</td><td>将来案（tp-04 の評価後）</td></tr>
+</table>
+<h3>4.3 後段に渡す特徴量（第 2 段。名前は予定）</h3>
+<table>
+<tr><th>特徴量</th><th>定義</th><th>置き換える既存の特徴量</th></tr>
+<tr><td><code>s_pos_pred</code>、<code>s_pos_pred_rank</code></td><td>P1 の予測位置と、レース内での前からの順位</td><td><code>f2_early_rank</code></td></tr>
+<tr><td><code>s_nfront_pred</code>、<code>s_front_gap</code>、<code>s_lone_front_prob</code></td><td>予測先行馬頭数、自馬の予測位置とレース内最前との差、単騎逃げの確率（P1 から）</td><td><code>f2_nfront</code>、<code>f2_pressure</code>、<code>f2_lone_front</code></td></tr>
+<tr><td><code>s_pace_p_front</code>、<code>s_pace_p_mid</code>、<code>s_pace_p_back</code>、<code>s_pace_bal_pred</code></td><td>P3 の出力</td><td><code>f2_p_fast</code></td></tr>
+<tr><td><code>m_pace_match</code></td><td>Σ<sub>k</sub> P3<sub>k</sub> × （馬の区分 k での縮約成績 <code>f2_a_reg_k</code>）。前傾・後傾への相性を、予測ペースの確率で重み付けする</td><td><code>f2_pace_match</code>（確率を対応表から P3 に替える）</td></tr>
+<tr><td><code>m_pace_adv</code></td><td><code>f2_pace_adv</code> × （P3 の前傾確率 − 後傾確率）。前傾に強い馬が前傾と予測されるレースで有利、の度合い</td><td>—</td></tr>
+<tr><td><code>s_l3f_pred_cond</code>、<code>s_l3f_adv</code></td><td>Σ<sub>k</sub> P3<sub>k</sub> × （P4 の区分 k 仮定下の上がり予測）、およびレース内平均との差</td><td>—（A 系の「過去の上がり」を、今回の展開で条件付けた期待値に拡張）</td></tr>
+<tr><td><code>s_time_pred</code>、<code>s_time_gap</code>、<code>s_rank_pred</code></td><td>P5・P6 の出力と、レース内最良予測との差</td><td>—</td></tr>
+</table>
+<h3>4.4 依存関係と実行順</h3>
+<p>tp-02（as-of の特徴量、P7 を含む tp-02b）→ P1 → P2（集計）→ P3 → P4 → 第 2 段の特徴量（<code>s_*</code>、<code>m_*</code>）の計算 → P5・P6 → tp-05。各段は時系列の OOF で予測を作り、次の段は前の段の OOF 予測だけを入力にする。</p>
+<h3>4.5 リーク防止と精度の基準</h3>
+<ul>
+  <li><b>ラベルは結果、入力は as-of:</b> 位置取り・ペース・上がり・時計は当該レースの結果なので、学習のラベルにだけ使う。入力は tp-02 の as-of 特徴量と、前の段の OOF 予測だけ。P2 の集計は出走馬の as-of 値だけで作る（自馬の結果を含めない）。</li>
+  <li><b>時系列の OOF:</b> 年 Y の予測は、Y の開始 10 日前（purge 7 日 + embargo 3 日）より前のデータで学習したモデルで出す。2020〜2021 年の行には予測が付かない（NA）。2025 年（test）の予測は、2020〜2024 年で学習したモデルで出す。</li>
+  <li><b>連鎖の注意:</b> 第 2 段以降が使える行は、前段の OOF がある 2022 年以降に限られる。その分、後段の学習行が減る（助走期間が実質的に長くなる）。代替として、年単位の leave-one-year-out の OOF（学習行は増えるが、将来のデータでパラメータを学習する軽い先読みを含む）も比べるが、既定は厳密な expanding window とする。</li>
+  <li><b>精度の基準（P3 の例）:</b> 3 区分の予測の LogLoss が、一様予測（≈ ln 3 = 1.099）を明確に下回ること（seed 間のばらつきを超える改善）。下回らない場合は <code>m_pace_match</code> に使わず、簡易版（F2）に戻す。P1 は実際の位置取りとの相関と MAE、P4 は MAE と相関で評価する。</li>
+  <li><b>寄与の確認:</b> 各段の予測そのものの精度とは別に、後段への寄与（<code>s_*</code>・<code>m_*</code> の有無での p_win の LogLoss 差）を tp-03 と同じ手順で測る。</li>
+  <li><b>簡易版との関係:</b> F2 の <code>f2_pressure</code>・<code>f2_p_fast</code>・<code>f2_pace_match</code> は、P2・P3・<code>m_pace_match</code> の簡易版（ルールベース）としてそのまま残し、前段の予測で置き換えた版と比べる。</li>
+</ul>
+
+<h2>5. 未実装・次の拡張（tp-02b 以降の候補）</h2>
 <table>
 <tr><th>項目</th><th>内容</th><th>状態</th></tr>
 <tr><td>追い切り・調教</td><td>最終追い切りからの日数、コース×馬場で標準化した 4F・終い 1F の時計、併せ馬の比較、<code>evaluation</code> の順序値。欠損が多い（約 44%）ため <code>has_*</code> を付ける。</td><td>未実装</td></tr>
@@ -108,12 +154,12 @@
 <tr><td>近交係数（Wright）</td><td>10 世代血統から <code>F_X = Σ (0.5)^(n−1)(1+F_A)</code>（出典 L15）。血統は固定のためリークは無い。</td><td>未実装</td></tr>
 <tr><td>「京都改修後」フラグ</td><td>京都は改修期間中に阪神が代替開催した（train は京都 5.7%、valid は 20.8%）。<code>venue_era</code> を追加し、京都改修後を別枠で評価する（分割ルールの <code>special_sets</code> にも定義あり）。</td><td>未実装</td></tr>
 <tr><td>Glicko の RD・TrueSkill</td><td>レーティングの不確実性を特徴量にする。休養が長いほど RD を増やす（出典 L7、L8）。</td><td>未実装</td></tr>
-<tr><td>上りの期待値との残差</td><td>ペース・馬場差・距離で説明した上りの期待値との残差（S1、S9 のアイデア）。ペース補正は前半 3F−後半 3F の比で代用する。</td><td>未実装（A の拡張）</td></tr>
+<tr><td>上りの期待値との残差</td><td>ペース・馬場差・距離で説明した上りの期待値との残差（S1、S9 のアイデア）。ペース補正は前半 3F−後半 3F の比で代用する。</td><td>未実装（§4 の P4（ペース別の条件付き上がり予測）として tp-04 で扱う）</td></tr>
 <tr><td>後日談（相手の後続成績）</td><td>評価日より前の出走だけで as-of 集計する。同日以降を使うと即リーク。</td><td>未実装</td></tr>
 <tr><td>騎手・調教師の拡張統計（<code>jk_*</code>・<code>tr_*</code>）</td><td>LayerA に未結合（<code>include_jockey_trainer_stats=False</code>）。</td><td>未結合</td></tr>
 </table>
 
-<h2>5. 試作検証の結果（参考。採否は tp-03 で確定）</h2>
+<h2>6. 試作検証の結果（参考。採否は tp-03 で確定）</h2>
 <p class="muted">条件: valid 2022/2023/2024、3 seed、LightGBM 固定、オッズなし、p_win の LogLoss。ベースライン B0 は全頭版で再現した事前統計＋レース条件（速度指数なし）で 0.23258。seed 間のばらつきは約 0.0001。FIT_END が 2021-12-31 だった試作での値。</p>
 <table>
 <tr><th>構成</th><th>LogLoss</th><th>B0 との差</th></tr>
@@ -132,8 +178,8 @@
 <tr><td>見送り候補</td><td>F1、F4（距離適性曲線）、F2b（ペース別成績）</td></tr>
 </table>
 
-<h2>6. tp-03 特徴量の ablation（未作成）</h2>
-<h3>6.1 比較の枠組み</h3>
+<h2>7. tp-03 特徴量の ablation（未作成）</h2>
+<h3>7.1 比較の枠組み</h3>
 <table>
 <tr><th>項目</th><th>内容</th></tr>
 <tr><td>データ</td><td>データ完全化後の <code>train_table.parquet</code>（LayerA 母表 + 履歴特徴量。全出走馬）。2020〜2025 年のみ。</td></tr>
@@ -144,7 +190,7 @@
 <tr><td>採否基準</td><td>全 fold で悪化せず、平均が改善し、改善幅が seed 間のばらつき（約 0.0001）を上回ること。相関が約 0.9 以上のものは代表 1 つを残す（<code>notebooks/feature_engineering</code> の 10 サイクルで混戦度系が ρ≈0.91〜0.98 だった）。</td></tr>
 <tr><td>記録</td><td>MLflow 実験 <code>keiba-tp-ablation</code>。採用セットは <code>adopted_features.json</code> に保存。確定事項ログに追記。</td></tr>
 </table>
-<h3>6.2 実験の組み合わせ</h3>
+<h3>7.2 実験の組み合わせ</h3>
 <table>
 <tr><th>#</th><th>実験</th><th>狙い</th></tr>
 <tr><td>1</td><td>B0 + 各ファミリー（単独）</td><td>各ブロックの単独効果。</td></tr>
@@ -156,11 +202,11 @@
 <tr><td>7</td><td>欠損の扱い（NA のまま／<code>has_*</code> 追加）</td><td>取得データの欠損（<code>race_index</code> の取り直し後に残る分）の影響。</td></tr>
 <tr><td>8</td><td>tp-02b の拡張（追い切り、調教師コメント、近交係数、<code>venue_era</code>）</td><td>第 1 段の採用セットが決まった後に、1 ブロックずつ追加して効果を確認。</td></tr>
 </table>
-<h3>6.3 時代ずれの追跡（adversarial validation）</h3>
+<h3>7.3 時代ずれの追跡（adversarial validation）</h3>
 <p>採用セットごとに、train と valid／test を見分ける AUC を記録する。現状（on_time 補正後、tp-02 の 94 特徴量）は、全部で 0.86（valid）・0.90（test）、F5 を除くと 0.76・0.79、F5 と件数系を除くと 0.74・0.78。上位は <code>c_rq_ewm2</code>、<code>c_cls_ewm2</code>、<code>c_cls_step</code>、<code>f3_fs_mean</code>、<code>c_fstop3_ewm2</code>。AUC は「分布差の大きさ」の目安であり、単独の合否基準ではない。LogLoss を悪化させずに下げられる範囲で対処する。</p>
 
-<h2>7. tp-04 前段モデル（未作成）</h2>
-<h3>7.1 目的変数</h3>
+<h2>8. tp-04 前段モデル（未作成）</h2>
+<h3>8.1 目的変数</h3>
 <table>
 <tr><th>モデル</th><th>目的変数</th><th>種類</th><th>旧 notebook</th><th>旧結果（参考。時間が重なる分割での値）</th></tr>
 <tr><td>T-6</td><td>脚質（4 クラス）</td><td>多クラス分類</td><td><code>nb-03-t6-running-style</code></td><td>芝 acc 0.83、F1-macro 0.37</td></tr>
@@ -170,8 +216,9 @@
 <tr><td>T-9</td><td>走破タイム</td><td>回帰</td><td><code>nb-07-t9-finish-time</code></td><td>芝 MAE 6.5 秒、Spearman 0.97</td></tr>
 </table>
 <p class="muted">旧 notebook（<code>nb-01</code>〜<code>nb-08</code>）は、層化分割の「四半期」が壊れており、train と valid／test の期間が重なっている。旧結果は比較の参考にとどめ、新系統で作り直す。</p>
-<h3>7.2 設計方針</h3>
+<h3>8.2 設計方針</h3>
 <ul>
+  <li><b>前段予測量の定義・連鎖・精度の基準は §4。</b>以下はその実装方針。</li>
   <li><b>入力は as-of のみ:</b> tp-02 の特徴量（レース前に分かる情報）だけを入力にする。目的変数はそのレースの結果で、学習のラベルとしてだけ使う。</li>
   <li><b>OOF（学習に使わなかった fold の予測）を時系列で作る:</b> 各 valid 年（2022・2023・2024）の予測は、その年の開始 10 日前までの学習で作ったモデルで出す。ランダムな GroupKFold は使わない。2025 年（test）の予測は、2020〜2024 年で学習したモデルで出す。2020〜2021 年の行には前段の予測が付かない（NA）。これは助走期間として扱い、tp-03 の「助走期間を外す」実験と整合させる。</li>
   <li><b>最終モデル（tp-05）への渡し方:</b> 前段の予測値は特徴量として渡す。ただし同じ年の fold の学習に使ったレースの予測は渡さない（OOF の原則）。</li>
@@ -180,7 +227,7 @@
   <li><b>障害レースの扱い:</b> 障害レースは上りが 13〜14 秒台（約 125 レース/年）で、上り 3F のモデルでは別扱いにする。</li>
 </ul>
 
-<h2>8. 未確認の項目</h2>
+<h2>9. 未確認の項目</h2>
 <table>
 <tr><th>項目</th><th>状態</th></tr>
 <tr><td>Ragozin、Timeform の日本版、Sartin の PacePar と Kiwi、Dosage・AEI・ニックスの具体式</td><td>取得して確認できていない。1 次文献で確認してから採用する。</td></tr>
@@ -190,7 +237,7 @@
 <tr><td>個人ブログの加点・減点（+15 点など）</td><td>恣意的なので採らない。重みは学習で決める。</td></tr>
 </table>
 
-<h2>9. 出典（取得して内容を確認できたもののみ）</h2>
+<h2>10. 出典（取得して内容を確認できたもののみ）</h2>
 <p class="muted">個人ブログの主張は検証されていない見解であり、採否は実データの ablation で決める。</p>
 <h3>文献・ウェブ（L）</h3>
 <table>
