@@ -1345,6 +1345,16 @@ def task_barometer_retry():
     })
 
 
+def task_recent_retry():
+    """直近の開催日の未取得データ（確定結果・結果ラップ・タイム指数・厩舎コメント）を取り直す（cron 1 日 2 回）。詳細は recent_retry.py。"""
+    from src.scraper import recent_retry
+
+    res = recent_retry.run(_load_race_calendar())
+    ok = res["error_count"] == 0
+    _save_status("recent-retry", {"status": "ok" if ok else "partial", "last_run": _now_jst_iso(), **res})
+    logger.info("recent-retry: %s", res)
+
+
 def task_daily_race_lists():
     """毎日 07:00 に実行 (cron)。今日〜カレンダー末尾までの全開催日の race_lists を取得・更新する。"""
     if _via_queue():
@@ -1416,6 +1426,7 @@ def show_status():
         "growth-curve-weekly":   "金曜18:30 成長曲線一括",
         "catchup-missing":       "過去欠損補完 (race_listsなし開催日)",
         "barometer-retry":       "バロメーター未取得の取り直し (公開済み分)",
+        "recent-retry":          "直近の開催日の未取得データ取り直し (確定結果・ラップ・指数・厩舎コメント)",
         "daily-race-lists":      "日次レース一覧 (今日〜カレンダー末尾)",
         "jra-baba-morning":      "JRA馬場情報 (朝ポーリング 05:00-09:00)",
     }
@@ -1521,6 +1532,7 @@ TASKS = {
     "weekly-update":          task_weekly_update,
     "catchup-missing":        task_catchup_missing_dates,
     "barometer-retry":        task_barometer_retry,
+    "recent-retry":           task_recent_retry,
     "daily-race-lists":       task_daily_race_lists,
     "jra-baba-morning":       task_jra_baba_morning,
 }
