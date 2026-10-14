@@ -92,7 +92,9 @@ def _extract_race_meta(data: dict, meta_index: dict[str, dict] | None = None) ->
 
     for field in RACE_META_FIELDS:
         val = data.get(field)
-        if val is None or (isinstance(val, str) and val.strip() == ""):
+        # 距離・頭数の 0 は「取れていない」。db.netkeiba の結果ページは障害レースの距離を取れず 0 で保存されている
+        # （0 のまま特徴量に入ると log(0) で無限大になる）。出馬表のメタで補う。
+        if val is None or (isinstance(val, str) and val.strip() == "") or (field in ("distance", "field_size") and val == 0):
             val = fallback.get(field)
         meta[field] = val
 

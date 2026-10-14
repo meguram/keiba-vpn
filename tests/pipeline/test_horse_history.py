@@ -155,3 +155,15 @@ def test_today_track_variant_uses_only_races_started_90_minutes_earlier(built):
     # 合成データは 1 日 2 レース（10:05 と 11:05 の発走で 60 分差）なので、同日の先行レースは「90 分以上前」に当たらない
     assert (races["sr_var_n"] == 0).all()
     assert races.filter(pl.col("date") > pl.col("date").min())["sr_var_today"].is_not_null().mean() > 0.8  # 前の開催日の値で補われる
+
+
+def test_check_runs_rejects_zero_distance_and_infinite_time(built):
+    from src.pipeline.features.horse_history.builder import check_runs
+
+    tables, la, F, P = built
+    runs = load_runs(tables)
+    check_runs(runs)  # 正常なデータは通る
+    with pytest.raises(ValueError, match="距離"):
+        check_runs(runs.with_columns(pl.when(pl.col("race_id") == runs["race_id"][0]).then(0).otherwise(pl.col("distance")).alias("distance")))
+    with pytest.raises(ValueError, match="無限大"):
+        check_runs(runs.with_columns(pl.when(pl.col("race_id") == runs["race_id"][0]).then(float("inf")).otherwise(pl.col("time_sec")).alias("time_sec")))

@@ -15,8 +15,18 @@ from .match import build_all, families
 from .profile import KEY
 
 
+def check_runs(runs: pl.DataFrame) -> None:
+    """入力の走に、特徴量を無限大にする値（距離 0、時計の無限大）が無いこと。入っていたら黙って進まず止める。"""
+    bad_d = runs.filter(~(pl.col("distance").cast(pl.Float64) > 0))["race_id"].n_unique()
+    bad_t = runs.filter(pl.col("time_sec").cast(pl.Float64).is_infinite())["race_id"].n_unique()
+    if bad_d or bad_t:
+        raise ValueError(f"入力データが不正: 距離が 0 以下のレース {bad_d} 件、時計が無限大のレース {bad_t} 件。"
+                         "テーブルの作り直し（export_tables --force）か、取得データを確認すること")
+
+
 def build_from_runs(runs: pl.DataFrame, repair_map: pl.DataFrame,
                     on_time: pl.DataFrame | None = None) -> tuple[pl.DataFrame, dict]:
+    check_runs(runs)
     delta, lls = select_delta(runs, FIT_END)  # 斤量差のハンデ項（0 が最良なら従来どおり）
     F, P = build_all(apply_repair(runs, repair_map, on_time), run_elo(runs, delta=delta))
     P["elo_delta"], P["elo_delta_ll"] = delta, lls
@@ -25,6 +35,7 @@ def build_from_runs(runs: pl.DataFrame, repair_map: pl.DataFrame,
 
 def build_with_state(runs: pl.DataFrame, repair_map: pl.DataFrame, on_time: pl.DataFrame | None = None):
     """build_from_runs と同じ特徴量に加え、推論用の状態（fit した値・過去走の素材・Elo の最終状態）も返す。"""
+    check_runs(runs)
     delta, lls = select_delta(runs, FIT_END)
     elo, rating, cnt = run_elo(runs, delta=delta, return_state=True)
     S: dict = {}
