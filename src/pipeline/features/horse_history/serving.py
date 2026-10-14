@@ -9,7 +9,7 @@
 バンドル（``data/local/modeling/feature_store/serving_bundle/``）:
   meta.json        作成時刻・履歴の最終日・行数・馬数
   params.pkl       P（fit した値）、S（段階ごとの fit 結果と日ごとの馬場差）、Elo の最終状態
-  horses.sqlite    馬ごとの過去走の素材（parquet のバイト列）。馬 ID で引く
+  horses.sqlite    馬ごとの過去走の素材（Arrow IPC + zstd のバイト列）。馬 ID で引く
 
 ここで作る特徴量は、全履歴で作った値と一致する（tests/pipeline/test_horse_history_serving.py が確認する）。
 """
@@ -34,7 +34,17 @@ from .match import build_frozen
 from .profile import prepare
 
 JST = timezone(timedelta(hours=9))
-VERSION = 1
+VERSION = 2
+
+# 凍結した段階（history〜clusters）が過去走の行から読む列。参照されない列（騎手 ID・馬番・パース中間値など）は持たない。
+# 足りない列は tests/pipeline/test_horse_history_serving.py が検出する。
+SERVING_COLUMNS = [
+    "E", "age", "class_level", "date", "direction", "dist_band", "distance", "finish_position", "fs_mean", "fs_std", "fs_top3", "going",
+    "horse_id", "is_top3", "is_turf", "is_wet", "is_win", "jockey_weight", "l3f", "l3f_cnt", "l3f_cov", "l3f_gap", "l3f_min", "l3f_mu",
+    "l3f_rk", "l3f_sd", "l3f_top3", "l3f_z", "l3f_z_back", "l3f_z_front", "logd", "n_fin", "n_pre", "pace_bal", "pos_early", "pos_late",
+    "r_eff", "r_pre", "race_id", "res", "res2", "res_w", "rpci", "sex", "standing", "start_time", "surface", "time_sec", "venue_code", "wt",
+    "_var",
+]
 EMPTY_RM = pl.DataFrame(schema={"horse_id": pl.Utf8, "run_date": pl.Date, "l3f_fix": pl.Float64, "weight_fix": pl.Float64, "src_date": pl.Date})
 
 
@@ -51,7 +61,7 @@ def write_bundle(out_dir: Path, F_cols: list[str], P: dict, S: dict, elo_state: 
     if tmp.exists():
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
-    F0 = S["F0"].join(S["sr_var"], on=["race_id", "horse_id"], how="left")
+    F0 = S["F0"].join(S["sr_var"], on=["race_id", "horse_id"], how="left").select(SERVING_COLUMNS)
     state = {k: v for k, v in S.items() if k not in ("F0", "sr_var")}
     with (tmp / "params.pkl").open("wb") as f:
         pickle.dump({"version": VERSION, "P": P, "S": state, "elo": elo_state, "extras": extras or {}}, f, protocol=4)
@@ -60,7 +70,7 @@ def write_bundle(out_dir: Path, F_cols: list[str], P: dict, S: dict, elo_state: 
     rows = []
     for (hid,), g in F0.sort(["horse_id", "date", "race_id"]).partition_by("horse_id", as_dict=True, maintain_order=True).items():
         buf = io.BytesIO()
-        g.write_parquet(buf, compression="zstd")
+        g.write_ipc(buf, compression="zstd")
         rows.append((hid, g.height, buf.getvalue()))
         if len(rows) >= 2000:
             db.executemany("INSERT INTO horse_runs VALUES (?,?,?)", rows)
@@ -99,7 +109,7 @@ class Bundle:
             for i in range(0, len(horse_ids), 500):
                 chunk = horse_ids[i:i + 500]
                 q = "SELECT data FROM horse_runs WHERE horse_id IN (%s)" % ",".join("?" * len(chunk))
-                parts += [pl.read_parquet(io.BytesIO(r[0])) for r in db.execute(q, chunk)]
+                parts += [pl.read_ipc(io.BytesIO(r[0])) for r in db.execute(q, chunk)]
         finally:
             db.close()
         return pl.concat(parts, how="diagonal_relaxed") if parts else pl.DataFrame()
