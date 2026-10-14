@@ -97,6 +97,13 @@ def build_inference_features(
     """
     t0 = time.perf_counter()
     today = card_to_raw_runs(card, graded_names)
+    # 日付が空のまま履歴に足すと、Elo の日付ループが進まず止まらなくなる。先に弾く。
+    bad = today.filter(
+        pl.col("date").is_null() | (pl.col("date").cast(pl.Utf8).fill_null("") == "")
+        | ~(pl.col("distance").cast(pl.Float64, strict=False) > 0) | pl.col("surface").cast(pl.Utf8).fill_null("").eq("")
+    )
+    if bad.height:
+        raise ValueError(f"出馬表のレース情報（日付・面・距離）が空のレース: {sorted(bad['race_id'].unique().to_list())}")
     race_ids = today["race_id"].unique().to_list()
     hist = raw_hist.filter(~pl.col("race_id").is_in(race_ids))
     # 今日の走より後の日付の履歴は使わない（再演・検証時に、後日のデータが混ざらないようにする）。

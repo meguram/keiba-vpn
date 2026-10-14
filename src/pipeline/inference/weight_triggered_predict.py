@@ -102,6 +102,21 @@ def card_frame(storage: Any, race_ids: list[str]) -> pl.DataFrame:
                            + [pl.col("jockey_weight").cast(pl.Float64, strict=False)])
 
 
+def fill_card_meta(card: pl.DataFrame, races: list[dict]) -> pl.DataFrame:
+    """出馬表に日付・発走時刻が無いとき、発走時刻表の値で補う（面・距離は補えないので、空なら呼び出し側で除く）。"""
+    sched = pl.DataFrame([
+        {"race_id": r["race_id"], "_date": r["post_time"].strftime("%Y-%m-%d"),
+         "_start": (r.get("start_time_str") or r["post_time"].strftime("%H:%M"))}
+        for r in races if r.get("post_time")
+    ], schema={"race_id": pl.Utf8, "_date": pl.Utf8, "_start": pl.Utf8})
+    df = card.join(sched, on="race_id", how="left")
+    df = df.with_columns(
+        pl.when(pl.col("date").cast(pl.Utf8).fill_null("") == "").then(pl.col("_date")).otherwise(pl.col("date")).alias("date"),
+        pl.when(pl.col("start_time").cast(pl.Utf8).fill_null("") == "").then(pl.col("_start")).otherwise(pl.col("start_time")).alias("start_time"),
+    )
+    return df.drop("_date", "_start")
+
+
 def _append_event(day: str, event: dict) -> None:
     d = inference_dir() / "events"
     d.mkdir(parents=True, exist_ok=True)
@@ -118,10 +133,28 @@ def run_for_races(
     ids = [r["race_id"] for r in races]
     now = datetime.now(_JST)
     events: list[dict] = []
+    events_bad: list[dict] = []
     try:
         card = card_frame(storage, ids)
         if card.height == 0:
             raise ValueError("出馬表の行がありません")
+        card = fill_card_meta(card, races)
+        unusable = card.filter(
+            ~(pl.col("distance").cast(pl.Float64, strict=False) > 0) | pl.col("surface").cast(pl.Utf8).fill_null("").eq("")
+        )["race_id"].unique().to_list()
+        if unusable:
+            logger.error("[weight-trigger] 出馬表のレース情報（面・距離）が空のため除外: %s", unusable)
+            card = card.filter(~pl.col("race_id").is_in(unusable))
+            for r in races:
+                if r["race_id"] in unusable:
+                    pt = r.get("post_time")
+                    ev = {"race_id": r["race_id"], "at": now.isoformat(timespec="seconds"), "status": "error", "mode": mode,
+                          "error": "出馬表のレース情報（面・距離）が空"}
+                    _append_event(pt.strftime("%Y%m%d") if pt else now.strftime("%Y%m%d"), ev)
+                    events_bad.append(ev)
+            races = [r for r in races if r["race_id"] not in unusable]
+            if card.height == 0:
+                return events_bad
         # 馬体重は出走馬全頭に同時に発表される。揃ったレースで体重の無い馬は、出走取消・除外とみなして出走馬から外す。
         announced = [rid for rid, k in weights_known.items() if k]
         no_weight = (pl.col("race_id").is_in(announced)) & ~(pl.col("weight").cast(pl.Float64, strict=False) > 0).fill_null(False)
@@ -137,7 +170,7 @@ def run_for_races(
             pt = r.get("post_time")
             _append_event(pt.strftime("%Y%m%d") if pt else now.strftime("%Y%m%d"), ev)
             events.append(ev)
-        return events
+        return events_bad + events
 
     for r in races:
         rid = r["race_id"]
@@ -165,4 +198,4 @@ def run_for_races(
         _append_event(day, ev)
         events.append(ev)
         logger.info("[weight-trigger] %s ok rows=%d weights_known=%s build=%.1fs", rid, part.height, ev["weights_known"], info["build_sec"])
-    return events
+    return events_bad + events

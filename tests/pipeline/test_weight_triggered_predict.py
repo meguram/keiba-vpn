@@ -120,3 +120,34 @@ def test_entries_without_weight_are_dropped_once_weights_are_announced(env, tmp_
     # 馬体重が未発表（weights_known=False）のレースでは、体重の無い馬を外さない
     evs2 = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: False for k in sh}, mode="features")
     assert {e["race_id"]: e["rows"] for e in evs2} == n_other
+
+
+def test_empty_race_info_is_reported_not_hung(env, tmp_path, monkeypatch):
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    rids = list(sh)
+    bad = rids[0]
+    sh[bad].update({"surface": "", "distance": 0})  # 終了後に取得した出馬表のようにレース情報が空
+    for v in sh.values():
+        v["date"] = ""  # 日付は発走時刻表から補う
+    races = [{"race_id": r, "post_time": datetime.fromisoformat(day + "T10:00:00+09:00"), "start_time_str": "10:00"} for r in rids]
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    evs = {e["race_id"]: e for e in wtp.run_for_races(races, FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")}
+    assert evs[bad]["status"] == "error" and "面・距離" in evs[bad]["error"]
+    assert all(evs[r]["status"] == "ok" for r in rids if r != bad)
+
+
+def test_build_inference_features_rejects_missing_date(env):
+    import polars as pl
+    from src.pipeline.features.horse_history.common import build_repair_map
+    from src.pipeline.features.horse_history.inference import build_inference_features
+
+    tables, la, day = env
+    card = _shutuba_from_day(tables, day, with_weight=True)
+    rid = next(iter(card))
+    rows = [{**e, "race_id": rid, "date": None, "surface": "芝", "distance": 1600, "venue_code": "05", "track_condition": "良",
+             "grade": "1勝", "race_class": "x", "direction": "左", "start_time": "10:00"} for e in card[rid]["entries"]]
+    with pytest.raises(ValueError):
+        build_inference_features(read_runs_raw(tables), pl.DataFrame(rows), build_repair_map(la))
