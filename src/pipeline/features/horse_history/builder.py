@@ -9,14 +9,18 @@ import numpy as np
 import polars as pl
 
 from .common import apply_repair, build_repair_map, load_runs
-from .elo import run_elo
+from .common import FIT_END
+from .elo import run_elo, select_delta
 from .match import build_all, families
 from .profile import KEY
 
 
 def build_from_runs(runs: pl.DataFrame, repair_map: pl.DataFrame,
                     on_time: pl.DataFrame | None = None) -> tuple[pl.DataFrame, dict]:
-    return build_all(apply_repair(runs, repair_map, on_time), run_elo(runs))
+    delta, lls = select_delta(runs, FIT_END)  # 斤量差のハンデ項（0 が最良なら従来どおり）
+    F, P = build_all(apply_repair(runs, repair_map, on_time), run_elo(runs, delta=delta))
+    P["elo_delta"], P["elo_delta_ll"] = delta, lls
+    return F, P
 
 
 def build_horse_history(

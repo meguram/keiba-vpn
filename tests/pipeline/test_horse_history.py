@@ -38,10 +38,10 @@ def _synthetic_tables(tmp_path, seed=0):
                         "venue_code": "05", "surface": surface, "distance": dist, "direction": "左",
                         "track_condition": "良", "grade": str(rng.choice(["未勝利", "1勝", "2勝"])),
                         "pace": json.dumps({"first_half_3f": 35.0 + rng.normal(), "second_half_3f": 36.0 + rng.normal()}),
-                        "finish_position": int(order[k]), "horse_number": k + 1, "horse_id": h, "sex_age": "牡3",
+                        "finish_position": int(order[k]), "horse_number": k + 1, "horse_id": h, "sex_age": str(rng.choice(["牡3", "牝3", "牡4", "牝4"])),
                         "time_sec": float(95 + order[k] * 0.2), "passing_order": f"{k + 1}-{k + 1}-{order[k]}-{order[k]}",
-                        "last_3f": float(34.0 + order[k] * 0.1 + rng.normal(scale=0.3)), "weight": 480.0,
-                        "jockey_id": f"J{k % 7}", "trainer_id": f"T{k % 5}", "jockey_weight": 56.0, "lap_times": json.dumps(laps),
+                        "last_3f": float(34.0 + order[k] * 0.1 + rng.normal(scale=0.3)), "weight": float(rng.choice([450, 470, 490, 510])),
+                        "jockey_id": f"J{k % 7}", "trainer_id": f"T{k % 5}", "jockey_weight": float(rng.choice([54, 55, 56, 57, 58])), "lap_times": json.dumps(laps),
                     })
     tables = tmp_path / "tables"
     for y, rows in per_year.items():
@@ -64,7 +64,7 @@ def test_features_cover_all_runs_and_families(built):
     tables, la, F, P = built
     assert F.height == load_runs(tables).height
     fam = feature_columns(F.columns)
-    for k in ("A", "B", "C", "D", "E", "G", "F1", "F2", "F3", "F5"):
+    for k in ("A", "B", "C", "D", "E", "G", "H", "F1", "F2", "F3", "F5"):
         assert fam[k], k
     assert F["date"].dt.year().max() <= 2025
 
@@ -124,3 +124,16 @@ def test_rpci_is_race_level_and_pc_features_are_history_only(built):
     assert r.group_by("race_id").agg(pl.col("rpci").n_unique()).get_column("rpci").max() == 1  # レース内で同じ値
     first = F.sort(["horse_id", "date", "race_id"]).group_by("horse_id").first()
     assert first["pc_pci_ewm2"].is_null().all() and (first["pc_n_reg0"] == 0).all()
+
+
+def test_standard_rating_uses_grid_beta_and_is_history_only(built):
+    _, _, F, P = built
+    assert set(P["sr_beta"].values()) <= set(P["sr_beta_grid"]) | {0.10}
+    assert P["elo_delta"] in (0.0, 5.0, 10.0, 20.0, 30.0)
+    first = F.sort(["horse_id", "date", "race_id"]).group_by("horse_id").first()
+    assert first["sr_perf_ewm2"].is_null().all() and (first["sr_n"] == 0).all()
+    assert F["sr_exp"].is_not_null().mean() > 0.5
+    # 負担が重いほど補正量(sr_load_pts)は小さい（負の方向）: 期待値は能力より低くなる
+    d = F.filter(pl.col("sr_load_dev").is_not_null() & (pl.col("sr_load_dev").abs() > 1))
+    heavy = d.filter(pl.col("sr_load_dev") > 0)["sr_load_pts"].mean(); light = d.filter(pl.col("sr_load_dev") < 0)["sr_load_pts"].mean()
+    assert heavy < 0 < light

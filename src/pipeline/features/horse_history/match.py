@@ -5,6 +5,7 @@ import polars as pl
 from .common import FIT_END
 from .profile import H, KEY, prepare, fit_basic, history, sh, ewm
 from .pace import pace_index
+from .rating import standard_rating
 
 
 def f3(F, P):
@@ -13,7 +14,7 @@ def f3(F, P):
         pl.col("fs_top3").alias("f3_fs_top3"), pl.col("fs_std").alias("f3_fs_std"),
         (pl.col("r_pre") - pl.col("fs_mean")).alias("f3_r_gap"), (pl.col("r_pre") - pl.col("fs_top3")).alias("f3_r_gap_top3"),
         (pl.col("r_pre").rank("average").over("race_id") / pl.col("n_fin")).alias("f3_r_rank"),
-        pl.col("n_pre").alias("f3_n_pre"),
+        pl.col("n_pre").alias("f3_n_pre"), pl.col("r_eff").alias("f3_r_eff"),
     )
 
 
@@ -133,6 +134,7 @@ def build_all(runs_rep, elo):
     P = fit_basic(F)
     F = history(F, P)
     F = pace_index(F, P)
+    F = standard_rating(F, P)
     F = f3(F, P)
     F = f2(F, P)
     F = sim(F, P)
@@ -149,6 +151,7 @@ def families(cols):
            "D": [c for c in cols if c.startswith("d_")],
            "E": [c for c in cols if c.startswith("e_")],
            "G": [c for c in cols if c.startswith("pc_")],
+           "H": [c for c in cols if c.startswith("sr_")],
            "F1": [c for c in cols if c.startswith("f1_")],
            "F2": [c for c in cols if c.startswith("f2_")],
            "F3": [c for c in cols if c.startswith("f3_")],

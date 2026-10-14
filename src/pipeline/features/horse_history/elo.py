@@ -1,4 +1,7 @@
-"""順位から逐次更新する多頭数 Elo。1 日分のレースは前日までのレーティングで評価し、日の終わりにまとめて更新する。"""
+"""順位から逐次更新する多頭数 Elo。1 日分のレースは前日までのレーティングで評価し、日の終わりにまとめて更新する。
+
+delta > 0 のとき、期待勝率に斤量差のハンデ項を入れる: P(i が j に勝つ) = σ((R_i − R_j − delta·(w_i − w_j)) / s)。
+このとき R は「同じ斤量だった場合」の能力になり、r_eff が今回の斤量を込みにした実効値になる。"""
 from __future__ import annotations
 import numpy as np
 import polars as pl
@@ -6,8 +9,9 @@ import polars as pl
 SCALE = 400.0 / np.log(10.0)
 
 
-def run_elo(runs: pl.DataFrame, k: float = 300.0, init: float = 1500.0) -> pl.DataFrame:
+def run_elo(runs: pl.DataFrame, k: float = 300.0, init: float = 1500.0, delta: float = 0.0) -> pl.DataFrame:
     df = runs.select("date", "race_id", "horse_id", "finish_position").with_row_index("i")
+    wgt = runs["jockey_weight"].fill_null(56.0).to_numpy().astype(float) if delta else np.full(runs.height, 56.0)
     n = df.height
     horse = df["horse_id"].to_numpy()
     fin = df["finish_position"].to_numpy().astype(float)
@@ -15,7 +19,7 @@ def run_elo(runs: pl.DataFrame, k: float = 300.0, init: float = 1500.0) -> pl.Da
     order = df.sort(["date", "race_id"])["i"].to_numpy()
     dates = df["date"].to_numpy()[order]
     races = df["race_id"].to_numpy()[order]
-    out = {c: np.full(n, np.nan) for c in ("r_pre", "n_pre", "S", "E", "fs_mean", "fs_top3", "fs_std")}
+    out = {c: np.full(n, np.nan) for c in ("r_pre", "n_pre", "S", "E", "fs_mean", "fs_top3", "fs_std", "r_eff")}
     rating, cnt = {}, {}
     pos = 0
     while pos < n:
@@ -37,7 +41,9 @@ def run_elo(runs: pl.DataFrame, k: float = 300.0, init: float = 1500.0) -> pl.Da
             out["r_pre"][idx] = r
             out["n_pre"][idx] = c
             if N >= 2:
-                diff = r[:, None] - r[None, :]
+                wr = wgt[idx]
+                diff = r[:, None] - r[None, :] - delta * (wr[:, None] - wr[None, :])
+                out["r_eff"][idx] = r - delta * (wr - wr.mean())
                 ep = 1.0 / (1.0 + np.exp(-diff / SCALE))
                 E = (ep.sum(1) - 0.5) / (N - 1)
                 S = (N - fin[idx]) / (N - 1)
@@ -60,3 +66,21 @@ def run_elo(runs: pl.DataFrame, k: float = 300.0, init: float = 1500.0) -> pl.Da
     res = pl.DataFrame({"i": np.arange(n), **{c: v for c, v in out.items()}})
     res = res.with_columns((pl.col("S") - pl.col("E")).alias("res"))
     return df.select("race_id", "horse_id", "i").join(res, on="i").drop("i")
+
+
+def select_delta(runs: pl.DataFrame, fit_end, grid=(0.0, 5.0, 10.0, 20.0, 30.0)) -> tuple[float, dict]:
+    """斤量差のハンデ項 δ（Elo ポイント/kg）を、fit 期間（fit_end 以前）の勝ち馬の対数尤度で選ぶ。0 が最良なら 0。"""
+    sub = runs.filter(pl.col("date") <= fit_end)
+    lls = {}
+    for dl in grid:
+        el = run_elo(sub, delta=dl)
+        d = (sub.select("race_id", "horse_id", "finish_position", "jockey_weight")
+             .join(el.select("race_id", "horse_id", "r_pre", "n_pre"), on=["race_id", "horse_id"])
+             .filter(pl.col("n_pre") >= 2))
+        d = d.with_columns(
+            ((pl.col("r_pre") - dl * (pl.col("jockey_weight").fill_null(56.0) - pl.col("jockey_weight").fill_null(56.0).mean().over("race_id"))) / SCALE).alias("x"))
+        d = d.with_columns((pl.col("x") - pl.col("x").max().over("race_id")).exp().sum().over("race_id").log().alias("_lse"), pl.col("x").max().over("race_id").alias("_mx"))
+        ll = d.filter(pl.col("finish_position") == 1).select((pl.col("x") - pl.col("_lse") - pl.col("_mx")).sum()).item()
+        lls[float(dl)] = float(ll)
+    best = max(lls, key=lambda k: (lls[k], -k))
+    return best, lls
