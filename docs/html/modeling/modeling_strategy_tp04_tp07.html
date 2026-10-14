@@ -294,6 +294,7 @@
 <tr><td><b>tier 1</b></td><td>当日朝（馬場状態・天候の発表後）</td><td>馬場状態（<code>going</code>）に依存する特徴量、クッション値・含水率、当日の馬場差 P7（同日の先行レースが終わるたびに更新）、P3 の更新。</td></tr>
 <tr><td><b>tier 2</b></td><td>T-60 前後（馬体重の検知後）</td><td>馬体重・増減（<code>d_wt_dev</code>、<code>d_wt_chg_now</code> など）、<code>sr_load_*</code> と <code>sr_exp</code>・<code>sr_exp6</code>・<code>sr_exp_rel</code> の確定、馬体重に依存する前段予測（P4〜P6）、最終モデルの推論、較正。</td></tr>
 </table>
+<p>実測（摂動法、2026-10-14）: 127 特徴量のうち tier 0 が 110、tier 1 が 7（馬場状態 6 + <code>sr_var_today</code>）、tier 2 が 10（馬体重に依存する <code>d_wt_*</code> 2 と <code>sr_load_*</code>・<code>sr_exp*</code> 8）。ファミリー別の表、生データ別の依存先、運用への示唆は <a href="feature_strategy_tp03_tp04.html">特徴量戦略書</a> の「特徴量と生データの依存関係」。上の表の分類は、斤量・性齢は前日に確定すること、<code>sr_exp_rank</code> が tier 2 であることを含めて実測と一致した。</p>
 <h3>10.2 実装方針</h3>
 <ul>
   <li><b>学習は常に全特徴量:</b> 学習データでは tier にかかわらず全特徴量を使う（発表後の予測を前提とするため、前日版の別モデルは作らない）。</li>

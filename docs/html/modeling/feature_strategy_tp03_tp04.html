@@ -533,6 +533,55 @@
 </table>
 <p class="muted">実測できなかったこと: 馬体重の発表時刻（基本は発走 1 時間前とのユーザー情報あり。秒単位のばらつきは未計測）、クッション値の実際の公開時刻、T-60 運用の本番での動作（実績が無い）、増分計算の所要時間（未実装）。</p>
 
+<h2>補足. 特徴量と生データの依存関係（摂動法による実測。2026-10-14）</h2>
+<p class="muted">方法: 1 開催日（2024-07-06、36 レース・419 頭）の入力を 1 項目ずつ変え、特徴量が動くかを見た。今日の出走行の項目（馬体重・斤量・馬場状態・性齢・出走馬の構成）を変えて<b>同じ行</b>が動けば「今日のその項目に依存」、今日の結果（着順・時計・上り・通過順・ペース・ラップ）を変えて<b>後の日の行</b>が動けば「過去走のその項目に依存」、<b>同じ行</b>が動けばリーク。順位・レース内相対化の特徴量を検出するため、全員に同じ量ではなく馬ごとに違う量を足した。ツール: <code>src/scripts/data/feature_lineage.py</code>、結果: ホスト PC の <code>data/local/modeling/training_pipeline/features/feature_lineage.json</code>・<code>feature_tiers.json</code>（特徴量ごとの tier）。</p>
+<div class="box"><b>結論:</b> 127 特徴量のうち<b>110 個は前日（出走馬・枠順・斤量の確定後）に計算できる</b>。当日朝（馬場状態、同日の先行レースの時計）を待つのは 7 個、<b>馬体重の発表（T-60）を待つのは 10 個だけ</b>。リークは検出されず（同じ行が動いたのは、同日の他レースの時計から作る <code>sr_var_today</code> だけで、設計どおり）。T-60 で計算が必要な特徴量は少ないため、処理時間の主な要素は、馬体重に依存する前段予測（P4〜P6）と最終モデルの推論になる。</div>
+<h3>1. 今日の入力データ別の依存先（その項目が分かるまで確定できない特徴量）</h3>
+<table>
+<tr><th>今日の入力</th><th>分かる時点</th><th>依存する特徴量</th><th>tier</th></tr>
+<tr><td>馬体重</td><td>T-60 前後（発走の約 1 時間前に発表）</td><td>10 個: <code>d_wt_dev</code>、<code>d_wt_chg_now</code>、<code>sr_load_pts</code>・<code>sr_load_eq</code>・<code>sr_load_dev</code>・<code>sr_load_chg</code>、<code>sr_exp</code>・<code>sr_exp6</code>・<code>sr_exp_rel</code>・<code>sr_exp_rank</code></td><td><b>2</b></td></tr>
+<tr><td>馬場状態（going）</td><td>当日朝</td><td>6 個: <code>b_aff_going</code>、<code>b_n_going</code>、<code>f1_neff</code>、<code>f1_sim_res</code>、<code>f1_sim_z</code>、<code>f1_sw</code></td><td><b>1</b></td></tr>
+<tr><td>同日の先行レースの時計</td><td>当日（先行レースの終了 + 15 分以降。使えるのは発走 90 分以上前のレース）</td><td>1 個: <code>sr_var_today</code>（<code>sr_var_n</code> は件数なので出走馬だけで決まる）</td><td><b>1</b></td></tr>
+<tr><td>斤量</td><td>木〜金（枠順確定後。騎手変更で更新）</td><td>8 個: <code>sr_load_*</code> 4、<code>sr_exp</code>・<code>sr_exp6</code>・<code>sr_exp_rel</code>・<code>sr_exp_rank</code>（いずれも馬体重にも依存するので tier 2）</td><td>0（馬体重と組むものは 2）</td></tr>
+<tr><td>性齢</td><td>出馬表の確定後（前日）</td><td>5 個: <code>sr_age_pts</code>（年齢だけ）、<code>sr_exp</code> 系 4（馬体重にも依存）</td><td>0（馬体重と組むものは 2）</td></tr>
+<tr><td>出走馬の構成（誰が出るか）</td><td>前日の出走確定後。取消は当日朝まで</td><td>21 個。うち 19 個は構成だけに依存（C 2・F2 9・F3 7・H 1）。取消が出たレースは、この 21 個（と tier 2 の相対化）を再計算すればよい。残りの 106 個は、出走取消に影響されない</td><td>0</td></tr>
+</table>
+<h3>2. ファミリー別の tier</h3>
+<table>
+<tr><th>ファミリー</th><th>tier 0（前日）</th><th>tier 1（当日朝）</th><th>tier 2（T-60）</th><th>過去走のどの生データに依存するか（特徴量数）</th></tr>
+<tr><td>A 上がり・脚質</td><td>14</td><td>0</td><td>0</td><td>上り 3F 11、通過順 5</td></tr>
+<tr><td>B 得意な舞台</td><td>15</td><td>2</td><td>0</td><td>着順 10、馬場状態 2</td></tr>
+<tr><td>C レースの質</td><td>17</td><td>0</td><td>0</td><td>着順 14</td></tr>
+<tr><td>D 休養・体重</td><td>8</td><td>0</td><td>2</td><td>馬体重 3、着順 2</td></tr>
+<tr><td>E 信頼度</td><td>3</td><td>0</td><td>0</td><td>着順 2</td></tr>
+<tr><td>F1 馬場適性の類似度</td><td>0</td><td>4</td><td>0</td><td>馬場状態 4、着順 1、上り 1</td></tr>
+<tr><td>F2 展開</td><td>17</td><td>0</td><td>0</td><td>通過順 9、ペース 8、着順 5</td></tr>
+<tr><td>F3 Elo</td><td>10</td><td>0</td><td>0</td><td>着順 9</td></tr>
+<tr><td>F5</td><td>3</td><td>0</td><td>0</td><td>通過順 3、上り 3、馬場状態 3、着順 2</td></tr>
+<tr><td>G RPCI・PCI</td><td>13</td><td>0</td><td>0</td><td>ラップ（RPCI）10、時計 5、上り 5、着順 4</td></tr>
+<tr><td>H 標準条件レーティング</td><td>10</td><td>1</td><td>8</td><td>馬体重 14、時計 11、斤量 11、年齢 10、上り・通過順・ラップ・馬場状態が各 1</td></tr>
+<tr><td><b>合計</b></td><td><b>110</b></td><td><b>7</b></td><td><b>10</b></td><td>履歴に依存しない（今日の入力だけで決まる）のは <code>sr_age_pts</code>・<code>sr_sex_pts</code>・<code>sr_var_n</code> の 3 個</td></tr>
+</table>
+<h3>3. 過去走の生データ別の依存先（再取得・修正が必要になったときの影響範囲）</h3>
+<table>
+<tr><th>過去走の生データ（取得元）</th><th>依存するファミリー</th><th>備考</th></tr>
+<tr><td>着順（<code>race_result</code>）</td><td>B・C・D・E・F1・F2・F3・F5・G</td><td>最も広く使われる。欠損すると影響が大きい</td></tr>
+<tr><td>上り 3F・通過順（<code>race_result</code> の会員限定列。壊れた期間は <code>race_result_on_time</code> で補修）</td><td>A・F1・F2・F5・G・H</td><td>2020〜2025 年で壊れた約 2,810 レースを補修済み</td></tr>
+<tr><td>走破時計（<code>race_result</code>）</td><td>G・H</td><td>H のレーティングと同日の馬場差の元</td></tr>
+<tr><td>ラップ・RPCI（<code>race_result_lap</code>）</td><td>G・H（1）</td><td>ペース（<code>pace_bal</code>）は F2 が使用</td></tr>
+<tr><td>馬体重・斤量・性齢（出馬表 <code>race_shutuba</code>・結果ページ）</td><td>D・H</td><td>過去走の馬体重は H の補正（14 個）と D の増減（3 個）に使う</td></tr>
+<tr><td>馬場状態（結果ページ）</td><td>B・F1・F5・H</td><td></td></tr>
+<tr><td>タイム指数（<code>race_index</code>。要ログイン）</td><td>—</td><td>特徴量は直接使わない（<code>has_speed_index</code> の有無のみ母表で保持）</td></tr>
+</table>
+<h3>4. 運用への示唆</h3>
+<ul>
+  <li><b>前日にまとめて計算してよい:</b> 110 個（87%）。馬の履歴だけで決まるので、前日夜に全出走馬ぶんをキャッシュできる。</li>
+  <li><b>当日朝に更新:</b> 7 個（馬場状態の 6 個と、先行レースの時計の <code>sr_var_today</code>）。ただし <code>sr_var_today</code> は先行レースが終わるたびに変わり、発走 90 分以上前のレースしか使えない。</li>
+  <li><b>T-60 に計算:</b> 馬体重の 10 個だけ。履歴の側は前日に済んでいるので、今日の馬体重を入れた計算（負荷・期待値・順位）だけを回す。計算量は小さく、T-60 の時間は前段予測（P4〜P6）と最終モデルの推論が占める。</li>
+  <li><b>出走取消・騎手変更:</b> 取消は構成に依存する 21 個、騎手変更（斤量の変化）は <code>sr_load_*</code>・<code>sr_exp*</code> を再計算する。106 個は取消でも変わらない。</li>
+  <li><b>注意:</b> 摂動は 1 開催日（36 レース）での実測。ほかの日・会場でも同じ分類かは、tp-07 の tier 一致確認（前日の値と T-60 の一括計算が一致するか）で検証する。</li>
+</ul>
+
 </main>
 </body>
 </html>
