@@ -26,8 +26,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--day", default="2024-07-06")
     ap.add_argument("--layer-a", default="data/local/modeling/training_pipeline/layer_a.parquet")
-    ap.add_argument("--keep-weights", action="store_true", help="馬体重を入れたまま（既定は T-60 と同じく入れる。外すと前日朝の状態）")
-    ap.add_argument("--no-weights", action="store_true")
+    ap.add_argument("--no-weights", action="store_true", help="馬体重を外して作る（既定は T-60 と同じく入れる。外すと前日朝の状態）")
     args = ap.parse_args()
 
     t0 = time.perf_counter()
@@ -51,11 +50,13 @@ def main() -> int:
     print(f"所要: 履歴の読み込み {t_load:.1f}s / 推論モードの特徴量計算 {info['build_sec']}s（参考: 学習時の全件計算 {t_batch:.0f}s）")
 
     tiers = load_tiers()
-    a = ref.select(["race_id", "horse_id"] + cols).sort(["race_id", "horse_id"])
-    b = out.select(["race_id", "horse_id"] + cols).sort(["race_id", "horse_id"])
-    if a.height != b.height or not (a.select(["race_id", "horse_id"]).to_numpy() == b.select(["race_id", "horse_id"]).to_numpy()).all():
-        print("行の対応が一致しません（出走取消などで出走馬が異なる可能性）")
-        return 2
+    key = ["race_id", "horse_id"]
+    only_card = out.join(ref.select(key), on=key, how="anti")
+    only_ref = ref.join(out.select(key), on=key, how="anti")
+    print(f"出馬表にだけある馬 {only_card.height}（出走取消・除外の可能性）/ 学習時にだけある馬 {only_ref.height}")
+    a = ref.join(out.select(key), on=key).select(key + cols).sort(key)
+    b = out.join(ref.select(key), on=key).select(key + cols).sort(key)
+    print(f"比較する行: {a.height}")
     bad: dict[int, list[str]] = defaultdict(list)
     for c in cols:
         x, y = a[c].to_numpy().astype(float), b[c].to_numpy().astype(float)
