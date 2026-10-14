@@ -55,7 +55,8 @@ def standard_rating(F: pl.DataFrame, P: dict, S: dict | None = None) -> pl.DataF
     else:
         fr = (F.filter((pl.col("date") <= FIT_END) & pl.col("_rll").is_not_null())
               .group_by("race_id").agg(pl.col("surface").first(), pl.col("distance").first(), pl.col("class_level").first(),
-                                       pl.col("dist_band").first(), pl.col("_rll").first()))
+                                       pl.col("dist_band").first(), pl.col("_rll").first())
+              .sort("race_id"))  # group_by の出力順は実行ごとに変わる。回帰の足し算の順序が変わって値が揺れるのを防ぐ
         tbs = [(fr.group_by(keys).agg(pl.col("_rll").median().alias(f"_par{i}"), pl.len().alias("_n"))
                 .filter(pl.col("_n") >= mn).drop("_n")) for i, (keys, mn) in enumerate(tabs)]
         # 最後のフォールバック: 芝ダ別に log時計 = a + b·log(距離) を fit 期間のレースで回帰（距離帯の平均は 2500〜3600m などで破綻する）

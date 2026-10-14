@@ -575,8 +575,10 @@ def export_year(
     categories: list[str] | None = None,
     storage: Any = None,
     workers: int = 6,
+    force: bool = False,
 ) -> dict:
-    """1年分の全カテゴリをエクスポートする。"""
+    """1年分の全カテゴリをエクスポートする。force=True は、対象カテゴリの既存ファイルを消して GCS から作り直す
+    （GCS 側のデータを直した後など、レース数が同じで中身だけが変わった場合。増分チェックは中身の変更を検知しない）。"""
     from src.scraper.storage import HybridStorage
 
     if storage is None:
@@ -587,7 +589,19 @@ def export_year(
     all_stats: list[dict] = []
 
     local_rr = OUTPUT_DIR / year / "race_result_flat.parquet"
-    if local_rr.exists():
+    # 基準レース数は、消す前のローカル race_result_flat から取る（force で作り直すときも同じレース集合で作る）
+    base_ids = frozenset(_existing_race_ids(local_rr)) if (force and local_rr.exists()) else None
+    if force:
+        for cat in cats:
+            for suffix in ("flat", "race"):
+                f = OUTPUT_DIR / year / f"{cat}_{suffix}.parquet"
+                if f.exists():
+                    f.unlink()
+                    logger.info("[%s/%s] --force: 既存の %s を削除して作り直す", year, cat, f.name)
+    if base_ids is not None:
+        expected_keys = base_ids
+        logger.info("[%s] 基準レース数 (force 前のローカル race_result_flat): %d", year, len(expected_keys))
+    elif local_rr.exists():
         expected_keys = frozenset(_existing_race_ids(local_rr))
         logger.info(
             "[%s] 基準レース数 (ローカル race_result_flat): %d",
@@ -668,6 +682,8 @@ def main() -> int:
     ap.add_argument("--categories",
                     help="対象カテゴリ (カンマ区切り、省略時: 全12カテゴリ)")
     ap.add_argument("--workers", type=int, default=6, help="並列数 (default: 6)")
+    ap.add_argument("--force", action="store_true",
+                    help="対象カテゴリの既存ファイルを消して GCS から作り直す（レース数が同じで中身だけ変わったとき）")
     args = ap.parse_args()
 
     years = [y.strip() for y in args.years.split(",")]
@@ -681,7 +697,7 @@ def main() -> int:
         print(f"  {year}年 テーブルエクスポート")
         print(f"{'='*60}")
 
-        report = export_year(year, categories=cats, storage=storage, workers=args.workers)
+        report = export_year(year, categories=cats, storage=storage, workers=args.workers, force=args.force)
 
         print(f"\n  フラット行: {report['total_flat_rows']:,}")
         print(f"  レース行: {report['total_race_rows']:,}")
