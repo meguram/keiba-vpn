@@ -9,18 +9,17 @@
 バンドル（``data/local/modeling/feature_store/serving_bundle/``）:
   meta.json        作成時刻・履歴の最終日・行数・馬数
   params.pkl       P（fit した値）、S（段階ごとの fit 結果と日ごとの馬場差）、Elo の最終状態
-  horses.sqlite    馬ごとの過去走の素材（Arrow IPC + zstd のバイト列）。馬 ID で引く
+  runs.arrow       過去走の素材（Arrow IPC・無圧縮。馬 ID・日付順。メモリマップで読むので、触れた分だけがメモリに載る）
+  horse_index.json 馬 ID → [開始行, 行数]
 
 ここで作る特徴量は、全履歴で作った値と一致する（tests/pipeline/test_horse_history_serving.py が確認する）。
 """
 
 from __future__ import annotations
 
-import io
 import json
 import pickle
 import shutil
-import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -34,7 +33,7 @@ from .match import build_frozen
 from .profile import prepare
 
 JST = timezone(timedelta(hours=9))
-VERSION = 2
+VERSION = 3
 
 # 凍結した段階（history〜clusters）が過去走の行から読む列。参照されない列（騎手 ID・馬番・パース中間値など）は持たない。
 # 足りない列は tests/pipeline/test_horse_history_serving.py が検出する。
@@ -65,19 +64,10 @@ def write_bundle(out_dir: Path, F_cols: list[str], P: dict, S: dict, elo_state: 
     state = {k: v for k, v in S.items() if k not in ("F0", "sr_var")}
     with (tmp / "params.pkl").open("wb") as f:
         pickle.dump({"version": VERSION, "P": P, "S": state, "elo": elo_state, "extras": extras or {}}, f, protocol=4)
-    db = sqlite3.connect(tmp / "horses.sqlite")
-    db.execute("CREATE TABLE horse_runs (horse_id TEXT PRIMARY KEY, n INTEGER, data BLOB)")
-    rows = []
-    for (hid,), g in F0.sort(["horse_id", "date", "race_id"]).partition_by("horse_id", as_dict=True, maintain_order=True).items():
-        buf = io.BytesIO()
-        g.write_ipc(buf, compression="zstd")
-        rows.append((hid, g.height, buf.getvalue()))
-        if len(rows) >= 2000:
-            db.executemany("INSERT INTO horse_runs VALUES (?,?,?)", rows)
-            rows = []
-    db.executemany("INSERT INTO horse_runs VALUES (?,?,?)", rows)
-    db.commit()
-    db.close()
+    F0 = F0.sort(["horse_id", "date", "race_id"])
+    F0.write_ipc(tmp / "runs.arrow", compression="uncompressed")
+    idx = F0.with_row_index("i").group_by("horse_id", maintain_order=True).agg(pl.col("i").min().alias("s"), pl.len().alias("n"))
+    (tmp / "horse_index.json").write_text(json.dumps({h: [s, n] for h, s, n in idx.iter_rows()}), encoding="utf-8")
     meta = {"version": VERSION, "built_at": datetime.now(JST).isoformat(timespec="seconds"), "rows": F0.height,
             "horses": F0["horse_id"].n_unique(), "history_last_date": str(F0["date"].max()), "columns": F0.columns,
             "elo_delta": elo_state["delta"]}
@@ -100,19 +90,18 @@ class Bundle:
         self.S = dict(d["S"], frozen=True)
         self.rating, self.cnt, self.delta = d["elo"]["rating"], d["elo"]["cnt"], d["elo"]["delta"]
         self.graded_names: dict[str, str] = d.get("extras", {}).get("graded_names", {})
+        self._runs = None  # pyarrow.Table（メモリマップ）
+        self._index: dict[str, list[int]] = {}
 
     def horses(self, horse_ids: list[str]) -> pl.DataFrame:
-        """出走馬の過去走の素材（保存時点の最新まで）。"""
-        db = sqlite3.connect(self.path / "horses.sqlite")
-        try:
-            parts = []
-            for i in range(0, len(horse_ids), 500):
-                chunk = horse_ids[i:i + 500]
-                q = "SELECT data FROM horse_runs WHERE horse_id IN (%s)" % ",".join("?" * len(chunk))
-                parts += [pl.read_ipc(io.BytesIO(r[0])) for r in db.execute(q, chunk)]
-        finally:
-            db.close()
-        return pl.concat(parts, how="diagonal_relaxed") if parts else pl.DataFrame()
+        """出走馬の過去走の素材（保存時点の最新まで）。無圧縮の Arrow ファイルをメモリマップで読み、該当の行だけを取り出す。"""
+        import pyarrow as pa  # polars の scan_ipc は全体を読み込んでしまうため、pyarrow のメモリマップを使う
+
+        if self._runs is None:
+            self._runs = pa.ipc.open_file(pa.memory_map(str(self.path / "runs.arrow"))).read_all()  # ゼロコピー
+            self._index = json.loads((self.path / "horse_index.json").read_text(encoding="utf-8"))
+        parts = [self._runs.slice(*self._index[h]) for h in horse_ids if h in self._index]
+        return pl.from_arrow(pa.concat_tables(parts)) if parts else pl.DataFrame()
 
 
 def compute_entrants(bundle: Bundle, card: pl.DataFrame, graded_names: dict[str, str] | None = None) -> tuple[pl.DataFrame, dict]:

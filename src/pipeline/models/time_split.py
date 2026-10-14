@@ -11,7 +11,7 @@ import pandas as pd
 from src.pipeline.models.dataset_split import race_calendar_year
 
 # 2026 年以降はデータが不完全なため学習に使わない（確実に揃っている年のみ）。
-TRAINING_YEARS: tuple[str, ...] = tuple(str(y) for y in range(2020, 2026))
+from src.pipeline.models.training_years import TRAINING_YEARS  # noqa: E402,F401  学習対象年（定数は別モジュール）
 
 
 def restrict_to_training_years(

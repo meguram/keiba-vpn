@@ -8,7 +8,7 @@ import polars as pl
 from pathlib import Path
 
 from src.config.data_paths import PAGE_REF
-from src.pipeline.models.time_split import TRAINING_YEARS
+from src.pipeline.models.training_years import TRAINING_YEARS
 
 TABLES_DIR = Path(PAGE_REF) / "tables"
 YEARS = [int(y) for y in TRAINING_YEARS]   # 2026 年は使わない
