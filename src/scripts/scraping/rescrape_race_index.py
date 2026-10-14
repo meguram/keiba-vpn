@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""race_index（タイム指数）の取り直し。取得頭数が既存より増えるときだけ保存する。再開可能。
+"""race_index（タイム指数）・race_trainer_comment（調教師コメント）の取り直し。取得頭数が既存より増えるときだけ保存する。再開可能。
 
-対象一覧は data/local/meta/rescrape/race_index_incomplete_2020_2025.txt（race_id を 1 行 1 件）。
-進捗は同ディレクトリの race_index_progress.jsonl に追記し、記録済みの race_id は再実行時に飛ばす。
+対象一覧は --ids-file（race_id を 1 行 1 件）。進捗は --progress に追記し、記録済みの race_id は再実行時に飛ばす。
+既定の一覧・進捗ファイルは --category ごとに data/local/meta/rescrape/ 以下に決まる。
 
 例::
 
@@ -20,8 +20,12 @@ from pathlib import Path
 
 from src.utils.project_env import load_project_dotenv
 
-DEFAULT_IDS = Path("data/local/meta/rescrape/race_index_incomplete_2020_2025.txt")
-DEFAULT_PROGRESS = Path("data/local/meta/rescrape/race_index_progress.jsonl")
+RESCRAPE_DIR = Path("data/local/meta/rescrape")
+CATEGORIES = {
+    # category: (URL 属性, パーサー属性, 既定の対象一覧, 既定の進捗ファイル)
+    "race_index": ("SPEED_INDEX_URL", "speed_parser", RESCRAPE_DIR / "race_index_rescrape_targets.txt", RESCRAPE_DIR / "race_index_progress.jsonl"),
+    "race_trainer_comment": ("TRAINER_COMMENT_URL", "trainer_comment_parser", RESCRAPE_DIR / "race_trainer_comment_rescrape_targets.txt", RESCRAPE_DIR / "race_trainer_comment_progress.jsonl"),
+}
 
 
 def _done(progress: Path) -> set[str]:
@@ -32,8 +36,9 @@ def _done(progress: Path) -> set[str]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="race_index の取り直し（件数が増えるときだけ保存）")
-    ap.add_argument("--ids-file", type=Path, default=DEFAULT_IDS)
-    ap.add_argument("--progress", type=Path, default=DEFAULT_PROGRESS)
+    ap.add_argument("--category", choices=sorted(CATEGORIES), default="race_index")
+    ap.add_argument("--ids-file", type=Path)
+    ap.add_argument("--progress", type=Path)
     ap.add_argument("--years", nargs="*", help="対象の開催年（例: 2025 2024）。指定順に処理する")
     ap.add_argument("--interval", type=float, default=5.0, help="レース間の待機秒（ゆらぎ ±30%%）")
     ap.add_argument("--limit", type=int, default=0, help="この回に処理する最大件数（0=無制限）")
@@ -43,13 +48,17 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     load_project_dotenv()
+    cat = args.category
+    url_attr, parser_attr, ids_default, progress_default = CATEGORIES[cat]
+    args.ids_file = args.ids_file or ids_default
+    args.progress = args.progress or progress_default
     ids = [x.strip() for x in args.ids_file.read_text(encoding="utf-8").splitlines() if x.strip()]
     years = args.years or sorted({i[:4] for i in ids}, reverse=True)
     done = _done(args.progress)
     todo = [i for y in years for i in ids if i.startswith(str(y)) and i not in done]
     if args.limit:
         todo = todo[: args.limit]
-    print(f"対象 {len(todo)} 件（記録済み {len(done)} 件を除く）", flush=True)
+    print(f"[{cat}] 対象 {len(todo)} 件（記録済み {len(done)} 件を除く）", flush=True)
     if args.dry_run or not todo:
         return 0
 
@@ -62,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def fetch(rid: str, n_old: int):
         return runner._fetch_parse_save(
-            "race_index", rid, runner.SPEED_INDEX_URL.format(race_id=rid), runner.speed_parser,
+            cat, rid, getattr(runner, url_attr).format(race_id=rid), getattr(runner, parser_attr),
             {"race_id": rid}, skip_existing=False, need_login=True, min_entries=n_old + 1,
         )
 
@@ -73,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
         return bool(c.login()) and c.premium_ok is not False
 
     for n, rid in enumerate(todo, 1):
-        old = runner.storage.load("race_index", rid)
+        old = runner.storage.load(cat, rid)
         n_old = len((old or {}).get("entries") or [])
         data = fetch(rid, n_old)
         if not data and n_old <= 3:
