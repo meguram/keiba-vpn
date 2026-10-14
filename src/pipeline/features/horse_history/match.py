@@ -4,6 +4,7 @@ import numpy as np
 import polars as pl
 from .common import FIT_END
 from .profile import H, KEY, prepare, fit_basic, history, sh, ewm
+from .pace import pace_index
 
 
 def f3(F, P):
@@ -131,6 +132,7 @@ def build_all(runs_rep, elo):
     F = prepare(runs_rep, elo)
     P = fit_basic(F)
     F = history(F, P)
+    F = pace_index(F, P)
     F = f3(F, P)
     F = f2(F, P)
     F = sim(F, P)
@@ -146,6 +148,7 @@ def families(cols):
            "C": [c for c in cols if c.startswith("c_")],
            "D": [c for c in cols if c.startswith("d_")],
            "E": [c for c in cols if c.startswith("e_")],
+           "G": [c for c in cols if c.startswith("pc_")],
            "F1": [c for c in cols if c.startswith("f1_")],
            "F2": [c for c in cols if c.startswith("f2_")],
            "F3": [c for c in cols if c.startswith("f3_")],

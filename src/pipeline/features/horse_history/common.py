@@ -20,7 +20,21 @@ GOING = {"良": 0, "稍重": 1, "重": 2, "不良": 3}
 
 RUN_COLS = ["race_id", "date", "start_time", "venue_code", "surface", "distance", "direction", "track_condition",
             "grade", "pace", "finish_position", "horse_number", "horse_id", "sex_age", "time_sec",
-            "passing_order", "last_3f", "weight", "jockey_id", "trainer_id", "jockey_weight"]
+            "passing_order", "last_3f", "weight", "jockey_id", "trainer_id", "jockey_weight", "lap_times"]
+
+
+def _rpci_from_laps(s: str | None) -> float | None:
+    """RPCI 相当: 50 × （ラスト 3F を除く 1F 平均 ÷ ラスト 3F の 1F 平均）。小さいほど前傾（ハイペース）、大きいほど後傾（スロー）。
+    JRA の RPCI の公式式は未確認のため、同じ考え方の自前定義（pc_ 系の列で使う）。"""
+    if not s:
+        return None
+    try:
+        laps = [float(x) for x in json.loads(s)]
+    except (ValueError, TypeError):
+        return None
+    if len(laps) < 5 or any(x < 8 or x > 20 for x in laps):
+        return None
+    return 50.0 * (sum(laps[:-3]) / (len(laps) - 3)) / (sum(laps[-3:]) / 3)
 
 
 def load_runs(tables_dir: str | Path | None = None) -> pl.DataFrame:
@@ -38,11 +52,12 @@ def load_runs(tables_dir: str | Path | None = None) -> pl.DataFrame:
         pl.col("pace").str.json_path_match("$.first_half_3f").cast(pl.Float64, strict=False).alias("pace_first"),
         pl.col("pace").str.json_path_match("$.second_half_3f").cast(pl.Float64, strict=False).alias("pace_second"),
         (pl.col("distance").cast(pl.Float64) / 1600.0).log().alias("logd"),
+        pl.col("lap_times").map_elements(_rpci_from_laps, return_dtype=pl.Float64, skip_nulls=False).alias("rpci"),
     ).with_columns(
         pl.when(pl.col("distance") <= 1200).then(0).when(pl.col("distance") <= 1500).then(1)
         .when(pl.col("distance") <= 1900).then(2).when(pl.col("distance") <= 2400).then(3).otherwise(4).alias("dist_band"),
         (pl.col("pace_first") - pl.col("pace_second")).alias("pace_bal"),
-    ).drop("pace")
+    ).drop("pace", "lap_times")
     return df.sort(["date", "start_time", "race_id", "horse_number"])
 
 

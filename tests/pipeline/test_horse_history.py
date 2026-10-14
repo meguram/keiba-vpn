@@ -30,6 +30,8 @@ def _synthetic_tables(tmp_path, seed=0):
                 race_id = f"{year}05{week // 8 + 1:02d}{week % 8 + 1:02d}{r + 1:02d}"
                 surface = str(rng.choice(["芝", "ダート"]))
                 dist = int(rng.choice([1200, 1600, 2000]))
+                laps = (12.0 + rng.normal(scale=0.3, size=dist // 200)).round(1).tolist()
+                laps[-3:] = [x + float(rng.normal(scale=0.4)) for x in laps[-3:]]
                 for k, h in enumerate(field):
                     per_year[year].append({
                         "race_id": race_id, "date": day.isoformat(), "start_time": f"{10 + r}:05",
@@ -39,7 +41,7 @@ def _synthetic_tables(tmp_path, seed=0):
                         "finish_position": int(order[k]), "horse_number": k + 1, "horse_id": h, "sex_age": "牡3",
                         "time_sec": float(95 + order[k] * 0.2), "passing_order": f"{k + 1}-{k + 1}-{order[k]}-{order[k]}",
                         "last_3f": float(34.0 + order[k] * 0.1 + rng.normal(scale=0.3)), "weight": 480.0,
-                        "jockey_id": f"J{k % 7}", "trainer_id": f"T{k % 5}", "jockey_weight": 56.0,
+                        "jockey_id": f"J{k % 7}", "trainer_id": f"T{k % 5}", "jockey_weight": 56.0, "lap_times": json.dumps(laps),
                     })
     tables = tmp_path / "tables"
     for y, rows in per_year.items():
@@ -62,7 +64,7 @@ def test_features_cover_all_runs_and_families(built):
     tables, la, F, P = built
     assert F.height == load_runs(tables).height
     fam = feature_columns(F.columns)
-    for k in ("A", "B", "C", "D", "E", "F1", "F2", "F3", "F5"):
+    for k in ("A", "B", "C", "D", "E", "G", "F1", "F2", "F3", "F5"):
         assert fam[k], k
     assert F["date"].dt.year().max() <= 2025
 
@@ -112,3 +114,13 @@ def test_on_time_repairs_corrupted_race(built):
     fixed = apply_repair(bad, rm, ot).filter(pl.col("race_id") == rid).sort(key).select(cols)
     assert broken["l3f"].is_null().all() and broken["pos_early"].is_null().all()  # 補正なしでは壊れた値を使わない
     assert fixed.equals(want)
+
+
+def test_rpci_is_race_level_and_pc_features_are_history_only(built):
+    tables, la, F, _ = built
+    runs = load_runs(tables)
+    r = runs.filter(pl.col("rpci").is_not_null())
+    assert r.height > 0 and r["rpci"].min() > 30 and r["rpci"].max() < 70
+    assert r.group_by("race_id").agg(pl.col("rpci").n_unique()).get_column("rpci").max() == 1  # レース内で同じ値
+    first = F.sort(["horse_id", "date", "race_id"]).group_by("horse_id").first()
+    assert first["pc_pci_ewm2"].is_null().all() and (first["pc_n_reg0"] == 0).all()
