@@ -52,10 +52,35 @@ class InferenceContext:
         self.history_last_date: str | None = None
         self.graded_names: dict[str, str] = {}
 
+    def engine(self) -> str:
+        """bundle: 出走馬の履歴だけを読む（小さなメモリで動く）。full: 全履歴から作る。auto: バンドルがあれば bundle。"""
+        e = (os.environ.get("KEIBA_INFERENCE_ENGINE") or "auto").strip().lower()
+        if e == "full":
+            return "full"
+        from src.pipeline.features.horse_history.serving import default_bundle_dir
+
+        if (default_bundle_dir() / "meta.json").exists():
+            return "bundle"
+        if e == "bundle":
+            raise FileNotFoundError(f"サービング用バンドルがありません: {default_bundle_dir()}（feature-accumulate を先に実行）")
+        return "full"
+
     def warm(self) -> dict:
+        t0 = time.perf_counter()
+        self.bundle = None
+        if self.engine() == "bundle":
+            from src.pipeline.features.horse_history.serving import Bundle, default_bundle_dir
+
+            self.bundle = Bundle(default_bundle_dir())
+            self.graded_names = self.bundle.graded_names
+            self.history_last_date = self.bundle.meta["history_last_date"]
+            info = {"engine": "bundle", "history_last_date": self.history_last_date, "bundle_built_at": self.bundle.meta["built_at"],
+                    "warm_sec": round(time.perf_counter() - t0, 1)}
+            logger.info("サービング用バンドルを読み込み: %s", info)
+            return info
+
         from src.pipeline.features.horse_history.common import build_repair_map, read_runs_raw
 
-        t0 = time.perf_counter()
         years = self.years or list(range(2020, datetime.now(_JST).year + 1))
         self.raw_hist = read_runs_raw(self.tables_dir, years).filter(pl.col("finish_position") > 0)
         if self.layer_a.exists():
@@ -68,17 +93,22 @@ class InferenceContext:
         from src.pipeline.features.horse_history.inference import graded_race_names
 
         self.graded_names = graded_race_names(self.tables_dir, years)
-        info = {"history_rows": self.raw_hist.height, "history_last_date": self.history_last_date,
+        info = {"engine": "full", "history_rows": self.raw_hist.height, "history_last_date": self.history_last_date,
                 "warm_sec": round(time.perf_counter() - t0, 1)}
         logger.info("推論用の履歴を読み込み: %s", info)
         return info
 
     def build(self, card: pl.DataFrame) -> tuple[pl.DataFrame, dict]:
+        if self.raw_hist is None and getattr(self, "bundle", None) is None:
+            self.warm()
+        if getattr(self, "bundle", None) is not None:
+            from src.pipeline.features.horse_history.serving import compute_entrants
+
+            return compute_entrants(self.bundle, card, self.graded_names)
         from src.pipeline.features.horse_history.inference import build_inference_features
 
-        if self.raw_hist is None:
-            self.warm()
-        return build_inference_features(self.raw_hist, card, self.repair_map, graded_names=self.graded_names)
+        out, info = build_inference_features(self.raw_hist, card, self.repair_map, graded_names=self.graded_names)
+        return out, info | {"engine": "full"}
 
 
 def card_frame(storage: Any, race_ids: list[str]) -> pl.DataFrame:
@@ -188,7 +218,7 @@ def run_for_races(
         ev = {
             "race_id": rid, "at": now.isoformat(timespec="seconds"), "status": "ok", "mode": mode, "rows": part.height,
             "weights_known": bool(weights_known.get(rid, info["weights_known_ratio"] >= 0.9)),
-            "going_known": info["going_known"], "build_sec": info["build_sec"], "batch_races": info["races"],
+            "going_known": info["going_known"], "build_sec": info["build_sec"], "batch_races": info["races"], "engine": info.get("engine", "full"),
             "history_last_date": ctx.history_last_date, "dropped_no_weight": int(dropped.get(rid, 0)),
         }
         if mode == "predict":

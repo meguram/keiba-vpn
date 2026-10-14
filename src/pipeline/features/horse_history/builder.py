@@ -23,6 +23,16 @@ def build_from_runs(runs: pl.DataFrame, repair_map: pl.DataFrame,
     return F, P
 
 
+def build_with_state(runs: pl.DataFrame, repair_map: pl.DataFrame, on_time: pl.DataFrame | None = None):
+    """build_from_runs と同じ特徴量に加え、推論用の状態（fit した値・過去走の素材・Elo の最終状態）も返す。"""
+    delta, lls = select_delta(runs, FIT_END)
+    elo, rating, cnt = run_elo(runs, delta=delta, return_state=True)
+    S: dict = {}
+    F, P = build_all(apply_repair(runs, repair_map, on_time), elo, S)
+    P["elo_delta"], P["elo_delta_ll"] = delta, lls
+    return F, P, S, {"rating": rating, "cnt": cnt, "delta": delta}
+
+
 def build_horse_history(
     layer_a_path: str | Path, tables_dir: str | Path | None = None, on_time: pl.DataFrame | None = None
 ) -> tuple[pl.DataFrame, dict]:

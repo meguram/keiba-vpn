@@ -1,4 +1,6 @@
 import json
+
+import numpy as np
 from datetime import datetime, timedelta, timezone
 
 import polars as pl
@@ -11,6 +13,11 @@ from tests.pipeline.test_horse_history import _synthetic_tables
 from tests.pipeline.test_weight_triggered_predict import FakeStorage, _races, _shutuba_from_day
 
 JST = timezone(timedelta(hours=9))
+
+
+@pytest.fixture(autouse=True)
+def _isolate_bundle(tmp_path, monkeypatch):
+    monkeypatch.setenv("KEIBA_SERVING_BUNDLE_DIR", str(tmp_path / "bundle"))
 
 
 @pytest.fixture(scope="module")
@@ -62,3 +69,43 @@ def test_skew_report_waits_when_results_are_not_in_history(tmp_path):
     pl.DataFrame({"race_id": ["x"], "horse_id": ["h"], "a_x": [1.0]}).write_parquet(d / "x.parquet")
     F = pl.DataFrame({"race_id": ["y"], "horse_id": ["h"], "date": [datetime(2026, 1, 1).date()], "a_x": [1.0]})
     assert acc.skew_report(F, ["a_x"], d, {"a_x": 0})["status"] == "results_not_yet"
+
+
+def test_accumulate_writes_serving_bundle_and_bundle_engine_matches_full_engine(env, tmp_path, monkeypatch):
+    from src.pipeline.features.horse_history.serving import default_bundle_dir
+
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_FEATURE_STORE_DIR", str(tmp_path / "fs"))
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf_full"))
+    monkeypatch.setenv("KEIBA_INFERENCE_ENGINE", "full")
+    # 当日より前の履歴だけでバンドルを作るため、当日以降を除いた表を用意する
+    cut_tables = tmp_path / "cut"
+    for y in range(2020, 2026):
+        d = cut_tables / str(y)
+        d.mkdir(parents=True)
+        pl.read_parquet(tables / str(y) / "race_result_flat.parquet").filter(pl.col("date") < day).write_parquet(d / "race_result_flat.parquet")
+    m = acc.accumulate(2025, cut_tables, la)
+    assert m["serving_bundle"]["horses"] > 0 and (default_bundle_dir() / "meta.json").exists()
+
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    ymd = day.replace("-", "")
+    ctx_full = wtp.InferenceContext(tables_dir=cut_tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx_full.warm()
+    ev_full = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx_full, weights_known={k: True for k in sh}, mode="features")
+    assert {e["engine"] for e in ev_full} == {"full"}
+
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf_bundle"))
+    monkeypatch.setenv("KEIBA_INFERENCE_ENGINE", "auto")
+    ctx_b = wtp.InferenceContext(tables_dir=cut_tables, layer_a=la, years=list(range(2020, 2026)))
+    assert ctx_b.warm()["engine"] == "bundle"
+    ev_b = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx_b, weights_known={k: True for k in sh}, mode="features")
+    assert {e["engine"] for e in ev_b} == {"bundle"}
+    for rid in sh:
+        a = pl.read_parquet(tmp_path / "inf_full" / "features" / ymd / f"{rid}.parquet").sort("horse_id")
+        b = pl.read_parquet(tmp_path / "inf_bundle" / "features" / ymd / f"{rid}.parquet").sort("horse_id")
+        assert a.height == b.height
+        cols = [c for c in a.columns if c in b.columns and a[c].dtype in (pl.Float64, pl.Float32, pl.Int64, pl.Int32, pl.UInt32)]
+        for c in cols:
+            x, y = a[c].to_numpy().astype(float), b[c].to_numpy().astype(float)
+            d = np.where(np.isnan(x) & np.isnan(y), 0.0, np.abs(x - y))
+            assert not (np.where(np.isnan(d), np.inf, d) > 1e-9).any(), (rid, c)

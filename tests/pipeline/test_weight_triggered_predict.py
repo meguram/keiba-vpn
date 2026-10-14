@@ -11,6 +11,11 @@ from tests.pipeline.test_horse_history import _synthetic_tables
 JST = timezone(timedelta(hours=9))
 
 
+@pytest.fixture(autouse=True)
+def _isolate_bundle(tmp_path, monkeypatch):
+    monkeypatch.setenv("KEIBA_SERVING_BUNDLE_DIR", str(tmp_path / "nobundle"))
+
+
 class FakeStorage:
     def __init__(self, shutuba: dict[str, dict]):
         self.shutuba = shutuba

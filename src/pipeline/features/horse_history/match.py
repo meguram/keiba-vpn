@@ -18,7 +18,8 @@ def f3(F, P):
     )
 
 
-def f2(F, P):
+def f2(F, P, S=None):
+    frozen = bool(S and S.get("frozen"))
     kn = pl.col("a_style").is_not_null().sum().over("race_id")
     F = F.with_columns(
         kn.alias("f2_nknown"), (pl.col("a_style") < 0.25).sum().over("race_id").alias("f2_nfront"),
@@ -26,8 +27,13 @@ def f2(F, P):
         (pl.col("a_style").rank("average").over("race_id") / kn).alias("f2_early_rank"),
     ).with_columns(
         pl.when(pl.col("f2_nknown") >= 0.5 * pl.col("n_fin")).then(pl.col("f2_nfront") / pl.col("f2_nknown")).alias("f2_pressure"))
-    fitr = F.filter(pl.col("date") <= FIT_END).group_by("race_id").agg(pl.col("f2_pressure").first(), pl.col("dist_band").first(), pl.col("pace_bal").first())
-    pq = fitr.select(pl.col("f2_pressure").quantile(0.33).alias("a"), pl.col("f2_pressure").quantile(0.67).alias("b")).row(0)
+    if frozen:
+        pq = S["press_q"]
+    else:
+        fitr = F.filter(pl.col("date") <= FIT_END).group_by("race_id").agg(pl.col("f2_pressure").first(), pl.col("dist_band").first(), pl.col("pace_bal").first())
+        pq = fitr.select(pl.col("f2_pressure").quantile(0.33).alias("a"), pl.col("f2_pressure").quantile(0.67).alias("b")).row(0)
+        if S is not None:
+            S["press_q"] = pq
     P["press_q"] = pq
     q = P["pace_q"]
     lo = {k: v[0] for k, v in q.items()}; hi = {k: v[1] for k, v in q.items()}
@@ -36,11 +42,16 @@ def f2(F, P):
         pl.when(pl.col("pace_bal").is_null()).then(None)
         .when(pl.col("pace_bal") <= pl.col("dist_band").replace_strict(lo, default=-99.0, return_dtype=pl.Float64)).then(0)
         .when(pl.col("pace_bal") >= pl.col("dist_band").replace_strict(hi, default=99.0, return_dtype=pl.Float64)).then(2).otherwise(1).alias("reg_act"))
-    fr = F.filter(pl.col("date") <= FIT_END).group_by("race_id").agg(pl.col("f2_bin").first(), pl.col("reg_act").first()).drop_nulls()
-    cnt = np.ones((3, 3))
-    for b, r in zip(fr["f2_bin"].to_list(), fr["reg_act"].to_list()):
-        cnt[int(b), int(r)] += 1
-    P["pmap"] = (cnt / cnt.sum(1, keepdims=True)).tolist()
+    if frozen:
+        P["pmap"] = S["pmap"]
+    else:
+        fr = F.filter(pl.col("date") <= FIT_END).group_by("race_id").agg(pl.col("f2_bin").first(), pl.col("reg_act").first()).drop_nulls()
+        cnt = np.ones((3, 3))
+        for b, r in zip(fr["f2_bin"].to_list(), fr["reg_act"].to_list()):
+            cnt[int(b), int(r)] += 1
+        P["pmap"] = (cnt / cnt.sum(1, keepdims=True)).tolist()
+        if S is not None:
+            S["pmap"] = P["pmap"]
     kap = P["kappa_all"]
     for k in range(3):
         ind = (pl.col("reg_act") == k).fill_null(False)
@@ -68,7 +79,8 @@ def _comp(df):
     ).to_numpy()
 
 
-def sim(F, P):
+def sim(F, P, S=None):
+    frozen = bool(S and S.get("frozen"))
     t = F.select(H, "date", "logd", "surface", "venue_code", "going", "direction", "class_level", "n_fin").with_row_index("ti")
     h = F.select(H, pl.col("date").alias("date_h"), pl.col("logd").alias("logd_h"), pl.col("surface").alias("surface_h"),
                  pl.col("venue_code").alias("venue_h"), pl.col("going").alias("going_h"), pl.col("direction").alias("dir_h"),
@@ -76,27 +88,32 @@ def sim(F, P):
     pr = t.join(h, on=H).filter(pl.col("date_h") < pl.col("date"))
     N = F.height
     res_t = F["res"].to_numpy()
-    # θ を FIT 期間の対象だけで探索（ランダム探索 + 座標微調整）
-    fp = pr.filter(pl.col("date") <= FIT_END)
-    C, ti, rh = _comp(fp), fp["ti"].to_numpy(), fp["res_h"].to_numpy()
-    fitmask = (F["date"] <= FIT_END).to_numpy()
+    if frozen:
+        best = np.array(S["sim_theta"])
+    else:
+        # θ を FIT 期間の対象だけで探索（ランダム探索 + 座標微調整）
+        fp = pr.filter(pl.col("date") <= FIT_END)
+        C, ti, rh = _comp(fp), fp["ti"].to_numpy(), fp["res_h"].to_numpy()
+        fitmask = (F["date"] <= FIT_END).to_numpy()
 
-    def score(th):
-        w = np.exp(-(C @ th)); sw = np.bincount(ti, w, N); s = np.bincount(ti, w * rh, N)
-        sim_ = s / (sw + 1.0); m = fitmask & (sw > 0.3)
-        return np.corrcoef(sim_[m], res_t[m])[0, 1] if m.sum() > 100 else -1
-    rng = np.random.default_rng(0)
-    base = score(np.zeros(C.shape[1])); best, bs = np.zeros(C.shape[1]), base
-    for _ in range(80):
-        th = np.exp(rng.uniform(np.log(0.05), np.log(4.0), C.shape[1]))
-        sc = score(th)
-        if sc > bs: best, bs = th, sc
-    for _ in range(2):
-        for j in range(C.shape[1]):
-            for mult in (0.5, 2.0):
-                th = best.copy(); th[j] = max(th[j], 0.05) * mult; sc = score(th)
-                if sc > bs: best, bs = th, sc
-    P["sim_theta"] = best.tolist(); P["sim_fit_corr"] = [float(base), float(bs)]
+        def score(th):
+            w = np.exp(-(C @ th)); sw = np.bincount(ti, w, N); s = np.bincount(ti, w * rh, N)
+            sim_ = s / (sw + 1.0); m = fitmask & (sw > 0.3)
+            return np.corrcoef(sim_[m], res_t[m])[0, 1] if m.sum() > 100 else -1
+        rng = np.random.default_rng(0)
+        base = score(np.zeros(C.shape[1])); best, bs = np.zeros(C.shape[1]), base
+        for _ in range(80):
+            th = np.exp(rng.uniform(np.log(0.05), np.log(4.0), C.shape[1]))
+            sc = score(th)
+            if sc > bs: best, bs = th, sc
+        for _ in range(2):
+            for j in range(C.shape[1]):
+                for mult in (0.5, 2.0):
+                    th = best.copy(); th[j] = max(th[j], 0.05) * mult; sc = score(th)
+                    if sc > bs: best, bs = th, sc
+        P["sim_theta"] = best.tolist(); P["sim_fit_corr"] = [float(base), float(bs)]
+        if S is not None:
+            S["sim_theta"] = best.tolist()
     C2, ti2 = _comp(pr), pr["ti"].to_numpy()
     w = np.exp(-(C2 @ best)); rh2 = pr["res_h"].to_numpy(); zh = pr["z_h"].to_numpy(); zv = ~np.isnan(zh)
     sw = np.bincount(ti2, w, N); s = np.bincount(ti2, w * rh2, N); sw2 = np.bincount(ti2, w * w, N)
@@ -106,22 +123,36 @@ def sim(F, P):
                           pl.Series("f1_sim_z", np.where(swz > 0, sz / (swz + 1.0), np.nan)))
 
 
-def clusters(F, P, k=24):
-    from sklearn.cluster import KMeans
+def clusters(F, P, k=24, S=None):
+    frozen = bool(S and S.get("frozen"))
     F = F.with_columns(ewm("logd", 3).alias("_p_logd"), ewm("is_turf", 3).alias("_p_turf"), ewm("is_wet", 3).alias("_p_wet"))
     cols = ["a_style", "a_l3fz_ewm2", "_p_logd", "_p_turf", "_p_wet", "c_cls_ewm2"]
     X = F.select(cols).to_numpy().astype(float)
     valid = (F["d_nprior"].to_numpy() >= 3)
-    fitm = valid & (F["date"] <= FIT_END).to_numpy()
-    mu, sd = np.nanmean(X[fitm], 0), np.nanstd(X[fitm], 0) + 1e-9
-    Z = np.nan_to_num((X - mu) / sd, nan=0.0)
-    km = KMeans(k, n_init=3, random_state=0).fit(Z[fitm])
-    lab = np.where(valid, km.predict(Z), -1)
+    if frozen:
+        mu, sd, centers = S["km_mu"], S["km_sd"], S["km_centers"]
+        Z = np.nan_to_num((X - mu) / sd, nan=0.0)
+        # KMeans.predict と同じ（最も近い中心。距離は二乗ユークリッド）
+        lab = np.where(valid, ((Z[:, None, :] - centers[None, :, :]) ** 2).sum(2).argmin(1), -1)
+    else:
+        from sklearn.cluster import KMeans
+        fitm = valid & (F["date"] <= FIT_END).to_numpy()
+        mu, sd = np.nanmean(X[fitm], 0), np.nanstd(X[fitm], 0) + 1e-9
+        Z = np.nan_to_num((X - mu) / sd, nan=0.0)
+        km = KMeans(k, n_init=3, random_state=0).fit(Z[fitm])
+        lab = np.where(valid, km.predict(Z), -1)
+        if S is not None:
+            S["km_mu"], S["km_sd"], S["km_centers"] = mu, sd, km.cluster_centers_
     F = F.with_columns(pl.Series("f5_cl", lab).cast(pl.Int32)).drop("_p_logd", "_p_turf", "_p_wet")
     keys = ["f5_cl", "surface", "dist_band"]
-    D = (F.filter(pl.col("f5_cl") >= 0).group_by(keys + ["date"]).agg(pl.col("res").sum().alias("s"), pl.col("is_win").sum().alias("w"), pl.len().alias("n"))
-         .sort("date").with_columns(pl.col("s").cum_sum().over(keys).alias("cs"), pl.col("w").cum_sum().over(keys).alias("cw"), pl.col("n").cum_sum().over(keys).alias("cn"))
-         .select(keys + ["date", "cs", "cw", "cn"]))
+    if frozen:
+        D = pl.DataFrame(S["f5_D"]).with_columns([pl.col(c).cast(F.schema[c]) for c in keys] + [pl.col("date").cast(pl.Date)])
+    else:
+        D = (F.filter(pl.col("f5_cl") >= 0).group_by(keys + ["date"]).agg(pl.col("res").sum().alias("s"), pl.col("is_win").sum().alias("w"), pl.len().alias("n"))
+             .sort("date").with_columns(pl.col("s").cum_sum().over(keys).alias("cs"), pl.col("w").cum_sum().over(keys).alias("cw"), pl.col("n").cum_sum().over(keys).alias("cn"))
+             .select(keys + ["date", "cs", "cw", "cn"]))
+        if S is not None:
+            S["f5_D"] = D.to_dicts()
     T = F.select(keys + ["date"]).with_row_index("ti").sort("date")
     J = T.join_asof(D, on="date", by=keys, strategy="backward", allow_exact_matches=False).sort("ti")
     cn = J["cn"].fill_null(0).to_numpy().astype(float); cs = J["cs"].fill_null(0).to_numpy().astype(float); cw = J["cw"].fill_null(0).to_numpy().astype(float)
@@ -129,19 +160,31 @@ def clusters(F, P, k=24):
     return F.with_columns(pl.Series("f5_aff", np.where(ok, cs / (cn + 30.0), np.nan)), pl.Series("f5_win", np.where(ok, (cw + 0.07 * 50) / (cn + 50.0), np.nan)))  # 累積件数 cn は時間で単調増加するため出力しない
 
 
-def build_all(runs_rep, elo):
+def build_all(runs_rep, elo, S=None):
+    """S を渡すと、推論用の状態（fit した値と、過去走の標準化に使う表）を S に書き出す。"""
     F = prepare(runs_rep, elo)
+    if S is not None:
+        S["F0"] = F  # 過去走の素材（レース内の相対化・Elo を済ませた段階）
     P = fit_basic(F)
     F = history(F, P)
-    F = pace_index(F, P)
-    F = standard_rating(F, P)
+    F = pace_index(F, P, S)
+    F = standard_rating(F, P, S)
     F = f3(F, P)
-    F = f2(F, P)
-    F = sim(F, P)
-    F = clusters(F, P)
+    F = f2(F, P, S)
+    F = sim(F, P, S)
+    F = clusters(F, P, S=S)
     return F, P
 
 
+def build_frozen(F0, P, S):
+    """保存した状態 S（frozen）と P を使い、F0（過去走の素材 + 今日の行）から特徴量を作る。fit はしない。"""
+    F = history(F0, P)
+    F = pace_index(F, P, S)
+    F = standard_rating(F, P, S)
+    F = f3(F, P)
+    F = f2(F, P, S)
+    F = sim(F, P, S)
+    return clusters(F, P, S=S)
 
 
 def families(cols):

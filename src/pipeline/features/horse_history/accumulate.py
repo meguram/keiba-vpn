@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from .builder import build_from_runs, feature_columns
+from .builder import build_with_state, feature_columns
 from .common import TABLES_DIR, build_repair_map, load_runs
 from .inference import load_tiers
 
@@ -45,17 +45,17 @@ def _empty_repair_map() -> pl.DataFrame:
     return pl.DataFrame(schema={"horse_id": pl.Utf8, "run_date": pl.Date, "l3f_fix": pl.Float64, "weight_fix": pl.Float64, "src_date": pl.Date})
 
 
-def build_year(year: int, tables_dir: str | Path | None = None, layer_a: str | Path | None = None) -> tuple[pl.DataFrame, list[str], dict]:
-    """``year`` 年の行の特徴量。履歴は 2020 年〜``year`` 年の確定結果。"""
+def build_year(year: int, tables_dir: str | Path | None = None, layer_a: str | Path | None = None):
+    """``year`` 年の行の特徴量。履歴は 2020 年〜``year`` 年の確定結果。推論用の状態も一緒に返す。"""
     t0 = time.perf_counter()
     runs = load_runs(tables_dir, years=list(range(2020, year + 1)))
     la = Path(layer_a) if layer_a else REPO_ROOT / DEFAULT_LAYER_A
     rm = build_repair_map(la) if la.exists() else _empty_repair_map()
-    F, _ = build_from_runs(runs, rm)
+    F, P, S, elo = build_with_state(runs, rm)
     cols = sorted({c for v in feature_columns(F.columns).values() for c in v})
     out = F.filter(pl.col("date").dt.year() == year).select(KEY + ["date"] + cols)
     info = {"history_rows": runs.height, "history_last_date": str(runs["date"].max()), "build_sec": round(time.perf_counter() - t0, 1)}
-    return out, cols, info
+    return out, cols, info, (F, P, S, elo)
 
 
 def _changed_rows(old: pl.DataFrame, new: pl.DataFrame, cols: list[str]) -> int:
@@ -101,7 +101,7 @@ def accumulate(year: int | None = None, tables_dir: str | Path | None = None, la
     year = year or datetime.now(JST).year
     out_dir = store_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
-    F, cols, info = build_year(year, tables_dir, layer_a)
+    F, cols, info, state = build_year(year, tables_dir, layer_a)
     path = out_dir / f"features_{year}.parquet"
     changed = None
     if path.exists():
@@ -125,10 +125,26 @@ def accumulate(year: int | None = None, tables_dir: str | Path | None = None, la
             if rep.get("status") == "compared":
                 (out_dir / "skew" / f"{d.name}.json").write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
 
+    bundle_meta = None
+    if os.environ.get("KEIBA_WRITE_SERVING_BUNDLE", "1").strip().lower() not in ("0", "false", "no"):
+        from .inference import graded_race_names
+        from .serving import default_bundle_dir, write_bundle
+
+        Ffull, P, S, elo = state
+        try:
+            graded = graded_race_names(tables_dir, list(range(2020, year + 1)))
+        except Exception as exc:  # 重賞名の表が作れなくても、バンドル自体は作る
+            logger.warning("重賞名の表が作れなかった: %s", exc)
+            graded = {}
+        t1 = time.perf_counter()
+        bundle_meta = write_bundle(default_bundle_dir(), Ffull.columns, P, S, elo, {"graded_names": graded})
+        bundle_meta = {k: v for k, v in bundle_meta.items() if k != "columns"} | {"write_sec": round(time.perf_counter() - t1, 1)}
+
     manifest = {
         "year": year, "built_at": datetime.now(JST).isoformat(timespec="seconds"), "rows": F.height, "races": F["race_id"].n_unique(),
         "first_date": str(F["date"].min()) if F.height else None, "last_date": str(F["date"].max()) if F.height else None,
         "features": len(cols), "changed_rows_vs_previous": changed, **info,
+        "serving_bundle": bundle_meta,
         "note": "当年分は毎回作り直す（結果の取り込み遅れで過去の行が変わりうる）。2026 年は学習に使わない。",
     }
     (out_dir / f"manifest_{year}.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
