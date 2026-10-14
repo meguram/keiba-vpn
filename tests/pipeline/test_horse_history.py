@@ -147,3 +147,11 @@ def test_hurdle_races_are_identified_by_blank_race_class(built):
     raw = pl.concat([pl.read_parquet(f) for f in sorted(tables.glob("*/race_result_flat.parquet"))])
     blank_ids = set(raw.filter(pl.col("race_class") == "")["race_id"].to_list())
     assert set(runs.filter(pl.col("surface") == "障")["race_id"].unique().to_list()) == blank_ids
+
+
+def test_today_track_variant_uses_only_races_started_90_minutes_earlier(built):
+    _, _, F, _ = built
+    races = F.group_by("race_id").agg(pl.col("sr_var_n").first(), pl.col("sr_var_today").first(), pl.col("start_time").first(), pl.col("date").first())
+    # 合成データは 1 日 2 レース（10:05 と 11:05 の発走で 60 分差）なので、同日の先行レースは「90 分以上前」に当たらない
+    assert (races["sr_var_n"] == 0).all()
+    assert races.filter(pl.col("date") > pl.col("date").min())["sr_var_today"].is_not_null().mean() > 0.8  # 前の開催日の値で補われる

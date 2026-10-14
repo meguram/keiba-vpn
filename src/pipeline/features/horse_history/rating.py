@@ -6,6 +6,7 @@
 - 時計は log で扱い、par（芝ダ×距離×クラスの中央値。fit 期間で決定）と当日の馬場差（日×場×芝ダの中央値）を引く。
 - 負担の指標は 斤量 × 基準体重(480) ÷ 馬体重。斤量の係数 β（秒/kg、par 時計に対する比で適用）は固定せず、
   候補（BETA_GRID）を fit 期間の「次走の実測パフォーマンスの予測誤差」で距離帯×芝ダ別に選ぶ。
+- sr_var_today は当日の馬場差の因果的な推定（発走 90 分以上前に発走した同日・同場・同面のレースと、前の開催日の値だけを使う）。
 - 性別は芝ダ別の固定効果（レース内比較）、年齢は年齢×月の成長曲線（馬の固定効果）で推定する。いずれも fit 期間のみ。
 """
 from __future__ import annotations
@@ -17,6 +18,7 @@ from .common import FIT_END
 from .profile import H, ewm
 
 LOAD_REF, BODY_REF = 56.0, 480.0
+CAUSAL_LAG_MIN = 90  # 予測時点(T-60)で結果が出ている同日レース: 発走が 90 分以上前（速報は発走+15分に取得）
 BETA_GRID = (0.0, 0.05, 0.10, 0.17, 0.25)  # 秒/kg（par 時計の比で適用）
 BETA_EST = 0.10  # 性別・年齢の推定時に使う仮の係数
 AGE_EDGES = (2.5, 3.0, 3.5, 4.0)  # 年齢 + (月−1)/12 の区切り。4.0 以上が基準
@@ -72,6 +74,24 @@ def standard_rating(F: pl.DataFrame, P: dict) -> pl.DataFrame:
           .filter(pl.col("_dev").is_not_null()).group_by(["date", "venue_code", "surface"])
           .agg(pl.col("_dev").median().alias("_var")))
     F = F.join(dv, on=["date", "venue_code", "surface"], how="left").sort([H, "date", "race_id"])
+
+    # 当日の馬場差の「因果的な推定」（P7）: 予測時点（T-60）で使える、発走が CAUSAL_LAG_MIN 分以上前の同日・同場・同面のレースだけで作る。
+    # 無ければ前の開催日の同場・同面の値で補う。過去走の標準化（_var）は結果が出揃った全日の値を使う（履歴は予測時点で完結しているため）。
+    hh = pl.col("start_time").str.extract(r"^(\d{1,2}):(\d{2})", 1).cast(pl.Int64, strict=False)
+    mm = pl.col("start_time").str.extract(r"^(\d{1,2}):(\d{2})", 2).cast(pl.Int64, strict=False)
+    keys = ["date", "venue_code", "surface"]
+    rt = (F.with_columns((hh * 60 + mm).alias("_smin")).group_by("race_id")
+          .agg(pl.col("date").first(), pl.col("venue_code").first(), pl.col("surface").first(), pl.col("_dev").first(), pl.col("_smin").first())
+          .filter(pl.col("_dev").is_not_null() & pl.col("_smin").is_not_null()))
+    early = (rt.join(rt.select(keys + [pl.col("_smin").alias("_smin_j"), pl.col("_dev").alias("_dev_j")]), on=keys)
+             .filter(pl.col("_smin_j") <= pl.col("_smin") - CAUSAL_LAG_MIN)
+             .group_by("race_id").agg(pl.col("_dev_j").median().alias("_v_early"), pl.len().alias("sr_var_n")))
+    daily = rt.group_by(keys).agg(pl.col("_dev").median().alias("_dv")).sort("date")
+    prev = (rt.select("race_id", *keys).sort("date")
+            .join_asof(daily, on="date", by=["venue_code", "surface"], strategy="backward", allow_exact_matches=False)
+            .select("race_id", pl.col("_dv").alias("_v_prev")))
+    F = F.join(early, on="race_id", how="left").join(prev, on="race_id", how="left")
+    F = F.with_columns((-100.0 * pl.coalesce(["_v_early", "_v_prev"])).alias("sr_var_today"), pl.col("sr_var_n").fill_null(0)).sort([H, "date", "race_id"])
     F = F.with_columns((-100.0 * (pl.col("_ll") - pl.col("_par") - pl.col("_var"))).alias("_fig"),
                        pl.col("_par").exp().alias("_ptime"))
 
