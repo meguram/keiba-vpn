@@ -26,6 +26,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--day", default="2024-07-06")
     ap.add_argument("--layer-a", default="data/local/modeling/training_pipeline/layer_a.parquet")
+    ap.add_argument("--only-finishers", action="store_true", help="学習時に含まれる馬（着順あり）だけに出馬表を絞る。出走取消・競走中止の影響の切り分け用")
     ap.add_argument("--no-weights", action="store_true", help="馬体重を外して作る（既定は T-60 と同じく入れる。外すと前日朝の状態）")
     args = ap.parse_args()
 
@@ -42,6 +43,9 @@ def main() -> int:
     year = args.day[:4]
     card = pl.read_parquet(TABLES_DIR / year / "race_shutuba_flat.parquet").filter(pl.col("date") == args.day)
     card = card.select([c for c in CARD_COLS + ["race_name"] if c in card.columns])
+    if args.only_finishers:
+        fin = pl.read_parquet(TABLES_DIR / year / "race_result_flat.parquet", columns=["race_id", "horse_id", "finish_position"]).filter(pl.col("finish_position") > 0)
+        card = card.join(fin.select("race_id", "horse_id"), on=["race_id", "horse_id"])
     if args.no_weights:
         card = card.with_columns(pl.lit(None, pl.Int64).alias("weight"))
     out, info = build_inference_features(raw, card, rm, graded_names=graded_race_names())
