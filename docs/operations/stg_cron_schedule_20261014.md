@@ -30,7 +30,41 @@ cron デーモンは稼働中（2026-10-13 23:44 UTC 起動）。ホストの再
 
 **ガード（新）**: daily-race-lists・weekly-update・barometer-retry・recent-retry・backfill の全行は `scripts/cron/yield_to_rescrape.sh` 経由。優先処理（`run_priority_rescrape.sh`）が動いている間は見送り（`logs/yield_skips.log` に記録）、終われば自動で通常どおり動く。netkeiba は同一アカウントで別セッションがログインすると取り直し側のセッションが無効になるため。止めたいときは `data/local/meta/rescrape/YIELD_DISABLED` を置く。raceday 系・JRA 馬場・export は見送らない。
 
-## 2. 取得したい生データの網羅状況
+## 2. 取得データの扱い（加工の有無と保存先）
+
+netkeiba を取得する全ジョブは共通の流れで保存する。
+
+1. **生の HTML は原則保存しない。** ページ構造の変更検出用に、カテゴリごと最大 10 件だけ GCS に gzip で置く。ローカルには残さない。
+2. **構造化**: パーサーが HTML から項目を取り出して JSON にする（値は画面のまま。集計・派生量は作らない）。取得時刻とスキーマ検証の結果（`_meta`）を付ける。
+3. **検証**: スキーマ不適合は GCS に保存せず、`data/local/quarantine/` に隔離し、違反を `data/local/meta/schema_violations/` に記録する（既定）。
+4. **保存先（正本）**: GCS `chuou/data/preprocessed/netkeiba/pc/<カテゴリ>/<年 または馬IDの先頭4桁>/<ID>.json`。ローカルは補助のキャッシュ（メモリ、週 2 回以上読まれたキーだけの `data/cache/`）。GCS 同形のミラー（`data/local/mirror/`）は設定で無効（ホストは未設定）。
+5. **ローカルのみのデータ**: レース一覧（`data/page_reference/race_lists`）、発走時刻表（`data/page_reference/race_day_schedule`）、JRA 馬場（`data/page_reference/cushion`。GCS へは手動アップロード）。
+6. **加工して別の場所に置くもの**: 履歴テーブル（`data/page_reference/tables`）、騎手・調教師統計（`data/features`）、馬場速度指数（`data/analysis/track_speed`）、推論用の特徴量（`data/local/inference`）、DB への取り込み（PostgreSQL）。いずれも GCS の構造化 JSON を元に作る。
+
+ジョブ別:
+
+| ジョブ | データの加工 | 保存先 |
+|---|---|---|
+| 前日夕方の出馬表・馬柱・追い切り | 構造化 + 推定（追走難度・想定オッズ。モデルによる計算結果を保存） | GCS: 出馬表・馬柱・追い切り・SmartRC は構造化JSON、追走難度・想定オッズは推定結果のキャッシュ。ローカル: 取得状況 data/local/meta/date_coverage、発走時刻表 data/page_reference/race_day_schedule（ローカルのみ）。DB 同期を起動（ホストでは失敗中） |
+| 開催日ランナー（オッズ・出馬表） | 構造化のみ（T-15 の予測トリガはモックで保存なし） | GCS: 出馬表・オッズ（T-60/T-15 の履歴を同じJSONに保持）・馬柱・追い切り・SmartRC。JRA 馬場はローカル data/page_reference/cushion |
+| 速報結果ランナー | 構造化のみ。全R後に結果テーブルの増分追記と馬場速度指数の計算 | GCS: 速報結果。ローカル: data/page_reference/tables（race_result_flat の増分）、data/analysis/track_speed（馬場速度指数） |
+| 馬体重の検知ランナー | 構造化（出馬表）+ 計算（127特徴量） | GCS: 出馬表。ローカルのみ: data/local/inference（特徴量 parquet・イベント記録。GCS には上げない） |
+| 開催日夕方の結果・確定オッズ | 構造化のみ | GCS: 速報結果・確定オッズ・SmartRC。ローカル: 取得状況 date_coverage。DB 同期を起動（ホストでは失敗中） |
+| JRA 馬場（クッション値・含水率） | 構造化（JRA 公式ページを整形したJSON） | ローカルのみ: data/page_reference/cushion。GCS へは自動では上げない（手動アップロード） |
+| レース一覧 | 構造化のみ | ローカルのみ: data/page_reference/race_lists。キューにレース単位のジョブが溜まっていれば、その分は GCS へ |
+| 週次更新 | 構造化 + 計算（めぐ指数）+ DB 取り込み | GCS: 確定結果・指数・バロメーター・馬情報。PostgreSQL: ETL（ホストでは DB 未起動・psycopg2 未導入のため失敗中） |
+| 馬名インデックス | 計算（馬名リスト・成長曲線の集計） | ローカルのみ: data/calculated_data |
+| バロメーターの取り直し | 構造化のみ | GCS: race_barometer |
+| 直近の未取得データの取り直し | 構造化のみ | GCS: race_result・race_result_lap・race_index・race_trainer_comment。ローカル: 試行状態 data/local/meta/recent_retry_state.json |
+| backfill（年度別・馬情報） | 構造化のみ | GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage |
+| 履歴テーブルの増分更新 | 加工（JSON を表に平坦化。1行=1馬の _flat と 1行=1レースの _race の Parquet） | ローカルのみ: data/page_reference/tables/<年>/ |
+| 騎手・調教師統計 | 計算（成績の集計） | ローカルのみ: data/features/jockey_trainer_stats ほか（Parquet） |
+| GCS → PostgreSQL 同期 | 加工（ETL で正規化テーブルへ） | PostgreSQL（ホストでは毎晩失敗: DB 未起動・psycopg2 未導入） |
+| ページ品質チェック | 検査のみ | ローカル: data/local/page_quality/latest.json（過去30件は history/） |
+
+注: DB（PostgreSQL）への取り込みは、ホストでは DB が起動しておらず psycopg2 も未導入のため、現状は毎晩失敗する（取得と GCS への保存には影響しない）。グループ別の一覧は `docs/html/operations/cron_schedule.html`。
+
+## 3. 取得したい生データの網羅状況
 
 「直近の開催日の取得済み / 全レース」は 2026-10-14 の実測（GCS）。
 
@@ -54,6 +88,8 @@ cron デーモンは稼働中（2026-10-13 23:44 UTC 起動）。ホストの再
 2. **取り直しとの衝突**: daily-race-lists が、キューに溜まった 2026 年分の日付ジョブをすべて処理しており（`_kick_and_wait` が最長 48 時間キュー全体の完了を待つ）、4 時間以上走ってログインを繰り返していた。→ 上記のガードで、優先処理の実行中は見送る。**既に走っていた 1 回（17:00 JST 起動）は止めていない。**
 3. 推論用の履歴テーブル（`race_result_flat` の 2026 年分）が更新されていなかった（最終日 2026-10-04）。→ `export_tables_daily`（新）を 07:00 JST に追加。
 4. 馬体重の検知ランナー（新）を 08:00 JST に追加。mode は `features`（特徴量の作成まで。予測は起動しない）。
+
+5. **DB（PostgreSQL）への取り込みがホストで毎晩失敗している**: ホストに DB が起動しておらず（`localhost:5432` に接続できない）、`psycopg2` も未導入。毎日 00:00 の同期と、週次更新・前日夕方・開催日夕方の後処理（めぐ指数の計算を含む）が失敗する。GCS への保存には影響しない。DB を使う運用にするなら、DB の用意と `psycopg2` の導入が要る（未対応・要判断）。
 
 ### 未解決・要確認
 

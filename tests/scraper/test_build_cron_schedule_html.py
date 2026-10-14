@@ -29,3 +29,10 @@ def test_parse_groups_and_flags():
     assert by["backfill: 2021年 結果+出馬表"].when == "火・金 02:00"
     assert by["サーバ死活監視"].group == "ops"
     assert len(others) == 1 and "REMOTE-ACCESS" in others[0]
+
+
+def test_every_job_documents_processing_and_destination():
+    from src.scripts.docs.build_cron_schedule_html import JOBS
+
+    for key, (_g, _n, _d, process, dest) in JOBS.items():
+        assert process and dest, key
