@@ -29,13 +29,14 @@ def _synthetic_tables(tmp_path, seed=0):
                 order = (-score).argsort().argsort() + 1
                 race_id = f"{year}05{week // 8 + 1:02d}{week % 8 + 1:02d}{r + 1:02d}"
                 surface = str(rng.choice(["芝", "ダート"]))
+                race_class = "" if (week % 10 == 0 and r == 1) else "サラ系３歳以上 １勝クラス"  # 空は障害レース
                 dist = int(rng.choice([1200, 1600, 2000]))
                 laps = (12.0 + rng.normal(scale=0.3, size=dist // 200)).round(1).tolist()
                 laps[-3:] = [x + float(rng.normal(scale=0.4)) for x in laps[-3:]]
                 for k, h in enumerate(field):
                     per_year[year].append({
                         "race_id": race_id, "date": day.isoformat(), "start_time": f"{10 + r}:05",
-                        "venue_code": "05", "surface": surface, "distance": dist, "direction": "左",
+                        "venue_code": "05", "surface": surface, "race_class": race_class, "distance": dist, "direction": "左",
                         "track_condition": "良", "grade": str(rng.choice(["未勝利", "1勝", "2勝"])),
                         "pace": json.dumps({"first_half_3f": 35.0 + rng.normal(), "second_half_3f": 36.0 + rng.normal()}),
                         "finish_position": int(order[k]), "horse_number": k + 1, "horse_id": h, "sex_age": str(rng.choice(["牡3", "牝3", "牡4", "牝4"])),
@@ -137,3 +138,12 @@ def test_standard_rating_uses_grid_beta_and_is_history_only(built):
     d = F.filter(pl.col("sr_load_dev").is_not_null() & (pl.col("sr_load_dev").abs() > 1))
     heavy = d.filter(pl.col("sr_load_dev") > 0)["sr_load_pts"].mean(); light = d.filter(pl.col("sr_load_dev") < 0)["sr_load_pts"].mean()
     assert heavy < 0 < light
+
+
+def test_hurdle_races_are_identified_by_blank_race_class(built):
+    tables, _, _, _ = built
+    runs = load_runs(tables)
+    assert runs.filter(pl.col("surface") == "障").height > 0
+    raw = pl.concat([pl.read_parquet(f) for f in sorted(tables.glob("*/race_result_flat.parquet"))])
+    blank_ids = set(raw.filter(pl.col("race_class") == "")["race_id"].to_list())
+    assert set(runs.filter(pl.col("surface") == "障")["race_id"].unique().to_list()) == blank_ids

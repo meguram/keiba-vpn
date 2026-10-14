@@ -20,7 +20,7 @@ GOING = {"良": 0, "稍重": 1, "重": 2, "不良": 3}
 
 RUN_COLS = ["race_id", "date", "start_time", "venue_code", "surface", "distance", "direction", "track_condition",
             "grade", "pace", "finish_position", "horse_number", "horse_id", "sex_age", "time_sec",
-            "passing_order", "last_3f", "weight", "jockey_id", "trainer_id", "jockey_weight", "lap_times"]
+            "passing_order", "last_3f", "weight", "jockey_id", "trainer_id", "jockey_weight", "lap_times", "race_class"]
 
 
 def _rpci_from_laps(s: str | None) -> float | None:
@@ -43,7 +43,8 @@ def load_runs(tables_dir: str | Path | None = None) -> pl.DataFrame:
     df = df.filter((pl.col("finish_position") > 0) & pl.col("venue_code").cast(pl.Int32, strict=False).is_between(1, 10))
     df = df.with_columns(
         pl.col("date").str.to_date("%Y-%m-%d"),
-        pl.col("surface").fill_null("障"),
+        # 障害レースは race_class が空。面が「芝」「ダート」と誤ってラベルされた障害レース（約 590 レース）も「障」にする。
+        pl.when(pl.col("race_class").fill_null("") == "").then(pl.lit("障")).otherwise(pl.col("surface").fill_null("障")).alias("surface"),
         pl.len().over("race_id").alias("n_fin"),
         pl.col("track_condition").replace_strict(GOING, default=0, return_dtype=pl.Int32).alias("going"),
         pl.col("grade").replace_strict(CLASS_LEVEL, default=1.0, return_dtype=pl.Float64).alias("class_level"),
@@ -57,7 +58,7 @@ def load_runs(tables_dir: str | Path | None = None) -> pl.DataFrame:
         pl.when(pl.col("distance") <= 1200).then(0).when(pl.col("distance") <= 1500).then(1)
         .when(pl.col("distance") <= 1900).then(2).when(pl.col("distance") <= 2400).then(3).otherwise(4).alias("dist_band"),
         (pl.col("pace_first") - pl.col("pace_second")).alias("pace_bal"),
-    ).drop("pace", "lap_times")
+    ).drop("pace", "lap_times", "race_class")
     return df.sort(["date", "start_time", "race_id", "horse_number"])
 
 
