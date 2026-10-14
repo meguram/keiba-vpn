@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>特徴量戦略書（tp-02 〜 tp-04） — keiba-vpn docs</title>
+<style>
+  :root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.75 "Noto Sans JP",system-ui,sans-serif; }
+  main { max-width:1040px; margin:0 auto; padding:40px 28px 96px; }
+  h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:20px; margin:46px 0 10px; padding-top:18px; border-top:1px solid var(--border); }
+  h3 { font-size:15px; color:var(--accent); margin:22px 0 6px; }
+  .muted { color:var(--muted); font-size:13px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0 16px; font-size:13.5px; }
+  th, td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; }
+  code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12.5px; }
+  .ok { color:var(--ok); font-weight:600; } .warn { color:var(--warn); font-weight:600; }
+  .box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+  a { color:var(--accent); word-break:break-all; }
+</style>
+</head>
+<body>
+<main>
+<h1>特徴量戦略書（tp-02 〜 tp-04）</h1>
+<p class="muted">学習パイプライン <code>notebooks/modeling/training_pipeline/</code> の特徴量設計の根拠・定義・検証手順をまとめる。確定した結果は <a href="training_pipeline_decisions.html">確定事項ログ</a> に記録し、本書は「なぜそう設計したか」と「次に何をどう比べるか」を持つ。最終更新: 2026-10-14。</p>
+
+<div class="box">
+<b>この文書の範囲</b>
+<ul>
+  <li>tp-02（特徴量生成。実装済み）の設計原則・特徴量ファミリーの定義・根拠。</li>
+  <li>tp-03（特徴量の ablation。未作成）の比較手順と採否基準。</li>
+  <li>tp-04（前段モデル。未作成）の目的変数・OOF の作り方・リーク防止。</li>
+  <li>未実装・未確認の項目（正直に区別して載せる）。</li>
+</ul>
+</div>
+
+<h2>1. 設計原則</h2>
+<table>
+<tr><th>原則</th><th>内容</th><th>実装・根拠</th></tr>
+<tr><td>時点ルール（as-of）</td><td>特徴量は「対象レース日より前」のデータだけで作る。同日の他レースも使わない。Elo は 1 日分のレースを前日までのレーティングで評価し、日の終わりにまとめて更新する。</td><td><code>src/pipeline/features/horse_history/</code>。リーク検査は <code>builder.py</code> の <code>truncation_check</code>（2023-07-01 以降を消して再計算しても、それ以前の特徴量が完全一致）と <code>permutation_check</code>（以降の結果を入れ替えても当日の特徴量が不変）。tp-02 で不一致 0 を確認。</td></tr>
+<tr><td>全体フィットの範囲</td><td>縮約強度（κ）・分位点・クラスタ・類似度の重みなど、全期間で決める値は <code>FIT_END = 2021-12-21</code> 以前のデータだけで決め、全 fold で固定する。</td><td>最初の fold（valid 2022）の学習終端 2021-12-22 より前。<code>common.py</code>。</td></tr>
+<tr><td>学習対象年</td><td>2020〜2025 年のみ。2026 年は不完全なため、学習・検証・テスト・履歴集計のいずれにも使わない。</td><td><code>time_split.py</code> の <code>TRAINING_YEARS</code>。</td></tr>
+<tr><td>オッズ・人気は使わない</td><td>LayerA（市場独立の確率推定）には入れない。市場との合成（Benter 型の 2 段階ロジット）は LayerB（tp-06 以降）で扱う。</td><td><code>pre_race_feature_whitelist.html</code>。学習時と運用時でオッズの時点が違うと劣化した事例（出典 L13）。</td></tr>
+<tr><td>欠損の扱い</td><td>欠損は 0 で埋めず NA のままにする。疎なデータには <code>has_*</code> フラグを付ける（例: <code>has_speed_index</code>）。</td><td>ホワイトリスト。木モデルは NA を扱える。</td></tr>
+<tr><td>時代ずれへの対処</td><td>年そのもの、時間とともに単調に増える累積件数、2020 年からの集計の始まりに由来する特徴量は、時代を見分ける手がかりになる。adversarial validation で追跡する。</td><td><code>f5_n</code>（全期間の累積件数）は出力から外した。残る候補への対処は tp-03（§6）。</td></tr>
+<tr><td>取得データの不備の補正</td><td>結果ページの <code>last_3f</code>・通過順・馬体重が壊れたレースは、優先順に (1) 生値、(2) GCS の <code>race_result_on_time</code>、(3) 母表の <code>past_races</code> で補う。</td><td><code>common.py</code> の <code>apply_repair</code>、<code>repair.py</code>。</td></tr>
+</table>
+
+<h2>2. 入力データの前提と制約</h2>
+<table>
+<tr><th>データ</th><th>状態・制約</th></tr>
+<tr><td>走破履歴（<code>race_result_flat</code>）</td><td>2020-01-05〜2025-12-28、JRA の完走馬 283,714 走。<b>2020 年より前の走は取得できない</b>（<code>race_result_flat</code>・<code>horse/result_tbl</code> とも 2020 年以降のみ）。そのため 2020〜2021 年は履歴が短く、特徴量の欠損が多い（助走期間）。</td></tr>
+<tr><td>結果ページの会員限定列</td><td>通過・上りはプレミアム（要ログイン）。該当期間（2023 年 10 月中旬〜12 月、2025 年 5 月以降）は空欄や <code>**</code> のため、パーサーが取り違えて壊れていた（約 2,810 レース）。パーサーはヘッダー名で列を決める方式に修正済み。GCS の <code>race_result</code> は <code>race_result_on_time</code> の値で修復済み。</td></tr>
+<tr><td>タイム指数（<code>race_index</code>）</td><td>取得時にログインの会員状態が反映されず、1 レース 3 頭分だけ保存されたレースがある。取り直し中（GCS 実測で対象 6,579 レース）。新馬戦は過去走がないため指数がなく、正常。</td></tr>
+<tr><td>調教師コメント</td><td>同様に 3 頭分だけのレースが 5,067 件。取り直し中。<b>tp-02 の特徴量にはまだ使っていない。</b>コメントが元々無いレースも多い（GCS で 0 件が 13,338 レース）。</td></tr>
+<tr><td>馬別 200m ラップ表・調子偏差値</td><td>netkeiba が 2024 年 1 月以降のレースにしか提供していない。2020〜2023 年は再取得できない。馬別ラップ表は 2024 年以降も保存されていない。学習対象年の約 3 分の 1 にしか使えないため、現時点では特徴量にしない。</td></tr>
+<tr><td>追い切り・パドック</td><td>保存件数と取り直した件数が一致（パドックは元々 5 頭程度）。<b>特徴量にはまだ使っていない。</b></td></tr>
+</table>
+
+<h2>3. 特徴量ファミリー（tp-02 で実装済み。94 特徴量）</h2>
+<p class="muted">列名の接頭辞でファミリーを判別できる（<code>feature_families.json</code> がホスト PC の <code>data/local/modeling/training_pipeline/features/</code> にある）。EWM は指数加重移動平均（半減期はレース数）。</p>
+<table>
+<tr><th>系</th><th>列数</th><th>計算の中身</th><th>主な列</th><th>根拠</th></tr>
+<tr><td><b>A 上がり・脚質</b></td><td>14</td>
+<td>各走の上り 3F を、レース内の標準化（z）、最速馬との差、順位（頭数で割る）にする。上り最速の頻度。位置取り（初角・最終角の順位を頭数で正規化）の EWM を「脚質」とし、先行時／後方時の上がり z を分ける。直近のトレンド（短期 EWM − 長期 EWM）、最良値、直近 5 走の中央値・標準偏差。</td>
+<td><code>a_l3fz_ewm2/ewm6/best/med5/std5</code>、<code>a_gap_ewm2</code>、<code>a_rk_ewm2</code>、<code>a_top3_freq</code>、<code>a_l3fz_back/front</code>、<code>a_style</code>、<code>a_style_late</code>、<code>a_trend</code></td>
+<td>上りの絶対値は馬場の高速化で年代比較できない（S1）。レース内で相対化する。33 秒台が標準・後傾ラップへの対応を見る（S8）。L2→L1 の減速量（S9）は未実装。</td></tr>
+<tr><td><b>B 得意な舞台</b></td><td>17</td>
+<td>各走の「相対成績の残差」（Elo による期待順位との差。<code>res = S − E</code>）を、条件セルごとに階層縮約する。セルは (芝ダ×距離帯)・(場×芝ダ)・(芝ダ×馬場)・(回り×芝ダ)・(場×芝ダ×距離)・クラス。親セルへ <code>(Σres + κ·親) / (n + κ)</code> で縮約し、親は「芝ダ×距離帯 → 馬の全体」。距離適性は、log 距離の二次リッジ回帰を過去走のモーメントの累積から閉形式で解き、今回距離での予測値・標準誤差・傾き・最適距離からのずれを出す。</td>
+<td><code>b_aff_all/sd/venue/going/dir/course/class</code>、<code>b_n_*</code>、<code>b_dist_pred/se/slope/gap</code></td>
+<td>経験ベイズによる縮約（出典 L5）。距離適性の残差回帰は Benter の DPGA（出典 L1）。同じ競馬場での実績・距離変更への対応（S7）。</td></tr>
+<tr><td><b>C レースの質・相手関係</b></td><td>17</td>
+<td>過去走の残差の EWM（短期・長期）・中央値・最大・最小・トリム平均（頑健統計）。出走馬の事前 Elo の平均・上位 3 頭の平均・自分との差（立ち位置）。クラス別の基準からのずれ（相手関係の質 <code>rq</code> = 相手の平均 Elo − クラスの基準）。クラスの EWM と、今回との差（昇級／降級）。前走の残差と長期平均の差。</td>
+<td><code>c_res_ewm2/ewm6/med5/max5/min5/trim5</code>、<code>c_fs_ewm2</code>、<code>c_fstop3_ewm2</code>、<code>c_standing_ewm2</code>、<code>c_rq_ewm2</code>、<code>c_cls_ewm2/prev</code>、<code>c_opp_step</code>、<code>c_cls_step</code>、<code>c_fs_step</code>、<code>c_last_dev</code></td>
+<td>昇級初戦は強い相手と当たりやすい（S5）。大敗は誤差として扱い、頑健統計で処理する（S12）。相手関係の補正は Benter の因子（出典 L1）。後日談（その後の出走で相手が好走したか）は、リーク回避のため未実装。</td></tr>
+<tr><td><b>D 休養・体重</b></td><td>10</td>
+<td>前走・前々走からの日数、過去走数、初出走からの日数、馬体重の長期平均からの偏差、前走の増減、今回の増減、前走の着順・頭数・着順率。</td>
+<td><code>d_rest</code>、<code>d_rest2</code>、<code>d_nprior</code>、<code>d_career_days</code>、<code>d_wt_dev</code>、<code>d_wt_chg_last/now</code>、<code>d_prev_fin</code>、<code>d_prev_field</code>、<code>d_prev_fin_pct</code></td>
+<td>Benter の因子分類（近走成績・間隔・馬体重など。出典 L1）。</td></tr>
+<tr><td><b>E 信頼度</b></td><td>3</td>
+<td>残差の標準偏差（直近 5 走・全期間）、上りの有効走数。サンプルが少ない馬の特徴量の信頼度をモデルに渡す。</td>
+<td><code>e_res_std5</code>、<code>e_res_std_all</code>、<code>e_n_l3f</code></td><td>縮約の信頼度（出典 L5）。</td></tr>
+<tr><td><b>F1 条件類似度</b></td><td>4</td>
+<td>今回の条件と過去走の条件の距離（log 距離、同場、同芝ダ、馬場、回り、クラス、頭数、経過年数）の重み付き和 <code>d</code> から <code>w = exp(−d)</code> を作り、過去走の残差を重み付き平均する。重みの係数は <code>FIT_END</code> 以前で探索。有効サンプル数も出す。</td>
+<td><code>f1_sim_res</code>、<code>f1_sw</code>、<code>f1_neff</code>、<code>f1_sim_z</code></td>
+<td>出走レースと各馬の過去履歴とのマッチ度（ユーザーの着想）。距離適性の考え方は出典 L1。<b>効果は不安定</b>（§5）。</td></tr>
+<tr><td><b>F2 展開・脚質マッチ</b></td><td>17</td>
+<td>各レースの出走馬の脚質（<code>a_style</code>）から、先行馬の頭数・割合（<code>pressure</code>）・出走馬内の前からの順位を作る。先行馬の頻度から想定ペース区分を決め、実際のペース区分（前半 3F − 後半 3F の分位）との対応表を <code>FIT_END</code> 以前で推定する。馬ごとに、前傾・平均・後傾の各ペースでの過去成績（縮約）を持ち、想定ペースの確率で重み付けした「展開マッチ」を出す。脚質×先行馬割合、単騎逃げのフラグ。</td>
+<td><code>f2_nfront</code>、<code>f2_nfront40</code>、<code>f2_nknown</code>、<code>f2_early_rank</code>、<code>f2_pressure</code>、<code>f2_bin</code>、<code>f2_a_reg0/1/2</code>、<code>f2_n_reg*</code>、<code>f2_pace_match</code>、<code>f2_pace_adv</code>、<code>f2_p_fast</code>、<code>f2_style_x_press</code>、<code>f2_lone_front</code></td>
+<td>逃げ馬が 1 頭ならスロー、同型が 5 頭以上なら前崩れ（S7、S12）。逃げはスローで有利、先行はハイペースで消耗（S2）。実測では、想定ペースの確率はほぼ一様（約 1/3）で、展開予測としては弱い。</td></tr>
+<tr><td><b>F3 Elo（相手関係付きレーティング）</b></td><td>9</td>
+<td>多頭数 Elo。順位から <code>S = (N − 順位)/(N − 1)</code>、期待値 <code>E</code> は全ペアの勝率の平均。K=300（fit 期間で勝ち馬の対数尤度が最小。K=24 では残差の自己相関が 0.31 残った）、初期値 1500、過去走 3 未満は K を 1.5 倍。レース前のレーティング、相手の平均・上位 3 頭・標準差、自分との差、レース内順位、過去走数。</td>
+<td><code>f3_r</code>、<code>f3_E</code>、<code>f3_fs_mean/top3/std</code>、<code>f3_r_gap</code>、<code>f3_r_gap_top3</code>、<code>f3_r_rank</code>、<code>f3_n_pre</code></td>
+<td>Elo・Glicko・TrueSkill（出典 L7、L8）。Glicko の不確実性（RD）の考え方は未実装。Plackett-Luce（出典 L9）は目的関数側の検討事項。</td></tr>
+<tr><td><b>F5 プロファイル近傍</b></td><td>3</td>
+<td>馬のプロファイル（脚質、上がり、距離、芝比率、湿り、クラス）を標準化して KMeans（k=24、<code>FIT_END</code> 以前で学習）でクラスタ化し、(クラスタ×芝ダ×距離帯) ごとの過去の好走率・残差を日付までの累積で出す。</td>
+<td><code>f5_cl</code>、<code>f5_aff</code>、<code>f5_win</code></td>
+<td>類似馬の好走率（F1 の延長）。<b>効果は小さく、時代ずれの原因になりやすい</b>（§5・§6）。</td></tr>
+</table>
+
+<h2>4. 未実装・次の拡張（tp-02b 以降の候補）</h2>
+<table>
+<tr><th>項目</th><th>内容</th><th>状態</th></tr>
+<tr><td>追い切り・調教</td><td>最終追い切りからの日数、コース×馬場で標準化した 4F・終い 1F の時計、併せ馬の比較、<code>evaluation</code> の順序値。欠損が多い（約 44%）ため <code>has_*</code> を付ける。</td><td>未実装</td></tr>
+<tr><td>調教師コメント・パドック</td><td>評価の順序値、キーワードのスコア化。カバレッジが低い（コメントは取り直し後に見直す）。</td><td>未実装（取り直し完了後）</td></tr>
+<tr><td>クッション値・含水率</td><td>開催内の相対値、4 角とゴールの含水率差、父系の重馬場適性との交互作用。</td><td>未実装</td></tr>
+<tr><td>近交係数（Wright）</td><td>10 世代血統から <code>F_X = Σ (0.5)^(n−1)(1+F_A)</code>（出典 L15）。血統は固定のためリークは無い。</td><td>未実装</td></tr>
+<tr><td>「京都改修後」フラグ</td><td>京都は改修期間中に阪神が代替開催した（train は京都 5.7%、valid は 20.8%）。<code>venue_era</code> を追加し、京都改修後を別枠で評価する（分割ルールの <code>special_sets</code> にも定義あり）。</td><td>未実装</td></tr>
+<tr><td>Glicko の RD・TrueSkill</td><td>レーティングの不確実性を特徴量にする。休養が長いほど RD を増やす（出典 L7、L8）。</td><td>未実装</td></tr>
+<tr><td>上りの期待値との残差</td><td>ペース・馬場差・距離で説明した上りの期待値との残差（S1、S9 のアイデア）。ペース補正は前半 3F−後半 3F の比で代用する。</td><td>未実装（A の拡張）</td></tr>
+<tr><td>後日談（相手の後続成績）</td><td>評価日より前の出走だけで as-of 集計する。同日以降を使うと即リーク。</td><td>未実装</td></tr>
+<tr><td>騎手・調教師の拡張統計（<code>jk_*</code>・<code>tr_*</code>）</td><td>LayerA に未結合（<code>include_jockey_trainer_stats=False</code>）。</td><td>未結合</td></tr>
+</table>
+
+<h2>5. 試作検証の結果（参考。採否は tp-03 で確定）</h2>
+<p class="muted">条件: valid 2022/2023/2024、3 seed、LightGBM 固定、オッズなし、p_win の LogLoss。ベースライン B0 は全頭版で再現した事前統計＋レース条件（速度指数なし）で 0.23258。seed 間のばらつきは約 0.0001。FIT_END が 2021-12-31 だった試作での値。</p>
+<table>
+<tr><th>構成</th><th>LogLoss</th><th>B0 との差</th></tr>
+<tr><td>B0 + F3（Elo・相手関係）</td><td>0.22496</td><td>−0.0076</td></tr>
+<tr><td>B0 + C</td><td>0.22520</td><td>−0.0074</td></tr>
+<tr><td>B0 + A</td><td>0.22929</td><td>−0.0033</td></tr>
+<tr><td>B0 + D / B / F2</td><td>–</td><td>−0.0038 / −0.0043 / −0.0033</td></tr>
+<tr><td>B0 + E / F1 / F5</td><td>–</td><td>−0.0003 / −0.0004 / −0.0003</td></tr>
+<tr><td>全部（117 特徴量。ベースラインの 22 列を含む）</td><td>0.22208</td><td>−0.0105</td></tr>
+</table>
+<p>B0 + F3 に上乗せした場合、全 fold で改善したのは A（−0.0013）・D（−0.0008）・C（−0.0006）・E（−0.0005）・B のセル別（−0.0004）・F2a 脚質×先行馬（−0.0003）・F5（−0.0003）。F1 は +0.0002（悪化）、F4（距離適性曲線）と F2b（ペース別成績）はほぼゼロ。LayerA 版（速度指数あり。母表が出走馬の約半数だった時点の値）でも傾向は一致した（B0 0.22749 → 全部 0.22092）。全頭版は、結果ページの列ずれが <code>past_races</code> からの復元だけで補われていた時点の値（2025 年の上がり系の非欠損率が約 6 割）。どちらも現在のデータ（全頭・on_time 補正後・<code>race_index</code> 取り直し後）とは前提が違うため、tp-03 で再計測する。</p>
+<table>
+<tr><th>分類</th><th>ファミリー</th></tr>
+<tr><td class="ok">採用候補</td><td>F3、C、A、D、B（セル別）、F2a、E</td></tr>
+<tr><td class="warn">小さい／要再確認</td><td>F5（LayerA 版では悪化）</td></tr>
+<tr><td>見送り候補</td><td>F1、F4（距離適性曲線）、F2b（ペース別成績）</td></tr>
+</table>
+
+<h2>6. tp-03 特徴量の ablation（未作成）</h2>
+<h3>6.1 比較の枠組み</h3>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>データ</td><td>データ完全化後の <code>train_table.parquet</code>（LayerA 母表 + 履歴特徴量。全出走馬）。2020〜2025 年のみ。</td></tr>
+<tr><td>CV</td><td><code>yearly_expanding_folds</code>（valid 2022・2023・2024、purge 7 日 + embargo 3 日）。test 2025 は tp-06 まで触らない。</td></tr>
+<tr><td>モデル</td><td>LightGBM 固定（<code>n_estimators=300, learning_rate=0.05, num_leaves=31, min_child_samples=100, subsample=0.8, colsample_bytree=0.7, reg_lambda=5</code>）、3 seed。計算資源は <code>compute.py</code>（スレッドは 20、他ジョブ用に 4 を空ける）。</td></tr>
+<tr><td>指標</td><td>主指標は p_win の LogLoss。AUC、レース内 softmax 化した負の対数尤度（race_nll）、p_top2・p_top3 の LogLoss を併記。fold 別と平均、seed 間のばらつきを出す。</td></tr>
+<tr><td>ベースライン B0</td><td>LayerA の既存列（<code>horse_prior_*</code>、<code>jockey_prior_*</code>、<code>trainer_prior_*</code>、<code>track_bias_*</code>、<code>sire_*</code>、<code>speed_*</code>、レース条件）。<code>has_speed_index</code> を含む。</td></tr>
+<tr><td>採否基準</td><td>全 fold で悪化せず、平均が改善し、改善幅が seed 間のばらつき（約 0.0001）を上回ること。相関が約 0.9 以上のものは代表 1 つを残す（<code>notebooks/feature_engineering</code> の 10 サイクルで混戦度系が ρ≈0.91〜0.98 だった）。</td></tr>
+<tr><td>記録</td><td>MLflow 実験 <code>keiba-tp-ablation</code>。採用セットは <code>adopted_features.json</code> に保存。確定事項ログに追記。</td></tr>
+</table>
+<h3>6.2 実験の組み合わせ</h3>
+<table>
+<tr><th>#</th><th>実験</th><th>狙い</th></tr>
+<tr><td>1</td><td>B0 + 各ファミリー（単独）</td><td>各ブロックの単独効果。</td></tr>
+<tr><td>2</td><td>B0 + F3 + 各ファミリー（累積）</td><td>最も効く F3 に上乗せしたときの追加効果。</td></tr>
+<tr><td>3</td><td>全部 − 各ファミリー（leave-one-out）</td><td>冗長なブロックの検出。</td></tr>
+<tr><td>4</td><td>助走期間（2020〜2021 年）の行を学習から外す</td><td>履歴が短い行が学習をゆがめていないか。特徴量の fit 期間とは別に検討する。</td></tr>
+<tr><td>5</td><td>時代ずれ対策: (a) クラス・相手関係系（<code>c_rq*</code>、<code>c_cls*</code>、<code>f3_fs_*</code>）の年内標準化、(b) 件数系（<code>d_career_days</code>、<code>d_nprior</code>、<code>b_n_*</code> など）の除外、(c) F5 の除外</td><td>adversarial validation の AUC（現状 0.74〜0.90）を下げつつ、LogLoss を悪化させない組み合わせを探す。</td></tr>
+<tr><td>6</td><td>2020 年フラグ（無観客期）の有無、2020 年の行の重み</td><td>COVID の影響の確認。</td></tr>
+<tr><td>7</td><td>欠損の扱い（NA のまま／<code>has_*</code> 追加）</td><td>取得データの欠損（<code>race_index</code> の取り直し後に残る分）の影響。</td></tr>
+<tr><td>8</td><td>tp-02b の拡張（追い切り、調教師コメント、近交係数、<code>venue_era</code>）</td><td>第 1 段の採用セットが決まった後に、1 ブロックずつ追加して効果を確認。</td></tr>
+</table>
+<h3>6.3 時代ずれの追跡（adversarial validation）</h3>
+<p>採用セットごとに、train と valid／test を見分ける AUC を記録する。現状（on_time 補正後、tp-02 の 94 特徴量）は、全部で 0.86（valid）・0.90（test）、F5 を除くと 0.76・0.79、F5 と件数系を除くと 0.74・0.78。上位は <code>c_rq_ewm2</code>、<code>c_cls_ewm2</code>、<code>c_cls_step</code>、<code>f3_fs_mean</code>、<code>c_fstop3_ewm2</code>。AUC は「分布差の大きさ」の目安であり、単独の合否基準ではない。LogLoss を悪化させずに下げられる範囲で対処する。</p>
+
+<h2>7. tp-04 前段モデル（未作成）</h2>
+<h3>7.1 目的変数</h3>
+<table>
+<tr><th>モデル</th><th>目的変数</th><th>種類</th><th>旧 notebook</th><th>旧結果（参考。時間が重なる分割での値）</th></tr>
+<tr><td>T-6</td><td>脚質（4 クラス）</td><td>多クラス分類</td><td><code>nb-03-t6-running-style</code></td><td>芝 acc 0.83、F1-macro 0.37</td></tr>
+<tr><td>T-8</td><td>ペース H/M/S（レース単位）</td><td>3 クラス分類</td><td><code>nb-04-t8-pace</code></td><td>芝 F1 0.62、ダート 0.42</td></tr>
+<tr><td>T-4</td><td>上り 3F</td><td>回帰</td><td><code>nb-05-t4-last3f</code></td><td>芝 MAE 0.87 秒</td></tr>
+<tr><td>T-5</td><td>正規化着順</td><td>回帰</td><td><code>nb-06-t5-position</code></td><td>Spearman 約 0.40</td></tr>
+<tr><td>T-9</td><td>走破タイム</td><td>回帰</td><td><code>nb-07-t9-finish-time</code></td><td>芝 MAE 6.5 秒、Spearman 0.97</td></tr>
+</table>
+<p class="muted">旧 notebook（<code>nb-01</code>〜<code>nb-08</code>）は、層化分割の「四半期」が壊れており、train と valid／test の期間が重なっている。旧結果は比較の参考にとどめ、新系統で作り直す。</p>
+<h3>7.2 設計方針</h3>
+<ul>
+  <li><b>入力は as-of のみ:</b> tp-02 の特徴量（レース前に分かる情報）だけを入力にする。目的変数はそのレースの結果で、学習のラベルとしてだけ使う。</li>
+  <li><b>OOF（学習に使わなかった fold の予測）を時系列で作る:</b> 各 valid 年（2022・2023・2024）の予測は、その年の開始 10 日前までの学習で作ったモデルで出す。ランダムな GroupKFold は使わない。2025 年（test）の予測は、2020〜2024 年で学習したモデルで出す。2020〜2021 年の行には前段の予測が付かない（NA）。これは助走期間として扱い、tp-03 の「助走期間を外す」実験と整合させる。</li>
+  <li><b>最終モデル（tp-05）への渡し方:</b> 前段の予測値は特徴量として渡す。ただし同じ年の fold の学習に使ったレースの予測は渡さない（OOF の原則）。</li>
+  <li><b>重複の整理:</b> 前段の脚質予測と、tp-02 の <code>a_style</code>（過去走の脚質 EWM）は情報が重なる。ablation で両方入れた場合の効果を確認する。</li>
+  <li><b>保存先:</b> OOF は <code>data/local/modeling/training_pipeline/oof/</code>、MLflow の実験は <code>keiba-tp-stage</code> に記録する。</li>
+  <li><b>障害レースの扱い:</b> 障害レースは上りが 13〜14 秒台（約 125 レース/年）で、上り 3F のモデルでは別扱いにする。</li>
+</ul>
+
+<h2>8. 未確認の項目</h2>
+<table>
+<tr><th>項目</th><th>状態</th></tr>
+<tr><td>Ragozin、Timeform の日本版、Sartin の PacePar と Kiwi、Dosage・AEI・ニックスの具体式</td><td>取得して確認できていない。1 次文献で確認してから採用する。</td></tr>
+<tr><td>Quirin Speed Points、Brohamer のファクター、class rating</td><td>確認できていない。</td></tr>
+<tr><td>PCI（前半と後半の配分を示す指数）の算出式</td><td>「前半と後半の配分を示す指数」という説明のみ確認（S11）。式は未確認のため、前半 3F／後半 3F の比などで自前に定義し、別名で扱う。</td></tr>
+<tr><td>J-STAGE・CiNii・SSRN の日本語論文</td><td>動的ページで取得できなかった。</td></tr>
+<tr><td>個人ブログの加点・減点（+15 点など）</td><td>恣意的なので採らない。重みは学習で決める。</td></tr>
+</table>
+
+<h2>9. 出典（取得して内容を確認できたもののみ）</h2>
+<p class="muted">個人ブログの主張は検証されていない見解であり、採否は実データの ablation で決める。</p>
+<h3>文献・ウェブ（L）</h3>
+<table>
+<tr><th>ID</th><th>内容</th><th>URL</th></tr>
+<tr><td>L1</td><td>Benter（1994）。多項ロジット（Bolton-Chapman）と公的オッズの 2 段階合成、因子の分類、DPGA。</td><td><a href="https://gwern.net/doc/statistics/decision/1994-benter.pdf">gwern.net/doc/statistics/decision/1994-benter.pdf</a></td></tr>
+<tr><td>L5</td><td>経験ベイズ（縮約推定）。</td><td><a href="https://en.wikipedia.org/wiki/Empirical_Bayes_method">en.wikipedia.org/wiki/Empirical_Bayes_method</a></td></tr>
+<tr><td>L7</td><td>Glicko レーティング（不確実性 RD、休養による増加）。</td><td><a href="https://en.wikipedia.org/wiki/Glicko_rating_system">en.wikipedia.org/wiki/Glicko_rating_system</a></td></tr>
+<tr><td>L8</td><td>TrueSkill（多頭数の順位更新）。</td><td><a href="https://en.wikipedia.org/wiki/TrueSkill">en.wikipedia.org/wiki/TrueSkill</a></td></tr>
+<tr><td>L9</td><td>Plackett-Luce モデル（着順の尤度）。</td><td><a href="https://en.wikipedia.org/wiki/Plackett%E2%80%93Luce_model">en.wikipedia.org/wiki/Plackett–Luce_model</a></td></tr>
+<tr><td>L14</td><td>Beyer スピード指数（トラックバリアント）。</td><td><a href="https://en.wikipedia.org/wiki/Beyer_Speed_Figure">en.wikipedia.org/wiki/Beyer_Speed_Figure</a></td></tr>
+<tr><td>L15</td><td>近交係数（Wright）。</td><td><a href="https://en.wikipedia.org/wiki/Coefficient_of_inbreeding">en.wikipedia.org/wiki/Coefficient_of_inbreeding</a></td></tr>
+<tr><td>L16</td><td>単勝オッズの過剰人気バイアス。</td><td><a href="https://en.wikipedia.org/wiki/Favourite-longshot_bias">en.wikipedia.org/wiki/Favourite-longshot_bias</a></td></tr>
+<tr><td>L13</td><td>学習時と推論時のオッズ時点のずれによる劣化の事例。</td><td><a href="https://zenn.dev/yurelu/articles/cb21d75c798258">zenn.dev/yurelu/articles/cb21d75c798258</a></td></tr>
+<tr><td>L18</td><td>リーク経路の洗い出し（過去走集計、血統 JOIN、基準日）。</td><td><a href="https://zenn.dev/umascore/articles/4f5ebf83012855">zenn.dev/umascore/articles/4f5ebf83012855</a></td></tr>
+<tr><td>L19</td><td>walk-forward 評価。</td><td><a href="https://qiita.com/umascore/items/4a239b2ba353c0a5be66">qiita.com/umascore/items/4a239b2ba353c0a5be66</a></td></tr>
+<tr><td>L20</td><td>季節による性能の劣化事例（単複が 1〜5 月は好調、6 月は悪化）。</td><td><a href="https://zenn.dev/nyanyanyanyanya/articles/ff16a824566376">zenn.dev/nyanyanyanyanya/articles/ff16a824566376</a></td></tr>
+<tr><td>L21</td><td>基本特徴の実例（過去 5 走、馬体重増減、休養日数など）。</td><td><a href="https://zenn.dev/kami/articles/66e400c8a43cd08a5d7f">zenn.dev/kami/articles/66e400c8a43cd08a5d7f</a></td></tr>
+<tr><td>L10</td><td>Benter 型モデルのベイズ推論（段階ごとの減衰付き PL）。競馬データでの検証は未確認。</td><td><a href="https://arxiv.org/abs/2608.23825">arxiv.org/abs/2608.23825</a></td></tr>
+</table>
+<h3>人間の予想手法（S）</h3>
+<table>
+<tr><th>ID</th><th>URL</th><th>用途</th></tr>
+<tr><td>S1</td><td><a href="https://ja.wikipedia.org/wiki/上がり_(競馬)">ja.wikipedia.org/wiki/上がり_(競馬)</a></td><td>上り 3F の意味、年代比較ができないこと</td></tr>
+<tr><td>S2</td><td><a href="https://ja.wikipedia.org/wiki/脚質">ja.wikipedia.org/wiki/脚質</a></td><td>脚質と展開・枠順の相性</td></tr>
+<tr><td>S5</td><td><a href="https://www.jra.go.jp/kouza/yougo/w51.html">www.jra.go.jp/kouza/yougo/w51.html</a></td><td>格上げ（昇級）の説明</td></tr>
+<tr><td>S7</td><td><a href="https://note.com/ken7979/n/n33b18eb59390">note.com/ken7979/n/n33b18eb59390</a></td><td>同じ競馬場での実績、距離変更、逃げ馬の頭数</td></tr>
+<tr><td>S8</td><td><a href="https://note.com/fancy_swan7988/n/n8c314e25a022">note.com/fancy_swan7988/n/n8c314e25a022</a></td><td>コースが要求する能力（持続力・瞬発力）</td></tr>
+<tr><td>S9</td><td><a href="https://note.com/umataro_estate/n/nbf970e6382bd">note.com/umataro_estate/n/nbf970e6382bd</a></td><td>L2→L1 の減速量、想定レース質との PCI 差</td></tr>
+<tr><td>S11</td><td><a href="https://note.com/racing_book/n/n48cd9a997b45">note.com/racing_book/n/n48cd9a997b45</a></td><td>前走の内容（勝ちまたは 0.4 秒以内の敗北）、PCI の説明</td></tr>
+<tr><td>S12</td><td><a href="https://note.com/nagikeiba/n/nc042955916ac">note.com/nagikeiba/n/nc042955916ac</a></td><td>同型 5 頭以上で前崩れ、大敗は誤差として扱う</td></tr>
+<tr><td>S14</td><td><a href="https://en.wikipedia.org/wiki/Beyer_Speed_Figure">en.wikipedia.org/wiki/Beyer_Speed_Figure</a></td><td>Beyer 指数の補正（par とトラックバリアント）</td></tr>
+<tr><td>S15</td><td><a href="https://en.wikipedia.org/wiki/Glossary_of_North_American_horse_racing">en.wikipedia.org/wiki/Glossary_of_North_American_horse_racing</a></td><td>bounce（自己最高級の走の直後の凡走）</td></tr>
+<tr><td>S16</td><td><a href="https://en.wikipedia.org/wiki/Timeform">en.wikipedia.org/wiki/Timeform</a></td><td>着差の距離別換算（1 馬身は 5F で約 3lb、2 マイルで約 1lb）</td></tr>
+</table>
+<p class="muted">S3、S4、S6、S10、S13 も取得して確認したが、本書の設計には直接使っていない（スピード指数の概説、日本の競走体系、時計、クラス変動スコア、不利の扱い）。</p>
+
+</main>
+</body>
+</html>
