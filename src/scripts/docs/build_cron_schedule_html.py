@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import re
 import subprocess
 from dataclasses import dataclass
@@ -230,7 +231,26 @@ COMMON_FLOW = (
     '</table>'
 )
 
-def render(jobs: list[Job], others: list[str], source: str) -> str:
+def last_run_text(key: str, status: dict | None) -> str:
+    """auto_scrape_status.json の直近の実行（ジョブがこの記録を持つ場合のみ）。"""
+    s = (status or {}).get(key)
+    if not s:
+        return "—"
+    when = str(s.get("last_run", ""))[:16].replace("T", " ")
+    why = s.get("reason") or ""
+    return f"{when} {s.get('status', '')}" + (f"（{why}）" if why else "")
+
+
+KNOWN_ISSUES = [
+    ("2026-10-15", "DB（PostgreSQL）への取り込みは、ホストで DB が起動しておらず psycopg2 も未導入のため、毎晩失敗している（週次更新・前日夕方・開催日夕方の後処理と 00:00 の同期）。取得と GCS への保存には影響しない。"),
+    ("2026-10-15", "2026-10-09〜10-10 に、ホストの cron が KEIBA_ENV=dev で動き、取得したデータの一部が GCS ではなくローカルの dev ストア（data/dev_mock）に入った（GCS に無いのは、2026 年の速報結果 180 件・馬の戦績 31 件・想定オッズ 24 件・出馬表 6 件）。現在は stg で、cron の実行ラッパーは dev に解決された場合に取得せず終了する。"),
+    ("2026-10-15", "馬名インデックスは 10-09 の実行が上の dev 設定のためスキップされた。次回は 10-16（金）18:30。"),
+    ("2026-10-15", "レース一覧（daily-race-lists）の状態が partial なのは、数週間先の開催日の一覧が netkeiba にまだ公開されていないため（想定内）。"),
+    ("2026-10-15", "優先処理（2020〜2025 年の取り直し）が動いている間は、見送り対象のジョブ（レース一覧・週次更新・バロメーター・recent-retry・backfill）は動かない（logs/yield_skips.log に記録）。終了は 10/15 午前の見込み。"),
+]
+
+
+def render(jobs: list[Job], others: list[str], source: str, status: dict | None = None, skips: list[str] | None = None) -> str:
     esc = html.escape
     out = ['<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">',
            "<title>cron 登録内容（グループ別） — keiba-vpn docs</title>", f"<style>{CSS}</style></head><body><main>",
@@ -241,6 +261,13 @@ def render(jobs: list[Job], others: list[str], source: str) -> str:
            "終われば自動で通常どおり動く（<code>scripts/cron/yield_to_rescrape.sh</code>。同じ netkeiba アカウントの別セッションが取り直し側のセッションを無効にするため）。"
            "見送りの記録は <code>logs/yield_skips.log</code>。止めるには <code>data/local/meta/rescrape/YIELD_DISABLED</code> を置く。</div>"]
 
+    out.append("<h2>稼働状況の点検（既知の問題）</h2><p class=\"sub\">cron の登録内容とは別に、実際の稼働で確認された問題。直したら項目を消す。</p><table><tr><th>確認日</th><th>内容</th></tr>")
+    out += [f"<tr><td class=\"when\">{esc(d)}</td><td>{esc(x)}</td></tr>" for d, x in KNOWN_ISSUES]
+    out.append("</table>")
+    if skips:
+        out.append("<h3>見送りの記録（直近）</h3><table><tr><th>記録（logs/yield_skips.log）</th></tr>")
+        out += [f"<tr><td><code>{esc(s)}</code></td></tr>" for s in skips[-8:]]
+        out.append("</table>")
     out.append(COMMON_FLOW)
     out.append("<h2>1日の流れ（JST）</h2><p class=\"sub\">毎日動くジョブを時刻順に並べたもの。曜日指定のあるものは右端に曜日を付けた。</p>")
     out.append("<table><tr><th>時刻</th><th>ジョブ</th><th>グループ</th></tr>")
@@ -254,10 +281,10 @@ def render(jobs: list[Job], others: list[str], source: str) -> str:
         if not gj:
             continue
         out.append(f"<h2>{esc(gtitle)}（{len(gj)}件）</h2><p class=\"sub\">{esc(gdesc)}</p>")
-        out.append("<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>データの加工</th><th>保存先</th><th>cron（UTC）</th><th></th></tr>")
+        out.append("<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>データの加工</th><th>保存先</th><th>直近の実行</th><th>cron（UTC）</th><th></th></tr>")
         for j in gj:
             badge = '<span class="badge">取り直し中は見送り</span>' if j.yields else ""
-            out.append(f'<tr><td class="when">{esc(j.when)}</td><td>{esc(j.name)}</td><td>{esc(j.desc)}</td><td>{esc(j.process)}</td><td>{esc(j.dest)}</td><td><code>{esc(j.schedule)}</code></td><td>{badge}</td></tr>')
+            out.append(f'<tr><td class="when">{esc(j.when)}</td><td>{esc(j.name)}</td><td>{esc(j.desc)}</td><td>{esc(j.process)}</td><td>{esc(j.dest)}</td><td>{esc(last_run_text(j.key, status))}</td><td><code>{esc(j.schedule)}</code></td><td>{badge}</td></tr>')
         out.append("</table>")
     if others:
         out.append("<h2>その他（グループ外）</h2><p class=\"sub\">このスクリプトの対象外のジョブ（別ツールが登録したもの）。</p><table><tr><th>登録行</th></tr>")
@@ -271,6 +298,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--crontab-file", type=Path, help="`crontab -l` の保存先。省略時は setup_all_cron.sh show の出力")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap.add_argument("--status-file", type=Path, help="ホストの data/local/meta/auto_scrape_status.json の写し（各ジョブの直近の実行を載せる）")
+    ap.add_argument("--skips-file", type=Path, help="ホストの logs/yield_skips.log の写し")
     args = ap.parse_args()
     if args.crontab_file:
         text, source = args.crontab_file.read_text(encoding="utf-8"), str(args.crontab_file)
@@ -279,7 +308,9 @@ def main() -> int:
         source = "scripts/cron/setup_all_cron.sh show"
     jobs, others = parse(text)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(render(jobs, others, source), encoding="utf-8")
+    status = json.loads(args.status_file.read_text(encoding="utf-8")) if args.status_file else None
+    skips = args.skips_file.read_text(encoding="utf-8").splitlines() if args.skips_file else None
+    args.out.write_text(render(jobs, others, source, status, skips), encoding="utf-8")
     print(f"{args.out}: {len(jobs)} ジョブ / グループ外 {len(others)} 行")
     return 0
 
