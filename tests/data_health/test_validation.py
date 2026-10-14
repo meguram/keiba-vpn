@@ -285,7 +285,7 @@ def test_cli_require_complete_exit_codes(tmp_path, monkeypatch, capsys):
     assert main(["--since", "2020-01-01", "--no-infra", "--no-horses", "--require-complete", "--quiet"]) == 0   # モックは全件健全
     assert "完全性" in capsys.readouterr().out
     assert main(["--no-infra", "--no-horses", "--require-complete", "--quiet"]) == 3                             # 既定(90日)は 2020 年より後
-    victim = next((make_dev_mock.dev_mock_root() / "race_odds").rglob("*.json"))
+    victim = sorted((make_dev_mock.dev_mock_root() / "race_odds").rglob("*.json"))[0]   # 順序固定（未来開催日のモックは欠けても欠損にならない）
     victim.unlink()
     assert main(["--since", "2020-01-01", "--no-infra", "--no-horses", "--require-complete", "--quiet"]) == 3    # 1 件欠けたら未達
     rep = json.loads((tmp_path / "health" / "dev" / "latest.json").read_text(encoding="utf-8"))

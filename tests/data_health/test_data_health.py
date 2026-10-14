@@ -250,7 +250,9 @@ def test_dev_health_on_mock_passes_and_detects_removed_file(tmp_path, monkeypatc
     assert rep["plan"]["counts"]["jobs"] == 0                      # dev はスクレイピング計画を出さない
     assert next(c for c in rep["checks"] if c["id"] == "dev.gcp_blocked")["status"] == "ok"
 
-    victim = next((tmp_path / "mock" / "race_shutuba").rglob("*.json"))
+    # rglob の順序はファイルシステム依存。モックには SLA 前の未来開催日も含まれ、それを消しても欠損にならないため、
+    # race_id 昇順の先頭（過去開催日）を決定的に選ぶ
+    victim = sorted((tmp_path / "mock" / "race_shutuba").rglob("*.json"))[0]
     victim.unlink()
     rep2 = run_health(now=now, root=tmp_path, infra=False)
     assert rep2["race_coverage"]["gap_total"]["race_shutuba"] == 1
