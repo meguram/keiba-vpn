@@ -33,6 +33,7 @@
   <li>前段予測量（ペース・位置取り・上がりなど）と、それを使う第 2 段の特徴量（§4）。</li>
   <li>tp-04（前段モデル。未作成）の目的変数・OOF の作り方・リーク防止。</li>
   <li>未実装・未確認の項目（正直に区別して載せる）。</li>
+  <li>予測フローの図（末尾の「補足. 予測フロー図」）。</li>
 </ul>
 </div>
 
@@ -334,6 +335,128 @@
 <tr><td>S16</td><td><a href="https://en.wikipedia.org/wiki/Timeform">en.wikipedia.org/wiki/Timeform</a></td><td>着差の距離別換算（1 馬身は 5F で約 3lb、2 マイルで約 1lb）</td></tr>
 </table>
 <p class="muted">S3、S4、S6、S10、S13 も取得して確認したが、本書の設計には直接使っていない（スピード指数の概説、日本の競走体系、時計、クラス変動スコア、不利の扱い）。</p>
+
+<h2>補足. 予測フロー図</h2>
+<p class="muted">本書の各章の関係を図にしたもの。青 = 実装済みまたは設計済みの本流、緑 = 前段予測（tp-04）、黄 = 評価・採否の工程、破線 = 補助的な入力。簡易版（F2・G）との置き換え・併用は、tp-03 で比較して良い方を採用する。</p>
+<h3>図 1. 全体の予測フロー（入力 → 特徴量 → 前段予測 → 最終モデル → 期待値）</h3>
+<div class="box" style="padding:10px 8px"><svg viewBox="0 0 1000 728" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans JP, system-ui, sans-serif" role="img" aria-label="予測フロー全体図"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7aa9ff"/></marker></defs>
+<rect x="20" y="14" width="300" height="62" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="170.0" y="32.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">入力データ①</text>
+<text x="170.0" y="49.55" text-anchor="middle" font-size="12" fill="#b9c6e8">race_result_flat（2020–2025 完走馬 283,714 走）</text>
+<text x="170.0" y="66.55" text-anchor="middle" font-size="12" fill="#b9c6e8">last_3f・通過順・馬体重は on_time で補正</text>
+<rect x="350" y="14" width="300" height="62" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="500.0" y="32.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">入力データ②</text>
+<text x="500.0" y="49.55" text-anchor="middle" font-size="12" fill="#b9c6e8">出馬表・LayerA 母表</text>
+<text x="500.0" y="66.55" text-anchor="middle" font-size="12" fill="#b9c6e8">斤量・馬体重・性齢・血統・race_index（取り直し中）</text>
+<rect x="680" y="14" width="300" height="62" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="830.0" y="32.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">入力データ③</text>
+<text x="830.0" y="49.55" text-anchor="middle" font-size="12" fill="#b9c6e8">ラップ・馬場</text>
+<text x="830.0" y="66.55" text-anchor="middle" font-size="12" fill="#b9c6e8">lap_times・クッション値（馬別ラップ表は 2024 年以降）</text>
+<line x1="170" y1="76" x2="170" y2="108" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<line x1="500" y1="76" x2="500" y2="108" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<line x1="830" y1="76" x2="830" y2="108" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="20" y="108" width="960" height="92" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="500.0" y="141.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">tp-01 母表・分割  →  tp-02 as-of 特徴量（125 列）</text>
+<text x="500.0" y="158.55" text-anchor="middle" font-size="12" fill="#b9c6e8">A 上がり・B 得意な舞台・C レースの質・D 休養/体重・E 信頼度・F1/F2/F3/F5・G RPCI/PCI・H 標準条件レーティング</text>
+<text x="500.0" y="175.55" text-anchor="middle" font-size="12" fill="#b9c6e8">全体フィットは FIT_END=2021-12-21 以前のみ ／ 切り詰め・結果入れ替えのリーク検査 ／ 2026 年は使わない</text>
+<line x1="500" y1="200" x2="500" y2="232" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="20" y="232" width="960" height="206" rx="10" fill="none" stroke="#2f8f9d" stroke-width="1.4" stroke-dasharray="6 4"/>
+<text x="34" y="252" font-size="13" font-weight="700" fill="#5fc3d1">tp-04 前段予測（時系列 OOF。第 2 段以降は 2022 年以降の行のみ）</text>
+<rect x="40" y="268" width="140" height="62" rx="8" fill="#17324a" stroke="#2f8f9d" stroke-width="1.4"/>
+<text x="110.0" y="286.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">P1 位置取り</text>
+<text x="110.0" y="303.55" text-anchor="middle" font-size="12" fill="#b9c6e8">馬ごとの初角・最終角</text>
+<text x="110.0" y="320.55" text-anchor="middle" font-size="12" fill="#b9c6e8">tp-04（T-6・T-5）</text>
+<rect x="205" y="268" width="140" height="62" rx="8" fill="#17324a" stroke="#2f8f9d" stroke-width="1.4"/>
+<text x="275.0" y="286.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">P2 隊列の集計</text>
+<text x="275.0" y="303.55" text-anchor="middle" font-size="12" fill="#b9c6e8">予測先行馬数・拮抗</text>
+<text x="275.0" y="320.55" text-anchor="middle" font-size="12" fill="#b9c6e8">（モデル不要）</text>
+<rect x="370" y="268" width="180" height="62" rx="8" fill="#17324a" stroke="#2f8f9d" stroke-width="1.4"/>
+<text x="460.0" y="286.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">P3 ペース予測</text>
+<text x="460.0" y="303.55" text-anchor="middle" font-size="12" fill="#b9c6e8">前傾/平均/後傾の確率</text>
+<text x="460.0" y="320.55" text-anchor="middle" font-size="12" fill="#b9c6e8">RPCI・pace_bal（T-8）</text>
+<rect x="575" y="268" width="180" height="62" rx="8" fill="#17324a" stroke="#2f8f9d" stroke-width="1.4"/>
+<text x="665.0" y="286.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">P4 上がり 3F 予測</text>
+<text x="665.0" y="303.55" text-anchor="middle" font-size="12" fill="#b9c6e8">ペース別の条件付き</text>
+<text x="665.0" y="320.55" text-anchor="middle" font-size="12" fill="#b9c6e8">（T-4）</text>
+<rect x="780" y="268" width="180" height="62" rx="8" fill="#17324a" stroke="#2f8f9d" stroke-width="1.4"/>
+<text x="870.0" y="286.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">P5 走破タイム / P6 着順</text>
+<text x="870.0" y="303.55" text-anchor="middle" font-size="12" fill="#b9c6e8">能力差・正規化着順</text>
+<text x="870.0" y="320.55" text-anchor="middle" font-size="12" fill="#b9c6e8">（T-9・T-5）</text>
+<line x1="180" y1="299" x2="205" y2="299" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<line x1="345" y1="299" x2="370" y2="299" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<line x1="550" y1="299" x2="575" y2="299" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<line x1="755" y1="299" x2="780" y2="299" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="370" y="366" width="180" height="56" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="460.0" y="381.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">P7 当日の馬場差</text>
+<text x="460.0" y="398.55" text-anchor="middle" font-size="12" fill="#b9c6e8">同日先行レースから as-of</text>
+<text x="460.0" y="415.55" text-anchor="middle" font-size="12" fill="#b9c6e8">（ルールベース・tp-02b）</text>
+<line x1="460" y1="366" x2="460" y2="330" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<line x1="550" y1="388" x2="650" y2="330" stroke="#7aa9ff" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<line x1="500" y1="438" x2="500" y2="468" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="20" y="468" width="960" height="62" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="500.0" y="486.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">第 2 段の特徴量</text>
+<text x="500.0" y="503.55" text-anchor="middle" font-size="12" fill="#b9c6e8">s_pos_pred・s_nfront_pred・s_pace_p_front/mid/back・m_pace_match・m_rpci_match・s_l3f_pred_cond・s_time_pred・s_rank_pred</text>
+<text x="500.0" y="520.55" text-anchor="middle" font-size="12" fill="#b9c6e8">（簡易版の F2・G の特徴量と置き換え／併用して比較）</text>
+<line x1="500" y1="530" x2="500" y2="560" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="20" y="560" width="300" height="62" rx="8" fill="#3a2f12" stroke="#fbbf24" stroke-width="1.4"/>
+<text x="170.0" y="578.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">tp-03 特徴量の ablation</text>
+<text x="170.0" y="595.55" text-anchor="middle" font-size="12" fill="#b9c6e8">採用セットの決定・時代ずれ追跡</text>
+<text x="170.0" y="612.55" text-anchor="middle" font-size="12" fill="#b9c6e8">（両方試して良い方を採用）</text>
+<line x1="320" y1="591" x2="350" y2="591" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="350" y="560" width="300" height="62" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="500.0" y="578.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">tp-05 最終モデル</text>
+<text x="500.0" y="595.55" text-anchor="middle" font-size="12" fill="#b9c6e8">p_win / p_top2 / p_top3</text>
+<text x="500.0" y="612.55" text-anchor="middle" font-size="12" fill="#b9c6e8">LightGBM・CatBoost・Optuna・MLflow</text>
+<line x1="650" y1="591" x2="680" y2="591" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="680" y="560" width="300" height="62" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="830.0" y="578.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">tp-06 確率較正・評価</text>
+<text x="830.0" y="595.55" text-anchor="middle" font-size="12" fill="#b9c6e8">LogLoss・Brier・ECE・セグメント別</text>
+<text x="830.0" y="612.55" text-anchor="middle" font-size="12" fill="#b9c6e8">test 2025 は一度だけ</text>
+<line x1="830" y1="622" x2="830" y2="654" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="20" y="654" width="960" height="58" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="500.0" y="679.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">LayerB: 市場オッズとの合成（Benter 型の 2 段階ロジット）→ 期待値 → 推奨馬券</text>
+<text x="500.0" y="696.05" text-anchor="middle" font-size="12" fill="#b9c6e8">tp-07 最終再学習・MLflow 登録・推論の一致確認（オッズは LayerA に入れない）</text></svg></div>
+<h3>図 2. ペース予測を使った「馬 × レース」のマッチ（前傾・後傾への相性）</h3>
+<div class="box" style="padding:10px 8px"><svg viewBox="0 0 1000 322" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans JP, system-ui, sans-serif" role="img" aria-label="ペース予測の使い方"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7aa9ff"/></marker></defs>
+<rect x="20" y="20" width="300" height="78" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="170.0" y="38.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">馬の過去走（as-of）</text>
+<text x="170.0" y="55.05" text-anchor="middle" font-size="12" fill="#b9c6e8">ペース区分別の相対成績</text>
+<text x="170.0" y="72.05" text-anchor="middle" font-size="12" fill="#b9c6e8">pc_a_reg0 前傾 / 1 平均 / 2 後傾（RPCI）</text>
+<text x="170.0" y="89.05" text-anchor="middle" font-size="12" fill="#b9c6e8">f2_a_reg0/1/2（前半3F−後半3F）</text>
+<rect x="20" y="150" width="300" height="78" rx="8" fill="#17324a" stroke="#2f8f9d" stroke-width="1.4"/>
+<text x="170.0" y="168.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">出走馬の位置取り予測 P1</text>
+<text x="170.0" y="185.05" text-anchor="middle" font-size="12" fill="#b9c6e8">予測先行馬数・拮抗 P2</text>
+<text x="170.0" y="202.05" text-anchor="middle" font-size="12" fill="#b9c6e8">自馬が最前か（単騎逃げ確率）</text>
+<text x="170.0" y="219.05" text-anchor="middle" font-size="12" fill="#b9c6e8">枠・騎手・距離・クラス・頭数</text>
+<rect x="380" y="150" width="270" height="78" rx="8" fill="#17324a" stroke="#2f8f9d" stroke-width="1.4"/>
+<text x="515.0" y="168.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">P3 ペース予測</text>
+<text x="515.0" y="185.05" text-anchor="middle" font-size="12" fill="#b9c6e8">P(前傾)・P(平均)・P(後傾)</text>
+<text x="515.0" y="202.05" text-anchor="middle" font-size="12" fill="#b9c6e8">期待 RPCI / pace_bal</text>
+<text x="515.0" y="219.05" text-anchor="middle" font-size="12" fill="#b9c6e8">入力: P2・Elo の分布・P7 馬場差</text>
+<line x1="320" y1="189" x2="380" y2="189" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="710" y="20" width="270" height="78" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="845.0" y="38.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">展開マッチ（第 2 段）</text>
+<text x="845.0" y="55.05" text-anchor="middle" font-size="12" fill="#b9c6e8">m_pace_match = Σk P3k × a_reg_k</text>
+<text x="845.0" y="72.05" text-anchor="middle" font-size="12" fill="#b9c6e8">m_rpci_match = Σk P3k × pc_a_reg_k</text>
+<text x="845.0" y="89.05" text-anchor="middle" font-size="12" fill="#b9c6e8">m_pace_adv = adv × (P前傾 − P後傾)</text>
+<line x1="320" y1="59" x2="710" y2="59" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/><text x="521.0" y="56.0" font-size="11" fill="#9aa7c7">区分別成績 a_reg_k</text>
+<line x1="650" y1="160" x2="760" y2="98" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/><text x="590" y="130" font-size="11" fill="#9aa7c7">確率 P3k</text>
+<rect x="710" y="150" width="270" height="78" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="845.0" y="168.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">上がりの期待値（第 2 段）</text>
+<text x="845.0" y="185.05" text-anchor="middle" font-size="12" fill="#b9c6e8">s_l3f_pred_cond = Σk P3k × (P4 の仮定 k)</text>
+<text x="845.0" y="202.05" text-anchor="middle" font-size="12" fill="#b9c6e8">レース内平均との差 s_l3f_adv</text>
+<text x="845.0" y="219.05" text-anchor="middle" font-size="12" fill="#b9c6e8">P4: 区分 k を仮定した上がり予測</text>
+<line x1="650" y1="189" x2="710" y2="189" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="380" y="262" width="600" height="44" rx="8" fill="#3a2f12" stroke="#fbbf24" stroke-width="1.4"/>
+<text x="680.0" y="288.55" text-anchor="middle" font-size="13" fill="#e6ecff">最終モデル（tp-05）へ: m_*・s_* を特徴量として渡す（OOF の原則）</text>
+<path d="M980,59 L996,59 L996,284 L980,284" fill="none" stroke="#7aa9ff" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<line x1="845" y1="228" x2="845" y2="262" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/></svg></div>
+<ul>
+  <li>馬ごとの「前傾に強いか後傾に強いか」（過去走の区分別成績）は as-of の履歴だけで作る。</li>
+  <li>今回のレースが前傾になるか後傾になるかは、出走馬の位置取り予測（P1）の集計（P2）から、ペース予測（P3）で確率にする。当日の馬場差（P7）・距離・クラス・頭数も入力に入れる。</li>
+  <li>両者を確率で重み付けして掛け合わせたものが展開マッチ（<code>m_pace_match</code>・<code>m_rpci_match</code>）。上がりも同様に、区分ごとの仮定の下での予測を確率で重み付けする。</li>
+  <li>前段の予測は、すべて時系列の OOF で作り、ラベル（結果）は学習にだけ使う（§4.5）。</li>
+</ul>
 
 </main>
 </body>
