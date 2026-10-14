@@ -305,7 +305,7 @@ footer.page-footer { margin-top: 70px; padding-top: 16px; border-top: 1px solid 
 <tr><td>前日夕方の出馬表・馬柱・追い切り</td><td>構造化 + 推定（追走難度・想定オッズ。モデルによる計算結果を保存）</td><td>GCS: 出馬表・馬柱・追い切り・SmartRC は構造化JSON、追走難度・想定オッズは推定結果のキャッシュ。ローカル: 取得状況 data/local/meta/date_coverage、発走時刻表 data/page_reference/race_day_schedule（ローカルのみ）。DB 同期を起動（ホストでは失敗中）</td></tr>
 <tr><td>開催日ランナー（オッズ・出馬表）</td><td>構造化のみ（T-15 の予測トリガはモックで保存なし）</td><td>GCS: 出馬表・オッズ（T-60/T-15 の履歴を同じJSONに保持）・馬柱・追い切り・SmartRC。JRA 馬場はローカル data/page_reference/cushion</td></tr>
 <tr><td>速報結果ランナー</td><td>構造化のみ。全R後に結果テーブルの増分追記と馬場速度指数の計算</td><td>GCS: 速報結果。ローカル: data/page_reference/tables（race_result_flat の増分）、data/analysis/track_speed（馬場速度指数）</td></tr>
-<tr><td>馬体重の検知ランナー</td><td>構造化（出馬表）+ 計算（127特徴量）</td><td>GCS: 出馬表。ローカルのみ: data/local/inference（特徴量 parquet・イベント記録。GCS には上げない）</td></tr>
+<tr><td>馬体重の検知ランナー</td><td>構造化（出馬表）+ 計算（127特徴量）</td><td>GCS: 出馬表。ローカルのみ: data/local/inference（特徴量 parquet・予測時点の出馬表スナップショット・イベント記録。GCS には上げない）</td></tr>
 <tr><td>開催日夕方の結果・確定オッズ</td><td>構造化のみ</td><td>GCS: 速報結果・確定オッズ・SmartRC。ローカル: 取得状況 date_coverage。DB 同期を起動（ホストでは失敗中）</td></tr>
 <tr><td>JRA 馬場（クッション値・含水率）</td><td>構造化（JRA 公式ページを整形したJSON）</td><td>ローカルのみ: data/page_reference/cushion。GCS へは自動では上げない（手動アップロード）</td></tr>
 <tr><td>レース一覧</td><td>構造化のみ</td><td>ローカルのみ: data/page_reference/race_lists。キューにレース単位のジョブが溜まっていれば、その分は GCS へ</td></tr>
@@ -315,6 +315,7 @@ footer.page-footer { margin-top: 70px; padding-top: 16px; border-top: 1px solid 
 <tr><td>直近の未取得データの取り直し</td><td>構造化のみ</td><td>GCS: race_result・race_result_lap・race_index・race_trainer_comment。ローカル: 試行状態 data/local/meta/recent_retry_state.json</td></tr>
 <tr><td>backfill（年度別・馬情報）</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td></tr>
 <tr><td>履歴テーブルの増分更新</td><td>加工（JSON を表に平坦化。1行=1馬の _flat と 1行=1レースの _race の Parquet）</td><td>ローカルのみ: data/page_reference/tables/&lt;年&gt;/</td></tr>
+<tr><td>履歴特徴量の蓄積</td><td>計算（as-of の履歴特徴量。学習と同じ計算）</td><td>ローカルのみ: data/local/modeling/feature_store/horse_history（features_&lt;年&gt;.parquet、manifest、skew/&lt;日付&gt;.json）。2026年は学習に使わない</td></tr>
 <tr><td>騎手・調教師統計</td><td>計算（成績の集計）</td><td>ローカルのみ: data/features/jockey_trainer_stats ほか（Parquet）</td></tr>
 <tr><td>GCS → PostgreSQL 同期</td><td>加工（ETL で正規化テーブルへ）</td><td>PostgreSQL（ホストでは毎晩失敗: DB 未起動・psycopg2 未導入）</td></tr>
 <tr><td>ページ品質チェック</td><td>検査のみ</td><td>ローカル: data/local/page_quality/latest.json（過去30件は history/）</td></tr>

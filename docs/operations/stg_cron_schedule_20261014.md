@@ -15,7 +15,8 @@ cron デーモンは稼働中（2026-10-13 23:44 UTC 起動）。ホストの再
 | 毎日 06:00 | backfill horse | 馬情報一括 |
 | 毎日 06:10 **（新）** | recent-retry | 直近 21 日の未取得データの取り直し |
 | 毎日 07:00 | daily-race-lists（朝） | 今日以降の全開催日のレース一覧 |
-| 毎日 07:00 **（新）** | export_tables_daily | 当年の flat テーブルを増分更新（推論の履歴） |
+| 毎日 07:00 **（新）** | export_tables_daily | 当年の flat テーブルを増分更新（推論の履歴。実測 約 4 分） |
+| 毎日 07:40 **（新）** | feature-accumulate | 当年分の履歴特徴量（127 列）を確定結果から作り直して蓄積し、推論モードとのずれを記録（実測 約 30 秒） |
 | 毎日 07:30 | raceday-runner、raceday-result-runner | 開催日のみ常駐。各R T-60 オッズ、T-15 バンドル、T+15 速報結果 |
 | 毎日 07:50 / 08:00 / 09:00 | backfill full 2026 / 2025 / 2024 | 補助データ（速報結果など） |
 | 毎日 08:00 **（新）** | raceday-weight-runner | 各R 発走 65〜30 分前に出馬表を取り直し、馬体重が揃ったら推論モードで特徴量を作成（開催日のみ） |
@@ -48,7 +49,7 @@ netkeiba を取得する全ジョブは共通の流れで保存する。
 | 前日夕方の出馬表・馬柱・追い切り | 構造化 + 推定（追走難度・想定オッズ。モデルによる計算結果を保存） | GCS: 出馬表・馬柱・追い切り・SmartRC は構造化JSON、追走難度・想定オッズは推定結果のキャッシュ。ローカル: 取得状況 data/local/meta/date_coverage、発走時刻表 data/page_reference/race_day_schedule（ローカルのみ）。DB 同期を起動（ホストでは失敗中） |
 | 開催日ランナー（オッズ・出馬表） | 構造化のみ（T-15 の予測トリガはモックで保存なし） | GCS: 出馬表・オッズ（T-60/T-15 の履歴を同じJSONに保持）・馬柱・追い切り・SmartRC。JRA 馬場はローカル data/page_reference/cushion |
 | 速報結果ランナー | 構造化のみ。全R後に結果テーブルの増分追記と馬場速度指数の計算 | GCS: 速報結果。ローカル: data/page_reference/tables（race_result_flat の増分）、data/analysis/track_speed（馬場速度指数） |
-| 馬体重の検知ランナー | 構造化（出馬表）+ 計算（127特徴量） | GCS: 出馬表。ローカルのみ: data/local/inference（特徴量 parquet・イベント記録。GCS には上げない） |
+| 馬体重の検知ランナー | 構造化（出馬表）+ 計算（127特徴量） | GCS: 出馬表。ローカルのみ: data/local/inference（特徴量 parquet・予測時点の出馬表スナップショット・イベント記録。GCS には上げない） |
 | 開催日夕方の結果・確定オッズ | 構造化のみ | GCS: 速報結果・確定オッズ・SmartRC。ローカル: 取得状況 date_coverage。DB 同期を起動（ホストでは失敗中） |
 | JRA 馬場（クッション値・含水率） | 構造化（JRA 公式ページを整形したJSON） | ローカルのみ: data/page_reference/cushion。GCS へは自動では上げない（手動アップロード） |
 | レース一覧 | 構造化のみ | ローカルのみ: data/page_reference/race_lists。キューにレース単位のジョブが溜まっていれば、その分は GCS へ |
@@ -58,6 +59,7 @@ netkeiba を取得する全ジョブは共通の流れで保存する。
 | 直近の未取得データの取り直し | 構造化のみ | GCS: race_result・race_result_lap・race_index・race_trainer_comment。ローカル: 試行状態 data/local/meta/recent_retry_state.json |
 | backfill（年度別・馬情報） | 構造化のみ | GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage |
 | 履歴テーブルの増分更新 | 加工（JSON を表に平坦化。1行=1馬の _flat と 1行=1レースの _race の Parquet） | ローカルのみ: data/page_reference/tables/<年>/ |
+| 履歴特徴量の蓄積 | 計算（as-of の履歴特徴量。学習と同じ計算） | ローカルのみ: data/local/modeling/feature_store/horse_history（features_<年>.parquet、manifest、skew/<日付>.json）。2026年は学習に使わない |
 | 騎手・調教師統計 | 計算（成績の集計） | ローカルのみ: data/features/jockey_trainer_stats ほか（Parquet） |
 | GCS → PostgreSQL 同期 | 加工（ETL で正規化テーブルへ） | PostgreSQL（ホストでは毎晩失敗: DB 未起動・psycopg2 未導入） |
 | ページ品質チェック | 検査のみ | ローカル: data/local/page_quality/latest.json（過去30件は history/） |
