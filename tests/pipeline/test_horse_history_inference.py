@@ -117,3 +117,11 @@ def test_graded_race_names_keeps_latest_grade(tmp_path):
         d.mkdir()
         pl.DataFrame({"race_id": [f"{y}0001", f"{y}0001", f"{y}0002"], "race_name": ["A杯", "A杯", "B賞"], "grade": [g, g, "OP"]}).write_parquet(d / "race_result_flat.parquet")
     assert graded_race_names(tmp_path, [2022, 2023]) == {"A杯": "G1"}
+
+
+def test_normalize_card_accepts_all_null_columns():
+    from src.pipeline.features.horse_history.inference import normalize_card
+
+    card = pl.DataFrame({"race_id": ["a", "b"], "track_condition": [None, None], "grade": [None, None], "race_class": [None, None], "race_name": [None, None]})
+    out = normalize_card(card, {"x": "G1"})
+    assert out.height == 2 and out["track_condition"].null_count() == 2

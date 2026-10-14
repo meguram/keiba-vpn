@@ -56,7 +56,7 @@ def normalize_card(card: pl.DataFrame, graded_names: dict[str, str] | None = Non
     - 馬場状態: 出馬表は略称（稍・不）→ 稍重・不良（略称のままだと良に落ちる）
     - 格（grade）: 1〜3勝クラスは空欄 → race_class から導く。重賞は ``OP`` → レース名から G1/G2/G3/L を引く（不明なら ``OP`` のまま）
     """
-    df = card
+    df = card.with_columns([pl.col(c).cast(pl.Utf8) for c in ("track_condition", "grade", "race_class", "race_name") if c in card.columns])  # 全部 null の列は Null 型になるため
     if "track_condition" in df.columns:
         df = df.with_columns(pl.col("track_condition").replace(_GOING_FULL))
     if "grade" in df.columns and "race_class" in df.columns:

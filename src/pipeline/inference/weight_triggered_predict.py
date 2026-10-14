@@ -134,7 +134,8 @@ def run_for_races(
         logger.exception("特徴量の作成に失敗: %s", ids)
         for r in races:
             ev = {"race_id": r["race_id"], "at": now.isoformat(timespec="seconds"), "status": "error", "error": str(exc), "mode": mode}
-            _append_event(now.strftime("%Y%m%d"), ev)
+            pt = r.get("post_time")
+            _append_event(pt.strftime("%Y%m%d") if pt else now.strftime("%Y%m%d"), ev)
             events.append(ev)
         return events
 
