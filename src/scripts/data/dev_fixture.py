@@ -17,7 +17,7 @@
 作り直し（実データを取り直したあと）:
     python3 -m src.scripts.data.dev_fixture pack --date 20260906
 
-注意: 中身は netkeiba から取得したデータの抜粋。社外に出るリポジトリへ置かないこと（DEC-024）。
+注意: 中身は netkeiba から取得したデータの抜粋。
 """
 
 from __future__ import annotations
@@ -110,7 +110,7 @@ def pack(date: str) -> dict[str, Any]:
         "date": date, "races": len(race_ids), "counts": counts,
         "archive": ARCHIVE.name, "archive_bytes": ARCHIVE.stat().st_size,
         "archive_sha256": hashlib.sha256(ARCHIVE.read_bytes()).hexdigest(),
-        "note": "netkeiba 取得データの抜粋（出馬表・結果・オッズ）。AI 予測/予測オッズはモック。社外に出るリポジトリへ置かない（DEC-024）",
+        "note": "netkeiba 取得データの抜粋（出馬表・結果・オッズ）。AI 予測/予測オッズはモック",
     }
     MANIFEST.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return manifest
