@@ -41,7 +41,9 @@ def read_runs_raw(tables_dir: str | Path | None = None, years: list[int] | None 
     """race_result_flat を読むだけ（整形前）。years 省略時は学習用の 2020〜2025 年。"""
     base = Path(tables_dir) if tables_dir else TABLES_DIR
     ys = [int(y) for y in years] if years else YEARS
-    return pl.concat([pl.read_parquet(base / str(y) / "race_result_flat.parquet", columns=RUN_COLS) for y in ys])
+    # 距離は年によって Float64 / Int64 に分かれていることがある。型を揃えてから連結する
+    return pl.concat([pl.read_parquet(base / str(y) / "race_result_flat.parquet", columns=RUN_COLS).with_columns(pl.col("distance").cast(pl.Int64))
+                      for y in ys])
 
 
 def load_runs(tables_dir: str | Path | None = None, years: list[int] | None = None) -> pl.DataFrame:

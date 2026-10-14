@@ -94,8 +94,11 @@ def _extract_race_meta(data: dict, meta_index: dict[str, dict] | None = None) ->
         val = data.get(field)
         # 距離・頭数の 0 は「取れていない」。db.netkeiba の結果ページは障害レースの距離を取れず 0 で保存されている
         # （0 のまま特徴量に入ると log(0) で無限大になる）。出馬表のメタで補う。
-        if val is None or (isinstance(val, str) and val.strip() == "") or (field in ("distance", "field_size") and val == 0):
+        if (val is None or (isinstance(val, str) and val.strip() == "")
+                or (field in ("distance", "field_size") and (val == 0 or (isinstance(val, float) and val != val)))):
             val = fallback.get(field)
+        if field in ("distance", "field_size") and isinstance(val, float) and val == val and val.is_integer():
+            val = int(val)  # 年によって列の型が Float64 と Int64 に分かれ、年をまたぐ読み込みが落ちるのを防ぐ
         meta[field] = val
 
     meta["venue_code"] = race_id[4:6] if len(race_id) >= 6 else ""

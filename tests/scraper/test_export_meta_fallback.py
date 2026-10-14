@@ -12,3 +12,10 @@ def test_valid_values_are_not_overwritten():
     data = {"race_id": "r", "distance": 1600, "surface": "芝", "field_size": 16}
     meta = _extract_race_meta(data, {"r": {"distance": 9999, "surface": "ダート", "field_size": 1}})
     assert (meta["distance"], meta["surface"], meta["field_size"]) == (1600, "芝", 16)
+
+
+def test_float_distance_is_normalized_to_int_and_nan_falls_back():
+    meta = _extract_race_meta({"race_id": "r", "distance": 1600.0, "field_size": 16.0}, None)
+    assert meta["distance"] == 1600 and isinstance(meta["distance"], int) and isinstance(meta["field_size"], int)
+    nan = _extract_race_meta({"race_id": "r", "distance": float("nan")}, {"r": {"distance": 2000}})
+    assert nan["distance"] == 2000
