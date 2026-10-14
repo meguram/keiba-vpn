@@ -76,6 +76,10 @@ class InferenceContext:
             self.history_last_date = self.bundle.meta["history_last_date"]
             info = {"engine": "bundle", "history_last_date": self.history_last_date, "bundle_built_at": self.bundle.meta["built_at"],
                     "warm_sec": round(time.perf_counter() - t0, 1)}
+            age = (datetime.now(_JST).date() - datetime.fromisoformat(self.history_last_date).date()).days
+            if age > 10:  # 確定結果の取得が遅れている（recent-retry と feature-accumulate を確認）
+                logger.warning("バンドルの履歴が古い: 最終日 %s（%d 日前）", self.history_last_date, age)
+            info["history_age_days"] = age
             logger.info("サービング用バンドルを読み込み: %s", info)
             return info
 

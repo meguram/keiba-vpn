@@ -68,7 +68,7 @@ JOBS: dict[str, tuple[str, str, str, str, str]] = {
                             "加工（JSON を表に平坦化。1行=1馬の _flat と 1行=1レースの _race の Parquet）", "ローカルのみ: data/page_reference/tables/<年>/"),
     "feature-accumulate": ("prep", "履歴特徴量の蓄積", "当年分の特徴量（127列）を確定結果から作り直し、推論モードで保存した特徴量とのずれを記録",
                            "計算（as-of の履歴特徴量。学習と同じ計算）",
-                           "ローカルのみ: data/local/modeling/feature_store/horse_history（features_<年>.parquet、manifest、skew/<日付>.json）。2026年は学習に使わない"),
+                           "ローカルのみ: data/local/modeling/feature_store/horse_history（features_<年>.parquet、manifest、skew/<日付>.json）と、小さなメモリのマシン向けのサービング用バンドル serving_bundle（約140MB）。2026年は学習に使わない"),
     "update_jockey_trainer_stats": ("prep", "騎手・調教師統計", "統計テーブルを再生成",
                                     "計算（成績の集計）", "ローカルのみ: data/features/jockey_trainer_stats ほか（Parquet）"),
     "sync_pg_from_gcs": ("prep", "GCS → PostgreSQL 同期", "直近7日の増分",

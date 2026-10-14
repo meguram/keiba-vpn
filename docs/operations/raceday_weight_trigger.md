@@ -57,7 +57,7 @@ KEIBA_ENV=stg KEIBA_WEIGHT_WATCH_DATE=20260613 KEIBA_WEIGHT_WATCH_REPLAY=1 /opt/
 - **履歴に 2026 年を含める**（推論は最新の履歴が要るため。学習には使わない）。2026 年のテーブルは取得が不完全で、`export_tables_daily` を回さないと古いまま。起動時に `history_last_date` をログ・イベントに出すので、前日までの結果が入っているか確認する。
 - **計算時間（実測、2024-07-06 の 36 レース・422 頭、ホスト PC）**: 履歴の読み込み 3.0 秒（起動時に 1 回）＋特徴量の計算 約 16 秒（レースをまとめて 1 回）。目標 30 秒・上限 120 秒に収まるため、tier 0 の前日キャッシュは作っていない（必要になったら追加）。
 - 摂動法の tier 分類は 1 開催日（2024-07-06）の実測。`tests/pipeline/test_weight_triggered_predict.py` が、馬体重の有無で tier 0 の特徴量が変わらないことを確認している。
-- 同日の先行レースの時計（`sr_var_today`）は、発走 90 分以上前のレースだけを使う設計だが、推論モードでは当日の結果がテーブルに入っていないため、前の開催日の値で代替される（学習時より情報が少ない側に倒れる）。
+- 同日の先行レースの時計（`sr_var_today` / `sr_var_n`）は、発走 90 分以上前のレースだけを使う設計だが、推論モードでは当日の結果がテーブルに入っていないため、前の開催日の値で代替される（学習時より情報が少ない側に倒れる）。**以前は代替も効かず全行が欠損になっていた**（学習と本番のずれ）ため、2026-10-14 に直した。
 
 ## 実データでの突き合わせ結果（2024-07-06、`verify_inference_features`）
 
@@ -88,3 +88,12 @@ KEIBA_ENV=stg KEIBA_WEIGHT_WATCH_DATE=20260613 KEIBA_WEIGHT_WATCH_REPLAY=1 /opt/
 - 履歴の最終日（`history_last_date`）が 2026-10-04 のまま。**`export_tables_daily` を回していないため**で、起動前に増分エクスポートを 1 回実行しておくこと。
 
 実運用の初回（10/17〜18）に見るもの: `events/<日付>.jsonl` の `weights_known`（検知が T-65〜T-30 の窓に収まったか）、`dropped_no_weight`（取消馬が出馬表にどう載るか）、`going_known`、`build_sec`。
+
+## 小さなメモリのマシンで動かす（サービング用バンドル、2026-10-14）
+
+- `KEIBA_INFERENCE_ENGINE`: `auto`（既定。バンドルがあればバンドル、無ければ全履歴）／`bundle`（無ければエラー）／`full`（全履歴）。
+- バンドルは `feature-accumulate`（毎日 07:40 JST）が `data/local/modeling/feature_store/serving_bundle/`（約 140MB）に作る。`KEIBA_SERVING_BUNDLE_DIR` で場所を変えられる。
+- バンドル方式の実測（ホスト）: 特徴量の計算 約 340MB（固有 約 160MB）・0.6 秒。全履歴方式は 2.4GB・約 20 秒。結果は全 127 特徴量で一致する。設計・検証: `docs/html/modeling/feature_serving_low_memory.html`。
+- 起動時のログとイベントに `engine`・`history_last_date` が出る。履歴が 10 日より古いと警告する。
+- プロセス全体では約 430MB（GCS クライアント等の import を含む）。400MB の余裕に収めるには、取得と計算のプロセスを分ける必要がある（未実施）。
+- 大きなマシンから小さなマシンへのバンドルの配布は未整備。

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>当日の特徴量を小さなメモリで作る設計 — keiba-vpn docs</title>
+<style>
+  :root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.75 "Noto Sans JP",system-ui,sans-serif; }
+  main { max-width:1040px; margin:0 auto; padding:40px 28px 96px; }
+  h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:20px; margin:46px 0 10px; padding-top:18px; border-top:1px solid var(--border); }
+  h3 { font-size:15px; color:var(--accent); margin:22px 0 6px; }
+  .muted { color:var(--muted); font-size:13px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0 16px; font-size:13.5px; }
+  th, td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; }
+  code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12.5px; }
+  .ok { color:var(--ok); font-weight:600; } .warn { color:var(--warn); font-weight:600; }
+  .box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+  a { color:var(--accent); word-break:break-all; }
+</style>
+</head>
+<body>
+<main>
+<h1>当日の特徴量を小さなメモリで作る設計</h1>
+<p class="muted">2026-10-14。対象: 履歴特徴量 127 列（tp-02 の A〜H）の蓄積と、当日（馬体重の発表後）の推論モード。実装: <code>src/pipeline/features/horse_history/</code>（<code>serving.py</code>・<code>elo.py</code>・各段階の frozen モード）。運用: <a href="../../operations/raceday_weight_trigger.md">raceday_weight_trigger.md</a>。保存形式: <a href="../data/database_schemas.html">database_schemas.html</a> の 3.6。</p>
+
+<div class="box"><b>結論</b>
+<ul>
+  <li>当日の特徴量は<b>出走馬の履歴だけ</b>で決まる。全履歴を使う計算（2〜3GB）を「大きなマシンで毎日 1 回」と「小さなマシンで当日」に分け、後者は<b>バンドル</b>（fit 済みの値・過去走の素材・Elo の最終状態）から出走馬の行だけを読む。</li>
+  <li>実測（ホスト、2024-07-06 の 36 レース・422 頭）: ピーク <b>約 340MB</b>（うち固有の分 約 160MB。残りはライブラリとメモリマップしたファイル）、計算 <b>0.6 秒</b>。全履歴方式は 2.4GB・約 20 秒。</li>
+  <li>結果は全履歴方式と<b>全 127 特徴量が一致</b>（実データ・合成データ）。学習用のバッチ計算は変えていない（28 万行 × 177 列で、変わったのは <code>sr_var_today</code> の 4 行だけ。下の 5）。</li>
+  <li>設計の途中で、<b>推論時に <code>sr_var_today</code> が全行欠損になる学習と本番のずれ</b>を見つけて直した（下の 5）。</li>
+</ul></div>
+
+<h2>1. 現状の実測（設計の前提）</h2>
+<table>
+<tr><th>処理</th><th>ピークメモリ</th><th>時間</th><th>主な内訳</th></tr>
+<tr><td>履歴特徴量の蓄積（<code>feature-accumulate</code>。2020〜2026 年の 32 万行を全部作り直す）</td><td>3.2GB</td><td>約 25 秒</td><td>polars のデータフレーム（約 190 列）の複製、<code>layer_a.parquet</code> の読み込み 約 1.3GB</td></tr>
+<tr><td>推論モード（全履歴方式。<code>KEIBA_INFERENCE_ENGINE=full</code>）</td><td>2.4GB</td><td>約 18 秒</td><td>同上（当日の行を履歴の末尾に足して全体を計算）</td></tr>
+<tr><td>小さなマシンの余裕（VPS 2GB のうち）</td><td>約 400MB</td><td>—</td><td>R-13（推論ピークメモリが VPS の余裕を超える可能性）</td></tr>
+</table>
+<p>列を絞る・float32 にするといった圧縮では 400MB に収まらず、float32 は値も変わる。そこで「計算する行を減らす」方向で設計した。</p>
+
+<h2>2. なぜ出走馬だけで正確に計算できるか（段階ごとの依存）</h2>
+<p>各段階が、<b>他の馬・他のレースの情報</b>をどこで使うかを洗い出し、その部分だけを保存済みの値に置き換えた。</p>
+<table>
+<tr><th>段階</th><th>他の馬・過去のレースから使うもの</th><th>バンドルでの扱い</th></tr>
+<tr><td>Elo（<code>run_elo</code>）</td><td>全レースを順に処理した各馬のレーティング。今日のレースは出走馬同士の事前レーティングだけ</td><td>最終状態（馬 → レーティング・出走数）を保存。今日の行は <code>elo_prerace</code> で状態から計算（1 レースの計算は <code>race_block</code> に切り出して共通化）</td></tr>
+<tr><td>準備（<code>prepare</code>）</td><td>レース内の相対化（上がりの z など）。過去のレースは全頭ぶん必要</td><td>過去走の行は<b>相対化済みの値</b>を保存。今日の行は結果が無いので null（出走馬だけで足りる）</td></tr>
+<tr><td>fit（<code>fit_basic</code> など）</td><td>FIT_END（2021-12-21）以前の全馬のデータ</td><td>fit した値（縮約強度・分位点・係数・KMeans の中心・近さの重みなど）を保存し、frozen モードで再 fit を省く</td></tr>
+<tr><td>履歴特徴量（A〜E・F5 の馬別）</td><td>その馬自身の過去走だけ（<code>over(馬)</code> の窓・累積）</td><td>出走馬の過去走を読むだけで同じ値になる</td></tr>
+<tr><td>標準条件レーティング H</td><td>par 時計の表（fit 期間）、日ごとの馬場差 <code>_var</code>（その日の全レースの中央値）、前の開催日の馬場差</td><td>par の表・回帰・性別・年齢・β を保存。過去走の <code>_var</code> は行に持たせる。<code>sr_var_today</code> 用の日別馬場差の表を保存</td></tr>
+<tr><td>F2・F3・F1（展開・Elo・類似）</td><td>今日のレースの出走馬どうしの脚質・レーティング。F1 は自分の過去走との類似</td><td>出走馬が全員読み込まれるので、そのまま計算できる。類似度の重み θ は保存</td></tr>
+<tr><td>F5（クラスタ）</td><td>全馬の過去走のクラスタ別の累積成績</td><td>累積の表（<code>f5_D</code>）と KMeans の中心を保存。ラベルは最も近い中心（<code>KMeans.predict</code> と同じ）。sklearn は読み込まない</td></tr>
+</table>
+
+<h2>3. 構成</h2>
+<table>
+<tr><th>役割</th><th>やること</th><th>メモリ</th></tr>
+<tr><td>大きなマシン（毎日 07:40 JST）</td><td><code>feature-accumulate</code>: 全履歴で特徴量を作り（当年分は <code>features_&lt;年&gt;.parquet</code> に蓄積）、同じ計算の結果としてバンドルを書き出す（約 1 秒）</td><td>約 3GB</td></tr>
+<tr><td>小さなマシン（当日）</td><td>馬体重の検知ランナーが <code>compute_entrants</code> を呼び、出走馬の履歴だけをメモリマップで読んで今日の行の特徴量を作る</td><td>約 340MB</td></tr>
+</table>
+<p>バンドルの中身は <a href="../data/database_schemas.html">database_schemas.html</a> の 3.6。大きなマシンから小さなマシンへの配布（rsync や GCS 経由）は未整備で、現状はホスト 1 台で動く。エンジンは <code>KEIBA_INFERENCE_ENGINE</code>（<code>auto</code>: バンドルがあれば使う／<code>bundle</code>／<code>full</code>）。</p>
+<h3>履歴の読み方</h3>
+<p>当初は馬ごとの小さな parquet を sqlite に入れたが、ファイルの固定オーバーヘッドで 618MB になった（元データは 90MB）。無圧縮の Arrow ファイルを <b>pyarrow でメモリマップ</b>し、馬ごとの行範囲（<code>horse_index.json</code>）で切り出す形にして 96MB・0.4 秒になった（polars の <code>scan_ipc</code> は全体を読み込み 2.4GB になったため使わない）。</p>
+<h3>import の削減</h3>
+<p><code>TRAINING_YEARS</code> を重い <code>time_split</code>（pandas 経由）から軽い <code>training_years.py</code> に移し、import 後のメモリを 153MB から 65MB にした。</p>
+
+<h2>4. 検証</h2>
+<table>
+<tr><th>比較</th><th>データ</th><th>結果</th></tr>
+<tr><td>バンドル vs 全履歴の推論モード</td><td>合成データ（テスト）、実データ 2024-07-06（422 頭）</td><td class="ok">不一致 0（127 特徴量すべて）</td></tr>
+<tr><td>バンドル vs 学習時のバッチ（同じ補修条件）</td><td>実データ 2024-07-06</td><td>23 個が不一致。すべて想定した差: ①出走取消・競走中止の 3 頭が出馬表に残る分（同一レース内で相対化する <code>c_fs_step</code>・<code>f2_*</code>・<code>f3_*</code>・<code>sr_exp_rank/rel</code>）、②出馬表と結果表のクラス表記の食い違い（<code>b_*class</code>・<code>c_cls_step</code>）、③馬場状態が取得時点と確定値で異なる（<code>f1_*</code>）、④同日の先行レースの結果が無い（<code>sr_var_today</code>・<code>sr_var_n</code>）</td></tr>
+<tr><td>バンドル vs 学習時のバッチ（補修表が全期間）</td><td>同上</td><td>44 個。上の 23 個に加え、補修表に<b>将来の出馬表</b>が含まれることによる差（<code>a_l3fz_*</code> など）。2020〜2025 年の壊れた上がり・通過順の期間だけに現れ、パーサー修正後の新しいデータでは生じない</td></tr>
+<tr><td>変更前後のバッチ（学習用）</td><td>実データ 28 万行 × 177 列</td><td>変わったのは <code>sr_var_today</code> の 4 行（null → 値）だけ。<code>sr_exp_rank</code> の 15 行は、同じコードを 2 回走らせても 11 行変わる計算の揺らぎ（並列の浮動小数点）</td></tr>
+</table>
+<p>自動テスト: <code>tests/pipeline/test_horse_history_serving.py</code>（バンドルと全履歴の一致、学習時のバッチとの差が想定内であること、<code>sr_var_today</code> が埋まること、レース情報が空の出馬表を拒否すること）、<code>test_horse_history_accumulate.py</code>（蓄積がバンドルを書き、バンドルエンジンと全履歴エンジンの出力が一致すること）。実データの検証は <code>python -m src.scripts.data.verify_serving_bundle build|serve|compare</code>（serve が小さなマシンの段階で、メモリを単独で測る）。</p>
+
+<h2>5. 見つかった不具合: 推論時に <code>sr_var_today</code> が全行欠損になる</h2>
+<div class="box">
+<p><code>sr_var_today</code>（当日の馬場差の推定）の「前の開催日の値」の補完は、<b>結果がある（<code>_dev</code> がある）レースにしか付かなかった</b>。学習時の行は結果があるので値が入るが、推論時の行は結果が無いので<b>全行が欠損</b>になり、学習と本番で分布が食い違っていた（合成データで学習時の欠損率 0%、推論時 100%）。</p>
+<p>修正: 前の開催日の値を、レースの日付・場・面から<b>すべてのレース</b>に付けるようにした（結果の有無に依らない。前の日付だけを使うのでリークは無い）。学習用バッチへの影響は、結果はあるが時計が足りず <code>_dev</code> が欠けるレースの 4 行（null → 値）のみ。tp-02 の再実行（データ完全化後）でこの値になる。</p></div>
+
+<h2>6. 運用</h2>
+<ul>
+  <li><code>feature-accumulate</code> が毎日バンドルを作り直す（<code>KEIBA_WRITE_SERVING_BUNDLE=0</code> で停止）。置き場所は <code>KEIBA_SERVING_BUNDLE_DIR</code> で変えられる。</li>
+  <li>履歴は前日までの確定結果までしか入らない。確定結果の取得が遅れた日があると、バンドルの <code>history_last_date</code> が古くなる（起動時のログとイベントに出る）。取得は <code>recent-retry</code>（毎日 2 回）が補う。</li>
+  <li>当日の先行レースの結果（<code>sr_var_n</code>・<code>sr_var_today</code> の「同日の他レース」分）は、推論モードにはまだ入っていない（前の開催日の値を使う）。入れるには、速報結果（発走 +15 分に取得）の馬場差を、日別馬場差の表に当日分として足す処理が要る。</li>
+</ul>
+
+<h2>7. 限界・未解決</h2>
+<ul>
+  <li><b>ランナー全体のメモリ</b>: 特徴量の計算は約 340MB だが、馬体重検知ランナーのプロセス全体（GCS クライアント・スクレイパーの import を含む）は約 430MB（固有 約 200MB）。400MB の余裕に収めるには、特徴量の計算だけを別プロセスにする、または小さなマシンでは取得と計算を分ける必要がある。</li>
+  <li><b>配布が未整備</b>: バンドル（96〜141MB）を大きなマシンから小さなマシンへ運ぶ手段（rsync・GCS）と、版・更新時刻の確認は未実装。</li>
+  <li><b>pickle</b>: <code>params.pkl</code> は信頼できる自前のファイルだけを読む前提（外部から受け取ったものは読まない）。</li>
+  <li><b>学習と推論の出走馬のずれ</b>: 学習側は着順の付かない馬（競走中止・除外）を履歴から外し、推論は出馬表の全頭。tp-03 で「含める／含めない」を比較して決める（別途記載）。</li>
+  <li>pyarrow が必要（polars の IPC 読み込みはメモリマップに対応しないため）。</li>
+</ul>
+</main>
+</body>
+</html>
