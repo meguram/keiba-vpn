@@ -18,6 +18,19 @@ def _rss() -> float:
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
 
 
+def _mem_breakdown() -> str:
+    """常駐メモリの内訳（匿名 = プロセス固有、ファイル = メモリマップしたファイルのページ。後者は必要なら OS が手放せる）。"""
+    d = {}
+    try:
+        for line in open("/proc/self/status", encoding="utf-8"):
+            if line.startswith(("VmRSS", "RssAnon", "RssFile", "VmHWM")):
+                k, v = line.split(":")
+                d[k] = int(v.split()[0]) / 1024
+    except OSError:
+        return ""
+    return " ".join(f"{k}={v:.0f}MB" for k, v in d.items())
+
+
 def _card(day: str):
     import polars as pl
 
@@ -58,7 +71,7 @@ def cmd_serve(a) -> int:
     out, info = compute_entrants(b, _card(a.day), b.graded_names)
     out.write_parquet(a.out)
     print(f"serve: import後 {r0:.0f} MB → バンドル読込後 {r1:.0f} MB → 計算後ピーク {_rss():.0f} MB / 全体 {time.perf_counter() - t:.1f}s / "
-          f"レース {info['races']} 行 {info['rows']} 履歴行 {info['history_rows']}")
+          f"レース {info['races']} 行 {info['rows']} 履歴行 {info['history_rows']} | {_mem_breakdown()}")
     return 0
 
 
@@ -97,7 +110,13 @@ def cmd_compare(a) -> int:
         return bad
 
     mism(got, full, "バンドル vs 全履歴の推論モード")
-    mism(got, ref, "バンドル vs 学習時の値")
+    mism(got, ref, "バンドル vs 学習時の値（補修表は全期間）")
+    # 同じ補修条件（当日までの出馬表だけ）で全期間をバッチ計算した値。補修表の将来分の影響を除いて比べる
+    from src.pipeline.features.horse_history.builder import build_from_runs
+    from src.pipeline.features.horse_history.common import load_runs
+
+    Fb, _ = build_from_runs(load_runs(years=list(range(2020, 2026))), rm)
+    mism(got, Fb.filter(pl.col("race_id").is_in(card["race_id"].unique().to_list())), "バンドル vs 同じ補修条件のバッチ")
     return 0
 
 
