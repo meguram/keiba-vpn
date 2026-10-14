@@ -91,3 +91,29 @@ def test_tier_file_covers_all_features(setup):
     cols = {c for v in feature_columns(F.columns).values() for c in v}
     assert cols <= set(tiers), sorted(cols - set(tiers))
     assert set(tiers.values()) == {0, 1, 2}
+
+
+def test_normalize_card_matches_result_table_conventions():
+    from src.pipeline.features.horse_history.inference import normalize_card
+
+    card = pl.DataFrame({
+        "race_id": list("abcdefg"),
+        "track_condition": ["良", "稍", "重", "不", None, "良", "良"],
+        "grade": ["", "", "", "OP", "OP", "未勝利", ""],
+        "race_class": ["サラ系３歳以上 ２勝クラス", "サラ系３歳以上 ３勝クラス", "サラ系３歳以上 １勝クラス", "サラ系３歳以上 オープン", "サラ系３歳以上 オープン",
+                       "サラ系２歳 未勝利", ""],
+        "race_name": ["x", "x", "x", "宝塚記念", "無名S", "x", "x"],
+    })
+    out = normalize_card(card, {"宝塚記念": "G1"})
+    assert out["track_condition"].to_list() == ["良", "稍重", "重", "不良", None, "良", "良"]
+    assert out["grade"].to_list() == ["2勝", "3勝", "1勝", "G1", "OP", "未勝利", None]  # 重賞名が不明なら OP のまま、障害（race_class 空）は空のまま
+
+
+def test_graded_race_names_keeps_latest_grade(tmp_path):
+    from src.pipeline.features.horse_history.inference import graded_race_names
+
+    for y, g in ((2022, "G2"), (2023, "G1")):
+        d = tmp_path / str(y)
+        d.mkdir()
+        pl.DataFrame({"race_id": [f"{y}0001", f"{y}0001", f"{y}0002"], "race_name": ["A杯", "A杯", "B賞"], "grade": [g, g, "OP"]}).write_parquet(d / "race_result_flat.parquet")
+    assert graded_race_names(tmp_path, [2022, 2023]) == {"A杯": "G1"}

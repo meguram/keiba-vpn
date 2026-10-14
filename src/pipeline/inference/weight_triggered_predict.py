@@ -50,6 +50,7 @@ class InferenceContext:
         self.raw_hist: pl.DataFrame | None = None
         self.repair_map: pl.DataFrame | None = None
         self.history_last_date: str | None = None
+        self.graded_names: dict[str, str] = {}
 
     def warm(self) -> dict:
         from src.pipeline.features.horse_history.common import build_repair_map, read_runs_raw
@@ -64,6 +65,9 @@ class InferenceContext:
             self.repair_map = pl.DataFrame(schema={"horse_id": pl.Utf8, "run_date": pl.Date, "l3f_fix": pl.Float64,
                                                    "weight_fix": pl.Float64, "src_date": pl.Date})
         self.history_last_date = str(self.raw_hist["date"].max())
+        from src.pipeline.features.horse_history.inference import graded_race_names
+
+        self.graded_names = graded_race_names(self.tables_dir, years)
         info = {"history_rows": self.raw_hist.height, "history_last_date": self.history_last_date,
                 "warm_sec": round(time.perf_counter() - t0, 1)}
         logger.info("推論用の履歴を読み込み: %s", info)
@@ -74,7 +78,7 @@ class InferenceContext:
 
         if self.raw_hist is None:
             self.warm()
-        return build_inference_features(self.raw_hist, card, self.repair_map)
+        return build_inference_features(self.raw_hist, card, self.repair_map, graded_names=self.graded_names)
 
 
 def card_frame(storage: Any, race_ids: list[str]) -> pl.DataFrame:
@@ -92,7 +96,7 @@ def card_frame(storage: Any, race_ids: list[str]) -> pl.DataFrame:
         rows.extend(_data_to_flat_rows(data, "race_shutuba"))
     if not rows:
         return pl.DataFrame()
-    df = pl.DataFrame([{c: r.get(c) for c in CARD_COLS} for r in rows], infer_schema_length=None)
+    df = pl.DataFrame([{c: r.get(c) for c in CARD_COLS + ["race_name"]} for r in rows], infer_schema_length=None)
     ints = [c for c in ("distance", "horse_number", "weight") if c in df.columns]
     return df.with_columns([pl.col(c).cast(pl.Int64, strict=False) for c in ints]
                            + [pl.col("jockey_weight").cast(pl.Float64, strict=False)])

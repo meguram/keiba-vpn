@@ -19,7 +19,7 @@ import polars as pl
 
 from src.pipeline.features.horse_history.builder import build_horse_history, feature_columns
 from src.pipeline.features.horse_history.common import TABLES_DIR, build_repair_map, read_runs_raw
-from src.pipeline.features.horse_history.inference import CARD_COLS, build_inference_features, load_tiers
+from src.pipeline.features.horse_history.inference import CARD_COLS, build_inference_features, graded_race_names, load_tiers
 
 
 def main() -> int:
@@ -41,10 +41,10 @@ def main() -> int:
 
     year = args.day[:4]
     card = pl.read_parquet(TABLES_DIR / year / "race_shutuba_flat.parquet").filter(pl.col("date") == args.day)
-    card = card.select([c for c in CARD_COLS if c in card.columns])
+    card = card.select([c for c in CARD_COLS + ["race_name"] if c in card.columns])
     if args.no_weights:
         card = card.with_columns(pl.lit(None, pl.Int64).alias("weight"))
-    out, info = build_inference_features(raw, card, rm)
+    out, info = build_inference_features(raw, card, rm, graded_names=graded_race_names())
     ref = F.filter(pl.col("race_id").is_in(card["race_id"].unique().to_list()))
     print(f"日: {args.day} レース {info['races']} 行 {info['rows']}（学習時 {ref.height}）  馬体重あり {info['weights_known_ratio']:.0%}")
     print(f"所要: 履歴の読み込み {t_load:.1f}s / 推論モードの特徴量計算 {info['build_sec']}s（参考: 学習時の全件計算 {t_batch:.0f}s）")
