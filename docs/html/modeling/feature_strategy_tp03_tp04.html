@@ -43,6 +43,7 @@
 <tr><td>時点ルール（as-of）</td><td>特徴量は「対象レース日より前」のデータだけで作る。同日の他レースも使わない。Elo は 1 日分のレースを前日までのレーティングで評価し、日の終わりにまとめて更新する。</td><td><code>src/pipeline/features/horse_history/</code>。リーク検査は <code>builder.py</code> の <code>truncation_check</code>（2023-07-01 以降を消して再計算しても、それ以前の特徴量が完全一致）と <code>permutation_check</code>（以降の結果を入れ替えても当日の特徴量が不変）。tp-02 で不一致 0 を確認。</td></tr>
 <tr><td>全体フィットの範囲</td><td>縮約強度（κ）・分位点・クラスタ・類似度の重みなど、全期間で決める値は <code>FIT_END = 2021-12-21</code> 以前のデータだけで決め、全 fold で固定する。</td><td>最初の fold（valid 2022）の学習終端 2021-12-22 より前。<code>common.py</code>。</td></tr>
 <tr><td>学習対象年</td><td>2020〜2025 年のみ。2026 年は不完全なため、学習・検証・テスト・履歴集計のいずれにも使わない。</td><td><code>time_split.py</code> の <code>TRAINING_YEARS</code>。</td></tr>
+<tr><td>予測時点と可用時点（tier）</td><td>予測は<b>馬体重の発表後（T-60）のみ</b>回す（前日夜の別バージョンは作らない）。前日までに確定する特徴量（tier 0）を先に計算してキャッシュし、当日朝（馬場状態・クッション値。tier 1）、T-60（馬体重。tier 2）の順に足す。</td><td>詳細は <a href="modeling_strategy_tp04_tp07.html">モデリング戦略書</a> §10。tp-02 で <code>feature_tiers.json</code> を出力する予定。</td></tr>
 <tr><td>オッズ・人気は使わない</td><td>LayerA（市場独立の確率推定）には入れない。市場との合成（Benter 型の 2 段階ロジット）は LayerB（tp-06 以降）で扱う。</td><td><code>pre_race_feature_whitelist.html</code>。学習時と運用時でオッズの時点が違うと劣化した事例（出典 L13）。</td></tr>
 <tr><td>欠損の扱い</td><td>欠損は 0 で埋めず NA のままにする。疎なデータには <code>has_*</code> フラグを付ける（例: <code>has_speed_index</code>）。</td><td>ホワイトリスト。木モデルは NA を扱える。</td></tr>
 <tr><td>時代ずれへの対処</td><td>年そのもの、時間とともに単調に増える累積件数、2020 年からの集計の始まりに由来する特徴量は、時代を見分ける手がかりになる。adversarial validation で追跡する。</td><td><code>f5_n</code>（全期間の累積件数）は出力から外した。残る候補への対処は tp-03（§7）。</td></tr>

@@ -57,6 +57,8 @@
 <tr><td>学習対象年</td><td>2020〜2025 年のみ。2026 年は不完全なため、学習・検証・テスト・履歴集計のいずれにも使わない（<code>TRAINING_YEARS</code>）。</td></tr>
 <tr><td>分割ルール</td><td><code>config/modeling/dataset_split_manifest.json</code>（version 1、git 管理）。2020-23 train / 2024 valid / 2025 test、レース単位で完全分離。</td></tr>
 <tr><td>必須ソース</td><td><code>race_shutuba</code>(33 列)、<code>race_result</code>(38 列)、<code>race_index</code>(26 列)、<code>race_shutuba_past</code>(20 列)。</td></tr>
+<tr><td>予測時点</td><td>予測は<b>馬体重の発表後（T-60）のみ</b>回す（2026-10-14 ユーザー決定）。前日夜の別バージョンは作らない。前日までに用意できる部分（tier 0）を先に計算してキャッシュし、T-60 の処理時間を短縮する。詳細は <a href="modeling_strategy_tp04_tp07.html" style="color:#7aa9ff">モデリング戦略書</a> §10。</td></tr>
+<tr><td>ニューラルネット用の環境</td><td>ホスト PC に PyTorch 2.6.0（CUDA 12.4）を導入済み（2026-10-14）。GPU（RTX 4070 Ti）で動作確認。XGBoost の CUDA、CatBoost の GPU、LightGBM、polars、MLflow とプロジェクトのテストも正常。</td></tr>
 <tr><td>計算資源</td><td>CPU 24 スレッド（他ジョブ用に 4 を空け、学習は 20）、GPU は RTX 4070 Ti 12GB、RAM 90GB。XGBoost(CUDA) と CatBoost(GPU) は GPU で動作確認済み。LightGBM は CPU のみ。CatBoost は CPU/GPU で <code>border_count=254</code> に固定。</td></tr>
 </table>
 <h3>申し送り</h3>
