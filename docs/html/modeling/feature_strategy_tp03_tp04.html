@@ -59,8 +59,8 @@
 <tr><td>追い切り・パドック</td><td>保存件数と取り直した件数が一致（パドックは元々 5 頭程度）。<b>特徴量にはまだ使っていない。</b></td></tr>
 </table>
 
-<h2>3. 特徴量ファミリー（tp-02 で実装済み。94 特徴量）</h2>
-<p class="muted">列名の接頭辞でファミリーを判別できる（<code>feature_families.json</code> がホスト PC の <code>data/local/modeling/training_pipeline/features/</code> にある）。EWM は指数加重移動平均（半減期はレース数）。</p>
+<h2>3. 特徴量ファミリー（tp-02 で実装済み。94 特徴量 + G 13 列 = 107）</h2>
+<p class="muted"><b>G（RPCI・PCI 系）はコード実装済みで、データ完全化後の tp-02 の再実行から出力に含まれる。</b>それ以外の 94 特徴量は tp-02 の実行済み。列名の接頭辞でファミリーを判別できる（<code>feature_families.json</code> がホスト PC の <code>data/local/modeling/training_pipeline/features/</code> にある）。EWM は指数加重移動平均（半減期はレース数）。</p>
 <table>
 <tr><th>系</th><th>列数</th><th>計算の中身</th><th>主な列</th><th>根拠</th></tr>
 <tr><td><b>A 上がり・脚質</b></td><td>14</td>
@@ -91,11 +91,17 @@
 今回のレースの想定ペースは、出走馬の脚質（<code>a_style</code>）から先行馬の頭数・割合（<code>f2_pressure</code>）を数え、3 区分に分けた先行馬圧力 <code>f2_bin</code> から、<code>FIT_END</code> 以前で推定した対応表 <code>P(実際のペース区分 | f2_bin)</code> で確率にする（<code>f2_p_fast</code> = 前傾の確率）。この確率で区分別の成績を重み付けしたものが <code>f2_pace_match</code>（展開マッチ）。ほかに、先行馬の頭数、出走馬内の前からの順位、脚質×先行馬割合、単騎逃げのフラグ。</td>
 <td><code>f2_nfront</code>、<code>f2_nfront40</code>、<code>f2_nknown</code>、<code>f2_early_rank</code>、<code>f2_pressure</code>、<code>f2_bin</code>、<code>f2_a_reg0/1/2</code>、<code>f2_n_reg*</code>、<code>f2_pace_match</code>、<code>f2_pace_adv</code>、<code>f2_p_fast</code>、<code>f2_style_x_press</code>、<code>f2_lone_front</code></td>
 <td>逃げ馬が 1 頭ならスロー、同型が 5 頭以上なら前崩れ（S7、S12）。逃げはスローで有利、先行はハイペースで消耗（S2）。<br>
-<b>限界:</b> 想定ペースの確率がほぼ一様（約 1/3 ずつ）で、展開の予測としては弱い。ペース区分は前半・後半の差だけで決めており、中盤の緩みなどラップの形は見ていない。試作検証でもペース別成績（F2b）の効果はほぼゼロだった（§6）。<b>ペースを専用に予測する前段が必要</b>（§4）。</td></tr>
+<b>限界:</b> 想定ペースの確率がほぼ一様（約 1/3 ずつ）で、展開の予測としては弱い。ペース区分は前半・後半の差だけで決めており、中盤の緩みなどラップの形は見ていない（距離で正規化し中盤も含む RPCI 相当は G で扱う）。試作検証でもペース別成績（F2b）の効果はほぼゼロだった（§6）。<b>ペースを専用に予測する前段が必要</b>（§4）。</td></tr>
 <tr><td><b>F3 Elo（相手関係付きレーティング）</b></td><td>9</td>
 <td>多頭数 Elo。順位から <code>S = (N − 順位)/(N − 1)</code>、期待値 <code>E</code> は全ペアの勝率の平均。K=300（fit 期間で勝ち馬の対数尤度が最小。K=24 では残差の自己相関が 0.31 残った）、初期値 1500、過去走 3 未満は K を 1.5 倍。レース前のレーティング、相手の平均・上位 3 頭・標準差、自分との差、レース内順位、過去走数。</td>
 <td><code>f3_r</code>、<code>f3_E</code>、<code>f3_fs_mean/top3/std</code>、<code>f3_r_gap</code>、<code>f3_r_gap_top3</code>、<code>f3_r_rank</code>、<code>f3_n_pre</code></td>
 <td>Elo・Glicko・TrueSkill（出典 L7、L8）。Glicko の不確実性（RD）の考え方は未実装。Plackett-Luce（出典 L9）は目的関数側の検討事項。</td></tr>
+<tr><td><b>G RPCI・PCI（ペースの形）</b></td><td>13</td>
+<td><b>レース単位の RPCI 相当:</b> ラップ（1F ごと）から <code>50 × （ラスト 3F を除く 1F 平均 ÷ ラスト 3F の 1F 平均）</code>。小さいほど前傾（ハイペース）、大きいほど後傾（スロー）。前半 3F と後半 3F の差（F2 の <code>pace_bal</code>）と違い、距離で正規化され、中盤も含む。実測では短距離が低く（1000〜1400m で平均 47.7）、長距離が高い（2300m 以上で 52.3）。<br>
+<b>馬単位の PCI:</b> 走破タイムと上り 3F から同じ式で計算（前半は <code>(time_sec − 上り3F) ÷ ((距離 − 600)/200)</code>）。小さいほど道中を速く走った。<br>
+<b>特徴量:</b> 馬の PCI の EWM（短期・長期）とトレンド、PCI −（そのレースの RPCI）の EWM（その馬がレースの流れより前に行く傾向）、過去走が走ったレースの RPCI の EWM。さらに、過去走を RPCI の 3 区分（距離帯別の分位。前傾・平均・後傾）に分けた区分別の相対成績（縮約）と過去走数、前傾と後傾の差 <code>pc_adv</code>（前傾・後傾への相性）。</td>
+<td><code>pc_pci_ewm2/ewm6</code>、<code>pc_pci_trend</code>、<code>pc_pcrel_ewm2/ewm6</code>、<code>pc_rpci_ewm3</code>、<code>pc_a_reg0/1/2</code>、<code>pc_n_reg0/1/2</code>、<code>pc_adv</code></td>
+<td>PCI は「前半と後半の配分を示す指数」（S11）、想定レース質との PCI 差を見る（S9）。<b>JRA の RPCI・PCI の公式式は未確認</b>のため自前定義で、公式値とは一致しない可能性がある。実データでの確認: ラップは全レースの 96.5% にあり、RPCI 相当は各年 86〜87% のレースで計算できる。馬の PCI の EWM と過去の位置取りの傾向（<code>a_style</code>）の順位相関は 0.32 で、別の情報になっている。効果は tp-03 で測る。</td></tr>
 <tr><td><b>F5 プロファイル近傍</b></td><td>3</td>
 <td>馬のプロファイル（脚質、上がり、距離、芝比率、湿り、クラス）を標準化して KMeans（k=24、<code>FIT_END</code> 以前で学習）でクラスタ化し、(クラスタ×芝ダ×距離帯) ごとの過去の好走率・残差を日付までの累積で出す。</td>
 <td><code>f5_cl</code>、<code>f5_aff</code>、<code>f5_win</code></td>
@@ -115,7 +121,7 @@
 <tr><th>ID</th><th>予測量</th><th>粒度</th><th>ラベル（結果由来。学習専用）</th><th>入力（すべて as-of）</th><th>後段での使い道</th><th>対応</th></tr>
 <tr><td>P1</td><td>位置取り（初角・最終角の順位の正規化）</td><td>馬</td><td>当該レースの <code>pos_early</code>・<code>pos_late</code></td><td>A 系（<code>a_style</code>、<code>a_style_late</code>）、枠・馬番、騎手・調教師の傾向（逃げ・先行率）、距離、芝ダ、場、クラス、頭数、休養、馬体重</td><td>先行馬頭数の予測、単騎逃げ確率、自馬が最前かどうか、脚質×展開</td><td>tp-04（T-6・T-5）</td></tr>
 <tr><td>P2</td><td>隊列の集計（予測先行馬頭数、先行力の上位 2〜3 頭の拮抗、逃げ候補の数）</td><td>レース</td><td>なし（P1 の集計。モデル不要）</td><td>P1 の出走馬分</td><td>P3 の入力、<code>s_nfront_pred</code></td><td>tp-04（集計）</td></tr>
-<tr><td>P3</td><td><b>ペース予測</b>: 前傾／平均／後傾の確率と、期待 <code>pace_bal</code>（前半 3F − 後半 3F）</td><td>レース</td><td>実際の <code>pace_bal</code> とその 3 区分（距離帯別の分位、<code>FIT_END</code> 以前で決定）</td><td>P2、出走馬の Elo の分布、クラス、距離、芝ダ、場（コース形状）、馬場状態、頭数、当日の馬場傾向</td><td>展開マッチの重み（<code>m_pace_match</code>）、上がり予測の条件</td><td>tp-04（T-8）</td></tr>
+<tr><td>P3</td><td><b>ペース予測</b>: 前傾／平均／後傾の確率と、期待 <code>pace_bal</code>（前半 3F − 後半 3F）</td><td>レース</td><td>実際の <code>pace_bal</code> とその 3 区分、および <code>rpci</code>（G と同じ定義）とその 3 区分（いずれも距離帯別の分位、<code>FIT_END</code> 以前で決定）。どちらをラベルにするかは tp-04 で比べる</td><td>P2、出走馬の Elo の分布、クラス、距離、芝ダ、場（コース形状）、馬場状態、頭数、当日の馬場傾向</td><td>展開マッチの重み（<code>m_pace_match</code>）、上がり予測の条件</td><td>tp-04（T-8）</td></tr>
 <tr><td>P4</td><td>上がり 3F の予測（<b>ペース別の条件付き</b>: 前傾・平均・後傾の各仮定下）</td><td>馬</td><td>当該レースの上り 3F（レース内 z）</td><td>A 系、P1、P3 の仮定、距離、馬場、F3 の Elo</td><td>予測ペースで重み付けした上がり期待値、レース内での相対位置</td><td>tp-04（T-4）</td></tr>
 <tr><td>P5</td><td>走破タイム（または時計指数）の予測</td><td>馬</td><td>当該レースの <code>time_sec</code></td><td>A・B・C・F3、距離、馬場</td><td>相手との能力差の予測（最良予測との差）</td><td>tp-04（T-9）</td></tr>
 <tr><td>P6</td><td>正規化着順の予測</td><td>馬</td><td>当該レースの正規化着順</td><td>全特徴量 + P1・P3・P4・P5</td><td>最終モデル（tp-05）への入力</td><td>tp-04（T-5）</td></tr>
@@ -129,6 +135,7 @@
 <tr><td><code>s_nfront_pred</code>、<code>s_front_gap</code>、<code>s_lone_front_prob</code></td><td>予測先行馬頭数、自馬の予測位置とレース内最前との差、単騎逃げの確率（P1 から）</td><td><code>f2_nfront</code>、<code>f2_pressure</code>、<code>f2_lone_front</code></td></tr>
 <tr><td><code>s_pace_p_front</code>、<code>s_pace_p_mid</code>、<code>s_pace_p_back</code>、<code>s_pace_bal_pred</code></td><td>P3 の出力</td><td><code>f2_p_fast</code></td></tr>
 <tr><td><code>m_pace_match</code></td><td>Σ<sub>k</sub> P3<sub>k</sub> × （馬の区分 k での縮約成績 <code>f2_a_reg_k</code>）。前傾・後傾への相性を、予測ペースの確率で重み付けする</td><td><code>f2_pace_match</code>（確率を対応表から P3 に替える）</td></tr>
+<tr><td><code>m_rpci_match</code>、<code>s_rpci_pred</code></td><td>RPCI 版の展開マッチ: Σ<sub>k</sub> P3<sub>k</sub>（RPCI の 3 区分の予測確率）× 馬の区分別成績 <code>pc_a_reg_k</code>。<code>s_rpci_pred</code> は P3 の期待 RPCI</td><td><code>pc_adv</code> を予測ペースで重み付けする形に拡張</td></tr>
 <tr><td><code>m_pace_adv</code></td><td><code>f2_pace_adv</code> × （P3 の前傾確率 − 後傾確率）。前傾に強い馬が前傾と予測されるレースで有利、の度合い</td><td>—</td></tr>
 <tr><td><code>s_l3f_pred_cond</code>、<code>s_l3f_adv</code></td><td>Σ<sub>k</sub> P3<sub>k</sub> × （P4 の区分 k 仮定下の上がり予測）、およびレース内平均との差</td><td>—（A 系の「過去の上がり」を、今回の展開で条件付けた期待値に拡張）</td></tr>
 <tr><td><code>s_time_pred</code>、<code>s_time_gap</code>、<code>s_rank_pred</code></td><td>P5・P6 の出力と、レース内最良予測との差</td><td>—</td></tr>
@@ -200,7 +207,8 @@
 <tr><td>5</td><td>時代ずれ対策: (a) クラス・相手関係系（<code>c_rq*</code>、<code>c_cls*</code>、<code>f3_fs_*</code>）の年内標準化、(b) 件数系（<code>d_career_days</code>、<code>d_nprior</code>、<code>b_n_*</code> など）の除外、(c) F5 の除外</td><td>adversarial validation の AUC（現状 0.74〜0.90）を下げつつ、LogLoss を悪化させない組み合わせを探す。</td></tr>
 <tr><td>6</td><td>2020 年フラグ（無観客期）の有無、2020 年の行の重み</td><td>COVID の影響の確認。</td></tr>
 <tr><td>7</td><td>欠損の扱い（NA のまま／<code>has_*</code> 追加）</td><td>取得データの欠損（<code>race_index</code> の取り直し後に残る分）の影響。</td></tr>
-<tr><td>8</td><td>tp-02b の拡張（追い切り、調教師コメント、近交係数、<code>venue_era</code>）</td><td>第 1 段の採用セットが決まった後に、1 ブロックずつ追加して効果を確認。</td></tr>
+<tr><td>8</td><td>G（RPCI・PCI）の単独・累積効果、および F2（<code>pace_bal</code> 版）との比較・併用</td><td>前傾・後傾への相性を、前半3F−後半3F の差で見る F2 と、距離で正規化した RPCI で見る G のどちらが効くか。両方入れて冗長でないか。</td></tr>
+<tr><td>9</td><td>tp-02b の拡張（追い切り、調教師コメント、近交係数、<code>venue_era</code>）</td><td>第 1 段の採用セットが決まった後に、1 ブロックずつ追加して効果を確認。</td></tr>
 </table>
 <h3>7.3 時代ずれの追跡（adversarial validation）</h3>
 <p>採用セットごとに、train と valid／test を見分ける AUC を記録する。現状（on_time 補正後、tp-02 の 94 特徴量）は、全部で 0.86（valid）・0.90（test）、F5 を除くと 0.76・0.79、F5 と件数系を除くと 0.74・0.78。上位は <code>c_rq_ewm2</code>、<code>c_cls_ewm2</code>、<code>c_cls_step</code>、<code>f3_fs_mean</code>、<code>c_fstop3_ewm2</code>。AUC は「分布差の大きさ」の目安であり、単独の合否基準ではない。LogLoss を悪化させずに下げられる範囲で対処する。</p>
@@ -232,7 +240,7 @@
 <tr><th>項目</th><th>状態</th></tr>
 <tr><td>Ragozin、Timeform の日本版、Sartin の PacePar と Kiwi、Dosage・AEI・ニックスの具体式</td><td>取得して確認できていない。1 次文献で確認してから採用する。</td></tr>
 <tr><td>Quirin Speed Points、Brohamer のファクター、class rating</td><td>確認できていない。</td></tr>
-<tr><td>PCI（前半と後半の配分を示す指数）の算出式</td><td>「前半と後半の配分を示す指数」という説明のみ確認（S11）。式は未確認のため、前半 3F／後半 3F の比などで自前に定義し、別名で扱う。</td></tr>
+<tr><td>JRA の RPCI・PCI の公式な算出式</td><td>「前半と後半の配分を示す指数」という説明のみ確認（S11）。式は未確認のため、G では「ラスト 3F を除く 1F 平均 ÷ ラスト 3F の 1F 平均 × 50」で自前に定義した（公式値とは一致しない可能性がある）。公式式を確認できたら置き換えを検討する。</td></tr>
 <tr><td>J-STAGE・CiNii・SSRN の日本語論文</td><td>動的ページで取得できなかった。</td></tr>
 <tr><td>個人ブログの加点・減点（+15 点など）</td><td>恣意的なので採らない。重みは学習で決める。</td></tr>
 </table>
