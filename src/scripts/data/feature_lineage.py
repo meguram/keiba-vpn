@@ -32,6 +32,10 @@ def _shift(col: str, delta: float):
     return lambda r, R: r.with_columns(pl.when(_in(R)).then(pl.col(col) + delta).otherwise(pl.col(col)).alias(col))
 
 
+def _skew(col: str, step: float):
+    return lambda r, R: r.with_columns(pl.when(_in(R)).then(pl.col(col) + (pl.col("horse_number") % 5).cast(pl.Float64) * step).otherwise(pl.col(col)).alias(col))
+
+
 TODAY = {  # 今日の出走行の項目（レース前に分かるもの）
     "馬体重(weight)": _shift("weight", 30.0),
     "斤量(jockey_weight)": _shift("jockey_weight", 3.0),
@@ -41,8 +45,9 @@ TODAY = {  # 今日の出走行の項目（レース前に分かるもの）
 }
 RESULT = {  # 今日の結果（レース後に分かるもの）
     "着順(finish_position)": lambda r, R: r.with_columns(pl.when(_in(R)).then(pl.col("n_fin") + 1 - pl.col("finish_position")).otherwise(pl.col("finish_position")).alias("finish_position")),
-    "走破時計(time_sec)": _shift("time_sec", 1.5),
-    "上り3F(last_3f)": _shift("last_3f", 0.8),
+    # レース内で相対化する特徴量(z・順位・par からの差)があるため、全員に同じ量を足すと動かない。馬ごとに違う量を足す。
+    "走破時計(time_sec)": _skew("time_sec", 0.5),
+    "上り3F(last_3f)": _skew("last_3f", 0.4),
     "通過順(passing_order)": lambda r, R: r.with_columns(pl.when(_in(R)).then(pl.lit("1-1")).otherwise(pl.col("passing_order")).alias("passing_order")),
     "ペース(pace_bal)": _shift("pace_bal", 1.0),
     "ラップ(rpci)": _shift("rpci", 2.0),
