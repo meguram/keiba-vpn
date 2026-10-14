@@ -159,6 +159,7 @@
   <li><code>race_index</code>（タイム指数）は生データが不完全（約 55% のレースが 3 頭分のみ）。ログインが実質的に効いていなかった取得の疑いが強く、取り直し手順は <code>docs/operations/stg_rescrape_login_dependent_20261014.md</code>。モデル側は <code>has_speed_index</code> で欠損を扱う。</li>
   <li>結果の <code>round</code> 列が全行 0（<code>parsers.py:186-187</code>）。<code>race_id</code> の下 2 桁から導出できる。</li>
   <li>RPCI・PCI 系の特徴量 G（<code>pc_</code> 接頭辞、13 列）をコードに追加済み。データ完全化後の tp-02 の再実行から出力に含まれる（詳細は特徴量戦略書の §3）。</li>
+  <li>標準条件レーティング H（<code>sr_</code> 接頭辞、17 列）とハンデ項つき Elo の実効値 <code>f3_r_eff</code> をコードに追加済み。斤量の係数 β は距離帯×芝ダ別に候補から選び（多くの区分で 0.00〜0.05 秒/kg。現行の固定表より小さい）、Elo のハンデ項は δ=0 を選択。障害レース（<code>race_class</code> が空）の面を「障」に直す修正も含む。いずれもデータ完全化後の tp-02 の再実行から反映される（詳細は特徴量戦略書の §3・§5.1）。</li>
   <li>「京都改修後」フラグ（<code>venue_era</code>）は未実装。</li>
   <li>騎手・調教師の拡張統計（<code>jk_*</code> / <code>tr_*</code>）は未結合。</li>
   <li>特徴量を LayerA の既存列（<code>horse_prior_*</code>、速度指数など）と合わせた状態での効果比較は tp-03 で行う。</li>
