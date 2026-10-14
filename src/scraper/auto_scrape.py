@@ -1408,6 +1408,7 @@ def show_status():
     task_labels = {
         "raceday-eve":           "前日夕 (出馬表+馬柱・追切 18:00 +追走難度)",
         "raceday-runner":        "開催日ランナー (出馬表・オッズ各R 15分前)",
+        "raceday-weight-runner": "馬体重の検知ランナー (各R T-65〜T-30 に出馬表を取り直し、特徴量・予測を起動)",
         "raceday-result-runner": "速報結果ランナー (各R発走15分後に速報取得)",
         "raceday-evening":       "開催日夕 (結果・確定オッズ)",
         "weekly-update":         "金曜18:00 週次 (直近10日・結果+めぐGCS)",
@@ -1500,10 +1501,21 @@ def task_jra_baba_morning():
 #  CLI
 # ═══════════════════════════════════════════════════════════════════
 
+def task_raceday_weight_runner():
+    """馬体重の検知ランナー（キュー経路のみ。cron 未登録）。詳細は auto_scrape_queue.task_raceday_weight_runner。"""
+    if not _via_queue():
+        logger.error("raceday-weight-runner はキュー経路（KEIBA_AUTO_SCRAPE_USE_QUEUE 有効）でのみ動く")
+        return
+    from src.scraper import auto_scrape_queue as _asq
+
+    return _asq.task_raceday_weight_runner()
+
+
 TASKS = {
     "raceday-eve":            task_raceday_eve,
     "horse-name-index":       task_horse_name_index,
     "raceday-runner":         task_raceday_runner,
+    "raceday-weight-runner":  task_raceday_weight_runner,
     "raceday-result-runner":  task_raceday_result_runner,
     "raceday-evening":        task_raceday_evening,
     "weekly-update":          task_weekly_update,

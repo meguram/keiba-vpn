@@ -25,3 +25,9 @@
 30 8 * * *  __PROJECT__/scripts/auto_scrape.sh barometer >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
 0 9  * * *  __PROJECT__/scripts/auto_scrape.sh catchup >> __PROJECT__/logs/auto_scrape_catchup.log 2>&1 # KEIBA-VPN-JST
 30 5 * * *  __PROJECT__/scripts/cron/update_jockey_trainer_stats.sh >> __PROJECT__/logs/jockey_trainer_stats.log 2>&1 # KEIBA-VPN-JST
+
+# ── 任意（既定は未登録。登録するときは行頭の「# 」を外して上の登録コマンドを使う。詳細: docs/operations/raceday_weight_trigger.md）
+# 馬体重の検知ランナー（各R T-65〜T-30 に出馬表を取り直し、特徴量・予測を起動）
+# 30 7 * * *  __PROJECT__/scripts/auto_scrape.sh weight_runner >> __PROJECT__/logs/auto_scrape_weight.log 2>&1 # KEIBA-VPN-JST
+# 推論用の履歴テーブルの増分エクスポート（当年。結果の取り込み後に 1 日 1 回）
+# 30 6 * * *  __PROJECT__/scripts/cron/export_tables_daily.sh >> __PROJECT__/logs/export_tables_daily.log 2>&1 # KEIBA-VPN-JST

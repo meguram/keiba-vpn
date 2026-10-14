@@ -37,9 +37,18 @@ def _rpci_from_laps(s: str | None) -> float | None:
     return 50.0 * (sum(laps[:-3]) / (len(laps) - 3)) / (sum(laps[-3:]) / 3)
 
 
-def load_runs(tables_dir: str | Path | None = None) -> pl.DataFrame:
+def read_runs_raw(tables_dir: str | Path | None = None, years: list[int] | None = None) -> pl.DataFrame:
+    """race_result_flat を読むだけ（整形前）。years 省略時は学習用の 2020〜2025 年。"""
     base = Path(tables_dir) if tables_dir else TABLES_DIR
-    df = pl.concat([pl.read_parquet(base / str(y) / "race_result_flat.parquet", columns=RUN_COLS) for y in YEARS])
+    ys = [int(y) for y in years] if years else YEARS
+    return pl.concat([pl.read_parquet(base / str(y) / "race_result_flat.parquet", columns=RUN_COLS) for y in ys])
+
+
+def load_runs(tables_dir: str | Path | None = None, years: list[int] | None = None) -> pl.DataFrame:
+    return clean_runs(read_runs_raw(tables_dir, years))
+
+
+def clean_runs(df: pl.DataFrame) -> pl.DataFrame:
     df = df.filter((pl.col("finish_position") > 0) & pl.col("venue_code").cast(pl.Int32, strict=False).is_between(1, 10))
     df = df.with_columns(
         pl.col("date").str.to_date("%Y-%m-%d"),

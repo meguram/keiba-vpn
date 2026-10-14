@@ -8,6 +8,7 @@
 #   auto_scrape.sh thu           → raceday-eve           (木 20:00: 翌日が開催日なら出馬表取得)
 #   auto_scrape.sh fri_night     → raceday-eve           (金 22:00: 明日=土曜=開催日の出馬表・追い切り)
 #   auto_scrape.sh runner        → raceday-runner        (土日 07:30: 開催日常駐 T-15 スクレイプ)
+#   auto_scrape.sh weight_runner → raceday-weight-runner (馬体重の検知: 各R T-65〜T-30。cron 未登録・手動起動)
 #   auto_scrape.sh result_runner → raceday-result-runner (土日 07:30: 各R発走T+15速報結果取得)
 #   auto_scrape.sh raceday       → raceday-evening       (土日 18:00: 本日レース結果取得)
 #   auto_scrape.sh catchup       → catchup-missing       (毎日 09:00: 欠損補完)
@@ -40,6 +41,13 @@ case "${1:-}" in
   runner)
     TASK="raceday-runner"
     if pgrep -f "auto_scrape.*--task.*raceday-runner" > /dev/null 2>&1; then
+      echo "[$(date '+%Y-%m-%dT%H:%M:%S')] $LOG_TAG already running, skip"
+      exit 0
+    fi
+    ;;
+  weight_runner)
+    TASK="raceday-weight-runner"
+    if pgrep -f "auto_scrape.*--task.*raceday-weight-runner" > /dev/null 2>&1; then
       echo "[$(date '+%Y-%m-%dT%H:%M:%S')] $LOG_TAG already running, skip"
       exit 0
     fi

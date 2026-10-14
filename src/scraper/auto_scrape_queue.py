@@ -41,6 +41,9 @@ T15_RACE_TASKS: list[str] = [
 # T-60 はオッズ（単複・馬連・ワイド・馬単・3連複）のみ。馬場ライブ・予測トリガは呼ばない。
 ODDS_T60_TASKS: list[str] = ["race_odds_t60", "race_pair_odds_t60"]
 
+# 馬体重の検知（raceday-weight-runner）: 各R T-65〜T-30 に出馬表を取り直し、馬体重が入ったら特徴量・予測を起動する。
+from src.scraper.raceday_weight_watch import WEIGHT_WATCH_TASKS  # noqa: E402,F401
+
 # 前日夕方（raceday-eve）: 出馬表・馬柱・追い切り・SmartRC
 EVE_TASKS: list[str] = ["race_shutuba", "race_shutuba_past", "race_oikiri", "smartrc"]
 
@@ -936,3 +939,97 @@ def task_raceday_result_runner() -> None:
             "error_count": len(stats["errors"]),
         },
     )
+
+
+def task_raceday_weight_runner() -> None:
+    """馬体重の検知ランナー（cron には登録しない。手動または起動スクリプトで開始する）。
+
+    各レースの T-65〜T-30 に出馬表（race_shutuba）を ``KEIBA_WEIGHT_WATCH_POLL_SEC``（既定 90 秒）間隔で取り直し、
+    9 割以上の馬に馬体重が入ったら推論モードで特徴量を作る（``KEIBA_WEIGHT_TRIGGER_MODE=predict`` なら既存の予測も起動）。
+    期限までに入らなければ、馬体重なしで起動する。既存の ``raceday-runner``（T-60 オッズ・T-15 バンドル）とは独立。
+
+    リハーサル: ``KEIBA_WEIGHT_WATCH_DATE=YYYYMMDD KEIBA_WEIGHT_WATCH_REPLAY=1`` で、取得も待機もせず保存済みの出馬表だけで一巡する。
+    """
+    from src.pipeline.inference import weight_triggered_predict as wtp
+    from src.scraper import auto_scrape as _as
+    from src.scraper import raceday_weight_watch as ww
+
+    replay = os.environ.get("KEIBA_WEIGHT_WATCH_REPLAY", "").strip().lower() in ("1", "true", "yes")
+    ymd = (os.environ.get("KEIBA_WEIGHT_WATCH_DATE") or "").strip()
+    today_str = f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:8]}" if len(ymd) == 8 else _as._today_jst().isoformat()
+    date_fmt = today_str.replace("-", "")
+
+    if not ymd:
+        calendar = _as._load_race_calendar()
+        if not _as._is_race_day(calendar, today_str):
+            logger.info("今日 (%s) は開催日ではありません", today_str)
+            _as._save_status("raceday-weight-runner", {"status": "skipped", "reason": "non-race-day"})
+            return
+
+    storage = _storage()
+    queue = _queue()
+    if not replay and not _ensure_race_list_date(storage, queue, date_fmt):
+        _as._save_status("raceday-weight-runner", {"status": "error", "reason": "no-race-list"})
+        return
+    schedule = _fetch_race_schedule_storage(storage, date_fmt)
+    if not schedule:
+        _as._save_status("raceday-weight-runner", {"status": "error", "reason": "no-schedule"})
+        return
+
+    ctx = wtp.InferenceContext()
+    warm = ctx.warm()
+    windows = ww.plan_windows(schedule)
+    far_future = max(w.deadline for w in windows) + timedelta(days=1)
+    now_fn = (lambda: far_future) if replay else (lambda: datetime.now(_JST))
+    poll = ww.poll_sec()
+    logger.info("  馬体重検知ランナー: %s 全%dレース mode=%s replay=%s poll=%ss 窓 T-%s〜T-%s",
+                today_str, len(schedule), wtp.trigger_mode(), replay, poll, ww.start_min(), ww.deadline_min())
+
+    done: set[str] = set()
+    stats: dict[str, Any] = {"announced": 0, "deadline": 0, "errors": 0, "polls": 0}
+    while True:
+        now = now_fn()
+        wake = ww.next_wake(windows, done, now, poll)
+        if wake is None:
+            break
+        if wake > now and not replay:
+            wait = (wake - now).total_seconds()
+            logger.info("[weight] 次の取得まで待機 (あと %.0f秒)", wait)
+            time.sleep(wait)
+        now = now_fn()
+        due = ww.open_windows(windows, done, now)
+        if not due:
+            continue
+
+        if not replay:
+            queue.bulk_add_jobs([
+                {"job_kind": "race", "target_id": w.race_id, "date": date_fmt,
+                 "tasks": list(ww.WEIGHT_WATCH_TASKS), "smart_skip": False}
+                for w in due
+            ])
+            ok, msg, _ = _kick_and_wait(queue, timeout_sec=1800.0)
+            stats["polls"] += 1
+            if not ok:
+                logger.error("[weight] キュー待機失敗: %s", msg)
+
+        ready: list[dict] = []
+        known: dict[str, bool] = {}
+        for w in due:
+            card = storage.load("race_shutuba", w.race_id, bypass_cache=True)
+            verdict = ww.decide(card, w, now_fn())
+            if verdict == "wait":
+                continue
+            done.add(w.race_id)
+            stats[verdict] += 1
+            known[w.race_id] = verdict == "announced"
+            ready.append(w.race)
+            logger.info("[weight] %s %s (馬体重 %.0f%%)", w.race_id, verdict, 100 * ww.weights_ratio(card))
+        if ready:
+            for ev in wtp.run_for_races(ready, storage, ctx, weights_known=known):
+                if ev.get("status") != "ok":
+                    stats["errors"] += 1
+
+    _as._save_status("raceday-weight-runner", {
+        "status": "ok", "date": today_str, "races": len(schedule), "replay": replay,
+        "mode": wtp.trigger_mode(), "history_last_date": warm.get("history_last_date"), **stats,
+    })
