@@ -37,10 +37,11 @@ def _skew(col: str, step: float):
 
 
 TODAY = {  # 今日の出走行の項目（レース前に分かるもの）
-    "馬体重(weight)": _shift("weight", 30.0),
-    "斤量(jockey_weight)": _shift("jockey_weight", 3.0),
+    # 順位・相対化の特徴量を検出するため、全員に同じ量ではなく馬ごとに違う量を足す
+    "馬体重(weight)": _skew("weight", 8.0),
+    "斤量(jockey_weight)": _skew("jockey_weight", 1.0),
     "馬場状態(going)": lambda r, R: r.with_columns(pl.when(_in(R)).then(pl.when(pl.col("going") >= 2).then(0).otherwise(2)).otherwise(pl.col("going")).alias("going")),
-    "性齢(age)": lambda r, R: r.with_columns(pl.when(_in(R)).then(pl.col("age") + 1).otherwise(pl.col("age")).alias("age")),
+    "性齢(age)": lambda r, R: r.with_columns(pl.when(_in(R)).then(pl.col("age") + (pl.col("horse_number") % 3)).otherwise(pl.col("age")).alias("age")),
     "出走馬の構成(1頭除く)": lambda r, R: r.filter(~(_in(R) & (pl.col("horse_number") == pl.col("horse_number").min().over("race_id")))),
 }
 RESULT = {  # 今日の結果（レース後に分かるもの）
