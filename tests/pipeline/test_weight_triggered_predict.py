@@ -28,7 +28,8 @@ def _shutuba_from_day(tables, day: str, *, with_weight: bool) -> dict[str, dict]
         r0 = g.row(0, named=True)
         entries = [
             {"horse_number": r["horse_number"], "horse_id": r["horse_id"], "sex_age": r["sex_age"], "jockey_id": r["jockey_id"],
-             "trainer_id": r["trainer_id"], "jockey_weight": r["jockey_weight"], "weight": r["weight"] if with_weight else None}
+             "trainer_id": r["trainer_id"], "jockey_weight": r["jockey_weight"], "weight": r["weight"] if with_weight else None,
+             "grade": r["grade"]}  # 合成データは格が馬ごとに違うので、行ごとに持たせて学習時と揃える
             for r in g.iter_rows(named=True)
         ]
         out[rid] = {"race_id": rid, "date": r0["date"], "venue": "東京", "surface": r0["surface"], "distance": r0["distance"],

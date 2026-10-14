@@ -179,6 +179,12 @@ def run_for_races(
         out_dir.mkdir(parents=True, exist_ok=True)
         part = F.filter(pl.col("race_id") == rid)
         part.write_parquet(out_dir / f"{rid}.parquet")
+        # 予測に使った時点の出馬表（馬体重・馬場状態・取消を反映したもの）を残す。出馬表は後の取得で上書きされるため。
+        snap_dir = inference_dir() / "snapshots" / day
+        snap_dir.mkdir(parents=True, exist_ok=True)
+        (snap_dir / f"{rid}.json").write_text(json.dumps(
+            {"race_id": rid, "detected_at": now.isoformat(timespec="seconds"), "weights_known": bool(weights_known.get(rid, info["weights_known_ratio"] >= 0.9)),
+             "entries": card.filter(pl.col("race_id") == rid).to_dicts()}, ensure_ascii=False, default=str), encoding="utf-8")
         ev = {
             "race_id": rid, "at": now.isoformat(timespec="seconds"), "status": "ok", "mode": mode, "rows": part.height,
             "weights_known": bool(weights_known.get(rid, info["weights_known_ratio"] >= 0.9)),

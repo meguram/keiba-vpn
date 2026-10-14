@@ -148,6 +148,10 @@ PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin
 # ── 推論用の履歴テーブル更新 ─────── UTC: 22:00 / JST: 07:00 ─────── # KEIBA-VPN-ALL
 # 馬体重検知ランナーが読む race_result_flat 等を、当年分だけ増分エクスポートする（recent-retry の後）。
 0 22 * * * ${EXPORT_DAILY} ${PROJECT_DIR} # KEIBA-VPN-ALL
+# ── 履歴特徴量の蓄積 ─────────── UTC: 22:40 / JST: 07:40 ─────── # KEIBA-VPN-ALL
+# 当年分の特徴量(127列)を確定結果から作り直して data/local/modeling/feature_store/ に置き、
+# 推論モードで保存した特徴量とのずれ(skew)を記録する。netkeiba には触れない。2026 年は学習に使わない。
+40 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} feature-accumulate logs/feature_accumulate.log # KEIBA-VPN-ALL
 # ── 馬体重の検知ランナー ───────── UTC: 23:00 / JST: 08:00 ─────── # KEIBA-VPN-ALL
 # 各R 発走65〜30分前に出馬表を取り直し、馬体重が揃ったら推論モードで特徴量を作る（予測は起動しない: mode=features）。
 # 非開催日は数秒でスキップ終了。手順: docs/operations/raceday_weight_trigger.md

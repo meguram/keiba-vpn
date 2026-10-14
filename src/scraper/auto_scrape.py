@@ -1355,6 +1355,15 @@ def task_recent_retry():
     logger.info("recent-retry: %s", res)
 
 
+def task_feature_accumulate():
+    """当年分の履歴特徴量（127 列）を確定結果から作り直して蓄積し、推論モードの特徴量とのずれを記録する（cron 毎日）。"""
+    from src.pipeline.features.horse_history.accumulate import accumulate
+
+    res = accumulate()
+    _save_status("feature-accumulate", {"status": "ok", "last_run": _now_jst_iso(), **res})
+    logger.info("feature-accumulate: %s", res)
+
+
 def task_daily_race_lists():
     """毎日 07:00 に実行 (cron)。今日〜カレンダー末尾までの全開催日の race_lists を取得・更新する。"""
     if _via_queue():
@@ -1427,6 +1436,7 @@ def show_status():
         "catchup-missing":       "過去欠損補完 (race_listsなし開催日)",
         "barometer-retry":       "バロメーター未取得の取り直し (公開済み分)",
         "recent-retry":          "直近の開催日の未取得データ取り直し (確定結果・ラップ・指数・厩舎コメント)",
+        "feature-accumulate":    "履歴特徴量の蓄積 (当年分を作り直し、推論モードとのずれを記録)",
         "daily-race-lists":      "日次レース一覧 (今日〜カレンダー末尾)",
         "jra-baba-morning":      "JRA馬場情報 (朝ポーリング 05:00-09:00)",
     }
@@ -1533,6 +1543,7 @@ TASKS = {
     "catchup-missing":        task_catchup_missing_dates,
     "barometer-retry":        task_barometer_retry,
     "recent-retry":           task_recent_retry,
+    "feature-accumulate":     task_feature_accumulate,
     "daily-race-lists":       task_daily_race_lists,
     "jra-baba-morning":       task_jra_baba_morning,
 }
