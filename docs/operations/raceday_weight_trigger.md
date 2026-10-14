@@ -48,7 +48,7 @@ nohup bash scripts/cron/run_auto_scrape_logged.sh "$PWD" raceday-weight-runner l
 ## リハーサル（取得なし）
 
 ```bash
-KEIBA_ENV=stg KEIBA_WEIGHT_WATCH_DATE=20261011 KEIBA_WEIGHT_WATCH_REPLAY=1 /opt/conda/bin/python3 -m src.scraper.auto_scrape --task raceday-weight-runner
+KEIBA_ENV=stg KEIBA_WEIGHT_WATCH_DATE=20260613 KEIBA_WEIGHT_WATCH_REPLAY=1 /opt/conda/bin/python3 -m src.scraper.auto_scrape --task raceday-weight-runner
 ```
 
 ## 注意点・未解決
@@ -76,3 +76,15 @@ KEIBA_ENV=stg KEIBA_WEIGHT_WATCH_DATE=20261011 KEIBA_WEIGHT_WATCH_REPLAY=1 /opt/
 - 馬体重が揃ったレースで体重の無い馬は、出走取消・除外とみなして外す（イベントの `dropped_no_weight`）。**出馬表のパーサーは取消馬を扱っていない**ため、取消馬が出馬表にどう載るかは 10/17〜18 の実運用で確認する。
 
 **学習と推論のずれ（未対応。tp-03 で両案を比較して決める）**: 学習時の `load_runs` は着順が付かなかった馬（競走中止・除外など。この日は 3 頭 / 422 頭）を履歴から落とすため、レース内で相対化する特徴量（`c_fs_step`・`c_opp_step`・`f2_*`・`f3_*` の 29 行）は「完走馬だけの出走馬」で計算されている。推論では全出走馬になる。差は小さい（この日は 7% の行）が、学習側で非完走馬を出走馬に含める案（着順が必要な集計からは除く）を、tp-03 で「含める／含めない」の両方で比較する。
+
+## ホストでのリハーサル結果（2026-10-14、`KEIBA_WEIGHT_WATCH_DATE=20260613 KEIBA_WEIGHT_WATCH_REPLAY=1`）
+
+36 レースを 1 回のまとめ計算で処理し、特徴量の計算 約 20 秒、ランナー全体で 32 秒（履歴の読み込み 3 秒を含む）。全レース `ok`、体重の無い 1 頭を除外（`dropped_no_weight`）。出力は `features/<日付>/<race_id>.parquet` と `events/<日付>.jsonl`。
+
+リハーサルで見つかり、修正したこと:
+
+- **終了後に取得した出馬表はレース情報が空**（面・距離・日付・格・馬場状態）。2026 年 7 月以降に保存された出馬表の多くがこの状態（例: 10/11 開催分）。出走前の出馬表（10/17 東京5R で実際に取得して確認）は、面・距離・日付・格をパーサーが正しく取れる。発走時刻・天候・馬場状態は、当日になってページに載る。→ 日付と発走時刻は発走時刻表で補い、面・距離が空のレースは `error` イベントにして除外する（推論モードに入れると Elo の日付ループが止まらなくなるため、`build_inference_features` でも弾く）。
+- 空の列（全部 null）で正規化が落ちる不具合。
+- 履歴の最終日（`history_last_date`）が 2026-10-04 のまま。**`export_tables_daily` を回していないため**で、起動前に増分エクスポートを 1 回実行しておくこと。
+
+実運用の初回（10/17〜18）に見るもの: `events/<日付>.jsonl` の `weights_known`（検知が T-65〜T-30 の窓に収まったか）、`dropped_no_weight`（取消馬が出馬表にどう載るか）、`going_known`、`build_sec`。
