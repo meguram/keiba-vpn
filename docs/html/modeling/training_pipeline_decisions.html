@@ -68,9 +68,12 @@
 </ul>
 
 <h2>2. tp-01 データセット構築・分割・分布検証</h2>
-<p class="muted">根拠: コミット <code>dc543d6</code>、MLflow 実験 <code>keiba-tp-dataset</code> の run <code>8272fa9337d2416ca90d239087ed9a1c</code>。成果物は <code>data/local/modeling/training_pipeline/</code> の <code>layer_a.parquet</code> と <code>eda/</code>（ホスト PC）。</p>
+<p class="muted">根拠: コミット <code>9351337</code>、MLflow 実験 <code>keiba-tp-dataset</code> の run <code>699bbc04abca4f2383723ef5369366e7</code>（データ完全化後の再実行、2026-10-15）。初回の確定時はコミット <code>dc543d6</code>・run <code>8272fa93…</code>。成果物は <code>data/local/modeling/training_pipeline/</code> の <code>layer_a.parquet</code> と <code>eda/</code>（ホスト PC）。</p>
 <div class="box">
 <b>訂正（2026-10-14）</b>: 初回の実行（コミット <code>7f53678</code>、run <code>5a81ac35…</code>）は、<code>race_index</code> との内部結合により出走馬の約半数（母表 134,556 行・18,925 レース）しか含んでいなかった。<code>race_index</code> が 1 レースあたり 6.5〜6.8 頭分しか持たないのに（出馬表は 13.7〜13.9 頭）内部結合していたため。左結合に修正して再実行し、以下を確定値とした。初回の値（頭数の増加傾向、split ごとの行数など）は無効。
+</div>
+<div class="box">
+<b>再実行の結果（2026-10-15）</b>: 2020〜2025 年の取り直し（第 4 節）の後に tp-01 を再実行した。母表（283,714 行・20,733 レース・71 列）、split（train 13,824 レース／valid 3,454／test 3,455）、時系列 CV の行数、ラベルの偏り、adversarial validation（月なし 0.676／0.619／0.639、月あり 0.772／0.756／0.774）はすべて<b>取り直し前と同じ</b>だった。母表は出走馬の頭数を持つ左結合のため、<code>race_index</code> の取り直しは行数を変えない。
 </div>
 <h3>確定事項</h3>
 <table>
@@ -101,23 +104,23 @@
 <h3>申し送り（tp-02 以降で対応）</h3>
 <ul>
   <li>「京都改修後」フラグ（<code>venue_era</code>）を特徴量に加え、京都改修後の評価を別枠で見る（分割ルールの <code>special_sets</code> にも定義あり）。</li>
-  <li><code>race_index</code>（速度指数）が 1 レース約半数の馬分しか無い原因は未調査（取得側かページ仕様か）。<code>speed_*</code> 列は欠損を含む前提で扱い、<code>has_speed_index</code> を併用する。</li>
+  <li><code>race_index</code>（速度指数）が 1 レース約半数の馬分しか無かった原因は、ログインが実質的に効いていない取得だった。取り直しで解消した（第 4 節）。なお<b>新馬戦（1,803 レース）には指数がそもそも存在しない</b>。<code>speed_*</code> 列は欠損を含む前提で扱い、<code>has_speed_index</code> を併用する。</li>
   <li>騎手・調教師の拡張統計（<code>include_jockey_trainer_stats</code>）は未結合（既定 False）。</li>
   <li>データチェックで 2024-08、2024-11、2025-05 に各 1 レースの欠損がある。</li>
   <li>adversarial validation の AUC を、特徴量追加後も同じ手順で追跡する（tp-02 で実施）。</li>
 </ul>
 
 <h2>3. tp-02 特徴量生成（馬の過去走履歴プロファイル）</h2>
-<p class="muted">根拠: コミット <code>f9848d1</code>、MLflow 実験 <code>keiba-tp-features</code> の run <code>51eae8ab8bf74e9da4898939cbd19eb3</code>（結果ページの不正値を <code>race_result_on_time</code> で補正した版。補正前の run は <code>b4090806…</code>）。実装は <code>src/pipeline/features/horse_history/</code>（common・elo・profile・match・builder）。成果物は <code>data/local/modeling/training_pipeline/features/</code>（<code>train_table.parquet</code>、<code>horse_history.parquet</code>、<code>fit_params.json</code>、<code>feature_families.json</code>、<code>adversarial_sets.json</code> ほか）。</p>
+<p class="muted">根拠: コミット <code>9351337</code>、MLflow 実験 <code>keiba-tp-features</code> の run <code>4b86f240fda74c6fa4322312daef6f22</code>（データ完全化後の再実行、2026-10-15。特徴量 127 列）。以前の run: <code>51eae8ab…</code>（94 列、コミット <code>f9848d1</code>）、補正前 <code>b4090806…</code>。実装は <code>src/pipeline/features/horse_history/</code>（common・elo・profile・match・builder）。成果物は <code>data/local/modeling/training_pipeline/features/</code>（<code>train_table.parquet</code>、<code>horse_history.parquet</code>、<code>fit_params.json</code>、<code>feature_families.json</code>、<code>adversarial_sets.json</code> ほか）。</p>
 <p class="muted">設計の根拠: 文献調査（Benter 型・Elo/Glicko/TrueSkill・経験ベイズ・Beyer 型の馬場差）、人間の予想手法のウェブ調査（上がりの補正、コース適性、相手関係、展開とのマッチ）、ホスト PC の実データでの試作検証。</p>
 <h3>確定事項</h3>
 <table>
 <tr><th>項目</th><th>確定内容</th></tr>
-<tr><td>入力</td><td><code>race_result_flat</code>（2020〜2025 年、JRA の完走馬 283,714 走）。<code>last_3f</code>・通過順・馬体重が不正なレースは、優先順に (1) 生値、(2) GCS の <code>race_result_on_time</code>、(3) 母表の <code>past_races</code> で補う。<b>2020 年より前の走は取得できない</b>（<code>race_result_flat</code>・<code>horse/result_tbl</code> とも 2020-01-05 以降）。</td></tr>
-<tr><td>特徴量数</td><td>94 個: A 上がり 14 / B 得意な舞台 17 / C レースの質 17 / D 休養・体重 10 / E 信頼度 3 / F1 条件類似度 4 / F2 展開 17 / F3 Elo 9 / F5 クラスタ 3。母表との被覆率 100%（283,714 行すべて）。</td></tr>
+<tr><td>入力</td><td><code>race_result_flat</code>（2020〜2025 年、JRA の完走馬 283,714 走。2026-10-15 に GCS から作り直した版。<b>補正対象のレースは 0 件</b>になった: 結果ページの不正値は、GCS の <code>race_result</code> 自体を <code>race_result_on_time</code> で修復済みのため）。<code>last_3f</code>・通過順・馬体重が不正なレースは、優先順に (1) 生値、(2) GCS の <code>race_result_on_time</code>、(3) 母表の <code>past_races</code> で補う。<b>2020 年より前の走は取得できない</b>（<code>race_result_flat</code>・<code>horse/result_tbl</code> とも 2020-01-05 以降）。</td></tr>
+<tr><td>特徴量数</td><td><b>127 個</b>: A 上がり 14 / B 得意な舞台 17 / C レースの質 17 / D 休養・体重 10 / E 信頼度 3 / F1 条件類似度 4 / F2 展開 17 / F3 Elo 10 / F5 クラスタ 3 / G RPCI・PCI 13 / H 標準条件レーティング 19。母表との被覆率 100%（283,714 行すべて）。初回の確定時は 94 個（G・H・<code>f3_r_eff</code> は後から追加し、今回の再実行から出力に含まれる）。</td></tr>
 <tr><td>時点ルール</td><td>対象レース日より前のみ。同日の他レースも使わない。Elo は 1 日分をまとめて更新し、当日は前日までのレーティングで評価する。</td></tr>
 <tr><td>全体フィット</td><td>縮約強度・分位点・クラスタ・類似度の重みは <code>FIT_END = 2021-12-21</code> 以前のデータだけで決め、全 fold で固定（最初の fold の学習終端 2021-12-22 より前）。Elo は K=300（fit 期間で勝ち馬の対数尤度が最小）。値は <code>fit_params.json</code>。</td></tr>
-<tr><td>リーク検査</td><td>切り詰め不変性（2023-07-01 以降を消して再計算）: 166,265 行 × 94 特徴量で不一致 0。結果入れ替え不変性（2023-07-01 以降の結果をレース内で入れ替え）: 429 行 × 94 特徴量で不一致 0。notebook は不一致があれば停止する。検査の過程で、直前走の値の <code>shift(1)</code> が馬ごとの窓の外に出て別の馬の値を拾うバグを見つけて修正済み。</td></tr>
+<tr><td>リーク検査</td><td>切り詰め不変性（2023-07-01 以降を消して再計算）: 166,265 行 × <b>127</b> 特徴量で不一致 0。結果入れ替え不変性（2023-07-01 以降の結果をレース内で入れ替え）: 429 行 × <b>127</b> 特徴量で不一致 0（2026-10-15 の再実行）。notebook は不一致があれば停止する。検査の過程で、直前走の値の <code>shift(1)</code> が馬ごとの窓の外に出て別の馬の値を拾うバグを見つけて修正済み。</td></tr>
 <tr><td>除外した特徴量</td><td>F5 の <code>f5_n</code>（クラスタ別の全期間累積件数）は時間とともに単調に増え、時代を見分ける最大の原因だったため出力から外した。</td></tr>
 </table>
 <h3>試作検証での効果（参考。採否は tp-03 で確定）</h3>
@@ -153,6 +156,14 @@
 <tr><td>F5 と件数系を除く（78）</td><td>0.800 → 0.743</td><td>0.884 → 0.775</td><td>c_rq_ewm2、c_cls_ewm2、c_cls_step、f3_fs_mean、c_fstop3_ewm2</td></tr>
 </table>
 <p>解釈: 補正により <code>f2_pressure</code>（展開）と <code>d_wt_*</code>（馬体重）が上位から消え、AUC が下がった。取得データの不備が、時代の見分けやすさの一因だったことが確認できた。<code>f5_n</code>（累積件数）を外した効果は第3節の通り。残るのは <code>c_rq_ewm2</code>・<code>c_cls_ewm2</code>・<code>f3_fs_mean</code> などクラス・相手関係の特徴量。クラスの対応表に抜けはない（<code>grade</code> の対応表に無い値は全年 0%）。候補は、2020〜2021 年の助走期間（履歴が短く欠損が多い）と Elo の母集団の変化（いずれも未検証）。tp-03 で、助走期間の行を学習から外す効果と、年内標準化を比べる。</p>
+<h3>adversarial validation の再計測（127 特徴量、2026-10-15）</h3>
+<table>
+<tr><th>特徴量の範囲</th><th>train vs valid</th><th>train vs test</th><th>上位の特徴量</th></tr>
+<tr><td>全部（127）</td><td>0.869</td><td>0.905</td><td>c_rq_ewm2、f5_win、c_cls_ewm2、f5_aff、d_career_days</td></tr>
+<tr><td>F5 を除く（124）</td><td>0.791</td><td>0.820</td><td>c_rq_ewm2、c_cls_ewm2、sr_age_pts、d_career_days、sr_var_today</td></tr>
+<tr><td>F5 と件数系を除く（111）</td><td>0.782</td><td>0.814</td><td>c_rq_ewm2、c_cls_ewm2、sr_age_pts、sr_var_today、sr_load_dev</td></tr>
+</table>
+<p>94 特徴量のとき（上の表）より、F5 を除いた範囲の AUC が 0.76→0.79（valid）、0.74→0.78（件数系も除く）と上がった。新しい H の特徴量（<code>sr_age_pts</code>＝年齢×月の成長曲線、<code>sr_var_today</code>＝当日の馬場差の推定、<code>sr_load_dev</code>）が時代を見分ける上位に入ったため。<code>sr_var_today</code> は以前は推論時と一部の行で欠損だったが、全行に値が入るようになったことも影響する。tp-03 で、H の各特徴量を入れたときの LogLoss と AUC の両方を見て採否を決める。</p>
 <h3>申し送り（tp-03 以降で対応）</h3>
 <ul>
   <li>採用候補: F3・C・A・D・B・F2a・E。小さい／要再確認: F5。見送り候補: F1・F4・F2b。最終判断は tp-03 の ablation（3 fold、採否基準は「全 fold で悪化せず平均が改善」）。</li>
@@ -170,7 +181,31 @@
   <li>当日の特徴量を小さなメモリ（約 340MB）で作れるよう、全履歴の計算を分け、出走馬の履歴だけで同じ値を作るサービング用バンドルを追加した（全 127 特徴量が全履歴方式と一致）。学習用の計算は変えていない。</li>
 </ul>
 
-<h2>4. 以降の節</h2>
+<h2>4. データ完全化の経緯と結果（2026-10-14〜15）</h2>
+<p class="muted">経緯の詳細: <code>docs/operations/stg_rescrape_login_dependent_20261014.md</code>。実行スクリプトと進捗: ホスト PC の <code>data/local/meta/rescrape/</code>。</p>
+<h3>原因</h3>
+<p>ログインが実質的に効いていない状態で取得したデータが、要ログインのカテゴリ（<code>race_index</code>・<code>race_trainer_comment</code>・通過順と上りの列）で欠けていた。ログイン成功の判定（<code>nkauth</code> クッキーの有無だけ）が弱く、会員状態が各ページで効いているかを確認していなかった。同じアカウントの別セッション（定期ジョブのログイン）が取り直し側のセッションを無効にする衝突も起きたため、取り直しは途中で再ログインして続ける作りにした。</p>
+<h3>結果（取り直し前 → 後。2020〜2025 年・20,733 レース）</h3>
+<table>
+<tr><th>項目</th><th>前</th><th>後</th><th>備考</th></tr>
+<tr><td><code>race_index</code>: 出走馬の 9 割以上が揃ったレース</td><td>34.8%</td><td><b>90.8%</b></td><td>新馬戦（1,803 レース）には指数が存在しない。新馬戦を除くと <b>99.4%</b>。年別 90.5〜91.3%</td></tr>
+<tr><td><code>race_index</code>: 頭数ベースの被覆</td><td>47.4%</td><td>91.2%</td><td>0 頭のレース 8.7% は新馬戦（構造的）</td></tr>
+<tr><td><code>race_trainer_comment</code>: 9 割以上のレース</td><td>11.2%</td><td>35.4%</td><td><b>構造的に一部のレースにしか無い</b>: 0 頭のレースが 64.3%。未勝利は 100%、1 勝は 85% が 0 頭。新馬・3 勝以上・重賞はほぼ全頭ある。取れる分は取れた（取り直し対象 5,067 レースを処理）</td></tr>
+<tr><td><code>last_3f</code> の正常率</td><td>83.3%</td><td><b>96.3%</b></td><td>テーブルの再作成後</td></tr>
+<tr><td>馬体重の正常率</td><td>86.2%</td><td><b>99.5%</b></td><td>同上</td></tr>
+</table>
+<p>取り直しの規模: <code>race_index</code> 8,507 レース（保存 8,315・増加なし 192、追加 88,083 行）、<code>race_trainer_comment</code> 5,067 レース（保存 5,007・増加なし 60、追加 51,923 行）。所要は <code>race_index</code> 約 9 時間、<code>race_trainer_comment</code> 約 6.8 時間（いずれも 1 秒あたり約 0.2 リクエスト）。ログイン有効性の検証エラーは 0 件で、途中の再ログインはすべて回復した。完了は 2026-10-15 05:00 JST。</p>
+<h3>最終処理で見つかり、直した問題</h3>
+<table>
+<tr><th>問題</th><th>影響</th><th>対応</th></tr>
+<tr><td>テーブルの再作成が、レース数が同じだと「作成済み」と判定してスキップされた（<code>export_tables</code> の増分チェックは中身の変更を検知しない）</td><td>1 回目の最終処理は、取り直し前と同じ集計値（9 割以上 0.348 など）を出した</td><td><code>--force</code> を追加。既存を消して GCS から作り直す</td></tr>
+<tr><td>標準条件レーティングの par 回帰が、<code>group_by</code> の出力順に依存して実行ごとに 1e-13 ほど揺れた</td><td>リーク検査が <code>sr_exp_rank</code> の順位の入れ替わり（7 行）で落ちた。同じコードを 2 回走らせても 11 行変わっていた</td><td>レース ID 順に固定。2 回の実行で 127 特徴量が完全一致することを確認</td></tr>
+<tr><td>GCS の結果ファイルで、障害レース 375 件の距離が 0（面も空）</td><td>強制再作成後に距離 0 が残り、<code>log(0)</code> で特徴量が無限大になった（<code>inf</code> 同士が不一致と数えられ、リーク検査が落ちた）</td><td>距離・頭数の 0 を出馬表のメタで補う。距離 0・時計の無限大は特徴量計算の前に検査して止める</td></tr>
+<tr><td>年によって距離の列の型が Float64 と Int64 に分かれた</td><td>年をまたぐ読み込みが落ちた</td><td>書き出しと読み込みの両方で整数に揃える</td></tr>
+</table>
+<p class="muted">上のほか、<code>sr_var_today</code> の補完（第 3 節の訂正）と、cron が dev 環境で動いていた期間（2026-10-09〜10）の取得データの一部が GCS に入っていない件（<code>docs/html/operations/cron_schedule.html</code>）が別にある。</p>
+
+<h2>5. 以降の節</h2>
 <p class="muted">tp-03〜tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
