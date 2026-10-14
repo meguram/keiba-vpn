@@ -6,6 +6,9 @@
 [service-endpoints.md](./service-endpoints.md)
 **最終更新**: 2026-10-02
 
+> **2026-10-14**: `deploy-gcp.yml` / `deploy-vps.yml` は一度も実行されておらず（Secrets 未設定・対象ブランチ `stg`/`master` は空）、不要のため削除した。
+> 現在の GitHub Actions は `ci.yml`（テスト + フロントエンド lint/build）のみ。デプロイを再開するときは git 履歴（`git log --diff-filter=D -- .github/workflows/deploy-*.yml`）から復元する。以下は当時の設計メモ。
+
 ## 設計意図: なぜDockerイメージ化が「VPSに必要最低限のファイルだけ」を実現するか
 
 [deployment-vps-vs-gcp.md](./deployment-vps-vs-gcp.md)で、ConoHa VPS（2GB・軽量シェアードコア）は
