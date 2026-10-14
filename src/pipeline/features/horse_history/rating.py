@@ -48,14 +48,25 @@ def standard_rating(F: pl.DataFrame, P: dict) -> pl.DataFrame:
     fr = (F.filter((pl.col("date") <= FIT_END) & pl.col("_rll").is_not_null())
           .group_by("race_id").agg(pl.col("surface").first(), pl.col("distance").first(), pl.col("class_level").first(),
                                    pl.col("dist_band").first(), pl.col("_rll").first()))
-    tabs = [(["surface", "distance", "class_level"], 5), (["surface", "distance"], 5), (["surface", "dist_band"], 5)]
+    tabs = [(["surface", "distance", "class_level"], 5), (["surface", "distance"], 5)]
     names = []
     for i, (keys, mn) in enumerate(tabs):
         tb = (fr.group_by(keys).agg(pl.col("_rll").median().alias(f"_par{i}"), pl.len().alias("_n"))
               .filter(pl.col("_n") >= mn).drop("_n"))
         F = F.join(tb, on=keys, how="left")
         names.append(f"_par{i}")
-    F = F.sort([H, "date", "race_id"]).with_columns(pl.coalesce(names).alias("_par"))
+    # 最後のフォールバック: 芝ダ別に log時計 = a + b·log(距離) を fit 期間のレースで回帰（距離帯の平均は 2500〜3600m などで破綻する）
+    reg = {}
+    for sf in ("芝", "ダート"):
+        g = fr.filter(pl.col("surface") == sf)
+        if g.height >= 30:
+            b, a = np.polyfit(np.log(g["distance"].to_numpy().astype(float)), g["_rll"].to_numpy(), 1)
+            reg[sf] = (float(a), float(b))
+    P["sr_par_reg"] = reg
+    a_s = {k: v[0] for k, v in reg.items()}; b_s = {k: v[1] for k, v in reg.items()}
+    F = F.with_columns((pl.col("surface").replace_strict(a_s, default=None, return_dtype=pl.Float64)
+                        + pl.col("surface").replace_strict(b_s, default=None, return_dtype=pl.Float64) * pl.col("distance").cast(pl.Float64).log()).alias("_parreg"))
+    F = F.sort([H, "date", "race_id"]).with_columns(pl.coalesce(names + ["_parreg"]).alias("_par"))
     F = F.with_columns((pl.col("_rll") - pl.col("_par")).alias("_dev"))
     dv = (F.group_by("race_id").agg(pl.col("date").first(), pl.col("venue_code").first(), pl.col("surface").first(), pl.col("_dev").first())
           .filter(pl.col("_dev").is_not_null()).group_by(["date", "venue_code", "surface"])
