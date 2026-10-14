@@ -102,3 +102,21 @@ def test_features_without_weight_match_when_weight_is_known_except_tier2(env, tm
                 changed.add((c, t))
     # 馬体重の有無で変わってよいのは tier 2 だけ（前日に計算できる tier 0 は変わらない）
     assert {c for c, t in changed if t == 0} == set(), changed
+
+
+def test_entries_without_weight_are_dropped_once_weights_are_announced(env, tmp_path, monkeypatch):
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    rid = next(iter(sh))
+    sh[rid]["entries"][0]["weight"] = None  # 体重が発表されない馬（出走取消・除外）
+    n_other = {k: len(v["entries"]) for k, v in sh.items()}
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    by = {e["race_id"]: e for e in evs}
+    assert by[rid]["rows"] == n_other[rid] - 1 and by[rid]["dropped_no_weight"] == 1
+    assert all(by[k]["rows"] == n_other[k] for k in sh if k != rid)
+    # 馬体重が未発表（weights_known=False）のレースでは、体重の無い馬を外さない
+    evs2 = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: False for k in sh}, mode="features")
+    assert {e["race_id"]: e["rows"] for e in evs2} == n_other

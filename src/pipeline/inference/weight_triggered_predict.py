@@ -122,6 +122,13 @@ def run_for_races(
         card = card_frame(storage, ids)
         if card.height == 0:
             raise ValueError("出馬表の行がありません")
+        # 馬体重は出走馬全頭に同時に発表される。揃ったレースで体重の無い馬は、出走取消・除外とみなして出走馬から外す。
+        announced = [rid for rid, k in weights_known.items() if k]
+        no_weight = (pl.col("race_id").is_in(announced)) & ~(pl.col("weight").cast(pl.Float64, strict=False) > 0).fill_null(False)
+        dropped = {r[0]: r[1] for r in card.filter(no_weight).group_by("race_id").len().iter_rows()} if announced else {}
+        if dropped:
+            logger.info("[weight-trigger] 馬体重のない馬を除外: %s", dropped)
+            card = card.filter(~no_weight)
         F, info = ctx.build(card)
     except Exception as exc:
         logger.exception("特徴量の作成に失敗: %s", ids)
@@ -142,7 +149,7 @@ def run_for_races(
             "race_id": rid, "at": now.isoformat(timespec="seconds"), "status": "ok", "mode": mode, "rows": part.height,
             "weights_known": bool(weights_known.get(rid, info["weights_known_ratio"] >= 0.9)),
             "going_known": info["going_known"], "build_sec": info["build_sec"], "batch_races": info["races"],
-            "history_last_date": ctx.history_last_date,
+            "history_last_date": ctx.history_last_date, "dropped_no_weight": int(dropped.get(rid, 0)),
         }
         if mode == "predict":
             try:
