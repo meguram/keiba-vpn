@@ -1,0 +1,105 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cron 登録内容（グループ別） — keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:36px 28px 80px; }
+h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:19px; margin:40px 0 4px; padding-top:16px; border-top:1px solid var(--border); }
+.muted { color:var(--muted); font-size:13px; } .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+table { border-collapse:collapse; width:100%; margin:8px 0 14px; font-size:13.5px; }
+th,td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12px; }
+.badge { display:inline-block; font-size:11.5px; padding:0 8px; border-radius:10px; border:1px solid var(--warn); color:var(--warn); white-space:nowrap; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.when { white-space:nowrap; font-weight:600; }
+</style></head><body><main>
+<h1>cron 登録内容（グループ別）</h1>
+<p class="muted">時刻はすべて <b>JST</b>（crontab 本体は UTC で記述）。生成: 2026-10-14 22:18 / 元データ: /tmp/host_cron.txt / 再生成: <code>python -m src.scripts.docs.build_cron_schedule_html</code>。定義の正は <code>scripts/cron/setup_all_cron.sh</code>。</p>
+<div class="box"><span class="badge">取り直し中は見送り</span> のジョブは、優先処理（2020-2025年の取り直し。<code>run_priority_rescrape.sh</code>）が動いている間は自動で見送り、終われば自動で通常どおり動く（<code>scripts/cron/yield_to_rescrape.sh</code>。同じ netkeiba アカウントの別セッションが取り直し側のセッションを無効にするため）。見送りの記録は <code>logs/yield_skips.log</code>。止めるには <code>data/local/meta/rescrape/YIELD_DISABLED</code> を置く。</div>
+<h2>1日の流れ（JST）</h2><p class="sub">毎日動くジョブを時刻順に並べたもの。曜日指定のあるものは右端に曜日を付けた。</p>
+<table><tr><th>時刻</th><th>ジョブ</th><th>グループ</th></tr>
+<tr><td class="when">毎日 00:00</td><td>GCS → PostgreSQL 同期</td><td>推論・学習用のデータ整備</td></tr>
+<tr><td class="when">毎日 00:00</td><td>backfill: 2026年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 終日 3分ごと</td><td>サーバ死活監視</td><td>保守・監視</td></tr>
+<tr><td class="when">毎日 01:00</td><td>backfill: 2025年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">火・金 02:00</td><td>backfill: 2021年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 02:00</td><td>backfill: 2024年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">水・土 03:00</td><td>backfill: 2020年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 03:00</td><td>backfill: 2023年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 04:00</td><td>backfill: 2022年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 04:30</td><td>ログローテーション</td><td>保守・監視</td></tr>
+<tr><td class="when">毎日 05:00〜08:50（10分ごと）</td><td>JRA 馬場（クッション値・含水率）</td><td>開催日のリアルタイム取得</td></tr>
+<tr><td class="when">毎日 05:30</td><td>騎手・調教師統計</td><td>推論・学習用のデータ整備</td></tr>
+<tr><td class="when">毎日 06:00</td><td>backfill: 馬情報</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 06:10</td><td>直近の未取得データの取り直し</td><td>定期更新・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 07:00</td><td>レース一覧</td><td>定期更新・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 07:00</td><td>履歴テーブルの増分更新</td><td>推論・学習用のデータ整備</td></tr>
+<tr><td class="when">毎日 07:30</td><td>速報結果ランナー</td><td>開催日のリアルタイム取得</td></tr>
+<tr><td class="when">毎日 07:30</td><td>開催日ランナー（オッズ・出馬表）</td><td>開催日のリアルタイム取得</td></tr>
+<tr><td class="when">毎日 07:50</td><td>backfill: 2026年 補助データ</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 08:00</td><td>backfill: 2025年 補助データ</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 08:00</td><td>ページ品質チェック</td><td>保守・監視</td></tr>
+<tr><td class="when">毎日 08:00</td><td>馬体重の検知ランナー</td><td>開催日のリアルタイム取得</td></tr>
+<tr><td class="when">毎日 08:30</td><td>バロメーターの取り直し</td><td>定期更新・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 09:00</td><td>backfill: 2024年 補助データ</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 17:00</td><td>レース一覧</td><td>定期更新・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 17:30</td><td>開催日夕方の結果・確定オッズ</td><td>開催日のリアルタイム取得</td></tr>
+<tr><td class="when">毎日 18:00</td><td>前日夕方の出馬表・馬柱・追い切り</td><td>開催日のリアルタイム取得</td></tr>
+<tr><td class="when">金 18:00</td><td>週次更新</td><td>定期更新・取りこぼしの取り直し</td></tr>
+<tr><td class="when">金 18:30</td><td>馬名インデックス</td><td>定期更新・取りこぼしの取り直し</td></tr>
+<tr><td class="when">金 19:30</td><td>バロメーターの取り直し</td><td>定期更新・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 19:40</td><td>直近の未取得データの取り直し</td><td>定期更新・取りこぼしの取り直し</td></tr>
+</table>
+<h2>開催日のリアルタイム取得（6件）</h2><p class="sub">開催日の前日夕方〜当日に、出走表・オッズ・結果・馬場を取りに行く。</p>
+<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>cron（UTC）</th><th></th></tr>
+<tr><td class="when">毎日 05:00〜08:50（10分ごと）</td><td>JRA 馬場（クッション値・含水率）</td><td>開催日の朝に10分ごとにポーリング</td><td><code>*/10 20-23 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 07:30</td><td>速報結果ランナー</td><td>開催日のみ常駐。各R 発走15分後に速報結果を取得</td><td><code>30 22 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 07:30</td><td>開催日ランナー（オッズ・出馬表）</td><td>開催日のみ常駐。各R 発走60分前にオッズ、15分前に出馬表・オッズ・馬柱などをまとめて取得</td><td><code>30 22 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 08:00</td><td>馬体重の検知ランナー</td><td>各R 発走65〜30分前に出馬表を取り直し、馬体重が揃ったら推論モードで特徴量を作る（予測は起動しない）</td><td><code>0 23 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 17:30</td><td>開催日夕方の結果・確定オッズ</td><td>速報結果・確定オッズ・SmartRC のまとめ取得</td><td><code>30 8 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 18:00</td><td>前日夕方の出馬表・馬柱・追い切り</td><td>翌日が開催日のときだけ動く。枠順・馬柱・追い切り・SmartRC を取得</td><td><code>0 9 * * *</code></td><td></td></tr>
+</table>
+<h2>定期更新・取りこぼしの取り直し（8件）</h2><p class="sub">レース一覧・確定結果・バロメーターなど、公開が遅れるデータの更新と再取得。</p>
+<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>cron（UTC）</th><th></th></tr>
+<tr><td class="when">毎日 06:10</td><td>直近の未取得データの取り直し</td><td>直近21日の確定結果・結果ラップ・タイム指数・厩舎コメントのうち未取得のものを、間隔と回数を制限して取得</td><td><code>10 21 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 07:00</td><td>レース一覧</td><td>今日以降の全開催日のレース一覧を更新（朝・夕の2回）</td><td><code>0 22 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 08:30</td><td>バロメーターの取り直し</td><td>公開済みで未取得のものだけを取得</td><td><code>30 23 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 17:00</td><td>レース一覧</td><td>今日以降の全開催日のレース一覧を更新（朝・夕の2回）</td><td><code>0 8 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">金 18:00</td><td>週次更新</td><td>直近10日の確定結果・タイム指数・バロメーター・馬情報</td><td><code>0 9 * * 5</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">金 18:30</td><td>馬名インデックス</td><td>馬名リストと成長曲線（週次更新の後）</td><td><code>30 9 * * 5</code></td><td></td></tr>
+<tr><td class="when">金 19:30</td><td>バロメーターの取り直し</td><td>公開済みで未取得のものだけを取得</td><td><code>30 10 * * 5</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 19:40</td><td>直近の未取得データの取り直し</td><td>直近21日の確定結果・結果ラップ・タイム指数・厩舎コメントのうち未取得のものを、間隔と回数を制限して取得</td><td><code>40 10 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+</table>
+<h2>過去データの補填（backfill）（11件）</h2><p class="sub">年度別に、取りこぼした結果・出走表・馬情報を深夜に補う。</p>
+<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>cron（UTC）</th><th></th></tr>
+<tr><td class="when">毎日 00:00</td><td>backfill: 2026年 結果+出馬表</td><td>2026年 結果+出馬表を補填</td><td><code>0 15 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 01:00</td><td>backfill: 2025年 結果+出馬表</td><td>2025年 結果+出馬表を補填</td><td><code>0 16 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">火・金 02:00</td><td>backfill: 2021年 結果+出馬表</td><td>2021年 結果+出馬表を補填</td><td><code>0 17 * * 1,4</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 02:00</td><td>backfill: 2024年 結果+出馬表</td><td>2024年 結果+出馬表を補填</td><td><code>0 17 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">水・土 03:00</td><td>backfill: 2020年 結果+出馬表</td><td>2020年 結果+出馬表を補填</td><td><code>0 18 * * 2,5</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 03:00</td><td>backfill: 2023年 結果+出馬表</td><td>2023年 結果+出馬表を補填</td><td><code>0 18 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 04:00</td><td>backfill: 2022年 結果+出馬表</td><td>2022年 結果+出馬表を補填</td><td><code>0 19 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 06:00</td><td>backfill: 馬情報</td><td>馬情報を補填</td><td><code>0 21 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 07:50</td><td>backfill: 2026年 補助データ</td><td>2026年 補助データを補填</td><td><code>50 22 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 08:00</td><td>backfill: 2025年 補助データ</td><td>2025年 補助データを補填</td><td><code>0 23 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 09:00</td><td>backfill: 2024年 補助データ</td><td>2024年 補助データを補填</td><td><code>0 0 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+</table>
+<h2>推論・学習用のデータ整備（3件）</h2><p class="sub">特徴量や推論が読むテーブル・統計・DB を更新する。</p>
+<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>cron（UTC）</th><th></th></tr>
+<tr><td class="when">毎日 00:00</td><td>GCS → PostgreSQL 同期</td><td>直近7日の増分</td><td><code>0 15 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 05:30</td><td>騎手・調教師統計</td><td>統計テーブルを再生成</td><td><code>30 20 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 07:00</td><td>履歴テーブルの増分更新</td><td>推論が読む race_result_flat などを当年分だけ更新</td><td><code>0 22 * * *</code></td><td></td></tr>
+</table>
+<h2>保守・監視（4件）</h2><p class="sub">サーバの死活監視、ログの整理、ページ構造の品質チェック。</p>
+<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>cron（UTC）</th><th></th></tr>
+<tr><td class="when">システム起動時</td><td>サーバ死活監視（起動時）</td><td>FastAPI・Flask・Next.js・MLflow を監視し、落ちていれば再起動</td><td><code>@reboot</code></td><td></td></tr>
+<tr><td class="when">毎日 終日 3分ごと</td><td>サーバ死活監視</td><td>FastAPI・Flask・Next.js・MLflow を監視し、落ちていれば再起動</td><td><code>*/3 * * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 04:30</td><td>ログローテーション</td><td>ログの整理</td><td><code>30 19 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 08:00</td><td>ページ品質チェック</td><td>スクレイパーが各ページの期待スキーマを取得できるかを確認</td><td><code>0 23 * * *</code></td><td></td></tr>
+</table>
+<h2>その他（グループ外）</h2><p class="sub">このスクリプトの対象外のジョブ（別ツールが登録したもの）。</p><table><tr><th>登録行</th></tr>
+<tr><td><code>@reboot sleep 10 &amp;&amp; /home/jovyan/keiba-remote-access/start_remote_access.sh &gt;&gt; /home/jovyan/keiba-remote-access/cron.log 2&gt;&amp;1 # KEIBA-REMOTE-ACCESS</code></td></tr>
+<tr><td><code>*/2 * * * * /home/jovyan/keiba-remote-access/start_remote_access.sh &gt;&gt; /home/jovyan/keiba-remote-access/cron.log 2&gt;&amp;1 # KEIBA-REMOTE-ACCESS</code></td></tr>
+</table>
+</main></body></html>

@@ -1,6 +1,6 @@
 # stg（ホスト PC）のスクレイピング cron: 時間割と取得データの網羅状況（2026-10-14）
 
-ホスト PC の root の crontab（UTC。以下は JST に換算）。定義の正は `scripts/cron/setup_all_cron.sh`（`install` で再登録）。バックアップは `data/local/meta/cron_backups/`。
+ホスト PC の root の crontab（UTC。以下は JST に換算）。定義の正は `scripts/cron/setup_all_cron.sh`（`install` で再登録）。グループ別の一覧は `docs/html/operations/cron_schedule.html`（`python -m src.scripts.docs.build_cron_schedule_html` で再生成）。バックアップは `data/local/meta/cron_backups/`。
 cron デーモンは稼働中（2026-10-13 23:44 UTC 起動）。ホストの再起動で止まった時間帯のジョブは実行されない点に注意（10/14 07:30 JST の runner は欠落、非開催日のため影響なし）。
 
 ## 1. 時間割（JST）
@@ -8,7 +8,7 @@ cron デーモンは稼働中（2026-10-13 23:44 UTC 起動）。ホストの再
 | 時刻 | ジョブ | 内容 |
 |---|---|---|
 | 毎日 00:00 | PG 同期、backfill 2026（fast） | GCS→PostgreSQL 増分、直近 7 開催日の結果・出馬表 |
-| 毎日 01:00 / 02:00 / 03:00 / 04:00 | backfill 2025 / 2024 / 2023 / 2022（fast）、月木 02:00 に 2021、火金 03:00 に 2020 | 過去年の取りこぼし補填（日付ごとに 1 回で「完了」扱い） |
+| 毎日 01:00 / 02:00 / 03:00 / 04:00 | backfill 2025 / 2024 / 2023 / 2022（fast）、火金 02:00 に 2021、水土 03:00 に 2020 | 過去年の取りこぼし補填（日付ごとに 1 回で「完了」扱い） |
 | 毎日 04:30 | ログローテーション | |
 | 毎日 05:00〜08:50（10 分ごと） | jra-baba-morning | JRA 馬場（クッション値・含水率）。開催日のみ |
 | 毎日 05:30 | 騎手・調教師統計 | |
