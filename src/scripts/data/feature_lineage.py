@@ -63,17 +63,20 @@ def _changed(base: pl.DataFrame, new: pl.DataFrame, cols: list[str], keys: pl.Da
     return out
 
 
-def run(layer_a: str, seed: int = 0, frac: float = 0.05, year: str = "2025") -> dict:
+def run(layer_a: str, day: str | None = None) -> dict:
+    """day（YYYY-MM-DD）の全レースだけを変化させる。複数日・ランダム抽出だと、同じ馬の過去走や対戦相手のレーティングが
+    変わって『今日の行』の特徴量が動き、依存関係と区別できなくなる（汚染）ため、1 開催日に絞る。"""
     runs, rmap = load_runs(), build_repair_map(layer_a)
     base, P = build_from_runs(runs, rmap)
     cols = sorted({c for v in feature_columns(base.columns).values() for c in v})
-    ids = runs.filter(pl.col("race_id").str.starts_with(year))["race_id"].unique().sort().to_list()
-    rng = np.random.default_rng(seed)
-    R = sorted(rng.choice(ids, size=max(20, int(len(ids) * frac)), replace=False).tolist())
+    if day is None:  # 2025 年 7〜10 月でレース数が最大の土日
+        d = (runs.filter((pl.col("date") >= pl.date(2025, 7, 1)) & (pl.col("date") <= pl.date(2025, 10, 31)) & (pl.col("date").dt.weekday() >= 6))
+             .group_by("date").agg(pl.col("race_id").n_unique().alias("n")).sort(["n", "date"], descending=[True, False]))
+        day = str(d["date"][0])
+    R = runs.filter(pl.col("date") == pl.lit(day).str.to_date())["race_id"].unique().sort().to_list()
     cur = base.filter(_in(R)).select(KEY)
-    first_day = runs.filter(_in(R))["date"].min()
-    later = base.filter(~_in(R) & (pl.col("date") > first_day)).select(KEY)
-    res = {"races": len(R), "rows_current": cur.height, "rows_later": later.height, "features": {c: {"today": [], "history": [], "leak": []} for c in cols}}
+    later = base.filter(~_in(R) & (pl.col("date") > pl.lit(day).str.to_date())).select(KEY)
+    res = {"day": day, "races": len(R), "rows_current": cur.height, "rows_later": later.height, "features": {c: {"today": [], "history": [], "leak": []} for c in cols}}
     for name, fn in {**TODAY, **RESULT}.items():
         t0 = time.time()
         new, _ = build_from_runs(fn(runs, R), rmap)
@@ -97,9 +100,10 @@ def run(layer_a: str, seed: int = 0, frac: float = 0.05, year: str = "2025") -> 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--layer-a", default="data/local/modeling/training_pipeline/layer_a.parquet")
+    ap.add_argument("--day", default=None, help="変化させる開催日（YYYY-MM-DD）。省略時は 2025 年 7〜10 月でレース数が最大の日曜")
     ap.add_argument("--out", type=Path, default=Path("data/local/modeling/training_pipeline/features/feature_lineage.json"))
     args = ap.parse_args()
-    res = run(args.layer_a)
+    res = run(args.layer_a, args.day)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     print("保存:", args.out)
