@@ -922,6 +922,83 @@ def task_raceday_eve():
     _save_status("raceday-eve", result)
 
 
+def run_raceday_comment_for_date(race_date_str: str) -> dict:
+    """
+    指定開催日 (YYYYMMDD) の全レースの厩舎コメントを取得する（レース前の厩舎の話。前日 16 時頃に公開とされる）。
+
+    既存の ``race_trainer_comment`` に保存する（レース後の recent-retry と同じカテゴリ）。コメントがまだ無いページ
+    （0 件）は保存しない。保存済みがある場合は、取り直した件数が保存済み以上のときだけ更新する（後から増えた分を反映し、減らさない）。
+    """
+    date_iso = f"{race_date_str[:4]}-{race_date_str[4:6]}-{race_date_str[6:]}"
+    logger.info("厩舎コメント取得 (raceday-comment): 開催日 %s", date_iso)
+    from src.scraper.run import ScraperRunner
+
+    runner = ScraperRunner()
+    races = runner.scrape_race_list(race_date_str)
+    if not races:
+        logger.warning("レース一覧が空: %s", race_date_str)
+        return {"status": "error", "reason": "no-races", "date": date_iso}
+
+    stats: dict = {"date": date_iso, "races": len(races), "saved": 0, "no_comment_yet": 0, "errors": []}
+    for i, race in enumerate(races):
+        rid = race["race_id"]
+        try:
+            old = runner.storage.load("race_trainer_comment", rid) or {}
+            old_n = len(old.get("entries") or [])
+            data = runner.scrape_trainer_comment(rid, skip_existing=False, min_entries=max(1, old_n))
+            if data:
+                stats["saved"] += 1
+            else:
+                stats["no_comment_yet"] += 1
+        except Exception as e:
+            logger.error("  厩舎コメントエラー [%s]: %s", rid, e)
+            stats["errors"].append(rid)
+        if i < len(races) - 1:
+            time.sleep(random.uniform(2.0, 4.0))
+    stats["status"] = "ok" if not stats["errors"] else "partial"
+    logger.info("厩舎コメント完了: %s", stats)
+    return stats
+
+
+def task_raceday_comment():
+    """
+    厩舎コメントの取得 (cron 20:00 JST と 07:40 JST)。12 時以降の実行は翌日、午前の実行は当日が開催日のとき対象。
+
+    前日 16 時頃に公開される想定（ユーザー指摘 2026-10-15。公開時刻は未観測で、最初の週末の実行ログで確かめる）。
+    20:00 で取れなかった／増えたレースは、翌朝 07:40 の実行で取り直す。
+    """
+    calendar = _load_race_calendar()
+    today = _today_jst()
+    target = today + timedelta(days=1) if datetime.now(_JST).hour >= 12 else today
+    target_iso = target.isoformat()
+    if not _is_race_day(calendar, target_iso):
+        logger.info("対象日 (%s) は開催日ではありません — スキップ", target_iso)
+        _save_status("raceday-comment", {"status": "skipped", "reason": "non-race-day", "target": target_iso})
+        return
+    result = run_raceday_comment_for_date(target_iso.replace("-", ""))
+    _save_status("raceday-comment", result)
+
+
+def task_new_horse_pedigree():
+    """
+    今後 1 週間の出走予定馬のうち血統テーブル (ped_tbl) が無い馬（主に新馬）の 5 世代血統を取得する (cron 21:00 JST)。
+
+    出走予定馬は保存済みの出馬表から集めるため、出馬表の公開（火〜木）後に効く。無い馬が居なければ何も取得しない。
+    """
+    from src.scraper import new_horse_pedigree as nhp
+    from src.scraper.run import REPO_ROOT, ScraperRunner
+
+    calendar = _load_race_calendar()
+    dates = nhp.upcoming_dates([d["date"] for d in calendar.get("race_days", [])], _today_jst(), horizon_days=7)
+    if not dates:
+        _save_status("new-horse-pedigree", {"status": "skipped", "reason": "no-race-days-in-7d"})
+        return
+    runner = ScraperRunner()
+    result = nhp.run(dates, base_dir=Path(REPO_ROOT), storage=runner.storage, runner=runner)
+    logger.info("新馬の血統取得: %s", result)
+    _save_status("new-horse-pedigree", result)
+
+
 # ═══════════════════════════════════════════════════════════════════
 #  馬場速度計算トリガー (raceday-evening 完了後)
 # ═══════════════════════════════════════════════════════════════════
@@ -1426,6 +1503,8 @@ def show_status():
 
     task_labels = {
         "raceday-eve":           "前日夕 (出馬表+馬柱・追切 18:00 +追走難度)",
+        "raceday-comment":       "厩舎コメント (前日 20:00 と当日 07:40)",
+        "new-horse-pedigree":    "新馬の5世代血統 (今後1週間の出走予定馬で ped_tbl が無い馬)",
         "raceday-runner":        "開催日ランナー (出馬表・オッズ各R 15分前)",
         "raceday-weight-runner": "馬体重の検知ランナー (各R T-65〜T-30 に出馬表を取り直し、特徴量・予測を起動)",
         "raceday-result-runner": "速報結果ランナー (各R発走15分後に速報取得)",
@@ -1534,6 +1613,8 @@ def task_raceday_weight_runner():
 
 TASKS = {
     "raceday-eve":            task_raceday_eve,
+    "raceday-comment":        task_raceday_comment,
+    "new-horse-pedigree":     task_new_horse_pedigree,
     "horse-name-index":       task_horse_name_index,
     "raceday-runner":         task_raceday_runner,
     "raceday-weight-runner":  task_raceday_weight_runner,

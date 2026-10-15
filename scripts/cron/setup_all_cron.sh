@@ -147,6 +147,15 @@ PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin
 # 直近7日・PG充足済みは GCS download スキップ。開催日の即時反映はスクレイプ後フック担当。
 0 15 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${SYNC_PG} >> ${LOG_DIR}/sync_pg_from_gcs_nightly.log 2>&1 # KEIBA_PG_SYNC
 
+# ── 厩舎コメント（レース前の厩舎の話）── UTC: 11:00 / 22:40 ── JST: 20:00 / 07:40 ─────── # KEIBA-VPN-ALL
+# 前日 16 時頃に公開される想定。20:00 は翌日、07:40 は当日が開催日のとき対象。コメントが出ていないレースは保存しない（翌朝に取り直す）。
+0 11 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} raceday-comment -- bash ${RUNNER} ${PROJECT_DIR} raceday-comment logs/raceday_comment.log # KEIBA-VPN-ALL
+40 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} raceday-comment -- bash ${RUNNER} ${PROJECT_DIR} raceday-comment logs/raceday_comment.log # KEIBA-VPN-ALL
+
+# ── 新馬（出走予定馬）の5世代血統 ───── UTC: 12:00 ── JST: 21:00 ─────── # KEIBA-VPN-ALL
+# 今後1週間の出走予定馬のうち血統テーブル(ped_tbl)が無い馬だけを取得（GCS + ローカルの5世代・10世代・ped_tbl）。無ければ何もしない。
+0 12 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} new-horse-pedigree -- bash ${RUNNER} ${PROJECT_DIR} new-horse-pedigree logs/new_horse_pedigree.log # KEIBA-VPN-ALL
+
 # ── 直近の開催日の未取得データ取り直し ── UTC: 21:10 / 10:40 / JST: 06:10 / 19:40 ── # KEIBA-VPN-ALL
 # 確定結果(race_result)・結果ラップ・タイム指数・厩舎コメントのうち未取得のものだけを、間隔を空けて最大30回まで試す。
 # backfill は深夜に 0 件で「完了」扱いにするため、レース翌日の結果を取りこぼしていた（2026-10-14 監査）。

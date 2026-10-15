@@ -893,12 +893,12 @@ class ScraperRunner:
             skip_existing=skip_existing,
         )
 
-    def scrape_trainer_comment(self, race_id: str, skip_existing: bool = True) -> dict | None:
+    def scrape_trainer_comment(self, race_id: str, skip_existing: bool = True, min_entries: int = 0) -> dict | None:
         return self._fetch_parse_save(
             "race_trainer_comment", race_id,
             self.TRAINER_COMMENT_URL.format(race_id=race_id),
             self.trainer_comment_parser, {"race_id": race_id},
-            skip_existing=skip_existing, need_login=True,
+            skip_existing=skip_existing, need_login=True, min_entries=min_entries,
         )
 
     # ── 馬情報 (2ページ分の HTML を個別にアーカイブ) ──────────
