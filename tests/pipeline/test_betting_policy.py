@@ -63,10 +63,23 @@ class TicketEnvTest(unittest.TestCase):
         self.assertTrue(((t["type"] == "umatan") & (t["combo"] == "1>2") & (t["mult"] == 25.0)).any() or not ((t["type"] == "umatan") & (t["combo"] == "1>2")).any())
         self.assertLessEqual(t[t["type"] == "tansho"]["p_comb"].sum(), 1.0 + 1e-9)
 
-    def test_skips_race_with_mismatched_field(self):
+    def test_imputes_runner_missing_from_prediction(self):
         pred, wp, pair, pay = _race("r1")
-        t = te.build_race_tickets(pred.iloc[:-1], wp, pair, pay, a=0.5, b=0.5, K=4)
-        self.assertTrue(t.empty)
+        full = te.build_race_tickets(pred, wp, pair, pay, a=0.5, b=0.5, K=20)
+        part = te.build_race_tickets(pred.iloc[:-1], wp, pair, pay, a=0.5, b=0.5, K=20)
+        self.assertFalse(part.empty)
+        last = str(len(pred))
+        self.assertTrue((part[(part["type"] == "tansho")]["combo"] == last).any())          # 補った馬の買い目も候補に残る
+        self.assertAlmostEqual(float(part[part["type"] == "tansho"]["p_comb"].sum()), 1.0, places=6)
+        self.assertAlmostEqual(float(full[full["type"] == "tansho"]["p_comb"].sum()), 1.0, places=6)
+
+    def test_impute_keeps_totals(self):
+        pred, wp, _, _ = _race("r1")
+        out = te.impute_missing_runners(pred.iloc[:-1], wp)
+        self.assertEqual(len(out), len(pred))
+        self.assertAlmostEqual(float(out["p_win"].sum()), 1.0, places=6)
+        self.assertAlmostEqual(float(out["p_top2"].sum()), 2.0, places=5)
+        self.assertAlmostEqual(float(out["p_top3"].sum()), 3.0, places=5)
 
 
 class PolicyTest(unittest.TestCase):

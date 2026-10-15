@@ -15,6 +15,7 @@ import pandas as pd
 from scipy.optimize import minimize
 
 from src.pipeline.inference.exotic_probabilities import RankDistribution, fit_rank_distribution
+from src.pipeline.models.win_models import normalize_to_total
 
 TYPES = ["tansho", "fukusho", "umaren", "wide", "umatan"]
 TYPE_IDX = {t: i for i, t in enumerate(TYPES)}
@@ -87,12 +88,39 @@ def _tickets_for_race(hn: np.ndarray, dist: RankDistribution, dist_model: RankDi
     return df.loc[sorted(set(keep))].to_dict("records")
 
 
+def impute_missing_runners(pred: pd.DataFrame, win_place: pd.DataFrame) -> pd.DataFrame:
+    """オッズ表にいるが予測に無い馬（中止・失格などで着順が無く学習データから外れた馬）に、市場の確率から作った予測を補う。
+    買う時点ではその馬が中止するかは分からないので、除くと結果を知った上でレースを選ぶことになる（楽観側の偏り）。
+    p_win = 市場の暗黙の確率、p_top2・p_top3 = 予測全体での p_win との対応（ビンの平均）から。補ったあとレース内の合計を 1・2・3 にそろえる。"""
+    key = ["race_id", "horse_id"]
+    w = win_place[win_place["win_odds"].notna() & win_place["race_id"].isin(pred["race_id"].unique())][key + ["horse_number", "win_odds"]].copy()
+    w["q"] = (1.0 / np.clip(w["win_odds"], 1.0, None)) / (1.0 / np.clip(w["win_odds"], 1.0, None)).groupby(w["race_id"]).transform("sum")
+    miss = w.merge(pred[key].assign(_h=1), on=key, how="left")
+    miss = miss[miss["_h"].isna()]
+    if miss.empty:
+        return pred
+    b = pd.qcut(pred["p_win"], 20, duplicates="drop").rename("bin")
+    g = pred.groupby(b, observed=True)[["p_win", "p_top2", "p_top3"]].mean().sort_values("p_win")
+    add = pd.DataFrame({"race_id": miss["race_id"].to_numpy(), "horse_id": miss["horse_id"].to_numpy(), "horse_number": miss["horse_number"].to_numpy(),
+                        "p_win": miss["q"].to_numpy(), "p_top2": np.interp(miss["q"], g["p_win"], g["p_top2"]), "p_top3": np.interp(miss["q"], g["p_win"], g["p_top3"])})
+    if "year" in pred.columns:
+        add["year"] = pred.groupby("race_id")["year"].first().reindex(add["race_id"]).to_numpy()
+    out = pd.concat([pred, add], ignore_index=True)
+    hit = out["race_id"].isin(set(add["race_id"]))
+    sub = out[hit].copy()
+    for c, tot in (("p_win", 1.0), ("p_top2", 2.0), ("p_top3", 3.0)):
+        sub[c] = normalize_to_total(sub["race_id"].to_numpy(), sub[c].to_numpy(), tot)
+    out.loc[hit, ["p_win", "p_top2", "p_top3"]] = sub[["p_win", "p_top2", "p_top3"]].to_numpy()
+    return out
+
+
 def build_race_tickets(pred: pd.DataFrame, win_place: pd.DataFrame, pair: pd.DataFrame, payoff: pd.DataFrame, a: float, b: float, K: int = 12,
                        alphas: tuple[float, float] | None = None) -> pd.DataFrame:
     """pred: race_id, horse_number, p_win, p_top2, p_top3（レース内で合計 1・2・3）。他は整備済みの表。
     戻り値: 候補の買い目（race_id, type, combo, p_comb, p_model, odds, mult, ev, race 特徴）。"""
     if "horse_number" not in pred.columns:
-        pred = pred.merge(win_place[["race_id", "horse_id", "horse_number"]], on=["race_id", "horse_id"], how="inner")
+        pred = pred.merge(win_place[["race_id", "horse_id", "horse_number"]].drop_duplicates(["race_id", "horse_id"]), on=["race_id", "horse_id"], how="inner")
+    pred = impute_missing_runners(pred, win_place)
     wp = {rid: g for rid, g in win_place[win_place["win_odds"].notna()].groupby("race_id")}
     pr = {rid: g for rid, g in pair.groupby("race_id")}
     po = {rid: g for rid, g in payoff.groupby("race_id")}
