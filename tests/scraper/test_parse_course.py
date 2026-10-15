@@ -24,3 +24,11 @@ def test_parse_course_formats(text, expected):
 def test_no_course_returns_none():
     assert parse_course("天候 : 晴 / 発走 : 11:35") is None
     assert parse_course("") is None
+
+
+def test_race_result_with_unreadable_course_is_rejected():
+    from src.scraper.run import _race_result_header_unreadable as f
+
+    assert f({"surface": "", "distance": 0}) is not None
+    assert f({"surface": "芝", "distance": 1200}) is None
+    assert f({"surface": "障", "distance": 0}) is None   # 面だけ読めた（障害レース）場合は保存する

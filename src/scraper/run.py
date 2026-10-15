@@ -170,6 +170,14 @@ def _horse_training_local_dict_looks_stored(
     return "entries" in d or d.get("total_items") is not None or d.get("pages_fetched") is not None
 
 
+def _race_result_header_unreadable(data: dict) -> str | None:
+    """結果ページのコース表記（芝/ダ + 距離）を読めなかったデータは保存しない。2026 年にページの表記が変わり、
+    距離 0・面が空のデータが 260 レース保存されていた（内外回りの表記に正規表現が合わなかった）ため。"""
+    if not data.get("surface") and not data.get("distance"):
+        return "コース表記（面・距離）を読み取れませんでした。ページ構造の変更の可能性があります"
+    return None
+
+
 def _update_local_pedigree_10gen(horse_id: str, rec5gen: dict, base_dir) -> None:
     """5gen GCS 保存直後に、ローカル 5gen / 10gen / ped_tbl Parquet を即時更新する。
 
@@ -442,6 +450,7 @@ class ScraperRunner:
         min_entries: int = 0,
         result_schema_kind: str | None = None,
         mutate_before_save: Callable[[dict], None] | None = None,
+        reject_reason: Callable[[dict], str | None] | None = None,
     ) -> dict | None:
         """
         共通フロー: fetch HTML → archive → parse → save JSON。
@@ -458,6 +467,8 @@ class ScraperRunner:
             min_entries: entries の最小数 (0 ならチェックしない)
             result_schema_kind: 付与時は ``_meta.result_schema_kind`` に書き込む（レース結果系）
             mutate_before_save: 保存直前に data を改変するフック（例: race_result_on_time 正規化）
+            reject_reason: 保存してはいけない内容なら理由を返す（None なら保存）。ページ構造の変更で必須項目が空になったデータを
+                黙って保存しないために使う（保存せず None を返し、次回の取得に任せる）
         """
         if skip_existing and self.storage.exists(category, key):
             logger.info("スキップ (既存): %s/%s", category, key)
@@ -486,6 +497,12 @@ class ScraperRunner:
                 logger.warning("データ不足: %s/%s (%d entries)", category, key,
                                len(data.get("entries", [])))
                 return None
+
+            if reject_reason is not None:
+                why = reject_reason(data)
+                if why:
+                    logger.error("保存しない: %s/%s — %s", category, key, why)
+                    return None
 
             if mutate_before_save is not None:
                 mutate_before_save(data)
@@ -528,6 +545,7 @@ class ScraperRunner:
             self.result_parser, {"race_id": race_id},
             skip_existing=skip_existing, min_entries=1,
             result_schema_kind=RESULT_SCHEMA_DB_RACE_RESULT,
+            reject_reason=_race_result_header_unreadable,
         )
         if data is not None:
             from src.scraper.pace_utils import merge_race_result_pace
