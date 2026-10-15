@@ -148,6 +148,18 @@ def alloc_kelly(pk: Packed, fraction: float = 0.25, cap_total: float = 1.0) -> n
     return np.where(tot > cap_total, f * cap_total / np.maximum(tot, 1e-12), f)
 
 
+def alloc_ev_selective(pk: Packed, frac: float, top: int = 3) -> np.ndarray:
+    """期待回収率の最大値が高い上位 frac のレースだけで、EV 上位 top 点に等分（参加率を frac にそろえた基準）。"""
+    ev = np.where(pk.mask, pk.p * pk.odds - 1.0, -np.inf)
+    best = ev.max(1)
+    thr = np.quantile(best, 1.0 - frac) if frac < 1.0 else -np.inf
+    sel = best >= thr
+    thr_k = -np.sort(-ev, axis=1)[:, min(top, ev.shape[1]) - 1: min(top, ev.shape[1])]
+    ok = pk.mask & (ev >= thr_k) & sel[:, None]
+    n = ok.sum(1, keepdims=True)
+    return np.where(ok, 1.0 / np.maximum(n, 1), 0.0)
+
+
 def alloc_random(pk: Packed, seed: int = 0) -> np.ndarray:
     rng = np.random.default_rng(seed)
     r = rng.random(pk.mask.shape)
@@ -198,6 +210,8 @@ class TrainConfig:
     risk: float = 0.0               # レースごとの損益の分散への罰則
     samples: int = 8                # reinforce で 1 レースから引く行動数
     max_ticket: float = 1.0         # 1 点への賭け金の上限（予算比）。超えた分は見送りに回す
+    target_stake: float = 0.0       # 1 レース当たりの平均賭け金の下限（予算比）。下回ると罰則（0 なら見送りが自由）
+    stake_penalty: float = 20.0
     seed: int = 0
     threads: int = 4
 
@@ -236,9 +250,10 @@ def train_policy(pk: Packed, cfg: TrainConfig):
             w, p = _alloc(logits, M[ii], cfg.max_ticket)
             g = G[ii]
             ent = -(p * torch.log(p.clamp(min=1e-12))).sum(1)
+            floor = cfg.stake_penalty * torch.relu(cfg.target_stake - w.sum(1).mean()) if cfg.target_stake > 0 else 0.0
             if cfg.mode == "expected":
                 r = (w * g).sum(1)
-                loss = -r.mean() + cfg.risk * r.var(unbiased=False) - cfg.entropy * ent.mean()
+                loss = -r.mean() + cfg.risk * r.var(unbiased=False) - cfg.entropy * ent.mean() + floor
             else:
                 k = cfg.samples
                 a = torch.multinomial(p.detach(), k, replacement=True)      # (B, k) 行動（最後 = 見送り）
@@ -247,7 +262,7 @@ def train_policy(pk: Packed, cfg: TrainConfig):
                 r_a = gg.gather(1, a)
                 base = (p.detach() * gg).sum(1, keepdim=True)               # 厳密な期待値を基準線にする
                 logp = torch.log(p.clamp(min=1e-12)).gather(1, a)
-                loss = -((r_a - base) * logp).mean() - cfg.entropy * ent.mean()
+                loss = -((r_a - base) * logp).mean() - cfg.entropy * ent.mean() + floor
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(net.parameters(), 5.0)

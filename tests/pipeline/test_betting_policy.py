@@ -141,6 +141,29 @@ class PolicyTest(unittest.TestCase):
         self.assertGreater(stake_pos, 3 * stake_neg)
         self.assertLess(hist[-1], hist[0])
 
+    def test_stake_floor_forces_participation(self):
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("torch がありません")
+        t = self._tickets(40).assign(mult=0.0)          # 全部外れ → 自由なら見送りを学ぶ
+        pk, _, _ = pol.pack(t)
+        free, _ = pol.train_policy(pk, pol.TrainConfig(epochs=40, hidden=16, lr=1e-2, entropy=0.0, batch_races=8, threads=2))
+        forced, _ = pol.train_policy(pk, pol.TrainConfig(epochs=40, hidden=16, lr=1e-2, entropy=0.0, batch_races=8, threads=2, target_stake=0.5))
+        s_free = pol.predict_alloc(free, pk).sum(1).mean()
+        s_forced = pol.predict_alloc(forced, pk).sum(1).mean()
+        self.assertGreater(s_forced, s_free)
+        self.assertGreater(s_forced, 0.3)
+        self.assertLess(s_free, 0.3)
+
+    def test_ev_selective_participation(self):
+        t = self._tickets(20)
+        pk, _, _ = pol.pack(t)
+        w = pol.alloc_ev_selective(pk, 0.25, top=2)
+        part = (w.sum(1) > 0).mean()
+        self.assertLessEqual(part, 0.4)
+        self.assertTrue((w.sum(1) <= 1.0 + 1e-9).all())
+
     def test_reinforce_mode_runs(self):
         try:
             import torch  # noqa: F401
