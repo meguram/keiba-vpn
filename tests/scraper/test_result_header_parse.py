@@ -20,6 +20,7 @@ TPL = """<html><body><div class="data_intro"><dl class="racedata fc"><dt>4 R</dt
     ("ダ右1800m", "ダート", ("ダート", "右", 1800)),
     ("芝直線1000m", "芝", ("芝", "直", 1000)),
     ("障芝 右 外・内 3170m", "芝", ("障", "右", 3170)),
+    ("障芝 外-内2890m", "芝", ("障", "", 2890)),
 ])
 def test_header_variants(course, surf, expected):
     d = RaceResultParser().parse(TPL.format(name="2歳新馬", course=course, surf=surf), race_id="202606040904")

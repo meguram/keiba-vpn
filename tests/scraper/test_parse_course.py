@@ -16,6 +16,11 @@ from src.scraper.parsers import parse_course
     ("ダ左1400m", ("ダート", "左", 1400)),
     ("障芝 右 3000m", ("障", "右", 3000)),
     ("障2860m", ("障", "", 2860)),
+    ("障芝 外-内2890m / 天候 : 晴", ("障", "", 2890)),
+    ("障芝 内-外 3000m", ("障", "", 3000)),
+    ("障ダ 3100m", ("障", "", 3100)),
+    ("芝右 外-内 2周 3200m", ("芝", "右", 3200)),
+    ("芝 外2000m", ("芝", "", 2000)),
 ])
 def test_parse_course_formats(text, expected):
     assert parse_course(text) == expected
