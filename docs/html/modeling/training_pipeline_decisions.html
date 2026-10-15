@@ -22,7 +22,7 @@
 <body>
 <main>
 <h1>学習パイプライン 確定事項ログ</h1>
-<p class="muted">notebook <code>notebooks/modeling/training_pipeline/tp-NN-*.ipynb</code> が完成するたびに、そのフローで確定した事項を追記する。各項目には根拠（コミット・MLflow run・成果物）を添える。実行はホスト PC（stg）。特徴量の設計根拠と tp-03・tp-04 の手順は <a href="feature_strategy_tp03_tp04.html" style="color:#7aa9ff">特徴量戦略書</a>、モデリングの方針（tp-04〜tp-07）は <a href="modeling_strategy_tp04_tp07.html" style="color:#7aa9ff">モデリング戦略書</a>。最終更新: 2026-10-15（tp-00〜tp-04）。</p>
+<p class="muted">notebook <code>notebooks/modeling/training_pipeline/tp-NN-*.ipynb</code> が完成するたびに、そのフローで確定した事項を追記する。各項目には根拠（コミット・MLflow run・成果物）を添える。実行はホスト PC（stg）。特徴量の設計根拠と tp-03・tp-04 の手順は <a href="feature_strategy_tp03_tp04.html" style="color:#7aa9ff">特徴量戦略書</a>、モデリングの方針（tp-04〜tp-07）は <a href="modeling_strategy_tp04_tp07.html" style="color:#7aa9ff">モデリング戦略書</a>。最終更新: 2026-10-15（tp-00〜tp-05a）。</p>
 
 <div class="box">
 <b>運用ルール</b>
@@ -41,7 +41,7 @@
 <tr><td>02</td><td><code>tp-02-feature-build</code></td><td>特徴量生成（リーク検査つき）</td><td class="ok">完了</td></tr>
 <tr><td>03</td><td><code>tp-03-feature-ablation</code></td><td>特徴量グループの採否</td><td class="ok">完了</td></tr>
 <tr><td>04</td><td><code>tp-04-stage-models</code></td><td>前段モデル（位置取り・ペース・上がり3F・走破タイム・着順）と後段への寄与</td><td class="ok">完了</td></tr>
-<tr><td>05</td><td><code>tp-05-final-train-tune</code></td><td>p_win・p_top2・p_top3 の学習と調整</td><td>未作成</td></tr>
+<tr><td>05</td><td><code>tp-05a〜e</code></td><td>p_win・p_top2・p_top3 の学習と調整（05a 目的関数の比較 = 完了、05b〜e 未着手）</td><td>進行中</td></tr>
 <tr><td>06</td><td><code>tp-06-calibration-eval</code></td><td>確率較正・評価（test は一度だけ）</td><td>未作成</td></tr>
 <tr><td>07</td><td><code>tp-07-register-verify</code></td><td>最終再学習・登録・推論の一致確認</td><td>未作成</td></tr>
 </table>
@@ -319,8 +319,28 @@
   <li>tp-03 から持ち越し（B0 の騎手・調教師の累積件数を外す案、H と旧 race_performance の比較、完走しなかった馬を履歴に含めるか）は、tp-05 で扱う。</li>
 </ul>
 
-<h2>7. 以降の節</h2>
-<p class="muted">tp-05〜tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
+<h2>7. tp-05a 勝ち馬確率の目的関数の比較（ベースライン）</h2>
+<p class="muted">根拠: MLflow 実験 <code>keiba-tp-model-screen</code>（9 方式の run と summary）、成果物 <code>data/local/modeling/training_pipeline/model_screen/</code>、詳細は <a href="tp05a_experiment_report.html" style="color:#7aa9ff">実験結果レポート</a>。特徴量は tp-03 の採用セット（175 列）、固定パラメータの LightGBM、valid 2022〜2024、3 seed。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>項目</th><th>確定内容</th></tr>
+<tr><td>基準と最良</td><td>基準 A1（二値 + レース内正規化）p_win LogLoss <b>0.21823</b> → 最良 <b>二値 + 相対化 + 前段 3 列 0.21722</b>（−0.00100、95% 信頼区間 −0.00144〜−0.00075、3/3 fold で改善、race_nll 2.0598 → 2.0483）。ランダム予測（1/頭数）は 0.26095。</td></tr>
+<tr><td>確率の整合（M1）</td><td>レース内で Σp=1（top2 は 2、top3 は 3）に反復比例で正規化すると、A1 の p_win LogLoss が 0.22081 → 0.21823（<b>−0.00258</b>）。モデルを変えるより大きい。<b>最終段で必ず適用する。</b></td></tr>
+<tr><td>前段 3 列の効果</td><td>二値で −0.00051（95% 区間 −0.00075〜−0.00028）、相対化との併用でさらに改善。<b>tp-04 の採用が下流で確認された。</b></td></tr>
+<tr><td>目的関数</td><td>softmax（A3）は二値と同等（0.21785 vs 0.21823、−0.00049）で、相対化 + 前段 3 列では 0.21731（二値 0.21722 と 0.00009 差）。lambdarank は T=1 で悪化（+0.00054）、rank_xendcg は大きく悪化（+0.01026、較正が合わない）。ランキング系は温度を検証 fold で最適化しても（楽観値）0.2175 前後で、二値・softmax を上回らない。</td></tr>
+<tr><td>相対化（C1）</td><td>レース内の z・順位・最大との差（14 列 × 3）で −0.00059（3/3 fold で改善）。</td></tr>
+<tr><td>次の最終候補</td><td>二値 + 相対化 + 前段 3 列（0.21722）と softmax + 相対化 + 前段 3 列（0.21731）。差が小さく誤差の多様性が期待できるため、両方を残してアンサンブルで合わせる。</td></tr>
+<tr><td>ホスト資源</td><td>最大メモリ約 2.4GB（ホスト使用 12%）、LightGBM 18 スレッド（6 コア空け）、全体で約 18 分。</td></tr>
+</table>
+<h3>申し送り（tp-05b 以降）</h3>
+<ul>
+  <li>softmax は p_top2・p_top3 を直接出さない。Plackett–Luce／割引 Harville との接続を検証する（<code>exotic_probabilities.py</code>）。</li>
+  <li>ランキング系の温度は過去 fold で決めて評価する（今回は楽観値）。</li>
+  <li>CatBoost・XGBoost・線形・NN（tp-05b）、時間減衰の重み・2020〜2021 年の扱い・early stopping（tp-05c）、Optuna（tp-05d）、アンサンブル（tp-05e）。今回は固定パラメータで、<b>市場オッズとの比較は未実施</b>（tp-06）。</li>
+</ul>
+
+<h2>8. 以降の節</h2>
+<p class="muted">tp-05b〜tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
 </html>
