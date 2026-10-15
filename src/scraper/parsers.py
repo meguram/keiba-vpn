@@ -40,6 +40,24 @@ logger = logging.getLogger("scraper.parsers")
 # 1. 過去レース結果パーサー
 #    URL: https://db.netkeiba.com/race/{race_id}/
 # ═══════════════════════════════════════════════════════
+
+# コース表記: 「芝右1600m」「ダ右1200m」「芝直1000m」に加え、2026 年に現れた「芝右 外1200m」「芝右 内2周2000m」「障芝 右 外・内 3000m」等。
+# グループ 1=面（芝/ダ/障）、2=方向（左/右/直。「直線」も 1 文字の「直」に正規化する側で扱う）、3=距離(m)。
+COURSE_RE = re.compile(
+    r"(芝|ダート?|ダ|障)\s*(?:芝|ダート?|ダ)?\s*(左|右|直線?)?\s*(?:内外|外内|外・内|内・外|内2周|外2周|内|外)?[\s・\-ー]*(\d{3,5})\s*m"
+)
+
+
+def parse_course(text: str) -> tuple[str, str, int] | None:
+    """(面, 方向, 距離) を返す。面は芝/ダート/障、方向は左/右/直（無ければ空）。見つからなければ None。"""
+    m = COURSE_RE.search(text or "")
+    if not m:
+        return None
+    surface = "ダート" if m.group(1).startswith("ダ") else m.group(1)
+    direction = (m.group(2) or "")[:1]
+    return surface, direction, int(m.group(3))
+
+
 class RaceResultParser:
     """
     過去のレース結果ページをパースする。
@@ -157,12 +175,9 @@ class RaceResultParser:
         data_text = safe_text(data_tag) if data_tag else ""
 
         # 「芝左1600m」「ダ右1200m」「ダ1200m」「ダート右1200m」等のパターン
-        m = re.search(r"(芝|ダート?|ダ|障)(左|右|直)?\s*(\d{3,5})\s*m", data_text)
-        if m:
-            surface_raw = m.group(1)
-            info["surface"] = "ダート" if surface_raw.startswith("ダ") else surface_raw
-            info["direction"] = m.group(2) or ""
-            info["distance"] = int(m.group(3))
+        course = parse_course(data_text)
+        if course:
+            info["surface"], info["direction"], info["distance"] = course
         else:
             info["surface"], info["direction"], info["distance"] = "", "", 0
 
@@ -598,11 +613,9 @@ class RaceResultOnTimeParser(RaceResultParser):
 
         # race.netkeiba.com RaceData01 旧形式: "10:05発走 / 芝1600m(左) / 天候:晴 / 馬場:良"
         # race.netkeiba.com RaceData01 新形式: "ダ右1000m / 天候 : 曇 / ダート : 良 / 発走 : 10:20"
-        m = re.search(r"(芝|ダ|ダート|障)\s*(左|右|直)?\s*(\d{3,5})\s*m", data1)
-        if m:
-            surface_raw = m.group(1)
-            info["surface"] = "ダート" if surface_raw.startswith("ダ") else surface_raw
-            info["distance"] = int(m.group(3))
+        course = parse_course(data1)
+        if course:
+            info["surface"], _, info["distance"] = course
         else:
             info["surface"], info["distance"] = "", 0
 
@@ -758,11 +771,9 @@ class RaceCardParser:
         data1 = data1_tag.get_text(" ", strip=True) if data1_tag else ""
 
         # 新形式 "ダ右1000m" にも対応（方角が距離の前に入る）
-        m = re.search(r"(芝|ダ|ダート|障)\s*(左|右|直)?\s*(\d{3,5})\s*m", data1)
-        if m:
-            surface_raw = m.group(1)
-            info["surface"] = "ダート" if surface_raw.startswith("ダ") else surface_raw
-            info["distance"] = int(m.group(3))
+        course = parse_course(data1)
+        if course:
+            info["surface"], _, info["distance"] = course
         else:
             info["surface"], info["distance"] = "", 0
 
