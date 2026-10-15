@@ -4,6 +4,8 @@
 #   bash scripts/server/tunnel_stg_ui.sh start    # バックグラウンドで張る（既にあれば何もしない）
 #   bash scripts/server/tunnel_stg_ui.sh status
 #   bash scripts/server/tunnel_stg_ui.sh stop
+#   bash scripts/server/tunnel_stg_ui.sh watch    # 切れたら 30 秒おきに張り直す常駐（バックグラウンド。logs/tunnel_stg_watch.log）
+#   bash scripts/server/tunnel_stg_ui.sh unwatch  # 常駐を止める（トンネル自体は止めない）
 #
 # 見られるもの（ポートは config/ports.env の stg。ローカルのポートはホストと同じ。監視ポータルだけ +1 する）:
 #   MLflow          http://localhost:23230
@@ -47,7 +49,28 @@ case "${1:-status}" in
   status)
     if alive; then echo "張られています"; else echo "張られていません"; exit 1; fi
     ;;
-  *) echo "usage: $0 start|stop|status" >&2; exit 2 ;;
+  watch)
+    PIDF="${TMPDIR:-/tmp}/keiba-stg-tunnel-watch.pid"
+    if [[ -f "$PIDF" ]] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then echo "常駐は動いています (pid $(cat "$PIDF"))"; exit 0; fi
+    mkdir -p "$ROOT/logs"
+    # 回線(ngrok/chisel 経由)が切れるとトンネルの ssh が終了する。常駐が alive を見て、切れていれば start し直す
+    nohup setsid bash -c '
+      while true; do
+        if ! ssh -S "'"$SOCK"'" -O check "'"$HOST"'" >/dev/null 2>&1; then
+          echo "[$(date -Is)] トンネルが無いので張り直す" >>"'"$ROOT"'/logs/tunnel_stg_watch.log"
+          bash "'"$ROOT"'/scripts/server/tunnel_stg_ui.sh" start >>"'"$ROOT"'/logs/tunnel_stg_watch.log" 2>&1 || true
+        fi
+        sleep 30
+      done' >/dev/null 2>&1 </dev/null &
+    echo $! >"$PIDF"; echo "常駐を始めました (pid $!)。切れても 30 秒以内に張り直します"
+    exit 0
+    ;;
+  unwatch)
+    PIDF="${TMPDIR:-/tmp}/keiba-stg-tunnel-watch.pid"
+    if [[ -f "$PIDF" ]] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then kill "$(cat "$PIDF")" && rm -f "$PIDF" && echo "常駐を止めました"; else echo "常駐は動いていません"; fi
+    exit 0
+    ;;
+  *) echo "usage: $0 start|stop|status|watch|unwatch" >&2; exit 2 ;;
 esac
 if [[ "${1:-status}" != "stop" ]] && alive; then
   for pair in "MLflow:${KEIBA_PORT_STG_MLFLOW}:/" "フロント:${KEIBA_PORT_STG_FRONTEND}:/" "Flask:${KEIBA_PORT_STG_FLASK}:/api/v1/health" "FastAPI:${KEIBA_PORT_STG_FASTAPI}:/api/health" "監視:${MON_LOCAL}:/login"; do
