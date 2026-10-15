@@ -41,7 +41,9 @@ def race_level_empty_rates(df: pl.DataFrame, id_col: str = "race_id") -> pl.Data
     return g.select(id_col, *([pl.col("date")] if "date" in g.columns else []), *exprs)
 
 
-def drift(tables_dir: Path, baseline_years: list[int], recent_years: list[int], months: int = 4, threshold: float = 0.15) -> list[dict]:
+def drift(tables_dir: Path, baseline_years: list[int], recent_years: list[int], months: int = 4, threshold: float = 0.15,
+          until: str | None = None) -> list[dict]:
+    """until（YYYY-MM-DD）より前の日付のレースだけを直近として比べる。開催前の出馬表は天候・馬場が空で正常なため、通常は昨日までにする。"""
     findings: list[dict] = []
     cats = sorted({p.name for y in baseline_years + recent_years for p in (tables_dir / str(y)).glob("*_flat.parquet")})
     for name in cats:
@@ -63,6 +65,8 @@ def drift(tables_dir: Path, baseline_years: list[int], recent_years: list[int], 
         rec = race_level_empty_rates(pl.concat([d.select(keep) for d in rec_parts], how="vertical_relaxed"))
         if base.height < MIN_BASELINE_ROWS or "date" not in rec.columns:
             continue
+        if until:
+            rec = rec.filter(pl.col("date").cast(pl.Utf8) < until)
         rec = rec.with_columns(pl.col("date").cast(pl.Utf8).str.slice(0, 7).alias("ym"))
         yms = sorted(rec["ym"].drop_nulls().unique().to_list())[-months:]
         flags = [c for c in base.columns if c[:2] in ("E:", "M:") and c in rec.columns]
@@ -86,6 +90,7 @@ def main() -> int:
     ap.add_argument("--recent", default="2026")
     ap.add_argument("--months", type=int, default=4)
     ap.add_argument("--threshold", type=float, default=0.15)
+    ap.add_argument("--until", help="この日付より前のレースだけを直近として比べる（既定: 今日 JST）")
     args = ap.parse_args()
 
     def years(s: str) -> list[int]:
@@ -94,7 +99,10 @@ def main() -> int:
             return list(range(int(a), int(b) + 1))
         return [int(x) for x in s.split(",")]
 
-    f = drift(args.tables_dir, years(args.baseline), years(args.recent), args.months, args.threshold)
+    from datetime import datetime, timedelta, timezone
+
+    until = args.until or datetime.now(timezone(timedelta(hours=9))).date().isoformat()
+    f = drift(args.tables_dir, years(args.baseline), years(args.recent), args.months, args.threshold, until)
     for x in sorted(f, key=lambda d: (d["table"], d["column"], d["month"])):
         print(f"{x['table']:34s} {x['column']:28s} {x['kind']}  {x['month']}  基準 {x['baseline']:.3f} → 直近 {x['recent']:.3f}  ({x['races']} レース)")
     print(f"検出 {len(f)} 件")

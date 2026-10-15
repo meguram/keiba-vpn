@@ -34,3 +34,10 @@ def test_no_findings_when_stable(tmp_path):
     _write(tmp_path, 2024, sum((_races(2024, 60, m) for m in range(1, 13)), []))
     _write(tmp_path, 2026, _races(2026, 60, 1) + _races(2026, 60, 2))
     assert drift(tmp_path, [2024], [2026]) == []
+
+
+def test_future_dated_races_are_excluded_by_until(tmp_path):
+    _write(tmp_path, 2024, sum((_races(2024, 60, m) for m in range(1, 13)), []))
+    _write(tmp_path, 2026, _races(2026, 60, 1) + _races(2026, 60, 2, weather="") if False else _races(2026, 60, 1) + _races(2026, 60, 2, surface=""))
+    assert drift(tmp_path, [2024], [2026], until="2026-02-01") == []
+    assert drift(tmp_path, [2024], [2026], until="2026-03-01") != []
