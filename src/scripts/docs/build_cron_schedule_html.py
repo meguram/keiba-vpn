@@ -37,7 +37,7 @@ JOBS: dict[str, tuple[str, str, str, str, str]] = {
     # key: (グループ, 名前, 内容, 加工, 保存先)
     "raceday-eve": ("live", "前日夕方の出馬表・馬柱・追い切り", "翌日が開催日のときだけ動く。枠順・馬柱・追い切り・SmartRC を取得",
                     "構造化 + 推定（追走難度・想定オッズ。モデルによる計算結果を保存）",
-                    "GCS: 出馬表・馬柱・追い切り・SmartRC は構造化JSON、追走難度・想定オッズは推定結果のキャッシュ。ローカル: 取得状況 data/local/meta/date_coverage、発走時刻表 data/page_reference/race_day_schedule（ローカルのみ）。DB 同期を起動（ホストでは失敗中）"),
+                    "GCS: 出馬表・馬柱・追い切り・SmartRC は構造化JSON、追走難度・想定オッズは推定結果のキャッシュ。ローカル: 取得状況 data/local/meta/date_coverage、発走時刻表 data/page_reference/race_day_schedule（ローカルのみ）。DB 同期を起動（直近の開催日では未検証。PostgreSQL は 2026-10-15 時点で起動中）"),
     "raceday-comment": ("live", "厩舎コメント（レース前の厩舎の話）", "前日 20:00 は翌日、07:40 は当日が開催日のときだけ動く。コメントが出ているレースだけ保存し、無いレースは次回に取り直す",
                         "構造化（コメント・評価・聞き手・調教師名）",
                         "GCS: race_trainer_comment（レース後の recent-retry と同じカテゴリ。保存済みより件数が減る更新はしない）"),
@@ -54,7 +54,7 @@ JOBS: dict[str, tuple[str, str, str, str, str]] = {
                               "構造化（出馬表）+ 計算（127特徴量）",
                               "GCS: 出馬表。ローカルのみ: data/local/inference（特徴量 parquet・予測時点の出馬表スナップショット・イベント記録。GCS には上げない）"),
     "raceday-evening": ("live", "開催日夕方の結果・確定オッズ", "速報結果・確定オッズ・SmartRC のまとめ取得",
-                        "構造化のみ", "GCS: 速報結果・確定オッズ・SmartRC。ローカル: 取得状況 date_coverage。DB 同期を起動（ホストでは失敗中）"),
+                        "構造化のみ", "GCS: 速報結果・確定オッズ・SmartRC。ローカル: 取得状況 date_coverage。DB 同期を起動（直近の開催日では未検証。PostgreSQL は 2026-10-15 時点で起動中）"),
     "jra-baba-morning": ("live", "JRA 馬場（クッション値・含水率）", "開催日の朝に10分ごとにポーリング",
                          "構造化（JRA 公式ページを整形したJSON）",
                          "ローカルのみ: data/page_reference/cushion。GCS へは自動では上げない（手動アップロード）"),
@@ -62,7 +62,7 @@ JOBS: dict[str, tuple[str, str, str, str, str]] = {
                          "構造化のみ", "ローカルのみ: data/page_reference/race_lists。キューにレース単位のジョブが溜まっていれば、その分は GCS へ"),
     "weekly-update": ("refresh", "週次更新", "直近10日の確定結果・タイム指数・バロメーター・馬情報",
                       "構造化 + 計算（めぐ指数）+ DB 取り込み",
-                      "GCS: 確定結果・指数・バロメーター・馬情報。PostgreSQL: ETL（ホストでは DB 未起動・psycopg2 未導入のため失敗中）"),
+                      "GCS: 確定結果・指数・バロメーター・馬情報。PostgreSQL: ETL（ホストでは psycopg2 未導入のため失敗中。最終実行は 2026-10-09 で、PostgreSQL 自体は 2026-10-15 時点で起動中）"),
     "horse-name-index": ("refresh", "馬名インデックス", "馬名リストと成長曲線（週次更新の後）",
                          "計算（馬名リスト・成長曲線の集計）", "ローカルのみ: data/calculated_data"),
     "barometer-retry": ("refresh", "バロメーターの取り直し", "公開済みで未取得のものだけを取得",
@@ -251,7 +251,8 @@ def last_run_text(key: str, status: dict | None) -> str:
 KNOWN_ISSUES = [
     ("2026-10-15", "馬名インデックスは 10-09 の実行が上の dev 設定のためスキップされた。次回は 10-16（金）18:30。"),
     ("2026-10-15", "レース一覧（daily-race-lists）の状態が partial なのは、数週間先の開催日の一覧が netkeiba にまだ公開されていないため（想定内）。"),
-    ("2026-10-15", "優先処理（2020〜2025 年の取り直し）が動いている間は、見送り対象のジョブ（レース一覧・週次更新・バロメーター・recent-retry・backfill）は動かない（logs/yield_skips.log に記録）。終了は 10/15 午前の見込み。"),
+    ("2026-10-15", "優先処理（2020〜2025 年の取り直し）が動いている間は、見送り対象のジョブ（レース一覧・週次更新・バロメーター・recent-retry・backfill）は動かない（logs/yield_skips.log に記録）。10/15 15 時の時点では優先処理のプロセスは無く、見送りの最後の記録は 04:00 のため、終了済みとみられる。"),
+    ("2026-10-15", "週次更新の PostgreSQL 取り込みは「No module named 'psycopg2'」で失敗する（最終実行 10-09）。ホストの Python には psycopg（v3）はあるが psycopg2 が無い。PostgreSQL 14 自体は起動している。"),
 ]
 
 
@@ -261,7 +262,8 @@ def render(jobs: list[Job], others: list[str], source: str, status: dict | None 
            "<title>cron 登録内容（グループ別） — keiba-vpn docs</title>", f"<style>{CSS}</style></head><body><main>",
            "<h1>cron 登録内容（グループ別）</h1>",
            f'<p class="muted">時刻はすべて <b>JST</b>（crontab 本体は UTC で記述）。生成: {datetime.now(JST):%Y-%m-%d %H:%M} / 元データ: {esc(source)} / '
-           "再生成: <code>python -m src.scripts.docs.build_cron_schedule_html</code>。定義の正は <code>scripts/cron/setup_all_cron.sh</code>。</p>",
+           "再生成: <code>python -m src.scripts.docs.build_cron_schedule_html</code>。定義の正は <code>scripts/cron/setup_all_cron.sh</code>。"
+           'データごとの収集→加工→統合の流れは <a href="../modeling/data_flow_schedule.html">データの収集〜加工〜統合フロー</a>。</p>',
            '<div class="box"><span class="badge">取り直し中は見送り</span> のジョブは、優先処理（2020-2025年の取り直し。<code>run_priority_rescrape.sh</code>）が動いている間は自動で見送り、'
            "終われば自動で通常どおり動く（<code>scripts/cron/yield_to_rescrape.sh</code>。同じ netkeiba アカウントの別セッションが取り直し側のセッションを無効にするため）。"
            "見送りの記録は <code>logs/yield_skips.log</code>。止めるには <code>data/local/meta/rescrape/YIELD_DISABLED</code> を置く。</div>"]

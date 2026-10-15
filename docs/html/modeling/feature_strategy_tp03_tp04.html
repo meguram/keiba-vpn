@@ -55,8 +55,8 @@
 <tr><th>データ</th><th>状態・制約</th></tr>
 <tr><td>走破履歴（<code>race_result_flat</code>）</td><td>2020-01-05〜2025-12-28、JRA の完走馬 283,714 走。<b>2020 年より前の走は取得できない</b>（<code>race_result_flat</code>・<code>horse/result_tbl</code> とも 2020 年以降のみ）。そのため 2020〜2021 年は履歴が短く、特徴量の欠損が多い（助走期間）。</td></tr>
 <tr><td>結果ページの会員限定列</td><td>通過・上りはプレミアム（要ログイン）。該当期間（2023 年 10 月中旬〜12 月、2025 年 5 月以降）は空欄や <code>**</code> のため、パーサーが取り違えて壊れていた（約 2,810 レース）。パーサーはヘッダー名で列を決める方式に修正済み。GCS の <code>race_result</code> は <code>race_result_on_time</code> の値で修復済み。</td></tr>
-<tr><td>タイム指数（<code>race_index</code>）</td><td>取得時にログインの会員状態が反映されず、1 レース 3 頭分だけ保存されたレースがある。取り直し中（GCS 実測で対象 6,579 レース）。新馬戦は過去走がないため指数がなく、正常。</td></tr>
-<tr><td>調教師コメント</td><td>同様に 3 頭分だけのレースが 5,067 件。取り直し中。<b>tp-02 の特徴量にはまだ使っていない。</b>コメントが元々無いレースも多い（GCS で 0 件が 13,338 レース）。</td></tr>
+<tr><td>タイム指数（<code>race_index</code>）</td><td>取得時にログインの会員状態が反映されず、1 レース 3 頭分だけ保存されたレースがあった。<b>取り直し済み（2026-10-15 05:00 完了）</b>: 出走馬の 9 割以上が揃ったレースは 34.8% → 90.8%（新馬戦を除くと 99.4%）。新馬戦は過去走がないため指数がなく、正常。詳細は<a href="training_pipeline_decisions.html">確定事項ログ</a> §4。</td></tr>
+<tr><td>調教師コメント</td><td>同様に 3 頭分だけのレースが 5,067 件あり、<b>取り直し済み</b>（9 割以上が揃ったレース 11.2% → 35.4%。未勝利・1 勝は構造的に 0 頭が多い）。<b>tp-02 の特徴量にはまだ使っていない。</b>コメントが元々無いレースも多い（GCS で 0 件が 13,338 レース）。</td></tr>
 <tr><td>馬別 200m ラップ表・調子偏差値</td><td>netkeiba が 2024 年 1 月以降のレースにしか提供していない。2020〜2023 年は再取得できない。馬別ラップ表は 2024 年以降も保存されていない。学習対象年の約 3 分の 1 にしか使えないため、現時点では特徴量にしない。</td></tr>
 <tr><td>追い切り・パドック</td><td>保存件数と取り直した件数が一致（パドックは元々 5 頭程度）。<b>特徴量にはまだ使っていない。</b></td></tr>
 </table>
@@ -238,7 +238,8 @@
 <tr><td>見送り候補</td><td>F1、F4（距離適性曲線）、F2b（ペース別成績）</td></tr>
 </table>
 
-<h2>7. tp-03 特徴量の ablation（未作成）</h2>
+<h2>7. tp-03 特徴量の ablation（実施済み）</h2>
+<div class="box">以下は実施前の計画。<b>実施済み（2026-10-15）</b>で、結果と採用セットは<a href="training_pipeline_decisions.html">確定事項ログ</a> §5。時代ずれの AUC も 127 特徴量で再計測されている（§3 の再計測）ため、7.3 の数値（94 特徴量）は計画時点のもの。</div>
 <h3>7.1 比較の枠組み</h3>
 <table>
 <tr><th>項目</th><th>内容</th></tr>
@@ -268,7 +269,8 @@
 <h3>7.3 時代ずれの追跡（adversarial validation）</h3>
 <p>採用セットごとに、train と valid／test を見分ける AUC を記録する。現状（on_time 補正後、tp-02 の 94 特徴量）は、全部で 0.86（valid）・0.90（test）、F5 を除くと 0.76・0.79、F5 と件数系を除くと 0.74・0.78。上位は <code>c_rq_ewm2</code>、<code>c_cls_ewm2</code>、<code>c_cls_step</code>、<code>f3_fs_mean</code>、<code>c_fstop3_ewm2</code>。AUC は「分布差の大きさ」の目安であり、単独の合否基準ではない。LogLoss を悪化させずに下げられる範囲で対処する。</p>
 
-<h2>8. tp-04 前段モデル（未作成）</h2>
+<h2>8. tp-04 前段モデル（実施済み）</h2>
+<div class="box">以下は実施前の設計。<b>実施済み（2026-10-15）</b>で、各段の精度と後段への寄与は<a href="training_pipeline_decisions.html">確定事項ログ</a> §6。tp-05（最終モデル）・tp-06・tp-07 は未作成。</div>
 <h3>8.1 目的変数</h3>
 <table>
 <tr><th>モデル</th><th>目的変数</th><th>種類</th><th>旧 notebook</th><th>旧結果（参考。時間が重なる分割での値）</th></tr>
@@ -341,21 +343,25 @@
 <p class="muted">本書の各章の関係を図にしたもの。青 = 実装済みまたは設計済みの本流、緑 = 前段予測（tp-04）、黄 = 評価・採否の工程、破線 = 補助的な入力。簡易版（F2・G）との置き換え・併用は、tp-03 で比較して良い方を採用する。</p>
 <h3>図 1. 全体の予測フロー（入力 → 特徴量 → 前段予測 → 最終モデル → 期待値）</h3>
 <div class="box" style="padding:10px 8px"><svg viewBox="0 0 1000 728" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans JP, system-ui, sans-serif" role="img" aria-label="予測フロー全体図"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7aa9ff"/></marker></defs>
-<rect x="20" y="14" width="300" height="62" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<rect x="20" y="14" width="300" height="86" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
 <text x="170.0" y="32.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">入力データ①</text>
 <text x="170.0" y="49.55" text-anchor="middle" font-size="12" fill="#b9c6e8">race_result_flat（2020–2025 完走馬 283,714 走）</text>
 <text x="170.0" y="66.55" text-anchor="middle" font-size="12" fill="#b9c6e8">last_3f・通過順・馬体重は on_time で補正</text>
-<rect x="350" y="14" width="300" height="62" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="170.0" y="83.55" text-anchor="middle" font-size="10.5" fill="#ffd479">速報 毎日07:30〜(各R+15分)・確定 06:10/19:40</text>
+<text x="170.0" y="95.2" text-anchor="middle" font-size="10.5" fill="#ffd479">flat化 毎日07:00 → 履歴特徴量 毎日07:40</text>
+<rect x="350" y="14" width="300" height="86" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
 <text x="500.0" y="32.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">入力データ②</text>
 <text x="500.0" y="49.55" text-anchor="middle" font-size="12" fill="#b9c6e8">出馬表・LayerA 母表</text>
-<text x="500.0" y="66.55" text-anchor="middle" font-size="12" fill="#b9c6e8">斤量・馬体重・性齢・血統・race_index（取り直し中）</text>
-<rect x="680" y="14" width="300" height="62" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="500.0" y="66.55" text-anchor="middle" font-size="12" fill="#b9c6e8">斤量・馬体重・性齢・血統・race_index（取り直し済み）</text>
+<text x="500.0" y="83.55" text-anchor="middle" font-size="10.5" fill="#ffd479">取得 前日18:00・T-15(07:30起動)・馬体重 T-65〜30(08:00起動)</text>
+<rect x="680" y="14" width="300" height="86" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
 <text x="830.0" y="32.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">入力データ③</text>
 <text x="830.0" y="49.55" text-anchor="middle" font-size="12" fill="#b9c6e8">ラップ・馬場</text>
 <text x="830.0" y="66.55" text-anchor="middle" font-size="12" fill="#b9c6e8">lap_times・クッション値（馬別ラップ表は 2024 年以降）</text>
-<line x1="170" y1="76" x2="170" y2="108" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
-<line x1="500" y1="76" x2="500" y2="108" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
-<line x1="830" y1="76" x2="830" y2="108" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="830.0" y="83.55" text-anchor="middle" font-size="10.5" fill="#ffd479">馬場 毎日05:00〜08:50(10分毎)・ラップ 06:10/19:40</text>
+<line x1="170" y1="100" x2="170" y2="108" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<line x1="500" y1="100" x2="500" y2="108" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
+<line x1="830" y1="100" x2="830" y2="108" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
 <rect x="20" y="108" width="960" height="92" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
 <text x="500.0" y="141.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">tp-01 母表・分割  →  tp-02 as-of 特徴量（127 列）</text>
 <text x="500.0" y="158.55" text-anchor="middle" font-size="12" fill="#b9c6e8">A 上がり・B 得意な舞台・C レースの質・D 休養/体重・E 信頼度・F1/F2/F3/F5・G RPCI/PCI・H 標準条件レーティング</text>
@@ -416,7 +422,8 @@
 <line x1="830" y1="622" x2="830" y2="654" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
 <rect x="20" y="654" width="960" height="58" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
 <text x="500.0" y="679.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">LayerB: 市場オッズとの合成（Benter 型の 2 段階ロジット）→ 期待値 → 推奨馬券</text>
-<text x="500.0" y="696.05" text-anchor="middle" font-size="12" fill="#b9c6e8">tp-07 最終再学習・MLflow 登録・推論の一致確認（オッズは LayerA に入れない）</text></svg></div>
+<text x="500.0" y="696.05" text-anchor="middle" font-size="12" fill="#b9c6e8">tp-07 最終再学習・MLflow 登録・推論の一致確認（オッズは LayerA に入れない）</text></svg>
+<p class="muted">図 1 の黄色い行は、各入力データを集める cron の発生時刻（JST）。収集 → 保存 → 加工 → 統合の全体と、データごとの時刻・保存先・加工ジョブは <a href="data_flow_schedule.html">データの収集〜加工〜統合フロー（cron 時刻つき）</a>、cron の全一覧は <a href="../operations/cron_schedule.html">cron 登録内容</a>。学習（tp-01〜tp-07）は手動で、cron には載っていない。</p></div>
 <h3>図 2. ペース予測を使った「馬 × レース」のマッチ（前傾・後傾への相性）</h3>
 <div class="box" style="padding:10px 8px"><svg viewBox="0 0 1000 322" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans JP, system-ui, sans-serif" role="img" aria-label="ペース予測の使い方"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7aa9ff"/></marker></defs>
 <rect x="20" y="20" width="300" height="78" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
@@ -461,7 +468,8 @@
 
 <h3>図の実運用での成立性（T-X で実行できるか。2026-10-14 調査）</h3>
 <p class="muted">調査対象: 当日のランナー（<code>auto_scrape_queue.py</code>）、<code>availability_watch.py</code>、<code>sla_spec.py</code>、予測のトリガー（<code>pre_race_predict_trigger.py</code>、<code>race_day_workflow.py</code>）、運用ドキュメント、ホストの実績データ。netkeiba への新規アクセスはしていない。</p>
-<div class="box"><b>結論:</b> 図と「予測は馬体重の発表後（T-60）のみ」の方針は、<b>現行の実装では成立しない</b>。T-60 では出馬表（馬体重を含む）を取らず（オッズのみ）、予測の起動点も T-15（モック）と T-45（疑似特徴量ビルダー）で、どちらも tp-02 の特徴量を使っていない。当日の出走馬を「結果なしの行」として履歴に足す推論モードも無い。修正すれば成立する見込み（下の修正案）。</div>
+<div class="box"><b>結論（2026-10-14 時点）:</b> 図と「予測は馬体重の発表後（T-60）のみ」の方針は、<b>現行の実装では成立しない</b>。T-60 では出馬表（馬体重を含む）を取らず（オッズのみ）、予測の起動点も T-15（モック）と T-45（疑似特徴量ビルダー）で、どちらも tp-02 の特徴量を使っていない。当日の出走馬を「結果なしの行」として履歴に足す推論モードも無い。修正すれば成立する見込み（下の修正案）。</div>
+<div class="box"><b>2026-10-15 の更新:</b> 上の調査のあと、10-14 夜に次が実装・登録された。<ul><li><b>馬体重の検知ランナー</b>（<code>raceday-weight-runner</code>）: cron 毎日 08:00 に起動し、各レース発走 65〜30 分前に出馬表を 90 秒間隔で取り直す。9 割以上の馬に馬体重が入ったら推論モードで特徴量を作る。期限までに入らなければ馬体重なしで起動。<b>既定では予測は起動せず、特徴量の作成まで</b>（<code>KEIBA_WEIGHT_TRIGGER_MODE=predict</code> で既存の予測も起動）。</li><li><b>推論モード</b>（<code>weight_triggered_predict</code>・<code>horse_history/inference.py</code>）: 当日の出走馬を結果なしの行として履歴に足し、学習と同じ計算で特徴量を作る。小さなメモリのマシン向けのサービング用バンドル（約 140MB）もある。</li><li><b>cron</b>: <code>export_tables_daily</code>（毎日 07:00。flat 表を当年分だけ増分更新）、<code>feature-accumulate</code>（毎日 07:40。当年分の 127 列を作り直し、推論モードとのずれを記録）。</li><li><code>config/modeling/feature_tiers.json</code> があり、推論モードが読み込む。</li></ul><b>まだ言えないこと:</b> 開催日での動作実績は無い（最初の開催日は 10/17〜18）。朝の tier 0・1 のキャッシュと、T-60 での tier 2 だけの増分計算になっているかは未確認。T-60 の取得自体はオッズのみのまま。予測の起動点（T-45 の疑似ビルダー、T-15 のモック）も残っている。各データの cron 時刻は <a href="data_flow_schedule.html">データの収集〜加工〜統合フロー</a>。</div>
 <h4>実装が各 T-X で行うこと</h4>
 <table>
 <tr><th>時点</th><th>取得（実装）</th><th>予測</th></tr>
@@ -488,38 +496,38 @@
 <h4>ノード別の判定（○ = 成立、△ = 条件つき、× = 現状は不成立）</h4>
 <table>
 <tr><th>ノード</th><th>判定</th><th>根拠・問題</th></tr>
-<tr><td>入力① 履歴（<code>race_result_flat</code>）</td><td>△</td><td>翌日取得＋金曜の週次更新。flat テーブルを定期的に再 export する cron が無い（<code>export_tables</code> は手動のみ）</td></tr>
+<tr><td>入力① 履歴（<code>race_result_flat</code>）</td><td>○（10/15 更新）</td><td>翌日取得＋金曜の週次更新に加え、<b>毎日 07:00 に <code>export_tables_daily</code> が当年分を増分更新</b>（race_result・race_shutuba・race_result_lap・race_result_on_time の 4 カテゴリ。他のカテゴリの flat は手動）。（10/14 時点は cron が無かった）</td></tr>
 <tr><td>入力② 出馬表・斤量</td><td>○</td><td>前日 18:00 の取得で枠順・斤量が入る</td></tr>
 <tr><td>入力③ ラップ・馬場</td><td>○／△</td><td>馬場は前日と当日朝に取れる。午後の変化は T-15 の更新まで反映されない</td></tr>
-<tr><td>tp-02 の as-of 特徴量（tier 0）</td><td><b>×</b></td><td>全期間の再構築（約 23 秒）は可能だが、<b>当日のレースを「結果なしの行」として足す推論モードが無い</b>（<code>load_runs</code> は完走馬だけを読む）</td></tr>
-<tr><td>馬体重系（<code>d_wt_*</code>、<code>sr_load_*</code>、<code>sr_exp</code>）</td><td>△</td><td>T-60 で出馬表を取らないので馬体重が入らない。発表時刻が T-60 より遅いと間に合わない</td></tr>
+<tr><td>tp-02 の as-of 特徴量（tier 0）</td><td><b>△</b>（10/15 更新）</td><td><b>推論モードを実装</b>（<code>weight_triggered_predict</code>。当日の出走馬を結果なしの行として足す）。開催日での実績は無い。（10/14 時点は×）</td></tr>
+<tr><td>馬体重系（<code>d_wt_*</code>、<code>sr_load_*</code>、<code>sr_exp</code>）</td><td>△</td><td>T-60 の取得はオッズのみのまま。代わりに<b>検知ランナーが T-65〜T-30 に出馬表を取り直す</b>（10/15 更新）。発表時刻のばらつきは未計測</td></tr>
 <tr><td>P1・P2・P3 事前版</td><td>△</td><td>設計のみ。tier 0 に載せられるが未実装</td></tr>
 <tr><td><b>P7 当日の馬場差</b></td><td>△</td><td>1 レースの間隔は約 30 分で、速報は発走 +15 分に取得されるため、<b>T-60 に使える同日の先行レースは、発走が約 90 分以上前のものだけ</b>。実データでは、先行レースが使えるレースは全体の 62%（第 1〜3R は 0%、第 4R 31%、第 5R 45%、第 6R 81%、第 7R 以降 90〜100%）。使えないレースは前の開催日の値で補う（補完後の非欠損は 96%）</td></tr>
-<tr><td>第 2 段・P4〜P6・最終モデル・較正</td><td>○（計算）／×（配線）</td><td>計算は数秒。推論側に配線が無い</td></tr>
+<tr><td>第 2 段・P4〜P6・最終モデル・較正</td><td>○（計算）／×（配線）</td><td>計算は数秒。検知ランナーの既定は特徴量の作成までで、予測は起動しない（最終モデル tp-05 は未作成）</td></tr>
 <tr><td>LayerB</td><td>○</td><td>T-15 のオッズ。時点は固定されている</td></tr>
-<tr><td>tier 0／1／2 の分割</td><td>×</td><td><code>feature_tiers.json</code> も、推論の分割も未実装</td></tr>
+<tr><td>tier 0／1／2 の分割</td><td>△（10/15 更新）</td><td><code>feature_tiers.json</code> があり、推論モード（<code>inference.py</code>）が読み込む。朝の tier 0・1 のキャッシュと、T-60 の tier 2 だけの計算になっているかは未確認（10/14 時点は未実装）</td></tr>
 </table>
 <h4>図・方針と実装・実績の食い違い</h4>
 <ol>
-  <li><b>T-60 の取得がオッズのみ:</b> 馬体重を含む出馬表は T-15 まで入らない。</li>
+  <li><b>T-60 の取得がオッズのみ:</b> 馬体重を含む出馬表は T-15 まで入らない。→ 10/15: 検知ランナーが T-65〜T-30 に出馬表を取り直す（T-60 の取得自体は変更なし）。</li>
   <li><b>予測の起動点が 3 系統:</b> 設計は T-60、実装は T-15（モック）と T-45（疑似ビルダー）。どれも tp-02 の特徴量を使っていない。</li>
   <li><b>本番に T-X の運用実績が無い:</b> 10/10・10/11・10/12 の 3 開催日で「アクセス一時停止中のためキュー処理を中断」が出て、T-15 の取得が実行されていない。10/12 のログは旧ロジック（T-15 のみ）で、T-60 版が本番で動いた記録が無い。</li>
   <li><b>馬体重の発表は T-60 前後:</b> 発表は基本的に発走の 1 時間前（ユーザー情報）なので、方針の起点（T-60）とは合う。ただし T-60 ちょうどに取得すると発表の直前にあたる可能性があるため、固定時刻ではなく「発表の検知」で起動する必要がある。発表の実際の時刻のばらつきは未計測。</li>
-  <li><b>特徴量の増分更新の仕組みが無い</b>（上記）。</li>
+  <li><b>特徴量の増分更新の仕組みが無い</b>（上記）。→ 10/15: 推論モードと、毎日 07:40 の蓄積 cron を実装（開催日の実績は未）。</li>
   <li><b>発走時刻表が無い:</b> GCS の <code>race_day_schedule</code> は直近の開催日で空。ランナーは <code>race_lists</code> から合成しているが、出馬表の <code>start_time</code> が空のレースがあると T-X のイベント時刻を作れない可能性がある。</li>
   <li><b>学習側の P7 が運用の制約を再現していなかった:</b> H の過去走の標準化は同日の全レースを使う（履歴は予測時点で完結しているため問題ない）が、「今日の馬場差」を特徴量にするなら、運用と同じ制約（発走 90 分以上前のレースだけ）で作る必要がある。→ <code>sr_var_today</code> として実装済み。</li>
 </ol>
 <h4>修正案と状況</h4>
 <table>
 <tr><th>#</th><th>修正案</th><th>状況</th></tr>
-<tr><td>1</td><td>T-60 の取得に出馬表（<code>race_shutuba</code>）を足す。1 レース約 4 秒（実測）、同時に 3 レースでも約 12 秒</td><td>提案（本番ランナーの変更のため、承認後に実施）</td></tr>
-<tr><td>2</td><td>起動は固定時刻ではなく「馬体重の検知」: 発表は T-60 前後なので <b>T-65 から 1〜2 分間隔</b>で出馬表を確認し、9 割以上の馬に馬体重が入った時点で予測する。期限は T-30（それまでに入らなければ前走の馬体重で代替し、<code>has_*</code> フラグを付ける）</td><td>提案</td></tr>
-<tr><td>3</td><td>推論モードを作る: 当日の出走馬を結果なしの行として履歴に足し、Elo の更新などをスキップして特徴量を作る。朝に 1 回（tier 0・1）作ってキャッシュし、T-60 は tier 2 だけを計算する</td><td>未実装（tp-07 の後続）</td></tr>
+<tr><td>1</td><td>T-60 の取得に出馬表（<code>race_shutuba</code>）を足す。1 レース約 4 秒（実測）、同時に 3 レースでも約 12 秒</td><td>未実施（T-60 の取得は変更せず、検知ランナー（#2）が出馬表を取り直す形で代替）</td></tr>
+<tr><td>2</td><td>起動は固定時刻ではなく「馬体重の検知」: 発表は T-60 前後なので <b>T-65 から 1〜2 分間隔</b>で出馬表を確認し、9 割以上の馬に馬体重が入った時点で予測する。期限は T-30（それまでに入らなければ前走の馬体重で代替し、<code>has_*</code> フラグを付ける）</td><td><b>実装済み・cron 登録済み</b>（2026-10-14 夜。<code>raceday-weight-runner</code>、毎日 08:00 起動、90 秒間隔）。開催日での実績は無い</td></tr>
+<tr><td>3</td><td>推論モードを作る: 当日の出走馬を結果なしの行として履歴に足し、Elo の更新などをスキップして特徴量を作る。朝に 1 回（tier 0・1）作ってキャッシュし、T-60 は tier 2 だけを計算する</td><td>推論モードは<b>実装済み</b>（10/14 夜）。朝のキャッシュと tier 2 だけの増分計算は未確認</td></tr>
 <tr><td>4</td><td>P7: (a) 前日の同場・同面の馬場差、(b) クッション値・含水率から回帰した推定、(c) 当日の先行レースの結果での更新、の順で使う。学習側も同じ制約で作る</td><td>(a)(c) は <code>sr_var_today</code> で実装済み。(b) は未実装</td></tr>
 <tr><td>5</td><td>T-60 でも馬場の更新（<code>refresh_jra_baba_live()</code>）を呼ぶ</td><td>提案</td></tr>
-<tr><td>6</td><td><code>export_tables</code> の定期化（flat テーブルの更新）</td><td>提案</td></tr>
+<tr><td>6</td><td><code>export_tables</code> の定期化（flat テーブルの更新）</td><td><b>cron 登録済み</b>（毎日 07:00、4 カテゴリ。<code>export_tables_daily.sh</code>）</td></tr>
 <tr><td>7</td><td>アクセス一時停止（連続 3 開催日）の原因の特定</td><td>未調査</td></tr>
-<tr><td>8</td><td>馬体重の発表時刻のばらつきを測る（基本は発走 1 時間前）: <code>availability_watch</code> を次の開催日（10/17〜18）に実行</td><td>提案</td></tr>
+<tr><td>8</td><td>馬体重の発表時刻のばらつきを測る（基本は発走 1 時間前）: <code>availability_watch</code> を次の開催日（10/17〜18）に実行</td><td>提案（cron 未登録。<code>availability_watch</code> は未実行）</td></tr>
 <tr><td>9</td><td>予測の起動点を 1 つにする（T-45 の疑似ビルダー、T-15 のモックを、新しいパイプラインに置き換える）</td><td>提案</td></tr>
 </table>
 <h4>T-60 の時間予算（提案）</h4>
