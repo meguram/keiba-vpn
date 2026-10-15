@@ -42,6 +42,7 @@ ROTATE_LOGS="${PROJECT_DIR}/scripts/cron/rotate_logs.sh"
 SYNC_PG="${PROJECT_DIR}/scripts/cron/sync_pg_from_gcs.sh"
 GUARD="${PROJECT_DIR}/scripts/cron/yield_to_rescrape.sh"
 EXPORT_DAILY="${PROJECT_DIR}/scripts/cron/export_tables_daily.sh"
+ENSURE_PG="${PROJECT_DIR}/scripts/server/ensure_postgres.sh"
 
 mkdir -p "$LOG_DIR"
 chmod +x "$RUNNER"     2>/dev/null || true
@@ -49,7 +50,7 @@ chmod +x "$WATCHDOG"   2>/dev/null || true
 chmod +x "$UPDATE_JT"  2>/dev/null || true
 chmod +x "$ROTATE_LOGS" 2>/dev/null || true
 chmod +x "$SYNC_PG" 2>/dev/null || true
-chmod +x "$GUARD" "$EXPORT_DAILY" 2>/dev/null || true
+chmod +x "$GUARD" "$EXPORT_DAILY" "$ENSURE_PG" 2>/dev/null || true
 
 # -------------------------------------------------------------------
 # 削除対象タグ (全 keiba-vpn cron エントリをまとめて除去)
@@ -61,6 +62,7 @@ ALL_TAGS=(
     "KEIBA_JT_STATS"
     "KEIBA_GIT_PULL"
     "KEIBA_PG_SYNC"
+    "KEIBA_PG_ENSURE"
     "KEIBA-VPN-ALL"
 )
 
@@ -135,6 +137,11 @@ PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin
 # ── SLA 6: 金曜週次更新 ─────────── UTC: 09:00 Fri / JST: 18:00 Fri # KEIBA-VPN-ALL
 # db.netkeiba 確定結果は金曜 16–17 時頃反映のため 18:00 実行
 0 9 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} weekly-update -- bash ${RUNNER} ${PROJECT_DIR} weekly-update logs/weekly_update.log # KEIBA-VPN-ALL
+
+# ── ローカル PostgreSQL の起動保証 ── 起動時 + 5分おき ───────────── # KEIBA_PG_ENSURE
+# コンテナ再起動で PostgreSQL が落ちたままになり、夜間の同期が接続拒否で失敗していた（2026-10-15）。止まっていれば起動する。
+@reboot sleep 20 && ${ENSURE_PG} # KEIBA_PG_ENSURE
+*/5 * * * * ${ENSURE_PG} # KEIBA_PG_ENSURE
 
 # ── GCS → PostgreSQL 増分同期 ─── UTC: 15:00 / JST: 00:00 ───────── # KEIBA-VPN-ALL
 # 直近7日・PG充足済みは GCS download スキップ。開催日の即時反映はスクレイプ後フック担当。

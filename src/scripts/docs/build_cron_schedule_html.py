@@ -73,7 +73,8 @@ JOBS: dict[str, tuple[str, str, str, str, str]] = {
     "update_jockey_trainer_stats": ("prep", "騎手・調教師統計", "統計テーブルを再生成",
                                     "計算（成績の集計）", "ローカルのみ: data/features/jockey_trainer_stats ほか（Parquet）"),
     "sync_pg_from_gcs": ("prep", "GCS → PostgreSQL 同期", "直近7日の増分",
-                         "加工（ETL で正規化テーブルへ）", "PostgreSQL（ホストでは毎晩失敗: DB 未起動・psycopg2 未導入）"),
+                         "加工（ETL で正規化テーブルへ）", "ホスト上の PostgreSQL（keiba_db_stg。止まっていれば ensure_postgres が起動する）"),
+    "ensure_postgres": ("ops", "PostgreSQL の起動保証", "ローカル PostgreSQL が止まっていれば起動（コンテナ再起動で落ちたままになるのを防ぐ）", "データなし", "—"),
     "server_watchdog": ("ops", "サーバ死活監視", "FastAPI・Flask・Next.js・MLflow を監視し、落ちていれば再起動", "データなし", "—"),
     "rotate_logs": ("ops", "ログローテーション", "ログの整理", "データなし", "—"),
     "page_quality_check": ("ops", "ページ品質チェック", "スクレイパーが各ページの期待スキーマを取得できるかを確認",
@@ -163,7 +164,7 @@ def _job_key(cmd: str) -> tuple[str, str]:
     m = _TASK.search(cmd)
     if m:
         return m.group(1), ""
-    for k in ("server_watchdog", "rotate_logs", "update_jockey_trainer_stats", "sync_pg_from_gcs", "export_tables_daily", "page_quality_check"):
+    for k in ("server_watchdog", "rotate_logs", "update_jockey_trainer_stats", "sync_pg_from_gcs", "ensure_postgres", "export_tables_daily", "page_quality_check"):
         if k in cmd:
             return k, ""
     return "", ""
@@ -242,7 +243,6 @@ def last_run_text(key: str, status: dict | None) -> str:
 
 
 KNOWN_ISSUES = [
-    ("2026-10-15", "DB（PostgreSQL）への取り込みは、ホストで DB が起動しておらず psycopg2 も未導入のため、毎晩失敗している（週次更新・前日夕方・開催日夕方の後処理と 00:00 の同期）。取得と GCS への保存には影響しない。"),
     ("2026-10-15", "馬名インデックスは 10-09 の実行が上の dev 設定のためスキップされた。次回は 10-16（金）18:30。"),
     ("2026-10-15", "レース一覧（daily-race-lists）の状態が partial なのは、数週間先の開催日の一覧が netkeiba にまだ公開されていないため（想定内）。"),
     ("2026-10-15", "優先処理（2020〜2025 年の取り直し）が動いている間は、見送り対象のジョブ（レース一覧・週次更新・バロメーター・recent-retry・backfill）は動かない（logs/yield_skips.log に記録）。終了は 10/15 午前の見込み。"),
