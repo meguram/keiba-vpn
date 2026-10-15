@@ -89,7 +89,7 @@ def _segment_run(run: str, candidates: set[int]) -> list[list[int]]:
     return res
 
 
-def parse_rows(numbers: str, arity: int, k: int, candidates: set[int], ordered: bool) -> list[list[tuple[int, ...]]]:
+def parse_rows(numbers: str, arity: int, k: int, candidates: set[int], ordered: bool, allow_dup: bool = False) -> list[list[tuple[int, ...]]]:
     """馬番の文字列を k 行・arity 個ずつの組に分ける全ての解釈。組は（順序なしなら昇順、順序ありなら表示順）。"""
     runs = [r for r in re.split(r"[^\d]+", str(numbers or "")) if r]
     seg_options = [_segment_run(r, candidates) for r in runs]
@@ -101,7 +101,7 @@ def parse_rows(numbers: str, arity: int, k: int, candidates: set[int], ordered: 
         if len(toks) != arity * k:
             continue
         rows = [tuple(toks[i * arity:(i + 1) * arity]) for i in range(k)]
-        if any(len(set(r)) != arity for r in rows):
+        if not allow_dup and any(len(set(r)) != arity for r in rows):
             continue
         rows = [r if ordered else tuple(sorted(r)) for r in rows]
         sols.append(rows)
@@ -128,7 +128,7 @@ def parse_payoff(payoff: dict, finishers: dict[int, int], field: Iterable[int]) 
             for it in v:
                 nums = [int(x) for x in re.findall(r"\d+", str(it.get("numbers", "")))]
                 pay = _to_int(it.get("payout"))
-                if len(nums) == n and len(set(nums)) == n and pay:
+                if len(nums) == n and (len(set(nums)) == n or bt == "wakuren") and pay:
                     out.append({"bet_type": bt, "combo": combo_str(nums if ordered else sorted(nums), ordered), "payout": pay, "n_rows": len(v), "ambiguous": False,
                                 "parsed": True, "popularity": _to_int(it.get("popularity"))})
                 else:
@@ -146,7 +146,7 @@ def parse_payoff(payoff: dict, finishers: dict[int, int], field: Iterable[int]) 
         for cands in cand_sets:
             hits = []
             for p in pays:
-                rows = parse_rows(v.get("numbers", ""), n, len(p), cands, ordered)
+                rows = parse_rows(v.get("numbers", ""), n, len(p), cands, ordered, allow_dup=(bt == "wakuren"))   # 枠連は同じ枠の組もある
                 for r in rows:
                     hits.append((p, r))
             if hits:

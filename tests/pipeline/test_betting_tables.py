@@ -103,3 +103,8 @@ def test_old_list_format_with_popularity():
     assert got[("wide", "2-13")] == (2490, 32) and got[("wide", "10-13")] == (7940, 59)
     assert got[("tansho", "13")] == (4220, 10)
     assert all(r["parsed"] and not r["ambiguous"] for r in rows)
+
+
+def test_wakuren_same_bracket_pair():
+    rows = bt.parse_payoff({"枠連": {"numbers": "3 - 3", "payout": "8,540"}}, {3: 1, 4: 2, 2: 3}, [3, 4, 2])
+    assert rows[0]["parsed"] and rows[0]["combo"] == "3-3" and rows[0]["payout"] == 8540
