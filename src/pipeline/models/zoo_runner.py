@@ -42,11 +42,21 @@ def run_oof(name: str, recipe: str, X: pd.DataFrame, meta: pd.DataFrame, folds, 
     direct23 = None
     covered = np.zeros(len(meta), bool)
     t0 = time.time()
+    params = dict(params or {})
+    min_year = params.pop("min_train_year", None)       # この年より前の行は学習に使わない（助走期間の除外）
+    halflife = params.pop("halflife_years", None)       # 新しい年ほど重くする（半減期。年単位）
+    year = meta["year"].to_numpy()
     for f in folds:
         tr, va = f.train_index, f.valid_index
+        if min_year is not None:
+            tr = tr[year[tr] >= min_year]
         ytr = {k: v[tr] for k, v in Y.items()}
+        p_f = dict(params)
+        if halflife:
+            age = (year[va].min() - 1) - year[tr]       # 検証年の前年を 0 とした経過年数
+            p_f["weight"] = 0.5 ** (np.clip(age, 0, None) / float(halflife))
         for seed in seeds:
-            out = zoo.fit_predict(recipe, X.iloc[tr], ytr, race[tr], X.iloc[va], race[va], threads, seed=seed, params=params)
+            out = zoo.fit_predict(recipe, X.iloc[tr], ytr, race[tr], X.iloc[va], race[va], threads, seed=seed, params=p_f)
             direct23 = "top2" in out
             if direct23:
                 fp_ = zoo.finalize(race[va], out)

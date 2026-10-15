@@ -225,7 +225,8 @@ def fit_predict(recipe: str, X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray
     戻り値: 'win'（確率）, 'top2'・'top3'（確率）, 'win_score'（あれば）。正規化前の値。"""
     params = params or {}
     if recipe == "lgb_binary":
-        o = wm.fit_predict("binary", X_tr, y_tr, race_tr, X_va, race_va, threads, seed=seed, params=params.get("lgb"), n_rounds=params.get("n_rounds", wm.N_ROUNDS))
+        o = wm.fit_predict("binary", X_tr, y_tr, race_tr, X_va, race_va, threads, seed=seed, params=params.get("lgb"), n_rounds=params.get("n_rounds", wm.N_ROUNDS),
+                           weight=params.get("weight"))
         return {"win": o["win"], "top2": o["top2"], "top3": o["top3"]}
     if recipe == "lgb_softmax":
         o = wm.fit_predict("softmax", X_tr, y_tr, race_tr, X_va, race_va, threads, seed=seed, params=params.get("lgb"), n_rounds=params.get("n_rounds", wm.N_ROUNDS))
@@ -249,9 +250,10 @@ def fit_predict(recipe: str, X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray
         out = {}
         for tgt in ("win", "top2", "top3"):
             m = xgb.XGBClassifier(n_estimators=params.get("n_estimators", 400), learning_rate=params.get("learning_rate", 0.05), max_depth=params.get("max_depth", 6),
-                                  subsample=0.8, colsample_bytree=0.7, reg_lambda=5.0, min_child_weight=20, tree_method="hist", device=params.get("device", "cuda"),
+                                  subsample=params.get("subsample", 0.8), colsample_bytree=params.get("colsample_bytree", 0.7), reg_lambda=params.get("reg_lambda", 5.0),
+                                  min_child_weight=params.get("min_child_weight", 20), tree_method="hist", device=params.get("device", "cuda"),
                                   enable_categorical=True, random_state=seed, n_jobs=threads, verbosity=0)
-            m.fit(X_tr, y_tr[tgt])
+            m.fit(X_tr, y_tr[tgt], sample_weight=params.get("weight"))
             out[tgt] = m.predict_proba(X_va)[:, 1]
         return out
     if recipe in ("linear", "nn"):

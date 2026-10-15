@@ -157,7 +157,7 @@ def softmax_objective(race_ids: np.ndarray, y_win: np.ndarray):
 
 
 def fit_predict(kind: str, X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, X_va: pd.DataFrame, race_va: np.ndarray, threads: int,
-                seed: int = 0, n_rounds: int = N_ROUNDS, params: dict | None = None) -> dict:
+                seed: int = 0, n_rounds: int = N_ROUNDS, params: dict | None = None, weight: np.ndarray | None = None) -> dict:
     """kind: 'binary'（win/top2/top3 を別々に）, 'softmax'（win のみ）, 'lambdarank', 'xendcg'。
     y_tr: {'win':..., 'top2':..., 'top3':..., 'finish':...}。戻り値: {'win': 検証のスコア/確率, ...}。"""
     import lightgbm as lgb
@@ -167,7 +167,7 @@ def fit_predict(kind: str, X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, 
     out: dict = {}
     if kind == "binary":
         for tgt in ("win", "top2", "top3"):
-            ds = lgb.Dataset(X_tr, label=y_tr[tgt], categorical_feature=cats or "auto")
+            ds = lgb.Dataset(X_tr, label=y_tr[tgt], weight=weight, categorical_feature=cats or "auto")
             out[tgt] = lgb.train(dict(p, objective="binary"), ds, num_boost_round=n_rounds).predict(X_va, raw_score=False)
     elif kind == "softmax":
         ds = lgb.Dataset(X_tr, label=y_tr["win"], categorical_feature=cats or "auto")
