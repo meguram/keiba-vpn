@@ -30,6 +30,11 @@ PLAN = {  # (実験名, run 名): (実行済みノートブック, 結果ディ�
     ("keiba-tp-hpo", "tp-05d-artifacts"): ("runs/tp-05d-executed.ipynb", "hpo", ["lgb_tuned", "xgb_tuned", "nn_tuned"]),
     ("keiba-tp-ensemble", "tp-05e-artifacts"): ("runs/tp-05e-executed.ipynb", "ensemble", ["ensemble"]),
     ("keiba-tp-final-eval", "tp-06-artifacts"): ("runs/tp-06-executed.ipynb", "final_eval", []),
+    ("keiba-tp-model-zoo", "tp-05f-artifacts"): ("runs/tp-05f-executed.ipynb", "improve_f", ["nn_emb", "nn_attn1", "nn_attn2", "nn_emb_attn1", "nn_c2", "lgb_c2", "xgb_c2"]),
+    ("keiba-tp-model-zoo", "tp-05g-artifacts"): ("runs/tp-05g-executed.ipynb", "improve_g", ["lgb_extras", "lgb_ped", "lgb_extras_ped", "xgb_extras_ped", "nn_extras_ped"]),
+    ("keiba-tp-hpo", "tp-05i-artifacts"): ("runs/tp-05i-executed.ipynb", "improve_i", ["nn_extras_ped_tuned"]),
+    ("keiba-tp-ensemble", "tp-05h-artifacts"): ("runs/tp-05h-executed.ipynb", "ensemble_v2", ["ensemble_v2"]),
+    ("keiba-tp-final-eval", "tp-06b-artifacts"): ("runs/tp-06b-executed.ipynb", "final_eval_v2", []),
 }
 
 
