@@ -91,3 +91,15 @@ def test_takeout_implied_payback_for_fair_odds():
     pair = pd.DataFrame({"race_id": [], "bet_type": [], "combo": [], "odds": [], "odds_min": [], "odds_max": [], "popularity": []})
     t = bt.takeout_by_year(odds, pair)
     assert abs(t["tansho"]["2025"]["implied_payback"] - 0.8) < 1e-9
+
+
+def test_old_list_format_with_popularity():
+    p = {"複勝": [{"numbers": "13", "payout": "900", "popularity": "11"}, {"numbers": "2", "payout": "170", "popularity": "1"}, {"numbers": "10", "payout": "640", "popularity": "8"}],
+         "ワイド": [{"numbers": "2 - 13", "payout": "2,490", "popularity": "32"}, {"numbers": "10 - 13", "payout": "7,940", "popularity": "59"}],
+         "単勝": {"numbers": "13", "payout": "4,220", "popularity": "10"}}
+    rows = bt.parse_payoff(p, {13: 1, 2: 2, 10: 3}, [13, 2, 10])
+    got = {(r["bet_type"], r["combo"]): (r["payout"], r["popularity"]) for r in rows}
+    assert got[("fukusho", "13")] == (900, 11) and got[("fukusho", "2")] == (170, 1)
+    assert got[("wide", "2-13")] == (2490, 32) and got[("wide", "10-13")] == (7940, 59)
+    assert got[("tansho", "13")] == (4220, 10)
+    assert all(r["parsed"] and not r["ambiguous"] for r in rows)

@@ -31,6 +31,13 @@ ORDERED = {"umatan", "sanrentan"}
 PAYBACK = {"tansho": 0.80, "fukusho": 0.80, "wakuren": 0.775, "umaren": 0.775, "wide": 0.775, "umatan": 0.75, "sanrenpuku": 0.75, "sanrentan": 0.725}
 
 
+def _to_int(x) -> int | None:
+    try:
+        return int(str(x).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
 # ── 払戻の金額の分割
 def split_payouts(s: str, k: int | None = None) -> list[list[int]]:
     """連結された金額の文字列を、有効なトークン（3 桁、または桁区切りカンマ付き）に分ける全ての分割。k を渡せばその個数のものだけ。"""
@@ -113,10 +120,26 @@ def parse_payoff(payoff: dict, finishers: dict[int, int], field: Iterable[int]) 
     out: list[dict] = []
     for jp, v in (payoff or {}).items():
         bt = BET_KEYS.get(jp)
-        if bt is None or not isinstance(v, dict):
+        if bt is None or not isinstance(v, (dict, list)):
             continue
         ordered = bt in ORDERED
         n = ARITY[bt]
+        if isinstance(v, list):      # 旧形式: 1 行 1 組の辞書のリスト（人気順位つき）
+            for it in v:
+                nums = [int(x) for x in re.findall(r"\d+", str(it.get("numbers", "")))]
+                pay = _to_int(it.get("payout"))
+                if len(nums) == n and len(set(nums)) == n and pay:
+                    out.append({"bet_type": bt, "combo": combo_str(nums if ordered else sorted(nums), ordered), "payout": pay, "n_rows": len(v), "ambiguous": False,
+                                "parsed": True, "popularity": _to_int(it.get("popularity"))})
+                else:
+                    out.append({"bet_type": bt, "combo": None, "payout": None, "n_rows": len(v), "ambiguous": False, "parsed": False, "popularity": None})
+            continue
+        if isinstance(v.get("numbers"), str) and v.get("popularity") not in (None, "") and len(split_payouts(v.get("payout", ""))) == 1 and \
+                len(re.findall(r"\d+", v["numbers"])) == n and _to_int(v.get("payout")):
+            nums = [int(x) for x in re.findall(r"\d+", v["numbers"])]       # 旧形式の単一行（人気順位つき）
+            out.append({"bet_type": bt, "combo": combo_str(nums if ordered else sorted(nums), ordered), "payout": _to_int(v["payout"]), "n_rows": 1, "ambiguous": False,
+                        "parsed": True, "popularity": _to_int(v.get("popularity"))})
+            continue
         pays = split_payouts(v.get("payout", ""))
         cand_sets = [set(range(1, 9))] if bt == "wakuren" else [top3, field_set]
         best = None
@@ -130,13 +153,13 @@ def parse_payoff(payoff: dict, finishers: dict[int, int], field: Iterable[int]) 
                 best = (hits, cands is cand_sets[0])
                 break
         if not best:
-            out.append({"bet_type": bt, "combo": None, "payout": None, "n_rows": len(pays[0]) if pays else 0, "ambiguous": False, "parsed": False})
+            out.append({"bet_type": bt, "combo": None, "payout": None, "n_rows": len(pays[0]) if pays else 0, "ambiguous": False, "parsed": False, "popularity": None})
             continue
         hits, _ = best
         ambiguous = len({(tuple(p), tuple(r)) for p, r in hits}) > 1
         p, r = hits[0]
         for payout, row in zip(p, r):
-            out.append({"bet_type": bt, "combo": combo_str(row, ordered), "payout": payout, "n_rows": len(p), "ambiguous": ambiguous, "parsed": True})
+            out.append({"bet_type": bt, "combo": combo_str(row, ordered), "payout": payout, "n_rows": len(p), "ambiguous": ambiguous, "parsed": True, "popularity": None})
     return out
 
 
@@ -154,7 +177,7 @@ def build_payoff_table(result_flat: pd.DataFrame) -> pd.DataFrame:
         for r in parse_payoff(payoff if isinstance(payoff, dict) else {}, fin, [int(h) for h in g["horse_number"].dropna()]):
             r["race_id"] = rid
             rows.append(r)
-    return pd.DataFrame(rows, columns=["race_id", "bet_type", "combo", "payout", "n_rows", "ambiguous", "parsed"])
+    return pd.DataFrame(rows, columns=["race_id", "bet_type", "combo", "payout", "popularity", "n_rows", "ambiguous", "parsed"])
 
 
 # ── オッズ
