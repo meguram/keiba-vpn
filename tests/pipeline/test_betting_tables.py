@@ -108,3 +108,13 @@ def test_old_list_format_with_popularity():
 def test_wakuren_same_bracket_pair():
     rows = bt.parse_payoff({"枠連": {"numbers": "3 - 3", "payout": "8,540"}}, {3: 1, 4: 2, 2: 3}, [3, 4, 2])
     assert rows[0]["parsed"] and rows[0]["combo"] == "3-3" and rows[0]["payout"] == 8540
+
+
+def test_scan_odds_phase_classify_and_summarize():
+    from src.pipeline.betting import scan_odds_phase as sc
+
+    new = {"phase": "t15", "snapshot_at": "2026-10-17T10:00:00+09:00", "snapshots": [{"phase": "t60"}], "_meta": {"scraped_at_jst": "2026-10-17 10:00:05"}}
+    old = {"entries": [], "_meta": {"scraped_at_jst": "2026-03-28 18:32:22"}}
+    s = sc.summarize([sc.classify(new), sc.classify(old), sc.classify(None)])
+    assert s["docs"] == 3 and s["missing"] == 1 and s["phase"] == {"t15": 1, "なし": 1} and s["with_snapshots"] == 1 and s["snapshot_phases"] == {"t60": 1}
+    assert s["scraped_month"] == {"2026-03": 1, "2026-10": 1}
