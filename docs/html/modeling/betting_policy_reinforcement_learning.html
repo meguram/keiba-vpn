@@ -468,7 +468,10 @@ document.addEventListener("DOMContentLoaded", function() {
       <span>keiba-vpn documentation</span>
       <span class="mono">modeling/betting_policy_reinforcement_learning.html</span>
     </footer>
-  </main>
+  <h2 id="12">12. 実装結果（2026-10-16 追記）</h2>
+<p>本書の設計を、過去データのバックテストとして実装した（<code>src/pipeline/betting/{ticket_env,policy}.py</code>、<code>notebooks/modeling/training_pipeline/tp-08-betting-rl.ipynb</code>）。結果と解釈は
+<a href="training_pipeline_decisions.html" style="color:#7aa9ff">決定ログ</a> §10 と <a href="modeling_experiment_report.html" style="color:#7aa9ff">実験結果レポート</a> §4。要点: 確定オッズに対して控除率を上回る優位は見つからず（回収率は最良でも約 88%）、見送りが自由なら全見送りが最適になる。購入時点のオッズのスナップショットが貯まってからの再検証が前提。</p>
+</main>
 </div>
 </body>
 </html>

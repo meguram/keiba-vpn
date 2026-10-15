@@ -88,9 +88,11 @@ def main() -> int:
         h = next((r for r in rl["final"] if r["方策"].startswith("RL（下限0.5）")), None)
         bl = next((r for r in rl["final"] if r["方策"] == "複勝: モデル1位に全額"), None)
         bf = next((r for r in rl["final"] if r["方策"] == "単勝: 1番人気に全額"), None)
+        vs = next((r for r in rl.get("vs_baselines", []) if r["比較相手"] == "複勝: モデル1位に全額"), None)
         if h:
-            o.append(f"<li><b>馬券の強化学習（tp-08、test 2025、確定オッズ）: 市場に対する優位は見つからなかった。</b>自由に見送れる設定では全レース見送りに落ちる。1 レース平均の賭け金に下限（予算の 50%）を課した最良の方策の回収率は <b>{h['roi'] * 100:.1f}%</b>（95% 信頼区間 {h['roi_lo'] * 100:.1f}〜{h['roi_hi'] * 100:.1f}%）で、"
-                     f"複勝のモデル 1 位 {bl['roi'] * 100:.1f}%・単勝 1 番人気 {bf['roi'] * 100:.1f}% と同水準（いずれも 100% 未満）。詳しくは §4。</li>")
+            extra = (f"単純な基準（複勝のモデル 1 位 {bl['roi'] * 100:.1f}%）より {vs['下限0.5: 回収率の差'] * 100:+.1f} ポイント（95% 信頼区間 {vs['下限0.5: 95%下限'] * 100:+.1f}〜{vs['下限0.5: 95%上限'] * 100:+.1f}）有意に高く、単勝 1 番人気（{bf['roi'] * 100:.1f}%）を大きく上回る" if vs else "")
+            o.append(f"<li><b>馬券の強化学習（tp-08、test 2025、確定オッズ）: 控除率を上回る優位は見つからなかった（回収率は 100% 未満）。</b>自由に見送れる設定では全レース見送りに落ちる。1 レース平均の賭け金に下限（予算の 50%）を課した最良の方策の回収率は <b>{h['roi'] * 100:.1f}%</b>"
+                     f"（95% 信頼区間 {h['roi_lo'] * 100:.1f}〜{h['roi_hi'] * 100:.1f}%）。{extra}が、損失を小さくする配分であって、利益が出る賭け方ではない。詳しくは §4。</li>")
     else:
         o.append("<li>市場オッズとの比較・馬券の回収率の検証は §4（実施した場合）を参照。</li>")
     o.append("</ul></div>")
@@ -190,7 +192,7 @@ def main() -> int:
                  "1 レースを 1 ステップとし、候補の買い目への賭け金の配分（予算 1 = 1R の予算、残りは見送り）を方策勾配で学習する。報酬は実際の払戻 − 賭け金。"
                  "学習 2022〜2024（ハイパーパラメータは 2023・2024 を評価年にした Optuna）、test 2025 は一度だけ。<b>オッズは締切後の確定オッズ</b>で、購入判断の時点の値ではない（楽観側に偏りうる）。三連複・三連単はオッズが無く対象外。</p>")
         if bl_ is not None:
-            o.append(f"<h3>市場とのブレンド（Benter）</h3><p>勝ち馬の対数尤度が最大になる a={rl['benter']['a']:.3f}（モデル）、b={rl['benter']['b']:.3f}（市場）。値は 2022 年だけで当てはめた。数値は勝ち馬の負の対数尤度（小さいほど良い）。</p>" + table(bl_.set_index("year"), first="年"))
+            o.append(f"<h3>市場とのブレンド（Benter）</h3><p>勝ち馬の対数尤度が最大になる a={rl['benter']['a']:.3f}（モデル）、b={rl['benter']['b']:.3f}（市場）。値は 2022 年だけで当てはめた。数値は勝ち馬の負の対数尤度（小さいほど良い）。</p>" + table(bl_.set_index("year"), fmt={"races": lambda v: f"{int(v):,}"}, first="年"))
             o.append("<p class='muted'>市場の暗黙の確率の方がモデル単独よりかなり良く、ブレンドの追加分はごくわずか。モデルの情報の大半は既にオッズに織り込まれている。</p>")
         if cal_ is not None:
             pv = cal_.pivot(index="band", columns="type", values="実際の回収率")
@@ -198,7 +200,7 @@ def main() -> int:
             o.append("<h3>期待回収率の較正（valid 2023・2024）</h3><p>買い目を「ブレンド確率 × オッズ」の帯に分け、実際の回収率（的中時の払戻倍率の平均）を見る。優位があるなら、期待回収率が高い帯ほど実際も高く、1 を超える帯がある。</p>" + table(pv, first="期待回収率の帯"))
             o.append("<p class='muted'>期待回収率が高い買い目ほど、実際の回収率は<b>むしろ低い</b>（高いオッズの穴馬を過大評価している）。1 を超える帯は無い。</p>")
         if mode_ is not None:
-            o.append("<h3>方策の学習方式の比較（valid、既定のハイパーパラメータ）</h3>" + table(mode_.set_index(["mode", "賭け金の下限", "fold"])[["roi", "profit_per_race", "stake_per_race", "participation"]], first="方式 / 下限 / fold"))
+            o.append("<h3>方策の学習方式の比較（valid、既定のハイパーパラメータ）</h3>" + table(mode_.assign(k=mode_["mode"] + " / 下限 " + mode_["賭け金の下限"].astype(str) + " / fold " + mode_["fold"]).set_index("k")[["roi", "profit_per_race", "stake_per_race", "participation"]], first="方式 / 下限 / fold"))
             o.append("<p class='muted'>下限 0（見送り自由）は、賭け金が 0 に収束する（全レース見送り）。優位が無いので、期待値の最大化は「買わない」になる。下限を課すと、その賭け金のもとで損失を最小にする配分を学ぶ。</p>")
         if fin_ is not None:
             o.append("<h3>test 2025 の結果（RL = 強化学習の方策、下限 = 1 レース平均の賭け金の下限（予算比））</h3>" + table(fin_.set_index("方策"), fmt={"participation": lambda v: f"{v * 100:.1f}%"}, first="方策"))
