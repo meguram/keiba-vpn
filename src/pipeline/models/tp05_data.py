@@ -48,3 +48,20 @@ def load_dataset(work: Path) -> dict:
     assert not missing, missing
     meta = df[["race_id", "horse_id", "finish_position", "year", "date"]].copy()
     return {"df": df, "BASE": base, "REL": list(rel.columns), "REL2": list(rel2.columns), "FEATS": feats, "folds": list(yearly_expanding_folds(df)), "meta": meta}
+
+
+def load_extras_ped(df: pd.DataFrame, work: Path) -> tuple[pd.DataFrame, list[str], list[str]]:
+    """tp-05g で採用した追加特徴量（追い切り評価・厩舎コメント + 血統×条件）。戻り値: (df と同じ index の表, extras 列, ped 列)。"""
+    from src.pipeline.features import pedigree_context
+
+    ex = pd.read_parquet(work / "features/prerace_extras.parquet")
+    ex = ex.drop(columns=[c for c in ("comment_result_words",) if c in ex.columns])
+    E = df[["race_id", "horse_id"]].merge(ex, on=["race_id", "horse_id"], how="left")
+    E.index = df.index
+    E["has_comment"] = E["has_comment"].fillna(0.0)
+    E["oikiri_eval_rank"] = E.groupby("race_id")["oikiri_eval"].rank(ascending=False, method="average")
+    E["oikiri_eval_gap"] = E["oikiri_eval"] - E.groupby("race_id")["oikiri_eval"].transform("max")
+    extras = [c for c in E.columns if c not in ("race_id", "horse_id")]
+    labels = pd.read_parquet(work / "oof/stage_labels.parquet")
+    P = pedigree_context.build(df, labels)
+    return pd.concat([E[extras], P], axis=1), extras, list(P.columns)
