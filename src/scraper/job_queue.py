@@ -1758,12 +1758,32 @@ class ScrapeJobQueue:
         finally:
             self.release_lock_urgent()
 
+    _RUNNER_LOCAL = threading.local()
+
+    @classmethod
+    def _runner_for_thread(cls, factory):
+        """スレッドごとに ScraperRunner を使い回す（SCRAPE_QUEUE_RUNNER_REUSE_SEC 秒、既定 1800）。
+
+        ジョブごとに作り直すと、ジョブのたびにログインが走り、同じアカウントの別セッションを無効にしてしまう。
+        0 以下で従来どおり毎回作る。"""
+        try:
+            ttl = float(os.environ.get("SCRAPE_QUEUE_RUNNER_REUSE_SEC", "1800"))
+        except ValueError:
+            ttl = 1800.0
+        local = cls._RUNNER_LOCAL
+        runner = getattr(local, "runner", None)
+        if runner is None or ttl <= 0 or time.monotonic() - getattr(local, "created", 0.0) > ttl:
+            runner = factory()
+            local.runner, local.created = runner, time.monotonic()
+        return runner
+
     def _execute_scraping(self, job: dict):
         """実際のスクレイピングを実行"""
         from src.scraper.queue_tasks import execute_job
         from src.scraper.run import ScraperRunner
 
-        runner = ScraperRunner()
+        runner = self._runner_for_thread(ScraperRunner)
+        runner._queue_mute_scrape_throttle = False   # ジョブごとの状態は引き継がない
         execute_job(runner, job)
         # ネット/HTML 未取得（スマート即返等）のジョブは待機0。実取得のときだけ間隔（負荷緩和）
         try:

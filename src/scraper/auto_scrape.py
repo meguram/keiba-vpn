@@ -187,6 +187,24 @@ def _future_race_dates_iso(calendar: dict) -> list[str]:
     )
 
 
+def race_list_poll_dates(future_dates: list[str], today: date, ahead_days: int | None = None, far_weekday: int = 0) -> list[str]:
+    """今日以降の開催日（ISO）のうち、今回レース一覧を取りに行く日。
+
+    近い日（today から ``ahead_days`` 日以内。既定 14 日、環境変数 KEIBA_RACE_LIST_AHEAD_DAYS）は毎回。
+    それより先の日は netkeiba にまだ一覧が出ていないことが多く、毎回取り直すと非開催日でも無駄なアクセスになるため、
+    週に 1 回（``far_weekday`` の曜日。既定は月曜）だけ確認する。純粋関数。
+    """
+    if ahead_days is None:
+        try:
+            ahead_days = int(os.environ.get("KEIBA_RACE_LIST_AHEAD_DAYS", RACE_LIST_FETCH_DAYS_AHEAD))
+        except ValueError:
+            ahead_days = RACE_LIST_FETCH_DAYS_AHEAD
+    limit = (today + timedelta(days=ahead_days)).isoformat()
+    near = [d for d in future_dates if d <= limit]
+    far = [d for d in future_dates if d > limit]
+    return near + (far if today.weekday() == far_weekday else [])
+
+
 def _missing_past_race_dates(calendar: dict, since: str | None = None) -> list[str]:
     """
     カレンダーに存在するが race_lists ファイルがない過去の開催日を返す。
@@ -1386,6 +1404,25 @@ def barometer_due_dates(calendar: dict, now: datetime | None = None, lookback_da
     return sorted(out)
 
 
+BAROMETER_STATE_PATH = Path("data/local/meta/barometer_retry_state.json")
+BAROMETER_MAX_ATTEMPTS = 10      # 公開済みでも「データなし」が続くレースを無限に取り直さない
+BAROMETER_MIN_INTERVAL_H = 12.0
+
+
+def select_barometer_targets(race_ids_by_date: dict[str, list[str]], exists, state: dict, now: datetime) -> list[str]:
+    """取りに行くレース（未取得で、試行上限に達しておらず、前回から間隔が空いているもの）。純粋関数。"""
+    from src.scraper import recent_retry
+
+    out = []
+    for d in sorted(race_ids_by_date):
+        for rid in race_ids_by_date[d]:
+            if exists(rid):
+                continue
+            if recent_retry.should_try(state, f"race_barometer/{rid}", now, min_interval_h=BAROMETER_MIN_INTERVAL_H, max_attempts=BAROMETER_MAX_ATTEMPTS):
+                out.append(rid)
+    return out
+
+
 def task_barometer_retry():
     """公開済みなのに未取得のバロメーター（走行データ）を取りに行く（毎日 cron 想定）。
 
@@ -1398,27 +1435,37 @@ def task_barometer_retry():
         _save_status("barometer-retry", {"status": "skipped", "reason": "no-due-dates"})
         return
 
+    from src.scraper import recent_retry
     from src.scraper.run import ScraperRunner
+
     runner = ScraperRunner()
+    state = recent_retry.load_state(BAROMETER_STATE_PATH)
+    now = datetime.now(timezone(timedelta(hours=9)))
+    targets = select_barometer_targets(
+        {d: [r["race_id"] for r in (runner.storage.load("race_lists", d) or {}).get("races", [])] for d in dates},
+        lambda rid: runner.storage.exists("race_barometer", rid), state, now,
+    )
     saved, pending, errors = 0, 0, 0
-    for date_str in dates:
-        rl = runner.storage.load("race_lists", date_str) or {}
-        for race in rl.get("races", []):
-            rid = race["race_id"]
-            if runner.storage.exists("race_barometer", rid):
-                continue
-            try:
-                if runner.scrape_barometer(rid, skip_existing=False):
-                    saved += 1
-                    time.sleep(random.uniform(2.0, 5.0))
-                else:
-                    pending += 1
-            except Exception as e:
-                logger.error("barometer-retry 失敗 [%s]: %s", rid, e)
-                errors += 1
+    gave_up = sum(1 for k, v in state.items() if int(v.get("attempts", 0)) >= BAROMETER_MAX_ATTEMPTS)
+    for rid in targets:
+        key = f"race_barometer/{rid}"
+        s = state.setdefault(key, {"attempts": 0})
+        s["attempts"] = int(s.get("attempts", 0)) + 1
+        s["last"] = datetime.now(timezone(timedelta(hours=9))).isoformat(timespec="seconds")
+        try:
+            if runner.scrape_barometer(rid, skip_existing=False):
+                saved += 1
+                state.pop(key, None)
+                time.sleep(random.uniform(2.0, 5.0))
+            else:
+                pending += 1
+        except Exception as e:
+            logger.error("barometer-retry 失敗 [%s]: %s", rid, e)
+            errors += 1
+    recent_retry.save_state(state, BAROMETER_STATE_PATH)
     _save_status("barometer-retry", {
         "status": "ok" if not errors else "partial",
-        "dates": dates, "saved": saved, "pending": pending, "error_count": errors,
+        "dates": dates, "targets": len(targets), "saved": saved, "pending": pending, "gave_up": gave_up, "error_count": errors,
         "last_run": _now_jst_iso(),
     })
 
@@ -1461,11 +1508,11 @@ def task_daily_race_lists():
         return _asq.task_daily_race_lists()
 
     calendar = _load_race_calendar()
-    target_dates = _future_race_dates_iso(calendar)
+    target_dates = race_list_poll_dates(_future_race_dates_iso(calendar), _today_jst())
 
     if not target_dates:
-        logger.info("今後の開催日なし（カレンダー末尾到達または未取得）")
-        _save_status("daily-race-lists", {"status": "skipped", "reason": "no-upcoming-races"})
+        logger.info("今回取りに行くレース一覧なし（先の日付は週 1 回の確認日のみ）")
+        _save_status("daily-race-lists", {"status": "skipped", "reason": "no-dates-to-poll"})
         return
 
     logger.info("daily-race-lists: カレンダー末尾まで %d 日分取得開始 %s〜%s",

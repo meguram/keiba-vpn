@@ -529,13 +529,29 @@ class NetkeibaClient:
         _load_env(env_path)
 
         self._current_ua = random.choice(_UA_POOL)
-        self._session = self._create_session()
+        self._raw_session = self._create_session()
 
         if cache_dir:
             os.makedirs(cache_dir, exist_ok=True)
 
-        if auto_login:
+        # ログインは最初に通信が必要になるまで遅らせる（作業が無い定期ジョブがログインだけして終わる無駄と、
+        # 同じアカウントの別セッションを無効にする衝突を避ける）。NETKEIBA_LAZY_LOGIN=0 で従来どおり生成時にログイン。
+        lazy = os.environ.get("NETKEIBA_LAZY_LOGIN", "1").strip().lower() not in ("0", "false", "no")
+        self._login_pending = bool(auto_login) and lazy
+        if auto_login and not lazy:
             self.login()
+
+    @property
+    def _session(self) -> requests.Session:
+        """HTTP セッション。ログインが保留中なら、最初にここへ触れたときにログインする。"""
+        if getattr(self, "_login_pending", False):
+            self._login_pending = False
+            self.login()
+        return self._raw_session
+
+    @_session.setter
+    def _session(self, value: requests.Session) -> None:
+        self._raw_session = value
 
     # ------------------------------------------------------------------
     # セッション構築
@@ -821,6 +837,7 @@ class NetkeibaClient:
         認証情報は環境変数 netkeiba_id / netkeiba_pw から取得する。
         スレッドセーフ。
         """
+        self._login_pending = False
         if self._logged_in:
             return True
         uid = os.environ.get("netkeiba_id", "")

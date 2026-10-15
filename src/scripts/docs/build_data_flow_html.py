@@ -88,7 +88,7 @@ ROWS: list[Row] = [
         "ローカル: data/page_reference/cushion（GCS は手動アップロード）",
         [], ["infer"], "当日の馬場差（P7）の補助。"),
     Row("レース一覧・発走時刻", "netkeiba / JRA",
-        [("daily-race-lists", "朝・夕の2回。今日以降の全開催日")],
+        [("daily-race-lists", "朝・夕の2回。14日先まで毎回、それより先は月曜だけ")],
         "ローカル: data/page_reference/race_lists・race_day_schedule",
         [], ["infer"], "各ランナーが発走時刻表として参照する。"),
     Row("馬情報・血統", "db.netkeiba（馬ページ・血統表）",

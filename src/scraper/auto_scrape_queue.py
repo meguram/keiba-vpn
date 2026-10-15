@@ -676,12 +676,12 @@ def task_daily_race_lists() -> None:
     from src.scraper import auto_scrape as _as
 
     calendar = _as._load_race_calendar()
-    target_dates = _as._future_race_dates_iso(calendar)
+    target_dates = _as.race_list_poll_dates(_as._future_race_dates_iso(calendar), _as._today_jst())
     if not target_dates:
-        logger.info("今後の開催日なし（カレンダー末尾到達または未取得）")
+        logger.info("今回取りに行くレース一覧なし（先の日付は週 1 回の確認日のみ）")
         _as._save_status(
             "daily-race-lists",
-            {"status": "skipped", "reason": "no-upcoming-races"},
+            {"status": "skipped", "reason": "no-dates-to-poll"},
         )
         return
 
