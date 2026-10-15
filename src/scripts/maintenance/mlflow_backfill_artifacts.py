@@ -27,6 +27,9 @@ PLAN = {  # (実験名, run 名): (実行済みノートブック, 結果ディ�
     ("keiba-tp-model-zoo", "tp-05b-artifacts"): ("runs/tp-05b-executed.ipynb", "model_zoo", ["lgb_binary", "lgb_softmax", "cat_binary", "xgb_binary", "linear", "nn_s", "nn", "nn_l"]),
     ("keiba-tp-model-zoo", "tp-05c-artifacts"): ("runs/tp-05c-executed.ipynb", "model_tune_c", ["lgb_binary_hl1", "lgb_binary_hl2", "lgb_binary_hl3", "lgb_binary_min2022", "lgb_binary_r150", "lgb_binary_r500", "lgb_binary_r800"]),
     ("keiba-tp-stage", "tp-04-artifacts"): ("oof_executed_tp04_v2.ipynb", "oof", []),
+    ("keiba-tp-hpo", "tp-05d-artifacts"): ("runs/tp-05d-executed.ipynb", "hpo", ["lgb_tuned", "xgb_tuned", "nn_tuned"]),
+    ("keiba-tp-ensemble", "tp-05e-artifacts"): ("runs/tp-05e-executed.ipynb", "ensemble", ["ensemble"]),
+    ("keiba-tp-final-eval", "tp-06-artifacts"): ("runs/tp-06-executed.ipynb", "final_eval", []),
 }
 
 
