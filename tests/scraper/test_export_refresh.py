@@ -4,13 +4,16 @@ from src.scraper import export_tables as et
 
 
 class _Storage:
-    def __init__(self, races):
+    def __init__(self, races, shutuba=None):
         self.races = races
+        self.shutuba = shutuba or {}
 
     def batch_list_blobs(self, category, year):
         return {rid: 1 for rid in self.races} if category == "race_result" else {}
 
     def load(self, category, key):
+        if category == "race_shutuba":
+            return self.shutuba.get(key)
         return self.races.get(key) if category == "race_result" else None
 
 
@@ -36,3 +39,16 @@ def test_refresh_appends_new_races_but_default_never_does(tmp_path, monkeypatch)
     df = pd.read_parquet(flat)
     assert set(df["race_id"]) == {"202605010101", "202605010201"}
     assert df[df["race_id"] == "202605010201"]["date"].iloc[0] == "2026-10-11"
+
+
+def test_refresh_fills_zero_distance_of_new_hurdle_race_from_shutuba(tmp_path, monkeypatch):
+    monkeypatch.setattr(et, "OUTPUT_DIR", tmp_path)
+    st = _Storage({"202605010101": _race("202605010101", "2026-10-04")})
+    et.export_year("2026", categories=["race_result"], storage=st)
+    hurdle = _race("202605010301", "2026-10-11")
+    hurdle["distance"] = 0
+    st.races["202605010301"] = hurdle
+    st.shutuba["202605010301"] = {"race_id": "202605010301", "distance": 3350, "surface": "障", "field_size": 2}
+    et.export_year("2026", categories=["race_result"], storage=st, refresh=True)
+    df = pd.read_parquet(tmp_path / "2026" / "race_result_flat.parquet")
+    assert set(df[df["race_id"] == "202605010301"]["distance"]) == {3350}

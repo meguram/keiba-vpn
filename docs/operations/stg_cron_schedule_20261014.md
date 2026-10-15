@@ -15,8 +15,9 @@ cron デーモンは稼働中（2026-10-13 23:44 UTC 起動）。ホストの再
 | 毎日 06:00 | backfill horse | 馬情報一括 |
 | 毎日 06:10 **（新）** | recent-retry | 直近 21 日の未取得データの取り直し |
 | 毎日 07:00 | daily-race-lists（朝） | 今日以降の全開催日のレース一覧 |
-| 毎日 07:00 **（新）** | export_tables_daily | 当年の flat テーブルを増分更新（推論の履歴。実測 約 4 分） |
-| 毎日 07:40 **（新）** | feature-accumulate | 当年分の履歴特徴量（127 列）を確定結果から作り直して蓄積し、推論モードとのずれを記録（実測 約 30 秒） |
+| 毎日 07:00 **（新）** | export_tables_daily | 当年の flat テーブルを増分更新（推論の履歴。`--refresh` 付き。実測 約 4〜5 分） |
+| 毎日 07:40 **（新）** | raceday-comment（朝） | 開催日なら当日の厩舎コメントを取り直す（20:00 で取れなかった／増えた分） |
+| 毎日 07:40 **（新）** | feature-accumulate | 当年分の履歴特徴量（127 列）を確定結果から作り直して蓄積し、推論モードとのずれを記録。最後にサービング用バンドルを GCS へ公開（実測 約 30 秒 + 公開） |
 | 毎日 07:30 | raceday-runner、raceday-result-runner | 開催日のみ常駐。各R T-60 オッズ、T-15 バンドル、T+15 速報結果 |
 | 毎日 07:50 / 08:00 / 09:00 | backfill full 2026 / 2025 / 2024 | 補助データ（速報結果など） |
 | 毎日 08:00 **（新）** | raceday-weight-runner | 各R 発走 65〜30 分前に出馬表を取り直し、馬体重が揃ったら推論モードで特徴量を作成（開催日のみ） |
@@ -26,6 +27,9 @@ cron デーモンは稼働中（2026-10-13 23:44 UTC 起動）。ホストの再
 | 毎日 17:30 | raceday-evening | 速報結果・確定オッズ（開催日のみ） |
 | 毎日 18:00 | raceday-eve | 翌日が開催日なら出馬表・馬柱・追い切り・SmartRC |
 | 毎日 19:40 **（新）** | recent-retry | 同上（2 回目） |
+| 毎日 20:00 **（新）** | raceday-comment（夜） | 翌日が開催日なら厩舎コメントを取得（前日 16 時頃に公開される想定。コメントが出ているレースだけ保存） |
+| 毎日 21:00 **（新）** | new-horse-pedigree | 今後 1 週間の出走予定馬のうち血統テーブル（ped_tbl）が無い馬だけ 5 世代血統を取得 |
+| 常時（起動時 + 5 分ごと） **（新）** | ensure_postgres | ローカル PostgreSQL が止まっていれば起動 |
 | 金 18:00 / 18:30 / 19:30 | weekly-update / horse-name-index / barometer-retry | 直近 10 日の確定結果・指数・バロメーター、馬名インデックス |
 | 常時 | watchdog（3 分ごと）、リモートアクセス（2 分ごと） | |
 
@@ -93,6 +97,9 @@ netkeiba を取得する全ジョブは共通の流れで保存する。
 
 5. **DB（PostgreSQL）への取り込みがホストで毎晩失敗していた（2026-10-15 に解消）**: 原因は「psycopg2 未導入」ではなく、**コンテナの再起動後に PostgreSQL 14 のクラスタ（`14/main`、DB `keiba_db_stg` 431MB）が停止したままだった**こと（接続拒否）。psycopg（v3）は導入済み。クラスタを起動して手動で同期を実行し、成功した（直近 10 日・120 レース、エラー 0、`exit=0`）。再発防止に `scripts/server/ensure_postgres.sh`（止まっていれば起動。冪等）を cron に追加した（起動時 + 5 分おき、タグ `KEIBA_PG_ENSURE`、ログ `logs/ensure_postgres.log`）。
 6. **10/09〜10/10 に cron が `KEIBA_ENV=dev` で動き、取得データの一部が GCS ではなく `data/dev_mock` に入っていた（2026-10-15 に復旧済み）**: 原因は環境設定の解決（dev になると保存先が dev ストアになる）。→ 実行ラッパー `run_auto_scrape_logged.sh` は dev に解決された場合、取得せず終了する（`KEIBA_ALLOW_DEV_CRON=1` で解除）。dev ストアに残っていた実データのうち GCS に無い 61 件は、`python -m src.scripts.maintenance.restore_dev_store_to_gcs --since 2026-10-09 --apply` で**作成のみ**（既存は上書きしない）で追加し、再実行で残り 0 件を確認した。以前の「速報結果 180 件が無い」は、キー照合の誤りによる誤検知だった。
+7. **履歴テーブルが 10/04 で止まっていた（2026-10-15 に修正）**: `export_tables_daily` は「自分の `race_result_flat` に載っているレース」を基準レース集合にしていたため、**`race_result` に新しいレースが永久に入らなかった**（flat の最終日 2026-10-04、10/10〜12 の 72 レースが未反映）。→ `--refresh`（各カテゴリが自分の flat に無いレースを GCS から追記する）を追加して日次ジョブで使う。手動実行で 72 レース・980 行が追記され、最終日は 2026-10-12 になった。テスト: `tests/scraper/test_export_refresh.py`。
+8. **`feature-accumulate` が今朝 07:40 に失敗していた**: 距離の型（Float64/Int64）の不一致（`read_runs_raw` に型をそろえる修正が入る前のコードで動いた）。修正済みのコードで手動再実行する。
+9. **厩舎コメント・新馬の血統・サービングバンドル配布の定期処理を追加（2026-10-15、ユーザー承認）**: `raceday-comment`（20:00・07:40）、`new-horse-pedigree`（21:00）、`feature-accumulate` の最後のバンドル公開（`chuou/models/serving_bundle/<版>/` と `LATEST.json`。3 版を残す。小さなマシンは `python -m src.pipeline.features.horse_history.bundle_sync fetch` で取得）。cushion の GCS 2026 年分は統合して更新済み（旧版は `data/local/backup/jra_cushion/`）。
 
 ### 未解決・要確認
 

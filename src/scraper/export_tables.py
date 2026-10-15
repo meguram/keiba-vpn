@@ -130,6 +130,21 @@ def _build_meta_index(year: str, storage: Any) -> dict[str, dict]:
     return index
 
 
+def _add_shutuba_meta(storage: Any, race_ids: Any, index: dict[str, dict]) -> int:
+    """指定レースのメタを出馬表から index に足す（既にあるレースは触らない）。--refresh で追記する新しいレースの、
+    障害レースの距離 0 などを出馬表のメタで補うために使う。足した件数を返す。"""
+    n = 0
+    for rid in race_ids:
+        if rid in index:
+            continue
+        data = storage.load("race_shutuba", rid)
+        if not data:
+            continue
+        index[rid] = {f: data.get(f) for f in RACE_META_FIELDS}
+        n += 1
+    return n
+
+
 def _build_meta_index_from_race_result_flat(year: str) -> dict[str, dict]:
     """ローカル race_result_flat.parquet からメタを構築（race_shutuba の GCS 列挙・load を避ける）。"""
     p = OUTPUT_DIR / year / "race_result_flat.parquet"
@@ -642,6 +657,10 @@ def export_year(
         meta_index = _build_meta_index_from_race_result_flat(year)
         if not meta_index:
             meta_index = _build_meta_index(year, storage)
+        elif refresh and not force:
+            new_ids = [k for k in storage.batch_list_blobs("race_result", year) if is_jra_race(k) and k not in meta_index]
+            logger.info("[%s] --refresh: 新しいレース %d 件のメタを出馬表から補う（%d 件）", year, len(new_ids),
+                        _add_shutuba_meta(storage, new_ids, meta_index))
     else:
         meta_index = {}
         logger.info("[%s] 全カテゴリ export 済み → メタインデックス構築スキップ", year)
