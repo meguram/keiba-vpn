@@ -105,3 +105,20 @@ def loyo_eval(method: str, P: np.ndarray, years: np.ndarray, race: np.ndarray, y
         out[va] = blend(method, P[va], Z[va], st)
     out = wm.normalize_to_total(race, out, total)
     return ll(out, y), out
+
+
+def apply_spec(entry: dict, P: np.ndarray) -> np.ndarray:
+    """ensemble_spec.json の 1 対象分（method と重み・係数）を、モデル別の確率 P（n × M）に適用する。正規化前の確率を返す。"""
+    m = entry["method"]
+    Z = logit(P)
+    if m == "mean":
+        return P.mean(axis=1)
+    if m == "logit_mean":
+        return sigmoid(Z.mean(axis=1))
+    if m == "weighted_logit":
+        return sigmoid(Z @ np.asarray(entry["weights"]))
+    if m == "greedy":
+        return P @ np.asarray(entry["weights"])
+    if m == "stack_lr":
+        return sigmoid(Z @ np.asarray(entry["coef"]) + entry["intercept"])
+    raise ValueError(m)

@@ -39,3 +39,16 @@ def test_loyo_eval_returns_normalized_probabilities():
     race = np.repeat(np.arange(300), 10)
     ll_, out = en.loyo_eval("weighted_logit", P, years, race, y, 1.0)
     assert np.isfinite(ll_) and abs(out[race == 0].sum() - 1) < 1e-6
+
+
+def test_apply_spec_matches_fit_and_blend():
+    P, y = _data()
+    Z = en.logit(P)
+    for m in en.METHODS:
+        st = en.fit_method(m, P, Z, y)
+        entry = {"method": m}
+        if m in ("weighted_logit", "greedy"):
+            entry["weights"] = list(st)
+        elif m == "stack_lr":
+            entry["coef"], entry["intercept"] = list(st.coef_[0]), float(st.intercept_[0])
+        assert np.allclose(en.apply_spec(entry, P), en.blend(m, P, Z, st)), m

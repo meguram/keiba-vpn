@@ -273,3 +273,12 @@ def finalize(race_va: np.ndarray, out: dict, gammas: tuple[float, float] | None 
         g2, g3 = gammas or (1.0, 1.0)
         p2, p3 = harville_topk(race_va, win, g2, g3)
     return {"win": win, "top2": wm.normalize_to_total(race_va, p2, 2.0), "top3": wm.normalize_to_total(race_va, p3, 3.0)}
+
+
+def tuned_params(key: str, p: dict) -> dict:
+    """Optuna の best params（tp-05d）から fit_predict の params を組み立てる。key: lgb / xgb / nn。"""
+    if key == "lgb":
+        return {"lgb": {k: p[k] for k in ("learning_rate", "num_leaves", "min_data_in_leaf", "feature_fraction", "bagging_fraction", "lambda_l2")}, "n_rounds": p["n_rounds"]}
+    if key == "xgb":
+        return {"device": "cuda", **p}
+    return {"hidden": tuple(int(x) for x in str(p["hidden"]).split("-")), **{k: p[k] for k in ("epochs", "lr", "wd", "dropout")}}
