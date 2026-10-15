@@ -42,11 +42,23 @@ def feature_list() -> dict:
             "hash": hashlib.md5("|".join(full).encode()).hexdigest()[:10]}
 
 
+def tag_experiment_kinds(client: MlflowClient) -> int:
+    """MLflow 3 の UI は、実験の種類（mlflow.experimentKind）が無いと GenAI 向けの表示（トレース・評価）になり、学習 run の一覧が既定で出ない。
+    keiba-* の実験に classic ML 用の種類を付ける（run には触れない）。"""
+    n = 0
+    for e in client.search_experiments():
+        if e.name.startswith("keiba-") and e.tags.get("mlflow.experimentKind") != "custom_model_development":
+            client.set_experiment_tag(e.experiment_id, "mlflow.experimentKind", "custom_model_development")
+            n += 1
+    return n
+
+
 def main() -> int:
     from src.utils.project_env import load_project_dotenv
 
     load_project_dotenv()
     client = MlflowClient()
+    print("実験の種類タグを付けた数:", tag_experiment_kinds(client))
     git = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
     fl = feature_list()
     for (exp, run_name), (nb, resdir, oofs) in PLAN.items():
