@@ -390,10 +390,14 @@ def finish_status_evidence(rr: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame
                                gaps.with_columns(pl.lit("着順に欠番").alias("種別"))], how="diagonal_relaxed")
 
 
-def track_bias_chronology_check(df: pl.DataFrame, winner_l3f: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
+def track_bias_chronology_check(df: pl.DataFrame, winner_l3f: pl.DataFrame, universe: pl.DataFrame | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
     """「当日の直前傾向」が時刻順になっているか。その日その場その路面で**時刻が最初**のレースに値が入っていたら、
-    まだ行われていない後続レースの結果を使っている（先読み）。戻り値: (件数の要約, 該当レース)。"""
-    ctx = track_bias_context(df, winner_l3f)
+    まだ行われていない後続レースの結果を使っている（先読み）。戻り値: (件数の要約, 該当レース)。
+
+    universe: 傾向の計算に使われる全レース（race_result の全レース）。学習表に入っていないレース（結果の欠落など）が
+    その日の先頭にあると、学習表だけでは『最初のレース』を取り違えるため、渡せるなら渡す。"""
+    base = universe if universe is not None else df
+    ctx = track_bias_context(base.select("race_id", "date", "venue_code", "surface", "start_time").unique(subset=["race_id"]), winner_l3f)
     r = df.select("race_id", "date", "venue_code", "surface", "start_time", "track_bias_winner_3f_same_day_prior").unique(subset=["race_id"]).join(ctx, on="race_id")
     first = r.filter(pl.col("tb_prior_races") == 0)
     leak = first.filter(pl.col("track_bias_winner_3f_same_day_prior").is_not_null())
