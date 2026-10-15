@@ -43,7 +43,7 @@ JOBS: dict[str, tuple[str, str, str, str, str]] = {
                         "GCS: race_trainer_comment（レース後の recent-retry と同じカテゴリ。保存済みより件数が減る更新はしない）"),
     "new-horse-pedigree": ("refresh", "新馬の5世代血統", "今後1週間の出走予定馬のうち血統テーブル(ped_tbl)が無い馬だけを取得。無ければ何もしない",
                            "構造化（5世代表）+ 計算（10世代・ped_tbl の生成）",
-                           "GCS: horse_pedigree_5gen。ローカル: data/local/horse_pedigree_5gen・horse_pedigree_10gen、data/features/horse/ped_tbl"),
+                           "GCS: horse_pedigree_5gen。ローカル: data/local/horse_pedigree_5gen・horse_pedigree_10gen、data/local/features/horse/ped_tbl"),
     "raceday-runner": ("live", "開催日ランナー（オッズ・出馬表）", "開催日のみ常駐。各R 発走60分前にオッズ、15分前に出馬表・オッズ・馬柱などをまとめて取得",
                        "構造化のみ（T-15 の予測トリガはモックで保存なし）",
                        "GCS: 出馬表・オッズ（T-60/T-15 の履歴を同じJSONに保持）・馬柱・追い切り・SmartRC。JRA 馬場はローカル data/page_reference/cushion"),

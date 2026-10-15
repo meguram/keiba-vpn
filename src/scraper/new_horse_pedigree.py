@@ -44,7 +44,9 @@ def race_ids_from_list_json(path: Path) -> list[str]:
 
 
 def ped_tbl_path(horse_id: str, base_dir: Path) -> Path:
-    return base_dir / "data" / "features" / "horse" / "ped_tbl" / horse_id[:4] / f"{horse_id}.parquet"
+    from src.pipeline.features.horse_entity_layout import ped_parquet_path
+
+    return ped_parquet_path(horse_id, base_dir)
 
 
 def has_ped_tbl(horse_id: str, base_dir: Path) -> bool:
