@@ -36,7 +36,7 @@ def _synthetic_tables(tmp_path, seed=0):
                 for k, h in enumerate(field):
                     per_year[year].append({
                         "race_id": race_id, "date": day.isoformat(), "start_time": f"{10 + r}:05",
-                        "venue_code": "05", "surface": surface, "race_class": race_class, "distance": dist, "direction": "左",
+                        "venue_code": "05", "surface": surface, "race_class": race_class, "distance": dist, "direction": "" if race_class == "" else "左",
                         "track_condition": "良", "grade": str(rng.choice(["未勝利", "1勝", "2勝"])),
                         "pace": json.dumps({"first_half_3f": 35.0 + rng.normal(), "second_half_3f": 36.0 + rng.normal()}),
                         "finish_position": int(order[k]), "horse_number": k + 1, "horse_id": h, "sex_age": str(rng.choice(["牡3", "牝3", "牡4", "牝4"])),
@@ -140,13 +140,24 @@ def test_standard_rating_uses_grid_beta_and_is_history_only(built):
     assert heavy < 0 < light
 
 
-def test_hurdle_races_are_identified_by_blank_race_class(built):
+def test_hurdle_races_are_identified_by_blank_race_class_and_direction(built):
     tables, _, _, _ = built
     runs = load_runs(tables)
     assert runs.filter(pl.col("surface") == "障").height > 0
     raw = pl.concat([pl.read_parquet(f) for f in sorted(tables.glob("*/race_result_flat.parquet"))])
-    blank_ids = set(raw.filter(pl.col("race_class") == "")["race_id"].to_list())
+    blank_ids = set(raw.filter((pl.col("race_class") == "") & (pl.col("direction") == ""))["race_id"].to_list())
     assert set(runs.filter(pl.col("surface") == "障")["race_id"].unique().to_list()) == blank_ids
+
+
+def test_flat_race_with_blank_race_class_but_a_direction_is_not_a_hurdle(built):
+    """出馬表の文字化けで race_class が空になった平地レース（2026 年に約 1,500 レース）を障害にしない。"""
+    tables, _, _, _ = built
+    raw = pl.concat([pl.read_parquet(f) for f in sorted(tables.glob("*/race_result_flat.parquet"))])
+    rid = raw.filter(pl.col("race_class") != "")["race_id"][0]
+    broken = raw.with_columns(pl.when(pl.col("race_id") == rid).then(pl.lit("")).otherwise(pl.col("race_class")).alias("race_class"))
+    from src.pipeline.features.horse_history.common import clean_runs, RUN_COLS
+    out = clean_runs(broken.select(RUN_COLS).with_columns(pl.col("distance").cast(pl.Int64)))
+    assert out.filter(pl.col("race_id") == rid)["surface"].unique().to_list() != ["障"]
 
 
 def test_today_track_variant_uses_only_races_started_90_minutes_earlier(built):

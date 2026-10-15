@@ -10,15 +10,23 @@ def _row(rid, **kw):
     return base
 
 
-def test_detects_unparsed_course_and_ignores_hurdle_direction():
-    df = pd.DataFrame([_row("a"), _row("b", surface="", distance=0, direction=""), _row("c", surface="障", direction="")])
+def test_detects_unparsed_course():
+    df = pd.DataFrame([_row("a"), _row("b", surface="", distance=0)])
     rep = audit_frame(df)
     assert rep["missing"]["surface"] == 1 and rep["missing"]["distance"] == 1
     assert rep["samples"]["surface"] == ["b"]
-    assert "direction(障害以外)" in rep["missing"]      # b は障害ではない
-    assert rep["missing"]["direction(障害以外)"] == 1   # c（障害）は数えない
     assert problems(rep)
 
 
 def test_clean_frame_has_no_problems():
-    assert problems(audit_frame(pd.DataFrame([_row("a"), _row("b", distance=2000)]))) == {}
+    assert problems(audit_frame(pd.DataFrame([_row("a", race_class="1勝"), _row("b", race_class="2勝", distance=2000)]))) == {}
+
+
+def test_hurdle_is_blank_class_and_direction_but_blank_class_with_direction_is_flagged():
+    hurdle = _row("h", direction="", race_class="", distance=2860)
+    ok = pd.DataFrame([_row("a", race_class="1勝"), hurdle])
+    assert problems(audit_frame(ok)) == {}
+    broken = pd.DataFrame([_row(f"m{i}", race_class="") for i in range(5)] + [hurdle])
+    assert audit_frame(broken)["missing"]["race_class(方向あり)"] == 5
+    assert "race_class(方向あり)" in problems(audit_frame(broken))
+    assert problems(audit_frame(pd.DataFrame([_row("x", race_class=""), _row("y", race_class="1勝")]))) == {}   # 1〜2 レースは許容

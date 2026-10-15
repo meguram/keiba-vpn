@@ -54,8 +54,10 @@ def clean_runs(df: pl.DataFrame) -> pl.DataFrame:
     df = df.filter((pl.col("finish_position") > 0) & pl.col("venue_code").cast(pl.Int32, strict=False).is_between(1, 10))
     df = df.with_columns(
         pl.col("date").str.to_date("%Y-%m-%d"),
-        # 障害レースは race_class が空。面が「芝」「ダート」と誤ってラベルされた障害レース（約 590 レース）も「障」にする。
-        pl.when(pl.col("race_class").fill_null("") == "").then(pl.lit("障")).otherwise(pl.col("surface").fill_null("障")).alias("surface"),
+        # 障害レースは race_class が空で、かつ方向（左/右/直）が無い。面が「芝」「ダート」と誤ってラベルされた障害レース（約 590 レース）も「障」にする。
+        # race_class だけで判定しない: 出馬表を文字コード誤判定で取得した 2026 年の約 1,500 レースは race_class が空だが、平地で方向がある。
+        pl.when((pl.col("race_class").fill_null("") == "") & (pl.col("direction").fill_null("") == "")).then(pl.lit("障"))
+        .otherwise(pl.col("surface").fill_null("障")).alias("surface"),
         pl.len().over("race_id").alias("n_fin"),
         pl.col("track_condition").replace_strict(GOING, default=0, return_dtype=pl.Int32).alias("going"),
         pl.col("grade").replace_strict(CLASS_LEVEL, default=1.0, return_dtype=pl.Float64).alias("class_level"),

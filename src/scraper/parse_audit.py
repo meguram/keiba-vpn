@@ -2,7 +2,7 @@
 
 ページ表記の変更でパーサが黙って空の値を返す事故（2026 年の「芝右 外1200m」で距離 0・面が空）を、取得の翌日までに見つけるための検査。
   python -m src.scraper.parse_audit --years 2026        # 欠損があれば終了コード 1
-障害レースは面が「障」・方向が空になるのが通常なので、方向の空は障害以外だけ数える。
+障害レースは race_class も方向も空になるのが通常。race_class だけが空のレースは文字化け等の兆候として数える。
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 # 必須（空・0 があればパース失敗の疑い）。しきい値は「許容するレース数」
+TOLERANCE = {"race_class(方向あり)": 2}
 REQUIRED = {"surface": 0, "distance": 0, "weather": 0, "track_condition": 0, "start_time": 0, "field_size": 0, "date": 0, "venue": 0}
 
 
@@ -30,16 +31,18 @@ def audit_frame(df: pd.DataFrame) -> dict:
         if n:
             out["missing"][col] = n
             out["samples"][col] = [str(i) for i in g.index[bad][:5]]
-    if "direction" in g.columns and "surface" in g.columns:
-        nd = g[(g["surface"] != "障") & (g["direction"].isna() | (g["direction"] == ""))]
-        if len(nd):
-            out["missing"]["direction(障害以外)"] = int(len(nd))
-            out["samples"]["direction(障害以外)"] = [str(i) for i in nd.index[:5]]
+    if "race_class" in g.columns and "direction" in g.columns:
+        # 障害レースは race_class も方向も空。race_class だけが空で方向がある平地レースは、出馬表の取得時の文字化け等の兆候
+        # （2026 年に文字コードの誤判定で約 1,500 レース）。旧データにも 1 年 1 レース程度の例外がある
+        rc = g[(g["race_class"].isna() | (g["race_class"] == "")) & ~(g["direction"].isna() | (g["direction"] == ""))]
+        if len(rc):
+            out["missing"]["race_class(方向あり)"] = int(len(rc))
+            out["samples"]["race_class(方向あり)"] = [str(i) for i in rc.index[:5]]
     return out
 
 
 def problems(report: dict) -> dict:
-    return {c: n for c, n in report["missing"].items() if n > REQUIRED.get(c, 0)}
+    return {c: n for c, n in report["missing"].items() if n > REQUIRED.get(c, TOLERANCE.get(c, 0))}
 
 
 def main() -> int:
@@ -53,7 +56,7 @@ def main() -> int:
         if not p.is_file():
             print(f"[{y}] race_result_flat がありません")
             continue
-        cols = ["race_id", *REQUIRED, "direction"]
+        cols = ["race_id", *REQUIRED, "direction", "race_class"]
         df = pd.read_parquet(p, columns=[c for c in cols if c in _schema_names(p)])
         rep = audit_frame(df)
         bad = problems(rep)
