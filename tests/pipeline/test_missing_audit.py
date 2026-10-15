@@ -27,10 +27,10 @@ def test_index_causes_follow_priority():
     )
     summary, suspects = M.classify(ctx, {"speed_max": M.feature_rules({"speed_max"})["speed_max"]})
     reasons = _by_reason(summary, "speed_max")
-    assert reasons["初出走（過去走なし。指数は過去走から算出）"] == M.LEGIT
+    assert reasons["行はあるが値が空（初出走）"] == M.RAW_EMPTY
     assert reasons["そのレースの race_index が無い"] == M.RAW_RACE
-    assert reasons["race_index にこの馬の行が無い"] == M.RAW_HORSE
-    assert reasons["race_index に行はあるが値が空"] == M.RAW_EMPTY
+    assert reasons["race_index にこの馬の行が無い（過去走あり）"] == M.RAW_HORSE
+    assert reasons["行はあるが値が空（過去走あり）"] == M.RAW_EMPTY
     assert reasons["生データに値があるのに特徴量が欠損"] == M.PROC
     assert suspects.height == 1 and suspects["原因"][0] == M.PROC
 
@@ -71,3 +71,14 @@ def test_finish_status_evidence_separates_timed_rows_and_rank_gaps():
     d = {r["区分"]: r["行数"] for r in summary.to_dicts()}
     assert d["タイムなし: 出走取消・競走除外・競走中止と整合"] == 2 and d["タイムあり: 失格・降着か解析失敗（要確認）"] == 1
     assert set(detail["種別"]) == {"着順<=0なのにタイムあり", "着順に欠番"}
+
+
+def test_track_bias_chronology_check_flags_first_race_with_value():
+    df = pl.DataFrame({
+        "race_id": ["a1", "a2", "a3"], "date": ["2026-01-01"] * 3, "venue_code": ["05"] * 3, "surface": ["芝"] * 3,
+        "start_time": ["10:00", "11:00", "12:00"],
+        "track_bias_winner_3f_same_day_prior": [35.0, 36.0, 36.5],   # 最初のレース a1 に値がある = 先読み
+    })
+    wl = pl.DataFrame({"race_id": ["a1", "a2", "a3"], "winner_l3f_nn": [True, True, True]})
+    s, leak = M.track_bias_chronology_check(df, wl)
+    assert leak["race_id"].to_list() == ["a1"] and s["レース数"].to_list() == [1, 1, 0]

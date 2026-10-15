@@ -158,21 +158,24 @@ def feature_rules(ctx_cols: set[str]) -> dict[str, list[Step]]:
     c = pl.col
     rules: dict[str, list[Step]] = {}
 
+    debut = c("horse_prior_races") == 0
     for f in INDEX_COLS:
+        # 初出走でも指数がある馬が多い（実測で約 3 割）ため、初出走は『正当』にしない。生データの有無を先に見る。
         rules[f] = [
-            Step(LEGIT, "初出走（過去走なし。指数は過去走から算出）", c("horse_prior_races") == 0),
-            Step(LEGIT, "障害レース（指数の対象外）", c("surface").cast(pl.Utf8).fill_null("").str.contains("障")),
             Step(RAW_RACE, "そのレースの race_index が無い", ~c("ix_race")),
-            Step(RAW_HORSE, "race_index にこの馬の行が無い", ~c("ix_row")),
-            Step(RAW_EMPTY, "race_index に行はあるが値が空", ~c(f"ix_nn_{f}")),
+            Step(RAW_HORSE, "race_index にこの馬の行が無い（初出走）", ~c("ix_row") & debut),
+            Step(RAW_HORSE, "race_index にこの馬の行が無い（過去走あり）", ~c("ix_row")),
+            Step(RAW_EMPTY, "行はあるが値が空（初出走）", ~c(f"ix_nn_{f}") & debut),
+            Step(RAW_EMPTY, "行はあるが値が空（過去走あり）", ~c(f"ix_nn_{f}")),
             Step(PROC, "生データに値があるのに特徴量が欠損", c(f"ix_nn_{f}")),
         ]
     for k in (1, 2, 3):
         rules[f"speed_recent_{k}"] = [
-            Step(LEGIT, f"過去走が {k} 走未満", c("horse_prior_races") < k),
             Step(RAW_RACE, "そのレースの race_index が無い", ~c("ix_race")),
-            Step(RAW_HORSE, "race_index にこの馬の行が無い", ~c("ix_row")),
-            Step(RAW_EMPTY, f"行はあるが {k} 走前の指数が 0/空", ~c(f"ix_recent_nn_{k}")),
+            Step(RAW_HORSE, "race_index にこの馬の行が無い（初出走）", ~c("ix_row") & debut),
+            Step(RAW_HORSE, "race_index にこの馬の行が無い（過去走あり）", ~c("ix_row")),
+            Step(RAW_EMPTY, f"行はあるが {k} 走前の指数が 0/空（過去走が {k} 走未満）", ~c(f"ix_recent_nn_{k}") & (c("horse_prior_races") < k)),
+            Step(RAW_EMPTY, f"行はあるが {k} 走前の指数が 0/空（過去走は十分）", ~c(f"ix_recent_nn_{k}")),
             Step(PROC, "生データに値があるのに特徴量が欠損", c(f"ix_recent_nn_{k}")),
         ]
     rules["past_races"] = [
@@ -196,9 +199,9 @@ def feature_rules(ctx_cols: set[str]) -> dict[str, list[Step]]:
 
     sdp, pdv = "track_bias_winner_3f_same_day_prior", "track_bias_winner_3f_prev_day"
     rules[sdp] = [
-        Step(LEGIT, "その日その場その路面の最初のレース（直前の勝ち馬がいない）", c("tb_prior_races") == 0),
+        Step(LEGIT, "その日その場その路面で時刻が最初のレース（直前の勝ち馬がいない）", c("tb_prior_races") == 0),
         Step(RAW_EMPTY, "直前のレースはあるが、勝ち馬の上り3F が生データに無い", c("tb_prior_l3f_nn") == 0),
-        Step(PROC, "直前の勝ち馬の上り3F はあるのに欠損", c("tb_prior_l3f_nn") > 0),
+        Step(PROC, "時刻順では直前のレースがあるのに欠損（実装の並びが 馬場×距離帯ブロック順 のため）", c("tb_prior_l3f_nn") > 0),
     ]
     rules[pdv] = [
         Step(LEGIT, "前日(暦日)に同じ場・路面の開催なし（開催初日・土曜など）", c("tb_prev_races") == 0),
@@ -385,3 +388,15 @@ def finish_status_evidence(rr: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame
     return summary, pl.concat([suspects.with_columns(pl.lit("着順<=0なのにタイムあり").alias("種別"),
                                                      pl.lit(None, dtype=pl.Int64).alias("最大着順"), pl.lit(None, dtype=pl.Int64).alias("着順付きの頭数")),
                                gaps.with_columns(pl.lit("着順に欠番").alias("種別"))], how="diagonal_relaxed")
+
+
+def track_bias_chronology_check(df: pl.DataFrame, winner_l3f: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """「当日の直前傾向」が時刻順になっているか。その日その場その路面で**時刻が最初**のレースに値が入っていたら、
+    まだ行われていない後続レースの結果を使っている（先読み）。戻り値: (件数の要約, 該当レース)。"""
+    ctx = track_bias_context(df, winner_l3f)
+    r = df.select("race_id", "date", "venue_code", "surface", "start_time", "track_bias_winner_3f_same_day_prior").unique(subset=["race_id"]).join(ctx, on="race_id")
+    first = r.filter(pl.col("tb_prior_races") == 0)
+    leak = first.filter(pl.col("track_bias_winner_3f_same_day_prior").is_not_null())
+    summary = pl.DataFrame({"区分": ["時刻が最初のレース（本来、直前の傾向は無い）", "うち値が入っている（後続レースの結果を使った疑い）", "うち欠損（正しい）"],
+                            "レース数": [first.height, leak.height, first.height - leak.height]})
+    return summary, leak.select("race_id", "date", "venue_code", "surface", "start_time", "track_bias_winner_3f_same_day_prior").sort("race_id")
