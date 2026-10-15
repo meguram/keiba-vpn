@@ -1,0 +1,37 @@
+"""tp-05b〜e・tp-06 共通のデータ読み込み: 学習テーブル + 前段 3 列 + レース内の相対化を作り、レース単位に連続して並べる。"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pandas as pd
+
+from src.pipeline.models import ablation as ab
+from src.pipeline.models import win_models as wm
+from src.pipeline.models.time_split import yearly_expanding_folds
+
+STAGE_COLS = ["s_time_pred", "s_time_gap", "s_rank_pred"]
+REL_BASE = ["f3_r", "sr_perf_ewm2", "sr_perf_ewm6", "sr_exp", "c_res_ewm2", "c_cls_ewm2", "a_l3fz_ewm2", "a_rk_ewm2", "a_style", "b_aff_all",
+            "pc_adv", "f2_pace_match", "horse_prior_win_rate", "jockey_prior_win_rate"]
+
+
+def load_dataset(work: Path) -> dict:
+    """戻り値: df（date・race_id・horse_number 順）, BASE（tp-03 採用の 175 列）, REL（相対化の列名）, FEATS（特徴量セット名→列）, folds, meta。"""
+    adopted = json.loads((work / "ablation_nospeed/adopted_features.json").read_text(encoding="utf-8"))
+    base = list(adopted["b0_features"]) + list(adopted["features"])
+    stage = pd.read_parquet(work / "oof/stage_features_expanding.parquet")
+    df = ab.load_table(work / "features/train_table.parquet")
+    df["race_id"] = df["race_id"].astype(str)
+    df["horse_id"] = df["horse_id"].astype(str)
+    df = df.merge(stage[["race_id", "horse_id"] + STAGE_COLS], on=["race_id", "horse_id"], how="left")
+    df = df.sort_values(["date", "race_id", "horse_number"], kind="stable").reset_index(drop=True)
+    rel_cols = [c for c in REL_BASE if c in df.columns]
+    rel = wm.add_race_relative(df, rel_cols)
+    for c in rel.columns:
+        df[c] = rel[c].to_numpy()
+    feats = {"base": base, "base+S": base + STAGE_COLS, "base+S+C1": base + STAGE_COLS + list(rel.columns)}
+    missing = [c for c in feats["base+S+C1"] if c not in df.columns]
+    assert not missing, missing
+    meta = df[["race_id", "horse_id", "finish_position", "year", "date"]].copy()
+    return {"df": df, "BASE": base, "REL": list(rel.columns), "FEATS": feats, "folds": list(yearly_expanding_folds(df)), "meta": meta}
