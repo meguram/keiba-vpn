@@ -65,7 +65,7 @@ def drift(tables_dir: Path, baseline_years: list[int], recent_years: list[int], 
             continue
         rec = rec.with_columns(pl.col("date").cast(pl.Utf8).str.slice(0, 7).alias("ym"))
         yms = sorted(rec["ym"].drop_nulls().unique().to_list())[-months:]
-        flags = [c for c in base.columns if c[:2] in ("E:", "M:")]
+        flags = [c for c in base.columns if c[:2] in ("E:", "M:") and c in rec.columns]
         for col in flags:
             b = float(base[col].mean())
             for ym in yms:
