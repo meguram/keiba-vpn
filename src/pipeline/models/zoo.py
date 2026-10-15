@@ -82,10 +82,11 @@ def fit_gamma(race_ids: np.ndarray, p_win: np.ndarray, finish: np.ndarray, which
 
 # ── 前処理（NN・線形用）
 class Prep:
-    """数値は欠損を中央値で埋めて標準化（欠損の多い列には欠損フラグを足す）、カテゴリは整数化して埋め込み用に返す。"""
+    """数値は欠損を中央値で埋めて標準化（欠損の多い列には欠損フラグを足す）、カテゴリは整数化して埋め込み用に返す。
+    id_cols（騎手・調教師・種牡馬など高カーディナリティ）は、学習データで min_count 回以上出る値だけを個別に扱い、残りは 0（その他）に寄せる。"""
 
-    def __init__(self, cat_cols: Sequence[str], num_cols: Sequence[str]):
-        self.cat_cols, self.num_cols = list(cat_cols), list(num_cols)
+    def __init__(self, cat_cols: Sequence[str], num_cols: Sequence[str], id_cols: Sequence[str] = (), min_count: int = 30):
+        self.cat_cols, self.num_cols, self.id_cols, self.min_count = list(cat_cols), list(num_cols), list(id_cols), min_count
 
     def fit(self, X: pd.DataFrame) -> "Prep":
         num = X[self.num_cols].astype("float64")
@@ -95,14 +96,22 @@ class Prep:
         self.mu = filled.mean().to_numpy()
         self.sd = filled.std().replace(0, 1.0).fillna(1.0).to_numpy()
         self.cats = {c: {v: i + 1 for i, v in enumerate(sorted(map(str, X[c].astype(str).unique())))} for c in self.cat_cols}
+        for c in self.id_cols:
+            vc = X[c].astype(str).value_counts()
+            self.cats[c] = {v: i + 1 for i, v in enumerate(sorted(vc[vc >= self.min_count].index))}
         return self
+
+    @property
+    def all_cat(self) -> list[str]:
+        return self.cat_cols + self.id_cols
 
     def transform(self, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         num = X[self.num_cols].astype("float64")
         flags = num[self.flag_cols].isna().to_numpy().astype("float32") if self.flag_cols else np.zeros((len(X), 0), "float32")
         z = (num.fillna(pd.Series(self.med, index=self.num_cols)).to_numpy() - self.mu) / self.sd
         z = np.clip(z, -5, 5).astype("float32")
-        cat = np.stack([X[c].astype(str).map(self.cats[c]).fillna(0).astype("int64").to_numpy() for c in self.cat_cols], axis=1) if self.cat_cols else np.zeros((len(X), 0), "int64")
+        cols = self.all_cat
+        cat = np.stack([X[c].astype(str).map(self.cats[c]).fillna(0).astype("int64").to_numpy() for c in cols], axis=1) if cols else np.zeros((len(X), 0), "int64")
         return np.concatenate([z, flags], axis=1), cat
 
 
@@ -121,7 +130,8 @@ def _pad_races(race_ids: np.ndarray, *arrays: np.ndarray, max_n: int = 18):
 
 def nn_fit_predict(X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, X_va: pd.DataFrame, race_va: np.ndarray, seed: int = 0,
                    hidden: Sequence[int] = (256, 128), epochs: int = 14, lr: float = 2e-3, wd: float = 1e-4, dropout: float = 0.15,
-                   batch_races: int = 128, device: str | None = None) -> dict:
+                   batch_races: int = 128, device: str | None = None, id_cols: Sequence[str] = (), id_dim: int = 16, min_count: int = 30,
+                   attn_layers: int = 0, attn_dim: int = 64) -> dict:
     """レース単位の NN。馬ごとの MLP の出力を、同レースの平均（文脈）と連結してスコアを出す。
     損失 = 勝ち馬の listwise softmax 交差エントロピー + p_top2・p_top3 の BCE。hidden=() で線形（条件付きロジット + BCE）。"""
     import torch
@@ -131,13 +141,14 @@ def nn_fit_predict(X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, X_va: pd
     np.random.seed(seed)
     dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
     cat_cols = [c for c in X_tr.columns if str(X_tr[c].dtype) == "category"]
-    num_cols = [c for c in X_tr.columns if c not in cat_cols]
-    prep = Prep(cat_cols, num_cols).fit(X_tr)
+    id_cols = list(id_cols)
+    num_cols = [c for c in X_tr.columns if c not in cat_cols and c not in id_cols]
+    prep = Prep(cat_cols, num_cols, id_cols, min_count).fit(X_tr)
     Ztr, Ctr = prep.transform(X_tr)
     Zva, Cva = prep.transform(X_va)
     idx_tr, idx_va = _pad_races(race_tr), _pad_races(race_va)
-    n_cat = [len(prep.cats[c]) + 1 for c in cat_cols]
-    emb_dim = [min(8, (n + 1) // 2) for n in n_cat]
+    n_cat = [len(prep.cats[c]) + 1 for c in prep.all_cat]
+    emb_dim = [min(8, (n + 1) // 2) for n in n_cat[: len(cat_cols)]] + [id_dim] * len(id_cols)
 
     class Net(nn.Module):
         def __init__(self):
@@ -149,12 +160,19 @@ def nn_fit_predict(X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, X_va: pd
                 layers += [nn.Linear(d, h), nn.ReLU(), nn.Dropout(dropout)]
                 d = h
             self.body = nn.Sequential(*layers) if layers else nn.Identity()
+            self.attn = None
+            if attn_layers > 0:
+                self.proj = nn.Linear(d, attn_dim)
+                self.attn = nn.TransformerEncoder(nn.TransformerEncoderLayer(attn_dim, 4, attn_dim * 2, dropout, batch_first=True), num_layers=attn_layers)
+                d = attn_dim
             self.d = d
             self.head = nn.Linear(d * 2, 3)
 
         def forward(self, z, c, mask):
             e = [emb(c[..., i]) for i, emb in enumerate(self.embs)]
             h = self.body(torch.cat([z] + e, dim=-1))
+            if self.attn is not None:
+                h = self.attn(self.proj(h), src_key_padding_mask=~mask)      # 同じレースの馬どうしで注意（パディングは無視）
             m = mask.unsqueeze(-1).float()
             ctx = (h * m).sum(1, keepdim=True) / m.sum(1, keepdim=True).clamp(min=1)
             return self.head(torch.cat([h, ctx.expand_as(h)], dim=-1))     # (R, n, 3): win score, top2 logit, top3 logit
@@ -259,7 +277,9 @@ def fit_predict(recipe: str, X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray
     if recipe in ("linear", "nn"):
         hidden = () if recipe == "linear" else tuple(params.get("hidden", (256, 128)))
         o = nn_fit_predict(X_tr, y_tr, race_tr, X_va, race_va, seed=seed, hidden=hidden, epochs=params.get("epochs", 14), lr=params.get("lr", 2e-3),
-                           wd=params.get("wd", 1e-4), dropout=params.get("dropout", 0.15), batch_races=params.get("batch_races", 128))
+                           wd=params.get("wd", 1e-4), dropout=params.get("dropout", 0.15), batch_races=params.get("batch_races", 128),
+                           id_cols=params.get("id_cols", ()), id_dim=params.get("id_dim", 16), min_count=params.get("min_count", 30),
+                           attn_layers=params.get("attn_layers", 0), attn_dim=params.get("attn_dim", 64))
         return {"win": wm.softmax_by_race(race_va, o["win_score"]), "win_score": o["win_score"], "top2": sigmoid(o["top2_logit"]), "top3": sigmoid(o["top3_logit"])}
     raise ValueError(recipe)
 

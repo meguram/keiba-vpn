@@ -65,3 +65,22 @@ def test_nn_and_linear_learn_a_simple_signal_on_cpu():
         p = zoo.finalize(race, o)
         from src.pipeline.models import win_models as wm
         assert wm.top1_hit_rate(race, p["win"], y["win"].astype(float)) > 0.3, rec
+
+
+def test_nn_with_id_embeddings_and_attention_runs_and_learns():
+    rng = np.random.default_rng(1)
+    n_r, n_h = 150, 8
+    race = np.repeat([f"r{i:04d}" for i in range(n_r)], n_h)
+    jockey = rng.choice([f"j{k}" for k in range(6)], n_r * n_h)
+    skill = {f"j{k}": v for k, v in enumerate(rng.normal(0, 1, 6))}
+    a = rng.normal(size=n_r * n_h)
+    s = a + np.array([skill[j] for j in jockey])
+    finish = np.concatenate([np.argsort(np.argsort(-(s[i * n_h:(i + 1) * n_h] + rng.normal(0, 0.4, n_h)))) + 1 for i in range(n_r)])
+    X = pd.DataFrame({"a": a, "jockey_id": jockey})
+    y = {"win": (finish == 1).astype(int), "top2": (finish <= 2).astype(int), "top3": (finish <= 3).astype(int), "finish": finish}
+    for attn in (0, 1):
+        o = zoo.fit_predict("nn", X, y, race, X, race, threads=2, params={"epochs": 40, "hidden": (16,), "lr": 2e-2, "batch_races": 32, "id_cols": ["jockey_id"],
+                                                                         "min_count": 5, "attn_layers": attn, "attn_dim": 16})
+        p = zoo.finalize(race, o)
+        from src.pipeline.models import win_models as wm
+        assert wm.top1_hit_rate(race, p["win"], y["win"].astype(float)) > 0.3, attn
