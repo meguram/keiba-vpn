@@ -22,7 +22,7 @@
 <body>
 <main>
 <h1>学習パイプライン 確定事項ログ</h1>
-<p class="muted">notebook <code>notebooks/modeling/training_pipeline/tp-NN-*.ipynb</code> が完成するたびに、そのフローで確定した事項を追記する。各項目には根拠（コミット・MLflow run・成果物）を添える。実行はホスト PC（stg）。特徴量の設計根拠と tp-03・tp-04 の手順は <a href="feature_strategy_tp03_tp04.html" style="color:#7aa9ff">特徴量戦略書</a>、モデリングの方針（tp-04〜tp-07）は <a href="modeling_strategy_tp04_tp07.html" style="color:#7aa9ff">モデリング戦略書</a>。最終更新: 2026-10-14（tp-00・tp-01）。</p>
+<p class="muted">notebook <code>notebooks/modeling/training_pipeline/tp-NN-*.ipynb</code> が完成するたびに、そのフローで確定した事項を追記する。各項目には根拠（コミット・MLflow run・成果物）を添える。実行はホスト PC（stg）。特徴量の設計根拠と tp-03・tp-04 の手順は <a href="feature_strategy_tp03_tp04.html" style="color:#7aa9ff">特徴量戦略書</a>、モデリングの方針（tp-04〜tp-07）は <a href="modeling_strategy_tp04_tp07.html" style="color:#7aa9ff">モデリング戦略書</a>。最終更新: 2026-10-15（tp-00〜tp-04）。</p>
 
 <div class="box">
 <b>運用ルール</b>
@@ -39,8 +39,8 @@
 <tr><td>00</td><td><code>tp-00-env-check</code></td><td>環境・接続・データ・計算資源の確認</td><td class="ok">完了</td></tr>
 <tr><td>01</td><td><code>tp-01-dataset-split</code></td><td>母表構築・分割・分布検証</td><td class="ok">完了</td></tr>
 <tr><td>02</td><td><code>tp-02-feature-build</code></td><td>特徴量生成（リーク検査つき）</td><td class="ok">完了</td></tr>
-<tr><td>03</td><td><code>tp-03-feature-ablation</code></td><td>特徴量グループの採否</td><td>未作成</td></tr>
-<tr><td>04</td><td><code>tp-04-stage-models</code></td><td>前段モデル（脚質・ペース・上がり3F・位置取り・走破タイム）</td><td>未作成</td></tr>
+<tr><td>03</td><td><code>tp-03-feature-ablation</code></td><td>特徴量グループの採否</td><td class="ok">完了</td></tr>
+<tr><td>04</td><td><code>tp-04-stage-models</code></td><td>前段モデル（位置取り・ペース・上がり3F・走破タイム・着順）と後段への寄与</td><td class="ok">完了</td></tr>
 <tr><td>05</td><td><code>tp-05-final-train-tune</code></td><td>p_win・p_top2・p_top3 の学習と調整</td><td>未作成</td></tr>
 <tr><td>06</td><td><code>tp-06-calibration-eval</code></td><td>確率較正・評価（test は一度だけ）</td><td>未作成</td></tr>
 <tr><td>07</td><td><code>tp-07-register-verify</code></td><td>最終再学習・登録・推論の一致確認</td><td>未作成</td></tr>
@@ -260,8 +260,67 @@
   <li>複数 seed の LogLoss のばらつきは 0.0002〜0.0003（3 seed）。採用基準の閾値は 0.0001〜0.0003。</li>
 </ul>
 
-<h2>6. 以降の節</h2>
-<p class="muted">tp-04〜tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
+<h2>6. tp-04 前段モデルと後段への寄与（採用する前段特徴量の確定）</h2>
+<p class="muted">根拠: コミット <code>0e62396</code>、MLflow 実験 <code>keiba-tp-stage</code> の run <code>5f7967005df343b6a5cbd119e39638e5</code>。成果物（ホスト PC）: <code>data/local/modeling/training_pipeline/oof/</code> の <code>stage_features_expanding.parquet</code>（20 列の前段特徴量、283,714 行）、<code>stage_report.json</code>、<code>downstream_results_*.csv</code>。部品は <code>src/pipeline/models/stage_models.py</code>、テストは <code>tests/pipeline/test_stage_models.py</code>。</p>
+<h3>条件</h3>
+<p>入力は tp-03 の採用セット（B0′ 48 列 + 履歴特徴量 127 列、<code>speed_*</code> なし）だけ。目的変数はそのレースの結果で、学習のラベルにだけ使う（通過順・上がりは tp-02 と同じ修復を通す）。OOF は expanding window（年 Y の予測は Y の開始 10 日前より前で学習）。2025 年の行は 2020〜2024 年のモデルで予測して保存したが、<b>採否の比較には使っていない</b>（比較は valid 2022〜2024、連鎖の比較は 2023・2024）。障害レースは上がり・ペースの対象から外した。ホストの 6 コアは空けて実行（load average 最大 21／24 コア）。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>項目</th><th>確定内容</th></tr>
+<tr><td>後段（p_win）に渡す前段特徴量</td><td><b><code>s_time_pred</code>・<code>s_time_gap</code>・<code>s_rank_pred</code> の 3 列</b>（P5 走破タイム差・P6 正規化着順の OOF 予測と、レース内最良予測との差）。<b>学習は 2020 年から使い、前段が無い 2020〜2021 年の行は欠損のまま</b>にする案を採る。base(2020〜) 比で p_win LogLoss <b>−0.00086</b>（valid 2023 −0.00061、2024 −0.00110。全 fold で改善、採用基準を満たす）。</td></tr>
+<tr><td>採用しない前段特徴量</td><td>P1（位置取り・隊列: <code>s_pos_pred</code> ほか 6 列）、P3（ペース確率・期待ペース: <code>s_pace_p_*</code>・<code>s_pace_bal_pred</code>・<code>s_rpci_pred</code>）、展開マッチ（<code>m_pace_match</code>・<code>m_rpci_match</code>・<code>m_pace_adv</code>）。基準を満たさない（下表）。<b>F2 の簡易版（<code>f2_*</code>）は置き換えずそのまま残す</b>。P4（上がり: <code>s_l3f_*</code>）は単独では基準を満たす（−0.00050）が、P5・P6 と併用しても上積みが無い（併用 −0.00067、P5・P6 単独 −0.00086）ため、列数の少ない P5・P6 のみを採る。</td></tr>
+<tr><td>OOF の方式</td><td><b>expanding window（厳密）を既定</b>。leave-one-year-out は P1 で MAE が 0.0008 良い（早期 0.2069 vs 0.2077、後期 0.2094 vs 0.2101）だけで、将来のデータで学習する先読みを含むため採用しない。</td></tr>
+<tr><td>学習範囲</td><td>後段の学習を 2022 年以降に限る案は不採用。base の LogLoss が 2020〜 比で fold 2023 +0.00300、2024 +0.00118 悪化し、前段特徴量の改善（−0.0012〜−0.0013）を上回って損をする（valid 2023・2024 の平均で base(2022〜) 0.22220 vs base(2020〜) 0.22011）。</td></tr>
+<tr><td>ペース 3 区分の定義</td><td>tp-02 の <code>fit_params.json</code>（<code>pace_q</code>・<code>rpci_q</code>。FIT_END 以前で決定）をそのまま使う。pace_bal は 0=後傾・2=前傾、rpci は 0=前傾・2=後傾（値が小さい順に 0,1,2。<b>両者で向きが逆</b>）。F2・G の区分別成績（<code>f2_a_reg0〜2</code>・<code>pc_a_reg0〜2</code>）と同じ区分。</td></tr>
+</table>
+<div class="box"><b>注意（tp-05 への申し送りと同じ）</b>: 採用した 3 列は「2020〜2021 年が欠損」という時代の目印になりうる。欠損の有無で年を見分けて LogLoss が良く見えている可能性があるため、tp-05 で「3 列を足す／足さない」「欠損行を学習から外す」を再比較する。比較した fold は 2 つ（2023・2024）だけで、確定ではなく有力候補として扱う。</div>
+
+<h3>各段の精度（valid 2022〜2024 の平均。2025 は見ていない）</h3>
+<table>
+<tr><th>段</th><th>比較</th><th>結果</th><th>採用</th></tr>
+<tr><td>P1 初角位置（0=先頭〜1）</td><td>A: 特徴量のみ／B: 騎手・調教師の先行傾向（as-of）を足す</td><td>MAE A 0.2090 → B 0.2077（定数予測 0.2686）、相関 0.565 → 0.572、レース内 Spearman 0.540 → 0.549。過去走の脚質 <code>a_style</code> そのままは相関 0.497・Spearman 0.522</td><td>B</td></tr>
+<tr><td>P1 最終角位置</td><td>同上</td><td>MAE A 0.2110 → B 0.2101（定数 0.2665）、相関 0.550 → 0.554、Spearman 0.528 → 0.532（<code>a_style_late</code> は 0.463／0.484）</td><td>B</td></tr>
+<tr><td>P2 隊列の集計</td><td>予測先行馬頭数 <code>s_nfront_pred</code> と実際の先行馬数（自馬を除く）</td><td>相関 0.25（簡易版 <code>f2_nfront</code> は 0.199）。簡易版との相関 0.43</td><td>参考</td></tr>
+<tr><td>P3 ペース 3 区分<br>pace_bal</td><td>コースのみ／rule（コース + 出走馬の as-of 集計）／rule（2022〜）／rule + P2（2022〜）</td><td>LogLoss <b>0.7231</b>／<b>0.7172</b>／0.7545／0.7561（クラス頻度 1.0944、ln3 1.0986。seed sd 0.0006〜0.0011）。正解率 0.651／0.660／0.643／0.642</td><td>rule(2020〜)</td></tr>
+<tr><td>P3 rpci</td><td>同上</td><td>0.8435／<b>0.8359</b>／0.8548／0.8564（クラス頻度 1.0978）。正解率 0.596／0.600／0.588／0.587</td><td>rule(2020〜)</td></tr>
+<tr><td>P3 期待ペース（回帰）</td><td>pace_bal・rpci</td><td>pace_bal 相関 0.907・MAE 0.958（定数 2.174）、rpci 相関 0.832・MAE 1.189（定数 2.176）</td><td>—</td></tr>
+<tr><td>P4 上がり 3F（レース内平均との差・秒）</td><td>条件なし／ペース条件（P3 の確率で重み付け）／（上限）実際のペースを入れる。P1 の予測を入力に使う／使わない</td><td>MAE: P1 なし・条件なし <b>0.6617</b>、P1 なし・ペース条件 <b>0.6615</b>、実際のペース（上限）0.6600、P1 あり 0.6633／0.6626／0.6611（定数 0.7614）。Spearman 0.468（P1 あり 0.466）</td><td>P1 なし</td></tr>
+<tr><td>P5 走破タイム差（秒）</td><td>A: 前段なし／B: 前段あり（2022〜）</td><td>MAE A 0.7248／B 0.7294（定数 0.8653）、Spearman 0.519／0.517</td><td>A</td></tr>
+<tr><td>P6 正規化着順</td><td>同上</td><td>MAE A 0.2161／B 0.2153（定数 0.2693）、Spearman 0.526／0.526</td><td>A（同等なら単純な方）</td></tr>
+</table>
+<p><b>ペース予測の解釈</b>: P3 は一様予測（1.0986）を大きく下回るが、これは<b>距離・コース形状・馬場などのレース条件でほぼ決まる</b>ためで、出走馬の情報を足した改善は 0.006（pace_bal）・0.0075（rpci）と小さい。P2 の隊列集計を足すとむしろ僅かに悪化（+0.0016／+0.0016）。また実際のペースを教えても上がり 3F の予測はほとんど良くならない（MAE 0.6617 → 0.6600）。展開の予測は、現在の特徴量では「当日のメンバー構成から読む」部分の寄与が小さい。</p>
+
+<h3>後段への寄与（p_win LogLoss の差。負が改善。3 seed、valid 2023・2024）</h3>
+<table>
+<tr><th>案</th><th>比較の相手</th><th>Δ2023</th><th>Δ2024</th><th>Δ平均</th><th>基準</th></tr>
+<tr><td colspan="6"><b>学習を 2022 年以降に揃える案</b>（相手は base(2022〜) = 0.22407／0.22033）</td></tr>
+<tr><td>+P4+P5・P6（6 列）</td><td>base(2022〜)</td><td>−0.00122</td><td>−0.00146</td><td>−0.00134</td><td>満たす</td></tr>
+<tr><td>+P5・P6（3 列）</td><td>同上</td><td>−0.00117</td><td>−0.00133</td><td>−0.00125</td><td>満たす</td></tr>
+<tr><td>+全部（20 列）</td><td>同上</td><td>−0.00081</td><td>−0.00166</td><td>−0.00124</td><td>満たす</td></tr>
+<tr><td>全部 − F2 簡易版（置き換え）</td><td>同上</td><td>−0.00110</td><td>−0.00132</td><td>−0.00121</td><td>満たす（置き換えの上積みなし）</td></tr>
+<tr><td>+P4（3 列）</td><td>同上</td><td>−0.00035</td><td>−0.00083</td><td>−0.00059</td><td>満たす</td></tr>
+<tr><td>+P1（6 列）</td><td>同上</td><td>−0.00006</td><td>−0.00004</td><td>−0.00005</td><td>満たさない</td></tr>
+<tr><td>+P3（ペース確率）</td><td>同上</td><td>+0.00010</td><td>−0.00021</td><td>−0.00005</td><td>満たさない</td></tr>
+<tr><td>+m_（展開マッチ）</td><td>同上</td><td>+0.00010</td><td>+0.00013</td><td>+0.00012</td><td>満たさない（悪化）</td></tr>
+<tr><td colspan="6"><b>学習は 2020 年から、前段が無い 2020〜2021 年は欠損</b>（相手は base(2020〜) = 0.22107／0.21915）</td></tr>
+<tr><td><b>+P5・P6（3 列）</b></td><td>base(2020〜)</td><td>−0.00061</td><td>−0.00110</td><td><b>−0.00086</b></td><td>満たす（<b>採用</b>）</td></tr>
+<tr><td>+全部（20 列）</td><td>同上</td><td>−0.00062</td><td>−0.00134</td><td>−0.00098</td><td>満たす（列数が多く、差が 0.0002 以内）</td></tr>
+<tr><td>+P4+P5・P6（6 列）</td><td>同上</td><td>−0.00032</td><td>−0.00102</td><td>−0.00067</td><td>満たす</td></tr>
+<tr><td>+P4（3 列）</td><td>同上</td><td>−0.00045</td><td>−0.00055</td><td>−0.00050</td><td>満たす</td></tr>
+</table>
+<p class="muted">2 つの範囲の比較は、2022 年以降案の差を base(2020〜) 比に換算して行った（2022 年以降案は +0.00075〜+0.00085 悪い側）。seed 間の sd は 0.00004〜0.00023。fold が 2 つしかないため、「全 fold で悪化しない」は緩い基準である点に注意。</p>
+
+<h3>申し送り（tp-05・tp-07 で対応）</h3>
+<ul>
+  <li><b>tp-05</b>: 入力は <code>adopted_features.json</code>（B0′ + 履歴 127 列）と <code>oof/stage_features_expanding.parquet</code> の <code>s_time_pred</code>・<code>s_time_gap</code>・<code>s_rank_pred</code>。結合キーは (<code>race_id</code>, <code>horse_id</code>)。<b>3 列を足す／足さない</b>、<b>2020〜2021 年の欠損行を学習から外す</b>を再比較する（欠損が時代の目印になる懸念）。他の 17 列（P1・P3・m_・P4）は基準未満だが、列は保存してある。</li>
+  <li><b>tp-07（運用）</b>: P5・P6 のモデル（入力は特徴量 175 列）を 2020〜2025 年で再学習して保存・登録し、推論では「特徴量 → P5・P6 → <code>s_*</code> → 最終モデル」の順に連鎖させる。学習時の <code>s_*</code> は OOF、推論時は全期間モデルの予測（2025 年の行が「2020〜2024 年のモデル」で作られているのと同じ関係）。推論の一致確認に、この連鎖を含める。</li>
+  <li>展開の予測（P3・P4）は、現在の特徴量では寄与が小さい。出走馬の組み合わせから展開を読む力を上げるには、馬ごとの先行力の分布（確率）や、騎手の逃げ・先行傾向を直接入れる拡張が要る（P8 の隊列シミュレーションは見送り）。</li>
+  <li>P1 で騎手・調教師の先行傾向（as-of）が僅かに効いた（MAE −0.0013）。後段の p_win にも騎手・調教師の位置取り傾向を直接入れる案は未検証。</li>
+  <li>tp-03 から持ち越し（B0 の騎手・調教師の累積件数を外す案、H と旧 race_performance の比較、完走しなかった馬を履歴に含めるか）は、tp-05 で扱う。</li>
+</ul>
+
+<h2>7. 以降の節</h2>
+<p class="muted">tp-05〜tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
 </html>
