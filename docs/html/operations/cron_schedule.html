@@ -15,10 +15,9 @@ code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var
 .when { white-space:nowrap; font-weight:600; }
 </style></head><body><main>
 <h1>cron 登録内容（グループ別）</h1>
-<p class="muted">時刻はすべて <b>JST</b>（crontab 本体は UTC で記述）。生成: 2026-10-15 10:55 / 元データ: /tmp/cronsrc/crontab.txt / 再生成: <code>python -m src.scripts.docs.build_cron_schedule_html</code>。定義の正は <code>scripts/cron/setup_all_cron.sh</code>。</p>
+<p class="muted">時刻はすべて <b>JST</b>（crontab 本体は UTC で記述）。生成: 2026-10-15 12:28 / 元データ: /dev/fd/63 / 再生成: <code>python -m src.scripts.docs.build_cron_schedule_html</code>。定義の正は <code>scripts/cron/setup_all_cron.sh</code>。</p>
 <div class="box"><span class="badge">取り直し中は見送り</span> のジョブは、優先処理（2020-2025年の取り直し。<code>run_priority_rescrape.sh</code>）が動いている間は自動で見送り、終われば自動で通常どおり動く（<code>scripts/cron/yield_to_rescrape.sh</code>。同じ netkeiba アカウントの別セッションが取り直し側のセッションを無効にするため）。見送りの記録は <code>logs/yield_skips.log</code>。止めるには <code>data/local/meta/rescrape/YIELD_DISABLED</code> を置く。</div>
 <h2>稼働状況の点検（既知の問題）</h2><p class="sub">cron の登録内容とは別に、実際の稼働で確認された問題。直したら項目を消す。</p><table><tr><th>確認日</th><th>内容</th></tr>
-<tr><td class="when">2026-10-15</td><td>DB（PostgreSQL）への取り込みは、ホストで DB が起動しておらず psycopg2 も未導入のため、毎晩失敗している（週次更新・前日夕方・開催日夕方の後処理と 00:00 の同期）。取得と GCS への保存には影響しない。</td></tr>
 <tr><td class="when">2026-10-15</td><td>馬名インデックスは 10-09 の実行が上の dev 設定のためスキップされた。次回は 10-16（金）18:30。</td></tr>
 <tr><td class="when">2026-10-15</td><td>レース一覧（daily-race-lists）の状態が partial なのは、数週間先の開催日の一覧が netkeiba にまだ公開されていないため（想定内）。</td></tr>
 <tr><td class="when">2026-10-15</td><td>優先処理（2020〜2025 年の取り直し）が動いている間は、見送り対象のジョブ（レース一覧・週次更新・バロメーター・recent-retry・backfill）は動かない（logs/yield_skips.log に記録）。終了は 10/15 午前の見込み。</td></tr>
@@ -36,6 +35,7 @@ code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var
 <h2>1日の流れ（JST）</h2><p class="sub">毎日動くジョブを時刻順に並べたもの。曜日指定のあるものは右端に曜日を付けた。</p>
 <table><tr><th>時刻</th><th>ジョブ</th><th>グループ</th></tr>
 <tr><td class="when">毎日 00:00</td><td>GCS → PostgreSQL 同期</td><td>推論・学習用のデータ整備</td></tr>
+<tr><td class="when">毎日 終日 5分ごと</td><td>PostgreSQL の起動保証</td><td>保守・監視</td></tr>
 <tr><td class="when">毎日 00:00</td><td>backfill: 2026年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
 <tr><td class="when">毎日 終日 3分ごと</td><td>サーバ死活監視</td><td>保守・監視</td></tr>
 <tr><td class="when">毎日 01:00</td><td>backfill: 2025年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
@@ -104,14 +104,16 @@ code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var
 </table>
 <h2>推論・学習用のデータ整備（4件）</h2><p class="sub">特徴量や推論が読むテーブル・統計・DB を更新する。</p>
 <table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>データの加工</th><th>保存先</th><th>直近の実行</th><th>cron（UTC）</th><th></th></tr>
-<tr><td class="when">毎日 00:00</td><td>GCS → PostgreSQL 同期</td><td>直近7日の増分</td><td>加工（ETL で正規化テーブルへ）</td><td>PostgreSQL（ホストでは毎晩失敗: DB 未起動・psycopg2 未導入）</td><td>—</td><td><code>0 15 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 00:00</td><td>GCS → PostgreSQL 同期</td><td>直近7日の増分</td><td>加工（ETL で正規化テーブルへ）</td><td>ホスト上の PostgreSQL（keiba_db_stg。止まっていれば ensure_postgres が起動する）</td><td>—</td><td><code>0 15 * * *</code></td><td></td></tr>
 <tr><td class="when">毎日 05:30</td><td>騎手・調教師統計</td><td>統計テーブルを再生成</td><td>計算（成績の集計）</td><td>ローカルのみ: data/features/jockey_trainer_stats ほか（Parquet）</td><td>—</td><td><code>30 20 * * *</code></td><td></td></tr>
 <tr><td class="when">毎日 07:00</td><td>履歴テーブルの増分更新</td><td>推論が読む race_result_flat などを当年分だけ更新</td><td>加工（JSON を表に平坦化。1行=1馬の _flat と 1行=1レースの _race の Parquet）</td><td>ローカルのみ: data/page_reference/tables/&lt;年&gt;/</td><td>—</td><td><code>0 22 * * *</code></td><td></td></tr>
 <tr><td class="when">毎日 07:40</td><td>履歴特徴量の蓄積</td><td>当年分の特徴量（127列）を確定結果から作り直し、推論モードで保存した特徴量とのずれを記録</td><td>計算（as-of の履歴特徴量。学習と同じ計算）</td><td>ローカルのみ: data/local/modeling/feature_store/horse_history（features_&lt;年&gt;.parquet、manifest、skew/&lt;日付&gt;.json）と、小さなメモリのマシン向けのサービング用バンドル serving_bundle（約140MB）。2026年は学習に使わない</td><td>2026-10-15 07:40 error</td><td><code>40 22 * * *</code></td><td></td></tr>
 </table>
-<h2>保守・監視（4件）</h2><p class="sub">サーバの死活監視、ログの整理、ページ構造の品質チェック。</p>
+<h2>保守・監視（6件）</h2><p class="sub">サーバの死活監視、ログの整理、ページ構造の品質チェック。</p>
 <table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>データの加工</th><th>保存先</th><th>直近の実行</th><th>cron（UTC）</th><th></th></tr>
+<tr><td class="when">システム起動時</td><td>PostgreSQL の起動保証（起動時）</td><td>ローカル PostgreSQL が止まっていれば起動（コンテナ再起動で落ちたままになるのを防ぐ）</td><td>データなし</td><td>—</td><td>—</td><td><code>@reboot</code></td><td></td></tr>
 <tr><td class="when">システム起動時</td><td>サーバ死活監視（起動時）</td><td>FastAPI・Flask・Next.js・MLflow を監視し、落ちていれば再起動</td><td>データなし</td><td>—</td><td>—</td><td><code>@reboot</code></td><td></td></tr>
+<tr><td class="when">毎日 終日 5分ごと</td><td>PostgreSQL の起動保証</td><td>ローカル PostgreSQL が止まっていれば起動（コンテナ再起動で落ちたままになるのを防ぐ）</td><td>データなし</td><td>—</td><td>—</td><td><code>*/5 * * * *</code></td><td></td></tr>
 <tr><td class="when">毎日 終日 3分ごと</td><td>サーバ死活監視</td><td>FastAPI・Flask・Next.js・MLflow を監視し、落ちていれば再起動</td><td>データなし</td><td>—</td><td>—</td><td><code>*/3 * * * *</code></td><td></td></tr>
 <tr><td class="when">毎日 04:30</td><td>ログローテーション</td><td>ログの整理</td><td>データなし</td><td>—</td><td>—</td><td><code>30 19 * * *</code></td><td></td></tr>
 <tr><td class="when">毎日 08:00</td><td>ページ品質チェック</td><td>スクレイパーが各ページの期待スキーマを取得できるかを確認</td><td>検査のみ</td><td>ローカル: data/local/page_quality/latest.json（過去30件は history/）</td><td>—</td><td><code>0 23 * * *</code></td><td></td></tr>

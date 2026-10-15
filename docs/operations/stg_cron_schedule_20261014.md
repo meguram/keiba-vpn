@@ -91,7 +91,7 @@ netkeiba を取得する全ジョブは共通の流れで保存する。
 3. 推論用の履歴テーブル（`race_result_flat` の 2026 年分）が更新されていなかった（最終日 2026-10-04）。→ `export_tables_daily`（新）を 07:00 JST に追加。
 4. 馬体重の検知ランナー（新）を 08:00 JST に追加。mode は `features`（特徴量の作成まで。予測は起動しない）。
 
-5. **DB（PostgreSQL）への取り込みがホストで毎晩失敗している**: ホストに DB が起動しておらず（`localhost:5432` に接続できない）、`psycopg2` も未導入。毎日 00:00 の同期と、週次更新・前日夕方・開催日夕方の後処理（めぐ指数の計算を含む）が失敗する。GCS への保存には影響しない。DB を使う運用にするなら、DB の用意と `psycopg2` の導入が要る（未対応・要判断）。
+5. **DB（PostgreSQL）への取り込みがホストで毎晩失敗していた（2026-10-15 に解消）**: 原因は「psycopg2 未導入」ではなく、**コンテナの再起動後に PostgreSQL 14 のクラスタ（`14/main`、DB `keiba_db_stg` 431MB）が停止したままだった**こと（接続拒否）。psycopg（v3）は導入済み。クラスタを起動して手動で同期を実行し、成功した（直近 10 日・120 レース、エラー 0、`exit=0`）。再発防止に `scripts/server/ensure_postgres.sh`（止まっていれば起動。冪等）を cron に追加した（起動時 + 5 分おき、タグ `KEIBA_PG_ENSURE`、ログ `logs/ensure_postgres.log`）。
 6. **10/09〜10/10 に cron が `KEIBA_ENV=dev` で動き、取得データの一部が GCS ではなく `data/dev_mock` に入っていた（2026-10-15 に復旧済み）**: 原因は環境設定の解決（dev になると保存先が dev ストアになる）。→ 実行ラッパー `run_auto_scrape_logged.sh` は dev に解決された場合、取得せず終了する（`KEIBA_ALLOW_DEV_CRON=1` で解除）。dev ストアに残っていた実データのうち GCS に無い 61 件は、`python -m src.scripts.maintenance.restore_dev_store_to_gcs --since 2026-10-09 --apply` で**作成のみ**（既存は上書きしない）で追加し、再実行で残り 0 件を確認した。以前の「速報結果 180 件が無い」は、キー照合の誤りによる誤検知だった。
 
 ### 未解決・要確認
