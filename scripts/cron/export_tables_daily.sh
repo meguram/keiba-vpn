@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 推論モードの履歴（race_result_flat など）を最新に保つため、当年（1 月は前年も）のテーブルを増分エクスポートする。
-# cron には登録していない。登録する場合の行は docs/operations/raceday_weight_trigger.md を参照。
+# --refresh: 各カテゴリが自分の flat に無いレースを GCS から追記する（これが無いと race_result に新しいレースが入らない）。
 # Usage: bash scripts/cron/export_tables_daily.sh [PROJECT_DIR] [categories]
 set -u
 export TZ="${TZ:-Asia/Tokyo}"
@@ -20,7 +20,7 @@ if ! flock -n 9; then
   exit 0
 fi
 echo "===== $(date -Is) START years=$YEARS categories=$CATS =====" >>"$LOG"
-"$PYTHON" -m src.scraper.export_tables --years "$YEARS" --categories "$CATS" >>"$LOG" 2>&1
+"$PYTHON" -m src.scraper.export_tables --years "$YEARS" --categories "$CATS" --refresh >>"$LOG" 2>&1
 EC=$?
 echo "===== $(date -Is) END exit=$EC =====" >>"$LOG"
 exit "$EC"

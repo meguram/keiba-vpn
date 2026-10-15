@@ -581,8 +581,11 @@ def export_year(
     storage: Any = None,
     workers: int = 6,
     force: bool = False,
+    refresh: bool = False,
 ) -> dict:
-    """1年分の全カテゴリをエクスポートする。force=True は、対象カテゴリの既存ファイルを消して GCS から作り直す
+    """1年分の全カテゴリをエクスポートする。refresh=True は日次の増分用で、各カテゴリが「自分の flat に無いレース」を
+    GCS から追記する（基準レース集合による完全性チェックを外す。既定のままだと race_result は自分の flat が基準になり、新しいレースが永久に入らない）。
+    force=True は、対象カテゴリの既存ファイルを消して GCS から作り直す
     （GCS 側のデータを直した後など、レース数が同じで中身だけが変わった場合。増分チェックは中身の変更を検知しない）。"""
     from src.scraper.storage import HybridStorage
 
@@ -603,7 +606,10 @@ def export_year(
                 if f.exists():
                     f.unlink()
                     logger.info("[%s/%s] --force: 既存の %s を削除して作り直す", year, cat, f.name)
-    if base_ids is not None:
+    if refresh and not force:
+        expected_keys = frozenset()
+        logger.info("[%s] --refresh: 各カテゴリが自分の flat に無いレースを GCS から追記する", year)
+    elif base_ids is not None:
         expected_keys = base_ids
         logger.info("[%s] 基準レース数 (force 前のローカル race_result_flat): %d", year, len(expected_keys))
     elif local_rr.exists():
@@ -618,7 +624,7 @@ def export_year(
         logger.info("[%s] 基準レース数 (GCS race_result): %d", year, len(expected_keys))
 
     # メタ: 増分 export があるときだけ。ローカル Parquet から組むことを最優先し GCS shutuba を避ける。
-    needs_meta = False
+    needs_meta = bool(refresh and not force)
     out_dir = OUTPUT_DIR / year
     for cat in cats:
         fp = out_dir / f"{cat}_flat.parquet"
@@ -645,6 +651,9 @@ def export_year(
             year, cat, storage, meta_index, expected_keys=expected_keys,
         )
         all_stats.append(stats)
+        if refresh and not force and cat == "race_result" and not stats.get("skipped"):
+            # 追記した新しいレースのメタ（日付・場・距離など）を、後続カテゴリが使えるようにする
+            meta_index = _build_meta_index_from_race_result_flat(year) or meta_index
 
         flat_info = f"flat={stats.get('flat_rows', 0)}"
         race_info = f"race={stats.get('race_rows', 0)}"
@@ -687,6 +696,8 @@ def main() -> int:
     ap.add_argument("--categories",
                     help="対象カテゴリ (カンマ区切り、省略時: 全12カテゴリ)")
     ap.add_argument("--workers", type=int, default=6, help="並列数 (default: 6)")
+    ap.add_argument("--refresh", action="store_true",
+                    help="日次の増分用: 各カテゴリが自分の flat に無いレースを GCS から追記する（基準レースの完全性チェックを外す）")
     ap.add_argument("--force", action="store_true",
                     help="対象カテゴリの既存ファイルを消して GCS から作り直す（レース数が同じで中身だけ変わったとき）")
     args = ap.parse_args()
@@ -702,7 +713,7 @@ def main() -> int:
         print(f"  {year}年 テーブルエクスポート")
         print(f"{'='*60}")
 
-        report = export_year(year, categories=cats, storage=storage, workers=args.workers, force=args.force)
+        report = export_year(year, categories=cats, storage=storage, workers=args.workers, force=args.force, refresh=args.refresh)
 
         print(f"\n  フラット行: {report['total_flat_rows']:,}")
         print(f"  レース行: {report['total_race_rows']:,}")
