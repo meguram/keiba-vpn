@@ -1,0 +1,156 @@
+"""馬券最適化（強化学習）の環境: レースごとの候補の買い目（券種 × 組）に、モデル確率・市場オッズ・実際の払戻を付けて並べる。
+
+- 券種: 単勝・複勝・馬連・ワイド・馬単（三連複・三連単はオッズが無く、払戻だけあるため対象外）
+- 確率: モデルの勝率・連対率・複勝率（tp-05/06）から割引 Harville の着順分布（``exotic_probabilities``）で各組の確率を出す。
+  市場オッズ（確定オッズ）の暗黙の確率とのブレンド（Benter 型: p ∝ p_model^a · p_market^b）も作る。
+- 判断に使うオッズ: 単勝・馬連・馬単はそのもの、複勝・ワイドは下限（保守的）。実際の払戻（報酬）は払戻表の確定値（的中した組のみ）。
+- 注意: 確定オッズは締切後の値で、購入判断の時点（T-15/T-60）のオッズとは違う。回収率は楽観側に偏りうる。
+"""
+
+from __future__ import annotations
+
+from itertools import combinations, permutations
+import numpy as np
+import pandas as pd
+from scipy.optimize import minimize
+
+from src.pipeline.inference.exotic_probabilities import RankDistribution, fit_rank_distribution
+
+TYPES = ["tansho", "fukusho", "umaren", "wide", "umatan"]
+TYPE_IDX = {t: i for i, t in enumerate(TYPES)}
+EPS = 1e-12
+
+
+def market_probs(odds: np.ndarray) -> np.ndarray:
+    """単勝オッズの暗黙の確率（控除を除いて合計 1 にそろえる）。"""
+    inv = 1.0 / np.clip(odds, 1.0, None)
+    return inv / inv.sum()
+
+
+def benter_blend(log_pm: np.ndarray, log_pk: np.ndarray, a: float, b: float) -> np.ndarray:
+    z = a * log_pm + b * log_pk
+    z = z - z.max()
+    p = np.exp(z)
+    return p / p.sum()
+
+
+def fit_benter(groups: list[tuple[np.ndarray, np.ndarray, int]], x0=(0.5, 0.5)) -> tuple[float, float]:
+    """groups: [(log p_model, log p_market, 勝ち馬の位置)] のリスト。勝ち馬の対数尤度が最大になる (a, b)。"""
+    def nll(ab):
+        a, b = ab
+        s = 0.0
+        for lm, lk, w in groups:
+            z = a * lm + b * lk
+            m = z.max()
+            s -= z[w] - m - np.log(np.exp(z - m).sum())
+        return s / len(groups)
+
+    r = minimize(nll, np.array(x0), method="L-BFGS-B", bounds=[(0.0, 2.0), (0.0, 2.0)])
+    return float(r.x[0]), float(r.x[1])
+
+
+def _tickets_for_race(hn: np.ndarray, dist: RankDistribution, dist_model: RankDistribution, odds: dict, K: int, payout: dict) -> list[dict]:
+    """1 レースの候補の買い目。dist = 判断に使う確率（ブレンド後）、dist_model = モデル単独の確率。"""
+    n = len(hn)
+    rows: list[dict] = []
+
+    def add(t, combo, pc, pm, o):
+        if o is None or not np.isfinite(o) or o <= 0 or pc <= 0:
+            return
+        rows.append({"type": t, "combo": combo, "p_comb": pc, "p_model": pm, "odds": o, "mult": payout.get((t, combo), 0.0)})
+
+    t3c, t3m = dist.top3(), dist_model.top3()
+    wide_c, wide_m = dist.all_wide(), dist_model.all_wide()
+    for i in range(n):
+        h = int(hn[i])
+        add("tansho", str(h), float(dist.win[i]), float(dist_model.win[i]), odds["win"].get(h))
+        add("fukusho", str(h), float(t3c[i]), float(t3m[i]), odds["place_min"].get(h))
+    if n >= 2:
+        for i, j in combinations(range(n), 2):
+            a, b = sorted((int(hn[i]), int(hn[j])))
+            c = f"{a}-{b}"
+            add("umaren", c, dist.umaren(i, j), dist_model.umaren(i, j), odds["umaren"].get(c))
+            if n >= 3:
+                add("wide", c, wide_c[(i, j)], wide_m[(i, j)], odds["wide_min"].get(c))
+        for i, j in permutations(range(n), 2):
+            c = f"{int(hn[i])}>{int(hn[j])}"
+            add("umatan", c, dist.umatan(i, j), dist_model.umatan(i, j), odds["umatan"].get(c))
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return []
+    df["ev"] = df["p_comb"] * df["odds"] - 1.0
+    keep = []
+    for t, g in df.groupby("type"):
+        top_p = g.nlargest(K, "p_comb").index
+        top_ev = g.nlargest(max(1, K // 2), "ev").index
+        keep += list(top_p) + list(top_ev)
+    return df.loc[sorted(set(keep))].to_dict("records")
+
+
+def build_race_tickets(pred: pd.DataFrame, win_place: pd.DataFrame, pair: pd.DataFrame, payoff: pd.DataFrame, a: float, b: float, K: int = 12,
+                       alphas: tuple[float, float] | None = None) -> pd.DataFrame:
+    """pred: race_id, horse_number, p_win, p_top2, p_top3（レース内で合計 1・2・3）。他は整備済みの表。
+    戻り値: 候補の買い目（race_id, type, combo, p_comb, p_model, odds, mult, ev, race 特徴）。"""
+    if "horse_number" not in pred.columns:
+        pred = pred.merge(win_place[["race_id", "horse_id", "horse_number"]], on=["race_id", "horse_id"], how="inner")
+    wp = {rid: g for rid, g in win_place[win_place["win_odds"].notna()].groupby("race_id")}
+    pr = {rid: g for rid, g in pair.groupby("race_id")}
+    po = {rid: g for rid, g in payoff.groupby("race_id")}
+    out: list[pd.DataFrame] = []
+    for rid, g in pred.groupby("race_id", sort=False):
+        w = wp.get(rid)
+        if w is None or len(g) < 3:
+            continue
+        g = g.sort_values("horse_number")
+        w = w.drop_duplicates("horse_number").set_index("horse_number")
+        hn = g["horse_number"].astype(int).to_numpy()
+        if set(hn) != set(w.index):
+            continue
+        win_odds = w.loc[hn, "win_odds"].to_numpy(dtype=float)
+        pm = g[["p_win"]].to_numpy().ravel()
+        pk = market_probs(win_odds)
+        win_c = benter_blend(np.log(np.clip(pm, EPS, None)), np.log(pk), a, b)
+        t2, t3 = g["p_top2"].to_numpy(), g["p_top3"].to_numpy()
+        dist_m, _ = fit_rank_distribution(pm / pm.sum(), t2, t3)
+        al2, al3 = (dist_m.alpha2, dist_m.alpha3) if alphas is None else alphas
+        dist_c = RankDistribution(win_c, al2, al3)
+        odds = {"win": dict(zip(hn, win_odds)), "place_min": dict(zip(hn, w.loc[hn, "place_odds_min"].to_numpy(dtype=float)))}
+        for t, col, name in (("umaren", "odds", "umaren"), ("wide", "odds_min", "wide_min"), ("umatan", "odds", "umatan")):
+            sub = pr.get(rid)
+            sub = sub[sub["bet_type"] == t] if sub is not None else None
+            odds[name] = dict(zip(sub["combo"], sub[col].astype(float))) if sub is not None and len(sub) else {}
+        pay = {}
+        p_rows = po.get(rid)
+        if p_rows is not None:
+            ok = p_rows[p_rows["bet_type"].isin(TYPES) & p_rows["combo"].notna() & p_rows["payout"].notna()]
+            for t, c, v in zip(ok["bet_type"], ok["combo"], ok["payout"]):
+                pay[(t, str(c))] = float(v) / 100.0
+        rows = _tickets_for_race(hn, dist_c, dist_m, odds, K, pay)
+        if not rows:
+            continue
+        d = pd.DataFrame(rows)
+        d.insert(0, "race_id", rid)
+        d["field_size"] = len(hn)
+        d["win_entropy"] = float(-(win_c * np.log(np.clip(win_c, EPS, None))).sum())
+        d["win_max"] = float(win_c.max())
+        out.append(d)
+    return pd.concat(out, ignore_index=True) if out else pd.DataFrame()
+
+
+def _build_chunk(args):
+    return build_race_tickets(*args)
+
+
+def build_parallel(pred: pd.DataFrame, win_place: pd.DataFrame, pair: pd.DataFrame, payoff: pd.DataFrame, a: float, b: float, K: int = 12,
+                   procs: int = 4, chunks: int = 24) -> pd.DataFrame:
+    """build_race_tickets をレースの塊に分けて並列に実行する（procs を超えない）。"""
+    from concurrent.futures import ProcessPoolExecutor
+
+    rids = pred["race_id"].unique()
+    jobs = []
+    for ch in np.array_split(rids, max(1, min(chunks, len(rids)))):
+        s = set(ch)
+        jobs.append((pred[pred["race_id"].isin(s)], win_place[win_place["race_id"].isin(s)], pair[pair["race_id"].isin(s)], payoff[payoff["race_id"].isin(s)], a, b, K))
+    with ProcessPoolExecutor(procs) as ex:
+        parts = [p for p in ex.map(_build_chunk, jobs) if len(p)]
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()

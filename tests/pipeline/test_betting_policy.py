@@ -1,0 +1,144 @@
+"""馬券環境（ticket_env）と方策（policy）の単体テスト。"""
+
+from __future__ import annotations
+
+import unittest
+
+import numpy as np
+import pandas as pd
+
+from src.pipeline.betting import policy as pol
+from src.pipeline.betting import ticket_env as te
+
+
+def _race(rid: str, n: int = 6, seed: int = 0):
+    rng = np.random.default_rng(seed)
+    w = rng.dirichlet(np.ones(n) * 2)
+    t2 = np.clip(w * 2 + 0.05, 0, 1)
+    t3 = np.clip(w * 3 + 0.1, 0, 1)
+    pred = pd.DataFrame({"race_id": rid, "horse_id": [f"h{i}" for i in range(n)], "horse_number": np.arange(1, n + 1), "p_win": w, "p_top2": t2 / t2.sum() * 2, "p_top3": t3 / t3.sum() * 3})
+    odds = 0.8 / w
+    wp = pd.DataFrame({"race_id": rid, "horse_id": pred["horse_id"], "horse_number": np.arange(1, n + 1), "win_odds": odds, "place_odds_min": np.maximum(odds / 3, 1.1), "place_odds_max": odds / 2})
+    rows = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            rows.append({"race_id": rid, "bet_type": "umaren", "combo": f"{i + 1}-{j + 1}", "odds": 0.775 / (w[i] * w[j] * 2), "odds_min": np.nan})
+            rows.append({"race_id": rid, "bet_type": "wide", "combo": f"{i + 1}-{j + 1}", "odds": np.nan, "odds_min": 1.5 + i + j})
+        for j in range(n):
+            if i != j:
+                rows.append({"race_id": rid, "bet_type": "umatan", "combo": f"{i + 1}>{j + 1}", "odds": 0.75 / (w[i] * w[j]), "odds_min": np.nan})
+    pair = pd.DataFrame(rows)
+    pay = pd.DataFrame({"race_id": rid, "bet_type": ["tansho", "fukusho", "fukusho", "umaren", "umatan", "wide"], "combo": ["1", "1", "2", "1-2", "1>2", "1-2"],
+                        "payout": [500, 150, 220, 1200, 2500, 300]})
+    return pred, wp, pair, pay
+
+
+class TicketEnvTest(unittest.TestCase):
+    def test_market_probs_and_benter(self):
+        p = te.market_probs(np.array([2.0, 4.0, 4.0]))
+        self.assertAlmostEqual(p.sum(), 1.0)
+        self.assertAlmostEqual(p[0], 0.5)
+        q = te.benter_blend(np.log([0.5, 0.5]), np.log([0.9, 0.1]), 0.0, 1.0)
+        np.testing.assert_allclose(q, [0.9, 0.1])
+
+    def test_fit_benter_prefers_informative_source(self):
+        rng = np.random.default_rng(0)
+        groups = []
+        for _ in range(400):
+            true = rng.dirichlet(np.ones(8))
+            w = rng.choice(8, p=true)
+            noisy_m = true * np.exp(rng.normal(0, 1.0, 8))
+            noisy_k = true * np.exp(rng.normal(0, 0.2, 8))
+            groups.append((np.log(noisy_m / noisy_m.sum()), np.log(noisy_k / noisy_k.sum()), int(w)))
+        a, b = te.fit_benter(groups)
+        self.assertGreater(b, a)
+
+    def test_build_race_tickets(self):
+        pred, wp, pair, pay = _race("r1")
+        t = te.build_race_tickets(pred.drop(columns="horse_number"), wp, pair, pay, a=0.5, b=0.5, K=4)
+        self.assertEqual(set(t["type"]), set(te.TYPES))
+        self.assertTrue((t["odds"] > 0).all() and (t["p_comb"] > 0).all())
+        hit = t[(t["type"] == "tansho") & (t["combo"] == "1")]
+        self.assertAlmostEqual(float(hit["mult"].iloc[0]), 5.0) if len(hit) else None
+        self.assertTrue(((t["type"] == "umatan") & (t["combo"] == "1>2") & (t["mult"] == 25.0)).any() or not ((t["type"] == "umatan") & (t["combo"] == "1>2")).any())
+        self.assertLessEqual(t[t["type"] == "tansho"]["p_comb"].sum(), 1.0 + 1e-9)
+
+    def test_skips_race_with_mismatched_field(self):
+        pred, wp, pair, pay = _race("r1")
+        t = te.build_race_tickets(pred.iloc[:-1], wp, pair, pay, a=0.5, b=0.5, K=4)
+        self.assertTrue(t.empty)
+
+
+class PolicyTest(unittest.TestCase):
+    def _tickets(self, races: int = 60):
+        parts = []
+        for k in range(races):
+            pred, wp, pair, pay = _race(f"r{k}", seed=k)
+            parts.append(te.build_race_tickets(pred, wp, pair, pay, a=0.5, b=0.5, K=3))
+        return pd.concat(parts, ignore_index=True)
+
+    def test_pack_and_settle(self):
+        t = self._tickets(10)
+        pk, mu, sd = pol.pack(t)
+        self.assertEqual(pk.X.shape[0], 10)
+        self.assertEqual(int(pk.mask.sum()), len(t))
+        w = pol.alloc_ev_threshold(pk, tau=-1.0)
+        np.testing.assert_allclose(w.sum(1), 1.0)
+        s = pol.settle(pk, w)
+        self.assertEqual(len(s), 10)
+        np.testing.assert_allclose(s["profit"], s["ret"] - s["stake"])
+        pk2, _, _ = pol.pack(t, mu, sd)
+        np.testing.assert_allclose(pk.X, pk2.X)
+
+    def test_baselines_respect_budget(self):
+        t = self._tickets(10)
+        pk, _, _ = pol.pack(t)
+        for w in (pol.alloc_top_p(pk, "tansho"), pol.alloc_favorite(pk), pol.alloc_kelly(pk), pol.alloc_random(pk), pol.alloc_ev_threshold(pk, 0.0, top=2)):
+            self.assertTrue((w.sum(1) <= 1.0 + 1e-9).all())
+            self.assertTrue((w >= 0).all())
+            self.assertTrue((w[~pk.mask] == 0).all())
+
+    def test_summarize_roi(self):
+        s = pd.DataFrame({"race_id": ["a", "b"], "stake": [1.0, 1.0], "ret": [3.0, 0.0]})
+        s["profit"] = s["ret"] - s["stake"]
+        m = pol.summarize(s, n_boot=50)
+        self.assertAlmostEqual(m["roi"], 1.5)
+        self.assertAlmostEqual(m["participation"], 1.0)
+
+    def test_policy_learns_positive_ev(self):
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("torch がありません")
+        rng = np.random.default_rng(0)
+        R, N = 400, 6
+        rows = []
+        for r in range(R):
+            for i in range(N):
+                p = float(rng.uniform(0.05, 0.4))
+                odds = float(rng.choice([0.7, 1.4]) / p)       # 半分の買い目だけ期待回収率 1.4（プラス）、残りは 0.7
+                rows.append({"race_id": f"r{r}", "type": "tansho", "combo": str(i), "p_comb": p, "p_model": p, "odds": odds, "mult": odds if rng.random() < p else 0.0,
+                             "field_size": N, "win_entropy": 1.5, "win_max": 0.4})
+        pk, _, _ = pol.pack(pd.DataFrame(rows))
+        net, hist = pol.train_policy(pk, pol.TrainConfig(epochs=25, hidden=32, lr=5e-3, entropy=0.0, threads=2))
+        w = pol.predict_alloc(net, pk)
+        ev = pk.p * pk.odds - 1.0
+        stake_pos = (w * (ev > 0.2)).sum()
+        stake_neg = (w * (ev < -0.1)).sum()
+        self.assertGreater(stake_pos, 3 * stake_neg)
+        self.assertLess(hist[-1], hist[0])
+
+    def test_reinforce_mode_runs(self):
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("torch がありません")
+        t = self._tickets(30)
+        pk, _, _ = pol.pack(t)
+        net, hist = pol.train_policy(pk, pol.TrainConfig(mode="reinforce", epochs=2, hidden=16, threads=2))
+        w = pol.predict_alloc(net, pk)
+        self.assertTrue((w.sum(1) <= 1.0 + 1e-6).all())
+
+
+if __name__ == "__main__":
+    unittest.main()
