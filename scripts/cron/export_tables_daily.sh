@@ -22,5 +22,9 @@ fi
 echo "===== $(date -Is) START years=$YEARS categories=$CATS =====" >>"$LOG"
 "$PYTHON" -m src.scraper.export_tables --years "$YEARS" --categories "$CATS" --refresh >>"$LOG" 2>&1
 EC=$?
-echo "===== $(date -Is) END exit=$EC =====" >>"$LOG"
+# パース失敗の検査（必須項目の欠損）。ページ表記の変更でパーサが黙って空を返す事故を、取得の翌日までに見つける
+"$PYTHON" -m src.scraper.parse_audit --years "$YEARS" >>"$LOG" 2>&1
+AUD=$?
+[ "$AUD" -ne 0 ] && echo "PARSE_AUDIT_FAIL: 必須項目の欠損があります（上の行を確認。docs/operations/stg_cron_schedule_20261014.md 参照）" >>"$LOG"
+echo "===== $(date -Is) END exit=$EC audit=$AUD =====" >>"$LOG"
 exit "$EC"

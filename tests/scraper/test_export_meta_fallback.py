@@ -19,3 +19,8 @@ def test_float_distance_is_normalized_to_int_and_nan_falls_back():
     assert meta["distance"] == 1600 and isinstance(meta["distance"], int) and isinstance(meta["field_size"], int)
     nan = _extract_race_meta({"race_id": "r", "distance": float("nan")}, {"r": {"distance": 2000}})
     assert nan["distance"] == 2000
+
+
+def test_round_falls_back_to_race_id_suffix():
+    assert _extract_race_meta({"race_id": "202606040904", "round": 0}, None)["round"] == 4
+    assert _extract_race_meta({"race_id": "202606040911"}, None)["round"] == 11

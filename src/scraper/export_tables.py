@@ -102,6 +102,8 @@ def _extract_race_meta(data: dict, meta_index: dict[str, dict] | None = None) ->
         meta[field] = val
 
     meta["venue_code"] = race_id[4:6] if len(race_id) >= 6 else ""
+    if not meta.get("round") and len(race_id) == 12 and race_id.isdigit():
+        meta["round"] = int(race_id[-2:])   # 古い結果データは round が 0 のまま。race_id の末尾 2 桁がレース番号
     if not meta.get("venue"):
         meta["venue"] = JRA_VENUE_NAMES.get(meta["venue_code"], "")
     return meta
