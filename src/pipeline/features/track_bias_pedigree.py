@@ -409,7 +409,14 @@ def build_track_bias_pedigree_features(
         return s.shift(1).expanding().mean()
 
     w_ext["sdp_fine"] = w_ext.groupby(g_fine, sort=False)["win_3f"].transform(_same_day_prior_mean)
-    w_ext["sdp_coarse"] = w_ext.groupby(g_coarse, sort=False)["win_3f"].transform(_same_day_prior_mean)
+    # w_ext は細分類(馬場×距離帯)のブロック順に並んでいるため、粗い区分の「直前」を同じ並びで取ると
+    # 時刻が後のレースの結果を含んでしまう（先読み）。粗い区分は時刻順に並べ直して計算する。
+    w_time = w_ext.sort_values(g_coarse + ["_st_sec", "race_id"], kind="mergesort")
+    sdp_coarse_by_race = (
+        w_time.groupby(g_coarse, sort=False)["win_3f"].transform(_same_day_prior_mean).set_axis(w_time["race_id"].to_numpy())
+    )
+    sdp_coarse_by_race = sdp_coarse_by_race[~sdp_coarse_by_race.index.duplicated(keep="first")]
+    w_ext["sdp_coarse"] = w_ext["race_id"].map(sdp_coarse_by_race)
     w_ext["track_bias_winner_3f_same_day_prior"] = w_ext["sdp_fine"].fillna(w_ext["sdp_coarse"])
 
     if not w_win.empty:
