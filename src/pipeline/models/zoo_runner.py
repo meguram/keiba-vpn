@@ -50,6 +50,8 @@ def run_oof(name: str, recipe: str, X: pd.DataFrame, meta: pd.DataFrame, folds, 
         tr, va = f.train_index, f.valid_index
         if min_year is not None:
             tr = tr[year[tr] >= min_year]
+        if len(tr) < 1000:      # 学習行が足りない fold（例: 2020〜2021 年を外した fold 2022）は飛ばす
+            continue
         ytr = {k: v[tr] for k, v in Y.items()}
         p_f = dict(params)
         if halflife:
