@@ -15,6 +15,12 @@ from .match import build_all, families
 from .profile import KEY
 
 
+def invalid_race_ids(runs: pl.DataFrame) -> list[str]:
+    """特徴量を無限大にする値（距離 0 以下、時計の無限大）を含むレースの race_id。"""
+    bad = runs.filter(~(pl.col("distance").cast(pl.Float64) > 0) | pl.col("time_sec").cast(pl.Float64).is_infinite())
+    return sorted(bad["race_id"].unique().to_list())
+
+
 def check_runs(runs: pl.DataFrame) -> None:
     """入力の走に、特徴量を無限大にする値（距離 0、時計の無限大）が無いこと。入っていたら黙って進まず止める。"""
     bad_d = runs.filter(~(pl.col("distance").cast(pl.Float64) > 0))["race_id"].n_unique()

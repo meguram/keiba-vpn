@@ -66,9 +66,11 @@ def compare(base: dict[str, tuple[float, float]], recent: dict[str, tuple[float,
 
 
 def sample_docs(storage: Any, category: str, year: str, n: int, newest: bool, rng: random.Random) -> list[dict]:
-    keys = sorted(k for k in storage.batch_list_blobs(category, year))
-    if not keys:
+    stamps = storage.batch_list_blobs(category, year)
+    if not stamps:
         return []
+    # 直近は「最近保存された文書」（今の取得処理の品質を見る）。基準年は無作為
+    keys = sorted(stamps, key=lambda k: stamps[k]) if newest else sorted(stamps)
     picked = keys[-n * 3:] if newest else rng.sample(keys, min(len(keys), n * 2))
     if newest:
         picked = picked[::3][:n]   # 直近の開催日にまたがるよう間引く

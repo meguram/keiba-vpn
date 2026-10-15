@@ -26,5 +26,12 @@ EC=$?
 "$PYTHON" -m src.scraper.parse_audit --years "$YEARS" >>"$LOG" 2>&1
 AUD=$?
 [ "$AUD" -ne 0 ] && echo "PARSE_AUDIT_FAIL: 必須項目の欠損があります（上の行を確認。docs/operations/stg_cron_schedule_20261014.md 参照）" >>"$LOG"
-echo "===== $(date -Is) END exit=$EC audit=$AUD =====" >>"$LOG"
+# 全 flat テーブルの列ごとの空・文字化けの急増（基準 2020〜前年 と 当年の直近）と、GCS の保存データ（最近保存した文書）の同様の検査
+"$PYTHON" -m src.scraper.parse_drift --baseline "2020-$((YEAR - 1))" --recent "$YEAR" --months 3 >>"$LOG" 2>&1
+DRIFT=$?
+"$PYTHON" -m src.scraper.parse_drift_docs --baseline-year "$((YEAR - 1))" --recent-year "$YEAR" --sample 40 >>"$LOG" 2>&1
+DOCS=$?
+[ "$DRIFT" -ne 0 ] && echo "PARSE_DRIFT_FAIL: flat テーブルの列で空・文字化けの急増があります（上の行を確認）" >>"$LOG"
+[ "$DOCS" -ne 0 ] && echo "PARSE_DRIFT_DOCS_FAIL: 最近保存した文書で空・文字化けの急増があります（上の行を確認）" >>"$LOG"
+echo "===== $(date -Is) END exit=$EC audit=$AUD drift=$DRIFT docs=$DOCS =====" >>"$LOG"
 exit "$EC"

@@ -109,3 +109,19 @@ def test_accumulate_writes_serving_bundle_and_bundle_engine_matches_full_engine(
             x, y = a[c].to_numpy().astype(float), b[c].to_numpy().astype(float)
             d = np.where(np.isnan(x) & np.isnan(y), 0.0, np.abs(x - y))
             assert not (np.where(np.isnan(d), np.inf, d) > 1e-9).any(), (rid, c)
+
+
+def test_accumulate_drops_invalid_races_but_training_builder_stays_strict(tmp_path, monkeypatch):
+    """距離 0 のレースが混ざっても推論用の蓄積は止まらず、除外した race_id を記録する。学習用ビルダーは止まる。"""
+    import polars as pl
+    from src.pipeline.features.horse_history import accumulate as acc
+    from src.pipeline.features.horse_history.builder import check_runs, invalid_race_ids
+
+    runs = pl.DataFrame({"race_id": ["a", "a", "b"], "distance": [1600, 1600, 0], "time_sec": [95.0, 96.0, 99.0]})
+    assert invalid_race_ids(runs) == ["b"]
+    try:
+        check_runs(runs)
+        raise AssertionError("check_runs は止まるはず")
+    except ValueError:
+        pass
+    assert hasattr(acc, "invalid_race_ids")

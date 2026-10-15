@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from .builder import build_with_state, feature_columns
+from .builder import build_with_state, feature_columns, invalid_race_ids
 from .common import TABLES_DIR, build_repair_map, load_runs
 from .inference import load_tiers
 
@@ -49,12 +49,18 @@ def build_year(year: int, tables_dir: str | Path | None = None, layer_a: str | P
     """``year`` 年の行の特徴量。履歴は 2020 年〜``year`` 年の確定結果。推論用の状態も一緒に返す。"""
     t0 = time.perf_counter()
     runs = load_runs(tables_dir, years=list(range(2020, year + 1)))
+    # 推論用の履歴を止めないため、距離 0・時計が無限大のレース（取得データの不備）だけを除外して記録する。
+    # 学習用の特徴量（build_horse_history）は従来どおり check_runs で厳密に止める。
+    dropped = invalid_race_ids(runs)
+    if dropped:
+        logger.warning("入力データが不正なレース %d 件を除外して蓄積する: %s", len(dropped), dropped[:10])
+        runs = runs.filter(~pl.col("race_id").is_in(dropped))
     la = Path(layer_a) if layer_a else REPO_ROOT / DEFAULT_LAYER_A
     rm = build_repair_map(la) if la.exists() else _empty_repair_map()
     F, P, S, elo = build_with_state(runs, rm)
     cols = sorted({c for v in feature_columns(F.columns).values() for c in v})
     out = F.filter(pl.col("date").dt.year() == year).select(KEY + ["date"] + cols)
-    info = {"history_rows": runs.height, "history_last_date": str(runs["date"].max()), "build_sec": round(time.perf_counter() - t0, 1)}
+    info = {"dropped_invalid_races": dropped, "history_rows": runs.height, "history_last_date": str(runs["date"].max()), "build_sec": round(time.perf_counter() - t0, 1)}
     return out, cols, info, (F, P, S, elo)
 
 
