@@ -37,3 +37,19 @@ def test_rendered_page_contains_the_cron_times():
 def test_compact_merges_times_per_day():
     assert F.compact(["毎日 19:40", "毎日 06:10"]) == "毎日 06:10・19:40"
     assert F.compact(["毎日 08:30", "金 19:30"]) == "毎日 08:30 ／ 金 19:30"
+
+
+def test_processing_time_slots_exist_for_every_stage_and_are_flagged_as_unmeasured():
+    # 取得・加工・統合の各工程に記入欄がある（キーが揃っている）
+    assert {f"collect:{r.label}" for r in F.ROWS if r.collect} <= set(F.DURATIONS)
+    assert {f"process:{r.label}" for r in F.ROWS if r.process} <= set(F.DURATIONS)
+    assert {f"target:{k}" for k in F.TARGETS} <= set(F.DURATIONS)
+    html = F.render(_jobs(), "test")
+    assert "処理時間は未計測" in html and "今後変更する可能性" in html and "<td class='tbd'>" in html
+    # 値を入れると、その値が図と表に出る
+    key = next(iter(F.DURATIONS))
+    F.DURATIONS[key] = "約 4 分"
+    try:
+        assert "約 4 分" in F.render(_jobs(), "test")
+    finally:
+        F.DURATIONS[key] = ""

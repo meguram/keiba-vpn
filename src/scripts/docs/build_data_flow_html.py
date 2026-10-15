@@ -102,6 +102,20 @@ ROWS: list[Row] = [
         [("update_jockey_trainer_stats", "統計表を再生成")], [], "騎手・調教師の通算成績（jockey_prior_*）は母表の構築時に race_result から別に計算する。"),
 ]
 
+# 各工程の処理時間（ダウンタイム）。**未計測なので空文字**。計測したら文字列（例 "約 4 分"）を入れて再生成する。
+# キー: "collect:<データ名>"（取得）/ "process:<データ名>"（加工）/ "target:<統合先>"（統合・利用）。値が空の間は空欄の記入欄を出す。
+DURATIONS: dict[str, str] = (
+    {f"collect:{r.label}": "" for r in ROWS if r.collect}
+    | {f"process:{r.label}": "" for r in ROWS if r.process}
+    | {f"target:{k}": "" for k in TARGETS}
+)
+DUR_MARK = "\x00DUR:"
+
+
+def dur_line(key: str) -> tuple[str, str]:
+    return (DUR_MARK + DURATIONS.get(key, ""), "#9aa7c7")
+
+
 # 1 日のタイムラインに載せるジョブ（レーン, ジョブキー, 短い名前）。時刻は cron から読む。
 LANES = [("取得", ["jra-baba-morning", "recent-retry", "daily-race-lists", "raceday-comment", "raceday-runner", "raceday-result-runner", "raceday-weight-runner",
                   "barometer-retry", "raceday-evening", "raceday-eve", "weekly-update", "new-horse-pedigree"]),
@@ -187,11 +201,19 @@ LH = 15.5
 
 
 def box(x: float, y: float, w: float, lines: list[tuple[str, str]], fill: str, stroke: str, h: float | None = None) -> tuple[str, float]:
-    """lines: [(テキスト, 色)] を縦に並べたボックスの SVG と高さ。"""
+    """lines: [(テキスト, 色)] を縦に並べたボックスの SVG と高さ。DUR_MARK で始まる行は『処理時間』の記入欄として描く。"""
     h = h or (len(lines) * LH + 12)
     out = [f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="7" fill="{fill}" stroke="{stroke}" stroke-width="1.2"/>']
     for i, (t, c) in enumerate(lines):
-        out.append(f'<text x="{x + 8}" y="{y + 16 + i * LH:.1f}" font-size="{FS}" fill="{c}">{esc(t)}</text>')
+        ty = y + 16 + i * LH
+        if t.startswith(DUR_MARK):
+            val = t[len(DUR_MARK):]
+            out.append(f'<text x="{x + 8}" y="{ty:.1f}" font-size="{FS - 1}" fill="#9aa7c7">処理時間</text>')
+            out.append(f'<rect x="{x + 64}" y="{ty - 11:.1f}" width="{min(w - 108, 130)}" height="14" rx="3" fill="#2a2410" fill-opacity="0.55" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3 2"/>')
+            out.append(f'<text x="{x + 70}" y="{ty:.1f}" font-size="{FS - 1}" fill="#ffd479">{esc(val)}</text>')
+            out.append(f'<text x="{x + 64 + min(w - 108, 130) + 6}" y="{ty:.1f}" font-size="9.5" fill="#fbbf24">{"" if val else "未計測"}</text>')
+        else:
+            out.append(f'<text x="{x + 8}" y="{ty:.1f}" font-size="{FS}" fill="{c}">{esc(t)}</text>')
     return "".join(out), h
 
 
@@ -213,7 +235,9 @@ def main_svg(times: dict[str, list[str]]) -> str:
             for i, l in enumerate(wrap(desc, COLS["collect"][1] - 14, FS)):
                 c1.append((l, TXT))
             c1.append(("時刻 " + tstr(times, key), TIME))
-        if not r.collect:
+        if r.collect:
+            c1.append(dur_line(f"collect:{r.label}"))
+        else:
             c1 = [("（取得ではなく集計）", MUT)]
         c2 = [(l, TXT) for l in wrap(r.store, COLS["store"][1] - 14, FS)]
         c3: list[tuple[str, str]] = []
@@ -222,7 +246,9 @@ def main_svg(times: dict[str, list[str]]) -> str:
                 c3.append((l, TXT))
             if key:
                 c3.append(("時刻 " + tstr(times, key), TIME))
-        if not r.process:
+        if r.process:
+            c3.append(dur_line(f"process:{r.label}"))
+        else:
             c3 = [("（加工ジョブなし）", MUT)]
         h = max(len(c) for c in (c0, c1, c2, c3)) * LH + 12
         for k, lines in (("src", c0), ("collect", c1), ("store", c2), ("proc", c3)):
@@ -242,13 +268,14 @@ def main_svg(times: dict[str, list[str]]) -> str:
     # 統合先の箱: 行の中央付近に等間隔で配置
     tx, tw = COLS["tgt"]
     n = len(TARGETS)
-    tgt_h = [(len(wrap(TARGETS[k][1], tw - 16, FS - 1)) + len(wrap(TARGETS[k][0], tw - 16, FS)) + 1) * LH + 14 for k in TARGETS]
+    tgt_h = [(len(wrap(TARGETS[k][1], tw - 16, FS - 1)) + len(wrap(TARGETS[k][0], tw - 16, FS)) + 2) * LH + 14 for k in TARGETS]
     gap = (total_h - 36 - sum(tgt_h)) / (n + 1)
     ty = 36 + gap
     tpos: dict[str, tuple[float, float]] = {}
     for (k, (title, desc, color)), th in zip(TARGETS.items(), tgt_h):
         lines = [(l, TXT) for l in wrap(title, tw - 16, FS)] + [(l, MUT) for l in wrap(desc, tw - 16, FS - 1)]
         lines.append(("時刻 " + tstr(times, TARGET_JOB[k]) if k in TARGET_JOB else "cron なし（手動で実行）", TIME if k in TARGET_JOB else MUT))
+        lines.append(dur_line(f"target:{k}"))
         s, _ = box(tx, ty, tw, lines, "#17233f", color, th)
         parts.append(s)
         tpos[k] = (ty, th)
@@ -342,6 +369,8 @@ th, td { border:1px solid var(--border); padding:6px 9px; text-align:left; verti
 td.t { color:#ffd479; white-space:nowrap; } code { background:#0b1428; padding:1px 5px; border-radius:4px; font-size:12.5px; }
 .box { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin:12px 0; }
 .legend span { display:inline-block; margin-right:16px; } a { color:var(--accent); }
+td.tbd { background:#2a2410; border:1px dashed var(--warn); min-width:64px; } td.na { color:var(--muted); text-align:center; }
+.tbd-note { border-color:var(--warn); background:#241f0e; }
 """
 
 
@@ -357,18 +386,27 @@ def render(jobs, source: str) -> str:
          '<span style="color:#ffd479">時刻 黄色</span> が cron の発生時刻。右端の線の色は統合先（'
          + "".join(f'<span style="color:{c}">■ {esc(t)}</span>' for t, _, c in TARGETS.values()) + ")。"
          "<br>cron で動くのは取得と、一部の加工（flat 表・履歴特徴量の蓄積）まで。<b>学習（tp-01〜tp-07）は手動</b>で、cron には載っていない。</div>",
+         '<div class="box tbd-note"><b>処理時間は未計測（空欄）</b>　各工程の処理時間（ダウンタイム）は<b>まだ計測しておらず、空欄にしてある</b>。図の黄色い破線の枠と、一覧表の「処理時間」列が記入欄。'
+         "計測したら <code>DURATIONS</code>（<code>src/scripts/docs/build_data_flow_html.py</code>）に書いて再生成する。"
+         "<b>工程の分け方・時刻・処理時間は今後変更する可能性がある</b>（この図は現時点の暫定版）。</div>",
          "<h2>1. データごとの流れ</h2>", main_svg(times),
          "<h2>2. 1日のタイムライン</h2>",
          '<p class="muted">緑 = 毎日、黄 = 曜日指定（金曜など）。帯は連続して動く時間帯（10分ごとのポーリング）。開催日でない日は、ランナー系のジョブは数秒で終わる。</p>',
          timeline_svg(times),
          "<h2>3. 一覧（データ別）</h2>",
-         "<table><tr><th>データ</th><th>取得ジョブと時刻（JST）</th><th>保存先</th><th>加工ジョブと時刻（JST）</th><th>統合・利用</th><th>補足</th></tr>"]
+         "<table><tr><th>データ</th><th>取得ジョブと時刻（JST）</th><th>取得の処理時間<br><span class='muted'>未計測</span></th><th>保存先</th><th>加工ジョブと時刻（JST）</th><th>加工の処理時間<br><span class='muted'>未計測</span></th><th>統合・利用</th><th>補足</th></tr>"]
     for r in ROWS:
         c = "<br>".join(f"{esc(d)}<br><span style='color:#ffd479'>{esc(tstr(times, k))}</span>" for k, d in r.collect) or "—"
         p = "<br>".join(f"{esc(d)}" + (f"<br><span style='color:#ffd479'>{esc(tstr(times, k))}</span>" if k else "") for k, d in r.process) or "—"
         tg = "、".join(f"<span style='color:{TARGETS[t][2]}'>{esc(TARGETS[t][0])}</span>" for t in r.targets) or "（現行の学習・推論では未使用）"
-        o.append(f"<tr><td><b>{esc(r.label)}</b><br><span class='muted'>{esc(r.src)}</span></td><td>{c}</td><td>{esc(r.store)}</td><td>{p}</td><td>{tg}</td><td>{esc(r.note)}</td></tr>")
+        dc = f"<td class='tbd'>{esc(DURATIONS.get('collect:' + r.label, ''))}</td>" if r.collect else "<td class='na'>—</td>"
+        dp = f"<td class='tbd'>{esc(DURATIONS.get('process:' + r.label, ''))}</td>" if r.process else "<td class='na'>—</td>"
+        o.append(f"<tr><td><b>{esc(r.label)}</b><br><span class='muted'>{esc(r.src)}</span></td><td>{c}</td>{dc}<td>{esc(r.store)}</td><td>{p}</td>{dp}<td>{tg}</td><td>{esc(r.note)}</td></tr>")
     o.append("</table>")
+    o.append("<h3>統合・利用の処理時間（未計測）</h3><table><tr><th>統合先</th><th>起動</th><th>処理時間<br><span class='muted'>未計測</span></th></tr>"
+             + "".join(f"<tr><td style='color:{c}'><b>{esc(n)}</b></td><td>{esc('時刻 ' + tstr(times, TARGET_JOB[k]) if k in TARGET_JOB else 'cron なし（手動で実行）')}</td>"
+                       f"<td class='tbd'>{esc(DURATIONS.get('target:' + k, ''))}</td></tr>" for k, (n, _, c) in TARGETS.items())
+             + "</table>")
     o += ["<h2>4. 毎日の流れ（結果が特徴量になるまで）</h2><ol>"
           f"<li>前日の結果: 夕方 {esc(tstr(times, 'raceday-evening'))} に速報結果、翌朝 {esc(tstr(times, 'recent-retry').split(' ／ ')[0])} の取り直しで確定結果・ラップ・指数が揃う。</li>"
           f"<li>flat 表: {esc(tstr(times, 'export_tables_daily'))} に当年分を増分更新（race_result・race_shutuba・race_result_lap・race_result_on_time）。</li>"
