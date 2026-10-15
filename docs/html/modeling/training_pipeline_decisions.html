@@ -205,8 +205,63 @@
 </table>
 <p class="muted">上のほか、<code>sr_var_today</code> の補完（第 3 節の訂正）と、cron が dev 環境で動いていた期間（2026-10-09〜10）の取得データの一部が GCS に入っていない件（<code>docs/html/operations/cron_schedule.html</code>）が別にある。</p>
 
-<h2>5. 以降の節</h2>
-<p class="muted">tp-03〜tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
+<h2>5. tp-03 特徴量の ablation（採用する特徴量の確定）</h2>
+<p class="muted">根拠: コミット <code>863be66</code>、MLflow 実験 <code>keiba-tp-ablation</code> の run <code>6fb037385c3545d18d4a6b68125ddada</code>（<b>運用の前提: speed_* なし</b>）と <code>75dcd920eed9405094a1ac3d3ac7435d</code>（参考: speed_* あり）。実装は <code>src/pipeline/models/ablation.py</code>、notebook は <code>notebooks/modeling/training_pipeline/tp-03-feature-ablation.ipynb</code>。成果物は <code>data/local/modeling/training_pipeline/ablation_nospeed/</code>（主）と <code>ablation/</code>（参考）の <code>adopted_features.json</code>・<code>ablation_results.csv</code>・<code>final_candidates.csv</code>。</p>
+<h3>条件</h3>
+<p>LightGBM 固定（<code>n_estimators=300, learning_rate=0.05, num_leaves=31, min_child_samples=100, subsample=0.8, colsample_bytree=0.7, reg_lambda=5</code>）、3 seed、valid 2022・2023・2024 の expanding window（purge 7 日 + embargo 3 日）。test 2025 は使っていない。主指標は p_win の LogLoss。採否の基準は「共通の全 fold で悪化せず、平均が改善し、改善幅が max(0.0001, 2×seed 間のばらつき) 以上」。B0 は LayerA の既存列（<code>horse_prior_*</code>・<code>jockey_prior_*</code>・<code>trainer_prior_*</code>・<code>track_bias_*</code>・<code>sire_*</code>・レース条件・馬体重）。</p>
+<div class="box"><b>ベースを 2 通りで評価した理由</b>: B0 の <code>speed_*</code>（タイム指数）は、そのレースのタイム指数ページ由来で、<b>開催前に取得できるか未確認</b>（SLA 監査 G11）。使えないと運用で動かないため、<b>speed_* を含めない B0′ を運用の前提（主）</b>とし、含める場合を参考として併記した。</div>
+<h3>確定事項</h3>
+<table>
+<tr><th>項目</th><th>確定内容</th></tr>
+<tr><td>採用する特徴量</td><td><b>履歴特徴量 127 列すべて（A〜H の 11 ファミリー）</b>を B0′ に足す。単独・累積・leave-one-out のどれかで採用基準を満たす（E・F1・F5 は累積では基準未満だが、外すと悪化）。入力は <code>ablation_nospeed/adopted_features.json</code>（tp-04 以降が読む）。</td></tr>
+<tr><td>精度（主: speed なし）</td><td>p_win LogLoss <b>0.23375 → 0.22069</b>（−0.0131。全 fold で改善）、p_top2 0.36388 → 0.34337、p_top3 0.45680 → 0.43009、AUC 0.7545 → 0.7987、race_nll 2.1813 → 2.0599。</td></tr>
+<tr><td><code>speed_*</code> は不要</td><td>履歴特徴量を入れた最終構成で、speed_* を足しても LogLoss は 0.22069 → 0.22030（−0.0004）しか変わらない。<b>運用で speed_* が取れなくても、精度はほとんど落ちない</b>。B0 のまま比べると speed_* は −0.0057 効くが、履歴特徴量が代わりを担う。</td></tr>
+<tr><td>時代ずれ対策</td><td><b>いずれも採用しない</b>（下表）。2020〜2021 年も学習に使う。F5・件数系・騎手調教師の累積件数は外さない。</td></tr>
+<tr><td>相関の整理</td><td>|ρ|≥0.9 を代表 1 つに寄せる案（127→92 列）は ALL より 0.00023 悪く、許容差（0.00011）を超えるため<b>採用しない</b>。</td></tr>
+</table>
+<h3>ファミリー別の効果（speed なし。B0′ からの LogLoss の差。負が改善）</h3>
+<table>
+<tr><th>ファミリー</th><th>単独（B0′+X）</th><th>F3 に上乗せ（B0′+F3+X）</th><th>全部から外す（ALL−X）</th><th>判定</th></tr>
+<tr><td>C レースの質</td><td>−0.00779</td><td>−0.00123</td><td>—</td><td>採用</td></tr>
+<tr><td>F3 Elo</td><td>−0.00743</td><td>（土台）</td><td>—</td><td>採用</td></tr>
+<tr><td>A 上がり・脚質</td><td>−0.00479</td><td>−0.00230</td><td>—</td><td>採用（上乗せが最大）</td></tr>
+<tr><td>F2 展開</td><td>−0.00457</td><td>−0.00078</td><td>—</td><td>採用</td></tr>
+<tr><td>B 得意な舞台</td><td>−0.00451</td><td>−0.00055</td><td>—</td><td>採用</td></tr>
+<tr><td>H 標準条件レーティング</td><td>−0.00441</td><td>−0.00171</td><td>—</td><td>採用（F3 に次ぐ上乗せ）</td></tr>
+<tr><td>D 休養・体重</td><td>−0.00427</td><td>−0.00109</td><td>—</td><td>採用</td></tr>
+<tr><td>G RPCI・PCI</td><td>−0.00249</td><td>−0.00065</td><td>—</td><td>採用</td></tr>
+<tr><td>F1 条件類似度</td><td>−0.00095</td><td>−0.00020（基準未満）</td><td>外すと +0.00015</td><td>採用（小さい）</td></tr>
+<tr><td>E 信頼度</td><td>−0.00066</td><td>−0.00051（基準未満）</td><td>外すと +0.00015</td><td>採用（小さい）</td></tr>
+<tr><td>F5 クラスタ</td><td>−0.00053（基準未満）</td><td>−0.00026（基準未満）</td><td>外すと +0.00014</td><td>採用（小さい）</td></tr>
+</table>
+<p class="muted">注: 単独の効果は F3・C が突出するが、重なる部分が大きく、上乗せでは A・H・C・D が残る。speed あり（参考）では、B・E・F1・F2・F5 は B0+F3 への上乗せで基準未満となり、A・C・D・F3・G・H の 6 ファミリーが採用基準を満たした（最終候補 ADOPTED+年内標準化 0.22046、ALL 0.22030）。</p>
+<h3>F2（展開）と G（RPCI）、H</h3>
+<p>F2 と G は<b>併用が良い</b>（B0′+F3+F2+G −0.00129。F2 単独 −0.00078、G 単独 −0.00065 の合計 −0.00143 に近く、ほぼ重ならない）。H と G の併用も加算的（B0′+F3+H+G −0.00258。H −0.00171、G −0.00065）。H（標準条件レーティング、新実装）は既存の <code>race_performance.py</code>（固定係数）との比較が未実施（既存実装の出力が 2025 年分だけのため。下の申し送り）。</p>
+<h3>時代ずれ対策の結果（ALL との LogLoss の差。正が悪化。speed なし）</h3>
+<table>
+<tr><th>対策</th><th>Δ平均</th><th>判定</th></tr>
+<tr><td>クラス・相手関係系 12 列の年内標準化（直前 365 日・as-of）</td><td>+0.00006</td><td>効果なし（speed あり: −0.00020 でも基準未満）</td></tr>
+<tr><td>騎手・調教師の累積件数 6 列を除く</td><td>+0.00013</td><td>わずかに悪化</td></tr>
+<tr><td>F5 を除く</td><td>+0.00014</td><td>わずかに悪化</td></tr>
+<tr><td>件数系を除く</td><td>+0.00018</td><td>悪化</td></tr>
+<tr><td>累積件数と件数系を除く</td><td>+0.00025</td><td>悪化</td></tr>
+<tr><td>2020 年の重みを 0.5 にする</td><td>+0.00033</td><td>悪化（fold 2022 で +0.0012）</td></tr>
+<tr><td>2020〜2021 年を学習から外す</td><td><b>+0.00209</b></td><td>大きく悪化（fold 2023・2024 で比較）</td></tr>
+</table>
+<p>結論: 履歴が短い助走期間（2020〜2021 年）の行も、情報として有用で、外すと悪化する。分布差を減らす操作はどれも LogLoss を改善しなかったため、<b>時代を見分けられること自体は、予測精度の低下に直結していない</b>。</p>
+<h3>adversarial validation の見方</h3>
+<p>B0 に <b>騎手・調教師の累積件数</b>（2020-01 からの通算。<code>jockey_prior_races</code> など 6 列）と、<code>sire_prior_win_rate_surface</code> など<b>時間とともに収束する事前統計</b>があり、これらを含む構成は train と valid を AUC 1.000 で見分ける（分布差の目安にならない）。累積件数・件数系を除いても 0.998 と、B0 の事前統計が残るため、履歴特徴量だけの AUC（tp-02 の再計測: 0.78〜0.87）で見る。B0 の事前統計が時間で単調に変わる点は、2026 年（学習範囲の外）で予測するときの<b>分布の外挿</b>として、tp-06 のバックテスト（test 2025）で影響を確認する。</p>
+<h3>申し送り（tp-04 以降で対応）</h3>
+<ul>
+  <li>tp-04 以降の入力は <code>ablation_nospeed/adopted_features.json</code>（B0′ + 履歴特徴量 127 列）。<code>speed_*</code> と <code>has_speed_index</code> は使わない。開催前に取得できると確認できたら、参考版（<code>ablation/</code>）に切り替えられるが、精度の差は 0.0004 と小さい。</li>
+  <li>H と既存 <code>race_performance.py</code>（固定係数）の比較は未実施。既存実装を 2020〜2025 年分で出力する必要がある。H が基準の斤量補正より良いかは未確定。</li>
+  <li>B0 の騎手・調教師の通算件数と、種牡馬の事前勝率は、時間とともに単調に変わる列。累積件数を除いても精度は変わらない（+0.00013）ので、<b>外す選択肢</b>（運用で 2026 年の値が学習範囲を超えるリスクを避ける）を tp-04 で再度比べる。</li>
+  <li>学習と推論の出走馬の定義のずれ（学習側は競走中止などで着順が付かない馬を履歴から外している）を、「含める／含めない」で比べる（未実施）。</li>
+  <li>複数 seed の LogLoss のばらつきは 0.0002〜0.0003（3 seed）。採用基準の閾値は 0.0001〜0.0003。</li>
+</ul>
+
+<h2>6. 以降の節</h2>
+<p class="muted">tp-04〜tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
 </html>
