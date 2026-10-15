@@ -130,6 +130,13 @@
     },
     "trainer_id": {
      "type": "str"
+    },
+    "finish_position_raw": {
+     "type": "str"
+    },
+    "finish_status": {
+     "type": "str",
+     "pattern": "^(finished|scratched|excluded|dnf|disqualified|unparsed)$"
     }
    },
    "entry_list_key": "entries",
@@ -287,6 +294,13 @@
     },
     "trainer_id": {
      "type": "str"
+    },
+    "finish_position_raw": {
+     "type": "str"
+    },
+    "finish_status": {
+     "type": "str",
+     "pattern": "^(finished|scratched|excluded|dnf|disqualified|unparsed)$"
     }
    },
    "entry_list_key": "entries",

@@ -28,6 +28,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
+from src.scraper.finish_status import UNPARSED, finish_anomalies, normalize_finish
 from src.scraper.selectors import (
     SelectorChain, safe_text, safe_attr, extract_id_from_url,
     extract_numbers, parse_weight_change,
@@ -358,13 +359,9 @@ class RaceResultParser:
             )
 
             pos_raw = safe_text(cols[0])
-            if pos_raw in ("取", "除", "中", "失"):
-                finish_position = -1
-            else:
-                try:
-                    finish_position = int(pos_raw)
-                except ValueError:
-                    finish_position = -1
+            finish_position, finish_status = normalize_finish(pos_raw)
+            if finish_status == UNPARSED:
+                logger.warning("着順を解釈できません: %r（馬番 %s）", pos_raw, safe_text(cols[2]))
 
             horse_link = cols[3].select_one("a[href*='/horse/']")
             horse_name = safe_text(horse_link) if horse_link else safe_text(cols[3])
@@ -391,6 +388,8 @@ class RaceResultParser:
 
             entry = {
                 "finish_position": finish_position,
+                "finish_position_raw": pos_raw,
+                "finish_status": finish_status,
                 "bracket_number": self._safe_int(safe_text(cols[1])),
                 "horse_number": self._safe_int(safe_text(cols[2])),
                 "horse_name": horse_name,
@@ -413,6 +412,9 @@ class RaceResultParser:
             }
             entries.append(entry)
 
+        anomalies = {k: v for k, v in finish_anomalies(entries).items() if v}
+        if anomalies:
+            logger.warning("着順の異常を検出: %s", anomalies)
         return entries
 
     @staticmethod
