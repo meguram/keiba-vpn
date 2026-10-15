@@ -31,6 +31,8 @@ B0_SPEED = ["speed_max", "speed_avg", "speed_distance", "speed_course", "speed_r
 # 時代を見分ける上位の特徴量（クラス・相手関係）。年内標準化の対象
 ERA_CLASS_COLS = ["c_rq_ewm2", "c_cls_ewm2", "c_cls_step", "c_fs_ewm2", "c_fs_step", "c_fstop3_ewm2", "c_standing_ewm2", "c_opp_step",
                   "f3_fs_mean", "f3_fs_top3", "f3_fs_std", "f3_r"]
+# 騎手・調教師の通算件数（LayerA は 2020-01 からの累積）。時間とともに単調に増えるため、時代を完全に見分ける（AUC=1.0）
+B0_TIME_COUNTS = [f"{p}_prior_{s}" for p in ("jockey", "trainer") for s in ("races", "wins", "top3")]
 # 件数系（時間とともに増える）
 COUNT_COLS = ["d_career_days", "d_nprior", "e_n_l3f", "b_n_sd", "b_n_venue", "b_n_going", "b_n_dir", "b_n_course", "b_n_class", "f3_n_pre",
               "sr_n", "sr_var_n", "f2_n_reg0", "f2_n_reg1", "f2_n_reg2", "pc_n_reg0", "pc_n_reg1", "pc_n_reg2", "f1_sw", "f1_neff"]
