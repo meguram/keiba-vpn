@@ -210,6 +210,16 @@ bash scripts/server/start_monitor.sh
 bash scripts/server/start_monitor.sh --port 23999 --host 127.0.0.1
 ```
 
+### 自動起動（落ちていたら起動 / コンテナ再起動後も）
+
+`scripts/server/ensure_monitor.sh` は、監視ポータルが応答しなければ起動する冪等スクリプト（既定 `127.0.0.1` 待ち受け。ログ `logs/ensure_monitor.log`）。
+cron から次のように呼ぶ（stg ホスト PC はこの 2 行を root の crontab に登録済み）:
+
+```cron
+@reboot sleep 30 && /path/to/keiba-vpn/scripts/server/ensure_monitor.sh   # KEIBA-VPN-MONITOR
+*/5 * * * * /path/to/keiba-vpn/scripts/server/ensure_monitor.sh            # KEIBA-VPN-MONITOR
+```
+
 ### service_start.sh との連携
 
 ```bash
