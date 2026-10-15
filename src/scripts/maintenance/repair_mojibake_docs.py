@@ -49,11 +49,23 @@ def has_mojibake(obj: Any) -> bool:
     return False
 
 
+def info_score(obj: Any) -> int:
+    """文書の中の「空でない値」の数（_meta は除く）。取り直しで項目が消えていないかを見る目安。"""
+    if isinstance(obj, dict):
+        return sum(info_score(v) for k, v in obj.items() if k != "_meta")
+    if isinstance(obj, list):
+        return sum(info_score(v) for v in obj)
+    return 0 if obj is None or obj == "" or (isinstance(obj, float) and obj != obj) else 1
+
+
 def acceptable(new: dict | None, old: dict) -> bool:
-    """取り直した結果が置き換えてよいか: 文字化けが無く、馬の行が旧版より減っていない。"""
+    """取り直した結果が置き換えてよいか: 文字化けが無く、馬の行が減らず、空でない値の数が旧版の 9 割以上。
+    レース後のページは表示が減るものがある（追い切りの調教日・ラップなど）ため、行数だけでなく値の数でも見る。"""
     if not new or has_mojibake(new):
         return False
-    return len(new.get("entries") or []) >= len(old.get("entries") or [])
+    if len(new.get("entries") or []) < len(old.get("entries") or []):
+        return False
+    return info_score(new) >= 0.9 * info_score(old)
 
 
 def main() -> int:
