@@ -47,21 +47,22 @@ def main() -> int:
     ap.add_argument("--year", required=True)
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--limit", type=int, default=0, help="先頭から N 件だけ（試し用）")
+    ap.add_argument("--ids-file", type=Path, help="対象 race_id の一覧（1 行 1 件）。省略時は GCS 全件を調べる（遅い）")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
     from src.scraper.run import ScraperRunner
 
-    runner = ScraperRunner()
+    runner = ScraperRunner(auto_login=False)   # 結果ページはログイン不要。ログインすると他のジョブのセッションを無効にしうる
     st = runner.storage
     if st._dev_store is not None or not st.gcs_enabled:
         raise SystemExit("GCS に接続できない環境（dev または未設定）です。KEIBA_ENV=stg で実行すること")
-    keys = sorted(k for k in st.batch_list_blobs("race_result", args.year))
-    targets = []
-    for k in keys:
-        doc = st.load("race_result", k, bypass_cache=True)
-        if needs_repair(doc):
-            targets.append(k)
+    if args.ids_file:
+        keys = [x.strip() for x in args.ids_file.read_text().split() if x.strip()]
+        targets = [k for k in keys if needs_repair(st.load("race_result", k, bypass_cache=True))]
+    else:
+        keys = sorted(k for k in st.batch_list_blobs("race_result", args.year))
+        targets = [k for k in keys if needs_repair(st.load("race_result", k, bypass_cache=True))]
     if args.limit:
         targets = targets[: args.limit]
     logger.info("対象 %d / %d レース", len(targets), len(keys))
