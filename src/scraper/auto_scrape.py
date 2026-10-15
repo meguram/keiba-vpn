@@ -82,6 +82,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import logging
 import random
 import sys
@@ -1437,8 +1438,19 @@ def task_feature_accumulate():
     from src.pipeline.features.horse_history.accumulate import accumulate
 
     res = accumulate()
-    _save_status("feature-accumulate", {"status": "ok", "last_run": _now_jst_iso(), **res})
-    logger.info("feature-accumulate: %s", res)
+    publish = None
+    if res.get("serving_bundle") and os.environ.get("KEIBA_PUBLISH_SERVING_BUNDLE", "1").strip().lower() not in ("0", "false", "no"):
+        # 小さなメモリのマシンへ GCS 経由で配るため、作り直したバンドルを公開する。失敗しても蓄積自体は成功として扱う
+        try:
+            from src.pipeline.features.horse_history.bundle_sync import publish as _publish_bundle
+            from src.pipeline.features.horse_history.serving import default_bundle_dir
+
+            publish = _publish_bundle(Path(default_bundle_dir()))
+        except Exception as exc:
+            publish = {"error": str(exc)[:300]}
+            logger.error("サービングバンドルの公開に失敗: %s", exc)
+    _save_status("feature-accumulate", {"status": "ok", "last_run": _now_jst_iso(), **res, "bundle_publish": publish})
+    logger.info("feature-accumulate: %s publish=%s", res, publish)
 
 
 def task_daily_race_lists():
