@@ -22,7 +22,7 @@
 <body>
 <main>
 <h1>学習パイプライン 確定事項ログ</h1>
-<p class="muted">notebook <code>notebooks/modeling/training_pipeline/tp-NN-*.ipynb</code> が完成するたびに、そのフローで確定した事項を追記する。各項目には根拠（コミット・MLflow run・成果物）を添える。実行はホスト PC（stg）。特徴量の設計根拠と tp-03・tp-04 の手順は <a href="feature_strategy_tp03_tp04.html" style="color:#7aa9ff">特徴量戦略書</a>、モデリングの方針（tp-04〜tp-07）は <a href="modeling_strategy_tp04_tp07.html" style="color:#7aa9ff">モデリング戦略書</a>。最終更新: 2026-10-15（tp-00〜tp-05a）。</p>
+<p class="muted">notebook <code>notebooks/modeling/training_pipeline/tp-NN-*.ipynb</code> が完成するたびに、そのフローで確定した事項を追記する。各項目には根拠（コミット・MLflow run・成果物）を添える。実行はホスト PC（stg）。特徴量の設計根拠と tp-03・tp-04 の手順は <a href="feature_strategy_tp03_tp04.html" style="color:#7aa9ff">特徴量戦略書</a>、モデリングの方針（tp-04〜tp-07）は <a href="modeling_strategy_tp04_tp07.html" style="color:#7aa9ff">モデリング戦略書</a>。最終更新: 2026-10-16（tp-00〜tp-06）。</p>
 
 <div class="box">
 <b>運用ルール</b>
@@ -41,8 +41,8 @@
 <tr><td>02</td><td><code>tp-02-feature-build</code></td><td>特徴量生成（リーク検査つき）</td><td class="ok">完了</td></tr>
 <tr><td>03</td><td><code>tp-03-feature-ablation</code></td><td>特徴量グループの採否</td><td class="ok">完了</td></tr>
 <tr><td>04</td><td><code>tp-04-stage-models</code></td><td>前段モデル（位置取り・ペース・上がり3F・走破タイム・着順）と後段への寄与</td><td class="ok">完了</td></tr>
-<tr><td>05</td><td><code>tp-05a〜e</code></td><td>p_win・p_top2・p_top3 の学習と調整（05a 目的関数の比較 = 完了、05b〜e 未着手）</td><td>進行中</td></tr>
-<tr><td>06</td><td><code>tp-06-calibration-eval</code></td><td>確率較正・評価（test は一度だけ）</td><td>未作成</td></tr>
+<tr><td>05</td><td><code>tp-05a〜e</code></td><td>p_win・p_top2・p_top3 の学習と調整（05a 目的関数、05b モデル族、05c 重み・ラウンド数、05d Optuna、05e アンサンブル）</td><td class="ok">完了</td></tr>
+<tr><td>06</td><td><code>tp-06-final-evaluation</code></td><td>最終評価（test 2025 は一度だけ）。較正の確認を含む</td><td class="ok">完了</td></tr>
 <tr><td>07</td><td><code>tp-07-register-verify</code></td><td>最終再学習・登録・推論の一致確認</td><td>未作成</td></tr>
 </table>
 
@@ -339,8 +339,29 @@
   <li>CatBoost・XGBoost・線形・NN（tp-05b）、時間減衰の重み・2020〜2021 年の扱い・early stopping（tp-05c）、Optuna（tp-05d）、アンサンブル（tp-05e）。今回は固定パラメータで、<b>市場オッズとの比較は未実施</b>（tp-06）。</li>
 </ul>
 
-<h2>8. 以降の節</h2>
-<p class="muted">tp-05b〜tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
+<h2>8. tp-05b〜e と tp-06 モデル族・調整・アンサンブル・最終評価</h2>
+<p class="muted">根拠: MLflow 実験 <code>keiba-tp-model-zoo</code>・<code>keiba-tp-hpo</code>・<code>keiba-tp-ensemble</code>・<code>keiba-tp-final-eval</code>、成果物 <code>data/local/modeling/training_pipeline/{model_zoo,model_tune_c,hpo,ensemble,final_eval}/</code>、詳細は <a href="modeling_experiment_report.html" style="color:#7aa9ff">モデリング実験結果レポート</a>。特徴量は base + 前段 3 列 + 相対化（220 列）、valid 2022〜2024。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>項目</th><th>確定内容</th></tr>
+<tr><td>モデル族（tp-05b）</td><td>勝率 LogLoss: XGBoost 0.21643 ≈ LightGBM 0.21666（二値）＞ 線形 0.21782 ＞ NN 小 0.21881 ＞ CatBoost 0.21911。大きい NN は過学習で悪化（0.22497・0.23554）。softmax は勝率で二値と同等だが連対・複勝は劣る（Harville 由来）。OOF を <code>oof/model_oof/</code> に保存。</td></tr>
+<tr><td>重み・期間・ラウンド（tp-05c）</td><td>半減期の重み（1・2・3 年）、2020〜2021 年の除外、ラウンド数 150・500・800 のいずれも基準を有意に上回らず（<b>全案不採用</b>、既定を維持）。</td></tr>
+<tr><td>ハイパーパラメータ調整（tp-05d）</td><td>Optuna（調整は valid 2022・2023、2024 は確認専用）。<b>NN（隠れ層 128、11 エポック、dropout 0.26）が最大の改善</b>: 勝率 0.21881 → 0.21538（確認 fold 2024 で −0.0019）。LightGBM 0.21666 → 0.21637、XGBoost 0.21643 → 0.21636。</td></tr>
+<tr><td>アンサンブル（tp-05e）</td><td>leave-one-year-out で評価。勝率 <b>0.21488</b>・連対率 <b>0.33720</b>・複勝率 <b>0.42395</b>（単独の最良 NN 0.21538 / NN 0.33868 / LightGBM 0.42617 を、95% 信頼区間でいずれも有意に上回る）。合成案は勝率・連対率が logit 空間の重み付き（NN・LightGBM・XGBoost・softmax・線形など）、複勝率が前進選択。</td></tr>
+<tr><td><b>最終精度（tp-06、test 2025 を一度だけ評価）</b></td><td>2020〜2024 年で学習し、3,455 レース・47,497 頭を評価。<b>勝率 LogLoss 0.21349（AUC 0.814）、連対率 0.33322（AUC 0.806）、複勝率 0.41887（AUC 0.800）</b>。一様予測は 0.25880 / 0.41042 / 0.51685。予測 1 位の馬が勝つ割合 30.0%（ランダム 7.3%）、連対 49.9%、複勝圏 62.3%。勝ち馬が予測上位 3 頭に入る割合 62.8%。valid 2022〜2024 の値（0.21488 / 0.33720 / 0.42395）と同水準で、悪化していない。</td></tr>
+<tr><td>較正</td><td>予測確率の十分位ごとの実測とよく一致（勝率 ECE 0.0039）。予測 1 位の馬の確信度が高いほど実際の勝率も上がる（予測 0.19 → 実測 0.18、0.51 → 0.47）。</td></tr>
+<tr><td>セグメント</td><td>ダートの方が芝より LogLoss が良い（勝率 0.204 vs 0.221）。障害（0.258）・2700m 以上（0.251）・11 頭以下（0.282）は相対的に弱い。頭数が多いほど LogLoss は下がる（確率が小さい馬が多いため）。</td></tr>
+</table>
+<h3>申し送り</h3>
+<ul>
+  <li><b>tp-07</b>: 2020〜2025 年で最終再学習し、MLflow Registry に登録、学習時と推論時の一致確認（P5・P6 を含む連鎖）を行う。本結果は 2025 年を学習に含めない値。</li>
+  <li><b>市場オッズとの比較・バックテスト（回収率）は未実施</b>。LogLoss の改善が馬券の期待値に結びつくかは、オッズ時点の暗黙の確率との差で確認する。</li>
+  <li>softmax 系の連対・複勝は Harville 由来で劣る。ランキング系（lambdarank）は確率としては不採用。</li>
+  <li>NN は小さく正則化が効いた構成が最良。さらに伸ばすなら、馬の埋め込み（騎手・調教師・種牡馬）や、レース内の注意機構（Transformer）を試す余地がある。</li>
+</ul>
+
+<h2>9. 以降の節</h2>
+<p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
 </html>

@@ -87,7 +87,12 @@ def main() -> int:
         if top1c is not None:
             o.append("<h3>予測 1 位の馬の確信度別（予測勝率が高いほど実際に勝つか）</h3>" + table(top1c, fmt={"races": lambda v: f"{int(v):,}"}, first="予測勝率の帯"))
         if segs is not None:
-            o.append("<h3>セグメント別</h3>" + table(segs.set_index(["区分", "値"]), fmt={"行数": lambda v: f"{int(v):,}"}, first="区分 / 値"))
+            VENUE = {"01": "札幌", "02": "函館", "03": "福島", "04": "新潟", "05": "東京", "06": "中山", "07": "中京", "08": "京都", "09": "阪神", "10": "小倉"}
+            sg = segs.copy()
+            sg["値"] = [VENUE.get(str(v).zfill(2), v) if k == "venue_code" else v for k, v in zip(sg["区分"], sg["値"])]
+            sg["区分"] = sg["区分"].map({"surface": "馬場", "venue_code": "競馬場"}).fillna(sg["区分"])
+            sg["k"] = sg["区分"] + " / " + sg["値"].astype(str)
+            o.append("<h3>セグメント別</h3>" + table(sg.set_index("k").drop(columns=["区分", "値"]), fmt={"行数": lambda v: f"{int(v):,}"}, first="区分 / 値"))
 
     # 段階別
     o.append("<h2>3. 段階別の実験結果（valid 2022〜2024）</h2>")
