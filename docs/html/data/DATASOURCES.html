@@ -208,7 +208,7 @@ document.addEventListener("DOMContentLoaded", function() {
     </header>
     <article class="md-body">
 <h1 id="_1">データソース一覧</h1>
-<p>netkeiba.com から取得するデータソースの仕様書です（SmartRC は DEC-024 で取得対象から除外。下記は当時の仕様の記録）。<br />
+<p>netkeiba.com から取得するデータソースの仕様書です（SmartRC は DEC-027 で取得を継続。DEC-024 の除外を見直した）。<br />
 各ページの URL パターン・認証要否・パーサー／クライアント・ストレージカテゴリ名・取得フィールドを定義します。</p>
 <hr />
 <h2 id="_2">概要</h2>
@@ -321,9 +321,9 @@ document.addEventListener("DOMContentLoaded", function() {
 <blockquote>
 <p><strong>認証「要」</strong>: netkeiba プレミアム会員のログインが必要です（<b>認証は完了している前提</b>）。認証情報は <code>.env</code> の <code>netkeiba_id</code> / <code>netkeiba_pw</code> で管理します。</p>
 </blockquote>
-<h3 id="smartrc-smartrcjp">SmartRC (smartrc.jp)（取得対象から除外・DEC-024）</h3>
+<h3 id="smartrc-smartrcjp">SmartRC (smartrc.jp)（取得を継続・DEC-027）</h3>
 <blockquote>
-<p><b>現状:</b> DEC-024 で SmartRC は取得対象から除外されました。コード（<code>smartrc_client.py</code>、キューの <code>smartrc</code> タスク）・スキーマ（<code>smartrc_race</code>）は残っており（T-034 で除去予定）、実運用での取得可否は要確認です。保存カテゴリは現在 <code>smartrc_race</code> のみで、下表の <code>smartrc_runners</code> / <code>smartrc_horse</code> / <code>smartrc_trend</code> は旧仕様の名前です。</p>
+<p><b>現状:</b> DEC-024 は SmartRC を除外としたが、2026-10-16 の <a href="../../decisions/DEC-027-smartrc-fetch-continued.html">DEC-027</a> で取得の継続に見直した（位置取り・ペース予測に使うスタート後 1F＝テン1F が目的）。キューの <code>smartrc</code> タスクは前日夕方・開催日夕方に動き、<code>smartrc_race</code> には 2020〜2026 年の全レース分がある。利用規約は未確認。保存カテゴリは現在 <code>smartrc_race</code> のみで、下表の <code>smartrc_runners</code> / <code>smartrc_horse</code> / <code>smartrc_trend</code> は旧仕様の名前です。</p>
 </blockquote>
 <table>
 <thead>

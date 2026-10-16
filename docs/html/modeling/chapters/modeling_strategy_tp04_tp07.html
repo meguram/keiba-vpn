@@ -51,7 +51,7 @@
 <tr><td>単調制約・サンプル重み・不均衡対策</td><td>どの文書にも規定がなく、<code>trainer.py</code>・<code>ensemble_trainer.py</code> にも使用箇所がない。</td><td>新規の検証項目として扱う（実験 C・D）。</td></tr>
 <tr><td>保存モデルの一致確認</td><td>「保存モデルを読み直して OOF と一致を確認する」手順は、どの文書にも規定がない。</td><td>tp-07 で新設（§8）。</td></tr>
 <tr><td>推論側の特徴量</td><td><code>race_prediction_service.py</code> は <code>keiba_model.pkl</code> と <code>encoder.json</code> を使う。tp-02 の 127 列を推論時に作る実装は見当たらない。</td><td>学習と推論で同じ as-of 計算を使うための共通化が必要。tp-07 の後続課題（§11）。</td></tr>
-<tr><td>SmartRC</td><td>DEC-024 は除外。<code>settings.yaml</code> に <code>smartrc.enabled: true</code> と whitelist が残る。</td><td>使わない（tp-02 の入力にも含めていない）。設定の整理は別件。</td></tr>
+<tr><td>SmartRC</td><td>DEC-024 は除外としたが、DEC-027（2026-10-16）で取得の継続に見直した。<code>settings.yaml</code> に <code>smartrc.enabled: true</code> と whitelist が残る。</td><td>tp-02 の入力にはまだ含めていない。テン1F（スタート後 1F）を位置取り・ペース予測に使えるか、保存済みデータで ablation して決める。</td></tr>
 <tr><td>既存 notebook</td><td>gold-medal はモック母表・<code>PurgedGroupTimeSeriesSplit</code>・オッズを使う特徴量・AUC 目的。nb-08 は層化分割と、<code>GroupKFold</code> の OOF（時間リーク）、valid を early stopping に使いながら test を直接評価。</td><td>骨格のみ再利用（§7）。分割・母表・目的関数・OOF は作り直す。</td></tr>
 </table>
 

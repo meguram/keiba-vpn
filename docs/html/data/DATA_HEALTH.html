@@ -367,7 +367,7 @@ make data-health-dashboard        # 画面とデータを作り直す（チェ�
 <li><b>スキーマ未定義のカテゴリは「存在」止まり</b>：<code>schema_defs.json</code> に定義が無いのは finish_order_prediction だけです（2026-10-16 時点の実数。39 カテゴリが定義済み）。race_predictions / tracking_difficulty / final_odds_prediction / race_performance / jra_cushion は定義済みですが、生成物のため助言（advisory）扱いの検証です（§8。tracking_difficulty は GCS ではなくローカルの <code>data/calculated_data</code> に置かれ、GCS 側の存在確認では不足に見えます）。</li>
 <li><b>健全性の検証は race 単位のカテゴリが中心</b>：馬単位（horse_result 等）は評価窓の出走馬の<b>存在</b>のみで、全馬のスキーマ適合は未対応です。</li>
 <li><b>派生 11 カテゴリ</b>（race_shutuba_meta 等）と <code>requirement_row_trace</code>、<code>horse_name</code> は対象外。親カテゴリが揃えば再生成できるため。</li>
-<li><b>対象外のカテゴリ</b>：SmartRC（取得中止）、<code>race_trainer_comment</code>、<code>broodmare_mating</code>（種付け日 T-019 未着手）、<code>race_detail</code> / <code>race_performance</code>。</li>
+<li><b>対象外のカテゴリ</b>：SmartRC（取得は継続しているが、まだ健全性チェックの対象に加えていない。DEC-027）、<code>race_trainer_comment</code>、<code>broodmare_mating</code>（種付け日 T-019 未着手）、<code>race_detail</code> / <code>race_performance</code>。</li>
 <li><b>推定の限界</b>：§5.3 の仮定（12R・1 日目から連続）。race_lists が無く、まだ検証もしていないレースの日付は分からず、年別と「YYYY-??」行にまとまる（検証が進むと月に振り分けられる）。</li>
 <li><b>台帳はローカル</b>：検証結果は環境ごとのローカル（<code>&lt;環境&gt;/ledger/</code>）にあり、他の環境とは共有しません。GCS は stg と prod で同一なので、prod でも全件検証すると stg と同じ結果を重複して得る（download 量が二重になる）ため、prod は sample を推奨します。台帳を消すと全件の再検証になります。</li>
 <li><b>馬は評価窓のみ</b>：直近〜出走予定の馬だけ。</li>

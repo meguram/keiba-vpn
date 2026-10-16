@@ -321,7 +321,7 @@
       <div class="ph-label">Phase 2a — 並列</div>
       <div class="ph-title">SmartRC + 馬情報</div>
       <ul>
-        <li>smartrc_race（SmartRC データ。DEC-024 で除外済み・コードに残存、要確認）</li>
+        <li>smartrc_race（SmartRC データ。DEC-027 で取得を継続）</li>
         <li style="margin-top:6px;"><strong>出走馬ごと:</strong></li>
         <li>horse_result（馬情報・レース歴）</li>
         <li style="font-size:12px;color:var(--c-text-muted);">is_horse_fresh() で 7 日以内の場合はスキップ</li>
@@ -581,8 +581,8 @@
         <td>SmartRC データ</td>
         <td><span class="badge badge-race">race</span></td>
         <td><code>…/smartrc_race/{year}/{race_id}.json</code></td>
-        <td><b>取得対象から除外（DEC-024）</b>。コードには前日夕方・開催日夕方のキュー（<code>EVE_TASKS</code> / <code>EVENING_TASKS</code> の <code>smartrc</code>）と <code>scrape_race_all</code> Ph2a が残っている（T-034 で除去予定）</td>
-        <td>実運用での取得可否は要確認</td>
+        <td><b>取得を継続（DEC-027）</b>。前日夕方・開催日夕方のキュー（<code>EVE_TASKS</code> / <code>EVENING_TASKS</code> の <code>smartrc</code>）と <code>scrape_race_all</code> Ph2a で取得する</td>
+        <td>2020〜2026 年の全レース分がある。利用規約は未確認</td>
         <td><a class="sample-link" href="https://www.smartrc.jp/race/202608030811/" target="_blank" rel="noopener">smartrc.jp/race/</a></td>
       </tr>
       <tr style="background:#f8f8ff;">

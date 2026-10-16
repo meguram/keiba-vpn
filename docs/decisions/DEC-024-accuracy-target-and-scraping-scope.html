@@ -184,8 +184,8 @@ SmartRC から取得していた特徴量（<code>cr_value</code>・<code>first_
 </ul>
 
 <div class="callout warn">
-  <h4>現状（2026-10-16 確認）: SmartRC の除外はコードに反映されていない</h4>
-  <p><code>smartrc_race</code> は <code>src/scraper/schema_defs.json</code> と <code>HybridStorage.CATEGORY_MAP</code> に残り、<code>auto_scrape_queue.py</code> の <code>EVE_TASKS</code> / <code>EVENING_TASKS</code> と SLA 仕様（<code>sla_spec.py</code>）でも取得対象のまま。GCS にも <code>smartrc_race</code> / <code>smartrc_entries</code> が存在する。決定どおり除外するか、決定を見直すかは要判断。</p>
+  <h4>現状（2026-10-16）: SmartRC の除外は <a href="DEC-027-smartrc-fetch-continued.html">DEC-027</a> で見直し（取得を継続）</h4>
+  <p>本決定の「SmartRC 除外」は実装されず、<code>auto_scrape_queue.py</code> の <code>EVE_TASKS</code> / <code>EVENING_TASKS</code> で取得が続いていた。プロダクトオーナーは 2026-10-16 に、位置取り・ペース予測に使えるスタート後 1F（テン1F）のデータが欲しいとして取得の継続を判断し、DEC-027 で記録した。§2 の SmartRC の行と §3 は DEC-027 に置き換わる（§1 の精度目標・netkeiba / JRA の扱いは有効）。</p>
   <p style="color:var(--muted);font-size:13px">この決定の記録は当時のまま残す。本欄だけが現状の注記。</p>
 </div>
 
