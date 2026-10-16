@@ -37,6 +37,15 @@ TARGETS = (
 )
 
 
+def recency_weights(race_ids, halflife_years: float | None) -> np.ndarray | None:
+    """新しい年ほど重くする学習重み（半減期 = halflife_years 年）。最新の年が 1.0。None なら重みなし（従来どおり）。
+    オッズの挙動は年とともに変わる（締切直前の資金流入で人気が偏る等）ので、古い年の影響を弱めるための選択肢。"""
+    if not halflife_years:
+        return None
+    yr = pd.Series(race_ids).astype(str).str[:4].astype(int).to_numpy()
+    return 0.5 ** ((yr.max() - yr) / float(halflife_years))
+
+
 @dataclass
 class _TrainedHead:
     name: str
@@ -61,6 +70,7 @@ class FinalOddsTrainer:
         eval_years: tuple[str, ...] = EVAL_YEARS_DEFAULT,
         max_races: int | None = None,
         progress: FinalOddsProgress | None = None,
+        recency_halflife_years: float | None = None,
     ) -> dict[str, Any]:
         t0 = time.time()
         if storage is None:
@@ -145,6 +155,7 @@ class FinalOddsTrainer:
                 head_name,
                 log_col,
                 raw_col,
+                weight=recency_weights(train_df["race_id"], recency_halflife_years),
             )
             heads.append(head)
             prog.update(
@@ -178,6 +189,7 @@ class FinalOddsTrainer:
         head_name: str,
         log_col: str,
         raw_col: str,
+        weight: np.ndarray | None = None,
     ) -> _TrainedHead:
         X_train = train_df[feature_cols].fillna(0).astype(float)
         y_train = train_df[log_col].astype(float).values
@@ -193,11 +205,13 @@ class FinalOddsTrainer:
             y_eval = y_train[-n_hold:]
             X_tr = X_train.iloc[:-n_hold]
             y_tr = y_train[:-n_hold]
+            if weight is not None:
+                weight = weight[:-n_hold]
             valid = lgb.Dataset(X_eval, label=y_eval, reference=lgb.Dataset(X_tr, label=y_tr))
             valid_sets = [valid]
             X_train, y_train = X_tr, y_tr
 
-        train_data = lgb.Dataset(X_train, label=y_train)
+        train_data = lgb.Dataset(X_train, label=y_train, weight=weight)
         callbacks = [lgb.early_stopping(80, verbose=False), lgb.log_evaluation(0)]
         model = lgb.train(
             params,
