@@ -90,13 +90,13 @@ def sections_to_records(sections: list[dict[str, Any]], link: dict, *, warnings:
         cols = s["cols_b"] or s["cols_a"]
         n = len(cols)
         if n == 0:
-            warnings.append(f"{link.get('venue_name')} 第{link.get('kai')}回 区間{si}: 曜日の列が読めない")
+            warnings.append(f"{link.get('year')} {link.get('venue_name')} 第{link.get('kai')}回 区間{si}: 曜日の列が読めない")
             continue
         has_cushion = len(s["cushion"]) == n
         for j, wd in enumerate(cols):
             d = _date_for_weekday(s["start"], s["end"], wd)
             if d is None:
-                warnings.append(f"{link.get('venue_name')} 第{link.get('kai')}回 区間{si}: {wd}曜日が日付範囲に無い")
+                warnings.append(f"{link.get('year')} {link.get('venue_name')} 第{link.get('kai')}回 区間{si}: {wd}曜日が日付範囲に無い")
                 continue
             rec: dict[str, Any] = {
                 "year": int(link["year"]), "venue_code": link["venue_code"], "venue_name": link["venue_name"], "kai": int(link["kai"]), "pair_index": si,
@@ -107,7 +107,7 @@ def sections_to_records(sections: list[dict[str, Any]], link: dict, *, warnings:
                 arr = s["vals"].get(key, [])
                 rec[field] = arr[j] if len(arr) == n and j < len(arr) else None
                 if key in s["vals"] and len(arr) != n:
-                    warnings.append(f"{link.get('venue_name')} 第{link.get('kai')}回 区間{si}: {field} の数が列数と違う（{len(arr)} / {n}）")
+                    warnings.append(f"{link.get('year')} {link.get('venue_name')} 第{link.get('kai')}回 区間{si}: {field} の数が列数と違う（{len(arr)} / {n}）")
             out.append(rec)
     return out
 

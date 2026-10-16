@@ -41,7 +41,7 @@ def _write(d: Path, rows: list[dict]) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--years", nargs="+", type=int, default=list(range(2018, 2027)))
+    ap.add_argument("--years", nargs="+", type=int, default=list(range(2018, 2025)))     # 2025 年以降は別形式（日別の表）なので既存パーサに任せる
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--report", default=str(ROOT / "data" / "local" / "meta" / "cushion_backfill_report.json"))
     a = ap.parse_args()
