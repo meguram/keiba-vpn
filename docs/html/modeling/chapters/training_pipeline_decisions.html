@@ -22,7 +22,7 @@
 <body>
 <main>
 <h1>学習パイプライン 確定事項ログ</h1>
-<p class="muted">notebook <code>notebooks/modeling/training_pipeline/tp-NN-*.ipynb</code> が完成するたびに、そのフローで確定した事項を追記する。各項目には根拠（コミット・MLflow run・成果物）を添える。実行はホスト PC（stg）。特徴量の設計根拠と tp-03・tp-04 の手順は <a href="feature_strategy_tp03_tp04.html" style="color:#7aa9ff">特徴量戦略書</a>、モデリングの方針（tp-04〜tp-07）は <a href="modeling_strategy_tp04_tp07.html" style="color:#7aa9ff">モデリング戦略書</a>。最終更新: 2026-10-16（tp-00〜tp-06）。</p>
+<p class="muted">notebook <code>notebooks/modeling/training_pipeline/tp-NN-*.ipynb</code> が完成するたびに、そのフローで確定した事項を追記する。各項目には根拠（コミット・MLflow run・成果物）を添える。実行はホスト PC（stg）。特徴量の設計根拠と tp-03・tp-04 の手順は <a href="feature_strategy_tp03_tp04.html" style="color:#7aa9ff">特徴量戦略書</a>、モデリングの方針（tp-04〜tp-07）は <a href="modeling_strategy_tp04_tp07.html" style="color:#7aa9ff">モデリング戦略書</a>。最終更新: 2026-10-16（記録済み: tp-00〜06b・08・11・15。未記録の notebook は §0 の表の『記録』列）。</p>
 
 <div class="box">
 <b>運用ルール</b>
@@ -30,21 +30,60 @@
   <li>確定した事項だけを書く。実測値と推測を区別し、未確定のものは「申し送り」に分ける。</li>
   <li>数値は notebook の実行結果から転記し、実行時のコミットと MLflow run を併記する。</li>
   <li>前の節の確定事項を変更するときは、変更理由と日付を該当節に追記する（書き換えて消さない）。</li>
+  <li><b>用語:</b> 「ホスト PC」＝「学習PC」＝stg のホスト（<code>ssh keiba-remote</code>）。「開発 PC」は Claude Code を動かすコード作業用の PC で、GCP・本物のデータには接続しない。</li>
+  <li><b>基準の名前:</b> <b>B0</b> = LayerA の既存列（<code>horse_prior_*</code>・<code>jockey_prior_*</code> など。speed_* を含む）、<b>B0′</b> = B0 から speed_*（タイム指数）を除いたもの＝運用の前提（48 列）。現行の特徴量は B0′ ＋ 履歴 127 列（tp-03）＋ 前段 3 列 ＋ 相対化 ＋ 追い切り・厩舎コメント・血統×条件。<b>BaselineV1 / ExtendedV1</b> は 2026-05 の旧設計（<code>horse_pre_race_dataset</code>）の呼称で、現行の B0 / B0′ とは別物。</li>
 </ul>
 </div>
 
+<div class="box" style="border-color:#fbbf24">
+<b class="warn">本ログの精度の数値の前提（2026-10-16 時点）</b>
+<p>本ログと各実験レポートの LogLoss・回収率は、<b>2026-10-15 の track_bias 先読みリーク修正（同日の後のレースの結果が、当日傾向の特徴量に混ざる不具合）より前の LayerA・特徴量</b>で出した値です（<code>layer_a.parquet</code> は 10-14 作成）。修正後の LayerA・<code>train_table</code> の再構築と再学習はまだで、<b>再構築後に更新予定</b>。それまでは、数値の絶対値はやや楽観側に偏っている可能性があり、特徴量や手法の<b>相対比較（差）</b>の結論は影響が小さいと見込まれるが、未確認です。</p>
+</div>
+
 <h2>0. 全体フローと状態</h2>
+<p class="muted">notebook 一覧は <code>notebooks/modeling/training_pipeline/</code> の実在ファイルから作成（2026-10-16 時点。notebook は出力を消した状態で git 管理され、実行したものの結果はホストの <code>data/local/modeling/training_pipeline/</code> と MLflow にある）。「記録」列は、本ログに確定事項の節があるか。<b>「未記録」は、結果が本ログに無い（確定事項として未確定、または記録待ち）</b>という意味で、結果の有無を示すものではない。</p>
 <table>
-<tr><th>#</th><th>notebook</th><th>役割</th><th>状態</th></tr>
-<tr><td>00</td><td><code>tp-00-env-check</code></td><td>環境・接続・データ・計算資源の確認</td><td class="ok">完了</td></tr>
-<tr><td>01</td><td><code>tp-01-dataset-split</code></td><td>母表構築・分割・分布検証</td><td class="ok">完了</td></tr>
-<tr><td>02</td><td><code>tp-02-feature-build</code></td><td>特徴量生成（リーク検査つき）</td><td class="ok">完了</td></tr>
-<tr><td>03</td><td><code>tp-03-feature-ablation</code></td><td>特徴量グループの採否</td><td class="ok">完了</td></tr>
-<tr><td>04</td><td><code>tp-04-stage-models</code></td><td>前段モデル（位置取り・ペース・上がり3F・走破タイム・着順）と後段への寄与</td><td class="ok">完了</td></tr>
-<tr><td>05</td><td><code>tp-05a〜e</code></td><td>p_win・p_top2・p_top3 の学習と調整（05a 目的関数、05b モデル族、05c 重み・ラウンド数、05d Optuna、05e アンサンブル）</td><td class="ok">完了</td></tr>
-<tr><td>06</td><td><code>tp-06-final-evaluation</code></td><td>最終評価（test 2025 は一度だけ）。較正の確認を含む</td><td class="ok">完了</td></tr>
-<tr><td>07</td><td><code>tp-07-register-verify</code></td><td>最終再学習・登録・推論の一致確認</td><td>未作成</td></tr>
+<tr><th>#</th><th>notebook</th><th>役割</th><th>状態</th><th>記録</th></tr>
+<tr><td>00</td><td><code>tp-00-env-check</code></td><td>環境・接続・データ・計算資源の確認</td><td class="ok">完了</td><td>§1</td></tr>
+<tr><td>01</td><td><code>tp-01-dataset-split</code></td><td>母表構築・分割・分布検証</td><td class="ok">完了</td><td>§2</td></tr>
+<tr><td>01b</td><td><code>tp-01b-missing-audit</code></td><td>欠損監査（特徴量ごとに、欠損が正当か・生データ未取得か・加工の誤りかを分類）</td><td>実行済み（ホスト）</td><td>未記録（§4 のデータ完全化の経緯に関連）</td></tr>
+<tr><td>02</td><td><code>tp-02-feature-build</code></td><td>特徴量生成（リーク検査つき）</td><td class="ok">完了</td><td>§3</td></tr>
+<tr><td>03</td><td><code>tp-03-feature-ablation</code></td><td>特徴量グループの採否</td><td class="ok">完了</td><td>§5</td></tr>
+<tr><td>04</td><td><code>tp-04-stage-models</code></td><td>前段モデル（位置取り・ペース・上がり3F・走破タイム・着順）と後段への寄与</td><td class="ok">完了</td><td>§6</td></tr>
+<tr><td>05a</td><td><code>tp-05a-baseline-objectives</code></td><td>勝ち馬確率の目的関数の比較（ベースライン）</td><td class="ok">完了</td><td>§7</td></tr>
+<tr><td>05b〜e</td><td><code>tp-05b〜e</code></td><td>モデル族・重み/ラウンド・Optuna・アンサンブル</td><td class="ok">完了</td><td>§8</td></tr>
+<tr><td>05f〜i</td><td><code>tp-05f〜i</code></td><td>NN 拡張・追い切り/厩舎コメント・血統×条件・アンサンブル v2・NN 再調整</td><td class="ok">完了</td><td>§9</td></tr>
+<tr><td>05j〜n</td><td><code>tp-05j〜n</code></td><td>専用化（クラス・コース別）、専用化の対照実験、ランキング学習の確率化、多層スタッキング、多様なメンバー</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>06</td><td><code>tp-06-final-evaluation</code></td><td>最終評価 v1（test 2025 は一度だけ）。較正の確認を含む</td><td class="ok">完了</td><td>§8</td></tr>
+<tr><td>06b</td><td><code>tp-06b-final-evaluation-v2</code></td><td>最終評価 v2（アンサンブル v2。test 2025 は一度だけ）</td><td class="ok">完了</td><td>§9</td></tr>
+<tr><td>07</td><td><code>tp-07-register-verify</code></td><td>最終再学習・登録・推論の一致確認（<b>notebook は未作成</b>）</td><td>未作成</td><td>—</td></tr>
+<tr><td>08</td><td><code>tp-08-betting-rl</code></td><td>馬券最適化の強化学習</td><td class="ok">完了（2026-10-16 訂正済み）</td><td>§10</td></tr>
+<tr><td>09</td><td><code>tp-09-betting-strategy-comparison</code></td><td>馬券戦略の比較（優位の検定・文献の手法）</td><td>notebook あり</td><td>§10 に再評価の数値のみ。節は未記録</td></tr>
+<tr><td>10</td><td><code>tp-10-odds-drift</code></td><td>オッズの年ごとの変化と最終オッズ予測のドリフト対策</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>11</td><td><code>tp-11-bet-staking</code></td><td>購入額の段階づけ（0 / 500 / 1000 / 2000 円）</td><td class="ok">完了</td><td>§12</td></tr>
+<tr><td>12</td><td><code>tp-12-predicted-odds-betting</code></td><td>予測オッズでの馬券最適化（実運用に最も近い設定）</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>13</td><td><code>tp-13-strategy-lab-level0</code></td><td>戦略探索 レベル 0（オッズを使わず、順位だけで買う規則）</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>14</td><td><code>tp-14-strategy-lab-level1</code></td><td>戦略探索 レベル 1（オッズを使う戦略＋購入額の段階づけ）</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>15</td><td><code>tp-15-course-similarity</code></td><td>コース適性の類似度</td><td class="ok">完了（不採用）</td><td>§11</td></tr>
+<tr><td>16</td><td><code>tp-16-feature-bakeoff</code></td><td>特徴量 bake-off（季節性・後日談・クッション値・近交係数ほか）</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>17</td><td><code>tp-17-imputation</code></td><td>欠損値のモデル補完・外れ値の変換（NN と LightGBM）</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>18</td><td><code>tp-18-hierarchical-stacking</code></td><td>特徴量グループごとの階層スタッキング</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>19</td><td><code>tp-19-training-laps</code></td><td>追い切りラップの特徴量と調教師別のパターン採点</td><td>notebook あり</td><td>未記録</td></tr>
 </table>
+
+<h3>勝率（p_win）LogLoss の推移（評価データと条件が違うので、横並びの比較には使わない）</h3>
+<table>
+<tr><th>段階</th><th>勝率 LogLoss</th><th>評価データ</th><th>特徴量・モデルの条件</th><th>節</th></tr>
+<tr><td>tp-03 採用後（B0′ に履歴 127 列を足した）</td><td>0.22069（足す前 0.23375）</td><td>valid 2022〜2024 の平均、3 seed</td><td>LightGBM 固定パラメータ、speed_* なし。レース内の合計 1 への正規化（M1）の適用有無は <b>要確認</b></td><td>§5</td></tr>
+<tr><td>tp-05a 基準 A1（二値＋レース内正規化）</td><td>0.21823（最良 C1 0.21722）</td><td>valid 2022〜2024、3 seed</td><td>tp-03 の採用セット 175 列、LightGBM 固定。正規化前は 0.22081</td><td>§7</td></tr>
+<tr><td>tp-05b モデル族（LightGBM 二値）</td><td>0.21666（XGBoost 0.21643）</td><td>valid 2022〜2024</td><td>base＋前段 3 列＋相対化（220 列）</td><td>§8</td></tr>
+<tr><td>tp-05d Optuna 後（LightGBM / XGBoost / NN）</td><td>0.21637 / 0.21636 / 0.21538</td><td>調整は valid 2022・2023、2024 は確認専用</td><td>同上の 220 列</td><td>§8</td></tr>
+<tr><td>tp-05e アンサンブル</td><td>0.21488</td><td>leave-one-year-out（valid 2022〜2024）</td><td>NN・LightGBM・XGBoost の logit 重み付き</td><td>§8</td></tr>
+<tr><td>tp-05g 追い切り・厩舎コメントを足した LightGBM</td><td>0.21549（足す前 0.21637）</td><td>valid 2022〜2024</td><td>単体のモデル</td><td>§9</td></tr>
+<tr><td>tp-06 最終評価 v1</td><td>0.21349</td><td><b>test 2025</b>（一度だけ、3,455 レース）</td><td>2020〜2024 年で学習</td><td>§8</td></tr>
+<tr><td>tp-06b 最終評価 v2（アンサンブル v2）</td><td>0.21240</td><td><b>test 2025</b>（一度だけ）</td><td>2020〜2024 年で学習、7 モデル。リーク修正前の特徴量</td><td>§9</td></tr>
+</table>
+<p class="muted">valid（調整に使う年）と test 2025（最後に一度だけ）は別の年の別の集合なので、数値の大小をそのまま比べない。表の値は、いずれもリーク修正（上の注記）より前の特徴量で出している。</p>
 
 <h2>1. tp-00 環境チェック</h2>
 <p class="muted">根拠: コミット <code>9d824b6</code> でホスト PC 実行、全 13 項目 OK。実行結果は <code>data/local/modeling/training_pipeline/runs/tp-00-env-check.ipynb</code>（ホスト PC）。</p>

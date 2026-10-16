@@ -111,6 +111,8 @@ ul.bullets li::before {
 <header class="hero">
   <div class="eyebrow">MODELING · FINAL ODDS</div>
   <h1>最終オッズ予測モデル</h1>
+<p style="background:#15213c;border:1px solid #fbbf24;border-radius:8px;padding:8px 12px;font-size:13px;color:#e6ecff"><b>注（2026-10-16）:</b> 既定の年次分割（Eval=2025）はこのモデル<b>単体</b>の設計上の既定。馬券の検証（tp-12）では、判断に使う予測オッズを「検証年 Y より前（Y-01-01 の 10 日前まで）で学習するローリング」で作り直し、年ごとに未来の情報が入らないようにしている（<a href="training_pipeline_decisions.html" style="color:#7aa9ff">確定事項ログ</a>の「test 2025 は一度だけ」の規則はメインの確率モデルの話）。</p>
+
   <p>
     発走前の出馬表・調教・速度指数・過去走データから単勝・複勝オッズを推定する
     LightGBM 3 ヘッドモデルの設計・学習・推論フローをまとめたページです。

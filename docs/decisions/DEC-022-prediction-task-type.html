@@ -138,6 +138,12 @@ article.html-body pre code { background: none; border: none; padding: 0; }
 <tr><td>関連</td><td><code>DEC-005</code>, <code>DEC-015</code>, <code>DEC-016</code>, <code>AREA-06</code>, <code>AREA-07</code></td></tr>
 </table>
 
+<div class="callout warn">
+  <h4>現状（2026-10-16 確認）: 連対率・複勝率は割引 Harville に置換、モデルは LightGBM 単独ではない</h4>
+  <p>連対率・複勝率の導出は、勝率・連対率・複勝率に整合する <b>割引 Harville（Benter 型、α をレースごとに当てはめ）</b>に置き換わった（<code>src/pipeline/inference/exotic_probabilities.py</code>、<code>docs/html/modeling/chapters/exotic_bet_probabilities.html</code>）。勝率のモデルも LightGBM 単独ではなく複数モデルのアンサンブル（<code>training_pipeline_decisions</code> 参照）。二値分類 + レース内 softmax の考え方は引き継がれている。</p>
+  <p style="color:var(--muted);font-size:13px">この決定の記録は当時のまま残す。本欄だけが現状の注記。</p>
+</div>
+
 <h2 id="context">コンテキスト</h2>
 <p>
 AREA-07 の単勝予測タスク定義が「回帰問題（連続値スコア）」と「二値分類（binary classification）」の両方で記述されており内部矛盾が発生していた。また連対率・複勝率の確率計算ロジックが未定義だった。

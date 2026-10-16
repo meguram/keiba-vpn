@@ -339,12 +339,13 @@
         <span class="tag">Stage0 → Stage7 / 7 段階</span>
         <span class="tag">LayerA (能力) / LayerB (市場)</span>
         <span class="tag">BaselineV1 / ExtendedV1</span>
-        <span class="tag">Train/Valid/Test（2020–23 / 24 / 25）</span>
+        <span class="tag">Valid 2022–2024 expanding / Test 2025</span>
         <span class="tag">Purged Group Time Series Split</span>
         <span class="tag">OOF Target Encoding</span>
-        <span class="tag">LightGBM × CatBoost ensemble</span>
+        <span class="tag">LightGBM・XGBoost・CatBoost・NN のアンサンブル</span>
         <span class="tag">Polars-first / fold materialize</span>
       </div>
+      <p class="meta doc-updated">最終更新: 2026-10-16（JST）</p>
     </header>
 
     <!-- 1. Purpose -->
@@ -845,12 +846,22 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
       <p>
         競馬のデータは <b>同一レース内で強く相関</b>しており、<b>時間方向の因果</b>も厳しく存在します。
         通常のランダム分割を使うと、情報リークと過楽観バイアスの原因になります。
-        本プロジェクトでは <code class="inline">data/meta/modeling/dataset_split_manifest.json</code> を
+        本プロジェクトでは <code class="inline">config/modeling/dataset_split_manifest.json</code> を
         唯一の分割定義とし、詳細は
         <code class="inline">docs/html/modeling/chapters/train_valid_test_split_strategy.html</code> に集約します。
       </p>
 
-      <h3>一次プロトコル（確率モデル本線）</h3>
+      <div class="callout warn">
+        <h4>現行の確定事項（2026-10 時点）</h4>
+        <p>
+          実際の分割は <b>valid を 2022・2023・2024 の各 1 暦年とする expanding window</b>（学習は valid 開始日の 10 日前＝purge 7 日 + embargo 3 日より前に限る）で、
+          <b>test 2025 は最後まで見ず、2020〜2024 年で学習して一度だけ評価</b>します。最終モデルは LightGBM・XGBoost・CatBoost・NN の複数モデルを組み合わせたアンサンブルです。
+          根拠と数値は <a href="../modeling/chapters/training_pipeline_decisions.html">学習パイプライン 確定事項ログ</a> と
+          <a href="../modeling/chapters/train_valid_test_split_strategy.html">Train / Valid / Test 分割戦略</a>。
+          以下の「2020–2023 / 2024 / 2025」の表と図は <b>2026-05 時点の初期設計</b>で、現行の分割とは異なります。また、予測時点は本ページの冒頭にある「T-10 分」ではなく、<b>馬体重の発表後（T-60）のみ</b>に変更済みです（2026-10-14 決定）。
+        </p>
+      </div>
+      <h3>一次プロトコル（2026-05 時点の初期設計）</h3>
       <table class="table">
         <thead><tr><th>役割</th><th>期間</th><th>用途</th></tr></thead>
         <tbody>
@@ -947,8 +958,8 @@ flowchart LR
     A[adversarial]
   end
   subgraph Split[本番前評価]
-    T[train 2020-2023]
-    V[valid 2024]
+    T[train 2020-2023 / 初期設計]
+    V[valid 2024 / 現行は 2022-2024]
     X[test 2025]
   end
   subgraph CV[開発CV]
@@ -1133,7 +1144,8 @@ flowchart LR
         </div>
       </div>
       <h3>分割ルールのまとめ</h3>
-      <pre class="code">2020-2023 train / 2024 valid / 2025 test
+      <pre class="code">（初期設計）2020-2023 train / 2024 valid / 2025 test
+（現行）valid 2022・2023・2024 の expanding window / test 2025 は最後まで見ない
 rolling-origin fold (race_id 単位)
 行単位ランダム split: 禁止
 train fold 内でのみ集計・encoding</pre>
@@ -1521,7 +1533,7 @@ flowchart TD
         <li>確率の補正（キャリブレーション）</li>
         <li>位置取り・ペース推定の補助モデル</li>
         <li>当日バイアス・血統文脈の補助モデル</li>
-        <li>LightGBM + CatBoost 交差検証での予測（OOF）ensemble</li>
+        <li>LightGBM・XGBoost・CatBoost・NN の交差検証での予測（OOF）アンサンブル</li>
         <li>safe_ev と方針探索</li>
       </ol>
 

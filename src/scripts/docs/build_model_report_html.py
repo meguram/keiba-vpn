@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.scripts.docs import report_notes as N
+
 CSS = """
 :root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
 body { margin:0; background:var(--bg); color:var(--text); font:15px/1.75 "Noto Sans JP",system-ui,sans-serif; }
@@ -89,6 +91,7 @@ def main() -> int:
     o.append(f'<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
              f'<title>tp-05a 実験結果レポート — keiba-vpn docs</title><style>{CSS}</style></head><body><main>')
     o.append("<h1>tp-05a 実験結果レポート: 勝ち馬確率の目的関数の比較</h1>")
+    o.append(N.LEAK_NOTE_HTML)
     o.append(f'<p class="muted">作成: {datetime.now():%Y-%m-%d %H:%M} / 実行コミット <code>{html.escape(str(rep.get("git_commit")))}</code> / '
              f'notebook <code>notebooks/modeling/training_pipeline/tp-05a-baseline-objectives.ipynb</code> / MLflow 実験 <code>keiba-tp-model-screen</code>（ホスト上 <code>http://127.0.0.1:23230</code>）</p>')
 

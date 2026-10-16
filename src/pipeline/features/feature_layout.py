@@ -1,5 +1,5 @@
 """
-特徴量ストア `data/features/` のブロック別レイアウト（結合キー単位）。
+特徴量ストア `data/local/features/` のブロック別レイアウト（結合キー単位）。
 
 - base_tbl: 予測ベースのスパイン（``shutuba.parquet``）= **race_id + horse_id + jockey_id + trainer_id のみ**（他列は載せない）
 - race_tbl: レース単位 = race_id + 列
@@ -78,10 +78,10 @@ def jt_meta_dir(base: Path | str = ".") -> Path:
 
 
 def rank_tbl_dir(base: Path | str = ".") -> Path:
-    """着順ラベル Parquet のルート: ``data/features/target/rank_tbl/``。"""
+    """着順ラベル Parquet のルート: ``data/local/features/target/rank_tbl/``。"""
     return Path(base) / FEATURES_DIR / RANK_TBL_SUBDIR
 
 
 def rank_parquet_path(year: str | int, base: Path | str = ".") -> Path:
-    """1 年分: ``data/features/target/rank_tbl/<YYYY>/rank.parquet``。"""
+    """1 年分: ``data/local/features/target/rank_tbl/<YYYY>/rank.parquet``。"""
     return rank_tbl_dir(base) / str(year) / "rank.parquet"

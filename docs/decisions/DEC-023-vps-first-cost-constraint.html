@@ -145,6 +145,12 @@ article.html-body pre code { background: none; border: none; padding: 0; }
 <tr><td>Supersedes</td><td>DEC-006（デプロイターゲット選定）の GCP マネージドサービス前提部分</td></tr>
 </table>
 
+<div class="callout warn">
+  <h4>現状（2026-10-16 確認）: Cloud SQL・Cloud Run Jobs を採用する構成に置き換わっている</h4>
+  <p>2026-10-02 に確定した構成（<code>docs/operations/vps-gcp-responsibilities.md</code>）は、<b>Cloud SQL（PostgreSQL、stg/prod 共用 1 台）・Cloud Run Jobs + Cloud Scheduler</b> を採用し、学習・特徴量生成は学習PC（stg ホスト）で行う。本 DEC の「Cloud SQL / Cloud Run / Cloud Scheduler を廃止」の部分は置き換わった。維持されているもの: 月額上限 3,000 円（<code>docs/operations/cost-estimate.md</code> の試算は約 $18≒2,700 円）、netkeiba への並列リクエスト禁止（<code>NETKEIBA_MAX_CONCURRENT_REQUESTS=1</code>）、BigQuery を使わない方針。置き換えを正式に残すなら新しい DEC を起こす（要判断）。</p>
+  <p style="color:var(--muted);font-size:13px">この決定の記録は当時のまま残す。本欄だけが現状の注記。</p>
+</div>
+
 <h2 id="context">コンテキスト</h2>
 <p>
 AREA-05〜07 のコスト試算は GCP マネージドサービス（Cloud Run / Cloud SQL / BigQuery）を前提に $100/月（〜15,000円）で作られていたが、実際のシステムは ConoHa VPS で稼働しており実態と乖離していた。また想定リクエスト数が最大 50,000 req/日（1,000 req/レース × 36レース）であることが確認され、月額予算を 1,000〜3,000円以内とする要件が明確化された。

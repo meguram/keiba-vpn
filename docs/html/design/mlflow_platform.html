@@ -121,6 +121,7 @@ tr:hover td { background: rgba(79,139,255,.04); }
   <div class="eyebrow">Ch1 · システム設計</div>
   <h1>MLflow（モデルの保管・バージョン管理ツール）モデリング・予測プラットフォーム</h1>
   <p>競馬予測の学習・Registry・モデル実行サービス・API キャッシュを <strong>モデルキー単位</strong> で統一する基盤です。</p>
+  <p class="meta doc-updated">最終更新: 2026-10-16（JST）</p>
 </header>
 
 <h2>アーキテクチャ</h2>
@@ -142,7 +143,8 @@ pipeline/models/*.py
 </div>
 
 <h2>モデルカタログ</h2>
-<p>正の定義: <code>src/pipeline/mlflow/catalog.py</code> の <code>MODEL_CATALOG</code></p>
+<p>正の定義: <code>src/pipeline/mlflow/catalog.py</code> の <code>MODEL_CATALOG</code>（2026-10-16 時点で 7 モデル。lifecycle もこの定義に合わせている）。
+Serving ポート 5001〜5010 は <code>mlflow/server/docker-compose.yml</code>（VPS デプロイ用）の従来ポートで、ローカルの Tracking UI は <code>config/ports.env</code> の 23130（dev）/ 23230（stg）/ 23330（prod）。</p>
 
 <table>
   <thead>
@@ -181,7 +183,7 @@ pipeline/models/*.py
       <td>最終オッズ予測</td>
       <td><code>keiba-final-odds-lgbm</code></td>
       <td>5003</td>
-      <td><span class="tag tag-planned">planned</span></td>
+      <td><span class="tag tag-active">active</span></td>
     </tr>
     <tr>
       <td><code>pace_predictor</code></td>
@@ -189,6 +191,20 @@ pipeline/models/*.py
       <td><code>pace-predictor-lgbm</code></td>
       <td>5004</td>
       <td><span class="tag tag-active">active</span></td>
+    </tr>
+    <tr>
+      <td><code>lap_predictor</code></td>
+      <td>ラップ予測（1F ごとの秒数・LightGBM）</td>
+      <td><code>lap-predictor-lgbm</code></td>
+      <td>5005</td>
+      <td><span class="tag tag-planned">planned</span></td>
+    </tr>
+    <tr>
+      <td><code>lap_lstm</code></td>
+      <td>ラップ予測（LSTM 時系列回帰・Phase 4 以降）</td>
+      <td><code>lap-predictor-lstm</code></td>
+      <td>5006</td>
+      <td><span class="tag tag-planned">planned</span></td>
     </tr>
   </tbody>
 </table>

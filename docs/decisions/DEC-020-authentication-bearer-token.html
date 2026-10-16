@@ -142,6 +142,12 @@ article.html-body pre code { background: none; border: none; padding: 0; }
 <tr><td><b>関連 DEC</b></td><td>DEC-016</td></tr>
 </table>
 
+<div class="callout warn">
+  <h4>現状（2026-10-16 確認）: JWT Bearer 認証は未実装</h4>
+  <p><code>src/api/auth.py</code> に JWT の生成・検証は無く（<code>PyJWT</code> も未依存）、<code>KEIBA_API_TOKEN</code> による認証もコード上に無い。Bearer を見るのは Cloud Tasks の OIDC 検証スタブ（<code>src/api/app.py</code>、既定オフ）のみ。ログインは DEV_PASSWORD + Cookie（DEC-016 の注記を参照）。</p>
+  <p style="color:var(--muted);font-size:13px">この決定の記録は当時のまま残す。本欄だけが現状の注記。</p>
+</div>
+
 <h2 id="context">コンテキスト</h2>
 <p>AREA-03 §4 は API クライアント向けに <code>Authorization: Bearer &lt;token&gt;</code> ヘッダーによる認証を仕様として定義しているが、実装は Cookie 専用で Bearer 検証ロジックが存在しない。外部クライアント・CI/CD からの API 呼び出しに対応できない。</p>
 

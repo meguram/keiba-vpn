@@ -149,6 +149,12 @@ article.html-body pre code { background: none; border: none; padding: 0; }
 <p>DEC-001 は競馬予測システム（keiba-vpn）のデータ要件・モデリング要件を定義した文書であり、開発環境固有の仕様（dev/stg/prod 環境分離、docker-compose 設計、デプロイフロー等）に関する記述は含まれていない。</p>
 <p>以下に、DEC-001 から抽出できる <b>開発環境要件に直接関連する情報</b> と、DEC-017 で確定した環境変数正規名・Python バージョン・CI 設定を統合して記載する。</p>
 
+<div class="callout warn">
+  <h4>現状（2026-10-16 確認）: 本書のポート・値の例は 2026-07 のもの</h4>
+  <p>各サーバーのポートは <code>config/ports.env</code> が正（dev=231xx / stg=232xx / prod=233xx / 監視=23900。MLflow Tracking は dev 23130）。本書の <code>localhost:5000</code>（Flask・MLflow）などは旧既定ポート。<code>GCS_BUCKET</code> の例 <code>keiba-vpn-data</code> は例示で、実バケットは環境の <code>.env</code> で設定する（<code>.env.example</code> は空欄。未設定だと起動時に失敗する: DEC-017）。<b>dev（開発PC）は GCP に一切接続せず</b>、<code>KEIBA_ENV=dev</code> が必須で <code>data/dev_mock/</code> を使う。</p>
+  <p style="color:var(--muted);font-size:13px">本書の記述は当時のまま残す。本欄だけが現状の注記。</p>
+</div>
+
 <h2 id="1">1. 実行環境に関する前提条件</h2>
 <p>DEC-001 から読み取れる環境要件は以下の通り。</p>
 <table>

@@ -141,6 +141,12 @@ article.html-body pre code { background: none; border: none; padding: 0; }
 <tr><td>矛盾ID</td><td>S-9-A</td></tr>
 </table>
 
+<div class="callout warn">
+  <h4>現状（2026-10-16 確認）: カバレッジの下限は CI に入っていない</h4>
+  <p><code>.github/workflows/ci.yml</code> に <code>--cov-fail-under</code> は無い（2026-10 の CI 整理後のジョブは <code>lint-and-test</code> / <code>frontend</code> / <code>smoke</code>。<code>tests/ml</code>・<code>tests/e2e</code> は <code>pytest tests/</code> に含まれる）。段階的に 50% → 80% へ上げる計画は未運用。</p>
+  <p style="color:var(--muted);font-size:13px">この決定の記録は当時のまま残す。本欄だけが現状の注記。</p>
+</div>
+
 <h2 id="context">コンテキスト</h2>
 <p>
 MASTER.html N-13 と AREA-08 はユニットテストカバレッジ ≥ 80% を CI ブロッキング条件として定義しているが、<code>.github/workflows/ci.yml</code> の <code>--cov-fail-under=20</code> は実質的にゲートとして機能しておらず、仕様書の要件を 4 分の 1 しか担保していない。
@@ -165,7 +171,7 @@ MASTER.html N-13 と AREA-08 はユニットテストカバレッジ ≥ 80% を
 <ul>
 <li><code>.github/workflows/ci.yml</code> の <code>--cov-fail-under=20</code> → <code>50</code> に変更</li>
 <li><code>ci.yml</code> に ML テスト・E2E テストの job を追加</li>
-<li><code>docs/decisions/AREA-08-testing.md</code> に段階引き上げ計画を注記</li>
+<li><code>docs/decisions/AREA-08-testing.html</code> に段階引き上げ計画を注記</li>
 </ul>
 
 <h2 id="notes">備考</h2>

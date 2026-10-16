@@ -183,6 +183,12 @@ SmartRC から取得していた特徴量（<code>cr_value</code>・<code>first_
 <li>AREA-07 の特徴量リストから SmartRC 特徴量を削除</li>
 </ul>
 
+<div class="callout warn">
+  <h4>現状（2026-10-16 確認）: SmartRC の除外はコードに反映されていない</h4>
+  <p><code>smartrc_race</code> は <code>src/scraper/schema_defs.json</code> と <code>HybridStorage.CATEGORY_MAP</code> に残り、<code>auto_scrape_queue.py</code> の <code>EVE_TASKS</code> / <code>EVENING_TASKS</code> と SLA 仕様（<code>sla_spec.py</code>）でも取得対象のまま。GCS にも <code>smartrc_race</code> / <code>smartrc_entries</code> が存在する。決定どおり除外するか、決定を見直すかは要判断。</p>
+  <p style="color:var(--muted);font-size:13px">この決定の記録は当時のまま残す。本欄だけが現状の注記。</p>
+</div>
+
 <h2 id="impact">影響範囲</h2>
 <ul>
 <li>AREA-01: N-24 を 複勝的中率 &ge; 40% として明記、SmartRC データソース欄を削除</li>

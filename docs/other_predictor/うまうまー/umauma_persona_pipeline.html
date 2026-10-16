@@ -133,6 +133,8 @@
   </nav>
 
   <section id="scope">
+    <div style="border-left:3px solid #fbbf24;background:rgba(251,191,36,.07);padding:10px 14px;border-radius:8px;margin:1em 0;font-size:14px"><b>現状（2026-10-16 確認）</b>: 本書は<b>設計案</b>で、<code>persona_umauma_features.py</code>・<code>train_persona_umauma.py</code>・<code>persona_umauma_predict.py</code>・<code>persona_umauma_segment_priors.json</code> など「新規」と書いたファイルは<b>まだ作られていない（予定）</b>。再利用すると書いた既存資産（<code>track_speed_engine.py</code>・<code>race_quality_model.py</code>・<code>perf_index.py</code>・<code>course_bloodline.py</code> は <code>src/research/race/</code>、<code>track_bias_pedigree.py</code> は <code>src/pipeline/features/</code>）は実在する。特徴量ストアの実際の場所は <code>data/local/features/</code>。</div>
+
     <h2><span class="num">1</span>問題設定（ペルソナの形式化）</h2>
     <div class="card">
       <p>うまうまー方式の核心は「過去10〜15年、対象レースで6人気以下から3着以内に好走した馬」を母集団にした<strong>穴馬発掘</strong>である。これをテーブルコンペの型に落とすと以下のようになる。</p>
@@ -270,7 +272,7 @@
       <div class="flow">
         <div class="step"><div class="dot">1</div><div><h4>レース情報取得</h4><p><code>race_id</code> から <code>race_tbl</code> / <code>race_shutuba</code> を参照し、出走馬一覧・競馬場・距離・芝ダ・グレード・開催日を取得。</p></div></div>
         <div class="step"><div class="dot">2</div><div><h4>ペルソナ特徴量計算</h4><p>当日時点で確定済みの情報のみを使い、<code>persona_umauma_features.py</code> 経由で②節の特徴量を各出走馬に付与（historical_entity_stats と同じリーク防止規約を継承）。</p></div></div>
-        <div class="step"><div class="dot">3</div><div><h4>モデルスコアリング</h4><p>MLflow レジストリ（<code>docs/mlflow_platform.md</code> 準拠）から学習済みモデルをロードし、各馬の <code>is_top3</code> スコアを算出。</p></div></div>
+        <div class="step"><div class="dot">3</div><div><h4>モデルスコアリング</h4><p>MLflow レジストリ（<code>docs/html/design/mlflow_platform.html</code> 準拠）から学習済みモデルをロードし、各馬の <code>is_top3</code> スコアを算出。</p></div></div>
         <div class="step"><div class="dot">4</div><div><h4>レース内正規化・順位付け</h4><p>同一レース内でスコアを正規化し、出走馬を順位付け。</p></div></div>
         <div class="step"><div class="dot">5</div><div><h4>穴馬フィルタ適用</h4><p>想定人気6位以下かつ上位スコアの馬を「推奨穴馬」として抽出。上位人気馬のみが並んだ場合は「穴馬の出番なし」と判定。</p></div></div>
         <div class="step"><div class="dot">6</div><div><h4>確信度合成</h4><p>⑤節のセグメント別事前信頼度を合成し、最終 confidence を付与。</p></div></div>

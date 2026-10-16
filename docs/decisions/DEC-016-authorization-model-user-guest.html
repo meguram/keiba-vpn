@@ -144,6 +144,12 @@ article.html-body pre code { background: none; border: none; padding: 0; }
 <tr><td><b>矛盾ID</b></td><td>S-4-A/B, S-8-B</td></tr>
 </table>
 
+<div class="callout warn">
+  <h4>現状（2026-10-16 確認）: users テーブル + bcrypt の認証は未実装</h4>
+  <p>ログインは単一の <code>DEV_PASSWORD</code> を照合して署名付きセッション Cookie を発行する方式（<code>src/api/auth.py</code>・<code>src/api/flask_auth.py</code>）で、本 DEC の「選択肢と比較」で見送った『DEV_PASSWORD 単一のまま維持』が実装の実態。<code>users</code> テーブルを使う登録/ログイン、bcrypt（リポジトリ内に使用箇所なし）、saved_analyses の RLS は未実装。</p>
+  <p style="color:var(--muted);font-size:13px">この決定の記録は当時のまま残す。本欄だけが現状の注記。</p>
+</div>
+
 <h2 id="context">コンテキスト</h2>
 <p>
 仕様書はゲスト（未ログイン）と登録ユーザーの2ロールを定義し、ゲストは AI 予測の上位3頭のみ閲覧可能と明記している。しかし実装では「ビジター / 開発者（DEV_PASSWORD 知者）」の1ビット判定のみで、一般ユーザー向けアカウント管理が存在せず、TOP3 制限も未実装。alembic には users テーブルがあるが認証で参照されていない。

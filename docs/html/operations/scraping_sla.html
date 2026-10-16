@@ -183,7 +183,7 @@
   <h1>keiba-vpn 運用 SLA（品質保証基準） — スクレイピング（Webからの自動データ収集）自動化と AI 予測の処理の流れ</h1>
   <div class="subtitle">netkeiba データ取得の現状・依存関係・週次/開催日タイムライン、および「レース 10 分前 AI 予測」実現に向けた現状ギャップの整理</div>
   <div class="meta-row">
-    <span class="pill">最終更新 2026-05-18</span>
+    <span class="pill">最終更新: 2026-10-16（JST）</span>
     <span>対象リポジトリ: <code>keiba-vpn</code></span>
     <span>主要ソース: <code>src/scraper/auto_scrape.py</code> / <code>src/scraper/run.py</code> / <code>src/api/app.py</code></span>
   </div>
@@ -1089,7 +1089,7 @@ crontab -l | grep KEIBA
 python -m src.scraper.queue_worker
 
 # 単発予測
-curl -X POST http://127.0.0.1:8000/api/race/202506050811/predict
+curl -X POST http://127.0.0.1:23120/api/race/202506050811/predict   # dev の FastAPI（config/ports.env）
 </code></pre>
 
   <p style="margin-top: 24px; color: var(--c-text-muted); font-size: 12px;">

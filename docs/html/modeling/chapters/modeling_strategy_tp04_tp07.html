@@ -203,11 +203,21 @@
 <tr><td>固定する条件</td><td>特徴量セット、fold（valid 2022・2023・2024）、purge 7 日 + embargo 3 日、シード（3 つ以上）、early stopping の基準を揃える。比較する要素以外は動かさない。</td></tr>
 <tr><td>主指標</td><td>p_win の LogLoss（fold 平均）。併記: p_top2・p_top3 の LogLoss、race_nll（レース内 softmax 化した負の対数尤度）、Brier、ECE、NDCG@3、top-1 的中率。ROI は参考値（二次）。</td></tr>
 <tr><td>差の統計的な扱い</td><td>レース単位のペアド・ブートストラップで、LogLoss の差の 95% 信頼区間を出す。シード間のばらつき（約 0.0001）を下回る差は採用の根拠にしない。</td></tr>
-<tr><td>採否基準</td><td>差の信頼区間の上限が 0 より小さい（改善）、かつ 3 fold 中 2 fold 以上で改善。同等なら、単純で学習・推論が速いものを採用する。</td></tr>
+<tr><td>採否基準</td><td>差の信頼区間の上限が 0 より小さい（改善）、かつ 3 fold 中 2 fold 以上で改善。同等なら、単純で学習・推論が速いものを採用する。<b>これは当初の原則。実際に使った基準は段階ごとに違う</b>（下の 5.1 の表。確定事項ログが正）。</td></tr>
 <tr><td>実験数の管理</td><td>段階的に絞り込み、確認は fold 2024、最終は test 2025 とする（§2）。試行数が多い比較は Holm 補正または、スクリーニングと確認の二段階で扱う。</td></tr>
 <tr><td>ゲート（相対）</td><td>ベースライン（B0 + 固定パラメータの LightGBM）に対する LogLoss の改善。可能なら市場の implied probability との差（DEC-026 の案）。既存の絶対値のゲート（LogLoss≤0.65）は使わない。</td></tr>
 <tr><td>セグメント別の確認</td><td>競馬場、芝ダ×距離、季節、頭数、京都改修後、クッション観測あり、パドック有無で悪化がないこと。adversarial validation の AUC も追跡する。</td></tr>
 </table>
+
+<h3>5.1 実際に使った採否基準（段階別。2026-10-16 時点）</h3>
+<table>
+<tr><th>段階</th><th>採否基準</th><th>出所</th></tr>
+<tr><td>tp-03 特徴量の ablation</td><td>共通の全 fold で悪化せず、平均が改善し、改善幅が max(0.0001, 2×seed 間のばらつき) 以上。相関が約 0.9 以上のものは代表 1 つ</td><td>確定事項ログ §5</td></tr>
+<tr><td>tp-05a〜e 目的関数・モデル族・調整</td><td>レース単位の paired bootstrap（1,000 回）で、差の 95% 信頼区間の上限が 0 未満、かつ 3 fold 中 2 fold 以上で改善（上の原則と同じ）</td><td>確定事項ログ §7・§8、tp-05a 実験レポート</td></tr>
+<tr><td>tp-05f〜i 精度向上の探索</td><td>差の 95% 信頼区間の上限 &lt; 0、かつ連対・複勝が悪化しない（0.0002 以内）。valid 2022〜2024 だけで決める</td><td>確定事項ログ §9</td></tr>
+<tr><td>tp-15・tp-16 追加特徴量</td><td>上限 &lt; 0、かつ効果 ≥ 0.0002、連対・複勝が 0.0002 を超えて悪化しない（tp-15 は複勝が悪化しない）</td><td>確定事項ログ §11、tp-16 notebook（結果は未記録）</td></tr>
+</table>
+<p class="muted">tp-04 の前段モデルの採用基準は確定事項ログ §6 を参照。</p>
 
 <h2>6. 各 notebook の戦略</h2>
 <table>
@@ -235,10 +245,12 @@
 <table>
 <tr><th>実験名</th><th>内容</th></tr>
 <tr><td><code>keiba-tp-stage</code></td><td>tp-04 の前段予測。</td></tr>
-<tr><td><code>keiba-tp-model-screen</code></td><td>tp-05a〜c のスクリーニングと確認。</td></tr>
+<tr><td><code>keiba-tp-model-screen</code></td><td>tp-05a のスクリーニング（9 方式）。</td></tr>
+<tr><td><code>keiba-tp-model-zoo</code></td><td>tp-05b〜c と tp-05f〜i のモデル族・追加特徴量の比較（初版の設計にない実験名）。</td></tr>
 <tr><td><code>keiba-tp-hpo</code></td><td>tp-05d の Optuna（1 study = 1 親 run、trial = 子 run）。</td></tr>
 <tr><td><code>keiba-tp-ensemble</code></td><td>tp-05e のブレンド・スタッキング。</td></tr>
-<tr><td><code>keiba-tp-final</code></td><td>tp-06・tp-07。test の評価と本番再学習・登録。</td></tr>
+<tr><td><code>keiba-tp-final-eval</code></td><td>tp-06・tp-06b の test 2025 の評価（実際の実験名）。tp-07 の本番再学習・登録に使う名前は未決（初版の予定は <code>keiba-tp-final</code>）。</td></tr>
+<tr><td>その他</td><td><code>keiba-tp-ablation</code>（tp-03）、<code>keiba-tp-dataset</code>、<code>keiba-tp-features</code>、<code>keiba-tp-segment</code>、<code>keiba-tp-betting-rl</code>（tp-08）、<code>keiba-tp-betting-compare</code>・<code>-staking</code>・<code>-predicted-odds</code>・<code>-lab</code>（tp-09〜14）、<code>keiba-tp-course-similarity</code>、<code>keiba-tp-odds-drift</code>・<code>-odds-model</code>、<code>keiba-tp-feature-bakeoff</code>、<code>keiba-tp-imputation</code>、<code>keiba-tp-hierarchical-stacking</code>、<code>keiba-tp-training-laps</code>（コードと notebook 内の実験名から）。</td></tr>
 </table>
 <p>すべての run に、次のタグ・パラメータ・成果物を残す: <code>split_manifest_version</code>、<code>data_version</code>、<code>git_commit</code>、<code>feature_list_hash</code>、<code>primary_metric</code>、<code>study_id</code>、<code>model_family</code>、<code>objective</code>、シード、fold ごとの指標、特徴量リストと採用設定（JSON）、OOF のサンプル、較正曲線、ブートストラップの結果。実験の一覧は確定事項ログにも要約を残す。</p>
 
@@ -246,7 +258,7 @@
 <ul>
   <li>LayerA の確率（オッズ非依存）と市場の implied probability を、Benter 型の 2 段階ロジットで合成する。オッズの時点（T-60／T-15）は学習と運用で揃える。</li>
   <li>予測オッズ（最終オッズ予測モデル。単勝・複勝のみ）の使い方と、三連複など複合馬券の確率（割引 Harville。α は p_top2・p_top3 から当てはめ）は、LayerA の確率の確定後に扱う。</li>
-  <li>期待値と推奨馬券は、較正後の確率を使う。ゲート（ROI＞−5%、Sharpe＞0.3、MDD＜30%）は AREA-07 §10-9 の値を参考にする。</li>
+  <li>期待値と推奨馬券は、較正後の確率を使う。ゲート（ROI＞−5%、Sharpe＞0.3、MDD＜30%）は AREA-07 §10-9 の値を参考にする。<b>（2026-10-16 注）</b> ROI＞−5% は回収率 95% 超と読めるが、tp-08・tp-11 の結果（確定オッズで最良でも約 88%）はこのゲートに届いていない。ゲートは「購入判断に使える優位がある」ことの目安で、未達の現状は UI で「損失を抑える配分」と位置づける（確定事項ログ §10・§12）。</li>
 </ul>
 
 <h2>10. 運用時の予測フロー（前日の準備と T-60）</h2>
@@ -305,20 +317,21 @@
 </ul>
 
 <h3>10.3 T-X での成立性の調査結果（2026-10-14）</h3>
-<div class="box"><b>結論:</b> この方針は<b>現行の実装では成立しない</b>が、修正すれば成立する見込み。詳細（実装が各 T-X で行うこと、データの可用時点の根拠、ノード別の判定、食い違い、修正案、時間予算）は <a href="feature_strategy_tp03_tp04.html">特徴量戦略書</a> 末尾の「図の実運用での成立性」。</div>
+<div class="box" style="border-color:#fbbf24"><b>状態の更新（2026-10-16）:</b> 以下は <b>10-14 の調査時点</b>の記述。指摘した不足のうち、馬体重の検知ランナー・推論モード・<code>export_tables</code> の定期化は<b>10-14〜15 に実装・cron 登録済み</b>（項目ごとの状態は下の「本番ランナーの変更」）。残りは、予測の起動点の一本化、馬体重の発表時刻の実測、tier 分割の運用確認、tp-07。</div>
+<div class="box"><b>結論（10-14 時点）:</b> この方針は<b>現行の実装では成立しない</b>が、修正すれば成立する見込み。詳細（実装が各 T-X で行うこと、データの可用時点の根拠、ノード別の判定、食い違い、修正案、時間予算）は <a href="feature_strategy_tp03_tp04.html">特徴量戦略書</a> 末尾の「図の実運用での成立性」。</div>
 <ul>
-  <li>T-60 の取得はオッズのみで、馬体重を含む出馬表は T-15 まで入らない。予測の起動点も T-15（モック）と T-45（疑似ビルダー）で、tp-02 の特徴量を使っていない。</li>
-  <li>当日の出走馬を結果なしの行として履歴に足す推論モードと、tier ごとの分割が未実装。</li>
+  <li>（10-14 時点）T-60 の取得はオッズのみで、馬体重を含む出馬表は T-15 まで入らない。予測の起動点も T-15（モック）と T-45（疑似ビルダー）で、tp-02 の特徴量を使っていない。</li>
+  <li>（10-14 時点）当日の出走馬を結果なしの行として履歴に足す推論モードと、tier ごとの分割が未実装。→ 推論モードは 10-15 までに実装済み（<code>horse_history/inference.py</code>、<code>feature_tiers.json</code>）。</li>
   <li>馬体重の発表は基本的に発走の 1 時間前（ユーザー情報）で、起点（T-60）とは合う。ただし発表の直前に取得しないよう、固定時刻ではなく<b>馬体重の検知で起動</b>する（T-65 から 1〜2 分間隔で確認、9 割以上の馬に馬体重が入った時点で予測、期限は T-30。入らなければ前走の馬体重で代替し <code>has_*</code> を付ける）。</li>
   <li>P7 は、T-60 に使える同日の先行レースが「発走 90 分以上前」のものだけ。実データで先行レースが使えるのは全体の 62%（第 1〜3R は 0%）。使えないレースは前の開催日の値で補う。学習側も同じ制約で作った（<code>sr_var_today</code>）。</li>
   <li>時間予算は約 30 秒を目標、上限 120 秒。予測の公開期限は T-30（LayerB の T-15 より前）。</li>
 </ul>
-<h4>本番ランナーの変更（承認後に実施）</h4>
+<h4>本番ランナーの変更（2026-10-14〜15 に実施。状態は 2026-10-16 時点）</h4>
 <ol>
-  <li>T-60 の取得に出馬表（<code>race_shutuba</code>）を足す。</li>
-  <li>馬体重の検知による予測の起動（T-75〜T-30）。</li>
-  <li>推論モード（朝に tier 0・1 をキャッシュ、T-60 は tier 2 だけ）。</li>
-  <li><code>export_tables</code> の定期化。予測の起動点の一本化。馬体重の発表時刻の実測（<code>availability_watch</code> を 10/17〜18 に実行）。</li>
+  <li>T-60 の取得に出馬表（<code>race_shutuba</code>）を足す。<b>実装済み</b>: 検知ランナー（<code>raceday-weight-runner</code>）が発走 65〜30 分前に出馬表を再取得する。</li>
+  <li>馬体重の検知による予測の起動（T-75〜T-30）。<b>検知は実装済み・cron 登録済み</b>（毎日 08:00 JST に起動して各 R を待つ）。ただし既定では<b>特徴量の作成までで、予測は起動しない</b>。</li>
+  <li>推論モード（朝に tier 0・1 をキャッシュ、T-60 は tier 2 だけ）。<b>推論モードは実装済み</b>。tier 0・1 のキャッシュと T-60 の tier 2 だけの計算になっているかは未確認。</li>
+  <li><code>export_tables</code> の定期化: <b>実装済み</b>（<code>export_tables_daily</code>、05:30 JST）。予測の起動点の一本化: <b>未</b>。馬体重の発表時刻の実測（<code>availability_watch</code> を 10/17〜18 に実行）: <b>未了</b>。</li>
 </ol>
 <p class="muted">注: 本番の cron（<code>daily-race-lists</code> など）が同じ netkeiba アカウントで繰り返しログインしている。取り直しスクレイピングのセッションが無効になる要因になりうる（調査中。第 5 章のリスク欄）。</p>
 
@@ -327,8 +340,8 @@
 <tr><th>項目</th><th>内容</th></tr>
 <tr><td>計算資源</td><td>ホスト PC は CPU 24 スレッド（学習は 20）、RTX 4070 Ti 12GB、RAM 90GB。XGBoost（<code>device=cuda</code>）と CatBoost（GPU）は動作確認済み。LightGBM は CPU のみ。<b>PyTorch（torch 2.6.0 + CUDA 12.4）を 2026-10-14 に導入済み</b>（GPU で行列積と簡易な MLP 学習を確認。XGBoost の CUDA、CatBoost の GPU、LightGBM、polars、MLflow が引き続き動くことも確認）。Optuna の並列数は <code>compute.optuna_workers</code> で決める。</td></tr>
 <tr><td>リスク: 実験数の増加</td><td>比較する手法が多く、CV への過剰適合のおそれ。スクリーニング／確認／最終の分離と、信頼区間・補正で抑える。</td></tr>
-<tr><td>リスク: 推論側の特徴量</td><td>tp-02 の 127 列を推論時に作る実装がない。学習と推論で同じ as-of 計算を使えるよう共通化が必要（tp-07 の後続）。</td></tr>
-<tr><td>リスク: データ</td><td><code>race_index</code>・調教師コメントの取り直しが未完了。完了後に tp-01・tp-02 を再実行してから tp-03 以降に進む。</td></tr>
+<tr><td>リスク: 推論側の特徴量</td><td>（2026-10-16 更新）推論時に 127 列を作る推論モードは実装済み（<code>horse_history/inference.py</code>）。毎日の蓄積（07:40）で学習側との食い違いを記録している。学習時と推論時の一致確認は tp-07 の対象。</td></tr>
+<tr><td>リスク: データ</td><td>（2026-10-16 更新）<code>race_index</code>・調教師コメントの取り直しは<b>完了</b>（2026-10-15、確定事項ログ §4）。tp-01・tp-02 は再実行済みで、tp-03 以降はその結果で確定している。</td></tr>
 <tr><td>決定済み</td><td>(1) 予測は馬体重の発表後（T-60）のみ。前日までに用意できる部分は先に計算する（§10）。(2) NN の検証のために、ホスト PC に PyTorch（CUDA 版）を導入する（導入済み）。</td></tr>
 <tr><td>リスク: 馬体重の発表時刻</td><td>基本は発走 1 時間前だが、発表のばらつきは未計測。未発表のレースは期限（T-30）まで待機し、入らなければ前走の馬体重で代替する（§10.2）。</td></tr>
 </table>

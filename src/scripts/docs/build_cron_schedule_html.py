@@ -251,9 +251,14 @@ def last_run_text(key: str, status: dict | None) -> str:
 KNOWN_ISSUES = [
     ("2026-10-15", "馬名インデックスは 10-09 の実行が上の dev 設定のためスキップされた。次回は 10-16（金）18:30。"),
     ("2026-10-15", "レース一覧（daily-race-lists）の状態が partial なのは、数週間先の開催日の一覧が netkeiba にまだ公開されていないため（想定内）。"),
-    ("2026-10-15", "優先処理（2020〜2025 年の取り直し）が動いている間は、見送り対象のジョブ（レース一覧・週次更新・バロメーター・recent-retry・backfill）は動かない（logs/yield_skips.log に記録）。10/15 15 時の時点では優先処理のプロセスは無く、見送りの最後の記録は 04:00 のため、終了済みとみられる。"),
+    ("2026-10-15", "優先処理（2020〜2025 年の取り直し）が動いている間は、見送り対象のジョブ（レース一覧・週次更新・バロメーター・recent-retry・backfill）は動かない（logs/yield_skips.log に記録）。終了したかは、優先処理のプロセスの有無と、見送りの最後の記録時刻で確認する。"),
     ("2026-10-15", "週次更新の PostgreSQL 取り込みは「No module named 'psycopg2'」で失敗する（最終実行 10-09）。ホストの Python には psycopg（v3）はあるが psycopg2 が無い。PostgreSQL 14 自体は起動している。"),
 ]
+
+
+def _source_label(source: str) -> str:
+    """一時ファイルのパスは読み手に意味が無いので、取得元の説明に置き換える。"""
+    return "ホストの crontab（取得時点の写し）" if str(source).startswith(("/tmp", "/var/tmp")) else str(source)
 
 
 def render(jobs: list[Job], others: list[str], source: str, status: dict | None = None, skips: list[str] | None = None) -> str:
@@ -261,7 +266,7 @@ def render(jobs: list[Job], others: list[str], source: str, status: dict | None 
     out = ['<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">',
            "<title>cron 登録内容（グループ別） — keiba-vpn docs</title>", f"<style>{CSS}</style></head><body><main>",
            "<h1>cron 登録内容（グループ別）</h1>",
-           f'<p class="muted">時刻はすべて <b>JST</b>（crontab 本体は UTC で記述）。生成: {datetime.now(JST):%Y-%m-%d %H:%M} / 元データ: {esc(source)} / '
+           f'<p class="muted">時刻はすべて <b>JST</b>（crontab 本体は UTC で記述）。最終更新: {datetime.now(JST):%Y-%m-%d}（JST） / 元データ: {esc(_source_label(source))} / '
            "再生成: <code>python -m src.scripts.docs.build_cron_schedule_html</code>。定義の正は <code>scripts/cron/setup_all_cron.sh</code>。"
            'データごとの収集→加工→統合の流れは <a href="../modeling/chapters/data_flow_schedule.html">データの収集〜加工〜統合フロー</a>。</p>',
            '<div class="box"><span class="badge">取り直し中は見送り</span> のジョブは、優先処理（2020-2025年の取り直し。<code>run_priority_rescrape.sh</code>）が動いている間は自動で見送り、'

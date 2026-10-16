@@ -225,7 +225,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <li><code>docs/html/modeling/chapters/race_performance_rating_system.html</code> — 特徴量モジュール単体の検証プロトコル（本書の一次分割とは別用途あり）</li>
 <li><code>docs/html/modeling/chapters/hyperparameter_tuning_workflow.html</code> — <strong>モデルの設定値（ハイパーパラメータ）探索・inner/outer・試行予算</strong>（valid/test の使い方と整合）</li>
 <li><code>docs/html/modeling/chapters/feature_engineering_exploration.html</code> — <strong>追加特徴量の探索</strong>（同一 split で ablation）</li>
-<li><code>data/meta/modeling/dataset_split_manifest.json</code> — <strong>機械上の正（バージョン付きマニフェスト）</strong></li>
+<li><code>config/modeling/dataset_split_manifest.json</code> — <strong>機械上の正（バージョン付きマニフェスト）</strong></li>
 </ul>
 <hr />
 <h2 id="2-split">2. なぜ「ランダム split」が通用しないか</h2>
@@ -262,7 +262,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <p>以上の理由から、<strong>行単位のランダム split は禁止</strong>（マニフェスト <code>constraints.no_random_row_split</code> と一致）。</p>
 <hr />
 <h2 id="3">3. 一次プロトコル（モデル選定・本番前評価）</h2>
-<p><code>data/meta/modeling/dataset_split_manifest.json</code> の <strong><code>protocols.model_selection_primary</code></strong> を採用する。</p>
+<p><code>config/modeling/dataset_split_manifest.json</code> の <strong><code>protocols.model_selection_primary</code></strong> を採用する。</p>
 <table>
 <thead>
 <tr>

@@ -145,9 +145,15 @@ document.addEventListener("DOMContentLoaded", function() {
         <code>LAYER_DESIGN.html</code> / <code>ARCHITECTURE.html</code> はいずれも Next.js・PostgreSQL・Redis
         導入前の旧設計のまま更新されていなかったため、本ページで統合・更新する）。
       </p>
+      <p class="meta doc-updated">最終更新: 2026-10-16（JST）</p>
     </header>
 
     <article class="html-body">
+<div class="doc-note" style="margin:14px 0 18px;padding:12px 16px;border:1px solid #3a63b8;border-left:4px solid #7aa9ff;border-radius:8px;background:rgba(79,139,255,.08);font-size:14px;line-height:1.75">
+<b>ポート表記について。</b> ローカル・stg・本番のサーバのポートは <code>config/ports.env</code>（dev 231xx / stg 232xx / prod 233xx、監視ポータル 23900）が正です
+（一覧は <code>docs/operations/service-endpoints.md</code>）。本書の 3000 / 3001 / 5000 / 8000 / 9090 などは、設計当時の既定値、または
+<code>docker-compose.serving.yml</code>・<code>mlflow/server/</code>（VPS デプロイ用）で今も使う従来ポート（FastAPI 8000、MLflow 5000、Model Serve 5001〜5010、PostgreSQL 5432、Redis 6379）です。
+</div>
 
 <h2 id="1">1. 全体構成図</h2>
 <div class="mermaid">
@@ -157,13 +163,13 @@ flowchart TB
   end
 
   subgraph FRONTEND["フロントエンド"]
-    NEXT_DEV["Next.js dev mock<br/>:3000"]
-    NEXT_STG["Next.js stg<br/>:3001（実API）"]
+    NEXT_DEV["Next.js dev mock<br/>dev :23100"]
+    NEXT_STG["Next.js stg / prod<br/>:23200 / :23300（実API）"]
   end
 
   subgraph BACKEND["バックエンド"]
-    FASTAPI["FastAPI :8000<br/>レガシー UI + 管理API<br/>(src/api/app.py)"]
-    FLASK["Flask :5000<br/>/api/v1（仕様上の正・DEC-013）<br/>(src/api/flask_app.py, api/v1/*)"]
+    FASTAPI["FastAPI dev :23120<br/>(stg :23220 / prod :23320)<br/>レガシー UI + 管理API<br/>(src/api/app.py)"]
+    FLASK["Flask dev :23110<br/>(stg :23210 / prod :23310)<br/>/api/v1（仕様上の正・DEC-013）<br/>(src/api/flask_app.py, api/v1/*)"]
   end
 
   subgraph CACHE["キャッシュ層"]
@@ -210,10 +216,10 @@ flowchart TB
 <h2 id="2">2. コンポーネント一覧</h2>
 <table>
 <tr><th>コンポーネント</th><th>役割</th><th>ポート</th><th>エントリ / 主要ファイル</th><th>状態</th></tr>
-<tr><td>Next.js（dev mock）</td><td>API無しのUI確認用モック</td><td>:3000</td><td><code>frontend/app/</code>, <code>NEXT_PUBLIC_MOCK=true</code></td><td><span class="badge ok">運用中</span></td></tr>
-<tr><td>Next.js（stg）</td><td>実API接続の本番相当フロント</td><td>:3001</td><td><code>next.config.js</code>（<code>/api/v1/*</code> を Flask へ rewrite）</td><td><span class="badge ok">運用中</span></td></tr>
-<tr><td>FastAPI</td><td>レガシー Jinja2 UI・管理画面・段階的廃止予定のREST</td><td>:8000</td><td><code>src/api/app.py</code>（13,000行超）</td><td><span class="badge warn">段階廃止予定（DEC-013）</span></td></tr>
-<tr><td>Flask</td><td><b>仕様上の正</b>の REST API（<code>/api/v1</code>）</td><td>:5000</td><td><code>src/api/flask_app.py</code>, <code>src/api/v1/services.py</code>, <code>delegates.py</code></td><td><span class="badge ok">現行主力（DEC-013）</span></td></tr>
+<tr><td>Next.js（dev mock）</td><td>API無しのUI確認用モック</td><td>dev :23100</td><td><code>frontend/app/</code>, <code>NEXT_PUBLIC_MOCK=true</code></td><td><span class="badge ok">運用中</span></td></tr>
+<tr><td>Next.js（stg）</td><td>実API接続の本番相当フロント</td><td>stg :23200 / prod :23300</td><td><code>next.config.js</code>（<code>/api/v1/*</code> を Flask へ rewrite）</td><td><span class="badge ok">運用中</span></td></tr>
+<tr><td>FastAPI</td><td>レガシー Jinja2 UI・管理画面・段階的廃止予定のREST</td><td>dev :23120 / stg :23220 / prod :23320（VPS compose は従来の :8000）</td><td><code>src/api/app.py</code>（13,000行超）</td><td><span class="badge warn">段階廃止予定（DEC-013）</span></td></tr>
+<tr><td>Flask</td><td><b>仕様上の正</b>の REST API（<code>/api/v1</code>）</td><td>dev :23110 / stg :23210 / prod :23310</td><td><code>src/api/flask_app.py</code>, <code>src/api/v1/services.py</code>, <code>delegates.py</code></td><td><span class="badge ok">現行主力（DEC-013）</span></td></tr>
 <tr><td>HybridStorage</td><td>L1/L2/L3統合ストレージアクセサ</td><td>—</td><td><code>src/scraper/storage.py</code>（1,430行、クラス定義69行目）</td><td><span class="badge warn">Flask側で毎回再生成（§4）</span></td></tr>
 <tr><td>PredictionCache</td><td>Redis予測結果キャッシュ</td><td>:6379</td><td><code>src/api/cache/redis_cache.py</code></td><td><span class="badge warn">部分実装（§4）</span></td></tr>
 <tr><td>PostgreSQL</td><td>Layer1〜5 正規化テーブル</td><td>:5432</td><td><code>src/db/models.py</code>, Alembic migrations</td><td><span class="badge ok">運用中</span></td></tr>

@@ -204,11 +204,11 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>データソース一覧</h1>
-      <p class="meta">ソース: <code>docs/html/data/DATASOURCES.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/data/DATASOURCES.html</code> · 最終更新: 2026-10-16（JST）</p>
     </header>
     <article class="md-body">
 <h1 id="_1">データソース一覧</h1>
-<p>netkeiba.com および SmartRC (smartrc.jp) から取得するデータソースの仕様書です。<br />
+<p>netkeiba.com から取得するデータソースの仕様書です（SmartRC は DEC-024 で取得対象から除外。下記は当時の仕様の記録）。<br />
 各ページの URL パターン・認証要否・パーサー／クライアント・ストレージカテゴリ名・取得フィールドを定義します。</p>
 <hr />
 <h2 id="_2">概要</h2>
@@ -321,7 +321,10 @@ document.addEventListener("DOMContentLoaded", function() {
 <blockquote>
 <p><strong>認証「要」</strong>: netkeiba プレミアム会員のログインが必要です（<b>認証は完了している前提</b>）。認証情報は <code>.env</code> の <code>netkeiba_id</code> / <code>netkeiba_pw</code> で管理します。</p>
 </blockquote>
-<h3 id="smartrc-smartrcjp">SmartRC (smartrc.jp)</h3>
+<h3 id="smartrc-smartrcjp">SmartRC (smartrc.jp)（取得対象から除外・DEC-024）</h3>
+<blockquote>
+<p><b>現状:</b> DEC-024 で SmartRC は取得対象から除外されました。コード（<code>smartrc_client.py</code>、キューの <code>smartrc</code> タスク）・スキーマ（<code>smartrc_race</code>）は残っており（T-034 で除去予定）、実運用での取得可否は要確認です。保存カテゴリは現在 <code>smartrc_race</code> のみで、下表の <code>smartrc_runners</code> / <code>smartrc_horse</code> / <code>smartrc_trend</code> は旧仕様の名前です。</p>
+</blockquote>
 <table>
 <thead>
 <tr>
@@ -428,7 +431,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </tbody>
 </table>
 <blockquote>
-<p><strong>SmartRC 認証</strong>: netkeiba とは別アカウントです。<code>.env</code> の <code>SMARTRC_LOGIN</code> / <code>SMARTRC_PASSWORD</code> で管理します。<br />
+<p><strong>SmartRC 認証</strong>（旧仕様）: netkeiba とは別アカウントでした。<code>.env</code> の <code>SMARTRC_LOGIN</code> / <code>SMARTRC_PASSWORD</code> で管理します。<br />
 SmartRC は JSON API（ExtJS ベース）のため、HTML のパースは不要です。<br />
 APIのアドレス（ベース）: <code>https://www.smartrc.jp/v3/smartrc.php/{endpoint}</code></p>
 </blockquote>
@@ -537,36 +540,31 @@ APIのアドレス（ベース）: <code>https://www.smartrc.jp/v3/smartrc.php/{
 <hr />
 <h2 id="_3">ストレージ構成</h2><p><b>GCS のアクセスポイント（バケット・prefix）は stg と prod で同一</b>です（dev は GCS に接続しない）。</p>
 <h3 id="gcs-source-of-truth">Google Cloud Storage（GCS）— 正データ置き場</h3>
-<pre><code>gs://{BUCKET}/chuou/data/
-  ├── race_result/{race_id}.json       # レース結果
-  ├── race_shutuba/{race_id}.json      # 出馬表
-  ├── race_index/{race_id}.json        # タイム指数
-  ├── race_shutuba_past/{race_id}.json # 馬柱・調教
-  ├── race_odds/{race_id}.json         # オッズ
-  ├── race_paddock/{race_id}.json      # パドック評価
-  ├── race_barometer/{race_id}.json    # 偏差値バロメーター
-  ├── race_oikiri/{race_id}.json       # 追い切り
-  ├── horse_result/{horse_id}.json     # 馬情報
-  ├── smartrc_runners/{race_id}.json   # SmartRC レースデータ
-  ├── smartrc_horse/{horse_id}.json    # SmartRC 馬データ
-  └── smartrc_trend/{race_id}.json     # SmartRC トレンド
+<pre><code>gs://{GCS_BUCKET}/chuou/data/
+  ├── preprocessed/netkeiba/pc/{category}/{年}/{race_id}.json       # レース単位（先頭4桁 = 年）
+  ├── preprocessed/netkeiba/pc/{category}/{先頭4桁}/{horse_id}.json  # 馬単位（先頭4桁 = horse_id の先頭）
+  ├── others/{category}/{key}.json                                  # jra_cushion / requirement_row_trace など
+  └── raw/html/{category}/{年 or 先頭4桁}/{id}.html.gz              # HTML アーカイブ
 </code></pre>
+<p>主なカテゴリ（<code>HybridStorage.CATEGORY_MAP</code>。<code>schema_defs.json</code> に定義済みの 39 カテゴリの全一覧は <a href="database_schemas.html">database_schemas.html</a>）:
+<code>race_result</code>・<code>race_shutuba</code>・<code>race_index</code>・<code>race_shutuba_past</code>・<code>race_odds</code>・<code>race_pair_odds</code>・<code>race_paddock</code>・<code>race_barometer</code>・<code>race_oikiri</code>・<code>race_trainer_comment</code>・<code>horse_result</code>・<code>horse_pedigree_5gen</code>・<code>horse_training</code>・<code>broodmare_mating</code>、
+および行固有の派生 11 カテゴリ・生成物（<code>race_predictions</code> 等）。</p>
 <h3 id="gcs-html">GCS — HTML アーカイブ</h3>
-<pre><code>gs://{BUCKET}/chuou/html/
-  ├── race_result/{race_id}.html.gz
-  ├── race_shutuba/{race_id}.html.gz
+<pre><code>gs://{GCS_BUCKET}/chuou/data/raw/html/
+  ├── race_result/{年}/{race_id}.html.gz
+  ├── race_shutuba/{年}/{race_id}.html.gz
   ├── ...
-  └── horse_result/{horse_id}.html.gz
+  └── horse_result/{先頭4桁}/{horse_id}.html.gz
 </code></pre>
 <blockquote>
-<p>SmartRC は JSON API のため、HTML アーカイブはありません。</p>
+<p>パスは <code>html_archive.py</code> の <code>GCS_RAW_BASE</code>（<code>chuou/data/raw/html</code>）。</p>
 </blockquote>
 <h3 id="_4">ローカル</h3>
-<pre><code>data/local/
-  └── race_lists/{date}.json   # 日付別レース一覧 (ローカルのみ)
+<pre><code>data/page_reference/
+  ├── race_lists/{date}.json          # 日付別レース一覧 (local_only: GCS に置かない)
+  └── race_day_schedule/              # 発走時刻スナップショット (local_only)
 data/meta/
-  ├── structure/               # ページ構造フィンガープリント
-  └── logs/                    # アクセスログ
+  └── structure/                      # ページ構造フィンガープリント
 </code></pre>
 <hr />
 <h2 id="env">認証情報の設定（.env）</h2>
@@ -574,13 +572,11 @@ data/meta/
 netkeiba_id=&lt;email&gt;
 netkeiba_pw=&lt;password&gt;
 
-# SmartRC (smartrc.jp) — 別アカウント
-SMARTRC_LOGIN=&lt;email&gt;
-SMARTRC_PASSWORD=&lt;password&gt;
-
-# GCS
-GCS_BUCKET_NAME=&lt;bucket&gt;
-GOOGLE_APPLICATION_CREDENTIALS=&lt;path&gt;
+# GCS（stg / prod。dev は GCP に接続しないので空のまま）
+GCS_BUCKET=&lt;bucket&gt;
+GCS_TYPE=service_account
+GCS_PROJECT_ID=...
+GCS_PRIVATE_KEY=...      # ほか GCS_PRIVATE_KEY_ID / GCS_CLIENT_EMAIL / GCS_CLIENT_ID / GCS_CLIENT_CERT_URL（.env.example 参照）
 </code></pre>
     </article>
     <nav class="doc-nav">

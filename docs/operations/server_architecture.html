@@ -126,19 +126,24 @@ ul.bullets li::before {
   </p>
 </header>
 
+<div class="callout info">
+  <h4>ポートの正は <code>config/ports.env</code></h4>
+  <p>他アプリが既定で使う 3000 / 5000 / 8000 / 9090 を避け、<b>dev=231xx / stg=232xx / prod=233xx / 監視ポータル=23900</b> に集約している（一覧は <code>docs/operations/service-endpoints.md</code>）。PostgreSQL（5432）・Redis（6379）・MLflow Model Serving（5001〜5010）・VPS 用 <code>docker-compose.serving.yml</code>（FastAPI 8000）は従来のポートのまま。このページの旧番号（3000 / 3001 / 5000 / 8000）は 2026-10 に現行値へ更新済み。</p>
+</div>
+
 <h2>全体構成図</h2>
 
 <div class="diagram">ブラウザ
   │
-  ├─ http://127.0.0.1:3001  Next.js (stg) ──/api/v1/*──►┐
-  ├─ http://127.0.0.1:3000  Next.js (dev mock)          │
-  ├─ http://127.0.0.1:8000  FastAPI（Jinja2 UI + レガシー REST）
-  │                                                       │
-  └─ http://127.0.0.1:5000  Flask /api/v1（仕様準拠 REST）◄┘  ※既定ポートは MLflow と衝突
+  ├─ http://127.0.0.1:23200  Next.js (stg) ──/api/v1/*──►┐   ※ dev=23100 / prod=23300
+  ├─ http://127.0.0.1:23100  Next.js (dev mock)           │
+  ├─ http://127.0.0.1:23220  FastAPI（Jinja2 UI + レガシー REST）※ stg の例。dev=23120 / prod=23320
+  │                                                        │
+  └─ http://127.0.0.1:23210  Flask /api/v1（仕様準拠 REST）◄┘  ※ stg の例。dev=23110 / prod=23310
 
 推論・学習
-  ├─ MLflow Tracking       :5000  （Flask の既定ポートと同じ → 片方を移動）
-  └─ MLflow Model Serving  :5001-5006, :5010
+  ├─ MLflow Tracking       :23230  （stg の例。dev=23130 / prod=23330）
+  └─ MLflow Model Serving  :5001-5006, :5010  （従来ポートのまま）
 
 データ基盤
   ├─ PostgreSQL  :5432   （Layer 1〜5 / predictions）
@@ -147,26 +152,26 @@ ul.bullets li::before {
 
 <div class="callout info">
   <h4>仕様上の正</h4>
-  <p>DEC-013 により <b>Flask <code>/api/v1</code>（:5000）が仕様上の正</b>。FastAPI（:8000）は Jinja2 UI・管理画面・レガシー <code>/api/*</code> を担い、段階的に廃止予定です。</p>
+  <p>DEC-013 により <b>Flask <code>/api/v1</code>（dev :23110 / stg :23210 / prod :23310）が仕様上の正</b>。FastAPI（dev :23120 / stg :23220 / prod :23320）は Jinja2 UI・管理画面・レガシー <code>/api/*</code> を担い、段階的に廃止予定です。</p>
 </div>
 
 <h2>サービス一覧</h2>
 
 <div class="svc">
   <div><span class="name">FastAPI</span> — レガシー Web + 管理 API <span class="badge">watchdog監視対象</span></div>
-  <div class="port">:8000</div>
+  <div class="port">dev :23120 / stg :23220 / prod :23320</div>
 </div>
 <div class="svc">
   <div><span class="name">Flask</span> — 仕様準拠 REST（<code>/api/v1</code>） <span class="badge amber">watchdog対象外</span></div>
-  <div class="port">:5000（既定）</div>
+  <div class="port">dev :23110 / stg :23210 / prod :23310</div>
 </div>
 <div class="svc">
   <div><span class="name">Next.js</span> — フロントエンド（App Router）</div>
-  <div class="port">:3001 stg / :3000 dev mock</div>
+  <div class="port">dev :23100（mock）/ stg :23200 / prod :23300</div>
 </div>
 <div class="svc">
   <div><span class="name">MLflow Tracking</span> — 実験管理 UI/API</div>
-  <div class="port">:5000</div>
+  <div class="port">dev :23130 / stg :23230 / prod :23330</div>
 </div>
 <div class="svc">
   <div><span class="name">MLflow Model Serving</span> — 各モデルの推論サーバ</div>
@@ -204,13 +209,13 @@ ul.bullets li::before {
   <div class="card">
     <h3 style="margin-top:0">個別起動</h3>
     <pre><code># FastAPI
-python main.py --host 0.0.0.0 --port 8000 [--prod]
+python main.py --host 0.0.0.0 --port 23120 [--prod]   # 省略時は config/ports.env
 
-# Flask（ポート衝突時は FLASK_PORT を変更）
-FLASK_PORT=5100 python main.py --flask-api
+# Flask（ポート変更は FLASK_PORT / KEIBA_PORT_* で上書き）
+FLASK_PORT=23110 python main.py --flask-api
 
 # Next.js
-cd frontend && npm run dev -- -p 3001
+cd frontend && npm run dev -- -p 23100
 
 # Watchdog（FastAPI + MLflow を監視・自動再起動）
 ./scripts/server/server_watchdog.sh</code></pre>
@@ -220,26 +225,26 @@ cd frontend && npm run dev -- -p 3001
 <h2>ヘルスチェック</h2>
 
 <pre><code># FastAPI
-curl -s http://127.0.0.1:8000/api/health | python3 -m json.tool
+curl -s http://127.0.0.1:23120/api/health   # dev。stg は 23220 | python3 -m json.tool
 
 # Flask（ポートを変更した場合は番号を合わせる）
-curl -s http://127.0.0.1:5100/api/v1/health | python3 -m json.tool
+curl -s http://127.0.0.1:23110/api/v1/health   # dev。stg は 23210 | python3 -m json.tool
 
 # Next.js（200が返れば起動済み）
-curl -s -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:3001/
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:23100/   # dev。stg は 23200
 
 # リッスン中ポート一覧
-ss -tlnp | grep -E ':(3000|3001|5000|5001|5010|5100|5432|6379|8000)\s'</code></pre>
+ss -tlnp | grep -E ':(23[123][0-3]0|23900|5001|5010|5432|6379)\s'</code></pre>
 
 <h2>運用ノート / 既知の問題</h2>
 
 <div class="callout danger">
-  <h4>⚠ ポート 5000 は他プロジェクトと衝突しやすい</h4>
+  <h4>旧既定ポート（3000 / 5000 / 8000）は他プロジェクトと衝突しやすい（対応済み）</h4>
   <p>
-    このマシンでは <b>別プロジェクト（<code>daily_news</code>）の <code>src/app.py</code></b> が常時ポート <code>:5000</code> を占有していることがあります。
-    Flask 起動時に <code>Address already in use</code> が出た場合、まず <code>ss -tlnp | grep :5000</code> でプロセスの出自を確認し、無関係なプロセスなら keiba-vpn 側を
-    <code>FLASK_PORT=5100</code> 等の別ポートで起動してください（他プロジェクトの常駐プロセスを誤って kill しない）。
-    Next.js から Flask へ向ける場合は <code>KEIBA_API_URL=http://127.0.0.1:5100</code> を合わせて設定します。
+    以前は <b>別プロジェクト（<code>daily_news</code>）の <code>src/app.py</code></b> が常時 <code>:5000</code> を占有し、Flask が起動できないことがありました。
+    現在は既定ポートを <code>config/ports.env</code> の 23xxx に移してあり、通常は衝突しません。<code>Address already in use</code> が出た場合は
+    <code>ss -tlnp | grep :23</code> でプロセスの出自を確認し、無関係なプロセスなら <code>KEIBA_PORT_*</code> で別ポートにしてください（他プロジェクトの常駐プロセスを誤って kill しない）。
+    Next.js から Flask へ向ける場合は <code>KEIBA_API_URL</code> を合わせて設定します。
   </p>
 </div>
 
@@ -256,8 +261,8 @@ npm install</code></pre>
 </div>
 
 <div class="callout warn">
-  <h4>⚠ MLflow Tracking（:5000）と Flask（既定 :5000）はポート競合する</h4>
-  <p>同時起動する場合は Flask を <code>FLASK_PORT=5100</code> 等に変更するか、MLflow を Docker 内のみに閉じてホスト側 Flask を :5000 のまま使う。</p>
+  <h4>MLflow Tracking と Flask のポート競合は解消済み</h4>
+  <p>MLflow Tracking は 231<b>3</b>0 / 232<b>3</b>0 / 233<b>3</b>0、Flask は 231<b>1</b>0 / 232<b>1</b>0 / 233<b>1</b>0 で分かれている。VPS 用 Docker（<code>mlflow/server/</code>）の MLflow だけは従来どおり内部ポートを使う。</p>
 </div>
 
 <h2>起動後チェックリスト</h2>
@@ -275,7 +280,7 @@ npm install</code></pre>
 <ul class="bullets">
   <li><code>docs/operations/service-endpoints.md</code> — エンドポイント・環境変数の詳細一覧</li>
   <li><code>docs/operations/PROJECT_LAYOUT.md</code> — ディレクトリ構成</li>
-  <li><code>docs/decisions/DEC-013-api-framework-flask-primary.md</code> — Flask を仕様上の正とする決定</li>
+  <li><code>docs/decisions/DEC-013-api-framework-flask-primary.html</code> — Flask を仕様上の正とする決定</li>
   <li><code>docs/environment-stg.md</code> — stg 環境の詳細</li>
 </ul>
 

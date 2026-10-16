@@ -1462,7 +1462,7 @@ class ScrapeJobQueue:
     def process_queue(self):
         """
         キューを処理する（バックグラウンドワーカーから呼ばれる）
-        SCRAPE_QUEUE_PARALLEL 本まで同時並列（既定 6）。
+        SCRAPE_QUEUE_PARALLEL 本まで同時並列（既定 4。queue_load_settings.json の parallel が優先）。
         """
         from src.scraper.queue_worker_log import ensure_queue_worker_log_handler, mark_queue_worker_active
 

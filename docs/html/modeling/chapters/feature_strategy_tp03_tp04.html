@@ -44,7 +44,7 @@
 <tr><td>全体フィットの範囲</td><td>縮約強度（κ）・分位点・クラスタ・類似度の重みなど、全期間で決める値は <code>FIT_END = 2021-12-21</code> 以前のデータだけで決め、全 fold で固定する。</td><td>最初の fold（valid 2022）の学習終端 2021-12-22 より前。<code>common.py</code>。</td></tr>
 <tr><td>学習対象年</td><td>2020〜2025 年のみ。2026 年は不完全なため、学習・検証・テスト・履歴集計のいずれにも使わない。</td><td><code>time_split.py</code> の <code>TRAINING_YEARS</code>。</td></tr>
 <tr><td>予測時点と可用時点（tier）</td><td>予測は<b>馬体重の発表後（T-60）のみ</b>回す（前日夜の別バージョンは作らない）。前日までに確定する特徴量（tier 0）を先に計算してキャッシュし、当日朝（馬場状態・クッション値。tier 1）、T-60（馬体重。tier 2）の順に足す。</td><td>詳細は <a href="modeling_strategy_tp04_tp07.html">モデリング戦略書</a> §10。tp-02 で <code>feature_tiers.json</code> を出力する予定。</td></tr>
-<tr><td>オッズ・人気は使わない</td><td>LayerA（市場独立の確率推定）には入れない。市場との合成（Benter 型の 2 段階ロジット）は LayerB（tp-06 以降）で扱う。</td><td><code>pre_race_feature_whitelist.html</code>。学習時と運用時でオッズの時点が違うと劣化した事例（出典 L13）。</td></tr>
+<tr><td>オッズ・人気は使わない</td><td>LayerA（市場独立の確率推定）には入れない。市場との合成（Benter 型の 2 段階ロジット）は LayerB（tp-08）で扱う。</td><td><code>pre_race_feature_whitelist.html</code>。学習時と運用時でオッズの時点が違うと劣化した事例（出典 L13）。</td></tr>
 <tr><td>欠損の扱い</td><td>欠損は 0 で埋めず NA のままにする。疎なデータには <code>has_*</code> フラグを付ける（例: <code>has_speed_index</code>）。</td><td>ホワイトリスト。木モデルは NA を扱える。</td></tr>
 <tr><td>時代ずれへの対処</td><td>年そのもの、時間とともに単調に増える累積件数、2020 年からの集計の始まりに由来する特徴量は、時代を見分ける手がかりになる。adversarial validation で追跡する。</td><td><code>f5_n</code>（全期間の累積件数）は出力から外した。残る候補への対処は tp-03（§7）。</td></tr>
 <tr><td>取得データの不備の補正</td><td>結果ページの <code>last_3f</code>・通過順・馬体重が壊れたレースは、優先順に (1) 生値、(2) GCS の <code>race_result_on_time</code>、(3) 母表の <code>past_races</code> で補う。</td><td><code>common.py</code> の <code>apply_repair</code>、<code>repair.py</code>。</td></tr>
@@ -76,7 +76,7 @@
 <tr><td><b>C レースの質・相手関係</b></td><td>17</td>
 <td>過去走の残差の EWM（短期・長期）・中央値・最大・最小・トリム平均（頑健統計）。出走馬の事前 Elo の平均・上位 3 頭の平均・自分との差（立ち位置）。クラス別の基準からのずれ（相手関係の質 <code>rq</code> = 相手の平均 Elo − クラスの基準）。クラスの EWM と、今回との差（昇級／降級）。前走の残差と長期平均の差。</td>
 <td><code>c_res_ewm2/ewm6/med5/max5/min5/trim5</code>、<code>c_fs_ewm2</code>、<code>c_fstop3_ewm2</code>、<code>c_standing_ewm2</code>、<code>c_rq_ewm2</code>、<code>c_cls_ewm2/prev</code>、<code>c_opp_step</code>、<code>c_cls_step</code>、<code>c_fs_step</code>、<code>c_last_dev</code></td>
-<td>昇級初戦は強い相手と当たりやすい（S5）。大敗は誤差として扱い、頑健統計で処理する（S12）。相手関係の補正は Benter の因子（出典 L1）。後日談（その後の出走で相手が好走したか）は、リーク回避のため未実装。</td></tr>
+<td>昇級初戦は強い相手と当たりやすい（S5）。大敗は誤差として扱い、頑健統計で処理する（S12）。相手関係の補正は Benter の因子（出典 L1）。後日談（その後の出走で相手が好走したか）は、リーク回避のため 127 列には入れていない（tp-16 の notebook で検証、結果は未記録）。</td></tr>
 <tr><td><b>D 休養・体重</b></td><td>10</td>
 <td>前走・前々走からの日数、過去走数、初出走からの日数、馬体重の長期平均からの偏差、前走の増減、今回の増減、前走の着順・頭数・着順率。</td>
 <td><code>d_rest</code>、<code>d_rest2</code>、<code>d_nprior</code>、<code>d_career_days</code>、<code>d_wt_dev</code>、<code>d_wt_chg_last/now</code>、<code>d_prev_fin</code>、<code>d_prev_field</code>、<code>d_prev_fin_pct</code></td>
@@ -161,15 +161,15 @@
 <h2>5. 未実装・次の拡張（tp-02b 以降の候補）</h2>
 <table>
 <tr><th>項目</th><th>内容</th><th>状態</th></tr>
-<tr><td>標準条件レーティング H（斤量・性別・年齢の補正）</td><td>全馬が同じ基準条件（牡・4 歳以上・基準の負担）だった場合のパフォーマンスを過去走ごとに求めて保持し、今回の斤量などで期待パフォーマンスに戻す。詳細は §5.1。</td><td>未実装（<code>race_performance.py</code> に原型あり。2025 年分のみ出力、特徴量ストア未統合）</td></tr>
-<tr><td>追い切り・調教</td><td>最終追い切りからの日数、コース×馬場で標準化した 4F・終い 1F の時計、併せ馬の比較、<code>evaluation</code> の順序値。欠損が多い（約 44%）ため <code>has_*</code> を付ける。</td><td>未実装</td></tr>
-<tr><td>調教師コメント・パドック</td><td>評価の順序値、キーワードのスコア化。カバレッジが低い（コメントは取り直し後に見直す）。</td><td>未実装（取り直し完了後）</td></tr>
-<tr><td>クッション値・含水率</td><td>開催内の相対値、4 角とゴールの含水率差、父系の重馬場適性との交互作用。</td><td>未実装</td></tr>
-<tr><td>近交係数（Wright）</td><td>10 世代血統から <code>F_X = Σ (0.5)^(n−1)(1+F_A)</code>（出典 L15）。血統は固定のためリークは無い。</td><td>未実装</td></tr>
+<tr><td>標準条件レーティング H（斤量・性別・年齢の補正）</td><td>全馬が同じ基準条件（牡・4 歳以上・基準の負担）だった場合のパフォーマンスを過去走ごとに求めて保持し、今回の斤量などで期待パフォーマンスに戻す。詳細は §5.1。</td><td><b>実装済み・採用</b>（2026-10-15。<code>horse_history/rating.py</code>、19 列。127 列に含まれる。<a href="training_pipeline_decisions.html">確定事項ログ</a> §3・§5）</td></tr>
+<tr><td>追い切り・調教</td><td>最終追い切りからの日数、コース×馬場で標準化した 4F・終い 1F の時計、併せ馬の比較、<code>evaluation</code> の順序値。欠損が多い（約 44%）ため <code>has_*</code> を付ける。</td><td><code>evaluation</code> の順序値（A〜D → 4〜1 とレース内順位・差）は<b>実装済み・採用</b>（tp-05g、確定事項ログ §9）。日数・時計の標準化・ラップは tp-16 / tp-19 の notebook で検証（結果は<b>未記録</b>）</td></tr>
+<tr><td>調教師コメント・パドック</td><td>評価の順序値、キーワードのスコア化。カバレッジが低い（コメントは取り直し後に見直す）。</td><td>調教師コメントの有無・長さ・前向き／後ろ向きの語数は<b>実装済み・採用</b>（tp-05g、確定事項ログ §9）。語彙の高度化とパドックは未実装</td></tr>
+<tr><td>クッション値・含水率</td><td>開催内の相対値、4 角とゴールの含水率差、父系の重馬場適性との交互作用。</td><td>tp-16（特徴量 bake-off）の notebook で検証（結果は<b>未記録</b>）</td></tr>
+<tr><td>近交係数（Wright）</td><td>10 世代血統から <code>F_X = Σ (0.5)^(n−1)(1+F_A)</code>（出典 L15）。血統は固定のためリークは無い。</td><td>tp-16 の notebook で検証（結果は<b>未記録</b>）</td></tr>
 <tr><td>「京都改修後」フラグ</td><td>京都は改修期間中に阪神が代替開催した（train は京都 5.7%、valid は 20.8%）。<code>venue_era</code> を追加し、京都改修後を別枠で評価する（分割ルールの <code>special_sets</code> にも定義あり）。</td><td>未実装</td></tr>
 <tr><td>Glicko の RD・TrueSkill</td><td>レーティングの不確実性を特徴量にする。休養が長いほど RD を増やす（出典 L7、L8）。</td><td>未実装</td></tr>
 <tr><td>上りの期待値との残差</td><td>ペース・馬場差・距離で説明した上りの期待値との残差（S1、S9 のアイデア）。ペース補正は前半 3F−後半 3F の比で代用する。</td><td>未実装（§4 の P4（ペース別の条件付き上がり予測）として tp-04 で扱う）</td></tr>
-<tr><td>後日談（相手の後続成績）</td><td>評価日より前の出走だけで as-of 集計する。同日以降を使うと即リーク。</td><td>未実装</td></tr>
+<tr><td>後日談（相手の後続成績）</td><td>評価日より前の出走だけで as-of 集計する。同日以降を使うと即リーク。</td><td>tp-16 の notebook で検証（結果は<b>未記録</b>）</td></tr>
 <tr><td>騎手・調教師の拡張統計（<code>jk_*</code>・<code>tr_*</code>）</td><td>LayerA に未結合（<code>include_jockey_trainer_stats=False</code>）。</td><td>未結合</td></tr>
 </table>
 
@@ -244,7 +244,7 @@
 <table>
 <tr><th>項目</th><th>内容</th></tr>
 <tr><td>データ</td><td>データ完全化後の <code>train_table.parquet</code>（LayerA 母表 + 履歴特徴量。全出走馬）。2020〜2025 年のみ。</td></tr>
-<tr><td>CV</td><td><code>yearly_expanding_folds</code>（valid 2022・2023・2024、purge 7 日 + embargo 3 日）。test 2025 は tp-06 まで触らない。</td></tr>
+<tr><td>CV</td><td><code>yearly_expanding_folds</code>（valid 2022・2023・2024、purge 7 日 + embargo 3 日）。test 2025 は tp-06 まで触らない（tp-06・tp-06b で一度ずつ評価済み）。</td></tr>
 <tr><td>モデル</td><td>LightGBM 固定（<code>n_estimators=300, learning_rate=0.05, num_leaves=31, min_child_samples=100, subsample=0.8, colsample_bytree=0.7, reg_lambda=5</code>）、3 seed。計算資源は <code>compute.py</code>（スレッドは 20、他ジョブ用に 4 を空ける）。</td></tr>
 <tr><td>指標</td><td>主指標は p_win の LogLoss。AUC、レース内 softmax 化した負の対数尤度（race_nll）、p_top2・p_top3 の LogLoss を併記。fold 別と平均、seed 間のばらつきを出す。</td></tr>
 <tr><td>ベースライン B0</td><td>LayerA の既存列（<code>horse_prior_*</code>、<code>jockey_prior_*</code>、<code>trainer_prior_*</code>、<code>track_bias_*</code>、<code>sire_*</code>、<code>speed_*</code>、レース条件）。<code>has_speed_index</code> を含む。</td></tr>
@@ -270,7 +270,7 @@
 <p>採用セットごとに、train と valid／test を見分ける AUC を記録する。現状（on_time 補正後、tp-02 の 94 特徴量）は、全部で 0.86（valid）・0.90（test）、F5 を除くと 0.76・0.79、F5 と件数系を除くと 0.74・0.78。上位は <code>c_rq_ewm2</code>、<code>c_cls_ewm2</code>、<code>c_cls_step</code>、<code>f3_fs_mean</code>、<code>c_fstop3_ewm2</code>。AUC は「分布差の大きさ」の目安であり、単独の合否基準ではない。LogLoss を悪化させずに下げられる範囲で対処する。</p>
 
 <h2>8. tp-04 前段モデル（実施済み）</h2>
-<div class="box">以下は実施前の設計。<b>実施済み（2026-10-15）</b>で、各段の精度と後段への寄与は<a href="training_pipeline_decisions.html">確定事項ログ</a> §6。tp-05（最終モデル）・tp-06・tp-07 は未作成。</div>
+<div class="box">以下は実施前の設計。<b>実施済み（2026-10-15）</b>で、各段の精度と後段への寄与は<a href="training_pipeline_decisions.html">確定事項ログ</a> §6。tp-05・tp-06 は完了（確定事項ログ §7〜§9）。tp-07（最終再学習・登録・推論の一致確認）だけが未作成。</div>
 <h3>8.1 目的変数</h3>
 <table>
 <tr><th>モデル</th><th>目的変数</th><th>種類</th><th>旧 notebook</th><th>旧結果（参考。時間が重なる分割での値）</th></tr>
@@ -413,7 +413,7 @@
 <rect x="350" y="560" width="300" height="62" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
 <text x="500.0" y="578.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">tp-05 最終モデル</text>
 <text x="500.0" y="595.55" text-anchor="middle" font-size="12" fill="#b9c6e8">p_win / p_top2 / p_top3</text>
-<text x="500.0" y="612.55" text-anchor="middle" font-size="12" fill="#b9c6e8">LightGBM・CatBoost・Optuna・MLflow</text>
+<text x="500.0" y="612.55" text-anchor="middle" font-size="12" fill="#b9c6e8">NN・LightGBM・XGBoost・Optuna・MLflow（アンサンブル v2）</text>
 <line x1="650" y1="591" x2="680" y2="591" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah)"/>
 <rect x="680" y="560" width="300" height="62" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
 <text x="830.0" y="578.55" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">tp-06 確率較正・評価</text>
@@ -503,7 +503,7 @@
 <tr><td>馬体重系（<code>d_wt_*</code>、<code>sr_load_*</code>、<code>sr_exp</code>）</td><td>△</td><td>T-60 の取得はオッズのみのまま。代わりに<b>検知ランナーが T-65〜T-30 に出馬表を取り直す</b>（10/15 更新）。発表時刻のばらつきは未計測</td></tr>
 <tr><td>P1・P2・P3 事前版</td><td>△</td><td>設計のみ。tier 0 に載せられるが未実装</td></tr>
 <tr><td><b>P7 当日の馬場差</b></td><td>△</td><td>1 レースの間隔は約 30 分で、速報は発走 +15 分に取得されるため、<b>T-60 に使える同日の先行レースは、発走が約 90 分以上前のものだけ</b>。実データでは、先行レースが使えるレースは全体の 62%（第 1〜3R は 0%、第 4R 31%、第 5R 45%、第 6R 81%、第 7R 以降 90〜100%）。使えないレースは前の開催日の値で補う（補完後の非欠損は 96%）</td></tr>
-<tr><td>第 2 段・P4〜P6・最終モデル・較正</td><td>○（計算）／×（配線）</td><td>計算は数秒。検知ランナーの既定は特徴量の作成までで、予測は起動しない（最終モデル tp-05 は未作成）</td></tr>
+<tr><td>第 2 段・P4〜P6・最終モデル・較正</td><td>○（計算）／×（配線）</td><td>計算は数秒。検知ランナーの既定は特徴量の作成までで、予測は起動しない（最終モデルは tp-05・06 で評価済み。最終再学習・登録は tp-07 で未実施）</td></tr>
 <tr><td>LayerB</td><td>○</td><td>T-15 のオッズ。時点は固定されている</td></tr>
 <tr><td>tier 0／1／2 の分割</td><td>△（10/15 更新）</td><td><code>feature_tiers.json</code> があり、推論モード（<code>inference.py</code>）が読み込む。朝の tier 0・1 のキャッシュと、T-60 の tier 2 だけの計算になっているかは未確認（10/14 時点は未実装）</td></tr>
 </table>

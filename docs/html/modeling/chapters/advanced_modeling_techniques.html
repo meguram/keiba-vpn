@@ -215,7 +215,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <ul>
 <li>テクニックは積極的に使うが、<code>リーク防止（過去の正解データが学習に混入しないこと）</code>を最優先にする</li>
 <li>まず <code>BaselineV1</code>（最初の安定版モデル）を完成させてから、テクニックを段階的に追加する</li>
-<li>追加したテクニックは必ず <strong>train 内 OOF</strong> と <strong>2024 valid（検証データ）</strong> で比較・選定する。設定を凍結したあとに限り、<strong>2025 test（最終評価データ）</strong> で最終報告する（<strong>test の結果を見ながら設定を変えない</strong>）。<code>data/meta/modeling/dataset_split_manifest.json</code> の一次プロトコルに合わせる</li>
+<li>追加したテクニックは必ず <strong>train 内 OOF</strong> と <strong>2024 valid（検証データ）</strong> で比較・選定する。設定を凍結したあとに限り、<strong>2025 test（最終評価データ）</strong> で最終報告する（<strong>test の結果を見ながら設定を変えない</strong>）。<code>config/modeling/dataset_split_manifest.json</code> の一次プロトコルに合わせる</li>
 <li>実装基盤は <code>polars</code> 中心で組み、OOF / stage 出力は fold 単位の Parquet に保存する</li>
 </ul>
 <p>実装時のデータ処理・メモリ戦略は <code>docs/html/modeling/chapters/modeling_coding_strategy.html</code> を参照してください。</p>

@@ -204,13 +204,27 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>ML-AutoPilot Keiba — システム仕様書</h1>
-      <p class="meta">ソース: <code>docs/html/design/ARCHITECTURE.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/design/ARCHITECTURE.html</code> · 最終更新: 2026-10-16（JST）</p>
     </header>
     <article class="md-body">
+<div class="doc-note" style="margin:14px 0 18px;padding:12px 16px;border:1px solid #3a63b8;border-left:4px solid #7aa9ff;border-radius:8px;background:rgba(79,139,255,.08);font-size:14px;line-height:1.75">
+<b>現在の構成との差分と用語（正: <code>docs/operations/vps-gcp-responsibilities.md</code>、2026-10-02 確定）。</b>
+本書は 2026-05 時点の設計です。現在は次の分担です。
+<ul style="margin:6px 0 0 1.3em;padding:0">
+<li><b>VPS</b>（ConoHa 2GB）: ページ配信・API・Redis・監視ポータル、開催日当日分の取得 cron。</li>
+<li><b>GCP</b>: GCS（データの正本・モデルの公開先）、Cloud SQL（PostgreSQL、stg/prod 共用 1 台）、重い集計・再構築ジョブ（Cloud Run Jobs）。</li>
+<li><b>学習PC</b>（旧称「別PC」＝ホスト PC。stg 環境もここで動く）: データ準備の全部（過去データの取得・特徴量生成）と学習、MLflow Tracking。</li>
+<li><b>開発PC</b>: Claude Code を動かすコード作業用の PC。<code>KEIBA_ENV=dev</code> で GCP に一切接続せず、<code>data/dev_mock</code> のモックで動く。</li>
+</ul>
+</div>
+<div class="doc-note" style="margin:14px 0 18px;padding:12px 16px;border:1px solid #3a63b8;border-left:4px solid #7aa9ff;border-radius:8px;background:rgba(79,139,255,.08);font-size:14px;line-height:1.75">
+<b>ポート表記について。</b> ローカル・stg・本番のサーバのポートは <code>config/ports.env</code>（dev 231xx / stg 232xx / prod 233xx、監視ポータル 23900）が正です
+（一覧は <code>docs/operations/service-endpoints.md</code>）。本書の 3000 / 3001 / 5000 / 8000 / 9090 などは、設計当時の既定値、または
+<code>docker-compose.serving.yml</code>・<code>mlflow/server/</code>（VPS デプロイ用）で今も使う従来ポート（FastAPI 8000、MLflow 5000、Model Serve 5001〜5010、PostgreSQL 5432、Redis 6379）です。
+</div>
 <h1 id="ml-autopilot-keiba">ML-AutoPilot Keiba — システム仕様書</h1>
 <blockquote>
-<p>自動生成: 2026-03-19 01:36:10<br />
-このファイルはシステム起動時・コマンド実行時に自動更新されます。</p>
+<p>初版の自動生成: 2026-03-19 01:36:10（現在は自動更新されず、手で更新しています）</p>
 </blockquote>
 <blockquote>
 <p>⚠ Next.js・PostgreSQL・Redis 導入前の記述が残っています。フロントエンド・DB・Redisを含む

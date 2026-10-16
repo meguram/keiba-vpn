@@ -20,6 +20,8 @@ import pandas as pd
 
 from src.scripts.docs.build_model_report_html import CSS, bars
 
+from src.scripts.docs import report_notes as N
+
 LABEL = {
     "lgb_binary": "LightGBM 二値", "lgb_softmax": "LightGBM レース内 softmax", "cat_binary": "CatBoost 二値", "xgb_binary": "XGBoost 二値", "linear": "線形（条件付きロジット）",
     "nn_s": "NN 小 (128,64)", "nn": "NN 中 (256,128)", "nn_l": "NN 大 (512,256,128)", "lgb_tuned": "LightGBM 二値（調整後）", "xgb_tuned": "XGBoost 二値（調整後）",
@@ -65,6 +67,7 @@ def main() -> int:
 
     o = [f'<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>モデリング実験結果レポート — keiba-vpn docs</title><style>{CSS}</style></head><body><main>']
     o.append("<h1>モデリング実験結果レポート（tp-05a〜tp-08）</h1>")
+    o.append(N.LEAK_NOTE_HTML)
     o.append(f'<p class="muted">作成: {datetime.now():%Y-%m-%d %H:%M} / 実験管理: MLflow（ホスト上 <code>http://127.0.0.1:23230</code>）の <code>keiba-tp-model-screen</code>・<code>keiba-tp-model-zoo</code>・<code>keiba-tp-hpo</code>・<code>keiba-tp-ensemble</code>・<code>keiba-tp-final-eval</code></p>')
 
     # 結論
@@ -92,7 +95,7 @@ def main() -> int:
         if h:
             extra = (f"単純な基準（複勝のモデル 1 位 {bl['roi'] * 100:.1f}%）より {vs['下限0.5: 回収率の差'] * 100:+.1f} ポイント（95% 信頼区間 {vs['下限0.5: 95%下限'] * 100:+.1f}〜{vs['下限0.5: 95%上限'] * 100:+.1f}）有意に高く、単勝 1 番人気（{bf['roi'] * 100:.1f}%）を大きく上回る" if vs else "")
             o.append(f"<li><b>馬券の強化学習（tp-08、test 2025、確定オッズ）: 控除率を上回る優位は見つからなかった（回収率は 100% 未満）。</b>自由に見送れる設定では全レース見送りに落ちる。1 レース平均の賭け金に下限（予算の 50%）を課した最良の方策の回収率は <b>{h['roi'] * 100:.1f}%</b>"
-                     f"（95% 信頼区間 {h['roi_lo'] * 100:.1f}〜{h['roi_hi'] * 100:.1f}%）。{extra}が、損失を小さくする配分であって、利益が出る賭け方ではない。詳しくは §4。</li>")
+                     f"（95% 信頼区間 {h['roi_lo'] * 100:.1f}〜{h['roi_hi'] * 100:.1f}%）{N.RL_HEADLINE_FIX}。{extra}が、損失を小さくする配分であって、利益が出る賭け方ではない。詳しくは §4。</li>")
     else:
         o.append("<li>市場オッズとの比較・馬券の回収率の検証は §4（実施した場合）を参照。</li>")
     o.append("</ul></div>")
@@ -129,7 +132,7 @@ def main() -> int:
     # 段階別
     o.append("<h2>3. 段階別の実験結果（valid 2022〜2024）</h2>")
     if zoo is not None:
-        o.append("<h3>tp-05b モデル族の比較</h3>")
+        o.append("<h3>3.1 tp-05b モデル族の比較</h3>")
         z = zoo[["logloss_win", "logloss_top2", "logloss_top3", "auc_win", "auc_top2", "auc_top3", "top1_hit", "seconds"]].copy()
         z.index = [LABEL.get(i, i) for i in z.index]
         o.append(table(z, first="モデル", fmt={"seconds": lambda v: f"{v:.0f} 秒", "top1_hit": lambda v: f"{v:.4f}"}))
@@ -137,13 +140,13 @@ def main() -> int:
         items[0] = (items[0][0], items[0][1], True)
         o.append(bars(items, items[0][1] - 0.0015, items[-1][1] + 0.0015))
     if tunec is not None:
-        o.append("<h3>tp-05c 重み・学習期間・ラウンド数（LightGBM 基準との差。負なら改善）</h3>")
+        o.append("<h3>3.2 tp-05c 重み・学習期間・ラウンド数（LightGBM 基準との差。負なら改善）</h3>")
         t = tunec[["Δwin", "win_lo", "win_hi", "Δtop2", "Δtop3", "採用"]].copy()
         t.index = [VAR_LABEL.get(i, i) for i in t.index]
         o.append(table(t.rename(columns={"win_lo": "勝率 95%下限", "win_hi": "勝率 95%上限"}), first="案", fmt={"採用": lambda v: "<span class=ok>採用</span>" if str(v) == "True" else "<span class=warn>不採用</span>"}))
         o.append("<p class='muted'>いずれも基準（重みなし・300 ラウンド・2020 年から学習）を有意には上回らなかったため、既定の設定を維持した。</p>")
     if hpo_final is not None:
-        o.append("<h3>tp-05d ハイパーパラメータ調整（Optuna。調整は valid 2022・2023、2024 は確認専用）</h3>")
+        o.append("<h3>3.3 tp-05d ハイパーパラメータ調整（Optuna。調整は valid 2022・2023、2024 は確認専用）</h3>")
         hf = hpo_final[["logloss_win", "logloss_top2", "logloss_top3", "race_nll", "auc_win", "top1_hit"]].copy()
         hf.index = [LABEL.get(i.replace("_default", "").replace("_tuned", "") + ("_tuned" if i.endswith("_tuned") else ""), i) + ("（既定）" if i.endswith("_default") else "") for i in hf.index]
         o.append(table(hf, first="モデル"))
@@ -152,7 +155,7 @@ def main() -> int:
         if hpo_best:
             o.append("<table><tr><th>モデル</th><th>最良パラメータ</th></tr>" + "".join(f"<tr><td>{k}</td><td style='text-align:left'><code>{html.escape(json.dumps(v['params'], ensure_ascii=False))}</code></td></tr>" for k, v in hpo_best["best"].items()) + "</table>")
     if loyo is not None and ens_spec:
-        o.append("<h3>tp-05e アンサンブル（leave-one-year-out の LogLoss）</h3>")
+        o.append("<h3>3.4 tp-05e アンサンブル（leave-one-year-out の LogLoss）</h3>")
         L = loyo.copy()
         L.index = [i if not i.startswith("single:") else "単独: " + LABEL.get(i.split(":")[1], i.split(":")[1]) for i in L.index]
         o.append(table(L.sort_values("win").rename(columns={"win": "勝率", "top2": "連対率", "top3": "複勝率"}), first="方式"))
@@ -188,6 +191,7 @@ def main() -> int:
         rb = lambda n: pd.read_csv(I / "rl" / n) if (I / "rl" / n).exists() else None
         bl_, cal_, fin_, vsb_, typ_, mode_ = rb("benter_blend.csv"), rb("ev_calibration_blend.csv"), rb("final_test2025.csv"), rb("final_vs_baselines.csv"), rb("final_by_type.csv"), rb("mode_comparison.csv")
         o.append("<h2>4. 馬券最適化の強化学習（tp-08）</h2>")
+        o.append(N.RL_CORRECTION_HTML)
         o.append("<p>予測（v2）の勝率・連対率・複勝率から、割引 Harville で単勝・複勝・馬連・ワイド・馬単の各組の確率を作り、市場の暗黙の確率と Benter 型でブレンドする。"
                  "1 レースを 1 ステップとし、候補の買い目への賭け金の配分（予算 1 = 1R の予算、残りは見送り）を方策勾配で学習する。報酬は実際の払戻 − 賭け金。"
                  "学習 2022〜2024（ハイパーパラメータは 2023・2024 を評価年にした Optuna）、test 2025 は一度だけ。<b>オッズは締切後の確定オッズ</b>で、購入判断の時点の値ではない（楽観側に偏りうる）。三連複・三連単はオッズが無く対象外。</p>")

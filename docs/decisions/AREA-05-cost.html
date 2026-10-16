@@ -139,6 +139,12 @@ article.html-body pre code { background: none; border: none; padding: 0; }
 
     <article class="html-body">
 
+<div class="callout warn">
+  <h4>現状（2026-10-16 確認）: 構成・費用の前提が置き換わっている</h4>
+  <p>「Cloud SQL / Cloud Run / Cloud Scheduler は廃止」「PostgreSQL・Celery を VPS に同居」「月額 約 1,300〜1,580 円」は 2026-07 の試算。現在は <code>docs/operations/vps-gcp-responsibilities.md</code>（2026-10-02 確定）の構成で、Cloud SQL・Cloud Run Jobs を採用し、試算は <code>docs/operations/cost-estimate.md</code>（約 $18/月）。上限 3,000 円/月、並列リクエスト禁止は有効。</p>
+  <p style="color:var(--muted);font-size:13px">この決定の記録は当時のまま残す。本欄だけが現状の注記。</p>
+</div>
+
 <h2 id="1">1. 概要</h2>
 <p>
 DEC-023 の確定により、インフラは <b>GCP マネージドサービスから ConoHa VPS ファーストへ移行</b> された。

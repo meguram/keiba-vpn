@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>data/features — 特徴量ストア参照</title>
+  <title>data/local/features — 特徴量ストア参照</title>
   <style>
     :root {
       --bg: #0f1419;
@@ -127,18 +127,19 @@
 </head>
 <body>
   <header>
-    <h1><code>data/features</code> — 特徴量（予測に使う数値）ストア参照</h1>
+    <h1><code>data/local/features</code> — 特徴量（予測に使う数値）ストア参照</h1>
     <p>
-      本ページでは、リポジトリ内の <span class="mono">data/features</span> 配下に保存される特徴量（予測に使う数値）について、
+      本ページでは、リポジトリ内の <span class="mono">data/local/features</span> 配下に保存される特徴量（予測に使う数値）について、
       <strong>ディレクトリ構成</strong>・<strong>キー設計</strong>・<strong>各列の意味</strong>を整理します。<br>
       参照元: <span class="mono">pipeline/feature_store.py</span>・<span class="mono">pipeline/race_performance.py</span>・
       <span class="mono">pipeline/jockey_trainer_stats.py</span>・
       <span class="mono">docs/html/modeling/chapters/race_performance_rating_system.html</span><br>
       <strong>訓練データ</strong>は出馬表を正とし、<span class="mono">race_id</span>・<span class="mono">horse_id</span>・<span class="mono">jockey_id</span>・<span class="mono">trainer_id</span> および
       舞台キー（<span class="mono">place_id</span>＝実装では主に <span class="mono">shutuba_venue_code</span>＋芝ダ＋距離）で特徴ブロックを left join します。
-      特徴量ファイルはブロックごとに <a href="#join-architecture"><span class="mono">data/features/</span> 直下の専用ディレクトリ</a>へ分割する<strong>目標レイアウト</strong>と、結合キー方針を整合させます。
+      特徴量ファイルはブロックごとに <a href="#join-architecture"><span class="mono">data/local/features/</span> 直下の専用ディレクトリ</a>へ分割する<strong>目標レイアウト</strong>と、結合キー方針を整合させます。
       （レジストリの行数・更新日は生成時点のスナップショットです。再生成後は数値が変わります。）
     </p>
+    <p class="small" style="margin-top:10px"><strong>最終更新: 2026-10-16（JST）</strong>。本ページの本文は 2026-04 起稿の旧設計（<span class="mono">data/features/columns/*.parquet</span>）を含みます。<b>現行の実体は <span class="mono">data/local/features/</span> のブロック別 <span class="mono">*_tbl</span></b>（対応は「ディレクトリ構成と役割」参照）。<span class="mono">columns/</span> を前提とする記述は旧レイアウトのものです。</p>
   </header>
   <main>
     <nav class="toc panel">
@@ -167,32 +168,29 @@
     </nav>
 
     <h2 id="layout">ディレクトリ構成と役割</h2>
-    <details class="raw-collapsible">
-      <summary>目標ツリー vs 現状ツリー（<span class="mono">data/features/</span>）</summary>
+    <details class="raw-collapsible" open>
+      <summary>現行のディレクトリ構成（<span class="mono">data/local/features/</span>）と、旧設計（目標/移行中）との対応</summary>
       <div class="raw-collapsible-body">
-      <p style="margin-top:0"><strong>目標（ブロック＝ディレクトリ）</strong> — 結合キー単位で読み取り・join の責務を分離します。</p>
-      <pre>data/features/
-├── _registry.json              # 登録メタ（列ごとの所在・dtype 等。ブロック別パスを指す想定）
-├── snapshots/                  # 任意: 学習用に複数列を束ねたスナップショット
-├── shutuba/                    # 予測ベース: race_id + horse_id + jockey_id + trainer_id + 馬番 + 出馬表由来列 A（stem は shutuba_* 等）
-│   └── &lt;stem&gt;.parquet          # 例: shutuba_* / idx_* / past_* / paddock_* / tcomment_* / 馬番で載せる確定後指標 等
-├── race/                       # レース特徴: キー race_id のみ（レース単位列 X・レース JSON ストア等）
-│   └── races/&lt;年&gt;/&lt;race_id&gt;.json  # 現: race_performance/races/ をここへ統合する想定
-├── horse/                      # 馬特徴: キー horse_id（血統・通算成績などの列 Y）
-├── jockey/                     # 騎手特徴: キー jockey_id（列 Z・lookup・切片 等）
-├── trainer/                    # 調教師特徴: キー trainer_id（列 V）
-└── venue/                      # 舞台特徴: place_id + course + length（実装: venue_code + surface + distance、列 W）</pre>
-      <p class="small"><strong>現状（移行中）</strong> — 実装は段階的に上記へ寄せます。</p>
-      <pre>data/features/
-├── _registry.json
-├── columns/                    # 列指向 Parquet がブロック横断で同居（shutuba_*・idx_*・custom 等）
-├── snapshots/
-├── race_performance/           # レースストア + 年次 Parquet（→ 目標では race/ 配下へ）
-└── jockey_trainer_stats/       # 騎手・調教師（→ 目標では jockey/ と trainer/ に分割配置）</pre>
+      <p style="margin-top:0"><strong>現行（実装 = <span class="mono">src/pipeline/features/feature_layout.py</span>、stg ホストの実体）</strong> — ブロックは結合キー単位の <span class="mono">*_tbl</span>。</p>
+      <pre>data/local/features/
+├── _registry.json                  # 登録メタ
+├── _raw_table_feature_selection.json  # 出馬表 raw 列の選別結果（register_raw_table_features）
+├── base_tbl/&lt;年&gt;/shutuba.parquet     # 予測スパイン: race_id + horse_id + jockey_id + trainer_id のみ
+├── race_tbl/                       # キー race_id
+├── race_horse_tbl/                 # キー race_id + horse_id（出馬表列・斤量・指数・jt_race_features 等）
+├── horse_tbl/                      # キー horse_id（血統・プロフィール等）
+├── race_jockey_tbl/ race_trainer_tbl/   # キー race_id + jockey_id / trainer_id
+├── jockey_tbl/ trainer_tbl/        # キー jockey_id / trainer_id
+├── jockey_trainer_stats/           # 騎手・調教師統計のメタ（マニフェスト・マージ仕様）
+├── target/rank_tbl/&lt;年&gt;/rank.parquet  # 着順ラベル（race_id, horse_id, rank）。build_rank_target
+└── horse/                          # 馬単位エンティティ: ped_tbl / result_tbl / training_tbl/{馬ID先頭4桁}/{horse_id}.parquet</pre>
+      <p class="small"><strong>旧設計との対応</strong>（下の表の「目標ディレクトリ」「現状（移行元）」は 2026-04 起稿時の設計で、<span class="mono">data/local/features/</span> と <span class="mono">columns/</span> は現在存在しません）:
+        <span class="mono">shutuba/</span>→<span class="mono">base_tbl/</span>、<span class="mono">race/</span>→<span class="mono">race_tbl/</span>、<span class="mono">horse/</span>→<span class="mono">horse_tbl/</span>（＋ <span class="mono">horse/</span> の馬単位エンティティ）、
+        <span class="mono">jockey/</span>→<span class="mono">jockey_tbl/</span>・<span class="mono">race_jockey_tbl/</span>、<span class="mono">trainer/</span>→<span class="mono">trainer_tbl/</span>・<span class="mono">race_trainer_tbl/</span>、<span class="mono">venue/</span>→未実装。
+        <span class="mono">race_horse_tbl/</span> が新設ブロック。<span class="mono">columns/</span> 出力（FeatureStore）は <span class="mono">*_tbl</span> に置き換わりました。</p>
       <p class="small" style="margin-bottom:0">
-        列の追加・更新は主に <span class="mono">FeatureStore</span>（現状は <span class="mono">columns/</span> 出力。移行後はブロック別 <span class="mono">features_dir</span> を拡張する想定）。
-        レースパフォーマンス系は <span class="mono">save_race_performance_features()</span> が年 Parquet・<span class="mono">columns/</span>・snapshots・race store を更新。
-        騎手・調教師統計は <span class="mono">python -m pipeline.build_jockey_trainer_stats</span>（定期: <span class="mono">scripts/cron/update_jockey_trainer_stats.sh</span>）。
+        騎手・調教師統計は <span class="mono">python -m src.pipeline.build_jockey_trainer_stats</span>（定期: <span class="mono">scripts/cron/update_jockey_trainer_stats.sh</span>）。
+        出馬表 raw の登録は <span class="mono">python -m src.pipeline.register_raw_table_features</span>。
       </p>
       </div>
     </details>
@@ -200,7 +198,7 @@
     <h2 id="join-architecture">訓練データの結合方針とブロック別ディレクトリ</h2>
     <div class="panel">
       <p style="margin-top:0">
-        学習・予測処理の<strong>母行</strong>は <strong>出馬表</strong>（<span class="mono">race_id</span> + 各エンティティ ID + <strong>馬番</strong>）。特徴量（予測に使う数値）は<strong>結合キーごとのブロック</strong>に分け、<span class="mono">data/features/</span> 直下の<strong>専用ディレクトリ</strong>に置きます（必要なブロックだけ読み、キーで left join）。
+        学習・予測処理の<strong>母行</strong>は <strong>出馬表</strong>（<span class="mono">race_id</span> + 各エンティティ ID + <strong>馬番</strong>）。特徴量（予測に使う数値）は<strong>結合キーごとのブロック</strong>に分け、<span class="mono">data/local/features/</span> 直下の<strong>専用ディレクトリ</strong>に置きます（必要なブロックだけ読み、キーで left join）。
         <a href="#layout">目標ツリー</a>と同一の分割です。
       </p>
       <table>
@@ -319,7 +317,7 @@
       <summary>現在のワークスペースで計測した母集団（<span class="mono">registry</span> の <span class="mono">source=custom</span> 列・クリックで展開）</summary>
       <div class="raw-collapsible-body">
         <p class="small" style="margin-top:0">次の数値は <span class="mono">src/scripts/docs/embed_raw_flat_samples_in_reference_html.py</span> が
-          <span class="mono">data/features/_registry.json</span> と <span class="mono">columns/*.parquet</span> から再計測した結果です。</p>
+          <span class="mono">data/local/features/_registry.json</span> と <span class="mono">columns/*.parquet</span> から再計測した結果です。</p>
     <!-- POPULATION_EMBED_BEGIN -->
       <ul class="compact" style="margin-bottom:0">
         <li>ファイル数: <strong>21</strong>（<span class="mono">_registry.json</span> の <span class="mono">source=custom</span> かつ Parquet 存在）</li>
@@ -565,7 +563,7 @@
 
     <h2 id="columns">登録列一覧（意味の要約）</h2>
     <p>
-      現在の <span class="mono">data/features/_registry.json</span> に基づく一覧です。
+      現在の <span class="mono">data/local/features/_registry.json</span> に基づく一覧です。
       各列は <span class="mono">data/features/columns/&lt;name&gt;.parquet</span> に対応します。<br>
       <strong>ファイル形式・行粒度・値の分布</strong>は <a href="#columns-parquet">columns/*.parquet の実体</a>を参照してください。<br>
       訓練時は <a href="#join-architecture">出馬表スパイン</a>に対し、まず <span class="mono">race_id + horse_number</span> で本一覧の列を付き合わせ、続けてエンティティ ID で二次 join します。
@@ -744,7 +742,7 @@
     <ul class="compact">
       <li>選別リスト: <span class="mono">pipeline/raw_table_features.py</span>（<span class="mono">ALL_RAW_SPECS</span>）</li>
       <li>登録コマンド: <span class="mono">python -m pipeline.register_raw_table_features</span>（<span class="mono">--years</span> / <span class="mono">--overwrite</span> 可）</li>
-      <li>実行結果・登録 stem 一覧: <span class="mono">data/features/_raw_table_feature_selection.json</span></li>
+      <li>実行結果・登録 stem 一覧: <span class="mono">data/local/features/_raw_table_feature_selection.json</span></li>
     </ul>
     <p class="small" style="margin-bottom:0">
       完成版の学習テーブルでは <strong>出馬表を正</strong>とし、<a href="#join-architecture"><span class="mono">race_id</span> + 各エンティティ ID + 舞台キー</a>のスパインに、
@@ -757,7 +755,7 @@
 
     <!-- RAW_FLAT_SAMPLES_BEGIN -->
     <h3 id="raw-flat-detail">追加 Parquet（raw flat 由来）の詳細とサンプル</h3>
-    <p class="small">登録は <span class="mono">python -m pipeline.register_raw_table_features</span>。サンプルはローカル <span class="mono">data/features/*_tbl/*.parquet</span>（レジストリ参照）の先頭行を結合したものです（環境・再登録で変わります）。折り畳みを開くと表が表示されます。</p>
+    <p class="small">登録は <span class="mono">python -m pipeline.register_raw_table_features</span>。サンプルはローカル <span class="mono">data/local/features/*_tbl/*.parquet</span>（レジストリ参照）の先頭行を結合したものです（環境・再登録で変わります）。折り畳みを開くと表が表示されます。</p>
 
     <details class="raw-collapsible">
       <summary>出馬表系 <span class="mono">shutuba_*</span> + ID 有効フラグ（29+3 stem・20,733 行）</summary>
@@ -1197,11 +1195,11 @@
           <td>出馬表・指数の採用／除外ルール</td>
         </tr>
         <tr>
-          <td><code>data/features/_raw_table_feature_selection.json</code></td>
+          <td><code>data/local/features/_raw_table_feature_selection.json</code></td>
           <td>raw flat 由来列の登録マニフェスト（スクリプト実行で更新）</td>
         </tr>
         <tr>
-          <td><code>data/features/jockey_trainer_stats/_merge_spec.json</code></td>
+          <td><code>data/local/features/jockey_trainer_stats/_merge_spec.json</code></td>
           <td>騎手・調教師 Parquet のマージキー仕様</td>
         </tr>
         <tr>
@@ -1215,7 +1213,7 @@
       <span class="mono">src/scripts/docs/embed_raw_flat_samples_in_reference_html.py</span> が
       <span class="mono">RAW_FLAT_SAMPLES_*</span>・<span class="mono">JT_STATS_REF_*</span>・<span class="mono">KEYS_SAMPLE_*</span>・<span class="mono">POPULATION_EMBED_*</span>・
       <span class="mono">COLUMN_STATS_EMBED_*</span>・<span class="mono">RP_WIDE_SAMPLE_*</span>・<span class="mono">REGISTRY_MERGED_SAMPLES_*</span>・<span class="mono">RACE_STORE_SAMPLE_*</span>
-      マーカー間を、ローカルの <span class="mono">data/features/</span> から再生成します。
+      マーカー間を、ローカルの <span class="mono">data/local/features/</span> から再生成します。
     </p>
   </main>
 </body>

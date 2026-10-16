@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-`docs/html/data_features_reference.html` 内の埋め込みマーカーを更新する。
+`docs/html/data/data_features_reference.html` 内の埋め込みマーカーを更新する。
 
 - `RAW_FLAT_SAMPLES_*` — raw flat 由来 columns の折り畳みサンプル
 - `JT_STATS_REF_*` — `race_horse_tbl/<YYYY>/jt_race_features.parquet` サンプル（折り畳み）
@@ -27,7 +27,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 ROOT = Path(__file__).resolve().parents[3]
-HTML_PATH = ROOT / "docs/html/data_features_reference.html"
+HTML_PATH = ROOT / "docs/html/data/data_features_reference.html"
 FEATURES_ROOT = ROOT / "data/local/features"
 REGISTRY_PATH = FEATURES_ROOT / "_registry.json"
 RACE_STORE_ROOT = FEATURES_ROOT / "race_performance/races"

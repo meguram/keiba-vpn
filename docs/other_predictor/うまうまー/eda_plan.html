@@ -127,6 +127,8 @@
   </nav>
 
   <section id="why">
+    <div style="border-left:3px solid #fbbf24;background:rgba(251,191,36,.07);padding:10px 14px;border-radius:8px;margin:1em 0;font-size:14px"><b>現状（2026-10-16 確認）</b>: 本書は<b>EDA の計画</b>で、フェーズ 0〜6 の実施結果はまだ無い（予定）。<code>track_speed_engine.py</code> などの既存モジュールは <code>src/research/race/</code>、<code>track_bias_pedigree.py</code> は <code>src/pipeline/features/</code> にある。<code>track_bias_pedigree.py</code> は 2026-10-15 に、同日の後のレースの結果が混ざる先読みを修正した（Phase 5 のリーク検証の前提が変わる）。</div>
+
     <h2><span class="num">1</span>なぜEDAが先に必要か</h2>
     <div class="card">
       <p>前回の設計書（②）では、うまうまーの着眼点の大部分が <code>track_speed_engine.py</code> / <code>race_quality_model.py</code> / <code>perf_index.py</code> / <code>course_bloodline.py</code> / <code>track_bias_pedigree.py</code> / L2血統クラスタなど、既存資産で代替できるという仮説を立てた。しかしこれらは<strong>別の目的で作られた既存モジュール</strong>であり、「うまうまーの手動判断と実際にどれだけ一致するか」「このペルソナの用途でカバレッジ・精度が十分か」はまだ検証していない。</p>

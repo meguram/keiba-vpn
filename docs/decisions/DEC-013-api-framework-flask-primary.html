@@ -140,6 +140,12 @@ article.html-body pre code { background: none; border: none; padding: 0; }
 <tr><td><b>矛盾ID</b></td><td>S-1-A</td></tr>
 </table>
 
+<div class="callout warn">
+  <h4>現状（2026-10-16 確認）: FastAPI の廃止は未実施</h4>
+  <p><code>src/api/app.py</code>（FastAPI・13,651 行）は <code>archive/</code> へ移されておらず（<code>archive/</code> は存在しない）、<code>main.py</code> は今も <code>src.api.app:app</code> を起動する。Flask（<code>src/api/flask_app.py</code>、<code>/api/v1</code>）は <code>--flask-api</code> や <code>service_start</code> で別ポート（dev 23110 / stg 23210 / prod 23310）に併走し、FastAPI は dev 23120 / stg 23220 / prod 23320。仕様上の正が Flask である点は変わらず、「段階廃止」は進行中。ポートの正は <code>config/ports.env</code>。</p>
+  <p style="color:var(--muted);font-size:13px">この決定の記録は当時のまま残す。本欄だけが現状の注記。</p>
+</div>
+
 <h2 id="context">コンテキスト</h2>
 <p>
 仕様書（AREA-03・MASTER.html）はバックエンドフレームワークとして Flask を明記しているが、実装では <code>src/api/app.py</code> が FastAPI で稼働し、<code>src/api/flask_app.py</code> が Flask の別実装として並存している。CI テストは <code>flask_app.py</code>（Flask）を対象としており、本番稼働コードと乖離している。
