@@ -2,7 +2,7 @@
 """tp-05a の実験結果（ホストの data/local/modeling/training_pipeline/model_screen/）から HTML レポートを作る。
 
   python -m src.scripts.docs.build_model_report_html --in /tmp/tp05a_out --log /tmp/tp05a.log --mlflow-json /tmp/tp05a_out/mlflow_runs.json \
-      --out docs/html/modeling/tp05a_experiment_report.html
+      --out docs/html/modeling/chapters/tp05a_experiment_report.html
 数値はすべて入力ファイルから埋め込む（手で書き写さない）。文章の判断は数値から機械的に出す（基準: 95% 信頼区間の上限が 0 未満、かつ 2 fold 以上で改善）。
 """
 

@@ -135,5 +135,5 @@ python3 -m src.research.genes.performance_genes combined --mstn CT --pdk4 GA --d
 
 - [docs/html/ARCHITECTURE.html](docs/html/ARCHITECTURE.html) — システム全体のアーキテクチャ
 - [docs/html/DATASOURCES.html](docs/html/DATASOURCES.html) — データソース仕様
-- [docs/html/modeling/](docs/html/modeling/) — モデリング・レーティング・データセット設計仕様
+- [docs/html/modeling/book.html](docs/html/modeling/book.html) — モデリング・レーティング・データセット設計仕様（全章を 1 冊に統合。各章の HTML は [chapters/](docs/html/modeling/chapters/)）
 - [docs/html/cost.html](docs/html/cost.html) — GCS コスト分析

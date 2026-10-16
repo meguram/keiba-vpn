@@ -36,7 +36,7 @@
 
 ### サービング用バンドル（小さなメモリのマシン向け。同日追記）
 
-`feature-accumulate` は、特徴量と同じ計算の結果から**サービング用バンドル**（fit 済みの値・過去走の素材・Elo の最終状態。約 140MB）も毎日書き出す。馬体重検知ランナーはバンドルがあれば出走馬の履歴だけを読んで特徴量を作る（約 340MB・0.6 秒。全履歴方式は 2.4GB・約 20 秒）。設計と検証は `docs/html/modeling/feature_serving_low_memory.html`。
+`feature-accumulate` は、特徴量と同じ計算の結果から**サービング用バンドル**（fit 済みの値・過去走の素材・Elo の最終状態。約 140MB）も毎日書き出す。馬体重検知ランナーはバンドルがあれば出走馬の履歴だけを読んで特徴量を作る（約 340MB・0.6 秒。全履歴方式は 2.4GB・約 20 秒）。設計と検証は `docs/html/modeling/chapters/feature_serving_low_memory.html`。
 
 ## 3. 要判断
 

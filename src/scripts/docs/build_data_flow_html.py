@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """データの「収集 → 保存 → 加工 → 統合（特徴量・推論）」の流れを、cron の発生時刻つきのフローチャートにする。
 
-出力: docs/html/modeling/data_flow_schedule.html
+出力: docs/html/modeling/chapters/data_flow_schedule.html
 
 時刻は cron の登録内容（正本 scripts/cron/setup_all_cron.sh）から読む（JST に換算済み）ため、cron を変えて再生成すれば追従する。
 どのデータがどのジョブで集まり、どの加工を経て、どこで統合されるか（誰が・いつ動かすか）は、下の ROWS に事実だけを書く。
@@ -24,7 +24,7 @@ from pathlib import Path
 from src.scripts.docs.build_cron_schedule_html import JST, parse
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_OUT = REPO_ROOT / "docs" / "html" / "modeling" / "data_flow_schedule.html"
+DEFAULT_OUT = REPO_ROOT / "docs" / "html" / "modeling" / "chapters" / "data_flow_schedule.html"
 
 # 統合先（右端の列）
 TARGETS = {
@@ -380,7 +380,7 @@ def render(jobs, source: str) -> str:
          "<title>データの収集〜加工〜統合フロー（cron 時刻つき） — keiba-vpn docs</title>", f"<style>{CSS}</style></head><body><main>",
          "<h1>データの収集〜加工〜統合フロー（cron 時刻つき）</h1>",
          f'<p class="muted">時刻はすべて <b>JST</b>。cron の登録内容（{esc(source)}）から生成: {datetime.now(JST):%Y-%m-%d %H:%M}。'
-         "再生成: <code>python -m src.scripts.docs.build_data_flow_html</code>。cron の一覧は <a href=\"../operations/cron_schedule.html\">cron 登録内容</a>、"
+         "再生成: <code>python -m src.scripts.docs.build_data_flow_html</code>。cron の一覧は <a href=\"../../operations/cron_schedule.html\">cron 登録内容</a>、"
          "特徴量とモデルの設計は <a href=\"feature_strategy_tp03_tp04.html\">特徴量戦略書</a>。</p>",
          '<div class="box legend"><b>読み方</b>　左から「データ → 取得するジョブと時刻 → 保存先 → 加工するジョブと時刻 → 統合・利用」。'
          '<span style="color:#ffd479">時刻 黄色</span> が cron の発生時刻。右端の線の色は統合先（'

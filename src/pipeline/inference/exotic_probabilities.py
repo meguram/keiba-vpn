@@ -1,6 +1,6 @@
 """馬連・ワイド・馬単・3連複の的中確率を、勝率・連対率・複勝率から一貫して計算する。
 
-設計の背景は docs/html/modeling/exotic_bet_probabilities.html。要点:
+設計の背景は docs/html/modeling/chapters/exotic_bet_probabilities.html。要点:
 
   1. 着順の生成モデルは Plackett–Luce（= Harville 1973）に、着順ステージごとの減衰指数 α_r を付けた
      Benter (1994) / Lo & Bacon-Shone 型の「割引 Harville」:

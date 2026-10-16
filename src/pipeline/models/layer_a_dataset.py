@@ -6,7 +6,7 @@ LayerA 学習母表の構築（BaselineV1 相当・当日レース直前パイ�
 - ラベル: race_result_flat.finish_position（学習時のみ結合。推論パイプラインでは使用しない）
 - 任意: 馬場傾向×血統 preprocess（pipeline/track_bias_pedigree.py）
 
-参照: docs/html/modeling/pre_race_feature_whitelist.html（BaselineV1）
+参照: docs/html/modeling/chapters/pre_race_feature_whitelist.html（BaselineV1）
 """
 
 from __future__ import annotations

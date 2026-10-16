@@ -263,7 +263,7 @@ def render(jobs: list[Job], others: list[str], source: str, status: dict | None 
            "<h1>cron 登録内容（グループ別）</h1>",
            f'<p class="muted">時刻はすべて <b>JST</b>（crontab 本体は UTC で記述）。生成: {datetime.now(JST):%Y-%m-%d %H:%M} / 元データ: {esc(source)} / '
            "再生成: <code>python -m src.scripts.docs.build_cron_schedule_html</code>。定義の正は <code>scripts/cron/setup_all_cron.sh</code>。"
-           'データごとの収集→加工→統合の流れは <a href="../modeling/data_flow_schedule.html">データの収集〜加工〜統合フロー</a>。</p>',
+           'データごとの収集→加工→統合の流れは <a href="../modeling/chapters/data_flow_schedule.html">データの収集〜加工〜統合フロー</a>。</p>',
            '<div class="box"><span class="badge">取り直し中は見送り</span> のジョブは、優先処理（2020-2025年の取り直し。<code>run_priority_rescrape.sh</code>）が動いている間は自動で見送り、'
            "終われば自動で通常どおり動く（<code>scripts/cron/yield_to_rescrape.sh</code>。同じ netkeiba アカウントの別セッションが取り直し側のセッションを無効にするため）。"
            "見送りの記録は <code>logs/yield_skips.log</code>。止めるには <code>data/local/meta/rescrape/YIELD_DISABLED</code> を置く。</div>"]

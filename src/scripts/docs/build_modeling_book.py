@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""docs/html/modeling/ の各 HTML を、章立てした 1 冊の本（book.html）に統合する。
+"""docs/html/modeling/chapters/ の各 HTML（章）を、部・章・節で目次をつけた 1 冊の本（docs/html/modeling/book.html）に統合する。
 
 元の HTML は変えない（個別ページの URL・他からのリンク・他の人の編集はそのまま）。この本は元の HTML から**毎回作り直す**ので、
 元の HTML を直したら再生成する。新しい HTML を modeling/ に足したら、下の PARTS にも載せる（載せ忘れはテストが検出する）。
@@ -27,7 +27,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-MODELING_DIR = REPO_ROOT / "docs" / "html" / "modeling"
+MODELING_DIR = REPO_ROOT / "docs" / "html" / "modeling"          # 本(book.html)を置く場所
+CHAPTERS_DIR = MODELING_DIR / "chapters"                      # 各章の HTML（子ファイル）はここで管理する
 DEFAULT_OUT = MODELING_DIR / "book.html"
 JST = timezone(timedelta(hours=9))
 
@@ -138,6 +139,8 @@ def namespace(body: str, slug: str, slugs: set[str]) -> str:
     body = re.sub(r'(\sid=")([^"]+)(")', lambda m: f'{m.group(1)}{slug}--{m.group(2)}{m.group(3)}', body)
     body = re.sub(r'(\s(?:xlink:)?href="#)([^"]+)(")', lambda m: f'{m.group(1)}{slug}--{m.group(2)}{m.group(3)}', body)
     body = re.sub(r"url\(#([^)]+)\)", lambda m: f"url(#{slug}--{m.group(1)})", body)
+    # 章のファイルは chapters/ にあり、本は 1 つ上の modeling/ にあるので、../ で始まる相対リンクを 1 階層浅くする
+    body = re.sub(r'((?:href|src)=")\.\./(\.\./)', r"\1\2", body)
 
     def link(m: re.Match) -> str:
         pre, target, frag = m.group(1), m.group(2), m.group(3)
@@ -295,7 +298,7 @@ SHELL_JS = """
 """
 
 
-def build(modeling_dir: Path = MODELING_DIR) -> tuple[str, dict]:
+def build(modeling_dir: Path = CHAPTERS_DIR) -> tuple[str, dict]:
     slugs = set(CHAPTERS)
     built: dict[str, dict] = {}
     css_groups: dict[str, str] = {}
@@ -328,8 +331,8 @@ def build(modeling_dir: Path = MODELING_DIR) -> tuple[str, dict]:
                         f'<td><span class="bk-tag" style="color:{KINDS[ch.kind]}">{ch.kind}</span></td><td>{html.escape(ch.blurb)}</td><td>{b["updated"]}</td></tr>')
     front = (
         '<section class="bk-front" id="front"><h1>モデリング総覧</h1>'
-        f'<p class="meta" style="color:#9aa7c7">docs/html/modeling/ の {len(CHAPTERS)} 本の HTML を、1 冊の本にまとめたもの。生成: {datetime.now(JST):%Y-%m-%d %H:%M} JST。'
-        "元の各ページはそのまま残っている（各章の見出しの「単独ページ」から開ける）。この本は元のページから自動で作るので、<b>直すときは元のページを直して</b> "
+        f'<p class="meta" style="color:#9aa7c7">docs/html/modeling/chapters/ の {len(CHAPTERS)} 本の HTML を、1 冊の本にまとめたもの。生成: {datetime.now(JST):%Y-%m-%d %H:%M} JST。'
+        "元の各ページは chapters/ にそのまま残っている（各章の見出しの「単独ページ」から開ける）。この本は元のページから自動で作るので、<b>直すときは元のページを直して</b> "
         "<code>python -m src.scripts.docs.build_modeling_book</code> で作り直す。</p>"
         "<h2>どれを読めばよいか</h2><ul>"
         f'<li>今の精度・最新の結論 → <a href="#ch-modeling_experiment_report">{html.escape(built["modeling_experiment_report"]["title"])}</a></li>'
@@ -356,7 +359,7 @@ def build(modeling_dir: Path = MODELING_DIR) -> tuple[str, dict]:
             f'<section class="bk-chapter css-{b["gid"]}" id="ch-{ch.slug}" data-slug="{ch.slug}">'
             f'<div class="bk-head"><div class="no">第{no}章　<span class="bk-tag" style="color:{KINDS[ch.kind]}">{ch.kind}</span></div>'
             f'<h2 class="bk-title">{html.escape(b["title"])}</h2>'
-            f'<p class="meta">更新日 {b["updated"]} ／ 元のファイル <a href="{ch.slug}.html">{ch.slug}.html</a>（単独ページ）</p>'
+            f'<p class="meta">更新日 {b["updated"]} ／ 元のファイル <a href="chapters/{ch.slug}.html">chapters/{ch.slug}.html</a>（単独ページ）</p>'
             f'<div class="blurb">{html.escape(ch.blurb)}</div>' + (f'<p class="bk-see">関連する章: {see}</p>' if see else "") + "</div>"
             f'<div class="bk-body html-body">{b["body"]}</div><div class="bk-pn">{prev_a}{next_a}</div></section>'
         )

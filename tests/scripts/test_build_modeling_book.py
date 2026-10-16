@@ -6,7 +6,8 @@ from src.scripts.docs import build_modeling_book as B
 
 
 def test_every_modeling_html_belongs_to_exactly_one_chapter():
-    files = {p.stem for p in B.MODELING_DIR.glob("*.html")} - {"book"}
+    files = {p.stem for p in B.CHAPTERS_DIR.glob("*.html")}
+    assert {p.name for p in B.MODELING_DIR.glob("*.html")} == {"book.html"}, "modeling/ 直下には book.html だけを置く（章の HTML は chapters/）"
     slugs = [c.slug for p in B.PARTS for c in p.chapters]
     assert len(slugs) == len(set(slugs)), "同じ章が 2 回載っている"
     assert files == set(slugs), f"本に載っていない: {files - set(slugs)} / ファイルが無い: {set(slugs) - files}"

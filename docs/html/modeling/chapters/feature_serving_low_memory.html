@@ -23,7 +23,7 @@
 <body>
 <main>
 <h1>当日の特徴量を小さなメモリで作る設計</h1>
-<p class="muted">2026-10-14。対象: 履歴特徴量 127 列（tp-02 の A〜H）の蓄積と、当日（馬体重の発表後）の推論モード。実装: <code>src/pipeline/features/horse_history/</code>（<code>serving.py</code>・<code>elo.py</code>・各段階の frozen モード）。運用: <a href="../../operations/raceday_weight_trigger.md">raceday_weight_trigger.md</a>。保存形式: <a href="../data/database_schemas.html">database_schemas.html</a> の 3.6。</p>
+<p class="muted">2026-10-14。対象: 履歴特徴量 127 列（tp-02 の A〜H）の蓄積と、当日（馬体重の発表後）の推論モード。実装: <code>src/pipeline/features/horse_history/</code>（<code>serving.py</code>・<code>elo.py</code>・各段階の frozen モード）。運用: <a href="../../../operations/raceday_weight_trigger.md">raceday_weight_trigger.md</a>。保存形式: <a href="../../data/database_schemas.html">database_schemas.html</a> の 3.6。</p>
 
 <div class="box"><b>結論</b>
 <ul>
@@ -61,7 +61,7 @@
 <tr><td>大きなマシン（毎日 07:40 JST）</td><td><code>feature-accumulate</code>: 全履歴で特徴量を作り（当年分は <code>features_&lt;年&gt;.parquet</code> に蓄積）、同じ計算の結果としてバンドルを書き出す（約 1 秒）</td><td>約 3GB</td></tr>
 <tr><td>小さなマシン（当日）</td><td>馬体重の検知ランナーが <code>compute_entrants</code> を呼び、出走馬の履歴だけをメモリマップで読んで今日の行の特徴量を作る</td><td>約 340MB</td></tr>
 </table>
-<p>バンドルの中身は <a href="../data/database_schemas.html">database_schemas.html</a> の 3.6。大きなマシンから小さなマシンへの配布（rsync や GCS 経由）は未整備で、現状はホスト 1 台で動く。エンジンは <code>KEIBA_INFERENCE_ENGINE</code>（<code>auto</code>: バンドルがあれば使う／<code>bundle</code>／<code>full</code>）。</p>
+<p>バンドルの中身は <a href="../../data/database_schemas.html">database_schemas.html</a> の 3.6。大きなマシンから小さなマシンへの配布（rsync や GCS 経由）は未整備で、現状はホスト 1 台で動く。エンジンは <code>KEIBA_INFERENCE_ENGINE</code>（<code>auto</code>: バンドルがあれば使う／<code>bundle</code>／<code>full</code>）。</p>
 <h3>履歴の読み方</h3>
 <p>当初は馬ごとの小さな parquet を sqlite に入れたが、ファイルの固定オーバーヘッドで 618MB になった（元データは 90MB）。無圧縮の Arrow ファイルを <b>pyarrow でメモリマップ</b>し、馬ごとの行範囲（<code>horse_index.json</code>）で切り出す形にして 96MB・0.4 秒になった（polars の <code>scan_ipc</code> は全体を読み込み 2.4GB になったため使わない）。</p>
 <h3>import の削減</h3>

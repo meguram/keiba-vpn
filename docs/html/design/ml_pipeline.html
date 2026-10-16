@@ -313,7 +313,7 @@
       <h4>Engineering</h4>
       <a href="#coding">15. コーディング戦略</a>
       <a href="#artifacts">16. 中間成果物・版管理</a>
-      <a href="../modeling/feature_engineering_exploration.html">特徴量探索（HTML）</a>
+      <a href="../modeling/chapters/feature_engineering_exploration.html">特徴量探索（HTML）</a>
       <a href="../data/data_features_reference.html">データ・特徴量（現行）</a>
 
       <h4>Betting</h4>
@@ -561,7 +561,7 @@ flowchart TD
             <ul class="bullets">
               <li><code class="inline">race_performance_rating_system</code> 由来の <code class="inline">run_performance_final</code> 系履歴</li>
               <li><code class="inline">horse_pre_rating_pre_race</code> / <code class="inline">field_relative_pre_rating</code></li>
-              <li><a href="../modeling/race_performance_rating_system.html">→ レースパフォーマンス算出システム（完全版）へ</a></li>
+              <li><a href="../modeling/chapters/race_performance_rating_system.html">→ レースパフォーマンス算出システム（完全版）へ</a></li>
             </ul>
           </div>
         </div>
@@ -847,7 +847,7 @@ bloodline_day_fit_burst   = burst_fit      * day_bias_burst</pre>
         通常のランダム分割を使うと、情報リークと過楽観バイアスの原因になります。
         本プロジェクトでは <code class="inline">data/meta/modeling/dataset_split_manifest.json</code> を
         唯一の分割定義とし、詳細は
-        <code class="inline">docs/html/modeling/train_valid_test_split_strategy.html</code> に集約します。
+        <code class="inline">docs/html/modeling/chapters/train_valid_test_split_strategy.html</code> に集約します。
       </p>
 
       <h3>一次プロトコル（確率モデル本線）</h3>
@@ -1308,7 +1308,7 @@ stacker は OOF 予測のみで学習</pre>
           </div>
           <p style="margin:12px 0 0;font-size:13px;color:var(--muted);">
             学習ジョブは <b>MLflow モデル管理</b>で Run を必ず記録します（params / metrics / tags / 主要な学習済みファイル）。
-            定義ドキュメント: <code class="inline">docs/html/modeling/modeling_coding_strategy.html</code>「MLflow による学習記録」。実装参照: <code class="inline">pipeline/trainer.py</code>。
+            定義ドキュメント: <code class="inline">docs/html/modeling/chapters/modeling_coding_strategy.html</code>「MLflow による学習記録」。実装参照: <code class="inline">pipeline/trainer.py</code>。
           </p>
         </div>
         <div class="card">
@@ -1529,19 +1529,19 @@ flowchart TD
       <table class="table">
         <thead><tr><th>テーマ</th><th>ファイル</th></tr></thead>
         <tbody>
-          <tr><td>多段階パイプライン</td><td class="mono">docs/html/modeling/staged_probability_pipeline.html</td></tr>
-          <tr><td>母表仕様</td><td class="mono">docs/html/modeling/horse_pre_race_dataset_spec.html</td></tr>
-          <tr><td>入力ホワイトリスト</td><td class="mono">docs/html/modeling/pre_race_feature_whitelist.html</td></tr>
-          <tr><td>ML テクニック</td><td class="mono">docs/html/modeling/advanced_modeling_techniques.html</td></tr>
-          <tr><td>コーディング戦略</td><td class="mono">docs/html/modeling/modeling_coding_strategy.html</td></tr>
-          <tr><td>馬券最適化（データ契約）</td><td class="mono">docs/html/modeling/betting_backtest_dataset_spec.html</td></tr>
-          <tr><td>馬券推奨 × RL（方策設計）</td><td class="mono">docs/html/modeling/betting_policy_reinforcement_learning.html</td></tr>
-          <tr><td>レースパフォーマンス</td><td class="mono">docs/html/modeling/race_performance_rating_system.html（完全版）</td></tr>
+          <tr><td>多段階パイプライン</td><td class="mono">docs/html/modeling/chapters/staged_probability_pipeline.html</td></tr>
+          <tr><td>母表仕様</td><td class="mono">docs/html/modeling/chapters/horse_pre_race_dataset_spec.html</td></tr>
+          <tr><td>入力ホワイトリスト</td><td class="mono">docs/html/modeling/chapters/pre_race_feature_whitelist.html</td></tr>
+          <tr><td>ML テクニック</td><td class="mono">docs/html/modeling/chapters/advanced_modeling_techniques.html</td></tr>
+          <tr><td>コーディング戦略</td><td class="mono">docs/html/modeling/chapters/modeling_coding_strategy.html</td></tr>
+          <tr><td>馬券最適化（データ契約）</td><td class="mono">docs/html/modeling/chapters/betting_backtest_dataset_spec.html</td></tr>
+          <tr><td>馬券推奨 × RL（方策設計）</td><td class="mono">docs/html/modeling/chapters/betting_policy_reinforcement_learning.html</td></tr>
+          <tr><td>レースパフォーマンス</td><td class="mono">docs/html/modeling/chapters/race_performance_rating_system.html（完全版）</td></tr>
           <tr><td>次アクション・議論整理</td><td class="mono">（未作成）</td></tr>
-          <tr><td>チューニング工程 SOP</td><td class="mono">docs/html/modeling/hyperparameter_tuning_workflow.html</td></tr>
-          <tr><td>特徴量探索（LayerA）</td><td class="mono">docs/html/modeling/feature_engineering_exploration.html</td></tr>
+          <tr><td>チューニング工程 SOP</td><td class="mono">docs/html/modeling/chapters/hyperparameter_tuning_workflow.html</td></tr>
+          <tr><td>特徴量探索（LayerA）</td><td class="mono">docs/html/modeling/chapters/feature_engineering_exploration.html</td></tr>
           <tr><td>データ・特徴量一覧（現段階）</td><td class="mono">docs/html/data/data_features_reference.html</td></tr>
-          <tr><td>参考資料反映</td><td class="mono">docs/html/modeling/reference_insights.html</td></tr>
+          <tr><td>参考資料反映</td><td class="mono">docs/html/modeling/chapters/reference_insights.html</td></tr>
         </tbody>
       </table>
     </section>

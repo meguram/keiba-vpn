@@ -62,7 +62,7 @@ _SKIP_DOC_HTML = frozenset(
 
 def collect_doc_html_pages() -> list[Path]:
     pages = [p for p in sorted(HTML_DIR.glob("*.html")) if p.name not in _SKIP_DOC_HTML]
-    modeling = HTML_DIR / "modeling"
+    modeling = HTML_DIR / "modeling" / "chapters"      # 各章の HTML（modeling/book.html はそれらの統合なので除く）
     if modeling.is_dir():
         pages.extend(sorted(modeling.glob("*.html")))
     return pages

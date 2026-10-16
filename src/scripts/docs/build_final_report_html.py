@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """モデリング全体（tp-05a〜e・tp-06）の実験結果レポート HTML を作る。数値はすべて成果物から埋め込む。
 
-  python -m src.scripts.docs.build_final_report_html --in /tmp/modeling_out --out docs/html/modeling/modeling_experiment_report.html
+  python -m src.scripts.docs.build_final_report_html --in /tmp/modeling_out --out docs/html/modeling/chapters/modeling_experiment_report.html
 入力ディレクトリには、ホストの training_pipeline/ 配下の次のサブディレクトリを置く（無いものは節ごと省く）:
   model_screen/ model_zoo/ model_tune_c/ hpo/ ensemble/ final_eval/ improve_f/ improve_g/ improve_i/ ensemble_v2/ final_eval_v2/
   rl/（= data/local/modeling/betting/rl/<tag>/ の中身）  と mlflow_runs.json（任意）

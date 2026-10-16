@@ -414,7 +414,7 @@ export function BetRecommend({ raceId, hasPrediction }: { raceId: string; hasPre
       )}
 
       {rec?.probability_model && (
-        <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12, marginBottom: 0 }} title="docs/html/modeling/exotic_bet_probabilities.html">
+        <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12, marginBottom: 0 }} title="docs/html/modeling/chapters/exotic_bet_probabilities.html">
           確率モデル:{" "}
           {rec.probability_model.kind === "discounted_harville"
             ? `馬連・ワイド・3連複は 割引Harville（α2=${rec.probability_model.alpha2}, α3=${rec.probability_model.alpha3}）で、勝率・${

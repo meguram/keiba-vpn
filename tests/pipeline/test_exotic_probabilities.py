@@ -1,4 +1,4 @@
-"""馬連・ワイド・3連複の確率モデル（割引 Harville）。設計: docs/html/modeling/exotic_bet_probabilities.html"""
+"""馬連・ワイド・3連複の確率モデル（割引 Harville）。設計: docs/html/modeling/chapters/exotic_bet_probabilities.html"""
 
 from __future__ import annotations
 

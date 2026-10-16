@@ -93,7 +93,7 @@ KEIBA_ENV=stg KEIBA_WEIGHT_WATCH_DATE=20260613 KEIBA_WEIGHT_WATCH_REPLAY=1 /opt/
 
 - `KEIBA_INFERENCE_ENGINE`: `auto`（既定。バンドルがあればバンドル、無ければ全履歴）／`bundle`（無ければエラー）／`full`（全履歴）。
 - バンドルは `feature-accumulate`（毎日 07:40 JST）が `data/local/modeling/feature_store/serving_bundle/`（約 140MB）に作る。`KEIBA_SERVING_BUNDLE_DIR` で場所を変えられる。
-- バンドル方式の実測（ホスト）: 特徴量の計算 約 340MB（固有 約 160MB）・0.6 秒。全履歴方式は 2.4GB・約 20 秒。結果は全 127 特徴量で一致する。設計・検証: `docs/html/modeling/feature_serving_low_memory.html`。
+- バンドル方式の実測（ホスト）: 特徴量の計算 約 340MB（固有 約 160MB）・0.6 秒。全履歴方式は 2.4GB・約 20 秒。結果は全 127 特徴量で一致する。設計・検証: `docs/html/modeling/chapters/feature_serving_low_memory.html`。
 - 起動時のログとイベントに `engine`・`history_last_date` が出る。履歴が 10 日より古いと警告する。
 - プロセス全体では約 430MB（GCS クライアント等の import を含む）。400MB の余裕に収めるには、取得と計算のプロセスを分ける必要がある（未実施）。
 - 大きなマシンから小さなマシンへのバンドルの配布は未整備。
