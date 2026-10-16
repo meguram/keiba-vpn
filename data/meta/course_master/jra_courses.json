@@ -5696,7 +5696,7 @@
    "C": 6.0
   },
   "n_corners_record_mode": 4,
-  "start_position_A": "向正面直線",
+  "start_position_A": "外回りコース上の3コーナー手前〜途中（4コーナーを目掛けて約192m）から発走し、内回りを使う",
   "corner_radius_class_A": "小回り（2・3コーナーがかなりタイト）",
   "turf_type_A": "野芝ベース（北海道以外の標準。冬季の洋芝オーバーシード有無はJRAコース紹介ページ上では未確認）",
   "other_slopes": [
@@ -5742,7 +5742,16 @@
   "start_geometry": "main_track",
   "spiral_curve": null,
   "width_m": "A20-32 / B17-29 / C14-26",
-  "confidence_A": "high"
+  "confidence_A": "high",
+  "corrections": [
+   {
+    "set": [
+     "start_position_A"
+    ],
+    "evidence": "調査結果: スタートは外回りコース上の3〜4コーナー途中（JRA-VAN『4コーナーを目掛けて約192m』）。A の『向正面直線』は誤り",
+    "round": 2
+   }
+  ]
  },
  {
   "venue_code": "06",
@@ -9552,8 +9561,16 @@
     ],
     "evidence": "阪神芝3200mは1周目外回り→2周目内回り（JRA公式表『外・内』、Wikipedia、netkeiba）。最後の周は内回りなので、A の外回りの値（2089m・473.6m・2.4m）は誤り",
     "round": 2
+   },
+   {
+    "set": [
+     "n_laps_note"
+    ],
+    "evidence": "JRA公式表『外・内』、Wikipedia、netkeiba",
+    "round": 2
    }
-  ]
+  ],
+  "n_laps_note": "1周目は外回り、2周目（最後の周）は内回り（図は内回りの周で描画）"
  },
  {
   "venue_code": "10",

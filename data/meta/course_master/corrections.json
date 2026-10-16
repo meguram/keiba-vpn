@@ -1,27 +1,305 @@
 [
-  {"match": {"venue_code": "03", "surface": "ダート"}, "set": {"goal_slope_exists": true, "goal_slope_start": 270, "goal_slope_end": 0, "goal_slope_rise": 0.95, "goal_slope_rise_precision": "low(JRA断面図の目読)"},
-   "evidence": "JRA公式本文『ダートの起伏構成も芝コースとほぼ同じ』（芝は残り170〜50mに高低差1.2mの上り）と断面図。C（なし）が誤り", "round": 2},
-  {"match": {"venue_code": "10", "surface": "ダート"}, "set": {"goal_slope_exists": true, "goal_slope_start": 400, "goal_slope_end": 0, "goal_slope_rise": 0.6},
-   "evidence": "JRA公式本文『残り400m地点から直線にかけて緩やかな上り勾配（高低差0.6m）』。B（なし）が誤り。芝は直線平坦", "round": 2},
-  {"match": {"venue_code": "09", "surface": "芝", "distance": 3200}, "set": {"lap_length_m": 1689.0, "final_straight_m": 356.5, "elevation_range_m": 1.9, "last_lap_variant": "内"},
-   "evidence": "阪神芝3200mは1周目外回り→2周目内回り（JRA公式表『外・内』、Wikipedia、netkeiba）。最後の周は内回りなので、A の外回りの値（2089m・473.6m・2.4m）は誤り", "round": 2},
-  {"match": {"venue_code": "09", "surface": "芝", "distance": 3000}, "set": {"n_laps_note": "内回り約1周半（2周ではない）"}, "evidence": "調査結果: 阪神芝3000mは内回りのみ、約1周半（コーナー6回）", "round": 2},
-  {"match": {"venue_code": "04", "surface": "芝", "distance": 1000}, "set": {"lap_length_m": null, "final_straight_m": 1000.0, "elevation_range_m": 1.2, "elevation_range_precision": "low(JRA断面図の目読)", "straight_course": true},
-   "evidence": "直線コース。JRA公式表に高低差の数値なし。断面図: スタート直後に約0.8〜1m上り、残り約760mで頂点（約+1.2m）、残り約320mからゴールまで平坦", "round": 2},
-  {"match": {"venue_code": "01", "surface": "芝", "distance": 1500}, "set": {"n_corner_records": 3}, "evidence": "ポケット合流曲線は『2コーナー』として記録される（JRAの実レース結果ページ、netkeiba各10戦、dev実データ）", "round": 2},
-  {"match": {"venue_code": "05", "surface": "芝", "distance": 1800}, "set": {"n_corner_records": 3}, "evidence": "毎日王冠のJRA結果ページ: 2・3・4コーナーの3つ", "round": 2},
-  {"match": {"venue_code": "05", "surface": "芝", "distance": 2000}, "set": {"n_corner_records": 3}, "evidence": "netkeiba各10戦: 2・3・4の3つ（1コーナーは記録されない）。幾何学的にはコーナー4回を通過", "round": 2},
-  {"match": {"venue_code": "06", "surface": "芝", "distance": 1600, "variant": "外"}, "set": {"n_corner_records": 3}, "evidence": "京成杯AHのJRA結果ページ: 3つ", "round": 2},
-  {"match": {"venue_code": "07", "surface": "芝", "distance": 1600}, "set": {"n_corner_records": 3}, "evidence": "中京記念のJRA結果ページ: 3つ", "round": 2},
-  {"match": {"venue_code": "01", "surface": "ダート", "distance": 2400}, "set": {"first_curve_m": 197.0, "first_curve_note": "実際は3コーナーまでの距離（JRA-VANの『1コーナーまで』は表記の誤り）。ダート1000mの280mからの検算で約193m"}, "evidence": "調査結果。180m を裏付ける資料なし", "round": 2},
-  {"match": {"venue_code": "01", "surface": "芝", "distance": 1200}, "set": {"first_curve_m": 400.0, "first_curve_note": "競馬ラボの412mは福島芝1200の転記ミスの疑い"}, "evidence": "JRA-VAN: 札幌は約400m、福島は約412m", "round": 2},
-  {"match": {"venue_code": "06", "surface": "芝", "distance": 1200, "variant": "外"}, "set": {"first_curve_m": 250.0, "first_curve_note": "250m強（仮柵位置で変わる）。275mを裏付ける資料なし"}, "evidence": "JRA-VAN", "round": 2},
-  {"match": {"venue_code": "09", "surface": "芝", "distance": 2600}, "set": {"first_curve_m": 525.0}, "evidence": "JRA-VAN: 1コーナーまで525m（スタートは芝2200m内と同位置）", "round": 2},
-  {"match": {"venue_code": "09", "surface": "芝", "distance": 1600, "variant": "外"}, "set": {"first_curve_m": 444.0, "first_curve_precision": "medium(一次資料に数値なし。競馬ラボと矛盾しない推定)"}, "evidence": "調査結果", "round": 2},
-  {"match": {"venue_code": "09", "surface": "芝", "distance": 1800, "variant": "外"}, "set": {"first_curve_m": null, "first_curve_note": "JRA-VANは『600m以上』のみ。1600m外のスタートの200m後ろなら約644m、競馬ラボの665mとは約21mずれる。確定できない"}, "evidence": "調査結果", "round": 2},
-  {"match": {"venue_code": "09", "surface": "芝", "distance": 3000}, "set": {"first_curve_m": 354.0, "first_curve_precision": "medium(推定)"}, "evidence": "調査結果", "round": 2},
-  {"match": {"venue_code": "07", "surface": "芝", "distance": 3000}, "set": {"first_curve_m": null, "first_curve_note": "スタートは向正面入口、約1周半までしか分からない"}, "evidence": "調査結果", "round": 2},
-  {"match": {"venue_code": "07", "surface": "ダート", "distance": 1200}, "set": {"first_curve_m": null, "first_curve_note": "競馬ラボの380mは中京芝1400と同一文面で転記ミスの疑い。JRA公式・JRA-VANに数値なし"}, "evidence": "調査結果", "round": 2},
-  {"match": {"venue_code": "07", "surface": "芝", "distance": 1400}, "set": {"first_curve_m": null, "first_curve_note": "競馬ラボの380mは中京ダ1200と同一文面で転記ミスの疑い"}, "evidence": "調査結果", "round": 2},
-  {"match": {"venue_code": "08", "surface": "芝", "distance": 2000, "variant": "外"}, "set": {"in_use": false}, "evidence": "外回り2000mは1993年のローズSが最後。2025年の京都芝2000m 42戦はすべて内回り", "round": 2}
+ {
+  "match": {
+   "venue_code": "03",
+   "surface": "ダート"
+  },
+  "set": {
+   "goal_slope_exists": true,
+   "goal_slope_start": 270,
+   "goal_slope_end": 0,
+   "goal_slope_rise": 0.95,
+   "goal_slope_rise_precision": "low(JRA断面図の目読)"
+  },
+  "evidence": "JRA公式本文『ダートの起伏構成も芝コースとほぼ同じ』（芝は残り170〜50mに高低差1.2mの上り）と断面図。C（なし）が誤り",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "10",
+   "surface": "ダート"
+  },
+  "set": {
+   "goal_slope_exists": true,
+   "goal_slope_start": 400,
+   "goal_slope_end": 0,
+   "goal_slope_rise": 0.6
+  },
+  "evidence": "JRA公式本文『残り400m地点から直線にかけて緩やかな上り勾配（高低差0.6m）』。B（なし）が誤り。芝は直線平坦",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "09",
+   "surface": "芝",
+   "distance": 3200
+  },
+  "set": {
+   "lap_length_m": 1689.0,
+   "final_straight_m": 356.5,
+   "elevation_range_m": 1.9,
+   "last_lap_variant": "内"
+  },
+  "evidence": "阪神芝3200mは1周目外回り→2周目内回り（JRA公式表『外・内』、Wikipedia、netkeiba）。最後の周は内回りなので、A の外回りの値（2089m・473.6m・2.4m）は誤り",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "09",
+   "surface": "芝",
+   "distance": 3000
+  },
+  "set": {
+   "n_laps_note": "内回り約1周半（2周ではない）"
+  },
+  "evidence": "調査結果: 阪神芝3000mは内回りのみ、約1周半（コーナー6回）",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "04",
+   "surface": "芝",
+   "distance": 1000
+  },
+  "set": {
+   "lap_length_m": null,
+   "final_straight_m": 1000.0,
+   "elevation_range_m": 1.2,
+   "elevation_range_precision": "low(JRA断面図の目読)",
+   "straight_course": true
+  },
+  "evidence": "直線コース。JRA公式表に高低差の数値なし。断面図: スタート直後に約0.8〜1m上り、残り約760mで頂点（約+1.2m）、残り約320mからゴールまで平坦",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "01",
+   "surface": "芝",
+   "distance": 1500
+  },
+  "set": {
+   "n_corner_records": 3
+  },
+  "evidence": "ポケット合流曲線は『2コーナー』として記録される（JRAの実レース結果ページ、netkeiba各10戦、dev実データ）",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "05",
+   "surface": "芝",
+   "distance": 1800
+  },
+  "set": {
+   "n_corner_records": 3
+  },
+  "evidence": "毎日王冠のJRA結果ページ: 2・3・4コーナーの3つ",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "05",
+   "surface": "芝",
+   "distance": 2000
+  },
+  "set": {
+   "n_corner_records": 3
+  },
+  "evidence": "netkeiba各10戦: 2・3・4の3つ（1コーナーは記録されない）。幾何学的にはコーナー4回を通過",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "06",
+   "surface": "芝",
+   "distance": 1600,
+   "variant": "外"
+  },
+  "set": {
+   "n_corner_records": 3
+  },
+  "evidence": "京成杯AHのJRA結果ページ: 3つ",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "07",
+   "surface": "芝",
+   "distance": 1600
+  },
+  "set": {
+   "n_corner_records": 3
+  },
+  "evidence": "中京記念のJRA結果ページ: 3つ",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "01",
+   "surface": "ダート",
+   "distance": 2400
+  },
+  "set": {
+   "first_curve_m": 197.0,
+   "first_curve_note": "実際は3コーナーまでの距離（JRA-VANの『1コーナーまで』は表記の誤り）。ダート1000mの280mからの検算で約193m"
+  },
+  "evidence": "調査結果。180m を裏付ける資料なし",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "01",
+   "surface": "芝",
+   "distance": 1200
+  },
+  "set": {
+   "first_curve_m": 400.0,
+   "first_curve_note": "競馬ラボの412mは福島芝1200の転記ミスの疑い"
+  },
+  "evidence": "JRA-VAN: 札幌は約400m、福島は約412m",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "06",
+   "surface": "芝",
+   "distance": 1200,
+   "variant": "外"
+  },
+  "set": {
+   "first_curve_m": 250.0,
+   "first_curve_note": "250m強（仮柵位置で変わる）。275mを裏付ける資料なし"
+  },
+  "evidence": "JRA-VAN",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "09",
+   "surface": "芝",
+   "distance": 2600
+  },
+  "set": {
+   "first_curve_m": 525.0
+  },
+  "evidence": "JRA-VAN: 1コーナーまで525m（スタートは芝2200m内と同位置）",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "09",
+   "surface": "芝",
+   "distance": 1600,
+   "variant": "外"
+  },
+  "set": {
+   "first_curve_m": 444.0,
+   "first_curve_precision": "medium(一次資料に数値なし。競馬ラボと矛盾しない推定)"
+  },
+  "evidence": "調査結果",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "09",
+   "surface": "芝",
+   "distance": 1800,
+   "variant": "外"
+  },
+  "set": {
+   "first_curve_m": null,
+   "first_curve_note": "JRA-VANは『600m以上』のみ。1600m外のスタートの200m後ろなら約644m、競馬ラボの665mとは約21mずれる。確定できない"
+  },
+  "evidence": "調査結果",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "09",
+   "surface": "芝",
+   "distance": 3000
+  },
+  "set": {
+   "first_curve_m": 354.0,
+   "first_curve_precision": "medium(推定)"
+  },
+  "evidence": "調査結果",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "07",
+   "surface": "芝",
+   "distance": 3000
+  },
+  "set": {
+   "first_curve_m": null,
+   "first_curve_note": "スタートは向正面入口、約1周半までしか分からない"
+  },
+  "evidence": "調査結果",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "07",
+   "surface": "ダート",
+   "distance": 1200
+  },
+  "set": {
+   "first_curve_m": null,
+   "first_curve_note": "競馬ラボの380mは中京芝1400と同一文面で転記ミスの疑い。JRA公式・JRA-VANに数値なし"
+  },
+  "evidence": "調査結果",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "07",
+   "surface": "芝",
+   "distance": 1400
+  },
+  "set": {
+   "first_curve_m": null,
+   "first_curve_note": "競馬ラボの380mは中京ダ1200と同一文面で転記ミスの疑い"
+  },
+  "evidence": "調査結果",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "08",
+   "surface": "芝",
+   "distance": 2000,
+   "variant": "外"
+  },
+  "set": {
+   "in_use": false
+  },
+  "evidence": "外回り2000mは1993年のローズSが最後。2025年の京都芝2000m 42戦はすべて内回り",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "06",
+   "surface": "芝",
+   "distance": 2500,
+   "variant": "内"
+  },
+  "set": {
+   "start_position_A": "外回りコース上の3コーナー手前〜途中（4コーナーを目掛けて約192m）から発走し、内回りを使う"
+  },
+  "evidence": "調査結果: スタートは外回りコース上の3〜4コーナー途中（JRA-VAN『4コーナーを目掛けて約192m』）。A の『向正面直線』は誤り",
+  "round": 2
+ },
+ {
+  "match": {
+   "venue_code": "09",
+   "surface": "芝",
+   "distance": 3200
+  },
+  "set": {
+   "n_laps_note": "1周目は外回り、2周目（最後の周）は内回り（図は内回りの周で描画）"
+  },
+  "evidence": "JRA公式表『外・内』、Wikipedia、netkeiba",
+  "round": 2
+ }
 ]
