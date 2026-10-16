@@ -319,13 +319,13 @@ def inbreeding_from_ancestors(anc: list[dict], max_gen: int = 8) -> dict:
     return {"F": F, "n_common": len(common), "max_contrib": best, "min_depth": float(mind) if np.isfinite(mind) else np.nan}
 
 
-def inbreeding_features(df: pd.DataFrame, ped_dir: str | Path, max_gen: int = 8) -> pd.DataFrame:
-    """馬ごとの近交係数。血統は固定なのでリークは無い（10 世代血統 JSON を使う）。"""
-    ped_dir = Path(ped_dir)
+def inbreeding_features(df: pd.DataFrame, ped_dirs: str | Path | list, max_gen: int = 8) -> pd.DataFrame:
+    """馬ごとの近交係数。血統は固定なのでリークは無い。ped_dirs は血統 JSON のディレクトリ（先に書いたものを優先。10 世代 → 5 世代の順など）。"""
+    dirs = [Path(d) for d in ([ped_dirs] if isinstance(ped_dirs, (str, Path)) else ped_dirs)]
     rows = {}
     for h in pd.unique(df["horse_id"].astype(str)):
-        f = ped_dir / h[:4] / f"{h}.json"
-        if not f.exists():
+        f = next((d / h[:4] / f"{h}.json" for d in dirs if (d / h[:4] / f"{h}.json").exists()), None)
+        if f is None:
             continue
         try:
             anc = json.loads(f.read_text(encoding="utf-8")).get("ancestors") or []
