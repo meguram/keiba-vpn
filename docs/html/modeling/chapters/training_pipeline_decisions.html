@@ -46,29 +46,34 @@
 <tr><th>#</th><th>notebook</th><th>役割</th><th>状態</th><th>記録</th></tr>
 <tr><td>00</td><td><code>tp-00-env-check</code></td><td>環境・接続・データ・計算資源の確認</td><td class="ok">完了</td><td>§1</td></tr>
 <tr><td>01</td><td><code>tp-01-dataset-split</code></td><td>母表構築・分割・分布検証</td><td class="ok">完了</td><td>§2</td></tr>
-<tr><td>01b</td><td><code>tp-01b-missing-audit</code></td><td>欠損監査（特徴量ごとに、欠損が正当か・生データ未取得か・加工の誤りかを分類）</td><td>実行済み（ホスト）</td><td>未記録（§4 のデータ完全化の経緯に関連）</td></tr>
+<tr><td>01b</td><td><code>tp-01b-missing-audit</code></td><td>欠損監査（特徴量ごとに、欠損が正当か・生データ未取得か・加工の誤りかを分類）</td><td class="ok">完了</td><td>§18（§4 のデータ完全化の経緯にも関連）</td></tr>
 <tr><td>02</td><td><code>tp-02-feature-build</code></td><td>特徴量生成（リーク検査つき）</td><td class="ok">完了</td><td>§3</td></tr>
 <tr><td>03</td><td><code>tp-03-feature-ablation</code></td><td>特徴量グループの採否</td><td class="ok">完了</td><td>§5</td></tr>
 <tr><td>04</td><td><code>tp-04-stage-models</code></td><td>前段モデル（位置取り・ペース・上がり3F・走破タイム・着順）と後段への寄与</td><td class="ok">完了</td><td>§6</td></tr>
 <tr><td>05a</td><td><code>tp-05a-baseline-objectives</code></td><td>勝ち馬確率の目的関数の比較（ベースライン）</td><td class="ok">完了</td><td>§7</td></tr>
 <tr><td>05b〜e</td><td><code>tp-05b〜e</code></td><td>モデル族・重み/ラウンド・Optuna・アンサンブル</td><td class="ok">完了</td><td>§8</td></tr>
 <tr><td>05f〜i</td><td><code>tp-05f〜i</code></td><td>NN 拡張・追い切り/厩舎コメント・血統×条件・アンサンブル v2・NN 再調整</td><td class="ok">完了</td><td>§9</td></tr>
-<tr><td>05j〜n</td><td><code>tp-05j〜n</code></td><td>専用化（クラス・コース別）、専用化の対照実験、ランキング学習の確率化、多層スタッキング、多様なメンバー</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>05j〜n</td><td><code>tp-05j〜n</code></td><td>専用化（クラス・コース別）、専用化の対照実験、ランキング学習の確率化、多層スタッキング、多様なメンバー</td><td class="ok">完了（不採用。05m の M+ の 2 構成は基準を満たすが v3 で再判断）</td><td>§19</td></tr>
 <tr><td>06</td><td><code>tp-06-final-evaluation</code></td><td>最終評価 v1（test 2025 は一度だけ）。較正の確認を含む</td><td class="ok">完了</td><td>§8</td></tr>
 <tr><td>06b</td><td><code>tp-06b-final-evaluation-v2</code></td><td>最終評価 v2（アンサンブル v2。test 2025 は一度だけ）</td><td class="ok">完了</td><td>§9</td></tr>
 <tr><td>07</td><td><code>tp-07-register-verify</code></td><td>最終再学習・登録・推論の一致確認（<b>notebook は未作成</b>）</td><td>未作成</td><td>—</td></tr>
 <tr><td>08</td><td><code>tp-08-betting-rl</code></td><td>馬券最適化の強化学習</td><td class="ok">完了（2026-10-16 訂正済み）</td><td>§10</td></tr>
-<tr><td>09</td><td><code>tp-09-betting-strategy-comparison</code></td><td>馬券戦略の比較（優位の検定・文献の手法）</td><td>notebook あり</td><td>§10 に再評価の数値のみ。節は未記録</td></tr>
-<tr><td>10</td><td><code>tp-10-odds-drift</code></td><td>オッズの年ごとの変化と最終オッズ予測のドリフト対策</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>09</td><td><code>tp-09-betting-strategy-comparison</code></td><td>馬券戦略の比較（優位の検定・文献の手法）</td><td class="ok">完了（優位は確認できず）</td><td>§20（再評価の数値は §10 にも）</td></tr>
+<tr><td>10</td><td><code>tp-10-odds-drift</code></td><td>オッズの年ごとの変化と最終オッズ予測のドリフト対策</td><td class="ok">完了（半減期 1 年を提案）</td><td>§21</td></tr>
 <tr><td>11</td><td><code>tp-11-bet-staking</code></td><td>購入額の段階づけ（0 / 500 / 1000 / 2000 円）</td><td class="ok">完了</td><td>§12</td></tr>
-<tr><td>12</td><td><code>tp-12-predicted-odds-betting</code></td><td>予測オッズでの馬券最適化（実運用に最も近い設定）</td><td>notebook あり</td><td>未記録</td></tr>
-<tr><td>13</td><td><code>tp-13-strategy-lab-level0</code></td><td>戦略探索 レベル 0（オッズを使わず、順位だけで買う規則）</td><td>notebook あり</td><td>未記録</td></tr>
-<tr><td>14</td><td><code>tp-14-strategy-lab-level1</code></td><td>戦略探索 レベル 1（オッズを使う戦略＋購入額の段階づけ）</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>12</td><td><code>tp-12-predicted-odds-betting</code></td><td>予測オッズでの馬券最適化（実運用に最も近い設定）</td><td class="ok">完了（test 2025 評価済み）</td><td>§22</td></tr>
+<tr><td>13</td><td><code>tp-13-strategy-lab-level0</code></td><td>戦略探索 レベル 0（オッズを使わず、順位だけで買う規則）</td><td class="ok">完了（reality check p ≈ 1.0）</td><td>§23</td></tr>
+<tr><td>14</td><td><code>tp-14-strategy-lab-level1</code></td><td>戦略探索 レベル 1（オッズを使う戦略＋購入額の段階づけ）</td><td class="ok">完了（reality check p = 0.78）</td><td>§23</td></tr>
 <tr><td>15</td><td><code>tp-15-course-similarity</code></td><td>コース適性の類似度</td><td class="ok">完了（不採用）</td><td>§11</td></tr>
-<tr><td>16</td><td><code>tp-16-feature-bakeoff</code></td><td>特徴量 bake-off（季節性・後日談・クッション値・近交係数ほか）</td><td>notebook あり</td><td>未記録</td></tr>
-<tr><td>17</td><td><code>tp-17-imputation</code></td><td>欠損値のモデル補完・外れ値の変換（NN と LightGBM）</td><td>notebook あり</td><td>未記録</td></tr>
-<tr><td>18</td><td><code>tp-18-hierarchical-stacking</code></td><td>特徴量グループごとの階層スタッキング</td><td>notebook あり</td><td>未記録</td></tr>
-<tr><td>19</td><td><code>tp-19-training-laps</code></td><td>追い切りラップの特徴量と調教師別のパターン採点</td><td>notebook あり</td><td>未記録</td></tr>
+<tr><td>16</td><td><code>tp-16-feature-bakeoff</code></td><td>特徴量 bake-off（季節性・後日談・クッション値・近交係数ほか）</td><td class="ok">完了（不採用。後日談は有望）</td><td>§13</td></tr>
+<tr><td>17</td><td><code>tp-17-imputation</code></td><td>欠損値のモデル補完・外れ値の変換（NN と LightGBM）</td><td class="ok">完了（不採用）</td><td>§14</td></tr>
+<tr><td>18</td><td><code>tp-18-hierarchical-stacking</code></td><td>特徴量グループごとの階層スタッキング</td><td class="ok">完了（不採用）</td><td>§15</td></tr>
+<tr><td>19</td><td><code>tp-19-training-laps</code></td><td>追い切りラップの特徴量と調教師別のパターン採点</td><td class="ok">完了（TL_A を採用）</td><td>§17</td></tr>
+<tr><td>16b</td><td><code>tp-16b-feature-bakeoff</code></td><td>後日談の変種（窓・減衰・複勝率）と、訂正後のクッション値・含水率の再評価</td><td>notebook あり（ホストで実行待ち）</td><td>未記録</td></tr>
+<tr><td>19b</td><td><code>tp-19b-training-laps</code></td><td>追い切り特徴の拡張（調教師内の相対化・絞り込み）</td><td>notebook あり（ホストで実行待ち）</td><td>未記録</td></tr>
+<tr><td>20</td><td><code>tp-20-odds-model</code></td><td>オッズ予測モデルのモデリング・チューニング（特徴量・目的変数・損失・新年重み・パラメータ探索・CatBoost）</td><td>notebook あり（ホストで実行中）</td><td>未記録</td></tr>
+<tr><td>21</td><td><code>tp-21-smartrc-ten1f</code>（.py）</td><td>SmartRC のテン1F 特徴量</td><td class="ok">完了</td><td>§16</td></tr>
+<tr><td>22</td><td><code>tp-22-leak-impact</code></td><td>track_bias 先読みリーク修正の影響測定（別ディレクトリで再構築した学習表との比較）</td><td>notebook あり（再構築の完了待ち）</td><td>未記録</td></tr>
 </table>
 
 <h3>勝率（p_win）LogLoss の推移（評価データと条件が違うので、横並びの比較には使わない）</h3>
@@ -583,7 +588,142 @@
   <li>採用は <b>TL_A</b>。次: 調教師内の相対化など TL_A の拡張（tp-19b）、v3 への統合（全モデルの再学習とアンサンブル）、運用でレース当日に必要な調教データの取得方法（馬別ページ vs レースの追い切りページ）の設計。</li>
 </ul>
 
-<h2>18. 以降の節</h2>
+<h2>18. tp-01b 欠損監査</h2>
+<p class="muted">notebook: <code>tp-01b-missing-audit.ipynb</code>（読み取りだけ。成果物はホストの <code>data/local/modeling/training_pipeline/eda/missing_audit/</code>）。学習表 283,714 行の欠損 1 セル（レース × 馬 × 特徴量）ごとに、原因を「正当／上流の欠損／生データ欠け／生データの値が空／加工で欠損／要確認」に分類した（LayerA 由来 24 特徴量、履歴由来 65 特徴量）。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>項目</th><th>結果</th></tr>
+<tr><td>行の突合</td><td>学習表 283,714 行。着順が 0 以下（競走中止・失格など）の 2,346 行は正当として除外。</td></tr>
+<tr><td>LayerA 特徴量の欠損セルの原因</td><td>上流の欠損 560,729／正当 266,630／生データ欠け 175,245（race_index にその馬の行が無い。初出走 23,892 行・過去走ありだが無い 1,143 行）／生データの値が空 111,386／<b>加工で欠損 28,269</b>／要確認 6。</td></tr>
+<tr><td>履歴特徴量の欠損セルの原因</td><td>正当 1,829,196／要確認 31,349（過去走は足りているのに欠損。条件付き特徴量か加工の誤りかを確認する対象）。</td></tr>
+<tr><td>「正当」ルールの実データとの整合</td><td>騎手・調教師・馬の過去実績が無い（prior_races = 0）ときの欠損は 100% 整合（騎手 323 行・調教師 347 行・馬 35,550 行）。前日傾向（<code>track_bias_winner_3f_prev_day</code>）は前日の開催が無い 142,519 行のうち 98.8% が欠損。<b>当日の直前傾向（<code>track_bias_winner_3f_same_day_prior</code>）は、その日その場その路面で時刻が最初のレース 55,863 行のうち欠損が 17,857 行（32%）しかなく、残りは値が入っていた。</b></td></tr>
+<tr><td>加工で欠損の 28,269 件の中身</td><td>全件が <code>track_bias_winner_3f_same_day_prior</code>。時刻順では直前のレースがあるのに欠損していた（実装の並びが「馬場 × 距離帯のブロック順」だったため）。対象 2,173 レース。値が入っていた最初のレースは 2,652 レース（<code>track_bias_lookahead_races.csv</code>）で、後のレースの結果が当日傾向に混ざっていた。</td></tr>
+<tr><td>着順まわり</td><td>着順 ≤ 0 なのにタイムあり 9 件、着順の欠番 8 件（<code>finish_status_suspects.csv</code>）。</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>この監査の検算が、track_bias の先読みリーク（2026-10-15 に修正）を見つけた。</b>欠損の分類で「正当」と判断したルールを実データで検算したところ、最初のレースにも値が入っていた。修正（時刻順に計算し直す）は <code>build_track_bias_pedigree_features</code> に入り、回帰テスト <code>tests/pipeline/test_track_bias_chronology.py</code> がある。</li>
+  <li>修正後の LayerA・学習表の再構築と再学習は、別ディレクトリ（<code>training_pipeline_fixed/</code>）で進める（本ログの冒頭の注記）。それまでは、本ログの精度の絶対値はやや楽観側の可能性がある。</li>
+  <li>その他の欠損は、ほとんどが生データ側（race_index の欠け・指数が空）。データ完全化の経緯は §4。要確認の 6 セルは血統名が無い（初出の血統の可能性）。</li>
+</ul>
+
+<h2>19. tp-05j〜n 専用化・対照実験・ランキング学習の確率化・多層スタッキング・多様なメンバー</h2>
+<p class="muted">notebook: <code>tp-05j-segment-specialization</code>・<code>tp-05k-segment-control</code>・<code>tp-05l-ranking-calibration</code>・<code>tp-05m-multilayer-stacking</code>・<code>tp-05n-diverse-members</code>（成果物 <code>improve_j</code>〜<code>improve_n</code>）。valid 2022〜2024、基準は LightGBM（extras・血統×条件）。採用基準は勝率の差の 95% 上限 &lt; 0・効果 ≥ 0.0002・連対/複勝が 0.0002 を超えて悪化しないこと（各 notebook の「採用」フラグは最小効果量を入れる前の基準なので、ここでは基準を当て直した）。test 2025 は使っていない。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>実験</th><th>内容</th><th>結果（勝率 LogLoss の差。負 = 改善）</th><th>採否</th></tr>
+<tr><td>05j 専用化</td><td>クラス（grade）・コース・競馬場・競馬場×路面ごとに専用モデル。専用だけ／重み付き／全体との 50:50</td><td>専用だけは全て悪化（+0.0026〜+0.0049、上限 +0.0031〜+0.0056）。重み付きは +0.00008〜+0.0004。全体との 50:50 は +0.0002〜+0.001（grade/weighted + 全体のみ −0.00015、効果 &lt; 0.0002）。区分別の再較正も勝率 +0.00014〜+0.00029。「過去の年の成績で専用を選ぶ」は基準と同じか +0.0001 以内の悪化（grade/separate などは専用を使う行が 0%）</td><td>不採用</td></tr>
+<tr><td>05k 対照</td><td>全体の seed 違い 2 本の平均を対照にして、専用の効果を測り直す</td><td>対照（全体 seed0 + seed1 の平均）自体が seed0 単独より −0.000237（上限 −0.000145）。course weighted + 全体は対照比 −0.000056（上限 +0.000093）、grade weighted は +0.00009。<b>専用化の「改善」はシード平均の効果と同じ</b>。v2 に足すと勝率 −0.000067（上限 ≈ 0）、連対 −0.000083、複勝 −0.000038</td><td>不採用（効果 &lt; 0.0002）</td></tr>
+<tr><td>05l ランキング学習の確率化</td><td>lambdarank・xendcg の出力を、温度・Platt・特徴 LR・等張で確率にする</td><td>単体は全て悪化または同等（最良 xendcg + 特徴 LR で勝率 −0.00012、上限 +0.00018、ただし連対 +0.0007・複勝 +0.0032）。Platt は複勝 +0.0175〜+0.033 と大きく悪化。v2 と logit 合成: 勝率 −0.000177（上限 −0.000076）、連対 −0.000145（上限 −0.000029）、複勝 −0.000003</td><td>不採用（効果 &lt; 0.0002）</td></tr>
+<tr><td>05m 多層スタッキング</td><td>L1 = 7 モデル（M7）または 23 モデル（M+）→ L2（ロジスティック・条件付きロジット・LightGBM・NN）→ L3 = v2 との logit 平均</td><td>L2 単独は v2 を超えない（M7: +0.00004〜+0.00055、M+: −0.00013〜+0.00099）。L3 の最良は M+ の「v2 + 3 つの L2」: 勝率 −0.00027（上限 −0.00014）・連対 −0.00033・複勝 −0.00067、次点は M+ の「v2 + L2 LightGBM + L2 NN」: −0.00022（上限 −0.00009）・−0.00021・−0.00046。M7 は −0.00012〜−0.00013（効果 &lt; 0.0002）</td><td>M+ の 2 構成は基準を満たす。ただし L1 約 20 モデルの再学習と L2 3 種が要るため、採用は v3 で再判断</td></tr>
+<tr><td>05n 多様なメンバー</td><td>CatBoost・DART・Extra Trees・深い XGBoost・TabM 風 NN・ノイズ付き NN を OOF で追加</td><td>cat_extras_ped は素の cat（調整前）比 −0.00099（0.21811）。lgb_et −0.00037、xgb_deep +0.00007、nn_tabm −0.00002、nn_noise +0.00002、DART は +0.0096 と悪化。基準との logit 相関は 0.95〜0.999（信頼区間は未計算）</td><td>05m の M+ のプールに入れて評価</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>クラス・コース別の専用モデルは不要。</b>差が出たように見えたのはシード平均の効果で、アンサンブルでも得られる。</li>
+  <li>ランキング学習は、確率の較正を足しても LogLoss 目的の二値モデルに及ばない（連対・複勝が悪化する）。v2 への多様性としての効果は小さい（勝率 −0.00018）。</li>
+  <li>多層スタッキングは、L1 を 23 モデルまで増やして初めて基準を満たす（−0.00027）。効果は小さく、L1 の再学習が重い。特徴量グループ別の階層（tp-18）は逆に悪化した（§15）。</li>
+  <li>メンバーの追加は多様性（相関 0.95〜0.99）を足すが、単体で v2 を超えるものは無い。</li>
+</ul>
+
+<h2>20. tp-09 馬券戦略の比較（優位の検定・文献の手法）</h2>
+<p class="muted">notebook: <code>tp-09-betting-strategy-comparison.ipynb</code>（成果物 <code>data/local/modeling/betting/rl_compare/cmp_v2/</code>、実行 2026-10-16 15:50。取消馬（単勝オッズ −3.0）を出走馬として扱っていた不具合の修正後の再実行）。確定オッズで判断し、確定の払戻で精算。<b>test 2025 を評価に使用</b>（tp-08 の <code>rl/TEST2025_EVALUATED_ens_v2.json</code> とは別の評価。使用状況は本節末）。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>項目</th><th>結果</th></tr>
+<tr><td>Benter 型ブレンド（モデルと市場の重み）</td><td>a（モデル）= 0.088、b（市場）= 0.987。モデルの重みの尤度比検定は 2022 年 p = 0.018、2023 年 p = 0.0084、2024 年 p = 0.0009（a は 0.088〜0.123）。モデルをレース内でシャッフルした対照は、2022 年で a = 0.030、p = 0.045</td></tr>
+<tr><td>割引 Harville の α</td><td>2022 年の最尤推定で α2 = 0.841、α3 = 0.719。負対数尤度は Harville（α = 1）より改善（2023: 6.083 vs 6.144、2024: 5.958 vs 6.017）</td></tr>
+<tr><td>期待値の傾き（実績の回収 ÷ 期待値の回帰）</td><td>全券種: ブレンド確率 −0.202（95% −0.296〜−0.109）、モデル単独 −0.046（−0.080〜−0.0002）、市場のみ −0.267（−0.389〜−0.117）。<b>期待値が高い買い目ほど実績は低い</b>（単勝のブレンドだけ +1.72）</td></tr>
+</table>
+<table>
+<tr><th>方策（test 2025、3,455 レース）</th><th>回収率</th><th>95% 区間</th><th>RL 基本との差</th></tr>
+<tr><td>RL 基本（tp-08）</td><td>88.28%</td><td>85.7〜91.0</td><td>—</td></tr>
+<tr><td>RL + cross（市場確率 × オッズ）</td><td>88.61%</td><td>86.1〜91.2</td><td>+0.33pt（−1.20〜+1.86）</td></tr>
+<tr><td>RL + cross + cal（較正 EV）</td><td>88.82%</td><td>86.3〜91.3</td><td>+0.54pt（−0.66〜+1.69）</td></tr>
+<tr><td>RL Kelly（対数成長）+ cross</td><td>87.79%</td><td>85.4〜90.0</td><td>−0.49pt（−2.17〜+0.81）</td></tr>
+<tr><td>較正 EV 上位 3 点（参加 100% / 50%）</td><td>78.1% / 76.2%</td><td>75.3〜80.9 / 72.7〜79.9</td><td>−10.2pt / −12.1pt</td></tr>
+<tr><td>cross 値上位 3 点（参加 100% / 50%）</td><td>34.3% / 24.9%</td><td>20.6〜51.2 / 3.5〜53.4</td><td>−54.0pt / −63.4pt</td></tr>
+<tr><td>複勝: モデル 1 位に全額 / 馬連: モデル 1 位に全額</td><td>84.5% / 86.6%</td><td>82.2〜86.7 / 79.2〜93.7</td><td>−3.7pt（有意）/ −1.7pt（有意でない）</td></tr>
+<tr><td>ランダム 1 点</td><td>78.5%</td><td>52.1〜113.9</td><td>—</td></tr>
+</table>
+<p>判断オッズに雑音（対数正規 σ = 0.05〜0.2）を入れて評価し直しても、RL 系は 87〜90% の範囲（例: RL + cross + cal は σ = 0.1 で 89.7%）。雑音つきで学習した版も 88.4〜88.7%。いずれも 100% 未満。</p>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>市場に対する優位は統計的には検出できる（モデルの重み a &gt; 0）が、控除率（単勝・複勝 20%、馬連・ワイド 22.5%、馬単 25%）を上回るほどではない。</b>回収率は最良でも約 89%。</li>
+  <li>方策の改良（cross・較正 EV・Kelly）は RL 基本との差が ±1pt 以内で、区間は 0 をまたぐ。期待値の高い買い目（穴馬）ほど実績が悪いので、期待値上位を買う単純な規則は大きく負ける。</li>
+  <li>オッズは締切後の確定値。雑音の模擬は粗い代理（買い目ごとに独立）。購入時点のオッズ（T-60/T-15）が貯まる 2026-10-17 以降に再検証する。</li>
+  <li>test 2025 の使用: tp-08（<code>rl/TEST2025_EVALUATED_ens_v2.json</code>）、本節 tp-09（<code>final_test2025.csv</code>）、tp-11（§12）、tp-12（§22）、tp-13/14（§23）。モデル選択には使っていない。</li>
+</ul>
+
+<h2>21. tp-10 オッズの年ごとの変化と最終オッズ予測のドリフト対策</h2>
+<p class="muted">notebook: <code>tp-10-odds-drift.ipynb</code>（成果物 <code>data/local/modeling/training_pipeline/odds_drift/</code>）。きっかけ: 「AI の参入で締切直前の大量購入が増え、同じタイプの馬の 20 倍が 10〜15 倍になっているのでは」という仮説。2020〜2025 年の確定オッズの構造と、最終オッズ予測（ローリングで学習）の新しい年の重み付けを測った。購入時点のオッズは持っていないので、確定オッズの範囲での検証。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>年</th><th>払戻率</th><th>本命の暗黙確率</th><th>質量 &lt; 5 倍</th><th>質量 10〜20 倍</th><th>質量 20〜50 倍</th><th>6〜10 番人気の中央値</th><th>11 番人気以下の中央値</th></tr>
+<tr><td>2020</td><td>0.797</td><td>0.326</td><td>0.510</td><td>0.132</td><td>0.078</td><td>27.5</td><td>126.0</td></tr>
+<tr><td>2022</td><td>0.797</td><td>0.334</td><td>0.528</td><td>0.121</td><td>0.071</td><td>30.0</td><td>141.9</td></tr>
+<tr><td>2024</td><td>0.791</td><td>0.338</td><td>0.544</td><td>0.117</td><td>0.068</td><td>31.2</td><td>150.1</td></tr>
+<tr><td>2025</td><td>0.791</td><td>0.335</td><td>0.534</td><td>0.121</td><td>0.072</td><td>29.6</td><td>141.8</td></tr>
+</table>
+<table>
+<tr><th>検証年</th><th>重み</th><th>二乗誤差の差（一様比）</th><th>95% 区間</th><th>改善</th></tr>
+<tr><td>2022</td><td>半減期 1 年 / 2 年</td><td>−0.0033 / −0.0018</td><td>−0.0047〜−0.0019 / −0.0032〜−0.0006</td><td>○ / ○</td></tr>
+<tr><td>2023</td><td>半減期 1 年 / 2 年</td><td>−0.0019 / −0.0022</td><td>−0.0035〜−0.0001 / −0.0037〜−0.0009</td><td>○ / ○</td></tr>
+<tr><td>2024</td><td>半減期 1 年 / 2 年</td><td>−0.0021 / −0.0025</td><td>−0.0038〜−0.0003 / −0.0038〜−0.0010</td><td>○ / ○</td></tr>
+<tr><td>2025</td><td>半減期 1 年 / 2 年</td><td>−0.0001 / −0.0011</td><td>−0.0020〜+0.0014 / −0.0024〜+0.0001</td><td>× / ×</td></tr>
+</table>
+<p>最終オッズ予測の対数誤差の RMSE は 2022: 0.631 → 2025: 0.602（一様重み）。モデル確率の帯別の中央値オッズ（例: 勝率 &lt; 1% は 192 → 171 倍、15% 以上は 3.6 倍）は年でほぼ変わらない。</p>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>2020〜2025 年の確定オッズには、穴馬のオッズが下がる傾向は見られない。</b>むしろ本命の暗黙確率は 0.326 → 0.338（2024）、11 番人気以下の中央値は 126 → 150 倍（2024）と、人気側に寄り穴馬は高くなっている。仮説の直近の動き（2026 年）や、購入時点 → 確定の変化は、この範囲では測れない。</li>
+  <li>最終オッズ予測は、新しい年を重くする方が 2022〜2024 年で一貫して良い。2025 年は差が出ない。tp-10 の提案は「半減期 1 年」。tp-12 のオッズ予測に反映した（<code>recency_halflife_years</code> = 1.0）。<b>本番の最終オッズモデルの再学習は承認待ち。</b></li>
+  <li>購入時点のオッズ（T-60/T-15）は 2026-10-17 以降に貯める。過去分の入手は断念（JRA-VAN の時系列オッズの契約・実測は保留）。</li>
+</ul>
+
+<h2>22. tp-12 予測オッズでの馬券最適化（実運用に最も近い設定）</h2>
+<p class="muted">notebook: <code>tp-12-predicted-odds-betting.ipynb</code>（タグ <code>pred_v1</code>、成果物 <code>data/local/modeling/betting/pred_odds/pred_v1/</code>）。オッズ予測（LightGBM、特徴量はオッズ・人気を含まない。列名検査あり）の予測オッズだけで買い目を決め、精算は確定の払戻。2 段階（前日に予測で絞り、T-15 に確定 × 雑音の代用で確認）も評価。新しい年の重みは半減期 1 年。<b>test 2025 は一度だけ評価済み</b>（<code>pred_odds/TEST2025_EVALUATED_pred_v1.json</code>。結果を見てやり直さない）。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>項目</th><th>結果</th></tr>
+<tr><td>オッズ予測の精度（対数誤差の RMSE）</td><td>単勝: 2022 年 0.629／2023 年 0.612／2024 年 0.615／2025 年 0.602。複勝: 0.464／0.458／0.458／0.452</td></tr>
+<tr><td>選ばれた買い目の 予測 ÷ 確定オッズ（賭け金で重みづけ）</td><td>test 2025: 1.071。valid の fold A: 1.290、fold B: 1.596（予測が楽観的）</td></tr>
+</table>
+<table>
+<tr><th>方策（test 2025）</th><th>回収率</th><th>95% 区間</th><th>1R の賭け金（基準比）</th><th>参加率</th></tr>
+<tr><td>RL（予測オッズ）</td><td>87.6%</td><td>85.0〜90.3</td><td>0.529</td><td>100%</td></tr>
+<tr><td>モデル確率 1 位: 単勝 / 複勝 / 馬連</td><td>84.5% / 87.5% / 91.9%</td><td>79.0〜89.9 / 84.9〜90.2 / 79.8〜104.9</td><td>1.0</td><td>100%</td></tr>
+<tr><td>予測 EV 上位 3 点（参加 100% / 50%）</td><td>66.2% / 85.9%</td><td>17.5〜155.5 / 1.6〜254.7</td><td>1.0 / 0.5</td><td>100% / 50%</td></tr>
+<tr><td>ランダム 1 点</td><td>65.9%</td><td>54.2〜78.4</td><td>1.0</td><td>100%</td></tr>
+<tr><td>RL → T-15 確認（σ = 0、EV ≥ 0.85）</td><td>92.1%</td><td>88.5〜95.9</td><td>0.172</td><td>90.9%</td></tr>
+<tr><td>RL → T-15 確認（σ = 0、EV ≥ 1.0）</td><td><b>110.7%</b></td><td>93.2〜131.4</td><td>0.017</td><td>68.9%</td></tr>
+<tr><td>RL → T-15 確認（σ = 0.1、EV ≥ 0.85）</td><td>91.0%</td><td>87.4〜94.8</td><td>0.190</td><td>92.4%</td></tr>
+<tr><td>RL → T-15 確認（σ = 0.1、EV ≥ 1.0）</td><td>96.9%</td><td>89.3〜105.2</td><td>0.045</td><td>78.2%</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>100% 超は確認できない。</b>EV ≥ 1.0 の確認で 110.7% が出たが、区間は 93〜131% で 100% を含み、賭け金は通常の約 2%。判断オッズに 10% のぶれを入れると 96.9%。valid の fold A は 73.3%（σ = 0）／93.1%（σ = 0.1）、fold B は 88.2%／92.8% で一貫しない。</li>
+  <li>予測オッズでの最適化の回収率（RL 87.6%）は確定オッズでの最適化（tp-09: 88.3%）とほぼ同じ。予測オッズ自体は楽観側（予測 ÷ 確定 = 1.07〜1.6）。</li>
+  <li>「モデルの再構築で変わる」前提: RL 方策・オッズ予測・確率は予測モデルの出力に依存するので、予測モデル（v3 など）が確定した後に一度だけ再実行する（環境変数でタグを分けて再実行できる）。オッズ予測モデル自体の調整は tp-20（実行待ち）。</li>
+  <li>実運用の判断は、購入時点（T-60/T-15）のオッズの記録が貯まった後に再検証する。</li>
+</ul>
+
+<h2>23. tp-13・tp-14 戦略探索（レベル 0・レベル 1）</h2>
+<p class="muted">notebook: <code>tp-13-strategy-lab-level0.ipynb</code>（タグ <code>lab0_v1</code>）・<code>tp-14-strategy-lab-level1.ipynb</code>（タグ <code>lab1_v1</code>）。成果物 <code>data/local/modeling/betting/lab/</code>。valid（2022〜2024）で多数の規則を総当たりし、White の reality check（ブートストラップ）で「最良の戦略が偶然でない」かを検定、上位 5 本だけ test 2025 で評価。レベル 0 = オッズを使わず順位だけで買う規則（300 戦略）、レベル 1 = オッズを使う戦略 + 購入額の段階づけ（2,014 戦略）。<b>test 2025 を各 1 回評価済み</b>（<code>lab/TEST2025_EVALUATED_lab0_v1.json</code>・<code>lab1_v1.json</code>）。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>レベル</th><th>valid の全戦略</th><th>reality check</th><th>test 2025 の上位</th></tr>
+<tr><td>0（順位だけ）</td><td>300 戦略、回収率の平均 81.4%（65.6〜94.5%）。valid で平均利益がプラスの戦略は 0。最良は 馬連 箱 2（絞り込み 0.4）94.5%（ランダム基準 53.0%）</td><td>p = 1.0（最良の戦略の平均利益 −1.03 円/レース）。test 2025 の p = 0.999</td><td>馬連 箱 2: 89.2%（区間 76.6〜103.9）、複勝 1 点: 89.2%（85.6〜92.9）、複勝 箱 2: 89.9%（86.2〜93.8）。いずれも 100% 未満</td></tr>
+<tr><td>1（オッズあり + 段階づけ）</td><td>2,014 戦略、回収率の平均 79.9%。valid で 100% 超は 115 戦略（最大 275.5%）、検定対象 1,403 戦略のうち平均利益がプラスは 71。当たりが数回の高配当に依存（例: 最大は 2022 年 0%・2023 年 313%・2024 年 523%）</td><td>p = 1.0（最良: 馬単・τ = 1.0 など）。test 2025 の p = 0.776</td><td>valid で 217% / 210% の上位 5 本は test 2025 で 0%、0%、138%（区間 0〜690%）、0%、0%。再現しない</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>reality check は「最良の戦略に偶然を超える優位は無い」（p ≈ 1.0）。</b>valid で 100% 超に見える戦略は、多数の候補から選んだことによる勝者の呪い（winner's curse）で、test 2025 では再現しなかった。</li>
+  <li>レベル 0 で最良の「馬連 箱 2」でも 89〜95%。ランダム基準との差（モデルの寄与）は +0.17〜+0.42 だが、いずれも控除率を超えない。</li>
+  <li>レベル 1 の 100% 超は、高配当（馬単・馬連）の少数の的中に依存し、年ごとに大きくばらつく。購入額の段階づけは損失の調整にはなるが、利益にはならない（§12）。</li>
+  <li>次のレベル（購入時点のオッズを使う戦略）は、T-60/T-15 の記録が貯まった後に。test 2025 は使い切りなので、以後の探索は valid と前向き検証（2026-10-17 以降の実オッズ）で行う。</li>
+</ul>
+
+<h2>24. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
