@@ -5,6 +5,9 @@ import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
 import { featureEnabled } from "@/lib/features";
 import { LEVEL_STYLE, RaceValue, useRaceValues, valueTitle } from "@/lib/raceValue";
+import { WeekPicker } from "@/components/WeekPicker";
+import { RaceStrip } from "@/components/RaceStrip";
+import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
 const SHOW_HORSE_LINK = featureEnabled("horse-detail");
 /* ── 型 ── */
@@ -212,21 +215,38 @@ function RaceCard({
   loading,
   onLoad,
   value,
+  selected,
+  selectNonce,
 }: {
   race: RaceItem;
+  selected: boolean;
+  selectNonce: number;
   pred: PredData | null;
   loading: boolean;
   onLoad: (id: string) => void;
   value?: RaceValue;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  // R チップ（RaceStrip）で選ばれたら、開いて予測を読み込み、画面内に移動する（同じ R をもう一度押しても移動する）
+  useEffect(() => {
+    if (!selected || selectNonce === 0) return;
+    setExpanded(true);
+    if (!pred && !loading) onLoad(race.race_id);
+    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, selectNonce]);
   const hasPred = pred?.has_prediction === true && (pred.predictions?.some((p) => p.win_prob != null) ?? false);
   const preds = pred?.predictions ?? [];
 
   return (
     <div
+      ref={cardRef}
+      id={`race-${race.race_id}`}
       title={valueTitle(value)}
       style={{
+        scrollMarginTop: 230,
+        outline: selected ? "2px solid var(--accent)" : undefined,
         background: value?.level === "hot" ? "linear-gradient(90deg, rgba(249,115,22,0.10), var(--surface) 40%)" : "var(--surface)",
         border: "1px solid var(--border)", borderLeft: `4px solid ${value ? LEVEL_STYLE[value.level].border : "var(--border)"}`,
         borderRadius: 10, overflow: "hidden", marginBottom: 12,
@@ -333,14 +353,21 @@ export default function WeeklyPredictionsPage() {
   const bulkAbort = useRef<AbortController | null>(null);
   const raceValues = useRaceValues(selectedDate);
   const [selectedVenue, setSelectedVenue] = useState("");
+  const [selectedRaceId, setSelectedRaceId] = useState("");
+  const [selectNonce, setSelectNonce] = useState(0);
+  const today = useMemo(() => todayJst(), []);
+
+  /** URL の ?date= ?week= ?venue= ?race= を書き換える（再読込・共有しても同じ表示に戻る） */
+  function syncUrl(patch: Record<string, string | null>) {
+    const u = new URL(window.location.href);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === "") u.searchParams.delete(k); else u.searchParams.set(k, v);
+    }
+    window.history.replaceState(null, "", u.toString());
+  }
 
   /* 開催場ごとに 12R を切り替える（URL の ?venue= で共有・再読込しても維持） */
-  const venues = useMemo(() => {
-    // JRA の競馬場コード順（race_id の 5〜6 桁目: 札幌01 函館02 福島03 新潟04 東京05 中山06 中京07 京都08 阪神09 小倉10）
-    const code = new Map<string, string>();
-    for (const r of races) if (r.venue && !code.has(r.venue)) code.set(r.venue, r.race_id.slice(4, 6));
-    return [...code.keys()].sort((a, b) => (code.get(a) ?? "").localeCompare(code.get(b) ?? ""));
-  }, [races]);
+  const venues = useMemo(() => venuesOf(races), [races]);   // JRA の競馬場コード順
   const activeVenue = venues.includes(selectedVenue) ? selectedVenue : (venues[0] ?? "");
   const visibleRaces = useMemo(
     () => races
@@ -350,42 +377,72 @@ export default function WeeklyPredictionsPage() {
   );
 
   useEffect(() => {
-    const v = new URLSearchParams(window.location.search).get("venue");
+    const q = new URLSearchParams(window.location.search);
+    const v = q.get("venue");
     if (v) setSelectedVenue(v);
+    const r = q.get("race");
+    if (r) { setSelectedRaceId(r); setSelectNonce(1); }      // ?race= で開いたときは、そのレースへ移動して開く
   }, []);
 
   function chooseVenue(v: string) {
     setSelectedVenue(v);
-    const u = new URL(window.location.href);
-    u.searchParams.set("venue", v);
-    window.history.replaceState(null, "", u.toString());
+    setSelectedRaceId("");
+    syncUrl({ venue: v, race: null });
   }
+
+  function chooseDate(d: string) {
+    setSelectedDate(d);
+    setSelectedRaceId("");
+    syncUrl({ date: d, week: meetingKeyOf(d), race: null });
+  }
+
+  function chooseRace(raceId: string) {
+    const r = races.find((x) => x.race_id === raceId);
+    if (r?.venue && r.venue !== activeVenue) setSelectedVenue(r.venue);
+    setSelectedRaceId(raceId);
+    setSelectNonce((n) => n + 1);
+    syncUrl({ race: raceId, ...(r?.venue ? { venue: r.venue } : {}) });
+  }
+
+  /* ?race= で指定されたレースの開催場へ切り替える（レース一覧を読み込んだあと） */
+  useEffect(() => {
+    if (!selectedRaceId) return;
+    const r = races.find((x) => x.race_id === selectedRaceId);
+    if (r?.venue) setSelectedVenue(r.venue);
+  }, [races, selectedRaceId]);
 
   /* 開催日一覧 */
   useEffect(() => {
+    // 既定の開催日: ?date= → NEXT_PUBLIC_DEFAULT_RACE_DATE（dev は実データを取り込んだ日を既定にできる）→ 次回の開催の最初の開催日
+    const initial = (list: string[]) => {
+      const fromUrl = new URLSearchParams(window.location.search).get("date") ?? undefined;
+      const preferred = fromUrl && list.includes(fromUrl) ? fromUrl : process.env.NEXT_PUBLIC_DEFAULT_RACE_DATE;
+      if (preferred && list.includes(preferred)) return preferred;
+      const next = pickTwoWeeks(list, today).find((w) => w.role === "next");
+      return next ? firstDateOf(next.week, today) : (list[0] ?? "");
+    };
     if (USE_MOCK) {
       const mockDates = getMockRaceDates();
       setDates(mockDates);
-      setSelectedDate(mockDates[0]);
+      setSelectedDate(initial(mockDates));
       setLoadingDates(false);
       return;
     }
     (async () => {
       try {
         const days = Number(process.env.NEXT_PUBLIC_PICKER_PAST_DAYS) || 30;
-        const res = await fetch(`/api/scrape-dates?picker_past_days=${days}`, { cache: "no-store" });
+        // 先週分〜来週分を出すため、今日と先の開催日（14 日先まで）も含める
+        const res = await fetch(`/api/scrape-dates?picker_past_days=${days}&picker_future_days=14`, { cache: "no-store" });
         if (!res.ok) return;
         const d = await res.json();
         const list: string[] = d.dates ?? d ?? [];
         setDates(list);
-        // dev は実データを取り込んだ開催日を既定表示にできる（NEXT_PUBLIC_DEFAULT_RACE_DATE）
-        const fromUrl = new URLSearchParams(window.location.search).get("date") ?? undefined;
-        const preferred = fromUrl && list.includes(fromUrl) ? fromUrl : process.env.NEXT_PUBLIC_DEFAULT_RACE_DATE;
-        if (list.length) setSelectedDate(preferred && list.includes(preferred) ? preferred : list[0]);
+        if (list.length) setSelectedDate(initial(list));
       } catch { /* ignore */ } finally {
         setLoadingDates(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* レース一覧（日付変更時） */
@@ -480,11 +537,6 @@ export default function WeeklyPredictionsPage() {
     .flatMap((p) => p.predictions ?? [])
     .filter((h) => (h.ev_win ?? 0) >= 1.0).length;
 
-  const SEL: React.CSSProperties = {
-    background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)",
-    padding: "7px 12px", borderRadius: 6, fontSize: 13,
-  };
-
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -496,27 +548,21 @@ export default function WeeklyPredictionsPage() {
           <span style={{ color: "var(--border)" }}>/</span>
           <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f0f6fc", margin: 0 }}>🤖 今週のAI予測</h1>
           <p style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
-            開催日ごとの勝率・期待値を一覧表示
+            前回と次回の開催（最大2週分）の勝率・期待値を一覧表示
           </p>
+        </div>
+      </div>
+
+      {/* 開催日の選択（週単位） */}
+      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "14px 24px" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", flexDirection: "column", gap: 12 }}>
+          <WeekPicker dates={dates} today={today} selectedDate={selectedDate} loading={loadingDates} onSelectDate={chooseDate} />
         </div>
       </div>
 
       {/* コントロールバー */}
       <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "12px 24px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <label style={{ fontSize: 12, color: "var(--text-dim)" }}>開催日:</label>
-          <select
-            style={SEL}
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            disabled={loadingDates}
-          >
-            {loadingDates ? <option>読み込み中…</option> :
-              dates.length === 0 ? <option>データなし</option> :
-              dates.map((d) => <option key={d} value={d}>{d}</option>)
-            }
-          </select>
-
           {visibleRaces.length > 0 && (
             <>
               {!bulkLoading ? (
@@ -594,30 +640,14 @@ export default function WeeklyPredictionsPage() {
 
         {!loadingRaces && races.length > 0 && (
           <>
-            {venues.length > 1 && (
-              <div role="tablist" aria-label="開催場" style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-                {venues.map((v) => {
-                  const n = races.filter((r) => r.venue === v).length;
-                  const on = v === activeVenue;
-                  return (
-                    <button
-                      key={v}
-                      role="tab"
-                      aria-selected={on}
-                      onClick={() => chooseVenue(v)}
-                      style={{
-                        padding: "8px 18px", borderRadius: 8, fontSize: 14, fontWeight: on ? 700 : 500, cursor: "pointer",
-                        border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
-                        background: on ? "rgba(59,130,246,0.15)" : "var(--surface)",
-                        color: on ? "var(--accent)" : "var(--text-dim)",
-                      }}
-                    >
-                      {v} <span style={{ fontSize: 11, opacity: 0.7 }}>{n}R</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <RaceStrip
+              races={races}
+              venue={activeVenue}
+              onVenue={chooseVenue}
+              values={raceValues}
+              selectedRaceId={selectedRaceId}
+              onSelectRace={chooseRace}
+            />
             <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-dim)" }}>
               {selectedDate}{activeVenue ? ` ${activeVenue}` : ""} — {visibleRaces.length}レース
               {bulkLoading && <span style={{ marginLeft: 8, color: "var(--accent)" }}>⏳ 取得中…</span>}
@@ -630,6 +660,8 @@ export default function WeeklyPredictionsPage() {
                 loading={loadingPred[race.race_id] ?? false}
                 onLoad={loadPred}
                 value={raceValues.get(race.race_id)}
+                selected={race.race_id === selectedRaceId}
+                selectNonce={selectNonce}
               />
             ))}
           </>
