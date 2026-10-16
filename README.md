@@ -129,11 +129,11 @@ python3 -m src.research.genes.myostatin predict ディープインパクト キ�
 python3 -m src.research.genes.performance_genes combined --mstn CT --pdk4 GA --distance 1800
 ```
 
-詳細: [docs/html/PERFORMANCE_GENES.html](docs/html/PERFORMANCE_GENES.html)
+詳細: [docs/html/pedigree/PERFORMANCE_GENES.html](docs/html/pedigree/PERFORMANCE_GENES.html)
 
 ## 関連ドキュメント
 
-- [docs/html/ARCHITECTURE.html](docs/html/ARCHITECTURE.html) — システム全体のアーキテクチャ
-- [docs/html/DATASOURCES.html](docs/html/DATASOURCES.html) — データソース仕様
-- [docs/html/modeling/book.html](docs/html/modeling/book.html) — モデリング・レーティング・データセット設計仕様（全章を 1 冊に統合。各章の HTML は [chapters/](docs/html/modeling/chapters/)）
-- [docs/html/cost.html](docs/html/cost.html) — GCS コスト分析
+- [docs/html/book.html](docs/html/book.html) — **全ドキュメントを 1 冊に統合**（要件・設計・データ・運用・モデリング・特徴量・決定記録・用語集。目次・章間リンク・専門用語の解説つき）。個々の HTML は `docs/html/{design,data,operations,pedigree,modeling/chapters}/` と `docs/decisions/` にあり、`python -m src.scripts.docs.build_docs_book` で本を作り直す
+- [docs/html/design/ARCHITECTURE.html](docs/html/design/ARCHITECTURE.html) — システム全体のアーキテクチャ
+- [docs/html/data/DATASOURCES.html](docs/html/data/DATASOURCES.html) — データソース仕様
+- [docs/html/design/cost.html](docs/html/design/cost.html) — GCS コスト分析

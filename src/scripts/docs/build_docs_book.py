@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""docs/html/modeling/chapters/ の各 HTML（章）を、部・章・節で目次をつけた 1 冊の本（docs/html/modeling/book.html）に統合する。
+"""docs/ 配下の全 HTML（docs/html/ の各ページ、決定記録 docs/decisions/、運用 docs/operations/、外部予想家の分析 docs/other_predictor/）を、
+部・章・節で目次をつけた 1 冊の本（docs/html/book.html）に統合する。
 
 元の HTML は変えない（個別ページの URL・他からのリンク・他の人の編集はそのまま）。この本は元の HTML から**毎回作り直す**ので、
-元の HTML を直したら再生成する。新しい HTML を modeling/ に足したら、下の PARTS にも載せる（載せ忘れはテストが検出する）。
+元の HTML を直したら再生成する。docs/ に HTML を足したら、下の PARTS にも載せる（載せ忘れはテストが検出する）。
 
-  python -m src.scripts.docs.build_modeling_book
-  python -m src.scripts.docs.build_modeling_book --out /tmp/book.html
+  python -m src.scripts.docs.build_docs_book
+  python -m src.scripts.docs.build_docs_book --out /tmp/book.html
 
 やっていること:
   - 各 HTML から本文だけを取り出す（旧ページの左サイドバー・前後リンク・フッターは外す）
   - 壊れた属性（”_1” のような全角の引用符）を直す
-  - id と # リンクを章ごとに名前空間化する（章の間で id が衝突しない）。他の章へのリンク（xxx.html#yyy）は本の中の位置へ張り替える
+  - id と # リンクを章ごとに名前空間化する（章の間で id が衝突しない）。他のページへのリンク（ディレクトリをまたぐものも）は本の中の位置へ張り替える。
+    本の外のファイル（コード・md）へのリンクは、本の位置から見た相対パスに直す
   - 各 HTML の CSS を、章の中だけに効くように範囲を限定して取り込む
-  - 左に目次（部 → 章 → 節）。章ごとに「何について書かれているか」「更新日」「状態」「関連する章」を付ける
+  - 左に目次（部 → 章 → 節）。章ごとに「何について書かれているか」「更新日」「状態（現行／旧設計／時点の記録）」「関連する章」を付ける
+  - 専門用語は押すとその場に解説が開く（modeling_glossary.py）。図（mermaid）は assets/ の同梱版で、見える位置に来たときに描く
 """
 
 from __future__ import annotations
@@ -20,27 +23,41 @@ from __future__ import annotations
 import argparse
 import hashlib
 import html
+import os
 import re
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 from src.scripts.docs import modeling_glossary as GL
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-MODELING_DIR = REPO_ROOT / "docs" / "html" / "modeling"          # 本(book.html)を置く場所
-CHAPTERS_DIR = MODELING_DIR / "chapters"                      # 各章の HTML（子ファイル）はここで管理する
-DEFAULT_OUT = MODELING_DIR / "book.html"
+REPO_ROOT = Path(os.environ.get("KEIBA_REPO_ROOT") or Path(__file__).resolve().parents[3])
+DOCS_DIR = REPO_ROOT / "docs"
+HTML_DIR = DOCS_DIR / "html"
+MODELING_DIR = HTML_DIR / "modeling"
+CHAPTERS_DIR = MODELING_DIR / "chapters"                      # モデリング各章の HTML（子ファイル）
+DEFAULT_OUT = HTML_DIR / "book.html"                          # 本はここ（docs/html/ の直下）
+BOOK_NAME = "book.html"
 JST = timezone(timedelta(hours=9))
 
 
 @dataclass
 class Chapter:
-    slug: str                      # 元のファイル名（拡張子なし）
-    blurb: str                     # 何について書かれているか（1〜2 文）
-    kind: str = "設計"             # 設計 / 仕様 / 結果 / ログ / メモ
+    slug: str                      # 章の識別子（既定は元のファイル名・拡張子なし）
+    blurb: str = ""                # 何について書かれているか（1〜2 文）。空なら元の HTML の最初の段落から作る
+    kind: str = "設計"             # 要件 / 設計 / 仕様 / 運用 / 結果 / ログ / メモ / 決定 / 用語
     see: list[tuple[str, str]] = field(default_factory=list)   # (関連する章の slug, 関係の説明)
+    src: str = ""                  # docs/ からの元ファイルの相対パス。空なら html/modeling/chapters/<slug>.html
+    status: str = ""               # "" = 現行 / "legacy" = 旧設計（一部が現行と異なる）/ "snapshot" = ある時点の記録 / "history" = 決定の履歴
+    note: str = ""                 # 状態の説明（現行と異なる点）
+    now: list[tuple[str, str]] = field(default_factory=list)   # 現行はこちら (slug, 説明)
+    keep_scripts: bool = False     # 元ページの画面操作用スクリプトを残す
+
+    @property
+    def path(self) -> Path:
+        return DOCS_DIR / (self.src or f"html/modeling/chapters/{self.slug}.html")
 
 
 @dataclass
@@ -48,63 +65,150 @@ class Part:
     title: str
     lead: str
     chapters: list[Chapter]
+    label: str = ""                # 「第I部」「付録A」
+
+
+C = Chapter
+
+
+def _decision_chapters() -> list[Chapter]:
+    """docs/decisions/*.html を、MASTER → AREA → DEC の順に章にする（説明は元のページの最初の段落から）。"""
+    files = sorted(p.stem for p in (DOCS_DIR / "decisions").glob("*.html"))
+    order = [s for s in files if s == "MASTER"] + [s for s in files if s.startswith("AREA")] + [s for s in files if s.startswith("DEC")]
+    rest = [s for s in files if s not in order]
+    return [C(s, "", "決定", src=f"decisions/{s}.html", status="history") for s in order + rest]
+
+
+def _umauma(stem: str) -> str:
+    return f"other_predictor/うまうまー/{stem}.html"
 
 
 PARTS: list[Part] = [
-    Part("第I部　全体像と方針", "モデルをどう作るかの考え方と、全体の設計。", [
-        Chapter("modeling_coding_strategy", "モデリングを実装するときのコーディング方針。推奨ライブラリ、ディレクトリ構成、ファイル命名、メモリ節約の原則など。", "設計"),
-        Chapter("staged_probability_pipeline", "勝率・連対率・複勝率を、位置取り → ペース → 当日馬場 → 血統適性 … と多段階で推定して最終確率につなぐパイプライン（Stage0〜7）の設計。", "設計",
-                [("modeling_strategy_tp04_tp07", "実装の方針はこちら"), ("feature_strategy_tp03_tp04", "前段予測量（P1〜P7）の具体化はこちら")]),
-        Chapter("modeling_strategy_tp04_tp07", "tp-04〜tp-07 のモデリング方針。既存ドキュメントの整理（踏襲・更新・矛盾の解消）、検証カタログ、採否基準、各 notebook の戦略。", "設計",
-                [("feature_strategy_tp03_tp04", "使う特徴量の設計"), ("training_pipeline_decisions", "確定した結果")]),
-        Chapter("advanced_modeling_techniques", "レース直前確率モデルに使う実戦的な ML テクニック。カテゴリ変数のエンコーディング（target encoding など）を中心に。", "メモ"),
-        Chapter("reference_insights", "参考資料から取り込んだ設計メモ。ベースラインを先に固定する、確率の信頼性を ROI より先に評価する、など。", "メモ"),
+    Part("要件と全体像", "何を作るのか、どういう構成か。", [
+        C("requirements", "keiba-vpn の要件定義書。目的、要件、KPI、構成、ワークフロー、ユーザーへの提供フロー、実装状況（実装済み／部分／モック／未実装）、関連文書の索引。`/update-requirements` で現状から再生成される。",
+          "要件", src="html/index.html"),
+        C("ARCHITECTURE", "システム仕様書。コンポーネント、データフロー、モデル、運用の全体像（2026-03〜05 の設計を土台に、現状の差分を冒頭に追記）。", "設計", src="html/design/ARCHITECTURE.html", status="snapshot",
+          note="設計の土台は 2026-05。現在の構成（VPS＋GCP＋学習PC）との差分は冒頭の節を参照。",
+          now=[("requirements", "要件定義書（最新状態）"), ("server_architecture", "いま動いているサーバー一覧")]),
+        C("FULLSTACK_ARCHITECTURE", "フロントエンド（Next.js）・バックエンド（FastAPI / Flask）・DB（PostgreSQL / Redis）・GCS を横断した現状構成図と、各コンポーネントの状態。", "設計", src="html/design/FULLSTACK_ARCHITECTURE.html"),
+        C("LAYER_DESIGN", "レイヤー構成・設計仕様。スクレイピング・ストレージ・ML 予測実行・Web API の 5 つの責務層、データフロー、主要な設計パターン。", "設計", src="html/design/LAYER_DESIGN.html"),
+        C("server_architecture", "ローカル開発〜stg 運用で動いている全サーバーコンポーネント（FastAPI / Flask / Next.js / MLflow / PostgreSQL / Redis / GCS）の役割・ポート・起動方法。", "運用", src="operations/server_architecture.html"),
     ]),
-    Part("第II部　データと分割", "どのデータがいつ集まり、どう加工され、どう分割して使うか。", [
-        Chapter("data_flow_schedule", "データの収集 → 保存 → 加工 → 統合の流れを、cron の発生時刻つきで示す。1 日のタイムライン、データ別の一覧、手動の工程、処理時間の記入欄。", "仕様",
-                [("feature_strategy_tp03_tp04", "T-X で実行できるか（成立性）の調査はこちら")]),
-        Chapter("horse_pre_race_dataset_spec", "horse_pre_race_dataset（学習の母表）の仕様。目的、設計思想、列の定義、カテゴリ変数の扱い。", "仕様"),
-        Chapter("pre_race_feature_whitelist", "レース直前に使ってよい特徴量のホワイトリスト。テーブル別に、使う列と使わない列（オッズ・人気を入れない原則）を定める。", "仕様"),
-        Chapter("train_valid_test_split_strategy", "Train / Valid / Test の分割戦略。なぜランダム分割が通用しないか、時系列 CV、補助評価セット、分布の把握。", "設計",
-                [("training_pipeline_decisions", "実際に確定した分割と分布差は §2")]),
+    Part("データ", "どのデータが、どこから取得され、どこに保存され、どう検証されるか。", [
+        C("DATASET_CATALOG", "AI パイプライン／分析に必要なデータセット一覧と、dev / stg / prod ごとのアクセス状況。サンプルの折りたたみつき。", "参照", src="html/data/DATASET_CATALOG.html", keep_scripts=True,
+          see=[("DATASOURCES", "取得元の仕様"), ("database_schemas", "保存先の構造")]),
+        C("DATASOURCES", "netkeiba・SmartRC 等の取得元ごとの URL パターン、認証、パーサー、ストレージカテゴリ、取得フィールドの仕様。", "仕様", src="html/data/DATASOURCES.html"),
+        C("data_scraping_storage_reference", "自動スクレイピングのタスクとキュー、保存先（GCS・ローカル）、カテゴリ別の取得・保存の手順のリファレンス。", "仕様", src="html/data/data_scraping_storage_reference.html"),
+        C("database_schemas", "全データストア（GCS の JSON、PostgreSQL、Parquet、ローカルのファイル型ストア、キュー、MLflow、Redis）の場所・形式・キー・列・書き手と読み手。", "仕様", src="html/data/database_schemas.html"),
+        C("data_features_reference", "特徴量ストア（data/local/features）のディレクトリ構成、キー設計、各列の意味。", "仕様", src="html/data/data_features_reference.html"),
+        C("DATA_HEALTH", "データ存在チェック／ヘルスチェック。どの時期・どのデータが足りないか、どこをスクレイピングすべきか、基盤は疎通しているかを 1 コマンドで可視化する。", "運用", src="html/data/DATA_HEALTH.html"),
+        C("data_flow_schedule", "データの収集 → 保存 → 加工 → 統合の流れを、cron の発生時刻つきで示す。1 日のタイムライン、データ別の一覧、手動の工程、処理時間の記入欄。", "仕様",
+          see=[("feature_strategy_tp03_tp04", "T-X で実行できるか（成立性）の調査はこちら"), ("cron_schedule", "cron の登録内容")]),
     ]),
-    Part("第III部　特徴量", "特徴量の設計・算出方法と、当日に作るための仕組み。", [
-        Chapter("feature_strategy_tp03_tp04", "tp-02〜tp-04 の特徴量戦略書。ファミリー A〜H（127 列）、前段予測量、ablation の計画、予測フローの図、T-X で実行できるか、特徴量と生データの依存関係。", "設計",
-                [("training_pipeline_decisions", "確定した結果はこちら"), ("data_flow_schedule", "各データが集まる時刻"), ("feature_serving_low_memory", "当日の特徴量の作り方")]),
-        Chapter("feature_engineering_exploration", "特徴量の探索メモ。出走メンバー依存の特徴、仕上げのリズム、コース・馬場、ペース・位置取りの合成、欠損自体を特徴にする、など。", "メモ"),
-        Chapter("race_performance_rating_system", "レースパフォーマンス（TimeFigure、着差補正、斤量補正など）を算出するシステムの設計と実装。", "仕様"),
-        Chapter("track_bias_pedigree_pipeline", "血統 × 馬場傾向（当日・前日の勝ち馬の上りと、父・母父の適性）の特徴量パイプライン。", "仕様"),
-        Chapter("horse_pedigree_10gen_merge_design", "5 世代血統表を接ぎ木して、10 世代相当の血統を作る設計（アンカー選定、一意キー、アルゴリズム）。", "設計"),
-        Chapter("pedigree_stage_research_notes", "血統・馬場傾向の研究方針メモ。ゴール、現状のパイプライン、GCS 負荷を抑える運用原則、未解決の論点。", "メモ"),
-        Chapter("course_geometry_atlas", "JRA 全 10 競馬場のコースの概形を、競馬場 → コース（芝・ダート、内外回り）→ 距離の順に切り替えて見られる図。コーナー区間、直線、スタート位置、坂、高低断面図、検証の状態（3 つの独立収集の一致）を表示し、誤りを探す。", "仕様",
-                [("course_master_verification", "検証の記録（3 ラウンド）"), ("feature_strategy_tp03_tp04", "特徴量の定義")]),
-        Chapter("course_master_verification", "JRA コース形状マスタ（108 コース）の検証記録。3 つの独立収集の突き合わせ、一次資料での再確認と訂正、実データとの照合、確認できていない項目。", "ログ",
-                [("course_geometry_atlas", "コースの概形を図で見る")]),
-        Chapter("feature_serving_low_memory", "当日の特徴量を小さなメモリで作る設計。出走馬だけで計算できる理由、サービング用バンドル、検証、見つかった不具合。", "設計",
-                [("feature_strategy_tp03_tp04", "特徴量の定義はこちら")]),
+    Part("取得と運用", "スクレイピングの設計、cron、SLA、API の入口。", [
+        C("scraper_architecture", "JRA 開催スケジュールに連動した自動スクレイピングの設計。タスク種別・実行タイミング・取得対象・ストレージ構成。", "設計", src="html/operations/scraper_architecture.html"),
+        C("cron_schedule", "cron の登録内容を役割ごとにグループ分けしたもの（時刻は JST）。ホスト実測の稼働状況と、確認済みの問題点。", "運用", src="html/operations/cron_schedule.html",
+          see=[("data_flow_schedule", "データごとの流れ")]),
+        C("scraping_sla", "運用 SLA（品質保証基準）と今後の目標（レース前の AI 予測）に向けた要件・現状ギャップ。スクレイピング自動化と予測の処理の流れ。", "運用", src="html/operations/scraping_sla.html"),
+        C("local_dataset_endpoints", "src/api/app.py のエンドポイントのうち、ローカルのデータセットを参照するものの一覧。", "参照", src="html/operations/local_dataset_endpoints.html"),
     ]),
-    Part("第IV部　学習パイプラインと実験結果", "tp-00〜tp-08 の確定事項、チューニング工程、実験結果。", [
-        Chapter("training_pipeline_decisions", "学習パイプライン（tp-00〜tp-04）で確定した事項のログ。分割、特徴量、データ完全化の経緯と結果、ablation、前段モデル。", "ログ",
-                [("feature_strategy_tp03_tp04", "設計の根拠はこちら")]),
-        Chapter("hyperparameter_tuning_workflow", "ハイパーパラメータ・モデル選定の工程。リーク防止の絶対ルール、二層 CV、凍結する順、目的関数、アンチパターン。", "設計"),
-        Chapter("tp05a_experiment_report", "tp-05a の実験結果。勝ち馬確率の目的関数の比較（3 fold × 3 seed）。", "結果",
-                [("modeling_experiment_report", "tp-05a〜tp-08 の総合はこちら")]),
-        Chapter("modeling_experiment_report", "tp-05a〜tp-08 の総合実験結果。現在の予測パイプラインの精度、段階別の結果、馬券最適化の強化学習（tp-08）、MLflow。", "結果",
-                [("training_pipeline_decisions", "tp-04 までの確定事項")]),
+    Part("モデリングの方針と分割", "モデルをどう作るかの考え方と、全体の設計、データの分割。", [
+        C("modeling_coding_strategy", "モデリングを実装するときのコーディング方針。推奨ライブラリ、ディレクトリ構成、ファイル命名、メモリ節約の原則など。", "設計", status="snapshot",
+          note="2026-05 時点の方針。ディレクトリ構成は src/pipeline のサブパッケージ化（features/・models/・inference/）の前のもの。"),
+        C("staged_probability_pipeline", "勝率・連対率・複勝率を、位置取り → ペース → 当日馬場 → 血統適性 … と多段階で推定して最終確率につなぐパイプライン（Stage0〜7）の設計。", "設計",
+          [("modeling_strategy_tp04_tp07", "実装の方針はこちら"), ("feature_strategy_tp03_tp04", "前段予測量（P1〜P7）の具体化はこちら")], status="legacy",
+          note="初期の Stage0〜7 の設計。現行は P1〜P8 の体系で、最終は NN 主体の複数モデル。Stage2〜5 相当のうち不採用になったものがある。",
+          now=[("training_pipeline_decisions", "確定した事項"), ("feature_strategy_tp03_tp04", "現行の特徴量・前段予測量")]),
+        C("modeling_strategy_tp04_tp07", "tp-04〜tp-07 のモデリング方針。既存ドキュメントの整理（踏襲・更新・矛盾の解消）、検証カタログ、採否基準、各 notebook の戦略。", "設計",
+          [("feature_strategy_tp03_tp04", "使う特徴量の設計"), ("training_pipeline_decisions", "確定した結果")]),
+        C("advanced_modeling_techniques", "レース直前確率モデルに使う実戦的な ML テクニック。カテゴリ変数のエンコーディング（target encoding など）を中心に。", "メモ", status="snapshot", note="2026-05 時点の調査メモ。"),
+        C("reference_insights", "参考資料から取り込んだ設計メモ。ベースラインを先に固定する、確率の信頼性を ROI より先に評価する、など。", "メモ", status="snapshot", note="2026-05 時点の調査メモ。"),
+        C("ml_pipeline", "レース直前確率モデルの機械学習パイプライン全体図。Stage0〜7 の流れ、データ定義、テクニック、運用ルール。", "設計", src="html/design/ml_pipeline.html", status="legacy",
+          note="Stage0〜7 の初期設計をもとにした全体図。分割・使うモデルなどは学習パイプラインで確定した内容に直してあるが、Stage の体系は初期のまま。",
+          now=[("training_pipeline_decisions", "確定した事項"), ("train_valid_test_split_strategy", "分割")]),
+        C("horse_pre_race_dataset_spec", "horse_pre_race_dataset（学習の母表）の仕様。目的、設計思想、列の定義、カテゴリ変数の扱い。", "仕様", status="legacy",
+          note="発走 10 分前を前提にした設計。現行は T-60（馬体重の発表後）で、母表は LayerA（layer_a.parquet）。horse_pre_race_dataset 自体は未実装。",
+          now=[("training_pipeline_decisions", "確定した事項"), ("feature_strategy_tp03_tp04", "現行の特徴量")]),
+        C("pre_race_feature_whitelist", "レース直前に使ってよい特徴量のホワイトリスト。テーブル別に、使う列と使わない列（オッズ・人気を入れない原則）を定める。", "仕様", status="legacy",
+          note="発走 10 分前を前提にした設計。現行は T-60 と tier（0=前日 / 1=当日朝 / 2=馬体重の発表後）。「オッズ・人気を入れない」原則は現行も有効。",
+          now=[("feature_strategy_tp03_tp04", "tier の定義")]),
+        C("train_valid_test_split_strategy", "Train / Valid / Test の分割戦略。なぜランダム分割が通用しないか、時系列 CV、補助評価セット、分布の把握。", "設計",
+          [("training_pipeline_decisions", "実際に確定した分割と分布差は §2")], status="legacy",
+          note="valid を 2024 年の 1 本にする初期案。現行は 1 暦年ずつの expanding window（valid 2022〜2024、test 2025 は最後まで見ない）。",
+          now=[("training_pipeline_decisions", "確定した分割")]),
     ]),
-    Part("第V部　オッズと馬券", "オッズの予測、複合馬券の確率、バックテストと馬券推奨の設計。", [
-        Chapter("final_odds_model", "最終オッズ予測モデル。発走前のデータから単勝・複勝オッズを推定する LightGBM 3 ヘッドモデルの設計・学習・推論フロー。", "設計"),
-        Chapter("exotic_bet_probabilities", "馬連・ワイド・馬単・3 連複の的中確率を、勝率・連対率・複勝率から一貫して計算するモデル（割引 Harville）。", "設計"),
-        Chapter("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様"),
-        Chapter("betting_policy_reinforcement_learning", "馬券推奨レイヤと強化学習の設計議論。なぜ機械学習の延長と切り分けるか、行動サイクル、バックテスト環境。", "設計",
-                [("modeling_experiment_report", "強化学習（tp-08）の結果")]),
+    Part("特徴量と血統", "特徴量の設計・算出方法、血統・コース・馬場の知識、当日に作るための仕組み。", [
+        C("feature_strategy_tp03_tp04", "tp-02〜tp-04 の特徴量戦略書。ファミリー A〜H（127 列）、前段予測量、ablation の計画、予測フローの図、T-X で実行できるか、特徴量と生データの依存関係。", "設計",
+          [("training_pipeline_decisions", "確定した結果はこちら"), ("data_flow_schedule", "各データが集まる時刻"), ("feature_serving_low_memory", "当日の特徴量の作り方")]),
+        C("feature_engineering_exploration", "特徴量の探索メモ。出走メンバー依存の特徴、仕上げのリズム、コース・馬場、ペース・位置取りの合成、欠損自体を特徴にする、など。", "メモ", status="snapshot", note="2026-05 時点の探索メモ。採否は学習パイプラインの確定事項を参照。",
+          now=[("training_pipeline_decisions", "採否の確定")]),
+        C("race_performance_rating_system", "レースパフォーマンス（TimeFigure、着差補正、斤量補正など）を算出するシステムの設計と実装。", "仕様"),
+        C("track_bias_pedigree_pipeline", "血統 × 馬場傾向（当日・前日の勝ち馬の上りと、父・母父の適性）の特徴量パイプライン。", "仕様", status="snapshot",
+          note="2026-10-15 に「同日の後のレースの結果が混ざる」先読みの不具合を修正した（この章の元の記述は修正前の説明を含む）。",
+          now=[("training_pipeline_decisions", "修正後の扱い")]),
+        C("horse_pedigree_10gen_merge_design", "5 世代血統表を接ぎ木して、10 世代相当の血統を作る設計（アンカー選定、一意キー、アルゴリズム）。", "設計"),
+        C("pedigree_stage_research_notes", "血統・馬場傾向の研究方針メモ。ゴール、現状のパイプライン、GCS 負荷を抑える運用原則、未解決の論点。", "メモ", status="snapshot", note="2026-05 時点の研究メモ。"),
+        C("NOTE_APTITUDE_5GEN", "適性 3D × 5 世代血統。父系・母系の経路をどう区別して重み付けするか。", "仕様", src="html/pedigree/NOTE_APTITUDE_5GEN.html",
+          see=[("PEDIGREE_NOTE_APTITUDE", "血統適性ナレッジ"), ("horse_pedigree_10gen_merge_design", "10 世代への拡張")]),
+        C("PEDIGREE_NOTE_APTITUDE", "血統適性ナレッジ（note まとめ → 特徴量 → モデル）。父・母父・牝系のブレンド比率（1.0 / 0.55 / 0.35）など。", "仕様", src="html/pedigree/PEDIGREE_NOTE_APTITUDE.html"),
+        C("PERFORMANCE_GENES", "競走馬パフォーマンス遺伝子ナレッジベース。運動能力に関係する遺伝子マーカーと推論システム。", "仕様", src="html/pedigree/PERFORMANCE_GENES.html"),
+        C("course_geometry_atlas", "JRA 全 10 競馬場のコースの概形を、競馬場 → コース（芝・ダート、内外回り）→ 距離の順に切り替えて見られる図。", "参照",
+          [("course_master_verification", "検証の記録（3 ラウンド）"), ("feature_strategy_tp03_tp04", "特徴量の定義")]),
+        C("course_master_verification", "JRA コース形状マスタ（108 コース）の検証記録。3 つの独立収集の突き合わせ、一次資料での再確認と訂正。", "ログ",
+          [("course_geometry_atlas", "コースの概形を図で見る")]),
+        C("feature_serving_low_memory", "当日の特徴量を小さなメモリで作る設計。出走馬だけで計算できる理由、サービング用バンドル、検証、見つかった不具合。", "設計",
+          [("feature_strategy_tp03_tp04", "特徴量の定義はこちら")]),
     ]),
+    Part("学習パイプラインと実験結果", "tp-00〜tp-08 以降の確定事項、チューニング工程、実験結果。", [
+        C("training_pipeline_decisions", "学習パイプラインで確定した事項のログ。分割、特徴量、データ完全化の経緯と結果、ablation、前段モデル。**確定事項の正**。", "ログ",
+          [("feature_strategy_tp03_tp04", "設計の根拠はこちら")]),
+        C("hyperparameter_tuning_workflow", "ハイパーパラメータ・モデル選定の工程。リーク防止の絶対ルール、二層 CV、凍結する順、目的関数、アンチパターン。", "設計", status="legacy",
+          note="§10 の「Optuna 未接続」は古い（tp-05d で接続済み。分割は time_split.py）。工程の考え方は現行も有効。",
+          now=[("training_pipeline_decisions", "tp-05d の結果")]),
+        C("tp05a_experiment_report", "tp-05a の実験結果。勝ち馬確率の目的関数の比較（3 fold × 3 seed）。", "結果",
+          [("modeling_experiment_report", "tp-05a〜tp-08 の総合はこちら")]),
+        C("modeling_experiment_report", "tp-05a〜tp-08 の総合実験結果。現在の予測パイプラインの精度、段階別の結果、馬券最適化の強化学習（tp-08）、MLflow。", "結果",
+          [("training_pipeline_decisions", "確定事項")]),
+    ]),
+    Part("オッズと馬券", "オッズの予測、複合馬券の確率、バックテストと馬券推奨の設計。", [
+        C("final_odds_model", "最終オッズ予測モデル。発走前のデータから単勝・複勝オッズを推定する LightGBM 3 ヘッドモデルの設計・学習・推論フロー。", "設計"),
+        C("exotic_bet_probabilities", "馬連・ワイド・馬単・3 連複の的中確率を、勝率・連対率・複勝率から一貫して計算するモデル（割引 Harville）。", "設計"),
+        C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",
+          note="safe_ev を前提にした設計。tp-08 の実装は Benter ブレンドで、safe_ev は使っていない。",
+          now=[("modeling_experiment_report", "tp-08 の結果")]),
+        C("betting_policy_reinforcement_learning", "馬券推奨レイヤと強化学習の設計議論。なぜ機械学習の延長と切り分けるか、行動サイクル、バックテスト環境。", "設計",
+          [("modeling_experiment_report", "強化学習（tp-08）の結果")], status="legacy",
+          note="強化学習を第一候補とした設計議論。tp-08 の結果は「確定オッズでは優位なし（回収率は最良でも約 88%）」。",
+          now=[("modeling_experiment_report", "tp-08 の結果")]),
+    ]),
+    Part("推論・MLflow・コスト", "予測を出す仕組み、モデルの管理、費用。", [
+        C("inference_services", "推論層の設計。src/pipeline/inference/ のサービスと MLflow ランタイム、キャッシュのフロー、API エンドポイント。", "設計", src="html/design/inference_services.html"),
+        C("mlflow_platform", "MLflow によるモデリング・予測プラットフォーム。モデルキー単位の学習・Registry・実行サービス・API キャッシュ。モデルの正は catalog.py。", "設計", src="html/design/mlflow_platform.html"),
+        C("cost", "GCS のコスト分析レポート（GCS の操作コストのみ。2026-04 時点）。GCP 全体の試算は docs/operations/cost-estimate.md。", "結果", src="html/design/cost.html", status="snapshot",
+          note="数値の基準日は 2026-04。"),
+    ]),
+    Part("決定記録", "なぜそう決めたかの記録。当時の判断の履歴で、書き換えず、古くなったものは注記を足す。", _decision_chapters(), label="付録A"),
+    Part("外部予想家の分析", "note の予想家「うまうまー」の手法の分析と、予測パイプラインへの翻訳の検討。", [
+        C("umauma_report", "note 予想家「うまうまー」の分析レポート。舞台別の予想手法と的中傾向。", "メモ", src=_umauma("index")),
+        C("umauma_persona_pipeline", "「うまうまー」のペルソナ予想を、テーブルコンペ型の機械学習パイプラインに翻訳する設計。", "設計", src=_umauma("umauma_persona_pipeline")),
+        C("umauma_eda_plan", "ペルソナ予想パイプラインを組む前の事前 EDA の計画。", "メモ", src=_umauma("eda_plan")),
+    ], label="付録B"),
 ]
+for _i, _p in enumerate(PARTS):
+    if not _p.label:
+        _p.label = "第" + ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"][_i] + "部"
 
 CHAPTERS: dict[str, Chapter] = {c.slug: c for p in PARTS for c in p.chapters}
-GLOSSARY_PART = Part("付録　用語集", "本文に出てくるデータサイエンスの専門用語の解説。", [Chapter(GL.GLOSSARY_SLUG, GL.GLOSSARY_BLURB, "用語")])
+GLOSSARY_PART = Part("用語集", "本文に出てくるデータサイエンスの専門用語の解説。", [C(GL.GLOSSARY_SLUG, GL.GLOSSARY_BLURB, "用語")], label="付録C")
 ALL_PARTS: list[Part] = PARTS + [GLOSSARY_PART]
-KINDS = {"設計": "#7aa9ff", "仕様": "#34d399", "結果": "#fbbf24", "ログ": "#c084fc", "メモ": "#9aa7c7", "用語": "#f472b6"}
+KINDS = {"要件": "#f87171", "設計": "#7aa9ff", "仕様": "#34d399", "運用": "#38bdf8", "参照": "#fb923c", "結果": "#fbbf24", "ログ": "#c084fc", "メモ": "#9aa7c7", "決定": "#a3e635", "用語": "#f472b6"}
+STATUS = {"legacy": ("旧設計", "#fb923c"), "snapshot": ("時点の記録", "#7aa9ff"), "history": ("決定の履歴", "#a3e635")}
+
+
+def all_source_files() -> set[Path]:
+    """本に載せるべき HTML（docs/ 配下の全 HTML。本自身を除く）。"""
+    out = {p for p in DOCS_DIR.rglob("*.html") if p.name != BOOK_NAME and "node_modules" not in p.parts}
+    return {p.resolve() for p in out}
 
 
 # ── 読み込みと整形 ─────────────────────────────────────────────────────────────
@@ -142,22 +246,56 @@ def extract(raw: str) -> tuple[str, str, str]:
     return title, css, body.strip()
 
 
-def namespace(body: str, slug: str, slugs: set[str]) -> str:
-    """id・# リンク・url(#...) を章ごとに名前空間化し、他の章への相対リンクを本の中の位置に張り替える。"""
-    body = re.sub(r'(\sid=")([^"]+)(")', lambda m: f'{m.group(1)}{slug}--{m.group(2)}{m.group(3)}', body)
+_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
+_REL = re.compile(r'(\s(?:href|src))="([^"#?]*)((?:[?#][^"]*)?)"')
+
+
+def namespace(body: str, slug: str, slugs: set[str], src_path: str | None = None,
+              path_to_slug: dict[str, str] | None = None, book_dir: str | None = None) -> str:
+    """id・# リンク・url(#...) を章ごとに名前空間化し、他のページへの相対リンクを本の中の位置に張り替える。
+
+    src_path（この章の元ファイル）と path_to_slug（元ファイルの絶対パス → 章の slug）を渡すと、ディレクトリをまたぐリンクも
+    パスで解決する。本に載っていないファイル（コード・md など）へのリンクは book_dir から見た相対パスに直す。
+    渡さない場合は、同じディレクトリのファイル名（slug）だけで解決する。"""
+    seen: dict[str, int] = {}
+
+    def new_id(m: re.Match) -> str:
+        seen[m.group(2)] = seen.get(m.group(2), 0) + 1
+        dup = f"__{seen[m.group(2)]}" if seen[m.group(2)] > 1 else ""      # 元のページ自身が同じ id を複数持つ場合は 2 つ目以降を別名にする
+        return f'{m.group(1)}{slug}--{m.group(2)}{dup}{m.group(3)}'
+
+    body = re.sub(r'(\sid=")([^"]+)(")', new_id, body)
     body = re.sub(r'(\s(?:xlink:)?href="#)([^"]+)(")', lambda m: f'{m.group(1)}{slug}--{m.group(2)}{m.group(3)}', body)
     body = re.sub(r"url\(#([^)]+)\)", lambda m: f"url(#{slug}--{m.group(1)})", body)
-    # 章のファイルは chapters/ にあり、本は 1 つ上の modeling/ にあるので、../ で始まる相対リンクを 1 階層浅くする
-    body = re.sub(r'((?:href|src)=")\.\./(\.\./)', r"\1\2", body)
 
-    def link(m: re.Match) -> str:
-        pre, target, frag = m.group(1), m.group(2), m.group(3)
-        stem = target[:-5]
-        if stem not in slugs:
+    if src_path is None:
+        body = re.sub(r'((?:href|src)=")\.\./(\.\./)', r"\1\2", body)
+
+        def link(m: re.Match) -> str:
+            pre, target, frag = m.group(1), m.group(2), m.group(3)
+            stem = target[:-5]
+            if stem not in slugs:
+                return m.group(0)
+            return f'{pre}"#{stem}--{frag[1:]}"' if frag else f'{pre}"#ch-{stem}"'
+
+        return re.sub(r'(\shref=)"(?:\./)?([A-Za-z0-9_\-]+\.html)(#[^"]*)?"', link, body)
+
+    base = os.path.dirname(src_path)
+
+    def rel(m: re.Match) -> str:
+        attr, target, tail = m.group(1), m.group(2), m.group(3)
+        if not target or _SCHEME.match(target) or target.startswith("/"):
             return m.group(0)
-        return f'{pre}"#{stem}--{frag[1:]}"' if frag else f'{pre}"#ch-{stem}"'
+        res = os.path.normpath(os.path.join(base, unquote(target)))
+        frag = tail if tail.startswith("#") else ""
+        to = (path_to_slug or {}).get(res)
+        if to and attr.strip() == "href":
+            return f'{attr}="#{to}--{frag[1:]}"' if frag else f'{attr}="#ch-{to}"'
+        if book_dir is not None:
+            return f'{attr}="{quote(os.path.relpath(res, book_dir))}{tail}"'
+        return m.group(0)
 
-    return re.sub(r'(\shref=)"(?:\./)?([A-Za-z0-9_\-]+\.html)(#[^"]*)?"', link, body)
+    return _REL.sub(rel, body)
 
 
 def sections(body: str, slug: str) -> list[tuple[str, str]]:
@@ -300,6 +438,9 @@ body.bk { margin:0; background:#0b1226; color:var(--text); font:15px/1.8 "Noto S
 .bk-chapter .gl-short { color:var(--muted); font-size:13px; } .bk-chapter details.gl-item .gl-body { padding:2px 14px 10px; }
 .bk-chapter button.gl-all { background:#0f1a36; color:var(--muted); border:1px solid var(--border); border-radius:5px; font-size:12.5px; padding:3px 10px; cursor:pointer; }
 .bk-chapter input.gl-q { padding:5px 10px; border-radius:6px; border:1px solid var(--border); background:#0f1a36; color:var(--text); margin-left:8px; width:220px; }
+.bk-status { --c:#7aa9ff; border:1px solid var(--c); border-left-width:5px; background:#14213f; border-radius:6px; padding:8px 12px; margin:8px 0 6px; font-size:13.5px; line-height:1.7; }
+.bk-status b { color:var(--c); margin-right:6px; } .bk-status a { color:var(--accent-2); }
+.bk-front td.lead { background:#101c38; color:var(--muted); font-size:12.5px; } .bk-front tr.partrow td { background:#16254a; color:#fff; font-weight:700; }
 @media (max-width: 900px) { .bk-layout { grid-template-columns: 1fr; } .bk-side { position:relative; height:auto; } }
 """
 
@@ -317,6 +458,7 @@ SHELL_JS = """
     if (!el) return;
     const dt = el.tagName === 'DETAILS' ? el : el.closest('details'); if (dt) dt.open = true;   // 用語集の項目は開いてから移動
     const y0 = window.scrollY;
+    const ch0 = el.closest('.bk-chapter'); if (ch0) renderIn(ch0).then(() => { if (location.hash === '#' + id || !push) window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - OFFSET); });
     window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - OFFSET);
     if (push) { history.replaceState({y: y0}, '', location.href); history.pushState({y: window.scrollY}, '', '#' + id); }
     markCurrent(id);
@@ -421,25 +563,60 @@ SHELL_JS = """
   /* 読み込み直後・図の描画後に、URL の # の位置へ合わせ直す（図の描画でページの高さが変わるため） */
   function settle() { if (location.hash) jump(decodeURIComponent(location.hash.slice(1)), false); else spy(); }
   window.addEventListener('load', settle);
-  if (window.mermaid) { mermaid.initialize({startOnLoad: false, theme: 'dark'}); mermaid.run({querySelector: '.mermaid'}).then(settle, settle); }
+  /* 図（mermaid）は、その章が見える位置に来たときに描く（全部を最初に描くと重いため） */
+  function renderIn(root) {
+    if (!window.mermaid) return Promise.resolve();
+    const nodes = [...root.querySelectorAll('.mermaid')].filter(n => !n.dataset.processed);
+    return nodes.length ? mermaid.run({nodes}).catch(() => {}) : Promise.resolve();
+  }
+  if (window.mermaid) {
+    mermaid.initialize({startOnLoad: false, theme: 'dark'});
+    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { io.unobserve(e.target); renderIn(e.target); } }), {rootMargin: '1500px 0px'});
+    document.querySelectorAll('.bk-chapter').forEach(c => io.observe(c));
+  }
 })();
 """
 
 
-def build(modeling_dir: Path = CHAPTERS_DIR) -> tuple[str, dict]:
+def extract_scripts(raw: str) -> str:
+    """元ページのインライン script（src の無いもの）。画面操作用のものだけを残す章で使う。"""
+    return "\n".join(s for s in re.findall(r"<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>", raw, re.S) if s.strip())
+
+
+def derive_blurb(body: str, skip_meta: bool = False) -> str:
+    """元ページの最初の段落から、章の説明（130 字まで）を作る。"""
+    for m in re.finditer(r"<p\b[^>]*>(.*?)</p>", body, re.S):
+        t = re.sub(r"\s+", " ", html.unescape(_TAG.sub("", m.group(1)))).strip()
+        if len(t) < 30 or (skip_meta and re.search(r"日付:|最終更新:|担当:", t[:80])):
+            continue
+        return t[:130] + ("…" if len(t) > 130 else "")
+    return ""
+
+
+def build(out: Path = DEFAULT_OUT) -> tuple[str, dict]:
+    book_dir = str(out.parent)
+    chapters = [c for p in PARTS for c in p.chapters]
     slugs = set(CHAPTERS)
+    path_to_slug = {os.path.normpath(str(c.path)): c.slug for c in chapters}
     built: dict[str, dict] = {}
     css_groups: dict[str, str] = {}
     used: dict[str, set[str]] = {}
-    for slug in CHAPTERS:
-        path = modeling_dir / f"{slug}.html"
-        title, css, body = extract(path.read_text(encoding="utf-8"))
-        body = ensure_h2_ids(body, slug)
-        body = namespace(body, slug, slugs)
-        body = GL.annotate(body, used, slug)
+    for ch in chapters:
+        raw = ch.path.read_text(encoding="utf-8")
+        title, css, body = extract(raw)
+        blurb = ch.blurb or derive_blurb(body, skip_meta=(ch.kind == "決定"))
+        script = extract_scripts(fix_curly_quotes(raw)) if ch.keep_scripts else ""
+        ids = re.findall(r'\sid="([^"]+)"', body)
+        body = ensure_h2_ids(body, ch.slug)
+        body = namespace(body, ch.slug, slugs, str(ch.path), path_to_slug, book_dir)
+        body = GL.annotate(body, used, ch.slug)
+        if script:
+            for i in sorted(ids, key=len, reverse=True):
+                script = re.sub(r"(['\"])" + re.escape(i) + r"\1", lambda m, i=i: f"{m.group(1)}{ch.slug}--{i}{m.group(1)}", script)
+            body += f"<script>{script}</script>"
         gid = hashlib.md5(re.sub(r"\s+", "", css).encode()).hexdigest()[:6]
         css_groups.setdefault(gid, css)
-        built[slug] = {"title": title, "body": body, "gid": gid, "secs": sections(body, slug), "updated": last_updated(path)}
+        built[ch.slug] = {"title": title or ch.slug, "body": body, "gid": gid, "secs": sections(body, ch.slug), "updated": last_updated(ch.path), "blurb": blurb}
 
     # 用語集（付録）。本文で押せるようにした用語の説明と、それが使われている章を載せる
     label, n = {}, 0
@@ -448,88 +625,108 @@ def build(modeling_dir: Path = CHAPTERS_DIR) -> tuple[str, dict]:
             n += 1
             label[ch.slug] = f"第{n}章 {built[ch.slug]['title']}"
     gl_body, gl_secs = GL.render_chapter(used, label)
-    allb = {**built, GL.GLOSSARY_SLUG: {"title": GL.GLOSSARY_TITLE, "body": gl_body, "gid": "gl", "secs": gl_secs, "updated": datetime.now(JST).strftime("%Y-%m-%d")}}
+    allb = {**built, GL.GLOSSARY_SLUG: {"title": GL.GLOSSARY_TITLE, "body": gl_body, "gid": "gl", "secs": gl_secs, "updated": datetime.now(JST).strftime("%Y-%m-%d"), "blurb": GL.GLOSSARY_BLURB}}
     parts_all = ALL_PARTS
+    order = [c for p in parts_all for c in p.chapters]
+    num = {c.slug: i + 1 for i, c in enumerate(order)}
+    part_of = {c.slug: f"{p.label}　{p.title}" for p in parts_all for c in p.chapters}
 
     # 目次（部 → 章 → 節 の 3 階層）
-    side, no = [], 0
+    side = []
     for part in parts_all:
-        first = no + 1
+        first = num[part.chapters[0].slug]
         span = f"第{first}章" if len(part.chapters) == 1 else f"第{first}〜{first + len(part.chapters) - 1}章"
-        side.append(f'<div class="part">{html.escape(part.title)}<small>{span}</small></div>')
+        side.append(f'<div class="part">{html.escape(part.label)}　{html.escape(part.title)}<small>{span}</small></div>')
         for ch in part.chapters:
-            no += 1
             b = allb[ch.slug]
             secs = "".join(f'<a href="#{html.escape(i)}" title="{html.escape(t)}">{html.escape(t[:46])}{"…" if len(t) > 46 else ""}</a>' for i, t in b["secs"])
+            mark = f' <span class="mk" style="color:{STATUS[ch.status][1]}" title="{STATUS[ch.status][0]}">●</span>' if ch.status in ("legacy",) else ""
             side.append(f'<div class="chap" data-slug="{ch.slug}"><div class="row"><button class="tg" type="button" aria-label="節を開閉"></button>'
-                        f'<a href="#ch-{ch.slug}"><span class="num">{no}</span><span>{html.escape(b["title"])}</span></a></div><div class="secs">{secs}</div></div>')
+                        f'<a href="#ch-{ch.slug}"><span class="num">{num[ch.slug]}</span><span>{html.escape(b["title"])}{mark}</span></a></div><div class="secs">{secs}</div></div>')
 
-    # 前付き: 全体の地図
-    rows, no = [], 0
+    # 前付け: 全体の地図
+    rows = []
     for part in parts_all:
+        rows.append(f'<tr class="partrow"><td colspan="5">{html.escape(part.label)}　{html.escape(part.title)}</td></tr><tr><td class="lead" colspan="5">{html.escape(part.lead)}</td></tr>')
         for ch in part.chapters:
-            no += 1
             b = allb[ch.slug]
-            rows.append(f'<tr><td>{html.escape(part.title.split("　")[0].replace("第", "").replace("部", ""))}</td><td><a href="#ch-{ch.slug}">第{no}章　{html.escape(b["title"])}</a></td>'
-                        f'<td><span class="bk-tag" style="color:{KINDS[ch.kind]}">{ch.kind}</span></td><td>{html.escape(ch.blurb)}</td><td>{b["updated"]}</td></tr>')
+            st = f' <span class="bk-tag" style="color:{STATUS[ch.status][1]}">{STATUS[ch.status][0]}</span>' if ch.status in ("legacy", "snapshot") else ""
+            rows.append(f'<tr><td>第{num[ch.slug]}章</td><td><a href="#ch-{ch.slug}">{html.escape(b["title"])}</a>{st}</td>'
+                        f'<td><span class="bk-tag" style="color:{KINDS[ch.kind]}">{ch.kind}</span></td><td>{html.escape(b["blurb"])}</td><td>{b["updated"]}</td></tr>')
+
+    def link(slug: str) -> str:
+        return f'<a href="#ch-{slug}">{html.escape(allb[slug]["title"])}</a>'
+
     front = (
-        '<section class="bk-front" id="front"><h1>モデリング総覧</h1>'
-        f'<p class="meta" style="color:#9aa7c7">docs/html/modeling/chapters/ の {len(CHAPTERS)} 本の HTML を、1 冊の本にまとめたもの。生成: {datetime.now(JST):%Y-%m-%d %H:%M} JST。'
-        "元の各ページは chapters/ にそのまま残っている（各章の見出しの「単独ページ」から開ける）。この本は元のページから自動で作るので、<b>直すときは元のページを直して</b> "
-        "<code>python -m src.scripts.docs.build_modeling_book</code> で作り直す。</p>"
+        '<section class="bk-front" id="front"><h1>keiba-vpn ドキュメント総覧</h1>'
+        f'<p class="meta" style="color:#9aa7c7">docs/ 配下の {len(CHAPTERS)} 本の HTML（docs/html/・docs/decisions/・docs/operations/・docs/other_predictor/）を、1 冊の本にまとめたもの。生成: {datetime.now(JST):%Y-%m-%d %H:%M} JST。'
+        "元の各ページはそのまま残っている（各章の見出しの「単独ページ」から開ける）。この本は元のページから自動で作るので、<b>直すときは元のページを直して</b> "
+        "<code>python -m src.scripts.docs.build_docs_book</code> で作り直す。</p>"
         "<h2>どれを読めばよいか</h2><ul>"
-        f'<li>今の精度・最新の結論 → <a href="#ch-modeling_experiment_report">{html.escape(built["modeling_experiment_report"]["title"])}</a></li>'
-        f'<li>学習で何が確定したか → <a href="#ch-training_pipeline_decisions">{html.escape(built["training_pipeline_decisions"]["title"])}</a></li>'
-        f'<li>データがいつ集まり、どこで特徴量になるか → <a href="#ch-data_flow_schedule">{html.escape(built["data_flow_schedule"]["title"])}</a></li>'
-        f'<li>特徴量の定義と設計の根拠 → <a href="#ch-feature_strategy_tp03_tp04">{html.escape(built["feature_strategy_tp03_tp04"]["title"])}</a></li>'
-        f'<li>馬券の確率・期待値 → <a href="#ch-exotic_bet_probabilities">{html.escape(built["exotic_bet_probabilities"]["title"])}</a></li>'
+        f'<li>プロダクトの目的・要件・現状 → {link("requirements")}</li>'
+        f'<li>いまの精度・最新の結論 → {link("modeling_experiment_report")}</li>'
+        f'<li>学習で何が確定したか → {link("training_pipeline_decisions")}</li>'
+        f'<li>データがいつ集まり、どこで特徴量になるか → {link("data_flow_schedule")}</li>'
+        f'<li>どのデータがどこにあるか → {link("database_schemas")}</li>'
+        f'<li>特徴量の定義と設計の根拠 → {link("feature_strategy_tp03_tp04")}</li>'
+        f'<li>馬券の確率・期待値 → {link("exotic_bet_probabilities")}</li>'
+        f'<li>cron・運用 → {link("cron_schedule")}</li>'
+        f'<li>なぜそう決めたか → {link("MASTER")}（決定記録は付録A）</li>'
         f'<li>専門用語がわからない → 本文の<button type="button" class="gl-term" data-gl="logloss">点線の下線がついた語</button>をクリックすると、その場に説明が開く。まとめて読むなら <a href="#ch-{GL.GLOSSARY_SLUG}">用語集</a>（{len(GL.TERMS)} 語・図つき）</li></ul>'
-        "<h2>章の種類</h2><p>" + "".join(f'<span class="bk-tag" style="color:{c}">{k}</span>' for k, c in KINDS.items()) +
-        "　設計 = 方針や仕組みの設計 ／ 仕様 = 列・手順などの取り決め ／ 結果 = 実験の結果 ／ ログ = 確定事項の記録 ／ メモ = 調査・探索のメモ。"
-        "「更新日」は元のページの最終コミット日。2026-05 の章は初期の設計で、後の tp 系の章で更新・確定された内容がある（各章の「関連する章」を参照）。</p>"
-        '<h2>全体の地図</h2><table><tr><th>部</th><th>章</th><th>種類</th><th>何について書かれているか</th><th>更新日</th></tr>' + "".join(rows) + "</table></section>"
+        "<h2>章の種類と状態</h2><p>" + "".join(f'<span class="bk-tag" style="color:{c}">{k}</span>' for k, c in KINDS.items()) +
+        "　要件 = 要件定義 ／ 設計 = 方針や仕組みの設計 ／ 仕様 = 列・手順などの取り決め ／ 運用 = cron・サーバーなどの運用 ／ 参照 = 一覧・カタログ ／ 結果 = 実験の結果 ／ ログ = 確定事項の記録 ／ メモ = 調査・探索のメモ ／ 決定 = 決定記録。</p>"
+        f'<p><span class="bk-tag" style="color:{STATUS["legacy"][1]}">旧設計</span> = 一部が現行と異なる（各章の冒頭に、異なる点と現行の章へのリンクがある）。'
+        f'<span class="bk-tag" style="color:{STATUS["snapshot"][1]}">時点の記録</span> = ある時点の設計・調査メモで、その後に変わった可能性がある。'
+        f'<span class="bk-tag" style="color:{STATUS["history"][1]}">決定の履歴</span> = 当時の判断の記録（書き換えない）。「更新日」は元のページの最終コミット日。</p>'
+        '<h2>全体の地図</h2><table><tr><th>章</th><th>タイトル</th><th>種類</th><th>何について書かれているか</th><th>更新日</th></tr>' + "".join(rows) + "</table></section>"
     )
 
     # 章
-    chapters_html, no = [], 0
-    order = [c for p in parts_all for c in p.chapters]
-    part_of = {c.slug: p.title for p in parts_all for c in p.chapters}
+    chapters_html = []
     for idx, ch in enumerate(order):
-        no += 1
         b = allb[ch.slug]
-        see = "".join(f'<a href="#ch-{s}">第{[c.slug for c in order].index(s) + 1}章 {html.escape(built[s]["title"])}</a>（{html.escape(why)}）　' for s, why in ch.see if s in built)
+        see = "".join(f'<a href="#ch-{s}">第{num[s]}章 {html.escape(allb[s]["title"])}</a>（{html.escape(why)}）　' for s, why in ch.see if s in allb)
+        now = "".join(f'<a href="#ch-{s}">第{num[s]}章 {html.escape(allb[s]["title"])}</a>（{html.escape(why)}）　' for s, why in ch.now if s in allb)
+        status = ""
+        if ch.status in STATUS:
+            name, color = STATUS[ch.status]
+            msg = ch.note or ("当時の判断の記録。書き換えず、古くなったものは注記を足す。" if ch.status == "history" else "")
+            status = f'<div class="bk-status" style="--c:{color}"><b>{name}</b>{html.escape(msg)}' + (f'　現行: {now}' if now else "") + "</div>"
         prev_a = f'<a href="#ch-{order[idx - 1].slug}">← 第{idx}章 {html.escape(allb[order[idx - 1].slug]["title"])}</a>' if idx else "<span></span>"
         next_a = f'<a href="#ch-{order[idx + 1].slug}">第{idx + 2}章 {html.escape(allb[order[idx + 1].slug]["title"])} →</a>' if idx + 1 < len(order) else "<span></span>"
+        if ch.slug in built:
+            origin = os.path.relpath(ch.path, book_dir)
+            meta = f'<p class="meta">更新日 {b["updated"]} ／ 元のファイル <a href="{quote(origin)}">{html.escape(origin)}</a>（単独ページ）</p>'
+        else:
+            meta = f'<p class="meta">生成日 {b["updated"]} ／ 定義: src/scripts/docs/modeling_glossary.py（本の生成時に作られる。単独ページは無い）</p>'
         chapters_html.append(
             f'<section class="bk-chapter css-{b["gid"]}" id="ch-{ch.slug}" data-slug="{ch.slug}">'
-            f'<div class="bk-head"><div class="partname">{html.escape(part_of[ch.slug])}</div><div class="no">第{no}章　<span class="bk-tag" style="color:{KINDS[ch.kind]}">{ch.kind}</span></div>'
-            f'<h2 class="bk-title">{html.escape(b["title"])}</h2>'
-            + (f'<p class="meta">更新日 {b["updated"]} ／ 元のファイル <a href="chapters/{ch.slug}.html">chapters/{ch.slug}.html</a>（単独ページ）</p>' if ch.slug in built
-               else f'<p class="meta">生成日 {b["updated"]} ／ 定義: src/scripts/docs/modeling_glossary.py（本の生成時に作られる。単独ページは無い）</p>') +
-            f'<div class="blurb">{html.escape(ch.blurb)}</div>' + (f'<p class="bk-see">関連する章: {see}</p>' if see else "") + "</div>"
+            f'<div class="bk-head"><div class="partname">{html.escape(part_of[ch.slug])}</div><div class="no">第{num[ch.slug]}章　<span class="bk-tag" style="color:{KINDS[ch.kind]}">{ch.kind}</span></div>'
+            f'<h2 class="bk-title">{html.escape(b["title"])}</h2>' + meta + status +
+            f'<div class="blurb">{html.escape(b["blurb"])}</div>' + (f'<p class="bk-see">関連する章: {see}</p>' if see else "") + "</div>"
             f'<div class="bk-body html-body">{b["body"]}</div><div class="bk-pn">{prev_a}{next_a}</div></section>'
         )
 
     css = SHELL_CSS + "\n" + "\n".join(f"/* {gid} */\n" + scope_css(c, f".css-{gid}") for gid, c in css_groups.items()) + "\n.bk-chapter{background:transparent !important}"
-    out = (
+    mermaid_src = quote(os.path.relpath(HTML_DIR / "assets" / "mermaid.min.js", book_dir))
+    out_html = (
         '<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-        "<title>モデリング総覧 — keiba-vpn docs</title>"
-        '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">'
-        f"<style>{css}</style></head><body class=\"bk\"><div class=\"bk-layout\"><nav class=\"bk-side\"><h1><a href=\"#front\">モデリング総覧</a></h1>"
-        '<div class="sub"><a href="../index.html">← ドキュメント一覧</a></div><input id="bk-q" type="search" placeholder="章・節をしぼり込む"><div class="tools"><button id="bk-open" type="button">すべて開く</button><button id="bk-close" type="button">すべて閉じる</button></div>'
+        "<title>keiba-vpn ドキュメント総覧</title>"
+        f"<style>{css}</style></head><body class=\"bk\"><div class=\"bk-layout\"><nav class=\"bk-side\"><h1><a href=\"#front\">ドキュメント総覧</a></h1>"
+        '<div class="sub">docs/ の全 HTML を 1 冊に統合</div><input id="bk-q" type="search" placeholder="章・節をしぼり込む"><div class="tools"><button id="bk-open" type="button">すべて開く</button><button id="bk-close" type="button">すべて閉じる</button></div>'
         + "".join(side) + '</nav><main class="bk-main">' + front + "".join(chapters_html) +
-        '</main></div><script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>' + SHELL_JS + "</script></body></html>"
+        f'</main></div><script src="{mermaid_src}"></script><script>' + SHELL_JS + "</script></body></html>"
     )
-    return out, built
+    return out_html, built
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = ap.parse_args()
-    out, built = build()
-    args.out.write_text(out, encoding="utf-8")
-    print(f"{args.out}: {len(built)} 章, {len(out) // 1024} KB")
+    out_html, built = build(args.out)
+    args.out.write_text(out_html, encoding="utf-8")
+    print(f"{args.out}: {len(built)} 章, {len(out_html) // 1024} KB")
     return 0
 
 

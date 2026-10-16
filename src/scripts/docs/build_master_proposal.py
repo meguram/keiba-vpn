@@ -53,6 +53,7 @@ def extract_doc_content(html: str) -> str:
 _SKIP_DOC_HTML = frozenset(
     {
         "index.html",
+        "book.html",
         "keiba_ai_pipeline_proposal.html",
         "data_features_reference.html",
         "data_storage_platform_comparison.html",
@@ -62,7 +63,7 @@ _SKIP_DOC_HTML = frozenset(
 
 def collect_doc_html_pages() -> list[Path]:
     pages = [p for p in sorted(HTML_DIR.glob("*.html")) if p.name not in _SKIP_DOC_HTML]
-    modeling = HTML_DIR / "modeling" / "chapters"      # 各章の HTML（modeling/book.html はそれらの統合なので除く）
+    modeling = HTML_DIR / "modeling" / "chapters"      # 各章の HTML（docs/html/book.html はそれらの統合なので除く）
     if modeling.is_dir():
         pages.extend(sorted(modeling.glob("*.html")))
     return pages
