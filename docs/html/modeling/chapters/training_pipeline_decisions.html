@@ -71,7 +71,7 @@
 <tr><td>19</td><td><code>tp-19-training-laps</code></td><td>追い切りラップの特徴量と調教師別のパターン採点</td><td class="ok">完了（TL_A を採用）</td><td>§17</td></tr>
 <tr><td>16b</td><td><code>tp-16b-feature-bakeoff</code></td><td>後日談の変種（窓・減衰・複勝率）と、訂正後のクッション値・含水率の再評価</td><td>notebook あり（ホストで実行待ち）</td><td>未記録</td></tr>
 <tr><td>19b</td><td><code>tp-19b-training-laps</code></td><td>追い切り特徴の拡張（調教師内の相対化・絞り込み）</td><td>notebook あり（ホストで実行待ち）</td><td>未記録</td></tr>
-<tr><td>20</td><td><code>tp-20-odds-model</code></td><td>オッズ予測モデルのモデリング・チューニング（特徴量・目的変数・損失・新年重み・パラメータ探索・CatBoost）</td><td>notebook あり（ホストで実行中）</td><td>未記録</td></tr>
+<tr><td>20</td><td><code>tp-20-odds-model</code></td><td>オッズ予測モデルのモデリング・チューニング（特徴量・目的変数・損失・新年重み・パラメータ探索・CatBoost）</td><td>完了</td><td>§25</td></tr>
 <tr><td>21</td><td><code>tp-21-smartrc-ten1f</code>（.py）</td><td>SmartRC のテン1F 特徴量</td><td class="ok">完了</td><td>§16</td></tr>
 <tr><td>22</td><td><code>tp-22-leak-impact</code></td><td>track_bias 先読みリーク修正の影響測定（別ディレクトリで再構築した学習表との比較）</td><td>完了（影響なし）</td><td>§24</td></tr>
 </table>
@@ -747,7 +747,30 @@
   <li>今後の新しい実験は修正後の表（<code>training_pipeline_fixed/</code>）でも構わないが、前段モデル 3 列（tp-04 の OOF）は旧表から作られており、修正後の表での再計算は、最終の再学習・登録（tp-07）で表を切り替える際にまとめて行う。</li>
 </ul>
 
-<h2>25. 以降の節</h2>
+<h2>25. tp-20 オッズ予測モデルのモデリングとチューニング</h2>
+<p class="muted">notebook: <code>tp-20-odds-model.ipynb</code>（MLflow: keiba-tp-odds-model）。tp-12 の予測オッズは「固定パラメータの LightGBM 1 本（対数オッズの回帰、特徴量 base+S+C1）」だけだったので、特徴量・目的変数・損失・新しい年の重み・パラメータ・モデル族を比べた。<b>オッズ・人気は特徴量に使わない</b>（列名検査あり）。評価は valid 2022・2023・2024（test 2025 は使っていない。2023 年はパラメータ選択に使用）。誤差は、レース内で 1/オッズ を正規化した市場確率の log の二乗誤差（レースごとの平均）で、基準との差はレース単位の paired bootstrap。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>変種</th><th>log オッズの RMSE</th><th>市場確率の誤差</th><th>基準との差（95% 区間の上限）</th></tr>
+<tr><td>V0 基準（tp-12 と同じ）</td><td>0.6712</td><td>0.3888</td><td>-</td></tr>
+<tr><td>V1 + 追い切り評価・厩舎コメント・血統×条件</td><td>0.6557</td><td>0.3497</td><td>−0.0390（−0.0370）</td></tr>
+<tr><td>V2 目的変数を log(市場確率) に</td><td>0.6717</td><td>0.3896</td><td>+0.0008（悪化）</td></tr>
+<tr><td>V3 V1 + log(市場確率)</td><td>0.6562</td><td>0.3503</td><td>−0.0385</td></tr>
+<tr><td>V4 V3 + Huber 損失</td><td>0.6585</td><td>0.3493</td><td>−0.0394</td></tr>
+<tr><td>V5 V3 + 新しい年を重く（半減期 1 年 / 2 年）</td><td>0.6593 / 0.6571</td><td>0.3455 / 0.3477</td><td>−0.0433 / −0.0411</td></tr>
+<tr><td>V6 V3 + 探索パラメータ（num_leaves=63, lr=0.02, feature_fraction=0.7, 早期終了）</td><td>0.6495</td><td>0.3349</td><td>−0.0539（−0.0517）</td></tr>
+<tr><td>V7 CatBoost（V3 の特徴量）</td><td>0.6489</td><td>0.3396</td><td>−0.0491</td></tr>
+<tr><td><b>V8 V6 と V7 の平均</b></td><td><b>0.6449</b></td><td><b>0.3331</b></td><td><b>−0.0557（−0.0536）</b></td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>オッズ予測は、固定パラメータの 1 本からかなり改善できる</b>（市場確率の誤差 −14%、log オッズの RMSE 0.671 → 0.645）。効いたのは、<b>追い切り評価・厩舎コメント・血統×条件の特徴量（−0.039）</b>、パラメータの探索（さらに −0.015）、LightGBM と CatBoost の平均（さらに −0.001〜−0.006）。</li>
+  <li>新しい年を重くする（半減期 1 年）は単独で −0.004 の上積み。ただし探索パラメータ版（V6）とは組み合わせていない（次の改善候補）。目的変数の変更・Huber は効果が小さい。</li>
+  <li>2023 年は探索の選択に使ったため、V6 以降の 2023 年分は楽観側。2022・2024 の年別の値で傾向が変わらないことは年別表（<code>odds_model_by_year.csv</code>）にある。</li>
+  <li><b>この改善が馬券最適化の回収率に効くかは未検証</b>（tp-12 は test 2025 を一度評価済みで、やり直さない）。次は valid 年だけで、V8 を使った予測オッズで tp-12 の比較をやり直す（tp-12b）。また、目的変数は確定オッズなので、T-60 のオッズが貯まったら学習し直す。</li>
+</ul>
+
+<h2>26. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
