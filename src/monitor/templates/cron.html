@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Cron — 監視ポータル{% endblock %}
+
+{% block content %}
+<style>
+  .cron-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:14px; }
+  .cron-tile { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px; cursor:pointer; }
+  .cron-tile.active { outline:2px solid var(--accent); }
+  .cron-tile .n { font-size:26px; font-weight:700; line-height:1.1; }
+  .cron-tile .l { font-size:12px; color:var(--muted); }
+  .cron-tile.t-failed .n { color:var(--danger); } .cron-tile.t-warning .n { color:var(--warn); }
+  .cron-tile.t-running .n { color:var(--accent); } .cron-tile.t-waiting .n { color:var(--accent2); }
+  .cron-group { margin-bottom:18px; }
+  .cron-group h3 { margin:0 0 4px; font-size:14px; } .cron-group .gd { font-size:12px; color:var(--muted); margin-bottom:8px; }
+  table.cron { width:100%; border-collapse:collapse; font-size:13px; }
+  table.cron th { text-align:left; color:var(--muted); font-weight:500; font-size:12px; padding:6px 8px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  table.cron td { padding:7px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  table.cron tr.job { cursor:pointer; } table.cron tr.job:hover td { background:rgba(88,166,255,.05); }
+  table.cron tr.r-failed td:first-child { box-shadow:inset 3px 0 0 var(--danger); }
+  table.cron tr.r-warning td:first-child { box-shadow:inset 3px 0 0 var(--warn); }
+  .jn { font-weight:600; } .jid { color:var(--muted); font-size:11px; font-family:ui-monospace,monospace; }
+  .sub { color:var(--muted); font-size:12px; }
+  .cause { margin-top:4px; font-size:12px; line-height:1.55; }
+  .cause .lbl { font-weight:600; } .cause.k-failed .lbl { color:var(--danger); } .cause.k-warning .lbl { color:var(--warn); } .cause.k-skipped .lbl { color:var(--muted); }
+  .cause .hint { color:var(--text); opacity:.85; }
+  .cause code { background:rgba(110,118,129,.2); border-radius:4px; padding:0 4px; word-break:break-all; }
+  tr.detail td { background:rgba(110,118,129,.07); }
+  .detail .kv { display:grid; grid-template-columns:110px 1fr; gap:3px 10px; font-size:12px; margin-bottom:8px; } .detail .kv b { color:var(--muted); font-weight:500; }
+  .detail pre { margin:4px 0 0; background:#0b0f14; border:1px solid var(--border); border-radius:6px; padding:8px 10px; max-height:260px; overflow:auto; font-size:11.5px; line-height:1.5; white-space:pre-wrap; word-break:break-all; }
+  .st-run { color:var(--accent); font-weight:600; } .st-wait { color:var(--accent2); }
+  .pulse { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:5px; animation:pu 1.2s infinite; }
+  @keyframes pu { 0%,100% { opacity:1 } 50% { opacity:.25 } }
+  .filter-note { font-size:12px; color:var(--muted); margin:-4px 0 10px; }
+</style>
+
+<div class="page-title"><span class="icon">⏱️</span> Cron（定期ジョブ）</div>
+<div class="cron-tiles" id="tiles"></div>
+<div class="filter-note" id="filter-note"></div>
+<div id="groups"><span class="loading">読込中...</span></div>
+<p class="last-updated">最終更新: <span id="last-ts">—</span>（30秒ごと自動更新）　時刻は日本時間。行をクリックすると詳細（説明・保存先・直近の出力・直近の失敗）が開きます。</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RESULT = {
+  success: ['✅ 成功', 'badge-ok'], warning: ['⚠️ 警告', 'badge-warn'], failed: ['❌ 失敗', 'badge-error'],
+  skipped: ['⏭️ 見送り', 'badge-muted'], unknown: ['❔ 記録なし', 'badge-muted'],
+};
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = iso => iso ? new Date(iso).toLocaleString('ja-JP', {timeZone:'Asia/Tokyo', month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '—';
+function rel(iso) {
+  if (!iso) return '';
+  const s = (Date.now() - new Date(iso).getTime()) / 1000, a = Math.abs(s);
+  const t = a < 90 ? Math.round(a) + '秒' : a < 5400 ? Math.round(a / 60) + '分' : a < 172800 ? Math.round(a / 3600) + '時間' : Math.round(a / 86400) + '日';
+  return s >= 0 ? t + '前' : t + '後';
+}
+function dur(sec) { if (sec == null) return ''; return sec < 90 ? Math.round(sec) + '秒' : sec < 5400 ? Math.round(sec / 60) + '分' : (sec / 3600).toFixed(1) + '時間'; }
+function causeHtml(c) {
+  if (!c) return '';
+  return `<div class="cause k-${esc(c.kind)}"><span class="lbl">${esc(c.label)}</span>` +
+    (c.hint ? `<div class="hint">▶ ${esc(c.hint)}</div>` : '') +
+    (c.evidence ? `<div class="sub">根拠: <code>${esc(c.evidence)}</code></div>` : '') + '</div>';
+}
+let DATA = null, FILTER = 'all', OPEN = new Set();
+
+function jobMatches(j) {
+  if (FILTER === 'all') return true;
+  if (FILTER === 'running' || FILTER === 'waiting') return j.state === FILTER;
+  return j.last_run && j.last_run.result === FILTER;
+}
+function rowHtml(j) {
+  const lr = j.last_run, res = lr ? lr.result : 'unknown';
+  const [rl, rc] = RESULT[res] || RESULT.unknown;
+  const state = j.state === 'running'
+    ? `<span class="st-run"><span class="pulse"></span>実行中</span><div class="sub">${esc(rel(j.running_since))}に開始</div>`
+    : `<span class="st-wait">待機中</span>` + (j.next_run ? `<div class="sub">次回 ${esc(fmt(j.next_run))}（${esc(rel(j.next_run))}）</div>` : '');
+  const last = lr ? `${esc(fmt(lr.started_at))}<div class="sub">${esc(rel(lr.started_at))}${lr.duration_sec != null ? '・' + esc(dur(lr.duration_sec)) : ''}${lr.exit_code != null && lr.exit_code !== 0 ? '・終了コード ' + lr.exit_code : ''}</div>`
+                 : '<span class="sub">記録なし</span>';
+  const open = OPEN.has(j.id);
+  let html = `<tr class="job r-${esc(res)}" data-id="${esc(j.id)}"><td><div class="jn">${esc(j.name)}</div><div class="jid">${esc(j.id)}</div></td>` +
+    `<td>${state}</td><td>${esc(j.schedule)}${j.yields ? '<div class="sub">優先処理中は見送り</div>' : ''}</td><td>${last}</td>` +
+    `<td><span class="badge ${rc}">${rl}</span>${res !== 'success' ? causeHtml(j.cause) : ''}</td></tr>`;
+  if (open) {
+    const lf = j.last_failure;
+    html += `<tr class="detail"><td colspan="5"><div class="detail"><div class="kv">` +
+      `<b>内容</b><span>${esc(j.desc) || '—'}</span><b>保存先</b><span>${esc(j.dest) || '—'}</span>` +
+      `<b>cron 式（サーバ時刻）</b><span><code>${esc((j.cron_exprs || []).join('  |  '))}</code></span>` +
+      `<b>ログ</b><span><code>${esc(j.log_path) || '—'}</code></span>` +
+      `<b>直近の失敗</b><span>${lf ? esc(fmt(lf.at)) + '（' + esc(rel(lf.at)) + '）' + causeHtml(lf.cause) : 'なし'}</span>` +
+      `<b>記録の出どころ</b><span>${lr ? ({record:'cron_run の実行記録', log:'ログの START/END 行', mtime:'ログの更新時刻のみ（成否は不明）'}[lr.source] || esc(lr.source)) : '—'}</span></div>` +
+      `<b class="sub">直近の出力（末尾）</b><pre>${esc((j.output_tail || []).join('\n')) || '（記録なし）'}</pre></div></td></tr>`;
+  }
+  return html;
+}
+function render() {
+  if (!DATA) return;
+  const s = DATA.summary || {};
+  const tiles = [['all', '全ジョブ', Object.values(DATA.groups).reduce((a, g) => a + g.jobs.length, 0)], ['running', '実行中', s.running], ['waiting', '待機中', s.waiting],
+                 ['failed', '失敗', s.failed], ['warning', '警告', s.warning], ['skipped', '見送り', s.skipped], ['unknown', '記録なし', s.unknown]];
+  document.getElementById('tiles').innerHTML = tiles.map(([k, l, n]) =>
+    `<div class="cron-tile t-${k} ${FILTER === k ? 'active' : ''}" data-f="${k}"><div class="n">${n ?? 0}</div><div class="l">${l}</div></div>`).join('');
+  document.getElementById('filter-note').textContent = FILTER === 'all' ? '' : `絞り込み中: ${tiles.find(t => t[0] === FILTER)[1]}（もう一度押すと解除）`;
+  let out = '';
+  for (const g of DATA.groups) {
+    const jobs = g.jobs.filter(jobMatches);
+    if (!jobs.length) continue;
+    out += `<div class="card cron-group"><h3>${esc(g.name)}</h3>${g.desc ? `<div class="gd">${esc(g.desc)}</div>` : ''}` +
+      `<table class="cron"><tr><th>ジョブ</th><th>状態</th><th>スケジュール（日本時間）</th><th>最終実行</th><th>結果・原因</th></tr>${jobs.map(rowHtml).join('')}</table></div>`;
+  }
+  document.getElementById('groups').innerHTML = out || '<div class="card"><span class="text-muted">該当するジョブはありません</span></div>';
+  document.getElementById('last-ts').textContent = new Date(DATA.generated_at).toLocaleString('ja-JP', {timeZone:'Asia/Tokyo'});
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('.cron-tile');
+  if (t) { FILTER = FILTER === t.dataset.f ? 'all' : t.dataset.f; render(); return; }
+  const r = e.target.closest('tr.job');
+  if (r) { const id = r.dataset.id; OPEN.has(id) ? OPEN.delete(id) : OPEN.add(id); render(); }
+});
+async function load() {
+  try {
+    const r = await fetch('/api/internal/cron-status');
+    if (r.status === 401 || r.redirected) { location.href = '/login'; return; }
+    DATA = await r.json(); render();
+  } catch (e) { document.getElementById('groups').innerHTML = '<div class="card"><span class="text-muted">取得に失敗しました: ' + esc(e.message) + '</span></div>'; }
+}
+load(); setInterval(load, 30000);
+</script>
+{% endblock %}

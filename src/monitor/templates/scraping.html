@@ -12,13 +12,10 @@
   </div>
 </div>
 
-<!-- Cron ジョブ 最終成功日時 -->
+<!-- Cron ジョブ -->
 <div class="card">
-  <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
-    <span>定期ジョブ — 最終成功日時</span>
-    <button onclick="expandAll()" style="font-size:11px;padding:3px 8px">すべて展開</button>
-  </div>
-  <div id="cron-jobs"><span class="loading">読込中...</span></div>
+  <div class="card-title">定期ジョブ（cron）</div>
+  <div id="cron-jobs">各 cron の状態（待機中／実行中）・最終実行・結果（成功／失敗）・失敗の原因は <a href="/cron" style="color:var(--accent)">⏱️ Cron ページ</a>にまとめています。</div>
 </div>
 
 <!-- 直近失敗ジョブ -->
@@ -143,116 +140,6 @@ function renderTableRows(tables) {
         ${pathLines}
       </div>`;
   }).join('');
-}
-
-function renderCronJobs(d) {
-  const jobs = d.jobs || [];
-  if (!jobs.length) {
-    document.getElementById('cron-jobs').innerHTML = '<span class="text-muted">データなし</span>';
-    return;
-  }
-
-  const items = jobs.map(j => {
-    const ok = j.status === 'ok';
-    const unknown = j.status === 'unknown';
-    const statusBadge = ok
-      ? '<span class="badge badge-ok">✅ 成功</span>'
-      : unknown
-        ? '<span class="badge badge-muted">— 不明</span>'
-        : '<span class="badge badge-warn">⚠️ 未確認</span>';
-
-    const elapsed = j.last_success ? elapsedLabel(j.last_success) : '—';
-    const ts = j.last_success
-      ? `<span title="${j.last_success}" style="cursor:help">${elapsed}</span>`
-      : '<span style="color:var(--muted)">記録なし</span>';
-
-    let headerBg = '';
-    if (j.last_success) {
-      const diffH = (Date.now() - new Date(j.last_success.replace(' ', 'T')).getTime()) / 3600000;
-      if (diffH > 72) headerBg = 'background:rgba(248,81,73,.07)';
-      else if (diffH > 24) headerBg = 'background:rgba(210,153,34,.07)';
-    }
-
-    const urlRows = (j.sample_urls || []).map(u =>
-      `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
-        <span style="font-size:10px;color:var(--muted);flex-shrink:0">URL</span>
-        <a href="${u}" target="_blank" rel="noopener"
-           style="font-size:11px;font-family:monospace;color:var(--accent);word-break:break-all;text-decoration:none"
-           onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'"
-        >${u}</a>
-      </div>`
-    ).join('');
-
-    const tableRows = renderTableRows(j.target_tables);
-
-    const hasDetail = j.description || (j.sample_urls && j.sample_urls.length) || (j.target_tables && j.target_tables.length);
-    const detailPanel = hasDetail ? `
-      <div class="cron-detail" id="detail-${j.id}" style="display:none;
-           border-top:1px solid var(--border);padding:14px 16px;background:rgba(0,0,0,.15)">
-        ${j.description ? `
-          <div style="font-size:12px;color:var(--text);margin-bottom:12px;line-height:1.6">
-            ${j.description}
-          </div>` : ''}
-        ${j.sla && j.sla !== '—' ? `
-          <div style="margin-bottom:10px">
-            <span class="badge badge-info">SLA: ${j.sla}</span>
-          </div>` : ''}
-        ${urlRows ? `
-          <div style="margin-bottom:12px">
-            <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;
-                        letter-spacing:.05em;margin-bottom:6px">スクレイピング対象 URL（サンプル）</div>
-            ${urlRows}
-          </div>` : ''}
-        ${tableRows ? `
-          <div>
-            <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;
-                        letter-spacing:.05em;margin-bottom:8px">保存先テーブル / カテゴリ（パスをクリックでコピー）</div>
-            ${tableRows}
-          </div>` : ''}
-        <div style="margin-top:12px;font-size:11px">
-          <a href="/logs?file=${encodeURIComponent(j.log_file)}"
-             style="color:var(--accent);text-decoration:none">
-            📄 ${j.log_file} を開く
-          </a>
-        </div>
-      </div>` : '';
-
-    const chevron = hasDetail ? `<span class="chevron" style="margin-left:auto;font-size:12px;color:var(--muted);transition:transform .2s">▼</span>` : '';
-
-    return `
-      <div class="cron-item" style="border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden">
-        <div class="cron-header" onclick="toggleCron('${j.id}', this)"
-             style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:${hasDetail ? 'pointer' : 'default'};${headerBg};user-select:none"
-             ${hasDetail ? 'title="クリックで詳細を展開"' : ''}>
-          <div style="min-width:160px;font-weight:600;font-size:13px">${j.label}</div>
-          <div style="min-width:190px;font-size:12px;color:var(--muted)">${j.schedule}</div>
-          <div style="min-width:90px">${statusBadge}</div>
-          <div style="font-size:12px">${ts}</div>
-          ${chevron}
-        </div>
-        ${detailPanel}
-      </div>`;
-  }).join('');
-
-  document.getElementById('cron-jobs').innerHTML = `<div style="margin-top:4px">${items}</div>`;
-}
-
-function toggleCron(id, headerEl) {
-  const detail = document.getElementById(`detail-${id}`);
-  if (!detail) return;
-  const isOpen = detail.style.display !== 'none';
-  detail.style.display = isOpen ? 'none' : 'block';
-  const chevron = headerEl.querySelector('.chevron');
-  if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
-}
-
-function expandAll() {
-  document.querySelectorAll('.cron-detail').forEach(el => {
-    el.style.display = 'block';
-  });
-  document.querySelectorAll('.chevron').forEach(el => {
-    el.style.transform = 'rotate(180deg)';
-  });
 }
 
 function renderScraping(d) {
@@ -742,12 +629,8 @@ function renderDateMatrix(data) {
 
 async function refresh() {
   try {
-    const [scraping, cronData] = await Promise.all([
-      fetch('/api/internal/scraping').then(r => r.json()),
-      fetch('/api/internal/cron-jobs').then(r => r.json()),
-    ]);
+    const scraping = await fetch('/api/internal/scraping').then(r => r.json());
     renderScraping(scraping);
-    renderCronJobs(cronData);
   } catch(e) {
     console.error(e);
   }

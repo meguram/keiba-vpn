@@ -11,7 +11,9 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DISABLED="${PROJECT_DIR}/data/local/meta/rescrape/YIELD_DISABLED"
 if [ ! -e "$DISABLED" ] && pgrep -f "run_priority_rescrape.sh" >/dev/null 2>&1; then
   mkdir -p "${PROJECT_DIR}/logs"
-  echo "[$(TZ=Asia/Tokyo date -Is)] SKIP ${LABEL}: 優先処理(取り直し)が動いているため見送り" >>"${PROJECT_DIR}/logs/yield_skips.log"
+  MSG="[$(TZ=Asia/Tokyo date -Is)] SKIP ${LABEL}: 優先処理(取り直し)が動いているため見送り"
+  echo "$MSG" >>"${PROJECT_DIR}/logs/yield_skips.log"
+  echo "$MSG"       # 標準出力にも出す（cron_run.sh の記録に残り、監視ポータルで『見送り』と判別できる）
   exit 0
 fi
 exec "$@"

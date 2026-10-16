@@ -43,6 +43,8 @@ SYNC_PG="${PROJECT_DIR}/scripts/cron/sync_pg_from_gcs.sh"
 GUARD="${PROJECT_DIR}/scripts/cron/yield_to_rescrape.sh"
 EXPORT_DAILY="${PROJECT_DIR}/scripts/cron/export_tables_daily.sh"
 ENSURE_PG="${PROJECT_DIR}/scripts/server/ensure_postgres.sh"
+# 全ジョブの実行を記録する共通ラッパー（監視ポータルの cron 状態表示が読む）。job_id の規則は src/monitor/cron_status.py の derive_job_id と同じ
+CRON_RUN="${PROJECT_DIR}/scripts/cron/cron_run.sh"
 
 mkdir -p "$LOG_DIR"
 chmod +x "$RUNNER"     2>/dev/null || true
@@ -50,7 +52,7 @@ chmod +x "$WATCHDOG"   2>/dev/null || true
 chmod +x "$UPDATE_JT"  2>/dev/null || true
 chmod +x "$ROTATE_LOGS" 2>/dev/null || true
 chmod +x "$SYNC_PG" 2>/dev/null || true
-chmod +x "$GUARD" "$EXPORT_DAILY" "$ENSURE_PG" 2>/dev/null || true
+chmod +x "$GUARD" "$EXPORT_DAILY" "$ENSURE_PG" "$CRON_RUN" 2>/dev/null || true
 
 # -------------------------------------------------------------------
 # 削除対象タグ (全 keiba-vpn cron エントリをまとめて除去)
@@ -101,110 +103,110 @@ generate_cron() {
 PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin
 
 # ── サービス監視 (Watchdog) ─── UTC: 常時 / JST: 常時 ─────────── # KEIBA-VPN-ALL
-*/3 * * * * ${WATCHDOG} # KEIBA-VPN-WATCHDOG
-@reboot sleep 15 && ${WATCHDOG} # KEIBA-VPN-WATCHDOG
+*/3 * * * * bash ${CRON_RUN} server_watchdog -- ${WATCHDOG} # KEIBA-VPN-WATCHDOG
+@reboot sleep 15 && bash ${CRON_RUN} server_watchdog -- ${WATCHDOG} # KEIBA-VPN-WATCHDOG
 
 # ── ログローテーション ─────────── UTC: 19:30 / JST: 04:30 ──────── # KEIBA-VPN-ALL
-30 19 * * * TZ=Asia/Tokyo bash ${ROTATE_LOGS} >> ${LOG_DIR}/rotate_logs.log 2>&1 # KEIBA-VPN-WATCHDOG
+30 19 * * * TZ=Asia/Tokyo bash ${CRON_RUN} rotate_logs -- bash ${ROTATE_LOGS} >> ${LOG_DIR}/rotate_logs.log 2>&1 # KEIBA-VPN-WATCHDOG
 
 # ── SLA 0: 毎日 レース一覧 朝取り ─ UTC: 22:00 / JST: 07:00 ──── # KEIBA-VPN-ALL
-0 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} daily-race-lists -- bash ${RUNNER} ${PROJECT_DIR} daily-race-lists logs/daily_race_lists_am.log # KEIBA-VPN-ALL
+0 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} daily-race-lists -- bash ${GUARD} daily-race-lists -- bash ${RUNNER} ${PROJECT_DIR} daily-race-lists logs/daily_race_lists_am.log # KEIBA-VPN-ALL
 # ── SLA 0: 毎日 レース一覧 夕方 ─── UTC: 08:00 / JST: 17:00 ──── # KEIBA-VPN-ALL
-0 8 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} daily-race-lists -- bash ${RUNNER} ${PROJECT_DIR} daily-race-lists logs/daily_race_lists_pm.log # KEIBA-VPN-ALL
+0 8 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} daily-race-lists -- bash ${GUARD} daily-race-lists -- bash ${RUNNER} ${PROJECT_DIR} daily-race-lists logs/daily_race_lists_pm.log # KEIBA-VPN-ALL
 
 # ── ページ品質チェック ────────── UTC: 23:00 / JST: 08:00 ────────── # KEIBA-VPN-ALL
 # スクレイパーが各ページの期待スキーマを取得できるか毎朝確認する
-0 23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo ${PYTHON} -m src.monitor.page_quality_check >> ${LOG_DIR}/page_quality_check.log 2>&1 # KEIBA-VPN-ALL
+0 23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} page_quality_check -- ${PYTHON} -m src.monitor.page_quality_check >> ${LOG_DIR}/page_quality_check.log 2>&1 # KEIBA-VPN-ALL
 
 # ── SLA 2: JRA馬場情報 朝ポーリング UTC: 20:00-23:50 / JST: 05:00-08:50 # KEIBA-VPN-ALL
 # 開催日以外は自動スキップ
-*/10 20-23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} jra-baba-morning logs/jra_baba_morning.log # KEIBA-VPN-ALL
+*/10 20-23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} jra-baba-morning -- bash ${RUNNER} ${PROJECT_DIR} jra-baba-morning logs/jra_baba_morning.log # KEIBA-VPN-ALL
 
 # ── 騎手・調教師統計 ─────────── UTC: 20:30 / JST: 05:30 ────────── # KEIBA-VPN-ALL
-30 20 * * * ${UPDATE_JT} # KEIBA_JT_STATS
+30 20 * * * bash ${CRON_RUN} update_jockey_trainer_stats -- ${UPDATE_JT} # KEIBA_JT_STATS
 
 # ── SLA 3: 開催日ランナー ───────── UTC: 22:30 / JST: 07:30 ──────── # KEIBA-VPN-ALL
 # 常駐プロセス: 全レース終了まで内部ループで待機・実行
 # 非開催日は起動後数秒でスキップ終了
-30 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} raceday-runner logs/raceday_runner.log # KEIBA-VPN-ALL
+30 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} raceday-runner -- bash ${RUNNER} ${PROJECT_DIR} raceday-runner logs/raceday_runner.log # KEIBA-VPN-ALL
 
 # ── SLA 4: 速報結果ランナー ──────── UTC: 22:30 / JST: 07:30 ──────── # KEIBA-VPN-ALL
-30 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} raceday-result-runner logs/raceday_result_runner.log # KEIBA-VPN-ALL
+30 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} raceday-result-runner -- bash ${RUNNER} ${PROJECT_DIR} raceday-result-runner logs/raceday_result_runner.log # KEIBA-VPN-ALL
 
 # ── SLA 5: 開催日夕方 速報まとめ ── UTC: 08:30 / JST: 17:30 ──────── # KEIBA-VPN-ALL
-30 8 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} raceday-evening logs/raceday_evening.log # KEIBA-VPN-ALL
+30 8 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} raceday-evening -- bash ${RUNNER} ${PROJECT_DIR} raceday-evening logs/raceday_evening.log # KEIBA-VPN-ALL
 
 # ── SLA 6: 金曜週次更新 ─────────── UTC: 09:00 Fri / JST: 18:00 Fri # KEIBA-VPN-ALL
 # db.netkeiba 確定結果は金曜 16–17 時頃反映のため 18:00 実行
-0 9 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} weekly-update -- bash ${RUNNER} ${PROJECT_DIR} weekly-update logs/weekly_update.log # KEIBA-VPN-ALL
+0 9 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} weekly-update -- bash ${GUARD} weekly-update -- bash ${RUNNER} ${PROJECT_DIR} weekly-update logs/weekly_update.log # KEIBA-VPN-ALL
 
 # ── ローカル PostgreSQL の起動保証 ── 起動時 + 5分おき ───────────── # KEIBA_PG_ENSURE
 # コンテナ再起動で PostgreSQL が落ちたままになり、夜間の同期が接続拒否で失敗していた（2026-10-15）。止まっていれば起動する。
-@reboot sleep 20 && ${ENSURE_PG} # KEIBA_PG_ENSURE
-*/5 * * * * ${ENSURE_PG} # KEIBA_PG_ENSURE
+@reboot sleep 20 && bash ${CRON_RUN} ensure_postgres -- ${ENSURE_PG} # KEIBA_PG_ENSURE
+*/5 * * * * bash ${CRON_RUN} ensure_postgres -- ${ENSURE_PG} # KEIBA_PG_ENSURE
 
 # ── GCS → PostgreSQL 増分同期 ─── UTC: 15:00 / JST: 00:00 ───────── # KEIBA-VPN-ALL
 # 直近7日・PG充足済みは GCS download スキップ。開催日の即時反映はスクレイプ後フック担当。
-0 15 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${SYNC_PG} >> ${LOG_DIR}/sync_pg_from_gcs_nightly.log 2>&1 # KEIBA_PG_SYNC
+0 15 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} sync_pg_from_gcs -- bash ${SYNC_PG} >> ${LOG_DIR}/sync_pg_from_gcs_nightly.log 2>&1 # KEIBA_PG_SYNC
 
 # ── 厩舎コメント（レース前の厩舎の話）── UTC: 11:00 / 22:40 ── JST: 20:00 / 07:40 ─────── # KEIBA-VPN-ALL
 # 前日 16 時頃に公開される想定。20:00 は翌日、07:40 は当日が開催日のとき対象。コメントが出ていないレースは保存しない（翌朝に取り直す）。
-0 11 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} raceday-comment -- bash ${RUNNER} ${PROJECT_DIR} raceday-comment logs/raceday_comment.log # KEIBA-VPN-ALL
-40 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} raceday-comment -- bash ${RUNNER} ${PROJECT_DIR} raceday-comment logs/raceday_comment.log # KEIBA-VPN-ALL
+0 11 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} raceday-comment -- bash ${GUARD} raceday-comment -- bash ${RUNNER} ${PROJECT_DIR} raceday-comment logs/raceday_comment.log # KEIBA-VPN-ALL
+40 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} raceday-comment -- bash ${GUARD} raceday-comment -- bash ${RUNNER} ${PROJECT_DIR} raceday-comment logs/raceday_comment.log # KEIBA-VPN-ALL
 
 # ── 新馬（出走予定馬）の5世代血統 ───── UTC: 12:00 ── JST: 21:00 ─────── # KEIBA-VPN-ALL
 # 今後1週間の出走予定馬のうち血統テーブル(ped_tbl)が無い馬だけを取得（GCS + ローカルの5世代・10世代・ped_tbl）。無ければ何もしない。
-0 12 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} new-horse-pedigree -- bash ${RUNNER} ${PROJECT_DIR} new-horse-pedigree logs/new_horse_pedigree.log # KEIBA-VPN-ALL
+0 12 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} new-horse-pedigree -- bash ${GUARD} new-horse-pedigree -- bash ${RUNNER} ${PROJECT_DIR} new-horse-pedigree logs/new_horse_pedigree.log # KEIBA-VPN-ALL
 
 # ── 直近の開催日の未取得データ取り直し ── UTC: 21:10 / 10:40 / JST: 06:10 / 19:40 ── # KEIBA-VPN-ALL
 # 確定結果(race_result)・結果ラップ・タイム指数・厩舎コメントのうち未取得のものだけを、間隔を空けて最大30回まで試す。
 # backfill は深夜に 0 件で「完了」扱いにするため、レース翌日の結果を取りこぼしていた（2026-10-14 監査）。
-10 21 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} recent-retry -- bash ${RUNNER} ${PROJECT_DIR} recent-retry logs/recent_retry.log # KEIBA-VPN-ALL
-40 10 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} recent-retry -- bash ${RUNNER} ${PROJECT_DIR} recent-retry logs/recent_retry.log # KEIBA-VPN-ALL
+10 21 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} recent-retry -- bash ${GUARD} recent-retry -- bash ${RUNNER} ${PROJECT_DIR} recent-retry logs/recent_retry.log # KEIBA-VPN-ALL
+40 10 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} recent-retry -- bash ${GUARD} recent-retry -- bash ${RUNNER} ${PROJECT_DIR} recent-retry logs/recent_retry.log # KEIBA-VPN-ALL
 # ── 推論用の履歴テーブル更新 ─────── UTC: 22:00 / JST: 07:00 ─────── # KEIBA-VPN-ALL
 # 馬体重検知ランナーが読む race_result_flat 等を、当年分だけ増分エクスポートする（recent-retry の後）。
-0 22 * * * ${EXPORT_DAILY} ${PROJECT_DIR} # KEIBA-VPN-ALL
+0 22 * * * bash ${CRON_RUN} export_tables_daily -- ${EXPORT_DAILY} ${PROJECT_DIR} # KEIBA-VPN-ALL
 # ── 履歴特徴量の蓄積 ─────────── UTC: 22:40 / JST: 07:40 ─────── # KEIBA-VPN-ALL
 # 当年分の特徴量(127列)を確定結果から作り直して data/local/modeling/feature_store/ に置き、
 # 推論モードで保存した特徴量とのずれ(skew)を記録する。netkeiba には触れない。2026 年は学習に使わない。
-40 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} feature-accumulate logs/feature_accumulate.log # KEIBA-VPN-ALL
+40 22 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} feature-accumulate -- bash ${RUNNER} ${PROJECT_DIR} feature-accumulate logs/feature_accumulate.log # KEIBA-VPN-ALL
 # ── 馬体重の検知ランナー ───────── UTC: 23:00 / JST: 08:00 ─────── # KEIBA-VPN-ALL
 # 各R 発走65〜30分前に出馬表を取り直し、馬体重が揃ったら推論モードで特徴量を作る（予測は起動しない: mode=features）。
 # 非開催日は数秒でスキップ終了。手順: docs/operations/raceday_weight_trigger.md
-0 23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} raceday-weight-runner logs/raceday_weight_runner.log # KEIBA-VPN-ALL
+0 23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} raceday-weight-runner -- bash ${RUNNER} ${PROJECT_DIR} raceday-weight-runner logs/raceday_weight_runner.log # KEIBA-VPN-ALL
 # ── SLA 1: 前日夕方 出馬表・馬柱 ── UTC: 09:00 / JST: 18:00 ──────── # KEIBA-VPN-ALL
-0 9 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} raceday-eve logs/raceday_eve.log # KEIBA-VPN-RACEDAY-EVE
+0 9 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} raceday-eve -- bash ${RUNNER} ${PROJECT_DIR} raceday-eve logs/raceday_eve.log # KEIBA-VPN-RACEDAY-EVE
 
 # ── バロメーター取り直し ─────── UTC: 23:30 毎日 + 10:30 Fri / JST: 08:30 毎日 + 19:30 Fri ── # KEIBA-VPN-ALL
 # 公開は「レース翌週の金曜 18 時頃」。weekly-update(金 18:00) で取れなかった分を、公開済み・未取得のものだけ取り直す
 # （取得済み・障害レース・未公開は無リクエストでスキップ）。
-30 23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} barometer-retry -- bash ${RUNNER} ${PROJECT_DIR} barometer-retry logs/barometer_retry.log # KEIBA-VPN-ALL
-30 10 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} barometer-retry -- bash ${RUNNER} ${PROJECT_DIR} barometer-retry logs/barometer_retry.log # KEIBA-VPN-ALL
+30 23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} barometer-retry -- bash ${GUARD} barometer-retry -- bash ${RUNNER} ${PROJECT_DIR} barometer-retry logs/barometer_retry.log # KEIBA-VPN-ALL
+30 10 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} barometer-retry -- bash ${GUARD} barometer-retry -- bash ${RUNNER} ${PROJECT_DIR} barometer-retry logs/barometer_retry.log # KEIBA-VPN-ALL
 
 # ── 金曜 馬名インデックス ─────── UTC: 09:30 Fri / JST: 18:30 Fri ─── # KEIBA-VPN-ALL
 # weekly-update 開始後に実行（馬名リストは週次結果反映後）
-30 9 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${RUNNER} ${PROJECT_DIR} horse-name-index logs/horse_name_index.log # KEIBA-VPN-RACEDAY-EVE
+30 9 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} horse-name-index -- bash ${RUNNER} ${PROJECT_DIR} horse-name-index logs/horse_name_index.log # KEIBA-VPN-RACEDAY-EVE
 
 # ── 過去データ Backfill (深夜) ────────────────────────────────── # KEIBA-VPN-ALL
 # Phase fast: レース結果+出馬表
 # UTC: 15:00=JST:00:00 / 16:00=JST:01:00 / 17:00=JST:02:00 / 18:00=JST:03:00 / 19:00=JST:04:00
-0 15 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2026 --phase fast --max-dates 7 >> ${LOG_DIR}/backfill_2026.log 2>&1 # KEIBA_BACKFILL
-0 16 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2025 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2025.log 2>&1 # KEIBA_BACKFILL
-0 17 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2024 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2024.log 2>&1 # KEIBA_BACKFILL
-0 18 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2023 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2023.log 2>&1 # KEIBA_BACKFILL
-0 19 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2022 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2022.log 2>&1 # KEIBA_BACKFILL
+0 15 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} backfill-2026-fast -- bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2026 --phase fast --max-dates 7 >> ${LOG_DIR}/backfill_2026.log 2>&1 # KEIBA_BACKFILL
+0 16 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} backfill-2025-fast -- bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2025 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2025.log 2>&1 # KEIBA_BACKFILL
+0 17 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} backfill-2024-fast -- bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2024 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2024.log 2>&1 # KEIBA_BACKFILL
+0 18 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} backfill-2023-fast -- bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2023 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2023.log 2>&1 # KEIBA_BACKFILL
+0 19 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} backfill-2022-fast -- bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2022 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2022.log 2>&1 # KEIBA_BACKFILL
 # Phase horse: 馬情報一括   UTC: 21:00 / JST: 06:00
-0 21 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --phase horse >> ${LOG_DIR}/backfill_horse.log 2>&1 # KEIBA_BACKFILL
+0 21 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} backfill-all-horse -- bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --phase horse >> ${LOG_DIR}/backfill_horse.log 2>&1 # KEIBA_BACKFILL
 # Phase full: 補助データ (race_result_on_time 含む)  UTC: 22:50=JST:07:50 / 23:00=JST:08:00 / 00:00=JST:09:00
 # 2026 だけ元々 UTC 22:30(JST 07:30) だったが、SLA3/SLA4 (raceday-runner / raceday-result-runner) も
 # 同時刻にキック（T-070）されており、netkeiba への同時アクセスが増えアクセス制限の一因になり得るため
 # 20 分ずらす（2025/2024 は raceday-runner 自体の netkeiba アクセスが落ち着く時間帯のため現状維持）。
-50 22 * * *  cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2026 --phase full --max-dates 5 >> ${LOG_DIR}/backfill_full_2026.log 2>&1 # KEIBA_BACKFILL
-0 23 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2025 --phase full --max-dates 3 >> ${LOG_DIR}/backfill_full_2025.log 2>&1 # KEIBA_BACKFILL
-0  0 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2024 --phase full --max-dates 3 >> ${LOG_DIR}/backfill_full_2024.log 2>&1 # KEIBA_BACKFILL
+50 22 * * *  cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} backfill-2026-full -- bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2026 --phase full --max-dates 5 >> ${LOG_DIR}/backfill_full_2026.log 2>&1 # KEIBA_BACKFILL
+0 23 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} backfill-2025-full -- bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2025 --phase full --max-dates 3 >> ${LOG_DIR}/backfill_full_2025.log 2>&1 # KEIBA_BACKFILL
+0  0 * * *   cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} backfill-2024-full -- bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2024 --phase full --max-dates 3 >> ${LOG_DIR}/backfill_full_2024.log 2>&1 # KEIBA_BACKFILL
 # 古い年度: 週2回  UTC: 17:00=JST:02:00(月木) / 18:00=JST:03:00(火金)
-0 17 * * 1,4 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2021 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2021.log 2>&1 # KEIBA_BACKFILL
-0 18 * * 2,5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2020 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2020.log 2>&1 # KEIBA_BACKFILL
+0 17 * * 1,4 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} backfill-2021-fast -- bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2021 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2021.log 2>&1 # KEIBA_BACKFILL
+0 18 * * 2,5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} backfill-2020-fast -- bash ${GUARD} backfill -- ${PYTHON} -m src.scraper.backfill --year 2020 --phase fast --max-dates 5 >> ${LOG_DIR}/backfill_2020.log 2>&1 # KEIBA_BACKFILL
 # backfill ログは rotate_logs.sh (04:30 JST) で一括管理 # KEIBA_BACKFILL
 
 CRON_EOF

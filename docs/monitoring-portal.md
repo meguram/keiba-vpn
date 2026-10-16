@@ -21,7 +21,7 @@
 | 監視ポータル（本書） | 23900 | [ダッシュボード](http://127.0.0.1:23900/) | `127.0.0.1` のみ bind。要ログイン |
 | MLflow Tracking | 23130 | [http://127.0.0.1:23130/](http://127.0.0.1:23130/) | 既定ではオフ（`START_MLFLOW_LOCAL=true` で起動） |
 
-監視ポータルの各ページ: [ダッシュボード `/`](http://127.0.0.1:23900/) ・ [サービス `/services`](http://127.0.0.1:23900/services) ・ [スクレイピング `/scraping`](http://127.0.0.1:23900/scraping) ・ [データ `/data`](http://127.0.0.1:23900/data) ・ [システム `/system`](http://127.0.0.1:23900/system) ・ [ログ `/logs`](http://127.0.0.1:23900/logs) ・ [Git `/git`](http://127.0.0.1:23900/git) ・ [データストア `/data-stores`](http://127.0.0.1:23900/data-stores) ・ [仕様書 `/specs`](http://127.0.0.1:23900/specs)
+監視ポータルの各ページ: [ダッシュボード `/`](http://127.0.0.1:23900/) ・ [サービス `/services`](http://127.0.0.1:23900/services) ・ [スクレイピング `/scraping`](http://127.0.0.1:23900/scraping) ・ [Cron `/cron`](http://127.0.0.1:23900/cron) ・ [データ `/data`](http://127.0.0.1:23900/data) ・ [システム `/system`](http://127.0.0.1:23900/system) ・ [ログ `/logs`](http://127.0.0.1:23900/logs) ・ [Git `/git`](http://127.0.0.1:23900/git) ・ [データストア `/data-stores`](http://127.0.0.1:23900/data-stores) ・ [仕様書 `/specs`](http://127.0.0.1:23900/specs)
 
 ### stg / prod（該当環境で起動したときのみ有効）
 
@@ -100,6 +100,20 @@ Monitor App :23900         （スタンドアロン Flask）
 | レスポンスタイム（ms） | curl タイミング |
 | FastAPI uptime / keiba_env | FastAPI `/api/health` レスポンス本文 |
 | Flask version / environment | Flask `/api/v1/health` レスポンス本文 |
+
+### 4.2b Cron `/cron`
+
+全 cron ジョブについて、**状態（待機中／実行中）・次回予定・最終実行・結果（成功／警告／失敗／見送り）・失敗の原因**を表示する（30 秒ごとに自動更新。行を押すと内容・保存先・直近の出力・直近の失敗が開く）。
+
+| 表示項目 | データ源 |
+|----------|---------|
+| ジョブ一覧・スケジュール | 実際の crontab（`crontab -l`）。名前・説明は `src/scripts/docs/build_cron_schedule_html.py` の `JOBS` |
+| 実行中／待機中 | `data/local/meta/cron_runs/<job_id>.running`（pid の生死）。記録の無いジョブは `ps` |
+| 最終実行・結果 | `cron_runs/<job_id>.tsv`（`scripts/cron/cron_run.sh` が cron の各行を包んで記録）。無ければログの START/END 行、それも無ければログの更新時刻のみ（結果は「記録なし」） |
+| 失敗・警告・見送りの原因 | 出力の末尾と終了コードを `src/monitor/cron_failure_patterns.py` の辞書と照合（原因・直し方のヒント付き）。辞書に無い失敗は「原因を自動判別できません」＋最後のエラー行 |
+
+- 新しい失敗パターンを見つけたら、辞書（`cron_failure_patterns.py`）に足す（テストは `tests/monitor/test_cron_failure_patterns.py`）。
+- 実行記録を残すには cron の行を `cron_run.sh` 経由にする（`scripts/cron/setup_all_cron.sh install` で登録される）。API は `GET /api/internal/cron-status`。
 
 ### 4.3 スクレイピング `/scraping`
 
@@ -182,6 +196,7 @@ src/monitor/
     dashboard.html     # / ダッシュボード
     services.html      # /services
     scraping.html      # /scraping
+    cron.html          # /cron 定期ジョブの状態
     data.html          # /data
     system.html        # /system
     logs.html          # /logs
@@ -261,7 +276,7 @@ bash scripts/server/service_start.sh --env stg --monitor
 | `GET /api/internal/scraping` | スクレイピング詳細（キュー + カバレッジ）|
 | `GET /api/internal/coverage/month?year=&month=` | 年月指定のカレンダーデータ（日別ステータス）|
 | `GET /api/internal/coverage/date-matrix?date=YYYYMMDD` | 指定日の race×category カバレッジマトリクス（FastAPI `/api/date-race-matrix` を中継）|
-| `GET /api/internal/cron-jobs` | 各定期ジョブ（cron）の最終成功日時・次回予定 |
+| `GET /api/internal/cron-status` | 全 cron ジョブの状態（待機中/実行中）・次回予定・最終実行・結果（成功/警告/失敗/見送り）・失敗の原因（`src/monitor/cron_failure_patterns.py` の辞書で判別）。画面は `/cron` |
 | `GET /api/internal/page-quality?date=YYYY-MM-DD` | ページ品質チェック結果（省略時は最新）|
 | `POST /api/internal/page-quality/run` | ページ品質チェックをオンデマンド実行 |
 | `GET /api/internal/data-stores` | PostgreSQL / SQLite / Parquet データストア状態（`/data-stores` ページ用）|
