@@ -40,6 +40,12 @@ def trigger_mode() -> str:
     return m if m in ("features", "predict") else "features"
 
 
+def v3_mode() -> str:
+    """off: 使わない / shadow: 予測をローカルに残すだけ（画面・GCS には出さない） / predict: 予測を保存して画面・API に出す。"""
+    m = (os.environ.get("KEIBA_V3_SERVING") or "off").strip().lower()
+    return m if m in ("off", "shadow", "predict") else "off"
+
+
 class InferenceContext:
     """履歴と補修表を保持する。ランナーの起動時に ``warm()`` で読み、以降は特徴量の計算だけを行う。"""
 
@@ -51,6 +57,7 @@ class InferenceContext:
         self.repair_map: pl.DataFrame | None = None
         self.history_last_date: str | None = None
         self.graded_names: dict[str, str] = {}
+        self.v3 = None
 
     def engine(self) -> str:
         """bundle: 出走馬の履歴だけを読む（小さなメモリで動く）。full: 全履歴から作る。auto: バンドルがあれば bundle。"""
@@ -66,6 +73,19 @@ class InferenceContext:
         return "full"
 
     def warm(self) -> dict:
+        info = self._warm_history()
+        if v3_mode() != "off":
+            try:
+                from src.pipeline.inference.v3_serving import V3Serving
+
+                self.v3 = V3Serving()
+                info["v3"] = self.v3.warm()
+            except Exception as exc:  # v3 が使えなくても履歴系の特徴量づくりは続ける
+                logger.exception("v3 の準備に失敗: %s", exc)
+                self.v3, info["v3"] = None, {"error": str(exc)}
+        return info
+
+    def _warm_history(self) -> dict:
         t0 = time.perf_counter()
         self.bundle = None
         if self.engine() == "bundle":
@@ -197,6 +217,16 @@ def run_for_races(
             logger.info("[weight-trigger] 馬体重のない馬を除外: %s", dropped)
             card = card.filter(~no_weight)
         F, info = ctx.build(card)
+        v3p, v3_err, v3_sec = {}, None, 0.0
+        if getattr(ctx, "v3", None) is not None:
+            try:
+                t_v3 = time.perf_counter()
+                P = ctx.v3.predict(ctx.v3.features(card, F, storage))
+                v3p = {k: g for k, g in P.groupby("race_id")}
+                v3_sec = time.perf_counter() - t_v3
+            except Exception as exc:
+                logger.exception("v3 の予測に失敗: %s", ids)
+                v3_err = str(exc)
     except Exception as exc:
         logger.exception("特徴量の作成に失敗: %s", ids)
         for r in races:
@@ -225,7 +255,26 @@ def run_for_races(
             "going_known": info["going_known"], "build_sec": info["build_sec"], "batch_races": info["races"], "engine": info.get("engine", "full"),
             "history_last_date": ctx.history_last_date, "dropped_no_weight": int(dropped.get(rid, 0)),
         }
-        if mode == "predict":
+        if getattr(ctx, "v3", None) is not None:
+            ev["v3_status"] = "error" if v3_err else ("ok" if rid in v3p else "missing")
+            if v3_err:
+                ev["v3_error"] = v3_err
+            elif rid in v3p:
+                v_dir = inference_dir() / "predictions_v3" / day
+                v_dir.mkdir(parents=True, exist_ok=True)
+                v3p[rid].to_parquet(v_dir / f"{rid}.parquet", index=False)
+                ev["v3_sec"] = round(v3_sec, 1)
+                if v3_mode() == "predict":
+                    try:
+                        from src.pipeline.inference.race_day_workflow import v3_payload
+                        from src.pipeline.inference.race_prediction_service import save_cached
+
+                        payload = v3_payload(rid, storage, v3p[rid], model_version=ctx.v3.bundle_dir.name, source="weight_t60", elapsed=v3_sec)
+                        ev["v3_persisted"] = bool(save_cached(storage, rid, payload, source="weight_t60"))
+                    except Exception as exc:
+                        logger.exception("v3 の予測の保存に失敗: %s", rid)
+                        ev["v3_status"], ev["v3_error"] = "error", str(exc)
+        if mode == "predict" and not (v3_mode() == "predict" and ev.get("v3_persisted")):
             try:
                 from src.pipeline.inference.race_day_workflow import predict_race
 

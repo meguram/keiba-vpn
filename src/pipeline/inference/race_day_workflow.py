@@ -156,6 +156,29 @@ def predict_race(race_id: str, storage, *, builder=None, predictor=None, source:
     return payload
 
 
+def v3_payload(race_id: str, storage, probs, *, model_version: str, source: str, elapsed: float = 0.0) -> dict:
+    """アンサンブル v3 の確率（race_id・horse_id・p_win・p_top2・p_top3 の表）を、``predict_race`` と同じ形の保存用 dict にする。"""
+    card = storage.load("race_shutuba", race_id) or {}
+    names = {str(e.get("horse_id") or ""): e for e in (card.get("entries") or [])}
+    df = probs.sort_values("p_win", ascending=False).reset_index(drop=True)
+    preds = []
+    for i, r in df.iterrows():
+        e = names.get(str(r["horse_id"]), {})
+        pw = float(r["p_win"])
+        preds.append({
+            "pred_rank": i + 1, "horse_number": int(e.get("horse_number") or 0), "horse_name": e.get("horse_name", ""), "horse_id": str(r["horse_id"]),
+            "pred_score": round(float(np.log(max(pw, 1e-9) / max(1 - pw, 1e-9))), 4), "normalized_score": round(pw, 4),
+            "win_prob": round(pw, 4), "place_prob": round(float(r["p_top2"]), 4), "show_prob": round(float(r["p_top3"]), 4),
+        })
+    return {
+        "race_id": race_id, "race_name": card.get("race_name", ""), "venue": card.get("venue", ""), "round": card.get("round", 0),
+        "surface": card.get("surface", ""), "distance": card.get("distance", 0), "track_condition": card.get("track_condition", ""),
+        "status": "success", "model_type": "ensemble_v3", "model_version": model_version, "feature_builder": "v3_serving",
+        "feature_count": 301, "total_horses": len(df), "elapsed_sec": round(elapsed, 2), "predictions": preds,
+        "_compute_meta": {"source": source, "elapsed_sec": round(elapsed, 2)},
+    }
+
+
 # ── 発走時刻表 ─────────────────────────────────────────
 
 

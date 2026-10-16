@@ -73,6 +73,57 @@ def test_run_for_races_writes_features_and_events(env, tmp_path, monkeypatch):
     assert len(lines) == len(sh) and all(json.loads(l)["weights_known"] for l in lines)
 
 
+class _FakeV3:
+    bundle_dir = type("P", (), {"name": "fake"})()
+
+    def __init__(self, fail=False):
+        self.fail = fail
+
+    def features(self, card, F, storage):
+        if self.fail:
+            raise RuntimeError("boom")
+        return F.select("race_id", "horse_id").to_pandas()
+
+    def predict(self, X):
+        out = X[["race_id", "horse_id"]].copy()
+        out["p_win"], out["p_top2"], out["p_top3"] = 0.1, 0.2, 0.3
+        return out
+
+
+def test_v3_shadow_writes_predictions_only_and_failure_does_not_break_features(env, tmp_path, monkeypatch):
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    monkeypatch.setenv("KEIBA_V3_SERVING", "shadow")
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    ctx.v3 = _FakeV3()
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    ymd = day.replace("-", "")
+    assert all(e["status"] == "ok" and e["v3_status"] == "ok" for e in evs)
+    for rid in sh:
+        v = pl.read_parquet(tmp_path / "inf" / "predictions_v3" / ymd / f"{rid}.parquet")
+        assert v.height == len(sh[rid]["entries"]) and {"p_win", "p_top2", "p_top3"} <= set(v.columns)
+    ctx.v3 = _FakeV3(fail=True)
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    assert all(e["status"] == "ok" and e["v3_status"] == "error" and "boom" in e["v3_error"] for e in evs)
+
+
+def test_v3_payload_has_prediction_fields():
+    import pandas as pd
+
+    from src.pipeline.inference.race_day_workflow import v3_payload
+
+    class St:
+        def load(self, cat, key, **kw):
+            return {"race_name": "R", "entries": [{"horse_id": "a", "horse_number": 1, "horse_name": "A"}, {"horse_id": "b", "horse_number": 2, "horse_name": "B"}]}
+
+    P = pd.DataFrame({"race_id": ["x", "x"], "horse_id": ["a", "b"], "p_win": [0.3, 0.7], "p_top2": [0.5, 1.0], "p_top3": [0.8, 0.9]})
+    out = v3_payload("x", St(), P, model_version="v", source="s")
+    assert out["predictions"][0]["horse_id"] == "b" and out["predictions"][0]["pred_rank"] == 1
+    assert out["predictions"][0]["win_prob"] == 0.7 and out["predictions"][1]["horse_number"] == 1 and out["status"] == "success"
+
+
 def test_missing_card_is_reported_as_error_not_raised(env, tmp_path, monkeypatch):
     tables, la, _ = env
     monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
