@@ -4,64 +4,65 @@
 {% block content %}
 <div class="page-title"><span class="icon">🔌</span> サービス詳細</div>
 
-<div class="card" id="svc-detail">
-  <span class="loading">読込中...</span>
-</div>
+<div id="svc-detail"><span class="loading">読込中...</span></div>
 
 <p class="last-updated">最終更新: <span id="last-ts">—</span>（30秒ごと自動更新）</p>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function pct(a, b) { return b > 0 ? Math.round(a / b * 100) : 0; }
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SVCS = [['next', 'Next.js（画面）'], ['flask', 'Flask（API）'], ['fastapi', 'FastAPI'], ['mlflow', 'MLflow']];
+const portOf = url => (String(url || '').match(/:(\d+)/) || [])[1] || '—';
+
+function svcRow(env, key, label) {
+  const s = env[key];
+  if (!s) return '';
+  let badge;
+  if (s.ok) badge = '<span class="badge badge-ok">✅ 稼働中</span>';
+  else if (env.is_local) badge = '<span class="badge badge-error">❌ 停止</span>';
+  else badge = '<span class="badge badge-muted">— 未起動（この環境は別のマシンで動かす）</span>';
+  const ms = s.elapsed_ms >= 0 ? `${s.elapsed_ms} ms` : '—';
+  const b = s.body || {};
+  let detail = '';
+  if (key === 'fastapi' && b.uptime_seconds != null) {
+    const up = Math.floor(b.uptime_seconds), h = Math.floor(up / 3600), m = Math.floor((up % 3600) / 60);
+    detail = `環境 ${esc(b.keiba_env || '—')}・起動 ${h}h ${m}m・GCS ${esc(b.gcs_bucket || '—')}`;
+  } else if (key === 'flask' && b.version != null) {
+    detail = `バージョン ${esc(b.version)}・環境 ${esc(b.environment || '—')}`;
+  }
+  return `<tr><td style="white-space:nowrap">${esc(label)}</td><td style="color:var(--muted)">:${portOf(s.url)}</td><td>${badge}</td>` +
+    `<td style="color:var(--muted);font-size:12px;white-space:nowrap">HTTP ${s.status || '—'}・${ms}</td><td style="color:var(--muted);font-size:12px">${detail}</td></tr>`;
+}
+
+function envCard(env) {
+  if (!env) return '';
+  const rows = SVCS.map(([k, l]) => svcRow(env, k, l)).join('');
+  const where = env.is_local
+    ? '<span class="badge badge-info">このマシンの環境（ここで動かす）</span>'
+    : '<span class="badge badge-muted">別のマシンの環境（ここでは動かさない）</span>';
+  const db = env.db && env.db.ok === true ? '<span class="badge badge-ok">PostgreSQL 接続OK</span>'
+    : env.db && env.db.ok === false ? `<span class="badge ${env.is_local ? 'badge-error' : 'badge-muted'}">PostgreSQL 接続不可</span>`
+    : '<span class="badge badge-muted">DB チェック対象外（モック）</span>';
+  const pub = env.public_url ? `<a href="${esc(env.public_url)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px">${esc(env.public_url)}</a>` : '';
+  const mdm = env.model_data_mode && env.model_data_mode.predictions ? `予測データ: ${esc(env.model_data_mode.predictions.mode)}` : '';
+  return `<div class="card" style="border-left:4px solid ${esc(env.color)}">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+      <span style="font-size:17px;font-weight:700;color:${esc(env.color)}">${esc(env.label)}</span>${where}${db}
+      <span style="margin-left:auto">${pub}</span></div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">${rows}</table>
+    ${mdm ? `<div style="margin-top:8px;font-size:12px;color:var(--muted)">${mdm}</div>` : ''}
+  </div>`;
+}
 
 function renderSvc(d) {
-  const svcs = [
-    { key: 'fastapi', label: 'FastAPI', port: {{ ports.fastapi }}, color: '#58a6ff' },
-    { key: 'flask',   label: 'Flask',   port: {{ ports.flask }}, color: '#3fb950' },
-    { key: 'nextjs',  label: 'Next.js', port: {{ ports.frontend }}, color: '#bc8cff' },
-  ];
-
-  let html = '<div class="grid grid-3">';
-  for (const s of svcs) {
-    const info = d.services[s.key];
-    const ok = info.ok;
-    const statusBadge = ok
-      ? '<span class="badge badge-ok">✅ 稼働中</span>'
-      : '<span class="badge badge-error">❌ 停止</span>';
-    const ms = info.elapsed_ms >= 0 ? `${info.elapsed_ms} ms` : '—';
-    const body = info.body || {};
-
-    let detail = '';
-    if (s.key === 'fastapi' && body.uptime_seconds != null) {
-      const up = Math.floor(body.uptime_seconds);
-      const h = Math.floor(up / 3600), m = Math.floor((up % 3600) / 60);
-      detail = `<div style="margin-top:10px;font-size:12px;color:var(--muted)">
-        <div>環境: <span class="text-accent">${body.keiba_env || '—'}</span></div>
-        <div>起動時間: ${h}h ${m}m</div>
-        <div>GCS: ${body.gcs_bucket || '—'}</div>
-      </div>`;
-    } else if (s.key === 'flask' && body.version != null) {
-      detail = `<div style="margin-top:10px;font-size:12px;color:var(--muted)">
-        <div>バージョン: <span class="text-accent">${body.version}</span></div>
-        <div>環境: ${body.environment || '—'}</div>
-      </div>`;
-    }
-
-    html += `
-      <div style="border-left:3px solid ${s.color};padding-left:14px">
-        <div style="font-size:16px;font-weight:700;margin-bottom:4px">${s.label}</div>
-        <div style="color:var(--muted);font-size:12px;margin-bottom:10px">:${s.port}</div>
-        ${statusBadge}
-        <div style="margin-top:8px;font-size:12px;color:var(--muted)">
-          <span>HTTP ${info.status || '—'}</span>
-          <span style="margin-left:12px">応答 ${ms}</span>
-        </div>
-        ${detail}
-      </div>`;
-  }
-  html += '</div>';
-  document.getElementById('svc-detail').innerHTML = html;
+  const order = ['dev', 'stg', 'prod'];
+  const envs = d.envs || {};
+  const local = d.local_env;
+  const sorted = [local, ...order.filter(k => k !== local)].filter(k => envs[k]);       // このマシンの環境を先頭に
+  document.getElementById('svc-detail').innerHTML =
+    `<p style="margin:0 0 12px;color:var(--muted);font-size:12.5px">環境（dev / stg / prod）ごとに表示。<b>このマシンの環境</b>のサーバが止まっていれば異常（赤）。ほかの環境のサーバは別のマシンで動くので、ここで止まっていても異常ではありません（グレー）。</p>` +
+    sorted.map(k => envCard(envs[k])).join('');
   document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
 }
 
@@ -69,7 +70,7 @@ async function refresh() {
   try {
     const d = await fetch('/api/internal/status').then(r => r.json());
     renderSvc(d);
-  } catch(e) {
+  } catch (e) {
     document.getElementById('svc-detail').innerHTML = '<span class="text-error">取得失敗</span>';
   }
 }

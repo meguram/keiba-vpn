@@ -60,6 +60,7 @@ ENV_CONFIGS = {
         "next_url": _local_url("frontend", "dev"),
         "flask_url": _local_url("flask", "dev"),
         "fastapi_url": _local_url("fastapi", "dev"),
+        "mlflow_url": _local_url("mlflow", "dev"),
         "public_url": "https://meguai-dev.tcpexposer.com/",
         "color": "#58a6ff",
         # dev は NEXT_PUBLIC_MOCK=true のためフロントがAPIを呼ばない。DB接続チェック対象外。
@@ -71,6 +72,7 @@ ENV_CONFIGS = {
         "next_url": _local_url("frontend", "stg"),
         "flask_url": _local_url("flask", "stg"),
         "fastapi_url": _local_url("fastapi", "stg"),
+        "mlflow_url": _local_url("mlflow", "stg"),
         "public_url": "https://meguai-stg.tcpexposer.com/",
         "color": "#3fb950",
         # stg はネイティブ PostgreSQL :5432 / DB=keiba_db_stg（scripts/server/setup_stg.sh 参照）
@@ -85,6 +87,7 @@ ENV_CONFIGS = {
         "next_url": _local_url("frontend", "prod"),
         "flask_url": _local_url("flask", "prod"),
         "fastapi_url": _local_url("fastapi", "prod"),
+        "mlflow_url": _local_url("mlflow", "prod"),
         "public_url": None,
         "color": "#d29922",
         "db_url": os.environ.get("PROD_DATABASE_URL", _SHARED_DB_URL),
@@ -321,23 +324,28 @@ def _check_env(env_key: str) -> dict:
     cfg = ENV_CONFIGS[env_key]
     next_code, _, next_ms = _http_get(cfg["next_url"])
     flask_code, flask_body, flask_ms = _http_get(f"{cfg['flask_url']}/api/v1/health")
+    fastapi_code, fastapi_body, fastapi_ms = _http_get(f"{cfg['fastapi_url']}/api/health")
+    mlflow_code, _, mlflow_ms = _http_get(cfg["mlflow_url"])
     is_mock = cfg.get("mock_frontend", False)
     if is_mock:
         db_result = {"ok": None, "mock": True}  # ok=None → モック構成（チェック対象外）
     else:
         db_result = _db_ping(cfg.get("db_url") or "")
-    all_ok = next_code in (200, 304) and flask_code == 200
+    all_ok = next_code in (200, 304) and flask_code == 200 and fastapi_code == 200
 
     # stg/prod のみモデルデータモードをチェック（dev はフロントモックなので省略）
     model_data_mode: dict | None = None
     if env_key in ("stg", "prod") and not is_mock:
         try:
-            model_data_mode = _check_model_data_mode(FASTAPI_URL)
+            model_data_mode = _check_model_data_mode(cfg["fastapi_url"])
         except Exception:
             model_data_mode = None
 
+    from src.config.deployment import keiba_env
+
     return {
         "env": env_key,
+        "is_local": env_key == keiba_env(),     # この監視サーバが動いているマシンの環境（他の環境のサーバは別のマシンで動くので、停止は異常ではない）
         "label": cfg["label"],
         "color": cfg["color"],
         "public_url": cfg["public_url"],
@@ -355,6 +363,19 @@ def _check_env(env_key: str) -> dict:
             "elapsed_ms": flask_ms,
             "body": flask_body,
         },
+        "fastapi": {
+            "url": cfg["fastapi_url"],
+            "status": fastapi_code,
+            "ok": fastapi_code == 200,
+            "elapsed_ms": fastapi_ms,
+            "body": fastapi_body,
+        },
+        "mlflow": {
+            "url": cfg["mlflow_url"],
+            "status": mlflow_code,
+            "ok": mlflow_code == 200,
+            "elapsed_ms": mlflow_ms,
+        },
         "db": db_result,
         "all_ok": all_ok,
         "model_data_mode": model_data_mode,
@@ -369,6 +390,8 @@ def internal_status():
 
     # 全環境チェック（並列化せず順次、タイムアウト 5s × 3env × 2svc = max 30s だが通常即応）
     envs = {key: _check_env(key) for key in ("dev", "stg", "prod")}
+    from src.config.deployment import keiba_env
+    local_env = keiba_env() if keiba_env() in envs else "stg"
 
     # スクレイピングキュー概要
     queue_summary: dict = {}
@@ -398,10 +421,11 @@ def internal_status():
                     "elapsed_ms": fastapi_ms,
                     "body": fastapi_body,
                 },
-                # 後方互換のため旧 flask/nextjs キーも残す（dev 値）
-                "flask": envs["dev"]["flask"],
-                "nextjs": envs["dev"]["next"],
+                # 後方互換のため旧 flask/nextjs キーも残す（このマシンの環境の値。以前は dev 固定で、stg のホストで常に「停止」と出ていた）
+                "flask": envs[local_env]["flask"],
+                "nextjs": envs[local_env]["next"],
             },
+            "local_env": local_env,
             "envs": envs,
             "queue": queue_summary,
             "git_head": git_head,
