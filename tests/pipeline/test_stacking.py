@@ -51,6 +51,29 @@ class StackingTest(unittest.TestCase):
         self.assertEqual(len(P["win"]), len(race))
         self.assertTrue(np.isfinite(P["win"]).all())
 
+    def test_clogit_meta_better_than_worst_member(self):
+        race, years, Z, Y = self._data()
+        Zt = {t: Z for t in st.TOT}
+        P = st.loyo_clogit_meta(Zt, Y, years, race)
+        import pandas as pd
+        from src.pipeline.models import win_models as wm
+        np.testing.assert_allclose(pd.Series(P["win"]).groupby(race).sum().to_numpy(), 1.0, atol=1e-6)
+        worst = max(wm.binary_logloss(wm.softmax_by_race(race, Z[:, j]), Y["win"]) for j in range(2))
+        self.assertLess(wm.binary_logloss(P["win"], Y["win"]), worst)
+        Pc = st.loyo_clogit_meta(Zt, Y, years, race, cross=True)
+        self.assertEqual(len(Pc["top3"]), len(race))
+
+    def test_fit_clogit_recovers_weights(self):
+        rng = np.random.default_rng(0)
+        R, n = 800, 8
+        F = rng.normal(size=(R * n, 2))
+        race = np.repeat(np.arange(R), n).astype(str)
+        true = np.array([1.5, -0.5])
+        s = (F @ true).reshape(R, n) + rng.gumbel(size=(R, n))
+        y = np.zeros((R, n)); y[np.arange(R), s.argmax(1)] = 1
+        w = st.fit_clogit(F, race, y.ravel())
+        self.assertLess(np.abs(w - true).max(), 0.25)
+
     def test_logit_mean(self):
         race = np.repeat(np.arange(4), 6).astype(str)
         p = np.tile(np.array([0.4, 0.2, 0.1, 0.1, 0.1, 0.1]), 4)

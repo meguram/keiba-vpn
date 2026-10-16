@@ -70,3 +70,59 @@ def loyo_nn_meta(Fall: pd.DataFrame, Y: dict, years: np.ndarray, race: np.ndarra
 def logit_mean(parts: list[np.ndarray], race: np.ndarray, total: float) -> np.ndarray:
     z = np.mean([en.logit(np.clip(p, 1e-6, 1 - 1e-6)) for p in parts], axis=0)
     return wm.normalize_to_total(race, en.sigmoid(z), total)
+
+
+def _pad_features(F: np.ndarray, race: np.ndarray):
+    codes, uniq = pd.factorize(race)
+    n_max = int(np.bincount(codes).max())
+    pos = pd.Series(codes).groupby(codes).cumcount().to_numpy()
+    A = np.zeros((len(uniq), n_max, F.shape[1]))
+    M = np.zeros((len(uniq), n_max), bool)
+    A[codes, pos] = F
+    M[codes, pos] = True
+    return A, M, codes, pos
+
+
+def fit_clogit(F: np.ndarray, race: np.ndarray, y_win: np.ndarray, l2: float = 1e-3) -> np.ndarray:
+    """条件付きロジット（レース内 softmax）の重みを学習する。重みの符号・合計に制約なし（温度は重みの大きさに吸収される）。勝ち馬がちょうど 1 頭のレースだけ使う。"""
+    from scipy.optimize import minimize
+
+    A, M, codes, pos = _pad_features(F, race)
+    Wn = np.zeros(M.shape, bool)
+    Wn[codes, pos] = y_win > 0.5
+    ok = Wn.sum(1) == 1
+    A, M, Wn = A[ok], M[ok], Wn[ok]
+    K = A.shape[2]
+    Aw = (A * Wn[..., None]).sum(1)
+
+    def f(w):
+        s = np.where(M, A @ w, -np.inf)
+        mx = s.max(1, keepdims=True)
+        e = np.exp(s - mx)
+        z = e.sum(1, keepdims=True)
+        p = e / z
+        nll = -((np.where(Wn, s, 0.0).sum(1)) - (mx[:, 0] + np.log(z[:, 0]))).mean() + 0.5 * l2 * (w ** 2).sum()
+        g = -(Aw - (p[..., None] * A).sum(1)).mean(0) + l2 * w
+        return nll, g
+
+    r = minimize(f, np.full(K, 1.0 / K), jac=True, method="L-BFGS-B")
+    return r.x
+
+
+def loyo_clogit_meta(Zt: dict[str, np.ndarray], Y: dict, years: np.ndarray, race: np.ndarray, cross: bool = False, C: float = 1.0) -> dict[str, np.ndarray]:
+    """L2 = 勝率は条件付きロジット（レース内 softmax、重み自由）、連対率・複勝率は切片つきロジスティック回帰（cross=True なら 3 つの目的の logit を全部入力にする）。"""
+    from sklearn.linear_model import LogisticRegression
+
+    out = {t: np.zeros(len(years)) for t in TOT}
+    allZ = np.concatenate([Zt[t] for t in TOT], axis=1)
+    for y in np.unique(years):
+        tr, te = years != y, years == y
+        Fw = allZ if cross else Zt["win"]
+        w = fit_clogit(Fw[tr], race[tr], Y["win"][tr])
+        pw = wm.softmax_by_race(race[te], Fw[te] @ w)
+        out["win"][te] = pw
+        for t in ("top2", "top3"):
+            Ft = allZ if cross else Zt[t]
+            lr = LogisticRegression(C=C, max_iter=500).fit(Ft[tr], Y[t][tr])
+            out[t][te] = lr.predict_proba(Ft[te])[:, 1]
+    return {t: wm.normalize_to_total(race, np.clip(out[t], 1e-6, 1 - 1e-6), TOT[t]) for t in TOT}

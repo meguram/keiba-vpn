@@ -131,8 +131,8 @@ def _pad_races(race_ids: np.ndarray, *arrays: np.ndarray, max_n: int = 18):
 def nn_fit_predict(X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, X_va: pd.DataFrame, race_va: np.ndarray, seed: int = 0,
                    hidden: Sequence[int] = (256, 128), epochs: int = 14, lr: float = 2e-3, wd: float = 1e-4, dropout: float = 0.15,
                    batch_races: int = 128, device: str | None = None, id_cols: Sequence[str] = (), id_dim: int = 16, min_count: int = 30,
-                   attn_layers: int = 0, attn_dim: int = 64) -> dict:
-    """レース単位の NN。馬ごとの MLP の出力を、同レースの平均（文脈）と連結してスコアを出す。
+                   attn_layers: int = 0, attn_dim: int = 64, tabm_k: int = 0, noise: float = 0.0) -> dict:
+    """レース単位の NN。tabm_k > 0 なら TabM-mini（入力側の乗算アダプタだけを k 本持ち、残りの重みを共有する暗黙のアンサンブル。各メンバーを独立に学習し、平均で予測）。noise > 0 は学習時の入力ガウスノイズ。馬ごとの MLP の出力を、同レースの平均（文脈）と連結してスコアを出す。
     損失 = 勝ち馬の listwise softmax 交差エントロピー + p_top2・p_top3 の BCE。hidden=() で線形（条件付きロジット + BCE）。"""
     import torch
     import torch.nn as nn
@@ -167,15 +167,33 @@ def nn_fit_predict(X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, X_va: pd
                 d = attn_dim
             self.d = d
             self.head = nn.Linear(d * 2, 3)
+            if tabm_k > 0:
+                assert attn_layers == 0, "TabM-mini は注意層と併用しない"
+                self.r = nn.Parameter(torch.sign(torch.randn(tabm_k, d_in)))           # 入力側の乗算アダプタ（ランダム符号で初期化）
+                self.hw = nn.Parameter(torch.randn(tabm_k, d * 2, 3) / np.sqrt(d * 2))   # メンバーごとの出力ヘッド
+                self.hb = nn.Parameter(torch.zeros(tabm_k, 3))
 
         def forward(self, z, c, mask):
             e = [emb(c[..., i]) for i, emb in enumerate(self.embs)]
+            if tabm_k > 0:
+                x = torch.cat([z] + e, dim=-1).unsqueeze(2) * self.r           # (R, n, k, d_in)
+                h = self.body(x)                                                 # (R, n, k, h)
+                m4 = mask[..., None, None].float()
+                ctx = (h * m4).sum(1, keepdim=True) / m4.sum(1, keepdim=True).clamp(min=1)
+                return torch.einsum("rnkd,kdo->rnko", torch.cat([h, ctx.expand_as(h)], dim=-1), self.hw) + self.hb      # (R, n, k, 3)
             h = self.body(torch.cat([z] + e, dim=-1))
             if self.attn is not None:
                 h = self.attn(self.proj(h), src_key_padding_mask=~mask)      # 同じレースの馬どうしで注意（パディングは無視）
             m = mask.unsqueeze(-1).float()
             ctx = (h * m).sum(1, keepdim=True) / m.sum(1, keepdim=True).clamp(min=1)
             return self.head(torch.cat([h, ctx.expand_as(h)], dim=-1))     # (R, n, 3): win score, top2 logit, top3 logit
+
+    def reduce_tabm(out, mask):
+        """(R, n, k, 3) → (R, n, 3): 勝ち馬スコア = k 本の softmax 確率の平均の log、連対・複勝 = k 本の sigmoid の平均の logit。"""
+        sc = out[..., 0].masked_fill(~mask[..., None], -1e9)
+        pw = torch.softmax(sc, dim=1).mean(2).clamp(min=1e-9)
+        p2, p3 = torch.sigmoid(out[..., 1]).mean(2).clamp(1e-6, 1 - 1e-6), torch.sigmoid(out[..., 2]).mean(2).clamp(1e-6, 1 - 1e-6)
+        return torch.stack([torch.log(pw), torch.log(p2 / (1 - p2)), torch.log(p3 / (1 - p3))], dim=-1)
 
     net = Net().to(dev)
     opt = torch.optim.AdamW(net.parameters(), lr=lr, weight_decay=wd)
@@ -196,17 +214,27 @@ def nn_fit_predict(X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, X_va: pd
         for s in range(0, len(perm), batch_races):
             rows = perm[s:s + batch_races]
             z, c, mask, safe, valid = batch(idx_tr[rows], Ztr, Ctr)
+            if noise > 0:
+                z = z + noise * torch.randn_like(z)
             out = net(z, c, mask)
-            score = out[..., 0].masked_fill(~mask, -1e9)
             tw = torch.from_numpy(np.where(valid, yw[safe], 0.0)).to(dev)
             use = torch.from_numpy((n_win_race[rows] == 1).astype("float32")).to(dev)
-            logp = torch.log_softmax(score, dim=1)
-            loss_w = -((logp * tw).sum(1) * use).sum() / use.sum().clamp(min=1)
             bce = nn.functional.binary_cross_entropy_with_logits
             t2 = torch.from_numpy(np.where(valid, y2[safe], 0.0)).to(dev)
             t3 = torch.from_numpy(np.where(valid, y3[safe], 0.0)).to(dev)
             m = mask.float()
-            loss_23 = ((bce(out[..., 1], t2, reduction="none") * m).sum() + (bce(out[..., 2], t3, reduction="none") * m).sum()) / m.sum()
+            if tabm_k > 0:
+                k_ = out.shape[2]
+                score = out[..., 0].masked_fill(~mask[..., None], -1e9)                          # (R, n, k)
+                logp = torch.log_softmax(score, dim=1)
+                loss_w = -(((logp * tw[..., None]).sum(1)) * use[:, None]).sum() / (use.sum().clamp(min=1) * k_)
+                mm = m[..., None]
+                loss_23 = ((bce(out[..., 1], t2[..., None].expand_as(out[..., 1]), reduction="none") * mm).sum() + (bce(out[..., 2], t3[..., None].expand_as(out[..., 2]), reduction="none") * mm).sum()) / (mm.sum() * k_)
+            else:
+                score = out[..., 0].masked_fill(~mask, -1e9)
+                logp = torch.log_softmax(score, dim=1)
+                loss_w = -((logp * tw).sum(1) * use).sum() / use.sum().clamp(min=1)
+                loss_23 = ((bce(out[..., 1], t2, reduction="none") * m).sum() + (bce(out[..., 2], t3, reduction="none") * m).sum()) / m.sum()
             loss = loss_w + loss_23
             opt.zero_grad()
             loss.backward()
@@ -218,7 +246,8 @@ def nn_fit_predict(X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, X_va: pd
     with torch.no_grad():
         for s in range(0, len(idx_va), 512):
             z, c, mask, safe, valid = batch(idx_va[s:s + 512], Zva, Cva)
-            out = net(z, c, mask).cpu().numpy()
+            o_ = net(z, c, mask)
+            out = (reduce_tabm(o_, mask) if tabm_k > 0 else o_).cpu().numpy()
             rr, cc = np.nonzero(valid)
             rows = safe[rr, cc]
             sw[rows], s2[rows], s3[rows] = out[rr, cc, 0], out[rr, cc, 1], out[rr, cc, 2]
@@ -279,7 +308,7 @@ def fit_predict(recipe: str, X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray
         o = nn_fit_predict(X_tr, y_tr, race_tr, X_va, race_va, seed=seed, hidden=hidden, epochs=params.get("epochs", 14), lr=params.get("lr", 2e-3),
                            wd=params.get("wd", 1e-4), dropout=params.get("dropout", 0.15), batch_races=params.get("batch_races", 128),
                            id_cols=params.get("id_cols", ()), id_dim=params.get("id_dim", 16), min_count=params.get("min_count", 30),
-                           attn_layers=params.get("attn_layers", 0), attn_dim=params.get("attn_dim", 64))
+                           attn_layers=params.get("attn_layers", 0), attn_dim=params.get("attn_dim", 64), tabm_k=params.get("tabm_k", 0), noise=params.get("noise", 0.0))
         return {"win": wm.softmax_by_race(race_va, o["win_score"]), "win_score": o["win_score"], "top2": sigmoid(o["top2_logit"]), "top3": sigmoid(o["top3_logit"])}
     raise ValueError(recipe)
 
