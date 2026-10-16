@@ -76,7 +76,7 @@
 <tr><td>22</td><td><code>tp-22-leak-impact</code></td><td>track_bias 先読みリーク修正の影響測定（別ディレクトリで再構築した学習表との比較）</td><td>完了（影響なし）</td><td>§24</td></tr>
 <tr><td>12b</td><td><code>tp-12b-predicted-odds-v8</code></td><td>改善したオッズ予測（tp-20 の V8）での馬券最適化（検証年のみ）</td><td>完了</td><td>§28</td></tr>
 <tr><td>23</td><td><code>tp-23-ensemble-v3</code></td><td>アンサンブル v3（追い切り TL_A を v2 の 7 メンバーに足して再学習し、v2 と比較）</td><td>完了（採用）</td><td>§29</td></tr>
-<tr><td>06c</td><td><code>tp-06c-final-evaluation-v3</code></td><td>最終評価 v3（アンサンブル v3。test 2025 は一度だけ）</td><td>notebook あり（ホストで実行中）</td><td>未記録</td></tr>
+<tr><td>06c</td><td><code>tp-06c-final-evaluation-v3</code></td><td>最終評価 v3（アンサンブル v3。test 2025 は一度だけ）</td><td>完了</td><td>§30</td></tr>
 </table>
 
 <h3>勝率（p_win）LogLoss の推移（評価データと条件が違うので、横並びの比較には使わない）</h3>
@@ -854,7 +854,36 @@
   <li>valid の OOF での採用判断。test 2025 は tp-06c で一度だけ評価する。</li>
 </ul>
 
-<h2>30. 以降の節</h2>
+<h2>30. tp-06c 最終評価 v3（アンサンブル v3、test 2025 を一度だけ）</h2>
+<p class="muted">notebook: <code>tp-06c-final-evaluation-v3.ipynb</code>（MLflow: keiba-tp-final-eval）。tp-23 のアンサンブル v3（7 メンバー、全員に追い切り TL_A を追加）を 2020〜2024 年（235,458 行）で学習し、2025 年の全 3,455 レース（47,497 行）で評価した（5 seed）。<b>v3 の test 2025 の評価はこれが最初で最後</b>（印 <code>final_eval_v3/TEST2025_EVALUATED.json</code>）。先に 2024 年（valid）で動作確認をしてから本番を実行した。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>test 2025</th><th>勝率 LogLoss</th><th>連対</th><th>複勝</th><th>AUC（勝/連/複）</th></tr>
+<tr><td><b>v3（今回）</b></td><td><b>0.21039</b></td><td><b>0.32833</b></td><td><b>0.41297</b></td><td>0.823 / 0.815 / 0.809</td></tr>
+<tr><td>v2（tp-06b）</td><td>0.21240</td><td>0.33179</td><td>0.41720</td><td>-</td></tr>
+<tr><td>v1（tp-06）</td><td>0.21349</td><td>0.33322</td><td>0.41887</td><td>-</td></tr>
+</table>
+<table>
+<tr><th>差（レース単位の paired bootstrap、95% 区間）</th><th>勝率</th><th>連対</th><th>複勝</th></tr>
+<tr><td>v3 − v2</td><td>−0.00201 [−0.00264, −0.00135]</td><td>−0.00342 [−0.00420, −0.00272]</td><td>−0.00409 [−0.00517, −0.00290]</td></tr>
+<tr><td>v3 − v1</td><td>−0.00319 [−0.00395, −0.00242]</td><td>−0.00496 [−0.00588, −0.00408]</td><td>−0.00580 [−0.00718, −0.00436]</td></tr>
+</table>
+<table>
+<tr><th>実用指標（test 2025）</th><th>値</th></tr>
+<tr><td>予測 1 位の馬が勝つ割合 / 連対 / 複勝</td><td>31.5% / 50.9% / 62.9%（一様予測の 1 位的中率 7.3%）</td></tr>
+<tr><td>勝ち馬が予測上位 2 頭 / 3 頭に入る割合</td><td>51.7% / 64.1%</td></tr>
+<tr><td>予測上位 3 頭（複勝確率順）のうち複勝圏に入った頭数の平均</td><td>1.55 頭（最大 3）</td></tr>
+<tr><td>較正（勝率の ECE）</td><td>0.0042。十分位ごとの予測と実測はほぼ一致（最上位 0.307 / 0.302）</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>valid での採用判断（v2 比 −0.0015〜−0.0027）は、一度だけ見た test 2025 でも再現し、むしろ大きかった</b>（v2 比 勝率 −0.0020、連対 −0.0034、複勝 −0.0041。区間はいずれも 0 を含まない）。追い切りの時計の効果は、年をまたいで安定している。</li>
+  <li>メンバー単体も全て v2 のものより良い（例: lgb_extras_ped の test 勝率 0.21141）。合成は新しい年でも崩れていない。</li>
+  <li><b>これで精度の基準は v3（test 2025 勝率 0.21039）。</b>馬券最適化の入力（予測確率）は <code>final_eval_v3/test2025_predictions.parquet</code> に更新できる（tp-08〜14 は v2 の予測で評価済み。モデルが変わったので、回収率は T-60/T-15 の実オッズが貯まった後に一度だけ取り直す）。</li>
+  <li>次: tp-07（最終再学習・登録・推論の一致確認）。運用でレース当日に必要な調教データ（馬別調教ページ）の入手が、T-60 までに間に合うかの設計が先に要る（TL_core の 12 列でも効果はほぼ同じ）。</li>
+</ul>
+
+<h2>31. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
