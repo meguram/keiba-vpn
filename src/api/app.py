@@ -6860,6 +6860,22 @@ async def get_race_predictions(race_id: str):
     return JSONResponse({"status": "not_found"}, status_code=404)
 
 
+@app.get("/api/race/{race_id}/entry/{horse_id}/card", response_class=JSONResponse)
+async def get_entry_card(race_id: str, horse_id: str):
+    """出馬表の馬名・騎手・調教師をタップしたときの情報（実データの事実。予測に依らない）。
+
+    馬の近5走・同条件の成績・追い切り、騎手・調教師の条件別成績などを 1 回でまとめて返す。
+    ロジックは src/api/entry_card.py。取れない項目は status="no_data"。"""
+    from src.api.entry_card import build_entry_card
+
+    data = await asyncio.to_thread(lambda: build_entry_card(race_id, horse_id, _get_storage()))
+    if data.get("status") == "bad_request":
+        return JSONResponse(data, status_code=400)
+    if data.get("status") == "not_found":
+        return JSONResponse(data, status_code=404)
+    return JSONResponse(data, headers={"Cache-Control": "private, max-age=120"})
+
+
 @app.get("/api/race/{race_id}/bloodline-aptitude", response_class=JSONResponse)
 async def get_bloodline_aptitude(race_id: str):
     """父・母父の舞台適性を返す。dev=モック / stg=DB集計値。"""
