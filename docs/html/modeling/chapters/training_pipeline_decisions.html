@@ -537,7 +537,33 @@
   <li>アンサンブルの多様性はモデル族（LightGBM・XGBoost・NN・線形・softmax）で取る現行の v2 で足りている。</li>
 </ul>
 
-<h2>16. 以降の節</h2>
+<h2>16. tp-21 SmartRC のテン1F（スタート後 1F）特徴量</h2>
+<p>目的: SmartRC の馬ごとのテン1F（<a href="../../decisions/DEC-027-smartrc-fetch-continued.html">DEC-027</a>）が、位置取り・ペース予測と p_win を改善するかを、保存済みデータだけ（追加アクセスなし）で測る。ベースは「ALL」（B0 48 列＋履歴 127 列、speed なし）。valid 2022・2023・2024、seed 3 通り、test 2025 は使わない。実装: <code>src/pipeline/features/smartrc_ten1f.py</code>、<code>notebooks/modeling/training_pipeline/tp-21-smartrc-ten1f.py</code>。</p>
+<h3>先読みの確認</h3>
+<ul>
+  <li>過去 5 走（<code>h1_</code>〜<code>h5_</code>）の日付が当該レース日以降のものは 1,052,130 件中 0 件。<code>ten1f_best</code> は過去走の最小値と 100% 一致（20,000 件）。</li>
+  <li><code>fullresults</code> は日付が当該レース日より前の行だけを使い、当該レース自身の行は目的変数にだけ使った。結合キーは <code>(race_id, horse_id)</code>。</li>
+  <li>カバレッジ（2020〜2025）: <code>runners</code> が空のレースは 0 件。特徴量が付く馬は約 90%（残りはほぼ初出走）。当該レースのテンの正解は 97%、最初に記録されているコーナー位置の正解は 99%（<code>corner1</code> だけでは 43% のため、最初に記録されているコーナーに変更）。</li>
+</ul>
+<h3>結果</h3>
+<table>
+<tr><th>評価</th><th>ベース</th><th>＋SmartRC</th><th>差</th></tr>
+<tr><td>p_win LogLoss（seed 3）</td><td>0.22069</td><td>0.22055</td><td>−0.00014（全 fold で改善）</td></tr>
+<tr><td>p_win LogLoss（seed 8 に増やすと）</td><td>—</td><td>—</td><td>−0.00012。2022 年の fold は +0.00011（基準を満たさない）</td></tr>
+<tr><td>序盤予測を OOF で足した p_win</td><td>0.22069</td><td>0.22049</td><td>−0.00020（基準を満たす）</td></tr>
+<tr><td>テン1F（相対）MAE</td><td>0.2757</td><td>0.2723</td><td>−1.2%、レース内 Spearman 0.542 → 0.552（全 fold で改善）</td></tr>
+<tr><td>序盤位置 MAE</td><td>0.1935</td><td>0.1910</td><td>−1.3%、Spearman 0.540 → 0.549（全 fold で改善）</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>p_win への効果は seed 間のばらつき（約 0.0001）程度で、実質は中立〜微小な改善。</b>ベースに位置取り・ペースの履歴特徴量がすでに入っているため、テンの情報は大きくは上積みにならない。SmartRC 特徴量の gain の割合は合計 7%。</li>
+  <li>位置取り・テン1F 自体の予測は全 fold で約 1% 改善した。tp-04 の前段モデル（位置取り・ペース）に使うと効果が出る可能性がある。</li>
+  <li><b>採否は保留。</b>LayerA を作り直す次の特徴量検証ラウンドで「候補群」として再評価し、そこで決める。</li>
+  <li><code>ten_has</code> / <code>ten_pat</code>（SmartRC の要約値）は、定義が不明で as-of か確認できないため主評価から外した。診断として足すと −0.00013 で、先読みの兆候は無い。</li>
+  <li>運用で使う場合は、前日夜に当日の出走馬の <code>runners/view</code> と <code>fullresults</code> が必要。現行の cron（前日 18:00 の <code>smartrc</code>）で取得できる。SmartRC の利用規約は未確認のまま。</li>
+</ul>
+
+<h2>17. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
