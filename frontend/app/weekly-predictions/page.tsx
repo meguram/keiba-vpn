@@ -278,7 +278,10 @@ function PredTable({ raceId, preds, hasPred, message }: { raceId: string; preds:
       </button>
     );
   };
-  const panelHorses = sorted.filter((p) => p.horse_id).map((p) => ({ horse_id: p.horse_id as string, horse_number: p.horse_number, horse_name: p.horse_name }));
+  const panelHorses = sorted.filter((p) => p.horse_id).map((p) => ({
+    horse_id: p.horse_id as string, horse_number: p.horse_number, horse_name: p.horse_name, bracket_number: p.bracket_number, sex_age: p.sex_age,
+    jockey_name: p.jockey_name, jockey_weight: p.jockey_weight, trainer_name: p.trainer_name, weight: p.weight, weight_change: p.weight_change,
+  }));
 
   return (
     <div style={{ overflowX: "auto", marginTop: 12 }}>
