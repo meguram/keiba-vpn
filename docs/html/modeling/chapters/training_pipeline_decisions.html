@@ -403,7 +403,24 @@
   <li>伸びしろがあるとすれば、市場が織り込む前の情報（T-60 前後の馬体重・直前の追い切り・パドック）と、オッズの時間変化（スナップショット）を特徴量に入れること。三連複・三連単はオッズ取得（type=7 の応答形式は未検証）の後に対象へ加える。</li>
 </ul>
 
-<h2>11. 以降の節</h2>
+<h2>11. tp-15 コース適性の類似度</h2>
+<p class="muted">notebook: <code>tp-15-course-similarity.ipynb</code>（MLflow: keiba-tp-course-similarity）。コース概形マスタ（<a href="course_master_verification.html">検証</a>・<a href="course_geometry_atlas.html">アトラス</a>）から作る形状ベクトルのカーネル類似度で、似たコースの実績を借りる特徴量（<code>sim_aff</code>・<code>sim_n</code>）と、形状の軸（直線・坂・コーナー数など）への馬の適性（<code>shape_pred</code>・<code>shape_se</code>）を、既存特徴量に足した。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>変種</th><th>勝率 LogLoss の差（基準 0.21553）</th><th>95% 上限</th><th>連対の差</th><th>複勝の差</th><th>採否</th></tr>
+<tr><td>G1.0（形状のみ τ=1.0）</td><td>−0.00006</td><td>+0.00007</td><td>+0.00007</td><td>+0.00042</td><td>不採用</td></tr>
+<tr><td>G1.5</td><td>+0.00000</td><td>+0.00015</td><td>+0.00016</td><td>+0.00034</td><td>不採用</td></tr>
+<tr><td>G2.5</td><td>−0.00005</td><td>+0.00008</td><td>+0.00013</td><td>+0.00036</td><td>不採用</td></tr>
+<tr><td>GS（形状 + 統計プロファイル）</td><td>−0.00000</td><td>+0.00014</td><td>+0.00005</td><td>+0.00044</td><td>不採用</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>どの変種も採用基準（上限 &lt; 0、効果 ≥ 0.0002、複勝が悪化しない）を満たさなかった。</b>勝率の改善は最良でも −0.00006 で信頼区間が 0 をまたぎ、複勝は逆に悪化方向。既存の <code>b_aff_course</code>/<code>b_aff_venue</code> と <code>sim_aff</code> の順位相関は 0.83 で、似たコースの借用は既存特徴量とほぼ同じ情報だった。</li>
+  <li>新特徴量の gain の合計は 0.7%。モデルは使うが、予測は良くならない（木モデルは距離・場・芝ダの組から同等の情報をすでに作れる）。</li>
+  <li>したがって <b>コース類似度は特徴量には入れない</b>。コース概形マスタは、UI の説明・アトラスとデータの検証資産として残す。</li>
+</ul>
+
+<h2>12. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
