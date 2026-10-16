@@ -134,6 +134,8 @@ def course_confidence(course: dict) -> tuple[str, str]:
     fcc, fcm = course.get("first_curve_calc"), course.get("first_curve_master")
     if st == "chute" and not fl:
         return "実形状", "引込み線が OSM の面に収まり、最初のコーナーまでの距離がマスタと合う"
+    if st == "pocket":
+        return "推定", ("ポケットの位置は独立した記述（JRA-VAN ほか）と OSM の面のふくらみで裏づけがあるが、先端から本線への曲線は補間。" + "；".join(fl))
     if st == "chute_diag" and not fl:
         return "実形状", "斜めに合流する引込み線（OSM の面の骨格）。経路長が距離と合い、最初のコーナーまでの距離がマスタと合う"
     if st == "main" and not fl:
@@ -195,7 +197,7 @@ def track_svg(vc: str, fr: Frame, circ: dict, venue_courses: list[tuple[dict, di
         anchor = "start" if v[0] > 0.35 else ("end" if v[0] < -0.35 else "middle")
         if anchor == "end" and lx < 110:
             anchor, lx = "start", x0 + 12
-        elif anchor == "start" and lx > 520:
+        elif anchor == "start" and lx > 440:
             anchor, lx, ly = "end", x0 - 10, y0 - 12
         elif anchor == "middle":
             lx = min(max(lx, 70), 570)
@@ -208,6 +210,8 @@ def track_svg(vc: str, fr: Frame, circ: dict, venue_courses: list[tuple[dict, di
             note.append(f"引込み線 約 {course['stub_len']:.0f}m（コーナー出口から直線の延長上）")
         if course.get("start") == "chute_diag":
             note.append(f"引込み線 約 {course['stub_len']:.0f}m（斜めに合流）")
+        if course.get("start") == "pocket":
+            note.append(f"ポケット 約 {course['stub_len']:.0f}m（本線の外側から斜めに合流。曲線は補間）")
         if course.get("start") == "main_approx":
             note.append("引込み線の形は OSM に無く、本線上で近似")
         for i_, t_ in enumerate(note):
@@ -269,6 +273,10 @@ def info_table(r: dict, course: dict | None = None, circ: dict | None = None) ->
             extra.append(f'周回路の長さ 図 {circ["L_run"]:.0f}m / マスタ {circ["lap_official"]:.0f}m（{circ["err"] * 100:+.1f}%）')
         if fcc is not None and fcm is not None:
             extra.append(f"最初のコーナーまで 図 {fcc:.0f}m / マスタ {fcm:.0f}m")
+        if course.get("start") == "pocket":
+            extra.append(f'ポケット 約{course["stub_len"]:.0f}m（本線の外側のポケット。経路長の誤差 {course["route_err"] * 100:+.1f}%）')
+        if course.get("override"):
+            extra.append("発走位置を独立資料で修正: " + str(course["override"]))
         if course.get("start") == "chute_diag":
             extra.append(f'引込み線 約{course["stub_len"]:.0f}m（本線に斜めに合流。経路長の誤差 {course["route_err"] * 100:+.1f}%）')
         if course.get("start") == "chute":

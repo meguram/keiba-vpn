@@ -1,0 +1,160 @@
+{
+  "_README": "マスタ（jra_courses.json の start_geometry）の発走位置が、独立した複数の資料と食い違うコースの上書き。キーは '場コード|面|内外|距離'。evidence の記述は要約（原文の転載ではない）。",
+  "05|芝||2000": {
+    "start_geometry": "pocket",
+    "note": "東京芝2000m: スタートは1コーナー奥の本線外側のポケット。本線上ではない。",
+    "evidence": [
+      {
+        "source": "JRA-VAN すごトク（コース解説） 東京芝2000m",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05t2000.html",
+        "summary": "スタート地点は1コーナー奥のポケット。スタート後約100mで左へ曲がる大きなカーブがある"
+      },
+      {
+        "source": "bakendo 東京芝2000m",
+        "url": "https://bakendo.com/tokyorc/tokyo2000t/",
+        "summary": "スタート地点は1コーナー奥にあるポケット地点。2コーナーの直角カーブまで126.2m"
+      },
+      {
+        "source": "収集B（競馬ラボのコース解説ほか）",
+        "url": "https://www.keibalab.jp/db/race/202502010511/course.html",
+        "summary": "1コーナー奥のポケット、最初のコーナーまで約130m"
+      },
+      {
+        "source": "Wikipedia 東京競馬場",
+        "url": "https://ja.wikipedia.org/wiki/東京競馬場",
+        "summary": "2003年の改修で、芝2000mのスタート直後のカーブが緩やかになった"
+      }
+    ]
+  },
+  "05|芝||1800": {
+    "start_geometry": "pocket",
+    "note": "東京芝1800m: 1〜2コーナーの間のポケットから斜めに走って向正面の直線に合流する（本線の直線延長ではない）。",
+    "evidence": [
+      {
+        "source": "JRA-VAN すごトク（コース解説） 東京芝1800m",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05t1800.html",
+        "summary": "スタートは1〜2コーナーの間のポケット。正面から見て斜めに横切り向正面の直線に合流する特殊なコース。スタートから合流地点まで約150m"
+      },
+      {
+        "source": "bakendo 東京芝1800m",
+        "url": "https://bakendo.com/tokyorc/tokyo1800t/",
+        "summary": "（収集C が参照）1〜2コーナー間のポケット"
+      }
+    ]
+  },
+  "07|芝||1600": {
+    "start_geometry": "pocket",
+    "note": "中京芝1600m: 1〜2コーナーにある斜めの引込み線から出て、まもなく左へカーブして本線に合流する。",
+    "evidence": [
+      {
+        "source": "JRA-VAN すごトク（コース解説） 中京芝1600m",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07t1600.html",
+        "summary": "1〜2コーナーにある斜めの引き込み線からのスタート。スタート後まもなく左にカーブして本線に合流する"
+      }
+    ]
+  },
+  "01|芝||1500": {
+    "start_geometry": "pocket",
+    "note": "札幌芝1500m: 1コーナー横のポケットから約170m斜めに走って向正面の直線に合流する。",
+    "evidence": [
+      {
+        "source": "JRA-VAN すごトク（コース解説） 札幌芝1500m",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs01t1500.html",
+        "summary": "スタート地点は1コーナー横のポケット。スタート後、約170m斜めに走り向正面直線に合流"
+      }
+    ]
+  },
+  "03|ダート||1150": {
+    "start_geometry": "pocket",
+    "note": "福島ダート1150m: 向正面・2コーナー外側のポケット（スタートは芝）から斜めに本コースへ合流する。",
+    "evidence": [
+      {
+        "source": "JRA-VAN すごトク（コース解説） 福島ダート1150m",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs03d1150.html",
+        "summary": "スタート地点は向正面の2コーナーの外側（スタート地点は芝）。斜めに走り、芝とダートの境目を横切って本コースに入る。3コーナーまで約480m"
+      }
+    ]
+  },
+  "06|芝|外|1600": {
+    "start_geometry": "pocket",
+    "note": "中山芝外回り1600m: 1コーナー横のポケットから外回りに合流する（コース最高地点）。",
+    "evidence": [
+      {
+        "source": "JRA-VAN すごトク（コース解説） 中山芝1600m（外）",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06t1600out.html",
+        "summary": "スタートは1コーナー横のポケット地点（コース全体の最高地点）"
+      }
+    ]
+  },
+  "01|ダート||1000": {
+    "start_geometry": "main_track",
+    "note": "札幌ダート1000m: 向正面左、2コーナー出口付近の本線上（引込み線ではない）。",
+    "evidence": [
+      {
+        "source": "JRA-VAN すごトク（コース解説） 札幌ダート1000m",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs01d1000.html",
+        "summary": "スタート地点は向正面左、2コーナー出口付近。3コーナーまで約280m"
+      }
+    ]
+  },
+  "05|ダート||1400": {
+    "start_geometry": "main_track",
+    "note": "東京ダート1400m: 向正面直線の右寄り（1300mの発走地点から100m下がる）の本線上。",
+    "evidence": [
+      {
+        "source": "JRA-VAN すごトク（コース解説） 東京ダート1400m",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05d1400.html",
+        "summary": "3コーナーまで約440m"
+      },
+      {
+        "source": "収集C",
+        "url": "https://bakendo.com/tokyorc/tokyo1400d/",
+        "summary": "向正面直線の右寄り。1300mの発走地点から100m下がる"
+      }
+    ]
+  },
+  "07|ダート||1200": {
+    "start_geometry": "main_track",
+    "note": "中京ダート1200m: 向正面の入口（本線上）。",
+    "evidence": [
+      {
+        "source": "JRA-VAN すごトク（コース解説） 中京ダート1200m",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07d1200.html",
+        "summary": "スタート地点は向正面入り口"
+      }
+    ]
+  },
+  "07|芝||3000": {
+    "start_geometry": "main_track",
+    "note": "中京芝3000m: 向正面直線入口の本線上（約1周半）。",
+    "evidence": [
+      {
+        "source": "JRA-VAN すごトク（コース解説） 中京芝3000m",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07t3000.html",
+        "summary": "スタート地点は向正面直線入口"
+      }
+    ]
+  },
+  "04|芝|内|2000": {
+    "start_geometry": "main_track",
+    "note": "新潟芝内回り2000m: スタンド前直線の外回りと内回りの合流地点（内回り4コーナー出口）の本線上。",
+    "evidence": [
+      {
+        "source": "JRA-VAN すごトク（コース解説） 新潟芝2000m（内）",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04t2000.html",
+        "summary": "スタート地点はスタンド前直線の外回りコースと内回りコースの合流地点。1コーナーまで約436m"
+      }
+    ]
+  },
+  "09|芝|内|3200": {
+    "start_geometry": "chute_pocket",
+    "note": "阪神芝内回り3200m: 発走地点を示す資料が見つからない。距離（3200m）から逆算すると、内回り3000mのスタート（向正面左・2コーナー出口付近）から約200m後ろ、2コーナー奥のポケットの延長上になる。推定。",
+    "evidence": [
+      {
+        "source": "距離からの逆算（jra_courses.json の距離 3200m・周長 1691.6m、内回り3000mの発走位置は JRA-VAN で確認済み）",
+        "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09t3000.html",
+        "summary": "内回り3000mのスタート地点は向正面の直線左、2コーナーの出口付近"
+      }
+    ]
+  }
+}

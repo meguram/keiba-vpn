@@ -144,8 +144,29 @@ def test_pocket_starts_are_straight_extensions_inside_surface(routes):
 
 def test_known_special_starts(routes):
     t = routes["venues"]["05"]["courses"]
-    assert t["芝||1600"]["start"] == "chute"           # 東京芝1600m: 向正面の引込み線
-    assert t["ダート||1600"]["start"] == "chute"       # 東京ダート1600m: 向正面ポケット
-    assert t["芝||2000"]["start"] == "main"            # 東京芝2000m: ゴール板を過ぎた先のホームストレッチ
+    assert t["芝||1800"]["start"] == "pocket"           # 東京芝1800m: 1〜2コーナーの間のポケットから斜めに合流（JRA-VAN）
+    assert t["芝||2000"]["start"] == "pocket"           # 東京芝2000m: 1コーナー奥のポケット（本線上ではない。JRA-VAN・bakendo・収集B）
+    assert 70 <= t["芝||2000"]["stub_len"] <= 200       # ポケットから本線までの距離（JRA-VAN『約100m先に大きなカーブ』）
+    assert abs(t["芝||2000"]["first_curve_calc"] - 128.1) <= 40
+    assert t["ダート||1600"]["start"] == "chute"       # 東京ダート1600m: 向正面のポケット（芝のスタート）
     nk = routes["venues"]["06"]["courses"]
-    assert nk["芝|外|1600"]["start"] == "chute" and nk["芝|内|2000"]["start"] == "chute"      # 中山の引込み線（外回り向正面・内回りのホーム側）
+    assert nk["芝|外|1600"]["start"] == "pocket" and nk["芝|内|2000"]["start"] == "chute"      # 中山: 外回り1600m は1コーナー横のポケット、内回り2000m はホーム側の引込み線
+    assert routes["venues"]["07"]["courses"]["芝||1600"]["start"] == "pocket"         # 中京芝1600m: 斜めの引込み線
+
+
+def test_overrides_have_evidence_urls():
+    ov = json.loads((ROOT / "data/meta/course_master/geo/start_overrides.json").read_text(encoding="utf-8"))
+    for k, v in ov.items():
+        if k.startswith("_"):
+            continue
+        assert v["start_geometry"] in ("pocket", "main_track", "chute_pocket", "home_stretch_pocket")
+        assert v["evidence"] and all(e["url"].startswith("https://") and e["summary"] for e in v["evidence"]), k
+
+
+def test_route_audit_covers_all_courses_and_agrees_mostly(routes, master):
+    audit = json.loads((ROOT / "data/meta/course_master/geo/route_audit.json").read_text(encoding="utf-8"))["rows"]
+    assert len(audit) == len(master)
+    ok = sum(1 for r in audit if r["verdict"] == "一致")
+    assert ok >= 95                                    # 独立した記述と区間が一致し、最初のコーナーまでの距離も合うコース
+    bad = [r for r in audit if r["verdict"].startswith("不一致")]
+    assert not bad, [(r["venue"], r["course"]) for r in bad]       # 記述と食い違うものは、直すか『推定』と明示する

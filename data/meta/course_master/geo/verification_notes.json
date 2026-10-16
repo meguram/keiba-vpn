@@ -7,6 +7,10 @@
   "斜めに合流する引込み線（札幌・中京・福島など）は、骨格の行き止まりの枝（先端 → 接続点）+ 接続点から先の周回路の長さが距離に合うものを採る。合わない・距離が照合できないものは『推定』にしている。",
   "中京: OSM にダートの面が無いため、芝の内ラチの内側に幅 25m の帯があるとして推定（周長はマスタと +0.8%）。",
   "新潟の直線 1000m は、外回りの最後の直線へつながる枝の骨格から推定（『推定』表示）。",
+  "第5ラウンドの監査: 全コースのスタート位置・区間を、JRA-VAN すごトクのコース解説（geo/jravan_start.json）・収集B/C（geo/start_descriptions.json）と突き合わせた（geo/route_audit.json、検証の章に全表）。独立した記述と合わない発走位置は geo/start_overrides.json で上書きし、根拠 URL を残している。",
+  "直したもの: 東京芝2000m（本線上 → 1コーナー奥のポケット）、東京芝1800m・中京芝1600m・札幌芝1500m・福島ダート1150m・中山芝外回り1600m（直線の延長 → 斜めに合流するポケット）、札幌ダート1000m・東京ダート1400m・中京ダート1200m・中京芝3000m・新潟芝内回り2000m（引込み線ではなく本線上）。コーナー検出のしきい値は競馬場ごとに選ぶ（福島・東京など）。",
+  "直せていない・推定のもの: ポケットのコース（位置は独立資料と OSM の面のふくらみで裏づけ、先端から本線への曲線は補間）、新潟の直線1000m、阪神内回り3200m（発走位置の資料なし）。函館ダート2400m・福島ダート1700m/2400mなど、最初のコーナーまでの距離が 30〜50m ずれる本線上のコースは、コーナー入口の定義の差（スパイラルカーブ等）による。",
+  "ポケットの最初のコーナーまでの距離の一致は、候補（先端と接続点の組）の中から距離とマスタの値が最も合うものを選んだ結果であり、独立した検証ではない。独立した検証になっているのは、(1) 先端が OSM のコース面のふくらみの中にあること、(2) スタートからゴールまでの経路長が距離と 2% 以内で合うこと、(3) 区間が独立した記述と合うこと。",
   "障害コースは OSM の別の面（ダートの輪の内側にある芝）として背景に薄く描くだけで、経路には使わない。",
   "複数周のコース（約 1.5 周など）は最後の周だけを描く。阪神の 3200m 内回り（1 周目は外回り）の初回の周は描いていない。"
  ],
@@ -20,17 +24,17 @@
     "err": -0.004,
     "method": "hole-direct",
     "derived": false,
-    "goal_to_stand_m": 53.0
+    "goal_to_stand_m": 53.2
    },
    {
     "venue": "01",
     "circuit": "ダート|",
-    "L_run": 1489.5,
+    "L_run": 1490.4,
     "lap_official": 1487.0,
-    "err": 0.0017,
-    "method": "hole-direct",
+    "err": 0.0023,
+    "method": "outer-inset",
     "derived": false,
-    "goal_to_stand_m": 74.9
+    "goal_to_stand_m": 75.2
    },
    {
     "venue": "02",
@@ -45,12 +49,12 @@
    {
     "venue": "02",
     "circuit": "ダート|",
-    "L_run": 1484.5,
+    "L_run": 1476.0,
     "lap_official": 1475.8,
-    "err": 0.0059,
-    "method": "hole-direct",
+    "err": 0.0002,
+    "method": "outer-inset",
     "derived": false,
-    "goal_to_stand_m": 69.7
+    "goal_to_stand_m": 68.7
    },
    {
     "venue": "03",
@@ -60,7 +64,7 @@
     "err": -0.0049,
     "method": "hole-direct",
     "derived": false,
-    "goal_to_stand_m": 41.4
+    "goal_to_stand_m": 41.6
    },
    {
     "venue": "03",
@@ -70,7 +74,7 @@
     "err": 0.0001,
     "method": "hole-direct",
     "derived": false,
-    "goal_to_stand_m": 64.6
+    "goal_to_stand_m": 64.7
    },
    {
     "venue": "04",
@@ -95,12 +99,12 @@
    {
     "venue": "04",
     "circuit": "ダート|",
-    "L_run": 1477.9,
+    "L_run": 1472.1,
     "lap_official": 1472.5,
-    "err": 0.0037,
-    "method": "hole-direct",
+    "err": -0.0003,
+    "method": "outer-inset",
     "derived": false,
-    "goal_to_stand_m": 120.9
+    "goal_to_stand_m": 118.4
    },
    {
     "venue": "05",
@@ -110,7 +114,7 @@
     "err": 0.0173,
     "method": "hole-direct",
     "derived": false,
-    "goal_to_stand_m": 49.8
+    "goal_to_stand_m": 50.0
    },
    {
     "venue": "05",
@@ -120,7 +124,7 @@
     "err": 0.002,
     "method": "hole-direct",
     "derived": false,
-    "goal_to_stand_m": 82.5
+    "goal_to_stand_m": 82.7
    },
    {
     "venue": "06",
@@ -145,12 +149,12 @@
    {
     "venue": "06",
     "circuit": "ダート|",
-    "L_run": 1496.8,
+    "L_run": 1495.2,
     "lap_official": 1493.0,
-    "err": 0.0025,
-    "method": "hole-direct",
+    "err": 0.0015,
+    "method": "outer-inset",
     "derived": false,
-    "goal_to_stand_m": 40.0
+    "goal_to_stand_m": 40.5
    },
    {
     "venue": "07",
@@ -165,10 +169,10 @@
    {
     "venue": "07",
     "circuit": "ダート|",
-    "L_run": 1542.0,
+    "L_run": 1541.9,
     "lap_official": 1530.0,
     "err": 0.0078,
-    "method": "hole-direct",
+    "method": "outer-inset",
     "derived": true,
     "goal_to_stand_m": 71.9
    },
@@ -257,50 +261,18 @@
   "max_abs_lap_err": 0.0173,
   "courses_total": 107,
   "start_kinds": {
-   "main_approx": 2,
-   "main": 60,
-   "chute": 42,
-   "chute_diag": 2,
+   "main": 62,
+   "chute": 38,
+   "pocket": 6,
    "straight": 1
   },
   "first_curve_check": {
-   "n": 94,
-   "median_err_m": 1.5749999999999886,
-   "mean_abs_err_m": 31.310638297872337,
-   "max_abs_err_m": 585.7
+   "n": 99,
+   "median_err_m": -1.0,
+   "mean_abs_err_m": 14.158585858585857,
+   "max_abs_err_m": 116.0
   },
   "estimated_courses": [
-   {
-    "venue": "01",
-    "course": "ダート||1000",
-    "start": "main_approx",
-    "first_curve_calc": 272.0,
-    "first_curve_master": 280.0,
-    "reasons": [
-     "引込み線の先端が OSM の面に収まらず、本線上の点で代用（候補なし）",
-     "引込み線の形状が OSM に無く、最初のコーナーまでの距離が合う本線上の点で近似（実際はこの手前に約 -12m の引込み線）"
-    ]
-   },
-   {
-    "venue": "01",
-    "course": "芝||1500",
-    "start": "chute_diag",
-    "first_curve_calc": 48.0,
-    "first_curve_master": 170.0,
-    "reasons": [
-     "斜めに合流する引込み線の経路長は距離と合うが、最初のコーナーまでの距離が図 48m / マスタ 170.0m とずれる"
-    ]
-   },
-   {
-    "venue": "03",
-    "course": "芝||1200",
-    "start": "chute",
-    "first_curve_calc": 544.0,
-    "first_curve_master": 412.0,
-    "reasons": [
-     "引込み線の形は OSM の面に収まるが、最初のコーナーまでの距離が図 544m / マスタ 412.0m とずれる"
-    ]
-   },
    {
     "venue": "04",
     "course": "芝|直|1000",
@@ -312,47 +284,57 @@
     ]
    },
    {
-    "venue": "04",
-    "course": "芝|内|2000",
-    "start": "main",
-    "first_curve_calc": 420.0,
-    "first_curve_master": 436.0,
-    "reasons": [
-     "引込み線の先端が OSM の面に収まらず、本線上の点で代用（候補なし）"
-    ]
-   },
-   {
-    "venue": "05",
-    "course": "ダート||1400",
-    "start": "main_approx",
-    "first_curve_calc": 436.0,
-    "first_curve_master": 441.0,
-    "reasons": [
-     "引込み線の先端が OSM の面に収まらず、本線上の点で代用（候補なし）",
-     "引込み線の形状が OSM に無く、最初のコーナーまでの距離が合う本線上の点で近似（実際はこの手前に約 6m の引込み線）"
-    ]
-   },
-   {
-    "venue": "07",
-    "course": "ダート||1200",
-    "start": "main",
-    "first_curve_calc": 392.0,
+    "venue": "09",
+    "course": "芝|内|3200",
+    "start": "chute",
+    "first_curve_calc": 572.0,
     "first_curve_master": null,
     "reasons": [
-     "引込み線の先端が OSM の面に収まらず、本線上の点で代用（候補なし）"
-    ]
-   },
-   {
-    "venue": "07",
-    "course": "芝||3000",
-    "start": "main",
-    "first_curve_calc": 424.0,
-    "first_curve_master": null,
-    "reasons": [
-     "引込み線の先端が OSM の面に収まらず、本線上の点で代用（候補なし）"
+     "引込み線の形は OSM の面に収まるが、最初のコーナーまでの距離が図 572m / マスタ 380.0m とずれる"
     ]
    }
   ],
-  "curve_thr": 0.0038461538461538464
+  "curve_thr_by_venue": {
+   "01": {
+    "thr": 350,
+    "fc_mae_m": 9.5
+   },
+   "02": {
+    "thr": 260,
+    "fc_mae_m": 5.1
+   },
+   "03": {
+    "thr": 500,
+    "fc_mae_m": 29.1
+   },
+   "04": {
+    "thr": 260,
+    "fc_mae_m": 6.3
+   },
+   "05": {
+    "thr": 200,
+    "fc_mae_m": 5.7
+   },
+   "06": {
+    "thr": 260,
+    "fc_mae_m": 8.6
+   },
+   "07": {
+    "thr": 260,
+    "fc_mae_m": 17.4
+   },
+   "08": {
+    "thr": 260,
+    "fc_mae_m": 8.9
+   },
+   "09": {
+    "thr": 260,
+    "fc_mae_m": 25.0
+   },
+   "10": {
+    "thr": 260,
+    "fc_mae_m": 11.3
+   }
+  }
  }
 }

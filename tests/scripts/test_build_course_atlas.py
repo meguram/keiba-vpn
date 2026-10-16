@@ -33,12 +33,14 @@ def test_frame_fits_map_and_puts_stand_below_goal():
 def test_course_route_and_confidence_for_known_courses():
     R = _routes()
     v = R["venues"]["05"]
-    c1600 = v["courses"]["芝||1600"]
-    route = A.course_route(v["circuits"]["芝|"], c1600)
+    d1600 = v["courses"]["ダート||1600"]
+    route = A.course_route(v["circuits"]["ダート|"], d1600)
     # 引込み線の先端から始まり、ゴール（pts_q[0]）で終わる
-    assert np.allclose(route[0], c1600["stub"][0]) and np.allclose(route[-1], v["circuits"]["芝|"]["pts_q"][0])
-    conf, why = A.course_confidence(c1600)
+    assert np.allclose(route[0], d1600["stub"][0]) and np.allclose(route[-1], v["circuits"]["ダート|"]["pts_q"][0])
+    conf, why = A.course_confidence(d1600)
     assert conf == "実形状" and "引込み線" in why
+    t2000 = v["courses"]["芝||2000"]                  # 東京芝2000m: 1コーナー奥のポケット（独立資料で修正）。位置の裏づけはあるが曲線は補間なので『推定』
+    assert t2000["start"] == "pocket" and A.course_confidence(t2000)[0] == "推定" and t2000.get("override")
     assert A.course_confidence({"flags": ["x"], "start": "main"})[0] == "推定"
 
 

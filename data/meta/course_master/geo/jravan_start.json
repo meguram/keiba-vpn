@@ -1,0 +1,532 @@
+{
+ "_README": "JRA-VAN すごトク（競馬場コース解説）の各コースのページから抜いた、発走位置に関する最初の文（先頭 110 字まで）。走行ルート監査の独立した記述（第 4 の資料）。",
+ "courses": {
+  "01|ダート||1000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs01d1000.html",
+   "start_sentence": "スタート地点は向正面左、２コーナー出口付近。",
+   "to_corner": "３コーナーまでの距離は約280m"
+  },
+  "01|ダート||1700": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs01d1700.html",
+   "start_sentence": "スタート地点は正面スタンド前直線右。",
+   "to_corner": "１コーナーまでの距離は約240m"
+  },
+  "01|ダート||2400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs01d2400.html",
+   "start_sentence": "スタート地点は向正面直線の真ん中付近。",
+   "to_corner": "１コーナーまでの距離は約197m"
+  },
+  "01|芝||1000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs01t1000.html",
+   "start_sentence": "スタート地点は向正面の真ん中付近。",
+   "to_corner": "３コーナーまでは約200m"
+  },
+  "01|芝||1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs01t1200.html",
+   "start_sentence": "スタート地点は向正面直線２コーナーから少し左に入ったところのポケット。",
+   "to_corner": "３コーナーまでの距離は約400m"
+  },
+  "01|芝||1500": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs01t1500.html",
+   "start_sentence": "スタート地点は１コーナー横にあるポケット。",
+   "to_corner": null
+  },
+  "01|芝||1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs01t1800.html",
+   "start_sentence": "スタート地点は正面スタンド前。",
+   "to_corner": null
+  },
+  "01|芝||2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs01t2000.html",
+   "start_sentence": "スタート地点は正面スタンド前直線の４コーナー奥ポケット。",
+   "to_corner": "１コーナーまで距離があることと、１ハロン伸びた分だけ芝1800m"
+  },
+  "01|芝||2600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs01t2600.html",
+   "start_sentence": "スタート地点は向正面直線半ば。",
+   "to_corner": null
+  },
+  "02|ダート||1000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs02d1000.html",
+   "start_sentence": "スタート地点は向正面の左端。",
+   "to_corner": "３コーナーまでの距離は366m"
+  },
+  "02|ダート||1700": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs02d1700.html",
+   "start_sentence": "スタート地点は正面スタンド前直線の右端。",
+   "to_corner": "１コーナーまでの距離は329m"
+  },
+  "02|ダート||2400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs02d2400.html",
+   "start_sentence": "スタート地点は向正面直線の真ん中から少し左に行ったところ。",
+   "to_corner": null
+  },
+  "02|芝||1000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs02t1000.html",
+   "start_sentence": "スタート地点は向正面直線の真ん中よりやや左。",
+   "to_corner": "３コーナーまでの距離は約290m"
+  },
+  "02|芝||1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs02t1200.html",
+   "start_sentence": "スタート地点は向正面直線、２コーナー奥にあるポケット。",
+   "to_corner": "３コーナーまでの距離は約490m"
+  },
+  "02|芝||1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs02t1800.html",
+   "start_sentence": "スタート地点は正面スタンド前直線、スタンドの右端。",
+   "to_corner": "１コーナーまでの距離は約275m"
+  },
+  "02|芝||2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs02t2000.html",
+   "start_sentence": "スタート地点は正面スタンド前直線の右端。",
+   "to_corner": "１コーナーまでの距離は約475m"
+  },
+  "02|芝||2600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs02t2600.html",
+   "start_sentence": "スタート地点は向正面直線の真ん中。",
+   "to_corner": null
+  },
+  "03|ダート||1150": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs03d1150.html",
+   "start_sentence": "スタート地点は向正面の２コーナーの外側｡スタート地点は芝だが､フルゲートは16頭取れる｡ちょうど中山のダート1200mのような雰囲気で､斜めに走る芝とダートと境目を横切って本コースに入る｡３コーナーまでの距離は約480m",
+   "to_corner": "３コーナーまでの距離は約480m"
+  },
+  "03|ダート||1700": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs03d1700.html",
+   "start_sentence": "スタート地点はホームストレッチの右端｡４コーナーを曲がり終えてすぐのところ｡最初の１コーナーまでの距離は約338m｡１～２コーナーにダートコースの最低位部分を通過。",
+   "to_corner": "１コーナーまでの距離は約338m"
+  },
+  "03|ダート||2400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs03d2400.html",
+   "start_sentence": "スタート地点は向正面の真ん中よりやや左｡ゴール板から向正面を見てほぼ真っすぐの位置にあり､ダートコースをちょうど一周半することになる｡１～２コーナーにダートコースの最低位部分を通過。",
+   "to_corner": null
+  },
+  "03|芝||1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs03t1200.html",
+   "start_sentence": "スタート地点は向正面直線の２コーナー奥にあるポケット｡３コーナーまでの距離は約412m（Ａコース時）｡スタート直後､少し走ってから緩やかな上り坂になる｡３～４コーナーはスパイラルカーブ。",
+   "to_corner": "３コーナーまでの距離は約412m"
+  },
+  "03|芝||1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs03t1800.html",
+   "start_sentence": "スタート地点は正面スタンド前より少し右｡スタート後、若干の勾配を上り、最初の１コーナーまでの距離は約305m（Ａコース時）｡１～２コーナーはほぼ平坦。",
+   "to_corner": "１コーナーまでの距離は約305m"
+  },
+  "03|芝||2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs03t2000.html",
+   "start_sentence": "スタート地点はホームストレッチの右端、４コーナーのポケット｡高低差はそれほどないが坂の頂上に位置し､スタンド前の直線は谷を下って上るような感じになる｡最初の１コーナーまでの距離は約505m（Ａコース時）。",
+   "to_corner": "１コーナーまでの距離は約505m"
+  },
+  "03|芝||2600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs03t2600.html",
+   "start_sentence": "スタート地点は向正面の真ん中｡スタンドから見てちょうど正面付近｡そこから約１周半の長丁場で、コーナーを合計で６回通過する。",
+   "to_corner": null
+  },
+  "04|ダート||1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04d1200.html",
+   "start_sentence": "スタート地点は２コーナーのポケット｡中央４場以外でダート1200mを組める唯一の場所だが、実際には芝コースが発走地点。",
+   "to_corner": "３コーナーまでの距離は約525m"
+  },
+  "04|ダート||1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04d1800.html",
+   "start_sentence": "スタート地点はスタンド前直線の４コーナー寄り｡最初の１コーナーまでの距離は約389mで平坦。",
+   "to_corner": "１コーナーまでの距離は約389m"
+  },
+  "04|ダート||2500": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04d2500.html",
+   "start_sentence": "スタート地点は向正面直線の２コーナー寄り。",
+   "to_corner": "３コーナーまでの距離は約350m"
+  },
+  "04|芝|直|1000": {
+   "url": null
+  },
+  "04|芝|内|1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04t1200.html",
+   "start_sentence": "スタート地点は向正面の直線の入り口｡内回りコースを使用で、３コーナーまでの直線距離は約448m（Ａコース時）。",
+   "to_corner": "３コーナーまでの直線距離は約448m"
+  },
+  "04|芝|内|1400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04t1400.html",
+   "start_sentence": "スタート地点は向正面直線の右奥の２コーナーポケット｡芝1200mからそのまま200m延長したコース。",
+   "to_corner": "３コーナーまでの直線は約648m"
+  },
+  "04|芝|外|1400": {
+   "url": null
+  },
+  "04|芝|外|1600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04t1600out.html",
+   "start_sentence": "スタート地点は向正面直線の真ん中よりやや右｡３コーナーまでの直線は約550m（Ａコース時）｡バックストレッチの内回りと外回りの分岐点を過ぎたところから、約1.7mの坂を上る。",
+   "to_corner": "３コーナーまでの直線は約550m"
+  },
+  "04|芝|外|1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04t1800out.html",
+   "start_sentence": "スタート地点は向正面直線の入り口。",
+   "to_corner": "３コーナーまでの距離は748m"
+  },
+  "04|芝|内|2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04t2000.html",
+   "start_sentence": "スタート地点はスタンド前直線の外回りコースと内回りコースの合流地点。",
+   "to_corner": "１コーナーまでの距離は約436m"
+  },
+  "04|芝|外|2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04t2000out.html",
+   "start_sentence": "スタート地点は向正面直線の右奥の２コーナーポケット｡内回りの芝1400mと同じ地点｡2000mでコーナーが２回のコースは､日本ではここだけ｡新潟競馬場の目玉コースの一つだ｡最初の３コーナーまでの距離は948m（Ａコース時",
+   "to_corner": "３コーナーまでの距離は948m"
+  },
+  "04|芝|内|2200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04t2200.html",
+   "start_sentence": "スタート地点はスタンド前の直線｡外回りコースの４コーナーと内回りコースの合流地点の間｡最初の１コーナーまでの距離は約636m（Ａコース時）｡１〜２コーナーは緩やかな上り。",
+   "to_corner": "１コーナーまでの距離は約636m"
+  },
+  "04|芝|内|2400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs04t2400.html",
+   "start_sentence": "スタート地点は外回りコースの４コーナーのポケット｡芝1000mのコースから本線に合流する手前あたり｡芝2200mのスタート地点から左に200m伸びたところにあり､内回りコースが利用される｡最初の１コーナーまでの距離は83",
+   "to_corner": "１コーナーまでの距離は836m"
+  },
+  "05|ダート||1300": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05d1300.html",
+   "start_sentence": "スタート地点は向正面半ば付近。",
+   "to_corner": "３コーナーまでの距離は約340m"
+  },
+  "05|ダート||1400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05d1400.html",
+   "start_sentence": "スタートとなっているからだ。",
+   "to_corner": "３コーナーまでの距離は約440m"
+  },
+  "05|ダート||1600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05d1600.html",
+   "start_sentence": "スタートであり、なおかつ内と外では芝を走る距離が異なる。",
+   "to_corner": "３コーナーまでの距離は約640m"
+  },
+  "05|ダート||2100": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05d2100.html",
+   "start_sentence": "スタート地点は正面スタンド前中央付近。",
+   "to_corner": "１コーナーまでの距離は約240m"
+  },
+  "05|芝||1400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05t1400.html",
+   "start_sentence": "スタート地点は向正面直線の真ん中付近。",
+   "to_corner": null
+  },
+  "05|芝||1600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05t1600.html",
+   "start_sentence": "スタート地点は向正面直線の右奥。",
+   "to_corner": "３コーナーまでの直線距離は約542m"
+  },
+  "05|芝||1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05t1800.html",
+   "start_sentence": "スタート地点は１～２コーナーの間にあるポケット。",
+   "to_corner": null
+  },
+  "05|芝||2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05t2000.html",
+   "start_sentence": "スタート地点は１コーナー奥のポケット。",
+   "to_corner": null
+  },
+  "05|芝||2300": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05t2300.html",
+   "start_sentence": "スタート地点は正面スタンド前直線の真ん中あたり。",
+   "to_corner": "１コーナーまでの距離は約250m"
+  },
+  "05|芝||2400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05t2400.html",
+   "start_sentence": "スタートは正面スタンド前直線から。",
+   "to_corner": "１コーナーまでの距離は約350m"
+  },
+  "05|芝||2500": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05t2500.html",
+   "start_sentence": "スタート地点は正面スタンド前左の直線坂下。",
+   "to_corner": "１コーナーまでの距離は約450m"
+  },
+  "05|芝||3400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs05t3400.html",
+   "start_sentence": "スタート地点は向正面直線の真ん中付近。",
+   "to_corner": "３コーナーまでの距離は約250m"
+  },
+  "06|ダート||1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06d1200.html",
+   "start_sentence": "スタート地点は向正面２コーナー奥の芝地点。",
+   "to_corner": "３コーナーまでの距離は約502m"
+  },
+  "06|ダート||1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06d1800.html",
+   "start_sentence": "スタート地点はスタンド前直線の入り口。",
+   "to_corner": "１コーナーまでの距離は約375m"
+  },
+  "06|ダート||2400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06d2400.html",
+   "start_sentence": "スタート地点は向正面直線の中間地点あたり。",
+   "to_corner": "３コーナーまでの距離は約209m"
+  },
+  "06|ダート||2500": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06d2500.html",
+   "start_sentence": "スタート地点は向正面直線の左。",
+   "to_corner": "３コーナーまでの距離は約309m"
+  },
+  "06|芝|外|1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06t1200out.html",
+   "start_sentence": "スタート地点。",
+   "to_corner": "３コーナーまでの距離は250m"
+  },
+  "06|芝|外|1600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06t1600out.html",
+   "start_sentence": "スタートは１コーナー横のポケット地点。",
+   "to_corner": "２コーナーまで緩やかに下り、さらに外回りコースのバックストレッチで約4.4m"
+  },
+  "06|芝|内|1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06t1800.html",
+   "start_sentence": "スタート地点は正面スタンド前直線の半ば。",
+   "to_corner": "１コーナーまでの距離は約205m"
+  },
+  "06|芝|内|2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06t2000.html",
+   "start_sentence": "スタート地点は４コーナーを曲がり終えたホームストレッチの右端。",
+   "to_corner": "１コーナーまでの距離は約405m"
+  },
+  "06|芝|外|2200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06t2200out.html",
+   "start_sentence": "スタート地点は４コーナーを曲がり終えたホームストレッチの右端。",
+   "to_corner": "１コーナーまでの距離は約432m"
+  },
+  "06|芝|内|2500": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06t2500.html",
+   "start_sentence": "スタート地点は外回りコースの３コーナー手前。",
+   "to_corner": null
+  },
+  "06|芝|内|3600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs06t3600.html",
+   "start_sentence": "スタート地点は正面スタンド前直線の真ん中よりやや右。",
+   "to_corner": null
+  },
+  "07|ダート||1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07d1200.html",
+   "start_sentence": "スタート地点は向正面入り口。",
+   "to_corner": null
+  },
+  "07|ダート||1400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07d1400.html",
+   "start_sentence": "スタート地点は２コーナー奥のポケット。",
+   "to_corner": null
+  },
+  "07|ダート||1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07d1800.html",
+   "start_sentence": "スタート地点はホームストレッチの真ん中より左寄り。",
+   "to_corner": null
+  },
+  "07|ダート||1900": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07d1900.html",
+   "start_sentence": "スタート地点はホームストレッチの左。",
+   "to_corner": null
+  },
+  "07|芝||1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07t1200.html",
+   "start_sentence": "スタート地点は向正面直線の真ん中付近。",
+   "to_corner": null
+  },
+  "07|芝||1400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07t1400.html",
+   "start_sentence": "スタート地点は向正面直線の２コーナー出口付近。",
+   "to_corner": null
+  },
+  "07|芝||1600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07t1600.html",
+   "start_sentence": "スタート。",
+   "to_corner": null
+  },
+  "07|芝||2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07t2000.html",
+   "start_sentence": "スタート。",
+   "to_corner": "１コーナーまでの距離は200m"
+  },
+  "07|芝||2200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07t2200.html",
+   "start_sentence": "スタート。",
+   "to_corner": null
+  },
+  "07|芝||3000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs07t3000.html",
+   "start_sentence": "スタート地点は向正面直線入口。",
+   "to_corner": null
+  },
+  "08|ダート||1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08d1200.html",
+   "start_sentence": "スタート地点は向正面の２コーナー出口。",
+   "to_corner": "３コーナーまでは約400m"
+  },
+  "08|ダート||1400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08d1400.html",
+   "start_sentence": "スタート地点は向正面２コーナー奥のポケット。",
+   "to_corner": "３コーナーまでは約600m"
+  },
+  "08|ダート||1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08d1800.html",
+   "start_sentence": "スタート地点はスタンド前の直線半ば付近。",
+   "to_corner": "１コーナーまでの距離は約280m"
+  },
+  "08|ダート||1900": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08d1900.html",
+   "start_sentence": "スタート地点はスタンド前の直線半ばよりやや４コーナー寄り。",
+   "to_corner": "１コーナーまでの距離は約380m"
+  },
+  "08|芝|内|1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08t1200.html",
+   "start_sentence": "スタート地点は向正面直線半ば付近。",
+   "to_corner": null
+  },
+  "08|芝|内|1400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08t1400.html",
+   "start_sentence": "スタート地点は向正面２コーナーのポケット。",
+   "to_corner": null
+  },
+  "08|芝|外|1400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08t1400out.html",
+   "start_sentence": "スタート地点は向正面左、２コーナー出口付近。",
+   "to_corner": null
+  },
+  "08|芝|内|1600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08t1600.html",
+   "start_sentence": "スタート地点は向正面２コーナーのポケット。",
+   "to_corner": "３コーナーまで、約700m"
+  },
+  "08|芝|外|1600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08t1600out.html",
+   "start_sentence": "スタート地点は向正面の２コーナーのポケット。",
+   "to_corner": "３コーナーまでは一直線で距離は約700m"
+  },
+  "08|芝|外|1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08t1800out.html",
+   "start_sentence": "スタート地点は２コーナー奥のポケット。",
+   "to_corner": "３コーナーまでの距離は約900m"
+  },
+  "08|芝|内|2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08t2000.html",
+   "start_sentence": "スタート地点は、メインスタンドの目の前。",
+   "to_corner": "１コーナーまでの距離は約300m"
+  },
+  "08|芝|外|2200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08t2200out.html",
+   "start_sentence": "スタート地点は正面スタンド前直線入り口付近。",
+   "to_corner": "１コーナーまでの距離は約400m"
+  },
+  "08|芝|外|2400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08t2400out.html",
+   "start_sentence": "スタート地点は４コーナー奥のポケット。",
+   "to_corner": "１コーナーまで、スタント前直線を約600m"
+  },
+  "08|芝|外|3000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08t3000out.html",
+   "start_sentence": "スタート地点は向正面３コーナー手前の上り坂。",
+   "to_corner": "３コーナーまではわずか200m"
+  },
+  "08|芝|外|3200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs08t3200out.html",
+   "start_sentence": "スタート地点は向正面の中間点よりやや２コーナー寄り。",
+   "to_corner": "３コーナーまでの距離は約400m"
+  },
+  "09|ダート||1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09d1200.html",
+   "start_sentence": "スタート地点は向正面直線の左端､２コーナー出口｡最初の３コーナーまでの距離は342m｡スタートしてから200mは平坦で､残り1000mから緩い下り坂｡４コーナー出口まで下りが続き､最後の直線距離は352.7m。",
+   "to_corner": "３コーナーまでの距離は342m"
+  },
+  "09|ダート||1400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09d1400.html",
+   "start_sentence": "スタート地点は２コーナー奥ポケットの芝部分｡ただし､芝1800mや芝1400mのスタート地点であるポケット部分よりも内側にあるコースが使用されており､本線とは重ならない｡ダート1200mのスタート地点からそのまま左に20",
+   "to_corner": "３コーナーまでの距離は542m"
+  },
+  "09|ダート||1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09d1800.html",
+   "start_sentence": "スタート地点は正面スタンド前直線の右｡スタートしてすぐに上り坂がある｡１コーナーまでの距離は303m｡ゴール板を通り過ぎてからダートコースをグルリと一周。",
+   "to_corner": "１コーナーまでの距離は303m"
+  },
+  "09|ダート||2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09d2000.html",
+   "start_sentence": "スタート地点は芝内回りコースの４コーナーのポケット｡最大で芝の上を78m通ってダートコースに入る｡あとは、ダート1800mと同じルートを通り、グルリと１周。",
+   "to_corner": null
+  },
+  "09|芝|内|1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09t1200.html",
+   "start_sentence": "スタート地点は向正面直線半ばより左寄り｡内回りコース使用で､３コーナーまでの距離は243m｡３コーナーまで距離がやや短いので､枠順は真ん中から内側の方が有利だが、最内枠の成績は悪い。",
+   "to_corner": "３コーナーまでの距離は243m"
+  },
+  "09|芝|内|1400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09t1400.html",
+   "start_sentence": "スタート地点は向正面左､２コーナー出口付近のポケット｡内回りコースを使用。",
+   "to_corner": "３コーナーまでの距離は芝1200m"
+  },
+  "09|芝|外|1400": {
+   "url": null
+  },
+  "09|芝|外|1600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09t1600out.html",
+   "start_sentence": "スタート地点はバックストレッチの中間からやや左寄り｡長い直線が２本にコーナーが２回｡外回りの京都芝1600mに似たコース形態となっている｡06年末にオープンした外回りコースに入り、ゆったりとした３～４コーナーを回る。",
+   "to_corner": null
+  },
+  "09|芝|外|1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09t1800out.html",
+   "start_sentence": "スタート地点からそのまま200mバックしたところがスタート地点で､内回りの芝1400mと同じ位置になる｡しかし、外回りコース使用なので、最初のコーナー（３コーナー）まで600m以上も距離がある。",
+   "to_corner": null
+  },
+  "09|芝|内|2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09t2000.html",
+   "start_sentence": "スタート地点は正面スタンド前直線右の4コーナー出口付近｡1コーナーまでの距離は325m｡内回りコース使用で、一周強回る。",
+   "to_corner": "1コーナーまでの距離は325m"
+  },
+  "09|芝|内|2200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09t2200.html",
+   "start_sentence": "スタート地点は正面スタンド前直線の右端｡外回りコースの４コーナー出口付近｡１コーナーまでの距離は525m｡正面スタンド前を通過した後は、芝2000mと全く同じルートを辿るため、３～４コーナーは内回りコースに入る。",
+   "to_corner": "１コーナーまでの距離は525m"
+  },
+  "09|芝|外|2400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09t2400out.html",
+   "start_sentence": "スタート地点は芝2000mと同じ､正面スタンド前直線右寄りのところ｡そこから外回りコースを使用して、グルリと一周強回る｡最後の直線距離はＡコース時が473.6m、Ｂコース時が476.3m。",
+   "to_corner": null
+  },
+  "09|芝|外|2600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09t2600out.html",
+   "start_sentence": "スタート地点は正面スタンド前直線の右端｡外回りコースの４コーナー出口付近で、芝2200mのスタート地点と同じだ。",
+   "to_corner": null
+  },
+  "09|芝|内|3000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs09t3000.html",
+   "start_sentence": "スタート地点は向正面の直線左｡２コーナーの出口付近｡内回りコースのみを使用し､コーナーを６回通過して約１周半回る｡最後の直線距離はＡコース時が356.5m、Ｂコース時が359.1m｡残り200m付近でゴール前の急坂｡約1",
+   "to_corner": null
+  },
+  "09|芝|内|3200": {
+   "url": null
+  },
+  "10|ダート||1000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs10d1000.html",
+   "start_sentence": "スタート地点は向正面直線の左。",
+   "to_corner": "３コーナーまでの距離は約365m"
+  },
+  "10|ダート||1700": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs10d1700.html",
+   "start_sentence": "スタート地点は正面スタンド前直線の右端。",
+   "to_corner": "１コーナーまでの距離は約343m"
+  },
+  "10|ダート||2400": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs10d2400.html",
+   "start_sentence": "スタート地点は向正面直線の左寄り。",
+   "to_corner": "３コーナーまでの距離は約320m"
+  },
+  "10|芝||1200": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs10t1200.html",
+   "start_sentence": "スタート地点は向正面直線の２コーナーポケット。",
+   "to_corner": "３コーナーまでの直線距離は約480m"
+  },
+  "10|芝||1800": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs10t1800.html",
+   "start_sentence": "スタート地点は正面スタンド前の直線真ん中よりやや右。",
+   "to_corner": "１コーナーまでの距離は約272m"
+  },
+  "10|芝||2000": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs10t2000.html",
+   "start_sentence": "スタート地点は正面スタンド前直線の４コーナーのポケット。",
+   "to_corner": "１コーナーまでの距離は約472m"
+  },
+  "10|芝||2600": {
+   "url": "https://sugo.jra-van.jp/sugotoku/crs/crs10t2600.html",
+   "start_sentence": "スタート地点は向正面直線の半ばよりやや左。",
+   "to_corner": "３コーナーまでの距離は約244m"
+  }
+ }
+}

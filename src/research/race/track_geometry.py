@@ -590,6 +590,85 @@ def find_spurs(g: dict, run_xy: np.ndarray, min_len: float = 45.0, max_junction_
     return out
 
 
+def find_bulges(O: dict, Pall, rise_m: float = 12.0, min_len_m: float = 24.0) -> list[dict]:
+    """走行線から外向きにコース面の端までの幅 W が、典型の幅より rise_m 以上広い区間（= 本線の外側にふくらむ引込み線の根元）。
+    O は走る向きにそろえた周回路。各区間は {i_a, i_b（走る向きで a が手前・b が先）, W_max, tips（ふくらみの外縁の点）}。"""
+    from shapely.geometry import LineString, MultiPoint, Point
+
+    xy = O["xy"]
+    n = len(xy)
+    tang = np.roll(xy, -1, axis=0) - np.roll(xy, 1, axis=0)
+    tang /= np.maximum(np.hypot(*tang.T), 1e-9)[:, None]
+    nout = np.column_stack([tang[:, 1], -tang[:, 0]])          # 走る向きの右 = 反時計回りの外側、時計回りでは内側。向きに応じて下で反転
+    # 外側 = 周回路の重心から遠ざかる側
+    ctr = xy.mean(axis=0)
+    sign = 1.0 if float(np.mean(np.einsum("ij,ij->i", nout, xy - ctr))) > 0 else -1.0
+    nout = nout * sign
+    B = Pall.boundary
+    W = np.empty(n)
+    for i in range(n):
+        x = LineString([tuple(xy[i]), tuple(xy[i] + nout[i] * 140)]).intersection(B)
+        W[i] = 140.0 if x.is_empty else min(float(np.hypot(*(np.array(g.coords[0]) - xy[i]))) for g in getattr(x, "geoms", [x]))
+    base = float(np.median(W))
+    on = W > base + rise_m
+    out = []
+    i = 0
+    while i < n:
+        if on[i]:
+            j = i
+            while j + 1 < n and on[j + 1]:
+                j += 1
+            if (j - i + 1) * STEP >= min_len_m:
+                a, b = max(i - 8, 0), min(j + 8, n - 1)
+                tips = []
+                zone = LineString(xy[a:b + 1]).buffer(float(W[i:j + 1].max()) + 12)
+                bd = Pall.boundary.intersection(zone)
+                for g in getattr(bd, "geoms", [bd]):
+                    if g.geom_type == "LineString" and g.length > 5:
+                        r = resample(np.array(g.coords), 6.0)
+                        for q in r:
+                            if float(np.min(np.hypot(*(xy[a:b + 1] - q).T))) > base + 6:
+                                tips.append(q)
+                out.append({"i_a": int(i), "i_b": int(j), "W_max": float(W[i:j + 1].max()), "base": base, "tips": np.array(tips)})
+            i = j + 1
+        else:
+            i += 1
+    return out
+
+
+def bezier(p0, p1, p2, p3, n: int = 24) -> np.ndarray:
+    t = np.linspace(0, 1, n)[:, None]
+    return (1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t ** 2 * p2 + t ** 3 * p3
+
+
+def pocket_candidates(O: dict, i_goal: int, Pall, max_tips: int = 36) -> list[dict]:
+    """ふくらみごとに、先端（外縁の点）→ 接続点（ふくらみの先の本線）を直線の向きで滑らかにつなぐ曲線を候補にする。
+    経路長（曲線 + 接続点から先の本線）が距離に合うかは、コースごとの照合（find_spur_route）で判定する。"""
+    xy, cum, L = O["xy"], O["cum"], O["L"]
+    n = len(xy)
+    out = []
+    for bl in find_bulges(O, Pall):
+        tips = bl["tips"]
+        if len(tips) == 0:
+            continue
+        for off in (-8, 0, 8, 16, 24, 32, 40, 52):                       # 接続点: ふくらみの終わりの前後
+            jb = (bl["i_b"] + off) % n
+            J = xy[jb]
+            t = xy[(jb + 3) % n] - xy[(jb - 3) % n]
+            t = t / max(float(np.hypot(*t)), 1e-9)
+            q_j = float((cum[i_goal] - cum[jb]) % L)
+            for tip in tips[:: max(1, len(tips) // max_tips)]:
+                d = J - tip
+                ell = float(np.hypot(*d))
+                if ell < 25 or float(np.dot(d / ell, t)) < 0.2:           # 先端は接続点の手前（走る向きの後ろ）にあるはず
+                    continue
+                pts = bezier(tip, tip + t * ell / 3, J - t * ell / 3, J)
+                ln = _plen(pts)
+                out.append({"tip": -1, "junction": -1, "len": round(ln, 1), "q_junction": round(q_j, 1), "tip_xy": np.round(tip, 1).tolist(), "kind": "pocket", "W": round(bl["W_max"], 1),
+                            "pts": np.round(pts, 1).tolist()})
+    return out
+
+
 def first_curve_distance(route: np.ndarray, thr: float = CURVE_THR, min_turn_deg: float = 12.0) -> float | None:
     """経路（スタート → ゴール）に沿って、最初のコーナーに入るまでの距離。曲率がしきい値を超えて続く最初の点。"""
     r = resample(route, STEP)
@@ -663,7 +742,7 @@ def _nearest_idx(xy: np.ndarray, p) -> int:
     return int(np.argmin(np.hypot(*(xy - np.asarray(p)).T)))
 
 
-def build_circuit_entry(ci: Circuit, direction: str, stand: np.ndarray | None, final_straight: float | None, g: dict, nodes: list[int], lap_official: float, info: dict, thr: float = CURVE_THR) -> dict:
+def build_circuit_entry(ci: Circuit, direction: str, stand: np.ndarray | None, final_straight: float | None, g: dict, nodes: list[int], lap_official: float, info: dict, thr: float = CURVE_THR, Pall=None) -> dict:
     cw = direction == "右"
     O = ci.oriented(cw)
     goal = locate_goal(O, stand, float(final_straight or 400.0), thr)
@@ -695,33 +774,55 @@ def build_circuit_entry(ci: Circuit, direction: str, stand: np.ndarray | None, f
         spurs.append({"tip": int(sp["tip"]), "junction": int(sp["junction"]), "len": round(sp["len"], 1), "q_junction": round(qj, 1), "tip_xy": np.round(sp["pts"][0], 1).tolist(),
                       "pts": np.round(resample(sp["pts"], Q_STEP), 1).tolist()})
     ent["spurs"] = spurs
+    if Pall is not None:
+        ent["_pockets"] = pocket_candidates(O, goal["idx"], Pall)          # 保存しない（コースの照合にだけ使う）
     return ent
 
 
+def _wiggle(run: np.ndarray) -> float:
+    """閉じた線の方位変化の総和 − 2π（凸な輪なら 0 に近い。内側へ入り込む凹みがあると大きくなる）。"""
+    d = np.roll(run, -1, axis=0) - run
+    a = np.unwrap(np.arctan2(d[:, 1], d[:, 0]))
+    return float(np.abs(np.diff(a)).sum() - 2 * math.pi)
+
+
 def hole_circuit(P, lap_official: float, rail: float = RAIL_M, close_m: float = 18.0, tol: float = 0.06) -> tuple[Circuit | None, dict]:
-    """単純な輪（ダートや、内外の別が無い芝）: 面の穴（= 内ラチの輪）を直接使う。穴に細く突き出た部分（引込み線の根元など）は閉じる処理でならす。
-    周長がマスタに近いもの（tol 以内）があれば採用する。"""
+    """単純な輪（ダートや、内外の別が無い芝）: 面の穴（= 内ラチの輪）を外へ rail 広げた線、または外周を内へ（輪の幅 − rail）縮めた線を直接使う。
+    穴に細く突き出た部分（引込み線の根元）は閉じる処理でならす。内側に帯が張り出す場（札幌・函館・新潟のダートの内側の引込み線の帯）は、穴の輪が帯をなぞって凹むので、
+    凹みの少ない（方位変化の総和が小さい）ほうを採る。周長がマスタに近いもの（tol 以内）が対象。"""
     from shapely.geometry import Polygon
 
-    best = None
+    cands = []
     for g in ([P] if P.geom_type == "Polygon" else list(P.geoms)):
+        outer = Polygon(g.exterior)
         for h in g.interiors:
             hp = Polygon(h)
             if hp.area < 3e4:
                 continue
+            ring_o = resample(np.array(g.exterior.coords)[:-1], STEP, closed=True)
+            from scipy.spatial import cKDTree
+
+            dist_o = cKDTree(resample(np.array(h.coords)[:-1], STEP, closed=True)).query(ring_o)[0]
+            w0 = float(np.percentile(dist_o, 25))                          # 輪の幅（帯が張り出す場所を除く）
             for cm in (0.0, close_m):
                 q = hp.buffer(cm, join_style=1).buffer(-cm, join_style=1) if cm else hp
                 if q.is_empty or q.geom_type != "Polygon":
                     continue
-                ex = q.buffer(rail, join_style=1).exterior
-                run = resample(np.array(ex.coords)[:-1], STEP, closed=True)
-                ci = Circuit(run, method="hole-direct")
-                err = ci.L_run / lap_official - 1
-                if best is None or abs(err) < abs(best[0]):
-                    best = (err, ci, cm)
-    if best is None or abs(best[0]) > tol:
-        return None, {"error": "穴の輪が周長に合わない" if best else "穴なし"}
-    return best[1], {"nodes": [], "err": best[0], "method": "hole-direct", "closing_m": best[2], "L_run": best[1].L_run}
+                run = resample(np.array(q.buffer(rail, join_style=1).exterior.coords)[:-1], STEP, closed=True)
+                cands.append(("hole-direct", cm, run))
+            ins = outer.buffer(-(w0 - rail), join_style=1)
+            if not ins.is_empty and ins.geom_type == "Polygon":
+                cands.append(("outer-inset", 0.0, resample(np.array(ins.exterior.coords)[:-1], STEP, closed=True)))
+    scored = []
+    for method, cm, run in cands:
+        ci = Circuit(run, method=method)
+        err = ci.L_run / lap_official - 1
+        if abs(err) <= tol:
+            scored.append((abs(err) + 0.01 * max(_wiggle(ci.xy_run), 0.0), err, ci, method, cm))
+    if not scored:
+        return None, {"error": "穴の輪が周長に合わない"}
+    _, err, ci, method, cm = min(scored, key=lambda t: t[0])
+    return ci, {"nodes": [], "err": err, "method": method, "closing_m": cm, "L_run": ci.L_run}
 
 
 def derive_dirt_from_turf(osm: dict, width_m: float = 25.0):
@@ -807,8 +908,6 @@ def layers_of(pk: dict, step: float = 6.0) -> list[dict]:
         layers.append({"kind": kind, "polys": polys})
 
     dirt_est = "ダート" in pk["P"] and not any(t["surface"] == "dirt" for t in osm["tracks"])
-    add("turf", pk["P"].get("芝"))
-    add("dirt_est" if dirt_est else "dirt", pk["P"].get("ダート"))
     flat = pk["P"].get("芝")
     steeple, other = [], []
     for t in osm["tracks"]:
@@ -823,8 +922,10 @@ def layers_of(pk: dict, step: float = 6.0) -> list[dict]:
                 other.append(fp)
         else:
             other.append(fp)
+    add("other", unary_union(other) if other else None)             # 下に敷く（面の種別が不明な広い輪郭が、芝・ダートを覆わないように）
     add("steeple", unary_union(steeple) if steeple else None)
-    add("other", unary_union(other) if other else None)
+    add("turf", pk["P"].get("芝"))
+    add("dirt_est" if dirt_est else "dirt", pk["P"].get("ダート"))
     tracks_u = unary_union([Polygon(a, holes=h).buffer(0) for t in osm["tracks"] for a, h in t["polys"]]) if osm["tracks"] else None
     stands = []
     for s_ in osm["stands"]:
@@ -844,10 +945,12 @@ def assemble_venue(pk: dict, rows: list[dict], thr: float = CURVE_THR) -> dict:
     for key, p in pk["picks"].items():
         vrows = p["vrows"]
         fs = float(np.median([r["final_straight_m"] for r in vrows if r.get("final_straight_m")]))
-        ent = build_circuit_entry(p["ci"], vrows[0]["direction"], pk["stand"], fs, p["g"], p["info"]["nodes"], p["lap"], p["info"], thr)
+        ent = build_circuit_entry(p["ci"], vrows[0]["direction"], pk["stand"], fs, p["g"], p["info"]["nodes"], p["lap"], p["info"], thr, pk["Pall"])
         ent["derived"] = p["derived"]
         out["circuits"][key] = ent
     out["courses"] = build_courses(out, rows, dict(pk["P"], all=pk["Pall"]), thr)
+    for c in out["circuits"].values():
+        c.pop("_pockets", None)
     return out
 
 
@@ -856,6 +959,17 @@ def build_venue(vc: str, rows: list[dict], osm_dir: Path = OSM_DIR, thr: float =
 
 
 # ------------------------------------------------------------------ コースごとの経路
+
+_OV = None
+
+
+def start_overrides() -> dict:
+    """geo/start_overrides.json: マスタの発走位置の種別を、独立資料（複数サイト）の記述で上書きするコース。キー = '場コード|面|内外|距離'。"""
+    global _OV
+    if _OV is None:
+        _OV = {k: v for k, v in json.loads(OVERRIDES_PATH.read_text(encoding="utf-8")).items() if not k.startswith("_")} if OVERRIDES_PATH.exists() else {}
+    return _OV
+
 
 def circuit_key_for(row: dict) -> str:
     var = row["variant"]
@@ -947,6 +1061,28 @@ def find_spur_route(circ: dict, D: float, fcm: float | list | None, thr: float =
     return best
 
 
+def find_pocket_route(circ: dict, D: float, fcm: list | None, thr: float = CURVE_THR, tol: float = 0.03) -> dict | None:
+    """本線の外側にふくらむ引込み線（ポケット）: 先端 → 接続点の曲線 + 接続点から先の本線 の長さが距離に合う候補のうち、
+    最初のコーナーまでの距離がマスタに近いものを選ぶ。"""
+    L = float(circ["L_run"])
+    Pq = np.array(circ["pts_q"])
+    after = Pq[::-1][: int(900 // Q_STEP)]
+    targets = [x for x in (fcm or []) if x]
+    best = None
+    for pk_ in circ.get("_pockets", []):
+        for k in range(0, int(D // L) + 1):
+            err = (pk_["len"] + pk_["q_junction"] + k * L) / D - 1
+            if abs(err) > tol:
+                continue
+            body = Pq[: int(pk_["q_junction"] // Q_STEP) + 1][::-1]
+            fc = first_curve_distance(np.vstack([np.array(pk_["pts"]), body, after]), thr)
+            fc_err = min(abs(fc - x) for x in targets) if (fc is not None and targets) else 0.0
+            cand = {"pk": pk_, "k": k, "err": err, "fc": fc, "fc_err": fc_err}
+            if best is None or (fc_err, abs(err)) < (best["fc_err"], abs(best["err"])):
+                best = cand
+    return best
+
+
 def build_courses(venue: dict, rows: list[dict], Ps: dict | None = None, thr: float = CURVE_THR) -> dict:
     out = {}
     for r in rows:
@@ -960,8 +1096,13 @@ def build_courses(venue: dict, rows: list[dict], Ps: dict | None = None, thr: fl
             continue
         D, L = float(r["distance"]), float(circ["L_run"])
         sg = r.get("start_geometry") or "main_track"
+        ov = start_overrides().get(f'{r["venue_code"]}|{key}')
+        if ov:
+            sg = ov["start_geometry"]
+            entry["override"] = ov.get("note") or "独立資料により発走位置を修正"
         fs = float(r.get("final_straight_m") or 400)
         Pall = (Ps or {}).get("all")
+        fct = [r.get("first_curve_m"), r.get("first_main_corner_m_A")]
         route = None
         if r["variant"] == "直":
             best = None
@@ -973,13 +1114,22 @@ def build_courses(venue: dict, rows: list[dict], Ps: dict | None = None, thr: fl
                 entry.update({"start": "straight", "spur": best[1]["tip"], "route_err": round(best[0], 4), "q_start": round(best[1]["q_junction"], 1)})
                 route = route_points(circ, best[1]["q_junction"], spur=best[1])
                 entry["flags"].append("直線コースは骨格の枝から推定")
-        elif sg != "main_track":
-            fct = [r.get("first_curve_m"), r.get("first_main_corner_m_A")]
+        if route is None and r["variant"] != "直" and sg == "pocket":
+            pr = find_pocket_route(circ, D, [r.get("first_curve_m")], thr)
+            if pr is not None:
+                pkt = pr["pk"]
+                entry.update({"start": "pocket", "q_start": round(pkt["q_junction"], 1), "stub": pkt["pts"], "stub_len": round(pkt["len"], 1), "route_err": round(pr["err"], 4), "laps_before": pr["k"]})
+                route = route_points(circ, pkt["q_junction"], stub=pkt["pts"])
+                if pr["fc"] is not None and pr["fc_err"] > 60:
+                    entry["flags"].append(f"ポケットの形は面から推定。最初のコーナーまでの距離が図 {pr['fc']:.0f}m / マスタ {r.get('first_curve_m')}m とずれる")
+                else:
+                    entry["pocket_estimated_shape"] = True
+        if route is None and r["variant"] != "直" and sg != "main_track":
             st, allc = find_stub(circ, D, sg, fs, Pall, fct, thr)
             if st is not None:
                 entry.update({"start": "chute", "q_start": round(st["q_exit"], 1), "stub_len": round(st["len"], 1), "laps_before": st["k"], "stub_inside": round(st["inside"], 2)})
                 if st.get("fc_mismatch"):
-                    entry["flags"].append(f"引込み線の形は OSM の面に収まるが、最初のコーナーまでの距離が図 {st['fc'] or 0:.0f}m / マスタ {r.get('first_curve_m')}m とずれる")
+                    entry["flags"].append(f"引込み線の形は OSM の面に収まるが、最初のコーナーまでの距離が図 {st['fc'] or 0:.0f}m / マスタ {r.get('first_curve_m') or r.get('first_main_corner_m_A')}m とずれる")
                 stub = np.vstack([st["tip"], st["xy"]])
                 entry["stub"] = np.round(stub, 1).tolist()
                 route = route_points(circ, st["q_exit"], stub=stub)
@@ -1005,7 +1155,12 @@ def build_courses(venue: dict, rows: list[dict], Ps: dict | None = None, thr: fl
                 ent = min(circ["exits"], key=lambda e: abs(((e["q_entry"] - q_c + L / 2) % L) - L / 2))
                 if abs(((ent["q_entry"] - q_c + L / 2) % L) - L / 2) < 90:
                     qv = ent["q_entry"] + float(fcm)
-                    if qv < L:
+                    if qv < L and abs(D - k * L - qv) <= 40:
+                        # 引込み線の長さが 40m 未満: 本線上のスタートとほぼ一致する（OSM の形状では引込み線と見分けられない）
+                        entry.update({"start": "main", "q_start": round(qv, 1), "laps_before": k, "short_chute_m": round(D - k * L - qv, 1)})
+                        route = route_points(circ, qv)
+                        entry["flags"] = [f for f in entry["flags"] if "先端が OSM の面に収まらず" not in f]
+                    elif qv < L:
                         entry.update({"start": "main_approx", "q_start": round(qv, 1), "laps_before": k, "approx_chute_len": round(D - k * L - qv, 1)})
                         route = route_points(circ, qv)
                         entry["flags"].append(f"引込み線の形状が OSM に無く、最初のコーナーまでの距離が合う本線上の点で近似（実際はこの手前に約 {D - k * L - qv:.0f}m の引込み線）")
@@ -1022,18 +1177,47 @@ def build_courses(venue: dict, rows: list[dict], Ps: dict | None = None, thr: fl
     return out
 
 
-def build_all(master_path: Path = MASTER, osm_dir: Path = OSM_DIR, venues: list[str] | None = None, thr: float = CURVE_THR) -> dict:
+THR_CANDIDATES = (1 / 120, 1 / 160, 1 / 200, 1 / 260, 1 / 350, 1 / 500, 1 / 700)
+
+
+def _fc_error(v: dict, rows: list[dict]) -> float:
+    """マスタの『最初のコーナーまでの距離』（first_curve_m または first_main_corner_m_A）と図の値の平均絶対誤差（m）。"""
+    by = {f'{r["surface"]}|{r["variant"]}|{int(r["distance"])}': r for r in rows}
+    errs = []
+    for k, c in v["courses"].items():
+        r = by[k]
+        t = [x for x in (r.get("first_curve_m"), r.get("first_main_corner_m_A")) if x]
+        if c.get("first_curve_calc") is not None and t:
+            errs.append(min(abs(c["first_curve_calc"] - x) for x in t))
+    return float(np.mean(errs)) if errs else 1e9
+
+
+def build_all(master_path: Path = MASTER, osm_dir: Path = OSM_DIR, venues: list[str] | None = None, thr: float | None = None) -> dict:
+    """thr を省略すると、競馬場ごとにコーナー検出のしきい値を THR_CANDIDATES から選ぶ（スパイラルカーブの有無でコーナー入口の見え方が違うため）。
+    選ぶ基準は、最初のコーナーまでの距離の図とマスタの平均絶対誤差。"""
     master = json.loads(Path(master_path).read_text(encoding="utf-8"))
-    result = {"attribution": "コース形状: © OpenStreetMap contributors (ODbL) から骨格化して導出", "rail_m": RAIL_M, "curve_thr": thr, "venues": {}}
+    result = {"attribution": "コース形状: © OpenStreetMap contributors (ODbL) から骨格化して導出", "rail_m": RAIL_M, "curve_thr": CURVE_THR, "venues": {}}
     for vc in sorted({r["venue_code"] for r in master}):
         if venues and vc not in venues:
             continue
         rows = [r for r in master if r["venue_code"] == vc and r.get("in_use") is not False]
-        result["venues"][vc] = build_venue(vc, rows, osm_dir, thr)
+        pk = pick_venue(vc, rows, osm_dir)
+        cands = (thr,) if thr else THR_CANDIDATES
+        best = None
+        for t in cands:
+            v = assemble_venue(pk, rows, t)
+            e = _fc_error(v, rows)
+            if best is None or e < best[0] - 1e-9:
+                best = (e, t, v)
+        v = best[2]
+        v["curve_thr"] = best[1]
+        v["fc_mae_m"] = round(best[0], 1)
+        result["venues"][vc] = v
     return result
 
 
 NOTES = ROUTES.parent / "verification_notes.json"
+OVERRIDES_PATH = GEO_DIR / "start_overrides.json"
 
 STATIC_NOTES = [
     "形状は OpenStreetMap の面ポリゴン。走行線は『内ラチから 3m』の線（面の穴 = 内ラチの輪を直接使う。内回り・外回りが重なる場所は骨格化した中心線から内側へ光線を飛ばして内ラチに当てる）で、周長はマスタと 3% 以内で合う（多くは 1% 以内）。",
@@ -1043,6 +1227,10 @@ STATIC_NOTES = [
     "斜めに合流する引込み線（札幌・中京・福島など）は、骨格の行き止まりの枝（先端 → 接続点）+ 接続点から先の周回路の長さが距離に合うものを採る。合わない・距離が照合できないものは『推定』にしている。",
     "中京: OSM にダートの面が無いため、芝の内ラチの内側に幅 25m の帯があるとして推定（周長はマスタと +0.8%）。",
     "新潟の直線 1000m は、外回りの最後の直線へつながる枝の骨格から推定（『推定』表示）。",
+    "第5ラウンドの監査: 全コースのスタート位置・区間を、JRA-VAN すごトクのコース解説（geo/jravan_start.json）・収集B/C（geo/start_descriptions.json）と突き合わせた（geo/route_audit.json、検証の章に全表）。独立した記述と合わない発走位置は geo/start_overrides.json で上書きし、根拠 URL を残している。",
+    "直したもの: 東京芝2000m（本線上 → 1コーナー奥のポケット）、東京芝1800m・中京芝1600m・札幌芝1500m・福島ダート1150m・中山芝外回り1600m（直線の延長 → 斜めに合流するポケット）、札幌ダート1000m・東京ダート1400m・中京ダート1200m・中京芝3000m・新潟芝内回り2000m（引込み線ではなく本線上）。コーナー検出のしきい値は競馬場ごとに選ぶ（福島・東京など）。",
+    "直せていない・推定のもの: ポケットのコース（位置は独立資料と OSM の面のふくらみで裏づけ、先端から本線への曲線は補間）、新潟の直線1000m、阪神内回り3200m（発走位置の資料なし）。函館ダート2400m・福島ダート1700m/2400mなど、最初のコーナーまでの距離が 30〜50m ずれる本線上のコースは、コーナー入口の定義の差（スパイラルカーブ等）による。",
+    "ポケットの最初のコーナーまでの距離の一致は、候補（先端と接続点の組）の中から距離とマスタの値が最も合うものを選んだ結果であり、独立した検証ではない。独立した検証になっているのは、(1) 先端が OSM のコース面のふくらみの中にあること、(2) スタートからゴールまでの経路長が距離と 2% 以内で合うこと、(3) 区間が独立した記述と合うこと。",
     "障害コースは OSM の別の面（ダートの輪の内側にある芝）として背景に薄く描くだけで、経路には使わない。",
     "複数周のコース（約 1.5 周など）は最後の周だけを描く。阪神の 3200m 内回り（1 周目は外回り）の初回の周は描いていない。",
 ]
@@ -1064,7 +1252,161 @@ def verification_summary(result: dict, master: list[dict]) -> dict:
     e = np.array(fc_err) if fc_err else np.zeros(1)
     return {"circuits": laps, "n_circuits": len(laps), "max_abs_lap_err": max(abs(x["err"]) for x in laps), "courses_total": sum(kinds.values()), "start_kinds": kinds,
             "first_curve_check": {"n": len(fc_err), "median_err_m": float(np.median(e)), "mean_abs_err_m": float(np.abs(e).mean()), "max_abs_err_m": float(np.abs(e).max())},
-            "estimated_courses": flagged, "curve_thr": result["curve_thr"]}
+            "estimated_courses": flagged, "curve_thr_by_venue": {vc: {"thr": round(1 / v["curve_thr"]), "fc_mae_m": v.get("fc_mae_m")} for vc, v in result["venues"].items()}}
+
+
+# ------------------------------------------------------------------ 走行ルートの監査（独立した記述との突き合わせ）
+
+DESCRIPTIONS = GEO_DIR / "start_descriptions.json"
+AUDIT = GEO_DIR / "route_audit.json"
+JRAVAN = GEO_DIR / "jravan_start.json"
+REGION_JP = {"home": "ゴール前の直線", "c34": "3・4コーナー", "back": "向正面", "c12": "1・2コーナー", "after": "ゴール後の直線"}
+
+
+def region_of_q(circ: dict, q: float, margin: float = 45.0) -> list[str]:
+    """周回路上の位置 q（ゴールまでの残り距離）の区間（先頭が本命）。コーナー区間の境界から margin 以内なら、隣の直線の区間も候補に含める。"""
+    L = float(circ["L_run"])
+    groups = sorted(circ.get("corners", {}).get("groups", []), key=lambda g: g["q_near"])
+    if len(groups) < 2:
+        return ["back"]
+    g0, g1 = groups[0], groups[-1]
+    q = q % L
+    bounds = [(0.0, g0["q_near"], "home"), (g0["q_near"], g0["q_far"], "c34"), (g0["q_far"], g1["q_near"], "back"), (g1["q_near"], g1["q_far"], "c12"), (g1["q_far"], L, "after")]
+    main = next(name for a, b, name in bounds if a <= q < b or (q == L and name == "after"))
+    out = [main]
+    for a, b, name in bounds:
+        if name != main and (abs(q - a) <= margin or abs(q - b) <= margin):
+            out.append(name)
+    return out
+
+
+def text_regions(text: str | None) -> set[str]:
+    """発走位置の記述から、示している区間（複数ありうる）を拾う。他のコースを参照する記述（『〇〇mと同じ』）は空集合。"""
+    import re as _re
+
+    if not text:
+        return set()
+    t = text
+    if _re.search(r"と同(じ|位置)|と同じ地点", t) and not _re.search(r"向正面|ホーム|スタンド|コーナー", t.split("と同")[0]):
+        return set()
+    r = set()
+    t = t.translate(str.maketrans("１２３４", "1234"))
+    if _re.search(r"向正面|向こう正面|向う正面|バックストレッチ|2コーナー|3コーナー手前|真ん中|半ば|中間", t):
+        r.update({"back", "c12"} if _re.search(r"2コーナー|1[～〜]2コーナー", t) else {"back"})
+    if _re.search(r"ホームストレッチ|スタンド前|正面スタンド|4コーナー|直線の入り口|直線入口|最後の直線|メインスタンド|合流地点", t):
+        r.update({"home", "c34"} if _re.search(r"4コーナー", t) else {"home", "after"})
+    if _re.search(r"ゴール板を過ぎ|ゴール板の先|1コーナー|1[～〜]2コーナー", t):
+        r.update({"after", "c12"})
+    if _re.search(r"3コーナー(手前|途中)", t):
+        r.update({"back", "c34"})
+    return r
+
+
+def figure_region(circ: dict, course: dict) -> tuple[list[str], str]:
+    """図のスタート位置の区間と説明。引込み線（stub）は接続点（q_start）の区間 + 引込み線の長さ。"""
+    q = float(course.get("q_start") or 0.0)
+    reg = region_of_q(circ, q)
+    kind = course.get("start")
+    extra = ""
+    if kind in ("chute", "pocket", "chute_diag"):
+        extra = f"（引込み線 約{course.get('stub_len', 0):.0f}m、本線への接続点はゴールの{q:.0f}m手前）"
+        if kind == "pocket":
+            extra = f"（ポケット 約{course.get('stub_len', 0):.0f}m、本線への接続点はゴールの{q:.0f}m手前）"
+    elif kind == "main_approx":
+        extra = f"（本線上の近似。実際はこの手前に引込み線 約{course.get('approx_chute_len', 0):.0f}m）"
+    else:
+        extra = f"（本線上、ゴールの{q:.0f}m手前" + (f"、{course.get('laps_before', 0)}周目の途中から" if course.get("laps_before") else "") + "）"
+    return reg, REGION_JP[reg[0]] + extra
+
+
+def route_audit(result: dict, master: list[dict], desc: dict, desc_j: dict) -> list[dict]:
+    """全コースについて、図のスタート位置・最初のコーナーまでの距離を、独立した記述（A/B/C）と突き合わせた監査表。"""
+    rows = []
+    r_first_main = {f'{m["venue_code"]}|{m["surface"]}|{m["variant"]}|{int(m["distance"])}': m.get("first_main_corner_m_A") for m in master}
+    for m in master:
+        vc = m["venue_code"]
+        ck = f'{m["surface"]}|{m["variant"]}|{int(m["distance"])}'
+        course = result["venues"][vc]["courses"][ck]
+        circ = result["venues"][vc]["circuits"].get(course["circuit"])
+        d = desc["courses"].get(f"{vc}|{ck}", {})
+        if circ is None or not circ.get("pts_q"):
+            rows.append({"venue": vc, "course": ck, "verdict": "図なし", "figure": None, "descriptions": d})
+            continue
+        reg, fig = figure_region(circ, course)
+        j = (desc_j.get(f"{vc}|{ck}") or {}).get("start_sentence")
+        texts = {"A": (d.get("A") or {}).get("start_position"), "B": (d.get("B") or {}).get("start_position"), "C": (d.get("C") or {}).get("start_position"), "JRA-VAN": j}
+        srcs = ["JRA-VAN", "C", "B"] + (["A"] if not any(texts[x] for x in ("JRA-VAN", "C", "B")) else [])      # A は全引込み線コースで同じ定型文のため、他の資料があるときは数えない
+        votes = []
+        for src in srcs:
+            rg = text_regions(texts[src])
+            if rg:
+                votes.append((src, bool(set(reg) & rg)))
+        fc_srcs = {"B": (d.get("B") or {}).get("first_corner_m"), "C": (d.get("C") or {}).get("first_corner_m")}
+        fc_calc = course.get("first_curve_calc")
+        targets = [x for x in (course.get("first_curve_master"), r_first_main.get(f"{vc}|{ck}")) if x]
+        fc_ok = bool(fc_calc is not None and targets and min(abs(fc_calc - x) for x in targets) <= 60)
+        agree = [s_ for s_, ok in votes if ok]
+        disagree = [s_ for s_, ok in votes if not ok]
+        if course["flags"]:
+            verdict = "推定"
+        elif course.get("start") == "pocket":
+            verdict = "推定（ポケットの位置は面のふくらみと独立資料から。曲線は補間）"
+        elif not votes:
+            verdict = "判定保留（記述が他のコースを参照）" if any(texts.values()) else "判定保留（記述なし）"
+        elif len(agree) > len(disagree):
+            verdict = "一致" if (fc_ok or not targets) else "区間は一致、最初のコーナーまでの距離は不一致"
+        elif agree:
+            verdict = "不一致（記述が割れている）"
+        else:
+            verdict = "不一致"
+        urls = []
+        ju = (desc_j.get(f"{vc}|{ck}") or {}).get("url")
+        if ju:
+            urls.append(ju)
+        for s_ in "CBA":
+            for u in (d.get(s_) or {}).get("sources", []):
+                if u not in urls and not u.endswith((".gif", ".png")):
+                    urls.append(u)
+        rows.append({"venue": vc, "course": ck, "figure": fig, "figure_region": reg, "start_kind": course.get("start"), "first_curve_calc": fc_calc, "first_curve_master": course.get("first_curve_master"),
+                     "first_corner_B": fc_srcs["B"], "first_corner_C": fc_srcs["C"], "descriptions": texts, "agree": agree, "disagree": disagree, "verdict": verdict, "flags": course["flags"],
+                     "override": course.get("override"), "jravan_to_corner": (desc_j.get(f"{vc}|{ck}") or {}).get("to_corner"), "urls": urls[:6]})
+    return rows
+
+
+CHAPTER = REPO_ROOT / "docs/html/modeling/chapters/course_master_verification.html"
+VENUE_JP = {"01": "札幌", "02": "函館", "03": "福島", "04": "新潟", "05": "東京", "06": "中山", "07": "中京", "08": "京都", "09": "阪神", "10": "小倉"}
+
+
+def audit_html(rows: list[dict]) -> str:
+    """監査表（全コース）を検証の章に埋め込む HTML にする。"""
+    import html as _h
+
+    def e(x):
+        return _h.escape(str(x if x is not None else "—"))
+
+    out = ['<table class="audit"><tr><th>コース</th><th>図の位置</th><th>独立した記述（JRA-VAN / 収集C）</th><th>最初のコーナーまで（図 / マスタ）</th><th>判定</th><th>根拠</th></tr>']
+    for r in rows:
+        desc = r["descriptions"]
+        txt = " ／ ".join(x for x in (desc.get("JRA-VAN"), desc.get("C")) if x) or "—"
+        ok = r["verdict"] == "一致"
+        urls = "　".join(f'<a href="{_h.escape(u)}">{i + 1}</a>' for i, u in enumerate(r["urls"][:4]))
+        fcm = r.get("first_curve_master") or r.get("first_corner_C") or r.get("first_corner_B")
+        out.append(f'<tr class="{"ok" if ok else "ng"}"><td>{e(VENUE_JP[r["venue"]])} {e(r["course"].replace("||", " ").replace("|", " "))}</td><td>{e(r["figure"])}'
+                   + (f'<br><span class="mut">{e("・".join(r["flags"]))}</span>' if r["flags"] else "") + (f'<br><span class="mut">修正: {e(r["override"])}</span>' if r.get("override") else "")
+                   + f'</td><td>{e(txt)}</td><td>{e(r["first_curve_calc"])} / {e(fcm)}</td><td>{e(r["verdict"])}</td><td>{urls}</td></tr>')
+    out.append("</table>")
+    return "".join(out)
+
+
+def write_audit_chapter(rows: list[dict]) -> None:
+    if not CHAPTER.exists():
+        return
+    t = CHAPTER.read_text(encoding="utf-8")
+    a, b = "<!--AUDIT-BEGIN-->", "<!--AUDIT-END-->"
+    if a not in t or b not in t:
+        return
+    i, j = t.index(a) + len(a), t.index(b)
+    CHAPTER.write_text(t[:i] + audit_html(rows) + t[j:], encoding="utf-8")
 
 
 def main() -> int:
@@ -1081,6 +1423,12 @@ def main() -> int:
         master = [r for r in json.loads(MASTER.read_text(encoding="utf-8")) if r.get("in_use") is not False]
         NOTES.write_text(json.dumps({"notes": STATIC_NOTES, "summary": verification_summary(res, master)}, ensure_ascii=False, indent=1), encoding="utf-8")
         print("wrote", NOTES)
+        desc = json.loads(DESCRIPTIONS.read_text(encoding="utf-8"))
+        dj = json.loads(JRAVAN.read_text(encoding="utf-8"))["courses"] if JRAVAN.exists() else {}
+        rows = route_audit(res, master, desc, dj)
+        AUDIT.write_text(json.dumps({"_README": "全コースの走行ルート（スタート位置・区間）と、独立した記述（start_descriptions.json）との突き合わせ", "rows": rows}, ensure_ascii=False, indent=1), encoding="utf-8")
+        print("wrote", AUDIT)
+        write_audit_chapter(rows)
     return 0
 
 

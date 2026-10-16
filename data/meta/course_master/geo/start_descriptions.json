@@ -1,0 +1,3350 @@
+{
+ "_README": "3 つの独立収集（A=JRA公式中心、B=netkeiba・競馬ラボ、C=Wikipedia・JRA-VAN・bakendo 等）が記録した各コースの発走位置の短い記述（要約）と、その根拠 URL。本文の転載ではない。アトラスの走行ルートの監査（route_audit.json）の入力。",
+ "courses": {
+  "01|ダート||1000": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 300,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/札幌競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面左・2コーナー出口付近",
+    "first_corner_m": 280.0,
+    "n_laps": 0.67,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs01d1000.html",
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://bakendo.com/sappororc/sapporo1000d/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "01|ダート||1700": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約213m手前",
+    "first_corner_m": 260,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/札幌競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の右(4コーナー寄り)",
+    "first_corner_m": 240.0,
+    "n_laps": 1.14,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs01d1700.html",
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://bakendo.com/sappororc/sapporo1700d/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "01|ダート||2400": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 210,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/札幌競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の真ん中付近(約1周半)",
+    "first_corner_m": 197.0,
+    "n_laps": 1.61,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs01d2400.html",
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://bakendo.com/sappororc/sapporo2400d/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "01|芝||1000": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 200,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/札幌競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向う正面",
+    "first_corner_m": 206,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202101010105",
+     "https://db.netkeiba.com/race/202101010105/",
+     "https://www.keibalab.jp/db/race/202106120105/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面の真ん中付近",
+    "first_corner_m": 200.0,
+    "n_laps": 0.61,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs01t1000.html",
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "01|芝||1200": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 400,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/札幌競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向う正面ポケット",
+    "first_corner_m": 412,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202501010101",
+     "https://db.netkeiba.com/race/202501010503/",
+     "https://www.keibalab.jp/db/race/202507260101/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線・2コーナー出口の少し左のポケット",
+    "first_corner_m": 400.0,
+    "n_laps": 0.73,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs01t1200.html",
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://bakendo.com/sappororc/sapporo1200t/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "01|芝||1500": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 700,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/札幌競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "1コーナーポケット",
+    "first_corner_m": null,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202501010104",
+     "https://db.netkeiba.com/race/202501010501/",
+     "https://www.keibalab.jp/db/race/202507260104/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "1コーナー横のポケット(約170m斜めに走って向正面直線に合流)",
+    "first_corner_m": 170.0,
+    "n_laps": 0.91,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs01t1500.html",
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://bakendo.com/sappororc/sapporo1500t/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "01|芝||1800": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約159m手前",
+    "first_corner_m": 210,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/札幌競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド手前の直線半ば",
+    "first_corner_m": 185,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202501010106",
+     "https://db.netkeiba.com/race/202501010310/",
+     "https://www.keibalab.jp/db/race/202507260106/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前(ホームストレッチ半ば付近)",
+    "first_corner_m": 180.0,
+    "n_laps": 1.1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs01t1800.html",
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://bakendo.com/sappororc/sapporo1800t/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "01|芝||2000": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約359m手前",
+    "first_corner_m": 410,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/札幌競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "4コーナー奥のポケット",
+    "first_corner_m": 385,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202501010108",
+     "https://db.netkeiba.com/race/202501010408/",
+     "https://www.keibalab.jp/db/race/202507260108/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の4コーナー奥ポケット",
+    "first_corner_m": 380.0,
+    "n_laps": 1.22,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs01t2000.html",
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://bakendo.com/sappororc/sapporo2000t/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "01|芝||2600": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 160,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/札幌競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向こう正面の直線半ば",
+    "first_corner_m": 165,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202501010110",
+     "https://db.netkeiba.com/race/202501010412/",
+     "https://www.keibalab.jp/db/race/202507260110/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線半ば(約1周半)",
+    "first_corner_m": 160.0,
+    "n_laps": 1.58,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/sapporo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs01t2600.html",
+     "https://ja.wikipedia.org/wiki/札幌競馬場",
+     "https://bakendo.com/sappororc/sapporo2600t/",
+     "https://www.jra.go.jp/facilities/race/sapporo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "02|ダート||1000": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 360,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/函館競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面の左端・2コーナー出口直後",
+    "first_corner_m": 366.0,
+    "n_laps": 0.68,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs02d1000.html",
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://bakendo.com/hakodaterc/hakodate1000d/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "02|ダート||1700": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約224m手前",
+    "first_corner_m": 330,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/函館競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の右端(4コーナー出口直後)",
+    "first_corner_m": 329.0,
+    "n_laps": 1.15,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs02d1700.html",
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://bakendo.com/hakodaterc/hakodate1700d/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "02|ダート||2400": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 290,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/函館競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の真ん中から少し左(約1周半)",
+    "first_corner_m": 290.6,
+    "n_laps": 1.63,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs02d2400.html",
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://bakendo.com/hakodaterc/hakodate2400d/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "02|芝||1000": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 290,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/函館競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面",
+    "first_corner_m": 289,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202502010105",
+     "https://db.netkeiba.com/race/202502010105/",
+     "https://www.keibalab.jp/db/race/202506140205/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の真ん中よりやや左",
+    "first_corner_m": 290.0,
+    "n_laps": 0.61,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs02t1000.html",
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://bakendo.com/hakodaterc/hakodate1000t/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "02|芝||1200": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 490,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/函館競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面ポケット",
+    "first_corner_m": 489,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202502010101",
+     "https://db.netkeiba.com/race/202502010311/",
+     "https://www.keibalab.jp/db/race/202506140201/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線・2コーナー奥のポケット",
+    "first_corner_m": 490.0,
+    "n_laps": 0.74,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs02t1200.html",
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://bakendo.com/hakodaterc/hakodate1200t/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "02|芝||1800": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約173m手前",
+    "first_corner_m": 280,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/函館競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前",
+    "first_corner_m": 276,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202502010104",
+     "https://db.netkeiba.com/race/202502010407/",
+     "https://www.keibalab.jp/db/race/202506140204/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線・スタンドの右端",
+    "first_corner_m": 275.0,
+    "n_laps": 1.11,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs02t1800.html",
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://bakendo.com/hakodaterc/hakodate1800t/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "02|芝||2000": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約373m手前",
+    "first_corner_m": 480,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/函館競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前の直線を延長したポケット",
+    "first_corner_m": 476,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202502010109",
+     "https://db.netkeiba.com/race/202502010409/",
+     "https://www.keibalab.jp/db/race/202506140209/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の右端・4コーナーポケット(坂の頂上から)",
+    "first_corner_m": 475.0,
+    "n_laps": 1.23,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs02t2000.html",
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://bakendo.com/hakodaterc/hakodate2000t/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "02|芝||2600": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 270,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/函館競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面",
+    "first_corner_m": 263,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202502010204",
+     "https://db.netkeiba.com/race/202502010310/",
+     "https://www.keibalab.jp/db/race/202506150204/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の真ん中(約1周半)",
+    "first_corner_m": 262.5,
+    "n_laps": 1.6,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hakodate/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs02t2600.html",
+     "https://ja.wikipedia.org/wiki/函館競馬場",
+     "https://bakendo.com/hakodaterc/hakodate2600t/",
+     "https://www.jra.go.jp/facilities/race/hakodate/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "03|ダート||1150": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 490,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/福島競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面・2コーナー外側のポケット(スタートは芝、斜めに本コースへ合流)",
+    "first_corner_m": 480.0,
+    "n_laps": 0.8,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs03d1150.html",
+     "https://ja.wikipedia.org/wiki/福島競馬場",
+     "https://bakendo.com/fukushimarc/fukushima1150d/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "03|ダート||1700": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約255m手前",
+    "first_corner_m": 340,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/福島競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "ホームストレッチの右端(4コーナー出口直後)",
+    "first_corner_m": 338.0,
+    "n_laps": 1.18,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs03d1700.html",
+     "https://ja.wikipedia.org/wiki/福島競馬場",
+     "https://bakendo.com/fukushimarc/fukushima1700d/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "03|ダート||2400": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 300,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/福島競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面の真ん中よりやや左(約1周半)",
+    "first_corner_m": 325.9,
+    "n_laps": 1.66,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs03d2400.html",
+     "https://ja.wikipedia.org/wiki/福島競馬場",
+     "https://bakendo.com/fukushimarc/fukushima2400d/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "03|芝||1200": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 430,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/福島競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面ポケット",
+    "first_corner_m": 412,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/福島競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202503010102",
+     "https://db.netkeiba.com/race/202503010509/",
+     "https://www.keibalab.jp/db/race/202504120302/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線・2コーナー奥のポケット",
+    "first_corner_m": 412.0,
+    "n_laps": 0.75,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs03t1200.html",
+     "https://ja.wikipedia.org/wiki/福島競馬場",
+     "https://bakendo.com/fukushimarc/fukushima1200t/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "03|芝||1800": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約200m手前",
+    "first_corner_m": 310,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/福島競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "(位置の記載なし)",
+    "first_corner_m": 305,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/福島競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202503010103",
+     "https://db.netkeiba.com/race/202503010608/",
+     "https://www.keibalab.jp/db/race/202504120303/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前より少し右",
+    "first_corner_m": 305.0,
+    "n_laps": 1.12,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs03t1800.html",
+     "https://ja.wikipedia.org/wiki/福島競馬場",
+     "https://bakendo.com/fukushimarc/fukushima1800t/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "03|芝||2000": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約400m手前",
+    "first_corner_m": 510,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/福島競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前直線を延長したポケット(4コーナー外側のバンク外)",
+    "first_corner_m": 500,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/福島競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202503010105",
+     "https://db.netkeiba.com/race/202503010503/",
+     "https://www.keibalab.jp/db/race/202504120305/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "ホームストレッチの右端・4コーナーのポケット",
+    "first_corner_m": 505.0,
+    "n_laps": 1.25,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs03t2000.html",
+     "https://ja.wikipedia.org/wiki/福島競馬場",
+     "https://bakendo.com/fukushimarc/fukushima2000t/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "03|芝||2600": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 230,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/福島競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面直線の上り途中",
+    "first_corner_m": 212,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/福島競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202503010108",
+     "https://db.netkeiba.com/race/202503010410/",
+     "https://www.keibalab.jp/db/race/202504120308/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面の真ん中(約1周半、コーナー6回通過)",
+    "first_corner_m": 211.7,
+    "n_laps": 1.62,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/fukushima/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs03t2600.html",
+     "https://ja.wikipedia.org/wiki/福島競馬場",
+     "https://bakendo.com/fukushimarc/fukushima2600t/",
+     "https://www.jra.go.jp/facilities/race/fukushima/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "04|ダート||1200": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 520,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "2コーナーのポケット(発走地点は芝。内外で芝部分の長さが違う)",
+    "first_corner_m": 525.0,
+    "n_laps": 0.81,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs04d1200.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://bakendo.com/niigatarc/niigata1200d/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "04|ダート||1800": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約328m手前",
+    "first_corner_m": 360,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "スタンド前直線の4コーナー寄り",
+    "first_corner_m": 389.0,
+    "n_laps": 1.22,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs04d1800.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://bakendo.com/niigatarc/niigata1800d/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "04|ダート||2500": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 350,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の2コーナー寄り(約1周半)",
+    "first_corner_m": 350.0,
+    "n_laps": 1.7,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs04d2500.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "04|芝|直|1000": {},
+  "04|芝|内|1200": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 450,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_shiba_in.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向こう正面の直線入口",
+    "first_corner_m": 448,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202504010409",
+     "https://db.netkeiba.com/race/202504010711/",
+     "https://www.keibalab.jp/db/race/202505110409/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面の直線の入り口(内回り使用)",
+    "first_corner_m": 448.0,
+    "n_laps": 0.74,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs04t1200.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://bakendo.com/niigatarc/niigata1200t/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "04|芝|内|1400": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 650,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_shiba_in.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面の延長されたポケット(内回り使用)",
+    "first_corner_m": 648,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202504010105",
+     "https://db.netkeiba.com/race/202504020103/",
+     "https://www.keibalab.jp/db/race/202505030405/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の右奥・2コーナーポケット(内回り使用)",
+    "first_corner_m": 648.0,
+    "n_laps": 0.86,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs04t1400.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://bakendo.com/niigatarc/niigata1400t/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "04|芝|外|1400": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 340,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_shiba_out.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "C": {
+    "start_position": null,
+    "first_corner_m": null,
+    "n_laps": 0.63,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   }
+  },
+  "04|芝|外|1600": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 540,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_shiba_out.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面",
+    "first_corner_m": 548,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202504010108",
+     "https://db.netkeiba.com/race/202504020206/",
+     "https://www.keibalab.jp/db/race/202505030408/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の真ん中よりやや右",
+    "first_corner_m": 550.0,
+    "n_laps": 0.72,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs04t1600out.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://bakendo.com/niigatarc/niigata1600t/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "04|芝|外|1800": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 740,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_shiba_out.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "芝1200と同じ地点(外回り使用)",
+    "first_corner_m": 748,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202504010110",
+     "https://db.netkeiba.com/race/202504010705/",
+     "https://www.keibalab.jp/db/race/202505030410/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の入り口(内回り芝1200mと同位置)",
+    "first_corner_m": 748.0,
+    "n_laps": 0.81,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs04t1800out.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://bakendo.com/niigatarc/niigata1800t/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "04|芝|内|2000": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約377m手前",
+    "first_corner_m": 410,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_shiba_in.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "内回りコースの4コーナー出口",
+    "first_corner_m": 436,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202504010205",
+     "https://db.netkeiba.com/race/202504010205/",
+     "https://www.keibalab.jp/db/race/202505040405/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "スタンド前直線の外回りと内回りの合流地点(内回り4コーナー出口)",
+    "first_corner_m": 436.0,
+    "n_laps": 1.23,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs04t2000.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://bakendo.com/niigatarc/niigata2000t/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "04|芝|外|2000": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 940,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_shiba_out.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "B": {
+    "start_position": null,
+    "first_corner_m": null,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202504010509",
+     "https://db.netkeiba.com/race/202504020406/"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の右奥・2コーナーポケット(内回り芝1400mと同地点)",
+    "first_corner_m": 948.0,
+    "n_laps": 0.9,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs04t2000out.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "04|芝|内|2200": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約577m手前",
+    "first_corner_m": 610,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_shiba_in.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前の直線",
+    "first_corner_m": 636,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202504010310",
+     "https://db.netkeiba.com/race/202504020210/",
+     "https://www.keibalab.jp/db/race/202505100410/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "スタンド前直線(外回り4コーナーと内回り合流地点の間)",
+    "first_corner_m": 636.0,
+    "n_laps": 1.36,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs04t2200.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://bakendo.com/niigatarc/niigata2200t/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "04|芝|内|2400": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約777m手前",
+    "first_corner_m": 810,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_shiba_in.gif",
+     "https://ja.wikipedia.org/wiki/新潟競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "外回りコースの4コーナーポケット(2200mのスタートから更に200m後ろ)",
+    "first_corner_m": 836,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202504010106",
+     "https://db.netkeiba.com/race/202504010106/",
+     "https://www.keibalab.jp/db/race/202505030406/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "外回りコースの4コーナーのポケット(芝1000m直線コースから本線に合流する手前)",
+    "first_corner_m": 836.0,
+    "n_laps": 1.48,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/niigata/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs04t2400.html",
+     "https://ja.wikipedia.org/wiki/新潟競馬場",
+     "https://bakendo.com/niigatarc/niigata2400t/",
+     "https://www.jra.go.jp/facilities/race/niigata/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|ダート||1300": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 360,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面半ば付近",
+    "first_corner_m": 340.0,
+    "n_laps": 0.68,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05d1300.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://bakendo.com/tokyorc/tokyo1300d/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|ダート||1400": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 460,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の右寄り(1300mの発走地点から100m下がる)",
+    "first_corner_m": 440.0,
+    "n_laps": 0.74,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05d1400.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://bakendo.com/tokyorc/tokyo1400d/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|ダート||1600": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 660,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "2コーナーの奥(芝スタート。内枠で約150m、外枠はさらに約30m芝を走る)",
+    "first_corner_m": 640.0,
+    "n_laps": 0.84,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05d1600.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://bakendo.com/tokyorc/tokyo1600d/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|ダート||2100": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約201m手前",
+    "first_corner_m": 250,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前中央付近",
+    "first_corner_m": 240.0,
+    "n_laps": 1.11,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05d2100.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://bakendo.com/tokyorc/tokyo2100d/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|芝||1400": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 360,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面(スタート60m後から緩やかな上り)",
+    "first_corner_m": 350,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202505010110",
+     "https://db.netkeiba.com/race/202505020505/",
+     "https://www.keibalab.jp/db/race/202502010510/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の真ん中付近",
+    "first_corner_m": 342.7,
+    "n_laps": 0.67,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05t1400.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://bakendo.com/tokyorc/tokyo1400t/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|芝||1600": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 560,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面の奥",
+    "first_corner_m": 550,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202505010105",
+     "https://db.netkeiba.com/race/202505020604/",
+     "https://www.keibalab.jp/db/race/202502010505/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の右奥(2コーナー終点付近)",
+    "first_corner_m": 542.0,
+    "n_laps": 0.77,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05t1600.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://bakendo.com/tokyorc/tokyo1600t/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|芝||1800": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 760,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "1〜2コーナーの間のポケット",
+    "first_corner_m": 160,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202505010106",
+     "https://db.netkeiba.com/race/202505020205/",
+     "https://www.keibalab.jp/db/race/202502010506/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "1〜2コーナーの間にあるポケット(斜めに走り向正面の直線に合流)",
+    "first_corner_m": 156.6,
+    "n_laps": 0.86,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05t1800.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://bakendo.com/tokyorc/tokyo1800t/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|芝||2000": {
+   "A": {
+    "start_position": "ゴール板を過ぎた先のホームストレッチ（1コーナー入口付近）",
+    "first_corner_m": 0,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "1コーナー奥のポケット",
+    "first_corner_m": 130,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202505010111",
+     "https://db.netkeiba.com/race/202505020607/",
+     "https://www.keibalab.jp/db/race/202502010511/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "1コーナー奥のポケット(約100m先に左へ曲がる大きなカーブ)",
+    "first_corner_m": 126.2,
+    "n_laps": 0.96,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05t2000.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://bakendo.com/tokyorc/tokyo2000t/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|芝||2300": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約217m手前",
+    "first_corner_m": 300,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前の直線半ば",
+    "first_corner_m": 250,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202405020109",
+     "https://db.netkeiba.com/race/202405020109/",
+     "https://www.keibalab.jp/db/race/202404200509/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の真ん中あたり",
+    "first_corner_m": 250.0,
+    "n_laps": 1.1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05t2300.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|芝||2400": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約317m手前",
+    "first_corner_m": 400,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "(位置の記載なし)",
+    "first_corner_m": 350,
+    "n_laps": 1,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202505010306",
+     "https://db.netkeiba.com/race/202505020204/",
+     "https://www.keibalab.jp/db/race/202502080506/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線",
+    "first_corner_m": 350.0,
+    "n_laps": 1.15,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05t2400.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://bakendo.com/tokyorc/tokyo2400t/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|芝||2500": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約417m手前",
+    "first_corner_m": 500,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前直線の坂下(2400mスタートの100m後ろ)",
+    "first_corner_m": 450,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202505021212",
+     "https://db.netkeiba.com/race/202505021212/",
+     "https://www.keibalab.jp/db/race/202506010512/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前左の直線坂下(2400mの発走地点より100m左)",
+    "first_corner_m": 450.0,
+    "n_laps": 1.2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05t2500.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://bakendo.com/tokyorc/tokyo2500t/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "05|芝||3400": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 280,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/東京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "バックストレッチ半ば",
+    "first_corner_m": 260,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202505010711",
+     "https://db.netkeiba.com/race/202505010711/",
+     "https://www.keibalab.jp/db/race/202502220511/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の真ん中付近(約1周半)",
+    "first_corner_m": 250.0,
+    "n_laps": 1.63,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/tokyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs05t3400.html",
+     "https://ja.wikipedia.org/wiki/東京競馬場",
+     "https://bakendo.com/tokyorc/tokyo3400t/",
+     "https://www.jra.go.jp/facilities/race/tokyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "06|ダート||1200": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 500,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/中山競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面2コーナー奥の芝地点(芝スタート)",
+    "first_corner_m": 502.0,
+    "n_laps": 0.8,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs06d1200.html",
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://bakendo.com/nakayamarc/nakayama1200d/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "06|ダート||1800": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約307m手前",
+    "first_corner_m": 380,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/中山競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "スタンド前直線の入り口(スタート直後に急坂)",
+    "first_corner_m": 375.0,
+    "n_laps": 1.21,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs06d1800.html",
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://bakendo.com/nakayamarc/nakayama1800d/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "06|ダート||2400": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 210,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/中山競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の中間地点あたり(約1周半)",
+    "first_corner_m": 209.0,
+    "n_laps": 1.61,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs06d2400.html",
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://bakendo.com/nakayamarc/nakayama2400d/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "06|ダート||2500": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 310,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/中山競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の左・2コーナーを出てすぐ(約1周半)",
+    "first_corner_m": 309.0,
+    "n_laps": 1.67,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs06d2500.html",
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://bakendo.com/nakayamarc/nakayama2500d/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "06|芝|外|1200": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 280,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_turf2.gif",
+     "https://ja.wikipedia.org/wiki/中山競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "外回りの向こう正面に入った坂の頂上部分",
+    "first_corner_m": 275,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202506010108",
+     "https://db.netkeiba.com/race/202506030210/",
+     "https://www.keibalab.jp/db/race/202501050608/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "2コーナーを回りきった向正面の入ったところ(外回り)",
+    "first_corner_m": 250.0,
+    "n_laps": 0.65,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs06t1200out.html",
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://bakendo.com/nakayamarc/nakayama1200t/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "06|芝|外|1600": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 680,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_turf2.gif",
+     "https://ja.wikipedia.org/wiki/中山競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "1コーナー横のポケット(コース最高地点・高低差5.3m)",
+    "first_corner_m": 240,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202506010105",
+     "https://db.netkeiba.com/race/202506020312/",
+     "https://www.keibalab.jp/db/race/202501050605/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "1コーナー横のポケット(外回りに合流。最高地点)",
+    "first_corner_m": 239.8,
+    "n_laps": 0.87,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs06t1600out.html",
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://bakendo.com/nakayamarc/nakayama1600t/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "06|芝|内|1800": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約133m手前",
+    "first_corner_m": 210,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/中山競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前の直線半ば",
+    "first_corner_m": 205,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202506010708",
+     "https://db.netkeiba.com/race/202506020311/",
+     "https://www.keibalab.jp/db/race/202501190608/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の半ば(スタート直後に急坂)",
+    "first_corner_m": 205.0,
+    "n_laps": 1.08,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs06t1800.html",
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://bakendo.com/nakayamarc/nakayama1800t/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "06|芝|内|2000": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約333m手前",
+    "first_corner_m": 410,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/中山競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前(1800mのスタート地点から200m後ろ)",
+    "first_corner_m": 405,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202506010106",
+     "https://db.netkeiba.com/race/202506020704/",
+     "https://www.keibalab.jp/db/race/202501050606/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "ホームストレッチの右端・4コーナーを曲がり終えたところ",
+    "first_corner_m": 405.0,
+    "n_laps": 1.2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs06t2000.html",
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://bakendo.com/nakayamarc/nakayama2000t/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "06|芝|外|2200": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約360m手前",
+    "first_corner_m": 450,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_turf2.gif",
+     "https://ja.wikipedia.org/wiki/中山競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "直線の入り口(外回り使用)",
+    "first_corner_m": 432,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202506010311",
+     "https://db.netkeiba.com/race/202506010905/",
+     "https://www.keibalab.jp/db/race/202501110611/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "ホームストレッチの右端・4コーナー出口(外回り使用)",
+    "first_corner_m": 432.0,
+    "n_laps": 1.2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs06t2200out.html",
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://bakendo.com/nakayamarc/nakayama2200t/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "06|芝|内|2500": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 50,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/中山競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "外回りの3コーナー(keibalab記述)",
+    "first_corner_m": 192,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202506020309",
+     "https://db.netkeiba.com/race/202506020807/",
+     "https://www.keibalab.jp/db/race/202503080609/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "外回りコース上・3コーナー手前(発走地点は外回り上、内回りを周回)",
+    "first_corner_m": 192.0,
+    "n_laps": 1.5,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs06t2500.html",
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://bakendo.com/nakayamarc/nakayama2500t/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "06|芝|内|3600": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約266m手前",
+    "first_corner_m": 340,
+    "n_laps": 3,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/中山競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の真ん中よりやや右(1800mと2000mの発走地点の中間、内回り2周)",
+    "first_corner_m": 337.7,
+    "n_laps": 2.16,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/nakayama/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs06t3600.html",
+     "https://ja.wikipedia.org/wiki/中山競馬場",
+     "https://bakendo.com/nakayamarc/nakayama3600t/",
+     "https://www.jra.go.jp/facilities/race/nakayama/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "07|ダート||1200": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 410,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/中京競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面入り口",
+    "first_corner_m": 407.7,
+    "n_laps": 0.78,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs07d1200.html",
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://bakendo.com/chukyorc/chukyo1200d/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "07|ダート||1400": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 610,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/中京競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "2コーナー奥のポケット(芝スタート、ダートまで約200m芝)",
+    "first_corner_m": 607.7,
+    "n_laps": 0.92,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs07d1400.html",
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://bakendo.com/chukyorc/chukyo1400d/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "07|ダート||1800": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約270m手前",
+    "first_corner_m": 290,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/中京競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "ホームストレッチの真ん中より左寄り(上り坂の途中)",
+    "first_corner_m": 291.8,
+    "n_laps": 1.18,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs07d1800.html",
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://bakendo.com/chukyorc/chukyo1800d/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "07|ダート||1900": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約370m手前",
+    "first_corner_m": 390,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/中京競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "ホームストレッチの左(ゴール前急坂の手前)",
+    "first_corner_m": 391.8,
+    "n_laps": 1.24,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs07d1900.html",
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://bakendo.com/chukyorc/chukyo1900d/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "07|芝||1200": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 320,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/中京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面の半ば",
+    "first_corner_m": null,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202507010306",
+     "https://db.netkeiba.com/race/202507020611/",
+     "https://www.keibalab.jp/db/race/202501110706/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の真ん中付近",
+    "first_corner_m": 315.5,
+    "n_laps": 0.7,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs07t1200.html",
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://bakendo.com/chukyorc/chukyo1200t/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "07|芝||1400": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 520,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/中京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面の端",
+    "first_corner_m": 380,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202507010412",
+     "https://db.netkeiba.com/race/202507020311/",
+     "https://www.keibalab.jp/db/race/202501120712/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の2コーナー出口付近",
+    "first_corner_m": 515.5,
+    "n_laps": 0.82,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs07t1400.html",
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://bakendo.com/chukyorc/chukyo1400t/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "07|芝||1600": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 720,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/中京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "1〜2コーナー間の引き込み線",
+    "first_corner_m": null,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202507010111",
+     "https://db.netkeiba.com/race/202507020207/",
+     "https://www.keibalab.jp/db/race/202501050711/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "1〜2コーナーにある斜めの引き込み線(まもなく左にカーブして本線に合流)",
+    "first_corner_m": 199.0,
+    "n_laps": 0.94,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs07t1600.html",
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://bakendo.com/chukyorc/chukyo1600t/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "07|芝||2000": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約294m手前",
+    "first_corner_m": 350,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/中京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前、直線の上がり坂の中間",
+    "first_corner_m": null,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202507010105",
+     "https://db.netkeiba.com/race/202507020211/",
+     "https://www.keibalab.jp/db/race/202501050705/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "ホームストレッチ中央から左寄り(上り坂の途中)",
+    "first_corner_m": 314.1,
+    "n_laps": 1.17,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs07t2000.html",
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://bakendo.com/chukyorc/chukyo2000t/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "07|芝||2200": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約494m手前",
+    "first_corner_m": 550,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/中京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": null,
+    "first_corner_m": null,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202507010109",
+     "https://db.netkeiba.com/race/202507020108/",
+     "https://www.keibalab.jp/db/race/202501050709/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "4コーナーにあるポケット",
+    "first_corner_m": 514.1,
+    "n_laps": 1.29,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs07t2200.html",
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://bakendo.com/chukyorc/chukyo2200t/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "07|芝||3000": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 410,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/中京競馬場"
+    ]
+   },
+   "B": {
+    "start_position": null,
+    "first_corner_m": null,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/中京競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線入口(芝1300mの発走地点よりわずかに左、約1周半)",
+    "first_corner_m": null,
+    "n_laps": 1.76,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/chukyo/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs07t3000.html",
+     "https://ja.wikipedia.org/wiki/中京競馬場",
+     "https://www.jra.go.jp/facilities/race/chukyo/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|ダート||1200": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 400,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面の2コーナー出口",
+    "first_corner_m": 400.0,
+    "n_laps": 0.75,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08d1200.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto1200d/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|ダート||1400": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 600,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面2コーナー奥のポケット(大半が芝)",
+    "first_corner_m": 600.0,
+    "n_laps": 0.87,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08d1400.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto1400d/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|ダート||1800": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約192m手前",
+    "first_corner_m": 290,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "スタンド前の直線半ば付近",
+    "first_corner_m": 280.0,
+    "n_laps": 1.12,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08d1800.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto1800d/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|ダート||1900": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約292m手前",
+    "first_corner_m": 390,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "スタンド前の直線半ばよりやや4コーナー寄り",
+    "first_corner_m": 380.0,
+    "n_laps": 1.18,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08d1900.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto1900d/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|芝|内|1200": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 320,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_shiba_in.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面の直線半ば",
+    "first_corner_m": 320,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202508010211",
+     "https://db.netkeiba.com/race/202508020707/",
+     "https://www.keibalab.jp/db/race/202502020811/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線半ば付近(内回り)",
+    "first_corner_m": 316.2,
+    "n_laps": 0.67,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08t1200.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto1200t/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|芝|内|1400": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 520,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_shiba_in.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "B": {
+    "start_position": null,
+    "first_corner_m": null,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202508020403",
+     "https://db.netkeiba.com/race/202508020503/"
+    ]
+   },
+   "C": {
+    "start_position": "向正面2コーナーのポケット(1200mの発走地点から200m下がる)",
+    "first_corner_m": 516.2,
+    "n_laps": 0.79,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08t1400.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto1400t/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|芝|外|1400": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 510,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_shiba_out.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "(位置の記載なし)",
+    "first_corner_m": 512,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202508010212",
+     "https://db.netkeiba.com/race/202508020503/",
+     "https://www.keibalab.jp/db/race/202502020812/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面左・2コーナー出口付近",
+    "first_corner_m": null,
+    "n_laps": 0.74,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08t1400out.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|芝|内|1600": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 720,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_shiba_in.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面ポケット(内回り)",
+    "first_corner_m": 716,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202508010109",
+     "https://db.netkeiba.com/race/202508020211/",
+     "https://www.keibalab.jp/db/race/202502010809/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面2コーナーのポケット(外回り1600mより左寄り)",
+    "first_corner_m": 700.0,
+    "n_laps": 0.9,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08t1600.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto1600t/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|芝|外|1600": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 710,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_shiba_out.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "B": {
+    "start_position": null,
+    "first_corner_m": null,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202508010112",
+     "https://db.netkeiba.com/race/202508020211/"
+    ]
+   },
+   "C": {
+    "start_position": "向正面の2コーナーのポケット(内回り1600mより若干右寄り)",
+    "first_corner_m": 700.0,
+    "n_laps": 0.84,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08t1600out.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|芝|外|1800": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 910,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_shiba_out.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面直線を延長した2コーナー奥のポケット",
+    "first_corner_m": 900,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202508010106",
+     "https://db.netkeiba.com/race/202508020305/",
+     "https://www.keibalab.jp/db/race/202502010806/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "2コーナー奥のポケット(向正面を目一杯使う)",
+    "first_corner_m": 900.0,
+    "n_laps": 0.95,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08t1800out.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto1800t/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|芝|内|2000": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約217m手前",
+    "first_corner_m": 310,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_shiba_in.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前の直線半ば",
+    "first_corner_m": 309,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202508010506",
+     "https://db.netkeiba.com/race/202508020804/",
+     "https://www.keibalab.jp/db/race/202502150806/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "メインスタンドの目の前(正面)",
+    "first_corner_m": 300.0,
+    "n_laps": 1.12,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08t2000.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto2000t/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|芝|外|2200": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約306m手前",
+    "first_corner_m": 400,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_shiba_out.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "内回りコースの直線入り口付近(外回り使用)",
+    "first_corner_m": 397,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202508010210",
+     "https://db.netkeiba.com/race/202508020209/",
+     "https://www.keibalab.jp/db/race/202502020810/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線入り口付近",
+    "first_corner_m": 400.0,
+    "n_laps": 1.16,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08t2200out.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto2200t/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|芝|外|2400": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約506m手前",
+    "first_corner_m": 600,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_shiba_out.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "4コーナー奥のポケット",
+    "first_corner_m": 600,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202508010110",
+     "https://db.netkeiba.com/race/202508020106/",
+     "https://www.keibalab.jp/db/race/202502010810/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "4コーナー奥のポケット",
+    "first_corner_m": 600.0,
+    "n_laps": 1.27,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08t2400out.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto2400t/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|芝|外|3000": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 220,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_shiba_out.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面の上り坂途中",
+    "first_corner_m": 208,
+    "n_laps": 1.5,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202508030911",
+     "https://db.netkeiba.com/race/202508030911/",
+     "https://www.keibalab.jp/db/race/202510260811/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面3コーナー手前の上り坂",
+    "first_corner_m": 200.0,
+    "n_laps": 1.58,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08t3000out.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto3000t/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "08|芝|外|3200": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 420,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_shiba_out.gif",
+     "https://ja.wikipedia.org/wiki/京都競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面半ば",
+    "first_corner_m": 417,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202508020411",
+     "https://db.netkeiba.com/race/202508020411/",
+     "https://www.keibalab.jp/db/race/202505040811/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面の中間点よりやや2コーナー寄り(外回り1周半)",
+    "first_corner_m": 400.0,
+    "n_laps": 1.69,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kyoto/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs08t3200out.html",
+     "https://ja.wikipedia.org/wiki/京都競馬場",
+     "https://bakendo.com/kyotorc/kyoto3200t/",
+     "https://www.jra.go.jp/facilities/race/kyoto/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|ダート||1200": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 340,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の左端・2コーナー出口",
+    "first_corner_m": 342.0,
+    "n_laps": 0.79,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09d1200.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin1200d/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|ダート||1400": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 540,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "2コーナー奥ポケットの芝部分(外枠ほど芝を長く走る)",
+    "first_corner_m": 542.0,
+    "n_laps": 0.92,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09d1400.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin1400d/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|ダート||1800": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約282m手前",
+    "first_corner_m": 310,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の右(スタート直後に上り坂)",
+    "first_corner_m": 303.0,
+    "n_laps": 1.19,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09d1800.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin1800d/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|ダート||2000": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約482m手前",
+    "first_corner_m": 510,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "芝内回りコースの4コーナーのポケット(最大で芝の上を78m通ってダートに入る)",
+    "first_corner_m": 498.2,
+    "n_laps": 1.32,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09d2000.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin2000d/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|芝|内|1200": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 250,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面半ば(内回り)",
+    "first_corner_m": 243,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202509010312",
+     "https://db.netkeiba.com/race/202509020506/",
+     "https://www.keibalab.jp/db/race/202503080912/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線半ばより左寄り(内回り)",
+    "first_corner_m": 243.0,
+    "n_laps": 0.71,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09t1200.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin1200t/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|芝|内|1400": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 450,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "2コーナー奥のポケット(内回り使用)",
+    "first_corner_m": 443,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202509010112",
+     "https://db.netkeiba.com/race/202509020207/",
+     "https://www.keibalab.jp/db/race/202503010912/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面左・2コーナー出口付近のポケット(内回り)",
+    "first_corner_m": 443.0,
+    "n_laps": 0.83,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09t1400.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin1400t/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|芝|外|1400": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 270,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_turf2.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "JRA平面図:向正面(外回り1600mの発走地点より3コーナー寄り)",
+    "first_corner_m": null,
+    "n_laps": 0.67,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|芝|外|1600": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 470,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_turf2.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "(keibalab本文に位置の記載なし。wikiは向正面の中ほど)",
+    "first_corner_m": 444,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202509010105",
+     "https://db.netkeiba.com/race/202509020504/",
+     "https://www.keibalab.jp/db/race/202503010905/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "バックストレッチの中間からやや左寄り(内回り1200mと同じ発走地点)",
+    "first_corner_m": 444.4,
+    "n_laps": 0.77,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09t1600out.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin1600t/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|芝|外|1800": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 670,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_turf2.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "2コーナーポケット(芝1600のスタート地点から200m後ろ)",
+    "first_corner_m": 665,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202509010205",
+     "https://db.netkeiba.com/race/202509020308/",
+     "https://www.keibalab.jp/db/race/202503020905/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "2コーナー出口付近のポケット(1600mから200mバック、内回り1400mと同位置)",
+    "first_corner_m": 644.4,
+    "n_laps": 0.86,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09t1800out.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin1800t/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|芝|内|2000": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約311m手前",
+    "first_corner_m": 340,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前直線(内回り使用)",
+    "first_corner_m": 325,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202509010206",
+     "https://db.netkeiba.com/race/202509020510/",
+     "https://www.keibalab.jp/db/race/202503020906/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線右の4コーナー出口付近",
+    "first_corner_m": 325.0,
+    "n_laps": 1.18,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09t2000.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin2000t/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|芝|内|2200": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約511m手前",
+    "first_corner_m": 540,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "外回り4コーナー出口(3〜4コーナーは内回り使用)",
+    "first_corner_m": 525,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202509010109",
+     "https://db.netkeiba.com/race/202509020704/",
+     "https://www.keibalab.jp/db/race/202503010909/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の右端・外回り4コーナー出口付近",
+    "first_corner_m": 525.0,
+    "n_laps": 1.3,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09t2200.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin2200t/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|芝|外|2400": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約311m手前",
+    "first_corner_m": 360,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_turf2.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前直線(2000mと同じスタート・外回り使用)",
+    "first_corner_m": null,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202509010306",
+     "https://db.netkeiba.com/race/202509020210/",
+     "https://www.keibalab.jp/db/race/202503080906/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線右寄り(2000mと同じ。外回りで一周強)",
+    "first_corner_m": 309.0,
+    "n_laps": 1.15,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09t2400out.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin2400t/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|芝|外|2600": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約511m手前",
+    "first_corner_m": 560,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_turf2.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "外回り(2200mと同じスタート地点)",
+    "first_corner_m": null,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202509010708",
+     "https://db.netkeiba.com/race/202509010708/",
+     "https://www.keibalab.jp/db/race/202503220908/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の右端・外回り4コーナー出口付近(2200mと同位置)",
+    "first_corner_m": null,
+    "n_laps": 1.24,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09t2600out.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|芝|内|3000": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 360,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_turf.gif",
+     "https://ja.wikipedia.org/wiki/阪神競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "2コーナーの出口付近(内回り使用)",
+    "first_corner_m": 360,
+    "n_laps": 1.5,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202509010110",
+     "https://db.netkeiba.com/race/202509010110/",
+     "https://www.keibalab.jp/db/race/202503010910/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面の直線左・2コーナー出口付近(内回り約1周半)",
+    "first_corner_m": 369.2,
+    "n_laps": 1.78,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/hanshin/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs09t3000.html",
+     "https://ja.wikipedia.org/wiki/阪神競馬場",
+     "https://bakendo.com/hanshinrc/hanshin3000t/",
+     "https://www.jra.go.jp/facilities/race/hanshin/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "09|芝|内|3200": {},
+  "10|ダート||1000": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 360,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/小倉競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の左",
+    "first_corner_m": 365.0,
+    "n_laps": 0.69,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs10d1000.html",
+     "https://ja.wikipedia.org/wiki/小倉競馬場",
+     "https://bakendo.com/kokurarc/kokura1000d/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "10|ダート||1700": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約255m手前",
+    "first_corner_m": 350,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/小倉競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の右端・4コーナー出口",
+    "first_corner_m": 343.0,
+    "n_laps": 1.18,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs10d1700.html",
+     "https://ja.wikipedia.org/wiki/小倉競馬場",
+     "https://bakendo.com/kokurarc/kokura1700d/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "10|ダート||2400": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 320,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_durt.gif",
+     "https://ja.wikipedia.org/wiki/小倉競馬場"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の左寄り(約1周半)",
+    "first_corner_m": 320.0,
+    "n_laps": 1.66,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs10d2400.html",
+     "https://ja.wikipedia.org/wiki/小倉競馬場",
+     "https://bakendo.com/kokurarc/kokura2400d/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "10|芝||1200": {
+   "A": {
+    "start_position": "向正面奥の引込み線/ポケット（2コーナー〜1コーナー付近の延長上）",
+    "first_corner_m": 480,
+    "n_laps": 1,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/小倉競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "2コーナーポケット(コース最高部)",
+    "first_corner_m": 479,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/小倉競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202510010102",
+     "https://db.netkeiba.com/race/202510010609/",
+     "https://www.keibalab.jp/db/race/202501251002/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の2コーナーポケット",
+    "first_corner_m": 480.0,
+    "n_laps": 0.74,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs10t1200.html",
+     "https://ja.wikipedia.org/wiki/小倉競馬場",
+     "https://bakendo.com/kokurarc/kokura1200t/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "10|芝||1800": {
+   "A": {
+    "start_position": "最後の直線（ホームストレッチ）。ゴール板の約185m手前",
+    "first_corner_m": 270,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/小倉競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "ゴール板から約100m手前",
+    "first_corner_m": 272,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/小倉競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202510010112",
+     "https://db.netkeiba.com/race/202510010806/",
+     "https://www.keibalab.jp/db/race/202501251012/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前の直線真ん中よりやや右",
+    "first_corner_m": 272.0,
+    "n_laps": 1.11,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs10t1800.html",
+     "https://ja.wikipedia.org/wiki/小倉競馬場",
+     "https://bakendo.com/kokurarc/kokura1800t/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "10|芝||2000": {
+   "A": {
+    "start_position": "ホームストレッチ入口（4コーナー出口の後ろの引込み線/ポケット）。ゴール板の約385m手前",
+    "first_corner_m": 470,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/小倉競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "スタンド前の直線ポケット",
+    "first_corner_m": 472,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/小倉競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202510010106",
+     "https://db.netkeiba.com/race/202510010510/",
+     "https://www.keibalab.jp/db/race/202501251006/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "正面スタンド前直線の4コーナーのポケット",
+    "first_corner_m": 472.0,
+    "n_laps": 1.24,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs10t2000.html",
+     "https://ja.wikipedia.org/wiki/小倉競馬場",
+     "https://bakendo.com/kokurarc/kokura2000t/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  },
+  "10|芝||2600": {
+   "A": {
+    "start_position": "向正面直線",
+    "first_corner_m": 260,
+    "n_laps": 2,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_shiba.gif",
+     "https://ja.wikipedia.org/wiki/小倉競馬場"
+    ]
+   },
+   "B": {
+    "start_position": "向正面の下り途中",
+    "first_corner_m": 244,
+    "n_laps": null,
+    "sources": [
+     "https://ja.wikipedia.org/wiki/小倉競馬場",
+     "https://race.netkeiba.com/race/result.html?race_id=202510010107",
+     "https://db.netkeiba.com/race/202510010509/",
+     "https://www.keibalab.jp/db/race/202501251007/course.html"
+    ]
+   },
+   "C": {
+    "start_position": "向正面直線の半ばよりやや左(1000mのスタートより少し前進)",
+    "first_corner_m": 244.0,
+    "n_laps": 1.61,
+    "sources": [
+     "https://www.jra.go.jp/facilities/race/kokura/course/index.html",
+     "https://sugo.jra-van.jp/sugotoku/crs/crs10t2600.html",
+     "https://ja.wikipedia.org/wiki/小倉競馬場",
+     "https://bakendo.com/kokurarc/kokura2600t/",
+     "https://www.jra.go.jp/facilities/race/kokura/course/img/pic_course_heimenzu.gif"
+    ]
+   }
+  }
+ }
+}
