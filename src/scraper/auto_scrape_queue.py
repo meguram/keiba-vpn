@@ -319,6 +319,24 @@ def _eve_precomputes(race_date_str: str, race_ids: list[str]) -> tuple[dict[str,
     return precompute_stats, final_odds_precompute_stats
 
 
+def _eve_horse_training(storage: Any, race_ids: list[str]) -> dict[str, Any]:
+    """前日夕方に、出走馬の調教ページ（最新 1 ページ）を取り直す。KEIBA_EVE_HORSE_TRAINING=1 のときだけ（既定は無効）。"""
+    if os.environ.get("KEIBA_EVE_HORSE_TRAINING", "0").strip().lower() not in ("1", "true", "yes"):
+        return {"enabled": False}
+    try:
+        from src.scraper.horse_training_recent import horse_ids_for_races, refresh_for_horses
+        from src.scraper.run import ScraperRunner
+
+        hids = horse_ids_for_races(storage, race_ids)
+        logger.info("  調教ページの取り直し: 出走馬 %d 頭", len(hids))
+        st = refresh_for_horses(ScraperRunner(), hids)
+        logger.info("  調教ページの取り直し結果: %s", st)
+        return {"enabled": True, **st}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("調教ページの取り直しに失敗: %s", exc)
+        return {"enabled": True, "error": str(exc)}
+
+
 def run_raceday_eve_for_date(race_date_str: str) -> dict[str, Any]:
     date_iso = f"{race_date_str[:4]}-{race_date_str[4:6]}-{race_date_str[6:]}"
     logger.info("=" * 60)
@@ -364,6 +382,7 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict[str, Any]:
         }
 
     race_ids = [str(s["target_id"]) for s in specs if s.get("target_id")]
+    training_stats = _eve_horse_training(storage, race_ids)
     pc1, pc2 = _eve_precomputes(race_date_str, race_ids)
 
     return {
@@ -377,6 +396,7 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict[str, Any]:
         "error_count": 0,
         "tracking_precompute": pc1,
         "final_odds_precompute": pc2,
+        "horse_training": training_stats,
         "queue_bulk_add": st_add,
     }
 
