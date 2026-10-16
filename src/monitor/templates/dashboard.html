@@ -4,6 +4,12 @@
 {% block content %}
 <div class="page-title"><span class="icon">🏠</span> ダッシュボード</div>
 
+<!-- ユーザーアクセス URL -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title" style="margin-bottom:10px">ユーザーアクセス URL</div>
+  <div id="access-urls"><span class="loading">読込中...</span></div>
+</div>
+
 <!-- 環境別サービス状況 -->
 <div class="card" style="margin-bottom:16px">
   <div class="card-title" style="margin-bottom:16px">環境別サービス状況</div>
@@ -45,14 +51,14 @@
 <script>
 const ENV_LABELS = { dev: 'DEV', stg: 'STG', prod: 'PROD' };
 
-function statusBadge(ok) {
+function statusBadge(ok, muted) {
   return ok
     ? `<span class="badge badge-ok">稼働中</span>`
-    : `<span class="badge badge-error">停止</span>`;
+    : muted ? `<span class="badge badge-muted">未起動</span>` : `<span class="badge badge-error">停止</span>`;
 }
 
-function svcRow(label, svc) {
-  const dot = svc.ok ? 'dot-ok' : 'dot-error';
+function svcRow(label, svc, muted) {
+  const dot = svc.ok ? 'dot-ok' : muted ? '' : 'dot-error';
   const ms  = svc.elapsed_ms >= 0 ? `${svc.elapsed_ms}ms` : '—';
   return `
     <div style="display:flex;align-items:center;justify-content:space-between;
@@ -61,7 +67,7 @@ function svcRow(label, svc) {
         <span class="dot ${dot}" style="margin-right:4px"></span>${label}
       </span>
       <span style="display:flex;align-items:center;gap:8px">
-        ${statusBadge(svc.ok)}
+        ${statusBadge(svc.ok, muted)}
         <span class="text-muted" style="font-size:11px">HTTP ${svc.status || '—'} / ${ms}</span>
       </span>
     </div>`;
@@ -148,14 +154,34 @@ function mkModelDataSection(modelData) {
   </div>`;
 }
 
+function accessRow(k, e) {
+  const color = e.color || '#6e7681';
+  const pub = e.public;
+  let url = e.public_url
+    ? `<a href="${e.public_url}" target="_blank" rel="noopener" style="color:${color};font-weight:600;word-break:break-all">${e.public_url}</a>`
+    : '<span class="text-muted">公開していない（本番は別途）</span>';
+  let chip = '<span class="badge badge-muted">—</span>';
+  if (pub) {
+    chip = pub.ok ? `<span class="badge badge-ok">✅ 開ける（HTTP ${pub.status}・${pub.elapsed_ms} ms）</span>`
+                  : `<span class="badge ${e.is_local || k === 'stg' ? 'badge-error' : 'badge-warn'}">❌ 開けない（HTTP ${pub.status || '—'}）</span>`;
+  }
+  let note = '';
+  if (k === 'dev') note = pub && !pub.ok ? 'dev の画面は開発 PC で動かし、開発 PC の tcpexposer トンネルで公開する。開発 PC の起動とトンネルを確認。' : '開発 PC の画面（モック）を公開';
+  if (k === 'stg') note = `このホストの stg を公開。ホスト内の直リンク: <code>${e.next.url}</code>（SSH トンネル経由なら <code>http://localhost:${(e.next.url.match(/:(\d+)/)||[])[1]}</code>）`;
+  return `<tr><td style="white-space:nowrap;padding:6px 10px"><span style="font-weight:700;color:${color}">${e.label}</span></td>` +
+    `<td style="padding:6px 10px">${url}</td><td style="padding:6px 10px;white-space:nowrap">${chip}</td>` +
+    `<td style="padding:6px 10px;color:var(--muted);font-size:12px">${note}</td></tr>`;
+}
+
 function mkEnvCard(env, data) {
   const color = data.color || '#6e7681';
   const allOk = data.all_ok;
   const anyOk = data.next.ok || data.flask.ok;
-  const outerBorder = allOk
+  const other = data.is_local === false && !allOk;           // 別のマシンの環境が止まっているのは異常ではない（グレー）
+  const outerBorder = other ? '1px solid rgba(139,148,158,0.3)' : allOk
     ? '1px solid rgba(63,185,80,0.4)'
     : anyOk ? '1px solid rgba(210,153,34,0.4)' : '1px solid rgba(239,68,68,0.3)';
-  const headerBg = allOk ? 'rgba(63,185,80,0.08)' : 'rgba(239,68,68,0.06)';
+  const headerBg = other ? 'rgba(139,148,158,0.08)' : allOk ? 'rgba(63,185,80,0.08)' : 'rgba(239,68,68,0.06)';
 
   const publicLink = data.public_url
     ? `<a href="${data.public_url}" target="_blank" style="font-size:11px;color:${color};text-decoration:none;opacity:0.8"
@@ -173,13 +199,13 @@ function mkEnvCard(env, data) {
       <div style="background:${headerBg};padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-weight:700;font-size:15px;color:${color}">${data.label}</span>
-          ${statusBadge(allOk)}
+          ${other ? '<span class="badge badge-muted">別のマシンの環境</span>' : statusBadge(allOk)}
         </div>
         ${publicLink}
       </div>
       <div style="padding:8px 14px 10px">
-        ${svcRow('Next.js', data.next)}
-        ${svcRow('Flask API', data.flask)}
+        ${svcRow('Next.js', data.next, other)}
+        ${svcRow('Flask API', data.flask, other)}
         ${dbRow(data.db, data.mock_frontend)}
         ${mkModelDataSection(data.model_data_mode || null)}
         <div style="margin-top:6px;font-size:11px;color:var(--muted)">
@@ -201,6 +227,8 @@ function renderStatus(d) {
   // 環境別カード
   const envs = d.envs || {};
   if (Object.keys(envs).length) {
+    document.getElementById('access-urls').innerHTML =
+      '<table style="width:100%;border-collapse:collapse;font-size:13px">' + ['dev', 'stg', 'prod'].filter(k => envs[k]).map(k => accessRow(k, envs[k])).join('') + '</table>';
     document.getElementById('env-grid').innerHTML =
       ['dev', 'stg', 'prod'].map(k => mkEnvCard(k, envs[k])).join('');
   }

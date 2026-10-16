@@ -44,7 +44,8 @@ function envCard(env) {
   const db = env.db && env.db.ok === true ? '<span class="badge badge-ok">PostgreSQL 接続OK</span>'
     : env.db && env.db.ok === false ? `<span class="badge ${env.is_local ? 'badge-error' : 'badge-muted'}">PostgreSQL 接続不可</span>`
     : '<span class="badge badge-muted">DB チェック対象外（モック）</span>';
-  const pub = env.public_url ? `<a href="${esc(env.public_url)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px">${esc(env.public_url)}</a>` : '';
+  const pchip = env.public ? (env.public.ok ? '<span class="badge badge-ok">開ける</span>' : `<span class="badge ${env.is_local ? 'badge-error' : 'badge-muted'}">開けない（HTTP ${env.public.status || '—'}）</span>`) : '';
+  const pub = env.public_url ? `<a href="${esc(env.public_url)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px">${esc(env.public_url)}</a> ${pchip}` : '';
   const mdm = env.model_data_mode && env.model_data_mode.predictions ? `予測データ: ${esc(env.model_data_mode.predictions.mode)}` : '';
   return `<div class="card" style="border-left:4px solid ${esc(env.color)}">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">

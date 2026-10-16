@@ -319,6 +319,22 @@ def _check_model_data_mode(fastapi_url: str) -> dict:
     }
 
 
+_PUBLIC_PROBE: dict[str, tuple[float, dict]] = {}
+
+
+def _public_probe(url: str | None) -> dict | None:
+    """ユーザーが開く公開 URL に実際に届くか（外から入る経路＝トンネルの先まで）。60 秒キャッシュ。"""
+    if not url:
+        return None
+    hit = _PUBLIC_PROBE.get(url)
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
+    code, _, ms = _http_get(url, timeout=6.0)
+    res = {"url": url, "status": code, "ok": code in (200, 301, 302, 304), "elapsed_ms": ms}
+    _PUBLIC_PROBE[url] = (time.time(), res)
+    return res
+
+
 def _check_env(env_key: str) -> dict:
     """指定環境（dev/stg/prod）の各サービス死活を返す。"""
     cfg = ENV_CONFIGS[env_key]
@@ -349,6 +365,7 @@ def _check_env(env_key: str) -> dict:
         "label": cfg["label"],
         "color": cfg["color"],
         "public_url": cfg["public_url"],
+        "public": _public_probe(cfg["public_url"]),
         "mock_frontend": is_mock,
         "next": {
             "url": cfg["next_url"],

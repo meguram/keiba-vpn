@@ -45,3 +45,12 @@ def test_legacy_service_keys_follow_the_local_env_not_dev(client):
     d = client.get("/api/internal/status").get_json()
     assert d["services"]["flask"]["ok"] and d["services"]["nextjs"]["ok"], "stg のホストで Flask/Next.js が停止と出ていた不具合"
     assert d["services"]["flask"]["url"].endswith(":23210") and d["services"]["nextjs"]["url"].endswith(":23200")
+
+
+def test_public_access_urls_are_reported_with_reachability_for_dev_and_stg(client):
+    M._PUBLIC_PROBE.clear()
+    envs = client.get("/api/internal/status").get_json()["envs"]
+    assert envs["stg"]["public"]["url"] == "https://meguai-stg.tcpexposer.com/"
+    assert envs["dev"]["public"]["url"] == "https://meguai-dev.tcpexposer.com/"
+    assert envs["prod"]["public"] is None and envs["prod"]["public_url"] is None
+    assert "ok" in envs["stg"]["public"] and "status" in envs["stg"]["public"]
