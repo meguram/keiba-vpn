@@ -47,6 +47,7 @@ class StakingTest(unittest.TestCase):
     def test_tier_rule_and_quantiles(self):
         rng = np.random.default_rng(1)
         f = pd.DataFrame({"race_id": [f"r{i}" for i in range(1000)], "ev_cal": rng.uniform(0.5, 1.2, 1000), "hit": rng.uniform(0.05, 0.9, 1000)})
+        f["ev_mix"] = f["ev_cal"]
         rule = sk.quantile_rule(f, h0=0.0, h1=0.0, h2=0.0)
         s = rule.assign(f)
         shares = [(s == v).mean() for v in sk.STAKES]
@@ -54,6 +55,15 @@ class StakingTest(unittest.TestCase):
         strict = sk.TierRule(0.0, 0.0, 0.0, h0=0.5, h1=0.5, h2=0.5)
         s2 = strict.assign(f)
         self.assertTrue(((s2 == 0) == (f["hit"] < 0.5)).all())            # 当たらなさすぎるレースは見送り
+
+    def test_quantile_rule_survives_ties(self):
+        rng = np.random.default_rng(2)
+        step = np.round(rng.uniform(0.7, 0.85, 1000), 2)                      # 階段状の ev_cal（同値が多い）
+        f = pd.DataFrame({"race_id": [f"r{i}" for i in range(1000)], "ev_cal": step, "ev_raw": rng.uniform(0.5, 1.0, 1000), "hit": 0.9})
+        f["ev_mix"] = f["ev_cal"] + 1e-3 * f["ev_raw"]
+        s = sk.quantile_rule(f, h0=0.0, h1=0.0, h2=0.0).assign(f)
+        shares = [(s == v).mean() for v in sk.STAKES]
+        np.testing.assert_allclose(shares, [0.4, 0.3, 0.2, 0.1], atol=0.06)    # 4 段階がすべて使われる
 
     def test_settle_tiered(self):
         t = pd.DataFrame({"race_id": ["a", "a", "b"], "type": ["tansho", "fukusho", "tansho"], "combo": ["1", "1", "2"], "mult": [5.0, 0.0, 0.0], "w": [0.6, 0.4, 1.0]})

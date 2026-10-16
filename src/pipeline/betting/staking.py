@@ -85,7 +85,7 @@ def race_features(tickets: pd.DataFrame, dists: dict[str, tuple], w_col: str = "
         o = portfolio_outcomes(hn, win, a2, a3, list(zip(g["type"], g["combo"].astype(str))), w, odds)
         ev_raw = float((w * g["p_comb"].to_numpy() * odds).sum())
         ev_cal = float((w * g[cal_col].to_numpy()).sum()) if cal_col and cal_col in g.columns else ev_raw
-        rows.append({"race_id": rid, "ev_raw": ev_raw, "ev_cal": ev_cal, "hit": o["hit"], "ppos": o["ppos"], "n_tickets": len(g), "max_w": float(w.max())})
+        rows.append({"race_id": rid, "ev_raw": ev_raw, "ev_cal": ev_cal, "ev_mix": ev_cal + 1e-3 * ev_raw, "hit": o["hit"], "ppos": o["ppos"], "n_tickets": len(g), "max_w": float(w.max())})
     return pd.DataFrame(rows)
 
 
@@ -115,8 +115,9 @@ class TierRule:
         return {k: getattr(self, k) for k in ("e1", "e2", "e3", "h0", "h1", "h2", "ev_col")}
 
 
-def quantile_rule(f: pd.DataFrame, shares=(0.4, 0.3, 0.2, 0.1), ev_col: str = "ev_cal", **kw) -> TierRule:
-    """参加の割合を固定した規則: shares = (見送り, 500, 1000, 2000) の割合になるよう EV のしきい値を学習側の分布から決める。"""
+def quantile_rule(f: pd.DataFrame, shares=(0.4, 0.3, 0.2, 0.1), ev_col: str = "ev_mix", **kw) -> TierRule:
+    """参加の割合を固定した規則: shares = (見送り, 500, 1000, 2000) の割合になるよう EV のしきい値を学習側の分布から決める。
+    等張回帰で較正した EV は同じ値が多い（階段状）ので、同順位を ev_raw で崩した ev_mix を既定にする（そうしないと分位点のしきい値が重なり、段階が潰れる）。"""
     q = np.cumsum(shares)[:3]
     e1, e2, e3 = (float(np.quantile(f[ev_col], x)) for x in q)
     return TierRule(e1, e2, e3, ev_col=ev_col, **kw)
