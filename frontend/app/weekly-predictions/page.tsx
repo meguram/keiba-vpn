@@ -7,6 +7,7 @@ import { featureEnabled } from "@/lib/features";
 import { LEVEL_STYLE, RaceValue, useRaceValues, valueTitle } from "@/lib/raceValue";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
+import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
 const SHOW_HORSE_LINK = featureEnabled("horse-detail");
@@ -196,13 +197,32 @@ function sortPreds(preds: PredEntry[], key: SortKey | null, dir: SortDir, fallba
   });
 }
 
+/* 出馬表の表のスマホ最適化: 馬番・馬名を固定表示して横スクロール、重要度の低い列は幅が狭いと隠す（パネルで見られる）。見出しは指で押しやすく */
+const TABLE_CSS = `
+.pt-tap{all:unset;cursor:pointer;display:inline-block;padding:6px 2px;border-bottom:1px dotted rgba(148,163,184,.55);font:inherit;font-weight:inherit;line-height:1.3}
+.pt-tap:hover{border-bottom-color:var(--accent)}
+.pt-tap:focus-visible,.pt-sortbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+@media (max-width: 899px){
+  .pt-c1,.pt-c2{position:sticky;background:var(--surface);z-index:1}
+  .pt-c1{left:0;min-width:36px;max-width:36px}
+  .pt-c2{left:36px;box-shadow:2px 0 0 rgba(36,48,73,.6);max-width:110px;overflow:hidden;text-overflow:ellipsis}
+  th.pt-c1,th.pt-c2{background:var(--surface2);z-index:2}
+}
+@media (max-width: 639px){ .pt-hide-sm{display:none} .wp-main{padding:12px 6px !important} .wp-race-body{padding:0 4px 10px !important} .pt-c2{max-width:128px} th.pt-c2,td.pt-c2{padding-left:6px !important;padding-right:6px !important} }
+@media (pointer: coarse){
+  .pt-sortbtn{min-height:44px;min-width:44px;justify-content:center}
+  .pt-tap{padding:12px 4px}
+}
+`;
+
 /* ── 予測テーブル ── */
-function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: boolean; message?: string }) {
+function PredTable({ raceId, preds, hasPred, message }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string }) {
   const TH: React.CSSProperties = {
     padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-dim)",
     textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", background: "var(--surface2)",
   };
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
+  const [card, setCard] = useState<{ horseId: string; tab: CardTab } | null>(null);   // 馬名・騎手・調教師のタップで開く情報パネル
   const defaultOrder = hasPred
     ? (a: PredEntry, b: PredEntry) => (a.composite_rank ?? a.pred_rank ?? 99) - (b.composite_rank ?? b.pred_rank ?? 99)
     : (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);
@@ -218,8 +238,9 @@ function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: b
     });
   }
   const arrow = (key: SortKey) => (sort?.key === key ? (sort.dir === "asc" ? " ▲" : " ▼") : "");
-  const th = (key: SortKey, label: string, style: React.CSSProperties = {}, title?: string) => (
+  const th = (key: SortKey, label: string, style: React.CSSProperties = {}, title?: string, cls?: string) => (
     <th
+      className={`pt-sort ${cls ?? ""}`}
       style={{ ...TH, cursor: "pointer", userSelect: "none", color: sort?.key === key ? "var(--accent)" : TH.color, ...style }}
       aria-sort={sort?.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
       title={title ? `${title}（クリックで並べ替え）` : "クリックで並べ替え"}
@@ -227,6 +248,7 @@ function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: b
       <button
         type="button"
         onClick={() => toggle(key)}
+        className="pt-sortbtn"
         style={{ all: "unset", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2, font: "inherit", color: "inherit", padding: "0 2px" }}
       >
         {label}<span aria-hidden style={{ fontSize: 9, opacity: sort?.key === key ? 1 : 0.35 }}>{arrow(key) || " ↕"}</span>
@@ -239,27 +261,58 @@ function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: b
     textAlign: "center", verticalAlign: "middle", fontSize: 12,
   };
 
+  /* 馬名・騎手・調教師: タップ/クリック（Enter・スペース）で情報パネルを開く。horse_id が無い行は文字のみ。 */
+  const tapCell = (p: PredEntry, tab: CardTab, text: string | null | undefined, color: string) => {
+    if (!text) return "-";
+    if (!p.horse_id) return text;
+    return (
+      <button
+        type="button"
+        className="pt-tap"
+        aria-haspopup="dialog"
+        title={tab === "horse" ? "馬の近走・血統・追い切りを見る" : tab === "jockey" ? "騎手の成績を見る" : "調教師の成績を見る"}
+        onClick={() => setCard({ horseId: p.horse_id as string, tab })}
+        style={{ color }}
+      >
+        {text}
+      </button>
+    );
+  };
+  const panelHorses = sorted.filter((p) => p.horse_id).map((p) => ({ horse_id: p.horse_id as string, horse_number: p.horse_number, horse_name: p.horse_name }));
+
   return (
     <div style={{ overflowX: "auto", marginTop: 12 }}>
+      <style>{TABLE_CSS}</style>
+      {card && (
+        <EntryCardPanel
+          raceId={raceId}
+          horses={panelHorses}
+          horseId={card.horseId}
+          tab={card.tab}
+          onTab={(tab) => setCard((c) => (c ? { ...c, tab } : c))}
+          onHorse={(horseId) => setCard((c) => (c ? { ...c, horseId } : c))}
+          onClose={() => setCard(null)}
+        />
+      )}
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
           <tr>
-            {th("num", "馬番", { width: 36 })}
-            {th("name", "馬名", { textAlign: "left", width: 120 })}
+            {th("num", "馬番", { width: 36, minWidth: 36 }, undefined, "pt-c1")}
+            {th("name", "馬名", { textAlign: "left", width: 120 }, undefined, "pt-c2")}
             {th("bracket", "枠", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "出馬表（前日に確定。馬体重は当日の発表後）")}
             {th("sexage", "性齢")}
-            {th("jwt", "斤量")}
+            {th("jwt", "斤量", {}, undefined, "pt-hide-sm")}
             {th("jockey", "騎手", { textAlign: "left" })}
-            {th("trainer", "調教師", { textAlign: "left" })}
+            {th("trainer", "調教師", { textAlign: "left" }, undefined, "pt-hide-sm")}
             {th("weight", "馬体重", {}, "当日、発走の約1時間前に発表")}
             {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
-            {th("top2", "連対率")}
-            {th("top3", "複勝率")}
+            {th("top2", "連対率", {}, undefined, "pt-hide-sm")}
+            {th("top3", "複勝率", {}, undefined, "pt-hide-sm")}
             {th("odds", "想定単勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
-            {th("podds", "想定複勝", {}, "複勝オッズの下限で並べ替え")}
+            {th("podds", "想定複勝", {}, "複勝オッズの下限で並べ替え", "pt-hide-sm")}
             {th("evw", "勝期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
-            {th("evp", "複期待値")}
-            {th("tier", "推奨", { borderLeft: "1px solid rgba(36,48,73,0.5)", width: 60 })}
+            {th("evp", "複期待値", {}, undefined, "pt-hide-sm")}
+            {th("tier", "推奨", { borderLeft: "1px solid rgba(36,48,73,0.5)", width: 60 }, undefined, "pt-hide-sm")}
           </tr>
         </thead>
         <tbody>
@@ -273,34 +326,30 @@ function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: b
               rank === 3 ? "rgba(34,197,94,0.03)" : undefined;
             return (
               <tr key={p.horse_number ?? i} style={{ background: rowBg }}>
-                <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "-"}</td>
-                <td style={{ ...TD, textAlign: "left", fontWeight: 600, color: "#fff", whiteSpace: "nowrap" }}>
-                  {p.horse_id && SHOW_HORSE_LINK ? (
-                    <Link href={`/horse/${p.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{p.horse_name ?? "-"}</Link>
-                  ) : (p.horse_name ?? "-")}
-                </td>
+                <td className="pt-c1" style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "-"}</td>
+                <td className="pt-c2" style={{ ...TD, textAlign: "left", fontWeight: 600, color: "#fff", whiteSpace: "nowrap" }}>{tapCell(p, "horse", p.horse_name, "#fff")}</td>
                 <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)" }}>
                   {p.bracket_number && BRACKET[p.bracket_number]
                     ? <span style={{ display: "inline-block", minWidth: 20, borderRadius: 4, padding: "1px 0", fontWeight: 700, background: BRACKET[p.bracket_number].bg, color: BRACKET[p.bracket_number].color }}>{p.bracket_number}</span>
                     : "-"}
                 </td>
                 <td style={TD}>{p.sex_age ?? "-"}</td>
-                <td style={TD}>{p.jockey_weight ?? "-"}</td>
-                <td style={{ ...TD, textAlign: "left", whiteSpace: "nowrap" }}>{p.jockey_name ?? "-"}</td>
-                <td style={{ ...TD, textAlign: "left", whiteSpace: "nowrap" }}>{p.trainer_name ?? "-"}</td>
+                <td className="pt-hide-sm" style={TD}>{p.jockey_weight ?? "-"}</td>
+                <td style={{ ...TD, textAlign: "left", whiteSpace: "nowrap" }}>{tapCell(p, "jockey", p.jockey_name, "var(--text)")}</td>
+                <td className="pt-hide-sm" style={{ ...TD, textAlign: "left", whiteSpace: "nowrap" }}>{tapCell(p, "trainer", p.trainer_name, "var(--text)")}</td>
                 <td style={{ ...TD, whiteSpace: "nowrap" }}>{fmtWeight(p.weight, p.weight_change)}</td>
                 <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontWeight: hasPred ? 600 : 400, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.win_prob)}</td>
-                <td style={{ ...TD, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.top2_prob)}</td>
-                <td style={{ ...TD, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.top3_prob)}</td>
+                <td className="pt-hide-sm" style={{ ...TD, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.top2_prob)}</td>
+                <td className="pt-hide-sm" style={{ ...TD, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.top3_prob)}</td>
                 <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}</td>
-                <td style={{ ...TD, color: "var(--text-dim)", fontSize: 11 }}>
+                <td className="pt-hide-sm" style={{ ...TD, color: "var(--text-dim)", fontSize: 11 }}>
                   {p.place_odds_min != null && p.place_odds_max != null
                     ? `${Number(p.place_odds_min).toFixed(1)}〜${Number(p.place_odds_max).toFixed(1)}`
                     : "-"}
                 </td>
                 <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", background: evW.bg, fontWeight: hasPred ? 700 : 400, color: evW.color }}>{evW.text}</td>
-                <td style={{ ...TD, background: evP.bg, fontWeight: hasPred ? 700 : 400, color: evP.color }}>{evP.text}</td>
-                <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: 11, color: "var(--text-dim)" }}>{p.buy_tier ?? "-"}</td>
+                <td className="pt-hide-sm" style={{ ...TD, background: evP.bg, fontWeight: hasPred ? 700 : 400, color: evP.color }}>{evP.text}</td>
+                <td className="pt-hide-sm" style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: 11, color: "var(--text-dim)" }}>{p.buy_tier ?? "-"}</td>
               </tr>
             );
           })}
@@ -417,7 +466,7 @@ function RaceCard({
 
       {/* 展開コンテンツ */}
       {expanded && (
-        <div style={{ borderTop: "1px solid var(--border)", padding: "0 18px 14px" }}>
+        <div className="wp-race-body" style={{ borderTop: "1px solid var(--border)", padding: "0 18px 14px" }}>
           {loading && (
             <div style={{ padding: "20px 0", textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
               <div style={{ width: 24, height: 24, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 8px" }} />
@@ -438,7 +487,7 @@ function RaceCard({
             </div>
           )}
           {pred && (
-            <PredTable preds={preds} hasPred={hasPred} message={pred.message} />
+            <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} />
           )}
         </div>
       )}
@@ -712,7 +761,7 @@ export default function WeeklyPredictionsPage() {
       </div>
 
       {/* メインコンテンツ */}
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
+      <div className="wp-main" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
         {/* 凡例 */}
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
           <span>
