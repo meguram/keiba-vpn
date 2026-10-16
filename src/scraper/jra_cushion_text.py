@@ -21,7 +21,7 @@ _WD = re.compile(r"^([月火水木金土日])曜日$")
 _NUM = re.compile(r"^\d{1,2}(?:\.\d+)?$")
 _MISSING = {"－", "-", "―", "—", "ー", "×", "−"}
 _HEAD_B = re.compile(r"[（(](\d{4})年(\d{1,2})月(\d{1,2})日[～〜~](?:(\d{1,2})月)?(\d{1,2})日[）)]")
-_HEAD_C = re.compile(r"(\d{4})年(\d{1,2})月(\d{1,2})日から(?:(\d{1,2})月)?(\d{1,2})日の含水率")
+_HEAD_C = re.compile(r"(\d{4})年(\d{1,2})月(\d{1,2})日から(?:(\d{1,2})月)?(\d{1,2})日の(?:含水率|気象状況)")
 _FIELDS = {("turf", "goal"): "turf_moisture_goal", ("turf", "4c"): "turf_moisture_4corner", ("dirt", "goal"): "dirt_moisture_goal", ("dirt", "4c"): "dirt_moisture_4corner"}
 
 
@@ -63,7 +63,12 @@ def parse_sections(tokens: list[str]) -> list[dict[str, Any]]:
         if tok == "場所":
             cur["stage"] = "place"
         elif w:
-            (cur["cols_b"] if cur["stage"] == "place" else cur["cols_a"]).append(w.group(1))
+            if cur["stage"] == "place" and cur["vals"]:            # 含水率の表より後ろにクッション値の表が来る並び（2020 年など）
+                cur["stage"] = "cushion_after"
+            if cur["stage"] == "cushion_after":
+                pass
+            else:
+                (cur["cols_b"] if cur["stage"] == "place" else cur["cols_a"]).append(w.group(1))
             cur["bucket"] = None
         elif "芝コース含水率" in tok:
             cur["course"] = "turf"; cur["bucket"] = None
@@ -77,7 +82,7 @@ def parse_sections(tokens: list[str]) -> list[dict[str, Any]]:
             v = float(tok) if _NUM.match(tok) else None
             if cur["bucket"] is not None:
                 cur["vals"][cur["bucket"]].append(v)
-            elif cur["stage"] == "head" and cur["cols_a"]:
+            elif (cur["stage"] == "head" and cur["cols_a"]) or cur["stage"] == "cushion_after":
                 cur["cushion"].append(v)
     return sections
 

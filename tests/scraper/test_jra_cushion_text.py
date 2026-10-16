@@ -97,6 +97,65 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(any("turf_moisture_4corner" in w for w in warns))
 
 
+TOK_AFTER = """第１日・第２日（2020年10月30日～11月1日）
+場所
+金曜日
+土曜日
+日曜日
+芝コース含水率
+ゴール前
+13.0
+10.7
+13.9
+（パーセント）
+４コーナー
+16.8
+15.4
+15.1
+ダートコース含水率
+ゴール前
+5.6
+5.3
+5.2
+（パーセント）
+４コーナー
+5.0
+5.7
+4.2
+金曜日
+土曜日
+日曜日
+8.8
+8.8
+8.3
+第３日・第４日（2020年11月6日～8日）
+場所
+金曜日
+土曜日
+日曜日
+芝コース含水率
+ゴール前
+12.5
+12.2
+13.9""".split("\n")
+
+
+class LayoutVariantTest(unittest.TestCase):
+    def test_cushion_table_after_moisture(self):
+        warns: list[str] = []
+        recs = jt.sections_to_records(jt.parse_sections(TOK_AFTER), dict(LINK, year=2020, venue_code="03", venue_name="福島", kai=3), warnings=warns)
+        first = [r for r in recs if r["date"].startswith(("2020-10-30", "2020-10-31", "2020-11-01"))]
+        self.assertEqual([r["cushion_value"] for r in first], [8.8, 8.8, 8.3])
+        self.assertEqual(first[1]["turf_moisture_goal"], 10.7)
+        self.assertEqual(first[2]["date"], "2020-11-01")             # 月をまたぐ範囲
+
+    def test_weather_heading_variant(self):
+        toks = ["第３日・第４日の含水率", "2019年5月3日から5日の気象状況", "場所", "金曜日", "土曜日", "日曜日", "芝コース含水率", "ゴール前", "12.7", "11.2", "11.6"]
+        secs = jt.parse_sections(toks)
+        self.assertEqual(len(secs), 1)
+        self.assertEqual(str(secs[0]["start"]), "2019-05-03")
+
+
 class MergeTest(unittest.TestCase):
     def test_fills_missing_and_keeps_existing(self):
         existing = [{"date": "2023-03-04", "venue_code": "06", "cushion_value": 10.2, "turf_moisture_goal": None, "dirt_moisture_goal": 3.0}]
