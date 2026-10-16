@@ -728,6 +728,32 @@ def task_daily_race_lists() -> None:
     _as._save_status("daily-race-lists", result)
 
 
+def _raceday_direct_enabled() -> bool:
+    """開催日ランナーの T-60/T-15 を、グローバルキューを待たずに直接実行するか。既定は従来どおりキュー経由（``KEIBA_RACEDAY_DIRECT=1`` で有効）。"""
+    return os.environ.get("KEIBA_RACEDAY_DIRECT", "0").strip().lower() in ("1", "true", "yes")
+
+
+def _run_race_tasks_direct(runner: Any, race_id: str, date_fmt: str, tasks: list[str]) -> list[str]:
+    """1 レースのタスクを順に直接実行する。失敗は握りつぶさず文字列で返す（アクセス制限の疑いも含む）。
+    キュー経由だと、他ジョブの滞留・固まったジョブ・アクセス一時停止で T-60/T-15 の時刻に間に合わなくなるため。"""
+    from src.scraper.access_guard import AccessRestrictionDetected
+    from src.scraper.queue_tasks import _race_task
+
+    errors: list[str] = []
+    for t in tasks:
+        try:
+            _race_task(runner, race_id, t, date_fmt, smart_skip=False)
+        except AccessRestrictionDetected as e:
+            errors.append(f"{race_id}:{t}:access_restriction:{e}")
+            logger.error("アクセス制限の疑い（%s %s）: %s", race_id, t, e)
+            break
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{race_id}:{t}:{type(e).__name__}:{e}")
+            logger.error("直接取得に失敗 %s %s: %s", race_id, t, e)
+        time.sleep(random.uniform(0.5, 1.5))
+    return errors
+
+
 def task_raceday_runner() -> None:
     """開催日常駐ランナー（キュー版）。各レース T-60 でオッズのみ、T-15 でバンドル（オッズ含む）を取得する。
 
@@ -767,6 +793,17 @@ def task_raceday_runner() -> None:
     stats = {"races": len(schedule), "scraped": 0, "odds_t60": 0, "errors": []}
     events = build_odds_events(schedule)
     done: set[tuple[str, str]] = set()
+    direct = _raceday_direct_enabled()
+    _runner_box: list[Any] = []
+
+    def _get_runner() -> Any:
+        if not _runner_box:
+            from src.scraper.run import ScraperRunner
+
+            _runner_box.append(ScraperRunner())
+        return _runner_box[0]
+
+    logger.info("  取得方式: %s", "直接実行（キューを待たない）" if direct else "キュー経由")
 
     for ev in events:
         if (ev["race"]["race_id"], ev["kind"]) in done:
@@ -798,11 +835,15 @@ def task_raceday_runner() -> None:
                 }
                 for x in t60_batch
             ]
-            queue.bulk_add_jobs(specs)
-            ok, msg, _ = _kick_and_wait(queue, timeout_sec=72000.0)
-            if not ok:
-                logger.error("T-60 キュー待機失敗: %s", msg)
-                stats["errors"].append(msg)
+            if direct:
+                for x in t60_batch:
+                    stats["errors"] += _run_race_tasks_direct(_get_runner(), x["race"]["race_id"], date_fmt, list(ODDS_T60_TASKS))
+            else:
+                queue.bulk_add_jobs(specs)
+                ok, msg, _ = _kick_and_wait(queue, timeout_sec=72000.0)
+                if not ok:
+                    logger.error("T-60 キュー待機失敗: %s", msg)
+                    stats["errors"].append(msg)
             for x in t60_batch:
                 done.add((x["race"]["race_id"], "t60"))
                 stats["odds_t60"] += 1
@@ -819,11 +860,15 @@ def task_raceday_runner() -> None:
             for r in batch
         ]
         if specs:
-            queue.bulk_add_jobs(specs)
-            ok, msg, _ = _kick_and_wait(queue, timeout_sec=72000.0)
-            if not ok:
-                logger.error("T-15 キュー待機失敗: %s", msg)
-                stats["errors"].append(msg)
+            if direct:
+                for r in batch:
+                    stats["errors"] += _run_race_tasks_direct(_get_runner(), r["race_id"], date_fmt, list(T15_RACE_TASKS))
+            else:
+                queue.bulk_add_jobs(specs)
+                ok, msg, _ = _kick_and_wait(queue, timeout_sec=72000.0)
+                if not ok:
+                    logger.error("T-15 キュー待機失敗: %s", msg)
+                    stats["errors"].append(msg)
 
             baba_ok = refresh_jra_baba_live()
             for r in batch:
