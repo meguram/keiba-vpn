@@ -43,6 +43,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--years", nargs="+", type=int, default=list(range(2018, 2025)))     # 2025 年以降は別形式（日別の表）なので既存パーサに任せる
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--keep-existing", action="store_true", help="既存の値と PDF の値が食い違っても上書きしない（既定は PDF の値で訂正）")
     ap.add_argument("--report", default=str(ROOT / "data" / "local" / "meta" / "cushion_backfill_report.json"))
     a = ap.parse_args()
 
@@ -66,14 +67,14 @@ def main() -> None:
                 no_text.append(f"{y} {link['venue_name']} 第{link['kai']}回")
             incoming += recs
     incoming += jt.load_manual(ROOT / "data" / "meta" / "cushion_manual")
-    rows, st = jt.merge_missing(existing, incoming)
+    rows, st = jt.merge_missing(existing, incoming, overwrite=not a.keep_existing)
     rep = {"evaluated_at": datetime.now().isoformat(timespec="seconds"), "years": a.years, "existing_rows": len(existing), "incoming_rows": len(incoming), "result_rows": len(rows),
-           "added_rows": st["added"], "filled_fields": st["filled_fields"], "agree_fields": st["agree_fields"], "mismatch_count": len(st["mismatches"]), "mismatches": st["mismatches"][:200],
+           "added_rows": st["added"], "filled_fields": st["filled_fields"], "agree_fields": st["agree_fields"], "corrected_fields": st["corrected_fields"], "corrections": st["corrections"], "mismatch_count": len(st["mismatches"]), "mismatches": st["mismatches"][:200],
            "warnings": warnings, "pdf_without_text_records": no_text, "applied": bool(a.apply)}
     Path(a.report).parent.mkdir(parents=True, exist_ok=True)
     Path(a.report).write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(json.dumps({k: v for k, v in rep.items() if k not in ("mismatches", "warnings", "pdf_without_text_records")}, ensure_ascii=False))
-    print("警告", len(warnings), "| 食い違い", len(st["mismatches"]), "| 読めなかった PDF", len(no_text))
+    print(json.dumps({k: v for k, v in rep.items() if k not in ("mismatches", "corrections", "warnings", "pdf_without_text_records")}, ensure_ascii=False))
+    print("警告", len(warnings), "| 訂正", st["corrected_fields"], "| 食い違い(未訂正)", len(st["mismatches"]), "| 読めなかった PDF", len(no_text))
     if a.apply:
         bk = ROOT / "data" / "local" / "backup" / f"jra_cushion_{datetime.now():%Y%m%d_%H%M%S}"
         for d in [CANON] + COPIES:

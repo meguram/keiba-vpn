@@ -167,6 +167,20 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(st["added"], 2)                              # 3/3 と 3/5 は追加
         self.assertTrue(any(m["field"] == "dirt_moisture_goal" for m in st["mismatches"]))      # 3.0 と 3.2 の食い違いは記録
 
+    def test_overwrite_corrects_swapped_values(self):
+        existing = [{"date": "2023-03-04", "venue_code": "06", "turf_moisture_4corner": 3.1, "dirt_moisture_4corner": 10.8}]       # 4 コーナーが入れ替わっていた
+        incoming = jt.sections_to_records(jt.parse_sections(TOK_B), LINK)
+        rows, st = jt.merge_missing(existing, incoming, overwrite=True)
+        r = [x for x in rows if x["date"] == "2023-03-04"][0]
+        self.assertEqual((r["turf_moisture_4corner"], r["dirt_moisture_4corner"]), (10.8, 3.1))
+        self.assertEqual(st["corrected_fields"], 2)
+        self.assertEqual(st["mismatches"], [])
+
+    def test_heading_without_day_char(self):
+        toks = ["第３日・第４日（2021年4月2～4日）", "金曜日", "土曜日", "日曜日", "9.8", "9.5", "10.3", "場所", "金曜日", "土曜日", "日曜日", "芝コース含水率", "ゴール前", "8.9", "8.6", "7.8"]
+        secs = jt.parse_sections(toks)
+        self.assertEqual((str(secs[0]["start"]), str(secs[0]["end"])), ("2021-04-02", "2021-04-04"))
+
     def test_manual_file_loads(self):
         rows = jt.load_manual(Path("data/meta/cushion_manual"))
         sat = [r for r in rows if r["date"] == "2021-12-04" and r["venue_code"] == "07"][0]

@@ -20,7 +20,7 @@ WEEKDAY_NAMES = ["月", "火", "水", "木", "金", "土", "日"]
 _WD = re.compile(r"^([月火水木金土日])曜日$")
 _NUM = re.compile(r"^\d{1,2}(?:\.\d+)?$")
 _MISSING = {"－", "-", "―", "—", "ー", "×", "−"}
-_HEAD_B = re.compile(r"[（(](\d{4})年(\d{1,2})月(\d{1,2})日[～〜~](?:(\d{1,2})月)?(\d{1,2})日[）)]")
+_HEAD_B = re.compile(r"[（(](\d{4})年(\d{1,2})月(\d{1,2})日?[～〜~](?:(\d{1,2})月)?(\d{1,2})日?[）)]")
 _HEAD_C = re.compile(r"(\d{4})年(\d{1,2})月(\d{1,2})日から(?:(\d{1,2})月)?(\d{1,2})日の(?:含水率|気象状況)")
 _FIELDS = {("turf", "goal"): "turf_moisture_goal", ("turf", "4c"): "turf_moisture_4corner", ("dirt", "goal"): "dirt_moisture_goal", ("dirt", "4c"): "dirt_moisture_4corner"}
 
@@ -143,12 +143,13 @@ def load_manual(manual_dir: Path) -> list[dict[str, Any]]:
 MOISTURE_FIELDS = ["turf_moisture_goal", "turf_moisture_4corner", "dirt_moisture_goal", "dirt_moisture_4corner"]
 
 
-def merge_missing(existing: list[dict[str, Any]], incoming: list[dict[str, Any]], tol: float = 0.05) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """既存の行のうち空の項目だけを incoming の値で埋め、無い (日付, 競馬場) は追加する。既存の値は上書きしない。
-    既存と incoming の値が食い違う（tol を超える）ものは mismatches に記録する（検証用）。"""
+def merge_missing(existing: list[dict[str, Any]], incoming: list[dict[str, Any]], tol: float = 0.05, *, overwrite: bool = False) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """既存の行のうち空の項目を incoming の値で埋め、無い (日付, 競馬場) は追加する。
+    overwrite=False（既定）: 既存の値は上書きせず、食い違い（tol 超）は mismatches に記録するだけ。
+    overwrite=True: incoming の値（None 以外）で既存を直し、直した内容を corrections に記録する（表の抽出で 4 コーナーが入れ替わっていた分の訂正に使う）。"""
     idx = {(r.get("date"), r.get("venue_code")): i for i, r in enumerate(existing)}
     rows = [dict(r) for r in existing]
-    stats = {"added": 0, "filled_fields": 0, "mismatches": [], "agree_fields": 0}
+    stats: dict[str, Any] = {"added": 0, "filled_fields": 0, "mismatches": [], "agree_fields": 0, "corrected_fields": 0, "corrections": []}
     for r in incoming:
         key = (r.get("date"), r.get("venue_code"))
         if key not in idx:
@@ -166,7 +167,13 @@ def merge_missing(existing: list[dict[str, Any]], incoming: list[dict[str, Any]]
                 cur[f] = nv
                 stats["filled_fields"] += 1
             elif abs(float(ov) - float(nv)) > tol:
-                stats["mismatches"].append({"date": key[0], "venue_code": key[1], "field": f, "existing": ov, "pdf_text": nv})
+                rec = {"date": key[0], "venue_code": key[1], "field": f, "existing": ov, "pdf_text": nv}
+                if overwrite:
+                    cur[f] = nv
+                    stats["corrected_fields"] += 1
+                    stats["corrections"].append(rec)
+                else:
+                    stats["mismatches"].append(rec)
             else:
                 stats["agree_fields"] += 1
     rows.sort(key=lambda x: (x.get("date") or "", x.get("venue_code") or ""))
