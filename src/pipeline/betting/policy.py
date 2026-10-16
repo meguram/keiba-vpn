@@ -15,11 +15,8 @@ import pandas as pd
 
 from src.pipeline.betting.ticket_env import TYPE_IDX, TYPES
 
-FEATURE_NAMES = (["type_" + t for t in TYPES] + ["log_p", "log_odds", "log_pxo", "ev", "log_ratio", "rank_p", "rank_ev", "p_rel", "ev_max_race", "field", "entropy", "win_max"])
-
-
-def ticket_features(df: pd.DataFrame) -> np.ndarray:
-    """候補の買い目の表 → 特徴量（行数 × len(FEATURE_NAMES)）。"""
+def ticket_features(df: pd.DataFrame, groups: tuple[str, ...] = ("base",)) -> np.ndarray:
+    """候補の買い目の表 → 特徴量（行数 × 列数）。groups: base = 基本、cross = 市場の暗黙確率に対する配当（券種間の整合）、cal = 較正した期待回収率（cal_ev 列が要る）。"""
     t = df["type"].map(TYPE_IDX).to_numpy()
     oh = np.eye(len(TYPES), dtype="float32")[t]
     p, o, pm = df["p_comb"].to_numpy(), df["odds"].to_numpy(), df["p_model"].to_numpy()
@@ -29,9 +26,17 @@ def ticket_features(df: pd.DataFrame) -> np.ndarray:
     rank_ev = df.assign(_ev=p * o).groupby(["race_id", "type"], sort=False)["_ev"].rank(ascending=False, pct=True).to_numpy()
     p_rel = (df["p_comb"] / g["p_comb"].transform("max")).to_numpy()
     ev_max = df.assign(_ev=np.clip(p * o - 1.0, -1.0, 5.0)).groupby("race_id", sort=False)["_ev"].transform("max").to_numpy()
-    rest = np.stack([np.log(p), np.log(o), np.log(p * o), ev, np.log(np.clip(p, 1e-12, None) / np.clip(pm, 1e-12, None)), rank_p, rank_ev, p_rel, ev_max,
-                     df["field_size"].to_numpy() / 18.0, df["win_entropy"].to_numpy() / 3.0, df["win_max"].to_numpy()], axis=1).astype("float32")
-    return np.concatenate([oh, rest], axis=1)
+    cols = [np.log(p), np.log(o), np.log(p * o), ev, np.log(np.clip(p, 1e-12, None) / np.clip(pm, 1e-12, None)), rank_p, rank_ev, p_rel, ev_max,
+            df["field_size"].to_numpy() / 18.0, df["win_entropy"].to_numpy() / 3.0, df["win_max"].to_numpy()]
+    if "cross" in groups:
+        x = np.clip(df["p_mkt"].to_numpy() * o, 1e-3, None)
+        xr = df.assign(_x=x).groupby(["race_id", "type"], sort=False)["_x"].rank(ascending=False, pct=True).to_numpy()
+        cols += [np.log(x), np.clip(x - 1.0, -1.0, 5.0), xr]
+    if "cal" in groups:
+        cal = df["cal_ev"].to_numpy()
+        calr = df.assign(_c=cal).groupby("race_id", sort=False)["_c"].rank(ascending=False, pct=True).to_numpy()
+        cols += [np.clip(cal - 1.0, -1.0, 5.0), calr]
+    return np.concatenate([oh, np.stack(cols, axis=1).astype("float32")], axis=1)
 
 
 @dataclass
@@ -51,9 +56,9 @@ class Packed:
         return len(self.race_ids)
 
 
-def pack(df: pd.DataFrame, mu: np.ndarray | None = None, sd: np.ndarray | None = None) -> tuple[Packed, np.ndarray, np.ndarray]:
+def pack(df: pd.DataFrame, mu: np.ndarray | None = None, sd: np.ndarray | None = None, groups: tuple[str, ...] = ("base",)) -> tuple[Packed, np.ndarray, np.ndarray]:
     df = df.reset_index(drop=True)
-    X = ticket_features(df)
+    X = ticket_features(df, groups)
     if mu is None:
         mu, sd = X.mean(0), X.std(0)
         sd = np.where(sd < 1e-6, 1.0, sd)
@@ -160,6 +165,27 @@ def alloc_ev_selective(pk: Packed, frac: float, top: int = 3) -> np.ndarray:
     return np.where(ok, 1.0 / np.maximum(n, 1), 0.0)
 
 
+def pack_column(pk: Packed, df: pd.DataFrame, col: str) -> np.ndarray:
+    """pack に渡した表の列を、(レース × 買い目) の形に並べる（足りない所は NaN）。df は pack に渡したものと同じ並び。"""
+    v = df[col].to_numpy(dtype="float64")
+    out = np.full(pk.mask.shape, np.nan)
+    m = pk.index >= 0
+    out[m] = v[pk.index[m]]
+    return out
+
+
+def alloc_topk_score(pk: Packed, score: np.ndarray, top: int = 3, frac: float = 1.0) -> np.ndarray:
+    """score（大きいほど有望）の上位 top 点に等分。frac < 1 なら、レース内の最大 score が高い上位 frac のレースだけで賭ける（参加率をそろえる）。"""
+    sc = np.where(pk.mask & np.isfinite(score), score, -np.inf)
+    best = sc.max(1)
+    sel = best >= np.quantile(best[np.isfinite(best)], 1.0 - frac) if frac < 1.0 else np.isfinite(best)
+    k = min(top, sc.shape[1])
+    thr = -np.sort(-sc, axis=1)[:, k - 1: k]
+    ok = pk.mask & (sc >= thr) & np.isfinite(sc) & sel[:, None]
+    n = ok.sum(1, keepdims=True)
+    return np.where(ok, 1.0 / np.maximum(n, 1), 0.0)
+
+
 def alloc_random(pk: Packed, seed: int = 0) -> np.ndarray:
     rng = np.random.default_rng(seed)
     r = rng.random(pk.mask.shape)
@@ -199,7 +225,7 @@ def build_policy(n_feat: int, hidden: int = 64, dropout: float = 0.1):
 
 @dataclass
 class TrainConfig:
-    mode: str = "expected"          # expected: 期待値の厳密な勾配 / reinforce: サンプリングした行動の方策勾配
+    mode: str = "expected"          # expected: 期待値の厳密な勾配 / reinforce: サンプリングした行動の方策勾配 / kelly: 資金の対数成長（log wealth）の厳密な勾配
     hidden: int = 64
     dropout: float = 0.1
     lr: float = 2e-3
@@ -211,6 +237,7 @@ class TrainConfig:
     samples: int = 8                # reinforce で 1 レースから引く行動数
     max_ticket: float = 1.0         # 1 点への賭け金の上限（予算比）。超えた分は見送りに回す
     target_stake: float = 0.0       # 1 レース当たりの平均賭け金の下限（予算比）。下回ると罰則（0 なら見送りが自由）
+    kelly_scale: float = 0.1        # kelly モード: 予算 1 が資金の何割か（= 分数 Kelly の上限。損益 g は資金比 scale × g）
     stake_penalty: float = 20.0
     seed: int = 0
     threads: int = 4
@@ -251,7 +278,10 @@ def train_policy(pk: Packed, cfg: TrainConfig):
             g = G[ii]
             ent = -(p * torch.log(p.clamp(min=1e-12))).sum(1)
             floor = cfg.stake_penalty * torch.relu(cfg.target_stake - w.sum(1).mean()) if cfg.target_stake > 0 else 0.0
-            if cfg.mode == "expected":
+            if cfg.mode == "kelly":
+                r = (w * g).sum(1)
+                loss = -torch.log1p((cfg.kelly_scale * r).clamp(min=-0.999)).mean() / cfg.kelly_scale - cfg.entropy * ent.mean() + floor
+            elif cfg.mode == "expected":
                 r = (w * g).sum(1)
                 loss = -r.mean() + cfg.risk * r.var(unbiased=False) - cfg.entropy * ent.mean() + floor
             else:
@@ -281,3 +311,14 @@ def predict_alloc(net, pk: Packed, max_ticket: float = 1.0) -> np.ndarray:
         logits = net(torch.from_numpy(pk.X), torch.from_numpy(pk.mask))
         w, _ = _alloc(logits, torch.from_numpy(pk.mask), max_ticket)
     return w.numpy().astype("float64")
+
+
+def perturb_odds(df: pd.DataFrame, sigma: float, seed: int = 0) -> pd.DataFrame:
+    """判断に使うオッズを、確定オッズから対数正規にずらす（購入時点と確定のずれの模擬）。払戻 mult は変えない。単勝・複勝は馬ごと、組は買い目ごとに独立。"""
+    if sigma <= 0:
+        return df
+    rng = np.random.default_rng(seed)
+    out = df.copy()
+    z = rng.normal(0.0, sigma, len(out))
+    out["odds"] = np.clip(out["odds"].to_numpy() * np.exp(z), 1.0, None)
+    return out

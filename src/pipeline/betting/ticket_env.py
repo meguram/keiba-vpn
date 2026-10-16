@@ -50,32 +50,32 @@ def fit_benter(groups: list[tuple[np.ndarray, np.ndarray, int]], x0=(0.5, 0.5)) 
     return float(r.x[0]), float(r.x[1])
 
 
-def _tickets_for_race(hn: np.ndarray, dist: RankDistribution, dist_model: RankDistribution, odds: dict, K: int, payout: dict) -> list[dict]:
+def _tickets_for_race(hn: np.ndarray, dist: RankDistribution, dist_model: RankDistribution, dist_mkt: RankDistribution, odds: dict, K: int, payout: dict) -> list[dict]:
     """1 レースの候補の買い目。dist = 判断に使う確率（ブレンド後）、dist_model = モデル単独の確率。"""
     n = len(hn)
     rows: list[dict] = []
 
-    def add(t, combo, pc, pm, o):
+    def add(t, combo, pc, pm, pk, o):
         if o is None or not np.isfinite(o) or o <= 0 or pc <= 0:
             return
-        rows.append({"type": t, "combo": combo, "p_comb": pc, "p_model": pm, "odds": o, "mult": payout.get((t, combo), 0.0)})
+        rows.append({"type": t, "combo": combo, "p_comb": pc, "p_model": pm, "p_mkt": pk, "odds": o, "mult": payout.get((t, combo), 0.0)})
 
-    t3c, t3m = dist.top3(), dist_model.top3()
-    wide_c, wide_m = dist.all_wide(), dist_model.all_wide()
+    t3c, t3m, t3k = dist.top3(), dist_model.top3(), dist_mkt.top3()
+    wide_c, wide_m, wide_k = dist.all_wide(), dist_model.all_wide(), dist_mkt.all_wide()
     for i in range(n):
         h = int(hn[i])
-        add("tansho", str(h), float(dist.win[i]), float(dist_model.win[i]), odds["win"].get(h))
-        add("fukusho", str(h), float(t3c[i]), float(t3m[i]), odds["place_min"].get(h))
+        add("tansho", str(h), float(dist.win[i]), float(dist_model.win[i]), float(dist_mkt.win[i]), odds["win"].get(h))
+        add("fukusho", str(h), float(t3c[i]), float(t3m[i]), float(t3k[i]), odds["place_min"].get(h))
     if n >= 2:
         for i, j in combinations(range(n), 2):
             a, b = sorted((int(hn[i]), int(hn[j])))
             c = f"{a}-{b}"
-            add("umaren", c, dist.umaren(i, j), dist_model.umaren(i, j), odds["umaren"].get(c))
+            add("umaren", c, dist.umaren(i, j), dist_model.umaren(i, j), dist_mkt.umaren(i, j), odds["umaren"].get(c))
             if n >= 3:
-                add("wide", c, wide_c[(i, j)], wide_m[(i, j)], odds["wide_min"].get(c))
+                add("wide", c, wide_c[(i, j)], wide_m[(i, j)], wide_k[(i, j)], odds["wide_min"].get(c))
         for i, j in permutations(range(n), 2):
             c = f"{int(hn[i])}>{int(hn[j])}"
-            add("umatan", c, dist.umatan(i, j), dist_model.umatan(i, j), odds["umatan"].get(c))
+            add("umatan", c, dist.umatan(i, j), dist_model.umatan(i, j), dist_mkt.umatan(i, j), odds["umatan"].get(c))
     df = pd.DataFrame(rows)
     if df.empty:
         return []
@@ -84,7 +84,8 @@ def _tickets_for_race(hn: np.ndarray, dist: RankDistribution, dist_model: RankDi
     for t, g in df.groupby("type"):
         top_p = g.nlargest(K, "p_comb").index
         top_ev = g.nlargest(max(1, K // 2), "ev").index
-        keep += list(top_p) + list(top_ev)
+        top_x = g.assign(_x=g["p_mkt"] * g["odds"]).nlargest(max(1, K // 2), "_x").index       # 市場の暗黙確率に対して配当が高い順（券種間の整合ずれ）
+        keep += list(top_p) + list(top_ev) + list(top_x)
     return df.loc[sorted(set(keep))].to_dict("records")
 
 
@@ -115,7 +116,7 @@ def impute_missing_runners(pred: pd.DataFrame, win_place: pd.DataFrame) -> pd.Da
 
 
 def build_race_tickets(pred: pd.DataFrame, win_place: pd.DataFrame, pair: pd.DataFrame, payoff: pd.DataFrame, a: float, b: float, K: int = 12,
-                       alphas: tuple[float, float] | None = None) -> pd.DataFrame:
+                       alphas: tuple[float, float] | None = None, mkt_alphas: tuple[float, float] = (1.0, 1.0)) -> pd.DataFrame:
     """pred: race_id, horse_number, p_win, p_top2, p_top3（レース内で合計 1・2・3）。他は整備済みの表。
     戻り値: 候補の買い目（race_id, type, combo, p_comb, p_model, odds, mult, ev, race 特徴）。"""
     if "horse_number" not in pred.columns:
@@ -142,6 +143,7 @@ def build_race_tickets(pred: pd.DataFrame, win_place: pd.DataFrame, pair: pd.Dat
         dist_m, _ = fit_rank_distribution(pm / pm.sum(), t2, t3)
         al2, al3 = (dist_m.alpha2, dist_m.alpha3) if alphas is None else alphas
         dist_c = RankDistribution(win_c, al2, al3)
+        dist_k = RankDistribution(pk, mkt_alphas[0], mkt_alphas[1])      # 市場の単勝確率だけから作った着順分布（券種間の整合の比較用）
         odds = {"win": dict(zip(hn, win_odds)), "place_min": dict(zip(hn, w.loc[hn, "place_odds_min"].to_numpy(dtype=float)))}
         for t, col, name in (("umaren", "odds", "umaren"), ("wide", "odds_min", "wide_min"), ("umatan", "odds", "umatan")):
             sub = pr.get(rid)
@@ -153,7 +155,7 @@ def build_race_tickets(pred: pd.DataFrame, win_place: pd.DataFrame, pair: pd.Dat
             ok = p_rows[p_rows["bet_type"].isin(TYPES) & p_rows["combo"].notna() & p_rows["payout"].notna()]
             for t, c, v in zip(ok["bet_type"], ok["combo"], ok["payout"]):
                 pay[(t, str(c))] = float(v) / 100.0
-        rows = _tickets_for_race(hn, dist_c, dist_m, odds, K, pay)
+        rows = _tickets_for_race(hn, dist_c, dist_m, dist_k, odds, K, pay)
         if not rows:
             continue
         d = pd.DataFrame(rows)
@@ -170,7 +172,7 @@ def _build_chunk(args):
 
 
 def build_parallel(pred: pd.DataFrame, win_place: pd.DataFrame, pair: pd.DataFrame, payoff: pd.DataFrame, a: float, b: float, K: int = 12,
-                   procs: int = 4, chunks: int = 24) -> pd.DataFrame:
+                   procs: int = 4, chunks: int = 24, mkt_alphas: tuple[float, float] = (1.0, 1.0)) -> pd.DataFrame:
     """build_race_tickets をレースの塊に分けて並列に実行する（procs を超えない）。"""
     from concurrent.futures import ProcessPoolExecutor
 
@@ -178,7 +180,7 @@ def build_parallel(pred: pd.DataFrame, win_place: pd.DataFrame, pair: pd.DataFra
     jobs = []
     for ch in np.array_split(rids, max(1, min(chunks, len(rids)))):
         s = set(ch)
-        jobs.append((pred[pred["race_id"].isin(s)], win_place[win_place["race_id"].isin(s)], pair[pair["race_id"].isin(s)], payoff[payoff["race_id"].isin(s)], a, b, K))
+        jobs.append((pred[pred["race_id"].isin(s)], win_place[win_place["race_id"].isin(s)], pair[pair["race_id"].isin(s)], payoff[payoff["race_id"].isin(s)], a, b, K, None, mkt_alphas))
     with ProcessPoolExecutor(procs) as ex:
         parts = [p for p in ex.map(_build_chunk, jobs) if len(p)]
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()

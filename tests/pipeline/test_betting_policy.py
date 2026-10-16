@@ -164,6 +164,37 @@ class PolicyTest(unittest.TestCase):
         self.assertLessEqual(part, 0.4)
         self.assertTrue((w.sum(1) <= 1.0 + 1e-9).all())
 
+    def test_kelly_mode_and_features(self):
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("torch がありません")
+        t = self._tickets(30)
+        t["cal_ev"] = t["p_comb"] * t["odds"]
+        pk, _, _ = pol.pack(t, groups=("base", "cross", "cal"))
+        self.assertEqual(pk.X.shape[2], 17 + 3 + 2)
+        net, hist = pol.train_policy(pk, pol.TrainConfig(mode="kelly", epochs=3, hidden=16, threads=2, target_stake=0.3))
+        w = pol.predict_alloc(net, pk)
+        self.assertTrue((w.sum(1) <= 1.0 + 1e-6).all())
+
+    def test_perturb_odds_keeps_mult(self):
+        t = self._tickets(10)
+        n = pol.perturb_odds(t, 0.2, seed=1)
+        np.testing.assert_allclose(n["mult"], t["mult"])
+        self.assertFalse(np.allclose(n["odds"], t["odds"]))
+        self.assertTrue((n["odds"] >= 1.0).all())
+        self.assertIs(pol.perturb_odds(t, 0.0), t)
+
+    def test_pack_column_and_topk_score(self):
+        t = self._tickets(12).reset_index(drop=True)
+        pk, _, _ = pol.pack(t)
+        sc = pol.pack_column(pk, t.assign(s=t["p_comb"] * t["odds"]), "s")
+        self.assertEqual(int(np.isfinite(sc).sum()), len(t))
+        w = pol.alloc_topk_score(pk, sc, top=2)
+        self.assertTrue((np.abs(w.sum(1) - 1.0) < 1e-9).all())
+        w2 = pol.alloc_topk_score(pk, sc, top=2, frac=0.25)
+        self.assertLessEqual(float((w2.sum(1) > 0).mean()), 0.5)
+
     def test_reinforce_mode_runs(self):
         try:
             import torch  # noqa: F401

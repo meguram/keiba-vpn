@@ -127,6 +127,10 @@ class RankDistribution:
     def umaren(self, i: int, j: int) -> float:
         return float(self._p2[i, j] + self._p2[j, i])
 
+    def sanrentan(self, i: int, j: int, k: int) -> float:
+        """i が 1 着、j が 2 着、k が 3 着になる確率（3連単）。"""
+        return float(self._p3[i, j, k]) if self.n >= 3 else 0.0
+
     def sanrenpuku(self, i: int, j: int, k: int) -> float:
         p = self._p3
         return float(p[i, j, k] + p[i, k, j] + p[j, i, k] + p[j, k, i] + p[k, i, j] + p[k, j, i])
