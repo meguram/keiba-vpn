@@ -227,3 +227,92 @@ def race_dists_parallel(pred: pd.DataFrame, win_place: pd.DataFrame, a: float, b
         for part in ex.map(_dists_chunk, jobs):
             out.update(part)
     return out
+
+
+def _build_pred_race(hn, p_model, dist_m, dist_k, pred_win, pred_place, c, payout, K):
+    """予測オッズだけで判断する 1 レース分の買い目。odds = 予測オッズ（判断用）、mult = 実際の払戻倍率（精算用）。"""
+    n = len(hn)
+    rows = []
+
+    def add(t, combo, pc, pk, o):
+        if not np.isfinite(o) or o <= 0 or pc <= 0:
+            return
+        rows.append({"type": t, "combo": combo, "p_comb": pc, "p_model": pc, "p_mkt": pk, "odds": float(o), "mult": payout.get((t, combo), 0.0)})
+
+    t3m, t3k = dist_m.top3(), dist_k.top3()
+    wide_m, wide_k = dist_m.all_wide(), dist_k.all_wide()
+    for i in range(n):
+        h = int(hn[i])
+        add("tansho", str(h), float(dist_m.win[i]), float(dist_k.win[i]), pred_win[i])
+        add("fukusho", str(h), float(t3m[i]), float(t3k[i]), pred_place[i])
+    for i, j in combinations(range(n), 2):
+        a_, b_ = sorted((int(hn[i]), int(hn[j])))
+        cmb = f"{a_}-{b_}"
+        pk = dist_k.umaren(i, j)
+        add("umaren", cmb, dist_m.umaren(i, j), pk, c["umaren"] / max(pk, 1e-9))
+        pkw = wide_k[(i, j)]
+        add("wide", cmb, wide_m[(i, j)], pkw, c["wide"] / max(pkw, 1e-9))
+    for i, j in permutations(range(n), 2):
+        pk = dist_k.umatan(i, j)
+        add("umatan", f"{int(hn[i])}>{int(hn[j])}", dist_m.umatan(i, j), pk, c["umatan"] / max(pk, 1e-9))
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return []
+    df["ev"] = df["p_comb"] * df["odds"] - 1.0
+    keep = []
+    for t, g in df.groupby("type"):
+        keep += list(g.nlargest(K, "p_comb").index) + list(g.nlargest(max(1, K // 2), "ev").index)
+    return df.loc[sorted(set(keep))].to_dict("records")
+
+
+def build_tickets_predicted(pred: pd.DataFrame, win_place: pd.DataFrame, payoff: pd.DataFrame, podds: pd.DataFrame, consts: dict, mkt_alphas: tuple[float, float], K: int = 12) -> pd.DataFrame:
+    """予測オッズで判断する買い目の表。pred = モデルの p_win・p_top2・p_top3、podds = race_id・horse_id・win_pred・place_pred（予測オッズ。そのレースの実際のオッズは使っていない）。
+    win_place は出走馬の確認（取消・除外の除外）と馬番の対応にだけ使い、オッズの値は使わない。精算用の払戻 mult だけが実際の結果。"""
+    wp = win_place[win_place["win_odds"] > 0][["race_id", "horse_id", "horse_number"]].drop_duplicates(["race_id", "horse_id"])
+    d = pred.drop(columns=["horse_number"], errors="ignore").merge(wp, on=["race_id", "horse_id"], how="inner").merge(podds[["race_id", "horse_id", "win_pred", "place_pred"]], on=["race_id", "horse_id"], how="inner")
+    runners = {rid: set(g["horse_number"]) for rid, g in wp.groupby("race_id")}
+    po = {rid: g for rid, g in payoff.groupby("race_id")}
+    out = []
+    for rid, g in d.groupby("race_id", sort=False):
+        if len(g) < 3 or set(g["horse_number"]) != runners.get(rid):
+            continue
+        g = g.sort_values("horse_number")
+        hn = g["horse_number"].astype(int).to_numpy()
+        pm = g["p_win"].to_numpy()
+        dist_m, _ = fit_rank_distribution(pm / pm.sum(), g["p_top2"].to_numpy(), g["p_top3"].to_numpy())
+        q = (1.0 / g["win_pred"].to_numpy()); q = q / q.sum()
+        dist_k = RankDistribution(q, mkt_alphas[0], mkt_alphas[1])
+        pay = {}
+        pr = po.get(rid)
+        if pr is not None:
+            ok = pr[pr["bet_type"].isin(TYPES) & pr["combo"].notna() & pr["payout"].notna()]
+            for t, cm, v in zip(ok["bet_type"], ok["combo"], ok["payout"]):
+                pay[(t, str(cm))] = float(v) / 100.0
+        rows = _build_pred_race(hn, pm, dist_m, dist_k, g["win_pred"].to_numpy(), g["place_pred"].to_numpy(), consts, pay, K)
+        if not rows:
+            continue
+        r = pd.DataFrame(rows)
+        r.insert(0, "race_id", rid)
+        r["field_size"] = len(hn)
+        w_c = dist_m.win
+        r["win_entropy"] = float(-(w_c * np.log(np.clip(w_c, EPS, None))).sum())
+        r["win_max"] = float(w_c.max())
+        out.append(r)
+    return pd.concat(out, ignore_index=True) if out else pd.DataFrame()
+
+
+def _pred_chunk(args):
+    return build_tickets_predicted(*args)
+
+
+def build_tickets_predicted_parallel(pred, win_place, payoff, podds, consts, mkt_alphas, K=12, procs=4, chunks=24) -> pd.DataFrame:
+    from concurrent.futures import ProcessPoolExecutor
+
+    rids = pred["race_id"].unique()
+    jobs = []
+    for ch in np.array_split(rids, max(1, min(chunks, len(rids)))):
+        s = set(ch)
+        jobs.append((pred[pred["race_id"].isin(s)], win_place[win_place["race_id"].isin(s)], payoff[payoff["race_id"].isin(s)], podds[podds["race_id"].isin(s)], consts, mkt_alphas, K))
+    with ProcessPoolExecutor(procs) as ex:
+        parts = [p for p in ex.map(_pred_chunk, jobs) if len(p)]
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
