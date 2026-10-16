@@ -6816,7 +6816,7 @@ def _prediction_freshness(data: dict) -> dict:
 
 @app.get("/api/race/{race_id}/predictions", response_class=JSONResponse)
 async def get_race_predictions(race_id: str):
-    """キャッシュ済みの予測結果を返す。stg では GCS になければモックを返す。
+    """キャッシュ済みの予測結果を返す。stg で GCS に無ければ、モックではなく出馬表の馬と最新オッズだけ（has_prediction=false）を返す。
 
     Flask v1 の GET /api/v1/races/<race_id>/predictions（PostgreSQL経由）とはデータソース・
     レスポンス形状が異なる（本関数はGCS、v1はhorsesキー／本関数はpredictionsキー）。
@@ -6833,26 +6833,29 @@ async def get_race_predictions(race_id: str):
         data["freshness"] = _prediction_freshness(data)
         return JSONResponse(data)
 
-    # stg 環境: モック予測を返す
+    # stg 環境: 実モデルの予測が無いレースは、予測を作り出さず『出馬表の馬 + 最新オッズ』だけを返す（実データの表示が前提）。
+    # 画面の開発用にモックが要るときだけ KEIBA_STG_MOCK_PREDICTIONS=1（応答は _mock: true）。
     if _keiba_env() == "stg":
-        def _mock():
-            from src.api.stg_mock import mock_predictions
-            storage = _get_storage()
-            horse_ids: list[str] = []
-            try:
-                for cat in ("race_shutuba", "race_result"):
-                    card = storage.load(cat, race_id)
-                    if card:
-                        entries = card.get("entries") or card.get("results") or []
-                        ids = [e.get("horse_id", "") for e in entries if e.get("horse_id")]
-                        if ids:
-                            horse_ids = ids
-                            break
-            except Exception:
-                pass
-            return mock_predictions(race_id, horse_ids)
-        mock_data = await asyncio.to_thread(_mock)
-        return JSONResponse(mock_data)
+        if os.environ.get("KEIBA_STG_MOCK_PREDICTIONS", "").strip() == "1":
+            def _mock():
+                from src.api.stg_mock import mock_predictions
+                storage = _get_storage()
+                horse_ids: list[str] = []
+                try:
+                    for cat in ("race_shutuba", "race_result"):
+                        card = storage.load(cat, race_id)
+                        if card:
+                            entries = card.get("entries") or card.get("results") or []
+                            ids = [e.get("horse_id", "") for e in entries if e.get("horse_id")]
+                            if ids:
+                                horse_ids = ids
+                                break
+                except Exception:
+                    pass
+                return mock_predictions(race_id, horse_ids)
+            return JSONResponse(await asyncio.to_thread(_mock))
+        from src.api.entries_only_predictions import entries_only_predictions
+        return JSONResponse(await asyncio.to_thread(lambda: entries_only_predictions(race_id, _get_storage())))
 
     return JSONResponse({"status": "not_found"}, status_code=404)
 

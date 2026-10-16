@@ -46,6 +46,7 @@ type PredData = {
   status?: string;
   has_prediction?: boolean;
   model_description?: string;
+  message?: string;
   total_horses?: number;
   predictions?: PredEntry[];
   error?: string;
@@ -131,7 +132,7 @@ function RaceSummaryBadges({ preds }: { preds: PredEntry[] }) {
 }
 
 /* ── 予測テーブル ── */
-function PredTable({ preds, hasPred }: { preds: PredEntry[]; hasPred: boolean }) {
+function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: boolean; message?: string }) {
   const sorted = hasPred
     ? [...preds].sort((a, b) => (a.composite_rank ?? a.pred_rank ?? 99) - (b.composite_rank ?? b.pred_rank ?? 99))
     : [...preds].sort((a, b) => (a.horse_number ?? 0) - (b.horse_number ?? 0));
@@ -201,7 +202,7 @@ function PredTable({ preds, hasPred }: { preds: PredEntry[]; hasPred: boolean })
       </table>
       {!hasPred && (
         <p style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 10px" }}>
-          ※ 予測未実行。数値は全て「—」です。レース詳細から「AI予測を実行」してください。
+          ※ {message ?? "予測未実行。数値は全て「—」です。レース詳細から「AI予測を実行」してください。"}
         </p>
       )}
     </div>
@@ -331,7 +332,7 @@ function RaceCard({
             </div>
           )}
           {pred && (
-            <PredTable preds={preds} hasPred={hasPred} />
+            <PredTable preds={preds} hasPred={hasPred} message={pred.message} />
           )}
         </div>
       )}
