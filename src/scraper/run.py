@@ -2365,7 +2365,12 @@ class ScraperRunner:
 
         rcode = netkeiba_to_rcode(race_id, date)
         logger.info("SmartRC rcode=%s (race_id=%s, date=%s)", rcode, race_id, date)
-        data = self.smartrc.scrape_race(rcode)
+        from src.scraper.smartrc_client import SmartRCRestricted
+        try:
+            data = self.smartrc.scrape_race(rcode)
+        except SmartRCRestricted as e:
+            logger.error("SmartRC 取得を中断: %s", e)
+            return None
         if data and data.get("runners"):
             self.storage.save("smartrc_race", race_id, data)
             logger.info("SmartRC %s: %d runners, %d horses 保存",
