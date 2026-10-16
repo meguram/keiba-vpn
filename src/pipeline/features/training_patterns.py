@@ -154,3 +154,29 @@ def trainer_pattern_scores(races: pd.DataFrame, m: float = 30.0) -> pd.DataFrame
             gl[0] += 1; gl[1] += top3[r_]; gl[2] += win[r_]
         i = j
     return pd.DataFrame(out, columns=["tp_top3", "tp_edge", "pat_edge", "tp_n", "tp_share", "tp_win", "tp_win_edge", "pat_win_edge"], index=races.index)
+
+
+# ---------------------------------------------------------------- 調教師内の相対化
+
+TRN_COLS = ["f_t4z", "f_t1z", "f_accelz", "f_days", "f_int", "w1_exists", "n_work_14"]
+
+
+def trainer_relative_features(feat: pd.DataFrame, trainer_id: pd.Series, date: pd.Series, min_prior: int = 20) -> pd.DataFrame:
+    """その調教師の過去の出走（前日までに確定した日付の分）の平均に対する差。小さい = その厩舎としては速い／軽い。
+    feat は race_features 済み（TRN_COLS を含む）で、trainer_id・date と同じ index。調教師は trainer_id で区別する。"""
+    d = pd.DataFrame({"trn": trainer_id.astype(str).to_numpy(), "date": pd.to_datetime(date).to_numpy()}, index=feat.index)
+    cols = [c for c in TRN_COLS if c in feat.columns]
+    for c in cols:
+        d[c] = feat[c].astype("float64").to_numpy()
+    agg = d.groupby(["trn", "date"])[cols].agg(["sum", "count"])
+    cs = agg.groupby(level=0).cumsum()
+    prev = cs.groupby(level=0).shift(1)
+    out = pd.DataFrame(index=feat.index)
+    key = pd.MultiIndex.from_arrays([d["trn"], d["date"]])
+    for c in cols:
+        n = prev[(c, "count")].reindex(key).to_numpy()
+        mean = prev[(c, "sum")].reindex(key).to_numpy() / np.where(n > 0, n, np.nan)
+        out[f"{c}_vs_trn"] = np.where(n >= min_prior, feat[c].to_numpy(dtype="float64") - mean, np.nan)
+        if c == cols[0]:
+            out["trn_n_prior"] = np.nan_to_num(n)
+    return out

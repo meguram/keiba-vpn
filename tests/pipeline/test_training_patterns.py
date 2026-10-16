@@ -82,3 +82,24 @@ class PatternKeyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrainerRelativeTest(unittest.TestCase):
+    def test_asof_mean_and_same_day_excluded(self):
+        n = 30
+        dates = pd.date_range("2022-01-01", periods=n, freq="D")
+        feat = pd.DataFrame({"f_t4z": np.arange(n, dtype=float), "f_t1z": 0.0, "f_accelz": 0.0, "f_days": 3.0, "f_int": 1.0, "w1_exists": 1.0, "n_work_14": 2.0})
+        out = tp.trainer_relative_features(feat, pd.Series(["T1"] * n), pd.Series(dates), min_prior=5)
+        self.assertTrue(out["f_t4z_vs_trn"].iloc[:5].isna().all())             # 過去が 5 件未満
+        # 25 番目（index 25）の過去 25 件の平均は 12.0 → 差は 13.0
+        self.assertAlmostEqual(float(out["f_t4z_vs_trn"].iloc[25]), 25 - 12.0)
+        self.assertEqual(float(out["trn_n_prior"].iloc[25]), 25.0)
+
+    def test_two_trainers_do_not_mix(self):
+        n = 40
+        dates = list(pd.date_range("2022-01-01", periods=20, freq="D")) * 2
+        trn = ["A"] * 20 + ["B"] * 20
+        feat = pd.DataFrame({"f_t4z": [0.0] * 20 + [10.0] * 20, "f_t1z": 0.0, "f_accelz": 0.0, "f_days": 3.0, "f_int": 1.0, "w1_exists": 1.0, "n_work_14": 2.0})
+        out = tp.trainer_relative_features(feat, pd.Series(trn), pd.Series(dates), min_prior=5)
+        self.assertAlmostEqual(float(out["f_t4z_vs_trn"].iloc[19]), 0.0)
+        self.assertAlmostEqual(float(out["f_t4z_vs_trn"].iloc[39]), 0.0)
