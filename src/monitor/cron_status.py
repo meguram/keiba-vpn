@@ -35,6 +35,28 @@ _TASK = re.compile(r"run_auto_scrape_logged\.sh\s+\S+\s+(\S+)")
 _EXPLICIT = re.compile(r"cron_run\.sh\s+(\S+)\s+--")
 
 
+def cron_timezone() -> tzinfo:
+    """cron のデーモンが時刻表を解釈するタイムゾーン（システムの時刻。ホストは UTC）。
+
+    監視サーバのプロセスは TZ=Asia/Tokyo で動くので、datetime.now() の時刻は cron のものと 9 時間ずれる。
+    cron 式を評価するときは必ずこちらを使う（使わないと『次回の実行』が 9 時間ずれる）。KEIBA_CRON_TZ で上書きできる。"""
+    from zoneinfo import ZoneInfo
+
+    name = os.environ.get("KEIBA_CRON_TZ", "").strip()
+    if not name:
+        try:
+            name = Path("/etc/timezone").read_text().strip()
+        except OSError:
+            try:
+                name = os.readlink("/etc/localtime").split("zoneinfo/")[-1]
+            except OSError:
+                name = "UTC"
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return timezone.utc
+
+
 def derive_job_id(cmd: str) -> str:
     """crontab の 1 行（またはコマンド部分）から job_id を決める。cron_run.sh に渡す id と同じ規則:
     run_auto_scrape_logged.sh のタスクは『タスク名』、backfill は 'backfill-<年|all>-<phase>'、それ以外はスクリプト／モジュールの基底名。"""
@@ -325,7 +347,7 @@ def build_status(crontab_text: str | None = None, runs_dir: Path | None = None, 
     if crontab_text is None:
         crontab_text, source = load_crontab_text()
     # setup_all_cron.sh show の内容は『システム TZ は UTC』前提で書かれているので、取得元がそれなら UTC で評価する
-    tz = server_tz or (timezone.utc if source.startswith("setup_all_cron.sh show") else datetime.now().astimezone().tzinfo)
+    tz = server_tz or (timezone.utc if source.startswith("setup_all_cron.sh show") else cron_timezone())
     now = (now or datetime.now(tz)).astimezone(tz)
     ps = ps_lines if ps_lines is not None else _ps_lines()
 

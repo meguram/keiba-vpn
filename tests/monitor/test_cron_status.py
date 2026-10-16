@@ -199,3 +199,23 @@ def test_crontab_source_falls_back_to_the_planned_one(monkeypatch):
     text, src = C.load_crontab_text()
     assert "weekly-update" in text and src.startswith("setup_all_cron.sh show")
     assert os.environ.get("KEIBA_CRONTAB_FILE") is None
+
+
+def test_cron_timezone_ignores_the_process_tz_env(monkeypatch):
+    """監視サーバは TZ=Asia/Tokyo で動くが、cron のデーモンはシステムの時刻(UTC)で動く。
+    プロセスの TZ を使うと『次回の実行』が 9 時間ずれた（2026-10-17: jra-baba-morning の次回が 20:00 と出た）。"""
+    monkeypatch.setenv("TZ", "Asia/Tokyo")
+    time.tzset()
+    monkeypatch.setenv("KEIBA_CRON_TZ", "UTC")
+    try:
+        assert C.cron_timezone().key == "UTC"
+        assert datetime.now().astimezone().utcoffset() == timedelta(hours=9)       # プロセスの時刻は日本時間
+        # TZ を使わない評価: UTC の金曜 15:45 から見て、'0 22 * * *'（UTC 22:00 = JST 07:00）は 6 時間 15 分後
+        after = datetime(2026, 10, 16, 15, 45, tzinfo=C.cron_timezone())
+        nxt = C.next_fire("0 22 * * *", after)
+        assert nxt.astimezone(JST).strftime("%m/%d %H:%M") == "10/17 07:00"
+        monkeypatch.setenv("KEIBA_CRON_TZ", "Asia/Tokyo")
+        assert C.cron_timezone().key == "Asia/Tokyo"
+    finally:
+        monkeypatch.undo()
+        time.tzset()
