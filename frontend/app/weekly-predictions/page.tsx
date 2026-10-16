@@ -151,16 +151,89 @@ function fmtWeight(w: number | null | undefined, d: number | null | undefined): 
   return d == null ? `${w}` : `${w}(${d > 0 ? "+" : d < 0 ? "" : "±"}${d})`;
 }
 
+/* ── 列での並べ替え ── */
+type SortKey = "num" | "name" | "bracket" | "sexage" | "jwt" | "jockey" | "trainer" | "weight" | "win" | "top2" | "top3" | "odds" | "podds" | "evw" | "evp" | "tier";
+type SortDir = "asc" | "desc";
+
+function sexAgeKey(v?: string | null): number | null {
+  const m = (v ?? "").match(/^(牡|牝|セ|騸)?(\d+)/);
+  return m ? Number(m[2]) * 10 + ({ 牡: 1, 牝: 2, セ: 3, 騸: 3 } as Record<string, number>)[m[1] ?? ""] : null;
+}
+
+/** 列の値。数値は数、文字は文字。値が無い（"-" 表示）ときは null（並べ替えでは常に末尾） */
+const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
+  num: (p) => p.horse_number ?? null,
+  name: (p) => p.horse_name ?? null,
+  bracket: (p) => p.bracket_number ?? null,
+  sexage: (p) => sexAgeKey(p.sex_age),
+  jwt: (p) => p.jockey_weight ?? null,
+  jockey: (p) => p.jockey_name ?? null,
+  trainer: (p) => p.trainer_name ?? null,
+  weight: (p) => p.weight ?? null,
+  win: (p) => p.win_prob ?? null,
+  top2: (p) => p.top2_prob ?? null,
+  top3: (p) => p.top3_prob ?? null,
+  odds: (p) => p.win_odds ?? null,
+  podds: (p) => p.place_odds_min ?? null,
+  evw: (p) => p.ev_win ?? null,
+  evp: (p) => p.ev_place ?? p.expected_value ?? null,
+  tier: (p) => p.buy_tier ?? null,
+};
+// 『大きいほど良い』列は、最初のクリックを降順にする（勝率・連対率・複勝率・期待値・馬体重）
+const DESC_FIRST = new Set<SortKey>(["win", "top2", "top3", "evw", "evp", "weight"]);
+
+function sortPreds(preds: PredEntry[], key: SortKey | null, dir: SortDir, fallback: (a: PredEntry, b: PredEntry) => number): PredEntry[] {
+  const out = [...preds].sort(fallback);                                   // 同じ値のときは既定の並び（安定）
+  if (!key) return out;
+  const val = SORT_VALUE[key];
+  return out.sort((a, b) => {
+    const x = val(a), y = val(b);
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;                                              // 値が無いものは昇順でも降順でも末尾
+    if (y == null) return -1;
+    const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "ja");
+    return dir === "asc" ? c : -c;
+  });
+}
+
 /* ── 予測テーブル ── */
 function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: boolean; message?: string }) {
-  const sorted = hasPred
-    ? [...preds].sort((a, b) => (a.composite_rank ?? a.pred_rank ?? 99) - (b.composite_rank ?? b.pred_rank ?? 99))
-    : [...preds].sort((a, b) => (a.horse_number ?? 0) - (b.horse_number ?? 0));
-
   const TH: React.CSSProperties = {
     padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-dim)",
     textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", background: "var(--surface2)",
   };
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
+  const defaultOrder = hasPred
+    ? (a: PredEntry, b: PredEntry) => (a.composite_rank ?? a.pred_rank ?? 99) - (b.composite_rank ?? b.pred_rank ?? 99)
+    : (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);
+  const sorted = sortPreds(preds, sort?.key ?? null, sort?.dir ?? "asc", defaultOrder);
+
+  // 見出しのクリック: 1 回目=その列の向き（既定は昇順、大きいほど良い列は降順）→ 2 回目=逆 → 3 回目=元の並びに戻す
+  function toggle(key: SortKey) {
+    setSort((cur) => {
+      const first: SortDir = DESC_FIRST.has(key) ? "desc" : "asc";
+      if (!cur || cur.key !== key) return { key, dir: first };
+      if (cur.dir === first) return { key, dir: first === "asc" ? "desc" : "asc" };
+      return null;
+    });
+  }
+  const arrow = (key: SortKey) => (sort?.key === key ? (sort.dir === "asc" ? " ▲" : " ▼") : "");
+  const th = (key: SortKey, label: string, style: React.CSSProperties = {}, title?: string) => (
+    <th
+      style={{ ...TH, cursor: "pointer", userSelect: "none", color: sort?.key === key ? "var(--accent)" : TH.color, ...style }}
+      aria-sort={sort?.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+      title={title ? `${title}（クリックで並べ替え）` : "クリックで並べ替え"}
+    >
+      <button
+        type="button"
+        onClick={() => toggle(key)}
+        style={{ all: "unset", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2, font: "inherit", color: "inherit", padding: "0 2px" }}
+      >
+        {label}<span aria-hidden style={{ fontSize: 9, opacity: sort?.key === key ? 1 : 0.35 }}>{arrow(key) || " ↕"}</span>
+      </button>
+    </th>
+  );
+
   const TD: React.CSSProperties = {
     padding: "8px 10px", borderBottom: "1px solid rgba(36,48,73,0.4)",
     textAlign: "center", verticalAlign: "middle", fontSize: 12,
@@ -171,29 +244,27 @@ function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: b
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
           <tr>
-            <th style={{ ...TH, width: 36 }}>印</th>
-            <th style={{ ...TH, width: 36 }}>馬番</th>
-            <th style={{ ...TH, textAlign: "left", width: 120 }}>馬名</th>
-            <th style={{ ...TH, borderLeft: "1px solid rgba(36,48,73,0.5)" }} title="出馬表（前日に確定。馬体重は当日の発表後）">枠</th>
-            <th style={TH}>性齢</th>
-            <th style={TH}>斤量</th>
-            <th style={{ ...TH, textAlign: "left" }}>騎手</th>
-            <th style={{ ...TH, textAlign: "left" }}>調教師</th>
-            <th style={TH} title="当日、発走の約1時間前に発表">馬体重</th>
-            <th style={{ ...TH, borderLeft: "1px solid rgba(36,48,73,0.5)" }}>勝率</th>
-            <th style={TH}>連対率</th>
-            <th style={TH}>複勝率</th>
-            <th style={{ ...TH, borderLeft: "1px solid rgba(36,48,73,0.5)" }}>想定単勝</th>
-            <th style={TH}>想定複勝</th>
-            <th style={{ ...TH, borderLeft: "1px solid rgba(36,48,73,0.5)" }}>勝期待値</th>
-            <th style={TH}>複期待値</th>
-            <th style={{ ...TH, borderLeft: "1px solid rgba(36,48,73,0.5)", width: 60 }}>推奨</th>
+            {th("num", "馬番", { width: 36 })}
+            {th("name", "馬名", { textAlign: "left", width: 120 })}
+            {th("bracket", "枠", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "出馬表（前日に確定。馬体重は当日の発表後）")}
+            {th("sexage", "性齢")}
+            {th("jwt", "斤量")}
+            {th("jockey", "騎手", { textAlign: "left" })}
+            {th("trainer", "調教師", { textAlign: "left" })}
+            {th("weight", "馬体重", {}, "当日、発走の約1時間前に発表")}
+            {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
+            {th("top2", "連対率")}
+            {th("top3", "複勝率")}
+            {th("odds", "想定単勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
+            {th("podds", "想定複勝", {}, "複勝オッズの下限で並べ替え")}
+            {th("evw", "勝期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
+            {th("evp", "複期待値")}
+            {th("tier", "推奨", { borderLeft: "1px solid rgba(36,48,73,0.5)", width: 60 })}
           </tr>
         </thead>
         <tbody>
           {sorted.map((p, i) => {
             const rank = p.composite_rank ?? p.pred_rank ?? 0;
-            const mark = markSym(p);
             const evW = fmtEv(p.ev_win);
             const evP = fmtEv(p.ev_place ?? p.expected_value);
             const rowBg =
@@ -202,7 +273,6 @@ function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: b
               rank === 3 ? "rgba(34,197,94,0.03)" : undefined;
             return (
               <tr key={p.horse_number ?? i} style={{ background: rowBg }}>
-                <td style={{ ...TD, fontSize: 16, fontWeight: 800, color: mark.color }}>{mark.sym}</td>
                 <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "-"}</td>
                 <td style={{ ...TD, textAlign: "left", fontWeight: 600, color: "#fff", whiteSpace: "nowrap" }}>
                   {p.horse_id && SHOW_HORSE_LINK ? (
@@ -645,12 +715,7 @@ export default function WeeklyPredictionsPage() {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
         {/* 凡例 */}
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <span><strong style={{ color: "#ef4444" }}>◎</strong> 1着優位</span>
-          <span><strong style={{ color: "#3b82f6" }}>○</strong> 2連相手</span>
-          <span><strong style={{ color: "#22c55e" }}>✓</strong> 3列紐</span>
-          <span><strong style={{ color: "#f59e0b" }}>▲</strong> 複勝妙味</span>
-          <span><strong style={{ color: "#a78bfa" }}>★</strong> 中穴</span>
-          <span style={{ borderLeft: "1px solid var(--border)", paddingLeft: 12 }}>
+          <span>
             期待値: <strong style={{ color: "#22c55e" }}>≥1.3</strong> / <strong style={{ color: "#60a5fa" }}>≥1.0</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.8</strong> / <strong style={{ color: "#f87171" }}>＜0.8</strong>
           </span>
         </div>
