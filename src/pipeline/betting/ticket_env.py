@@ -184,3 +184,46 @@ def build_parallel(pred: pd.DataFrame, win_place: pd.DataFrame, pair: pd.DataFra
     with ProcessPoolExecutor(procs) as ex:
         parts = [p for p in ex.map(_build_chunk, jobs) if len(p)]
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+
+
+def race_dists(pred: pd.DataFrame, win_place: pd.DataFrame, a: float, b: float) -> dict[str, tuple]:
+    """build_race_tickets と同じ手順で、レースごとの（馬番, ブレンド後の勝率, α2, α3）を返す（的中確率の厳密計算用）。"""
+    if "horse_number" not in pred.columns:
+        pred = pred.merge(win_place[["race_id", "horse_id", "horse_number"]].drop_duplicates(["race_id", "horse_id"]), on=["race_id", "horse_id"], how="inner")
+    pred = impute_missing_runners(pred, win_place)
+    wp = {rid: g for rid, g in win_place[win_place["win_odds"] > 0].groupby("race_id")}
+    out = {}
+    for rid, g in pred.groupby("race_id", sort=False):
+        w = wp.get(rid)
+        if w is None or len(g) < 3:
+            continue
+        g = g.sort_values("horse_number")
+        w = w.drop_duplicates("horse_number").set_index("horse_number")
+        hn = g["horse_number"].astype(int).to_numpy()
+        if set(hn) != set(w.index):
+            continue
+        pm = g["p_win"].to_numpy()
+        pk = market_probs(w.loc[hn, "win_odds"].to_numpy(dtype=float))
+        win_c = benter_blend(np.log(np.clip(pm, EPS, None)), np.log(pk), a, b)
+        dist_m, _ = fit_rank_distribution(pm / pm.sum(), g["p_top2"].to_numpy(), g["p_top3"].to_numpy())
+        out[rid] = (hn, win_c, float(dist_m.alpha2), float(dist_m.alpha3))
+    return out
+
+
+def _dists_chunk(args):
+    return race_dists(*args)
+
+
+def race_dists_parallel(pred: pd.DataFrame, win_place: pd.DataFrame, a: float, b: float, procs: int = 4, chunks: int = 24) -> dict[str, tuple]:
+    from concurrent.futures import ProcessPoolExecutor
+
+    rids = pred["race_id"].unique()
+    jobs = []
+    for ch in np.array_split(rids, max(1, min(chunks, len(rids)))):
+        s = set(ch)
+        jobs.append((pred[pred["race_id"].isin(s)], win_place[win_place["race_id"].isin(s)], a, b))
+    out: dict = {}
+    with ProcessPoolExecutor(procs) as ex:
+        for part in ex.map(_dists_chunk, jobs):
+            out.update(part)
+    return out

@@ -86,6 +86,16 @@ class TicketEnvTest(unittest.TestCase):
         out = te.impute_missing_runners(pred, wp2)
         self.assertEqual(len(out), len(pred))
 
+    def test_race_dists_match_tickets(self):
+        pred, wp, pair, pay = _race("r1")
+        d = te.race_dists(pred.drop(columns="horse_number"), wp, a=0.5, b=0.5)
+        hn, win, a2, a3 = d["r1"]
+        self.assertAlmostEqual(float(win.sum()), 1.0)
+        t = te.build_race_tickets(pred, wp, pair, pay, a=0.5, b=0.5, K=20)
+        tans = t[t["type"] == "tansho"].set_index("combo")["p_comb"]
+        for h, p in zip(hn, win):
+            self.assertAlmostEqual(float(tans[str(int(h))]), float(p), places=9)
+
     def test_impute_keeps_totals(self):
         pred, wp, _, _ = _race("r1")
         out = te.impute_missing_runners(pred.iloc[:-1], wp)
