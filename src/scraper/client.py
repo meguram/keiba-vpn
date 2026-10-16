@@ -524,7 +524,7 @@ class NetkeibaClient:
         self._request_count: int = 0
         self._burst_counter: int = 0
         self._last_url: str = ""
-        self._client_lock = threading.Lock()
+        self._client_lock = threading.RLock()      # 遅延ログイン（最初の通信中にログインし、その確認でも通信する）で再入するため
 
         _load_env(env_path)
 
