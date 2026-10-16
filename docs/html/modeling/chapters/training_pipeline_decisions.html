@@ -382,7 +382,7 @@
 </ul>
 
 <h2>10. tp-08 馬券最適化の強化学習</h2>
-<div class="box"><b>訂正予定（2026-10-16 判明）</b>: 本節の回収率は、買い目の表で<b>取消・除外の馬（単勝オッズ = -3.0）を「オッズ 1.0 の本命」として扱っていた不具合</b>を含む値です（約 5% のレースで市場確率が歪んだ）。修正済みで、tp-09 の「RL 基本」で同じ設定を再評価中です。結論の方向（確定オッズでは控除率を超える優位が見つからない）は変わらない見込みですが、数値は再計算後に差し替えます。</div>
+<div class="box"><b>訂正済み（2026-10-16）</b>: 本節の表は、買い目の表で<b>取消・除外の馬（単勝オッズ = -3.0）を「オッズ 1.0 の本命」として扱っていた不具合</b>を含む値でした。修正して tp-09 で同じ設定を再評価した結果、<b>RL 基本は 88.3%（95% 信頼区間 85.7〜91.0%）</b>で、補正前の 88.5% とほぼ同じです（複勝のモデル 1 位 84.5%、馬連のモデル 1 位 86.6%。差は 0.3 ポイント以内）。結論（確定オッズでは控除率を上回る優位が見つからない）は変わりません。下の表の数値は補正前の値のままです。</div>
 <p class="muted">根拠: MLflow 実験 <code>keiba-tp-betting-rl</code>、成果物 <code>data/local/modeling/betting/rl/ens_v2/</code>、コード <code>src/pipeline/betting/{ticket_env,policy}.py</code>、詳細は <a href="modeling_experiment_report.html" style="color:#7aa9ff">モデリング実験結果レポート</a> §4。設計の概念は <a href="betting_policy_reinforcement_learning.html" style="color:#7aa9ff">betting_policy_reinforcement_learning.html</a>。</p>
 <h3>確定事項</h3>
 <table>
