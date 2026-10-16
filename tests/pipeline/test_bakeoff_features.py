@@ -94,6 +94,19 @@ class AftermathTest(unittest.TestCase):
         self.assertAlmostEqual(r_b + r_c, 0.0)
 
 
+class AftermathVariantTest(unittest.TestCase):
+    def test_more_lags_and_decay(self):
+        df = _toy(60, seed=3)
+        a3 = bo.aftermath_features(df, lags=3)
+        a5 = bo.aftermath_features(df, lags=5)
+        self.assertTrue((a5["af_cnt_3"] >= a3["af_cnt_3"]).all())          # 窓を広げると相手の数は減らない
+        d = bo.aftermath_features(df, lags=5, decay=0.5)
+        self.assertTrue((d["af_cnt_3"] <= a5["af_cnt_3"] + 1e-9).all())    # 減衰すると重みづけた数は増えない
+        self.assertIn("af_top3_3", a3.columns)
+        ok = a3["af_top3_3"].dropna()
+        self.assertTrue(((ok >= 0) & (ok <= 1)).all())
+
+
 class CushionTest(unittest.TestCase):
     def test_join_and_surface(self):
         cu = pd.DataFrame({"date": ["2022-04-02", "2022-04-02"], "venue_code": ["06", "09"], "cushion_value": [9.5, 8.0], "turf_moisture_goal": [12.0, 10.0],

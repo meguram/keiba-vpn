@@ -145,12 +145,13 @@ def glicko_rd_features(df: pd.DataFrame, per_week: float = 0.01, q: float = 1.5)
 
 # ---------------------------------------------------------------- 後日談（相手の次走の成績）
 
-def aftermath_features(df: pd.DataFrame, lags: int = 3, day_key: int = 100000) -> pd.DataFrame:
+def aftermath_features(df: pd.DataFrame, lags: int = 3, day_key: int = 100000, decay: float = 1.0) -> pd.DataFrame:
     """馬の直近 lags 走それぞれについて「そのレースの相手（自分以外）が、その後の出走でどれだけ走ったか」を、今回の日より前に分かる分だけ平均する。
     相手の次走の結果は、その次走の日に初めて分かる（当日は含めない）。"""
     n = len(df)
     res = _res(df)
     win = (df["finish_position"].to_numpy(dtype=float) == 1).astype(float)
+    top3 = (df["finish_position"].to_numpy(dtype=float) <= 3).astype(float)
     dnum = pd.to_datetime(df["date"]).to_numpy("datetime64[D]").astype(np.int64)
     hid = df["horse_id"].astype(str).to_numpy()
     rcode = pd.factorize(df["race_id"].astype(str))[0].astype(np.int64)
@@ -169,8 +170,9 @@ def aftermath_features(df: pd.DataFrame, lags: int = 3, day_key: int = 100000) -
     src, key = src[o], key[o]
     c_res = np.concatenate([[0.0], np.cumsum(res[nxt[src]])])
     c_win = np.concatenate([[0.0], np.cumsum(win[nxt[src]])])
+    c_t3 = np.concatenate([[0.0], np.cumsum(top3[nxt[src]])])
 
-    S_r = np.zeros(n); S_w = np.zeros(n); C = np.zeros(n)
+    S_r = np.zeros(n); S_w = np.zeros(n); S_3 = np.zeros(n); C = np.zeros(n)
     first = None
     cur = np.arange(n)
     for lag in range(1, lags + 1):
@@ -181,22 +183,26 @@ def aftermath_features(df: pd.DataFrame, lags: int = 3, day_key: int = 100000) -
         hi = np.searchsorted(key, rcode[p] * day_key + dnum, side="left")      # 次走の日が今回の日より前のものだけ
         s_r = c_res[hi] - c_res[lo]
         s_w = c_win[hi] - c_win[lo]
+        s_3 = c_t3[hi] - c_t3[lo]
         cnt = (hi - lo).astype(float)
         self_next = nxt[p]                                                 # 自分自身の次走（=相手ではない）を引く
         sn_ok = ok & (self_next >= 0)
         sn_ok[sn_ok] = (dnum[self_next[sn_ok]] < dnum[sn_ok]) & np.isfinite(res[self_next[sn_ok]])
         s_r = s_r - np.where(sn_ok, res[np.maximum(self_next, 0)], 0.0)
         s_w = s_w - np.where(sn_ok, win[np.maximum(self_next, 0)], 0.0)
+        s_3 = s_3 - np.where(sn_ok, top3[np.maximum(self_next, 0)], 0.0)
         cnt = cnt - sn_ok.astype(float)
-        s_r, s_w, cnt = np.where(ok, s_r, 0.0), np.where(ok, s_w, 0.0), np.where(ok, cnt, 0.0)
+        s_r, s_w, s_3, cnt = np.where(ok, s_r, 0.0), np.where(ok, s_w, 0.0), np.where(ok, s_3, 0.0), np.where(ok, cnt, 0.0)
         if lag == 1:
             first = (s_r, cnt)
-        S_r += s_r; S_w += s_w; C += cnt
+        wgt = decay ** (lag - 1)
+        S_r += wgt * s_r; S_w += wgt * s_w; S_3 += wgt * s_3; C += wgt * cnt
     with np.errstate(invalid="ignore", divide="ignore"):
         out = pd.DataFrame({
             "af_res_l1": np.where(first[1] >= 3, first[0] / np.maximum(first[1], 1), np.nan),
             "af_res_3": np.where(C >= 3, S_r / np.maximum(C, 1), np.nan),
             "af_win_3": np.where(C >= 3, S_w / np.maximum(C, 1), np.nan),
+            "af_top3_3": np.where(C >= 3, S_3 / np.maximum(C, 1), np.nan),
             "af_cnt_3": C,
         }, index=df.index)
     return out
