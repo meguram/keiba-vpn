@@ -57,3 +57,16 @@ def test_build_contains_every_chapter_and_toc():
     for slug in B.CHAPTERS:
         assert f'id="ch-{slug}"' in out and f'href="#ch-{slug}"' in out
     assert out.count('class="bk-chapter') == len(B.CHAPTERS)
+
+
+def test_navigation_does_not_use_smooth_scroll_or_scrollintoview():
+    # 長いページで『滑らかなスクロール』や scrollIntoView(目次側) を使うと、ジャンプが途中で打ち消されて目的の章に着かなかった（2026-10-16）
+    assert "scroll-behavior: smooth" not in B.SHELL_CSS and "scroll-behavior:smooth" not in B.SHELL_CSS
+    assert "scrollIntoView" not in B.SHELL_JS
+    assert "scrollRestoration" in B.SHELL_JS
+
+
+def test_sidebar_has_three_levels_and_a_toggle_per_chapter():
+    out, _ = B.build()
+    assert out.count('class="part"') == len(B.PARTS) and out.count('class="tg"') == len(B.CHAPTERS)
+    assert out.count('class="secs"') == len(B.CHAPTERS) and 'id="bk-open"' in out and 'id="bk-close"' in out

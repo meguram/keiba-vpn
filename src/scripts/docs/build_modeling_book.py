@@ -230,18 +230,32 @@ def last_updated(path: Path) -> str:
 
 SHELL_CSS = """
 :root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --code-bg:#0b1428; }
-* { box-sizing: border-box; } html { scroll-behavior: smooth; scroll-padding-top: 18px; }
+* { box-sizing: border-box; } html { scroll-behavior: auto; }
 body.bk { margin:0; background:#0b1226; color:var(--text); font:15px/1.8 "Noto Sans JP",system-ui,sans-serif; }
-.bk-layout { display:grid; grid-template-columns: 330px 1fr; min-height:100vh; }
-.bk-side { position:sticky; top:0; height:100vh; overflow-y:auto; background:#0a1124; border-right:1px solid var(--border); padding:18px 14px 40px; font-size:13px; }
-.bk-side h1 { font-size:16px; margin:0 0 4px; } .bk-side .sub { color:var(--muted); font-size:12px; margin-bottom:10px; }
-.bk-side input { width:100%; padding:7px 10px; border-radius:6px; border:1px solid var(--border); background:#0f1a36; color:var(--text); margin-bottom:10px; }
-.bk-side .part { margin:14px 0 4px; color:var(--accent-2); font-weight:700; font-size:12.5px; letter-spacing:.02em; }
-.bk-side a { color:var(--text); text-decoration:none; display:block; padding:2px 6px; border-radius:5px; line-height:1.45; }
-.bk-side a:hover { background:#16254a; } .bk-side a.cur { background:#1c2f58; color:#fff; }
-.bk-side .chap > a { font-weight:600; padding:4px 6px; } .bk-side .chap .num { color:var(--muted); margin-right:5px; font-weight:400; }
-.bk-side .secs { display:none; margin:0 0 4px 14px; border-left:1px solid var(--border); } .bk-side .chap.open .secs { display:block; }
-.bk-side .secs a { color:var(--muted); font-size:12px; padding:1px 6px; }
+.bk-layout { display:grid; grid-template-columns: 340px 1fr; min-height:100vh; }
+.bk-side { position:sticky; top:0; height:100vh; overflow-y:auto; background:#0a1124; border-right:1px solid var(--border); padding:16px 12px 48px; font-size:13px; }
+.bk-side h1 { font-size:16px; margin:0 0 2px; } .bk-side h1 a { color:var(--text); text-decoration:none; }
+.bk-side .sub { color:var(--muted); font-size:12px; margin-bottom:8px; } .bk-side .sub a { color:var(--accent-2); text-decoration:none; }
+.bk-side input { width:100%; padding:7px 10px; border-radius:6px; border:1px solid var(--border); background:#0f1a36; color:var(--text); margin-bottom:6px; }
+.bk-side .tools { display:flex; gap:6px; margin-bottom:6px; } .bk-side .tools button { flex:1; background:#0f1a36; color:var(--muted); border:1px solid var(--border); border-radius:5px; font-size:11.5px; padding:3px 0; cursor:pointer; }
+.bk-side .tools button:hover { color:var(--text); border-color:var(--accent); }
+/* 部（いちばん上の階層）: 帯 */
+.bk-side .part { margin:18px -4px 6px; padding:5px 10px; background:linear-gradient(90deg,#1b2d5c,#0f1a36); border-left:4px solid var(--accent); border-radius:0 6px 6px 0; color:#fff; font-weight:700; font-size:13px; letter-spacing:.02em; }
+.bk-side .part small { font-weight:400; color:#b9c6e8; margin-left:6px; }
+/* 章（2 階層目）: 番号つきの行。左に開閉ボタン */
+.bk-side .chap { margin:1px 0; }
+.bk-side .chap .row { display:flex; align-items:flex-start; gap:2px; }
+.bk-side .chap .tg { flex:0 0 22px; height:24px; background:none; border:0; color:var(--muted); cursor:pointer; font-size:11px; padding:0; }
+.bk-side .chap .tg:hover { color:#fff; } .bk-side .chap .tg::before { content:"▶"; display:inline-block; transition:transform .12s; } .bk-side .chap.open .tg::before { transform:rotate(90deg); }
+.bk-side .chap .row > a { flex:1; display:flex; gap:7px; align-items:flex-start; color:var(--text); text-decoration:none; padding:3px 6px; border-radius:5px; font-weight:600; line-height:1.45; }
+.bk-side .chap .row > a:hover { background:#16254a; }
+.bk-side .chap .num { flex:0 0 24px; text-align:center; background:#1a2a52; color:var(--accent-2); border-radius:4px; font-size:11.5px; font-weight:700; line-height:20px; margin-top:1px; }
+.bk-side .chap.cur > .row > a { background:#1c3566; color:#fff; } .bk-side .chap.cur .num { background:var(--accent); color:#fff; }
+/* 節（3 階層目）: 字下げ + 縦線 + 小さく淡い色 */
+.bk-side .secs { display:none; margin:2px 0 6px 31px; padding-left:8px; border-left:2px solid #2b3d6e; }
+.bk-side .chap.open .secs { display:block; }
+.bk-side .secs a { display:block; color:#9fb0d6; text-decoration:none; font-size:12px; font-weight:400; line-height:1.4; padding:2px 6px; border-radius:4px; }
+.bk-side .secs a:hover { background:#16254a; color:#fff; } .bk-side .secs a.cur { color:#fff; background:#223a6e; box-shadow:inset 3px 0 0 var(--accent-2); }
 .bk-main { min-width:0; padding:0 0 120px; }
 .bk-front, .bk-chapter { max-width:1040px; margin:0 auto; padding:30px 40px 10px; }
 .bk-front h1 { font-size:30px; margin:20px 0 6px; } .bk-front h2 { font-size:19px; margin:30px 0 8px; border-top:1px solid var(--border); padding-top:14px; }
@@ -250,12 +264,13 @@ body.bk { margin:0; background:#0b1226; color:var(--text); font:15px/1.8 "Noto S
 .bk-front a, .bk-head a, .bk-pn a { color:var(--accent-2); }
 .bk-front td:nth-child(1), .bk-front td:nth-child(3), .bk-front td:nth-child(5) { white-space:nowrap; }
 .bk-head { border-top:3px solid var(--accent); margin-top:36px; padding-top:14px; } .bk-head .no { color:var(--muted); font-size:13px; letter-spacing:.06em; }
+.bk-head .partname { color:var(--accent-2); font-size:12.5px; margin-bottom:2px; }
 .bk-head h2.bk-title { font-size:26px; margin:2px 0 8px; border:0; padding:0; } .bk-head .meta { color:var(--muted); font-size:12.5px; margin:0 0 6px; }
 .bk-head .blurb { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin:8px 0 6px; font-size:14px; }
 .bk-tag { display:inline-block; font-size:11.5px; border:1px solid currentColor; border-radius:4px; padding:0 6px; margin-right:6px; }
 .bk-see { font-size:13px; color:var(--muted); margin:4px 0 0; } .bk-see a { color:var(--accent-2); }
 .bk-pn { display:flex; justify-content:space-between; gap:12px; margin:28px 0 0; padding-top:12px; border-top:1px solid var(--border); font-size:13.5px; }
-.bk-pn a { color:var(--accent-2); text-decoration:none; max-width:48%; }
+.bk-pn a { text-decoration:none; max-width:48%; }
 .bk-body { padding-top:6px; } .bk-body img, .bk-body svg { max-width:100%; height:auto; }
 .bk-chapter { background:transparent !important; max-width:1040px !important; margin:0 auto !important; padding:30px 40px 10px !important; }
 .bk-body table { max-width:100%; } .bk-body pre { max-width:100%; overflow-x:auto; }
@@ -267,12 +282,74 @@ SHELL_JS = """
   const side = document.querySelector('.bk-side');
   const chaps = [...side.querySelectorAll('.chap')];
   const input = document.getElementById('bk-q');
+  const OFFSET = 12;
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';   // 戻る/進むの位置はこちらで管理する
+
+  /* 移動: 目的の要素の位置へ即座に移動する（ページが長く、図の描画で高さが変わるため、滑らかなスクロールにはしない） */
+  function jump(id, push) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const y0 = window.scrollY;
+    window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - OFFSET);
+    if (push) { history.replaceState({y: y0}, '', location.href); history.pushState({y: window.scrollY}, '', '#' + id); }
+    markCurrent(id);
+  }
+  side.addEventListener('click', e => {
+    const tg = e.target.closest('.tg');
+    if (tg) { tg.closest('.chap').classList.toggle('open'); return; }
+    const a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    e.preventDefault();
+    jump(a.getAttribute('href').slice(1), true);
+  });
+  document.querySelector('.bk-main').addEventListener('click', e => {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a || a.getAttribute('href') === '#') return;
+    const id = decodeURIComponent(a.getAttribute('href').slice(1));
+    if (!document.getElementById(id)) return;
+    e.preventDefault(); jump(id, true);
+  });
+  window.addEventListener('popstate', e => {
+    if (e.state && typeof e.state.y === 'number') window.scrollTo(0, e.state.y);
+    else if (location.hash) jump(decodeURIComponent(location.hash.slice(1)), false);
+    else window.scrollTo(0, 0);
+  });
+
+  /* 現在位置の表示: サイドバーの章・節を強調し、その章だけ開く */
+  function revealInSide(a) {
+    const r = a.getBoundingClientRect(), s = side.getBoundingClientRect();
+    if (r.top < s.top + 80) side.scrollTop -= (s.top + 80 - r.top);
+    else if (r.bottom > s.bottom - 24) side.scrollTop += (r.bottom - s.bottom + 24);
+  }
+  function markCurrent(id) {
+    const el = document.getElementById(id); if (!el) return;
+    const ch = el.closest('.bk-chapter');
+    side.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
+    chaps.forEach(c => {
+      const mine = ch && c.dataset.slug === ch.dataset.slug;
+      c.classList.toggle('cur', !!mine);
+      if (!input.value && !c.dataset.pinned) c.classList.toggle('open', !!mine);
+    });
+    const a = side.querySelector('a[href="#' + CSS.escape(id) + '"]') || (ch && side.querySelector('a[href="#ch-' + ch.dataset.slug + '"]'));
+    if (a) { a.classList.add('cur'); revealInSide(a); }
+  }
+  const targets = [...document.querySelectorAll('.bk-chapter, .bk-body h2')].filter(t => t.id);
+  let ticking = false;
+  function spy() {
+    ticking = false;
+    let cur = null;
+    for (const t of targets) { if (t.getBoundingClientRect().top <= 90) cur = t; else break; }
+    if (cur) markCurrent(cur.id);
+  }
+  window.addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(spy); } }, {passive: true});
+
+  /* しぼり込み・全部開く・全部閉じる */
   input.addEventListener('input', () => {
     const q = input.value.trim().toLowerCase();
     chaps.forEach(c => {
       const hit = !q || c.textContent.toLowerCase().includes(q);
       c.style.display = hit ? '' : 'none';
-      if (q && hit) c.classList.add('open');
+      if (q) c.classList.toggle('open', hit);
     });
     side.querySelectorAll('.part').forEach(p => {
       let n = p.nextElementSibling, any = false;
@@ -280,20 +357,13 @@ SHELL_JS = """
       p.style.display = any ? '' : 'none';
     });
   });
-  const targets = [...document.querySelectorAll('.bk-chapter, .bk-body h2')];
-  const link = id => side.querySelector('a[href="#' + CSS.escape(id) + '"]');
-  const io = new IntersectionObserver(entries => {
-    entries.forEach(e => {
-      if (!e.isIntersecting) return;
-      const t = e.target; const ch = t.closest('.bk-chapter');
-      side.querySelectorAll('a.cur').forEach(a => a.classList.remove('cur'));
-      chaps.forEach(c => { if (!input.value) c.classList.toggle('open', ch && c.dataset.slug === ch.dataset.slug); });
-      const a = link(t.id) || (ch && link('ch-' + ch.dataset.slug));
-      if (a) { a.classList.add('cur'); a.scrollIntoView({block:'nearest'}); }
-    });
-  }, {rootMargin: '0px 0px -75% 0px'});
-  targets.forEach(t => t.id && io.observe(t));
-  if (window.mermaid) { mermaid.initialize({startOnLoad: false, theme: 'dark'}); mermaid.run({querySelector: '.mermaid'}).catch(()=>{}); }
+  document.getElementById('bk-open').addEventListener('click', () => chaps.forEach(c => { c.classList.add('open'); c.dataset.pinned = '1'; }));
+  document.getElementById('bk-close').addEventListener('click', () => chaps.forEach(c => { c.classList.remove('open'); delete c.dataset.pinned; }));
+
+  /* 読み込み直後・図の描画後に、URL の # の位置へ合わせ直す（図の描画でページの高さが変わるため） */
+  function settle() { if (location.hash) jump(decodeURIComponent(location.hash.slice(1)), false); else spy(); }
+  window.addEventListener('load', settle);
+  if (window.mermaid) { mermaid.initialize({startOnLoad: false, theme: 'dark'}); mermaid.run({querySelector: '.mermaid'}).then(settle, settle); }
 })();
 """
 
@@ -311,15 +381,17 @@ def build(modeling_dir: Path = CHAPTERS_DIR) -> tuple[str, dict]:
         css_groups.setdefault(gid, css)
         built[slug] = {"title": title, "body": body, "gid": gid, "secs": sections(body, slug), "updated": last_updated(path)}
 
-    # 目次
+    # 目次（部 → 章 → 節 の 3 階層）
     side, no = [], 0
     for part in PARTS:
-        side.append(f'<div class="part">{html.escape(part.title)}</div>')
+        first = no + 1
+        side.append(f'<div class="part">{html.escape(part.title)}<small>第{first}〜{first + len(part.chapters) - 1}章</small></div>')
         for ch in part.chapters:
             no += 1
             b = built[ch.slug]
-            secs = "".join(f'<a href="#{html.escape(i)}">{html.escape(t[:48])}</a>' for i, t in b["secs"])
-            side.append(f'<div class="chap" data-slug="{ch.slug}"><a href="#ch-{ch.slug}"><span class="num">{no}</span>{html.escape(b["title"])}</a><div class="secs">{secs}</div></div>')
+            secs = "".join(f'<a href="#{html.escape(i)}" title="{html.escape(t)}">{html.escape(t[:46])}{"…" if len(t) > 46 else ""}</a>' for i, t in b["secs"])
+            side.append(f'<div class="chap" data-slug="{ch.slug}"><div class="row"><button class="tg" type="button" aria-label="節を開閉"></button>'
+                        f'<a href="#ch-{ch.slug}"><span class="num">{no}</span><span>{html.escape(b["title"])}</span></a></div><div class="secs">{secs}</div></div>')
 
     # 前付き: 全体の地図
     rows, no = [], 0
@@ -349,6 +421,7 @@ def build(modeling_dir: Path = CHAPTERS_DIR) -> tuple[str, dict]:
     # 章
     chapters_html, no = [], 0
     order = [c for p in PARTS for c in p.chapters]
+    part_of = {c.slug: p.title for p in PARTS for c in p.chapters}
     for idx, ch in enumerate(order):
         no += 1
         b = built[ch.slug]
@@ -357,7 +430,7 @@ def build(modeling_dir: Path = CHAPTERS_DIR) -> tuple[str, dict]:
         next_a = f'<a href="#ch-{order[idx + 1].slug}">第{idx + 2}章 {html.escape(built[order[idx + 1].slug]["title"])} →</a>' if idx + 1 < len(order) else "<span></span>"
         chapters_html.append(
             f'<section class="bk-chapter css-{b["gid"]}" id="ch-{ch.slug}" data-slug="{ch.slug}">'
-            f'<div class="bk-head"><div class="no">第{no}章　<span class="bk-tag" style="color:{KINDS[ch.kind]}">{ch.kind}</span></div>'
+            f'<div class="bk-head"><div class="partname">{html.escape(part_of[ch.slug])}</div><div class="no">第{no}章　<span class="bk-tag" style="color:{KINDS[ch.kind]}">{ch.kind}</span></div>'
             f'<h2 class="bk-title">{html.escape(b["title"])}</h2>'
             f'<p class="meta">更新日 {b["updated"]} ／ 元のファイル <a href="chapters/{ch.slug}.html">chapters/{ch.slug}.html</a>（単独ページ）</p>'
             f'<div class="blurb">{html.escape(ch.blurb)}</div>' + (f'<p class="bk-see">関連する章: {see}</p>' if see else "") + "</div>"
@@ -370,7 +443,7 @@ def build(modeling_dir: Path = CHAPTERS_DIR) -> tuple[str, dict]:
         "<title>モデリング総覧 — keiba-vpn docs</title>"
         '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">'
         f"<style>{css}</style></head><body class=\"bk\"><div class=\"bk-layout\"><nav class=\"bk-side\"><h1><a href=\"#front\">モデリング総覧</a></h1>"
-        '<div class="sub"><a href="../index.html">← ドキュメント一覧</a></div><input id="bk-q" type="search" placeholder="章・節をしぼり込む">'
+        '<div class="sub"><a href="../index.html">← ドキュメント一覧</a></div><input id="bk-q" type="search" placeholder="章・節をしぼり込む"><div class="tools"><button id="bk-open" type="button">すべて開く</button><button id="bk-close" type="button">すべて閉じる</button></div>'
         + "".join(side) + '</nav><main class="bk-main">' + front + "".join(chapters_html) +
         '</main></div><script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>' + SHELL_JS + "</script></body></html>"
     )
