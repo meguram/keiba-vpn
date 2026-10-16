@@ -93,15 +93,35 @@ def build(a: list[dict], b: list[dict], c: list[dict], n_corner_obs: dict | None
     return rows, issues
 
 
+def apply_corrections(rows: list[dict], corrections: list[dict]) -> list[dict]:
+    """第 2 ラウンド（一次資料での再確認）で確定した訂正を当てる。match に一致する行の項目を上書きし、訂正の根拠を ``corrections`` に残す。"""
+    for r in rows:
+        for c in corrections:
+            m = c["match"]
+            if r["venue_code"] != m["venue_code"] or r["surface"] != m["surface"]:
+                continue
+            if "distance" in m and r["distance"] != m["distance"]:
+                continue
+            if "variant" in m and r["variant"] != m["variant"]:
+                continue
+            r.update(c["set"])
+            r.setdefault("corrections", []).append({"set": sorted(c["set"]), "evidence": c["evidence"], "round": c.get("round")})
+    return rows
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--a", required=True); ap.add_argument("--b", required=True); ap.add_argument("--c", required=True)
     ap.add_argument("--fingerprint", default="/tmp/course_fingerprint.json")
+    ap.add_argument("--corrections", default=None)
     ap.add_argument("--out", type=Path, default=Path("data/meta/course_master"))
     a = ap.parse_args()
     fp = json.loads(Path(a.fingerprint).read_text(encoding="utf-8")) if Path(a.fingerprint).exists() else []
     obs = {(r["venue_code"], r["surface"], r["distance"]): r["n_corners_mode"] for r in fp}
     rows, issues = build(cm.load(a.a), cm.load(a.b), cm.load(a.c), obs)
+    corr_path = Path(a.corrections) if a.corrections else a.out / "corrections.json"
+    if corr_path.exists():
+        rows = apply_corrections(rows, json.loads(corr_path.read_text(encoding="utf-8")))
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "jra_courses.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     (a.out / "verification_issues.json").write_text(json.dumps(issues, ensure_ascii=False, indent=1, default=str), encoding="utf-8")

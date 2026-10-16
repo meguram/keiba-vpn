@@ -1,0 +1,49 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>JRA コース形状マスタの検証記録 — keiba-vpn docs</title><style>
+  :root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.75 "Noto Sans JP",system-ui,sans-serif; }
+  main { max-width:980px; margin:0 auto; padding:40px 28px 96px; }
+  h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:20px; margin:44px 0 10px; padding-top:18px; border-top:1px solid var(--border); }
+  h3 { font-size:15px; color:var(--accent); margin:22px 0 6px; }
+  p, li { color:var(--text); } .muted { color:var(--muted); font-size:13px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0 16px; font-size:13.5px; }
+  th, td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--panel); color:var(--muted); font-weight:600; }
+  code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12.5px; }
+  .ok { color:var(--ok); font-weight:600; } .warn { color:var(--warn); font-weight:600; }
+  .box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+</style></head><body><main>
+<h1>JRA コース形状マスタの検証記録</h1>
+<p class="muted">作成 2026-10-16 / マスタ: <code>data/meta/course_master/jra_courses.json</code>（108 コース）、訂正: <code>corrections.json</code>、突き合わせの残り: <code>verification_issues.json</code>、コード: <code>src/research/race/{course_master,build_course_master}.py</code></p>
+<div class="box"><b>要点</b>: 周長・最後の直線の長さ・コース全体の高低差は、3 つの独立収集（JRA 公式 / netkeiba・競馬ラボ・Wikipedia / JRA-VAN・Wikipedia・bakendo）が 106〜107 行で許容誤差内に一致した。
+食い違いの大半は<b>定義の違い</b>（ポケットから本線へ合流する曲線をコーナーに数えるか）で、一次資料での再確認（第 2 ラウンド）で誤りだった値を特定して訂正した。
+最後の直線の長さは、実レースの「最終コーナーからゴールまでの順位変動」との相関（芝 0.62、ダート 0.84）でも独立に裏づいた。</div>
+<h2>1. 検証の手順（3 ラウンド）</h2>
+<table><tr><th>ラウンド</th><th>内容</th></tr>
+<tr><td>1. 独立収集</td><td>3 つのエージェントが互いの結果を見ずに、別の情報源で 108 コース（札幌〜小倉の芝・ダート、内外回りを分けた行）の属性を収集。A = JRA 公式の本文・平面図・断面図（図は画像処理で数値化）、B = netkeiba のレース結果ページ・競馬ラボのコース解説・Wikipedia、C = JRA-VAN の個別コース解説・Wikipedia・bakendo。各値に出典 URL と確信度。</td></tr>
+<tr><td>2. 突き合わせと再確認</td><td>項目ごとに許容誤差つきで比較（周長 ±30m、直線 ±10m、高低差 ±0.4m、最初の曲線まで ±40m）。「合意」「合意(外れ値あり)」「不一致」「未確認」「欠損」に分類。残った食い違い 30 項目を、別のエージェントが JRA 公式の本文・図（curl で生 HTML）、JRA-VAN 約 110 ページ、Wikipedia の生テキスト、JRA の実レース結果ページ 24 件で一次資料に近い順に再確認し、原文引用つきで結論。</td></tr>
+<tr><td>3. 実データと内部整合</td><td>レース記録（2020〜2025 年）から測れる量との照合と、マスタの内部矛盾の検査。</td></tr></table>
+<h2>2. 突き合わせの結果（第 1 ラウンド直後）</h2>
+<table><tr><th>項目</th><th>行数の内訳</th></tr><tr><td>lap_length_m</td><td>合意 106、欠損 1、未確認 1</td></tr><tr><td>final_straight_m</td><td>合意 107、未確認 1</td></tr><tr><td>elevation_range_m</td><td>合意 106、欠損 1、未確認 1</td></tr><tr><td>first_curve</td><td>合意 83、未確認 17、欠損 7、不一致 1</td></tr></table>
+<p>ゴール前の坂の有無は 108 行中 102 行で 3 者一致。不一致の 6 行（福島ダート 3、小倉ダート 3）は第 2 ラウンドで解決。</p>
+<h2>3. 第 2 ラウンドで確定した訂正（21 件）</h2>
+<table><tr><th>コース</th><th>訂正した項目</th><th>根拠</th></tr><tr><td>03/ダート/全</td><td>goal_slope_end、goal_slope_exists、goal_slope_rise、goal_slope_rise_precision、goal_slope_start</td><td>JRA公式本文『ダートの起伏構成も芝コースとほぼ同じ』（芝は残り170〜50mに高低差1.2mの上り）と断面図。C（なし）が誤り</td></tr><tr><td>10/ダート/全</td><td>goal_slope_end、goal_slope_exists、goal_slope_rise、goal_slope_start</td><td>JRA公式本文『残り400m地点から直線にかけて緩やかな上り勾配（高低差0.6m）』。B（なし）が誤り。芝は直線平坦</td></tr><tr><td>09/芝/3200</td><td>elevation_range_m、final_straight_m、lap_length_m、last_lap_variant</td><td>阪神芝3200mは1周目外回り→2周目内回り（JRA公式表『外・内』、Wikipedia、netkeiba）。最後の周は内回りなので、A の外回りの値（2089m・473.6m・2.4m）は誤り</td></tr><tr><td>09/芝/3000</td><td>n_laps_note</td><td>調査結果: 阪神芝3000mは内回りのみ、約1周半（コーナー6回）</td></tr><tr><td>04/芝/1000</td><td>elevation_range_m、elevation_range_precision、final_straight_m、lap_length_m、straight_course</td><td>直線コース。JRA公式表に高低差の数値なし。断面図: スタート直後に約0.8〜1m上り、残り約760mで頂点（約+1.2m）、残り約320mからゴールまで平坦</td></tr><tr><td>01/芝/1500</td><td>n_corner_records</td><td>ポケット合流曲線は『2コーナー』として記録される（JRAの実レース結果ページ、netkeiba各10戦、dev実データ）</td></tr><tr><td>05/芝/1800</td><td>n_corner_records</td><td>毎日王冠のJRA結果ページ: 2・3・4コーナーの3つ</td></tr><tr><td>05/芝/2000</td><td>n_corner_records</td><td>netkeiba各10戦: 2・3・4の3つ（1コーナーは記録されない）。幾何学的にはコーナー4回を通過</td></tr><tr><td>06/芝/1600外</td><td>n_corner_records</td><td>京成杯AHのJRA結果ページ: 3つ</td></tr><tr><td>07/芝/1600</td><td>n_corner_records</td><td>中京記念のJRA結果ページ: 3つ</td></tr><tr><td>01/ダート/2400</td><td>first_curve_m、first_curve_note</td><td>調査結果。180m を裏付ける資料なし</td></tr><tr><td>01/芝/1200</td><td>first_curve_m、first_curve_note</td><td>JRA-VAN: 札幌は約400m、福島は約412m</td></tr><tr><td>06/芝/1200外</td><td>first_curve_m、first_curve_note</td><td>JRA-VAN</td></tr><tr><td>09/芝/2600</td><td>first_curve_m</td><td>JRA-VAN: 1コーナーまで525m（スタートは芝2200m内と同位置）</td></tr><tr><td>09/芝/1600外</td><td>first_curve_m、first_curve_precision</td><td>調査結果</td></tr><tr><td>09/芝/1800外</td><td>first_curve_m、first_curve_note</td><td>調査結果</td></tr><tr><td>09/芝/3000</td><td>first_curve_m、first_curve_precision</td><td>調査結果</td></tr><tr><td>07/芝/3000</td><td>first_curve_m、first_curve_note</td><td>調査結果</td></tr><tr><td>07/ダート/1200</td><td>first_curve_m、first_curve_note</td><td>調査結果</td></tr><tr><td>07/芝/1400</td><td>first_curve_m、first_curve_note</td><td>調査結果</td></tr><tr><td>08/芝/2000外</td><td>in_use</td><td>外回り2000mは1993年のローズSが最後。2025年の京都芝2000m 42戦はすべて内回り</td></tr></table>
+<p>誤りだった元の値: 福島ダートの C（坂なし）、小倉ダートの B（坂なし）、阪神芝3200 の A（外回りの値を最後の周に使用）、新潟芝2200・2400 の「内→外」の仮説、阪神芝3000 の「内回り 2 周」の仮説、コーナー数の A（東京 1800・2000、札幌 1500、中山 1600 外、中京 1600）、競馬ラボの札幌芝1200（412m）・中京の 380m（転記ミスの疑い）。</p>
+<h2>4. 実データとの照合（第 3 ラウンド）</h2>
+<ul>
+<li><b>コーナー数</b>: レース記録の通過順位の記録点の数（最頻値）は、C の値と 86 行中 80 行が一致。残りは記録の上限が 4 つであること、新潟芝2000 が内外混在（記録で外回り約 52%・内回り約 48%）であること、直線コースの記録点が 1 つであることで説明できる。</li>
+<li><b>最後の直線の長さ</b>: 「最終コーナーからゴールまでの順位変動（頭数で規格化）」との相関が、芝 0.62（33 コース）、ダート 0.84（23 コース）。距離帯補正後も同じ。独立した裏づけ。</li>
+<li><b>ゴール前の坂</b>: 200m ラップの最後の遅れとの相関は −0.07（ダート）、−0.14（芝）で、裏づけにならなかった（距離・展開の影響が大きい）。坂は文書の一致（JRA 本文・図、JRA-VAN、Wikipedia）で確認した。</li>
+<li><b>内部整合</b>: 直線 &gt; 周長 の行なし。距離 / 周長 は 0.61〜2.16。芝の直線の順位（新潟外 658.7 &gt; 東京 525.9 &gt; 阪神外 473.6 &gt; 中京 412.5 … 福島 292.0 &gt; 札幌 266.1 &gt; 函館 262.1）は既知の事実と一致。</li>
+</ul>
+<h2>5. 確認できていない項目・注意</h2>
+<ul>
+<li>確定できなかった値は null にしてある: 中京芝3000 と 阪神芝1800 外 の最初のコーナーまでの距離、中京ダ1200・芝1400 の 3 コーナーまで（競馬ラボの 380m は転記ミスの疑い）、新潟芝1000（直線）の幅員。</li>
+<li>推定を含む値（確信度 medium）: 阪神芝1600 外 444m、阪神芝3000 内 354m。一次資料に数値がない。</li>
+<li>コーナー半径はどの資料にも数値がない（定性表現のみ）。</li>
+<li>競馬ラボのコース解説は会員制のため、競馬ラボの値そのものは一次資料では検証できていない。</li>
+<li>2020〜2025 年のレース記録には<b>内回り / 外回りの区別がない</b>。同じ（競馬場・面・距離）に内外がある行（京都芝1400・1600、阪神芝1400、新潟芝1400・2000 など）は、特徴量では混合として扱う（新潟芝2000 だけは記録から割合が分かる）。</li>
+<li>ゴール前の坂の位置・高低差のうち、図の画像処理で得た値は精度が低い（±0.1〜0.3m、位置 ±数十 m）。</li>
+</ul>
+<h2>6. 次の一手</h2>
+<p>このマスタをコース類似度（形状 + 統計プロファイル）と、馬のコース適性特徴量（類似度で重みづけした実績、形状の軸 = 直線・坂・コーナー・スタート位置への適性）に使う。効果は valid 2022〜2024 だけで測る。</p>
+</main></body></html>

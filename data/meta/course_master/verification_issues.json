@@ -1,0 +1,167 @@
+[
+ {
+  "key": [
+   "03",
+   "ダート",
+   1150,
+   ""
+  ],
+  "field": "goal_slope_exists",
+  "status": "不一致",
+  "values": {
+   "A": true,
+   "B": null,
+   "C": false
+  }
+ },
+ {
+  "key": [
+   "03",
+   "ダート",
+   1700,
+   ""
+  ],
+  "field": "goal_slope_exists",
+  "status": "不一致",
+  "values": {
+   "A": true,
+   "B": null,
+   "C": false
+  }
+ },
+ {
+  "key": [
+   "03",
+   "ダート",
+   2400,
+   ""
+  ],
+  "field": "goal_slope_exists",
+  "status": "不一致",
+  "values": {
+   "A": true,
+   "B": null,
+   "C": false
+  }
+ },
+ {
+  "key": [
+   "04",
+   "芝",
+   1000,
+   "直"
+  ],
+  "field": "lap_length_m",
+  "status": "欠損",
+  "values": {
+   "A": null,
+   "B": null,
+   "C": null
+  }
+ },
+ {
+  "key": [
+   "04",
+   "芝",
+   1000,
+   "直"
+  ],
+  "field": "elevation_range_m",
+  "status": "欠損",
+  "values": {
+   "A": null,
+   "B": null,
+   "C": null
+  }
+ },
+ {
+  "key": [
+   "09",
+   "芝",
+   3200,
+   "内"
+  ],
+  "field": "lap_length_m",
+  "status": "未確認",
+  "values": {
+   "A": 2089.0,
+   "B": null,
+   "C": null
+  }
+ },
+ {
+  "key": [
+   "09",
+   "芝",
+   3200,
+   "内"
+  ],
+  "field": "final_straight_m",
+  "status": "未確認",
+  "values": {
+   "A": 473.6,
+   "B": null,
+   "C": null
+  }
+ },
+ {
+  "key": [
+   "09",
+   "芝",
+   3200,
+   "内"
+  ],
+  "field": "elevation_range_m",
+  "status": "未確認",
+  "values": {
+   "A": 2.4,
+   "B": null,
+   "C": null
+  }
+ },
+ {
+  "key": [
+   "10",
+   "ダート",
+   1000,
+   ""
+  ],
+  "field": "goal_slope_exists",
+  "status": "不一致",
+  "values": {
+   "A": true,
+   "B": false,
+   "C": true
+  }
+ },
+ {
+  "key": [
+   "10",
+   "ダート",
+   1700,
+   ""
+  ],
+  "field": "goal_slope_exists",
+  "status": "不一致",
+  "values": {
+   "A": true,
+   "B": false,
+   "C": true
+  }
+ },
+ {
+  "key": [
+   "10",
+   "ダート",
+   2400,
+   ""
+  ],
+  "field": "goal_slope_exists",
+  "status": "不一致",
+  "values": {
+   "A": true,
+   "B": false,
+   "C": true
+  }
+ }
+]

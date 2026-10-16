@@ -48,5 +48,23 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(rows[0]["first_curve_status"], "合意")
 
 
+class CorrectionTest(unittest.TestCase):
+    def test_apply_corrections(self):
+        rows = [{"venue_code": "09", "surface": "芝", "distance": 3200, "variant": "内", "lap_length_m": 2089.0, "final_straight_m": 473.6},
+                {"venue_code": "09", "surface": "芝", "distance": 3000, "variant": "内", "lap_length_m": 1689.0}]
+        corr = [{"match": {"venue_code": "09", "surface": "芝", "distance": 3200}, "set": {"lap_length_m": 1689.0, "final_straight_m": 356.5}, "evidence": "e", "round": 2}]
+        out = bcm.apply_corrections(rows, corr)
+        self.assertEqual(out[0]["final_straight_m"], 356.5)
+        self.assertEqual(out[0]["corrections"][0]["round"], 2)
+        self.assertEqual(out[1]["lap_length_m"], 1689.0)
+        self.assertNotIn("corrections", out[1])
+
+    def test_variant_match(self):
+        rows = [{"venue_code": "06", "surface": "芝", "distance": 1600, "variant": "外"}, {"venue_code": "06", "surface": "芝", "distance": 1600, "variant": "内"}]
+        out = bcm.apply_corrections(rows, [{"match": {"venue_code": "06", "surface": "芝", "distance": 1600, "variant": "外"}, "set": {"n_corner_records": 3}, "evidence": "e"}])
+        self.assertEqual(out[0].get("n_corner_records"), 3)
+        self.assertNotIn("n_corner_records", out[1])
+
+
 if __name__ == "__main__":
     unittest.main()
