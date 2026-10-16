@@ -2811,9 +2811,6 @@
     "course_position": {
      "type": "str"
     },
-    "cushion_value": {
-     "type": "float"
-    },
     "date": {
      "type": "str"
     },
@@ -2844,6 +2841,9 @@
     }
    },
    "entry_optional": {
+    "cushion_value": {
+     "type": "float"
+    },
     "dirt_moisture_4corner": {
      "type": "float"
     },
