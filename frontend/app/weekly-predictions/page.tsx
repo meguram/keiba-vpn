@@ -27,6 +27,14 @@ type PredEntry = {
   horse_number?: number;
   horse_name?: string;
   horse_id?: string;
+  bracket_number?: number | null;
+  sex_age?: string | null;
+  jockey_name?: string | null;
+  jockey_weight?: number | null;
+  trainer_name?: string | null;
+  weight?: number | null;
+  weight_change?: number | null;
+  popularity?: number | null;
   mark_type?: string;
   pred_rank?: number;
   composite_rank?: number;
@@ -59,7 +67,7 @@ const MARK_META: Record<string, { sym: string; color: string }> = {
   anchor:   { sym: "✓", color: "#22c55e" },
   show_val: { sym: "▲", color: "#f59e0b" },
   star:     { sym: "★", color: "#a78bfa" },
-  none:     { sym: "—", color: "var(--text-dim)" },
+  none:     { sym: "-", color: "var(--text-dim)" },
 };
 
 function markSym(p: PredEntry): { sym: string; color: string } {
@@ -68,12 +76,12 @@ function markSym(p: PredEntry): { sym: string; color: string } {
 }
 
 function fmtPct(v: number | null | undefined): string {
-  if (v == null) return "—";
+  if (v == null) return "-";
   return `${(v * 100).toFixed(1)}%`;
 }
 
 function fmtEv(v: number | null | undefined): { text: string; color: string; bg: string } {
-  if (v == null) return { text: "—", color: "var(--text-dim)", bg: "transparent" };
+  if (v == null) return { text: "-", color: "var(--text-dim)", bg: "transparent" };
   const n = Number(v);
   if (n >= 1.5) return { text: n.toFixed(2), color: "#22c55e", bg: "rgba(34,197,94,0.10)" };
   if (n >= 1.2) return { text: n.toFixed(2), color: "#4ade80", bg: "rgba(74,222,128,0.08)" };
@@ -83,7 +91,7 @@ function fmtEv(v: number | null | undefined): { text: string; color: string; bg:
 }
 
 function fmtOdds(v: number | null | undefined): string {
-  if (v == null) return "—";
+  if (v == null) return "-";
   return `${Number(v).toFixed(1)}倍`;
 }
 
@@ -131,6 +139,18 @@ function RaceSummaryBadges({ preds }: { preds: PredEntry[] }) {
   );
 }
 
+/* 枠の色（JRA: 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃） */
+const BRACKET: Record<number, { bg: string; color: string }> = {
+  1: { bg: "#f8fafc", color: "#111" }, 2: { bg: "#111827", color: "#fff" }, 3: { bg: "#ef4444", color: "#fff" }, 4: { bg: "#3b82f6", color: "#fff" },
+  5: { bg: "#facc15", color: "#111" }, 6: { bg: "#22c55e", color: "#111" }, 7: { bg: "#fb923c", color: "#111" }, 8: { bg: "#f9a8d4", color: "#111" },
+};
+
+/** 馬体重「514(+2)」。未発表（前日〜当日の発表前）は "-" */
+function fmtWeight(w: number | null | undefined, d: number | null | undefined): string {
+  if (!w) return "-";
+  return d == null ? `${w}` : `${w}(${d > 0 ? "+" : d < 0 ? "" : "±"}${d})`;
+}
+
 /* ── 予測テーブル ── */
 function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: boolean; message?: string }) {
   const sorted = hasPred
@@ -154,6 +174,12 @@ function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: b
             <th style={{ ...TH, width: 36 }}>印</th>
             <th style={{ ...TH, width: 36 }}>馬番</th>
             <th style={{ ...TH, textAlign: "left", width: 120 }}>馬名</th>
+            <th style={{ ...TH, borderLeft: "1px solid rgba(36,48,73,0.5)" }} title="出馬表（前日に確定。馬体重は当日の発表後）">枠</th>
+            <th style={TH}>性齢</th>
+            <th style={TH}>斤量</th>
+            <th style={{ ...TH, textAlign: "left" }}>騎手</th>
+            <th style={{ ...TH, textAlign: "left" }}>調教師</th>
+            <th style={TH} title="当日、発走の約1時間前に発表">馬体重</th>
             <th style={{ ...TH, borderLeft: "1px solid rgba(36,48,73,0.5)" }}>勝率</th>
             <th style={TH}>連対率</th>
             <th style={TH}>複勝率</th>
@@ -177,12 +203,22 @@ function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: b
             return (
               <tr key={p.horse_number ?? i} style={{ background: rowBg }}>
                 <td style={{ ...TD, fontSize: 16, fontWeight: 800, color: mark.color }}>{mark.sym}</td>
-                <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "—"}</td>
+                <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "-"}</td>
                 <td style={{ ...TD, textAlign: "left", fontWeight: 600, color: "#fff", whiteSpace: "nowrap" }}>
                   {p.horse_id && SHOW_HORSE_LINK ? (
-                    <Link href={`/horse/${p.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{p.horse_name ?? "—"}</Link>
-                  ) : (p.horse_name ?? "—")}
+                    <Link href={`/horse/${p.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "#fff", textDecoration: "none" }}>{p.horse_name ?? "-"}</Link>
+                  ) : (p.horse_name ?? "-")}
                 </td>
+                <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)" }}>
+                  {p.bracket_number && BRACKET[p.bracket_number]
+                    ? <span style={{ display: "inline-block", minWidth: 20, borderRadius: 4, padding: "1px 0", fontWeight: 700, background: BRACKET[p.bracket_number].bg, color: BRACKET[p.bracket_number].color }}>{p.bracket_number}</span>
+                    : "-"}
+                </td>
+                <td style={TD}>{p.sex_age ?? "-"}</td>
+                <td style={TD}>{p.jockey_weight ?? "-"}</td>
+                <td style={{ ...TD, textAlign: "left", whiteSpace: "nowrap" }}>{p.jockey_name ?? "-"}</td>
+                <td style={{ ...TD, textAlign: "left", whiteSpace: "nowrap" }}>{p.trainer_name ?? "-"}</td>
+                <td style={{ ...TD, whiteSpace: "nowrap" }}>{fmtWeight(p.weight, p.weight_change)}</td>
                 <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontWeight: hasPred ? 600 : 400, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.win_prob)}</td>
                 <td style={{ ...TD, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.top2_prob)}</td>
                 <td style={{ ...TD, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.top3_prob)}</td>
@@ -190,11 +226,11 @@ function PredTable({ preds, hasPred, message }: { preds: PredEntry[]; hasPred: b
                 <td style={{ ...TD, color: "var(--text-dim)", fontSize: 11 }}>
                   {p.place_odds_min != null && p.place_odds_max != null
                     ? `${Number(p.place_odds_min).toFixed(1)}〜${Number(p.place_odds_max).toFixed(1)}`
-                    : "—"}
+                    : "-"}
                 </td>
                 <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", background: evW.bg, fontWeight: hasPred ? 700 : 400, color: evW.color }}>{evW.text}</td>
                 <td style={{ ...TD, background: evP.bg, fontWeight: hasPred ? 700 : 400, color: evP.color }}>{evP.text}</td>
-                <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: 11, color: "var(--text-dim)" }}>{p.buy_tier ?? "—"}</td>
+                <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: 11, color: "var(--text-dim)" }}>{p.buy_tier ?? "-"}</td>
               </tr>
             );
           })}

@@ -38,10 +38,18 @@ def entries_only_predictions(race_id: str, storage: Any) -> dict[str, Any]:
     for r in sorted(rows, key=lambda x: int(x["horse_number"])):
         n = int(r["horse_number"])
         o = odds.get(n, {})
+        w = r.get("weight") or None                      # 馬体重は当日（発走の約 1 時間前）の発表後に入る。前日は 0 → None
         preds.append({
             "horse_number": n,
             "horse_name": r.get("horse_name"),
             "horse_id": r.get("horse_id"),
+            "bracket_number": r.get("bracket_number") or None,
+            "sex_age": r.get("sex_age") or None,
+            "jockey_name": r.get("jockey_name") or None,
+            "jockey_weight": r.get("jockey_weight") or None,
+            "trainer_name": r.get("trainer_name") or None,
+            "weight": w,
+            "weight_change": r.get("weight_change") if w else None,     # 増減 0 は正当な値。馬体重が無いときだけ None
             "win_odds": o.get("win_odds") or None,
             "place_odds_min": o.get("place_odds_min") or None,
             "place_odds_max": o.get("place_odds_max") or None,
