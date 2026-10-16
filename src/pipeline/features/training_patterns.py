@@ -68,6 +68,7 @@ def apply_reference(t: pd.DataFrame, ref: pd.DataFrame, asof: bool = False) -> p
         if miss.any():
             r2 = ref.dropna(subset=[f"{REF_COLS[0]}_mu"]).sort_values("ym")
             sub = base.iloc[np.flatnonzero(miss)].sort_values("ym")
+            sub["intensity"] = sub["intensity"].astype("float64"); r2 = r2.assign(intensity=r2["intensity"].astype("float64"))
             f = pd.merge_asof(sub, r2, on="ym", by=GRP, direction="backward").set_index("_i")
             mm = mm.set_index("_i")
             for c in REF_COLS:
