@@ -21951,7 +21951,7 @@ OpenStreetMap の芝・ダート・障害コースの面（内外の帯と引込
 </ul>
 
 <h2 id="training_pipeline_decisions--training_pipeline_decisions--s17">16. tp-21 SmartRC のテン1F（スタート後 1F）特徴量</h2>
-<p>目的: SmartRC の馬ごとのテン1F（<a href="decisions/DEC-027-smartrc-fetch-continued.html">DEC-027</a>）が、位置取り・ペース予測と p_win を改善するかを、保存済みデータだけ（追加アクセスなし）で測る。ベースは「ALL」（B0 48 列＋履歴 127 列、speed なし）。valid 2022・2023・2024、seed 3 通り、test 2025 は使わない。実装: <code>src/pipeline/features/smartrc_ten1f.py</code>、<code>notebooks/modeling/training_pipeline/tp-21-smartrc-ten1f.py</code>。</p>
+<p>目的: SmartRC の馬ごとのテン1F（<a href="#ch-DEC-027-smartrc-fetch-continued">DEC-027</a>）が、位置取り・ペース予測と p_win を改善するかを、保存済みデータだけ（追加アクセスなし）で測る。ベースは「ALL」（B0 48 列＋履歴 127 列、speed なし）。valid 2022・2023・2024、seed 3 通り、test 2025 は使わない。実装: <code>src/pipeline/features/smartrc_ten1f.py</code>、<code>notebooks/modeling/training_pipeline/tp-21-smartrc-ten1f.py</code>。</p>
 <h3>先読みの確認</h3>
 <ul>
   <li>過去 5 走（<code>h1_</code>〜<code>h5_</code>）の日付が当該レース日以降のものは 1,052,130 件中 0 件。<code>ten1f_best</code> は過去走の最小値と 100% 一致（20,000 件）。</li>
