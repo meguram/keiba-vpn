@@ -1,39 +1,45 @@
-"""コース概形アトラスの生成のテスト（座標の写像・HTML の構造）。"""
+"""コース概形アトラスの生成のテスト（実形状の座標変換・経路・HTML の構造）。"""
 
 from __future__ import annotations
 
-import math
+import json
 import re
+
+import numpy as np
 
 from src.scripts.docs import build_course_atlas as A
 
 
-def test_layout_maps_goal_and_start():
-    b = [524.0, 771.0, 1036.0, 1479.0, 1740.0, 2005.0]
-    left = A.Layout(2083.1, b, clockwise=False)
-    right = A.Layout(2083.1, b, clockwise=True)
-    # ゴールは下の直線上。左回りは右寄り・右回りは左寄り（走る向きの前方）
-    gx_l, gy_l = left.xy(0.0)
-    gx_r, gy_r = right.xy(0.0)
-    assert gy_l == A.YB and gy_r == A.YB
-    assert abs((gx_l + gx_r) - (A.CXL + A.CXR)) < 0.2          # 左右対称
-    # ゴール前の直線の始まり（q = b1）は直線の端、ゴール後の直線の終わり（q = L）はゴールのすぐ先
-    x_start, _ = left.xy(524.0)
-    assert abs(x_start - A.CXL) < 0.2
-    # 走る向き（q が減る方向）に x が増える（左回りの下の直線）
-    assert left.xy(300.0)[0] < left.xy(100.0)[0] < left.xy(0.0)[0]
-    # 向正面は上の直線、弧の頂点は円の側面
-    assert left.xy(1200.0)[1] == A.YT
-    assert abs(left.xy(1740.0)[0] - (A.CXR + A.R * math.cos(math.radians(0)))) < 1.0           # 1C と 2C の境 = 弧の真横（右端）
-    assert 0 <= left.xy(2083.0)[0] - gx_l < 80                                                  # ゴール後の直線は短い
+def _routes():
+    return json.loads(A.ROUTES.read_text(encoding="utf-8"))
 
 
-def test_polyline_and_bounds_fallback():
-    lay = A.Layout(1600.0, A.bounds_from_profile(None, 1600.0, 292.0), clockwise=True)
-    pts = lay.polyline(1000.0, 0.0).split()
-    assert len(pts) >= 2 and all(re.match(r"^-?\d+\.\d,-?\d+\.\d$", p) for p in pts)
-    b = A.bounds_from_profile(None, 1600.0, 292.0)
-    assert b == sorted(b) and b[-1] < 1600.0
+def test_frame_fits_map_and_puts_stand_below_goal():
+    R = _routes()
+    for vc, v in R["venues"].items():
+        fr = A.Frame(v)
+        for c in v["circuits"].values():
+            xy = fr.xy(np.array(c["pts_q"]))
+            assert xy[:, 0].min() >= -1 and xy[:, 0].max() <= A.MAP_W + 1, vc
+            assert xy[:, 1].min() >= -1 and xy[:, 1].max() <= A.MAP_H + 1, vc
+            if c.get("stand_pts"):
+                sp = fr.xy(np.array(c["stand_pts"]))
+                goal = fr.xy(np.array(c["goal_xy"]))[0]
+                near = sp[int(np.argmin(np.hypot(*(sp - goal).T)))]
+                assert near[1] > goal[1] - 5, (vc, "ゴールにいちばん近いスタンドは、ゴールより下（画面の下側）にそろえる")
+            break
+
+
+def test_course_route_and_confidence_for_known_courses():
+    R = _routes()
+    v = R["venues"]["05"]
+    c1600 = v["courses"]["芝||1600"]
+    route = A.course_route(v["circuits"]["芝|"], c1600)
+    # 引込み線の先端から始まり、ゴール（pts_q[0]）で終わる
+    assert np.allclose(route[0], c1600["stub"][0]) and np.allclose(route[-1], v["circuits"]["芝|"]["pts_q"][0])
+    conf, why = A.course_confidence(c1600)
+    assert conf == "実形状" and "引込み線" in why
+    assert A.course_confidence({"flags": ["x"], "start": "main"})[0] == "推定"
 
 
 def test_html_has_all_venues_and_switch_rules():
@@ -43,5 +49,9 @@ def test_html_has_all_venues_and_switch_rules():
     assert h.count('name="atl_v"') == 10
     assert ":has(input.v0:checked)" in h and ".vp0:has(input.t0_0:checked)" in h
     assert "<script" not in h                                  # JavaScript を使わない
-    assert h.count("<svg") >= 24                               # コース（芝/ダート × 内外）ごとに 1 つ
+    assert h.count("<svg") >= 25                               # 背景の定義 1 つ + コース（芝/ダート × 内外）ごとに 1 つ（地図の入れ子の svg を含む）
+    assert h.count('<use href="#bg-') >= 24                    # 背景は競馬場ごとに 1 つの定義を <use> で呼ぶ
+    assert re.search(r'<g id="bg-05">', h)
+    assert "OpenStreetMap" in h
     assert "訂正" in h                                           # 第 2 ラウンドの訂正が表に出る
+    assert "実形状" in h and "推定" in h
