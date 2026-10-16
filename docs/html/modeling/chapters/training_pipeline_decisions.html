@@ -37,7 +37,7 @@
 
 <div class="box" style="border-color:#fbbf24">
 <b class="warn">本ログの精度の数値の前提（2026-10-16 時点）</b>
-<p>本ログと各実験レポートの LogLoss・回収率は、<b>2026-10-15 の track_bias 先読みリーク修正（同日の後のレースの結果が、当日傾向の特徴量に混ざる不具合）より前の LayerA・特徴量</b>で出した値です（<code>layer_a.parquet</code> は 10-14 作成）。修正後の LayerA・<code>train_table</code> の再構築と再学習はまだで、<b>再構築後に更新予定</b>。それまでは、数値の絶対値はやや楽観側に偏っている可能性があり、特徴量や手法の<b>相対比較（差）</b>の結論は影響が小さいと見込まれるが、未確認です。</p>
+<p>本ログと各実験レポートの LogLoss・回収率は、<b>2026-10-15 の track_bias 先読みリーク修正（同日の後のレースの結果が、当日傾向の特徴量に混ざる不具合）より前の LayerA・特徴量</b>で出した値です（<code>layer_a.parquet</code> は 10-14 作成）。修正後の LayerA・学習表を別ディレクトリ（<code>training_pipeline_fixed/</code>）に作り直して影響を測ったところ（<b>tp-22、§24</b>）、同じ設定の LightGBM の勝率 LogLoss は旧表 0.21728 → 修正後 0.21731（差 +0.00003、95% 上限 +0.00011）で、<b>影響は無視できる大きさ</b>でした。これまでの数値と相対比較の結論はそのまま使えます（前段モデル 3 列は旧表から作った OOF のままで、修正後の表での再計算は最終の再学習 tp-07 で行います）。</p>
 </div>
 
 <h2>0. 全体フローと状態</h2>
@@ -73,7 +73,7 @@
 <tr><td>19b</td><td><code>tp-19b-training-laps</code></td><td>追い切り特徴の拡張（調教師内の相対化・絞り込み）</td><td>notebook あり（ホストで実行待ち）</td><td>未記録</td></tr>
 <tr><td>20</td><td><code>tp-20-odds-model</code></td><td>オッズ予測モデルのモデリング・チューニング（特徴量・目的変数・損失・新年重み・パラメータ探索・CatBoost）</td><td>notebook あり（ホストで実行中）</td><td>未記録</td></tr>
 <tr><td>21</td><td><code>tp-21-smartrc-ten1f</code>（.py）</td><td>SmartRC のテン1F 特徴量</td><td class="ok">完了</td><td>§16</td></tr>
-<tr><td>22</td><td><code>tp-22-leak-impact</code></td><td>track_bias 先読みリーク修正の影響測定（別ディレクトリで再構築した学習表との比較）</td><td>notebook あり（再構築の完了待ち）</td><td>未記録</td></tr>
+<tr><td>22</td><td><code>tp-22-leak-impact</code></td><td>track_bias 先読みリーク修正の影響測定（別ディレクトリで再構築した学習表との比較）</td><td>完了（影響なし）</td><td>§24</td></tr>
 </table>
 
 <h3>勝率（p_win）LogLoss の推移（評価データと条件が違うので、横並びの比較には使わない）</h3>
@@ -603,7 +603,7 @@
 <h3>解釈と申し送り</h3>
 <ul>
   <li><b>この監査の検算が、track_bias の先読みリーク（2026-10-15 に修正）を見つけた。</b>欠損の分類で「正当」と判断したルールを実データで検算したところ、最初のレースにも値が入っていた。修正（時刻順に計算し直す）は <code>build_track_bias_pedigree_features</code> に入り、回帰テスト <code>tests/pipeline/test_track_bias_chronology.py</code> がある。</li>
-  <li>修正後の LayerA・学習表の再構築と再学習は、別ディレクトリ（<code>training_pipeline_fixed/</code>）で進める（本ログの冒頭の注記）。それまでは、本ログの精度の絶対値はやや楽観側の可能性がある。</li>
+  <li>修正後の LayerA・学習表は別ディレクトリ（<code>training_pipeline_fixed/</code>）に作り直し、影響を測った（tp-22、§24）。差は無視できる大きさだった。</li>
   <li>その他の欠損は、ほとんどが生データ側（race_index の欠け・指数が空）。データ完全化の経緯は §4。要確認の 6 セルは血統名が無い（初出の血統の可能性）。</li>
 </ul>
 
@@ -723,7 +723,31 @@
   <li>次のレベル（購入時点のオッズを使う戦略）は、T-60/T-15 の記録が貯まった後に。test 2025 は使い切りなので、以後の探索は valid と前向き検証（2026-10-17 以降の実オッズ）で行う。</li>
 </ul>
 
-<h2>24. 以降の節</h2>
+<h2>24. tp-22 track_bias 先読みリーク修正の影響測定</h2>
+<p class="muted">notebook: <code>tp-22-leak-impact.ipynb</code>（MLflow: keiba-tp-leak-impact）。2026-10-15 に直した「当日の直前傾向が同日の後のレースの結果を使う」不具合の影響を、修正後のコードで別ディレクトリ（<code>data/local/modeling/training_pipeline_fixed/</code>、<code>rebuild_train_table_fixed.py</code>）に作り直した母表・学習表と旧表を、同じ設定で比べて測った。tp-03 採用の 175 列（前段 3 列は入れない）、LightGBM（調整後）、valid 2022〜2024 × 2 seed、test 2025 は使っていない。行は 283,714 行で完全に一致。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>表</th><th>勝率 LogLoss</th><th>連対</th><th>複勝</th></tr>
+<tr><td>旧表（リーク修正前）</td><td>0.21728</td><td>0.33960</td><td>0.42705</td></tr>
+<tr><td>修正後の表</td><td>0.21731</td><td>0.33959</td><td>0.42705</td></tr>
+<tr><td>差（修正後 − 旧）</td><td>+0.00003（95% 上限 +0.00011）</td><td>−0.00001</td><td>−0.00002</td></tr>
+</table>
+<table>
+<tr><th>track_bias 系の列</th><th>変わった行の割合</th><th>欠損率（旧 → 新）</th><th>平均絶対差</th></tr>
+<tr><td>当日の直前傾向 <code>…same_day_prior</code></td><td>26.3%</td><td>16.3% → 17.7%</td><td>0.68 秒</td></tr>
+<tr><td>当日と前日の差 <code>…diff</code></td><td>26.4%</td><td>57.7% → 58.4%</td><td>0.72 秒</td></tr>
+<tr><td>合成 <code>…weighted</code></td><td>35.6%</td><td>8.2% → 8.9%</td><td>0.72 秒</td></tr>
+<tr><td>前日の傾向 <code>…prev_day</code></td><td>0%</td><td>変化なし</td><td>0</td></tr>
+<tr><td>種牡馬・母父 × 傾向（4 列）</td><td>26〜36%</td><td>同上の増加</td><td>0.05 秒</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>特徴量の値は 3 割弱の行で変わったが、予測精度への影響は無視できる大きさ</b>（勝率 +0.00003、連対・複勝はほぼ 0）。リークした分は、当日傾向の特徴量のモデルへの寄与が小さい（欠損が多く、gain の上位でもない）ため、LogLoss には出なかった。</li>
+  <li>したがって、これまでの<b>絶対値（本ログ冒頭の注記）も、相対比較の結論（採用・不採用）もそのまま使える</b>。主要実験の再実行は不要。</li>
+  <li>今後の新しい実験は修正後の表（<code>training_pipeline_fixed/</code>）でも構わないが、前段モデル 3 列（tp-04 の OOF）は旧表から作られており、修正後の表での再計算は、最終の再学習・登録（tp-07）で表を切り替える際にまとめて行う。</li>
+</ul>
+
+<h2>25. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>

@@ -14,7 +14,7 @@ code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var
 </style></head><body><main>
 <h1>モデリング実験結果レポート（tp-05a〜tp-08）</h1>
 <p class="muted">作成: 2026-10-16 05:35 / 実験管理: MLflow（ホスト上 <code>http://127.0.0.1:23230</code>）の <code>keiba-tp-model-screen</code>・<code>keiba-tp-model-zoo</code>・<code>keiba-tp-hpo</code>・<code>keiba-tp-ensemble</code>・<code>keiba-tp-final-eval</code></p>
-<div class="box" style="border-color:#fbbf24"><b class="warn">数値の前提（2026-10-16 時点）</b>: このレポートの精度・回収率は、<b>2026-10-15 の track_bias 先読みリーク修正（同日の後のレースの結果が当日傾向の特徴量に混ざる不具合）より前の LayerA・特徴量</b>で出した値です。再構築・再学習はまだで、<b>再構築後に更新予定</b>。絶対値はやや楽観側の可能性があり、特徴量や手法の相対比較（差）の影響は小さいと見込まれるが未確認です。確定事項は <a href="training_pipeline_decisions.html" style="color:#7aa9ff">学習パイプライン確定事項ログ</a> を参照。</div>
+<div class="box" style="border-color:#fbbf24"><b class="warn">数値の前提（2026-10-16 時点）</b>: このレポートの精度・回収率は、<b>2026-10-15 の track_bias 先読みリーク修正（同日の後のレースの結果が当日傾向の特徴量に混ざる不具合）より前の LayerA・特徴量</b>で出した値です。修正後の表で影響を測ったところ、勝率 LogLoss の差は +0.00003（95% 上限 +0.00011）で<b>影響は無視できる大きさ</b>でした（確定事項ログ §24）。この数値も相対比較の結論も、そのまま使えます。確定事項は <a href="training_pipeline_decisions.html" style="color:#7aa9ff">学習パイプライン確定事項ログ</a> を参照。</div>
 <h2>1. 結論</h2><div class='box'><ul>
 <li><b>現行パイプライン（v2（新特徴量 + アンサンブル v2））の test 2025（2020〜2024 年で学習、3,455 レース・47,497 頭を一度だけ評価）の最終精度</b>: 勝率 LogLoss <b>0.2124</b>（AUC 0.817）、連対率 LogLoss <b>0.3318</b>（AUC 0.809）、複勝率 LogLoss <b>0.4172</b>（AUC 0.802）。一様予測は勝率 0.2588・連対率 0.4104・複勝率 0.5168。</li>
 <li><b>予測 1 位の馬が勝つ割合 30.8%</b>（ランダムなら 7.3%）、連対する割合 50.1%、複勝圏に入る割合 62.5%。勝ち馬が予測上位 3 頭に入る割合は 63.2%。</li>

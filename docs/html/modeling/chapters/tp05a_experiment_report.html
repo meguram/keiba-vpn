@@ -14,7 +14,7 @@ code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var
 </style></head><body><main>
 <h1>tp-05a 実験結果レポート: 勝ち馬確率の目的関数の比較</h1>
 <p class="muted">作成: 2026-10-15 20:46 / 実行コミット <code>bb535c8</code> / notebook <code>notebooks/modeling/training_pipeline/tp-05a-baseline-objectives.ipynb</code> / MLflow 実験 <code>keiba-tp-model-screen</code>（ホスト上 <code>http://127.0.0.1:23230</code>）</p>
-<div class="box" style="border-color:#fbbf24"><b class="warn">数値の前提（2026-10-16 時点）</b>: このレポートの精度・回収率は、<b>2026-10-15 の track_bias 先読みリーク修正（同日の後のレースの結果が当日傾向の特徴量に混ざる不具合）より前の LayerA・特徴量</b>で出した値です。再構築・再学習はまだで、<b>再構築後に更新予定</b>。絶対値はやや楽観側の可能性があり、特徴量や手法の相対比較（差）の影響は小さいと見込まれるが未確認です。確定事項は <a href="training_pipeline_decisions.html" style="color:#7aa9ff">学習パイプライン確定事項ログ</a> を参照。</div>
+<div class="box" style="border-color:#fbbf24"><b class="warn">数値の前提（2026-10-16 時点）</b>: このレポートの精度・回収率は、<b>2026-10-15 の track_bias 先読みリーク修正（同日の後のレースの結果が当日傾向の特徴量に混ざる不具合）より前の LayerA・特徴量</b>で出した値です。修正後の表で影響を測ったところ、勝率 LogLoss の差は +0.00003（95% 上限 +0.00011）で<b>影響は無視できる大きさ</b>でした（確定事項ログ §24）。この数値も相対比較の結論も、そのまま使えます。確定事項は <a href="training_pipeline_decisions.html" style="color:#7aa9ff">学習パイプライン確定事項ログ</a> を参照。</div>
 <h2>1. 結論</h2><div class="box"><ul>
 <li><b>最良の方式は C1 二値 + 相対化 + 前段3列</b>（p_win LogLoss <b>0.21722</b>）。基準 A1（二値）の 0.21823 から <b>-0.00100</b>（95% 信頼区間 -0.00144〜-0.00075、3/3 fold で改善）。</li>
 <li>確率を<b>レース内で合計 1 にそろえる（M1）だけで 0.00258 改善</b>する（A1 の正規化前 0.22081 → 後 0.21823）。モデルを変えるよりも大きい改善で、必ず最終段にかける。</li>
