@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from src.scripts.docs import modeling_glossary as GL
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MODELING_DIR = REPO_ROOT / "docs" / "html" / "modeling"          # 本(book.html)を置く場所
 CHAPTERS_DIR = MODELING_DIR / "chapters"                      # 各章の HTML（子ファイル）はここで管理する
@@ -96,7 +98,9 @@ PARTS: list[Part] = [
 ]
 
 CHAPTERS: dict[str, Chapter] = {c.slug: c for p in PARTS for c in p.chapters}
-KINDS = {"設計": "#7aa9ff", "仕様": "#34d399", "結果": "#fbbf24", "ログ": "#c084fc", "メモ": "#9aa7c7"}
+GLOSSARY_PART = Part("付録　用語集", "本文に出てくるデータサイエンスの専門用語の解説。", [Chapter(GL.GLOSSARY_SLUG, GL.GLOSSARY_BLURB, "用語")])
+ALL_PARTS: list[Part] = PARTS + [GLOSSARY_PART]
+KINDS = {"設計": "#7aa9ff", "仕様": "#34d399", "結果": "#fbbf24", "ログ": "#c084fc", "メモ": "#9aa7c7", "用語": "#f472b6"}
 
 
 # ── 読み込みと整形 ─────────────────────────────────────────────────────────────
@@ -274,6 +278,24 @@ body.bk { margin:0; background:#0b1226; color:var(--text); font:15px/1.8 "Noto S
 .bk-body { padding-top:6px; } .bk-body img, .bk-body svg { max-width:100%; height:auto; }
 .bk-chapter { background:transparent !important; max-width:1040px !important; margin:0 auto !important; padding:30px 40px 10px !important; }
 .bk-body table { max-width:100%; } .bk-body pre { max-width:100%; overflow-x:auto; }
+/* 用語の解説（本文の用語ボタン・その場に開くカード・用語集の章） */
+.bk-main button.gl-term { font:inherit; color:inherit; background:none; border:0; border-bottom:1.5px dotted #7aa9ff; padding:0; margin:0; cursor:help; }
+.bk-main button.gl-term:hover, .bk-main button.gl-term.open { background:#1c3566; color:#fff; border-radius:3px; }
+.bk-main aside.gl-card { background:#10234a; border:1px solid #3a63b8; border-left:4px solid var(--accent); border-radius:8px; padding:8px 14px 6px; margin:8px 0 14px; font-size:14px; line-height:1.75; color:var(--text); text-align:left; }
+.gl-card .gl-ch { display:flex; justify-content:space-between; align-items:center; color:var(--accent-2); font-size:13px; }
+.gl-card .gl-x { background:none; border:0; color:var(--muted); font-size:20px; line-height:1; cursor:pointer; padding:0 4px; }
+.gl-card .gl-x:hover { color:#fff; } .gl-card .gl-more { font-size:12.5px; margin:4px 0 2px; }
+.bk-chapter .gl-one { font-weight:700; color:#fff; margin:4px 0 6px; }
+.bk-chapter .gl-fig { background:#0b1428; border:1px solid var(--border); border-radius:6px; padding:8px; margin:8px 0; text-align:center; overflow-x:auto; }
+.bk-chapter .gl-fig svg { max-width:100%; height:auto; }
+.bk-chapter .gl-links { font-size:13px; color:var(--muted); margin:6px 0; } .bk-chapter .gl-links a { margin-right:12px; color:var(--accent-2); }
+.bk-chapter details.gl-item { border:1px solid var(--border); border-radius:8px; background:var(--panel); margin:6px 0; }
+.bk-chapter details.gl-item > summary { cursor:pointer; padding:8px 12px; list-style:none; display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
+.bk-chapter details.gl-item > summary::-webkit-details-marker { display:none; }
+.bk-chapter details.gl-item > summary::before { content:"▶"; color:var(--muted); font-size:11px; } .bk-chapter details.gl-item[open] > summary::before { content:"▼"; }
+.bk-chapter .gl-short { color:var(--muted); font-size:13px; } .bk-chapter details.gl-item .gl-body { padding:2px 14px 10px; }
+.bk-chapter button.gl-all { background:#0f1a36; color:var(--muted); border:1px solid var(--border); border-radius:5px; font-size:12.5px; padding:3px 10px; cursor:pointer; }
+.bk-chapter input.gl-q { padding:5px 10px; border-radius:6px; border:1px solid var(--border); background:#0f1a36; color:var(--text); margin-left:8px; width:220px; }
 @media (max-width: 900px) { .bk-layout { grid-template-columns: 1fr; } .bk-side { position:relative; height:auto; } }
 """
 
@@ -289,6 +311,7 @@ SHELL_JS = """
   function jump(id, push) {
     const el = document.getElementById(id);
     if (!el) return;
+    const dt = el.tagName === 'DETAILS' ? el : el.closest('details'); if (dt) dt.open = true;   // 用語集の項目は開いてから移動
     const y0 = window.scrollY;
     window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - OFFSET);
     if (push) { history.replaceState({y: y0}, '', location.href); history.pushState({y: window.scrollY}, '', '#' + id); }
@@ -313,6 +336,37 @@ SHELL_JS = """
     if (e.state && typeof e.state.y === 'number') window.scrollTo(0, e.state.y);
     else if (location.hash) jump(decodeURIComponent(location.hash.slice(1)), false);
     else window.scrollTo(0, 0);
+  });
+
+  /* 用語の解説: 本文の用語ボタンを押すと、その段落の下に用語集の説明をその場で開く */
+  document.querySelector('.bk-main').addEventListener('click', e => {
+    const x = e.target.closest('.gl-x');
+    if (x) { const c = x.closest('.gl-card'); const b = c && c._btn; if (b) b.classList.remove('open'); if (c) c.remove(); return; }
+    const btn = e.target.closest('button.gl-term');
+    if (!btn) return;
+    if (btn._card && btn._card.isConnected) { btn._card.remove(); btn.classList.remove('open'); return; }
+    const src = document.getElementById('gl-' + btn.dataset.gl);
+    if (!src) return;
+    const card = document.createElement('aside');
+    card.className = 'gl-card'; card.dataset.gl = btn.dataset.gl; card._btn = btn;
+    const body = src.querySelector('.gl-body').cloneNode(true);
+    body.querySelectorAll('.gl-links').forEach(n => { if (!n.textContent.startsWith('詳しくは')) n.remove(); });
+    card.innerHTML = '<div class="gl-ch"><b>' + src.querySelector('summary b').textContent + '</b><button type="button" class="gl-x" aria-label="閉じる">×</button></div>';
+    card.append(...body.childNodes);
+    const more = document.createElement('p'); more.className = 'gl-more';
+    more.innerHTML = '<a href="#gl-' + btn.dataset.gl + '">用語集の項目を開く →</a>'; card.append(more);
+    const host = btn.closest('table') || btn.closest('p, li, blockquote, dd, figure') || btn.parentElement;
+    if (host.tagName === 'LI') host.appendChild(card); else host.after(card);
+    btn._card = card; btn.classList.add('open');
+  });
+  document.querySelector('.bk-main').addEventListener('click', e => {
+    const b = e.target.closest('button.gl-all'); if (!b) return;
+    document.querySelectorAll('details.gl-item').forEach(d => { if (d.style.display !== 'none') d.open = b.dataset.open === '1'; });
+  });
+  document.querySelector('.bk-main').addEventListener('input', e => {
+    if (!e.target.classList.contains('gl-q')) return;
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('details.gl-item').forEach(d => { d.style.display = !q || (d.dataset.name + ' ' + d.textContent).toLowerCase().includes(q) ? '' : 'none'; });
   });
 
   /* 現在位置の表示: サイドバーの章・節を強調し、その章だけ開く */
@@ -372,33 +426,46 @@ def build(modeling_dir: Path = CHAPTERS_DIR) -> tuple[str, dict]:
     slugs = set(CHAPTERS)
     built: dict[str, dict] = {}
     css_groups: dict[str, str] = {}
+    used: dict[str, set[str]] = {}
     for slug in CHAPTERS:
         path = modeling_dir / f"{slug}.html"
         title, css, body = extract(path.read_text(encoding="utf-8"))
         body = ensure_h2_ids(body, slug)
         body = namespace(body, slug, slugs)
+        body = GL.annotate(body, used, slug)
         gid = hashlib.md5(re.sub(r"\s+", "", css).encode()).hexdigest()[:6]
         css_groups.setdefault(gid, css)
         built[slug] = {"title": title, "body": body, "gid": gid, "secs": sections(body, slug), "updated": last_updated(path)}
 
+    # 用語集（付録）。本文で押せるようにした用語の説明と、それが使われている章を載せる
+    label, n = {}, 0
+    for part in PARTS:
+        for ch in part.chapters:
+            n += 1
+            label[ch.slug] = f"第{n}章 {built[ch.slug]['title']}"
+    gl_body, gl_secs = GL.render_chapter(used, label)
+    allb = {**built, GL.GLOSSARY_SLUG: {"title": GL.GLOSSARY_TITLE, "body": gl_body, "gid": "gl", "secs": gl_secs, "updated": datetime.now(JST).strftime("%Y-%m-%d")}}
+    parts_all = ALL_PARTS
+
     # 目次（部 → 章 → 節 の 3 階層）
     side, no = [], 0
-    for part in PARTS:
+    for part in parts_all:
         first = no + 1
-        side.append(f'<div class="part">{html.escape(part.title)}<small>第{first}〜{first + len(part.chapters) - 1}章</small></div>')
+        span = f"第{first}章" if len(part.chapters) == 1 else f"第{first}〜{first + len(part.chapters) - 1}章"
+        side.append(f'<div class="part">{html.escape(part.title)}<small>{span}</small></div>')
         for ch in part.chapters:
             no += 1
-            b = built[ch.slug]
+            b = allb[ch.slug]
             secs = "".join(f'<a href="#{html.escape(i)}" title="{html.escape(t)}">{html.escape(t[:46])}{"…" if len(t) > 46 else ""}</a>' for i, t in b["secs"])
             side.append(f'<div class="chap" data-slug="{ch.slug}"><div class="row"><button class="tg" type="button" aria-label="節を開閉"></button>'
                         f'<a href="#ch-{ch.slug}"><span class="num">{no}</span><span>{html.escape(b["title"])}</span></a></div><div class="secs">{secs}</div></div>')
 
     # 前付き: 全体の地図
     rows, no = [], 0
-    for part in PARTS:
+    for part in parts_all:
         for ch in part.chapters:
             no += 1
-            b = built[ch.slug]
+            b = allb[ch.slug]
             rows.append(f'<tr><td>{html.escape(part.title.split("　")[0].replace("第", "").replace("部", ""))}</td><td><a href="#ch-{ch.slug}">第{no}章　{html.escape(b["title"])}</a></td>'
                         f'<td><span class="bk-tag" style="color:{KINDS[ch.kind]}">{ch.kind}</span></td><td>{html.escape(ch.blurb)}</td><td>{b["updated"]}</td></tr>')
     front = (
@@ -411,7 +478,8 @@ def build(modeling_dir: Path = CHAPTERS_DIR) -> tuple[str, dict]:
         f'<li>学習で何が確定したか → <a href="#ch-training_pipeline_decisions">{html.escape(built["training_pipeline_decisions"]["title"])}</a></li>'
         f'<li>データがいつ集まり、どこで特徴量になるか → <a href="#ch-data_flow_schedule">{html.escape(built["data_flow_schedule"]["title"])}</a></li>'
         f'<li>特徴量の定義と設計の根拠 → <a href="#ch-feature_strategy_tp03_tp04">{html.escape(built["feature_strategy_tp03_tp04"]["title"])}</a></li>'
-        f'<li>馬券の確率・期待値 → <a href="#ch-exotic_bet_probabilities">{html.escape(built["exotic_bet_probabilities"]["title"])}</a></li></ul>'
+        f'<li>馬券の確率・期待値 → <a href="#ch-exotic_bet_probabilities">{html.escape(built["exotic_bet_probabilities"]["title"])}</a></li>'
+        f'<li>専門用語がわからない → 本文の<button type="button" class="gl-term" data-gl="logloss">点線の下線がついた語</button>をクリックすると、その場に説明が開く。まとめて読むなら <a href="#ch-{GL.GLOSSARY_SLUG}">用語集</a>（{len(GL.TERMS)} 語・図つき）</li></ul>'
         "<h2>章の種類</h2><p>" + "".join(f'<span class="bk-tag" style="color:{c}">{k}</span>' for k, c in KINDS.items()) +
         "　設計 = 方針や仕組みの設計 ／ 仕様 = 列・手順などの取り決め ／ 結果 = 実験の結果 ／ ログ = 確定事項の記録 ／ メモ = 調査・探索のメモ。"
         "「更新日」は元のページの最終コミット日。2026-05 の章は初期の設計で、後の tp 系の章で更新・確定された内容がある（各章の「関連する章」を参照）。</p>"
@@ -420,19 +488,20 @@ def build(modeling_dir: Path = CHAPTERS_DIR) -> tuple[str, dict]:
 
     # 章
     chapters_html, no = [], 0
-    order = [c for p in PARTS for c in p.chapters]
-    part_of = {c.slug: p.title for p in PARTS for c in p.chapters}
+    order = [c for p in parts_all for c in p.chapters]
+    part_of = {c.slug: p.title for p in parts_all for c in p.chapters}
     for idx, ch in enumerate(order):
         no += 1
-        b = built[ch.slug]
+        b = allb[ch.slug]
         see = "".join(f'<a href="#ch-{s}">第{[c.slug for c in order].index(s) + 1}章 {html.escape(built[s]["title"])}</a>（{html.escape(why)}）　' for s, why in ch.see if s in built)
-        prev_a = f'<a href="#ch-{order[idx - 1].slug}">← 第{idx}章 {html.escape(built[order[idx - 1].slug]["title"])}</a>' if idx else "<span></span>"
-        next_a = f'<a href="#ch-{order[idx + 1].slug}">第{idx + 2}章 {html.escape(built[order[idx + 1].slug]["title"])} →</a>' if idx + 1 < len(order) else "<span></span>"
+        prev_a = f'<a href="#ch-{order[idx - 1].slug}">← 第{idx}章 {html.escape(allb[order[idx - 1].slug]["title"])}</a>' if idx else "<span></span>"
+        next_a = f'<a href="#ch-{order[idx + 1].slug}">第{idx + 2}章 {html.escape(allb[order[idx + 1].slug]["title"])} →</a>' if idx + 1 < len(order) else "<span></span>"
         chapters_html.append(
             f'<section class="bk-chapter css-{b["gid"]}" id="ch-{ch.slug}" data-slug="{ch.slug}">'
             f'<div class="bk-head"><div class="partname">{html.escape(part_of[ch.slug])}</div><div class="no">第{no}章　<span class="bk-tag" style="color:{KINDS[ch.kind]}">{ch.kind}</span></div>'
             f'<h2 class="bk-title">{html.escape(b["title"])}</h2>'
-            f'<p class="meta">更新日 {b["updated"]} ／ 元のファイル <a href="chapters/{ch.slug}.html">chapters/{ch.slug}.html</a>（単独ページ）</p>'
+            + (f'<p class="meta">更新日 {b["updated"]} ／ 元のファイル <a href="chapters/{ch.slug}.html">chapters/{ch.slug}.html</a>（単独ページ）</p>' if ch.slug in built
+               else f'<p class="meta">生成日 {b["updated"]} ／ 定義: src/scripts/docs/modeling_glossary.py（本の生成時に作られる。単独ページは無い）</p>') +
             f'<div class="blurb">{html.escape(ch.blurb)}</div>' + (f'<p class="bk-see">関連する章: {see}</p>' if see else "") + "</div>"
             f'<div class="bk-body html-body">{b["body"]}</div><div class="bk-pn">{prev_a}{next_a}</div></section>'
         )

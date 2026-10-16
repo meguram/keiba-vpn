@@ -56,7 +56,8 @@ def test_build_contains_every_chapter_and_toc():
     assert set(built) == set(B.CHAPTERS)
     for slug in B.CHAPTERS:
         assert f'id="ch-{slug}"' in out and f'href="#ch-{slug}"' in out
-    assert out.count('class="bk-chapter') == len(B.CHAPTERS)
+    assert out.count('class="bk-chapter') == len(B.CHAPTERS) + 1      # + 用語集（付録）
+    assert 'id="ch-glossary"' in out and 'href="#ch-glossary"' in out
 
 
 def test_navigation_does_not_use_smooth_scroll_or_scrollintoview():
@@ -68,5 +69,58 @@ def test_navigation_does_not_use_smooth_scroll_or_scrollintoview():
 
 def test_sidebar_has_three_levels_and_a_toggle_per_chapter():
     out, _ = B.build()
-    assert out.count('class="part"') == len(B.PARTS) and out.count('class="tg"') == len(B.CHAPTERS)
-    assert out.count('class="secs"') == len(B.CHAPTERS) and 'id="bk-open"' in out and 'id="bk-close"' in out
+    assert out.count('class="part"') == len(B.ALL_PARTS) and out.count('class="tg"') == len(B.CHAPTERS) + 1
+    assert out.count('class="secs"') == len(B.CHAPTERS) + 1 and 'id="bk-open"' in out and 'id="bk-close"' in out
+
+
+# ── 用語集 ────────────────────────────────────────────────────────────────────
+
+from src.scripts.docs import modeling_glossary as GL  # noqa: E402
+
+
+def test_glossary_terms_are_well_formed():
+    ids = [t.id for t in GL.TERMS]
+    assert len(ids) == len(set(ids)), "用語の id が重複している"
+    cats = {c for c, _ in GL.CATS}
+    import re
+    for t in GL.TERMS:
+        assert re.fullmatch(r"[a-z0-9]+", t.id), t.id
+        assert t.cat in cats and t.pats and t.short and t.name, t.id
+        assert not t.diagram or t.diagram in GL.DIAGRAMS, f"{t.id}: 図 {t.diagram} が無い"
+        for pat in t.pats:
+            re.compile(pat)
+    for k, f in GL.DIAGRAMS.items():
+        svg = f()
+        assert svg.startswith("<svg") and svg.endswith("</svg>") and " id=" not in svg, k    # 同じ図を何度も複製するので id を持たない
+
+
+def test_glossary_see_links_point_to_real_chapters():
+    for t in GL.TERMS:
+        for s in t.see:
+            assert s in B.CHAPTERS, f"用語 {t.id} の関連章 {s} が無い"
+
+
+def test_annotate_wraps_first_use_only_and_skips_code_links_headings():
+    used: dict = {}
+    body = ('<p>OOF と OOF。<code>LogLoss</code> <a href="#x">AUC</a></p><h2>ECE</h2><svg><text>Brier</text></svg>'
+            '<div class="mermaid">Harville</div><p>valid と validate、LogLoss、T-60、ewm2</p>')
+    out = GL.annotate(body, used, "c1")
+    assert out.count('data-gl="oof"') == 1 and out.count("OOF") == 2
+    for skipped in ("ece", "brier", "harville", "auc"):
+        assert f'data-gl="{skipped}"' not in out, skipped
+    assert out.count('data-gl="logloss"') == 1 and "<code>LogLoss</code>" in out
+    assert 'data-gl="valid"' in out and ">validate" not in out.replace("と validate", "")     # 単語の途中は押せるようにしない
+    assert 'data-gl="tier"' in out and 'data-gl="ewm"' not in out
+    assert used["oof"] == {"c1"}
+
+
+def test_build_includes_glossary_with_every_term_and_buttons_resolve():
+    out, _ = B.build()
+    for t in GL.TERMS:
+        assert f'id="gl-{t.id}"' in out, t.id
+    import re
+    for gid in set(re.findall(r'class="gl-term" data-gl="([a-z0-9]+)"', out)):
+        assert f'id="gl-{gid}"' in out, f"押せる用語 {gid} の解説が用語集に無い"
+    assert out.count('class="gl-term"') > 100, "本文にほとんど注釈がついていない"
+    # 用語ボタンが <a>・<code>・見出しの中に入って壊れていない
+    assert not re.search(r"<a\b[^>]*>[^<]*<button", out) and not re.search(r"<code>[^<]*<button", out)
