@@ -75,7 +75,8 @@
 <tr><td>21</td><td><code>tp-21-smartrc-ten1f</code>（.py）</td><td>SmartRC のテン1F 特徴量</td><td class="ok">完了</td><td>§16</td></tr>
 <tr><td>22</td><td><code>tp-22-leak-impact</code></td><td>track_bias 先読みリーク修正の影響測定（別ディレクトリで再構築した学習表との比較）</td><td>完了（影響なし）</td><td>§24</td></tr>
 <tr><td>12b</td><td><code>tp-12b-predicted-odds-v8</code></td><td>改善したオッズ予測（tp-20 の V8）での馬券最適化（検証年のみ）</td><td>完了</td><td>§28</td></tr>
-<tr><td>23</td><td><code>tp-23-ensemble-v3</code></td><td>アンサンブル v3（追い切り TL_A を v2 の 7 メンバーに足して再学習し、v2 と比較）</td><td>notebook あり（ホストで実行中）</td><td>未記録</td></tr>
+<tr><td>23</td><td><code>tp-23-ensemble-v3</code></td><td>アンサンブル v3（追い切り TL_A を v2 の 7 メンバーに足して再学習し、v2 と比較）</td><td>完了（採用）</td><td>§29</td></tr>
+<tr><td>06c</td><td><code>tp-06c-final-evaluation-v3</code></td><td>最終評価 v3（アンサンブル v3。test 2025 は一度だけ）</td><td>notebook あり（ホストで実行中）</td><td>未記録</td></tr>
 </table>
 
 <h3>勝率（p_win）LogLoss の推移（評価データと条件が違うので、横並びの比較には使わない）</h3>
@@ -826,7 +827,34 @@
   <li>結論: 馬券の期待値がプラスになる戦略は、オッズ予測を改善しても見つからない（tp-08〜14 と同じ）。実運用の判断は、10/17 以降に貯まる T-60/T-15 の実オッズで再検証する。V8 は予測オッズの標準として採用する。</li>
 </ul>
 
-<h2>29. 以降の節</h2>
+<h2>29. tp-23 アンサンブル v3（追い切り TL_A を全メンバーに足して再学習）</h2>
+<p class="muted">notebook: <code>tp-23-ensemble-v3.ipynb</code>（MLflow: keiba-tp-ensemble）。v2 の 7 メンバーすべての特徴量に、tp-19 で採用した追い切りの時計・加速度の特徴量（TL_A、tl_ 接頭辞つきの追い切り特徴）を足して再学習し（3 seed、valid 2022〜2024 の OOF）、v2 と同じ手順（勝率: logit の重み付き平均、連対・複勝: 前進選択）で合成した。評価は leave-one-year-out。test 2025 は使っていない。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>指標</th><th>v2（LOYO）</th><th>v3（LOYO）</th><th>差（95% 上限）</th></tr>
+<tr><td>勝率 LogLoss</td><td>0.21394</td><td><b>0.21249</b></td><td><b>−0.00146（−0.00109）</b></td></tr>
+<tr><td>連対 LogLoss</td><td>0.33615</td><td><b>0.33362</b></td><td><b>−0.00264（−0.00223）</b></td></tr>
+<tr><td>複勝 LogLoss</td><td>0.42227</td><td><b>0.41941</b></td><td><b>−0.00273（−0.00181）</b></td></tr>
+</table>
+<table>
+<tr><th>メンバー（TL_A つき）</th><th>勝率</th><th>連対</th><th>複勝</th><th>勝率の合成重み</th></tr>
+<tr><td>nn_extras_ped</td><td>0.21360</td><td>0.33558</td><td>0.42248</td><td>0.315</td></tr>
+<tr><td>xgb_extras_ped</td><td>0.21395</td><td>0.33497</td><td>0.42121</td><td>0.221</td></tr>
+<tr><td>lgb_extras_ped</td><td>0.21418</td><td>0.33526</td><td>0.42165</td><td>0.123</td></tr>
+<tr><td>lgb_extras</td><td>0.21425</td><td>0.33534</td><td>0.42173</td><td>0</td></tr>
+<tr><td>lgb_softmax</td><td>0.21460</td><td>0.33797</td><td>0.42578</td><td>0.101</td></tr>
+<tr><td>linear</td><td>0.21550</td><td>0.33928</td><td>0.42696</td><td>0.140</td></tr>
+<tr><td>nn_s</td><td>0.22023</td><td>0.33820</td><td>0.42478</td><td>0.100</td></tr>
+</table>
+<p>連対・複勝の前進選択は、nn_extras_ped・xgb_extras_ped・lgb_extras_ped・nn_s を等しく選んだ。</p>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>採用基準（上限 &lt; 0、効果 ≥ 0.0002、連対・複勝が悪化しない）を満たした。v3 を採用する。</b>3 つの指標とも −0.0015〜−0.0027 で、これまでのアンサンブル改善（v1 → v2）より大きい。</li>
+  <li>メンバー単体も全て改善した（例: lgb_extras_ped 0.21549 → 0.21418）。追い切りの時計は、モデルの種類によらず効く情報だった。</li>
+  <li>valid の OOF での採用判断。test 2025 は tp-06c で一度だけ評価する。</li>
+</ul>
+
+<h2>30. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
