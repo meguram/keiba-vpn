@@ -24,20 +24,25 @@ def prepare(laps: pd.DataFrame) -> pd.DataFrame:
     return t
 
 
-def add_reference_z(t: pd.DataFrame, window_months: int = 12, min_n: int = 200) -> pd.DataFrame:
-    """(種別, 所属, 強度) ごとに、調教日より前の過去 window_months か月の平均・標準偏差で t4/t3/t1/accel を標準化する（小さい = 速い）。"""
+GRP = ["kind", "center", "intensity"]
+
+
+def _ym(t: pd.DataFrame) -> pd.Series:
+    return (t["train_date"].dt.year * 12 + t["train_date"].dt.month).astype("int64")
+
+
+def build_reference(t: pd.DataFrame, window_months: int = 12, min_n: int = 200) -> pd.DataFrame:
+    """(種別, 所属, 強度, 月) ごとの、直前 window_months か月（その月は含めない）の平均・標準偏差。列: GRP + ym + {t4,t3,t1,accel}_{mu,sd}。"""
     t = t.copy()
-    t["ym"] = t["train_date"].dt.year * 12 + t["train_date"].dt.month
-    grp = ["kind", "center", "intensity"]
+    t["ym"] = _ym(t)
     timed = t[t["timed"] & t["intensity"].notna()]
-    out = {c: np.full(len(t), np.nan) for c in REF_COLS}
-    pos = pd.Series(np.arange(len(t)), index=t.index)
+    ref_all = None
     for c in REF_COLS:
-        m = timed.groupby(grp + ["ym"])[c].agg(["count", "sum", lambda s: float((s**2).sum())])
+        m = timed.groupby(GRP + ["ym"])[c].agg(["count", "sum", lambda s: float((s**2).sum())])
         m.columns = ["n", "s", "ss"]
         m = m.reset_index()
         res = []
-        for key, g in m.groupby(grp):
+        for key, g in m.groupby(GRP):
             g = g.set_index("ym").sort_index()
             full = g.reindex(range(int(g.index.min()), int(g.index.max()) + 2), fill_value=0)
             roll = full[["n", "s", "ss"]].rolling(window_months, min_periods=1).sum().shift(1).fillna(0)
@@ -46,11 +51,38 @@ def add_reference_z(t: pd.DataFrame, window_months: int = 12, min_n: int = 200) 
             ok = roll["n"] >= min_n
             res.append(pd.DataFrame({"kind": key[0], "center": key[1], "intensity": key[2], "ym": full.index, f"{c}_mu": mean.where(ok), f"{c}_sd": sd.where(ok)}))
         ref = pd.concat(res, ignore_index=True)
-        mm = t[grp + ["ym"]].merge(ref, on=grp + ["ym"], how="left")
-        out[c] = ((t[c].to_numpy() - mm[f"{c}_mu"].to_numpy()) / mm[f"{c}_sd"].to_numpy())
+        ref["ym"] = ref["ym"].astype("int64")
+        ref_all = ref if ref_all is None else ref_all.merge(ref, on=GRP + ["ym"], how="outer")
+    return ref_all
+
+
+def apply_reference(t: pd.DataFrame, ref: pd.DataFrame, asof: bool = False) -> pd.DataFrame:
+    """参照表で t4/t3/t1/accel を標準化する（小さい = 速い）。asof=True（推論用）は、参照表に無い月を、その種別で直近の月の値で補う。"""
+    t = t.copy()
+    t["ym"] = _ym(t)
+    base = t[GRP + ["ym"]].copy()
+    base["_i"] = np.arange(len(base))
+    mm = base.merge(ref, on=GRP + ["ym"], how="left").sort_values("_i")
+    if asof:
+        miss = mm[f"{REF_COLS[0]}_mu"].isna().to_numpy()
+        if miss.any():
+            r2 = ref.dropna(subset=[f"{REF_COLS[0]}_mu"]).sort_values("ym")
+            sub = base.iloc[np.flatnonzero(miss)].sort_values("ym")
+            f = pd.merge_asof(sub, r2, on="ym", by=GRP, direction="backward").set_index("_i")
+            mm = mm.set_index("_i")
+            for c in REF_COLS:
+                for k in ("mu", "sd"):
+                    col = f"{c}_{k}"
+                    mm.loc[f.index, col] = f[col].to_numpy()
+            mm = mm.reset_index()
     for c in REF_COLS:
-        t[f"{c}z"] = out[c]
+        t[f"{c}z"] = (t[c].to_numpy() - mm[f"{c}_mu"].to_numpy()) / mm[f"{c}_sd"].to_numpy()
     return t
+
+
+def add_reference_z(t: pd.DataFrame, window_months: int = 12, min_n: int = 200) -> pd.DataFrame:
+    """(種別, 所属, 強度) ごとに、調教日より前の過去 window_months か月の平均・標準偏差で t4/t3/t1/accel を標準化する（小さい = 速い）。"""
+    return apply_reference(t, build_reference(t, window_months, min_n))
 
 
 def _pick(t: pd.DataFrame, lo: int, hi: int, prefix: str) -> pd.DataFrame:
