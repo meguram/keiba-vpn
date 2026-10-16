@@ -70,7 +70,7 @@
 <tr><td>18</td><td><code>tp-18-hierarchical-stacking</code></td><td>特徴量グループごとの階層スタッキング</td><td class="ok">完了（不採用）</td><td>§15</td></tr>
 <tr><td>19</td><td><code>tp-19-training-laps</code></td><td>追い切りラップの特徴量と調教師別のパターン採点</td><td class="ok">完了（TL_A を採用）</td><td>§17</td></tr>
 <tr><td>16b</td><td><code>tp-16b-feature-bakeoff</code></td><td>後日談の変種（窓・減衰・複勝率）と、訂正後のクッション値・含水率の再評価</td><td>notebook あり（ホストで実行待ち）</td><td>未記録</td></tr>
-<tr><td>19b</td><td><code>tp-19b-training-laps</code></td><td>追い切り特徴の拡張（調教師内の相対化・絞り込み）</td><td>notebook あり（ホストで実行待ち）</td><td>未記録</td></tr>
+<tr><td>19b</td><td><code>tp-19b-training-laps</code></td><td>追い切り特徴の拡張（調教師内の相対化・絞り込み）</td><td>完了</td><td>§26</td></tr>
 <tr><td>20</td><td><code>tp-20-odds-model</code></td><td>オッズ予測モデルのモデリング・チューニング（特徴量・目的変数・損失・新年重み・パラメータ探索・CatBoost）</td><td>完了</td><td>§25</td></tr>
 <tr><td>21</td><td><code>tp-21-smartrc-ten1f</code>（.py）</td><td>SmartRC のテン1F 特徴量</td><td class="ok">完了</td><td>§16</td></tr>
 <tr><td>22</td><td><code>tp-22-leak-impact</code></td><td>track_bias 先読みリーク修正の影響測定（別ディレクトリで再構築した学習表との比較）</td><td>完了（影響なし）</td><td>§24</td></tr>
@@ -770,7 +770,23 @@
   <li><b>この改善が馬券最適化の回収率に効くかは未検証</b>（tp-12 は test 2025 を一度評価済みで、やり直さない）。次は valid 年だけで、V8 を使った予測オッズで tp-12 の比較をやり直す（tp-12b）。また、目的変数は確定オッズなので、T-60 のオッズが貯まったら学習し直す。</li>
 </ul>
 
-<h2>26. 以降の節</h2>
+<h2>26. tp-19b 追い切り特徴の拡張（調教師内の相対化・絞り込み）</h2>
+<p class="muted">notebook: <code>tp-19b-training-laps.ipynb</code>（MLflow: keiba-tp-training-laps）。tp-19 で採用した TL_A に、調教師内の相対化（その調教師の過去の出走の平均に対する、最終追い切りの時計・加速度・日数・強度・1 週前の有無・本数の差と、過去の件数。<code>trainer_id</code> をキー、前日までに確定した分だけ）を足した TL_AT と、寄与の大きい 12 列だけの TL_core を比べた。基準 win 0.21553、valid 2022〜2024 × 2 seed、test 2025 は使っていない。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>群</th><th>基準（TL なし）との差 Δwin（上限）</th><th>TL_A との差 Δwin（上限）</th><th>Δtop2 / Δtop3（TL_A 比）</th><th>判断</th></tr>
+<tr><td>TL_A（tp-19 の採用セット）</td><td>−0.00136（−0.00106）</td><td>-</td><td>-</td><td>採用（基準）</td></tr>
+<tr><td>TL_AT（A + 調教師内の相対化）</td><td>−0.00125（−0.00096）</td><td>+0.00011（+0.00026）</td><td>0.00000 / −0.00067</td><td>A を超えない</td></tr>
+<tr><td>TL_core（12 列）</td><td>−0.00127（−0.00100）</td><td>+0.00008（+0.00025）</td><td>+0.00025 / +0.00016</td><td>A とほぼ同等</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>調教師内の相対化は上乗せにならない</b>（A 比 +0.00011）。tp-19 の調教師 × パターン採点に続き、<b>調教師ごとの癖を明示的に入れても効果が出ない</b>ことを確認した。標準化した時計（コース・所属・強度ごと）と馬自身との差で、状態の情報は取り切れている。</li>
+  <li><b>12 列だけでも TL_A とほぼ同じ効果</b>（基準比 −0.00127 と −0.00136）。運用で取得できる調教データが限られる場合（レース当日に馬別ページを全馬分取れない等）の縮小版として使える。使う列: 直近 28/14 日の最良の終い1F の標準化値、14 日の4F の平均、最終の終い1F とその馬自身との差、1 週前の4F、最終の位置取り・4F・4F の標準化値・順位、2 週前の終い1F、最終の4F の馬自身との差。</li>
+  <li>採用は <b>TL_A</b> のまま（縮小版 TL_core は運用の制約用の代替）。v3 の特徴量セットに TL_A を含める。</li>
+</ul>
+
+<h2>27. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
