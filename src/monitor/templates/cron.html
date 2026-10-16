@@ -72,7 +72,7 @@ function rowHtml(j) {
   const lr = j.last_run, res = lr ? lr.result : 'unknown';
   const [rl, rc] = RESULT[res] || RESULT.unknown;
   const state = j.state === 'running'
-    ? `<span class="st-run"><span class="pulse"></span>実行中</span><div class="sub">${esc(rel(j.running_since))}に開始</div>`
+    ? `<span class="st-run"><span class="pulse"></span>実行中</span><div class="sub">${j.running_since ? esc(rel(j.running_since)) + 'に開始' : '開始時刻は不明（記録の無い起動）'}</div>`
     : `<span class="st-wait">待機中</span>` + (j.next_run ? `<div class="sub">次回 ${esc(fmt(j.next_run))}（${esc(rel(j.next_run))}）</div>` : '');
   const last = lr ? `${esc(fmt(lr.started_at))}<div class="sub">${esc(rel(lr.started_at))}${lr.duration_sec != null ? '・' + esc(dur(lr.duration_sec)) : ''}${lr.exit_code != null && lr.exit_code !== 0 ? '・終了コード ' + lr.exit_code : ''}</div>`
                  : '<span class="sub">記録なし</span>';
