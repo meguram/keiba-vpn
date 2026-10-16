@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { LEVEL_STYLE, RaceValue, ValueLevel, valueTitle } from "@/lib/raceValue";
 import { venuesOf } from "@/lib/weekDates";
@@ -11,6 +11,19 @@ const BTN: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6, fontSize: 12,
   border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", textDecoration: "none", whiteSpace: "nowrap", cursor: "pointer",
 };
+
+/** 幅 640px 未満（スマホ）か。スマホでは 1 行の横スクロールにして、画面をふさがない・指で押しやすい大きさにする */
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return narrow;
+}
 
 /**
  * 開催日の中でレースを移動するバー。レース詳細（RaceNav）と同じ作り:
@@ -26,11 +39,18 @@ export function RaceStrip({
   selectedRaceId: string;
   onSelectRace: (raceId: string) => void;
 }) {
+  const narrow = useNarrow();
+  const chipsRef = useRef<HTMLDivElement | null>(null);
   const venues = useMemo(() => venuesOf(races), [races]);
   const sameVenue = useMemo(
     () => races.filter((r) => r.venue === venue).sort((a, b) => Number(a.round ?? 0) - Number(b.round ?? 0)),
     [races, venue],
   );
+  useEffect(() => {
+    if (!narrow) return;
+    const el = chipsRef.current?.querySelector<HTMLElement>('[aria-current="true"]');
+    el?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [narrow, selectedRaceId, venue]);
   if (sameVenue.length === 0) return null;
 
   const idx = sameVenue.findIndex((r) => r.race_id === selectedRaceId);
@@ -45,10 +65,10 @@ export function RaceStrip({
       aria-label="レース移動"
       style={{
         position: "sticky", top: 44, zIndex: 20, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
-        padding: "12px 16px", marginBottom: 14, display: "flex", flexDirection: "column", gap: 10,
+        padding: narrow ? "6px 8px" : "12px 16px", marginBottom: 14, display: "flex", flexDirection: "column", gap: narrow ? 6 : 10,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: narrow ? "nowrap" : "wrap", overflowX: narrow ? "auto" : undefined }}>
         {venues.map((v) => {
           const on = v === venue;
           const hot = hotIn(v);
@@ -58,7 +78,7 @@ export function RaceStrip({
               onClick={() => onVenue(v)}
               aria-current={on ? "page" : undefined}
               style={{
-                ...BTN, fontSize: 13, fontWeight: on ? 700 : 500,
+                ...BTN, fontSize: 13, fontWeight: on ? 700 : 500, minHeight: narrow ? 40 : undefined, flex: "none",
                 border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
                 background: on ? "rgba(59,130,246,0.15)" : "var(--surface)", color: on ? "var(--accent)" : "var(--text-dim)",
               }}
@@ -69,18 +89,23 @@ export function RaceStrip({
           );
         })}
         {sel && (
-          <Link href={`/race/${sel.race_id}`} style={{ ...BTN, marginLeft: "auto", color: "var(--accent)" }}>
-            {venue} {roundOf(sel)}R の詳細へ
+          <Link href={`/race/${sel.race_id}`} style={{ ...BTN, marginLeft: "auto", flex: "none", minHeight: narrow ? 40 : undefined, color: "var(--accent)" }}>
+            {narrow ? `${roundOf(sel)}R 詳細` : `${venue} ${roundOf(sel)}R の詳細へ`}
           </Link>
         )}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        {prev ? (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: narrow ? "nowrap" : "wrap" }}>
+        {!narrow && (prev ? (
           <button onClick={() => onSelectRace(prev.race_id)} style={BTN} title={prev.race_name}>← {roundOf(prev)}R</button>
-        ) : <span style={{ ...BTN, opacity: 0.35, cursor: "default" }}>← 前のR</span>}
+        ) : <span style={{ ...BTN, opacity: 0.35, cursor: "default" }}>← 前のR</span>)}
 
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", flex: 1, justifyContent: "center" }}>
+        <div
+          ref={chipsRef}
+          style={narrow
+            ? { display: "flex", gap: 6, flexWrap: "nowrap", flex: 1, overflowX: "auto", padding: "4px 2px", scrollSnapType: "x proximity", WebkitOverflowScrolling: "touch" }
+            : { display: "flex", gap: 4, flexWrap: "wrap", flex: 1, justifyContent: "center" }}
+        >
           {sameVenue.map((r) => {
             const on = r.race_id === selectedRaceId;
             const v = values.get(r.race_id);
@@ -95,7 +120,8 @@ export function RaceStrip({
                 title={`${roundOf(r)}R ${r.race_name ?? ""}\n${valueTitle(v)}`}
                 data-level={lv}
                 style={{
-                  minWidth: 46, display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+                  minWidth: narrow ? 48 : 46, minHeight: narrow ? 46 : undefined, flex: "none", scrollSnapAlign: "center",
+                  display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
                   padding: "5px 6px", borderRadius: 8, lineHeight: 1.15, cursor: "pointer",
                   border: `1px ${hasVal ? "solid" : "dashed"} ${st.border}`, background: st.bg, color: st.color,
                   boxShadow: [on ? "0 0 0 2px var(--bg), 0 0 0 4px #e6edf3" : "", st.glow ?? ""].filter(Boolean).join(", ") || undefined,
@@ -112,12 +138,12 @@ export function RaceStrip({
           })}
         </div>
 
-        {next ? (
+        {!narrow && (next ? (
           <button onClick={() => onSelectRace(next.race_id)} style={BTN} title={next.race_name}>{roundOf(next)}R →</button>
-        ) : <span style={{ ...BTN, opacity: 0.35, cursor: "default" }}>次のR →</span>}
+        ) : <span style={{ ...BTN, opacity: 0.35, cursor: "default" }}>次のR →</span>)}
       </div>
 
-      {values.size > 0 && (
+      {values.size > 0 && !narrow && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", fontSize: 11, color: "var(--text-dim)" }}>
           <span>推奨の期待回収率:</span>
           {(["hot", "good", "ok", "pass"] as ValueLevel[]).map((k) => (
