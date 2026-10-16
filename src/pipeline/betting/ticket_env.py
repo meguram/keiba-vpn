@@ -94,7 +94,7 @@ def impute_missing_runners(pred: pd.DataFrame, win_place: pd.DataFrame) -> pd.Da
     買う時点ではその馬が中止するかは分からないので、除くと結果を知った上でレースを選ぶことになる（楽観側の偏り）。
     p_win = 市場の暗黙の確率、p_top2・p_top3 = 予測全体での p_win との対応（ビンの平均）から。補ったあとレース内の合計を 1・2・3 にそろえる。"""
     key = ["race_id", "horse_id"]
-    w = win_place[win_place["win_odds"].notna() & win_place["race_id"].isin(pred["race_id"].unique())][key + ["horse_number", "win_odds"]].copy()
+    w = win_place[(win_place["win_odds"] > 0) & win_place["race_id"].isin(pred["race_id"].unique())][key + ["horse_number", "win_odds"]].copy()
     w["q"] = (1.0 / np.clip(w["win_odds"], 1.0, None)) / (1.0 / np.clip(w["win_odds"], 1.0, None)).groupby(w["race_id"]).transform("sum")
     miss = w.merge(pred[key].assign(_h=1), on=key, how="left")
     miss = miss[miss["_h"].isna()]
@@ -122,7 +122,7 @@ def build_race_tickets(pred: pd.DataFrame, win_place: pd.DataFrame, pair: pd.Dat
     if "horse_number" not in pred.columns:
         pred = pred.merge(win_place[["race_id", "horse_id", "horse_number"]].drop_duplicates(["race_id", "horse_id"]), on=["race_id", "horse_id"], how="inner")
     pred = impute_missing_runners(pred, win_place)
-    wp = {rid: g for rid, g in win_place[win_place["win_odds"].notna()].groupby("race_id")}
+    wp = {rid: g for rid, g in win_place[win_place["win_odds"] > 0].groupby("race_id")}      # 取消・除外は win_odds = -3.0（人気 9999）。出走しないので除く
     pr = {rid: g for rid, g in pair.groupby("race_id")}
     po = {rid: g for rid, g in payoff.groupby("race_id")}
     out: list[pd.DataFrame] = []

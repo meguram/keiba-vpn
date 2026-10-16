@@ -73,6 +73,19 @@ class TicketEnvTest(unittest.TestCase):
         self.assertAlmostEqual(float(part[part["type"] == "tansho"]["p_comb"].sum()), 1.0, places=6)
         self.assertAlmostEqual(float(full[full["type"] == "tansho"]["p_comb"].sum()), 1.0, places=6)
 
+    def test_scratched_runner_with_negative_odds_is_ignored(self):
+        pred, wp, pair, pay = _race("r1")
+        ghost = wp.iloc[[0]].copy()
+        ghost["horse_id"], ghost["horse_number"], ghost["win_odds"], ghost["place_odds_min"], ghost["place_odds_max"] = "ghost", 99, -3.0, -3.0, -3.0     # 取消・除外
+        wp2 = pd.concat([wp, ghost], ignore_index=True)
+        a = te.build_race_tickets(pred, wp, pair, pay, a=0.5, b=0.5, K=20)
+        b = te.build_race_tickets(pred, wp2, pair, pay, a=0.5, b=0.5, K=20)
+        self.assertEqual(len(a), len(b))
+        np.testing.assert_allclose(a["p_comb"].to_numpy(), b["p_comb"].to_numpy())
+        self.assertFalse((b["combo"] == "99").any())
+        out = te.impute_missing_runners(pred, wp2)
+        self.assertEqual(len(out), len(pred))
+
     def test_impute_keeps_totals(self):
         pred, wp, _, _ = _race("r1")
         out = te.impute_missing_runners(pred.iloc[:-1], wp)
