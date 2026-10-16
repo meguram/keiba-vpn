@@ -151,3 +151,55 @@ def reality_check(profit: np.ndarray, n_boot: int = 2000, seed: int = 0) -> dict
         mx[b] = (np.sqrt(n) * centered[ii].mean(0)).max()
     best = int(np.argmax(t_obs))
     return {"best": best, "best_mean": float(mu[best]), "t_obs": float(t_obs[best]), "p_value": float((mx >= t_obs[best]).mean()), "n_strategies": int(m)}
+
+
+# ───────────── レベル 1: オッズを使う戦略（判断オッズ = 確定 × 雑音、精算は確定の払戻） ─────────────
+def noisy_odds(odds: np.ndarray, sigma: float, seed: int = 0) -> np.ndarray:
+    """購入時点のオッズの代用（確定オッズに対数正規の雑音。sigma = 0 は確定オッズを知っている先読み = 参考の上限）。"""
+    if sigma <= 0:
+        return np.asarray(odds, dtype=float)
+    rng = np.random.default_rng(seed)
+    return np.clip(np.asarray(odds, dtype=float) * np.exp(rng.normal(0.0, sigma, len(odds))), 1.0, None)
+
+
+def prepare_tickets(df: pd.DataFrame, sigma: float, seed: int = 0) -> pd.DataFrame:
+    """買い目の表（race_id・type・p_comb・p_model・odds・mult）に、判断オッズ od と race コードを付ける。"""
+    d = df[["race_id", "type", "p_comb", "p_model", "odds", "mult"]].copy()
+    d["od"] = noisy_odds(d["odds"].to_numpy(), sigma, seed)
+    d["rc"] = pd.factorize(d["race_id"])[0]
+    return d
+
+
+def select_portfolio(d: pd.DataFrame, bet: str, tau: float, pmin: float, topk: int, psrc: str = "p_comb") -> pd.DataFrame:
+    """券種 bet の買い目から、期待値 p × od ≥ tau かつ p ≥ pmin のものを、期待値の高い順に最大 topk 点選ぶ。レースごとに
+    n（点数）・mean_mult（等額で買った場合の払戻倍率の平均）・ev_mean（期待値の平均）・hit（どれか 1 つが当たる確率の近似 = 1 − Π(1 − p)）を返す。"""
+    x = d[(d["type"] == bet) & (d[psrc] >= pmin)].copy()
+    x["ev"] = x[psrc] * x["od"]
+    x = x[x["ev"] >= tau]
+    if x.empty:
+        return pd.DataFrame(columns=["race_id", "n", "mean_mult", "ev_mean", "hit"])
+    x = x.sort_values(["rc", "ev"], ascending=[True, False])
+    x["rk"] = x.groupby("rc").cumcount()
+    x = x[x["rk"] < topk]
+    x["lq"] = np.log1p(-np.clip(x[psrc], 0, 0.999))
+    g = x.groupby("race_id", sort=False)
+    out = g.agg(n=("mult", "size"), mean_mult=("mult", "mean"), ev_mean=("ev", "mean"), lq=("lq", "sum")).reset_index()
+    out["hit"] = 1.0 - np.exp(out["lq"])
+    return out.drop(columns="lq")
+
+
+def tier_stake(port: pd.DataFrame, scheme: str, base: float = 1000.0) -> np.ndarray:
+    """レースごとの購入額（円）。flat = 毎回 base / ev = 期待値で 500・1000・2000 円（EV 1.0 未満は 500、1.1 以上で 1000、1.25 以上で 2000）/ evhit = ev に加えて的中確率が低ければ段を下げる。"""
+    if scheme == "flat":
+        return np.full(len(port), base)
+    ev, hit = port["ev_mean"].to_numpy(), port["hit"].to_numpy()
+    s = np.where(ev >= 1.25, 2000.0, np.where(ev >= 1.1, 1000.0, 500.0))
+    if scheme == "evhit":
+        s = np.where((hit < 0.15), 0.0, np.where(hit < 0.3, np.minimum(s, 500.0), np.where(hit < 0.45, np.minimum(s, 1000.0), s)))
+    return s
+
+
+def settle_portfolio(port: pd.DataFrame, stake: np.ndarray) -> pd.DataFrame:
+    """等額で n 点に按分した購入額での精算（円）。"""
+    ret = stake * port["mean_mult"].to_numpy()
+    return pd.DataFrame({"race_id": port["race_id"].to_numpy(), "stake": stake, "ret": ret})
