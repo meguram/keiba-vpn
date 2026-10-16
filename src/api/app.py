@@ -2546,6 +2546,12 @@ async def get_scraped_dates(
         le=150,
         description="UI 用: 直近 N 日は race_lists を日付ごとに読み JRA≥1 の日のみ（全件 glob しない）",
     ),
+    picker_future_days: int | None = Query(
+        None,
+        ge=0,
+        le=30,
+        description="UI 用（週間予測）: picker_past_days と併用すると、今日と今日から N 日先までも走査に含める。未指定なら従来どおり今日を含めない",
+    ),
 ):
     """
     スクレイピング済みの日付一覧。
@@ -2560,7 +2566,7 @@ async def get_scraped_dates(
     now = _time.time()
 
     if picker_past_days is not None:
-        ck = str(int(picker_past_days))
+        ck = f"{int(picker_past_days)}+{int(picker_future_days)}" if picker_future_days is not None else str(int(picker_past_days))
         pd = _PICKER_SCRAPE_DATES_CACHE
         if (
             pd.get("key") == ck
@@ -2579,7 +2585,9 @@ async def get_scraped_dates(
             today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             n = int(picker_past_days)
             out: list[str] = []
-            for i in range(1, n + 1):
+            # 週間予測用: picker_future_days 指定時は今日(i=0)と未来(i<0)も含める。日付の降順（未来 → 過去）で返す
+            first = -int(picker_future_days) if picker_future_days is not None else 1
+            for i in range(first, n + 1):
                 d = today - timedelta(days=i)
                 stem = d.strftime("%Y%m%d")
                 rl = storage.load("race_lists", stem)
