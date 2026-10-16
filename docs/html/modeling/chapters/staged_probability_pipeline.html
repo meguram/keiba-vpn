@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>多段階レース直前確率パイプライン設計</h1>
-      <p class="meta">ソース: <code>docs/html/modeling/staged_probability_pipeline.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/staged_probability_pipeline.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class=”html-body”>
 <h1 id=”_1”>多段階レース直前確率パイプライン設計</h1>
@@ -286,7 +286,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <p>対象レースで「その馬がいつもの位置を取りやすいか」を推定する。</p>
 <h2 id="_10">既存コードの活用先</h2>
 <ul>
-<li><code>src/pipeline/tracking_difficulty.py</code></li>
+<li><code>src/pipeline/models/tracking_difficulty.py</code></li>
 </ul>
 <h2 id="_11">入力特徴量 / 出力 / 学習ターゲット</h2>
 <table>
@@ -309,7 +309,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <p>レース全体の前半ラップ速度・消耗度・上がり勝負になりやすさを推定する。</p>
 <h2 id="_16">既存コードの活用先</h2>
 <ul>
-<li><code>src/pipeline/pace_predictor.py</code></li>
+<li><code>src/pipeline/models/pace_predictor.py</code></li>
 </ul>
 <h2 id="_17">入力特徴量 / 出力 / 派生特徴量</h2>
 <table>
@@ -392,8 +392,8 @@ document.addEventListener("DOMContentLoaded", function() {
 </table>
 <h2 id="_24">既存コードの活用先</h2>
 <ul>
-<li><code>src/research/race_quality_model.py</code></li>
-<li><code>src/research/tune_race_quality_priors.py</code></li>
+<li><code>src/research/race/race_quality_model.py</code></li>
+<li><code>src/research/race/tune_race_quality_priors.py</code></li>
 </ul>
 <h2 id="stage5">Stage5: 血統 × 当日文脈適合モデル</h2>
 <h2 id="_25">目的</h2>
@@ -408,16 +408,16 @@ document.addEventListener("DOMContentLoaded", function() {
 <p>そのため、血統特徴量は「静的な距離適性」だけでなく「当日の race-day bias との相性」で再評価する。</p>
 <h2 id="_27">既存コードの活用先</h2>
 <ul>
-<li><code>src/research/bloodline_distance.py</code></li>
-<li><code>src/research/bloodline_vector.py</code></li>
-<li><code>src/research/course_bloodline.py</code></li>
-<li><code>src/research/sire_factor_stats.py</code></li>
-<li><code>src/research/sire_factor_race_map.py</code></li>
-<li><code>src/research/sire_factor_aptitude.py</code></li>
-<li><code>src/research/note_aptitude_5gen.py</code></li>
-<li><code>src/research/sire_aptitude_note.py</code></li>
-<li><code>src/research/myostatin.py</code></li>
-<li><code>src/research/race_quality_model.py</code></li>
+<li><code>src/research/pedigree/bloodline_distance.py</code></li>
+<li><code>src/research/pedigree/bloodline_vector.py</code></li>
+<li><code>src/research/race/course_bloodline.py</code></li>
+<li><code>src/research/pedigree/sire_factor_stats.py</code></li>
+<li><code>src/research/pedigree/sire_factor_race_map.py</code></li>
+<li><code>src/research/pedigree/sire_factor_aptitude.py</code></li>
+<li><code>src/research/pedigree/note_aptitude_5gen.py</code></li>
+<li><code>src/research/pedigree/sire_aptitude_note.py</code></li>
+<li><code>src/research/genes/myostatin.py</code></li>
+<li><code>src/research/race/race_quality_model.py</code></li>
 </ul>
 <h2 id="_28">血統特徴量の二層構造</h2>
 <h3 id="5a">5A: 静的血統適性（固定値）</h3>
@@ -451,7 +451,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <li>どの適性軸（aptitude axis）が強く出たか</li>
 </ul>
 <h3 id="2-segment-prior-same-day-posterior">2. segment prior + same-day posterior</h3>
-<p><code>src/research/race_quality_model.py</code> の segment prior を day prior として利用し、同日先行レースの結果で posterior 補正する。</p>
+<p><code>src/research/race/race_quality_model.py</code> の segment prior を day prior として利用し、同日先行レースの結果で posterior 補正する。</p>
 <h3 id="3-race-wise-contextual-fit">3. race-wise contextual fit（レース単位の文脈適合スコア）</h3>
 <p>対象馬について以下の類似度を計算し、<code>contextual_bloodline_fit</code> とする。</p>
 <ul>
@@ -532,7 +532,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <h2 id="ml">推奨レイヤ（教師あり ML とは分離）</h2>
 <p><strong>券種・投資配分・予測印と推奨券の結びつけ</strong>など、期待値を土台にした系列意思決定は、確率モデルの勾配学習とは切り分ける。<strong>強化学習（方策）</strong> を第一候補とする設計議論は別紙にまとめた。</p>
 <ul>
-<li><code>docs/html/modeling/betting_policy_reinforcement_learning.html</code></li>
+<li><code>docs/html/modeling/chapters/betting_policy_reinforcement_learning.html</code></li>
 
 </ul>
 <h2 id="_37">設計ルール</h2>

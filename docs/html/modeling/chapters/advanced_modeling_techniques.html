@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>レース直前確率モデルに使う実戦的 ML テクニック</h1>
-      <p class="meta">ソース: <code>docs/html/modeling/advanced_modeling_techniques.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/advanced_modeling_techniques.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
 <h1 id="ml">レース直前確率モデルに使う実戦的 ML テクニック</h1>
@@ -218,9 +218,9 @@ document.addEventListener("DOMContentLoaded", function() {
 <li>追加したテクニックは必ず <strong>train 内 OOF</strong> と <strong>2024 valid（検証データ）</strong> で比較・選定する。設定を凍結したあとに限り、<strong>2025 test（最終評価データ）</strong> で最終報告する（<strong>test の結果を見ながら設定を変えない</strong>）。<code>data/meta/modeling/dataset_split_manifest.json</code> の一次プロトコルに合わせる</li>
 <li>実装基盤は <code>polars</code> 中心で組み、OOF / stage 出力は fold 単位の Parquet に保存する</li>
 </ul>
-<p>実装時のデータ処理・メモリ戦略は <code>docs/html/modeling/modeling_coding_strategy.html</code> を参照してください。</p>
-<p><strong>モデルの設定値（ハイパーパラメータ）探索・inner/outer 評価・試行予算の配分</strong>は <code>docs/html/modeling/hyperparameter_tuning_workflow.html</code> を参照してください。本書はテクニック集であり、運用手順（SOP）ではありません。</p>
-<p><strong>新規特徴量の探索候補</strong>は <code>docs/html/modeling/feature_engineering_exploration.html</code>（LayerA 前提・検証プロトコル付き）を参照してください。</p>
+<p>実装時のデータ処理・メモリ戦略は <code>docs/html/modeling/chapters/modeling_coding_strategy.html</code> を参照してください。</p>
+<p><strong>モデルの設定値（ハイパーパラメータ）探索・inner/outer 評価・試行予算の配分</strong>は <code>docs/html/modeling/chapters/hyperparameter_tuning_workflow.html</code> を参照してください。本書はテクニック集であり、運用手順（SOP）ではありません。</p>
+<p><strong>新規特徴量の探索候補</strong>は <code>docs/html/modeling/chapters/feature_engineering_exploration.html</code>（LayerA 前提・検証プロトコル付き）を参照してください。</p>
 <h2 id="1">1. カテゴリ変数エンコーディング戦略</h2>
 <h2 id="11">1.1 基本カテゴリ処理</h2>
 <p>まずはリスクが低く効果が安定した定番手法を常設します。</p>

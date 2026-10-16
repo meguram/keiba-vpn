@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>血統・馬場傾向・研究方針メモ（ブラッシュアップ用）</h1>
-      <p class="meta">ソース: <code>docs/html/modeling/pedigree_stage_research_notes.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/pedigree_stage_research_notes.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
 <h1 id="_1">血統・馬場傾向・研究方針メモ</h1>
@@ -515,7 +515,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </ul>
 <h3 id="51">5.1 ファーストステップ: 母系種牡馬 × 舞台別集計（バッチ）</h3>
 <ul>
-<li><strong>スクリプト</strong>: <code>src/research/build_maternal_stallion_stage_stats.py</code></li>
+<li><strong>スクリプト</strong>: <code>src/research/pedigree/build_maternal_stallion_stage_stats.py</code></li>
 <li><strong>入力</strong>: <code>data/local/tables/{年}/race_result_flat.parquet</code>、5 世代血統索引（既定は <code>data/local/horse_pedigree_5gen/**/*.json</code> があれば優先、無ければ <code>KEIBA_PEDIGREE_JSONL_GZ</code> / <code>data/research/_ped_snapshot_cache.jsonl.gz</code>）</li>
 <li><strong>種牡馬の含有範囲（本節）</strong>: 集計に載せる <code>stallion_id</code> は、下記の母系展開で <strong>当馬基準の世代 3〜10 に入るノードに限る</strong>（母系側・最大 10 世代の窓）。<code>data/research/sire_factor_stats.json</code> の <code>sires</code> は（既定の <code>--stallions-only</code> 相当）<strong>その窓内の ID を辞書でさらに絞る</strong>ためのもの。<code>--no-stallions-only</code> を付けると辞書絞りを外し、<strong>同じ窓内</strong>のすべての祖先 <code>horse_id</code> を対象にできる（窓外の父系全体へ広がるわけではない）</li>
 <li><strong>母系</strong>: <code>research/pedigree_similarity.is_maternal_side</code> と同じ二分木定義。世代 3〜10 は、当馬の 5 世代表で母系に含まれるノードをシードとし、各シード祖先の 5 世代表を <strong>当馬基準世代 <code>g + r</code></strong> として数える（最大 5+5=10）。拡張先の 5 世代表は父・母両系を含む（母系 = 母側 subtree 内の全祖先）</li>
@@ -532,7 +532,7 @@ python3 -m src.research.pedigree.build_maternal_stallion_stage_stats --years 202
 </code></pre>
 <h3 id="52-2">5.2 セカンドステップ: 種牡馬祖先グラフ（父・母父の2本）</h3>
 <ul>
-<li><strong>スクリプト</strong>: <code>src/research/build_stallion_ancestor_graph.py</code></li>
+<li><strong>スクリプト</strong>: <code>src/research/pedigree/build_stallion_ancestor_graph.py</code></li>
 <li><strong>対象</strong>: <code>--from-parquet</code> でファーストステップの <code>stallion_id</code> 一意を読む（省略時は <code>sire_factor_stats</code> の全 <code>sires</code>）</li>
 <li><strong>辺</strong>: 各馬の主馬 5 世代表で <strong>父 (1,0)</strong> と <strong>母父 (2,2)</strong> の <code>horse_id</code> を取り、<strong>祖先 → 子孫</strong> の有向辺を張る（<code>relation</code> は <code>sire</code> / <code>dam_sire</code>）</li>
 <li><strong>親方向の閉包（既定）</strong>: 対象の主馬（Parquet の <code>stallion_id</code> で索引に主馬があるもの）をシードに BFS し、索引に主馬がある限り <strong>各ノードについて父・母父へ再帰的に</strong> 辺を伸ばす。主馬 JSON が無い ID で途切れるまで「上」に辿れる（<code>meta.closure_nodes_processed</code> など）</li>
@@ -620,7 +620,7 @@ python3 -m src.research.pedigree.build_stallion_ancestor_graph \\
 </ul>
 <h4 id="531-json">5.3.1 評価ラボ（実装済み・結果は JSON）</h4>
 <ul>
-<li><strong>特徴モジュール:</strong> <code>src/research/pedigree_stage5_3_features.py</code> — §5.3 A〜E を数値化します（経験ベイズ縮小・残差・logit 変換・粗/細 stage・PCA/NMF/SVD・グラフ平滑化・最短経路カーネルなど）。</li>
+<li><strong>特徴モジュール:</strong> <code>src/research/pedigree/pedigree_stage5_3_features.py</code> — §5.3 A〜E を数値化します（経験ベイズ縮小・残差・logit 変換・粗/細 stage・PCA/NMF/SVD・グラフ平滑化・最短経路カーネルなど）。</li>
 <li><strong>評価スクリプト:</strong> <code>python3 -m src.research.pedigree.pedigree_stage5_3_eval</code> — 「1着」の二値予測。時系列 split（既定: 2023 以前を学習、2024 以降をテスト）・Ablation・馬単位 GroupShuffleSplit を実施。</li>
 <li><strong>出力先:</strong> <code>data/meta/modeling/pedigree_stage5_3_eval.json</code>（各指標・Ablation 結果・補助 R² など）</li>
 <li><strong>重要（リークに注意）:</strong> 現行の種牡馬×舞台集計は<strong>全期間の同一レース行を母数に含みうる</strong>ため、ROC-AUC は<strong>楽観的に高く出やすい</strong>（探索目的に限る）。本番評価では<strong>レース日以前のみ</strong>でベクトルを再集計する必要があります。</li>
@@ -652,43 +652,43 @@ python3 -m src.research.pedigree.build_stallion_ancestor_graph \\
 </thead>
 <tbody>
 <tr>
-<td><code>src/pipeline/track_bias_pedigree.py</code></td>
+<td><code>src/pipeline/features/track_bias_pedigree.py</code></td>
 <td>馬場×血統特徴・<code>include_shutuba_entries_without_result</code></td>
 </tr>
 <tr>
-<td><code>src/research/tune_track_bias_weights.py</code></td>
+<td><code>src/research/race/tune_track_bias_weights.py</code></td>
 <td>重みチューニング（v2 JSON）</td>
 </tr>
 <tr>
-<td><code>src/research/pedigree_local_store.py</code></td>
+<td><code>src/research/pedigree/pedigree_local_store.py</code></td>
 <td>血統スナップショット・索引・BFS 補助</td>
 </tr>
 <tr>
-<td><code>src/research/pedigree_factor_table.py</code></td>
+<td><code>src/research/pedigree/pedigree_factor_table.py</code></td>
 <td><code>horse_id</code> × 因子ブレンド Parquet</td>
 </tr>
 <tr>
-<td><code>src/research/pedigree_similarity.py</code></td>
+<td><code>src/research/pedigree/pedigree_similarity.py</code></td>
 <td>血統構造類似度</td>
 </tr>
 <tr>
-<td><code>src/research/build_maternal_stallion_stage_stats.py</code></td>
+<td><code>src/research/pedigree/build_maternal_stallion_stage_stats.py</code></td>
 <td>母系種牡馬 × 舞台別集計（Parquet）</td>
 </tr>
 <tr>
-<td><code>src/research/build_stallion_ancestor_graph.py</code></td>
+<td><code>src/research/pedigree/build_stallion_ancestor_graph.py</code></td>
 <td>種牡馬祖先グラフ JSON / 簡易 HTML 可視化</td>
 </tr>
 <tr>
-<td><code>src/research/pedigree_stage5_3_features.py</code></td>
+<td><code>src/research/pedigree/pedigree_stage5_3_features.py</code></td>
 <td>§5.3 特徴前計算（評価ラボ）</td>
 </tr>
 <tr>
-<td><code>src/research/pedigree_stage5_3_eval.py</code></td>
+<td><code>src/research/pedigree/pedigree_stage5_3_eval.py</code></td>
 <td>§5.3 精度検証（Logistic + Ablation）</td>
 </tr>
 <tr>
-<td><code>docs/html/modeling/track_bias_pedigree_pipeline.html</code></td>
+<td><code>docs/html/modeling/chapters/track_bias_pedigree_pipeline.html</code></td>
 <td>馬場×血統パイプライン説明</td>
 </tr>
 </tbody>
@@ -730,7 +730,7 @@ python3 -m src.research.pedigree.build_stallion_ancestor_graph \\
 </tbody>
 </table>
 <hr />
-<p><em>このドキュメントは <code>docs/html/modeling/pedigree_stage_research_notes.html</code> に置いています。追記・修正は PR または直接編集で更新してください。</em></p>
+<p><em>このドキュメントは <code>docs/html/modeling/chapters/pedigree_stage_research_notes.html</code> に置いています。追記・修正は PR または直接編集で更新してください。</em></p>
     </article>
     <nav class="doc-nav">
       <a href="modeling_coding_strategy.html">← モデリング実装時のコーディング戦略</a>

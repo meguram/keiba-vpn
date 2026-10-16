@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>血統×馬場傾向（track_bias_pedigree）パイプライン</h1>
-      <p class="meta">ソース: <code>docs/html/modeling/track_bias_pedigree_pipeline.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/track_bias_pedigree_pipeline.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
 <h1 id="track_bias_pedigree">血統×コースバイアス（track_bias_pedigree）パイプライン</h1>
@@ -233,17 +233,17 @@ document.addEventListener("DOMContentLoaded", function() {
 </tr>
 <tr>
 <td>母表</td>
-<td><code>src/pipeline/layer_a_dataset.py</code> → <code>data/modeling/layer_a_train.parquet</code></td>
+<td><code>src/pipeline/models/layer_a_dataset.py</code> → <code>data/modeling/layer_a_train.parquet</code></td>
 <td>ローカル</td>
 </tr>
 </tbody>
 </table>
 <ul>
 <li><strong>学習・チューニング・評価</strong>はすべて上記の Parquet ファイルを読むだけで完結します。推論時も同様に、当日以前の <code>race_result</code> と出馬表から同じ計算式で再現できます。</li>
-<li><strong>5世代血統（HTML/GCS）</strong>を使うのは <code>src/research/pedigree_similarity.py</code> など別系統であり、馬場傾向の特徴量計算には不要です。必要な場合は<strong>一度だけバッチ取得し、<code>data/local/</code> またはローカルキャッシュに保存</strong>します。以降は再取得しない方針を推奨します。</li>
+<li><strong>5世代血統（HTML/GCS）</strong>を使うのは <code>src/research/pedigree/pedigree_similarity.py</code> など別系統であり、馬場傾向の特徴量計算には不要です。必要な場合は<strong>一度だけバッチ取得し、<code>data/local/</code> またはローカルキャッシュに保存</strong>します。以降は再取得しない方針を推奨します。</li>
 </ul>
 <h2 id="vs">重みチューニング（当日 vs 前日 + 馬場区分 + 距離帯）</h2>
-<p>加重合成のロジックは <code>src/pipeline/track_bias_pedigree.py</code> で定義されています。主なパラメータは以下の通りです。</p>
+<p>加重合成のロジックは <code>src/pipeline/features/track_bias_pedigree.py</code> で定義されています。主なパラメータは以下の通りです。</p>
 <table>
 <thead>
 <tr><th>パラメータ</th><th>既定値 / 区分</th><th>説明</th></tr>
@@ -286,9 +286,9 @@ document.addEventListener("DOMContentLoaded", function() {
 <tr><th>モジュール</th><th>役割</th></tr>
 </thead>
 <tbody>
-<tr><td><code>src/pipeline/track_bias_pedigree.py</code></td><td>特徴定義・加重ブレンド・<code>recompute_weighted_interactions</code></td></tr>
-<tr><td><code>src/research/tune_track_bias_weights.py</code></td><td>Optuna による重みチューニング</td></tr>
-<tr><td><code>src/research/evaluate_track_bias_pedigree_only.py</code></td><td>単独特徴群のベースライン評価</td></tr>
+<tr><td><code>src/pipeline/features/track_bias_pedigree.py</code></td><td>特徴定義・加重ブレンド・<code>recompute_weighted_interactions</code></td></tr>
+<tr><td><code>src/research/race/tune_track_bias_weights.py</code></td><td>Optuna による重みチューニング</td></tr>
+<tr><td><code>src/research/race/evaluate_track_bias_pedigree_only.py</code></td><td>単独特徴群のベースライン評価</td></tr>
 </tbody>
 </table>
     </article>

@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>参考資料から反映した設計メモ</h1>
-      <p class="meta">ソース: <code>docs/html/modeling/reference_insights.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/reference_insights.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
 <h1 id="_1">参考資料から反映した設計メモ</h1>
@@ -234,10 +234,10 @@ document.addEventListener("DOMContentLoaded", function() {
 <tr><th>モジュール</th><th>役割</th></tr>
 </thead>
 <tbody>
-<tr><td><code>src/pipeline/tracking_difficulty.py</code></td><td>脚質プロファイル・位置取り予測</td></tr>
-<tr><td><code>src/pipeline/pace_predictor.py</code></td><td>ラップタイム・ペース分類予測</td></tr>
-<tr><td><code>src/research/bloodline_distance.py</code></td><td>父・母父と距離適性の関係整理</td></tr>
-<tr><td><code>src/research/race_quality_model.py</code></td><td>脚質タイプ別好走率のベイズ推定</td></tr>
+<tr><td><code>src/pipeline/models/tracking_difficulty.py</code></td><td>脚質プロファイル・位置取り予測</td></tr>
+<tr><td><code>src/pipeline/models/pace_predictor.py</code></td><td>ラップタイム・ペース分類予測</td></tr>
+<tr><td><code>src/research/pedigree/bloodline_distance.py</code></td><td>父・母父と距離適性の関係整理</td></tr>
+<tr><td><code>src/research/race/race_quality_model.py</code></td><td>脚質タイプ別好走率のベイズ推定</td></tr>
 </tbody>
 </table>
 <h2 id="_5">実装戦略の補足</h2>
@@ -246,8 +246,8 @@ document.addEventListener("DOMContentLoaded", function() {
 <tr><th>ドキュメント</th><th>内容</th></tr>
 </thead>
 <tbody>
-<tr><td><code>docs/html/modeling/modeling_coding_strategy.html</code></td><td>Polars・省メモリ・コーディング規約</td></tr>
-<tr><td><code>docs/html/modeling/race_performance_rating_system.html</code></td><td>レースパフォーマンス算出システム設計</td></tr>
+<tr><td><code>docs/html/modeling/chapters/modeling_coding_strategy.html</code></td><td>Polars・省メモリ・コーディング規約</td></tr>
+<tr><td><code>docs/html/modeling/chapters/race_performance_rating_system.html</code></td><td>レースパフォーマンス算出システム設計</td></tr>
 </tbody>
 </table>
 <h2 id="_6">反映したポイント</h2>
@@ -423,7 +423,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </tbody>
 </table>
 <h2 id="13">13. 位置取りを前段モデルで予測する</h2>
-<p>既存の <code>src/pipeline/tracking_difficulty.py</code> には、脚質プロファイル・隣枠影響・頭数・コース条件から <code>position_deviation</code>（位置取りのずれ）を学習する設計があります。</p>
+<p>既存の <code>src/pipeline/models/tracking_difficulty.py</code> には、脚質プロファイル・隣枠影響・頭数・コース条件から <code>position_deviation</code>（位置取りのずれ）を学習する設計があります。</p>
 <table>
 <thead>
 <tr><th>追加特徴量</th><th>説明</th></tr>
@@ -436,7 +436,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </table>
 <p>位置取りモデルを最終確率モデルの前段に組み込む。</p>
 <h2 id="14">14. ペースを前段モデルで予測する</h2>
-<p>既存の <code>src/pipeline/pace_predictor.py</code> には、距離・馬場・頭数・前に行きたい馬の比率からラップタイムを予測する実装があります。</p>
+<p>既存の <code>src/pipeline/models/pace_predictor.py</code> には、距離・馬場・頭数・前に行きたい馬の比率からラップタイムを予測する実装があります。</p>
 <table>
 <thead>
 <tr><th>追加特徴量</th><th>説明</th></tr>
@@ -449,7 +449,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </table>
 <p>ペースシナリオを Stage3 として独立したモジュールに分ける。</p>
 <h2 id="15">15. 血統適性を当日のコースバイアスと組み合わせる</h2>
-<p>既存の <code>src/research/bloodline_distance.py</code> は父・母父と距離適性の関係を整理しており、<code>src/research/race_quality_model.py</code> は「そのレースでどの脚質タイプが好走したか」をベイズ推定で計算しています。この 2 つを組み合わせると、血統適性（静的な距離適性）とコースバイアス（当日の馬場タイプ）の相互作用として血統を扱う設計になります。</p>
+<p>既存の <code>src/research/pedigree/bloodline_distance.py</code> は父・母父と距離適性の関係を整理しており、<code>src/research/race/race_quality_model.py</code> は「そのレースでどの脚質タイプが好走したか」をベイズ推定で計算しています。この 2 つを組み合わせると、血統適性（静的な距離適性）とコースバイアス（当日の馬場タイプ）の相互作用として血統を扱う設計になります。</p>
 <table>
 <thead>
 <tr><th>追加した考え方</th><th>説明</th></tr>

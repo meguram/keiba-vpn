@@ -213,7 +213,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>GCS コスト分析レポート</h1>
-      <p class="meta">ソース: <code>docs/html/cost.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/design/cost.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="html-body">
 <h1 id="gcs">Google Cloud Storage（GCS）コスト分析レポート</h1>
@@ -1650,7 +1650,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </table>
 <p>保存先: <code>data/cache/results/{namespace}/{key}.json</code></p>
 <h3 id="69-parquet-new">6.9 研究モジュールのローカルParquet一括読み込み — 新規</h3>
-<p><strong>対象ファイル</strong>: <code>src/scraper/local_tables.py</code>（拡張）、<code>src/research/bloodline_distance.py</code>、<code>src/research/bloodline_vector.py</code>、<code>src/research/course_bloodline.py</code></p>
+<p><strong>対象ファイル</strong>: <code>src/scraper/local_tables.py</code>（拡張）、<code>src/research/pedigree/bloodline_distance.py</code>、<code>src/research/pedigree/bloodline_vector.py</code>、<code>src/research/race/course_bloodline.py</code></p>
 <p>研究モジュールの <code>load_from_gcs()</code> を <code>_load_from_local_parquet()</code> 優先に変更しました。1回のDataFrame読み込みで全レースデータを取得でき、個別に <code>storage.load()</code> を何万回も呼び出す処理を回避できます。</p>
 <table>
 <thead>

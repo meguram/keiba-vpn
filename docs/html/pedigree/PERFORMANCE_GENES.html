@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>競走馬パフォーマンス遺伝子ナレッジベース</h1>
-      <p class="meta">ソース: <code>docs/html/PERFORMANCE_GENES.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/pedigree/PERFORMANCE_GENES.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
 <h1 id="_1">競走馬パフォーマンス遺伝子ナレッジベース</h1>
@@ -265,7 +265,7 @@ document.addEventListener("DOMContentLoaded", function() {
   </tbody>
 </table>
 <h2 id="python">Pythonモジュール</h2>
-<h3 id="srcresearchmyostatinpy"><code>src/research/myostatin.py</code></h3>
+<h3 id="srcresearchmyostatinpy"><code>src/research/genes/myostatin.py</code></h3>
 <p>ミオスタチン遺伝子専用の解析モジュール。</p>
 <pre><code class="language-python">from research.genes.myostatin import MyostatinLookup
 
@@ -283,7 +283,7 @@ probs = mstn.predict_offspring(&quot;ディープインパクト&quot;, &quot;�
 affinity = mstn.distance_affinity(&quot;ディープインパクト&quot;, &quot;キングカメハメハ&quot;, 2400)
 # → 0.8547（高適合）
 </code></pre>
-<h3 id="srcresearchperformance_genespy"><code>src/research/performance_genes.py</code></h3>
+<h3 id="srcresearchperformance_genespy"><code>src/research/genes/performance_genes.py</code></h3>
 <p>MSTN以外のパフォーマンス遺伝子解析モジュール。</p>
 <pre><code class="language-python">from research.genes.performance_genes import PerformanceGenes
 
@@ -351,7 +351,7 @@ python3 -m src.research.genes.performance_genes combined \
 python3 -m src.research.genes.performance_genes extreme --mstn TT --pdk4 AA
 </code></pre>
 <h2 id="_6">パイプラインへの組み込み</h2>
-<h3 id="srcpipelinefeature_builderpy"><code>src/pipeline/feature_builder.py</code></h3>
+<h3 id="srcpipelinefeature_builderpy"><code>src/pipeline/features/feature_builder.py</code></h3>
 <p>特徴量生成時に、遺伝子関連の特徴量が自動で追加されます。</p>
 <pre><code class="language-python">from research.genes.myostatin import get_lookup as get_mstn
 from research.genes.performance_genes import get_lookup as get_perf_genes

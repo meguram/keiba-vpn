@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>モデリング実装時のコーディング戦略</h1>
-      <p class="meta">ソース: <code>docs/html/modeling/modeling_coding_strategy.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/modeling_coding_strategy.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
 <h1 id="_1">モデリング実装時のコーディング戦略</h1>
@@ -670,7 +670,7 @@ joined = base.join(
     <tr><td>OOF 予測のサンプル</td><td>Parquet</td><td>ファイル容量に応じて保存（任意）</td></tr>
   </tbody>
 </table>
-<p>既存コードでは <code>src/pipeline/trainer.py</code> / <code>src/pipeline/ensemble_trainer.py</code> / <code>src/pipeline/pace_predictor.py</code> 等が MLflow 連携を持ちます。<strong>新しい runner を追加するときも同じパターンに合わせる</strong>こと。</p>
+<p>既存コードでは <code>src/pipeline/models/trainer.py</code> / <code>src/pipeline/models/ensemble_trainer.py</code> / <code>src/pipeline/models/pace_predictor.py</code> 等が MLflow 連携を持ちます。<strong>新しい runner を追加するときも同じパターンに合わせる</strong>こと。</p>
 <h2 id="_23">再現性・比較可能性</h2>
 <h2 id="_24">必ず保存するもの</h2>
 <table>

@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>ハイパーパラメータ・モデル選定のチューニング工程</h1>
-      <p class="meta">ソース: <code>docs/html/modeling/hyperparameter_tuning_workflow.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/hyperparameter_tuning_workflow.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
 <h1 id="_1">モデルの設定値（ハイパーパラメータ）チューニングとモデル選定の工程</h1>
@@ -381,7 +381,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <h2 id="10-pipeline">10. 現行実装（<code>pipeline/</code>）とのギャップ</h2>
 <p>ドキュメント（<code>dataset_split_manifest.json</code>・本書・<code>train_valid_test_split_strategy.html</code>）と、リポジトリ内の学習コードは <strong>2026 時点で完全には一致していません</strong>。</p>
 <p>モデル選定の手順をコードに落とすときは、次の差分を前提にマイルストーンを設定してください。</p>
-<h3 id="101-srcpipelinetrainerpymodeltrainer">10.1 <code>src/pipeline/trainer.py</code>（<code>ModelTrainer</code>）</h3>
+<h3 id="101-srcpipelinetrainerpymodeltrainer">10.1 <code>src/pipeline/models/trainer.py</code>（<code>ModelTrainer</code>）</h3>
 <table>
 <thead>
 <tr>
@@ -414,7 +414,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </tbody>
 </table>
 <p><strong>次の実装アクション</strong>: <code>race_date</code>（または <code>race_id</code> 先頭年）でソートし、<code>dataset_split_manifest.json</code> を読んで <strong>評価用 race_id の集合</strong>でマスク分割するモジュールを <code>ModelTrainer</code> の前段に挿入する。LambdaRank 用には <code>relevance = f(finish_position)</code>（着順から計算した関連度）を別列で渡すオプションを追加する。</p>
-<h3 id="102-srcpipelineensemble_trainerpyensembletrainer">10.2 <code>src/pipeline/ensemble_trainer.py</code>（<code>EnsembleTrainer</code>）</h3>
+<h3 id="102-srcpipelineensemble_trainerpyensembletrainer">10.2 <code>src/pipeline/models/ensemble_trainer.py</code>（<code>EnsembleTrainer</code>）</h3>
 <table>
 <thead>
 <tr>
@@ -437,12 +437,12 @@ document.addEventListener("DOMContentLoaded", function() {
 </tbody>
 </table>
 <p><strong>次の実装アクション</strong>: <code>GroupKFold</code> を維持しつつ、fold の境界を <strong><code>race_date</code> + purge_window_days</strong> で切る <code>PurgedGroupTimeSeriesSplit</code> 相当のイテレータに差し替える。また、メタ学習用に <strong>2024 行を学習から除外した OOF</strong> を別パスで生成するオプションを検討する。</p>
-<h3 id="103-srcpipelinefeature_storepy">10.3 <code>src/pipeline/feature_store.py</code></h3>
+<h3 id="103-srcpipelinefeature_storepy">10.3 <code>src/pipeline/features/feature_store.py</code></h3>
 <ul>
 <li>列指向・スナップショット・<code>_registry.json</code>（特徴量レジストリ）は <strong><code>modeling_coding_strategy.html</code> の方針と整合しやすい</strong>。</li>
 <li>学習行列の <strong>行順・重複 race の保証方法</strong>については、<code>build_training_matrix</code> の呼び出し規約で明示する必要がある（trainer の分割処理と連動させる）。</li>
 </ul>
-<h3 id="104-srcresearchevaluate_race_performance_signalpy">10.4 <code>src/research/evaluate_race_performance_signal.py</code> 等（ベンチ・調査用スクリプト）</h3>
+<h3 id="104-srcresearchevaluate_race_performance_signalpy">10.4 <code>src/research/race/evaluate_race_performance_signal.py</code> 等（ベンチ・調査用スクリプト）</h3>
 <ul>
 <li>これらのスクリプトは <strong>独自のデータ結合・特徴量定義</strong>を持っており、<strong>本番の <code>ModelTrainer</code> と同じ split 設計とは限らない</strong>。</li>
 <li>指標の比較は「シグナル検証」としてログに残し、<strong>本番の選定スコアは manifest 準拠の runner だけ</strong>に集約するのが望ましい。</li>

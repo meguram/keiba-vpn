@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>特徴量エンジニアリング — 探索メモ（新要素の発見）</h1>
-      <p class="meta">ソース: <code>docs/html/modeling/feature_engineering_exploration.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/feature_engineering_exploration.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
 <h1 id="_1">特徴量の作成・加工（予測に使う数値を整える工程） — 探索メモ（新要素の発見）</h1>
@@ -215,7 +215,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <li><strong>LayerA（発走10分前の時点で観測可能な情報）</strong> を優先する</li>
 <li><strong>結果ラベルからの情報漏えい（リーク）</strong>にならないものだけを対象とする（オッズ由来は LayerB として別管理）</li>
 </ul>
-<p>実装時は <code>src/pipeline/feature_store.py</code> の列登録と <code>data/features/_registry.json</code> の方針に従い、<strong>OOF + purged CV</strong>（データリークを防いだ交差検証）でのみ寄与を測定します。</p>
+<p>実装時は <code>src/pipeline/features/feature_store.py</code> の列登録と <code>data/features/_registry.json</code> の方針に従い、<strong>OOF + purged CV</strong>（データリークを防いだ交差検証）でのみ寄与を測定します。</p>
 <p>HTML 要約（ナビ用）: <code>docs/html/feature_engineering/index.html</code></p>
 <hr />
 <h2 id="1">1. レース内「能力の分布」を数値化する（出走メンバー依存の特徴）</h2>

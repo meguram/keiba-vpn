@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>適性3D × 5世代血統（父系／母系経路の扱い）</h1>
-      <p class="meta">ソース: <code>docs/html/NOTE_APTITUDE_5GEN.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/pedigree/NOTE_APTITUDE_5GEN.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
 <h1 id="3d-5">適性3D × 5世代血統（父系／母系経路の扱い）</h1>
@@ -259,7 +259,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <h3 id="_4">実装上の位置づけ（重要）</h3>
 <ul>
 <li>以下のアルゴリズムは、<strong>著者が作成したナレッジJSON（主観スコア）への重み付けルール</strong>です。遺伝子を直接測定したものではありません。</li>
-<li><strong>再現性と比較のため</strong>、係数は <code>src/research/note_aptitude_5gen.py</code> にまとめており、実績データと照らし合わせながら随時調整します。</li>
+<li><strong>再現性と比較のため</strong>、係数は <code>src/research/pedigree/note_aptitude_5gen.py</code> にまとめており、実績データと照らし合わせながら随時調整します。</li>
 </ul>
 <h2 id="_5">アルゴリズムの概要</h2>
 <ol>
@@ -277,11 +277,11 @@ document.addEventListener("DOMContentLoaded", function() {
   </thead>
   <tbody>
     <tr>
-      <td><code>src/research/note_aptitude_5gen.py</code></td>
+      <td><code>src/research/pedigree/note_aptitude_5gen.py</code></td>
       <td>5代血統ブレンドの本体・係数表</td>
     </tr>
     <tr>
-      <td><code>src/research/note_aptitude_race_map.py</code></td>
+      <td><code>src/research/pedigree/note_aptitude_race_map.py</code></td>
       <td>レース全頭の3次元適性マップ（<code>blend_mode</code> 対応）</td>
     </tr>
     <tr>
@@ -319,7 +319,7 @@ document.addEventListener("DOMContentLoaded", function() {
       <td>—</td>
     </tr>
     <tr>
-      <td><code>src/research/race_pedigree_5gen_prefetch.py</code></td>
+      <td><code>src/research/pedigree/race_pedigree_5gen_prefetch.py</code></td>
       <td>実装ファイル</td>
       <td>キュー優先度設定: <code>src/scraper/job_queue.py</code></td>
     </tr>

@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>5 世代血統表 ×「5 世代目の種牡馬」の 5 世代マージによる深さ 10 相当の血統設計</h1>
-      <p class="meta">ソース: <code>docs/html/modeling/horse_pedigree_10gen_merge_design.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/horse_pedigree_10gen_merge_design.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
 <h1 id="5-5-5-10">5 世代血統表 ×「5 世代目の種牡馬」の 5 世代マージによる 10 代前まで対応の血統設計</h1>
@@ -337,8 +337,8 @@ document.addEventListener("DOMContentLoaded", function() {
 <tr><td>5 世代パース</td><td><code>research.pedigree.pedigree_similarity.parse_blood_table_5gen</code></td></tr>
 <tr><td>牡スロット判定</td><td><code>is_male_pedigree_slot</code>, <code>MALE_PEDIGREE_SLOTS_5GEN</code></td></tr>
 <tr><td>ローカル JSON の場所</td><td><code>data/local/horse_pedigree_5gen/{4桁}/{horse_id}.json</code>、ストアは <code>research.pedigree.pedigree_local_store</code></td></tr>
-<tr><td>馬単位の出力</td><td><code>src/pipeline/build_horse_entity_store.py</code>, <code>src/pipeline/horse_entity_layout.py</code></td></tr>
-<tr><td>パス変換・定数の定義場所</td><td><code>src/pipeline/horse_pedigree_expand.py</code></td></tr>
+<tr><td>馬単位の出力</td><td><code>src/pipeline/build_horse_entity_store.py</code>, <code>src/pipeline/features/horse_entity_layout.py</code></td></tr>
+<tr><td>パス変換・定数の定義場所</td><td><code>src/pipeline/features/horse_pedigree_expand.py</code></td></tr>
 </tbody>
 </table>
     </article>

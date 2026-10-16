@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <header class="hero">
       <div class="eyebrow">DOCUMENTATION</div>
       <h1>血統適性ナレッジ（note まとめ → 特徴量 → モデル）</h1>
-      <p class="meta">ソース: <code>docs/html/PEDIGREE_NOTE_APTITUDE.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+      <p class="meta">ソース: <code>docs/html/pedigree/PEDIGREE_NOTE_APTITUDE.html</code> · 生成: 2026-05-20 06:01 UTC</p>
     </header>
     <article class="md-body">
 <h1 id="note">血統適性ナレッジ（note まとめ → 特徴量 → モデル）</h1>
@@ -230,7 +230,7 @@ document.addEventListener("DOMContentLoaded", function() {
    各馬のスコアは、<strong>父 1.0 + 母父 0.55 + 牝系ライン 0.35</strong> の加重平均で計算します。牝系ラインが特定できた場合にのみ第3項が有効になります。特定できない場合は父+母父のみです。</p>
    <ul>
      <li>パイプラインでは <code>entry</code> / <code>profile</code> に <code>broodmare_line</code>（JSONの牝系キーまたは <code>aliases</code> 経由）があれば自動で適用されます。</li>
-     <li>将来的には5代血統の祖先名ヒットでベクトルを積み上げる方式や、<code>src/research/bloodline_vector.py</code> の系統埋め込みと組み合わせる方法も検討しています。</li>
+     <li>将来的には5代血統の祖先名ヒットでベクトルを積み上げる方式や、<code>src/research/pedigree/bloodline_vector.py</code> の系統埋め込みと組み合わせる方法も検討しています。</li>
    </ul>
 </li>
 <li>
