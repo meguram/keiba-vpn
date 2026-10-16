@@ -69,7 +69,7 @@
 <tr><td>17</td><td><code>tp-17-imputation</code></td><td>欠損値のモデル補完・外れ値の変換（NN と LightGBM）</td><td class="ok">完了（不採用）</td><td>§14</td></tr>
 <tr><td>18</td><td><code>tp-18-hierarchical-stacking</code></td><td>特徴量グループごとの階層スタッキング</td><td class="ok">完了（不採用）</td><td>§15</td></tr>
 <tr><td>19</td><td><code>tp-19-training-laps</code></td><td>追い切りラップの特徴量と調教師別のパターン採点</td><td class="ok">完了（TL_A を採用）</td><td>§17</td></tr>
-<tr><td>16b</td><td><code>tp-16b-feature-bakeoff</code></td><td>後日談の変種（窓・減衰・複勝率）と、訂正後のクッション値・含水率の再評価</td><td>notebook あり（ホストで実行待ち）</td><td>未記録</td></tr>
+<tr><td>16b</td><td><code>tp-16b-feature-bakeoff</code></td><td>後日談の変種（窓・減衰・複勝率）と、訂正後のクッション値・含水率の再評価</td><td>完了（不採用）</td><td>§27</td></tr>
 <tr><td>19b</td><td><code>tp-19b-training-laps</code></td><td>追い切り特徴の拡張（調教師内の相対化・絞り込み）</td><td>完了</td><td>§26</td></tr>
 <tr><td>20</td><td><code>tp-20-odds-model</code></td><td>オッズ予測モデルのモデリング・チューニング（特徴量・目的変数・損失・新年重み・パラメータ探索・CatBoost）</td><td>完了</td><td>§25</td></tr>
 <tr><td>21</td><td><code>tp-21-smartrc-ten1f</code>（.py）</td><td>SmartRC のテン1F 特徴量</td><td class="ok">完了</td><td>§16</td></tr>
@@ -786,7 +786,26 @@
   <li>採用は <b>TL_A</b> のまま（縮小版 TL_core は運用の制約用の代替）。v3 の特徴量セットに TL_A を含める。</li>
 </ul>
 
-<h2>27. 以降の節</h2>
+<h2>27. tp-16b 後日談の変種とクッション値・含水率（訂正後データ）</h2>
+<p class="muted">notebook: <code>tp-16b-feature-bakeoff.ipynb</code>。tp-16 で最も有望だった後日談（AF: 直近の走の相手が、その後の出走でどれだけ走ったか）の窓・減衰・指標の変種と、4 コーナー含水率の入れ替わりを訂正したクッション値・含水率（CU）を再評価した。基準 win 0.21552、valid 2022〜2024 × 2 seed、test 2025 は使っていない。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>群</th><th>Δwin</th><th>95% 上限</th><th>Δtop2</th><th>Δtop3</th><th>採否</th></tr>
+<tr><td>AF_l2（直近 2 走）</td><td>−0.00011</td><td>+0.00007</td><td>−0.00021</td><td>−0.00010</td><td>不採用</td></tr>
+<tr><td>AF_l3（直近 3 走。複勝率の指標つき）</td><td>−0.00015</td><td>+0.00002</td><td>−0.00027</td><td>−0.00013</td><td>不採用</td></tr>
+<tr><td>AF_l5（直近 5 走）</td><td>−0.00015</td><td>+0.00001</td><td>−0.00015</td><td>−0.00020</td><td>不採用</td></tr>
+<tr><td>AF_l5_d07（5 走、1 走ごとに 0.7 倍）</td><td>−0.00007</td><td>+0.00009</td><td>−0.00024</td><td>−0.00020</td><td>不採用</td></tr>
+<tr><td>CU_fixed（クッション値・含水率 8 列）</td><td>+0.00005</td><td>+0.00018</td><td>+0.00011</td><td>+0.00015</td><td>不採用</td></tr>
+<tr><td>CU_goal（4 コーナー系を除く 6 列）</td><td>−0.00003</td><td>+0.00010</td><td>+0.00001</td><td>+0.00042</td><td>不採用</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>採用基準を満たした群は無い。</b>後日談は、窓を 3〜5 走にすると勝率・連対・複勝の 3 つとも −0.0001〜−0.0003 で改善方向に揃い、上限は 0 にほぼ届く（+0.00001〜+0.00002）。ただし効果は最小効果量（0.0002）に届かない。減衰は効かない。</li>
+  <li>クッション値・含水率は、訂正後のデータでも効かない（tp-16 と同じ結論）。当日の馬場状態の情報は、既存の馬場傾向・レース条件の特徴量と重なる。</li>
+  <li>後日談は将来の候補として残す（データが増えて、相手の次走の観測が多くなれば上限が負になる可能性）。v3 の特徴量セットには入れない。</li>
+</ul>
+
+<h2>28. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
