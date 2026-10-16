@@ -192,13 +192,11 @@ def fit_predict(kind: str, X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, 
 
 # ── C1: レース内の相対化
 def add_race_relative(df: pd.DataFrame, cols: Sequence[str], suffix: tuple[str, str, str] = ("_rz", "_rrank", "_rgap")) -> pd.DataFrame:
-    """各列について、レース内の z、順位（降順 1 位 = 最大）、最大との差を足す（as-of の特徴量どうしの比較だけで、結果は使わない）。"""
-    g = df.groupby("race_id", sort=False)
-    out = {}
-    for c in cols:
-        x = df[c].astype("float64")
-        mu, sd = g[c].transform("mean"), g[c].transform("std")
-        out[c + suffix[0]] = ((x - mu) / sd.replace(0, np.nan)).astype("float32")
-        out[c + suffix[1]] = g[c].rank(ascending=False, method="average").astype("float32")
-        out[c + suffix[2]] = (x - g[c].transform("max")).astype("float32")
-    return pd.DataFrame(out, index=df.index)
+    """各列について、レース内の z、順位（降順 1 位 = 最大）、最大との差を足す（as-of の特徴量どうしの比較だけで、結果は使わない）。
+    計算は推論時と共通の ``serving_stage_rel.race_relative``。"""
+    from src.pipeline.features.serving_stage_rel import SUFFIX, race_relative
+
+    out = race_relative(df, cols)
+    if tuple(suffix) != SUFFIX:
+        out = out.rename(columns={c + a: c + b for c in cols for a, b in zip(SUFFIX, suffix)})
+    return out

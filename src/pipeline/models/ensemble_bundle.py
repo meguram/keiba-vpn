@@ -67,7 +67,10 @@ class EnsembleBundle:
         Xm = X[cols].copy()
         for c in cols:
             if c in self.cat_levels:
-                Xm[c] = pd.Categorical(Xm[c].astype(str).where(Xm[c].notna()), categories=self.cat_levels[c])
+                s = Xm[c].astype(str).where(Xm[c].notna())
+                if "(なし)" in self.cat_levels[c]:       # 学習時（ablation.load_table）は欠損を「(なし)」にしている
+                    s = s.fillna("(なし)")
+                Xm[c] = pd.Categorical(s, categories=self.cat_levels[c])
         return Xm
 
     def predict_member(self, m: MemberSpec, X: pd.DataFrame, race: np.ndarray) -> dict[str, np.ndarray]:

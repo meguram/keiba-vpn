@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.pipeline.features.serving_stage_rel import race_relative
 from src.pipeline.models import ablation as ab
 from src.pipeline.models import win_models as wm
 from src.pipeline.models.time_split import yearly_expanding_folds
@@ -33,13 +34,7 @@ def load_dataset(work: Path) -> dict:
     # C2: 相対化をさらに広い列に（展開・ペース・レーティング系など。馬の能力と、同じレースの相手との位置関係を明示する）
     fam = json.loads((work / "features/feature_families.json").read_text(encoding="utf-8"))
     rel2_src = [c for f in ("A", "C", "F2", "F3", "G", "H") for c in fam[f] if c in df.columns and c not in REL_BASE and str(df[c].dtype) != "category" and not c.startswith(("f2_n_", "pc_n_", "sr_n"))]
-    g = df.groupby("race_id", sort=False)
-    rel2 = {}
-    for c in rel2_src:
-        x = df[c].astype("float64")
-        rel2[c + "_rz"] = ((x - g[c].transform("mean")) / g[c].transform("std").replace(0, float("nan"))).astype("float32")
-        rel2[c + "_rrank"] = g[c].rank(ascending=False, method="average").astype("float32")
-    rel2 = pd.DataFrame(rel2, index=df.index)
+    rel2 = race_relative(df, rel2_src, ("_rz", "_rrank"))
     for c in rel2.columns:
         df[c] = rel2[c].to_numpy()
     feats = {"base": base, "base+S": base + STAGE_COLS, "base+S+C1": base + STAGE_COLS + list(rel.columns),

@@ -262,6 +262,7 @@ def _prior_win_rate_by_id_surface(
             "surface_group",
             "finish_position",
         ]
+        + (["_pending"] if "_pending" in work.columns else [])
     ].copy()
     w["_pid"] = w[id_col].map(_norm_pedigree_name)
     w = w.sort_values(
@@ -274,6 +275,10 @@ def _prior_win_rate_by_id_surface(
     cs = g["_win"].cumsum()
     prior_wins = cs - w["_win"]
     prior_races = g.cumcount()
+    if "_pending" in w.columns:
+        # 推論時の未確定行（結果なし）は件数に数えない。_pending 列が無ければ学習時と同じ挙動。
+        w["_cnt"] = (~w["_pending"].astype(bool)).astype(np.float64)
+        prior_races = g["_cnt"].cumsum() - w["_cnt"]
     pr = prior_races.astype(float).replace(0, np.nan).to_numpy()
     pw = prior_wins.to_numpy()
     rate = np.where(np.isfinite(pr) & (pr > 0), pw / pr, np.nan)
@@ -293,6 +298,8 @@ def build_track_bias_pedigree_features(
     cond_multipliers: dict[str, float] | None = None,
     dist_multipliers: dict[str, float] | None = None,
     include_shutuba_entries_without_result: bool = False,
+    placeholder_unfinished_races: bool = False,
+    placeholder_win_3f: float = 0.0,
 ) -> pd.DataFrame:
     """
     race_id + horse_number 単位の特徴1表。
@@ -303,6 +310,12 @@ def build_track_bias_pedigree_features(
       True のとき出馬表を左主軸にマージし、race_result にまだ無い馬（新馬戦のレース前予測など）も行を持つ。
       馬場傾向の「当日累積」には、未確定レース用のプレースホルダ（勝者3F=0・SDP 計算では当行の値は使わない）を 1 行足す。
       前日平均（日次集計）は実勝者のみ（プレースホルダ除外）で計算する。
+
+    placeholder_unfinished_races:
+      True のとき、race_result に勝者の行が無いレース（推論対象。finish_position が空の行を race_result_df に含めて渡す）にも
+      プレースホルダ行を足して傾向を付与する。placeholder_win_3f を NaN にすると、未確定レースが同日の後のレースの
+      「当日直前傾向」に混ざらない（既定 0.0 は include_shutuba_entries_without_result と同じ従来挙動）。
+      race_result_df に ``_pending``（bool）列があれば、その行は父・母父の累計件数に数えない。
 
     same_day_weight / prev_day_weight は正規化して用い、
     track_bias_winner_3f_weighted = w_s×当日該当レース前 + w_p×前日（当日分が無い先頭レースは前日のみ）。
@@ -327,6 +340,7 @@ def build_track_bias_pedigree_features(
             "last_3f",
             "track_condition",
             "distance",
+            "_pending",
         )
         if c in race_result_df.columns
     ]
@@ -378,11 +392,11 @@ def build_track_bias_pedigree_features(
     g_fine = ["_d", "venue_code", "surface_group", "cond_bucket", "dist_band"]
     g_coarse = ["_d", "venue_code", "surface_group"]
 
-    if w_win.empty and not include_shutuba_entries_without_result:
+    if w_win.empty and not (include_shutuba_entries_without_result or placeholder_unfinished_races):
         return pd.DataFrame()
 
     w_ext = w_win.copy()
-    if include_shutuba_entries_without_result and not sb.empty:
+    if (include_shutuba_entries_without_result and not sb.empty) or placeholder_unfinished_races:
         have = set(w_win["race_id"].astype(str).unique()) if not w_win.empty else set()
         need = set(rr["race_id"].astype(str).unique()) - have
         for rid in need:
@@ -394,7 +408,7 @@ def build_track_bias_pedigree_features(
             if sub.empty:
                 continue
             row = sub.iloc[:1].copy()
-            row["win_3f"] = 0.0
+            row["win_3f"] = float(placeholder_win_3f)
             w_ext = pd.concat([w_ext, row], ignore_index=True)
 
     if w_ext.empty:
