@@ -2577,7 +2577,8 @@ class TrainingParser:
                     current_comment = first_text[:200]
                     continue
 
-                date_match = re.match(r"(\d{4})/(\d{2})/(\d{2})\((.)\)", first_text)
+                # 旧: 2026/10/14(水)  新（時刻つき）: 2026/10/14 06:21:00(水)。曜日が無い表記も読む
+                date_match = re.match(r"(\d{4})/(\d{1,2})/(\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::\d{2})?)?(?:\((.)\))?", first_text)
                 if not date_match:
                     continue
 
@@ -2616,11 +2617,17 @@ class TrainingParser:
         if len(tds) < 8:
             return None
 
-        year, month, day, dow = (
-            date_match.group(1), date_match.group(2),
-            date_match.group(3), date_match.group(4),
-        )
-        date_str = f"{year}-{month}-{day}"
+        year, month, day = date_match.group(1), int(date_match.group(2)), int(date_match.group(3))
+        date_str = f"{year}-{month:02d}-{day:02d}"
+        dow = date_match.group(6)
+        if not dow:
+            try:
+                import datetime as _dt
+                dow = "月火水木金土日"[_dt.date(int(year), month, day).weekday()]
+            except ValueError:
+                dow = ""
+        time_of_day = f"{int(date_match.group(4)):02d}:{date_match.group(5)}" if date_match.group(4) else ""
+        partner_notes = " / ".join(p.get_text(strip=True) for p in tds[4].find_all("p", class_="TrainingHeisou") if p.get_text(strip=True)) if len(tds) > 4 else ""
 
         course = safe_text(tds[1])
         track_cond = safe_text(tds[2])
@@ -2647,6 +2654,8 @@ class TrainingParser:
             "evaluation": eval_text,
             "rank": rank,
             "comment": comment,
+            **({"time_of_day": time_of_day} if time_of_day else {}),
+            **({"partner_notes": partner_notes} if partner_notes else {}),
         }
 
     @staticmethod

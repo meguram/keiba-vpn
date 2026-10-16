@@ -1700,6 +1700,12 @@
     },
     "comment": {
      "type": "str"
+    },
+    "time_of_day": {
+     "type": "str"
+    },
+    "partner_notes": {
+     "type": "str"
     }
    },
    "entry_list_key": "entries",
