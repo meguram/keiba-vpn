@@ -157,7 +157,7 @@ def softmax_objective(race_ids: np.ndarray, y_win: np.ndarray):
 
 
 def fit_predict(kind: str, X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, X_va: pd.DataFrame, race_va: np.ndarray, threads: int,
-                seed: int = 0, n_rounds: int = N_ROUNDS, params: dict | None = None, weight: np.ndarray | None = None) -> dict:
+                seed: int = 0, n_rounds: int = N_ROUNDS, params: dict | None = None, weight: np.ndarray | None = None, boosters_out: dict | None = None) -> dict:
     """kind: 'binary'（win/top2/top3 を別々に）, 'softmax'（win のみ）, 'lambdarank', 'xendcg'。
     y_tr: {'win':..., 'top2':..., 'top3':..., 'finish':...}。戻り値: {'win': 検証のスコア/確率, ...}。"""
     import lightgbm as lgb
@@ -168,11 +168,16 @@ def fit_predict(kind: str, X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, 
     if kind == "binary":
         for tgt in ("win", "top2", "top3"):
             ds = lgb.Dataset(X_tr, label=y_tr[tgt], weight=weight, categorical_feature=cats or "auto")
-            out[tgt] = lgb.train(dict(p, objective="binary"), ds, num_boost_round=n_rounds).predict(X_va, raw_score=False)
+            b = lgb.train(dict(p, objective="binary"), ds, num_boost_round=n_rounds)
+            if boosters_out is not None:
+                boosters_out[tgt] = b
+            out[tgt] = b.predict(X_va, raw_score=False)
     elif kind == "softmax":
         ds = lgb.Dataset(X_tr, label=y_tr["win"], categorical_feature=cats or "auto")
         # LightGBM 4 系: カスタム目的関数は params["objective"] に関数として渡す
         b = lgb.train(dict(p, objective=softmax_objective(race_tr, np.asarray(y_tr["win"], dtype="float64"))), ds, num_boost_round=n_rounds)
+        if boosters_out is not None:
+            boosters_out["win"] = b
         out["win_score"] = b.predict(X_va, raw_score=True)
     elif kind in ("lambdarank", "xendcg"):
         rel = np.clip(4 - np.asarray(y_tr["finish"]), 0, None).astype(int)   # 1 着 3、2 着 2、3 着 1
