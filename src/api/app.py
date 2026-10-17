@@ -2672,6 +2672,16 @@ async def get_scraped_dates(
     return JSONResponse(result, headers=_NO_STORE_HEADERS)
 
 
+def merge_db_and_list_races(db_races: list[dict], list_races: list[dict], date: str) -> list[dict]:
+    """DB に開催があれば DB を正とする（race_lists は日付キーと中身がずれていることがある）。
+    ただし DB の取り込みが途中だと欠けるので、race_lists 側の同じ日付の行で DB に無いレースは足す。"""
+    if not db_races:
+        return list_races
+    have = {r["race_id"] for r in db_races}
+    extra = [r for r in list_races if r["race_id"] not in have and str(r.get("date") or "") == date]
+    return db_races + extra
+
+
 @app.get("/api/race-list/{date}", response_class=JSONResponse)
 async def get_race_list_for_date(date: str, with_result_status: bool = True):
     """指定日付のレース一覧を会場別に返す（結果データ有無オプション付き）。"""
@@ -2738,9 +2748,7 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
         except Exception:
             pass
 
-        # race_lists の日付キーと中身がずれていることがある → DB に開催があれば DB を正とする
-        if db_races:
-            jra = db_races
+        jra = merge_db_and_list_races(db_races, jra, date)
 
         if not jra:
             return {"date": date, "venues": [], "races": []}
