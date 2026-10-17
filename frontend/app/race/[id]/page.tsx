@@ -8,6 +8,8 @@ import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { featureEnabled } from "@/lib/features";
 import { BetRecommend } from "@/components/BetRecommend";
 import { RaceNav } from "@/components/RaceNav";
+import { useNarrow } from "@/components/RaceStrip";
+import { raceExists } from "@/lib/raceExists";
 
 const SHOW_MEGU = featureEnabled("megu-index");
 const SHOW_TRACKING = featureEnabled("tracking-difficulty");
@@ -233,7 +235,7 @@ const TH: React.CSSProperties = {
 };
 const TD: React.CSSProperties = {
   padding: "10px 12px", borderBottom: "1px solid rgba(36,48,73,0.5)",
-  textAlign: "center", verticalAlign: "middle",
+  textAlign: "center", verticalAlign: "middle", whiteSpace: "nowrap",
 };
 
 /* ── めぐ指数（モック） ── */
@@ -281,17 +283,20 @@ export default function RaceDetailPage() {
   const [tdData, setTdData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [notFound, setNotFound] = useState(false);
   const [navDate, setNavDate] = useState("");
   const [predicting, setPredicting] = useState(false);
   const [meguById, setMeguById] = useState<Record<string, MeguHorseData>>({});
   const [meguByNumber, setMeguByNumber] = useState<Record<string, MeguHorseData>>({});
   const [meguSource, setMeguSource] = useState<"db" | "mock">("mock");
   const { isMember } = useAuthStatus();
+  const narrow = useNarrow();
 
   const loadRace = useCallback(async () => {
     if (!raceId) return;
     setLoading(true);
     setLoadError("");
+    setNotFound(false);
     setPredData(null);
     setTdData(null);
     if (USE_MOCK) {
@@ -306,8 +311,10 @@ export default function RaceDetailPage() {
         fetch(`/api/race/${raceId}`),
         SHOW_TRACKING ? fetch(`/api/race/${raceId}/tracking-difficulty`) : Promise.reject(new Error("disabled")),
       ]);
-      if (rRes.status !== "fulfilled" || !rRes.value.ok) throw new Error("レースデータの取得に失敗しました");
+      if (rRes.status === "fulfilled" && rRes.value.status === 404) { setNotFound(true); return; }
+      if (rRes.status !== "fulfilled" || !rRes.value.ok) throw new Error("レースデータの取得に失敗しました。通信状況を確認して、もう一度お試しください。");
       const rd: RaceData = await rRes.value.json();
+      if (!raceExists(rd)) { setNotFound(true); return; }
       setRaceData(rd);
       if (tdRes.status === "fulfilled" && tdRes.value.ok) {
         const td = await tdRes.value.json();
@@ -407,12 +414,29 @@ export default function RaceDetailPage() {
     );
   }
 
-  if (loadError) {
-  return (
+  if (notFound) {
+    return (
       <div style={{ padding: 24, textAlign: "center" }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f0f6fc", marginBottom: 8 }}>レースが見つかりません</h1>
+        <p style={{ color: "var(--text-dim)", fontSize: 13, marginBottom: 16 }}>レースID「{raceId}」のデータはありません。URL をご確認ください。</p>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
+          <Link href="/races" style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid var(--accent)", color: "var(--accent)", textDecoration: "none", fontSize: 14 }}>レース一覧へ</Link>
+          <Link href="/" style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid var(--border)", color: "var(--text-dim)", textDecoration: "none", fontSize: 14 }}>ホームへ</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div role="alert" style={{ padding: 24, textAlign: "center" }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-        <p style={{ color: "var(--err)", marginBottom: 12 }}>{loadError}</p>
-        <Link href="/" style={{ color: "var(--accent)" }}>← ホームへ</Link>
+        <p style={{ color: "var(--err)", marginBottom: 14 }}>{loadError}</p>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
+          <button type="button" onClick={() => loadRace()} style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid var(--accent)", background: "rgba(59,130,246,0.15)", color: "var(--accent)", cursor: "pointer", fontSize: 14 }}>再読み込み</button>
+          <Link href="/races" style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid var(--border)", color: "var(--text-dim)", textDecoration: "none", fontSize: 14 }}>レース一覧へ</Link>
+        </div>
       </div>
     );
   }
@@ -421,7 +445,7 @@ export default function RaceDetailPage() {
 
   /* ── レースヘッダー ── */
   const Header = rd ? (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "24px 32px", marginBottom: 24 }}>
+    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: narrow ? "14px 14px" : "24px 32px", marginBottom: narrow ? 14 : 24 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
         <span style={{ background: "var(--accent)", color: "#fff", fontWeight: 800, fontSize: 16, padding: "6px 14px", borderRadius: 6, minWidth: 50, textAlign: "center" }}>
           {rd.venue} {rd.round}R
@@ -437,7 +461,7 @@ export default function RaceDetailPage() {
           🔗 netkeiba
         </a>
       </div>
-      <h1 style={{ fontSize: 26, fontWeight: 700, color: "#fff", marginBottom: 8 }}>{rd.race_name ?? raceId}</h1>
+      <h1 style={{ fontSize: narrow ? 20 : 26, fontWeight: 700, color: "#fff", marginBottom: 8, overflowWrap: "anywhere" }}>{rd.race_name ?? raceId}</h1>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 13, color: "var(--text-dim)" }}>
         {[rd.date, rd.surface && `馬場: ${rd.surface}`, rd.distance && `${rd.distance}m`, rd.direction, rd.weather && `☁ ${rd.weather}`, rd.track_condition && `馬場: ${rd.track_condition}`, rd.start_time && `🕐 ${rd.start_time}`]
           .filter(Boolean)
@@ -775,8 +799,8 @@ export default function RaceDetailPage() {
 
   /* ── レンダー ── */
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)", padding: 24 }}>
-      <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-dim)", marginBottom: 16, textDecoration: "none" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)", padding: narrow ? 12 : 24 }}>
+      <Link href="/" className="hide-narrow" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-dim)", marginBottom: 16, textDecoration: "none" }}>
         ← ホーム
       </Link>
 
@@ -784,13 +808,18 @@ export default function RaceDetailPage() {
       {Header}
 
       {/* タブバー */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--border)", paddingBottom: 0 }}>
+      <div role="tablist" style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--border)", paddingBottom: 0, flexWrap: "nowrap", overflowX: "auto" }}>
         {TABS.map(({ id, label }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
+            role="tab"
+            aria-selected={tab === id}
             style={{
-              padding: "10px 20px",
+              padding: narrow ? "12px 14px" : "10px 20px",
+              minHeight: 44,
+              whiteSpace: "nowrap",
+              flex: "none",
               fontSize: 14,
               fontWeight: 500,
               color: tab === id ? "var(--accent)" : "var(--text-dim)",

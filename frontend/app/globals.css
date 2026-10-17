@@ -47,3 +47,19 @@ body {
   color: var(--text-dim);
   background: var(--surface2);
 }
+
+@media (max-width: 639px) {
+  .hide-narrow {
+    display: none !important;
+  }
+}
+
+/* 見た目はそのまま、押せる範囲だけを 44px 前後まで広げる */
+.hit44 {
+  position: relative;
+}
+.hit44::after {
+  content: "";
+  position: absolute;
+  inset: -9px -6px;
+}

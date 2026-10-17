@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockBetRecommendation } from "@/lib/mock";
+import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 
 /** レースの「価値」= 推奨買い目の期待回収率（バックエンド delegates.race_value_summary と同じ区分） */
 export type ValueLevel = "hot" | "good" | "ok" | "pass" | "none";
@@ -22,8 +23,8 @@ export const LEVEL_STYLE: Record<ValueLevel, { label: string; hint: string; colo
   hot: { label: "★ 特に高い", hint: "期待回収率 150% 以上かつその日の上位 20%", color: "#fff", bg: "linear-gradient(135deg,#f97316,#ef4444)", border: "#fb923c", glow: "0 0 10px rgba(249,115,22,.65)" },
   good: { label: "高い", hint: "期待回収率 125% 以上", color: "#bbf7d0", bg: "rgba(34,197,94,0.22)", border: "#22c55e" },
   ok: { label: "プラス期待", hint: "期待回収率 105% 以上", color: "#bfdbfe", bg: "rgba(96,165,250,0.14)", border: "#60a5fa" },
-  pass: { label: "見送り水準", hint: "期待回収率 105% 未満、または買い目なし", color: "#6b7d95", bg: "transparent", border: "#243049" },
-  none: { label: "未計算", hint: "予測またはオッズが無い", color: "#566178", bg: "transparent", border: "#243049" },
+  pass: { label: "見送り水準", hint: "期待回収率 105% 未満、または買い目なし", color: "#8b9bb4", bg: "transparent", border: "#35445f" },
+  none: { label: "未計算", hint: "予測またはオッズが無い", color: "#8b9bb4", bg: "transparent", border: "#35445f" },
 };
 
 const BET_JA: Record<string, string> = { tansho: "単勝", fukusho: "複勝", umaren: "馬連", wide: "ワイド", umatan: "馬単", sanrenpuku: "3連複" };
@@ -81,11 +82,13 @@ async function fetchValues(date: string): Promise<Map<string, RaceValue>> {
 /** 開催日（YYYYMMDD）の各レースの価値。取得できるまでは空。 */
 export function useRaceValues(date: string): Map<string, RaceValue> {
   const [map, setMap] = useState<Map<string, RaceValue>>(new Map());
+  const { loading, loggedIn } = useAuthStatus();
   useEffect(() => {
     let alive = true;
     if (!date && !USE_MOCK) return;
+    if (!USE_MOCK && (loading || !loggedIn)) return;   // ログイン必須の API。未ログインで呼ぶと 401 になる
     fetchValues(date).then((m) => alive && setMap(m)).catch(() => alive && setMap(new Map()));
     return () => { alive = false; };
-  }, [date]);
+  }, [date, loading, loggedIn]);
   return map;
 }

@@ -24,9 +24,10 @@ export function useAuthStatus(): AuthStatus {
       return;
     }
     fetch("/api/v1/auth/status", { credentials: "include" })
-      .then((r) =>
-        r.ok ? r.json() : { logged_in: false, is_admin: false, is_member: false }
-      )
+      .then((r) => {
+        if (r.status >= 500) throw new Error(`HTTP ${r.status}`);
+        return r.ok ? r.json() : { logged_in: false, is_admin: false, is_member: false };
+      })
       .then((d) =>
         setStatus({
           loading: false,
@@ -35,9 +36,7 @@ export function useAuthStatus(): AuthStatus {
           isMember: !!d.is_member,
         })
       )
-      .catch(() =>
-        setStatus({ loading: false, loggedIn: false, isAdmin: false, isMember: false })
-      );
+      .catch(() => setStatus((s) => ({ ...s, loading: false })));
   }, []);
 
   return status;

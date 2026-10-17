@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PageShell } from "@/components/PageShell";
 import { USE_MOCK, MOCK_KELLY } from "@/lib/mock";
 import { featureEnabled } from "@/lib/features";
+import { raceExists } from "@/lib/raceExists";
 
 type Display = typeof MOCK_KELLY;
 
@@ -79,6 +80,11 @@ export default function BettingPage() {
       setError("レースID は 12 桁の数字で入力してください（例: 202606010101）");
       return;
     }
+    const money = Number(bankroll);
+    if (bankroll.trim() === "" || !Number.isFinite(money) || money <= 0) {
+      setError("軍資金は 1 円以上の数値で入力してください");
+      return;
+    }
     setLoading(true);
     let r: Display;
     if (USE_MOCK) {
@@ -94,7 +100,14 @@ export default function BettingPage() {
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setError(body?.error ?? `最適化に失敗しました（HTTP ${res.status}）`);
+          if (res.status === 404 && /予測結果がありません/.test(String(body?.error ?? ""))) {
+            const exists = await fetch(`/api/race/${raceId}`).then((r) => (r.ok ? r.json() : null)).then(raceExists).catch(() => true);
+            setError(exists
+              ? "このレースはまだ予測されていません（未推論）。レース詳細で「AI予測を実行」してからお試しください。"
+              : `レースID「${raceId}」のレースは見つかりません。ID をご確認ください。`);
+          } else {
+            setError(body?.error ?? `最適化に失敗しました（HTTP ${res.status}）`);
+          }
           setLoading(false);
           return;
         }
@@ -147,8 +160,9 @@ export default function BettingPage() {
       <div className="card space-y-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
-            <label className="text-xs" style={{ color: "var(--text-dim)" }}>レースID（12桁）</label>
+            <label htmlFor="bet-race-id" className="text-xs" style={{ color: "var(--text-dim)" }}>レースID（12桁）</label>
             <input
+              id="bet-race-id"
               type="text"
               inputMode="numeric"
               maxLength={12}
@@ -160,13 +174,14 @@ export default function BettingPage() {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-xs" style={{ color: "var(--text-dim)" }}>軍資金（円）</label>
+            <label htmlFor="bet-bankroll" className="text-xs" style={{ color: "var(--text-dim)" }}>軍資金（円）</label>
             <input
+              id="bet-bankroll"
               type="number"
               className="rounded border bg-transparent px-3 py-1.5 text-sm"
               style={{ borderColor: "var(--border)", color: "var(--text)", width: 160 }}
               value={bankroll}
-              min={0}
+              min={1}
               onChange={(e) => setBankroll(e.target.value)}
             />
           </div>

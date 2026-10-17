@@ -56,6 +56,11 @@
 .home-root .hero-icon-wrap .icon {
   width: 72px;
   height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  background: #161b22;
   border-radius: 50%;
   filter: drop-shadow(0 2px 16px rgba(88, 166, 255, 0.5));
   animation: home-hero-icon-float 5s ease-in-out infinite;

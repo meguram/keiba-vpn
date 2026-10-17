@@ -13,7 +13,7 @@ const BTN: React.CSSProperties = {
 };
 
 /** 幅 640px 未満（スマホ）か。スマホでは 1 行の横スクロールにして、画面をふさがない・指で押しやすい大きさにする */
-function useNarrow(): boolean {
+export function useNarrow(): boolean {
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 639px)");
@@ -111,7 +111,6 @@ export function RaceStrip({
             const v = values.get(r.race_id);
             const lv: ValueLevel = v?.level ?? "none";
             const st = LEVEL_STYLE[lv];
-            const hasVal = lv !== "none";
             return (
               <button
                 key={r.race_id}
@@ -123,9 +122,9 @@ export function RaceStrip({
                   minWidth: narrow ? 48 : 46, minHeight: narrow ? 46 : undefined, flex: "none", scrollSnapAlign: "center",
                   display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
                   padding: "5px 6px", borderRadius: 8, lineHeight: 1.15, cursor: "pointer",
-                  border: `1px ${hasVal ? "solid" : "dashed"} ${st.border}`, background: st.bg, color: st.color,
+                  border: `1px solid ${st.border}`, background: st.bg, color: st.color,
                   boxShadow: [on ? "0 0 0 2px var(--bg), 0 0 0 4px #e6edf3" : "", st.glow ?? ""].filter(Boolean).join(", ") || undefined,
-                  opacity: lv === "pass" || lv === "none" ? (on ? 1 : 0.7) : 1,
+                  opacity: lv === "pass" || lv === "none" ? (on ? 1 : 0.9) : 1,
                   transform: lv === "hot" ? "translateY(-1px)" : undefined,
                 }}
               >

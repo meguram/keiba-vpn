@@ -232,7 +232,7 @@ function RunsTable({ runs, cur }: { runs: PastRun[]; cur?: Cur }) {
                 <td className="ec-l">
                   <div className="ec-rn"><ClassChip cls={rn.cls} /><span>{r.venue ?? ""} {rn.name}</span></div>
                   <div className="ec-rs">
-                    <SurfaceChip s={r.surface} />{r.distance ?? "-"}m{r.going ? ` ${r.going}` : ""}{r.field ? ` ・${r.field}頭` : ""}
+                    <SurfaceChip s={r.surface} />{r.distance ? `${r.distance}m` : "-"}{r.going ? ` ${r.going}` : ""}{r.field ? ` ・${r.field}頭` : ""}
                     {isSame(r, cur) ? <em className="ec-same">同距離</em> : dc ? <em className="ec-dc">今回比{dc > 0 ? "↑" : "↓"}{Math.abs(dc)}m</em> : null}
                   </div>
                 </td>
@@ -268,7 +268,7 @@ function RunCards({ runs, cur }: { runs: PastRun[]; cur?: Cur }) {
                 <span className="ec-run-name">{r.venue ?? ""} {rn.name}</span>
               </div>
               <div className="ec-run-sub">
-                <SurfaceChip s={r.surface} />{r.distance ?? "-"}m{r.going ? ` ${r.going}` : ""} ・ {r.field ? `${r.field}頭` : "-"}
+                <SurfaceChip s={r.surface} />{r.distance ? `${r.distance}m` : "-"}{r.going ? ` ${r.going}` : ""} ・ {r.field ? `${r.field}頭` : "-"}
                 {isSame(r, cur) ? <em className="ec-same">同距離</em> : dc ? <em className="ec-dc">今回比{dc > 0 ? "↑" : "↓"}{Math.abs(dc)}m</em> : null}
               </div>
               <div className="ec-run-facts">

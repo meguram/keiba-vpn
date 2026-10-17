@@ -19,12 +19,15 @@ export function Nav() {
       return;
     }
     fetch("/api/v1/auth/status", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : { logged_in: false, is_admin: false }))
+      .then((r) => {
+        if (r.status >= 500) throw new Error(`HTTP ${r.status}`);
+        return r.ok ? r.json() : { logged_in: false, is_admin: false };
+      })
       .then((d) => {
         setLoggedIn(!!d.logged_in);
         setIsAdmin(!!d.logged_in && !!d.is_admin);
       })
-      .catch(() => { setLoggedIn(false); setIsAdmin(false); });
+      .catch(() => { /* 一時的な通信失敗・サーバエラーでは、直前のログイン表示を保つ */ });
   }, [path]);
 
   const isHome = path === "/";
@@ -55,7 +58,7 @@ export function Nav() {
         background: "#0d1117",
         borderBottom: "1px solid #21262d",
       }}>
-        <Link href="/" style={{
+        <Link href="/" className="hit44" style={{
           fontWeight: 700,
           fontSize: 14,
           color: "#f0f6fc",
@@ -70,7 +73,7 @@ export function Nav() {
         </Link>
 
         {!isHome && (
-          <Link href="/" style={{
+          <Link href="/" className="hit44" style={{
             marginLeft: 16,
             fontSize: 12,
             color: "#6e7681",
@@ -89,7 +92,7 @@ export function Nav() {
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
           {isAdmin && (
-            <Link href="/betting" style={{
+            <Link href="/betting" className="hit44" style={{
               fontSize: 12,
               color: "#3fb950",
               textDecoration: "none",
@@ -115,7 +118,7 @@ export function Nav() {
               管理者
             </span>
           ) : (
-            <Link href="/login" style={{
+            <Link href="/login" className="hit44" style={{
               fontSize: 12,
               color: "#58a6ff",
               textDecoration: "none",

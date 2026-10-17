@@ -201,7 +201,13 @@ function sortPreds(preds: PredEntry[], key: SortKey | null, dir: SortDir, fallba
 const TABLE_CSS = `
 .pt-tap{all:unset;cursor:pointer;display:inline-block;padding:6px 2px;border-bottom:1px dotted rgba(148,163,184,.55);font:inherit;font-weight:inherit;line-height:1.3}
 .pt-tap:hover{border-bottom-color:var(--accent)}
-.pt-tap:focus-visible,.pt-sortbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.pt-tap:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.pt-sort{padding:0 !important}
+.pt-sortbtn{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:2px;width:100%;min-height:44px;padding:0 10px;font:inherit;color:inherit}
+.pt-sortbtn:hover{background:rgba(148,163,184,.08)}
+.pt-sortbtn[data-left]{justify-content:flex-start}
+.pt-sortbtn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.pt-c1 .pt-sortbtn{padding:0 2px}
 @media (max-width: 899px){
   .pt-c1,.pt-c2{position:sticky;background:var(--surface);z-index:1}
   .pt-c1{left:0;min-width:36px;max-width:36px}
@@ -210,7 +216,6 @@ const TABLE_CSS = `
 }
 @media (max-width: 639px){ .pt-hide-sm{display:none} .wp-main{padding:12px 6px !important} .wp-race-body{padding:0 4px 10px !important} .pt-c2{max-width:128px} th.pt-c2,td.pt-c2{padding-left:6px !important;padding-right:6px !important} }
 @media (pointer: coarse){
-  .pt-sortbtn{min-height:44px;min-width:44px;justify-content:center}
   .pt-tap{padding:12px 4px}
 }
 `;
@@ -249,7 +254,7 @@ function PredTable({ raceId, preds, hasPred, message }: { raceId: string; preds:
         type="button"
         onClick={() => toggle(key)}
         className="pt-sortbtn"
-        style={{ all: "unset", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2, font: "inherit", color: "inherit", padding: "0 2px" }}
+        data-left={style.textAlign === "left" ? "" : undefined}
       >
         {label}<span aria-hidden style={{ fontSize: 9, opacity: sort?.key === key ? 1 : 0.35 }}>{arrow(key) || " ↕"}</span>
       </button>
@@ -458,6 +463,7 @@ function RaceCard({
           )}
           <Link
             href={`/race/${race.race_id}`}
+            className="hit44"
             onClick={(e) => e.stopPropagation()}
             style={{ fontSize: 11, color: "var(--accent)", textDecoration: "none", border: "1px solid rgba(59,130,246,0.3)", padding: "3px 8px", borderRadius: 4 }}
           >
@@ -508,6 +514,8 @@ export default function WeeklyPredictionsPage() {
   const [loadingDates, setLoadingDates] = useState(true);
   const [loadingRaces, setLoadingRaces] = useState(false);
   const [racesError, setRacesError] = useState("");
+  const [datesError, setDatesError] = useState("");
+  const [datesReload, setDatesReload] = useState(0);
   const [bulkLoading, setBulkLoading] = useState(false);
   const bulkAbort = useRef<AbortController | null>(null);
   const raceValues = useRaceValues(selectedDate);
@@ -587,22 +595,25 @@ export default function WeeklyPredictionsPage() {
       setLoadingDates(false);
       return;
     }
+    setDatesError("");
     (async () => {
       try {
         const days = Number(process.env.NEXT_PUBLIC_PICKER_PAST_DAYS) || 30;
         // 先週分〜来週分を出すため、今日と先の開催日（14 日先まで）も含める
         const res = await fetch(`/api/scrape-dates?picker_past_days=${days}&picker_future_days=14`, { cache: "no-store" });
-        if (!res.ok) return;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const d = await res.json();
         const list: string[] = d.dates ?? d ?? [];
         setDates(list);
         if (list.length) setSelectedDate(initial(list));
-      } catch { /* ignore */ } finally {
+      } catch (e: unknown) {
+        setDatesError(`開催日の一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`);
+      } finally {
         setLoadingDates(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [datesReload]);
 
   /* レース一覧（日付変更時） */
   const loadRaces = useCallback(async (date: string) => {
@@ -703,10 +714,10 @@ export default function WeeklyPredictionsPage() {
       {/* ページヘッダー */}
       <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
-          <Link href="/" style={{ fontSize: 12, color: "var(--text-dim)", textDecoration: "none" }}>← ホーム</Link>
-          <span style={{ color: "var(--border)" }}>/</span>
+          <Link href="/" className="hide-narrow" style={{ fontSize: 12, color: "var(--text-dim)", textDecoration: "none" }}>← ホーム</Link>
+          <span className="hide-narrow" style={{ color: "var(--border)" }}>/</span>
           <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f0f6fc", margin: 0 }}>🤖 今週のAI予測</h1>
-          <p style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
+          <p className="hide-narrow" style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
             前回と次回の開催（最大2週分）の勝率・期待値を一覧表示
           </p>
         </div>
@@ -779,13 +790,20 @@ export default function WeeklyPredictionsPage() {
           </div>
         )}
 
-        {racesError && (
-          <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "14px 18px", color: "var(--err)", fontSize: 13, marginBottom: 16 }}>
-            ⚠️ {racesError}
+        {(datesError || racesError) && (
+          <div role="alert" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "14px 18px", color: "var(--err)", fontSize: 13, marginBottom: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span>⚠️ {datesError || `レース一覧を取得できませんでした（${racesError}）`}</span>
+            <button
+              type="button"
+              onClick={() => { if (datesError) { setLoadingDates(true); setDatesReload((n) => n + 1); } else loadRaces(selectedDate); }}
+              style={{ marginLeft: "auto", minHeight: 44, padding: "0 16px", borderRadius: 8, border: "1px solid var(--accent)", background: "rgba(59,130,246,0.15)", color: "var(--accent)", cursor: "pointer", fontSize: 13 }}
+            >
+              再読み込み
+            </button>
           </div>
         )}
 
-        {!loadingRaces && races.length === 0 && !racesError && selectedDate && (
+        {!loadingRaces && races.length === 0 && !racesError && !datesError && selectedDate && (
           <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-dim)" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
             <p>この日程のレース情報がありません</p>

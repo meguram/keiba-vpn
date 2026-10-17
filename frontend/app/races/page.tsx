@@ -111,6 +111,7 @@ export default function RacesPage() {
   const [loadingDates, setLoadingDates] = useState(true);
   const [loadingRaces, setLoadingRaces] = useState(false);
   const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
   const { isMember, loading: authLoading } = useAuthStatus();
   const today = todayJst();
 
@@ -123,7 +124,8 @@ export default function RacesPage() {
           list = getMockRaceDates();
         } else {
           const res = await fetch(`/api/scrape-dates?picker_past_days=${PAST_DAYS}&picker_future_days=${FUTURE_DAYS}`, { cache: "no-store" });
-          list = res.ok ? ((await res.json()).dates ?? []) : [];
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          list = (await res.json()).dates ?? [];
         }
         setDates(list);
         const fromUrl = new URLSearchParams(window.location.search).get("date") ?? "";
@@ -131,13 +133,13 @@ export default function RacesPage() {
         const next = pickTwoWeeks(list, today).find((p) => p.role === "next");
         const initial = list.includes(fromUrl) ? fromUrl : preferred && list.includes(preferred) ? preferred : next ? firstDateOf(next.week, today) : (list[0] ?? "");
         setDate(initial);
-      } catch {
-        setError("開催日の一覧を取得できませんでした。");
+      } catch (e) {
+        setError(`開催日の一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`);
       } finally {
         setLoadingDates(false);
       }
     })();
-  }, [today]);
+  }, [today, reload]);
 
   /* 選んだ開催日のレース一覧 */
   useEffect(() => {
@@ -162,7 +164,7 @@ export default function RacesPage() {
       }
     })();
     return () => { alive = false; };
-  }, [date]);
+  }, [date, reload]);
 
   function choose(d: string) {
     setDate(d);
@@ -186,7 +188,7 @@ export default function RacesPage() {
   return (
     <>
       {showModal && <MemberUpgradeModal onClose={() => setShowModal(false)} />}
-      <PageShell title="レース一覧">
+      <PageShell title="レース一覧" note={false}>
         {!authLoading && !isMember && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderRadius: 8, background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.25)", marginBottom: 16, fontSize: 13, color: "var(--text)", flexWrap: "wrap" }}>
             <span>🔒 AI予測データは会員限定です。</span>
@@ -204,7 +206,7 @@ export default function RacesPage() {
               <select
                 value={older.includes(date) ? date : ""}
                 onChange={(e) => e.target.value && choose(e.target.value)}
-                style={{ padding: "5px 8px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 12 }}
+                style={{ minHeight: 44, padding: "5px 8px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 12 }}
               >
                 <option value="">選ぶ…</option>
                 {older.map((d) => <option key={d} value={d}>{formatMD(d)}（{WEEKDAY_JA[weekdayOf(d)]}）</option>)}
@@ -218,7 +220,18 @@ export default function RacesPage() {
             {formatMD(date)}（{wd}）— {byVenue.map(([v, r]) => `${v} ${r.length}R`).join(" ／ ") || "開催なし"}
           </div>
         )}
-        {error && <div role="alert" style={{ color: "var(--err)", fontSize: 13, padding: "10px 0" }}>⚠️ {error}</div>}
+        {error && (
+          <div role="alert" style={{ color: "var(--err)", fontSize: 13, padding: "10px 0", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span>⚠️ {error}</span>
+            <button
+              type="button"
+              onClick={() => { setError(""); setLoadingDates(true); setReload((n) => n + 1); }}
+              style={{ minHeight: 44, padding: "0 16px", borderRadius: 8, border: "1px solid var(--accent)", background: "rgba(59,130,246,0.15)", color: "var(--accent)", cursor: "pointer", fontSize: 13 }}
+            >
+              再読み込み
+            </button>
+          </div>
+        )}
         {loadingRaces && <div style={{ color: "var(--text-dim)", fontSize: 13, padding: "24px 0" }}>読み込み中…</div>}
         {!loadingRaces && !loadingDates && !error && rows.length === 0 && (
           <div style={{ color: "var(--text-dim)", fontSize: 13, padding: "24px 0" }}>表示できるレースがありません。</div>

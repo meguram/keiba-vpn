@@ -4,9 +4,10 @@ type Props = {
   title: string;
   description?: string;
   children?: React.ReactNode;
+  note?: boolean;
 };
 
-export function PageShell({ title, description, children }: Props) {
+export function PageShell({ title, description, children, note = true }: Props) {
   return (
     <div className="space-y-4">
       <header>
@@ -14,7 +15,7 @@ export function PageShell({ title, description, children }: Props) {
         {description && <p style={{ color: "var(--text-dim)" }}>{description}</p>}
       </header>
       {children}
-      <AnalysisNote />
+      {note && <AnalysisNote />}
     </div>
   );
 }

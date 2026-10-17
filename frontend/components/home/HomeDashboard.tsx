@@ -235,8 +235,7 @@ export function HomeDashboard() {
         <div className="hero-icon-wrap">
           <span className="icon-glow" />
           <span className="icon-ring" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/data/image/icon.jpg" alt="icon" className="icon" />
+          <span className="icon" aria-hidden>🏇</span>
         </div>
         <h1 className="hero-catch">🏇 めぐ競馬</h1>
       </div>
