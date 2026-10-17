@@ -51,7 +51,7 @@ def _build(d_z, n_cat, emb_dim, hidden, dropout, n_aux, interact):
 
 def mtl_fit_predict(X_tr: pd.DataFrame, y_tr: dict, A_tr: np.ndarray | None, race_tr: np.ndarray, X_va: pd.DataFrame, race_va: np.ndarray,
                     seed: int = 0, hidden: Sequence[int] = (128, 64), epochs: int = 14, lr: float = 2e-3, wd: float = 1e-4, dropout: float = 0.15,
-                    batch_races: int = 128, aux_w: float = 0.5, interact: bool = False, device: str | None = None, want_hidden: bool = False) -> dict:
+                    batch_races: int = 128, aux_w: float = 0.5, interact: bool = False, device: str | None = None, want_hidden: bool = False, want_model: bool = False) -> dict:
     """A_tr: (n_train, k) の補助目的変数（欠損は NaN）。戻り値: win_score, top2_logit, top3_logit, aux（標準化した補助の予測 (n_va, k)）, hidden（want_hidden のとき）。"""
     import torch
     import torch.nn as nn
@@ -113,6 +113,12 @@ def mtl_fit_predict(X_tr: pd.DataFrame, y_tr: dict, A_tr: np.ndarray | None, rac
             sched.step()
     net.eval()
     n = len(X_va)
+    model = None
+    if want_model:     # 推論用に保存する（nn_predict と同じ作り: 構造の引数・学習済みの重み・前処理・補助の標準化）
+        model = {"arch": {"d_z": int(Ztr.shape[1]), "n_cat": [int(x) for x in n_cat], "emb_dim": [int(x) for x in emb_dim], "hidden": [int(x) for x in hidden],
+                          "dropout": float(dropout), "n_aux": int(k), "interact": bool(interact)},
+                 "state": {kk: vv.detach().cpu() for kk, vv in net.state_dict().items()}, "prep": prep,
+                 "mu": None if not k else mu, "sd": None if not k else sd}
     res = {"win_score": np.zeros(n), "top2_logit": np.zeros(n), "top3_logit": np.zeros(n)}
     if k:
         res["aux"] = np.zeros((n, k), dtype="float32")
@@ -132,4 +138,29 @@ def mtl_fit_predict(X_tr: pd.DataFrame, y_tr: dict, A_tr: np.ndarray | None, rac
                 res["aux"][rows_] = a.cpu().numpy()[rr, cc]
             if want_hidden:
                 res["hidden"][rows_] = h.cpu().numpy()[rr, cc]
+    if model is not None:
+        res["model"] = model
     return res
+
+
+def mtl_infer(model: dict, X: pd.DataFrame, race: np.ndarray, device: str | None = None) -> np.ndarray:
+    """mtl_fit_predict(want_model=True) で保存したモデルの補助ヘッド予測（標準化した単位）を返す。形は (len(X), n_aux)。"""
+    import torch
+
+    dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    a = model["arch"]
+    net = _build(a["d_z"], a["n_cat"], a["emb_dim"], tuple(a["hidden"]), a["dropout"], a["n_aux"], a["interact"]).to(dev)
+    net.load_state_dict(model["state"])
+    net.eval()
+    Z, C = model["prep"].transform(X)
+    idx = _pad_races(np.asarray(race))
+    out = np.zeros((len(X), a["n_aux"]), dtype="float32")
+    with torch.no_grad():
+        for s in range(0, len(idx), 512):
+            ir = idx[s:s + 512]
+            valid = ir >= 0
+            safe = np.where(valid, ir, 0)
+            _o, aux, _h = net(torch.from_numpy(Z[safe]).to(dev), torch.from_numpy(C[safe]).to(dev), torch.from_numpy(valid).to(dev))
+            rr, cc = np.nonzero(valid)
+            out[safe[rr, cc]] = aux.cpu().numpy()[rr, cc]
+    return out

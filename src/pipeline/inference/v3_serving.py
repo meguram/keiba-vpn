@@ -50,6 +50,7 @@ class V3Serving:
         self.history: pd.DataFrame | None = None
         self.ped: spe.PedState | None = None
         self.tl_ref: pd.DataFrame | None = None
+        self.aux = None
         self.feature_cols: list[str] = []
 
     def warm(self) -> dict:
@@ -62,6 +63,10 @@ class V3Serving:
         self.feature_cols = list(dict.fromkeys(c for m in self.bundle.members for c in m.feature_cols))
         self.stage = ssr.StageModels.load(self.stage_dir)
         self.tl_ref = pd.read_parquet(self.tl_reference_path)
+        if any(x.startswith("mtl_") for x in self.feature_cols):           # 補助タスクつき NN の補助ヘッド予測を使うバンドル（v4 候補）
+            from src.pipeline.features.serving_aux import AuxModels
+
+            self.aux = AuxModels.load(Path(os.environ.get("KEIBA_V3_AUX") or WORK / "final_aux"))
         self.history = sla.load_history(self.tables_dir)
         runs = apply_repair(load_runs(self.tables_dir), EMPTY_RM)
         self.ped = spe.PedState.from_history(spe.history_from_runs(runs))
@@ -90,7 +95,7 @@ class V3Serving:
         base = base.sort_values(["race_id", "horse_number"], kind="stable").reset_index(drop=True)
 
         stage = self.stage.predict(base, base["race_id"])
-        cur = pd.concat([base, stage], axis=1)
+        cur = pd.concat([base, stage] + ([self.aux.predict(base, base["race_id"])] if self.aux is not None else []), axis=1)
 
         tgt = base[KEYS + ["date"]].merge(cm[KEYS + ["surface", "distance", "track_condition", "venue_code"]], on=KEYS, how="left")
         ped = self.ped.features(tgt)
