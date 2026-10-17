@@ -58,7 +58,7 @@ def decide(wd: dict | None, en_lead, ja_lead, year: int):
     return "none", None, ""
 
 
-def priority_list(zone_rows: list[dict], ancestors: dict[str, dict], done: set[str], max_gen: int = 3, min_year: int = 1900):
+def priority_list(zone_rows: list[dict], ancestors: dict[str, dict], done: set[str], max_gen: int = 3, min_year: int = 1900, min_impact: int = 1):
     """zone_review の近い世代の種牡馬のうち、年のみ・min_year 以降生まれ・未検索を影響の大きい順に返す。"""
     weight: dict[str, int] = defaultdict(int)
     for r in zone_rows:
@@ -67,7 +67,7 @@ def priority_list(zone_rows: list[dict], ancestors: dict[str, dict], done: set[s
     out = []
     for sid, n in weight.items():
         a = ancestors.get(sid)
-        if a and a["precision"] == "year" and int(a["birthday"][:4]) >= min_year and sid not in done:
+        if a and a["precision"] == "year" and int(a["birthday"][:4]) >= min_year and sid not in done and n >= min_impact:
             out.append((sid, a["name"], int(a["birthday"][:4]), n))
     return sorted(out, key=lambda x: -x[3])
 
@@ -131,7 +131,7 @@ def run(a) -> None:
     done = {r["horse_id"] for r in csv.DictReader(open(log_p, encoding="utf-8"))} if log_p.exists() else set()
     done |= {r["horse_id"] for r in csv.DictReader(open(man_p, encoding="utf-8"))} if man_p.exists() else set()
     anc = {r["horse_id"]: r for r in csv.DictReader(open(a.ancestors, encoding="utf-8"))}
-    todo = priority_list(list(csv.DictReader(open(a.zone, encoding="utf-8"))), anc, done, a.max_gen)[: a.limit]
+    todo = priority_list(list(csv.DictReader(open(a.zone, encoding="utf-8"))), anc, done, a.max_gen, min_impact=a.min_impact)[: a.limit]
     today = date.today().isoformat()
     log_rows, man_rows = [], []
     for sid, raw, year, n in todo:
@@ -181,6 +181,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--dir", required=True, help="birth_search_log.csv / birth_manual.csv のあるディレクトリ")
     ap.add_argument("--limit", type=int, default=20)
     ap.add_argument("--max-gen", type=int, default=3)
+    ap.add_argument("--min-impact", type=int, default=3, help="ゾーンに現れる馬数の下限。これ未満の種牡馬は調べない（採用率が低く費用対効果が悪いため）")
     ap.add_argument("--sleep", type=float, default=1.0)
     ap.add_argument("--apply", action="store_true")
     run(ap.parse_args(argv))

@@ -60,3 +60,13 @@ def test_priority_list():
     }
     assert bs.priority_list(zone, anc, set()) == [("a", "A", 1970, 10)]
     assert bs.priority_list(zone, anc, {"a"}) == []
+
+
+def test_priority_list_min_impact():
+    zone = [
+        {"stallion_id": "a", "min_gen": "1", "n_horses": "10"},
+        {"stallion_id": "b", "min_gen": "1", "n_horses": "2"},
+    ]
+    anc = {k: {"precision": "year", "birthday": "1970", "name": k.upper()} for k in "ab"}
+    assert [x[0] for x in bs.priority_list(zone, anc, set(), min_impact=3)] == ["a"]
+    assert [x[0] for x in bs.priority_list(zone, anc, set())] == ["a", "b"]

@@ -121,3 +121,9 @@ horse_id,name,birth_year,birth_month,birth_day,source_url,note
 000a01053e,Smarty Jones(米),2001,2,28,https://www.wikidata.org/wiki/Q7544171 ; https://en.wikipedia.org/wiki/Smarty_Jones,英語版 Wikipedia 冒頭文
 000a010751,Is It True,1986,5,12,https://www.wikidata.org/wiki/Q6075437 ; https://en.wikipedia.org/wiki/Is_It_True_%28horse%29,英語版 Wikipedia 冒頭文
 000a0114c3,Johan Cruyff,1994,3,27,https://www.wikidata.org/wiki/Q10920078,Wikidata(参照付き)
+000a00004d,ボールドリックBaldric(米),1961,5,16,https://www.wikidata.org/wiki/Q4850474 ; https://en.wikipedia.org/wiki/Baldric_%28horse%29 ; https://ja.wikipedia.org/wiki/%E3%83%9C%E3%83%BC%E3%83%AB%E3%83%89%E3%83%AA%E3%83%83%E3%82%AF,英語版 Wikipedia 冒頭文
+000a000f44,Intentionally,1956,4,2,https://www.wikidata.org/wiki/Q6044492 ; https://en.wikipedia.org/wiki/Intentionally_%28horse%29,英語版 Wikipedia 冒頭文
+000a0003eb,シャトーゲイChateaugay(米),1960,2,29,https://www.wikidata.org/wiki/Q5087563 ; https://en.wikipedia.org/wiki/Chateaugay_%28horse%29 ; https://ja.wikipedia.org/wiki/%E3%82%B7%E3%83%A3%E3%83%88%E3%83%BC%E3%82%B2%E3%82%A4_%28%E7%AB%B6%E8%B5%B0%E9%A6%AC%29,Wikidata + Wikipedia 冒頭文が一致
+000a000166,ハバット,1971,1,25,https://ja.wikipedia.org/wiki/%E3%83%8F%E3%83%90%E3%83%83%E3%83%88,日本語版 Wikipedia 冒頭文
+000a00042c,ジルドレ,1953,4,12,https://ja.wikipedia.org/wiki/%E3%82%B8%E3%83%AB%E3%83%89%E3%83%AC_%28%E7%AB%B6%E8%B5%B0%E9%A6%AC%29,日本語版 Wikipedia 冒頭文
+000a000f35,Hill Gail,1949,4,19,https://www.wikidata.org/wiki/Q5762129 ; https://en.wikipedia.org/wiki/Hill_Gail,英語版 Wikipedia 冒頭文
