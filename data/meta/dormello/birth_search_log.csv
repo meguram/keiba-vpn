@@ -205,3 +205,83 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a00086c,ミンドアーMint d'Or(英),no_data,1922,,,,2026-10-17,
 000a001341,Big Spruce,no_data,1969,,,https://www.wikidata.org/wiki/Q4906451 ; https://en.wikipedia.org/wiki/Big_Spruce,2026-10-17,
 000a011ff9,Privately Held,no_data,1994,,,https://www.wikidata.org/wiki/Q61994223,2026-10-17,
+000a000320,ソヴィエトスターSoviet Star(米),adopted,1984,4,20,https://www.wikidata.org/wiki/Q11315477 ; https://en.wikipedia.org/wiki/Soviet_Star,2026-10-17,Wikidata + Wikipedia 冒頭文が一致
+000a000cda,ラシアンルーブル,adopted,1980,3,30,https://ja.wikipedia.org/wiki/%E3%83%A9%E3%82%B7%E3%82%A2%E3%83%B3%E3%83%AB%E3%83%BC%E3%83%96%E3%83%AB,2026-10-17,日本語版 Wikipedia 冒頭文
+000a000cef,サウスアトランティック,no_data,1980,,,,2026-10-17,
+000a001b4f,Risen Star,adopted,1985,3,25,https://www.wikidata.org/wiki/Q7336008 ; https://en.wikipedia.org/wiki/Risen_Star,2026-10-17,英語版 Wikipedia 冒頭文
+000a00fa4a,Smadoun,adopted,1990,2,2,https://www.wikidata.org/wiki/Q11313273,2026-10-17,Wikidata(参照付き)
+000a010538,Efisio,no_data,1982,,,https://www.wikidata.org/wiki/Q61985586,2026-10-17,
+000a011135,チチカステナンゴChichicastenango(仏),adopted,1998,5,3,https://www.wikidata.org/wiki/Q11317941,2026-10-17,Wikidata(参照付き)
+000a0122b0,Acclamation,no_data,1999,,,https://en.wikipedia.org/wiki/Acclamation_%28horse%29,2026-10-17,
+000a001e23,Linamix (仏),no_data,1987,,,https://www.wikidata.org/wiki/Q3241276,2026-10-17,
+000a0011a7,Ksar,no_data,1918,,,https://www.wikidata.org/wiki/Q6440694 ; https://en.wikipedia.org/wiki/Ksar_%28horse%29,2026-10-17,
+000a000df7,Tudor Minstrel,no_data,1944,,,https://www.wikidata.org/wiki/Q7851301 ; https://en.wikipedia.org/wiki/Tudor_Minstrel,2026-10-17,
+000a000133,フォルティノ,no_data,1959,,,,2026-10-17,
+000a001902,Naevus,no_data,1980,,,,2026-10-17,
+000a000465,ラッキーソブリン,no_data,1974,,,,2026-10-17,
+000a0011a8,Bruleur,no_data,1910,,,https://www.wikidata.org/wiki/Q61994587,2026-10-17,
+000a001245,Nantallah,no_data,1953,,,https://www.wikidata.org/wiki/Q11324101,2026-10-17,
+000a001172,Bahram,no_data,1932,,,https://www.wikidata.org/wiki/Q4842833 ; https://en.wikipedia.org/wiki/Bahram_%28horse%29,2026-10-17,
+000a000dd4,Grey Sovereign,no_data,1948,,,https://www.wikidata.org/wiki/Q11300706 ; https://en.wikipedia.org/wiki/Grey_Sovereign,2026-10-17,
+000a000fb3,Petition,no_data,1944,,,https://www.wikidata.org/wiki/Q15538683 ; https://en.wikipedia.org/wiki/Petition_%28horse%29,2026-10-17,
+000a000f4c,Khaled,no_data,1943,,,https://en.wikipedia.org/wiki/Khaled_%28horse%29,2026-10-17,
+000a0002bd,ルション,no_data,1981,,,,2026-10-17,
+000a0016cb,Vigors,no_data,1973,,,https://www.wikidata.org/wiki/Q7929008 ; https://en.wikipedia.org/wiki/Vigors_%28horse%29,2026-10-17,
+000a001cce,Easy Goer,adopted,1986,3,21,https://www.wikidata.org/wiki/Q5331132 ; https://en.wikipedia.org/wiki/Easy_Goer,2026-10-17,英語版 Wikipedia 冒頭文
+000a00fdb2,Pleasant Tap,adopted,1987,5,8,https://www.wikidata.org/wiki/Q7203981 ; https://en.wikipedia.org/wiki/Pleasant_Tap,2026-10-17,英語版 Wikipedia 冒頭文
+000a000b3b,サンシー,adopted,1969,3,25,https://ja.wikipedia.org/wiki/%E3%82%B5%E3%83%B3%E3%82%B7%E3%83%BC,2026-10-17,日本語版 Wikipedia 冒頭文
+000a00fa33,カリズマティックCharismatic(米),adopted,1996,3,13,https://www.wikidata.org/wiki/Q5074405 ; https://en.wikipedia.org/wiki/Charismatic_%28horse%29,2026-10-17,Wikidata(参照付き)
+000a0005d4,Explodent,no_data,1969,,,,2026-10-17,
+000a0002de,Sardanapale,no_data,1911,,,https://www.wikidata.org/wiki/Q20065036 ; https://en.wikipedia.org/wiki/Sardanapale_%28horse%29,2026-10-17,
+000a001157,Rock Sand,no_data,1900,,,https://www.wikidata.org/wiki/Q7354677 ; https://en.wikipedia.org/wiki/Rock_Sand_%28horse%29,2026-10-17,
+000a0013d9,Bull Page,no_data,1947,,,https://www.wikidata.org/wiki/Q4996596 ; https://en.wikipedia.org/wiki/Bull_Page,2026-10-17,
+000a000293,プリメロPrimero(英),no_data,1931,,,https://ja.wikipedia.org/wiki/%E3%83%97%E3%83%AA%E3%83%A1%E3%83%AD,2026-10-17,
+000a000fbf,Precipitation,no_data,1933,,,https://www.wikidata.org/wiki/Q7239482 ; https://en.wikipedia.org/wiki/Precipitation_%28horse%29,2026-10-17,
+000a001233,Sunglow,no_data,1947,,,https://www.wikidata.org/wiki/Q102239761,2026-10-17,
+000a000687,Lord Avie,adopted,1978,4,25,https://www.wikidata.org/wiki/Q6678939 ; https://en.wikipedia.org/wiki/Lord_Avie,2026-10-17,Wikidata(参照付き)
+000a001997,Greinton,adopted,1981,3,5,https://www.wikidata.org/wiki/Q5607322 ; https://en.wikipedia.org/wiki/Greinton_%28horse%29,2026-10-17,英語版 Wikipedia 冒頭文
+000a001dd9,Dynaformer,adopted,1985,4,1,https://www.wikidata.org/wiki/Q5318887 ; https://en.wikipedia.org/wiki/Dynaformer,2026-10-17,英語版 Wikipedia 冒頭文
+000a002329,Sinndar(愛),adopted,1997,2,27,https://www.wikidata.org/wiki/Q3485021 ; https://en.wikipedia.org/wiki/Sinndar,2026-10-17,英語版 Wikipedia 冒頭文
+000a0003ff,ダイアトム,no_data,1962,,,,2026-10-17,
+000a0014a9,Papyrus,no_data,1920,,,https://en.wikipedia.org/wiki/Papyrus_%28horse%29,2026-10-17,
+000a00164c,Stefan the Great,no_data,1916,,,https://www.wikidata.org/wiki/Q107546036,2026-10-17,
+000a000fc8,Princely Gift,no_data,1951,,,https://www.wikidata.org/wiki/Q11335681 ; https://en.wikipedia.org/wiki/Princely_Gift,2026-10-17,
+000a011434,Freud,no_data,1998,,,,2026-10-17,
+000a000f30,Heliopolis,no_data,1936,,,https://www.wikidata.org/wiki/Q5705843 ; https://en.wikipedia.org/wiki/Heliopolis_%28horse%29,2026-10-17,
+000a001665,Supremus,no_data,1922,,,,2026-10-17,
+000a000ec9,Crepello,no_data,1954,,,https://www.wikidata.org/wiki/Q5184233 ; https://en.wikipedia.org/wiki/Crepello,2026-10-17,
+000a000227,ミシシッピアン,no_data,1971,,,,2026-10-17,
+000a000b0b,ラディガ,no_data,1969,,,,2026-10-17,
+000a0017cf,Copelan,no_data,1980,,,,2026-10-17,
+000a001c5d,Eastern Echo,no_data,1988,,,,2026-10-17,
+000a01109b,Concerto,no_data,1994,,,,2026-10-17,
+000a011329,Ride the Rails (米),adopted,1991,3,5,https://www.wikidata.org/wiki/Q61994476,2026-10-17,Wikidata(参照付き)
+000a000d01,パークリージェント,no_data,1981,,,,2026-10-17,
+000a001be4,Kendor,no_data,1986,,,https://www.wikidata.org/wiki/Q11301313,2026-10-17,
+000a001fc0,Marquetry,no_data,1987,,,,2026-10-17,
+000a000f12,Forli,no_data,1963,,,https://www.wikidata.org/wiki/Q11332888 ; https://en.wikipedia.org/wiki/Forli_%28horse%29,2026-10-17,
+000a001216,Brantome,no_data,1931,,,https://www.wikidata.org/wiki/Q4957709 ; https://en.wikipedia.org/wiki/Brantome_%28horse%29,2026-10-17,
+000a011dc0,ベーカバドBehkabad(仏),adopted,2007,3,21,https://www.wikidata.org/wiki/Q11337268 ; https://en.wikipedia.org/wiki/Behkabad ; https://ja.wikipedia.org/wiki/%E3%83%99%E3%83%BC%E3%82%AB%E3%83%90%E3%83%89,2026-10-17,Wikidata(参照付き)
+000a000e5b,Ajax,no_data,1901,,,https://www.wikidata.org/wiki/Q4699589 ; https://en.wikipedia.org/wiki/Ajax_%28horse%29,2026-10-17,
+000a000f9f,Olympia,no_data,1946,,,https://en.wikipedia.org/wiki/Olympia_%28horse%29,2026-10-17,
+000a001021,Tenerani,adopted,1944,4,14,https://www.wikidata.org/wiki/Q7699707 ; https://en.wikipedia.org/wiki/Tenerani,2026-10-17,英語版 Wikipedia 冒頭文
+000a000ecf,Dante,no_data,1942,,,https://en.wikipedia.org/wiki/Dante_%28horse%29,2026-10-17,
+000a0013d7,Bubbling Over,no_data,1923,,,https://www.wikidata.org/wiki/Q16954270 ; https://en.wikipedia.org/wiki/Bubbling_Over_%28horse%29,2026-10-17,
+000a000dab,Abernant,no_data,1946,,,https://www.wikidata.org/wiki/Q4667140 ; https://en.wikipedia.org/wiki/Abernant_%28horse%29,2026-10-17,
+000a00100c,Stardust,no_data,1937,,,,2026-10-17,
+000a001b29,Baldski,adopted,1974,5,15,https://www.wikidata.org/wiki/Q55071860 ; https://en.wikipedia.org/wiki/Baldski,2026-10-17,Wikidata + Wikipedia 冒頭文が一致
+000a001f36,Boundary,no_data,1990,,,,2026-10-17,
+000a00fe91,Lomitas,no_data,1988,,,,2026-10-17,
+000a0008b0,ステーツマンStatesman(英),no_data,1930,,,,2026-10-17,
+000a00150a,Thor,no_data,1930,,,,2026-10-17,
+000a002322,Rainbow Corner,no_data,1989,,,,2026-10-17,
+000a000e33,Milesian,no_data,1953,,,,2026-10-17,
+000a001190,Reigh Count,adopted,1925,4,13,https://www.wikidata.org/wiki/Q7310091 ; https://en.wikipedia.org/wiki/Reigh_Count,2026-10-17,英語版 Wikipedia 冒頭文
+000a0011ec,Gold Bridge,no_data,1929,,,https://www.wikidata.org/wiki/Q117358530,2026-10-17,
+000a001033,Tom Rolfe(米),adopted,1962,4,14,https://www.wikidata.org/wiki/Q7817407 ; https://en.wikipedia.org/wiki/Tom_Rolfe,2026-10-17,英語版 Wikipedia 冒頭文
+000a0011ee,Bellini,no_data,1937,,,,2026-10-17,
+000a001220,Graustark,no_data,1963,,,https://www.wikidata.org/wiki/Q5597761 ; https://en.wikipedia.org/wiki/Graustark_%28horse%29,2026-10-17,
+000a001234,Sun Again,no_data,1939,,,,2026-10-17,
+000a000de7,The Axe,no_data,1958,,,,2026-10-17,
+000a000ea8,Chamossaire,no_data,1942,,,https://www.wikidata.org/wiki/Q16354567 ; https://en.wikipedia.org/wiki/Chamossaire_%28horse%29,2026-10-17,
+000a000fc5,Prince Chevalier,no_data,1943,,,https://www.wikidata.org/wiki/Q107547194,2026-10-17,
