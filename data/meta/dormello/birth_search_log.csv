@@ -12,3 +12,16 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a0011a3,Prince Rose,no_data,1928,,,,2026-10-17,年のみ
 000a001139,The Tetrarch,adopted,1911,4,22,https://www.ballylinchstud.ie/about-us/the-tetrarch/ ; https://sporthorse-data.com/pedigree/tetrarch,2026-10-17,独立した複数の出典が一致
 000a00114f,Bayardo,no_data,1906,,,,2026-10-17,Wikipedia・Wikidata・競売カタログいずれも年のみ
+000a001849,Deputy Minister,adopted,1979,5,17,https://www.wikidata.org/wiki/Q4817311,2026-10-17,Wikidata(参照付き)
+000a0010fb,Icecapade,adopted,1969,4,4,https://www.wikidata.org/wiki/Q11282173,2026-10-17,Wikidata(参照付き)
+000a000082,Brian's Time,adopted,1985,5,28,https://www.wikidata.org/wiki/Q4962908,2026-10-17,Wikidata(参照付き)
+000a0000ed,ディクタス,adopted,1967,4,11,https://www.wikidata.org/wiki/Q11320008,2026-10-17,Wikidata(参照付き)
+000a001ecc,Konigsstuhl,adopted,1976,5,17,https://www.wikidata.org/wiki/Q1796466,2026-10-17,Wikidata(参照付き)
+000a00fa4b,Tiznow,adopted,1997,3,12,https://www.wikidata.org/wiki/Q11318930,2026-10-17,Wikidata(参照付き)
+000a0000cc,Dancing Brave,adopted,1983,5,11,https://www.wikidata.org/wiki/Q3013377 ; https://en.wikipedia.org/wiki/Dancing_Brave,2026-10-17,Wikidata + 英語版 Wikipedia 冒頭文が一致
+000a000efe,Exclusive Native,adopted,1965,4,17,https://www.wikidata.org/wiki/Q5419688 ; https://en.wikipedia.org/wiki/Exclusive_Native,2026-10-17,Wikidata + 英語版 Wikipedia 冒頭文が一致
+000a000dd9,Sir Ivor,adopted,1965,5,5,https://www.wikidata.org/wiki/Q7527349 ; https://en.wikipedia.org/wiki/Sir_Ivor,2026-10-17,Wikidata + 英語版 Wikipedia 冒頭文が一致
+000a000258,ノーザンテースト,adopted,1971,3,15,https://ja.wikipedia.org/wiki/ノーザンテースト,2026-10-17,日本語版 Wikipedia 冒頭文
+000a001177,Son-in-Law,adopted,1911,4,22,https://en.wikipedia.org/wiki/Son-in-Law,2026-10-17,英語版 Wikipedia 冒頭文
+000a001127,Isonomy,adopted,1875,5,,https://en.wikipedia.org/wiki/Isonomy,2026-10-17,英語版 Wikipedia 冒頭文（月のみ）
+000a000628,His Majesty,adopted,1968,4,17,https://www.wikidata.org/wiki/Q11330029 ; https://en.wikipedia.org/wiki/His_Majesty_(horse),2026-10-17,Wikidata + 英語版 Wikipedia 冒頭文が一致

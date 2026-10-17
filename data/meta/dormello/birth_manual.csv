@@ -1,3 +1,16 @@
 horse_id,name,birth_year,birth_month,birth_day,source_url,note
 000a001139,The Tetrarch,1911,4,22,https://www.ballylinchstud.ie/about-us/the-tetrarch/ ; https://sporthorse-data.com/pedigree/tetrarch ; https://thevaulthorseracing.wordpress.com/tag/herod/,独立した複数の出典が 1911-04-22 で一致
 000a001124,Swynford,1907,1,,https://en.wikipedia.org/wiki/Swynford,Wikipedia 本文に 'January 1907'（日は不明）
+000a001849,Deputy Minister,1979,5,17,https://www.wikidata.org/wiki/Q4817311,Wikidata(参照付き)
+000a0010fb,Icecapade,1969,4,4,https://www.wikidata.org/wiki/Q11282173,Wikidata(参照付き)
+000a000082,Brian's Time,1985,5,28,https://www.wikidata.org/wiki/Q4962908,Wikidata(参照付き)
+000a0000ed,ディクタス,1967,4,11,https://www.wikidata.org/wiki/Q11320008,Wikidata(参照付き)
+000a001ecc,Konigsstuhl,1976,5,17,https://www.wikidata.org/wiki/Q1796466,Wikidata(参照付き)
+000a00fa4b,Tiznow,1997,3,12,https://www.wikidata.org/wiki/Q11318930,Wikidata(参照付き)
+000a0000cc,Dancing Brave,1983,5,11,https://www.wikidata.org/wiki/Q3013377 ; https://en.wikipedia.org/wiki/Dancing_Brave,Wikidata + 英語版 Wikipedia 冒頭文が一致
+000a000efe,Exclusive Native,1965,4,17,https://www.wikidata.org/wiki/Q5419688 ; https://en.wikipedia.org/wiki/Exclusive_Native,Wikidata + 英語版 Wikipedia 冒頭文が一致
+000a000dd9,Sir Ivor,1965,5,5,https://www.wikidata.org/wiki/Q7527349 ; https://en.wikipedia.org/wiki/Sir_Ivor,Wikidata + 英語版 Wikipedia 冒頭文が一致
+000a000258,ノーザンテースト,1971,3,15,https://ja.wikipedia.org/wiki/ノーザンテースト,日本語版 Wikipedia 冒頭文（1971年3月15日 - 2004年12月11日）
+000a001177,Son-in-Law,1911,4,22,https://en.wikipedia.org/wiki/Son-in-Law,英語版 Wikipedia 冒頭文
+000a001127,Isonomy,1875,5,,https://en.wikipedia.org/wiki/Isonomy,英語版 Wikipedia 冒頭文（月のみ）
+000a000628,His Majesty,1968,4,17,https://www.wikidata.org/wiki/Q11330029 ; https://en.wikipedia.org/wiki/His_Majesty_(horse),Wikidata + 英語版 Wikipedia 冒頭文が一致
