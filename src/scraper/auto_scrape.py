@@ -1025,7 +1025,7 @@ def task_new_horse_pedigree():
 def _trigger_track_speed_for_date(date_str: str) -> None:
     """
     race_result_flat.parquet を増分更新し、当日の馬場速度指数を計算する。
-    raceday-evening でレース結果がすべて保存された後に呼び出す。
+    確定結果（race_result）が取れた後に呼び出す（当日夜は速報のみなので、翌朝の recent-retry からも呼ぶ）。
 
     Steps:
       1. export_category_chunked("race_result", year) で flat parquet を差分追記
@@ -1063,6 +1063,9 @@ def _trigger_track_speed_for_date(date_str: str) -> None:
             progress_cb=lambda msg: logger.info("[馬場速度] %s", msg),
         )
         logger.info("[馬場速度] assign_races 完了: %s", date_fmt)
+    except ValueError as e:
+        # 当日夜は確定結果（race_result）が未取得で 0 件になる。翌朝の recent-retry が取得後に計算し直す
+        logger.info("[馬場速度] %s の確定結果が未取得のため計算を見送る（recent-retry が取得後に実行）: %s", date_fmt, e)
     except Exception as e:
         logger.error("[馬場速度] assign_races 失敗: %s", e, exc_info=True)
 

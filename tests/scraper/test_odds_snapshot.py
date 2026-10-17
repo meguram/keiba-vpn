@@ -269,9 +269,11 @@ def test_queue_task_passes_phase_to_runner():
     class R:
         def scrape_odds(self, rid, skip_existing=True, phase=None):
             calls.append(("odds", rid, skip_existing, phase))
+            return {"entries": [1]}
 
         def scrape_pair_odds(self, rid, skip_existing=True, phase=None):
             calls.append(("pair", rid, skip_existing, phase))
+            return {"umaren": [1]}
 
     for task in ("race_odds_t60", "race_pair_odds_t15"):
         queue_tasks._race_task(R(), "202605010101", task, "20260502", smart_skip=False)

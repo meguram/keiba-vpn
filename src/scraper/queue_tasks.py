@@ -297,7 +297,9 @@ def _race_task(
         runner.scrape_race_result_on_time(race_id, skip_existing=smart_skip, opening_date=od)
         return False
     if task in _ODDS_PHASE_TASKS:
-        fn(race_id, skip_existing=smart_skip, phase=_ODDS_PHASE_TASKS[task])
+        if not fn(race_id, skip_existing=smart_skip, phase=_ODDS_PHASE_TASKS[task]):
+            # 空振りを成功扱いにしない（2026-10-17 は T-60/T-15 が全レース空振りでも cron が exit 0 で気づけなかった）
+            raise RuntimeError(f"{task}: オッズを取得できなかった（{race_id}）")
         return False
     fn(race_id, skip_existing=smart_skip)
     return False

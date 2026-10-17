@@ -107,6 +107,8 @@ def run(calendar: dict, now: datetime | None = None) -> dict[str, Any]:
     saved = {c: 0 for c, _ in CATEGORIES}
     pending = {c: 0 for c, _ in CATEGORIES}
     errors = 0
+    date_of = {rid: d for d, rids in by_date.items() for rid in rids}
+    result_dates: set[str] = set()
     for i, (cat, method, rid) in enumerate(targets):
         key = f"{cat}/{rid}"
         s = state.setdefault(key, {"attempts": 0})
@@ -120,10 +122,22 @@ def run(calendar: dict, now: datetime | None = None) -> dict[str, Any]:
             ok = False
         saved[cat] += int(ok)
         pending[cat] += int(not ok)
+        if ok and cat == "race_result" and rid in date_of:
+            result_dates.add(date_of[rid])
         if ok:
             state.pop(key, None)
         if i % 20 == 19:
             save_state(state)
         time.sleep(random.uniform(2.0, 5.0))
     save_state(state)
-    return {"dates": dates, "targets": len(targets), "saved": saved, "pending": pending, "error_count": errors}
+    # 馬場速度は確定結果（race_result）から計算する。当日夜は未取得なので、取れた日付の分をここで計算する
+    for d in sorted(result_dates):
+        try:
+            from src.scraper.auto_scrape import _trigger_track_speed_for_date
+
+            _trigger_track_speed_for_date(d)
+        except Exception as exc:
+            logger.error("recent-retry 馬場速度の計算に失敗 [%s]: %s", d, exc)
+            errors += 1
+    return {"dates": dates, "targets": len(targets), "saved": saved, "pending": pending, "error_count": errors,
+            "track_speed_dates": sorted(result_dates)}
