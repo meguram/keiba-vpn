@@ -49,15 +49,15 @@ def test_build_review_keeps_manual_values(tmp_path):
     stats = da.build_review([tmp_path / "ped"], {}, review)
     assert stats["zone_rows"] == 1 and stats["pairs_with_birth_year"] == 1
     rows = review.read_text(encoding="utf-8").splitlines()
-    assert rows[1].startswith("2008100001,父,2008,2016,1,,")
+    assert rows[1].startswith("2008100001,父,2008,2016,1,1,,")
 
-    review.write_text(rows[0] + "\n" + "2008100001,父,2008,2016,1,8,手入力\n", encoding="utf-8")
+    review.write_text(rows[0] + "\n" + "2008100001,父,2008,2016,1,1,8,手入力\n", encoding="utf-8")
     da.build_review([tmp_path / "ped"], {}, review)
     assert da.load_manual(review) == {("2008100001", 2016): (8, "手入力")}
 
 
 def test_manual_value_out_of_range(tmp_path):
     p = tmp_path / "r.csv"
-    p.write_text(",".join(da.REVIEW_COLUMNS) + "\nx,n,2000,2008,1,9,\n", encoding="utf-8")
+    p.write_text(",".join(da.REVIEW_COLUMNS) + "\nx,n,2000,2008,1,1,9,\n", encoding="utf-8")
     with pytest.raises(ValueError):
         da.load_manual(p)

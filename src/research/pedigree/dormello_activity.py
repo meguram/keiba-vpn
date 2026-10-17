@@ -21,7 +21,7 @@ from pathlib import Path
 
 CYCLE = 8
 GESTATION_DAYS = 340
-REVIEW_COLUMNS = ["stallion_id", "stallion_name", "stallion_birth_year", "conception_year", "n_horses", "manual_value", "note"]
+REVIEW_COLUMNS = ["stallion_id", "stallion_name", "stallion_birth_year", "conception_year", "min_gen", "n_horses", "manual_value", "note"]
 _YEAR_ID = re.compile(r"^(19|20)\d{2}\d{6}$")
 
 
@@ -131,16 +131,17 @@ def build_review(
                 male_gen3_known += 1
             if in_review_zone(phase(cy, ay)):
                 n_zone_pairs += 1
-                z = zone.setdefault((aid, cy), {"name": aname, "birth_year": ay, "horses": set()})
+                z = zone.setdefault((aid, cy), {"name": aname, "birth_year": ay, "horses": set(), "min_gen": gen})
                 z["horses"].add(hid)
+                z["min_gen"] = min(z["min_gen"], gen)
     out_rows = []
     for (aid, cy), z in zone.items():
         mv, note = manual.get((aid, cy), ("", ""))
-        out_rows.append([aid, z["name"], z["birth_year"], cy, len(z["horses"]), mv, note])
+        out_rows.append([aid, z["name"], z["birth_year"], cy, z["min_gen"], len(z["horses"]), mv, note])
     for (aid, cy), (mv, note) in manual.items():  # 今回の走査に出なかった手入力も落とさない
         if (aid, cy) not in zone:
-            out_rows.append([aid, "", "", cy, 0, mv, note])
-    out_rows.sort(key=lambda r: (-int(r[4]), r[0], int(r[3])))
+            out_rows.append([aid, "", "", cy, "", 0, mv, note])
+    out_rows.sort(key=lambda r: (-int(r[5]), r[0], int(r[3])))
     review_path.parent.mkdir(parents=True, exist_ok=True)
     with open(review_path, "w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
@@ -154,7 +155,8 @@ def build_review(
         "gen<=3_male_pairs": male_gen3,
         "gen<=3_male_pairs_with_birth_year": male_gen3_known,
         "zone_rows": len(zone),
-        "manual_entered": sum(1 for r in out_rows if r[5] != ""),
+        "zone_rows_min_gen<=3": sum(1 for r in out_rows if r[4] != "" and int(r[4]) <= 3),
+        "manual_entered": sum(1 for r in out_rows if r[6] != ""),
     }
 
 
