@@ -671,6 +671,9 @@ class NetkeibaClient:
             was_logged_in = self._logged_in
             self._refresh_session()
             if was_logged_in:
+                # 認証クッキーは _refresh_session で捨てているので、login() の早期 return（_logged_in が True）を避けて入り直す。
+                # これが無いと 150 リクエスト目以降は未ログインのまま進み、会員限定の表（調教・備考など）が空で返る
+                self._logged_in = False
                 self.login()
 
     # ------------------------------------------------------------------

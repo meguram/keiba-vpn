@@ -52,3 +52,22 @@ class LazyLoginTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SessionRefreshReloginTest(unittest.TestCase):
+    def test_login_state_is_reset_so_login_really_runs_after_refresh(self):
+        import src.scraper.client as cl
+
+        c = NetkeibaClient(auto_login=False)
+        c._logged_in = True
+        c._request_count = cl._SESSION_REFRESH_INTERVAL
+        seen = {}
+
+        def fake_login(self_):
+            seen["logged_in_at_login"] = self_._logged_in      # True のままだと本物の login() は早期 return して入り直さない
+            return True
+
+        with mock.patch.object(NetkeibaClient, "login", fake_login), mock.patch.object(NetkeibaClient, "_refresh_session", lambda s: None), \
+                mock.patch("time.sleep", lambda *_: None):
+            c._check_burst()
+        self.assertEqual(seen.get("logged_in_at_login"), False)
