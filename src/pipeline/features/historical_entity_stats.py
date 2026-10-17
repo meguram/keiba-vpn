@@ -4,8 +4,11 @@ race_result 履歴から、当該レース「直前」までの累計統計を�
 raw → preprocess: 本モジュールでテーブル横断の時系列累計を計算し、
 LayerA 母表に merge（modeling 前段）。
 
-同一 id（horse / jockey / trainer）を日付・race_id 順に並べ、
-cumsum(当行を含む勝ち) − 当行の勝ち = 直前までの勝数（同様に top3）。
+同一 id（horse / jockey / trainer）について、**日付が厳密に前**の行だけを数える（同日の他レース・同一レースの他馬の結果は数えない）。
+日ごとに集計して累積し、その日の分を引く（strict_prior_by_date）。推論側（serving_layer_a）も同じ関数を使う。
+
+以前は (id, 日付, race_id, 馬番) 順の累積で、同一レースで馬番の小さい同一騎手・同一調教師の馬の結果や、
+race_id の小さい別場の同日レース（実際には後に発走）の結果まで数えていた（先読み）。2026-10-18 に直した。
 """
 
 from __future__ import annotations
@@ -34,6 +37,20 @@ def _norm_id(s: pd.Series) -> pd.Series:
     return s.map(one)
 
 
+def strict_prior_by_date(work: pd.DataFrame, gid: str, cols: list[str], date_col: str = "date") -> pd.DataFrame:
+    """work の各行について、同じ gid の「日付が厳密に前」の行の cols の合計を返す（work と同じ index）。"""
+    d = pd.to_datetime(work[date_col], errors="coerce")
+    w = pd.DataFrame({"_g": work[gid].to_numpy(), "_d": d.to_numpy()}, index=work.index)
+    for c in cols:
+        w[c] = work[c].to_numpy(dtype=np.float64)
+    daily = w.groupby(["_g", "_d"], sort=True)[cols].sum()
+    prior = (daily.groupby(level=0).cumsum() - daily).reset_index()
+    j = w[["_g", "_d"]].reset_index(drop=True).merge(prior, on=["_g", "_d"], how="left")
+    out = j[cols].copy()
+    out.index = work.index
+    return out
+
+
 def _prior_rates_for_id(
     df: pd.DataFrame,
     id_col: str,
@@ -51,18 +68,16 @@ def _prior_rates_for_id(
     work = work.sort_values(["_gid", date_col, "race_id", "horse_number"], kind="mergesort")
 
     fp = pd.to_numeric(work["finish_position"], errors="coerce")
+    work["_n"] = 1.0
     work["_win"] = (fp == 1).astype(np.float64)
     work["_t3"] = ((fp >= 1) & (fp <= 3)).astype(np.float64)
-
-    g = work.groupby("_gid", sort=False)
-    cs_win = g["_win"].cumsum()
-    cs_t3 = g["_t3"].cumsum()
-    prior_wins = cs_win - work["_win"]
-    prior_top3 = cs_t3 - work["_t3"]
-    prior_races = g.cumcount()
+    cs = strict_prior_by_date(work, "_gid", ["_n", "_win", "_t3"], date_col)
+    prior_wins = cs["_win"]
+    prior_top3 = cs["_t3"]
+    prior_races = cs["_n"]
 
     out = work[["race_id", "horse_number"]].copy()
-    out[f"{prefix}_prior_races"] = prior_races.to_numpy()
+    out[f"{prefix}_prior_races"] = prior_races.fillna(0).to_numpy().astype(np.int64)
     out[f"{prefix}_prior_wins"] = prior_wins.to_numpy()
     out[f"{prefix}_prior_top3"] = prior_top3.to_numpy()
     pr = prior_races.astype(float).replace(0, np.nan).to_numpy()
@@ -83,13 +98,11 @@ def _prior_avg_finish(df: pd.DataFrame) -> pd.DataFrame:
     work["date"] = pd.to_datetime(work["date"], errors="coerce")
     work["_hid"] = _norm_id(work["horse_id"])
     fp = pd.to_numeric(work["finish_position"], errors="coerce")
-    work["_fp"] = fp
+    work["_fs"] = fp.fillna(0.0)
+    work["_n"] = 1.0
     work = work.sort_values(["_hid", "date", "race_id"], kind="mergesort")
-
-    g = work.groupby("_hid", sort=False)
-    prior_sum = g["_fp"].cumsum() - work["_fp"].fillna(0)
-    prior_cnt = g.cumcount()
-    avg = np.where(prior_cnt > 0, prior_sum / prior_cnt, np.nan)
+    cs = strict_prior_by_date(work, "_hid", ["_fs", "_n"])
+    avg = np.where(cs["_n"] > 0, cs["_fs"] / cs["_n"].replace(0, np.nan), np.nan)
 
     out = work[["race_id", "horse_number"]].copy()
     out["horse_prior_avg_finish"] = avg

@@ -3,14 +3,14 @@
 学習側（``layer_a_dataset.build_layer_a_dataframe`` と ``load_table``）と同じ定義で、結果が未確定の出走馬（出馬表）に付ける。
 
 方式: 学習と同じ関数・同じ並び順を使い、「履歴（結果あり）＋対象レース（結果なし）」を連結して計算し、対象行だけ返す。
-- 通算成績（``historical_entity_stats`` と同じ定義）: 履歴の行だけを数える（対象行は数えない）。並びは学習と同じ（日付・race_id・馬番）。
+- 通算成績（``historical_entity_stats`` と同じ関数 ``strict_prior_by_date``）: 日付が厳密に前の履歴の行だけを数える（同日・同一レースの結果は数えない）。
 - 馬場傾向・父/母父の勝率（``track_bias_pedigree.build_track_bias_pedigree_features``）: 結果のないレースにプレースホルダ行を足して
   傾向を付ける。未確定レースは同日の後のレースの「当日直前傾向」に混ざらない。
 
 注意（学習側の仕様）:
 - 出馬表の sire / dam_sire は全期間で空のため、学習表の ``sire_prior_win_rate_surface`` などは「面ごとの全体の累計勝率」になっている。
   推論でも同じ（空のまま扱う）。血統名が入るようになったら学習表の作り直しが先。
-- 学習側の通算成績は、同じレースで馬番の小さい同一騎手・同一調教師の馬の結果も数えている（先読み）。推論では結果が無いので数えない。
+- 学習側の通算成績も 2026-10-18 から『日付が厳密に前』に直したので、推論と同じ定義（以前は同一レースの他馬の結果まで数える先読みがあった）。
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.pipeline.features.historical_entity_stats import _norm_id
+from src.pipeline.features.historical_entity_stats import _norm_id, strict_prior_by_date
 from src.pipeline.features.track_bias_pedigree import (
     _prior_win_rate_by_id_surface,
     _time_sort_seconds,
@@ -94,11 +94,6 @@ def _to_pandas(df: Any) -> pd.DataFrame:
     return df.to_pandas() if hasattr(df, "to_pandas") else df.copy()
 
 
-def _exclusive_cum(w: pd.DataFrame, gid: str, cols: list[str]) -> pd.DataFrame:
-    g = w.groupby(gid, sort=False)
-    return pd.DataFrame({c: g[c].cumsum() - w[c] for c in cols}, index=w.index)
-
-
 def _prior_stats(hist: pd.DataFrame, card: pd.DataFrame) -> pd.DataFrame:
     """騎手・調教師・馬の通算成績。履歴（結果あり）の行だけを数え、対象行は数えない。"""
     out = card[["race_id", "horse_number"]].copy()
@@ -115,7 +110,7 @@ def _prior_stats(hist: pd.DataFrame, card: pd.DataFrame) -> pd.DataFrame:
         w["_win"] = ((fp == 1) & ~w["_t"]).astype(np.float64)
         w["_t3"] = ((fp >= 1) & (fp <= 3) & ~w["_t"]).astype(np.float64)
         w["_fs"] = fp.fillna(0.0) * own
-        cs = _exclusive_cum(w, "_gid", ["_n", "_win", "_t3", "_fs"])
+        cs = strict_prior_by_date(w, "_gid", ["_n", "_win", "_t3", "_fs"])
         t = w[w["_t"]]
         r = pd.DataFrame({"race_id": t["race_id"], "horse_number": t["horse_number"]})
         pr = cs.loc[t.index, "_n"]
