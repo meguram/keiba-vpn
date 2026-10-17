@@ -11,3 +11,4 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a001212,Sir Gallahad III,no_data,1920,,,,2026-10-17,Rimondo の '01.01.1920' は仮置きで不採用。他は年のみ
 000a0011a3,Prince Rose,no_data,1928,,,,2026-10-17,年のみ
 000a001139,The Tetrarch,adopted,1911,4,22,https://www.ballylinchstud.ie/about-us/the-tetrarch/ ; https://sporthorse-data.com/pedigree/tetrarch,2026-10-17,独立した複数の出典が一致
+000a00114f,Bayardo,no_data,1906,,,,2026-10-17,Wikipedia・Wikidata・競売カタログいずれも年のみ
