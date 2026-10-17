@@ -100,6 +100,8 @@ class V3Serving:
         records = self._training_records(base["horse_id"].unique().tolist(), storage, workers) if storage is not None else {}
         tl = ssr.tl_columns_for_races(base[KEYS + ["date"]], records, self.tl_ref)
         tl = base[KEYS].merge(tl, on=KEYS, how="left").drop(columns=KEYS)
+        # 調教の記録が 1 頭も無いと列が作られない。学習表でも記録の無い馬は欠損（tl_has_training も欠損）なので、欠損で埋める
+        tl = tl.reindex(columns=[x for x in self.feature_cols if x.startswith(ssr.TL_PREFIX)])
         tl.index = base.index
 
         rel_names = [x for x in self.feature_cols if ssr.split_relative_name(x) is not None and x not in cur.columns]
