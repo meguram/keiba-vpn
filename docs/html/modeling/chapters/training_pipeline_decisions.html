@@ -920,7 +920,32 @@
   <li>未検討: 種牡馬 ID そのものをカテゴリとして入れる、種牡馬ごとの産駒成績を経験ベイズで縮約した列（距離・馬場別）、母父系・ニックスなど。血統の被覆率が 100% と分かったので、血統特徴の作り直しは tp-05g の再検討として価値がありそう。</li>
 </ul>
 
-<h2>32. 以降の節</h2>
+<h2>32. v3 の推論経路（当日の 301 列の組み立て）と学習との一致</h2>
+<p class="muted">コード: <code>src/pipeline/inference/v3_serving.py</code>（組み立て）、<code>src/pipeline/features/serving_{layer_a,ped_extras,stage_rel}.py</code>（部品）、<code>src/scripts/data/verify_v3_serving.py</code>（検証）、<code>diag_v3_serving_gap.py</code>（差の切り分け）。2026-10-17。</p>
+<h3>確定事項</h3>
+<ul>
+  <li>v3 が使う 301 列は、履歴系 127（<code>InferenceContext.build</code>）+ LayerA 48 + 血統 24 + 追加 7 + 前段 3 + 相対化 42 + 追い切り 50。推論では各部を学習と同じ定義で作り、部品ごとに学習表（修正後）と一致を確認した。</li>
+  <li>通しの検証（2025 年の 7 開催日 228 レース 3,149 頭、bundle_2024 と前段 verify_2024、履歴は「その日より前＋同日で先に発走したレース」だけ）: 推論経路の予測と tp-06c の予測の相関は勝率 0.998・連対 0.998・複勝 0.997、平均絶対差は勝率 0.003。<b>勝率 LogLoss は 0.2159（推論経路）対 0.2150（tp-06c）で +0.0009</b>。</li>
+  <li>差の主因は推論の出馬表（<code>card_frame</code>）が枠番・馬体重増減・頭数・R・天候・重量種別を落としていたこと（約 +0.0007）。これを足して直した（4 日 1,839 頭の再計測で +0.0010 → +0.0003）。</li>
+</ul>
+<h3>残る差の内訳（列群を学習側の値に差し替えて戻る LogLoss）</h3>
+<table>
+<tr><th>列群</th><th>戻る ΔLogLoss</th><th>原因</th><th>扱い</th></tr>
+<tr><td><code>sr_var_today</code> / <code>sr_var_n</code></td><td>約 0.00023</td><td>学習は同日・同場・同面で 90 分以上前に発走したレースの結果を使う。サービング用バンドル（<code>compute_entrants</code>）は同日の結果を受け取れず前の開催日の値で代用する</td><td>未対応（バンドル経路が同日の確定結果を受け取れるようにする）</td></tr>
+<tr><td>馬場傾向（<code>track_bias_*</code>）</td><td>0.00008</td><td>学習値は先読みリーク修正前の旧表。推論は修正後</td><td>想定どおり（tp-07 で修正後の表に作り直す）</td></tr>
+<tr><td>騎手・調教師の通算成績</td><td>0.00004</td><td>学習側は同一レースの他馬（同じ騎手・調教師）の結果まで数える先読みがあり、推論では再現できない</td><td>学習側の先読み。tp-07 で直す</td></tr>
+<tr><td>血統 24 / 追加 7 / 追い切り 50 / 馬の通算成績</td><td>0 付近</td><td>-</td><td>問題なし</td></tr>
+<tr><td>前段 3 列</td><td>−0.00015</td><td>推論側（out-of-sample の最終モデル）の方が良い</td><td>問題なし</td></tr>
+</table>
+<h3>運用上の注意</h3>
+<ul>
+  <li>血統名は学習表で全行空（§31）。推論も空として作ってあり（<code>blank_pedigree=True</code>）、v3 を血統入りで作り直す（tp-07）ときに同時に直す。</li>
+  <li>追い切り（<code>tl_*</code>）は馬別調教ページの最新記録が前日夕方（eve）までに取れていることが前提。記録が無い馬は学習表と同じく欠損になり、全馬で無いレースでも列は欠損で埋めて動く。</li>
+  <li>同日の前のレースの結果は <code>same_day_results</code> が保存済みの <code>race_result</code> から足す。前日までの結果は日次のテーブルエクスポート（22:00）に依存する。</li>
+  <li>配線は <code>KEIBA_V3_SERVING=off|shadow|predict</code>（既定 off）。shadow は <code>data/local/inference/predictions_v3/&lt;日&gt;/&lt;race_id&gt;.parquet</code> に残すだけ（画面・API・GCS には出さない）。2026-10-17 にホストで shadow を承認・設定（ランナーの次の起動から有効）。predict は未承認。</li>
+</ul>
+
+<h2>33. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
