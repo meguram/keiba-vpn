@@ -389,14 +389,61 @@ def _count_parquet_races(path: Path) -> int:
     return len(_existing_race_ids(path))
 
 
+BRIDGE_COL = "result_source"
+BRIDGE_VALUE = "on_time"
+
+
 def _existing_race_ids(path: Path) -> set[str]:
+    """flat に入っているレース ID。速報から橋渡しした行（result_source == on_time）は『確定結果ではない』ので数えない
+    （数えると、確定結果が公開されても『既にエクスポート済み』になって入れ替わらない）。"""
     if not path.exists():
         return set()
     try:
-        tbl = pq.read_table(path, columns=["race_id"])
-        return {str(x) for x in tbl.column("race_id").to_pandas().tolist() if x}
+        cols = ["race_id"] + ([BRIDGE_COL] if BRIDGE_COL in pq.read_schema(path).names else [])
+        df = pq.read_table(path, columns=cols).to_pandas()
+        if BRIDGE_COL in df.columns:
+            df = df[df[BRIDGE_COL].fillna("") != BRIDGE_VALUE]
+        return {str(x) for x in df["race_id"].tolist() if x}
     except Exception:
         return set()
+
+
+def bridge_on_time_results(year: str) -> dict:
+    """確定結果（db.netkeiba.com の race_result）の公開が数日遅れる間、速報（race_result_on_time。着順・タイム・通過順・上がりなど同じ列）
+    から race_result_flat に行を足す。履歴系の特徴量（直近の開催の結果）が数日古くなるのを避けるため。
+    橋渡しした行には result_source='on_time' を付け、確定結果が出たら入れ替わる（確定結果の取り込み対象から外れず、同じ馬番の行は後勝ち、
+    確定結果に無い馬の行は掃除する）。race_result_race（レース単位の表）には足さない。"""
+    out_dir = OUTPUT_DIR / year
+    rr, ot = out_dir / "race_result_flat.parquet", out_dir / "race_result_on_time_flat.parquet"
+    if not rr.exists() or not ot.exists():
+        return {"bridged_races": 0, "reason": "flat が無い"}
+    cur = pq.read_table(rr).to_pandas()
+    if BRIDGE_COL not in cur.columns:
+        cur[BRIDGE_COL] = None
+    is_b = cur[BRIDGE_COL].fillna("") == BRIDGE_VALUE
+    official = set(cur.loc[~is_b, "race_id"].astype(str))
+    bridged = set(cur.loc[is_b, "race_id"].astype(str))
+    stale = bridged & official
+    changed = False
+    if stale:
+        cur = cur[~(is_b & cur["race_id"].astype(str).isin(stale))]
+        changed = True
+    new_df = pq.read_table(ot).to_pandas()
+    new_df["race_id"] = new_df["race_id"].astype(str)
+    need = set(new_df["race_id"]) - official - (bridged - stale)
+    if need:
+        add = new_df[new_df["race_id"].isin(need)].drop(columns=["finish_position_raw", "finish_status"], errors="ignore").copy()
+        add = add[add.get("finish_position", 0).notna()] if "finish_position" in add.columns else add
+        add[BRIDGE_COL] = BRIDGE_VALUE
+        cur = pd.concat([cur, add], ignore_index=True)
+        changed = True
+    if changed:
+        cur.to_parquet(rr, index=False, engine="pyarrow")
+    stats = {"bridged_races": len(need), "removed_stale_races": len(stale)}
+    if need:
+        logger.warning("[%s] 確定結果(db.netkeiba.com)が未公開のレースが %d 件。速報で代用中（公開されると自動で入れ替わる）: %s", year, len(need), sorted(need)[:3])
+    logger.info("[%s] 速報から race_result_flat へ橋渡し: %s", year, stats)
+    return stats
 
 
 def _append_parquet_rows(path: Path, new_rows: list[dict]) -> int:
@@ -684,6 +731,13 @@ def export_year(
         if stats.get("race_size_mb"):
             size_info += f" race={stats['race_size_mb']}MB"
         logger.info("[%s/%s] 完了: %s, %s%s", year, cat, flat_info, race_info, size_info)
+
+    if "race_result" in cats:
+        try:
+            _b = bridge_on_time_results(year)
+            all_stats.append({"category": "race_result_bridge_on_time", "races": _b.get("bridged_races", 0), "flat_rows": 0, "race_rows": 0, **_b})
+        except Exception as exc:  # noqa: BLE001  橋渡しの失敗で日次エクスポート全体を止めない
+            logger.warning("[%s] 速報の橋渡しに失敗: %s", year, exc)
 
     elapsed = time.time() - t0
 
