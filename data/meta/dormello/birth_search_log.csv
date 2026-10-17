@@ -1,0 +1,13 @@
+horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,note
+000a00115e,Blenheim,candidate,1927,4,16,https://sporthorse-data.com/pedigree/blenheim-1,2026-10-17,SporthorseData 1 件のみ（元ページは 403 で未確認）。Wikipedia は年のみ
+000a000fc9,Princequillo,no_data,1940,,,,2026-10-17,各サイト年のみ。'01/01/1940' は仮置きで不採用
+000a00115d,Mahmoud,no_data,1933,,,,2026-10-17,Britannica・JBIS・Wikidata いずれも年のみ
+000a0019b6,Understanding,no_data,1963,,,,2026-10-17,検索結果に該当なし
+000a0011c8,Teddy,no_data,1913,,,,2026-10-17,年のみ
+000a001123,Blandford,no_data,1919,,,,2026-10-17,年のみ
+000a001124,Swynford,adopted,1907,1,,https://en.wikipedia.org/wiki/Swynford,2026-10-17,月のみ（January 1907）
+000a00129b,Blue Larkspur,no_data,1926,,,,2026-10-17,年のみ
+000a0013fd,Discovery,candidate,1931,3,3,https://grokipedia.com/page/discovery_horse,2026-10-17,Grokipedia 1 件のみ（独立した出典なし）。Wikipedia・Wikidata は年のみ
+000a001212,Sir Gallahad III,no_data,1920,,,,2026-10-17,Rimondo の '01.01.1920' は仮置きで不採用。他は年のみ
+000a0011a3,Prince Rose,no_data,1928,,,,2026-10-17,年のみ
+000a001139,The Tetrarch,adopted,1911,4,22,https://www.ballylinchstud.ie/about-us/the-tetrarch/ ; https://sporthorse-data.com/pedigree/tetrarch,2026-10-17,独立した複数の出典が一致
