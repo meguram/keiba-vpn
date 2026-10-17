@@ -31,14 +31,17 @@ class _Resp:
 
 
 class _FakeSession:
-    def __init__(self, by_type):
+    def __init__(self, by_type, status="result"):
         self.by_type = by_type
+        self.status = status
+        self.urls = []
 
     def get(self, url, timeout=0):
-        t = url.rsplit("type=", 1)[1]
+        self.urls.append(url)
+        t = url.rsplit("type=", 1)[1].split("&")[0]
         if t not in self.by_type:
             return _Resp({}, 404)
-        return _Resp({"status": "result", "data": {"odds": {t: self.by_type[t]}}})
+        return _Resp({"status": self.status, "data": {"odds": {t: self.by_type[t]}}})
 
 
 def test_parse_sanrenpuku_sorts_combo_and_ignores_garbage():
@@ -60,10 +63,27 @@ def test_parse_sanrenpuku_sorts_combo_and_ignores_garbage():
     assert out["wide"] == [] and out["umatan"] == []
 
 
+def test_odds_api_needs_action_init_and_accepts_selling_status():
+    # 発売中は status="middle"、action=init が無いと data が空（2026-10-17 の開催日に実測）
+    win = {"01": ["3.3", "0", "1"], "02": ["8.3", "0", "6"]}
+    plc = {"01": ["1.5", "2.0", "1"], "02": ["2.4", "3.1", "6"]}
+    sess = _FakeSession({"1": win, "2": plc, "7": {"010203": ["115.8", "0", "39"]}}, status="middle")
+    out = OddsParser().parse_from_api(sess, "202604040101")
+    assert [e["win_odds"] for e in out["entries"]] == [3.3, 8.3]
+    pair = OddsParser().parse_pair_odds_from_api(sess, "202604040101")
+    assert pair["sanrenpuku"] == [{"combo": [1, 2, 3], "odds": 115.8, "popularity": 39}]
+    assert sess.urls and all("action=init" in u for u in sess.urls)
+
+
+def test_odds_api_ignores_unknown_status():
+    sess = _FakeSession({"1": {"01": ["3.3", "0", "1"]}}, status="yoso")
+    assert OddsParser().parse_from_api(sess, "202604040101")["entries"] == []
+
+
 def test_sanrenpuku_failure_does_not_break_other_bet_types():
     class Boom(_FakeSession):
         def get(self, url, timeout=0):
-            if url.endswith("type=7"):
+            if "type=7" in url:
                 raise RuntimeError("boom")
             return super().get(url, timeout)
 

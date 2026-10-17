@@ -1745,14 +1745,17 @@ class OddsParser:
     }
     """
 
-    ODDS_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type={type}"
+    # 発売中は "middle"、確定後は "result"。action=init が無いと発売中は data が空で返る（2026-10-17 実測）
+    LIVE_STATUSES = ("result", "middle")
 
-    WIN_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=1"
-    PLACE_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=2"
-    UMAREN_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=4"
-    WIDE_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=5"
-    UMATAN_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=6"
-    SANRENPUKU_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=7"
+    ODDS_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type={type}&action=init"
+
+    WIN_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=1&action=init"
+    PLACE_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=2&action=init"
+    UMAREN_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=4&action=init"
+    WIDE_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=5&action=init"
+    UMATAN_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=6&action=init"
+    SANRENPUKU_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=7&action=init"
 
     def parse_from_api(self, session, race_id: str) -> dict[str, Any]:
         """HTTP session を使って JSON API からオッズを取得・パースする。"""
@@ -1765,7 +1768,7 @@ class OddsParser:
             resp = session.get(self.WIN_API.format(race_id=race_id), timeout=15)
             if resp.status_code == 200:
                 d = resp.json()
-                if d.get("status") == "result":
+                if d.get("status") in self.LIVE_STATUSES:
                     win_data = d.get("data", {}).get("odds", {}).get("1", {})
         except Exception:
             pass
@@ -1774,7 +1777,7 @@ class OddsParser:
             resp = session.get(self.PLACE_API.format(race_id=race_id), timeout=15)
             if resp.status_code == 200:
                 d = resp.json()
-                if d.get("status") == "result":
+                if d.get("status") in self.LIVE_STATUSES:
                     place_data = d.get("data", {}).get("odds", {}).get("2", {})
         except Exception:
             pass
@@ -1903,7 +1906,7 @@ class OddsParser:
                 if resp.status_code != 200:
                     continue
                 d = resp.json()
-                if d.get("status") != "result":
+                if d.get("status") not in self.LIVE_STATUSES:
                     continue
                 raw = d.get("data", {}).get("odds", {}).get(resp_key, {})
 
