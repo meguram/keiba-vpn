@@ -79,5 +79,28 @@ class BundleTest(unittest.TestCase):
         self.assertFalse(p.isna().any().any())
 
 
+
+class MtlMemberTest(unittest.TestCase):
+    def test_mtl_member_roundtrip_matches_direct_prediction(self):
+        from src.pipeline.models.tp25c_mtl import mtl_predict
+
+        X, y, race = _data(n_races=60, seed=3)
+        rng = np.random.default_rng(0)
+        aux = rng.normal(size=(len(X), 2))
+        aux[::7, 0] = np.nan
+        cols = list(X.columns)
+        m = eb.MemberSpec("mtl", "mtl_nn", {"hidden": (8,), "epochs": 2, "aux_w": 0.5}, cols)
+        b = eb.EnsembleBundle([m], _spec(1)).fit(X, y, race, threads=1, seeds=[0, 1], aux=aux)
+        with tempfile.TemporaryDirectory() as d:
+            b.save(Path(d))
+            b2 = eb.EnsembleBundle.load(Path(d))
+        p1, p2 = b.predict_member(m, X, race), b2.predict_member(m, X, race)
+        for t_ in ("win", "top2", "top3"):
+            np.testing.assert_allclose(p1[t_], p2[t_], atol=1e-6)
+        o = mtl_predict(b2.models["mtl"][0], b2._cast(X, cols), race)
+        self.assertEqual(o["aux"].shape, (len(X), 2))
+        self.assertTrue(np.isfinite(p1["win"]).all())
+
+
 if __name__ == "__main__":
     unittest.main()

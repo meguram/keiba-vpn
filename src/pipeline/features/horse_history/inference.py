@@ -31,6 +31,40 @@ _GOING_FULL = {"稍": "稍重", "不": "不良"}
 _CLASS_GRADE = [("未勝利", "未勝利"), ("新馬", "新馬"), ("１勝", "1勝"), ("２勝", "2勝"), ("３勝", "3勝")]
 
 
+_NAME_EDITION = r"^第\d+回\s*"
+_NAME_SUFFIX = r"\s*[（(][^)）]*[)）]$"
+
+
+def graded_name_key(name: str | None) -> str:
+    """重賞名の照合キー。結果表の名前は『第96回中山記念』『札幌日経オープン(L)』のように回数・格が付くが、出馬表は『中山記念』なので、回数と末尾の括弧を除く。"""
+    import re
+
+    return re.sub(_NAME_SUFFIX, "", re.sub(_NAME_EDITION, "", str(name or "").strip())).strip()
+
+
+def _abbrev(key: str) -> str:
+    """出馬表は『リゲルS』『○○C』のように略すことがあるので、ステークス→S、カップ→C にそろえる。"""
+    return key.replace("ステークス", "S").replace("カップ", "C").replace("ハンデキャップ", "H")
+
+
+def graded_lookup(name: str | None, graded_names: dict[str, str]) -> str:
+    """出馬表のレース名 → 格。回数・括弧・略称をそろえて完全一致、無ければ『スポンサー名つきの正式名の末尾が出馬表の名前に一致する』唯一の重賞。不明は OP。"""
+    k = graded_name_key(name)
+    if not k:
+        return "OP"
+    if k in graded_names:
+        return graded_names[k]
+    ka = _abbrev(k)
+    table = {_abbrev(x): g for x, g in graded_names.items()}
+    if ka in table:
+        return table[ka]
+    if len(ka) >= 4:
+        hits = {g for x, g in table.items() if x.endswith(ka) and len(x) > len(ka)}
+        if len(hits) == 1:
+            return hits.pop()
+    return "OP"
+
+
 def graded_race_names(tables_dir: str | Path | None = None, years: list[int] | None = None) -> dict[str, str]:
     """重賞・リステッドのレース名 → 直近の格（G1/G2/G3/L）。出馬表の格は重賞も ``OP`` としか書かれないため、履歴から引く。"""
     base = Path(tables_dir) if tables_dir else TABLES_DIR
@@ -47,7 +81,7 @@ def graded_race_names(tables_dir: str | Path | None = None, years: list[int] | N
     df = df.filter(pl.col("grade").is_in(["G1", "G2", "G3", "L"]) & pl.col("race_name").is_not_null())
     last = df.group_by("race_id").agg(pl.col("race_name").first(), pl.col("grade").first()).sort("race_id", descending=True)
     # race_id の新しい順に並べているので、逆順に辞書へ入れて最新の格が残るようにする
-    return {n: g for n, g in reversed(list(zip(last["race_name"].to_list(), last["grade"].to_list())))}
+    return {graded_name_key(n): g for n, g in reversed(list(zip(last["race_name"].to_list(), last["grade"].to_list())))}
 
 
 def normalize_card(card: pl.DataFrame, graded_names: dict[str, str] | None = None) -> pl.DataFrame:
@@ -65,8 +99,9 @@ def normalize_card(card: pl.DataFrame, graded_names: dict[str, str] | None = Non
             derived = pl.when(pl.col("race_class").fill_null("").str.contains(key)).then(pl.lit(g)).otherwise(derived)
         df = df.with_columns(pl.when(pl.col("grade").fill_null("") == "").then(derived).otherwise(pl.col("grade")).alias("grade"))
     if graded_names and "race_name" in df.columns and "grade" in df.columns:
+        lookup = {n: graded_lookup(n, graded_names) for n in df["race_name"].drop_nulls().unique().to_list()}
         df = df.with_columns(
-            pl.when(pl.col("grade") == "OP").then(pl.col("race_name").replace_strict(graded_names, default="OP", return_dtype=pl.Utf8))
+            pl.when(pl.col("grade") == "OP").then(pl.col("race_name").replace_strict(lookup, default="OP", return_dtype=pl.Utf8))
             .otherwise(pl.col("grade")).alias("grade"))
     return df
 

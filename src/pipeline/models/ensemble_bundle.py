@@ -49,7 +49,8 @@ class EnsembleBundle:
         self.models: dict[str, list[dict]] = {}      # member 名 → seed ごとのモデル
 
     # ------------------------------------------------------------ 学習
-    def fit(self, X: pd.DataFrame, y: dict, race: np.ndarray, threads: int, seeds: list[int]) -> "EnsembleBundle":
+    def fit(self, X: pd.DataFrame, y: dict, race: np.ndarray, threads: int, seeds: list[int], aux: np.ndarray | None = None) -> "EnsembleBundle":
+        """aux: 補助目的変数（行 × k、欠損は NaN）。recipe が mtl_nn のメンバーだけが使う。"""
         for c in X.columns:
             if str(X[c].dtype) == "category":
                 self.cat_levels[c] = [str(v) for v in X[c].cat.categories]
@@ -58,7 +59,14 @@ class EnsembleBundle:
             self.models[m.name] = []
             for s in seeds:
                 mo: dict = {}
-                zoo.fit_predict(m.recipe, Xm, y, race, Xm.iloc[:1], race[:1], threads, seed=s, params=dict(m.params), model_out=mo)
+                if m.recipe == "mtl_nn":
+                    from src.pipeline.models.tp25c_mtl import mtl_fit_predict
+
+                    kw = {k: m.params[k] for k in ("hidden", "epochs", "lr", "wd", "dropout") if k in m.params}
+                    o = mtl_fit_predict(Xm, y, aux, race, Xm.iloc[:1], race[:1], seed=s, aux_w=float(m.params.get("aux_w", 0.5)), want_model=True, **kw)
+                    mo = o["model"]
+                else:
+                    zoo.fit_predict(m.recipe, Xm, y, race, Xm.iloc[:1], race[:1], threads, seed=s, params=dict(m.params), model_out=mo)
                 self.models[m.name].append(mo)
         return self
 
@@ -92,6 +100,11 @@ class EnsembleBundle:
                 out = {t: mo["boosters"][t].predict(Xm, raw_score=False) for t in TOT}
             elif m.recipe == "xgb_binary":
                 out = {t: mo["xgb"][t].predict_proba(Xm)[:, 1] for t in TOT}
+            elif m.recipe == "mtl_nn":
+                from src.pipeline.models.tp25c_mtl import mtl_predict
+
+                o = mtl_predict(mo, Xm, race)
+                out = {"win": wm.softmax_by_race(race, o["win_score"]), "top2": zoo.sigmoid(o["top2_logit"]), "top3": zoo.sigmoid(o["top3_logit"])}
             elif m.recipe in ("nn", "linear"):
                 o = zoo.nn_predict(mo, Xm, race)
                 out = {"win": wm.softmax_by_race(race, o["win_score"]), "top2": zoo.sigmoid(o["top2_logit"]), "top3": zoo.sigmoid(o["top3_logit"])}
@@ -132,7 +145,7 @@ class EnsembleBundle:
                 if "state" in mo:
                     import torch
 
-                    torch.save({"arch": mo["arch"], "state": mo["state"]}, sd / "nn.pt")
+                    torch.save({"arch": mo["arch"], "state": mo["state"], "mu": mo.get("mu"), "sd": mo.get("sd")}, sd / "nn.pt")
                     with open(sd / "prep.pkl", "wb") as f:
                         pickle.dump(mo["prep"], f)
 
@@ -165,6 +178,8 @@ class EnsembleBundle:
 
                     z = torch.load(sd / "nn.pt", map_location="cpu", weights_only=False)
                     mo.update({"arch": z["arch"], "state": z["state"]})
+                    if "mu" in z:
+                        mo.update({"mu": z["mu"], "sd": z["sd"]})
                     with open(sd / "prep.pkl", "rb") as f:
                         mo["prep"] = pickle.load(f)
                 b.models[mm["name"]].append(mo)

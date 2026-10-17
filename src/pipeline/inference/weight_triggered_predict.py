@@ -135,7 +135,7 @@ class InferenceContext:
         return out, info | {"engine": "full"}
 
 
-V3_CARD_EXTRA = ["bracket_number", "weight_change", "field_size", "round", "weather", "weight_rule", "course_type"]
+V3_CARD_EXTRA = ["bracket_number", "weight_change", "field_size", "round", "weather", "weight_rule", "course_type", "jockey_name"]
 
 
 def card_frame(storage: Any, race_ids: list[str]) -> pl.DataFrame:

@@ -1064,6 +1064,13 @@ class HorseParser:
 
         return result
 
+    @staticmethod
+    def _link_id(a, kind: str) -> str:
+        """プロフィール表のリンク（/owner/005509/、/breeder/373126/）から ID を取る。リンクが無い・形が違うときは空。"""
+        href = (a.get("href") if a is not None else "") or ""
+        m = re.search(rf"/{kind}/([^/?#]+)", str(href))
+        return m.group(1) if m else ""
+
     def _parse_profile(self, soup: BeautifulSoup) -> dict:
         info: dict[str, Any] = {}
 
@@ -1101,8 +1108,12 @@ class HorseParser:
                     info["trainer"] = link_text
                 elif "馬主" in th:
                     info["owner"] = link_text
+                    if self._link_id(link, "owner"):
+                        info["owner_id"] = self._link_id(link, "owner")
                 elif "生産者" in th:
                     info["breeder"] = link_text
+                    if self._link_id(link, "breeder"):
+                        info["breeder_id"] = self._link_id(link, "breeder")
                 elif "産地" in th:
                     info["birthplace"] = val
                 elif "獲得賞金" in th and "中央" in th:

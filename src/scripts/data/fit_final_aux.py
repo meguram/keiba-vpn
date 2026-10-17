@@ -22,7 +22,7 @@ from src.pipeline.features import serving_aux as sa
 from src.scripts.data import tp25c_eval as c
 
 ROOT = Path(__file__).resolve().parents[3]
-OUT = ROOT / "data/local/modeling/training_pipeline/final_aux"
+OUT = Path(os.environ.get("FINAL_AUX_OUT") or ROOT / "data/local/modeling/training_pipeline/final_aux")
 SEEDS = [int(s) for s in (os.environ.get("SEEDS") or "0,1,2,3,4").split(",")]
 
 

@@ -1414,6 +1414,12 @@
     },
     "dam_sire": {
      "type": "str"
+    },
+    "owner_id": {
+     "type": "str"
+    },
+    "breeder_id": {
+     "type": "str"
     }
    },
    "entry_required": {
@@ -2178,6 +2184,12 @@
      "type": "str"
     },
     "dam_sire": {
+     "type": "str"
+    },
+    "owner_id": {
+     "type": "str"
+    },
+    "breeder_id": {
      "type": "str"
     }
    },

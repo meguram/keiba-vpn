@@ -22,7 +22,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 TP = ROOT / "data/local/modeling/training_pipeline"
-FIX = ROOT / "data/local/modeling/training_pipeline_fixed"
+FIX = Path(os.environ.get("TP_BASE_DIR") or ROOT / "data/local/modeling/training_pipeline_fixed")   # v4 の土台で回すときは TP_BASE_DIR=training_pipeline_v4
 SX = TP / "smartrc_ten1f"
 OUT = Path(os.environ.get("TP25C_OUT") or TP / "tp25c")
 SEEDS = [int(s) for s in (os.environ.get("SEEDS") or "0,1,2").split(",")]
@@ -256,6 +256,9 @@ def cmd_oof(a):
             _log(f"oof aux {Yr} done")
         np.save(cache, oof)
     names = ["mtl_" + c for c in v["aux"]]
+    if getattr(a, "oof_only", False):
+        _log(f"oof only: {cache}")
+        return
     for j, c in enumerate(names):
         df[c] = oof[:, j]
     rel = _rel_cols(df, names)
@@ -266,7 +269,7 @@ def cmd_oof(a):
     if a.with_sx:
         specs.append(ab.Spec("LGB_V0+SX", base + sx))
     if a.stage_only:
-        st = pd.read_parquet(TP / "oof/stage_features_expanding.parquet")[["race_id", "horse_id", "s_time_pred", "s_time_gap", "s_rank_pred"]]
+        st = pd.read_parquet(Path(os.environ.get("TP_WORK") or TP) / "oof/stage_features_expanding.parquet")[["race_id", "horse_id", "s_time_pred", "s_time_gap", "s_rank_pred"]]
         st["race_id"], st["horse_id"] = st["race_id"].astype(str), st["horse_id"].astype(str)
         m = df[["race_id", "horse_id"]].merge(st, on=["race_id", "horse_id"], how="left")
         assert len(m) == len(df)
@@ -355,6 +358,7 @@ def main():
     o.add_argument("--variant", required=True)
     o.add_argument("--with-sx", action="store_true")
     o.add_argument("--stage-only", action="store_true")
+    o.add_argument("--oof-only", action="store_true", help="補助予測の OOF だけ保存して終える（LightGBM の評価はしない）")
     c = sp.add_parser("lgbci")
     c.add_argument("--variant", required=True)
     a = ap.parse_args()

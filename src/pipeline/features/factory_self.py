@@ -536,13 +536,13 @@ def _streak_true(v: np.ndarray, h: np.ndarray) -> np.ndarray:
     return out
 
 
-def g_attrs(d: pd.DataFrame, attrs: pd.DataFrame | None = None, **_) -> pd.DataFrame:
+def g_attrs(d: pd.DataFrame, attrs: pd.DataFrame | None = None, frozen: dict | None = None, **_) -> pd.DataFrame:
     """馬の固定属性: 産地（レース前に変わらない・全馬で取れる）。毛色は生まれ年によって取れていない（最近生まれの馬だけ 100%）ので使わない。
     産地は頻度順の整数コードと、産地ごとの過去の成績（その日より前のレースだけ・縮約付き）。"""
     if attrs is None or "birthplace" not in attrs.columns:
         return pd.DataFrame(index=d.index)
     bp = attrs["birthplace"].reindex(d["horse_id"]).fillna("").astype(str).to_numpy()
-    top = pd.Series(bp).value_counts().index[:15]
+    top = frozen["bp_top"] if frozen else pd.Series(bp).value_counts().index[:15]      # frozen: 推論では学習時（2020〜2025）の産地コードと平均を固定して使う
     code = {v: i for i, v in enumerate(top) if v != ""}
     out = {"attr_birthplace": np.array([code.get(v, np.nan if v == "" else 99) for v in bp], float)}
     df = pd.DataFrame({"key": bp, "fp": d["fp"].to_numpy(), "win": d["win"].to_numpy(), "dnum": d["dnum"].to_numpy()})
@@ -551,7 +551,7 @@ def g_attrs(d: pd.DataFrame, attrs: pd.DataFrame | None = None, **_) -> pd.DataF
         daily[c] = daily.groupby("key")[c].cumsum() - daily[c]
     m = df.merge(daily, on=["key", "dnum"], how="left")
     n = m["n"].to_numpy(float)
-    gm_fp, gm_w = float(np.nanmean(df["fp"])), float(np.nanmean(df["win"]))
+    gm_fp, gm_w = (float(frozen["gm_fp"]), float(frozen["gm_w"])) if frozen else (float(np.nanmean(df["fp"])), float(np.nanmean(df["win"])))
     out["attr_bp_n"] = n
     out["attr_bp_fp"] = (m["sf"].to_numpy(float) + 200 * gm_fp) / (n + 200)
     out["attr_bp_win"] = (m["sw"].to_numpy(float) + 200 * gm_w) / (n + 200)
@@ -567,13 +567,21 @@ GROUPS: dict[str, Callable] = {
 }
 
 
-def build_groups(runs: pd.DataFrame, birthday: pd.Series | None = None, attrs: pd.DataFrame | None = None, only: list[str] | None = None) -> dict[str, pd.DataFrame]:
+def attrs_constants(runs: pd.DataFrame, attrs: pd.DataFrame) -> dict:
+    """g_attrs が全行から決める定数（産地コード上位 15 と平均着順・勝率）。学習時の runs（2020〜2025）から作って固定する。"""
+    d = prep(runs)
+    bp = attrs["birthplace"].reindex(d["horse_id"]).fillna("").astype(str).to_numpy()
+    return {"bp_top": [str(x) for x in pd.Series(bp).value_counts().index[:15]], "gm_fp": float(np.nanmean(d["fp"])), "gm_w": float(np.nanmean(d["win"]))}
+
+
+def build_groups(runs: pd.DataFrame, birthday: pd.Series | None = None, attrs: pd.DataFrame | None = None, only: list[str] | None = None,
+                 frozen: dict | None = None) -> dict[str, pd.DataFrame]:
     d = prep(runs)
     out = {}
     for name, fn in GROUPS.items():
         if only and name not in only:
             continue
-        f = fn(d, birthday=birthday, attrs=attrs)
+        f = fn(d, birthday=birthday, attrs=attrs, frozen=frozen)
         if f.shape[1]:
             out[name] = f.astype("float32").assign(race_id=d["race_id"].to_numpy(), horse_id=d["horse_id"].to_numpy())
     return out

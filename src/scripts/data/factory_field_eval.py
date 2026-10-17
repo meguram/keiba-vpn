@@ -21,8 +21,8 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 OLD = ROOT / "data/local/modeling/training_pipeline"
-FIXED = ROOT / "data/local/modeling/training_pipeline_fixed"
-OUT = OLD / "factory/field"
+FIXED = Path(os.environ.get("FAC_BASE_DIR") or ROOT / "data/local/modeling/training_pipeline_fixed")   # v4 の土台: FAC_BASE_DIR=training_pipeline_v4
+OUT = Path(os.environ.get("FAC_FIELD_OUT") or OLD / "factory/field")
 KEY = ["race_id", "horse_id"]
 # 群を細かく分けて調べる（群の総数 = ここの数）
 SUBGROUPS = {

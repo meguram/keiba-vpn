@@ -52,6 +52,8 @@ class V3Serving:
         self.tl_ref: pd.DataFrame | None = None
         self.aux = None
         self.feature_cols: list[str] = []
+        self.v4 = None
+        self._card_day: dict[str, pd.DataFrame] = {}
 
     def warm(self) -> dict:
         from src.pipeline.models.ensemble_bundle import EnsembleBundle
@@ -67,6 +69,14 @@ class V3Serving:
             from src.pipeline.features.serving_aux import AuxModels
 
             self.aux = AuxModels.load(Path(os.environ.get("KEIBA_V3_AUX") or WORK / "final_aux"))
+        from src.pipeline.features import serving_v4 as sv4
+
+        if sv4.needed_groups(self.feature_cols):                           # v4 の群（馬主・馬自身・メンバー構成/コース環境・種牡馬 ID）を要求するバンドル
+            tt = Path(os.environ.get("KEIBA_V4_TRAIN_TABLE") or WORK.parent / "training_pipeline_v4/features/train_table.parquet")
+            if not tt.exists():
+                tt = WORK.parent / "training_pipeline_fixed/features/train_table.parquet"
+            self.v4 = sv4.V4Features(self.tables_dir, tt)
+            self.v4.warm()
         self.history = sla.load_history(self.tables_dir)
         runs = apply_repair(load_runs(self.tables_dir), EMPTY_RM)
         self.ped = spe.PedState.from_history(spe.history_from_runs(runs))
@@ -96,6 +106,12 @@ class V3Serving:
 
         stage = self.stage.predict(base, base["race_id"])
         cur = pd.concat([base, stage] + ([self.aux.predict(base, base["race_id"])] if self.aux is not None else []), axis=1)
+        v4cols = None
+        if self.v4 is not None:
+            v4cols = self.v4.features(c, cur, self.feature_cols, storage, self._day_card(c, storage))
+            v4cols.index = pd.RangeIndex(len(v4cols))
+            v4cols = base[KEYS].astype(str).merge(v4cols.drop_duplicates(KEYS), on=KEYS, how="left").drop(columns=KEYS)
+            v4cols.index = base.index
 
         tgt = base[KEYS + ["date"]].merge(cm[KEYS + ["surface", "distance", "track_condition", "venue_code"]], on=KEYS, how="left")
         ped = self.ped.features(tgt)
@@ -112,7 +128,7 @@ class V3Serving:
         rel_names = [x for x in self.feature_cols if ssr.split_relative_name(x) is not None and x not in cur.columns]
         rel = ssr.relative_by_names(pd.concat([cur, ped, extras], axis=1), rel_names) if rel_names else pd.DataFrame(index=base.index)
 
-        allc = pd.concat([cur, ped, extras, tl, rel], axis=1)
+        allc = pd.concat([cur, ped, extras, tl, rel] + ([v4cols] if v4cols is not None else []), axis=1)
         allc = allc.loc[:, ~allc.columns.duplicated()]
         missing = [x for x in self.feature_cols if x not in allc.columns]
         if missing:
@@ -120,6 +136,26 @@ class V3Serving:
         out = pd.concat([base[KEYS], allc[self.feature_cols]], axis=1)
         logger.info("v3 の特徴量: %d 行 × %d 列 %.1fs", len(out), len(self.feature_cols), time.perf_counter() - t0)
         return out
+
+    def _day_card(self, c: pd.DataFrame, storage: Any) -> pd.DataFrame | None:
+        """その日の全レースの出馬表（馬主・馬自身の群を日単位で作るため）。日程から引けなければ None（今回の出馬表だけで作る）。"""
+        if storage is None:
+            return None
+        day = str(pd.to_datetime(c["date"]).min().date())
+        if day in self._card_day:
+            return self._card_day[day]
+        try:
+            from src.pipeline.inference.race_day_workflow import load_day_schedule
+            from src.pipeline.inference.weight_triggered_predict import card_frame
+
+            ids = [r["race_id"] for r in load_day_schedule(storage, day.replace("-", ""))]
+            allc = card_frame(storage, ids).to_pandas()
+            if len(allc):
+                self._card_day[day] = allc
+                return allc
+        except Exception as exc:
+            logger.warning("その日の全レースの出馬表を作れなかった（今回の分だけで作る）: %s", exc)
+        return None
 
     @staticmethod
     def _training_records(horse_ids: list[str], storage: Any, workers: int) -> dict[str, dict | None]:

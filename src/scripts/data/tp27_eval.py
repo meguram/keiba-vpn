@@ -26,9 +26,13 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 WORK = ROOT / "data/local/modeling/training_pipeline"
-FIXED = ROOT / "data/local/modeling/training_pipeline_fixed"
+FIXED = Path(os.environ.get("TP_BASE_DIR") or ROOT / "data/local/modeling/training_pipeline_fixed")      # v4 の土台で回すときは TP_BASE_DIR=training_pipeline_v4
+WORK_V = Path(os.environ.get("TP_WORK") or WORK)                                                          # 前段(S3)・補助列・tp05_data の読み先（v4: TP_WORK=training_pipeline_v4）
 FAC = WORK / "factory"
-OUT = WORK / "tp27"
+FAC_FIELD = Path(os.environ.get("TP27_FAC_FIELD") or FAC / "field")
+AUX_DIR = Path(os.environ.get("TP25E_OUT") or WORK_V / "tp25e")
+GROUPDEF = WORK / "tp27"                                                                                  # 群の定義（採用された群）は旧 tp-27 の結果を読む
+OUT = Path(os.environ.get("TP27_OUT") or WORK / "tp27")
 KEY = ["race_id", "horse_id"]
 THREADS = int(os.environ.get("TP27_THREADS", 5))
 SEEDS = [0, 1]
@@ -93,7 +97,7 @@ def load_one(src: str, name: str, df: pd.DataFrame, raw: pd.DataFrame | None) ->
         G = pd.read_parquet(FAC / "conn/groups" / f"{name}.parquet")
         G[KEY[0]], G[KEY[1]] = raw["race_id"].to_numpy(), raw["horse_id"].to_numpy()
     elif src == "aux":
-        G = pd.read_parquet(WORK / "tp25e" / f"{name}.parquet")
+        G = pd.read_parquet(AUX_DIR / f"{name}.parquet")
     elif src == "src":
         G = pd.read_parquet(FAC / "src" / f"cand_{name}.parquet")
     elif src == "field":
@@ -102,7 +106,7 @@ def load_one(src: str, name: str, df: pd.DataFrame, raw: pd.DataFrame | None) ->
         from src.scripts.data.factory_field_eval import SUBGROUPS
 
         g, pat = SUBGROUPS.get(name, (name, None))
-        G = pd.read_parquet(FAC / "field" / f"{g}.parquet")
+        G = pd.read_parquet(FAC_FIELD / f"{g}.parquet")
         if pat:
             G = G[KEY + [c for c in G.columns if c not in KEY and re.search(pat, c)]]
     else:
@@ -141,7 +145,7 @@ def setup():
     lp = zoo.tuned_params("lgb", best["lgb"]["params"])
     df = ab.load_table(FIXED / "features/train_table.parquet")
     df["race_id"], df["horse_id"] = df["race_id"].astype(str), df["horse_id"].astype(str)
-    stage = pd.read_parquet(WORK / "oof/stage_features_expanding.parquet")[KEY + STAGE_COLS]
+    stage = pd.read_parquet(WORK_V / "oof/stage_features_expanding.parquet")[KEY + STAGE_COLS]
     stage["race_id"], stage["horse_id"] = stage["race_id"].astype(str), stage["horse_id"].astype(str)
     df = df.merge(stage, on=KEY, how="left")
     df = df.sort_values(["date", "race_id", "horse_number"], kind="stable").reset_index(drop=True)
@@ -307,7 +311,7 @@ def cmd_stages_c(a) -> None:
 def v4_groups(variant: str = "core") -> list[str]:
     """V4 の群。core = A で採用された G1〜G3・馬主・補助列 + 静的/検証可能な G4（TL_A を入れた土台で採用されたもの）。
     plus = core + 未検証の SmartRC 由来のうち採用されたもの。"""
-    r = _jload(OUT / "stages_C/results.json")
+    r = _jload(GROUPDEF / "stages_C/results.json")
     core = list(r.get("core_from_A", [])) + [f"src:{g}" for g in r.get("V4_core_groups", [])]
     if variant == "core":
         return core
@@ -422,7 +426,7 @@ def cmd_member(a) -> None:
     df, meta, folds, members, TLX = e.load_v3()
     recipe, params, X = members[a.name]
     X = pd.concat([X, TLX], axis=1)
-    aux = pd.read_parquet(WORK / "tp25e/aux_B.parquet")
+    aux = pd.read_parquet(AUX_DIR / "aux_B.parquet")
     aux["race_id"], aux["horse_id"] = aux["race_id"].astype(str), aux["horse_id"].astype(str)
     m = df[KEY].merge(aux, on=KEY, how="left")
     A = m[[c for c in m.columns if c not in KEY]]
@@ -503,7 +507,7 @@ def cmd_ens(a) -> None:
     from src.pipeline.models import feature_bakeoff as fb
     from src.pipeline.models import tp05_data
 
-    D = tp05_data.load_dataset(WORK)
+    D = tp05_data.load_dataset(WORK_V)
     meta = D["meta"]
     base = meta[KEY + ["finish_position", "year"]].copy()
     names = []

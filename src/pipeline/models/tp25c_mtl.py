@@ -143,6 +143,34 @@ def mtl_fit_predict(X_tr: pd.DataFrame, y_tr: dict, A_tr: np.ndarray | None, rac
     return res
 
 
+def mtl_predict(model: dict, X: pd.DataFrame, race: np.ndarray, device: str | None = None) -> dict:
+    """mtl_fit_predict(want_model=True) で保存したモデルの出力。win_score・top2_logit・top3_logit・aux（標準化した単位）を返す。"""
+    import torch
+
+    dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    a = model["arch"]
+    net = _build(a["d_z"], a["n_cat"], a["emb_dim"], tuple(a["hidden"]), a["dropout"], a["n_aux"], a["interact"]).to(dev)
+    net.load_state_dict(model["state"])
+    net.eval()
+    Z, C = model["prep"].transform(X)
+    idx = _pad_races(np.asarray(race))
+    n = len(X)
+    res = {"win_score": np.zeros(n), "top2_logit": np.zeros(n), "top3_logit": np.zeros(n), "aux": np.zeros((n, a["n_aux"]), dtype="float32")}
+    with torch.no_grad():
+        for s in range(0, len(idx), 512):
+            ir = idx[s:s + 512]
+            valid = ir >= 0
+            safe = np.where(valid, ir, 0)
+            o, aux, _h = net(torch.from_numpy(Z[safe]).to(dev), torch.from_numpy(C[safe]).to(dev), torch.from_numpy(valid).to(dev))
+            o = o.cpu().numpy()
+            rr, cc = np.nonzero(valid)
+            rows = safe[rr, cc]
+            res["win_score"][rows], res["top2_logit"][rows], res["top3_logit"][rows] = o[rr, cc, 0], o[rr, cc, 1], o[rr, cc, 2]
+            if aux is not None:
+                res["aux"][rows] = aux.cpu().numpy()[rr, cc]
+    return res
+
+
 def mtl_infer(model: dict, X: pd.DataFrame, race: np.ndarray, device: str | None = None) -> np.ndarray:
     """mtl_fit_predict(want_model=True) で保存したモデルの補助ヘッド予測（標準化した単位）を返す。形は (len(X), n_aux)。"""
     import torch

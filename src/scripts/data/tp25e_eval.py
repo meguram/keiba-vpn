@@ -19,9 +19,9 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-WORK = ROOT / "data/local/modeling/training_pipeline"
+WORK = Path(os.environ.get("TP_WORK") or ROOT / "data/local/modeling/training_pipeline")     # v4 の土台で回すときは TP_WORK=training_pipeline_v4
 OUT = Path(os.environ.get("TP25E_OUT") or WORK / "tp25e")
-C_OUT = WORK / "tp25c"
+C_OUT = Path(os.environ.get("TP25C_OUT") or WORK / "tp25c")
 SEEDS = [int(s) for s in (os.environ.get("SEEDS") or "0,1,2").split(",")]
 THREADS = int(os.environ.get("THREADS") or 3)
 KEY = ["race_id", "horse_id"]
