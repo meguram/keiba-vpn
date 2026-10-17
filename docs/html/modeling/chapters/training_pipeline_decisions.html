@@ -56,7 +56,7 @@
 <tr><td>05j〜n</td><td><code>tp-05j〜n</code></td><td>専用化（クラス・コース別）、専用化の対照実験、ランキング学習の確率化、多層スタッキング、多様なメンバー</td><td class="ok">完了（不採用。05m の M+ の 2 構成は基準を満たすが v3 で再判断）</td><td>§19</td></tr>
 <tr><td>06</td><td><code>tp-06-final-evaluation</code></td><td>最終評価 v1（test 2025 は一度だけ）。較正の確認を含む</td><td class="ok">完了</td><td>§8</td></tr>
 <tr><td>06b</td><td><code>tp-06b-final-evaluation-v2</code></td><td>最終評価 v2（アンサンブル v2。test 2025 は一度だけ）</td><td class="ok">完了</td><td>§9</td></tr>
-<tr><td>07</td><td><code>tp-07-register-verify</code></td><td>最終再学習・登録・推論の一致確認（<b>notebook は未作成</b>）</td><td>未作成</td><td>—</td></tr>
+<tr><td>07</td><td><code>tp-07-register-verify</code></td><td>最終再学習・登録・推論の一致確認（notebook は未作成。検証用 bundle の一致確認と MLflow 登録スクリプトは追加済み。本番の再学習は特徴量の次の検証ラウンドの後）</td><td>進行中</td><td>§29・§31・§32</td></tr>
 <tr><td>08</td><td><code>tp-08-betting-rl</code></td><td>馬券最適化の強化学習</td><td class="ok">完了（2026-10-16 訂正済み）</td><td>§10</td></tr>
 <tr><td>09</td><td><code>tp-09-betting-strategy-comparison</code></td><td>馬券戦略の比較（優位の検定・文献の手法）</td><td class="ok">完了（優位は確認できず）</td><td>§20（再評価の数値は §10 にも）</td></tr>
 <tr><td>10</td><td><code>tp-10-odds-drift</code></td><td>オッズの年ごとの変化と最終オッズ予測のドリフト対策</td><td class="ok">完了（半減期 1 年を提案）</td><td>§21</td></tr>
@@ -78,6 +78,7 @@
 <tr><td>23</td><td><code>tp-23-ensemble-v3</code></td><td>アンサンブル v3（追い切り TL_A を v2 の 7 メンバーに足して再学習し、v2 と比較）</td><td>完了（採用）</td><td>§29</td></tr>
 <tr><td>06c</td><td><code>tp-06c-final-evaluation-v3</code></td><td>最終評価 v3（アンサンブル v3。test 2025 は一度だけ）</td><td>完了</td><td>§30</td></tr>
 <tr><td>24</td><td><code>ped_names_eval</code>（スクリプト）</td><td>学習表の sire / dam_sire が全行空だった問題の復旧（父・母父を horse_id で付与）と、前後の比較</td><td>完了（父系 6 列は採用、ped_* は不採用）</td><td>§31</td></tr>
+<tr><td>v3</td><td><code>v3_serving</code>（コード）</td><td>v3 の推論経路（当日 301 列の組み立て）と、学習との一致確認</td><td>実装済み・shadow 運用中（predict は未承認）</td><td>§32</td></tr>
 </table>
 
 <h3>勝率（p_win）LogLoss の推移（評価データと条件が違うので、横並びの比較には使わない）</h3>

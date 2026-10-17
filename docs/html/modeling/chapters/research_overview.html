@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>調査の全体像と今後の予定 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+<style>.ok{color:#4ade80}.wait{color:#fbbf24}.ng{color:#f87171}.tag{font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid #243358}</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>調査の全体像と今後の予定</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/research_overview.html</code></p>
+    </header>
+    <article class="html-body">
+<h1>調査の全体像と今後の予定</h1>
+<p class="muted">特徴量・モデリング・馬券の調査を、結果と状態つきで 1 か所にまとめた一覧。詳しい数値と根拠は <a href="training_pipeline_decisions.html">学習パイプラインの確定事項ログ</a>（各行の「節」列、§N）。現行の特徴量は <a href="adopted_features_v3.html">採用している特徴量</a>。最終更新: 2026-10-17。</p>
+
+<h2>1. 現在地</h2>
+<ul>
+  <li><b>最終モデル</b>: アンサンブル v3（7 メンバー、特徴量 301 列）。2025 年の test（一度だけ評価）で、勝率 LogLoss 0.21039（v2 は 0.21240、差 −0.00201）、連対 0.32833、複勝 0.41297（§29・§30）。</li>
+  <li><b>推論</b>: v3 の推論経路（当日 301 列の組み立て）は実装済みで、学習時の予測との相関は勝率 0.998（§32）。ホストでは <code>KEIBA_V3_SERVING=shadow</code>（結果を保存するだけで画面・API には出さない）を 2026-10-17 に承認・設定済み。<b>predict（画面に出す）は未承認</b>。</li>
+  <li><b>最終の再学習・登録（tp-07）</b>: 進行中。検証用の bundle の一致確認と MLflow 登録スクリプトは済み。血統の復旧（§31）と先読みの直しを含めた表での再学習は、<b>特徴量の次の検証ラウンドが終わってから</b>行う（2026-10-16 の決定）。</li>
+  <li><b>馬券</b>: 確定オッズでは優位を確認できず、回収率は最良でも約 88%（§10・§20・§23）。時点別オッズ（T-60 / T-15）は 2026-10-17 から自前で蓄積を始めた。</li>
+  <li><b>数値の注意</b>: 本ログの多くの LogLoss は 2026-10-15 の track_bias 先読みリーク修正より前の特徴量で出した値。影響は +0.00003 で無視できる大きさ（tp-22、§24）ので、相対比較の結論はそのまま使える。</li>
+</ul>
+
+<h2>2. 調査の一覧（結果と状態）</h2>
+<p class="muted">状態: <span class="ok">完了</span>＝結論が出ている / <span class="wait">進行中・保留</span> / 採否は「採用・不採用・保留」で別に示す。</p>
+<table>
+<tr><th>調査</th><th>結果（採否と主な数値）</th><th>状態</th><th>節</th></tr>
+<tr><td>tp-00〜02・01b、データ完全化</td><td>母表・分割・欠損監査。2020〜2025 年を学習・検証・test に分割</td><td class="ok">完了</td><td>§1〜4・§18</td></tr>
+<tr><td>tp-03 特徴量 ablation</td><td><b>採用</b>: 履歴 127 列（勝率 LogLoss 0.23375 → 0.22069）。時代ずれ対策は不採用</td><td class="ok">完了</td><td>§5</td></tr>
+<tr><td>tp-04 前段モデル</td><td><b>採用</b>: s_time_pred / s_time_gap / s_rank_pred の 3 列のみ</td><td class="ok">完了</td><td>§6</td></tr>
+<tr><td>tp-05a〜e・tp-06</td><td>目的関数・モデル族・Optuna・アンサンブル v1（test 2025: 0.21349）</td><td class="ok">完了</td><td>§7・§8</td></tr>
+<tr><td>tp-05f〜i・tp-06b</td><td><b>採用</b>: 追い切り評価・厩舎コメント。アンサンブル v2（test 2025: 0.21240）</td><td class="ok">完了</td><td>§9</td></tr>
+<tr><td>tp-05j〜n</td><td>専用化・ランキング学習・多層スタッキングは<b>不採用</b></td><td class="ok">完了</td><td>§19</td></tr>
+<tr><td>tp-15 コース類似度</td><td><b>不採用</b></td><td class="ok">完了</td><td>§11</td></tr>
+<tr><td>tp-16 特徴量 bake-off</td><td><b>不採用</b>: 季節性・京都改修・Glicko の RD・クッション値・近交係数。後日談は将来の候補</td><td class="ok">完了</td><td>§13</td></tr>
+<tr><td>tp-16b 後日談の変種・訂正後クッション値</td><td><b>不採用</b>（効果が最小効果量 0.0002 に届かず）</td><td class="ok">完了</td><td>§27</td></tr>
+<tr><td>tp-17 欠損の補完・外れ値</td><td><b>不採用</b></td><td class="ok">完了</td><td>§14</td></tr>
+<tr><td>tp-18 階層スタッキング</td><td><b>不採用</b></td><td class="ok">完了</td><td>§15</td></tr>
+<tr><td>tp-19・19b 追い切りラップ</td><td><b>採用</b>: TL_A（勝率 −0.00136）。調教師別の採点・調教師内の相対化は上乗せなし</td><td class="ok">完了</td><td>§17・§26</td></tr>
+<tr><td>tp-21 SmartRC のテン1F</td><td>p_win は中立、位置取り・テン1F の予測は約 1% 改善。<b>採否は保留</b>（次の特徴量ラウンドで再評価）</td><td class="wait">完了（採否保留）</td><td>§16</td></tr>
+<tr><td>tp-22 先読みリーク修正の影響</td><td>+0.00003 で無視できる</td><td class="ok">完了</td><td>§24</td></tr>
+<tr><td>tp-23・tp-06c アンサンブル v3</td><td><b>採用</b>: v2 の 7 メンバーに TL_A を足して再学習。test 2025 は 0.21039</td><td class="ok">完了</td><td>§29・§30</td></tr>
+<tr><td>tp-24 血統キーの復旧</td><td>学習表の sire / dam_sire が全行空だった問題を復旧。父系 6 列は<b>採用</b>、ped_* 24 列は不採用（効果なし）。表の作り直しは tp-07 で判断</td><td class="ok">完了</td><td>§31</td></tr>
+<tr><td>v3 の推論経路</td><td>301 列の組み立て。学習との差の主因は出馬表の列落ち（修正済み）。残る差は sr_var_*・先読み</td><td class="wait">実装済み・shadow 運用中</td><td>§32</td></tr>
+<tr><td>tp-07 最終再学習・登録</td><td>検証用 bundle 一致確認・MLflow 登録スクリプト追加済み。本番用の再学習は未実施</td><td class="wait">進行中</td><td>§0・§32</td></tr>
+<tr><td>馬券 tp-08・09・11・13・14</td><td>確定オッズでは優位なし。回収率は最良でも約 88%</td><td class="ok">完了</td><td>§10・§12・§20・§23</td></tr>
+<tr><td>馬券 tp-10・12・12b・20</td><td>オッズのドリフト対策と予測オッズ。誤差が約 14% 減っても 100% に届かない</td><td class="ok">完了</td><td>§21・§22・§25・§28</td></tr>
+</table>
+
+<h2>3. これからの調査</h2>
+<table>
+<tr><th>項目</th><th>内容</th><th>状態</th><th>節・関連</th></tr>
+<tr><td>特徴量の次の検証ラウンド</td><td>新しい特徴量の追加検証。SmartRC のテン1F（<code>ten_has</code> / <code>ten_pat</code> を含む）の採否もここで判断。完了するまで再学習はしない</td><td class="wait">未着手</td><td>§16</td></tr>
+<tr><td>tp-07 本番の再学習</td><td>修正後の表（血統入り）に差し替えて再学習。ped_* を外す案とそのまま残す案を比べる。騎手・調教師の通算成績の先読み（学習側）もここで直す</td><td class="wait">上の検証ラウンドの後</td><td>§29・§31・§32</td></tr>
+<tr><td>馬券戦略の再生成</td><td>再学習の後に、tp-08 以降の最適化・購入額の段階づけをやり直す。これまでの回収率の数値は旧モデルのもの</td><td class="wait">再学習の後</td><td>§10・§12</td></tr>
+<tr><td>時点別オッズの蓄積と活用</td><td>T-60 / T-15 / 確定の履歴を自前で貯め、購入時点から確定までのオッズ推移を学習する。2026-10-17 の開催日は取得の不具合で貯まらなかった（修正済み、翌日から有効）</td><td class="wait">蓄積中</td><td>§22</td></tr>
+<tr><td>血統特徴の作り直し</td><td>種牡馬 ID と産駒成績の経験ベイズ、ニックスなど</td><td class="wait">未検討</td><td>§31</td></tr>
+<tr><td>推論の残る差の解消</td><td>同日結果の反映（<code>sr_var_*</code>）、学習側の先読みの解消。v3 の predict（画面に出す）の承認</td><td class="wait">承認待ち</td><td>§32</td></tr>
+<tr><td>ドルメロ流（8 年周期）の検証</td><td>祖先の生年月日から活性値を計算し、0 または 8 を「要検討ゾーン」として手入力するシートを作る調査。別の作業で進行中で、本書には結果がまだない</td><td class="wait">進行中（調査段階）</td><td>—</td></tr>
+</table>
+
+<h2>4. 本書で食い違いのある箇所（確認済み）</h2>
+<ul>
+  <li><b>要件定義書（<code>docs/html/index.html</code>）</b>は 2026-10-16 時点の記述で、「特徴量ビルダーは MOCK・約 1000 特徴量が TODO」「実データで学習したアンサンブルの経路はまだ成立していない」と書いてある。実際には履歴 127 列を含む学習済みモデルと v3 の推論経路が稼働しているので、現状はこの章と確定事項ログを正とする。要件定義書は <code>/update-requirements</code> で再生成する。</li>
+  <li>設計の章（<a href="feature_strategy_tp03_tp04.html">特徴量戦略書</a>・<a href="modeling_strategy_tp04_tp07.html">モデリング戦略書</a>・<a href="modeling_experiment_report.html">総合実験結果</a>）は v2 までの記述が中心。v3 と tp-21〜24 は確定事項ログ §16・§24・§29〜32 が正。</li>
+</ul>
+
+    </article>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/chapters/research_overview.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>
