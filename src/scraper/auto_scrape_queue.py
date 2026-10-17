@@ -337,6 +337,22 @@ def _eve_horse_training(storage: Any, race_ids: list[str]) -> dict[str, Any]:
         return {"enabled": True, "error": str(exc)}
 
 
+def _eve_horse_profile(storage: Any, race_ids: list[str]) -> dict[str, Any]:
+    """前日夕方に、出走馬のうち horse_result が無い馬（新馬・初出走など）の基本情報を取得して馬主を揃える。
+    KEIBA_EVE_HORSE_PROFILE=1 のときだけ（既定は無効）。既存の horse_result は上書きしない。"""
+    from src.scraper import horse_profile_eve as hp
+
+    if not hp.enabled():
+        return {"enabled": False}
+    try:
+        st = hp.fill_for_races(storage, race_ids)
+        logger.info("  馬の基本情報（馬主）の取得結果: %s", st)
+        return {"enabled": True, **st}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("馬の基本情報の取得に失敗: %s", exc)
+        return {"enabled": True, "error": str(exc)}
+
+
 def run_raceday_eve_for_date(race_date_str: str) -> dict[str, Any]:
     date_iso = f"{race_date_str[:4]}-{race_date_str[4:6]}-{race_date_str[6:]}"
     logger.info("=" * 60)
@@ -383,6 +399,7 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict[str, Any]:
 
     race_ids = [str(s["target_id"]) for s in specs if s.get("target_id")]
     training_stats = _eve_horse_training(storage, race_ids)
+    profile_stats = _eve_horse_profile(storage, race_ids)
     pc1, pc2 = _eve_precomputes(race_date_str, race_ids)
 
     return {
@@ -397,6 +414,7 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict[str, Any]:
         "tracking_precompute": pc1,
         "final_odds_precompute": pc2,
         "horse_training": training_stats,
+        "horse_profile": profile_stats,
         "queue_bulk_add": st_add,
     }
 
