@@ -41,7 +41,7 @@ def split_names(raw: str) -> tuple[str, str]:
 
 def decide(wd: dict | None, en_lead, ja_lead, year: int):
     """(status, (y, m, d), evidence) を返す。status は adopted / candidate / none。"""
-    leads = [(src, v) for src, v in (("en", en_lead), ("ja", ja_lead)) if v and v[0] == year and v[1]]
+    leads = [(src, v) for src, v in (("en", en_lead), ("ja", ja_lead)) if v and v[0] == year and v[1] and not (v[1] == 1 and v[2] == 1)]
     wd_day = None
     if wd and wd["precision"] >= 11 and wd["year"] == year and not (wd["month"] == 1 and wd["day"] == 1):
         wd_day = (wd["year"], wd["month"], wd["day"])

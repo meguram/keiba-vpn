@@ -96,3 +96,17 @@ horse_id,name,birth_year,birth_month,birth_day,source_url,note
 000a002273,Bertrando,1989,2,18,https://www.wikidata.org/wiki/Q4895908 ; https://en.wikipedia.org/wiki/Bertrando,Wikidata + Wikipedia 冒頭文が一致
 000a011cff,Quality Road,2006,3,23,https://www.wikidata.org/wiki/Q7268758 ; https://en.wikipedia.org/wiki/Quality_Road,Wikidata(参照付き)
 000a000db5,Val de Loir,1959,5,7,https://www.wikidata.org/wiki/Q7909179 ; https://en.wikipedia.org/wiki/Val_de_Loir,英語版 Wikipedia 冒頭文
+000a000270,Peaks and Valleys,1992,5,1,https://www.wikidata.org/wiki/Q7157899 ; https://en.wikipedia.org/wiki/Peaks_and_Valleys,Wikidata(参照付き)
+000a0014ad,Pavot,1942,1,27,https://www.wikidata.org/wiki/Q17108943 ; https://en.wikipedia.org/wiki/Pavot,英語版 Wikipedia 冒頭文
+000a011227,フォーティナイナーズサンFourty Niners Son(米),2001,2,2,https://ja.wikipedia.org/wiki/%E3%83%95%E3%82%A9%E3%83%BC%E3%83%86%E3%82%A3%E3%83%8A%E3%82%A4%E3%83%8A%E3%83%BC%E3%82%BA%E3%82%B5%E3%83%B3,日本語版 Wikipedia 冒頭文
+000a00108d,Mourne,1954,3,24,https://www.wikidata.org/wiki/Q22320845,Wikidata(参照付き)
+000a002220,Siphon,1991,11,11,https://en.wikipedia.org/wiki/Siphon_%28horse%29,英語版 Wikipedia 冒頭文
+000a00004b,バチアーBachir(愛),1997,3,8,https://www.wikidata.org/wiki/Q11327749 ; https://en.wikipedia.org/wiki/Bachir,Wikidata(参照付き)
+000a000d99,スキャターザゴールドScatter the Gold(加),1997,2,26,https://www.wikidata.org/wiki/Q11311404 ; https://en.wikipedia.org/wiki/Scatter_the_Gold,英語版 Wikipedia 冒頭文
+000a0022fb,Favorite Trick,1995,4,20,https://www.wikidata.org/wiki/Q5438639 ; https://en.wikipedia.org/wiki/Favorite_Trick,Wikidata + Wikipedia 冒頭文が一致
+000a010525,Ghostzapper (米),2000,4,6,https://www.wikidata.org/wiki/Q5557464 ; https://en.wikipedia.org/wiki/Ghostzapper,英語版 Wikipedia 冒頭文
+000a01053b,Azamour(愛),2001,3,8,https://www.wikidata.org/wiki/Q4832218 ; https://en.wikipedia.org/wiki/Azamour,Wikidata + Wikipedia 冒頭文が一致
+000a010a66,Sky Mesa,2000,1,21,https://www.wikidata.org/wiki/Q11311272,Wikidata(参照付き)
+000a000ec7,Crafty Admiral,1948,6,6,https://www.wikidata.org/wiki/Q16952484 ; https://en.wikipedia.org/wiki/Crafty_Admiral,英語版 Wikipedia 冒頭文
+000a000eda,Determine,1951,4,7,https://www.wikidata.org/wiki/Q5265697 ; https://en.wikipedia.org/wiki/Determine_%28horse%29,英語版 Wikipedia 冒頭文
+000a00129d,Dark Star,1950,4,4,https://www.wikidata.org/wiki/Q16989123 ; https://en.wikipedia.org/wiki/Dark_Star_%28horse%29,英語版 Wikipedia 冒頭文

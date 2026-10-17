@@ -32,6 +32,12 @@ def test_decide_rejects_placeholder_and_year_precision():
     assert bs.decide(_wd(y=1980), None, None, 1979)[0] == "none"
 
 
+def test_decide_rejects_jan1_placeholder_in_lead():
+    assert bs.decide(None, (1990, 1, 1), None, 1990)[0] == "none"
+    assert bs.decide(None, None, (1990, 1, 1), 1990)[0] == "none"
+    assert bs.decide(None, (1990, 1, 2), None, 1990)[0] == "adopted"
+
+
 def test_decide_lead_only_and_year_mismatch():
     assert bs.decide(None, (1907, 1, None), None, 1907) == ("adopted", (1907, 1, None), "英語版 Wikipedia 冒頭文")
     assert bs.decide(None, (1908, 1, None), None, 1907)[0] == "none"
