@@ -160,6 +160,8 @@ PARTS: list[Part] = [
           [("course_master_verification", "検証の記録（3 ラウンド）"), ("feature_strategy_tp03_tp04", "特徴量の定義")]),
         C("course_master_verification", "JRA コース形状マスタ（108 コース）の検証記録。3 つの独立収集の突き合わせ、一次資料での再確認と訂正。", "ログ",
           [("course_geometry_atlas", "コースの概形を図で見る")]),
+        C("course_performance_similarity", "馬の過去成績から作る『成績が連動するコース』の対応づけ（tp-26）。転移相関・置換検定・FDR、コース概形との一致、類似マップ、勝率予測への増分。", "結果",
+          [("course_geometry_atlas", "コースの概形を図で見る"), ("training_pipeline_decisions", "tp-15（形状だけの類似度）の結果")]),
         C("feature_serving_low_memory", "当日の特徴量を小さなメモリで作る設計。出走馬だけで計算できる理由、サービング用バンドル、検証、見つかった不具合。", "設計",
           [("feature_strategy_tp03_tp04", "特徴量の定義はこちら")]),
     ]),
