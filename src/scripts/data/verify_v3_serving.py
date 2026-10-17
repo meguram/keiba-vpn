@@ -35,6 +35,7 @@ def main() -> None:
     ap.add_argument("--stage", default=str(WORK / "final_stage/verify_2024"))
     ap.add_argument("--max-races", type=int, default=0)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--dump-x", default="", help="推論経路で作った特徴量 X（301 列）を parquet に保存する")
     a = ap.parse_args()
     from src.scraper.storage import HybridStorage
 
@@ -51,7 +52,7 @@ def main() -> None:
     fin = pl.read_parquet(TRAIN, columns=["race_id", "horse_id", "finish_position"]).to_pandas()
     fin["race_id"], fin["horse_id"] = fin["race_id"].astype(str), fin["horse_id"].astype(str)
 
-    rows, report = [], {"days": {}}
+    rows, xs, report = [], [], {"days": {}}
     for day in a.days:
         d = f"{day[:4]}-{day[4:6]}-{day[6:]}"
         ids = sorted(ref.merge(fin, on=["race_id", "horse_id"])["race_id"].loc[lambda s: s.str[:4] == day[:4]].unique())
@@ -70,10 +71,13 @@ def main() -> None:
             h = hist_full[(hist_full["date"].astype(str) < d) | ((hist_full["date"].astype(str) == d) & (hist_full["start_time"].astype(str) < st) & (hist_full["race_id"].astype(str) != rid))]
             X = v3.features(cr, F.filter(pl.col("race_id") == rid), storage, history=h)
             P = v3.predict(X)
+            xs.append(X)
             nan_rate = float(X.drop(columns=["race_id", "horse_id"]).isna().mean().mean())
             P["nan_rate"] = nan_rate
             rows.append(P)
         report["days"][day] = {"races": len(ids), "sec": round(time.time() - t0, 1)}
+    if a.dump_x:
+        pd.concat(xs, ignore_index=True).to_parquet(a.dump_x, index=False)
     got = pd.concat(rows, ignore_index=True)
     m = got.merge(ref, on=["race_id", "horse_id"], suffixes=("", "_ref")).merge(fin, on=["race_id", "horse_id"])
     y = (m["finish_position"] == 1).to_numpy().astype(float)

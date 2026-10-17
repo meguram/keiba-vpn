@@ -77,6 +77,7 @@
 <tr><td>12b</td><td><code>tp-12b-predicted-odds-v8</code></td><td>改善したオッズ予測（tp-20 の V8）での馬券最適化（検証年のみ）</td><td>完了</td><td>§28</td></tr>
 <tr><td>23</td><td><code>tp-23-ensemble-v3</code></td><td>アンサンブル v3（追い切り TL_A を v2 の 7 メンバーに足して再学習し、v2 と比較）</td><td>完了（採用）</td><td>§29</td></tr>
 <tr><td>06c</td><td><code>tp-06c-final-evaluation-v3</code></td><td>最終評価 v3（アンサンブル v3。test 2025 は一度だけ）</td><td>完了</td><td>§30</td></tr>
+<tr><td>24</td><td><code>ped_names_eval</code>（スクリプト）</td><td>学習表の sire / dam_sire が全行空だった問題の復旧（父・母父を horse_id で付与）と、前後の比較</td><td>完了（父系 6 列は採用、ped_* は不採用）</td><td>§31</td></tr>
 </table>
 
 <h3>勝率（p_win）LogLoss の推移（評価データと条件が違うので、横並びの比較には使わない）</h3>
@@ -883,7 +884,43 @@
   <li>次: tp-07（最終再学習・登録・推論の一致確認）。運用でレース当日に必要な調教データ（馬別調教ページ）の入手が、T-60 までに間に合うかの設計が先に要る（TL_core の 12 列でも効果はほぼ同じ）。</li>
 </ul>
 
-<h2>31. 以降の節</h2>
+<h2>31. tp-24 血統キーの復旧（学習表の sire / dam_sire が全行空だった問題）</h2>
+<p class="muted">スクリプト: <code>src/scripts/data/ped_names_eval.py</code>（<code>build</code> → <code>eval</code>）、血統キー: <code>src/pipeline/features/pedigree_keys.py</code>。出力: <code>data/local/modeling/training_pipeline_ped/</code>（既存の学習表は上書きしない）。tp-22 と同じ設定（tp-03 採用の 175 列、LightGBM 固定、valid 2022〜2024 の expanding、2 seed）。test 2025 は使っていない。行数は 283,714 行で修正後の表と完全に一致。</p>
+<h3>原因</h3>
+<ul>
+  <li>出馬表のパーサ（<code>parsers.py</code>）は <code>span.Pedigree</code> などの要素から父・母父を読むが、出馬表ページにその要素が無く、<code>race_shutuba</code> の <code>sire</code> / <code>dam_sire</code> は <b>2020〜2026 年の全行が空文字</b>だった（<code>race_shutuba_flat</code>・<code>horse_tbl/shutuba_horse</code> も同じ）。LayerA と学習表はこの空の値を使っていた。</li>
+  <li>そのため <code>sire_prior_win_rate_surface</code>・<code>dam_sire_prior_win_rate_surface</code>・<code>sire / dam_sire_x_track_bias_*</code>（計 6 列。tp-03 の採用 175 列に含まれる）は、<b>全馬が同じ「父」とみなされ、芝・ダートごとの全体の累計勝率</b>になっていた。<code>ped_*</code> 24 列（tp-05g）も血統を持たず、条件（面×距離帯・馬場状態・競馬場）別の全体平均だった。</li>
+</ul>
+<h3>復旧</h3>
+<ul>
+  <li>血統の正本は馬別の血統 JSON（<code>horse_pedigree_5gen</code> / <code>_10gen</code>）の <code>ancestors</code>。generation=1・position=0 が父、generation=2・position=2 が母父（名前欄と 3,000 頭で全件一致を確認）。名前は日英併記などの表記ゆれがあるので、<b>キーは種牡馬の horse_id</b>。</li>
+  <li><b>被覆率は 100%</b>（2020〜2026 年の出走馬 39,381 頭すべてで父・母父の ID が分かる）。父は 766 種（学習対象年）、母父は 1,184 種。</li>
+  <li><code>build_layer_a_dataframe(pedigree_keys=...)</code> に血統キー表を渡すと、<code>sire</code> / <code>dam_sire</code> が ID で埋まる（既定の None は従来どおり）。血統以外の LayerA 列は修正後の表と完全に一致することを確認。</li>
+</ul>
+<h3>確定事項</h3>
+<table>
+<tr><th>比較（valid 2022〜2024 の平均、LightGBM 2 seed）</th><th>勝率 LogLoss</th><th>連対</th><th>複勝</th></tr>
+<tr><td>V0 修正後の表（血統が空）の 175 列</td><td>0.21731</td><td>0.33959</td><td>0.42705</td></tr>
+<tr><td>V1 V0 + ped_* 24 列（血統が空のまま。v3 の状態）</td><td>0.21718</td><td>0.33969</td><td>0.42697</td></tr>
+<tr><td>V2 血統入りの表の 175 列</td><td><b>0.21698</b></td><td><b>0.33934</b></td><td><b>0.42675</b></td></tr>
+<tr><td>V3 V2 + ped_* 24 列（実際の血統）</td><td>0.21709</td><td>0.33965</td><td>0.42693</td></tr>
+</table>
+<table>
+<tr><th>差（paired bootstrap、95% 上限）</th><th>勝率</th><th>連対</th><th>複勝</th><th>採否</th></tr>
+<tr><td><b>V2 − V0（父系 6 列の復旧）</b></td><td><b>−0.00032（上限 −0.00012）</b></td><td>−0.00027</td><td>+0.00001</td><td><b>採用</b>（上限 &lt; 0、効果 ≥ 0.0002、連対・複勝は悪化せず）</td></tr>
+<tr><td>V3 − V2（ped_* 24 列の上乗せ）</td><td>+0.00017（上限 +0.00038）</td><td>+0.00051</td><td>±0.00000</td><td>不採用（むしろ悪化気味）</td></tr>
+<tr><td>V3 − V1（ped_* も含む血統の復旧）</td><td>−0.00004（上限 +0.00024）</td><td>+0.00015</td><td>+0.00003</td><td>不採用</td></tr>
+<tr><td>V3 − V0（全部）</td><td>−0.00015（上限 +0.00012）</td><td>+0.00024</td><td>+0.00001</td><td>不採用</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>父系 6 列は実際の血統キーにすると、勝率 −0.00032・連対 −0.00027 で採用基準を満たした。</b>効果は小さいが、バグの修正なので学習表は血統入りに差し替えるのが正しい。</li>
+  <li><b>ped_* 24 列は、血統が空のまま（V1−V0 = −0.00013）でも実際の血統でも、基準を満たさない。</b>実際の血統にすると V2 への上乗せは勝率 +0.00017 で悪化気味（種牡馬ごとの件数が少なく、縮約後の値の分散が増えるため、と推測。未検証）。v3 の 3 メンバー（lgb / xgb / nn の extras_ped）の ped_* は、実質「条件別の全体平均」だった。</li>
+  <li>v3 は血統が空の学習表で学習済みで、推論側（<code>serving_layer_a</code> / <code>serving_ped_extras</code>）も同じ前提で作ってある。v3 の推論はそのまま動かせる。<b>血統を直した版は、tp-07 で修正後の表を血統入りに差し替えて再学習するときに反映する</b>（ped_* は外す案と、そのまま残す案を比べる）。</li>
+  <li>未検討: 種牡馬 ID そのものをカテゴリとして入れる、種牡馬ごとの産駒成績を経験ベイズで縮約した列（距離・馬場別）、母父系・ニックスなど。血統の被覆率が 100% と分かったので、血統特徴の作り直しは tp-05g の再検討として価値がありそう。</li>
+</ul>
+
+<h2>32. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>

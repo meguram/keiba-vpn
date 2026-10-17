@@ -208,3 +208,15 @@ def test_build_inference_features_rejects_missing_date(env):
              "grade": "1勝", "race_class": "x", "direction": "左", "start_time": "10:00"} for e in card[rid]["entries"]]
     with pytest.raises(ValueError):
         build_inference_features(read_runs_raw(tables), pl.DataFrame(rows), build_repair_map(la))
+
+
+def test_card_frame_keeps_v3_race_columns(env):
+    tables, la, day = env
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    rid = next(iter(sh))
+    sh[rid]["weather"], sh[rid]["weight_rule"] = "晴", "馬齢"
+    sh[rid]["entries"][0].update({"bracket_number": 3, "weight_change": -4})
+    df = wtp.card_frame(FakeStorage({rid: sh[rid]}), [rid])
+    assert set(wtp.V3_CARD_EXTRA) <= set(df.columns)
+    r0 = df.row(0, named=True)
+    assert r0["bracket_number"] == 3 and r0["weight_change"] == -4 and r0["weather"] == "晴"

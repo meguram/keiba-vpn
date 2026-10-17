@@ -178,7 +178,7 @@ def _track_bias(hist: pd.DataFrame, card: pd.DataFrame) -> pd.DataFrame:
 def build_layer_a_features(card: Any, history: pd.DataFrame) -> pd.DataFrame:
     """card: 出馬表の行（race_id・horse_id・horse_number・jockey_id・trainer_id・date・venue_code・surface・start_time・track_condition・distance・
     sex_age と OUTPUT_COLS のレース条件・体重など。馬体重は発表後の値）。history: ``load_history`` の結果（対象レースの結果が入っていても除く）。
-    戻り値: race_id・horse_id・OUTPUT_COLS（学習表と同じ列名）。カテゴリ列は文字列（欠損は「(なし)」）。"""
+    戻り値: race_id・horse_id・OUTPUT_COLS（学習表と同じ列名）。カテゴリ列は文字列（欠損は空文字。学習表のカテゴリ水準は空文字を持ち、「(なし)」は持たない）。"""
     c = _to_pandas(card)
     c["race_id"] = c["race_id"].astype(str)
     c["horse_number"] = pd.to_numeric(c["horse_number"], errors="coerce")
@@ -207,5 +207,5 @@ def build_layer_a_features(card: Any, history: pd.DataFrame) -> pd.DataFrame:
     st = c["start_time"].astype(str) if "start_time" in c.columns else pd.Series("", index=c.index)
     out["start_hour"] = pd.to_numeric(st.str.extract(r"^(\d{1,2})")[0], errors="coerce").astype("float32")
     for col in CATEGORICAL:
-        out[col] = out[col].astype("string").fillna("(なし)").astype(str)
+        out[col] = out[col].astype("string").fillna("").astype(str)
     return out[["race_id", "horse_id"] + OUTPUT_COLS]

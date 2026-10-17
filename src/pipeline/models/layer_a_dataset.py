@@ -70,6 +70,7 @@ def build_layer_a_dataframe(
     track_bias_same_day_weight: float | None = None,
     track_bias_prev_day_weight: float | None = None,
     track_bias_weights_json: str | Path | None = None,
+    pedigree_keys: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """
     data/local/tables の flat Parquet から LayerA 母表を構築する。
@@ -87,6 +88,9 @@ def build_layer_a_dataframe(
       当日（該当レース前）と前日の傾向の合成重み（None 時は track_bias_pedigree の既定 0.75 / 0.25）。
     track_bias_weights_json:
       tune_track_bias_weights の出力 JSON パス。指定時は上記 float より優先。
+    pedigree_keys:
+      ``pedigree_keys.build_parent_table`` の表（horse_id, sire_id, dam_sire_id）。指定すると出馬表の
+      ``sire`` / ``dam_sire``（出馬表ページに血統が無く、既定では全行空）を父・母父の ID で埋める。None なら従来どおり。
     """
     from src.pipeline.features.feature_store import FeatureStore
 
@@ -109,6 +113,11 @@ def build_layer_a_dataframe(
     sb = store.load_source("race_shutuba", years=use_years)
     if sb.empty:
         raise RuntimeError("race_shutuba が空です")
+
+    if pedigree_keys is not None:
+        from src.pipeline.features.pedigree_keys import attach_parent_ids
+
+        sb = attach_parent_ids(sb, pedigree_keys)
 
     drop_mkt = {"odds", "popularity"}
     sb = sb.drop(columns=[c for c in drop_mkt if c in sb.columns], errors="ignore")
@@ -231,10 +240,15 @@ def build_layer_a_dataframe(
         rr_tb = store.load_source("race_result", years=avail, columns=tb_cols)
         sb_cols = [
             c
-            for c in ("race_id", "horse_number", "sire", "dam_sire")
+            for c in ("race_id", "horse_number", "horse_id", "sire", "dam_sire")
             if c in store.source_schema("race_shutuba", use_years[0])
         ]
         sb_tb = store.load_source("race_shutuba", years=avail, columns=sb_cols)
+        if pedigree_keys is not None and not sb_tb.empty:
+            from src.pipeline.features.pedigree_keys import attach_parent_ids
+
+            sb_tb = attach_parent_ids(sb_tb, pedigree_keys)
+        sb_tb = sb_tb.drop(columns=["horse_id"], errors="ignore")
         if jra_only and not rr_tb.empty:
             keep_tb = _jra_mask(rr_tb)
             rr_tb = rr_tb.loc[keep_tb].copy()

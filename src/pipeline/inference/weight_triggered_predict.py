@@ -135,6 +135,9 @@ class InferenceContext:
         return out, info | {"engine": "full"}
 
 
+V3_CARD_EXTRA = ["bracket_number", "weight_change", "field_size", "round", "weather", "weight_rule", "course_type"]
+
+
 def card_frame(storage: Any, race_ids: list[str]) -> pl.DataFrame:
     """保存済みの ``race_shutuba`` から、``race_shutuba_flat`` と同じ形の行を作る。"""
     from src.scraper.export_tables import _data_to_flat_rows
@@ -150,8 +153,9 @@ def card_frame(storage: Any, race_ids: list[str]) -> pl.DataFrame:
         rows.extend(_data_to_flat_rows(data, "race_shutuba"))
     if not rows:
         return pl.DataFrame()
-    df = pl.DataFrame([{c: r.get(c) for c in CARD_COLS + ["race_name"]} for r in rows], infer_schema_length=None)
-    ints = [c for c in ("distance", "horse_number", "weight") if c in df.columns]
+    extra = [c for c in V3_CARD_EXTRA if c not in CARD_COLS]  # v3 の LayerA 列（枠番・馬体重増減・頭数・R・天候・重量種別）
+    df = pl.DataFrame([{c: r.get(c) for c in CARD_COLS + ["race_name"] + extra} for r in rows], infer_schema_length=None)
+    ints = [c for c in ("distance", "horse_number", "weight", "bracket_number", "weight_change", "field_size", "round") if c in df.columns]
     return df.with_columns([pl.col(c).cast(pl.Int64, strict=False) for c in ints]
                            + [pl.col("jockey_weight").cast(pl.Float64, strict=False)])
 
