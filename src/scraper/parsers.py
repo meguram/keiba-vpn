@@ -59,6 +59,29 @@ def parse_course(text: str) -> tuple[str, str, int] | None:
     return surface, direction, int(m.group(3))
 
 
+# 内回り/外回り: 出馬表は「芝2400m (右 外 B)」「芝1600m (右 B)」、結果ページは「芝右 外2200m」「芝右 内2周2000m」「障芝 外-内2890m」。
+# 内外が無い（標準）コースは空文字。戻り値: 内 / 外 / 内2周 / 外2周 / 内-外 / 外-内
+_COURSE_TYPE_RE = re.compile(r"(内|外)(?:\s*[\-ー・/→]\s*(内|外))?(?:\s*(\d)\s*周)?")
+
+
+def parse_course_type(text: str) -> str:
+    segs: list[str] = []
+    m = COURSE_RE.search(text or "")
+    if m:
+        segs.append(m.group(0))
+    m2 = re.search(r"\d{3,5}\s*m\s*[\(（]([^)）]*)[\)）]", text or "")
+    if m2:
+        segs.append(m2.group(1))
+    for seg in segs:
+        t = _COURSE_TYPE_RE.search(seg)
+        if t:
+            a, b, n = t.groups()
+            if b and b != a:
+                return f"{a}-{b}"
+            return f"{a}{n}周" if n else a
+    return ""
+
+
 class RaceResultParser:
     """
     過去のレース結果ページをパースする。
@@ -181,6 +204,7 @@ class RaceResultParser:
             info["surface"], info["direction"], info["distance"] = course
         else:
             info["surface"], info["direction"], info["distance"] = "", "", 0
+        info["course_type"] = parse_course_type(data_text)
 
         m_w = re.search(r"天候\s*[:：]\s*(\S+)", data_text)
         info["weather"] = m_w.group(1) if m_w else ""
@@ -624,7 +648,8 @@ class RaceResultOnTimeParser(RaceResultParser):
         m_dir = re.search(r"(?:芝|ダ|ダート|障)(左|右|直)\s*\d+m", data1)
         if not m_dir:
             m_dir = re.search(r"\d+m\s*\(?\s*(左|右|直)\s*\)?", data1)
-        info["direction"] = m_dir.group(1) if m_dir else ""
+        info["direction"] = m_dir.group(1) if m_dir else (course[1] if course else "")
+        info["course_type"] = parse_course_type(data1)
 
         m_w = re.search(r"天候\s*[:：]\s*([^\s/]+)", data1)
         info["weather"] = m_w.group(1) if m_w else ""
@@ -783,7 +808,8 @@ class RaceCardParser:
         m_dir = re.search(r"(?:芝|ダ|ダート|障)(左|右|直)\s*\d+m", data1)
         if not m_dir:
             m_dir = re.search(r"\d+m\s*\(?\s*(左|右|直)\s*\)?", data1)
-        info["direction"] = m_dir.group(1) if m_dir else ""
+        info["direction"] = m_dir.group(1) if m_dir else (course[1] if course else "")
+        info["course_type"] = parse_course_type(data1)
 
         m_w = re.search(r"天候\s*[:：]\s*([^\s/]+)", data1)
         info["weather"] = m_w.group(1) if m_w else ""
@@ -839,10 +865,6 @@ class RaceCardParser:
                 info["weight_rule"] = wr
                 break
 
-        m_ct = re.search(r"[/／]\s*(内|外|内2周|外2周)", data1)
-        if not m_ct:
-            m_ct = re.search(r"\((内|外|内2周|外2周)\)", data1)
-        info["course_type"] = m_ct.group(1) if m_ct else ""
 
         return info
 
@@ -995,6 +1017,20 @@ class HorseParser:
         "div.db_head_name p.txt_01",
         "p[class*='txt_01']",
     ])
+    # 戦績表の列名 → 保存キー。実ヘッダーはツールチップの文言が後ろに付く（例 'ﾀｲﾑ指数Mタイム指数(通常)…'）ので前方一致で見る。
+    # 'last_3f' だけは「上がり指数」と前方が同じなので完全一致で見る。列の位置は会員状態・年代で変わるため固定位置より列名を優先する。
+    _NAMED_COLS = (
+        ("start_index", ("ｽﾀｰﾄ指数", "スタート指数"), False),
+        ("chase_index", ("追走指数",), False),
+        ("closing_index", ("上がり指数", "上り指数"), False),
+        ("stable_comment", ("厩舎ｺﾒﾝﾄ", "厩舎コメント"), False),
+        ("remarks", ("備考",), False),
+        ("passing_order", ("通過",), False),
+        ("last_3f", ("上り", "上がり"), True),
+        ("winner", ("勝ち馬",), False),
+        ("time_index_m", ("ﾀｲﾑ指数M", "タイム指数M"), False),
+    )
+
     _RACE_TABLE = SelectorChain("horse_race_table", [
         "table.db_h_race_results",
         "table[class*='race_results']",
@@ -1158,6 +1194,7 @@ class HorseParser:
         # ヘッダー行から列のインデックスを取得
         header_row = table.select_one("tr")
         col_indices = {}
+        named: dict[str, int] = {}
         if header_row:
             headers = header_row.select("th")
 
@@ -1166,6 +1203,13 @@ class HorseParser:
             logger = logging.getLogger(__name__)
             header_texts = [safe_text(th) for th in headers]
             logger.info(f"[HorseParser] テーブルヘッダー ({len(header_texts)}列): {header_texts}")
+
+            for i, th in enumerate(headers):
+                header_text = re.sub(r"\s+", "", safe_text(th))
+                for key, aliases, exact in self._NAMED_COLS:
+                    if key not in named and any((header_text == a) if exact else header_text.startswith(a) for a in aliases):
+                        named[key] = i
+                        break
 
             for i, th in enumerate(headers):
                 header_text = safe_text(th).strip()
@@ -1190,7 +1234,8 @@ class HorseParser:
                     # 「M」だけの列名（タイム指数M）
                     col_indices["time_index"] = i
                     logger.info(f"[HorseParser] ✓ M列（タイム指数）を検出: {i}")
-                elif "指数" in header_text and "上り" not in header_text and "3F" not in header_text:
+                elif ("指数" in header_text and "上り" not in header_text and "3F" not in header_text
+                      and not any(w in header_text for w in ("馬場", "ｽﾀｰﾄ", "スタート", "追走", "上がり"))):
                     # 上り指数でない指数列
                     if "time_index" not in col_indices:
                         col_indices["time_index"] = i
@@ -1235,7 +1280,10 @@ class HorseParser:
             date_str = safe_text(cols[0])
             time_index = 0
             
-            if "time_index" in col_indices and len(cols) > col_indices["time_index"]:
+            if "time_index_m" in named and len(cols) > named["time_index_m"]:
+                ti_text = safe_text(cols[named["time_index_m"]])
+                time_index = int(ti_text) if ti_text.isdigit() else 0
+            elif "time_index" in col_indices and len(cols) > col_indices["time_index"]:
                 time_index_text = safe_text(cols[col_indices["time_index"]])
                 try:
                     time_index = int(time_index_text) if time_index_text.isdigit() else 0
@@ -1264,12 +1312,23 @@ class HorseParser:
                 "finish_time": finish_time_str,
                 "time_sec": time_sec,
                 "margin": safe_text(cols[19]) if len(cols) > 19 else "",
-                "passing_order": safe_text(cols[21]) if len(cols) > 21 else "",
-                "last_3f": self._to_float(safe_text(cols[23])) if len(cols) > 23 else 0,
+                "passing_order": (safe_text(cols[named["passing_order"]]) if len(cols) > named["passing_order"] else "") if "passing_order" in named
+                                 else (safe_text(cols[21]) if len(cols) > 21 else ""),
+                "last_3f": (self._to_float(safe_text(cols[named["last_3f"]])) if len(cols) > named["last_3f"] else 0) if "last_3f" in named
+                           else (self._to_float(safe_text(cols[23])) if len(cols) > 23 else 0),
                 "weight": wt,
                 "weight_change": wt_chg,
-                "winner": safe_text(cols[27]) if len(cols) > 27 else "",
+                "winner": (safe_text(cols[named["winner"]]) if len(cols) > named["winner"] else "") if "winner" in named
+                          else (safe_text(cols[27]) if len(cols) > 27 else ""),
             }
+            # 列名で見つかった列だけ足す（古い・短い表では出さない）。指数は整数、空や '**' は None
+            for key in ("start_index", "chase_index", "closing_index"):
+                if key in named:
+                    t = safe_text(cols[named[key]]) if len(cols) > named[key] else ""
+                    rec[key] = int(t) if t.isdigit() else None
+            for key in ("stable_comment", "remarks"):
+                if key in named:
+                    rec[key] = safe_text(cols[named[key]]) if len(cols) > named[key] else ""
             history.append(rec)
 
         return history

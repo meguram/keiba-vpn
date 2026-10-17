@@ -285,6 +285,18 @@ def horse_training(rng: random.Random, h: dict[str, Any], past_day: date) -> dic
     return {"horse_id": h["horse_id"], "total_items": len(ents), "pages_fetched": 1, "entries": ents}
 
 
+def horse_race_remarks(rng: random.Random, h: dict[str, Any], hist: list[dict[str, Any]]) -> dict[str, Any]:
+    rows = []
+    for r in hist:
+        if not r.get("race_id"):
+            continue
+        d = str(r.get("date") or "").replace("/", "-")
+        rows.append({"race_id": r["race_id"], "date": d, "horse_number": r.get("horse_number"), "finish_position": r.get("finish_position"),
+                     "start_index": rng.randint(70, 105), "chase_index": rng.randint(70, 105), "closing_index": rng.randint(70, 105),
+                     "remarks": rng.choice(["", "", "", "出遅", "不利"]), "stable_comment": ""})
+    return {"horse_id": h["horse_id"], "fetched_at": "2026-10-17T00:00:00+09:00", "source": "dev_mock", "race_history": rows}
+
+
 def horse_result(rng: random.Random, h: dict[str, Any], ran: list[dict[str, Any]], past_day: date) -> dict[str, Any]:
     hist = list(ran)
     for k in range(rng.randint(2, 5)):
@@ -603,9 +615,11 @@ def generate(today: date, root: Path) -> dict[str, int]:
             {"date_fmt": day.strftime("%Y%m%d"), "iso_date": day.isoformat(), "slots": schedule_slots})
 
     for h in horses:
-        put("horse_result", h["horse_id"], horse_result(rng, h, ran[h["horse_id"]], past_day))
+        hr = horse_result(rng, h, ran[h["horse_id"]], past_day)
+        put("horse_result", h["horse_id"], hr)
         put("horse_pedigree_5gen", h["horse_id"], peds[h["horse_id"]])
         put("horse_training", h["horse_id"], horse_training(rng, h, past_day))
+        put("horse_race_remarks", h["horse_id"], horse_race_remarks(rng, h, hr["race_history"]))
     dam_ids = sorted({p["ancestors"][1]["horse_id"] for p in peds.values()})
     for i, dam in enumerate(dam_ids):
         put("broodmare_mating", dam, {"horse_id": dam, "matings": [

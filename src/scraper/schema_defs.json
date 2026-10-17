@@ -1496,6 +1496,21 @@
     },
     "winner": {
      "type": "str"
+    },
+    "start_index": {
+     "type": "any"
+    },
+    "chase_index": {
+     "type": "any"
+    },
+    "closing_index": {
+     "type": "any"
+    },
+    "stable_comment": {
+     "type": "str"
+    },
+    "remarks": {
+     "type": "str"
     }
    },
    "entry_list_key": "race_history",
@@ -2288,6 +2303,21 @@
      "type": "any"
     },
     "winner": {
+     "type": "str"
+    },
+    "start_index": {
+     "type": "any"
+    },
+    "chase_index": {
+     "type": "any"
+    },
+    "closing_index": {
+     "type": "any"
+    },
+    "stable_comment": {
+     "type": "str"
+    },
+    "remarks": {
      "type": "str"
     }
    },
@@ -3465,6 +3495,61 @@
      }
     ],
     "note": "実データの観測プロファイル（docs/requirements/data/schemas/observed/）から再構成"
+   }
+  },
+  "horse_race_remarks": {
+   "top_required": {
+    "horse_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "race_history": {
+     "type": "list"
+    }
+   },
+   "top_optional": {
+    "fetched_at": {
+     "type": "str"
+    },
+    "source": {
+     "type": "str"
+    }
+   },
+   "entry_required": {
+    "date": {
+     "type": "str"
+    },
+    "race_id": {
+     "type": "str"
+    }
+   },
+   "entry_optional": {
+    "horse_number": {
+     "type": "any"
+    },
+    "finish_position": {
+     "type": "any"
+    },
+    "start_index": {
+     "type": "any"
+    },
+    "chase_index": {
+     "type": "any"
+    },
+    "closing_index": {
+     "type": "any"
+    },
+    "remarks": {
+     "type": "str"
+    },
+    "stable_comment": {
+     "type": "str"
+    }
+   },
+   "entry_list_key": "race_history",
+   "_provenance": {
+    "source": "designed",
+    "note": "2026-10-17 追加。netkeiba の戦績ページの列名ベース抽出（備考・厩舎ｺﾒﾝﾄ・ｽﾀｰﾄ指数・追走指数・上がり指数）。実データの観測後に schema_infer で再構成する"
    }
   }
  },

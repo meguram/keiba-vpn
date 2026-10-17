@@ -129,6 +129,8 @@ class HybridStorage:
         "race_trainer_comment": "race",
         "horse_training": "horse",
         "horse_pedigree_5gen": "horse",
+        # 戦績ページの 備考・厩舎ｺﾒﾝﾄ・ｽﾀｰﾄ指数・追走指数・上がり指数（馬ごと 1 オブジェクト。horse_result は上書きしない別カテゴリ）
+        "horse_race_remarks": "horse",
         # 母馬の種付け情報（own.netkeiba、キーは母馬の horse_id）
         "broodmare_mating": "horse",
         # クッション値・含水率（JRA PDF/ライブ集約）— GCS: chuou/data/others/jra_cushion/{年}.json

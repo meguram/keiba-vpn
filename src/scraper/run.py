@@ -972,6 +972,15 @@ class ScraperRunner:
             )
             if data.get("horse_name"):
                 self.storage.save("horse_result", horse_id, data)
+                try:  # 戦績表に 備考・指数の列があれば、追加リクエスト無しで horse_race_remarks にも残す
+                    from datetime import datetime as _dt
+                    from src.scraper.horse_race_remarks import CATEGORY as _RM_CAT, to_record as _rm_record
+
+                    _rec = _rm_record(horse_id, data.get("race_history", []), _dt.now().astimezone().isoformat(timespec="seconds"))
+                    if _rec["race_history"]:
+                        self.storage.save(_RM_CAT, horse_id, _rec)
+                except Exception as _e:  # noqa: BLE001
+                    logger.debug("horse_race_remarks 保存スキップ [%s]: %s", horse_id, _e)
                 try:
                     from src.utils.horse_name_index import upsert_horse_name_index_entry
 
