@@ -72,6 +72,12 @@ def priority_list(zone_rows: list[dict], ancestors: dict[str, dict], done: set[s
     return sorted(out, key=lambda x: -x[3])
 
 
+def all_year_only_list(ancestors: dict[str, dict], done: set[str], min_year: int = 1900):
+    """ゾーンに関係なく、年のみ・min_year 以降生まれ・未検索の祖先を表の順（出現の多い順）で返す。"""
+    return [(sid, a["name"], int(a["birthday"][:4]), 0) for sid, a in ancestors.items()
+            if a["precision"] == "year" and int(a["birthday"][:4]) >= min_year and sid not in done]
+
+
 def _get(base: str, params: dict) -> dict:
     url = base + "?" + urllib.parse.urlencode({**params, "format": "json", "formatversion": 2})
     with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=30) as r:
@@ -131,7 +137,10 @@ def run(a) -> None:
     done = {r["horse_id"] for r in csv.DictReader(open(log_p, encoding="utf-8"))} if log_p.exists() else set()
     done |= {r["horse_id"] for r in csv.DictReader(open(man_p, encoding="utf-8"))} if man_p.exists() else set()
     anc = {r["horse_id"]: r for r in csv.DictReader(open(a.ancestors, encoding="utf-8"))}
-    todo = priority_list(list(csv.DictReader(open(a.zone, encoding="utf-8"))), anc, done, a.max_gen, min_impact=a.min_impact)[: a.limit]
+    if a.all_year_only:
+        todo = all_year_only_list(anc, done, a.min_year)[: a.limit]
+    else:
+        todo = priority_list(list(csv.DictReader(open(a.zone, encoding="utf-8"))), anc, done, a.max_gen, min_impact=a.min_impact)[: a.limit]
     today = date.today().isoformat()
     log_rows, man_rows = [], []
     for sid, raw, year, n in todo:
@@ -176,7 +185,9 @@ def run(a) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--zone", required=True)
+    ap.add_argument("--zone", help="zone_review.csv（--all-year-only のときは不要）")
+    ap.add_argument("--all-year-only", action="store_true", help="ゾーンに関係なく、年のみの全祖先を表の順に調べる")
+    ap.add_argument("--min-year", type=int, default=1900, help="--all-year-only で調べる最小の生年")
     ap.add_argument("--ancestors", required=True, help="ancestor_birthdays.csv（precision 列を持つ統合テーブル）")
     ap.add_argument("--dir", required=True, help="birth_search_log.csv / birth_manual.csv のあるディレクトリ")
     ap.add_argument("--limit", type=int, default=20)
@@ -184,7 +195,10 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--min-impact", type=int, default=3, help="ゾーンに現れる馬数の下限。これ未満の種牡馬は調べない（採用率が低く費用対効果が悪いため）")
     ap.add_argument("--sleep", type=float, default=1.0)
     ap.add_argument("--apply", action="store_true")
-    run(ap.parse_args(argv))
+    a = ap.parse_args(argv)
+    if not a.all_year_only and not a.zone:
+        ap.error("--zone か --all-year-only のどちらかが必要です")
+    run(a)
 
 
 if __name__ == "__main__":

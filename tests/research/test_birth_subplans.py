@@ -70,3 +70,15 @@ def test_priority_list_min_impact():
     anc = {k: {"precision": "year", "birthday": "1970", "name": k.upper()} for k in "ab"}
     assert [x[0] for x in bs.priority_list(zone, anc, set(), min_impact=3)] == ["a"]
     assert [x[0] for x in bs.priority_list(zone, anc, set())] == ["a", "b"]
+
+
+def test_all_year_only_list():
+    anc = {
+        "a": {"precision": "year", "birthday": "1970", "name": "A"},
+        "b": {"precision": "day", "birthday": "1970-01-02", "name": "B"},
+        "c": {"precision": "year", "birthday": "1890", "name": "C"},
+        "d": {"precision": "year", "birthday": "1980", "name": "D"},
+    }
+    assert [x[0] for x in bs.all_year_only_list(anc, set())] == ["a", "d"]
+    assert [x[0] for x in bs.all_year_only_list(anc, {"a"})] == ["d"]
+    assert [x[0] for x in bs.all_year_only_list(anc, set(), min_year=1800)] == ["a", "c", "d"]
