@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from src.pipeline.features.factory_self import _prior_cumsum
 
 K_GLOBAL = 30.0                     # 属性の全コース推定を全体平均へ縮約する強さ
 K_LEVEL = (40.0, 30.0, 20.0)         # 面×距離帯 → 場×面×距離帯 → 厳密コース の縮約の強さ
@@ -75,8 +76,8 @@ def asof_sn(key: pd.Series | np.ndarray, d: np.ndarray, y: np.ndarray) -> tuple[
     codes = pd.factorize(pd.Series(key).astype("string").fillna("NA"))[0]
     t = pd.DataFrame({"k": codes, "d": d, "y": y})
     g = t.groupby(["k", "d"], sort=True)["y"].agg(["sum", "count"]).reset_index()
-    g["cs"] = g.groupby("k")["sum"].cumsum() - g["sum"]
-    g["cn"] = g.groupby("k")["count"].cumsum() - g["count"]
+    g["cs"] = _prior_cumsum(g["sum"].astype(float), [g["k"]])
+    g["cn"] = _prior_cumsum(g["count"].astype(float), [g["k"]])
     m = t[["k", "d"]].merge(g[["k", "d", "cs", "cn"]], on=["k", "d"], how="left")
     return m["cs"].to_numpy(dtype="float64"), m["cn"].to_numpy(dtype="float64")
 

@@ -367,8 +367,9 @@ def grp_recent_bias(df: pd.DataFrame) -> pd.DataFrame:
     for v in BIAS_VALS:
         val = rd[v].fillna(0.0)
         cnt = rd[v].notna().astype(float)
-        cs = val.groupby([rd["venue"], rd["surface"], rd["date"]]).cumsum() - val
-        cc = cnt.groupby([rd["venue"], rd["surface"], rd["date"]]).cumsum() - cnt
+        gk = [rd["venue"], rd["surface"], rd["date"]]
+        cs = val.groupby(gk).cumsum().groupby(gk).shift(1).fillna(0.0)               # 累積和を 1 行ずらす（『累積和 − 自分』は端数に今回の値の痕跡が残る。tp-34）
+        cc = cnt.groupby(gk).cumsum().groupby(gk).shift(1).fillna(0.0)
         same[f"frb_same_{v}"] = cs / cc.replace(0, np.nan)
     same["frb_same_n"] = g.cumcount().astype(float)
     sf = pd.concat([rd[["race_id"]], pd.DataFrame(same, index=rd.index)], axis=1)

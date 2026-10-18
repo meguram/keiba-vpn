@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from src.pipeline.features.factory_self import _prior_cumsum
 
 KEY = ["race_id", "horse_id"]
 P0 = 0.08                      # 出遅れ率の公称値（全体の率の as-of 推定の出発点）
@@ -37,8 +38,8 @@ def proxy_labels(career: pd.DataFrame, norm_before: str = "20200101", q_a: float
     h = c["horse_id"]
     for src, name in (("ten_z", "ten"), ("c1_rel", "c1")):
         v = c[src]
-        S = v.fillna(0).groupby(h).cumsum() - v.fillna(0)          # 自分より前の合計
-        N = v.notna().astype(int).groupby(h).cumsum() - v.notna().astype(int)
+        S = _prior_cumsum(v.fillna(0).astype(float), [h])          # 自分より前の合計（累積和を 1 行ずらす。『合計 − 自分』は端数に自分の値が残る）
+        N = _prior_cumsum(v.notna().astype(float), [h])
         c[f"base_{name}"] = (S / N.replace(0, np.nan)).where(N >= 2)
     c["resid"] = c["ten_z"] - c["base_ten"]
     c["c1_drop"] = c["c1_rel"] - c["base_c1"]

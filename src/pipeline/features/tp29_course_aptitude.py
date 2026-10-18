@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from src.pipeline.features.factory_self import _prior_cumsum
 
 SLOW_RANK = 6          # 着順 6 着以降
 G1_RANK_MAX = 3        # 期待順位 1〜3
@@ -238,7 +239,7 @@ def horse_history(F: pd.DataFrame) -> pd.DataFrame:
     g1, g2 = F["g1"].astype(int), F["g2"].astype(int)
     one = pd.Series(1, index=F.index)
     for name, keys in (("all", ["horse_id"]), ("k2", ["horse_id", "k2"]), ("surf", ["horse_id", "surf"])):
-        gb = lambda s: s.groupby([F[k] for k in keys]).cumsum() - s
+        gb = lambda s: _prior_cumsum(s.astype(float), [F[k] for k in keys])
         out[f"hz_g1_{name}"] = gb(g1)
         out[f"hz_g2_{name}"] = gb(g2)
         out[f"hz_n_{name}"] = gb(one)

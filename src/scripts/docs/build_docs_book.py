@@ -170,6 +170,8 @@ PARTS: list[Part] = [
           [("course_specific_effects", "コース特注の要因（tp-31）"), ("training_pipeline_decisions", "決定ログ")]),
         C("transport_and_stay", "輸送のありなし（厩舎の拠点×開催場）と滞在（追い切りの場所）で好走率が変わるか（tp-33）。判定できるデータの範囲、V4 の予測に対する残差、年別の再現性、特徴量の増分。", "結果",
           [("course_specific_effects", "コース特注の要因（tp-31）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("rest_and_interval", "休養明け・レース間隔の分析（tp-34）。間隔の帯・叩き何戦目別の好走率と V4 に対する残差、馬・調教師ごとの再現性、特徴量 8 群の増分、見かけの大きな改善が浮動小数点の端数のリークだった経緯と修正。", "結果",
+          [("race_volatility", "荒れやすいレースの分析（tp-30）"), ("training_pipeline_decisions", "決定ログ")]),
         C("race_volatility", "荒れやすいレースの分析（tp-30）。荒れの事後指標、荒れやすい条件・コース、事前予測（オッズなし/あり）、予想の特徴量・温度調整への寄与、3連複の買い目の幅（フォーメーション・流し・点数）への寄与。", "結果",
           [("course_aptitude_groups", "コース適性（tp-29）"), ("training_pipeline_decisions", "決定ログ")]),
         C("feature_serving_low_memory", "当日の特徴量を小さなメモリで作る設計。出走馬だけで計算できる理由、サービング用バンドル、検証、見つかった不具合。", "設計",

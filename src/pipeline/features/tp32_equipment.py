@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from src.pipeline.features.factory_self import KEY, _f, _g, lag, prep, seg_affinity
+from src.pipeline.features.factory_self import KEY, _f, _g, _prior_cumsum, lag, prep, seg_affinity
 
 EAST = {"03", "04", "05", "06"}
 WEST = {"07", "08", "09", "10"}
@@ -87,10 +87,10 @@ def g_eq(d: pd.DataFrame, E: pd.DataFrame | None = None, **_) -> pd.DataFrame:
     prev_blk = gh["blk"].shift(1)
     on_c = e["blk"].fillna(0.0)
     off_c = (1.0 - e["blk"]).fillna(0.0)
-    n_on = on_c.groupby(e["horse_id"], sort=False).cumsum() - on_c
-    n_off = off_c.groupby(e["horse_id"], sort=False).cumsum() - off_c
-    s_on = (e["fpe"] * e["blk"]).fillna(0).groupby(e["horse_id"], sort=False).cumsum() - (e["fpe"] * e["blk"]).fillna(0)
-    s_off = (e["fpe"] * (1 - e["blk"])).fillna(0).groupby(e["horse_id"], sort=False).cumsum() - (e["fpe"] * (1 - e["blk"])).fillna(0)
+    n_on = _prior_cumsum(on_c, [e["horse_id"]])
+    n_off = _prior_cumsum(off_c, [e["horse_id"]])
+    s_on = _prior_cumsum((e["fpe"] * e["blk"]).fillna(0), [e["horse_id"]])
+    s_off = _prior_cumsum((e["fpe"] * (1 - e["blk"])).fillna(0), [e["horse_id"]])
     k = 3.0
     allm = 0.5
     m_on = (s_on + k * allm) / (n_on + k)
