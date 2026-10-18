@@ -164,6 +164,8 @@ PARTS: list[Part] = [
           [("course_geometry_atlas", "コースの概形を図で見る"), ("training_pipeline_decisions", "tp-15（形状だけの類似度）の結果")]),
         C("course_aptitude_groups", "期待外れ・期待以上の馬のグループ差分から作るコース適性（tp-29）。グループの定義と件数、有意な属性、コース固有の超過、人気を制御した予測力、勝率予測への増分。", "結果",
           [("course_performance_similarity", "成績が連動するコース（tp-26）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("course_specific_effects", "コース特注の要因（tp-31）。V4 の予測残差がコース×属性でずれているかの監査、前の年からの補正の検証、コース特注の特徴量（厳密コース×属性の as-of lift）の増分。", "結果",
+          [("course_aptitude_groups", "コース適性（tp-29）"), ("training_pipeline_decisions", "決定ログ")]),
         C("race_volatility", "荒れやすいレースの分析（tp-30）。荒れの事後指標、荒れやすい条件・コース、事前予測（オッズなし/あり）、予想の特徴量・温度調整への寄与、3連複の買い目の幅（フォーメーション・流し・点数）への寄与。", "結果",
           [("course_aptitude_groups", "コース適性（tp-29）"), ("training_pipeline_decisions", "決定ログ")]),
         C("feature_serving_low_memory", "当日の特徴量を小さなメモリで作る設計。出走馬だけで計算できる理由、サービング用バンドル、検証、見つかった不具合。", "設計",
