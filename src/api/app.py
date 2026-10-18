@@ -6841,7 +6841,8 @@ async def get_race_predictions(race_id: str):
 
             st = _get_storage()
             card = st.load("race_shutuba", race_id) or {}
-            return attach_position_forecast(resp, st.load("race_shutuba_past", race_id), str(card.get("date") or ""))
+            course = {k: card.get(k) for k in ("venue", "surface", "distance")}
+            return attach_position_forecast(resp, st.load("race_shutuba_past", race_id), str(card.get("date") or ""), course)
         except Exception as exc:  # noqa: BLE001
             logger.warning("位置取り予想の付与に失敗 %s: %s", race_id, exc)
             return resp

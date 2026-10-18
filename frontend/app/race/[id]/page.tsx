@@ -11,7 +11,7 @@ import { RaceNav } from "@/components/RaceNav";
 import { useNarrow } from "@/components/RaceStrip";
 import { raceExists } from "@/lib/raceExists";
 import { PositionForecast } from "@/components/PositionForecast";
-import type { ForecastHorse, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
+import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
 
 const SHOW_MEGU = featureEnabled("megu-index");
 const SHOW_TRACKING = featureEnabled("tracking-difficulty");
@@ -161,6 +161,7 @@ type PredEntry = {
 
 type PredData = {
   pace_forecast?: PaceForecast;
+  gate_bias?: GateBias;
   status?: string;
   has_prediction?: boolean;
   model_type?: string;
@@ -668,7 +669,7 @@ export default function RaceDetailPage() {
             </div>
           )}
 
-      {forecastHorses.length > 0 && <PositionForecast horses={forecastHorses} pace={predData?.pace_forecast} />}
+      {forecastHorses.length > 0 && <PositionForecast horses={forecastHorses} pace={predData?.pace_forecast} gate={predData?.gate_bias} />}
 
       {sortedPreds.length > 0 ? (
         <div style={{ overflowX: "auto" }}>
