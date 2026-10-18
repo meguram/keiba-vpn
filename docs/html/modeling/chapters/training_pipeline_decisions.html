@@ -89,6 +89,7 @@
 <tr><td>27</td><td><code>tp27_eval</code>（スクリプト）</td><td>v4 特徴量セットの統合（群を前向きに累積し、アンサンブルで v3 と比較）</td><td>完了（採用）</td><td>§33</td></tr>
 <tr><td>29</td><td><code>tp29_eval</code>（スクリプト）</td><td>コース特注適性（期待外れ・期待以上のグループ差分）</td><td>完了（不採用）</td><td>§33</td></tr>
 <tr><td>30</td><td><code>tp30_eval</code> / <code>tp30_bet_eval</code>（スクリプト）</td><td>荒れやすいレースの分析（事前予測、予想の特徴量への寄与、馬券の幅への寄与）</td><td>完了（特徴量・馬券の幅とも不採用）</td><td>§33</td></tr>
+<tr><td>06d</td><td><code>fit_final_v4</code>（スクリプト）</td><td>最終評価 v4（アンサンブル v4。test 2025 は一度だけ）</td><td class="ok">完了（採用。v3 比 勝率 −0.00303）</td><td>§34</td></tr>
 </table>
 
 <h3>勝率（p_win）LogLoss の推移（評価データと条件が違うので、横並びの比較には使わない）</h3>
@@ -1023,7 +1024,26 @@
   <li>実オッズ（T-60/T-15）が溜まった段階で、馬券戦略の再検証。</li>
 </ul>
 
-<h2>34. 以降の節</h2>
+<h2>34. tp-06d 最終評価 v4（アンサンブル v4、test 2025 を一度だけ）</h2>
+<p class="muted">コード: <code>src/scripts/data/fit_final_v4.py</code>（<code>--fit-end 2024</code>）。2020〜2024 年（235,458 行、1,135 列、5 seed）で学習した 7 メンバー（lgb_extras_ped / xgb_extras_ped / lgb_extras / lgb_softmax / linear / mtl_nn_extras_ped / mtl_nn_s）のアンサンブルで test 2025（3,455 レース、47,497 行）を一度だけ予測した。土台は修正後の学習表（先読み修正・血統キー・track_bias 修正・course_variant・S3 再計算、<code>training_pipeline_v4/</code>）。結果を見てやり直さない（<code>final_eval_v4/TEST2025_EVALUATED.json</code>）。</p>
+<h3>確定事項</h3>
+<table>
+<tr><th>test 2025</th><th>勝率 LogLoss</th><th>連対</th><th>複勝</th></tr>
+<tr><td>v1（tp-06）</td><td>0.21349</td><td>-</td><td>-</td></tr>
+<tr><td>v2（tp-06b）</td><td>0.21240</td><td>-</td><td>-</td></tr>
+<tr><td>v3（tp-06c）</td><td>0.21039</td><td>0.32833</td><td>0.41297</td></tr>
+<tr><td><b>v4（tp-06d）</b></td><td><b>0.20740</b></td><td><b>0.32360</b></td><td><b>0.40640</b></td></tr>
+<tr><td>v4 − v3（paired bootstrap、95% 上限）</td><td><b>−0.00303（−0.00216）</b></td><td>−0.00459（−0.00360）</td><td>−0.00661（−0.00523）</td></tr>
+</table>
+<h3>解釈と申し送り</h3>
+<ul>
+  <li><b>採用。</b>群の選択に使った valid 2022〜24 の LOYO（v3 比 −0.00321）とほぼ同じ大きさで、選択の楽観は小さかった。test 2025 での v3 比は、勝率・連対・複勝のすべてで信頼区間の上限が 0 未満。</li>
+  <li>効いたのは、馬主系（−0.00226）、補助ヘッド予測と補助損失つき NN（−0.00081）、馬自身の履歴 8 群（−0.00043）、レース・メンバー構成・コース環境の 7 群（−0.00071）、種牡馬 ID×条件（−0.00044）の順に積み上げた効果（§33）。</li>
+  <li>2020〜2025 年の全行で学習した本番用 <code>bundle_v4_2025</code> を作成中（<code>--fit-end 2025</code>）。続けて MLflow への追加登録（<code>keiba-ensemble-v4</code>）、推論経路との一致確認（<code>verify_v4_serving_e2e</code>）、影モードへの切替を行う。</li>
+  <li>test 2025 は、v1 から v4 まで 4 回の評価に使った（モデル精度の評価）。以降、この年での選択はしない。</li>
+</ul>
+
+<h2>35. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>
