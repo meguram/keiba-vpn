@@ -1616,6 +1616,8 @@ class ShutubaPastParser:
           "horse_number": 1,
           "horse_name": "...",
           "horse_id": "...",
+          "blinker": 0,            # 馬名の右の印 B = ブリンカー（2026-10-18 追加。出走前の馬柱に載る）
+          "marks": [],
           "past_races": [
             {"date": "2026.02.18", "venue": "大井", "race": "雲取賞", "surface_dist": "ダ1800", ...}, ...
           ]
@@ -1696,6 +1698,12 @@ class ShutubaPastParser:
                 "horse_id": extract_id_from_url(safe_attr(horse_link, "href")),
                 "past_races": [],
             }
+            # 馬名の右の印（<span class="Mark">B</span> = ブリンカー）。馬名の枠（Horse02）がある表だけ読む（無ければキーを付けない）
+            name_cell = row.select_one(".Horse02")
+            if name_cell is not None:
+                marks = [safe_text(m) for m in name_cell.select("span.Mark") if safe_text(m)]
+                entry["marks"] = marks
+                entry["blinker"] = 1 if "B" in marks else 0
 
             past_cols = row.select("td.Past")
             for pc in past_cols:

@@ -73,8 +73,30 @@ def fetch_one(runner: Any, horse_id: str, now_iso: str) -> dict[str, Any]:
     return {"status": "saved" if ok else "error", "n_rows": len(rec["race_history"])}
 
 
-def run(runner: Any, horse_ids: Iterable[str], *, max_consecutive_errors: int = 5, limit: int = 0, wait_idle: Any = None) -> dict[str, Any]:
-    """順に取得する。保存済みの馬はスキップ（再開用）。アクセス制限の疑い・連続エラーで中断。"""
+def needs_refresh(stored: dict | None, last_run: tuple[str, str] | None, give_up_days: int = 5) -> bool:
+    """日次の増分用。保存済みの戦績に直近の出走（race_id, 日付）の行が無ければ取り直す。
+    出走から give_up_days 日たっても netkeiba 側に行が出ない場合は取り直さない（毎日取りに行くのを避ける）。"""
+    if last_run is None:
+        return False
+    if not stored:
+        return True
+    race_id, rdate = last_run
+    if any(str(x.get("race_id")) == race_id for x in stored.get("race_history", [])):
+        return False
+    fetched = str(stored.get("fetched_at") or "")[:10]
+    try:
+        from datetime import date as _d
+
+        lag = (_d.fromisoformat(fetched) - _d.fromisoformat(str(rdate)[:10])).days
+    except ValueError:
+        return True
+    return lag < give_up_days
+
+
+def run(runner: Any, horse_ids: Iterable[str], *, max_consecutive_errors: int = 5, limit: int = 0, wait_idle: Any = None,
+        last_run: dict[str, tuple[str, str]] | None = None) -> dict[str, Any]:
+    """順に取得する。保存済みの馬はスキップ（再開用）。アクセス制限の疑い・連続エラーで中断。
+    last_run（馬ID → (直近の出走 race_id, 日付)）を渡すと日次の増分モード: 保存済みでも直近の出走の行が無ければ取り直す。"""
     from datetime import datetime
     from zoneinfo import ZoneInfo
 
@@ -89,8 +111,9 @@ def run(runner: Any, horse_ids: Iterable[str], *, max_consecutive_errors: int = 
     done = 0
     for i, hid in enumerate(ids, 1):
         if runner.storage.exists(CATEGORY, hid):
-            stats["skipped_existing"] += 1
-            continue
+            if last_run is None or not needs_refresh(runner.storage.load(CATEGORY, hid, bypass_cache=True), last_run.get(hid)):
+                stats["skipped_existing"] += 1
+                continue
         if limit and done >= limit:
             break
         if wait_idle is not None:

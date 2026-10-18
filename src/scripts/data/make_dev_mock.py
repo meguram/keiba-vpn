@@ -285,6 +285,11 @@ def horse_training(rng: random.Random, h: dict[str, Any], past_day: date) -> dic
     return {"horse_id": h["horse_id"], "total_items": len(ents), "pages_fetched": 1, "entries": ents}
 
 
+def smartrc_prerace(rid: str, smartrc: dict[str, Any]) -> dict[str, Any]:
+    return {"race_id": rid, "rcode": smartrc.get("rcode", ""), "source": "dev_mock",
+            "phases": {"eve": {"phase": "eve", "snapshot_at": "2026-10-17T18:00:00+09:00", "runners": [dict(x) for x in smartrc.get("runners") or []]}}}
+
+
 def horse_race_remarks(rng: random.Random, h: dict[str, Any], hist: list[dict[str, Any]]) -> dict[str, Any]:
     rows = []
     for r in hist:
@@ -585,6 +590,7 @@ def generate(today: date, root: Path) -> dict[str, int]:
                                ("race_trainer_comment", "trainer_comment"), ("race_shutuba_past", "shutuba_past"),
                                ("race_pair_odds", "pair_odds"), ("race_detail", "detail"), ("smartrc_race", "smartrc")):
                     put(cat, rid, r[k])
+                put("smartrc_prerace", rid, smartrc_prerace(rid, r["smartrc"]))
                 _put_schemaless(put, rid, r["meta"], day, field, rng)
                 if with_result:
                     put("race_result", rid, r["result"])

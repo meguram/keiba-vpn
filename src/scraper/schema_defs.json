@@ -577,6 +577,12 @@
     },
     "horse_number": {
      "type": "int"
+    },
+    "blinker": {
+     "type": "int"
+    },
+    "marks": {
+     "type": "list"
     }
    },
    "entry_list_key": "entries",
@@ -3562,6 +3568,29 @@
    "_provenance": {
     "source": "designed",
     "note": "2026-10-17 追加。netkeiba の戦績ページの列名ベース抽出（備考・厩舎ｺﾒﾝﾄ・ｽﾀｰﾄ指数・追走指数・上がり指数）。実データの観測後に schema_infer で再構成する"
+   }
+  },
+  "smartrc_prerace": {
+   "top_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "phases": {
+     "type": "dict"
+    }
+   },
+   "top_optional": {
+    "rcode": {
+     "type": "str"
+    },
+    "source": {
+     "type": "str"
+    }
+   },
+   "_provenance": {
+    "source": "designed",
+    "note": "2026-10-18 追加（tp-32）。SmartRC の出走表の『出走前の値』（blinker など）を phase（eve/t60）ごとに不変のスナップショットとして保存する。old_pr は特徴量に使わない。実データの観測後に schema_infer で再構成する"
    }
   }
  },

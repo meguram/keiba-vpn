@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 TABLES = ROOT / "data/page_reference/tables"
 PROGRESS = ROOT / "data/local/meta/horse_race_remarks_progress.json"
+PROGRESS_DAILY = ROOT / "data/local/meta/horse_race_remarks_daily.json"
 OTHER_SCRAPERS = r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks)|scraper\.(backfill|run|export_tables))"
 
 
@@ -44,6 +45,26 @@ def horse_ids(recent_years: int, include_older: bool) -> list[str]:
     return ids
 
 
+def recent_runs(days: int) -> dict[str, tuple[str, str]]:
+    """直近 days 日に走った馬 → (最終出走の race_id, 日付)。日次の増分取得用。"""
+    import datetime as dt
+
+    import polars as pl
+
+    since = (dt.date.today() - dt.timedelta(days=days)).isoformat()
+    out: dict[str, tuple[str, str]] = {}
+    this_year = int(time.strftime("%Y"))
+    for y in (this_year, this_year - 1):
+        f = TABLES / str(y) / "race_result_flat.parquet"
+        if not f.exists():
+            continue
+        d = pl.read_parquet(f, columns=["horse_id", "date", "race_id"]).filter(pl.col("date").cast(pl.Utf8) >= since)
+        for hid, dt_, rid in d.sort("date").iter_rows():
+            if hid:
+                out[hid] = (str(rid), str(dt_)[:10])
+    return out
+
+
 def busy() -> bool:
     """他のスクレイピング（修復・バックフィル・エクスポート）のプロセスが動いている。
 
@@ -66,18 +87,26 @@ def main() -> None:
     ap.add_argument("--all-before", action="store_true")
     ap.add_argument("--limit", type=int, default=0, help="新規に取得する頭数の上限（パイロット用）")
     ap.add_argument("--no-wait-idle", action="store_true")
+    ap.add_argument("--ran-within-days", type=int, default=0, help="日次の増分: 直近 N 日に走った馬のうち、直近の出走の行が保存済みの戦績に無い馬だけ取り直す")
     a = ap.parse_args()
     from src.scraper.horse_race_remarks import run
     from src.scraper.run import ScraperRunner
 
-    ids = horse_ids(a.recent_years, a.all_before)
-    print(f"対象 {len(ids)} 頭（直近 {a.recent_years} 年に走った馬から）", flush=True)
+    last_run = None
+    if a.ran_within_days:
+        last_run = recent_runs(a.ran_within_days)
+        ids = sorted(last_run, key=lambda h: last_run[h][1], reverse=True)
+        print(f"対象 {len(ids)} 頭（直近 {a.ran_within_days} 日に走った馬。直近の出走の行が無い馬だけ取り直す）", flush=True)
+    else:
+        ids = horse_ids(a.recent_years, a.all_before)
+        print(f"対象 {len(ids)} 頭（直近 {a.recent_years} 年に走った馬から）", flush=True)
     t0 = time.time()
-    st = run(ScraperRunner(), ids, limit=a.limit, wait_idle=None if a.no_wait_idle else (lambda: wait_idle() if busy() else None))
+    st = run(ScraperRunner(), ids, limit=a.limit, last_run=last_run, wait_idle=None if a.no_wait_idle else (lambda: wait_idle() if busy() else None))
     st["seconds"] = round(time.time() - t0)
     st["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-    PROGRESS.parent.mkdir(parents=True, exist_ok=True)
-    PROGRESS.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
+    prog = PROGRESS_DAILY if a.ran_within_days else PROGRESS
+    prog.parent.mkdir(parents=True, exist_ok=True)
+    prog.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(st, ensure_ascii=False, indent=1), flush=True)
     if st["aborted"]:
         raise SystemExit(3)

@@ -2382,6 +2382,16 @@ class ScraperRunner:
             return None
         if data and data.get("runners"):
             self.storage.save("smartrc_race", race_id, data)
+            try:  # 出走前の値を不変のスナップショットとして残す（KEIBA_EVE_SMARTRC_SNAPSHOT=1 のときだけ）
+                from src.scraper import smartrc_prerace as _pre
+
+                if _pre.enabled():
+                    _card = self.storage.load("race_shutuba", race_id) or {}
+                    _ph = _pre.save_snapshot(self.storage, race_id, data, date, str(_card.get("start_time") or ""))
+                    if _ph:
+                        logger.info("smartrc_prerace %s: phase=%s を保存", race_id, _ph)
+            except Exception as _e:  # noqa: BLE001  スナップショットの失敗で本来の保存を妨げない
+                logger.warning("smartrc_prerace 保存スキップ [%s]: %s", race_id, _e)
             logger.info("SmartRC %s: %d runners, %d horses 保存",
                         race_id, len(data["runners"]), len(data.get("horses", {})))
         return data
