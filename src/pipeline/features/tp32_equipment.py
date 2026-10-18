@@ -18,7 +18,7 @@ from src.pipeline.features.factory_self import KEY, _f, _g, lag, prep, seg_affin
 
 EAST = {"03", "04", "05", "06"}
 WEST = {"07", "08", "09", "10"}
-GROUPS = ["EQ", "DIST", "SURF", "FIRST", "REST", "CLASS", "TRAN", "JOCKEY", "GELD", "WEIGHT", "TRANSPORT", "AGE"]
+GROUPS = ["EQ", "DIST", "SURF", "FIRST", "REST", "CLASS", "TRAN", "JOCKEY", "GELD", "WEIGHT", "TRANSPORT", "AGE", "COMBO"]
 
 
 # ───────────────────────── 部品
@@ -146,7 +146,7 @@ def g_surf(d: pd.DataFrame, **_) -> pd.DataFrame:
 def g_first(d: pd.DataFrame, **_) -> pd.DataFrame:
     sf = d["surface"].astype("string")
     band = _dist_band(d["dist"])
-    course = (d["venue_code"].astype(str) + "|" + sf + "|" + d["dist"].astype(int).astype(str)).astype("string")
+    course = (d["venue_code"].astype(str) + "|" + sf + "|" + d["dist"].round().astype("Int64").astype(str)).where(d["dist"].notna()).astype("string")
     direction = d["direction"].astype("string").replace("", pd.NA)
     heavy = pd.Series(np.where(d["going"] >= 2, "heavy", None), index=d.index, dtype="string")
     longd = pd.Series(np.where(d["dist"] >= 2400, "long", None), index=d.index, dtype="string")
@@ -286,8 +286,52 @@ def g_age(d: pd.DataFrame, **_) -> pd.DataFrame:
     return pd.concat([out, situ(d, key, "agk", pop=True)], axis=1)
 
 
+def g_combo(d: pd.DataFrame, E: pd.DataFrame | None = None, **_) -> pd.DataFrame:
+    """状況の組み合わせ（休み明け・初経験・昇級・乗り替わり・馬具・面×距離の替わり など）。間隔そのものの特徴量は tp-34 の担当なので作らない。
+    組み合わせごとに『馬自身のその組み合わせでの過去の成績』と『全馬のその組み合わせの as-of 成績率』を持つ。"""
+    days = d["dnum"] - lag(d, "dnum")
+    lay = (days >= 91).to_numpy()
+    has_prev = days.notna().to_numpy()
+    dd = (d["dist"] - lag(d, "dist")).to_numpy(float)
+    dist_t = np.where(dd >= 200, "ext", np.where(dd <= -200, "short", "same"))
+    ps, sc = lag(d, "surface").astype(object).to_numpy(), d["surface"].astype(object).to_numpy()
+    sw = has_prev & pd.notna(ps) & (ps != sc)
+    pc = lag(d, "cls").to_numpy(float)
+    cl_up = has_prev & (d["cls"].to_numpy(float) > pc)
+    cl_dn = has_prev & (d["cls"].to_numpy(float) < pc)
+    pj = lag(d, "jockey_id").astype(object).to_numpy()
+    jchg = has_prev & pd.notna(pj) & (pj != d["jockey_id"].astype(object).to_numpy())
+    wc = d["wt_chg"].to_numpy(float)
+    wbig = np.abs(wc) >= 10
+    s_, ps_s = d["sex"].astype(object).to_numpy(), lag(d, "sex").astype(object).to_numpy()
+    geld1 = (s_ == "セ") & pd.notna(ps_s) & (ps_s != "セ")
+    age, mo = d["age"].to_numpy(float), d["month"].to_numpy(float)
+    first_course = (_same_count(d, d["venue_code"].astype(str) + "|" + d["surface"].astype(str) + "|" + d["dist"].round().astype("Int64").astype(str)) == 0)
+    blk_first = np.zeros(len(d), dtype=bool)
+    if E is not None and len(E):
+        eq = g_eq(d, E=E)
+        blk_first = (eq["eq_first"].to_numpy(float) == 1)
+
+    def key(mask, label):
+        return pd.Series(np.where(mask & has_prev, label, None), index=d.index, dtype="string")
+
+    keys = {
+        "cb_lay_blk": key(lay & blk_first, "lay_blk"), "cb_lay_short": key(lay & (dist_t == "short"), "lay_short"), "cb_lay_ext": key(lay & (dist_t == "ext"), "lay_ext"),
+        "cb_short_cls": key((dist_t == "short") & cl_up, "short_up"), "cb_lay_sw": key(lay & sw, "lay_sw"), "cb_sw_dist": key(sw & (dist_t != "same"), "sw_distchg"),
+        "cb_up_jchg": key(cl_up & jchg, "up_jchg"), "cb_dn_jchg": key(cl_dn & jchg, "dn_jchg"), "cb_lay_firstcourse": key(lay & first_course, "lay_fc"),
+        "cb_lay_wbig": key(lay & wbig, "lay_wbig"), "cb_lay_geld": key(lay & geld1, "lay_geld"), "cb_blk_distchg": key(blk_first & (dist_t != "same"), "blk_distchg"),
+        "cb_3aut_up": key((age == 3) & (mo >= 9) & cl_up, "3aut_up"),
+    }
+    parts = [situ(d, k, n, k=3.0) for n, k in keys.items()]
+    return pd.concat(parts, axis=1)
+
+
+def _same_count(d: pd.DataFrame, key: pd.Series) -> np.ndarray:
+    return d.assign(_k=key.astype(str)).groupby(["horse_id", "_k"], sort=False).cumcount().to_numpy(float)
+
+
 FUNCS = {"EQ": g_eq, "DIST": g_dist, "SURF": g_surf, "FIRST": g_first, "REST": g_rest, "CLASS": g_class, "TRAN": g_tran, "JOCKEY": g_jockey, "GELD": g_geld,
-         "WEIGHT": g_weight, "TRANSPORT": g_transport, "AGE": g_age}
+         "WEIGHT": g_weight, "TRANSPORT": g_transport, "AGE": g_age, "COMBO": g_combo}
 
 
 def build_groups(runs: pd.DataFrame, E: pd.DataFrame | None = None, home: pd.Series | None = None, only: list[str] | None = None) -> dict[str, pd.DataFrame]:
@@ -300,3 +344,20 @@ def build_groups(runs: pd.DataFrame, E: pd.DataFrame | None = None, home: pd.Ser
         if f.shape[1]:
             out[name] = f.astype("float32").assign(race_id=d["race_id"].to_numpy(), horse_id=d["horse_id"].to_numpy())
     return out
+
+
+def sit_features(hist_runs: pd.DataFrame, target_rows: pd.DataFrame, groups: list[str], E: pd.DataFrame | None = None, home: pd.Series | None = None) -> pd.DataFrame:
+    """推論用: 履歴（その日より前の確定結果）と当日の出走馬の行（結果は未確定）をつないで群を作り、当日の行だけ返す。
+    学習時と同じ関数を使う（二重実装にしない）。target_rows の finish_position 等は無くてよい（欠損のまま）。"""
+    cols = list(hist_runs.columns)
+    T = target_rows.reindex(columns=cols).copy()
+    allr = pd.concat([hist_runs, T], ignore_index=True).sort_values(["horse_id", "date", "race_id"], kind="stable").reset_index(drop=True)
+    out = build_groups(allr, E=E, home=home, only=groups)
+    tk = pd.MultiIndex.from_frame(T[KEY].astype(str))
+    parts = []
+    for g in groups:
+        if g not in out:
+            continue
+        f = out[g].set_index(KEY)
+        parts.append(f.loc[f.index.isin(tk)])
+    return pd.concat(parts, axis=1).reset_index() if parts else pd.DataFrame(columns=KEY)

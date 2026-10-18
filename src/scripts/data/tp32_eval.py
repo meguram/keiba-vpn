@@ -28,6 +28,7 @@ from src.scripts.data import tp31_eval as T31  # noqa: E402
 from src.scripts.data import tp27_eval as t  # noqa: E402
 
 KEY = ["race_id", "horse_id"]
+HANDED_OFF = ("REST", "TRANSPORT")        # 休み明け・間隔は tp-34、輸送・滞在は tp-33 の担当（ここでは結果を参考に残すだけ）
 TABLES = ROOT / "data/page_reference/tables"
 
 
@@ -65,7 +66,7 @@ def cmd_groups(a) -> None:
     df, base, meta, folds, lp = t.setup()
     runs, E, toz = load_inputs()
     home = home_from_tozai(runs, toz)
-    parts = te.build_groups(runs, E=E, home=home)
+    parts = te.build_groups(runs, E=E, home=home, only=getattr(a, 'only', None) or None)
     gdir = OUT / "groups"
     gdir.mkdir(parents=True, exist_ok=True)
     for g, G in parts.items():
@@ -87,7 +88,7 @@ def _setup_tp31():
 
 def cmd_stage1(a) -> None:
     _setup_tp31()
-    T31.GROUP_NAMES = te.GROUPS
+    T31.GROUP_NAMES = list(a.only) if a.only else [g for g in te.GROUPS if g not in HANDED_OFF]
     T31.cmd_stage1(a)
 
 
@@ -99,6 +100,7 @@ def cmd_stage2(a) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["groups", "stage1", "stage2"])
+    ap.add_argument("--only", nargs="*", help="groups: 指定した群だけ作る（例 COMBO）。stage1/stage2: 指定した群だけ評価する")
     a = ap.parse_args()
     {"groups": cmd_groups, "stage1": cmd_stage1, "stage2": cmd_stage2}[a.cmd](a)
 

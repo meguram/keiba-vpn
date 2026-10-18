@@ -38,6 +38,7 @@ def cmd_columns() -> None:
                       + names(sv.FAC / "field/course_draw.parquet", r"^fdr_(course|br|hn|third|cond_third|fs_third)_") + names(sv.FAC / "field/calendar_env.parquet")
                       + names(sv.FAC / "field/race_type.parquet"))
     cols["ped"] = names(sv.FAC / "src/cand_PED_sire_cond.parquet")
+    cols["rest34"] = [c for n in sv.REST34 for c in names(sv.V4_WORK / "tp34/groups" / f"{n}.parquet")]
     cols = {g: list(dict.fromkeys(c)) for g, c in cols.items()}
     sv.GROUP_COLUMNS_JSON.write_text(json.dumps(cols, ensure_ascii=False, indent=1), encoding="utf-8")
     print({g: len(c) for g, c in cols.items()})

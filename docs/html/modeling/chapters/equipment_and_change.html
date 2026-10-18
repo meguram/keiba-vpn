@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>馬具と「初めて・替わり」系の状況特徴（tp-32）— keiba-vpn</title><style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 22px 0 8px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; } th { background: #1b2a4d; }
+td.num { text-align: right; font-family: monospace; } .muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }</style></head>
+<body><a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>馬具と「初めて・替わり」系の状況特徴（tp-32）</h1>
+<p class="muted">ブリンカーなどの馬具、距離の延長・短縮、芝↔ダートの替わり、初経験、昇級・降級、転厩、乗り替わり、去勢明け、馬体重・斤量の変化、年齢の節目と、それらの組み合わせについて、「その状況かどうか」と「その状況での過去の成績（馬自身の as-of 親和度・全馬の as-of 成績率・初経験フラグ）」を特徴量にして、V4（1,062 列）に対する増分を測った。休み明け・間隔は tp-34、輸送・滞在は tp-33 の担当で、ここでは参考の結果だけを載せる。</p>
+<div class="note"><b>要点.</b> 第 2 段で採用基準を満たした群はありません。 評価は valid 2022〜24 の LightGBM（第 1 段: 2022+2023・seed 1 本、第 2 段: 2024・新しい seed 2 本）。採否は『CI 上限&lt;0・効果≥0.0002・連対/複勝の悪化 0.0002 以内』。test 2025・2026 年は使っていない。</div>
+<h2>1. 馬具データの所在と使えるか</h2>
+<pre style='white-space:pre-wrap'># tp-32 馬具データの所在調査（2026-10-18）
+
+## 結論
+| 項目 | 判定 |
+|---|---|
+| ブリンカー（馬具）の過去分 | **使える。** SmartRC の fullresults（馬ごとの全戦績。2015 年〜）に、各出走の当時の blinker が入っている。確定した過去の事実で、取得が出走後でも変わらない。 |
+| 出走表（runners）の blinker | 自レースの確定戦績の blinker と 324,802 行中 323,746 行で比べて **一致率 100%**（不一致 1 件、年別でも全年 1.0）。取得時点の最新値ではなく、そのレースの申告・使用値。 |
+| 出走前に分かるか | netkeiba の**馬柱（race_shutuba_past）に、馬名の右に印 B（`&lt;span class=&quot;Mark&quot;&gt;B&lt;/span&gt;`）** が出ており、これが blinker と 140/140 頭で一致（アーカイブ済みの 10 レースで確認）。出馬表（race_shutuba）・結果ページ・調教・厩舎コメントには馬具の記載なし。 |
+| 馬具のその他（シャドーロール・チークピーシーズ・ハミ等） | **取れない。** 馬柱の印は B のみ（10 レースの Mark の値は B だけ）。SmartRC の runners にも blinker 以外の馬具項目は無い。 |
+| 出走前に取った値での直接検証 | 過去分は不可（保存は全件出走後の取得）。**今後**は馬柱の B 印（パーサー拡張済み）と smartrc_prerace（eve スナップショット）で前向きに検証する。 |
+
+## 根拠
+- runners_eq 324,802 行・career_eq 497,001 行（2015〜2026 年の戦績、horse×race の重複除去後）。
+- 出走表の項目と、同じレースの確定戦績の項目の一致率: blinker 1.0000、handicap 1.0000、ustat 0.99999、interval 1.0000、jcode 1.0000。
+- 馬具の使用率は年とともにやや増える（blinker=1 率: 2020 年 9.8% → 2026 年 13.1%）。連続出走での変化率は 5%（初着用 9,581 件・外し 4,693 件）。
+- SmartRC の `_meta` に取得時刻は無い（tp-27 の smartrc_scraped_at を参照）。
+- 馬柱の HTML はアーカイブに直近 10 件しか残らない（保持=10）ため、過去の B 印は取り戻せない。これからの保存分から馬柱の blinker が溜まる。
+
+## 前向き検証の計画
+1. 馬柱のパーサー拡張（blinker と marks を保存。2026-10-18）で、eve/T-60 の馬柱から出走前の blinker が溜まる（毎開催日 約 400 頭）。
+2. KEIBA_EVE_SMARTRC_SNAPSHOT=1（ホストの .env に設定済み）で、eve の SmartRC 取得時に runners を smartrc_prerace に不変で保存。次の開催日の前日夕方から。
+3. `verify_equipment_snapshot` で、出走前のスナップショット/馬柱 B と出走後の smartrc_race を比べる。2〜3 開催週（約 1,000 頭以上）溜まれば、blinker の一致率を 95% 信頼区間つきで出せる。
+</pre>
+<h2>2. 第 1 段（valid 2022+2023）</h2>
+<p class="muted">基準 V4: 勝率 0.21171。</p>
+<table><tr><th>群</th><th>内容</th><th>列数</th><th>Δ勝率</th><th>CI 上限</th><th>Δ連対</th><th>Δ複勝</th><th>通過</th></tr><tr><td>EQ</td><td>馬具（ブリンカー）: 当日の着用・初着用・外した・着用の継続・着用時と非着用時の成績の差</td><td class='num'>12</td><td class='num'>+0.00007</td><td class='num'>+0.00033</td><td class='num'>-0.00023</td><td class='num'>-0.00132</td><td>×</td></tr><tr><td>DIST</td><td>距離の延長・短縮の段階（±200/400/600m 以上）と、その変更での過去成績</td><td class='num'>21</td><td class='num'>-0.00013</td><td class='num'>+0.00013</td><td class='num'>+0.00009</td><td class='num'>+0.00005</td><td>×</td></tr><tr><td>SURF</td><td>芝↔ダートの替わり × 距離の延長・短縮（芝短縮替わり、ダート延長替わり など）</td><td class='num'>17</td><td class='num'>-0.00017</td><td class='num'>+0.00009</td><td class='num'>-0.00002</td><td class='num'>-0.00066</td><td>○</td></tr><tr><td>FIRST</td><td>初経験: 初芝・初ダート・初距離帯・初コース・初の左右回り・初の重/不良・初の長距離/短距離・初の多頭数・初の競馬場</td><td class='num'>59</td><td class='num'>-0.00042</td><td class='num'>-0.00014</td><td class='num'>-0.00002</td><td class='num'>-0.00067</td><td>○</td></tr><tr><td>REST</td><td>休み明け（日数帯）× 叩き何戦目 〔tp-34 の担当。参考〕</td><td class='num'>18</td><td class='num'>-0.00008</td><td class='num'>+0.00017</td><td class='num'>-0.00002</td><td class='num'>-0.00096</td><td>×</td></tr><tr><td>CLASS</td><td>昇級初戦・降級初戦・格上挑戦</td><td class='num'>20</td><td class='num'>-0.00007</td><td class='num'>+0.00018</td><td class='num'>-0.00012</td><td class='num'>-0.00117</td><td>×</td></tr><tr><td>TRAN</td><td>転厩初戦（調教師替わり）と転厩後の走数</td><td class='num'>10</td><td class='num'>-0.00006</td><td class='num'>+0.00019</td><td class='num'>-0.00001</td><td class='num'>-0.00094</td><td>×</td></tr><tr><td>JOCKEY</td><td>乗り替わり、前走騎手との成績率の差（格の差）、継続騎乗</td><td class='num'>15</td><td class='num'>-0.00011</td><td class='num'>+0.00013</td><td class='num'>+0.00015</td><td class='num'>-0.00062</td><td>×</td></tr><tr><td>GELD</td><td>去勢明け</td><td class='num'>10</td><td class='num'>+0.00003</td><td class='num'>+0.00029</td><td class='num'>-0.00020</td><td class='num'>+0.00047</td><td>×</td></tr><tr><td>WEIGHT</td><td>馬体重の大幅増減・斤量の変化</td><td class='num'>21</td><td class='num'>-0.00008</td><td class='num'>+0.00019</td><td class='num'>+0.00029</td><td class='num'>-0.00044</td><td>×</td></tr><tr><td>TRANSPORT</td><td>東西の遠征（美浦↔栗東と開催場）〔tp-33 の担当。参考〕</td><td class='num'>10</td><td class='num'>-0.00023</td><td class='num'>+0.00004</td><td class='num'>-0.00008</td><td class='num'>+0.00024</td><td>○</td></tr><tr><td>AGE</td><td>年齢の節目（3 歳の春/夏/秋、古馬初戦）</td><td class='num'>13</td><td class='num'>-0.00021</td><td class='num'>+0.00003</td><td class='num'>+0.00007</td><td class='num'>-0.00059</td><td>○</td></tr><tr><td>COMBO</td><td>状況の組み合わせ（休み明け初戦×ブリンカー初着用、短縮初戦×昇級、昇級×乗り替わり、芝ダ替わり×距離替わり、去勢明け×休み明け ほか）</td><td class='num'>91</td><td class='num'>-0.00023</td><td class='num'>+0.00003</td><td class='num'>-0.00005</td><td class='num'>-0.00078</td><td>○</td></tr></table>
+<h2>3. 第 2 段（valid 2024、新 seed）</h2>
+<p class="muted">基準 V4: 勝率 0.20917。</p>
+<table><tr><th>群</th><th>内容</th><th>列数</th><th>Δ勝率</th><th>CI 上限</th><th>Δ連対</th><th>Δ複勝</th><th>採否</th></tr><tr><td>SURF</td><td>芝↔ダートの替わり × 距離の延長・短縮（芝短縮替わり、ダート延長替わり など）</td><td class='num'>17</td><td class='num'>+0.00006</td><td class='num'>+0.00029</td><td class='num'>-0.00000</td><td class='num'>-0.00024</td><td>不採用</td></tr><tr><td>FIRST</td><td>初経験: 初芝・初ダート・初距離帯・初コース・初の左右回り・初の重/不良・初の長距離/短距離・初の多頭数・初の競馬場</td><td class='num'>59</td><td class='num'>-0.00021</td><td class='num'>+0.00003</td><td class='num'>-0.00018</td><td class='num'>-0.00181</td><td>不採用</td></tr><tr><td>TRANSPORT</td><td>東西の遠征（美浦↔栗東と開催場）〔tp-33 の担当。参考〕</td><td class='num'>10</td><td class='num'>+0.00010</td><td class='num'>+0.00032</td><td class='num'>-0.00006</td><td class='num'>-0.00034</td><td>不採用</td></tr><tr><td>AGE</td><td>年齢の節目（3 歳の春/夏/秋、古馬初戦）</td><td class='num'>13</td><td class='num'>+0.00019</td><td class='num'>+0.00043</td><td class='num'>+0.00014</td><td class='num'>+0.00009</td><td>不採用</td></tr><tr><td>COMBO</td><td>状況の組み合わせ（休み明け初戦×ブリンカー初着用、短縮初戦×昇級、昇級×乗り替わり、芝ダ替わり×距離替わり、去勢明け×休み明け ほか）</td><td class='num'>91</td><td class='num'>+0.00006</td><td class='num'>+0.00028</td><td class='num'>+0.00003</td><td class='num'>-0.00011</td><td>不採用</td></tr><tr><td>ALL_PASSED</td><td></td><td class='num'>190</td><td class='num'>+0.00006</td><td class='num'>+0.00031</td><td class='num'>-0.00002</td><td class='num'>-0.00043</td><td>不採用</td></tr></table>
+<h2>4. 今後の取得（cron）と前向きの検証</h2>
+<ul>
+<li>馬柱（race_shutuba_past）の馬名の右の印 B（ブリンカー）を保存するようパーサーを拡張。前日夕方（eve）の馬柱取得で、出走前の blinker が毎開催日 約 400 頭溜まる。</li>
+<li>KEIBA_EVE_SMARTRC_SNAPSHOT=1 で、eve の SmartRC 取得時に出走表（runners）を <code>smartrc_prerace</code> に phase ごとに不変で保存（出走後の再取得で上書きされない）。</li>
+<li>備考（horse_race_remarks）の日次の増分取得: 毎日 03:00 JST、直近 14 日に走った馬のうち直近の出走の行が無い馬だけ取り直す（<code>scripts/cron/install_horse_remarks_cron.sh</code>）。</li>
+<li><code>verify_equipment_snapshot</code> で、出走前の値（スナップショット・馬柱 B）と出走後の smartrc_race を比較し、一致率を測る。2〜3 開催週（約 1,000 頭以上）溜まれば信頼区間つきで判定できる。</li>
+</ul>
+</body></html>

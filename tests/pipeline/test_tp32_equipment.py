@@ -83,3 +83,20 @@ class DefinitionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ServingParityTest(unittest.TestCase):
+    def test_history_plus_target_equals_training_rows(self):
+        df = _toy()
+        day = df["date"].sort_values().unique()[len(df["date"].unique()) // 2]
+        hist = df[df["date"] < day]
+        target = df[df["date"] == day].copy()
+        for c in ("finish_position", "margin", "passing_order", "last_3f", "time_sec"):
+            target[c] = np.nan
+        groups = ["DIST", "SURF", "FIRST", "CLASS", "TRAN", "GELD", "WEIGHT", "AGE", "JOCKEY"]
+        full = te.build_groups(df, only=groups)
+        got = te.sit_features(hist, target, groups).set_index(te.KEY)
+        for g in groups:
+            ref = full[g].set_index(te.KEY).loc[got.index, [c for c in full[g].columns if c not in te.KEY]]
+            cols = list(ref.columns)
+            np.testing.assert_allclose(got[cols].to_numpy(float), ref[cols].to_numpy(float), atol=1e-4, equal_nan=True, err_msg=g)

@@ -23,6 +23,8 @@ from src.pipeline.features import factory_conn as fc
 from src.pipeline.features import factory_field as ff
 from src.pipeline.features import factory_ped as fp
 from src.pipeline.features import factory_self as fs
+from src.pipeline.features import tp34_rest as tr34
+from src.pipeline.features import tp32_equipment as te
 
 logger = logging.getLogger("pipeline.features.serving_v4")
 
@@ -30,10 +32,13 @@ ROOT = Path(__file__).resolve().parents[3]
 TABLES = ROOT / "data/page_reference/tables"
 WORK = ROOT / "data/local/modeling/training_pipeline"
 FAC = WORK / "factory"
+V4_WORK = ROOT / "data/local/modeling/training_pipeline_v4"
 STATE_DIR = Path(__import__("os").environ.get("KEIBA_INFERENCE_DIR") or ROOT / "data/local/inference") / "state"
 KEY = ["race_id", "horse_id"]
 
+SIT_JSON = Path(__file__).with_name("serving_tp32_groups.json")       # {"groups": [採用した状況群], "columns": {群: [列名]}}（tp-32）
 SELF8 = ["change", "experience", "lags_margin", "pair", "rest", "seq_stats", "timedev", "attrs"]
+REST34 = ["R1_band", "R2_horse_pref", "R4_trainer", "R6_prev", "R8_season"]                  # tp-34（休養明け・間隔）で採用された群。群の定義は tp34_rest.py
 FIELD7_TARGET_ONLY = ["mem_strength", "mem_demo", "mem_conn", "calendar_env"]      # 当日の行だけで決まる（calendar_env は前日の馬場の履歴も使う）
 TRAIN_LAST_YEAR = 2025
 
@@ -286,6 +291,38 @@ class V4Groups:
             parts.append(g.loc[g.index.isin(tk)].drop(columns=[c for c in g.columns if c in KEY], errors="ignore"))
         return pd.concat(parts, axis=1).reset_index() if parts else pd.DataFrame(columns=KEY)
 
+    # ------------------------------------------------------------------ 状況（初経験・面×距離の替わり ほか。tp-32 で採用した群）
+    def sit(self, card: pd.DataFrame) -> pd.DataFrame:
+        groups = sit_groups()
+        if not groups:
+            return pd.DataFrame(columns=KEY)
+        card = self.as_result_surface(self.normalize(card))
+        D = _to_dt(card["date"]).min()
+        runs = self.h.self_runs
+        hist = runs[runs["date"] < D]
+        T = _card_rows(card, fs.RUN_COLS)
+        T["distance"] = pd.to_numeric(T["distance"], errors="coerce").astype(float)
+        return te.sit_features(hist, T, groups)
+
+    # ------------------------------------------------------------------ 休養明け・間隔（tp-34）
+    def rest34(self, card: pd.DataFrame) -> pd.DataFrame:
+        """学習側（tp34_rest.build_all）を、履歴 + 当日の行（結果なし）に対してそのまま呼ぶ。R4 / R8 の全馬横断の as-of は当日専用の高速版に差し替える。"""
+        card = self.as_result_surface(self.normalize(card))
+        D = _to_dt(card["date"]).min()
+        runs = self.h.self_runs
+        hist = runs[runs["date"] < D]
+        T = _card_rows(card, fs.RUN_COLS)
+        T["distance"] = pd.to_numeric(T["distance"], errors="coerce").astype(float)
+        allr = pd.concat([hist, T], ignore_index=True).sort_values(["horse_id", "date", "race_id"], kind="stable").reset_index(drop=True)
+        with fast_asof(D):
+            groups = tr34.build_all(allr, None, only=REST34)
+        tk = pd.MultiIndex.from_frame(T[KEY])
+        parts = []
+        for name, g in groups.items():
+            g = g.set_index(KEY)
+            parts.append(g.loc[g.index.isin(tk)])
+        return pd.concat(parts, axis=1).reset_index() if parts else pd.DataFrame(columns=KEY)
+
     # ------------------------------------------------------------------ 出走メンバー・コース環境 7 群
     def field7(self, target: pd.DataFrame) -> pd.DataFrame:
         """target: 当日の行（card の列 + V0 の列 + race_name など）。mem_* は当日の行だけ、course_draw / race_type / calendar_env は履歴も使う。"""
@@ -371,9 +408,16 @@ GROUP_COLUMNS_JSON = Path(__file__).with_name("serving_v4_columns.json")
 EXTRA_CARD_COLS = ["race_name", "jockey_name", "sex_age", "jockey_id", "trainer_id", "direction", "start_time", "weight_rule", "grade", "race_class", "round", "weather"]
 
 
+def sit_groups() -> list[str]:
+    return list(json.loads(SIT_JSON.read_text(encoding="utf-8")).get("groups", [])) if SIT_JSON.exists() else []
+
+
 def group_columns() -> dict[str, list[str]]:
     """群 → 列名（学習時の保存物から作った一覧。``update_serving_state columns`` で作り直す）。"""
-    return json.loads(GROUP_COLUMNS_JSON.read_text(encoding="utf-8")) if GROUP_COLUMNS_JSON.exists() else {}
+    cols = json.loads(GROUP_COLUMNS_JSON.read_text(encoding="utf-8")) if GROUP_COLUMNS_JSON.exists() else {}
+    if SIT_JSON.exists():
+        cols["sit"] = [c for g in sit_groups() for c in json.loads(SIT_JSON.read_text(encoding="utf-8")).get("columns", {}).get(g, [])]
+    return cols
 
 
 def needed_groups(feature_cols: list[str]) -> set[str]:
@@ -390,6 +434,7 @@ class V4Features:
         self.groups = V4Groups(self.hist)
         self.state_dir = Path(state_dir) if state_dir else STATE_DIR
         self._day: dict[str, pd.DataFrame] = {}
+        self._day_rest: dict[str, pd.DataFrame] = {}
         self.warmed = False
 
     def warm(self) -> dict:
@@ -442,6 +487,8 @@ class V4Features:
         own = self.groups.owner(card_all, prof)
         slf = self.groups.self8(card_all)
         F = own.merge(slf, on=KEY, how="outer")
+        if sit_groups():
+            F = F.merge(self.groups.sit(card_all), on=KEY, how="outer")
         logger.info("v4 日単位の群: %d 行 %.1fs", len(F), time.perf_counter() - t0)
         self._day[D] = F
         try:
@@ -449,6 +496,28 @@ class V4Features:
             F.to_parquet(path, index=False)
         except OSError:
             logger.warning("v4 日単位の群を保存できなかった: %s", path)
+        return F
+
+    def day_rest(self, card_all: pd.DataFrame) -> pd.DataFrame:
+        """休養明け・間隔の群（tp-34）。その日の全レースを 1 回作って日単位でキャッシュする（体重・馬場に依存しない）。"""
+        D = str(pd.to_datetime(card_all["date"]).min().date())
+        path = self.state_dir / D / "v4_day_rest.parquet"
+        have = self._day_rest.get(D)
+        if have is None and path.exists():
+            have = pd.read_parquet(path)
+        want = card_all[KEY].astype(str)
+        if have is not None and len(want.merge(have[KEY], on=KEY, how="left", indicator=True).query("_merge == 'left_only'")) == 0:
+            self._day_rest[D] = have
+            return have
+        t0 = time.perf_counter()
+        F = self.groups.rest34(card_all)
+        logger.info("v4 休養明け・間隔の群: %d 行 %.1fs", len(F), time.perf_counter() - t0)
+        self._day_rest[D] = F
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            F.to_parquet(path, index=False)
+        except OSError:
+            logger.warning("v4 休養明け・間隔の群を保存できなかった: %s", path)
         return F
 
     # ------------------------------------------------------------------ 本体
@@ -461,9 +530,11 @@ class V4Features:
         t0 = time.perf_counter()
         card = card.copy()
         card["race_id"], card["horse_id"] = card["race_id"].astype(str), card["horse_id"].astype(str)
-        if need & {"owner", "self8"}:
+        if need & {"owner", "self8", "sit"}:
             day = self.day_groups(card_all if card_all is not None else card, storage)
             out = out.merge(day, on=KEY, how="left")
+        if "rest34" in need:
+            out = out.merge(self.day_rest(card_all if card_all is not None else card), on=KEY, how="left")
         if need & {"field7"}:
             extra = [c for c in EXTRA_CARD_COLS if c in card.columns and c not in base.columns]
             T = base.merge(card[KEY + ([] if "date" in base.columns else ["date"]) + extra].drop_duplicates(KEY), on=KEY, how="left")

@@ -61,3 +61,14 @@ class PhaseTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VerifyCompareTest(unittest.TestCase):
+    def test_compare_runners(self):
+        from src.scripts.data.verify_equipment_snapshot import compare_runners
+
+        pre = [{"hcode": "a", "blinker": "1", "old_pr": "A"}, {"hcode": "b", "blinker": "0", "old_pr": "C"}]
+        post = [{"hcode": "a", "blinker": "1", "old_pr": "B"}, {"hcode": "b", "blinker": "1", "old_pr": "C"}, {"hcode": "c", "blinker": "0"}]
+        r = compare_runners(pre, post, ["blinker", "old_pr"])
+        self.assertEqual(r["blinker"], [2, 1])
+        self.assertEqual(r["old_pr"], [2, 1])

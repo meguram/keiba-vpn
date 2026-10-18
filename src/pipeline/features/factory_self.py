@@ -151,14 +151,22 @@ def slope_last(M: np.ndarray) -> np.ndarray:
     return np.where((cnt >= 3) & (den > 0), s, np.nan)
 
 
+def _prior_cumsum(x: pd.Series, groups) -> pd.Series:
+    """groups ごとの『その行より前の行だけの』累積和。累積和を 1 行ずらして作る（累積和から自分を引かない）。
+
+    『cumsum() − 自分』は数学的には同じだが、浮動小数点では (a + b) − b ≠ a になり得て、端数に自分の値 b の痕跡が残る。木モデルはこの端数
+    （例: 前走が 1 回だけの馬では 0 のはずの値が、今回勝ったときだけ厳密な 0 になる）を拾って今回の結果を当ててしまう（tp-34 で発見）。"""
+    cs = x.groupby(groups, sort=False, dropna=False).cumsum()
+    return cs.groupby(groups, sort=False, dropna=False).shift(1).fillna(0.0)
+
+
 def excl_cum(d: pd.DataFrame, keys: list[str], col: str, as_count: bool = False) -> np.ndarray:
     """keys ごとの排他的累積（その行より前だけ）。d は馬・日付順に並んでいること。"""
     v = d[col].astype(float)
-    ok = v.notna().astype(float)
+    g = [d[k] for k in keys]
     if as_count:
-        return (ok.groupby([d[k] for k in keys], sort=False, dropna=False).cumsum() - ok).to_numpy()
-    z = v.fillna(0.0)
-    return (z.groupby([d[k] for k in keys], sort=False, dropna=False).cumsum() - z).to_numpy()
+        return _prior_cumsum(v.notna().astype(float), g).to_numpy()
+    return _prior_cumsum(v.fillna(0.0), g).to_numpy()
 
 
 def seg_affinity(d: pd.DataFrame, seg: pd.Series, name: str, vals: tuple[str, ...] = ("fp",), k: float = 3.0) -> pd.DataFrame:
@@ -361,7 +369,7 @@ def _same_key_count(d: pd.DataFrame, keys: list[str]) -> np.ndarray:
 
 def _same_key_sum(d: pd.DataFrame, keys: list[str], col: str) -> np.ndarray:
     v = d[col].fillna(0.0).astype(float)
-    return (v.groupby([d[k].astype(str) for k in keys], sort=False, dropna=False).cumsum() - v).to_numpy()
+    return _prior_cumsum(v, [d[k].astype(str) for k in keys]).to_numpy()
 
 
 def _streak(v: np.ndarray, h: np.ndarray, target: float) -> np.ndarray:
@@ -495,8 +503,8 @@ def g_timedev(d: pd.DataFrame, **_) -> pd.DataFrame:
     df = pd.DataFrame({"key": key.to_numpy(), "t": t.to_numpy(), "dnum": d["dnum"].to_numpy()})
     # 日ごとにまとめて、その日より前の累積平均を引く
     daily = df.groupby(["key", "dnum"])["t"].agg(["sum", "count"]).reset_index().sort_values(["key", "dnum"])
-    daily["cs"] = daily.groupby("key")["sum"].cumsum() - daily["sum"]
-    daily["cn"] = daily.groupby("key")["count"].cumsum() - daily["count"]
+    daily["cs"] = _prior_cumsum(daily["sum"], [daily["key"]])
+    daily["cn"] = _prior_cumsum(daily["count"].astype(float), [daily["key"]])
     m = df.merge(daily[["key", "dnum", "cs", "cn"]], on=["key", "dnum"], how="left")
     norm = np.where(m["cn"] >= 20, m["cs"] / np.maximum(m["cn"], 1), np.nan)
     dev = (m["t"].to_numpy() - norm) / (d["dist"].to_numpy() / 200.0)
@@ -548,7 +556,7 @@ def g_attrs(d: pd.DataFrame, attrs: pd.DataFrame | None = None, frozen: dict | N
     df = pd.DataFrame({"key": bp, "fp": d["fp"].to_numpy(), "win": d["win"].to_numpy(), "dnum": d["dnum"].to_numpy()})
     daily = df.groupby(["key", "dnum"]).agg(sf=("fp", "sum"), sw=("win", "sum"), n=("fp", "count")).reset_index().sort_values(["key", "dnum"])
     for c in ("sf", "sw", "n"):
-        daily[c] = daily.groupby("key")[c].cumsum() - daily[c]
+        daily[c] = _prior_cumsum(daily[c].astype(float), [daily["key"]])
     m = df.merge(daily, on=["key", "dnum"], how="left")
     n = m["n"].to_numpy(float)
     gm_fp, gm_w = (float(frozen["gm_fp"]), float(frozen["gm_w"])) if frozen else (float(np.nanmean(df["fp"])), float(np.nanmean(df["win"])))
