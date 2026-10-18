@@ -54,3 +54,19 @@ def test_group_columns_cover_the_adopted_groups_and_pick_needed_groups():
     assert (len(cols["owner"]), len(cols["self8"]), len(cols["field7"]), len(cols["ped"])) == (125, 199, 451, 32)
     assert sv.needed_groups(["o_win", "foo"]) == {"owner"}
     assert sv.needed_groups(["foo", "bar"]) == set()
+
+
+def test_stage_and_aux_dirs_follow_the_bundle_name(monkeypatch):
+    from pathlib import Path
+
+    from src.pipeline.inference import v3_serving as v
+
+    monkeypatch.delenv("KEIBA_V3_STAGE", raising=False)
+    monkeypatch.delenv("KEIBA_V3_AUX", raising=False)
+    assert v.default_stage_dir(Path("x/bundle_v4_2025")).name == "v4_fixed"
+    assert v.default_stage_dir(Path("x/bundle_v4_2024")).name == "v4_verify_2024"
+    assert v.default_stage_dir(Path("x/bundle_2025")).name == "fixed"
+    assert "training_pipeline_v4" in str(v.default_aux_dir(Path("x/bundle_v4_2025")))
+    assert v.default_aux_dir(Path("x/bundle_2025")).name == "final_aux" and "training_pipeline_v4" not in str(v.default_aux_dir(Path("x/bundle_2025")))
+    monkeypatch.setenv("KEIBA_V3_STAGE", "/tmp/s")
+    assert str(v.default_stage_dir(Path("x/bundle_v4_2025"))) == "/tmp/s"

@@ -28,6 +28,23 @@ def _ll(p: np.ndarray, y: np.ndarray) -> float:
     return float(-np.mean(y * np.log(p) + (1 - y) * np.log(1 - p)))
 
 
+class _OofAux:
+    """検証用: 補助ヘッドの予測を、保存済みの OOF から (race_id, horse_id) で引く。"""
+
+    def __init__(self, oof: pd.DataFrame):
+        oof = oof.copy()
+        oof["race_id"], oof["horse_id"] = oof["race_id"].astype(str), oof["horse_id"].astype(str)
+        self.oof = oof.drop_duplicates(["race_id", "horse_id"]).set_index(["race_id", "horse_id"])
+
+    def predict(self, X: pd.DataFrame, race_id) -> pd.DataFrame:
+        from src.pipeline.features.serving_aux import aux_columns
+
+        idx = pd.MultiIndex.from_arrays([X["race_id"].astype(str).to_numpy(), X["horse_id"].astype(str).to_numpy()])
+        out = self.oof[aux_columns()].reindex(idx)
+        out.index = X.index
+        return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", nargs="+", required=True)
@@ -35,6 +52,9 @@ def main() -> None:
     ap.add_argument("--stage", default=str(WORK / "final_stage/verify_2024"))
     ap.add_argument("--max-races", type=int, default=0)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--ref", default=str(WORK / "final_eval_v3/test2025_predictions.parquet"), help="学習時の予測（比べる相手）")
+    ap.add_argument("--fin-table", default=str(TRAIN), help="着順を引く学習表")
+    ap.add_argument("--aux-oof", default="", help="補助ヘッドの予測を、この OOF（≤2024 学習）に差し替える。2024 年までの bundle で 2025 年を検証するとき、最終補助モデル（2025 年を含む学習）の内側の予測を避ける")
     ap.add_argument("--dump-x", default="", help="推論経路で作った特徴量 X（301 列）を parquet に保存する")
     a = ap.parse_args()
     from src.scraper.storage import HybridStorage
@@ -46,10 +66,12 @@ def main() -> None:
     raw_full = ctx.raw_hist
     v3 = V3Serving(a.bundle, a.stage)
     v3.warm()
+    if a.aux_oof:
+        v3.aux = _OofAux(pd.read_parquet(a.aux_oof))
     hist_full = v3.history.copy()
-    ref = pd.read_parquet(WORK / "final_eval_v3/test2025_predictions.parquet")[["race_id", "horse_id", "p_win", "p_top2", "p_top3"]]
+    ref = pd.read_parquet(a.ref)[["race_id", "horse_id", "p_win", "p_top2", "p_top3"]]
     ref["race_id"], ref["horse_id"] = ref["race_id"].astype(str), ref["horse_id"].astype(str)
-    fin = pl.read_parquet(TRAIN, columns=["race_id", "horse_id", "finish_position"]).to_pandas()
+    fin = pl.read_parquet(a.fin_table, columns=["race_id", "horse_id", "finish_position"]).to_pandas()
     fin["race_id"], fin["horse_id"] = fin["race_id"].astype(str), fin["horse_id"].astype(str)
 
     rows, xs, report = [], [], {"days": {}}

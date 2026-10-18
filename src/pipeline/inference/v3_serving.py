@@ -34,15 +34,29 @@ def default_bundle_dir() -> Path:
     return Path(os.environ.get("KEIBA_V3_BUNDLE") or WORK / "final_v3/bundle_2025")
 
 
-def default_stage_dir() -> Path:
-    return Path(os.environ.get("KEIBA_V3_STAGE") or WORK / "final_stage/fixed")
+def default_stage_dir(bundle_dir: Path | None = None) -> Path:
+    """前段モデルの置き場。v4 のバンドルは新土台（training_pipeline_v4）で作り直した前段（final_stage/v4_fixed。検証用 bundle_v4_2024 は v4_verify_2024）を使う。"""
+    if os.environ.get("KEIBA_V3_STAGE"):
+        return Path(os.environ["KEIBA_V3_STAGE"])
+    name = Path(bundle_dir).name if bundle_dir else ""
+    if name.startswith("bundle_v4"):
+        return WORK / "final_stage" / ("v4_verify_2024" if name.endswith("2024") else "v4_fixed")
+    return WORK / "final_stage/fixed"
+
+
+def default_aux_dir(bundle_dir: Path | None = None) -> Path:
+    """補助ヘッドの最終モデルの置き場（v4 は新土台のもの）。"""
+    if os.environ.get("KEIBA_V3_AUX"):
+        return Path(os.environ["KEIBA_V3_AUX"])
+    name = Path(bundle_dir).name if bundle_dir else ""
+    return (WORK.parent / "training_pipeline_v4/final_aux") if name.startswith("bundle_v4") else WORK / "final_aux"
 
 
 class V3Serving:
     def __init__(self, bundle_dir: str | Path | None = None, stage_dir: str | Path | None = None, tables_dir: str | Path | None = None,
                  tl_reference: str | Path | None = None):
         self.bundle_dir = Path(bundle_dir) if bundle_dir else default_bundle_dir()
-        self.stage_dir = Path(stage_dir) if stage_dir else default_stage_dir()
+        self.stage_dir = Path(stage_dir) if stage_dir else default_stage_dir(self.bundle_dir)
         self.tables_dir = tables_dir
         self.tl_reference_path = Path(tl_reference) if tl_reference else ssr.tl_reference_path(self.stage_dir.parent)
         self.bundle = None
@@ -68,7 +82,7 @@ class V3Serving:
         if any(x.startswith("mtl_") for x in self.feature_cols):           # 補助タスクつき NN の補助ヘッド予測を使うバンドル（v4 候補）
             from src.pipeline.features.serving_aux import AuxModels
 
-            self.aux = AuxModels.load(Path(os.environ.get("KEIBA_V3_AUX") or WORK / "final_aux"))
+            self.aux = AuxModels.load(default_aux_dir(self.bundle_dir))
         from src.pipeline.features import serving_v4 as sv4
 
         if sv4.needed_groups(self.feature_cols):                           # v4 の群（馬主・馬自身・メンバー構成/コース環境・種牡馬 ID）を要求するバンドル

@@ -80,7 +80,13 @@ def cmd_precompute(date: str) -> None:
     st = _storage()
     sched = load_day_schedule(st, date)
     ids = [r["race_id"] for r in sched]
+    if not ids:
+        print(f"{date}: 開催なし（日程が空）。何もしない")
+        return
     card = wtp.card_frame(st, ids).to_pandas()
+    if card.empty:
+        print(f"{date}: 出馬表がまだ保存されていない。何もしない")
+        return
     print(f"{date}: {len(ids)} レース / {len(card)} 頭", flush=True)
     f = sv.V4Features()
     f.warm()
