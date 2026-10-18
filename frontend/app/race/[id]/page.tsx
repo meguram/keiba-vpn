@@ -10,6 +10,8 @@ import { BetRecommend } from "@/components/BetRecommend";
 import { RaceNav } from "@/components/RaceNav";
 import { useNarrow } from "@/components/RaceStrip";
 import { raceExists } from "@/lib/raceExists";
+import { PositionForecast } from "@/components/PositionForecast";
+import type { ForecastHorse, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
 
 const SHOW_MEGU = featureEnabled("megu-index");
 const SHOW_TRACKING = featureEnabled("tracking-difficulty");
@@ -132,6 +134,8 @@ type RaceData = {
 };
 
 type PredEntry = {
+  position_forecast?: PosFc | null;
+  bracket_number?: number | string | null;
   horse_number?: number;
   horse_name?: string;
   horse_id?: string;
@@ -156,6 +160,7 @@ type PredEntry = {
 };
 
 type PredData = {
+  pace_forecast?: PaceForecast;
   status?: string;
   has_prediction?: boolean;
   model_type?: string;
@@ -630,6 +635,13 @@ export default function RaceDetailPage() {
     ? [...preds].sort((a, b) => (a.composite_rank ?? a.pred_rank ?? 99) - (b.composite_rank ?? b.pred_rank ?? 99))
     : preds;
 
+  const bracketOf = new Map<number, number>();
+  shutubaEntries.forEach((e) => { const n = Number(e.horse_number), b = Number(e.bracket_number); if (n && b) bracketOf.set(n, b); });
+  const forecastHorses: ForecastHorse[] = [...preds]
+    .filter((p) => p.horse_number != null)
+    .sort((a, b) => Number(a.horse_number) - Number(b.horse_number))
+    .map((p) => ({ no: Number(p.horse_number), name: p.horse_name ?? "", bracket: bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null), f: p.position_forecast ?? null }));
+
   const PredPanel = (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -655,6 +667,8 @@ export default function RaceDetailPage() {
           予測結果がありません。「AI予測を実行」で算出できます。
             </div>
           )}
+
+      {forecastHorses.length > 0 && <PositionForecast horses={forecastHorses} pace={predData?.pace_forecast} />}
 
       {sortedPreds.length > 0 ? (
         <div style={{ overflowX: "auto" }}>

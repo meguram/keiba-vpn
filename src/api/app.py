@@ -6834,12 +6834,24 @@ async def get_race_predictions(race_id: str):
     2026-10-01: 「表示されない/古い」事象の検知用に `freshness` フィールド
     （age_hours / is_stale 等）を付与。既存クライアントは未知キーを無視するため後方互換。
     """
+    def _with_position(resp: dict) -> dict:
+        # 過去走の通過順位から作る位置取り予想（実モデルの予測ではない）。失敗しても予測の応答は返す
+        try:
+            from src.pipeline.inference.position_forecast import attach_position_forecast
+
+            st = _get_storage()
+            card = st.load("race_shutuba", race_id) or {}
+            return attach_position_forecast(resp, st.load("race_shutuba_past", race_id), str(card.get("date") or ""))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("位置取り予想の付与に失敗 %s: %s", race_id, exc)
+            return resp
+
     data = await asyncio.to_thread(
         lambda: _get_storage().load("race_predictions", race_id))
     if data:
         data = dict(data)
         data["freshness"] = _prediction_freshness(data)
-        return JSONResponse(data)
+        return JSONResponse(await asyncio.to_thread(lambda: _with_position(data)))
 
     # stg 環境: 実モデルの予測が無いレースは、予測を作り出さず『出馬表の馬 + 最新オッズ』だけを返す（実データの表示が前提）。
     # 画面の開発用にモックが要るときだけ KEIBA_STG_MOCK_PREDICTIONS=1（応答は _mock: true）。
@@ -6863,7 +6875,7 @@ async def get_race_predictions(race_id: str):
                 return mock_predictions(race_id, horse_ids)
             return JSONResponse(await asyncio.to_thread(_mock))
         from src.api.entries_only_predictions import entries_only_predictions
-        return JSONResponse(await asyncio.to_thread(lambda: entries_only_predictions(race_id, _get_storage())))
+        return JSONResponse(await asyncio.to_thread(lambda: _with_position(entries_only_predictions(race_id, _get_storage()))))
 
     return JSONResponse({"status": "not_found"}, status_code=404)
 
