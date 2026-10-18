@@ -150,6 +150,9 @@ class RaceResultParser:
         result["entries"] = self._parse_entries(soup)
         result["field_size"] = len(result["entries"])
         result["payoff"] = self._parse_payoff(soup)
+        if any(isinstance(result["payoff"].get(k), dict) and "popularity" not in result["payoff"][k] for k in ("複勝", "ワイド")):
+            # 複数行のはずの券種が 1 つに連結されている（2024-01〜2026-03 の保存分がこの形。補正は scraper.payoff_repair）
+            logger.warning("払戻の複勝/ワイドが連結されている疑い: race_id=%s", race_id)
         result["lap_times"] = self._parse_lap(soup)
         result["pace"] = self._parse_pace(soup, result["lap_times"])
         result["corner_passing"] = self._parse_corner_passing_order(soup)

@@ -49,6 +49,20 @@ def _filter_horse_history_by_date(hr: dict, before_date_str: str) -> dict:
     return {**hr, "race_history": filtered}
 
 
+_FIX_LOOKUP: dict | None = None
+
+
+def _apply_horse_result_fix(hr: dict) -> dict:
+    global _FIX_LOOKUP
+    if _FIX_LOOKUP is None:
+        from src.scraper import horse_result_fix as hf
+
+        _FIX_LOOKUP = hf.load_lookup()
+    from src.scraper import horse_result_fix as hf
+
+    return hf.apply_overlay(hr, _FIX_LOOKUP)
+
+
 def race_id_year(race_id: str) -> str:
     rid = str(race_id).strip()
     return rid[:4] if len(rid) >= 4 else ""
@@ -97,6 +111,7 @@ def _assemble_race_data(storage: Any, race_id: str, result: dict) -> dict | None
             continue
         hr = storage.load("horse_result", hid)
         if hr:
+            hr = _apply_horse_result_fix(hr)   # 保存済みの通過順・上り3F のずれを race_result_flat で補正（scraper.horse_result_fix）
             # 対象レース以降の出走結果を除外してリークを防ぐ
             hr = _filter_horse_history_by_date(hr, race_date)
             horses[hid] = hr
