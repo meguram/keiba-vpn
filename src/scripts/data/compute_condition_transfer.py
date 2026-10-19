@@ -40,6 +40,7 @@ def fetch_megu_history(engine) -> pd.DataFrame:
         FROM megu_index mi
         JOIN races r ON r.race_id = mi.race_id
         WHERE mi.megu_index IS NOT NULL
+          AND mi.model_version = 'v2'
           AND mi.computation_status = 'valid'
           AND r.surface IN ('芝', 'ダート')
           AND r.distance > 0
