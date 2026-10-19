@@ -58,3 +58,13 @@ def test_slug_drops_all_stopwords_first_but_keeps_fallbacks():
     c = mc.slug_candidates("Our Emblem")
     assert c[0] == "emblem" and "our-emblem" in c
     assert len(mc.slug_candidates("Hold Your Peace")) <= 14
+
+
+def test_latin_name_prefers_a_field_with_letters():
+    assert mc.latin_name({"name": "ヨハネスブルグ", "name_en": "Johannesburg"}, "ヨハネスブルグ") == "Johannesburg"
+    assert mc.latin_name({"name": "Kris", "name_en": "クリス"}, "Kris") == "Kris"
+    assert mc.latin_name({}, "ノーザンテーストNorthern Taste(加)") == "Northern Taste(加)"
+    assert mc.latin_name({}, "ハイセイコー") == ""
+    rows = mc.build_rows({"a": {"precision": "year", "birthday": "1999", "name": "ヨハネスブルグ"}},
+                         [{"stallion_id": "a", "min_gen": "1", "n_horses": "9"}], {"a": {"name": "ヨハネスブルグ", "name_en": "Johannesburg"}}, set(), 10, "https://x.test/p")
+    assert rows[0]["candidates"] and rows[0]["candidates"][0] == "https://x.test/p/johannesburg"

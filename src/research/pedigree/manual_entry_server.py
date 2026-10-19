@@ -336,13 +336,14 @@ button.primary{background:#2d7ff9;color:#fff;border-color:#2d7ff9;font-size:1.05
 const TOKEN="__TOKEN__";let N=5,batch=[],sig="",rows={};
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','X-Token':TOKEN},body:body?JSON.stringify(body):undefined});return r.json()}
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const q=s=>encodeURIComponent(s);const $=id=>document.getElementById(id);
-function url(it){const c=it.candidates||[it.url];return c[rows[it.horse_id].ci%c.length]}
-function openOne(i){const it=batch[i];if(!it)return null;return window.open(url(it),'sh_'+i)}      // 名前つきタブ: 次の頭数でも同じタブを使い回す（noopener は付けない）
+function cands(it){return (it.candidates&&it.candidates.length)?it.candidates:(it.url?[it.url]:[])}
+function url(it){const c=cands(it);return c.length?c[rows[it.horse_id].ci%c.length]:''}
+function openOne(i){const it=batch[i];if(!it||!url(it))return null;return window.open(url(it),'sh_'+i)}      // 名前つきタブ: 次の頭数でも同じタブを使い回す（noopener は付けない）
 function openAll(){
- if(document.documentElement.dataset.dormelloUserscript){window.postMessage({type:'dormello-open-tabs',urls:batch.map(url)},location.origin);$('popmsg').className='ok';$('popmsg').textContent='ユーザースクリプトで '+batch.length+' 頭分を背景タブに開きました（前回のタブは閉じます）';return}
+ if(document.documentElement.dataset.dormelloUserscript){window.postMessage({type:'dormello-open-tabs',urls:batch.map(url).filter(Boolean)},location.origin);$('popmsg').className='ok';$('popmsg').textContent='ユーザースクリプトで '+batch.length+' 頭分を背景タブに開きました（前回のタブは閉じます）';return}
  let blocked=0;batch.forEach((it,i)=>{if(!openOne(i))blocked++});$('popmsg').className='err';
  $('popmsg').textContent=blocked?`${blocked} 件がブロックされました。ユーザースクリプトを最新版（1.2）にすると、ブロックされずに開けます（各行の「開く」でも個別に開けます）`:''}
-function cand(i){const it=batch[i];rows[it.horse_id].ci++;$('cu_'+it.horse_id).textContent=url(it).split('/').pop();openOne(i)}
+function cand(i){const it=batch[i];rows[it.horse_id].ci++;$('cu_'+it.horse_id).textContent=url(it).split('/').pop()||'（候補なし）';openOne(i)}
 function initBatch(){const L=$('rows');L.innerHTML='';
  if(!batch.length){L.innerHTML='<p class="ok"><b>すべて処理しました。</b></p>';return}
  batch.forEach((it,i)=>{const h=it.horse_id;const st=rows[h]||(rows[h]={ci:0,edited:false,err:''});
@@ -350,7 +351,7 @@ function initBatch(){const L=$('rows');L.innerHTML='';
   div.innerHTML=`<div><b>${i+1}. ${esc(it.name)}</b> <span class="muted">${esc(it.name_en||'')} ／ 生年 ${it.year} ／ 影響 ${it.impact}</span></div>
   <div class="det muted" id="det_${h}">検出待ち…</div>
   <div><input type="text" id="in_${h}" placeholder="例 30-Jan-1970" oninput="rows['${h}'].edited=true"> <label><input type="checkbox" id="nn_${h}"> 記載なし</label> <label><input type="checkbox" id="j1_${h}"> 1月1日で確認</label></div>
-  <div class="muted"><button onclick="openOne(${i})">開く</button><button onclick="cand(${i})">次の候補で開く</button>候補: <span id="cu_${h}">${esc(url(it).split('/').pop())}</span>
+  <div class="muted"><button onclick="openOne(${i})">開く</button><button onclick="cand(${i})">次の候補で開く</button>候補: <span id="cu_${h}">${esc(url(it).split('/').pop()||'（候補なし。馬名で探して URL を貼ってください）')}</span>
    <a class="btn" href="https://www.jbis.jp/navi_search/?keyword=${q(it.name_en||it.name)}" target="sh_alt" >JBIS</a><a class="btn" href="https://en.wikipedia.org/w/index.php?search=${q((it.name_en||it.name)+' horse')}" target="sh_alt">Wikipedia</a>
    <input type="text" id="ur_${h}" placeholder="実際のURL（違うとき）" style="width:34%" onchange="setUrl('${h}')"></div><div class="err" id="er_${h}">${esc(st.err)}</div>`;
   L.appendChild(div)})}

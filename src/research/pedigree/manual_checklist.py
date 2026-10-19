@@ -100,6 +100,14 @@ def slug(name: str) -> str:
     return s
 
 
+def latin_name(nk_rec: dict, ancestor_name: str) -> str:
+    """英字を含む名前を選ぶ。netkeiba では 外国馬の英語名が name にも name_en にも入りうる（Johannesburg は name_en 側）。"""
+    for cand in (nk_rec.get("name"), nk_rec.get("name_en"), re.sub(r"[ァ-ヶー・]+", "", ancestor_name).strip()):
+        if cand and re.search(r"[A-Za-z]", cand):
+            return cand.replace("\xa0", " ").strip()
+    return ""
+
+
 def build_rows(ancestors: dict[str, dict], zone: list[dict], nk: dict[str, dict], manual: set[str], limit: int, base_url: str):
     weight: dict[str, int] = defaultdict(int)
     for r in zone:
@@ -111,7 +119,7 @@ def build_rows(ancestors: dict[str, dict], zone: list[dict], nk: dict[str, dict]
     rows = []
     for h, n in cand[:limit]:
         a = ancestors[h]
-        en = (nk.get(h, {}).get("name") or "").strip() or re.sub(r"[ァ-ヶー・]+", "", a["name"]).strip()
+        en = latin_name(nk.get(h, {}), a["name"])
         key = en if slug(en) else a["name"]
         cands = [f"{base_url.rstrip('/')}/{c}" for c in slug_candidates(key)]
         rows.append({"horse_id": h, "name": a["name"].replace("\xa0", " "), "name_en": en, "year": int(a["birthday"][:4]),
