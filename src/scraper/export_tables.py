@@ -229,7 +229,23 @@ def _data_to_flat_rows(
         row.update(top_extra)
         rows.append(row)
 
+    if category == "race_result" and rows:
+        rows = _apply_win_odds_fix(rows)
     return rows
+
+
+def _apply_win_odds_fix(rows: list[dict]) -> list[dict]:
+    """指数列を読んでいた単勝オッズ・人気を race_odds 由来の補正値で置き換える（scraper.odds_fix）。保存物は変えない。"""
+    from src.scraper import odds_fix
+
+    lookup = odds_fix.load_lookup()
+    if not lookup:
+        return rows
+    out = []
+    for r in rows:
+        fx = lookup.get((str(r.get("race_id") or ""), int(r.get("horse_number") or 0)))
+        out.append({**r, "odds": fx[0], "popularity": fx[1]} if fx else r)
+    return out
 
 
 def _data_to_pair_odds_flat_rows(

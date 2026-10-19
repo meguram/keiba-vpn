@@ -71,6 +71,7 @@ from typing import Any
 import numpy as np
 
 from src.pipeline.inference.betting import BetSimulator, BettingConfig, BettingOptimizer
+from src.scraper.odds_fix import fix_result as _fix_result_odds
 
 # ---------------------------------------------------------------------------
 # 1. 本番データ読み込み（GCS/ローカルキャッシュに実データがある環境で使う）
@@ -97,7 +98,7 @@ def load_real_races(race_ids: list[str], storage: Any = None) -> list[dict]:
 
     races: list[dict] = []
     for race_id in race_ids:
-        result = storage.load("race_result", race_id)
+        result = _fix_result_odds(storage.load("race_result", race_id))
         if not result or not result.get("entries"):
             continue
         ordered = sorted(

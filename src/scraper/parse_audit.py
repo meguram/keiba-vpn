@@ -38,7 +38,45 @@ def audit_frame(df: pd.DataFrame) -> dict:
         if len(rc):
             out["missing"]["race_class(方向あり)"] = int(len(rc))
             out["samples"]["race_class(方向あり)"] = [str(i) for i in rc.index[:5]]
+    _audit_columns_misread(df, out)
     return out
+
+
+def _audit_columns_misread(df: pd.DataFrame, out: dict) -> None:
+    """列ずれの検査。結果ページに指数列が入った 25 列表を固定位置で読み、odds が追走指数・人気が上がり指数・馬体重が通過順になっていた
+    事故（2025-05〜12 の約 2,100R）を、取得の翌日までに見つける。scraper.odds_fix の補正表で直るレースは数えない。
+    - odds_sum: レース内の Σ(1/odds) が払戻率から決まる範囲（約 1.0〜1.6、通常 1.26）にない
+    - popularity_range: 人気が 1〜頭数の範囲にない
+    - weight_range: 馬体重が 300〜700kg にない（着順のあるレースのみ）"""
+    if not {"race_id", "odds"} <= set(df.columns):
+        return
+    try:
+        from src.scraper import odds_fix
+
+        covered = odds_fix.fixed_race_ids()
+    except Exception:
+        covered, odds_fix = set(), None
+    d = df[~df["race_id"].astype(str).isin(covered)].copy()
+    if d.empty:
+        return
+
+    def put(name: str, ids) -> None:
+        ids = sorted(set(map(str, ids)))
+        if ids:
+            out["missing"][name] = len(ids)
+            out["samples"][name] = ids[:5]
+
+    d["odds"] = pd.to_numeric(d["odds"], errors="coerce")
+    if odds_fix is not None:
+        ok = d.groupby("race_id")["odds"].apply(lambda x: odds_fix.is_plausible_win_odds(x.tolist()))
+        put("odds_sum", ok.index[~ok])
+    if "popularity" in d.columns and "field_size" in d.columns:
+        pop, fs = pd.to_numeric(d["popularity"], errors="coerce"), pd.to_numeric(d["field_size"], errors="coerce")
+        put("popularity_range", d["race_id"][(pop > fs) | (pop < 1)])
+    if "weight" in d.columns:
+        w = pd.to_numeric(d["weight"], errors="coerce")
+        fp = pd.to_numeric(d["finish_position"], errors="coerce") if "finish_position" in d.columns else pd.Series(1, index=d.index)
+        put("weight_range", d["race_id"][(fp > 0) & ((w < 300) | (w > 700))])
 
 
 def problems(report: dict) -> dict:
@@ -56,7 +94,7 @@ def main() -> int:
         if not p.is_file():
             print(f"[{y}] race_result_flat がありません")
             continue
-        cols = ["race_id", *REQUIRED, "direction", "race_class"]
+        cols = ["race_id", *REQUIRED, "direction", "race_class", "horse_number", "odds", "popularity", "weight", "finish_position"]
         df = pd.read_parquet(p, columns=[c for c in cols if c in _schema_names(p)])
         rep = audit_frame(df)
         bad = problems(rep)

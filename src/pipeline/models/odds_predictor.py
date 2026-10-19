@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 
 from src.utils.logger import get_logger
+from src.scraper.odds_fix import fix_result as _fix_result_odds
 
 logger = get_logger("OddsPredictor")
 
@@ -93,7 +94,7 @@ class OddsPredictor:
             for key in keys[:max_per_year]:
                 race_id = key.replace(".json", "")
                 try:
-                    result = storage.load("race_result", race_id)
+                    result = _fix_result_odds(storage.load("race_result", race_id))
                     if not result or "entries" not in result:
                         continue
 

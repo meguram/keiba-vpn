@@ -125,7 +125,10 @@ def _odds_labels_for_race(
     result: dict,
 ) -> dict[int, dict[str, float]]:
     """馬番 → {win_odds, place_min, place_max}（確定・発売終了オッズ）。"""
+    from src.scraper import odds_fix
+
     labels: dict[int, dict[str, float]] = {}
+    result = odds_fix.fix_result(result)   # 指数列を読んでいた 2025 年の odds を race_odds 由来の値に直す
 
     for e in result.get("entries", []):
         hn = int(e.get("horse_number") or 0)
@@ -151,6 +154,9 @@ def _odds_labels_for_race(
                     labels[hn]["place_max"] = px
                 if wo > 0 and labels[hn]["win_odds"] <= 0:
                     labels[hn]["win_odds"] = wo
+
+    if labels and not odds_fix.is_plausible_win_odds([lab["win_odds"] for lab in labels.values()]):
+        labels = {}   # 補正表に無い壊れたレースは単勝ラベルとして使わない（複勝ラベルだけの行は作らない）
 
     for hn, lab in labels.items():
         wo = lab["win_odds"]
