@@ -52,13 +52,19 @@ apply_service_profile() {
       # 本番相当（本 PC）。prod 将来は VPS へ同構成をデプロイ。
       FASTAPI_MODE=prod
       FLASK_DEBUG=0
-      # PC stg は next dev（実 API）。VPS prod は npm run start。
-      FRONTEND_NPM_SCRIPT=dev
+      # PC stg は本番ビルド（next build + next start）が既定。従来の next dev に戻すときは KEIBA_STG_NEXT_MODE=dev。
+      # （server_watchdog.sh --profile stg も同じ変数を見る。ビルドは起動時に必要なら自動実行）
       FRONTEND_USE_MOCK=false
       : "${PORT:=$KEIBA_PORT_STG_FASTAPI}"
       : "${FLASK_PORT:=$KEIBA_PORT_STG_FLASK}"
       FRONTEND_PORT="${FRONTEND_PORT:-$KEIBA_PORT_STG_FRONTEND}"
-      : "${NODE_ENV:=development}"
+      if [[ "${KEIBA_STG_NEXT_MODE:-prod}" == "dev" ]]; then
+        FRONTEND_NPM_SCRIPT=dev
+        NODE_ENV=development
+      else
+        FRONTEND_NPM_SCRIPT=start
+        NODE_ENV=production
+      fi
       START_MLFLOW_LOCAL="${START_MLFLOW_LOCAL:-false}"
       PROFILE_EXPORT_KEYS=(KEIBA_ENV KEIBA_DEPLOYMENT_LABEL)
       KEIBA_ENV=stg

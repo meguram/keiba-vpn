@@ -78,6 +78,11 @@ case "$ACTIVE_PROFILE" in
         if [ -f "${PROJECT_DIR}/.env.${ACTIVE_PROFILE}" ]; then
             set -a; source "${PROJECT_DIR}/.env.${ACTIVE_PROFILE}"; set +a
         fi
+        # stg は本番ビルド（next build + next start）が既定。従来の next dev に戻すときは KEIBA_STG_NEXT_MODE=dev
+        # （環境変数、または .env.stg に書いて watchdog を再起動）。prod プロファイルは従来どおり。
+        if [ "$ACTIVE_PROFILE" = "stg" ] && [ "${KEIBA_STG_NEXT_MODE:-prod}" != "dev" ]; then
+            FRONTEND_NPM_SCRIPT="start"
+        fi
         ;;
     *)  # dev またはプロファイル不明（dev 扱い）
         PROFILE_KEY=dev
@@ -88,6 +93,10 @@ case "$ACTIVE_PROFILE" in
         FRONTEND_USE_MOCK="true"
         ;;
 esac
+
+# next build の要否判定（BUILD_ID・入力の更新時刻・ビルド時環境のシグネチャ）
+# shellcheck source=frontend_build.sh
+source "${PROJECT_DIR}/scripts/server/frontend_build.sh"
 
 # サービス定義（プロファイル別ポート）
 API_PORT="$(keiba_port "$PROFILE_KEY" fastapi)"
@@ -114,6 +123,9 @@ FLASK_HEALTH_URL="http://127.0.0.1:${FLASK_PORT}/api/v1/health"
 FRONTEND_PID_FILE="${PROJECT_DIR}/.frontend${PROFILE_SUFFIX}.pid"
 FRONTEND_HEALTH_URL="http://127.0.0.1:${FRONTEND_PORT}/"
 NODE_ENV="${NODE_ENV:-development}"
+if [ "$FRONTEND_NPM_SCRIPT" = "start" ]; then
+    NODE_ENV=production
+fi
 
 KEIBA_API_URL="${KEIBA_API_URL:-http://127.0.0.1:${FLASK_PORT}}"
 
@@ -499,6 +511,68 @@ stop_frontend() {
     kill_by_pattern "next.*start.*-p ${FRONTEND_PORT}"
 }
 
+# 本番ビルド（next build）＋起動の間は他の watchdog 実行（cron は 3 分おき）が割り込まないようロックする。
+FRONTEND_LOCK_FILE="${LOG_DIR}/.frontend-build${PROFILE_SUFFIX}.lock"
+
+frontend_lock_held_by_other() {
+    # 他のプロセスがロック中なら 0（真）。自分は取得して即解放するだけ。
+    [ "$FRONTEND_NPM_SCRIPT" = "start" ] || return 1
+    (
+        exec 8>"$FRONTEND_LOCK_FILE"
+        flock -n 8
+    ) && return 1
+    return 0
+}
+
+# script=start のとき: 必要なら next build（失敗時は旧ビルドで起動、旧ビルドも無ければ失敗）
+build_frontend_if_needed() {
+    local fdir="${PROJECT_DIR}/frontend" dist_dir="$1" dist_path="$2" sig reason
+    sig=$(frontend_env_signature)
+    if ! reason=$(frontend_build_needed "$fdir" "$dist_dir" "$sig"); then
+        log "[Next.js] ビルド済み（${dist_dir}）— 再ビルドは不要"
+        return 0
+    fi
+    # 直近でビルドに失敗していたら、同じ失敗を 3 分おきに繰り返さない（CPU を食うため 10 分あけて再試行）
+    local fail_stamp="${LOG_DIR}/.frontend-build-failed${PROFILE_SUFFIX}"
+    if [ -f "$fail_stamp" ] && [ -n "$(find "$fail_stamp" -mmin -10 2>/dev/null)" ]; then
+        log "[Next.js] 直近 10 分以内にビルドが失敗している — 今回は再試行しません（${reason}）"
+        if [ ! -f "${dist_path}/BUILD_ID" ]; then
+            echo "build-failed" > "$FRONTEND_PID_FILE"   # 監視対象に残す（PID ではない値。次の周期で再試行）
+            return 1
+        fi
+        return 0
+    fi
+    log "[Next.js] 本番ビルドを実行: ${reason}"
+    # 既存の next（start / dev）が distDir を掴んだままだと壊れるので、ビルド前に必ず止める
+    kill_by_pattern "next.*dev.*-p ${FRONTEND_PORT}"
+    kill_by_pattern "next.*start.*-p ${FRONTEND_PORT}"
+    # BUILD_ID が無い distDir は開発モードの残骸なので消してから作る
+    if [ ! -f "${dist_path}/BUILD_ID" ]; then rm -rf "$dist_path"; fi
+    local build_log="${LOG_DIR}/frontend_build_$(date +%Y%m%d_%H%M%S).log"
+    local t0=$SECONDS
+    if (
+        cd "$fdir"
+        export KEIBA_API_URL="$KEIBA_API_URL" KEIBA_ENV="${KEIBA_ENV:-dev}" NODE_ENV=production
+        if [ "$FRONTEND_USE_MOCK" = "true" ]; then export NEXT_PUBLIC_MOCK=true; else unset NEXT_PUBLIC_MOCK 2>/dev/null || true; fi
+        npm run build
+    ) > "$build_log" 2>&1; then
+        printf '%s' "$sig" > "${dist_path}/.build-env"
+        rm -f "$fail_stamp"
+        log "[Next.js] ビルド成功 ($((SECONDS - t0))秒) ログ=${build_log}"
+        return 0
+    fi
+    log "[Next.js] ERROR: ビルド失敗 ($((SECONDS - t0))秒) ログ=${build_log}"
+    : > "$fail_stamp"
+    tail -n 15 "$build_log" 2>/dev/null | while IFS= read -r l; do log "  | $l"; done
+    if [ -f "${dist_path}/BUILD_ID" ]; then
+        log "[Next.js] WARNING: 旧ビルドで起動を試みます"
+        return 0
+    fi
+    log "[Next.js] ERROR: 使える旧ビルドが無い — 起動しません（next dev へは自動で戻しません。KEIBA_STG_NEXT_MODE=dev で戻せます）"
+    echo "build-failed" > "$FRONTEND_PID_FILE"   # 監視対象に残す（PID ではない値。10 分後の周期で再試行）
+    return 1
+}
+
 start_frontend() {
     local log_file="${LOG_DIR}/frontend_$(date +%Y%m%d_%H%M%S).log"
     log "[Next.js] フロントエンド起動中 (port=${FRONTEND_PORT} script=${FRONTEND_NPM_SCRIPT} mock=${FRONTEND_USE_MOCK}) ログ=${log_file}"
@@ -527,6 +601,19 @@ start_frontend() {
         rm -rf "$dist_path"
     fi
 
+    # 本番ビルド運用: ロックを取り（同時に 2 本ビルド/起動しない）、必要ならビルドしてから start
+    if [ "$FRONTEND_NPM_SCRIPT" = "start" ]; then
+        exec 9>"$FRONTEND_LOCK_FILE"
+        if ! flock -n 9; then
+            log "[Next.js] 別の watchdog がビルド/起動中 — 今回は何もしません"
+            return 1
+        fi
+        if ! build_frontend_if_needed "$dist_dir" "$dist_path"; then
+            flock -u 9 2>/dev/null || true
+            return 1
+        fi
+    fi
+
     (
         cd "${PROJECT_DIR}/frontend"
         export KEIBA_API_URL="$KEIBA_API_URL"
@@ -537,19 +624,21 @@ start_frontend() {
             unset NEXT_PUBLIC_MOCK 2>/dev/null || true
         fi
         export NODE_ENV="${NODE_ENV:-development}"
-        nohup npm run "$FRONTEND_NPM_SCRIPT" -- -p "$FRONTEND_PORT" >> "$log_file" 2>&1 &
+        # 子プロセスにビルドロックの fd(9) を引き継がせない（next-server が動いている間ロックが残らないように）
+        nohup npm run "$FRONTEND_NPM_SCRIPT" -- -p "$FRONTEND_PORT" >> "$log_file" 2>&1 9>&- &
         echo $! > "$FRONTEND_PID_FILE"
     )
 
-    # Next.js の起動は遅いため待機時間を長めに設定
+    # Next.js の起動は遅いため待機時間を長めに設定（start はビルド済みなので短め）
     local wait_sec=45
     if [ "$FRONTEND_NPM_SCRIPT" = "start" ]; then
-        wait_sec=20
+        wait_sec=30
     fi
     local secs
     secs=$(wait_for_health "$FRONTEND_HEALTH_URL" "$wait_sec") || true
     local front_pid
     front_pid=$(cat "$FRONTEND_PID_FILE" 2>/dev/null || echo "?")
+    if [ "$FRONTEND_NPM_SCRIPT" = "start" ]; then flock -u 9 2>/dev/null || true; fi
     if [ "$secs" != "0" ]; then
         log "[Next.js] 起動完了 (PID=${front_pid}, ${secs}秒)"
         return 0
@@ -560,6 +649,10 @@ start_frontend() {
 
 check_frontend() {
     frontend_should_monitor || return 0  # PID ファイルがなければスキップ
+    if frontend_lock_held_by_other; then
+        log "[Next.js${PROFILE_SUFFIX}] 別の watchdog がビルド/起動中 — 今回は監視をスキップ"
+        return 0
+    fi
 
     local code
     code=$(http_check "$FRONTEND_HEALTH_URL")

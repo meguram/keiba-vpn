@@ -34,6 +34,7 @@ PostgreSQL（5432）/ Redis（6379）、`docker-compose.serving.yml`・`mlflow/s
 
 # 環境プロファイル
 ./service_start --env stg          # 本番相当 + KEIBA_ENV=stg + meguai-stg トンネル
+# stg の Next.js は本番ビルド（next build + next start）が既定。切り替えと反映手順は stg_frontend_prod_build.md（戻すときは KEIBA_STG_NEXT_MODE=dev）
 ./service_start --env prod         # 本番相当（FastAPI --prod / next build+start）
 
 # 状態確認
