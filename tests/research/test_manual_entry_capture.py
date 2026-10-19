@@ -19,3 +19,21 @@ def test_capture_rejects_wrong_year_and_none(tmp_path):
     assert [r["horse_id"] for r in s.pending()][:1] == ["b"]
     # スラッグが違ってもタイトルの馬名で一致すれば受け付ける
     assert s.capture("https://sporthorse-data.com/pedigree/bt-99", "Beta - Thoroughbred", "03-Mar-1980")["ok"] is True
+
+
+def test_url_override_is_remembered_and_committed_list(tmp_path):
+    s, d = _setup(tmp_path)
+    r = s.save("a", "30-Jan-1970", url="https://sporthorse-data.com/pedigree/alpha-0")
+    assert r["ok"] is True
+    rows = list(csv.reader(open(d / "sporthorse_urls.csv", encoding="utf-8")))
+    assert rows[1] == ["a", "https://sporthorse-data.com/pedigree/alpha-0"]
+
+
+def test_saved_override_is_used_for_pending_horse_after_restart(tmp_path):
+    from src.research.pedigree import manual_entry_server as me
+    s, d = _setup(tmp_path)
+    (d / "sporthorse_urls.csv").write_text("horse_id,url\nb,https://sporthorse-data.com/pedigree/beta-0\n", encoding="utf-8")
+    s2 = me.Store(tmp_path / "anc.csv", tmp_path / "zone.csv", None, d, "https://example.test/p")
+    assert s2.save("a", "30-Jan-1970")["ok"] is True
+    item = s2.next()["item"]
+    assert item["horse_id"] == "b" and item["url"].endswith("/beta-0") and item["candidates"][0].endswith("/beta-0")

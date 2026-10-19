@@ -63,6 +63,30 @@ function downloadCsv(){const a=document.createElement('a');a.href=URL.createObje
 """
 
 
+STOP_MIN = {"the", "to"}                                           # 実例で取り除かれていた語（Key to the Mint -> key-mint, The Tetrarch -> tetrarch）
+STOP_WIDE = STOP_MIN | {"a", "an", "of", "and", "in", "on", "at", "for", "by"}
+SUFFIXES = ["", "-0", "-1", "-2"]                                  # 同名の区別に付く番号（kampala-1, key-mint-0 など）
+
+
+def _slug_words(name: str, stop: set[str]) -> str:
+    base = slug(name)
+    return "-".join(w for w in base.split("-") if w not in stop) or base
+
+
+def slug_candidates(name: str) -> list[str]:
+    """ページ名の候補（可能性の高い順、重複なし）。最初が最有力。"""
+    base = slug(name)
+    variants = [_slug_words(name, STOP_MIN), base, _slug_words(name, STOP_WIDE)]
+    seen, out = set(), []
+    for v in variants:
+        for suf in SUFFIXES:
+            c = (v + suf) if v else ""
+            if c and c not in seen:
+                seen.add(c)
+                out.append(c)
+    return out
+
+
 def slug(name: str) -> str:
     """SporthorseData のページ名の作り方に合わせる。アポストロフィは取り除く（Devil's Bag -> devils-bag）、その他の記号はハイフンにする。"""
     s = re.sub(r"[\(（].*?[\)）]", "", name.replace("\xa0", " ")).strip().lower()
@@ -83,8 +107,10 @@ def build_rows(ancestors: dict[str, dict], zone: list[dict], nk: dict[str, dict]
     for h, n in cand[:limit]:
         a = ancestors[h]
         en = (nk.get(h, {}).get("name") or "").strip() or re.sub(r"[ァ-ヶー・]+", "", a["name"]).strip()
+        key = en if slug(en) else a["name"]
+        cands = [f"{base_url.rstrip('/')}/{c}" for c in slug_candidates(key)]
         rows.append({"horse_id": h, "name": a["name"].replace("\xa0", " "), "name_en": en, "year": int(a["birthday"][:4]),
-                     "impact": n, "url": f"{base_url.rstrip('/')}/{slug(en) or slug(a['name'])}"})
+                     "impact": n, "url": cands[0] if cands else base_url, "candidates": cands[:10]})
     return rows
 
 

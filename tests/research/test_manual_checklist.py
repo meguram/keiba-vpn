@@ -26,3 +26,12 @@ def test_render_embeds_json_safely():
     html_text = mc.render([{"horse_id": "x", "name": "</script>", "name_en": "", "year": 1970, "impact": 1, "url": "u"}])
     data = re.search(r"const DATA = (.*?);\nconst MON", html_text, re.S)[1]
     assert "</" not in data and json.loads(data.replace("<\\/", "</"))[0]["horse_id"] == "x"
+
+
+def test_slug_candidates_cover_known_exceptions():
+    c = mc.slug_candidates("Key to the Mint")
+    assert c[0] == "key-mint" and "key-mint-0" in c and "key-to-the-mint" in c
+    assert mc.slug_candidates("The Tetrarch")[0] == "tetrarch"
+    assert mc.slug_candidates("Kampala")[:3] == ["kampala", "kampala-0", "kampala-1"]
+    assert mc.slug_candidates("Devil's Bag")[0] == "devils-bag"
+    assert len(set(mc.slug_candidates("Hold Your Peace"))) == len(mc.slug_candidates("Hold Your Peace"))

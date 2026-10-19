@@ -56,6 +56,8 @@ class Store:
         self.pending_msgs: list[str] = []
         self.git_status = ""
         self.manual_p, self.log_p = d / "birth_manual.csv", d / "birth_search_log.csv"
+        self.urls_p = d / "sporthorse_urls.csv"      # 実際のページ名が分かった馬の URL（horse_id,url）
+        self.url_overrides = {r[0]: r[1] for r in self._read_csv(self.urls_p)[1:] if len(r) > 1} if self.urls_p.exists() else {}
         anc = {r["horse_id"]: r for r in csv.DictReader(open(ancestors, encoding="utf-8"))}
         zone_rows = list(csv.DictReader(open(zone, encoding="utf-8")))
         nk_map: dict[str, dict] = {}
@@ -102,7 +104,7 @@ class Store:
         return subprocess.run(["git", *args], cwd=self.dir, capture_output=True, text=True, timeout=timeout)
 
     def _commit_and_push(self) -> str:
-        files = [str(self.manual_p.resolve()), str(self.log_p.resolve())]
+        files = [str(self.manual_p.resolve()), str(self.log_p.resolve())] + ([str(self.urls_p.resolve())] if self.urls_p.exists() else [])
         try:
             top = self._git("rev-parse", "--show-toplevel").stdout.strip()
             if not top:
@@ -150,10 +152,22 @@ class Store:
         later = [r for r in todo if r["horse_id"] in self.skipped]
         return first + later
 
+    def _with_override(self, item: dict | None) -> dict | None:
+        if item and item["horse_id"] in self.url_overrides:
+            u = self.url_overrides[item["horse_id"]]
+            return {**item, "url": u, "candidates": [u] + [c for c in item.get("candidates", []) if c != u]}
+        return item
+
+    def remember_url(self, horse_id: str, url: str) -> None:
+        if not url or self.url_overrides.get(horse_id) == url:
+            return
+        self.url_overrides[horse_id] = url
+        self._write_csv(self.urls_p, [["horse_id", "url"], *[[h, u] for h, u in self.url_overrides.items()]])
+
     def next(self) -> dict:
         with self.lock:
             p = self.pending()
-            return {"item": p[0] if p else None, "remaining": len(p), "saved": self.session_saved, "none": self.session_none,
+            return {"item": self._with_override(p[0]) if p else None, "remaining": len(p), "saved": self.session_saved, "none": self.session_none,
                     "unsaved": len(self.pending_msgs), "git": self.git_status, "auto_commit": self.commit_every,
                     "recent": [{"horse_id": u["horse_id"], "name": u["name"], "text": u["text"]} for u in self.undo_stack[-5:]][::-1]}
 
@@ -169,7 +183,9 @@ class Store:
                 return {"ok": False, "error": f"生年が違います（{r['year']} のはず）。違う馬のページかもしれません"}
             if d[1] == 1 and d[2] == 1 and not confirm_jan1:
                 return {"ok": False, "need_confirm": True, "error": "1 月 1 日は日付不明の仮置きの可能性があります。実際に 1 月 1 日なら確認して保存してください"}
-            src = url or r["url"]
+            src = url or self._with_override(r)["url"]
+            if url:
+                self.remember_url(horse_id, url)
             note = OK_NOTE + ("（1月1日を確認のうえ保存）" if d[1] == 1 and d[2] == 1 else "")
             prev_log = next((x for x in self._read_csv(self.log_p)[1:] if x and x[0] == horse_id), None)
             with open(self.manual_p, "a", encoding="utf-8", newline="") as f:
@@ -187,9 +203,9 @@ class Store:
             return None
         cur = p[0]
         seg = urllib.parse.urlparse(url).path.rstrip("/").rsplit("/", 1)[-1].lower()
-        slug = cur["url"].rsplit("/", 1)[-1].lower()
+        slugs = [c.rsplit("/", 1)[-1].lower() for c in cur.get("candidates", [cur["url"]])]
         norm = lambda t: re.sub(r"[^a-z0-9]", "", t.lower())  # noqa: E731
-        if (slug and seg.startswith(slug)) or (cur["name_en"] and norm(cur["name_en"]) and norm(cur["name_en"]) in norm(title)):
+        if seg in slugs or (cur["name_en"] and norm(cur["name_en"]) and norm(cur["name_en"]) in norm(title)):
             return cur
         return None
 
@@ -270,10 +286,12 @@ async function load(){const d=await api('/api/next');document.getElementById('st
  <p><a class="btn" href="${cur.url}" target="_blank" rel="noopener" onclick="document.getElementById('d').focus()">① ページを開く（SporthorseData）</a>
  <a class="btn" href="https://www.jbis.jp/navi_search/?keyword=${q(en)}" target="_blank" rel="noopener">JBIS で探す</a>
  <a class="btn" href="https://en.wikipedia.org/w/index.php?search=${q(en+' horse')}" target="_blank" rel="noopener">Wikipedia で探す</a></p>
+ <p class="muted">開けないときの別候補: ${(cur.candidates||[]).slice(1,9).map((u,i)=>`<a href="${u}" target="_blank" rel="noopener">${u.split('/').pop()}</a>`).join(' ／ ')}</p>
  <p>② 日付を入力 <input id="d" placeholder="例 30-Jan-1970" autofocus> <span id="msg"></span></p>
+ <p class="muted">実際のページの URL が違っていたら貼ってください（次回からそのリンクを使います）: <input id="u" style="width:380px" placeholder="https://sporthorse-data.com/pedigree/..."></p>
  <p><button class="primary" onclick="save(false)">③ 保存して次へ</button><button onclick="none_()">日付が載っていない（記載なし）</button><button onclick="skip_()">あとで</button><button onclick="undo_()">直前を取り消す</button></p>`;
  document.getElementById('d').addEventListener('keydown',e=>{if(e.key==='Enter')save(false)})}
-async function save(c){const v=document.getElementById('d').value;const r=await api('/api/save',{horse_id:cur.horse_id,text:v,confirm_jan1:c});
+async function save(c){const v=document.getElementById('d').value;const r=await api('/api/save',{horse_id:cur.horse_id,text:v,confirm_jan1:c,url:document.getElementById('u').value.trim()});
  if(r.ok){load()}else if(r.need_confirm){if(confirm(r.error))save(true)}else{const m=document.getElementById('msg');m.className='err';m.textContent=r.error}}
 async function none_(){await api('/api/none',{horse_id:cur.horse_id});load()}
 async function skip_(){await api('/api/skip',{horse_id:cur.horse_id});load()}
@@ -323,7 +341,7 @@ def make_handler(store: Store, token: str):
             body = json.loads(self.rfile.read(n) or b"{}")
             path = urllib.parse.urlparse(self.path).path
             if path == "/api/save":
-                self._json(store.save(body.get("horse_id", ""), body.get("text", ""), bool(body.get("confirm_jan1"))))
+                self._json(store.save(body.get("horse_id", ""), body.get("text", ""), bool(body.get("confirm_jan1")), (body.get("url") or "").strip() or None))
             elif path == "/api/none":
                 self._json(store.none(body.get("horse_id", "")))
             elif path == "/api/commit":
