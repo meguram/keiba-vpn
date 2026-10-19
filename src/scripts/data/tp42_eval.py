@@ -82,13 +82,13 @@ def cmd_groups(a) -> None:
 # ───────────────────────── 段階評価
 def cmd_stage1(a) -> None:
     groups = [g for g in os.environ.get("TP42_GROUPS", "").split(",") if g] or GROUP_NAMES
-    te._stage(os.environ.get("TP42_LABEL", "stage1"), [2022, 2023], [0], groups, "stage1")
+    te._stage(os.environ.get("TP42_LABEL") or "stage1", [2022, 2023], [0], groups, "stage1")
 
 
 def cmd_stage2c(a) -> None:
     """第 2 段を、群を指定して別ラベルで並行実行する（環境変数 TP42_GROUPS、結果は stage2c/）。"""
     groups = [g for g in os.environ.get("TP42_GROUPS", "").split(",") if g]
-    te._stage(os.environ.get("TP42_LABEL", "stage2c"), [2024], [2, 3], groups, "stage2")
+    te._stage(os.environ.get("TP42_LABEL") or "stage2c", [2024], [2, 3], groups, "stage2")
 
 
 def cmd_stage2(a) -> None:
