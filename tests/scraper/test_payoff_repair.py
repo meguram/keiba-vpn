@@ -40,3 +40,41 @@ def test_parser_splits_multirow_cells_with_br():
     pay = RaceResultParser()._parse_payoff(BeautifulSoup(html, "html.parser"))
     assert [x["numbers"] for x in pay["複勝"]] == ["14", "13", "3"] and [x["payout"] for x in pay["複勝"]] == ["270", "220", "170"]
     assert pay["ワイド"][1] == {"numbers": "3 - 14", "payout": "630", "popularity": "5"}
+
+
+def test_load_fix_skips_ambiguous_and_apply_fix_replaces_only_concatenated(tmp_path):
+    import pandas as pd
+
+    rows = [
+        {"race_id": "A", "bet_type": "fukusho", "combo": "3", "payout": 120, "n_rows": 2, "ambiguous": False, "resolved_by": "unique"},
+        {"race_id": "A", "bet_type": "fukusho", "combo": "4", "payout": 110, "n_rows": 2, "ambiguous": False, "resolved_by": "unique"},
+        {"race_id": "B", "bet_type": "fukusho", "combo": "1", "payout": 150, "n_rows": 1, "ambiguous": True, "resolved_by": "first"},
+        {"race_id": "C", "bet_type": "wide", "combo": None, "payout": None, "n_rows": 0, "ambiguous": False, "resolved_by": "unparsed"},
+    ]
+    f = tmp_path / "payoff_fix_2026.parquet"
+    pd.DataFrame(rows).to_parquet(f, index=False)
+    fix = pr.load_fix(2026, f)
+    assert set(fix) == {"A"}                                   # 曖昧・解析不能のレースは補正しない
+    payoff = {"単勝": {"numbers": "3", "payout": "480", "popularity": "2"}, "複勝": {"numbers": "34", "payout": "120110"}}
+    out = pr.apply_fix(payoff, fix["A"])
+    assert out["単勝"] == payoff["単勝"]
+    assert [(x["numbers"], x["payout"]) for x in out["複勝"]] == [("3", "120"), ("4", "110")]
+    ok = {"複勝": [{"numbers": "3", "payout": "130", "popularity": "1"}]}
+    assert pr.apply_fix(ok, fix["A"]) == ok                    # すでに正しい形の券種は触らない
+    assert pr.apply_fix(payoff, None) is payoff and pr.load_fix(1999) == {}
+
+
+def test_repair_then_parse_for_2026_evaluation():
+    from src.scripts.data.tp36_final2026 import parse_payoff_json
+    import json
+
+    payoff = {"単勝": {"numbers": "3", "payout": "480", "popularity": "2"},
+              "複勝": {"numbers": "341", "payout": "120110140"}, "ワイド": {"numbers": "3 - 41 - 31 - 4", "payout": "170370220"}}
+    rows = pr.repair_race(payoff, {3: 1, 4: 2, 1: 3, 2: 4, 5: 5}, [1, 2, 3, 4, 5], {}, {})
+    for r in rows:
+        r["race_id"] = "A"
+    raw = json.dumps(payoff, ensure_ascii=False)
+    assert parse_payoff_json(raw)["_broken"] == {"fukusho", "wide"}        # 補正なしでは採点から外れる
+    h = parse_payoff_json(raw, rows)
+    assert not h["_broken"] and h["fukusho"] == {(3,): 120.0, (4,): 110.0, (1,): 140.0}
+    assert h["wide"] == {(3, 4): 170.0, (1, 3): 370.0, (1, 4): 220.0} and h["tansho"][(3,)] == 480.0

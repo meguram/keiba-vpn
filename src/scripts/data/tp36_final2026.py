@@ -33,6 +33,8 @@ def build_frame2026(pred_dir: Path, result_path: Path) -> pd.DataFrame:
     d["win_odds"] = pd.to_numeric(d["win_odds"], errors="coerce")
     d["fin"] = pd.to_numeric(d["finish_position"], errors="coerce")
     bad = set(d.loc[~(d["win_odds"] >= 1.0), "race_id"])
+    inv = (1 / d["win_odds"]).groupby(d["race_id"]).sum()
+    bad |= set(inv[~inv.between(1.0, 1.6)].index)         # 単勝オッズが壊れているレース（Σ1/odds が 1.0〜1.6 の外。追走指数などが入っている）
     d = d[~d["race_id"].isin(bad)].copy()
     s = d.groupby("race_id")["p_win"].transform("sum")
     d = d[(s > 0.97) & (s < 1.03)].copy()
@@ -52,14 +54,19 @@ JP_KEYS = {"単勝": "tansho", "複勝": "fukusho", "馬連": "umaren", "ワイ�
 ARITY = {"tansho": 1, "fukusho": 1, "umaren": 2, "wide": 2, "umatan": 2, "sanrenpuku": 3, "sanrentan": 3}
 
 
-def parse_payoff_json(raw: str) -> dict:
+def parse_payoff_json(raw: str, fix_rows: list[dict] | None = None) -> dict:
     """race_result_flat.payoff（JSON 文字列）→ {bet_type: {組合せ(タプル): 払戻}}。組合せは 'a - b' / 'a → b' / 'a - b - c'。
-    複数的中が区切りなしに連結されて壊れている券種（例: ワイド numbers='7 - 97 - 129 - 12'）は out['_broken'] に入れ、払戻は載せない。"""
+    複数的中が区切りなしに連結されて壊れている券種（例: ワイド numbers='7 - 97 - 129 - 12'）は、補正行（scraper.payoff_repair）があれば置き換え、
+    無ければ out['_broken'] に入れて払戻は載せない。"""
     out: dict = {"_broken": set()}
     try:
         js = json.loads(raw)
     except (TypeError, ValueError):
         return out
+    if fix_rows:
+        from src.scraper.payoff_repair import apply_fix
+
+        js = apply_fix(js, fix_rows)
     for jp, bt in JP_KEYS.items():
         v = js.get(jp)
         if v is None:
@@ -80,7 +87,10 @@ def parse_payoff_json(raw: str) -> dict:
 
 def single_2026(new: pd.DataFrame, result_path: Path, alpha_market: tuple[float, float], out_raw: Path, out_json: Path) -> None:
     pj = pd.read_parquet(result_path, columns=["race_id", "payoff"]).drop_duplicates("race_id")
-    hits = {str(r.race_id): parse_payoff_json(r.payoff) for r in pj.itertuples(index=False)}
+    from src.scraper.payoff_repair import load_fix
+
+    fix = load_fix(2026)
+    hits = {str(r.race_id): parse_payoff_json(r.payoff, fix.get(str(r.race_id))) for r in pj.itertuples(index=False)}
     recs, meta = [], []
     for rid, g in new.groupby("race_id", sort=False):
         h = hits.get(str(rid), {})

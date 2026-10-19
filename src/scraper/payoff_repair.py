@@ -38,6 +38,32 @@ def is_concatenated(payoff: dict | None) -> bool:
     return False
 
 
+def load_fix(year: int, path: Path | None = None) -> dict[str, list[dict]]:
+    """補正テーブルを race_id → 補正行の一覧にする。曖昧（ambiguous）・解析不能の行を含むレースは入れない（誤った払戻を載せないため）。"""
+    f = Path(path) if path else OUT / f"payoff_fix_{year}.parquet"
+    if not f.exists():
+        return {}
+    d = pd.read_parquet(f)
+    bad = set(d[d["ambiguous"].astype(bool) | (d["resolved_by"] == "unparsed")]["race_id"])
+    d = d[~d["race_id"].isin(bad)]
+    return {rid: g.to_dict("records") for rid, g in d.groupby("race_id")}
+
+
+def apply_fix(payoff: dict, rows: list[dict] | None) -> dict:
+    """連結されている券種（複勝・ワイド）だけを補正行で置き換えた払戻を返す（形は通常の複数行と同じ。人気は空）。"""
+    if not rows or not isinstance(payoff, dict):
+        return payoff
+    out = dict(payoff)
+    for jp in MULTI:
+        v = payoff.get(jp)
+        if not (isinstance(v, dict) and "popularity" not in v):
+            continue
+        rs = [r for r in rows if r["bet_type"] == bo.BET_KEYS[jp] and r.get("combo")]
+        if rs:
+            out[jp] = [{"numbers": r["combo"], "payout": str(int(r["payout"])), "popularity": ""} for r in rs]
+    return out
+
+
 def _hits(v: dict, bt: str, top3: set[int], field: set[int]) -> list[tuple[list[int], list[tuple[int, ...]]]]:
     ordered = bt in bo.ORDERED
     n = bo.ARITY[bt]
