@@ -1018,6 +1018,10 @@ def task_raceday_result_runner() -> None:
 
     if stats["scraped"] > 0:
         _as._trigger_track_speed_for_date(today_str)
+        # 予測結果の暫定集計（KEIBA_PREDICTION_RESULTS=1 のときだけ。失敗しても本体は成功）
+        from src.pipeline.inference.prediction_results import refresh_for_dates
+
+        refresh_for_dates([today_str], reason="raceday-result-runner")
 
     _as._save_status(
         "raceday-result-runner",

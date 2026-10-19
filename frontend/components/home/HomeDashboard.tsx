@@ -15,6 +15,7 @@ import {
 import { FeatureId, featureEnabled } from "@/lib/features";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberUpgradeModal } from "@/components/upgrade/MemberUpgradeModal";
+import { PredictionNews } from "@/components/home/PredictionNews";
 
 function NavCard({
   card,
@@ -239,6 +240,8 @@ export function HomeDashboard() {
         </div>
         <h1 className="hero-catch">🏇 めぐ競馬</h1>
       </div>
+
+      {featureEnabled("prediction-results") && <PredictionNews />}
 
       <div className="main">
         {VISIBLE_PUBLIC.map((section) => (

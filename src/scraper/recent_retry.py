@@ -139,5 +139,10 @@ def run(calendar: dict, now: datetime | None = None) -> dict[str, Any]:
         except Exception as exc:
             logger.error("recent-retry 馬場速度の計算に失敗 [%s]: %s", d, exc)
             errors += 1
+    # 確定結果が取れた日の予測結果を確定として集計し直す（KEIBA_PREDICTION_RESULTS=1 のときだけ。失敗しても本体は成功）
+    if result_dates:
+        from src.pipeline.inference.prediction_results import refresh_for_dates
+
+        refresh_for_dates(sorted(result_dates), reason="recent-retry")
     return {"dates": dates, "targets": len(targets), "saved": saved, "pending": pending, "error_count": errors,
             "track_speed_dates": sorted(result_dates)}

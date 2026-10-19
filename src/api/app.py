@@ -13812,3 +13812,9 @@ async def api_pedigree_race_stats_lineage_meta():
     except Exception as e:
         logger.error("lineage-meta エラー: %s", e, exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# 予測結果の集計（予測成績）API。ロジックは src/api/prediction_results_api.py
+from src.api.prediction_results_api import router as _prediction_results_router  # noqa: E402
+
+app.include_router(_prediction_results_router)

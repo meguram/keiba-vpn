@@ -353,6 +353,11 @@ def finalize_weekly_update(target_dates: list[str], result: dict) -> dict:
     pg_sync = _trigger_pg_sync_for_dates(target_dates, reason="weekly-update")
     out["pg_sync"] = pg_sync
 
+    # 予測結果の集計を取り直す（確定結果・確定払戻が入った日を確定にする。KEIBA_PREDICTION_RESULTS=1 のときだけ）
+    from src.pipeline.inference.prediction_results import refresh_for_dates
+
+    out["prediction_results"] = refresh_for_dates(target_dates, reason="weekly-update")
+
     out["last_run"] = _now_jst_iso()
     if megu.get("status") == "error" and out.get("status") == "ok":
         out["status"] = "partial"
