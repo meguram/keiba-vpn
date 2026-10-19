@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { fetchAuthStatus } from "@/lib/httpCache";
 
 export type AuthStatus = {
   loading: boolean;
@@ -23,11 +24,7 @@ export function useAuthStatus(): AuthStatus {
       setStatus({ loading: false, loggedIn: auto, isAdmin: auto, isMember: auto });
       return;
     }
-    fetch("/api/v1/auth/status", { credentials: "include" })
-      .then((r) => {
-        if (r.status >= 500) throw new Error(`HTTP ${r.status}`);
-        return r.ok ? r.json() : { logged_in: false, is_admin: false, is_member: false };
-      })
+    fetchAuthStatus()
       .then((d) =>
         setStatus({
           loading: false,

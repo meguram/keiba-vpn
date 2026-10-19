@@ -1,7 +1,8 @@
 "use client";
 
+import { PendingLink } from "@/components/PendingLink";
+import { fetchRaceList } from "@/lib/httpCache";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { PageShell } from "@/components/PageShell";
 import { GradeChip, WeekPicker } from "@/components/WeekPicker";
 import { RaceCalendar } from "@/components/RaceCalendar";
@@ -79,8 +80,9 @@ function VenueBlock({ venue, rows }: { venue: string; rows: Row[] }) {
           const isG = !!r.grade && GRADES.has(r.grade);
           return (
             <li key={r.race_id} style={{ borderBottom: "1px solid var(--border)" }}>
-              <Link
+              <PendingLink
                 href={`/race/${r.race_id}`}
+                warm={[`/api/race/${r.race_id}`, `/api/race/${r.race_id}/predictions`]}
                 title={`${venue} ${r.round}R ${r.race_name}`}
                 style={{ display: "grid", gridTemplateColumns: "34px 44px 1fr auto", alignItems: "center", gap: 10, padding: "8px 14px", textDecoration: "none", color: "var(--text)", background: isG ? "rgba(251,191,36,0.06)" : undefined }}
               >
@@ -94,8 +96,8 @@ function VenueBlock({ venue, rows }: { venue: string; rows: Row[] }) {
                     {[course(r), r.entries_count ? `${r.entries_count}頭` : ""].filter(Boolean).join(" · ")}
                   </span>
                 </span>
-                {r.has_result && <span style={{ fontSize: 10, color: "#4ade80", border: "1px solid rgba(74,222,128,0.4)", borderRadius: 4, padding: "1px 6px" }}>結果</span>}
-              </Link>
+                {r.has_result && <span style={{ fontSize: 10, color: "#4ade80", border: "1px solid rgba(74,222,128,0.4)", borderRadius: 4, padding: "1px 6px", marginRight: 18 }}>結果</span>}
+              </PendingLink>
             </li>
           );
         })}
@@ -155,10 +157,8 @@ export default function RacesPage() {
           if (alive) setRows(MOCK_WEEKLY_RACES.map((r) => toRow({ ...r })));
           return;
         }
-        const res = await fetch(`/api/race-list/${date}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const d = await res.json();
-        if (alive) setRows((d.races ?? d ?? []).map((x: Record<string, unknown>) => toRow(x)));
+        const d = (await fetchRaceList(date)) as { races?: Record<string, unknown>[] } | Record<string, unknown>[];
+        if (alive) setRows(((Array.isArray(d) ? d : d.races) ?? []).map((x: Record<string, unknown>) => toRow(x)));
       } catch (e) {
         if (alive) { setRows([]); setError(`レース一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`); }
       } finally {

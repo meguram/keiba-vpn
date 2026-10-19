@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { getJson, invalidateJson } from "@/lib/httpCache";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { USE_MOCK, getMockRaceDetail, getMockPredictions, getMockTdData, getMockMeguPredicted } from "@/lib/mock";
@@ -298,6 +299,18 @@ export default function RaceDetailPage() {
   const { isMember } = useAuthStatus();
   const narrow = useNarrow();
 
+  const loadSeq = useRef(0);
+  const loadPrediction = useCallback(async (seq?: number) => {
+    if (!raceId) return;
+    if (USE_MOCK) {
+      setPredData(getMockPredictions(raceId) as PredData);
+      return;
+    }
+    try {
+      const d = await getJson<PredData>(`/api/race/${raceId}/predictions`, { ttlMs: 15_000 });
+      if (seq === undefined || seq === loadSeq.current) setPredData(d);
+    } catch { /* ignore */ }
+  }, [raceId]);
   const loadRace = useCallback(async () => {
     if (!raceId) return;
     setLoading(true);
@@ -312,46 +325,41 @@ export default function RaceDetailPage() {
       setLoading(false);
       return;
     }
+    // レースを素早く切り替えたとき、遅れて届いた古い応答が新しい画面を上書きしないようにする
+    const seq = ++loadSeq.current;
+    const fresh = () => seq === loadSeq.current;
     try {
-      const [rRes, tdRes] = await Promise.allSettled([
-        fetch(`/api/race/${raceId}`),
-        SHOW_TRACKING ? fetch(`/api/race/${raceId}/tracking-difficulty`) : Promise.reject(new Error("disabled")),
-      ]);
-      if (rRes.status === "fulfilled" && rRes.value.status === 404) { setNotFound(true); return; }
-      if (rRes.status !== "fulfilled" || !rRes.value.ok) throw new Error("レースデータの取得に失敗しました。通信状況を確認して、もう一度お試しください。");
-      const rd: RaceData = await rRes.value.json();
+      // 本体・予測・走りやすさを同時に取りに行く（予測は本体の後ではなく並行。重い走りやすさは本体を待たせない）
+      const racePromise = getJson<RaceData>(`/api/race/${raceId}`, { ttlMs: 20_000 });
+      loadPrediction(seq);
+      if (SHOW_TRACKING) {
+        getJson<Record<string, unknown>>(`/api/race/${raceId}/tracking-difficulty`, { ttlMs: 60_000 })
+          .then((td) => { if (fresh() && !td.error) setTdData(td); })
+          .catch(() => { /* 走りやすさが無くても画面は出す */ });
+      }
+      let rd: RaceData;
+      try {
+        rd = await racePromise;
+      } catch (e) {
+        if (!fresh()) return;
+        if ((e as { status?: number }).status === 404) { setNotFound(true); return; }
+        throw new Error("レースデータの取得に失敗しました。通信状況を確認して、もう一度お試しください。");
+      }
+      if (!fresh()) return;
       if (!raceExists(rd)) { setNotFound(true); return; }
       setRaceData(rd);
-      if (tdRes.status === "fulfilled" && tdRes.value.ok) {
-        const td = await tdRes.value.json();
-        if (!td.error) setTdData(td);
-      }
     } catch (e: unknown) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      if (fresh()) setLoadError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      if (fresh()) setLoading(false);
     }
-  }, [raceId]);
+  }, [raceId, loadPrediction]);
 
-  const loadPrediction = useCallback(async () => {
-    if (!raceId) return;
-    if (USE_MOCK) {
-      setPredData(getMockPredictions(raceId) as PredData);
-      return;
-    }
-    try {
-      const res = await fetch(`/api/race/${raceId}/predictions`);
-      if (res.ok) setPredData(await res.json());
-    } catch { /* ignore */ }
-  }, [raceId]);
+
 
   useEffect(() => {
     loadRace();
   }, [loadRace]);
-
-  useEffect(() => {
-    if (raceData) loadPrediction();
-  }, [raceData, loadPrediction]);
 
   // レース移動ナビ用の開催日（YYYYMMDD）。読み込み中も直前の値を保つのでナビは消えない
   useEffect(() => {
@@ -389,7 +397,7 @@ export default function RaceDetailPage() {
   }, [raceId]);
 
   async function runPrediction() {
-    if (!raceId) return;
+    if (!raceId || predicting) return;     // 連打しても予測実行は 1 回
     setPredicting(true);
     if (USE_MOCK) {
       await new Promise((r) => setTimeout(r, 600));
@@ -400,6 +408,7 @@ export default function RaceDetailPage() {
     try {
       const res = await fetch(`/api/race/${raceId}/predict`, { method: "POST" });
       const data = await res.json();
+      invalidateJson(`/api/race/${raceId}/predictions`);
       if (data.status === "success" || data.predictions?.length) setPredData(data);
     } catch { /* ignore */ } finally {
       setPredicting(false);

@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchRaceList } from "@/lib/httpCache";
 import { useEffect, useState, useCallback } from "react";
 import { USE_MOCK, getMockRaceDates, MOCK_WEEKLY_RACES } from "@/lib/mock";
 
@@ -103,10 +104,9 @@ export function RacePicker({
       return;
     }
     try {
-      const res = await fetch(`/api/race-list/${date}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const list: RaceItem[] = data.races ?? data ?? [];
+      const data = (await fetchRaceList(date).catch(() => null)) as { races?: RaceItem[] } | RaceItem[] | null;
+      if (!data) return;
+      const list: RaceItem[] = (Array.isArray(data) ? data : data.races) ?? [];
       setRacesForDate(list);
       const venueSet = [...new Set(list.map((r) => r.venue ?? "").filter(Boolean))];
       setVenues(venueSet);

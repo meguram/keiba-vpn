@@ -75,3 +75,12 @@ body {
   .races-cal { display: none; }
   .races-cal-open { display: inline-flex; align-items: center; width: 100%; justify-content: center; }
 }
+
+/* ── 遷移中の進捗バーと、クリック直後の読み込み表示 ── */
+.nav-progress { position: fixed; top: 0; left: 0; height: 3px; z-index: 9999; background: var(--accent, #4f8bff); box-shadow: 0 0 8px var(--accent, #4f8bff); pointer-events: none; }
+.nav-progress-run { width: 0; animation: nav-progress-run 8s cubic-bezier(.1,.6,.2,1) forwards; }
+.nav-progress-done { width: 100%; opacity: 0; transition: width .15s ease-out, opacity .3s ease .1s; }
+@keyframes nav-progress-run { to { width: 88%; } }
+.pl-spin { position: absolute; right: 10px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border: 2px solid var(--border, #243358); border-top-color: var(--accent, #4f8bff); border-radius: 50%; animation: pl-spin .8s linear infinite; }
+@keyframes pl-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .nav-progress-run { animation-duration: 20s; } .pl-spin { animation-duration: 2s; } }

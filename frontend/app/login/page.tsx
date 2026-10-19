@@ -2,26 +2,38 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { invalidateJson } from "@/lib/httpCache";
 
 export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const router = useRouter();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const res = await fetch("/api/v1/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ password, remember }),
-    });
-    if (!res.ok) {
-      setError("ログイン失敗");
-      return;
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password, remember }),
+      });
+      if (!res.ok) {
+        setError("ログイン失敗");
+        setBusy(false);
+        return;
+      }
+      invalidateJson("/api/v1/auth/status");
+      router.push("/");
+    } catch {
+      setError("通信に失敗しました。もう一度お試しください");
+      setBusy(false);
     }
-    router.push("/");
   }
 
   return (
@@ -34,7 +46,7 @@ export default function LoginPage() {
           30日間ログイン保持
         </label>
         {error && <p style={{ color: "var(--err)" }}>{error}</p>}
-        <button type="submit" className="btn w-full">ログイン</button>
+        <button type="submit" className="btn w-full" disabled={busy} aria-busy={busy}>{busy ? "ログイン中…" : "ログイン"}</button>
       </form>
     </div>
   );

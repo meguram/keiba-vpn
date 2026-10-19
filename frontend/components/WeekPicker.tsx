@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchRaceList } from "@/lib/httpCache";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { USE_MOCK, MOCK_WEEKLY_RACES } from "@/lib/mock";
 import {
@@ -20,10 +21,8 @@ function loadSummary(date: string): Promise<DaySummary> {
       if (USE_MOCK) {
         rows = MOCK_WEEKLY_RACES as RaceLite[];
       } else {
-        const res = await fetch(`/api/race-list/${date}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const d = await res.json();
-        rows = d.races ?? d ?? [];
+        const d = (await fetchRaceList(date)) as { races?: RaceLite[] } | RaceLite[];
+        rows = (Array.isArray(d) ? d : d.races) ?? [];
       }
       return { n: rows.length, venues: venuesOf(rows), grades: pickGradeRaces(rows) };
     })();

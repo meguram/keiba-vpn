@@ -1,5 +1,6 @@
 "use client";
 
+import { PendingLink } from "@/components/PendingLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { LEVEL_STYLE, RaceValue, ValueLevel, valueTitle } from "@/lib/raceValue";
@@ -89,9 +90,9 @@ export function RaceStrip({
           );
         })}
         {sel && (
-          <Link href={`/race/${sel.race_id}`} style={{ ...BTN, marginLeft: "auto", flex: "none", minHeight: narrow ? 40 : undefined, color: "var(--accent)" }}>
+          <PendingLink href={`/race/${sel.race_id}`} warm={[`/api/race/${sel.race_id}`, `/api/race/${sel.race_id}/predictions`]} style={{ ...BTN, marginLeft: "auto", flex: "none", minHeight: narrow ? 40 : undefined, color: "var(--accent)" }}>
             {narrow ? `${roundOf(sel)}R 詳細` : `${venue} ${roundOf(sel)}R の詳細へ`}
-          </Link>
+          </PendingLink>
         )}
       </div>
 

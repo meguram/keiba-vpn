@@ -2713,6 +2713,11 @@ def merge_db_and_list_races(db_races: list[dict], list_races: list[dict], date: 
     return db_races + extra
 
 
+from src.api.response_cache import TtlCoalescingCache as _TtlCoalescingCache
+
+_RACE_LIST_CACHE = _TtlCoalescingCache()
+
+
 @app.get("/api/race-list/{date}", response_class=JSONResponse)
 async def get_race_list_for_date(date: str, with_result_status: bool = True):
     """指定日付のレース一覧を会場別に返す（結果データ有無オプション付き）。"""
@@ -2867,7 +2872,11 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
                 row["result_view_url"] = st.get("result_view_url")
             races.append(row)
         return {"date": date, "venues": venues, "races": races}
-    result = await asyncio.to_thread(_load)
+    from src.api.response_cache import race_list_ttl
+
+    result = await _RACE_LIST_CACHE.get_or_compute(
+        (date, bool(with_result_status)), race_list_ttl(date), lambda: asyncio.to_thread(_load)
+    )
     return JSONResponse(result)
 
 

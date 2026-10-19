@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchRaceList, getJson } from "@/lib/httpCache";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
@@ -630,8 +631,10 @@ export default function WeeklyPredictionsPage() {
   }, [datesReload]);
 
   /* レース一覧（日付変更時） */
+  const racesSeq = useRef(0);
   const loadRaces = useCallback(async (date: string) => {
     if (!date) return;
+    const seq = ++racesSeq.current;      // 日付を素早く切り替えたとき、遅れて届いた古い一覧で上書きしない
     setLoadingRaces(true);
     setRacesError("");
     setRaces([]);
@@ -643,15 +646,14 @@ export default function WeeklyPredictionsPage() {
       return;
     }
     try {
-      const res = await fetch(`/api/race-list/${date}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json();
-      const list: RaceItem[] = d.races ?? d ?? [];
+      const d = (await fetchRaceList(date)) as { races?: RaceItem[] } | RaceItem[];
+      if (seq !== racesSeq.current) return;
+      const list: RaceItem[] = (Array.isArray(d) ? d : d.races) ?? [];
       setRaces(list);
     } catch (e: unknown) {
-      setRacesError(e instanceof Error ? e.message : String(e));
+      if (seq === racesSeq.current) setRacesError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoadingRaces(false);
+      if (seq === racesSeq.current) setLoadingRaces(false);
     }
   }, []);
 
@@ -669,8 +671,7 @@ export default function WeeklyPredictionsPage() {
       return;
     }
     try {
-      const res = await fetch(`/api/race/${raceId}/predictions`);
-      const d: PredData = res.ok ? await res.json() : { status: "error", predictions: [] };
+      const d = await getJson<PredData>(`/api/race/${raceId}/predictions`, { ttlMs: 15_000 }).catch((): PredData => ({ status: "error", predictions: [] }));
       setPreds((prev) => ({ ...prev, [raceId]: d }));
     } catch {
       setPreds((prev) => ({ ...prev, [raceId]: { status: "error", predictions: [] } }));

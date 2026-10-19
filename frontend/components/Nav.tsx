@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchAuthStatus } from "@/lib/httpCache";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -18,11 +19,7 @@ export function Nav() {
       setIsAdmin(auto);
       return;
     }
-    fetch("/api/v1/auth/status", { credentials: "include" })
-      .then((r) => {
-        if (r.status >= 500) throw new Error(`HTTP ${r.status}`);
-        return r.ok ? r.json() : { logged_in: false, is_admin: false };
-      })
+    fetchAuthStatus()
       .then((d) => {
         setLoggedIn(!!d.logged_in);
         setIsAdmin(!!d.logged_in && !!d.is_admin);

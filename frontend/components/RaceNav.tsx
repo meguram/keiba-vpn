@@ -1,7 +1,9 @@
 "use client";
 
+import { fetchRaceList } from "@/lib/httpCache";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { PendingLink } from "@/components/PendingLink";
 import { USE_MOCK, MOCK_WEEKLY_RACES } from "@/lib/mock";
 import { LEVEL_STYLE, ValueLevel, useRaceValues, valueTitle } from "@/lib/raceValue";
 import { useNarrow } from "@/components/RaceStrip";
@@ -18,9 +20,8 @@ async function loadList(date: string): Promise<RaceRow[]> {
   if (USE_MOCK) {
     rows = MOCK_WEEKLY_RACES.map((r) => ({ race_id: r.race_id, round: Number(r.round), venue: String(r.venue), race_name: String(r.race_name) }));
   } else {
-    const res = await fetch(`/api/race-list/${date}`);
-    const d = res.ok ? await res.json() : { races: [] };
-    rows = (d.races ?? d ?? []).map((r: Record<string, unknown>) => ({
+    const d = (await fetchRaceList(date).catch(() => ({ races: [] }))) as { races?: Record<string, unknown>[] } | Record<string, unknown>[];
+    rows = ((Array.isArray(d) ? d : d.races) ?? []).map((r: Record<string, unknown>) => ({
       race_id: String(r.race_id),
       round: Number(r.round ?? Number(String(r.race_id).slice(-2))),
       venue: String(r.venue ?? ""),
@@ -83,7 +84,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
           const target = atVenue(v);
           const on = v === cur.venue;
           return (
-            <Link
+            <PendingLink
               key={v}
               href={`/race/${target?.race_id ?? raceId}`}
               aria-current={on ? "page" : undefined}
@@ -100,7 +101,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
                 const hot = rows.filter((r) => r.venue === v && values.get(r.race_id)?.level === "hot").length;
                 return hot > 0 ? <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: "#fb923c" }} title="特に価値の高いレース">★{hot}</span> : null;
               })()}
-            </Link>
+            </PendingLink>
           );
         })}
         <Link href={listHref} style={{ ...BTN, marginLeft: "auto", flex: "none", minHeight: narrow ? 40 : undefined, color: "var(--accent)" }}>
@@ -110,7 +111,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: narrow ? "nowrap" : "wrap" }}>
         {!narrow && (prev ? (
-          <Link href={`/race/${prev.race_id}`} style={BTN} title={prev.race_name}>← {prev.round}R</Link>
+          <PendingLink href={`/race/${prev.race_id}`} style={BTN} title={prev.race_name}>← {prev.round}R</PendingLink>
         ) : <span style={{ ...BTN, opacity: 0.35 }}>← 前のR</span>)}
 
         <div style={narrow
@@ -122,7 +123,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
             const lv: ValueLevel = v?.level ?? "none";
             const st = LEVEL_STYLE[lv];
             return (
-              <Link
+              <PendingLink
                 key={r.race_id}
                 href={`/race/${r.race_id}`}
                 aria-current={on ? "page" : undefined}
@@ -141,13 +142,13 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
                 <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.95 }}>
                   {v?.expected_roi != null && lv !== "pass" ? `${(v.expected_roi * 100).toFixed(0)}%` : lv === "pass" ? "見送" : "–"}
                 </span>
-              </Link>
+              </PendingLink>
             );
           })}
         </div>
 
         {!narrow && (next ? (
-          <Link href={`/race/${next.race_id}`} style={BTN} title={next.race_name}>{next.round}R →</Link>
+          <PendingLink href={`/race/${next.race_id}`} style={BTN} title={next.race_name}>{next.round}R →</PendingLink>
         ) : <span style={{ ...BTN, opacity: 0.35 }}>次のR →</span>)}
       </div>
 

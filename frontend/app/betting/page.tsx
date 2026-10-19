@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchAuthStatus } from "@/lib/httpCache";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageShell } from "@/components/PageShell";
@@ -68,8 +69,7 @@ export default function BettingPage() {
       setIsAdmin(true);
       return;
     }
-    fetch("/api/v1/auth/status", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : { logged_in: false, is_admin: false }))
+    fetchAuthStatus()
       .then((d) => setIsAdmin(!!d.logged_in && !!d.is_admin))
       .catch(() => setIsAdmin(false));
   }, []);
