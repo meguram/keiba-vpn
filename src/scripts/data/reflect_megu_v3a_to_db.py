@@ -28,13 +28,16 @@ from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
+# 変換と upsert は日次の計算とも共通（v3a_db）。既存の呼び名のまま使えるように取り込む
+from src.pipeline.megu_index.v3a_db import (  # noqa: E402,F401
+    NUMERIC_LIMITS, USABLE_STATUS, _none, build_index_rows, check_ranges, upsert_index,
+)
+
 MODEL_VERSION = "v3a"
 SOURCE_VERSION = "v2"
 MODEL_DIR = Path("config/megu_v3a")
 TABLES_DIR = Path("data/page_reference/tables")
-USABLE_STATUS = ("ok", "clipped", "restored_out_of_range", "restored_clipped")
 COPIED_PARAMS = ("beta_pace", "beta_track", "tsi_mean", "beta_level")  # v2 から引き継ぐ（馬場のフォールバック・互換のため）
-NUMERIC_LIMITS = {"megu_index": 99999.9, "par_time_sec": 9999.99, "adjusted_time_sec": 9999.99, "finish_time_sec": 9999.99, "delta_track_sec": 99.999}
 
 
 def parse_years(spec: str) -> list[int]:
@@ -82,42 +85,6 @@ def build_par_rows(par: pd.DataFrame) -> list[dict]:
     return out
 
 
-# ── megu_index ──────────────────────────────────────────────────────
-def build_index_rows(df: pd.DataFrame) -> pd.DataFrame:
-    """年の parquet から DB に入れる行を作る（純粋関数）。絶対指数が付いている走だけ。
-
-    megu_index 列 = 絶対指数(megu_index_v3a_abs_robust)。par_time_sec/adjusted_time_sec/delta_track_sec は相対の計算に使った
-    値（v3a_par_sec / v3a_corrected_sec / v3a_track_sec）で、絶対指数とは中心合わせの分だけ恒等式が成り立たない。
-    delta_pace/weight/level は v3 の値で v3a の係数と違うため NULL にする。
-    """
-    ok = df["megu_v3a_status"].isin(USABLE_STATUS) & df["megu_index_v3a_abs_robust"].notna()
-    d = df.loc[ok].copy()
-    return pd.DataFrame({
-        "race_id": d["race_id"].astype(str), "horse_id": d["horse_id"].astype(str),
-        "finish_time_sec": d["finish_time_sec"].astype(float).round(2),
-        "par_time_sec": d["v3a_par_sec"].astype(float).round(2),
-        "delta_pace_sec": np.nan, "delta_track_sec": d["v3a_track_sec"].astype(float).round(3),
-        "delta_weight_sec": np.nan, "delta_level_sec": np.nan,
-        "adjusted_time_sec": d["v3a_corrected_sec"].astype(float).round(2),
-        "megu_index": d["megu_index_v3a_abs_robust"].astype(float).round(1),
-        "computation_status": "valid",
-    }).reset_index(drop=True)
-
-
-def check_ranges(rows: pd.DataFrame) -> list[str]:
-    bad = []
-    for col, lim in NUMERIC_LIMITS.items():
-        if col in rows and rows[col].notna().any():
-            m = float(rows[col].abs().max())
-            if m >= lim:
-                bad.append(f"{col}: 最大 {m} が桁あふれ（上限 {lim}）")
-    return bad
-
-
-def _none(v):
-    return None if v is None or (isinstance(v, float) and np.isnan(v)) else v
-
-
 # ── DB 操作 ─────────────────────────────────────────────────────────
 def load_v2_params(session) -> dict[str, tuple[float, float | None]]:
     rows = session.execute(text("SELECT param_name, param_value, std_error FROM megu_regression_params WHERE model_version=:mv"), {"mv": SOURCE_VERSION}).fetchall()
@@ -145,25 +112,6 @@ def upsert_par(session, rows: list[dict], batch: int = 500) -> None:
     """)
     for i in range(0, len(rows), batch):
         session.execute(sql, [{**r, "mv": MODEL_VERSION} for r in rows[i:i + batch]])
-
-
-def upsert_index(session, rows: pd.DataFrame, batch: int = 1000) -> int:
-    sql = text("""
-        INSERT INTO megu_index (race_id, horse_id, finish_time_sec, par_time_sec, delta_pace_sec, delta_track_sec, delta_weight_sec, delta_level_sec,
-                                adjusted_time_sec, megu_index, computation_status, model_version, computed_at)
-        VALUES (:race_id, :horse_id, :finish_time_sec, :par_time_sec, :delta_pace_sec, :delta_track_sec, :delta_weight_sec, :delta_level_sec,
-                :adjusted_time_sec, :megu_index, :computation_status, :mv, NOW())
-        ON CONFLICT (race_id, horse_id, model_version) DO UPDATE SET
-            finish_time_sec=EXCLUDED.finish_time_sec, par_time_sec=EXCLUDED.par_time_sec, delta_track_sec=EXCLUDED.delta_track_sec,
-            adjusted_time_sec=EXCLUDED.adjusted_time_sec, megu_index=EXCLUDED.megu_index, computation_status=EXCLUDED.computation_status, computed_at=NOW()
-    """)
-    n = 0
-    recs = [{k: _none(v) for k, v in r.items()} for r in rows.to_dict("records")]
-    for i in range(0, len(recs), batch):
-        part = recs[i:i + batch]
-        session.execute(sql, [{**r, "mv": MODEL_VERSION} for r in part])
-        n += len(part)
-    return n
 
 
 def backup_tables(session, out_dir: Path) -> dict[str, dict[str, int]]:

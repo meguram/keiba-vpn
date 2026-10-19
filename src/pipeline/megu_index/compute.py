@@ -916,8 +916,9 @@ def compute_for_date(
         df_hist = _load_history_flat_for_level(date_str)
         from src.pipeline.megu_index.v3a import load_model_from_env
 
+        v3a_model = load_model_from_env()
         df_result = compute_for_dataframe(
-            df_flat, params, df_par, df_hist=df_hist, df_ref=df_year_ref, v3a_model=load_model_from_env(),
+            df_flat, params, df_par, df_hist=df_hist, df_ref=df_year_ref, v3a_model=v3a_model,
         )
         # valid + out_of_range 両方を保存（par_time があるものに限る）
         df_save = df_result[df_result["par_time_final"].notna()].copy()
@@ -926,8 +927,13 @@ def compute_for_date(
             pol = {"reason": "no_results_after_compute", "legitimate_skip": False, "action": "repair_flat_metadata"}
             return {"status": "skipped", **pol, "date": date_str, "megu_valid": 0, "megu_oor": 0}
 
+        v3a_db_rows = 0
         with get_session() as session:
             saved = _upsert_batch(session, df_save, model_version=model_version)
+            # v3a の計算が有効で KEIBA_MEGU_V3A_DB=1 のときだけ、v3a の行（model_version='v3a'）も DB に入れる（既定はオフ）
+            from src.pipeline.megu_index.v3a_db import maybe_upsert_for_result
+
+            v3a_db_rows = maybe_upsert_for_result(session, df_result, v3a_model is not None)
 
         gcs_info = _save_megu_parquet_backup(
             frame_for_parquet(df_result, df_flat), year, gcs_canonical=gcs_canonical
@@ -946,6 +952,7 @@ def compute_for_date(
             "megu_valid": n_valid,
             "megu_oor": n_oor,
             "megu_no_par": n_no_par,
+            "megu_v3a_db": v3a_db_rows,
             "gcs": gcs_info,
         }
 
