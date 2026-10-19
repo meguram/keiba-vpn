@@ -64,7 +64,9 @@ function downloadCsv(){const a=document.createElement('a');a.href=URL.createObje
 
 
 def slug(name: str) -> str:
+    """SporthorseData のページ名の作り方に合わせる。アポストロフィは取り除く（Devil's Bag -> devils-bag）、その他の記号はハイフンにする。"""
     s = re.sub(r"[\(（].*?[\)）]", "", name.replace("\xa0", " ")).strip().lower()
+    s = re.sub(r"['’`´]", "", s)
     s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
     return s
 

@@ -7,7 +7,8 @@ from src.research.pedigree import manual_checklist as mc
 def test_slug():
     assert mc.slug("Shecky Greene") == "shecky-greene"
     assert mc.slug("Harlan\xa0(米)") == "harlan"
-    assert mc.slug("Devil's Bag") == "devil-s-bag"
+    assert mc.slug("Devil's Bag") == "devils-bag"
+    assert mc.slug("Man o'War") == "man-owar" and mc.slug("Mr. Prospector") == "mr-prospector" and mc.slug("Kris S.") == "kris-s"
     assert mc.slug("ノーザンテースト") == ""
 
 
