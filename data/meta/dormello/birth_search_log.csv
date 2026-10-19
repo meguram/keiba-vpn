@@ -46,12 +46,12 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a001b4d,Rainbow Quest(米),no_data,1981,,,https://sporthorse-data.com/pedigree/rainbow-quest,2026-10-19,ユーザー確認: 記載なし
 000a001d10,Surumu,adopted,1974,2,26,https://www.wikidata.org/wiki/Q2368704 ; https://en.wikipedia.org/wiki/Surumu,2026-10-17,英語版 Wikipedia 冒頭文
 000a001a8e,Shareef Dancer,adopted,1980,3,3,https://sporthorse-data.com/pedigree/shareef-dancer,2026-10-19,ユーザーがブラウザで目視確認
-000a0021eb,Classic Go Go,no_data,1978,,,https://www.wikidata.org/wiki/Q102241573,2026-10-17,
+000a0021eb,Classic Go Go,adopted,1978,2,11,https://sporthorse-data.com/pedigree/classic-go-go,2026-10-19,ユーザーがブラウザで目視確認
 000a001617,Pleasant Colony,adopted,1978,5,4,https://www.wikidata.org/wiki/Q11335830 ; https://en.wikipedia.org/wiki/Pleasant_Colony,2026-10-17,英語版 Wikipedia 冒頭文
-000a00185f,Wild Again (米),no_data,1980,,,https://www.jbis.jp/horse/0000336574/,2026-10-19,JBIS も年のみ
-000a00193b,Crafty Prospector,no_data,1979,,,,2026-10-17,
-000a001174,Solario,no_data,1922,,,https://www.wikidata.org/wiki/Q7557028 ; https://en.wikipedia.org/wiki/Solario,2026-10-17,
-000a000477,Mr. Leader,no_data,1966,,,,2026-10-17,
+000a00185f,Wild Again (米),adopted,1980,5,22,https://sporthorse-data.com/pedigree/wild-again,2026-10-19,ユーザーがブラウザで目視確認
+000a00193b,Crafty Prospector,no_data,1979,,,https://sporthorse-data.com/pedigree/crafty-prospector,2026-10-19,ユーザー確認: 記載なし
+000a001174,Solario,no_data,1922,,,https://sporthorse-data.com/pedigree/solario,2026-10-19,ユーザー確認: 記載なし
+000a000477,Mr. Leader,adopted,1966,3,18,https://sporthorse-data.com/pedigree/mr-leader,2026-10-19,ユーザーがブラウザで目視確認
 000a001c0e,Meadowlake,no_data,1983,,,,2026-10-17,
 000a001679,Arctic Tern,no_data,1973,,,https://www.wikidata.org/wiki/Q17232090 ; https://en.wikipedia.org/wiki/Arctic_Tern_%28horse%29,2026-10-17,
 000a001604,Cox's Ridge,no_data,1974,,,https://www.wikidata.org/wiki/Q5179853 ; https://en.wikipedia.org/wiki/Cox%27s_Ridge,2026-10-17,
