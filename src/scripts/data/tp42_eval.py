@@ -31,7 +31,10 @@ from src.pipeline.features import tp42_racelevel as rl  # noqa: E402
 from src.scripts.data import tp39_eval as te  # noqa: E402
 
 KEY = ["race_id", "horse_id"]
-OUT = te.V / "tp42"
+VARIANT = os.environ.get("TP42_VARIANT", "")                   # 先読み解消版・鮮度版などの出力先を分ける（例 lf / lf_l7 / lf_l14）
+OUT = te.V / (f"tp42_{VARIANT}" if VARIANT else "tp42")
+MEGU_ROOT = te.ROOT / os.environ["TP42_MEGU_ROOT"] if os.environ.get("TP42_MEGU_ROOT") else te.MEGU_ROOT   # 指数の読み先（既定: 最終候補 v3a）
+LAG_DAYS = int(os.environ.get("TP42_LAG_DAYS", "0"))            # 指数の反映遅れ（日）。0 なら遅れなし
 te.OUT = OUT                                   # tp39_eval の段階評価をそのまま使い、出力先だけ替える
 GROUP_NAMES = ["RL_A", "RL_A2", "RL_B", "RL_C", "RL_ALL"]
 REL_COLS = re.compile(r"(^fm_|(_rank|_rk|_gap|_gap12|_own_z|_n_better)$)")  # 既存のレース内相対化列（V4 では *_rank / *_gap / メンバー構成 fm_*。*_rz 等の名前は V4 の表には無い）
@@ -49,10 +52,11 @@ def _load_all_groups(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
 # ───────────────────────── 群の作成
 def cmd_groups(a) -> None:
     runs = fs.load_runs(te.TABLES, list(range(2020, 2026)))
-    megu = tg.load_megu(te.MEGU_ROOT, list(range(2020, 2026)))
+    megu = tg.load_megu(MEGU_ROOT, list(range(2020, 2026)))
     d = rl.prepare(runs, megu)
     _log(f"走 {len(d):,} 行 / 指数あり {int(d['a'].notna().sum()):,} 行 / megu: {megu.attrs['megu'].get('dir')} {megu.attrs['megu'].get('version')}")
-    gs = rl.build_all(d)
+    gs = rl.build_all(d, LAG_DAYS)
+    _log(f"variant={VARIANT or '(既定)'} 指数の読み先={MEGU_ROOT.name} 反映遅れ={LAG_DAYS}日")
     gdir = OUT / "groups"
     gdir.mkdir(parents=True, exist_ok=True)
     allc = [gs["RL_A"], gs["RL_A2"][[c for c in gs["RL_A2"].columns if c not in KEY]], gs["RL_B"][[c for c in gs["RL_B"].columns if c not in KEY]],
@@ -66,7 +70,7 @@ def cmd_groups(a) -> None:
         by = {int(y): float(t.loc[yr == y, cols].notna().mean().mean()) for y in (2021, 2022, 2023, 2024, 2025)}
         cov[n] = {"cols": len(cols), "columns": cols, "nonnull_rate_by_year": by}
         _log(f"{n}: {len(cols)} 列 被覆 {by}")
-    te._jsave(OUT / "consts.json", {"megu": megu.attrs["megu"]})
+    te._jsave(OUT / "consts.json", {"megu": megu.attrs["megu"], "variant": VARIANT, "lag_days": LAG_DAYS})
     te._jsave(OUT / "coverage.json", cov)
 
 

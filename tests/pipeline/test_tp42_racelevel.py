@@ -118,3 +118,40 @@ def test_expectation_ewm_matches_manual():
         m = np.isfinite(prior)
         want = (prior[m] * w[m]).sum() / w[m].sum() if m.any() else np.nan
         assert np.isclose(c.loc[g.index[pos], "rlC_E"], want, equal_nan=True)
+
+
+def _all_lag(d, lag):
+    parts = [rl.grp_A(d, lag), rl.grp_A2(d, lag), rl.grp_B(d, lag), rl.grp_C(d, lag)]
+    return pd.concat(parts, axis=1)
+
+
+def test_lag_zero_is_the_default():
+    d = _synth(6)
+    a = _all(d).to_numpy(float)
+    b = _all_lag(d, 0).to_numpy(float)
+    assert np.allclose(np.where(np.isnan(a), 0, a), np.where(np.isnan(b), 0, b))
+
+
+def test_reflection_lag_hides_runs_that_are_not_yet_reflected():
+    d = _synth(7)
+    for lag in (7, 14):
+        base = _all_lag(d, lag)
+        days = np.sort(d["dnum"].unique())
+        d0 = float(days[len(days) // 2])
+        d2 = d.copy()
+        rng = np.random.default_rng(11)
+        recent = d2["dnum"] > d0 - lag                                           # 今回の日の lag 日前より後の結果を全部入れ替える
+        d2.loc[recent, "a"] = rng.normal(90, 40, recent.sum())
+        alt = _all_lag(d2, lag)
+        day = (d["dnum"] == d0).to_numpy()
+        a, b = base.loc[day].to_numpy(float), alt.loc[day].to_numpy(float)
+        both_nan = np.isnan(a) & np.isnan(b)
+        assert day.sum() > 0
+        assert np.allclose(np.where(both_nan, 0, a), np.where(both_nan, 0, b), atol=1e-9, rtol=0), f"lag={lag}: 反映前の指数が入っている"
+
+
+def test_reflection_lag_reduces_available_history():
+    d = _synth(8)
+    c0 = rl.grp_C(d, 0)["rlC_n"].to_numpy(float)
+    c14 = rl.grp_C(d, 14)["rlC_n"].to_numpy(float)
+    assert (c14 <= c0 + 1e-9).all() and (c14 < c0).any()

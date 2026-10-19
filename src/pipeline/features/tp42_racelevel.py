@@ -52,6 +52,16 @@ def _ewm(M: np.ndarray, w: float = W, extra_w: np.ndarray | None = None) -> np.n
     return np.where(den > 0, out, np.nan)
 
 
+def lags_m(d: pd.DataFrame, col: str, k: int, lag_days: int = 0) -> np.ndarray:
+    """fs.lags と同じ (n, k) の過去走の値。今回の日付との差が lag_days 日未満の走は『まだ指数が反映されていない』として欠損にする。
+    lag_days は指数の反映遅れ（確定結果が揃うのは金曜の weekly-update 後）を学習側にも再現するための設定。0 なら遅れなし。"""
+    M = fs.lags(d, col, k)
+    if lag_days > 0:
+        gap = d["dnum"].to_numpy(float)[:, None] - fs.lags(d, "dnum", k)
+        M = np.where(gap >= lag_days, M, np.nan)
+    return M
+
+
 # ───────────────────────── 過去レースの強さ（事後。自分を除く）
 def add_race_level(d: pd.DataFrame) -> pd.DataFrame:
     """各走に、そのレースの『自分を除く出走馬の絶対指数の平均 / 上位3頭の平均』を足す（そのレースの結果を使うので、必ず過去走としてずらして使う）。"""
@@ -88,12 +98,12 @@ def add_race_level(d: pd.DataFrame) -> pd.DataFrame:
     return d
 
 
-def grp_A(d: pd.DataFrame) -> pd.DataFrame:
+def grp_A(d: pd.DataFrame, lag_days: int = 0) -> pd.DataFrame:
     """RL_A: 過去 K 走のレースの強さと、相手関係補正後の自分の指数。"""
     x = add_race_level(d)
     out = pd.DataFrame(index=d.index)
     for name, col in (("oppm", "opp_mean"), ("oppt3", "opp_top3"), ("rel", "rel_mean"), ("rel3", "rel_top3")):
-        M = fs.lags(x, col, K)
+        M = lags_m(x, col, K, lag_days)
         out[f"rlA_{name}_ewm"] = _ewm(M)
         out[f"rlA_{name}_last"] = M[:, 0]
         if name in ("oppm", "oppt3"):
@@ -105,7 +115,7 @@ def grp_A(d: pd.DataFrame) -> pd.DataFrame:
 
 
 # ───────────────────────── 後日談（相手のその後。今回の日付より前の次走だけ）
-def grp_A2(d: pd.DataFrame) -> pd.DataFrame:
+def grp_A2(d: pd.DataFrame, lag_days: int = 0) -> pd.DataFrame:
     """RL_A2: 過去 KD レースの相手が、今回の日付より前に出した次走の絶対指数 / 相手の事前水準との差の指数加重平均。"""
     n = len(d)
     h = d["horse_id"].to_numpy()
@@ -114,7 +124,7 @@ def grp_A2(d: pd.DataFrame) -> pd.DataFrame:
     same_next = np.r_[h[1:] == h[:-1], False]
     next_dn = np.where(same_next, np.r_[dn[1:], np.nan], np.nan)
     next_a = np.where(same_next, np.r_[a[1:], np.nan], np.nan)
-    pre = _ewm(fs.lags(d, "a", K))                                                  # その走の前の水準（その走の結果は入らない）
+    pre = _ewm(lags_m(d, "a", K, lag_days))                                         # その走の前の水準（その走の結果は入らない）
     v1 = next_a
     v2 = next_a - pre
     ok = np.isfinite(next_dn) & np.isfinite(next_a)
@@ -135,9 +145,12 @@ def grp_A2(d: pd.DataFrame) -> pd.DataFrame:
         src = np.where(pos_in_group >= j, np.arange(n) - j, -1)                       # j 走前の行
         have = src >= 0
         s = np.where(have, src, 0)
+        if lag_days > 0:                                                              # j 走前そのものが反映前なら使わない
+            have = have & ((dn - dn[s]) >= lag_days)
         q = ridx[s] * BIG
         lo = np.searchsorted(keys, q, side="left")
-        hi = np.searchsorted(keys, q + dn.astype(np.int64), side="left")             # 次走の日付 < 今回の日付
+        cutoff = dn.astype(np.int64) - lag_days + (1 if lag_days > 0 else 0)
+        hi = np.searchsorted(keys, q + cutoff, side="left")                          # 次走の日付 < 今回の日付（遅れありなら 日付 <= 今回 - lag_days）
         S1 = c1[hi] - c1[lo]
         S2 = c2[hi] - c2[lo]
         N = (cnt[hi] - cnt[lo]).astype(float)
@@ -145,7 +158,7 @@ def grp_A2(d: pd.DataFrame) -> pd.DataFrame:
         if j >= 2:                                                                    # 自分の j 走前→(j-1)走前 の次走は今回より前なので差し引く
             sv1 = np.where(np.isfinite(v1[s]), v1[s], 0.0)
             sv2 = np.where(np.isfinite(v2[s]), v2[s], 0.0)
-            own = np.isfinite(v1[s]) & np.isfinite(next_dn[s]) & (next_dn[s] < dn)
+            own = np.isfinite(v1[s]) & np.isfinite(next_dn[s]) & (next_dn[s] < cutoff)
             S1 = S1 - np.where(own, sv1, 0.0)
             N = N - own
             own2 = own & np.isfinite(v2[s])
@@ -167,8 +180,8 @@ def grp_A2(d: pd.DataFrame) -> pd.DataFrame:
 
 
 # ───────────────────────── 自分の想定指数
-def _self_block(d: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
-    M = fs.lags(d, "a", K)
+def _self_block(d: pd.DataFrame, lag_days: int = 0) -> tuple[pd.DataFrame, np.ndarray]:
+    M = lags_m(d, "a", K, lag_days)
     out = pd.DataFrame(index=d.index)
     E = _ewm(M)
     out["rlC_E"] = E
@@ -197,14 +210,14 @@ def _self_block(d: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
     return out, E
 
 
-def grp_C(d: pd.DataFrame) -> pd.DataFrame:
-    return _self_block(d)[0]
+def grp_C(d: pd.DataFrame, lag_days: int = 0) -> pd.DataFrame:
+    return _self_block(d, lag_days)[0]
 
 
 # ───────────────────────── 今回のレースの強さ（出走馬の過去走だけ）
-def grp_B(d: pd.DataFrame) -> pd.DataFrame:
+def grp_B(d: pd.DataFrame, lag_days: int = 0) -> pd.DataFrame:
     """RL_B: 出走馬の想定指数 E の分布と、その中での自分の位置。E は各馬の過去走だけから作る（今回の結果は使わない）。"""
-    E = _self_block(d)[1]
+    E = _self_block(d, lag_days)[1]
     x = pd.DataFrame({"race_id": d["race_id"].to_numpy(), "E": E})
     g = x.groupby("race_id", sort=False)["E"]
     n = g.transform("count").to_numpy(float)
@@ -266,10 +279,10 @@ def grp_B(d: pd.DataFrame) -> pd.DataFrame:
 GROUPS = {"RL_A": grp_A, "RL_A2": grp_A2, "RL_B": grp_B, "RL_C": grp_C}
 
 
-def build_all(d: pd.DataFrame) -> dict[str, pd.DataFrame]:
+def build_all(d: pd.DataFrame, lag_days: int = 0) -> dict[str, pd.DataFrame]:
     out = {}
     for name, f in GROUPS.items():
-        t = f(d)
+        t = f(d, lag_days)
         t.insert(0, "horse_id", d["horse_id"].to_numpy())
         t.insert(0, "race_id", d["race_id"].to_numpy())
         out[name] = t
