@@ -1005,7 +1005,7 @@ def excluded_rows(df_flat: pd.DataFrame, computed: pd.DataFrame) -> pd.DataFrame
     reason = pd.Series("excluded_other", index=miss.index)
     reason[~(time_ok & dist_ok)] = "no_time"
     reason[~surf_ok] = "excluded_surface"
-    reason[obst] = "excluded_obstacle"
+    reason[obst] = "steeplechase"
     out = miss[["race_id", "horse_id"]].copy()
     out["computation_status"] = "excluded"
     out["megu_index"] = float("nan")

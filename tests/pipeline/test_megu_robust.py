@@ -92,7 +92,7 @@ def test_recompute_keeps_rows_dropped_by_the_compute_filters():
     computed = pd.DataFrame([{"race_id": "r1", "horse_id": "a"}])
     out = excluded_rows(flat, computed).set_index("horse_id")
     assert set(out.index) == {"b", "c", "d"}
-    assert out.loc["b", "megu_index_status"] == "excluded_obstacle"
+    assert out.loc["b", "megu_index_status"] == "steeplechase"
     assert out.loc["c", "megu_index_status"] == "excluded_surface"
     assert out.loc["d", "megu_index_status"] == "no_time"
     assert out["megu_index"].isna().all() and (out["computation_status"] == "excluded").all()
@@ -128,4 +128,4 @@ def test_frame_for_parquet_keeps_rows_without_par_and_excluded_rows():
                          "computation_status": "no_par", "megu_index_status": "no_par"}])
     out = frame_for_parquet(res, flat).set_index("horse_id")
     assert set(out.index) == {"a", "b"} and out.loc["a", "megu_index_status"] == "no_par"
-    assert out.loc["b", "megu_index_status"] == "excluded_obstacle"
+    assert out.loc["b", "megu_index_status"] == "steeplechase"
