@@ -122,6 +122,34 @@ class Store:
             self.session_saved += 1
             return {"ok": True}
 
+    def _current_matches(self, url: str, title: str) -> dict | None:
+        """ユーザースクリプトが送ってきたページが、いま表示中の馬のものか（URL の末尾の名前か、タイトルの馬名で判定）。"""
+        p = self.pending()
+        if not p:
+            return None
+        cur = p[0]
+        seg = urllib.parse.urlparse(url).path.rstrip("/").rsplit("/", 1)[-1].lower()
+        slug = cur["url"].rsplit("/", 1)[-1].lower()
+        norm = lambda t: re.sub(r"[^a-z0-9]", "", t.lower())  # noqa: E731
+        if (slug and seg.startswith(slug)) or (cur["name_en"] and norm(cur["name_en"]) and norm(cur["name_en"]) in norm(title)):
+            return cur
+        return None
+
+    def capture(self, url: str, title: str, text: str) -> dict:
+        cur = None
+        with self.lock:
+            cur = self._current_matches(url, title)
+        if not cur:
+            return {"ok": False, "error": "いま表示中の馬と違うページです。ツールの画面の馬のページを開いてください"}
+        return self.save(cur["horse_id"], text, confirm_jan1=False, url=url)
+
+    def capture_none(self, url: str, title: str) -> dict:
+        with self.lock:
+            cur = self._current_matches(url, title)
+        if not cur:
+            return {"ok": False, "error": "いま表示中の馬と違うページです"}
+        return self.none(cur["horse_id"])
+
     def none(self, horse_id: str) -> dict:
         with self.lock:
             r = self._row(horse_id)
@@ -190,6 +218,7 @@ async function none_(){await api('/api/none',{horse_id:cur.horse_id});load()}
 async function skip_(){await api('/api/skip',{horse_id:cur.horse_id});load()}
 async function undo_(){const r=await api('/api/undo',{});if(!r.ok)alert(r.error);load()}
 load();
+setInterval(async()=>{if(!cur)return;const d=await api('/api/next');if(d.item&&d.item.horse_id!==cur.horse_id&&!document.getElementById('d').value){load()}else if(!d.item){load()}},3000);
 </script></body></html>"""
 
 
@@ -220,6 +249,8 @@ def make_handler(store: Store, token: str):
                 self.wfile.write(b)
             elif path == "/api/next" and self._authorized():
                 self._json(store.next())
+            elif path == "/api/token":  # ユーザースクリプト用（ブラウザの他サイトからは読めない）
+                self._json({"token": token})
             else:
                 self._json({"ok": False, "error": "not found"}, 404)
 
@@ -237,6 +268,10 @@ def make_handler(store: Store, token: str):
                 self._json(store.skip(body.get("horse_id", "")))
             elif path == "/api/undo":
                 self._json(store.undo())
+            elif path == "/api/ext_capture":
+                self._json(store.capture(body.get("url", ""), body.get("title", ""), body.get("text", "")))
+            elif path == "/api/ext_none":
+                self._json(store.capture_none(body.get("url", ""), body.get("title", "")))
             else:
                 self._json({"ok": False, "error": "not found"}, 404)
 
