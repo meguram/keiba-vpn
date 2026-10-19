@@ -36,16 +36,16 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a0016f2,Kris S. (米),adopted,1977,4,25,https://www.wikidata.org/wiki/Q6437279 ; https://en.wikipedia.org/wiki/Kris_S.,2026-10-17,英語版 Wikipedia 冒頭文
 000a000e32,Mill Reef(米),adopted,1968,2,23,https://www.wikidata.org/wiki/Q3314241 ; https://en.wikipedia.org/wiki/Mill_Reef,2026-10-17,英語版 Wikipedia 冒頭文
 000a00013a,フレンチデピュティFrench Deputy(米),adopted,1992,1,30,https://www.wikidata.org/wiki/Q11334069 ; https://ja.wikipedia.org/wiki/%E3%83%95%E3%83%AC%E3%83%B3%E3%83%81%E3%83%87%E3%83%94%E3%83%A5%E3%83%86%E3%82%A3,2026-10-17,日本語版 Wikipedia 冒頭文
-000a000db7,Vaguely Noble(英),no_data,1965,,,https://www.jbis.jp/horse/0000333923/,2026-10-19,JBIS も年のみ
+000a000db7,Vaguely Noble(英),no_data,1965,,,https://sporthorse-data.com/pedigree/vaguely-noble,2026-10-19,ユーザー確認: 記載なし
 000a0017b0,Miswaki,adopted,1978,2,22,https://www.wikidata.org/wiki/Q11164164 ; https://en.wikipedia.org/wiki/Miswaki,2026-10-17,英語版 Wikipedia 冒頭文
-000a001a8f,Devil's Bag,no_data,1981,,,https://www.jbis.jp/horse/0000337092/,2026-10-19,JBIS が 1 月 1 日（仮置きの疑い）
-000a00180b,Speak John,no_data,1958,,,https://www.wikidata.org/wiki/Q7574198 ; https://en.wikipedia.org/wiki/Speak_John,2026-10-17,
-000a0010f9,Key to the Mint,no_data,1969,,,https://www.jbis.jp/horse/0000334745/,2026-10-19,JBIS も年のみ
-000a0017b2,Dixieland Band,no_data,1980,,,https://www.jbis.jp/horse/0000336397/,2026-10-19,JBIS も年のみ
+000a001a8f,Devil's Bag,no_data,1981,,,https://sporthorse-data.com/pedigree/devils-bag,2026-10-19,ユーザー確認: 記載なし
+000a00180b,Speak John,no_data,1958,,,https://sporthorse-data.com/pedigree/speak-john,2026-10-19,ユーザー確認: 記載なし
+000a0010f9,Key to the Mint,no_data,1969,,,https://sporthorse-data.com/pedigree/key-mint,2026-10-19,ユーザー確認: 記載なし
+000a0017b2,Dixieland Band,adopted,1980,3,20,https://sporthorse-data.com/pedigree/dixieland-band,2026-10-19,ユーザーがブラウザで目視確認
 000a0010fa,Raja Baba,adopted,1968,4,5,https://www.wikidata.org/wiki/Q7285398 ; https://en.wikipedia.org/wiki/Raja_Baba,2026-10-17,英語版 Wikipedia 冒頭文
-000a001b4d,Rainbow Quest(米),no_data,1981,,,https://www.jbis.jp/horse/0000337286/,2026-10-19,JBIS も年のみ
+000a001b4d,Rainbow Quest(米),no_data,1981,,,https://sporthorse-data.com/pedigree/rainbow-quest,2026-10-19,ユーザー確認: 記載なし
 000a001d10,Surumu,adopted,1974,2,26,https://www.wikidata.org/wiki/Q2368704 ; https://en.wikipedia.org/wiki/Surumu,2026-10-17,英語版 Wikipedia 冒頭文
-000a001a8e,Shareef Dancer,no_data,1980,,,https://www.jbis.jp/horse/0000337091/,2026-10-19,JBIS も年のみ
+000a001a8e,Shareef Dancer,adopted,1980,3,3,https://sporthorse-data.com/pedigree/shareef-dancer,2026-10-19,ユーザーがブラウザで目視確認
 000a0021eb,Classic Go Go,no_data,1978,,,https://www.wikidata.org/wiki/Q102241573,2026-10-17,
 000a001617,Pleasant Colony,adopted,1978,5,4,https://www.wikidata.org/wiki/Q11335830 ; https://en.wikipedia.org/wiki/Pleasant_Colony,2026-10-17,英語版 Wikipedia 冒頭文
 000a00185f,Wild Again (米),no_data,1980,,,https://www.jbis.jp/horse/0000336574/,2026-10-19,JBIS も年のみ
