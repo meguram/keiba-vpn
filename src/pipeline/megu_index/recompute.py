@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.pipeline.megu_index.robust import MEGU_VERSION
 from src.pipeline.megu_index.compute import (
     MODEL_VERSION,
     _load_cushion,
@@ -38,13 +39,46 @@ def parse_years(spec: str) -> list[int]:
     return [int(x) for x in spec.split(",") if x]
 
 
+def excluded_rows(df_flat: pd.DataFrame, computed: pd.DataFrame) -> pd.DataFrame:
+    """計算の対象外で落ちた行（障害レース・芝ダート以外・タイム無し）を、指数 NaN のまま行として残す。
+
+    旧データには障害レース（年に約 1,000 行）の値があったが、現行の計算は障害を対象外にしている（2026-07-23 の品質ガード）。
+    行ごと消えると『旧にあって新に無い』になり追跡できないため、理由を ``megu_index_status`` に書いて残す。
+    """
+    from src.pipeline.megu_index.flat_metadata import is_obstacle_race_name
+
+    base = df_flat.drop_duplicates(["race_id", "horse_id"])
+    key = pd.MultiIndex.from_frame(base[["race_id", "horse_id"]])
+    have = pd.MultiIndex.from_frame(computed[["race_id", "horse_id"]])
+    miss = base[~key.isin(have)].copy()
+    if miss.empty:
+        return pd.DataFrame(columns=["race_id", "horse_id", "computation_status", "megu_index", "megu_index_status",
+                                     "low_confidence", "megu_version"])
+    time_ok = pd.to_numeric(miss.get("time_sec"), errors="coerce") > 0
+    dist_ok = pd.to_numeric(miss.get("distance"), errors="coerce") > 0
+    obst = miss.get("race_name", pd.Series("", index=miss.index)).fillna("").apply(is_obstacle_race_name)
+    surf_ok = miss.get("surface", pd.Series("", index=miss.index)).isin(["芝", "ダート"])
+    reason = pd.Series("excluded_other", index=miss.index)
+    reason[~(time_ok & dist_ok)] = "no_time"
+    reason[~surf_ok] = "excluded_surface"
+    reason[obst] = "excluded_obstacle"
+    out = miss[["race_id", "horse_id"]].copy()
+    out["computation_status"] = "excluded"
+    out["megu_index"] = float("nan")
+    out["megu_index_status"] = reason.values
+    out["low_confidence"] = False
+    out["megu_version"] = MEGU_VERSION
+    return out
+
+
 def recompute_year(year: int, params: dict[str, float], df_par: pd.DataFrame, out_dir: Path) -> dict:
     df_year = _load_result_flat(year)
     if df_year.empty:
         return {"year": year, "rows": 0, "skipped": "no_flat"}
     df_flat = merge_cushion_tsi(df_year.copy(), _load_cushion(year), params)
     df_result = compute_for_dataframe(df_flat, params, df_par, df_hist=None, df_ref=df_year)
-    df_save = df_result[df_result["par_time_final"].notna()].copy()
+    # 基準タイムが取れない行も落とさない（status=no_par・指数 NaN）。対象外で落ちた行も理由つきで残す
+    df_save = pd.concat([df_result, excluded_rows(df_year, df_result)], ignore_index=True)
     info = _save_megu_parquet_backup(df_save, year, out_dir=out_dir, replace=True)
     return {"year": year, "rows": len(df_save), "path": info["local_path"],
             "status": df_save["megu_index_status"].value_counts().to_dict()}

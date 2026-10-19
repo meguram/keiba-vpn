@@ -78,3 +78,21 @@ def test_compute_for_dataframe_adds_columns_without_changing_existing_semantics(
     assert out.loc["c", "megu_index_raw"] < out.loc["a", "megu_index_raw"]
     assert out.loc["a", "megu_index"] == out.loc["a", "megu_index_raw"]
     assert (out["par_sample_count"] == 200).all() and not out["low_confidence"].any()
+
+
+def test_recompute_keeps_rows_dropped_by_the_compute_filters():
+    from src.pipeline.megu_index.recompute import excluded_rows
+
+    flat = pd.DataFrame([
+        {"race_id": "r1", "horse_id": "a", "race_name": "3歳以上1勝クラス", "surface": "芝", "time_sec": 70.0, "distance": 1200},
+        {"race_id": "r2", "horse_id": "b", "race_name": "障害4歳以上未勝利", "surface": "芝", "time_sec": 190.0, "distance": 2750},
+        {"race_id": "r3", "horse_id": "c", "race_name": "新馬", "surface": "障", "time_sec": 190.0, "distance": 2750},
+        {"race_id": "r4", "horse_id": "d", "race_name": "新馬", "surface": "ダート", "time_sec": float("nan"), "distance": 1200},
+    ])
+    computed = pd.DataFrame([{"race_id": "r1", "horse_id": "a"}])
+    out = excluded_rows(flat, computed).set_index("horse_id")
+    assert set(out.index) == {"b", "c", "d"}
+    assert out.loc["b", "megu_index_status"] == "excluded_obstacle"
+    assert out.loc["c", "megu_index_status"] == "excluded_surface"
+    assert out.loc["d", "megu_index_status"] == "no_time"
+    assert out["megu_index"].isna().all() and (out["computation_status"] == "excluded").all()
