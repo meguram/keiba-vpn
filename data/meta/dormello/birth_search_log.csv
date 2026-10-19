@@ -4,7 +4,7 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a00115d,Mahmoud,no_data,1933,,,,2026-10-17,Britannica・JBIS・Wikidata いずれも年のみ
 000a0019b6,Understanding,no_data,1963,,,,2026-10-17,検索結果に該当なし
 000a0011c8,Teddy,no_data,1913,,,,2026-10-17,年のみ
-000a001123,Blandford,no_data,1919,,,,2026-10-17,年のみ
+000a001123,Blandford,no_data,1919,,,https://sporthorse-data.com/pedigree/blandford,2026-10-19,ユーザー確認: 記載なし
 000a001124,Swynford,adopted,1907,1,,https://en.wikipedia.org/wiki/Swynford,2026-10-17,月のみ（January 1907）
 000a00129b,Blue Larkspur,no_data,1926,,,,2026-10-17,年のみ
 000a0013fd,Discovery,candidate,1931,3,3,https://grokipedia.com/page/discovery_horse,2026-10-17,Grokipedia 1 件のみ（独立した出典なし）。Wikipedia・Wikidata は年のみ（2026-10-19 再確認: 他に独立した出典は見つからず保留のまま）
@@ -57,12 +57,12 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a001604,Cox's Ridge,adopted,1974,4,4,https://sporthorse-data.com/pedigree/coxs-ridge,2026-10-19,ユーザーがブラウザで目視確認
 000a0017b5,Clever Trick (米),no_data,1976,,,https://sporthorse-data.com/pedigree/clever-trick,2026-10-19,ユーザー確認: 記載なし
 000a002276,Tale of the Cat(米),adopted,1994,4,13,https://sporthorse-data.com/pedigree/tale-cat,2026-10-19,ユーザーがブラウザで目視確認
-000a001bde,Fairy King,no_data,1982,,,https://www.wikidata.org/wiki/Q5430970 ; https://en.wikipedia.org/wiki/Fairy_King_%28horse%29,2026-10-17,
+000a001bde,Fairy King,no_data,1982,,,https://sporthorse-data.com/pedigree/fairy-king,2026-10-19,ユーザー確認: 記載なし
 000a0003c7,トウショウボーイ,adopted,1973,4,15,https://ja.wikipedia.org/wiki/%E3%83%88%E3%82%A6%E3%82%B7%E3%83%A7%E3%82%A6%E3%83%9C%E3%83%BC%E3%82%A4,2026-10-17,日本語版 Wikipedia 冒頭文
-000a00026d,パーソロンPartholon(愛),no_data,1960,,,https://www.wikidata.org/wiki/Q11329825 ; https://ja.wikipedia.org/wiki/%E3%83%91%E3%83%BC%E3%82%BD%E3%83%AD%E3%83%B3,2026-10-17,
-000a001cd4,In The Wings (英),no_data,1986,,,https://www.wikidata.org/wiki/Q13575295 ; https://en.wikipedia.org/wiki/In_The_Wings_%28horse%29,2026-10-17,
+000a00026d,パーソロンPartholon(愛),no_data,1960,,,https://sporthorse-data.com/pedigree/partholon,2026-10-19,ユーザー確認: 記載なし
+000a001cd4,In The Wings (英),no_data,1986,,,https://sporthorse-data.com/pedigree/in-wings,2026-10-19,ユーザー確認: 記載なし
 000a0017c9,Irish River (仏),adopted,1976,4,2,https://www.wikidata.org/wiki/Q6071184 ; https://en.wikipedia.org/wiki/Irish_River,2026-10-17,英語版 Wikipedia 冒頭文
-000a0017ef,Lombard (独),candidate,1967,5,21,https://www.wikidata.org/wiki/Q18024215,2026-10-19,Wikidata のみ（参照なし・冒頭文の裏付けなし）（Wikidata 一括照会）
+000a0017ef,Lombard (独),no_data,1967,,,https://sporthorse-data.com/pedigree/lombard,2026-10-19,ユーザー確認: 記載なし
 000a0017e6,Seattle Song,adopted,1981,2,19,https://www.wikidata.org/wiki/Q7442173 ; https://en.wikipedia.org/wiki/Seattle_Song,2026-10-17,英語版 Wikipedia 冒頭文
 000a001fb6,Marju(愛),adopted,1988,3,12,https://www.wikidata.org/wiki/Q6766369 ; https://en.wikipedia.org/wiki/Marju,2026-10-17,英語版 Wikipedia 冒頭文
 000a0000e3,Deploy,no_data,1987,,,,2026-10-17,
