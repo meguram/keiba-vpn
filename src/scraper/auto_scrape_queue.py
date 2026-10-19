@@ -42,6 +42,16 @@ T15_RACE_TASKS: list[str] = [
 # T-60 はオッズ（単複・馬連・ワイド・馬単・3連複）のみ。馬場ライブ・予測トリガは呼ばない。
 ODDS_T60_TASKS: list[str] = ["race_odds_t60", "race_pair_odds_t60", "race_trifecta_odds_t60"]
 
+# 発走直前の単複オッズ（race_odds のみ・1 レース 1 リクエスト）。KEIBA_ODDS_LATE_SNAPSHOTS=1 のときだけ取る。
+# 直前のオッズ変動（最後の数分の資金流入）の検証用履歴を貯める。phase は t10 / t05 / t02（snapshots に積まれる）。
+LATE_LEADS: tuple[int, ...] = (10, 5, 2)
+LATE_KIND_TASK: dict[str, str] = {"t10": "race_odds_t10", "t05": "race_odds_t05", "t02": "race_odds_t02"}
+ODDS_LATE_TASKS: list[str] = list(LATE_KIND_TASK.values())
+# 予定時刻からこの秒数を超えて遅れた直前取得は捨てる（t05 の名で 4 分前のオッズを積まない）。
+LATE_TOLERANCE_SECONDS = 120
+# 重い取得の前に、この秒数以内に直前オッズが来るなら、その時刻まで待ってから取る（バンドルの最中に過ぎるのを防ぐ）。
+LATE_LOOKAHEAD_SECONDS = 90
+
 # 馬体重の検知（raceday-weight-runner）: 各R T-65〜T-30 に出馬表を取り直し、馬体重が入ったら特徴量・予測を起動する。
 from src.scraper.raceday_weight_watch import WEIGHT_WATCH_TASKS  # noqa: E402,F401
 
@@ -59,15 +69,26 @@ def enabled_tasks(tasks: list[str]) -> list[str]:
     return [t for t in tasks if not t.startswith("race_trifecta_odds")]
 
 
+def late_snapshots_enabled() -> bool:
+    """発走直前（T-10 / T-5 / T-2）の単複オッズを取るか。既定は off（``KEIBA_ODDS_LATE_SNAPSHOTS=1`` で on）。"""
+    return os.environ.get("KEIBA_ODDS_LATE_SNAPSHOTS", "").strip().lower() in ("1", "true", "yes")
+
+
+def _kind_order(kind: str) -> int:
+    """同時刻のイベントの順序: t60 → 直前（時刻が重要）→ t15（重いバンドル）。"""
+    return 0 if kind == "t60" else (2 if kind == "t15" else 1)
+
+
 def build_odds_events(
     schedule: list[dict],
     lead_t60: int = T60_LEAD_MINUTES,
     lead_t15: int = LEAD_MINUTES,
+    late_leads: tuple[int, ...] = (),
 ) -> list[dict[str, Any]]:
-    """各レースの T-60 / T-15 イベントを時刻順に並べて返す（純粋関数）。
+    """各レースの T-60 / T-15（と、指定があれば直前の T-10 / T-5 / T-2）イベントを時刻順に並べて返す（純粋関数）。
 
-    要素: ``{"kind": "t60"|"t15", "at": 実行時刻, "t15_at": そのレースの T-15 時刻, "race": race}``。
-    同時刻なら t60 → t15 の順、それも同じなら schedule の並び順。
+    要素: ``{"kind": "t60"|"t15"|"t10"|"t05"|"t02", "at": 実行時刻, "t15_at": そのレースの T-15 時刻, "race": race}``。
+    同時刻なら t60 → 直前 → t15 の順、それも同じなら schedule の並び順。
     """
     events: list[dict[str, Any]] = []
     for idx, race in enumerate(schedule):
@@ -76,7 +97,10 @@ def build_odds_events(
         events.append({"kind": "t60", "at": post - timedelta(minutes=lead_t60),
                        "t15_at": t15_at, "race": race, "_i": idx})
         events.append({"kind": "t15", "at": t15_at, "t15_at": t15_at, "race": race, "_i": idx})
-    events.sort(key=lambda e: (e["at"], 0 if e["kind"] == "t60" else 1, e["_i"]))
+        for lead in late_leads:
+            events.append({"kind": f"t{lead:02d}", "at": post - timedelta(minutes=lead),
+                           "t15_at": t15_at, "race": race, "_i": idx})
+    events.sort(key=lambda e: (e["at"], _kind_order(e["kind"]), e["_i"]))
     for e in events:
         del e["_i"]
     return events
@@ -96,6 +120,8 @@ def select_due_events(
     t15: list[dict] = []
     skipped: list[dict] = []
     for e in events:
+        if e["kind"] not in ("t60", "t15"):
+            continue                       # 直前イベントは select_due_late_events が扱う
         key = (e["race"]["race_id"], e["kind"])
         if key in done or e["at"] > now:
             continue
@@ -106,6 +132,33 @@ def select_due_events(
         else:
             t60.append(e)
     return t60, t15, skipped
+
+
+def select_due_late_events(
+    events: list[dict[str, Any]],
+    done: set[tuple[str, str]],
+    now: datetime,
+    tolerance_sec: float = LATE_TOLERANCE_SECONDS,
+) -> tuple[list[dict], list[dict]]:
+    """``now`` までに到達した未処理の直前イベントを (実行する, 捨てる) に振り分ける（純粋関数）。
+
+    予定時刻から ``tolerance_sec`` を超えて遅れたもの、発走時刻を過ぎたものは捨てる（遅れて取ったオッズを
+    t05 / t02 の名で積むと、直前変動の検証がずれる）。返した全イベントは呼び出し側が ``done`` に追加する想定。
+    """
+    due: list[dict] = []
+    stale: list[dict] = []
+    for e in events:
+        if e["kind"] not in LATE_KIND_TASK:
+            continue
+        key = (e["race"]["race_id"], e["kind"])
+        if key in done or e["at"] > now:
+            continue
+        late_sec = (now - e["at"]).total_seconds()
+        if late_sec > tolerance_sec or now >= e["race"]["post_time"]:
+            stale.append(e)
+        else:
+            due.append(e)
+    return due, stale
 
 
 def use_queue() -> bool:
@@ -804,6 +857,8 @@ def task_raceday_runner() -> None:
     """開催日常駐ランナー（キュー版）。各レース T-60 でオッズのみ、T-15 でバンドル（オッズ含む）を取得する。
 
     T-60 のオッズ取得はこのキュー版のみ（KEIBA_AUTO_SCRAPE_USE_QUEUE=0 の直接版は従来どおり T-15 のみ）。
+    ``KEIBA_ODDS_LATE_SNAPSHOTS=1`` のときは、T-10 / T-5 / T-2 に単複オッズだけを追加で取る（1 レース +3 リクエスト）。
+    直前イベントは同じ起床の中で T-60 / T-15 より先に処理する（時刻が命。重いバンドルの後ろに回さない）。
     """
     from src.scraper import auto_scrape as _as
     from src.scraper.raceday_pre_race_pipeline import (
@@ -836,8 +891,11 @@ def task_raceday_runner() -> None:
         return
 
     logger.info("  開催日ランナー (キュー経由): %s 全%dレース", today_str, len(schedule))
-    stats = {"races": len(schedule), "scraped": 0, "odds_t60": 0, "errors": []}
-    events = build_odds_events(schedule)
+    stats = {"races": len(schedule), "scraped": 0, "odds_t60": 0, "odds_late": 0, "late_skipped": 0, "errors": []}
+    late_on = late_snapshots_enabled()
+    events = build_odds_events(schedule, late_leads=LATE_LEADS if late_on else ())
+    if late_on:
+        logger.info("  直前オッズ (T-%s) を取得する（KEIBA_ODDS_LATE_SNAPSHOTS=1）", "/".join(str(m) for m in LATE_LEADS))
     done: set[tuple[str, str]] = set()
     direct = _raceday_direct_enabled()
     _runner_box: list[Any] = []
@@ -848,6 +906,49 @@ def task_raceday_runner() -> None:
 
             _runner_box.append(ScraperRunner())
         return _runner_box[0]
+
+    def _run_late_due() -> None:
+        """到達済みの直前オッズ（T-10 / T-5 / T-2）を取る。重い T-15 バンドルの途中でもレースの合間に呼び、時刻のずれを 1 レース分に抑える。"""
+        if not late_on:
+            return
+        late_due, late_stale = select_due_late_events(events, done, datetime.now(_JST))
+        for x in late_stale:
+            done.add((x["race"]["race_id"], x["kind"]))
+            stats["late_skipped"] += 1
+            logger.info("直前オッズ %s スキップ（予定から遅れた／発走後）: %s", x["kind"].upper(), x["race"]["race_id"])
+        if not late_due:
+            return
+        if direct:
+            for x in late_due:
+                stats["errors"] += _run_race_tasks_direct(
+                    _get_runner(), x["race"]["race_id"], date_fmt, [LATE_KIND_TASK[x["kind"]]])
+        else:
+            queue.bulk_add_jobs([
+                {"job_kind": "race", "target_id": x["race"]["race_id"], "date": date_fmt,
+                 "tasks": [LATE_KIND_TASK[x["kind"]]], "smart_skip": False}
+                for x in late_due
+            ])
+            ok, msg, _ = _kick_and_wait(queue, timeout_sec=600.0)
+            if not ok:
+                logger.error("直前オッズ キュー待機失敗: %s", msg)
+                stats["errors"].append(msg)
+        for x in late_due:
+            done.add((x["race"]["race_id"], x["kind"]))
+            stats["odds_late"] += 1
+
+    def _before_heavy_step() -> None:
+        """重い取得（T-15 バンドルなど）に入る前に呼ぶ。到達済みの直前オッズを取り、直前オッズが LATE_LOOKAHEAD_SECONDS 以内に
+        来るならその時刻まで待ってから取る（バンドルが 1〜3 分かかって、その間に T-5 / T-2 が過ぎるのを防ぐ）。"""
+        if late_on:
+            now = datetime.now(_JST)
+            soon = [
+                e["at"] for e in events
+                if e["kind"] in LATE_KIND_TASK and (e["race"]["race_id"], e["kind"]) not in done
+                and now < e["at"] <= now + timedelta(seconds=LATE_LOOKAHEAD_SECONDS) and e["at"] < e["race"]["post_time"]
+            ]
+            if soon:
+                time.sleep(max(0.0, (min(soon) - now).total_seconds()))
+        _run_late_due()
 
     logger.info("  取得方式: %s", "直接実行（キューを待たない）" if direct else "キュー経由")
 
@@ -864,6 +965,8 @@ def task_raceday_runner() -> None:
                 wait_sec / 60,
             )
             time.sleep(wait_sec)
+
+        _run_late_due()
 
         t60_batch, t15_batch, skipped = select_due_events(events, done, datetime.now(_JST))
         for x in skipped:
@@ -883,6 +986,7 @@ def task_raceday_runner() -> None:
             ]
             if direct:
                 for x in t60_batch:
+                    _before_heavy_step()
                     stats["errors"] += _run_race_tasks_direct(_get_runner(), x["race"]["race_id"], date_fmt, enabled_tasks(ODDS_T60_TASKS))
             else:
                 queue.bulk_add_jobs(specs)
@@ -908,6 +1012,7 @@ def task_raceday_runner() -> None:
         if specs:
             if direct:
                 for r in batch:
+                    _before_heavy_step()
                     stats["errors"] += _run_race_tasks_direct(_get_runner(), r["race_id"], date_fmt, enabled_tasks(T15_RACE_TASKS))
             else:
                 queue.bulk_add_jobs(specs)
@@ -916,8 +1021,10 @@ def task_raceday_runner() -> None:
                     logger.error("T-15 キュー待機失敗: %s", msg)
                     stats["errors"].append(msg)
 
+            _before_heavy_step()
             baba_ok = refresh_jra_baba_live()
             for r in batch:
+                _before_heavy_step()
                 rid = r["race_id"]
                 bundle = PreRaceBundleResult(race_id=rid, jra_baba_refreshed=baba_ok, ok=True)
                 trigger_pre_race_predict(r, bundle_result=bundle)
@@ -934,6 +1041,8 @@ def task_raceday_runner() -> None:
             "races": stats["races"],
             "scraped": stats["scraped"],
             "odds_t60": stats["odds_t60"],
+            "odds_late": stats["odds_late"],
+            "late_skipped": stats["late_skipped"],
             "error_count": len(stats["errors"]),
         },
     )
