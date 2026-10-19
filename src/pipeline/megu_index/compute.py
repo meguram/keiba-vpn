@@ -56,7 +56,7 @@ from src.pipeline.megu_index.class_bucket import par_class_bucket
 from src.pipeline.megu_index.common import adjusted_time_to_megu
 from src.pipeline.megu_index.field_quality import attach_fq_and_delta_level
 from src.pipeline.megu_index.par_time_resolve import attach_par_time_with_fallback
-from src.pipeline.megu_index.robust import ROBUST_COLUMNS, add_robust_columns
+from src.pipeline.megu_index.robust import MEGU_VERSION, ROBUST_COLUMNS, add_robust_columns
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -910,7 +910,7 @@ def compute_for_date(
             saved = _upsert_batch(session, df_save, model_version=model_version)
 
         gcs_info = _save_megu_parquet_backup(
-            df_save, year, gcs_canonical=gcs_canonical
+            frame_for_parquet(df_result, df_flat), year, gcs_canonical=gcs_canonical
         )
 
         n_valid = int((df_save["computation_status"] == "valid").sum())
@@ -982,6 +982,44 @@ def compute_megu_for_opening_dates(
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI エントリポイント
 # ─────────────────────────────────────────────────────────────────────────────
+
+def excluded_rows(df_flat: pd.DataFrame, computed: pd.DataFrame) -> pd.DataFrame:
+    """計算の対象外で落ちた行（障害レース・芝ダート以外・タイム無し）を、指数 NaN のまま行として残す。
+
+    旧データには障害レース（年に約 1,000 行）の値があったが、現行の計算は障害を対象外にしている（2026-07-23 の品質ガード）。
+    行ごと消えると『旧にあって新に無い』になり追跡できないため、理由を ``megu_index_status`` に書いて残す。
+    """
+    from src.pipeline.megu_index.flat_metadata import is_obstacle_race_name
+
+    base = df_flat.drop_duplicates(["race_id", "horse_id"])
+    key = pd.MultiIndex.from_frame(base[["race_id", "horse_id"]])
+    have = pd.MultiIndex.from_frame(computed[["race_id", "horse_id"]])
+    miss = base[~key.isin(have)].copy()
+    if miss.empty:
+        return pd.DataFrame(columns=["race_id", "horse_id", "computation_status", "megu_index", "megu_index_status",
+                                     "low_confidence", "megu_version"])
+    time_ok = pd.to_numeric(miss.get("time_sec"), errors="coerce") > 0
+    dist_ok = pd.to_numeric(miss.get("distance"), errors="coerce") > 0
+    obst = miss.get("race_name", pd.Series("", index=miss.index)).fillna("").apply(is_obstacle_race_name)
+    surf_ok = miss.get("surface", pd.Series("", index=miss.index)).isin(["芝", "ダート"])
+    reason = pd.Series("excluded_other", index=miss.index)
+    reason[~(time_ok & dist_ok)] = "no_time"
+    reason[~surf_ok] = "excluded_surface"
+    reason[obst] = "excluded_obstacle"
+    out = miss[["race_id", "horse_id"]].copy()
+    out["computation_status"] = "excluded"
+    out["megu_index"] = float("nan")
+    out["megu_index_status"] = reason.values
+    out["low_confidence"] = False
+    out["megu_version"] = MEGU_VERSION
+    return out
+
+
+def frame_for_parquet(df_result: pd.DataFrame, df_flat: pd.DataFrame) -> pd.DataFrame:
+    """parquet に保存する行 = 計算結果の全行（基準タイムが取れない行は status=no_par・指数 NaN で残す）
+    + 計算対象外で落ちた行（理由つき・指数 NaN）。DB への保存は従来どおり基準タイムのある行だけ。"""
+    return pd.concat([df_result, excluded_rows(df_flat, df_result)], ignore_index=True)
+
 
 def merge_cushion_tsi(df_flat: pd.DataFrame, df_cushion: pd.DataFrame, params: dict[str, float]) -> pd.DataFrame:
     """クッション値・含水率を日付×競馬場でマージし、tsi_raw（馬場指標）を付ける。"""
@@ -1110,7 +1148,8 @@ def main() -> None:
 
     # GCS バックアップ保存（年単位バッチでも同様に実行）
     for yr in set(years):
-        df_yr = df_save[pd.to_datetime(df_all["date"], errors="coerce").dt.year == yr] if len(years) > 1 else df_save
+        df_pq = frame_for_parquet(df_result, df_all)
+        df_yr = df_pq[df_pq["race_id"].astype(str).str[:4] == str(yr)] if len(years) > 1 else df_pq
         _save_megu_parquet_backup(df_yr, yr)
 
 
