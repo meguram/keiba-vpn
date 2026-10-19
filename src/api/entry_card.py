@@ -393,6 +393,10 @@ def build_entry_card(race_id: str, horse_id: str, storage: Any) -> dict:
     oik = _entry_by_horse((_load(storage, "race_oikiri", race_id) or {}).get("entries"), horse_id)
     com = _entry_by_horse((_load(storage, "race_trainer_comment", race_id) or {}).get("entries"), horse_id)
 
+    from src.pipeline.inference.horse_growth import growth_for_horse
+
+    growth = _cached(("growth", horse_id, rdate), lambda: growth_for_horse(horse_id, all_runs, hist.get("birthday"))) if all_runs else None
+
     horse = {
         "status": "ok" if (recent or hist or oik) else "no_data",
         "id": horse_id, "name": entry.get("horse_name"), "sex_age": entry.get("sex_age"), "weight": entry.get("weight") or None, "weight_change": entry.get("weight_change") if entry.get("weight") else None,
@@ -408,6 +412,7 @@ def build_entry_card(race_id: str, horse_id: str, storage: Any) -> dict:
         "training": ({k: oik.get(k) or None for k in ("training_date", "course", "condition", "rider", "lap_times", "impression", "evaluation", "comment")} if oik else None),
         "trainer_comment": ({"comment": com.get("comment"), "evaluation": com.get("evaluation") or None, "trainer": com.get("trainer_name")} if com and com.get("comment") else None),
         "weights": [{"date": r["date"], "weight": r["weight"], "change": r["weight_change"]} for r in recent if r.get("weight")],
+        "growth": growth,
     }
 
     jockey = _entity_card("jockey", jid, entry.get("jockey_name"), ctx)
@@ -423,5 +428,5 @@ def build_entry_card(race_id: str, horse_id: str, storage: Any) -> dict:
         "status": "ok", "race_id": race_id, "horse_id": horse_id, "as_of": rdate or None,
         "race": {"name": shutuba.get("race_name"), "venue": ctx["venue"], "surface": surface, "distance": ctx["distance"], "grade": shutuba.get("grade")},
         "horse": horse, "jockey": jockey, "trainer": trainer,
-        "sources": ["race_shutuba", "race_shutuba_past", "horse_result", "race_oikiri", "race_trainer_comment", "jockey_tbl/trainer_tbl lookup", "person meta"],
+        "sources": ["race_shutuba", "race_shutuba_past", "horse_result", "megu_index_flat", "race_oikiri", "race_trainer_comment", "jockey_tbl/trainer_tbl lookup", "person meta"],
     }

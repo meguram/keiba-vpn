@@ -13,6 +13,15 @@ export type PastRun = {
 export type TrainingInfo = { training_date?: string | null; course?: string | null; condition?: string | null; rider?: string | null; lap_times?: string | null; impression?: string | null; evaluation?: string | null; comment?: string | null };
 export type TrainerComment = { comment: string; evaluation?: string | null; trainer?: string | null };
 
+export type GrowthPoint = {
+  date: string; race_id: string; race_name?: string | null; venue?: string | null; surface?: string | null; distance?: number | null;
+  finish?: number | string | null; field?: number | null; age_months?: number | null; raw: number; value: number;
+};
+export type HorseGrowth =
+  | { status: "ok"; axis: { key: string; name: string; note: string; ref: number }; points: GrowthPoint[]; n: number; excluded: number;
+      trend: { label: "上昇中" | "横ばい" | "下降中"; delta: number; basis: string } | null; best: { value: number; date: string; race_name?: string | null } }
+  | { status: "no_data" | "error"; reason?: string; excluded?: number };
+
 export type HorseCard = {
   status: "ok" | "no_data"; id: string; name?: string | null; sex_age?: string | null; weight?: number | null; weight_change?: number | null;
   profile: { sire?: string | null; dam?: string | null; dam_sire?: string | null; owner?: string | null; breeder?: string | null; birthday?: string | null; career?: string | null; earnings?: number | null } | null;
@@ -22,6 +31,7 @@ export type HorseCard = {
   training: TrainingInfo | null;
   trainer_comment: TrainerComment | null;
   weights: { date: string; weight: number | null; change: number | null }[];
+  growth?: HorseGrowth | null;
 };
 
 export type PersonProfile = {

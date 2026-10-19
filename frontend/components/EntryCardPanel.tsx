@@ -8,6 +8,7 @@ import {
   distanceChange, finishBadge, finishBarHeight, formTag, layoffTag, parseLap, passingList, placeTag, popGap, splitRaceName, styleOf, surfaceStyle, trainingGrade,
 } from "@/lib/entryCardUi";
 import { ViewportMode, useViewportMode } from "@/lib/useViewportMode";
+import { GrowthCurve, GROWTH_CSS } from "@/components/GrowthCurve";
 
 /* 出馬表の馬名・騎手・調教師をタップしたときのパネル。
    PC: 右のドロワー（要約タイル → 近5走の表 → 条件別ゲージ）。スマホ: 下から出るボトムシート（要約タイルを最上部・近5走はカード・詳細は折りたたみ）。
@@ -386,6 +387,10 @@ function HorseView({ h, mode, cur, jockeyName }: { h: HorseCard; mode: ViewportM
         )}
       </Section>
 
+      <Section title="成長曲線" hint={h.growth && h.growth.status === "ok" ? `${h.growth.axis.name}の推移` : undefined}>
+        <GrowthCurve g={h.growth} />
+      </Section>
+
       <Section title="今回と同じ条件での成績" hint="この馬の過去走">
         {sc.length === 0 && h.same_conditions.length === 0 ? <Empty /> : (
           <>
@@ -605,7 +610,7 @@ function Profile({ e }: { e: EntityCard }) {
 }
 
 /* ── パネル本体 ── */
-const CSS = `
+const CSS = GROWTH_CSS + `
 .ec-root{--ec-dim:#94a6bf;position:fixed;inset:0;z-index:1000;background:rgba(2,6,23,.6)}
 .ec-drawer{position:fixed;top:0;right:0;bottom:0;width:min(640px,94vw);background:var(--surface);border-left:1px solid var(--border);box-shadow:-16px 0 40px rgba(0,0,0,.5);display:flex;flex-direction:column;animation:ecIn .16s ease-out}
 .ec-sheet{position:fixed;left:0;right:0;bottom:0;max-height:90vh;background:var(--surface);border-top:1px solid var(--border);border-radius:18px 18px 0 0;box-shadow:0 -14px 36px rgba(0,0,0,.55);display:flex;flex-direction:column;animation:ecUp .2s ease-out;touch-action:pan-y}

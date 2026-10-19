@@ -175,3 +175,27 @@ def test_endpoint_returns_card_and_error_codes(monkeypatch):
     assert r.status_code == 200 and r.json()["horse"]["name"] == "テストホース" and len(r.content) < 20000
     assert c.get(f"/api/race/{RID}/entry/NOPE/card").status_code == 404
     assert c.get(f"/api/race/{RID}/entry/H1;rm/card").status_code in (400, 404)
+
+
+def test_card_has_growth_curve_with_only_runs_before_the_race_day(tmp_path, monkeypatch):
+    import pandas as pd
+
+    from src.pipeline.inference import horse_growth as HG
+
+    for y, ids in ((2026, ["202608040101", "202609040604", "202605020103", RID]),):
+        d = tmp_path / str(y)
+        d.mkdir()
+        pd.DataFrame([{"race_id": r, "horse_id": "H1", "megu_index": 40.0 + i * 5, "computation_status": "valid"} for i, r in enumerate(ids)]).to_parquet(d / "megu_index_flat.parquet")
+    monkeypatch.setattr(HG, "tables_dir", lambda: tmp_path)
+    HG._baseline_cache.clear()
+    g = E.build_entry_card(RID, "H1", make_storage())["horse"]["growth"]
+    assert g["status"] == "ok" and g["n"] == 3
+    assert RID not in [p["race_id"] for p in g["points"]], "レース当日の走は含めない（先読みなし）"
+    assert [p["date"] for p in g["points"]] == ["20260801", "20260920", "20261003"]
+
+
+def test_card_growth_is_no_data_without_megu_files(tmp_path, monkeypatch):
+    from src.pipeline.inference import horse_growth as HG
+
+    monkeypatch.setattr(HG, "tables_dir", lambda: tmp_path)
+    assert E.build_entry_card(RID, "H1", make_storage())["horse"]["growth"]["status"] == "no_data"
