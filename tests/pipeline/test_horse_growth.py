@@ -131,12 +131,12 @@ def test_robust_axis_uses_restored_values_and_marks_low_confidence(tmp_path):
     assert [p["low_confidence"] for p in g["points"]] == [False, True, False]
 
 
-def test_w55_axis_is_default_and_shows_actual_weight(tmp_path, monkeypatch):
+def test_w55_axis_shows_actual_weight(tmp_path, monkeypatch):
     import pandas as pd
 
     from src.pipeline.inference import horse_growth as hg
 
-    monkeypatch.delenv("KEIBA_GROWTH_AXIS", raising=False)
+    monkeypatch.setenv("KEIBA_GROWTH_AXIS", "megu_w55")
     assert hg.active_axis().key == "megu_w55"
     d = tmp_path / "2025"
     d.mkdir()
@@ -154,7 +154,8 @@ def test_w55_axis_is_default_and_shows_actual_weight(tmp_path, monkeypatch):
     assert [p["jockey_weight"] for p in g["points"]] == [53.0, 56.0]
 
 
-def test_v3a_abs_axis_is_defined_and_not_the_default():
+def test_v3a_abs_axis_is_defined_and_is_the_default(monkeypatch):
     ax = hg.AXES["megu_v3a_abs"]
     assert ax.value_col == "megu_index_v3a_abs_robust" and ax.conf_col == "megu_v3a_low_confidence" and not ax.align_by_month
-    assert hg.DEFAULT_AXIS != "megu_v3a_abs"
+    monkeypatch.delenv("KEIBA_GROWTH_AXIS", raising=False)
+    assert hg.DEFAULT_AXIS == "megu_v3a_abs" and hg.active_axis().key == "megu_v3a_abs"
