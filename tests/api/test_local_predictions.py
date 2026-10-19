@@ -94,3 +94,14 @@ def test_route_returns_local_prediction_only_when_gcs_has_none(tmp_path, monkeyp
     st.data[("race_predictions", "R1")] = {"race_id": "R1", "status": "success", "predictions": [{"horse_number": 1}], "_meta": {"scraped_at": 1}}
     r2 = c.get("/api/race/R1/predictions")                                             # GCS の予測があればそちらが優先
     assert "prediction_source" not in r2.json() and r2.json()["predictions"][0]["horse_number"] == 1
+
+
+def test_eval_backfill_logloss_and_top1_hit():
+    from src.scripts.data.eval_backfill_predictions import evaluate
+
+    preds = pd.DataFrame({"race_id": ["R1"] * 3 + ["R2"] * 3, "horse_id": list("abcabc"),
+                          "p_win": [0.6, 0.3, 0.1, 0.5, 0.3, 0.2], "p_top2": [0.8, 0.6, 0.3, 0.7, 0.6, 0.4], "p_top3": [0.9, 0.8, 0.5, 0.85, 0.8, 0.55]})
+    fin = pd.DataFrame({"race_id": ["R1"] * 3 + ["R2"] * 3, "horse_id": list("abcabc"), "finish_position": [1, 2, 3, 2, 1, 3]})
+    r = evaluate(preds, fin, bins=2)
+    assert r["races"] == 2 and r["rows"] == 6 and r["top1_hit"] == 0.5
+    assert r["win"]["logloss"] < r["win"]["uniform_logloss"] + 0.2 and r["top3"]["rate"] == 1.0

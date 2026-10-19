@@ -119,6 +119,7 @@ def main() -> None:
     ap.add_argument("--to", dest="until", default=datetime.date.today().strftime("%Y%m%d"))
     ap.add_argument("--list", action="store_true", help="対象を数えるだけ（計算しない）")
     ap.add_argument("--max-days", type=int, default=0, help="この日数だけ処理して終わる（0=すべて）")
+    ap.add_argument("--max-races", type=int, default=0, help="1 日あたり先頭の何レースだけ算出するか（確認用。0=すべて）")
     ap.add_argument("--oldest-first", action="store_true", help="既定は新しい日から")
     ap.add_argument("--max-load", type=float, default=18.0)
     ap.add_argument("--bundle", default="")
@@ -177,7 +178,7 @@ def main() -> None:
         if a.max_days and done_days >= a.max_days:
             break
         wait_for_load(a.max_load)
-        ids = todo[day]
+        ids = todo[day][: a.max_races] if a.max_races else todo[day]
         d = f"{day[:4]}-{day[4:6]}-{day[6:]}"
         t0 = time.time()
         try:

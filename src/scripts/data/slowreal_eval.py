@@ -474,6 +474,13 @@ def cmd_chapter(a) -> None:
                 f"<td class=num>{_f(c['Δtop2'])}</td><td class=num>{_f(c['Δtop3'])}（{_f(c.get('top3_hi'))}）</td></tr>")
 
     arm_rows = arm_row("A（重み付き・ラベルのある走だけで学習）", {**r2, "groups": {"SS_pred": s2["SS_pred"]}} if "SS_pred" in s2 else {}) + arm_row("A0（重み無し）", rA0) + arm_row("B（ラベルの無い走も学習に使う。特徴量は欠損）", rB)
+    def _c(r):
+        return next(iter(r["groups"].values()))["vs_V4"] if r.get("groups") else {}
+
+    cA0, cB = _c(rA0), _c(rB)
+    arm_note = (f"重み無し（A0）は Δwin {_f(cA0.get('Δwin'))}（上限 {_f(cA0.get('win_hi'))}）、ラベルのない走も学習に使う腕 B は {_f(cB.get('Δwin'))}（上限 {_f(cB.get('win_hi'))}）。"
+                "どの腕でも採用基準（上限 &lt; 0）に届かない。腕 B は、特徴量が欠損の走だけ勝率が低い（ラベルの有無が将来を漏らす）ことを学習に使えてしまう一方、検証には欠損が無いので、この偏りで不利に出る（基準の V4 は学習行が多く、勝率 LogLoss が良い）。"
+                if cA0 and cB else "")
     lk_ok = all(v.get("exact") for v in lk.values()) if lk else False
     best1 = min((u for u in s1 if u in UNITS), key=lambda u: s1[u]["vs_V4"]["Δwin"]) if s1 else "-"
     adopted = [u for u, v in s2.items() if v.get("vs_V4", {}).get("採用")]
@@ -510,13 +517,14 @@ def cmd_chapter(a) -> None:
 <p class="muted">対照（ランダムに入れ替えた列）の勝率は {_f(s1.get('SS_all_shuffled', {}).get('vs_V4', {}).get('Δwin'))}、つまり雑音の水準は 0 付近。第 1 段で 22 通りのうち最良を選ぶと、その分だけ良く見える（選択の偏り）。</p>
 <h3>感度分析（第 2 段の窓、p_slow の群）</h3>
 <table><tr><th>腕</th><th>学習行</th><th>V4 基準</th><th>群</th><th>Δwin（上限）</th><th>Δtop2</th><th>Δtop3（上限）</th></tr>{arm_rows}</table>
+<p class="muted">{arm_note}</p>
 <h2>6. p_slow は何を表すか</h2>
 <p>2024-01〜06 の検証行を p_slow の十分位に分けた（下表）。実際の出遅れ率は 2.2% から 55.9% まで開く。V4 は出遅れやすい馬の勝率・複勝率を実際より高く、出遅れにくい馬を低く見積もっている（右 2 列は 実際 / V4 の予測）。この残差を学習し直した効果は、第 1 段の窓では勝率 −0.00073 だったが、第 2 段の窓では CI が 0 をまたいだ（5 節）。</p>
 <table><tr><th>p_slow の十分位</th><th>p_slow 平均</th><th>実際の出遅れ率</th><th>勝率 実 / V4</th><th>複勝率 実 / V4</th></tr>{dec_rows}</table>
 <p class="muted">p_slow と V4 の列の相関（Spearman、上位）: 出走経験の少なさが最大。出遅れやすさは『経験が浅い』ことと強く結びつき、V4 はその大半を既に持つ。</p>
 <table><tr><th>V4 の列</th><th>相関</th></tr>{cor_rows}</table>
 <h2>7. 解釈と次の一手</h2>
-<ul><li>出遅れは馬ごとの癖が強く（偶奇相関 0.60）、着順にも効く（着順 +0.083）。それでも V4 に足した増分は、第 2 段の窓で再現しなかった。V4 は出走経験・位置取り・前段（S3）などを通じて、出遅れやすさの大半を既に持っている。</li>
+<ul><li>出遅れは馬ごとの癖が強く（偶奇相関 0.59）、着順にも効く（着順 +0.083）。それでも V4 に足した増分は、第 2 段の窓で再現しなかった。V4 は出走経験・位置取り・前段（S3）などを通じて、出遅れやすさの大半を既に持っている。</li>
 <li>採用なし → v5 の再学習の材料にはならない。ただし top3 の悪化は無く、第 2 段の p_slow は Δtop3 {_f(s2.get('SS_pred', {}).get('vs_V4', {}).get('Δtop3'))}（上限 {_f(s2.get('SS_pred', {}).get('vs_V4', {}).get('top3_hi'))}）。複勝側の補助として弱い手がかりはある。</li>
 <li>今回の窓は小さく（検証 22,000〜25,000 走）、全員にラベルが揃う期間は 2024 年以降のみ。ラベルが 2025・2026 年も溜まる来年以降は、学習行をすべてラベルありにできるため、重みなしの評価が可能になる。<b>再評価の条件</b>: ラベルが全員に揃う年が増え、重みなしで学習・検証をやり直せるとき。</li>
 <li>運用に載せる場合の設計メモ（採用時のみ）: 出走馬の戦績ページ（horse_race_remarks）を各開催日の結果確定後に取る必要があり（1 開催日約 500 頭、1 頭 1 リクエスト）、騎手・調教師・父・枠のセル別の件数と出遅れ数、馬ごとの履歴を状態として持つ。p_slow モデルは年ごとに学び直す。</li></ul>
