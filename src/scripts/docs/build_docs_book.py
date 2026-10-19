@@ -172,6 +172,8 @@ PARTS: list[Part] = [
           [("course_specific_effects", "コース特注の要因（tp-31）"), ("training_pipeline_decisions", "決定ログ")]),
         C("transport_and_stay", "輸送のありなし（厩舎の拠点×開催場）と滞在（追い切りの場所）で好走率が変わるか（tp-33）。判定できるデータの範囲、V4 の予測に対する残差、年別の再現性、特徴量の増分。", "結果",
           [("course_specific_effects", "コース特注の要因（tp-31）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("growth_curve_weight", "成長曲線（馬体重の変化とパフォーマンス）の特徴量化（tp-39）。馬ごとの『体重が増えると上がる／減ると上がる／無関係』の判別、母集団の成長曲線（性別×年齢×季節×馬格）と履歴の浅い馬への適用、補正ポイントの V4 への増分、megu v3a の版の記録。", "結果",
+          [("lap_groups_and_trainer_stats", "追い切りのラップ種別（tp-35）"), ("training_pipeline_decisions", "決定ログ")]),
         C("lap_groups_and_trainer_stats", "追い切りのラップ種別（A1〜B3）と、調教師別・コース別・前週土日の坂路時計の成績（tp-35）。1F ごとのラップに直せる割合と分布、傾向の再現性、V4 への増分、TL_A 再生成の効果。", "結果",
           [("rest_and_interval", "休養明け・レース間隔（tp-34）"), ("training_pipeline_decisions", "決定ログ")]),
         C("slow_start_real_label", "出遅れ率（実ラベル版）。戦績ページの備考『出遅』を実ラベルにした馬・騎手・調教師・枠・血統の出遅れ率と出遅れ確率（p_slow）。ラベルの被覆の偏り（ラベルの有無が将来の情報になる）とその対処、V4 全体への増分（第 2 段で再現せず不採用）、先読み検査。", "結果",
