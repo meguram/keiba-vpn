@@ -72,13 +72,13 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a00191f,Slewpy,no_data,1980,,,https://sporthorse-data.com/pedigree/slewpy,2026-10-19,ユーザー確認: 記載なし
 000a00181a,Private Account,adopted,1976,4,26,https://www.wikidata.org/wiki/Q7246040 ; https://en.wikipedia.org/wiki/Private_Account,2026-10-17,英語版 Wikipedia 冒頭文
 000a00167b,Majestic Light,no_data,1973,,,https://sporthorse-data.com/pedigree/majestic-light,2026-10-19,ユーザー確認: 記載なし
-000a001dbb,Runaway Groom,no_data,1979,,,https://www.wikidata.org/wiki/Q7379652 ; https://en.wikipedia.org/wiki/Runaway_Groom,2026-10-17,
+000a001dbb,Runaway Groom,adopted,1979,4,11,https://sporthorse-data.com/pedigree/runaway-groom,2026-10-19,ユーザーがブラウザで目視確認
 000a00fb8e,Harlan (米),adopted,1989,3,2,https://www.wikidata.org/wiki/Q107552028,2026-10-19,Wikidata(参照付き)（Wikidata 一括照会）
-000a0103b9,ヨハネスブルグ,no_data,1999,,,,2026-10-17,
+000a0103b9,ヨハネスブルグ,adopted,1999,2,23,https://sporthorse-data.com/pedigree/johannesburg,2026-10-19,ユーザーがブラウザで目視確認
 000a01176a,パイロPyro(米),adopted,2005,2,19,https://en.wikipedia.org/wiki/Pyro_%28horse%29 ; https://ja.wikipedia.org/wiki/%E3%83%91%E3%82%A4%E3%83%AD,2026-10-17,英語版 Wikipedia 冒頭文
-000a00fdb3,Old Trieste,no_data,1995,,,https://www.wikidata.org/wiki/Q7085330 ; https://en.wikipedia.org/wiki/Old_Trieste,2026-10-17,
-000a001e7d,Carson City,no_data,1987,,,,2026-10-17,
-000a00fa4c,Cee's Tizzy,no_data,1987,,,,2026-10-17,
+000a00fdb3,Old Trieste,adopted,1995,3,2,https://sporthorse-data.com/pedigree/old-trieste,2026-10-19,ユーザーがブラウザで目視確認
+000a001e7d,Carson City,adopted,1987,4,4,https://sporthorse-data.com/pedigree/carson-city,2026-10-19,ユーザーがブラウザで目視確認
+000a00fa4c,Cee's Tizzy,adopted,1987,4,21,https://sporthorse-data.com/pedigree/cees-tizzy,2026-10-19,ユーザーがブラウザで目視確認
 000a010651,Notebook,no_data,1985,,,,2026-10-17,
 000a001f0b,Acatenango,no_data,1982,,,https://www.wikidata.org/wiki/Q338164 ; https://en.wikipedia.org/wiki/Acatenango_%28horse%29,2026-10-17,
 000a0019a3,Phone Trick,no_data,1982,,,,2026-10-17,

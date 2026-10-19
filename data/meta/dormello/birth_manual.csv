@@ -292,3 +292,8 @@ horse_id,name,birth_year,birth_month,birth_day,source_url,note
 000a0000e3,Deploy,1987,5,15,https://sporthorse-data.com/pedigree/deploy,ユーザーがブラウザで目視確認
 000a002326,Orpen,1996,5,20,https://sporthorse-data.com/pedigree/orpen,ユーザーがブラウザで目視確認
 000a001fee,General Meeting,1988,4,3,https://sporthorse-data.com/pedigree/general-meeting,ユーザーがブラウザで目視確認
+000a001dbb,Runaway Groom,1979,4,11,https://sporthorse-data.com/pedigree/runaway-groom,ユーザーがブラウザで目視確認
+000a0103b9,ヨハネスブルグ,1999,2,23,https://sporthorse-data.com/pedigree/johannesburg,ユーザーがブラウザで目視確認
+000a00fdb3,Old Trieste,1995,3,2,https://sporthorse-data.com/pedigree/old-trieste,ユーザーがブラウザで目視確認
+000a001e7d,Carson City,1987,4,4,https://sporthorse-data.com/pedigree/carson-city,ユーザーがブラウザで目視確認
+000a00fa4c,Cee's Tizzy,1987,4,21,https://sporthorse-data.com/pedigree/cees-tizzy,ユーザーがブラウザで目視確認
