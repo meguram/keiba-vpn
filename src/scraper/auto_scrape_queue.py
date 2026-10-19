@@ -1025,7 +1025,7 @@ def task_raceday_result_runner() -> None:
 
 
 def task_raceday_weight_runner() -> None:
-    """馬体重の検知ランナー（cron には登録しない。手動または起動スクリプトで開始する）。
+    """馬体重の検知ランナー（stg ホストの cron で毎朝 08:00 JST に起動。開催日以外は見送る）。
 
     各レースの T-65〜T-30 に出馬表（race_shutuba）を ``KEIBA_WEIGHT_WATCH_POLL_SEC``（既定 90 秒）間隔で取り直し、
     9 割以上の馬に馬体重が入ったら推論モードで特徴量を作る（``KEIBA_WEIGHT_TRIGGER_MODE=predict`` なら既存の予測も起動）。

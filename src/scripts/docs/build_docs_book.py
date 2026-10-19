@@ -107,8 +107,10 @@ PARTS: list[Part] = [
     ]),
     Part("取得と運用", "スクレイピングの設計、cron、SLA、API の入口。", [
         C("scraper_architecture", "JRA 開催スケジュールに連動した自動スクレイピングの設計。タスク種別・実行タイミング・取得対象・ストレージ構成。", "設計", src="html/operations/scraper_architecture.html"),
+        C("raceday_prediction_workflow", "毎レースの予測出力までのワークフロー（cron 設計）。前日夕方〜発走前の時系列、馬体重検知から予測の保存まで、影モードと切り替え手順、結果確定側、確認項目と落とし穴。", "運用", src="html/operations/raceday_prediction_workflow.html",
+          see=[("cron_schedule", "cron の登録内容"), ("data_flow_schedule", "データごとの流れ")]),
         C("cron_schedule", "cron の登録内容を役割ごとにグループ分けしたもの（時刻は JST）。ホスト実測の稼働状況と、確認済みの問題点。", "運用", src="html/operations/cron_schedule.html",
-          see=[("data_flow_schedule", "データごとの流れ")]),
+          see=[("data_flow_schedule", "データごとの流れ"), ("raceday_prediction_workflow", "開催日の予測までの流れ")]),
         C("scraping_sla", "運用 SLA（品質保証基準）と今後の目標（レース前の AI 予測）に向けた要件・現状ギャップ。スクレイピング自動化と予測の処理の流れ。", "運用", src="html/operations/scraping_sla.html"),
         C("local_dataset_endpoints", "src/api/app.py のエンドポイントのうち、ローカルのデータセットを参照するものの一覧。", "参照", src="html/operations/local_dataset_endpoints.html"),
     ]),
@@ -205,6 +207,8 @@ PARTS: list[Part] = [
     Part("オッズと馬券", "オッズの予測、複合馬券の確率、バックテストと馬券推奨の設計。", [
         C("final_odds_model", "最終オッズ予測モデル。発走前のデータから単勝・複勝オッズを推定する LightGBM 3 ヘッドモデルの設計・学習・推論フロー。", "設計"),
         C("exotic_bet_probabilities", "馬連・ワイド・馬単・3 連複の的中確率を、勝率・連対率・複勝率から一貫して計算するモデル（割引 Harville）。", "設計"),
+        C("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）。構造の全数調査、モデルと市場のずれ（Benter 混合）、組合せ券、強化学習（リーグ戦・批評役）、多重比較の補正、WIN5 のデータ有無、2026 年での最終評価。", "結果",
+          [("exotic_bet_probabilities", "組合せ券の確率の作り方"), ("modeling_experiment_report", "強化学習（tp-08）の結果")]),
         C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",
           note="safe_ev を前提にした設計。tp-08 の実装は Benter ブレンドで、safe_ev は使っていない。",
           now=[("modeling_experiment_report", "tp-08 の結果")]),

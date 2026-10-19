@@ -16,6 +16,7 @@ td.tbd { background:#2a2410; border:1px dashed var(--warn); min-width:64px; } td
 </style></head><body><main>
 <h1>データの収集〜加工〜統合フロー（cron 時刻つき）</h1>
 <p class="muted">時刻はすべて <b>JST</b>。cron の登録内容（scripts/cron/setup_all_cron.sh show）から生成: 2026-10-16 17:06。再生成: <code>python -m src.scripts.docs.build_data_flow_html</code>。cron の一覧は <a href="../../operations/cron_schedule.html">cron 登録内容</a>、特徴量とモデルの設計は <a href="feature_strategy_tp03_tp04.html">特徴量戦略書</a>。</p>
+<div class="box"><b>開催日の予測までの流れは別章が最新</b>　馬体重ランナー（08:00 JST）による予測、v4 の影モード、サービング状態の事前計算（07:35）、確定結果の橋渡しなどは、<a href="../../operations/raceday_prediction_workflow.html">毎レースの予測出力までのワークフロー</a>に書いた（2026-10-19）。この図の時刻は生成時点の cron の写しで、ホストの crontab とずれることがある。</div>
 <div class="box legend"><b>読み方</b>　左から「データ → 取得するジョブと時刻 → 保存先 → 加工するジョブと時刻 → 統合・利用」。<span style="color:#ffd479">時刻 黄色</span> が cron の発生時刻。右端の線の色は統合先（<span style="color:#4f8bff">■ 学習（手動・ノートブック）</span><span style="color:#34d399">■ 履歴特徴量の蓄積</span><span style="color:#fb923c">■ 当日の推論（特徴量づくり）</span><span style="color:#c084fc">■ 期待値・推奨馬券（LayerB）</span>)。<br>cron で動くのは取得と、一部の加工（flat 表・履歴特徴量の蓄積）まで。<b>学習（tp-01〜tp-07）は手動</b>で、cron には載っていない。</div>
 <div class="box tbd-note"><b>処理時間は未計測（空欄）</b>　各工程の処理時間（ダウンタイム）は<b>まだ計測しておらず、空欄にしてある</b>。図の黄色い破線の枠と、一覧表の「処理時間」列が記入欄。計測したら <code>DURATIONS</code>（<code>src/scripts/docs/build_data_flow_html.py</code>）に書いて再生成する。<b>工程の分け方・時刻・処理時間は今後変更する可能性がある</b>（この図は現時点の暫定版）。</div>
 <h2>1. データごとの流れ</h2>

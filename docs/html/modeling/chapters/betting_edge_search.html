@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>馬券で回収率 100% を超える余地の探索（tp-36）— keiba-vpn</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --code-bg:#0b1428; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+* { box-sizing: border-box; }
+body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.85; font-size: 15px; padding: 40px 56px 96px; max-width: 980px; margin: 0 auto; }
+code, pre { font-family: "JetBrains Mono", ui-monospace, monospace; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; overflow-x: auto; font-size: 13px; line-height: 1.7; }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+pre code { background: none; padding: 0; }
+a { color: var(--accent-2); }
+h1 { font-size: 26px; margin: 0 0 8px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 24px 0 8px; color: var(--accent-2); }
+.lead { color: var(--muted); margin-bottom: 28px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0 18px; font-size: 13.5px; background: var(--panel); }
+th, td { border: 1px solid var(--border); padding: 7px 12px; text-align: left; vertical-align: top; }
+th { background: #1b2a4d; } td.num { text-align: right; font-family: "JetBrains Mono", monospace; }
+.note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 14px; }
+.ok { border-left-color: var(--ok); } .bad { border-left-color: var(--bad); }
+.muted { color: var(--muted); font-size: 13px; }
+.pos { color: var(--ok); } .neg { color: var(--bad); }
+</style>
+</head>
+<body>
+<a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>馬券で回収率 100% を超える余地の探索（tp-36）</h1>
+<p class="lead">「世間には回収率 100% を超える予想家がいる。やり方はあるはず」という問いに、構造の全数調査・モデルと市場のずれ・組合せ券・強化学習・多重比較の補正で答える。実装は <code>src/scripts/data/tp36_*.py</code>、数値の出力は <code>data/local/modeling/betting/tp36/</code>。確率モデルは v4（勝率の対数損失 test2025 0.20740）。</p>
+
+<h2>1. 結論</h2>
+<ul>
+  <li><strong>構造だけでは勝てない</strong>。人気・オッズ・条件のどの帯を均等に買っても、区間下限が 100% に届くセルは無い（最高 88.7%）。控除率（単勝・複勝 20%、馬連・ワイド 22.5%、馬単・3連複 25%、3連単 27.5%）は、人気の偏り（favorite–longshot bias）では取り返せない。</li>
+  <li><strong>市場なしのモデル単体も勝てない</strong>。v4 の確率に確定オッズを掛けた EV で選んでも、単勝 EV≥1.5 で 100.6%（88.9〜112.8）。モデルは市場の情報量に及ばない（勝者の対数損失 モデル 1.952 / 市場 1.906）。</li>
+  <li><strong>市場とモデルを混ぜる（Benter 型）と、EV の高い側で 100% を超える</strong>。混合の勝者対数損失は 1.893 で市場より良い。単勝 EV≥1.2 は 159%（97.6〜241.7, 3 年とも 138〜173%）。ただし<strong>点数が 375 と少なく、上位 3 的中を除くと 106%</strong>。複数の方策を試した補正（Reality Check）後の p 値は 0.053（混合の 10 通り）で、5% 有意に届かない。</li>
+  <li><strong>強化学習は固定ルールに勝てない</strong>。単一エージェント・リーグ戦（集団ベースの進化）・乗法的重み・批評役のどれも、walk-forward の評価年で 100% を超えなかった。学習に使える年が 1〜2 年しかなく、「賭けない」が最適解に収束する。</li>
+  <li><strong>馬連・馬単は EV≥2.0 で約 102〜105%</strong>（的中率 0.2〜0.4%）だが区間下限は 84〜87%。ワイド・複勝は 100% に届かない。</li>
+  <li>2026 年の未使用データでの最終評価は §9。<strong>確定オッズでの評価である点が最大の留保</strong>（購入時点のオッズは別の値）。実オッズ（T-60/T-15）の蓄積は 2026-10-17 から始まったばかりで、再検証は蓄積後。</li>
+</ul>
+
+<h2>2. 前提と注意</h2>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>オッズ</td><td>2020〜2025 年は<strong>締切後の確定オッズ</strong>。購入時点（T-60/T-15）の値ではない。判断用オッズに誤差（対数正規 σ=0.05〜0.20）を足し、精算は確定オッズで行う感度実験を §4 に載せた。</td></tr>
+<tr><td>確率</td><td>2022〜2024 年は v4 の leave-one-year-out、2025 年は bundle_v4_2024 の test 予測、2026 年は bundle_v4_2025 をその日より前の履歴だけで推論。市場オッズは M1 の特徴量に入れていない。</td></tr>
+<tr><td>混合</td><td>p ∝ p_model<sup>a</sup> · q_market<sup>b</sup>。a, b は<strong>評価年より前の年</strong>の勝者の条件付き対数尤度で当てはめ（a=0.26〜0.30, b=0.78〜0.83）。<strong>市場込みの確率は市場なしと分けて報告する</strong>（混合はオッズを使うため、推論時にオッズが要る）。</td></tr>
+<tr><td>区間</td><td>回収率の 95% 区間はレース単位のブートストラップ。多数の方策を試した族の補正は White の Reality Check（<code>tp36_rc.py</code>）。</td></tr>
+<tr><td>除外</td><td>払戻が曖昧・未解析のレース、取消馬がいてオッズが欠けるレース、確率の合計が 0.97〜1.03 を外れるレース。3連複・3連単は払戻の人気が 2024 年以降欠損のため 2020〜2023 年のみ。</td></tr>
+</table>
+
+<h2>3. 構造的な歪みの全数調査（モデルなし・均等買い）</h2>
+<p>1 点 100 円の均等買い。人気（組合せなら組合せの人気）帯別の回収率。単勝・複勝・馬連・ワイド・馬単・3連複・3連単を、年別と条件別（芝/ダート・距離・頭数・クラス・場・馬場）にも集計した。</p>
+<table>
+<tr><th>券種</th><th>人気 1</th><th>人気 2〜5 付近</th><th>人気薄</th><th>最悪帯</th></tr>
+<tr><td>単勝</td><td class="num">79.6%</td><td class="num">75〜80%</td><td class="num">9〜12 位 69.5%</td><td class="num">13 位以下 54.2%、単勝 50 倍以上 58.0%</td></tr>
+<tr><td>複勝</td><td class="num">84.4%</td><td class="num">76〜84%</td><td class="num">9〜12 位 70.1%</td><td class="num">13 位以下 56.1%</td></tr>
+<tr><td>馬連</td><td class="num">81.5%</td><td class="num">77〜79%</td><td class="num">21〜40 位 68.1%</td><td class="num">81 位以降 35.8%</td></tr>
+<tr><td>ワイド</td><td class="num">76.7%</td><td class="num">79%</td><td class="num">21〜40 位 70.6%</td><td class="num">81 位以降 39.5%</td></tr>
+<tr><td>馬単</td><td class="num">76.9%</td><td class="num">75〜78%</td><td class="num">21〜40 位 72.6%</td><td class="num">81 位以降 50.3%</td></tr>
+<tr><td>3連複 (2020〜23)</td><td class="num">75.9%</td><td class="num">75〜77%</td><td class="num">61〜150 位 64.2%</td><td class="num">401〜1000 位 36.5%</td></tr>
+<tr><td>3連単 (2020〜23)</td><td class="num">65.2%</td><td class="num">66〜70%</td><td class="num">61〜150 位 74.8%</td><td class="num">1001 位以降 45.3%</td></tr>
+</table>
+<div class="note">区間下限が 100% に届く帯は 1 つも無い。条件別で最高は「3 勝クラス × 9 番人気以下の単勝」88.7%（71.3〜107.8）で、年別が 51〜127% とばらつく。3連単は中位の組合せ（人気 21〜400 位）が 72〜75% と相対的に高いが、これも控除率（27.5%）を超えない。</div>
+
+<h2>4. モデルと市場のずれ（単勝）</h2>
+<h3>4.1 情報量</h3>
+<table>
+<tr><th>確率</th><th>勝者の対数損失（2023〜2025）</th></tr>
+<tr><td>モデル（v4）</td><td class="num">1.9519</td></tr>
+<tr><td>市場（確定オッズの逆数を正規化）</td><td class="num">1.9061</td></tr>
+<tr><td><strong>Benter 混合（市場込み）</strong></td><td class="num pos">1.8934</td></tr>
+</table>
+<p>モデルは市場より悪い（市場はモデルにない情報、直前の気配・馬体重・パドック・厩舎情報などを含む）が、混合は市場より 0.0127 良く、モデルは市場に足りない独立の情報を持つ。</p>
+
+<h3>4.2 EV のしきい値別の回収率（均等買い）</h3>
+<table>
+<tr><th>方策</th><th>EV≥</th><th>回収率</th><th>95% 区間</th><th>点数</th><th>年別 (2023/24/25)</th></tr>
+<tr><td>混合（市場込み）</td><td class="num">0.85</td><td class="num">101.2%</td><td class="num">95.0〜108.6</td><td class="num">27,803</td><td class="num">100.7 / 101.7 / 101.0</td></tr>
+<tr><td>混合</td><td class="num">0.95</td><td class="num">105.0%</td><td class="num">92.6〜117.6</td><td class="num">8,432</td><td class="num">107.4 / 104.0 / 104.2</td></tr>
+<tr><td>混合</td><td class="num">1.1</td><td class="num">128.9%</td><td class="num">88.7〜167.3</td><td class="num">1,147</td><td class="num">100.3 / 146.7 / 131.3</td></tr>
+<tr><td>混合</td><td class="num">1.2</td><td class="num pos">159.2%</td><td class="num">97.6〜241.7</td><td class="num">375</td><td class="num">138.2 / 173.1 / 167.0</td></tr>
+<tr><td>混合</td><td class="num">1.3</td><td class="num pos">254.0%</td><td class="num">124.5〜425.1</td><td class="num">164</td><td class="num">—</td></tr>
+<tr><td>モデルのみ（市場なし）</td><td class="num">1.0</td><td class="num neg">91.5%</td><td class="num">84.8〜98.6</td><td class="num">45,940</td><td class="num">—</td></tr>
+<tr><td>モデルのみ</td><td class="num">1.5</td><td class="num">100.6%</td><td class="num">88.9〜112.8</td><td class="num">19,900</td><td class="num">—</td></tr>
+<tr><td>市場だけの傾き補正（モデルなし）</td><td class="num">0.9</td><td class="num">100.4%</td><td class="num">79.7〜125.1</td><td class="num">829</td><td class="num">93 / 106 / 104</td></tr>
+</table>
+<p class="muted">回収率が EV に対して<strong>単調に増える</strong>こと（0.85 → 1.3 で 101 → 254%）と、3 年とも同じ向きであることが、偶然でない根拠。一方で EV が高いほど点数が減り、区間は広がる。</p>
+
+<h3>4.3 大穴への依存</h3>
+<table>
+<tr><th>混合 EV≥</th><th>点数</th><th>的中</th><th>回収率</th><th>最大 1 的中を除く</th><th>上位 3 的中を除く</th><th>買い目の中央オッズ</th></tr>
+<tr><td class="num">1.1</td><td class="num">1,147</td><td class="num">81</td><td class="num">128.9%</td><td class="num">119.7%</td><td class="num">104.2%</td><td class="num">29.6 倍</td></tr>
+<tr><td class="num">1.2</td><td class="num">375</td><td class="num">35</td><td class="num">159.2%</td><td class="num">139.4%</td><td class="num">106.1%</td><td class="num">33.5 倍</td></tr>
+<tr><td class="num">1.3</td><td class="num">164</td><td class="num">20</td><td class="num">254.0%</td><td class="num">208.7%</td><td class="num">142.2%</td><td class="num">33.0 倍</td></tr>
+</table>
+<p>EV≥1.2 の買い目は半分以上がオッズ 15 倍超。回収率の水準は上位数件の大穴に左右される（的中の中央オッズは約 8.6 倍で、的中率は約 9%）。</p>
+
+<h3>4.4 購入時点のオッズが確定オッズと違う場合</h3>
+<p>判断用オッズに対数正規の誤差を足して混合を作り直し、払戻は確定オッズで精算した。</p>
+<table>
+<tr><th>誤差 σ</th><th>EV≥0.9</th><th>EV≥1.0</th><th>EV≥1.1</th></tr>
+<tr><td class="num">0.05</td><td class="num">105.2% (96.0〜115.4)</td><td class="num">107.8% (92.5〜125.7)</td><td class="num">124.9% (91.1〜166.7)</td></tr>
+<tr><td class="num">0.10</td><td class="num">101.7% (93.2〜110.7)</td><td class="num">114.2% (97.2〜134.0)</td><td class="num">112.8% (84.8〜142.5)</td></tr>
+<tr><td class="num">0.20</td><td class="num">99.9% (92.0〜107.8)</td><td class="num">106.1% (94.0〜119.1)</td><td class="num">116.3% (97.1〜139.6)</td></tr>
+</table>
+<p class="muted">オッズの誤差があっても傾向は崩れない。ただし誤差が「締切に向けて有利な方へ動く／不利な方へ動く」という系統的なずれを含まない仮定。買った後でオッズが下がる（人気が集まる）なら、実際の回収率はここより低い。</p>
+
+<h3>4.5 Kelly 配分（混合）</h3>
+<table>
+<tr><th>設定</th><th>2023</th><th>2024</th><th>2025</th></tr>
+<tr><td>1/4 Kelly, 1R 上限 5%, EV≥0.95</td><td class="num">資金 1.46 倍 / 下落 14%</td><td class="num">1.28 倍 / 16%</td><td class="num">1.33 倍 / 15%</td></tr>
+<tr><td>1/4 Kelly, 上限 10%, EV≥1.0</td><td class="num">1.80 倍 / 14%</td><td class="num">1.49 倍 / 16%</td><td class="num">1.42 倍 / 15%</td></tr>
+<tr><td>1/2 Kelly, 上限 10%, EV≥1.0</td><td class="num">2.01 倍 / 26%</td><td class="num">1.53 倍 / 30%</td><td class="num">1.65 倍 / 28%</td></tr>
+<tr><td>1/4 Kelly, 上限 10%, EV≥1.1</td><td class="num">1.63 倍 / 14%</td><td class="num">1.66 倍 / 20%</td><td class="num">1.54 倍 / 9%</td></tr>
+</table>
+
+<h2>5. 組合せ券（馬連・ワイド・馬単）</h2>
+<p>v4 の勝率・連対率・複勝率に割引 Harville（<a href="exotic_bet_probabilities.html">馬連・ワイド・3連複の確率モデル</a>）を当てはめ、組合せの的中確率 × 確定オッズ（ワイドは最小と最大の平均）を EV として均等買いした（2023〜2025 年、9,745 レース）。</p>
+<table>
+<tr><th>券種</th><th>確率</th><th>EV≥</th><th>回収率</th><th>95% 区間</th><th>点数</th><th>1 点の的中率</th></tr>
+<tr><td>馬連</td><td>市場なし</td><td class="num">1.5</td><td class="num">90.6%</td><td class="num">79.5〜101.7</td><td class="num">175,433</td><td class="num">0.5%</td></tr>
+<tr><td>馬連</td><td>市場なし</td><td class="num">2.0</td><td class="num">104.9%</td><td class="num">86.6〜121.8</td><td class="num">99,810</td><td class="num">0.4%</td></tr>
+<tr><td>馬単</td><td>市場なし</td><td class="num">2.0</td><td class="num">102.1%</td><td class="num">84.4〜124.8</td><td class="num">200,703</td><td class="num">0.2%</td></tr>
+<tr><td>ワイド</td><td>市場なし</td><td class="num">2.0</td><td class="num neg">88.5%</td><td class="num">79.0〜98.4</td><td class="num">78,353</td><td class="num">1.2%</td></tr>
+<tr><td>馬連</td><td>混合</td><td class="num">1.0</td><td class="num neg">77.7%</td><td class="num">69.2〜87.0</td><td class="num">125,641</td><td class="num">1.3%</td></tr>
+<tr><td>馬単</td><td>混合</td><td class="num">1.2</td><td class="num">92.9%</td><td class="num">72.7〜117.5</td><td class="num">98,831</td><td class="num">0.5%</td></tr>
+<tr><td>ワイド</td><td>混合</td><td class="num">1.5</td><td class="num neg">77.7%</td><td class="num">60.5〜96.6</td><td class="num">23,342</td><td class="num">1.5%</td></tr>
+</table>
+<p>市場なしの馬連・馬単は EV が高いほど回収率が増え、EV≥2.0 で 100% 付近になるが、区間下限は 84〜87%。<strong>混合は単勝で当てはめた重みを組合せ市場に流用しているため悪化した</strong>（組合せ市場には組合せ市場の歪みがあり、単勝の重みは合わない）。組合せ券専用の混合重み（組合せのオッズで当てはめ）は今後の課題。的中率は 1 点あたり 0.2〜1.5% で、ポートフォリオの的中率を保つには点数が極端に多くなる。</p>
+
+<h2>6. 多重比較の補正（White の Reality Check）</h2>
+<p>単勝の均等買い 30 通り（混合・市場なし・市場だけの傾き補正 × EV しきい値 10 段階）を一つの族として、「どれも平均利益が 0 以下」という帰無仮説をレース単位ブートストラップ（2,000 回）で検定した。</p>
+<table>
+<tr><th>族</th><th>方策数</th><th>最大 t 値</th><th>p 値</th><th>最良</th></tr>
+<tr><td>全体</td><td class="num">30</td><td class="num">2.04</td><td class="num">0.186</td><td>混合 EV≥1.3</td></tr>
+<tr><td>混合（市場込み）のみ</td><td class="num">10</td><td class="num">2.04</td><td class="num">0.053</td><td>混合 EV≥1.3</td></tr>
+<tr><td>モデルのみ（市場なし）</td><td class="num">10</td><td class="num">0.10</td><td class="num">0.66</td><td>EV≥1.5</td></tr>
+</table>
+<p>混合の高 EV 側は有望だが、複数試したことを補正すると 5% 有意には届かない（p=0.053）。市場なしのモデル単体は有意な利益が全く見えない。</p>
+
+<h2>7. 強化学習による方策探索（単勝）</h2>
+<h3>7.1 設計</h3>
+<ul>
+  <li>環境: 過去のレースの再生。行動 = 各馬への資金割合（レース合計は上限 B 以内、全体を見送ることもできる）。報酬 = レースごとの対数成長 log(1+Σ f<sub>i</sub>(払戻倍率<sub>i</sub>−1))（資金の対数成長 = Kelly 基準）。</li>
+  <li>方策: 各馬の特徴量（モデル/市場の対数確率、対数オッズ、モデル/市場の比、EV（混合含む）、複勝率、人気順位、頭数）を入力に、線形のスキップ接続（初期値は基準ルール＝混合の EV）+ 小さな NN で馬ごとのスコアを出し、見送りロジットとの softmax で資金割合にする。</li>
+  <li><strong>リーグ戦（自己対戦・集団ベースの進化）</strong>: 24 本の方策（隠れ層・学習率・上限 B・分散報酬・リスク罰則・見送り可否のハイパーパラメータを乱数で選ぶ）が同じ検証年で競い、下位 25% を上位の摂動コピーに入れ替える（5 世代）。<strong>乗法的重み</strong>（Exp3 型）で上位 6 本を検証年のレース順に更新して混合。</li>
+  <li><strong>批評役</strong>: 学習年の「馬ごとの実現払戻」を LightGBM で予測し、方策と批評役が両方賛成した馬だけ買う（勝者の呪い対策）。</li>
+  <li><strong>多目的</strong>: リーグの上位方策それぞれの (回収率, 的中率, 最大下落, 資金倍率) を出力（<code>league_members_test</code>）。</li>
+  <li>リーク防止: 評価年 Y について、学習 = Y−2 年以前、方策の選択（リーグ戦・重み）= Y−1 年、評価 = Y 年。特徴量の標準化も学習年だけで当てはめる（<code>tests/pipeline/test_tp36_rl.py</code>）。</li>
+  <li>訓練した方策の本数: 110（2024 年・2025 年の評価の合計。他に単一エージェント 2、批評役の併用 12、固定ルール 8）。補正済み区間は 0.125% 点（約 20 通りの比較の Bonferroni 相当）で併記した。</li>
+</ul>
+<h3>7.2 結果（評価年ごと）</h3>
+<table>
+<tr><th>方策</th><th>2024 回収率 (95%)</th><th>2025 回収率 (95%)</th><th>備考</th></tr>
+<tr><td>固定ルール: 混合 EV≥0.95, B=5%</td><td class="num">119.5% (86.1〜156.5)</td><td class="num">112.7% (86.7〜141.2)</td><td>EV−0.9 に比例した割合。的中率 11〜13%</td></tr>
+<tr><td>固定ルール: 混合 EV≥1.0, B=5%</td><td class="num">132.6% (82.0〜189.1)</td><td class="num">118.1% (77.6〜164.0)</td><td>的中率 10%</td></tr>
+<tr><td>固定ルール: 混合 EV≥1.05, B=10%</td><td class="num">136.4% (68.9〜215.1)</td><td class="num">154.7% (81.3〜241.2)</td><td>的中率 9〜11%</td></tr>
+<tr><td>対照: 1 番人気に常に 5%</td><td class="num neg">81.5%</td><td class="num neg">78.1%</td><td>的中率 33〜35%、資金はほぼ尽きる</td></tr>
+<tr><td>単一エージェント（全レースを賭ける）</td><td class="num neg">87.8%</td><td class="num neg">88.3%</td><td>資金はほぼ尽きる</td></tr>
+<tr><td>リーグ戦 最上位</td><td class="num">見送りに収束（賭け 0 点）</td><td class="num">97.0% (71.5〜127.3)</td><td>2025 年は的中率 2%、最大下落 47%</td></tr>
+<tr><td>リーグ戦 + 乗法的重み</td><td class="num">見送りに収束</td><td class="num">98.9% (78.3〜122.4)</td><td></td></tr>
+<tr><td>リーグ最上位 × 批評役 ≥0.9</td><td class="num">見送り</td><td class="num">100.9% (59.4〜150.6)</td><td>点数少</td></tr>
+<tr><td>乗法的重み × 批評役 ≥0.9</td><td class="num">見送り</td><td class="num">108.3% (68.4〜155.9)</td><td>点数少</td></tr>
+</table>
+<div class="note"><strong>強化学習は固定ルールに勝てない。</strong>2024 年（学習は 2022 年のみ＝約 3,300 レース）は全方策が「賭けない」に収束した。2025 年（学習 2022〜2023 年）でも、最良の学習方策は 97〜108% で区間下限は 60〜78%。固定ルール（混合の EV に比例）は 113〜155% と高いが、区間下限は 69〜87% で、補正後は有意でない。原因は<strong>学習に使えるレース数の少なさ</strong>（勝ち馬 1 頭、的中する大穴は年に数十件）で、方策の自由度を増やすほど過学習し、「賭けない」が最適解になる。</div>
+
+<h2>8. プール構造（WIN5・キャリーオーバー）と配当の歪み</h2>
+<ul>
+  <li><strong>WIN5</strong>: 本リポジトリに<strong>WIN5 の取得コード・保存カテゴリ・データは存在しない</strong>（<code>src</code> と要件文書に該当なし）。キャリーオーバー（持ち越し）が出ると還元率が 70% を超えるため期待値が上がる構造的な歪みの候補だが、検証できない。今回はスクレイピングを新設しない。</li>
+  <li>取得の計画（承認後）: 対象 = JRA の WIN5 対象 5 レース・的中口数・払戻・売上・キャリーオーバー額（開催週ごとに 1 件、2020 年以降 約 300 件）。確率 = 5 レースの勝率の積（v4 勝率 × 混合）、買い目 = 各レースの候補を絞った組合せ（点数 × 100 円）。判断 = キャリーオーバー額と売上から実効還元率を出し、持ち越しがある週だけ参加。これは週 1 回・総数 300 件程度で検証の統計力が低く、持ち越しのある週はさらに少ない。</li>
+  <li>馬単・3連単の大穴側の歪み（§3）: 3連単は人気 21〜400 位の中位が 72〜75% と、3連複の同じ帯（47〜64%）より高いが、控除率 27.5% を超えない。</li>
+</ul>
+
+<!--2026-->
+
+<h2>10. 今後</h2>
+<ul>
+  <li><strong>購入時点のオッズでの再検証</strong>: T-60/T-15 の実スナップショット（2026-10-17 から蓄積開始）が数か月分たまってから、混合の EV≥1.0〜1.2 を再評価する。確定オッズと購入時点の差が最大の不確実性。</li>
+  <li>組合せ券専用の混合重み（組合せ市場のオッズで当てはめ）と、組合せ券の確率の較正（<code>validate_exotic_probabilities</code>）。</li>
+  <li>強化学習は、学習に使える年を増やしてから再挑戦する（2020〜2021 年の OOF 予測を作る、2026 年以降の実オッズを使うなど）。それまでは固定ルール（混合 EV 比例・Kelly）を方策の基準にする。</li>
+  <li>WIN5 のデータ取得（計画のみ）。</li>
+</ul>
+</body>
+</html>

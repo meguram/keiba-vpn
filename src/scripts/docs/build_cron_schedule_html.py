@@ -26,35 +26,35 @@ DOW = ["日", "月", "火", "水", "木", "金", "土"]
 
 # ジョブのキー → (グループ, 名前, 説明)。キーは run_auto_scrape_logged.sh のタスク名、または下の _job_key が返す名前。
 GROUPS = [
-    ("live", "開催日のリアルタイム取得", "開催日の前日夕方〜当日に、出走表・オッズ・結果・馬場を取りに行く。"),
-    ("refresh", "定期更新・取りこぼしの取り直し", "レース一覧・確定結果・バロメーターなど、公開が遅れるデータの更新と再取得。"),
+    ("live", "開催日の流れ（前日夕方〜当日）", "開催日の前日夕方〜当日に、出走表・オッズ・馬体重・結果・馬場を取りに行き、各レースの予測を出す。通しの流れは「毎レースの予測出力までのワークフロー」の章。"),
+    ("refresh", "定期取得・取りこぼしの取り直し", "レース一覧・確定結果・バロメーター・備考など、公開が遅れるデータの更新と再取得。"),
     ("backfill", "過去データの補填（backfill）", "年度別に、取りこぼした結果・出走表・馬情報を深夜に補う。"),
-    ("prep", "推論・学習用のデータ整備", "特徴量や推論が読むテーブル・統計・DB を更新する。"),
-    ("ops", "保守・監視", "サーバの死活監視、ログの整理、ページ構造の品質チェック。"),
+    ("prep", "特徴量・状態の更新", "特徴量や推論が読むテーブル・統計・状態（サービング用バンドル・キャッシュ）・DB を更新する。"),
+    ("ops", "監視・保守", "サーバの死活監視、ログの整理、ページ構造の品質チェック。"),
 ]
 GCS_NOTE = "GCS（正本）"
 JOBS: dict[str, tuple[str, str, str, str, str]] = {
     # key: (グループ, 名前, 内容, 加工, 保存先)
-    "raceday-eve": ("live", "前日夕方の出馬表・馬柱・追い切り", "翌日が開催日のときだけ動く。枠順・馬柱・追い切り・SmartRC を取得",
+    "raceday-eve": ("live", "前日夕方の出馬表・馬柱・追い切り・SmartRC", "翌日が開催日のときだけ動く（18:00 JST。非開催日は skipped）。枠順・馬柱・追い切り・SmartRC を取得し、続けて、出走馬の調教ページの取り直し（KEIBA_EVE_HORSE_TRAINING）、馬主が未取得の馬の基本情報の取得（KEIBA_EVE_HORSE_PROFILE）、追走難度・想定オッズの事前計算を行う。SmartRC は出走前の値を不変のスナップショット smartrc_prerace として残す（KEIBA_EVE_SMARTRC_SNAPSHOT）",
                     "構造化 + 推定（追走難度・想定オッズ。モデルによる計算結果を保存）",
-                    "GCS: 出馬表・馬柱・追い切り・SmartRC は構造化JSON、追走難度・想定オッズは推定結果のキャッシュ。ローカル: 取得状況 data/local/meta/date_coverage、発走時刻表 data/page_reference/race_day_schedule（ローカルのみ）。DB 同期を起動（直近の開催日では未検証。PostgreSQL は 2026-10-15 時点で起動中）"),
+                    "GCS: race_shutuba・race_shutuba_past・race_oikiri・smartrc_race・horse_training（取り直した記録を既存の記録に統合。空や読めない結果は保存しない）・horse_result（馬主が未取得の馬だけ。既存は上書きしない）・smartrc_prerace（出走前の値。上書きしない）。追走難度・想定オッズは推定結果のキャッシュ。ローカル: 取得状況 data/local/meta/date_coverage、発走時刻表 data/page_reference/race_day_schedule（ローカルのみ）"),
     "raceday-comment": ("live", "厩舎コメント（レース前の厩舎の話）", "前日 20:00 は翌日、07:40 は当日が開催日のときだけ動く。コメントが出ているレースだけ保存し、無いレースは次回に取り直す",
                         "構造化（コメント・評価・聞き手・調教師名）",
                         "GCS: race_trainer_comment（レース後の recent-retry と同じカテゴリ。保存済みより件数が減る更新はしない）"),
     "new-horse-pedigree": ("refresh", "新馬の5世代血統", "今後1週間の出走予定馬のうち血統テーブル(ped_tbl)が無い馬だけを取得。無ければ何もしない",
                            "構造化（5世代表）+ 計算（10世代・ped_tbl の生成）",
                            "GCS: horse_pedigree_5gen。ローカル: data/local/horse_pedigree_5gen・horse_pedigree_10gen、data/local/features/horse/ped_tbl"),
-    "raceday-runner": ("live", "開催日ランナー（オッズ・出馬表）", "開催日のみ常駐。各R 発走60分前にオッズ、15分前に出馬表・オッズ・馬柱などをまとめて取得",
+    "raceday-runner": ("live", "開催日ランナー（オッズ・出馬表）", "開催日のみ常駐（07:30 JST 起動）。各R 発走60分前にオッズ、15分前に出馬表・オッズ・馬柱などをまとめて取得（KEIBA_RACEDAY_DIRECT=1 では、全体のキューを通さず、このランナーが直接取得する）",
                        "構造化のみ（T-15 の予測トリガはモックで保存なし）",
-                       "GCS: 出馬表・オッズ（T-60/T-15 の履歴を同じJSONに保持）・馬柱・追い切り・SmartRC。JRA 馬場はローカル data/page_reference/cushion"),
-    "raceday-result-runner": ("live", "速報結果ランナー", "開催日のみ常駐。各R 発走15分後に速報結果を取得",
-                              "構造化のみ。全R後に結果テーブルの増分追記と馬場速度指数の計算",
-                              "GCS: 速報結果。ローカル: data/page_reference/tables（race_result_flat の増分）、data/analysis/track_speed（馬場速度指数）"),
-    "raceday-weight-runner": ("live", "馬体重の検知ランナー", "各R 発走65〜30分前に出馬表を取り直し、馬体重が揃ったら推論モードで特徴量を作る（予測は起動しない）",
-                              "構造化（出馬表）+ 計算（127特徴量）",
-                              "GCS: 出馬表。ローカルのみ: data/local/inference（特徴量 parquet・予測時点の出馬表スナップショット・イベント記録。GCS には上げない）"),
-    "raceday-evening": ("live", "開催日夕方の結果・確定オッズ", "速報結果・確定オッズ・SmartRC のまとめ取得",
-                        "構造化のみ", "GCS: 速報結果・確定オッズ・SmartRC。ローカル: 取得状況 date_coverage。DB 同期を起動（直近の開催日では未検証。PostgreSQL は 2026-10-15 時点で起動中）"),
+                       "GCS: 出馬表・オッズ（phase=t60/t15 と snapshot_at の履歴を同じJSONに保持）・馬柱・追い切り・SmartRC。JRA 馬場はローカル data/page_reference/cushion"),
+    "raceday-result-runner": ("live", "速報結果ランナー", "開催日のみ常駐（07:30 JST 起動）。各R 発走15分後に速報結果を取得",
+                              "構造化のみ。全R後に結果テーブルの増分追記と馬場速度指数の計算（その日の確定結果が未公開のときは 0 件で見送り＝正常）",
+                              "GCS: 速報結果（race_result_on_time）。ローカル: data/page_reference/tables（race_result_flat の増分）、data/analysis/track_speed（馬場速度指数）"),
+    "raceday-weight-runner": ("live", "馬体重の検知ランナー（予測の出口）", "開催日のみ（08:00 JST 起動。非開催日は skipped）。各R 発走65〜30分前に90秒おきに出馬表を取り直し、9割以上の馬に馬体重が入ったら推論モードで特徴量を作る。KEIBA_V3_SERVING=shadow のときは、v3/v4 のアンサンブルでその場で予測し、ファイルに残す（画面・API・GCS には出さない）。KEIBA_WEIGHT_TRIGGER_MODE=predict だと既存の予測も起動する（現在は使っていない）",
+                              "構造化（出馬表）+ 計算（履歴系の特徴量と、v4 は 1,135 列）+ 予測（影モード）",
+                              "GCS: 出馬表。ローカルのみ: data/local/inference（features/<日>/・predictions_v3/<日>/・snapshots/<日>/・events/<日>.jsonl。GCS には上げない）"),
+    "raceday-evening": ("live", "開催日夕方の結果・確定オッズ", "速報結果・確定オッズ（phase=final）・馬連などの確定オッズ・SmartRC のまとめ取得（17:30 JST、開催日のみ）。確定オッズは phase=final で履歴化し、T-60/T-15 のスナップショットを上書きしない",
+                        "構造化のみ。速報結果が取れたら馬場速度指数の計算を起動", "GCS: race_result_on_time・race_odds・race_pair_odds・smartrc_race。ローカル: 取得状況 date_coverage。DB 同期を起動"),
     "jra-baba-morning": ("live", "JRA 馬場（クッション値・含水率）", "開催日の朝に10分ごとにポーリング",
                          "構造化（JRA 公式ページを整形したJSON）",
                          "ローカルのみ: data/page_reference/cushion。GCS へは自動では上げない（手動アップロード）"),
@@ -67,17 +67,27 @@ JOBS: dict[str, tuple[str, str, str, str, str]] = {
                          "計算（馬名リスト・成長曲線の集計）", "ローカルのみ: data/calculated_data"),
     "barometer-retry": ("refresh", "バロメーターの取り直し", "公開済みで未取得のものだけを取得（同じレースは12時間以上空け、最大10回まで）",
                         "構造化のみ", "GCS: race_barometer"),
-    "recent-retry": ("refresh", "直近の未取得データの取り直し", "直近21日の確定結果・結果ラップ・タイム指数・厩舎コメントのうち未取得のものを、間隔と回数を制限して取得",
+    "recent-retry": ("refresh", "直近の未取得データの取り直し（確定結果）", "直近21日の確定結果・結果ラップ・タイム指数・厩舎コメントのうち未取得のものを、間隔と回数を制限して取得（06:10 と 19:40 JST）。確定結果（db.netkeiba.com の race_result）は数日遅れで公開されるため、公開前は未取得のまま残る（実測: 2026-10-19 朝の時点で 10-17・10-18 の 72 レースが未取得）",
                      "構造化のみ", "GCS: race_result・race_result_lap・race_index・race_trainer_comment。ローカル: 試行状態 data/local/meta/recent_retry_state.json"),
     "backfill": ("backfill", "backfill", "",
                  "構造化のみ", "GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage"),
-    "export_tables_daily": ("prep", "履歴テーブルの増分更新", "推論が読む race_result_flat などを当年分だけ更新",
-                            "加工（JSON を表に平坦化。1行=1馬の _flat と 1行=1レースの _race の Parquet）", "ローカルのみ: data/page_reference/tables/<年>/"),
-    "feature-accumulate": ("prep", "履歴特徴量の蓄積", "当年分の特徴量（127列）を確定結果から作り直し、推論モードで保存した特徴量とのずれを記録",
+    "export_tables_daily": ("prep", "履歴テーブルの増分更新と、確定結果の橋渡し", "推論が読む race_result_flat などを当年分だけ更新（07:00 JST）。確定結果が未公開のレースは、速報（race_result_on_time）から race_result_flat に行を足して履歴が古くならないようにする（result_source=on_time。確定結果が出たら自動で置き換わる。race_result_race には足さない）。続けてパース監査（parse_audit）とパースのずれ検査（parse_drift）を行う",
+                            "加工（JSON を表に平坦化。1行=1馬の _flat と 1行=1レースの _race の Parquet）", "ローカルのみ: data/page_reference/tables/<年>/、ログ logs/export_tables_daily.log"),
+    "feature-accumulate": ("prep", "履歴特徴量の蓄積とサービング用バンドルの更新", "当年分の特徴量（127列）を確定結果（橋渡しを含む）から作り直し、推論モードで保存した特徴量とのずれを記録（07:40 JST）。作り直したサービング用バンドルを公開する（KEIBA_PUBLISH_SERVING_BUNDLE。既定で有効）",
                            "計算（as-of の履歴特徴量。学習と同じ計算）",
-                           "ローカルのみ: data/local/modeling/feature_store/horse_history（features_<年>.parquet、manifest、skew/<日付>.json）と、小さなメモリのマシン向けのサービング用バンドル serving_bundle（約140MB）。2026年は学習に使わない"),
+                           "ローカルのみ: data/local/modeling/feature_store/horse_history（features_<年>.parquet、manifest、skew/<日付>.json）と、小さなメモリのマシン向けのサービング用バンドル serving_bundle（約140MB）。バンドルは公開用にも書き出す（古い版は整理）。2026年は学習に使わない"),
     "update_jockey_trainer_stats": ("prep", "騎手・調教師統計", "統計テーブルを再生成",
                                     "計算（成績の集計）", "ローカルのみ: data/features/jockey_trainer_stats ほか（Parquet）"),
+    "horse-remarks-daily": ("refresh", "馬の戦績ページの備考・スタート指数の日次増分", "直近14日に走った馬のうち、直近の出走の行が保存済みの戦績に無い馬だけ取り直す（03:00 JST。1日に数百頭）。他のスクレイピングが動いていれば止まるまで待つ作り",
+                            "構造化のみ（備考・スタート指数・追走指数・上がり指数を列名ベースで保存）", "GCS: horse_race_remarks（新カテゴリ。既存の horse_result は上書きしない）"),
+    "serving-state-precompute": ("prep", "v4 サービングの当日キャッシュ", "開催日の朝（07:35 JST）、その日の全レースの馬主系・馬自身の群の特徴量を先に作ってキャッシュする（update_serving_state precompute。出馬表が保存済みの日だけ。開催なしの日は何もしない）",
+                                  "計算（as-of。馬主・馬自身の群）", "ローカルのみ: data/local/inference/state/<日>/（キャッシュ。作れなかった日は最初の馬体重検知で作る＝約1分遅れる）"),
+    "serving-state-profile": ("prep", "v4 サービングの馬主・プロフィール状態", "履歴にいて馬主などが未登録の馬を horse_result から補う（08:10 JST。update_serving_state profile）",
+                               "加工（馬ごとの静的な状態）", "ローカルのみ: data/local/inference/state/profile_dyn.parquet"),
+    "odds-drift-weekly": ("prep", "オッズ変化の週次レポート", "直近28日の T-15 → 最新、T-60 → 最新のオッズ変化率をオッズ帯別に集計（日曜 22:00 JST。読み取りのみ。netkeiba へはアクセスしない）",
+                          "計算（オッズ帯別の変化率）", "ローカル: data/local/meta/odds_drift/weekly/、latest_t15.json・latest_t60.json"),
+    "ensure_monitor": ("ops", "監視ポータルの起動保証", "監視ポータル（Flask）が止まっていれば起動（5分ごと・起動時）", "データなし", "—"),
+    "start_remote_access": ("ops", "リモートアクセスの起動保証", "リモート接続の仕組みを維持（2分ごと・起動時）", "データなし", "—"),
     "sync_pg_from_gcs": ("prep", "GCS → PostgreSQL 同期", "直近7日の増分",
                          "加工（ETL で正規化テーブルへ）", "ホスト上の PostgreSQL（keiba_db_stg。止まっていれば ensure_postgres が起動する）"),
     "ensure_postgres": ("ops", "PostgreSQL の起動保証", "ローカル PostgreSQL が止まっていれば起動（コンテナ再起動で落ちたままになるのを防ぐ）", "データなし", "—"),
@@ -173,6 +183,12 @@ def _job_key(cmd: str) -> tuple[str, str]:
     for k in ("server_watchdog", "rotate_logs", "update_jockey_trainer_stats", "sync_pg_from_gcs", "ensure_postgres", "export_tables_daily", "page_quality_check"):
         if k in cmd:
             return k, ""
+    m = re.search(r"cron_run\.sh\s+(horse-remarks-daily|serving-state-precompute|serving-state-profile|odds-drift-weekly)\b", cmd)
+    if m:
+        return m.group(1), ""
+    for k in ("ensure_monitor", "start_remote_access"):
+        if k in cmd:
+            return k, ""
     return "", ""
 
 
@@ -249,12 +265,13 @@ def last_run_text(key: str, status: dict | None) -> str:
 
 
 KNOWN_ISSUES = [
-    ("2026-10-15", "馬名インデックスは 10-09 の実行が上の dev 設定のためスキップされた。次回は 10-16（金）18:30。"),
+    ("2026-10-19", "確定結果（db.netkeiba.com の race_result）は開催から数日遅れて公開される。公開前は recent-retry が 0 件で見送る（10-19 朝時点で 10-17・10-18 の 72 レースが未取得）。履歴が古くならないよう、export_tables_daily が速報結果（race_result_on_time）を race_result_flat に橋渡しし、確定結果が出たら置き換わる。"),
+    ("2026-10-19", "週次更新の PostgreSQL 取り込みは「No module named 'psycopg2'」で失敗する状態が続いている。ホストの Python には psycopg（v3）はあるが psycopg2 が無い。予測の出力（馬体重検知ランナー・特徴量の蓄積）は PostgreSQL を使わないため影響しない。"),
+    ("2026-10-19", "馬の戦績ページの備考の補填（backfill_horse_race_remarks。約 2 万頭）は、他のスクレイピングが動いている間は待つ作りのため、進みが遅い。日次増分（horse-remarks-daily）とは別に、空いた時間に進める。"),
+    ("2026-10-18", "ログイン後 150 リクエストでセッションを作り直したとき、認証用 cookie を捨てたまま「ログイン済み」と扱っていたため、以降が未ログインで取得されていた（調教ページ 302/450 が空、horse_training 5,261 頭の空保存の原因）。2026-10-17 に修正し、該当の馬は取り直し済み。再発したときは、空の保存件数が急に増えることで気づく（parse_audit）。"),
+    ("2026-10-18", "git pull をホストで実行すると Next.js のビルド（.next-stg）が消える。pull のあとは Next を再起動する（運用メモ参照）。"),
     ("2026-10-15", "レース一覧（daily-race-lists）の状態が partial なのは、数週間先の開催日の一覧が netkeiba にまだ公開されていないため（想定内）。"),
-    ("2026-10-15", "優先処理（2020〜2025 年の取り直し）が動いている間は、見送り対象のジョブ（レース一覧・週次更新・バロメーター・recent-retry・backfill）は動かない（logs/yield_skips.log に記録）。終了したかは、優先処理のプロセスの有無と、見送りの最後の記録時刻で確認する。"),
-    ("2026-10-15", "週次更新の PostgreSQL 取り込みは「No module named 'psycopg2'」で失敗する（最終実行 10-09）。ホストの Python には psycopg（v3）はあるが psycopg2 が無い。PostgreSQL 14 自体は起動している。"),
-    ('2026-10-16', 'JRA 馬場（クッション値）が、2026-03〜09 の開催日 87 日のうち 28 日分抜けている（3 月下旬〜4 月 8 日、5/30-31、8 月 6 日、9 月 8 日）。cron が動いていなかった期間で、JRA の画面は当週分しか出ないため、後から取れない可能性がある（未対応）。'),
-    ('2026-10-16', 'JRA 馬場の含水率が 2026-04 以降まったく取れていなかった。cron が root で動くのに Playwright のブラウザが jovyan 側にしか無く、起動に失敗していたため。/root/.cache/ms-playwright から jovyan 側へのシンボリックリンクで解消（10-16 に起動確認済み。次の開催日 10-17 の朝から取れる想定）。'),
+    ("2026-10-15", "優先処理（2020〜2025 年の取り直し）が動いている間は、見送り対象のジョブ（レース一覧・週次更新・バロメーター・recent-retry・backfill）は動かない（logs/yield_skips.log に記録）。"),
 ]
 
 

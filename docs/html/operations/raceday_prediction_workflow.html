@@ -1,0 +1,116 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>毎レースの予測出力までのワークフロー（cron 設計） — keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:36px 28px 80px; }
+h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:19px; margin:40px 0 4px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+.muted { color:var(--muted); font-size:13px; } .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+table { border-collapse:collapse; width:100%; margin:8px 0 14px; font-size:13.5px; }
+th,td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12px; }
+pre { background:var(--code); border:1px solid var(--border); border-radius:8px; padding:10px 14px; overflow-x:auto; font-size:12.5px; line-height:1.55; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.when { white-space:nowrap; font-weight:600; }
+.ok { color:var(--ok); } .warn { color:var(--warn); }
+</style></head><body><main>
+<h1>毎レースの予測出力までのワークフロー（cron 設計）</h1>
+<p class="muted">時刻はすべて <b>JST</b>（ホストの crontab は UTC で記述）。最終更新: 2026-10-19。ホストの crontab とコードを突き合わせて書いた最新版。個々のジョブの登録内容は「cron 登録内容」の章、データごとの流れは「データ収集〜統合のスケジュール」の章を参照。</p>
+
+<div class="box">
+<b>ゴール</b>：開催日の各レースについて、<b>馬体重の発表後（発走の約 65〜30 分前）に</b>、その日のその馬の特徴量を作り、アンサンブル（v3／v4）で勝率・連対率・複勝率を出す。前日までに準備できるものは先に済ませ、当日の処理時間を短くする。<br>
+<b>現在の状態</b>：予測は<b>影モード（shadow）</b>。結果はファイルに残すだけで、画面・API・GCS には出していない。画面に出すのは <code>predict</code> に切り替えてから（後述）。
+</div>
+
+<h2>1. 全体の流れ</h2>
+<p class="sub">前日夕方 → 当日朝 → 発走前（T-65〜T-15）→ 発走後 → 結果確定、の順。表の「動く条件」が「開催日のみ」のジョブは、非開催日は見送って終了する（失敗ではない）。</p>
+<table>
+<tr><th>時刻</th><th>cron 名</th><th>やること</th><th>読む／書くもの</th><th>動く条件</th></tr>
+<tr><td class="when">前日 18:00</td><td><code>raceday-eve</code></td><td>出馬表・馬柱・追い切り・SmartRC を取得。続けて、出走馬の調教ページの取り直し、馬主が未取得の馬の基本情報の取得、追走難度・想定オッズの事前計算</td><td>GCS: race_shutuba・race_shutuba_past・race_oikiri・smartrc_race・horse_training・horse_result（馬主）・smartrc_prerace</td><td>翌日が開催日のときだけ</td></tr>
+<tr><td class="when">03:00</td><td><code>horse-remarks-daily</code></td><td>直近 14 日に走った馬の戦績ページから備考・スタート指数の増分を取る</td><td>GCS: horse_race_remarks</td><td>毎日（他の取得が動いていれば待つ）</td></tr>
+<tr><td class="when">05:00〜08:50（10 分ごと）</td><td><code>jra-baba-morning</code></td><td>JRA の馬場（クッション値・含水率）の公開を待って取得</td><td>ローカル: data/page_reference/cushion</td><td>開催日の朝</td></tr>
+<tr><td class="when">06:10 / 19:40</td><td><code>recent-retry</code></td><td>直近 21 日の確定結果などの未取得分を取り直す。確定結果は数日遅れで公開される</td><td>GCS: race_result・race_result_lap・race_index</td><td>毎日（優先処理中は見送り）</td></tr>
+<tr><td class="when">07:00</td><td><code>export_tables_daily</code></td><td>当年分の履歴テーブル（race_result_flat など）を増分更新。確定結果が未公開なら速報結果から橋渡し。パース監査とずれ検査</td><td>ローカル: data/page_reference/tables/&lt;年&gt;/</td><td>毎日</td></tr>
+<tr><td class="when">07:30</td><td><code>raceday-runner</code></td><td>各レース発走 60 分前にオッズ、15 分前に出馬表・オッズ・馬柱などをまとめて取得（常駐。全レース済みで終了）</td><td>GCS: race_shutuba・race_odds・race_pair_odds（phase=t60/t15 の履歴）</td><td>開催日のみ</td></tr>
+<tr><td class="when">07:30</td><td><code>raceday-result-runner</code></td><td>各レース発走 15 分後に速報結果を取得。全レース後に結果テーブルの増分と馬場速度指数</td><td>GCS: race_result_on_time</td><td>開催日のみ</td></tr>
+<tr><td class="when">07:35</td><td><code>serving-state-precompute</code></td><td>その日の全レースの、馬主系・馬自身の群の特徴量を先に計算してキャッシュ（v4 用）</td><td>ローカル: data/local/inference/state/&lt;日&gt;/</td><td>出馬表が保存済みの日のみ</td></tr>
+<tr><td class="when">07:40</td><td><code>feature-accumulate</code></td><td>履歴特徴量（127 列）を確定結果（橋渡し含む）から作り直し、サービング用バンドルを公開</td><td>ローカル: data/local/modeling/feature_store/horse_history、serving_bundle</td><td>毎日</td></tr>
+<tr><td class="when">08:00</td><td><code>raceday-weight-runner</code></td><td><b>予測の本体</b>。各レース T-65〜T-30 に出馬表を 90 秒おきに取り直し、馬体重が 9 割以上入ったらそのレースの特徴量を作って予測する（第 2 節）</td><td>読む: 出馬表・履歴バンドル・モデル。書く: data/local/inference（features・predictions_v3・snapshots・events）</td><td>開催日のみ</td></tr>
+<tr><td class="when">08:10</td><td><code>serving-state-profile</code></td><td>馬主などが未登録の馬を horse_result から補う</td><td>ローカル: data/local/inference/state/profile_dyn.parquet</td><td>毎日</td></tr>
+<tr><td class="when">17:30</td><td><code>raceday-evening</code></td><td>速報結果・確定オッズ（phase=final）・SmartRC をまとめて取得</td><td>GCS: race_result_on_time・race_odds・race_pair_odds・smartrc_race</td><td>開催日のみ</td></tr>
+<tr><td class="when">日曜 22:00</td><td><code>odds-drift-weekly</code></td><td>T-15 → 最新、T-60 → 最新のオッズ変化率の週次レポート（読み取りのみ）</td><td>ローカル: data/local/meta/odds_drift</td><td>毎週</td></tr>
+</table>
+<p class="muted">注: 07:35 の事前計算が 07:40 のバンドル更新より先に走る点は、馬体重ランナー（08:00）が読む時点で両方済んでいる前提の並び。前日分の確定結果が公開前でも、橋渡しにより履歴は前日の速報までを含む。</p>
+
+<h2>2. 馬体重ランナーの動き（予測が出るまで）</h2>
+<ol>
+<li><b>起動</b>：08:00 に cron が起動。その日が開催日でなければ何もせず終了（ログに skipped）。</li>
+<li><b>待ち</b>：各レースの発走 65 分前から 30 分前までの窓で、出馬表を 90 秒間隔で取り直す。馬体重の検知は出馬表の取得だけで、ログインは要らない。</li>
+<li><b>起動条件</b>：9 割以上の馬に馬体重が入ったら、そのレースを起動する。窓の終わり（T-30）までに入らなければ、馬体重なしで起動する。</li>
+<li><b>特徴量</b>：出馬表の行を「結果なしの走」として履歴に足し、学習と同じ計算で履歴系の特徴量を作る。v3 は 301 列、v4 は 1,135 列（v3 に馬主系・補助ヘッド・G1/G3 の群・種牡馬×条件を加えたもの）。</li>
+<li><b>予測</b>：サービング用バンドル（<code>V3Serving</code> → v4 は <code>V4Features</code>）で、7 メンバーのアンサンブルを動かし、勝率・連対率・複勝率を出す。</li>
+<li><b>保存</b>：<code>data/local/inference/predictions_v3/&lt;日&gt;/&lt;race_id&gt;.parquet</code>、経過は <code>data/local/inference/events/&lt;日&gt;.jsonl</code>（<code>v3_status</code> など）。</li>
+</ol>
+<p class="sub">各レースの所要時間と、T-30 までに間に合わなかったレースは events に記録される（v4 の実測は 10-24 以降に確認する）。</p>
+
+<h2>3. モード（環境変数）と切り替え</h2>
+<table>
+<tr><th>変数</th><th>値</th><th>意味</th></tr>
+<tr><td><code>KEIBA_V3_SERVING</code></td><td><code>off</code>（既定）</td><td>v3/v4 は動かさない。履歴系の特徴量だけ保存</td></tr>
+<tr><td></td><td><code>shadow</code>（<b>現在</b>）</td><td>アンサンブルで予測し、ファイルに残すだけ。画面・API・GCS には出さない</td></tr>
+<tr><td></td><td><code>predict</code></td><td>予測を保存して画面・API に出す（<code>race_day_workflow.v3_payload</code>）</td></tr>
+<tr><td><code>KEIBA_V3_BUNDLE</code> / <code>KEIBA_V3_STAGE</code></td><td>パス</td><td>使うバンドルと前段モデル。現在は v4（<code>bundle_v4_2025</code> / <code>v4_fixed</code>）。2026-10-18 16:30 に切り替え、<b>次の開催日（10-24 の 08:00）のランナー起動から有効</b></td></tr>
+<tr><td><code>KEIBA_WEIGHT_TRIGGER_MODE</code></td><td>未設定（features）</td><td><code>predict</code> にすると既存の予測も起動する。現在は使っていない</td></tr>
+<tr><td><code>KEIBA_RACEDAY_DIRECT</code></td><td>1</td><td>開催日ランナーが、全体のキューを通さず直接取得する</td></tr>
+<tr><td><code>KEIBA_EVE_HORSE_TRAINING</code> / <code>KEIBA_EVE_HORSE_PROFILE</code> / <code>KEIBA_EVE_SMARTRC_SNAPSHOT</code></td><td>1</td><td>前日夕方に、調教の取り直し／馬主の取得／SmartRC の出走前スナップショットを行う</td></tr>
+</table>
+<h3>バンドルの切り替え手順</h3>
+<pre>bash scripts/server/switch_v3_bundle.sh   # .env を退避（env.before.*）してから KEIBA_V3_BUNDLE / KEIBA_V3_STAGE を書き換える
+# 反映は「次にランナーが起動したとき」。起動済みのランナーは古い設定のまま動く。
+# 戻すときは退避した env.before.* を .env に戻す。</pre>
+<p class="sub"><code>shadow</code> から <code>predict</code> への切り替えは、影モードの結果（較正・的中）を見てから。実測：10-18 の 36 レース（v3）で、予測平均と実際の勝率がほぼ一致、勝率 LogLoss 0.2410（一様予測 0.2768）、1 番手の的中 38.9%・複勝圏 72.2%。</p>
+
+<h2>4. T-60 のチェックリストと欠けたときの扱い</h2>
+<table>
+<tr><th>確認</th><th>欠けたとき</th></tr>
+<tr><td>出馬表（前日夕方・当日朝）が保存されている</td><td>ランナーが取り直す。取れなければそのレースは見送り（events に記録）</td></tr>
+<tr><td>馬体重が 9 割以上</td><td>T-30 まで待ち、足りなければ馬体重なしで起動</td></tr>
+<tr><td>履歴バンドルが前日分まで更新済み（07:40）</td><td>古いバンドルで動く。特徴量のずれは skew レポート（feature_store の skew/&lt;日付&gt;.json）で記録</td></tr>
+<tr><td>馬主・プロフィール（v4）</td><td>前日夕方の取得で未取得の馬は、馬主系の列が欠損のまま（モデルは欠損を許容）。08:10 の profile 更新は次のレースから効く</td></tr>
+<tr><td>サービング状態のキャッシュ（07:35）</td><td>作れていなければ最初の馬体重検知で作る（約 1 分遅れる）</td></tr>
+<tr><td>オッズ（T-60）</td><td>予測そのものには使わない（市場オッズは特徴量にしない方針）。推奨馬券の期待値計算でのみ使う</td></tr>
+</table>
+
+<h2>5. 結果の確定側（翌日の履歴になるまで）</h2>
+<ol>
+<li>発走 15 分後：速報結果（<code>race_result_on_time</code>）。17:30 に夕方のまとめ取得。</li>
+<li>翌朝 07:00：<code>export_tables_daily</code> が履歴テーブルを更新。<b>確定結果は数日遅れで公開される</b>ため、未公開のレースは速報から <code>race_result_flat</code> に橋渡しする（<code>result_source=on_time</code>）。確定結果が出たら自動で置き換わる。<code>race_result_race</code> には橋渡ししない。</li>
+<li>07:40：<code>feature-accumulate</code> が履歴特徴量を作り直し、サービング用バンドルを公開。これで次の開催日の履歴に前の開催日が入る。</li>
+<li>確定結果が公開された後：<code>recent-retry</code>（06:10 / 19:40）が取得し、次回の export で速報の行が確定の行に置き換わる。</li>
+</ol>
+
+<h2>6. 日次・週次の確認</h2>
+<table>
+<tr><th>何を</th><th>どこで</th></tr>
+<tr><td>各ジョブの終了状態</td><td>監視ポータル、ホストの <code>logs/</code>、<code>cron_run.sh</code> のログ</td></tr>
+<tr><td>予測が出たか・何レース出たか</td><td><code>data/local/inference/events/&lt;日&gt;.jsonl</code> の <code>v3_status</code>、<code>predictions_v3/&lt;日&gt;/</code> のファイル数</td></tr>
+<tr><td>取得データの健全性</td><td><code>parse_audit</code> / <code>parse_drift</code>（export_tables_daily の最後）、<code>make data-health</code></td></tr>
+<tr><td>オッズの変化</td><td>日曜の <code>odds-drift-weekly</code></td></tr>
+<tr><td>影モードの精度</td><td>開催日の翌日に、predictions_v3 と確定結果を突き合わせる（較正・LogLoss・的中）</td></tr>
+</table>
+
+<h2>7. 既知の落とし穴</h2>
+<table>
+<tr><th>落とし穴</th><th>内容と対処</th></tr>
+<tr><td>150 リクエストのログイン切れ</td><td>以前は、150 リクエスト後のセッション作り直しで認証 cookie を捨てたまま取得を続け、空のページを保存していた（2026-10-17 に修正済み）。空の保存件数が急に増えたら疑う</td></tr>
+<tr><td>確定結果の公開遅れ</td><td>recent-retry が 0 件になるのは正常。橋渡しで履歴は止まらない（第 5 節）</td></tr>
+<tr><td><code>git pull</code> で <code>.next-stg</code> が消える</td><td>ホストで pull したあとは Next を再起動する（運用メモ参照）</td></tr>
+<tr><td>馬の備考の補填は空き待ち</td><td><code>backfill_horse_race_remarks</code> は他の取得が動いている間は待つ。止まっているように見えても仕様</td></tr>
+<tr><td>netkeiba への同時アクセス</td><td>同時に 1 取得（DEC-023）。他のセッションの取得と重ねない</td></tr>
+<tr><td>バンドル切り替えの反映タイミング</td><td>次にランナーが起動したとき。開催日の朝に切り替えても、起動済みのランナーは古い設定のまま</td></tr>
+<tr><td>週次更新の PostgreSQL 取り込み</td><td>ホストに psycopg2 が無く失敗している。予測の出力には影響しない</td></tr>
+</table>
+<p class="muted">関連：<a href="cron_schedule.html">cron 登録内容</a>／<a href="../modeling/chapters/data_flow_schedule.html">データ収集〜統合のスケジュール</a>。このページが正で、古い運用メモ（docs/operations/ の 2026-10-14 付）は当時の記録。</p>
+</main></body></html>

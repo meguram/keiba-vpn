@@ -4,7 +4,7 @@
 各レースの T-65〜T-30 の窓で出馬表を 1〜2 分間隔で取り直し、9 割以上の馬に馬体重が入った時点で予測を起動する。
 期限（T-30）までに入らなければ、馬体重なし（前走の馬体重で代替）として起動する。
 
-ランナー本体は ``auto_scrape_queue.task_raceday_weight_runner``（``--task raceday-weight-runner``）。cron には登録しない。
+ランナー本体は ``auto_scrape_queue.task_raceday_weight_runner``（``--task raceday-weight-runner``）。stg ホストの cron（23:00 UTC = 08:00 JST）で起動する。
 環境変数:
   KEIBA_WEIGHT_WATCH_START_MIN     窓の開始（発走の何分前から。既定 65）
   KEIBA_WEIGHT_WATCH_DEADLINE_MIN  期限（発走の何分前まで。既定 30）

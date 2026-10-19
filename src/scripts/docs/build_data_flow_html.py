@@ -382,6 +382,7 @@ def render(jobs, source: str) -> str:
          f'<p class="muted">時刻はすべて <b>JST</b>。cron の登録内容（{esc(source)}）から生成: {datetime.now(JST):%Y-%m-%d %H:%M}。'
          "再生成: <code>python -m src.scripts.docs.build_data_flow_html</code>。cron の一覧は <a href=\"../../operations/cron_schedule.html\">cron 登録内容</a>、"
          "特徴量とモデルの設計は <a href=\"feature_strategy_tp03_tp04.html\">特徴量戦略書</a>。</p>",
+         '<div class="box"><b>開催日の予測までの流れは別章が最新</b>　馬体重ランナー（08:00 JST）による予測、v4 の影モード、サービング状態の事前計算（07:35）、確定結果の橋渡しなどは、<a href="../../operations/raceday_prediction_workflow.html">毎レースの予測出力までのワークフロー</a>に書いた（2026-10-19）。この図の時刻は生成時点の cron の写しで、ホストの crontab とずれることがある。</div>',
          '<div class="box legend"><b>読み方</b>　左から「データ → 取得するジョブと時刻 → 保存先 → 加工するジョブと時刻 → 統合・利用」。'
          '<span style="color:#ffd479">時刻 黄色</span> が cron の発生時刻。右端の線の色は統合先（'
          + "".join(f'<span style="color:{c}">■ {esc(t)}</span>' for t, _, c in TARGETS.values()) + ")。"

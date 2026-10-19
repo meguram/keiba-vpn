@@ -1,5 +1,7 @@
 # stg（ホスト PC）のスクレイピング cron: 時間割と取得データの網羅状況（2026-10-14）
 
+> **最新の設計は `docs/html/operations/raceday_prediction_workflow.html`（毎レースの予測出力までのワークフロー）と `docs/html/operations/cron_schedule.html`（cron 登録内容）を参照。このメモは当時（2026-10-14）の記録で、以降の変更（馬体重ランナーの cron 登録、v4 の影モード、確定結果の橋渡し、サービング状態の事前計算など）は反映していない。**
+
 ホスト PC の root の crontab（UTC。以下は JST に換算）。定義の正は `scripts/cron/setup_all_cron.sh`（`install` で再登録）。グループ別の一覧は `docs/html/operations/cron_schedule.html`（`python -m src.scripts.docs.build_cron_schedule_html` で再生成）。バックアップは `data/local/meta/cron_backups/`。
 cron デーモンは稼働中（2026-10-13 23:44 UTC 起動）。ホストの再起動で止まった時間帯のジョブは実行されない点に注意（10/14 07:30 JST の runner は欠落、非開催日のため影響なし）。
 
