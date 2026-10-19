@@ -276,3 +276,4 @@ horse_id,name,birth_year,birth_month,birth_day,source_url,note
 000a000bea,カーネルシンボリ,1971,2,22,https://www.wikidata.org/wiki/Q11295685,Wikidata(参照付き)（Wikidata 一括照会）
 000a000aa7,ヒカルタカイ,1964,4,9,https://www.wikidata.org/wiki/Q11329953,Wikidata(参照付き)（Wikidata 一括照会）
 000a000a40,ハクズイコウ,1961,3,19,https://www.wikidata.org/wiki/Q24877159,Wikidata(参照付き)（Wikidata 一括照会）
+000a000827,カンパラ,1976,2,19,https://www.jbis.jp/horse/0000336378/,"JBIS（Kampala(GB)、Date of Birth Feb 19,1976）。ユーザー提示の URL を 1 回だけ取得"
