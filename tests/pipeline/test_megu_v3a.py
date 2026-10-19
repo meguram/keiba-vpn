@@ -112,4 +112,20 @@ def test_model_roundtrip(tmp_path):
     model = V.build_model(ref, V.V3ASpec(n_iter=1), beta_pace=0.0, meta={"x": 1})
     model.save(tmp_path / "m")
     back = V.V3AModel.load(tmp_path / "m")
-    assert back.spec == model.spec and len(back.par) == len(model.par) and back.class_offsets.keys() == model.class_offsets.keys()
+    assert back.spec == model.spec and len(back.par) == len(model.par) and back.centers.keys() == model.centers.keys()
+
+
+def test_soft_floor_keeps_order_and_compresses_the_slow_tail():
+    x = pd.Series([-60.0, -10.0, 20.0, 30.0, 45.0, 70.0])
+    y = V.soft_floor(x)
+    assert (y.diff().dropna() > 0).all()                 # 順序は保つ
+    assert y.iloc[3] == 30.0 and y.iloc[4] == 45.0       # 30 以上は変えない
+    assert abs(y.iloc[0] - (30 + 0.1 * (-90))) < 1e-9    # 30 未満は傾き 0.1
+
+
+def test_rel_and_abs_are_centered_per_surface():
+    ref = pd.DataFrame(sum([_rows(f"r{k}", day=f"2024-05-0{k + 1}", horse_prefix=f"h{k}") for k in range(5)], []))
+    model = V.build_model(ref, V.V3ASpec(n_iter=2), beta_pace=0.0)
+    out = V.apply_model(ref, model, beta_pace=0.0)
+    s2 = out[out["finish_pos_num"] == 2]
+    assert abs(s2["megu_index_v3a"].mean() - 50.0) < 0.5 and abs(s2["megu_index_v3a_abs"].mean() - 50.0) < 0.5

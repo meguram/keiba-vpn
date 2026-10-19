@@ -8,8 +8,11 @@
   3. ペース: 芝だけに掛ける（ダートの係数は根拠が無い）。上限は ``pace_cap``。
   4. 基準タイム: 世代（2歳/3歳/3歳以上/4歳以上）×クラスを区別し、薄いセルは親のセルに縮約する。
      世代×クラスの季節（月）の水準差は、平滑した月別オフセットで補う。
-  5. 絶対化: クラスをまたいで比べられる指数（昇級馬を同じ軸で追える）を ``megu_index_v3a_abs`` として別に出す。
-     クラス間差は『同一馬・同一年齢』で比べた固定効果から推定する。
+  5. 絶対化: 世代・クラス・季節に依らない単一の基準タイム（1勝クラス・3歳以上の 2 着馬の水準）を使った
+     スピード指数型の指数を ``megu_index_v3a_abs`` として別に出す（成長曲線の縦軸。馬の成長・昇級がそのまま見える）。
+     ``megu_index_v3a`` は『同世代・同クラスの 2 着馬を 50 とする相対指数』（世代×クラス×月の水準差を引く）。
+  どちらも、基準期間の 2 着馬（相対）／基準クラスの 2 着馬（絶対）が面ごとに平均 50 になるよう、面別の定数で中心を合わせる
+  （馬場差を同日他レースから作ると指数の水準が一定の定数にずれるため）。
 
 基準タイム・月別オフセット・クラスオフセットは「基準期間」のデータから作ってファイルに保存し、日次でも同じ値を使う
 （将来年にその年の結果から自己推定した値を使わない）。馬場差は同日のレースだけから作るので、日次でも再計算でも同じ値になる。
@@ -28,13 +31,15 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 V3A_MODEL_VERSION = "v3a"
-V3A_VERSION_LABEL = "v3a-w55-loro-genpar"
+V3A_VERSION_LABEL = "v3a-w55-loro-genpar-abs"
 BASE_INDEX = 50.0
 POINTS_PER_SEC = 10.0
-CLIP_MIN, CLIP_MAX = 0.0, 100.0
+CLIP_MIN, CLIP_MAX = -30.0, 130.0   # 表示・集計用の丸め。上限側は実際には 80 前後までしか出ない。下側（大敗）の長い尾だけを切る
+FEAT_LO, FEAT_K = 30.0, 0.1         # 予測用: 30 未満は傾き 0.1 に圧縮（大敗の差は次走予測に効かないため。順序は保つ）
 
 V3A_COLUMNS = [
     "megu_index_v3a", "megu_index_v3a_robust", "megu_index_v3a_abs", "megu_index_v3a_abs_robust",
+    "megu_index_v3a_feat", "megu_index_v3a_abs_feat",
     "megu_v3a_status", "megu_v3a_low_confidence", "megu_v3a_version",
     "v3a_track_sec", "v3a_track_src", "v3a_par_sec", "v3a_par_level", "v3a_par_n", "v3a_corrected_sec",
 ]
@@ -56,12 +61,13 @@ class V3ASpec:
     pace_turf_only: bool = True
     loro_min_other_races: int = 2  # 馬場差を作るのに必要な『同日・同場・同面の他レース』の数
     loro_min_horses: int = 6       # 馬場差の推定に使うレースの最小頭数
-    min_par_n: int = 30            # これ未満のセルは low_confidence
+    min_par_n: int = 15            # これ未満のセルは low_confidence
     shrink_k: float = 30.0         # 基準タイムの親セルへの縮約の強さ
     month_smooth: int = 3          # 月別オフセットの移動平均の窓
     month_shrink_k: float = 30.0
     n_iter: int = 3                # 基準タイムと馬場差の往復回数
-    abs_min_runs: int = 3          # 絶対化の固定効果推定に使う馬の最小走数
+    abs_ref_gen: str = "3歳以上"    # 絶対指数の基準（この世代・クラスの 2 着馬が 50）
+    abs_ref_cls: str = "1勝"
 
 
 @dataclass
@@ -69,7 +75,7 @@ class V3AModel:
     spec: V3ASpec
     par: pd.DataFrame                      # level, surface, distance, direction, gen, cls, mean, n, par
     month_offsets: pd.DataFrame            # gen, cls, month, off_pts
-    class_offsets: dict[str, float]        # cls -> gamma（相対指数が絶対指数より低く出る分。abs = rel − gamma）
+    centers: dict[str, dict[str, float]]   # {"rel": {面: 定数}, "abs": {面: 定数}}（指数から引く中心合わせの定数）
     meta: dict = field(default_factory=dict)
 
     # ── 保存・読込 ───────────────────────────────────────────
@@ -79,7 +85,7 @@ class V3AModel:
         (d / "spec.json").write_text(json.dumps(asdict(self.spec), ensure_ascii=False, indent=1))
         self.par.to_csv(d / "par.csv", index=False)
         self.month_offsets.to_csv(d / "month_offsets.csv", index=False)
-        (d / "class_offsets.json").write_text(json.dumps(self.class_offsets, ensure_ascii=False, indent=1))
+        (d / "centers.json").write_text(json.dumps(self.centers, ensure_ascii=False, indent=1))
         (d / "meta.json").write_text(json.dumps(self.meta, ensure_ascii=False, indent=1, default=str))
 
     @classmethod
@@ -94,12 +100,20 @@ class V3AModel:
             spec=spec,
             par=par,
             month_offsets=pd.read_csv(d / "month_offsets.csv"),
-            class_offsets=json.loads((d / "class_offsets.json").read_text()),
+            centers=json.loads((d / "centers.json").read_text()),
             meta=json.loads((d / "meta.json").read_text()) if (d / "meta.json").exists() else {},
         )
 
 
 # ── 区分 ──────────────────────────────────────────────────────
+def soft_floor(x: pd.Series, lo: float = FEAT_LO, k: float = FEAT_K) -> pd.Series:
+    """lo 未満を傾き k で圧縮する（順序は保つ）。予測用の特徴量向け。"""
+    y = x.copy()
+    m = x < lo
+    y[m] = lo + k * (x[m] - lo)
+    return y
+
+
 def gen_of(race_class) -> str:
     s = str(race_class or "")
     if "２歳" in s or "2歳" in s:
@@ -280,40 +294,38 @@ def _month_off_series(w: pd.DataFrame, mo: pd.DataFrame) -> pd.Series:
     return m["off_pts"].fillna(0.0)
 
 
-def _class_offsets(w: pd.DataFrame, rel: pd.Series, spec: V3ASpec) -> dict[str, float]:
-    """同一馬・同一年齢で比べたクラス間差（1勝=0 に正規化）。rel = クラス内相対の指数。"""
-    d = pd.DataFrame({
-        "h": w["horse_id"].values, "age": _num(w, "v3a_age").values, "cls": w["v3a_cls"].values,
-        "y": rel.clip(CLIP_MIN, CLIP_MAX).values,
-    }).dropna()
-    cnt = d.groupby("h")["y"].transform("size")
-    d = d[cnt >= spec.abs_min_runs].copy()
-    gamma = {c: 0.0 for c in CLASS_ORDER}
-    dh = pd.Series(0.0, index=d.index)
-    da = pd.Series(0.0, index=d.index)
-    gcol = d["cls"].map(gamma)
-    for _ in range(25):
-        dh = (d["y"] - da - gcol).groupby(d["h"]).transform("mean")
-        da = (d["y"] - dh - gcol).groupby(d["age"]).transform("mean")
-        gm = (d["y"] - dh - da).groupby(d["cls"]).mean()
-        gamma = {c: float(gm.get(c, 0.0)) for c in CLASS_ORDER}
-        gcol = d["cls"].map(gamma)
-    base = gamma["1勝"]
-    return {c: gamma[c] - base for c in CLASS_ORDER}
+def _rel_abs(w: pd.DataFrame, model_parts: dict, spec: V3ASpec, wp: pd.DataFrame | None = None):
+    """作業フレームから、相対・絶対の指数（中心合わせ前）と途中の値を返す。"""
+    wp = attach_par(w, model_parts["par"]) if wp is None else wp
+    mo_pts = _month_off_series(wp, model_parts["month_offsets"])
+    par_final = wp["v3a_par_sec"] - mo_pts / POINTS_PER_SEC
+    resid = wp["v3a_c0"] - par_final
+    loro = loro_track(wp, resid, spec)
+    term, src = track_term(wp, loro)
+    corrected = wp["v3a_c0"] - term
+    rel = BASE_INDEX + (par_final - corrected) * POINTS_PER_SEC
+    ref = w.assign(v3a_gen=spec.abs_ref_gen, v3a_cls=spec.abs_ref_cls)
+    ref = attach_par(ref, model_parts["par"])
+    absv = BASE_INDEX + (ref["v3a_par_sec"] - corrected) * POINTS_PER_SEC
+    return dict(wp=wp, par_final=par_final, term=term, src=src, corrected=corrected, rel=rel, absv=absv,
+                ref_par=ref["v3a_par_sec"], ref_n=ref["v3a_par_n"])
+
+
+def _centered(parts: dict, surface: pd.Series, centers: dict) -> tuple[pd.Series, pd.Series]:
+    cr = surface.map(centers.get("rel", {})).fillna(0.0)
+    ca = surface.map(centers.get("abs", {})).fillna(0.0)
+    return parts["rel"] - cr, parts["absv"] - ca
 
 
 def build_model(df_ref: pd.DataFrame, spec: V3ASpec, beta_pace: float, meta: dict | None = None) -> V3AModel:
     """基準期間のフレーム（compute_for_dataframe の途中結果。複数年を連結）からモデルを作る。"""
     w = prepare(df_ref, spec, beta_pace)
-    w["v3a_age"] = pd.to_numeric(w["sex_age"].astype(str).str.extract(r"(\d+)", expand=False), errors="coerce")
     track = w["v3a_tsi_track"].copy()           # 初回は TSI の補正だけ
-    par = None
     for it in range(spec.n_iter):
         c = w["v3a_c0"] - track
         par = build_par_table(_second_rows(w, c), spec)
         wp = attach_par(w, par)
-        resid = w["v3a_c0"] - wp["v3a_par_sec"]
-        loro = loro_track(wp, resid, spec)
+        loro = loro_track(wp, w["v3a_c0"] - wp["v3a_par_sec"], spec)
         track, _ = track_term(w, loro)
         logger.info("v3a build iter %d: par cells=%d, loro coverage=%.3f", it + 1, len(par), float(loro.notna().mean()))
     c = w["v3a_c0"] - track
@@ -321,12 +333,18 @@ def build_model(df_ref: pd.DataFrame, spec: V3ASpec, beta_pace: float, meta: dic
     wp = attach_par(w, par)
     rel0 = BASE_INDEX + (wp["v3a_par_sec"] - c) * POINTS_PER_SEC
     sec = _second_rows(w, c)
-    w2 = w.loc[sec.index].assign(rel=rel0.loc[sec.index])
-    mo = _month_offsets(w2, spec)
-    rel = rel0 - _month_off_series(w, mo)
-    cls_off = _class_offsets(w, rel.where(~w["v3a_oor"]), spec)
-    model = V3AModel(spec=spec, par=par, month_offsets=mo, class_offsets=cls_off, meta=meta or {})
-    return model
+    mo = _month_offsets(w.loc[sec.index].assign(rel=rel0.loc[sec.index]), spec)
+    # 中心合わせ: 暫定モデル(中心 0)を基準期間に適用し、2 着馬(相対)・基準クラスの 2 着馬(絶対)の面別平均を 50 にそろえる
+    parts = _rel_abs(w, {"par": par, "month_offsets": mo}, spec)
+    sec_idx = _second_rows(w, parts["corrected"]).index
+    surf = w["surface"]
+    c_rel, c_abs = {}, {}
+    for s in ("芝", "ダート"):
+        m = surf.loc[sec_idx].eq(s)
+        c_rel[s] = float(parts["rel"].loc[sec_idx][m].mean() - BASE_INDEX) if m.any() else 0.0
+        ref_m = (m & w.loc[sec_idx, "v3a_gen"].eq(spec.abs_ref_gen) & w.loc[sec_idx, "v3a_cls"].eq(spec.abs_ref_cls))
+        c_abs[s] = float(parts["absv"].loc[sec_idx][ref_m].mean() - BASE_INDEX) if ref_m.any() else c_rel[s]
+    return V3AModel(spec=spec, par=par, month_offsets=mo, centers={"rel": c_rel, "abs": c_abs}, meta=meta or {})
 
 
 # ── 適用 ──────────────────────────────────────────────────────
@@ -334,24 +352,17 @@ def apply_model(df: pd.DataFrame, model: V3AModel, beta_pace: float) -> pd.DataF
     """compute_for_dataframe の途中結果に v3a の列（V3A_COLUMNS）を付けて返す（行は増減しない）。"""
     spec = model.spec
     w = prepare(df, spec, beta_pace)
-    wp = attach_par(w, model.par)
-    mo_pts = _month_off_series(wp, model.month_offsets)
-    par_final = wp["v3a_par_sec"] - mo_pts / POINTS_PER_SEC
-    resid = wp["v3a_c0"] - par_final
-    loro = loro_track(wp, resid, spec)
-    term, src = track_term(wp, loro)
-    corrected = wp["v3a_c0"] - term
-    rel = BASE_INDEX + (par_final - corrected) * POINTS_PER_SEC
-    gamma = wp["v3a_cls"].map(model.class_offsets).fillna(0.0)
-    absv = rel - gamma
+    parts = _rel_abs(w, {"par": model.par, "month_offsets": model.month_offsets}, spec)
+    wp = parts["wp"]
+    rel, absv = _centered(parts, w["surface"], model.centers)
+    corrected, src = parts["corrected"], parts["src"]
 
     out = df.copy()
-    usable = rel.notna() & wp["v3a_par_sec"].notna() & corrected.notna()
     fp = wp["v3a_fp"]
     invalid = fp.isna() | (fp <= 0)
-    usable = usable & ~invalid
+    usable = rel.notna() & wp["v3a_par_sec"].notna() & corrected.notna() & ~invalid
     rel = rel.where(usable)
-    absv = absv.where(usable)
+    absv = absv.where(usable & parts["ref_par"].notna())
     clipped = (rel < CLIP_MIN) | (rel > CLIP_MAX) | (absv < CLIP_MIN) | (absv > CLIP_MAX)
     status = pd.Series("ok", index=out.index, dtype=object)
     status[usable & clipped & ~wp["v3a_oor"]] = "clipped"
@@ -359,19 +370,24 @@ def apply_model(df: pd.DataFrame, model: V3AModel, beta_pace: float) -> pd.DataF
     status[usable & wp["v3a_oor"] & clipped] = "restored_clipped"
     status[wp["v3a_par_sec"].isna()] = "no_par"
     status[invalid & wp["v3a_par_sec"].notna()] = "invalid"
-    low = (wp["v3a_par_n"] < spec.min_par_n) | wp["v3a_par_level"].isin(["L4_pooled"]) | wp["v3a_weight_missing"]
-    low = (low | (src == "tsi") | (src == "none")) & usable   # 馬場差が同日他レースで作れない行も低信頼
+    low = (
+        (wp["v3a_par_n"] < spec.min_par_n) | (parts["ref_n"] < spec.min_par_n)
+        | wp["v3a_par_level"].isin(["L4_pooled"]) | wp["v3a_weight_missing"]
+        | src.isin(["tsi", "none"])
+    ) & usable
 
     out["megu_index_v3a"] = rel
     out["megu_index_v3a_robust"] = rel.clip(CLIP_MIN, CLIP_MAX)
     out["megu_index_v3a_abs"] = absv
     out["megu_index_v3a_abs_robust"] = absv.clip(CLIP_MIN, CLIP_MAX)
+    out["megu_index_v3a_feat"] = soft_floor(rel)
+    out["megu_index_v3a_abs_feat"] = soft_floor(absv)
     out["megu_v3a_status"] = status
     out["megu_v3a_low_confidence"] = low
     out["megu_v3a_version"] = V3A_VERSION_LABEL
-    out["v3a_track_sec"] = term
+    out["v3a_track_sec"] = parts["term"]
     out["v3a_track_src"] = src
-    out["v3a_par_sec"] = par_final
+    out["v3a_par_sec"] = parts["par_final"]
     out["v3a_par_level"] = wp["v3a_par_level"]
     out["v3a_par_n"] = wp["v3a_par_n"]
     out["v3a_corrected_sec"] = corrected
