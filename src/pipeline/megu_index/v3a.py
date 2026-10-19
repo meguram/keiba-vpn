@@ -105,6 +105,21 @@ class V3AModel:
         )
 
 
+def load_model_from_env() -> "V3AModel | None":
+    """環境変数 KEIBA_MEGU_V3A_DIR（モデルのディレクトリ）が設定されているときだけ v3a を読む。未設定は None（従来どおり）。
+    日次の計算（compute_for_date）で v3a の列を足すかどうかの切り替えに使う。"""
+    import os
+
+    d = os.environ.get("KEIBA_MEGU_V3A_DIR", "").strip()
+    if not d:
+        return None
+    try:
+        return V3AModel.load(Path(d))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("v3a モデルを読めないため従来の計算のみ: %s (%s)", d, exc)
+        return None
+
+
 # ── 区分 ──────────────────────────────────────────────────────
 def soft_floor(x: pd.Series, lo: float = FEAT_LO, k: float = FEAT_K) -> pd.Series:
     """lo 未満を傾き k で圧縮する（順序は保つ）。予測用の特徴量向け。"""

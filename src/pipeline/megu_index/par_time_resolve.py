@@ -91,7 +91,11 @@ def attach_par_time_with_fallback(
             merged = merged.drop(columns=["sample_count"])
         merged.loc[mask, "par_match_level"] = level
         drop_cols = [c for c in merged.columns if c.endswith("_new")]
-        return merged.drop(columns=drop_cols)
+        merged = merged.drop(columns=drop_cols)
+        # merge は連番の index を振り直す。L5 は部分集合(sub)に対して使い、結果を元の行の index へ書き戻すので、元の index を戻す
+        # （戻さないと別の行に基準タイムが書き込まれる。当日だけの計算で重・不良馬場の行がある日に起きていた）
+        merged.index = frame.index
+        return merged
 
     # L1: full + class
     par_l1 = par[par["class_bucket"] != ""]

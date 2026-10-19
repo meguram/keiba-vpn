@@ -914,7 +914,11 @@ def compute_for_date(
 
         # 過去レース履歴（delta_level 用）: 当該日より前の全年データをロード
         df_hist = _load_history_flat_for_level(date_str)
-        df_result = compute_for_dataframe(df_flat, params, df_par, df_hist=df_hist, df_ref=df_year_ref)
+        from src.pipeline.megu_index.v3a import load_model_from_env
+
+        df_result = compute_for_dataframe(
+            df_flat, params, df_par, df_hist=df_hist, df_ref=df_year_ref, v3a_model=load_model_from_env(),
+        )
         # valid + out_of_range 両方を保存（par_time があるものに限る）
         df_save = df_result[df_result["par_time_final"].notna()].copy()
 
