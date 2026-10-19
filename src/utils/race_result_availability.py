@@ -4,8 +4,28 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+
+# 年ごとのキー一覧(GCS の list は 0.4〜1.0 秒かかる)を短時間だけ使い回す。同じ年の別の日付の要求でも再利用される
+_KEYS_TTL_SEC = 30.0
+_keys_cache: dict[tuple[int, str, str], tuple[float, frozenset[str]]] = {}
+_keys_lock = threading.Lock()
+
+
+def _list_keys_cached(storage, category: str, year: str, *, now: float | None = None) -> frozenset[str]:
+    k = (id(storage), category, year)
+    t = time.monotonic() if now is None else now
+    with _keys_lock:
+        hit = _keys_cache.get(k)
+        if hit and t - hit[0] < _KEYS_TTL_SEC:
+            return hit[1]
+    keys = frozenset(storage.list_keys(category, year))
+    with _keys_lock:
+        _keys_cache[k] = (t, keys)
+    return keys
 
 
 def _blob_has_entries(data: dict | None) -> bool:
@@ -69,12 +89,12 @@ def batch_race_result_status(
         return {}
 
     year = (date or ids[0])[:4] if len(date or ids[0]) >= 4 else ""
-    confirmed_keys: set[str] = set()
-    flash_keys: set[str] = set()
+    confirmed_keys: frozenset[str] = frozenset()
+    flash_keys: frozenset[str] = frozenset()
     if year:
         try:
-            confirmed_keys = set(storage.list_keys("race_result", year))
-            flash_keys = set(storage.list_keys("race_result_on_time", year))
+            confirmed_keys = _list_keys_cached(storage, "race_result", year)
+            flash_keys = _list_keys_cached(storage, "race_result_on_time", year)
         except Exception:
             pass
 

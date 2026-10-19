@@ -748,6 +748,13 @@ async def lifespan(app):
         target=_horse_name_index_bootstrap, daemon=True, name="horse-name-index-ensure"
     ).start()
 
+    # 起動 5 秒後から、直近の開催日のレース一覧を裏で先読みしてキャッシュを温める（失敗しても起動は妨げない）
+    global _race_list_warm_task
+    try:
+        _race_list_warm_task = asyncio.get_running_loop().create_task(_warm_race_lists())
+    except Exception:
+        logger.warning("レース一覧の先読みを開始できません", exc_info=True)
+
     yield
 
     # 終了処理
@@ -2716,6 +2723,7 @@ def merge_db_and_list_races(db_races: list[dict], list_races: list[dict], date: 
 from src.api.response_cache import TtlCoalescingCache as _TtlCoalescingCache
 
 _RACE_LIST_CACHE = _TtlCoalescingCache()
+_race_list_warm_task: Any = None
 
 
 @app.get("/api/race-list/{date}", response_class=JSONResponse)
@@ -2791,39 +2799,52 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
 
         venues = sorted(set(r.get("venue", "") for r in jra if r.get("venue")))
         race_ids = [r["race_id"] for r in jra]
-        status_map = (
-            batch_race_result_status(storage, race_ids, date=date)
-            if with_result_status and race_ids
-            else {}
-        )
+
+        def _status() -> dict:
+            return (
+                batch_race_result_status(storage, race_ids, date=date)
+                if with_result_status and race_ids
+                else {}
+            )
 
         # DB から surface / distance / grade / track_condition / start_time を補完
-        db_info: dict[str, dict] = {}
-        try:
-            from src.db.session import get_session, init_engine
-            from sqlalchemy import text as sa_text
-            init_engine()
-            with get_session() as sess:
-                rows = sess.execute(
-                    sa_text(
-                        "SELECT race_id, venue, race_name, surface, distance, grade, track_condition,"
-                        " start_time FROM races WHERE race_id = ANY(:ids)"
-                    ),
-                    {"ids": race_ids},
-                ).fetchall()
-                for row in rows:
-                    st_val = row.start_time
-                    db_info[row.race_id] = {
-                        "venue": row.venue or None,
-                        "race_name": row.race_name or None,
-                        "surface": row.surface or None,
-                        "distance": int(row.distance) if row.distance else None,
-                        "grade": row.grade or None,
-                        "track_condition": row.track_condition or None,
-                        "start_time": st_val.strftime("%H:%M") if st_val else None,
-                    }
-        except Exception:
-            pass  # DB 未接続時でも race_lists の基本情報で継続
+        def _db_info() -> dict[str, dict]:
+            info: dict[str, dict] = {}
+            try:
+                from src.db.session import get_session, init_engine
+                from sqlalchemy import text as sa_text
+                init_engine()
+                with get_session() as sess:
+                    rows = sess.execute(
+                        sa_text(
+                            "SELECT race_id, venue, race_name, surface, distance, grade, track_condition,"
+                            " start_time FROM races WHERE race_id = ANY(:ids)"
+                        ),
+                        {"ids": race_ids},
+                    ).fetchall()
+                    for row in rows:
+                        st_val = row.start_time
+                        info[row.race_id] = {
+                            "venue": row.venue or None,
+                            "race_name": row.race_name or None,
+                            "surface": row.surface or None,
+                            "distance": int(row.distance) if row.distance else None,
+                            "grade": row.grade or None,
+                            "track_condition": row.track_condition or None,
+                            "start_time": st_val.strftime("%H:%M") if st_val else None,
+                        }
+            except Exception:
+                pass  # DB 未接続時でも race_lists の基本情報で継続
+            return info
+
+        # 結果有無の判定(GCS の一覧)と DB の補完は互いに独立なので並行して待つ
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=2) as _ex:
+            _f_status = _ex.submit(_status)
+            _f_db = _ex.submit(_db_info)
+            status_map = _f_status.result()
+            db_info = _f_db.result()
 
         from src.utils.race_card_merge import (
             is_plausible_label,
@@ -2832,7 +2853,10 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
             race_meta_from_card,
         )
 
-        gcs_info: dict[str, dict] = {}
+        # レースカード(GCS の出馬表/結果)の読み込みはレースごとに独立なので並列にする。
+        # 確定結果が無いと分かっているレースは、確定結果の読み込みを省く。
+        raw_by_id = {x.get("race_id"): x for x in jra}
+        need_ids: list[str] = []
         for rid in race_ids:
             db = db_info.get(rid, {})
             need = (
@@ -2840,11 +2864,20 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
                 or int(db.get("distance") or 0) <= 0
                 or not db.get("surface")
             )
-            raw_r = next((x for x in jra if x.get("race_id") == rid), {})
-            if need or not is_plausible_label(raw_r.get("race_name")):
-                card = load_merged_race_card(rid)
-                if card:
-                    gcs_info[rid] = race_meta_from_card(card)
+            if need or not is_plausible_label(raw_by_id.get(rid, {}).get("race_name")):
+                need_ids.append(rid)
+
+        def _card_meta(rid: str):
+            has_confirmed = (status_map.get(rid) or {}).get("has_confirmed", True) if with_result_status else True
+            card = load_merged_race_card(rid, storage=storage, with_result=bool(has_confirmed))
+            return rid, (race_meta_from_card(card) if card else None)
+
+        gcs_info: dict[str, dict] = {}
+        if need_ids:
+            with ThreadPoolExecutor(max_workers=min(8, len(need_ids))) as _pool:
+                for rid, meta in _pool.map(_card_meta, need_ids):
+                    if meta:
+                        gcs_info[rid] = meta
 
         races = []
         for r in sorted(jra, key=lambda x: (x.get("venue", ""), x.get("round", 0))):
@@ -2874,10 +2907,33 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
         return {"date": date, "venues": venues, "races": races}
     from src.api.response_cache import race_list_ttl
 
+    ttl = race_list_ttl(date)
     result = await _RACE_LIST_CACHE.get_or_compute(
-        (date, bool(with_result_status)), race_list_ttl(date), lambda: asyncio.to_thread(_load)
+        (date, bool(with_result_status)), ttl, lambda: asyncio.to_thread(_load), stale_max=ttl * 10
     )
     return JSONResponse(result)
+
+
+async def _warm_race_lists() -> None:
+    """起動直後の最初の来訪者が待たないよう、直近の開催日のレース一覧を直列で先に計算しておく。"""
+    try:
+        await asyncio.sleep(5)
+        from datetime import datetime, timedelta, timezone
+
+        jst = timezone(timedelta(hours=9))
+        today = datetime.now(jst).date()
+        stems = await asyncio.to_thread(lambda: _cached_race_list_stems(_get_storage()))
+        lo, hi = (today - timedelta(days=7)).strftime("%Y%m%d"), (today + timedelta(days=14)).strftime("%Y%m%d")
+        dates = sorted(s for s in stems if lo <= str(s) <= hi)
+        for d in dates:
+            try:
+                await get_race_list_for_date(d, True)
+            except Exception:
+                logger.warning("レース一覧の先読みに失敗: %s", d)
+            await asyncio.sleep(0.5)
+        logger.info("レース一覧の先読み完了: %d 日分", len(dates))
+    except Exception:
+        logger.warning("レース一覧の先読みを中止", exc_info=True)
 
 
 @app.get("/api/megu-index-dates", response_class=JSONResponse)

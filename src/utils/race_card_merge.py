@@ -144,14 +144,18 @@ def patch_result_metadata_from_shutuba(result: dict | None, shutuba: dict | None
     return out
 
 
-def load_merged_race_card(race_id: str) -> dict | None:
-    """GCS から shutuba / result を読み、マージしたレースカードを返す。"""
-    try:
-        from src.scraper.storage import HybridStorage
+def load_merged_race_card(race_id: str, storage=None, with_result: bool = True) -> dict | None:
+    """GCS から shutuba / result を読み、マージしたレースカードを返す。
 
-        storage = HybridStorage()
+    ``storage`` を渡すと共有の接続を使う（レースごとの接続作成を避ける）。``with_result=False`` なら確定結果は読まない
+    （確定結果が無いと分かっているレースで、存在しないキーを問い合わせる往復を省く）。"""
+    try:
+        if storage is None:
+            from src.scraper.storage import HybridStorage
+
+            storage = HybridStorage()
         shutuba = storage.load("race_shutuba", race_id)
-        result = storage.load("race_result", race_id)
+        result = storage.load("race_result", race_id) if with_result else None
         return merge_race_card(shutuba, result)
     except Exception:
         return None

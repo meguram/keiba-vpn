@@ -14,6 +14,8 @@ class TtlCoalescingCache:
     def __init__(self, max_items: int = 512, clock: Callable[[], float] = time.monotonic) -> None:
         self._items: dict[Hashable, tuple[float, Any]] = {}
         self._locks: dict[Hashable, asyncio.Lock] = {}
+        self._refreshing: set[Hashable] = set()
+        self._bg_tasks: set[asyncio.Task] = set()
         self._max = max_items
         self._clock = clock
 
@@ -23,22 +25,57 @@ class TtlCoalescingCache:
             return True, hit[1]
         return False, None
 
-    async def get_or_compute(self, key: Hashable, ttl: float, compute: Callable[[], Awaitable[Any]]) -> Any:
+    async def get_or_compute(
+        self, key: Hashable, ttl: float, compute: Callable[[], Awaitable[Any]], stale_max: float | None = None
+    ) -> Any:
+        """新鮮な値があれば返す。期限切れでも ``stale_max`` 秒以内なら古い値を即座に返し、裏で 1 回だけ再計算して差し替える
+        （stale-while-revalidate）。値が無い／古すぎるときだけ計算を待つ（同時要求は 1 回に統合）。"""
         ok, val = self._fresh(key, ttl)
         if ok:
             return val
+        if stale_max is not None:
+            hit = self._items.get(key)
+            if hit and (self._clock() - hit[0]) < stale_max:
+                self._refresh_in_background(key, compute)
+                return hit[1]
         lock = self._locks.setdefault(key, asyncio.Lock())
         async with lock:
             ok, val = self._fresh(key, ttl)      # 待っている間に別の要求が計算を終えていれば、それを使う
             if ok:
                 return val
             val = await compute()
-            if len(self._items) >= self._max:
-                oldest = min(self._items, key=lambda k: self._items[k][0])
-                self._items.pop(oldest, None)
-                self._locks.pop(oldest, None)
-            self._items[key] = (self._clock(), val)
+            self._store(key, val)
             return val
+
+    def _store(self, key: Hashable, val: Any) -> None:
+        if len(self._items) >= self._max and key not in self._items:
+            oldest = min(self._items, key=lambda k: self._items[k][0])
+            self._items.pop(oldest, None)
+            self._locks.pop(oldest, None)
+        self._items[key] = (self._clock(), val)
+
+    def _refresh_in_background(self, key: Hashable, compute: Callable[[], Awaitable[Any]]) -> None:
+        if key in self._refreshing:
+            return
+        self._refreshing.add(key)
+
+        async def _run() -> None:
+            try:
+                lock = self._locks.setdefault(key, asyncio.Lock())
+                async with lock:
+                    self._store(key, await compute())
+            except Exception:  # 再計算に失敗したら古い値のまま（次の要求でまた試す）
+                pass
+            finally:
+                self._refreshing.discard(key)
+
+        task = asyncio.get_running_loop().create_task(_run())
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+
+    async def warm(self, key: Hashable, ttl: float, compute: Callable[[], Awaitable[Any]]) -> None:
+        """起動時などに先に計算して入れておく（新鮮な値があれば何もしない）。"""
+        await self.get_or_compute(key, ttl, compute)
 
     def clear(self) -> None:
         self._items.clear()
