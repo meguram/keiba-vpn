@@ -56,6 +56,7 @@ from src.pipeline.megu_index.class_bucket import par_class_bucket
 from src.pipeline.megu_index.common import adjusted_time_to_megu
 from src.pipeline.megu_index.field_quality import attach_fq_and_delta_level
 from src.pipeline.megu_index.par_time_resolve import attach_par_time_with_fallback
+from src.pipeline.megu_index.robust import ROBUST_COLUMNS, add_robust_columns
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -595,11 +596,17 @@ def compute_for_dataframe(
     df.loc[bad_par, "megu_index"] = np.nan
     df.loc[bad_par & (df["computation_status"] == "valid"), "computation_status"] = "no_par"
 
+    # 外れ値対策の列（megu_index / computation_status は変えず、足すだけ）
+    df = add_robust_columns(
+        df, bad_par=bad_par, finish_pos=df["finish_pos_num"] if "finish_pos_num" in df.columns else None,
+    )
+
     result_cols = [
         "race_id", "horse_id", "finish_time_sec", "par_time_final",
         "delta_pace_sec", "delta_track_sec", "delta_weight_sec", "delta_level_sec",
         "corrected_time_sec", "adjusted_time_sec", "megu_index", "field_quality",
         "computation_status", "front_split_sec", "split_point_m", "tsi_raw",
+        *ROBUST_COLUMNS, "par_sample_count", "par_match_level",
     ]
     return df[[c for c in result_cols if c in df.columns]].copy()
 
@@ -671,6 +678,7 @@ _MEGU_PARQUET_COLS = [
     "race_id", "horse_id", "megu_index", "computation_status",
     "finish_time_sec", "par_time_final", "corrected_time_sec", "adjusted_time_sec",
     "delta_pace_sec", "delta_track_sec", "delta_weight_sec", "delta_level_sec",
+    *ROBUST_COLUMNS, "par_sample_count", "par_match_level",
 ]
 _GCS_MEGU_BLOB_TPL = "chuou/data/preprocessed/netkeiba/pc/megu_index/{year}/megu_index_flat.parquet"
 
@@ -680,21 +688,27 @@ def _save_megu_parquet_backup(
     year: int,
     *,
     gcs_canonical: bool = False,
+    out_dir: Path | None = None,
+    replace: bool = False,
 ) -> dict[str, Any]:
     """
     計算済み megu_index をローカル parquet + GCS に保存する。
 
     gcs_canonical=True のとき GCS 保存を正本とみなし、gcs_enabled なら失敗時に例外。
     DB は API 参照用の二次ストア（compute_for_date 内で別途 upsert）。
+
+    out_dir を指定すると <out_dir>/<年>/ に保存し、GCS へは上げない（再計算の試作用。稼働データを触らない）。
+    replace=True なら既存ファイルとマージせず作り直す（年全体を同じ版でそろえるとき）。
     """
     save_cols = [c for c in _MEGU_PARQUET_COLS if c in df_save.columns]
     df_new = df_save[save_cols].copy()
 
-    out_dir = TABLES_DIR / str(year)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "megu_index_flat.parquet"
+    base_dir = Path(out_dir) if out_dir is not None else TABLES_DIR
+    year_dir = base_dir / str(year)
+    year_dir.mkdir(parents=True, exist_ok=True)
+    out_path = year_dir / "megu_index_flat.parquet"
 
-    if out_path.exists():
+    if out_path.exists() and not replace:
         try:
             df_existing = pd.read_parquet(out_path)
             df_combined = pd.concat([df_existing, df_new], ignore_index=True)
@@ -707,8 +721,13 @@ def _save_megu_parquet_backup(
     else:
         df_combined = df_new
 
-    df_combined.to_parquet(out_path, index=False)
+    tmp_path = out_path.with_suffix(".parquet.tmp")
+    df_combined.to_parquet(tmp_path, index=False)
+    tmp_path.replace(out_path)  # 途中で失敗しても既存ファイルを壊さない
     logger.info("megu_index parquet 保存: %s (%d 行)", out_path, len(df_combined))
+
+    if out_dir is not None:
+        return {"local_path": str(out_path), "gcs_uri": "", "gcs_status": "skipped", "rows": len(df_combined)}
 
     gcs_uri = ""
     gcs_status = "skipped"
@@ -964,6 +983,26 @@ def compute_megu_for_opening_dates(
 # CLI エントリポイント
 # ─────────────────────────────────────────────────────────────────────────────
 
+def merge_cushion_tsi(df_flat: pd.DataFrame, df_cushion: pd.DataFrame, params: dict[str, float]) -> pd.DataFrame:
+    """クッション値・含水率を日付×競馬場でマージし、tsi_raw（馬場指標）を付ける。"""
+    if df_cushion.empty:
+        return df_flat
+    df_flat = df_flat.copy()
+    df_flat["date_str"] = pd.to_datetime(df_flat["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    df_flat["venue_code"] = df_flat["venue_code"].astype(str).str.strip()
+    c_merge = df_cushion[["date_str", "venue_code", "cushion_value", "dirt_moisture_goal"]].drop_duplicates(
+        subset=["date_str", "venue_code"]
+    )
+    df_flat = df_flat.merge(c_merge, on=["date_str", "venue_code"], how="left")
+    tsi_mean = params.get("tsi_mean", 0.0)
+    df_flat["tsi_raw"] = np.where(
+        df_flat["surface"] == "芝",
+        df_flat["cushion_value"].fillna(tsi_mean),
+        -df_flat["dirt_moisture_goal"].fillna(-tsi_mean),
+    )
+    return df_flat
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="めぐ指数計算スクリプト")
     group = p.add_mutually_exclusive_group(required=True)
@@ -1033,21 +1072,7 @@ def main() -> None:
         if df_flat.empty:
             continue
 
-        # cushion マージ
-        df_cushion = _load_cushion(yr)
-        if not df_cushion.empty:
-            df_flat["date_str"] = pd.to_datetime(df_flat["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-            df_flat["venue_code"] = df_flat["venue_code"].astype(str).str.strip()
-            c_merge = df_cushion[["date_str", "venue_code", "cushion_value", "dirt_moisture_goal"]].drop_duplicates(
-                subset=["date_str", "venue_code"]
-            )
-            df_flat = df_flat.merge(c_merge, on=["date_str", "venue_code"], how="left")
-            tsi_mean = params.get("tsi_mean", 0.0)
-            df_flat["tsi_raw"] = np.where(
-                df_flat["surface"] == "芝",
-                df_flat["cushion_value"].fillna(tsi_mean),
-                -df_flat["dirt_moisture_goal"].fillna(-tsi_mean),
-            )
+        df_flat = merge_cushion_tsi(df_flat, _load_cushion(yr), params)
 
         dfs.append(df_flat)
         if not df_year_ref.empty:

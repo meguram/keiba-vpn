@@ -18,7 +18,14 @@ def _prep_par(df_par: pd.DataFrame) -> pd.DataFrame:
         out["class_bucket"] = ""
     out["class_bucket"] = out["class_bucket"].fillna("").astype(str)
     out["par_time_sec"] = pd.to_numeric(out["par_time_sec"], errors="coerce")
+    if "sample_count" in out.columns:
+        out["sample_count"] = pd.to_numeric(out["sample_count"], errors="coerce")
     return out
+
+
+def _SC_AGG(par: pd.DataFrame) -> dict:
+    """集約セルのサンプル数は合計（sample_count 列があるときだけ）。"""
+    return {"sample_count": ("sample_count", "sum")} if "sample_count" in par.columns else {}
 
 
 def attach_par_time_with_fallback(
@@ -54,6 +61,7 @@ def attach_par_time_with_fallback(
     out["par_time_sec"] = pd.NA
     out["par_front_split_sec"] = pd.NA
     out["par_match_level"] = ""
+    out["par_sample_count"] = pd.NA
 
     def _merge_level(
         frame: pd.DataFrame,
@@ -64,7 +72,7 @@ def attach_par_time_with_fallback(
     ) -> pd.DataFrame:
         if par_sub.empty:
             return frame
-        cols = keys + ["par_time_sec", "par_front_split_sec"]
+        cols = keys + ["par_time_sec", "par_front_split_sec", "sample_count"]
         use_cols = [c for c in cols if c in par_sub.columns]
         merged = frame.merge(
             par_sub[use_cols].drop_duplicates(keys),
@@ -78,6 +86,9 @@ def attach_par_time_with_fallback(
         merged.loc[mask, "par_time_sec"] = merged.loc[mask, "par_time_sec_new"]
         if "par_front_split_sec_new" in merged.columns:
             merged.loc[mask, "par_front_split_sec"] = merged.loc[mask, "par_front_split_sec_new"]
+        if "sample_count" in merged.columns:
+            merged.loc[mask, "par_sample_count"] = merged.loc[mask, "sample_count"]
+            merged = merged.drop(columns=["sample_count"])
         merged.loc[mask, "par_match_level"] = level
         drop_cols = [c for c in merged.columns if c.endswith("_new")]
         return merged.drop(columns=drop_cols)
@@ -94,7 +105,7 @@ def attach_par_time_with_fallback(
     # L2: no direction + class
     par_l2 = (
         par_l1.groupby(["distance", "surface", "track_cat", "class_bucket"], as_index=False)
-        .agg(par_time_sec=("par_time_sec", "mean"), par_front_split_sec=("par_front_split_sec", "mean"))
+        .agg(par_time_sec=("par_time_sec", "mean"), par_front_split_sec=("par_front_split_sec", "mean"), **_SC_AGG(par_l1))
     )
     out = _merge_level(
         out,
@@ -115,7 +126,7 @@ def attach_par_time_with_fallback(
     # L4: no direction, class pooled
     par_l4 = (
         par_l3.groupby(["distance", "surface", "track_cat"], as_index=False)
-        .agg(par_time_sec=("par_time_sec", "mean"), par_front_split_sec=("par_front_split_sec", "mean"))
+        .agg(par_time_sec=("par_time_sec", "mean"), par_front_split_sec=("par_front_split_sec", "mean"), **_SC_AGG(par_l3))
     )
     out = _merge_level(out, ["distance", "surface", "track_cat"], par_l4, "L4_pooled")
 
@@ -156,6 +167,7 @@ def attach_par_time_with_fallback(
                     out.loc[idx, "par_time_sec"] = sub.loc[idx, "par_time_sec"]
                     out.loc[idx, "par_front_split_sec"] = sub.loc[idx, "par_front_split_sec"]
                     out.loc[idx, "par_match_level"] = sub.loc[idx, "par_match_level"]
+                    out.loc[idx, "par_sample_count"] = sub.loc[idx, "par_sample_count"]
 
     out["par_time_final"] = out["par_time_sec"]
     return out
