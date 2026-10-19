@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dormello DOB capture (SporthorseData -> ローカル入力ツール)
 // @namespace    keiba-vpn
-// @version      1.0
+// @version      1.1
 // @description  ご自身が開いた SporthorseData の馬ページから Date of Birth を読み取り、127.0.0.1 のローカル入力ツールへ送る（自動遷移・自動アクセスはしない）
 // @match        https://sporthorse-data.com/pedigree/*
 // @grant        GM_xmlhttpRequest
@@ -31,6 +31,13 @@
     return call('POST', path, Object.assign({ url: location.href, title: document.title }, body), t);
   }
 
+  const inFrame = window.top !== window.self;   // ツールの画面に埋め込まれているとき
+  // 読み取った日付はツールの画面へ送る（保存は画面のボタンで行う）。年のみのときも知らせる
+  const report = async () => {
+    try { await send('/api/ext_detect', { text: full ? full[1] : null, year_only: yearOnly ? yearOnly[1] : null }); } catch (e) { /* ツールが起動していないときは何もしない */ }
+  };
+  report();
+  if (inFrame) return;                              // 埋め込み中は表示を増やさない
   const box = document.createElement('div');
   box.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:2147483647;background:#fffbe6;border:2px solid #d4a800;border-radius:8px;padding:10px 12px;font:14px sans-serif;color:#000;box-shadow:0 2px 8px rgba(0,0,0,.3);max-width:340px';
   const msg = document.createElement('div');

@@ -37,3 +37,15 @@ def test_saved_override_is_used_for_pending_horse_after_restart(tmp_path):
     assert s2.save("a", "30-Jan-1970")["ok"] is True
     item = s2.next()["item"]
     assert item["horse_id"] == "b" and item["url"].endswith("/beta-0") and item["candidates"][0].endswith("/beta-0")
+
+
+def test_detect_is_remembered_for_current_horse_only_and_shown_in_next(tmp_path):
+    s, d = _setup(tmp_path)
+    assert s.detect("https://sporthorse-data.com/pedigree/beta", "Beta", "30-Jan-1980")["ok"] is False             # 表示中は alpha
+    assert s.detect("https://sporthorse-data.com/pedigree/alpha-1", "Alpha", "30-Jan-1970")["ok"] is True
+    n = s.next()
+    assert n["item"]["horse_id"] == "a" and n["detected"]["text"] == "30-Jan-1970" and n["detected"]["url"].endswith("/alpha-1")
+    assert s.save("a", n["detected"]["text"], url=n["detected"]["url"])["ok"] is True                              # 画面のボタンの流れ
+    assert s.next()["item"]["horse_id"] == "b" and s.next()["detected"] is None
+    assert s.detect("https://sporthorse-data.com/pedigree/beta", "Beta", None, "1980")["ok"] is True
+    assert s.next()["detected"]["year_only"] == "1980"
