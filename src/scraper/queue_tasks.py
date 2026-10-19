@@ -41,6 +41,11 @@ TASK_CATALOG: list[dict[str, Any]] = [
     {"id": "race_pair_odds_final", "entity": "race", "scheduled": True, "label": "2連系・3連複オッズ (確定)", "hint": "race_pair_odds — phase=final として履歴化"},
     {"id": "race_odds_t15", "entity": "race", "scheduled": True, "label": "単複オッズ (T-15)", "hint": "race_odds — phase=t15 として履歴化"},
     {"id": "race_pair_odds_t15", "entity": "race", "scheduled": True, "label": "2連系・3連複オッズ (T-15)", "hint": "race_pair_odds — phase=t15 として履歴化"},
+    # 3連単（全組合せ約 100KB/レース）。KEIBA_ODDS_TRIFECTA=1 のときだけ開催日ランナーが実行（auto_scrape_queue.enabled_tasks）。
+    {"id": "race_trifecta_odds", "entity": "race", "label": "3連単オッズ", "hint": "race_trifecta_odds"},
+    {"id": "race_trifecta_odds_t60", "entity": "race", "scheduled": True, "label": "3連単オッズ (T-60)", "hint": "race_trifecta_odds — phase=t60 として履歴化"},
+    {"id": "race_trifecta_odds_t15", "entity": "race", "scheduled": True, "label": "3連単オッズ (T-15)", "hint": "race_trifecta_odds — phase=t15 として履歴化"},
+    {"id": "race_trifecta_odds_final", "entity": "race", "scheduled": True, "label": "3連単オッズ (確定)", "hint": "race_trifecta_odds — phase=final として履歴化"},
     {"id": "race_index", "entity": "race", "label": "タイム指数", "hint": "race_index"},
     {"id": "race_paddock", "entity": "race", "label": "パドック", "hint": "race_paddock"},
     {"id": "race_barometer", "entity": "race", "label": "偏差値", "hint": "race_barometer"},
@@ -74,6 +79,9 @@ _ODDS_PHASE_TASKS: dict[str, str] = {
     "race_pair_odds_t15": "t15",
     "race_odds_final": "final",
     "race_pair_odds_final": "final",
+    "race_trifecta_odds_t60": "t60",
+    "race_trifecta_odds_t15": "t15",
+    "race_trifecta_odds_final": "final",
 }
 
 
@@ -268,6 +276,10 @@ def _race_task(
         "race_pair_odds_t15": "scrape_pair_odds",
         "race_odds_final": "scrape_odds",
         "race_pair_odds_final": "scrape_pair_odds",
+        "race_trifecta_odds": "scrape_trifecta_odds",
+        "race_trifecta_odds_t60": "scrape_trifecta_odds",
+        "race_trifecta_odds_t15": "scrape_trifecta_odds",
+        "race_trifecta_odds_final": "scrape_trifecta_odds",
         "race_index": "scrape_speed_index",
         "race_paddock": "scrape_paddock",
         "race_barometer": "scrape_barometer",

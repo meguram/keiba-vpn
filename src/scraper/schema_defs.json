@@ -3592,6 +3592,41 @@
     "source": "designed",
     "note": "2026-10-18 追加（tp-32）。SmartRC の出走表の『出走前の値』（blinker など）を phase（eve/t60）ごとに不変のスナップショットとして保存する。old_pr は特徴量に使わない。実データの観測後に schema_infer で再構成する"
    }
+  },
+  "race_trifecta_odds": {
+   "top_required": {
+    "race_id": {
+     "type": "str",
+     "non_empty": true
+    },
+    "trifecta": {
+     "type": "list"
+    }
+   },
+   "top_optional": {
+    "n_head": {
+     "type": "int"
+    },
+    "n_combos": {
+     "type": "int"
+    },
+    "expected_combos": {
+     "type": "int"
+    },
+    "phase": {
+     "type": "str"
+    },
+    "snapshot_at": {
+     "type": "str"
+    },
+    "snapshots": {
+     "type": "list"
+    }
+   },
+   "_provenance": {
+    "source": "designed",
+    "note": "2026-10-19 追加。3連単オッズ API(type=8) の全組合せ。trifecta は [1着,2着,3着,オッズ,人気] の配列のリスト（約3,360通り/16頭）。実データの観測後に schema_infer で再構成する"
+   }
   }
  },
  "no_schema_reason": {

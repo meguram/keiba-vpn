@@ -442,6 +442,10 @@ class RaceResultParser:
         anomalies = {k: v for k, v in finish_anomalies(entries).items() if v}
         if anomalies:
             logger.warning("着順の異常を検出: %s", anomalies)
+        from src.scraper.odds_fix import is_plausible_win_odds
+
+        if entries and not is_plausible_win_odds([e["odds"] for e in entries]):
+            logger.warning("単勝オッズの合計 Σ(1/odds) が不自然です（列ずれの疑い。指数列などを読んでいないか確認）")
         return entries
 
     @staticmethod
@@ -1837,6 +1841,7 @@ class OddsParser:
     WIDE_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=5&action=init"
     UMATAN_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=6&action=init"
     SANRENPUKU_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=7&action=init"
+    TRIFECTA_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=8&action=init"
 
     def parse_from_api(self, session, race_id: str) -> dict[str, Any]:
         """HTTP session を使って JSON API からオッズを取得・パースする。"""
@@ -1958,8 +1963,7 @@ class OddsParser:
           NN=1着馬番(2桁), MM=2着馬番(2桁)
           馬連/ワイド: NN < MM (非順序)、馬単: NN→MM (順序あり)
 
-        注意: type=7 の形式は馬連系からの推定（組合せキー6桁・値は [odds, "", popularity]）。
-        実サンプル未検証のため、形式が違う場合は sanrenpuku が空になるだけで他券種には影響しない。
+        type=7 の形式は実サンプルで確認済み（組合せキー6桁・値は [odds, "0.0", popularity]、C(頭数,3) 件）。
 
         出力:
         {
@@ -2032,6 +2036,50 @@ class OddsParser:
         result["sanrenpuku"].sort(key=lambda e: tuple(e["combo"]))
 
         return result
+
+    @staticmethod
+    def parse_trifecta_payload(d: dict, race_id: str) -> dict[str, Any] | None:
+        """3連単 API (type=8) の応答 dict を読む。読めなければ None（保存しない）。
+
+        応答: data.odds["8"] = {"AABBCC": [odds("11,835.2"), "0.0", popularity]}（AA=1着, BB=2着, CC=3着の馬番2桁）。
+        出力: {"race_id", "trifecta": [[a, b, c, odds, popularity], ...], "n_head", "n_combos", "expected_combos"}
+        expected_combos = 頭数 × (頭数-1) × (頭数-2)。取消・除外馬は応答から外れるので n_combos と比べて欠けを検知する。
+        形式の崩れた行は読み飛ばし、1 行も読めなければ None。
+        """
+        if not isinstance(d, dict) or d.get("status") not in OddsParser.LIVE_STATUSES:
+            return None
+        raw = ((d.get("data") or {}).get("odds") or {}).get("8")
+        if not isinstance(raw, dict) or not raw:
+            return None
+        rows: list[list] = []
+        for key, arr in raw.items():
+            if not isinstance(arr, list) or not arr or len(key) != 6 or not key.isdigit():
+                continue
+            a, b, c = int(key[0:2]), int(key[2:4]), int(key[4:6])
+            if 0 in (a, b, c) or len({a, b, c}) != 3:
+                continue
+            odds = OddsParser._safe_float(arr[0])
+            if odds <= 0:
+                continue
+            pop = OddsParser._safe_int(arr[2]) if len(arr) > 2 else 0
+            rows.append([a, b, c, odds, pop])
+        if not rows:
+            return None
+        rows.sort(key=lambda r: (r[0], r[1], r[2]))
+        heads = {x for r in rows for x in r[:3]}
+        n = len(heads)
+        return {"race_id": race_id, "trifecta": rows, "n_head": n, "n_combos": len(rows),
+                "expected_combos": n * (n - 1) * (n - 2)}
+
+    def parse_trifecta_from_api(self, session, race_id: str) -> dict[str, Any] | None:
+        """3連単オッズを JSON API (type=8) から取得する。取得・解析できなければ None。"""
+        try:
+            resp = session.get(self.TRIFECTA_API.format(race_id=race_id), timeout=20)
+            if resp.status_code != 200:
+                return None
+            return self.parse_trifecta_payload(resp.json(), race_id)
+        except Exception:
+            return None
 
     @staticmethod
     def _safe_float(v) -> float:

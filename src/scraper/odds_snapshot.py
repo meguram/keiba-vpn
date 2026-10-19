@@ -16,6 +16,7 @@ JST = ZoneInfo("Asia/Tokyo")
 
 ODDS_PAYLOAD_KEYS: tuple[str, ...] = ("entries",)
 PAIR_ODDS_PAYLOAD_KEYS: tuple[str, ...] = ("umaren", "wide", "umatan", "sanrenpuku")
+TRIFECTA_PAYLOAD_KEYS: tuple[str, ...] = ("trifecta", "n_head", "n_combos", "expected_combos")
 
 
 def now_jst_iso() -> str:

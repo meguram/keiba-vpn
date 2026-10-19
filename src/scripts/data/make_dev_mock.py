@@ -285,6 +285,15 @@ def horse_training(rng: random.Random, h: dict[str, Any], past_day: date) -> dic
     return {"horse_id": h["horse_id"], "total_items": len(ents), "pages_fetched": 1, "entries": ents}
 
 
+def trifecta_odds(rid: str, win_odds: dict[int, float]) -> dict[str, Any]:
+    nums = sorted(win_odds)
+    rows = [[a, b, c, round(win_odds[a] * win_odds[b] * win_odds[c] * 0.6, 1), 0] for a in nums for b in nums for c in nums if len({a, b, c}) == 3]
+    for k, i in enumerate(sorted(range(len(rows)), key=lambda i: rows[i][3])):
+        rows[i][4] = k + 1
+    n = len(nums)
+    return {"race_id": rid, "trifecta": rows, "n_head": n, "n_combos": len(rows), "expected_combos": n * (n - 1) * (n - 2)}
+
+
 def smartrc_prerace(rid: str, smartrc: dict[str, Any]) -> dict[str, Any]:
     return {"race_id": rid, "rcode": smartrc.get("rcode", ""), "source": "dev_mock",
             "phases": {"eve": {"phase": "eve", "snapshot_at": "2026-10-17T18:00:00+09:00", "runners": [dict(x) for x in smartrc.get("runners") or []]}}}
@@ -591,6 +600,7 @@ def generate(today: date, root: Path) -> dict[str, int]:
                                ("race_pair_odds", "pair_odds"), ("race_detail", "detail"), ("smartrc_race", "smartrc")):
                     put(cat, rid, r[k])
                 put("smartrc_prerace", rid, smartrc_prerace(rid, r["smartrc"]))
+                put("race_trifecta_odds", rid, trifecta_odds(rid, {int(e["horse_number"]): float(e["win_odds"]) for e in r["odds"]["entries"]}))
                 _put_schemaless(put, rid, r["meta"], day, field, rng)
                 if with_result:
                     put("race_result", rid, r["result"])

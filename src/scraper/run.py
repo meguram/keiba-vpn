@@ -776,6 +776,34 @@ class ScraperRunner:
             logger.error("2連系オッズ取得失敗 [%s]: %s", race_id, e)
             return None
 
+    def scrape_trifecta_odds(
+        self, race_id: str, skip_existing: bool = True, phase: str | None = None,
+    ) -> dict | None:
+        """3連単オッズ（約 100KB/レース）を JSON API (type=8) から取得する。phase の扱いは scrape_odds と同じ。
+
+        phase 無しで既存があれば取り直さない（skip_existing）。読めない応答は保存しない。"""
+        if skip_existing and not phase and self.storage.exists("race_trifecta_odds", race_id):
+            logger.info("スキップ (既存): race_trifecta_odds/%s", race_id)
+            return self.storage.load("race_trifecta_odds", race_id)
+        try:
+            data = self.odds_parser.parse_trifecta_from_api(self.client._session, race_id)
+            if not data:
+                logger.warning("3連単オッズデータなし: %s", race_id)
+                return None
+            existing = self.storage.load("race_trifecta_odds", race_id)
+            phase = self._effective_odds_phase(existing, phase)
+            if phase:
+                from src.scraper.odds_snapshot import TRIFECTA_PAYLOAD_KEYS, merge_snapshot
+
+                data = merge_snapshot(existing, data, phase, TRIFECTA_PAYLOAD_KEYS)
+            self.storage.save("race_trifecta_odds", race_id, data)
+            logger.info("保存: race_trifecta_odds/%s (%d/%d通り%s)", race_id, data["n_combos"],
+                        data["expected_combos"], f", phase={phase}" if phase else "")
+            return data
+        except Exception as e:
+            logger.error("3連単オッズ取得失敗 [%s]: %s", race_id, e)
+            return None
+
     def scrape_paddock(self, race_id: str, skip_existing: bool = True) -> dict | None:
         return self._fetch_parse_save(
             "race_paddock", race_id,

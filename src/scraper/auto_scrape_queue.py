@@ -33,13 +33,14 @@ T15_RACE_TASKS: list[str] = [
     "race_shutuba",
     "race_odds_t15",
     "race_pair_odds_t15",
+    "race_trifecta_odds_t15",
     "race_shutuba_past",
     "race_oikiri",
     "smartrc",
 ]
 
 # T-60 はオッズ（単複・馬連・ワイド・馬単・3連複）のみ。馬場ライブ・予測トリガは呼ばない。
-ODDS_T60_TASKS: list[str] = ["race_odds_t60", "race_pair_odds_t60"]
+ODDS_T60_TASKS: list[str] = ["race_odds_t60", "race_pair_odds_t60", "race_trifecta_odds_t60"]
 
 # 馬体重の検知（raceday-weight-runner）: 各R T-65〜T-30 に出馬表を取り直し、馬体重が入ったら特徴量・予測を起動する。
 from src.scraper.raceday_weight_watch import WEIGHT_WATCH_TASKS  # noqa: E402,F401
@@ -48,7 +49,14 @@ from src.scraper.raceday_weight_watch import WEIGHT_WATCH_TASKS  # noqa: E402,F4
 EVE_TASKS: list[str] = ["race_shutuba", "race_shutuba_past", "race_oikiri", "smartrc"]
 
 # 開催日夕方（raceday-evening）: 速報結果・確定オッズ（履歴を壊さないよう phase=final 固定）・SmartRC
-EVENING_TASKS: list[str] = ["race_result_on_time", "race_odds_final", "race_pair_odds_final", "smartrc"]
+EVENING_TASKS: list[str] = ["race_result_on_time", "race_odds_final", "race_pair_odds_final", "race_trifecta_odds_final", "smartrc"]
+
+
+def enabled_tasks(tasks: list[str]) -> list[str]:
+    """3連単オッズ（1 レース約 100KB・1 リクエスト）のタスクは KEIBA_ODDS_TRIFECTA=1 のときだけ実行する。"""
+    if os.environ.get("KEIBA_ODDS_TRIFECTA", "").strip() in ("1", "true", "yes"):
+        return list(tasks)
+    return [t for t in tasks if not t.startswith("race_trifecta_odds")]
 
 
 def build_odds_events(
@@ -450,7 +458,7 @@ def run_raceday_evening_for_date(date_str: str) -> dict[str, Any]:
         return {"status": "error", "reason": "no-races", "date": iso_day}
 
     # 確定オッズは phase=final で履歴化（T-60/T-15 のスナップショットを上書きで失わない）
-    tasks = list(EVENING_TASKS)
+    tasks = enabled_tasks(EVENING_TASKS)
     full = [
         {**sp, "tasks": tasks, "smart_skip": False, "date": date_fmt} for sp in specs
     ]
@@ -868,14 +876,14 @@ def task_raceday_runner() -> None:
                     "job_kind": "race",
                     "target_id": x["race"]["race_id"],
                     "date": date_fmt,
-                    "tasks": list(ODDS_T60_TASKS),
+                    "tasks": enabled_tasks(ODDS_T60_TASKS),
                     "smart_skip": False,
                 }
                 for x in t60_batch
             ]
             if direct:
                 for x in t60_batch:
-                    stats["errors"] += _run_race_tasks_direct(_get_runner(), x["race"]["race_id"], date_fmt, list(ODDS_T60_TASKS))
+                    stats["errors"] += _run_race_tasks_direct(_get_runner(), x["race"]["race_id"], date_fmt, enabled_tasks(ODDS_T60_TASKS))
             else:
                 queue.bulk_add_jobs(specs)
                 ok, msg, _ = _kick_and_wait(queue, timeout_sec=72000.0)
@@ -892,7 +900,7 @@ def task_raceday_runner() -> None:
                 "job_kind": "race",
                 "target_id": r["race_id"],
                 "date": date_fmt,
-                "tasks": list(T15_RACE_TASKS),
+                "tasks": enabled_tasks(T15_RACE_TASKS),
                 "smart_skip": False,
             }
             for r in batch
@@ -900,7 +908,7 @@ def task_raceday_runner() -> None:
         if specs:
             if direct:
                 for r in batch:
-                    stats["errors"] += _run_race_tasks_direct(_get_runner(), r["race_id"], date_fmt, list(T15_RACE_TASKS))
+                    stats["errors"] += _run_race_tasks_direct(_get_runner(), r["race_id"], date_fmt, enabled_tasks(T15_RACE_TASKS))
             else:
                 queue.bulk_add_jobs(specs)
                 ok, msg, _ = _kick_and_wait(queue, timeout_sec=72000.0)

@@ -249,7 +249,7 @@ def test_select_due_events_skips_t60_already_past_t15_and_is_idempotent():
 def test_t15_tasks_use_phase_variants_and_t60_is_odds_only():
     assert "race_odds_t15" in T15_RACE_TASKS and "race_pair_odds_t15" in T15_RACE_TASKS
     assert "race_odds" not in T15_RACE_TASKS and "race_pair_odds" not in T15_RACE_TASKS
-    assert ODDS_T60_TASKS == ["race_odds_t60", "race_pair_odds_t60"]
+    assert ODDS_T60_TASKS == ["race_odds_t60", "race_pair_odds_t60", "race_trifecta_odds_t60"]  # 3連単は KEIBA_ODDS_TRIFECTA=1 のときだけ実行（enabled_tasks）
 
 
 # ── タスクカタログ ───────────────────────────────────────────
