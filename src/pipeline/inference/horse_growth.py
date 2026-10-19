@@ -64,7 +64,7 @@ AXES["megu_v3a_abs"] = Axis(
     conf_col="megu_v3a_low_confidence",
     note="全馬を斤量 55kg に換算し、馬場差は同日の他レースから推定（1点＝0.1秒）。クラス・世代をまたいで比べられる絶対指数",
 )
-DEFAULT_AXIS = "megu_w55"
+DEFAULT_AXIS = "megu_v3a_abs"
 
 
 def active_axis() -> Axis:
