@@ -114,3 +114,13 @@ test("重賞だけを開催場コード順・R 順に抜く。『第N回』『(G
   assert.equal(g[1].fullName, "第12回サウジアラビアRC");
   assert.deepEqual(W.venuesOf(races), ["中山", "東京", "京都"]);
 });
+
+
+test("pickPastWeeks: 未来の開催を含めず、今日以前の最新 2 開催を返す（今日が開催日ならその開催を含む）", () => {
+  const dates = ["20261003", "20261004", "20261010", "20261011", "20261012", "20261017", "20261018", "20261024", "20261025"];
+  const got = W.pickPastWeeks(dates, "20261019");
+  assert.deepEqual(got.map((p) => p.week.key), ["20261010", "20261017"]);
+  assert.ok(got.every((p) => p.role === "prev" && p.week.dates.every((d) => d <= "20261019")));
+  assert.deepEqual(W.pickPastWeeks(dates, "20261018").map((p) => p.week.dates).pop(), ["20261017", "20261018"]);
+  assert.deepEqual(W.pickPastWeeks(["20261024"], "20261019"), []);
+});

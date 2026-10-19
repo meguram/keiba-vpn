@@ -63,3 +63,15 @@ body {
   position: absolute;
   inset: -9px -6px;
 }
+
+
+/* /races: PC は左にカレンダー、スマホはボトムシート */
+.races-layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 20px; align-items: start; }
+.races-cal { position: sticky; top: 12px; }
+.races-main { min-width: 0; }
+.races-cal-open { display: none; margin-top: 10px; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; cursor: pointer; }
+@media (max-width: 899px) {
+  .races-layout { grid-template-columns: minmax(0, 1fr); }
+  .races-cal { display: none; }
+  .races-cal-open { display: inline-flex; align-items: center; width: 100%; justify-content: center; }
+}

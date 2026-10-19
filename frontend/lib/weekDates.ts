@@ -86,6 +86,11 @@ export function pickTwoWeeks(dates: string[], today: string): PickedWeek[] {
   return out;
 }
 
+/** 過去の開催だけを見るページ用: 今日以前の最新 2 開催（昇順＝その前, 直近）。今日が開催日ならその開催も含む（開催中・終了後を見られる） */
+export function pickPastWeeks(dates: string[], today: string): PickedWeek[] {
+  return groupWeeks(dates.filter((d) => d <= today)).slice(-2).map((week) => ({ week, role: "prev" as const, rel: relOf(week, today) }));
+}
+
 /** 開催の最初の開催日。開催中（今日が最初の日以降）なら、今日以降で最初の開催日（無ければ最初の日） */
 export function firstDateOf(week: RaceWeek, today: string): string {
   return (today >= week.dates[0] ? week.dates.find((d) => d >= today) : undefined) ?? week.dates[0];

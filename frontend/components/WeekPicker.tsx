@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { USE_MOCK, MOCK_WEEKLY_RACES } from "@/lib/mock";
 import {
-  COLOR_SUN, GradeRace, PickedWeek, dayKind, firstDateOf, formatMD, formatRange, groupWeeks, meetingKeyOf, pickGradeRaces, pickTwoWeeks, venuesOf,
+  COLOR_SUN, GradeRace, PickedWeek, dayKind, firstDateOf, formatMD, formatRange, groupWeeks, meetingKeyOf, pickGradeRaces, pickPastWeeks, pickTwoWeeks, venuesOf,
 } from "@/lib/weekDates";
 
 type RaceLite = { race_id: string; race_name?: string; grade?: string; venue?: string; round?: number | string };
@@ -71,6 +71,7 @@ export type WeekPickerProps = {
   selectedDate: string;
   loading: boolean;
   onSelectDate: (date: string) => void;
+  pastOnly?: boolean;              // 過去の開催だけ（/races 用）。未来の開催・『次回』は出さず、直近の 2 開催を並べる
 };
 
 /**
@@ -78,9 +79,9 @@ export type WeekPickerProps = {
  * 『前回の開催』と『次回の開催』の最大 2 つをタブで切り替え、選んだ開催の日付をカードで並べる。
  * 土=青・日と祝日開催=赤、重賞は G1/G2/G3 のチップとレース名で日付カードに出す。
  */
-export function WeekPicker({ dates, today, selectedDate, loading, onSelectDate }: WeekPickerProps) {
+export function WeekPicker({ dates, today, selectedDate, loading, onSelectDate, pastOnly = false }: WeekPickerProps) {
   const picked: (PickedWeek & { extra: boolean })[] = useMemo(() => {
-    const two = pickTwoWeeks(dates, today);
+    const two = pastOnly ? pickPastWeeks(dates, today) : pickTwoWeeks(dates, today);
     // URL の ?date= が 2 つの開催に入らない過去の日付のときは、その開催も 1 つ足して選べるようにする
     if (selectedDate && dates.includes(selectedDate) && !two.some((p) => p.week.dates.includes(selectedDate))) {
       const w = groupWeeks(dates).find((x) => x.dates.includes(selectedDate));
@@ -88,7 +89,7 @@ export function WeekPicker({ dates, today, selectedDate, loading, onSelectDate }
       return two.map((p, i) => ({ ...p, extra: i === 0 }));
     }
     return two.map((p) => ({ ...p, extra: false }));
-  }, [dates, today, selectedDate]);
+  }, [dates, today, selectedDate, pastOnly]);
 
   const activeKey = selectedDate ? meetingKeyOf(selectedDate) : "";
   const activeIdx = Math.max(0, picked.findIndex((p) => p.week.dates.includes(selectedDate) || p.week.key === activeKey));
@@ -113,7 +114,8 @@ export function WeekPicker({ dates, today, selectedDate, loading, onSelectDate }
       <div role="tablist" aria-label="開催週" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
         {picked.map((p, i) => {
           const on = i === activeIdx;
-          const title = p.extra ? "指定の開催" : p.role === "prev" ? "前回の開催" : "次回の開催";
+          const last = i === picked.length - 1;
+          const title = p.extra ? "指定の開催" : pastOnly ? (last ? "直近の開催" : "その前の開催") : p.role === "prev" ? "前回の開催" : "次回の開催";
           const rel = REL_STYLE[p.rel];
           return (
             <button

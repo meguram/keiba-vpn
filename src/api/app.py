@@ -2513,6 +2513,7 @@ def _invalidate_race_list_caches() -> None:
     _SCRAPE_DATES_RAW_CACHE["ts"] = 0.0
     _PICKER_SCRAPE_DATES_CACHE["data"] = None
     _PICKER_SCRAPE_DATES_CACHE["ts"] = 0.0
+    _RACE_CALENDAR_CACHE.clear()
     try:
         from src.scraper.monitor_backlog import invalidate_cache as _mb_invalidate
         _mb_invalidate()
@@ -2530,6 +2531,36 @@ def _cached_race_list_stems(storage) -> list[str]:
     c["stems"] = stems
     c["ts"] = now
     return stems
+
+
+_RACE_CALENDAR_CACHE: dict[str, tuple[float, dict]] = {}
+_RACE_CALENDAR_TTL = 120.0
+
+
+@app.get("/api/race-calendar", response_class=JSONResponse)
+async def get_race_calendar(month: str = Query(..., pattern=r"^\d{6}$", description="YYYYMM")):
+    """過去の開催日カレンダー用。指定月の開催日（JRA）と、開催場・重賞を返す。今日（JST）より後の日は含めない。
+    range は race_lists にある最古〜今日までの日付（年月ジャンプの範囲）。"""
+    from datetime import datetime, timedelta, timezone
+
+    from src.api.race_calendar import build_month, stem_range
+    from src.scraper.monitor_future_eligible import date_has_at_least_one_jra_race
+
+    today = (datetime.now(timezone.utc) + timedelta(hours=9)).strftime("%Y%m%d")
+    now = _time.time()
+    hit = _RACE_CALENDAR_CACHE.get(month)
+    if hit and (now - hit[0]) < _RACE_CALENDAR_TTL and hit[1].get("today") == today:
+        return JSONResponse(hit[1], headers=_NO_STORE_HEADERS)
+
+    def _build():
+        storage = _get_storage()
+        stems = _cached_race_list_stems(storage)
+        days = build_month(month, stems, lambda s: storage.load("race_lists", s), date_has_at_least_one_jra_race, today)
+        return {"month": month, "today": today, "days": days, "range": stem_range(stems, today)}
+
+    data = await asyncio.to_thread(_build)
+    _RACE_CALENDAR_CACHE[month] = (now, data)
+    return JSONResponse(data, headers=_NO_STORE_HEADERS)
 
 
 @app.get("/api/scrape-dates", response_class=JSONResponse)

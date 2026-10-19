@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { PageShell } from "@/components/PageShell";
 import { GradeChip, WeekPicker } from "@/components/WeekPicker";
+import { RaceCalendar } from "@/components/RaceCalendar";
+import { latestOnOrBefore, resolveDate } from "@/lib/raceCalendar";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberUpgradeModal } from "@/components/upgrade/MemberUpgradeModal";
-import { firstDateOf, formatMD, pickTwoWeeks, todayJst, weekdayOf, WEEKDAY_JA } from "@/lib/weekDates";
+import { formatMD, todayJst, weekdayOf, WEEKDAY_JA } from "@/lib/weekDates";
 
-/* レース一覧（開催日ごと・開催場ごと）。
+/* レース一覧（過去の開催日ごと・開催場ごと）。未来の開催はここには出さない（今日まで。今日が開催日ならその日は含める）。
    データは GCS/ホストの開催日別一覧（/api/scrape-dates と /api/race-list/<日付>）。DB（/api/v1/races）は使わない:
    DB の取り込みが古いと、レース名が文字化けしたまま出ていた（stg, 2026-10-16）。 */
 
@@ -28,7 +30,6 @@ type Row = {
 };
 
 const PAST_DAYS = Number(process.env.NEXT_PUBLIC_PICKER_PAST_DAYS) || 30;
-const FUTURE_DAYS = 14;
 const GRADES = new Set(["G1", "G2", "G3"]);
 
 function toRow(x: Record<string, unknown>): Row {
@@ -106,40 +107,41 @@ function VenueBlock({ venue, rows }: { venue: string; rows: Row[] }) {
 export default function RacesPage() {
   const [showModal, setShowModal] = useState(false);
   const [dates, setDates] = useState<string[]>([]);
+  const [extraDates, setExtraDates] = useState<string[]>([]);
   const [date, setDate] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [loadingDates, setLoadingDates] = useState(true);
   const [loadingRaces, setLoadingRaces] = useState(false);
   const [error, setError] = useState("");
-  const [reload, setReload] = useState(0);
+  const [futureNotice, setFutureNotice] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const { isMember, loading: authLoading } = useAuthStatus();
   const today = todayJst();
 
-  /* 開催日の一覧（過去 30 日 + 今日以降 14 日）。初期は『次回の開催』の最初の開催日（?date= があればそれ） */
+  /* 開催日の一覧（過去 30 日。今日が開催日なら今日を含む）。古い日はカレンダーから選ぶ。初期は『直近の開催日』（?date= があればそれ。未来なら直近に切り替える） */
   useEffect(() => {
     (async () => {
       try {
         let list: string[];
         if (USE_MOCK) {
-          list = getMockRaceDates();
+          list = getMockRaceDates().filter((d) => d <= today);
         } else {
-          const res = await fetch(`/api/scrape-dates?picker_past_days=${PAST_DAYS}&picker_future_days=${FUTURE_DAYS}`, { cache: "no-store" });
+          const res = await fetch(`/api/scrape-dates?picker_past_days=${PAST_DAYS}&picker_future_days=0`, { cache: "no-store" });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          list = (await res.json()).dates ?? [];
+          list = ((await res.json()).dates ?? []).filter((d: string) => d <= today);
         }
         setDates(list);
-        const fromUrl = new URLSearchParams(window.location.search).get("date") ?? "";
-        const preferred = process.env.NEXT_PUBLIC_DEFAULT_RACE_DATE;
-        const next = pickTwoWeeks(list, today).find((p) => p.role === "next");
-        const initial = list.includes(fromUrl) ? fromUrl : preferred && list.includes(preferred) ? preferred : next ? firstDateOf(next.week, today) : (list[0] ?? "");
-        setDate(initial);
-      } catch (e) {
-        setError(`開催日の一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`);
+        const r = resolveDate(new URLSearchParams(window.location.search).get("date") ?? "", latestOnOrBefore(list, today), today);
+        setDate(r.date);
+        setFutureNotice(r.future);
+      } catch {
+        setError("開催日の一覧を取得できませんでした。");
       } finally {
         setLoadingDates(false);
       }
     })();
-  }, [today, reload]);
+  }, [today, reloadKey]);
 
   /* 選んだ開催日のレース一覧 */
   useEffect(() => {
@@ -164,10 +166,17 @@ export default function RacesPage() {
       }
     })();
     return () => { alive = false; };
-  }, [date, reload]);
+  }, [date, reloadKey]);
+
+  // カレンダーで読み込んだ月の開催日を足す（古い開催でも、週ピッカーがその開催の全日を出せるように）
+  const addDates = useCallback((ds: string[]) => setExtraDates((cur) => (ds.every((d) => cur.includes(d)) ? cur : [...new Set([...cur, ...ds])])), []);
+  const allDates = useMemo(() => [...new Set([...dates, ...extraDates])].filter((d) => d <= today).sort(), [dates, extraDates, today]);
+  const latest = latestOnOrBefore(allDates, today);
 
   function choose(d: string) {
     setDate(d);
+    setFutureNotice(false);
+    setSheetOpen(false);
     const u = new URL(window.location.href);
     u.searchParams.set("date", d);
     window.history.replaceState(null, "", u.toString());
@@ -180,15 +189,12 @@ export default function RacesPage() {
     return [...m.entries()].sort((a, b) => a[1][0].race_id.slice(4, 6).localeCompare(b[1][0].race_id.slice(4, 6)));
   }, [rows]);
 
-  // 現在の 2 つの開催に入らない過去の日付は、ここから選べる
-  const shown = useMemo(() => new Set(pickTwoWeeks(dates, today).flatMap((p) => p.week.dates)), [dates, today]);
-  const older = dates.filter((d) => !shown.has(d));
   const wd = date ? WEEKDAY_JA[weekdayOf(date)] : "";
 
   return (
     <>
       {showModal && <MemberUpgradeModal onClose={() => setShowModal(false)} />}
-      <PageShell title="レース一覧" note={false}>
+      <PageShell title="レース一覧">
         {!authLoading && !isMember && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderRadius: 8, background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.25)", marginBottom: 16, fontSize: 13, color: "var(--text)", flexWrap: "wrap" }}>
             <span>🔒 AI予測データは会員限定です。</span>
@@ -198,49 +204,73 @@ export default function RacesPage() {
           </div>
         )}
 
-        <div style={{ marginBottom: 14 }}>
-          <WeekPicker dates={dates} today={today} selectedDate={date} loading={loadingDates} onSelectDate={choose} />
-          {older.length > 0 && (
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: "var(--text-dim)" }}>
-              それ以前の開催日
-              <select
-                value={older.includes(date) ? date : ""}
-                onChange={(e) => e.target.value && choose(e.target.value)}
-                style={{ minHeight: 44, padding: "5px 8px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 12 }}
-              >
-                <option value="">選ぶ…</option>
-                {older.map((d) => <option key={d} value={d}>{formatMD(d)}（{WEEKDAY_JA[weekdayOf(d)]}）</option>)}
-              </select>
-            </label>
-          )}
+        <div className="races-layout">
+          {/* PC: 左にカレンダー（過去の開催日を年月から選ぶ） */}
+          <aside className="races-cal" aria-label="開催日カレンダー">
+            <RaceCalendar selectedDate={date} today={today} latestDate={latest} onSelect={choose} onMonthDays={addDates} />
+          </aside>
+
+          <div className="races-main">
+            <div style={{ marginBottom: 14 }}>
+              <WeekPicker dates={allDates} today={today} selectedDate={date} loading={loadingDates} onSelectDate={choose} pastOnly />
+              {/* スマホ: カレンダーはボトムシートで開く（画面をふさがない） */}
+              <button className="races-cal-open" onClick={() => setSheetOpen(true)} aria-haspopup="dialog">
+                📅 カレンダーから過去の開催日を選ぶ
+              </button>
+            </div>
+
+            {futureNotice && (
+              <div role="status" style={{ marginBottom: 10, fontSize: 12, color: "var(--text-dim)" }}>
+                未来の日付が指定されたため、直近の開催日を表示しています。
+              </div>
+            )}
+
+            {date && (
+              <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-dim)" }}>
+                <span style={{ color: "var(--text)", fontWeight: 700 }}>{date.slice(0, 4)}年{formatMD(date)}（{wd}）</span> — {byVenue.map(([v, r]) => `${v} ${r.length}R`).join(" ／ ") || "開催なし"}
+              </div>
+            )}
+            {error && (
+              <div role="alert" style={{ color: "var(--err)", fontSize: 13, padding: "10px 0" }}>
+                ⚠️ {error}
+                <button onClick={() => { setError(""); setReloadKey((n) => n + 1); }} style={{ marginLeft: 10, minHeight: 36, padding: "0 12px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", cursor: "pointer" }}>再読み込み</button>
+              </div>
+            )}
+            {loadingRaces && <div style={{ color: "var(--text-dim)", fontSize: 13, padding: "24px 0" }}>読み込み中…</div>}
+            {!loadingRaces && !loadingDates && !error && rows.length === 0 && (
+              <div style={{ color: "var(--text-dim)", fontSize: 13, padding: "24px 0" }}>表示できるレースがありません。</div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
+              {byVenue.map(([v, list]) => <VenueBlock key={v} venue={v} rows={list} />)}
+            </div>
+          </div>
         </div>
 
-        {date && (
-          <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-dim)" }}>
-            {formatMD(date)}（{wd}）— {byVenue.map(([v, r]) => `${v} ${r.length}R`).join(" ／ ") || "開催なし"}
-          </div>
-        )}
-        {error && (
-          <div role="alert" style={{ color: "var(--err)", fontSize: 13, padding: "10px 0", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <span>⚠️ {error}</span>
-            <button
-              type="button"
-              onClick={() => { setError(""); setLoadingDates(true); setReload((n) => n + 1); }}
-              style={{ minHeight: 44, padding: "0 16px", borderRadius: 8, border: "1px solid var(--accent)", background: "rgba(59,130,246,0.15)", color: "var(--accent)", cursor: "pointer", fontSize: 13 }}
-            >
-              再読み込み
-            </button>
-          </div>
-        )}
-        {loadingRaces && <div style={{ color: "var(--text-dim)", fontSize: 13, padding: "24px 0" }}>読み込み中…</div>}
-        {!loadingRaces && !loadingDates && !error && rows.length === 0 && (
-          <div style={{ color: "var(--text-dim)", fontSize: 13, padding: "24px 0" }}>表示できるレースがありません。</div>
-        )}
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
-          {byVenue.map(([v, list]) => <VenueBlock key={v} venue={v} rows={list} />)}
-        </div>
+        {sheetOpen && <CalendarSheet onClose={() => setSheetOpen(false)}>
+          <RaceCalendar selectedDate={date} today={today} latestDate={latest} onSelect={choose} onMonthDays={addDates} />
+        </CalendarSheet>}
       </PageShell>
     </>
+  );
+}
+
+/** スマホ用のボトムシート。背景を押す・Esc・閉じるボタンで閉じる */
+function CalendarSheet({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", on);
+    return () => window.removeEventListener("keydown", on);
+  }, [onClose]);
+  return (
+    <div role="dialog" aria-modal="true" aria-label="開催日を選ぶ" style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,0.55)" }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxHeight: "88vh", overflowY: "auto", background: "var(--bg, #0d1117)", borderRadius: "16px 16px 0 0", padding: "12px 12px calc(16px + env(safe-area-inset-bottom))", borderTop: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+          <strong style={{ fontSize: 15 }}>開催日を選ぶ</strong>
+          <button onClick={onClose} aria-label="閉じる" style={{ marginLeft: "auto", minWidth: 44, minHeight: 44, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 16, cursor: "pointer" }}>✕</button>
+        </div>
+        <div style={{ display: "flex", justifyContent: "center" }}>{children}</div>
+      </div>
+    </div>
   );
 }
