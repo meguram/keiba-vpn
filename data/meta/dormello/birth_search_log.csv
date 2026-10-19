@@ -52,11 +52,11 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a00193b,Crafty Prospector,no_data,1979,,,https://sporthorse-data.com/pedigree/crafty-prospector,2026-10-19,ユーザー確認: 記載なし
 000a001174,Solario,no_data,1922,,,https://sporthorse-data.com/pedigree/solario,2026-10-19,ユーザー確認: 記載なし
 000a000477,Mr. Leader,adopted,1966,3,18,https://sporthorse-data.com/pedigree/mr-leader,2026-10-19,ユーザーがブラウザで目視確認
-000a001c0e,Meadowlake,no_data,1983,,,,2026-10-17,
-000a001679,Arctic Tern,no_data,1973,,,https://www.wikidata.org/wiki/Q17232090 ; https://en.wikipedia.org/wiki/Arctic_Tern_%28horse%29,2026-10-17,
-000a001604,Cox's Ridge,no_data,1974,,,https://www.wikidata.org/wiki/Q5179853 ; https://en.wikipedia.org/wiki/Cox%27s_Ridge,2026-10-17,
-000a0017b5,Clever Trick (米),no_data,1976,,,,2026-10-17,
-000a002276,Tale of the Cat(米),no_data,1994,,,https://www.wikidata.org/wiki/Q11319116,2026-10-17,
+000a001c0e,Meadowlake,adopted,1983,3,12,https://sporthorse-data.com/pedigree/meadowlake,2026-10-19,ユーザーがブラウザで目視確認
+000a001679,Arctic Tern,adopted,1973,5,11,https://sporthorse-data.com/pedigree/arctic-tern,2026-10-19,ユーザーがブラウザで目視確認
+000a001604,Cox's Ridge,adopted,1974,4,4,https://sporthorse-data.com/pedigree/coxs-ridge,2026-10-19,ユーザーがブラウザで目視確認
+000a0017b5,Clever Trick (米),no_data,1976,,,https://sporthorse-data.com/pedigree/clever-trick,2026-10-19,ユーザー確認: 記載なし
+000a002276,Tale of the Cat(米),adopted,1994,4,13,https://sporthorse-data.com/pedigree/tale-cat,2026-10-19,ユーザーがブラウザで目視確認
 000a001bde,Fairy King,no_data,1982,,,https://www.wikidata.org/wiki/Q5430970 ; https://en.wikipedia.org/wiki/Fairy_King_%28horse%29,2026-10-17,
 000a0003c7,トウショウボーイ,adopted,1973,4,15,https://ja.wikipedia.org/wiki/%E3%83%88%E3%82%A6%E3%82%B7%E3%83%A7%E3%82%A6%E3%83%9C%E3%83%BC%E3%82%A4,2026-10-17,日本語版 Wikipedia 冒頭文
 000a00026d,パーソロンPartholon(愛),no_data,1960,,,https://www.wikidata.org/wiki/Q11329825 ; https://ja.wikipedia.org/wiki/%E3%83%91%E3%83%BC%E3%82%BD%E3%83%AD%E3%83%B3,2026-10-17,
