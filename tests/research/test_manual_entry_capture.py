@@ -120,3 +120,15 @@ def test_userscript_connection_is_reported(tmp_path):
         assert after["us_seen_ago"] is not None and after["us_seen_ago"] < 5
     finally:
         srv.shutdown()
+
+
+def test_year_mismatch_needs_explicit_confirmation(tmp_path):
+    s, d = _setup(tmp_path)
+    r = s.save("a", "10-Apr-1972")                                            # netkeiba は 1970
+    assert r["ok"] is False and r["year_mismatch"] is True
+    assert s.batch_save([{"horse_id": "a", "text": "10-Apr-1972"}])["results"][0]["ok"] is False
+    assert s.batch_save([{"horse_id": "a", "text": "10-Apr-1972", "confirm_year": True}])["results"][0]["ok"] is True
+    rows = list(csv.reader(open(d / "birth_manual.csv", encoding="utf-8")))
+    assert rows[-1][:5] == ["a", "Alpha", "1972", "4", "10"] and "異なる" in rows[-1][6] and "1970" in rows[-1][6]
+    log = {r[0]: r for r in csv.reader(open(d / "birth_search_log.csv", encoding="utf-8"))}
+    assert log["a"][2] == "adopted" and log["a"][3] == "1972"

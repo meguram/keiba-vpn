@@ -199,7 +199,7 @@ class Store:
             if r.get("none"):
                 out = self.none(hid)
             elif r.get("text"):
-                out = self.save(hid, r["text"], bool(r.get("confirm_jan1")), (r.get("url") or "").strip() or None)
+                out = self.save(hid, r["text"], bool(r.get("confirm_jan1")), (r.get("url") or "").strip() or None, bool(r.get("confirm_year")))
             else:
                 out = self.skip(hid)
             results.append({"horse_id": hid, **out})
@@ -213,7 +213,7 @@ class Store:
                     "unsaved": len(self.pending_msgs), "git": self.git_status, "auto_commit": self.commit_every,
                     "recent": [{"horse_id": u["horse_id"], "name": u["name"], "text": u["text"]} for u in self.undo_stack[-5:]][::-1]}
 
-    def save(self, horse_id: str, text: str, confirm_jan1: bool = False, url: str | None = None) -> dict:
+    def save(self, horse_id: str, text: str, confirm_jan1: bool = False, url: str | None = None, confirm_year: bool = False) -> dict:
         with self.lock:
             r = self._row(horse_id)
             if not r:
@@ -221,14 +221,17 @@ class Store:
             d = parse_date_input(text)
             if not d:
                 return {"ok": False, "error": "日付の形式が読めません（例: 1970-01-30 / 30-Jan-1970 / Jan 30, 1970）"}
+            year_note = ""
             if d[0] != r["year"]:
-                return {"ok": False, "error": f"生年が違います（{r['year']} のはず）。違う馬のページかもしれません"}
+                if not confirm_year:
+                    return {"ok": False, "year_mismatch": True, "error": f"生年が違います（netkeiba では {r['year']}）。ページの馬が正しければ、行の「生年の違いを確認済み」にチェックして保存してください"}
+                year_note = f"（netkeiba の生年 {r['year']} と異なるが、ユーザーがページを見て確認）"
             if d[1] == 1 and d[2] == 1 and not confirm_jan1:
                 return {"ok": False, "need_confirm": True, "error": "1 月 1 日は日付不明の仮置きの可能性があります。実際に 1 月 1 日なら確認して保存してください"}
             src = url or self._with_override(r)["url"]
             if url:
                 self.remember_url(horse_id, url)
-            note = OK_NOTE + ("（1月1日を確認のうえ保存）" if d[1] == 1 and d[2] == 1 else "")
+            note = OK_NOTE + ("（1月1日を確認のうえ保存）" if d[1] == 1 and d[2] == 1 else "") + year_note
             prev_log = next((x for x in self._read_csv(self.log_p)[1:] if x and x[0] == horse_id), None)
             with open(self.manual_p, "a", encoding="utf-8", newline="") as f:
                 csv.writer(f).writerow([horse_id, r["name"], d[0], d[1], d[2], src, note])
@@ -354,7 +357,7 @@ function initBatch(){const L=$('rows');L.innerHTML='';
   const div=document.createElement('div');div.className='row'+(st.err?' bad':'');
   div.innerHTML=`<div><b>${i+1}. ${esc(it.name)}</b> <span class="muted">${esc(it.name_en||'')} ／ 生年 ${it.year} ／ 影響 ${it.impact}</span></div>
   <div class="det muted" id="det_${h}">検出待ち…</div>
-  <div><input type="text" id="in_${h}" placeholder="例 30-Jan-1970" oninput="rows['${h}'].edited=true"> <label><input type="checkbox" id="nn_${h}"> 記載なし</label> <label><input type="checkbox" id="j1_${h}"> 1月1日で確認</label></div>
+  <div><input type="text" id="in_${h}" placeholder="例 30-Jan-1970" oninput="rows['${h}'].edited=true"> <label><input type="checkbox" id="nn_${h}"> 記載なし</label> <label><input type="checkbox" id="j1_${h}"> 1月1日で確認</label> <label><input type="checkbox" id="yc_${h}"> 生年の違いを確認済み</label></div>
   <div class="muted"><button onclick="openOne(${i})">開く</button><button onclick="cand(${i})">次の候補で開く</button>候補: <span id="cu_${h}">${esc(url(it).split('/').pop()||'（候補なし。馬名で探して URL を貼ってください）')}</span>
    <a class="btn" href="https://www.jbis.jp/navi_search/?keyword=${q(it.name_en||it.name)}" target="sh_alt" >JBIS</a><a class="btn" href="https://en.wikipedia.org/w/index.php?search=${q((it.name_en||it.name)+' horse')}" target="sh_alt">Wikipedia</a>
    <input type="text" id="ur_${h}" placeholder="実際のURL（違うとき）" style="width:34%" onchange="setUrl('${h}')"></div><div class="err" id="er_${h}">${esc(st.err)}</div>`;
@@ -377,9 +380,9 @@ async function poll(force){const d=await api('/api/batch?n='+N);
  $('stat').innerHTML=`残り ${d.remaining} 頭 ／ 保存 ${d.saved}・記載なし ${d.none} ／ `+(d.auto_commit?`コミットまで あと ${Math.max(d.auto_commit-d.unsaved,0)} 件 <button onclick="commitNow()">今すぐコミット</button> <span class="muted">${esc(d.git||'')}</span>`:'自動コミット: 無効');
  $('recent').innerHTML=d.recent.map(r=>`<li>${esc(r.name)}: ${esc(r.text)}</li>`).join('')||'<li class="muted">なし</li>';
  usSeenAgo=d.us_seen_ago;renderUs();const s=d.items.map(i=>i.horse_id).join(',');batch=d.items;if(s!==sig||force){sig=s;initBatch()}updateDet(d.detected)}
-async function saveBatch(){const out=[];batch.forEach(it=>{const h=it.horse_id,text=$('in_'+h).value.trim(),none=$('nn_'+h).checked,j1=$('j1_'+h).checked;
+async function saveBatch(){const out=[];batch.forEach(it=>{const h=it.horse_id,text=$('in_'+h).value.trim(),none=$('nn_'+h).checked,j1=$('j1_'+h).checked,yc=$('yc_'+h).checked;
   const u=$('ur_'+h).value.trim()||$('ur_'+h).dataset.det||'';
-  if(none)out.push({horse_id:h,none:true});else if(text)out.push({horse_id:h,text,confirm_jan1:j1,url:u});else out.push({horse_id:h,skip:true})});
+  if(none)out.push({horse_id:h,none:true});else if(text)out.push({horse_id:h,text,confirm_jan1:j1,confirm_year:yc,url:u});else out.push({horse_id:h,skip:true})});
  const r=await api('/api/batch_save',{rows:out});let bad=0;
  r.results.forEach(x=>{if(!x.ok){bad++;rows[x.horse_id].err=x.error||'保存できません'}else{delete rows[x.horse_id]}});
  await poll(true);if(bad)alert(bad+' 頭は保存できませんでした。赤い行の理由を確認してください')}
@@ -432,7 +435,7 @@ def make_handler(store: Store, token: str):
             body = json.loads(self.rfile.read(n) or b"{}")
             path = urllib.parse.urlparse(self.path).path
             if path == "/api/save":
-                self._json(store.save(body.get("horse_id", ""), body.get("text", ""), bool(body.get("confirm_jan1")), (body.get("url") or "").strip() or None))
+                self._json(store.save(body.get("horse_id", ""), body.get("text", ""), bool(body.get("confirm_jan1")), (body.get("url") or "").strip() or None, bool(body.get("confirm_year"))))
             elif path == "/api/none":
                 self._json(store.none(body.get("horse_id", "")))
             elif path == "/api/commit":
