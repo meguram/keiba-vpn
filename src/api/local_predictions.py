@@ -33,6 +33,21 @@ def _day_of(card: dict) -> str:
     return str(card.get("date") or "").replace("-", "").replace("/", "")[:8]
 
 
+def shadow_model_label(day: str, inf: Path | None = None) -> str:
+    """shadow の予測を作ったモデル名。shadow のファイルにはモデル名が無い（設定は後から変わる）ので、
+    日付ごとの対応表 ``predictions_backfill/_shadow_models.json``（{"20261018": "bundle_2025"}）があればそれを使い、無ければ現在の設定。"""
+    import json
+
+    inf = inf or inference_dir()
+    try:
+        m = json.loads((inf / "predictions_backfill" / "_shadow_models.json").read_text(encoding="utf-8"))
+        if m.get(day):
+            return str(m[day])
+    except (OSError, ValueError):
+        pass
+    return Path(os.environ.get("KEIBA_V3_BUNDLE") or "").name or "shadow"
+
+
 def find_local_prediction(race_id: str, day: str, inf: Path | None = None) -> tuple[Path, str, str] | None:
     """(parquet のパス, source, モデル名)。優先順位は shadow > バックフィル。"""
     inf = inf or inference_dir()
@@ -40,8 +55,7 @@ def find_local_prediction(race_id: str, day: str, inf: Path | None = None) -> tu
         return None
     shadow = inf / "predictions_v3" / day / f"{race_id}.parquet"
     if shadow.exists():
-        label = Path(os.environ.get("KEIBA_V3_BUNDLE") or "").name or "shadow"
-        return shadow, "shadow", label
+        return shadow, "shadow", shadow_model_label(day, inf)
     cands = sorted((inf / "predictions_backfill").glob(f"*/{day}/{race_id}.parquet"), key=lambda p: p.stat().st_mtime, reverse=True)
     if cands:
         return cands[0], "backfill", cands[0].parent.parent.name

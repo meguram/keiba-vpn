@@ -105,3 +105,14 @@ def test_eval_backfill_logloss_and_top1_hit():
     r = evaluate(preds, fin, bins=2)
     assert r["races"] == 2 and r["rows"] == 6 and r["top1_hit"] == 0.5
     assert r["win"]["logloss"] < r["win"]["uniform_logloss"] + 0.2 and r["top3"]["rate"] == 1.0
+
+
+def test_shadow_label_comes_from_the_day_table_when_present(tmp_path, monkeypatch):
+    monkeypatch.setenv("KEIBA_V3_BUNDLE", "/x/final_v4/bundle_v4_2025")
+    _put(tmp_path / "predictions_v3" / "20261018" / "R1.parquet", _probs())
+    assert LP.find_local_prediction("R1", "20261018", tmp_path)[2] == "bundle_v4_2025"     # 対応表が無ければ現在の設定
+    (tmp_path / "predictions_backfill").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "predictions_backfill" / "_shadow_models.json").write_text('{"20261018": "bundle_2025"}', encoding="utf-8")
+    assert LP.find_local_prediction("R1", "20261018", tmp_path)[2] == "bundle_2025"
+    d = LP.load_local_prediction_payload("R1", _storage(), inf=tmp_path)
+    assert d["model_version"] == "bundle_2025" and d["model_type"] == "ensemble_v3"
