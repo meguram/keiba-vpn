@@ -35,3 +35,8 @@ def test_slug_candidates_cover_known_exceptions():
     assert mc.slug_candidates("Kampala")[:3] == ["kampala", "kampala-0", "kampala-1"]
     assert mc.slug_candidates("Devil's Bag")[0] == "devils-bag"
     assert len(set(mc.slug_candidates("Hold Your Peace"))) == len(mc.slug_candidates("Hold Your Peace"))
+
+
+def test_slug_drops_of():
+    assert mc.slug_candidates("Tale of the Cat")[0] == "tale-cat"
+    assert mc.slug_candidates("Cox's Ridge")[0] == "coxs-ridge"

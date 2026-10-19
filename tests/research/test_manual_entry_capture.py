@@ -86,3 +86,15 @@ def test_http_batch_endpoints(tmp_path):
         assert json.load(urllib.request.urlopen(post))["results"][0]["ok"] is True
     finally:
         srv.shutdown()
+
+
+def test_set_url_is_remembered_even_without_saving(tmp_path):
+    s, d = _setup(tmp_path)
+    assert s.set_url("a", "https://example.test/x")["ok"] is False                      # 他サイトの URL は受け付けない
+    assert s.set_url("zzz", "https://sporthorse-data.com/pedigree/q")["ok"] is False
+    assert s.set_url("a", "https://sporthorse-data.com/pedigree/alpha-9")["ok"] is True
+    assert s.next()["item"]["url"].endswith("/alpha-9")
+    # 記載なし・空欄の行でも、貼られた URL は残る
+    s.batch_save([{"horse_id": "b", "none": True, "url": "https://sporthorse-data.com/pedigree/beta-7"}])
+    rows = list(csv.reader(open(d / "sporthorse_urls.csv", encoding="utf-8")))
+    assert ["b", "https://sporthorse-data.com/pedigree/beta-7"] in rows and ["a", "https://sporthorse-data.com/pedigree/alpha-9"] in rows

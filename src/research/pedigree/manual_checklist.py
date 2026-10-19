@@ -63,8 +63,8 @@ function downloadCsv(){const a=document.createElement('a');a.href=URL.createObje
 """
 
 
-STOP_MIN = {"the", "to"}                                           # 実例で取り除かれていた語（Key to the Mint -> key-mint, The Tetrarch -> tetrarch）
-STOP_WIDE = STOP_MIN | {"a", "an", "of", "and", "in", "on", "at", "for", "by"}
+STOP_MIN = {"the", "to", "of"}                                     # 実例で取り除かれていた語（Key to the Mint -> key-mint, The Tetrarch -> tetrarch, Tale of the Cat -> tale-cat）
+STOP_WIDE = STOP_MIN | {"a", "an", "and", "in", "on", "at", "for", "by"}
 SUFFIXES = ["", "-0", "-1", "-2"]                                  # 同名の区別に付く番号（kampala-1, key-mint-0 など）
 
 

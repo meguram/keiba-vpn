@@ -175,11 +175,24 @@ class Store:
                     "git": self.git_status, "auto_commit": self.commit_every,
                     "recent": [{"horse_id": u["horse_id"], "name": u["name"], "text": u["text"]} for u in self.undo_stack[-5:]][::-1]}
 
+    def set_url(self, horse_id: str, url: str) -> dict:
+        """「実際の URL」欄に貼られた URL をその場で記憶する（保存や記載なしを押さなくても残す）。"""
+        with self.lock:
+            url = (url or "").strip()
+            if not self._row(horse_id):
+                return {"ok": False, "error": "対象の馬が見つかりません"}
+            if not url.startswith("https://sporthorse-data.com/"):
+                return {"ok": False, "error": "SporthorseData の URL（https://sporthorse-data.com/...）を入れてください"}
+            self.remember_url(horse_id, url)
+            return {"ok": True}
+
     def batch_save(self, rows: list[dict]) -> dict:
         """行ごとに 保存 / 記載なし / あとで を処理する。失敗した行は未処理のまま残り、理由を返す。"""
         results = []
         for r in rows:
             hid = r.get("horse_id", "")
+            if r.get("url") and (r.get("none") or not r.get("text")):   # 保存しない行でも、貼られた URL は残す
+                self.set_url(hid, r["url"])
             if r.get("none"):
                 out = self.none(hid)
             elif r.get("text"):
@@ -325,7 +338,8 @@ async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET'
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const q=s=>encodeURIComponent(s);const $=id=>document.getElementById(id);
 function url(it){const c=it.candidates||[it.url];return c[rows[it.horse_id].ci%c.length]}
 function openOne(i){const it=batch[i];if(!it)return null;return window.open(url(it),'sh_'+i)}      // 名前つきタブ: 次の頭数でも同じタブを使い回す（noopener は付けない）
-function openAll(){let blocked=0;batch.forEach((it,i)=>{if(!openOne(i))blocked++});$('popmsg').textContent=blocked?`${blocked} 件がポップアップでブロックされました。アドレスバーで許可するか、各行の「開く」を使ってください`:''}
+function openAll(){let blocked=0;batch.forEach((it,i)=>{if(!openOne(i))blocked++});$('popmsg').textContent=blocked?`${blocked} 件がポップアップでブロックされました。アドレスバー右端のアイコンから「127.0.0.1:8765 のポップアップを常に許可」にして、もう一度押してください（各行の「開く」でも個別に開けます）`:''}
+async function setUrl(h){const v=$('ur_'+h).value.trim();if(!v)return;const r=await api('/api/set_url',{horse_id:h,url:v});$('er_'+h).textContent=r.ok?'':r.error;if(r.ok){$('er_'+h).className='ok';$('er_'+h).textContent='このURLを記憶しました'}else $('er_'+h).className='err'}
 function cand(i){const it=batch[i];rows[it.horse_id].ci++;$('cu_'+it.horse_id).textContent=url(it).split('/').pop();openOne(i)}
 function initBatch(){const L=$('rows');L.innerHTML='';
  if(!batch.length){L.innerHTML='<p class="ok"><b>すべて処理しました。</b></p>';return}
@@ -336,7 +350,7 @@ function initBatch(){const L=$('rows');L.innerHTML='';
   <div><input type="text" id="in_${h}" placeholder="例 30-Jan-1970" oninput="rows['${h}'].edited=true"> <label><input type="checkbox" id="nn_${h}"> 記載なし</label> <label><input type="checkbox" id="j1_${h}"> 1月1日で確認</label></div>
   <div class="muted"><button onclick="openOne(${i})">開く</button><button onclick="cand(${i})">次の候補で開く</button>候補: <span id="cu_${h}">${esc(url(it).split('/').pop())}</span>
    <a class="btn" href="https://www.jbis.jp/navi_search/?keyword=${q(it.name_en||it.name)}" target="sh_alt" >JBIS</a><a class="btn" href="https://en.wikipedia.org/w/index.php?search=${q((it.name_en||it.name)+' horse')}" target="sh_alt">Wikipedia</a>
-   <input type="text" id="ur_${h}" placeholder="実際のURL（違うとき）" style="width:34%"></div><div class="err" id="er_${h}">${esc(st.err)}</div>`;
+   <input type="text" id="ur_${h}" placeholder="実際のURL（違うとき）" style="width:34%" onchange="setUrl('${h}')"></div><div class="err" id="er_${h}">${esc(st.err)}</div>`;
   L.appendChild(div)})}
 function updateDet(m){batch.forEach(it=>{const h=it.horse_id,d=m[h],st=rows[h];if(!$('det_'+h))return;
  if(d&&d.text){$('det_'+h).innerHTML=`<span class="ok">検出: <b>${esc(d.text)}</b></span> <span class="muted">${esc((d.url||'').split('/').pop())}</span>`;if(!st.edited&&!$('in_'+h).value)$('in_'+h).value=d.text;$('ur_'+h).dataset.det=d.url||''}
@@ -409,6 +423,8 @@ def make_handler(store: Store, token: str):
                 self._json(store.skip(body.get("horse_id", "")))
             elif path == "/api/undo":
                 self._json(store.undo())
+            elif path == "/api/set_url":
+                self._json(store.set_url(body.get("horse_id", ""), body.get("url", "")))
             elif path == "/api/batch_save":
                 self._json(store.batch_save(body.get("rows", [])))
             elif path == "/api/ext_detect":
