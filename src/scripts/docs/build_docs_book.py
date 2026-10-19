@@ -172,6 +172,8 @@ PARTS: list[Part] = [
           [("course_specific_effects", "コース特注の要因（tp-31）"), ("training_pipeline_decisions", "決定ログ")]),
         C("transport_and_stay", "輸送のありなし（厩舎の拠点×開催場）と滞在（追い切りの場所）で好走率が変わるか（tp-33）。判定できるデータの範囲、V4 の予測に対する残差、年別の再現性、特徴量の増分。", "結果",
           [("course_specific_effects", "コース特注の要因（tp-31）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("lap_groups_and_trainer_stats", "追い切りのラップ種別（A1〜B3）と、調教師別・コース別・前週土日の坂路時計の成績（tp-35）。1F ごとのラップに直せる割合と分布、傾向の再現性、V4 への増分、TL_A 再生成の効果。", "結果",
+          [("rest_and_interval", "休養明け・レース間隔（tp-34）"), ("training_pipeline_decisions", "決定ログ")]),
         C("rest_and_interval", "休養明け・レース間隔の分析（tp-34）。間隔の帯・叩き何戦目別の好走率と V4 に対する残差、馬・調教師ごとの再現性、特徴量 8 群の増分、見かけの大きな改善が浮動小数点の端数のリークだった経緯と修正。", "結果",
           [("race_volatility", "荒れやすいレースの分析（tp-30）"), ("training_pipeline_decisions", "決定ログ")]),
         C("race_volatility", "荒れやすいレースの分析（tp-30）。荒れの事後指標、荒れやすい条件・コース、事前予測（オッズなし/あり）、予想の特徴量・温度調整への寄与、3連複の買い目の幅（フォーメーション・流し・点数）への寄与。", "結果",
