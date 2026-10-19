@@ -29,10 +29,10 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a000827,カンパラ,adopted,1976,2,19,https://www.jbis.jp/horse/0000336378/,2026-10-19,"JBIS（Kampala(GB)、Date of Birth Feb 19,1976）。ユーザー提示の URL を 1 回だけ取得"
 000a001598,Bold Reasoning,adopted,1968,4,29,https://www.wikidata.org/wiki/Q4939066 ; https://en.wikipedia.org/wiki/Bold_Reasoning,2026-10-17,英語版 Wikipedia 冒頭文
 000a0014ce,Riverman,adopted,1969,3,22,https://www.wikidata.org/wiki/Q3433509 ; https://en.wikipedia.org/wiki/Riverman,2026-10-17,英語版 Wikipedia 冒頭文
-000a001e72,Gold Meridian,no_data,1982,,,,2026-10-17,
-000a00184d,Hold Your Peace,no_data,1969,,,https://www.wikidata.org/wiki/Q102241029,2026-10-17,
-000a000e44,Le Fabuleux,no_data,1961,,,,2026-10-17,
-000a001678,Kris,no_data,1976,,,https://www.jbis.jp/horse/0000336087/,2026-10-19,JBIS も年のみ
+000a001e72,Gold Meridian,no_data,1982,,,https://sporthorse-data.com/pedigree/gold-meridian,2026-10-19,ユーザー確認: 記載なし
+000a00184d,Hold Your Peace,adopted,1969,1,4,https://sporthorse-data.com/pedigree/hold-your-peace,2026-10-19,ユーザーがブラウザで目視確認
+000a000e44,Le Fabuleux,adopted,1961,2,12,https://sporthorse-data.com/pedigree/le-fabuleux,2026-10-19,ユーザーがブラウザで目視確認
+000a001678,Kris,adopted,1976,3,23,https://sporthorse-data.com/pedigree/kris,2026-10-19,ユーザーがブラウザで目視確認
 000a0016f2,Kris S. (米),adopted,1977,4,25,https://www.wikidata.org/wiki/Q6437279 ; https://en.wikipedia.org/wiki/Kris_S.,2026-10-17,英語版 Wikipedia 冒頭文
 000a000e32,Mill Reef(米),adopted,1968,2,23,https://www.wikidata.org/wiki/Q3314241 ; https://en.wikipedia.org/wiki/Mill_Reef,2026-10-17,英語版 Wikipedia 冒頭文
 000a00013a,フレンチデピュティFrench Deputy(米),adopted,1992,1,30,https://www.wikidata.org/wiki/Q11334069 ; https://ja.wikipedia.org/wiki/%E3%83%95%E3%83%AC%E3%83%B3%E3%83%81%E3%83%87%E3%83%94%E3%83%A5%E3%83%86%E3%82%A3,2026-10-17,日本語版 Wikipedia 冒頭文

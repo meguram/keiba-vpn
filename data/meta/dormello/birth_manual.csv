@@ -277,3 +277,6 @@ horse_id,name,birth_year,birth_month,birth_day,source_url,note
 000a000aa7,ヒカルタカイ,1964,4,9,https://www.wikidata.org/wiki/Q11329953,Wikidata(参照付き)（Wikidata 一括照会）
 000a000a40,ハクズイコウ,1961,3,19,https://www.wikidata.org/wiki/Q24877159,Wikidata(参照付き)（Wikidata 一括照会）
 000a000827,カンパラ,1976,2,19,https://www.jbis.jp/horse/0000336378/,"JBIS（Kampala(GB)、Date of Birth Feb 19,1976）。ユーザー提示の URL を 1 回だけ取得"
+000a00184d,Hold Your Peace,1969,1,4,https://sporthorse-data.com/pedigree/hold-your-peace,ユーザーがブラウザで目視確認
+000a000e44,Le Fabuleux,1961,2,12,https://sporthorse-data.com/pedigree/le-fabuleux,ユーザーがブラウザで目視確認
+000a001678,Kris,1976,3,23,https://sporthorse-data.com/pedigree/kris,ユーザーがブラウザで目視確認
