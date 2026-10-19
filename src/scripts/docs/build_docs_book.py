@@ -184,6 +184,8 @@ PARTS: list[Part] = [
           now=[("feature_investigation_catalog", "特徴量調査の総覧"), ("training_pipeline_decisions", "v4 は §33・§34")]),
         C("feature_investigation_catalog", "これまでの特徴量・前段モデル・モデル構造の調査を、概要・結果（勝率 LogLoss の差）・採否・根拠の節つきで網羅した総覧。現行 v4（1,135 列）の構成、枠順×コースの検証、データ・実装の問題、今後の調査対象の一覧。特徴量の採否はここから。", "結果",
           [("adopted_features_v3", "v3 の 301 列のグループ別一覧"), ("research_overview", "調査の全体像"), ("training_pipeline_decisions", "数値の正（§N）")]),
+        C("model_accuracy_summary", "予測モデル（アンサンブル v1〜v4）の精度を、train（学習に使ったデータ）・valid（調整用）・test 2025（最後に一度だけ）で並べた総括。過学習の読み方に加え、予測確率の帯ごとの実際の発生率（較正表と較正プロット）と、単勝・複勝の回収率（参考値）。", "結果",
+          [("research_overview", "調査の全体像"), ("feature_investigation_catalog", "特徴量調査の総覧"), ("training_pipeline_decisions", "各数値の根拠（§N）")]),
         C("adopted_features_v3", "アンサンブル v3 が使う 301 列を、LayerA・履歴・前段/相対化/追い切りラップ・血統/追加のグループごとに整理。代表列、意味、採用の根拠、注意点、不採用・保留の候補、列の正本の場所。", "結果",
           [("research_overview", "調査の全体像"), ("training_pipeline_decisions", "採否の根拠")], status="snapshot",
           note="v3（301 列）時点の一覧。現行の v4 は 1,135 列（v3 + 追加 834 列）で、追加分の内訳は特徴量調査の総覧と決定ログ §33・§34 にある。",
