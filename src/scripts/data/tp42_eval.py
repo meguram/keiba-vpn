@@ -7,6 +7,7 @@ python -m src.scripts.data.tp42_eval overlap    # 既存 V4 列との相関 / �
 python -m src.scripts.data.tp42_eval importance # V4 + 全群での勝率モデルの gain 重要度（fold 2023）
 python -m src.scripts.data.tp42_eval calib      # レースの強さの帯別の較正（基準 OOF）
 python -m src.scripts.data.tp42_eval subst      # 既存のレース内相対化列を外したとき、RL_B が代わりになるか
+python -m src.scripts.data.tp42_eval stack      # 軽い一次選別: V4 のアンサンブル OOF の log p_win に特徴量を 1 つ足す条件付きロジット（tp-39 と同じ）
 test 2025・2026 年は使わない。市場オッズ・人気は使わない。環境変数: TP39_THREADS, TP39_LOAD_LIMIT, TP39_MAX_HEAVY（tp39_eval の待機の仕組みを共用）。
 """
 
@@ -215,12 +216,21 @@ def cmd_subst(a) -> None:
     _log(json.dumps({k: {a: b for a, b in v["vs_V4"].items() if isinstance(b, float)} for k, v in res.items() if isinstance(v, dict) and "vs_V4" in v}, ensure_ascii=False))
 
 
+def cmd_stack(a) -> None:
+    import shutil
+
+    if not (OUT / "nprior.parquet").exists():
+        shutil.copy(te.V / "tp39" / "nprior.parquet", OUT / "nprior.parquet")          # 馬ごとの過去走数（履歴 0〜2 走の部分集合用）
+    te.GROUP_NAMES = ["RL_A", "RL_A2", "RL_B", "RL_C"]
+    te.cmd_stack(a)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["groups", "stage1", "stage2", "overlap", "importance", "calib", "subst"])
+    ap.add_argument("cmd", choices=["groups", "stage1", "stage2", "overlap", "importance", "calib", "subst", "stack"])
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    {"groups": cmd_groups, "stage1": cmd_stage1, "stage2": cmd_stage2, "overlap": cmd_overlap, "importance": cmd_importance, "calib": cmd_calib, "subst": cmd_subst}[a.cmd](a)
+    {"groups": cmd_groups, "stage1": cmd_stage1, "stage2": cmd_stage2, "overlap": cmd_overlap, "importance": cmd_importance, "calib": cmd_calib, "subst": cmd_subst, "stack": cmd_stack}[a.cmd](a)
 
 
 if __name__ == "__main__":
