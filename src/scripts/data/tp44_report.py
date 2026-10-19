@@ -164,7 +164,12 @@ def main() -> None:
     ap.add_argument("--rules", type=Path, required=True)
     ap.add_argument("--out", type=Path, default=OUT)
     a = ap.parse_args()
-    a.out.write_text(build(json.loads(a.pools.read_text(encoding="utf-8")), json.loads(a.rules.read_text(encoding="utf-8"))), encoding="utf-8")
+    text = build(json.loads(a.pools.read_text(encoding="utf-8")), json.loads(a.rules.read_text(encoding="utf-8")))
+    if a.out.exists() and "<!-- tp45:start -->" in a.out.read_text(encoding="utf-8"):      # tp-45 が足した節（5b）を作り直しで消さない
+        old = a.out.read_text(encoding="utf-8")
+        block = old[old.index("<!-- tp45:start -->"): old.index("<!-- tp45:end -->") + len("<!-- tp45:end -->")]
+        text = text.replace("<h2>6. 取り入れる価値のある手法と実装案</h2>", block + "\n<h2>6. 取り入れる価値のある手法と実装案</h2>", 1)
+    a.out.write_text(text, encoding="utf-8")
     print("wrote", a.out)
 
 
