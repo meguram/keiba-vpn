@@ -18,6 +18,11 @@ def f3(F, P):
     )
 
 
+def _bin_probs(bins, pm, marg):
+    """圧力ビンごとの展開確率（n × 3）。ビンが欠損の行は周辺分布。0 行でも (0, 3) を返す。"""
+    return np.array([pm[int(b)] if b is not None and b == b else marg for b in bins], dtype=float).reshape(-1, pm.shape[1])
+
+
 def f2(F, P, S=None):
     frozen = bool(S and S.get("frozen"))
     kn = pl.col("a_style").is_not_null().sum().over("race_id")
@@ -59,8 +64,7 @@ def f2(F, P, S=None):
         F = F.with_columns((r_k.cum_sum().over(H) - r_k).alias(f"_rs{k}"), (ind.cast(pl.Float64).cum_sum().over(H) - ind.cast(pl.Float64)).alias(f"f2_n_reg{k}"))
         F = F.with_columns((pl.col(f"_rs{k}") / (pl.col(f"f2_n_reg{k}") + kap)).alias(f"f2_a_reg{k}")).drop(f"_rs{k}")
     pm = np.array(P["pmap"]); marg = pm.mean(0)
-    bins = F["f2_bin"].to_numpy()
-    probs = np.array([pm[int(b)] if b == b and b is not None else marg for b in bins])
+    probs = _bin_probs(F["f2_bin"].to_list(), pm, marg)
     a = F.select("f2_a_reg0", "f2_a_reg1", "f2_a_reg2").to_numpy()
     F = F.with_columns(pl.Series("f2_pace_match", (probs * a).sum(1)), (pl.col("f2_a_reg0") - pl.col("f2_a_reg2")).alias("f2_pace_adv"),
                        pl.Series("f2_p_fast", probs[:, 0]))

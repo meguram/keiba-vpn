@@ -132,6 +132,8 @@ def build_inference_features(
     """
     t0 = time.perf_counter()
     today = card_to_raw_runs(card, graded_names)
+    if today.height == 0:
+        raise ValueError("出馬表に馬番の確定した馬がいない（枠順確定前の出馬表の可能性）。特徴量は作れない")
     # 日付が空のまま履歴に足すと、Elo の日付ループが進まず止まらなくなる。先に弾く。
     bad = today.filter(
         pl.col("date").is_null() | (pl.col("date").cast(pl.Utf8).fill_null("") == "")

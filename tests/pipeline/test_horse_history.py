@@ -178,3 +178,16 @@ def test_check_runs_rejects_zero_distance_and_infinite_time(built):
         check_runs(runs.with_columns(pl.when(pl.col("race_id") == runs["race_id"][0]).then(0).otherwise(pl.col("distance")).alias("distance")))
     with pytest.raises(ValueError, match="無限大"):
         check_runs(runs.with_columns(pl.when(pl.col("race_id") == runs["race_id"][0]).then(float("inf")).otherwise(pl.col("time_sec")).alias("time_sec")))
+
+
+def test_bin_probs_handles_empty_and_missing_bins():
+    import numpy as np
+
+    from src.pipeline.features.horse_history.match import _bin_probs
+
+    pm = np.array([[0.5, 0.3, 0.2], [0.2, 0.5, 0.3], [0.1, 0.3, 0.6]])
+    marg = pm.mean(0)
+    assert _bin_probs([], pm, marg).shape == (0, 3)
+    got = _bin_probs([0, None, 2, float("nan")], pm, marg)
+    assert got.shape == (4, 3)
+    assert np.allclose(got[0], pm[0]) and np.allclose(got[2], pm[2]) and np.allclose(got[1], marg) and np.allclose(got[3], marg)

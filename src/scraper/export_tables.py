@@ -446,6 +446,20 @@ def bridge_on_time_results(year: str) -> dict:
     return stats
 
 
+def _drop_duplicate_entries(df: pd.DataFrame) -> pd.DataFrame:
+    """同じ (race_id, 馬) の行を後勝ちで 1 行にする。馬の識別は horse_id（枠順確定前の出馬表は horse_number が全頭 0 なので番号では潰れる）。"""
+    if "horse_id" in df.columns:
+        hid = df["horse_id"].astype("string").fillna("").str.strip()
+        if "horse_number" in df.columns:
+            alt = "no" + df["horse_number"].astype("string").fillna("")
+        else:
+            alt = pd.Series(range(len(df)), index=df.index).astype("string")
+        key = hid.where(hid != "", alt)
+        return df.loc[~pd.DataFrame({"r": df["race_id"].astype(str), "k": key}).duplicated(keep="last")]
+    subset = ["race_id", "horse_number"] if "horse_number" in df.columns else ["race_id"]
+    return df.drop_duplicates(subset=subset, keep="last")
+
+
 def _append_parquet_rows(path: Path, new_rows: list[dict]) -> int:
     """既存 flat Parquet に行を追記して書き戻す。"""
     if not new_rows:
@@ -454,10 +468,7 @@ def _append_parquet_rows(path: Path, new_rows: list[dict]) -> int:
         old = pq.read_table(path).to_pandas()
         merged = pd.concat([old, pd.DataFrame(new_rows)], ignore_index=True)
         if "race_id" in merged.columns:
-            merged = merged.drop_duplicates(
-                subset=["race_id", "horse_number"] if "horse_number" in merged.columns else ["race_id"],
-                keep="last",
-            )
+            merged = _drop_duplicate_entries(merged)
     else:
         merged = pd.DataFrame(new_rows)
     path.parent.mkdir(parents=True, exist_ok=True)

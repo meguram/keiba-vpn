@@ -220,3 +220,66 @@ def test_card_frame_keeps_v3_race_columns(env):
     assert set(wtp.V3_CARD_EXTRA) <= set(df.columns)
     r0 = df.row(0, named=True)
     assert r0["bracket_number"] == 3 and r0["weight_change"] == -4 and r0["weather"] == "晴"
+
+
+def test_race_with_unassigned_horse_numbers_is_isolated(env, tmp_path, monkeypatch):
+    """枠順確定前の出馬表（馬番が全頭 0）は、そのレースだけ error にして、他のレースは通常どおり作る。"""
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    rids = list(sh)
+    assert len(rids) >= 2
+    bad = rids[0]
+    for e in sh[bad]["entries"]:
+        e["horse_number"] = 0
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    evs = {e["race_id"]: e for e in wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")}
+    assert evs[bad]["status"] == "error" and "馬番" in evs[bad]["error"]
+    assert all(evs[r]["status"] == "ok" and evs[r]["rows"] == len(sh[r]["entries"]) for r in rids if r != bad)
+
+
+def test_all_races_unassigned_returns_errors_without_raising(env, tmp_path, monkeypatch):
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    sh = _shutuba_from_day(tables, day, with_weight=False)
+    for v in sh.values():
+        for e in v["entries"]:
+            e["horse_number"] = 0
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, mode="features")
+    assert len(evs) == len(sh) and all(e["status"] == "error" for e in evs)
+
+
+def test_build_inference_features_explains_empty_card(env):
+    from src.pipeline.features.horse_history.common import build_repair_map
+    from src.pipeline.features.horse_history.inference import build_inference_features
+
+    tables, la, day = env
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    for v in sh.values():
+        for e in v["entries"]:
+            e["horse_number"] = 0
+    card = wtp.fill_card_meta(wtp.card_frame(FakeStorage(sh), list(sh)), [])
+    with pytest.raises(ValueError, match="馬番"):
+        build_inference_features(read_runs_raw(tables), card, build_repair_map(la))
+
+
+def test_single_horse_and_all_debut_races_do_not_break(env):
+    """1 頭だけのレース・全頭が初出走のレースでも特徴量が作れる（空配列で落ちない）。"""
+    from src.pipeline.features.horse_history.common import build_repair_map
+    from src.pipeline.features.horse_history.inference import build_inference_features
+
+    tables, la, day = env
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    rid = next(iter(sh))
+    one = {rid: {**sh[rid], "entries": sh[rid]["entries"][:1], "field_size": 1}}
+    card = wtp.fill_card_meta(wtp.card_frame(FakeStorage(one), [rid]), [])
+    out, _ = build_inference_features(read_runs_raw(tables), card, build_repair_map(la))
+    assert out.height == 1
+
+    debut = {rid: {**sh[rid], "entries": [{**e, "horse_id": f"NEW{i:03d}"} for i, e in enumerate(sh[rid]["entries"])]}}
+    card = wtp.fill_card_meta(wtp.card_frame(FakeStorage(debut), [rid]), [])
+    out, _ = build_inference_features(read_runs_raw(tables), card, build_repair_map(la))
+    assert out.height == len(debut[rid]["entries"]) and out["f2_pace_match"].len() == out.height

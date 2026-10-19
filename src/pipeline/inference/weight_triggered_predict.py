@@ -213,6 +213,21 @@ def run_for_races(
             races = [r for r in races if r["race_id"] not in unusable]
             if card.height == 0:
                 return events_bad
+        # 枠順確定前の出馬表（馬番が全頭 0）は特徴量の対象にならない。他のレースを巻き込まないよう、先に除く。
+        no_number = (card.group_by("race_id").agg((pl.col("horse_number").fill_null(0) > 0).sum().alias("k")).filter(pl.col("k") == 0)["race_id"].to_list())
+        if no_number:
+            logger.error("[weight-trigger] 馬番が確定していない出馬表のため除外: %s", no_number)
+            card = card.filter(~pl.col("race_id").is_in(no_number))
+            for r in races:
+                if r["race_id"] in no_number:
+                    pt = r.get("post_time")
+                    ev = {"race_id": r["race_id"], "at": now.isoformat(timespec="seconds"), "status": "error", "mode": mode,
+                          "error": "出馬表の馬番が未確定（枠順確定前）"}
+                    _append_event(pt.strftime("%Y%m%d") if pt else now.strftime("%Y%m%d"), ev)
+                    events_bad.append(ev)
+            races = [r for r in races if r["race_id"] not in no_number]
+            if card.height == 0:
+                return events_bad
         # 馬体重は出走馬全頭に同時に発表される。揃ったレースで体重の無い馬は、出走取消・除外とみなして出走馬から外す。
         announced = [rid for rid, k in weights_known.items() if k]
         no_weight = (pl.col("race_id").is_in(announced)) & ~(pl.col("weight").cast(pl.Float64, strict=False) > 0).fill_null(False)
