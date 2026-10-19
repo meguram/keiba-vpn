@@ -46,4 +46,15 @@ def test_slug_drops_in_and_lists_wider_variants():
     c = mc.slug_candidates("In The Wings")
     assert c[0] == "wings" and "in-the-wings" in c
     h = mc.slug_candidates("Hold Your Peace")
-    assert h[0] == "hold-your-peace" and "hold-peace" in h          # your を含む形が先、除いた形も候補に残す
+    assert h[0] == "hold-peace" and "hold-your-peace" in h          # your も取り除いた形が先、そのままの形も候補に残す
+
+
+def test_slug_drops_all_stopwords_first_but_keeps_fallbacks():
+    assert mc.slug_candidates("Wild Again")[0] == "wild"
+    assert mc.slug_candidates("Be My Guest")[0] == "guest"
+    assert mc.slug_candidates("Who Is It")[0] == "who-is-it"            # すべてがストップワードならそのままの形
+    c = mc.slug_candidates("Key to the Mint")
+    assert c[0] == "key-mint" and "key-to-the-mint" in c
+    c = mc.slug_candidates("Our Emblem")
+    assert c[0] == "emblem" and "our-emblem" in c
+    assert len(mc.slug_candidates("Hold Your Peace")) <= 14

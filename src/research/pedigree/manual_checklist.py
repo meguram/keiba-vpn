@@ -63,8 +63,13 @@ function downloadCsv(){const a=document.createElement('a');a.href=URL.createObje
 """
 
 
-STOP_MIN = {"the", "to", "of", "in"}                               # 実例で取り除かれていた語（Key to the Mint -> key-mint, The Tetrarch -> tetrarch, Tale of the Cat -> tale-cat, In The Wings）
-STOP_WIDE = STOP_MIN | {"a", "an", "and", "as", "at", "by", "for", "from", "into", "on", "or", "with", "is", "it", "no", "my", "your", "our", "his", "her", "their", "its"}
+STOP_MIN = {"the", "to", "of", "in"}                               # 実例で取り除かれていた語（Key to the Mint -> key-mint, The Tetrarch -> tetrarch, Tale of the Cat -> tale-cat, In The Wings -> wings）
+# 英語の一般的なストップワード（NLTK の英語リスト相当）。サイトは同様の語をすべて取り除くとのユーザー情報に基づき、最有力の候補で取り除く
+STOP_ALL = set("""i me my myself we our ours ourselves you your yours yourself yourselves he him his himself she her hers herself it its itself they them their theirs
+themselves what which who whom this that these those am is are was were be been being have has had having do does did doing a an the and but if or because as until while of at by
+for with about against between into through during before after above below to from up down in out on off over under again further then once here there when where why how all any both
+each few more most other some such no nor not only own same so than too very s t can will just don should now""".split())
+STOP_WIDE = STOP_ALL | STOP_MIN
 SUFFIXES = ["", "-0", "-1", "-2"]                                  # 同名の区別に付く番号（kampala-1, key-mint-0 など）
 
 
@@ -76,7 +81,7 @@ def _slug_words(name: str, stop: set[str]) -> str:
 def slug_candidates(name: str) -> list[str]:
     """ページ名の候補（可能性の高い順、重複なし）。最初が最有力。"""
     base = slug(name)
-    variants = [_slug_words(name, STOP_MIN), base, _slug_words(name, STOP_WIDE)]
+    variants = [_slug_words(name, STOP_WIDE), _slug_words(name, STOP_MIN), base]
     seen, out = set(), []
     for v in variants:
         for suf in SUFFIXES:
