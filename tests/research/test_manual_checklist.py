@@ -40,3 +40,10 @@ def test_slug_candidates_cover_known_exceptions():
 def test_slug_drops_of():
     assert mc.slug_candidates("Tale of the Cat")[0] == "tale-cat"
     assert mc.slug_candidates("Cox's Ridge")[0] == "coxs-ridge"
+
+
+def test_slug_drops_in_and_lists_wider_variants():
+    c = mc.slug_candidates("In The Wings")
+    assert c[0] == "wings" and "in-the-wings" in c
+    h = mc.slug_candidates("Hold Your Peace")
+    assert h[0] == "hold-your-peace" and "hold-peace" in h          # your を含む形が先、除いた形も候補に残す

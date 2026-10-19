@@ -63,8 +63,8 @@ function downloadCsv(){const a=document.createElement('a');a.href=URL.createObje
 """
 
 
-STOP_MIN = {"the", "to", "of"}                                     # 実例で取り除かれていた語（Key to the Mint -> key-mint, The Tetrarch -> tetrarch, Tale of the Cat -> tale-cat）
-STOP_WIDE = STOP_MIN | {"a", "an", "and", "in", "on", "at", "for", "by"}
+STOP_MIN = {"the", "to", "of", "in"}                               # 実例で取り除かれていた語（Key to the Mint -> key-mint, The Tetrarch -> tetrarch, Tale of the Cat -> tale-cat, In The Wings）
+STOP_WIDE = STOP_MIN | {"a", "an", "and", "as", "at", "by", "for", "from", "into", "on", "or", "with", "is", "it", "no", "my", "your", "our", "his", "her", "their", "its"}
 SUFFIXES = ["", "-0", "-1", "-2"]                                  # 同名の区別に付く番号（kampala-1, key-mint-0 など）
 
 
@@ -110,7 +110,7 @@ def build_rows(ancestors: dict[str, dict], zone: list[dict], nk: dict[str, dict]
         key = en if slug(en) else a["name"]
         cands = [f"{base_url.rstrip('/')}/{c}" for c in slug_candidates(key)]
         rows.append({"horse_id": h, "name": a["name"].replace("\xa0", " "), "name_en": en, "year": int(a["birthday"][:4]),
-                     "impact": n, "url": cands[0] if cands else base_url, "candidates": cands[:10]})
+                     "impact": n, "url": cands[0] if cands else base_url, "candidates": cands[:14]})
     return rows
 
 
