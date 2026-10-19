@@ -17,16 +17,94 @@ import pandas as pd
 
 from src.pipeline.megu_index.common import MEGU_BASE, MEGU_POINTS_PER_SEC
 
-MEGU_VERSION = "v3-base50-robust1"
+MEGU_VERSION = "v3-base50-robust2-w55"
 CLIP_MIN = 0.0
 CLIP_MAX = 100.0
 MIN_PAR_SAMPLES = 30
 # 基準が L1（場×回り×クラス）または L2（回りを問わない×クラス）で取れた行だけを『高信頼』とみなす
 HIGH_CONFIDENCE_LEVELS = ("L1_class", "L2_no_direction")
 
+W55_COLUMNS = ["megu_index_w55", "megu_index_w55_robust", "megu_index_w55_half_robust"]
+
 ROBUST_COLUMNS = [
     "megu_index_raw", "megu_index_robust", "megu_index_status", "low_confidence", "megu_version",
+    *W55_COLUMNS,
 ]
+
+# ── 斤量を 55kg に一般化した指数（成長曲線用）──────────────────────────────────────
+# 現行の斤量補正は『性別ごとの基準斤量（牝 53 / 牡・セン 55）に換算したタイム』を作る。基準タイム(par)はその換算タイムの
+# 2 着馬の平均なので、『全馬 55kg』に変えるには、馬のタイムと par の両方を 55kg に直す必要がある。
+#   t_nw      = 走破 − ペース補正 − 馬場補正             （斤量補正の前）
+#   corr_w55  = t_nw − β·(斤量 − 55)·(距離/2000)          （全馬 55kg に換算したタイム。斤量欠損は NaN）
+#   par_w55   = par + 2β·(距離/2000)·p_牝                  （par の 2 着馬のうち牝の割合 p_牝 だけ、基準が 53→55kg で遅くなる）
+#   指数 w55  = 50 + (par_w55 − corr_w55)·10
+# 性差の項: 同じ条件なら 牡 は +20β·d·p_牝 点、牝 は −20β·d·(1−p_牝) 点だけ現行の指数から動く（牡と牝の差は 20β·d 点）。
+# 『半分版』は β を 0.5 倍にした比較用（par も同じ β で作り直した場合に等しくなるよう、par の 2 着馬の平均斤量偏差 m_dev を使う）。
+W55_BASE_KG = 55.0
+# 2 着馬（平地、2020〜2025）の 牝の割合 p と 平均斤量偏差 m_dev（斤量−基準）を 面×距離帯で集計した値
+W55_PAR_STATS = {
+    "ダート|~1200": {"p": 0.4657, "m_dev": 0.9492},
+    "ダート|1400-1600": {"p": 0.3220, "m_dev": 1.2531},
+    "ダート|1800-2000": {"p": 0.2877, "m_dev": 0.9706},
+    "ダート|2200-2400": {"p": 0.0601, "m_dev": 1.2523},
+    "ダート|2500~": {"p": 0.0598, "m_dev": 4.5043},
+    "芝|~1200": {"p": 0.5787, "m_dev": 0.9924},
+    "芝|1400-1600": {"p": 0.5029, "m_dev": 1.1751},
+    "芝|1800-2000": {"p": 0.3977, "m_dev": 1.0097},
+    "芝|2200-2400": {"p": 0.1987, "m_dev": 1.2428},
+    "芝|2500~": {"p": 0.1252, "m_dev": 3.0254},
+}
+W55_PAR_STATS_ALL = {"p": 0.3782, "m_dev": 1.1682}
+_W55_BANDS = ((0, 1300, "~1200"), (1300, 1700, "1400-1600"), (1700, 2100, "1800-2000"), (2100, 2500, "2200-2400"), (2500, 10**9, "2500~"))
+_USABLE_STATUS = ("ok", "clipped", "restored_out_of_range", "restored_clipped")
+
+
+def _w55_stats(surface, distance) -> tuple[float, float]:
+    try:
+        d = float(distance)
+    except (TypeError, ValueError):
+        return W55_PAR_STATS_ALL["p"], W55_PAR_STATS_ALL["m_dev"]
+    for lo, hi, name in _W55_BANDS:
+        if lo <= d < hi:
+            s = W55_PAR_STATS.get(f"{surface}|{name}")
+            if s:
+                return s["p"], s["m_dev"]
+    return W55_PAR_STATS_ALL["p"], W55_PAR_STATS_ALL["m_dev"]
+
+
+def add_w55_columns(df: pd.DataFrame, *, beta_weight: float) -> pd.DataFrame:
+    """斤量を 55kg に一般化した指数の列（W55_COLUMNS）を足す。``add_robust_columns`` の後に呼ぶ（行は増減しない）。
+
+    df に必要な列: finish_time_sec, delta_pace_sec, delta_track_sec, jockey_weight_num, dist_scale, par_time_final,
+    surface, distance, megu_index_status。指数を付けない行（no_par・invalid・障害 など）と斤量欠損の行は NaN。
+    """
+    out = df.copy()
+
+    def num(c):
+        return pd.to_numeric(out[c], errors="coerce") if c in out.columns else pd.Series(np.nan, index=out.index)
+
+    t_nw = num("finish_time_sec") - num("delta_pace_sec").fillna(0) - num("delta_track_sec").fillna(0)
+    w = num("jockey_weight_num")
+    ds = num("dist_scale").fillna(1.0)
+    par = num("par_time_final")
+    st = [_w55_stats(s, d) for s, d in zip(out.get("surface", [None] * len(out)), out.get("distance", [None] * len(out)))]
+    p = pd.Series([a for a, _ in st], index=out.index)
+    m = pd.Series([b for _, b in st], index=out.index)
+
+    corr55 = t_nw - beta_weight * (w - W55_BASE_KG) * ds
+    corr55h = t_nw - 0.5 * beta_weight * (w - W55_BASE_KG) * ds
+    par55 = par + 2.0 * beta_weight * ds * p
+    par55h = par + beta_weight * ds * (0.5 * m + p)
+    raw55 = MEGU_BASE + (par55 - corr55) * MEGU_POINTS_PER_SEC
+    raw55h = MEGU_BASE + (par55h - corr55h) * MEGU_POINTS_PER_SEC
+
+    usable = out["megu_index_status"].astype(str).isin(_USABLE_STATUS) & w.notna() & par.notna()
+    raw55 = raw55.where(usable)
+    raw55h = raw55h.where(usable)
+    out["megu_index_w55"] = raw55
+    out["megu_index_w55_robust"] = raw55.clip(CLIP_MIN, CLIP_MAX)
+    out["megu_index_w55_half_robust"] = raw55h.clip(CLIP_MIN, CLIP_MAX)
+    return out
 
 
 def add_robust_columns(

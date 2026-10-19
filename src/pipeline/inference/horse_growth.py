@@ -35,6 +35,7 @@ class Axis:
     valid: str | tuple[str, ...] = "valid"   # 有効とみなす状態（複数可）
     align_by_month: bool = True   # 年・時期の水準のずれを、月ごとの全馬の中央値で揃える
     conf_col: str | None = None   # True の行は『信頼度が低い』として点に印を付ける（値は使う）
+    note: str = ""                # 画面の凡例に出す説明（空なら既定の文言）
 
     @property
     def valid_set(self) -> frozenset[str]:
@@ -49,8 +50,14 @@ AXES: dict[str, Axis] = {
         valid=("ok", "clipped", "restored_out_of_range", "restored_clipped"), align_by_month=False,
         conf_col="low_confidence",
     ),
+    # 斤量を全馬 55kg に換算した指数（性別・斤量の違いを除いた、馬自身の変化を見るための軸）。1 点 = 0.1 秒
+    "megu_w55": Axis(
+        "megu_w55", "めぐ指数（斤量55kg換算）", "megu_index_flat.parquet", "megu_index_w55_robust", "megu_index_status",
+        valid=("ok", "clipped", "restored_out_of_range", "restored_clipped"), align_by_month=False,
+        conf_col="low_confidence", note="全馬を斤量 55kg に換算（1点＝0.1秒）。実際の斤量は各点に表示",
+    ),
 }
-DEFAULT_AXIS = "megu_robust"
+DEFAULT_AXIS = "megu_w55"
 
 
 def active_axis() -> Axis:
@@ -151,13 +158,13 @@ def build_growth(
             "date": d8, "race_id": rid, "race_name": r.get("race_name"), "venue": r.get("venue"),
             "surface": r.get("surface"), "distance": r.get("distance"), "finish": r.get("finish"), "field": r.get("field"),
             "age_months": age_months(bd, r["date"]), "raw": round(float(val), 1), "value": round(align(float(val), baseline.get(month) if ax.align_by_month else None, ref), 1),
-            "low_confidence": low_conf,
+            "low_confidence": low_conf, "jockey_weight": r.get("jockey_weight"),
         })
     if not pts:
         return {"status": "no_data", "reason": f"{ax.name}が未計算、または基準外です", "excluded": excluded}
     best = max(pts, key=lambda p: p["value"])
     return {
-        "status": "ok", "axis": {"key": ax.key, "name": ax.name, "note": "時期ごとの水準差をそろえた値（元の値は各点に表示）" if ax.align_by_month else "元の値", "ref": round(ref, 1)},
+        "status": "ok", "axis": {"key": ax.key, "name": ax.name, "note": ax.note or ("時期ごとの水準差をそろえた値（元の値は各点に表示）" if ax.align_by_month else "元の値"), "ref": round(ref, 1)},
         "points": pts, "n": len(pts), "excluded": excluded, "trend": trend([p["value"] for p in pts]),
         "best": {"value": best["value"], "date": best["date"], "race_name": best["race_name"]},
     }

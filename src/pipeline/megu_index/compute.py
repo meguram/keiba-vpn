@@ -56,7 +56,7 @@ from src.pipeline.megu_index.class_bucket import par_class_bucket
 from src.pipeline.megu_index.common import adjusted_time_to_megu
 from src.pipeline.megu_index.field_quality import attach_fq_and_delta_level
 from src.pipeline.megu_index.par_time_resolve import attach_par_time_with_fallback
-from src.pipeline.megu_index.robust import MEGU_VERSION, ROBUST_COLUMNS, add_robust_columns
+from src.pipeline.megu_index.robust import MEGU_VERSION, ROBUST_COLUMNS, add_robust_columns, add_w55_columns
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -600,6 +600,8 @@ def compute_for_dataframe(
     df = add_robust_columns(
         df, bad_par=bad_par, finish_pos=df["finish_pos_num"] if "finish_pos_num" in df.columns else None,
     )
+    # 斤量を 55kg に一般化した指数（成長曲線用）
+    df = add_w55_columns(df, beta_weight=beta_weight)
 
     result_cols = [
         "race_id", "horse_id", "finish_time_sec", "par_time_final",

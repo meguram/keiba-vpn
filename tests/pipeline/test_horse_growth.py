@@ -129,3 +129,26 @@ def test_robust_axis_uses_restored_values_and_marks_low_confidence(tmp_path):
     assert g["status"] == "ok" and g["n"] == 3 and g["excluded"] == 0
     assert [p["value"] for p in g["points"]] == [55.0, 30.0, 100.0]   # 月別の補正はしない
     assert [p["low_confidence"] for p in g["points"]] == [False, True, False]
+
+
+def test_w55_axis_is_default_and_shows_actual_weight(tmp_path, monkeypatch):
+    import pandas as pd
+
+    from src.pipeline.inference import horse_growth as hg
+
+    monkeypatch.delenv("KEIBA_GROWTH_AXIS", raising=False)
+    assert hg.active_axis().key == "megu_w55"
+    d = tmp_path / "2025"
+    d.mkdir()
+    pd.DataFrame({
+        "race_id": ["r1", "r2"], "horse_id": ["h"] * 2,
+        "megu_index_w55_robust": [52.0, 47.5], "megu_index_status": ["ok", "ok"], "low_confidence": [False, False],
+    }).to_parquet(d / "megu_index_flat.parquet")
+    ax = hg.active_axis()
+    mm = hg.megu_map_for_horse("h", {2025}, tmp_path, ax)
+    runs = [{"race_id": "r1", "date": "2025-03-10", "jockey_weight": 53.0, "finish": 2},
+            {"race_id": "r2", "date": "2025-05-10", "jockey_weight": 56.0, "finish": 5}]
+    g = hg.build_growth(runs, mm, {}, 50.0, None, ax)
+    assert g["axis"]["name"] == "めぐ指数（斤量55kg換算）" and "55kg" in g["axis"]["note"]
+    assert [p["value"] for p in g["points"]] == [52.0, 47.5]
+    assert [p["jockey_weight"] for p in g["points"]] == [53.0, 56.0]

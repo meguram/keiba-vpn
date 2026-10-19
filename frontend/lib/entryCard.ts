@@ -15,7 +15,7 @@ export type TrainerComment = { comment: string; evaluation?: string | null; trai
 
 export type GrowthPoint = {
   date: string; race_id: string; race_name?: string | null; venue?: string | null; surface?: string | null; distance?: number | null;
-  finish?: number | string | null; field?: number | null; age_months?: number | null; raw: number; value: number;
+  finish?: number | string | null; field?: number | null; age_months?: number | null; raw: number; value: number; jockey_weight?: number | null;
 };
 export type HorseGrowth =
   | { status: "ok"; axis: { key: string; name: string; note: string; ref: number }; points: GrowthPoint[]; n: number; excluded: number;

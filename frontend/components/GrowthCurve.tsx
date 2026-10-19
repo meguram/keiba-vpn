@@ -117,7 +117,7 @@ export function GrowthCurve({ g }: { g: HorseGrowth | null | undefined }) {
         <span>{[p.surface, p.distance ? `${p.distance}m` : null, p.field ? `${p.field}頭` : null].filter(Boolean).join(" ")}</span>
         <span>{fin(p.finish) ?? "?"}着</span>
         <strong>{g.axis.name} {p.value.toFixed(1)}</strong>
-        <small>元の値 {p.raw.toFixed(1)}{ageText(p.age_months) ? ` ・ ${ageText(p.age_months)}` : ""}</small>
+        <small>元の値 {p.raw.toFixed(1)}{p.jockey_weight ? ` ・ 斤量 ${p.jockey_weight}kg` : ""}{ageText(p.age_months) ? ` ・ ${ageText(p.age_months)}` : ""}</small>
       </div>
       <p className="gc-note">縦軸: {g.axis.name}（{g.axis.note}）。丸の中の数字は着順で、<i style={{ background: "#fbbf24" }} />3着以内 <i style={{ background: "#60a5fa" }} />4〜5着 <i style={{ background: "#64748b" }} />6着以下。点をタップすると詳細。{g.excluded > 0 ? ` 基準外で除いた走 ${g.excluded}。` : ""}</p>
     </div>

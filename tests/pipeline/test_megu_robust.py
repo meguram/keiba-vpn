@@ -129,3 +129,69 @@ def test_frame_for_parquet_keeps_rows_without_par_and_excluded_rows():
     out = frame_for_parquet(res, flat).set_index("horse_id")
     assert set(out.index) == {"a", "b"} and out.loc["a", "megu_index_status"] == "no_par"
     assert out.loc["b", "megu_index_status"] == "steeplechase"
+
+
+# ── 斤量を 55kg に一般化した指数 ──────────────────────────────────────────────
+
+def _w55_frame(rows):
+    import pandas as pd
+
+    base = {"finish_time_sec": 120.0, "delta_pace_sec": 0.0, "delta_track_sec": 0.0, "dist_scale": 1.0,
+            "par_time_final": 120.0, "surface": "ダート", "distance": 2000, "megu_index_status": "ok"}
+    return pd.DataFrame([{**base, **r} for r in rows])
+
+
+def test_w55_male_and_filly_shift_by_theory():
+    from src.pipeline.megu_index.robust import W55_PAR_STATS, add_w55_columns
+
+    beta = 0.3
+    df = _w55_frame([{"jockey_weight_num": 55.0}, {"jockey_weight_num": 53.0}])
+    out = add_w55_columns(df, beta_weight=beta)
+    p = W55_PAR_STATS["ダート|1800-2000"]["p"]
+    cur = 50.0 + (120.0 - 120.0) * 10.0  # 現行: 補正が 0 のとき（牡 55kg / 牝 53kg は基準斤量どおり）
+    male, filly = out["megu_index_w55"].tolist()
+    assert abs(male - (cur + 20 * beta * 1.0 * p)) < 1e-9          # 牡: par の 55kg 化の分だけ上がる
+    assert abs(filly - (cur - 20 * beta * 1.0 * (1 - p))) < 1e-9   # 牝: 55kg にすると +2kg 背負う分だけ下がる
+    assert abs((male - filly) - 20 * beta) < 1e-9                  # 牡と牝の差は 20β·(距離/2000) 点
+
+
+def test_w55_heavier_weight_is_credited_by_beta_per_kg():
+    from src.pipeline.megu_index.robust import add_w55_columns
+
+    beta = 0.3
+    out = add_w55_columns(_w55_frame([{"jockey_weight_num": 55.0}, {"jockey_weight_num": 57.0}]), beta_weight=beta)
+    a, b = out["megu_index_w55"].tolist()
+    assert abs((b - a) - 10 * beta * 2.0) < 1e-9  # 同じタイムで 2kg 重いほうが、2kg×β 秒ぶん（×10 点）上
+
+
+def test_w55_scales_with_distance_and_nan_cases():
+    from src.pipeline.megu_index.robust import add_w55_columns
+
+    beta = 0.3
+    out = add_w55_columns(
+        _w55_frame([
+            {"jockey_weight_num": 57.0, "dist_scale": 1.0},
+            {"jockey_weight_num": 57.0, "dist_scale": 1.2, "distance": 2400},
+            {"jockey_weight_num": float("nan")},
+            {"jockey_weight_num": 55.0, "megu_index_status": "no_par"},
+            {"jockey_weight_num": 55.0, "megu_index_status": "steeplechase"},
+            {"jockey_weight_num": 70.0, "finish_time_sec": 100.0},
+        ]),
+        beta_weight=beta,
+    )
+    v = out["megu_index_w55"]
+    assert v.iloc[1] != v.iloc[0]
+    assert v.iloc[2:5].isna().all()                       # 斤量欠損・基準なし・障害は付けない
+    assert out["megu_index_w55_robust"].iloc[5] == 100.0   # 極端値は [0,100] に丸め（丸め前は保持）
+    assert out["megu_index_w55"].iloc[5] > 100.0
+
+
+def test_w55_half_uses_half_beta_and_rebased_par():
+    from src.pipeline.megu_index.robust import W55_PAR_STATS, add_w55_columns
+
+    beta = 0.3
+    out = add_w55_columns(_w55_frame([{"jockey_weight_num": 57.0}]), beta_weight=beta)
+    s = W55_PAR_STATS["ダート|1800-2000"]
+    corr_h = 120.0 - 0.5 * beta * (57.0 - 55.0)
+    par_h = 120.0 + beta * (0.5 * s["m_dev"] + s["p"])
+    assert abs(out["megu_index_w55_half_robust"].iloc[0] - (50.0 + (par_h - corr_h) * 10.0)) < 1e-9
