@@ -228,6 +228,8 @@ PARTS: list[Part] = [
           [("exotic_bet_probabilities", "組合せ券の確率の作り方"), ("modeling_experiment_report", "強化学習（tp-08）の結果")]),
         C("race_type_marks", "レースの性質（堅い/荒れやすい）で印（◎○▲）の付け方と買い方を変える方式の評価（tp-43）。荒れ度の定義 6 種、印 10 通り、買い方 20 通り、設計年での選択と検証年・2026 年での確認、reality check、破産確率。切り替えの価値は見つからず、印の付け方（期待値＋複勝確率の閾値）は組合せ券で良い傾向だが 100% 超の確かな根拠は無い。", "結果",
           [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("similar_horses_pairs", "似た馬は同じレースで着順が近くなるか（tp-41）"), ("race_volatility", "荒れやすいレースの分析（tp-30）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("proven_methods_roi", "回収率 100% 超の実績者の手法と検証（tp-44）。公開情報から集めた手法 12 件（種類の印・検証可能性・原文の場所）、プール間の不整合（Hausch–Ziemba・Dr. Z 型）の 67 戦略、公開ルール（函館の3番人気）の再現、WIN5 のキャリーオーバー、発走直前のオッズ低下。検証できる形で 100% 超を示した公開記録は無く、自前の検証でも区間下限が 100% を超える手法は無かった。", "結果",
+          [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("race_type_marks", "レースの性質で変える印と買い方（tp-43）"), ("training_pipeline_decisions", "決定ログ")]),
         C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",
           note="safe_ev を前提にした設計。tp-08 の実装は Benter ブレンドで、safe_ev は使っていない。",
           now=[("modeling_experiment_report", "tp-08 の結果")]),
