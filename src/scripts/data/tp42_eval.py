@@ -76,6 +76,12 @@ def cmd_stage1(a) -> None:
     te._stage(os.environ.get("TP42_LABEL", "stage1"), [2022, 2023], [0], groups, "stage1")
 
 
+def cmd_stage2c(a) -> None:
+    """第 2 段を、群を指定して別ラベルで並行実行する（環境変数 TP42_GROUPS、結果は stage2c/）。"""
+    groups = [g for g in os.environ.get("TP42_GROUPS", "").split(",") if g]
+    te._stage(os.environ.get("TP42_LABEL", "stage2c"), [2024], [2, 3], groups, "stage2")
+
+
 def cmd_stage2(a) -> None:
     allg: dict = {}
     for lab in ("stage1", "stage1b"):
@@ -229,10 +235,10 @@ def cmd_stack(a) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["groups", "stage1", "stage2", "overlap", "importance", "calib", "subst", "stack"])
+    ap.add_argument("cmd", choices=["groups", "stage1", "stage2", "stage2c", "overlap", "importance", "calib", "subst", "stack"])
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    {"groups": cmd_groups, "stage1": cmd_stage1, "stage2": cmd_stage2, "overlap": cmd_overlap, "importance": cmd_importance, "calib": cmd_calib, "subst": cmd_subst, "stack": cmd_stack}[a.cmd](a)
+    {"groups": cmd_groups, "stage1": cmd_stage1, "stage2": cmd_stage2, "stage2c": cmd_stage2c, "overlap": cmd_overlap, "importance": cmd_importance, "calib": cmd_calib, "subst": cmd_subst, "stack": cmd_stack}[a.cmd](a)
 
 
 if __name__ == "__main__":
