@@ -98,3 +98,25 @@ def test_set_url_is_remembered_even_without_saving(tmp_path):
     s.batch_save([{"horse_id": "b", "none": True, "url": "https://sporthorse-data.com/pedigree/beta-7"}])
     rows = list(csv.reader(open(d / "sporthorse_urls.csv", encoding="utf-8")))
     assert ["b", "https://sporthorse-data.com/pedigree/beta-7"] in rows and ["a", "https://sporthorse-data.com/pedigree/alpha-9"] in rows
+
+
+def test_userscript_connection_is_reported(tmp_path):
+    import json
+    import threading
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+
+    from src.research.pedigree import manual_entry_server as me
+    s, d = _setup(tmp_path)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), me.make_handler(s, "tok"))
+    port = srv.server_address[1]
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        h = {"X-Token": "tok"}
+        before = json.load(urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/api/batch?n=1", headers=h)))
+        assert before["us_seen_ago"] is None                                 # まだ一度もスクリプトからの接続がない
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/api/token").read()   # ユーザースクリプトがトークンを取りに来る
+        after = json.load(urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/api/batch?n=1", headers=h)))
+        assert after["us_seen_ago"] is not None and after["us_seen_ago"] < 5
+    finally:
+        srv.shutdown()

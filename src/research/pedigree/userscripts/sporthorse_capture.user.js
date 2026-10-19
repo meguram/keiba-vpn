@@ -15,7 +15,7 @@
 
   // ── ローカル入力ツールの画面で動くとき: 「ページを開く」の依頼を受けて、馬のページを背景タブで開く（ポップアップブロックの対象外）
   if (location.origin === BASE) {
-    document.documentElement.dataset.dormelloUserscript = '1';
+    document.documentElement.dataset.dormelloUserscript = '1.2';
     let opened = [];
     window.addEventListener('message', (e) => {
       if (e.source !== window || e.origin !== location.origin) return;

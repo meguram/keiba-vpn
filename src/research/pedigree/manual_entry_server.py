@@ -14,6 +14,7 @@ import json
 import re
 import secrets
 import subprocess
+import time
 import threading
 import urllib.parse
 from datetime import date
@@ -71,6 +72,7 @@ class Store:
         self.skipped: list[str] = []
         self.undo_stack: list[dict] = []
         self.session_saved = self.session_none = 0
+        self.us_seen: float | None = None          # ユーザースクリプトからの最後の接続時刻（導入の確認用）
         self.detected: dict[str, dict] = {}       # horse_id -> ユーザースクリプトが読み取った日付（保存はまだ）
         if not self.manual_p.exists():
             self._write_csv(self.manual_p, [MANUAL_COLUMNS])
@@ -173,6 +175,7 @@ class Store:
             return {"items": items, "detected": {i["horse_id"]: self.detected[i["horse_id"]] for i in items if i["horse_id"] in self.detected},
                     "remaining": len(p), "saved": self.session_saved, "none": self.session_none, "unsaved": len(self.pending_msgs),
                     "git": self.git_status, "auto_commit": self.commit_every,
+                    "us_seen_ago": None if self.us_seen is None else round(time.time() - self.us_seen),
                     "recent": [{"horse_id": u["horse_id"], "name": u["name"], "text": u["text"]} for u in self.undo_stack[-5:]][::-1]}
 
     def set_url(self, horse_id: str, url: str) -> dict:
@@ -326,6 +329,7 @@ button,a.btn{display:inline-block;margin:2px 4px 2px 0;padding:6px 10px;font-siz
 button.primary{background:#2d7ff9;color:#fff;border-color:#2d7ff9;font-size:1.05em;padding:9px 16px}input[type=text]{font-size:1em;padding:4px;width:170px}.det{margin:3px 0}
 .steps{background:#f7f7ff;border:1px solid #ccd;border-radius:8px;padding:8px 12px}</style></head><body>
 <h2 style="margin:2px 0">誕生日 手入力（まとめ表示）</h2><div class="muted" id="stat"></div>
+<div id="us" class="steps" style="margin-bottom:6px"></div>
 <div class="steps"><b>使い方</b> ① 「この頭数のページを開く」を押す（別タブが開き、次回からは同じタブを使い回します） → ② 各行の「検出」を確認 → ③ 「保存して次へ」
 <br><span class="muted">ユーザースクリプト（バージョン 1.2）を入れていれば、ポップアップに邪魔されず背景タブで開きます。サイトが埋め込みを禁止しているため、画面内には表示できません。</span></div>
 <div style="margin:8px 0">1 回に扱う頭数 <select id="n" onchange="N=+this.value;poll(true)"><option>1</option><option>3</option><option selected>5</option><option>8</option><option>10</option></select>
@@ -333,7 +337,7 @@ button.primary{background:#2d7ff9;color:#fff;border-color:#2d7ff9;font-size:1.05
 <div id="rows"></div><div style="margin:10px 0"><button class="primary" onclick="saveBatch()">③ この頭数を保存して次へ</button></div>
 <div class="muted">直近の操作</div><ul id="recent" style="margin:4px 0;padding-left:18px"></ul>
 <script>
-const TOKEN="__TOKEN__";let N=5,batch=[],sig="",rows={};
+const TOKEN="__TOKEN__";let N=5,batch=[],sig="",rows={},usSeenAgo=null;
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','X-Token':TOKEN},body:body?JSON.stringify(body):undefined});return r.json()}
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const q=s=>encodeURIComponent(s);const $=id=>document.getElementById(id);
 function cands(it){return (it.candidates&&it.candidates.length)?it.candidates:(it.url?[it.url]:[])}
@@ -342,7 +346,7 @@ function openOne(i){const it=batch[i];if(!it||!url(it))return null;return window
 function openAll(){
  if(document.documentElement.dataset.dormelloUserscript){window.postMessage({type:'dormello-open-tabs',urls:batch.map(url).filter(Boolean)},location.origin);$('popmsg').className='ok';$('popmsg').textContent='ユーザースクリプトで '+batch.length+' 頭分を背景タブに開きました（前回のタブは閉じます）';return}
  let blocked=0;batch.forEach((it,i)=>{if(!openOne(i))blocked++});$('popmsg').className='err';
- $('popmsg').textContent=blocked?`${blocked} 件がブロックされました。ユーザースクリプトを最新版（1.2）にすると、ブロックされずに開けます（各行の「開く」でも個別に開けます）`:''}
+ $('popmsg').textContent=blocked?`${blocked} 件がブロックされました。ページ上部の確認手順でユーザースクリプトを有効にするか、キーボードの数字キー 1〜5 を順に押して開いてください`:''}
 function cand(i){const it=batch[i];rows[it.horse_id].ci++;$('cu_'+it.horse_id).textContent=url(it).split('/').pop()||'（候補なし）';openOne(i)}
 function initBatch(){const L=$('rows');L.innerHTML='';
  if(!batch.length){L.innerHTML='<p class="ok"><b>すべて処理しました。</b></p>';return}
@@ -355,6 +359,16 @@ function initBatch(){const L=$('rows');L.innerHTML='';
    <a class="btn" href="https://www.jbis.jp/navi_search/?keyword=${q(it.name_en||it.name)}" target="sh_alt" >JBIS</a><a class="btn" href="https://en.wikipedia.org/w/index.php?search=${q((it.name_en||it.name)+' horse')}" target="sh_alt">Wikipedia</a>
    <input type="text" id="ur_${h}" placeholder="実際のURL（違うとき）" style="width:34%" onchange="setUrl('${h}')"></div><div class="err" id="er_${h}">${esc(st.err)}</div>`;
   L.appendChild(div)})}
+function renderUs(){const v=document.documentElement.dataset.dormelloUserscript;const el=$('us');
+ if(v){el.style.background='#e8f5e9';el.innerHTML=`✅ ユーザースクリプト <b>有効</b>（版 ${esc(v)}）。「① ページを開く」は背景タブで開きます。`+(usSeenAgo==null?` <span class="muted">／ SporthorseData のページからの読み取りは、まだ受け取っていません</span>`:` <span class="muted">／ ページからの読み取り: ${usSeenAgo} 秒前に受信</span>`)}
+ else{el.style.background='#fff3cd';el.innerHTML=`⚠ <b>ユーザースクリプトがこの画面で動いていません</b>。次を確認してください。
+  <ol style="margin:4px 0 4px 18px;padding:0"><li>Chrome/Edge の拡張機能 <b>Tampermonkey</b> が入っていて、有効になっている</li>
+  <li>拡張機能の管理画面（chrome://extensions）で Tampermonkey の「詳細」を開き、<b>「ユーザースクリプトを許可する」</b>（または「デベロッパーモード」）をオンにする</li>
+  <li>Tampermonkey のダッシュボードで、<b>Dormello DOB capture（版 1.2）</b>が有効になっている（古い版のままなら、最新の内容に貼り替える）</li>
+  <li>このページを再読み込みする</li></ol>
+  <span class="muted">それまでの代わりに、<b>キーボードの数字キー 1〜5</b> を順に押すと、その番号の馬のページを 1 つずつ開けます（ポップアップにブロックされません）。</span>`}}
+document.addEventListener('keydown',e=>{if(e.target&&['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;if(e.ctrlKey||e.metaKey||e.altKey)return;
+ const n=parseInt(e.key,10);if(n>=1&&n<=9&&batch[n-1]){openOne(n-1);e.preventDefault()}});
 function updateDet(m){batch.forEach(it=>{const h=it.horse_id,d=m[h],st=rows[h];if(!$('det_'+h))return;
  if(d&&d.text){$('det_'+h).innerHTML=`<span class="ok">検出: <b>${esc(d.text)}</b></span> <span class="muted">${esc((d.url||'').split('/').pop())}</span>`;if(!st.edited&&!$('in_'+h).value)$('in_'+h).value=d.text;$('ur_'+h).dataset.det=d.url||''}
  else if(d&&d.year_only){$('det_'+h).innerHTML=`<span class="err">年のみ（${esc(d.year_only)}）のページ</span>`;if(!st.edited&&!st.nnAuto){$('nn_'+h).checked=true;st.nnAuto=true}}
@@ -362,7 +376,7 @@ function updateDet(m){batch.forEach(it=>{const h=it.horse_id,d=m[h],st=rows[h];i
 async function poll(force){const d=await api('/api/batch?n='+N);
  $('stat').innerHTML=`残り ${d.remaining} 頭 ／ 保存 ${d.saved}・記載なし ${d.none} ／ `+(d.auto_commit?`コミットまで あと ${Math.max(d.auto_commit-d.unsaved,0)} 件 <button onclick="commitNow()">今すぐコミット</button> <span class="muted">${esc(d.git||'')}</span>`:'自動コミット: 無効');
  $('recent').innerHTML=d.recent.map(r=>`<li>${esc(r.name)}: ${esc(r.text)}</li>`).join('')||'<li class="muted">なし</li>';
- const s=d.items.map(i=>i.horse_id).join(',');batch=d.items;if(s!==sig||force){sig=s;initBatch()}updateDet(d.detected)}
+ usSeenAgo=d.us_seen_ago;renderUs();const s=d.items.map(i=>i.horse_id).join(',');batch=d.items;if(s!==sig||force){sig=s;initBatch()}updateDet(d.detected)}
 async function saveBatch(){const out=[];batch.forEach(it=>{const h=it.horse_id,text=$('in_'+h).value.trim(),none=$('nn_'+h).checked,j1=$('j1_'+h).checked;
   const u=$('ur_'+h).value.trim()||$('ur_'+h).dataset.det||'';
   if(none)out.push({horse_id:h,none:true});else if(text)out.push({horse_id:h,text,confirm_jan1:j1,url:u});else out.push({horse_id:h,skip:true})});
@@ -406,6 +420,7 @@ def make_handler(store: Store, token: str):
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
                 self._json(store.batch(int((q.get("n") or ["5"])[0])))
             elif path == "/api/token":  # ユーザースクリプト用（ブラウザの他サイトからは読めない）
+                store.us_seen = time.time()
                 self._json({"token": token})
             else:
                 self._json({"ok": False, "error": "not found"}, 404)
