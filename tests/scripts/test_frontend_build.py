@@ -84,3 +84,29 @@ def test_signature_includes_public_vars_and_urls():
     )
     out = r.stdout
     assert "KEIBA_ENV=stg|" in out and "KEIBA_API_URL=http://a|" in out and "NEXT_PUBLIC_PICKER_PAST_DAYS=150|" in out
+
+
+def _bash(cmd: str, **kw) -> subprocess.CompletedProcess:
+    return subprocess.run(["bash", "-c", f'source "{SCRIPT}"; {cmd}'], capture_output=True, text=True, **kw)
+
+
+def test_load_guard_boundaries():
+    assert _bash("frontend_load_too_high 19.3 24 0.8").returncode == 0     # 閾値 19.2 を超える
+    assert _bash("frontend_load_too_high 19.2 24 0.8").returncode == 1     # 超えない（等しい）
+    assert _bash("frontend_load_too_high 5 24").returncode == 1            # 係数の既定は 0.8
+    assert _bash("frontend_load_too_high 47 24").returncode == 0           # 本番ビルド中に実際に出た負荷
+
+
+def test_remove_dist_refuses_paths_outside_frontend_next(tmp_path):
+    keep = tmp_path / "other"
+    keep.mkdir()
+    (keep / "x").write_text("1")
+    r = _bash(f'frontend_remove_dist "{keep}"')
+    assert r.returncode == 1 and (keep / "x").exists()
+    r = _bash('frontend_remove_dist ""')
+    assert r.returncode == 1
+    d = tmp_path / "frontend" / ".next-stg-build"
+    d.mkdir(parents=True)
+    (d / "BUILD_ID").write_text("a")
+    assert _bash(f'frontend_remove_dist "{d}"').returncode == 0 and not d.exists()
+    assert _bash(f'frontend_remove_dist "{d}"').returncode == 0           # 無くても成功

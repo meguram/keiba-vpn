@@ -47,3 +47,32 @@ frontend_build_needed() {
     done
     return 1
 }
+
+# frontend/ 直下の .next-* だけを消す（変数が空・想定外のパスなら何もしない）
+frontend_remove_dist() {
+    local target="$1"
+    case "$target" in
+        */frontend/.next-*) ;;
+        *) echo "frontend_remove_dist: 想定外のパスのため削除しません: ${target}" >&2; return 1 ;;
+    esac
+    [ -e "$target" ] || return 0
+    rm -rf -- "$target"
+}
+
+# 1 分平均の負荷（/proc/loadavg の先頭）
+frontend_current_load1() {
+    awk '{print $1}' /proc/loadavg 2>/dev/null || echo 0
+}
+
+# load1 がコア数×係数を超えていれば 0（真）
+#   frontend_load_too_high <load1> <cores> [factor=0.8]
+frontend_load_too_high() {
+    awk -v l="$1" -v c="$2" -v f="${3:-0.8}" 'BEGIN { exit !(l > c * f) }'
+}
+
+# 単体実行: 稼働中のサーバを止めずに別ディレクトリへ本番ビルドする（切替は --switch-frontend）
+#   bash scripts/server/frontend_build.sh [stg|prod]   強制: KEIBA_FORCE_BUILD=1
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    _d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    exec bash "${_d}/server_watchdog.sh" --profile "${1:-stg}" --build-frontend
+fi

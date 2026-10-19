@@ -26,11 +26,20 @@ const flaskApi =
 const fastApi =
   process.env.KEIBA_FASTAPI_URL || `http://127.0.0.1:${portOf(`KEIBA_PORT_${envKey.toUpperCase()}_FASTAPI`)}`;
 
-// dev/stg/prod でビルドキャッシュディレクトリを分離し、共有による破損を防ぐ
-const distDir = env === "stg" ? ".next-stg" : env === "prod" ? ".next-prod" : ".next-dev";
+// dev/stg/prod でビルドキャッシュディレクトリを分離し、共有による破損を防ぐ。
+// NEXT_DIST_DIR で上書きできる（稼働中のサーバを止めずに別ディレクトリへビルドし、成功後に入れ替えるため）。
+const distDir =
+  process.env.NEXT_DIST_DIR || (env === "stg" ? ".next-stg" : env === "prod" ? ".next-prod" : ".next-dev");
+
+// ビルドの並列数。既定の「コア数ぶんのワーカー」だと、24 コアの共有ホストで約 25 プロセスが走り負荷が急上昇した。
+// stg は 2 に制限（NEXT_BUILD_CPUS で変更可。dev / prod は Next の既定のまま）。
+const buildCpus = Number(process.env.NEXT_BUILD_CPUS) || (env === "stg" ? 2 : undefined);
 
 const nextConfig = {
   distDir,
+  ...(buildCpus
+    ? { experimental: { cpus: buildCpus, staticGenerationMaxConcurrency: buildCpus, workerThreads: false } }
+    : {}),
   env: {
     KEIBA_API_URL: flaskApi,
     NEXT_PUBLIC_MONITOR_PORT: portOf("KEIBA_PORT_MONITOR"),

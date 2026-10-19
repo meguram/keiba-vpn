@@ -23,6 +23,14 @@ set -euo pipefail
 
 export TZ="${TZ:-Asia/Tokyo}"
 
+# cron（PATH が限定的）や sudo -n（secure_path）でも npm / node が見えるように補う（先頭には足さない）
+for _d in /opt/conda/bin /usr/local/bin; do
+    if [ -d "$_d" ]; then
+        case ":${PATH}:" in *":${_d}:"*) ;; *) PATH="${PATH}:${_d}" ;; esac
+    fi
+done
+export PATH
+
 # ── CLI 引数パース（--profile / --mode 等）──
 # --profile dev|stg|prod  → .service_start.profile を上書きして指定プロファイルを強制
 PROFILE_OVERRIDE=""
@@ -502,17 +510,47 @@ check_flask() {
 frontend_should_monitor() {
     # プロファイル指定がある場合はプロファイル別 PID ファイルのみを参照
     # （旧 .frontend.pid への自動フォールバックは行わない: 別プロファイルの PID を誤殺するため）
-    [ -f "$FRONTEND_PID_FILE" ]
+    # PID ファイルが無くても、ビルド失敗/高負荷待ちで起動できていない目印があれば監視を続ける
+    # （目印を PID ファイルに書くと、プロファイル指定の有無で別ファイルになり復旧判定が壊れるため、別ファイルにしている）
+    [ -f "$FRONTEND_PID_FILE" ] || [ -f "$FRONTEND_WANT_FILE" ]
+}
+
+# 指定ポートで LISTEN しているプロセスを止める。npm / next の親を止めても、子の next-server（プロセス名が
+# "next-server" で "-p" を含まない）が残ってポートを掴み続けるため、パターン一致だけでは止まらない。
+kill_by_port() {
+    local port="$1" pids=""
+    if command -v ss >/dev/null 2>&1; then
+        pids=$(ss -ltnp "sport = :${port}" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u | tr '\n' ' ' || true)
+    elif command -v lsof >/dev/null 2>&1; then
+        pids=$(lsof -t -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null | sort -u | tr '\n' ' ' || true)
+    fi
+    pids="${pids% }"
+    if [ -n "$pids" ]; then
+        log "  ポート ${port} を掴んでいるプロセスを停止: ${pids}"
+        # shellcheck disable=SC2086
+        kill $pids 2>/dev/null || true
+        sleep 2
+        local p
+        for p in $pids; do
+            if kill -0 "$p" 2>/dev/null; then kill -9 "$p" 2>/dev/null || true; fi
+        done
+        sleep 1
+    fi
 }
 
 stop_frontend() {
     kill_by_pid_file "$FRONTEND_PID_FILE"
     kill_by_pattern "next.*dev.*-p ${FRONTEND_PORT}"
     kill_by_pattern "next.*start.*-p ${FRONTEND_PORT}"
+    kill_by_port "$FRONTEND_PORT"
 }
 
-# 本番ビルド（next build）＋起動の間は他の watchdog 実行（cron は 3 分おき）が割り込まないようロックする。
-FRONTEND_LOCK_FILE="${LOG_DIR}/.frontend-build${PROFILE_SUFFIX}.lock"
+# 本番ビルド運用（stg）。ビルドは別ディレクトリ（.next-stg-build）に作り、動いているサーバを止めない。
+# 切り替えは『next を止める → .next-stg を退避 → ビルドを .next-stg に入れ替え → next start』の数秒。
+# ロック・目印は、プロファイル指定の有無（PID ファイル名が変わる）に関係なく共有するため PROFILE_KEY で名前を付ける。
+FRONTEND_LOCK_FILE="${LOG_DIR}/.frontend-build-${PROFILE_KEY}.lock"
+FRONTEND_FAIL_STAMP="${LOG_DIR}/.frontend-build-failed-${PROFILE_KEY}"
+FRONTEND_WANT_FILE="${LOG_DIR}/.frontend-want-${PROFILE_KEY}"
 
 frontend_lock_held_by_other() {
     # 他のプロセスがロック中なら 0（真）。自分は取得して即解放するだけ。
@@ -524,57 +562,85 @@ frontend_lock_held_by_other() {
     return 0
 }
 
-# script=start のとき: 必要なら next build（失敗時は旧ビルドで起動、旧ビルドも無ければ失敗）
-build_frontend_if_needed() {
-    local fdir="${PROJECT_DIR}/frontend" dist_dir="$1" dist_path="$2" sig reason
+frontend_dist_name() {
+    case "${KEIBA_ENV:-dev}" in
+        stg)  echo ".next-stg"  ;;
+        prod) echo ".next-prod" ;;
+        *)    echo ".next-dev"  ;;
+    esac
+}
+
+# 自動ビルドを見送るか（高負荷）。見送るなら 0 を返して理由を stdout に出す。KEIBA_FORCE_BUILD=1 なら見送らない。
+frontend_build_deferred_for_load() {
+    [ "${KEIBA_FORCE_BUILD:-0}" = "1" ] && return 1
+    local load cores max
+    load=$(frontend_current_load1); cores=$(nproc 2>/dev/null || echo 4)
+    if [ -n "${KEIBA_BUILD_MAX_LOAD:-}" ]; then
+        max="$KEIBA_BUILD_MAX_LOAD"
+        awk -v l="$load" -v m="$max" 'BEGIN{exit !(l>m)}' || return 1
+    else
+        frontend_load_too_high "$load" "$cores" 0.8 || return 1
+        max=$(awk -v c="$cores" 'BEGIN{printf "%.1f", c*0.8}')
+    fi
+    echo "load1=${load} が閾値 ${max} を超えている（コア数 ${cores}）"
+    return 0
+}
+
+# 別ディレクトリへビルドする（稼働中のサーバには触れない）。ロックは呼び出し側が持つ。
+#   戻り値 0=ビルド成功 1=失敗 2=不要 3=高負荷で見送り 4=直近の失敗で見送り
+build_frontend_aside() {
+    local fdir="${PROJECT_DIR}/frontend" active build_name build_path reason="" sig
+    active=$(frontend_dist_name); build_name="${active}-build"; build_path="${fdir}/${build_name}"
     sig=$(frontend_env_signature)
-    if ! reason=$(frontend_build_needed "$fdir" "$dist_dir" "$sig"); then
-        log "[Next.js] ビルド済み（${dist_dir}）— 再ビルドは不要"
-        return 0
-    fi
-    # 直近でビルドに失敗していたら、同じ失敗を 3 分おきに繰り返さない（CPU を食うため 10 分あけて再試行）
-    local fail_stamp="${LOG_DIR}/.frontend-build-failed${PROFILE_SUFFIX}"
-    if [ -f "$fail_stamp" ] && [ -n "$(find "$fail_stamp" -mmin -10 2>/dev/null)" ]; then
-        log "[Next.js] 直近 10 分以内にビルドが失敗している — 今回は再試行しません（${reason}）"
-        if [ ! -f "${dist_path}/BUILD_ID" ]; then
-            echo "build-failed" > "$FRONTEND_PID_FILE"   # 監視対象に残す（PID ではない値。次の周期で再試行）
-            return 1
+    if [ "${KEIBA_FORCE_BUILD:-0}" != "1" ]; then
+        if ! reason=$(frontend_build_needed "$fdir" "$active" "$sig"); then
+            log "[Next.js] ビルド済み（${active}）— 再ビルドは不要"
+            return 2
         fi
-        return 0
+        local why
+        if why=$(frontend_build_deferred_for_load); then
+            log "[Next.js] 高負荷のためビルドを見送り: ${why}（${reason}）"
+            return 3
+        fi
+        if [ -f "$FRONTEND_FAIL_STAMP" ] && [ -n "$(find "$FRONTEND_FAIL_STAMP" -mmin -10 2>/dev/null)" ]; then
+            log "[Next.js] 直近 10 分以内にビルドが失敗している — 今回は再試行しません（${reason}）"
+            return 4
+        fi
     fi
-    log "[Next.js] 本番ビルドを実行: ${reason}"
-    # 既存の next（start / dev）が distDir を掴んだままだと壊れるので、ビルド前に必ず止める
-    kill_by_pattern "next.*dev.*-p ${FRONTEND_PORT}"
-    kill_by_pattern "next.*start.*-p ${FRONTEND_PORT}"
-    # BUILD_ID が無い distDir は開発モードの残骸なので消してから作る
-    if [ ! -f "${dist_path}/BUILD_ID" ]; then rm -rf "$dist_path"; fi
-    local build_log="${LOG_DIR}/frontend_build_$(date +%Y%m%d_%H%M%S).log"
+    reason="${reason:-強制ビルド}"
+    log "[Next.js] 本番ビルドを実行（別ディレクトリ ${build_name}、nice 19・並列 ${NEXT_BUILD_CPUS:-2}）: ${reason}"
+    frontend_remove_dist "$build_path"
+    local build_log
+    build_log="${LOG_DIR}/frontend_build_$(date +%Y%m%d_%H%M%S).log"
     local t0=$SECONDS
     if (
         cd "$fdir"
         export KEIBA_API_URL="$KEIBA_API_URL" KEIBA_ENV="${KEIBA_ENV:-dev}" NODE_ENV=production
+        export NEXT_DIST_DIR="$build_name" NEXT_BUILD_CPUS="${NEXT_BUILD_CPUS:-2}"
+        export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
         if [ "$FRONTEND_USE_MOCK" = "true" ]; then export NEXT_PUBLIC_MOCK=true; else unset NEXT_PUBLIC_MOCK 2>/dev/null || true; fi
-        npm run build
-    ) > "$build_log" 2>&1; then
-        printf '%s' "$sig" > "${dist_path}/.build-env"
-        rm -f "$fail_stamp"
-        log "[Next.js] ビルド成功 ($((SECONDS - t0))秒) ログ=${build_log}"
+        if command -v ionice >/dev/null 2>&1; then
+            nice -n 19 ionice -c3 npm run build
+        else
+            nice -n 19 npm run build
+        fi
+    ) 9>&- > "$build_log" 2>&1; then
+        printf '%s' "$sig" > "${build_path}/.build-env"
+        rm -f "$FRONTEND_FAIL_STAMP"
+        log "[Next.js] ビルド成功 ($((SECONDS - t0))秒) 出力=${build_name} ログ=${build_log}"
         return 0
     fi
-    log "[Next.js] ERROR: ビルド失敗 ($((SECONDS - t0))秒) ログ=${build_log}"
-    : > "$fail_stamp"
+    log "[Next.js] ERROR: ビルド失敗 ($((SECONDS - t0))秒) ログ=${build_log} — 稼働中の ${active} は変更していません"
+    : > "$FRONTEND_FAIL_STAMP"
     tail -n 15 "$build_log" 2>/dev/null | while IFS= read -r l; do log "  | $l"; done
-    if [ -f "${dist_path}/BUILD_ID" ]; then
-        log "[Next.js] WARNING: 旧ビルドで起動を試みます"
-        return 0
-    fi
-    log "[Next.js] ERROR: 使える旧ビルドが無い — 起動しません（next dev へは自動で戻しません。KEIBA_STG_NEXT_MODE=dev で戻せます）"
-    echo "build-failed" > "$FRONTEND_PID_FILE"   # 監視対象に残す（PID ではない値。10 分後の周期で再試行）
+    frontend_remove_dist "$build_path"
     return 1
 }
 
-start_frontend() {
-    local log_file="${LOG_DIR}/frontend_$(date +%Y%m%d_%H%M%S).log"
+# 起動本体（ロックは呼び出し側が持つ）。script=start で BUILD_ID が無い場合だけ、その場でビルドする（落ちている最中なので止まる影響は無い）
+_start_frontend_inner() {
+    local log_file
+    log_file="${LOG_DIR}/frontend_$(date +%Y%m%d_%H%M%S).log"
     log "[Next.js] フロントエンド起動中 (port=${FRONTEND_PORT} script=${FRONTEND_NPM_SCRIPT} mock=${FRONTEND_USE_MOCK}) ログ=${log_file}"
 
     # node_modules の確認
@@ -586,31 +652,39 @@ start_frontend() {
         }
     fi
 
-    # 環境別 distDir を決定し、古い production ビルド残骸をクリア
     local keiba_env="${KEIBA_ENV:-dev}"
-    local dist_dir
-    case "$keiba_env" in
-        stg)  dist_dir=".next-stg"  ;;
-        prod) dist_dir=".next-prod" ;;
-        *)    dist_dir=".next-dev"  ;;
-    esac
-    local dist_path="${PROJECT_DIR}/frontend/${dist_dir}"
+    local dist_dir dist_path
+    dist_dir=$(frontend_dist_name)
+    dist_path="${PROJECT_DIR}/frontend/${dist_dir}"
     # production ビルド残骸（required-server-files.json）が dev 起動の妨げになる場合にクリア
     if [ "$FRONTEND_NPM_SCRIPT" = "dev" ] && [ -f "${dist_path}/required-server-files.json" ]; then
         log "[Next.js] 旧 production キャッシュを検出 — ${dist_dir} をクリアします"
-        rm -rf "$dist_path"
+        frontend_remove_dist "$dist_path"
     fi
 
-    # 本番ビルド運用: ロックを取り（同時に 2 本ビルド/起動しない）、必要ならビルドしてから start
     if [ "$FRONTEND_NPM_SCRIPT" = "start" ]; then
-        exec 9>"$FRONTEND_LOCK_FILE"
-        if ! flock -n 9; then
-            log "[Next.js] 別の watchdog がビルド/起動中 — 今回は何もしません"
-            return 1
-        fi
-        if ! build_frontend_if_needed "$dist_dir" "$dist_path"; then
-            flock -u 9 2>/dev/null || true
-            return 1
+        if [ ! -f "${dist_path}/BUILD_ID" ]; then
+            # 使える本番ビルドが無い: 別ディレクトリにビルドして入れ替える（高負荷なら待つ。旧ビルドが無いので起動できない）
+            local rc=0
+            build_frontend_aside || rc=$?
+            if [ "$rc" = "0" ]; then
+                frontend_remove_dist "$dist_path"
+                mv "${dist_path}-build" "$dist_path"
+            else
+                case "$rc" in
+                    3) log "[Next.js] 使える本番ビルドが無く、高負荷でビルドも見送り — 負荷が下がるまで待機（次の周期で再試行）" ;;
+                    4) log "[Next.js] 使える本番ビルドが無く、直近のビルド失敗から 10 分以内 — 待機（次の周期で再試行）" ;;
+                    *) log "[Next.js] ERROR: 使える本番ビルドが無く、ビルドもできない — 起動しません（next dev へは自動で戻しません。KEIBA_STG_NEXT_MODE=dev で戻せます）" ;;
+                esac
+                touch "$FRONTEND_WANT_FILE"
+                return 1
+            fi
+        else
+            local why sig
+            sig=$(frontend_env_signature)
+            if why=$(frontend_build_needed "${PROJECT_DIR}/frontend" "$dist_dir" "$sig"); then
+                log "[Next.js] 注意: 本番ビルドが最新ではない（${why}）— 旧ビルドで起動します。更新は frontend_build.sh → --switch-frontend"
+            fi
         fi
     fi
 
@@ -634,16 +708,91 @@ start_frontend() {
     if [ "$FRONTEND_NPM_SCRIPT" = "start" ]; then
         wait_sec=30
     fi
-    local secs
+    local secs front_pid
     secs=$(wait_for_health "$FRONTEND_HEALTH_URL" "$wait_sec") || true
-    local front_pid
     front_pid=$(cat "$FRONTEND_PID_FILE" 2>/dev/null || echo "?")
-    if [ "$FRONTEND_NPM_SCRIPT" = "start" ]; then flock -u 9 2>/dev/null || true; fi
     if [ "$secs" != "0" ]; then
+        rm -f "$FRONTEND_WANT_FILE"
         log "[Next.js] 起動完了 (PID=${front_pid}, ${secs}秒)"
         return 0
     fi
     log "[Next.js] WARNING: 起動したが応答確認できず (PID=${front_pid})"
+    return 1
+}
+
+start_frontend() {
+    if [ "$FRONTEND_NPM_SCRIPT" != "start" ]; then
+        _start_frontend_inner
+        return $?
+    fi
+    exec 9>"$FRONTEND_LOCK_FILE"
+    if ! flock -n 9; then
+        log "[Next.js] 別の watchdog がビルド/切替中 — 今回は何もしません"
+        return 1
+    fi
+    local rc=0
+    _start_frontend_inner || rc=$?
+    flock -u 9 2>/dev/null || true
+    return $rc
+}
+
+# 明示実行: 稼働中のサーバを止めずに別ディレクトリへビルド（frontend_build.sh から呼ぶ）
+build_frontend_cli() {
+    if [ "$FRONTEND_NPM_SCRIPT" != "start" ]; then
+        echo "このプロファイルは next dev 運用です（KEIBA_STG_NEXT_MODE=dev または stg 以外）。本番ビルドは不要です"
+        return 0
+    fi
+    exec 9>"$FRONTEND_LOCK_FILE"
+    if ! flock -n 9; then echo "別のビルド/切替が実行中です"; return 1; fi
+    local rc=0
+    build_frontend_aside || rc=$?
+    flock -u 9 2>/dev/null || true
+    case "$rc" in
+        0) echo "ビルド成功: 切り替えは  bash scripts/server/server_watchdog.sh --profile ${ACTIVE_PROFILE} --switch-frontend"; return 0 ;;
+        2) echo "ビルド不要（最新）。強制するには KEIBA_FORCE_BUILD=1"; return 0 ;;
+        3) echo "高負荷のため見送り（logs/watchdog.log 参照）。強制するには KEIBA_FORCE_BUILD=1"; return 3 ;;
+        4) echo "直近のビルド失敗から 10 分以内のため見送り。強制するには KEIBA_FORCE_BUILD=1"; return 4 ;;
+        *) echo "ビルド失敗（logs/watchdog.log と logs/frontend_build_*.log を参照）"; return 1 ;;
+    esac
+}
+
+# 明示実行: 別ディレクトリのビルドに入れ替えて next start（ダウンタイムは数秒）。失敗したら元に戻す。
+switch_frontend() {
+    if [ "$FRONTEND_NPM_SCRIPT" != "start" ]; then echo "このプロファイルは next dev 運用です。切替は不要です"; return 0; fi
+    local fdir="${PROJECT_DIR}/frontend" active build_name sig
+    active=$(frontend_dist_name); build_name="${active}-build"; sig=$(frontend_env_signature)
+    if [ ! -f "${fdir}/${build_name}/BUILD_ID" ]; then
+        echo "ビルド済みの ${build_name} がありません。先に frontend_build.sh を実行してください"; return 1
+    fi
+    if [ "$(cat "${fdir}/${build_name}/.build-env" 2>/dev/null)" != "$sig" ] && [ "${KEIBA_FORCE_SWITCH:-0}" != "1" ]; then
+        echo "ビルド時の環境が現在と違います（API の URL など）。作り直すか KEIBA_FORCE_SWITCH=1 で強制してください"; return 1
+    fi
+    exec 9>"$FRONTEND_LOCK_FILE"
+    if ! flock -n 9; then echo "別のビルド/切替が実行中です"; return 1; fi
+    log "[Next.js] 切替開始: ${build_name} → ${active}（next を止めて入れ替え）"
+    stop_frontend
+    frontend_remove_dist "${fdir}/${active}.old"
+    if [ -e "${fdir}/${active}" ]; then mv "${fdir}/${active}" "${fdir}/${active}.old"; fi
+    mv "${fdir}/${build_name}" "${fdir}/${active}"
+    local rc=0
+    _start_frontend_inner || rc=$?
+    if [ "$rc" = "0" ]; then
+        frontend_remove_dist "${fdir}/${active}.old"
+        log "[Next.js] 切替完了（旧ディレクトリを削除）"
+        flock -u 9 2>/dev/null || true
+        echo "切替完了"
+        return 0
+    fi
+    log "[Next.js] ERROR: 切替後の起動に失敗 — 元のディレクトリに戻します"
+    stop_frontend
+    frontend_remove_dist "${fdir}/${active}.failed"
+    mv "${fdir}/${active}" "${fdir}/${active}.failed"
+    if [ -e "${fdir}/${active}.old" ]; then
+        mv "${fdir}/${active}.old" "${fdir}/${active}"
+        _start_frontend_inner || true
+    fi
+    flock -u 9 2>/dev/null || true
+    echo "切替に失敗したため元に戻しました（失敗した出力: ${active}.failed）"
     return 1
 }
 
@@ -800,6 +949,14 @@ case "$MODE" in
     --flask-only)
         check_flask
         exit 0
+        ;;
+    --build-frontend)
+        build_frontend_cli
+        exit $?
+        ;;
+    --switch-frontend)
+        switch_frontend
+        exit $?
         ;;
     --frontend-only)
         check_frontend
