@@ -14,6 +14,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import date
 from pathlib import Path
@@ -35,6 +36,53 @@ def parse_page(html: str) -> dict:
     return {"title": title, "year": int(y[1]) if y else None, "month": None, "day": None, "dob_text": raw}
 
 
+_ANCHOR = re.compile(r'<a[^>]*href="/horse/(\d{10})/"[^>]*>(.*?)</a>', re.S)
+
+
+def _norm_name(s: str) -> str:
+    s = re.sub(r"[\(（][^)）]*[\)）]\s*$", "", s.replace("\xa0", " ")).strip().lower()
+    return re.sub(r"[^a-z0-9ぁ-んァ-ヶー一-龥]", "", s)
+
+
+def parse_search(html: str) -> list[dict]:
+    """検索結果ページの /horse/<ID>/ へのリンクを、表示名と直後の文字列（生年が書かれていれば拾う）つきで返す。"""
+    out, seen = [], set()
+    ms = list(_ANCHOR.finditer(html))
+    for i, m in enumerate(ms):
+        end = ms[i + 1].start() if i + 1 < len(ms) else m.end() + 300
+        hid = m[1]
+        label = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", m[2])).strip()
+        tail = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html[m.end():min(end, m.end() + 300)]))
+        if hid in seen or not label:
+            continue
+        seen.add(hid)
+        y = re.search(r"\b(1[89]\d{2}|20\d{2})\b", tail[:120])
+        out.append({"id": hid, "label": label, "year_near": int(y[1]) if y else None})
+    return out
+
+
+def select_candidate(cands: list[dict], name: str, year: int) -> tuple[str | None, str]:
+    """馬名が一致し、生年が分かるなら一致するものを 1 件だけ選ぶ。(JBIS ID or None, 理由)"""
+    want = _norm_name(name)
+    same = [c for c in cands if _norm_name(c["label"]) == want]
+    if not same:
+        return None, "search_none"
+    with_year = [c for c in same if c["year_near"] == year]
+    if len(with_year) == 1:
+        return with_year[0]["id"], "ok"
+    if len(with_year) > 1:
+        return None, "search_ambiguous"
+    unknown = [c for c in same if c["year_near"] is None]
+    if len(same) == 1 and unknown:
+        return same[0]["id"], "ok_name_only"  # 生年は馬ページで照合する
+    return None, "search_ambiguous" if len(same) > 1 else "search_year_mismatch"
+
+
+def _get(url: str) -> str:
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=30) as r:
+        return r.read().decode("utf-8", errors="replace")
+
+
 def fetch(queue_path: Path, out_path: Path, delay: float, limit: int | None, initial_wait: float = 0.0) -> int:
     queue = json.loads(queue_path.read_text(encoding="utf-8"))
     done = set()
@@ -47,28 +95,65 @@ def fetch(queue_path: Path, out_path: Path, delay: float, limit: int | None, ini
     if initial_wait and todo:
         print(f"直前のアクセスから間隔を空けるため {initial_wait:.0f} 秒待機", flush=True)
         time.sleep(initial_wait)
-    for i, (hid, name, year, jbis, q, impact) in enumerate(todo):
-        if i:
-            time.sleep(delay)
-        url = f"https://www.jbis.jp/horse/{jbis}/"
+    last = [0.0]
+
+    def wait() -> None:
+        gap = delay - (time.time() - last[0])
+        if gap > 0:
+            time.sleep(gap)
+
+    def request(url: str) -> str | int:
+        wait()
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=30) as r:
-                html = r.read().decode("utf-8", errors="replace")
+            return _get(url)
         except urllib.error.HTTPError as e:
+            last[0] = time.time()
             if e.code in (403, 429) or e.code >= 500:
                 print(f"{time.strftime('%H:%M:%S')} HTTP {e.code} のため停止（回避しない）: {url}", flush=True)
-                return 3
-            rec = {"horse_id": hid, "name": name, "nk_year": year, "jbis": jbis, "q": q, "impact": impact, "url": url, "status": f"http_{e.code}"}
+                return -1
+            return e.code
         except Exception as e:  # noqa: BLE001
             print(f"{time.strftime('%H:%M:%S')} 通信エラーのため停止: {e!r}", flush=True)
-            return 4
+            return -2
+        finally:
+            last[0] = time.time()
+
+    for hid, name, year, jbis, q, impact in todo:
+        rec = {"horse_id": hid, "name": name, "nk_year": year, "jbis": jbis, "q": q, "impact": impact}
+        if not jbis:  # ID 不明: まず検索で探す
+            query = urllib.parse.quote(re.sub(r"[\(（][^)）]*[\)）]\s*$", "", name.replace("\xa0", " ")).strip())
+            res = request(f"https://www.jbis.jp/navi_search/?keyword={query}")
+            if isinstance(res, int):
+                if res < 0:
+                    return 3 if res == -1 else 4
+                rec.update(status=f"search_http_{res}")
+                _append(out_path, rec)
+                continue
+            cands = parse_search(res)
+            jbis, why = select_candidate(cands, name, year)
+            rec.update(search_candidates=cands[:8], search_result=why, jbis=jbis)
+            if not jbis:
+                rec["status"] = why
+                _append(out_path, rec)
+                print(f"{time.strftime('%H:%M:%S')} {hid} {name} {year} -> 検索: {why}（候補 {len(cands)}）", flush=True)
+                continue
+        url = f"https://www.jbis.jp/horse/{jbis}/"
+        res = request(url)
+        if isinstance(res, int):
+            if res < 0:
+                return 3 if res == -1 else 4
+            rec.update(url=url, status=f"http_{res}")
         else:
-            rec = {"horse_id": hid, "name": name, "nk_year": year, "jbis": jbis, "q": q, "impact": impact, "url": url, "status": "ok", **parse_page(html)}
-        with open(out_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            rec.update(url=url, status="ok", **parse_page(res))
+        _append(out_path, rec)
         print(f"{time.strftime('%H:%M:%S')} {hid} {name} {year} -> {rec.get('year')}-{rec.get('month')}-{rec.get('day')} ({rec.get('title', '')[:30]})", flush=True)
     print("DONE", flush=True)
     return 0
+
+
+def _append(path: Path, rec: dict) -> None:
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
 def decide(rec: dict) -> tuple[str, str]:
