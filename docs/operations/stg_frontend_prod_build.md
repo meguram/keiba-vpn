@@ -15,7 +15,11 @@
 - **watchdog（cron）が自動でビルドするのは「next が落ちていて、使える本番ビルドが無い」ときだけ**（その場でビルド→配置→起動）。使える旧ビルドがあるときは、ソースが新しくても旧ビルドで即起動する（復旧を優先）。ソース更新の反映は、下の手順（ビルド→切替）を明示的に実行する。
 - **ロックと目印**: `logs/.frontend-build-stg.lock`（flock。ビルド/切替/起動中は他の watchdog 実行がスキップ）。`logs/.frontend-build-failed-stg`（ビルド失敗の目印。10 分は自動再試行しない）。`logs/.frontend-want-stg`（起動したいのにできていない目印。PID ファイルが無くても watchdog が監視・再試行を続ける）。**PID ファイルには目印を書かない**（cron の watchdog は `.frontend.pid`、`--profile stg` 付きは `.frontend-stg.pid` と別ファイルになり、復旧判定が壊れるため）。
 - **PATH**: watchdog は `/opt/conda/bin` と `/usr/local/bin` を PATH の末尾に補う（cron / `sudo -n` で `npm: command not found` になる問題の対策）。
-- **停止**: `stop_frontend` は、npm / next の親に加えて、ポートを掴んでいる `next-server`（子。`-p` を含まず pattern 一致では止まらない）も止める。これが無いと、切り替えても旧サーバが残ってポートを掴み続け、新しいサーバが起動できない（dev PC の検証で発覚）。
+- **停止（ss / netstat / lsof に依存しない。`/proc` だけで動く）**: ホストの初回の切替では、親（sh -c / npm）だけが止まり、子の `next-server`（プロセス名 `next-server`、親が 1 の孤児、`-p` を含まない）が旧ビルドのままポート 23200 を掴み続け、新しいサーバは起動に失敗して、旧ビルドの画面が出続けた（新ページが 404）。そのため `stop_frontend`（`frontend_stop_all`）は次のとおり止める。
+  1. PID ファイルのプロセス（コマンドラインに npm / next / node を含むもののみ）と、その**子孫すべて**（`/proc/*/stat` の ppid をたどる）。
+  2. ポートを LISTEN しているプロセス（`/proc/net/tcp{,6}` の LISTEN の inode → `/proc/*/fd` の `socket:[inode]` で持ち主を特定）で、**cwd が `frontend/` のもの**と、その子孫。dev の別プロファイル（別ポート）や、別ディレクトリ起動のプロセスは止めない。
+  3. TERM → 最大 10 秒、ポートが空くまで待つ（`KEIBA_STOP_WAIT_SEC`）→ 残っていれば KILL → 最大 5 秒待つ。**それでも空かなければ失敗を返し、切替は入れ替えずに中止**（旧ビルドと `.next-stg-build` を残す）。
+- **起動後の確認**: 起動した `next start` が期待したビルドで動いているかを確認する。(a) `/_next/static/<BUILD_ID>/_buildManifest.js` が 200（別ビルドのサーバなら 404）、(b) ポートの持ち主が、いま起動した PID の子孫であること（旧プロセスが残っていればここで検出）。不一致なら失敗扱いで、切替は元のディレクトリに戻す。成功時のログに『新プロセスの PID・リスナー PID・BUILD_ID』が出る（`切替完了: 新プロセス PID=… リスナーPID=… BUILD_ID=…`）。
 - ビルド時に固定される値（`rewrites` の転送先・`NEXT_PUBLIC_*`）はビルド時に渡る。ホストの stg では `NEXT_PUBLIC_*` は未設定（コードの既定値で動作）。設定を足したら自動で『環境が違う』判定になる。
 - `next build` は tracked の `frontend/next-env.d.ts` を書き換える（`.next-dev` → `.next-stg…` の参照）。ホストでは `M` のままでよい（反映時にこのファイルは触らない）。
 
@@ -25,7 +29,7 @@
    `sudo -n bash scripts/server/frontend_build.sh stg`
    （内部で nice 19。約 1〜数分。ssh が切れないよう `sudo -n nohup bash scripts/server/frontend_build.sh stg > /tmp/fe_build.out 2>&1 &` で投げて `tail logs/watchdog.log` で見てもよい）。高負荷で見送られたら下がるのを待つ（急ぐときだけ `KEIBA_FORCE_BUILD=1`）。`ビルド成功` と出れば `frontend/.next-stg-build` ができている。
 3. **切替**（成功後。ダウンタイム数秒）: `sudo -n bash scripts/server/server_watchdog.sh --profile stg --switch-frontend`（`切替完了` と出る）。
-4. **確認**: `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:23200/`、`ps -eo pid,etime,comm | awk '$3=="next-server"'`（1 本、起動したばかり）、`tail logs/watchdog.log`（`ビルド成功` `切替完了`）、公開 URL（`/weekly-predictions` `/races` `/race/<id>`）。
+4. **確認**: `tail logs/watchdog.log` の `切替完了: 新プロセス PID=… リスナーPID=… BUILD_ID=…`、`cat frontend/.next-stg/BUILD_ID` と一致、`curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:23200/_next/static/$(cat frontend/.next-stg/BUILD_ID)/_buildManifest.js` が 200、`ps -eo pid,etime,comm | awk '$3=="next-server"'`（1 本、起動したばかり）、公開 URL（`/weekly-predictions` `/races` `/race/<id>`、追加したページが 404 でないこと）。
 5. **ロールバック**:
    - 切替直後に不具合: 前の出力は切替成功で削除されるため、前のコミットに戻して 1〜3 をやり直す（約 2 分）。
    - 本番ビルド運用そのものをやめて `next dev` に戻す: ホストの `.env.stg` に `KEIBA_STG_NEXT_MODE=dev` を 1 行追記 → Next の PID を番号で確認して `sudo -n kill <PID…>` → `sudo -n bash scripts/server/server_watchdog.sh --profile stg`。`.next-stg` の本番ビルドは dev 起動時に自動で消える。本番ビルドに戻すときはその行を消す。

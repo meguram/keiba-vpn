@@ -515,34 +515,11 @@ frontend_should_monitor() {
     [ -f "$FRONTEND_PID_FILE" ] || [ -f "$FRONTEND_WANT_FILE" ]
 }
 
-# 指定ポートで LISTEN しているプロセスを止める。npm / next の親を止めても、子の next-server（プロセス名が
-# "next-server" で "-p" を含まない）が残ってポートを掴み続けるため、パターン一致だけでは止まらない。
-kill_by_port() {
-    local port="$1" pids=""
-    if command -v ss >/dev/null 2>&1; then
-        pids=$(ss -ltnp "sport = :${port}" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u | tr '\n' ' ' || true)
-    elif command -v lsof >/dev/null 2>&1; then
-        pids=$(lsof -t -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null | sort -u | tr '\n' ' ' || true)
-    fi
-    pids="${pids% }"
-    if [ -n "$pids" ]; then
-        log "  ポート ${port} を掴んでいるプロセスを停止: ${pids}"
-        # shellcheck disable=SC2086
-        kill $pids 2>/dev/null || true
-        sleep 2
-        local p
-        for p in $pids; do
-            if kill -0 "$p" 2>/dev/null; then kill -9 "$p" 2>/dev/null || true; fi
-        done
-        sleep 1
-    fi
-}
-
+# フロントエンドを確実に止める（ss / netstat / lsof に依存しない。/proc で子孫とポートの持ち主を特定）。
+# 親（npm / sh）だけを止めても、子の next-server が残ってポートを掴み続け、新ビルドに切り替わらないことがあった。
+# ポートが空かなければ 1 を返す（呼び出し側は起動・入れ替えを中止すること）。
 stop_frontend() {
-    kill_by_pid_file "$FRONTEND_PID_FILE"
-    kill_by_pattern "next.*dev.*-p ${FRONTEND_PORT}"
-    kill_by_pattern "next.*start.*-p ${FRONTEND_PORT}"
-    kill_by_port "$FRONTEND_PORT"
+    frontend_stop_all "$FRONTEND_PORT" "${PROJECT_DIR}/frontend" "$FRONTEND_PID_FILE"
 }
 
 # 本番ビルド運用（stg）。ビルドは別ディレクトリ（.next-stg-build）に作り、動いているサーバを止めない。
@@ -551,6 +528,7 @@ stop_frontend() {
 FRONTEND_LOCK_FILE="${LOG_DIR}/.frontend-build-${PROFILE_KEY}.lock"
 FRONTEND_FAIL_STAMP="${LOG_DIR}/.frontend-build-failed-${PROFILE_KEY}"
 FRONTEND_WANT_FILE="${LOG_DIR}/.frontend-want-${PROFILE_KEY}"
+FRONTEND_LAST_BUILD_ID=""
 
 frontend_lock_held_by_other() {
     # 他のプロセスがロック中なら 0（真）。自分は取得して即解放するだけ。
@@ -730,6 +708,20 @@ _start_frontend_inner() {
     secs=$(wait_for_health "$FRONTEND_HEALTH_URL" "$wait_sec") || true
     front_pid=$(cat "$FRONTEND_PID_FILE" 2>/dev/null || echo "?")
     if [ "$secs" != "0" ]; then
+        if [ "$FRONTEND_NPM_SCRIPT" = "start" ] && [ -f "${dist_path}/BUILD_ID" ]; then
+            local bid listener
+            bid=$(cat "${dist_path}/BUILD_ID")
+            if ! frontend_verify_build "$FRONTEND_PORT" "$bid" "$front_pid"; then
+                log "[Next.js] ERROR: 起動したサーバが期待したビルド(${bid})ではない — 失敗扱い"
+                stop_frontend || true
+                return 1
+            fi
+            listener=$(frontend_listener_pids "$FRONTEND_PORT")
+            FRONTEND_LAST_BUILD_ID="$bid"
+            rm -f "$FRONTEND_WANT_FILE"
+            log "[Next.js] 起動完了 (PID=${front_pid}, リスナーPID=${listener:-?}, BUILD_ID=${bid}, ${secs}秒)"
+            return 0
+        fi
         rm -f "$FRONTEND_WANT_FILE"
         log "[Next.js] 起動完了 (PID=${front_pid}, ${secs}秒)"
         return 0
@@ -788,7 +780,12 @@ switch_frontend() {
     exec 9>"$FRONTEND_LOCK_FILE"
     if ! flock -n 9; then echo "別のビルド/切替が実行中です"; return 1; fi
     log "[Next.js] 切替開始: ${build_name} → ${active}（next を止めて入れ替え）"
-    stop_frontend
+    if ! stop_frontend; then
+        log "[Next.js] ERROR: 旧プロセスを止められない — 切替を中止（${active} は入れ替えていません。${build_name} は残しています）"
+        flock -u 9 2>/dev/null || true
+        echo "旧プロセスを止められないため切替を中止しました（旧ビルドのまま。ログ参照）"
+        return 1
+    fi
     frontend_remove_dist "${fdir}/${active}.old"
     if [ -e "${fdir}/${active}" ]; then mv "${fdir}/${active}" "${fdir}/${active}.old"; fi
     mv "${fdir}/${build_name}" "${fdir}/${active}"
@@ -796,13 +793,13 @@ switch_frontend() {
     _start_frontend_inner || rc=$?
     if [ "$rc" = "0" ]; then
         frontend_remove_dist "${fdir}/${active}.old"
-        log "[Next.js] 切替完了（旧ディレクトリを削除）"
+        log "[Next.js] 切替完了: 新プロセス PID=$(cat "$FRONTEND_PID_FILE" 2>/dev/null) リスナーPID=$(frontend_listener_pids "$FRONTEND_PORT") BUILD_ID=${FRONTEND_LAST_BUILD_ID:-?}（旧ディレクトリを削除）"
         flock -u 9 2>/dev/null || true
-        echo "切替完了"
+        echo "切替完了 (BUILD_ID=${FRONTEND_LAST_BUILD_ID:-?})"
         return 0
     fi
-    log "[Next.js] ERROR: 切替後の起動に失敗 — 元のディレクトリに戻します"
-    stop_frontend
+    log "[Next.js] ERROR: 切替後の起動/ビルド確認に失敗 — 元のディレクトリに戻します"
+    stop_frontend || log "[Next.js] WARNING: 失敗したサーバを止めきれていません"
     frontend_remove_dist "${fdir}/${active}.failed"
     mv "${fdir}/${active}" "${fdir}/${active}.failed"
     if [ -e "${fdir}/${active}.old" ]; then
@@ -831,7 +828,7 @@ check_frontend() {
     # 5xx サーバーエラー → 即時再起動
     if [[ "$code" =~ ^5 ]]; then
         log "[Next.js${PROFILE_SUFFIX}] ALERT: サーバーエラー (HTTP=${code}) — 即時再起動"
-        stop_frontend
+        if ! stop_frontend; then log "[Next.js${PROFILE_SUFFIX}] ERROR: 旧プロセスを止められない — 起動しません"; return 1; fi
         if start_frontend; then
             reset_counter "${LOG_DIR}/.frontend_fail_count${PROFILE_SUFFIX}"
             log "[Next.js${PROFILE_SUFFIX}] 再起動成功"
@@ -862,7 +859,7 @@ check_frontend() {
         sleep 30
     fi
 
-    stop_frontend
+    if ! stop_frontend; then log "[Next.js${PROFILE_SUFFIX}] ERROR: 旧プロセスを止められない — 起動しません"; return 1; fi
     if start_frontend; then
         reset_counter "${LOG_DIR}/.frontend_fail_count${PROFILE_SUFFIX}"
         log "[Next.js${PROFILE_SUFFIX}] 再起動成功"
