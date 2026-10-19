@@ -215,6 +215,8 @@ PARTS: list[Part] = [
         C("exotic_bet_probabilities", "馬連・ワイド・馬単・3 連複の的中確率を、勝率・連対率・複勝率から一貫して計算するモデル（割引 Harville）。", "設計"),
         C("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）。構造の全数調査、モデルと市場のずれ（Benter 混合）、組合せ券、強化学習（リーグ戦・批評役）、多重比較の補正、WIN5 のデータ有無、2026 年での最終評価。", "結果",
           [("exotic_bet_probabilities", "組合せ券の確率の作り方"), ("modeling_experiment_report", "強化学習（tp-08）の結果")]),
+        C("race_type_marks", "レースの性質（堅い/荒れやすい）で印（◎○▲）の付け方と買い方を変える方式の評価（tp-43）。荒れ度の定義 6 種、印 10 通り、買い方 20 通り、設計年での選択と検証年・2026 年での確認、reality check、破産確率。切り替えの価値は見つからず、印の付け方（期待値＋複勝確率の閾値）は組合せ券で良い傾向だが 100% 超の確かな根拠は無い。", "結果",
+          [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("similar_horses_pairs", "似た馬は同じレースで着順が近くなるか（tp-41）"), ("race_volatility", "荒れやすいレースの分析（tp-30）"), ("training_pipeline_decisions", "決定ログ")]),
         C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",
           note="safe_ev を前提にした設計。tp-08 の実装は Benter ブレンドで、safe_ev は使っていない。",
           now=[("modeling_experiment_report", "tp-08 の結果")]),
