@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>特徴量調査の総覧 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+<style>.ok{color:#4ade80}.wait{color:#fbbf24}.ng{color:#f87171}.tag{font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid #243358}</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>特徴量調査の総覧</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/feature_investigation_catalog.html</code></p>
+    </header>
+    <article class="html-body">
+<h1>特徴量調査の総覧（採用・不採用・保留と今後の調査）</h1>
+<p class="muted">これまでに行った特徴量・前段モデル・モデル構造の調査を、概要・結果・採否つきで 1 か所にまとめた一覧。数値の正は <a href="training_pipeline_decisions.html">確定事項ログ</a>（各行の「節」列、§N）で、ここは総覧として要約している。現行モデルの特徴量そのものは <a href="adopted_features_v3.html">採用している特徴量</a>、調査全体の流れは <a href="research_overview.html">調査の全体像</a>。最終更新: 2026-10-19。</p>
+
+<h2>1. 読み方</h2>
+<ul>
+  <li><b>評価指標</b>: 勝率（p_win）の LogLoss（予測確率の外れ具合。小さいほど良い）の差。<b>負が改善</b>。例えば −0.00100 は LogLoss が 0.001 下がったこと。比べる相手（基準）は行ごとに違うので、行の注を見る。</li>
+  <li><b>採用の基準</b>（主に 2026-10 以降の調査）: 95% 信頼区間（paired bootstrap＝同じレースで対にして何度も取り直した幅）の<b>上限が 0 未満</b>、効果が <b>0.0002 以上</b>、連対・複勝の悪化が 0.0002 以内。初期（tp-03〜06）は「全 fold で悪化せず、平均が改善し、改善幅が閾値以上」。試す群が多いと偶然の改善が混ざるため、第 1 段（valid 2022・2023）と第 2 段（2024 と新しい seed）で確認し、最終は累積（tp-27）とアンサンブルで確かめる。</li>
+  <li><b>評価に使う年</b>: valid は 2022〜2024 年。test 2025 年は最終評価で数回だけ見て、特徴量の選択には使わない。2026 年は学習にも使わない。</li>
+  <li><b>採否の記号</b>: <span class="ok">採用</span>＝現行モデル（v3 または v4）に入っている / <span class="ng">不採用</span> / <span class="wait">保留・進行中・未検証</span>。</li>
+  <li><b>共通ルール</b>: 市場オッズ・人気は特徴量にしない。統計量は「そのレース日より前のデータだけ」（as-of）で作り、先読み（将来の結果が過去行に混ざること）のテストを付ける。騎手・調教師・馬・種牡馬・馬主は ID をキーにする。</li>
+</ul>
+
+<h2>2. 現在の採用状況（要約）</h2>
+<table>
+<tr><th>モデル</th><th>特徴量</th><th>test 2025 の勝率 LogLoss</th><th>状態</th></tr>
+<tr><td>v1 → v2 → v3</td><td>v3 は 301 列（LayerA 48 + 履歴 127 + 前段・相対化・追い切りラップ 95 + 血統・追加 31）</td><td>0.21349 → 0.21240 → 0.21039</td><td>v3 の推論経路は実装済み（§29・§30・§32）</td></tr>
+<tr><td><b>v4</b></td><td><b>v3 の 301 列 + 追加 834 列 = 1,135 列</b>（追加の内訳: 馬主系 125 + 補助ヘッド 27 + 馬自身の履歴 8 群 199 + レース・メンバー構成・コース環境 7 群 451 + 種牡馬 ID×条件 32。§33・§34 の列数と一致）</td><td><b>0.20740</b>（v3 比 −0.00303、95% 上限 −0.00216。連対・複勝も改善）</td><td>採用。2020〜2025 年の全行で学習する本番用バンドルは作成中（§34）</td></tr>
+</table>
+<p class="muted">v4 の追加 4 群は、群の選択に使った valid 2022〜24 のアンサンブル（leave-one-year-out）で v3 比 −0.00345（上限 −0.00294）、test 2025 では −0.00303 と、楽観はほぼ入っていない（§33・§34）。グループ別の一覧は <a href="adopted_features_v3.html">採用している特徴量</a>にあるが、これは v3 時点の 301 列。<b>v4 で追加した 834 列の内訳は、下の調査カタログの「採用（v4）」の行と §33 を見る</b>。</p>
+
+<h2>3. 調査カタログ</h2>
+
+<h3>3.1 履歴特徴量と土台（tp-02・tp-03）</h3>
+<table>
+<tr><th>候補</th><th>何を調べたか</th><th>結果</th><th>採否</th><th>節</th></tr>
+<tr><td>馬の過去走履歴プロファイル 127 列（A〜H の 11 ファミリー）</td><td>土台（B0′ 48 列）に足す。単独・累積・1 ファミリーずつ外す（leave-one-out）の 3 通りで評価。valid 2022〜2024、LightGBM 固定、3 seed</td><td>勝率 0.23375 → <b>0.22069</b>（−0.0131、全 fold 改善）。単独で大きいのは C レースの質 −0.00779、F3 Elo −0.00743。上乗せで最大は A 上がり・脚質 −0.00230、次いで H −0.00171。E・F1・F5 は小さいが外すと悪化</td><td class="ok">採用（127 列すべて）</td><td>§3・§5</td></tr>
+<tr><td>speed_*（タイム指数ページ由来）</td><td>履歴 127 列を入れた構成に足す</td><td>0.22069 → 0.22030（−0.0004）。履歴が代わりを担う。開催前に取得できるかも未確認</td><td class="ng">不採用</td><td>§5</td></tr>
+<tr><td>時代ずれ対策（6 通り）</td><td>年内標準化、騎手・調教師の累積件数や件数系を除く、F5 を除く、2020 年の重み 0.5、2020〜2021 年を学習から外す</td><td>どれも悪化（+0.00006〜+0.00033）。2020〜2021 年を外すと +0.00209。時代を見分けられること自体は精度低下に直結していない</td><td class="ng">不採用</td><td>§5</td></tr>
+<tr><td>履歴 127 → 92 列の相関整理</td><td>相関 0.9 以上を代表 1 つに寄せる</td><td>全列より 0.00023 悪化（許容 0.00011 を超える）</td><td class="ng">不採用</td><td>§5</td></tr>
+<tr><td>H 標準条件レーティング（sr_*）と旧 race_performance の比較</td><td>新実装 H が固定係数の既存実装より良いか</td><td>H 自体は採用。既存実装との比較は未実施</td><td class="wait">未検証</td><td>§5</td></tr>
+</table>
+
+<h3>3.2 前段モデル（走破タイム・位置取り・ペースなどの予測を特徴量にする）</h3>
+<table>
+<tr><th>候補</th><th>何を調べたか</th><th>結果</th><th>採否</th><th>節</th></tr>
+<tr><td>P5 走破タイム差・P6 正規化着順（s_time_pred・s_time_gap・s_rank_pred の 3 列）</td><td>前段モデルの out-of-fold 予測を後段に足す（学習は 2020 年から、前段が無い 2020〜2021 年は欠損のまま）</td><td>valid 2023・2024 の平均 <b>−0.00086</b>（−0.00061／−0.00110）。tp-05a の再比較でも −0.00051</td><td class="ok">採用（3 列）</td><td>§6</td></tr>
+<tr><td>P4 上がり 3F</td><td>同上（3 列）</td><td>単独 −0.00050 だが、P5・P6 に足しても上積みなし（6 列 −0.00067）</td><td class="ng">不採用</td><td>§6</td></tr>
+<tr><td>P1 位置取り（6 列）・P3 ペース確率・展開マッチ m_*</td><td>同上</td><td>P1 −0.00005、P3 −0.00005（基準未満）、m_ +0.00012（悪化）</td><td class="ng">不採用</td><td>§6</td></tr>
+<tr><td>後段の学習を 2022 年以降に限る案</td><td>前段の欠損を避けて 2022 年以降だけで学習</td><td>base が 2023 で +0.00300、2024 で +0.00118 悪化し、前段の改善を上回って損</td><td class="ng">不採用</td><td>§6</td></tr>
+<tr><td>前段の out-of-fold 方式</td><td>expanding window（厳密）と leave-one-year-out の比較</td><td>後者は P1 の MAE が 0.0008 良いが先読みを含む。expanding を既定</td><td class="ok">expanding を採用</td><td>§6</td></tr>
+<tr><td>tp-25a 位置取り・テン 1F の前段モデル</td><td>前段を強化（スタート・位置取り・テン 1F を予測）</td><td>V0 比 −0.00024（採用基準を満たす）だが、現行の前段 3 列に重ねると −0.00012（上限 +0.00008）。前段精度は上がった（テンの Spearman 0.544 → 0.565）が情報が重複</td><td class="ng">不採用</td><td>§33</td></tr>
+<tr><td>tp-25b ペース予測・ペース条件付きの能力・展開相性</td><td>同上</td><td>最良 −0.00020（上限 −0.00003）。効果 0.0002 未満。現行前段と併用すると複勝 +0.00042</td><td class="ng">不採用</td><td>§33</td></tr>
+</table>
+
+<h3>3.3 モデル構造・学習の工夫</h3>
+<table>
+<tr><th>候補</th><th>何を調べたか</th><th>結果</th><th>採否</th><th>節</th></tr>
+<tr><td>レース内の相対化（42 列: z・順位・最大との差）</td><td>14 列について同じレースの出走馬との相対値を足す</td><td>tp-05a で −0.00059（3 fold すべて改善）。拡張版（tp-05f）は有意差なし</td><td class="ok">採用（42 列）</td><td>§7・§9</td></tr>
+<tr><td>NN の ID 埋め込み・レース内の注意機構</td><td>騎手・調教師・種牡馬の ID 埋め込み、Transformer 注意層</td><td>埋め込み +0.0005、注意 1〜2 層 +0.0021、両方 +0.0033（悪化）</td><td class="ng">不採用</td><td>§9</td></tr>
+<tr><td>NN の再調整・弱いセグメントの再較正</td><td>新特徴量上で Optuna 30 試行、障害・長距離・少頭数の補正</td><td>再調整 −0.00002、再較正 +0.00004（障害では悪化）</td><td class="ng">不採用</td><td>§9</td></tr>
+<tr><td>欠損値のモデル補完・外れ値変換（RankGauss など）</td><td>NN と LightGBM で補完・変換</td><td>NN −0.00007（上限 +0.00012）。LightGBM は補完で悪化</td><td class="ng">不採用</td><td>§14</td></tr>
+<tr><td>特徴量グループごとの階層スタッキング</td><td>グループ別モデルを積む</td><td>+0.0031〜+0.0036（悪化）。全特徴量を 1 モデルに入れるほうが良い</td><td class="ng">不採用</td><td>§15</td></tr>
+<tr><td>専用モデル・ランキング学習の確率化・多層スタッキング・多様なメンバー（tp-05j〜n）</td><td>クラス・コース別の専用化とその対照実験ほか</td><td>上乗せなし（多層スタッキング M+ は v3 で再判断）</td><td class="ng">不採用</td><td>§19</td></tr>
+<tr><td>補助タスクつき NN・補助ヘッド予測（tp-25c・25e）</td><td>位置取りなどの補助予測を NN の補助損失にし、その out-of-fold 予測を LightGBM にも足す</td><td>NN −0.00103、LightGBM に足す −0.00095（上限 −0.00055）。v3 の 7 メンバーへの組み込みは LOYO −0.00026（上限 −0.00008）。SmartRC を入力に足すと悪化</td><td class="ok">採用（補助 27 列＋補助損失つき NN）</td><td>§33</td></tr>
+</table>
+
+<h3>3.4 追加の情報源（追い切り・厩舎コメント・血統・SmartRC）</h3>
+<table>
+<tr><th>候補</th><th>何を調べたか</th><th>結果</th><th>採否</th><th>節</th></tr>
+<tr><td>追い切り評価・厩舎コメント（7 列）</td><td>追い切り評価 A〜D とコメントの有無・長さ・前向き後ろ向きの語数</td><td>0.21637 → <b>0.21549</b>（−0.00086、上限 −0.00060）。XGBoost・NN でも改善</td><td class="ok">採用</td><td>§9</td></tr>
+<tr><td>血統×条件（ped_*、24 列）</td><td>父・母父 × (面距離・馬場・競馬場) の産駒成績（as-of・経験ベイズ）</td><td>単独では −0.00002（効かない）が害もなく同梱。血統キー復旧後の再評価（tp-24）では +0.00017 で不採用</td><td class="ng">不採用（v4 で差し替え）</td><td>§9・§31</td></tr>
+<tr><td>血統キーの復旧（tp-24）</td><td>学習表の sire / dam_sire が全行空だった問題を、血統 JSON から horse_id で引いて直す</td><td>父系 6 列 −0.00032（上限 −0.00012）</td><td class="ok">採用（v4 で差し替え）</td><td>§31</td></tr>
+<tr><td>種牡馬 ID×条件（PED_sire_cond、32 列）</td><td>G4（未活用データ源）の中で単独で通った群</td><td>−0.00044（累積の最終確認）</td><td class="ok">採用（v4）</td><td>§33</td></tr>
+<tr><td>追い切りラップ TL_A（標準化した時計・終い 1F・加速度ほか 50 列）</td><td>馬別調教ページのラップから特徴量化</td><td><b>−0.00136</b>（上限 −0.00106）。連対 −0.00237、複勝 −0.00195</td><td class="ok">採用（v3 から）</td><td>§17・§29</td></tr>
+<tr><td>追い切りの調教師×パターン採点 TL_B・調教師内の相対化（tp-19b）</td><td>TL_A に重ねる</td><td>上乗せなし（12 列の縮小版も同程度）</td><td class="ng">不採用</td><td>§17・§26</td></tr>
+<tr><td>追い切りのパターン別の勝率・回収率の統計（tp-28、7 群・86 列）</td><td>パターン別の過去の勝率・回収率を as-of で</td><td>第 2 段 +0.00003〜+0.00009、同時追加 +0.00017〜+0.00024。TL_A が大半を取り込み済み</td><td class="ng">不採用</td><td>§33</td></tr>
+<tr><td>SmartRC のテン 1F（スタート後 1F）</td><td>直接特徴量にする／位置取り・テンの前段を経由する</td><td>直接は −0.00014（p_win 中立）。位置取り・テンの予測自体は全 fold で約 1% 改善。SmartRC 由来の群は tp-27 の累積で採用ゼロ（保存データが出走後の取得のため）</td><td class="wait">保留</td><td>§16・§33</td></tr>
+</table>
+
+<h3>3.5 レース・コース・環境</h3>
+<table>
+<tr><th>候補</th><th>何を調べたか</th><th>結果</th><th>採否</th><th>節</th></tr>
+<tr><td>コース概形だけから作る類似度（tp-15）</td><td>108 コースの形状マスタから類似度</td><td>最良 −0.00006（上限 +0.00007）。既存の b_aff_* と順位相関 0.83 で、木モデルが同じ情報を持つ</td><td class="ng">不採用</td><td>§11</td></tr>
+<tr><td>季節性・京都改修・Glicko の不確実性 RD・近交係数・最終追い切り日（tp-16）</td><td>9 群を 1 つずつ足す（基準 0.21552）</td><td>CAL_sc +0.00004、CAL_all +0.00005、HS −0.00005、VE +0.00002、RD ±0.00001、IB −0.00001、OK 0.00000。基準を満たす群なし</td><td class="ng">不採用</td><td>§13</td></tr>
+<tr><td>後日談（相手の次走の成績）・その変種</td><td>窓・減衰・複勝率を変えて再検証（tp-16b）</td><td>AF −0.00011（上限 +0.00005）、変種の最良 −0.00015（上限 +0.00001）。境界線上</td><td class="ng">不採用（将来の候補）</td><td>§13・§27</td></tr>
+<tr><td>クッション値・含水率</td><td>入れ替わっていた 4 コーナー含水率を訂正して再評価</td><td>CU −0.00002（訂正前）。訂正後も基準未満</td><td class="ng">不採用</td><td>§13・§27</td></tr>
+<tr><td>track_bias の先読みリーク修正の影響（tp-22）</td><td>修正前後の表で同じ設定の LightGBM を比較</td><td>+0.00003（上限 +0.00011）。影響なし。以降の学習は修正後の表</td><td class="ok">影響なし</td><td>§24</td></tr>
+<tr><td>成績が連動するコースの対応づけ（tp-26）</td><td>馬の過去成績の転移相関 × コース概形 × 検定</td><td>最良 −0.00014（上限 −0.00003）。有意なペアの約 90% が同距離か 200m 差以内で、距離で説明がつく</td><td class="ng">不採用</td><td>§33・<a href="course_performance_similarity.html">章</a></td></tr>
+<tr><td>期待外れ・期待以上の馬のグループ差分によるコース適性（tp-29）</td><td>人気と結果のずれから作るコース固有の適性</td><td>市場版 −0.00019（上限 −0.00003）、モデル期待版 −0.00008。有意な差の大半は全コース共通</td><td class="ng">不採用</td><td>§33・<a href="course_aptitude_groups.html">章</a></td></tr>
+<tr><td>コース特注の要因（tp-31）</td><td>V4 の予測残差がコース×属性でずれているか、厳密コース×属性の lift 6 群、コース別の温度調整</td><td>セル 6,755 中 35 が有意（個人×コースの癖）。候補群は第 2 段 −0.00002〜+0.00006、同時追加 +0.00001。温度調整は悪化</td><td class="ng">不採用</td><td>§33・<a href="course_specific_effects.html">章</a></td></tr>
+<tr><td>荒れやすいレース（tp-30）</td><td>荒れ度の事前予測、特徴量、温度調整、3 連複の幅</td><td>事前予測は R² 0.13（オッズなし）。文脈列 −0.00009〜+0.00003、温度調整 +0.00013（悪化）。予想の精度にも買い目の幅にも使えない</td><td class="ng">不採用</td><td>§33・<a href="race_volatility.html">章</a></td></tr>
+<tr><td>レース・メンバー構成・コース環境（G3、21 群・672 列）</td><td>メンバー強度・通過・コース形状など 21 群を累積評価</td><td>7 群 451 列の同時追加 −0.00071。cross_misc は累積で −0.00009 となり不採用</td><td class="ok">採用（7 群 451 列、v4）</td><td>§33</td></tr>
+<tr><td>枠順×コース（2026-10-18 の検証、決定ログ未記録）</td><td>2020〜2025 年 20,109 レースで、馬番の相対位置と最初のコーナー順位・着順の関係をコース別に</td><td>芝は内が前（β=+0.025）、ダートは外が前（β=−0.024）で、混ぜると 0.000。126 コース中 86 を分類: 差なし 59・内が前 16・外が前 11。序盤位置の説明率はコース別で約 0.3%。v3 の 301 列に枠バイアスを直接表す列は無い</td><td class="wait">特徴量化は未検証（提案）</td><td>—</td></tr>
+</table>
+<p class="muted">枠順は特徴量としては未検証だが、画面の「展開予想」ではコース別の係数（<code>config/gate_bias.json</code>）で想定位置を補正している。展開予想は過去走の通過順位からの集計で、モデルの予測ではなく、特徴量でもない。</p>
+
+<h3>3.6 馬自身・関係者・状況</h3>
+<table>
+<tr><th>候補</th><th>何を調べたか</th><th>結果</th><th>採否</th><th>節</th></tr>
+<tr><td>馬自身の履歴・状態（G1、19 群・404 列）</td><td>群ごとに第 1 段・第 2 段、累積</td><td>単独の群は基準未満。8 群 199 列の同時追加で −0.00058（上限 −0.00029）。毛色は取得率が生まれ年で違うため除外</td><td class="ok">採用（8 群 199 列、v4）</td><td>§33</td></tr>
+<tr><td>関係者（G2: 馬主・生産者・騎手・調教師と組み合わせ）</td><td>群ごとに評価、先読み検査、馬主シャッフル</td><td><b>馬主系 4 群 125 列 −0.00228</b>（上限 −0.00182）。騎手・調教師系は上乗せなし</td><td class="ok">採用（馬主系 125 列、v4）</td><td>§33</td></tr>
+<tr><td>未活用データ源（G4: SmartRC・血統・テキスト・埋め込み、30 群）</td><td>7 群同時追加まで</td><td>7 群同時 −0.00119（上限 −0.00081）だが、累積で通ったのは PED_sire_cond のみ。old_pr（結果由来の疑い）と毛色は除外</td><td class="ok">一部採用（PED_sire_cond）</td><td>§33</td></tr>
+<tr><td>馬具（ブリンカー）と初めて・替わり系の状況（tp-32、13 群）</td><td>面×距離の替わり、初経験、輸送、年齢の節目、体重、クラス替わりほか</td><td>FIRST（初経験）−0.00021（上限 +0.00003）が境界線上。他は +0.00006〜+0.00019。出走前の SmartRC を保存する運用で再評価予定</td><td class="ng">不採用（再評価待ち）</td><td>§33・<a href="equipment_and_change.html">章</a></td></tr>
+<tr><td>輸送と滞在（tp-33）</td><td>追い切りの場所から遠征・滞在を判定</td><td>記述分析で有意なし（遠征 p=0.20）。特徴量は第 2 段 +0.00003、全部入り +0.00001</td><td class="ng">不採用</td><td>§33・<a href="transport_and_stay.html">章</a></td></tr>
+<tr><td>休養明け・レース間隔（tp-34、8 群）</td><td>間隔の帯、馬ごとの好み、叩き 2 戦目ほか</td><td>休み明け初戦の複勝残差 −0.0071 などは有意だが、特徴量は第 2 段 +0.00003〜+0.00019、同時追加 +0.00025。前走の消耗の見かけの改善（−0.0038）は端数リークと判明</td><td class="ng">不採用</td><td>§33・<a href="rest_and_interval.html">章</a></td></tr>
+<tr><td>出遅れ率（G6）</td><td>出遅れの統計と予測確率</td><td>代理ラベル −0.00003（上限 +0.00017）。備考の「出遅」（記載率 2.3%）を実ラベルにする版は取り込み中</td><td class="wait">進行中</td><td>§33</td></tr>
+<tr><td>ドルメロ流（8 年周期）の活性値</td><td>祖先種牡馬の生年から 8 年周期の活性値 8 列。周期 7・9・10 年を対照</td><td>8 年 −0.000005（上限 +0.00013）。対照も +0.00004〜+0.00007。8 年だけが効く証拠なし</td><td class="ng">不採用</td><td>§35</td></tr>
+<tr><td>v4 特徴量セットの統合（tp-27）と最終評価（tp-06d）</td><td>基準から前向きに累積し、順序を変えても同じ 4 群か確認。アンサンブルで v3 と比較</td><td>V4 = 馬主 125 + 補助 27 + G1 199 + G3 451 + PED_sire_cond 32 = 834 列。LOYO で v3 比 勝率 −0.00345・連対 −0.00504・複勝 −0.00707。test 2025 は 0.20740（v3 比 −0.00303）。列の絞り込み（上位 150/300 列、相関整理）は全列より悪化</td><td class="ok">採用（v4）</td><td>§33・§34</td></tr>
+</table>
+
+<h3>3.7 データ・実装の問題（結果に影響したもの）</h3>
+<table>
+<tr><th>問題</th><th>影響</th><th>対応</th></tr>
+<tr><td>学習表の sire / dam_sire が全行空</td><td>血統系は条件別の全体平均だった</td><td>血統 JSON から horse_id で父・母父を引く。v4 で差し替え（§31）</td></tr>
+<tr><td>出馬表の course_type（内回り・外回り）が全行空</td><td>内外の区別が全特徴量から欠落</td><td>パーサー修正、過去分はコースマスタから導出（年 89〜94% が一意）（§33）</td></tr>
+<tr><td>騎手・調教師の通算成績が同一レースの他馬の結果まで数える</td><td>学習のみ先読み（推論では再現できない）。勝率 +0.0001 程度の差</td><td>v4 の再学習で「日付が厳密に前」に直す（§33）</td></tr>
+<tr><td>累積和−自分の浮動小数点端数（今回勝ったときだけ値が厳密に 0）</td><td>木モデルが拾って見かけの改善（R6 で −0.0038）</td><td>累積和を 1 行ずらす共通関数に置き換え、V4 の全採用群を厳密一致で監査（リーク 0 列）（§33）</td></tr>
+<tr><td>毛色・SmartRC old_pr などの取得率の時間依存・結果由来の列</td><td>見かけの改善（−0.002〜−0.006）</td><td>除外。新規列は取得率の年別推移も確認（§33）</td></tr>
+<tr><td>推論用の出馬表が枠番・馬体重増減などを落としていた</td><td>推論経路の LogLoss が約 +0.0007 悪化</td><td>card_frame に追加（§32）</td></tr>
+</table>
+
+<h2>4. 今後の調査対象</h2>
+<table>
+<tr><th>項目</th><th>狙い</th><th>前提・依存</th><th>状態</th><th>根拠</th></tr>
+<tr><td>tp-07: v4 の本番再学習・登録</td><td>修正後の表（血統キー・先読み修正・補助列・馬主系・G1・G3・PED_sire_cond）で 2020〜2025 年の全行を学習し、MLflow（keiba-ensemble-v4）に登録、推論経路との一致確認</td><td>本番用バンドル <code>bundle_v4_2025</code> を作成中</td><td class="wait">進行中</td><td>§34</td></tr>
+<tr><td>日次更新の as-of 状態の保存と推論側への配線</td><td>馬主の成績・血統の集計などを日次で更新し、当日の特徴量に引けるようにする</td><td>tp-07 と並行</td><td class="wait">未着手</td><td>§33 D</td></tr>
+<tr><td>v3 / v4 の predict への切替</td><td>影モード（<code>KEIBA_V3_SERVING=shadow</code>）の予測品質を確認し、画面に出す判断</td><td>影モードの蓄積、v4 の推論経路</td><td class="wait">承認待ち</td><td>§32・§33 D</td></tr>
+<tr><td>特徴量の次の検証ラウンドの記録（tp-35 ほか）</td><td>追い切りラップの群の再生成・評価（コード <code>tp35_lap_groups</code> などが作業中）</td><td>結果は決定ログに未記録</td><td class="wait">進行中</td><td>—（未確認）</td></tr>
+<tr><td>出遅れ率の実ラベル版（G6）</td><td>備考の「出遅」を実ラベルにして再評価</td><td>直近 3 年の備考の取り込み（毎日 03:00 JST の増分取得も稼働）</td><td class="wait">進行中</td><td>§33</td></tr>
+<tr><td>馬具・テン 1F の再評価</td><td>出走前の SmartRC（<code>smartrc_prerace</code>）で、出走前の値と出走後の値の差を確かめ、馬具・初経験・テン 1F の採否を決め直す</td><td>2〜3 開催週（約 1,000 頭以上）の蓄積</td><td class="wait">データ待ち</td><td>§16・§33</td></tr>
+<tr><td>枠バイアスの特徴量化（gate_bias_asof）</td><td>コース別の枠バイアスを、そのレース日より前のデータだけで経験ベイズ縮約し、「β×(枠の相対位置−0.5)」を馬ごとの値にする。脚質との掛け算も試す</td><td>ablation（valid 2022〜24 で勝率 LogLoss）。期待は大きくない（説明率 約 0.3%）</td><td class="wait">未着手（提案）</td><td>本書 3.5</td></tr>
+<tr><td>血統特徴の作り直し</td><td>種牡馬 ID・産駒成績の経験ベイズ・ニックスなどで、PED_sire_cond 以上の上積みを探す</td><td>血統キー復旧済み</td><td class="wait">未検討</td><td>§31</td></tr>
+<tr><td>後日談の将来候補</td><td>最有望だったが基準未満（−0.00015、上限 +0.00001）。新しい情報と組み合わせて再評価</td><td>—</td><td class="wait">保留</td><td>§13・§27</td></tr>
+<tr><td>騎手・調教師の位置取り傾向を p_win に直接入れる</td><td>P1 で効いた（MAE −0.0013）傾向を後段に</td><td>—</td><td class="wait">未検証</td><td>§6</td></tr>
+<tr><td>厩舎コメントの語彙の高度化</td><td>語句の頻度 → 意味的な埋め込み</td><td>—</td><td class="wait">未検討</td><td>§9</td></tr>
+<tr><td>H と旧 race_performance の比較／完走しなかった馬を履歴に含めるか</td><td>tp-03 から持ち越した未実施の比較</td><td>—</td><td class="wait">未実施</td><td>§5</td></tr>
+<tr><td>内回り・外回りが一意に決まらない年の解消</td><td>course_type の導出で一意でない年（6〜11%）の扱い</td><td>コースマスタ</td><td class="wait">未確認</td><td>§33 B</td></tr>
+<tr><td>戦績ページの固定位置読みの影響範囲</td><td>通過順・上がりのずれが horse_result 由来の派生に及んだか</td><td>—</td><td class="wait">未確認</td><td>§33 B</td></tr>
+<tr><td>実オッズが溜まった後の馬券戦略の再検証</td><td>T-60 / T-15 の実オッズ（2026-10-18 から蓄積）で、予測オッズ・期待値・買い目を再評価</td><td>実オッズの蓄積</td><td class="wait">蓄積中</td><td>§33 D</td></tr>
+</table>
+<p class="muted">注: 本章は 2026-10-19 時点。ドルメロ流の生年月日データ（<code>data/meta/dormello/</code>）と要検討ゾーンのシートは、今後の再検証用に残してある（§35）。</p>
+
+    </article>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/chapters/feature_investigation_catalog.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>
