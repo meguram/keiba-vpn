@@ -1,15 +1,35 @@
 // ==UserScript==
 // @name         Dormello DOB capture (SporthorseData -> ローカル入力ツール)
 // @namespace    keiba-vpn
-// @version      1.1
+// @version      1.2
 // @description  ご自身が開いた SporthorseData の馬ページから Date of Birth を読み取り、127.0.0.1 のローカル入力ツールへ送る（自動遷移・自動アクセスはしない）
 // @match        https://sporthorse-data.com/pedigree/*
+// @match        http://127.0.0.1:8765/*
 // @grant        GM_xmlhttpRequest
+// @grant        GM_openInTab
 // @connect      127.0.0.1
 // ==/UserScript==
 (function () {
   'use strict';
   const BASE = 'http://127.0.0.1:8765';
+
+  // ── ローカル入力ツールの画面で動くとき: 「ページを開く」の依頼を受けて、馬のページを背景タブで開く（ポップアップブロックの対象外）
+  if (location.origin === BASE) {
+    document.documentElement.dataset.dormelloUserscript = '1';
+    let opened = [];
+    window.addEventListener('message', (e) => {
+      if (e.source !== window || e.origin !== location.origin) return;
+      const d = e.data;
+      if (!d || d.type !== 'dormello-open-tabs' || !Array.isArray(d.urls)) return;
+      opened.forEach((t) => { try { t.close(); } catch (_) { /* すでに閉じられている */ } });   // 前回の分は閉じて、タブを増やさない
+      opened = d.urls
+        .filter((x) => typeof x === 'string' && x.startsWith('https://sporthorse-data.com/'))
+        .slice(0, 12)
+        .map((x) => GM_openInTab(x, { active: false, insert: true }));
+      window.postMessage({ type: 'dormello-open-tabs-ack', n: opened.length }, location.origin);
+    });
+    return;
+  }
   const text = document.body ? document.body.innerText : '';
   // 例: "Date of Birth: 30-Jan-1970" / "born 30-Jan-1970"。年のみのときは日付なし扱い
   const full = text.match(/(?:Date of Birth|born)[:\s]*([0-9]{1,2}-[A-Za-z]{3}-[0-9]{4})/i);

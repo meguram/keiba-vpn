@@ -327,7 +327,7 @@ button.primary{background:#2d7ff9;color:#fff;border-color:#2d7ff9;font-size:1.05
 .steps{background:#f7f7ff;border:1px solid #ccd;border-radius:8px;padding:8px 12px}</style></head><body>
 <h2 style="margin:2px 0">誕生日 手入力（まとめ表示）</h2><div class="muted" id="stat"></div>
 <div class="steps"><b>使い方</b> ① 「この頭数のページを開く」を押す（別タブが開き、次回からは同じタブを使い回します） → ② 各行の「検出」を確認 → ③ 「保存して次へ」
-<br><span class="muted">タブが 1 つしか開かないときは、アドレスバーのポップアップ許可（localhost:8765）をオンにしてください。サイトが埋め込みを禁止しているため、画面内には表示できません。</span></div>
+<br><span class="muted">ユーザースクリプト（バージョン 1.2）を入れていれば、ポップアップに邪魔されず背景タブで開きます。サイトが埋め込みを禁止しているため、画面内には表示できません。</span></div>
 <div style="margin:8px 0">1 回に扱う頭数 <select id="n" onchange="N=+this.value;poll(true)"><option>1</option><option>3</option><option selected>5</option><option>8</option><option>10</option></select>
 <button class="primary" onclick="openAll()">① この頭数のページを開く</button><button onclick="undo_()">直前を取り消す</button> <span id="popmsg" class="err"></span></div>
 <div id="rows"></div><div style="margin:10px 0"><button class="primary" onclick="saveBatch()">③ この頭数を保存して次へ</button></div>
@@ -338,8 +338,10 @@ async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET'
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const q=s=>encodeURIComponent(s);const $=id=>document.getElementById(id);
 function url(it){const c=it.candidates||[it.url];return c[rows[it.horse_id].ci%c.length]}
 function openOne(i){const it=batch[i];if(!it)return null;return window.open(url(it),'sh_'+i)}      // 名前つきタブ: 次の頭数でも同じタブを使い回す（noopener は付けない）
-function openAll(){let blocked=0;batch.forEach((it,i)=>{if(!openOne(i))blocked++});$('popmsg').textContent=blocked?`${blocked} 件がポップアップでブロックされました。アドレスバー右端のアイコンから「127.0.0.1:8765 のポップアップを常に許可」にして、もう一度押してください（各行の「開く」でも個別に開けます）`:''}
-async function setUrl(h){const v=$('ur_'+h).value.trim();if(!v)return;const r=await api('/api/set_url',{horse_id:h,url:v});$('er_'+h).textContent=r.ok?'':r.error;if(r.ok){$('er_'+h).className='ok';$('er_'+h).textContent='このURLを記憶しました'}else $('er_'+h).className='err'}
+function openAll(){
+ if(document.documentElement.dataset.dormelloUserscript){window.postMessage({type:'dormello-open-tabs',urls:batch.map(url)},location.origin);$('popmsg').className='ok';$('popmsg').textContent='ユーザースクリプトで '+batch.length+' 頭分を背景タブに開きました（前回のタブは閉じます）';return}
+ let blocked=0;batch.forEach((it,i)=>{if(!openOne(i))blocked++});$('popmsg').className='err';
+ $('popmsg').textContent=blocked?`${blocked} 件がブロックされました。ユーザースクリプトを最新版（1.2）にすると、ブロックされずに開けます（各行の「開く」でも個別に開けます）`:''}
 function cand(i){const it=batch[i];rows[it.horse_id].ci++;$('cu_'+it.horse_id).textContent=url(it).split('/').pop();openOne(i)}
 function initBatch(){const L=$('rows');L.innerHTML='';
  if(!batch.length){L.innerHTML='<p class="ok"><b>すべて処理しました。</b></p>';return}
