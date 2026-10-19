@@ -109,13 +109,27 @@ def _lead(lang: str, title: str) -> str:
     return "" if p.get("missing") else p.get("extract", "")
 
 
+_FOALED = re.compile(r"\b(?:foaled|born)\s+(?:on\s+)?((?:\d{1,2}\s+[A-Z][a-z]+|[A-Z][a-z]+\s+\d{1,2},?)\s+\d{4})")
+
+
+def body_foaled_date(text: str):
+    """冒頭文の本文にある 'foaled April 20, 1904' / 'born on 20 April 1904' 形式の日付（日まであるものだけ）。"""
+    m = _FOALED.search(text[:700])
+    if not m:
+        return None
+    v = wb.parse_date(m.group(1))
+    return v if v and v[1] and v[2] else None
+
+
 def en_lead_date(name: str):
     for title in (f"{name} (horse)", name):
         t = _lead("en", title)
         if t and re.search(r"horse|stallion|sire|thoroughbred|racehorse", t[:300], re.I):
             m = re.search(r"\(([^)]*?)\)", t)
-            if m:
-                return wb.parse_date(re.split(r"\s[–—-]\s|–|—", m.group(1))[0]), title
+            v = wb.parse_date(re.split(r"\s[–—-]\s|–|—", m.group(1))[0]) if m else None
+            if not (v and v[1]):  # 括弧内に月が無ければ、本文の foaled/born を探す
+                v = body_foaled_date(t) or v
+            return v, title
     return None, None
 
 

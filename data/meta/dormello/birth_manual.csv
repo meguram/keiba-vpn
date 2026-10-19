@@ -239,3 +239,6 @@ horse_id,name,birth_year,birth_month,birth_day,source_url,note
 000a000d8c,ザグレブZagreb(米),1993,5,14,https://www.wikidata.org/wiki/Q11306348 ; https://en.wikipedia.org/wiki/Zagreb_%28horse%29,英語版 Wikipedia 冒頭文
 000a000307,シンバー,1970,3,14,https://ja.wikipedia.org/wiki/%E3%82%B7%E3%83%B3%E3%83%90%E3%83%BC,日本語版 Wikipedia 冒頭文
 000a0115e9,Volksraad,1988,2,5,https://www.wikidata.org/wiki/Q7940286 ; https://en.wikipedia.org/wiki/Volksraad_%28horse%29,英語版 Wikipedia 冒頭文
+000a0002f7,Shecky Greene,1970,1,30,https://www.wikidata.org/wiki/Q102241092 ; https://sporthorse-data.com/pedigree/shecky-greene ; https://alchetron.com/Shecky-Greene,Wikidata（サブプランで取得）・SporthorseData・Alchetron・生産記録の投稿が 1970-01-30 で一致
+000a0104d9,Hussonet,1991,1,29,https://www.wikidata.org/wiki/Q107002560 ; https://sporthorse-data.com/pedigree/hussonet,Wikidata と SporthorseData が 1991-01-29 で一致
+000a001993,Electioneer,1904,4,20,https://www.wikidata.org/wiki/Q110594588 ; https://en.wikipedia.org/wiki/Electioneer,"Wikipedia 本文 'foaled April 20, 1904' と Wikidata が一致（1904 年生まれの米国馬）"

@@ -1,5 +1,5 @@
 horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,note
-000a00115e,Blenheim,candidate,1927,4,16,https://sporthorse-data.com/pedigree/blenheim-1,2026-10-17,SporthorseData 1 件のみ（元ページは 403 で未確認）。Wikipedia は年のみ
+000a00115e,Blenheim,candidate,1927,4,16,https://sporthorse-data.com/pedigree/blenheim-1,2026-10-17,SporthorseData 1 件のみ（元ページは 403 で未確認）。Wikipedia は年のみ（2026-10-19 再確認: 他に独立した出典は見つからず保留のまま）
 000a000fc9,Princequillo,no_data,1940,,,,2026-10-17,各サイト年のみ。'01/01/1940' は仮置きで不採用
 000a00115d,Mahmoud,no_data,1933,,,,2026-10-17,Britannica・JBIS・Wikidata いずれも年のみ
 000a0019b6,Understanding,no_data,1963,,,,2026-10-17,検索結果に該当なし
@@ -7,7 +7,7 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a001123,Blandford,no_data,1919,,,,2026-10-17,年のみ
 000a001124,Swynford,adopted,1907,1,,https://en.wikipedia.org/wiki/Swynford,2026-10-17,月のみ（January 1907）
 000a00129b,Blue Larkspur,no_data,1926,,,,2026-10-17,年のみ
-000a0013fd,Discovery,candidate,1931,3,3,https://grokipedia.com/page/discovery_horse,2026-10-17,Grokipedia 1 件のみ（独立した出典なし）。Wikipedia・Wikidata は年のみ
+000a0013fd,Discovery,candidate,1931,3,3,https://grokipedia.com/page/discovery_horse,2026-10-17,Grokipedia 1 件のみ（独立した出典なし）。Wikipedia・Wikidata は年のみ（2026-10-19 再確認: 他に独立した出典は見つからず保留のまま）
 000a001212,Sir Gallahad III,no_data,1920,,,,2026-10-17,Rimondo の '01.01.1920' は仮置きで不採用。他は年のみ
 000a0011a3,Prince Rose,no_data,1928,,,,2026-10-17,年のみ
 000a001139,The Tetrarch,adopted,1911,4,22,https://www.ballylinchstud.ie/about-us/the-tetrarch/ ; https://sporthorse-data.com/pedigree/tetrarch,2026-10-17,独立した複数の出典が一致
@@ -450,7 +450,7 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a001b46,Skywalker (米),adopted,1982,3,4,https://www.wikidata.org/wiki/Q7538100 ; https://en.wikipedia.org/wiki/Skywalker_%28horse%29,2026-10-17,英語版 Wikipedia 冒頭文
 000a002075,Halling,adopted,1991,3,14,https://en.wikipedia.org/wiki/Halling_%28horse%29,2026-10-17,英語版 Wikipedia 冒頭文
 000a01025b,Stuka (米),adopted,1990,2,23,https://en.wikipedia.org/wiki/Stuka_%28horse%29,2026-10-17,英語版 Wikipedia 冒頭文
-000a0104d9,Hussonet,candidate,1991,1,29,https://www.wikidata.org/wiki/Q107002560,2026-10-17,Wikidata のみ（参照なし・冒頭文の裏付けなし）
+000a0104d9,Hussonet,adopted,1991,1,29,https://www.wikidata.org/wiki/Q107002560 ; https://sporthorse-data.com/pedigree/hussonet,2026-10-19,Wikidata と SporthorseData が 1991-01-29 で一致
 000a0111cf,Lost Soldier,no_data,1990,,,,2026-10-17,
 000a01ee9e,Sternkonig,no_data,1990,,,,2026-10-17,
 000a0004e9,ヴィミー,no_data,1952,,,https://ja.wikipedia.org/wiki/%E3%83%B4%E3%82%A3%E3%83%9F%E3%83%BC,2026-10-17,
@@ -1323,7 +1323,7 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a00199b,Buen Ojo,no_data,1916,,,,2026-10-18,
 000a001a39,Wise Exchange,no_data,1965,,,,2026-10-18,
 000a0016ce,Medium,no_data,1946,,,,2026-10-18,
-000a0002f7,Shecky Greene,candidate,1970,1,30,https://www.wikidata.org/wiki/Q102241092,2026-10-18,Wikidata のみ（参照なし・冒頭文の裏付けなし）
+000a0002f7,Shecky Greene,adopted,1970,1,30,https://www.wikidata.org/wiki/Q102241092 ; https://sporthorse-data.com/pedigree/shecky-greene ; https://alchetron.com/Shecky-Greene,2026-10-19,Wikidata（サブプランで取得）・SporthorseData・Alchetron・生産記録の投稿が 1970-01-30 で一致
 000a000ec2,Count of Honor,no_data,1953,,,,2026-10-18,
 000a0017fd,Cockrullah,no_data,1951,,,,2026-10-18,
 000a001c28,Salieri (米),no_data,1980,,,,2026-10-18,
@@ -1800,7 +1800,7 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a001a73,Right Royal,no_data,1902,,,https://en.wikipedia.org/wiki/Right_Royal,2026-10-18,
 000a01908a,Watervale,no_data,1908,,,https://www.wikidata.org/wiki/Q7974526 ; https://en.wikipedia.org/wiki/Watervale_%28horse%29,2026-10-18,
 000a00159d,Mel Hash,no_data,1945,,,,2026-10-18,
-000a001993,Electioneer,candidate,1904,4,20,https://www.wikidata.org/wiki/Q110594588 ; https://en.wikipedia.org/wiki/Electioneer_%28horse%29,2026-10-18,Wikidata のみ（参照なし・冒頭文の裏付けなし）
+000a001993,Electioneer,adopted,1904,4,20,https://www.wikidata.org/wiki/Q110594588 ; https://en.wikipedia.org/wiki/Electioneer,2026-10-19,"Wikipedia 本文 'foaled April 20, 1904' と Wikidata が一致（1904 年生まれの米国馬）"
 000a000da7,Irish Ruler,no_data,1963,,,,2026-10-18,
 000a012177,Marduk,no_data,1971,,,,2026-10-18,
 000a0018ca,The Font,no_data,1930,,,,2026-10-18,
@@ -2806,7 +2806,7 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a001a50,Sackford,no_data,1980,,,,2026-10-19,
 000a002172,Aferd,no_data,1976,,,,2026-10-19,
 000a000469,マンオブビィジョン,no_data,1976,,,,2026-10-19,
-000a01151b,ジャイアントレッカーGiant Wrecker(米),candidate,2002,4,17,https://www.wikidata.org/wiki/Q11309666,2026-10-19,Wikidata のみ（参照なし・冒頭文の裏付けなし）
+000a01151b,ジャイアントレッカーGiant Wrecker(米),candidate,2002,4,17,https://www.wikidata.org/wiki/Q11309666,2026-10-19,Wikidata のみ（参照なし・冒頭文の裏付けなし）（2026-10-19 再確認: 他に独立した出典は見つからず保留のまま）
 000a001d50,Golden Guinea,no_data,1917,,,,2026-10-19,
 000a001f2c,Pentathlon,no_data,1964,,,,2026-10-19,
 000a011381,Gay Fandango,no_data,1972,,,,2026-10-19,

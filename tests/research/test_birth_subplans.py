@@ -82,3 +82,10 @@ def test_all_year_only_list():
     assert [x[0] for x in bs.all_year_only_list(anc, set())] == ["a", "d"]
     assert [x[0] for x in bs.all_year_only_list(anc, {"a"})] == ["d"]
     assert [x[0] for x in bs.all_year_only_list(anc, set(), min_year=1800)] == ["a", "c", "d"]
+
+
+def test_body_foaled_date():
+    assert bs.body_foaled_date("Electioneer was an American racehorse, foaled April 20, 1904 in Kentucky.") == (1904, 4, 20)
+    assert bs.body_foaled_date("He was born on 3 March 1931 at Mereworth.") == (1931, 3, 3)
+    assert bs.body_foaled_date("foaled in 1904 in Kentucky") is None
+    assert bs.body_foaled_date("born March 1904") is None
