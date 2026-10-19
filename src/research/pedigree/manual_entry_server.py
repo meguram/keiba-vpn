@@ -13,6 +13,7 @@ import csv
 import json
 import re
 import secrets
+import subprocess
 import threading
 import urllib.parse
 from datetime import date
@@ -49,8 +50,11 @@ def parse_date_input(s: str) -> tuple[int, int, int] | None:
 
 
 class Store:
-    def __init__(self, ancestors: Path, zone: Path, nk: Path | None, d: Path, base_url: str, limit: int = 3000):
+    def __init__(self, ancestors: Path, zone: Path, nk: Path | None, d: Path, base_url: str, limit: int = 3000, commit_every: int = 0):
         self.dir = d
+        self.commit_every = commit_every          # 0 なら自動コミットしない
+        self.pending_msgs: list[str] = []
+        self.git_status = ""
         self.manual_p, self.log_p = d / "birth_manual.csv", d / "birth_search_log.csv"
         anc = {r["horse_id"]: r for r in csv.DictReader(open(ancestors, encoding="utf-8"))}
         zone_rows = list(csv.DictReader(open(zone, encoding="utf-8")))
@@ -67,6 +71,13 @@ class Store:
         self.session_saved = self.session_none = 0
         if not self.manual_p.exists():
             self._write_csv(self.manual_p, [MANUAL_COLUMNS])
+        if commit_every:  # 前回の未コミット分が残っていれば、次のコミットに含める
+            try:
+                dirty = self._git("status", "--porcelain", "--", str(self.manual_p.resolve()), str(self.log_p.resolve())).stdout.strip()
+            except Exception:  # noqa: BLE001
+                dirty = ""
+            if dirty:
+                self.pending_msgs.append("前回セッションの未コミット分")
 
     # --- csv helpers
     @staticmethod
@@ -86,6 +97,51 @@ class Store:
     def _row(self, hid: str) -> dict | None:
         return next((r for r in self.rows if r["horse_id"] == hid), None)
 
+    # --- git（永久保存）
+    def _git(self, *args: str, timeout: int = 90) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], cwd=self.dir, capture_output=True, text=True, timeout=timeout)
+
+    def _commit_and_push(self) -> str:
+        files = [str(self.manual_p.resolve()), str(self.log_p.resolve())]
+        try:
+            top = self._git("rev-parse", "--show-toplevel").stdout.strip()
+            if not top:
+                return "git リポジトリではないためコミットできません"
+            self._git("pull", "-q", "--ff-only", "origin", "HEAD")  # 失敗しても続ける（他の変更と衝突しない限り先に進む）
+            self._git("add", "--", *files)
+            if not self._git("diff", "--cached", "--quiet", "--", *files).returncode:
+                return "コミットする変更はありません"
+            lines = self.pending_msgs[-10:]
+            msg = ("feat(research): 手入力ツールで誕生月日を " + f"{len(self.pending_msgs)} 件記録する\n\n" + "\n".join(f"- {m}" for m in lines)
+                   + "\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\n")
+            c = self._git("commit", "-q", "-m", msg, "--", *files)
+            if c.returncode:
+                return "コミット失敗: " + (c.stderr or c.stdout).strip()[:160]
+            sha = self._git("rev-parse", "--short", "HEAD").stdout.strip()
+            pu = self._git("push", "-q", "origin", "HEAD")
+            if pu.returncode:  # リモートが進んでいたら rebase して再試行
+                self._git("pull", "-q", "--rebase", "--autostash", "origin", "HEAD")
+                pu = self._git("push", "-q", "origin", "HEAD")
+            if pu.returncode:
+                return f"コミット {sha} は作成済み。プッシュに失敗: " + (pu.stderr or pu.stdout).strip()[:160]
+            self.pending_msgs = []
+            return f"コミット {sha} を GitHub へプッシュしました"
+        except Exception as e:  # noqa: BLE001
+            return f"自動コミットでエラー: {e!r}"[:200]
+
+    def _after_change(self, msg: str | None, force: bool = False) -> None:
+        if msg:
+            self.pending_msgs.append(msg)
+        if self.commit_every and (force or len(self.pending_msgs) >= self.commit_every):
+            self.git_status = self._commit_and_push()
+
+    def commit_now(self) -> dict:
+        with self.lock:
+            if not self.commit_every:
+                return {"ok": False, "error": "自動コミットが無効です（--commit-every を指定してください）"}
+            self.git_status = self._commit_and_push()
+            return {"ok": True, "status": self.git_status}
+
     # --- operations
     def pending(self) -> list[dict]:
         done = self._resolved()
@@ -98,6 +154,7 @@ class Store:
         with self.lock:
             p = self.pending()
             return {"item": p[0] if p else None, "remaining": len(p), "saved": self.session_saved, "none": self.session_none,
+                    "unsaved": len(self.pending_msgs), "git": self.git_status, "auto_commit": self.commit_every,
                     "recent": [{"horse_id": u["horse_id"], "name": u["name"], "text": u["text"]} for u in self.undo_stack[-5:]][::-1]}
 
     def save(self, horse_id: str, text: str, confirm_jan1: bool = False, url: str | None = None) -> dict:
@@ -120,6 +177,7 @@ class Store:
             upsert_log(self.log_p, [[horse_id, r["name"], "adopted", d[0], d[1], d[2], src, date.today().isoformat(), note]])
             self.undo_stack.append({"kind": "save", "horse_id": horse_id, "name": r["name"], "text": f"{d[0]}-{d[1]:02d}-{d[2]:02d}", "prev_log": prev_log})
             self.session_saved += 1
+            self._after_change(f"{r['name']}: {d[0]}-{d[1]:02d}-{d[2]:02d}")
             return {"ok": True}
 
     def _current_matches(self, url: str, title: str) -> dict | None:
@@ -159,6 +217,7 @@ class Store:
             upsert_log(self.log_p, [[horse_id, r["name"], "no_data", r["year"], "", "", r["url"], date.today().isoformat(), NONE_NOTE]])
             self.undo_stack.append({"kind": "none", "horse_id": horse_id, "name": r["name"], "text": "記載なし", "prev_log": prev_log})
             self.session_none += 1
+            self._after_change(f"{r['name']}: 記載なし")
             return {"ok": True}
 
     def skip(self, horse_id: str) -> dict:
@@ -186,6 +245,8 @@ class Store:
             if u["prev_log"]:
                 log.append(u["prev_log"])
             self._write_csv(self.log_p, log if log else [LOG_COLUMNS])
+            if self.pending_msgs:
+                self.pending_msgs.pop()
             return {"ok": True, "name": u["name"]}
 
 
@@ -200,7 +261,7 @@ button.primary{background:#2d7ff9;color:#fff;border-color:#2d7ff9}input{font-siz
 const TOKEN="__TOKEN__";let cur=null;
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','X-Token':TOKEN},body:body?JSON.stringify(body):undefined});return r.json()}
 function q(s){return encodeURIComponent(s)}
-async function load(){const d=await api('/api/next');document.getElementById('stat').textContent=`残り ${d.remaining} 頭 ／ このセッションで保存 ${d.saved} 頭・記載なし ${d.none} 頭`;
+async function load(){const d=await api('/api/next');document.getElementById('stat').innerHTML=`残り ${d.remaining} 頭 ／ このセッションで保存 ${d.saved} 頭・記載なし ${d.none} 頭<br>`+(d.auto_commit?`永久保存（コミット）まで あと ${Math.max(d.auto_commit-d.unsaved,0)} 件 ／ 未コミット ${d.unsaved} 件 <button onclick="commitNow()">今すぐコミット</button> <span class="muted">${d.git||''}</span>`:'自動コミット: 無効');
  document.getElementById('recent').innerHTML=d.recent.map(r=>`<li>${r.name}: ${r.text}</li>`).join('')||'<li class="muted">なし</li>';
  const m=document.getElementById('main');cur=d.item;
  if(!cur){m.innerHTML='<p class="ok big">すべて処理しました。</p>';return}
@@ -216,6 +277,7 @@ async function save(c){const v=document.getElementById('d').value;const r=await 
  if(r.ok){load()}else if(r.need_confirm){if(confirm(r.error))save(true)}else{const m=document.getElementById('msg');m.className='err';m.textContent=r.error}}
 async function none_(){await api('/api/none',{horse_id:cur.horse_id});load()}
 async function skip_(){await api('/api/skip',{horse_id:cur.horse_id});load()}
+async function commitNow(){const r=await api('/api/commit',{});if(!r.ok)alert(r.error);load()}
 async function undo_(){const r=await api('/api/undo',{});if(!r.ok)alert(r.error);load()}
 load();
 setInterval(async()=>{if(!cur)return;const d=await api('/api/next');if(d.item&&d.item.horse_id!==cur.horse_id&&!document.getElementById('d').value){load()}else if(!d.item){load()}},3000);
@@ -264,6 +326,8 @@ def make_handler(store: Store, token: str):
                 self._json(store.save(body.get("horse_id", ""), body.get("text", ""), bool(body.get("confirm_jan1"))))
             elif path == "/api/none":
                 self._json(store.none(body.get("horse_id", "")))
+            elif path == "/api/commit":
+                self._json(store.commit_now())
             elif path == "/api/skip":
                 self._json(store.skip(body.get("horse_id", "")))
             elif path == "/api/undo":
@@ -286,8 +350,9 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--dir", required=True, type=Path)
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--base-url", default="https://sporthorse-data.com/pedigree")
+    ap.add_argument("--commit-every", type=int, default=5, help="この件数ごとに birth_manual.csv と birth_search_log.csv だけをコミットして GitHub へプッシュする（0 で無効）")
     a = ap.parse_args(argv)
-    store = Store(a.ancestors, a.zone, a.nk, a.dir, a.base_url)
+    store = Store(a.ancestors, a.zone, a.nk, a.dir, a.base_url, commit_every=a.commit_every)
     token = secrets.token_urlsafe(16)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(store, token))
     print(f"対象 {len(store.pending())} 頭。ブラウザで http://127.0.0.1:{a.port}/ を開いてください（Ctrl+C で終了）", flush=True)
@@ -295,6 +360,9 @@ def main(argv: list[str] | None = None) -> None:
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        if a.commit_every and store.pending_msgs:
+            print("終了前に未コミットの分を保存します:", store.commit_now().get("status"), flush=True)
 
 
 if __name__ == "__main__":
