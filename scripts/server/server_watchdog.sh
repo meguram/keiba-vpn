@@ -613,10 +613,22 @@ build_frontend_aside() {
     local build_log
     build_log="${LOG_DIR}/frontend_build_$(date +%Y%m%d_%H%M%S).log"
     local t0=$SECONDS
+    # ビルドは /tmp の作業コピーで行う。ホストの repo は 9p（Windows ドライブ）上にあり、小ファイルの作成が /tmp の約 300 倍遅い。
+    # 9p 上で直接ビルドすると「Collecting page data」から 7 分以上進まなかった（2026-10-19）。/tmp 上では 23 秒。
+    # 成果物（キャッシュを除く約 6MB・240 ファイル）だけを repo 側の ${build_name} に置く。
+    local work_dir="${FRONTEND_BUILD_WORK_DIR:-/tmp/keiba-vpn-fe-build${PROFILE_SUFFIX}}"
+    local work_dist
+    work_dist=$(frontend_dist_name)
     if (
-        cd "$fdir"
+        set -e
+        mkdir -p "$work_dir"
+        for d in app components lib styles public data; do rm -rf "${work_dir:?}/$d"; done
+        tar -C "$fdir" --exclude=node_modules --exclude='.next*' --exclude='*.test.mjs' -cf - . | tar -C "$work_dir" -xf -
+        ln -sfn "$(readlink -f "$fdir/node_modules")" "$work_dir/node_modules"
+        cd "$work_dir"
         export KEIBA_API_URL="$KEIBA_API_URL" KEIBA_ENV="${KEIBA_ENV:-dev}" NODE_ENV=production
-        export NEXT_DIST_DIR="$build_name" NEXT_BUILD_CPUS="${NEXT_BUILD_CPUS:-2}"
+        export NEXT_BUILD_CPUS="${NEXT_BUILD_CPUS:-2}"
+        unset NEXT_DIST_DIR
         export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
         if [ "$FRONTEND_USE_MOCK" = "true" ]; then export NEXT_PUBLIC_MOCK=true; else unset NEXT_PUBLIC_MOCK 2>/dev/null || true; fi
         if command -v ionice >/dev/null 2>&1; then
@@ -624,6 +636,12 @@ build_frontend_aside() {
         else
             nice -n 19 npm run build
         fi
+        test -f "${work_dir}/${work_dist}/BUILD_ID"
+        rm -rf "${build_path}.tmp"
+        mkdir -p "${build_path}.tmp"
+        tar -C "${work_dir}/${work_dist}" --exclude=cache -cf - . | tar -C "${build_path}.tmp" -xf -
+        rm -rf "$build_path"
+        mv "${build_path}.tmp" "$build_path"
     ) 9>&- > "$build_log" 2>&1; then
         printf '%s' "$sig" > "${build_path}/.build-env"
         rm -f "$FRONTEND_FAIL_STAMP"

@@ -38,3 +38,9 @@
 - ビルドが失敗したら稼働中のものは変わらない。10 分は自動再試行されない。ログ: `logs/frontend_build_<日時>.log`。
 - 手動で `npm run build` を並行して走らせない（flock は watchdog のものだけを見る）。
 - 動作確認の実績は dev PC のみ（`KEIBA_ENV=stg` で build → switch、稼働中ビルド→切替の無停止検証＝ビルド中の失敗 0・切替の約 3.6 秒のみ、高負荷ガード、ビルド失敗時に稼働中が不変、旧ビルド無しでの自動ビルド）。ホストでの再試行は、ログを見ながら実施する。
+
+## ビルドは /tmp の作業コピーで行う（ホストの 9p 問題）
+
+ホストの repo（`/home/jovyan/work`）は Windows ドライブ（9p）上にあり、小ファイルの作成が `/tmp`（overlay）の約 300 倍遅い（2,000 ファイルで 11 秒 対 0.04 秒）。ここで直接 `next build` すると、`.next-stg-build` への大量の書き込みで「Collecting page data」から 7 分以上進まなかった（2026-10-19、2 回とも。負荷の高い時間帯でさらに悪化）。`/tmp` 上では同じビルドが 23 秒で完走する。
+
+そのため `server_watchdog.sh` のビルドは、ソース（約 1.4MB）を `/tmp/keiba-vpn-fe-build<suffix>/` にコピーし、`node_modules` は symlink のまま、そこでビルドする。成功したら、成果物（キャッシュを除く約 6MB・約 240 ファイル、9p への書き込みは約 3 秒）だけを `frontend/.next-stg-build` に置く。作業コピーのビルドキャッシュは次回の高速化に使う。`/tmp` は消えてもよい（次回はキャッシュ無しでビルドされるだけ）。作業場所は `FRONTEND_BUILD_WORK_DIR` で変えられる。
