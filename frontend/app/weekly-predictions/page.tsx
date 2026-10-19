@@ -6,6 +6,7 @@ import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
 import { featureEnabled } from "@/lib/features";
 import { LEVEL_STYLE, RaceValue, useRaceValues, valueTitle } from "@/lib/raceValue";
+import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
@@ -59,6 +60,8 @@ type PredData = {
   status?: string;
   has_prediction?: boolean;
   model_description?: string;
+  prediction_source?: string;
+  prediction_note?: string;
   message?: string;
   total_horses?: number;
   predictions?: PredEntry[];
@@ -510,6 +513,7 @@ function RaceCard({
               </Link>
             </div>
           )}
+          {pred && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
           {pred && (
             <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} />
           )}
@@ -797,6 +801,11 @@ export default function WeeklyPredictionsPage() {
             期待値: <strong style={{ color: "#22c55e" }}>≥1.3</strong> / <strong style={{ color: "#60a5fa" }}>≥1.0</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.8</strong> / <strong style={{ color: "#f87171" }}>＜0.8</strong>
           </span>
         </div>
+
+        {(() => {
+          const loc = visiblePreds.find((p) => p.prediction_source === "backfill" || p.prediction_source === "shadow");
+          return loc ? <PredictionSourceBadge source={loc.prediction_source} note={loc.prediction_note} /> : null;
+        })()}
 
         {loadingRaces && (
           <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-dim)" }}>

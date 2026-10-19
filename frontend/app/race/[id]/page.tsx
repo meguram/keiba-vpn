@@ -7,6 +7,7 @@ import Link from "next/link";
 import { USE_MOCK, getMockRaceDetail, getMockPredictions, getMockTdData, getMockMeguPredicted } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { featureEnabled } from "@/lib/features";
+import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { BetRecommend } from "@/components/BetRecommend";
 import { RaceNav } from "@/components/RaceNav";
 import { useNarrow } from "@/components/RaceStrip";
@@ -167,6 +168,8 @@ type PredData = {
   has_prediction?: boolean;
   model_type?: string;
   model_description?: string;
+  prediction_source?: string;
+  prediction_note?: string;
   total_horses?: number;
   elapsed_sec?: number;
   predictions?: PredEntry[];
@@ -667,6 +670,7 @@ export default function RaceDetailPage() {
             {hasPred ? "🧠" : "📊"} {predData.model_description}
           </span>
         )}
+        <PredictionSourceBadge source={predData?.prediction_source} note={predData?.prediction_note} />
         {hasPred && predData?.elapsed_sec != null && (
           <span style={{ fontSize: 11, color: "var(--text-dim)" }}>⏱ {predData.elapsed_sec}秒 / {predData.total_horses}頭</span>
         )}

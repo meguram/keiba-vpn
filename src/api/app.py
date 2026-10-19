@@ -6959,6 +6959,16 @@ async def get_race_predictions(race_id: str):
         data["freshness"] = _prediction_freshness(data)
         return JSONResponse(await asyncio.to_thread(lambda: _with_position(data)))
 
+    # GCS に予測が無くても、ホストのローカルに推論経路の出力（shadow / バックフィル）があれば、それを注記つきで返す（GCS > shadow > バックフィル）
+    def _local():
+        from src.api.local_predictions import load_local_prediction_payload
+
+        return load_local_prediction_payload(race_id, _get_storage(), alpha=_load_composite_params().get("prob_weight", _DEFAULT_PROB_WEIGHT))
+
+    local = await asyncio.to_thread(_local)
+    if local:
+        return JSONResponse(await asyncio.to_thread(lambda: _with_position(local)))
+
     # stg 環境: 実モデルの予測が無いレースは、予測を作り出さず『出馬表の馬 + 最新オッズ』だけを返す（実データの表示が前提）。
     # 画面の開発用にモックが要るときだけ KEIBA_STG_MOCK_PREDICTIONS=1（応答は _mock: true）。
     if _keiba_env() == "stg":
