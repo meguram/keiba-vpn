@@ -32,12 +32,23 @@ class Axis:
     file: str                 # data/page_reference/tables/<年>/ 直下の parquet（馬×レース単位。race_id・horse_id を持つ）
     value_col: str
     status_col: str | None    # None なら全行を有効とみなす
-    valid: str = "valid"
+    valid: str | tuple[str, ...] = "valid"   # 有効とみなす状態（複数可）
     align_by_month: bool = True   # 年・時期の水準のずれを、月ごとの全馬の中央値で揃える
+    conf_col: str | None = None   # True の行は『信頼度が低い』として点に印を付ける（値は使う）
+
+    @property
+    def valid_set(self) -> frozenset[str]:
+        return frozenset([self.valid] if isinstance(self.valid, str) else self.valid)
 
 
 AXES: dict[str, Axis] = {
     "megu": Axis("megu", "めぐ指数", "megu_index_flat.parquet", "megu_index", "computation_status"),
+    # 全期間を同じ版で作り直した列（範囲外の復元・[0,100] 丸め済み）。水準がそろっているので月別補正は不要
+    "megu_robust": Axis(
+        "megu_robust", "めぐ指数", "megu_index_flat.parquet", "megu_index_robust", "megu_index_status",
+        valid=("ok", "clipped", "restored_out_of_range", "restored_clipped"), align_by_month=False,
+        conf_col="low_confidence",
+    ),
 }
 DEFAULT_AXIS = "megu"
 
@@ -128,7 +139,10 @@ def build_growth(
         if not hit:
             continue
         val, status = hit
-        if status != ax.valid or val is None:
+        low_conf = status.endswith("+low")
+        if low_conf:
+            status = status[:-4]
+        if status not in ax.valid_set or val is None:
             excluded += 1
             continue
         d8 = re.sub(r"\D", "", str(r["date"]))[:8]
@@ -137,6 +151,7 @@ def build_growth(
             "date": d8, "race_id": rid, "race_name": r.get("race_name"), "venue": r.get("venue"),
             "surface": r.get("surface"), "distance": r.get("distance"), "finish": r.get("finish"), "field": r.get("field"),
             "age_months": age_months(bd, r["date"]), "raw": round(float(val), 1), "value": round(align(float(val), baseline.get(month) if ax.align_by_month else None, ref), 1),
+            "low_confidence": low_conf,
         })
     if not pts:
         return {"status": "no_data", "reason": f"{ax.name}が未計算、または基準外です", "excluded": excluded}
@@ -172,14 +187,16 @@ def megu_map_for_horse(horse_id: str, years: set[int] | None = None, base: Path 
                 break
             continue
         try:
-            cols = ["race_id", "horse_id", ax.value_col] + ([ax.status_col] if ax.status_col else [])
+            cols = ["race_id", "horse_id", ax.value_col] + ([ax.status_col] if ax.status_col else []) + ([ax.conf_col] if ax.conf_col else [])
             df = _read(p, columns=cols, filters=[("horse_id", "==", horse_id)])
         except Exception:
             continue
-        sts = df[ax.status_col] if ax.status_col else [ax.valid] * len(df)
-        for rid, v, st in zip(df["race_id"], df[ax.value_col], sts):
+        first_valid = sorted(ax.valid_set)[0]
+        sts = df[ax.status_col] if ax.status_col else [first_valid] * len(df)
+        lows = df[ax.conf_col] if ax.conf_col else [False] * len(df)
+        for rid, v, st, lo in zip(df["race_id"], df[ax.value_col], sts, lows):
             if v == v:
-                out[str(rid)] = (float(v), str(st))
+                out[str(rid)] = (float(v), str(st) + ("+low" if lo is True or lo == 1 else ""))
     return out
 
 
@@ -204,7 +221,7 @@ def month_baseline(base: Path | None = None, axis: Axis | None = None) -> tuple[
             m = _read(f, columns=["race_id", ax.value_col] + ([ax.status_col] if ax.status_col else []))
             m = m[m[ax.value_col].notna()]
             if ax.status_col:
-                m = m[m[ax.status_col] == ax.valid]
+                m = m[m[ax.status_col].isin(ax.valid_set)]
             d = _read(rr, columns=["race_id", "date"]).drop_duplicates("race_id")
             j = m.merge(d, on="race_id")
             j["ym"] = j["date"].astype(str).str.replace("/", "-").str[:7]

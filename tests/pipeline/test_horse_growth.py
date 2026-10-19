@@ -99,3 +99,26 @@ def test_axis_can_be_switched_in_one_place(tmp_path, monkeypatch):
     assert m == {"rA": (61.0, "valid")}
     g = hg.build_growth([{"date": "20250301", "race_id": "rA"}], m, {"2025-03": 10.0}, 50.0)
     assert g["axis"]["name"] == "別の指数" and g["points"][0]["value"] == 61.0, "月補正を切った指数は元の値のまま"
+
+
+def test_robust_axis_uses_restored_values_and_marks_low_confidence(tmp_path):
+    import pandas as pd
+
+    from src.pipeline.inference import horse_growth as hg
+
+    d = tmp_path / "2025"
+    d.mkdir()
+    pd.DataFrame({
+        "race_id": ["r1", "r2", "r3", "r4"], "horse_id": ["h"] * 4,
+        "megu_index_robust": [55.0, 30.0, 100.0, float("nan")],
+        "megu_index_status": ["ok", "restored_out_of_range", "clipped", "no_par"],
+        "low_confidence": [False, True, False, False],
+    }).to_parquet(d / "megu_index_flat.parquet")
+    ax = hg.AXES["megu_robust"]
+    mm = hg.megu_map_for_horse("h", {2025}, tmp_path, ax)
+    assert set(mm) == {"r1", "r2", "r3"}            # 値の無い行（基準なし）は入らない
+    runs = [{"race_id": f"r{i}", "date": f"2025-0{i}-10", "race_name": f"R{i}", "finish": i} for i in (1, 2, 3)]
+    g = hg.build_growth(runs, mm, {}, 50.0, None, ax)
+    assert g["status"] == "ok" and g["n"] == 3 and g["excluded"] == 0
+    assert [p["value"] for p in g["points"]] == [55.0, 30.0, 100.0]   # 月別の補正はしない
+    assert [p["low_confidence"] for p in g["points"]] == [False, True, False]
