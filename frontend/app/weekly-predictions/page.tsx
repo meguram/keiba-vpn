@@ -8,6 +8,8 @@ import { LEVEL_STYLE, RaceValue, useRaceValues, valueTitle } from "@/lib/raceVal
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
+import { ExpectedMeguCell } from "@/components/ExpectedMegu";
+import type { ExpectedMegu, ExpectedMeguMeta } from "@/lib/expectedMegu";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
 const SHOW_HORSE_LINK = featureEnabled("horse-detail");
@@ -49,6 +51,7 @@ type PredEntry = {
   place_odds_min?: number | null;
   place_odds_max?: number | null;
   buy_tier?: string;
+  expected_megu?: ExpectedMegu | null;
 };
 
 type PredData = {
@@ -58,6 +61,7 @@ type PredData = {
   message?: string;
   total_horses?: number;
   predictions?: PredEntry[];
+  expected_megu_meta?: ExpectedMeguMeta | null;
   error?: string;
 };
 
@@ -153,7 +157,7 @@ function fmtWeight(w: number | null | undefined, d: number | null | undefined): 
 }
 
 /* ── 列での並べ替え ── */
-type SortKey = "num" | "name" | "bracket" | "sexage" | "jwt" | "jockey" | "trainer" | "weight" | "win" | "top2" | "top3" | "odds" | "podds" | "evw" | "evp" | "tier";
+type SortKey = "num" | "name" | "bracket" | "sexage" | "jwt" | "jockey" | "trainer" | "weight" | "emegu" | "win" | "top2" | "top3" | "odds" | "podds" | "evw" | "evp" | "tier";
 type SortDir = "asc" | "desc";
 
 function sexAgeKey(v?: string | null): number | null {
@@ -171,6 +175,7 @@ const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
   jockey: (p) => p.jockey_name ?? null,
   trainer: (p) => p.trainer_name ?? null,
   weight: (p) => p.weight ?? null,
+  emegu: (p) => p.expected_megu?.value ?? null,
   win: (p) => p.win_prob ?? null,
   top2: (p) => p.top2_prob ?? null,
   top3: (p) => p.top3_prob ?? null,
@@ -181,7 +186,7 @@ const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
   tier: (p) => p.buy_tier ?? null,
 };
 // 『大きいほど良い』列は、最初のクリックを降順にする（勝率・連対率・複勝率・期待値・馬体重）
-const DESC_FIRST = new Set<SortKey>(["win", "top2", "top3", "evw", "evp", "weight"]);
+const DESC_FIRST = new Set<SortKey>(["win", "top2", "top3", "evw", "evp", "weight", "emegu"]);
 
 function sortPreds(preds: PredEntry[], key: SortKey | null, dir: SortDir, fallback: (a: PredEntry, b: PredEntry) => number): PredEntry[] {
   const out = [...preds].sort(fallback);                                   // 同じ値のときは既定の並び（安定）
@@ -221,7 +226,7 @@ const TABLE_CSS = `
 `;
 
 /* ── 予測テーブル ── */
-function PredTable({ raceId, preds, hasPred, message }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string }) {
+function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null }) {
   const TH: React.CSSProperties = {
     padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-dim)",
     textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", background: "var(--surface2)",
@@ -286,6 +291,7 @@ function PredTable({ raceId, preds, hasPred, message }: { raceId: string; preds:
   const panelHorses = sorted.filter((p) => p.horse_id).map((p) => ({
     horse_id: p.horse_id as string, horse_number: p.horse_number, horse_name: p.horse_name, bracket_number: p.bracket_number, sex_age: p.sex_age,
     jockey_name: p.jockey_name, jockey_weight: p.jockey_weight, trainer_name: p.trainer_name, weight: p.weight, weight_change: p.weight_change,
+    expected_megu: p.expected_megu ?? null, expected_through: megu?.data_through ?? null, expected_meta: megu ?? null,
   }));
 
   return (
@@ -313,6 +319,7 @@ function PredTable({ raceId, preds, hasPred, message }: { raceId: string; preds:
             {th("jockey", "騎手", { textAlign: "left" })}
             {th("trainer", "調教師", { textAlign: "left" }, undefined, "pt-hide-sm")}
             {th("weight", "馬体重", {}, "当日、発走の約1時間前に発表")}
+            {th("emegu", "想定指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "過去のめぐ指数からの想定（AI予測ではありません）。1点＝0.1秒")}
             {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
             {th("top2", "連対率", {}, undefined, "pt-hide-sm")}
             {th("top3", "複勝率", {}, undefined, "pt-hide-sm")}
@@ -346,6 +353,7 @@ function PredTable({ raceId, preds, hasPred, message }: { raceId: string; preds:
                 <td style={{ ...TD, textAlign: "left", whiteSpace: "nowrap" }}>{tapCell(p, "jockey", p.jockey_name, "var(--text)")}</td>
                 <td className="pt-hide-sm" style={{ ...TD, textAlign: "left", whiteSpace: "nowrap" }}>{tapCell(p, "trainer", p.trainer_name, "var(--text)")}</td>
                 <td style={{ ...TD, whiteSpace: "nowrap" }}>{fmtWeight(p.weight, p.weight_change)}</td>
+                <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)" }}><ExpectedMeguCell e={p.expected_megu} /></td>
                 <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontWeight: hasPred ? 600 : 400, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.win_prob)}</td>
                 <td className="pt-hide-sm" style={{ ...TD, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.top2_prob)}</td>
                 <td className="pt-hide-sm" style={{ ...TD, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.top3_prob)}</td>
@@ -363,6 +371,12 @@ function PredTable({ raceId, preds, hasPred, message }: { raceId: string; preds:
           })}
         </tbody>
       </table>
+      {megu && (
+        <p style={{ fontSize: 11, color: "var(--text-dim)", padding: "6px 10px 0" }}>
+          想定指数: {megu.name ?? "過去のめぐ指数からの想定（AI予測ではありません）"}。{megu.data_through ? `指数データは ${megu.data_through.slice(5).replace("-", "/")} まで。` : ""}
+          1点＝0.1秒。「条件」は面・距離・クラス・休み明けなどが過去走と違う馬（±は実際の誤差の大きさ）。
+        </p>
+      )}
       {!hasPred && (
         <p style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 10px" }}>
           ※ {message ?? "予測未実行。数値は全て「—」です。レース詳細から「AI予測を実行」してください。"}
@@ -496,7 +510,7 @@ function RaceCard({
             </div>
           )}
           {pred && (
-            <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} />
+            <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} />
           )}
         </div>
       )}

@@ -161,6 +161,7 @@ def change_group(score: float, model: dict | None) -> str:
     return "large" if score >= th["large"] else "some" if score >= th["some"] else "none"
 
 
+CENTERED = {"age", "weight_diff"}
 FEATURE_LABELS = {
     "to_dirt": "ダート替わり", "to_turf": "芝替わり", "dist_up": "距離延長", "dist_down": "距離短縮",
     "class_up": "昇級", "class_down": "降級", "rest_long": "休み明け", "rest_short": "間隔が短い",
@@ -218,13 +219,25 @@ def expected_from_runs(runs: Iterable[Run], race_date: str | None, today: dict |
         group = change_group(score, model)
         if model and model.get("coef"):
             cap = float(model.get("cap", 8.0))
-            raw = {k: float(model["coef"][k]) * (f[k] - float(model.get("center", {}).get(k, 0.0))) for k in model["coef"] if k in f}
-            total = sum(raw.values()) + float(model.get("intercept", 0.0))
+            center = model.get("center", {})
+            parts: dict[str, float] = {}
+            const = float(model.get("intercept", 0.0))
+            for k, c_ in model["coef"].items():
+                if k not in f:
+                    continue
+                if k in CENTERED:                           # 馬齢・斤量差は『平均的な値』からの差で効く
+                    parts[k] = float(c_) * (f[k] - float(center.get(k, 0.0)))
+                else:                                       # 面の切り替えなどは『変化なし(0)』が基準。平均との差は定数に回す
+                    parts[k] = float(c_) * f[k]
+                    const -= float(c_) * float(center.get(k, 0.0))
+            total = sum(parts.values()) + const
             clipped = max(-cap, min(cap, total))
             scale = (clipped / total) if total else 1.0
-            for k, v in raw.items():
+            for k, v in parts.items():
                 if abs(v * scale) >= 0.3:
                     adjust.append({"key": k, "label": FEATURE_LABELS.get(k, k), "delta": round(v * scale, 1)})
+            if abs(const * scale) >= 0.3:
+                adjust.append({"key": "const", "label": "全体の傾向", "delta": round(const * scale, 1)})
             value = base + clipped
         reasons = _reasons(f, today, usable, _days(rd, latest))
     if n <= REFERENCE_MAX_RUNS:
@@ -235,10 +248,8 @@ def expected_from_runs(runs: Iterable[Run], race_date: str | None, today: dict |
         conf = "normal"
     rng = max(sd, MIN_RANGE) if sd is not None else None
     extra = ((model or {}).get("resid_sd") or {}).get(group)
-    if extra is not None and group != "none":
-        rng = max(rng or 0.0, float(extra))                 # 条件変化があるときは、その場合の実際の誤差の大きさまで広げる
-    elif extra is not None and rng is None:
-        rng = float(extra)
+    if extra is not None:
+        rng = max(rng or 0.0, float(extra))                 # 過去走のばらつきだけでなく、実際の誤差（検証済みの標準偏差。条件変化が大きいほど大きい）まで広げる
     out = {
         "value": round(value, 1),
         "range": round(rng, 1) if rng is not None else None,
@@ -288,13 +299,13 @@ def _load_year(year: int, base: Path) -> tuple[dict[str, list[Run]], str]:
 
         names = set(pq.read_schema(p).names)
         use = ax if ax.value_col in names else legacy       # dev のモックは従来の列だけ
-        cols = ["race_id", "horse_id", use.value_col] + [c for c in (use.status_col, use.conf_col, "date") if c and c in names]
-        df = hg._read(p, columns=cols)
         ctx_cols = ["venue", "surface", "distance", "grade", "jockey_weight", "sex_age"]
+        cols = ["race_id", "horse_id", use.value_col] + [c for c in (use.status_col, use.conf_col, "date", *ctx_cols) if c and c in names]
+        df = hg._read(p, columns=cols)
         if rr.exists():
             rnames = set(pq.read_schema(rr).names)
             mkey = ["race_id", "horse_id"] if "horse_id" in rnames else ["race_id"]       # 馬ごとの行が無い古い形式はレース単位で結合
-            rcols = mkey + [c for c in ctx_cols if c in rnames] + (["date"] if "date" not in df.columns and "date" in rnames else [])
+            rcols = mkey + [c for c in ctx_cols if c in rnames and c not in df.columns] + (["date"] if "date" not in df.columns and "date" in rnames else [])
             ctx = hg._read(rr, columns=rcols).drop_duplicates(mkey)
             df = df.merge(ctx, on=mkey, how="left")
         if "date" not in df.columns:
