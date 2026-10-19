@@ -1,0 +1,15 @@
+{
+ "beta_weight": 0.05,
+ "base_kg": 55.0,
+ "pace_cap": 3.0,
+ "pace_turf_only": true,
+ "loro_min_other_races": 2,
+ "loro_min_horses": 6,
+ "min_par_n": 15,
+ "shrink_k": 30.0,
+ "month_smooth": 3,
+ "month_shrink_k": 30.0,
+ "n_iter": 3,
+ "abs_ref_gen": "3歳以上",
+ "abs_ref_cls": "1勝"
+}

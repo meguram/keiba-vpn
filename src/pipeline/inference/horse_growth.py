@@ -57,6 +57,13 @@ AXES: dict[str, Axis] = {
         conf_col="low_confidence", note="全馬を斤量 55kg に換算（1点＝0.1秒）。実際の斤量は各点に表示",
     ),
 }
+# 改善版 v3a の絶対指数（世代・クラス・季節に依らない単一の基準タイム。成長・昇級がそのまま見える）。1 点 = 0.1 秒
+AXES["megu_v3a_abs"] = Axis(
+    "megu_v3a_abs", "めぐ指数（絶対・斤量55kg換算）", "megu_index_flat.parquet", "megu_index_v3a_abs_robust", "megu_v3a_status",
+    valid=("ok", "clipped", "restored_out_of_range", "restored_clipped"), align_by_month=False,
+    conf_col="megu_v3a_low_confidence",
+    note="全馬を斤量 55kg に換算し、馬場差は同日の他レースから推定（1点＝0.1秒）。クラス・世代をまたいで比べられる絶対指数",
+)
 DEFAULT_AXIS = "megu_w55"
 
 

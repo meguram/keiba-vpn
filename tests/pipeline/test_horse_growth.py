@@ -152,3 +152,9 @@ def test_w55_axis_is_default_and_shows_actual_weight(tmp_path, monkeypatch):
     assert g["axis"]["name"] == "めぐ指数（斤量55kg換算）" and "55kg" in g["axis"]["note"]
     assert [p["value"] for p in g["points"]] == [52.0, 47.5]
     assert [p["jockey_weight"] for p in g["points"]] == [53.0, 56.0]
+
+
+def test_v3a_abs_axis_is_defined_and_not_the_default():
+    ax = hg.AXES["megu_v3a_abs"]
+    assert ax.value_col == "megu_index_v3a_abs_robust" and ax.conf_col == "megu_v3a_low_confidence" and not ax.align_by_month
+    assert hg.DEFAULT_AXIS != "megu_v3a_abs"

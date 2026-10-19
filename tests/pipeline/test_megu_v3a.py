@@ -129,3 +129,16 @@ def test_rel_and_abs_are_centered_per_surface():
     out = V.apply_model(ref, model, beta_pace=0.0)
     s2 = out[out["finish_pos_num"] == 2]
     assert abs(s2["megu_index_v3a"].mean() - 50.0) < 0.5 and abs(s2["megu_index_v3a_abs"].mean() - 50.0) < 0.5
+
+
+def test_committed_model_loads_and_env_switch(monkeypatch):
+    from pathlib import Path
+
+    d = Path(__file__).resolve().parents[2] / "config" / "megu_v3a"
+    m = V.V3AModel.load(d)
+    assert set(m.par["level"]) == {"L1_dir_gen_cls", "L2_gen_cls", "L3_cls", "L4_pooled"}
+    assert set(m.centers) == {"rel", "abs"} and {"芝", "ダート"} <= set(m.centers["rel"])
+    monkeypatch.delenv("KEIBA_MEGU_V3A_DIR", raising=False)
+    assert V.load_model_from_env() is None
+    monkeypatch.setenv("KEIBA_MEGU_V3A_DIR", str(d))
+    assert V.load_model_from_env() is not None
