@@ -34,7 +34,11 @@ def main() -> int:
         for i, r in enumerate(hist):
             y = int(str(r["date"])[:4])
             v = base + 4.0 * i + 8 * (_h(hid, str(r["race_id"])) - 0.5)
-            rows.setdefault(y, []).append({"race_id": str(r["race_id"]), "horse_id": hid, "megu_index": round(v, 1), "computation_status": "valid"})
+            rows.setdefault(y, []).append({
+                "race_id": str(r["race_id"]), "horse_id": hid, "megu_index": round(v, 1), "computation_status": "valid",
+                "megu_index_v3a_abs_robust": round(v, 1), "megu_v3a_status": "ok", "megu_v3a_low_confidence": False,
+                "date": str(r["date"]).replace("/", "-")[:10],
+            })
     for y, rs in rows.items():
         out = ROOT / "data" / "page_reference" / "tables" / str(y) / "megu_index_flat.parquet"
         out.parent.mkdir(parents=True, exist_ok=True)

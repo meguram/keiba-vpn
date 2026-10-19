@@ -6873,9 +6873,18 @@ async def get_race_predictions(race_id: str):
             st = _get_storage()
             card = st.load("race_shutuba", race_id) or {}
             course = {k: card.get(k) for k in ("venue", "surface", "distance")}
-            return attach_position_forecast(resp, st.load("race_shutuba_past", race_id), str(card.get("date") or ""), course)
+            past = st.load("race_shutuba_past", race_id)
+            resp = attach_position_forecast(resp, past, str(card.get("date") or ""), course)
         except Exception as exc:  # noqa: BLE001
             logger.warning("位置取り予想の付与に失敗 %s: %s", race_id, exc)
+            past, card = None, {}
+        # 過去のめぐ指数からの想定めぐ指数（AI の予測ではない）。失敗しても予測の応答は返す
+        try:
+            from src.pipeline.inference.expected_megu import attach_expected_megu
+
+            return attach_expected_megu(resp, str(card.get("date") or ""), past_doc=past, card=card)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("想定めぐ指数の付与に失敗 %s: %s", race_id, exc)
             return resp
 
     data = await asyncio.to_thread(
