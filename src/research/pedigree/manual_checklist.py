@@ -108,7 +108,7 @@ def latin_name(nk_rec: dict, ancestor_name: str) -> str:
     return ""
 
 
-def build_rows(ancestors: dict[str, dict], zone: list[dict], nk: dict[str, dict], manual: set[str], limit: int, base_url: str):
+def build_rows(ancestors: dict[str, dict], zone: list[dict], nk: dict[str, dict], manual: set[str], limit: int, base_url: str, sires: dict[str, dict] | None = None):
     weight: dict[str, int] = defaultdict(int)
     for r in zone:
         if r["min_gen"] and int(r["min_gen"]) <= 3:
@@ -123,7 +123,8 @@ def build_rows(ancestors: dict[str, dict], zone: list[dict], nk: dict[str, dict]
         key = en if slug(en) else a["name"]
         cands = [f"{base_url.rstrip('/')}/{c}" for c in slug_candidates(key)]
         rows.append({"horse_id": h, "name": a["name"].replace("\xa0", " "), "name_en": en, "year": int(a["birthday"][:4]),
-                     "impact": n, "url": cands[0] if cands else base_url, "candidates": cands[:14]})
+                     "impact": n, "url": cands[0] if cands else base_url, "candidates": cands[:14],
+                     "sire": ((sires or {}).get(h) or {}).get("sire", "")})
     return rows
 
 

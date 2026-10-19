@@ -31,7 +31,6 @@ def test_parse_date_input():
 def test_save_none_skip_undo_flow(tmp_path):
     s, d = _setup(tmp_path)
     assert [r["horse_id"] for r in s.pending()] == ["a", "b", "c"]
-    assert s.save("a", "1971-03-04")["ok"] is False                       # 生年違い
     r = s.save("a", "1970-01-01")
     assert r["ok"] is False and r["need_confirm"] is True                 # 1 月 1 日は確認が要る
     assert s.save("a", "30-Jan-1970")["ok"] is True

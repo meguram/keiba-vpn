@@ -25,6 +25,7 @@ from src.research.pedigree import manual_checklist as mc
 from src.research.pedigree.birth_subplans import LOG_COLUMNS, MANUAL_COLUMNS, upsert_log
 
 MON = {m: i for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split(), 1)}
+STAGING_COLUMNS = ["horse_id", "name", "birth_year", "birth_month", "birth_day", "source_url", "note", "netkeiba_year", "warning", "entered_at"]
 NONE_NOTE = "ユーザー確認: 記載なし"
 OK_NOTE = "ユーザーがブラウザで目視確認"
 
@@ -51,12 +52,13 @@ def parse_date_input(s: str) -> tuple[int, int, int] | None:
 
 
 class Store:
-    def __init__(self, ancestors: Path, zone: Path, nk: Path | None, d: Path, base_url: str, limit: int = 3000, commit_every: int = 0):
+    def __init__(self, ancestors: Path, zone: Path, nk: Path | None, d: Path, base_url: str, limit: int = 3000, commit_every: int = 0, sires: Path | None = None):
         self.dir = d
         self.commit_every = commit_every          # 0 なら自動コミットしない
         self.pending_msgs: list[str] = []
         self.git_status = ""
         self.manual_p, self.log_p = d / "birth_manual.csv", d / "birth_search_log.csv"
+        self.staging_p = d / "birth_pending_approval.csv"   # 警告つきで入力された値（承認するまで確定データには入れない）
         self.urls_p = d / "sporthorse_urls.csv"      # 実際のページ名が分かった馬の URL（horse_id,url）
         self.url_overrides = {r[0]: r[1] for r in self._read_csv(self.urls_p)[1:] if len(r) > 1} if self.urls_p.exists() else {}
         anc = {r["horse_id"]: r for r in csv.DictReader(open(ancestors, encoding="utf-8"))}
@@ -67,7 +69,8 @@ class Store:
                 if line.strip():
                     r = json.loads(line)
                     nk_map[r["horse_id"]] = r
-        self.rows = mc.build_rows(anc, zone_rows, nk_map, set(), limit, base_url)
+        sire_map = json.loads(sires.read_text(encoding="utf-8")) if sires and sires.exists() else {}
+        self.rows = mc.build_rows(anc, zone_rows, nk_map, set(), limit, base_url, sire_map)
         self.lock = threading.Lock()
         self.skipped: list[str] = []
         self.undo_stack: list[dict] = []
@@ -97,6 +100,7 @@ class Store:
     def _resolved(self) -> set[str]:
         done = {r[0] for r in self._read_csv(self.manual_p)[1:] if r}
         done |= {r[0] for r in self._read_csv(self.log_p)[1:] if len(r) > 8 and r[8].startswith(NONE_NOTE)}
+        done |= {r[0] for r in self._read_csv(self.staging_p)[1:] if r}
         return done
 
     def _row(self, hid: str) -> dict | None:
@@ -107,7 +111,7 @@ class Store:
         return subprocess.run(["git", *args], cwd=self.dir, capture_output=True, text=True, timeout=timeout)
 
     def _commit_and_push(self) -> str:
-        files = [str(self.manual_p.resolve()), str(self.log_p.resolve())] + ([str(self.urls_p.resolve())] if self.urls_p.exists() else [])
+        files = [str(self.manual_p.resolve()), str(self.log_p.resolve())] + [str(p.resolve()) for p in (self.urls_p, self.staging_p) if p.exists()]
         try:
             top = self._git("rev-parse", "--show-toplevel").stdout.strip()
             if not top:
@@ -176,7 +180,51 @@ class Store:
                     "remaining": len(p), "saved": self.session_saved, "none": self.session_none, "unsaved": len(self.pending_msgs),
                     "git": self.git_status, "auto_commit": self.commit_every,
                     "us_seen_ago": None if self.us_seen is None else round(time.time() - self.us_seen),
+                    "approvals": self.approvals(),
                     "recent": [{"horse_id": u["horse_id"], "name": u["name"], "text": u["text"]} for u in self.undo_stack[-5:]][::-1]}
+
+    def approvals(self) -> list[dict]:
+        rows = self._read_csv(self.staging_p)[1:]
+        out = []
+        for r in rows:
+            if r:
+                rec = dict(zip(STAGING_COLUMNS, r))
+                rec["sire"] = (self._row(rec["horse_id"]) or {}).get("sire", "")
+                out.append(rec)
+        return out
+
+    def approve(self, horse_id: str | None = None) -> dict:
+        """承認待ちの値を確定データ（birth_manual.csv）へ移す。horse_id を省略するとすべて承認。"""
+        with self.lock:
+            rows = self._read_csv(self.staging_p)[1:]
+            targets = [r for r in rows if r and (horse_id is None or r[0] == horse_id)]
+            if not targets:
+                return {"ok": False, "error": "承認待ちの対象がありません"}
+            with open(self.manual_p, "a", encoding="utf-8", newline="") as f:
+                w = csv.writer(f)
+                for r in targets:
+                    w.writerow([r[0], r[1], r[2], r[3], r[4], r[5], r[6] + "（承認済み: 生年の食い違いを確認）"])
+            upsert_log(self.log_p, [[r[0], r[1], "adopted", r[2], r[3], r[4], r[5], date.today().isoformat(), r[6] + "（承認済み）"] for r in targets])
+            keep = [r for r in rows if r and r not in targets]
+            self._write_csv(self.staging_p, [STAGING_COLUMNS, *keep])
+            self.undo_stack = [u for u in self.undo_stack if not (u["kind"] == "stage" and any(u["horse_id"] == t[0] for t in targets))]
+            for r in targets:
+                self._after_change(f"{r[1]}: {r[2]}-{int(r[3]):02d}-{int(r[4]):02d}（承認）")
+            return {"ok": True, "n": len(targets)}
+
+    def reject(self, horse_id: str) -> dict:
+        """承認待ちを却下する。その馬は再び入力対象に戻る。"""
+        with self.lock:
+            rows = self._read_csv(self.staging_p)[1:]
+            tgt = next((r for r in rows if r and r[0] == horse_id), None)
+            if not tgt:
+                return {"ok": False, "error": "承認待ちに見つかりません"}
+            self._write_csv(self.staging_p, [STAGING_COLUMNS, *[r for r in rows if r and r is not tgt]])
+            upsert_log(self.log_p, [[tgt[0], tgt[1], "no_data", tgt[7], "", "", tgt[5], date.today().isoformat(), "承認で却下（生年の食い違い）"]])
+            self.undo_stack = [u for u in self.undo_stack if not (u["kind"] == "stage" and u["horse_id"] == horse_id)]
+            self.session_saved = max(self.session_saved - 1, 0)
+            self._after_change(f"{tgt[1]}: 却下")
+            return {"ok": True}
 
     def set_url(self, horse_id: str, url: str) -> dict:
         """「実際の URL」欄に貼られた URL をその場で記憶する（保存や記載なしを押さなくても残す）。"""
@@ -222,16 +270,34 @@ class Store:
             if not d:
                 return {"ok": False, "error": "日付の形式が読めません（例: 1970-01-30 / 30-Jan-1970 / Jan 30, 1970）"}
             year_note = ""
+            staged = False
             if d[0] != r["year"]:
-                if not confirm_year:
-                    return {"ok": False, "year_mismatch": True, "error": f"生年が違います（netkeiba では {r['year']}）。ページの馬が正しければ、行の「生年の違いを確認済み」にチェックして保存してください"}
-                year_note = f"（netkeiba の生年 {r['year']} と異なるが、ユーザーがページを見て確認）"
+                if confirm_year:
+                    year_note = f"（netkeiba の生年 {r['year']} と異なるが、ユーザーがページを見て確認）"
+                else:
+                    staged = True   # 警告のみ。承認の段階を経てから確定する
             if d[1] == 1 and d[2] == 1 and not confirm_jan1:
                 return {"ok": False, "need_confirm": True, "error": "1 月 1 日は日付不明の仮置きの可能性があります。実際に 1 月 1 日なら確認して保存してください"}
             src = url or self._with_override(r)["url"]
             if url:
                 self.remember_url(horse_id, url)
             note = OK_NOTE + ("（1月1日を確認のうえ保存）" if d[1] == 1 and d[2] == 1 else "") + year_note
+            if staged:
+                warning = f"生年が netkeiba（{r['year']}）と異なります。違う馬のページでないか確認して、承認してください"
+                if url:
+                    self.remember_url(horse_id, url)
+                prev_log = next((x for x in self._read_csv(self.log_p)[1:] if x and x[0] == horse_id), None)
+                new_file = not self.staging_p.exists()
+                with open(self.staging_p, "a", encoding="utf-8", newline="") as f:
+                    w = csv.writer(f)
+                    if new_file:
+                        w.writerow(STAGING_COLUMNS)
+                    w.writerow([horse_id, r["name"], d[0], d[1], d[2], src, note, r["year"], warning, date.today().isoformat()])
+                upsert_log(self.log_p, [[horse_id, r["name"], "pending_approval", d[0], d[1], d[2], src, date.today().isoformat(), "承認待ち: " + warning]])
+                self.undo_stack.append({"kind": "stage", "horse_id": horse_id, "name": r["name"], "text": f"{d[0]}-{d[1]:02d}-{d[2]:02d}（承認待ち）", "prev_log": prev_log})
+                self.session_saved += 1
+                self._after_change(f"{r['name']}: {d[0]}-{d[1]:02d}-{d[2]:02d}（承認待ち）")
+                return {"ok": True, "staged": True, "warning": warning}
             prev_log = next((x for x in self._read_csv(self.log_p)[1:] if x and x[0] == horse_id), None)
             with open(self.manual_p, "a", encoding="utf-8", newline="") as f:
                 csv.writer(f).writerow([horse_id, r["name"], d[0], d[1], d[2], src, note])
@@ -308,7 +374,11 @@ class Store:
                 return {"ok": False, "error": "取り消せる操作がありません"}
             u = self.undo_stack.pop()
             hid = u["horse_id"]
-            if u["kind"] == "save":
+            if u["kind"] == "stage":
+                rows = [r for r in self._read_csv(self.staging_p) if not (r and r[0] == hid)]
+                self._write_csv(self.staging_p, rows if rows else [STAGING_COLUMNS])
+                self.session_saved -= 1
+            elif u["kind"] == "save":
                 rows = self._read_csv(self.manual_p)
                 idx = max(i for i, r in enumerate(rows) if r and r[0] == hid)
                 del rows[idx]
@@ -336,11 +406,12 @@ button.primary{background:#2d7ff9;color:#fff;border-color:#2d7ff9;font-size:1.05
 <div class="steps"><b>使い方</b> ① 「この頭数のページを開く」を押す（別タブが開き、次回からは同じタブを使い回します） → ② 各行の「検出」を確認 → ③ 「保存して次へ」
 <br><span class="muted">ユーザースクリプト（バージョン 1.2）を入れていれば、ポップアップに邪魔されず背景タブで開きます。サイトが埋め込みを禁止しているため、画面内には表示できません。</span></div>
 <div style="margin:8px 0">1 回に扱う頭数 <select id="n" onchange="N=+this.value;poll(true)"><option>1</option><option>3</option><option selected>5</option><option>8</option><option>10</option></select>
-<button class="primary" onclick="openAll()">① この頭数のページを開く</button><button onclick="undo_()">直前を取り消す</button> <span id="popmsg" class="err"></span></div>
+<button class="primary" onclick="openAll()">① この頭数のページを開く</button><button onclick="undo_()">直前を取り消す</button> <label><input type="checkbox" id="autoopen" checked> 保存後、次の頭数のページも自動で開く（ユーザースクリプト使用時）</label> <span id="popmsg" class="err"></span></div>
 <div id="rows"></div><div style="margin:10px 0"><button class="primary" onclick="saveBatch()">③ この頭数を保存して次へ</button></div>
+<div id="appr"></div>
 <div class="muted">直近の操作</div><ul id="recent" style="margin:4px 0;padding-left:18px"></ul>
 <script>
-const TOKEN="__TOKEN__";let N=5,batch=[],sig="",rows={},usSeenAgo=null;
+const TOKEN="__TOKEN__";let N=5,batch=[],sig="",rows={},usSeenAgo=null,warns=[];
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','X-Token':TOKEN},body:body?JSON.stringify(body):undefined});return r.json()}
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const q=s=>encodeURIComponent(s);const $=id=>document.getElementById(id);
 function cands(it){return (it.candidates&&it.candidates.length)?it.candidates:(it.url?[it.url]:[])}
@@ -355,9 +426,9 @@ function initBatch(){const L=$('rows');L.innerHTML='';
  if(!batch.length){L.innerHTML='<p class="ok"><b>すべて処理しました。</b></p>';return}
  batch.forEach((it,i)=>{const h=it.horse_id;const st=rows[h]||(rows[h]={ci:0,edited:false,err:''});
   const div=document.createElement('div');div.className='row'+(st.err?' bad':'');
-  div.innerHTML=`<div><b>${i+1}. ${esc(it.name)}</b> <span class="muted">${esc(it.name_en||'')} ／ 生年 ${it.year} ／ 影響 ${it.impact}</span></div>
+  div.innerHTML=`<div><b>${i+1}. ${esc(it.name)}</b> <span class="muted">${esc(it.name_en||'')} ／ 生年 ${it.year} ／ 影響 ${it.impact}</span><div style="font-size:1.05em;margin:2px 0">父: <b>${esc(it.sire||'（不明）')}</b></div></div>
   <div class="det muted" id="det_${h}">検出待ち…</div>
-  <div><input type="text" id="in_${h}" placeholder="例 30-Jan-1970" oninput="rows['${h}'].edited=true"> <label><input type="checkbox" id="nn_${h}"> 記載なし</label> <label><input type="checkbox" id="j1_${h}"> 1月1日で確認</label> <label><input type="checkbox" id="yc_${h}"> 生年の違いを確認済み</label></div>
+  <div><input type="text" id="in_${h}" placeholder="例 30-Jan-1970" oninput="rows['${h}'].edited=true"> <label><input type="checkbox" id="nn_${h}"> 記載なし</label> <label><input type="checkbox" id="j1_${h}"> 1月1日で確認</label></div>
   <div class="muted"><button onclick="openOne(${i})">開く</button><button onclick="cand(${i})">次の候補で開く</button>候補: <span id="cu_${h}">${esc(url(it).split('/').pop()||'（候補なし。馬名で探して URL を貼ってください）')}</span>
    <a class="btn" href="https://www.jbis.jp/navi_search/?keyword=${q(it.name_en||it.name)}" target="sh_alt" >JBIS</a><a class="btn" href="https://en.wikipedia.org/w/index.php?search=${q((it.name_en||it.name)+' horse')}" target="sh_alt">Wikipedia</a>
    <input type="text" id="ur_${h}" placeholder="実際のURL（違うとき）" style="width:34%" onchange="setUrl('${h}')"></div><div class="err" id="er_${h}">${esc(st.err)}</div>`;
@@ -372,6 +443,13 @@ function renderUs(){const v=document.documentElement.dataset.dormelloUserscript;
   <span class="muted">それまでの代わりに、<b>キーボードの数字キー 1〜5</b> を順に押すと、その番号の馬のページを 1 つずつ開けます（ポップアップにブロックされません）。</span>`}}
 document.addEventListener('keydown',e=>{if(e.target&&['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;if(e.ctrlKey||e.metaKey||e.altKey)return;
  const n=parseInt(e.key,10);if(n>=1&&n<=9&&batch[n-1]){openOne(n-1);e.preventDefault()}});
+function renderAppr(list){const el=$('appr');if(!list.length){el.innerHTML='';return}
+ el.innerHTML=`<div class="steps" style="background:#fff3cd;border-color:#d4a800"><b>承認待ち（${list.length} 件）</b> <span class="muted">— 生年が netkeiba と異なる値です。違う馬のページでないかを確認して、承認または却下してください</span>
+ <button class="primary" onclick="approve('',true)">すべて承認して確定</button>`+list.map(r=>`<div class="row" style="background:#fffdf3"><b>${esc(r.name)}</b>（父: ${esc(r.sire||'不明')}）：入力 <b>${esc(r.birth_year)}-${String(r.birth_month).padStart(2,'0')}-${String(r.birth_day).padStart(2,'0')}</b> ／ netkeiba の生年 ${esc(r.netkeiba_year)}
+ <a href="${esc(r.source_url)}" target="sh_alt" rel="noopener">ページ</a><br><span class="err">⚠ ${esc(r.warning)}</span><br>
+ <button class="primary" onclick="approve('${esc(r.horse_id)}')">承認して確定</button><button onclick="reject('${esc(r.horse_id)}')">却下（入力に戻す）</button></div>`).join('')+'</div>'}
+async function approve(h,all){const r=await api('/api/approve',all?{all:true}:{horse_id:h});if(!r.ok)alert(r.error);poll(true)}
+async function reject(h){const r=await api('/api/reject',{horse_id:h});if(!r.ok)alert(r.error);poll(true)}
 function updateDet(m){batch.forEach(it=>{const h=it.horse_id,d=m[h],st=rows[h];if(!$('det_'+h))return;
  if(d&&d.text){$('det_'+h).innerHTML=`<span class="ok">検出: <b>${esc(d.text)}</b></span> <span class="muted">${esc((d.url||'').split('/').pop())}</span>`;if(!st.edited&&!$('in_'+h).value)$('in_'+h).value=d.text;$('ur_'+h).dataset.det=d.url||''}
  else if(d&&d.year_only){$('det_'+h).innerHTML=`<span class="err">年のみ（${esc(d.year_only)}）のページ</span>`;if(!st.edited&&!st.nnAuto){$('nn_'+h).checked=true;st.nnAuto=true}}
@@ -379,13 +457,15 @@ function updateDet(m){batch.forEach(it=>{const h=it.horse_id,d=m[h],st=rows[h];i
 async function poll(force){const d=await api('/api/batch?n='+N);
  $('stat').innerHTML=`残り ${d.remaining} 頭 ／ 保存 ${d.saved}・記載なし ${d.none} ／ `+(d.auto_commit?`コミットまで あと ${Math.max(d.auto_commit-d.unsaved,0)} 件 <button onclick="commitNow()">今すぐコミット</button> <span class="muted">${esc(d.git||'')}</span>`:'自動コミット: 無効');
  $('recent').innerHTML=d.recent.map(r=>`<li>${esc(r.name)}: ${esc(r.text)}</li>`).join('')||'<li class="muted">なし</li>';
- usSeenAgo=d.us_seen_ago;renderUs();const s=d.items.map(i=>i.horse_id).join(',');batch=d.items;if(s!==sig||force){sig=s;initBatch()}updateDet(d.detected)}
-async function saveBatch(){const out=[];batch.forEach(it=>{const h=it.horse_id,text=$('in_'+h).value.trim(),none=$('nn_'+h).checked,j1=$('j1_'+h).checked,yc=$('yc_'+h).checked;
+ usSeenAgo=d.us_seen_ago;renderUs();renderAppr(d.approvals||[]);const s=d.items.map(i=>i.horse_id).join(',');batch=d.items;if(s!==sig||force){sig=s;initBatch()}updateDet(d.detected)}
+async function saveBatch(){const out=[];batch.forEach(it=>{const h=it.horse_id,text=$('in_'+h).value.trim(),none=$('nn_'+h).checked,j1=$('j1_'+h).checked;
   const u=$('ur_'+h).value.trim()||$('ur_'+h).dataset.det||'';
-  if(none)out.push({horse_id:h,none:true});else if(text)out.push({horse_id:h,text,confirm_jan1:j1,confirm_year:yc,url:u});else out.push({horse_id:h,skip:true})});
+  if(none)out.push({horse_id:h,none:true});else if(text)out.push({horse_id:h,text,confirm_jan1:j1,url:u});else out.push({horse_id:h,skip:true})});
  const r=await api('/api/batch_save',{rows:out});let bad=0;
- r.results.forEach(x=>{if(!x.ok){bad++;rows[x.horse_id].err=x.error||'保存できません'}else{delete rows[x.horse_id]}});
- await poll(true);if(bad)alert(bad+' 頭は保存できませんでした。赤い行の理由を確認してください')}
+ const warn=[];r.results.forEach(x=>{if(!x.ok){bad++;rows[x.horse_id].err=x.error||'保存できません'}else{if(x.warning)warn.push(x.warning);delete rows[x.horse_id]}});
+ await poll(true);if($('autoopen').checked&&document.documentElement.dataset.dormelloUserscript&&batch.length)openAll();
+ if(warn.length)alert('警告: '+warn.length+' 頭は生年が netkeiba と異なるため「承認待ち」に入れました。画面の「承認待ち」で確認して承認してください');
+ if(bad)alert(bad+' 頭は保存できませんでした。赤い行の理由を確認してください')}
 async function commitNow(){const r=await api('/api/commit',{});if(!r.ok)alert(r.error);poll(true)}
 async function undo_(){const r=await api('/api/undo',{});if(!r.ok)alert(r.error);poll(true)}
 poll(true);setInterval(()=>poll(false),1500);
@@ -444,6 +524,10 @@ def make_handler(store: Store, token: str):
                 self._json(store.skip(body.get("horse_id", "")))
             elif path == "/api/undo":
                 self._json(store.undo())
+            elif path == "/api/approve":
+                self._json(store.approve(body.get("horse_id") if not body.get("all") else None))
+            elif path == "/api/reject":
+                self._json(store.reject(body.get("horse_id", "")))
             elif path == "/api/set_url":
                 self._json(store.set_url(body.get("horse_id", ""), body.get("url", "")))
             elif path == "/api/batch_save":
@@ -468,9 +552,10 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--dir", required=True, type=Path)
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--base-url", default="https://sporthorse-data.com/pedigree")
+    ap.add_argument("--sires", type=Path, help="ancestor_sires.json（祖先ID -> 父の名前）。画面に父を表示する")
     ap.add_argument("--commit-every", type=int, default=5, help="この件数ごとに birth_manual.csv と birth_search_log.csv だけをコミットして GitHub へプッシュする（0 で無効）")
     a = ap.parse_args(argv)
-    store = Store(a.ancestors, a.zone, a.nk, a.dir, a.base_url, commit_every=a.commit_every)
+    store = Store(a.ancestors, a.zone, a.nk, a.dir, a.base_url, commit_every=a.commit_every, sires=a.sires)
     token = secrets.token_urlsafe(16)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(store, token))
     print(f"対象 {len(store.pending())} 頭。ブラウザで http://127.0.0.1:{a.port}/ を開いてください（Ctrl+C で終了）", flush=True)

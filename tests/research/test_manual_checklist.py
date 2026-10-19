@@ -68,3 +68,11 @@ def test_latin_name_prefers_a_field_with_letters():
     rows = mc.build_rows({"a": {"precision": "year", "birthday": "1999", "name": "ヨハネスブルグ"}},
                          [{"stallion_id": "a", "min_gen": "1", "n_horses": "9"}], {"a": {"name": "ヨハネスブルグ", "name_en": "Johannesburg"}}, set(), 10, "https://x.test/p")
     assert rows[0]["candidates"] and rows[0]["candidates"][0] == "https://x.test/p/johannesburg"
+
+
+def test_build_rows_includes_sire_name():
+    anc = {"a": {"precision": "year", "birthday": "1976", "name": "Kampala"}}
+    zone = [{"stallion_id": "a", "min_gen": "1", "n_horses": "9"}]
+    rows = mc.build_rows(anc, zone, {}, set(), 10, "https://x.test/p", {"a": {"sire": "Kalamoun", "sire_id": "s"}})
+    assert rows[0]["sire"] == "Kalamoun"
+    assert mc.build_rows(anc, zone, {}, set(), 10, "https://x.test/p")[0]["sire"] == ""
