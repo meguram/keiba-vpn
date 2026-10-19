@@ -165,6 +165,30 @@ class Store:
         self.url_overrides[horse_id] = url
         self._write_csv(self.urls_p, [["horse_id", "url"], *[[h, u] for h, u in self.url_overrides.items()]])
 
+    def batch(self, n: int = 5) -> dict:
+        """先頭 n 頭（まとめ表示用）。各頭の検出済みの日付つき。"""
+        with self.lock:
+            p = self.pending()
+            items = [self._with_override(x) for x in p[: max(1, min(int(n), 12))]]
+            return {"items": items, "detected": {i["horse_id"]: self.detected[i["horse_id"]] for i in items if i["horse_id"] in self.detected},
+                    "remaining": len(p), "saved": self.session_saved, "none": self.session_none, "unsaved": len(self.pending_msgs),
+                    "git": self.git_status, "auto_commit": self.commit_every,
+                    "recent": [{"horse_id": u["horse_id"], "name": u["name"], "text": u["text"]} for u in self.undo_stack[-5:]][::-1]}
+
+    def batch_save(self, rows: list[dict]) -> dict:
+        """行ごとに 保存 / 記載なし / あとで を処理する。失敗した行は未処理のまま残り、理由を返す。"""
+        results = []
+        for r in rows:
+            hid = r.get("horse_id", "")
+            if r.get("none"):
+                out = self.none(hid)
+            elif r.get("text"):
+                out = self.save(hid, r["text"], bool(r.get("confirm_jan1")), (r.get("url") or "").strip() or None)
+            else:
+                out = self.skip(hid)
+            results.append({"horse_id": hid, **out})
+        return {"results": results}
+
     def next(self) -> dict:
         with self.lock:
             p = self.pending()
@@ -198,17 +222,22 @@ class Store:
             self._after_change(f"{r['name']}: {d[0]}-{d[1]:02d}-{d[2]:02d}")
             return {"ok": True}
 
+    WINDOW = 12   # 先頭からこの頭数のうちのどの馬のページかを判定する（まとめ表示で複数同時に開くため）
+
     def _current_matches(self, url: str, title: str) -> dict | None:
-        """ユーザースクリプトが送ってきたページが、いま表示中の馬のものか（URL の末尾の名前か、タイトルの馬名で判定）。"""
-        p = self.pending()
-        if not p:
-            return None
-        cur = p[0]
+        """ユーザースクリプトが送ってきたページが、表示中の馬（先頭 WINDOW 頭）のどれのものか。URL の末尾の名前か、タイトルの馬名で判定する。"""
         seg = urllib.parse.urlparse(url).path.rstrip("/").rsplit("/", 1)[-1].lower()
-        slugs = [c.rsplit("/", 1)[-1].lower() for c in cur.get("candidates", [cur["url"]])]
         norm = lambda t: re.sub(r"[^a-z0-9]", "", t.lower())  # noqa: E731
-        if seg in slugs or (cur["name_en"] and norm(cur["name_en"]) and norm(cur["name_en"]) in norm(title)):
-            return cur
+        win = self.pending()[: self.WINDOW]
+        for cur in win:
+            slugs = [c.rsplit("/", 1)[-1].lower() for c in cur.get("candidates", [cur["url"]])]
+            if cur["horse_id"] in self.url_overrides:
+                slugs.append(self.url_overrides[cur["horse_id"]].rsplit("/", 1)[-1].lower())
+            if seg in slugs:
+                return cur
+        for cur in win:
+            if cur["name_en"] and norm(cur["name_en"]) and norm(cur["name_en"]) in norm(title):
+                return cur
         return None
 
     def detect(self, url: str, title: str, text: str | None, year_only: str | None = None) -> dict:
@@ -277,57 +306,55 @@ class Store:
             return {"ok": True, "name": u["name"]}
 
 
-PAGE = """<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>誕生日 手入力</title>
-<style>*{box-sizing:border-box}body{font-family:sans-serif;margin:0;height:100vh;display:flex}.left{width:430px;min-width:340px;padding:10px 12px;overflow:auto;border-right:2px solid #ccc}
-.right{flex:1;display:flex;flex-direction:column}.bar{padding:6px 10px;background:#f1f1f1;border-bottom:1px solid #ccc;font-size:.9em}iframe{flex:1;border:0;width:100%}
-.big{font-size:1.4em;font-weight:bold}.muted{color:#666;font-size:.9em}.err{color:#b00020}.ok{color:#0a7d2c}
-button,a.btn{display:inline-block;margin:3px 5px 3px 0;padding:7px 11px;font-size:.95em;border:1px solid #888;border-radius:6px;background:#f4f4f4;text-decoration:none;color:#000;cursor:pointer}
-button.primary{background:#2d7ff9;color:#fff;border-color:#2d7ff9}input{font-size:1.1em;padding:5px;width:200px}.card{border:1px solid #ccc;border-radius:8px;padding:10px;margin:8px 0}
-.det{background:#e8f5e9;border:1px solid #2e7d32;border-radius:6px;padding:8px;margin:8px 0}</style></head><body>
-<div class="left"><h2 style="margin:4px 0">誕生日 手入力</h2><div class="muted" id="stat"></div><div id="main" class="card"></div>
-<div class="muted">直近の操作</div><ul id="recent" style="margin:4px 0;padding-left:18px"></ul></div>
-<div class="right"><div class="bar" id="bar"></div><iframe id="view" referrerpolicy="no-referrer"></iframe></div>
+PAGE = """<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>誕生日 手入力（まとめ）</title>
+<style>*{box-sizing:border-box}body{font-family:sans-serif;margin:0 auto;max-width:860px;padding:10px 14px}
+.muted{color:#666;font-size:.88em}.err{color:#b00020}.ok{color:#0a7d2c}.row{border:1px solid #ccc;border-radius:8px;padding:8px 10px;margin:7px 0}.row.bad{border-color:#b00020;background:#fff5f5}
+button,a.btn{display:inline-block;margin:2px 4px 2px 0;padding:6px 10px;font-size:.92em;border:1px solid #888;border-radius:6px;background:#f4f4f4;color:#000;text-decoration:none;cursor:pointer}
+button.primary{background:#2d7ff9;color:#fff;border-color:#2d7ff9;font-size:1.05em;padding:9px 16px}input[type=text]{font-size:1em;padding:4px;width:170px}.det{margin:3px 0}
+.steps{background:#f7f7ff;border:1px solid #ccd;border-radius:8px;padding:8px 12px}</style></head><body>
+<h2 style="margin:2px 0">誕生日 手入力（まとめ表示）</h2><div class="muted" id="stat"></div>
+<div class="steps"><b>使い方</b> ① 「この頭数のページを開く」を押す（別タブが開き、次回からは同じタブを使い回します） → ② 各行の「検出」を確認 → ③ 「保存して次へ」
+<br><span class="muted">タブが 1 つしか開かないときは、アドレスバーのポップアップ許可（localhost:8765）をオンにしてください。サイトが埋め込みを禁止しているため、画面内には表示できません。</span></div>
+<div style="margin:8px 0">1 回に扱う頭数 <select id="n" onchange="N=+this.value;poll(true)"><option>1</option><option>3</option><option selected>5</option><option>8</option><option>10</option></select>
+<button class="primary" onclick="openAll()">① この頭数のページを開く</button><button onclick="undo_()">直前を取り消す</button> <span id="popmsg" class="err"></span></div>
+<div id="rows"></div><div style="margin:10px 0"><button class="primary" onclick="saveBatch()">③ この頭数を保存して次へ</button></div>
+<div class="muted">直近の操作</div><ul id="recent" style="margin:4px 0;padding-left:18px"></ul>
 <script>
-const TOKEN="__TOKEN__";let cur=null,ci=0,embed=true,lastDet=null;
+const TOKEN="__TOKEN__";let N=5,batch=[],sig="",rows={};
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','X-Token':TOKEN},body:body?JSON.stringify(body):undefined});return r.json()}
-function q(s){return encodeURIComponent(s)}
-function show(){const v=document.getElementById('view'),bar=document.getElementById('bar');if(!cur){v.removeAttribute('src');bar.textContent='';return}
- const u=(cur.candidates||[cur.url])[ci]||cur.url;
- bar.innerHTML=`表示中: <a href="${u}" target="sporthorse_view" rel="noopener">${u}</a> （候補 ${ci+1}/${(cur.candidates||[u]).length}） `
-  +`<button onclick="nextCand()">次の候補</button><button onclick="toggleEmbed()">${embed?'埋め込みを止める':'埋め込みで表示'}</button>`
-  +`<a class="btn" href="${u}" target="sporthorse_view" rel="noopener">別ウィンドウで開く（使い回し）</a>`
-  +`<a class="btn" href="https://www.jbis.jp/navi_search/?keyword=${q(cur.name_en||cur.name)}" target="sporthorse_view" rel="noopener">JBIS</a>`
-  +`<a class="btn" href="https://en.wikipedia.org/w/index.php?search=${q((cur.name_en||cur.name)+' horse')}" target="sporthorse_view" rel="noopener">Wikipedia</a>`
-  +`<span class="muted"> ※右が空白のままなら、サイトが埋め込みを許可していません。「別ウィンドウで開く」を使ってください</span>`;
- if(embed)v.src=u;else v.removeAttribute('src')}
-function nextCand(){ci=(ci+1)%((cur.candidates||[cur.url]).length);show()}
-function toggleEmbed(){embed=!embed;show()}
-function renderDet(d){const el=document.getElementById('det');if(!el)return;
- if(d&&d.text){el.className='det';el.innerHTML=`ページから検出: <b>${d.text}</b> <button class="primary" onclick="saveDet()">この日付で保存して次へ</button>`}
- else if(d&&d.year_only){el.className='det';el.innerHTML=`このページは年のみ（${d.year_only}）のようです <button onclick="none_()">記載なしにして次へ</button>`}
- else{el.className='muted';el.textContent='ページを表示すると、誕生日を自動で検出して、ここに出します（要ユーザースクリプト）'}}
-async function load(){const d=await api('/api/next');
- document.getElementById('stat').innerHTML=`残り ${d.remaining} 頭 ／ 保存 ${d.saved}・記載なし ${d.none}<br>`+(d.auto_commit?`コミットまで あと ${Math.max(d.auto_commit-d.unsaved,0)} 件 <button onclick="commitNow()">今すぐコミット</button> <span class="muted">${d.git||''}</span>`:'自動コミット: 無効');
- document.getElementById('recent').innerHTML=d.recent.map(r=>`<li>${r.name}: ${r.text}</li>`).join('')||'<li class="muted">なし</li>';
- const m=document.getElementById('main');const same=cur&&d.item&&cur.horse_id===d.item.horse_id;cur=d.item;
- if(!cur){m.innerHTML='<p class="ok big">すべて処理しました。</p>';show();return}
- if(!same){ci=0;lastDet=null;
-  m.innerHTML=`<div class="big">${cur.name}</div><div class="muted">${cur.name_en||''} ／ 生年 ${cur.year} ／ 影響 ${cur.impact}</div>
-  <div id="det" class="muted"></div>
-  <p>日付 <input id="d" placeholder="例 30-Jan-1970" autofocus> <span id="msg"></span></p>
-  <p class="muted">実際の URL が違うときは貼る: <input id="u" style="width:100%" placeholder="https://sporthorse-data.com/pedigree/..."></p>
-  <p><button class="primary" onclick="save(false)">保存して次へ</button><button onclick="none_()">記載なし</button><button onclick="skip_()">あとで</button><button onclick="undo_()">直前を取り消す</button></p>`;
-  document.getElementById('d').addEventListener('keydown',e=>{if(e.key==='Enter')save(false)});show()}
- renderDet(d.detected)}
-async function save(c,text,url){const v=text||document.getElementById('d').value;const u=url||document.getElementById('u').value.trim();
- const r=await api('/api/save',{horse_id:cur.horse_id,text:v,confirm_jan1:c,url:u});
- if(r.ok){load()}else if(r.need_confirm){if(confirm(r.error))save(true,text,url)}else{const m=document.getElementById('msg');if(m){m.className='err';m.textContent=r.error}}}
-async function saveDet(){const d=(await api('/api/next')).detected;if(d&&d.text)save(false,d.text,d.url)}
-async function none_(){await api('/api/none',{horse_id:cur.horse_id});load()}
-async function skip_(){await api('/api/skip',{horse_id:cur.horse_id});load()}
-async function commitNow(){const r=await api('/api/commit',{});if(!r.ok)alert(r.error);load()}
-async function undo_(){const r=await api('/api/undo',{});if(!r.ok)alert(r.error);load()}
-load();setInterval(load,1500);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const q=s=>encodeURIComponent(s);const $=id=>document.getElementById(id);
+function url(it){const c=it.candidates||[it.url];return c[rows[it.horse_id].ci%c.length]}
+function openOne(i){const it=batch[i];if(!it)return null;return window.open(url(it),'sh_'+i)}      // 名前つきタブ: 次の頭数でも同じタブを使い回す（noopener は付けない）
+function openAll(){let blocked=0;batch.forEach((it,i)=>{if(!openOne(i))blocked++});$('popmsg').textContent=blocked?`${blocked} 件がポップアップでブロックされました。アドレスバーで許可するか、各行の「開く」を使ってください`:''}
+function cand(i){const it=batch[i];rows[it.horse_id].ci++;$('cu_'+it.horse_id).textContent=url(it).split('/').pop();openOne(i)}
+function initBatch(){const L=$('rows');L.innerHTML='';
+ if(!batch.length){L.innerHTML='<p class="ok"><b>すべて処理しました。</b></p>';return}
+ batch.forEach((it,i)=>{const h=it.horse_id;const st=rows[h]||(rows[h]={ci:0,edited:false,err:''});
+  const div=document.createElement('div');div.className='row'+(st.err?' bad':'');
+  div.innerHTML=`<div><b>${i+1}. ${esc(it.name)}</b> <span class="muted">${esc(it.name_en||'')} ／ 生年 ${it.year} ／ 影響 ${it.impact}</span></div>
+  <div class="det muted" id="det_${h}">検出待ち…</div>
+  <div><input type="text" id="in_${h}" placeholder="例 30-Jan-1970" oninput="rows['${h}'].edited=true"> <label><input type="checkbox" id="nn_${h}"> 記載なし</label> <label><input type="checkbox" id="j1_${h}"> 1月1日で確認</label></div>
+  <div class="muted"><button onclick="openOne(${i})">開く</button><button onclick="cand(${i})">次の候補で開く</button>候補: <span id="cu_${h}">${esc(url(it).split('/').pop())}</span>
+   <a class="btn" href="https://www.jbis.jp/navi_search/?keyword=${q(it.name_en||it.name)}" target="sh_alt" >JBIS</a><a class="btn" href="https://en.wikipedia.org/w/index.php?search=${q((it.name_en||it.name)+' horse')}" target="sh_alt">Wikipedia</a>
+   <input type="text" id="ur_${h}" placeholder="実際のURL（違うとき）" style="width:34%"></div><div class="err" id="er_${h}">${esc(st.err)}</div>`;
+  L.appendChild(div)})}
+function updateDet(m){batch.forEach(it=>{const h=it.horse_id,d=m[h],st=rows[h];if(!$('det_'+h))return;
+ if(d&&d.text){$('det_'+h).innerHTML=`<span class="ok">検出: <b>${esc(d.text)}</b></span> <span class="muted">${esc((d.url||'').split('/').pop())}</span>`;if(!st.edited&&!$('in_'+h).value)$('in_'+h).value=d.text;$('ur_'+h).dataset.det=d.url||''}
+ else if(d&&d.year_only){$('det_'+h).innerHTML=`<span class="err">年のみ（${esc(d.year_only)}）のページ</span>`;if(!st.edited&&!st.nnAuto){$('nn_'+h).checked=true;st.nnAuto=true}}
+ else{$('det_'+h).textContent='検出待ち…（ページを開いて、ユーザースクリプトで読み取ります）'}})}
+async function poll(force){const d=await api('/api/batch?n='+N);
+ $('stat').innerHTML=`残り ${d.remaining} 頭 ／ 保存 ${d.saved}・記載なし ${d.none} ／ `+(d.auto_commit?`コミットまで あと ${Math.max(d.auto_commit-d.unsaved,0)} 件 <button onclick="commitNow()">今すぐコミット</button> <span class="muted">${esc(d.git||'')}</span>`:'自動コミット: 無効');
+ $('recent').innerHTML=d.recent.map(r=>`<li>${esc(r.name)}: ${esc(r.text)}</li>`).join('')||'<li class="muted">なし</li>';
+ const s=d.items.map(i=>i.horse_id).join(',');batch=d.items;if(s!==sig||force){sig=s;initBatch()}updateDet(d.detected)}
+async function saveBatch(){const out=[];batch.forEach(it=>{const h=it.horse_id,text=$('in_'+h).value.trim(),none=$('nn_'+h).checked,j1=$('j1_'+h).checked;
+  const u=$('ur_'+h).value.trim()||$('ur_'+h).dataset.det||'';
+  if(none)out.push({horse_id:h,none:true});else if(text)out.push({horse_id:h,text,confirm_jan1:j1,url:u});else out.push({horse_id:h,skip:true})});
+ const r=await api('/api/batch_save',{rows:out});let bad=0;
+ r.results.forEach(x=>{if(!x.ok){bad++;rows[x.horse_id].err=x.error||'保存できません'}else{delete rows[x.horse_id]}});
+ await poll(true);if(bad)alert(bad+' 頭は保存できませんでした。赤い行の理由を確認してください')}
+async function commitNow(){const r=await api('/api/commit',{});if(!r.ok)alert(r.error);poll(true)}
+async function undo_(){const r=await api('/api/undo',{});if(!r.ok)alert(r.error);poll(true)}
+poll(true);setInterval(()=>poll(false),1500);
 </script></body></html>"""
 
 
@@ -358,6 +385,9 @@ def make_handler(store: Store, token: str):
                 self.wfile.write(b)
             elif path == "/api/next" and self._authorized():
                 self._json(store.next())
+            elif path == "/api/batch" and self._authorized():
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                self._json(store.batch(int((q.get("n") or ["5"])[0])))
             elif path == "/api/token":  # ユーザースクリプト用（ブラウザの他サイトからは読めない）
                 self._json({"token": token})
             else:
@@ -379,6 +409,8 @@ def make_handler(store: Store, token: str):
                 self._json(store.skip(body.get("horse_id", "")))
             elif path == "/api/undo":
                 self._json(store.undo())
+            elif path == "/api/batch_save":
+                self._json(store.batch_save(body.get("rows", [])))
             elif path == "/api/ext_detect":
                 self._json(store.detect(body.get("url", ""), body.get("title", ""), body.get("text"), body.get("year_only")))
             elif path == "/api/ext_capture":
