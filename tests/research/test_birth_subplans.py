@@ -89,3 +89,34 @@ def test_body_foaled_date():
     assert bs.body_foaled_date("He was born on 3 March 1931 at Mereworth.") == (1931, 3, 3)
     assert bs.body_foaled_date("foaled in 1904 in Kentucky") is None
     assert bs.body_foaled_date("born March 1904") is None
+
+
+def _row(q, en, d, nref=1, ja=None):
+    r = {"h": {"value": f"http://www.wikidata.org/entity/{q}"}, "en": {"value": en}, "d": {"value": d + "T00:00:00Z"}, "nref": {"value": str(nref)}}
+    if ja:
+        r["ja"] = {"value": ja}
+    return r
+
+
+def test_match_bulk_unique_and_placeholder():
+    rows = [_row("Q1", "Harlan", "1989-03-02"), _row("Q2", "Twin", "1970-05-05"), _row("Q3", "Twin", "1970-06-06"),
+            _row("Q4", "Placeholder", "1980-01-01"), _row("Q5", "X", "1950-04-01", ja="ボストニアン")]
+    anc = {
+        "a": {"precision": "year", "birthday": "1989", "name": "Harlan\xa0(米)"},
+        "b": {"precision": "year", "birthday": "1970", "name": "Twin"},
+        "c": {"precision": "year", "birthday": "1980", "name": "Placeholder"},
+        "d": {"precision": "year", "birthday": "1950", "name": "ボストニアン"},
+        "e": {"precision": "day", "birthday": "1989-03-02", "name": "Harlan"},
+    }
+    got = {m["horse_id"]: m for m in bs.match_bulk(rows, anc, set())}
+    assert set(got) == {"a", "d"}          # b は同名同年が 2 頭で曖昧、c は 1 月 1 日、e は日付つき
+    assert got["a"]["date"] == "1989-03-02" and got["a"]["nref"] == 1
+    assert bs.match_bulk(rows, anc, {"a"}) and "a" not in {m["horse_id"] for m in bs.match_bulk(rows, anc, {"a"})}
+
+
+def test_upsert_log_replaces_and_appends(tmp_path):
+    p = tmp_path / "log.csv"
+    p.write_text(",".join(bs.LOG_COLUMNS) + "\nh1,A,no_data,1990,,,,2026-10-17,x\nh2,B,adopted,1991,3,4,u,2026-10-17,y\n", encoding="utf-8")
+    bs.upsert_log(p, [["h1", "A", "adopted", 1990, 5, 6, "u1", "2026-10-19", "z"], ["h3", "C", "no_data", 1992, "", "", "", "2026-10-19", "w"]])
+    rows = [l.split(",")[:3] for l in p.read_text(encoding="utf-8").splitlines()[1:]]
+    assert rows == [["h1", "A", "adopted"], ["h2", "B", "adopted"], ["h3", "C", "no_data"]]

@@ -145,7 +145,109 @@ def ja_lead_date(ja_name: str):
     return None, None
 
 
+_SPARQL = """SELECT ?h ?en ?ja ?d ?p (COUNT(?ref) AS ?nref) WHERE {
+  ?h wdt:P31 wd:Q726 . ?h p:P569 ?st . ?st psv:P569 ?v . ?v wikibase:timePrecision ?p ; wikibase:timeValue ?d . FILTER(?p >= 11)
+  OPTIONAL { ?st prov:wasDerivedFrom ?ref }
+  OPTIONAL { ?h rdfs:label ?en FILTER(lang(?en)="en") }
+  OPTIONAL { ?h rdfs:label ?ja FILTER(lang(?ja)="ja") }
+} GROUP BY ?h ?en ?ja ?d ?p"""
+
+
+def wikidata_bulk_rows() -> list[dict]:
+    """Wikidata の「馬」で誕生日が日精度のものを一括で取る（1 回の照会）。"""
+    req = urllib.request.Request("https://query.wikidata.org/sparql", data=urllib.parse.urlencode({"query": _SPARQL}).encode(),
+                                 headers={"User-Agent": UA, "Accept": "application/sparql-results+json"})
+    return json.load(urllib.request.urlopen(req, timeout=180))["results"]["bindings"]
+
+
+def _norm(s: str) -> str:
+    return re.sub(r"[^a-z0-9ぁ-んァ-ヶー一-龥]", "", re.sub(r"\(.*?\)", "", s).lower())
+
+
+def match_bulk(rows: list[dict], ancestors: dict[str, dict], skip: set[str], min_year: int = 1800):
+    """年のみの祖先を (正規化した馬名, 生年) で Wikidata の日付つき馬に一意に突き合わせる。1 月 1 日は仮置きとして除く。"""
+    idx: dict[tuple[str, int], list[tuple[str, str, int]]] = defaultdict(list)
+    for r in rows:
+        d = r["d"]["value"][:10]
+        for k in ("en", "ja"):
+            if k in r:
+                idx[(_norm(r[k]["value"]), int(d[:4]))].append((r["h"]["value"].rsplit("/", 1)[-1], d, int(r["nref"]["value"])))
+    out = []
+    for hid, a in ancestors.items():
+        if a["precision"] != "year" or hid in skip or int(a["birthday"][:4]) < min_year:
+            continue
+        y = int(a["birthday"][:4])
+        latin, ja = split_names(a["name"])
+        cands = []
+        for nm in (latin, ja):
+            if nm:
+                cands += idx.get((_norm(nm), y), [])
+        cands = list(dict.fromkeys(cands))
+        if len(cands) == 1 and not cands[0][1].endswith("-01-01"):
+            q, d, nref = cands[0]
+            out.append({"horse_id": hid, "name": a["name"], "year": y, "q": q, "date": d, "nref": nref})
+    return out
+
+
+def upsert_log(path: Path, rows: list[list]) -> None:
+    """検索ログを horse_id ごとに最新の行へ置き換える（新規は追記）。"""
+    existing = list(csv.reader(open(path, encoding="utf-8"))) if path.exists() else [LOG_COLUMNS]
+    new = {r[0]: r for r in rows}
+    out, seen = [], set()
+    for r in existing:
+        if r and r[0] in new:
+            out.append(new[r[0]])
+            seen.add(r[0])
+        else:
+            out.append(r)
+    out += [r for h, r in new.items() if h not in seen]
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        csv.writer(f).writerows(out)
+
+
+def run_bulk(a) -> None:
+    d = Path(a.dir)
+    log_p, man_p = d / "birth_search_log.csv", d / "birth_manual.csv"
+    adopted = {r["horse_id"] for r in csv.DictReader(open(man_p, encoding="utf-8"))} if man_p.exists() else set()
+    anc = {r["horse_id"]: r for r in csv.DictReader(open(a.ancestors, encoding="utf-8"))}
+    matches = match_bulk(wikidata_bulk_rows(), anc, adopted, a.min_year)
+    today = date.today().isoformat()
+    log_rows, man_rows = [], []
+    for m in matches:
+        y, mo, dd = map(int, m["date"].split("-"))
+        url = f"https://www.wikidata.org/wiki/{m['q']}"
+        wd = {"q": m["q"], "year": y, "month": mo, "day": dd, "precision": 11, "has_ref": m["nref"] > 0}
+        en = ja_l = None
+        if not wd["has_ref"]:  # 参照なしは Wikipedia 冒頭文で裏付けを取る
+            latin, ja = split_names(m["name"])
+            try:
+                en, _ = en_lead_date(latin) if latin else (None, None)
+                time.sleep(a.sleep)
+                ja_l, _ = ja_lead_date(ja) if ja else (None, None)
+                time.sleep(a.sleep)
+            except Exception:
+                pass
+        status, v, basis = decide(wd, en, ja_l, m["year"])
+        st = {"adopted": "adopted", "candidate": "candidate", "none": "no_data"}[status]
+        yy, mm, d2 = v if v else (m["year"], "", "")
+        log_rows.append([m["horse_id"], m["name"], st, yy, mm or "", d2 or "", url, today, f"{basis}（Wikidata 一括照会）" if basis else "一括照会で突き合わせたが採用基準を満たさず"])
+        if status == "adopted":
+            man_rows.append([m["horse_id"], m["name"], yy, mm or "", d2 or "", url, f"{basis}（Wikidata 一括照会）"])
+        print(f"{m['horse_id']} {m['name']} {m['year']} -> {st} {v or ''} {basis}", flush=True)
+    if a.apply:
+        upsert_log(log_p, log_rows)
+        new = not man_p.exists()
+        with open(man_p, "a", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            if new:
+                w.writerow(MANUAL_COLUMNS)
+            w.writerows(man_rows)
+        print("反映:", len(log_rows), "ログ /", len(man_rows), "採用")
+
+
 def run(a) -> None:
+    if a.wikidata_bulk:
+        return run_bulk(a)
     d = Path(a.dir)
     log_p, man_p = d / "birth_search_log.csv", d / "birth_manual.csv"
     done = {r["horse_id"] for r in csv.DictReader(open(log_p, encoding="utf-8"))} if log_p.exists() else set()
@@ -200,6 +302,7 @@ def run(a) -> None:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--zone", help="zone_review.csv（--all-year-only のときは不要）")
+    ap.add_argument("--wikidata-bulk", action="store_true", help="Wikidata の日付つきの馬を一括で取り、年のみの祖先と馬名・生年で突き合わせる")
     ap.add_argument("--all-year-only", action="store_true", help="ゾーンに関係なく、年のみの全祖先を表の順に調べる")
     ap.add_argument("--min-year", type=int, default=1900, help="--all-year-only で調べる最小の生年")
     ap.add_argument("--ancestors", required=True, help="ancestor_birthdays.csv（precision 列を持つ統合テーブル）")
@@ -210,8 +313,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--sleep", type=float, default=1.0)
     ap.add_argument("--apply", action="store_true")
     a = ap.parse_args(argv)
-    if not a.all_year_only and not a.zone:
-        ap.error("--zone か --all-year-only のどちらかが必要です")
+    if not a.all_year_only and not a.zone and not a.wikidata_bulk:
+        ap.error("--zone / --all-year-only / --wikidata-bulk のいずれかが必要です")
     run(a)
 
 

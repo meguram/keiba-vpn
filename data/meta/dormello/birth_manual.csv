@@ -242,3 +242,37 @@ horse_id,name,birth_year,birth_month,birth_day,source_url,note
 000a0002f7,Shecky Greene,1970,1,30,https://www.wikidata.org/wiki/Q102241092 ; https://sporthorse-data.com/pedigree/shecky-greene ; https://alchetron.com/Shecky-Greene,Wikidata（サブプランで取得）・SporthorseData・Alchetron・生産記録の投稿が 1970-01-30 で一致
 000a0104d9,Hussonet,1991,1,29,https://www.wikidata.org/wiki/Q107002560 ; https://sporthorse-data.com/pedigree/hussonet,Wikidata と SporthorseData が 1991-01-29 で一致
 000a001993,Electioneer,1904,4,20,https://www.wikidata.org/wiki/Q110594588 ; https://en.wikipedia.org/wiki/Electioneer,"Wikipedia 本文 'foaled April 20, 1904' と Wikidata が一致（1904 年生まれの米国馬）"
+000a001150,Bay Ronald,1893,5,3,https://www.wikidata.org/wiki/Q4874084 ; https://en.wikipedia.org/wiki/Bay_Ronald,英語版 Wikipedia 冒頭文
+000a00171c,Disguise,1897,5,10,https://en.wikipedia.org/wiki/Disguise_%28horse%29,英語版 Wikipedia 冒頭文
+000a000434,ガーサント,1949,4,5,https://www.wikidata.org/wiki/Q11296502,Wikidata(参照付き)（Wikidata 一括照会）
+000a0012a4,Herold,1917,5,5,https://www.wikidata.org/wiki/Q1433915,Wikidata(参照付き)（Wikidata 一括照会）
+000a000e4d,Worden,1949,3,7,https://www.wikidata.org/wiki/Q96415515,Wikidata(参照付き)（Wikidata 一括照会）
+000a00fb8e,Harlan (米),1989,3,2,https://www.wikidata.org/wiki/Q107552028,Wikidata(参照付き)（Wikidata 一括照会）
+000a01124c,Posse,2000,2,11,https://www.wikidata.org/wiki/Q11339171,Wikidata(参照付き)（Wikidata 一括照会）
+000a0022a2,Our Emblem,1991,3,7,https://www.wikidata.org/wiki/Q17361617,Wikidata(参照付き)（Wikidata 一括照会）
+000a0003ff,ダイアトム,1962,6,13,https://www.wikidata.org/wiki/Q5272127,Wikidata(参照付き)（Wikidata 一括照会）
+000a000937,ボストニアン,1950,5,13,https://www.wikidata.org/wiki/Q11338612,Wikidata(参照付き)（Wikidata 一括照会）
+000a000234,ムーティエMoutiers(仏),1958,3,16,https://www.wikidata.org/wiki/Q11343230,Wikidata(参照付き)（Wikidata 一括照会）
+000a0130d0,ザファクター,2008,3,15,https://www.wikidata.org/wiki/Q55972474,Wikidata(参照付き)（Wikidata 一括照会）
+000a0122b0,Acclamation,1999,4,26,https://www.wikidata.org/wiki/Q131630757,Wikidata(参照付き)（Wikidata 一括照会）
+000a000b10,ダンシングキャップ,1968,2,5,https://www.wikidata.org/wiki/Q11317465,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008d8,クリノハナ,1949,5,18,https://www.wikidata.org/wiki/Q11299394,Wikidata(参照付き)（Wikidata 一括照会）
+000a016336,Foxhall,1878,4,2,https://www.wikidata.org/wiki/Q5477158,Wikidata(参照付き)（Wikidata 一括照会）
+000a001d4b,Botafogo,1914,11,7,https://www.wikidata.org/wiki/Q8251165,Wikidata(参照付き)（Wikidata 一括照会）
+000a00091b,ヒロサクラ,1940,3,9,https://www.wikidata.org/wiki/Q17361614,Wikidata(参照付き)（Wikidata 一括照会）
+000a010753,Yes It's True,1996,3,31,https://www.wikidata.org/wiki/Q64780159,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008ad,マルタケ,1936,5,26,https://www.wikidata.org/wiki/Q11341318,Wikidata(参照付き)（Wikidata 一括照会）
+000a000872,コイワヰ,1908,5,1,https://www.wikidata.org/wiki/Q11301835,Wikidata(参照付き)（Wikidata 一括照会）
+000a0108d0,Officer,1999,2,14,https://www.wikidata.org/wiki/Q11292216,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008c7,クモノハナ,1947,3,15,https://www.wikidata.org/wiki/Q11298823,Wikidata(参照付き)（Wikidata 一括照会）
+000a000169,ハンセル,1988,3,12,https://www.wikidata.org/wiki/Q5651011,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008ab,シーマー,1944,3,22,https://www.wikidata.org/wiki/Q11308902,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008b5,カブトヤマ,1930,3,5,https://www.wikidata.org/wiki/Q11294629,Wikidata(参照付き)（Wikidata 一括照会）
+000a000d53,シェリフズスター,1985,4,27,https://www.wikidata.org/wiki/Q11306984,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008a2,ハクシヨウ,1924,5,8,https://www.wikidata.org/wiki/Q11326285,Wikidata(参照付き)（Wikidata 一括照会）
+000a00091e,ミハルオー,1945,4,30,https://www.wikidata.org/wiki/Q11342486,Wikidata(参照付き)（Wikidata 一括照会）
+000a000d96,ミシックトライブMythic Tribe(米),1996,2,16,https://www.wikidata.org/wiki/Q11341992,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008ed,ミツハタ,1948,4,20,https://www.wikidata.org/wiki/Q11342279,Wikidata(参照付き)（Wikidata 一括照会）
+000a000bea,カーネルシンボリ,1971,2,22,https://www.wikidata.org/wiki/Q11295685,Wikidata(参照付き)（Wikidata 一括照会）
+000a000aa7,ヒカルタカイ,1964,4,9,https://www.wikidata.org/wiki/Q11329953,Wikidata(参照付き)（Wikidata 一括照会）
+000a000a40,ハクズイコウ,1961,3,19,https://www.wikidata.org/wiki/Q24877159,Wikidata(参照付き)（Wikidata 一括照会）
