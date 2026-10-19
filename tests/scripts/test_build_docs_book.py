@@ -23,7 +23,9 @@ def test_every_html_under_docs_belongs_to_exactly_one_chapter():
     assert len(paths) == len(set(paths)), "同じファイルが 2 回載っている"
     assert not list(B.MODELING_DIR.glob("*.html")), "modeling/ 直下には HTML を置かない（章は chapters/、本は docs/html/book.html）"
     files = B.all_source_files()
-    assert files == set(paths), f"本に載っていない: {sorted(str(p) for p in files - set(paths))} / ファイルが無い: {sorted(str(p) for p in set(paths) - files)}"
+    html_paths = {p for p in paths if p.suffix.lower() == ".html"}   # 運用メモの .md は本に載せてもよい（HTML 以外は必須ではない）
+    assert files == html_paths, f"本に載っていない: {sorted(str(p) for p in files - html_paths)} / ファイルが無い: {sorted(str(p) for p in html_paths - files)}"
+    assert all(p.exists() for p in paths), "章の元ファイル（.md を含む）が無い"
 
 
 def test_related_chapters_exist():

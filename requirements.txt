@@ -61,3 +61,4 @@ google-cloud-tasks>=2.0.0
 
 # BigQuery（GCPコストモニタリング。Cloud Billing課金エクスポートの集計に使用）
 google-cloud-bigquery>=3.0.0
+markdown>=3.4  # docs の本の生成（運用メモの .md を HTML にする）

@@ -112,6 +112,13 @@ PARTS: list[Part] = [
         C("cron_schedule", "cron の登録内容を役割ごとにグループ分けしたもの（時刻は JST）。ホスト実測の稼働状況と、確認済みの問題点。", "運用", src="html/operations/cron_schedule.html",
           see=[("data_flow_schedule", "データごとの流れ"), ("raceday_prediction_workflow", "開催日の予測までの流れ")]),
         C("scraping_sla", "運用 SLA（品質保証基準）と今後の目標（レース前の AI 予測）に向けた要件・現状ギャップ。スクレイピング自動化と予測の処理の流れ。", "運用", src="html/operations/scraping_sla.html"),
+        C("stg_frontend_prod_build", "stg（ホスト）の画面配信を next dev から本番ビルド（next build + next start）にする運用。無停止の切替、ホストの 9p が遅い問題への対処（/tmp の作業コピーでビルド）、負荷ガード、反映手順とロールバック。", "運用", src="operations/stg_frontend_prod_build.md"),
+        C("prediction_results", "予測成績（予測結果の集計）の運用。日次の集計（暫定→確定）、指標の定義（◎○★・仮想購入）、自動実行の契機と環境変数、API、有効化とロールバック。", "運用", src="operations/prediction_results.md",
+          see=[("prediction_backfill", "過去のレースの予測の算出")]),
+        C("prediction_backfill", "先週までのレースで予測が無いものを、推論経路で後から算出して画面に出す仕組み（バックフィル）。API の優先順位、算出の手順、as-of の確認結果。", "運用", src="operations/prediction_backfill.md",
+          see=[("prediction_results", "予測成績の集計")]),
+        C("megu_v3a_rollout", "めぐ指数 v3a の本番反映の手順書（DB・GCS・日次 cron・退避とロールバック）。", "運用", src="operations/megu_v3a_rollout.md",
+          see=[("megu_index_v3a", "めぐ指数 v3a の章")]),
         C("local_dataset_endpoints", "src/api/app.py のエンドポイントのうち、ローカルのデータセットを参照するものの一覧。", "参照", src="html/operations/local_dataset_endpoints.html"),
     ]),
     Part("モデリングの方針と分割", "モデルをどう作るかの考え方と、全体の設計、データの分割。", [
@@ -184,13 +191,15 @@ PARTS: list[Part] = [
           [("race_volatility", "荒れやすいレースの分析（tp-30）"), ("training_pipeline_decisions", "決定ログ")]),
         C("race_volatility", "荒れやすいレースの分析（tp-30）。荒れの事後指標、荒れやすい条件・コース、事前予測（オッズなし/あり）、予想の特徴量・温度調整への寄与、3連複の買い目の幅（フォーメーション・流し・点数）への寄与。", "結果",
           [("course_aptitude_groups", "コース適性（tp-29）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("megu_index_v3a", "めぐ指数（ユーザー独自のレーティング指数。1点=0.1秒）の改善と本番反映（2026-10-19）。旧版の問題（水準の段差・基準外・補正の過大）、改善の工程と合格基準 10 項目、DB・GCS・日次 cron への反映、使い方（成長曲線・特徴量・想定めぐ指数）、限界。", "結果",
+          [("research_overview", "調査の全体像"), ("feature_investigation_catalog", "特徴量調査の総覧"), ("adopted_features_v3", "v3 の特徴量"), ("megu_v3a_rollout", "本番反映の手順書")]),
         C("feature_serving_low_memory", "当日の特徴量を小さなメモリで作る設計。出走馬だけで計算できる理由、サービング用バンドル、検証、見つかった不具合。", "設計",
           [("feature_strategy_tp03_tp04", "特徴量の定義はこちら")]),
     ]),
     Part("学習パイプラインと実験結果", "tp-00〜tp-08 以降の確定事項、チューニング工程、実験結果。", [
         C("research_overview", "特徴量・モデリング・馬券の調査を、結果と状態つきで 1 か所にまとめた一覧。現在地、調査の一覧（採用・不採用・保留）、これからの調査、本書内の食い違い。調査の全体像はここから。", "結果",
-          [("training_pipeline_decisions", "各調査の数値と根拠（§N）"), ("adopted_features_v3", "v3 の特徴量"), ("feature_investigation_catalog", "特徴量調査の総覧")], status="snapshot",
-          note="2026-10-17 時点（最終モデルは v3）。現行は v4（test 2025 勝率 0.20740）で、特徴量の採否の総覧は『特徴量調査の総覧』、数値の正は決定ログ §33・§34。",
+          [("training_pipeline_decisions", "各調査の数値と根拠（§N）"), ("adopted_features_v3", "v3 の特徴量"), ("feature_investigation_catalog", "特徴量調査の総覧"), ("megu_index_v3a", "めぐ指数 v3a")], status="snapshot",
+          note="調査の一覧は 2026-10-17 時点（最終モデルは v3）。『1. 現在地』は 2026-10-19 に更新済み（現行は v4、test 2025 勝率 0.20740）。特徴量の採否の総覧は『特徴量調査の総覧』、めぐ指数は『めぐ指数 v3a』、数値の正は決定ログ §33・§34。",
           now=[("feature_investigation_catalog", "特徴量調査の総覧"), ("training_pipeline_decisions", "v4 は §33・§34")]),
         C("feature_investigation_catalog", "これまでの特徴量・前段モデル・モデル構造の調査を、概要・結果（勝率 LogLoss の差）・採否・根拠の節つきで網羅した総覧。現行 v4（1,135 列）の構成、枠順×コースの検証、データ・実装の問題、今後の調査対象の一覧。特徴量の採否はここから。", "結果",
           [("adopted_features_v3", "v3 の 301 列のグループ別一覧"), ("research_overview", "調査の全体像"), ("training_pipeline_decisions", "数値の正（§N）")]),
@@ -265,6 +274,16 @@ _TAG = re.compile(r"<[^<>]*>")
 def fix_curly_quotes(s: str) -> str:
     """タグの中の全角の引用符（class=”x” など）を半角に直す（旧ページの生成時の不具合）。"""
     return _TAG.sub(lambda m: m.group(0).replace("“", '"').replace("”", '"'), s)
+
+
+def read_chapter_source(path: Path) -> str:
+    """章の元ファイルを HTML として返す。運用メモなどの Markdown（.md）は、表とコードブロックを HTML にして <article> で包む。"""
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() != ".md":
+        return text
+    import markdown  # 本の生成時だけ使う（requirements.txt）
+
+    return f'<article class="html-body">{markdown.markdown(text, extensions=["tables", "fenced_code"])}</article>'
 
 
 def extract(raw: str) -> tuple[str, str, str]:
@@ -648,7 +667,7 @@ def build(out: Path = DEFAULT_OUT) -> tuple[str, dict]:
     css_groups: dict[str, str] = {}
     used: dict[str, set[str]] = {}
     for ch in chapters:
-        raw = ch.path.read_text(encoding="utf-8")
+        raw = read_chapter_source(ch.path)
         title, css, body = extract(raw)
         blurb = ch.blurb or derive_blurb(body, skip_meta=(ch.kind == "決定"))
         script = extract_scripts(fix_curly_quotes(raw)) if ch.keep_scripts else ""
