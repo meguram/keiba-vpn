@@ -56,7 +56,8 @@ def _load_all_groups(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
 # ───────────────────────── 群の作成
 def cmd_groups(a) -> None:
     runs = fs.load_runs(te.TABLES, list(range(2020, 2026)))
-    megu = tg.load_megu(MEGU_ROOT, list(range(2020, 2026)))
+    keep_low = os.environ.get("TP42_KEEP_LOW") == "1"                    # 低信頼フラグの行も使う（先読みの有無と被覆率の影響を分けて見るため）
+    megu = tg.load_megu(MEGU_ROOT, list(range(2020, 2026)), spec={"low_col": "__none__"} if keep_low else None)
     d = rl.prepare(runs, megu)
     _log(f"走 {len(d):,} 行 / 指数あり {int(d['a'].notna().sum()):,} 行 / megu: {megu.attrs['megu'].get('dir')} {megu.attrs['megu'].get('version')}")
     gs = rl.build_all(d, LAG_DAYS)
@@ -74,7 +75,7 @@ def cmd_groups(a) -> None:
         by = {int(y): float(t.loc[yr == y, cols].notna().mean().mean()) for y in (2021, 2022, 2023, 2024, 2025)}
         cov[n] = {"cols": len(cols), "columns": cols, "nonnull_rate_by_year": by}
         _log(f"{n}: {len(cols)} 列 被覆 {by}")
-    te._jsave(OUT / "consts.json", {"megu": megu.attrs["megu"], "variant": VARIANT, "lag_days": LAG_DAYS})
+    te._jsave(OUT / "consts.json", {"megu": megu.attrs["megu"], "variant": VARIANT, "lag_days": LAG_DAYS, "keep_low": keep_low})
     te._jsave(OUT / "coverage.json", cov)
 
 
