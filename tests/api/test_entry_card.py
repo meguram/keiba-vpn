@@ -7,6 +7,12 @@ import pytest
 from src.api import entry_card as E
 
 
+
+@pytest.fixture(autouse=True)
+def _legacy_growth_axis(monkeypatch):
+    # 既定の軸は megu_robust。旧列(megu_index)だけの検証データを使うテストは従来の軸を指定する
+    monkeypatch.setenv("KEIBA_GROWTH_AXIS", "megu")
+
 @pytest.fixture(autouse=True)
 def _fresh_cache():
     E.clear_cache()

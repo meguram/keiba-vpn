@@ -1,7 +1,14 @@
 import pandas as pd
+import pytest
 
 from src.pipeline.inference import horse_growth as hg
 
+
+
+@pytest.fixture(autouse=True)
+def _legacy_growth_axis(monkeypatch):
+    # 既定の軸は megu_robust。旧列(megu_index)だけの検証データを使うテストは従来の軸を指定する
+    monkeypatch.setenv("KEIBA_GROWTH_AXIS", "megu")
 
 def _runs():
     return [

@@ -50,7 +50,7 @@ AXES: dict[str, Axis] = {
         conf_col="low_confidence",
     ),
 }
-DEFAULT_AXIS = "megu"
+DEFAULT_AXIS = "megu_robust"
 
 
 def active_axis() -> Axis:
