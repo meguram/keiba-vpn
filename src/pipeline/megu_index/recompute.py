@@ -39,12 +39,12 @@ def parse_years(spec: str) -> list[int]:
     return [int(x) for x in spec.split(",") if x]
 
 
-def recompute_year(year: int, params: dict[str, float], df_par: pd.DataFrame, out_dir: Path) -> dict:
+def recompute_year(year: int, params: dict[str, float], df_par: pd.DataFrame, out_dir: Path, v3a_model=None) -> dict:
     df_year = _load_result_flat(year)
     if df_year.empty:
         return {"year": year, "rows": 0, "skipped": "no_flat"}
     df_flat = merge_cushion_tsi(df_year.copy(), _load_cushion(year), params)
-    df_result = compute_for_dataframe(df_flat, params, df_par, df_hist=None, df_ref=df_year)
+    df_result = compute_for_dataframe(df_flat, params, df_par, df_hist=None, df_ref=df_year, v3a_model=v3a_model)
     df_save = frame_for_parquet(df_result, df_year)
     info = _save_megu_parquet_backup(df_save, year, out_dir=out_dir, replace=True)
     return {"year": year, "rows": len(df_save), "path": info["local_path"],
@@ -57,7 +57,13 @@ def main() -> None:
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--years", default="2020-2026")
     ap.add_argument("--model-version", default=MODEL_VERSION)
+    ap.add_argument("--v3a-model-dir", default="", help="改善版(v3a)のモデル（par.csv など）のディレクトリ。指定すると v3a の列も出す")
     args = ap.parse_args()
+    v3a_model = None
+    if args.v3a_model_dir:
+        from src.pipeline.megu_index.v3a import V3AModel
+
+        v3a_model = V3AModel.load(Path(args.v3a_model_dir))
 
     out_dir = Path(args.out_dir)
     from src.db.session import get_session, init_engine
@@ -70,7 +76,7 @@ def main() -> None:
         raise SystemExit("係数または基準タイムが DB に無い")
     for yr in parse_years(args.years):
         logger.info("再計算: %d", yr)
-        logger.info("結果: %s", recompute_year(yr, params, df_par, out_dir))
+        logger.info("結果: %s", recompute_year(yr, params, df_par, out_dir, v3a_model=v3a_model))
 
 
 if __name__ == "__main__":

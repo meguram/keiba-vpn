@@ -56,6 +56,7 @@ from src.pipeline.megu_index.class_bucket import par_class_bucket
 from src.pipeline.megu_index.common import adjusted_time_to_megu
 from src.pipeline.megu_index.field_quality import attach_fq_and_delta_level
 from src.pipeline.megu_index.par_time_resolve import attach_par_time_with_fallback
+from src.pipeline.megu_index.v3a import V3A_COLUMNS
 from src.pipeline.megu_index.robust import MEGU_VERSION, ROBUST_COLUMNS, add_robust_columns, add_w55_columns
 
 
@@ -442,9 +443,13 @@ def compute_for_dataframe(
     df_par: pd.DataFrame,
     df_hist: Optional[pd.DataFrame] = None,
     df_ref: Optional[pd.DataFrame] = None,
+    v3a_model=None,
+    return_full: bool = False,
 ) -> pd.DataFrame:
     """
     race_result_flat DataFrame → めぐ指数 DataFrame を返す。
+
+    v3a_model を渡すと、改善版（v3a）の列を足す。return_full=True は列を絞らず途中の全列を返す（v3a の基準期間づくり用）。
 
     Parameters
     ----------
@@ -602,6 +607,12 @@ def compute_for_dataframe(
     )
     # 斤量を 55kg に一般化した指数（成長曲線用）
     df = add_w55_columns(df, beta_weight=beta_weight)
+    if v3a_model is not None:
+        from src.pipeline.megu_index.v3a import V3A_COLUMNS, apply_model
+
+        df = apply_model(df, v3a_model, beta_pace=beta_pace)
+    if return_full:
+        return df
 
     result_cols = [
         "race_id", "horse_id", "finish_time_sec", "par_time_final",
@@ -610,6 +621,8 @@ def compute_for_dataframe(
         "computation_status", "front_split_sec", "split_point_m", "tsi_raw",
         *ROBUST_COLUMNS, "par_sample_count", "par_match_level",
     ]
+    if v3a_model is not None:
+        result_cols += V3A_COLUMNS
     return df[[c for c in result_cols if c in df.columns]].copy()
 
 
@@ -681,6 +694,7 @@ _MEGU_PARQUET_COLS = [
     "finish_time_sec", "par_time_final", "corrected_time_sec", "adjusted_time_sec",
     "delta_pace_sec", "delta_track_sec", "delta_weight_sec", "delta_level_sec",
     *ROBUST_COLUMNS, "par_sample_count", "par_match_level",
+    *V3A_COLUMNS,
 ]
 _GCS_MEGU_BLOB_TPL = "chuou/data/preprocessed/netkeiba/pc/megu_index/{year}/megu_index_flat.parquet"
 
