@@ -34,7 +34,7 @@ KEY = ["race_id", "horse_id"]
 OUT = te.V / "tp42"
 te.OUT = OUT                                   # tp39_eval の段階評価をそのまま使い、出力先だけ替える
 GROUP_NAMES = ["RL_A", "RL_A2", "RL_B", "RL_C", "RL_ALL"]
-REL_COLS = re.compile(r"(_rz|_rrank|_rgap)$")  # 既存のレース内相対化列（14 列 × 3）
+REL_COLS = re.compile(r"(^fm_|(_rank|_rk|_gap|_gap12|_own_z|_n_better)$)")  # 既存のレース内相対化列（V4 では *_rank / *_gap / メンバー構成 fm_*。*_rz 等の名前は V4 の表には無い）
 
 
 def _log(msg: str) -> None:
@@ -209,6 +209,8 @@ def cmd_subst(a) -> None:
     res["removed_cols"] = len(rel)
     lv0, o0 = te._run_subset("V4-rel", X1, meta, folds, lp, [2022, 2023], [0])
     lv1, o1 = te._run_subset("V4-rel+RL_B", pd.concat([X1, _load_all_groups(df, ["RL_B"])], axis=1), meta, folds, lp, [2022, 2023], [0])
+    if not len(rel):
+        raise RuntimeError("外す列が 0 件（正規表現が V4 の列名に合っていない）")
     base_o = pd.read_parquet(FR / "stage1" / "base.parquet")
     res["V4-rel"] = {"levels": lv0, "vs_V4": t._cmp(base_o, o0, fin_map, "V4-rel")}
     res["V4-rel+RL_B"] = {"levels": lv1, "vs_V4": t._cmp(base_o, o1, fin_map, "V4-rel+RL_B"), "vs_V4-rel": t._cmp(o0, o1, fin_map, "RL_B|-rel")}
