@@ -191,6 +191,8 @@ PARTS: list[Part] = [
           [("lap_groups_and_trainer_stats", "追い切りのラップ種別（tp-35）"), ("training_pipeline_decisions", "決定ログ")]),
         C("similar_horses_pairs", "似た馬は同じレースで着順が近くなるか（tp-41）。力・適性・位置取り・血統・陣営の類似度ごとの『ともに上位に来る』観測/期待、調整後の回帰、組合せ券（3連複・馬連）の確率への補正、買い目の選び方、特徴量の増分。", "結果",
           [("exotic_bet_probabilities", "馬連・ワイド・3連複の確率"), ("training_pipeline_decisions", "決定ログ")]),
+        C("workout_remaining_ideas", "追い切りの残りの余地（tp-37）。調教師ごとの時計の標準化・時計の出し方のクラスタ、追い切り×条件の交互作用、本数・間隔・前走比、追い切り騎手・短評、記者コメント、V4 の予測と追い切りの条件を組み合わせた馬券（レース単位・reality check・2026 年の 1 回評価）。", "結果",
+          [("lap_groups_and_trainer_stats", "ラップ種別と調教師別の成績（tp-35）"), ("training_pipeline_decisions", "決定ログ")]),
         C("rest_and_interval", "休養明け・レース間隔の分析（tp-34）。間隔の帯・叩き何戦目別の好走率と V4 に対する残差、馬・調教師ごとの再現性、特徴量 8 群の増分、見かけの大きな改善が浮動小数点の端数のリークだった経緯と修正。", "結果",
           [("race_volatility", "荒れやすいレースの分析（tp-30）"), ("training_pipeline_decisions", "決定ログ")]),
         C("race_volatility", "荒れやすいレースの分析（tp-30）。荒れの事後指標、荒れやすい条件・コース、事前予測（オッズなし/あり）、予想の特徴量・温度調整への寄与、3連複の買い目の幅（フォーメーション・流し・点数）への寄与。", "結果",
