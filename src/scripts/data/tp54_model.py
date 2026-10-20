@@ -30,6 +30,9 @@ except ImportError:      # ホストは repo が root 所有で新規ファイ�
 PARAMS = dict(objective="regression", learning_rate=0.03, num_leaves=31, min_child_samples=200, feature_fraction=0.8, bagging_fraction=0.8, bagging_freq=1,
               lambda_l2=10.0, verbose=-1, num_threads=int(os.environ.get("TP54_THREADS", "3")), seed=0)
 N_ROUNDS = int(os.environ.get("TP54_ROUNDS", "500"))
+# 『追走』に関わる量だけ（要求＋位置取り・前で運んだときの癖）。年齢・馬体重・休養・距離の変化・前走の上がりなど、一般の調子の変化は含めない
+CORE = ["pf_early", "pf_rank_norm", "gate_norm", "field_size", "z_hat", "pf_front", "pf_stalker", "pf_pressure", "pf_known_frac", "turf", "distance_km", "heavy", "venue_code",
+        "demand_idx", "demand_idx_z", "w_adj", "w_dev", "w_dev_front", "w_dev_rear", "w_early", "w_n", "w_nfront", "w_nrear", "prev_early", "early_shift", "same_style_run"]
 DEMAND_ONLY = ["pf_early", "pf_rank_norm", "gate_norm", "field_size", "z_hat", "pf_front", "pf_stalker", "pf_pressure", "pf_known_frac", "turf", "distance_km", "heavy",
                "venue_code", "demand_idx", "demand_idx_z"]
 
@@ -41,6 +44,27 @@ def load() -> pd.DataFrame:
     for c in ("z_hat", "pf_front", "pf_stalker", "pf_pressure", "pf_known", "venue", "track_condition", "horse_number", "Y", "pf_early", "pf_rank"):
         h[f"prevc_{c}"] = g[c].shift(1)
     return h
+
+
+def _baseline_design(h: pd.DataFrame) -> np.ndarray:
+    """その馬の過去の上がりの力だけで今回の上がり偏差を説明するベースライン（平均への回帰を含む）。"""
+    wa, wd = h["w_adj"].astype(float), h["w_dev"].astype(float)
+    return np.column_stack([np.ones(len(h)), wa.fillna(0), wa.isna().astype(float), wd.fillna(0), h["w_n"].astype(float).fillna(0)])
+
+
+def baseline_fit(h: pd.DataFrame, train: pd.Series) -> np.ndarray:
+    t = h["act_l3f_dev"].clip(-td2.Y_CLIP, td2.Y_CLIP)
+    m = train & t.notna()
+    coef, *_ = np.linalg.lstsq(_baseline_design(h[m]), t[m].to_numpy(), rcond=None)
+    return coef
+
+
+def make_target(h: pd.DataFrame, coef: np.ndarray) -> tuple[pd.Series, pd.Series]:
+    """返り値: (T=実測の上がり偏差を±4 秒に丸めたもの, Y2=T − ベースライン)。Y2 は『過去の力では説明できない分』＝要求（位置取り・ペース・コース）と文脈の効果＋雑音。
+    ベースラインを引くのは、過去の上がりの力が『特徴量でもあり、目的変数の一部でもある』ことによる見かけの相関（平均への回帰）を除くため。"""
+    t = h["act_l3f_dev"].clip(-td2.Y_CLIP, td2.Y_CLIP)
+    b = pd.Series(_baseline_design(h) @ coef, index=h.index)
+    return t, (t - b).clip(-td2.Y_CLIP, td2.Y_CLIP)
 
 
 def fit(X: pd.DataFrame, y: np.ndarray, rounds: int = N_ROUNDS, valid: tuple | None = None):
@@ -99,45 +123,58 @@ def prev_swap(h: pd.DataFrame, X: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
 def run_eval() -> dict:
     h = load()
     X = td2.make_features(h)
-    y = h["Y"].clip(-td2.Y_CLIP, td2.Y_CLIP)
     ok = h["pf_early"].notna()
-    res: dict = {"n_rows": int(len(h)), "n_with_Y": int(h["Y"].notna().sum()), "by_year": {}}
+    res: dict = {"n_rows": int(len(h)), "n_with_T": int(h["act_l3f_dev"].notna().sum()), "by_year": {}}
     pairs_all = []
     for yr in (2023, 2024, 2025):
+        coef = baseline_fit(h, ok & (h["year"] < yr))
+        T, y = make_target(h, coef)
+        h["y2"] = y
+        h["prev_y2"] = h.groupby("horse_id", sort=False)["y2"].shift(1)
         tr = ok & y.notna() & (h["year"] < yr)
         te = ok & y.notna() & (h["year"] == yr)
         mB = fit(X[tr], y[tr].to_numpy())
         mA = fit(X.loc[tr, DEMAND_ONLY], y[tr].to_numpy())
-        pB, pA = mB.predict(X[te]), mA.predict(X.loc[te, DEMAND_ONLY])
-        yt = h.loc[te, "Y"]
+        mC = fit(X.loc[tr, CORE], y[tr].to_numpy())
+        pB, pA, pC = mB.predict(X[te]), mA.predict(X.loc[te, DEMAND_ONLY]), mC.predict(X.loc[te, CORE])
+        yt = y[te]                 # ベースラインを引いた実測 Y2（秒）
         yc = y[te]
+        bte = (T - y)[te]          # ベースライン（過去の力による予測）
+        tte = T[te]
         row = {
             "n_test": int(te.sum()),
-            "v2_full": {"corr": corr(pB, yc), "corr_raw": corr(pB, yt), "spearman": scorr(pB, yc), "r2": 1 - float(np.mean((yc - pB) ** 2) / np.var(yc))},
+            "v2_full": {"corr": corr(pB, yc), "corr_on_T": corr(pB + bte, tte), "corr_baseline_on_T": corr(bte, tte), "spearman": scorr(pB, yc), "r2": 1 - float(np.mean((yc - pB) ** 2) / np.var(yc))},
+            "v2_core": {"corr": corr(pC, yc), "spearman": scorr(pC, yc), "r2": 1 - float(np.mean((yc - pC) ** 2) / np.var(yc)), "corr_on_T": corr(pC + bte, tte), "calibration_slope": float(np.polyfit(pC, yc, 1)[0]),
+                        "r2_on_T": 1 - float(np.mean((tte - bte - pC) ** 2) / np.var(tte))},
             "v2_demand_only": {"corr": corr(pA, yc), "spearman": scorr(pA, yc), "r2": 1 - float(np.mean((yc - pA) ** 2) / np.var(yc))},
-            "baseline_current_ease": {"corr_neg_ease": corr(-h.loc[te, "td_ease"], yc), "spearman": scorr(-h.loc[te, "td_ease"], yc)},
+            "baseline_current_ease": {"corr_neg_ease": corr(-h.loc[te, "td_ease"], yc), "spearman": scorr(-h.loc[te, "td_ease"], yc), "corr_neg_ease_on_T": corr(-h.loc[te, "td_ease"], tte)},
             "baseline_current_stamina": {"corr_stamina": corr(-h.loc[te, "td_stamina"], yc)},
             "baseline_position": {"corr_pf_early": corr(h.loc[te, "pf_early"], yc)},
             "calibration_slope": float(np.polyfit(pB, yc, 1)[0]),
+            "r2_on_T": {"baseline_ability_only": 1 - float(np.mean((tte - bte) ** 2) / np.var(tte)), "baseline_plus_v2": 1 - float(np.mean((tte - bte - pB) ** 2) / np.var(tte)),
+                        "baseline_plus_demand_only": 1 - float(np.mean((tte - bte - pA) ** 2) / np.var(tte))},
             "deciles_by_pred": decile_table(pd.Series(pB, index=yc.index), yt),
             "deciles_by_current_ease": decile_table(-h.loc[te, "td_ease"], yt),
+            "deciles_by_baseline_only": decile_table(bte, yt),
+            "deciles_by_core": decile_table(pd.Series(pC, index=yc.index), yt),
         }
         # 現行の ease_pct（絶対値）の目盛りの偏り
         row["current_ease_share_ge60"] = float((h.loc[te, "td_ease"] >= 60).mean())
         row["current_ease_share_lt30"] = float((h.loc[te, "td_ease"] < 30).mean())
         # 位置取り三分位 × ペース三分位での一致（予測と実測の平均 Y）
-        d = pd.DataFrame({"pred": pB, "Y": yt.to_numpy(), "pos": pd.qcut(h.loc[te, "pf_early"].rank(method="first"), 3, labels=["前", "中", "後"]).to_numpy(),
+        d = pd.DataFrame({"pred": pC, "Y": yt.to_numpy(), "pos": pd.qcut(h.loc[te, "pf_early"].rank(method="first"), 3, labels=["前", "中", "後"]).to_numpy(),
                           "pace": pd.cut(h.loc[te, "z_hat"], [-9, -0.3, 0.3, 9], labels=["速", "並", "遅"]).to_numpy()})
         grid = d.groupby(["pos", "pace"], observed=True).agg(pred=("pred", "mean"), actual=("Y", "mean"), n=("Y", "size")).round(3).reset_index()
         row["position_pace_grid"] = grid.to_dict("records")
         # (c) 前走比
-        pe_ok = te & h["prev_act_early_norm"].notna() & h["prevc_z_hat"].notna() & h["prevc_Y"].notna()
+        pe_ok = te & h["prev_act_early_norm"].notna() & h["prevc_z_hat"].notna() & h["prev_y2"].notna()
         xa, xb = prev_swap(h[pe_ok], X[pe_ok])
-        delta = mB.predict(xb) - mB.predict(xa)          # 正＝前走の条件のほうが重かった＝今回は楽
+        delta = mC.predict(xb[CORE]) - mC.predict(xa[CORE])          # 正＝前走の条件のほうが重かった＝今回は楽（追走に関わる量だけ）
+        delta_full = mB.predict(xb) - mB.predict(xa)
         sub = h[pe_ok]
         same = (np.abs(sub["pf_early"] - sub["prev_act_early_norm"]) < 0.15) & ((sub["act_early_norm"] - sub["prev_act_early_norm"]).abs() < 0.15)
-        improve = (sub["prevc_Y"] - sub["Y"]).to_numpy()  # 正＝今回のほうが終いに余裕
-        row["vs_prev"] = {"n": int(pe_ok.sum()), "n_same_pos": int(same.sum()), "corr_all": corr(delta, improve), "corr_same_pos": corr(delta[same.to_numpy()], improve[same.to_numpy()]),
+        improve = (sub["prev_y2"] - sub["y2"]).to_numpy()  # 正＝今回のほうが終いに余裕
+        row["vs_prev"] = {"n": int(pe_ok.sum()), "n_same_pos": int(same.sum()), "corr_all": corr(delta, improve), "corr_same_pos": corr(delta[same.to_numpy()], improve[same.to_numpy()]), "corr_same_pos_full": corr(delta_full[same.to_numpy()], improve[same.to_numpy()]),
                           "spearman_same_pos": scorr(delta[same.to_numpy()], improve[same.to_numpy()]),
                           "deciles_same_pos": decile_table(pd.Series(delta[same.to_numpy()]), pd.Series(improve[same.to_numpy()]), 5)}
         res["by_year"][str(yr)] = row
@@ -152,22 +189,25 @@ def run_eval() -> dict:
 def run_oof() -> None:
     h = load()
     X = td2.make_features(h)
-    y = h["Y"].clip(-td2.Y_CLIP, td2.Y_CLIP)
     ok = h["pf_early"].notna()
-    out = pd.DataFrame(index=h.index, columns=["drain", "demand", "delta_prev"], dtype=float)
+    out = pd.DataFrame(index=h.index, columns=["drain", "full", "demand", "delta_prev"], dtype=float)
     for yr in sorted(h["year"].unique()):
+        coef = baseline_fit(h, ok & (h["year"] != yr))
+        T, y = make_target(h, coef)
         tr = ok & y.notna() & (h["year"] != yr)
         te = ok & (h["year"] == yr)
         mB = fit(X[tr], y[tr].to_numpy())
         mA = fit(X.loc[tr, DEMAND_ONLY], y[tr].to_numpy())
-        out.loc[te, "drain"] = mB.predict(X[te])
+        mC = fit(X.loc[tr, CORE], y[tr].to_numpy())
+        out.loc[te, "drain"] = mC.predict(X.loc[te, CORE])
+        out.loc[te, "full"] = mB.predict(X[te])
         out.loc[te, "demand"] = mA.predict(X.loc[te, DEMAND_ONLY])
         pe_ok = te & h["prev_act_early_norm"].notna() & h["prevc_z_hat"].notna()
         xa, xb = prev_swap(h[pe_ok], X[pe_ok])
-        out.loc[pe_ok, "delta_prev"] = mB.predict(xb) - mB.predict(xa)
+        out.loc[pe_ok, "delta_prev"] = mC.predict(xb[CORE]) - mC.predict(xa[CORE])
         print("oof", yr, int(te.sum()), flush=True)
     q = np.nanquantile(out["drain"], np.linspace(0, 1, 101)).tolist()
-    g = pd.DataFrame({"race_id": h["race_id"], "horse_id": h["horse_id"], "EASE2_drain": out["drain"], "EASE2_demand": out["demand"],
+    g = pd.DataFrame({"race_id": h["race_id"], "horse_id": h["horse_id"], "EASE2_drain": out["drain"], "EASE2_demand": out["demand"], "EASE2_full": out["full"],
                       "EASE2_capacity": out["drain"] - out["demand"], "EASE2_pct": td2.to_ease_pct(out["drain"].fillna(np.nan).to_numpy(), q), "EASE2_vs_prev": out["delta_prev"]})
     g.loc[out["drain"].isna(), "EASE2_pct"] = np.nan
     (OUT / "groups").mkdir(parents=True, exist_ok=True)
@@ -179,17 +219,22 @@ def run_oof() -> None:
 def run_final() -> None:
     h = load()
     X = td2.make_features(h)
-    y = h["Y"].clip(-td2.Y_CLIP, td2.Y_CLIP)
-    ok = h["pf_early"].notna() & y.notna()
-    m = fit(X[ok], y[ok].to_numpy())
-    pred = m.predict(X[h["pf_early"].notna()])
+    base_ok = h["pf_early"].notna()
+    coef = baseline_fit(h, base_ok)
+    T, y = make_target(h, coef)
+    ok = base_ok & y.notna()
+    m = fit(X.loc[ok, CORE], y[ok].to_numpy())
+    mD = fit(X.loc[ok, DEMAND_ONLY], y[ok].to_numpy())
+    pred = m.predict(X.loc[h["pf_early"].notna(), CORE])
     q = np.quantile(pred, np.linspace(0, 1, 101)).tolist()
     d = Path(os.environ.get("TP54_CONFIG_DIR") or td2.CONFIG_DIR)
     d.mkdir(parents=True, exist_ok=True)
     m.save_model(str(d / "model.txt"))
-    meta = {"version": "tp54-1", "features": td2.FEATURES, "quantiles": q, "y_clip": td2.Y_CLIP, "trained_years": [int(h["year"].min()), int(h["year"].max())],
+    mD.save_model(str(d / "model_demand.txt"))
+    meta = {"version": "tp54-1", "features": CORE, "demand_features": DEMAND_ONLY, "quantiles": q, "y_clip": td2.Y_CLIP, "trained_years": [int(h["year"].min()), int(h["year"].max())],
             "n_train": int(ok.sum()), "params": {k: v for k, v in PARAMS.items() if k != "num_threads"}, "rounds": N_ROUNDS,
-            "note": "Y = 実測の上がり偏差 − 位置取りの効果を除いた過去の上がり偏差（as-of）。予測が大きい＝終いが落ちる（大変）"}
+            "baseline_coef": [float(c) for c in coef],
+            "note": "Y2 = 実測の上がり偏差（レース内の中央値との差、±4秒）− 過去の上がりの力によるベースライン。予測が大きい＝過去の力から見て終いが落ちる（大変）"}
     (d / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
     pe = OUT / "position_effect.json"
     if pe.exists():

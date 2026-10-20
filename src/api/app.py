@@ -6966,6 +6966,10 @@ async def get_race_predictions(race_id: str):
             from src.pipeline.inference.pace_coherence import attach_pace_coherence
 
             resp = attach_pace_coherence(resp, past, str(card.get("date") or ""), {**course, "track_condition": card.get("track_condition")})
+            # 追走難度 v2（想定位置取りを取るのに必要な通過ラップが、その馬にとって楽か大変か。KEIBA_TRACKING_V2=1 のときだけ。既定は何もしない）
+            from src.pipeline.models.tracking_difficulty_v2 import attach_tracking_v2_to_response
+
+            resp = attach_tracking_v2_to_response(resp, past, str(card.get("date") or ""), {**course, "track_condition": card.get("track_condition")}, card)
         except Exception as exc:  # noqa: BLE001
             logger.warning("位置取り予想の付与に失敗 %s: %s", race_id, exc)
             past, card = None, {}

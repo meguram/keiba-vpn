@@ -161,3 +161,63 @@ def test_pace_v2_inference_matches_training_design(monkeypatch):
     assert np.allclose(a, b, atol=1e-9)           # 学習時の特徴の作り方と、推論側の作り方が一致
     monkeypatch.delenv(pcoh.ENV_FLAG_V2, raising=False)
     assert pcoh.enabled_v2() is False             # 既定は現行のペース推定のまま
+
+
+RAW = "2025.06.29 函館 6 2歳新馬 芝1200 1:11.7 良 12頭 10番 2人 武豊 55.0 2-2 (35.7) 434(0) エスカレイト (1.0)"
+
+
+def _tiny_model(tmp_path):
+    import json
+
+    import lightgbm as lgb
+
+    rng = np.random.default_rng(0)
+    feats = td2.FEATURES
+    X = pd.DataFrame(rng.normal(size=(300, len(feats))), columns=feats)
+    y = X["demand_idx"] * 0.3 + rng.normal(scale=0.1, size=300)
+    b = lgb.train({"objective": "regression", "verbose": -1, "num_leaves": 4, "min_data_in_leaf": 10}, lgb.Dataset(X, y), num_boost_round=20)
+    b.save_model(str(tmp_path / "model.txt"))
+    b.save_model(str(tmp_path / "model_demand.txt"))
+    pred = b.predict(X)
+    (tmp_path / "meta.json").write_text(json.dumps({"version": "test", "features": feats, "demand_features": feats, "quantiles": np.quantile(pred, np.linspace(0, 1, 101)).tolist()}), encoding="utf-8")
+    (tmp_path / "position_effect.json").write_text(json.dumps({"features": ["const", "e", "e_dist", "e_turf"], "coef": [0.0, -0.8, -0.1, 0.0]}), encoding="utf-8")
+
+
+def _resp():
+    preds = [{"horse_number": i, "horse_id": f"h{i}", "position_forecast": {"early_pos_norm": i / 6, "rank": i + 1}} for i in range(6)]
+    return {"predictions": preds, "pace_forecast": {"level": "mid", "front_runner_count": 1, "stalker_count": 3, "early_pressure": 0.33, "field_size": 6, "known_horses": 6},
+            "venue": "函館", "surface": "芝", "distance": 1200, "track_condition": "良"}
+
+
+def test_attach_tracking_v2_flag_off_does_nothing(monkeypatch, tmp_path):
+    monkeypatch.delenv(td2.ENV_FLAG, raising=False)
+    r = _resp()
+    assert td2.attach_tracking_v2_to_response(r, {"entries": []}, "20261024") is r
+    assert "tracking_v2" not in r["predictions"][0]
+
+
+def test_attach_tracking_v2_adds_fields_when_enabled(monkeypatch, tmp_path):
+    _tiny_model(tmp_path)
+    monkeypatch.setenv(td2.ENV_FLAG, "1")
+    monkeypatch.setattr(td2, "CONFIG_DIR", tmp_path)
+    td2.load_model.cache_clear()
+    past = {"entries": [{"horse_id": f"h{i}", "past_races": [{"raw": RAW}]} for i in range(6)]}
+    out = td2.attach_tracking_v2_to_response(_resp(), past, "20261024")
+    td2.load_model.cache_clear()
+    for p in out["predictions"]:
+        t = p["tracking_v2"]
+        assert 0.0 <= t["ease_pct"] <= 100.0 and t["label"] and "drain_sec" in t and "demand_sec" in t
+    assert out["tracking_v2_meta"]["version"] == "test"
+
+
+def test_capacity_from_past_uses_only_runs_before_the_race_date():
+    import json
+
+    from src.pipeline.inference.pace_coherence import load_config
+
+    cfg = load_config()
+    pe = {"features": ["const", "e", "e_dist", "e_turf"], "coef": [0.0, -0.8, -0.1, 0.0]}
+    before = td2.capacity_from_past([{"raw": RAW}], "20260101", cfg, pe)
+    same_day = td2.capacity_from_past([{"raw": RAW}], "20250629", cfg, pe)           # 当日の走は使わない
+    assert before["w_n"] == 1.0 and abs(before["w_early"] - (1 / 11)) < 1e-9 and before["rest_days"] > 0
+    assert same_day["w_n"] == 0.0 and np.isnan(same_day["w_early"])
