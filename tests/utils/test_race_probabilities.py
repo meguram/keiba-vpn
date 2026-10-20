@@ -103,6 +103,56 @@ class TestRaceProbabilities(unittest.TestCase):
         assign_mece_marks(entries)
         self.assertTrue(all(isinstance(e["mark_type"], str) for e in entries))
 
+    # ---- レースの状況による切替（situational。既定はオフ）----
+    def _ents(self, rows):
+        return [{"horse_number": i + 1, "win_prob": w, "top2_prob": t2, "top3_prob": t3, **({"ev_win": ev} if ev is not None else {})}
+                for i, (w, t2, t3, ev) in enumerate(rows)]
+
+    def test_situation_dom_close_value_normal(self):
+        from src.utils.race_probabilities import race_situation
+
+        n = 10
+        dom = self._ents([(0.4, 0.6, 0.8, 1.0)] + [(0.0667, 0.15, 0.3, 0.8)] * (n - 1))
+        self.assertEqual(race_situation(dom), "dom")
+        close = self._ents([(0.2, 0.4, 0.6, 0.9), (0.19, 0.38, 0.55, 0.9)] + [(0.0762, 0.15, 0.3, 0.8)] * (n - 2))
+        self.assertEqual(race_situation(close), "close")
+        value = self._ents([(0.2, 0.4, 0.6, 0.9), (0.15, 0.35, 0.5, 1.4)] + [(0.0813, 0.15, 0.3, 0.8)] * (n - 2))
+        self.assertEqual(race_situation(value), "value")
+        normal = self._ents([(0.2, 0.4, 0.6, 0.9), (0.15, 0.35, 0.5, 0.95)] + [(0.0813, 0.15, 0.3, 0.8)] * (n - 2))
+        self.assertEqual(race_situation(normal), "normal")
+
+    def test_situation_without_odds_never_value(self):
+        from src.utils.race_probabilities import race_situation
+
+        es = self._ents([(0.2, 0.4, 0.6, None), (0.15, 0.35, 0.5, None)] + [(0.0813, 0.15, 0.3, None)] * 8)
+        self.assertEqual(race_situation(es), "normal")
+
+    def test_situational_value_moves_honmei_to_high_ev_horse(self):
+        n = 10
+        es = self._ents([(0.2, 0.4, 0.6, 0.9), (0.15, 0.35, 0.5, 1.4)] + [(0.0813, 0.15, 0.3, 0.8)] * (n - 2))
+        assign_mece_marks(es, situational=True)
+        types = {e["horse_number"]: e["mark_type"] for e in es}
+        self.assertEqual((types[2], types[1]), ("honmei", "pair"))
+        es2 = self._ents([(0.2, 0.4, 0.6, 0.9), (0.15, 0.35, 0.5, 1.4)] + [(0.0813, 0.15, 0.3, 0.8)] * (n - 2))
+        assign_mece_marks(es2)  # 既定はオフ: ◎は勝率最上位
+        self.assertEqual(es2[0]["mark_type"], "honmei")
+
+    def test_situational_close_picks_higher_ev_of_top2(self):
+        n = 10
+        es = self._ents([(0.2, 0.4, 0.6, 0.9), (0.19, 0.38, 0.55, 1.05)] + [(0.0762, 0.15, 0.3, 0.8)] * (n - 2))
+        assign_mece_marks(es, situational=True, cfg={"value_ev": 99.0})
+        self.assertEqual((es[1]["mark_type"], es[0]["mark_type"]), ("honmei", "pair"))
+
+    def test_situational_marks_counts_unchanged(self):
+        for seed in range(15):
+            es = self._race(14, seed)
+            for i, e in enumerate(es):
+                e["ev_win"] = 0.6 + (i * 7 % 11) / 10
+            assign_mece_marks(es, situational=True)
+            ts = [e["mark_type"] for e in es]
+            self.assertTrue(all(ts.count(k) <= 1 for k in ("honmei", "pair", "show_val", "star")))
+            self.assertLessEqual(ts.count("anchor"), 4)
+
     def test_qualifies_star_odds_band(self):
         self.assertTrue(
             qualifies_star_mark(

@@ -104,6 +104,18 @@ def qualifies_star_mark(entry: dict, base_prob: float) -> bool:
 # △（mark_type=anchor）の上限。頭数が少ないレースでは減らす（頭数の下限, 上限）。
 MAYBE_LIMITS: tuple[tuple[int, int], ...] = ((13, 4), (8, 3), (5, 2), (0, 1))
 
+# レースの状況の判定と、状況別の印の基準（situational=True のときだけ使う）。値は設計年（2022〜23 年）で決める。
+SITUATION_CFG: dict[str, float] = {
+    "dom_mult": 2.0,      # 突出型: 勝率最大が均等確率のこの倍以上
+    "dom_ratio": 1.6,     # 突出型: 勝率1位/2位がこの倍以上
+    "close_ratio": 1.15,  # 拮抗型: 勝率1位/2位がこの倍未満
+    "value_ev": 1.15,     # 荒れ型: 期待値が最大の馬のこの値以上の期待値
+    "value_top3": 0.25,   # 荒れ型: 期待値で選ぶ馬の複勝確率の下限
+    "value_min_win_mult": 0.8,  # 荒れ型の◎にする馬の勝率の下限（均等確率の倍）
+    "maybe_by_composite": 0.0,  # 1 なら △ を複勝確率ではなく合成点（複勝確率^0.55 × 複勝EV^0.45）の高い順に選ぶ
+}
+SITUATIONAL_DEFAULT = False
+
 
 def maybe_limit(n_runners: int) -> int:
     """頭数に応じた △ の最大頭数（13頭以上 4、8〜12頭 3、5〜7頭 2、4頭以下 1）。"""
@@ -113,7 +125,35 @@ def maybe_limit(n_runners: int) -> int:
     return 0
 
 
-def assign_mece_marks(entries: list[dict]) -> None:
+def _f(e: dict, key: str) -> float:
+    return float(e.get(key) or 0)
+
+
+def race_situation(entries: list[dict], cfg: dict[str, float] | None = None) -> str:
+    """レースの状況: dom（突出）/ value（期待値の高い別の馬がいる＝荒れ型）/ close（拮抗）/ normal。
+    オッズが無く期待値が出ないときは value にならない（dom / close / normal のみ）。"""
+    c = {**SITUATION_CFG, **(cfg or {})}
+    n = len(entries)
+    if n < 2:
+        return "normal"
+    base = 1.0 / n
+    by_win = sorted(entries, key=lambda x: _f(x, "win_prob"), reverse=True)
+    p1, p2 = _f(by_win[0], "win_prob"), _f(by_win[1], "win_prob")
+    if p1 >= base * c["dom_mult"] and p2 > 0 and p1 / p2 >= c["dom_ratio"]:
+        return "dom"
+    if p2 <= 0 and p1 > 0:
+        return "dom"
+    ev_cands = [e for e in entries if e.get("ev_win") and _f(e, "top3_prob") >= c["value_top3"]]
+    if ev_cands:
+        best = max(ev_cands, key=lambda x: _f(x, "ev_win"))
+        if best is not by_win[0] and _f(best, "ev_win") >= c["value_ev"] and _f(best, "win_prob") >= base * c["value_min_win_mult"]:
+            return "value"
+    if p2 > 0 and p1 / p2 < c["close_ratio"]:
+        return "close"
+    return "normal"
+
+
+def assign_mece_marks(entries: list[dict], situational: bool | None = None, cfg: dict[str, float] | None = None) -> None:
     """
     印を付与（in-place）。◎○▲★は各1頭まで、△は複数頭（上限は maybe_limit）。1頭1印。
 
@@ -124,11 +164,17 @@ def assign_mece_marks(entries: list[dict]) -> None:
       star     … 10〜30倍帯で期待値が高い（★）※1頭のみ
       anchor   … 馬券内に来るかもしれない（△）※複数。3連系の相手候補。保存データ互換のため内部名は anchor のまま
       none     … 印なし
+    situational=True のとき ◎○ の選び方をレースの状況（race_situation）で切り替える:
+      value（期待値の高い別の馬がいる）… ◎=その馬、○=勝率最上位 / close（拮抗）… ◎=上位2頭のうち期待値の高い方、○=もう一方
+      dom（突出）・normal … 通常（◎=勝率最上位、○=連対確率の最も高い馬）。
     旧ルールで保存された予測には ○・▲ が複数付いているものがあるが、保存済みの mark_type は書き換えない。
     """
     n = len(entries)
     if n == 0:
         return
+    if situational is None:
+        situational = SITUATIONAL_DEFAULT
+    c = {**SITUATION_CFG, **(cfg or {})}
     base = 1.0 / max(n, 1)
     for e in entries:
         e["mark_type"] = "none"
@@ -144,9 +190,30 @@ def assign_mece_marks(entries: list[dict]) -> None:
     def _free() -> list[dict]:
         return [e for e in entries if e.get("mark_type") == "none"]
 
-    # ◎ 1着優位（1頭）
     by_win = sorted(entries, key=lambda x: float(x.get("win_prob") or 0), reverse=True)
-    if by_win and float(by_win[0].get("win_prob") or 0) >= base * 1.1:
+    situation = race_situation(entries, cfg) if situational else "normal"
+    pair_done = False
+
+    # ◎ 1着優位（1頭）
+    if situation == "value":
+        ev_cands = [e for e in entries if e.get("ev_win") and _f(e, "top3_prob") >= c["value_top3"]]
+        honmei = max(ev_cands, key=lambda x: _f(x, "ev_win"))
+        honmei["mark_type"] = "honmei"
+        top = by_win[0]
+        if top is not honmei and _f(top, "top2_prob") >= base * 1.25:
+            top["mark_type"] = "pair"
+            pair_done = True
+    elif situation == "close":
+        a, b = by_win[0], by_win[1]
+        pick, other = (a, b)
+        if a.get("ev_win") and b.get("ev_win") and _f(b, "ev_win") > _f(a, "ev_win"):
+            pick, other = b, a
+        if _f(pick, "win_prob") >= base * 1.1:
+            pick["mark_type"] = "honmei"
+            if _f(other, "top2_prob") >= base * 1.25:
+                other["mark_type"] = "pair"
+                pair_done = True
+    elif by_win and float(by_win[0].get("win_prob") or 0) >= base * 1.1:
         by_win[0]["mark_type"] = "honmei"
 
     # ★ 中穴妙味（1頭・◎以外）
@@ -162,9 +229,10 @@ def assign_mece_marks(entries: list[dict]) -> None:
         star["mark_type"] = "star"
 
     # ○ 連対確率が最も高い馬（1頭・◎★以外、閾値を満たすときだけ）
-    pair_candidates = [e for e in _free() if float(e.get("top2_prob") or 0) >= base * 1.25]
-    if pair_candidates:
-        max(pair_candidates, key=lambda x: float(x.get("top2_prob") or 0))["mark_type"] = "pair"
+    if not pair_done:
+        pair_candidates = [e for e in _free() if float(e.get("top2_prob") or 0) >= base * 1.25]
+        if pair_candidates:
+            max(pair_candidates, key=lambda x: float(x.get("top2_prob") or 0))["mark_type"] = "pair"
 
     # ▲ 複勝妙味の単穴（1頭）
     show_candidates = [
@@ -179,7 +247,13 @@ def assign_mece_marks(entries: list[dict]) -> None:
         e for e in _free()
         if float(e.get("top3_prob") or 0) >= base * 1.35 and _anchor_score(e) >= base * 0.5
     ]
-    maybe_candidates.sort(key=lambda x: float(x.get("top3_prob") or 0), reverse=True)
+    if c.get("maybe_by_composite"):
+        def _comp(x: dict) -> float:
+            p3, evp = _f(x, "top3_prob"), _f(x, "ev_place")
+            return (p3 ** 0.55) * (evp ** 0.45) if evp > 0 else p3 * 0.5
+        maybe_candidates.sort(key=_comp, reverse=True)
+    else:
+        maybe_candidates.sort(key=lambda x: float(x.get("top3_prob") or 0), reverse=True)
     for e in maybe_candidates[: maybe_limit(n)]:
         e["mark_type"] = "anchor"
 
