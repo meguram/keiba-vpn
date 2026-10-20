@@ -219,34 +219,54 @@ function sortPreds(preds: PredEntry[], key: SortKey | null, dir: SortDir, fallba
   });
 }
 
-/* 出馬表の表のスマホ最適化: 馬番・馬名を固定表示して横スクロール、重要度の低い列は幅が狭いと隠す（パネルで見られる）。見出しは指で押しやすく */
+/* 出馬表の見せ方を幅で切り替える（横スクロールはしない）:
+   広い(1100px〜)=列を統合した表 / 中間(769〜1099px)=さらに畳んだ表 / 狭い(〜768px)=1頭1枚のカード。
+   3 つとも DOM に置き、CSS の display で切り替える（JS の幅検知なし＝SSR とハイドレーションが一致する）。 */
 const TABLE_CSS = `
-.pt-tap{all:unset;cursor:pointer;display:inline-block;padding:6px 2px;border-bottom:1px dotted rgba(148,163,184,.55);font:inherit;font-weight:inherit;line-height:1.3}
+.pt-tap{all:unset;cursor:pointer;display:inline-block;max-width:100%;padding:6px 2px;border-bottom:1px dotted rgba(148,163,184,.55);font:inherit;font-weight:inherit;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;box-sizing:border-box}
 .pt-tap:hover{border-bottom-color:var(--accent)}
 .pt-tap:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
 .pt-sort{padding:0 !important}
-.pt-sortbtn{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:2px;width:100%;min-height:44px;padding:0 10px;font:inherit;color:inherit}
+.pt-sortbtn{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:2px;width:100%;min-height:44px;padding:0 4px;font:inherit;color:inherit;overflow:hidden}
 .pt-sortbtn:hover{background:rgba(148,163,184,.08)}
 .pt-sortbtn[data-left]{justify-content:flex-start}
 .pt-sortbtn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.pt-c1 .pt-sortbtn{padding:0 2px}
-@media (max-width: 899px){
-  .pt-c1,.pt-c2{position:sticky;background:var(--surface);z-index:1}
-  .pt-c1{left:0;min-width:36px;max-width:36px}
-  .pt-c2{left:36px;box-shadow:2px 0 0 rgba(36,48,73,.6);max-width:110px;overflow:hidden;text-overflow:ellipsis}
-  th.pt-c1,th.pt-c2{background:var(--surface2);z-index:2}
-}
-@media (max-width: 639px){ .pt-hide-sm{display:none} .wp-main{padding:12px 6px !important} .wp-race-body{padding:0 4px 10px !important} .pt-c2{max-width:128px} th.pt-c2,td.pt-c2{padding-left:6px !important;padding-right:6px !important} }
-@media (pointer: coarse){
-  .pt-tap{padding:12px 4px}
-}
+.pt-v-wide{display:block}.pt-v-mid{display:none}.pt-v-card{display:none}
+@media (max-width:1099px){.pt-v-wide{display:none}.pt-v-mid{display:block}}
+@media (max-width:768px){.pt-v-mid{display:none}.pt-v-card{display:block}}
+.pt-tbl{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px}
+.pt-tbl th,.pt-tbl td{overflow:hidden;text-overflow:ellipsis}
+.pt-tbl td{padding:7px 6px;border-bottom:1px solid rgba(36,48,73,.4);text-align:center;vertical-align:middle;font-size:12px}
+.pt-tbl td.l{text-align:left}
+.pt-tbl .sub{display:block;font-size:10px;color:var(--text-dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
+.pt-tbl .sep{border-left:1px solid rgba(36,48,73,.35)}
+.pt-sortbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 8px;font-size:12px;color:var(--text-dim)}
+.pt-chip{all:unset;box-sizing:border-box;cursor:pointer;min-height:36px;padding:0 12px;display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;font-size:12px;color:var(--text)}
+.pt-chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:rgba(59,130,246,.10)}
+.pt-chip:focus-visible,.pt-select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pt-select{min-height:36px;padding:0 8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px}
+.pt-card{display:grid;gap:6px;padding:10px 10px 10px 12px;border-bottom:1px solid rgba(36,48,73,.5)}
+.pt-card .r1{display:flex;align-items:center;gap:8px;min-width:0}
+.pt-card .no{flex:0 0 auto;min-width:28px;height:28px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+.pt-card .nm{flex:1 1 auto;min-width:0;font-weight:700;color:#fff;font-size:15px}
+.pt-card .win{flex:0 0 auto;text-align:right;line-height:1.1}
+.pt-card .win b{font-size:20px;font-variant-numeric:tabular-nums}
+.pt-card .win small{display:block;font-size:10px;color:var(--text-dim)}
+.pt-card .r2{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:12px;color:var(--text-dim);align-items:center}
+.pt-card .r3{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12px}
+.pt-bar{display:inline-flex;align-items:center;gap:5px}
+.pt-bar i{display:inline-block;width:52px;height:6px;border-radius:3px;background:rgba(148,163,184,.2);position:relative;overflow:hidden}
+.pt-bar i::after{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--w);background:var(--c);border-radius:3px}
+.pt-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:5px;font-weight:700;font-size:12px}
+@media (pointer: coarse){ .pt-tap{padding:12px 4px} }
+@media (max-width:639px){ .wp-main{padding:12px 6px !important} .wp-race-body{padding:0 4px 10px !important} }
 `;
 
 /* ── 予測テーブル ── */
 function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null }) {
   const TH: React.CSSProperties = {
     padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-dim)",
-    textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", background: "var(--surface2)",
+    textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "normal", lineHeight: 1.25, background: "var(--surface2)", overflow: "hidden",
   };
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
   const [card, setCard] = useState<{ horseId: string; tab: CardTab } | null>(null);   // 馬名・騎手・調教師のタップで開く情報パネル
@@ -312,8 +332,57 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
     expected_megu: p.expected_megu ?? null, expected_through: megu?.data_through ?? null, expected_meta: megu ?? null,
   }));
 
+  const rowBgOf = (p: PredEntry) => {
+    const rank = p.composite_rank ?? p.pred_rank ?? 0;
+    return rank === 1 ? "rgba(239,68,68,0.04)" : rank === 2 ? "rgba(59,130,246,0.04)" : rank === 3 ? "rgba(34,197,94,0.03)" : undefined;
+  };
+  const evOf = (p: PredEntry) => ({
+    w: fmtEv(p.ev_win_cal ?? p.ev_win, p.ev_win_cal != null),
+    pl: fmtEv(p.ev_place_cal ?? p.ev_place ?? p.expected_value, p.ev_place_cal != null),
+  });
+  const bracketChip = (p: PredEntry) =>
+    p.bracket_number && BRACKET[p.bracket_number]
+      ? <span title={`${p.bracket_number}枠`} style={{ display: "inline-block", minWidth: 20, borderRadius: 4, padding: "1px 0", fontWeight: 700, background: BRACKET[p.bracket_number].bg, color: BRACKET[p.bracket_number].color }}>{p.bracket_number}</span>
+      : <span>-</span>;
+  const placeOdds = (p: PredEntry) =>
+    p.place_odds_min != null && p.place_odds_max != null ? `${Number(p.place_odds_min).toFixed(1)}〜${Number(p.place_odds_max).toFixed(1)}` : "-";
+  const dim = hasPred ? "var(--text)" : "var(--text-dim)";
+  const evLabel = calibratedEv ? "期待値(勝/複・較正後)" : "期待値(勝/複)";
+  const evTitle = "勝期待値で並べ替え（複勝は『並び替え』の選択肢から）";
+
+  // 並び替えバー: よく使う 4 つはチップ、そのほかは選択肢から。どの幅でも使える（表の見出しは主要な列だけ）
+  const QUICK: { key: SortKey; label: string }[] = [
+    { key: "num", label: "馬番" }, { key: "win", label: "勝率" }, { key: "evw", label: "期待値" }, { key: "emegu", label: "想定指数" },
+  ];
+  const ALL: { key: SortKey; label: string }[] = [
+    { key: "num", label: "馬番" }, { key: "name", label: "馬名" }, { key: "bracket", label: "枠" }, { key: "sexage", label: "性齢" },
+    { key: "jwt", label: "斤量" }, { key: "jockey", label: "騎手" }, { key: "trainer", label: "調教師" }, { key: "weight", label: "馬体重" },
+    { key: "emegu", label: "想定指数" }, { key: "win", label: "勝率" }, { key: "top2", label: "連対率" }, { key: "top3", label: "複勝率" },
+    { key: "odds", label: "想定単勝" }, { key: "podds", label: "想定複勝" }, { key: "evw", label: "勝期待値" }, { key: "evp", label: "複期待値" }, { key: "tier", label: "推奨" },
+  ];
+  const sortBar = (
+    <div className="pt-sortbar" role="group" aria-label="並び替え">
+      <span>並び替え</span>
+      {QUICK.map((q) => (
+        <button key={q.key} type="button" className="pt-chip" aria-pressed={sort?.key === q.key} onClick={() => toggle(q.key)}>
+          {q.label}<span aria-hidden style={{ marginLeft: 3, fontSize: 10 }}>{arrow(q.key)}</span>
+        </button>
+      ))}
+      <select
+        className="pt-select"
+        aria-label="そのほかの項目で並べ替え"
+        value={sort && !QUICK.some((q) => q.key === sort.key) ? sort.key : ""}
+        onChange={(e) => { const k = e.target.value as SortKey | ""; if (k) setSort({ key: k, dir: DESC_FIRST.has(k) ? "desc" : "asc" }); else setSort(null); }}
+      >
+        <option value="">そのほか…</option>
+        {ALL.filter((a) => !QUICK.some((q) => q.key === a.key)).map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+      </select>
+      {sort && <button type="button" className="pt-chip" onClick={() => setSort(null)}>元の並び</button>}
+    </div>
+  );
+
   return (
-    <div style={{ overflowX: "auto", marginTop: 12 }}>
+    <div style={{ marginTop: 12, maxWidth: "100%" }}>
       <style>{TABLE_CSS}</style>
       {card && (
         <EntryCardPanel
@@ -326,69 +395,139 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
           onClose={() => setCard(null)}
         />
       )}
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-        <thead>
-          <tr>
-            {th("num", "馬番", { width: 36, minWidth: 36 }, undefined, "pt-c1")}
-            {th("name", "馬名", { textAlign: "left", width: 120 }, undefined, "pt-c2")}
-            {th("bracket", "枠", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "出馬表（前日に確定。馬体重は当日の発表後）")}
-            {th("sexage", "性齢")}
-            {th("jwt", "斤量", {}, undefined, "pt-hide-sm")}
-            {th("jockey", "騎手", { textAlign: "left" })}
-            {th("trainer", "調教師", { textAlign: "left" }, undefined, "pt-hide-sm")}
-            {th("weight", "馬体重", {}, "当日、発走の約1時間前に発表")}
-            {th("emegu", "想定指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "過去のめぐ指数からの想定（AI予測ではありません）。1点＝0.1秒")}
-            {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
-            {th("top2", "連対率", {}, undefined, "pt-hide-sm")}
-            {th("top3", "複勝率", {}, undefined, "pt-hide-sm")}
-            {th("odds", "想定単勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
-            {th("podds", "想定複勝", {}, "複勝オッズの下限で並べ替え", "pt-hide-sm")}
-            {th("evw", calibratedEv ? "勝期待値(較正後)" : "勝期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
-            {th("evp", calibratedEv ? "複期待値(較正後)" : "複期待値", {}, undefined, "pt-hide-sm")}
-            {th("tier", "推奨", { borderLeft: "1px solid rgba(36,48,73,0.5)", width: 60 }, undefined, "pt-hide-sm")}
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((p, i) => {
-            const rank = p.composite_rank ?? p.pred_rank ?? 0;
-            const evW = fmtEv(p.ev_win_cal ?? p.ev_win, p.ev_win_cal != null);
-            const evP = fmtEv(p.ev_place_cal ?? p.ev_place ?? p.expected_value, p.ev_place_cal != null);
-            const rowBg =
-              rank === 1 ? "rgba(239,68,68,0.04)" :
-              rank === 2 ? "rgba(59,130,246,0.04)" :
-              rank === 3 ? "rgba(34,197,94,0.03)" : undefined;
-            return (
-              <tr key={p.horse_number ?? i} style={{ background: rowBg }}>
-                <td className="pt-c1" style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "-"}</td>
-                <td className="pt-c2" style={{ ...TD, textAlign: "left", fontWeight: 600, color: "#fff", whiteSpace: "nowrap" }}>{tapCell(p, "horse", p.horse_name, "#fff")}</td>
-                <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)" }}>
-                  {p.bracket_number && BRACKET[p.bracket_number]
-                    ? <span style={{ display: "inline-block", minWidth: 20, borderRadius: 4, padding: "1px 0", fontWeight: 700, background: BRACKET[p.bracket_number].bg, color: BRACKET[p.bracket_number].color }}>{p.bracket_number}</span>
-                    : "-"}
-                </td>
-                <td style={TD}>{p.sex_age ?? "-"}</td>
-                <td className="pt-hide-sm" style={TD}>{p.jockey_weight ?? "-"}</td>
-                <td style={{ ...TD, textAlign: "left", whiteSpace: "nowrap" }}>{tapCell(p, "jockey", p.jockey_name, "var(--text)")}</td>
-                <td className="pt-hide-sm" style={{ ...TD, textAlign: "left", whiteSpace: "nowrap" }}>{tapCell(p, "trainer", p.trainer_name, "var(--text)")}</td>
-                <td style={{ ...TD, whiteSpace: "nowrap" }}>{fmtWeight(p.weight, p.weight_change)}</td>
-                <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)" }}><ExpectedMeguCell e={p.expected_megu} /></td>
-                <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontWeight: hasPred ? 600 : 400, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.win_prob)}</td>
-                <td className="pt-hide-sm" style={{ ...TD, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.top2_prob)}</td>
-                <td className="pt-hide-sm" style={{ ...TD, color: hasPred ? "var(--text)" : "var(--text-dim)" }}>{fmtPct(p.top3_prob)}</td>
-                <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}</td>
-                <td className="pt-hide-sm" style={{ ...TD, color: "var(--text-dim)", fontSize: 11 }}>
-                  {p.place_odds_min != null && p.place_odds_max != null
-                    ? `${Number(p.place_odds_min).toFixed(1)}〜${Number(p.place_odds_max).toFixed(1)}`
-                    : "-"}
-                </td>
-                <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", background: evW.bg, fontWeight: hasPred ? 700 : 400, color: evW.color }}>{evW.text}</td>
-                <td className="pt-hide-sm" style={{ ...TD, background: evP.bg, fontWeight: hasPred ? 700 : 400, color: evP.color }}>{evP.text}</td>
-                <td className="pt-hide-sm" style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: 11, color: "var(--text-dim)" }}>{p.buy_tier ?? "-"}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {sortBar}
+
+      {/* ── 広い画面（1100px〜）: 関連する列を 2 段にまとめた表 ── */}
+      <div className="pt-v-wide">
+        <table className="pt-tbl">
+          <colgroup>
+            <col style={{ width: "5%" }} /><col style={{ width: "22%" }} /><col style={{ width: "4.5%" }} /><col style={{ width: "16%" }} />
+            <col style={{ width: "10%" }} /><col style={{ width: "7%" }} /><col style={{ width: "9.5%" }} /><col style={{ width: "11%" }} />
+            <col style={{ width: "9%" }} /><col style={{ width: "6%" }} />
+          </colgroup>
+          <thead>
+            <tr>
+              {th("num", "馬番")}
+              {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・馬体重）")}
+              {th("bracket", "枠", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "出馬表（前日に確定。馬体重は当日の発表後）")}
+              {th("jockey", "騎手/調教師", { textAlign: "left" }, "騎手で並べ替え（調教師は『そのほか』から）")}
+              {th("emegu", "想定指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "過去のめぐ指数からの想定（AI予測ではありません）。1点＝0.1秒")}
+              {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
+              {th("top2", "連対/複勝", {}, "連対率で並べ替え（複勝率は『そのほか』から）")}
+              {th("odds", "想定単勝/複勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（想定複勝は『そのほか』から）")}
+              {th("evw", calibratedEv ? "期待値(較正後)" : "期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
+              {th("tier", "推奨", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((p, i) => {
+              const ev = evOf(p);
+              return (
+                <tr key={p.horse_number ?? i} style={{ background: rowBgOf(p) }}>
+                  <td style={{ fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "-"}</td>
+                  <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
+                    {tapCell(p, "horse", p.horse_name, "#fff")}
+                    <span className="sub">{[p.sex_age, p.jockey_weight != null ? `${p.jockey_weight}kg` : null, p.weight ? fmtWeight(p.weight, p.weight_change) : null].filter(Boolean).join("　")}</span>
+                  </td>
+                  <td className="sep">{bracketChip(p)}</td>
+                  <td className="l">
+                    {tapCell(p, "jockey", p.jockey_name, "var(--text)")}
+                    <span className="sub">{p.trainer_name ? <>{tapCell(p, "trainer", p.trainer_name, "var(--text-dim)")}</> : "-"}</span>
+                  </td>
+                  <td className="sep"><ExpectedMeguCell e={p.expected_megu} /></td>
+                  <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}</td>
+                  <td style={{ color: dim }}>{fmtPct(p.top2_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top3_prob)}</span></td>
+                  <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
+                  <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>{ev.pl.text}</span></td>
+                  <td className="sep" style={{ fontSize: 11, color: "var(--text-dim)" }}>{p.buy_tier ?? "-"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── 中間（769〜1099px）: 馬名の下に騎手・斤量・体重を畳んだ表 ── */}
+      <div className="pt-v-mid">
+        <table className="pt-tbl">
+          <colgroup>
+            <col style={{ width: "8%" }} /><col style={{ width: "36%" }} /><col style={{ width: "13%" }} /><col style={{ width: "15%" }} />
+            <col style={{ width: "14%" }} /><col style={{ width: "14%" }} />
+          </colgroup>
+          <thead>
+            <tr>
+              {th("num", "馬番")}
+              {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 枠・性齢・斤量・騎手・馬体重・調教師）")}
+              {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "勝率で並べ替え（連対率・複勝率は下段、『そのほか』から並べ替え）")}
+              {th("emegu", "想定指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "過去のめぐ指数からの想定（AI予測ではありません）。1点＝0.1秒")}
+              {th("evw", calibratedEv ? "期待値(較正後)" : "期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
+              {th("odds", "想定単勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（下段: 想定複勝）")}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((p, i) => {
+              const ev = evOf(p);
+              return (
+                <tr key={p.horse_number ?? i} style={{ background: rowBgOf(p) }}>
+                  <td style={{ fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "-"}</td>
+                  <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
+                    {tapCell(p, "horse", p.horse_name, "#fff")}
+                    <span className="sub">{[p.bracket_number ? `${p.bracket_number}枠` : null, p.sex_age, p.jockey_weight != null ? `${p.jockey_weight}kg` : null, p.jockey_name, p.weight ? fmtWeight(p.weight, p.weight_change) : null].filter(Boolean).join("　")}</span>
+                    <span className="sub">{[p.trainer_name, p.buy_tier && p.buy_tier !== "—" ? `推奨 ${p.buy_tier}` : null].filter(Boolean).join("　")}</span>
+                  </td>
+                  <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top2_prob)} / {fmtPct(p.top3_prob)}</span></td>
+                  <td className="sep"><ExpectedMeguCell e={p.expected_megu} /></td>
+                  <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>複 {ev.pl.text}</span></td>
+                  <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── 狭い画面（〜768px）: 1 頭 = 1 枚のカード ── */}
+      <div className="pt-v-card" role="list">
+        {sorted.map((p, i) => {
+          const ev = evOf(p);
+          const m = markSym(p);
+          const bb = p.bracket_number && BRACKET[p.bracket_number] ? BRACKET[p.bracket_number] : { bg: "var(--surface2)", color: "#7dd3fc" };
+          const bar = (v: number | null | undefined, c: string) => (
+            <span className="pt-bar"><i style={{ ["--w" as string]: `${Math.min(100, Math.max(0, (v ?? 0) * 100))}%`, ["--c" as string]: c } as React.CSSProperties} /></span>
+          );
+          return (
+            <div key={p.horse_number ?? i} className="pt-card" role="listitem" style={{ background: rowBgOf(p) }}>
+              <div className="r1">
+                <span className="no" title={p.bracket_number ? `${p.bracket_number}枠` : undefined} style={{ background: bb.bg, color: bb.color }}>{p.horse_number ?? "-"}</span>
+                <span className="nm">{tapCell(p, "horse", p.horse_name, "#fff")}</span>
+                {m.sym !== "-" && <span title="印" aria-label={`印 ${m.sym}`} style={{ color: m.color, fontWeight: 800, fontSize: 15 }}>{m.sym}</span>}
+                <span className="win"><b style={{ color: dim }}>{fmtPct(p.win_prob)}</b><small>勝率</small></span>
+              </div>
+              <div className="r2">
+                {p.sex_age && <span>{p.sex_age}</span>}
+                {p.jockey_name && <span>{tapCell(p, "jockey", p.jockey_name, "var(--text)")}{p.jockey_weight != null && ` ${p.jockey_weight}kg`}</span>}
+                {p.trainer_name && <span>{tapCell(p, "trainer", p.trainer_name, "var(--text-dim)")}</span>}
+                {p.weight ? <span>馬体重 {fmtWeight(p.weight, p.weight_change)}</span> : null}
+              </div>
+              <div className="r3">
+                <span className="pt-bar" title="連対率">連対 {bar(p.top2_prob, "#60a5fa")}<b style={{ color: dim, fontVariantNumeric: "tabular-nums" }}>{fmtPct(p.top2_prob)}</b></span>
+                <span className="pt-bar" title="複勝率">複勝 {bar(p.top3_prob, "#34d399")}<b style={{ color: dim, fontVariantNumeric: "tabular-nums" }}>{fmtPct(p.top3_prob)}</b></span>
+              </div>
+              <div className="r3">
+                <span className="pt-badge" title="勝期待値" style={{ background: ev.w.bg, color: ev.w.color }}>期待値 {ev.w.text}</span>
+                <span className="pt-badge" title="複勝期待値" style={{ background: ev.pl.bg, color: ev.pl.color }}>複 {ev.pl.text}</span>
+                <span style={{ color: "var(--text-dim)" }} title="想定単勝オッズ">単勝 {fmtOdds(p.win_odds)}</span>
+                <span style={{ color: "var(--text-dim)" }} title="想定複勝オッズ">複勝 {placeOdds(p)}</span>
+                {p.buy_tier && p.buy_tier !== "—" && <span style={{ color: "var(--text-dim)" }}>推奨 {p.buy_tier}</span>}
+              </div>
+              <div className="r3" style={{ color: "var(--text-dim)" }}>
+                <span>想定指数 </span><ExpectedMeguCell e={p.expected_megu} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       {megu && (
         <p style={{ fontSize: 11, color: "var(--text-dim)", padding: "6px 10px 0" }}>
           想定指数: {megu.name ?? "過去のめぐ指数からの想定（AI予測ではありません）"}。{megu.data_through ? `指数データは ${megu.data_through.slice(5).replace("-", "/")} まで。` : ""}
