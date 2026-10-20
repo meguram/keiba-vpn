@@ -6965,7 +6965,7 @@ async def get_race_predictions(race_id: str):
             # 位置取り・ペース・想定上がりを結ぶ整合層（KEIBA_PACE_COHERENCE=1 のときだけ。既定は何もしない）
             from src.pipeline.inference.pace_coherence import attach_pace_coherence
 
-            resp = attach_pace_coherence(resp, past, str(card.get("date") or ""), {"track_condition": card.get("track_condition")})
+            resp = attach_pace_coherence(resp, past, str(card.get("date") or ""), {**course, "track_condition": card.get("track_condition")})
         except Exception as exc:  # noqa: BLE001
             logger.warning("位置取り予想の付与に失敗 %s: %s", race_id, exc)
             past, card = None, {}
