@@ -48,6 +48,9 @@ type PredEntry = {
   top3_prob?: number | null;
   ev_win?: number | null;
   ev_place?: number | null;
+  /** EV の較正が有効なときの、較正後の値（過去の実績に合わせて補正した期待回収率）。あれば画面はこちらを表示する */
+  ev_win_cal?: number | null;
+  ev_place_cal?: number | null;
   expected_value?: number | null;
   win_odds?: number | null;
   place_odds_min?: number | null;
@@ -89,9 +92,16 @@ function fmtPct(v: number | null | undefined): string {
   return `${(v * 100).toFixed(1)}%`;
 }
 
-function fmtEv(v: number | null | undefined): { text: string; color: string; bg: string } {
+/** 較正後の期待値（cal=true）の色の閾値は、買い推奨度（強推奨 1.10 / 推奨 1.00 / 様子見 0.90）に合わせる */
+function fmtEv(v: number | null | undefined, cal = false): { text: string; color: string; bg: string } {
   if (v == null) return { text: "-", color: "var(--text-dim)", bg: "transparent" };
   const n = Number(v);
+  if (cal) {
+    if (n >= 1.1) return { text: n.toFixed(2), color: "#22c55e", bg: "rgba(34,197,94,0.10)" };
+    if (n >= 1.0) return { text: n.toFixed(2), color: "#60a5fa", bg: "rgba(96,165,250,0.08)" };
+    if (n >= 0.9) return { text: n.toFixed(2), color: "var(--text-dim)", bg: "transparent" };
+    return { text: n.toFixed(2), color: "#f87171", bg: "rgba(239,68,68,0.07)" };
+  }
   if (n >= 1.5) return { text: n.toFixed(2), color: "#22c55e", bg: "rgba(34,197,94,0.10)" };
   if (n >= 1.2) return { text: n.toFixed(2), color: "#4ade80", bg: "rgba(74,222,128,0.08)" };
   if (n >= 1.0) return { text: n.toFixed(2), color: "#60a5fa", bg: "rgba(96,165,250,0.08)" };
@@ -121,8 +131,8 @@ function gradeChip(grade: string | undefined) {
 function RaceSummaryBadges({ preds }: { preds: PredEntry[] }) {
   const hasP = preds.filter((p) => p.win_prob != null);
   if (!hasP.length) return null;
-  const evOk = hasP.filter((p) => (p.ev_win ?? 0) >= 1.0).length;
-  const evGreat = hasP.filter((p) => (p.ev_win ?? 0) >= 1.3).length;
+  const evOk = hasP.filter((p) => (p.ev_win_cal ?? p.ev_win ?? 0) >= 1.0).length;
+  const evGreat = hasP.filter((p) => (p.ev_win_cal != null ? p.ev_win_cal >= 1.1 : (p.ev_win ?? 0) >= 1.3)).length;
   const honmei = hasP.find((p) => p.mark_type === "honmei");
   return (
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -185,8 +195,8 @@ const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
   top3: (p) => p.top3_prob ?? null,
   odds: (p) => p.win_odds ?? null,
   podds: (p) => p.place_odds_min ?? null,
-  evw: (p) => p.ev_win ?? null,
-  evp: (p) => p.ev_place ?? p.expected_value ?? null,
+  evw: (p) => p.ev_win_cal ?? p.ev_win ?? null,
+  evp: (p) => p.ev_place_cal ?? p.ev_place ?? p.expected_value ?? null,
   tier: (p) => p.buy_tier ?? null,
 };
 // 『大きいほど良い』列は、最初のクリックを降順にする（勝率・連対率・複勝率・期待値・馬体重）
@@ -241,6 +251,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
     ? (a: PredEntry, b: PredEntry) => (a.composite_rank ?? a.pred_rank ?? 99) - (b.composite_rank ?? b.pred_rank ?? 99)
     : (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);
   const sorted = sortPreds(preds, sort?.key ?? null, sort?.dir ?? "asc", defaultOrder);
+  const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);     // EV の較正が有効なときだけ『(較正後)』と表示する
 
   // 見出しのクリック: 1 回目=その列の向き（既定は昇順、大きいほど良い列は降順）→ 2 回目=逆 → 3 回目=元の並びに戻す
   function toggle(key: SortKey) {
@@ -329,16 +340,16 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
             {th("top3", "複勝率", {}, undefined, "pt-hide-sm")}
             {th("odds", "想定単勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
             {th("podds", "想定複勝", {}, "複勝オッズの下限で並べ替え", "pt-hide-sm")}
-            {th("evw", "勝期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
-            {th("evp", "複期待値", {}, undefined, "pt-hide-sm")}
+            {th("evw", calibratedEv ? "勝期待値(較正後)" : "勝期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
+            {th("evp", calibratedEv ? "複期待値(較正後)" : "複期待値", {}, undefined, "pt-hide-sm")}
             {th("tier", "推奨", { borderLeft: "1px solid rgba(36,48,73,0.5)", width: 60 }, undefined, "pt-hide-sm")}
           </tr>
         </thead>
         <tbody>
           {sorted.map((p, i) => {
             const rank = p.composite_rank ?? p.pred_rank ?? 0;
-            const evW = fmtEv(p.ev_win);
-            const evP = fmtEv(p.ev_place ?? p.expected_value);
+            const evW = fmtEv(p.ev_win_cal ?? p.ev_win, p.ev_win_cal != null);
+            const evP = fmtEv(p.ev_place_cal ?? p.ev_place ?? p.expected_value, p.ev_place_cal != null);
             const rowBg =
               rank === 1 ? "rgba(239,68,68,0.04)" :
               rank === 2 ? "rgba(59,130,246,0.04)" :
@@ -724,7 +735,7 @@ export default function WeeklyPredictionsPage() {
   const predOkCount = visiblePreds.filter((p) => p.has_prediction).length;
   const totalEVOk = visiblePreds
     .flatMap((p) => p.predictions ?? [])
-    .filter((h) => (h.ev_win ?? 0) >= 1.0).length;
+    .filter((h) => (h.ev_win_cal ?? h.ev_win ?? 0) >= 1.0).length;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
@@ -799,7 +810,7 @@ export default function WeeklyPredictionsPage() {
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
           <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補）</span>
           <span>
-            期待値: <strong style={{ color: "#22c55e" }}>≥1.3</strong> / <strong style={{ color: "#60a5fa" }}>≥1.0</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.8</strong> / <strong style={{ color: "#f87171" }}>＜0.8</strong>
+            期待値（過去の実績に合わせて較正した期待回収率）: <strong style={{ color: "#22c55e" }}>≥1.10</strong> / <strong style={{ color: "#60a5fa" }}>≥1.00</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.90</strong> / <strong style={{ color: "#f87171" }}>＜0.90</strong>
           </span>
         </div>
 

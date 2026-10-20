@@ -182,8 +182,23 @@ class TestRaceProbabilities(unittest.TestCase):
         self.assertEqual(stars[0]["horse_number"], 1)
 
     def test_buy_recommendation_tier(self):
-        self.assertEqual(buy_recommendation_tier({"ev_win": 1.3}), "強推奨")
-        self.assertEqual(buy_recommendation_tier({"ev_place": 0.95}), "様子見")
+        from unittest import mock
+
+        with mock.patch("src.utils.ev_calibration.load_config", return_value={"enabled": False}):          # 較正が無効のときは従来の閾値
+            self.assertEqual(buy_recommendation_tier({"ev_win": 1.3}), "強推奨")
+            self.assertEqual(buy_recommendation_tier({"ev_place": 0.95}), "様子見")
+
+    def test_buy_recommendation_tier_calibrated(self):
+        from unittest import mock
+
+        cfg = {"enabled": True, "kinds": {"win": {"method": "const", "value": 0.7}, "top2": {"method": "const", "value": 0.7},
+                                          "place": {"method": "isotonic", "x": [0.5, 1.5], "y": [0.8, 1.2]}},
+               "tiers": {"strong": 1.1, "recommend": 1.0, "watch": 0.9}}
+        with mock.patch("src.utils.ev_calibration.load_config", return_value=cfg):
+            self.assertEqual(buy_recommendation_tier({"ev_win": 3.0}), "—")                        # 単勝の EV は高くても較正後は 0.7
+            self.assertEqual(buy_recommendation_tier({"ev_place": 1.5}), "強推奨")                  # 較正後 1.2
+            self.assertEqual(buy_recommendation_tier({"ev_place": 0.9}), "様子見")                  # 較正後 0.96
+            self.assertEqual(buy_recommendation_tier({"ev_win": 0}), "—")                           # EV が無い馬は較正しない
 
 
 if __name__ == "__main__":

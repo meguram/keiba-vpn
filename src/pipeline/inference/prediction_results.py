@@ -236,7 +236,7 @@ def build_race_record(race_id: str, meta: dict, storage: Any, max_total_bet: int
         hn = int(e.get("horse_number") or 0)
         return {"horse_number": hn, "horse_name": e.get("horse_name", ""), "finish": fm.get(hn),
                 "win_prob": round(float(e.get("win_prob") or 0), 4), "win_odds": e.get("win_odds"),
-                "ev_win": e.get("ev_win"), "mark": e.get("mark_type")}
+                "ev_win": e.get("ev_win_cal") if e.get("ev_win_cal") is not None else e.get("ev_win"), "mark": e.get("mark_type")}
 
     rec["top1"] = pick(top1)
     rec["marks"] = {m: [pick(e) for e in entries if e.get("mark_type") == m] for m in MARKS}

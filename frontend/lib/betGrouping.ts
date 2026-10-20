@@ -8,6 +8,9 @@ export type BetItem = {
   odds?: number;
   prob?: number;
   ev?: number;
+  /** 較正前の期待値と、その券種の較正が基準を満たしているか（BetRecommend が較正後の値を ev に入れ替えたとき） */
+  ev_raw?: number;
+  ev_calibration_validated?: boolean;
   bet_amount: number;
   expected_return?: number;
   predicted_odds?: number;

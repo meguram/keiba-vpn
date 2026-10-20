@@ -20,10 +20,10 @@ export type RaceValue = {
 };
 
 export const LEVEL_STYLE: Record<ValueLevel, { label: string; hint: string; color: string; bg: string; border: string; glow?: string }> = {
-  hot: { label: "★ 特に高い", hint: "期待回収率 150% 以上かつその日の上位 20%", color: "#fff", bg: "linear-gradient(135deg,#f97316,#ef4444)", border: "#fb923c", glow: "0 0 10px rgba(249,115,22,.65)" },
-  good: { label: "高い", hint: "期待回収率 125% 以上", color: "#bbf7d0", bg: "rgba(34,197,94,0.22)", border: "#22c55e" },
-  ok: { label: "プラス期待", hint: "期待回収率 105% 以上", color: "#bfdbfe", bg: "rgba(96,165,250,0.14)", border: "#60a5fa" },
-  pass: { label: "見送り水準", hint: "期待回収率 105% 未満、または買い目なし", color: "#8b9bb4", bg: "transparent", border: "#35445f" },
+  hot: { label: "★ 相対的に高い", hint: "較正後の期待回収率が高水準で、その日の上位 20%（目安。年によって実現回収率は大きく動く）", color: "#fff", bg: "linear-gradient(135deg,#f97316,#ef4444)", border: "#fb923c", glow: "0 0 10px rgba(249,115,22,.65)" },
+  good: { label: "やや高い", hint: "較正後の期待回収率が高め（目安）", color: "#bbf7d0", bg: "rgba(34,197,94,0.22)", border: "#22c55e" },
+  ok: { label: "平均並み", hint: "較正後の期待回収率が損益分岐の近く（目安）", color: "#bfdbfe", bg: "rgba(96,165,250,0.14)", border: "#60a5fa" },
+  pass: { label: "見送り水準", hint: "較正後の期待回収率が基準未満、または買い目なし", color: "#8b9bb4", bg: "transparent", border: "#35445f" },
   none: { label: "未計算", hint: "予測またはオッズが無い", color: "#8b9bb4", bg: "transparent", border: "#35445f" },
 };
 
@@ -33,7 +33,7 @@ export function valueTitle(v: RaceValue | undefined): string {
   if (!v) return "";
   const s = LEVEL_STYLE[v.level];
   if (v.level === "none") return `${s.label}${v.reason ? `（${v.reason}）` : ""}`;
-  const roi = v.expected_roi != null ? `推奨の期待回収率 ${(v.expected_roi * 100).toFixed(0)}%` : "買い目なし";
+  const roi = v.expected_roi != null ? `推奨の期待回収率（較正後） ${(v.expected_roi * 100).toFixed(0)}%` : "買い目なし";
   const top = v.top_bet ? ` ／ 最有力 ${BET_JA[v.top_bet.bet_type] ?? v.top_bet.bet_type} ${v.top_bet.label}（期待値 ${v.top_bet.ev.toFixed(2)}）` : "";
   const rank = v.rank ? ` ／ その日 ${v.rank} 位` : "";
   return `${s.label}｜${roi}${top}${rank}`;

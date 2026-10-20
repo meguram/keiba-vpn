@@ -74,6 +74,7 @@ def score_entries(entries: list[dict], odds: dict[int, dict], alpha: float = 0.5
     """確率つきの出走馬に、オッズ・期待値・合成スコア・印・買い推奨度を付ける（in-place ではなく新しい一覧を返す）。"""
     from src.utils.race_probabilities import (
         assign_mece_marks,
+        attach_calibrated_ev,
         buy_recommendation_tier,
         market_top2_fair_odds,
         place_effective_odds,
@@ -110,6 +111,7 @@ def score_entries(entries: list[dict], odds: dict[int, dict], alpha: float = 0.5
     assign_mece_marks(out)
     for s in out:
         s["recommendation"] = _MARK_LABELS.get(s.get("mark_type") or "none", "")
+        attach_calibrated_ev(s)
         s["buy_tier"] = buy_recommendation_tier(s)
     return out
 

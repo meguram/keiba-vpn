@@ -284,20 +284,36 @@ def assign_mece_marks(entries: list[dict], situational: bool | None = None, cfg:
         e["mark_type"] = "anchor"
 
 
-def buy_recommendation_tier(entry: dict) -> str:
-    """買い判断推奨度（期待値の最大を基準）。EV の較正（config/ev_calibration.json、既定は無効）があれば縮約した値で判定する。"""
-    from src.utils.ev_calibration import calibrated_ev
+def _cal_horse_ev(entry: dict, key: str, kind: str) -> float | None:
+    """馬ごとの EV を較正した値。無効なら None（従来の EV を使う）。EV が無い（0 以下）ものは較正しない。"""
+    from src.utils.ev_calibration import calibrated_ev, is_enabled
 
-    evs = [
-        calibrated_ev(float(entry.get("ev_win") or 0), "win"),
-        calibrated_ev(float(entry.get("ev_top2") or 0), "top2"),
-        calibrated_ev(float(entry.get("ev_place") or 0), "place"),
-    ]
-    best = max(evs) if evs else 0.0
-    if best >= 1.2:
+    v = entry.get(key)
+    if not is_enabled() or v is None or float(v) <= 0:
+        return None
+    return round(float(calibrated_ev(float(v), kind)), 3)
+
+
+def attach_calibrated_ev(entry: dict) -> None:
+    """ev_win / ev_top2 / ev_place に対する較正後の値（ev_*_cal）を付ける（無効のときは None）。画面は ev_*_cal があればそれを表示する。"""
+    for key, kind in (("ev_win", "win"), ("ev_top2", "top2"), ("ev_place", "place")):
+        entry[f"{key}_cal"] = _cal_horse_ev(entry, key, kind)
+
+
+def buy_recommendation_tier(entry: dict) -> str:
+    """買い判断推奨度（期待値の最大を基準）。EV の較正（config/ev_calibration.json）が有効なら、較正後の EV と較正後の閾値で判定する。"""
+    from src.utils.ev_calibration import is_enabled, tier_thresholds
+
+    th = tier_thresholds()
+    if is_enabled():
+        evs = [_cal_horse_ev(entry, k, kind) for k, kind in (("ev_win", "win"), ("ev_top2", "top2"), ("ev_place", "place"))]
+        best = max([e for e in evs if e is not None], default=0.0)
+    else:
+        best = max(float(entry.get("ev_win") or 0), float(entry.get("ev_top2") or 0), float(entry.get("ev_place") or 0))
+    if best >= th["strong"]:
         return "強推奨"
-    if best >= 1.05:
+    if best >= th["recommend"]:
         return "推奨"
-    if best >= 0.9:
+    if best >= th["watch"]:
         return "様子見"
     return "—"

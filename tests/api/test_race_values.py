@@ -7,7 +7,8 @@ import pytest
 from src.api.v1 import delegates as D
 
 
-def test_value_level_thresholds():
+def test_value_level_thresholds(monkeypatch):
+    monkeypatch.setattr("src.utils.ev_calibration.load_config", lambda: {"enabled": False})      # 較正が無効のときは従来の閾値
     assert D.value_level(1.6, 5) == "hot" and D.value_level(1.5, 1) == "hot"
     assert D.value_level(1.3, 5) == "good" and D.value_level(1.1, 5) == "ok"
     assert D.value_level(1.04, 5) == "pass" and D.value_level(2.0, 0) == "pass" and D.value_level(None, 3) == "pass"
@@ -33,6 +34,7 @@ def fake(monkeypatch):
         return _payload(roi, n=0 if body["race_id"] == "r08" else 3)
 
     monkeypatch.setattr("src.scraper.storage.HybridStorage", lambda *a, **k: S())
+    monkeypatch.setattr("src.utils.ev_calibration.load_config", lambda: {"enabled": False})      # 従来の閾値・期待回収率で検査
     monkeypatch.setattr(D, "optimize_betting", opt)
     D._VALUE_CACHE.clear()
     return rois
@@ -81,3 +83,22 @@ def test_route_validates_params_and_requires_login(fake, monkeypatch):
     assert ok.status_code == 200 and len(ok.get_json()["races"]) == 10
     tunnel = c.get("/api/v1/betting/race-values?date=20260906", headers={"Host": "127.0.0.1:23110", "X-Forwarded-Host": "meguai-dev.tcpexposer.com"})
     assert tunnel.status_code == 401
+
+
+def test_value_level_thresholds_calibrated(monkeypatch):
+    monkeypatch.setattr("src.utils.ev_calibration.load_config", lambda: {"enabled": True, "levels": {"hot": 1.03, "good": 1.0, "ok": 0.97}})
+    assert D.value_level(1.05, 3) == "hot" and D.value_level(1.0, 3) == "good" and D.value_level(0.98, 3) == "ok"
+    assert D.value_level(0.96, 3) == "pass" and D.value_level(1.2, 0) == "pass" and D.value_level(None, 3) == "pass"
+
+
+def test_calibrate_candidates_adds_fields(monkeypatch):
+    cfg = {"enabled": True, "kinds": {"cand_tansho": {"method": "const", "value": 0.9, "validated": True},
+                                      "cand_umaren": {"method": "const", "value": 1.0, "validated": False}}, "cap": {"ev": 1.3, "roi": 1.15}}
+    monkeypatch.setattr("src.utils.ev_calibration.load_config", lambda: cfg)
+    cands = [{"bet_type": "tansho", "ev": 2.0, "bet_amount": 300}, {"bet_type": "umaren", "ev": 3.0, "bet_amount": 100}]
+    out = D._calibrate_candidates(cands)
+    assert cands[0]["ev_calibrated"] == 0.9 and cands[0]["ev_calibration_validated"] is True
+    assert cands[1]["ev_calibrated"] == 1.0 and cands[1]["ev_calibration_validated"] is False
+    assert out["expected_roi_calibrated"] == pytest.approx(0.925, abs=1e-3)           # (0.9×300 + 1.0×100) / 400
+    monkeypatch.setattr("src.utils.ev_calibration.load_config", lambda: {"enabled": False})
+    assert D._calibrate_candidates([{"bet_type": "tansho", "ev": 2.0, "bet_amount": 300}]) == {}

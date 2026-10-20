@@ -154,13 +154,13 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
 
       {values.size > 0 && !narrow && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", fontSize: 11, color: "var(--text-dim)" }}>
-          <span>推奨の期待回収率:</span>
+          <span>推奨の期待回収率（較正後）:</span>
           {(["hot", "good", "ok", "pass"] as ValueLevel[]).map((k) => (
             <span key={k} title={LEVEL_STYLE[k].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[k].border}`, background: LEVEL_STYLE[k].bg, color: LEVEL_STYLE[k].color, opacity: k === "pass" ? 0.8 : 1 }}>
               {LEVEL_STYLE[k].label}
             </span>
           ))}
-          <span>（確率はモデルの出力で未検証。目安として参照）</span>
+          <span>（過去の実績に合わせて補正した目安。年による変動が大きい）</span>
         </div>
       )}
     </nav>

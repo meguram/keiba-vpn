@@ -118,12 +118,14 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
             item["odds_gap"] = round(c.odds / pred_odds - 1, 3)
         candidates_out.append(item)
 
+    calibrated = _calibrate_candidates(candidates_out)
     return {
         "race_id": race_id,
         "bankroll": body.get("bankroll", 100000),
         "total_bet": portfolio["total_bet"],
         "expected_return": portfolio["expected_return"],
         "roi_pct": round(portfolio["expected_roi"] * 100, 1),
+        **calibrated,
         "max_total_bet": max_total_bet,
         "probability_model": portfolio.get("probability_model"),
         "candidates": candidates_out,
@@ -133,6 +135,31 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
         "available_odds": odds["available"],
         "odds_note": odds["note"],
     }, 200
+
+
+def _levels_now():
+    from src.utils.ev_calibration import value_levels
+
+    return value_levels()
+
+
+def _calibrate_candidates(candidates_out: list[dict]) -> dict:
+    """推奨買い目に、較正後の EV（ev_calibrated）と購入額加重の期待回収率を付ける。EV の較正が無効のときは何も付けない。"""
+    from src.utils.ev_calibration import LABEL, calibrate_portfolio, load_config
+
+    cal = calibrate_portfolio(candidates_out)
+    if cal is None:
+        return {}
+    kinds = load_config().get("kinds") or {}
+    for item, e in zip(candidates_out, cal["evs"]):
+        item["ev_calibrated"] = round(e, 3)
+        spec = kinds.get(f"cand_{item['bet_type']}")
+        item["ev_calibration_validated"] = bool(spec and spec.get("validated"))
+    rng = load_config().get("range") or {}
+    return {"expected_roi_calibrated": cal["expected_roi"], "expected_return_calibrated": cal["expected_return"],
+            "roi_pct_calibrated": None if cal["expected_roi"] is None else round(cal["expected_roi"] * 100, 1),
+            "roi_calibrated_capped": bool(cal.get("capped")), "ev_label": LABEL,
+            "roi_range_calibrated": [rng["lo"], rng["hi"]] if "lo" in rng and "hi" in rng else None}
 
 
 # ── レースの「価値」一覧（レース選択の見た目用） ──
@@ -145,12 +172,12 @@ _VALUE_TTL_SEC = 20.0
 
 
 def value_level(expected_roi: float | None, n_bets: int) -> str:
-    from src.utils.ev_calibration import calibrated_ev
+    """expected_roi は呼び出し側で較正した値を渡す（EV の較正が有効なら較正後の期待回収率、無効なら従来の値）。閾値も較正の設定に従う。"""
+    from src.utils.ev_calibration import value_levels
 
     if not n_bets or expected_roi is None:
         return "pass"
-    expected_roi = calibrated_ev(expected_roi, "portfolio")     # 既定は無効（config/ev_calibration.json）
-    for name, floor in VALUE_LEVELS:
+    for name, floor in value_levels():
         if expected_roi >= floor:
             return name
     return "pass"
@@ -163,16 +190,21 @@ def _value_row(race: dict[str, Any], payload: dict[str, Any], code: int) -> dict
         return {**base, "level": "none", "reason": payload.get("error", "計算できません"), "expected_roi": None, "n_bets": 0}
     cands = payload.get("candidates") or []
     total = payload.get("total_bet") or 0
-    roi = (payload.get("expected_return") or 0) / total if total else None
-    top = max(cands, key=lambda c: c.get("ev") or 0) if cands else None
+    roi_raw = (payload.get("expected_return") or 0) / total if total else None
+    roi_cal = payload.get("expected_roi_calibrated")             # EV の較正が有効なときだけ入る
+    roi = roi_cal if roi_cal is not None else roi_raw
+    ev_key = "ev_calibrated" if roi_cal is not None else "ev"
+    top = max(cands, key=lambda c: c.get(ev_key) or 0) if cands else None
     return {
         **base,
         "level": value_level(roi, len(cands)),
         "expected_roi": None if roi is None else round(roi, 3),
-        "max_ev": None if top is None else round(top["ev"], 3),
+        "expected_roi_raw": None if roi_raw is None else round(roi_raw, 3),
+        "calibrated": roi_cal is not None,
+        "max_ev": None if top is None else round(top.get(ev_key) or 0, 3),
         "n_bets": len(cands),
         "total_bet": total,
-        "top_bet": None if top is None else {"bet_type": top["bet_type"], "label": top["pair_label"], "ev": round(top["ev"], 3)},
+        "top_bet": None if top is None else {"bet_type": top["bet_type"], "label": top["pair_label"], "ev": round(top.get(ev_key) or 0, 3)},
         "odds_source": payload.get("odds_source"),
         "odds_phase": payload.get("odds_phase"),
     }
@@ -229,7 +261,7 @@ def race_value_summary(
     _apply_day_ranking(rows)
     out = {
         "date": date,
-        "levels": [{"level": n, "min_roi": f} for n, f in VALUE_LEVELS],
+        "levels": [{"level": n, "min_roi": f} for n, f in _levels_now()],
         "max_total_bet": max_total_bet,
         "races": rows,
     }

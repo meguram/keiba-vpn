@@ -6930,7 +6930,29 @@ async def get_race_predictions(race_id: str):
     2026-10-01: 「表示されない/古い」事象の検知用に `freshness` フィールド
     （age_hours / is_stale 等）を付与。既存クライアントは未知キーを無視するため後方互換。
     """
+    def _with_calibrated_ev(resp: dict) -> dict:
+        # 保存済みの予測は保存時点の EV（未較正）を持つので、EV の較正が有効なら読み出し時に較正後の値（ev_*_cal）と買い推奨度を付け直す
+        try:
+            from src.utils.ev_calibration import is_enabled
+            from src.utils.race_probabilities import attach_calibrated_ev, buy_recommendation_tier
+
+            preds = resp.get("predictions")
+            if not is_enabled() or not isinstance(preds, list):
+                return resp
+            out = []
+            for e in preds:
+                if isinstance(e, dict) and any(e.get(k) is not None for k in ("ev_win", "ev_top2", "ev_place")):
+                    e = dict(e)
+                    attach_calibrated_ev(e)
+                    e["buy_tier"] = buy_recommendation_tier(e)
+                out.append(e)
+            return {**resp, "predictions": out, "ev_calibrated": True}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("EV の較正の付与に失敗 %s: %s", race_id, exc)
+            return resp
+
     def _with_position(resp: dict) -> dict:
+        resp = _with_calibrated_ev(resp)
         # 過去走の通過順位から作る位置取り予想（実モデルの予測ではない）。失敗しても予測の応答は返す
         try:
             from src.pipeline.inference.position_forecast import attach_position_forecast
@@ -7693,6 +7715,7 @@ def _compute_composite_scores(
     """
     from src.utils.race_probabilities import (
         assign_mece_marks,
+        attach_calibrated_ev,
         buy_recommendation_tier,
         derive_race_probabilities,
         market_top2_fair_odds,
@@ -7780,6 +7803,7 @@ def _compute_composite_scores(
     for s in scored:
         mt = s.get("mark_type") or "none"
         s["recommendation"] = _MARK_LABELS.get(mt, "")
+        attach_calibrated_ev(s)
         s["buy_tier"] = buy_recommendation_tier(s)
 
     return scored, bet_suggestion

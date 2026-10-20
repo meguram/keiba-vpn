@@ -152,6 +152,9 @@ type PredEntry = {
   top3_prob?: number | null;
   ev_win?: number | null;
   ev_place?: number | null;
+  /** EV の較正が有効なときの、較正後の値。あれば画面はこちらを表示する */
+  ev_win_cal?: number | null;
+  ev_place_cal?: number | null;
   expected_value?: number | null;
   buy_tier?: string;
   win_odds?: number | null;
@@ -220,8 +223,9 @@ function gradeStyle(grade: string | undefined): React.CSSProperties {
   return { background: "rgba(245,158,11,0.2)", color: "var(--warn)" };
 }
 
-function evColor(v: number | null | undefined): string {
+function evColor(v: number | null | undefined, cal = false): string {
   if (v == null) return "var(--text-dim)";
+  if (cal) return v >= 1.1 ? "var(--ok)" : v >= 1.0 ? "var(--accent)" : v >= 0.9 ? "var(--text-dim)" : "var(--err)";      // 較正後: 買い推奨度の閾値に合わせる
   if (v >= 1.3) return "var(--ok)";
   if (v >= 1.0) return "var(--accent)";
   if (v >= 0.8) return "var(--text-dim)";
@@ -643,6 +647,7 @@ export default function RaceDetailPage() {
 
   /* ── AI予測 ── */
   const preds = predData?.predictions ?? [];
+  const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);       // EV の較正が有効なときだけ『(較正後)』と表示する
   const hasPred = predData?.has_prediction === true && preds.some((p) => p.pred_score != null || p.composite_score != null);
   const sortedPreds = hasPred
     ? [...preds].sort((a, b) => (a.composite_rank ?? a.pred_rank ?? 99) - (b.composite_rank ?? b.pred_rank ?? 99))
@@ -696,7 +701,7 @@ export default function RaceDetailPage() {
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>印</th>
               </tr>
               <tr>
-                {(["馬番","馬名","勝率","連対率","複勝率","単勝","複勝","勝期待値","複期待値","推奨","印"] as string[]).map((h, i) => {
+                {(["馬番","馬名","勝率","連対率","複勝率","単勝","複勝",(calibratedEv ? "勝期待値(較正後)" : "勝期待値"),(calibratedEv ? "複期待値(較正後)" : "複期待値"),"推奨","印"] as string[]).map((h, i) => {
                   // AI columns: indices 2–8
                   const isAiCol = i >= 2 && i <= 8;
                   return (
@@ -743,11 +748,11 @@ export default function RaceDetailPage() {
                         ? "●●〜●●"
                         : `${Number(p.place_odds_min).toFixed(1)}〜${Number(p.place_odds_max).toFixed(1)}`}
                     </td>
-                    <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: (p.redacted || p.ev_win == null) ? "var(--text-dim)" : evColor(p.ev_win), fontWeight: 600 }}>
-                      {(p.redacted || p.ev_win == null) ? "●●" : p.ev_win.toFixed(2)}
+                    <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: (p.redacted || (p.ev_win_cal ?? p.ev_win) == null) ? "var(--text-dim)" : evColor(p.ev_win_cal ?? p.ev_win, p.ev_win_cal != null), fontWeight: 600 }}>
+                      {(p.redacted || (p.ev_win_cal ?? p.ev_win) == null) ? "●●" : Number(p.ev_win_cal ?? p.ev_win).toFixed(2)}
                     </td>
-                    <td style={{ ...TD, color: (p.redacted || (p.ev_place ?? p.expected_value) == null) ? "var(--text-dim)" : evColor(p.ev_place ?? p.expected_value), fontWeight: 600 }}>
-                      {(p.redacted || (p.ev_place ?? p.expected_value) == null) ? "●●" : Number(p.ev_place ?? p.expected_value).toFixed(2)}
+                    <td style={{ ...TD, color: (p.redacted || (p.ev_place_cal ?? p.ev_place ?? p.expected_value) == null) ? "var(--text-dim)" : evColor(p.ev_place_cal ?? p.ev_place ?? p.expected_value, p.ev_place_cal != null), fontWeight: 600 }}>
+                      {(p.redacted || (p.ev_place_cal ?? p.ev_place ?? p.expected_value) == null) ? "●●" : Number(p.ev_place_cal ?? p.ev_place ?? p.expected_value).toFixed(2)}
                     </td>
                     <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: 11 }}>{p.buy_tier ?? "—"}</td>
                     <td style={{ ...TD, fontSize: 18, fontWeight: 800, color: mark.color }}>{mark.sym}</td>
@@ -775,7 +780,7 @@ export default function RaceDetailPage() {
       ) : null}
 
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
-        印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / —印なし。期待値: 緑≥1.3 / 青≥1.0 / 赤＜0.8
+        印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / —印なし。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
       </p>
     </div>
   );
