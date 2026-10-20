@@ -119,13 +119,15 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 const sec = (v?: number) => (v != null ? v.toFixed(1) : "—");
 
 export function PredExtras({
-  raceId, entries, pace: paceApi, paceUnified, gate,
+  raceId, entries, pace: paceApi, paceUnified, gate, steeplechase,
 }: {
   raceId: string;
   entries: ExtraEntry[];
   pace?: PaceForecast | null;
   paceUnified?: PaceUnified | null;
   gate?: GateBias | null;
+  /** 障害レース。追走難度 v2 は平地の走りで学習した値で障害では低く出すぎるため、使わない */
+  steeplechase?: boolean;
 }) {
   const unified = !!(paceUnified && paceUnified.level !== "unknown");
   const pace = useMemo(
@@ -184,7 +186,7 @@ export function PredExtras({
       if (unified && hadTd && c && c.seconds != null) {
         m.set(e.horse_number, { ...(m.get(e.horse_number) ?? {}), last3f_sec: c.seconds, last3f_delta: c.dev_sec });
       }
-      const v = e.tracking_v2;
+      const v = steeplechase ? null : e.tracking_v2;
       if (v && typeof v.ease_pct === "number") {
         m.set(e.horse_number, {
           ...(m.get(e.horse_number) ?? {}), v2: true, ease_pct: v.ease_pct, ease_label: v.label,
@@ -193,8 +195,8 @@ export function PredExtras({
       }
     }
     return m;
-  }, [td, unified, entries]);
-  const hasV2 = useMemo(() => entries.some((e) => e.tracking_v2 && typeof e.tracking_v2.ease_pct === "number"), [entries]);
+  }, [td, unified, entries, steeplechase]);
+  const hasV2 = useMemo(() => !steeplechase && entries.some((e) => e.tracking_v2 && typeof e.tracking_v2.ease_pct === "number"), [entries, steeplechase]);
   const baseline = (unified ? paceUnified?.last_3f_baseline_sec : null) ?? pp?.last_3f_baseline_sec;
   const first3f = (unified ? paceUnified?.first_3f_sec : null) ?? pp?.lap_times?.first_3f;
 
@@ -237,6 +239,7 @@ export function PredExtras({
             tdNote={
               <>
                 {tdStatus}
+                {steeplechase && entries.some((e) => e.tracking_v2) && <Note>障害レースでは、平地の走りで学習した新しい追走難度は出しません（従来の追走難度のみ）。</Note>}
                 {tdBroken && !hasV2 && <Note>追走難度・消耗・想定上がりは出せません（{String(td?.error)}）。位置取りの予想だけ表示しています。</Note>}
                 {tdBroken && hasV2 && <Note>流れ・想定上がりの別算出データは出せません（{String(td?.error)}）。追走難度と消耗は表示しています。</Note>}
                 {td && !tdBroken && tdMap.size === 0 && <Note>追走難度は出せません（出走馬の過去走が足りません）。</Note>}
