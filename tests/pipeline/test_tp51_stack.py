@@ -114,3 +114,19 @@ def test_group_columns_partition_is_exact():
     flat = [c for v in g.values() for c in v]
     assert sorted(flat) == sorted(cols) and len(set(flat)) == len(cols)
     assert g["STAGE_AUX"] == ["s_time_pred", "mtl_t_pos_early"]
+
+
+def test_meta_module_matches_stack_scheme(df):
+    """tp51_meta（推論側に載せる形）が、評価に使った S11e（現行 + クロス LR の L3、複勝は現行）と同じ予測を出す。"""
+    from src.pipeline.models import tp51_meta as M
+
+    tr = df[df["year"] < 2024].reset_index(drop=True)
+    va = df[df["year"] == 2024].reset_index(drop=True)
+    expect = S.SCHEMES["S11e_L3lr_win2"](tr, va)
+    Ptr, Pva = S.member_arrays(tr), S.member_arrays(va)
+    y = S._ys(tr)
+    spec = M.fit_cross_lr(Ptr, y, tr["race_id"].to_numpy(), C=0.1)
+    base = S.SCHEMES["S0_spec"](tr, va)
+    got = M.apply_l3(spec, Pva, base, va["race_id"].to_numpy())
+    for t in S.TARGETS:
+        assert np.allclose(got[t], expect[t], atol=1e-9)

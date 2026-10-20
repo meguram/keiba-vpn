@@ -100,6 +100,30 @@ def single_models(log: str) -> list[list]:
     return rows
 
 
+def peryear_table(py: dict) -> str:
+    keys = sorted({k.rsplit("|", 1)[0] for k in py})
+    names = sorted({k.split("|")[0] for k in keys})
+    rows = []
+    for n in names:
+        for mode in ("loyo", "forward"):
+            cells = []
+            for y in (2022, 2023, 2024):
+                c = py.get(f"{n}|{mode}|{y}")
+                cells.append(f"{_f(c['Δwin'])}（{_f(c['win_hi'])}）/ {_f(c['Δtop2'])}" if c else "-")
+            if any(x != "-" for x in cells):
+                rows.append([f"<code>{html.escape(n)}</code>", mode] + cells)
+    return r29._tbl(["方式", "評価", "2022（Δ勝率（上限）/ Δ連対）", "2023", "2024"], rows, ["s", "s", "n", "n", "n"]) if rows else "<p>（未実施）</p>"
+
+
+def logo_table(log: str, full_win: float | None) -> str:
+    rows = []
+    for m in re.finditer(r"\] logo_(\S+): win ([0-9.]+) top2 ([0-9.]+) top3 ([0-9.]+) cols=(\d+)", log):
+        w = float(m.group(2))
+        rows.append([f"<code>{m.group(1)}</code>", m.group(5), m.group(2), (f"{w - full_win:+.5f}" if full_win else "-"), m.group(3), m.group(4)])
+    rows.sort(key=lambda r: -float(r[3]) if r[3] != "-" else 0)
+    return r29._tbl(["抜いたグループ", "残った列数", "勝率 LogLoss", "全列モデルとの差（大きいほどそのグループが効く）", "連対", "複勝"], rows, ["s", "n", "n", "n", "n", "n"]) if rows else "<p>（未実施）</p>"
+
+
 def groups_table(csv_path: Path, imp: dict) -> str:
     import pandas as pd
 
@@ -120,6 +144,13 @@ def build(d: Path) -> None:
     log = (d / "gm_run.log").read_text(encoding="utf-8") if (d / "gm_run.log").exists() else ""
     leak = (d / "stack_leak.log").read_text(encoding="utf-8") if (d / "stack_leak.log").exists() else ""
     summary = (d / "summary.html").read_text(encoding="utf-8") if (d / "summary.html").exists() else ""
+    py = json.loads((d / "stack/peryear.json").read_text(encoding="utf-8")) if (d / "stack/peryear.json").exists() else {}
+    pool2y = json.loads((d / "pool2y/stack/results.json").read_text(encoding="utf-8")) if (d / "pool2y/stack/results.json").exists() else {}
+    v5 = json.loads((d / "v5stack/stack/results.json").read_text(encoding="utf-8")) if (d / "v5stack/stack/results.json").exists() else {}
+    v5py = json.loads((d / "v5stack/stack/peryear.json").read_text(encoding="utf-8")) if (d / "v5stack/stack/peryear.json").exists() else {}
+    sb_rows = [[f"<code>{k.split('|')[0]}</code>", k.split("|")[1], _cell(v)] for k, v in stack.items() if k.startswith("R_")]
+    full_m = re.search(r"\] full: win ([0-9.]+)", log)
+    full_win = float(full_m.group(1)) if full_m else None
     n_schemes = len({k.split("|")[0] for k in stack}) + len(comb)
     style = re.search(r"<style>.*?</style>", r29.STYLE_SRC.read_text(encoding="utf-8"), re.S).group(0)
     csv_path = ROOT / "src/scripts/data/tp51_feature_groups.csv"
@@ -148,8 +179,20 @@ def build(d: Path) -> None:
 <h3>合成の効果（全列モデル比）</h3>
 {gm_table(comb)}
 <p class="muted">多様性: {html.escape(json.dumps(corr, ensure_ascii=False)) if corr else '（未計算）'}</p>
-<h2>4. 別系統のメンバーを V4 の 7 メンバーに足す</h2>
+<h3>1 グループを抜いた全列モデル（leave-one-group-out）</h3>
+{logo_table(log, full_win)}
+<h3>グルーピング型の追加メンバーを V4 の 7 メンバーに足す（valid 2022〜23 の 2 年、粗い段階）</h3>
+{pool_table(pool2y)}
+<h2>4. 別系統のメンバー・seed バギングを V4 の 7 メンバーに足す（valid 2022〜24）</h2>
 {pool_table(stack)}
+<h3>seed を 3 → 6 本にした版への置き換え</h3>
+{r29._tbl(["置き換えたもの", "評価", "Δ勝率（95% 上限）/ Δ連対 / Δ複勝 / 判定"], sb_rows, ["s", "s", "n"]) if sb_rows else "<p>（未実施）</p>"}
+<h2>4b. 年ごとの内訳（主な方式）</h2>
+<p class="muted">前進の 2024 年は『2022〜23 年の 2 年で合成を学習して 2024 年を予測』で、v5 の実運用（過去 OOF で合成を学習 → 次の年に適用）に最も近い。</p>
+{peryear_table(py)}
+<h2>4c. v5 の列セット（構成 d、1,142 列）の LOYO OOF での再確認</h2>
+{stack_table(v5) if v5 else "<p>（v5 の 7 メンバー OOF の完成待ち）</p>"}
+{peryear_table(v5py) if v5py else ""}
 <h2>5. 推論の実用性</h2>
 <ul>
  <li>LR・L3 の合成は、メンバー 7 × 3 対象の logit の線形結合（係数 21〜22 個 × 3 対象）で、推論時間・バンドルサイズへの影響はほぼ無い。</li>
