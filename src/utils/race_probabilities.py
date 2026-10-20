@@ -72,11 +72,37 @@ def derive_race_probabilities(scores: list[float]) -> list[dict[str, float]]:
     return out
 
 
-def estimate_top2_payout_odds(win_odds: float) -> float | None:
-    """連対系の参考オッズ（単勝予測オッズからの経験的換算）。"""
-    if not win_odds or win_odds <= 0:
+# 払戻率（JRA: 単勝・複勝 80%、馬連 77.5%）と、確定オッズから当てはめた補正の定数。
+# 根拠と検証は docs/html/modeling/chapters/ev_calibration_audit.html、当てはめは audit_ev_calibration.py calib。
+RETURN_RATE_UMAREN = 0.775
+TOP2_MARKET_LAMBDA = 0.9      # 単勝の市場確率 q^λ の Harville が、馬連の確定オッズから作る連対確率に最もよく合う指数（λ=1 は人気馬に寄りすぎ）
+PLACE_RANGE_WEIGHT = 0.3      # 複勝の実効オッズ = 下限 + w×(上限−下限)。確定オッズの Σ(1/odds)=3/0.8 を満たす w（的中時の払戻の位置の平均も 0.31）
+
+
+def place_effective_odds(place_min: float | None, place_max: float | None) -> float | None:
+    """複勝の期待払戻（倍）。中央値 (min+max)/2 は実際の払戻より約 9% 高い（Σ(1/odds) が 3/0.8 に届かない）ので、下限寄りに取る。"""
+    if not place_min or place_min <= 0:
         return None
-    return round(float(win_odds) * 1.65, 1)
+    hi = place_max if place_max and place_max >= place_min else place_min
+    return place_min + PLACE_RANGE_WEIGHT * (hi - place_min)
+
+
+def market_top2_fair_odds(win_odds: dict[int, float]) -> dict[int, float]:
+    """連対そのものの馬券は無いので、単勝オッズから作る『馬連プールと整合する連対の公正オッズ』（控除率 22.5% 込み）を返す。
+
+    q = (1/単勝オッズ) を正規化、連対確率 P2 = Harville(q^λ)、公正オッズ = 0.775 / P2。モデルの連対確率 p2 との EV は p2×この値で、
+    p2 が市場の P2 に等しいとき 0.775 になる（以前の『単勝オッズ×1.65』は平均で約 4.4 倍高く、ほぼ全馬が EV≥1 になっていた）。
+    頭数分の単勝オッズが揃わないときは空の辞書。
+    """
+    items = [(int(h), float(o)) for h, o in win_odds.items() if o and float(o) > 0]
+    if len(items) < 3 or len(items) != len(win_odds):
+        return {}
+    hs = [h for h, _ in items]
+    q = np.array([1.0 / o for _, o in items], dtype=float)
+    q = q / q.sum()
+    w = q ** TOP2_MARKET_LAMBDA
+    p2 = np.clip(harville_top2_prob(w / w.sum()), 1e-4, 1.0)
+    return {h: round(float(max(RETURN_RATE_UMAREN / p, 1.0)), 2) for h, p in zip(hs, p2)}
 
 
 # ★: 想定単勝10〜30倍帯の妙味馬（期待値基準）
@@ -259,11 +285,13 @@ def assign_mece_marks(entries: list[dict], situational: bool | None = None, cfg:
 
 
 def buy_recommendation_tier(entry: dict) -> str:
-    """買い判断推奨度（期待値の最大を基準）。"""
+    """買い判断推奨度（期待値の最大を基準）。EV の較正（config/ev_calibration.json、既定は無効）があれば縮約した値で判定する。"""
+    from src.utils.ev_calibration import calibrated_ev
+
     evs = [
-        float(entry.get("ev_win") or 0),
-        float(entry.get("ev_top2") or 0),
-        float(entry.get("ev_place") or 0),
+        calibrated_ev(float(entry.get("ev_win") or 0), "win"),
+        calibrated_ev(float(entry.get("ev_top2") or 0), "top2"),
+        calibrated_ev(float(entry.get("ev_place") or 0), "place"),
     ]
     best = max(evs) if evs else 0.0
     if best >= 1.2:

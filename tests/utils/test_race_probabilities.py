@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import unittest
 
+import pytest
+
 from src.utils.race_probabilities import (
     assign_mece_marks,
     buy_recommendation_tier,
@@ -257,3 +259,50 @@ class TestVectorizedHarville(unittest.TestCase):
         one = np.array([1.0])
         np.testing.assert_allclose(harville_top3_prob(one), [1.0])
         self.assertEqual(len(harville_top3_prob(np.array([]))), 0)
+
+
+def test_market_top2_fair_odds_makes_market_ev_equal_the_payout_rate():
+    """p2 を市場の連対確率に置けば EV は払戻率（馬連 0.775）になる。以前の『単勝×1.65』は平均で数倍高かった。"""
+    import numpy as np
+
+    from src.utils.race_probabilities import (
+        RETURN_RATE_UMAREN,
+        TOP2_MARKET_LAMBDA,
+        harville_top2_prob,
+        market_top2_fair_odds,
+    )
+
+    win_odds = {1: 2.5, 2: 4.0, 3: 6.0, 4: 10.0, 5: 20.0, 6: 40.0, 7: 80.0, 8: 120.0}
+    fair = market_top2_fair_odds(win_odds)
+    q = np.array([1 / o for o in win_odds.values()])
+    q /= q.sum()
+    w = q ** TOP2_MARKET_LAMBDA
+    p2 = harville_top2_prob(w / w.sum())
+    for (h, o), p in zip(fair.items(), p2):
+        assert p * o == pytest.approx(RETURN_RATE_UMAREN, rel=0.02)
+    # 旧換算（×1.65）は人気薄で桁違いに高い
+    assert fair[8] < win_odds[8] * 1.65 / 2
+    # オッズが揃わないレースは計算しない
+    assert market_top2_fair_odds({1: 2.0, 2: 0.0, 3: 5.0, 4: 9.0}) == {}
+    assert market_top2_fair_odds({1: 2.0, 2: 3.0}) == {}
+
+
+def test_place_effective_odds_is_between_min_and_max_near_the_low_end():
+    from src.utils.race_probabilities import PLACE_RANGE_WEIGHT, place_effective_odds
+
+    assert place_effective_odds(1.2, 1.6) == pytest.approx(1.2 + PLACE_RANGE_WEIGHT * 0.4)
+    assert place_effective_odds(1.5, 1.5) == pytest.approx(1.5)
+    assert place_effective_odds(None, 2.0) is None and place_effective_odds(0, 2.0) is None
+    assert place_effective_odds(2.0, None) == pytest.approx(2.0)
+    assert place_effective_odds(1.2, 1.6) < (1.2 + 1.6) / 2
+
+
+def test_buy_tier_uses_calibrated_ev_only_when_enabled(monkeypatch):
+    from src.utils import ev_calibration
+    from src.utils.race_probabilities import buy_recommendation_tier
+
+    e = {"ev_win": 1.5, "ev_top2": 0.5, "ev_place": 0.5}
+    monkeypatch.setattr(ev_calibration, "load_config", lambda: {})
+    assert buy_recommendation_tier(e) == "強推奨"
+    monkeypatch.setattr(ev_calibration, "load_config", lambda: {"enabled": True, "k": {"win": 0.2}, "base": {"win": 0.8}})
+    assert buy_recommendation_tier(e) == "様子見"      # 0.8 + 0.2×(1.5−0.8) = 0.94 → 様子見（0.9 以上）

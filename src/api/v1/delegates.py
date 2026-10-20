@@ -145,8 +145,11 @@ _VALUE_TTL_SEC = 20.0
 
 
 def value_level(expected_roi: float | None, n_bets: int) -> str:
+    from src.utils.ev_calibration import calibrated_ev
+
     if not n_bets or expected_roi is None:
         return "pass"
+    expected_roi = calibrated_ev(expected_roi, "portfolio")     # 既定は無効（config/ev_calibration.json）
     for name, floor in VALUE_LEVELS:
         if expected_roi >= floor:
             return name

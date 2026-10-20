@@ -72,19 +72,26 @@ def _num(x: Any) -> float | None:
 
 def score_entries(entries: list[dict], odds: dict[int, dict], alpha: float = 0.55) -> list[dict]:
     """確率つきの出走馬に、オッズ・期待値・合成スコア・印・買い推奨度を付ける（in-place ではなく新しい一覧を返す）。"""
-    from src.utils.race_probabilities import assign_mece_marks, buy_recommendation_tier, estimate_top2_payout_odds
+    from src.utils.race_probabilities import (
+        assign_mece_marks,
+        buy_recommendation_tier,
+        market_top2_fair_odds,
+        place_effective_odds,
+    )
 
     out: list[dict] = []
+    top2_fair = market_top2_fair_odds({int(e.get("horse_number") or 0): _num((odds.get(int(e.get("horse_number") or 0)) or {}).get("win_odds")) or 0.0 for e in entries})
     for e in entries:
         o = odds.get(int(e.get("horse_number") or 0), {})
         win_odds = _num(o.get("win_odds"))
         pmin, pmax = _num(o.get("place_odds_min")), _num(o.get("place_odds_max"))
         place_avg = (pmin + pmax) / 2 if (pmin and pmax) else None
-        top2_odds = estimate_top2_payout_odds(win_odds) if win_odds else None
+        top2_odds = top2_fair.get(int(e.get("horse_number") or 0))
+        place_eff = place_effective_odds(pmin, pmax)
         pw, p2, p3 = float(e["win_prob"]), float(e["top2_prob"]), float(e["top3_prob"])
         ev_win = round(pw * win_odds, 3) if win_odds and pw > 0 else None
         ev_top2 = round(p2 * top2_odds, 3) if top2_odds and p2 > 0 else None
-        ev_place = round(p3 * place_avg, 3) if place_avg and p3 > 0 else None
+        ev_place = round(p3 * place_eff, 3) if place_eff and p3 > 0 else None
         if p3 > 0 and ev_place:
             composite = (p3 ** alpha) * (ev_place ** (1 - alpha))
         else:
@@ -92,7 +99,7 @@ def score_entries(entries: list[dict], odds: dict[int, dict], alpha: float = 0.5
         out.append({
             **e, "win_odds": round(win_odds, 1) if win_odds else None,
             "place_odds_min": round(pmin, 1) if pmin else None, "place_odds_max": round(pmax, 1) if pmax else None,
-            "place_odds_avg": round(place_avg, 1) if place_avg else None, "top2_odds_est": top2_odds,
+            "place_odds_avg": round(place_avg, 1) if place_avg else None, "place_odds_eff": round(place_eff, 2) if place_eff else None, "top2_odds_est": top2_odds,
             "popularity": o.get("popularity") or None, "estimated_prob": p3,
             "ev_win": ev_win, "ev_top2": ev_top2, "ev_place": ev_place, "expected_value": ev_place,
             "composite_score": round(composite, 4),

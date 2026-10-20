@@ -60,7 +60,7 @@ def test_payload_has_note_source_and_ev_from_model_probabilities():
     by = {p["horse_number"]: p for p in d["predictions"]}
     assert by[1]["win_prob"] == 0.5 and by[1]["top3_prob"] == 0.9 and by[1]["pred_rank"] == 1
     assert by[1]["ev_win"] == pytest.approx(0.5 * 3.0)                                  # 勝率 × 単勝オッズ
-    assert by[1]["ev_place"] == pytest.approx(0.9 * (1.2 + 1.6) / 2)                    # 複勝率 × 複勝オッズ平均
+    assert by[1]["ev_place"] == pytest.approx(0.9 * (1.2 + 0.3 * (1.6 - 1.2)))          # 複勝率 × 複勝の実効オッズ（下限寄り、w=0.3）
     assert by[3]["win_odds"] is None and by[3]["ev_win"] is None                        # オッズが無い馬は期待値も作らない
     assert by[2]["weight"] is None and by[1]["weight_change"] == 2
     assert "pred_score" in by[1] and "composite_score" in by[1]                         # race/[id] 画面が予測ありと判定する項目

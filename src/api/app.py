@@ -7695,7 +7695,8 @@ def _compute_composite_scores(
         assign_mece_marks,
         buy_recommendation_tier,
         derive_race_probabilities,
-        estimate_top2_payout_odds,
+        market_top2_fair_odds,
+        place_effective_odds,
     )
 
     params = _load_composite_params()
@@ -7705,6 +7706,10 @@ def _compute_composite_scores(
     prob_list = derive_race_probabilities(scores)
 
     scored: list[dict] = []
+    top2_fair = market_top2_fair_odds({
+        e["horse_number"]: float((odds_map.get(e["horse_number"], {}).get("predicted_win_odds") or odds_map.get(e["horse_number"], {}).get("win_odds", 0)) or 0)
+        for e in entries
+    })
 
     for e, probs in zip(entries, prob_list):
         hn = e["horse_number"]
@@ -7719,13 +7724,14 @@ def _compute_composite_scores(
         odds_confidence = odds_info.get("confidence", 1.0)
         odds_source = odds_info.get("source", "live")
         place_avg = (place_min + place_max) / 2 if (place_min and place_max) else 0
-        top2_odds = estimate_top2_payout_odds(win_odds) if win_odds else None
+        top2_odds = top2_fair.get(hn)
+        place_eff = place_effective_odds(place_min, place_max)
 
         ev_win = round(win_prob * win_odds, 3) if win_odds and win_prob > 0 else None
         ev_top2 = (
             round(top2_prob * top2_odds, 3) if top2_odds and top2_prob > 0 else None
         )
-        ev_place = round(top3_prob * place_avg, 3) if place_avg and top3_prob > 0 else None
+        ev_place = round(top3_prob * place_eff, 3) if place_eff and top3_prob > 0 else None
 
         if top3_prob > 0 and ev_place:
             composite = (top3_prob ** alpha) * (ev_place ** (1 - alpha))
@@ -7742,6 +7748,7 @@ def _compute_composite_scores(
             "place_odds_min": round(place_min, 1) if place_min else None,
             "place_odds_max": round(place_max, 1) if place_max else None,
             "place_odds_avg": round(place_avg, 1) if place_avg else None,
+            "place_odds_eff": round(place_eff, 2) if place_eff else None,
             "win_odds": round(win_odds, 1) if win_odds else None,
             "top2_odds_est": top2_odds,
             "odds_confidence": round(odds_confidence, 2),

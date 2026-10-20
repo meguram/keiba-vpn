@@ -232,3 +232,16 @@ class PolicyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_rank_context_reads_v3_payload_keys_for_marginals():
+    """v3/v4 の保存形式は連対率・複勝率を place_prob / show_prob に入れる。top2_prob / top3_prob と同じ扱いで α を当てはめる。"""
+    from src.pipeline.inference.betting import _RankContext
+
+    base = [(1, 0.40, 0.62, 0.78), (2, 0.25, 0.48, 0.66), (3, 0.15, 0.32, 0.50), (4, 0.10, 0.22, 0.38), (5, 0.06, 0.14, 0.30), (6, 0.04, 0.22, 0.38)]
+    a = [{"horse_number": h, "win_prob": w, "top2_prob": t2, "top3_prob": t3} for h, w, t2, t3 in base]
+    b = [{"horse_number": h, "win_prob": w, "place_prob": t2, "show_prob": t3} for h, w, t2, t3 in base]
+    ra, rb = _RankContext(a), _RankContext(b)
+    assert rb.report.used_top2 and rb.report.used_top3
+    assert rb.report.alpha2 == ra.report.alpha2 and rb.report.alpha3 == ra.report.alpha3
+    assert rb.prob("umaren", (1, 2)) == ra.prob("umaren", (1, 2))

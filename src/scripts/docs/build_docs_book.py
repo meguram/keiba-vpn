@@ -236,6 +236,8 @@ PARTS: list[Part] = [
           [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("similar_horses_pairs", "似た馬は同じレースで着順が近くなるか（tp-41）"), ("race_volatility", "荒れやすいレースの分析（tp-30）"), ("training_pipeline_decisions", "決定ログ")]),
         C("mark_rules", "印（◎○▲★各1頭＋△複数）の付け方をレースの状況（突出・荒れ・拮抗・通常）で切り替えるかの評価（tp-46）。現行の基準と切替を同じ尺度（◎の勝率・連対カバー・3着内の拾い方・回収率・安定性）で比較し、切替は印の質を下げたので採用しない。印の数の実態（旧ルールは平均11.7個）と新ルールの内容も記す。", "結果",
           [("race_type_marks", "レースの性質で変える印と買い方（tp-43）"), ("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("ev_calibration_audit", "期待値（的中確率×オッズ）の水準の監査。オッズ側・確率側の恒等式（控除率どおり）、全組合せ買いの回収率、連対 EV の『単勝オッズ×1.65』と複勝 EV の中央値オッズが高く出ていた誤りの修正、組合せ券・買い目提案・レース価値の色分けの較正曲線、縮約係数 k（既定は無効）。", "結果",
+          [("exotic_bet_probabilities", "組合せ券の確率の作り方"), ("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("mark_rules", "印の付け方"), ("training_pipeline_decisions", "決定ログ")]),
         C("proven_methods_roi", "回収率 100% 超の実績者の手法と検証（tp-44）。公開情報から集めた手法 12 件（種類の印・検証可能性・原文の場所）、プール間の不整合（Hausch–Ziemba・Dr. Z 型）の 67 戦略、公開ルール（函館の3番人気）の再現、WIN5 のキャリーオーバー、発走直前のオッズ低下。検証できる形で 100% 超を示した公開記録は無く、自前の検証でも区間下限が 100% を超える手法は無かった。", "結果",
           [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("race_type_marks", "レースの性質で変える印と買い方（tp-43）"), ("training_pipeline_decisions", "決定ログ")]),
         C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",

@@ -89,11 +89,15 @@ class _RankContext:
         self.idx = {int(p["horse_number"]): i for i, p in enumerate(rows)}
         win = [float(p["win_prob"]) for p in rows]
 
-        def col(key: str):
-            vals = [p.get(key) for p in rows]
-            return [float(v) for v in vals] if all(v is not None for v in vals) else None
+        def col(*keys: str):
+            # v3/v4 の保存形式（v3_payload）は連対率・複勝率を place_prob / show_prob に入れる
+            for key in keys:
+                vals = [p.get(key) for p in rows]
+                if all(v is not None for v in vals):
+                    return [float(v) for v in vals]
+            return None
 
-        top2, top3 = col("top2_prob"), col("top3_prob")
+        top2, top3 = col("top2_prob", "place_prob"), col("top3_prob", "show_prob")
         self.dist, self.report = fit_rank_distribution(win, top2, top3)
         # 複勝率はモックでなくモデルの出力（総和 3 に正規化したもの）を優先。無ければ着順分布の周辺確率
         self.top3 = normalize_marginal(top3, 3.0) if top3 is not None else self.dist.top3()

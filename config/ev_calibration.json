@@ -1,0 +1,7 @@
+{
+  "enabled": false,
+  "note": "EV の縮約 EV_adj = base + k×(EV−base)。既定は無効。k は audit_ev_calibration.py（2022〜2025 年、V4 の予測 × 確定オッズ・確定払戻）の当てはめ。モデルを更新したら当てはめ直すこと。章: docs/html/modeling/chapters/ev_calibration_audit.html",
+  "fit_years": "2022-2025",
+  "k": {"win": 0.20, "top2": 0.11, "place": 0.24, "umaren": 0.11, "wide": 0.10, "umatan": 0.13, "portfolio": 0.14},
+  "base": {"win": 0.80, "top2": 0.775, "place": 0.80, "umaren": 0.775, "wide": 0.775, "umatan": 0.75, "portfolio": 0.80}
+}
