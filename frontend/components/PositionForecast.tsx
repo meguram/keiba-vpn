@@ -275,7 +275,7 @@ export function PositionForecast({ horses, pace, gate, td, tdNote, embedded }: {
       )}
       {tdNote}
       {cur && !(embedded && selFrom === "list") && detailOf(cur)}
-      {embedded && <HorseList horses={horses} pace={pace} td={td} narrow={narrow} sel={sel} onPick={toggleList} detail={detailOf} />}
+      {embedded && <HorseList horses={horses} pace={pace} td={td} narrow={narrow} sel={sel} onPick={toggleList} detail={(h) => (selFrom === "list" ? detailOf(h) : null)} />}
     </section>
   );
 }
