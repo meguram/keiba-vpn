@@ -11,6 +11,8 @@ import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { ExpectedMeguCell } from "@/components/ExpectedMegu";
+import { PredExtras } from "@/components/PredExtras";
+import type { GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
 import type { ExpectedMegu, ExpectedMeguMeta } from "@/lib/expectedMegu";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
@@ -60,6 +62,7 @@ type PredEntry = {
   place_odds_max?: number | null;
   buy_tier?: string;
   expected_megu?: ExpectedMegu | null;
+  position_forecast?: PosFc | null;
 };
 
 type PredData = {
@@ -72,6 +75,8 @@ type PredData = {
   total_horses?: number;
   predictions?: PredEntry[];
   expected_megu_meta?: ExpectedMeguMeta | null;
+  pace_forecast?: PaceForecast | null;
+  gate_bias?: GateBias | null;
   error?: string;
 };
 
@@ -645,6 +650,9 @@ function RacePanel({
         {pred && !failed && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
         {pred && !failed && (
           <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} />
+        )}
+        {pred && !failed && preds.length > 0 && (
+          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} gate={pred.gate_bias} />
         )}
       </div>
     </section>
