@@ -31,7 +31,7 @@ export function useNarrow(): boolean {
  * 開催場タブ（★ = 特に価値の高いレースの数）、R チップ（推奨の期待回収率で色分け）、前後の R ボタン。
  */
 export function RaceStrip({
-  races, venue, onVenue, values, selectedRaceId, onSelectRace,
+  races, venue, onVenue, values, selectedRaceId, onSelectRace, onWarm,
 }: {
   races: StripRace[];
   venue: string;
@@ -39,6 +39,8 @@ export function RaceStrip({
   values: Map<string, RaceValue>;
   selectedRaceId: string;
   onSelectRace: (raceId: string) => void;
+  /** マウスが乗った／触れ始めたレースを先読みするためのコールバック（任意。GET だけに使う） */
+  onWarm?: (raceId: string) => void;
 }) {
   const narrow = useNarrow();
   const chipsRef = useRef<HTMLDivElement | null>(null);
@@ -98,7 +100,7 @@ export function RaceStrip({
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: narrow ? "nowrap" : "wrap" }}>
         {!narrow && (prev ? (
-          <button onClick={() => onSelectRace(prev.race_id)} style={BTN} title={prev.race_name}>← {roundOf(prev)}R</button>
+          <button onClick={() => onSelectRace(prev.race_id)} onMouseEnter={() => onWarm?.(prev.race_id)} style={BTN} title={prev.race_name}>← {roundOf(prev)}R</button>
         ) : <span style={{ ...BTN, opacity: 0.35, cursor: "default" }}>← 前のR</span>)}
 
         <div
@@ -116,6 +118,9 @@ export function RaceStrip({
               <button
                 key={r.race_id}
                 onClick={() => onSelectRace(r.race_id)}
+                onMouseEnter={() => onWarm?.(r.race_id)}
+                onTouchStart={() => onWarm?.(r.race_id)}
+                onFocus={() => onWarm?.(r.race_id)}
                 aria-current={on ? "true" : undefined}
                 title={`${roundOf(r)}R ${r.race_name ?? ""}\n${valueTitle(v)}`}
                 data-level={lv}
@@ -139,7 +144,7 @@ export function RaceStrip({
         </div>
 
         {!narrow && (next ? (
-          <button onClick={() => onSelectRace(next.race_id)} style={BTN} title={next.race_name}>{roundOf(next)}R →</button>
+          <button onClick={() => onSelectRace(next.race_id)} onMouseEnter={() => onWarm?.(next.race_id)} style={BTN} title={next.race_name}>{roundOf(next)}R →</button>
         ) : <span style={{ ...BTN, opacity: 0.35, cursor: "default" }}>次のR →</span>)}
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { fetchRaceList, getJson } from "@/lib/httpCache";
+import { fetchRaceList, getJson, prefetchJson } from "@/lib/httpCache";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
@@ -26,6 +26,9 @@ type RaceItem = {
   surface?: string;
   grade?: string;
   field_size?: number;
+  start_time?: string;
+  track_condition?: string;
+  entries_count?: number;
 };
 
 type PredEntry = {
@@ -401,69 +404,51 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
   );
 }
 
-/* ── レースカード ── */
-function RaceCard({
-  race,
-  pred,
-  loading,
-  onLoad,
-  value,
-  selected,
-  selectNonce,
+/* ── 選んだ 1 レースの表示 ── */
+function RacePanel({
+  race, pred, loading, onReload, value,
 }: {
   race: RaceItem;
-  selected: boolean;
-  selectNonce: number;
   pred: PredData | null;
   loading: boolean;
-  onLoad: (id: string) => void;
+  onReload: (id: string) => void;
   value?: RaceValue;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  // R チップ（RaceStrip）で選ばれたら、開いて予測を読み込み、画面内に移動する（同じ R をもう一度押しても移動する）
-  useEffect(() => {
-    if (!selected || selectNonce === 0) return;
-    setExpanded(true);
-    if (!pred && !loading) onLoad(race.race_id);
-    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, selectNonce]);
   const hasPred = pred?.has_prediction === true && (pred.predictions?.some((p) => p.win_prob != null) ?? false);
   const preds = pred?.predictions ?? [];
+  const heads = race.entries_count ?? race.field_size ?? pred?.total_horses;
+  const conds = [
+    race.venue,
+    race.distance ? `${race.distance}m` : "",
+    race.surface,
+    race.track_condition ? `馬場 ${race.track_condition}` : "",
+    race.start_time ? `${race.start_time} 発走` : "",
+    heads ? `${heads}頭` : "",
+  ].filter(Boolean);
+  const failed = !loading && pred?.status === "error" && preds.length === 0;
 
   return (
-    <div
-      ref={cardRef}
+    <section
       id={`race-${race.race_id}`}
+      aria-label={`${race.venue ?? ""}${race.round ?? ""}R ${race.race_name ?? ""}`}
+      aria-busy={loading}
       title={valueTitle(value)}
       style={{
-        scrollMarginTop: 230,
-        outline: selected ? "2px solid var(--accent)" : undefined,
         background: value?.level === "hot" ? "linear-gradient(90deg, rgba(249,115,22,0.10), var(--surface) 40%)" : "var(--surface)",
         border: "1px solid var(--border)", borderLeft: `4px solid ${value ? LEVEL_STYLE[value.level].border : "var(--border)"}`,
         borderRadius: 10, overflow: "hidden", marginBottom: 12,
         boxShadow: value?.level === "hot" ? "0 0 12px rgba(249,115,22,0.25)" : undefined,
       }}
     >
-      {/* ヘッダー */}
-      <div
-        style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", flexWrap: "wrap" }}
-        onClick={() => {
-          setExpanded(!expanded);
-          if (!pred && !loading) onLoad(race.race_id);
-        }}
-      >
+      <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <span style={{ background: "var(--accent)", color: "#fff", fontWeight: 800, fontSize: 13, padding: "3px 10px", borderRadius: 4, minWidth: 40, textAlign: "center" }}>
           {race.round}R
         </span>
-        <span style={{ fontWeight: 700, fontSize: 14, color: "#fff" }}>
+        <h2 style={{ margin: 0, fontWeight: 700, fontSize: 16, color: "#fff" }}>
           {race.race_name ?? race.race_id}
           {gradeChip(race.grade)}
-        </span>
-        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
-          {race.venue} {race.distance && `${race.distance}m`} {race.surface}
-        </span>
+        </h2>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{conds.join(" ・ ")}</span>
 
         {value && value.level !== "none" && (
           <span
@@ -477,11 +462,10 @@ function RaceCard({
           </span>
         )}
 
-        {/* 予測サマリー */}
         {hasPred && <RaceSummaryBadges preds={preds} />}
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          {pred && (
+          {pred && !failed && (
             <span style={{
               fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 3,
               background: hasPred ? "rgba(34,197,94,0.12)" : "rgba(107,125,149,0.12)",
@@ -493,44 +477,38 @@ function RaceCard({
           <Link
             href={`/race/${race.race_id}`}
             className="hit44"
-            onClick={(e) => e.stopPropagation()}
             style={{ fontSize: 11, color: "var(--accent)", textDecoration: "none", border: "1px solid rgba(59,130,246,0.3)", padding: "3px 8px", borderRadius: 4 }}
           >
             詳細 →
           </Link>
-          <span style={{ fontSize: 16, color: "var(--text-dim)", userSelect: "none" }}>{expanded ? "▲" : "▼"}</span>
         </div>
       </div>
 
-      {/* 展開コンテンツ */}
-      {expanded && (
-        <div className="wp-race-body" style={{ borderTop: "1px solid var(--border)", padding: "0 18px 14px" }}>
-          {loading && (
-            <div style={{ padding: "20px 0", textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
-              <div style={{ width: 24, height: 24, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 8px" }} />
-              予測データを取得中…
-            </div>
-          )}
-          {!loading && !pred && (
-            <div style={{ padding: "16px 0", display: "flex", gap: 10, alignItems: "center" }}>
-              <button
-                style={{ background: "#1e3a5f", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)", padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                onClick={() => onLoad(race.race_id)}
-              >
-                🤖 予測を取得
-              </button>
-              <Link href={`/race/${race.race_id}`} style={{ fontSize: 12, color: "var(--accent)" }}>
-                レース詳細で予測を実行 →
-              </Link>
-            </div>
-          )}
-          {pred && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
-          {pred && (
-            <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} />
-          )}
-        </div>
-      )}
-    </div>
+      <div className="wp-race-body" style={{ borderTop: "1px solid var(--border)", padding: "0 18px 14px" }}>
+        {(loading || (!pred && !failed)) && (
+          <div role="status" style={{ padding: "20px 0", textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+            <div style={{ width: 24, height: 24, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 8px" }} />
+            予測データを取得中…
+          </div>
+        )}
+        {failed && (
+          <div role="alert" style={{ margin: "14px 0", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "12px 16px", color: "var(--err)", fontSize: 13, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span>⚠️ このレースの予測を取得できませんでした。</span>
+            <button
+              type="button"
+              onClick={() => onReload(race.race_id)}
+              style={{ marginLeft: "auto", minHeight: 44, padding: "0 16px", borderRadius: 8, border: "1px solid var(--accent)", background: "rgba(59,130,246,0.15)", color: "var(--accent)", cursor: "pointer", fontSize: 13 }}
+            >
+              再読み込み
+            </button>
+          </div>
+        )}
+        {pred && !failed && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
+        {pred && !failed && (
+          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} />
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -546,12 +524,9 @@ export default function WeeklyPredictionsPage() {
   const [racesError, setRacesError] = useState("");
   const [datesError, setDatesError] = useState("");
   const [datesReload, setDatesReload] = useState(0);
-  const [bulkLoading, setBulkLoading] = useState(false);
-  const bulkAbort = useRef<AbortController | null>(null);
   const raceValues = useRaceValues(selectedDate);
   const [selectedVenue, setSelectedVenue] = useState("");
   const [selectedRaceId, setSelectedRaceId] = useState("");
-  const [selectNonce, setSelectNonce] = useState(0);
   const today = useMemo(() => todayJst(), []);
 
   /** URL の ?date= ?week= ?venue= ?race= を書き換える（再読込・共有しても同じ表示に戻る） */
@@ -573,18 +548,30 @@ export default function WeeklyPredictionsPage() {
     [races, activeVenue],
   );
 
+  /* 表示する 1 レース: ?race= で指定されたレース。無い・この開催場に無いときは、その開催場の最初のレース */
+  const activeRace = useMemo(
+    () => visibleRaces.find((r) => r.race_id === selectedRaceId) ?? visibleRaces[0],
+    [visibleRaces, selectedRaceId],
+  );
+  const activeRaceId = activeRace?.race_id ?? "";
+
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const v = q.get("venue");
     if (v) setSelectedVenue(v);
     const r = q.get("race");
-    if (r) { setSelectedRaceId(r); setSelectNonce(1); }      // ?race= で開いたときは、そのレースへ移動して開く
+    if (r) setSelectedRaceId(r);
   }, []);
 
+  function firstRaceOf(v: string): RaceItem | undefined {
+    return races.filter((r) => r.venue === v).sort((a, b) => Number(a.round ?? 0) - Number(b.round ?? 0))[0];
+  }
+
   function chooseVenue(v: string) {
+    const first = firstRaceOf(v);
     setSelectedVenue(v);
-    setSelectedRaceId("");
-    syncUrl({ venue: v, race: null });
+    setSelectedRaceId(first?.race_id ?? "");
+    syncUrl({ venue: v, race: first?.race_id ?? null });
   }
 
   function chooseDate(d: string) {
@@ -597,7 +584,6 @@ export default function WeeklyPredictionsPage() {
     const r = races.find((x) => x.race_id === raceId);
     if (r?.venue && r.venue !== activeVenue) setSelectedVenue(r.venue);
     setSelectedRaceId(raceId);
-    setSelectNonce((n) => n + 1);
     syncUrl({ race: raceId, ...(r?.venue ? { venue: r.venue } : {}) });
   }
 
@@ -677,8 +663,9 @@ export default function WeeklyPredictionsPage() {
   }, [selectedDate, loadRaces]);
 
   /* 個別レース予測取得 */
-  const loadPred = useCallback(async (raceId: string) => {
+  const loadPred = useCallback(async (raceId: string, force = false) => {
     setLoadingPred((prev) => ({ ...prev, [raceId]: true }));
+    if (force) setPreds((prev) => ({ ...prev, [raceId]: null }));
     if (USE_MOCK) {
       await new Promise((r) => setTimeout(r, 200));
       setPreds((prev) => ({ ...prev, [raceId]: getMockPredictions(raceId) }));
@@ -686,7 +673,7 @@ export default function WeeklyPredictionsPage() {
       return;
     }
     try {
-      const d = await getJson<PredData>(`/api/race/${raceId}/predictions`, { ttlMs: 15_000 }).catch((): PredData => ({ status: "error", predictions: [] }));
+      const d = await getJson<PredData>(`/api/race/${raceId}/predictions`, { ttlMs: 15_000, force }).catch((): PredData => ({ status: "error", predictions: [] }));
       setPreds((prev) => ({ ...prev, [raceId]: d }));
     } catch {
       setPreds((prev) => ({ ...prev, [raceId]: { status: "error", predictions: [] } }));
@@ -695,47 +682,47 @@ export default function WeeklyPredictionsPage() {
     }
   }, []);
 
-  /* 全レース一括取得 */
-  async function loadAllPreds() {
-    if (!visibleRaces.length) return;
-    setBulkLoading(true);
-    bulkAbort.current = new AbortController();
-    const signal = bulkAbort.current.signal;
-    for (const race of visibleRaces) {
-      if (signal.aborted) break;
-      if (preds[race.race_id]) continue;
-      setLoadingPred((prev) => ({ ...prev, [race.race_id]: true }));
-      if (USE_MOCK) {
-        await new Promise((r) => setTimeout(r, 100));
-        if (!signal.aborted) {
-          setPreds((prev) => ({ ...prev, [race.race_id]: getMockPredictions(race.race_id) }));
-        }
-        setLoadingPred((prev) => ({ ...prev, [race.race_id]: false }));
-        continue;
-      }
-      try {
-        const res = await fetch(`/api/race/${race.race_id}/predictions`, { signal });
-        const d: PredData = res.ok ? await res.json() : { status: "error", predictions: [] };
-        setPreds((prev) => ({ ...prev, [race.race_id]: d }));
-      } catch { /* ignore abort */ } finally {
-        setLoadingPred((prev) => ({ ...prev, [race.race_id]: false }));
-      }
+  /* マウスが乗った／触れ始めたレースの予測を先読みする。連続で動かしたときは、止まった（150ms）レースだけ */
+  const warmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warmPred = useCallback((id: string) => {
+    if (USE_MOCK) return;
+    if (warmTimer.current) clearTimeout(warmTimer.current);
+    warmTimer.current = setTimeout(() => prefetchJson(`/api/race/${id}/predictions`, { ttlMs: 15_000 }), 150);
+  }, []);
+
+  /* 選んだレースの予測だけを取得する（素早く切り替えたときは最後に選んだものだけ。取得済みは即表示）。
+     表示は activeRaceId の状態だけを見るので、遅れて届いた別レースの応答が画面を上書きすることはない */
+  useEffect(() => {
+    if (!activeRaceId || preds[activeRaceId] || loadingPred[activeRaceId]) return;
+    const id = activeRaceId;
+    const timer = setTimeout(() => { void loadPred(id); }, 120);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRaceId, preds]);
+
+  /* 既定のレース（先頭）が選ばれたときも URL に race を入れる（再読み込み・共有で同じレースが開く） */
+  useEffect(() => {
+    if (!activeRace) return;
+    const cur = new URLSearchParams(window.location.search).get("race");
+    if (cur !== activeRace.race_id) syncUrl({ race: activeRace.race_id, ...(activeRace.venue ? { venue: activeRace.venue } : {}) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRace?.race_id]);
+
+  /* ←/→ キーで前後のレースへ（入力欄では無効） */
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const el = e.target as HTMLElement | null;
+      if (el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)) return;
+      const i = visibleRaces.findIndex((r) => r.race_id === activeRaceId);
+      const to = visibleRaces[i + (e.key === "ArrowRight" ? 1 : -1)];
+      if (i >= 0 && to) { e.preventDefault(); chooseRace(to.race_id); }
     }
-    setBulkLoading(false);
-  }
-
-  function stopBulk() {
-    bulkAbort.current?.abort();
-    setBulkLoading(false);
-  }
-
-  /* 統計 */
-  const visiblePreds = visibleRaces.map((r) => preds[r.race_id]).filter((p): p is PredData => !!p);
-  const loadedCount = visiblePreds.length;
-  const predOkCount = visiblePreds.filter((p) => p.has_prediction).length;
-  const totalEVOk = visiblePreds
-    .flatMap((p) => p.predictions ?? [])
-    .filter((h) => (h.ev_win_cal ?? h.ev_win ?? 0) >= 1.0).length;
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleRaces, activeRaceId, races]);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
@@ -760,50 +747,6 @@ export default function WeeklyPredictionsPage() {
         </div>
       </div>
 
-      {/* コントロールバー */}
-      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "12px 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          {visibleRaces.length > 0 && (
-            <>
-              {!bulkLoading ? (
-                <button
-                  style={{ background: "#1e3a5f", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)", padding: "7px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                  onClick={loadAllPreds}
-                >
-                  🤖 {activeVenue} 全{visibleRaces.length}レースの予測を取得
-                </button>
-              ) : (
-                <button
-                  style={{ background: "rgba(239,68,68,0.12)", color: "#f87171", border: "1px solid rgba(239,68,68,0.3)", padding: "7px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                  onClick={stopBulk}
-                >
-                  ⏹ 取得を中止
-                </button>
-              )}
-            </>
-          )}
-
-          {/* 統計バッジ */}
-          {loadedCount > 0 && (
-            <div style={{ display: "flex", gap: 8, marginLeft: 4, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, background: "rgba(107,125,149,0.12)", color: "var(--text-dim)" }}>
-                {loadedCount}/{visibleRaces.length}R 取得済
-              </span>
-              {predOkCount > 0 && (
-                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, background: "rgba(34,197,94,0.10)", color: "var(--ok)" }}>
-                  予測済: {predOkCount}R
-                </span>
-              )}
-              {totalEVOk > 0 && (
-                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, background: "rgba(59,130,246,0.10)", color: "#60a5fa" }}>
-                  EV≥1.0: 計{totalEVOk}頭
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* メインコンテンツ */}
       <div className="wp-main" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
         {/* 凡例 */}
@@ -813,11 +756,6 @@ export default function WeeklyPredictionsPage() {
             期待値（過去の実績に合わせて較正した期待回収率）: <strong style={{ color: "#22c55e" }}>≥1.10</strong> / <strong style={{ color: "#60a5fa" }}>≥1.00</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.90</strong> / <strong style={{ color: "#f87171" }}>＜0.90</strong>
           </span>
         </div>
-
-        {(() => {
-          const loc = visiblePreds.find((p) => p.prediction_source === "backfill" || p.prediction_source === "shadow");
-          return loc ? <PredictionSourceBadge source={loc.prediction_source} note={loc.prediction_note} /> : null;
-        })()}
 
         {loadingRaces && (
           <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-dim)" }}>
@@ -853,25 +791,24 @@ export default function WeeklyPredictionsPage() {
               venue={activeVenue}
               onVenue={chooseVenue}
               values={raceValues}
-              selectedRaceId={selectedRaceId}
+              selectedRaceId={activeRaceId}
               onSelectRace={chooseRace}
+              onWarm={warmPred}
             />
             <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-dim)" }}>
-              {selectedDate}{activeVenue ? ` ${activeVenue}` : ""} — {visibleRaces.length}レース
-              {bulkLoading && <span style={{ marginLeft: 8, color: "var(--accent)" }}>⏳ 取得中…</span>}
+              {selectedDate}{activeVenue ? ` ${activeVenue}` : ""} — {visibleRaces.length}レース中 {activeRace?.round}R を表示
+              <span className="hide-narrow" style={{ marginLeft: 8 }}>（← → キーで前後のレース）</span>
             </div>
-            {visibleRaces.map((race) => (
-              <RaceCard
-                key={race.race_id}
-                race={race}
-                pred={preds[race.race_id] ?? null}
-                loading={loadingPred[race.race_id] ?? false}
-                onLoad={loadPred}
-                value={raceValues.get(race.race_id)}
-                selected={race.race_id === selectedRaceId}
-                selectNonce={selectNonce}
+            {activeRace && (
+              <RacePanel
+                key={activeRace.race_id}
+                race={activeRace}
+                pred={preds[activeRace.race_id] ?? null}
+                loading={loadingPred[activeRace.race_id] ?? false}
+                onReload={(id) => { void loadPred(id, true); }}
+                value={raceValues.get(activeRace.race_id)}
               />
-            ))}
+            )}
           </>
         )}
       </div>
