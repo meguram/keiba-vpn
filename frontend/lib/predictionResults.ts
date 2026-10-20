@@ -89,7 +89,7 @@ export const SCOPES: { id: PredictionResults["scope"]; label: string }[] = [
 
 export const MARK_META: Record<MarkKey, { sym: string; label: string; color: string }> = {
   honmei: { sym: "◎", label: "本命（1着優位）", color: "#ef4444" },
-  pair: { sym: "○", label: "対抗（2連系の相手）", color: "#3b82f6" },
+  pair: { sym: "○", label: "対抗（連対候補）", color: "#3b82f6" },
   star: { sym: "★", label: "中穴妙味（10〜30倍）", color: "#a78bfa" },
 };
 

@@ -72,6 +72,31 @@ class TestRaceBetSuggestion(unittest.TestCase):
         fukusho = [p for p in out["picks"] if p["bet_type"] == "fukusho"]
         self.assertTrue(any(p["horses"] == [3] for p in fukusho))
 
+    def test_trio_uses_maybe_partners_and_symbol(self):
+        def e(hn, mark, ev_top2, ev_place, ev_win=0.5):
+            return {"horse_number": hn, "horse_name": str(hn), "mark_type": mark, "win_prob": 0.1, "top2_prob": 0.3,
+                    "top3_prob": 0.4, "win_odds": 10.0, "ev_win": ev_win, "ev_top2": ev_top2, "ev_place": ev_place}
+
+        entries = [e(12, "honmei", 0.5, 0.94), e(8, "pair", 0.5, 0.94), e(7, "anchor", 0.5, 1.0), e(5, "anchor", 0.5, 0.99)]
+        out = suggest_race_bets(entries)
+        trios = [p for p in out["picks"] if p["bet_type"] == "trio"]
+        self.assertEqual(len(trios), 2)
+        for p in trios:
+            self.assertEqual(p["marks"], ["◎", "○", "△"])
+            self.assertEqual(p["horses"][:2], [12, 8])
+            self.assertIn(p["horses"][2], (7, 5))
+            self.assertEqual(len(p["selection"].split("-")), 3)
+        self.assertEqual(len({p["selection"] for p in trios}), 2)
+
+    def test_old_saved_data_with_multiple_pairs_still_works(self):
+        entries = self._base_entries()
+        entries.append({
+            "horse_number": 9, "horse_name": "F", "mark_type": "pair", "win_prob": 0.07, "top2_prob": 0.33,
+            "top3_prob": 0.45, "win_odds": 9.0, "ev_win": 0.7, "ev_top2": 1.04, "ev_place": 1.0,
+        })
+        out = suggest_race_bets(entries)
+        self.assertTrue(any(p["bet_type"] == "umaren" for p in out["picks"]))
+
     def test_empty_entries(self):
         out = suggest_race_bets([])
         self.assertEqual(out["picks"], [])

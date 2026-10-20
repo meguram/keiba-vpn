@@ -1,4 +1,8 @@
-"""印・期待値（勝/連/複EV）からレース単位の馬券提案を生成する。"""
+"""印・期待値（勝/連/複EV）からレース単位の馬券提案を生成する。
+
+印: ◎(honmei)・○(pair)・▲(show_val)・★(star) は各1頭、△(anchor) は複数（3連系の相手候補）。
+旧ルールで保存された予測には ○・▲ が複数付いているものがあるので、複数の場合も扱えるようにしてある。
+"""
 
 from __future__ import annotations
 
@@ -17,7 +21,7 @@ BET_TYPE_LABELS: dict[str, str] = {
 MARK_SYMBOLS: dict[str, str] = {
     "honmei": "◎",
     "pair": "○",
-    "anchor": "✓",
+    "anchor": "△",
     "show_val": "▲",
     "star": "★",
     "none": "",
@@ -89,10 +93,10 @@ def _make_pick(
         selection = _pair_selection(horses[0], horses[1], ordered=True)
     elif bet_type == "tierce" and len(horses) >= 3:
         selection = f"{horses[0]}→{horses[1]}→{horses[2]}"
-    elif len(horses) >= 2:
-        selection = _pair_selection(horses[0], horses[1], ordered=ordered)
     elif len(horses) == 3:
         selection = f"{horses[0]}-{horses[1]}-{horses[2]}"
+    elif len(horses) >= 2:
+        selection = _pair_selection(horses[0], horses[1], ordered=ordered)
     else:
         selection = "-".join(labels)
 
@@ -131,7 +135,6 @@ def suggest_race_bets(entries: list[dict]) -> dict[str, Any]:
     pairs = _all_by_mark(entries, "pair")
     pair = pairs[0] if pairs else None
     anchors = _all_by_mark(entries, "anchor")
-    anchor = anchors[0] if anchors else None
     show_vals = _all_by_mark(entries, "show_val")
     show_val = max(show_vals, key=lambda x: _ev(x, "ev_place")) if show_vals else None
     star = _pick_by_mark(entries, "star")
@@ -188,7 +191,7 @@ def suggest_race_bets(entries: list[dict]) -> dict[str, Any]:
     for e in anchors:
         ev = _ev(e, "ev_place")
         if ev >= _EV_WATCH:
-            fukusho_candidates.append((e, ev, "✓紐の複勝安定", ["✓"]))
+            fukusho_candidates.append((e, ev, "△の複勝安定", ["△"]))
 
     seen_fukusho: set[int] = set()
     for e, ev, lbl, marks in sorted(fukusho_candidates, key=lambda x: -x[1])[:4]:
@@ -259,25 +262,31 @@ def suggest_race_bets(entries: list[dict]) -> dict[str, Any]:
                         )
                     )
 
-    # ── 3連系（◎○✓） ──
-    if honmei and pair and anchor:
-        h1, h2, h3 = _hn(honmei), _hn(pair), _hn(anchor)
-        trio_ev = (
-            _ev(honmei, "ev_place") + _ev(pair, "ev_place") + _ev(anchor, "ev_place")
-        ) / 3
-        if trio_ev >= _EV_WATCH:
+    # ── 3連系（◎○ ＋ 相手△） ──
+    if honmei and pair and anchors:
+        h1, h2 = _hn(honmei), _hn(pair)
+        partners = sorted(anchors, key=lambda x: _ev(x, "ev_place"), reverse=True)[:3]
+        for i, a in enumerate(partners):
+            h3 = _hn(a)
+            trio_ev = (
+                _ev(honmei, "ev_place") + _ev(pair, "ev_place") + _ev(a, "ev_place")
+            ) / 3
+            if trio_ev < _EV_WATCH:
+                continue
+            suffix = f"（{i + 1}点目）" if i > 0 else ""
             picks.append(
                 _make_pick(
                     bet_type="trio",
                     horses=[h1, h2, h3],
                     ev=trio_ev,
                     ev_kind="複EV",
-                    marks=["◎", "○", "✓"],
-                    reason="◎○✓の3列紐で3連複圏の期待",
+                    marks=["◎", "○", "△"],
+                    reason=f"◎○と相手△で3連複圏の期待{suffix}",
                     priority=6,
                 )
             )
         if _ev(honmei, "ev_win") >= _EV_OK:
+            h3 = _hn(partners[0])
             tierce_ev = _ev(honmei, "ev_win")
             picks.append(
                 _make_pick(
@@ -285,8 +294,8 @@ def suggest_race_bets(entries: list[dict]) -> dict[str, Any]:
                     horses=[h1, h2, h3],
                     ev=tierce_ev,
                     ev_kind="勝EV",
-                    marks=["◎", "○", "✓"],
-                    reason="◎軸の3連単（○→✓）",
+                    marks=["◎", "○", "△"],
+                    reason="◎軸の3連単（○→△）",
                     priority=7,
                     ordered=True,
                 )

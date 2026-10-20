@@ -29,7 +29,7 @@ DEFAULT_MAX_TOTAL_BET = 2000
 BET_TYPES = ["tansho", "fukusho", "umaren", "wide", "sanrenpuku"]
 BET_LABELS = {"tansho": "単勝", "fukusho": "複勝", "umaren": "馬連", "wide": "ワイド", "umatan": "馬単", "sanrenpuku": "3連複"}
 MARKS = ("honmei", "pair", "star")
-MARK_SYMBOLS = {"honmei": "◎", "pair": "○", "star": "★", "anchor": "✓", "show_val": "▲"}
+MARK_SYMBOLS = {"honmei": "◎", "pair": "○", "star": "★", "anchor": "△", "show_val": "▲"}
 _PAYOFF_KEYS = {"単勝": "tansho", "複勝": "fukusho", "馬連": "umaren", "ワイド": "wide", "馬単": "umatan",
                 "三連複": "sanrenpuku", "3連複": "sanrenpuku"}
 

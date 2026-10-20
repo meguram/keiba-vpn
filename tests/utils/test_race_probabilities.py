@@ -37,16 +37,71 @@ class TestRaceProbabilities(unittest.TestCase):
         self.assertEqual(types.count("honmei"), 1)
         self.assertLessEqual(types.count("star"), 1)
 
-    def test_mece_allows_multiple_pair(self):
+    def _race(self, n=14, seed=0):
+        import random
+
+        rng = random.Random(seed)
+        raw = [rng.random() ** 2 + 0.02 for _ in range(n)]
+        t = sum(raw)
+        win = sorted((r / t for r in raw), reverse=True)
+        out = []
+        for i, w in enumerate(win):
+            out.append({"horse_number": i + 1, "win_prob": w, "top2_prob": min(1.0, w * 2.1), "top3_prob": min(1.0, w * 3.0)})
+        return out
+
+    def test_each_mark_except_maybe_is_single(self):
+        for seed in range(20):
+            entries = self._race(14, seed)
+            assign_mece_marks(entries)
+            c = {k: [e["mark_type"] for e in entries].count(k) for k in ("honmei", "pair", "show_val", "star")}
+            self.assertTrue(all(v <= 1 for v in c.values()), c)
+
+    def test_pair_is_highest_top2_after_honmei(self):
         entries = [
-            {"horse_number": 1, "win_prob": 0.22, "top2_prob": 0.5, "top3_prob": 0.6},
+            {"horse_number": 1, "win_prob": 0.3, "top2_prob": 0.5, "top3_prob": 0.6},
             {"horse_number": 2, "win_prob": 0.1, "top2_prob": 0.45, "top3_prob": 0.5},
             {"horse_number": 3, "win_prob": 0.08, "top2_prob": 0.4, "top3_prob": 0.48},
             {"horse_number": 4, "win_prob": 0.05, "top2_prob": 0.15, "top3_prob": 0.3},
         ]
         assign_mece_marks(entries)
-        pairs = [e for e in entries if e["mark_type"] == "pair"]
-        self.assertGreaterEqual(len(pairs), 2)
+        types = {e["horse_number"]: e["mark_type"] for e in entries}
+        self.assertEqual(types[1], "honmei")
+        self.assertEqual(types[2], "pair")
+        self.assertNotEqual(types[3], "pair")
+
+    def test_pair_not_assigned_below_threshold(self):
+        entries = [{"horse_number": i + 1, "win_prob": 1 / 12, "top2_prob": 1 / 12 * 1.1, "top3_prob": 0.25} for i in range(12)]
+        assign_mece_marks(entries)
+        self.assertEqual([e["mark_type"] for e in entries].count("pair"), 0)
+        self.assertEqual([e["mark_type"] for e in entries].count("honmei"), 0)
+
+    def test_maybe_limit_by_runner_count(self):
+        from src.utils.race_probabilities import maybe_limit
+
+        self.assertEqual([maybe_limit(n) for n in (3, 5, 7, 8, 12, 13, 18)], [1, 2, 2, 3, 3, 4, 4])
+
+    def test_maybe_marks_capped_and_ordered_by_top3(self):
+        entries = self._race(16, 3)
+        assign_mece_marks(entries)
+        maybes = [e for e in entries if e["mark_type"] == "anchor"]
+        self.assertLessEqual(len(maybes), 4)
+        others = [e for e in entries if e["mark_type"] == "none" and e["top3_prob"] >= 1 / 16 * 1.35]
+        if maybes and others:
+            self.assertGreaterEqual(min(m["top3_prob"] for m in maybes), max(o["top3_prob"] for o in others) - 1e-12)
+
+    def test_total_marks_stay_small(self):
+        for n in (6, 10, 14, 18):
+            for seed in range(10):
+                entries = self._race(n, seed)
+                assign_mece_marks(entries)
+                marked = sum(1 for e in entries if e["mark_type"] != "none")
+                self.assertLessEqual(marked, 3 + 4 + 1)
+
+    def test_one_mark_per_horse_and_empty(self):
+        assign_mece_marks([])
+        entries = self._race(10, 1)
+        assign_mece_marks(entries)
+        self.assertTrue(all(isinstance(e["mark_type"], str) for e in entries))
 
     def test_qualifies_star_odds_band(self):
         self.assertTrue(

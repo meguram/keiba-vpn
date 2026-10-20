@@ -7764,9 +7764,9 @@ def _compute_composite_scores(
     bet_suggestion = suggest_race_bets(scored)
     _MARK_LABELS = {
         "honmei": "◎ 1着優位",
-        "pair": "○ 2連相手",
-        "anchor": "✓ 3列紐",
-        "show_val": "▲ 複勝妙味",
+        "pair": "○ 連対候補",
+        "anchor": "△ 馬券内の候補",
+        "show_val": "▲ 単穴",
         "star": "★ 中穴妙味",
         "none": "",
     }

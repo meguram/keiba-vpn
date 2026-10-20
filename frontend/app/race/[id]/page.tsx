@@ -198,7 +198,7 @@ function fmtOdds(v: number | null | undefined): { text: string; cls: string } {
 const MARK_META: Record<string, { sym: string; color: string; bg: string }> = {
   honmei:   { sym: "◎", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
   pair:     { sym: "○", color: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
-  anchor:   { sym: "✓", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
+  anchor:   { sym: "△", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
   show_val: { sym: "▲", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
   star:     { sym: "★", color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
   none:     { sym: "—", color: "var(--text-dim)", bg: "transparent" },
@@ -775,7 +775,7 @@ export default function RaceDetailPage() {
       ) : null}
 
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
-        印: ◎1着優位・★中穴は各1頭まで / ○2連相手・✓3列紐・▲複勝妙味は複数可 / —回目に入れない。期待値: 緑≥1.3 / 青≥1.0 / 赤＜0.8
+        印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / —印なし。期待値: 緑≥1.3 / 青≥1.0 / 赤＜0.8
       </p>
     </div>
   );

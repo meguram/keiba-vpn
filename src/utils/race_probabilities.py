@@ -101,17 +101,30 @@ def qualifies_star_mark(entry: dict, base_prob: float) -> bool:
     return False
 
 
+# △（mark_type=anchor）の上限。頭数が少ないレースでは減らす（頭数の下限, 上限）。
+MAYBE_LIMITS: tuple[tuple[int, int], ...] = ((13, 4), (8, 3), (5, 2), (0, 1))
+
+
+def maybe_limit(n_runners: int) -> int:
+    """頭数に応じた △ の最大頭数（13頭以上 4、8〜12頭 3、5〜7頭 2、4頭以下 1）。"""
+    for min_n, limit in MAYBE_LIMITS:
+        if n_runners >= min_n:
+            return limit
+    return 0
+
+
 def assign_mece_marks(entries: list[dict]) -> None:
     """
-    印を付与（in-place）。◎・★は各1頭まで、○・✓・▲は複数頭可（1頭1印）。
+    印を付与（in-place）。◎○▲★は各1頭まで、△は複数頭（上限は maybe_limit）。1頭1印。
 
-    mark_type:
+    mark_type（表示記号）:
       honmei   … 1着優位（◎）※1頭のみ
-      pair     … 2連系の相手優位（○）※複数可
-      anchor   … 3列目の紐で優位（✓）※複数可
-      show_val … 勝率低・複勝率高（▲）※複数可
+      pair     … 連対確率が◎の次に高い（○）※1頭のみ
+      show_val … 勝率低・複勝率高の単穴（▲）※1頭のみ
       star     … 10〜30倍帯で期待値が高い（★）※1頭のみ
+      anchor   … 馬券内に来るかもしれない（△）※複数。3連系の相手候補。保存データ互換のため内部名は anchor のまま
       none     … 印なし
+    旧ルールで保存された予測には ○・▲ が複数付いているものがあるが、保存済みの mark_type は書き換えない。
     """
     n = len(entries)
     if n == 0:
@@ -128,19 +141,16 @@ def assign_mece_marks(entries: list[dict]) -> None:
     def _show_val_gap(entry: dict) -> float:
         return float(entry.get("top3_prob") or 0) - float(entry.get("win_prob") or 0)
 
+    def _free() -> list[dict]:
+        return [e for e in entries if e.get("mark_type") == "none"]
+
     # ◎ 1着優位（1頭）
     by_win = sorted(entries, key=lambda x: float(x.get("win_prob") or 0), reverse=True)
-    honmei_hn: int | None = None
     if by_win and float(by_win[0].get("win_prob") or 0) >= base * 1.1:
         by_win[0]["mark_type"] = "honmei"
-        honmei_hn = int(by_win[0].get("horse_number") or 0)
 
     # ★ 中穴妙味（1頭・◎以外）
-    star_candidates = [
-        e
-        for e in entries
-        if e.get("mark_type") == "none" and qualifies_star_mark(e, base)
-    ]
+    star_candidates = [e for e in _free() if qualifies_star_mark(e, base)]
     if star_candidates:
         star = max(
             star_candidates,
@@ -151,35 +161,27 @@ def assign_mece_marks(entries: list[dict]) -> None:
         )
         star["mark_type"] = "star"
 
-    star_hn = next(
-        (int(e.get("horse_number") or 0) for e in entries if e.get("mark_type") == "star"),
-        None,
-    )
+    # ○ 連対確率が最も高い馬（1頭・◎★以外、閾値を満たすときだけ）
+    pair_candidates = [e for e in _free() if float(e.get("top2_prob") or 0) >= base * 1.25]
+    if pair_candidates:
+        max(pair_candidates, key=lambda x: float(x.get("top2_prob") or 0))["mark_type"] = "pair"
 
-    # ○ 2連系相手（複数）
-    for e in entries:
-        if e.get("mark_type") != "none":
-            continue
-        hn = int(e.get("horse_number") or 0)
-        if hn and hn in (honmei_hn, star_hn):
-            continue
-        if float(e.get("top2_prob") or 0) >= base * 1.25:
-            e["mark_type"] = "pair"
+    # ▲ 複勝妙味の単穴（1頭）
+    show_candidates = [
+        e for e in _free()
+        if _show_val_gap(e) >= base * 0.45 and float(e.get("win_prob") or 0) < base * 1.05
+    ]
+    if show_candidates:
+        max(show_candidates, key=_show_val_gap)["mark_type"] = "show_val"
 
-    # ✓ 3列紐（複数）
-    for e in entries:
-        if e.get("mark_type") != "none":
-            continue
-        if float(e.get("top3_prob") or 0) >= base * 1.35 and _anchor_score(e) >= base * 0.5:
-            e["mark_type"] = "anchor"
-
-    # ▲ 複勝妙味（複数）
-    for e in entries:
-        if e.get("mark_type") != "none":
-            continue
-        gap = _show_val_gap(e)
-        if gap >= base * 0.45 and float(e.get("win_prob") or 0) < base * 1.05:
-            e["mark_type"] = "show_val"
+    # △ 馬券内に来るかもしれない馬（複数・上限あり・複勝確率の高い順）
+    maybe_candidates = [
+        e for e in _free()
+        if float(e.get("top3_prob") or 0) >= base * 1.35 and _anchor_score(e) >= base * 0.5
+    ]
+    maybe_candidates.sort(key=lambda x: float(x.get("top3_prob") or 0), reverse=True)
+    for e in maybe_candidates[: maybe_limit(n)]:
+        e["mark_type"] = "anchor"
 
 
 def buy_recommendation_tier(entry: dict) -> str:

@@ -73,7 +73,7 @@ type PredData = {
 const MARK_META: Record<string, { sym: string; color: string }> = {
   honmei:   { sym: "◎", color: "#ef4444" },
   pair:     { sym: "○", color: "#3b82f6" },
-  anchor:   { sym: "✓", color: "#22c55e" },
+  anchor:   { sym: "△", color: "#22c55e" },
   show_val: { sym: "▲", color: "#f59e0b" },
   star:     { sym: "★", color: "#a78bfa" },
   none:     { sym: "-", color: "var(--text-dim)" },
@@ -797,6 +797,7 @@ export default function WeeklyPredictionsPage() {
       <div className="wp-main" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
         {/* 凡例 */}
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補）</span>
           <span>
             期待値: <strong style={{ color: "#22c55e" }}>≥1.3</strong> / <strong style={{ color: "#60a5fa" }}>≥1.0</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.8</strong> / <strong style={{ color: "#f87171" }}>＜0.8</strong>
           </span>

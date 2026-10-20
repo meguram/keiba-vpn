@@ -156,3 +156,16 @@ def test_to_int(raw, expected):
 def test_non_positive_finish_positions_are_ignored():
     assert pr._finish_map([{"horse_number": 1, "finish_position": 1}, {"horse_number": 2, "finish_position": -1},
                            {"horse_number": 3, "finish_position": "中止"}, {"horse_number": 4, "finish_position": 0}]) == {1: 1}
+
+
+def test_old_saved_marks_with_many_pairs_and_old_anchor_still_aggregate():
+    """旧ルールで保存された予測（○・✓・▲が複数）でも、予測成績の集計が壊れない。保存済みの印は書き換えない。"""
+    st = _storage()
+    preds = st.docs[("race_predictions", "202610180101")]["predictions"]
+    for e, m in zip(preds, ["honmei", "pair", "pair", "anchor", "show_val", "show_val"]):
+        e["mark_type"] = m
+    rec = pr.build_race_record("202610180101", {"venue": "東京", "round": 1}, st)
+    assert rec["included"]
+    assert [x["horse_number"] for x in rec["marks"]["pair"]] == [2, 3]
+    assert [e["mark_type"] for e in preds] == ["honmei", "pair", "pair", "anchor", "show_val", "show_val"]
+    assert pr.MARK_SYMBOLS["anchor"] == "△"
