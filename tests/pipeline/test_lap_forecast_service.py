@@ -45,3 +45,21 @@ def test_attach_is_noop_when_disabled_or_missing(tmp_path, monkeypatch):
     out = svc.attach_lap_forecast(resp, "R1", "2026-10-17")
     assert out["lap_forecast"]["race_id"] == "R1" and out["lap_forecast"]["lap_meters"] == [200] * 6 and "predictions" in out
     assert json.loads(svc.path_for("R1", "2026-10-17").read_text(encoding="utf-8"))["version"] == svc.VERSION
+
+
+def test_forecast_frame_uses_full_or_noten_model_by_ten_availability():
+    from src.scripts.data import tp55_backfill as bf
+    from tests.pipeline.test_tp55_model import _synth
+
+    df = _synth(500)
+    train, test = df[df["year"] < 2025], df[df["year"] == 2025].copy().reset_index(drop=True)
+    m_full = lfm.LapForecast(scenario="A", threads=2, n_oof=2).fit(train)
+    m_no = lfm.LapForecast(scenario="A", threads=2, n_oof=2, drop_groups=("ten",)).fit(train)
+    test["ten_cnt"] = [5 if i % 2 == 0 else 0 for i in range(len(test))]
+    docs = bf.forecast_frame(test, {"A_full": m_full, "A_noten": m_no}, {"A_full": m_full.scenario_names(), "A_noten": m_no.scenario_names()})
+    assert len(docs) == len(test)
+    models = {d["race_id"]: d["model"] for d in docs}
+    assert {models[r] for r, c in zip(test["race_id"], test["ten_cnt"]) if c > 0} == {"A_full"}
+    assert {models[r] for r, c in zip(test["race_id"], test["ten_cnt"]) if c == 0} == {"A_noten"}
+    d = docs[0]
+    assert abs(sum(s["prob"] for s in d["scenarios"]) - 1.0) < 1e-3 and d["lap_meters"][0] in (100, 200) and len(d["expected_laps"]) == d["n_laps"]

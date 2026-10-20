@@ -104,7 +104,7 @@ def ablate_tbl(d: Path) -> str:
     full = res["full"]
     jp = {"full": "全特徴量", "style": "脚質の分布を除く", "gate": "枠並びを除く", "ten": "テン1F を除く", "jockey": "騎手の積極性を除く", "sameday": "同日の先のレースのラップを除く",
           "field": "メンバー構成を除く", "style+gate+ten+jockey": "脚質・枠並び・テン1F・騎手をすべて除く", "course": "コース・距離などを除く", "cond": "馬場・天候・クラスを除く",
-          "geo": "コース形状を除く"}
+          "geo": "コース形状を除く", "recent": "コース別の直近のラップ傾向を除く"}
     rows = []
     for k, v in res.items():
         rows.append([jp.get(k, k), _f(v["logloss"]), _f(v["logloss"] - full["logloss"], 4, True), _f(v["lap0_mae"], 4), _f(v["lap0_mae"] - full["lap0_mae"], 4, True),
@@ -132,6 +132,23 @@ def final_tbl(d: Path) -> str:
                      _f(cv["last3f"]["coverage80"], 2)])
     return r29._tbl(["モデル", "レース数", "log loss", "事前分布", "正解率", "前半3F par", "混合", "後半3F par", "混合", "対数尤度/ラップ", "80%帯 前半3F", "後半3F"], rows,
                     ["s", "n", "n", "n", "n", "n", "n", "n", "n", "n", "n", "n"])
+
+
+def version_tbl(dirs: dict) -> str:
+    rows = []
+    for y in (2022, 2023, 2024, 2025):
+        cells = [y]
+        for name, dd in dirs.items():
+            r = _main(dd, "A", "full", y) if dd else None
+            if r:
+                cells += [_f(r["classify"]["logloss"], 4), _f(r["agg"]["first3f"]["mixture_mae"], 4), _f(r["agg"]["last3f"]["mixture_mae"], 4)]
+            else:
+                cells += ["-", "-", "-"]
+        rows.append(cells)
+    head = ["評価年"]
+    for name in dirs:
+        head += [f"{name} log loss", "前半3F 誤差", "後半3F 誤差"]
+    return r29._tbl(head, rows, ["n"] * len(head))
 
 
 def cluster_tbl(d: Path) -> str:
@@ -180,24 +197,24 @@ def win_block(d: Path) -> str:
     return r29._tbl(["比較", "Δ勝率", "95%上限", "Δ連対", "Δ複勝", "採否", "年別 Δ勝率"], rows, ["s", "n", "n", "n", "n", "s", "s"])
 
 
-def build(d: Path, d1: Path | None) -> None:
+def build(d: Path, d1: Path | None, d2: Path | None = None) -> None:
     a24 = _main(d, "A", "full", 2024)
     b24 = _main(d, "B5", "full", 2024)
     t24 = _main(d, "A", "ten", 2024)
     if not a24:
         raise SystemExit("main_A_full_2024.json が無い")
     ca, ab = a24["classify"], a24["agg"]
-    v1 = _main(d1, "A", "full", 2024) if d1 else None
-    f26 = _j(d / "final2026_A_noten.json")
     style = re.search(r"<style>.*?</style>", r29.STYLE_SRC.read_text(encoding="utf-8"), re.S).group(0)
-    v1txt = (f"コース形状（コース台帳の初角までの距離・直線・起伏など 7 列）と、テン1F の面・距離別の標準化を足した版は、足す前（log loss {_f(v1['classify']['logloss'], 4)}、"
-             f"前半3F の誤差 {_f(v1['agg']['first3f']['mixture_mae'], 4)} 秒）とほぼ同じだった（{_f(ca['logloss'], 4)}、{_f(ab['first3f']['mixture_mae'], 4)} 秒）。"
-             if v1 else "")
+    f26 = _j(d / "final2026_A_noten.json")
+    f26_v2 = _j(d2 / "final2026_A_noten.json") if d2 else None
     f26txt = ""
     if f26:
-        f26txt = (f"2026 年（未使用、1 回のみ。学習は 2020〜2025 年。2026 年は SmartRC の表が無いのでテン1F なしのモデル）: シナリオの log loss {_f(f26['classify']['logloss'])}"
+        f26txt = (f"<b>2026 年</b>（未使用。学習は 2020〜2025 年。2026 年は SmartRC の表が無いのでテン1F なしのモデル）: シナリオの log loss {_f(f26['classify']['logloss'])}"
                   f"（事前分布 {_f(f26['classify']['logloss_prior'])}）、前半3F の誤差 {_f(f26['agg']['first3f']['mixture_mae'])} 秒（par {_f(f26['agg']['first3f']['par_mae'])}）、"
-                  f"後半3F の誤差 {_f(f26['agg']['last3f']['mixture_mae'])} 秒（par {_f(f26['agg']['last3f']['par_mae'])}）。")
+                  f"後半3F の誤差 {_f(f26['agg']['last3f']['mixture_mae'])} 秒（par {_f(f26['agg']['last3f']['par_mae'])}）。"
+                  + (f"なお 2026 年の 1 回目の評価は特徴量 v2（コース別の直近の傾向を足す前）で行い（log loss {_f(f26_v2['classify']['logloss'])}、前半3F {_f(f26_v2['agg']['first3f']['mixture_mae'])} 秒）、"
+                     f"v3 に決めたあとの評価はこの 2 回目。" if f26_v2 else ""))
+    v1txt = "特徴量の版の比較は第 4 節。"
     body = f"""<!doctype html>
 <html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>ハロンごとのラップ予想（ラップ傾向別のタイムと発生確率）（tp-55）— keiba-vpn</title>{style}</head>
 <body><a href="../../index.html" class="muted">← ドキュメント一覧</a>
@@ -235,7 +252,11 @@ def build(d: Path, d1: Path | None) -> None:
 <h2>4. 特徴量の効き（2024 年、抜き取り）</h2>
 <p class="muted">学習は 2020〜2023 年。シナリオ A の分類器と、テン1F・前半3F・後半3F の直接回帰だけの軽い版で、特徴量のグループを抜いたときの差（正の差=悪化）。</p>
 {ablate_tbl(d)}
+<h3>特徴量の版の比較（シナリオ A、全特徴量）</h3>
+<p class="muted">v1 = 脚質・枠並び・テン1F・同日・コース条件。v2 = v1 にコース形状（初角までの距離・直線・起伏など 7 列）とテン1F の面・距離別の標準化を足したもの。v3（既定）= v2 に、同じコース（直近 30 レース）・同じ会場×面（直近 60 レース）のラップ傾向を足したもの。</p>
+{version_tbl({'v1': d1, 'v2': d2, 'v3': d})}
 <ul>
+ <li>v1→v2 はほぼ同じ（コース形状はコースの種類で既に表せている）。v3 は log loss が 2023〜2025 年で 0.002 前後良く、後半3F の誤差が 2024・2025 年で 0.005〜0.006 秒縮んだ（2022 年は学習が 2 年と少なく、log loss はわずかに悪化）。差は小さいが、後半3F に効く傾向が一貫するので v3 を既定にした。</li>
  <li>最も効くのはコース・距離などの条件、次いで脚質の分布（逃げ・先行の頭数、最前の馬の位置取り）。同日の先のレースのラップは後半3F の誤差に大きく効く（馬場や当日の傾向の代理）。</li>
  <li>枠並びとテン1F は、単独ではほとんど効かない。枠並びの情報は、脚質の分布と中身が重なる。テン1F（SmartRC の前走までのスタート1F）は、前走の距離やコースが今回と違うため、脚質の分布が決まれば追加の情報が小さい。</li>
 </ul>
@@ -279,10 +300,11 @@ def build(d: Path, d1: Path | None) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", required=True)
+    ap.add_argument("--dir", required=True, help="特徴量 v3（既定）の結果")
     ap.add_argument("--dir-v1", default=None)
+    ap.add_argument("--dir-v2", default=None)
     a = ap.parse_args()
-    build(Path(a.dir), Path(a.dir_v1) if a.dir_v1 else None)
+    build(Path(a.dir), Path(a.dir_v1) if a.dir_v1 else None, Path(a.dir_v2) if a.dir_v2 else None)
 
 
 if __name__ == "__main__":
