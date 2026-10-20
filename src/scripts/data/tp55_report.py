@@ -197,6 +197,17 @@ def win_block(d: Path) -> str:
     return r29._tbl(["比較", "Δ勝率", "95%上限", "Δ連対", "Δ複勝", "採否", "年別 Δ勝率"], rows, ["s", "n", "n", "n", "n", "s", "s"])
 
 
+def win_concl(d: Path) -> str:
+    w = _j(d / "win_eval.json")
+    if not w:
+        return ""
+    c = w["g_CY_BEST_LAP vs d_CY_BEST"]["overall"]
+    return (f"<b>結論: 勝率予測への増分は無い（不採用）.</b>V5 の列セット（d_CY_BEST）にラップ予想の 12 列（傾向確率 3、期待の前半3F・後半3F・テン1F の偏差、馬の脚質×傾向の交互作用 4 など）を足しても、"
+            f"勝率の log loss は {c['Δwin']:+.5f}（95% 上限 {c['win_hi']:+.5f}）で基準（上限 &lt; 0、効果 0.0002 以上）に届かず、複勝は {c['Δtop3']:+.5f} と悪化した。"
+            f"『d_CY_BEST の b_tlfresh に対する改善』（−0.00036）と同じ大きさの改善が表の 2 行目に出ているのは、ラップ予想ではなく CY・ALL_BEST の効果。"
+            "（ラップ予想は、特徴量 v2 で作った『年ごとに、その年を含まない年で学習した』予測。）tp-25b のペース予測と同じ結論で、ラップの傾向は、勝率予測の入力としては V4 の既存の列（脚質・位置取りの履歴など）に含まれる情報とほぼ重なる。")
+
+
 def build(d: Path, d1: Path | None, d2: Path | None = None) -> None:
     a24 = _main(d, "A", "full", 2024)
     b24 = _main(d, "B5", "full", 2024)
@@ -278,11 +289,13 @@ def build(d: Path, d1: Path | None, d2: Path | None = None) -> None:
  <li><b>勝率予測への増分</b>（V5 の列セット d_CY_BEST に、ラップ予想の特徴量 12 列を足す。valid 2022〜2024 年、既定の採否基準）:</li>
 </ul>
 {win_block(d)}
+<p>{win_concl(d)}</p>
 <h2>8. API・フラグ・運用</h2>
 <ul>
  <li>予測 API（<code>/api/race/{{id}}/predictions</code>）に、環境変数 <code>KEIBA_LAP_FORECAST=1</code> のときだけ <code>lap_forecast</code> を付ける（既定は無効）。保存済みの予想を読み出すだけ（<code>src/pipeline/inference/lap_forecast_service.py</code>）。</li>
  <li>保存: <code>python -m src.scripts.data.tp55_backfill --dates YYYY-MM-DD ...</code>（出馬表が書き出された日の全レース。過去分のバックフィルも同じ）。保存先 <code>data/local/inference/lap_forecast/&lt;日付&gt;/&lt;race_id&gt;.json</code>。モデルは final2026 の A（テン1F あり／なし）。</li>
  <li><code>lap_forecast</code>: <code>version, race_id, date, distance, n_laps, lap_meters, model(A_full|A_noten), pace_label, pace_prob, scenarios[{{name, prob, laps, sd, first3f, last3f}}], expected_laps, band80_lo, band80_hi, expected_first3f, expected_last3f, par</code>。laps はスタートから 1 区間ずつの秒。</li>
+  <li>保存済みの予想（2026-01-01〜10-18 の全開催日）: ホスト <code>/home/jovyan/work/tp55_forecast_store/&lt;日付&gt;/&lt;race_id&gt;.json</code>（リポジトリ外）。</li>
  <li>本番へは未反映。T-60 の確定出走表（枠順確定後）で動かす。出馬表の書き出し（export_tables の差分）が前提で、書き出し前は暫定にならない（保存なし＝付かない）。</li>
 </ul>
 <h2>9. 限界と今後</h2>
@@ -291,7 +304,7 @@ def build(d: Path, d1: Path | None, d2: Path | None = None) -> None:
  <li>特徴量は、馬の過去走の脚質とコースが中心。騎手の意図や当日の馬場の直前変化は入らない。2026 年のテン1F は取得できていない（SmartRC の 2026 年の表が無い）。</li>
  <li>勝率予測への応用は、第 7 節の増分の結果に従う。ペース予測は tp-25b でも不採用だった。</li>
 </ul>
-<p class="muted">コード: <code>src/pipeline/features/tp55_lapfeat.py</code>、<code>src/scripts/data/tp55_build.py</code>（表の作成）、<code>src/pipeline/models/lap_forecast.py</code>（モデル）、<code>tp55_eval.py</code>（評価）、<code>tp55_win_eval.py</code>（勝率への増分）、<code>tp55_backfill.py</code>、<code>tp55_report.py</code>。結果の生データ: ホスト <code>/home/jovyan/work/tp55_out3/</code>。</p>
+<p class="muted">コード: <code>src/pipeline/features/tp55_lapfeat.py</code>、<code>src/scripts/data/tp55_build.py</code>（表の作成）、<code>src/pipeline/models/lap_forecast.py</code>（モデル）、<code>tp55_eval.py</code>（評価）、<code>tp55_win_eval.py</code>（勝率への増分）、<code>tp55_backfill.py</code>、<code>tp55_report.py</code>。結果の生データ: ホスト <code>/home/jovyan/work/tp55_out4/</code>（特徴量 v3＝既定）、<code>tp55_out3/</code>（v2。勝率への増分 win_eval.json を含む）、<code>tp55_out/</code>（v1）。</p>
 </body></html>
 """
     CHAPTER.write_text(body, encoding="utf-8")
