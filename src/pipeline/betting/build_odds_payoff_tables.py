@@ -276,10 +276,12 @@ def main() -> int:
     ap.add_argument("--tables-dir", type=Path, default=Path("data/page_reference/tables"))
     ap.add_argument("--out-dir", type=Path, default=Path("data/local/modeling/betting"))
     ap.add_argument("--years", default="2020-2025")
+    ap.add_argument("--allow-2026", action="store_true", help="2026 年（最終評価用の未使用年）を含める。既定の出力先は上書きさせないので --out-dir の明示が必須")
     a = ap.parse_args()
     lo, hi = (int(x) for x in a.years.split("-"))
     years = list(range(lo, hi + 1))
-    assert max(years) <= 2025, "2026 年は学習・評価に使わない"
+    if max(years) >= 2026:
+        assert a.allow_2026 and a.out_dir != Path("data/local/modeling/betting"), "2026 年は学習・選択に使わない。最終評価用は --allow-2026 と別の --out-dir を指定する"
     a.out_dir.mkdir(parents=True, exist_ok=True)
     wp_all, pair_all, pay_all, races = [], [], [], {}
     for y in years:

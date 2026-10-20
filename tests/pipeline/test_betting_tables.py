@@ -118,3 +118,18 @@ def test_scan_odds_phase_classify_and_summarize():
     s = sc.summarize([sc.classify(new), sc.classify(old), sc.classify(None)])
     assert s["docs"] == 3 and s["missing"] == 1 and s["phase"] == {"t15": 1, "なし": 1} and s["with_snapshots"] == 1 and s["snapshot_phases"] == {"t60": 1}
     assert s["scraped_month"] == {"2026-03": 1, "2026-10": 1}
+
+
+def test_2026_requires_explicit_flag_and_separate_out_dir(monkeypatch, tmp_path):
+    import sys
+
+    import pytest
+
+    from src.pipeline.betting import build_odds_payoff_tables as b
+
+    monkeypatch.setattr(sys, "argv", ["x", "--years", "2026-2026"])
+    with pytest.raises(AssertionError):
+        b.main()
+    monkeypatch.setattr(sys, "argv", ["x", "--years", "2026-2026", "--allow-2026"])        # 既定の出力先のまま
+    with pytest.raises(AssertionError):
+        b.main()
