@@ -72,6 +72,17 @@ def _bin(x: pd.Series, cuts=Z_CUTS) -> pd.Series:
 
 
 # ---------------------------------------------------------------- 追い切り 1 本ごと
+def standardized_workouts(t: pd.DataFrame) -> pd.DataFrame:
+    """標準化済み（t4z・t1z・accelz を持つ）の追い切りから、良さ g などを作って時計ありの行だけにする。学習（prepare_workouts）と推論（serving_v5）で共有。"""
+    t = t.copy()
+    t["horse_id"] = t["horse_id"].astype(str)
+    t["train_day"] = pd.to_datetime(t["train_date"]).to_numpy("datetime64[D]").astype(np.int64)
+    t["g_t4"], t["g_t1"], t["g_acc"] = -t["t4z"], -t["t1z"], -t["accelz"]
+    t["g"] = t[["g_t4", "g_t1"]].mean(axis=1)
+    t["is_hard"] = (t["intensity"].fillna(0) >= 1).astype(int)
+    return t[t["timed"] & t["g"].notna()].copy()
+
+
 def prepare_workouts(laps: pd.DataFrame, runs: pd.DataFrame, with_ref: bool = True) -> pd.DataFrame:
     """追い切り（時計あり）1 本 1 行。g（良さ）・g_t1・g_acc・g_tr・強度・サイクルのキー（horse_id, race_date）・調教師。
     with_ref=False のときは laps が t4z・t1z・accelz を持つこと（テスト用）。"""
@@ -79,12 +90,7 @@ def prepare_workouts(laps: pd.DataFrame, runs: pd.DataFrame, with_ref: bool = Tr
     t = t[t["race_date"] >= "2011-01-01"].copy()
     if with_ref:
         t = TP.add_reference_z(t)
-    t["horse_id"] = t["horse_id"].astype(str)
-    t["train_day"] = pd.to_datetime(t["train_date"]).to_numpy("datetime64[D]").astype(np.int64)
-    t["g_t4"], t["g_t1"], t["g_acc"] = -t["t4z"], -t["t1z"], -t["accelz"]
-    t["g"] = t[["g_t4", "g_t1"]].mean(axis=1)
-    t["is_hard"] = (t["intensity"].fillna(0) >= 1).astype(int)
-    t = t[t["timed"] & t["g"].notna()].copy()
+    t = standardized_workouts(t)
     tr = runs[["horse_id", "date", "trainer_id"]].copy()
     tr["race_date"] = pd.to_datetime(tr["date"]).dt.strftime("%Y-%m-%d")
     tr["horse_id"] = tr["horse_id"].astype(str)

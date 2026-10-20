@@ -139,10 +139,20 @@ class V3Serving:
         tl = tl.reindex(columns=[x for x in self.feature_cols if x.startswith(ssr.TL_PREFIX)])
         tl.index = base.index
 
+        wc_names = [x for x in self.feature_cols if x.startswith("wc_")]                    # v5: 追い切りサイクルの推移 CY（tp-40）
+        if wc_names:
+            from src.pipeline.features import serving_v5 as sv5
+
+            wc = sv5.cy_columns_for_races(base[KEYS + ["date"]], records, self.tl_ref)
+            wc = base[KEYS].merge(wc, on=KEYS, how="left").drop(columns=KEYS).reindex(columns=wc_names)
+            wc.index = base.index
+        else:
+            wc = pd.DataFrame(index=base.index)
+
         rel_names = [x for x in self.feature_cols if ssr.split_relative_name(x) is not None and x not in cur.columns]
         rel = ssr.relative_by_names(pd.concat([cur, ped, extras], axis=1), rel_names) if rel_names else pd.DataFrame(index=base.index)
 
-        allc = pd.concat([cur, ped, extras, tl, rel] + ([v4cols] if v4cols is not None else []), axis=1)
+        allc = pd.concat([cur, ped, extras, tl, wc, rel] + ([v4cols] if v4cols is not None else []), axis=1)
         allc = allc.loc[:, ~allc.columns.duplicated()]
         missing = [x for x in self.feature_cols if x not in allc.columns]
         if missing:
