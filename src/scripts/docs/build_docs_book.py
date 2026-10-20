@@ -248,6 +248,8 @@ PARTS: list[Part] = [
           [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("trifecta_true_odds", "3連単の実オッズでの再評価（tp-48）"), ("ev_calibration_adopt", "期待値の較正（tp-49）"), ("training_pipeline_decisions", "決定ログ")]),
         C("trifecta_true_odds", "3連単の実オッズ（2024〜2026 年、9,711 レース）で、tp-36 が保留した買い方を再評価（tp-48）。データ品質（Σ(1/オッズ)・払戻との一致）、3連単の EV 上位 k 点・しきい値・縮約後しきい値・プール間の不整合、3連複（3連単プール由来の価格）、印の組合せ、的中率が高い券種（複勝・ワイド・馬連）の『期待値が高いものだけ』、購入時点オッズの感度、Reality Check、2026 年の最終評価。区間下限が 100% を超える方策は無く、100% 超は高配当に依存した。", "結果",
           [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("ev_calibration_audit", "期待値の水準の監査（tp-47）"), ("proven_methods_roi", "回収率 100% 超の実績者の手法と検証（tp-44）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("pace_consistency", "想定位置取り・追走難度・想定上がりの連動の検証と整合層（tp-53）。3 つは別系統で共通のペース想定が無く、追走側のペースは 91% がミドルで実測と無相関、想定上がりは位置取りにほぼ反応しない（実測は後ろの馬ほど速く、ペースが速いほど差が大きい）。位置取り側の先行勢からペースを推定し、位置取り×ペースと自己の過去の上がり偏差で上がりを決める整合層（既定オフ）を、2023〜2025 年の walk-forward で検証（上がり偏差の相関 0.07〜0.16 → 0.35〜0.36）。", "結果",
+          [("training_pipeline_decisions", "決定ログ")]),
         C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",
           note="safe_ev を前提にした設計。tp-08 の実装は Benter ブレンドで、safe_ev は使っていない。",
           now=[("modeling_experiment_report", "tp-08 の結果")]),
