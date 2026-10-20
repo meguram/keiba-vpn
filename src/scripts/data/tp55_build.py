@@ -42,7 +42,7 @@ def load_inputs(years: list[int], cut: str | None = None):
     res_cols = ["race_id", "date", "venue", "surface", "distance", "direction", "grade", "race_class", "weather", "track_condition",
                 "field_size", "round", "lap_times", "horse_number", "horse_id", "jockey_id", "passing_order", "sex_age", "jockey_weight"]
     sh_cols = ["race_id", "horse_number", "horse_id", "sex_age", "jockey_weight", "jockey_id"]
-    sm_cols = ["race_id", "uno", "h1_ten1f", "ten1f_best"]
+    sm_cols = ["race_id", "uno", "h1_ten1f", "ten1f_best", "h1_trackkind", "h1_range"]
     res, shu, smr = [], [], []
     for y in years:
         res.append(_read(y, "race_result_flat", res_cols))
@@ -91,7 +91,15 @@ def _finish(races: pd.DataFrame, res: pd.DataFrame, shu: pd.DataFrame, smr: pd.D
     for c in ("h1_ten1f", "ten1f_best"):
         smr[c] = pd.to_numeric(smr[c], errors="coerce") / 10.0
     smr = smr.drop_duplicates(["race_id", "horse_number"])
-    ent = ent.merge(smr[["race_id", "horse_number", "h1_ten1f", "ten1f_best"]], on=["race_id", "horse_number"], how="left")
+    # テン1F の基準: 前走の（面・距離）ごとの平均（2020〜2021 年の行から。評価年より前だけで決める）。ten_z = 前走のテン1F − 基準（負=速い）
+    smr["_rng"] = pd.to_numeric(smr["h1_range"], errors="coerce")
+    smr["_yr"] = pd.to_numeric(smr["race_id"].astype(str).str[:4], errors="coerce")
+    src = smr[(smr["_yr"] <= 2021)].dropna(subset=["h1_ten1f", "_rng"])
+    ref = src.groupby(["h1_trackkind", "_rng"])["h1_ten1f"].agg(["mean", "count"])
+    ref = ref[ref["count"] >= 30]["mean"]
+    key = pd.MultiIndex.from_arrays([smr["h1_trackkind"], smr["_rng"]])
+    smr["ten_z"] = smr["h1_ten1f"].values - ref.reindex(key).values
+    ent = ent.merge(smr[["race_id", "horse_number", "h1_ten1f", "ten1f_best", "ten_z"]], on=["race_id", "horse_number"], how="left")
     ent = ent.rename(columns={"h1_ten1f": "ten1f"})
     ag = [lf.parse_sex_age(s) for s in ent["sex_age"]]
     ent["age"] = [a[0] for a in ag]
@@ -106,6 +114,7 @@ def _finish(races: pd.DataFrame, res: pd.DataFrame, shu: pd.DataFrame, smr: pd.D
     rf = pd.DataFrame(rows)
     rep["ten_coverage_share_races"] = float((rf["ten_cnt"] > 0).mean()) if len(rf) else None
     out = races.merge(rf, on="race_id", how="inner")
+    out = lf.attach_geo(out, lf.load_course_geo(ROOT / "data/meta/course_master/jra_courses.json"))
     par0_src = done[done["date"] < pd.Timestamp("2022-01-01")][["venue", "surface", "distance", "direction", "laps"]]
     par0 = lf.fit_par(par0_src)
     sd_in = pd.concat([done[["race_id", "date", "venue", "surface", "round_no", "laps", "distance", "direction"]],
@@ -114,6 +123,10 @@ def _finish(races: pd.DataFrame, res: pd.DataFrame, shu: pd.DataFrame, smr: pd.D
     sd_in = sd_in[sd_in["date"].isin(set(out["date"]))]
     sd = lf.sameday_features(sd_in, par0)
     out = out.merge(sd, on="race_id", how="left")
+    full = pd.concat([done[["race_id", "date", "venue", "surface", "round_no", "laps", "distance", "direction"]],
+                      out[~out["race_id"].isin(done["race_id"])][["race_id", "date", "venue", "surface", "round_no", "distance", "direction"]].assign(laps=None)],
+                     ignore_index=True)
+    out = out.merge(lf.recent_trend_features(full, par0), on="race_id", how="left")
     out["course_key"] = [lf.course_key(v, s, d, di) for v, s, d, di in zip(out["venue"], out["surface"], out["distance"], out["direction"])]
     return out
 
@@ -187,7 +200,7 @@ def main() -> None:
         num = [c for c in lf.RACE_NUM_COLS if c in pre.columns]
         # 結果を消した版は、cut 日以降の『同日の傾向』などに影響しない（cut より前のレースだけを比べる）
         diff = {}
-        for c in num + ["sd_n", "sd_q_mean", "sd_f3_mean", "sd_l3_mean", "sd_q_last"]:
+        for c in num + ["sd_n", "sd_q_mean", "sd_f3_mean", "sd_l3_mean", "sd_q_last", "cr_n", "cr_q", "cr_f3", "cr_l3", "vs_q", "vs_f3", "vs_l3"]:
             a1 = pre.loc[common, c].astype(float).values
             b1 = pre2.loc[common, c].astype(float).values
             bad = ~((a1 == b1) | (np.isnan(a1) & np.isnan(b1)))

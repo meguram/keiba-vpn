@@ -185,9 +185,44 @@ def evaluate(model: lfm.LapForecast, train: pd.DataFrame, test: pd.DataFrame, n_
         "density": {"loglik_per_lap_mixture": float(np.nanmean(ll_mix)), "loglik_per_lap_direct": float(np.nanmean(ll_dir)), "loglik_per_lap_par": float(np.nanmean(ll_par))},
         "coverage": cover, "segments": seg,
     }
+    if hasattr(model, "cen_sorted"):
+        res["cluster_centers"] = {"names": model.scenario_names(), "centers_f3_mid_l3_dev": np.asarray(model.cen_sorted).round(3).tolist(),
+                                  "share_train": [float(x) for x in model.prior]}
+    if model.scenario == "A":
+        res["baseline_pressure"] = baseline_pressure(model, train, test)
     pred = pd.DataFrame({"race_id": test["race_id"], **{f"p{k}": proba[:, k] for k in range(K)}, "exp_f3_dev": agg(mix, "f3"), "exp_l3_dev": agg(mix, "l3"),
                          "true_f3_dev": tf3, "true_l3_dev": tl3, "label": lab})
     return res, pred
+
+
+def _labels_df(model: lfm.LapForecast, df: pd.DataFrame):
+    df = df.reset_index(drop=True)
+    laps = [json.loads(x) for x in df["laps_json"]]
+    L = lfm.laps_matrix(laps)
+    nl = np.array([len(a) for a in laps])
+    P = lfm.par_matrix(df, model.par)
+    ok = ~np.isnan(P[np.arange(len(df)), 0])
+    lab = model._labels(df, L - P, nl, fit=False)
+    return df, lab, ok
+
+
+def baseline_pressure(model: lfm.LapForecast, train: pd.DataFrame, test: pd.DataFrame) -> dict:
+    """比較: 脚質の頭数だけ（逃げ・先行の頭数、圧力、逃げ不在）の多項ロジットでシナリオを当てる簡易モデル（position_forecast の『先行の頭数でペースを決める』発想）。"""
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.preprocessing import StandardScaler
+
+    cols = [c for c in ("n_front_hard", "n_stalk_hard", "press", "no_leader", "exp_front", "exp_frontstalk") if c in train.columns]
+    if not cols:
+        return {}
+    tr, ytr, oktr = _labels_df(model, train)
+    te, yte, okte = _labels_df(model, test)
+    Xtr = tr[cols].fillna(tr[cols].median()).values[oktr]
+    Xte = te[cols].fillna(tr[cols].median()).values[okte]
+    sc = StandardScaler().fit(Xtr)
+    lr = LogisticRegression(max_iter=500).fit(sc.transform(Xtr), ytr[oktr])
+    p = lr.predict_proba(sc.transform(Xte))
+    y = yte[okte]
+    return {"logloss": float(-np.mean(np.log(np.clip(p[np.arange(len(y)), y], 1e-9, 1)))), "acc": float(np.mean(np.argmax(p, axis=1) == y))}
 
 
 def _par_sd(model: lfm.LapForecast, train: pd.DataFrame) -> dict:
@@ -239,7 +274,7 @@ def run_ablate(year: int) -> None:
     lab_tr = np.where(ytr[3] <= q_lo, 0, np.where(ytr[3] >= q_hi, 2, 1))
     lab_te = np.where(yte[3] <= q_lo, 0, np.where(yte[3] >= q_hi, 2, 1))
     results = {}
-    for drop in [(), ("style",), ("gate",), ("ten",), ("jockey",), ("sameday",), ("field",), ("style", "gate", "ten", "jockey"), ("course",), ("cond",)]:
+    for drop in [(), ("style",), ("gate",), ("ten",), ("jockey",), ("sameday",), ("field",), ("style", "gate", "ten", "jockey"), ("course",), ("cond",), ("geo",), ("recent",)]:
         num, cats = lfm.feature_columns(drop)
         vocab = lfm.Vocab.fit(train, cats)
         Xtr = vocab.apply(train, num, cats)
@@ -265,6 +300,24 @@ def run_ablate(year: int) -> None:
     (OUT / f"ablate_{year}.json").write_text(json.dumps({"year": year, "n_train": len(train), "n_test": len(test), "results": results}, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+def _dump_examples(m: lfm.LapForecast, test: pd.DataFrame) -> None:
+    """章に載せる例: 2026 年のレースから、距離・面の違う 4 つ（結果のラップと並べる）。"""
+    t = test.reset_index(drop=True)
+    picks = []
+    for surf, dist in (("芝", 1200), ("ダート", 1800), ("芝", 1600), ("芝", 2000)):
+        sub = t[(t["surface"] == surf) & (t["distance"] == dist)]
+        if len(sub):
+            picks.append(int(sub.index[len(sub) // 2]))
+    out = m.predict(t)
+    ex = []
+    for i in picks:
+        summ = lfm.mixture_summary(out, i, m.scenario_names(), seed=i)
+        ex.append({"race_id": t.at[i, "race_id"], "date": t.at[i, "date"], "venue": t.at[i, "venue"], "surface": t.at[i, "surface"], "distance": int(t.at[i, "distance"]),
+                   "field": int(t.at[i, "field_size"]) if pd.notna(t.at[i, "field_size"]) else None, "actual_laps": json.loads(t.at[i, "laps_json"]),
+                   "par": [None if x != x else round(float(x), 2) for x in out["par"][i][: int(out["n_laps"][i])]], "summary": summ})
+    (OUT / "examples_2026.json").write_text(json.dumps(ex, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def run_final2026() -> None:
     d = load()
     train = d[d["year"] <= 2025]
@@ -277,6 +330,8 @@ def run_final2026() -> None:
         (OUT / f"{label}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
         pred.to_parquet(OUT / f"{label}_pred.parquet", index=False)
         m.save(OUT / f"model_{label}.pkl")
+        if label == "final2026_A_noten":
+            _dump_examples(m, test)
         print(label, "logloss", res["classify"]["logloss"], "f3", res["agg"]["first3f"]["mixture_mae"])
 
 

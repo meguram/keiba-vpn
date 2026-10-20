@@ -108,3 +108,20 @@ def test_sameday_uses_only_earlier_rounds():
     rs2.at[2, "laps"] = [9.0] * 8                    # 3R の結果を変えても 2R までの特徴は変わらない
     sd2 = lf.sameday_features(rs2, par0).set_index("race_id")
     assert sd2.loc["A2", "sd_q_mean"] == sd.loc["A2", "sd_q_mean"]
+
+
+def test_recent_trend_uses_only_earlier_races():
+    par0 = lf.fit_par(pd.DataFrame([{"venue": "東京", "surface": "芝", "distance": 1600, "direction": "左", "laps": [12.0] * 8}] * 5))
+    rows = []
+    for k in range(12):
+        slow = [12.0, 12.5, 12.5, 12.0, 12.0, 11.5, 11.5, 11.5] if k < 6 else [12.0, 11.0, 11.0, 12.0, 12.0, 12.5, 12.5, 12.5]
+        rows.append({"race_id": f"T{k:02d}", "date": pd.Timestamp("2024-05-01") + pd.Timedelta(days=7 * k), "venue": "東京", "surface": "芝", "distance": 1600,
+                     "direction": "左", "round_no": 5, "laps": slow})
+    rs = pd.DataFrame(rows)
+    a = lf.recent_trend_features(rs, par0, n_course=30, n_venue=60).set_index("race_id")
+    assert np.isnan(a.loc["T03", "cr_q"])                                    # 5 レース未満は出さない
+    assert a.loc["T08", "cr_q"] < 0 and a.loc["T11", "cr_q"] > a.loc["T08", "cr_q"]       # スロー寄り→ハイ寄りに移る
+    rs2 = rs.copy()
+    rs2.at[11, "laps"] = [9.0] * 8                                           # 最後のレースの結果を変えても、そのレースの特徴は変わらない
+    b = lf.recent_trend_features(rs2, par0).set_index("race_id")
+    assert a.loc["T11", "cr_q"] == b.loc["T11", "cr_q"]

@@ -232,6 +232,17 @@ def race_features_one(g: pd.DataFrame) -> dict:
     out["ten_gap12"] = float(ts[1] - ts[0]) if len(ts) > 1 else np.nan
     out["ten_mean3"] = float(ts[:3].mean()) if len(ts) else np.nan
     out["tenbest_min"] = float(np.nanmin(tb)) if np.isfinite(tb).any() else np.nan
+    if "ten_z" in g.columns:
+        z = g["ten_z"].values.astype(float)
+        zk = ~np.isnan(z)
+        zs = np.sort(z[zk])
+        out["tenz_min"] = float(zs[0]) if len(zs) else np.nan
+        out["tenz_2nd"] = float(zs[1]) if len(zs) > 1 else np.nan
+        out["tenz_mean3"] = float(zs[:3].mean()) if len(zs) else np.nan
+        zf = known & (e_raw <= STALKER_MAX) & zk
+        out["tenz_front_min"] = float(z[zf].min()) if zf.any() else np.nan
+        out["tenz_front_mean"] = float(z[zf].mean()) if zf.any() else np.nan
+        out["tenz_n_fast"] = int((z[zk] <= -0.3).sum())
     fm = known & (e_raw <= STALKER_MAX) & tk
     out["ten_front_min"] = float(t[fm].min()) if fm.any() else np.nan
     out["ten_front_mean"] = float(t[fm].mean()) if fm.any() else np.nan
@@ -259,17 +270,21 @@ RACE_NUM_COLS = [
     "n_entrants", "n_known", "unknown_ratio", "e1", "e2", "e3", "e4", "e_mean", "e_std", "n_front_hard", "n_stalk_hard", "exp_front",
     "exp_frontstalk", "press", "no_leader", "front8_sum", "gate_f1", "gate_f2", "gate_f3", "no_f1", "no_f2", "no_f3", "gate_gap12",
     "front_adjacent_pairs", "front_inner", "front_outer", "gate_front_mean", "ten_cnt", "ten_min", "ten_2nd", "ten_gap12", "ten_mean3",
-    "tenbest_min", "ten_front_min", "ten_front_mean", "jock_front_mean", "jock_min", "age_mean", "female_share", "age3_share", "jw_sd", "runs_mean",
+    "tenbest_min", "ten_front_min", "ten_front_mean", "tenz_min", "tenz_2nd", "tenz_mean3", "tenz_front_min", "tenz_front_mean", "tenz_n_fast",
+    "jock_front_mean", "jock_min", "age_mean", "female_share", "age3_share", "jw_sd", "runs_mean",
 ]
 FEATURE_GROUPS = {
     "style": ["e1", "e2", "e3", "e4", "e_mean", "e_std", "n_front_hard", "n_stalk_hard", "exp_front", "exp_frontstalk", "press", "no_leader",
               "front8_sum", "unknown_ratio", "n_known"],
     "gate": ["gate_f1", "gate_f2", "gate_f3", "no_f1", "no_f2", "no_f3", "gate_gap12", "front_adjacent_pairs", "front_inner", "front_outer",
              "gate_front_mean"],
-    "ten": ["ten_cnt", "ten_min", "ten_2nd", "ten_gap12", "ten_mean3", "tenbest_min", "ten_front_min", "ten_front_mean"],
+    "ten": ["ten_cnt", "ten_min", "ten_2nd", "ten_gap12", "ten_mean3", "tenbest_min", "ten_front_min", "ten_front_mean", "tenz_min", "tenz_2nd",
+            "tenz_mean3", "tenz_front_min", "tenz_front_mean", "tenz_n_fast"],
+    "geo": ["geo_first_curve_m", "geo_final_straight_m", "geo_elevation_m", "geo_lap_length_m", "geo_n_corners", "geo_goal_slope", "geo_start_geom"],
     "jockey": ["jock_front_mean", "jock_min"],
     "field": ["n_entrants", "age_mean", "female_share", "age3_share", "jw_sd", "runs_mean"],
     "sameday": ["sd_n", "sd_q_mean", "sd_f3_mean", "sd_l3_mean", "sd_q_last"],
+    "recent": ["cr_n", "cr_q", "cr_f3", "cr_l3", "vs_q", "vs_f3", "vs_l3"],
     "course": ["distance", "n_laps", "d0", "course_code", "venue_code_c", "surface_c", "direction_c", "kai", "nichime", "round_no", "month"],
     "cond": ["weather_c", "track_c", "grade_c", "class_c"],
 }
@@ -302,3 +317,64 @@ def sameday_features(races: pd.DataFrame, par0: Par) -> pd.DataFrame:
     df = pd.DataFrame.from_dict(out, orient="index", columns=["sd_n", "sd_q_mean", "sd_f3_mean", "sd_l3_mean", "sd_q_last"])
     df.index.name = "race_id"
     return df.reset_index()
+
+
+# ───────────────────────── コース形状（data/meta/course_master/jra_courses.json。複数の情報源が合意した値）
+GEO_FIELDS = {"geo_first_curve_m": "first_curve_m", "geo_final_straight_m": "final_straight_m", "geo_elevation_m": "elevation_range_m",
+              "geo_lap_length_m": "lap_length_m", "geo_n_corners": "n_corners_record_mode"}
+_START_GEOM = {"main_track": 0, "chute_pocket": 1, "home_stretch_pocket": 2, "straight_course": 3}
+
+
+def load_course_geo(path) -> dict:
+    """(venue_code 2桁, 面, 距離) → 形状の辞書。内回り・外回りなど同じ距離で複数あるものは平均。"""
+    rows = json.loads(open(path, encoding="utf-8").read())
+    acc: dict = {}
+    for r in rows:
+        k = (str(r.get("venue_code") or "").zfill(2), "芝" if "芝" in str(r.get("surface")) else "ダート", int(float(r.get("distance") or 0)))
+        acc.setdefault(k, []).append(r)
+    out = {}
+    for k, rs in acc.items():
+        d = {}
+        for col, f in GEO_FIELDS.items():
+            vals = [float(r[f]) for r in rs if r.get(f) not in (None, "")]
+            d[col] = float(np.mean(vals)) if vals else np.nan
+        d["geo_goal_slope"] = float(np.mean([1.0 if r.get("goal_slope_exists") else 0.0 for r in rs]))
+        sg = [_START_GEOM.get(r.get("start_geometry")) for r in rs if _START_GEOM.get(r.get("start_geometry")) is not None]
+        d["geo_start_geom"] = float(np.mean(sg)) if sg else np.nan
+        out[k] = d
+    return out
+
+
+def attach_geo(df: pd.DataFrame, geo: dict) -> pd.DataFrame:
+    cols = list(GEO_FIELDS) + ["geo_goal_slope", "geo_start_geom"]
+    vals = []
+    for rid, s, d in zip(df["race_id"].astype(str), df["surface"], df["distance"]):
+        g = geo.get((rid[4:6], s, int(float(d))))
+        vals.append([g[c] if g else np.nan for c in cols])
+    return pd.concat([df.reset_index(drop=True), pd.DataFrame(vals, columns=cols)], axis=1)
+
+
+def recent_trend_features(races: pd.DataFrame, par0: Par, n_course: int = 30, n_venue: int = 60) -> pd.DataFrame:
+    """同じコース（直近 n_course レース）・同じ会場×面（直近 n_venue レース）のラップ傾向（par との差の平均）。対象より前（日付・ラウンド順）のレースだけ。
+    races: race_id, date, venue, surface, distance, direction, round_no, laps（結果が無いレースは None＝窓には入るが平均には効かない）。"""
+    r = races[["race_id", "date", "venue", "surface", "distance", "direction", "round_no", "laps"]].copy()
+    f3, l3 = [], []
+    for v, s, d, di, laps in zip(r["venue"], r["surface"], r["distance"], r["direction"], r["laps"]):
+        pv = par0.vec(v, s, d, di)
+        if pv is None or laps is None or len(pv) != len(laps):
+            f3.append(np.nan); l3.append(np.nan); continue
+        dv = np.asarray(laps) - pv
+        f3.append(dv[:3].sum()); l3.append(dv[-3:].sum())
+    r["f3d"], r["l3d"] = f3, l3
+    r["qd"] = r["l3d"] - r["f3d"]
+    r["ck"] = [course_key(v, s, d, di) for v, s, d, di in zip(r["venue"], r["surface"], r["distance"], r["direction"])]
+    r["vs"] = r["venue"].astype(str) + "|" + r["surface"].astype(str)
+    r = r.sort_values(["date", "round_no", "race_id"], kind="stable").reset_index(drop=True)
+    out = pd.DataFrame({"race_id": r["race_id"]})
+    for key, pre, n, cols in (("ck", "cr", n_course, {"qd": "cr_q", "f3d": "cr_f3", "l3d": "cr_l3"}), ("vs", "vs", n_venue, {"qd": "vs_q", "f3d": "vs_f3", "l3d": "vs_l3"})):
+        g = r.groupby(key, sort=False)
+        for src, dst in cols.items():
+            out[dst] = g[src].transform(lambda x: x.rolling(n, min_periods=5).mean().shift(1)).values
+        if pre == "cr":
+            out["cr_n"] = g["qd"].transform(lambda x: x.notna().rolling(n, min_periods=1).sum().shift(1)).values
+    return out
