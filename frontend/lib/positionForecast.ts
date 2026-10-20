@@ -114,3 +114,77 @@ export function packTrackGate(horses: ForecastHorse[], width: number, chip = 30,
   const height = placed.reduce((m, p) => Math.max(m, p.y + chip), depth * 0 + chip);
   return { placed, height };
 }
+
+/* ── 追走難度（/api/race/{id}/tracking-difficulty）を展開予想に重ねるための型と純粋関数。
+   位置取りの予想（過去走の通過順位）とは別の算出なので、脚質の表現がずれることがある。 */
+
+export type HorseTd = {
+  ease_pct?: number;               // 大きいほど前に付いていきやすい
+  ease_label?: string;
+  style?: string;                  // 追走難度側の脚質
+  flow_pattern?: string;
+  stamina_label?: string;
+  stamina_concern?: boolean;
+  last3f_sec?: number;
+  last3f_delta?: number;           // 同条件の基準との差（−が速い）
+};
+
+/** 追走のしやすさの色（ラベルの境目は API の `_ease_label` と同じ: 75/60/45/30）。色だけに頼らず、文字でも出す。 */
+export function easeTone(pct: number | null | undefined): { color: string; word: string } {
+  if (pct == null) return { color: "transparent", word: "—" };
+  if (pct >= 75) return { color: "#22c55e", word: "非常に楽" };
+  if (pct >= 60) return { color: "#4ade80", word: "楽" };
+  if (pct >= 45) return { color: "#94a3b8", word: "普通" };
+  if (pct >= 30) return { color: "#f59e0b", word: "やや困難" };
+  return { color: "#ef4444", word: "困難" };
+}
+
+export type PaceFit = { score: number; label: "向く" | "ふつう" | "不向き"; reasons: string[] };
+
+/** 展開向き／不向き。脚質×想定ペース（前に行く馬が多い＝ハイなら差し・追込、少ない＝スローなら逃げ・先行）に、
+    追走のしやすさ（60 以上 +1、30 未満 −1）を足した合計が +1 以上で「向く」、−1 以下で「不向き」。 */
+export function paceFit(style: StyleCode | undefined, paceLevel: PaceForecast["level"] | undefined, easePct: number | null | undefined): PaceFit | null {
+  if (!style) return null;
+  const reasons: string[] = [];
+  let score = 0;
+  const front = style === "front" || style === "stalker";
+  if (paceLevel === "high") {
+    score += front ? -1 : 1;
+    reasons.push(front ? "ハイペースで前に行く側は苦しい" : "ハイペースで後ろから差せる");
+  } else if (paceLevel === "slow") {
+    score += front ? 1 : -1;
+    reasons.push(front ? "スローで前が残りやすい" : "スローで後ろは届きにくい");
+  }
+  if (easePct != null) {
+    if (easePct >= 60) { score += 1; reasons.push("追走が楽"); }
+    else if (easePct < 30) { score -= 1; reasons.push("追走が困難"); }
+  }
+  return { score, label: score >= 1 ? "向く" : score <= -1 ? "不向き" : "ふつう", reasons };
+}
+
+/** 予測 API の馬ごとの追走難度情報を作る（position_flow と entries を馬番で合わせる）。 */
+export function buildTdMap(
+  flows: { horse_number?: number; style?: string; flow_pattern?: string; stamina_concern?: boolean; stamina?: { stamina_label?: string }; expected_last_3f?: { seconds?: number; delta_sec?: number } }[] | undefined,
+  entries: { horse_number?: number; tracking_difficulty?: { ease_pct?: number; label?: string } }[] | undefined,
+): Map<number, HorseTd> {
+  const m = new Map<number, HorseTd>();
+  const get = (no: number) => m.get(no) ?? (m.set(no, {}), m.get(no)!);
+  for (const e of entries ?? []) {
+    if (e.horse_number == null) continue;
+    Object.assign(get(e.horse_number), { ease_pct: e.tracking_difficulty?.ease_pct, ease_label: e.tracking_difficulty?.label });
+  }
+  for (const f of flows ?? []) {
+    if (f.horse_number == null) continue;
+    Object.assign(get(f.horse_number), {
+      style: f.style, flow_pattern: f.flow_pattern, stamina_label: f.stamina?.stamina_label, stamina_concern: f.stamina_concern,
+      last3f_sec: f.expected_last_3f?.seconds, last3f_delta: f.expected_last_3f?.delta_sec,
+    });
+  }
+  return m;
+}
+
+/** 基準との差の表示。−0.0 にならないよう丸めてから符号を付ける。 */
+export function fmtDelta(d: number): string {
+  const r = Math.round(d * 10) / 10;
+  return r === 0 ? "±0.0" : `${r > 0 ? "+" : ""}${r.toFixed(1)}`;
+}

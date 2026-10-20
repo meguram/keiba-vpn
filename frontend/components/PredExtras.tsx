@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { getJson, prefetchJson } from "@/lib/httpCache";
 import { PositionForecast } from "@/components/PositionForecast";
-import { GATE_TONE, PACE_TONE } from "@/lib/positionForecast";
+import { GATE_TONE, PACE_TONE, buildTdMap } from "@/lib/positionForecast";
 import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
-import { bracketColor, bracketOf } from "@/lib/bracket";
+import { bracketOf } from "@/lib/bracket";
 
 /* 出馬表の下に置く、付随予測の折りたたみ。既定は閉じる（開閉は覚える）。
-   - 展開予想: 予測 API が返す pace_forecast / gate_bias / 各馬の position_forecast（取得済みなので追加の通信なし）
-   - 想定ラップ・位置取りの流れ: /api/race/{id}/tracking-difficulty（重いので開いたときに初めて取得） */
+   - 展開予想: 予測 API が返す pace_forecast / gate_bias / 各馬の position_forecast（取得済み）に、
+     追走難度・消耗・想定上がり（/api/race/{id}/tracking-difficulty。重いので開いたときに初めて取得）を重ねる
+   - 想定ラップ: 同じ tracking-difficulty を共有（開閉どちらで取得しても 1 回） */
 
 export type ExtraEntry = {
   horse_number?: number;
@@ -44,14 +45,15 @@ type TdData = {
   entries?: TdEntry[];
 };
 
-type SectionKey = "pos" | "lap" | "flow";
+type SectionKey = "pos" | "lap";
 const STORE_KEY = "wp-extra-open";
 
 function loadOpen(): Record<SectionKey, boolean> {
-  const base = { pos: false, lap: false, flow: false };
+  const base = { pos: false, lap: false };
   try {
     const raw = window.localStorage.getItem(STORE_KEY);
-    return raw ? { ...base, ...JSON.parse(raw) } : base;
+    const s = raw ? JSON.parse(raw) : {};
+    return { pos: !!(s.pos ?? s.flow), lap: !!s.lap };
   } catch {
     return base;
   }
@@ -106,7 +108,7 @@ export function PredExtras({
   pace?: PaceForecast | null;
   gate?: GateBias | null;
 }) {
-  const [open, setOpen] = useState<Record<SectionKey, boolean>>({ pos: false, lap: false, flow: false });
+  const [open, setOpen] = useState<Record<SectionKey, boolean>>({ pos: false, lap: false });
   const [td, setTd] = useState<TdData | null>(null);
   const [tdState, setTdState] = useState<"idle" | "loading" | "error">("idle");
   const [reloadKey, setReloadKey] = useState(0);
@@ -120,7 +122,7 @@ export function PredExtras({
   });
 
   const tdUrl = `/api/race/${raceId}/tracking-difficulty`;
-  const needTd = open.lap || open.flow;
+  const needTd = open.lap || open.pos;
   useEffect(() => {
     if (!needTd) return;
     let alive = true;
@@ -149,15 +151,7 @@ export function PredExtras({
 
   const pp = td && !td.error ? td.pace_prediction : undefined;
   const tdBroken = !!td?.error;
-  const flowRows = useMemo(() => {
-    const ease = new Map<number, TdEntry["tracking_difficulty"]>();
-    for (const e of td?.entries ?? []) if (e.horse_number != null) ease.set(e.horse_number, e.tracking_difficulty);
-    const byNo = new Map(horses.map((h) => [h.no, h]));
-    return [...(td?.position_flow ?? [])]
-      .filter((f) => f.horse_number != null)
-      .sort((a, b) => (a.horse_number ?? 0) - (b.horse_number ?? 0))
-      .map((f) => ({ f, h: byNo.get(f.horse_number as number), ease: ease.get(f.horse_number as number) }));
-  }, [td, horses]);
+  const tdMap = useMemo(() => buildTdMap(td?.position_flow, td?.entries), [td]);
 
   const tdLoading = tdState === "loading" && !td;
   const tdError = tdState === "error" && !td;
@@ -178,16 +172,37 @@ export function PredExtras({
     <div aria-label="付随する予測" style={{ display: "grid", gap: 8, marginTop: 12 }}>
       <Section
         id={`wp-extra-pos-${raceId}`}
-        title="展開予想（位置取り・ペース）"
+        title="展開予想"
         open={open.pos}
         onToggle={() => toggle("pos")}
+        onHover={() => prefetchJson(tdUrl, { ttlMs: 60_000 })}
         summary={[
           paceTone && pace ? `ペース ${pace.label}` : "",
           gateTone ? `枠順 ${gateTone.label}` : "",
-        ].filter(Boolean).join(" ・ ") || (hasPos ? "" : "出せません")}
+          pp?.lap_times ? `上がり基準 ${sec(pp.last_3f_baseline_sec)}秒` : "",
+        ].filter(Boolean).join(" ・ ") || (hasPos ? "位置取り・追走難度" : "出せません")}
       >
         {hasPos || pace ? (
-          <PositionForecast horses={horses} pace={pace} gate={gate} />
+          <PositionForecast
+            embedded
+            horses={horses}
+            pace={pace}
+            gate={gate}
+            td={tdBroken ? null : tdMap}
+            tdNote={
+              <>
+                {tdStatus}
+                {tdBroken && <Note>追走難度・消耗・想定上がりは出せません（{String(td?.error)}）。位置取りの予想だけ表示しています。</Note>}
+                {td && !tdBroken && tdMap.size === 0 && <Note>追走難度は出せません（出走馬の過去走が足りません）。</Note>}
+                {tdMap.size > 0 && (
+                  <Note>
+                    追走難度（大きいほど前に付いていきやすい）・消耗・想定上がり（基準との差、−が速い）は、位置取りの予想とは別に、過去走の統計で算出しています。脚質の表現がずれることがあります。
+                    「展開」は、想定ペース（ハイなら差し・追込、スローなら逃げ・先行が向く）に追走のしやすさ（楽なら +、困難なら −）を足し合わせた目安で、AI予測ではありません。
+                  </Note>
+                )}
+              </>
+            }
+          />
         ) : (
           <Note>この条件では出せません（出走馬の過去走の通過順位がありません）。</Note>
         )}
@@ -222,42 +237,6 @@ export function PredExtras({
         )}
       </Section>
 
-      <Section
-        id={`wp-extra-flow-${raceId}`}
-        title="位置取りの流れ・追走難度"
-        open={open.flow}
-        onToggle={() => toggle("flow")}
-        onHover={() => prefetchJson(tdUrl, { ttlMs: 60_000 })}
-        summary="馬ごとの脚質・想定上がり・追走のしやすさ"
-      >
-        {tdStatus}
-        {tdBroken && <Note>この条件では出せません（{String(td?.error)}）。</Note>}
-        {td && !tdBroken && flowRows.length === 0 && <Note>この条件では出せません（出走馬の過去走が足りません）。</Note>}
-        {flowRows.length > 0 && (
-          <>
-            <Note>追走難度: 数字が大きいほど、その馬にとって前に付いていきやすい（％）。想定上がりは同条件の基準との差（−が速い）。過去走からの統計ベースの目安です。</Note>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
-              {flowRows.map(({ f, h, ease }) => {
-                const b = bracketColor(h?.bracket);
-                const d = f.expected_last_3f?.delta_sec;
-                return (
-                  <li key={f.horse_number} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 8px", borderRadius: 8, background: "var(--surface2)", border: "1px solid var(--border)", fontSize: 12 }}>
-                    <span style={{ minWidth: 26, height: 26, borderRadius: 999, background: b.bg, color: b.color, border: `1px solid ${b.border}`, boxSizing: "border-box", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13 }}>{f.horse_number}</span>
-                    <strong style={{ flex: "1 1 110px", minWidth: 0, fontSize: 13, color: "#f0f6fc", overflowWrap: "anywhere" }}>{h?.name || f.horse_name || ""}</strong>
-                    <span style={{ color: "var(--text-dim)" }}>脚質 <b style={{ color: "var(--text)" }}>{f.style ?? "—"}</b></span>
-                    {f.flow_pattern && <span style={{ color: "var(--text-dim)" }}>流れ <b style={{ color: "var(--text)" }}>{f.flow_pattern}</b></span>}
-                    {f.stamina?.stamina_label && <span style={{ color: f.stamina_concern ? "#fbbf24" : "var(--text-dim)" }}>消耗 <b>{f.stamina.stamina_label}</b></span>}
-                    {f.expected_last_3f?.seconds != null && (
-                      <span style={{ color: "var(--text-dim)" }}>想定上がり <b style={{ color: "var(--text)" }}>{f.expected_last_3f.seconds.toFixed(1)}</b>{d != null && `（${d > 0 ? "+" : ""}${d.toFixed(1)}）`}</span>
-                    )}
-                    {ease?.ease_pct != null && <span style={{ color: "var(--text-dim)" }}>追走 <b style={{ color: "var(--text)" }}>{ease.ease_pct.toFixed(0)}%</b>{ease.label ? `（${ease.label}）` : ""}</span>}
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        )}
-      </Section>
     </div>
   );
 }
