@@ -86,8 +86,8 @@ def final_section(f: dict) -> str:
 <p>v5 − v4（同じ行）: Δwin {_f(vs.get('Δwin'))}（95% CI 上限 {_f(vs.get('win_hi'))}）、Δtop2 {_f(vs.get('Δtop2'))}、Δtop3 {_f(vs.get('Δtop3'))}。</p>"""
 
 
-def serving_section(s: dict, px: dict) -> str:
-    if not s and not px:
+def serving_section(s: dict, px: dict, e2e: dict | None = None) -> str:
+    if not s and not px and not e2e:
         return ""
     rows = ""
     for d, v in (s or {}).items():
@@ -97,10 +97,16 @@ def serving_section(s: dict, px: dict) -> str:
             if g in v:
                 x = v[g]
                 rows += f"<tr><td>{g}（tp-38）</td><td>{d}</td><td class=num>{x['rows']}</td><td class=num>{x['cols']}</td><td class=num>{x['bad']}</td><td>{html.escape(json.dumps(x.get('worst', {}), ensure_ascii=False)[:160])}</td></tr>"
+    e2e_rows = ""
+    for d, v in (e2e or {}).items():
+        e2e_rows += f"<tr><td>{d}</td><td class=num>{v['rows']}</td>" + "".join(f"<td class=num>{v[t]['corr']:.4f}</td><td class=num>{v[t]['diff']:+.4f}</td>" for t in ("win", "top2", "top3")) + f"<td class=num>{v['sec']}</td></tr>"
+    e2e_tbl = ("<h3>通しの経路（V3Serving + bundle_v5_2024）の確率と、最終学習の学習側の予測（test 2025）との対比</h3>"
+               "<table><tr><th>日</th><th>行</th><th>勝 相関</th><th>勝 LogLoss 差</th><th>連対 相関</th><th>連対 LogLoss 差</th><th>複勝 相関</th><th>複勝 LogLoss 差</th><th>秒</th></tr>" + e2e_rows + "</table>"
+               "<p class=\"muted\">V0 の列（LayerA など）は推論の経路で作るので、学習表の値と完全一致はしない（v4 の同じ検証は相関 0.9987）。LogLoss 差は 1 日 80〜100 行で、符号がばらつく雑音の水準。</p>") if e2e_rows else ""
     return f"""<h2>4. 推論側の一致検証（過去の日）</h2>
 <p class="muted">推論の経路（serving_v5 の CY、serving_v5_px の ALL_BEST）が、履歴 + 当日の行から作る列を、学習側の群の値と比べた（相対 1e-3・絶対 1e-4 以内を一致とする）。CY・セル統計・SVD 射影は一致し、リッジは再学習時の lsqr の収束差で 0.3〜6% の行が僅かにずれる。</p>
 <table><tr><th>群</th><th>日</th><th>行</th><th>列</th><th>不一致の列数</th><th>最も不一致の多い列（行の割合）</th></tr>{rows}</table>
-<p class="muted">PX の 1 日あたりの計算時間は約 15〜18 秒（セル統計の履歴計算が主）。状態は data/local/inference/state/px_v5/（祖先表・SVD の成分・半年ごとのリッジ）。</p>"""
+<p class="muted">PX の 1 日あたりの計算時間は約 15〜18 秒（セル統計の履歴計算が主）。状態は data/local/inference/state/px_v5/（祖先表・SVD の成分・半年ごとのリッジ）。</p>{e2e_tbl}"""
 
 
 def main() -> None:
@@ -111,12 +117,13 @@ def main() -> None:
     ap.add_argument("--final")
     ap.add_argument("--serving")
     ap.add_argument("--serving-px", dest="serving_px")
+    ap.add_argument("--e2e")
     ap.add_argument("--note", default="", help="要点（HTML の段落）。省略時は既定の文")
     ap.add_argument("--out", default=str(OUT))
     a = ap.parse_args()
     r = _j(a.select)
     note = a.note or "<p><b>要点.</b> 選択の結果は下の表。採用した構成と理由は決定ログ（tp-51）に書いてある。</p>"
-    body = HEAD + f'<div class="note">{note}</div>' + sel_section(r) + ens_section(_j(a.ens), _j(a.ens_vs)) + final_section(_j(a.final)) + serving_section(_j(a.serving), _j(a.serving_px))
+    body = HEAD + f'<div class="note">{note}</div>' + sel_section(r) + ens_section(_j(a.ens), _j(a.ens_vs)) + final_section(_j(a.final)) + serving_section(_j(a.serving), _j(a.serving_px), _j(a.e2e))
     body += '\n<p class="muted">コード: src/scripts/data/v5_select_eval.py、v5_members.py、fit_final_v5.py、register_final_v5.py、verify_v5_serving_cy.py、src/pipeline/features/serving_v5.py。</p></body></html>\n'
     Path(a.out).write_text(body, encoding="utf-8")
     print("保存:", a.out)
