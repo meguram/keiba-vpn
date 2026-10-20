@@ -32,11 +32,10 @@ FEATURES = [
     # 要求（想定位置取り・想定ペース・コース）
     "pf_early", "pf_rank_norm", "gate_norm", "field_size", "z_hat", "pf_front", "pf_stalker", "pf_pressure", "pf_known_frac",
     "turf", "distance_km", "heavy", "venue_code", "demand_idx", "demand_idx_z",
-    # 供給（その馬の過去）
-    "ability_adj", "prior_l3f_adj", "prior_l3f_dev_front", "prior_l3f_dev_rear", "prior_l3f_adj_fast", "prior_early", "prior_tpre_dev", "prior_finq",
-    "n_prior", "n_prior_front", "n_prior_fast", "age", "weight", "weight_change", "rest_days",
+    # 供給（その馬の過去 5 走。馬柱から推論時にも作れる量だけ）
+    "w_adj", "w_dev", "w_dev_front", "w_dev_rear", "w_early", "w_n", "w_nfront", "w_nrear", "age", "weight", "weight_change", "rest_days",
     # 前走との関係
-    "prev_early", "prev_l3f_dev", "prev_z", "d_dist", "early_shift", "same_style_run",
+    "prev_early", "prev_dev", "d_dist", "early_shift", "same_style_run",
 ]
 
 
@@ -48,7 +47,7 @@ def make_features(h: pd.DataFrame) -> pd.DataFrame:
     """学習表（tp54_dataset.build の出力）または推論用に同じ列名で作った表から、FEATURES の表を作る。
 
     必要な列: pf_early, pf_rank, field_size, horse_number, z_hat, pf_front, pf_stalker, pf_pressure, pf_known, surface, distance,
-    track_condition または going_group, venue, ability_adj, prior_*, n_prior*, age, weight, weight_change, rest_days, prev_*。
+    track_condition または going_group, venue, w_adj, w_dev*, w_n*, age, weight, weight_change, rest_days, prev_*。
     """
     fs = h["field_size"].astype(float).clip(lower=1)
     pe = h["pf_early"].astype(float)
@@ -70,14 +69,12 @@ def make_features(h: pd.DataFrame) -> pd.DataFrame:
     f["venue_code"] = h["venue"].map({v: i for i, v in enumerate(VENUES)}).astype(float)
     f["demand_idx"] = (1.0 - pe) * (-z)                  # 前にいるほど、ペースが速いほど大きい
     f["demand_idx_z"] = (1.0 - pe) * (-z.clip(-2, 2)) * (f["distance_km"] - 0.6)
-    for c in ("ability_adj", "prior_l3f_adj", "prior_l3f_dev_front", "prior_l3f_dev_rear", "prior_l3f_adj_fast", "prior_early", "prior_tpre_dev", "prior_finq",
-              "n_prior", "n_prior_front", "n_prior_fast", "age", "weight", "weight_change", "rest_days"):
+    for c in ("w_adj", "w_dev", "w_dev_front", "w_dev_rear", "w_early", "w_n", "w_nfront", "w_nrear", "age", "weight", "weight_change", "rest_days"):
         f[c] = h[c].astype(float) if c in h.columns else np.nan
     f["prev_early"] = h["prev_act_early_norm"].astype(float)
-    f["prev_l3f_dev"] = h["prev_act_l3f_dev"].astype(float)
-    f["prev_z"] = h["prev_z_act"].astype(float)
+    f["prev_dev"] = h["prev_c_dev"].astype(float)
     f["d_dist"] = (h["distance"].astype(float) - h["prev_distance"].astype(float)) / 1000.0
-    f["early_shift"] = pe - h["prior_early"].astype(float)       # いつもの位置より前/後ろに行く想定か
+    f["early_shift"] = pe - h["w_early"].astype(float)       # いつもの位置より前/後ろに行く想定か
     f["same_style_run"] = (np.abs(pe - h["prev_act_early_norm"].astype(float)) < 0.15).astype(float)
     return f[FEATURES]
 

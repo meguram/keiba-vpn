@@ -21,6 +21,8 @@ from typing import Any, Iterable
 
 CONFIG_PATH = Path(__file__).resolve().parents[3] / "config" / "pace_coherence.json"
 ENV_FLAG = "KEIBA_PACE_COHERENCE"
+ENV_FLAG_V2 = "KEIBA_PACE_COHERENCE_V2"        # ペース想定 v2（tp-54）。既定は無効＝現行のまま
+CONFIG_V2_PATH = Path(__file__).resolve().parents[3] / "config" / "pace_coherence_v2.json"
 
 _DATE = re.compile(r"^(\d{4})[./](\d{1,2})[./](\d{1,2})")
 _VENUE = re.compile(r"^\d{4}[./]\d{1,2}[./]\d{1,2}\s*(?: )?\s*(?:\d+)?\s*([^\d\s ]{1,3})")
@@ -44,6 +46,39 @@ def load_config(path: str | None = None) -> dict | None:
         return json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def enabled_v2() -> bool:
+    return os.environ.get(ENV_FLAG_V2, "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+@functools.lru_cache(maxsize=2)
+def load_pace_v2(path: str | None = None) -> dict | None:
+    p = Path(path) if path else CONFIG_V2_PATH
+    if not p.exists():
+        return None
+    try:
+        return (json.loads(p.read_text(encoding="utf-8")) or {}).get("pace_v2")
+    except Exception:
+        return None
+
+
+def pace_v2_features(front: float, stalker: float, pressure: float, known: float, field: float, surface: Any, distance: Any, going: Any) -> dict[str, float]:
+    """tp54_pace.design と同じ定義（テストで一致を確認）。出走表の段階で分かる量だけ。"""
+    fr = min(float(front or 0), 6.0)
+    st = min(float(stalker or 0), 10.0)
+    fd = float(field or 14.0)
+    turf = 1.0 if surface == "芝" else 0.0
+    heavy = 1.0 if going_group(going) == "道悪" else 0.0
+    dist = (float(distance or 1600) - 1600.0) / 1000.0
+    return {"f0": float(fr == 0), "f1": float(fr == 1), "f2": float(fr == 2), "f3p": float(fr >= 3), "stalk": st / 5.0, "stalk2": (st / 5.0) ** 2,
+            "f0_stalk": float(fr == 0) * st / 5.0, "pressure": float(pressure or 0.0), "known_frac": min(float(known or 0) / max(fd, 1.0), 1.0),
+            "field": (fd - 14.0) / 4.0, "turf": turf, "dist": dist, "dist2": dist ** 2, "heavy": heavy, "turf_dist": turf * dist, "heavy_turf": heavy * turf}
+
+
+def predict_pace_z_v2(m: dict, front: float, stalker: float, pressure: float, known: float, field: float, surface: Any, distance: Any, going: Any) -> float:
+    x = pace_v2_features(front, stalker, pressure, known, field, surface, distance, going)
+    return float(m["intercept"] + sum(c * x[k] for k, c in zip(m["features"], m["coef"])))
 
 
 def going_group(going: Any) -> str:
@@ -154,6 +189,10 @@ def coherent_forecast(cfg: dict, horses: list[dict], pf_pace: dict, course: dict
     位置取りが無い馬には上がりを出さない。上がり(秒) = 同条件の中央値 + 偏差（ペースが速いほど全体が遅くなる補正は、実測で弱いので入れない）。"""
     venue, surface, distance, going = course.get("venue"), course.get("surface"), course.get("distance"), course.get("track_condition") or course.get("going")
     z = predict_pace_z(cfg, int(pf_pace.get("front_runner_count") or 0), int(pf_pace.get("stalker_count") or 0), float(pf_pace.get("early_pressure") or 0.0), surface, distance, going)
+    v2 = load_pace_v2() if enabled_v2() else None
+    if v2:       # tp-54: 逃げ0頭の有無・逃げ×先行の交互作用・頭数・既知馬の割合を入れた較正（既定は無効）
+        z = predict_pace_z_v2(v2, pf_pace.get("front_runner_count") or 0, pf_pace.get("stalker_count") or 0, pf_pace.get("early_pressure") or 0.0,
+                              pf_pace.get("known_horses") or 0, pf_pace.get("field_size") or len(horses), surface, distance, going)
     level, label = pace_label(z, cfg)
     t = (cfg.get("cohort_t3f") or {}).get(cohort_key(venue, surface, distance, going)) or {}
     first3f = (t.get("median") + z * t.get("std")) if t.get("median") is not None and t.get("std") else None

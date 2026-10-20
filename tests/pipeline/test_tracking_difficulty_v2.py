@@ -84,10 +84,9 @@ def _race_rows(n: int = 6) -> pd.DataFrame:
     d = pd.DataFrame({
         "pf_early": np.linspace(0.0, 1.0, n), "pf_rank": np.arange(1, n + 1), "field_size": n, "horse_number": np.arange(1, n + 1), "z_hat": -0.5, "pf_front": 1, "pf_stalker": 3,
         "pf_pressure": 0.3, "pf_known": n, "surface": "芝", "distance": 1600, "track_condition": "良", "venue": "東京",
-        "prev_act_early_norm": rng.random(n), "prev_act_l3f_dev": rng.normal(size=n), "prev_z_act": rng.normal(size=n), "prev_distance": 1400,
+        "prev_act_early_norm": rng.random(n), "prev_c_dev": rng.normal(size=n), "prev_distance": 1400,
     })
-    for c in ("ability_adj", "prior_l3f_adj", "prior_l3f_dev_front", "prior_l3f_dev_rear", "prior_l3f_adj_fast", "prior_early", "prior_tpre_dev", "prior_finq",
-              "n_prior", "n_prior_front", "n_prior_fast", "age", "weight", "weight_change", "rest_days"):
+    for c in ("w_adj", "w_dev", "w_dev_front", "w_dev_rear", "w_early", "w_n", "w_nfront", "w_nrear", "age", "weight", "weight_change", "rest_days"):
         d[c] = rng.normal(size=n)
     return d
 
@@ -103,9 +102,9 @@ def test_make_features_independent_of_other_rows_results():
     d = _race_rows()
     f1 = td2.make_features(d)
     d2 = d.copy()
-    d2["prev_act_l3f_dev"] = 123.0         # 前走の値は特徴量の入力だが、今回のレース内の他馬の結果とは無関係
+    d2["prev_c_dev"] = 123.0         # 前走の値は特徴量の入力だが、今回のレース内の他馬の結果とは無関係
     f2 = td2.make_features(d2)
-    assert f1.drop(columns=["prev_l3f_dev"]).equals(f2.drop(columns=["prev_l3f_dev"]))
+    assert f1.drop(columns=["prev_dev"]).equals(f2.drop(columns=["prev_dev"]))
 
 
 def test_pace_design_uses_prerace_columns_only():
@@ -117,3 +116,48 @@ def test_pace_design_uses_prerace_columns_only():
     m = pc.fit_ridge(pd.concat([X] * 20, ignore_index=True), np.tile([0.5, -0.2], 20))
     p = pc.predict_ridge(m, X)
     assert p.shape == (2,) and np.isfinite(p).all()
+
+
+def test_window_prior_uses_only_last_five_prior_rows():
+    rng = np.random.default_rng(1)
+    f = pd.DataFrame({"horse_id": ["a"] * 9, "date": pd.date_range("2024-01-01", periods=9, freq="7D"), "v": rng.normal(size=9), "early": np.linspace(0.1, 0.9, 9)})
+    m = ds.window_prior(f, f["v"])
+    for k in range(9):
+        past = f["v"].iloc[max(0, k - 5):k]
+        if len(past):
+            assert abs(m.iloc[k] - past.mean()) < 1e-12
+        else:
+            assert np.isnan(m.iloc[k])
+    # 条件つき: 前に行った（early<0.35）走だけの平均、該当が無ければ NaN
+    mf = ds.window_prior(f, f["v"], f["early"] < 0.35)
+    sel = f.iloc[:5]
+    assert abs(mf.iloc[5] - sel[sel["early"] < 0.35]["v"].mean()) < 1e-12 or np.isnan(mf.iloc[5])
+    assert np.isnan(mf.iloc[0])
+    # 合計・件数
+    n = ds.window_prior(f, f["early"].notna().astype(float), how="sum")
+    assert n.iloc[0] == 0 and n.iloc[3] == 3 and n.iloc[8] == 5
+
+
+def test_window_prior_ignores_current_and_future_values():
+    f = _frame()
+    base = ds.window_prior(f, f["v"])
+    g = f.copy()
+    last = g[g["horse_id"] == "a"].index[-1]
+    g.loc[last, "v"] = 999.0
+    new = ds.window_prior(g, g["v"])
+    pd.testing.assert_series_equal(base.drop(index=[last]), new.drop(index=[last]))       # 最後の走の値を変えても、他の行の窓の集計は同じ（自分自身も含まない）
+    assert base.loc[last] == new.loc[last]
+
+
+def test_pace_v2_inference_matches_training_design(monkeypatch):
+    from src.pipeline.inference import pace_coherence as pcoh
+
+    m = pcoh.load_pace_v2()
+    assert m and m["features"] == pc.FEATURES
+    r = pd.DataFrame({"pf_front": [0, 2, 5], "pf_stalker": [6, 3, 9], "pf_pressure": [0.3, 0.5, 0.7], "pf_known": [14, 16, 10], "field_size": [14, 16, 18],
+                      "surface": ["芝", "ダ", "芝"], "distance": [1600, 1200, 2400], "going_group": ["良", "道悪", "良"]})
+    a = pc.predict_ridge({"intercept": m["intercept"], "coef": m["coef"], "features": m["features"]}, pc.design(r))
+    b = [pcoh.predict_pace_z_v2(m, *row) for row in zip(r.pf_front, r.pf_stalker, r.pf_pressure, r.pf_known, r.field_size, r.surface, r.distance, r.going_group)]
+    assert np.allclose(a, b, atol=1e-9)           # 学習時の特徴の作り方と、推論側の作り方が一致
+    monkeypatch.delenv(pcoh.ENV_FLAG_V2, raising=False)
+    assert pcoh.enabled_v2() is False             # 既定は現行のペース推定のまま
