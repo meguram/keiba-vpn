@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bracketColor } from "@/lib/bracket";
-import { CONF_LABEL, ForecastHorse, GATE_TONE, GateBias, HorseTd, PACE_TONE, PaceFit, PaceForecast, STYLE_LANES, easeTone, fmtDelta, gateWord, lanesOf, packTrack, packTrackGate, paceFit } from "@/lib/positionForecast";
+import { CONF_LABEL, ForecastHorse, GATE_TONE, GateBias, HorseTd, PACE_TONE, PaceFit, PaceForecast, STYLE_LANES, easeTone, fmtDelta, fmtSec2, gateWord, lanesOf, packTrack, packTrackGate, paceFit } from "@/lib/positionForecast";
 import { useNarrow } from "@/components/RaceStrip";
 
 /* 展開予想（位置取り）。過去走の通過順位から作る予想で、実モデルの予測ではない（画面にも明記する）。
@@ -72,9 +72,9 @@ function Detail({ h, gate, td, fit }: { h: ForecastHorse; gate: GateBias | null 
               {et && <span style={{ color: "var(--text-dim)" }}>追走難度 <b style={{ color: et.color }}>{et.word}</b>（{td.ease_pct!.toFixed(0)}％）</span>}
               {td.flow_pattern && <span style={{ color: "var(--text-dim)" }}>流れ <b style={{ color: "var(--text)" }}>{td.flow_pattern}</b></span>}
               {td.v2 && td.drain_sec != null
-                ? <span style={{ color: (td.ease_pct ?? 50) < 30 ? "#fbbf24" : "var(--text-dim)" }}>消耗（終いの落ち） <b>{td.drain_sec.toFixed(1)}秒</b></span>
+                ? <span style={{ color: (td.ease_pct ?? 50) < 30 ? "#fbbf24" : "var(--text-dim)" }}>消耗（終いの落ち） <b>{fmtSec2(td.drain_sec)}秒</b></span>
                 : td.stamina_label && <span style={{ color: td.stamina_concern ? "#fbbf24" : "var(--text-dim)" }}>消耗 <b>{td.stamina_label}</b></span>}
-              {td.v2 && td.demand_sec != null && td.capacity_sec != null && <span style={{ color: "var(--text-dim)" }}>要求 <b style={{ color: "var(--text)" }}>{td.demand_sec.toFixed(1)}秒</b> / 供給 <b style={{ color: "var(--text)" }}>{td.capacity_sec.toFixed(1)}秒</b></span>}
+              {td.v2 && td.demand_sec != null && td.capacity_sec != null && <span style={{ color: "var(--text-dim)" }}>要求 <b style={{ color: "var(--text)" }}>{fmtSec2(td.demand_sec)}秒</b> / 供給 <b style={{ color: "var(--text)" }}>{fmtSec2(td.capacity_sec)}秒</b></span>}
               {td.last3f_sec != null && <span style={{ color: "var(--text-dim)" }}>想定上がり <b style={{ color: "var(--text)" }}>{td.last3f_sec.toFixed(1)}</b>{td.last3f_delta != null && `（${fmtDelta(td.last3f_delta)}）`}</span>}
               {td.style && td.style !== f.style && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>追走側の脚質は「{td.style}」（別算出のため位置取りの予想とずれることがあります）</span>}
             </>
@@ -112,7 +112,7 @@ function HorseList({ horses, pace, td, narrow, sel, onPick, detail }: { horses: 
         const fitPill = fit && ft ? <span title={fit.reasons.join("・")} style={{ padding: "1px 8px", borderRadius: 999, border: `1px solid ${ft.bd}`, background: ft.bg, color: ft.fg, fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}>{fit.label}</span> : <span style={{ color: "var(--text-dim)" }}>—</span>;
         const easeCell = et ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}><span aria-hidden style={{ width: 9, height: 9, borderRadius: 999, background: et.color }} /><b style={{ color: "var(--text)" }}>{et.word}</b><span style={{ color: "var(--text-dim)" }}>{x!.ease_pct!.toFixed(0)}</span></span> : <span style={{ color: "var(--text-dim)" }}>—</span>;
         const stam = x?.v2 && x.drain_sec != null
-          ? <span title="通過ラップのあとの終いの落ち（秒、大きいほど大変）" style={{ color: (x.ease_pct ?? 50) < 30 ? "#fbbf24" : "var(--text-dim)", whiteSpace: "nowrap" }}>{x.drain_sec.toFixed(1)}秒</span>
+          ? <span title="通過ラップのあとの終いの落ち（秒、大きいほど大変）" style={{ color: (x.ease_pct ?? 50) < 30 ? "#fbbf24" : "var(--text-dim)", whiteSpace: "nowrap" }}>{fmtSec2(x.drain_sec)}秒</span>
           : x?.stamina_label ? <span style={{ color: x.stamina_concern ? "#fbbf24" : "var(--text-dim)", whiteSpace: "nowrap" }}>{x.stamina_label}</span> : <span style={{ color: "var(--text-dim)" }}>—</span>;
         const l3 = x?.last3f_sec != null ? <span style={{ whiteSpace: "nowrap", color: "var(--text)" }}>{x.last3f_sec.toFixed(1)}<span style={{ color: "var(--text-dim)" }}>{x.last3f_delta != null ? `（${fmtDelta(x.last3f_delta)}）` : ""}</span></span> : <span style={{ color: "var(--text-dim)" }}>—</span>;
         const style = <span style={{ color: h.f ? "var(--text)" : "var(--text-dim)" }}>{h.f?.style ?? "データなし"}</span>;
