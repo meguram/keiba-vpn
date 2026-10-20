@@ -22,6 +22,7 @@ import polars as pl
 from src.pipeline.features import serving_layer_a as sla
 from src.pipeline.features import serving_ped_extras as spe
 from src.pipeline.features import serving_stage_rel as ssr
+from src.pipeline.features.serving_v5 import v5_columns as sv5_columns
 
 logger = logging.getLogger("pipeline.inference.v3_serving")
 
@@ -149,16 +150,47 @@ class V3Serving:
         else:
             wc = pd.DataFrame(index=base.index)
 
+        px_names = [x for x in self.feature_cols if x in set(sv5_columns().get("PX", []))]                 # v5: 血統の位置別セル・SVD 射影・リッジ（tp-38 の ALL_BEST）
+        if px_names and self.v4 is not None:
+            pxf = self._px_for_day(c, storage)
+            px = base[KEYS].merge(pxf, on=KEYS, how="left").drop(columns=KEYS).reindex(columns=px_names)
+            px.index = base.index
+        else:
+            px = pd.DataFrame(index=base.index)
+
         rel_names = [x for x in self.feature_cols if ssr.split_relative_name(x) is not None and x not in cur.columns]
         rel = ssr.relative_by_names(pd.concat([cur, ped, extras], axis=1), rel_names) if rel_names else pd.DataFrame(index=base.index)
 
-        allc = pd.concat([cur, ped, extras, tl, wc, rel] + ([v4cols] if v4cols is not None else []), axis=1)
+        allc = pd.concat([cur, ped, extras, tl, wc, px, rel] + ([v4cols] if v4cols is not None else []), axis=1)
         allc = allc.loc[:, ~allc.columns.duplicated()]
         missing = [x for x in self.feature_cols if x not in allc.columns]
         if missing:
             raise KeyError(f"v3 の特徴量が足りない列: {len(missing)} 列 {missing[:12]}")
         out = pd.concat([base[KEYS], allc[self.feature_cols]], axis=1)
         logger.info("v3 の特徴量: %d 行 × %d 列 %.1fs", len(out), len(self.feature_cols), time.perf_counter() - t0)
+        return out
+
+    def _px_for_day(self, c: pd.DataFrame, storage: Any) -> pd.DataFrame:
+        """その日の全レースの PX 列（v5）。日単位でキャッシュ（学習側の関数を履歴 + 当日の行に当てるので、1 日 15〜20 秒）。"""
+        from src.pipeline.features import serving_v5_px as sv5px
+
+        day = str(pd.to_datetime(c["date"]).min().date())
+        if getattr(self, "_px_cache", None) is None:
+            self._px_cache = {}
+        want = c[KEYS].astype(str)
+        have = self._px_cache.get(day)
+        if have is not None and len(want.merge(have[KEYS], on=KEYS, how="left", indicator=True).query("_merge == 'left_only'")) == 0:
+            return have
+        if getattr(self, "px", None) is None:
+            self.px = sv5px.PXFeatures(self.v4.hist.field_hist)
+        allc = self._day_card(c, storage)
+        card = (allc if allc is not None and len(allc) else c).copy()
+        card["race_id"], card["horse_id"] = card["race_id"].astype(str), card["horse_id"].astype(str)
+        card = pd.concat([card, c[[x for x in c.columns if x in card.columns]].astype({"race_id": str, "horse_id": str})], ignore_index=True).drop_duplicates(KEYS)
+        if "field_size" not in card.columns or card["field_size"].isna().any():
+            card["field_size"] = card.groupby("race_id")["horse_id"].transform("count")
+        out = self.px.day(card)
+        self._px_cache[day] = out
         return out
 
     def _day_card(self, c: pd.DataFrame, storage: Any) -> pd.DataFrame | None:

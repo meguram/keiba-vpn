@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pandas as pd
@@ -47,3 +48,11 @@ def cy_columns_for_races(races: pd.DataFrame, records: dict[str, dict[str, Any] 
         m = g[["race_id", "horse_id"]].merge(got.reset_index(), on="horse_id", how="left") if len(got) else g[["race_id", "horse_id"]].copy()
         parts.append(m)
     return pd.concat(parts, ignore_index=True) if parts else r[["race_id", "horse_id"]]
+
+
+COLUMNS_JSON = __import__("pathlib").Path(__file__).with_name("serving_v5_columns.json")
+
+
+def v5_columns() -> dict[str, list[str]]:
+    """v5 の追加列の名前: {"CY": [...], "PX": [...]}。"""
+    return json.loads(COLUMNS_JSON.read_text(encoding="utf-8")) if COLUMNS_JSON.exists() else {"CY": [], "PX": []}

@@ -59,14 +59,20 @@ def sel_section(r: dict) -> str:
 {t1}{t2}"""
 
 
-def ens_section(e: dict) -> str:
-    if not e:
+def ens_section(e: dict, v: dict) -> str:
+    if not e and not v:
         return ""
     rows = []
-    for k, v in e.items():
-        if k.startswith("vs_") and isinstance(v, dict):
-            rows.append(f"<tr><td>{html.escape(k)}</td><td class=num>{_f(v.get('Δwin'))}</td><td class=num>{_f(v.get('win_hi'))}</td><td class=num>{_f(v.get('Δtop2'))}</td><td class=num>{_f(v.get('Δtop3'))}</td></tr>")
-    return f"""<h2>2. LOYO アンサンブル（7 メンバー、valid 2022〜24）</h2>
+    for k, x in e.items():
+        if k.startswith("vs_") and isinstance(x, dict):
+            rows.append(f"<tr><td>v5（LOYO） {html.escape(k)}</td><td class=num>{_f(x.get('Δwin'))}</td><td class=num>{_f(x.get('win_hi'))}</td><td class=num>{_f(x.get('Δtop2'))}</td><td class=num>{_f(x.get('Δtop3'))}</td></tr>")
+    if v.get("overall"):
+        o = v["overall"]
+        rows.append(f"<tr><td><b>v5 vs v4（同じ {v.get('rows', 0):,} 行）</b></td><td class=num>{_f(o.get('Δwin'))}</td><td class=num>{_f(o.get('win_hi'))}</td><td class=num>{_f(o.get('Δtop2'))}</td><td class=num>{_f(o.get('Δtop3'))}</td></tr>")
+        for y in ("2022", "2023", "2024"):
+            if y in v:
+                rows.append(f"<tr><td>　{y} 年</td><td class=num>{_f(v[y].get('Δwin'))}</td><td class=num>{_f(v[y].get('win_hi'))}</td><td class=num>{_f(v[y].get('Δtop2'))}</td><td class=num>{_f(v[y].get('Δtop3'))}</td></tr>")
+    return f"""<h2>2. LOYO アンサンブル（7 メンバー、valid 2022〜24。メンバーの OOF は V5_GROUPS=CY,BEST の特徴量で作り直し）</h2>
 <table><tr><th>比較</th><th>Δwin</th><th>95% CI 上限</th><th>Δtop2</th><th>Δtop3</th></tr>{''.join(rows)}</table>"""
 
 
@@ -80,27 +86,37 @@ def final_section(f: dict) -> str:
 <p>v5 − v4（同じ行）: Δwin {_f(vs.get('Δwin'))}（95% CI 上限 {_f(vs.get('win_hi'))}）、Δtop2 {_f(vs.get('Δtop2'))}、Δtop3 {_f(vs.get('Δtop3'))}。</p>"""
 
 
-def serving_section(s: dict) -> str:
-    if not s:
+def serving_section(s: dict, px: dict) -> str:
+    if not s and not px:
         return ""
-    rows = "".join(f"<tr><td>{d}</td><td class=num>{v['rows']}</td><td class=num>{v['cols']}</td><td class=num>{v['bad']}</td><td>{html.escape(json.dumps(v.get('worst', {}), ensure_ascii=False)[:200])}</td></tr>" for d, v in s.items())
-    return f"""<h2>4. 推論側（CY）の一致検証</h2>
-<p class="muted">推論の経路（serving_v5.cy_columns_for_races）が作る CY と、学習側の CY（tp40/groups/CY.parquet）を、過去の日で比べる。</p>
-<table><tr><th>日</th><th>行</th><th>列</th><th>不一致の列数</th><th>最も不一致の多い列（行の割合）</th></tr>{rows}</table>"""
+    rows = ""
+    for d, v in (s or {}).items():
+        rows += f"<tr><td>CY（tp-40）</td><td>{d}</td><td class=num>{v['rows']}</td><td class=num>{v['cols']}</td><td class=num>{v['bad']}</td><td>{html.escape(json.dumps(v.get('worst', {}), ensure_ascii=False)[:160])}</td></tr>"
+    for d, v in (px or {}).items():
+        for g in ("PX_cell_sd", "PX_emb", "PX_ridge_als"):
+            if g in v:
+                x = v[g]
+                rows += f"<tr><td>{g}（tp-38）</td><td>{d}</td><td class=num>{x['rows']}</td><td class=num>{x['cols']}</td><td class=num>{x['bad']}</td><td>{html.escape(json.dumps(x.get('worst', {}), ensure_ascii=False)[:160])}</td></tr>"
+    return f"""<h2>4. 推論側の一致検証（過去の日）</h2>
+<p class="muted">推論の経路（serving_v5 の CY、serving_v5_px の ALL_BEST）が、履歴 + 当日の行から作る列を、学習側の群の値と比べた（相対 1e-3・絶対 1e-4 以内を一致とする）。CY・セル統計・SVD 射影は一致し、リッジは再学習時の lsqr の収束差で 0.3〜6% の行が僅かにずれる。</p>
+<table><tr><th>群</th><th>日</th><th>行</th><th>列</th><th>不一致の列数</th><th>最も不一致の多い列（行の割合）</th></tr>{rows}</table>
+<p class="muted">PX の 1 日あたりの計算時間は約 15〜18 秒（セル統計の履歴計算が主）。状態は data/local/inference/state/px_v5/（祖先表・SVD の成分・半年ごとのリッジ）。</p>"""
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--select", required=True)
     ap.add_argument("--ens")
+    ap.add_argument("--ens-vs", dest="ens_vs", help="v5_ens_compare の出力（v5 vs v4 の対比較）")
     ap.add_argument("--final")
     ap.add_argument("--serving")
+    ap.add_argument("--serving-px", dest="serving_px")
     ap.add_argument("--note", default="", help="要点（HTML の段落）。省略時は既定の文")
     ap.add_argument("--out", default=str(OUT))
     a = ap.parse_args()
     r = _j(a.select)
     note = a.note or "<p><b>要点.</b> 選択の結果は下の表。採用した構成と理由は決定ログ（tp-51）に書いてある。</p>"
-    body = HEAD + f'<div class="note">{note}</div>' + sel_section(r) + ens_section(_j(a.ens)) + final_section(_j(a.final)) + serving_section(_j(a.serving))
+    body = HEAD + f'<div class="note">{note}</div>' + sel_section(r) + ens_section(_j(a.ens), _j(a.ens_vs)) + final_section(_j(a.final)) + serving_section(_j(a.serving), _j(a.serving_px))
     body += '\n<p class="muted">コード: src/scripts/data/v5_select_eval.py、v5_members.py、fit_final_v5.py、register_final_v5.py、verify_v5_serving_cy.py、src/pipeline/features/serving_v5.py。</p></body></html>\n'
     Path(a.out).write_text(body, encoding="utf-8")
     print("保存:", a.out)
