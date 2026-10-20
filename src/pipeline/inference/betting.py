@@ -539,12 +539,12 @@ class BettingOptimizer:
                 hn = e.get("horse_number", 0)
                 if hn <= 0:
                     continue
-                wo = e.get("win_odds", 0.0)
+                wo = e.get("win_odds") or 0.0
                 if wo > 0:
                     tansho_map[(hn,)] = wo
-                po = e.get("place_odds_min", 0.0)
+                po = e.get("place_odds_min") or 0.0
                 if not self.config.fukusho_use_min_odds:
-                    po = (e.get("place_odds_min", 0.0) + e.get("place_odds_max", 0.0)) / 2
+                    po = ((e.get("place_odds_min") or 0.0) + (e.get("place_odds_max") or 0.0)) / 2
                 if po > 0:
                     fukusho_map[(hn,)] = po
 
@@ -554,13 +554,13 @@ class BettingOptimizer:
                 if hn <= 0:
                     continue
                 if not tansho_map.get((hn,)):
-                    wo = p.get("win_odds", 0.0)
+                    wo = p.get("win_odds") or 0.0
                     if wo > 0:
                         tansho_map[(hn,)] = wo
                 if not fukusho_map.get((hn,)):
-                    po = p.get("place_odds_min", 0.0)
+                    po = p.get("place_odds_min") or 0.0
                     if not self.config.fukusho_use_min_odds:
-                        po_max = p.get("place_odds_max", po)
+                        po_max = p.get("place_odds_max") or po
                         po = (po + po_max) / 2 if po_max > 0 else po
                     if po > 0:
                         fukusho_map[(hn,)] = po

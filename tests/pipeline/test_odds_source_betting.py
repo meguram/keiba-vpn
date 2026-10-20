@@ -237,3 +237,11 @@ def test_optimize_betting_default_cap_is_2000_and_overridable():
     assert p_none["max_total_bet"] is None
     assert _optimize({"race_odds": ACTUAL_SINGLE}, {"max_total_bet": 50})[1] == 400
     assert _optimize({"race_odds": ACTUAL_SINGLE}, {"max_total_bet": "abc"})[1] == 400
+
+
+def test_build_odds_map_tolerates_none_odds_in_predictions():
+    """バックフィルの予測は win_odds 等が None のことがある。落とさず、値がある馬だけ拾う。"""
+    preds = [{"horse_number": 1, "win_odds": None, "place_odds_min": None},
+             {"horse_number": 2, "win_odds": 3.5, "place_odds_min": 1.4, "place_odds_max": 1.8}]
+    r = BettingOptimizer(BettingConfig())._build_odds_map({}, preds, {})
+    assert r["tansho"] == {(2,): 3.5} and r["fukusho"] == {(2,): 1.4}
