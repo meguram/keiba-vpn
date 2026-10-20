@@ -17,7 +17,18 @@ export type ExtraEntry = {
   horse_name?: string;
   bracket_number?: number | null;
   position_forecast?: PosFc | null;
+  l3f_coherent?: L3fCoherent | null;
 };
+
+/** 整合層（KEIBA_PACE_COHERENCE=1 のときだけ API が返す）。位置取り側の先行勢から推定したペースと、位置×ペースで決めた想定上がり */
+export type PaceUnified = {
+  level: PaceForecast["level"];
+  label: string;
+  z?: number;
+  first_3f_sec?: number | null;
+  last_3f_baseline_sec?: number | null;
+};
+export type L3fCoherent = { dev_sec: number; seconds?: number | null; rank?: number };
 
 type TdEntry = { horse_number?: number; tracking_difficulty?: { ease_pct?: number; label?: string } };
 type TdFlow = {
@@ -101,13 +112,19 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 const sec = (v?: number) => (v != null ? v.toFixed(1) : "—");
 
 export function PredExtras({
-  raceId, entries, pace, gate,
+  raceId, entries, pace: paceApi, paceUnified, gate,
 }: {
   raceId: string;
   entries: ExtraEntry[];
   pace?: PaceForecast | null;
+  paceUnified?: PaceUnified | null;
   gate?: GateBias | null;
 }) {
+  const unified = !!(paceUnified && paceUnified.level !== "unknown");
+  const pace = useMemo(
+    () => (unified && paceUnified && paceApi ? { ...paceApi, level: paceUnified.level, label: paceUnified.label } : paceApi),
+    [unified, paceUnified, paceApi],
+  );
   const [open, setOpen] = useState<Record<SectionKey, boolean>>({ pos: false, lap: false });
   const [td, setTd] = useState<TdData | null>(null);
   const [tdState, setTdState] = useState<"idle" | "loading" | "error">("idle");
@@ -151,7 +168,18 @@ export function PredExtras({
 
   const pp = td && !td.error ? td.pace_prediction : undefined;
   const tdBroken = !!td?.error;
-  const tdMap = useMemo(() => buildTdMap(td?.position_flow, td?.entries), [td]);
+  const tdMap = useMemo(() => {
+    const m = buildTdMap(td?.position_flow, td?.entries);
+    if (!unified || m.size === 0) return m;
+    for (const e of entries) {
+      const c = e.l3f_coherent;
+      if (e.horse_number == null || !c || c.seconds == null) continue;
+      m.set(e.horse_number, { ...(m.get(e.horse_number) ?? {}), last3f_sec: c.seconds, last3f_delta: c.dev_sec });
+    }
+    return m;
+  }, [td, unified, entries]);
+  const baseline = (unified ? paceUnified?.last_3f_baseline_sec : null) ?? pp?.last_3f_baseline_sec;
+  const first3f = (unified ? paceUnified?.first_3f_sec : null) ?? pp?.lap_times?.first_3f;
 
   const tdLoading = tdState === "loading" && !td;
   const tdError = tdState === "error" && !td;
@@ -179,7 +207,7 @@ export function PredExtras({
         summary={[
           paceTone && pace ? `ペース ${pace.label}` : "",
           gateTone ? `枠順 ${gateTone.label}` : "",
-          pp?.lap_times ? `上がり基準 ${sec(pp.last_3f_baseline_sec)}秒` : "",
+          pp?.lap_times || (unified && baseline != null) ? `上がり基準 ${sec(baseline)}秒` : "",
         ].filter(Boolean).join(" ・ ") || (hasPos ? "位置取り・追走難度" : "出せません")}
       >
         {hasPos || pace ? (
@@ -196,7 +224,10 @@ export function PredExtras({
                 {td && !tdBroken && tdMap.size === 0 && <Note>追走難度は出せません（出走馬の過去走が足りません）。</Note>}
                 {tdMap.size > 0 && (
                   <Note>
-                    追走難度（大きいほど前に付いていきやすい）・消耗・想定上がり（基準との差、−が速い）は、位置取りの予想とは別に、過去走の統計で算出しています。脚質の表現がずれることがあります。
+                    追走難度（大きいほど前に付いていきやすい）・消耗は、位置取りの予想とは別に、過去走の統計で算出しています。脚質の表現がずれることがあります。
+                    {unified
+                      ? " 想定上がり（基準との差、−が速い）は、位置取り（後ろの馬ほど速い）とペースから決めた値で、追走難度とは別です。"
+                      : " 想定上がり（基準との差、−が速い）も、位置取りとは別の過去走の統計です。"}
                     「展開」は、想定ペース（ハイなら差し・追込、スローなら逃げ・先行が向く）に追走のしやすさ（楽なら +、困難なら −）を足し合わせた目安で、AI予測ではありません。
                   </Note>
                 )}
@@ -214,7 +245,7 @@ export function PredExtras({
         open={open.lap}
         onToggle={() => toggle("lap")}
         onHover={() => prefetchJson(tdUrl, { ttlMs: 60_000 })}
-        summary={pp?.lap_times ? `前半3F ${sec(pp.lap_times.first_3f)}秒 ・ 上がり基準 ${sec(pp.last_3f_baseline_sec)}秒` : "前半と上がりの想定タイム"}
+        summary={pp?.lap_times ? `前半3F ${sec(first3f)}秒 ・ 上がり基準 ${sec(baseline)}秒` : "前半と上がりの想定タイム"}
       >
         {tdStatus}
         {tdBroken && <Note>この条件では出せません（{String(td?.error)}）。</Note>}
@@ -223,15 +254,17 @@ export function PredExtras({
           <>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
               <Stat label="前半 1F" value={`${sec(pp.lap_times.first_1f)}秒`} />
-              <Stat label="前半 3F" value={`${sec(pp.lap_times.first_3f)}秒`} />
-              <Stat label="上がり 3F の基準" value={`${sec(pp.last_3f_baseline_sec)}秒`} sub="同条件の平均" />
-              <Stat label="ペース" value={pp.pace_type ?? "—"} sub={pp.pace_index != null ? `指数 ${pp.pace_index}` : undefined} />
+              <Stat label="前半 3F" value={`${sec(first3f)}秒`} />
+              <Stat label="上がり 3F の基準" value={`${sec(baseline)}秒`} sub="同条件の平均" />
+              <Stat label="ペース" value={unified ? (paceUnified?.label ?? "—") : (pp.pace_type ?? "—")} sub={!unified && pp.pace_index != null ? `指数 ${pp.pace_index}` : undefined} />
             </div>
-            {pp.predicted_pattern && <Note>{pp.predicted_pattern}</Note>}
+            {!unified && pp.predicted_pattern && <Note>{pp.predicted_pattern}</Note>}
             <Note>
               同じ条件の過去レースの平均ラップに、出走馬の脚質の構成を加味した統計ベースの目安です（モデルの予測ではありません）。
               {pp.pace_factors?.empirical_n != null && ` 参照した過去レース ${pp.pace_factors.empirical_n} 件。`}
-              {" "}上の「展開予想」のペースとは算出方法が違うため、表現がずれることがあります。
+              {unified
+                ? " ペースは上の「展開予想」と同じ判定にそろえています（位置取りの先行勢から推定）。"
+                : " 上の「展開予想」のペースとは算出方法が違うため、表現がずれることがあります。"}
             </Note>
           </>
         )}
