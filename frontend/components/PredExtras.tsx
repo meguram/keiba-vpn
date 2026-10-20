@@ -28,6 +28,12 @@ export type PaceUnified = {
   first_3f_sec?: number | null;
   last_3f_baseline_sec?: number | null;
 };
+/** 整合層のペースに合わせた説明文（位置取り側の説明文は別のペース判定のものなので使わない） */
+const UNIFIED_NOTE: Record<string, string> = {
+  high: "前に行く馬が多く、前半から流れやすい見込み。差し・追込に展開が向きやすい。",
+  slow: "前に行きたい馬が少なく、前半は落ち着く見込み。逃げ・先行が残りやすい。",
+  mid: "前に行く馬の数は平均的で、平均的なペースの見込み。",
+};
 export type L3fCoherent = { dev_sec: number; seconds?: number | null; rank?: number };
 
 type TdEntry = { horse_number?: number; tracking_difficulty?: { ease_pct?: number; label?: string } };
@@ -122,7 +128,7 @@ export function PredExtras({
 }) {
   const unified = !!(paceUnified && paceUnified.level !== "unknown");
   const pace = useMemo(
-    () => (unified && paceUnified && paceApi ? { ...paceApi, level: paceUnified.level, label: paceUnified.label } : paceApi),
+    () => (unified && paceUnified && paceApi ? { ...paceApi, level: paceUnified.level, label: paceUnified.label, note: UNIFIED_NOTE[paceUnified.level] ?? paceApi.note } : paceApi),
     [unified, paceUnified, paceApi],
   );
   const [open, setOpen] = useState<Record<SectionKey, boolean>>({ pos: false, lap: false });
