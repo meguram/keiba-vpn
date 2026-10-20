@@ -6,6 +6,9 @@ import { PositionForecast } from "@/components/PositionForecast";
 import { GATE_TONE, PACE_TONE, buildTdMap } from "@/lib/positionForecast";
 import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
 import { bracketOf } from "@/lib/bracket";
+import { LapForecast as LapForecastView } from "@/components/LapForecast";
+import { isUsableLapForecast, lapSummaryText } from "@/lib/lapForecast";
+import type { LapForecast } from "@/lib/lapForecast";
 
 /* 出馬表の下に置く、付随予測の折りたたみ。既定は閉じる（開閉は覚える）。
    - 展開予想: 予測 API が返す pace_forecast / gate_bias / 各馬の position_forecast（取得済み）に、
@@ -119,7 +122,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 const sec = (v?: number) => (v != null ? v.toFixed(1) : "—");
 
 export function PredExtras({
-  raceId, entries, pace: paceApi, paceUnified, gate, steeplechase,
+  raceId, entries, pace: paceApi, paceUnified, gate, steeplechase, lapForecast,
 }: {
   raceId: string;
   entries: ExtraEntry[];
@@ -128,7 +131,10 @@ export function PredExtras({
   gate?: GateBias | null;
   /** 障害レース。追走難度 v2 は平地の走りで学習した値で障害では低く出すぎるため、使わない */
   steeplechase?: boolean;
+  /** 予測 API の lap_forecast（ラップ予想）。あれば『想定ラップ』の主役にし、従来の目安は出さない */
+  lapForecast?: LapForecast | null;
 }) {
+  const lf = isUsableLapForecast(lapForecast) ? lapForecast : null;
   const unified = !!(paceUnified && paceUnified.level !== "unknown");
   const pace = useMemo(
     () => (unified && paceUnified && paceApi ? { ...paceApi, level: paceUnified.level, label: paceUnified.label, note: UNIFIED_NOTE[paceUnified.level] ?? paceApi.note } : paceApi),
@@ -148,7 +154,7 @@ export function PredExtras({
   });
 
   const tdUrl = `/api/race/${raceId}/tracking-difficulty`;
-  const needTd = open.lap || open.pos;
+  const needTd = open.pos || (open.lap && !lf);
   useEffect(() => {
     if (!needTd) return;
     let alive = true;
@@ -268,12 +274,13 @@ export function PredExtras({
         open={open.lap}
         onToggle={() => toggle("lap")}
         onHover={() => prefetchJson(tdUrl, { ttlMs: 60_000 })}
-        summary={pp?.lap_times ? `前半3F ${sec(first3f)}秒 ・ 上がり基準 ${sec(baseline)}秒` : "前半と上がりの想定タイム"}
+        summary={lf ? lapSummaryText(lf) : pp?.lap_times ? `前半3F ${sec(first3f)}秒 ・ 上がり基準 ${sec(baseline)}秒` : "前半と上がりの想定タイム"}
       >
-        {tdStatus}
-        {tdBroken && <Note>この条件では出せません（{String(td?.error)}）。</Note>}
-        {td && !tdBroken && !pp?.lap_times && <Note>この条件では出せません（過去の同条件レースのラップが足りません）。</Note>}
-        {pp?.lap_times && (
+        {lf && <LapForecastView lf={lf} />}
+        {!lf && tdStatus}
+        {!lf && tdBroken && <Note>この条件では出せません（{String(td?.error)}）。</Note>}
+        {!lf && td && !tdBroken && !pp?.lap_times && <Note>この条件では出せません（過去の同条件レースのラップが足りません）。</Note>}
+        {!lf && pp?.lap_times && (
           <>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
               <Stat label="前半 1F" value={`${sec(pp.lap_times.first_1f)}秒`} />

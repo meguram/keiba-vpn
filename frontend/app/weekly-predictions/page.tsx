@@ -13,6 +13,7 @@ import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { ExpectedMeguCell } from "@/components/ExpectedMegu";
 import { PredExtras } from "@/components/PredExtras";
 import type { L3fCoherent, PaceUnified } from "@/components/PredExtras";
+import type { LapForecast } from "@/lib/lapForecast";
 import { bracketChipStyle, bracketOf } from "@/lib/bracket";
 import type { GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
 import type { ExpectedMegu, ExpectedMeguMeta } from "@/lib/expectedMegu";
@@ -81,6 +82,7 @@ type PredData = {
   expected_megu_meta?: ExpectedMeguMeta | null;
   pace_forecast?: PaceForecast | null;
   pace_unified?: PaceUnified | null;
+  lap_forecast?: LapForecast | null;
   gate_bias?: GateBias | null;
   error?: string;
 };
@@ -656,7 +658,7 @@ function RacePanel({
           <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} />
         )}
         {pred && !failed && preds.length > 0 && (
-          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />
+          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />
         )}
       </div>
     </section>
