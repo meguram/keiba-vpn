@@ -17,7 +17,7 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 .ok { color:var(--ok); } .warn { color:var(--warn); }
 </style></head><body><main>
 <h1>毎レースの予測出力までのワークフロー（cron 設計）</h1>
-<p class="muted">時刻はすべて <b>JST</b>（ホストの crontab は UTC で記述）。最終更新: 2026-10-19。ホストの crontab とコードを突き合わせて書いた最新版。個々のジョブの登録内容は「cron 登録内容」の章、データごとの流れは「データ収集〜統合のスケジュール」の章を参照。</p>
+<p class="muted">時刻はすべて <b>JST</b>（ホストの crontab は UTC で記述）。最終更新: 2026-10-20。ホストの crontab とコードを突き合わせて書いた最新版。個々のジョブの登録内容は「cron 登録内容」の章、データごとの流れは「データ収集〜統合のスケジュール」の章を参照。</p>
 
 <div class="box">
 <b>ゴール</b>：開催日の各レースについて、<b>馬体重の発表後（発走の約 65〜30 分前）に</b>、その日のその馬の特徴量を作り、アンサンブル（v3／v4）で勝率・連対率・複勝率を出す。前日までに準備できるものは先に済ませ、当日の処理時間を短くする。<br>
@@ -33,7 +33,7 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <tr><td class="when">05:00〜08:50（10 分ごと）</td><td><code>jra-baba-morning</code></td><td>JRA の馬場（クッション値・含水率）の公開を待って取得</td><td>ローカル: data/page_reference/cushion</td><td>開催日の朝</td></tr>
 <tr><td class="when">06:10 / 19:40</td><td><code>recent-retry</code></td><td>直近 21 日の確定結果などの未取得分を取り直す。確定結果は数日遅れで公開される</td><td>GCS: race_result・race_result_lap・race_index</td><td>毎日（優先処理中は見送り）</td></tr>
 <tr><td class="when">07:00</td><td><code>export_tables_daily</code></td><td>当年分の履歴テーブル（race_result_flat など）を増分更新。確定結果が未公開なら速報結果から橋渡し。パース監査とずれ検査</td><td>ローカル: data/page_reference/tables/&lt;年&gt;/</td><td>毎日</td></tr>
-<tr><td class="when">07:30</td><td><code>raceday-runner</code></td><td>各レース発走 60 分前にオッズ、15 分前に出馬表・オッズ・馬柱などをまとめて取得（常駐。全レース済みで終了）</td><td>GCS: race_shutuba・race_odds・race_pair_odds（phase=t60/t15 の履歴）</td><td>開催日のみ</td></tr>
+<tr><td class="when">07:30</td><td><code>raceday-runner</code></td><td>各レース発走 60 分前にオッズ、15 分前に出馬表・オッズ・馬柱などをまとめて取得（常駐。全レース済みで終了）。<code>KEIBA_ODDS_LATE_SNAPSHOTS=1</code> のときは、発走 10・5・2 分前に<b>単勝・複勝だけ</b>を追加で取得する（直前オッズ。10/24 夜〜10/25 の開催日から有効）。<code>KEIBA_ODDS_TRIFECTA=1</code> のときは 3 連単の全組合せも取る</td><td>GCS: race_shutuba・race_odds・race_pair_odds（phase=t60/t15/t10/t05/t02 の履歴）・race_trifecta_odds</td><td>開催日のみ</td></tr>
 <tr><td class="when">07:30</td><td><code>raceday-result-runner</code></td><td>各レース発走 15 分後に速報結果を取得。全レース後に結果テーブルの増分と馬場速度指数</td><td>GCS: race_result_on_time</td><td>開催日のみ</td></tr>
 <tr><td class="when">07:35</td><td><code>serving-state-precompute</code></td><td>その日の全レースの、馬主系・馬自身の群の特徴量を先に計算してキャッシュ（v4 用）</td><td>ローカル: data/local/inference/state/&lt;日&gt;/</td><td>出馬表が保存済みの日のみ</td></tr>
 <tr><td class="when">07:40</td><td><code>feature-accumulate</code></td><td>履歴特徴量（127 列）を確定結果（橋渡し含む）から作り直し、サービング用バンドルを公開</td><td>ローカル: data/local/modeling/feature_store/horse_history、serving_bundle</td><td>毎日</td></tr>
@@ -64,6 +64,8 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <tr><td><code>KEIBA_V3_BUNDLE</code> / <code>KEIBA_V3_STAGE</code></td><td>パス</td><td>使うバンドルと前段モデル。現在は v4（<code>bundle_v4_2025</code> / <code>v4_fixed</code>）。2026-10-18 16:30 に切り替え、<b>次の開催日（10-24 の 08:00）のランナー起動から有効</b></td></tr>
 <tr><td><code>KEIBA_WEIGHT_TRIGGER_MODE</code></td><td>未設定（features）</td><td><code>predict</code> にすると既存の予測も起動する。現在は使っていない</td></tr>
 <tr><td><code>KEIBA_RACEDAY_DIRECT</code></td><td>1</td><td>開催日ランナーが、全体のキューを通さず直接取得する</td></tr>
+<tr><td><code>KEIBA_ODDS_LATE_SNAPSHOTS</code></td><td><code>1</code></td><td>発走 10・5・2 分前の単勝・複勝オッズを追加取得（既定は off。ホストの <code>.env</code> に追記済み、次回のランナー起動から有効）。同じ起床の中では直前オッズを先に処理し、予定時刻から 120 秒を超えて遅れたものは捨てる</td></tr>
+<tr><td><code>KEIBA_ODDS_TRIFECTA</code></td><td><code>1</code></td><td>3 連単（<code>race_trifecta_odds</code>）を T-60 / T-15 / 確定で取得。過去分は <code>backfill_trifecta_odds</code>（完了済み、9,711 レース）</td></tr>
 <tr><td><code>KEIBA_EVE_HORSE_TRAINING</code> / <code>KEIBA_EVE_HORSE_PROFILE</code> / <code>KEIBA_EVE_SMARTRC_SNAPSHOT</code></td><td>1</td><td>前日夕方に、調教の取り直し／馬主の取得／SmartRC の出走前スナップショットを行う</td></tr>
 </table>
 <h3>バンドルの切り替え手順</h3>
@@ -111,6 +113,13 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <tr><td>netkeiba への同時アクセス</td><td>同時に 1 取得（DEC-023）。他のセッションの取得と重ねない</td></tr>
 <tr><td>バンドル切り替えの反映タイミング</td><td>次にランナーが起動したとき。開催日の朝に切り替えても、起動済みのランナーは古い設定のまま</td></tr>
 <tr><td>週次更新の PostgreSQL 取り込み</td><td>ホストに psycopg2 が無く失敗している。予測の出力には影響しない</td></tr>
+<tr><td>ホストの repo が最新から古い</td><td>HEAD が最新コミットから 100 以上遅れ、作業ツリーは各セッションがファイル単位で反映した継ぎはぎ。<code>git pull</code> は衝突と <code>.next-stg</code> の破損の恐れがあるので使わない。反映はバックアップ付きのスクリプトで行う（第 8 節）</td></tr>
+<tr><td>3 連単バックフィルの自動中断</td><td>連続 8 件の失敗で止まる設計。原因が DNS の一時不調なら <code>--retry-failed</code> で再開できる（アクセス制限とは限らない）。定期の取得ジョブ（06:00 の <code>backfill-all-horse</code> など）が走っている間は、同時 1 取得（DEC-023）に従って待つ</td></tr>
+<tr><td>Flask の古い PID ファイル</td><td><code>.flask.pid</code> に前のプロセスの番号が残ることがある。害はないが、監視が古いファイルを見ていないか確認する</td></tr>
 </table>
+<h2>8. 印と期待値の表示、本番への反映（2026-10-20）</h2>
+<p><b>印</b>は、◎（勝率最上位）・○（連対確率が最も高い）・▲（複勝妙味が最大）・★（想定単勝 10〜30 倍で期待値が高い）が各 1 頭、△が複数（最大 4 頭、頭数が少ないレースでは減らす。3 着以内に来そうな順）。旧ルールの 1 レース平均 11.7 個を 6.5 個に絞った。レースの状況で基準を切り替える案は印の質を下げたので不採用（既定オフ）。詳しくは <a href="../modeling/chapters/mark_rules.html">印のルール</a>。</p>
+<p><b>期待値</b>は、予測の保存形式には入れず、API の読み出し時に計算する（確率・オッズ→期待値→較正→印・買い推奨度・レース価値）。式の誤り 2 か所を直し（<a href="../modeling/chapters/ev_calibration_audit.html">tp-47</a>）、表示する値を過去の実績に較正した（<a href="../modeling/chapters/ev_calibration_adopt.html">tp-49</a>）。画面の「期待回収率（較正後）」には、過去の年別の実現回収率の範囲（78〜105%）を併記し、レース価値の色分けは較正後の 1.03・1.00・0.97 を閾値にしている。<b>予測の作り直しは不要</b>（保存してあるのは確率だけ）。ただし予測成績の日次集計は印・期待値を集計時に固定するので、反映後に再集計する（<code>python -m src.scripts.data.prediction_results</code>）。</p>
+<p><b>本番（stg）への反映手順</b>: ホストの repo は古く、<code>git pull</code> を使わない。(1) 対象ファイルのホストの内容が想定の版と一致するか確認、(2) バックアップ（<code>data/local/meta/cron_backups/deploy_*/</code>）、(3) ファイルを置換（<code>sudo -n git checkout &lt;commit&gt; -- &lt;file&gt;</code> と同じ内容）、(4) 構文確認（<code>ast</code>）と印の検証、(5) FastAPI（23220）・Flask（23210）の再起動（スクレイピングキューが空であることを確認）、(6) フロントの本番ビルド（旧サーバ稼働のまま）→ 切り替え、(7) 確認。失敗したら自動でロールバック（<code>/tmp/rollback_*.sh</code>）。自動セーフティが本番の停止や書き込みを拒否した場合は、用意したスクリプトをユーザーが <code>! ssh keiba-remote 'bash /tmp/xxx.sh'</code> で実行する。</p>
 <p class="muted">関連：<a href="cron_schedule.html">cron 登録内容</a>／<a href="../modeling/chapters/data_flow_schedule.html">データ収集〜統合のスケジュール</a>。このページが正で、古い運用メモ（docs/operations/ の 2026-10-14 付）は当時の記録。</p>
 </main></body></html>
