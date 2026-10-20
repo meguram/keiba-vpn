@@ -14,7 +14,7 @@ import { ExpectedMeguCell } from "@/components/ExpectedMegu";
 import { PredExtras } from "@/components/PredExtras";
 import type { L3fCoherent, PaceUnified } from "@/components/PredExtras";
 import { bracketChipStyle, bracketOf } from "@/lib/bracket";
-import type { GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
+import type { GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
 import type { ExpectedMegu, ExpectedMeguMeta } from "@/lib/expectedMegu";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
@@ -66,6 +66,7 @@ type PredEntry = {
   expected_megu?: ExpectedMegu | null;
   position_forecast?: PosFc | null;
   l3f_coherent?: L3fCoherent | null;
+  tracking_v2?: TrackingV2 | null;
 };
 
 type PredData = {

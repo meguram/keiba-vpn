@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getJson, prefetchJson } from "@/lib/httpCache";
 import { PositionForecast } from "@/components/PositionForecast";
 import { GATE_TONE, PACE_TONE, buildTdMap } from "@/lib/positionForecast";
-import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
+import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
 import { bracketOf } from "@/lib/bracket";
 
 /* 出馬表の下に置く、付随予測の折りたたみ。既定は閉じる（開閉は覚える）。
@@ -18,6 +18,7 @@ export type ExtraEntry = {
   bracket_number?: number | null;
   position_forecast?: PosFc | null;
   l3f_coherent?: L3fCoherent | null;
+  tracking_v2?: TrackingV2 | null;
 };
 
 /** 整合層（KEIBA_PACE_COHERENCE=1 のときだけ API が返す）。位置取り側の先行勢から推定したペースと、位置×ペースで決めた想定上がり */
@@ -176,14 +177,24 @@ export function PredExtras({
   const tdBroken = !!td?.error;
   const tdMap = useMemo(() => {
     const m = buildTdMap(td?.position_flow, td?.entries);
-    if (!unified || m.size === 0) return m;
+    const hadTd = m.size > 0;
     for (const e of entries) {
+      if (e.horse_number == null) continue;
       const c = e.l3f_coherent;
-      if (e.horse_number == null || !c || c.seconds == null) continue;
-      m.set(e.horse_number, { ...(m.get(e.horse_number) ?? {}), last3f_sec: c.seconds, last3f_delta: c.dev_sec });
+      if (unified && hadTd && c && c.seconds != null) {
+        m.set(e.horse_number, { ...(m.get(e.horse_number) ?? {}), last3f_sec: c.seconds, last3f_delta: c.dev_sec });
+      }
+      const v = e.tracking_v2;
+      if (v && typeof v.ease_pct === "number") {
+        m.set(e.horse_number, {
+          ...(m.get(e.horse_number) ?? {}), v2: true, ease_pct: v.ease_pct, ease_label: v.label,
+          drain_sec: v.drain_sec, demand_sec: v.demand_sec, capacity_sec: v.capacity_sec,
+        });
+      }
     }
     return m;
   }, [td, unified, entries]);
+  const hasV2 = useMemo(() => entries.some((e) => e.tracking_v2 && typeof e.tracking_v2.ease_pct === "number"), [entries]);
   const baseline = (unified ? paceUnified?.last_3f_baseline_sec : null) ?? pp?.last_3f_baseline_sec;
   const first3f = (unified ? paceUnified?.first_3f_sec : null) ?? pp?.lap_times?.first_3f;
 
@@ -222,15 +233,18 @@ export function PredExtras({
             horses={horses}
             pace={pace}
             gate={gate}
-            td={tdBroken ? null : tdMap}
+            td={tdBroken && !hasV2 ? null : tdMap}
             tdNote={
               <>
                 {tdStatus}
-                {tdBroken && <Note>追走難度・消耗・想定上がりは出せません（{String(td?.error)}）。位置取りの予想だけ表示しています。</Note>}
+                {tdBroken && !hasV2 && <Note>追走難度・消耗・想定上がりは出せません（{String(td?.error)}）。位置取りの予想だけ表示しています。</Note>}
+                {tdBroken && hasV2 && <Note>流れ・想定上がりの別算出データは出せません（{String(td?.error)}）。追走難度と消耗は表示しています。</Note>}
                 {td && !tdBroken && tdMap.size === 0 && <Note>追走難度は出せません（出走馬の過去走が足りません）。</Note>}
                 {tdMap.size > 0 && (
                   <Note>
-                    追走難度（大きいほど前に付いていきやすい）・消耗は、位置取りの予想とは別に、過去走の統計で算出しています。脚質の表現がずれることがあります。
+                    {hasV2
+                      ? "追走難度は、想定位置取りを取るために必要な通過ラップが、その馬にとって楽か大変か（過去の同じような走から見た終いの余裕。大きいほど楽）。消耗は、通過ラップのあとの終いの落ち（秒、大きいほど大変）です。"
+                      : "追走難度（大きいほど前に付いていきやすい）・消耗は、位置取りの予想とは別に、過去走の統計で算出しています。脚質の表現がずれることがあります。"}
                     {unified
                       ? " 想定上がり（基準との差、−が速い）は、位置取り（後ろの馬ほど速い）とペースから決めた値で、追走難度とは別です。"
                       : " 想定上がり（基準との差、−が速い）も、位置取りとは別の過去走の統計です。"}

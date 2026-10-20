@@ -127,7 +127,14 @@ export type HorseTd = {
   stamina_concern?: boolean;
   last3f_sec?: number;
   last3f_delta?: number;           // 同条件の基準との差（−が速い）
+  v2?: boolean;                    // 追走難度 v2（予測 API の tracking_v2）の値で上書きしている
+  drain_sec?: number;              // v2: 通過ラップのあとの終いの落ち（秒、大きいほど大変）
+  demand_sec?: number;             // v2: 要求（キーが無いことがある）
+  capacity_sec?: number;           // v2: 供給（キーが無いことがある）
 };
+
+/** 予測 API が各馬に付ける追走難度 v2（KEIBA_TRACKING_V2=1 のときだけ。キーが無い馬・レースは従来どおり） */
+export type TrackingV2 = { ease_pct: number; label?: string; drain_sec?: number; demand_sec?: number; capacity_sec?: number };
 
 /** 追走のしやすさの色（ラベルの境目は API の `_ease_label` と同じ: 75/60/45/30）。色だけに頼らず、文字でも出す。 */
 export function easeTone(pct: number | null | undefined): { color: string; word: string } {
