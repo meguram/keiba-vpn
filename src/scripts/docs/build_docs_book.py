@@ -242,6 +242,8 @@ PARTS: list[Part] = [
           [("ev_calibration_audit", "期待値の水準の監査（tp-47）"), ("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("mark_rules", "印の付け方"), ("training_pipeline_decisions", "決定ログ")]),
         C("proven_methods_roi", "回収率 100% 超の実績者の手法と検証（tp-44）。公開情報から集めた手法 12 件（種類の印・検証可能性・原文の場所）、プール間の不整合（Hausch–Ziemba・Dr. Z 型）の 67 戦略、公開ルール（函館の3番人気）の再現、WIN5 のキャリーオーバー、発走直前のオッズ低下。検証できる形で 100% 超を示した公開記録は無く、自前の検証でも区間下限が 100% を超える手法は無かった。", "結果",
           [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("race_type_marks", "レースの性質で変える印と買い方（tp-43）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("bet_optimization", "馬券最適化（強化学習ほか）を、最新モデル（V4）と修正後の期待値で大規模に回す（tp-50）。レース×買い目の表（2022〜2026 年）に、固定ルール・LightGBM・MLP アンサンブル・方策勾配・PPO・リーグ戦・進化戦略・決定木の約 900 方策を walk-forward で比較。強化学習系は『賭けない』に近い方策に収束し、最良はワイドの LightGBM 系。多重比較の補正（Reality Check）と、2026 年の事前固定・1 回評価、購入時点オッズの感度。", "結果",
+          [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("trifecta_true_odds", "3連単の実オッズでの再評価（tp-48）"), ("ev_calibration_adopt", "期待値の較正（tp-49）"), ("training_pipeline_decisions", "決定ログ")]),
         C("trifecta_true_odds", "3連単の実オッズ（2024〜2026 年、9,711 レース）で、tp-36 が保留した買い方を再評価（tp-48）。データ品質（Σ(1/オッズ)・払戻との一致）、3連単の EV 上位 k 点・しきい値・縮約後しきい値・プール間の不整合、3連複（3連単プール由来の価格）、印の組合せ、的中率が高い券種（複勝・ワイド・馬連）の『期待値が高いものだけ』、購入時点オッズの感度、Reality Check、2026 年の最終評価。区間下限が 100% を超える方策は無く、100% 超は高配当に依存した。", "結果",
           [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("ev_calibration_audit", "期待値の水準の監査（tp-47）"), ("proven_methods_roi", "回収率 100% 超の実績者の手法と検証（tp-44）"), ("training_pipeline_decisions", "決定ログ")]),
         C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",

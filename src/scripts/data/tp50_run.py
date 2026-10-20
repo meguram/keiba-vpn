@@ -26,6 +26,12 @@ from src.scripts.data.tp50_lib import (BT_NAMES, FEATS, PRIMARY_YEARS, RET_CAP, 
 
 RES = TP50 / "res"
 THREADS = 3
+WANT: set[str] | None = None     # 2026 年の最終評価で、固定した方策に必要な構成だけを学習するための絞り込み
+CLASS_ALIAS = {"rule": "rules"}
+
+
+def want(prefix: str) -> bool:
+    return WANT is None or any(w.startswith(prefix) for w in WANT)
 SEEDS = (0, 1, 2)
 KS = 320
 
@@ -527,6 +533,8 @@ def cls_lgbm2(tr: pd.DataFrame, ev: pd.DataFrame, Y: int) -> dict:
         for fn, fs in FSETS.items():
             if hn != "H1" and fn == "min":
                 continue
+            if not want(f"lgbm2|{hn}|{fn}|"):
+                continue
             Xtr, Xev = tr[fs].to_numpy(np.float32), ev[fs].to_numpy(np.float32)
             ps = []
             for seed in (0, 1, 2):
@@ -574,7 +582,9 @@ def cls_pg2(tr: pd.DataFrame, ev: pd.DataFrame, Y: int) -> dict:
             for H in (32, 128):
                 for lr in (5e-4, 2e-3):
                     for seed in range(5):
-                        if rng.random() > 0.5:      # 組合せの半分を乱択（時間の都合）
+                        if WANT is None and rng.random() > 0.5:      # 組合せの半分を乱択（時間の都合）。最終評価では固定した方策の構成だけ学習する
+                            continue
+                        if not want(f"pg2|{obj}|ent{ent}|H{H}|lr{lr}|s{seed}"):
                             continue
                         net = train_pg(Xtr, rtr, mtr, obj, ent, 100 + seed, H=H, lr=lr)
                         out.update(policies_from_weights(f"pg2|{obj}|ent{ent}|H{H}|lr{lr}|s{seed}", net_weights(net, Xev, mev), rid, pos, keep, len(ev)))
@@ -594,6 +604,8 @@ def cls_lgbm3(tr: pd.DataFrame, ev: pd.DataFrame, Y: int) -> dict:
         for est in (200, 400):
             for fn in ("nomix", "full"):
                 fs = FSETS[fn]
+                if not want(f"lgbm3|L{leaves}|E{est}|{fn}|"):
+                    continue
                 h = dict(n_estimators=est, learning_rate=0.03, num_leaves=leaves, min_child_samples=300)
                 Xtr, Xev = tr[fs].to_numpy(np.float32), ev[fs].to_numpy(np.float32)
                 p = np.mean([_clf(h, sd).fit(Xtr, ytr).predict_proba(Xev)[:, 1] for sd in (0, 1)], 0)
@@ -729,6 +741,9 @@ def cmd_register(a) -> None:
     pick: list[str] = []
     pick += list(ok.sort_values("lo", ascending=False).head(5)["policy"])
     pick += list(ok.sort_values("roi", ascending=False).head(5)["policy"])
+    # 2023・2024・2025 のどの年も回収率 100% 超で、賭けたレースが多い方策（頑健性の基準。2026 年は見ていない）
+    rob = ok[(ok["races_bet"] >= 2000) & (ok["y2023"] > 1.0) & (ok["y2024"] > 1.0) & (ok["y2025"] > 1.0)]
+    pick += list(rob.sort_values("lo", ascending=False).head(5)["policy"])
     for c, g in ok.groupby("cls"):
         pick.append(g.sort_values("lo", ascending=False).iloc[0]["policy"])
     pick = list(dict.fromkeys(pick))
@@ -751,19 +766,28 @@ def cmd_final2026(a) -> None:
     out_f = TP50 / "final2026.json"
     if out_f.exists() and not a.force:
         raise SystemExit("2026 年の評価は 1 回だけ")
-    want = payload["policies"]
-    classes = sorted({p.split("|")[0] for p in want})
+    wanted = payload["policies"]
+    global WANT
+    WANT = set(wanted)
+    classes = sorted({CLASS_ALIAS.get(p.split("|")[0], p.split("|")[0]) for p in wanted})
     d = load_years(range(2022, 2027))
     tr = d[d["year"] < 2026].reset_index(drop=True)
     ev = d[d["year"] == 2026].reset_index(drop=True)
     st = Stats(ev)
     res: dict = {"hash": h, "registered_at": payload["registered_at"], "policies": {}}
     pn: dict = {}
+    RES.mkdir(parents=True, exist_ok=True)
     for cname in classes:
-        pols = CLASSES[cname](tr, ev, 2026)
-        for k in want:
-            if k in pols:
-                pn[k] = st.summarize(pols[k])
+        cf = RES / f"final_{cname}.pkl"            # 途中で失敗しても再計算しないための保存
+        if cf.exists():
+            got = pickle.loads(cf.read_bytes())
+        else:
+            pols = CLASSES[cname](tr, ev, 2026)
+            got = {k: st.summarize(v) for k, v in pols.items() if k in WANT}
+            cf.write_bytes(pickle.dumps(got))
+        log("final", cname, len(got))
+        pn.update(got)
+    want = wanted
     profits = []
     for k in want:
         if k not in pn:
@@ -806,19 +830,22 @@ def cmd_sens(a) -> None:
         tr = d[d["year"] < Y].reset_index(drop=True)
         ev = d[d["year"] == Y].reset_index(drop=True)
         c = hit_scale(tr)
-        clf = _clf(HPARAMS["H1"], 0).fit(tr[FEATS].to_numpy(np.float32), (tr["ret"].to_numpy() > 0).astype(int))
+        ytr = (tr["ret"].to_numpy() > 0).astype(int)
+        models = {"H1full": ([_clf(HPARAMS["H1"], 0).fit(tr[FEATS].to_numpy(np.float32), ytr)], FEATS),
+                  "L15nomix": ([_clf(dict(n_estimators=400, learning_rate=0.03, num_leaves=15, min_child_samples=300), sd).fit(tr[FSETS["nomix"]].to_numpy(np.float32), ytr) for sd in (0, 1)], FSETS["nomix"])}
         st = Stats(ev)
         rng = np.random.default_rng(Y)
         for sg in sig:
             for rep in range(1 if sg == 0 else 5):
                 op = ev["odds"].to_numpy(np.float64) * np.exp(sg * rng.standard_normal(len(ev))) if sg > 0 else ev["odds"].to_numpy(np.float64)
                 e2 = refresh_odds(ev, op)
-                p = clf.predict_proba(e2[FEATS].to_numpy(np.float32))[:, 1]
-                v = p * op * c[ev["bt"].to_numpy()]
-                for bt, th in pols:
-                    m = (v >= th) & (np.ones(len(ev), bool) if bt == "pooled" else (ev["bt"].to_numpy() == BT_NAMES.index(bt)))
-                    s_ = st.summarize(m.astype(np.float32))
-                    acc.setdefault((bt, th, sg, rep), []).append(s_)
+                for mn, (ms, fs) in models.items():
+                    p = np.mean([m_.predict_proba(e2[fs].to_numpy(np.float32))[:, 1] for m_ in ms], 0)
+                    v = p * op * c[ev["bt"].to_numpy()]
+                    for bt, th in (pols if mn == "H1full" else [("wide", 1.0), ("wide", 1.05), ("wide", 1.1), ("fukusho", 1.0)]):
+                        m = (v >= th) & (np.ones(len(ev), bool) if bt == "pooled" else (ev["bt"].to_numpy() == BT_NAMES.index(bt)))
+                        s_ = st.summarize(m.astype(np.float32))
+                        acc.setdefault((f"{mn}|{bt}", th, sg, rep), []).append(s_)
         log("sens", Y)
     for (bt, th, sg, rep), lst in acc.items():
         S = np.concatenate([x["S"] for x in lst]).astype(np.float64)
@@ -828,6 +855,43 @@ def cmd_sens(a) -> None:
                     "bets_mean": float(np.mean([r["bets"] for r in v]))} for sg, v in d2.items()} for k, d2 in res.items()}
     (TP50 / "sens.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(out, ensure_ascii=False, indent=1))
+
+
+def cmd_cond(a) -> None:
+    """最有力のワイド方策（小さい木・特徴量 nomix・EV≥1.0）がどんな買い目を選び、どこで稼いでいるかを年・オッズ帯・人気・頭数・月で分解する。"""
+    d = load_years(range(2022, 2026))
+    h = dict(n_estimators=400, learning_rate=0.03, num_leaves=15, min_child_samples=300)
+    fs = FSETS["nomix"]
+    rows = []
+    for Y in PRIMARY_YEARS:
+        tr = d[d["year"] < Y].reset_index(drop=True)
+        ev = d[(d["year"] == Y) & (d["bt"] == 3)].reset_index(drop=True)
+        c = hit_scale(tr)
+        ytr = (tr["ret"].to_numpy() > 0).astype(int)
+        p = np.mean([_clf(h, sd).fit(tr[fs].to_numpy(np.float32), ytr).predict_proba(ev[fs].to_numpy(np.float32))[:, 1] for sd in (0, 1)], 0)
+        ev["ev_hat"] = p * ev["odds"].to_numpy() * c[3]
+        ev["p_hat"] = p
+        rows.append(ev[ev["ev_hat"] >= 1.0])
+        log("cond", Y)
+    s_ = pd.concat(rows, ignore_index=True)
+    s_["month"] = s_["date"].astype(str).str[5:7]
+    s_["odds_band"] = pd.cut(s_["odds"], [0, 3, 6, 10, 20, 50, 1e9], labels=["~3", "3~6", "6~10", "10~20", "20~50", "50~"])
+    s_["pop_band"] = pd.cut(s_["pop_max"], [0, 3, 6, 9, 12, 99], labels=["~3", "4~6", "7~9", "10~12", "13~"])
+    s_["n_band"] = pd.cut(s_["n"], [0, 10, 14, 16, 18], labels=["~10", "11~14", "15~16", "17~18"])
+
+    def agg(g):
+        return pd.Series({"bets": len(g), "roi": g["ret"].mean(), "hit": (g["ret"] > 0).mean(), "mean_ev_hat": g["ev_hat"].mean()})
+
+    out = {"n_bets": int(len(s_)), "overall_roi": float(s_["ret"].mean())}
+    for col in ("year", "odds_band", "pop_band", "n_band", "month"):
+        g = s_.groupby(col, observed=True).apply(agg)
+        out[col] = {str(k): {kk: float(vv) for kk, vv in r.items()} for k, r in g.iterrows()}
+    # EV̂ の水準別（予測どおりに回収されるか）
+    s_["evb"] = pd.cut(s_["ev_hat"], [1.0, 1.1, 1.2, 1.4, 1.8, 1e9], right=False)
+    g = s_.groupby("evb", observed=True).apply(agg)
+    out["ev_hat_band"] = {str(k): {kk: float(vv) for kk, vv in r.items()} for k, r in g.iterrows()}
+    (TP50 / "cond.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps(out, ensure_ascii=False)[:2500])
 
 
 def main() -> None:
@@ -841,10 +905,11 @@ def main() -> None:
     r = sp.add_parser("register")
     r.add_argument("--force", action="store_true")
     sp.add_parser("sens")
+    sp.add_parser("cond")
     f = sp.add_parser("final2026")
     f.add_argument("--force", action="store_true")
     a = ap.parse_args()
-    {"wf": cmd_wf, "summarize": cmd_summarize, "register": cmd_register, "final2026": cmd_final2026, "sens": cmd_sens}[a.cmd](a)
+    {"wf": cmd_wf, "summarize": cmd_summarize, "register": cmd_register, "final2026": cmd_final2026, "sens": cmd_sens, "cond": cmd_cond}[a.cmd](a)
 
 
 if __name__ == "__main__":

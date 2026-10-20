@@ -90,3 +90,17 @@ def test_rules_policy_thresholds_and_standardize():
 def test_hit_scale_defaults_to_one():
     c = run.hit_scale(toy(50, 6))
     assert c.shape == (6,) and (c > 0).all()
+
+
+def test_report_builds_from_summary_without_2026():
+    from src.scripts.data import tp50_report as rep
+
+    sm = pd.DataFrame([
+        {"policy": "lgbm3|L15|E400|nomix|wide>=1.0", "cls": "lgbm3", "stake": 100.0, "bets": 100, "races_bet": 3000, "hit_rate": 0.07, "roi": 1.18, "lo": 1.05, "hi": 1.3, "roi_wo_top3": 1.1,
+         "y2023": 1.09, "y2024": 1.03, "y2025": 1.28},
+        {"policy": "pg|lin|ent0.0|s1|stake", "cls": "pg", "stake": 3000.0, "bets": 100, "races_bet": 6000, "hit_rate": 0.03, "roi": 0.95, "lo": 0.9, "hi": 1.0, "roi_wo_top3": 0.94,
+         "y2023": 0.9, "y2024": 0.95, "y2025": 0.97},
+    ])
+    js = {"n_policies": 2, "n_with_bets": 2, "reality_check": {"t_max": 1.2, "p_value": 0.5, "n_strategies": 2, "best_name": "x"}}
+    html = rep.build(sm, js, None, None, None)
+    assert "tp-50" in html and "lgbm3" in html and "偶然を排除できない" in html
