@@ -200,7 +200,8 @@ def capacity_from_past(past_races: list[dict], race_date: str | None, cfg: dict,
     }
 
 
-def attach_tracking_v2_to_response(resp: dict, past_doc: dict | None = None, race_date: str | None = None, course: dict | None = None, card: dict | None = None) -> dict:
+def attach_tracking_v2_to_response(resp: dict, past_doc: dict | None = None, race_date: str | None = None, course: dict | None = None, card: dict | None = None,
+                                     capture: dict | None = None) -> dict:
     """予測 API の応答（position_forecast / pace_forecast が付いたもの）に、各馬の tracking_v2 を足す。無効・材料不足は何もしない。
 
     tracking_v2 = {ease_pct, label, drain_sec, demand_sec?}。既存の追走難度（/tracking-difficulty の ease_pct・消耗）は変えない。
@@ -252,6 +253,8 @@ def attach_tracking_v2_to_response(resp: dict, past_doc: dict | None = None, rac
     df = pd.DataFrame(rows)
     out = attach_v2(df, model)
     for p, (_, r) in zip(idx, out.iterrows()):
+        if capture is not None:     # 保存・突き合わせ用（応答には出さない）: 推論に使った入力のうち、実測との突き合わせに要るもの
+            capture[int(p["horse_number"])] = {k: (None if pd.isna(r[k]) else float(r[k])) for k in ("pf_early", "pf_rank", "z_hat", "w_adj", "w_early", "w_n", "age", "weight") if k in r.index}
         p["tracking_v2"] = {"ease_pct": float(r["ease_pct_v2"]), "label": r["ease_label_v2"], "drain_sec": float(r["drain_v2"])}
         if "demand_v2" in r:
             p["tracking_v2"].update({"demand_sec": float(r["demand_v2"]), "capacity_sec": float(r["capacity_v2"])})
