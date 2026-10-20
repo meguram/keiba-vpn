@@ -1,0 +1,71 @@
+{
+ "registered_at": "2026-10-20 14:03:36",
+ "purpose": "2026 年（未使用）の評価。評価前にこの一覧を固定する。各方策名は tp48_eval の policy_rows と同じ。",
+ "periods": {
+  "design": "2024〜2025（参考）",
+  "final": "2026（1 回だけ）"
+ },
+ "rules": [
+  {
+   "id": "F1",
+   "policy": "fukusho|model|ev>=2.0|top5",
+   "note": "複勝: 市場なしモデルの EV≥2.0（tp-48 で最も近かった規則: 2024〜25 年 113%）"
+  },
+  {
+   "id": "F2",
+   "policy": "fukusho|model|ev>=1.5|top5",
+   "note": "複勝: モデル EV≥1.5"
+  },
+  {
+   "id": "F3",
+   "policy": "fukusho|model|ev>=1.2|top5",
+   "note": "複勝: モデル EV≥1.2（ユーザーの質問の水準）"
+  },
+  {
+   "id": "F4",
+   "policy": "fukusho|model|shrunk1.05(raw>=1.84)|top50",
+   "note": "複勝: 縮約後 EV≥1.05 に相当する生の EV≥1.84（縮約係数 k=0.24）"
+  },
+  {
+   "id": "F5",
+   "policy": "fukusho|mixed|ev>=1.2|top5",
+   "note": "複勝: 混合（Benter 型）EV≥1.2"
+  },
+  {
+   "id": "F6",
+   "policy": "fukusho|mixed|ev>=1.0|top5",
+   "note": "複勝: 混合 EV≥1.0"
+  },
+  {
+   "id": "W1",
+   "policy": "wide|model|top1",
+   "note": "ワイド: モデル EV 最大の 1 点"
+  },
+  {
+   "id": "W2",
+   "policy": "wide|mixed|top1",
+   "note": "ワイド: 混合 EV 最大の 1 点"
+  },
+  {
+   "id": "W3",
+   "policy": "wide|model|ev>=2.0|top1",
+   "note": "ワイド: モデル EV 最大の 1 点が EV≥2.0 のときだけ"
+  },
+  {
+   "id": "U1",
+   "policy": "umaren|model|top1",
+   "note": "馬連: モデル EV 最大の 1 点"
+  },
+  {
+   "id": "U2",
+   "policy": "umaren|mixed|top1",
+   "note": "馬連: 混合 EV 最大の 1 点"
+  },
+  {
+   "id": "U3",
+   "policy": "umaren|model|ev>=2.0|top1",
+   "note": "馬連: モデル EV 最大の 1 点が EV≥2.0 のときだけ"
+  }
+ ],
+ "hash": "c504f1559cadda65"
+}
