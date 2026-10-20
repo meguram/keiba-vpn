@@ -6969,6 +6969,13 @@ async def get_race_predictions(race_id: str):
         except Exception as exc:  # noqa: BLE001
             logger.warning("位置取り予想の付与に失敗 %s: %s", race_id, exc)
             past, card = None, {}
+        # ラップ傾向別のハロンごとの予想と各傾向の発生確率（KEIBA_LAP_FORECAST=1 のときだけ。保存済みの予想を付けるだけ）
+        try:
+            from src.pipeline.inference.lap_forecast_service import attach_lap_forecast
+
+            resp = attach_lap_forecast(resp, race_id, str(card.get("date") or ""))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ラップ予想の付与に失敗 %s: %s", race_id, exc)
         # 過去のめぐ指数からの想定めぐ指数（AI の予測ではない）。失敗しても予測の応答は返す
         try:
             from src.pipeline.inference.expected_megu import attach_expected_megu
