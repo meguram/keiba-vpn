@@ -109,6 +109,33 @@ def serving_section(s: dict, px: dict, e2e: dict | None = None) -> str:
 <p class="muted">PX の 1 日あたりの計算時間は約 15〜18 秒（セル統計の履歴計算が主）。状態は data/local/inference/state/px_v5/（祖先表・SVD の成分・半年ごとのリッジ）。</p>{e2e_tbl}"""
 
 
+def diag_section(d: dict) -> str:
+    if not d:
+        return ""
+    rows = ""
+    for day, v in d.items():
+        b = v["base"]["win"]
+        rows += f"<tr><td>{day}</td><td>（そのまま）</td><td class=num>-</td><td class=num>{b['corr']:.4f}</td><td class=num>{b['diff']:+.4f}</td></tr>"
+        for g, x in v["groups"].items():
+            a = x["after_replace"]["win"]
+            rows += f"<tr><td></td><td>{html.escape(g)} を学習側の値に差し替え</td><td class=num>{x['cols_with_diff']}/{x['cols']}</td><td class=num>{a['corr']:.4f}</td><td class=num>{a['diff']:+.4f}</td></tr>"
+        a = v["all_training"]["win"]
+        rows += f"<tr><td></td><td>全列を学習側の値に差し替え（整合の確認）</td><td class=num>-</td><td class=num>{a['corr']:.4f}</td><td class=num>{a['diff']:+.4f}</td></tr>"
+    return f"""<h2>5. 通しの確率のずれの出どころ（群ごとの差し替え）</h2>
+<p class="muted">推論経路の特徴量のうち、1 つの群だけを学習側の値に差し替えて予測し直し、学習側の予測との相関（勝率）がどれだけ上がるかを見る。上がり幅が大きい群が主なずれの出どころ。</p>
+<table><tr><th>日</th><th>差し替えた群</th><th>値が違う列/列数</th><th>勝 相関</th><th>勝 LogLoss 差</th></tr>{rows}</table>
+<p>V0（LayerA・血統・前段・相対化）の列の再現誤差が主因で（差し替えると 0.9918 → 0.9992）、v5 で足した群（tl_ 再取得版 +0.0009、CY +0.0007、PX ほぼ 0）の寄与は小さい。V0 の再現誤差は v4 と同じ構造で、v5 固有の劣化ではない。</p>"""
+
+
+def shadow_section() -> str:
+    return """<h2>6. v4 と並走する shadow（v5）</h2>
+<ul><li>有効化: <code>KEIBA_V5_SHADOW=1</code>、バンドルは <code>KEIBA_V5_BUNDLE</code>（既定 final_v5/bundle_v5_2025）、前段は <code>KEIBA_V5_STAGE</code>（既定 final_stage/v4_fixed）、追い切りの基準表は <code>KEIBA_V5_TL_REF</code>（既定 tp35/tl_reference_v2.parquet）。</li>
+<li>出力: <code>data/local/inference/predictions_v5/&lt;日&gt;/&lt;race_id&gt;.parquet</code>（v4 は predictions_v3/ のまま）。イベントに v5_status / v5_sec / v5_bundle を残す。</li>
+<li>隔離: v5 の準備・予測・保存は、それぞれ独立に例外を捕まえる。v5 が失敗しても、v4 の shadow・特徴量・本番予測は変わらない（tests/pipeline/test_weight_triggered_predict.py で検査）。</li>
+<li>状態: <code>data/local/inference/state/px_v5/</code>（祖先表・SVD の成分・半年ごとのリッジ。<code>python -m src.scripts.data.build_px_state --windows YYYY-MM-DD</code>）。新しい半年（1/1・7/1）の前に作っておく。</li>
+<li>時間: 1 日分の PX は約 15〜20 秒（日単位でキャッシュ）、v5 の特徴量の組み立てと推論は 1 バッチあたり 1 分未満の見込み。v4 の後に逐次で走らせる（並列にしない: メモリが 2 倍になるため）。実測は 10/24 の週末のイベント（v5_sec）で確認する。</li></ul>"""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--select", required=True)
@@ -118,12 +145,13 @@ def main() -> None:
     ap.add_argument("--serving")
     ap.add_argument("--serving-px", dest="serving_px")
     ap.add_argument("--e2e")
+    ap.add_argument("--diag")
     ap.add_argument("--note", default="", help="要点（HTML の段落）。省略時は既定の文")
     ap.add_argument("--out", default=str(OUT))
     a = ap.parse_args()
     r = _j(a.select)
     note = a.note or "<p><b>要点.</b> 選択の結果は下の表。採用した構成と理由は決定ログ（tp-51）に書いてある。</p>"
-    body = HEAD + f'<div class="note">{note}</div>' + sel_section(r) + ens_section(_j(a.ens), _j(a.ens_vs)) + final_section(_j(a.final)) + serving_section(_j(a.serving), _j(a.serving_px), _j(a.e2e))
+    body = HEAD + f'<div class="note">{note}</div>' + sel_section(r) + ens_section(_j(a.ens), _j(a.ens_vs)) + final_section(_j(a.final)) + serving_section(_j(a.serving), _j(a.serving_px), _j(a.e2e)) + diag_section(_j(a.diag)) + shadow_section()
     body += '\n<p class="muted">コード: src/scripts/data/v5_select_eval.py、v5_members.py、fit_final_v5.py、register_final_v5.py、verify_v5_serving_cy.py、src/pipeline/features/serving_v5.py。</p></body></html>\n'
     Path(a.out).write_text(body, encoding="utf-8")
     print("保存:", a.out)

@@ -40,7 +40,7 @@ def default_stage_dir(bundle_dir: Path | None = None) -> Path:
     if os.environ.get("KEIBA_V3_STAGE"):
         return Path(os.environ["KEIBA_V3_STAGE"])
     name = Path(bundle_dir).name if bundle_dir else ""
-    if name.startswith("bundle_v4"):
+    if name.startswith(("bundle_v4", "bundle_v5")):
         return WORK / "final_stage" / ("v4_verify_2024" if name.endswith("2024") else "v4_fixed")
     return WORK / "final_stage/fixed"
 
@@ -50,7 +50,20 @@ def default_aux_dir(bundle_dir: Path | None = None) -> Path:
     if os.environ.get("KEIBA_V3_AUX"):
         return Path(os.environ["KEIBA_V3_AUX"])
     name = Path(bundle_dir).name if bundle_dir else ""
-    return (WORK.parent / "training_pipeline_v4/final_aux") if name.startswith("bundle_v4") else WORK / "final_aux"
+    return (WORK.parent / "training_pipeline_v4/final_aux") if name.startswith(("bundle_v4", "bundle_v5")) else WORK / "final_aux"
+
+
+def v5_enabled() -> bool:
+    """v5 を v4 の shadow と並走させる（KEIBA_V5_SHADOW=1）。出力は predictions_v5/<日>/<race_id>.parquet。v4 の経路には影響しない。"""
+    return (os.environ.get("KEIBA_V5_SHADOW") or "").strip().lower() in ("1", "true", "on", "yes")
+
+
+def v5_paths() -> dict:
+    """v5 のバンドル・前段・追い切りの基準表（KEIBA_V5_BUNDLE / KEIBA_V5_STAGE / KEIBA_V5_TL_REF）。"""
+    bundle = Path(os.environ.get("KEIBA_V5_BUNDLE") or WORK / "final_v5/bundle_v5_2025")
+    stage = Path(os.environ.get("KEIBA_V5_STAGE") or WORK / "final_stage" / ("v4_verify_2024" if bundle.name.endswith("2024") else "v4_fixed"))
+    tl_ref = Path(os.environ.get("KEIBA_V5_TL_REF") or WORK.parent / "training_pipeline_v4/tp35/tl_reference_v2.parquet")
+    return {"bundle": bundle, "stage": stage, "tl_reference": tl_ref}
 
 
 class V3Serving:

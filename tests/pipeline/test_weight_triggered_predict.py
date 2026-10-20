@@ -283,3 +283,42 @@ def test_single_horse_and_all_debut_races_do_not_break(env):
     card = wtp.fill_card_meta(wtp.card_frame(FakeStorage(debut), [rid]), [])
     out, _ = build_inference_features(read_runs_raw(tables), card, build_repair_map(la))
     assert out.height == len(debut[rid]["entries"]) and out["f2_pace_match"].len() == out.height
+
+
+def test_v5_shadow_runs_beside_v4_and_its_failure_never_breaks_v4_or_the_features(env, tmp_path, monkeypatch):
+    """v5 は predictions_v5/ に別系統で書く。v5 が例外を出しても、v4 の shadow と特徴量・イベントは通常どおり。"""
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    monkeypatch.setenv("KEIBA_V3_SERVING", "shadow")
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    ctx.v3 = _FakeV3()
+    ymd = day.replace("-", "")
+
+    class _V5(_FakeV3):
+        bundle_dir = type("B", (), {"name": "bundle_v5_test"})()
+
+    ctx.v5 = _V5()
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    assert all(e["status"] == "ok" and e["v3_status"] == "ok" and e["v5_status"] == "ok" and e["v5_bundle"] == "bundle_v5_test" for e in evs)
+    for rid in sh:
+        assert (tmp_path / "inf" / "predictions_v5" / ymd / f"{rid}.parquet").exists() and (tmp_path / "inf" / "predictions_v3" / ymd / f"{rid}.parquet").exists()
+    ctx.v5 = _V5(fail=True)
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    assert all(e["status"] == "ok" and e["v3_status"] == "ok" and e["v5_status"] == "error" and "boom" in e["v5_error"] for e in evs)
+    ctx.v5 = None                                                  # v5 無効（既定）のイベントに v5 のキーは出ない
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    assert all("v5_status" not in e for e in evs)
+
+
+def test_v5_paths_and_flag(monkeypatch):
+    from src.pipeline.inference import v3_serving as vs
+
+    monkeypatch.delenv("KEIBA_V5_SHADOW", raising=False)
+    assert vs.v5_enabled() is False
+    monkeypatch.setenv("KEIBA_V5_SHADOW", "1")
+    assert vs.v5_enabled() is True
+    monkeypatch.setenv("KEIBA_V5_BUNDLE", "/x/bundle_v5_2024")
+    p = vs.v5_paths()
+    assert p["bundle"].name == "bundle_v5_2024" and p["stage"].name == "v4_verify_2024" and p["tl_reference"].name == "tl_reference_v2.parquet"
