@@ -2,11 +2,7 @@
    「良い/悪い」は色だけでなく、必ず文字（◎/△/▽ と語）を併記するための判定もここに置く。 */
 import type { CardStat } from "@/lib/entryCard";
 
-/** 枠の色（JRA: 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃） */
-export const BRACKET: Record<number, { bg: string; color: string }> = {
-  1: { bg: "#f8fafc", color: "#0f172a" }, 2: { bg: "#111827", color: "#fff" }, 3: { bg: "#ef4444", color: "#fff" }, 4: { bg: "#3b82f6", color: "#fff" },
-  5: { bg: "#facc15", color: "#0f172a" }, 6: { bg: "#22c55e", color: "#0f172a" }, 7: { bg: "#fb923c", color: "#0f172a" }, 8: { bg: "#f9a8d4", color: "#0f172a" },
-};
+export { BRACKET } from "@/lib/bracket";
 
 /** 全体の目安（JRA 平均）。複勝率 = 3/14 ≒ 21%、勝率 = 1/14 ≒ 7% */
 export const BASE_TOP3 = 21;

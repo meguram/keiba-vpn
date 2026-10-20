@@ -1,11 +1,12 @@
+import { bracketOf } from "@/lib/bracket";
 export const USE_MOCK = process.env.NEXT_PUBLIC_MOCK === "true";
 
 // ---------------------------------------------------------------------------
 // ユーティリティ
 // ---------------------------------------------------------------------------
-/** JRA公式枠番計算: 1枠=1番、2枠=2-3番、…、8枠=14-16番 */
-function calcBracket(horseNumber: number): number {
-  return Math.min(Math.ceil((horseNumber + 1) / 2), 8);
+/** 枠割り（lib/bracket.ts）。頭数が分からないモックは 16 頭立てとして扱う */
+function calcBracket(horseNumber: number, fieldSize = 16): number {
+  return bracketOf(horseNumber, fieldSize) ?? 8;
 }
 
 // ---------------------------------------------------------------------------
@@ -249,7 +250,7 @@ export function getMockRaceDetail(raceId: string) {
     race_shutuba: {
       entries: MOCK_HORSES.slice(0, race.field_size ?? 16).map((h) => ({
         horse_number: h.post_no,
-        bracket_number: calcBracket(h.post_no),
+        bracket_number: calcBracket(h.post_no, race.field_size ?? 16),
         horse_name: h.horse_name,
         horse_id: h.horse_id,
         sex_age: h.post_no % 2 === 0 ? "牡4" : "牝4",

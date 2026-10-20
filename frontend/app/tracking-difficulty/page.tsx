@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { bracketChipStyle } from "@/lib/bracket";
 import { RacePicker } from "@/components/RacePicker";
 import { USE_MOCK, getMockTdData, getMockRaceQuality } from "@/lib/mock";
 
@@ -63,21 +64,8 @@ function easeLabel(label: string | undefined): { bg: string; color: string } {
   return { bg: "rgba(239,68,68,0.15)", color: "var(--err)" };
 }
 
-/* JRA公式枠色: 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃 */
-const WAKU_COLORS: [string, string][] = [
-  ["#fff",    "#333"], // 1枠: 白
-  ["#1a1a1a", "#fff"], // 2枠: 黒
-  ["#c0392b", "#fff"], // 3枠: 赤
-  ["#1a5fa0", "#fff"], // 4枠: 青
-  ["#e8b800", "#333"], // 5枠: 黄
-  ["#1e8449", "#fff"], // 6枠: 緑
-  ["#e36c00", "#fff"], // 7枠: 橙
-  ["#e0479e", "#fff"], // 8枠: 桃（ピンク）
-];
-
 function wakuStyle(bn: number): React.CSSProperties {
-  const [bg, color] = WAKU_COLORS[(bn - 1) % 8] ?? ["#888", "#fff"];
-  return { background: bg, color, width: 26, height: 26, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800 };
+  return bracketChipStyle(bn, 26);
 }
 
 function styleChip(style: string) {

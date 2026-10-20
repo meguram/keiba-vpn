@@ -12,6 +12,7 @@ import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { ExpectedMeguCell } from "@/components/ExpectedMegu";
 import { PredExtras } from "@/components/PredExtras";
+import { bracketChipStyle, bracketOf } from "@/lib/bracket";
 import type { GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
 import type { ExpectedMegu, ExpectedMeguMeta } from "@/lib/expectedMegu";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
@@ -166,12 +167,6 @@ function RaceSummaryBadges({ preds }: { preds: PredEntry[] }) {
   );
 }
 
-/* 枠の色（JRA: 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃） */
-const BRACKET: Record<number, { bg: string; color: string }> = {
-  1: { bg: "#f8fafc", color: "#111" }, 2: { bg: "#111827", color: "#fff" }, 3: { bg: "#ef4444", color: "#fff" }, 4: { bg: "#3b82f6", color: "#fff" },
-  5: { bg: "#facc15", color: "#111" }, 6: { bg: "#22c55e", color: "#111" }, 7: { bg: "#fb923c", color: "#111" }, 8: { bg: "#f9a8d4", color: "#111" },
-};
-
 /** 馬体重「514(+2)」。未発表（前日〜当日の発表前）は "-" */
 function fmtWeight(w: number | null | undefined, d: number | null | undefined): string {
   if (!w) return "-";
@@ -252,7 +247,8 @@ const TABLE_CSS = `
 .pt-select{min-height:36px;padding:0 8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px}
 .pt-card{display:grid;gap:6px;padding:10px 10px 10px 12px;border-bottom:1px solid rgba(36,48,73,.5)}
 .pt-card .r1{display:flex;align-items:center;gap:8px;min-width:0}
-.pt-card .no{flex:0 0 auto;min-width:28px;height:28px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+.pt-card .pt-nums{flex:0 0 auto;display:inline-flex;gap:3px}
+.pt-card .pt-nums span{font-size:13px !important}
 .pt-card .nm{flex:1 1 auto;min-width:0;font-weight:700;color:#fff;font-size:15px}
 .pt-card .win{flex:0 0 auto;text-align:right;line-height:1.1}
 .pt-card .win b{font-size:20px;font-variant-numeric:tabular-nums}
@@ -345,10 +341,13 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
     w: fmtEv(p.ev_win_cal ?? p.ev_win, p.ev_win_cal != null),
     pl: fmtEv(p.ev_place_cal ?? p.ev_place ?? p.expected_value, p.ev_place_cal != null),
   });
-  const bracketChip = (p: PredEntry) =>
-    p.bracket_number && BRACKET[p.bracket_number]
-      ? <span title={`${p.bracket_number}枠`} style={{ display: "inline-block", minWidth: 20, borderRadius: 4, padding: "1px 0", fontWeight: 700, background: BRACKET[p.bracket_number].bg, color: BRACKET[p.bracket_number].color }}>{p.bracket_number}</span>
-      : <span>-</span>;
+  const brOf = (p: PredEntry) => bracketOf(p.horse_number ?? 0, sorted.length, p.bracket_number);
+  const wakuChip = (p: PredEntry, size = 24) => {
+    const bn = brOf(p);
+    return bn ? <span title={`${bn}枠`} style={bracketChipStyle(bn, size)}>{bn}</span> : <span>-</span>;
+  };
+  const numChip = (p: PredEntry, size = 24) =>
+    p.horse_number != null ? <span title={`${brOf(p) ?? "-"}枠 ${p.horse_number}番`} style={bracketChipStyle(brOf(p), size)}>{p.horse_number}</span> : <span>-</span>;
   const placeOdds = (p: PredEntry) =>
     p.place_odds_min != null && p.place_odds_max != null ? `${Number(p.place_odds_min).toFixed(1)}〜${Number(p.place_odds_max).toFixed(1)}` : "-";
   const dim = hasPred ? "var(--text)" : "var(--text-dim)";
@@ -406,15 +405,15 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
       <div className="pt-v-wide">
         <table className="pt-tbl">
           <colgroup>
-            <col style={{ width: "5%" }} /><col style={{ width: "22%" }} /><col style={{ width: "4.5%" }} /><col style={{ width: "16%" }} />
+            <col style={{ width: "4.5%" }} /><col style={{ width: "5%" }} /><col style={{ width: "22%" }} /><col style={{ width: "16%" }} />
             <col style={{ width: "10%" }} /><col style={{ width: "7%" }} /><col style={{ width: "9.5%" }} /><col style={{ width: "11%" }} />
             <col style={{ width: "9%" }} /><col style={{ width: "6%" }} />
           </colgroup>
           <thead>
             <tr>
+              {th("bracket", "枠", {}, "枠番（前日に確定）")}
               {th("num", "馬番")}
-              {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・馬体重）")}
-              {th("bracket", "枠", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "出馬表（前日に確定。馬体重は当日の発表後）")}
+              {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・馬体重。馬体重は当日の発表後）")}
               {th("jockey", "騎手/調教師", { textAlign: "left" }, "騎手で並べ替え（調教師は『そのほか』から）")}
               {th("emegu", "想定指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "過去のめぐ指数からの想定（AI予測ではありません）。1点＝0.1秒")}
               {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
@@ -429,12 +428,12 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
               const ev = evOf(p);
               return (
                 <tr key={p.horse_number ?? i} style={{ background: rowBgOf(p) }}>
-                  <td style={{ fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "-"}</td>
+                  <td>{wakuChip(p)}</td>
+                  <td>{numChip(p)}</td>
                   <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
                     {tapCell(p, "horse", p.horse_name, "#fff")}
                     <span className="sub">{[p.sex_age, p.jockey_weight != null ? `${p.jockey_weight}kg` : null, p.weight ? fmtWeight(p.weight, p.weight_change) : null].filter(Boolean).join("　")}</span>
                   </td>
-                  <td className="sep">{bracketChip(p)}</td>
                   <td className="l">
                     {tapCell(p, "jockey", p.jockey_name, "var(--text)")}
                     <span className="sub">{p.trainer_name ? <>{tapCell(p, "trainer", p.trainer_name, "var(--text-dim)")}</> : "-"}</span>
@@ -456,13 +455,14 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
       <div className="pt-v-mid">
         <table className="pt-tbl">
           <colgroup>
-            <col style={{ width: "8%" }} /><col style={{ width: "36%" }} /><col style={{ width: "13%" }} /><col style={{ width: "15%" }} />
+            <col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "30%" }} /><col style={{ width: "13%" }} /><col style={{ width: "15%" }} />
             <col style={{ width: "14%" }} /><col style={{ width: "14%" }} />
           </colgroup>
           <thead>
             <tr>
+              {th("bracket", "枠", {}, "枠番（前日に確定）")}
               {th("num", "馬番")}
-              {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 枠・性齢・斤量・騎手・馬体重・調教師）")}
+              {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・騎手・馬体重・調教師）")}
               {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "勝率で並べ替え（連対率・複勝率は下段、『そのほか』から並べ替え）")}
               {th("emegu", "想定指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "過去のめぐ指数からの想定（AI予測ではありません）。1点＝0.1秒")}
               {th("evw", calibratedEv ? "期待値(較正後)" : "期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
@@ -474,10 +474,11 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
               const ev = evOf(p);
               return (
                 <tr key={p.horse_number ?? i} style={{ background: rowBgOf(p) }}>
-                  <td style={{ fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "-"}</td>
+                  <td>{wakuChip(p, 22)}</td>
+                  <td>{numChip(p, 22)}</td>
                   <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
                     {tapCell(p, "horse", p.horse_name, "#fff")}
-                    <span className="sub">{[p.bracket_number ? `${p.bracket_number}枠` : null, p.sex_age, p.jockey_weight != null ? `${p.jockey_weight}kg` : null, p.jockey_name, p.weight ? fmtWeight(p.weight, p.weight_change) : null].filter(Boolean).join("　")}</span>
+                    <span className="sub">{[p.sex_age, p.jockey_weight != null ? `${p.jockey_weight}kg` : null, p.jockey_name, p.weight ? fmtWeight(p.weight, p.weight_change) : null].filter(Boolean).join("　")}</span>
                     <span className="sub">{[p.trainer_name, p.buy_tier && p.buy_tier !== "—" ? `推奨 ${p.buy_tier}` : null].filter(Boolean).join("　")}</span>
                   </td>
                   <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top2_prob)} / {fmtPct(p.top3_prob)}</span></td>
@@ -496,14 +497,13 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
         {sorted.map((p, i) => {
           const ev = evOf(p);
           const m = markSym(p);
-          const bb = p.bracket_number && BRACKET[p.bracket_number] ? BRACKET[p.bracket_number] : { bg: "var(--surface2)", color: "#7dd3fc" };
           const bar = (v: number | null | undefined, c: string) => (
             <span className="pt-bar"><i style={{ ["--w" as string]: `${Math.min(100, Math.max(0, (v ?? 0) * 100))}%`, ["--c" as string]: c } as React.CSSProperties} /></span>
           );
           return (
             <div key={p.horse_number ?? i} className="pt-card" role="listitem" style={{ background: rowBgOf(p) }}>
               <div className="r1">
-                <span className="no" title={p.bracket_number ? `${p.bracket_number}枠` : undefined} style={{ background: bb.bg, color: bb.color }}>{p.horse_number ?? "-"}</span>
+                <span className="pt-nums">{wakuChip(p, 26)}{numChip(p, 26)}</span>
                 <span className="nm">{tapCell(p, "horse", p.horse_name, "#fff")}</span>
                 {m.sym !== "-" && <span title="印" aria-label={`印 ${m.sym}`} style={{ color: m.color, fontWeight: 800, fontSize: 15 }}>{m.sym}</span>}
                 <span className="win"><b style={{ color: dim }}>{fmtPct(p.win_prob)}</b><small>勝率</small></span>

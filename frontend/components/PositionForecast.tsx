@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BRACKET } from "@/lib/entryCardUi";
+import { bracketColor } from "@/lib/bracket";
 import { CONF_LABEL, ForecastHorse, GATE_TONE, GateBias, PACE_TONE, PaceForecast, STYLE_LANES, gateWord, lanesOf, packTrack, packTrackGate } from "@/lib/positionForecast";
 import { useNarrow } from "@/components/RaceStrip";
 
@@ -13,7 +13,7 @@ const CHIP = 30;
 const SHORT = 5;
 
 function Chip({ h, on, onClick, big }: { h: ForecastHorse; on: boolean; onClick: () => void; big?: boolean }) {
-  const b = h.bracket && BRACKET[h.bracket] ? BRACKET[h.bracket] : { bg: "#243049", color: "#e5e7eb" };
+  const b = bracketColor(h.bracket);
   const none = !h.f;
   return (
     <button

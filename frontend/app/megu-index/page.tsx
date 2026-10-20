@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { bracketChipStyle } from "@/lib/bracket";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockMeguPredicted } from "@/lib/mock";
 
@@ -369,39 +370,9 @@ function gradeChip(grade: string | undefined | null) {
   return <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 3, marginLeft: 4, ...s }}>{grade}</span>;
 }
 
-/* 枠色（tracking-difficulty と同一）— bracket_number で色分け、表示は馬番のみ */
-/* JRA公式枠色: 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃 */
-const WAKU_COLORS: [string, string][] = [
-  ["#fff",    "#333"], // 1枠: 白
-  ["#1a1a1a", "#fff"], // 2枠: 黒
-  ["#c0392b", "#fff"], // 3枠: 赤
-  ["#1a5fa0", "#fff"], // 4枠: 青
-  ["#e8b800", "#333"], // 5枠: 黄
-  ["#1e8449", "#fff"], // 6枠: 緑
-  ["#e36c00", "#fff"], // 7枠: 橙
-  ["#e0479e", "#fff"], // 8枠: 桃（ピンク）
-];
-
+/* 枠色は lib/bracket.ts（netkeiba 配色）に統一。枠番が無いときは中立色 */
 function horseNumberBadgeStyle(bracketNumber: number | null | undefined): React.CSSProperties {
-  const bn = bracketNumber != null && bracketNumber >= 1 && bracketNumber <= 8
-    ? bracketNumber
-    : null;
-  const [bg, color] = bn ? WAKU_COLORS[(bn - 1) % 8] : ["#64748b", "#fff"];
-  return {
-    background: bg,
-    color,
-    width: 28,
-    height: 28,
-    borderRadius: "50%",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 800,
-    lineHeight: 1,
-    border: bg === "#fff" ? "1px solid #cbd5e1" : "none",
-    boxShadow: "0 1px 2px rgba(0,0,0,0.18)",
-  };
+  return bracketChipStyle(bracketNumber, 28);
 }
 
 function HorseNumberBadge({

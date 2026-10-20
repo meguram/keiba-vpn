@@ -5,7 +5,7 @@ import { getJson, prefetchJson } from "@/lib/httpCache";
 import { PositionForecast } from "@/components/PositionForecast";
 import { GATE_TONE, PACE_TONE } from "@/lib/positionForecast";
 import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
-import { BRACKET } from "@/lib/entryCardUi";
+import { bracketColor, bracketOf } from "@/lib/bracket";
 
 /* 出馬表の下に置く、付随予測の折りたたみ。既定は閉じる（開閉は覚える）。
    - 展開予想: 予測 API が返す pace_forecast / gate_bias / 各馬の position_forecast（取得済みなので追加の通信なし）
@@ -140,7 +140,7 @@ export function PredExtras({
     () => [...entries]
       .filter((p) => p.horse_number != null)
       .sort((a, b) => (a.horse_number ?? 0) - (b.horse_number ?? 0))
-      .map((p) => ({ no: p.horse_number as number, name: p.horse_name ?? "", bracket: p.bracket_number ?? null, f: p.position_forecast ?? null })),
+      .map((p) => ({ no: p.horse_number as number, name: p.horse_name ?? "", bracket: bracketOf(p.horse_number as number, entries.length, p.bracket_number), f: p.position_forecast ?? null })),
     [entries],
   );
   const hasPos = horses.some((h) => h.f);
@@ -238,11 +238,11 @@ export function PredExtras({
             <Note>追走難度: 数字が大きいほど、その馬にとって前に付いていきやすい（％）。想定上がりは同条件の基準との差（−が速い）。過去走からの統計ベースの目安です。</Note>
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
               {flowRows.map(({ f, h, ease }) => {
-                const b = h?.bracket && BRACKET[h.bracket] ? BRACKET[h.bracket] : { bg: "#243049", color: "#e5e7eb" };
+                const b = bracketColor(h?.bracket);
                 const d = f.expected_last_3f?.delta_sec;
                 return (
                   <li key={f.horse_number} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 8px", borderRadius: 8, background: "var(--surface2)", border: "1px solid var(--border)", fontSize: 12 }}>
-                    <span style={{ minWidth: 26, height: 26, borderRadius: 999, background: b.bg, color: b.color, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13 }}>{f.horse_number}</span>
+                    <span style={{ minWidth: 26, height: 26, borderRadius: 999, background: b.bg, color: b.color, border: `1px solid ${b.border}`, boxSizing: "border-box", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13 }}>{f.horse_number}</span>
                     <strong style={{ flex: "1 1 110px", minWidth: 0, fontSize: 13, color: "#f0f6fc", overflowWrap: "anywhere" }}>{h?.name || f.horse_name || ""}</strong>
                     <span style={{ color: "var(--text-dim)" }}>脚質 <b style={{ color: "var(--text)" }}>{f.style ?? "—"}</b></span>
                     {f.flow_pattern && <span style={{ color: "var(--text-dim)" }}>流れ <b style={{ color: "var(--text)" }}>{f.flow_pattern}</b></span>}

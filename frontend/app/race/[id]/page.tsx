@@ -10,6 +10,7 @@ import { featureEnabled } from "@/lib/features";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { BetRecommend } from "@/components/BetRecommend";
 import { RaceNav } from "@/components/RaceNav";
+import { bracketChipStyle, bracketOf as wakuOf } from "@/lib/bracket";
 import { useNarrow } from "@/components/RaceStrip";
 import { raceExists } from "@/lib/raceExists";
 import { PositionForecast } from "@/components/PositionForecast";
@@ -59,34 +60,15 @@ type RaceOddsEntry = { horse_number?: number | string; odds?: number; win_odds?:
 const positive = (v: unknown): number | undefined => (typeof v === "number" && v > 0 ? v : undefined);
 type MeguHorseData = { megu_final: number | null; actual_megu: number | null };
 
-/* JRA公式枠色: 1白 2黒 3赤 4青 5黄 6緑 7橙 8桃 */
-const WAKU_COLORS: [string, string][] = [
-  ["#fff",    "#333"], // 1枠: 白
-  ["#1a1a1a", "#fff"], // 2枠: 黒
-  ["#c0392b", "#fff"], // 3枠: 赤
-  ["#1a5fa0", "#fff"], // 4枠: 青
-  ["#e8b800", "#333"], // 5枠: 黄
-  ["#1e8449", "#fff"], // 6枠: 緑
-  ["#e36c00", "#fff"], // 7枠: 橙
-  ["#e0479e", "#fff"], // 8枠: 桃（ピンク）
-];
+/** 枠番バッジ（枠色の背景に枠番）。馬番は NumBadge で同じ枠色に塗る */
+function BracketBadge({ bn }: { bn: number | null | undefined }) {
+  if (!bn) return <span style={{ color: "var(--text-dim)" }}>—</span>;
+  return <span title={`${bn}枠`} style={bracketChipStyle(bn, 24)}>{bn}</span>;
+}
 
-function BracketBadge({ bn }: { bn: number | string | undefined | null }) {
-  const n = bn != null ? Number(bn) : null;
-  if (n == null || isNaN(n) || n < 1 || n > 8) {
-    return <span style={{ color: "var(--text-dim)" }}>{bn ?? "—"}</span>;
-  }
-  const [bg, color] = WAKU_COLORS[n - 1];
-  return (
-    <span style={{
-      background: bg, color, border: bg === "#fff" ? "1px solid #ccc" : "none",
-      width: 22, height: 22, borderRadius: "50%",
-      display: "inline-flex", alignItems: "center", justifyContent: "center",
-      fontSize: 11, fontWeight: 800, lineHeight: 1,
-    }}>
-      {n}
-    </span>
-  );
+function NumBadge({ no, bn }: { no: number | string | null | undefined; bn: number | null | undefined }) {
+  if (no == null || no === "") return <span style={{ color: "var(--text-dim)" }}>—</span>;
+  return <span title={bn ? `${bn}枠 ${no}番` : `${no}番`} style={bracketChipStyle(bn, 24)}>{no}</span>;
 }
 
 function indexMeguHorses(
@@ -555,8 +537,8 @@ export default function RaceDetailPage() {
             const megu = getMeguValues(e);
             return (
               <tr key={hn} style={{ transition: "background 0.12s" }}>
-                <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={e.bracket_number} /></td>
-                <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{hn}</td>
+                <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null)} /></td>
+                <td style={{ ...TD, textAlign: "center" }}><NumBadge no={hn} bn={wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null)} /></td>
                 <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
                   <HorseName id={e.horse_id} name={e.horse_name} />
                 </td>
@@ -598,8 +580,8 @@ export default function RaceDetailPage() {
             return (
               <tr key={i} style={{ transition: "background 0.12s" }}>
                 <td style={{ ...TD, fontWeight: pos <= 3 ? 800 : 400, color: placeColor, fontSize: pos <= 3 ? 15 : 13 }}>{pos <= 0 || pos >= 99 ? "—" : pos}</td>
-                <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={e.bracket_number} /></td>
-                <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{String(e.horse_number ?? e.number ?? "—")}</td>
+                <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={wakuOf(Number(e.horse_number ?? e.number), resultEntries.length, Number(e.bracket_number) || null)} /></td>
+                <td style={{ ...TD, textAlign: "center" }}><NumBadge no={e.horse_number ?? (e.number as number | string | undefined)} bn={wakuOf(Number(e.horse_number ?? e.number), resultEntries.length, Number(e.bracket_number) || null)} /></td>
                 <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
                   <HorseName id={e.horse_id} name={e.horse_name} />
                 </td>
@@ -658,7 +640,7 @@ export default function RaceDetailPage() {
   const forecastHorses: ForecastHorse[] = [...preds]
     .filter((p) => p.horse_number != null)
     .sort((a, b) => Number(a.horse_number) - Number(b.horse_number))
-    .map((p) => ({ no: Number(p.horse_number), name: p.horse_name ?? "", bracket: bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null), f: p.position_forecast ?? null }));
+    .map((p) => ({ no: Number(p.horse_number), name: p.horse_name ?? "", bracket: wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null)), f: p.position_forecast ?? null }));
 
   const PredPanel = (
     <div>
@@ -694,22 +676,22 @@ export default function RaceDetailPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 12 }}>
             <thead style={{ background: "var(--surface2)" }}>
               <tr>
-                <th style={{ ...TH, textAlign: "center" }} colSpan={2}>出走馬</th>
+                <th style={{ ...TH, textAlign: "center" }} colSpan={3}>出走馬</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={3}>予測確率</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>想定オッズ</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>期待値</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>印</th>
               </tr>
               <tr>
-                {(["馬番","馬名","勝率","連対率","複勝率","単勝","複勝",(calibratedEv ? "勝期待値(較正後)" : "勝期待値"),(calibratedEv ? "複期待値(較正後)" : "複期待値"),"推奨","印"] as string[]).map((h, i) => {
-                  // AI columns: indices 2–8
-                  const isAiCol = i >= 2 && i <= 8;
+                {(["枠","馬番","馬名","勝率","連対率","複勝率","単勝","複勝",(calibratedEv ? "勝期待値(較正後)" : "勝期待値"),(calibratedEv ? "複期待値(較正後)" : "複期待値"),"推奨","印"] as string[]).map((h, i) => {
+                  // AI columns: indices 3–9
+                  const isAiCol = i >= 3 && i <= 9;
                   return (
                     <th
                       key={h}
                       style={{
                         ...TH,
-                        borderLeft: [2,5,7,9,11].includes(i) ? "1px solid rgba(36,48,73,0.5)" : undefined,
+                        borderLeft: [3,6,8,10,12].includes(i) ? "1px solid rgba(36,48,73,0.5)" : undefined,
                         color: isAiCol && !isMember ? "var(--text-dim)" : TH.color,
                       }}
                     >
@@ -726,7 +708,8 @@ export default function RaceDetailPage() {
                 const rowBg = rank === 1 ? "rgba(239,68,68,0.04)" : rank === 2 ? "rgba(59,130,246,0.04)" : rank === 3 ? "rgba(34,197,94,0.04)" : undefined;
                 return (
                   <tr key={p.horse_number ?? i} style={{ background: rowBg, transition: "background 0.12s" }}>
-                    <td style={{ ...TD, fontWeight: 800, color: "#7dd3fc" }}>{p.horse_number ?? "—"}</td>
+                    <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null))} /></td>
+                    <td style={{ ...TD, textAlign: "center" }}><NumBadge no={p.horse_number} bn={wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null))} /></td>
                     <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left", whiteSpace: "nowrap" }}>
                       <HorseName id={p.horse_id} name={p.horse_name} />
                     </td>
