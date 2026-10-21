@@ -6,6 +6,7 @@ import { PositionForecast } from "@/components/PositionForecast";
 import { GATE_TONE, PACE_TONE, buildTdMap } from "@/lib/positionForecast";
 import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
 import { bracketOf } from "@/lib/bracket";
+import { CONF_JA, buildFitMap, type PaceType, type ScenarioForecast } from "@/lib/paceType";
 import { LapForecast as LapForecastView } from "@/components/LapForecast";
 import { isUsableLapForecast, lapSummaryText } from "@/lib/lapForecast";
 import type { LapForecast } from "@/lib/lapForecast";
@@ -122,7 +123,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 const sec = (v?: number) => (v != null ? v.toFixed(1) : "—");
 
 export function PredExtras({
-  raceId, entries, pace: paceApi, paceUnified, gate, steeplechase, lapForecast,
+  raceId, entries, pace: paceApi, paceUnified, gate, steeplechase, lapForecast, paceType, scenarioForecast,
 }: {
   raceId: string;
   entries: ExtraEntry[];
@@ -133,8 +134,13 @@ export function PredExtras({
   steeplechase?: boolean;
   /** 予測 API の lap_forecast（ラップ予想）。あれば『想定ラップ』の主役にし、従来の目安は出さない */
   lapForecast?: LapForecast | null;
+  /** 展開タイプ（pace_type）と展開別の有利さ（scenario_forecast）。あれば『展開』の表示をこれに置き換える */
+  paceType?: PaceType | null;
+  scenarioForecast?: ScenarioForecast | null;
 }) {
   const lf = isUsableLapForecast(lapForecast) ? lapForecast : null;
+  const pt = paceType && paceType.pace_probs && paceType.shape_probs ? paceType : null;
+  const fitMap = useMemo(() => buildFitMap(scenarioForecast, pt), [scenarioForecast, pt]);
   const unified = !!(paceUnified && paceUnified.level !== "unknown");
   const pace = useMemo(
     () => (unified && paceUnified && paceApi ? { ...paceApi, level: paceUnified.level, label: paceUnified.label, note: UNIFIED_NOTE[paceUnified.level] ?? paceApi.note } : paceApi),
@@ -230,16 +236,18 @@ export function PredExtras({
         onToggle={() => toggle("pos")}
         onHover={() => prefetchJson(tdUrl, { ttlMs: 60_000 })}
         summary={[
-          paceTone && pace ? `ペース ${pace.label}` : "",
+          pt ? `展開 ${pt.label}${pt.confidence ? `（確度 ${CONF_JA[pt.confidence] ?? pt.confidence}）` : ""}` : paceTone && pace ? `ペース ${pace.label}` : "",
           gateTone ? `枠順 ${gateTone.label}` : "",
           pp?.lap_times || (unified && baseline != null) ? `上がり基準 ${sec(baseline)}秒` : "",
         ].filter(Boolean).join(" ・ ") || (hasPos ? "位置取り・追走難度" : "出せません")}
       >
-        {hasPos || pace ? (
+        {hasPos || pace || pt ? (
           <PositionForecast
             embedded
             horses={horses}
             pace={pace}
+            paceType={pt}
+            fitMap={fitMap}
             gate={gate}
             td={tdBroken && !hasV2 ? null : tdMap}
             tdNote={
@@ -257,7 +265,9 @@ export function PredExtras({
                     {unified
                       ? " 想定上がり（基準との差、−が速い）は、位置取り（後ろの馬ほど速い）とペースから決めた値で、追走難度とは別です。"
                       : " 想定上がり（基準との差、−が速い）も、位置取りとは別の過去走の統計です。"}
-                    「展開」は、想定ペース（ハイなら差し・追込、スローなら逃げ・先行が向く）に追走のしやすさ（楽なら +、困難なら −）を足し合わせた目安で、AI予測ではありません。
+                    {fitMap
+                      ? "「展開」の記号は、ハイ・ミドル・スローそれぞれのペースで、その馬の脚質が有利（▲）か不利（▽）かの目安です（隊列の凝縮度の確率で重みづけ）。「向く／不向き」は9つのシナリオの確率で平均した総合の目安で、AI予測ではありません。"
+                      : "「展開」は、想定ペース（ハイなら差し・追込、スローなら逃げ・先行が向く）に追走のしやすさ（楽なら +、困難なら −）を足し合わせた目安で、AI予測ではありません。"}
                   </Note>
                 )}
               </>

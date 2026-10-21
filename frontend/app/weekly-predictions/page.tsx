@@ -18,6 +18,7 @@ import type { L3fCoherent, PaceUnified } from "@/components/PredExtras";
 import type { LapForecast } from "@/lib/lapForecast";
 import { bracketChipStyle, bracketOf } from "@/lib/bracket";
 import type { GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
+import type { PaceType, ScenarioForecast } from "@/lib/paceType";
 import { recentMean, type ClassBenchmark, type ExpectedMegu, type ExpectedMeguMeta } from "@/lib/expectedMegu";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
@@ -88,6 +89,8 @@ type PredData = {
   class_benchmark?: ClassBenchmark | null;
   growth_meta?: GrowthMeta | null;
   lap_forecast?: LapForecast | null;
+  pace_type?: PaceType | null;
+  scenario_forecast?: ScenarioForecast | null;
   gate_bias?: GateBias | null;
   error?: string;
 };
@@ -661,7 +664,7 @@ function RacePanel({
           <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} bench={pred.class_benchmark} today={{ surface: race.surface, distance: Number(race.distance) || undefined }} growthMeta={pred.growth_meta} />
         )}
         {pred && !failed && preds.length > 0 && (
-          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />
+          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} paceType={pred.pace_type} scenarioForecast={pred.scenario_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />
         )}
       </div>
     </section>

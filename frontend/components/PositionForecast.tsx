@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { bracketColor } from "@/lib/bracket";
 import { CONF_LABEL, ForecastHorse, GATE_TONE, GateBias, HorseTd, PACE_TONE, PaceFit, PaceForecast, STYLE_LANES, easeTone, fmtDelta, gateWord, lanesOf, packTrack, packTrackGate, paceFit } from "@/lib/positionForecast";
 import { useNarrow } from "@/components/RaceStrip";
+import { FitGrid, FitMarks, PaceTypePanel } from "@/components/PaceTypePanel";
+import type { HorseFit, PaceType } from "@/lib/paceType";
 
 /* 展開予想（位置取り）。過去走の通過順位から作る予想で、実モデルの予測ではない（画面にも明記する）。
    PC: 横=前後の位置取り、縦=上が内ラチ・下が外の隊列図（同じ位置なら内枠が上＝ラチ寄り）。
@@ -50,7 +52,7 @@ function Chip({ h, on, onClick, big, ease }: { h: ForecastHorse; on: boolean; on
   );
 }
 
-function Detail({ h, gate, td, fit }: { h: ForecastHorse; gate: GateBias | null | undefined; td?: HorseTd | null; fit?: PaceFit | null }) {
+function Detail({ h, gate, td, fit, scen }: { h: ForecastHorse; gate: GateBias | null | undefined; td?: HorseTd | null; fit?: PaceFit | null; scen?: HorseFit | null }) {
   const f = h.f;
   const et = td?.ease_pct != null ? easeTone(td.ease_pct) : null;
   const shifted = !!gate?.applied && f != null && f.gate_shift != null && Math.abs(f.gate_shift) >= 0.005;
@@ -75,7 +77,7 @@ function Detail({ h, gate, td, fit }: { h: ForecastHorse; gate: GateBias | null 
               {td.style && td.style !== f.style && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>追走側の脚質は「{td.style}」（別算出のため位置取りの予想とずれることがあります）</span>}
             </>
           )}
-          {fit && (
+          {scen ? <FitGrid fit={scen} /> : fit && (
             <span style={{ flexBasis: "100%", color: "var(--text-dim)" }}>
               展開 <b style={{ color: FIT_TONE[fit.label].fg }}>{fit.label}</b>{fit.reasons.length > 0 && `（${fit.reasons.join("・")}）`}
             </span>
@@ -89,23 +91,30 @@ function Detail({ h, gate, td, fit }: { h: ForecastHorse; gate: GateBias | null 
 }
 
 /** 馬別一覧（展開向き／不向き・追走難度・想定上がり）。追走難度が未取得の間は、脚質×ペースの判定だけを出す。 */
-function HorseList({ horses, pace, td, narrow, sel, onPick, detail }: { horses: ForecastHorse[]; pace: PaceForecast | null | undefined; td?: Map<number, HorseTd> | null; narrow: boolean; sel: number | null; onPick: (no: number) => void; detail: (h: ForecastHorse) => React.ReactNode }) {
-  const cols = "30px minmax(96px,1.6fr) 52px 62px 124px 104px";
+function HorseList({ horses, pace, td, narrow, sel, onPick, detail, fitMap }: { horses: ForecastHorse[]; fitMap?: Map<number, HorseFit> | null; pace: PaceForecast | null | undefined; td?: Map<number, HorseTd> | null; narrow: boolean; sel: number | null; onPick: (no: number) => void; detail: (h: ForecastHorse) => React.ReactNode }) {
+  const cols = fitMap ? "30px minmax(96px,1.4fr) 52px 224px 124px 104px" : "30px minmax(96px,1.6fr) 52px 62px 124px 104px";
   return (
     <div role="list" aria-label="馬別の展開" style={{ marginTop: 12, display: "grid", gap: 4 }}>
       {!narrow && (
         <div aria-hidden style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: "0 8px", fontSize: 11, color: "var(--text-dim)" }}>
-          <span>馬番</span><span>馬名</span><span>脚質</span><span>展開</span><span>追走難度</span><span>想定上がり</span>
+          <span>馬番</span><span>馬名</span><span>脚質</span><span>{fitMap ? "展開（ペース別の有利さ）" : "展開"}</span><span>追走難度</span><span>想定上がり</span>
         </div>
       )}
       {horses.map((h) => {
         const x = td?.get(h.no);
+        const scen = fitMap?.get(h.no) ?? null;
         const fit = h.f ? paceFit(h.f.style_code, pace?.level, x?.ease_pct) : null;
         const ft = fit ? FIT_TONE[fit.label] : null;
         const et = x?.ease_pct != null ? easeTone(x.ease_pct) : null;
         const b = bracketColor(h.bracket);
         const num = <span style={{ width: 26, height: 26, borderRadius: 999, background: b.bg, color: b.color, border: `1px solid ${b.border}`, boxSizing: "border-box", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, flex: "none" }}>{h.no}</span>;
-        const fitPill = fit && ft ? <span title={fit.reasons.join("・")} style={{ padding: "1px 8px", borderRadius: 999, border: `1px solid ${ft.bd}`, background: ft.bg, color: ft.fg, fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}>{fit.label}</span> : <span style={{ color: "var(--text-dim)" }}>—</span>;
+        const fitPill = scen && scen.word ? (() => {
+          const ft2 = FIT_TONE[scen.word];
+          return <span title={scen.bestLabel ? `最も合う展開: ${scen.bestLabel}` : undefined} style={{ display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
+            <span style={{ padding: "1px 8px", borderRadius: 999, border: `1px solid ${ft2.bd}`, background: ft2.bg, color: ft2.fg, fontWeight: 700, fontSize: 12 }}>{scen.word}</span>
+            {scen.sensitivity === "展開次第" && <span style={{ fontSize: 11, color: "#fbbf24" }}>展開次第</span>}
+          </span>;
+        })() : fit && ft ? <span title={fit.reasons.join("・")} style={{ padding: "1px 8px", borderRadius: 999, border: `1px solid ${ft.bd}`, background: ft.bg, color: ft.fg, fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}>{fit.label}</span> : <span style={{ color: "var(--text-dim)" }}>—</span>;
         const easeCell = et ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}><span aria-hidden style={{ width: 9, height: 9, borderRadius: 999, background: et.color }} /><b style={{ color: "var(--text)" }}>{et.word}</b><span style={{ color: "var(--text-dim)" }}>{x!.ease_pct!.toFixed(0)}</span></span> : <span style={{ color: "var(--text-dim)" }}>—</span>;
         const l3 = x?.last3f_sec != null ? <span style={{ whiteSpace: "nowrap", color: "var(--text)" }}>{x.last3f_sec.toFixed(1)}<span style={{ color: "var(--text-dim)" }}>{x.last3f_delta != null ? `（${fmtDelta(x.last3f_delta)}）` : ""}</span></span> : <span style={{ color: "var(--text-dim)" }}>—</span>;
         const style = <span style={{ color: h.f ? "var(--text)" : "var(--text-dim)" }}>{h.f?.style ?? "データなし"}</span>;
@@ -117,18 +126,19 @@ function HorseList({ horses, pace, td, narrow, sel, onPick, detail }: { horses: 
               <strong style={{ flex: "1 1 auto", minWidth: 0, fontSize: 13, color: "#f0f6fc", overflowWrap: "anywhere" }}>{h.name}</strong>
               {fitPill}
             </span>
+            {scen && <span style={{ display: "flex" }}><FitMarks fit={scen} size={12} /></span>}
             <span style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", color: "var(--text-dim)" }}>
               <span>脚質 {style}</span>
               <span>追走 {easeCell}</span>
               <span>上がり {l3}</span>
             </span>
-            {fit && fit.reasons.length > 0 && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>展開: {fit.reasons.join("・")}</span>}
+            {!scen && fit && fit.reasons.length > 0 && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>展開: {fit.reasons.join("・")}</span>}
           </button>
         ) : (
           <button type="button" onClick={() => onPick(h.no)} aria-pressed={sel === h.no} style={{ ...common, padding: "6px 8px", display: "grid", gridTemplateColumns: cols, gap: 8, alignItems: "center" }}>
             {num}
             <strong style={{ minWidth: 0, fontSize: 13, color: "#f0f6fc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.name}</strong>
-            {style}{fitPill}{easeCell}{l3}
+            {style}{scen ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}><FitMarks fit={scen} />{fitPill}</span> : fitPill}{easeCell}{l3}
           </button>
         );
         return <div key={h.no} role="listitem">{row}{sel === h.no && detail(h)}</div>;
@@ -137,7 +147,11 @@ function HorseList({ horses, pace, td, narrow, sel, onPick, detail }: { horses: 
   );
 }
 
-export function PositionForecast({ horses, pace, gate, td, tdNote, embedded }: {
+export function PositionForecast({ horses, pace, gate, td, tdNote, embedded, paceType, fitMap }: {
+  /** 展開タイプ（pace_type）。あれば見出しとパネルをこれで出す */
+  paceType?: PaceType | null;
+  /** 馬ごとの展開別の有利さ（scenario_forecast から）。あれば『展開』列を置き換える */
+  fitMap?: Map<number, HorseFit> | null;
   horses: ForecastHorse[];
   pace: PaceForecast | null | undefined;
   gate?: GateBias | null;
@@ -170,12 +184,13 @@ export function PositionForecast({ horses, pace, gate, td, tdNote, embedded }: {
   const lanes = useMemo(() => lanesOf(horses, hasGate), [horses, hasGate]);
   const unknown = horses.filter((h) => !h.f);
   const cur = sel != null ? horses.find((h) => h.no === sel) ?? null : null;
-  const tone = PACE_TONE[pace?.level ?? "unknown"];
+  const chipLevel = (paceType ? (paceType.key.split("_")[0] as PaceForecast["level"]) : pace?.level) ?? "unknown";
+  const tone = PACE_TONE[PACE_TONE[chipLevel] ? chipLevel : "unknown"];
   const gtone = gate ? GATE_TONE[gate.level] : null;
   const TOP = 24, BOTTOM = 20;
   const toggle = (no: number) => { setSelFrom("chart"); setSel((s) => (s === no ? null : no)); };
   const toggleList = (no: number) => { setSelFrom("list"); setSel((s) => (s === no ? null : no)); };
-  const detailOf = (h: ForecastHorse) => <Detail h={h} gate={gate} td={td?.get(h.no)} fit={h.f ? paceFit(h.f.style_code, pace?.level, td?.get(h.no)?.ease_pct ?? null) : null} />;
+  const detailOf = (h: ForecastHorse) => <Detail h={h} gate={gate} td={td?.get(h.no)} scen={fitMap?.get(h.no) ?? null} fit={h.f ? paceFit(h.f.style_code, pace?.level, td?.get(h.no)?.ease_pct ?? null) : null} />;
   const hasTd = !!td && td.size > 0;
   const easeOf = (no: number) => td?.get(no)?.ease_pct ?? null;
 
@@ -190,13 +205,14 @@ export function PositionForecast({ horses, pace, gate, td, tdNote, embedded }: {
             {gtone.label}
           </span>
         )}
-        {pace && (
+        {(pace || paceType) && (
           <span style={{ marginLeft: gate && gtone && gate.level !== "na" ? 0 : "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 12px", borderRadius: 999, background: tone.bg, border: `1px solid ${tone.bd}`, color: tone.fg, fontWeight: 800, fontSize: 13 }}>
-            <span aria-hidden>{tone.icon}</span>ペース {pace.label}
+            <span aria-hidden>{tone.icon}</span>{paceType ? `展開 ${paceType.label}` : `ペース ${pace?.label ?? ""}`}
           </span>
         )}
       </header>
-      {pace && (
+      {paceType && <PaceTypePanel pt={paceType} />}
+      {!paceType && pace && (
         <p style={{ margin: "0 0 10px", fontSize: 12.5, color: "var(--text-dim)", lineHeight: 1.6 }}>
           {pace.note}
           <span style={{ marginLeft: 8, whiteSpace: "nowrap" }}>逃げ {pace.front_runner_count}頭・先行 {pace.stalker_count}頭（{pace.known_horses}/{pace.field_size}頭で判定）</span>
@@ -272,7 +288,7 @@ export function PositionForecast({ horses, pace, gate, td, tdNote, embedded }: {
       )}
       {tdNote}
       {cur && !(embedded && selFrom === "list") && detailOf(cur)}
-      {embedded && <HorseList horses={horses} pace={pace} td={td} narrow={narrow} sel={sel} onPick={toggleList} detail={(h) => (selFrom === "list" ? detailOf(h) : null)} />}
+      {embedded && <HorseList fitMap={fitMap} horses={horses} pace={pace} td={td} narrow={narrow} sel={sel} onPick={toggleList} detail={(h) => (selFrom === "list" ? detailOf(h) : null)} />}
     </section>
   );
 }
