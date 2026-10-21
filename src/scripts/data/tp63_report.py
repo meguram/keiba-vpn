@@ -24,6 +24,8 @@ KIND_JP = {
     "rf_deep_cal": "ランダムフォレスト（深い: 深さ 14、120 本、較正つき）", "et_deep": "ExtraTrees（深さ 16、150 本、較正つき）", "rf_full": "ランダムフォレスト（深さ無制限）",
     "lgb_xendcg": "LightGBM ランキング（rank_xendcg）", "lgb_lambdarank": "LightGBM ランキング（lambdarank）", "lgb_surface": "LightGBM 芝・ダート別の専門モデル",
     "lgb_recent3": "LightGBM 直近 3 年だけで学習", "lgb_half2": "LightGBM 半減期 2 年の重み", "lgb_dart": "LightGBM dart", "logreg_l2": "ロジスティック回帰（L2）",
+    "lgb_qfeat": "LightGBM + レース質の事前確率 18 列を入力に足した全体モデル", "lgb_ctrl": "LightGBM 対照（V5 の設定のまま、1 seed、同じ入力）",
+    "lgb_retuned": "LightGBM 調整後（葉 7・feature_fraction 0.5・min_data 200・1000 ラウンド）", "lgb_retuned_v1(rounds500)": "LightGBM 調整後・木数不足版（葉 7・ff 0.5・500 ラウンド。木数の決め方の誤り、参考）",
     "lgb_split_dist": "LightGBM 距離帯別の専門モデル", "lgb_split_going": "LightGBM 馬場別の専門モデル", "lgb_split_class": "LightGBM クラス帯別の専門モデル",
     "lgb_q_pace": "LightGBM レース質（ペース段階）別の専門モデル（事前の確率で混合）", "lgb_q_pace_oracle": "同（実測の段階で選ぶ。オラクル＝上限、実運用では使えない）",
 }
@@ -111,7 +113,7 @@ def combos_table(res: dict) -> str:
     return r29._tbl(["組", "メンバー", "合成", "現行合成比 LOYO", "L3 型比 LOYO", "L3 型比 前進"], rows, ["s", "s", "s", "n", "n", "n"]) if rows else "<p>（未実施）</p>"
 
 
-def sweep_tables(sw: dict) -> str:
+def sweep_tables(sw: dict, tgt: str = "win") -> str:
     if not sw:
         return "<p>（未実施）</p>"
     cfgs = []
@@ -119,8 +121,8 @@ def sweep_tables(sw: dict) -> str:
         c = k.split("|")[0]
         if c not in cfgs:
             cfgs.append(c)
-    years = sorted({k.split("|")[1] for k in sw})
-    tgt = "win"
+    years = sorted({k.split("|")[1] for k in sw if k.endswith("|" + tgt)})
+    cfgs = [c for c in cfgs if any(f"{c}|{y}|{tgt}" in sw for y in years)]
     rows = []
     for c in cfgs:
         cells = []
@@ -133,9 +135,13 @@ def sweep_tables(sw: dict) -> str:
             ks = [x for x in r if x != "seconds"]
             kb = min(ks, key=lambda x: r[x]["all"])
             cells.append(f"{r[kb]['all']:.5f} @{kb}")
-            tot.append(r[kb]["all"])
-        rows.append([f"<code>{c}</code>"] + cells + [f"{sum(tot) / len(tot):.5f}" if tot else "-"])
-    return r29._tbl(["設定（学習率 3 倍の簡易設定、他は V5 の LightGBM と同じ）"] + [f"{y} の最良（LL @木数）" for y in years] + ["平均"], rows, ["s"] + ["n"] * (len(years) + 1))
+            if y in ("2022", "2023"):
+                tot.append(r[kb]["all"])
+        base = [sw[f"base|{y}|{tgt}"] for y in ("2022", "2023") if f"base|{y}|{tgt}" in sw]
+        bl = sum(min(r[x]["all"] for x in r if x != "seconds") for r in base) / len(base) if base else None
+        m = sum(tot) / len(tot) if len(tot) == 2 else None
+        rows.append([f"<code>{c}</code>"] + cells + [f"{m:.5f}" if m else "-", f"{m - bl:+.5f}" if (m and bl) else "-"])
+    return r29._tbl(["設定（学習率 3 倍の簡易設定、他は V5 の LightGBM と同じ）"] + [f"{y} の最良（LL @木数）" for y in years] + ["2022・23 の平均（選択）", "基準比"], rows, ["s"] + ["n"] * (len(years) + 2))
 
 
 def cond_sweep_table(sw: dict) -> str:
@@ -222,8 +228,10 @@ def build(d: Path) -> None:
 {combos_table(res)}
 <h2>4. ハイパーパラメータの調整履歴と感度</h2>
 {hist}
-<h3>主要パラメータを 1 つずつ動かした感度（勝率、valid 2022・2023）</h3>
-{sweep_tables(sw)}
+<h3>主要パラメータを 1 つずつ動かした感度（勝率、valid 2022・2023。2024 は確認）</h3>
+{sweep_tables(sw, "win")}
+<h3>同（複勝、valid 2022・2023）</h3>
+{sweep_tables(sw, "top3")}
 <h3>条件別の最適設定（同じ予測を条件で切って集計）</h3>
 {cond_sweep_table(sw)}
 {opt}

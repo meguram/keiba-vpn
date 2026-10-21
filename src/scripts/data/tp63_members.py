@@ -322,6 +322,8 @@ CONFIGS: dict[str, dict] = {
     "lgb_split_class": dict(recipe="lgb_split", numeric=False, params="lp", extra=dict(by="class")),
     # レース質の事前の確率（共有表の p_joint_*・p_lap_*・p_l3f_*。拡張窓で学習済みで as-of）を入力に足した全体モデル
     # 感度の掃引で決めた設定（tune/best_params.json: {"lgb": {...上書きするキー}, "n_rounds": 木数}）を、V5 と同じ入力・同じ学習率で使う
+    # 対照: V5 の LightGBM の設定のまま、1 seed・同じ入力（調整後メンバーとの比較用）
+    "lgb_ctrl": dict(recipe="lgb_binary", numeric=False, params="lp"),
     "lgb_retuned": dict(recipe="lgb_binary", numeric=False, params="tuned"),
     "lgb_qfeat": dict(recipe="lgb_binary", numeric=False, params="lp", xcols="quality"),
     "lgb_q_pace": dict(recipe="lgb_quality", numeric=False, params="lp", oracle="lgb_q_pace_oracle"),

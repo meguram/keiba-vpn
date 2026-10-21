@@ -25,7 +25,7 @@ except ImportError:      # ホストのリポジトリは書けないので、�
 
 OUT = mem.OUT / "tune"
 THREADS = int(os.environ.get("TP63_THREADS", 3))
-ITERS = [60, 100, 150, 200, 260, 330, 400]
+ITERS = [60, 100, 150, 200, 260, 330, 400, 500, 600]
 
 
 def _log(msg: str) -> None:
@@ -43,6 +43,15 @@ def sweep_configs(base: dict, which: list[str]) -> dict[str, dict]:
     if "l2" in which:
         for v in (10, 300):
             cfgs[f"l2={v}"] = {"lambda_l2": v}
+    if "combo" in which:
+        cfgs.update({
+            "combo=l7_ff5": {"num_leaves": 7, "feature_fraction": 0.5},
+            "combo=l7_ff5_md200": {"num_leaves": 7, "feature_fraction": 0.5, "min_data_in_leaf": 200},
+            "combo=l4_ff5": {"num_leaves": 4, "feature_fraction": 0.5},
+            "combo=l11_ff5": {"num_leaves": 11, "feature_fraction": 0.5},
+            "combo=l7_ff35": {"num_leaves": 7, "feature_fraction": 0.35},
+            "combo=l7_ff5_l2_30": {"num_leaves": 7, "feature_fraction": 0.5, "lambda_l2": 30},
+        })
     if "ff" in which:
         for v in (0.2, 0.5):
             cfgs[f"ff={v}"] = {"feature_fraction": v}
@@ -154,6 +163,34 @@ def cmd_pick(a) -> None:
     _log(f"採用する設定: {chosen}、木数 {rounds}（基準 LL {base:.5f}）")
 
 
+def cmd_pick2(a) -> None:
+    """組み合わせの掃引（tag）で、全設定のうち平均 LogLoss が最良のものを tune/best_params2.json に書く（木数 = 最良ラウンド × 3。簡易設定は学習率 3 倍）。"""
+    res = json.loads((OUT / f"sweep_{a.tag}.json").read_text(encoding="utf-8"))
+    years = sorted({k.split("|")[1] for k in res})
+    cfgs = {k.split("|")[0] for k in res}
+    over = sweep_configs({}, ["leaves", "combo"])
+    best = None
+    for c in cfgs:
+        vals, its = [], []
+        for y in years:
+            r = res.get(f"{c}|{y}|win")
+            if not r:
+                break
+            ks = [x for x in r if x != "seconds"]
+            kb = min(ks, key=lambda x: r[x]["all"])
+            vals.append(r[kb]["all"])
+            its.append(int(kb))
+        else:
+            if best is None or np.mean(vals) < best[0]:
+                best = (float(np.mean(vals)), float(np.mean(its)), c)
+    ll, it, c = best
+    ov = over.get(c, {})
+    out = {"lgb": ov, "n_rounds": int(min(1500, round(3 * it / 50) * 50)), "config": c, "ll": ll, "best_iter_fast": it,
+           "all": {k: None for k in cfgs}}
+    (OUT / "best_params2.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    _log(f"最良: {c} {ov} LL {ll:.5f} 木数(簡易)={it:.0f} → 木数 {out['n_rounds']}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -165,13 +202,15 @@ def main() -> None:
     s.add_argument("--threads", type=int, default=THREADS)
     s.add_argument("--max-rounds", type=int, default=400)
     s.add_argument("--fast", action="store_true")
+    p2 = sp.add_parser("pick2")
+    p2.add_argument("--tag", default="combo")
     pk = sp.add_parser("pick")
     pk.add_argument("--tag", default="base")
     w = sp.add_parser("show")
     w.add_argument("--tag", default="base")
     w.add_argument("--target", default="win")
     a = ap.parse_args()
-    {"sweep": cmd_sweep, "show": cmd_show, "pick": cmd_pick}[a.cmd](a)
+    {"sweep": cmd_sweep, "show": cmd_show, "pick": cmd_pick, "pick2": cmd_pick2}[a.cmd](a)
 
 
 if __name__ == "__main__":
