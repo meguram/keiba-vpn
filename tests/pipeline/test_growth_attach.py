@@ -95,3 +95,14 @@ def test_meta_has_level_table_and_attach_is_off_by_default(monkeypatch):
     monkeypatch.setenv(ga.ENV_FLAG, "1")
     monkeypatch.setattr(ga, "load_assets", lambda *_: None)                           # 設定が読めなければ何も付けず落ちない
     assert ga.attach_growth(resp, "2026-10-17") is resp and "growth" not in resp["predictions"][0]
+
+
+def test_missing_training_record_is_not_scored_as_no_improvement():
+    """追い切りの記録が無い馬は、寄与を 0 にして評価に含めず、注記を返す（『上積みが見えない』と読ませない）。"""
+    x = _x()
+    x["f_t4z_vs_self"] = None
+    g = ga.compute_growth(x, PARAMS, FakeBooster())
+    assert g["contributions"]["oikiri"] == 0.0 and g["coverage"]["oikiri"] is False
+    assert g["index"] == pytest.approx(1.1) and g["notes"] and "追い切り" in g["notes"][0]
+    assert all("追い切り" not in t for t in g["reasons"])
+    assert ga.compute_growth(_x(), PARAMS, FakeBooster())["notes"] == []

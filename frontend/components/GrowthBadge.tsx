@@ -54,7 +54,9 @@ function GrowthDetail({ g, meta, horse, onClose }: { g: Growth; meta?: GrowthMet
           <span style={{ color: "var(--text-dim)" }}>{indexLine(g)}</span>
         </div>
         {g.provisional && <p style={{ margin: "0 0 8px", color: "#fbbf24" }}>暫定（馬体重の発表待ち）: 馬体重を除いて計算しています。発表後（レースの約1時間前）に更新されます。</p>}
-        {noTl && <p style={{ margin: "0 0 8px", color: "var(--text-dim)" }}>追い切りの時計が取れていないため、追い切りの寄与は平均で置いています。</p>}
+        {(g.notes ?? []).length > 0
+          ? (g.notes ?? []).map((n) => <p key={n} style={{ margin: "0 0 8px", color: "#fbbf24" }}>{n}。</p>)
+          : noTl && <p style={{ margin: "0 0 8px", color: "var(--text-dim)" }}>追い切りの時計が取れていないため、追い切りの寄与は平均で置いています。</p>}
         {(g.reasons ?? []).length > 0 && (
           <ul style={{ margin: "0 0 8px", paddingLeft: 18 }}>
             {(g.reasons ?? []).map((r) => <li key={r}>{r}</li>)}

@@ -10,6 +10,7 @@ export type Growth = {
   contributions?: Record<string, number>;
   reasons?: string[];
   provisional?: boolean;
+  notes?: string[];                 // 評価に含められなかった要素の注記（例: 追い切りの記録なし）
   n_missing?: number;
   coverage?: Record<string, boolean>;
 };

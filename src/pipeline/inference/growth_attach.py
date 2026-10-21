@@ -145,9 +145,14 @@ def summarize(res: Mapping[str, Any], x: Mapping[str, Any], params: Mapping[str,
     if provisional:
         idx -= float(contrib.get("weight", 0.0))
         contrib["weight"] = 0.0
-    level = gi.stage_of_index(idx, params["thresholds"])
     cov = dict(res.get("coverage") or {})
     cov["oikiri"] = x.get("f_t4z_vs_self") is not None            # 追い切りの時計（馬別調教）があるか。評価・コメントだけでは『あり』にしない
+    notes: list[str] = []
+    if not cov["oikiri"]:                                         # 記録が無いことを『上積みが見えない』と読ませない: 寄与を 0 にして評価に含めない
+        idx -= float(contrib.get("oikiri", 0.0))
+        contrib["oikiri"] = 0.0
+        notes.append("追い切りの記録がないため、追い切りは評価に含めていません")
+    level = gi.stage_of_index(idx, params["thresholds"])
     reasons = []
     min_pts = float(params.get("reason_min_points", 0.3))
     for g in ("oikiri", "stage", "weight", "ped"):
@@ -162,6 +167,7 @@ def summarize(res: Mapping[str, Any], x: Mapping[str, Any], params: Mapping[str,
         "index": round(idx, 2), "stage": level, "label": gi.LABELS[level],
         "contributions": {k: round(float(v), 2) for k, v in contrib.items()},
         "reasons": [t for _, t in reasons[:3]],
+        "notes": notes,
         "provisional": bool(provisional),
         "n_missing": sum(1 for k in ("weight", "oikiri", "ped") if not cov.get(k)) + (1 if provisional and cov.get("weight") else 0),
         "coverage": {k: bool(v) for k, v in cov.items()},
