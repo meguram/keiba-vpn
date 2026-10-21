@@ -275,7 +275,7 @@ const TABLE_CSS = `
 `;
 
 /* ── 予測テーブル ── */
-function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null; bench?: ClassBenchmark | null; growthMeta?: GrowthMeta | null }) {
+function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta, today }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null; bench?: ClassBenchmark | null; growthMeta?: GrowthMeta | null; today?: { surface?: string; distance?: number } }) {
   const TH: React.CSSProperties = {
     padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-dim)",
     textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "normal", lineHeight: 1.25, background: "var(--surface2)", overflow: "hidden",
@@ -454,7 +454,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta }:
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>{ev.pl.text}</span></td>
                   <td className="sep" style={{ fontSize: 11, color: "var(--text-dim)" }}>{p.buy_tier ?? "-"}</td>
                 </tr>
-                <tr className="pt-r2" style={{ background: rowBgOf(p) }}><td colSpan={9}><PastRunStrip e={p.expected_megu} bench={bench} /></td></tr>
+                <tr className="pt-r2" style={{ background: rowBgOf(p) }}><td colSpan={9}><PastRunStrip e={p.expected_megu} bench={bench} today={today} /></td></tr>
                 </Fragment>
               );
             })}
@@ -496,7 +496,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta }:
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>複 {ev.pl.text}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
                 </tr>
-                <tr className="pt-r2" style={{ background: rowBgOf(p) }}><td colSpan={6}><PastRunStrip e={p.expected_megu} bench={bench} /></td></tr>
+                <tr className="pt-r2" style={{ background: rowBgOf(p) }}><td colSpan={6}><PastRunStrip e={p.expected_megu} bench={bench} today={today} /></td></tr>
                 </Fragment>
               );
             })}
@@ -537,7 +537,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta }:
                 <span style={{ color: "var(--text-dim)" }} title="想定複勝オッズ">複勝 {placeOdds(p)}</span>
                 {p.buy_tier && p.buy_tier !== "—" && <span style={{ color: "var(--text-dim)" }}>推奨 {p.buy_tier}</span>}
               </div>
-              <PastRunStrip e={p.expected_megu} bench={bench} />
+              <PastRunStrip e={p.expected_megu} bench={bench} today={today} />
             </div>
           );
         })}
@@ -658,7 +658,7 @@ function RacePanel({
         )}
         {pred && !failed && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
         {pred && !failed && (
-          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} bench={pred.class_benchmark} growthMeta={pred.growth_meta} />
+          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} bench={pred.class_benchmark} today={{ surface: race.surface, distance: Number(race.distance) || undefined }} growthMeta={pred.growth_meta} />
         )}
         {pred && !failed && preds.length > 0 && (
           <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />

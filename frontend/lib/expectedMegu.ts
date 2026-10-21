@@ -5,7 +5,7 @@ export type ExpectedMeguAdjust = { key: string; label: string; delta: number };
 /** 過去の 1 走（馬柱の 1 セル）。race_id 以降のレース情報は、実績の表が読めたときだけ付く */
 export type RecentRun = {
   date: string; value: number; low?: boolean;
-  race_id?: string; race_name?: string; round?: number; venue?: string; surface?: string; distance?: number; going?: string; grade?: string;
+  race_id?: string; cls?: string; race_name?: string; round?: number; venue?: string; surface?: string; distance?: number; going?: string; grade?: string;
   field?: number; finish?: number; pop?: number; jockey?: string; jw?: number; l3f?: number; passing?: string; bw?: number; bw_diff?: number; margin?: string;
 };
 

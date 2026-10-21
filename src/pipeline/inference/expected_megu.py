@@ -18,7 +18,7 @@ import math
 import re
 import threading
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from src.pipeline.inference import horse_growth as hg
 
@@ -333,7 +333,7 @@ def _load_year(year: int, base: Path) -> tuple[dict[str, list[Run]], str]:
     return out, latest
 
 
-DETAIL_COLS = ["race_id", "horse_id", "race_name", "round", "venue", "surface", "distance", "track_condition", "grade", "field_size",
+DETAIL_COLS = ["race_id", "horse_id", "race_name", "race_class", "round", "venue", "surface", "distance", "track_condition", "grade", "field_size",
                "finish_position", "popularity", "jockey_name", "jockey_weight", "last_3f", "passing_order", "weight", "weight_change", "margin"]
 
 
@@ -349,6 +349,17 @@ def _num(v: Any, nd: int | None = None) -> float | int | None:
 
 def _txt(v: Any) -> str | None:
     return None if v is None or v != v or str(v).strip() in ("", "nan", "None") else str(v).strip()
+
+
+def _class_label(row: Mapping[str, Any]) -> str | None:
+    """『2歳未勝利』『3歳以上1勝クラス』『G3』など、年齢つきのクラス名。読めなければ None（画面はレース名で代える）。"""
+    try:
+        from src.pipeline.inference import class_benchmark as cb
+
+        age, tier = cb.cell_of(row.get("race_class"), row.get("grade"), row.get("race_name"))
+        return cb.label_of(age, tier) if tier else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def race_details(pairs: Iterable[tuple[str, str]], base: Path | None = None) -> dict[tuple[str, str], dict]:
@@ -378,6 +389,7 @@ def race_details(pairs: Iterable[tuple[str, str]], base: Path | None = None) -> 
             if key[0] not in by_horse.get(key[1], ()):
                 continue
             out[key] = {
+                "cls": _class_label(row),
                 "race_name": _txt(row.get("race_name")), "round": _num(row.get("round")), "venue": _txt(row.get("venue")),
                 "surface": _txt(row.get("surface")), "distance": _num(row.get("distance")), "going": _txt(row.get("track_condition")),
                 "grade": _txt(row.get("grade")), "field": _num(row.get("field_size")), "finish": _num(row.get("finish_position")),

@@ -186,3 +186,14 @@ def test_attach_adds_class_benchmark_when_the_class_is_known(tmp_path, monkeypat
     assert b["label"] == "3歳未勝利" and b["line"] == 35.0 and b["median"] == 40.0 and b["n"] == 99 and b["period"] == "2023-2025"
     card2 = {"race_class": "", "grade": "", "race_name": "謎のレース", "surface": "芝", "distance": 1600}
     assert "class_benchmark" not in em.attach_expected_megu({"predictions": [{"horse_number": 1, "horse_id": "A"}]}, "2025-05-01", base=tmp_path, card=card2)
+
+
+def test_recent_runs_get_age_and_class_label(tmp_path):
+    em._cache.clear()
+    _write_tables(
+        tmp_path,
+        [{"race_id": "202501010101", "horse_id": "A", "megu_index_v3a_abs_robust": 55.0, "megu_v3a_status": "ok", "megu_v3a_low_confidence": False}],
+        [{"race_id": "202501010101", "horse_id": "A", "date": "2025-01-10", "race_name": "3歳以上1勝クラス", "race_class": "3歳以上1勝クラス", "grade": "", "finish_position": 2}],
+    )
+    out = em.attach_expected_megu({"predictions": [{"horse_number": 1, "horse_id": "A"}]}, "2025-05-01", base=tmp_path)
+    assert out["predictions"][0]["expected_megu"]["recent"][0]["cls"] == "3歳以上1勝クラス"

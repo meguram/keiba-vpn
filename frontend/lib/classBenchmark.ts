@@ -16,7 +16,7 @@ export const clearsLine = (value: number | null | undefined, b?: ClassBenchmark 
 
 export type PassState = { kind: "above" | "below" | "none"; best: number | null; gap: number | null };
 
-/** 直近の走（最大5走）の最高指数が突破ライン以上か。走が無い・基準が無いときは none。 */
+/** 渡された走（呼び出し側で同条件の走に絞る）の最高指数が突破ライン以上か。走が無い・基準が無いときは none。 */
 export function passState(runs: RecentRun[] | undefined, b?: ClassBenchmark | null): PassState {
   const vals = (runs ?? []).slice(0, 5).map((r) => r.value).filter((v) => Number.isFinite(v));
   if (!b || !vals.length) return { kind: "none", best: vals.length ? Math.max(...vals) : null, gap: null };
