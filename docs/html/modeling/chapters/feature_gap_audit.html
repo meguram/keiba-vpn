@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>特徴量のやり残しの棚卸し— keiba-vpn</title>
+<style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 22px 0 8px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; } th { background: #1b2a4d; }
+.muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }</style></head>
+<body><a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>特徴量のやり残しの棚卸し（モデルを作り直す前に）</h1>
+<p class="muted">2026-10-21、ユーザー依頼『モデルを作り直す前に、特徴量の部分でまだやり残していることがないかを確認してほしい』への回答。資料: <a href="feature_investigation_catalog.html">特徴量調査の総覧</a>・<a href="training_pipeline_decisions.html">決定ログ</a>・<a href="research_overview.html">調査の全体像</a>、<code>src/scraper/schema_defs.json</code>（42 カテゴリ）、<code>src/pipeline/features/</code> のコード。読み取りと軽い照合だけで、学習や評価は走らせていない。効果の数字は<b>見込み</b>（過去の同種の群の実績からの目安）で、実測ではない。</p>
+
+<div class="note"><b>要点.</b>
+<ul>
+<li><b>試した群の総括</b>: 2026-10-16〜20 に約 100 群を 2 段階（valid 2022〜23 → 2024・新 seed）で調べ、V4 に入ったのは馬主系・補助ヘッド・G1 の 8 群・G3 の 7 群・種牡馬 ID×条件、V5 の追加は CY・ALL_BEST・追い切りの再取得版のみ。第 1 段で通っても第 2 段で再現しないものが大半で、<b>既存データの組み替えによる探索はほぼ頭打ち</b>。</li>
+<li><b>やり残しは「組み替え」ではなく「まだ特徴量にしていないデータ」と「新規データ」</b>。42 カテゴリを点検すると、①非 JRA（地方・海外）の過去走が履歴に入っていない、②馬ごとの 200m 区間ラップ・コース取り（<code>horse_lap</code>）が未使用、③母側・きょうだい（<code>broodmare_mating</code> ほか）が未使用、④併せ馬（<code>partner_notes</code>）が未使用、が見つかった。</li>
+<li>候補は 13 個（4 章）。<b>再学習の前にやる価値があるのは 6 個</b>（非 JRA 過去走、区間ラップ形状、母側・きょうだい、馬主の ID キー化、境界群の再結合、コース取り補正）。どれも見込みは勝率 LogLoss で −0.0001〜−0.0006 程度で、全部足しても −0.001 前後に留まる見込み。</li>
+<li><b>効果の桁が違う論点</b>: 2026 年のモデル−市場の差は 0.010〜0.013 に開いている（<a href="deployment_readiness.html">導入可否の確認</a>）。特徴量 1 群の見込み（≤0.0006）より、<b>2026 年を含めた再学習と学習窓・重みの設計</b>のほうが大きい可能性が高い。特徴量の追加は、その再学習に同梱できる形で進める。</li>
+<li>走行中の別調査（v6-features・feature-cross-search・handicapper-research）と重なるものは 3 章で除外した。予想家の調査の結果は 7 章に受け取る欄を用意した。</li>
+</ul></div>
+
+<h2>1. 試した特徴量の群・採否・増分の一覧</h2>
+<p class="muted">評価は V4（または当時の基準）に対する勝率 LogLoss の差（負が改善）。括弧は 95% 区間の上限。節は決定ログ（§N）。</p>
+<table>
+<tr><th>領域</th><th>試した群</th><th>結果（増分）</th><th>採否</th><th>節</th></tr>
+<tr><td>履歴の土台</td><td>馬の過去走プロファイル 127 列（A〜H の 11 ファミリー）</td><td>0.23375 → 0.22069（−0.0131）</td><td>採用（v1〜）</td><td>§3・§5</td></tr>
+<tr><td></td><td>speed_*、時代ずれ対策 6 通り、相関整理 92 列</td><td>−0.0004／悪化／悪化</td><td>不採用</td><td>§5</td></tr>
+<tr><td>前段・補助</td><td>前段 3 列（s_time_pred / s_time_gap / s_rank_pred）</td><td>−0.00086</td><td>採用</td><td>§6</td></tr>
+<tr><td></td><td>上がり・位置取り・ペース前段（P1・P3・P4、tp-25a/b）</td><td>−0.00005〜−0.00020（重複）</td><td>不採用</td><td>§6・§33</td></tr>
+<tr><td></td><td>補助ヘッド 27 列＋補助損失 NN（tp-25c/e）</td><td>−0.00095（上限 −0.00055）、LOYO −0.00026</td><td>採用</td><td>§33</td></tr>
+<tr><td>相対化・追い切り</td><td>レース内の相対化 42 列／追い切り評価・厩舎コメント 7 列</td><td>−0.00059／−0.00086</td><td>採用</td><td>§7・§9</td></tr>
+<tr><td></td><td>追い切りラップ TL_A 50 列</td><td>−0.00136（上限 −0.00106）</td><td>採用（再取得版へ差し替え、V5）</td><td>§17</td></tr>
+<tr><td></td><td>TL_B・tp-28 パターン別・tp-35 ラップ分類・tp-37 の 24 群</td><td>第 2 段 +0.00019〜−0.00011</td><td>不採用</td><td>§17・§33</td></tr>
+<tr><td></td><td>CY（今回サイクル内の推移 37 列、tp-40）</td><td>−0.00030（−0.00002）、初出走 −0.00159</td><td>V5 に採用</td><td>§38</td></tr>
+<tr><td>関係者</td><td>馬主系 4 群 125 列（馬主×条件・直近・日数・馬主×生産者）</td><td>−0.00226（−0.00182）</td><td>採用（最大）</td><td>§33</td></tr>
+<tr><td></td><td>騎手・調教師系、組み合わせ（jt/jh/to/tb/jo/jb）</td><td>上乗せなし</td><td>不採用</td><td>§33</td></tr>
+<tr><td>馬自身</td><td>G1 の 8 群 199 列（change・experience・lags_margin・pair・rest・seq_stats・timedev・attrs）</td><td>−0.00058（−0.00029）</td><td>採用</td><td>§33</td></tr>
+<tr><td></td><td>休養・間隔（tp-34）、馬具・初経験・輸送（tp-32/33）、出遅れ（G6、代理・実ラベル）</td><td>+0.00003〜+0.00019／FIRST −0.00021（境界）／−0.00073→−0.00005</td><td>不採用</td><td>§33</td></tr>
+<tr><td></td><td>成長曲線（tp-39、9 群）／めぐ指数のレースレベル（tp-42）</td><td>ALL_PASSED −0.00028（+0.00005）／RL_C −0.00026（+0.00006）</td><td>境界・保留</td><td>§33・§37</td></tr>
+<tr><td>レース・コース</td><td>G3 の 7 群 451 列（メンバー強度・通過・コース形状・枠 course_draw ほか）</td><td>−0.00071（−0.00043）</td><td>採用</td><td>§33</td></tr>
+<tr><td></td><td>コース類似・成績連動・期待外れ・コース特注（tp-15/26/29/31）、荒れ度（tp-30）</td><td>最良 −0.00019、荒れ度 +0.00013</td><td>不採用</td><td>§11・§33</td></tr>
+<tr><td></td><td>季節性・RD・近交係数・クッション値・後日談（tp-16/16b）</td><td>後日談 −0.00015（+0.00001）が最良</td><td>不採用（後日談は境界）</td><td>§13・§27</td></tr>
+<tr><td>血統</td><td>血統キー復旧＋種牡馬 ID×条件 32 列</td><td>−0.00044（−0.00025）</td><td>採用</td><td>§31・§33</td></tr>
+<tr><td></td><td>血統の位置・存在割合・クロス・類似種牡馬（tp-38）</td><td>個別は再現せず。ALL_BEST 43 列 −0.00031、複勝 −0.00209</td><td>V5 に採用（境界）</td><td>§36</td></tr>
+<tr><td></td><td>ドルメロ流（8 年周期）</td><td>−0.000005</td><td>不採用</td><td>§35</td></tr>
+<tr><td>その他の情報源</td><td>G4（SmartRC・テキスト・埋め込み・トリビア 30 群）</td><td>7 群同時 −0.00119、累積で通ったのは PED_sire_cond のみ</td><td>一部採用</td><td>§33</td></tr>
+<tr><td></td><td>似た馬（tp-41 SIM_*）、成長・体重（tp-57）、ラップ予想・追走難度 v2（tp-54/55）</td><td>第 2 段で再現せず／増分なし</td><td>不採用（表示・馬券側で採用）</td><td>§33</td></tr>
+<tr><td></td><td>ユーザーの予想手順 27 群（tp-56）</td><td>最良 −0.00016（区間 −0.00029〜−0.00003）</td><td>不採用</td><td>§33</td></tr>
+<tr><td>モデル構造</td><td>ID 埋め込み・注意機構・階層スタッキング・専用モデル・メタ学習（tp-51 の約 90 構成）</td><td>悪化〜±0.00003。境界は L3（勝率・連対のみ −0.00025）</td><td>不採用（L3 は境界）</td><td>§9〜§19</td></tr>
+</table>
+
+<h3>V5 の列の由来</h3>
+<table>
+<tr><th>由来</th><th>列数</th><th>備考</th></tr>
+<tr><td>V4 の入力列</td><td>1,062</td><td>tp-52 の基準 a_V4。総覧の 1,135 列との差（73 列）の内訳は未確認で、列の数え方は <a href="ensemble_v5.html">アンサンブル v5</a> を正とする</td></tr>
+<tr><td>追い切りの再取得版（tl_）</td><td>差し替え（列数は同じ）</td><td>TL_A を再取得したラップで作り直した版（<code>tp35/cand_TL_A_v2.parquet</code>）</td></tr>
+<tr><td>CY（今回サイクル内の推移）</td><td>37</td><td><code>tp40/groups/CY.parquet</code></td></tr>
+<tr><td>ALL_BEST（血統の位置ほか）</td><td>43</td><td><code>tp38_out/groups/{PX_cell_sd, PX_emb, PX_ridge_als}.parquet</code></td></tr>
+<tr><td>合計</td><td>1,142</td><td>V4 比 勝率 −0.00082（上限 −0.00056）、test 2025 は −0.00030（上限 −0.00001）</td></tr>
+</table>
+<p class="muted">注: 総覧 5 章の「枠バイアスの特徴量化（未着手）」は古い。G3 の <code>course_draw</code> が V4 に <code>fdr_*</code> 34 列として入っている（<code>serving_v4_columns.json</code> の field7）。
+
+総覧の更新時に直す。</p>
+
+<h2>2. データはあるのに特徴量にしていないもの（schema_defs.json の 42 カテゴリの点検）</h2>
+<p class="muted">コード（<code>src/pipeline/</code>・<code>src/scripts/data/</code>）への参照と、決定ログの記述で分類した。「未使用」は特徴量・モデルの入力としての参照が無いもの。</p>
+<table>
+<tr><th>分類</th><th>カテゴリ（フィールド）</th><th>状況</th><th>候補番号</th></tr>
+<tr><td>使用中</td><td>race_result／_on_time（着順・タイム・通過順・上がり・払戻）、race_shutuba／_meta、race_oikiri、race_trainer_comment、horse_training（時計・ラップ・評価）、horse_profile、horse_result／horse_race_history、horse_pedigree_5gen／10gen、race_performance（めぐ指数）、jra_cushion（tp-16 で評価）</td><td>履歴・追い切り・血統・馬主・レース環境の各群に使用</td><td>—</td></tr>
+<tr><td>使用したが採用ゼロ</td><td>smartrc_race（テン 1F ほか）、race_barometer（BARO_hist）、race_paddock（PADDOCK_hist）、race_index（speed_*）、horse_race_remarks の start/chase/closing_index</td><td>SmartRC は出走後の取得で先読みの疑い、バロメーター・パドックは当日／出走後の値で運用に使えない、speed は欠損が多く履歴が代替</td><td>13（SmartRC の前向き蓄積のみ）</td></tr>
+<tr><td><b>未使用（特徴量化の余地あり）</b></td><td><b>horse_lap</b>（馬ごとの 1F〜15F の区間タイム・内外・位置）、race_result_lap の <b>horse_laptime_table／entries_lap</b></td><td>参照は final_odds_dataset のコメントのみ。区間ごとの加減速・コース取り（内／中／外）を含む</td><td>2・6</td></tr>
+<tr><td></td><td><b>broodmare_mating</b>（母の種付け記録）、horse_profile の dam と horse_pedigree_5gen の mating_*</td><td>mating_date は血統の接木で使うのみ。同母のきょうだい・母の産駒数・母の年齢は未集計（決定ログに「きょうだい」の記述なし）</td><td>3</td></tr>
+<tr><td></td><td><b>horse_training.partner_notes</b>（併せ馬の相手・結果）</td><td>パーサーは保存しているが、特徴量コードに参照なし。leg_color・position・rider は使用済み</td><td>8</td></tr>
+<tr><td></td><td><b>非 JRA の過去走</b>（horse_race_history の地方・海外行）</td><td>母表は JRA のみ（<code>jra_only=True</code>）で、履歴特徴量も JRA の結果から作る。転入馬・外国馬の過去走は履歴に入らない可能性が高い（要確認）</td><td>1</td></tr>
+<tr><td></td><td>smartrc_prerace（出走前スナップショット）</td><td>蓄積中。馬具・初経験の前向き検証に使う</td><td>13</td></tr>
+<tr><td>重複・不要</td><td>race_detail（出馬表と同じ項目＋speed_*）、race_lap_on_time（69 件の advisory）、requirement_row_trace、race_lists、race_day_schedule</td><td>別カテゴリと同内容、またはメタ／運用用</td><td>—</td></tr>
+<tr><td>方針上使わない</td><td>race_odds／race_pair_odds／race_trifecta_odds、race_shutuba_past の marks（記者印）、final_odds_prediction、race_predictions、tracking_difficulty</td><td>市場オッズ・人気は特徴量にしない。記者印は市場に近い情報なので同様に扱う。後 3 者は出力</td><td>—</td></tr>
+</table>
+
+<h2>3. 実行中の調査と重なるため除外したもの</h2>
+<table>
+<tr><th>実行中の調査</th><th>含まれる範囲</th><th>この棚卸しでの扱い</th></tr>
+<tr><td>v6-features</td><td>前段・補助ヘッドの作り直し、シナリオ条件付き特徴、レース内の相対化、シナリオのエントロピーなどのメタ、補助タスク（ペース補正済みターゲットを含む）</td><td><b>重複あり</b>。候補にしない。ただし 6（コース取り補正）は「走破距離」を補正する別軸で、補助ターゲットの作り直しとは入力が違う</td></tr>
+<tr><td>feature-cross-search（tp-58）</td><td>交互作用・比率・差・積のクロス、SHAP 交互作用、手設計のクロス、FM／DCN 系メンバー</td><td><b>重複あり</b>。候補にしない（7 の適性平滑は交互作用ではなく単変量の平滑化）</td></tr>
+<tr><td>handicapper-research</td><td>予想家の観点の収集と頻度表、ギャップ分析</td><td><b>重複あり</b>。観点由来の候補は 7 章で受け取り、ここでは追加しない</td></tr>
+</table>
+
+<h2>4. やり残し候補（優先度順）</h2>
+<p class="muted">見込みは勝率 LogLoss の差（V5 基準、全体）。過去の実績から、1 群が 2 段階を通って採用される確率は 1 割に満たない。表の「再学習との関係」は 5 章を参照。</p>
+<table>
+<tr><th>#</th><th>候補</th><th>見込み</th><th>工数</th><th>既存データで作れるか</th><th>再学習との関係</th></tr>
+<tr><td>1</td><td>非 JRA（地方・海外）の過去走を履歴に取り込む</td><td>−0.0001〜−0.0004（対象は転入馬・外国馬の初戦〜数戦。対象行では大きい）</td><td>中</td><td>可（horse_race_history の非 JRA 行。被覆を要確認）</td><td>前</td></tr>
+<tr><td>2</td><td>馬ごとの 200m 区間ラップ形状（加速型・持続型、最速区間の位置、直線の加速、コーナーの減速）の履歴</td><td>−0.0002〜−0.0006</td><td>中</td><td>可（horse_lap・horse_laptime_table。被覆と取得時期を要確認）</td><td>前</td></tr>
+<tr><td>3</td><td>母側・きょうだい（同母産駒の成績、母の産駒数・年齢・初仔、同母の距離適性）</td><td>全体 −0.0001〜−0.0003（初出走・新馬で −0.001〜−0.003）</td><td>中</td><td>可（broodmare_mating、horse_pedigree_5gen の dam。母の ID 化が要る）</td><td>前</td></tr>
+<tr><td>4</td><td>馬主の ID キー化（owner_id）</td><td>0〜−0.0003（最大効果群 −0.00226 の品質向上）</td><td>大（約 39,000 頭の再取得）</td><td>一部（解析は実装済み。実 HTML の確認と再取得が要る）</td><td>前（取得に時間がかかるので先に着手）</td></tr>
+<tr><td>5</td><td>境界群の再結合（FIRST、後日談 AF、ALL_PASSED、RL_C）を V5 に累積</td><td>−0.0002〜−0.0004（重複で縮む。相関 0.86 の組あり）</td><td>小</td><td>可（全て構築済み）</td><td>前（選択バイアスに注意）</td></tr>
+<tr><td>6</td><td>コース取り（内外）による実質走行距離で補正した走破タイム（前段・補助の目的変数側）</td><td>−0.0001〜−0.0003</td><td>中</td><td>可（2 と同じデータ）</td><td>前（2 の後。v6 の補助作り直しと入力が異なる）</td></tr>
+<tr><td>7</td><td>距離・馬場・競馬場の適性を隣接条件から借りて滑らかに推定（カーネル平滑・階層ベイズ）</td><td>−0.0001〜−0.0003</td><td>中</td><td>可</td><td>後</td></tr>
+<tr><td>8</td><td>併せ馬（相手の格、先着・同入・遅れ）</td><td>−0.0001〜−0.0002（TL_A・CY と重複する恐れ）</td><td>中（テキストのパース）</td><td>可（partner_notes。相手の ID 化は要確認）</td><td>後</td></tr>
+<tr><td>9</td><td>騎手・調教師の位置取り傾向（騎手が馬の脚質を変える度合い）</td><td>−0.0001〜−0.0002</td><td>小</td><td>可（通過順）</td><td>後</td></tr>
+<tr><td>10</td><td>セリ取引価格・馬体測定（新馬・初出走向け）</td><td>全体 −0.0001〜−0.0004（初出走 −0.001〜−0.003）</td><td>大（新規取得）</td><td>不可（JRHA／JBIS 等の外部）</td><td>後（方針の確認も要）</td></tr>
+<tr><td>11</td><td>外厩・放牧先（休み明けの調整先）</td><td>−0.0001〜−0.0004</td><td>大</td><td>不明（取得元の調査から）</td><td>後</td></tr>
+<tr><td>12</td><td>気象（降水・気温・風）の当日値</td><td>−0.0001〜−0.0003（馬場状態・含水率で大半が吸収済みの見込み）</td><td>大（外部データ）</td><td>不可</td><td>後</td></tr>
+<tr><td>13</td><td>馬具・初経験の前向き検証（出走前の SmartRC）</td><td>FIRST −0.00021 の再確認のみ</td><td>小（蓄積待ち）</td><td>蓄積中</td><td>後（データ待ち）</td></tr>
+</table>
+
+<h3>候補ごとの先読みリスクと評価計画（2 段階）</h3>
+<p class="muted">共通: 統計量は「そのレース日より前」だけで作り（as-of）、厳密一致と先読みのテストを付ける。第 1 段 = valid 2022＋2023（V5 の 1,142 列に群を足す）、第 2 段 = 2024 と新しい seed。採用基準は総覧 1 章（上限 &lt; 0、効果 ≥ 0.0002、連対・複勝の悪化 ≤ 0.0002）。通過群は累積（tp-27）と LOYO で最終確認。test 2025 と 2026 年は選択に使わない。</p>
+<table>
+<tr><th>#</th><th>必要データ・取得</th><th>先読みリスクと対策</th><th>評価の特記</th></tr>
+<tr><td>1</td><td>horse_race_history の非 JRA 行（race_id の場コードで判別）。着順・着差・上がりは JRA と同じ形式か要確認</td><td>低。過去走のみ。地方の着順・タイムは JRA の指数と尺度が違うので、まず「地方走の回数・直近の着順・格」の素朴な列から</td><td>対象行（転入馬・外国馬）と全体の両方で報告。対象行は少ないので区間が広い→レース単位の bootstrap</td></tr>
+<tr><td>2</td><td>horse_lap／horse_laptime_table（GCS）。2020〜2026 年の被覆をまず read-only で数える</td><td>低（過去走のみ）。ただし取得率が年で違えば時代の見分け特徴になる→年別の取得率を確認（毛色・old_pr の前例）</td><td>BARO_hist（バロメーターの履歴）と一部重なる。BARO_hist の個別結果は決定ログに無いので、同条件で再評価して差を見る</td></tr>
+<tr><td>3</td><td>母の ID 化（dam の horse_id）→ 同母産駒の過去走を horse_result から集計</td><td><b>中</b>。同母の「弟妹」の成績を使うと将来の結果が混ざる→対象馬の生まれ年より前（年上のきょうだい）かつレース日より前に限る。厳密一致テスト必須</td><td>初出走・新馬戦・履歴 3 走未満の層別を必須で報告（CY・ALL_BEST と効く層が同じ→足し算にならない恐れ）</td></tr>
+<tr><td>4</td><td>馬のページの /owner/ID/ から owner_id。実 HTML の確認 → 再取得（ホスト、取得系は同時 1 本）</td><td>低。ただし取得時点の馬主は過去走時点と違う可能性（馬主は取得時点の値）→ 取得日付き</td><td>馬主シャッフルの対照検査を再実行。名前キー版との差分を主指標</td></tr>
+<tr><td>5</td><td>構築済みの列（FIRST は tp32、AF は tp-16b、ALL_PASSED は tp-39、RL_C は tp-42）</td><td>低。選択バイアス: 各群は既に「境界」として選ばれている→第 2 段以降の評価年は、これまで境界判定に使っていない年（2022・2023 の逆順など）を使う</td><td>相関の高い組（GR_mga と RL_C は 0.86）は片方だけ。多重比較は件数を記録</td></tr>
+<tr><td>6</td><td>2 のデータ。内外の位置から実質距離のロスを推定</td><td>低（過去走の補正は as-of）。今回のレースの値は使わない</td><td>前段 s_time_gap の MAE と、M1 への増分の両方</td></tr>
+<tr><td>7</td><td>既存データ</td><td>低</td><td>aff_* の離散ビンと同じ入力なので、差が出なければ打ち切り</td></tr>
+<tr><td>8</td><td>partner_notes のテキストを正規化（相手名・「先着」「遅れ」）</td><td>低（追い切りは出走前）</td><td>TL_A・CY を入れた状態で評価（V5 の列がすでに入っている）</td></tr>
+<tr><td>9</td><td>既存データ</td><td>低</td><td>mem_style との重複を相関で先に確認</td></tr>
+<tr><td>10</td><td>JRHA セリ結果等。馬の同定（馬名・生年・父母）が必要</td><td>中。購買額は市場の評価に近い。市場オッズ・人気ではないが、方針の確認が要る</td><td>初出走・新馬戦での評価が中心。取得の前にユーザー確認</td></tr>
+<tr><td>11</td><td>取得元の調査から（netkeiba の調教ページに放牧先が出るか未確認）</td><td>低〜中（出走前の情報であること）</td><td>休み明け初戦の層で評価</td></tr>
+<tr><td>12</td><td>気象庁の観測値（前日までの降水・当日朝の実況）</td><td>中（予報と実況の混同。当日朝の実況だけに限る）</td><td>馬場状態・含水率を入れた状態で評価</td></tr>
+<tr><td>13</td><td>smartrc_prerace を 2〜3 開催週（約 1,000 頭以上）蓄積</td><td>低（出走前の値で検証できる）</td><td>蓄積後に FIRST と馬具を 1 回だけ評価</td></tr>
+</table>
+
+<h2>5. 再学習の前にやるべきもの／後でよいもの</h2>
+<h3>前（再学習に同梱できるもの）</h3>
+<ul>
+<li><b>データの被覆確認（読み取りのみ、半日）</b>: 非 JRA 過去走（1）、horse_lap（2）、母 ID（3）の年別の取得率。足りなければ取得の依頼を先に出す（取得系は同時 1 本）。</li>
+<li><b>馬主 ID の再取得の開始（4）</b>: 取得に時間がかかるので、評価より先に走らせておく。</li>
+<li><b>1・2・3・5・6 を第 1 段で評価</b>（各 1 日程度、ホストの共有スロットで直列）。通ったものだけ第 2 段へ。v6-features・feature-cross-search の結論が出たあとに、同じ基準（V5 の列に足す）でそろえる。</li>
+<li><b>学習側の設計を決める</b>（特徴量より効く可能性）: 2026 年を学習に含めるか（ユーザー判断待ち）、学習窓と新しい年の重み、2027-01-01 前の PX 状態（<code>build_px_state --windows</code>）、前段・補助ヘッド・最終オッズモデルの作り直し。</li>
+<li>総覧 5 章の更新（枠バイアスは V4 に入っている、上記の候補の追記）。</li>
+</ul>
+<h3>後でよい</h3>
+<ul>
+<li>7・8・9（見込み −0.0002 以下、既存の群と重なる恐れ）。</li>
+<li>10・11・12（新規データの取得が要る。10 は方針の確認も要る）と 13（データ待ち）。</li>
+<li>馬券側のデータ（直前オッズ T-10/5/2、実オッズ）は特徴量ではないので、この表の対象外。</li>
+</ul>
+<p class="muted">実行順の案: ①被覆確認 → ②1・5（既存データで最短）→ ③2・6 → ④3 → ⑤第 2 段 → ⑥通過群を V5 に累積して LOYO。ホストの重い処理は <code>/tmp/heavy_run.sh</code> 経由（共有 3 スロット、threads ≤4）。</p>
+
+<h2>6. 限界</h2>
+<ul>
+<li>見込みの数字は実測ではない。過去の「第 1 段で通って第 2 段で再現しない」率が高いので、実際に採用に至るのは 13 個のうち 1〜3 個と見る。</li>
+<li>horse_lap の被覆、非 JRA 行の中身、partner_notes のパース成功率は未確認（読み取りだけでは数えていない）。</li>
+<li>G4 の個別群（BARO_hist・PADDOCK_hist・TXT_*・EMB_* など）の結果は決定ログに群別で残っていない。重なりの判断はコードの定義からの推定。</li>
+</ul>
+
+<h2>7. 予想家の調査（X・ブログ・note）の結果を受け取る欄</h2>
+<p class="muted">fork <code>handicapper-research</code> が、レース名で検索して予想の考え方を集めている（X の本文は取得できないため、記事・ブログ・note 経由）。結果が出たら、観点の頻度表のうち「モデルの特徴量に無いもの」をここに追記し、4 章の候補に加えるかを同じ形式（見込み・データ・先読み・評価計画）で判断する。</p>
+<table>
+<tr><th>観点</th><th>出現頻度</th><th>現行モデルの対応</th><th>候補化</th></tr>
+<tr><td colspan="4" class="muted">（調査完了後に記入）</td></tr>
+</table>
+
+<p class="muted">関連: <a href="feature_investigation_catalog.html">特徴量調査の総覧</a>・<a href="training_pipeline_decisions.html">決定ログ</a>・<a href="research_overview.html">調査の全体像</a>・<a href="ensemble_v5.html">アンサンブル v5</a>・<a href="deployment_readiness.html">導入可否の確認</a>・<a href="yosou_procedure.html">ユーザーの予想手順の再現（tp-56）</a></p>
+</body></html>

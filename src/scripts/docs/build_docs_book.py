@@ -266,6 +266,8 @@ PARTS: list[Part] = [
           [("pace_consistency", "想定位置取り・追走難度・想定上がりの連動の検証（tp-53）"), ("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("training_pipeline_decisions", "決定ログ")]),
         C("deployment_readiness", "各モデルの導入可否（精度が導入可能なレベルか）の確認。基準を 2026 年の結果を見る前に固定し、v4（現在画面に出ている予測）・v5・前段/補助ヘッド・予測最終オッズ・追走難度 v2/ペース v2/ラップ予想・期待値の較正と印・組合せ券の確率を、独立データの 2026 年で判定する。v4 は条件付き導入可（連対の悪化が基準を 0.00015 超過、被覆 96.7%、モデルと市場の差が月とともに拡大）、v5 は抜き取り 122 レースで v4 と同等以上だが優劣は示せない、複勝の期待値は最上位で実現を 0.20 上回る、予測最終オッズの単勝は不可。v5 を predict に切り替えてよいかの所見と、必要な改善の優先順。", "結果",
           [("ensemble_v5", "アンサンブル v5 の構成選択と最終学習（tp-52）"), ("ev_calibration_adopt", "期待値の較正（tp-49）"), ("lap_forecast", "ハロンごとのラップ予想（tp-55）"), ("tracking_difficulty_v2", "追走難度 v2（tp-54）"), ("exotic_bet_probabilities", "組合せ券の確率の作り方"), ("training_pipeline_decisions", "決定ログ")]),
+        C("feature_gap_audit", "モデルを作り直す前の特徴量のやり残しの棚卸し。試した群の採否・増分の総括、V5 の列の由来、schema_defs.json 42 カテゴリの未使用データ（非 JRA の過去走・馬ごとの区間ラップ・母側きょうだい・併せ馬）、実行中の調査（v6・交互作用・予想家）と重なるものの除外、やり残し候補 13 個（見込み・必要データ・先読みリスク・工数・2 段階の評価計画）と、再学習の前にやるもの・後でよいもの。特徴量 1 群の見込み（≤0.0006）より 2026 年を含めた再学習の設計のほうが効く可能性が高い、という整理。", "結果",
+          [("feature_investigation_catalog", "特徴量調査の総覧"), ("ensemble_v5", "アンサンブル v5（tp-52）"), ("deployment_readiness", "導入可否の確認"), ("training_pipeline_decisions", "決定ログ")]),
         C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",
           note="safe_ev を前提にした設計。tp-08 の実装は Benter ブレンドで、safe_ev は使っていない。",
           now=[("modeling_experiment_report", "tp-08 の結果")]),
