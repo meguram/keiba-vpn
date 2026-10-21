@@ -4,7 +4,10 @@ from __future__ import annotations
 import unittest
 
 from src.pipeline.inference import prediction_results as pr
-from src.utils.race_probabilities import KESI_MIN_POP, KESI_P3_MAX, assign_kesi_mark, assign_mece_marks
+from src.utils.race_probabilities import assign_kesi_mark, assign_mece_marks, kesi_config
+
+KESI_MIN_POP = int(kesi_config()["min_pop"])
+KESI_P3_MAX = float(kesi_config()["p3_max"])
 
 
 def _race(n: int = 16, with_pop: bool = True, low_from: int = 11) -> list[dict]:
@@ -111,6 +114,49 @@ class TestKesiMark(unittest.TestCase):
             assign_mece_marks(es)
             assign_kesi_mark(es)
         self.assertEqual([e["mark_type"] for e in with_pop], [e["mark_type"] for e in without])
+
+    def test_config_file_drives_threshold(self):
+        import json
+        import os
+        import tempfile
+
+        es = _race()
+        for e in es:
+            if e["horse_number"] >= KESI_MIN_POP:
+                e["top3_prob"] = 0.10                     # 現行のしきい値（8%）では付かない
+        assign_mece_marks(es)
+        assign_kesi_mark(es)
+        self.assertFalse(any(e["mark_type"] == "kesi" for e in es))
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "kesi.json")
+            json.dump({"version": 99, "p3_max": 0.12}, open(p, "w"))
+            old = os.environ.get("KEIBA_KESI_CONFIG")
+            os.environ["KEIBA_KESI_CONFIG"] = p
+            try:
+                es2 = [dict(e, mark_type="none") for e in es]
+                assign_kesi_mark(es2)
+                self.assertTrue(any(e["mark_type"] == "kesi" for e in es2))
+                self.assertEqual(kesi_config()["version"], 99)
+            finally:
+                if old is None:
+                    os.environ.pop("KEIBA_KESI_CONFIG", None)
+                else:
+                    os.environ["KEIBA_KESI_CONFIG"] = old
+        self.assertEqual(kesi_config()["version"], 2)   # 環境変数を戻せば config/kesi_mark.json に戻る
+
+    def test_missing_config_falls_back_to_defaults(self):
+        import os
+
+        old = os.environ.get("KEIBA_KESI_CONFIG")
+        os.environ["KEIBA_KESI_CONFIG"] = "/nonexistent/kesi.json"
+        try:
+            self.assertEqual(kesi_config()["version"], 0)
+            self.assertEqual(kesi_config()["p3_max"], 0.08)
+        finally:
+            if old is None:
+                os.environ.pop("KEIBA_KESI_CONFIG", None)
+            else:
+                os.environ["KEIBA_KESI_CONFIG"] = old
 
     def test_idempotent(self):
         es = _race()

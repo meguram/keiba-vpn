@@ -287,11 +287,36 @@ def assign_mece_marks(entries: list[dict], situational: bool | None = None, cfg:
 # 消印: 『3 着以内に来る確率が低い』と過去の実績から確信を持って言える馬。目標は人気区分別（ユーザー確定 2026-10-21）:
 #   1〜5 人気 ≤10%（V4 の複勝確率や消し要因の信号を足した分類器でも、10% 以下と言える集合は見つからなかったので付けない）
 #   6〜9 人気 設定なし（付けない）／ 10 人気以下 ≤5%
-# 10 人気以下は、複勝確率 ≤ KESI_P3_MAX の馬に付ける。しきい値は、設計年（2022〜23）で『実績の 3 着内率の Clopper-Pearson 上側 95% 限界が 3% 以下』
-# になる最大値（目標 5% に対する余裕。ユーザーが最初に挙げた 3% を内部の基準にした）。確認 2024・参考 2025・最終 2026 はこの値の検証だけに使う。詳細と検証は docs/html/modeling/chapters/kesi_mark.html。
-KESI_MIN_FIELD = 8
-KESI_MIN_POP = 10
-KESI_P3_MAX = 0.08
+# 10 人気以下に付ける水準（min_field・min_pop・p3_max）は config/kesi_mark.json（環境変数 KEIBA_KESI_CONFIG で別ファイルも可）から読む。
+# しきい値 p3_max は、設計年（2022〜23）で『実績の 3 着内率の Clopper-Pearson 上側 95% 限界が 3% 以下』になる最大値付近を、
+# 追加した断面（確率の区間ごとの 3 着内率が 5% を超えない上限、期間間の安定、買い目への影響）で確認して決めた（tp67_opt、章 kesi_mark.html）。
+_KESI_DEFAULT = {"version": 0, "min_field": 8, "min_pop": 10, "p3_max": 0.08, "main_marks": ["honmei", "pair", "show_val", "star"],
+                 "evidence": {"past_rate_text": "約2.5%"}}
+_kesi_cache: dict = {}
+
+
+def kesi_config() -> dict:
+    """消印の設定（config/kesi_mark.json）。ファイルが無い・壊れているときは既定値（version 0）。ファイルの更新時刻で読み直す。"""
+    import json
+    import os
+    from pathlib import Path
+
+    path = Path(os.environ.get("KEIBA_KESI_CONFIG") or Path(__file__).resolve().parents[2] / "config" / "kesi_mark.json")
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return dict(_KESI_DEFAULT)
+    hit = _kesi_cache.get(str(path))
+    if hit and hit[0] == mtime:
+        return hit[1]
+    try:
+        cfg = {**_KESI_DEFAULT, **json.loads(path.read_text(encoding="utf-8"))}
+    except (OSError, ValueError):
+        cfg = dict(_KESI_DEFAULT)
+    _kesi_cache[str(path)] = (mtime, cfg)
+    return cfg
+
+
 KESI_MAIN_MARKS = ("honmei", "pair", "show_val", "star")
 
 
@@ -322,28 +347,31 @@ def _popularity_order(entries: list[dict]) -> list[dict] | None:
 def assign_kesi_mark(entries: list[dict]) -> str | None:
     """消印（mark_type='kesi'）を付与（in-place。複数頭可、0 頭のレースもある）。assign_mece_marks の後に呼ぶ。
 
-    10 番人気以下（単勝オッズ順。実オッズがなければ予測オッズ）で、複勝確率（top3_prob）が KESI_P3_MAX 以下の馬。◎○▲★の付いた馬には付けない
-    （△は消に置き換える）。8 頭未満、または全頭の単勝オッズ（人気）が揃わないときは付けず、その理由を返す。付けた馬には kesi_reason（根拠の短文）を入れる。
+    10 番人気以下（単勝オッズ順。実オッズがなければ予測オッズ）で、複勝確率（top3_prob）が設定の p3_max 以下の馬（config/kesi_mark.json）。
+    ◎○▲★の付いた馬には付けない（△は消に置き換える）。min_field 頭未満、または全頭の単勝オッズ（人気）が揃わないときは付けず、その理由を返す。
+    付けた馬には kesi_reason（根拠の短文）を入れる。
     """
+    cfg = kesi_config()
+    min_field, min_pop, p3_max = int(cfg["min_field"]), int(cfg["min_pop"]), float(cfg["p3_max"])
+    main_marks = tuple(cfg.get("main_marks") or KESI_MAIN_MARKS)
+    past = (cfg.get("evidence") or {}).get("past_rate_text") or "約2.5%"
     for e in entries:
         e.pop("kesi_reason", None)
-    if len(entries) < KESI_MIN_FIELD:
-        return f"{KESI_MIN_FIELD}頭未満のため付けません"
+    if len(entries) < min_field:
+        return f"{min_field}頭未満のため付けません"
     order = _popularity_order(entries)
     if order is None:
         return "単勝オッズ（人気）が揃っていないため付けません"
     for i, e in enumerate(order):
         pop = i + 1
-        if pop < KESI_MIN_POP or e.get("top3_prob") is None:
+        if pop < min_pop or e.get("top3_prob") is None:
             continue
-        if (e.get("mark_type") or "none") in KESI_MAIN_MARKS:
+        if (e.get("mark_type") or "none") in main_marks:
             continue
         p3 = _f(e, "top3_prob")
-        if p3 <= KESI_P3_MAX:
+        if p3 <= p3_max:
             e["mark_type"] = "kesi"
-            e["kesi_reason"] = (
-                f"{pop}番人気で複勝確率{p3 * 100:.0f}%。過去の実績では、{KESI_MIN_POP}番人気以下で複勝確率{KESI_P3_MAX * 100:.0f}%以下の馬が3着以内に来たのは約2.5%"
-            )
+            e["kesi_reason"] = f"{pop}番人気で複勝確率{p3 * 100:.0f}%。過去の実績では、{min_pop}番人気以下で複勝確率{p3_max * 100:.0f}%以下の馬が3着以内に来たのは{past}"
     return None
 
 

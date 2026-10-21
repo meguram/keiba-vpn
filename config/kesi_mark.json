@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "updated": "2026-10-21",
+  "min_field": 8,
+  "min_pop": 10,
+  "p3_max": 0.08,
+  "main_marks": ["honmei", "pair", "show_val", "star"],
+  "target_upper": 0.05,
+  "evidence": {
+    "model": "V4 OOF（tp-36 frame_all）。V5 に切り替わったら python -m src.scripts.data.tp67_opt recheck で再確認",
+    "periods": "設計2022-23 / 確認2024 / 参考2025 / 最終2026（3着内率の Clopper-Pearson 95% 上側限界）",
+    "rate": {"design": 0.0261, "confirm": 0.0232, "ref2025": 0.0260, "final2026": 0.0268},
+    "upper": {"design": 0.0283, "confirm": 0.0262, "ref2025": 0.0291, "final2026": 0.0306},
+    "past_rate_text": "約2.5%"
+  },
+  "alternatives": {
+    "conservative": {"p3_max": 0.05, "per_race": 2.55, "upper_max": 0.0205},
+    "aggressive": {"p3_max": 0.12, "per_race": 4.25, "upper_max": 0.0369}
+  },
+  "history": [
+    {"version": 1, "rule": "上位5人気のうち、◎○▲★以外で複勝確率が最小の1頭", "status": "廃止（未配備）", "result": "消印の馬の3着内率 28.6〜31.2%（目標 10% に届かず）"},
+    {"version": 2, "rule": "10人気以下で複勝確率が p3_max 以下（複数頭可）", "p3_max": 0.08, "status": "現行", "result": "3着内率 2.3〜2.7%、上側限界 3.1% 以下（目標 5%）"}
+  ]
+}
