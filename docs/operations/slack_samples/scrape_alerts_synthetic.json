@@ -1,0 +1,75 @@
+{
+  "text": "[緊急] スクレイピングの異常 6 件",
+  "attachments": [
+    {
+      "color": "#e01e5a",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*[緊急] スクレイピングの異常 6 件*"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*調教の取り直し が連続 3 回失敗*　［緊急・新規］\nHTTP 403"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*取得の停止の兆候（ネットワーク/アクセス拒否）*　［緊急・新規］\n調教の取り直し: HTTP 403"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*夜間の一括取得 が予定時刻から 95 分たっても始まっていない*　［注意・新規］\n最終実行 2026-10-18T18:00:00+09:00"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*取得の停止の兆候: 403/429/DNS 系の失敗が 6 件*　［緊急・新規］\nhttp_403=6, schema_validation=2"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*スキーマ違反が急増（24時間で 34 件、通常の中央値 3）*　［注意・新規］\nrace_shutuba 20, horse_result 14"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*調教データの被覆が低下（2026-10: 20%）*　［緊急・新規］\n下限 90%。調教系の特徴量が欠損のまま予測される"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*復旧しました*　old:x"
+          }
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "2026-10-18 21:30 JST"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

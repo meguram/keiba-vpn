@@ -494,4 +494,19 @@ def refresh_for_dates(dates: list[str], *, reason: str = "") -> dict:
         logger.warning("予測結果の集計を始められない (%s): %s", reason, exc)
         return {"status": "error", "error": str(exc)[:200]}
     logger.info("予測結果の集計 (%s): %s", reason, out)
+    _notify_final_days(out)
     return {"status": "ok", "days": out}
+
+
+def _notify_final_days(out: dict[str, str]) -> None:
+    """確定した日の結果通知（KEIBA_SLACK_NOTIFY=1 かつ KEIBA_SLACK_NOTIFY_ON_FINAL=1 のときだけ。1 日 1 回、失敗しても止めない）。"""
+    if os.environ.get("KEIBA_SLACK_NOTIFY") != "1" or os.environ.get("KEIBA_SLACK_NOTIFY_ON_FINAL") != "1":
+        return
+    try:
+        from src.scripts.data.daily_results_notify import run as notify_run
+
+        for d, v in out.items():
+            if str(v).startswith("final:"):
+                notify_run(d, send=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("結果通知に失敗（無視して続行）: %s", exc)
