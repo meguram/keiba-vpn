@@ -71,12 +71,66 @@ VPS ──5 分おき（HMAC 署名）──▶ GCP /ops/heartbeat（死活・�
 
 推奨の順（低リスク → 時間厳守）：`entries-sync` → `recent-retry` `barometer-retry` `daily-race-lists` `jra-baba-morning` → `race-odds-t60/t15`（1 開催週末）→ 直前オッズ → `race-weight-check`。
 
+**その前に 5.5 章の影モードで、ホストを止めずに VPS の取得を数日間見届ける（基準を満たすまでコードが担当の移譲を拒否する）。**
+
 1 タスクの切り替え手順（**ホストを先に止め、直後に VPS を始める**。二重取得より 1 回の取りこぼしの方が安全）：
 1. GCP の Scheduler（またはホスト）が積む準備をする：定期タスクは `python -m src.ops.fetch_plan recurring --task entries-sync`（10 分おき）、開催日は前日夜〜朝に `python -m src.ops.fetch_plan day --date YYYYMMDD [--late]`。`--dry-run` で件数を確認。
 2. `config/fetch_owner.json` の `agent_tasks` に追加してホストに反映（ステージ → メンテナンス窓の自動反映）。以後 `scripts/auto_scrape.sh` が該当タスクをスキップする（`race-odds-*` を移すとホストの `raceday-runner`、`race-weight-check` を移すと `raceday-weight-runner` もスキップ）。
 3. VPS：`/etc/keiba-fetch/fetch.env` を `KEIBA_FETCH_AGENT_ENABLED=1` にし、`publish_release.sh --fetch` で同じ `fetch_owner.json` を持つバンドルを配布 → `sudo bash vps_03_units.sh --enable-fetch-agent`。
 4. **並走の検証**：その日のスナップショット（`race_odds` の `snapshots` の phase と `snapshot_at`、`late_odds_report.py`）に欠けが無いか、`fetch_plan show --state failed` が空か、ハートビートが正常かを確認する。
 5. 問題があれば 6 章で戻す。
+
+## 5.5 影モード（ホストが取得を続けたまま、VPS の取得を数日間見届ける）
+
+**方針**: prod（VPS/GCP）で取得が数日間うまくいくのを見届けるまでは、stg（ホスト PC）の取得は止めない。そのために、ホストが取得を続けたまま、VPS の実行役が**同じ取得を並走**し、結果を本番ではなく `shadow/<日付>/` 以下に保存して、本番（ホストが取ったもの）と比べる。基準を満たすまで、**担当の移譲（`job_owner set`）・適用スクリプトの生成（`cutover_plan make`）・crontab の停止（`host_cron_switch.sh disable`）はコードが拒否する**（`--force` でも外せない）。
+
+### 仕組み
+| 部品 | 内容 |
+|---|---|
+| 有効化 | VPS の `/etc/keiba-fetch/fetch.env` に `KEIBA_FETCH_SHADOW_ENABLED=1`（既定 0）と `KEIBA_FETCH_AGENT_ENABLED=1`。GCP の予約ジョブ（`reserve-race-day` / `reserve-fetch-tasks`）の環境にも同じ `KEIBA_FETCH_SHADOW_ENABLED=1`（影のタスクを積むため）。**直前オッズ（T-10/5/2）を比べるなら VPS の `.env` にも `KEIBA_ODDS_LATE_SNAPSHOTS=1`**（無効だと取得せずスキップ扱いになり、スキップが 10% を超えると不合格） |
+| 対象 | `config/fetch_shadow.json` の `tasks`（軽いものだけ）: `entries-sync`、`race-odds-t60/t15/t10/t05/t02`、`race-weight-check`（3 回に 1 回に間引く）、`daily-race-lists`、`jra-baba-morning`、`recent-retry`、`barometer-retry`。`weekly-update` `raceday-evening` `new-horse-pedigree` など重い定期処理は**対象外**（影では実行しない。子プロセスも拒否する） |
+| タスク表 | 本番とは別の名前空間 `gs://BUCKET/ops/fetch_tasks_shadow/`。本番のタスク表・イベント（馬体重の検知→予測の起動）には触れない（`PrefixedStore` が他のキーを拒否） |
+| 書き込みの隔離 | 子プロセス（`KEIBA_FETCH_SHADOW=1`）は `shadow_storage.install()` で GCS の書き込み先を `shadow/<日付>/<本番と同じパス>` に付け替え、**それ以外の書き込み・削除・コピーは例外**。読み取りは本番をそのまま読む。コードの保証に加えて IAM でも守る（下の「事前」） |
+| 実行 | 同じ実行役が、本番のタスクが無いときに影のタスクを 1 本ずつ実行（メモリは 250M の枠内）。本番のタスクが優先。影のタスクは本番の計画に 5〜300 秒（タスクごと）のジッターを足して積むので、ホストと同じ秒には叩かない |
+| 上限 | 1 日の見積りリクエスト数が `max_requests_per_day`（既定 2,500）を超えるタスクは**取得せずスキップ**（失敗にはしない。スキップが 10% を超えた日は不合格） |
+| アクセス制限 | 403/429 や制限語を検知したら**即停止**し、`access_pause_seconds`（既定 3,600 秒。最低 1,800）claim を止め、Slack に注意を出す。1 日に 2 回で翌朝 6 時まで止める。**本番の実行役も同じ IP なので一緒に止まる**。状態は VPS のローカル（`data/local/meta/fetch_shadow/state.json`）に残り、再起動しても止まったまま |
+| 日次集計 | GCP の Run Job `fetch-shadow-report`（毎朝 07:30 JST）が前日分を `ops/fetch_shadow/daily/<日付>.json` に書き、Slack に要約を出す（`src/scripts/ops/shadow_report.py`） |
+
+### 本番との比較の規則（`shadow_report.py`）
+- `race_odds`: 同じ phase の本番スナップショット（最新が別の phase なら `snapshots` から探す）と、出走馬の集合が一致し、単勝オッズが相対 15% 以内の馬が 90% 以上（取得時刻の差を許す）。
+- `race_pair_odds`: 券種ごとに組合せの集合が一致し、オッズが相対 15% 以内のものが 90% 以上。
+- `race_shutuba`: 馬の集合と安定項目（馬番・枠・馬名・騎手・調教師・性齢）が一致。馬体重は両方に値があるときだけ比べる（片方が未発表なら無視）。
+- 一致率の基準は 95%、取得の成功率は 95%、アクセス制限の疑い・異常通知は 0 件。
+
+### 合格の基準（`config/fetch_shadow.json` の `pass`。`shadow_eval.py` が判定）
+直近 **5 日**（昨日まで）がすべて合格、うち**開催日を 1 日以上含む**こと。さらにジョブのタスクが `min_task_days` 日以上実行され、各日のそのタスクも合格であること。日次レポートが 1 日でも欠ける・読めないときは**不合格**（安全側）。影モードの対象外のタスクを含む VPS ジョブ（例: `weekly-update`）は、`config/gcp_job_map.json` のそのジョブに `"shadow": {"exempt": true, "reason": "…"}` を**人が**書くまで止められない（免除はユーザーの判断）。
+
+### リクエスト増の見積りと DEC-023
+- 目安（`est_requests` の合計。実測で置き換える）: 平日 約 250 件/日、開催日（36R）約 1,000 件/日（T-60 が 2、T-15 が 12、馬体重 約 4、直前を有効にすると +3 / レース）。**ホストと合わせて、その間は netkeiba への取得がほぼ 2 倍**になる。上限 2,500 件/日はこの 2.5 倍。
+- DEC-023（同じ時刻に叩かない）は、ジッター（ホストの計画時刻に 5〜300 秒を足す）と、1 日の上限、アクセス制限での即停止で守る。**影モードを動かす間は、ホストの重い取得（バックフィル）を同じ時間帯に走らせない**。長い影の期間は不要（5 日 + 開催日）なので、判定が揃ったら止める。
+
+### 手順
+**事前（ユーザー・1 回）**
+1. GCS の IAM: 影モードの VPS 実行役のサービスアカウントには、通常の書き込み権限（`ops/fetch_tasks/` 等）に加えて、**`shadow/` と `ops/fetch_tasks_shadow/` 以下だけ**に書ける条件つきの `storage.objectUser` を付ける（IAM 条件 `resource.name.startsWith("projects/_/buckets/BUCKET/objects/shadow/")`）。本番のデータのパスには書き込み権限を付けない。これがコードの隔離の外側の保証になる。
+2. `config/fetch_shadow.json` の `tasks` と `limits` を確認（対象を減らす・上限を下げるのは安全側）。
+
+**開始**
+1. VPS の `fetch.env` に `KEIBA_FETCH_SHADOW_ENABLED=1`（と、直前オッズを見るなら `KEIBA_ODDS_LATE_SNAPSHOTS=1`）。`sudo systemctl restart keiba-fetch-agent`。ホストの `fetch_owner.json` の `agent_tasks` は**空のまま**（ホストが取得を続ける）。
+2. GCP の `reserve-race-day` / `reserve-fetch-tasks` の環境に `KEIBA_FETCH_SHADOW_ENABLED=1`。`python -m src.ops.reservations race-day --date YYYYMMDD --dry-run` の出力の `shadow_tasks` が 0 でないことを確認。
+3. `job_map` の `fetch-shadow-report` の `ready` を true にして Scheduler に載せる（`python -m src.ops.job_map ready fetch-shadow-report --note …`）。
+
+**確認（毎日）**
+- `python -m src.scripts.ops.shadow_report --yesterday --json`（またはその朝の Slack 要約）で `ok`、`success_rate`、`match_ratio`、`access_restrictions`、`skipped` を見る。
+- `python -m src.scripts.ops.cron_cutover_status` の各 VPS ジョブの `shadow_days`（足りない日数・不合格の理由が出る）。
+- `python -m src.ops.fetch_shadow status`（VPS で。当日の予算の消費・停止状態）。
+
+**終了（判定が揃ったら）**
+1. `cron_cutover_status` が `shadow_days` 合格になったジョブから、4 章の手順で担当を渡す（`cutover_plan make` → `_1_owner.sh`。ここで初めて `fetch_owner.json` の `agent_tasks` に載り、ホストの cron が見送る）。
+2. 担当を渡したタスクの影は自動で止まる（実行役が担当しているタスクは影の対象から外れる）。全部移し終えたら `KEIBA_FETCH_SHADOW_ENABLED=0` に戻す。`shadow/` 以下は 30 日で削除してよい（ライフサイクル規則を付ける）。
+
+**ロールバック（影モードをやめる）**
+- VPS の `KEIBA_FETCH_SHADOW_ENABLED=0` にして実行役を再起動、GCP の予約ジョブの環境からも外す。ホストの取得は最初から止めていないので、ほかの作業は不要。積み済みの影のタスクは放置でよい（期限が来ると失敗として記録されるだけで実行されない）。
+- アクセス制限の疑いで止まった場合: 自動で止まる。再開してよいと判断したら `data/local/meta/fetch_shadow/state.json` の `paused_until` を消して実行役を再起動。制限が続く（VPS の IP が制限されている）なら、`architecture_target.md` 5.1 のフォールバック（取得はホストに残す）に切り替える。
 
 ## 6. ロールバック
 

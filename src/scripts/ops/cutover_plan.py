@@ -12,6 +12,7 @@
 
 ホストに残すジョブ（destination=host。バックフィル・モデリング・遠隔アクセス・stg のデプロイなど）は対象外で、作れない。
 合格していない単位は ``--force`` が無い限り作らない（``--status-file`` は ``cron_cutover_status --json`` の出力）。
+ただし VPS の取得を含む単位は、影モード（``shadow_days``）の基準を満たすまで ``--force`` でも作らない。
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from src.ops import job_map
+from src.ops import job_map, shadow_eval
 
 DEFAULT_PROJECT_DIR = "/home/jovyan/work/keiba-vpn"
 
@@ -105,6 +106,8 @@ def render(unit_id: str, doc: dict[str, Any] | None = None, *, project_dir: str 
     v_tasks = vps_tasks(u["jobs"], doc)
     meta = dict(stamp=stamp, unit=unit_id, jobs=",".join(sorted(u["jobs"])), project=project_dir)
     s1 = HEADER.format(title=f"切替 1/2: {unit_id} の担当を {owner} に渡す（ホストの cron は何もしなくなる。crontab の行は残る）", **meta)
+    if "vps" in u["destinations"]:    # 影モード（ホストと並走の検証）の基準を満たすまで、何も変更せずここで止める
+        s1 += f'PYTHONPATH=. python3 -m src.ops.fetch_shadow can-switch {unit_id}\n'
     s1 += 'cp config/job_owner.json "$BK/job_owner.before_' + unit_id + '_$TS.json"\n'
     if v_tasks:
         s1 += 'cp config/fetch_owner.json "$BK/fetch_owner.before_' + unit_id + '_$TS.json"\n' + PY_ADD_AGENT.format(tasks=" ".join(v_tasks))
@@ -150,6 +153,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     status = json.loads(Path(ns.status_file).read_text(encoding="utf-8")) if ns.status_file else None
     ok, waiting = unit_status(status, ns.unit)
+    sok, sreasons = shadow_eval.status_gate(status, ns.unit, doc)   # --force でも外せない
+    if not sok:
+        print(f"作りません: {ns.unit} は影モード（VPS の取得をホストと並走で検証）の基準を満たしていません: " + " / ".join(sreasons), file=sys.stderr)
+        return 3
     if not ns.force and ok is not True:
         print(f"作りません: {ns.unit} は切替判定に合格していません（{'未評価（--status-file が必要）' if ok is None else '待ち: ' + ', '.join(waiting)}）。--force で強制できます", file=sys.stderr)
         return 3

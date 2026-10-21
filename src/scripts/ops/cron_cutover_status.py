@@ -8,6 +8,8 @@
 3. ``parity``                成果物があるジョブ（parity.kind ≠ none）は、``parity_min_days``（既定 3）回分の並走検証がすべて一致。
 4. ``no_alerts``             直近 ``window_days`` 日にそのジョブの Slack 異常通知（記録 ``ops/alerts/``）が ``max_alerts``（既定 0）件以下。
 5. ``raceday_t60_t15``       （race-odds-per-race のみ）直近 ``raceday_min_days`` 回の開催日で、**全レース**の T-60 / T-15 が成功し、失敗が 0。
+6. ``shadow_days``           （VPS ジョブで ``require_shadow`` のとき）影モード（ホストが取得を続けたまま VPS が並走）の日次レポートが、直近 N 日（既定 5、開催日を含む）
+                             すべて合格。**足りない・読めないときは不合格**。判定は ``src/ops/shadow_eval.py``。免除はジョブの ``shadow.exempt``（理由つき）だけ。
 ホストに残すジョブ（destination=host）は対象外（止めない）。``ready=false`` のジョブは『未着手』（理由つき）。
 同じ cron_job_id を持つジョブ（例: 朝・夕の daily-race-lists）は、**全部合格したときだけ**その cron_job_id を止めてよい（cut_unit）。
 
@@ -24,7 +26,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from src.ops import job_map
+from src.ops import job_map, shadow_eval
 from src.ops.gcs_io import BlobIO, read_json, write_json
 
 JST = ZoneInfo("Asia/Tokyo")
@@ -38,8 +40,20 @@ STATUS_KEY = "ops/cutover/status.json"
 class Records:
     """GCS の運用記録を読む（テストでは MemoryIO を渡す）。"""
 
-    def __init__(self, io: BlobIO) -> None:
+    def __init__(self, io: BlobIO, shadow_cfg: Any | None = None) -> None:
         self.io = io
+        self._shadow_cfg = shadow_cfg
+
+    @property
+    def shadow_cfg(self) -> Any:
+        if self._shadow_cfg is None:
+            from src.ops import fetch_shadow
+
+            self._shadow_cfg = fetch_shadow.load_config()
+        return self._shadow_cfg
+
+    def shadow_reports(self, now: datetime) -> dict[str, dict[str, Any]]:
+        return shadow_eval.load_reports(self.io, now, int(self.shadow_cfg.passing.get("required_days", 5)))
 
     def gcp_runs(self, job_id: str, limit: int = 40) -> list[dict[str, Any]]:
         keys = [k for k in self.io.list(f"ops/job_runs/{job_id}/") if not k.endswith("latest.json")]
@@ -180,6 +194,10 @@ def evaluate_job(job: dict[str, Any], doc: dict[str, Any], rec: Records, now: da
     mine = [a for a in alerts if a.get("job") in ids and a.get("severity") in ("warning", "critical")]
     mx = int(pol.get("max_alerts", 0))
     checks.append(_check("no_alerts", len(mine) <= mx, f"窓内の異常通知 {len(mine)} 件（上限 {mx}）" + (f"：{mine[0].get('title')}" if mine else "")))
+    if job["destination"] == "vps" and pol.get("require_shadow", False):
+        sc = shadow_eval.evaluate_job(job, doc, rec.shadow_reports(now), now, rec.shadow_cfg)
+        if sc is not None:
+            checks.append(sc)
     ok_all = all(c["ok"] for c in checks)
     row.update(state="合格" if ok_all else "不合格", reason=None if ok_all else "; ".join(f"{c['name']}: {c['detail']}" for c in checks if not c["ok"]))
     return row

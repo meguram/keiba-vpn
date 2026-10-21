@@ -173,7 +173,9 @@ bash scripts/gcp/deploy_cloud_run_jobs.sh run-now group g-pump --dry-run # 手�
 | 成果物の一致 | `parity.kind ≠ none` のジョブは直近 3 回（週次は 2 回）の並走検証がすべて一致 |
 | 異常通知ゼロ | 直近 14 日（週次は 35 日）に、そのジョブの警告以上の通知（`ops/alerts/`）が 0 件 |
 | 開催日の取得 | `race-odds-per-race`: 直近 3 回の開催日で**全レース**の T-60／T-15 が成功し、失敗が 0（レース数は `race_day_schedule` の枠数と照合） |
+| 影モード（`shadow_days`） | **VPS の取得ジョブのみ**（`require_shadow`＝既定 true）。ホストが取得を続けたまま VPS が並走した日次レポートが、直近 5 日（開催日を含む）すべて合格。足りない・読めないときは不合格。対象外のタスク（重い定期処理）は人が `shadow.exempt`（理由つき）を書くまで止められない。詳細: `vps_agent.md` 5.5 章 |
 | 対象外 | `host`（ホストに残す）は「N/A」、`ready=false` は「未着手」＋理由、`retire` は「対象外」 |
+- **VPS の取得を含む単位は、影モードの基準を満たすまで、担当の移譲（`job_owner set`）も `cutover_plan make`（`--force` でも）も `host_cron_switch.sh disable`（`can-stop`、終了コード 5/6）も拒否される。** 「prod で数日間データ取得が正常にクリアするのを見届けるまで、stg（ホスト）の取得は続ける」をコードで保証している。
 - 同じ `cron_job_id` を持つジョブ（例: 朝・夕の `daily-race-lists`、`raceday-runner`＝予約(GCP)＋オッズ(VPS)）は**全部合格したときだけ**止めてよい。
 - 結果は `--json`／`--markdown`／`--write`（`ops/cutover/status.json`）で出せます。実行は読み取りのみです。
 
@@ -210,6 +212,13 @@ sudo bash /tmp/cutover_drift-monitor-weekly_2_cron_off.sh  # ④ root で cronta
 `reserve-race-day` が前夜 19:10／19:40 に翌日の全レースのタスクを積みます。**この 2 つの tick の間か、その後〜翌朝 07:30 までに**切り替えてください（積む前に担当を渡すと、翌朝のホストの runner が止まり、タスクは積まれず、取得が空く）。開催日のない日に切り替えるのが最も安全です。
 
 ---
+
+### 4.8 影モード（VPS の取得をホストと並走で検証。取得ジョブの切替の前提）
+取得系（`entries-sync`・`race-odds-*`・`race-weight-check`・`daily-race-lists` など VPS の実行役に移すもの）は、GCP のジョブと違って**ホストと同じ netkeiba を叩く**ので、parity（成果物の一致）の代わりに「並走で数日間見届ける」を基準にする。
+- 仕組みと手順: `vps_agent.md` 5.5 章（有効化 `KEIBA_FETCH_SHADOW_ENABLED=1`、対象は `config/fetch_shadow.json`、書き込みは `shadow/<日付>/` だけ、1 日の上限・ジッター・アクセス制限での即停止、日次集計 `fetch-shadow-report`＝毎朝 07:30 JST）。
+- 切替の関門: `cron_cutover_status` の `shadow_days` → `cutover_plan make`（`--force` でも作らない）→ `_1_owner.sh` の先頭（`fetch_shadow can-switch`）→ `job_owner set` → `host_cron_switch.sh disable`（`can-stop`）。**どこを通っても、基準を満たす前は止まる**。
+- DEC-023: 影モードの間は netkeiba への取得がほぼ 2 倍になる（平日 約 250 件/日、開催日 約 1,000 件/日の見積り）。ジッターと上限で重ならないようにし、ホストのバックフィルと同じ時間帯に走らせない。
+- ロールバック: `KEIBA_FETCH_SHADOW_ENABLED=0`（ホストの取得は止めていないので他は不要）。
 
 ## 5. 運用（切替後）
 | 項目 | 内容 |

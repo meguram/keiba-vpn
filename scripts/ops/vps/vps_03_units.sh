@@ -67,6 +67,8 @@ write_if_missing 600 /etc/keiba-fetch/fetch.env <<'ENVF'
 KEIBA_ENV=prod
 KEIBA_RUN_LOCATION=vps
 KEIBA_FETCH_AGENT_ENABLED=0
+# 影モード: ホストが取得を続けたまま、同じ取得を shadow/ 以下へ並走して本番と比べる（docs/operations/vps_agent.md の影モードの章）。既定オフ
+KEIBA_FETCH_SHADOW_ENABLED=0
 GCS_BUCKET=
 GOOGLE_APPLICATION_CREDENTIALS=/etc/keiba-fetch/sa.json
 # netkeiba のログイン等（.env.example の NETKEIBA_* と同じ名前）はここにだけ置く

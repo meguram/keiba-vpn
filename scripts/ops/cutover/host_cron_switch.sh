@@ -9,7 +9,7 @@
 #   KEIBA-VPN-ALL のように多数のジョブが共有するタグは、タグだけでは選ばない（--job-id が必須）。
 # - 止め方: 行頭に `#KEIBA-CUTOVER:<ID># ` を付ける（enable はそれを外すだけ。元の行は一文字も変えない）。
 # - 毎回 crontab を data/local/meta/cron_backups/ に退避する。対象が 0 行、または --max-lines（既定 4）を超えるときは何もしない。
-# - disable は先に `python3 -m src.ops.job_owner can-stop <ID>` を通す（担当が GCP / VPS に渡っていて、ホストに残すジョブでないこと。
+# - disable は先に `python3 -m src.ops.job_owner can-stop <ID>` を通す（担当が GCP / VPS に渡っていて、ホストに残すジョブでなく、VPS の取得は影モードの基準を満たしていること。
 #   二重実行を避ける順序＝先に担当を渡し、観察してから行を止める）。--no-owner-check は検証用。
 # - 止めた後に戻すときは enable → `python3 -m src.ops.job_owner unset <ID>` の順（行を戻してから担当を外す）。
 set -euo pipefail
@@ -32,6 +32,10 @@ done
 case "$ACTION" in status|disable|enable) ;; *) echo "usage: $0 status|disable|enable --job-id ID [--tag TAG] [--dry-run]" >&2; exit 2 ;; esac
 [ -n "$ID" ] || { echo "--job-id は必須です" >&2; exit 2; }
 case "$ID" in *[!A-Za-z0-9._-]*) echo "job-id が不正です: $ID" >&2; exit 2 ;; esac
+
+if [ "$OWNER_CHECK" = 0 ] && [ -z "${CRONTAB_CMD:-}" ]; then
+  echo "--no-owner-check は検証用（CRONTAB_CMD で別の crontab を指すとき）にしか使えません。本番の crontab は担当と影モードの確認を必ず通します" >&2; exit 2
+fi
 
 MARK="#KEIBA-CUTOVER:${ID}# "
 CURRENT="$($CRONTAB -l 2>/dev/null || true)"
@@ -65,7 +69,7 @@ if [ "$ACTION" = disable ]; then
   [ "$n_active" -gt 0 ] || { echo "対象の有効な行がありません（job-id=${ID}）。何もしません" >&2; exit 3; }
   [ "$n_active" -le "$MAX_LINES" ] || { echo "対象が ${n_active} 行で --max-lines(${MAX_LINES}) を超えます。タグ/ID を見直してください" >&2; exit 4; }
   if [ "$OWNER_CHECK" = 1 ]; then
-    ( cd "$PROJECT_DIR" && PYTHONPATH="$PROJECT_DIR" python3 -m src.ops.job_owner can-stop "$ID" ) || { echo "担当がまだ GCP / VPS に渡っていない、またはホストに残すジョブです。止めません" >&2; exit 5; }
+    ( cd "$PROJECT_DIR" && PYTHONPATH="$PROJECT_DIR" python3 -m src.ops.job_owner can-stop "$ID" ) || { echo "担当がまだ GCP / VPS に渡っていない、ホストに残すジョブ、または VPS の取得が影モードの基準（数日間の並走検証）を満たしていません。止めません" >&2; exit 5; }
   fi
 else
   [ "$n_disabled" -gt 0 ] || { echo "戻す対象（#KEIBA-CUTOVER:${ID}# の行）がありません。何もしません" >&2; exit 3; }

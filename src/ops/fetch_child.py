@@ -10,6 +10,7 @@ auto_scrape.main() は例外を飲み込んで終了コード 0 を返すため�
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -17,8 +18,27 @@ from datetime import datetime, timezone
 RESULT_PREFIX = "FETCH_RESULT "
 
 
+def _shadow() -> bool:
+    return os.environ.get("KEIBA_FETCH_SHADOW", "").strip() == "1"
+
+
 def _emit(result: dict) -> None:
+    if _shadow():
+        result = {**result, "shadow": True}
     print(RESULT_PREFIX + json.dumps(result, ensure_ascii=False, default=str), flush=True)
+
+
+def shadow_guard(task: str) -> int | None:
+    """影モード（KEIBA_FETCH_SHADOW=1）のとき、対象外のタスクは実行せず、書き込みを shadow/ 以下に限る。問題があれば終了コード、無ければ None。"""
+    from src.ops import fetch_shadow
+
+    if task not in fetch_shadow.load_config().task_names():
+        _emit({"errors": [f"shadow_not_allowed: {task}"], "access_restriction": False})
+        return 4
+    from src.ops import shadow_storage
+
+    shadow_storage.install()
+    return None
 
 
 def race_task_list(task: str) -> list[str]:
@@ -107,6 +127,10 @@ def selfcheck() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     a = list(sys.argv[1:] if argv is None else argv)
+    if _shadow() and len(a) >= 2 and a[0] in ("auto", "race"):
+        rc = shadow_guard(a[1])
+        if rc is not None:
+            return rc
     if len(a) == 2 and a[0] == "auto":
         return run_auto(a[1])
     if len(a) == 4 and a[0] == "race":

@@ -65,12 +65,23 @@ def can_switch(job_id: str) -> tuple[bool, str]:
     return True, ""
 
 
+def shadow_gate(job_id: str) -> tuple[bool, list[str]]:
+    """VPS の取得を含む単位は、影モード（ホストと並走の検証）の基準を満たすまで担当を渡さない・crontab を止めない。読めなければ不合格。"""
+    from src.ops import shadow_eval
+
+    return shadow_eval.unit_gate_from_env(job_id)
+
+
 def set_owner(job_id: str, owner: str, *, path: Path | None = None, today: str | None = None, force: bool = False) -> None:
     if owner not in OWNER_VALUES:
         raise ValueError(f"owner は {OWNER_VALUES}")
     ok, why = can_switch(job_id)
     if not ok and not force:
         raise ValueError(why)
+    if owner != "retire":
+        sok, sreasons = shadow_gate(job_id)        # force でも外せない: VPS の取得は影モードで見届けるまで担当を渡さない
+        if not sok:
+            raise ValueError("影モードの基準を満たしていない: " + " / ".join(sreasons))
     p = Path(os.environ.get("KEIBA_JOB_OWNER_FILE") or path or DEFAULT_PATH)
     doc = _read(p)
     doc.setdefault("owners", {})[job_id] = owner
@@ -120,6 +131,10 @@ def main(argv: list[str] | None = None) -> int:
         if a[1] not in owners():
             print(f"{a[1]} はまだ担当が渡っていない（先に set。二重実行を避ける順序）", file=sys.stderr)
             return 3
+        sok, sreasons = shadow_gate(a[1])
+        if not sok:
+            print("影モードの基準を満たしていないため止めません: " + " / ".join(sreasons), file=sys.stderr)
+            return 6
         return 0
     print("usage: python -m src.ops.job_owner check <id> | list | set <id> <gcp|vps|retire> | unset <id> | can-stop <id>", file=sys.stderr)
     return 2

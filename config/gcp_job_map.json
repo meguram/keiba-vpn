@@ -51,6 +51,7 @@
   "max_start_delay_sec_vps": 300,
   "window_days": 14,
   "require_parity": true,
+  "require_shadow": true,
   "parity_min_days": 3,
   "raceday_min_days": 3,
   "max_alerts": 0,
@@ -85,6 +86,15 @@
    "desc": "GCP 日次コスト報告（想定 vs 実績・急増警告。予算超過の早期警戒）",
    "jobs": [
     "gcp-daily-cost-report"
+   ]
+  },
+  "g-0730-shadow": {
+   "cron_jst": "30 7 * * *",
+   "size": "s",
+   "timeout_sec": 600,
+   "desc": "影モード（VPS の取得の並走検証）の日次集計",
+   "jobs": [
+    "fetch-shadow-report"
    ]
   },
   "g-0730": {
@@ -825,6 +835,57 @@
    },
    "blockers": [
     "BigQuery への課金エクスポートの有効化（ユーザーが Console で実施）と GCP_BILLING_BQ_TABLE の設定"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "fetch-shadow-report",
+   "desc": "影モード（VPS の取得をホストと並走で検証）の日次集計。前日分の成功率・本番との一致率・合否を ops/fetch_shadow/daily/ に書く",
+   "destination": "gcp",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "src/scripts/ops/shadow_report.py（新規。ホストには無い）"
+   },
+   "group": "g-0730-shadow",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.ops.shadow_report",
+      "--yesterday",
+      "--write",
+      "--slack"
+     ]
+    }
+   ],
+   "memory_mib": 512,
+   "timeout_sec": 600,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_SLACK_NOTIFY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_WEBHOOK_URL_RESULTS",
+    "SLACK_WEBHOOK_URL_REPORT",
+    "SLACK_WEBHOOK_URL_ALERT",
+    "KEIBA_FETCH_SHADOW_ENABLED"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "影モードを有効にしてから（KEIBA_FETCH_SHADOW_ENABLED=1。docs/operations/vps_agent.md の影モードの章）"
    ],
    "enabled": true,
    "ready": false

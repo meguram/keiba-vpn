@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "_comment": "VPS の取得の『影モード』の設定。ホストが取得を続けたまま、VPS の実行役が同じ取得を shadow/<日付>/ 以下に保存して本番と比べる（docs/operations/vps_agent.md の影モードの章）。有効化は KEIBA_FETCH_SHADOW_ENABLED=1（既定オフ）。",
+  "tasks": {
+    "entries-sync":       {"est_requests": 25, "compare": "shutuba_stable", "categories": ["race_shutuba"], "min_task_days": 2, "jitter": [30, 120]},
+    "race-odds-t60":      {"est_requests": 2,  "compare": "odds", "categories": ["race_odds"], "min_task_days": 1, "jitter": [10, 90]},
+    "race-odds-t15":      {"est_requests": 12, "compare": "odds", "categories": ["race_odds", "race_pair_odds"], "min_task_days": 1, "jitter": [10, 60]},
+    "race-odds-t10":      {"est_requests": 1,  "compare": "odds", "categories": ["race_odds"], "min_task_days": 1, "jitter": [5, 20]},
+    "race-odds-t05":      {"est_requests": 1,  "compare": "odds", "categories": ["race_odds"], "min_task_days": 1, "jitter": [5, 20]},
+    "race-odds-t02":      {"est_requests": 1,  "compare": "odds", "categories": ["race_odds"], "min_task_days": 1, "jitter": [3, 10]},
+    "race-weight-check":  {"est_requests": 1,  "compare": "weights", "categories": ["race_shutuba"], "min_task_days": 1, "jitter": [10, 60], "thin": 3},
+    "daily-race-lists":   {"est_requests": 6,  "compare": "none", "categories": [], "min_task_days": 5, "jitter": [60, 300]},
+    "jra-baba-morning":   {"est_requests": 3,  "compare": "none", "categories": [], "min_task_days": 2, "jitter": [60, 300]},
+    "recent-retry":       {"est_requests": 10, "compare": "none", "categories": [], "min_task_days": 5, "jitter": [60, 300]},
+    "barometer-retry":    {"est_requests": 10, "compare": "none", "categories": [], "min_task_days": 3, "jitter": [60, 300]}
+  },
+  "limits": {
+    "max_requests_per_day": 2500,
+    "access_pause_seconds": 3600,
+    "max_restrictions_per_day": 2
+  },
+  "pass": {
+    "required_days": 5,
+    "require_raceday_days": 1,
+    "min_success_rate": 0.95,
+    "max_skipped_ratio": 0.1,
+    "min_match_ratio": 0.95,
+    "max_alerts": 0,
+    "odds_rtol": 0.15,
+    "odds_horse_ok_ratio": 0.9
+  }
+}

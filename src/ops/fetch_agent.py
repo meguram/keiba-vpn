@@ -95,12 +95,12 @@ def build_argv(t: ft.FetchTask, python: str) -> list[str]:
     return base + ["auto", t.task]
 
 
-def subprocess_runner(python: str = sys.executable, cwd: Path = ROOT) -> Runner:
+def subprocess_runner(python: str = sys.executable, cwd: Path = ROOT, extra_env: dict[str, str] | None = None) -> Runner:
     def run(t: ft.FetchTask, timeout: int) -> RunResult:
         t0 = time.time()
         with tempfile.TemporaryFile() as out:       # 出力はファイルへ（親のメモリを増やさない）
             proc = subprocess.Popen(build_argv(t, python), cwd=str(cwd), stdout=out, stderr=subprocess.STDOUT,
-                                    start_new_session=True)
+                                    start_new_session=True, env={**os.environ, **(extra_env or {})})
             timed_out = False
             try:
                 rc = proc.wait(timeout=timeout)
@@ -130,6 +130,10 @@ def subprocess_runner(python: str = sys.executable, cwd: Path = ROOT) -> Runner:
 
 
 class FetchAgent:
+    publish_events = True       # 馬体重の検知イベントを置く（影モードの実行役は False＝本番のイベントに触れない）
+    skip_announced = True       # 発表済みの馬体重は取り直さない（影モードは比較のため取り直す）
+    shadow: "FetchAgent | None" = None   # 影モードの実行役（本番のタスクが無いときに 1 本ずつ回す。同じ VPS の同じ IP なので停止を共有する）
+
     def __init__(self, queue: ft.TaskQueue, cfg: AgentConfig, runner: Runner,
                  clock: Callable[[], datetime] = ft.now_jst, sleep: Callable[[float], None] = time.sleep) -> None:
         self.q, self.cfg, self.runner, self.clock, self.sleep = queue, cfg, runner, clock, sleep
@@ -174,7 +178,7 @@ class FetchAgent:
         if t is None:
             return f"ran:{due[0].task_id}:lost"
         self._cache.pop(t.task_id, None)
-        if t.task == ft.RACE_WEIGHT_TASK and self.q.store.get(self._weight_event_key(t)) is not None:
+        if self.skip_announced and t.task == ft.RACE_WEIGHT_TASK and self.q.store.get(self._weight_event_key(t)) is not None:
             self.q.complete(t, {"agent": self.cfg.agent_id, "skipped": "already_announced"}, self.clock())
             self.stats["done"] += 1
             return f"ran:{t.task_id}:done"
@@ -196,16 +200,29 @@ class FetchAgent:
         if ok:
             self.q.complete(t, outcome, self.clock())
             self.stats["done"] += 1
-            self._publish_events(t, res)
+            if self.publish_events:
+                self._publish_events(t, res)
             return f"ran:{t.task_id}:done"
         restricted = bool((res.result or {}).get("access_restriction"))
         if restricted:
             outcome["access_restriction"] = True
             self._paused_until = self.clock() + timedelta(seconds=self.cfg.access_pause_seconds)
             logger.error("アクセス制限の疑い。%d 秒 claim を止めます: %s", self.cfg.access_pause_seconds, t.task_id)
+            self._on_restricted(t, outcome)
         state = self.q.fail(t, outcome, self.clock(), retry=not restricted)
         self.stats["requeued" if state == "requeued" else "failed"] += 1
         return f"ran:{t.task_id}:{state}"
+
+    def _on_restricted(self, t: ft.FetchTask, outcome: dict[str, Any]) -> None:
+        """アクセス制限の疑いを検知したとき（影モードの実行役が通知・停止の記録に使う）。"""
+
+    def _share_pause(self) -> None:
+        """本番と影は同じ VPS の同じ IP。どちらかが制限を疑ったら両方止める。"""
+        if self.shadow is None:
+            return
+        ps = [p for p in (self._paused_until, self.shadow._paused_until) if p is not None]
+        if ps:
+            self._paused_until = self.shadow._paused_until = max(ps)
 
     @staticmethod
     def _weight_event_key(t: ft.FetchTask) -> str:
@@ -226,13 +243,21 @@ class FetchAgent:
         signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__("v", True))
         while not stop["v"]:
             try:
-                state = self.tick()
+                state = self.tick() if self.cfg.tasks else "idle"
+                if self.shadow is not None and not state.startswith("ran:"):   # 本番のタスクが無いときだけ影を 1 本回す
+                    self._share_pause()
+                    state = self.shadow.tick() if self.shadow._paused_until is None or self.clock() >= self.shadow._paused_until else "paused"
+                    self._share_pause()
             except Exception:  # noqa: BLE001
                 logger.exception("tick で例外（次の周期で再試行）")
                 state = "error"
             if state.startswith("ran:"):
                 continue                      # まだ期限の来たタスクがあるかもしれないので待たずに次へ
-            self.sleep(self.next_sleep(self.clock()) if state == "idle" else self.cfg.poll_seconds)
+            if state == "idle":
+                waits = [self.next_sleep(self.clock())] + ([self.shadow.next_sleep(self.clock())] if self.shadow is not None else [])
+                self.sleep(min(waits))
+            else:
+                self.sleep(self.cfg.poll_seconds)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -242,18 +267,31 @@ def main(argv: list[str] | None = None) -> int:
     if not cfg.enabled:
         logger.info("KEIBA_FETCH_AGENT_ENABLED が 1 でないため何もしません（既定オフ）")
         return 0
-    if not cfg.tasks:
+    from src.ops import fetch_shadow as fs
+
+    shadow_on = fs.enabled()
+    if not cfg.tasks and not shadow_on:
         logger.warning("担当タスクが空です（config/fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS）。何もしません")
         return 0
     bucket = os.environ.get("GCS_BUCKET", "")
-    queue = ft.TaskQueue(ft.GcsTaskStore(bucket))
+    store = ft.GcsTaskStore(bucket)
+    queue = ft.TaskQueue(store)
     agent = FetchAgent(queue, cfg, subprocess_runner(cfg.python))
+    if shadow_on:
+        agent.shadow = fs.build_shadow_agent(store, cfg, cfg.python, owned=set(cfg.tasks))
+        logger.info("影モード: 対象=%s", sorted(agent.shadow.cfg.tasks))
     if "--dry-run" in a:
         due = queue.due_pending(only=cfg.tasks)
         print(json.dumps([{"task_id": t.task_id, "not_before": t.not_before} for t in due], ensure_ascii=False))
+        if agent.shadow is not None:
+            sdue = agent.shadow.q.due_pending(only=agent.shadow.cfg.tasks)
+            print(json.dumps({"shadow": [{"task_id": t.task_id, "not_before": t.not_before} for t in sdue]}, ensure_ascii=False))
         return 0
     if "--once" in a:
-        print(agent.tick())
+        state = agent.tick() if cfg.tasks else "idle"
+        if agent.shadow is not None and not state.startswith("ran:"):
+            state = "shadow:" + agent.shadow.tick()
+        print(state)
         return 0
     agent.run_forever()
     return 0

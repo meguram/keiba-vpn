@@ -79,6 +79,13 @@ def recurring_tasks(doc: dict[str, Any], now: datetime, horizon_hours: float, ow
     return tasks, skipped
 
 
+def shadow_tasks(real: list[FT.FetchTask], owned: set[str], env: dict[str, str] | None = None) -> list[FT.FetchTask]:
+    """影モード（``KEIBA_FETCH_SHADOW_ENABLED=1`` のときだけ）で並走検証するタスク。無効なら空。"""
+    from src.ops import fetch_shadow
+
+    return fetch_shadow.shadow_tasks_from(real, fetch_shadow.load_config(), exclude=owned, env=env)
+
+
 def enqueue_fetch(queue: FT.TaskQueue, tasks: list[FT.FetchTask]) -> dict[str, int]:
     res = {"enqueued": 0, "exists": 0, "error": 0}
     for t in tasks:
@@ -177,7 +184,8 @@ def plan_race_day(rows: list[dict[str, Any]], date: str, now: datetime, *, late_
 
 def reserve_race_day(date: str, storage: Any, queue: FT.TaskQueue, *, now: datetime | None = None, dry_run: bool = False,
                      enqueue_predict: Callable[[dict[str, Any]], str] | None = None, load_schedule: Callable[[Any, str], list[dict[str, Any]]] | None = None,
-                     env: dict[str, str] | None = None, build_events: Any = None, owned: set[str] | None = None) -> dict[str, Any]:
+                     env: dict[str, str] | None = None, build_events: Any = None, owned: set[str] | None = None,
+                     shadow_queue: FT.TaskQueue | None = None) -> dict[str, Any]:
     now = now or datetime.now(JST)
     e = env if env is not None else os.environ
     owned = owned_tasks(e) if owned is None else owned
@@ -187,12 +195,16 @@ def reserve_race_day(date: str, storage: Any, queue: FT.TaskQueue, *, now: datet
     late = e.get("KEIBA_ODDS_LATE_SNAPSHOTS", "") == "1"
     plan = plan_race_day(rows, date, now, late_snapshots=late, build_events=build_events)
     not_owned = sorted({t.task for t in plan["fetch"] if t.task not in owned})
+    shadow_planned = shadow_tasks(plan["fetch"], owned, e)          # 影モード（ホストが取得を続けたまま並走検証）。担当済みは本番で実行するので除く
     plan["fetch"] = [t for t in plan["fetch"] if t.task in owned]
     out: dict[str, Any] = {"date": date, "races": plan["races"], "past": plan["past"], "fetch_tasks": len(plan["fetch"]), "predict_tasks": len(plan["predicts"]),
-                           "late_snapshots": late, "dry_run": dry_run, "not_owned_tasks": not_owned}
+                           "late_snapshots": late, "dry_run": dry_run, "not_owned_tasks": not_owned,
+                           "shadow_tasks": len(shadow_planned)}
     if dry_run:
         return out
     out["fetch"] = enqueue_fetch(queue, plan["fetch"])
+    if shadow_queue is not None and shadow_planned:
+        out["shadow"] = enqueue_fetch(shadow_queue, shadow_planned)
     pres = {"created": 0, "exists": 0, "error": 0}
     for p in plan["predicts"]:
         try:
@@ -206,12 +218,25 @@ def reserve_race_day(date: str, storage: Any, queue: FT.TaskQueue, *, now: datet
 
 
 def reserve_recurring(queue: FT.TaskQueue, *, now: datetime | None = None, horizon_hours: float = 6, dry_run: bool = False,
-                      doc: dict[str, Any] | None = None, owned: set[str] | None = None) -> dict[str, Any]:
+                      doc: dict[str, Any] | None = None, owned: set[str] | None = None, shadow_queue: FT.TaskQueue | None = None,
+                      env: dict[str, str] | None = None) -> dict[str, Any]:
     now = now or datetime.now(JST)
-    tasks, skipped = recurring_tasks(doc or job_map.load(), now, horizon_hours, owned)
+    doc = doc or job_map.load()
+    owned_set = owned_tasks() if owned is None else owned
+    tasks, skipped = recurring_tasks(doc, now, horizon_hours, owned_set)
     out: dict[str, Any] = {"horizon_hours": horizon_hours, "tasks": len(tasks), "skipped_jobs": skipped, "dry_run": dry_run}
+    from src.ops import fetch_shadow
+
+    shadow_planned: list[FT.FetchTask] = []
+    if fetch_shadow.enabled(env):
+        cands = set(fetch_shadow.load_config().task_names()) - set(owned_set)
+        stasks, _ = recurring_tasks(doc, now, horizon_hours, cands)
+        shadow_planned = shadow_tasks(stasks, set(owned_set), env)
+    out["shadow_tasks"] = len(shadow_planned)
     if not dry_run:
         out["fetch"] = enqueue_fetch(queue, tasks)
+        if shadow_queue is not None and shadow_planned:
+            out["shadow"] = enqueue_fetch(shadow_queue, shadow_planned)
     return out
 
 
@@ -233,14 +258,17 @@ def main(argv: list[str] | None = None) -> int:
 
     load_project_dotenv()
     queue = FT.TaskQueue(FT.MemoryTaskStore()) if ns.dry_run else _queue()
+    from src.ops import fetch_shadow
+
+    shadow_queue = FT.TaskQueue(fetch_shadow.PrefixedStore(queue.store)) if fetch_shadow.enabled() else None
     if ns.cmd == "race-day":
         from src.scraper.storage import HybridStorage
 
-        res = reserve_race_day(ns.date, HybridStorage("."), queue, dry_run=ns.dry_run)
+        res = reserve_race_day(ns.date, HybridStorage("."), queue, dry_run=ns.dry_run, shadow_queue=shadow_queue)
     else:
-        res = reserve_recurring(queue, horizon_hours=ns.horizon_hours, dry_run=ns.dry_run)
+        res = reserve_recurring(queue, horizon_hours=ns.horizon_hours, dry_run=ns.dry_run, shadow_queue=shadow_queue)
     print(json.dumps(res, ensure_ascii=False, default=str))
-    bad = (res.get("fetch") or {}).get("error", 0) + (res.get("predict") or {}).get("error", 0)
+    bad = (res.get("fetch") or {}).get("error", 0) + (res.get("predict") or {}).get("error", 0) + (res.get("shadow") or {}).get("error", 0)
     return 1 if bad else 0
 
 
