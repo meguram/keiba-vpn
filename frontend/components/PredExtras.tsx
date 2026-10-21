@@ -6,6 +6,8 @@ import { PositionForecast } from "@/components/PositionForecast";
 import { GATE_TONE, PACE_TONE, buildTdMap } from "@/lib/positionForecast";
 import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
 import { bracketOf } from "@/lib/bracket";
+import { PastRuns } from "@/components/PastRuns";
+import { recentMean, type ExpectedMegu } from "@/lib/expectedMegu";
 import { LapForecast as LapForecastView } from "@/components/LapForecast";
 import { isUsableLapForecast, lapSummaryText } from "@/lib/lapForecast";
 import type { LapForecast } from "@/lib/lapForecast";
@@ -22,6 +24,7 @@ export type ExtraEntry = {
   position_forecast?: PosFc | null;
   l3f_coherent?: L3fCoherent | null;
   tracking_v2?: TrackingV2 | null;
+  expected_megu?: ExpectedMegu | null;
 };
 
 /** 整合層（KEIBA_PACE_COHERENCE=1 のときだけ API が返す）。位置取り側の先行勢から推定したペースと、位置×ペースで決めた想定上がり */
@@ -66,15 +69,15 @@ type TdData = {
   entries?: TdEntry[];
 };
 
-type SectionKey = "pos" | "lap";
+type SectionKey = "past" | "pos" | "lap";
 const STORE_KEY = "wp-extra-open";
 
 function loadOpen(): Record<SectionKey, boolean> {
-  const base = { pos: false, lap: false };
+  const base = { past: true, pos: false, lap: false };
   try {
     const raw = window.localStorage.getItem(STORE_KEY);
     const s = raw ? JSON.parse(raw) : {};
-    return { pos: !!(s.pos ?? s.flow), lap: !!s.lap };
+    return { past: s.past ?? true, pos: !!(s.pos ?? s.flow), lap: !!s.lap };      // 馬柱は既定で開く
   } catch {
     return base;
   }
@@ -140,7 +143,7 @@ export function PredExtras({
     () => (unified && paceUnified && paceApi ? { ...paceApi, level: paceUnified.level, label: paceUnified.label, note: UNIFIED_NOTE[paceUnified.level] ?? paceApi.note } : paceApi),
     [unified, paceUnified, paceApi],
   );
-  const [open, setOpen] = useState<Record<SectionKey, boolean>>({ pos: false, lap: false });
+  const [open, setOpen] = useState<Record<SectionKey, boolean>>({ past: true, pos: false, lap: false });
   const [td, setTd] = useState<TdData | null>(null);
   const [tdState, setTdState] = useState<"idle" | "loading" | "error">("idle");
   const [reloadKey, setReloadKey] = useState(0);
@@ -223,6 +226,25 @@ export function PredExtras({
 
   return (
     <div aria-label="付随する予測" style={{ display: "grid", gap: 8, marginTop: 12 }}>
+      <Section
+        id={`wp-extra-past-${raceId}`}
+        title="馬柱（直近5走の指数）"
+        open={open.past}
+        onToggle={() => toggle("past")}
+        summary={(() => {
+          const withRuns = entries.filter((e) => e.expected_megu?.recent?.length);
+          if (!withRuns.length) return "過去のめぐ指数なし";
+          const best = withRuns.reduce((b, e) => ((recentMean(e.expected_megu) ?? 0) > (recentMean(b.expected_megu) ?? 0) ? e : b));
+          return `${withRuns.length}頭 ・ 直近の平均が最高 ${best.horse_number}番 ${(recentMean(best.expected_megu) ?? 0).toFixed(1)}`;
+        })()}
+      >
+        <PastRuns
+          horses={[...entries].filter((e) => e.horse_number != null).sort((a, b) => (a.horse_number ?? 0) - (b.horse_number ?? 0)).map((e) => ({
+            no: e.horse_number as number, name: e.horse_name ?? "", bracket: bracketOf(e.horse_number as number, entries.length, e.bracket_number), e: e.expected_megu,
+          }))}
+        />
+      </Section>
+
       <Section
         id={`wp-extra-pos-${raceId}`}
         title="展開予想"

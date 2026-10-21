@@ -277,9 +277,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
   };
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
   const [card, setCard] = useState<{ horseId: string; tab: CardTab } | null>(null);   // 馬名・騎手・調教師のタップで開く情報パネル
-  const defaultOrder = hasPred
-    ? (a: PredEntry, b: PredEntry) => (a.composite_rank ?? a.pred_rank ?? 99) - (b.composite_rank ?? b.pred_rank ?? 99)
-    : (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);
+  const defaultOrder = (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);      // 既定は馬番順
   const sorted = sortPreds(preds, sort?.key ?? null, sort?.dir ?? "asc", defaultOrder);
   const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);     // EV の較正が有効なときだけ『(較正後)』と表示する
 

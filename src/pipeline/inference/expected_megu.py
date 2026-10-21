@@ -94,7 +94,7 @@ def load_model(path: Path | None = None) -> dict | None:
 # ── 純粋関数（テスト対象・学習スクリプトと共有）────────────────────────────
 
 def _pad(r: Run) -> Run:
-    return tuple(r) + (None,) * (9 - len(r)) if len(r) < 9 else tuple(r)
+    return tuple(r) + (None,) * (10 - len(r)) if len(r) < 10 else tuple(r)
 
 
 def run_weights(runs: list[Run], today: dict | None, wcfg: dict | None) -> list[float]:
@@ -262,7 +262,7 @@ def expected_from_runs(runs: Iterable[Run], race_date: str | None, today: dict |
         "change": group,
         "reasons": reasons,
         "adjust": adjust,
-        "recent": [{"date": _fmt(r[0]), "value": round(float(r[1]), 1), "low": bool(r[2])} for r in usable],   # 実測の直近走（新しい順）
+        "recent": [{"date": _fmt(r[0]), "value": round(float(r[1]), 1), "low": bool(r[2]), **({"race_id": r[9]} if r[9] else {})} for r in usable],   # 実測の直近走（新しい順）
     }
     return out
 
@@ -319,17 +319,73 @@ def _load_year(year: int, base: Path) -> tuple[dict[str, list[Run]], str]:
         if use.status_col and use.status_col in df.columns:
             df = df[df[use.status_col].isin(use.valid_set)]
         lows = df[use.conf_col] if use.conf_col and use.conf_col in df.columns else [False] * len(df)
-        for hid, d, v, lo, ve, su, di, gr, jw, sa in zip(df["horse_id"], df["date"], df[use.value_col], lows, df["venue"], df["surface"],
-                                                          df["distance"], df["grade"], df["jockey_weight"], df["sex_age"]):
+        for hid, rid_, d, v, lo, ve, su, di, gr, jw, sa in zip(df["horse_id"], df["race_id"], df["date"], df[use.value_col], lows, df["venue"], df["surface"],
+                                                                df["distance"], df["grade"], df["jockey_weight"], df["sex_age"]):
             ymd = _digits(d)
             if len(ymd) == 8:
                 out.setdefault(str(hid), []).append((
                     ymd, float(v), lo is True or lo == 1, surface_of(su), (float(di) if di == di and di is not None else None),
                     (str(ve) if ve is not None and ve == ve else None), class_level(gr), (float(jw) if jw == jw and jw is not None else None), age_of(sa),
+                    str(rid_),
                 ))
     with _lock:
         _cache[key] = (sig, out, latest)
     return out, latest
+
+
+DETAIL_COLS = ["race_id", "horse_id", "race_name", "round", "venue", "surface", "distance", "track_condition", "grade", "field_size",
+               "finish_position", "popularity", "jockey_name", "jockey_weight", "last_3f", "passing_order", "weight", "weight_change", "margin"]
+
+
+def _num(v: Any, nd: int | None = None) -> float | int | None:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    if f != f:
+        return None
+    return round(f, nd) if nd is not None else (int(f) if f == int(f) else f)
+
+
+def _txt(v: Any) -> str | None:
+    return None if v is None or v != v or str(v).strip() in ("", "nan", "None") else str(v).strip()
+
+
+def race_details(pairs: Iterable[tuple[str, str]], base: Path | None = None) -> dict[tuple[str, str], dict]:
+    """(race_id, horse_id) → 過去走のレース情報（馬柱用）。実績の表を年ごとに、必要な馬だけ絞って読む。読めない年・列は飛ばす。"""
+    base = base or hg.tables_dir()
+    need: dict[int, dict[str, set[str]]] = {}
+    for rid, hid in pairs:
+        if rid and hid and rid[:4].isdigit():
+            need.setdefault(int(rid[:4]), {}).setdefault(hid, set()).add(rid)
+    out: dict[tuple[str, str], dict] = {}
+    for year, by_horse in need.items():
+        p = base / str(year) / "race_result_flat.parquet"
+        if not p.exists():
+            continue
+        try:
+            import pyarrow.parquet as pq
+
+            names = set(pq.read_schema(p).names)
+            cols = [c for c in DETAIL_COLS if c in names]
+            if "race_id" not in cols or "horse_id" not in cols:
+                continue
+            df = hg._read(p, columns=cols, filters=[("horse_id", "in", list(by_horse))])
+        except Exception:
+            continue
+        for row in df.to_dict("records"):
+            key = (str(row.get("race_id")), str(row.get("horse_id")))
+            if key[0] not in by_horse.get(key[1], ()):
+                continue
+            out[key] = {
+                "race_name": _txt(row.get("race_name")), "round": _num(row.get("round")), "venue": _txt(row.get("venue")),
+                "surface": _txt(row.get("surface")), "distance": _num(row.get("distance")), "going": _txt(row.get("track_condition")),
+                "grade": _txt(row.get("grade")), "field": _num(row.get("field_size")), "finish": _num(row.get("finish_position")),
+                "pop": _num(row.get("popularity")), "jockey": _txt(row.get("jockey_name")), "jw": _num(row.get("jockey_weight"), 1),
+                "l3f": _num(row.get("last_3f"), 1), "passing": _txt(row.get("passing_order")), "bw": _num(row.get("weight")),
+                "bw_diff": _num(row.get("weight_change")), "margin": _txt(row.get("margin")),
+            }
+    return out
 
 
 def runs_for_horse(horse_id: str, race_date: str | None, base: Path | None = None) -> tuple[list[Run], str]:
@@ -400,6 +456,13 @@ def attach_expected_megu(resp: dict, race_date: str | None, base: Path | None = 
             ex["latest_past_date"] = _fmt(last_past[hid])
         items[i] = ex
     rank_and_gap(items)
+    pairs = [(r["race_id"], str(preds[i].get("horse_id") or "")) for i, ex in items.items() if ex for r in ex.get("recent") or [] if r.get("race_id")]
+    details = race_details(pairs, base) if pairs else {}
+    for i, ex in items.items():
+        for r in (ex or {}).get("recent") or []:
+            d = details.get((r.get("race_id", ""), str(preds[i].get("horse_id") or "")))
+            if d:
+                r.update({k: v for k, v in d.items() if v is not None})
     for i, p in enumerate(preds):
         p["expected_megu"] = items[i]
     n_known = sum(1 for v in items.values() if v)

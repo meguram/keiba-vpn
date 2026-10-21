@@ -154,3 +154,20 @@ def test_recent_lists_actual_runs_newest_first_with_low_flag():
     assert [x["low"] for x in r["recent"]] == [True, False, False, False, False]
     dates = [x["date"] for x in r["recent"]]
     assert dates == sorted(dates, reverse=True)
+
+
+def test_recent_runs_carry_race_details_from_the_result_table(tmp_path):
+    em._cache.clear()
+    _write_tables(
+        tmp_path,
+        [{"race_id": "202501010101", "horse_id": "A", "megu_index_v3a_abs_robust": 55.0, "megu_v3a_status": "ok", "megu_v3a_low_confidence": False},
+         {"race_id": "202502010101", "horse_id": "A", "megu_index_v3a_abs_robust": 61.0, "megu_v3a_status": "ok", "megu_v3a_low_confidence": False}],
+        [{"race_id": "202501010101", "horse_id": "A", "date": "2025-01-10", "race_name": "新馬", "round": 1, "finish_position": 3, "popularity": 2,
+          "field_size": 14, "jockey_name": "騎手A", "last_3f": 34.56, "passing_order": "3-3", "weight": 460, "weight_change": 2, "track_condition": "良"},
+         {"race_id": "202502010101", "horse_id": "A", "date": "2025-02-10", "race_name": "未勝利", "round": 5, "finish_position": 1, "popularity": float("nan")}],
+    )
+    out = em.attach_expected_megu({"predictions": [{"horse_number": 1, "horse_id": "A"}]}, "2025-05-01", base=tmp_path)
+    new, old = out["predictions"][0]["expected_megu"]["recent"]
+    assert new["race_name"] == "未勝利" and new["finish"] == 1 and "pop" not in new          # 欠損は付けない
+    assert old["race_name"] == "新馬" and old["finish"] == 3 and old["pop"] == 2 and old["l3f"] == 34.6
+    assert old["passing"] == "3-3" and old["bw"] == 460 and old["bw_diff"] == 2 and old["going"] == "良" and old["field"] == 14
