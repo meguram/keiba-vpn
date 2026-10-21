@@ -240,6 +240,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <tr><td>3 連複のオッズ（<code>race_pair_odds</code> の sanrenpuku）が過去分で 0 件</td><td>3 連複の過去の価格は 3 連単の実オッズから見る必要がある</td><td>取得は 3 連複 API（type=7）の応答形式を確認済みだが、過去分は取れていない</td></tr>
 <tr><td>馬主が ID を持たない（名前キー）</td><td>表記ゆれの恐れ。v4 の効果の大半は馬主系で、取得時点（2026）の値</td><td>owner_id の解析は実装済み。実 HTML の確認と約 39,000 頭の再取得が必要</td></tr>
 <tr><td>ホストの repo が最新から古く、ファイル単位で反映している</td><td><code>git pull</code> は衝突と画面データの破損の恐れがあり使えない</td><td>反映はバックアップ付きのスクリプトで（<a href="../operations/raceday_prediction_workflow.html">運用の章</a>）。一括更新の整理は別途</td></tr>
+<tr><td>horse_training（調教）が 2026 年 4 月から取り直されていない</td><td>運用予測の調教系 87 列（tl_・wc_）が約 95% の行で欠損。出走行の被覆は 4 月 79%、5 月 18%、6〜9 月 5〜6%（10/18 のみ 100%）。テストセット②の評価・ドリフト監視にも影響</td><td>前日夕方の取り直し（<code>KEIBA_EVE_HORSE_TRAINING=1</code>）が 10/17 から稼働。過去分 8,437 頭（約 14 時間）は穴埋めスクリプト（<code>backfill_horse_training_recent</code>、40 頭パイロット済み）と夜間 cron（未登録）。予測 API に被覆の注記（<code>KEIBA_TRAINING_COVERAGE</code>）。手順: <code>docs/operations/training_fetch.md</code>、決定ログ §54</td></tr>
 <tr><td>購入時点のオッズが確定オッズと違う</td><td>馬券の評価は確定オッズで精算しており、購入時点の値ではない</td><td>T-60 / T-15 / 直前（T-10/T-5/T-2）の実オッズを蓄積中（10/24 夜〜10/25 から直前分が貯まる）</td></tr>
 </table>
 

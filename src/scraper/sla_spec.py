@@ -93,7 +93,9 @@ ENDPOINTS: tuple[Endpoint, ...] = (
              (Fetch("new-horse-pedigree", "毎日 21:00（今後 1 週間の出走予定馬で ped_tbl が無い馬だけ）"),
               Fetch("script.run_after_scrape_missing_5gen_10gen_chain", "手動（IDE 外で実行。過去分の一括）"))),
     Endpoint("horse_mating_date", "種付け日", "母馬ページ", "low", False, ("horse_mating_date",)),
-    Endpoint("horse_training", "調教タイム全ページ", "要追加観測", "low", False, ("horse_training",)),
+    Endpoint("horse_training", "調教タイム全ページ", "次走に向けた調教は前日夕方までに最新ページへ載る（最終追い切りまで）", "medium", True, ("horse_training",),
+             (Fetch("raceday-eve", "前日 18:00（KEIBA_EVE_HORSE_TRAINING=1。出走馬の最新ページを取り直し、同日の行だけ入れ替え）"),
+              Fetch("backfill.horse_training", "過去分の穴埋め（src.scripts.scraping.backfill_horse_training_recent。1 頭 1 リクエスト）"))),
     Endpoint("jra_baba", "JRA 馬場（クッション値・含水率）", "開催日の朝〜（非開催日は直近値が残る）", "medium", False, (),
              (Fetch("jra-baba-morning", "5:00–9:00 の 10 分毎"),)),
     Endpoint("jra_calendar", "JRA 開催カレンダー", "年初に年間日程", "high", True, (),
@@ -107,7 +109,6 @@ AGGREGATE_TASK_IDS: frozenset[str] = frozenset({"race_all"})
 KNOWN_GAPS: dict[str, str] = {
     "race_detail": "どのスケジュールにも入っていない（手動・capture のみ）",
     "horse_mating_date": "手動投入のみ",
-    "horse_training": "手動投入のみ",
 }
 
 NON_TASK_JOBS_PREFIXES = ("pipeline.", "backfill.", "script.", "manual")

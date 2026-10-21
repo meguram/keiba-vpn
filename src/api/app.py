@@ -7015,6 +7015,13 @@ async def get_race_predictions(race_id: str):
             resp = attach_training_coverage(resp, str(card.get("date") or ""), _get_storage())
         except Exception as exc:  # noqa: BLE001
             logger.warning("調教の被覆の付与に失敗 %s: %s", race_id, exc)
+        # 調教データの被覆（そのレース日の調教の行がある馬の割合）。低いと調教系の評価が欠けた予測になる（KEIBA_TRAINING_COVERAGE=1 のときだけ）
+        try:
+            from src.pipeline.inference.training_coverage import attach_training_coverage
+
+            resp = attach_training_coverage(resp, str(card.get("date") or ""), _get_storage())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("調教の被覆の付与に失敗 %s: %s", race_id, exc)
         # 過去のめぐ指数からの想定めぐ指数（AI の予測ではない）。失敗しても予測の応答は返す
         try:
             from src.pipeline.inference.expected_megu import attach_expected_megu

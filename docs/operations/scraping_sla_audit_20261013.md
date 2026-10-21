@@ -70,7 +70,7 @@ JST マシン用の雛形 `scripts/cron/crontab.jst.example` を追加。**cront
 | G6 | 中 | 月曜(祝)開催のバロメーター公開日が未確認（週末分と同じ金曜か、翌週か） | 10/16（金）18 時以降に 10/12 分を確認。`barometer_publish_at` は同じ金曜と仮定し、外れても「公開予定」表示で未公開と判定されるだけで N/A 固定にはならない |
 | G7 | 中 | backfill が 1 回走ると「完了」扱いにして、未公開カテゴリ（バロメーターは対象外）も再試行しない | 未対応。取得率の検査は `verify_scrape_completeness` / `data_health` に任せる |
 | G8 | 中 | `catchup-missing` は race_lists の有無しか見ない（結果・オッズ欠損は拾わない） | 未対応（`data_health` のスクレイピング計画で補う運用） |
-| G9 | 低 | trainer_comment / race_result_lap / race_detail / horse_training / horse_mating に定期経路が無い | `sla_spec.KNOWN_GAPS` に明示（解消したらテストが更新を強制）。必要性の判断待ち |
+| G9 | 低 | trainer_comment / race_result_lap / race_detail / horse_mating に定期経路が無い（**horse_training は 2026-10-21 に解消**: 前日夕方の raceday-eve が出走馬の最新ページを取り直す。穴埋めは `docs/operations/training_fetch.md`） | `sla_spec.KNOWN_GAPS` に明示（解消したらテストが更新を強制）。必要性の判断待ち |
 | G10 | 低 | race_index（翌日取得可）の取得が金曜まで遅れる | 夕方ジョブへ足すか、翌朝ジョブを作るかは要判断 |
 | G11 | 要確認 | 予測パイプラインが T-45 に「そのレースのタイム指数」を取りに行くが、開催前は 0（レース後に出る指標）。特徴量として使っていれば推論時に欠損になる | モデル入力に当該レースの speed_index が含まれていないか要確認 |
 
