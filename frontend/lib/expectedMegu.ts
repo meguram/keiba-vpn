@@ -54,8 +54,6 @@ export const md = (ymd?: string | null): string => {
   return m ? `${Number(m[2])}/${Number(m[3])}` : "-";
 };
 
-/** 出馬表に出す直近走の指数（古い→新しいの順）。想定値は画面に出さない。 */
-export const recentRuns = (e?: ExpectedMegu | null, max = 5) => [...(e?.recent ?? [])].slice(0, max).reverse();
 
 /** 直近走の平均（並べ替え用）。 */
 export const recentMean = (e?: ExpectedMegu | null): number | null => {

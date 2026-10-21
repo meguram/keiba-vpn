@@ -1,36 +1,9 @@
 "use client";
 
-import { clearsLine } from "@/lib/classBenchmark";
-import { md, recentMean, recentRuns, type ClassBenchmark, type ExpectedMegu, type ExpectedMeguMeta } from "@/lib/expectedMegu";
+import { md, recentMean, type ExpectedMegu, type ExpectedMeguMeta } from "@/lib/expectedMegu";
 
 /* 実測のめぐ指数（直近の過去走）の表示。想定値（今回の指数の推定）は画面に出さない: 予測精度への寄与が小さいため。
    API の expected_megu.recent を使う（古い→新しい）。 */
-
-const tip = (e?: ExpectedMegu | null) =>
-  e?.recent?.length ? e.recent.map((r) => `${md(r.date)} ${r.value.toFixed(1)}${r.low ? "（低信頼）" : ""}`).join(" / ") + "（新しい順）" : "過去のめぐ指数がありません";
-
-/** 出馬表の 1 セル: 直近3走（広い画面は5走）の実測指数。左が古く右が最新（太字）。低信頼の走は淡色。 */
-export function RecentMeguCell({ e, wide, onOpen, bench }: { e?: ExpectedMegu | null; wide?: boolean; onOpen?: () => void; bench?: ClassBenchmark | null }) {
-  const runs = recentRuns(e, 5);
-  if (!runs.length) return <span style={{ color: "var(--text-dim)" }} title={tip(e)}>—</span>;
-  const n = runs.length;
-  const open = onOpen ? (ev: { stopPropagation: () => void }) => { ev.stopPropagation(); onOpen(); } : undefined;
-  return (
-    <span title={onOpen ? `${tip(e)}（押すと馬柱で、レース名・着順つきで見られます）` : tip(e)} onClick={open} role={onOpen ? "button" : undefined} tabIndex={onOpen ? 0 : undefined}
-      onKeyDown={onOpen ? (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open!(ev); } } : undefined}
-      style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", cursor: onOpen ? "pointer" : undefined, borderBottom: onOpen ? "1px dotted var(--text-dim)" : undefined }}>
-      {runs.map((r, i) => {
-        const latest = i === n - 1;
-        const extra = !wide && i < n - 3;
-        return (
-          <span key={r.date + i} className={extra ? "pt-hide-sm" : undefined} style={{ marginLeft: i ? 5 : 0, opacity: r.low ? 0.55 : 1 }}>
-            {latest ? <b style={{ color: clearsLine(r.value, bench) ? "#4ade80" : "var(--text)" }}>{r.value.toFixed(0)}</b> : <span style={{ color: clearsLine(r.value, bench) ? "#4ade80" : "var(--text-dim)" }}>{r.value.toFixed(0)}</span>}
-          </span>
-        );
-      })}
-    </span>
-  );
-}
 
 /** 馬のパネル: 直近の実測指数を日付つきで（新しい順）。平均と、最新の反映走。 */
 export function RecentMeguSection({ e, meta }: { e?: ExpectedMegu | null; meta?: ExpectedMeguMeta | null }) {

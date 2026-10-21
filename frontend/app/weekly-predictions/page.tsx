@@ -1,7 +1,7 @@
 "use client";
 
 import { fetchRaceList, getJson, prefetchJson } from "@/lib/httpCache";
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { Fragment, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
 import { featureEnabled } from "@/lib/features";
@@ -10,14 +10,13 @@ import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
-import { RecentMeguCell } from "@/components/ExpectedMegu";
+import { BenchNote, PAST_RUNS_CSS, PastRunStrip } from "@/components/PastRuns";
 import { PredExtras } from "@/components/PredExtras";
 import type { L3fCoherent, PaceUnified } from "@/components/PredExtras";
 import type { LapForecast } from "@/lib/lapForecast";
 import { bracketChipStyle, bracketOf } from "@/lib/bracket";
 import type { GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
 import { recentMean, type ClassBenchmark, type ExpectedMegu, type ExpectedMeguMeta } from "@/lib/expectedMegu";
-import { benchmarkTitle } from "@/lib/classBenchmark";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
 const SHOW_HORSE_LINK = featureEnabled("horse-detail");
@@ -281,7 +280,6 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
   const [card, setCard] = useState<{ horseId: string; tab: CardTab } | null>(null);   // 馬名・騎手・調教師のタップで開く情報パネル
   const defaultOrder = (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);      // 既定は馬番順
   const sorted = sortPreds(preds, sort?.key ?? null, sort?.dir ?? "asc", defaultOrder);
-  const openPast = (no?: number) => window.dispatchEvent(new CustomEvent("wp-open-past", { detail: { raceId, no } }));
   const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);     // EV の較正が有効なときだけ『(較正後)』と表示する
 
   // 見出しのクリック: 1 回目=その列の向き（既定は昇順、大きいほど良い列は降順）→ 2 回目=逆 → 3 回目=元の並びに戻す
@@ -394,7 +392,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
 
   return (
     <div style={{ marginTop: 12, maxWidth: "100%" }}>
-      <style>{TABLE_CSS}</style>
+      <style>{TABLE_CSS + PAST_RUNS_CSS}</style>
       {card && (
         <EntryCardPanel
           raceId={raceId}
@@ -407,21 +405,15 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
         />
       )}
       {sortBar}
-      {preds.some((p) => p.expected_megu?.recent?.length) && (
-        <div style={{ padding: "0 10px 6px" }}>
-          <button type="button" onClick={() => openPast()} style={{ minHeight: 36, padding: "0 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", fontSize: 12, cursor: "pointer" }}>
-            直近5走の指数を、レース名・着順つきで見る（馬柱）↓
-          </button>
-        </div>
-      )}
+      {preds.some((p) => p.expected_megu?.recent?.length) && <BenchNote bench={bench} />}
 
       {/* ── 広い画面（1100px〜）: 関連する列を 2 段にまとめた表 ── */}
       <div className="pt-v-wide">
         <table className="pt-tbl">
           <colgroup>
-            <col style={{ width: "4.5%" }} /><col style={{ width: "5%" }} /><col style={{ width: "19%" }} /><col style={{ width: "16%" }} />
-            <col style={{ width: "13%" }} /><col style={{ width: "7%" }} /><col style={{ width: "9.5%" }} /><col style={{ width: "11%" }} />
-            <col style={{ width: "9%" }} /><col style={{ width: "6%" }} />
+            <col style={{ width: "5%" }} /><col style={{ width: "5%" }} /><col style={{ width: "22%" }} /><col style={{ width: "18%" }} />
+            <col style={{ width: "9%" }} /><col style={{ width: "9.5%" }} /><col style={{ width: "11%" }} /><col style={{ width: "12%" }} />
+            <col style={{ width: "8.5%" }} />
           </colgroup>
           <thead>
             <tr>
@@ -429,7 +421,6 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
               {th("num", "馬番")}
               {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・馬体重。馬体重は当日の発表後）")}
               {th("jockey", "騎手/調教師", { textAlign: "left" }, "騎手で並べ替え（調教師は『そのほか』から）")}
-              {th("emegu", "直近指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "直近の実測めぐ指数（左が古く右が最新。1点＝0.1秒。並べ替えは平均）")}
               {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
               {th("top2", "連対/複勝", {}, "連対率で並べ替え（複勝率は『そのほか』から）")}
               {th("odds", "想定単勝/複勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（想定複勝は『そのほか』から）")}
@@ -441,7 +432,8 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
             {sorted.map((p, i) => {
               const ev = evOf(p);
               return (
-                <tr key={p.horse_number ?? i} style={{ background: rowBgOf(p) }}>
+                <Fragment key={p.horse_number ?? i}>
+                <tr className="pt-r1" style={{ background: rowBgOf(p) }}>
                   <td>{wakuChip(p)}</td>
                   <td>{numChip(p)}</td>
                   <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
@@ -452,13 +444,14 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
                     {tapCell(p, "jockey", p.jockey_name, "var(--text)")}
                     <span className="sub">{p.trainer_name ? <>{tapCell(p, "trainer", p.trainer_name, "var(--text-dim)")}</> : "-"}</span>
                   </td>
-                  <td className="sep"><RecentMeguCell bench={bench} e={p.expected_megu} wide onOpen={() => openPast(p.horse_number)} /></td>
                   <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}</td>
                   <td style={{ color: dim }}>{fmtPct(p.top2_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top3_prob)}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>{ev.pl.text}</span></td>
                   <td className="sep" style={{ fontSize: 11, color: "var(--text-dim)" }}>{p.buy_tier ?? "-"}</td>
                 </tr>
+                <tr className="pt-r2" style={{ background: rowBgOf(p) }}><td colSpan={9}><PastRunStrip e={p.expected_megu} bench={bench} /></td></tr>
+                </Fragment>
               );
             })}
           </tbody>
@@ -469,8 +462,8 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
       <div className="pt-v-mid">
         <table className="pt-tbl">
           <colgroup>
-            <col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "30%" }} /><col style={{ width: "13%" }} /><col style={{ width: "15%" }} />
-            <col style={{ width: "14%" }} /><col style={{ width: "14%" }} />
+            <col style={{ width: "8%" }} /><col style={{ width: "8%" }} /><col style={{ width: "36%" }} /><col style={{ width: "16%" }} />
+            <col style={{ width: "16%" }} /><col style={{ width: "16%" }} />
           </colgroup>
           <thead>
             <tr>
@@ -478,7 +471,6 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
               {th("num", "馬番")}
               {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・騎手・馬体重・調教師）")}
               {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "勝率で並べ替え（連対率・複勝率は下段、『そのほか』から並べ替え）")}
-              {th("emegu", "直近指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "直近の実測めぐ指数（左が古く右が最新。1点＝0.1秒。並べ替えは平均）")}
               {th("evw", calibratedEv ? "期待値(較正後)" : "期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
               {th("odds", "想定単勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（下段: 想定複勝）")}
             </tr>
@@ -487,7 +479,8 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
             {sorted.map((p, i) => {
               const ev = evOf(p);
               return (
-                <tr key={p.horse_number ?? i} style={{ background: rowBgOf(p) }}>
+                <Fragment key={p.horse_number ?? i}>
+                <tr className="pt-r1" style={{ background: rowBgOf(p) }}>
                   <td>{wakuChip(p, 22)}</td>
                   <td>{numChip(p, 22)}</td>
                   <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
@@ -496,10 +489,11 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
                     <span className="sub">{[p.trainer_name, p.buy_tier && p.buy_tier !== "—" ? `推奨 ${p.buy_tier}` : null].filter(Boolean).join("　")}</span>
                   </td>
                   <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top2_prob)} / {fmtPct(p.top3_prob)}</span></td>
-                  <td className="sep"><RecentMeguCell bench={bench} e={p.expected_megu} onOpen={() => openPast(p.horse_number)} /></td>
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>複 {ev.pl.text}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
                 </tr>
+                <tr className="pt-r2" style={{ background: rowBgOf(p) }}><td colSpan={6}><PastRunStrip e={p.expected_megu} bench={bench} /></td></tr>
+                </Fragment>
               );
             })}
           </tbody>
@@ -539,18 +533,15 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
                 <span style={{ color: "var(--text-dim)" }} title="想定複勝オッズ">複勝 {placeOdds(p)}</span>
                 {p.buy_tier && p.buy_tier !== "—" && <span style={{ color: "var(--text-dim)" }}>推奨 {p.buy_tier}</span>}
               </div>
-              <div className="r3" style={{ color: "var(--text-dim)" }}>
-                <span>直近指数 </span><RecentMeguCell bench={bench} e={p.expected_megu} wide onOpen={() => openPast(p.horse_number)} />
-              </div>
+              <PastRunStrip e={p.expected_megu} bench={bench} />
             </div>
           );
         })}
       </div>
 
-      {megu && (
+      {megu?.data_through && preds.some((p) => p.expected_megu?.recent?.length) && (
         <p style={{ fontSize: 11, color: "var(--text-dim)", padding: "6px 10px 0" }}>
-          直近指数: 過去の走の実測めぐ指数（左が古く右が最新、淡色は低信頼）。{megu.data_through ? `指数データは ${megu.data_through.slice(5).replace("-", "/")} まで。` : ""}
-          1点＝0.1秒、斤量55kg換算。今回の指数の想定は出しません（予測精度への寄与が小さいため）。{bench && <> 緑の数字は、このクラス（{benchmarkTitle(bench)}）の突破ライン {bench.line.toFixed(0)} 以上。</>}
+          指数データは {megu.data_through.slice(5).replace("-", "/")} まで（直近の週末分は、確定結果の反映が数日遅れます）。
         </p>
       )}
       {!hasPred && (
@@ -666,7 +657,7 @@ function RacePanel({
           <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} bench={pred.class_benchmark} />
         )}
         {pred && !failed && preds.length > 0 && (
-          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} classBenchmark={pred.class_benchmark} lapForecast={pred.lap_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />
+          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />
         )}
       </div>
     </section>
