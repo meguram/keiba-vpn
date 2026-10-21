@@ -77,7 +77,7 @@ export function Nav() {
           gap: 8,
         }}>
           <span style={{ fontSize: 16 }}>🏇</span>
-          <span>keiba-vpn</span>
+          <span>めぐAI</span>
         </Link>
 
         {!isHome && (
