@@ -223,7 +223,7 @@ def integrated_scores(d: pd.DataFrame, cols: list[str], l2=3.0) -> pd.DataFrame:
     d["ridx"] = pd.factorize(d["race_id"])[0]
     d["pw_int"] = np.nan
     d["p3_int"] = np.nan
-    for ev in (2022, 2023, 2024, 2025):
+    for ev in sorted(d["year"].unique()):
         tr = d[(d["year"] != ev) & (d["year"] <= 2024)]
         te_i = d["year"] == ev
         te = d[te_i]
@@ -371,14 +371,25 @@ def ruin_prob(S, R, n_races=300, n_sim=2000, bank_mult=30.0, seed=0):
     return ruined / n_sim
 
 
-def cmd_bet(a) -> None:
+def bet_inputs(d: pd.DataFrame):
+    """印の表に馬番・単勝オッズを足し、オッズ・払戻が壊れたレースを除く（tp48_2026 と同じ除外）。"""
     from src.scripts.data import tp48_eval as t48
+
+    frame = pd.read_parquet(BET / "tp36/frame_all.parquet", columns=["race_id", "horse_id", "horse_number", "win_odds"])
+    d = d.merge(frame, on=["race_id", "horse_id"], how="inner")
+    inv = (1.0 / d["win_odds"].where(d["win_odds"] >= 1.0)).groupby(d["race_id"]).sum()
+    bad_odds = set(inv[~inv.between(1.0, 1.6)].index) | set(d.loc[~(d["win_odds"] >= 1.0), "race_id"])
+    hits, bad = t48.load_hits_all()
+    pay26 = pd.read_parquet(ROOT / "data/local/modeling/betting_2026/payoff.parquet")
+    bad = set(bad) | set(pay26.loc[pay26["ambiguous"] | ~pay26["parsed"], "race_id"]) | bad_odds
+    return d, hits, bad
+
+
+def cmd_bet(a) -> None:
     from src.scripts.data.tp50_lib import reality_check, roi_ci
 
     d = pd.read_parquet(OUT / "integrated.parquet")
-    frame = pd.read_parquet(BET / "tp36/frame_all.parquet", columns=["race_id", "horse_id", "horse_number", "win_odds"])
-    d = d.merge(frame, on=["race_id", "horse_id"], how="inner")
-    hits, bad = t48.load_hits_all()
+    d, hits, bad = bet_inputs(d)
     names = rule_names()
     variants = ["base", "int", "fit"]
     rows = {(v, r): [] for v in variants for r in names}   # (variant, rule) → [(year, race_id, S, R)]
@@ -429,11 +440,168 @@ def cmd_bet(a) -> None:
 
 
 
+# ───────────────────────── 各段階の単独の予測力 ─────────────────────────
+def auc(score: np.ndarray, y: np.ndarray) -> float:
+    m = ~np.isnan(score)
+    r = pd.Series(score[m]).rank().to_numpy()
+    yy = y[m]
+    n1, n0 = yy.sum(), (1 - yy).sum()
+    return float((r[yy == 1].sum() - n1 * (n1 + 1) / 2) / (n1 * n0))
+
+
+def within_race_corr(d: pd.DataFrame, col: str, sign: float = 1.0) -> tuple[float, int]:
+    """レース内順位相関（col が高いほど着順が良い想定、sign=-1 で反転）の平均。レース単位。"""
+    x = d[["race_id", col, "finish_position"]].dropna()
+    x = x[x.groupby("race_id")[col].transform("size") >= 6]
+    a = x.groupby("race_id")[col].rank()
+    b = -x.groupby("race_id")["finish_position"].rank()
+    xa = pd.DataFrame({"r": x["race_id"], "a": a * sign, "b": b})
+    g = xa.groupby("r")
+    xa["a"] -= g["a"].transform("mean")
+    xa["b"] -= g["b"].transform("mean")
+    num = (xa["a"] * xa["b"]).groupby(xa["r"]).sum()
+    den = np.sqrt((xa["a"] ** 2).groupby(xa["r"]).sum() * (xa["b"] ** 2).groupby(xa["r"]).sum())
+    c = (num / den).dropna()
+    return float(c.mean()), int(len(c))
+
+
+def cmd_stages(a) -> None:
+    feats = pd.read_parquet(OUT / "features.parquet")
+    feats["year"] = pd.to_datetime(feats["date"]).dt.year
+    f = feats[(feats["year"] >= 2022) & (feats["year"] <= 2025) & (feats["field_size"] >= 6)].copy()
+    f["y3"] = (f["finish_position"] <= 3).astype(float)
+    f["y1"] = (f["finish_position"] == 1).astype(float)
+    out: dict = {}
+    # (1) レースタイプ: 直前までの流れ R_* が、そのレース自身の実現値（fb/kb/chalk/inside/attr）をどれだけ予測するか
+    runs = ty.prepare_runs(pd.concat([pd.read_parquet(p) for p in sorted((ROOT / "data/page_reference/tables").glob("*/race_result_flat.parquet"))], ignore_index=True))
+    rl = ty.race_level(runs)
+    rl["year"] = pd.to_datetime(rl["date"]).dt.year
+    rr = f.groupby("race_id").first()[[f"R_{c}" for c in ty.RACE_SIG]].reset_index()
+    rl = rl.merge(rr, on="race_id", how="inner")
+    rl = rl[(rl["year"] >= 2022) & (rl["year"] <= 2025)]
+    rt = {}
+    for c in ty.RACE_SIG:
+        x = rl[[c, f"R_{c}"]].dropna()
+        # 同じ競馬場・面の長期平均との比較: 流れ（R_）が長期平均より当たるか
+        base = rl.groupby(["venue", "surface"])[c].transform("mean").loc[x.index]
+        rho = float(np.corrcoef(x[c], x[f"R_{c}"])[0, 1])
+        rho_b = float(np.corrcoef(x[c], base)[0, 1])
+        rt[c] = {"corr_stream": round(rho, 4), "corr_venue_mean": round(rho_b, 4), "n_races": int(len(x))}
+    out["race_type"] = rt
+    # (2) 馬タイプ: 6 タイプ + 不明の複勝率・勝率
+    out["horse_type"] = {int(k): {"n": int(len(g)), "top3": round(float(g["y3"].mean()), 4), "win": round(float(g["y1"].mean()), 4)} for k, g in f.groupby("tp")}
+    # (3) 適合: 適合率の AUC、適合順位別の複勝率、レース内相関
+    fr = {"auc_top3_fit_rate": round(auc(f["fit_rate"].to_numpy(), f["y3"].to_numpy()), 4), "auc_top3_fit_lift": round(auc(f["fit_lift"].to_numpy(), f["y3"].to_numpy()), 4),
+          "within_race_corr_fit_rate": round(within_race_corr(f, "fit_rate")[0], 4), "by_rank": {}}
+    for k, g in f.groupby(f["fit_rank"].clip(upper=5)):
+        fr["by_rank"][int(k)] = {"n": int(len(g)), "top3": round(float(g["y3"].mean()), 4), "win": round(float(g["y1"].mean()), 4)}
+    # 馬自身の力を揃えた適合（同じ elo_rel_c の十分位の中で fit_best か否か）
+    f["elo_dec"] = pd.qcut(f["elo_rel_c"].rank(method="first"), 10, labels=False)
+    fr["top3_gain_given_elo_decile"] = round(float((f[f.fit_best == 1].groupby("elo_dec")["y3"].mean() - f[f.fit_best == 0].groupby("elo_dec")["y3"].mean()).mean()), 4)
+    out["fit"] = fr
+    # (4) 条件付き対戦比較（Elo）と不利補正
+    el = {}
+    for c in ("elo_rel_g", "elo_rel_c", "elo_pw_c", "elo_rel_g_adj", "elo_rel_c_adj", "elo_pw_c_adj"):
+        el[c] = {"auc_top3": round(auc(f[c].to_numpy(), f["y3"].to_numpy()), 4), "within_race_corr": round(within_race_corr(f, c)[0], 4)}
+    sub = f[(f["trouble_n3"] > 0)]
+    el["subset_trouble_n3>0"] = {"n_rows": int(len(sub)), **{c: round(within_race_corr(sub.assign(), c)[0], 4) for c in ("elo_rel_c", "elo_rel_c_adj")}}
+    out["pairwise"] = el
+    # 参考: V5 の複勝確率（2025 は最終版、2022〜24 は OOF）の AUC、人気（逆順）
+    out["reference"] = {"auc_top3_popularity_inv": round(auc(-f["popularity"].to_numpy(float), f["y3"].to_numpy()), 4),
+                        "within_race_corr_popularity_inv": round(within_race_corr(f, "popularity", -1.0)[0], 4)}
+    (OUT / "stages.json").write_text(json.dumps(out, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    print(json.dumps(out, ensure_ascii=False, indent=1, default=str), flush=True)
+
+
+# ───────────────────────── 2026 年（未使用）の 1 回だけの評価 ─────────────────────────
+RULES_FILE = ROOT / "src/scripts/data/tp56_2026_rules.json"
+RULES_2026 = [
+    {"id": "Y1", "variant": "int", "rule": "lsB_12_b", "note": "統合した印 + 穴(単勝12倍以上)軸の3連複、いなければ馬連+ワイド（2022〜24 年で平均・下限とも最良）"},
+    {"id": "Y2", "variant": "int", "rule": "lsC_12_b", "note": "統合した印 + 穴軸のワイド+3連複、いなければ馬連+ワイド"},
+    {"id": "Y3", "variant": "fit", "rule": "lsC_12_b", "note": "ユーザー手順を文字どおり（適合上位2グループ内から印 + 穴軸のワイド+3連複）"},
+    {"id": "Y4", "variant": "base", "rule": "lsB_12_b", "note": "既存の印（V5 の確率順）で同じ買い方（印の効果の切り分け）"},
+]
+
+
+def rules_hash(payload: dict) -> str:
+    import hashlib
+
+    body = json.dumps({"rules": payload["rules"], "periods": payload["periods"]}, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()[:16]
+
+
+def cmd_register(a) -> None:
+    from datetime import datetime
+
+    p = {"registered_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+         "purpose": "2026 年（未使用）の評価。評価前にこの一覧を固定する。確率は frame_all の 2026 年（V4 系）、係数は 2022〜24 年で学習。",
+         "periods": {"design": "2022〜2025", "final": "2026（1 回だけ）"}, "rules": RULES_2026}
+    p["hash"] = rules_hash(p)
+    RULES_FILE.write_text(json.dumps(p, ensure_ascii=False, indent=1), encoding="utf-8")
+    print("registered", RULES_FILE, p["hash"])
+
+
+def cmd_run2026(a) -> None:
+    from src.scripts.data.tp50_lib import roi_ci
+
+    out = Path(a.out)
+    if out.exists() and not a.force:
+        raise SystemExit(f"{out} が既にある。2026 年の評価は 1 回だけ")
+    payload = json.loads(RULES_FILE.read_text(encoding="utf-8"))
+    if rules_hash(payload) != payload.get("hash"):
+        raise SystemExit("規則のハッシュが固定時と違う")
+    d = with_2025(load_base())
+    feats = pd.read_parquet(OUT / "features.parquet")
+    feats["year"] = pd.to_datetime(feats["date"]).dt.year
+    f26 = feats[feats["year"] == 2026]
+    fr = pd.read_parquet(BET / "tp36/frame_all.parquet", columns=["race_id", "horse_id", "p_win", "p_top2", "p_top3", "year"])
+    fr = fr[fr["year"] == 2026].drop(columns="year")
+    x = f26.merge(fr, on=["race_id", "horse_id"], how="inner")
+    x["year"] = 2026
+    for t, c in (("y_win", 1), ("y_top2", 2), ("y_top3", 3)):
+        x[t] = (x["finish_position"] <= c).astype(float) if t != "y_win" else (x["finish_position"] == 1).astype(float)
+    x = x[x.groupby("race_id")["y_win"].transform("sum") == 1]
+    d = pd.concat([d, x], ignore_index=True).sort_values(["date", "race_id", "horse_id"], kind="stable").reset_index(drop=True)
+    d = integrated_scores(d, INT_COLS)
+    d, hits, bad = bet_inputs(d[d["year"].isin((2024, 2025, 2026))])
+    res = {"hash": payload["hash"], "registered_at": payload["registered_at"], "rules": {}}
+    for r in payload["rules"]:
+        rows = {2024: [], 2025: [], 2026: []}
+        for rid, g in d.groupby("race_id", sort=False):
+            if rid in bad or rid not in hits:
+                continue
+            g = g.reset_index(drop=True)
+            m = make_marks(g, r["variant"])
+            if m is None:
+                continue
+            M = [int(g["horse_number"].iloc[i]) for i in m]
+            odds = {int(h): float(o) for h, o in zip(g["horse_number"], g["win_odds"]) if o >= 1.0}
+            tk = tickets_for(r["rule"], M, odds)
+            ret = settle(hits[rid], tk)
+            if ret is None:
+                continue
+            rows[int(g["year"].iloc[0])].append((float(len(tk)), ret))
+        o = {}
+        for y, lst in rows.items():
+            if len(lst) < 50:
+                continue
+            S, R = np.array([a for a, _ in lst]), np.array([b for _, b in lst])
+            roi, lo, hi = roi_ci(S, R, 500)
+            o[str(y)] = {"n_races": len(lst), "roi": round(roi, 4), "lo": round(lo, 4), "hi": round(hi, 4), "hit": round(float((R > 0).mean()), 4),
+                         "reach500": round(float((R / S >= 5).mean()), 4), "roi_ex_top3": round(float((R.sum() - np.sort(R)[-3:].sum()) / S.sum()), 4),
+                         "points_per_race": round(float(S.mean()), 2), "ruin": ruin_prob(S, R)}
+        res["rules"][r["id"]] = {**r, "result": o}
+        print(r["id"], r["variant"], r["rule"], o, flush=True)
+    out.write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["screen", "marks", "bet"])
+    ap.add_argument("--out", default=str(OUT / "eval_2026.json"))
+    ap.add_argument("--force", action="store_true")
+    ap.add_argument("cmd", choices=["screen", "marks", "bet", "stages", "register", "run2026"])
     a = ap.parse_args()
-    {"screen": cmd_screen, "marks": cmd_marks, "bet": cmd_bet}.get(a.cmd, lambda x: print("未実装"))(a)
+    {"screen": cmd_screen, "marks": cmd_marks, "bet": cmd_bet, "stages": cmd_stages, "register": cmd_register, "run2026": cmd_run2026}.get(a.cmd, lambda x: print("未実装"))(a)
 
 
 if __name__ == "__main__":
