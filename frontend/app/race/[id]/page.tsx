@@ -10,6 +10,8 @@ import { featureEnabled } from "@/lib/features";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import ProbCalNote from "@/components/ProbCalNote";
 import type { ProbCalibration } from "@/lib/probCalibration";
+import { EntriesStatusBadge } from "@/components/EntriesStatus";
+import type { EntriesStatus } from "@/lib/entriesStatus";
 import { BetRecommend } from "@/components/BetRecommend";
 import { RaceNav } from "@/components/RaceNav";
 import { bracketChipStyle, bracketOf as wakuOf } from "@/lib/bracket";
@@ -168,6 +170,9 @@ type PredData = {
   feature_highlights?: { label?: string; direction?: string; magnitude?: string }[];
   bet_suggestion?: unknown;
   prob_calibration?: ProbCalibration | null;
+  /** 出馬表の公示の段階（特別登録／出走馬決定／出馬表確定／馬体重発表済み）と最終更新 */
+  entries_status?: EntriesStatus | null;
+  provisional_entries?: boolean;
   [k: string]: unknown;
 };
 
@@ -475,6 +480,7 @@ export default function RaceDetailPage() {
         </a>
       </div>
       <h1 style={{ fontSize: narrow ? 20 : 26, fontWeight: 700, color: "#fff", marginBottom: 8, overflowWrap: "anywhere" }}>{rd.race_name ?? raceId}</h1>
+      {predData?.entries_status && <div style={{ margin: "0 0 10px" }}><EntriesStatusBadge status={predData.entries_status} /></div>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 13, color: "var(--text-dim)" }}>
         {[rd.date, rd.surface && `馬場: ${rd.surface}`, rd.distance && `${rd.distance}m`, rd.direction, rd.weather && `☁ ${rd.weather}`, rd.track_condition && `馬場: ${rd.track_condition}`, rd.start_time && `🕐 ${rd.start_time}`]
           .filter(Boolean)
@@ -540,14 +546,16 @@ export default function RaceDetailPage() {
         </thead>
         <tbody>
           {shutubaEntries.map((e, i) => {
-            const hn = String(e.horse_number ?? e.number ?? i + 1);
+            const rawNo = Number(e.horse_number ?? e.number);
+            const hasNo = Number.isFinite(rawNo) && rawNo > 0;       // 馬番が未確定（特別登録・出走馬決定の段階）は 0 で来る → 『—』を出す
+            const hn = hasNo ? String(rawNo) : "";
             const oddVal = positive(e.win_odds) ?? oddsMap[hn] ?? positive(e.odds);
             const { text: oddsText, cls: oddsColorClass } = fmtOdds(oddVal as number | undefined);
             const megu = getMeguValues(e);
             return (
-              <tr key={hn} style={{ transition: "background 0.12s" }}>
-                <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null)} /></td>
-                <td style={{ ...TD, textAlign: "center" }}><NumBadge no={hn} bn={wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null)} /></td>
+              <tr key={hasNo ? hn : `p${i}-${e.horse_id ?? ""}`} style={{ transition: "background 0.12s" }}>
+                <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={hasNo ? wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null) : null} /></td>
+                <td style={{ ...TD, textAlign: "center" }}><NumBadge no={hasNo ? hn : null} bn={hasNo ? wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null) : null} /></td>
                 <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
                   <HorseName id={e.horse_id} name={e.horse_name} />
                 </td>
@@ -656,10 +664,11 @@ export default function RaceDetailPage() {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <button
           style={{ background: "#1e3a5f", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)", padding: "7px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: predicting ? "not-allowed" : "pointer", opacity: predicting ? 0.6 : 1 }}
-          disabled={predicting}
+          disabled={predicting || predData?.provisional_entries === true}
+          title={predData?.provisional_entries === true ? "出馬表が確定する前日以降に実行できます" : undefined}
           onClick={runPrediction}
         >
-          {predicting ? "⏳ 予測実行中…" : hasPred ? "🔄 予測を再実行" : "🤖 AI予測を実行"}
+          {predicting ? "⏳ 予測実行中…" : predData?.provisional_entries === true ? "🤖 確定後に予測" : hasPred ? "🔄 予測を再実行" : "🤖 AI予測を実行"}
         </button>
         {predData?.model_description && (
           <span style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, background: "rgba(59,130,246,0.12)", color: "#60a5fa" }}>
@@ -676,7 +685,9 @@ export default function RaceDetailPage() {
 
       {!hasPred && (
         <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-dim)", padding: "10px 14px", borderRadius: 8, background: "rgba(36,48,73,0.4)" }}>
-          予測結果がありません。「AI予測を実行」で算出できます。
+          {predData?.provisional_entries === true
+            ? "出馬表は公示の途中です。AI 予測は、出走馬と枠順が確定した前日以降に表示します。"
+            : "予測結果がありません。「AI予測を実行」で算出できます。"}
             </div>
           )}
 

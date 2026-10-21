@@ -41,8 +41,9 @@ _EVE = _Q + "EVE_TASKS"
 ENDPOINTS: tuple[Endpoint, ...] = (
     Endpoint("race_list", "レース一覧", "開催週の早い段階から部分的（火曜時点で 14R）。全レースは週後半", "medium", True, ("race_list", "date_all"),
              (Fetch("daily-race-lists", "毎日 07:00（設計は 17:00 も）"),)),
-    Endpoint("race_card", "出馬表", "頭数・馬名・騎手は火曜から。枠番/馬番は枠順確定後（木〜金）。馬体重は当日", "medium", True, ("race_shutuba", "date_cards"),
-             (Fetch("raceday-eve", "前日 18:00", "race_shutuba", _EVE),
+    Endpoint("race_card", "出馬表", "日曜夕に特別登録（登録馬・暫定）→ 木曜に出走馬決定 → 前日の金16時/土10時に枠番・馬番が確定。馬体重は当日", "medium", True, ("race_shutuba", "date_cards"),
+             (Fetch("entries-sync", "10分おき起動。日曜18:30/19:30・月〜水 08:30/20:00・木 12:30〜21:30・金 10:00〜18:30・土 10:05〜12:30 の checkpoint で未来の開催日の出馬表を段階的に取得（config/entries_schedule.json）"),
+              Fetch("raceday-eve", "前日 18:00（最終確認）", "race_shutuba", _EVE),
               Fetch("raceday-runner", "各R T-15", "race_shutuba", _Q + "T15_RACE_TASKS"),
               Fetch("raceday-weight-runner", "各R T-65〜T-30（馬体重の検知。cron 未登録・手動起動）", "race_shutuba", _Q + "WEIGHT_WATCH_TASKS"))),
     Endpoint("odds", "単複オッズ", "前売開始（通常は前日夕方）以降。確定値は発走後も残る", "medium", True, ("race_odds", "race_odds_t60", "race_odds_t15", "race_odds_t10", "race_odds_t05", "race_odds_t02", "race_odds_final"),

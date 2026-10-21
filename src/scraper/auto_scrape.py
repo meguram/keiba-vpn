@@ -1611,6 +1611,7 @@ def show_status():
         "recent-retry":          "直近の開催日の未取得データ取り直し (確定結果・ラップ・指数・厩舎コメント)",
         "feature-accumulate":    "履歴特徴量の蓄積 (当年分を作り直し、推論モードとのずれを記録)",
         "daily-race-lists":      "日次レース一覧 (今日〜カレンダー末尾)",
+        "entries-sync":          "出馬表の段階収集 (特別登録→出走馬決定→前日確定。10分おき起動・checkpoint のみ取得)",
         "jra-baba-morning":      "JRA馬場情報 (朝ポーリング 05:00-09:00)",
     }
 
@@ -1705,6 +1706,22 @@ def task_raceday_weight_runner():
     return _asq.task_raceday_weight_runner()
 
 
+def task_entries_sync():
+    """出馬表の段階的な収集（JRA の公示に沿う: 日曜夕の特別登録 → 月〜水の更新 → 木曜の出走馬決定 → 前日の金16時／土10時の確定）。
+
+    cron は 10 分おきに呼ぶ。config/entries_schedule.json の checkpoint の時刻から window 以内で未実施のときだけ取得し、
+    それ以外は即終了する（netkeiba には触れない）。仕様: docs/operations/entries_timeline.md
+    """
+    from src.scraper.entries_sync import run_entries_sync
+
+    result = run_entries_sync()
+    if result.get("status") == "skipped":
+        logger.info("entries-sync: スキップ (%s)", result.get("reason"))
+        return
+    logger.info("entries-sync: %s", {k: result.get(k) for k in ("checkpoint", "races", "to_fetch", "fetched", "phases")})
+    _save_status("entries-sync", result)
+
+
 TASKS = {
     "raceday-eve":            task_raceday_eve,
     "raceday-comment":        task_raceday_comment,
@@ -1720,6 +1737,7 @@ TASKS = {
     "recent-retry":           task_recent_retry,
     "feature-accumulate":     task_feature_accumulate,
     "daily-race-lists":       task_daily_race_lists,
+    "entries-sync":           task_entries_sync,
     "jra-baba-morning":       task_jra_baba_morning,
 }
 

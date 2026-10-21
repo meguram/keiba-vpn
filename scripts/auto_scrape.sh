@@ -16,6 +16,7 @@
 #   auto_scrape.sh weekly        → weekly-update         (金 18:00: 直近10日の確定結果・指数・バロメーター)
 #   auto_scrape.sh name_index    → horse-name-index      (金 18:30)
 #   auto_scrape.sh race_lists    → daily-race-lists      (毎日 07:00 / 17:00)
+#   auto_scrape.sh entries_sync  → entries-sync          (10 分おき: 出馬表の段階収集。docs/operations/entries_timeline.md)
 #   auto_scrape.sh baba          → jra-baba-morning      (05:00-09:00 の10分毎)
 #   auto_scrape.sh barometer     → barometer-retry       (毎日: 公開済み・未取得のバロメーター)
 #
@@ -82,6 +83,9 @@ case "${1:-}" in
     ;;
   race_lists)
     TASK="daily-race-lists"
+    ;;
+  entries_sync)
+    TASK="entries-sync"             # 出馬表の段階収集（10 分おき。checkpoint の時刻だけ取得）
     ;;
   baba)
     TASK="jra-baba-morning"

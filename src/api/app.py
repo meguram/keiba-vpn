@@ -2888,6 +2888,12 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
                     if meta:
                         gcs_info[rid] = meta
 
+        try:
+            from src.api.entries_status import race_list_fields
+
+            entries_fields = race_list_fields(race_ids)       # 出馬表の公示の段階（収集側の状態ファイル）。無いレースは付かない
+        except Exception:  # noqa: BLE001
+            entries_fields = {}
         races = []
         for r in sorted(jra, key=lambda x: (x.get("venue", ""), x.get("round", 0))):
             rid = r["race_id"]
@@ -2906,6 +2912,7 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
                 "start_time": db.get("start_time") or r.get("start_time"),
                 "entries_count": r.get("entries_count"),
             }
+            row.update(entries_fields.get(rid, {}))
             if with_result_status:
                 row["has_race_result"] = bool(st.get("has_confirmed"))
                 row["has_result_flash"] = bool(st.get("has_flash"))
@@ -6939,6 +6946,12 @@ async def get_race_predictions(race_id: str):
     2026-10-01: 「表示されない/古い」事象の検知用に `freshness` フィールド
     （age_hours / is_stale 等）を付与。既存クライアントは未知キーを無視するため後方互換。
     """
+    def _with_entries_status(resp: dict) -> dict:
+        # 出馬表の公示の段階（特別登録／出走馬決定／出馬表確定／馬体重発表済み）と最終更新。収集側の状態ファイルを読むだけ
+        from src.api.entries_status import attach_entries_status
+
+        return attach_entries_status(resp, race_id, _get_storage())
+
     def _with_kesi(resp: dict) -> dict:
         # 市場補正（KEIBA_PROB_CALIBRATION=1 のときだけ。実オッズが揃うレースで確率・EV・印を付け直す。保存済みの予測は書き換えない）
         try:
@@ -7052,7 +7065,7 @@ async def get_race_predictions(race_id: str):
     if data:
         data = dict(data)
         data["freshness"] = _prediction_freshness(data)
-        return JSONResponse(await asyncio.to_thread(lambda: _with_position(data)))
+        return JSONResponse(await asyncio.to_thread(lambda: _with_entries_status(_with_position(data))))
 
     # GCS に予測が無くても、ホストのローカルに推論経路の出力（shadow / バックフィル）があれば、それを注記つきで返す（GCS > shadow > バックフィル）
     def _local():
@@ -7062,7 +7075,7 @@ async def get_race_predictions(race_id: str):
 
     local = await asyncio.to_thread(_local)
     if local:
-        return JSONResponse(await asyncio.to_thread(lambda: _with_position(local)))
+        return JSONResponse(await asyncio.to_thread(lambda: _with_entries_status(_with_position(local))))
 
     # stg 環境: 実モデルの予測が無いレースは、予測を作り出さず『出馬表の馬 + 最新オッズ』だけを返す（実データの表示が前提）。
     # 画面の開発用にモックが要るときだけ KEIBA_STG_MOCK_PREDICTIONS=1（応答は _mock: true）。
@@ -7086,7 +7099,14 @@ async def get_race_predictions(race_id: str):
                 return mock_predictions(race_id, horse_ids)
             return JSONResponse(await asyncio.to_thread(_mock))
         from src.api.entries_only_predictions import entries_only_predictions
-        return JSONResponse(await asyncio.to_thread(lambda: _with_position(entries_only_predictions(race_id, _get_storage()))))
+
+        def _entries_only():
+            resp = entries_only_predictions(race_id, _get_storage())
+            if resp.get("provisional_entries"):          # 馬番が無い段階（特別登録・出走馬決定）: 位置取り等は付けず、出馬表と段階だけを返す
+                return _with_entries_status(resp)
+            return _with_entries_status(_with_position(resp))
+
+        return JSONResponse(await asyncio.to_thread(_entries_only))
 
     return JSONResponse({"status": "not_found"}, status_code=404)
 

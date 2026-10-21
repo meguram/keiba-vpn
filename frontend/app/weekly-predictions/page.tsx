@@ -12,6 +12,8 @@ import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { MeguTable } from "@/components/MeguTable";
 import ProbCalNote from "@/components/ProbCalNote";
+import { EntriesDaySummary, EntriesStatusBadge } from "@/components/EntriesStatus";
+import type { EntriesStatus } from "@/lib/entriesStatus";
 import type { ProbCalibration } from "@/lib/probCalibration";
 import { PredExtras } from "@/components/PredExtras";
 import { GrowthBadge } from "@/components/GrowthBadge";
@@ -39,10 +41,16 @@ type RaceItem = {
   start_time?: string;
   track_condition?: string;
   entries_count?: number;
+  /** 出馬表の公示の段階（収集側が判定）。無いレースは出馬表待ち */
+  entries_phase?: string | null;
+  entries_label?: string | null;
+  entries_updated_at?: string | null;
 };
 
 type PredEntry = {
-  horse_number?: number;
+  horse_number?: number;                 // 馬番が未確定の段階（特別登録・出走馬決定）は API が null を返す（画面は『-』を出す）
+  /** 馬番が未確定の段階（特別登録・出走馬決定）では true */
+  horse_number_provisional?: boolean;
   horse_name?: string;
   horse_id?: string;
   bracket_number?: number | null;
@@ -101,6 +109,9 @@ type PredData = {
   scenario_forecast?: ScenarioForecast | null;
   gate_bias?: GateBias | null;
   prob_calibration?: ProbCalibration | null;
+  /** 出馬表の公示の段階と最終更新 */
+  entries_status?: EntriesStatus | null;
+  provisional_entries?: boolean;
   error?: string;
 };
 
@@ -628,6 +639,12 @@ function RacePanel({
         </h2>
         <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{conds.join(" ・ ")}</span>
 
+        {(pred?.entries_status || race.entries_phase) && (
+          <EntriesStatusBadge
+            status={pred?.entries_status ?? { phase: race.entries_phase, label: race.entries_label ?? undefined, updated_at: race.entries_updated_at }}
+          />
+        )}
+
         {value && value.level !== "none" && (
           <span
             style={{
@@ -649,7 +666,7 @@ function RacePanel({
               background: hasPred ? "rgba(34,197,94,0.12)" : "rgba(107,125,149,0.12)",
               color: hasPred ? "var(--ok)" : "var(--text-dim)",
             }}>
-              {hasPred ? "✓ 予測済" : "未予測"}
+              {hasPred ? "✓ 予測済" : pred.provisional_entries ? "確定後に予測" : "未予測"}
             </span>
           )}
           <Link
@@ -971,6 +988,7 @@ export default function WeeklyPredictionsPage() {
 
         {!loadingRaces && races.length > 0 && (
           <>
+            <EntriesDaySummary races={races} />
             <RaceStrip
               races={races}
               venue={activeVenue}
