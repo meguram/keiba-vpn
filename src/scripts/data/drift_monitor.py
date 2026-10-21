@@ -425,6 +425,38 @@ def shadow_section(root: Path, cfg: dict, df: pd.DataFrame, window: int = 8) -> 
             "note": "優劣の検出には約 2,000 レースが要る。区間が 0 を跨ぐ間は優劣を言わない（切替判断に使うのは readiness の基準）"}
 
 
+def benchmark_section(root: Path, cfg: dict, window: int, base_year_from: str = "2025-01-01") -> dict:
+    """固定の簡素な基準モデル（drift_benchmark。2021-2024 年で学習、結果の表だけの特徴量）との比較。市場や世の中が変わったのか、こちらのモデル・入力が悪くなったのかの切り分け。
+    直近窓の『基準モデル−市場』の差と、2025 年の同じ期間の平均を出す。両方の差が上がれば市場側、こちらだけなら自前のモデル・入力側。"""
+    try:
+        import lightgbm as lgb
+
+        from src.scripts.data import drift_benchmark as B
+        from src.scripts.data.drift_data import market_probs
+
+        d = B.build(root)
+        tr = d[(d["year"] >= 2021) & (d["year"] <= 2024)]
+        model = lgb.LGBMClassifier(n_estimators=300, learning_rate=0.05, num_leaves=31, min_child_samples=100, subsample=0.8, subsample_freq=1, colsample_bytree=0.8,
+                                   reg_lambda=5.0, verbose=-1, random_state=0)
+        model.fit(tr[B.FEATS], tr["y_win"])
+        te = d[d["year"] >= 2025].copy()
+        te["p_raw"] = model.predict_proba(te[B.FEATS])[:, 1]
+        te["p_b"] = te["p_raw"] / te.groupby("race_id")["p_raw"].transform("sum")
+        mk = pd.concat([market_probs(root / "data/page_reference/tables", y)[0] for y in sorted(te["year"].unique())])
+        te = te.merge(mk, on=["race_id", "horse_number"], how="inner")
+        te["week"] = M.iso_week_of(te["date"])
+        te["dd"] = M.bin_ll(te["y_win"], te["p_b"]) - M.bin_ll(te["y_win"], te["p_mkt"])
+        last = sorted(te["week"].unique())[-window:]
+        cur = te[te["week"].isin(last)]
+        same = te[(te["date"].dt.year == 2025) & (te["date"].dt.month.isin(sorted(cur["date"].dt.month.unique())))]
+        gc, sc = M.cluster_gap_se(cur, "dd")
+        gb, sb = M.cluster_gap_se(same, "dd")
+        return {"status": "ok", "window_weeks": last, "gap_benchmark": gc, "se": sc, "gap_benchmark_2025_same_months": gb, "se_2025": sb, "change": gc - gb,
+                "change_se": float(np.hypot(sc, sb)), "note": "基準モデルの差が上がっていなければ、差の拡大は市場側ではなく自前のモデル・入力側"}
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "unavailable", "error": str(exc)[:200]}
+
+
 # ---------------------------------------------------------------- 本体
 
 def read_ack(out_dir: Path) -> dict:
@@ -498,6 +530,7 @@ def build_report(root: Path, cfg: dict, with_features: bool = True, with_shadow:
         rep["labelfree"] = labelfree_section(root, cfg, window, base_end)
     except Exception as exc:  # noqa: BLE001
         rep["labelfree"] = {"status": "unavailable", "error": str(exc)[:200]}
+    rep["benchmark"] = benchmark_section(root, cfg, window)
     rep["features"] = feature_section(root, cfg) if with_features else {"status": "skipped"}
     rep["shadow_v5"] = shadow_section(root, cfg, raw[raw["src"] == "forward"], window) if with_shadow else {"status": "skipped"}
     stage = seq.iloc[-1]["stage"] if len(seq) else "保留"

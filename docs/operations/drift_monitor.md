@@ -33,6 +33,7 @@
 | 予測の尖り | モデルの勝率の対数オッズの SD ÷ 市場のそれ（`sd_ratio`）。低下は入力の情報の欠落を疑う |
 | 管理図 | 窓の差（基準の平均と ±2σ・±3σ）、週次の差の EWMA（λ=0.2）と CUSUM（k=0.5, h=5） |
 | 区分 | `ばらつきの範囲`（窓の差 ≤ 基準+2σ）／`境界`／`有意な悪化`（窓の差−2×SE が基準の平均を超え、かつ基準+3σ 超え）／`保留` |
+| 基準モデルとの比較 | 結果の表だけから作った固定の簡素なモデル（`drift_benchmark.py`、2021-2024 年で学習、調教・血統・オッズなし）の『市場との差』の直近窓と、2025 年の同じ月との変化。**これが動いていれば市場側・世の中の変化、動かず自前の差だけが上がっていれば自前のモデル・入力側**（2026 年は 6〜10 月の変化 +0.0025±0.0023、直近窓 −0.0002±0.0035 で動いていない） |
 | 層別 | 芝/ダ・距離帯・頭数・競馬場・新馬/未勝利・年齢・月。直近窓の差を基準期間の同じ層と比べる片側 z 検定を BH で FDR 補正（q<0.10 を強調）。**参考扱い**（多重比較のため原因の手がかり） |
 
 ### ラベルなし（先行指標。結果が出る前にも出せる）
@@ -99,7 +100,7 @@ bash scripts/cron/drift_monitor_weekly.sh
 | ラベルなしの先行指標 | `src/scripts/data/drift_labelfree.py` |
 | 調教ページの被覆 | `src/scripts/data/drift_coverage.py` |
 | 特徴量の抜き取り（推論経路） | `src/scripts/data/drift_dump_features.py` |
-| 一回きりの診断 | `drift_diagnose.py`・`drift_diagnose_features.py`・`drift_mask_experiment.py`・`drift_top_features.py` |
+| 一回きりの診断 | `drift_diagnose.py`・`drift_diagnose_features.py`・`drift_mask_experiment.py`・`drift_top_features.py`・`drift_benchmark.py` |
 | 自動起動 | `src/pipeline/inference/drift_monitor_hook.py`（auto_scrape から） |
 | テスト | `tests/scripts/test_drift_metrics.py`・`test_drift_monitor.py`・`test_drift_diagnose.py` |
 

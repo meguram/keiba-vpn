@@ -122,6 +122,11 @@ def render_html(rep: dict) -> str:
         if lf.get("new_ids"):
             n = lf["new_ids"]
             P.append(f"<p>新しい ID の出現率（最新週）: 初出走の馬 {_f(n.get('new_horse'), 3)} / 学習期間に出ていない騎手 {_f(n.get('new_jockey'), 3)} / 調教師 {_f(n.get('new_trainer'), 3)}</p>")
+    bm = rep.get("benchmark", {})
+    if bm.get("status") == "ok":
+        P.append("<h2>市場側か自前か: 固定の簡素な基準モデルとの比較</h2>" + _table(["", "基準モデル−市場の差", "SE"], [
+            ["直近窓", _f(bm["gap_benchmark"], 4, True), _f(bm["se"], 4)], ["2025 年の同じ月", _f(bm["gap_benchmark_2025_same_months"], 4, True), _f(bm["se_2025"], 4)],
+            ["変化", _f(bm["change"], 4, True), _f(bm["change_se"], 4)]]) + f"<p class='muted'>{html.escape(bm.get('note', ''))}</p>")
     cv = rep.get("coverage", {})
     P.append(f"<h2>入力データの供給（調教ページの被覆）: {html.escape(str(cv.get('status')))}</h2>")
     if cv.get("table"):

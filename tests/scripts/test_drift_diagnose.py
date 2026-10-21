@@ -83,3 +83,13 @@ def test_pick_days_and_spread():
     assert DD.spread(list("abcdefghij"), 4) == ["a", "c", "f", "h"]
     assert DD.spread(["a", "b"], 5) == ["a", "b"]
     assert DD.parse_months("1-3,7") == [1, 2, 3, 7]
+
+
+def test_benchmark_asof_stats_exclude_same_day():
+    from src.scripts.data import drift_benchmark as B
+
+    df = pd.DataFrame({"horse_id": ["a", "a", "a", "b"], "date": pd.to_datetime(["2026-01-05", "2026-01-12", "2026-01-12", "2026-01-12"]),
+                       "y_win": [1.0, 0.0, 1.0, 0.0], "y_top3": [1.0, 1.0, 1.0, 0.0], "pct": [0.1, 0.5, 0.2, 0.9]})
+    s = B.asof_stats(df, "horse_id", "h")
+    assert s["h_n"].tolist() == [0.0, 1.0, 1.0, 0.0]            # 同日の別レースは含めない。初回は 0 件
+    assert s["h_win"].iloc[1] > s["h_win"].iloc[0]                 # 前走で勝った馬は勝率の推定が上がる
