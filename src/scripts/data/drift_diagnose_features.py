@@ -26,11 +26,48 @@ from src.scripts.data.drift_monitor import load_dumps
 META = {"race_id", "horse_id", "day", "p_win", "p_top2", "p_top3"}
 
 
+_GROUPS: dict[str, str] | None = None
+LINEAGE = "data/local/modeling/training_pipeline/features/feature_lineage.json"
+
+
+def _group_map() -> dict[str, str]:
+    """列名 → 系統（OWNER/SELF8/FIELD7/PED(v4)、CY/PX(v5)、HIST127(履歴)、TL、AUX、STAGE、EXTRAS、それ以外は LAYER_A+REL）。"""
+    global _GROUPS
+    if _GROUPS is not None:
+        return _GROUPS
+    from src.pipeline.features import serving_v5 as sv5
+
+    g: dict[str, str] = {}
+    base = Path(__file__).resolve().parents[3]
+    try:
+        for k, cols in json.loads((base / "src/pipeline/features/serving_v4_columns.json").read_text(encoding="utf-8")).items():
+            g.update({c: k.upper() + "(v4)" for c in cols})
+    except Exception:  # noqa: BLE001
+        pass
+    for k, cols in sv5.v5_columns().items():
+        g.update({c: {"CY": "CY(wc_)", "PX": "PX(血統の位置別)"}.get(k, k) for c in cols})
+    lin = base / LINEAGE
+    if lin.exists():
+        g.update({c: "HIST127(履歴)" for c in json.loads(lin.read_text(encoding="utf-8")).get("features", {})})
+    for c in ("oikiri_eval", "has_comment", "comment_len", "comment_pos", "comment_neg", "oikiri_eval_rank", "oikiri_eval_gap"):
+        g[c] = "EXTRAS(追い切り評価・コメント)"
+    for c in ("s_time_pred", "s_time_gap", "s_rank_pred"):
+        g[c] = "STAGE(前段)"
+    _GROUPS = g
+    return g
+
+
 def family(col: str) -> str:
-    for pre in ("mtl_", "wc_", "tl_", "ped_", "pd_", "ob_", "exp_", "seq_", "fdr_", "fd_", "fm_", "fc_", "fr_", "fe_", "frn_", "s_", "o_", "px_"):
-        if col.startswith(pre):
-            return pre.rstrip("_")
-    return col.split("_")[0] if "_" in col else "base"
+    g = _group_map()
+    if col in g:
+        return g[col]
+    if col.startswith("tl_"):
+        return "TL(tl_)"
+    if col.startswith("mtl_"):
+        return "AUX(mtl_)"
+    if col.startswith("wc_"):
+        return "CY(wc_)"
+    return "LAYER_A+相対化+血統(v3)"
 
 
 def shift_table(ref: pd.DataFrame, cur: pd.DataFrame, cols: list[str]) -> pd.DataFrame:

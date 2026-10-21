@@ -60,6 +60,37 @@ def swap_in_aux_oof(X: pd.DataFrame, aux: pd.DataFrame) -> pd.DataFrame:
     return X
 
 
+def drop_training_predict(v3, X: pd.DataFrame, storage, frac: float, seed: int = 0) -> pd.DataFrame:
+    """X の tl_・wc_ を、馬の調教記録の frac を落とした状態で作り直し、予測し直す（相対化の列も、残った馬だけで作られる）。戻り値は p_win_d・p_top2_d・p_top3_d。"""
+    import hashlib
+
+    from src.pipeline.features import serving_stage_rel as ssr
+    from src.pipeline.features import serving_v5 as sv5
+
+    keys = ["race_id", "horse_id"]
+    hs = X["horse_id"].astype(str).unique().tolist()
+    recs = v3._training_records(hs, storage, 8)
+
+    def keep(h: str) -> bool:
+        return int(hashlib.md5(f"{seed}:{h}".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF >= frac
+
+    sub = {h: (r if keep(h) else None) for h, r in recs.items()}
+    base = X[keys + ["day"]].copy()
+    base["date"] = pd.to_datetime(base["day"].astype(str), format="%Y%m%d")
+    tl_cols = [c for c in v3.feature_cols if c.startswith(ssr.TL_PREFIX)]
+    wc_cols = [c for c in v3.feature_cols if c.startswith("wc_")]
+    X2 = X.copy()
+    tl = ssr.tl_columns_for_races(base[keys + ["date"]], sub, v3.tl_ref)
+    tl = base[keys].merge(tl, on=keys, how="left").drop(columns=keys).reindex(columns=tl_cols)
+    X2[tl_cols] = tl.to_numpy()
+    if wc_cols:
+        wc = sv5.cy_columns_for_races(base[keys + ["date"]], sub, v3.tl_ref)
+        wc = base[keys].merge(wc, on=keys, how="left").drop(columns=keys).reindex(columns=wc_cols)
+        X2[wc_cols] = wc.to_numpy()
+    P = v3.predict(X2)
+    return pd.DataFrame({"p_win_d": P["p_win"].to_numpy(), "p_top2_d": P["p_top2"].to_numpy(), "p_top3_d": P["p_top3"].to_numpy()}, index=X.index)
+
+
 def parse_months(s: str) -> list[int]:
     out: list[int] = []
     for part in s.split(","):
@@ -80,6 +111,8 @@ def main() -> None:
     ap.add_argument("--out", default="data/local/inference/drift_features")
     ap.add_argument("--max-load", type=float, default=14.0)
     ap.add_argument("--bundle", default="", help="省略時は v5 の既定（KEIBA_V5_BUNDLE）")
+    ap.add_argument("--drop-training", type=float, default=0.0,
+                    help="0〜1: 馬ごとの調教記録をこの割合だけ落として tl_・wc_ を作り直した予測（p_win_d など）も付ける。2026 年 4 月以降の『調教ページが揃っていない』状態の再現（マスク実験より実際に近い）")
     ap.add_argument("--stage", default="", help="前段モデルの置き場。省略時は v5 の既定（2025 年の日は学習に入っていない v4_verify_2024 を指定する）")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -156,6 +189,10 @@ def main() -> None:
                 P = v3.predict(X)
                 for k in ("p_win", "p_top2", "p_top3"):
                     X[k] = P[k].to_numpy()
+                if a.drop_training > 0:
+                    Pd = drop_training_predict(v3, X, storage, a.drop_training)
+                    for k in Pd.columns:
+                        X[k] = Pd[k].to_numpy()
                 parts.append(X)
             if parts:
                 (out_root / day[:4]).mkdir(parents=True, exist_ok=True)

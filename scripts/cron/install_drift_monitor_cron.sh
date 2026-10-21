@@ -5,8 +5,8 @@
 set -eu
 PROJECT_DIR="${1:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)}"
 TAG="KEIBA-DRIFT-MONITOR"
-# 金曜 20:30 JST = 金曜 11:30 UTC（cron はシステム時刻 = UTC）。weekly-update(18:00 JST)・barometer-retry(19:30 JST) の後
-LINE="30 11 * * 5 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${PROJECT_DIR}/scripts/cron/cron_run.sh drift-monitor-weekly -- bash ${PROJECT_DIR}/scripts/cron/drift_monitor_weekly.sh ${PROJECT_DIR} >> ${PROJECT_DIR}/logs/drift_monitor_weekly.log 2>&1 # ${TAG}"
+# 月曜 10:00 JST = 月曜 01:00 UTC（cron はシステム時刻 = UTC）。週末の結果・払戻・確定オッズが揃った後に週 1 回（追走難度 v2 の突き合わせは月曜 08:30 JST）
+LINE="0 1 * * 1 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${PROJECT_DIR}/scripts/cron/cron_run.sh drift-monitor-weekly -- bash ${PROJECT_DIR}/scripts/cron/drift_monitor_weekly.sh ${PROJECT_DIR} >> ${PROJECT_DIR}/logs/drift_monitor_weekly.log 2>&1 # ${TAG}"
 mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/data/local/meta/cron_backups"
 crontab -l 2>/dev/null > "${PROJECT_DIR}/data/local/meta/cron_backups/crontab_before_drift_monitor_$(date +%Y%m%d_%H%M%S).txt" || true
 TMP="$(mktemp)"

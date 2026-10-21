@@ -233,3 +233,131 @@ def iso_week_of(date: pd.Series) -> pd.Series:
 
 def fmt(x: float, nd: int = 4) -> str:
     return "—" if x is None or (isinstance(x, float) and math.isnan(x)) else f"{x:.{nd}f}"
+
+
+# ---------------------------------------------------------------- 週次監視の拡張（Brier・順位相関・市場の連対/複勝・分布・FDR・EWMA）
+
+def brier(y: np.ndarray, p: np.ndarray) -> float:
+    return float(np.mean((np.asarray(p, dtype=float) - np.asarray(y, dtype=float)) ** 2))
+
+
+def market_top_probs(df: pd.DataFrame, lam: float = 0.9) -> tuple[np.ndarray, np.ndarray]:
+    """市場の勝率(p_mkt)から、Harville で連対・複勝の確率を作る（市場の連対/複勝の参考値）。レースごと。df は race_id, p_mkt を持つ。"""
+    from src.utils.race_probabilities import harville_top2_prob, harville_top3_prob
+
+    p2 = np.zeros(len(df))
+    p3 = np.zeros(len(df))
+    pos = pd.Series(np.arange(len(df)), index=df.index)
+    for _, idx in df.groupby("race_id").indices.items():
+        q = df["p_mkt"].to_numpy()[idx] ** lam
+        q = q / q.sum()
+        p2[idx] = harville_top2_prob(q)
+        p3[idx] = harville_top3_prob(q)
+    del pos
+    return p2, p3
+
+
+def race_rank_corr(df: pd.DataFrame, p_col: str, y_col: str = "finish_position") -> float:
+    """予測が高い順と着順の、レースごとのスピアマン順位相関（符号を反転して、高いほど良い）の平均。"""
+    d = df[["race_id", p_col, y_col]].copy()
+    d["rp"] = d.groupby("race_id")[p_col].rank(ascending=False, method="average")
+    d["rf"] = d.groupby("race_id")[y_col].rank(ascending=True, method="average")
+    g = d.groupby("race_id")
+    mp, mf = g["rp"].transform("mean"), g["rf"].transform("mean")
+    cov = ((d["rp"] - mp) * (d["rf"] - mf)).groupby(d["race_id"]).sum()
+    vp = ((d["rp"] - mp) ** 2).groupby(d["race_id"]).sum()
+    vf = ((d["rf"] - mf) ** 2).groupby(d["race_id"]).sum()
+    r = cov / np.sqrt(vp * vf)
+    return float(r.replace([np.inf, -np.inf], np.nan).dropna().mean())
+
+
+def entropy_rel(df: pd.DataFrame, p_col: str) -> float:
+    """レースごとの勝率の分布のエントロピーを log(頭数) で割った値の平均（1 に近いほど平ら）。"""
+    d = df[["race_id", p_col]].copy()
+    d["h"] = -d[p_col].clip(1e-9, 1) * np.log(d[p_col].clip(1e-9, 1))
+    g = d.groupby("race_id")
+    return float((g["h"].sum() / np.log(g.size())).mean())
+
+
+def cluster_gap_se(df: pd.DataFrame, d_col: str = "d") -> tuple[float, float]:
+    """行ごとの差 d の平均と、レースでクラスタした標準誤差（比推定量）。"""
+    g = df.groupby("race_id")[d_col].agg(["sum", "size"])
+    n = g["size"].sum()
+    r = g["sum"].sum() / n
+    var = (((g["sum"] - r * g["size"]) ** 2).sum()) / (n ** 2) * len(g) / max(len(g) - 1, 1)
+    return float(r), float(np.sqrt(var))
+
+
+def norm_sf(z: float) -> float:
+    return 0.5 * math.erfc(z / math.sqrt(2))
+
+
+def bh_fdr(pvals: list[float]) -> list[float]:
+    """Benjamini-Hochberg の q 値。"""
+    p = np.asarray(pvals, dtype=float)
+    n = len(p)
+    if n == 0:
+        return []
+    order = np.argsort(p)
+    q = np.empty(n)
+    prev = 1.0
+    for rank in range(n, 0, -1):
+        i = order[rank - 1]
+        prev = min(prev, p[i] * n / rank)
+        q[i] = prev
+    return q.tolist()
+
+
+def ewma(values: list[float], lam: float, mu: float, sigma: float, L: float = 3.0) -> dict:
+    """EWMA 管理図。z_t = λx_t + (1−λ)z_{t−1}、限界 μ ± Lσ√(λ/(2−λ)·(1−(1−λ)^{2t}))。"""
+    z, path, ucl, flags = mu, [], [], []
+    for t, x in enumerate(values, start=1):
+        z = lam * x + (1 - lam) * z if not np.isnan(x) else z
+        lim = mu + L * sigma * math.sqrt(lam / (2 - lam) * (1 - (1 - lam) ** (2 * t)))
+        path.append(z)
+        ucl.append(lim)
+        flags.append(bool(z > lim))
+    return {"path": path, "ucl": ucl, "flags": flags}
+
+
+def quantile_table(x: np.ndarray, qs: tuple[float, ...] = (0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99)) -> dict:
+    x = np.asarray(x, dtype=float)
+    return {f"q{int(q * 100):02d}": float(np.quantile(x, q)) for q in qs}
+
+
+def quantile_edges(x: np.ndarray, bins: int = 10) -> np.ndarray:
+    """基準の分位で区切る端点（両端は ±inf）。psi_with_edges の基準。"""
+    x = np.asarray(x, dtype=float)
+    x = x[~np.isnan(x)]
+    if len(x) == 0:
+        return np.array([])
+    e = np.unique(np.quantile(x, np.linspace(0, 1, bins + 1)))
+    if len(e) < 2:
+        return np.array([])
+    e[0], e[-1] = -np.inf, np.inf
+    return e
+
+
+def psi_with_edges(edges: np.ndarray, cur: np.ndarray) -> float:
+    """基準の分位（各区画の基準の割合は等分）に対する今回の PSI。"""
+    c = np.asarray(cur, dtype=float)
+    c = c[~np.isnan(c)]
+    if len(edges) < 2 or len(c) == 0:
+        return float("nan")
+    cc = np.histogram(c, edges)[0].astype(float)
+    rp = np.full(len(cc), 1.0 / len(cc))
+    cp = np.clip(cc / cc.sum(), 1e-4, None)
+    return float(((cp - rp) * np.log(cp / rp)).sum())
+
+
+def race_rank_corr_by_race(df: pd.DataFrame, p_col: str, y_col: str = "finish_position") -> pd.Series:
+    """レースごとのスピアマン順位相関（予測が高い順 vs 着順。高いほど予測が着順を当てている）。"""
+    d = df[["race_id", p_col, y_col]].copy()
+    d["rp"] = d.groupby("race_id")[p_col].rank(ascending=False, method="average")
+    d["rf"] = d.groupby("race_id")[y_col].rank(ascending=True, method="average")
+    g = d.groupby("race_id")
+    mp, mf = g["rp"].transform("mean"), g["rf"].transform("mean")
+    cov = ((d["rp"] - mp) * (d["rf"] - mf)).groupby(d["race_id"]).sum()
+    vp = ((d["rp"] - mp) ** 2).groupby(d["race_id"]).sum()
+    vf = ((d["rf"] - mf) ** 2).groupby(d["race_id"]).sum()
+    return (cov / np.sqrt(vp * vf)).replace([np.inf, -np.inf], np.nan)

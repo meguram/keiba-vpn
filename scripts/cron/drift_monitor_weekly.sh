@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ドリフトの週次監視（特徴量の抜き取り込み）。金曜の weekly-update（18:00 JST）で先週末の確定結果が入った後に回す。
-# 1) 先週末（直近 8 日の土日）のうち開催のあった日から 10 レースずつ、推論経路の特徴量を抜き取って保存（data/local/inference/drift_features/<年>/、重い。nice 19・load>14 で待つ）
+# ドリフトの週次監視（特徴量の抜き取り込み）。週末の結果・払戻・確定オッズが揃った月曜の朝に 1 回回す（毎週 1 回。KEIBA_DRIFT_MONITOR=1 の自動起動とは併用しない）。
+# 1) 直近 8 日の土日のうち開催のあった日から 10 レースずつ、推論経路の特徴量を抜き取って保存（data/local/inference/drift_features/<年>/、重い。nice 19・load>14 で待つ）
 # 2) drift_monitor を回して latest.json / latest.html / history.jsonl を作る（モデルと市場の差の管理図・CUSUM・較正・特徴量の PSI・v4/v5 shadow）
 # 読み取りと data/local への書き込みのみ。GCS/DB/netkeiba へはアクセスしない。指標は報告・警報のみで、モデルや閾値の選択には使わない（config/drift_periods.json）。
 # 自動実行（auto_scrape からの軽量版、特徴量なし）は KEIBA_DRIFT_MONITOR=1 のときだけ。このスクリプトは手動・cron 用で、環境変数に依らず実行する。

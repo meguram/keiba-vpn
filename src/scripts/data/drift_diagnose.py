@@ -28,6 +28,11 @@ from src.scripts.data.drift_data import add_strata, load_cfg, load_eval_frame
 STRATA = ["hist", "age_c", "surface", "dist_band", "f_size", "track_condition", "venue", "grade"]
 
 
+def _logit(p) -> np.ndarray:
+    p = np.clip(np.asarray(p, dtype=float), 1e-6, 1 - 1e-6)
+    return np.log(p / (1 - p))
+
+
 def period_of(df: pd.DataFrame) -> pd.Series:
     return pd.Series(np.where(df["year"] < 2026, "base", np.where(df["month"] <= 5, "26_JanMay", "26_JunOct")), index=df.index)
 
@@ -45,6 +50,8 @@ def monthly(df: pd.DataFrame) -> list[dict]:
             "ll_top2": float(M.bin_ll(g["y_top2"], g["p_top2"]).mean()), "ll_top3": float(M.bin_ll(g["y_top3"], g["p_top3"]).mean()),
             "ece_model": M.ece(g["p_win"], g["y_win"]), "ece_market": M.ece(g["p_mkt"], g["y_win"]),
             "top_pick_win": float(top["y_win"].mean()), "favorite_win": float(fav["y_win"].mean()),
+            "sd_ratio": float(_logit(g["p_win"]).std() / _logit(g["p_mkt"]).std()), "corr_logit": float(np.corrcoef(_logit(g["p_win"]), _logit(g["p_mkt"]))[0, 1]),
+            "mean_top_p_model": float(g.groupby("race_id")["p_win"].max().mean()), "mean_top_p_market": float(g.groupby("race_id")["p_mkt"].max().mean()),
         })
     return out
 

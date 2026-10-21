@@ -90,9 +90,21 @@ def main() -> None:
         e.update({"n_cols_masked": len(cs), "delta_ll_vs_full": float(dd.mean()), "delta_lo": float(np.quantile(est, 0.025)), "delta_hi": float(np.quantile(est, 0.975)),
                   "corr_with_full": float(np.corrcoef(p, p0)[0, 1])})
         out["masked"][g] = e
+    if "p_win_d" in d.columns and d["p_win_d"].notna().all():                       # --drop-training で抜き取った『調教記録を一部落とした』実際に近い再現
+        pd_ = d["p_win_d"].to_numpy(float)
+        e = evaluate(d, pd_, y, pm)
+        dd = M.bin_ll(y, pd_) - M.bin_ll(y, p0)
+        gr = pd.DataFrame({"race_id": race, "d": dd}).groupby("race_id")["d"].agg(["sum", "size"])
+        rng = np.random.default_rng(1)
+        s_, n_ = gr["sum"].to_numpy(), gr["size"].to_numpy()
+        idx = rng.integers(0, len(gr), (500, len(gr)))
+        est = s_[idx].sum(1) / n_[idx].sum(1)
+        e.update({"delta_ll_vs_full": float(dd.mean()), "delta_lo": float(np.quantile(est, 0.025)), "delta_hi": float(np.quantile(est, 0.975)), "corr_with_full": float(np.corrcoef(pd_, p0)[0, 1])})
+        out["partial_drop_95"] = e
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out).write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
-    print(json.dumps({"rows": out["rows"], "full": out["full"], "masked": {k: {x: round(v[x], 5) for x in ("gap", "logit_sd_ratio_vs_market", "delta_ll_vs_full")} for k, v in out["masked"].items()}}, default=float))
+    print(json.dumps({"rows": out["rows"], "full": out["full"], "masked": {k: {x: round(v[x], 5) for x in ("gap", "logit_sd_ratio_vs_market", "delta_ll_vs_full")} for k, v in out["masked"].items()},
+                      "partial_drop_95": out.get("partial_drop_95")}, default=float))
 
 
 if __name__ == "__main__":

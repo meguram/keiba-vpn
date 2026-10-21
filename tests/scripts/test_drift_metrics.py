@@ -88,3 +88,22 @@ def test_cusum_detects_sustained_shift_but_not_noise():
 def test_iso_week_is_monday():
     s = pd.Series(pd.to_datetime(["2026-10-17", "2026-10-18", "2026-10-19"]))
     assert M.iso_week_of(s).tolist() == ["2026-10-12", "2026-10-12", "2026-10-19"]
+
+
+def test_new_helpers_brier_rankcorr_fdr_ewma_edges():
+    assert abs(M.brier(np.array([1, 0]), np.array([0.8, 0.2])) - 0.04) < 1e-12
+    q = M.bh_fdr([0.001, 0.02, 0.04, 0.5])
+    assert q[0] < q[1] <= q[2] < q[3] and all(0 <= x <= 1 for x in q)
+    ew = M.ewma([0.0] * 10 + [3.0] * 10, 0.2, 0.0, 1.0)
+    assert not any(ew["flags"][:10]) and any(ew["flags"][10:])
+    x = np.random.default_rng(0).normal(size=2000)
+    e = M.quantile_edges(x, 10)
+    assert M.psi_with_edges(e, x) < 0.02 and M.psi_with_edges(e, x + 1.5) > 0.25
+    df = pd.DataFrame({"race_id": ["a"] * 4 + ["b"] * 4, "p": [0.4, 0.3, 0.2, 0.1] * 2, "finish_position": [1, 2, 3, 4, 4, 3, 2, 1]})
+    rc = M.race_rank_corr_by_race(df, "p")
+    assert abs(rc["a"] - 1.0) < 1e-9 and abs(rc["b"] + 1.0) < 1e-9
+    se = M.cluster_gap_se(pd.DataFrame({"race_id": ["a", "a", "b", "b"], "d": [0.1, 0.1, 0.3, 0.3]}))
+    assert abs(se[0] - 0.2) < 1e-12 and se[1] > 0
+    m = pd.DataFrame({"race_id": ["a"] * 4, "p_mkt": [0.4, 0.3, 0.2, 0.1]})
+    p2, p3 = M.market_top_probs(m)
+    assert abs(p2.sum() - 2.0) < 0.05 and abs(p3.sum() - 3.0) < 0.1

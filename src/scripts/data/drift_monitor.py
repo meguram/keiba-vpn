@@ -1,22 +1,21 @@
-"""ドリフトの週次監視: モデルの勝率予測が市場に比べて劣化していないかを、基準期間の変動幅から決めた管理図で見る。
+"""ドリフトの週次監視: 毎週、週末の結果（着順・払戻・確定オッズ）が揃った後に 1 回、直近 8 週のローリング窓と全期間の累積で測る。
 
-  python -m src.scripts.data.drift_monitor [--root .] [--out-dir data/local/meta/drift_monitor] [--no-features] [--no-shadow]
+  python -m src.scripts.data.drift_monitor [--root .] [--out-dir data/local/meta/drift_monitor] [--no-features] [--no-shadow] [--no-coverage]
+  python -m src.scripts.data.drift_monitor --ack-reset 2026-11-02 --note "調教ページの取り直しを完了"
+  python -m src.scripts.data.drift_backtest   # 過去の各週にさかのぼって、どの週に警報が出たか・誤警報の率
 
-見るもの（すべて『報告・警報のみ』。モデルや閾値の選択・学習には使わない。期間の定義は config/drift_periods.json）:
-  gap        モデルと市場(確定単勝)の勝率 LogLoss の差の 8 週移動窓。基準(2022-2025)の窓の平均 + k×シグマを 3 週続けて超えたら警報
-  sharpness  モデルの勝率の対数オッズの標準偏差 ÷ 市場のそれ（予測の尖り方。結果が無くても計算できる。低下は入力の情報の欠落を疑う）
-  ece        モデル勝率の ECE（10 分位）
-  features   特徴量の PSI（上位 50 列）と欠損率の跳ね。drift_dump_features で抜き取った日の特徴量を、2025 年の同経路の抜き取りと比べる
-  shadow_v5  v4 shadow と v5 shadow(predictions_v5/) を同じ馬で突き合わせ、LogLoss の差(v5−v4)とレース単位の区間
-自動実行: KEIBA_DRIFT_MONITOR=1 のとき金曜の weekly-update の後に別プロセスで起動(drift_monitor_hook)。手動・cron は環境変数に依らず実行する。
-出力: <out-dir>/latest.json / latest.html / history.jsonl / <asof>/report.json。仕様: docs/operations/drift_monitor.md
+主指標は『モデルと市場（確定単勝オッズ）の勝率 LogLoss の差』（レースの難しさの変動を打ち消す）。勝率/連対/複勝の LogLoss・Brier・ECE・較正曲線・的中の順位相関も併記する。
+窓の揺れは、週次の EWMA/CUSUM 管理図と、レースでクラスタした標準誤差・ブートストラップ区間で、『ばらつきの範囲』と『有意な悪化』を分ける。窓内のレース数が min_races 未満は判定保留。
+ラベルなしの先行指標（予測分布・新しい ID・特徴量の PSI・調教の被覆）は結果が出る前にも出せるので別枠にする（drift_labelfree）。
+警報の段階: 注意（1 項目が 2σ 超え）／警告（独立な 2 群以上が連続 2 週超え）／要対応（差が 3σ 超えを 4 週連続、または較正のずれが回収率に効く水準を 2 週連続）。
+手順は docs/operations/drift_monitor.md。**指標は報告・警報のみ。モデルや閾値の選択・学習には使わない**（2026 年はテストセット②）。
+自動実行は KEIBA_DRIFT_MONITOR=1 のとき（drift_monitor_hook）。手動・cron は環境変数に依らず実行する。
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime
-import html
 import json
 import os
 from pathlib import Path
@@ -25,12 +24,15 @@ import numpy as np
 import pandas as pd
 
 from src.scripts.data import drift_metrics as M
-from src.scripts.data.drift_data import PCOLS, load_cfg, load_eval_frame
+from src.scripts.data.drift_data import PCOLS, add_strata, load_cfg, load_eval_frame
 
 ENV_FLAG = "KEIBA_DRIFT_MONITOR"
 ENV_DIR = "KEIBA_DRIFT_MONITOR_DIR"
-WINDOW_WEEKS = 8
-MIN_BASELINE_WINDOWS = 20
+STAGES = ["ok", "注意", "警告", "要対応"]
+STAGE_COLOR = {"ok": "green", "注意": "yellow", "警告": "orange", "要対応": "red", "保留": "gray"}
+LIMIT_KEYS = ("gap", "gap_top2", "gap_top3", "ece", "rank_gap", "sd_ratio", "psi_p")
+ECE_ROI = 0.012                         # 較正のずれが回収率に効く水準（readiness 基準 ECE 勝率 0.006 の 2 倍）
+SLOPE_RANGE = (0.85, 1.15)              # readiness 基準の logit 傾き
 
 
 def enabled() -> bool:
@@ -41,181 +43,273 @@ def default_out_dir(root: Path) -> Path:
     return Path(os.environ.get(ENV_DIR) or root / "data/local/meta/drift_monitor")
 
 
-def _logit(p: np.ndarray) -> np.ndarray:
+def _logit(p) -> np.ndarray:
     p = np.clip(np.asarray(p, dtype=float), M.EPS, 1 - M.EPS)
     return np.log(p / (1 - p))
 
 
-def window_metrics(g: pd.DataFrame) -> dict:
-    """窓内のレースの指標。"""
+# ---------------------------------------------------------------- 行ごとの前計算
+
+def prepare(df: pd.DataFrame, with_market_top: bool = True) -> pd.DataFrame:
+    """行ごとの LL・Brier・差、市場の連対/複勝（Harville）を前計算し、週（月曜）を付ける。"""
+    d = df.copy()
+    d["week"] = M.iso_week_of(d["date"])
+    d["ll_m"] = M.bin_ll(d["y_win"], d["p_win"])
+    d["ll_k"] = M.bin_ll(d["y_win"], d["p_mkt"])
+    d["d"] = d["ll_m"] - d["ll_k"]
+    d["br_m"] = (d["p_win"] - d["y_win"]) ** 2
+    d["ll2_m"], d["ll3_m"] = M.bin_ll(d["y_top2"], d["p_top2"]), M.bin_ll(d["y_top3"], d["p_top3"])
+    if with_market_top and "p2_k" not in d:
+        d["p2_k"], d["p3_k"] = M.market_top_probs(d)
+    if "p2_k" in d:
+        d["d2"] = d["ll2_m"] - M.bin_ll(d["y_top2"], d["p2_k"])
+        d["d3"] = d["ll3_m"] - M.bin_ll(d["y_top3"], d["p3_k"])
+    else:
+        d["d2"] = d["d3"] = np.nan
+    d["lm"], d["lk"] = _logit(d["p_win"]), _logit(d["p_mkt"])
+    return d
+
+
+def race_table(d: pd.DataFrame) -> pd.DataFrame:
+    """レースごとの順位相関（モデル/市場）と週。窓の的中の順位相関に使う。"""
+    rc_m = M.race_rank_corr_by_race(d, "p_win")
+    rc_k = M.race_rank_corr_by_race(d, "p_mkt")
+    wk = d.groupby("race_id")["week"].first()
+    return pd.DataFrame({"week": wk, "rc_m": rc_m, "rc_k": rc_k}).dropna()
+
+
+def window_metrics(g: pd.DataFrame, rt: pd.DataFrame | None = None, base_edges_p: np.ndarray | None = None) -> dict:
+    """窓（行の集合）の指標。g は prepare 済み。rt は race_table のうち窓に入るレース。"""
     if len(g) == 0:
         return {}
-    lm, lk = _logit(g["p_win"].to_numpy()), _logit(g["p_mkt"].to_numpy())
+    gap, se = M.cluster_gap_se(g, "d")
+    a, b = M.calib_slope(g["p_win"], g["y_win"])
     top = g.loc[g.groupby("race_id")["p_win"].idxmax()]
-    return {
-        "races": int(g["race_id"].nunique()), "rows": int(len(g)),
-        "gap": float((M.bin_ll(g["y_win"], g["p_win"]) - M.bin_ll(g["y_win"], g["p_mkt"])).mean()),
-        "ll_model": float(M.bin_ll(g["y_win"], g["p_win"]).mean()), "ll_market": float(M.bin_ll(g["y_win"], g["p_mkt"]).mean()),
-        "ece": M.ece(g["p_win"], g["y_win"]), "sd_ratio": float(lm.std() / lk.std()),
-        "corr": float(np.corrcoef(lm, lk)[0, 1]), "top_pick_win": float(top["y_win"].mean()),
-    }
+    out = {"races": int(g["race_id"].nunique()), "rows": int(len(g)), "gap": gap, "gap_se": se,
+           "gap_top2": float(g["d2"].mean()), "gap_top3": float(g["d3"].mean()),
+           "ll_win": float(g["ll_m"].mean()), "ll_win_mkt": float(g["ll_k"].mean()), "ll_top2": float(g["ll2_m"].mean()), "ll_top3": float(g["ll3_m"].mean()),
+           "brier_win": float(g["br_m"].mean()), "brier_win_mkt": M.brier(g["y_win"], g["p_mkt"]), "brier_top3": M.brier(g["y_top3"], g["p_top3"]),
+           "ece": M.ece(g["p_win"], g["y_win"]), "ece_top2": M.ece(g["p_top2"], g["y_top2"]), "ece_top3": M.ece(g["p_top3"], g["y_top3"]),
+           "slope": b, "intercept": a, "sd_ratio": float(g["lm"].std() / g["lk"].std()), "corr": float(np.corrcoef(g["lm"], g["lk"])[0, 1]),
+           "top_pick_win": float(top["y_win"].mean())}
+    if rt is not None and len(rt):
+        out["rank_corr"], out["rank_corr_mkt"] = float(rt["rc_m"].mean()), float(rt["rc_k"].mean())
+        out["rank_gap"] = out["rank_corr_mkt"] - out["rank_corr"]
+    if base_edges_p is not None and len(base_edges_p):
+        out["psi_p"] = M.psi_with_edges(base_edges_p, g["p_win"].to_numpy())
+    return out
 
 
-def rolling_series(df: pd.DataFrame, window: int = WINDOW_WEEKS) -> pd.DataFrame:
-    """週(月曜)ごとに、その週を末尾とする window 週の窓の指標。窓が満たない最初の週は除く。"""
-    d = df.assign(week=M.iso_week_of(df["date"]))
+def rolling_series(d: pd.DataFrame, window: int = 8, rt: pd.DataFrame | None = None, base_edges_p: np.ndarray | None = None) -> pd.DataFrame:
+    """週(月曜)ごとに、その週を末尾とする window 週の窓の指標。窓が満たない最初の週は除く。週単独の値（CUSUM/EWMA 用）も付ける。"""
     weeks = sorted(d["week"].unique())
+    by_week = {w: g for w, g in d.groupby("week")}
     rows = []
     for i in range(window - 1, len(weeks)):
-        sub = d[d["week"].isin(weeks[i - window + 1: i + 1])]
-        m = window_metrics(sub)
-        wk = window_metrics(d[d["week"] == weeks[i]])
-        m.update({"week": weeks[i], "week_races": wk.get("races", 0), "week_gap": wk.get("gap", float("nan")), "week_sd_ratio": wk.get("sd_ratio", float("nan"))})
+        ws = weeks[i - window + 1: i + 1]
+        sub = pd.concat([by_week[w] for w in ws])
+        rts = rt[rt["week"].isin(ws)] if rt is not None else None
+        m = window_metrics(sub, rts, base_edges_p)
+        g1 = by_week[weeks[i]]
+        m.update({"week": weeks[i], "week_races": int(g1["race_id"].nunique()), "week_gap": float(g1["d"].mean()),
+                  "week_sd_ratio": float(g1["lm"].std() / g1["lk"].std())})
         rows.append(m)
     return pd.DataFrame(rows)
 
 
 def baseline_limits(series: pd.DataFrame, start: str, end: str, k: float) -> dict:
+    """基準期間（窓が全部基準に入る週）の窓の指標の平均と ±kσ（と 2σ）。"""
     s = series[(series["week"] >= start) & (series["week"] <= end)]
-    if len(s) < MIN_BASELINE_WINDOWS:
+    if len(s) < 20:
         return {}
     out = {}
-    for key in ("gap", "sd_ratio", "ece", "corr"):
-        out[key] = M.control_limits(s[key].to_numpy(), k)
+    for key in LIMIT_KEYS + ("corr", "rank_corr"):
+        if key in s.columns and s[key].notna().sum() > 5:
+            out[key] = M.control_limits(s[key].to_numpy(), k)
+            out[key]["k2_upper"] = out[key]["mean"] + 2 * out[key]["sd"]
+            out[key]["k2_lower"] = out[key]["mean"] - 2 * out[key]["sd"]
     return out
 
 
-def weekly_gap_sigma(df: pd.DataFrame, start: str, end: str) -> dict:
-    """基準期間の『週ごとの差』の平均と標準偏差（CUSUM の基準）。週のレース数が少ない週は除く。"""
-    d = df.assign(week=M.iso_week_of(df["date"]))
-    d = d[(d["week"] >= start) & (d["week"] <= end)]
-    rows = [{"week": w, **window_metrics(g)} for w, g in d.groupby("week")]
+def weekly_baseline(d: pd.DataFrame, start: str, end: str, min_races: int | None = None) -> dict:
+    """基準期間の『週ごとの値』の平均と標準偏差（CUSUM・EWMA の基準）。レース数が少ない週（祝日の短い開催など）は除く（既定: 週のレース数の中央値の 4 割）。"""
+    x = d[(d["week"] >= start) & (d["week"] <= end)]
+    if min_races is None:
+        min_races = max(5, int(0.4 * x.groupby("week")["race_id"].nunique().median()))
+    rows = []
+    for _, g in x.groupby("week"):
+        if g["race_id"].nunique() >= min_races:
+            rows.append({"gap": g["d"].mean(), "sd_ratio": g["lm"].std() / g["lk"].std()})
     t = pd.DataFrame(rows)
-    t = t[t["races"] >= 20]
-    out = {}
-    for key in ("gap", "sd_ratio"):
-        out[key] = {"mean": float(t[key].mean()), "sd": float(t[key].std(ddof=1)), "n": int(len(t))}
-    return out
+    return {k: {"mean": float(t[k].mean()), "sd": float(t[k].std(ddof=1)), "n": int(len(t))} for k in ("gap", "sd_ratio")}
 
 
-def evaluate_alerts(series: pd.DataFrame, limits: dict, start: str, consecutive: int, weekly: dict | None = None,
-                    cusum_k: float = 0.5, cusum_h: float = 5.0, cusum_from: str | None = None) -> dict:
-    """監視期間(start 以降)の窓について、管理限界を超えた週を数え、続けて超えた週数と警報を出す。
-    警報は (a) 8 週窓が限界を consecutive 週続けて超える（遅いが誤報が少ない）か、(b) 週次の差が CUSUM の h を超える（数週で検出）。"""
-    cur = series[series["week"] >= start].reset_index(drop=True)
+# ---------------------------------------------------------------- 警報の段階
+
+def _flag(v, lim: dict | None, which: str, k: int) -> bool:
+    if v is None or lim is None or (isinstance(v, float) and np.isnan(v)):
+        return False
+    if which == "upper":
+        return bool(v > (lim["ucl"] if k == 3 else lim["k2_upper"]))
+    return bool(v < (lim["lcl"] if k == 3 else lim["k2_lower"]))
+
+
+def evaluate_sequence(series: pd.DataFrame, limits: dict, wk_base: dict, start: str, alert: dict, coverage_by_week: dict | None = None,
+                      cusum_from: str | None = None, end: str | None = None) -> pd.DataFrame:
+    """start 以降の各週について、指標ごとの超過・EWMA/CUSUM・有意性の区分・警報の段階（その週までの情報だけで決める）を出す。"""
+    cur = series[(series["week"] >= start) & ((series["week"] <= end) if end else True)].reset_index(drop=True).copy()
     if len(cur) == 0 or not limits:
-        return {"status": "no_data" if len(cur) == 0 else "no_baseline", "triggers": {}}
-    rules = {"gap": ("gap", ">", "ucl"), "sharpness": ("sd_ratio", "<", "lcl"), "ece": ("ece", ">", "ucl")}
-    trig = {}
-    for name, (col, op, lim) in rules.items():
-        lv = limits[col][lim]
-        flags = [bool(v > lv) if op == ">" else bool(v < lv) for v in cur[col]]
-        run = M.run_length(flags)
-        max_run, r = 0, 0
-        first_alert = None
-        for w, f in zip(cur["week"], flags):
-            r = r + 1 if f else 0
-            max_run = max(max_run, r)
-            if first_alert is None and r >= consecutive:
-                first_alert = w
-        t = {"limit": lv, "latest": float(cur[col].iloc[-1]), "run_weeks": run, "max_run_weeks": max_run, "weeks_over": int(sum(flags)),
-             "weeks": int(len(flags)), "alert": run >= consecutive, "warn": run >= 1, "first_alert_week": first_alert,
-             "first_over_week": next((w for w, f in zip(cur["week"], flags) if f), None)}
-        if weekly and col in weekly:
-            direction = "up" if op == ">" else "down"
-            cc = cur[cur["week"] >= cusum_from].reset_index(drop=True) if cusum_from else cur      # 原因を直したあと ack で CUSUM をやり直す
-            cs = M.cusum(cc["week_" + col].tolist() if ("week_" + col) in cc.columns else cc[col].tolist(), weekly[col]["mean"], weekly[col]["sd"],
-                         cusum_k, cusum_h, direction)
-            t["cusum_latest"], t["cusum_h"] = cs["latest"], cusum_h
-            t["cusum_first_alarm_week"] = cc["week"].iloc[cs["first_alarm_index"]] if cs["first_alarm_index"] is not None else None
-            t["cusum_alarm_now"] = cs["alarm_now"]
-            t["alert"] = bool(t["alert"] or cs["alarm_now"])
-        trig[name] = t
-    status = "alert" if any(t["alert"] for t in trig.values()) else ("warn" if any(t["warn"] for t in trig.values()) else "ok")
-    return {"status": status, "triggers": trig}
-
-
-# ---------------------------------------------------------------- 特徴量
-
-def load_dumps(dump_dir: Path, years: list[int] | None = None) -> pd.DataFrame:
-    parts = []
-    for f in sorted(dump_dir.glob("*/*.parquet")):
-        if years and int(f.parent.name) not in years:
+        return cur
+    min_races = int(alert.get("min_races_window", 150))
+    h = float(alert.get("cusum_h", 5.0))
+    ew = M.ewma(cur["week_gap"].tolist(), float(alert.get("ewma_lambda", 0.2)), wk_base["gap"]["mean"], wk_base["gap"]["sd"], float(alert.get("gap_sigma_k", 3.0)))
+    cs_idx = cur.index[cur["week"] >= (cusum_from or start)]
+    cus = M.cusum(cur.loc[cs_idx, "week_gap"].tolist(), wk_base["gap"]["mean"], wk_base["gap"]["sd"], float(alert.get("cusum_k", 0.5)), h)
+    cus_s = pd.Series(0.0, index=cur.index)
+    cus_s.loc[cs_idx] = cus["path"]
+    cur["ewma_gap"], cur["ewma_ucl"], cur["ewma_flag"] = ew["path"], ew["ucl"], ew["flags"]
+    cur["cusum_gap"], cur["cusum_flag"] = cus_s, cus_s > h
+    g = limits.get("gap", {})
+    sig = []
+    for _, r in cur.iterrows():
+        if r["races"] < min_races:
+            sig.append("保留")
+        elif r["gap"] - 2 * r["gap_se"] > g.get("mean", 0) and r["gap"] > g.get("ucl", 1):
+            sig.append("有意な悪化")
+        elif r["gap"] <= g.get("k2_upper", 1):
+            sig.append("ばらつきの範囲")
+        else:
+            sig.append("境界")
+    cur["gap_class"] = sig
+    ece_roi = float(alert.get("ece_roi", ECE_ROI))
+    s_lo, s_hi = float(alert.get("slope_lo", SLOPE_RANGE[0])), float(alert.get("slope_hi", SLOPE_RANGE[1]))
+    grp: dict[str, list[bool]] = {k: [] for k in ("perf", "cal", "dist", "inputs")}
+    roi, perf3, hold = [], [], []
+    for _, r in cur.iterrows():
+        cov = (coverage_by_week or {}).get(r["week"])
+        perf2 = (_flag(r["gap"], limits.get("gap"), "upper", 2) or _flag(r["gap_top2"], limits.get("gap_top2"), "upper", 2)
+                 or _flag(r["gap_top3"], limits.get("gap_top3"), "upper", 2) or _flag(r.get("rank_gap"), limits.get("rank_gap"), "upper", 2) or bool(r["ewma_flag"]))
+        cal2 = _flag(r["ece"], limits.get("ece"), "upper", 2) or not (s_lo <= r["slope"] <= s_hi)
+        psi_p = r.get("psi_p")
+        dist2 = _flag(r["sd_ratio"], limits.get("sd_ratio"), "lower", 2) or _flag(psi_p, limits.get("psi_p"), "upper", 2)
+        inp2 = bool(cov is not None and cov < float(alert.get("coverage_floor", 0.90)))
+        grp["perf"].append(perf2), grp["cal"].append(cal2), grp["dist"].append(dist2), grp["inputs"].append(inp2)
+        perf3.append(_flag(r["gap"], limits.get("gap"), "upper", 3))
+        roi.append(bool(r["ece"] > ece_roi or not (s_lo <= r["slope"] <= s_hi)))
+        hold.append(bool(r["races"] < min_races))
+    for k, v in grp.items():
+        cur[f"flag_{k}"] = v
+    cur["flag_perf3"], cur["flag_roi_cal"], cur["hold"] = perf3, roi, hold
+    n_groups = [sum(grp[k][i] for k in grp) for i in range(len(cur))]
+    stages = []
+    for i in range(len(cur)):
+        if hold[i]:
+            stages.append("保留")
             continue
-        parts.append(pd.read_parquet(f))
-    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+        s = "ok"
+        if n_groups[i] >= 1:
+            s = "注意"
+        if i >= 1 and n_groups[i] >= 2 and n_groups[i - 1] >= 2:
+            s = "警告"
+        if (i >= 3 and all(perf3[i - 3: i + 1])) or (i >= 1 and all(roi[i - 1: i + 1])):
+            s = "要対応"
+        stages.append(s)
+    cur["stage"] = stages
+    return cur
 
 
-def top_features(path: Path, n: int) -> list[str]:
-    if not path.exists():
-        return []
-    d = json.loads(path.read_text(encoding="utf-8"))
-    return list(d.get("features", []))[:n]
+def segments_for_backtest(cfg: dict) -> list[tuple[str, str, str]]:
+    """(監視の開始週, 監視の終了, 基準期間の終わり)。2025 年の週は 2022-2024 の OOF だけを基準にする（先読みを避ける）。"""
+    return [("2025-01-01", "2025-12-31", "2024-12-31"), (cfg["test2"]["from"], "2099-12-31", cfg["baseline"]["to"])]
 
 
-def feature_section(root: Path, cfg: dict, ref_year: int = 2025, since: str | None = None) -> dict:
-    dump_dir = root / "data/local/inference/drift_features"
-    ref = load_dumps(dump_dir, [ref_year])
-    cur = load_dumps(dump_dir, [y for y in range(ref_year + 1, 2100)])
-    if len(ref) == 0 or len(cur) == 0:
-        return {"status": "no_dump", "note": "drift_dump_features で 2025 年(基準)と監視期間の抜き取りを作ると PSI を計算する"}
-    if since:
-        cur = cur[cur["day"].astype(str) >= since.replace("-", "")]
-        if len(cur) == 0:
-            return {"status": "no_dump_in_range"}
-    al = cfg["alert"]
-    feats = top_features(root / "config/drift_top_features.json", al["top_features"])
-    cols = feats or [c for c in ref.columns if c not in ("race_id", "horse_id", "day") + tuple(PCOLS)]
-    sh = M.feature_shift(ref, cur, cols)
-    sh["rank"] = range(1, len(sh) + 1) if feats else np.nan
-    nz = sh.sort_values("psi", ascending=False)
-    big = nz[nz["psi"] >= al["psi_alert"]]
-    jump = nz[(nz["miss_cur"] - nz["miss_ref"]) >= al["missing_rate_jump"]]
-    status = "alert" if (len(big) >= al["psi_alert_min_features"] or len(jump) > 0) else ("warn" if (nz["psi"] >= al["psi_warn"]).any() else "ok")
-    return {"status": status, "ref_rows": int(len(ref)), "cur_rows": int(len(cur)), "n_features": int(len(sh)),
-            "n_psi_ge_alert": int(len(big)), "n_psi_ge_warn": int((nz["psi"] >= al["psi_warn"]).sum()), "n_missing_jump": int(len(jump)),
-            "top_psi": nz.head(15).round(4).to_dict("records"), "missing_jump": jump.head(15).round(4).to_dict("records")}
+def backtest(d: pd.DataFrame, cfg: dict, window: int | None = None, k: float | None = None, coverage_by_week: dict | None = None,
+             segments: list[tuple[str, str, str]] | None = None) -> pd.DataFrame:
+    """2025 年の週は 2022-2024（OOF）だけを基準に、2026 年以降の週は 2022-2025 を基準に、各週の警報の段階を再現する（先読みなし）。
+    d は prepare 済みの全期間。window/k で感度を見る（本番の設定は変えない）。"""
+    al = dict(cfg["alert"])
+    if k is not None:
+        al["gap_sigma_k"] = k
+    w = int(window or al.get("window_weeks", 8))
+    rt = race_table(d)
+    parts = []
+    for s_from, s_to, b_end in (segments or segments_for_backtest(cfg)):
+        edges = M.quantile_edges(d[(d["week"] >= cfg["baseline"]["from"]) & (d["week"] <= b_end)]["p_win"].to_numpy(), 10)
+        series = rolling_series(d, w, rt, edges)
+        lim = baseline_limits(series, cfg["baseline"]["from"], b_end, float(al["gap_sigma_k"]))
+        wkb = weekly_baseline(d, cfg["baseline"]["from"], b_end)
+        seq = evaluate_sequence(series, lim, wkb, s_from, al, coverage_by_week, end=s_to)
+        seq["baseline_end"] = b_end
+        parts.append(seq)
+    return pd.concat(parts, ignore_index=True)
 
 
-# ---------------------------------------------------------------- v4 と v5 の shadow の並べ比較
+# ---------------------------------------------------------------- 層別（FDR）
 
-def paired_delta(a: pd.DataFrame, b: pd.DataFrame, key: str, n_boot: int = 1000, seed: int = 0) -> dict:
-    """b − a の LogLoss 差（同じ馬だけ・レース単位ブートストラップ）。a, b は race_id, horse_id, y_<key>, p_<key>。"""
-    col = {"win": "p_win", "top2": "p_top2", "top3": "p_top3"}[key]
-    m = a.merge(b[["race_id", "horse_id", col]], on=["race_id", "horse_id"], suffixes=("_a", "_b"))
-    if len(m) == 0:
-        return {"races": 0}
-    y = m[f"y_{key}"].to_numpy()
-    d = M.bin_ll(y, m[f"{col}_b"].to_numpy()) - M.bin_ll(y, m[f"{col}_a"].to_numpy())
-    g = pd.DataFrame({"race_id": m["race_id"], "d": d}).groupby("race_id")["d"].agg(["sum", "size"])
-    s, n = g["sum"].to_numpy(), g["size"].to_numpy()
-    rng = np.random.default_rng(seed)
-    idx = rng.integers(0, len(g), (n_boot, len(g)))
-    est = s[idx].sum(1) / n[idx].sum(1)
-    return {"races": int(len(g)), "delta": float(s.sum() / n.sum()), "lo": float(np.quantile(est, 0.025)), "hi": float(np.quantile(est, 0.975))}
+def strata_fdr(d: pd.DataFrame, cur_weeks: list[str], base_end: str, base_start: str, cols: list[str], q_alert: float = 0.10, min_rows: int = 150) -> list[dict]:
+    """直近窓と基準期間の、層ごとの差の比較（片側 z 検定、BH の FDR 補正）。参考扱い。"""
+    d = add_strata(d)
+    d["is_new"] = np.where(d["grade"].astype(str) == "新馬", "新馬", np.where(d["grade"].astype(str) == "未勝利", "未勝利", "その他"))
+    d["month_s"] = d["date"].dt.strftime("%m月")
+    base = d[(d["week"] >= base_start) & (d["week"] <= base_end)]
+    cur = d[d["week"].isin(cur_weeks)]
+    out = []
+    for col in cols:
+        if col not in d.columns:
+            continue
+        for key, gc in cur.groupby(col):
+            gb = base[base[col] == key]
+            if len(gc) < min_rows or len(gb) < min_rows:
+                continue
+            mc, sc = M.cluster_gap_se(gc, "d")
+            mb, sb = M.cluster_gap_se(gb, "d")
+            z = (mc - mb) / float(np.hypot(sc, sb))
+            out.append({"strata": col, "value": str(key), "rows": int(len(gc)), "gap_cur": mc, "gap_base": mb, "z": float(z), "p": M.norm_sf(z)})
+    q = M.bh_fdr([o["p"] for o in out])
+    for o, qq in zip(out, q):
+        o["q"] = qq
+        o["flag"] = bool(qq < q_alert and o["gap_cur"] > o["gap_base"])
+    return sorted(out, key=lambda o: o["q"])
 
 
-def shadow_section(root: Path, cfg: dict, df: pd.DataFrame) -> dict:
-    """df は v4 の評価表(forward)。predictions_v5/ の確率を同じ馬で突き合わせる。"""
-    from src.scripts.data import readiness_eval as R
+# ---------------------------------------------------------------- ラベルなし・入力の質・特徴量・shadow
 
-    v5dir = root / cfg["prediction_sources"]["v5_shadow_dir"]
-    if not v5dir.exists():
-        return {"status": "no_v5_shadow"}
-    p5 = R.load_preds([v5dir])
-    if len(p5) == 0:
-        return {"status": "no_v5_shadow"}
-    p5 = p5[["race_id", "horse_id"] + PCOLS]
-    v4 = df.merge(p5[["race_id", "horse_id"]], on=["race_id", "horse_id"])
-    if len(v4) == 0:
-        return {"status": "no_overlap", "v5_races": int(p5["race_id"].nunique())}
-    v5 = v4[["race_id", "horse_id", "y_win", "y_top2", "y_top3", "p_mkt"]].merge(p5, on=["race_id", "horse_id"])
-    out = {"status": "ok", "races": int(v4["race_id"].nunique()), "rows": int(len(v4)),
-           "delta_v5_minus_v4": {k: paired_delta(v4, v5, k) for k in ("win", "top2", "top3")},
-           "gap_v4": window_metrics(v4).get("gap"), "gap_v5": window_metrics(v5)["gap"],
-           "sd_ratio_v4": window_metrics(v4).get("sd_ratio"), "sd_ratio_v5": window_metrics(v5)["sd_ratio"]}
-    out["note"] = "優劣の検出には約 2,000 レースが要る。区間が 0 を跨ぐ間は優劣を言わない（切替判断に使うのは readiness の基準）"
-    return out
+def labelfree_section(root: Path, cfg: dict, window: int, base_end: str) -> dict:
+    from src.scripts.data import drift_labelfree as LF
+
+    years = list(range(int(cfg["baseline"]["from"][:4]), datetime.date.today().year + 1))
+    p = LF.load_pred_with_card(root, cfg, years)
+    if len(p) == 0:
+        return {"status": "no_predictions"}
+    p["week"] = M.iso_week_of(p["date"])
+    base = p[(p["week"] >= cfg["baseline"]["from"]) & (p["week"] <= base_end)]
+    weeks = sorted(p["week"].unique())
+    last = weeks[-window:]
+    cur = p[p["week"].isin(last)]
+    shift = LF.dist_shift(base, cur)
+    psi = shift["p_win"]["psi"]
+    series = []
+    for i in range(window - 1, len(weeks)):
+        ws = weeks[i - window + 1: i + 1]
+        m = LF.dist_metrics(p[p["week"].isin(ws)])
+        m["week"] = weeks[i]
+        series.append(m)
+    ser = pd.DataFrame(series)
+    k = float(cfg["alert"].get("gap_sigma_k", 3.0))
+    bs = ser[(ser["week"] >= cfg["baseline"]["from"]) & (ser["week"] <= base_end)]
+    lim = {c: M.control_limits(bs[c].to_numpy(), k) for c in ("mean_top_p", "logit_sd", "entropy_rel") if len(bs) > 20}
+    lat = ser.iloc[-1] if len(ser) else None
+    flags = {}
+    if lat is not None and lim:
+        flags = {"mean_top_p_low": bool(lat["mean_top_p"] < lim["mean_top_p"]["lcl"]), "logit_sd_low": bool(lat["logit_sd"] < lim["logit_sd"]["lcl"]),
+                 "entropy_high": bool(lat["entropy_rel"] > lim["entropy_rel"]["ucl"])}
+        flags["n_flagged"] = int(sum(flags.values()))
+    status = "alert" if (psi >= 0.25 or flags.get("n_flagged", 0) >= 2) else ("warn" if (psi >= float(cfg["alert"].get("psi_warn", 0.10)) or flags.get("n_flagged", 0) == 1) else "ok")
+    j, t, first = LF.known_ids(root, int(cfg["train"]["to"][:4]))
+    latest_w = weeks[-1]
+    new_ids = LF.new_id_rates(p[p["week"] == latest_w], first, latest_w, j, t) if "jockey_id" in p else {}
+    return {"status": status, "latest_prediction_week": latest_w, "window_weeks": last, "shift": shift, "base_metrics": LF.dist_metrics(base),
+            "cur_metrics": LF.dist_metrics(cur), "series": series, "limits": lim, "flags": flags, "new_ids": new_ids}
 
 
 def coverage_section(df: pd.DataFrame, cfg: dict, weeks: int = 4, load_many=None) -> dict:
@@ -233,123 +327,211 @@ def coverage_section(df: pd.DataFrame, cfg: dict, weeks: int = 4, load_many=None
         return {"status": "unavailable", "error": str(exc)[:200]}
 
 
-# ---------------------------------------------------------------- 出力
+def coverage_by_week(df: pd.DataFrame, start: str, load_many=None) -> dict:
+    """週ごとの調教被覆（バックテスト用）。"""
+    from src.scripts.data import drift_coverage as C
 
-def svg_line(xs: list[str], series: dict[str, list[float]], limits: dict[str, float] | None = None, w: int = 640, h: int = 170) -> str:
-    vals = [v for s in series.values() for v in s if v is not None and not np.isnan(v)] + list((limits or {}).values())
-    if not vals or not xs:
-        return ""
-    lo, hi = min(vals), max(vals)
-    pad = (hi - lo) * 0.08 or 1e-3
-    lo, hi = lo - pad, hi + pad
-    sx = lambda i: 40 + (w - 50) * i / max(len(xs) - 1, 1)  # noqa: E731
-    sy = lambda v: h - 20 - (h - 35) * (v - lo) / (hi - lo)  # noqa: E731
-    colors = ["#1f77b4", "#d62728", "#2ca02c"]
-    parts = [f'<svg viewBox="0 0 {w} {h}" width="{w}" height="{h}" xmlns="http://www.w3.org/2000/svg" style="background:#fafafa;border:1px solid #ddd">']
-    for name, lv in (limits or {}).items():
-        parts.append(f'<line x1="40" x2="{w - 10}" y1="{sy(lv):.1f}" y2="{sy(lv):.1f}" stroke="#d62728" stroke-dasharray="4 3"/>'
-                     f'<text x="{w - 12}" y="{sy(lv) - 3:.1f}" font-size="10" text-anchor="end" fill="#d62728">{html.escape(name)} {lv:.4f}</text>')
-    for j, (name, s) in enumerate(series.items()):
-        pts = " ".join(f"{sx(i):.1f},{sy(v):.1f}" for i, v in enumerate(s) if v is not None and not np.isnan(v))
-        parts.append(f'<polyline fill="none" stroke="{colors[j % 3]}" stroke-width="1.6" points="{pts}"/>')
-    parts.append(f'<text x="40" y="{h - 5}" font-size="10">{html.escape(xs[0])}</text><text x="{w - 10}" y="{h - 5}" font-size="10" text-anchor="end">{html.escape(xs[-1])}</text>')
-    parts.append(f'<text x="4" y="{sy(hi - pad):.0f}" font-size="10">{hi - pad:.3f}</text><text x="4" y="{sy(lo + pad):.0f}" font-size="10">{lo + pad:.3f}</text>')
-    parts.append("</svg>")
-    return "".join(parts)
+    sub = df[M.iso_week_of(df["date"]) >= start]
+    recs = (load_many or C.default_loader())(sorted(sub["horse_id"].astype(str).unique().tolist()))
+    blocks = C.block_dates(recs)
+    s = sub[["race_id", "horse_id", "date"]].copy()
+    s["has"] = [x in blocks.get(str(h), set()) for h, x in zip(s["horse_id"], pd.to_datetime(s["date"]).dt.strftime("%Y-%m-%d"))]
+    s["week"] = M.iso_week_of(s["date"])
+    return s.groupby("week")["has"].mean().to_dict()
 
 
-def render_html(rep: dict) -> str:
-    st = rep["alerts"]["status"]
-    color = {"ok": "#2e7d32", "warn": "#ef6c00", "alert": "#c62828"}.get(st, "#555")
-    s = rep["series"]
-    xs = [r["week"] for r in s]
-    lim = rep["baseline"]
-    parts = [f"<html><head><meta charset='utf-8'><title>ドリフト監視</title><style>body{{font-family:sans-serif;margin:20px}}table{{border-collapse:collapse}}td,th{{border:1px solid #ccc;padding:3px 8px;font-size:13px}}</style></head><body>",
-             f"<h1>ドリフト監視 <span style='color:{color}'>[{st}]</span></h1>",
-             f"<p>作成: {html.escape(rep['asof'])} / 窓: {rep['window_weeks']} 週 / 基準期間: {html.escape(rep['baseline_period'])}。"
-             "指標は報告・警報のみで、モデルや閾値の選択・学習には使わない（2026 年はテストセット②）。</p>"]
-    if s and lim:
-        parts += ["<h2>モデル − 市場 の勝率 LogLoss 差（8 週窓）</h2>", svg_line(xs, {"gap": [r["gap"] for r in s]}, {"UCL": lim["gap"]["ucl"], "mean": lim["gap"]["mean"]}),
-                  "<h2>予測の尖り（モデル ÷ 市場 の対数オッズ SD）</h2>", svg_line(xs, {"sd_ratio": [r["sd_ratio"] for r in s]}, {"LCL": lim["sd_ratio"]["lcl"], "mean": lim["sd_ratio"]["mean"]}),
-                  "<h2>ECE（モデル勝率）</h2>", svg_line(xs, {"ece": [r["ece"] for r in s]}, {"UCL": lim["ece"]["ucl"]})]
-    parts.append("<h2>警報の条件と現在</h2><table><tr><th>指標</th><th>限界</th><th>最新</th><th>続けて超えた週</th><th>超えた週/全週</th><th>最初に超えた週</th><th>最初の警報週(窓)</th><th>CUSUM(最新/h)</th><th>最初のCUSUM警報週</th><th>警報</th></tr>")
-    for name, t in rep["alerts"].get("triggers", {}).items():
-        parts.append(f"<tr><td>{name}</td><td>{t['limit']:.4f}</td><td>{t['latest']:.4f}</td><td>{t['run_weeks']}</td><td>{t['weeks_over']}/{t['weeks']}</td><td>{t['first_over_week'] or '—'}</td><td>{t.get('first_alert_week') or '—'}</td><td>{t.get('cusum_latest', float('nan')):.2f}/{t.get('cusum_h', float('nan')):.1f}</td><td>{t.get('cusum_first_alarm_week') or '—'}</td><td>{'警報' if t['alert'] else ('注意' if t['warn'] else '—')}</td></tr>")
-    parts.append("</table>")
-    f = rep.get("features", {})
-    parts.append(f"<h2>特徴量（PSI 上位）: {f.get('status')}</h2>")
-    if f.get("top_psi"):
-        parts.append("<table><tr><th>列</th><th>PSI</th><th>KS</th><th>欠損(基準)</th><th>欠損(今回)</th></tr>" + "".join(
-            f"<tr><td>{html.escape(str(r['feature']))}</td><td>{r['psi']:.3f}</td><td>{r['ks']:.3f}</td><td>{r['miss_ref']:.3f}</td><td>{r['miss_cur']:.3f}</td></tr>" for r in f["top_psi"]) + "</table>")
-    cv = rep.get("coverage", {})
-    parts.append(f"<h2>入力データの供給（調教ページの被覆）: {cv.get('status')}</h2>")
-    if cv.get("table"):
-        parts.append("<p class='muted'>学習側(2020-2025)は約 100%。低いと tl_・wc_ が欠損のまま予測され、予測が平らになる。</p><table><tr><th>月</th><th>行数</th><th>調教の行がある率</th><th>記録がある率</th></tr>" + "".join(
-            f"<tr><td>{r['ym']}</td><td>{r['rows']}</td><td>{r['block']:.3f}</td><td>{r['rec']:.3f}</td></tr>" for r in cv["table"]) + "</table>")
-    sh = rep.get("shadow_v5", {})
-    parts.append(f"<h2>v4 と v5 の shadow: {sh.get('status')}</h2>")
-    if sh.get("status") == "ok":
-        parts.append("<table><tr><th>指標</th><th>差(v5−v4)</th><th>95%区間</th><th>レース数</th></tr>" + "".join(
-            f"<tr><td>{k}</td><td>{v.get('delta', float('nan')):+.5f}</td><td>[{v.get('lo', float('nan')):+.5f}, {v.get('hi', float('nan')):+.5f}]</td><td>{v.get('races')}</td></tr>"
-            for k, v in sh["delta_v5_minus_v4"].items()) + "</table>")
-    parts.append("</body></html>")
-    return "".join(parts)
+def load_dumps(dump_dir: Path, years: list[int] | None = None) -> pd.DataFrame:
+    parts = []
+    for f in sorted(dump_dir.glob("*/*.parquet")):
+        if years and int(f.parent.name) not in years:
+            continue
+        parts.append(pd.read_parquet(f))
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
+
+def top_features(path: Path, n: int) -> list[str]:
+    if not path.exists():
+        return []
+    return list(json.loads(path.read_text(encoding="utf-8")).get("features", []))[:n]
+
+
+def feature_section(root: Path, cfg: dict, ref_year: int = 2025, since: str | None = None) -> dict:
+    dump_dir = root / "data/local/inference/drift_features"
+    ref = load_dumps(dump_dir, [ref_year])
+    cur = load_dumps(dump_dir, [y for y in range(ref_year + 1, 2100)])
+    if len(ref) == 0 or len(cur) == 0:
+        return {"status": "no_dump", "note": "drift_dump_features で 2025 年(基準)と監視期間の抜き取りを作ると PSI を計算する"}
+    if since:
+        cur = cur[cur["day"].astype(str) >= since.replace("-", "")]
+        if len(cur) == 0:
+            return {"status": "no_dump_in_range"}
+    al = cfg["alert"]
+    feats = top_features(root / "config/drift_top_features.json", al["top_features"])
+    cols = feats or [c for c in ref.columns if c not in ("race_id", "horse_id", "day") + tuple(PCOLS)]
+    sh = M.feature_shift(ref, cur, cols)
+    nz = sh.sort_values("psi", ascending=False)
+    big = nz[nz["psi"] >= al["psi_alert"]]
+    jump = nz[(nz["miss_cur"] - nz["miss_ref"]) >= al["missing_rate_jump"]]
+    status = "alert" if (len(big) >= al["psi_alert_min_features"] or len(jump) > 0) else ("warn" if (nz["psi"] >= al["psi_warn"]).any() else "ok")
+    return {"status": status, "ref_rows": int(len(ref)), "cur_rows": int(len(cur)), "n_features": int(len(sh)), "n_psi_ge_alert": int(len(big)),
+            "n_psi_ge_warn": int((nz["psi"] >= al["psi_warn"]).sum()), "n_missing_jump": int(len(jump)),
+            "top_psi": nz.head(15).round(4).to_dict("records"), "missing_jump": jump.head(15).round(4).to_dict("records")}
+
+
+def paired_delta(a: pd.DataFrame, b: pd.DataFrame, key: str, n_boot: int = 1000, seed: int = 0) -> dict:
+    """b − a の LogLoss 差（同じ馬だけ・レース単位ブートストラップ）。a, b は race_id, horse_id, y_<key>, p_<key>。"""
+    col = {"win": "p_win", "top2": "p_top2", "top3": "p_top3"}[key]
+    m = a.merge(b[["race_id", "horse_id", col]], on=["race_id", "horse_id"], suffixes=("_a", "_b"))
+    if len(m) == 0:
+        return {"races": 0}
+    y = m[f"y_{key}"].to_numpy()
+    dd = M.bin_ll(y, m[f"{col}_b"].to_numpy()) - M.bin_ll(y, m[f"{col}_a"].to_numpy())
+    g = pd.DataFrame({"race_id": m["race_id"], "d": dd}).groupby("race_id")["d"].agg(["sum", "size"])
+    s, n = g["sum"].to_numpy(), g["size"].to_numpy()
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(g), (n_boot, len(g)))
+    est = s[idx].sum(1) / n[idx].sum(1)
+    return {"races": int(len(g)), "delta": float(s.sum() / n.sum()), "lo": float(np.quantile(est, 0.025)), "hi": float(np.quantile(est, 0.975))}
+
+
+def shadow_section(root: Path, cfg: dict, df: pd.DataFrame, window: int = 8) -> dict:
+    """v4 shadow（predictions_v3）と v5 shadow（predictions_v5）を同じ馬で突き合わせる（全期間の累積と直近窓）。df は v4 の評価表。"""
+    from src.scripts.data import readiness_eval as R
+
+    v5dir = root / cfg["prediction_sources"]["v5_shadow_dir"]
+    if not v5dir.exists():
+        return {"status": "no_v5_shadow"}
+    p5 = R.load_preds([v5dir])
+    if len(p5) == 0:
+        return {"status": "no_v5_shadow"}
+    p5 = p5[["race_id", "horse_id"] + PCOLS]
+    v4 = df.merge(p5[["race_id", "horse_id"]], on=["race_id", "horse_id"])
+    if len(v4) == 0:
+        return {"status": "no_overlap", "v5_races": int(p5["race_id"].nunique())}
+    v5 = v4[["race_id", "horse_id", "y_win", "y_top2", "y_top3", "p_mkt"]].merge(p5, on=["race_id", "horse_id"])
+    v5["lm"], v5["lk"] = _logit(v5["p_win"]), _logit(v5["p_mkt"])
+    v4 = v4.assign(lm=_logit(v4["p_win"]), lk=_logit(v4["p_mkt"]))
+
+    def gap(x: pd.DataFrame) -> float:
+        return float((M.bin_ll(x["y_win"], x["p_win"]) - M.bin_ll(x["y_win"], x["p_mkt"])).mean())
+
+    wk = M.iso_week_of(v4["date"])
+    last = sorted(wk.unique())[-window:]
+    v4w = v4[wk.isin(last)]
+    return {"status": "ok", "races": int(v4["race_id"].nunique()), "rows": int(len(v4)),
+            "delta_v5_minus_v4": {k: paired_delta(v4, v5, k) for k in ("win", "top2", "top3")},
+            "gap_v4": gap(v4), "gap_v5": gap(v5), "sd_ratio_v4": float(v4["lm"].std() / v4["lk"].std()), "sd_ratio_v5": float(v5["lm"].std() / v5["lk"].std()),
+            "latest_window": {"weeks": last, "races": int(v4w["race_id"].nunique()), "delta_win": paired_delta(v4w, v5[v5["race_id"].isin(v4w["race_id"])], "win")},
+            "note": "優劣の検出には約 2,000 レースが要る。区間が 0 を跨ぐ間は優劣を言わない（切替判断に使うのは readiness の基準）"}
+
+
+# ---------------------------------------------------------------- 本体
 
 def read_ack(out_dir: Path) -> dict:
     p = out_dir / "ack.json"
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
-def build_report(root: Path, cfg: dict, with_features: bool = True, with_shadow: bool = True, asof: str | None = None,
-                 cusum_from: str | None = None, with_coverage: bool = True) -> dict:
+def scorecard(rep: dict) -> list[dict]:
+    """緑/黄/赤のスコアカード（群ごと）。"""
+    seq = rep["performance"].get("sequence") or []
+    last = seq[-1] if seq else {}
+    cards = [{"name": "総合（警報の段階）", "color": STAGE_COLOR.get(rep["stage"], "gray"), "detail": rep["stage"]}]
+
+    def lamp(flag) -> str:
+        return "gray" if flag is None else ("yellow" if flag else "green")
+
+    if last:
+        cards += [
+            {"name": "性能: モデル−市場の勝率 LL 差", "color": lamp(last["flag_perf"]), "detail": f"{last['gap']:+.4f}（{last['gap_class']}）"},
+            {"name": "較正: ECE・傾き", "color": lamp(last["flag_cal"]), "detail": f"ECE {last['ece']:.4f} / 傾き {last['slope']:.3f}"},
+            {"name": "予測の尖り（先行）", "color": lamp(last["flag_dist"]), "detail": f"sd_ratio {last['sd_ratio']:.3f}"},
+        ]
+    cv = rep.get("coverage", {})
+    cards.append({"name": "入力: 調教の被覆", "color": {"ok": "green", "alert": "red"}.get(cv.get("status"), "gray"), "detail": f"{cv.get('block', float('nan')):.2f}"})
+    lf = rep.get("labelfree", {})
+    cards.append({"name": "先行: 予測分布の PSI", "color": {"ok": "green", "warn": "yellow", "alert": "red"}.get(lf.get("status"), "gray"),
+                  "detail": f"{lf.get('shift', {}).get('p_win', {}).get('psi', float('nan')):.3f}"})
+    ft = rep.get("features", {})
+    cards.append({"name": "先行: 特徴量の PSI", "color": {"ok": "green", "warn": "yellow", "alert": "red"}.get(ft.get("status"), "gray"), "detail": ft.get("status", "")})
+    cards.append({"name": "shadow v5−v4", "color": "gray", "detail": rep.get("shadow_v5", {}).get("status", "")})
+    return cards
+
+
+def build_report(root: Path, cfg: dict, with_features: bool = True, with_shadow: bool = True, with_coverage: bool = True, asof: str | None = None,
+                 cusum_from: str | None = None, df: pd.DataFrame | None = None) -> dict:
     al = cfg["alert"]
+    window = int(al.get("window_weeks", 8))
     start_year = int(cfg["baseline"]["from"][:4])
-    end_year = datetime.date.today().year
-    df = load_eval_frame(root, list(range(start_year, end_year + 1)), cfg, with_prior=False)
-    window = int(al.get("window_weeks", WINDOW_WEEKS))
-    series = rolling_series(df, window)
-    base_end = cfg["baseline"]["to"]
-    mon_start = cfg["test2"]["from"]
-    limits = baseline_limits(series, cfg["baseline"]["from"], base_end, al["gap_sigma_k"])
-    weekly = weekly_gap_sigma(df, cfg["baseline"]["from"], base_end)
-    alerts = evaluate_alerts(series, limits, mon_start, al["gap_consecutive_weeks"], {"gap": weekly["gap"], "sd_ratio": weekly["sd_ratio"]},
-                             float(al.get("cusum_k", 0.5)), float(al.get("cusum_h", 5.0)), cusum_from)
-    wk_all = M.iso_week_of(df["date"])
-    last_weeks = sorted(wk_all.unique())[-window:]
-    latest_win = df[wk_all.isin(last_weeks)]
-    cal = M.calib_bins(latest_win["p_win"], latest_win["y_win"]).round(5).to_dict("records") if len(latest_win) else []
-    rep = {"asof": asof or datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), "window_weeks": window,
-           "baseline_period": f"{cfg['baseline']['from']}〜{base_end}", "monitor_from": mon_start, "usage": cfg.get("usage"),
-           "cusum_from": cusum_from, "baseline": limits, "baseline_weekly": weekly, "alerts": alerts, "rows": int(len(df)),
-           "series": series[series["week"] >= cfg["baseline"]["from"]].round(6).to_dict("records"), "calibration_latest_window": cal}
-    fwd = df[df["src"] == "forward"]
+    raw = df if df is not None else load_eval_frame(root, list(range(start_year, datetime.date.today().year + 1)), cfg, with_prior=False)
+    d = prepare(raw)
+    wk_n = d.groupby("week")["race_id"].nunique()
+    partial = None
+    if len(wk_n) > 4 and wk_n.iloc[-1] < 0.6 * wk_n.iloc[-9:-1].median():      # 結果がまだ揃っていない週（週の途中で実行）は判定に使わない
+        partial = {"week": wk_n.index[-1], "races": int(wk_n.iloc[-1]), "typical": float(wk_n.iloc[-9:-1].median())}
+        d = d[d["week"] != wk_n.index[-1]]
+    rt = race_table(d)
+    base_end, mon_start = cfg["baseline"]["to"], cfg["test2"]["from"]
+    edges = M.quantile_edges(d[(d["week"] >= cfg["baseline"]["from"]) & (d["week"] <= base_end)]["p_win"].to_numpy(), 10)
+    series = rolling_series(d, window, rt, edges)
+    limits = baseline_limits(series, cfg["baseline"]["from"], base_end, float(al["gap_sigma_k"]))
+    wk_base = weekly_baseline(d, cfg["baseline"]["from"], base_end)
+    cov = coverage_section(d, cfg) if with_coverage else {"status": "skipped"}
+    seq = evaluate_sequence(series, limits, wk_base, mon_start, al, None, cusum_from)
+    last_weeks = sorted(d["week"].unique())[-window:]
+    cur = d[d["week"].isin(last_weeks)]
+    cum = d[d["week"] >= mon_start]
+    base_rows = d[(d["week"] >= cfg["baseline"]["from"]) & (d["week"] <= base_end)]
+    rep = {"asof": asof or datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), "usage": cfg.get("usage"), "window_weeks": window,
+           "periods": {k: cfg[k] for k in ("train", "test1", "test2", "monitor", "baseline")}, "rows": int(len(d)), "latest_result_week": last_weeks[-1],
+           "performance": {"limits": limits, "weekly_baseline": wk_base, "min_races_window": int(al.get("min_races_window", 150)),
+                           "latest_window": {**window_metrics(cur, rt[rt["week"].isin(last_weeks)], edges), "gap_ci": M.gap_with_ci(cur, n_boot=500)},
+                           "cumulative_since_monitor_start": ({**window_metrics(cum, rt[rt["week"] >= mon_start], edges), "gap_ci": M.gap_with_ci(cum, n_boot=300)} if len(cum) else {}),
+                           "sequence": seq.round(6).to_dict("records"),
+                           "calibration": {"window": M.calib_bins(cur["p_win"], cur["y_win"]).round(5).to_dict("records"),
+                                           "window_top3": M.calib_bins(cur["p_top3"], cur["y_top3"]).round(5).to_dict("records"),
+                                           "baseline": M.calib_bins(base_rows["p_win"], base_rows["y_win"]).round(5).to_dict("records")},
+                           "series_baseline": series[series["week"] >= cfg["baseline"]["from"]].round(6).to_dict("records")},
+           "coverage": cov, "cusum_from": cusum_from, "partial_week_excluded": partial}
+    rep["strata"] = strata_fdr(d, last_weeks, base_end, cfg["baseline"]["from"], ["surface", "dist_band", "f_size", "venue", "is_new", "age_c", "month_s"])
+    try:
+        rep["labelfree"] = labelfree_section(root, cfg, window, base_end)
+    except Exception as exc:  # noqa: BLE001
+        rep["labelfree"] = {"status": "unavailable", "error": str(exc)[:200]}
     rep["features"] = feature_section(root, cfg) if with_features else {"status": "skipped"}
-    rep["shadow_v5"] = shadow_section(root, cfg, fwd) if with_shadow else {"status": "skipped"}
-    rep["coverage"] = coverage_section(df, cfg) if with_coverage else {"status": "skipped"}
-    st = [alerts["status"], rep["features"].get("status"), rep["coverage"].get("status")]
-    rep["status"] = "alert" if "alert" in st else ("warn" if "warn" in st else alerts["status"])
-    rep["alerts"]["status_overall"] = rep["status"]
+    rep["shadow_v5"] = shadow_section(root, cfg, raw[raw["src"] == "forward"], window) if with_shadow else {"status": "skipped"}
+    stage = seq.iloc[-1]["stage"] if len(seq) else "保留"
+    idx = STAGES.index(stage) if stage in STAGES else 0
+    for extra in (cov.get("status") == "alert", rep["features"].get("status") == "alert", rep["labelfree"].get("status") == "alert"):
+        idx = max(idx, 1) if extra else idx
+    rep["stage"] = stage if (stage == "保留" and idx == 0) else STAGES[idx]
+    rep["scorecard"] = scorecard(rep)
     return rep
 
 
-def write_outputs(rep: dict, out_dir: Path) -> None:
+def write_outputs(rep: dict, out_dir: Path) -> Path:
+    """追記のみ: レポートは時刻つきフォルダに新規保存し（上書きしない）、history.jsonl に 1 行足す。latest.* は最新を指す写し。"""
+    from src.scripts.data.drift_report import render_html
+
     out_dir.mkdir(parents=True, exist_ok=True)
-    day = rep["asof"][:10]
-    (out_dir / day).mkdir(exist_ok=True)
+    stamp = rep["asof"].replace("-", "").replace(":", "").replace(" ", "_")
+    rd = out_dir / "reports" / stamp
+    rd.mkdir(parents=True, exist_ok=True)
     txt = json.dumps(rep, ensure_ascii=False, indent=1, default=float)
-    (out_dir / day / "report.json").write_text(txt, encoding="utf-8")
+    page = render_html(rep)
+    (rd / "report.json").write_text(txt, encoding="utf-8")
+    (rd / "report.html").write_text(page, encoding="utf-8")
     (out_dir / "latest.json").write_text(txt, encoding="utf-8")
-    page = render_html({**rep, "alerts": {**rep["alerts"], "status": rep["status"]}})
     (out_dir / "latest.html").write_text(page, encoding="utf-8")
-    (out_dir / day / "report.html").write_text(page, encoding="utf-8")
-    last = rep["series"][-1] if rep["series"] else {}
-    row = {"asof": rep["asof"], "status": rep["status"], "gap": last.get("gap"), "sd_ratio": last.get("sd_ratio"), "ece": last.get("ece"),
-           "triggers": {k: {"run_weeks": v["run_weeks"], "alert": v["alert"]} for k, v in rep["alerts"].get("triggers", {}).items()},
-           "features": rep["features"].get("status"), "shadow_v5": rep["shadow_v5"].get("status"), "coverage": rep["coverage"].get("status"),
-           "coverage_block": rep["coverage"].get("block")}
+    seq = rep["performance"].get("sequence") or []
+    last = seq[-1] if seq else {}
+    row = {"asof": rep["asof"], "stage": rep["stage"], "latest_result_week": rep.get("latest_result_week"), "gap": last.get("gap"), "gap_class": last.get("gap_class"),
+           "sd_ratio": last.get("sd_ratio"), "ece": last.get("ece"), "slope": last.get("slope"), "cusum": last.get("cusum_gap"), "ewma": last.get("ewma_gap"),
+           "coverage_block": rep["coverage"].get("block"), "labelfree_psi": rep.get("labelfree", {}).get("shift", {}).get("p_win", {}).get("psi"),
+           "features": rep["features"].get("status"), "shadow_v5": rep["shadow_v5"].get("status"), "report": str(rd)}
     with open(out_dir / "history.jsonl", "a", encoding="utf-8") as fh:
         fh.write(json.dumps(row, ensure_ascii=False, default=float) + "\n")
+    return rd
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -368,16 +550,20 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = Path(a.out_dir) if a.out_dir else default_out_dir(root)
     if a.ack_reset:
         out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / "ack.json").write_text(json.dumps({"cusum_reset_from": a.ack_reset, "note": a.note, "at": datetime.datetime.now().isoformat(timespec="seconds")},
-                                                     ensure_ascii=False), encoding="utf-8")
+        rec = {"cusum_reset_from": a.ack_reset, "note": a.note, "at": datetime.datetime.now().isoformat(timespec="seconds")}
+        with open(out_dir / "ack_history.jsonl", "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        (out_dir / "ack.json").write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
         print(f"ack: CUSUM を {a.ack_reset} 以降でやり直す")
         return 0
-    rep = build_report(root, cfg, with_features=not a.no_features, with_shadow=not a.no_shadow, with_coverage=not a.no_coverage, cusum_from=read_ack(out_dir).get("cusum_reset_from"))
-    if not a.dry_run:
-        write_outputs(rep, out_dir)
-    print(json.dumps({"status": rep["status"], "alerts": {k: {"latest": round(v["latest"], 4), "limit": round(v["limit"], 4), "run_weeks": v["run_weeks"]}
-                                                     for k, v in rep["alerts"].get("triggers", {}).items()},
-                      "features": rep["features"].get("status"), "shadow_v5": rep["shadow_v5"].get("status")}, ensure_ascii=False))
+    rep = build_report(root, cfg, with_features=not a.no_features, with_shadow=not a.no_shadow, with_coverage=not a.no_coverage,
+                       cusum_from=read_ack(out_dir).get("cusum_reset_from"))
+    rd = None if a.dry_run else write_outputs(rep, out_dir)
+    last = (rep["performance"]["sequence"] or [{}])[-1]
+    print(json.dumps({"stage": rep["stage"], "week": rep["latest_result_week"], "gap": round(last.get("gap", float("nan")), 4), "gap_class": last.get("gap_class"),
+                      "sd_ratio": round(last.get("sd_ratio", float("nan")), 3), "ece": round(last.get("ece", float("nan")), 4), "coverage": rep["coverage"].get("status"),
+                      "labelfree": rep.get("labelfree", {}).get("status"), "features": rep["features"].get("status"), "shadow_v5": rep["shadow_v5"].get("status"),
+                      "report": str(rd) if rd else None}, ensure_ascii=False))
     return 0
 
 
