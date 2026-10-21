@@ -5,7 +5,8 @@
 set -u
 APPLY=0; BACKUP=0
 for a in "$@"; do case "$a" in --apply) APPLY=1;; --i-have-a-backup) BACKUP=1;; esac; done
-CANDS=(keiba-api uwsgi apache2 httpd nginx caddy certbot.timer certbot docker pm2-root supervisor gunicorn uvicorn)
+# nginx は止めない: vps_02 のあとは nginx(127.0.0.1:8080) が新しい UI の入口になっている。止めると prod が落ちる
+CANDS=(keiba-api uwsgi apache2 httpd caddy certbot.timer certbot docker pm2-root supervisor gunicorn uvicorn)
 echo "止める候補（存在するもの）:"
 FOUND=()
 for u in "${CANDS[@]}"; do
