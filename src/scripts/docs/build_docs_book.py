@@ -203,6 +203,8 @@ PARTS: list[Part] = [
           [("course_aptitude_groups", "コース適性（tp-29）"), ("training_pipeline_decisions", "決定ログ")]),
         C("megu_index_v3a", "めぐ指数（ユーザー独自のレーティング指数。1点=0.1秒）の改善と本番反映（2026-10-19）。旧版の問題（水準の段差・基準外・補正の過大）、改善の工程と合格基準 10 項目、DB・GCS・日次 cron への反映、使い方（成長曲線・特徴量・想定めぐ指数）、限界。", "結果",
           [("research_overview", "調査の全体像"), ("feature_investigation_catalog", "特徴量調査の総覧"), ("adopted_features_v3", "v3 の特徴量"), ("megu_v3a_rollout", "本番反映の手順書")]),
+        C("class_benchmark", "クラス別の基準めぐ指数（突破ライン）。『○歳XXX』のクラスごとに、2着馬の指数の中央値と下位25%（突破ライン）を出す。基準以上の馬は未満の馬より勝ちやすい（2025年の検証）。馬柱と出馬表に重ねて表示する。", "結果",
+          [("megu_index_v3a", "めぐ指数 v3a"), ("training_pipeline_decisions", "決定ログ")]),
         C("feature_serving_low_memory", "当日の特徴量を小さなメモリで作る設計。出走馬だけで計算できる理由、サービング用バンドル、検証、見つかった不具合。", "設計",
           [("feature_strategy_tp03_tp04", "特徴量の定義はこちら")]),
     ]),

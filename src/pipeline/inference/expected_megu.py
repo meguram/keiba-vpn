@@ -473,4 +473,13 @@ def attach_expected_megu(resp: dict, race_date: str | None, base: Path | None = 
         "data_through": _fmt(through) if through else None, "n_horses": len(preds), "n_known": n_known,
         "model": ({k: model.get(k) for k in ("version", "trained_on", "validated_on", "eval")} if model else None),
     }
+    try:                                                                  # このクラスの基準（突破ライン）。表が無い・クラスが読めないレースは付けない
+        from src.pipeline.inference.class_benchmark import lookup as _bench
+
+        bm = _bench(card.get("race_class"), card.get("grade"), card.get("race_name") or resp.get("race_name"),
+                    card.get("surface") or resp.get("surface"), card.get("distance") or resp.get("distance"))
+        if bm:
+            resp["class_benchmark"] = bm
+    except Exception:  # noqa: BLE001
+        pass
     return resp

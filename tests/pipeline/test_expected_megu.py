@@ -171,3 +171,18 @@ def test_recent_runs_carry_race_details_from_the_result_table(tmp_path):
     assert new["race_name"] == "未勝利" and new["finish"] == 1 and "pop" not in new          # 欠損は付けない
     assert old["race_name"] == "新馬" and old["finish"] == 3 and old["pop"] == 2 and old["l3f"] == 34.6
     assert old["passing"] == "3-3" and old["bw"] == 460 and old["bw_diff"] == 2 and old["going"] == "良" and old["field"] == 14
+
+
+def test_attach_adds_class_benchmark_when_the_class_is_known(tmp_path, monkeypatch):
+    from src.pipeline.inference import class_benchmark as cb
+
+    em._cache.clear()
+    _write_tables(tmp_path, [{"race_id": "202501010101", "horse_id": "A", "megu_index_v3a_abs_robust": 55.0, "megu_v3a_status": "ok", "megu_v3a_low_confidence": False}],
+                  [{"race_id": "202501010101", "horse_id": "A", "date": "2025-01-10"}])
+    monkeypatch.setattr(cb, "load_table", lambda path=None: {"period": "2023-2025", "cells": {"3歳|未勝利": {"n": 99, "median": 40.0, "p25": 35.0, "p75": 45.0}}})
+    card = {"race_class": "サラ系３歳 未勝利", "grade": "未勝利", "race_name": "3歳未勝利", "surface": "芝", "distance": 1600}
+    out = em.attach_expected_megu({"predictions": [{"horse_number": 1, "horse_id": "A"}]}, "2025-05-01", base=tmp_path, card=card)
+    b = out["class_benchmark"]
+    assert b["label"] == "3歳未勝利" and b["line"] == 35.0 and b["median"] == 40.0 and b["n"] == 99 and b["period"] == "2023-2025"
+    card2 = {"race_class": "", "grade": "", "race_name": "謎のレース", "surface": "芝", "distance": 1600}
+    assert "class_benchmark" not in em.attach_expected_megu({"predictions": [{"horse_number": 1, "horse_id": "A"}]}, "2025-05-01", base=tmp_path, card=card2)

@@ -7,7 +7,7 @@ import { GATE_TONE, PACE_TONE, buildTdMap } from "@/lib/positionForecast";
 import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
 import { bracketOf } from "@/lib/bracket";
 import { PastRuns } from "@/components/PastRuns";
-import { recentMean, type ExpectedMegu } from "@/lib/expectedMegu";
+import { recentMean, type ClassBenchmark, type ExpectedMegu } from "@/lib/expectedMegu";
 import { LapForecast as LapForecastView } from "@/components/LapForecast";
 import { isUsableLapForecast, lapSummaryText } from "@/lib/lapForecast";
 import type { LapForecast } from "@/lib/lapForecast";
@@ -125,12 +125,13 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 const sec = (v?: number) => (v != null ? v.toFixed(1) : "—");
 
 export function PredExtras({
-  raceId, entries, pace: paceApi, paceUnified, gate, steeplechase, lapForecast,
+  raceId, entries, pace: paceApi, paceUnified, classBenchmark, gate, steeplechase, lapForecast,
 }: {
   raceId: string;
   entries: ExtraEntry[];
   pace?: PaceForecast | null;
   paceUnified?: PaceUnified | null;
+  classBenchmark?: ClassBenchmark | null;
   gate?: GateBias | null;
   /** 障害レース。追走難度 v2 は平地の走りで学習した値で障害では低く出すぎるため、使わない */
   steeplechase?: boolean;
@@ -262,6 +263,7 @@ export function PredExtras({
       >
         <PastRuns
           raceId={raceId}
+          bench={classBenchmark}
           horses={[...entries].filter((e) => e.horse_number != null).sort((a, b) => (a.horse_number ?? 0) - (b.horse_number ?? 0)).map((e) => ({
             no: e.horse_number as number, name: e.horse_name ?? "", bracket: bracketOf(e.horse_number as number, entries.length, e.bracket_number), e: e.expected_megu,
           }))}

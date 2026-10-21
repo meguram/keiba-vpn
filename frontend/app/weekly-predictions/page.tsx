@@ -16,7 +16,8 @@ import type { L3fCoherent, PaceUnified } from "@/components/PredExtras";
 import type { LapForecast } from "@/lib/lapForecast";
 import { bracketChipStyle, bracketOf } from "@/lib/bracket";
 import type { GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
-import { recentMean, type ExpectedMegu, type ExpectedMeguMeta } from "@/lib/expectedMegu";
+import { recentMean, type ClassBenchmark, type ExpectedMegu, type ExpectedMeguMeta } from "@/lib/expectedMegu";
+import { benchmarkTitle } from "@/lib/classBenchmark";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
 const SHOW_HORSE_LINK = featureEnabled("horse-detail");
@@ -82,6 +83,7 @@ type PredData = {
   expected_megu_meta?: ExpectedMeguMeta | null;
   pace_forecast?: PaceForecast | null;
   pace_unified?: PaceUnified | null;
+  class_benchmark?: ClassBenchmark | null;
   lap_forecast?: LapForecast | null;
   gate_bias?: GateBias | null;
   error?: string;
@@ -270,7 +272,7 @@ const TABLE_CSS = `
 `;
 
 /* ── 予測テーブル ── */
-function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null }) {
+function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null; bench?: ClassBenchmark | null }) {
   const TH: React.CSSProperties = {
     padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-dim)",
     textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "normal", lineHeight: 1.25, background: "var(--surface2)", overflow: "hidden",
@@ -450,7 +452,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                     {tapCell(p, "jockey", p.jockey_name, "var(--text)")}
                     <span className="sub">{p.trainer_name ? <>{tapCell(p, "trainer", p.trainer_name, "var(--text-dim)")}</> : "-"}</span>
                   </td>
-                  <td className="sep"><RecentMeguCell e={p.expected_megu} wide onOpen={() => openPast(p.horse_number)} /></td>
+                  <td className="sep"><RecentMeguCell bench={bench} e={p.expected_megu} wide onOpen={() => openPast(p.horse_number)} /></td>
                   <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}</td>
                   <td style={{ color: dim }}>{fmtPct(p.top2_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top3_prob)}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
@@ -494,7 +496,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                     <span className="sub">{[p.trainer_name, p.buy_tier && p.buy_tier !== "—" ? `推奨 ${p.buy_tier}` : null].filter(Boolean).join("　")}</span>
                   </td>
                   <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top2_prob)} / {fmtPct(p.top3_prob)}</span></td>
-                  <td className="sep"><RecentMeguCell e={p.expected_megu} onOpen={() => openPast(p.horse_number)} /></td>
+                  <td className="sep"><RecentMeguCell bench={bench} e={p.expected_megu} onOpen={() => openPast(p.horse_number)} /></td>
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>複 {ev.pl.text}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
                 </tr>
@@ -538,7 +540,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                 {p.buy_tier && p.buy_tier !== "—" && <span style={{ color: "var(--text-dim)" }}>推奨 {p.buy_tier}</span>}
               </div>
               <div className="r3" style={{ color: "var(--text-dim)" }}>
-                <span>直近指数 </span><RecentMeguCell e={p.expected_megu} wide onOpen={() => openPast(p.horse_number)} />
+                <span>直近指数 </span><RecentMeguCell bench={bench} e={p.expected_megu} wide onOpen={() => openPast(p.horse_number)} />
               </div>
             </div>
           );
@@ -548,7 +550,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
       {megu && (
         <p style={{ fontSize: 11, color: "var(--text-dim)", padding: "6px 10px 0" }}>
           直近指数: 過去の走の実測めぐ指数（左が古く右が最新、淡色は低信頼）。{megu.data_through ? `指数データは ${megu.data_through.slice(5).replace("-", "/")} まで。` : ""}
-          1点＝0.1秒、斤量55kg換算。今回の指数の想定は出しません（予測精度への寄与が小さいため）。
+          1点＝0.1秒、斤量55kg換算。今回の指数の想定は出しません（予測精度への寄与が小さいため）。{bench && <> 緑の数字は、このクラス（{benchmarkTitle(bench)}）の突破ライン {bench.line.toFixed(0)} 以上。</>}
         </p>
       )}
       {!hasPred && (
@@ -661,10 +663,10 @@ function RacePanel({
         )}
         {pred && !failed && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
         {pred && !failed && (
-          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} />
+          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} bench={pred.class_benchmark} />
         )}
         {pred && !failed && preds.length > 0 && (
-          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />
+          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} classBenchmark={pred.class_benchmark} lapForecast={pred.lap_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />
         )}
       </div>
     </section>

@@ -1,0 +1,48 @@
+<!doctype html><html lang='ja'><head><meta charset='utf-8'><title>クラス別の基準めぐ指数（突破ライン）</title><style>:root { --bg:#0f172a; --panel:#15213c; --border:#2a3a5c; --text:#e5e7eb; --muted:#94a3b8; --accent:#60a5fa; --accent-2:#93c5fd; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; }
+td.num { text-align: right; font-family: monospace; } .muted { color: var(--muted); font-size: 13px; }</style></head><body>
+<h1>クラス別の基準めぐ指数（突破ライン）</h1>
+<p class="muted">ユーザー依頼（2026-10-21）:「○歳XXX」というレベル感のクラスで、これを超えていればこのクラスは突破できそう、という基準めぐ指数が見たい。指数は絶対指数 megu_index_v3a_abs_robust（1点＝0.1秒、斤量55kg換算。<a href="megu_index_v3a.html">めぐ指数 v3a</a>）。集計期間は 2023〜2025 年（低信頼の指数・障害を除く）。</p>
+
+<h2>1. 結論</h2>
+<ul>
+<li><b>基準はそのクラスの「2着馬」の指数で作ります。</b>クラスごとに、2着馬の指数の中央値（そのクラスの標準的な水準）と、下位25%（<b>突破ライン</b>）を出します。2着馬は、めぐ指数の基準タイム自体が「2着馬の補正後タイムの平均」で作られていて物差しが揃うこと、勝ち馬のような大差勝ちの上側の裾が無いことから採りました。</li>
+<li><b>基準以上の馬は、未満の馬より勝ちやすく、3着内に入りやすい</b>（2025年、基準は2023〜24年で作成）。ランダムに比べた勝率の倍率は、基準以上 1.48 倍・未満 0.77 倍（差 0.63〜0.79、レース単位の95%区間）。3着内率の倍率は 1.41 倍と 0.89 倍。</li>
+<li>勝ち馬基準・2着以内・3着以内でも、判別力は同等（区間が重なる）。2着馬は四分位幅が最も小さく、基準以上の馬の割合も極端でない（約66%）ため採用しました。</li>
+<li><b>突破を保証するものではありません。</b>1走の指数のばらつきは約±10点（約1秒）あり、基準以上でも勝つ馬は 10.6% です。</li>
+<li>面（芝/ダ）は11のクラスで分け、距離帯は17の組合せで分けました（親との中央値の差が2点以上で、n≥30 のときだけ）。時期（前期・後期）は2歳・3歳限定戦で中央値が約2点違いますが、分けていません。</li>
+</ul>
+
+<h2>2. 基準の定義</h2>
+<ul>
+<li>クラスの正規化: race_class・grade・race_name から「年齢（2歳・3歳・3歳以上・4歳以上）× クラス（新馬・未勝利・1勝・2勝・3勝・OP・L・G3・G2・G1）」を読む。全角数字・表記ゆれを広く読み、年齢が読めないグレード戦はクラスのみで持つ。読めなかったのは障害の324レースだけ（障害は対象外）。</li>
+<li>突破ライン = 2着馬の指数の下位25%。最小件数は 30。セルが薄い・差が小さいときは親（面なし→年齢×クラス→クラスのみ）の基準を使う。使った階層は API の level に入る。</li>
+<li>データ: 2023〜2025 年の 2着馬 9,061 走。再生成は <code>python -m src.scripts.data.class_benchmark_build --years 2023,2024,2025 --basis second --out config/class_benchmark.json</code>、検証は <code>--evaluate --build-years 2023,2024 --eval-year 2025</code>。</li>
+</ul>
+
+<h2>3. 代表的な数値（年齢 × クラス、面を分けない基準）</h2>
+<table><tr><th>クラス</th><th>2着馬 n</th><th>中央値</th><th>突破ライン</th><th>上位75%</th></tr>
+<tr><td>2歳 ／ 1勝</td><td class='num'>56</td><td class='num'>47.5</td><td class='num'><b>44.8</b></td><td class='num'>52.7</td></tr><tr><td>2歳 ／ 新馬</td><td class='num'>761</td><td class='num'>34.8</td><td class='num'><b>29.3</b></td><td class='num'>39.7</td></tr><tr><td>2歳 ／ 未勝利</td><td class='num'>970</td><td class='num'>36.0</td><td class='num'><b>30.5</b></td><td class='num'>41.0</td></tr><tr><td>3歳 ／ 1勝</td><td class='num'>291</td><td class='num'>51.3</td><td class='num'><b>47.2</b></td><td class='num'>56.5</td></tr><tr><td>3歳 ／ 新馬</td><td class='num'>105</td><td class='num'>31.9</td><td class='num'><b>27.3</b></td><td class='num'>37.8</td></tr><tr><td>3歳 ／ 未勝利</td><td class='num'>2433</td><td class='num'>39.8</td><td class='num'><b>34.2</b></td><td class='num'>44.7</td></tr><tr><td>3歳以上 ／ 1勝</td><td class='num'>1444</td><td class='num'>50.0</td><td class='num'><b>45.7</b></td><td class='num'>54.2</td></tr><tr><td>3歳以上 ／ 2勝</td><td class='num'>738</td><td class='num'>54.2</td><td class='num'><b>50.1</b></td><td class='num'>58.6</td></tr><tr><td>3歳以上 ／ 3勝</td><td class='num'>294</td><td class='num'>59.3</td><td class='num'><b>54.9</b></td><td class='num'>63.2</td></tr><tr><td>3歳以上 ／ G3</td><td class='num'>46</td><td class='num'>62.1</td><td class='num'><b>57.5</b></td><td class='num'>66.6</td></tr><tr><td>3歳以上 ／ L</td><td class='num'>47</td><td class='num'>58.7</td><td class='num'><b>55.2</b></td><td class='num'>64.9</td></tr><tr><td>3歳以上 ／ OP</td><td class='num'>70</td><td class='num'>62.2</td><td class='num'><b>56.7</b></td><td class='num'>68.2</td></tr><tr><td>4歳以上 ／ 1勝</td><td class='num'>819</td><td class='num'>50.0</td><td class='num'><b>45.2</b></td><td class='num'>54.4</td></tr><tr><td>4歳以上 ／ 2勝</td><td class='num'>560</td><td class='num'>55.0</td><td class='num'><b>50.1</b></td><td class='num'>59.4</td></tr><tr><td>4歳以上 ／ 3勝</td><td class='num'>235</td><td class='num'>59.6</td><td class='num'><b>54.3</b></td><td class='num'>65.0</td></tr><tr><td>4歳以上 ／ OP</td><td class='num'>46</td><td class='num'>63.5</td><td class='num'><b>58.2</b></td><td class='num'>69.6</td></tr>
+</table>
+<p class="muted">面で分けた基準 11 件、距離帯まで分けた基準 17 件は config/class_benchmark.json にあります。</p>
+
+<h2>4. 検証（2025年。基準は 2023〜2024 年で作成）</h2>
+<p>2025年の出走馬のうち、直近5走の最高指数が基準以上の馬と未満の馬を比べました（過去走のある 29,987 頭・45,748 頭中。過去走が無い馬は別枠）。倍率 = 実際の勝ち（3着内）の数 ÷ ランダムに選んだ場合の期待数（頭数の逆数）。区間はレース単位の再標本化。</p>
+<table><tr><th>基準にした馬</th><th>基準の数</th><th>基準以上の割合</th><th>勝ちの倍率 以上 / 未満</th><th>倍率の差（95%区間）</th><th>3着内の倍率 以上 / 未満</th><th>倍率の差（95%区間）</th></tr>
+<tr><td>勝ち馬</td><td class='num'>53</td><td class='num'>56%</td><td class='num'>1.56 / 0.84</td><td class='num'>0.64〜0.81</td><td class='num'>1.45 / 0.95</td><td class='num'>0.46〜0.55</td></tr><tr><td>2着馬（採用）</td><td class='num'>46</td><td class='num'>66%</td><td class='num'>1.48 / 0.77</td><td class='num'>0.63〜0.79</td><td class='num'>1.41 / 0.89</td><td class='num'>0.48〜0.56</td></tr><tr><td>2着以内</td><td class='num'>64</td><td class='num'>62%</td><td class='num'>1.49 / 0.82</td><td class='num'>0.60〜0.75</td><td class='num'>1.42 / 0.92</td><td class='num'>0.45〜0.54</td></tr><tr><td>3着以内</td><td class='num'>68</td><td class='num'>67%</td><td class='num'>1.46 / 0.78</td><td class='num'>0.60〜0.76</td><td class='num'>1.39 / 0.90</td><td class='num'>0.46〜0.54</td></tr>
+</table>
+<p>過去走の無い馬（新馬・初出走など）は勝ちの倍率が 0.56 と低く、基準とは比べられません（画面では「基準と比べるデータなし」）。</p>
+<table><tr><th>基準にした馬</th><th>クラス数</th><th>四分位幅（小さいほど安定）</th><th>年ごとの中央値のぶれ</th><th>下位25%の標準誤差</th></tr>
+<tr><td>勝ち馬</td><td class='num'>16</td><td class='num'>10.19</td><td class='num'>0.43</td><td class='num'>0.37</td></tr><tr><td>2着馬（採用）</td><td class='num'>16</td><td class='num'>9.70</td><td class='num'>0.54</td><td class='num'>0.37</td></tr><tr><td>2着以内</td><td class='num'>21</td><td class='num'>10.06</td><td class='num'>0.47</td><td class='num'>0.31</td></tr><tr><td>3着以内</td><td class='num'>24</td><td class='num'>10.21</td><td class='num'>0.48</td><td class='num'>0.26</td></tr>
+</table>
+<p class="muted">四分位幅はクラスの n 加重平均、年ごとのぶれは各年15件以上のクラスで（点）、標準誤差は200回のブートストラップ。</p>
+
+<h2>5. 画面での使い方と限界</h2>
+<ul>
+<li>馬柱の上にクラスの基準（例:「3歳以上2勝クラス・ダ: 2着馬の中央値 54／突破ライン 50」）、各馬に「超えている／届かない 最高 62 ≥ 50」のバッジ、突破ライン以上の走に緑の数字と▲、出馬表の「直近指数」の列でも緑で出す。基準が無いレースは何も出さない。</li>
+<li>クラスの基準は過去の水準（2023〜2025年）で、年や季節による水準の変化は含まない。</li>
+<li>障害は対象外。年齢が読めないグレード戦は、クラス全体の基準を使う。</li>
+</ul>
+</body></html>

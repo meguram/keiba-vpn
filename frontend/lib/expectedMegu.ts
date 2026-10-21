@@ -9,6 +9,21 @@ export type RecentRun = {
   field?: number; finish?: number; pop?: number; jockey?: string; jw?: number; l3f?: number; passing?: string; bw?: number; bw_diff?: number; margin?: string;
 };
 
+/** このクラスの基準（突破ライン）。API: /api/race/{id}/predictions の class_benchmark。基準が無いレースはキー自体が無い */
+export type ClassBenchmark = {
+  label: string;                         // 『2歳未勝利』『3歳以上1勝クラス』
+  key: string;
+  level: "tier" | "cell" | "surface" | "distance";
+  surface?: string | null;               // 面で分けた基準のときだけ（芝/ダ）
+  band?: string | null;                  // 距離帯で分けた基準のときだけ（短/中短/中/長）
+  n: number;                             // 基準にした2着馬の数
+  median: number;                        // 2着馬の指数の中央値（そのクラスの標準的な水準）
+  line: number;                          // 突破ライン = 2着馬の指数の下位25%
+  p75: number;
+  period?: string;                       // 『2023-2025』
+  fallback?: boolean;                    // 年齢まで一致する基準が無く、クラスのみの基準を使った
+};
+
 export type ExpectedMegu = {
   value: number;
   range: number | null;
