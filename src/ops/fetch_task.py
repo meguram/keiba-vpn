@@ -25,9 +25,10 @@ PREFIX = "ops/fetch_tasks"
 STATES = ("pending", "running", "done", "failed")
 
 # --- allowlist ---------------------------------------------------------------------------------
-# 1. auto_scrape のモード（``python -m src.scraper.auto_scrape --task <mode>``）。取得中心のものだけ。
+# 1. auto_scrape のモード（``python -m src.scraper.auto_scrape --task <mode>``）。取得中心で『1 回で終わる』ものだけ。
 #    除外: raceday-eve（追走難度・想定オッズの前計算で ML を読む=VPS の 250M に収まらない。GCP Jobs / ホスト）、
-#    feature-accumulate・horse-name-index（計算）、raceday-runner（常駐ループ。race-odds-* の個別タスクに置き換える）。
+#    feature-accumulate・horse-name-index（計算）、raceday-runner / raceday-weight-runner / raceday-result-runner
+#    （1 日居座る常駐ループ。1 本ずつ実行する実行役を塞ぐので、race-odds-* / race-weight-check の個別タスクに置き換える）。
 AUTO_SCRAPE_MODES: frozenset[str] = frozenset({
     "entries-sync",
     "recent-retry",
@@ -36,14 +37,13 @@ AUTO_SCRAPE_MODES: frozenset[str] = frozenset({
     "weekly-update",
     "catchup-missing",
     "jra-baba-morning",
-    "raceday-weight-runner",
-    "raceday-result-runner",
     "raceday-evening",
     "raceday-comment",
     "new-horse-pedigree",
 })
 
-# 2. 1 レースのオッズ取得（開催日の T-60 / T-15 / 直前 T-10 / T-5 / T-2）。引数: {"race_id": 12 桁, "date": "YYYYMMDD"}
+# 2. 1 レースの取得（開催日）。引数: {"race_id": 12 桁, "date": "YYYYMMDD"}
+#    オッズ T-60 / T-15 / 直前 T-10 / T-5 / T-2 と、馬体重の検知（出馬表を取り直し、馬体重が入ったか判定）。
 RACE_ODDS_TASKS: dict[str, str] = {
     "race-odds-t60": "t60",
     "race-odds-t15": "t15",
@@ -51,12 +51,21 @@ RACE_ODDS_TASKS: dict[str, str] = {
     "race-odds-t05": "t05",
     "race-odds-t02": "t02",
 }
+RACE_WEIGHT_TASK = "race-weight-check"
+RACE_ARG_TASKS: frozenset[str] = frozenset(RACE_ODDS_TASKS) | {RACE_WEIGHT_TASK}
 
-ALLOWED_TASKS: frozenset[str] = AUTO_SCRAPE_MODES | frozenset(RACE_ODDS_TASKS)
+ALLOWED_TASKS: frozenset[str] = AUTO_SCRAPE_MODES | RACE_ARG_TASKS
+
+# 実行役が既定で受け持つタスク（KEIBA_FETCH_AGENT_TASKS で上書き）。それ以外は pending のまま残し、別の実行者（ホスト等）に任せる。
+# weekly-update 等の重いものは VPS の 250M で実測してから足す（段階移行）。
+DEFAULT_AGENT_TASKS: frozenset[str] = RACE_ARG_TASKS | {
+    "entries-sync", "recent-retry", "barometer-retry", "daily-race-lists", "jra-baba-morning",
+}
 
 # 直前オッズは時刻が命。実行役は期限のこの秒数前から待機する（既定の lead_seconds）。
 DEFAULT_LEAD_SECONDS: dict[str, int] = {"race-odds-t10": 60, "race-odds-t05": 60, "race-odds-t02": 60}
 DEFAULT_MAX_ATTEMPTS = 2
+DEFAULT_GRACE_SECONDS_ANY = 1800
 # 直前系は遅れて取ると履歴を汚す（auto_scrape_queue.LATE_TOLERANCE_SECONDS と同じ 120 秒）。
 DEFAULT_GRACE_SECONDS: dict[str, int] = {"race-odds-t10": 120, "race-odds-t05": 120, "race-odds-t02": 120}
 
@@ -108,9 +117,9 @@ class FetchTask:
         for k in self.args:
             if _FORBIDDEN_ARG_KEYS.search(str(k)):
                 raise TaskError(f"引数に秘密らしいキーは使えない: {k!r}")
-        if self.task in RACE_ODDS_TASKS:
+        if self.task in RACE_ARG_TASKS:
             if set(self.args) != {"race_id", "date"}:
-                raise TaskError("race-odds-* の引数は race_id と date のみ")
+                raise TaskError(f"{self.task} の引数は race_id と date のみ")
             if not _RACE_ID.match(str(self.args["race_id"])):
                 raise TaskError(f"race_id が不正: {self.args['race_id']!r}")
             if not _DATE.match(str(self.args["date"])):
@@ -146,7 +155,7 @@ def make_task(task: str, not_before: datetime, *, args: dict[str, Any] | None = 
               max_attempts: int = DEFAULT_MAX_ATTEMPTS, grace_seconds: int | None = None) -> FetchTask:
     """司令塔向けの生成ヘルパ。task_id は決定的（同じ内容を二重に積まない）。"""
     args = dict(args or {})
-    grace = DEFAULT_GRACE_SECONDS.get(task, 1800) if grace_seconds is None else grace_seconds
+    grace = DEFAULT_GRACE_SECONDS.get(task, DEFAULT_GRACE_SECONDS_ANY) if grace_seconds is None else grace_seconds
     tid = task_id or "-".join(
         [task, not_before.astimezone(JST).strftime("%Y%m%dT%H%M")] + [str(args[k]) for k in sorted(args)]
     )
@@ -275,21 +284,31 @@ class TaskQueue:
     def list_ids(self, state: str) -> list[str]:
         return [_id_of(k) for k in self.store.list(f"{PREFIX}/{state}/")]
 
-    def due_pending(self, now: datetime | None = None) -> list[FetchTask]:
+    def due_pending(self, now: datetime | None = None, cache: dict[str, FetchTask] | None = None,
+                    only: frozenset[str] | set[str] | None = None) -> list[FetchTask]:
         """起動してよい（not_before - lead_seconds <= now）pending を、実行予定の早い順に返す。
-        running / done / failed に同じ id があるもの（claim 途中のクラッシュ残り）は除く。"""
+        running / done / failed に同じ id があるもの（claim 途中のクラッシュ残り）は除く。
+        ``cache``: task_id → FetchTask の使い回し（pending の中身は変わらないので GET を省く）。
+        ``only``: このタスク名だけを対象にする（段階移行用）。"""
         now = now or now_jst()
+        gone = set()
+        for st in ("running", "done", "failed"):
+            gone.update(self.list_ids(st))
+        cache = cache if cache is not None else {}
         out: list[FetchTask] = []
         for tid in self.list_ids("pending"):
-            if any(self.store.get(key_of(s, tid)) for s in ("running", "done", "failed")):
+            if tid in gone:
                 continue
-            t = self.load("pending", tid)
+            t = cache.get(tid) or self.load("pending", tid)
             if t is None:
+                continue
+            cache[tid] = t
+            if only is not None and t.task not in only:
                 continue
             try:
                 t.validate()
             except TaskError:
-                continue   # 不正なタスクは実行しない（reap_invalid で failed へ）
+                continue   # 不正なタスクは実行しない（expire_overdue が failed へ）
             if t.start_at() <= now:
                 out.append(t)
         out.sort(key=lambda t: (parse_ts(t.not_before), t.task_id))
@@ -345,14 +364,16 @@ class TaskQueue:
             moved.append(f"{tid}:{res}")
         return moved
 
-    def expire_overdue(self, now: datetime | None = None) -> list[str]:
+    def expire_overdue(self, now: datetime | None = None, cache: dict[str, FetchTask] | None = None) -> list[str]:
         """期限（deadline）を過ぎた pending を実行せず failed に記録する。不正なタスクも failed へ。"""
         now = now or now_jst()
         moved: list[str] = []
+        cache = cache if cache is not None else {}
         for tid in self.list_ids("pending"):
-            t = self.load("pending", tid)
+            t = cache.get(tid) or self.load("pending", tid)
             if t is None:
                 continue
+            cache[tid] = t
             reason = None
             try:
                 t.validate()
@@ -361,7 +382,20 @@ class TaskQueue:
             except TaskError as e:
                 reason = f"invalid:{e}"
             if reason:
+                cache.pop(tid, None)
                 self.store.delete(key_of("pending", tid))
                 self._finish(t, "failed", {"reason": reason}, now)
                 moved.append(f"{tid}:{reason}")
         return moved
+
+    def prune(self, keep_days: int = 7, now: datetime | None = None) -> int:
+        """done / failed のうち完了から keep_days 日を過ぎたものを消す（一覧が肥大して LIST が遅くなるのを防ぐ）。"""
+        now = now or now_jst()
+        n = 0
+        for st in ("done", "failed"):
+            for tid in self.list_ids(st):
+                t = self.load(st, tid)
+                ts = t.finished_at or t.not_before if t else None
+                if t and ts and (now - parse_ts(ts)).days >= keep_days:
+                    n += int(self.store.delete(key_of(st, tid)))
+        return n

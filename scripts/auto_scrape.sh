@@ -99,6 +99,14 @@ case "${1:-}" in
     ;;
 esac
 
+# VPS の取得の実行役が担当するタスクは、このマシンでは実行しない（config/fetch_owner.json。二重取得の防止）
+rc=0
+"$PYTHON" -m src.ops.fetch_owner check "$TASK" || rc=$?
+if [ "$rc" -eq 10 ]; then
+  echo "[$(date '+%Y-%m-%dT%H:%M:%S')] $LOG_TAG skip → task=$TASK は VPS の実行役の担当"
+  exit 0
+fi
+
 echo "[$(date '+%Y-%m-%dT%H:%M:%S')] $LOG_TAG start → task=$TASK"
 "$PYTHON" -m src.scraper.auto_scrape --task "$TASK"
 echo "[$(date '+%Y-%m-%dT%H:%M:%S')] $LOG_TAG done → task=$TASK"
