@@ -218,7 +218,7 @@ gcloud billing budgets create --billing-account="$BILLING_ACCOUNT" --display-nam
 
 1. 実行前に確認: **ホストの取得ジョブが止まっていること**（DEC-023: netkeiba へ同時にアクセスしない）。
    ```bash
-   ssh keiba-remote 'pgrep -af '[a]uto_scrape' || echo 動いていない'
+   ssh keiba-remote "pgrep -af '[a]uto_scrape' || echo 動いていない"
    ```
 2. 推奨の実行枠（JST）:
    | 枠（引数） | いつ | 狙い |

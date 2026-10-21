@@ -25,7 +25,7 @@ JST_NOW="$(TZ=Asia/Tokyo date '+%F %a %H:%M')"
 echo "== netkeiba 到達試験  project=$PROJECT region=$REGION 枠=$SLOT 現在(JST)=$JST_NOW"
 if [ "${YES:-}" != "1" ]; then
   echo "確認: (1) ホストの取得ジョブ(cron/ランナー)は今止まっていますか？ netkeiba へ同時にアクセスしてはいけません（DEC-023）。"
-  echo "      ホストでの確認: ssh keiba-remote 'pgrep -af '[a]uto_scrape' || echo 動いていない'"
+  echo "      ホストでの確認: ssh keiba-remote \"pgrep -af '[a]uto_scrape' || echo 動いていない\""
   read -r -p "止まっていれば y: " ans
   [ "$ans" = "y" ] || { echo "中止しました"; exit 3; }
 fi
