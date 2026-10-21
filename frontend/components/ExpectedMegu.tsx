@@ -9,12 +9,15 @@ const tip = (e?: ExpectedMegu | null) =>
   e?.recent?.length ? e.recent.map((r) => `${md(r.date)} ${r.value.toFixed(1)}${r.low ? "（低信頼）" : ""}`).join(" / ") + "（新しい順）" : "過去のめぐ指数がありません";
 
 /** 出馬表の 1 セル: 直近3走（広い画面は5走）の実測指数。左が古く右が最新（太字）。低信頼の走は淡色。 */
-export function RecentMeguCell({ e, wide }: { e?: ExpectedMegu | null; wide?: boolean }) {
+export function RecentMeguCell({ e, wide, onOpen }: { e?: ExpectedMegu | null; wide?: boolean; onOpen?: () => void }) {
   const runs = recentRuns(e, 5);
   if (!runs.length) return <span style={{ color: "var(--text-dim)" }} title={tip(e)}>—</span>;
   const n = runs.length;
+  const open = onOpen ? (ev: { stopPropagation: () => void }) => { ev.stopPropagation(); onOpen(); } : undefined;
   return (
-    <span title={tip(e)} style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+    <span title={onOpen ? `${tip(e)}（押すと馬柱で、レース名・着順つきで見られます）` : tip(e)} onClick={open} role={onOpen ? "button" : undefined} tabIndex={onOpen ? 0 : undefined}
+      onKeyDown={onOpen ? (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open!(ev); } } : undefined}
+      style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", cursor: onOpen ? "pointer" : undefined, borderBottom: onOpen ? "1px dotted var(--text-dim)" : undefined }}>
       {runs.map((r, i) => {
         const latest = i === n - 1;
         const extra = !wide && i < n - 3;

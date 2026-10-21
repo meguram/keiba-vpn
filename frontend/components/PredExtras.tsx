@@ -150,6 +150,28 @@ export function PredExtras({
 
   useEffect(() => { setOpen(loadOpen()); }, []);
 
+  // 出馬表の『直近指数』から馬柱を開き、その馬の行へ移動する（no が無ければ馬柱の先頭へ）
+  useEffect(() => {
+    const on = (ev: Event) => {
+      const d = (ev as CustomEvent<{ raceId: string; no?: number }>).detail;
+      if (!d || d.raceId !== raceId) return;
+      setOpen((cur) => {
+        const next = { ...cur, past: true };
+        try { window.localStorage.setItem(STORE_KEY, JSON.stringify(next)); } catch { /* 記憶できなくても動く */ }
+        return next;
+      });
+      window.setTimeout(() => {
+        const el = document.getElementById(d.no != null ? `pr-${raceId}-${d.no}` : `wp-extra-past-${raceId}`);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("flash");
+        window.setTimeout(() => el.classList.remove("flash"), 1600);
+      }, 80);
+    };
+    window.addEventListener("wp-open-past", on);
+    return () => window.removeEventListener("wp-open-past", on);
+  }, [raceId]);
+
   const toggle = (k: SectionKey) => setOpen((cur) => {
     const next = { ...cur, [k]: !cur[k] };
     try { window.localStorage.setItem(STORE_KEY, JSON.stringify(next)); } catch { /* 記憶できなくても動く */ }
@@ -239,6 +261,7 @@ export function PredExtras({
         })()}
       >
         <PastRuns
+          raceId={raceId}
           horses={[...entries].filter((e) => e.horse_number != null).sort((a, b) => (a.horse_number ?? 0) - (b.horse_number ?? 0)).map((e) => ({
             no: e.horse_number as number, name: e.horse_name ?? "", bracket: bracketOf(e.horse_number as number, entries.length, e.bracket_number), e: e.expected_megu,
           }))}

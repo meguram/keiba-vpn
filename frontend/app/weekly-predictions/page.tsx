@@ -279,6 +279,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
   const [card, setCard] = useState<{ horseId: string; tab: CardTab } | null>(null);   // 馬名・騎手・調教師のタップで開く情報パネル
   const defaultOrder = (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);      // 既定は馬番順
   const sorted = sortPreds(preds, sort?.key ?? null, sort?.dir ?? "asc", defaultOrder);
+  const openPast = (no?: number) => window.dispatchEvent(new CustomEvent("wp-open-past", { detail: { raceId, no } }));
   const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);     // EV の較正が有効なときだけ『(較正後)』と表示する
 
   // 見出しのクリック: 1 回目=その列の向き（既定は昇順、大きいほど良い列は降順）→ 2 回目=逆 → 3 回目=元の並びに戻す
@@ -404,6 +405,13 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
         />
       )}
       {sortBar}
+      {preds.some((p) => p.expected_megu?.recent?.length) && (
+        <div style={{ padding: "0 10px 6px" }}>
+          <button type="button" onClick={() => openPast()} style={{ minHeight: 36, padding: "0 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", fontSize: 12, cursor: "pointer" }}>
+            直近5走の指数を、レース名・着順つきで見る（馬柱）↓
+          </button>
+        </div>
+      )}
 
       {/* ── 広い画面（1100px〜）: 関連する列を 2 段にまとめた表 ── */}
       <div className="pt-v-wide">
@@ -442,7 +450,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                     {tapCell(p, "jockey", p.jockey_name, "var(--text)")}
                     <span className="sub">{p.trainer_name ? <>{tapCell(p, "trainer", p.trainer_name, "var(--text-dim)")}</> : "-"}</span>
                   </td>
-                  <td className="sep"><RecentMeguCell e={p.expected_megu} wide /></td>
+                  <td className="sep"><RecentMeguCell e={p.expected_megu} wide onOpen={() => openPast(p.horse_number)} /></td>
                   <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}</td>
                   <td style={{ color: dim }}>{fmtPct(p.top2_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top3_prob)}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
@@ -486,7 +494,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                     <span className="sub">{[p.trainer_name, p.buy_tier && p.buy_tier !== "—" ? `推奨 ${p.buy_tier}` : null].filter(Boolean).join("　")}</span>
                   </td>
                   <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top2_prob)} / {fmtPct(p.top3_prob)}</span></td>
-                  <td className="sep"><RecentMeguCell e={p.expected_megu} /></td>
+                  <td className="sep"><RecentMeguCell e={p.expected_megu} onOpen={() => openPast(p.horse_number)} /></td>
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>複 {ev.pl.text}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
                 </tr>
@@ -530,7 +538,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                 {p.buy_tier && p.buy_tier !== "—" && <span style={{ color: "var(--text-dim)" }}>推奨 {p.buy_tier}</span>}
               </div>
               <div className="r3" style={{ color: "var(--text-dim)" }}>
-                <span>直近指数 </span><RecentMeguCell e={p.expected_megu} wide />
+                <span>直近指数 </span><RecentMeguCell e={p.expected_megu} wide onOpen={() => openPast(p.horse_number)} />
               </div>
             </div>
           );

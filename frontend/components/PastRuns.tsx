@@ -16,6 +16,7 @@ const CSS = `
 .pr-row{display:grid;grid-template-columns:150px repeat(${SLOTS},minmax(0,1fr));gap:6px;align-items:stretch;padding:6px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
 .pr-head{display:flex;flex-direction:column;gap:4px;justify-content:center;min-width:0}
 .pr-cell{min-width:0;padding:6px 8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--text-dim);line-height:1.35}
+.pr-row.flash{outline:2px solid #60a5fa;transition:outline-color .6s}
 .pr-cell.best{border-color:rgba(251,191,36,0.7);box-shadow:inset 0 0 0 1px rgba(251,191,36,0.25)}
 .pr-cell.empty{border-style:dashed;align-items:center;justify-content:center;opacity:.6}
 .pr-line{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -54,7 +55,7 @@ function RunCell({ r, label, best }: { r: RecentRun; label: string; best: boolea
   );
 }
 
-export function PastRuns({ horses }: { horses: PastRunHorse[] }) {
+export function PastRuns({ horses, raceId }: { horses: PastRunHorse[]; raceId: string }) {
   return (
     <div className="pr-wrap" role="list" aria-label="馬柱（直近5走の指数）">
       <style>{CSS}</style>
@@ -63,7 +64,7 @@ export function PastRuns({ horses }: { horses: PastRunHorse[] }) {
         const mean = recentMean(h.e);
         const bestIdx = runs.length ? runs.reduce((bi, r, i) => (r.value > runs[bi].value ? i : bi), 0) : -1;
         return (
-          <div key={h.no} className="pr-row" role="listitem">
+          <div key={h.no} id={`pr-${raceId}-${h.no}`} className="pr-row" role="listitem">
             <div className="pr-head">
               <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                 <span style={bracketChipStyle(h.bracket, 24)}>{h.no}</span>
