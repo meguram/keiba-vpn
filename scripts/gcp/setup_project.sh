@@ -8,6 +8,7 @@
 # やること: API の有効化 / Artifact Registry / サービスアカウント 4 つ（api・jobs・scheduler・deployer）と最小権限 /
 #           BUCKET を渡したときはそのバケットへの権限。秘密の値は扱わない（scripts/gcp/put_secret.sh）。
 set -euo pipefail
+export CLOUDSDK_CORE_DISABLE_PROMPTS=1   # 未有効の API を確認する読み取りコマンドが「有効にしますか?」で止まらないようにする
 
 REGION="${REGION:-asia-northeast1}"
 AR_REPO="${AR_REPO:-keiba}"
