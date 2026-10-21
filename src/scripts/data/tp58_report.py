@@ -52,7 +52,8 @@ def build(res: Path) -> str:
     hand = pd.read_csv(res / "hand_score.csv") if (res / "hand_score.csv").exists() else pd.DataFrame()
     named = pd.read_csv(res / "named_score.csv") if (res / "named_score.csv").exists() else pd.DataFrame()
     sing = pd.read_csv(res / "singles.csv", index_col=0) if (res / "singles.csv").exists() else pd.DataFrame()
-    resid = jload(res / "resid.json")
+    resid = {"V5 の LightGBM 単体": jload(res / "resid_lgb.json") or jload(res / "resid.json"), "現行の合成 S0": jload(res / "resid_S0.json")}
+    resid = {k: v for k, v in resid.items() if v}
     lgb = {p.parent.name: jload(p) for p in sorted(res.glob("lgb_*/result.json"))}
     p = []
     p.append(f"<!doctype html><html lang='ja'><head><meta charset='utf-8'><title>{TITLE}</title><style>{CSS}</style></head><body><h1>{TITLE}</h1>")
@@ -65,6 +66,8 @@ def build(res: Path) -> str:
         p.append(f"<li><b>A 自動の総当たり: 上乗せなし。</b>V5 の重要度上位 {S['k']} 列とそのレース内偏差 {S['rel']} 列（基 {S['bases']} 列）から、積・差・対数比 <b>{n:,} 候補</b>を、V5 の OOF 確率に対するスコア検定（再学習なし）で全て調べました（3 目的で検定数 {S['n_tests']:,}）。発見期間（2022–23）で Bonferroni（z={S['bonferroni_z']:.2f}、帰無のばらつき {min(sd.values()):.1f}〜{max(sd.values()):.1f} 倍に補正）を超えたものは <b>0</b> でした。上位の候補は『単独列の残差の足し算』にすぎません（§4）。</li>")
     p.append("<li><b>B 手設計の掛け合わせ（as-of 目的変数統計 12 種 + 数値 30 種）: 基準を満たすものなし。</b>最も一貫したのは調教師×競馬場（発見・確認とも z=2.5〜4）ですが、検定数を考えると有意ではありません（§5）。</li>")
     p.append("<li><b>C 交互作用を表現できる NN（DCN-v2・FM・DeepFM）: 構造の上乗せはなし。</b>効いたのは『掛け合わせの構造』ではなく『NN という別系統 + レース内ソフトマックス』で、構造なしの MLP が最良でした。V5 の LightGBM 単体にブレンドすると勝率 −0.0013 ですが、<b>現行の合成（S0）に足すと勝率 −0.00022（上限 −0.00011）・連対と複勝は変化なし</b>、L3 を含む合成の上では −0.00014 で基準（0.0002）に届きません（§6）。</li>")
+    p.append("<li><b>D 残差ブースティング: 現行の合成にはもう学べる構造がほぼ残っていない。</b>V5 の OOF ロジットを土台に浅い木（切り株 = 加法のみ / 深さ 3 = 3 列までの交互作用）を LOYO で学習すると、現行の合成（S0）に対しては深さ 3 でも勝率 −0.00002（上限 +0.00003）・連対 −0.00012・複勝 −0.00005。V5 の LightGBM 単体に対しては勝率 −0.00019（切り株）→ −0.00027（深さ 3）で、<b>交互作用で取れる分は −0.00008</b>、残りは加法で、合成が既に取っています（§8）。</li>")
+    p.append("<li><b>結論: 掛け合わせに上乗せなし。</b>追加する列・表はありません。NN メンバーは現行の合成へ勝率のみ −0.0002 で、L3 と重なるため単独の採用基準に届かず、v5 最終学習で L3 を足すか決めるときに同条件の候補として残します（§9）。</li>")
     p.append("</ul></div>")
     # 2 method
     p.append("<h2>2. 方法</h2><ul><li><b>スコア検定</b>: 学習済みモデルの OOF 確率を offset として、列 z を 1 本足したときの対数尤度の傾き（score）を、再学習なしで測ります。勝ちはレース内ソフトマックス（offset = log p_win）、連対・複勝は二値ロジット。z = g/√I は『上乗せなし』で標準正規に近くなります。実装は有限差分と一致することをテストで確認（<code>tests/pipeline/test_tp58_score.py</code>）。レースの中で動かない列は 0 になるよう、レース内で中心化してから情報量を計算します。</li>")
@@ -143,13 +146,26 @@ def build(res: Path) -> str:
     p.append("<p>V5 の OOF ロジットを init_score にして、浅い木のブースティングを『検証年以外の 2 年』で学習し検証年に当てる（LOYO）。深さ 1（切り株 = 列ごとの加法効果のみ）と深さ 3（3 列までの交互作用）の差が『交互作用で取れる分』です。ラウンド数は学習 2 年の内側で決め、検証年は見ません。</p>")
     if resid:
         rows = []
-        for k, r in resid.items():
-            rows.append([k, f5(r["delta"]), f5(r["hi"]), ", ".join(f"{y}:{v['rounds']}R/{v['delta']:+.5f}" for y, v in r["per_year"].items())])
-        p.append(table(["目的_構造", "Δ（新−V5）", "上限", "年ごと（ラウンド/Δ）"], rows, num_from=1))
+        for base, rr in resid.items():
+            for k, r in rr.items():
+                rows.append([base, k, f5(r["delta"]), f5(r["hi"]), ", ".join(f"{y}:{v['rounds']}R/{v['delta']:+.5f}" for y, v in r["per_year"].items())])
+        p.append(table(["残差を取る先", "目的_構造", "Δ（新−先）", "上限", "年ごと（ラウンド/Δ）"], rows, num_from=2))
     else:
         p.append("<p class='muted'>（実行待ち／未完了）</p>")
     p.append("<h2>9. 判定と v6-features との統合方針</h2>")
-    p.append("<div class='note'>判定は最終版で追記します。</div>")
+    if lgb:
+        c = next(iter(lgb.values()))["compare"]
+        lgb_txt = f"LightGBM の確認（上位 40 組 + 手設計 60 列を同時に追加）は 勝率 {f5(c['Δwin'])}（上限 {f5(c['win_hi'])}）・連対 {f5(c['Δtop2'])}・複勝 {f5(c['Δtop3'])} で、基準を{'満たしました' if c['採用'] else '満たしませんでした'}（§7）。"
+    else:
+        lgb_txt = "LightGBM での確認は実行待ちで未了です（§7）。"
+    p.append("<div class='key'><ul>")
+    p.append("<li><b>掛け合わせの列: 採用なし。</b>自動の総当たり（44,631 候補）・手設計のカテゴリ交差（12 種）・手設計の数値交差（30 種）のいずれも、発見期間で多重検定を超えるものがなく、残差ブースティング（深さ 3）でも現行の合成に勝率 −0.00002（上限 +0.00003）しか残っていません。最も一貫した調教師×競馬場（発見・確認とも z=2.5〜4）は、検定数と帰無の広がりを考えると有意とは言えません。" + lgb_txt + "</li>")
+    p.append("<li><b>NN メンバー: 掛け合わせの構造（DCN・FM）は効かず、効くのは別系統としての MLP のみ。</b>現行の合成（S0）に足すと勝率 −0.00018〜−0.00026（上限 −0.00008〜−0.00013）で連対・複勝は変わらない（新 seed でも再現）。ただし L3 を含む合成（S11f）の上では −0.00014〜−0.00015（基準 0.0002 未満）で、L3 と同じ信号に重なります。tp-51 の結論『別系統メンバーは足しても効果なし』と矛盾せず、NN は勝率の 0.0002 を L3 と分け合う関係です。<b>採用しない</b>（v5 最終学習で L3 の採否を決めるとき、重みつき MLP 1 本を同条件の候補にする）。</li>")
+    p.append("<li><b>v6-features との統合方針</b>: 追加採用がないため、v6 の列に足す作業はありません。将来採用する場合は、積・差・対数比の列 <code>tp58_pairs.pair_column</code>（定数は 2021 年以前の行のみ、列名 <code>x58_&lt;op&gt;__&lt;a&gt;__&lt;b&gt;</code>）と as-of 交差 <code>tp58_cross.shrunk_cross</code>（列名 <code>x58_&lt;名&gt;_&lt;目的&gt;_{m,dev,n}</code>）を v6 の表に結合するだけで、列名の接頭辞 <code>x58_</code> は v6 の列と衝突しません。</li>")
+    p.append("<li><b>副次の知見（掛け合わせではない）</b>: 調教の時計（<code>tl_*</code>・<code>wc_*</code>）の単独列に、発見・確認で同符号の残差が残る（§4）。残差ブースティングの切り株（加法）で −0.00019 取れるのは、この種の主効果が V5 の LightGBM 単体にはまだ残っていることを示しますが、合成には入っています。調教の列を作り直す v6 側の仕事で扱うのが筋です。</li>")
+    p.append("</ul></div>")
+    p.append("<h3>試した数（多重検定の分母）</h3>")
+    p.append(table(["段", "試した数", "備考"], [["A 総当たり（積・差・対数比）", "44,631 候補 × 3 目的 = 133,893 検定", "基 210 列（重要度上位 150 + レース内偏差 60）。Bonferroni z=5.08"], ["B1 カテゴリ交差", "12 種 × 4 統計 × 3 目的 = 144 検定", "親との差・縮約平均 × 勝率/複勝率"], ["B2 数値の手設計", "30 種 × 3 目的 = 90 検定", "積/対数比"], ["C NN", "設定 4 系統 × 4 構造 + 組合せ、ブレンド先 3 通り", "r0, r1, r1s2, r2"], ["D 残差ブースティング", "2 土台 × 3 目的 × 2 構造", "上位 150 列"], ["確認 LightGBM", "1 回（上位 40 組 + 手設計 60 列を同時に追加）", "V5 と同設定"]], num_from=9))
     p.append("</body></html>")
     return "".join(p)
 

@@ -58,12 +58,14 @@ def _boot(loss_b, loss_n, race, n=500, seed=0):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--top", type=int, default=400)
+    ap.add_argument("--base", default=None, help="OOF の parquet（既定は V5 の LightGBM 単体）")
+    ap.add_argument("--tag", default="")
     a = ap.parse_args()
     imp = json.loads((CACHE / "importance_gain.json").read_text(encoding="utf-8"))
     cols = [c for c, _ in imp if not any(b in c.lower() for b in ("odds", "ninki", "popular"))][: a.top]
     F = pd.read_parquet(CACHE / "v5_frame_num.parquet", columns=KEY + ["finish_position", "year", "date"] + cols)
     F["race_id"], F["horse_id"] = F["race_id"].astype(str), F["horse_id"].astype(str)
-    O = pd.read_parquet(OOF)
+    O = pd.read_parquet(a.base or OOF)
     O["race_id"], O["horse_id"] = O["race_id"].astype(str), O["horse_id"].astype(str)
     D = F[F["year"].isin(YEARS)].merge(O[KEY + ["p_win", "p_top2", "p_top3"]], on=KEY, how="inner").reset_index(drop=True)
     fp = pd.to_numeric(D["finish_position"], errors="coerce").to_numpy()
@@ -97,7 +99,7 @@ def main() -> int:
             d, hi = _boot(lb, ln, rc)
             res[f"{tgt}_{name}"] = {"delta": d, "hi": hi, "per_year": per_year}
             _log(f"== {tgt} {name}: Δ={d:.5f} 上限={hi:.5f}")
-    (OUT / "resid.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    (OUT / f"resid{a.tag}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     return 0
 
 
