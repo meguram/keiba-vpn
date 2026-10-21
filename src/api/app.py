@@ -936,7 +936,7 @@ async def health_check():
         "timestamp": datetime.now().isoformat(),
     }
     try:
-        payload.update(_deployment_info())
+        payload.update(_deployment_info(include_storage=False))
     except Exception:
         payload.setdefault("keiba_env", _keiba_env())
     return JSONResponse(payload)
@@ -1010,7 +1010,7 @@ async def auth_status(request: Request):
     dev = is_developer(request)
     out = {"is_developer": dev}
     try:
-        out.update(_deployment_info())
+        out.update(_deployment_info(include_storage=False))
     except Exception:
         out["keiba_env"] = _keiba_env()
     return JSONResponse(out)
@@ -7037,13 +7037,6 @@ async def get_race_predictions(race_id: str):
             resp = attach_pace_type(resp, past, str(card.get("date") or ""), {"track_condition": card.get("track_condition"), "grade": card.get("grade")})
         except Exception as exc:  # noqa: BLE001
             logger.warning("展開タイプの付与に失敗 %s: %s", race_id, exc)
-        # 調教データの被覆（そのレース日の調教の行がある馬の割合）。低いと調教系の評価が欠けた予測になる（KEIBA_TRAINING_COVERAGE=1 のときだけ）
-        try:
-            from src.pipeline.inference.training_coverage import attach_training_coverage
-
-            resp = attach_training_coverage(resp, str(card.get("date") or ""), _get_storage())
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("調教の被覆の付与に失敗 %s: %s", race_id, exc)
         # 調教データの被覆（そのレース日の調教の行がある馬の割合）。低いと調教系の評価が欠けた予測になる（KEIBA_TRAINING_COVERAGE=1 のときだけ）
         try:
             from src.pipeline.inference.training_coverage import attach_training_coverage

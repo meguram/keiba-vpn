@@ -63,13 +63,19 @@ def keiba_staging_badge() -> str:
     return deployment_banner_label()
 
 
-def deployment_info() -> dict[str, Any]:
-    """ヘルス・auth 状態 JSON 用（秘密情報は含めない）。"""
-    return {
+def deployment_info(*, include_storage: bool = True) -> dict[str, Any]:
+    """ヘルス・auth 状態 JSON 用（秘密情報は含めない）。
+
+    include_storage=False のとき、保存先（GCS のバケット名・接頭辞）を含めない。外から見える応答（/api/health など）では False にして、
+    環境の内部情報を出さない（ログ・内部用途は既定の True）。
+    """
+    out: dict[str, Any] = {
         "keiba_env": keiba_env(),
         "is_staging": is_staging(),
         "is_production": is_production(),
         "deployment_label": (os.environ.get("KEIBA_DEPLOYMENT_LABEL") or "").strip() or keiba_env(),
-        "gcs_bucket": os.environ.get("GCS_BUCKET", ""),
-        "gcs_prefix": os.environ.get("GCS_PREFIX", ""),
     }
+    if include_storage:
+        out["gcs_bucket"] = os.environ.get("GCS_BUCKET", "")
+        out["gcs_prefix"] = os.environ.get("GCS_PREFIX", "")
+    return out
