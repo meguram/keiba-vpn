@@ -1430,7 +1430,24 @@
 <li>血統の回収率を探す方針は終了。特徴量としての血統の寄与は V5（PED_sire_cond・ALL_BEST）に入っている。回収率由来の統計は特徴量にしていない（市場オッズを特徴量にしない方針）。</li>
 </ul>
 
-<h2>53. 以降の節</h2>
+<h2>53. 凍結した馬券候補（tp-59・tp-62）の前向き追跡の実行側（結論: 毎週月曜に台帳へ追記する仕組みを用意。バックテストで tp-62 は完全一致、tp-59 は 99.5% の買い目が一致）</h2>
+<p class="muted">ユーザー指示 2026-10-21『次のアクションまで残っているものは、効果が出そうなのであれば基本そのまま続けて』。tp-59（騎手・調教師の単勝 EV 規則）と tp-62（馬連・的中率 20%・払戻 500%）は事後に見つけた候補なので採用せず、<code>config/tp59_frozen_rule.json</code> / <code>config/tp62_frozen_rule.json</code> に凍結して 2026-10-22 以降のレースで前向きに追跡する。運用手順: <code>docs/operations/frozen_tracking.md</code>。スクリプト: <code>src/scripts/data/frozen_tracking.py</code>、<code>scripts/cron/frozen_tracking_weekly.sh</code>。</p>
+<h3>確定事項</h3>
+<ul>
+<li>判定の入力は『その時点で分かること』だけ: V4（<code>predictions_v3</code>。参考に V5）の予測、単勝の Benter 混合の係数（2022〜2025 年で当てはめた値を <code>config/frozen_tracking.json</code> に凍結。a=0.3155, b=0.7591）、オッズは <b>final</b>（確定）と <b>pre</b>（発走前の最後のスナップショット。単勝は t02→t05→t10→t15→t60、馬連は t15→t60 のうち発走時刻より前のもの。使った phase を台帳に記録）の両方。精算は確定払戻。</li>
+<li>履歴は追記のみ（<code>ledger.jsonl</code>。同じ『規則|モデル|オッズ時点|レース』は書かない＝冪等）。凍結ファイルのハッシュを <code>hashes.jsonl</code> に記録し、変わっていたら追記を拒否する。スコアカード（回収率とレース単位ブートストラップ区間、月ごとの回収率、100% 超の月の数、凍結前の期待との比較、確証までの買ったレース数の目安）を <code>latest.json/html</code> と日時つきの <code>reports/</code> に出す。</li>
+<li><b>バックテスト（コードの正しさの確認。凍結の評価ではない）</b>: 2026-01-04〜10-18 の V4 予測（<code>tp36/pred2026</code>）と確定オッズで同じコードを流した。<b>tp-62 は報告値と完全に一致</b>（買ったレース 40、賭け 58 点、回収率 108.6%、100% 超の月 4/10、的中レース 8＝20%）。<b>tp-59 は 1,730 賭け・1,218 レース・回収率 145.7%</b>（報告値は 1,711・1,202・147.3%）。凍結時の買い目 1,711 のうち 1,702 が一致し、差は 28 賭け（tp-59 の学習表で勝率が欠損している馬）と 9 賭け（払戻の解析で除かれたレース）で、データの作り方の違い。取消・除外でオッズの無い馬がいるレースは対象外（tp-36 の frame と同じ。入れると tp-62 が 42 レース・101.6% になり再現しない）。</li>
+<li>確証までの目安に使う『買ったレース 1 つあたりの払戻倍率の標準偏差』は、上のバックテストから見積もった値（tp-59 13.5、tp-62 2.3）を <code>config/frozen_tracking.json</code> の <code>reference_sd</code> に置いた（ハッシュの対象外）。</li>
+<li>週次ジョブ <code>scripts/cron/frozen_tracking_weekly.sh</code>（既定は未登録。登録は <code>install_frozen_tracking_cron.sh</code>、月曜 10:30 JST。nice 19、<code>load&gt;14</code> の間は最大 30 分待つ、<code>flock</code> で二重起動防止、<code>KEIBA_FROZEN_TRACKING=0</code> で停止）。ホストの実データ（2026-10-18 の 36 レース、final と pre）で通しを確認した（pre は t15 を 34 レース・t60 を 2 レースで使用）。</li>
+<li>tp-59 の LightGBM <code>rs59</code>（関係者の残差 4 列）が 14 秒で落ちていた原因: <code>jockey_id</code>/<code>trainer_id</code> が pandas の string 型のまま <code>groupby(as_index=False)</code> に入り、長さ不一致になっていた。<code>astype(str)</code> と <code>observed=True</code> で直した（<code>tp59_feat.py</code>）。ホストの共有スロットが埋まっていたため再投入は待ち行列（<code>/tmp/tp59_rs2.log</code>、結果は <code>tp59_out/lgb_rs59/result.json</code>）。</li>
+</ul>
+<h3>解釈と申し送り</h3>
+<ul>
+<li>確定オッズでの評価は購入時点の価格より有利。pre が貯まるほど『買えた価格』での回収率に近づく。直前オッズ（t10/t05/t02）は 10/24 の週末から貯まる。</li>
+<li>tp-59 は約 3,300 賭け（約 2 年）で確証の見込み。tp-62 は買うレースが少ない（年 40〜100 程度）ので、月次過半の基準を評価できるのは 1〜2 年先。結果は <code>latest.html</code> のスコアカードで見る。</li>
+</ul>
+
+<h2>54. 以降の節</h2>
 <p class="muted">tp-07 は、各 notebook の完成時に本節以降へ同じ形式（確定事項・根拠・申し送り）で追記する。</p>
 </main>
 </body>

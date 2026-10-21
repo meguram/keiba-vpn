@@ -162,7 +162,9 @@ def rs_features(df: pd.DataFrame, k: float = 100.0) -> pd.DataFrame:
     out = pd.DataFrame(index=df.index)
     in_oof_years = (pd.to_datetime(df["date"]) >= pd.Timestamp("2022-01-01")).to_numpy()
     for nm, key in (("j", "jockey_id"), ("t", "trainer_id")):
-        daily = base[has].groupby([key, "date"], as_index=False).agg(sw=("r_win", "sum"), s3=("r_top3", "sum"), n=("one", "sum")).sort_values([key, "date"])
+        base[key] = base[key].astype(str)           # ID がカテゴリ型のままだと as_index=False の groupby が長さ不一致で落ちる（rs59 の rc=1）
+        daily = (base[has].groupby([key, "date"], observed=True, sort=False).agg(sw=("r_win", "sum"), s3=("r_top3", "sum"), n=("one", "sum"))
+                 .reset_index().sort_values([key, "date"]))
         for c in ("sw", "s3", "n"):
             daily[f"c_{c}"] = daily.groupby(key)[c].cumsum() - daily[c]
         m = base[[key, "date"]].merge(daily[[key, "date", "c_sw", "c_s3", "c_n"]], on=[key, "date"], how="left")
