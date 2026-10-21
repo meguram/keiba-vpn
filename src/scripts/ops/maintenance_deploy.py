@@ -280,7 +280,7 @@ class Deployer:
         for u in v.get("urls") or []:
             checks.append((u["url"], int(u.get("expect_status", 200)), u.get("json_key")))
         if "frontend_build_switch" in steps:
-            checks.append((v.get("frontend_url") or f"http://127.0.0.1:{FRONT_PORT}/", 200, None))
+            checks.append((v.get("frontend_url") or f"http://127.0.0.1:{FRONT_PORT}/login", 200, None))
         for url, st, key in checks:
             ok, why = self.wait_http(url, st, key)
             if not ok:

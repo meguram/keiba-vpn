@@ -129,7 +129,8 @@ FLASK_PID_FILE="${PROJECT_DIR}/.flask${PROFILE_SUFFIX}.pid"
 FLASK_HEALTH_URL="http://127.0.0.1:${FLASK_PORT}/api/v1/health"
 
 FRONTEND_PID_FILE="${PROJECT_DIR}/.frontend${PROFILE_SUFFIX}.pid"
-FRONTEND_HEALTH_URL="http://127.0.0.1:${FRONTEND_PORT}/"
+# メンテナンス時間帯(JST 03:00-04:00)は「/」が 503 のメンテナンス画面になる。窓の中の自動デプロイの切替確認が失敗しないよう、窓の対象外の /login で生死を見る
+FRONTEND_HEALTH_URL="http://127.0.0.1:${FRONTEND_PORT}/login"
 NODE_ENV="${NODE_ENV:-development}"
 if [ "$FRONTEND_NPM_SCRIPT" = "start" ]; then
     NODE_ENV=production

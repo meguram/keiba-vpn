@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--ref", help="git の ref から内容を取る（既定: 作業ツリー）")
     c.add_argument("--verify", action="append", default=[], help="'URL|status=200|key=a.b'（繰り返し可）")
     c.add_argument("--health-url", default="http://127.0.0.1:23220/api/health")
-    c.add_argument("--frontend-url", default="http://127.0.0.1:23200/")
+    c.add_argument("--frontend-url", default="http://127.0.0.1:23200/login")
     c.add_argument("--expires-hours", type=float, default=72.0)
     c.add_argument("--max-load", type=float)
     c.add_argument("--quiet", action="store_true", help="成功時の Slack 通知を出さない（失敗は常に緊急通知）")
