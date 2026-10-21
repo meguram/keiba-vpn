@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>消印（上位5人気で好走率がもっとも低そうな1頭）と推奨列の印表示（tp-67）— keiba-vpn</title><style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 22px 0 8px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; } th { background: #1b2a4d; }
+td.num { text-align: right; font-family: monospace; } .muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+.hm { overflow: auto; max-height: 760px; border: 1px solid var(--border); } table.hm { font-size: 9px; margin: 0; } table.hm td { width: 14px; height: 14px; min-width: 14px; padding: 0; text-align: center; font-size: 8px; line-height: 14px; border: 1px solid #1b2a4d; }
+table.hm th.v { height: 150px; padding: 0; vertical-align: bottom; } table.hm th.v div { writing-mode: vertical-rl; white-space: nowrap; font-size: 9px; padding: 2px 0; } table.hm th.h { white-space: nowrap; font-size: 9px; padding: 0 4px; text-align: right; position: sticky; left: 0; }
+td.d { background: #243358; } td.n { background: #0b1428; }</style></head>
+<body><a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>消印（上位5人気で好走率がもっとも低そうな1頭）と、推奨列の印表示（tp-67）</h1>
+<p class="muted">依頼: 「推奨の列は印を出すことにしているはず。◎○▲★で1頭ずつ、上位5人気の馬の中でもっとも好走率の低そうな馬を消印にしたい」。印の出し方は <a href="mark_rules.html">印の付け方（tp-46）</a> のまま、◎○▲★△に<b>消</b>を足した。データは tp-36 の入力（V4 の OOF 予測 p_win / p_top2 / p_top3、確定の単勝・複勝オッズ・人気・払戻。2022〜2025 年は OOF、2026 年は 1 回だけの最終確認）。人気・オッズは消印の選び方と精算にだけ使い、特徴量にはしていない。好走＝複勝圏（3 着以内。2026 年は確定着順）、対象は 8 頭以上のレース。</p>
+<div class="note"><b>要点.</b><ul>
+<li><b>推奨列が印になっていなかった.</b>広い画面の表の「推奨」列は買い判断（強推奨・推奨・様子見）の文字だけで、印は狭い画面のカードの端にしか出ていなかった。広い画面・中間幅・カード・レース詳細とも、<b>推奨＝印（◎○▲★△消）、買い判断は下段の小さな字</b>にそろえた（レース詳細は「推奨」の見出しの下に「印」「買い判断」の 2 列）。</li>
+<li><b>消印の定義: 上位 5 人気（単勝オッズ順。実オッズがなければ予測オッズ）のうち、◎○▲★の付いていない馬から、複勝確率が最小の 1 頭.</b>△の馬は消に置き換える。8 頭未満、または全頭の単勝オッズが揃わないレースには付けない（理由を返す）。</li>
+<li><b>効果.</b>消印の馬が 3 着内に来た割合は設計年 30.0%・確認 2024 年 31.2%・2025 年 29.2%・<b>2026 年 28.6%</b>で、同じレースの他の上位人気（約 47.1%）より 16〜18pt 低い（レース単位ブートストラップの区間は 0 を含まない）。</li>
+<li><b>限界.</b>(1) 消印の馬でも約 3 割は 3 着以内に来る（『来ない』ではなく『他の上位人気より来にくい』）。(2) <b>機械的に『◎○▲★以外の 5 番人気』を選んでも同じ</b>（3 着内率の差 +0.002、区間 −0.005〜+0.009）で、V5 の予測を使った選び方が人気の順より上積みを生んでいるとは言えない。(3) 消印の馬の複勝回収率は 72%（他の上位人気 83%）、単勝回収率 67%（83%）と低いが、これは人気薄ほど払戻率が低い一般的な傾向でもある。</li>
+<li><b>△との関係.</b>消印に選ばれる馬は約 8 割がこれまで△だった馬（2024 年 80.2%）。△に消が重なる場合は消を優先するので、<b>推奨馬券の相手候補（△）から消印の馬が外れる</b>。</li>
+</ul></div>
+<h2>1. 推奨列の現状と修正</h2>
+<ul>
+<li>広い画面（1100px〜）: 「推奨」列は <code>buy_tier</code>（買い判断）の文字のみ。印は出ていなかった → 印（記号）を大きく、買い判断を下段の小さな字に。見出しをクリックすると印の順（◎→○→▲→★→△→消）で並ぶ。</li>
+<li>中間（769〜1099px）: 印はなく、馬名の下に『推奨 強推奨』と出ていた → 馬名の前に印、下段は『買い判断 …』に。</li>
+<li>狭い画面（〜768px）: カードの右上に印（◎○△▲★）が出ていた → 消を追加。</li>
+<li>レース詳細: 「推奨」（買い判断）と「印」が別の列、見出しは「印」のグループ → 「推奨」のグループに「印」「買い判断」の順で並べ替え、凡例に消を追加。</li>
+<li>予測成績（/prediction-results）: ◎・○・★に消を追加（消は 4 着以下が多いほど当たり）。旧い日次集計に消のキーが無くても合算できるようにした。</li>
+</ul>
+<h2>2. 消印の定義の比較（印の扱い: 主印の付いた馬は消印にしない）</h2>
+<p class="muted">各セルは『消印の馬 / 同じレースの他の上位 4 人気の平均』の 3 着内率。設計 = 2022〜23 年、確認 = 2024 年、参考 = 2025 年。差と区間は確認年（消印の馬 − 他の 4 頭、同じレース内の対、レース単位ブートストラップ 95%）。複勝回収率は設計年の『消印 / 他の 4 頭』。</p>
+<table><tr><th>定義</th><th>内容</th><th>レース数（設計年）</th><th>設計年 3着内率</th><th>確認年 3着内率</th><th>確認年の差 [95% 区間]</th><th>2025 年 3着内率</th><th>複勝回収率（設計年）</th></tr><tr><td>A_min_top3</td><td>複勝確率が最小</td><td class='num'>6418</td><td class='num'>30.0% / 47.1%</td><td class='num'>31.2% / 47.0%</td><td class='num'>-0.159 [-0.178, -0.139]</td><td class='num'>29.2% / 46.9%</td><td class='num'>72.0% / 83.5%</td></tr><tr><td>B_min_win</td><td>勝率が最小</td><td class='num'>6418</td><td class='num'>30.5% / 47.0%</td><td class='num'>31.6% / 46.9%</td><td class='num'>-0.153 [-0.172, -0.134]</td><td class='num'>29.4% / 46.8%</td><td class='num'>72.4% / 83.4%</td></tr><tr><td>C1_mkt_gap</td><td>市場の複勝見込み（単勝オッズの Harville）−モデルの複勝確率が最大</td><td class='num'>6418</td><td class='num'>37.8% / 45.2%</td><td class='num'>39.0% / 45.1%</td><td class='num'>-0.060 [-0.081, -0.039]</td><td class='num'>37.8% / 44.7%</td><td class='num'>73.8% / 83.0%</td></tr><tr><td>C2_ratio</td><td>モデルの複勝確率 ÷ 市場の複勝見込みが最小</td><td class='num'>6418</td><td class='num'>35.1% / 45.8%</td><td class='num'>37.2% / 45.5%</td><td class='num'>-0.083 [-0.102, -0.063]</td><td class='num'>35.4% / 45.3%</td><td class='num'>72.2% / 83.4%</td></tr><tr><td>D1_min_ev_place</td><td>複勝期待値（複勝確率×複勝オッズ）が最小</td><td class='num'>6418</td><td class='num'>33.5% / 46.3%</td><td class='num'>35.7% / 45.9%</td><td class='num'>-0.102 [-0.122, -0.081]</td><td class='num'>32.9% / 45.9%</td><td class='num'>70.1% / 83.9%</td></tr><tr><td>D2_min_ev_win</td><td>単勝期待値（勝率×単勝オッズ）が最小</td><td class='num'>6418</td><td class='num'>34.9% / 45.9%</td><td class='num'>35.9% / 45.8%</td><td class='num'>-0.100 [-0.120, -0.079]</td><td class='num'>34.7% / 45.5%</td><td class='num'>72.5% / 83.3%</td></tr><tr><td>E_rank_avg</td><td>A と C2 の順位平均が最小</td><td class='num'>6418</td><td class='num'>32.2% / 46.6%</td><td class='num'>33.6% / 46.4%</td><td class='num'>-0.128 [-0.148, -0.108]</td><td class='num'>31.7% / 46.2%</td><td class='num'>71.6% / 83.6%</td></tr><tr><td>F_min_top3_pop</td><td>複勝確率が最小（人気 4・5 位に限る）</td><td class='num'>5723</td><td class='num'>28.6% / 47.1%</td><td class='num'>27.8% / 47.4%</td><td class='num'>-0.196 [-0.216, -0.176]</td><td class='num'>27.3% / 47.1%</td><td class='num'>75.3% / 82.4%</td></tr><tr><td>Z_pop5</td><td>（比較用）5 番人気の馬</td><td class='num'>6418</td><td class='num'>30.6% / 47.0%</td><td class='num'>29.9% / 47.3%</td><td class='num'>-0.175 [-0.194, -0.156]</td><td class='num'>28.4% / 47.1%</td><td class='num'>78.0% / 82.0%</td></tr><tr><td>Z_pop5</td><td>（比較用）5 番人気の馬</td><td class='num'>6418</td><td class='num'>30.6% / 47.0%</td><td class='num'>29.9% / 47.3%</td><td class='num'>-0.175 [-0.194, -0.156]</td><td class='num'>28.4% / 47.1%</td><td class='num'>78.0% / 82.0%</td></tr></table>
+<p class="muted">A（複勝確率が最小）と B（勝率が最小）はほぼ同じで、E（A と C2 の順位平均）、D（期待値）、C（市場との差）の順に弱くなる。F は 4・5 番人気に限った A で、3 着内率はいちばん低い（28%）が、対象が狭い（設計年 5,723 レース）。比較用の『5 番人気』も A と同じ水準（30〜31%）で、A が F の水準に届かないのは、候補に 1〜3 番人気を含めるため。</p>
+<h2>3. 印の扱いの比較（定義 A で）</h2>
+<table><tr><th>方式</th><th>内容</th><th>レース数（設計年）</th><th>設計年</th><th>確認年</th><th>2025 年</th><th>主印の馬が選ばれる割合</th></tr><tr><td>P_main</td><td>主印（◎○▲★）の付いた馬は消印にしない（△は消印に上書き可）</td><td class='num'>6418（100%）</td><td class='num'>30.0% / 47.1%</td><td class='num'>31.2% / 47.0%</td><td class='num'>29.2% / 46.9%</td><td class='num'>0.0%</td></tr><tr><td>P_any</td><td>印（△を含む）が付いた馬は消印にしない</td><td class='num'>1436（22%）</td><td class='num'>21.4% / 45.9%</td><td class='num'>21.5% / 46.3%</td><td class='num'>21.7% / 44.1%</td><td class='num'>0.0%</td></tr><tr><td>P_none</td><td>印に関係なく選ぶ（主印の馬も候補）</td><td class='num'>6418（100%）</td><td class='num'>27.3% / 47.8%</td><td class='num'>27.7% / 47.9%</td><td class='num'>26.5% / 47.5%</td><td class='num'>22.6%</td></tr></table>
+<p class="muted">P_any（何か印のある馬は消印にしない）は消印の馬の 3 着内率が 21% と最も低いが、上位 5 人気に印の無い馬がいるレースが 22% しかなく、多くのレースで消印が付かない。P_none（印を無視）は 27% と最も低いが、選ばれた馬の 23% は◎○▲★（主に▲）で、『▲なのに消』という矛盾が出る。<b>採用は P_main</b>（主印は動かさず、△は消に置き換える）。</p>
+<h2>4. 採用した定義（A・P_main）の成績</h2>
+<table><tr><th>期間</th><th>レース数</th><th>消印の 3着内率</th><th>他の上位 4 人気</th><th>差 [95% 区間]</th><th>勝率（消 / 他）</th><th>複勝回収率（消 / 他）</th><th>単勝回収率（消 / 他）</th></tr><tr><td>設計 2022〜23 年</td><td class='num'>6418</td><td class='num'>30.0%</td><td class='num'>47.1%</td><td class='num'>-0.171 [-0.185, -0.157]</td><td class='num'>8.6% / 18.5%</td><td class='num'>72.0% / 83.5%</td><td class='num'>66.9% / 82.5%</td></tr><tr><td>確認 2024 年</td><td class='num'>3139</td><td class='num'>31.2%</td><td class='num'>47.0%</td><td class='num'>-0.159 [-0.178, -0.139]</td><td class='num'>10.1% / 18.3%</td><td class='num'>74.3% / 81.6%</td><td class='num'>75.1% / 77.0%</td></tr><tr><td>参考 2025 年</td><td class='num'>3115</td><td class='num'>29.2%</td><td class='num'>46.9%</td><td class='num'>-0.176 [-0.196, -0.157]</td><td class='num'>8.8% / 18.3%</td><td class='num'>71.8% / 83.0%</td><td class='num'>70.5% / 79.6%</td></tr><tr><td><b>2026 年（テストセット②、1 回だけ）</b></td><td class='num'>2490</td><td class='num'>28.6%</td><td class='num'>44.6%</td><td class='num'>-0.160 [-0.182, -0.140]</td><td class='num'>9.8% / 17.8%</td><td class='num'>（払戻なし）</td><td class='num'>77.2% / 77.0%</td></tr></table>
+<p class="muted">2026 年の複勝回収率は、評価用の表に払戻が無いため出していない。3 着内は rank_tbl の確定着順（約 5% の馬は着順が取れず『圏外』扱い）。2026 年は選択に使わず、最終確認の 1 回だけ。</p>
+<h3>4-1. 『5 番人気を選ぶだけ』との比較（同じレースの対）</h3>
+<p>消印に選ばれる人気: 定義 A は 5 番人気 40%・4 番人気 30%・3 番人気 19%・2 番人気 9%・1 番人気 3%。5 番人気を機械的に選ぶ方式と同じ馬を選ぶレースは 68%。3 着内率の差（A − 5 番人気）は 全期間 +0.002 [−0.005, +0.009]、選ぶ馬が違うレースだけ（4,062 レース）で +0.007 [−0.014, +0.029]、複勝回収率は A 72.5% / 5 番人気 76.3%。<b>V5 の予測で選ぶことの上積みは、3 着内率では検出できない</b>（統計的には同じ）。複勝回収率が 4pt 低いのは、モデルが人気の高い馬も候補に含めるため。</p>
+<h3>4-2. 予測オッズで人気を作ったとき</h3>
+<p>確定前は予測オッズで人気が決まる。オッズに対数正規の揺れ（σ）を足して人気順を作り直したときの定義 A（確認 2024 年＋参考 2025 年）:</p>
+<table><tr><th>σ</th><th>消印の 3着内率</th><th>他の 4 頭</th><th>差 [95% 区間]</th></tr><tr><td>0.0</td><td class='num'>30.2%</td><td class='num'>46.9%</td><td class='num'>-0.167 [-0.181, -0.154]</td></tr><tr><td>0.15</td><td class='num'>30.2%</td><td class='num'>47.0%</td><td class='num'>-0.168 [-0.182, -0.155]</td></tr><tr><td>0.3</td><td class='num'>29.7%</td><td class='num'>46.9%</td><td class='num'>-0.172 [-0.186, -0.159]</td></tr><tr><td>0.5</td><td class='num'>27.6%</td><td class='num'>46.4%</td><td class='num'>-0.189 [-0.201, -0.175]</td></tr></table>
+<p class="muted">人気が揺れても差は縮まらない（σ が大きいほど上位 5 人気に入る馬の質が下がる分、消印の馬の 3 着内率は下がる）。予測オッズしか無い場合も消印は付ける。オッズが全く無い場合は付けない。</p>
+<h2>5. 実装と運用</h2>
+<ul>
+<li><code>src/utils/race_probabilities.py</code> の <code>assign_kesi_mark</code>（<code>assign_mece_marks</code> の後に呼ぶ。人気の情報が無い呼び出しでは従来の印のまま）。<code>mark_type='kesi'</code> と根拠の短文 <code>kesi_reason</code> を返し、付けない理由は戻り値の文字列。ライブの予測（<code>app.py</code> の採点、<code>local_predictions.py</code> の shadow/バックフィル）と、保存済みの予測の読み出し時（確率とオッズが揃っているレースだけ）で付く。◎○▲★は変えない。</li>
+<li><code>prediction_results.py</code>: 印別の着順分布に <code>kesi</code> を追加（注目レースの『穴の的中』には使わない）。</li>
+<li>推奨馬券（<code>race_bet_suggestion</code>）は変更していない。△を消に置き換えた分、相手候補が 1 頭減る。</li>
+<li>再現: <code>python -m src.scripts.data.tp67_kesi run --data frame_all.parquet --out DIR</code>、<code>robust</code>、<code>final2026 --rule A_min_top3 --policy P_main --rank rank_tbl/2026/rank.parquet</code>。テスト: <code>tests/utils/test_kesi_mark.py</code>。</li>
+</ul>
+<h2>6. 申し送り</h2>
+<ul>
+<li>消印は『他の上位人気より来にくい』目安で、買い目から外す根拠としては弱い（約 3 割は来る）。馬券の相手から機械的に外すと、3 連系で 3 着内を取り逃す。外した場合の影響（3 連複の的中率・回収率）は未検証。</li>
+<li>V5 の予測が『人気の順』以上の情報を持つ部分を拾うなら、候補を上位 5 人気に限らない、複数の定義を組み合わせる、といった設計が要る。今回の範囲では、人気の順で選ぶ方式と差が無かった。</li>
+<li>確定前のオッズが貯まったら（10/24 以降の T-10/T-5/T-2）、直前オッズの人気での再評価ができる。</li>
+</ul>
+</body></html>

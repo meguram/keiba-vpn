@@ -284,6 +284,61 @@ def assign_mece_marks(entries: list[dict], situational: bool | None = None, cfg:
         e["mark_type"] = "anchor"
 
 
+# 消印: 上位 KESI_TOP_POP 人気の馬のうち、好走（複勝）の確率がもっとも低い 1 頭（8 頭以上のレースだけ）。
+# 定義の比較（複勝確率が最小・勝率が最小・市場との差・期待値など 7 通り × 印の扱い 3 通り）は docs/html/modeling/chapters/kesi_mark.html。
+KESI_TOP_POP = 5
+KESI_MIN_FIELD = 8
+KESI_MAIN_MARKS = ("honmei", "pair", "show_val", "star")
+
+
+def _popularity_order(entries: list[dict]) -> list[dict] | None:
+    """単勝人気の昇順に並べた出走馬。全頭の単勝オッズ（実オッズ、なければ予測オッズ）が揃わないときは None。人気が同じなら単勝オッズ、馬番の順。"""
+    keyed = []
+    for e in entries:
+        try:
+            odds = float(e.get("win_odds") or 0)
+        except (TypeError, ValueError):
+            return None
+        if odds <= 0:
+            return None
+        pop = e.get("popularity")
+        try:
+            pop_f = float(pop) if pop not in (None, "") else None
+        except (TypeError, ValueError):
+            pop_f = None
+        keyed.append((pop_f, odds, int(e.get("horse_number") or 0), e))
+    if any(k[0] is None or k[0] <= 0 for k in keyed):
+        keyed = [(None, k[1], k[2], k[3]) for k in keyed]
+        keyed.sort(key=lambda k: (k[1], k[2]))
+    else:
+        keyed.sort(key=lambda k: (k[0], k[1], k[2]))
+    return [k[3] for k in keyed]
+
+
+def assign_kesi_mark(entries: list[dict]) -> str | None:
+    """消印（mark_type='kesi'）を付与（in-place）。assign_mece_marks の後に呼ぶ。
+
+    上位 5 人気の馬のうち、◎○▲★の付いていない馬（△は消印に置き換える）から、複勝確率（top3_prob）が最小の 1 頭。
+    同じ確率なら人気が低い方。8 頭未満、または全頭の単勝オッズ（人気）が無いときは付けず、その理由を返す。付けたときは None。
+    付けた馬には kesi_reason（根拠の短文）を入れる。人気の情報が無い状態の従来の印は変わらない。
+    """
+    for e in entries:
+        e.pop("kesi_reason", None)
+    if len(entries) < KESI_MIN_FIELD:
+        return f"{KESI_MIN_FIELD}頭未満のため付けません"
+    order = _popularity_order(entries)
+    if order is None:
+        return "単勝オッズ（人気）が揃っていないため付けません"
+    top = order[:KESI_TOP_POP]
+    pool = [(i, e) for i, e in enumerate(top) if (e.get("mark_type") or "none") not in KESI_MAIN_MARKS]
+    if not pool:
+        return None
+    i, pick = min(pool, key=lambda ie: (_f(ie[1], "top3_prob"), -ie[0]))
+    pick["mark_type"] = "kesi"
+    pick["kesi_reason"] = f"上位{KESI_TOP_POP}人気（{i + 1}番人気）の中で複勝確率が最も低い（{_f(pick, 'top3_prob') * 100:.0f}%）。過去の検証では、この条件の馬が3着内に来たのは約3割（他の上位人気は約5割）"
+    return None
+
+
 def _cal_horse_ev(entry: dict, key: str, kind: str) -> float | None:
     """馬ごとの EV を較正した値。無効なら None（従来の EV を使う）。EV が無い（0 以下）ものは較正しない。"""
     from src.utils.ev_calibration import calibrated_ev, is_enabled

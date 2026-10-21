@@ -124,6 +124,8 @@ type PredEntry = {
   horse_name?: string;
   horse_id?: string;
   mark_type?: string;
+  /** 消印（mark_type='kesi'）の根拠の短文 */
+  kesi_reason?: string;
   recommendation?: string;
   pred_rank?: number;
   composite_rank?: number;
@@ -186,6 +188,7 @@ const MARK_META: Record<string, { sym: string; color: string; bg: string }> = {
   anchor:   { sym: "△", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
   show_val: { sym: "▲", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
   star:     { sym: "★", color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
+  kesi:     { sym: "消", color: "#cbd5e1", bg: "rgba(148,163,184,0.14)" },
   none:     { sym: "—", color: "var(--text-dim)", bg: "transparent" },
 };
 
@@ -680,10 +683,10 @@ export default function RaceDetailPage() {
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={3}>予測確率</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>想定オッズ</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>期待値</th>
-                <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>印</th>
+                <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>推奨</th>
               </tr>
               <tr>
-                {(["枠","馬番","馬名","勝率","連対率","複勝率","単勝","複勝",(calibratedEv ? "勝期待値(較正後)" : "勝期待値"),(calibratedEv ? "複期待値(較正後)" : "複期待値"),"推奨","印"] as string[]).map((h, i) => {
+                {(["枠","馬番","馬名","勝率","連対率","複勝率","単勝","複勝",(calibratedEv ? "勝期待値(較正後)" : "勝期待値"),(calibratedEv ? "複期待値(較正後)" : "複期待値"),"印","買い判断"] as string[]).map((h, i) => {
                   // AI columns: indices 3–9
                   const isAiCol = i >= 3 && i <= 9;
                   return (
@@ -737,8 +740,13 @@ export default function RaceDetailPage() {
                     <td style={{ ...TD, color: (p.redacted || (p.ev_place_cal ?? p.ev_place ?? p.expected_value) == null) ? "var(--text-dim)" : evColor(p.ev_place_cal ?? p.ev_place ?? p.expected_value, p.ev_place_cal != null), fontWeight: 600 }}>
                       {(p.redacted || (p.ev_place_cal ?? p.ev_place ?? p.expected_value) == null) ? "●●" : Number(p.ev_place_cal ?? p.ev_place ?? p.expected_value).toFixed(2)}
                     </td>
-                    <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: 11 }}>{p.buy_tier ?? "—"}</td>
-                    <td style={{ ...TD, fontSize: 18, fontWeight: 800, color: mark.color }}>{mark.sym}</td>
+                    <td
+                      style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: p.mark_type === "kesi" ? 14 : 18, fontWeight: 800, color: mark.color }}
+                      title={p.mark_type === "kesi" ? p.kesi_reason || "消し（上位人気で好走率が低い）" : undefined}
+                    >
+                      {p.mark_type === "kesi" ? <span style={{ border: "1.5px solid #94a3b8", borderRadius: 4, padding: "1px 4px" }}>{mark.sym}</span> : mark.sym}
+                    </td>
+                    <td style={{ ...TD, fontSize: 11 }}>{p.buy_tier ?? "—"}</td>
                 </tr>
                 );
               })}
@@ -763,7 +771,7 @@ export default function RaceDetailPage() {
       ) : null}
 
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
-        印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / —印なし。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
+        印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消は上位5人気の中で複勝確率が最も低い1頭（8頭以上のレース。押さずに印の上にカーソルで根拠） / —印なし。買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
       </p>
     </div>
   );

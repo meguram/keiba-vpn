@@ -1,7 +1,7 @@
 /** 予測成績（予測結果の集計）API の型と整形。サーバ: src/api/prediction_results_api.py */
 
 export type Counts = { n: number; f1: number; f2: number; f3: number; f4p: number };
-export type MarkKey = "honmei" | "pair" | "star";
+export type MarkKey = "honmei" | "pair" | "star" | "kesi";
 export type BetByType = { invested: number; returned: number; n: number; hit: number; label?: string; roi?: number | null };
 
 export type Kpi = {
@@ -91,6 +91,7 @@ export const MARK_META: Record<MarkKey, { sym: string; label: string; color: str
   honmei: { sym: "◎", label: "本命（1着優位）", color: "#ef4444" },
   pair: { sym: "○", label: "対抗（連対候補）", color: "#3b82f6" },
   star: { sym: "★", label: "中穴妙味（10〜30倍）", color: "#a78bfa" },
+  kesi: { sym: "消", label: "消し（上位5人気で複勝確率が最低）", color: "#cbd5e1" },
 };
 
 export const FINISH_META: { key: "f1" | "f2" | "f3" | "f4p"; label: string; color: string }[] = [

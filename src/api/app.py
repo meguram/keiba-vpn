@@ -6930,8 +6930,28 @@ async def get_race_predictions(race_id: str):
     2026-10-01: 「表示されない/古い」事象の検知用に `freshness` フィールド
     （age_hours / is_stale 等）を付与。既存クライアントは未知キーを無視するため後方互換。
     """
+    def _with_kesi(resp: dict) -> dict:
+        # 保存済みの予測には消印が無いので、確率と単勝オッズ（人気）が揃っていれば読み出し時に付ける（◎○▲★は変えない）
+        try:
+            from src.utils.race_probabilities import assign_kesi_mark
+
+            preds = resp.get("predictions")
+            if not isinstance(preds, list) or not preds or not resp.get("has_prediction", True):
+                return resp
+            if any(isinstance(e, dict) and e.get("mark_type") == "kesi" for e in preds):
+                return resp
+            if not all(isinstance(e, dict) and e.get("top3_prob") is not None for e in preds):
+                return resp
+            out = [dict(e) for e in preds]
+            assign_kesi_mark(out)
+            return {**resp, "predictions": out}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("消印の付与に失敗 %s: %s", race_id, exc)
+            return resp
+
     def _with_calibrated_ev(resp: dict) -> dict:
         # 保存済みの予測は保存時点の EV（未較正）を持つので、EV の較正が有効なら読み出し時に較正後の値（ev_*_cal）と買い推奨度を付け直す
+        resp = _with_kesi(resp)
         try:
             from src.utils.ev_calibration import is_enabled
             from src.utils.race_probabilities import attach_calibrated_ev, buy_recommendation_tier
@@ -7812,6 +7832,9 @@ def _compute_composite_scores(
         s["composite_rank"] = i + 1
 
     assign_mece_marks(scored)
+    from src.utils.race_probabilities import assign_kesi_mark
+
+    assign_kesi_mark(scored)
     from src.utils.race_bet_suggestion import suggest_race_bets
 
     bet_suggestion = suggest_race_bets(scored)
@@ -7821,6 +7844,7 @@ def _compute_composite_scores(
         "anchor": "△ 馬券内の候補",
         "show_val": "▲ 単穴",
         "star": "★ 中穴妙味",
+        "kesi": "消 消し（上位人気で好走率が低い）",
         "none": "",
     }
     for s in scored:

@@ -21,7 +21,7 @@ SOURCE_NOTE = {
     "backfill": "過去分の算出（バックフィル）。レース当日の確定した予測ではありません。その日より前の情報だけで後から算出したモデルの出力で、期待値は最新（確定）オッズで計算しています。",
 }
 _MARK_LABELS = {
-    "honmei": "◎ 1着優位", "pair": "○ 連対候補", "anchor": "△ 馬券内の候補", "show_val": "▲ 単穴", "star": "★ 中穴妙味", "none": "",
+    "honmei": "◎ 1着優位", "pair": "○ 連対候補", "anchor": "△ 馬券内の候補", "show_val": "▲ 単穴", "star": "★ 中穴妙味", "kesi": "消 消し（上位人気で好走率が低い）", "none": "",
 }
 
 
@@ -73,6 +73,7 @@ def _num(x: Any) -> float | None:
 def score_entries(entries: list[dict], odds: dict[int, dict], alpha: float = 0.55) -> list[dict]:
     """確率つきの出走馬に、オッズ・期待値・合成スコア・印・買い推奨度を付ける（in-place ではなく新しい一覧を返す）。"""
     from src.utils.race_probabilities import (
+        assign_kesi_mark,
         assign_mece_marks,
         attach_calibrated_ev,
         buy_recommendation_tier,
@@ -109,6 +110,7 @@ def score_entries(entries: list[dict], odds: dict[int, dict], alpha: float = 0.5
     for i, s in enumerate(out):
         s["composite_rank"] = i + 1
     assign_mece_marks(out)
+    assign_kesi_mark(out)
     for s in out:
         s["recommendation"] = _MARK_LABELS.get(s.get("mark_type") or "none", "")
         attach_calibrated_ev(s)

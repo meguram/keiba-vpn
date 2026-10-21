@@ -52,6 +52,8 @@ type PredEntry = {
   weight_change?: number | null;
   popularity?: number | null;
   mark_type?: string;
+  /** 消印（mark_type='kesi'）の根拠の短文 */
+  kesi_reason?: string;
   pred_rank?: number;
   composite_rank?: number;
   win_prob?: number | null;
@@ -102,12 +104,35 @@ const MARK_META: Record<string, { sym: string; color: string }> = {
   anchor:   { sym: "△", color: "#22c55e" },
   show_val: { sym: "▲", color: "#f59e0b" },
   star:     { sym: "★", color: "#a78bfa" },
+  kesi:     { sym: "消", color: "#cbd5e1" },
   none:     { sym: "-", color: "var(--text-dim)" },
 };
 
 function markSym(p: PredEntry): { sym: string; color: string } {
   if (p.mark_type && MARK_META[p.mark_type]) return MARK_META[p.mark_type];
   return MARK_META.none;
+}
+
+/** 推奨列の並び順: ◎ → ○ → ▲ → ★ → △ → 消。印なしは値なし（末尾） */
+const MARK_ORDER: Record<string, number> = { honmei: 1, pair: 2, show_val: 3, star: 4, anchor: 5, kesi: 6 };
+
+/** 印の表示。消印は枠線つき（他の印と見分けがつき、色だけに頼らない）で、押さなくても理由が title で読める */
+function MarkChip({ p, size = 18 }: { p: PredEntry; size?: number }) {
+  const m = markSym(p);
+  if (m.sym === "-") return <span style={{ color: "var(--text-dim)" }}>-</span>;
+  const kesi = p.mark_type === "kesi";
+  return (
+    <span
+      title={kesi ? p.kesi_reason || "消し（上位人気で好走率が低い）" : "印"}
+      aria-label={`印 ${m.sym}`}
+      style={{
+        color: m.color, fontWeight: 800, fontSize: size, lineHeight: 1,
+        ...(kesi ? { border: "1.5px solid #94a3b8", borderRadius: 4, padding: "1px 4px", fontSize: Math.round(size * 0.75) } : {}),
+      }}
+    >
+      {m.sym}
+    </span>
+  );
 }
 
 function fmtPct(v: number | null | undefined): string {
@@ -213,7 +238,7 @@ const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
   podds: (p) => p.place_odds_min ?? null,
   evw: (p) => p.ev_win_cal ?? p.ev_win ?? null,
   evp: (p) => p.ev_place_cal ?? p.ev_place ?? p.expected_value ?? null,
-  tier: (p) => p.buy_tier ?? null,
+  tier: (p) => (p.mark_type && MARK_ORDER[p.mark_type]) || null,
 };
 // 『大きいほど良い』列は、最初のクリックを降順にする（勝率・連対率・複勝率・期待値・馬体重）
 const DESC_FIRST = new Set<SortKey>(["win", "top2", "top3", "evw", "evp", "weight"]);
@@ -430,7 +455,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
               {th("top2", "連対/複勝", {}, "連対率で並べ替え（複勝率は『そのほか』から）")}
               {th("odds", "想定単勝/複勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（想定複勝は『そのほか』から）")}
               {th("evw", calibratedEv ? "期待値(較正後)" : "期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
-              {th("tier", "推奨", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
+              {th("tier", "推奨", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "印（◎○▲★△消）で並べ替え。下段: 買い判断（期待値の最大で判定）")}
             </tr>
           </thead>
           <tbody>
@@ -453,7 +478,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
                   <td style={{ color: dim }}>{fmtPct(p.top2_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top3_prob)}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>{ev.pl.text}</span></td>
-                  <td className="sep" style={{ fontSize: 11, color: "var(--text-dim)" }}>{p.buy_tier ?? "-"}</td>
+                  <td className="sep"><MarkChip p={p} /><span className="sub" style={{ color: "var(--text-dim)" }}>{p.buy_tier && p.buy_tier !== "—" ? p.buy_tier : ""}</span></td>
                 </tr>
                 </Fragment>
               );
@@ -488,9 +513,9 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
                   <td>{wakuChip(p, 22)}</td>
                   <td>{numChip(p, 22)}</td>
                   <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
-                    {tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} />
+                    {p.mark_type && p.mark_type !== "none" ? <><MarkChip p={p} size={14} /> </> : null}{tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} />
                     <span className="sub">{[p.sex_age, p.jockey_weight != null ? `${p.jockey_weight}kg` : null, p.jockey_name, p.weight ? fmtWeight(p.weight, p.weight_change) : null].filter(Boolean).join("　")}</span>
-                    <span className="sub">{[p.trainer_name, p.buy_tier && p.buy_tier !== "—" ? `推奨 ${p.buy_tier}` : null].filter(Boolean).join("　")}</span>
+                    <span className="sub">{[p.trainer_name, p.buy_tier && p.buy_tier !== "—" ? `買い判断 ${p.buy_tier}` : null].filter(Boolean).join("　")}</span>
                   </td>
                   <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top2_prob)} / {fmtPct(p.top3_prob)}</span></td>
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>複 {ev.pl.text}</span></td>
@@ -516,7 +541,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
               <div className="r1">
                 <span className="pt-nums">{wakuChip(p, 26)}{numChip(p, 26)}</span>
                 <span className="nm">{tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} /></span>
-                {m.sym !== "-" && <span title="印" aria-label={`印 ${m.sym}`} style={{ color: m.color, fontWeight: 800, fontSize: 15 }}>{m.sym}</span>}
+                {m.sym !== "-" && <MarkChip p={p} size={15} />}
                 <span className="win"><b style={{ color: dim }}>{fmtPct(p.win_prob)}</b><small>勝率</small></span>
               </div>
               <div className="r2">
@@ -534,7 +559,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
                 <span className="pt-badge" title="複勝期待値" style={{ background: ev.pl.bg, color: ev.pl.color }}>複 {ev.pl.text}</span>
                 <span style={{ color: "var(--text-dim)" }} title="想定単勝オッズ">単勝 {fmtOdds(p.win_odds)}</span>
                 <span style={{ color: "var(--text-dim)" }} title="想定複勝オッズ">複勝 {placeOdds(p)}</span>
-                {p.buy_tier && p.buy_tier !== "—" && <span style={{ color: "var(--text-dim)" }}>推奨 {p.buy_tier}</span>}
+                {p.buy_tier && p.buy_tier !== "—" && <span style={{ color: "var(--text-dim)" }}>買い判断 {p.buy_tier}</span>}
               </div>
             </div>
           );
@@ -903,7 +928,7 @@ export default function WeeklyPredictionsPage() {
       <div className="wp-main" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
         {/* 凡例 */}
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補）</span>
+          <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消は上位5人気の中で複勝確率が最も低い1頭（8頭以上のレース）</span>
           <span>
             期待値（過去の実績に合わせて較正した期待回収率）: <strong style={{ color: "#22c55e" }}>≥1.10</strong> / <strong style={{ color: "#60a5fa" }}>≥1.00</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.90</strong> / <strong style={{ color: "#f87171" }}>＜0.90</strong>
           </span>

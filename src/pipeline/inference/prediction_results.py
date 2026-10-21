@@ -28,8 +28,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_MAX_TOTAL_BET = 2000
 BET_TYPES = ["tansho", "fukusho", "umaren", "wide", "sanrenpuku"]
 BET_LABELS = {"tansho": "単勝", "fukusho": "複勝", "umaren": "馬連", "wide": "ワイド", "umatan": "馬単", "sanrenpuku": "3連複"}
-MARKS = ("honmei", "pair", "star")
-MARK_SYMBOLS = {"honmei": "◎", "pair": "○", "star": "★", "anchor": "△", "show_val": "▲"}
+MARKS = ("honmei", "pair", "star", "kesi")
+HIGHLIGHT_MARKS = ("honmei", "pair", "star")  # 注目レース（穴の的中）に使う印。消印は『走らない』側の印なので除く
+MARK_SYMBOLS = {"honmei": "◎", "pair": "○", "star": "★", "anchor": "△", "show_val": "▲", "kesi": "消"}
 _PAYOFF_KEYS = {"単勝": "tansho", "複勝": "fukusho", "馬連": "umaren", "ワイド": "wide", "馬単": "umatan",
                 "三連複": "sanrenpuku", "3連複": "sanrenpuku"}
 
@@ -276,7 +277,7 @@ def summarize(records: list[dict]) -> dict:
                 s[key]["n"] += 1
                 s[key][b] += 1
         for m in MARKS:
-            for p in r["marks"].get(m, []):
+            for p in (r.get("marks") or {}).get(m, []):
                 b = _bucket(p.get("finish"))
                 if b:
                     s["marks"][m]["n"] += 1
@@ -309,7 +310,7 @@ def merge_summaries(parts: list[dict]) -> dict:
         for k in ("n", "f1", "f2", "f3", "f4p"):
             out["top1"][k] += p["top1"][k]
             for m in MARKS:
-                out["marks"][m][k] += p["marks"][m][k]
+                out["marks"][m][k] += ((p.get("marks") or {}).get(m) or {}).get(k, 0)
         pb, ob = p["bets"], out["bets"]
         for k in ("invested", "returned", "races_bought", "races_hit", "estimated_races"):
             ob[k] += pb[k]
@@ -329,7 +330,7 @@ def highlights(records: list[dict], limit_each: int = 3) -> list[dict]:
         if not r.get("included"):
             continue
         label = f"{r['venue']}{r['round']}R"
-        for m in MARKS:
+        for m in HIGHLIGHT_MARKS:
             for p in r["marks"].get(m, []):
                 f = p.get("finish")
                 if f and f <= 3 and (p.get("win_odds") or 0) >= 10:

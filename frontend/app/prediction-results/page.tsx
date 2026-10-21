@@ -42,7 +42,9 @@ function Tile({ label, value, sub, locked }: { label: string; value: string; sub
   );
 }
 
-/** ◎○★ の着順分布（1着/2着/3着/4着以下）を、件数つきの積み上げ棒で。色だけに頼らず、各区間に数字とラベルを出す。 */
+/** ◎○★消 の着順分布（1着/2着/3着/4着以下）を、件数つきの積み上げ棒で。色だけに頼らず、各区間に数字とラベルを出す。 */
+const EMPTY_COUNTS: Counts = { n: 0, f1: 0, f2: 0, f3: 0, f4p: 0 };
+
 function FinishDist({ mark, c }: { mark: MarkKey; c: Counts }) {
   const m = MARK_META[mark];
   return (
@@ -155,7 +157,7 @@ function RaceCard({ r, member }: { r: RaceRecord; member: boolean }) {
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 10px", marginTop: 8, alignItems: "center", fontSize: 13 }}>
         <span style={dim}>予測1位</span>
         <span>{r.top1?.horse_number}番 {r.top1?.horse_name} <FinishChip pos={r.top1?.finish} /> <span style={dim}>勝率{pct(r.top1?.win_prob)}</span></span>
-        {(["honmei", "pair", "star"] as MarkKey[]).map((m) => (r.marks?.[m]?.length ? (
+        {(["honmei", "pair", "star", "kesi"] as MarkKey[]).map((m) => (r.marks?.[m]?.length ? (
           <span key={m} style={{ display: "contents" }}>
             <span style={{ color: MARK_META[m].color, fontWeight: 800 }}>{MARK_META[m].sym}</span>
             <span>
@@ -264,11 +266,11 @@ export default function PredictionResultsPage() {
           </div>
 
           <section aria-label="印ごとの着順分布">
-            <h2 style={h2}>◎・○・★ の着順分布</h2>
+            <h2 style={h2}>◎・○・★・消 の着順分布</h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
-              {(["honmei", "pair", "star"] as MarkKey[]).map((m) => <FinishDist key={m} mark={m} c={data.summary.marks[m]} />)}
+              {(["honmei", "pair", "star", "kesi"] as MarkKey[]).map((m) => <FinishDist key={m} mark={m} c={data.summary.marks[m] ?? EMPTY_COUNTS} />)}
             </div>
-            <p style={{ ...dim, margin: "6px 0 0" }}>◎=1着優位（各レース1頭まで）・○=2連系の相手・★=10〜30倍帯で期待値が高い中穴（各レース1頭まで）。印の定義は予測画面と同じです。</p>
+            <p style={{ ...dim, margin: "6px 0 0" }}>◎=1着優位（各レース1頭まで）・○=2連系の相手・★=10〜30倍帯で期待値が高い中穴（各レース1頭まで）・消=上位5人気の中で複勝確率が最も低い1頭（消は4着以下が多いほど当たり。8頭以上のレースだけ）。印の定義は予測画面と同じです。</p>
           </section>
 
           {scope !== "day" && (
