@@ -10,7 +10,7 @@ CANDS=(keiba-api uwsgi apache2 httpd caddy certbot.timer certbot docker pm2-root
 echo "止める候補（存在するもの）:"
 FOUND=()
 for u in "${CANDS[@]}"; do
-  if systemctl list-unit-files 2>/dev/null | grep -q "^${u}[.]\|^${u}\$"; then FOUND+=("$u"); echo "  - $u ($(systemctl is-active "$u" 2>/dev/null))"; fi
+  if systemctl cat "$u" >/dev/null 2>&1; then FOUND+=("$u"); echo "  - $u ($(systemctl is-active "$u" 2>/dev/null))"; fi   # certbot.timer のような .timer 名も見つける
 done
 [ ${#FOUND[@]} -gt 0 ] || { echo "  （なし）"; exit 0; }
 echo "注意: nginx は新構成（vps_02）で使うので、旧設定（/etc/nginx/conf.d/myapp_nginx.conf など）は vps_02 が退避してから入れ直します。ここで止めても問題ありません。"
