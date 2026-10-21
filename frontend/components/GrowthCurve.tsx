@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react";
 import type { HorseGrowth, GrowthPoint } from "@/lib/entryCard";
+import { fmtWeightChange, pathOf, weightAxis, weightSegments } from "@/lib/growthCurve";
 
-/* 馬の成長曲線（過去走ごとのめぐ指数の推移）。外部ライブラリなしの SVG。
-   横軸=レース日（時間の目盛り）、縦軸=めぐ指数（時期ごとの水準差をそろえた値）。丸の中の数字は着順。 */
+/* 馬の成長曲線（過去走ごとのめぐ指数と馬体重の推移）。外部ライブラリなしの SVG。
+   横軸=レース日（時間の目盛り）、左軸=めぐ指数（時期ごとの水準差をそろえた値）、右軸=馬体重(kg)。丸の中の数字は着順。 */
 
-const W = 360, H = 190, PL = 34, PR = 40, PT = 14, PB = 28;
+const W = 360, H = 190, PL = 34, PR = 44, PT = 14, PB = 28;
+const WCOL = "#2dd4bf";
 
 const dayNum = (ymd: string) => Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8))) / 86400000;
 const fmtDate = (ymd: string) => `${ymd.slice(0, 4)}/${Number(ymd.slice(4, 6))}/${Number(ymd.slice(6, 8))}`;
@@ -34,12 +36,23 @@ function ageText(m: number | null | undefined) {
 export function GrowthCurve({ g }: { g: HorseGrowth | null | undefined }) {
   const pts = useMemo<GrowthPoint[]>(() => (g && g.status === "ok" ? g.points : []), [g]);
   const [sel, setSel] = useState<number | null>(null);
+  const [selW, setSelW] = useState<number | null>(null);          // 体重の点を選んだとき（めぐ指数の点は選ばない）
+  const [show, setShow] = useState({ megu: true, weight: true });
   const cur = sel ?? pts.length - 1;
+  const weights = useMemo(() => (g && g.status === "ok" ? g.weights ?? [] : []), [g]);
+  const wAxis = useMemo(() => weightAxis(weights), [weights]);
+  const hasW = weights.length > 0 && wAxis != null;
+  const showMegu = show.megu || !hasW, showW = hasW && (show.weight || !show.megu);
+  const toggle = (k: "megu" | "weight") => setShow((s) => {
+    const n = { ...s, [k]: !s[k] };
+    return n.megu || n.weight ? n : s;                            // 少なくとも一方は残す
+  });
 
   const geo = useMemo(() => {
     if (pts.length < 2 || !g || g.status !== "ok") return null;
     const xs = pts.map((p) => dayNum(p.date));
-    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const wxs = weights.map((w) => dayNum(w.date));
+    const x0 = Math.min(...xs, ...wxs), x1 = Math.max(...xs, ...wxs);
     const vals = pts.map((p) => p.value).concat([g.axis.ref]);
     const lo = Math.floor((Math.min(...vals) - 4) / 5) * 5, hi = Math.ceil((Math.max(...vals) + 4) / 5) * 5;
     const X = (d: number) => PL + ((d - x0) / Math.max(1, x1 - x0)) * (W - PL - PR - 8) + 4;
@@ -53,8 +66,9 @@ export function GrowthCurve({ g }: { g: HorseGrowth | null | undefined }) {
     const yt: number[] = [];
     const step = hi - lo > 40 ? 10 : 5;
     for (let v = lo; v <= hi; v += step) yt.push(v);
-    return { X, Y, xs, ticks, yt, lo, hi };
-  }, [pts, g]);
+    const Yw = (v: number) => (wAxis ? PT + (1 - (v - wAxis.lo) / Math.max(1, wAxis.hi - wAxis.lo)) * (H - PT - PB) : 0);
+    return { X, Y, Yw, xs, wxs, ticks, yt, lo, hi };
+  }, [pts, g, weights, wAxis]);
 
   if (!g || g.status !== "ok") {
     return <div className="gc-empty">成長曲線はまだ出せません<small>{g?.reason ?? "出走履歴がありません"}</small></div>;
@@ -68,6 +82,11 @@ export function GrowthCurve({ g }: { g: HorseGrowth | null | undefined }) {
   const p = pts[cur];
   const line = pts.map((q, i) => `${i ? "L" : "M"}${geo.X(geo.xs[i]).toFixed(1)},${geo.Y(q.value).toFixed(1)}`).join(" ");
   const bestY = geo.Y(g.best.value);
+  const breakDates = pts.filter((q) => q.weight == null).map((q) => q.date);          // 体重の無い走を挟むところは線を切る
+  const wSegs = weightSegments(weights.map((w, i) => ({ ...w, x: geo.X(geo.wxs[i]), y: geo.Yw(w.weight) })), breakDates);
+  const wSel = selW != null ? weights[selW] : null;
+  const wRace = wSel ? pts.find((q) => q.race_id === wSel.race_id) : null;
+  const wText = (w?: number | null, c?: number | null) => (w != null ? `馬体重 ${w}kg${fmtWeightChange(c) ? `（前走比 ${fmtWeightChange(c)}）` : ""}` : null);
 
   return (
     <div className="gc">
@@ -80,46 +99,88 @@ export function GrowthCurve({ g }: { g: HorseGrowth | null | undefined }) {
         <span className="gc-best">自己ベスト <b>{g.best.value.toFixed(1)}</b><small>{fmtDate(g.best.date)}</small></span>
         <span className="gc-n">{g.n}走</span>
       </div>
-      <svg className="gc-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`成長曲線。${g.axis.name}の推移 ${pts.map((q) => `${fmtDate(q.date)} ${q.value.toFixed(1)}`).join("、")}`}>
-        {geo.yt.map((v) => (
+      {hasW && (
+        <div className="gc-legend" role="group" aria-label="表示する線">
+          <button type="button" className="gc-pill" aria-pressed={showMegu} onClick={() => toggle("megu")}>
+            <i style={{ background: "var(--accent)" }} />{g.axis.name}（左軸）
+          </button>
+          <button type="button" className="gc-pill" aria-pressed={showW} onClick={() => toggle("weight")}>
+            <i style={{ background: WCOL, borderRadius: 2, height: 3 }} />馬体重（右軸・kg）
+          </button>
+        </div>
+      )}
+      <svg className="gc-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`成長曲線。${g.axis.name}の推移 ${pts.map((q) => `${fmtDate(q.date)} ${q.value.toFixed(1)}`).join("、")}${showW ? `。馬体重の推移 ${weights.map((w) => `${fmtDate(w.date)} ${w.weight}kg`).join("、")}` : ""}`}>
+        {showMegu ? geo.yt.map((v) => (
           <g key={v}>
             <line x1={PL} x2={W - PR} y1={geo.Y(v)} y2={geo.Y(v)} stroke="var(--border)" strokeWidth={0.6} />
-            <text x={PL - 5} y={geo.Y(v) + 3.5} fontSize={10} textAnchor="end" fill="var(--text-dim)">{v}</text>
+            <text x={PL - 5} y={geo.Y(v) + 3.5} fontSize={11} textAnchor="end" fill="var(--text-dim)">{v}</text>
           </g>
+        )) : wAxis && wAxis.ticks.map((v) => (
+          <line key={v} x1={PL} x2={W - PR} y1={geo.Yw(v)} y2={geo.Yw(v)} stroke="var(--border)" strokeWidth={0.6} />
+        ))}
+        {showW && wAxis && wAxis.ticks.map((v) => (
+          <text key={`w${v}`} x={W - PR + 5} y={geo.Yw(v) + 3.5} fontSize={11} fill={WCOL}>{v}</text>
         ))}
         {geo.ticks.map((t) => (
           <g key={t.t}>
             <line x1={t.x} x2={t.x} y1={PT} y2={H - PB} stroke="var(--border)" strokeWidth={0.8} strokeDasharray="2 3" />
-            <text x={t.x + 3} y={H - 9} fontSize={10} fill="var(--text-dim)">{t.t}</text>
+            <text x={t.x + 3} y={H - 9} fontSize={11} fill="var(--text-dim)">{t.t}</text>
           </g>
         ))}
-        <line x1={PL} x2={W - PR} y1={geo.Y(g.axis.ref)} y2={geo.Y(g.axis.ref)} stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 4" />
-        <text x={W - PR + 4} y={geo.Y(g.axis.ref) - 1} fontSize={9} fill="#94a3b8">全体の</text>
-        <text x={W - PR + 4} y={geo.Y(g.axis.ref) + 9} fontSize={9} fill="#94a3b8">水準 {g.axis.ref}</text>
-        <line x1={PL} x2={W - PR} y1={bestY} y2={bestY} stroke="#fbbf24" strokeWidth={0.8} strokeDasharray="1 3" opacity={0.8} />
-        <path d={line} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        {pts.map((q, i) => {
-          const f = fin(q.finish), c = tone(f), on = i === cur;
+        {showMegu && (
+          <>
+            <line x1={PL} x2={W - PR} y1={geo.Y(g.axis.ref)} y2={geo.Y(g.axis.ref)} stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 4" />
+            <text x={W - PR - 3} y={geo.Y(g.axis.ref) + 12} fontSize={11} textAnchor="end" fill="#94a3b8">全体の水準 {g.axis.ref}</text>
+            <line x1={PL} x2={W - PR} y1={bestY} y2={bestY} stroke="#fbbf24" strokeWidth={0.8} strokeDasharray="1 3" opacity={0.8} />
+            <path d={line} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          </>
+        )}
+        {showW && wSegs.map((seg, k) => (
+          <path key={k} d={pathOf(seg)} fill="none" stroke={WCOL} strokeWidth={1.6} strokeDasharray="5 3" strokeLinejoin="round" strokeLinecap="round" />
+        ))}
+        {showW && weights.map((w, i) => {
+          const cx = geo.X(geo.wxs[i]), cy = geo.Yw(w.weight), on = selW === i;
+          return (
+            <g key={`w${w.race_id}${i}`} role="button" tabIndex={0} aria-label={`${fmtDate(w.date)} 馬体重 ${w.weight}キロ${fmtWeightChange(w.weight_change) ? ` 前走比 ${fmtWeightChange(w.weight_change)}` : ""}`}
+              onClick={() => { setSelW(i); setSel(null); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelW(i); setSel(null); } }} style={{ cursor: "pointer", outline: "none" }}>
+              <circle cx={cx} cy={cy} r={10} fill="transparent" />
+              <circle cx={cx} cy={cy} r={on ? 5 : 3.6} fill={WCOL} stroke={on ? "#fff" : "var(--surface)"} strokeWidth={on ? 2 : 1} />
+            </g>
+          );
+        })}
+        {showMegu && pts.map((q, i) => {
+          const f = fin(q.finish), c = tone(f), on = i === cur && selW == null;
           const cx = geo.X(geo.xs[i]), cy = geo.Y(q.value);
           return (
             <g key={q.race_id + i} role="button" tabIndex={0} aria-label={`${fmtDate(q.date)} ${q.race_name ?? ""} ${f ?? "?"}着 ${g.axis.name} ${q.value.toFixed(1)}`}
-              onClick={() => setSel(i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSel(i); } }} style={{ cursor: "pointer", outline: "none" }}>
-              <circle cx={cx} cy={cy} r={16} fill="transparent" />
+              onClick={() => { setSel(i); setSelW(null); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSel(i); setSelW(null); } }} style={{ cursor: "pointer", outline: "none" }}>
+              <circle cx={cx} cy={cy} r={12} fill="transparent" />
               <circle cx={cx} cy={cy} r={on ? 10 : 8} fill={c.bg} stroke={on ? "#fff" : "var(--surface)"} strokeWidth={on ? 2 : 1.2} />
               <text x={cx} y={cy + 3.4} fontSize={on ? 10.5 : 9.5} fontWeight={800} textAnchor="middle" fill={c.fg}>{f ?? "?"}</text>
             </g>
           );
         })}
       </svg>
+      {wSel ? (
+        <div className="gc-sel" aria-live="polite">
+          <b>{fmtDate(wSel.date)}</b>
+          <span>{[wRace?.venue, wRace?.race_name].filter(Boolean).join(" ")}</span>
+          {fin(wSel.finish) != null && <span>{fin(wSel.finish)}着</span>}
+          <strong style={{ color: WCOL }}>{wText(wSel.weight, wSel.weight_change)}</strong>
+          {wRace && <small>{g.axis.name} {wRace.value.toFixed(1)}</small>}
+        </div>
+      ) : (
       <div className="gc-sel" aria-live="polite">
         <b>{fmtDate(p.date)}</b>
         <span>{[p.venue, p.race_name].filter(Boolean).join(" ")}</span>
         <span>{[p.surface, p.distance ? `${p.distance}m` : null, p.field ? `${p.field}頭` : null].filter(Boolean).join(" ")}</span>
         <span>{fin(p.finish) ?? "?"}着</span>
         <strong>{g.axis.name} {p.value.toFixed(1)}</strong>
+        {p.weight != null && <strong style={{ color: WCOL }}>{wText(p.weight, p.weight_change)}</strong>}
         <small>元の値 {p.raw.toFixed(1)}{p.jockey_weight ? ` ・ 斤量 ${p.jockey_weight}kg` : ""}{ageText(p.age_months) ? ` ・ ${ageText(p.age_months)}` : ""}</small>
       </div>
-      <p className="gc-note">縦軸: {g.axis.name}（{g.axis.note}）。丸の中の数字は着順で、<i style={{ background: "#fbbf24" }} />3着以内 <i style={{ background: "#60a5fa" }} />4〜5着 <i style={{ background: "#64748b" }} />6着以下。点をタップすると詳細。{g.excluded > 0 ? ` 基準外で除いた走 ${g.excluded}。` : ""}</p>
+      )}
+      <p className="gc-note">縦軸: {g.axis.name}（{g.axis.note}）。丸の中の数字は着順で、<i style={{ background: "#fbbf24" }} />3着以内 <i style={{ background: "#60a5fa" }} />4〜5着 <i style={{ background: "#64748b" }} />6着以下。点をタップすると詳細。{g.excluded > 0 ? ` 基準外で除いた走 ${g.excluded}。` : ""}{hasW ? " 馬体重（破線・右軸）は出走時の発表値で、レースごとの増減は成長だけでなく調整・季節の影響もあります。" : ""}</p>
     </div>
   );
 }
@@ -131,6 +192,10 @@ export const GROWTH_CSS = `
 .gc-trend small{font-size:11px;opacity:.85}
 .gc-best{font-size:12px;color:var(--text-dim);display:inline-flex;align-items:baseline;gap:5px}
 .gc-best b{color:#fbbf24;font-size:14px}
+.gc-legend{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.gc-pill{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:3px 11px;border-radius:99px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-size:12px;cursor:pointer;font:inherit;font-size:12px}
+.gc-pill[aria-pressed=true]{border-color:var(--accent);color:var(--text);background:rgba(96,165,250,.12)}
+.gc-pill i{display:inline-block;width:14px;height:8px;border-radius:99px}
 .gc-n{margin-left:auto;font-size:12px;color:var(--text-dim)}
 .gc-svg{display:block;width:100%;height:auto;max-height:260px}
 .gc-svg g[role=button]:focus-visible circle:nth-child(2){stroke:#fff;stroke-width:2.5}

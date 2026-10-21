@@ -159,3 +159,24 @@ def test_v3a_abs_axis_is_defined_and_is_the_default(monkeypatch):
     assert ax.value_col == "megu_index_v3a_abs_robust" and ax.conf_col == "megu_v3a_low_confidence" and not ax.align_by_month
     monkeypatch.delenv("KEIBA_GROWTH_AXIS", raising=False)
     assert hg.DEFAULT_AXIS == "megu_v3a_abs" and hg.active_axis().key == "megu_v3a_abs"
+
+
+def test_weight_parsing_accepts_numbers_and_signed_strings():
+    assert [hg.weight_kg(x) for x in (480, "480", "480kg", 0, -3, None, "abc", True)] == [480, 480, 480, None, None, None, None, None]
+    assert [hg.weight_delta(x) for x in ("+4", "-2", "−6", 0, "±0", None, "")] == [4, -2, -6, 0, 0, None, None]
+
+
+def test_build_growth_adds_weight_to_points_and_weights_series():
+    runs = _runs()
+    runs[0].update(weight="478", weight_change="+4")
+    runs[1].update(weight=486, weight_change=8)
+    runs[2].update(weight=0, weight_change=None)          # 0 以下は体重なし
+    runs[3].update(weight=490, weight_change="-2")
+    megu = {"r1": (44.0, "valid"), "r2": (50.0, "valid"), "r3": (60.0, "valid")}   # r4 はめぐ指数なし
+    g = hg.build_growth(list(reversed(runs)), megu, {}, 50.0)
+    assert [(p["weight"], p["weight_change"]) for p in g["points"]] == [(478, 4), (486, 8), (None, None)]
+    # weights は めぐ指数が無い走(r4)も含み、体重の無い走(r3)は含まない。日付昇順
+    assert [(w["race_id"], w["weight"], w["weight_change"]) for w in g["weights"]] == [("r1", 478, 4), ("r2", 486, 8), ("r4", 490, -2)]
+    assert g["weights"][0]["date"] == "20240310" and g["weights"][0]["finish"] == 3
+    # 既存キーは変わらない
+    assert g["status"] == "ok" and g["n"] == 3 and "trend" in g and "best" in g

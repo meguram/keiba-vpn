@@ -111,6 +111,46 @@ def age_months(birthday: tuple[int, int, int] | None, ymd: str) -> int | None:
     return months if months >= 0 else None
 
 
+def _to_float(x: Any) -> float | None:
+    """数値・数字文字列（'+4' '-2' '480' '480kg'）を float に。読めなければ None。"""
+    if x is None or isinstance(x, bool):
+        return None
+    if isinstance(x, (int, float)):
+        v = float(x)
+    else:
+        m = re.search(r"[+\-−]?\s*\d+(?:\.\d+)?", str(x))
+        if not m:
+            return None
+        v = float(m.group(0).replace("−", "-").replace(" ", ""))
+    return v if v == v else None
+
+
+def weight_kg(x: Any) -> int | None:
+    """馬体重(kg)。0 以下・読めない値は None。"""
+    v = _to_float(x)
+    return int(round(v)) if v is not None and v > 0 else None
+
+
+def weight_delta(x: Any) -> int | None:
+    """前走比(kg)。符号つき。0 は有効（増減なし）。読めない値は None。"""
+    v = _to_float(x)
+    return int(round(v)) if v is not None else None
+
+
+def weight_series(runs: list[dict]) -> list[dict]:
+    """馬体重のある全走（日付昇順）。めぐ指数が無い走も含める。"""
+    out = []
+    for r in sorted((x for x in runs if x.get("date")), key=lambda x: x["date"]):
+        w = weight_kg(r.get("weight"))
+        if w is None:
+            continue
+        out.append({
+            "date": re.sub(r"\D", "", str(r["date"]))[:8], "race_id": str(r.get("race_id") or ""),
+            "weight": w, "weight_change": weight_delta(r.get("weight_change")), "finish": r.get("finish"),
+        })
+    return out
+
+
 def align(raw: float, month_median: float | None, ref: float) -> float:
     """その月の水準差を引いて全期間の基準値に揃える。月の中央値が無ければ補正しない。"""
     return raw if month_median is None else raw - month_median + ref
@@ -166,13 +206,14 @@ def build_growth(
             "surface": r.get("surface"), "distance": r.get("distance"), "finish": r.get("finish"), "field": r.get("field"),
             "age_months": age_months(bd, r["date"]), "raw": round(float(val), 1), "value": round(align(float(val), baseline.get(month) if ax.align_by_month else None, ref), 1),
             "low_confidence": low_conf, "jockey_weight": r.get("jockey_weight"),
+            "weight": weight_kg(r.get("weight")), "weight_change": weight_delta(r.get("weight_change")),
         })
     if not pts:
         return {"status": "no_data", "reason": f"{ax.name}が未計算、または基準外です", "excluded": excluded}
     best = max(pts, key=lambda p: p["value"])
     return {
         "status": "ok", "axis": {"key": ax.key, "name": ax.name, "note": ax.note or ("時期ごとの水準差をそろえた値（元の値は各点に表示）" if ax.align_by_month else "元の値"), "ref": round(ref, 1)},
-        "points": pts, "n": len(pts), "excluded": excluded, "trend": trend([p["value"] for p in pts]),
+        "points": pts, "weights": weight_series(runs), "n": len(pts), "excluded": excluded, "trend": trend([p["value"] for p in pts]),
         "best": {"value": best["value"], "date": best["date"], "race_name": best["race_name"]},
     }
 
