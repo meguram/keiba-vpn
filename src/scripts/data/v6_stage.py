@@ -75,6 +75,19 @@ def scenario_values(T: pd.DataFrame) -> dict[str, float]:
     return {"slow": float(s[c == 0].mean()), "mid": float(s[c == 1].mean()), "high": float(s[c == 2].mean())}
 
 
+def make_inputs(variant: str, df: pd.DataFrame, T: pd.DataFrame, base: list[str]) -> pd.DataFrame:
+    """前段の入力行列。a: base + tl_ 再取得 + CY。b/c/d: a + 追走難度 v2・ラップ予想・位置取り予想。c は学習用にペースの結果由来の列を足す。"""
+    X = pd.concat([df[base].copy(), new_inputs(df)], axis=1)
+    if variant in ("b", "c", "d"):
+        X = pd.concat([X, forecast_inputs(df)], axis=1)
+    if variant == "c":
+        X["v6_pace_score"] = T["r_pace_bal"].to_numpy(dtype=float)
+    for c in X.columns:
+        if str(X[c].dtype) in ("object", "string"):
+            X[c] = X[c].astype("category")
+    return X
+
+
 def build(variant: str) -> None:
     from src.pipeline.models import stage_models as sm
 
@@ -85,18 +98,11 @@ def build(variant: str) -> None:
     fit_params = json.loads((tb.OLD / "features/fit_params.json").read_text(encoding="utf-8"))
     race_cls = sm.pace_class_labels(labels, fit_params["pace_q"], fit_params["rpci_q"])
     T = sm.build_targets(df, labels, race_cls)
-    X = df[base].copy()
-    X = pd.concat([X, new_inputs(df)], axis=1)
-    if variant in ("b", "c", "d"):
-        X = pd.concat([X, forecast_inputs(df)], axis=1)
+    X = make_inputs(variant, df, T, base)
     sv = None
     if variant == "c":
         sv = scenario_values(T)
         _log(f"シナリオ値（r_pace_bal の区分平均）: {sv}")
-        X["v6_pace_score"] = T["r_pace_bal"].to_numpy(dtype=float)
-    for c in X.columns:
-        if str(X[c].dtype) in ("object", "string"):
-            X[c] = X[c].astype("category")
     years = sorted(int(y) for y in df["year"].unique() if int(y) <= 2025)
     out = pd.DataFrame({"race_id": df["race_id"].to_numpy(), "horse_id": df["horse_id"].to_numpy()})
     t0 = time.time()

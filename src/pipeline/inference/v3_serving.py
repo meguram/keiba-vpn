@@ -66,6 +66,20 @@ def v5_paths() -> dict:
     return {"bundle": bundle, "stage": stage, "tl_reference": tl_ref}
 
 
+def v6_enabled() -> bool:
+    """v6 を v4/v5 の shadow と並走させる（KEIBA_V6_SHADOW=1）。出力は predictions_v6/<日>/<race_id>.parquet。v4・v5 の経路には影響しない。"""
+    return (os.environ.get("KEIBA_V6_SHADOW") or "").strip().lower() in ("1", "true", "on", "yes")
+
+
+def v6_paths() -> dict:
+    """v6 のバンドル・前段 S3B・追い切りの基準表・RB の履歴状態（KEIBA_V6_BUNDLE / KEIBA_V6_STAGE / KEIBA_V5_TL_REF / KEIBA_V6_RB_STATE）。"""
+    bundle = Path(os.environ.get("KEIBA_V6_BUNDLE") or WORK / "final_v6/bundle_v6_2025")
+    stage = Path(os.environ.get("KEIBA_V6_STAGE") or WORK / "final_stage" / ("v6_b_2024" if bundle.name.endswith("2024") else "v6_b_2025"))
+    tl_ref = Path(os.environ.get("KEIBA_V5_TL_REF") or WORK.parent / "training_pipeline_v4/tp35/tl_reference_v2.parquet")
+    rb = Path(os.environ.get("KEIBA_V6_RB_STATE") or Path(os.environ.get("KEIBA_INFERENCE_DIR") or REPO_ROOT / "data/local/inference") / "state" / "rb_v6")
+    return {"bundle": bundle, "stage": stage, "tl_reference": tl_ref, "rb_state": rb}
+
+
 class V3Serving:
     def __init__(self, bundle_dir: str | Path | None = None, stage_dir: str | Path | None = None, tables_dir: str | Path | None = None,
                  tl_reference: str | Path | None = None):
@@ -79,6 +93,9 @@ class V3Serving:
         self.ped: spe.PedState | None = None
         self.tl_ref: pd.DataFrame | None = None
         self.aux = None
+        self.rb_state: Path | None = None          # v6: RB の履歴状態の場所（v6_paths()["rb_state"]。None なら RB 列は使わない）
+        self.rb_hist: pd.DataFrame | None = None
+        self.rb_params: dict | None = None
         self.feature_cols: list[str] = []
         self.v4 = None
         self._card_day: dict[str, pd.DataFrame] = {}
@@ -105,6 +122,10 @@ class V3Serving:
                 tt = WORK.parent / "training_pipeline_fixed/features/train_table.parquet"
             self.v4 = sv4.V4Features(self.tables_dir, tt)
             self.v4.warm()
+        from src.pipeline.features import serving_v6 as sv6
+
+        if self.rb_state is not None and any(x in sv6.COLUMNS for x in self.feature_cols):            # v6: めぐ指数/netkeiba 指数の履歴 RB（tp-65）
+            self.rb_hist, self.rb_params = sv6.load_state(self.rb_state)
         self.history = sla.load_history(self.tables_dir)
         runs = apply_repair(load_runs(self.tables_dir), EMPTY_RM)
         self.ped = spe.PedState.from_history(spe.history_from_runs(runs))
@@ -132,7 +153,33 @@ class V3Serving:
         base = base.merge(cm[KEYS + ["date"]], on=KEYS, how="left")
         base = base.sort_values(["race_id", "horse_number"], kind="stable").reset_index(drop=True)
 
-        stage = self.stage.predict(base, base["race_id"])
+        records = None
+        stage_in = base
+        extra_names = [x for x in self.stage.feature_cols if x not in base.columns]
+        if extra_names:                                                                       # v6: 前段 S3B は tl_・wc_・追走難度 v2・ラップ予想・位置取り予想も入力にする
+            from src.pipeline.features import serving_v6 as sv6
+            from src.pipeline.features import serving_v5 as sv5
+
+            records = self._training_records(base["horse_id"].unique().tolist(), storage, workers) if storage is not None else {}
+            parts = [base]
+            tl_n = [x for x in extra_names if x.startswith(ssr.TL_PREFIX)]
+            wc_n = [x for x in extra_names if x.startswith("wc_")]
+            if tl_n:
+                tl0 = ssr.tl_columns_for_races(base[KEYS + ["date"]], records, self.tl_ref)
+                tl0 = base[KEYS].merge(tl0, on=KEYS, how="left").drop(columns=KEYS).reindex(columns=tl_n)
+                tl0.index = base.index
+                parts.append(tl0)
+            if wc_n:
+                wc0 = sv5.cy_columns_for_races(base[KEYS + ["date"]], records, self.tl_ref)
+                wc0 = base[KEYS].merge(wc0, on=KEYS, how="left").drop(columns=KEYS).reindex(columns=wc_n)
+                wc0.index = base.index
+                parts.append(wc0)
+            rest = [x for x in extra_names if x not in tl_n and x not in wc_n]
+            if rest:
+                inf = Path(os.environ.get("KEIBA_INFERENCE_DIR") or REPO_ROOT / "data/local/inference")
+                parts.append(sv6.stage_forecast_columns(base, rest, inf))
+            stage_in = pd.concat(parts, axis=1)
+        stage = self.stage.predict(stage_in, base["race_id"])
         cur = pd.concat([base, stage] + ([self.aux.predict(base, base["race_id"])] if self.aux is not None else []), axis=1)
         v4cols = None
         if self.v4 is not None:
@@ -146,7 +193,8 @@ class V3Serving:
         extras = spe.extras_features(base[KEYS], spe.fetch_extras_rows(race_ids, storage, workers=min(workers, 4))) if storage is not None else spe.extras_features(base[KEYS], None)
         ped.index = extras.index = base.index
 
-        records = self._training_records(base["horse_id"].unique().tolist(), storage, workers) if storage is not None else {}
+        if records is None:
+            records = self._training_records(base["horse_id"].unique().tolist(), storage, workers) if storage is not None else {}
         tl = ssr.tl_columns_for_races(base[KEYS + ["date"]], records, self.tl_ref)
         tl = base[KEYS].merge(tl, on=KEYS, how="left").drop(columns=KEYS)
         # 調教の記録が 1 頭も無いと列が作られない。学習表でも記録の無い馬は欠損（tl_has_training も欠損）なので、欠損で埋める
@@ -171,10 +219,20 @@ class V3Serving:
         else:
             px = pd.DataFrame(index=base.index)
 
+        from src.pipeline.features import serving_v6 as sv6
+
+        rb_names = [x for x in self.feature_cols if x in sv6.COLUMNS]                                    # v6: めぐ指数/netkeiba 指数の履歴 RB（16 列）
+        if rb_names and self.rb_hist is not None:
+            rb = sv6.rb_features(self.rb_hist, base[KEYS + ["date"]], self.rb_params)
+            rb = base[KEYS].astype(str).merge(rb.assign(race_id=rb["race_id"].astype(str), horse_id=rb["horse_id"].astype(str)), on=KEYS, how="left").drop(columns=KEYS).reindex(columns=rb_names)
+            rb.index = base.index
+        else:
+            rb = pd.DataFrame(index=base.index)
+
         rel_names = [x for x in self.feature_cols if ssr.split_relative_name(x) is not None and x not in cur.columns]
         rel = ssr.relative_by_names(pd.concat([cur, ped, extras], axis=1), rel_names) if rel_names else pd.DataFrame(index=base.index)
 
-        allc = pd.concat([cur, ped, extras, tl, wc, px, rel] + ([v4cols] if v4cols is not None else []), axis=1)
+        allc = pd.concat([cur, ped, extras, tl, wc, px, rb, rel] + ([v4cols] if v4cols is not None else []), axis=1)
         allc = allc.loc[:, ~allc.columns.duplicated()]
         missing = [x for x in self.feature_cols if x not in allc.columns]
         if missing:

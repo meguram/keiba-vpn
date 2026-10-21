@@ -3,7 +3,7 @@
 python -m src.scripts.data.v6_members member NAME        # NAME は lgb_extras_ped / xgb_extras_ped / lgb_extras / lgb_softmax / linear
 python -m src.scripts.data.v6_members mtl nn_extras_ped  # 補助損失つき NN
 python -m src.scripts.data.v6_members ens --name v6 --members ...
-環境変数: V5_GROUPS（v5 の群 + v6 の群。例 CY,BEST,RB,CB,NJ）, V6_STAGE（前段 S3 を作り直した版 a/b。空なら v4 のまま）, TP27_THREADS。
+環境変数: V5_GROUPS（v5 の群 + v6 の群。例 CY,BEST,RB,CB,NJ）, V6_STAGE（前段 S3 を作り直した版 b など。v6_work が作業ディレクトリを差し替える。空なら v4 のまま）, TP27_THREADS。
 出力先は tp27_v6/（tp27_v5/ は読むだけ・上書きしない）。NN には追加群を足さない（v5 と同じ設計）が、前段の差し替えは全メンバーに効く。
 """
 
@@ -19,6 +19,10 @@ import pandas as pd
 V = Path(__file__).resolve().parents[3] / "data/local/modeling/training_pipeline_v4"
 OUT = V / "tp27_v6"
 os.environ["TP27_OUT"] = str(OUT)
+if os.environ.get("V6_STAGE"):
+    from src.scripts.data import v6_work
+
+    v6_work.use(os.environ["V6_STAGE"])               # 前段 S3 を差し替えた作業ディレクトリ（tp27_eval / tp25e_eval / tp05_data はそこから前段を読む）
 for _k, _v in {"TP_BASE_DIR": V, "TP_WORK": V, "TP25C_OUT": V / "tp25c", "TP25E_OUT": V / "tp25e", "TP27_FAC_FIELD": V / "factory_field"}.items():
     os.environ.setdefault(_k, str(_v))
 
@@ -41,22 +45,6 @@ def patch() -> None:
         return orig_group(name, df)
 
     sel.load_group = load_group
-    stage = os.environ.get("V6_STAGE", "")
-    if stage:
-        orig_setup = t27.setup
-
-        def setup():
-            df, base, meta, folds, lp = orig_setup()
-            S = pd.read_parquet(ev.OUT / f"s3x_{stage}.parquet")
-            S["race_id"], S["horse_id"] = S["race_id"].astype(str), S["horse_id"].astype(str)
-            m = df[KEY].astype(str).merge(S, on=KEY, how="left")
-            m.index = df.index
-            for c in ev.STAGE_COLS:
-                if c in m.columns:
-                    df[c] = m[c].to_numpy()
-            return df, base, meta, folds, lp
-
-        t27.setup = setup
 
 
 def main() -> None:

@@ -59,6 +59,7 @@ class InferenceContext:
         self.graded_names: dict[str, str] = {}
         self.v3 = None
         self.v5 = None            # v5 の shadow（v4 と並走。失敗しても v4 の経路・本番予測には影響しない）
+        self.v6 = None            # v6 の shadow（v4・v5 と並走。v5 と同じ形・失敗しても他の経路には影響しない）
 
     def engine(self) -> str:
         """bundle: 出走馬の履歴だけを読む（小さなメモリで動く）。full: 全履歴から作る。auto: バンドルがあれば bundle。"""
@@ -95,6 +96,18 @@ class InferenceContext:
         except Exception as exc:  # v5 が使えなくても v4 の経路は続ける
             logger.exception("v5 の準備に失敗: %s", exc)
             self.v5, info["v5"] = None, {"error": str(exc)}
+        self.v6 = None
+        try:
+            from src.pipeline.inference import v3_serving as vs
+
+            if vs.v6_enabled():
+                pth = vs.v6_paths()
+                self.v6 = vs.V3Serving(pth["bundle"], pth["stage"], tl_reference=pth["tl_reference"])
+                self.v6.rb_state = pth["rb_state"]
+                info["v6"] = self.v6.warm()
+        except Exception as exc:  # v6 が使えなくても v4・v5 の経路は続ける
+            logger.exception("v6 の準備に失敗: %s", exc)
+            self.v6, info["v6"] = None, {"error": str(exc)}
         return info
 
     def _warm_history(self) -> dict:
@@ -268,6 +281,16 @@ def run_for_races(
             except Exception as exc:
                 logger.exception("v5 の予測に失敗（v4 には影響しない）: %s", ids)
                 v5_err = str(exc)
+        v6p, v6_err, v6_sec = {}, None, 0.0
+        if getattr(ctx, "v6", None) is not None:
+            try:
+                t_v6 = time.perf_counter()
+                P6 = ctx.v6.predict(ctx.v6.features(card, F, storage))
+                v6p = {k: g for k, g in P6.groupby("race_id")}
+                v6_sec = time.perf_counter() - t_v6
+            except Exception as exc:
+                logger.exception("v6 の予測に失敗（v4・v5 には影響しない）: %s", ids)
+                v6_err = str(exc)
     except Exception as exc:
         logger.exception("特徴量の作成に失敗: %s", ids)
         for r in races:
@@ -329,6 +352,20 @@ def run_for_races(
             except Exception as exc:
                 logger.exception("v5 の予測の保存に失敗（v4 には影響しない）: %s", rid)
                 ev["v5_status"], ev["v5_error"] = "error", str(exc)
+        if getattr(ctx, "v6", None) is not None:
+            try:
+                ev["v6_status"] = "error" if v6_err else ("ok" if rid in v6p else "missing")
+                if v6_err:
+                    ev["v6_error"] = v6_err
+                elif rid in v6p:
+                    v6_dir = inference_dir() / "predictions_v6" / day
+                    v6_dir.mkdir(parents=True, exist_ok=True)
+                    v6p[rid].to_parquet(v6_dir / f"{rid}.parquet", index=False)
+                    ev["v6_sec"] = round(v6_sec, 1)
+                    ev["v6_bundle"] = ctx.v6.bundle_dir.name
+            except Exception as exc:
+                logger.exception("v6 の予測の保存に失敗（v4・v5 には影響しない）: %s", rid)
+                ev["v6_status"], ev["v6_error"] = "error", str(exc)
         if mode == "predict" and not (v3_mode() == "predict" and ev.get("v3_persisted")):
             try:
                 from src.pipeline.inference.race_day_workflow import predict_race
