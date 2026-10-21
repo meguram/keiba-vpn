@@ -39,7 +39,7 @@ echo "== 2/5 イメージのビルド（Cloud Build）"
 gcloud builds submit "$HERE" --tag "$IMAGE" --region "$REGION" --quiet
 
 echo "== 3/5 ジョブの作成または更新"
-COMMON=(--image "$IMAGE" --region "$REGION" --max-retries 0 --task-timeout 600 --tasks 1 --cpu 1 --memory 256Mi)
+COMMON=(--image "$IMAGE" --region "$REGION" --max-retries 0 --task-timeout 600 --tasks 1 --cpu 1 --memory 512Mi)
 if gcloud run jobs describe "$JOB" --region "$REGION" >/dev/null 2>&1; then
   gcloud run jobs update "$JOB" "${COMMON[@]}"
 else
