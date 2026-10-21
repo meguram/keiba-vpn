@@ -22,7 +22,8 @@ while [ $# -gt 0 ]; do case "$1" in
   *) echo "不明な引数: $1" >&2; exit 1;; esac; done
 [ -n "$SSH_MODE" ] || { echo "--ssh-mode が必要です（keep | ip:<ADDR> | closed）" >&2; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
-[ -n "$SSH_PORT" ] || SSH_PORT="$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}')"
+# awk を途中で exit させると sshd -T が SIGPIPE で落ち、pipefail + set -e で無言のまま終了する（実機で発生）。最後まで読む
+[ -n "$SSH_PORT" ] || SSH_PORT="$(sshd -T 2>/dev/null | awk '/^port /{p=$2} END{print p}' || true)"
 SSH_PORT="${SSH_PORT:-22}"
 echo "SSH ポート: $SSH_PORT"
 
@@ -94,7 +95,7 @@ esac
 # 80/443 は ufw 側で開けない（公開は cloudflared の外向き接続のみ）。ConoHa のセキュリティグループ IPv4v6-Web(80/443) は
 # 新構成が動いてから外す（docs/operations/vps_ui_deploy.md 第 8 節）
 ufw --force enable >/dev/null
-ufw status verbose | head -12
+ufw status verbose | head -12 || true
 
 echo "== 7/9 fail2ban"
 cat > /etc/fail2ban/jail.d/keiba.local <<'F2B'
