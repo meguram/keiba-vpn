@@ -337,11 +337,55 @@ def ev_robust(tau: float = 1.5, n_perm: int = 2000) -> dict:
     return out
 
 
+def flag_modelfree() -> dict:
+    """モデルを使わない確認: 騎手・調教師の『勝ち数 − 市場の見込み』が（当年より前に）ともに正の馬を、単勝オッズの帯ごとに、条件なしと比べる。
+    2021 年は 2020 年だけで条件を作る（これまでの選択年・確認年と無関係の標本）。年別・オッズ帯別の単勝・複勝の回収率と、差の区間。"""
+    d = P.load()
+    d = d.sort_values(["date", "race_id"]).reset_index(drop=True)
+    for c in ("j_pos", "t_pos"):
+        d[c] = np.nan
+    for y in range(2021, 2027):
+        h = d[d["year"] < y]
+        cur = d["year"] == y
+        for nm, key in (("j_pos", "jockey_id"), ("t_pos", "trainer_id")):
+            g = (h["win"] - h["q_win"]).groupby(h[key]).sum()
+            d.loc[cur, nm] = (d.loc[cur, key].map(g) > 0).astype(float)
+    d = d[d["year"] >= 2021].copy()
+    d["both"] = (d["j_pos"] == 1) & (d["t_pos"] == 1)
+    bands = {"all": (0, 1e9), "<10": (0, 10), "10-30": (10, 30), "30-100": (30, 100), ">=100": (100, 1e9), ">=30": (30, 1e9)}
+    out: dict = {"rows": []}
+    for y in list(range(2021, 2027)) + ["2021-2024", "2025-2026", "2021-2026"]:
+        if isinstance(y, int):
+            g = d[d["year"] == y]
+        elif y == "2021-2024":
+            g = d[d["year"].between(2021, 2024)]
+        elif y == "2025-2026":
+            g = d[d["year"] >= 2025]
+        else:
+            g = d
+        for bn, (lo, hi) in bands.items():
+            gg = g[(g["win_odds"] >= lo) & (g["win_odds"] < hi)]
+            a, b = gg[gg["both"]], gg[~gg["both"]]
+            if len(a) < 30:
+                continue
+            row = {"period": str(y), "band": bn, "n_flag": int(len(a)), "n_other": int(len(b))}
+            for bet in ("win", "place"):
+                rc = f"ret_{bet}"
+                row[bet] = {"flag": L.boot_roi(a["race_id"].to_numpy(), a[rc].to_numpy(), 500), "other_roi": float(100 * b[rc].mean() / 100.0),
+                            "diff": L.boot_diff(a["race_id"].to_numpy(), a[rc].to_numpy(), b["race_id"].to_numpy(), b[rc].to_numpy(), 500)}
+            out["rows"].append(row)
+    (P.OUT / "flag_modelfree.json").write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float))
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["scan", "ev", "evfinal", "evrobust"])
+    ap.add_argument("cmd", choices=["scan", "ev", "evfinal", "evrobust", "flagfree"])
     a = ap.parse_args()
-    if a.cmd == "evrobust":
+    if a.cmd == "flagfree":
+        flag_modelfree()
+        print("saved")
+    elif a.cmd == "evrobust":
         r = ev_robust()
         print(json.dumps(r["pooled"], ensure_ascii=False, default=float)[:600])
     elif a.cmd == "evfinal":
