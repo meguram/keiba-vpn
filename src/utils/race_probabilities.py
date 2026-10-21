@@ -187,7 +187,7 @@ def race_situation(entries: list[dict], cfg: dict[str, float] | None = None) -> 
     return "normal"
 
 
-def assign_mece_marks(entries: list[dict], situational: bool | None = None, cfg: dict[str, float] | None = None) -> None:
+def assign_mece_marks_v1(entries: list[dict], situational: bool | None = None, cfg: dict[str, float] | None = None) -> None:
     """
     印を付与（in-place）。◎○▲★は各1頭まで、△は複数頭（上限は maybe_limit）。1頭1印。
 
@@ -290,6 +290,152 @@ def assign_mece_marks(entries: list[dict], situational: bool | None = None, cfg:
         maybe_candidates.sort(key=lambda x: float(x.get("top3_prob") or 0), reverse=True)
     for e in maybe_candidates[: maybe_limit(n)]:
         e["mark_type"] = "anchor"
+
+
+# ───────────────────────── 印の付け方 v2（ユーザー定義、2026-10-21） ─────────────────────────
+#   ◎ 勝率がある程度担保されながら、一番期待値の取れる馬
+#   ○ ◎を除いて一番勝率が高い馬、または◎とセットで着やすい馬
+#   ▲ 3 番手候補で、馬券内の確率が高そうな馬
+#   ★ オッズの高い（人気薄）馬で、馬券内率がある程度あり、期待値が一番高い馬（オッズの上限なし）
+#   △ 残った馬の中で馬券内に入る確率が高い 2〜3 頭（出走頭数で数を調整）
+# 使う版は config/mark_rule.json の version（環境変数 KEIBA_MARK_RULE=v1|v2 で上書き）。既定は v1（従来どおり）。
+_MARK_RULE_DEFAULT = {
+    "version": 1,
+    "v2": {
+        "honmei": {"win_mult": 2.0, "topk": 3},
+        "pair": {"rule": "win", "min_win_mult": 0.0},
+        "show_val": {"rule": "top3", "min_top3_mult": 0.0},
+        "star": {"odds_min": 10.0, "odds_max": None, "top3_floor_mult": 1.0, "ev": "max", "ev_min": 0.0},
+        "anchor": {"limits": [[12, 3], [0, 2]], "min_top3_mult": 0.0},
+    },
+}
+_mark_rule_cache: dict = {}
+
+
+def mark_rule_config() -> dict:
+    """印の版の設定（config/mark_rule.json）。無い・壊れているときは既定（version 1）。ファイルの更新時刻で読み直す。"""
+    import json
+    import os
+    from pathlib import Path
+
+    path = Path(os.environ.get("KEIBA_MARK_RULE_CONFIG") or Path(__file__).resolve().parents[2] / "config" / "mark_rule.json")
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return _MARK_RULE_DEFAULT
+    hit = _mark_rule_cache.get(str(path))
+    if hit and hit[0] == mtime:
+        return hit[1]
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        v2 = {k: {**_MARK_RULE_DEFAULT["v2"][k], **((raw.get("v2") or {}).get(k) or {})} for k in _MARK_RULE_DEFAULT["v2"]}
+        cfg = {**_MARK_RULE_DEFAULT, **{k: v for k, v in raw.items() if k != "v2"}, "v2": v2}
+    except (OSError, ValueError):
+        cfg = _MARK_RULE_DEFAULT
+    _mark_rule_cache[str(path)] = (mtime, cfg)
+    return cfg
+
+
+def mark_rule_version() -> int:
+    import os
+
+    env = (os.environ.get("KEIBA_MARK_RULE") or "").strip().lower()
+    if env in ("v1", "1"):
+        return 1
+    if env in ("v2", "2"):
+        return 2
+    try:
+        return int(mark_rule_config().get("version") or 1)
+    except (TypeError, ValueError):
+        return 1
+
+
+def assign_mece_marks_v2(entries: list[dict], params: dict | None = None) -> None:
+    """印 v2（in-place）。◎○▲★ は各 1 頭まで、△ は複数。1 頭 1 印。順序は ◎ → ○ → ★ → ▲ → △。
+    mark_type の内部名は v1 と同じ（honmei / pair / star / show_val / anchor / none）。"""
+    n = len(entries)
+    if n == 0:
+        return
+    pr = {k: {**_MARK_RULE_DEFAULT["v2"][k], **((params or {}).get(k) or {})} for k in _MARK_RULE_DEFAULT["v2"]}
+    base = 1.0 / n
+    for e in entries:
+        e["mark_type"] = "none"
+
+    def free() -> list[dict]:
+        return [e for e in entries if e.get("mark_type") == "none"]
+
+    # ◎ 勝率が基準を満たす馬（勝率上位 topk 頭のうち 均等確率×win_mult 以上）の中で、期待値（単勝）が最大の馬
+    h = pr["honmei"]
+    by_win = sorted(entries, key=lambda x: _f(x, "win_prob"), reverse=True)
+    cand = [e for e in by_win[: max(int(h["topk"]), 1)] if _f(e, "win_prob") >= base * float(h["win_mult"])]
+    if not cand:
+        cand = by_win[:1]
+    if any(e.get("ev_win") for e in cand):
+        honmei = max(cand, key=lambda x: (_f(x, "ev_win"), _f(x, "win_prob")))
+    else:
+        honmei = cand[0]
+    honmei["mark_type"] = "honmei"
+
+    # ○ ◎を除いて、勝率が最も高い馬（rule=win）／連対率が最も高い馬（rule=top2）／勝率順と連対率順の順位の和が最小の馬（rule=blend）
+    pa = pr["pair"]
+    pool = [e for e in free() if _f(e, "win_prob") >= base * float(pa.get("min_win_mult") or 0.0)]
+    if pool:
+        if pa["rule"] == "top2":
+            pick = max(pool, key=lambda x: (_f(x, "top2_prob"), _f(x, "win_prob")))
+        elif pa["rule"] == "blend":
+            by_w = {id(e): i for i, e in enumerate(sorted(pool, key=lambda x: _f(x, "win_prob"), reverse=True))}
+            by_t = {id(e): i for i, e in enumerate(sorted(pool, key=lambda x: _f(x, "top2_prob"), reverse=True))}
+            pick = min(pool, key=lambda x: (by_w[id(x)] + by_t[id(x)], -_f(x, "win_prob")))
+        else:
+            pick = max(pool, key=lambda x: (_f(x, "win_prob"), _f(x, "top2_prob")))
+        pick["mark_type"] = "pair"
+
+    # ★ 人気薄（想定単勝が odds_min 以上、odds_max があればそれ以下）で、複勝率が 均等確率×top3_floor_mult 以上の馬のうち、期待値が最大の馬
+    st = pr["star"]
+    lo = float(st["odds_min"])
+    hi = float(st["odds_max"]) if st.get("odds_max") else float("inf")
+    floor3 = base * float(st["top3_floor_mult"]) * 3.0  # 複勝率の均等水準は 3/n
+    star_pool = []
+    for e in free():
+        wo = _f(e, "win_odds")
+        if wo < lo or wo > hi or _f(e, "top3_prob") < floor3:
+            continue
+        evw, evp = _f(e, "ev_win"), _f(e, "ev_place")
+        ev = evw if st["ev"] == "win" else evp if st["ev"] == "place" else max(evw, evp)
+        if ev >= float(st.get("ev_min") or 0.0) and ev > 0:
+            star_pool.append((ev, _f(e, "top3_prob"), e))
+    if star_pool:
+        max(star_pool, key=lambda t: (t[0], t[1]))[2]["mark_type"] = "star"
+
+    # ▲ 残りのうち、馬券内（3 着以内）の確率が最も高い馬（3 番手候補）
+    sv = pr["show_val"]
+    sv_pool = [e for e in free() if _f(e, "top3_prob") >= base * 3.0 * float(sv.get("min_top3_mult") or 0.0)]
+    if sv_pool:
+        if sv["rule"] == "composite":
+            key = lambda x: (_f(x, "composite_score") or _f(x, "top3_prob"), _f(x, "top3_prob"))  # noqa: E731
+        else:
+            key = lambda x: (_f(x, "top3_prob"), _f(x, "win_prob"))  # noqa: E731
+        max(sv_pool, key=key)["mark_type"] = "show_val"
+
+    # △ 残りのうち馬券内の確率が高い順に、頭数に応じた数（limits: [[頭数の下限, 頭], …] 降順）
+    an = pr["anchor"]
+    lim = 0
+    for min_n, k in an["limits"]:
+        if n >= int(min_n):
+            lim = int(k)
+            break
+    cand_a = [e for e in free() if _f(e, "top3_prob") >= base * 3.0 * float(an.get("min_top3_mult") or 0.0)]
+    cand_a.sort(key=lambda x: (_f(x, "top3_prob"), _f(x, "win_prob")), reverse=True)
+    for e in cand_a[:lim]:
+        e["mark_type"] = "anchor"
+
+
+def assign_mece_marks(entries: list[dict], situational: bool | None = None, cfg: dict[str, float] | None = None) -> None:
+    """印を付ける入口。版は mark_rule_version()（既定 v1＝従来どおり。situational / cfg を指定した呼び出しは常に v1）。"""
+    if situational is None and cfg is None and mark_rule_version() == 2:
+        assign_mece_marks_v2(entries, mark_rule_config().get("v2"))
+        return
+    assign_mece_marks_v1(entries, situational, cfg)
 
 
 # 消印: 『3 着以内に来る確率が低い』と過去の実績から確信を持って言える馬。目標は人気区分別（ユーザー確定 2026-10-21）:
