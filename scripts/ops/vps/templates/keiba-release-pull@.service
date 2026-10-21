@@ -1,0 +1,16 @@
+[Unit]
+Description=keiba pull 型デプロイ (%i)（GCS の latest.json を見て、メンテナンス窓に新しい版を入れる）
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# GCS_BUCKET と GOOGLE_APPLICATION_CREDENTIALS（読み取り専用の専用サービスアカウント）。値は表示しない。set_secret.sh で書く
+EnvironmentFile=/etc/keiba-pull/pull.env
+Environment=KEIBA_ENV=prod KEIBA_RUN_LOCATION=vps PYTHONUNBUFFERED=1
+ExecStart=/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind %i
+TimeoutStartSec=1200
+# UI の導入中に起動テストで Node が走る。pull 自体は軽い
+MemoryMax=150M
+Nice=10
+SyslogIdentifier=keiba-release-pull

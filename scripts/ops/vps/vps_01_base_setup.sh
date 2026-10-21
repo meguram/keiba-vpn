@@ -58,6 +58,23 @@ net.ipv4.tcp_syncookies=1
 SYS
 sysctl --system >/dev/null
 
+echo "== 3b/9 メモリ逼迫への備え（journald 100MB・earlyoom。architecture_target.md 3.2）"
+install -d /etc/systemd/journald.conf.d
+cat > /etc/systemd/journald.conf.d/99-keiba.conf <<'JD'
+[Journal]
+SystemMaxUse=100M
+RuntimeMaxUse=50M
+MaxRetentionSec=2week
+JD
+systemctl restart systemd-journald 2>/dev/null || true
+# earlyoom: MemAvailable が 5% / swap が 100% 未満になったら、取得の子プロセス（python）→ node の順に先に止める（nginx・cloudflared・sshd は守る）
+apt-get install -y earlyoom
+cat > /etc/default/earlyoom <<'EO'
+EARLYOOM_ARGS="-r 3600 -m 5 -s 10 --prefer '(^|/)(python3?)$' --avoid '(^|/)(nginx|cloudflared|sshd|systemd|systemd-journald)$'"
+EO
+systemctl enable --now earlyoom >/dev/null 2>&1 || true
+systemctl restart earlyoom 2>/dev/null || true
+
 echo "== 4/9 自動セキュリティ更新"
 cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AU'
 APT::Periodic::Update-Package-Lists "1";

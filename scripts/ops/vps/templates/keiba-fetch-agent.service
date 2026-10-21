@@ -1,0 +1,32 @@
+[Unit]
+Description=keiba 取得の実行役（GCS のタスク表を pull して 1 本ずつ取得）
+After=network-online.target
+Wants=network-online.target
+# 有効化の前提: /etc/keiba-fetch/fetch.env に KEIBA_FETCH_AGENT_ENABLED=1（既定オフ）と担当タスク。docs/operations/vps_agent.md
+
+[Service]
+Slice=keiba-fetch.slice
+User=keibafetch
+Group=keibafetch
+WorkingDirectory=/opt/keiba-fetch/current
+# 秘密（netkeiba のログイン、GCS の資格情報）はこのファイルだけ。権限 600 root:keibafetch=640。タスクにもログインにも出さない
+EnvironmentFile=/etc/keiba-fetch/fetch.env
+Environment=KEIBA_ENV=prod KEIBA_RUN_LOCATION=vps PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/keiba-fetch/venv/bin/python -m src.ops.fetch_agent
+# 有効化フラグがオフなら終了コード 0 で止まる。落ちたときだけ再起動
+Restart=on-failure
+RestartSec=10
+# メモリ逼迫時は最初に殺される（UI・nginx・cloudflared より先）
+OOMScoreAdjust=500
+MemoryHigh=220M
+MemoryMax=250M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/keiba-fetch
+StateDirectory=keiba-fetch
+SyslogIdentifier=keiba-fetch-agent
+
+[Install]
+WantedBy=multi-user.target

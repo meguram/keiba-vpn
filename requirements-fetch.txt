@@ -1,0 +1,13 @@
+# VPS の取得の実行役（src.ops.fetch_agent / fetch_child）が使う最小の依存。UI・ML・API の依存は入れない（2GB の VPS）。
+# 追加・削除したら VPS で `python -m src.ops.fetch_child selfcheck` が missing=[] になることを確認する（docs/operations/vps_agent.md）。
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+jsonschema>=4.20.0
+numpy>=1.24.0
+pandas>=2.0.0
+pyarrow>=14.0.0
+google-cloud-storage>=2.0.0
+uvicorn>=0.24.0   # src/utils/keiba_logging.py が uvicorn.logging を import する（ログ書式の共有）

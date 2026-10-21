@@ -1,0 +1,9 @@
+[Unit]
+Description=keiba 取得の実行役のメモリ枠（architecture_target.md 3.2: 250M で OOM Kill）
+
+[Slice]
+MemoryAccounting=true
+MemoryHigh=220M
+MemoryMax=250M
+MemorySwapMax=0
+TasksMax=128
