@@ -35,8 +35,17 @@ const distDir =
 // stg は 2 に制限（NEXT_BUILD_CPUS で変更可。dev / prod は Next の既定のまま）。
 const buildCpus = Number(process.env.NEXT_BUILD_CPUS) || (env === "stg" ? 2 : undefined);
 
+// 画面端の環境バッジ（components/EnvBadge.tsx）。stg のビルド（KEIBA_ENV=stg）だけ "STG"。prod / dev は空で非表示。
+// 明示指定（NEXT_PUBLIC_ENV_LABEL）が優先。ビルド時に固定される。
+const envLabel = process.env.NEXT_PUBLIC_ENV_LABEL !== undefined ? process.env.NEXT_PUBLIC_ENV_LABEL : env === "stg" ? "STG" : "";
+
+// ConoHa VPS など、ビルドと実行を別の場所で行う配布用: NEXT_OUTPUT=standalone で自己完結の出力（server.js）を作る。既定は従来どおり。
+const standalone =
+  process.env.NEXT_OUTPUT === "standalone" ? { output: "standalone", outputFileTracingRoot: __dirname } : {};
+
 const nextConfig = {
   distDir,
+  ...standalone,
   ...(buildCpus
     ? { experimental: { cpus: buildCpus, staticGenerationMaxConcurrency: buildCpus, workerThreads: false } }
     : {}),
@@ -44,6 +53,7 @@ const nextConfig = {
     KEIBA_API_URL: flaskApi,
     KEIBA_FASTAPI_URL: fastApi,
     NEXT_PUBLIC_MONITOR_PORT: portOf("KEIBA_PORT_MONITOR"),
+    NEXT_PUBLIC_ENV_LABEL: envLabel,
   },
   // 検索エンジン・AI クローラーに索引・複製させない（robots.txt は守る相手にしか効かないため、ヘッダでも明示）
   async headers() {

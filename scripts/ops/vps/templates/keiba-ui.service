@@ -1,0 +1,27 @@
+[Unit]
+Description=keiba UI (Next.js standalone)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=keibaui
+Group=keibaui
+WorkingDirectory=/srv/keiba-ui/current
+EnvironmentFile=/etc/keiba-ui/ui.env
+ExecStart=/usr/local/bin/node server.js
+Restart=always
+RestartSec=3
+# 2GB の VPS を守る（超えたら systemd が止めて再起動）
+MemoryHigh=700M
+MemoryMax=900M
+LimitNOFILE=4096
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=keiba-ui
+
+[Install]
+WantedBy=multi-user.target

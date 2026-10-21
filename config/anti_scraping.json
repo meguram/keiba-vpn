@@ -12,6 +12,8 @@
   "trusted_proxies": ["127.0.0.1", "::1"],
   "client_ip_headers": ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"],
   "allowlist_ips": [],
+  "edge_sources": [],
+  "edge_ip_header": "x-keiba-client-ip",
   "internal_path_prefixes": [
     "/api/health",
     "/api/v1/health",

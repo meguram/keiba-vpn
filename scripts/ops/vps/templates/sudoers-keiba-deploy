@@ -1,0 +1,2 @@
+# deploy ユーザーが root 権限で実行できるのは、リリースの導入・戻し・ヘルスチェックだけ（スクリプトは root 所有で deploy は書き換えられない）
+deploy ALL=(root) NOPASSWD: /opt/keiba-ui/bin/install_release.sh *, /opt/keiba-ui/bin/rollback.sh, /opt/keiba-ui/bin/rollback.sh *, /opt/keiba-ui/bin/healthcheck.sh

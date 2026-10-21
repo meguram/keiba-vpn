@@ -1,3 +1,4 @@
+import { EnvBadge } from "@/components/EnvBadge";
 import { MaintenanceShell } from "@/components/MaintenanceShell";
 import { NavProgress } from "@/components/NavProgress";
 import type { Metadata } from "next";
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja">
       <body>
+        <EnvBadge />
         <MaintenanceShell
           chrome={
             <>

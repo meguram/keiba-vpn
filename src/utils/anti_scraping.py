@@ -33,6 +33,10 @@ DEFAULTS: dict[str, Any] = {
     "trusted_proxies": ["127.0.0.1", "::1"],
     "client_ip_headers": ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"],
     "allowlist_ips": [],
+    # 別の場所（例: ConoHa VPS の UI）が Access のサービストークンで API を呼ぶ構成用。cf-connecting-ip がここに載っている接続元
+    # （=その VPS の IP）からのときだけ、edge_ip_header の値を本当のクライアント IP として採る。空なら従来どおり（何もしない）
+    "edge_sources": [],
+    "edge_ip_header": "x-keiba-client-ip",
     "internal_path_prefixes": ["/api/health", "/api/v1/health", "/api/scrape-jobs", "/api/v1/scrape-jobs"],
     "static_prefixes": ["/static/", "/_next/", "/data/image/", "/favicon", "/robots.txt"],
     "auth": {"protected_prefixes": ["/api/"], "public_exempt_prefixes": ["/api/health", "/api/auth/", "/api/v1/auth/", "/api/_hp/"]},
@@ -197,6 +201,9 @@ class AntiScraping:
         if peer_ip is None or not _in_nets(peer_ip, trusted):
             return str(peer_ip) if peer_ip else (peer or "unknown")
         h = {k.lower(): v for k, v in headers.items()}
+        edge = self._ip_from_edge(h, cfg)
+        if edge:
+            return edge
         found = self._ip_from_headers(h, cfg, trusted)
         if found:
             return found
@@ -205,6 +212,18 @@ class AntiScraping:
             # 巻き添えで制限しないよう、UA と言語から作った指紋をキーにする（IP が取れる前段に変えると精度が上がる）
             return "fp:" + sha8(h.get("user-agent", "") + "|" + h.get("accept-language", ""))
         return str(peer_ip)
+
+    def _ip_from_edge(self, h: Mapping[str, str], cfg: Mapping[str, Any]) -> str:
+        """edge_sources（信頼する中継元の IP）から来た要求だけ、edge_ip_header の値をクライアント IP として採る。"""
+        sources = list(cfg.get("edge_sources") or [])
+        if not sources:
+            return ""
+        src = _parse_ip((h.get("cf-connecting-ip") or "").split(",")[0])
+        if src is None or not _in_nets(src, sources):
+            return ""
+        name = str(cfg.get("edge_ip_header") or "x-keiba-client-ip").lower()
+        ip = _parse_ip((h.get(name) or "").split(",")[0])
+        return str(ip) if ip is not None else ""
 
     def _ip_from_headers(self, h: Mapping[str, str], cfg: Mapping[str, Any], trusted: list[str]) -> str:
         for name in cfg.get("client_ip_headers", []):

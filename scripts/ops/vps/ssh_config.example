@@ -1,0 +1,18 @@
+# ~/.ssh/config に足す（ホスト機と開発 PC）。VPS の 22 番を公開しない場合は Cloudflare Tunnel 経由（cloudflared が手元にも必要）。
+# 初期設定の間だけ: IP 直接（vps_01 の --ssh-mode keep か ip:<自分の IP> のとき）。この VPS の SSH ポートは 2254
+Host keiba-vps-direct
+    HostName 160.251.250.252
+    Port 2254
+    User deploy
+    IdentityFile ~/.ssh/keiba_vps_ed25519
+    IdentitiesOnly yes
+
+# 通常: Tunnel 経由（vps_01 を --ssh-mode closed にした後）。Cloudflare 側で ssh.megu-keiba.com → ssh://localhost:2254 の route と Access アプリが必要
+Host keiba-vps
+    HostName ssh.megu-keiba.com
+    User deploy
+    IdentityFile ~/.ssh/keiba_vps_ed25519
+    IdentitiesOnly yes
+    ProxyCommand cloudflared access ssh --hostname %h
+# 非対話（ホスト機の cron や promote_if_approved.sh）で使う場合は、サービストークンを環境変数で渡す（ファイルに書かない）:
+#   export TUNNEL_SERVICE_TOKEN_ID=...  TUNNEL_SERVICE_TOKEN_SECRET=...   （cloudflared access ssh が読む）

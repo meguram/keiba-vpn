@@ -1,0 +1,6 @@
+[Unit]
+Description=keiba UI health check
+
+[Service]
+Type=oneshot
+ExecStart=/opt/keiba-ui/bin/healthcheck.sh
