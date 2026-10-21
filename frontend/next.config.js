@@ -42,6 +42,7 @@ const nextConfig = {
     : {}),
   env: {
     KEIBA_API_URL: flaskApi,
+    KEIBA_FASTAPI_URL: fastApi,
     NEXT_PUBLIC_MONITOR_PORT: portOf("KEIBA_PORT_MONITOR"),
   },
   // 検索エンジン・AI クローラーに索引・複製させない（robots.txt は守る相手にしか効かないため、ヘッダでも明示）

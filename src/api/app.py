@@ -855,6 +855,11 @@ from src.api.middleware.anti_scraping import register_fastapi as _install_anti_s
 _install_anti_scraping(app)
 app.add_middleware(KeibaDeploymentMiddleware)
 
+# 毎日のメンテナンス時間帯（既定 JST 03:00–04:00）。KEIBA_MAINTENANCE_WINDOW=1 のときだけ働く（既定オフ。config/maintenance.json）
+from src.api.maintenance_mw import install_fastapi as _install_maintenance
+
+_install_maintenance(app, is_developer)
+
 JRA_PLACE_CODES = {"01", "02", "03", "04", "05", "06", "07", "08", "09", "10"}
 
 

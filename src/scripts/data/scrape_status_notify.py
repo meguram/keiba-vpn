@@ -452,6 +452,24 @@ def build_coverage(now: datetime, misc: dict, schema: dict | None) -> dict:
 
 # ───────────────────────── 実行 ─────────────────────────
 
+MAINTENANCE_GRACE_MIN = 10   # 窓の終了後、再起動した API・ジョブが戻るまでの猶予（分）
+
+
+def in_maintenance(now: datetime, env: dict[str, str] | None = None) -> bool:
+    """メンテナンス時間帯（毎日 JST 03:00–04:00、KEIBA_MAINTENANCE_WINDOW=1 のとき）か、その終了直後の猶予中か。"""
+    from datetime import timedelta
+
+    from src.utils import maintenance as M
+
+    try:
+        cfg = M.load_config()
+        if not M.is_enabled(cfg, env):
+            return False
+        return any(M.compute_status(cfg, t, enabled=True)["active"] for t in (now, now - timedelta(minutes=MAINTENANCE_GRACE_MIN)))
+    except Exception:  # noqa: BLE001  判定の失敗で通知を止めない
+        return False
+
+
 def run(mode: str, now: datetime, *, send: bool = False, state_path: Path | None = None, out_dir: Path | None = None,
         inputs: dict | None = None, poster: Callable[..., Any] | None = None, env: dict[str, str] | None = None) -> dict:
     """mode ごとにメッセージを作り、dry-run なら出力、send なら送る。inputs でテストから材料を差し込める。"""
@@ -459,6 +477,9 @@ def run(mode: str, now: datetime, *, send: bool = False, state_path: Path | None
     if send and str(e.get("KEIBA_SLACK_NOTIFY", "")).strip() != "1":
         return {"code": 13, "reason": "KEIBA_SLACK_NOTIFY!=1"}
     inp = inputs or {}
+    if (inp["maintenance"] if "maintenance" in inp else in_maintenance(now, e)):
+        # 毎日のメンテナンス時間帯（と終了後の猶予）は『予定された停止』。API の 503・再起動・ジョブの停止を異常にしない（状態も更新しない）
+        return {"code": 0, "mode": mode, "reason": "maintenance"}
     meta = Path(inp.get("meta") or META)
     env_key = inp.get("env_key") or (e.get("KEIBA_ENV") or "stg")
     raceday_fn = inp.get("raceday") or _default_raceday

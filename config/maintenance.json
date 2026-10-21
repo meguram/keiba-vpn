@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "_doc": "毎日のメンテナンス時間帯の設定。有効化は環境変数 KEIBA_MAINTENANCE_WINDOW=1（既定オフ。dev は KEIBA_MAINTENANCE_DEV=1 も要る）。この JSON は 30 秒キャッシュで読み直すので、書き換えるだけで API の再起動なしに反映される。",
+  "enabled": true,
+  "timezone": "Asia/Tokyo",
+  "daily": {"start": "03:00", "end": "04:00"},
+  "notice_minutes": 30,
+  "message": "ただいまメンテナンス中です。終了までしばらくお待ちください。",
+  "notice_message": "まもなくメンテナンスを行います。この間はサービスをご利用いただけません。",
+  "override": {"start": null, "end": null, "message": null},
+  "exempt_exact": [
+    "/api/health",
+    "/api/v1/health",
+    "/api/maintenance/status",
+    "/api/v1/maintenance/status",
+    "/login",
+    "/logout"
+  ],
+  "exempt_prefixes": [
+    "/api/auth/",
+    "/api/v1/auth/",
+    "/api/scrape-jobs",
+    "/api/scrape-queue",
+    "/api/auto-scrape",
+    "/api/admin",
+    "/api/monitor",
+    "/api/quality-check",
+    "/api/backfill",
+    "/api/race-lists-backfill",
+    "/api/train",
+    "/static/",
+    "/data/image/",
+    "/_next/"
+  ],
+  "bypass": {
+    "header": "X-Keiba-Maintenance-Bypass",
+    "token_env": "KEIBA_MAINTENANCE_BYPASS_TOKEN",
+    "admin_login": true,
+    "internal_loopback": true
+  },
+  "notify": {"slack_start_end": false}
+}

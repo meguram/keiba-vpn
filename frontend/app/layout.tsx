@@ -1,3 +1,4 @@
+import { MaintenanceShell } from "@/components/MaintenanceShell";
 import { NavProgress } from "@/components/NavProgress";
 import type { Metadata } from "next";
 import "./globals.css";
@@ -18,9 +19,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja">
       <body>
-        <Nav />
-        <NavProgress />
-        <main className="site-main">{children}</main>
+        <MaintenanceShell
+          chrome={
+            <>
+              <Nav />
+              <NavProgress />
+            </>
+          }
+        >
+          {children}
+        </MaintenanceShell>
       </body>
     </html>
   );

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pathEnabled } from "@/lib/features";
+import { MAINTENANCE_PATH, STATUS_URL } from "@/lib/maintenance";
 
 // 開発者限定ページ。src/api/auth.py の DEV_ONLY_PAGES と同じ一覧（変更時は両方を揃える）。
 const DEV_ONLY_PAGES = [
@@ -58,7 +59,33 @@ function isScannerProbe(pathname: string): boolean {
   return SCANNER_PROBES.some((x) => p === x || p.startsWith(x + "/") || p.startsWith(x + "."));
 }
 
-export function middleware(request: NextRequest) {
+// ── メンテナンス時間帯（毎日 JST 03:00–04:00）。判定の正は API（/api/maintenance/status）。15 秒だけメモリに持つ ──
+const MAINTENANCE_PASS_PREFIXES = ["/api/", "/_next/", "/data/image/", "/static/", "/favicon", "/login", "/logout", MAINTENANCE_PATH];
+let maintCache: { at: number; ttl: number; active: boolean; retry: number } | null = null;
+
+async function maintenanceState(): Promise<{ active: boolean; retry: number }> {
+  const now = Date.now();
+  if (maintCache && now - maintCache.at < maintCache.ttl) return maintCache;
+  const base = process.env.KEIBA_FASTAPI_URL;
+  if (!base) return { active: false, retry: 0 };
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 1500);
+    const res = await fetch(`${base}${STATUS_URL}`, { cache: "no-store", signal: ctl.signal });
+    clearTimeout(t);
+    if (!res.ok) throw new Error(String(res.status));
+    const j = (await res.json()) as { active?: boolean; remaining_sec?: number | null; retry_after?: number };
+    const active = j.active === true;
+    const rem = typeof j.remaining_sec === "number" ? j.remaining_sec : 15;
+    maintCache = { at: now, ttl: active ? Math.max(1000, Math.min(15_000, rem * 1000)) : 15_000, active, retry: j.retry_after ?? 60 };
+  } catch {
+    // 取れないときは通常扱い（API が止まっていれば各画面の共通ハンドラが切り替える）
+    maintCache = { at: now, ttl: 5_000, active: false, retry: 0 };
+  }
+  return maintCache;
+}
+
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isScannerProbe(pathname)) {
@@ -66,6 +93,20 @@ export function middleware(request: NextRequest) {
     url.pathname = "/api/_hp/probe";
     url.search = "";
     return NextResponse.rewrite(url);
+  }
+
+  if (!MAINTENANCE_PASS_PREFIXES.some((p) => pathname === p || pathname.startsWith(p))) {
+    const st = await maintenanceState();
+    // 管理者のセッション Cookie がある人は通す（本当の検証は API 側。偽の Cookie では API が 503 を返し、共通ハンドラがメンテナンス画面にする）
+    if (st.active && !request.cookies.get(DEV_COOKIE)) {
+      const url = request.nextUrl.clone();
+      url.pathname = MAINTENANCE_PATH;
+      url.search = "";
+      return NextResponse.rewrite(url, {
+        status: 503,
+        headers: { "Retry-After": String(st.retry || 60), "Cache-Control": "no-store, max-age=0", "X-Robots-Tag": "noindex", "X-Keiba-Maintenance": "1" },
+      });
+    }
   }
 
   // 無効化中の機能（lib/features.ts）への直リンクはホームへ戻す

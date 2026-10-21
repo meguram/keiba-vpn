@@ -73,7 +73,12 @@ def create_app() -> Flask:
     app.register_blueprint(analytics_bp, url_prefix="/api/v1")
     app.register_blueprint(data_analysis_bp, url_prefix="/api/v1")
 
-    # スクレイピング対策（既定は検知のみ。config/anti_scraping.json）。メンテナンス判定を入れる場合はその後に登録する
+    # 毎日のメンテナンス時間帯（KEIBA_MAINTENANCE_WINDOW=1 のときだけ働く。config/maintenance.json）
+    from src.api.maintenance_mw import install_flask as _install_maintenance
+
+    _install_maintenance(app, _is_logged_in)
+
+    # スクレイピング対策（メンテナンス判定の後に評価される）。既定は検知のみ。config/anti_scraping.json
     from src.api.middleware.anti_scraping import register_flask as _install_anti_scraping
 
     _install_anti_scraping(app)

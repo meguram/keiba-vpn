@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>メンテナンス中 | keiba-vpn</title>
+<!-- フロント（Next.js）が止まっているとき用の単体の静的ページ。外部の読み込みなし。リバースプロキシの error_page や
+     scripts/ops/maintenance_holding_server.py から返す（HTTP 503 で返すこと）。通常のメンテナンス表示は Next.js 側（/maintenance）。 -->
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#0a0e17; color:#c8d6e5; font-family: system-ui,'Noto Sans JP',sans-serif; }
+  main { width:min(28rem,92vw); box-sizing:border-box; text-align:center; padding:2rem 1.5rem; border:1px solid #243049; border-radius:16px; background:#131926; }
+  h1 { font-size:1.35rem; margin:0 0 .5rem; color:#f0f6fc; }
+  p { line-height:1.7; margin:.4rem 0; font-size:.9rem; }
+  .dim { color:#6b7d95; font-size:.78rem; }
+  #count { font:600 2.4rem ui-monospace,'JetBrains Mono',monospace; color:#f59e0b; letter-spacing:.04em; margin:.9rem 0 .1rem; }
+  button { margin-top:.8rem; padding:.55rem 1.1rem; border-radius:8px; border:1px solid #3b82f6; background:transparent; color:#3b82f6; font-weight:600; cursor:pointer; }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<main role="status" aria-live="polite">
+  <h1>メンテナンス中です</h1>
+  <p id="msg">ただいまメンテナンス中です。終了までしばらくお待ちください。</p>
+  <p id="ends" class="dim"></p>
+  <div id="count" aria-hidden="true">--:--</div>
+  <div class="dim" aria-hidden="true">終了まで</div>
+  <p class="dim">終了すると、この画面は自動で元のページに戻ります。ご不便をおかけして申し訳ありません。</p>
+  <button type="button" id="re">状態を再確認する</button>
+  <span id="sr" class="sr"></span>
+</main>
+<script>
+(function () {
+  var left = null, got = 0, back = (location.pathname.indexOf('/maintenance') === 0 || location.pathname.indexOf('/static/') === 0) ? '/' : location.pathname + location.search;
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  function fmt(s) { var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h > 0 ? p2(h) + ':' : '') + p2(m) + ':' + p2(x); }
+  function paint() {
+    if (left === null) return;
+    var s = Math.max(0, Math.ceil(left - (Date.now() - got) / 1000));
+    document.getElementById('count').textContent = fmt(s);
+  }
+  function poll() {
+    fetch('/api/maintenance/status', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j && j.active) {
+        left = typeof j.remaining_sec === 'number' ? j.remaining_sec : null; got = Date.now();
+        if (j.message) document.getElementById('msg').textContent = j.message;
+        if (j.ends_at_label) document.getElementById('ends').textContent = '終了予定 ' + j.ends_at_label + '（日本時間）';
+        document.getElementById('sr').textContent = left ? 'メンテナンス中です。終了まであと約' + Math.ceil(left / 60) + '分です。' : '';
+      } else if (j && j.active === false) {
+        location.replace(back);   // 終わっている → 元のページへ
+      }
+    }).catch(function () { /* API が再起動中などは、そのまま待つ */ });
+  }
+  document.getElementById('re').addEventListener('click', poll);
+  setInterval(paint, 1000); setInterval(poll, 15000); poll();
+})();
+</script>
+</body>
+</html>
