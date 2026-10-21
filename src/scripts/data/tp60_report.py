@@ -132,7 +132,9 @@ def section_quality(gq, gqb, cinfo, qpre, qmeta, names, ev) -> str:
 <li><b>未知のレースへの適用</b>: 各馬の期待上乗せ = Σ<sub>q</sub> P(q̂) × effect(g, q)（効果表は<b>その年より前</b>の全期間から作る）。<b>オラクル</b>（q を既知とした上限）と<b>事前の確率版</b>（実運用の下限）の両方を出す。</li>
 </ul>""")
     a("<h3>1.1 レース質ラベルの共有表（pace-benefit・v6-features から読める）</h3>")
-    a("<p>1 レース 1 行のラベル表を 1 回だけ作り、次に置いた: <code>data/local/modeling/shared_cache/race_quality/race_quality.parquet</code>（ホスト /home/jovyan/work/keiba-vpn 配下。列の説明は同じ場所の <code>README.json</code>）。作成: <code>python -m src.scripts.data.tp60_quality table</code>。tp-61 の出力（race_cls.parquet・pre.parquet）を再利用し、実装を重ねていない。</p>")
+    a("<p>1 レース 1 行のラベル表を 1 回だけ作り、次に置いた: <code>data/local/modeling/shared_cache/race_quality/race_quality.parquet</code>（ホスト /home/jovyan/work/keiba-vpn 配下。列の説明は同じ場所の <code>README.json</code>）。作成: <code>python -m src.scripts.data.tp60_quality table</code>。tp-61 の出力（race_cls.parquet・pre.parquet）を再利用し、実装を重ねていない。</p>"
+      "<p><b>tp-64 との関係（重複の整理）.</b> tp-64 は展開セル（ペース 3 × 隊列 3）の事前確率を <code>data/local/modeling/tp64/pcell.parquet</code> に置いている。そちらは<b>年ごとの leave-one-year-out</b>（評価年の確率を他のすべての年で学習）で、後の年のラベルが学習に入る。"
+      "本表の <code>p_joint_*</code> は<b>拡張窓</b>（y 年の確率は y 年より前だけで学習）で厳密に as-of。先読みを避けたい評価（V5 の 2 段階評価、馬券側の評価）は本表を使い、tp-64 の pcell は展開利の係数表の当てはめなど同じ年の leave-one-year-out を前提にした分析に限る。実測のラベル（q_joint など）は同一（tp-61 の race_cls）。</p>")
     a(table(["区分", "列", "内容", "いつ分かるか"], [
         ["実測", "pace_cls / shape_cls / q_joint", "ペース（slow/mid/high）、隊列（compact/normal/stretched）、その組（9 通り）", "結果後"],
         ["実測", "lap_type / q_lap", "tp-61 の規則のラップ型 6 通り", "結果後"],
