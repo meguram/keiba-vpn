@@ -184,13 +184,14 @@ _VALUE_CACHE: dict[tuple, tuple[float, dict]] = {}
 _VALUE_TTL_SEC = 20.0
 
 
-def value_level(expected_roi: float | None, n_bets: int) -> str:
-    """expected_roi は呼び出し側で較正した値を渡す（EV の較正が有効なら較正後の期待回収率、無効なら従来の値）。閾値も較正の設定に従う。"""
-    from src.utils.ev_calibration import value_levels
+def value_level(expected_roi: float | None, n_bets: int, prob_calibrated: bool = False) -> str:
+    """expected_roi は呼び出し側で較正した値を渡す（EV の較正が有効なら較正後の期待回収率、無効なら従来の値）。閾値も較正の設定に従う。
+    確率を市場補正したレース（prob_calibrated）は、補正後のポートフォリオで作り直した段（config/ev_calibration_pc.json）を使う。"""
+    from src.utils.ev_calibration import active_config, value_levels
 
     if not n_bets or expected_roi is None:
         return "pass"
-    for name, floor in value_levels():
+    for name, floor in value_levels(active_config(prob_calibrated)):
         if expected_roi >= floor:
             return name
     return "pass"
@@ -208,9 +209,11 @@ def _value_row(race: dict[str, Any], payload: dict[str, Any], code: int) -> dict
     roi = roi_cal if roi_cal is not None else roi_raw
     ev_key = "ev_calibrated" if roi_cal is not None else "ev"
     top = max(cands, key=lambda c: c.get(ev_key) or 0) if cands else None
+    pcal = bool((payload.get("prob_calibration") or {}).get("applied"))
     return {
         **base,
-        "level": value_level(roi, len(cands)),
+        "level": value_level(roi, len(cands), pcal),
+        "prob_calibrated": pcal,
         "expected_roi": None if roi is None else round(roi, 3),
         "expected_roi_raw": None if roi_raw is None else round(roi_raw, 3),
         "calibrated": roi_cal is not None,
@@ -228,12 +231,15 @@ HOT_TOP_FRACTION = 0.2  # hot にできるのは、その日の期待回収率�
 
 def _apply_day_ranking(rows: list[dict[str, Any]]) -> None:
     """その日の期待回収率で順位を付け、hot は「絶対水準を超え、かつ上位 20%」に絞る（全レースが hot になって区別できなくなるのを防ぐ）。"""
-    ranked = sorted((r for r in rows if r.get("expected_roi") is not None), key=lambda r: -r["expected_roi"])
-    cutoff = max(1, math.ceil(len(ranked) * HOT_TOP_FRACTION))
-    for i, r in enumerate(ranked, 1):
-        r["rank"] = i
-        if r["level"] == "hot" and i > cutoff:
-            r["level"] = "good"
+    # 確率を市場補正したレースとしないレースは、期待回収率の水準（ポートフォリオ・較正・段の閾値）が違うので、順位は別々に付ける（補正の機能が無効なら全レースが同じ組）
+    for flag in (False, True):
+        group = [r for r in rows if bool(r.get("prob_calibrated")) == flag]
+        ranked = sorted((r for r in group if r.get("expected_roi") is not None), key=lambda r: -r["expected_roi"])
+        cutoff = max(1, math.ceil(len(ranked) * HOT_TOP_FRACTION))
+        for i, r in enumerate(ranked, 1):
+            r["rank"] = i
+            if r["level"] == "hot" and i > cutoff:
+                r["level"] = "good"
     for r in rows:
         r.setdefault("rank", None)
 
@@ -278,6 +284,13 @@ def race_value_summary(
         "max_total_bet": max_total_bet,
         "races": rows,
     }
+    n_pc = sum(1 for r in rows if r.get("prob_calibrated"))
+    if n_pc:       # 市場補正が有効なとき: 補正したレース（実オッズあり）としないレース（予測オッズ・オッズ未確定）の水準が混ざらないよう、段と順位を別に付けた旨を返す
+        from src.utils.ev_calibration import active_config, value_levels
+
+        out["levels_prob_calibrated"] = [{"level": n, "min_roi": f} for n, f in value_levels(active_config(True))]
+        out["prob_calibration"] = {"races_applied": n_pc, "races_not_applied": len(rows) - n_pc, "mixed": 0 < n_pc < len(rows),
+                                   "note": "市場補正した確率のレース（実オッズあり）としないレースは、期待回収率の水準が違うため、段の閾値と当日の順位を別に付けています。"}
     _VALUE_CACHE[key] = (time.time(), out)
     return out
 

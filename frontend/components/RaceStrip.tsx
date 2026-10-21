@@ -3,7 +3,7 @@
 import { PendingLink } from "@/components/PendingLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { LEVEL_STYLE, RaceValue, ValueLevel, valueTitle } from "@/lib/raceValue";
+import { LEVEL_STYLE, RaceValue, ValueLevel, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
 import { venuesOf } from "@/lib/weekDates";
 
 export type StripRace = { race_id: string; race_name?: string; venue?: string; round?: number | string };
@@ -157,6 +157,7 @@ export function RaceStrip({
             </span>
           ))}
           <span>（確率はモデルの出力で未検証。目安として参照）</span>
+          {mixedProbCalibration(values) && <span title="オッズが出たレースは確率を市場補正して計算し、段の閾値と当日の順位を、補正しないレース（オッズ未確定・予測オッズ）とは別に付けています">※ 市場補正したレースとしないレースは基準が別</span>}
         </div>
       )}
     </nav>

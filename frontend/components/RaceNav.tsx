@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { PendingLink } from "@/components/PendingLink";
 import { USE_MOCK, MOCK_WEEKLY_RACES } from "@/lib/mock";
-import { LEVEL_STYLE, ValueLevel, useRaceValues, valueTitle } from "@/lib/raceValue";
+import { LEVEL_STYLE, ValueLevel, useRaceValues, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
 import { useNarrow } from "@/components/RaceStrip";
 
 type RaceRow = { race_id: string; round: number; venue: string; race_name: string };
@@ -161,6 +161,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
             </span>
           ))}
           <span>（過去の実績に合わせて補正した目安。年による変動が大きい）</span>
+          {mixedProbCalibration(values) && <span title="オッズが出たレースは確率を市場補正して計算し、段の閾値と当日の順位を、補正しないレース（オッズ未確定・予測オッズ）とは別に付けています">※ 市場補正したレースとしないレースは基準が別</span>}
         </div>
       )}
     </nav>

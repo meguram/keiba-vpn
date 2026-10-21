@@ -17,6 +17,8 @@ export type RaceValue = {
   rank?: number | null;
   top_bet?: { bet_type: string; label: string; ev: number } | null;
   reason?: string;
+  /** 確率を市場補正（実オッズあり）したレース。補正したレースとしないレースは基準（段の閾値・順位）が別 */
+  prob_calibrated?: boolean;
 };
 
 export const LEVEL_STYLE: Record<ValueLevel, { label: string; hint: string; color: string; bg: string; border: string; glow?: string }> = {
@@ -35,8 +37,9 @@ export function valueTitle(v: RaceValue | undefined): string {
   if (v.level === "none") return `${s.label}${v.reason ? `（${v.reason}）` : ""}`;
   const roi = v.expected_roi != null ? `推奨の期待回収率（較正後） ${(v.expected_roi * 100).toFixed(0)}%` : "買い目なし";
   const top = v.top_bet ? ` ／ 最有力 ${BET_JA[v.top_bet.bet_type] ?? v.top_bet.bet_type} ${v.top_bet.label}（期待値 ${v.top_bet.ev.toFixed(2)}）` : "";
-  const rank = v.rank ? ` ／ その日 ${v.rank} 位` : "";
-  return `${s.label}｜${roi}${top}${rank}`;
+  const rank = v.rank ? ` ／ その日 ${v.rank} 位${v.prob_calibrated ? "（市場補正したレースの中）" : ""}` : "";
+  const pc = v.prob_calibrated ? " ／ 確率は市場補正後" : "";
+  return `${s.label}｜${roi}${top}${rank}${pc}`;
 }
 
 function levelOf(roi: number | null, n: number): ValueLevel {
@@ -91,4 +94,12 @@ export function useRaceValues(date: string): Map<string, RaceValue> {
     return () => { alive = false; };
   }, [date, loading, loggedIn]);
   return map;
+}
+
+/** 市場補正したレースとしないレースが同じ日に混ざっているか（混ざっていると段の基準と順位が別になるので凡例に注記する） */
+export function mixedProbCalibration(values: Map<string, RaceValue>): boolean {
+  let pc = false;
+  let plain = false;
+  values.forEach((v) => { if (v.level === "none") return; if (v.prob_calibrated) pc = true; else plain = true; });
+  return pc && plain;
 }

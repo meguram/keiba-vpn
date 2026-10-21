@@ -102,3 +102,37 @@ def test_calibrate_candidates_adds_fields(monkeypatch):
     assert out["expected_roi_calibrated"] == pytest.approx(0.925, abs=1e-3)           # (0.9×300 + 1.0×100) / 400
     monkeypatch.setattr("src.utils.ev_calibration.load_config", lambda: {"enabled": False})
     assert D._calibrate_candidates([{"bet_type": "tansho", "ev": 2.0, "bet_amount": 300}]) == {}
+
+
+def test_value_level_prob_calibrated_uses_pc_levels(monkeypatch):
+    std = {"enabled": True, "levels": {"hot": 1.03, "good": 1.0, "ok": 0.97}}
+    pc = {"enabled": True, "levels": {"hot": 9.99, "good": 0.949, "ok": 0.935}}
+    monkeypatch.setattr("src.utils.ev_calibration.load_config", lambda: std)
+    monkeypatch.setattr("src.utils.ev_calibration.load_config_pc", lambda: pc)
+    assert D.value_level(0.96, 3) == "pass"                              # 従来の閾値（補正しないレース）では見送り
+    assert D.value_level(0.96, 3, True) == "good"                        # 補正したレースは補正後の閾値
+    assert D.value_level(1.5, 3, True) == "good"                         # hot は補正後は出さない
+    assert D.value_level(0.93, 3, True) == "pass" and D.value_level(0.94, 3, True) == "ok"
+    monkeypatch.setattr("src.utils.ev_calibration.load_config_pc", lambda: {})      # PC 版が無ければ従来の設定
+    assert D.value_level(0.96, 3, True) == "pass"
+
+
+def test_day_ranking_is_separate_for_calibrated_and_not():
+    rows = [{"level": "hot", "expected_roi": 1.2, "prob_calibrated": False}, {"level": "hot", "expected_roi": 1.1, "prob_calibrated": False},
+            {"level": "hot", "expected_roi": 0.99, "prob_calibrated": True}, {"level": "good", "expected_roi": 0.95, "prob_calibrated": True},
+            {"level": "none", "expected_roi": None}]
+    D._apply_day_ranking(rows)
+    assert [r["rank"] for r in rows[:4]] == [1, 2, 1, 2]                 # 補正あり・なしで別々に順位を付ける
+    assert rows[4]["rank"] is None
+    plain = [{"level": "hot", "expected_roi": 1.3 - 0.1 * i} for i in range(5)]
+    D._apply_day_ranking(plain)                                          # 補正の機能が無効（フラグ無し）なら従来どおり 1 組
+    assert [r["rank"] for r in plain] == [1, 2, 3, 4, 5] and [r["level"] for r in plain].count("hot") == 1
+
+
+def test_value_row_carries_prob_calibrated_flag():
+    payload, code = _payload(0.96)
+    payload["prob_calibration"] = {"applied": True}
+    row = D._value_row({"race_id": "r", "round": 1, "venue": "x", "race_name": "y"}, payload, code)
+    assert row["prob_calibrated"] is True
+    plain, code = _payload(0.96)
+    assert D._value_row({"race_id": "r"}, plain, code)["prob_calibrated"] is False

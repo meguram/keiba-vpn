@@ -31,5 +31,8 @@
   2. `python -m src.scripts.data.tp70_fit compare --base DIR/base.parquet --out DIR`（前年までのウォークフォワードで LogLoss・ECE を確認）
   3. `python -m src.scripts.data.tp70_fit export --base DIR/base.parquet --out config/prob_calibration.json`
   4. `python -m src.scripts.data.tp70_pc ev / star / kesi --preds DIR/tp70_cal_preds.parquet`（補正後の確率の EV の当てはめ、★の下限、消印のしきい値を作り直す）
-  5. 推奨ポートフォリオの期待回収率の年別範囲と `levels` は `calibrate_ev build_portfolio` を補正後の確率で再実行して差し替える（現状は従来のまま）。
+  5. 推奨ポートフォリオ・`cand_*`・`levels`・年別の範囲の作り直し（約 1.2 万レースで数分。ホストの betting データ `payoff.parquet`・`odds_pair.parquet`・`betting_2026/*` を手元にコピーして実行しても同じ）:
+     `python -m src.scripts.data.tp70_portfolio build --preds DIR/tp70_cal_preds.parquet --bet <betting> --bet26 <betting_2026> --mode raw --out DIR/pf` と `--mode pc`（補正後の確率）→
+     `python -m src.scripts.data.tp70_portfolio fit --out DIR/pf --config config/ev_calibration_pc.json --hot-off`（方式選択は 2024・25 年、2026 年は最終確認。標本が少なく検証も通らない定数は市場並みに置く。補正後はレースの期待回収率が券種構成でほぼ決まり予測の高い順に実現が上がらないため hot を出さない設定）。
+  6. `race_value` は補正したレースとしないレースで段の閾値（`ev_calibration_pc.json` / `ev_calibration.json`）と当日の順位を別に付ける。応答の `prob_calibration` と `levels_prob_calibrated` を参照。
 - 注意: 係数は確定オッズで当てはめた。T-60/T-15 の早いオッズでは市場の情報量が少ないぶん市場側の係数が大きすぎる可能性がある。時点別の比較は直前オッズの蓄積後。
