@@ -53,9 +53,12 @@ def prepare_runs(df: pd.DataFrame) -> pd.DataFrame:
     d = d[d["finish_position"].notna()].copy()
     d["field_size"] = pd.to_numeric(d["field_size"], errors="coerce")
     d["last_3f"] = pd.to_numeric(d["last_3f"], errors="coerce")
+    d["last_3f"] = d["last_3f"].where((d["last_3f"] >= 30) & (d["last_3f"] <= 50))     # 計測外れ値（0・100 超など）は欠損
     d["popularity"] = pd.to_numeric(d["popularity"], errors="coerce")
     d["bracket_number"] = pd.to_numeric(d["bracket_number"], errors="coerce")
     d["distance"] = pd.to_numeric(d["distance"], errors="coerce")
+    d["dnf"] = (d["finish_position"] <= 0).astype(float)          # 中止・失格などは -1。最下位扱い（同順位）にする
+    d["finish_position"] = np.where(d["dnf"] > 0, d["field_size"], d["finish_position"])
     d["epn"] = d["passing_order"].map(_first_pos) / d["field_size"]
     parts = d["pace"].map(_pace_parts)
     d["t3f"] = [p[0] for p in parts]
@@ -309,7 +312,7 @@ def build_features(runs: pd.DataFrame, flags: pd.DataFrame | None = None) -> pd.
         g = d.groupby("race_id", sort=False)[c]
         d[f"{c}_rel"] = (d[c] - g.transform("mean")).to_numpy()
     d["fit_pct"] = d.groupby("race_id", sort=False)["fit_rate"].rank(pct=True).to_numpy()
-    keep = ["race_id", "horse_id", "date", "venue", "surface", "distance", "field_size", "finish_position", "popularity",
+    keep = ["race_id", "horse_id", "date", "venue", "surface", "distance", "field_size", "finish_position", "popularity", "dnf",
             "R_fb", "R_kb", "R_chalk", "R_inside", "R_attr", "R_n",
             "front_t", "kick_t", "stam_t", "perf_t", "kick_best", "n_runs", "tp",
             "fit_rate", "fit_lift", "fit_rank", "fit_best", "fit_pct", "m_front", "m_kick", "m_att",
