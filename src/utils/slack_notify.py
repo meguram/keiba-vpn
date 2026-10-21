@@ -151,21 +151,34 @@ def build_message(title: str, blocks: list[dict], *, severity: str = "normal", f
 
 # ───────────────────────── 宛先・送信 ─────────────────────────
 
+def _env_suffix(env: dict[str, str] | None = None) -> str:
+    e = os.environ if env is None else env
+    return _ENV_LABELS.get((e.get("KEIBA_ENV") or "").strip().lower(), "")
+
+
 def webhook_url(channel: str = "default", env: dict[str, str] | None = None) -> str:
-    """チャンネル名 → Webhook URL。個別の変数が空なら SLACK_WEBHOOK_URL を使う。未設定は空文字。"""
+    """チャンネル名 → Webhook URL。未設定は空文字。
+
+    探す順: ①<チャンネル>_<環境>（例 SLACK_WEBHOOK_URL_ALERT_PROD）②SLACK_WEBHOOK_URL_<環境>（環境の既定）
+    ③<チャンネル>（例 SLACK_WEBHOOK_URL_ALERT）④SLACK_WEBHOOK_URL。環境は KEIBA_ENV（stg/prod/dev）から決まる。
+    """
     e = os.environ if env is None else env
     name = CHANNEL_ENV.get(channel, CHANNEL_ENV["default"])
-    url = (e.get(name) or "").strip()
-    if not url and name != CHANNEL_ENV["default"]:
-        url = (e.get(CHANNEL_ENV["default"]) or "").strip()
-    return url
+    base = CHANNEL_ENV["default"]
+    suf = _env_suffix(e)
+    names = ([f"{name}_{suf}"] if suf and name != base else []) + ([f"{base}_{suf}"] if suf else []) + [name, base]
+    for n in names:
+        url = (e.get(n) or "").strip()
+        if url:
+            return url
+    return ""
 
 
 def redact(text: str, env: dict[str, str] | None = None) -> str:
     """ログ・エラー文に Webhook URL が混ざらないよう伏せる。"""
     e = os.environ if env is None else env
     out = _URL_RE.sub("<webhook>", str(text))
-    for name in CHANNEL_ENV.values():
+    for name in [n for n in e if str(n).startswith("SLACK_WEBHOOK_URL")]:
         v = (e.get(name) or "").strip()
         if v:
             out = out.replace(v, "<webhook>")

@@ -26,6 +26,8 @@
 | `KEIBA_PUBLIC_BASE_URL` | 結果通知の『詳細を開く』リンクの基点 URL（任意） | リンクなし |
 | `KEIBA_NOTIFY_API_BASE` | スクレイピング状況が `/api/scrape-jobs` を読む API の URL（既定 `http://127.0.0.1:23220`） | 既定値 |
 
+**環境（stg/prod）ごとの宛先と表示**: 通知文には環境名（`【STG】`/`【PROD】`）と実行場所（`KEIBA_RUN_LOCATION=host|vps|gcp`）が自動で付く（`KEIBA_ENV` から決まる。上書きは `KEIBA_NOTIFY_ENV_LABEL`）。宛先は `KEIBA_ENV` に応じて次の順で探す: ①`SLACK_WEBHOOK_URL_<CH>_<ENV>`（例 `SLACK_WEBHOOK_URL_ALERT_PROD`）→ ②`SLACK_WEBHOOK_URL_<ENV>`（例 `SLACK_WEBHOOK_URL_PROD`）→ ③`SLACK_WEBHOOK_URL_<CH>` → ④`SLACK_WEBHOOK_URL`。環境別の変数が無ければ従来どおり（stg と prod が同じチャンネルに【STG】/【PROD】の表示つきで届く）。推奨は `#…-prod` と `#…-stg` を分け、`SLACK_WEBHOOK_URL_PROD` / `SLACK_WEBHOOK_URL_STG` を設定すること。
+
 チャンネルの分け方の案: ①まず 1 チャンネル（`SLACK_WEBHOOK_URL` のみ）。②通知が増えたら `#…-results`（結果）と `#…-alerts`（異常。モバイルの通知を強めに）に分ける。
 
 ## 3. 通知カタログ

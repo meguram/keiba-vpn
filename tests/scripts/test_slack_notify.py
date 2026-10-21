@@ -448,3 +448,20 @@ def test_env_label_added_to_sent_payload():
     assert sent[2]["text"] == "テスト" and len(sent[2]["attachments"][0]["blocks"]) == 1
     assert payload["text"] == "テスト" and len(payload["attachments"][0]["blocks"]) == 1  # 元のペイロードは変えない
     assert not any("_keiba_env_label" in p for p in sent)
+
+
+def test_webhook_url_prefers_environment_specific():
+    from src.utils import slack_notify as SN
+
+    env = {
+        "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T/B/DEFAULT",
+        "SLACK_WEBHOOK_URL_ALERT": "https://hooks.slack.com/services/T/B/ALERT",
+        "SLACK_WEBHOOK_URL_PROD": "https://hooks.slack.com/services/T/B/PRODDEF",
+        "SLACK_WEBHOOK_URL_ALERT_PROD": "https://hooks.slack.com/services/T/B/ALERTPROD",
+    }
+    assert SN.webhook_url("alert", {**env, "KEIBA_ENV": "prod"}).endswith("ALERTPROD")
+    assert SN.webhook_url("results", {**env, "KEIBA_ENV": "prod"}).endswith("PRODDEF")
+    assert SN.webhook_url("alert", {**env, "KEIBA_ENV": "stg"}).endswith("ALERT")      # stg 専用が無ければ従来どおり
+    assert SN.webhook_url("results", {**env, "KEIBA_ENV": "stg"}).endswith("DEFAULT")
+    assert SN.webhook_url("alert", env).endswith("ALERT")                                # 環境未設定は従来どおり
+    assert "ALERTPROD" not in SN.redact("err https://hooks.slack.com/services/T/B/ALERTPROD", env)
