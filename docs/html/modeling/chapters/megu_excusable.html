@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>めぐ指数 v3b の集約と、無視してよい低下（excusable）の判別（tp-69）— keiba-vpn</title><style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; --good:#34d399; --bad:#f87171; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; max-width: 1100px; margin: 0 auto; padding: 24px 28px 80px; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 24px 0 8px; color: var(--accent-2); }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; } th { background: #1a2748; color: var(--muted); text-align: left; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+.ok { color: var(--good); } .ng { color: var(--bad); } code { background: #0b1428; padding: 1px 5px; border-radius: 4px; }</style></head><body>
+<a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>めぐ指数 v3b の集約と、『無視してよい低下（excusable）』の判別（tp-69）</h1>
+<p class="muted">2026-10-21、ユーザー決定『tp-65 の改良案（勝ち馬−40 点の下限、低信頼セルの縮約、加重 Huber）は採用してよい』『不利や状態の異常で着順が悪く、指数が外れ値になることがある。それは予測の特徴量に反映せず、使える指数だけを使いたい。本当に力がなくて低いのか、無視してよい低下かを判断するロジックを作ってほしい』への回答。資料: <a href="index_variance.html">指数の分散の比較（tp-65）</a>・<a href="megu_index_v3a.html">めぐ指数 v3a</a>・<a href="pace_type.html">展開タイプ（tp-61）</a>・<a href="training_pipeline_decisions.html">決定ログ</a>。対象は 2020〜2025 年の中央の平地（障害を除く）で指数がある 312,809 走。2026 年は観察のみ（選択・当てはめに使わない）。市場オッズ・人気は使っていない。</p>
+
+<h2>結論</h2>
+<ul>
+<li><b>v3b（下限＋低信頼の重み＋加重 Huber）は採用</b>。次走予測（勝ち馬の対数尤度、2023〜25 年）は、下限＋加重 Huber の骨格 0.2984 に対し、低信頼の走の重みを 0.5 にすると 0.3020（<b>+0.0036</b>、3 年とも改善、2025 年は区間が 0 を含まない）。低信頼の走を完全に除くと悪化する（−0.0087〜+0.0010）。</li>
+<li><b>『無視してよい低下』は、観測できる信号からはごく弱くしか見分けられない</b>。低い走（直前 5 走の中央値より尺度 1 つ分以上低い走。全体の約 11%）の 46% は次の 2 走で通常水準に戻る（反発）。判定器の AUC は 0.57〜0.60（履歴の外れ度だけのベースライン 0.53〜0.55）で、判定した走の反発率は 52〜60%、それ以外は 41〜46%（lift 1.2〜1.4）。誤除外率（判定したのに戻らなかった割合）は 40〜48%。</li>
+<li><b>除外して集約すると、次走予測は悪化する</b>。excusable の上位 35% を除くと −0.0064〜−0.0079（3 年とも区間が 0 を含まない）、上位 20% でも −0.0028〜−0.0046。重みを半分にしても −0.0001〜−0.0015（改善なし）。<b>したがって v3b の値は excusable を除かない</b>（既定の重み 1.0）。判定は『参考: 一過性の可能性』の表示用にとどめる。</li>
+<li>不利・出遅れの備考（<code>trouble_rem</code>、<code>slow_rem</code>）、上がり上位なのに着順が下、馬体重の変動などの単独の信号は、反発率の差がほぼ無い（lift 0.97〜1.08）。効いた信号は『レース全体の上がりが遅い（消耗戦）』（lift 1.16）、初めての距離・馬場（1.12・1.08）、休み明けは逆向き（0.85）。</li>
+<li>V5（1,142 列）への増分の LightGBM 評価は、ホストの共有スロット待ちで<b>未実行</b>（下記の手順で完了できる）。</li>
+</ul>
+
+<h2>1. v3b の定義（v3a の値は変えない）</h2>
+<p>V5 は v3a で学習済みなので、v3a の値そのものは変えない。v3b は『走ごとの指数を、履歴として集めるときの扱い』だけの追加層（<code>src/pipeline/megu_index/v3b.py</code>）で、UI（めぐ指数テーブル・めぐ印・成長曲線）と v6 以降の特徴量候補に使う。</p>
+<table><tr><th>変更</th><th>値</th><th>根拠</th></tr>
+<tr><td>大差負けの下限</td><td>同じレースの勝ち馬の指数 − 40 点（約 4 秒）より下は引き上げる</td><td>tp-65: めぐ・netkeiba とも +0.006（−20 点は悪化、30〜60 点は同程度）</td></tr>
+<tr><td>低信頼セルの重み</td><td>基準タイムが薄いセルの走（全体の約 9%）は重み 0.5</td><td>本章: +0.0036（0.0 は悪化）。極端値の縮約は、重みの形で実装した</td></tr>
+<tr><td>履歴の集約</td><td>直近 5 走を、減衰 0.65 の加重 Huber（c = 1.345、尺度 11.5 = 2020〜21 年の MAD×1.4826）</td><td>tp-65: 加重 Huber は加重平均より +0.003。最高値・単純平均より大幅に良い（下表）</td></tr>
+<tr><td>excusable の扱い</td><td>既定は除かない（重み 1.0）。引数で重みを変えられる</td><td>下記: 除くと悪化</td></tr></table>
+
+<h2>2. 次走予測への効果</h2>
+<p>各走の直前 5 走（その走より前）から集約した値で、次走の勝ち馬の対数尤度の改善（一様に対する。他の年で当てはめた β）を測る（tp-65 と同じ枠組み、2023〜25 年）。除外・重み下げで全走が除かれた行は除外なしの値に戻して、比べる行を揃えた。</p>
+<table><tr><th>集約（直近5走）</th><th class='n'>2023</th><th class='n'>2024</th><th class='n'>2025</th><th class='n'>平均</th><th class='n'>順位相関 2025</th></tr><tr><td>v3b の骨格（勝ち馬−40点の下限＋減衰 0.65 の加重 Huber）</td><td class='n'>0.3076</td><td class='n'>0.2958</td><td class='n'>0.2918</td><td class='n'>0.2984</td><td class='n'>0.409</td></tr><tr><td>＋低信頼の走の重み 0.5（採用）</td><td class='n'>0.3098</td><td class='n'>0.2993</td><td class='n'>0.2968</td><td class='n'>0.3020</td><td class='n'>0.410</td></tr><tr><td>＋低信頼の走を除く</td><td class='n'>0.2990</td><td class='n'>0.2922</td><td class='n'>0.2928</td><td class='n'>0.2946</td><td class='n'>0.401</td></tr><tr><td>＋excusable の確率で重み (1−p)</td><td class='n'>0.3090</td><td class='n'>0.2933</td><td class='n'>0.2924</td><td class='n'>0.2983</td><td class='n'>0.411</td></tr><tr><td>＋excusable 上位 20% を重み半分</td><td class='n'>0.3078</td><td class='n'>0.2948</td><td class='n'>0.2917</td><td class='n'>0.2981</td><td class='n'>0.411</td></tr><tr><td>＋excusable 上位 35% を重み半分</td><td class='n'>0.3072</td><td class='n'>0.2943</td><td class='n'>0.2913</td><td class='n'>0.2976</td><td class='n'>0.410</td></tr><tr><td>＋excusable 上位 20% を除く</td><td class='n'>0.3048</td><td class='n'>0.2912</td><td class='n'>0.2888</td><td class='n'>0.2949</td><td class='n'>0.410</td></tr><tr><td>＋excusable 上位 35% を除く</td><td class='n'>0.3012</td><td class='n'>0.2879</td><td class='n'>0.2852</td><td class='n'>0.2914</td><td class='n'>0.406</td></tr><tr><td>＋excusable 上位 50% を除く</td><td class='n'>0.3002</td><td class='n'>0.2828</td><td class='n'>0.2802</td><td class='n'>0.2877</td><td class='n'>0.402</td></tr><tr><td>低信頼 0.5 ＋ excusable 上位 35% を除く</td><td class='n'>0.3024</td><td class='n'>0.2917</td><td class='n'>0.2896</td><td class='n'>0.2946</td><td class='n'>0.407</td></tr><tr><td>素の直近5走の平均（参考）</td><td class='n'>0.2857</td><td class='n'>0.2812</td><td class='n'>0.2784</td><td class='n'>0.2818</td><td class='n'>0.399</td></tr><tr><td>素の直近5走の最高値（参考）</td><td class='n'>0.2273</td><td class='n'>0.2121</td><td class='n'>0.2103</td><td class='n'>0.2166</td><td class='n'>0.336</td></tr></table>
+<table><tr><th>対の差（同じレースでの勝ち馬の対数尤度。正が改善）</th><th>2023</th><th>2024</th><th>2025</th></tr><tr><td>lc0.5 − 骨格</td><td class='n'>+0.0022 [-0.0002, +0.0045]</td><td class='n'>+0.0035 [-0.0003, +0.0074]</td><td class='n'>+0.0050 [+0.0023, +0.0078]</td></tr><tr><td>lc0.0 − 骨格</td><td class='n'>-0.0087 [-0.0177, -0.0010]</td><td class='n'>-0.0036 [-0.0119, +0.0054]</td><td class='n'>+0.0010 [-0.0072, +0.0099]</td></tr><tr><td>soft − 骨格</td><td class='n'>+0.0014 [-0.0016, +0.0047]</td><td class='n'>-0.0025 [-0.0053, +0.0008]</td><td class='n'>+0.0006 [-0.0025, +0.0042]</td></tr><tr><td>excl20_half − 骨格</td><td class='n'>+0.0001 [-0.0012, +0.0016]</td><td class='n'>-0.0010 [-0.0021, +0.0002]</td><td class='n'>-0.0001 [-0.0014, +0.0013]</td></tr><tr><td>excl35_half − 骨格</td><td class='n'>-0.0004 [-0.0022, +0.0015]</td><td class='n'>-0.0015 [-0.0030, +0.0001]</td><td class='n'>-0.0005 [-0.0023, +0.0014]</td></tr><tr><td>excl20_hard − 骨格</td><td class='n'>-0.0028 [-0.0061, +0.0005]</td><td class='n'>-0.0046 [-0.0073, -0.0019]</td><td class='n'>-0.0030 [-0.0063, +0.0002]</td></tr><tr><td>excl35_hard − 骨格</td><td class='n'>-0.0064 [-0.0104, -0.0018]</td><td class='n'>-0.0079 [-0.0115, -0.0040]</td><td class='n'>-0.0066 [-0.0105, -0.0017]</td></tr><tr><td>lc0.5_excl35 − lc0.5</td><td class='n'>-0.0074 [-0.0115, -0.0034]</td><td class='n'>-0.0076 [-0.0112, -0.0034]</td><td class='n'>-0.0072 [-0.0114, -0.0026]</td></tr></table>
+<p class="muted">区間はレースを単位にしたブートストラップ（500 回）。最高値は素の最高値で、除外の影響を受けない（低い走は最高値にならない）。</p>
+
+<h2>3. 『無視してよい低下』の判別</h2>
+<h3>3-1. 信号（その走の結果が確定した時点以降に分かるものだけ）</h3>
+<ul>
+<li>結果表の事実: 着順の割合、最初・最後のコーナーの位置、最後のコーナーから着順にかけての順位の変化、上がり 3F の順位と着順の乖離、着差（秒換算）、頭数。</li>
+<li>レース水準（結果から作ったもの、共有表 <code>race_quality</code>）: レース全体の上がりの偏差、脚質×ペース×隊列の 3 着内率の比（tp-61 の分類、評価年より前の年だけで作る）。</li>
+<li>備考のフラグ（不利・躓き・挟まれ・出遅れ。生テキストは持ち出さない）、馬体重の変動、休み明け（90 日以上）、初めての距離・馬場、斤量の変化、重・不良馬場、多頭数、低信頼セル。</li>
+<li>馬自身の履歴: その走の指数が、直前 5 走の中央値より尺度いくつ分低いか（<code>own_drop</code>。3 走以上ある馬だけ）。</li>
+</ul>
+<h3>3-2. 評価用の事後ラベルと判定器</h3>
+<p>低い走（<code>own_drop</code> ≥ 1）のあと、次の 2 走（指数がある走）の平均が、その前の通常水準（直前 5 走の中央値）− 0.5×尺度 以上なら『反発』。これは評価・学習のラベルにだけ使い、判定そのものには使わない。判定器は standardize 済みのロジスティック回帰（24 信号）。評価年 Y の判定器は、Y−1 年 6/30 までの低い走だけで当てはめ、ラベルは Y 年 1/1 より前の次走だけから作る（先読みなし）。2020〜2021 年の走は判定しない（除外なし）。</p>
+<table><tr><th>年</th><th class='n'>低い走</th><th class='n'>反発率</th><th class='n'>AUC</th><th class='n'>AUC 基準</th><th>除外の水準</th><th class='n'>判定した走の反発率</th><th class='n'>それ以外</th><th class='n'>lift</th><th class='n'>誤除外率</th><th class='n'>全走に占める除外</th></tr><tr><td>2022</td><td class='n'>4,427</td><td class='n'>0.475</td><td class='n'>0.568</td><td class='n'>0.532</td><td>低い走の約46%</td><td class='n'>0.524</td><td class='n'>0.434</td><td class='n'>1.21</td><td class='n'>0.476</td><td class='n'>5.6%</td></tr><tr><td>2022</td><td class='n'>4,427</td><td class='n'>0.475</td><td class='n'>0.568</td><td class='n'>0.532</td><td>約30%</td><td class='n'>0.553</td><td class='n'>0.441</td><td class='n'>1.25</td><td class='n'>0.447</td><td class='n'>3.9%</td></tr><tr><td>2022</td><td class='n'>4,427</td><td class='n'>0.475</td><td class='n'>0.568</td><td class='n'>0.532</td><td>約16%</td><td class='n'>0.587</td><td class='n'>0.455</td><td class='n'>1.29</td><td class='n'>0.413</td><td class='n'>2.1%</td></tr><tr><td>2023</td><td class='n'>4,733</td><td class='n'>0.457</td><td class='n'>0.569</td><td class='n'>0.539</td><td>低い走の約46%</td><td class='n'>0.512</td><td class='n'>0.409</td><td class='n'>1.25</td><td class='n'>0.488</td><td class='n'>6.0%</td></tr><tr><td>2023</td><td class='n'>4,733</td><td class='n'>0.457</td><td class='n'>0.569</td><td class='n'>0.539</td><td>約30%</td><td class='n'>0.521</td><td class='n'>0.426</td><td class='n'>1.22</td><td class='n'>0.479</td><td class='n'>4.2%</td></tr><tr><td>2023</td><td class='n'>4,733</td><td class='n'>0.457</td><td class='n'>0.569</td><td class='n'>0.539</td><td>約16%</td><td class='n'>0.533</td><td class='n'>0.439</td><td class='n'>1.21</td><td class='n'>0.467</td><td class='n'>2.5%</td></tr><tr><td>2024</td><td class='n'>4,496</td><td class='n'>0.455</td><td class='n'>0.593</td><td class='n'>0.550</td><td>低い走の約46%</td><td class='n'>0.529</td><td class='n'>0.399</td><td class='n'>1.32</td><td class='n'>0.471</td><td class='n'>5.4%</td></tr><tr><td>2024</td><td class='n'>4,496</td><td class='n'>0.455</td><td class='n'>0.593</td><td class='n'>0.550</td><td>約30%</td><td class='n'>0.547</td><td class='n'>0.418</td><td class='n'>1.31</td><td class='n'>0.453</td><td class='n'>3.7%</td></tr><tr><td>2024</td><td class='n'>4,496</td><td class='n'>0.455</td><td class='n'>0.593</td><td class='n'>0.550</td><td>約16%</td><td class='n'>0.587</td><td class='n'>0.430</td><td class='n'>1.37</td><td class='n'>0.413</td><td class='n'>2.2%</td></tr><tr><td>2025</td><td class='n'>4,437</td><td class='n'>0.476</td><td class='n'>0.596</td><td class='n'>0.545</td><td>低い走の約46%</td><td class='n'>0.550</td><td class='n'>0.419</td><td class='n'>1.31</td><td class='n'>0.450</td><td class='n'>5.3%</td></tr><tr><td>2025</td><td class='n'>4,437</td><td class='n'>0.476</td><td class='n'>0.596</td><td class='n'>0.545</td><td>約30%</td><td class='n'>0.562</td><td class='n'>0.440</td><td class='n'>1.28</td><td class='n'>0.438</td><td class='n'>3.6%</td></tr><tr><td>2025</td><td class='n'>4,437</td><td class='n'>0.476</td><td class='n'>0.596</td><td class='n'>0.545</td><td>約16%</td><td class='n'>0.597</td><td class='n'>0.452</td><td class='n'>1.32</td><td class='n'>0.403</td><td class='n'>2.1%</td></tr><tr><td>2026</td><td class='n'>2,718</td><td class='n'>0.478</td><td class='n'>0.573</td><td class='n'>0.541</td><td>低い走の約46%</td><td class='n'>0.528</td><td class='n'>0.442</td><td class='n'>1.19</td><td class='n'>0.472</td><td class='n'>5.3%</td></tr><tr><td>2026</td><td class='n'>2,718</td><td class='n'>0.478</td><td class='n'>0.573</td><td class='n'>0.541</td><td>約30%</td><td class='n'>0.551</td><td class='n'>0.449</td><td class='n'>1.23</td><td class='n'>0.449</td><td class='n'>3.6%</td></tr><tr><td>2026</td><td class='n'>2,718</td><td class='n'>0.478</td><td class='n'>0.573</td><td class='n'>0.541</td><td>約16%</td><td class='n'>0.612</td><td class='n'>0.455</td><td class='n'>1.34</td><td class='n'>0.388</td><td class='n'>1.9%</td></tr></table>
+<p class="muted">『判定した走』は p が学習期間の上位 50% / 35% / 20% に入る低い走。lift = 判定した走の反発率 ÷ それ以外の反発率。誤除外率 = 判定したのに戻らなかった割合。2026 年は観察のみ。</p>
+<h3>3-3. 効いた信号と、効かなかった信号</h3>
+<table><tr><th>信号</th><th class='n'>係数（標準化）</th><th>向き</th></tr><tr><td><code>own_drop</code></td><td class='n'>-0.237</td><td>本当の低下寄り</td></tr><tr><td><code>race_l3f_dev</code></td><td class='n'>+0.186</td><td>一過性（反発）寄り</td></tr><tr><td><code>margin_sec</code></td><td class='n'>+0.132</td><td>一過性（反発）寄り</td></tr><tr><td><code>rest_log</code></td><td class='n'>-0.088</td><td>本当の低下寄り</td></tr><tr><td><code>n_prior</code></td><td class='n'>+0.073</td><td>一過性（反発）寄り</td></tr><tr><td><code>going_heavy</code></td><td class='n'>+0.070</td><td>一過性（反発）寄り</td></tr><tr><td><code>l3f_vs_fp</code></td><td class='n'>+0.064</td><td>一過性（反発）寄り</td></tr><tr><td><code>novel_dist</code></td><td class='n'>+0.062</td><td>一過性（反発）寄り</td></tr><tr><td><code>novel_surf</code></td><td class='n'>+0.053</td><td>一過性（反発）寄り</td></tr><tr><td><code>c1_pct</code></td><td class='n'>-0.045</td><td>本当の低下寄り</td></tr><tr><td><code>layoff90</code></td><td class='n'>-0.045</td><td>本当の低下寄り</td></tr><tr><td><code>fp_pct</code></td><td class='n'>+0.041</td><td>一過性（反発）寄り</td></tr></table>
+<p class="muted">最終の判定器（2025 年までの全体で当てはめた <code>config/megu_excusable.json</code>）の係数の上位。履歴で深く落ちた走ほど戻りにくい（本当の低下寄り）、レース全体の上がりが遅い・着差が大きい・馬場が重いと戻りやすい。</p>
+<table><tr><th>単独の信号（低い走 18,093 走、2022〜25 年）</th><th class="n">該当</th><th class="n">反発率</th><th class="n">lift（該当 ÷ 非該当）</th></tr>
+<tr><td>備考に不利・躓き・挟まれ</td><td class="n">536</td><td class="n">0.489</td><td class="n">1.05</td></tr>
+<tr><td>備考に出遅れ</td><td class="n">2,146</td><td class="n">0.482</td><td class="n">1.04</td></tr>
+<tr><td>上がり 3F が上位 20% なのに着順が下位半分</td><td class="n">359</td><td class="n">0.501</td><td class="n">1.08</td></tr>
+<tr><td>レース全体の上がりが遅い（偏差 &gt; 0.8）</td><td class="n">3,177</td><td class="n">0.526</td><td class="n">1.16</td></tr>
+<tr><td>初めての距離（±200m に過去走なし）</td><td class="n">907</td><td class="n">0.518</td><td class="n">1.12</td></tr>
+<tr><td>初めての馬場（芝/ダ）</td><td class="n">1,090</td><td class="n">0.501</td><td class="n">1.08</td></tr>
+<tr><td>重・不良馬場</td><td class="n">2,693</td><td class="n">0.487</td><td class="n">1.05</td></tr>
+<tr><td>馬体重が ±10kg 以上変動</td><td class="n">3,011</td><td class="n">0.455</td><td class="n">0.97</td></tr>
+<tr><td>休み明け（90 日以上）</td><td class="n">4,145</td><td class="n">0.412</td><td class="n">0.85</td></tr>
+<tr><td>履歴の中央値より尺度 2 つ以上低い</td><td class="n">3,988</td><td class="n">0.420</td><td class="n">0.88</td></tr></table>
+
+<h2>4. 『除外しすぎる』弊害</h2>
+<ul>
+<li>判定した走の 40〜48% は、その後も通常水準に戻らなかった（誤除外）。除外すると、本当に衰えた馬の低下を見逃す。</li>
+<li>低い走そのものに、次走を予測する情報がある（深く落ちた走は戻りにくい）。除外では、この情報も捨てることになり、次走予測が −0.003〜−0.008 悪化した。</li>
+<li>加重 Huber は、極端な低値の影響を有界にする（外れ値の対策としては、判別して除くより、頑健な集約のほうが効く）。</li>
+<li>休み明けの低下は戻りにくい（反発率 0.41）ので、『休み明けだから仕方ない』という見方は、この集計では支持されない。</li>
+</ul>
+
+<h2>5. V5（1,142 列）への増分 — 未実行</h2>
+<p>V5 の 1,142 列に累積する LightGBM の評価は、ホストの共有スロット（3 本）が他の評価で埋まっているため、待ち行列に入れた（<code>tp69-A</code>、<code>tp69-X</code>）。組 A = v3b（excusable の除外なし）の 3 列（<code>v3bA_wh</code>、<code>v3bA_max5</code>、<code>v3bA_mean5</code>）、組 X = A に excusable の除外を足した 7 列。判定は既定の 2 段階評価（勝率の 95% 区間の上限 &lt; 0、効果 ≥ 0.0002、連対・複勝の悪化 ≤ 0.0002）。次走予測の結果（除外は悪化）からは、組 X が組 A を上回る見込みは低い。完了後の手順:</p>
+<pre><code>scp keiba-remote:/home/jovyan/work/tp69_out/lgb_v3b{A,X}/result.json  # それぞれ lgb_v3bA/ lgb_v3bX/ に置く
+python -m src.scripts.data.tp69_report --in &lt;置いたディレクトリ&gt;</code></pre>
+
+<h2>6. API・UI への出し方</h2>
+<ul>
+<li><code>src/pipeline/inference/megu_excusable_attach.py</code> の <code>annotate(ex, runs)</code> を、<code>expected_megu.attach_expected_megu</code> で過去走の詳細（<code>race_details</code>）を <code>recent</code> に反映した後に呼ぶ。<code>ex["v3b"]</code>（集約値）と、<code>recent[i]</code> に <code>low_run</code> / <code>excusable</code> / <code>excusable_p</code> / <code>excusable_reasons</code>（根拠の短文、最大 2 つ）が付く。判定できるのは、直前に 3 走以上ある走だけ。</li>
+<li>API では勝ち馬の指数が無く下限は使えない。備考とペース区分も無いので、その信号は欠損（中立）で判定する。判定器（<code>config/megu_excusable.json</code>）が無いときは何も付かない。</li>
+<li>UI は『参考: 一過性の可能性』と薄く表示し、めぐ印の集計からは除外しない（除外すると予測が悪化するため）。</li>
+</ul>
+
+<h2>7. 先読みの検査と限界</h2>
+<ul>
+<li>信号は『その走より前の走』だけから作る（切断日以降を消しても、それより前の信号は完全一致、将来の指数を書き換えても変わらない。<code>tests/pipeline/test_tp69.py</code>）。</li>
+<li>反発ラベルは次の 2 走を使うが、評価・学習にだけ使う。評価年の判定器は、その年の 1/1 より前に確定したラベルだけで当てはめた。</li>
+<li>反発率の基準が約 46% と高く、『戻った』の定義（通常水準 − 0.5×尺度）は緩い。厳しくすると反発率は下がるが、判定の順位は同じ向き。</li>
+<li>判定に使える信号の多くは結果表の事実で、映像で見た不利・道中の詰まりは含まれない。備考は記入率が年とともに下がる（2022 年 21.6% → 2025 年 12.1%）。</li>
+<li>API 版の判定は、備考・ペース区分が欠損の分、学習時より精度が落ちる。</li>
+</ul>
+<h2>成果物</h2>
+<ul>
+<li><code>src/pipeline/megu_index/v3b.py</code>（集約）、<code>src/pipeline/megu_index/excusable.py</code>（信号・判定器）、<code>src/pipeline/inference/megu_excusable_attach.py</code>（API 用）、<code>config/megu_excusable.json</code>。</li>
+<li><code>src/scripts/data/tp69_build.py</code>（signals / pred / paired / feat / final）、<code>tp69_report.py</code>、<code>tests/pipeline/test_tp69.py</code>。</li>
+</ul>
+</body></html>
