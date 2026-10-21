@@ -81,6 +81,7 @@ def test_registered_then_final_flow_and_history():
     r1 = _run(datetime(2026, 10, 21, 20, 5, tzinfo=JST), st, q)
     assert r1["status"] == "ok" and r1["fetched"] == 2 and r1["phases"] == {"registered": 2}
     assert [s["tasks"] for s in q.added] == [["race_shutuba"]] * 2 and all(s["smart_skip"] is False for s in q.added)
+    assert all(s["priority"] < 0 for s in q.added)               # 開催日ランナーのジョブより後回し
     s1 = ES.load_state(ids[0])
     assert s1["phase"] == "registered" and s1["first_seen_phase"] == "registered" and len(s1["history"]) == 1
     # 同じ checkpoint は 1 回だけ

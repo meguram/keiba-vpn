@@ -32,6 +32,7 @@ HISTORY_KEEP = 40
 CHANGES_KEEP = 60
 DONE_KEEP = 200
 WAIT_TIMEOUT_SEC = 1500.0  # 1 回の同期でキューを待つ最大（25 分）
+ENTRIES_JOB_PRIORITY = -100  # 既定(0)より低い: 同じ時間帯の開催日ランナー（T-15 など）のジョブを先に処理させる
 
 
 def state_dir() -> Path:
@@ -191,7 +192,8 @@ def run_entries_sync(
         prev_cards = {p["race_id"]: _load_card(storage, p["race_id"]) for p in todo}
         specs = [
             {"job_kind": "race", "target_id": p["race_id"], "date": p["date"], "venue": p["venue"], "round": p["round"],
-             "race_name": p["race_name"], "tasks": ["race_shutuba"], "smart_skip": False}
+             "race_name": p["race_name"], "tasks": ["race_shutuba"], "smart_skip": False,
+             "priority": ENTRIES_JOB_PRIORITY}
             for p in todo
         ]
         if queue is None:
