@@ -60,10 +60,18 @@ chmod 644 /etc/keiba-ui/ui.env
 
 echo "== 5/7 nginx（127.0.0.1:${PROXY_PORT} のみ。旧設定は退避）"
 [ -d /etc/nginx/sites-enabled ] && { install -d /root/old_site_configs; cp -a /etc/nginx/sites-enabled /root/old_site_configs/nginx_sites_enabled_$(date +%Y%m%d%H%M) 2>/dev/null || true; }
-rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf
+rm -f /etc/nginx/sites-enabled/default
+# 旧サイトの設定（conf.d/myapp_nginx.conf など。80/443 を握り、期限切れ証明書を使っている）を退避。新しい keiba-ui-zones.conf 以外を動かさない
+install -d /root/old_site_configs/conf.d
+for f in /etc/nginx/conf.d/*.conf; do
+  [ -e "$f" ] || continue
+  [ "$(basename "$f")" = keiba-ui-zones.conf ] && continue
+  mv -v "$f" "/root/old_site_configs/conf.d/$(basename "$f").$(date +%Y%m%d%H%M)"
+done
 UP_RE="$(printf '%s' "$UPSTREAM_HOST" | sed 's/\./\\./g')"
+UP_RE_SED="${UP_RE//\\/\\\\}"      # sed の置換側で \ が消えないように二重にする
 install -m 644 "$HERE/templates/nginx-zones.conf" /etc/nginx/conf.d/keiba-ui-zones.conf
-sed -e "s/__UPSTREAM_HOST_RE__/${UP_RE}/g" -e "s/__UPSTREAM_HOST__/${UPSTREAM_HOST}/g" -e "s/__PROXY_PORT__/${PROXY_PORT}/g" -e "s/__APP_PORT__/${APP_PORT}/g" "$HERE/templates/nginx-keiba-ui.conf" > /etc/nginx/sites-available/keiba-ui
+sed -e "s/__UPSTREAM_HOST_RE__/${UP_RE_SED}/g" -e "s/__UPSTREAM_HOST__/${UPSTREAM_HOST}/g" -e "s/__PROXY_PORT__/${PROXY_PORT}/g" -e "s/__APP_PORT__/${APP_PORT}/g" "$HERE/templates/nginx-keiba-ui.conf" > /etc/nginx/sites-available/keiba-ui
 ln -sfn /etc/nginx/sites-available/keiba-ui /etc/nginx/sites-enabled/keiba-ui
 [ -f /etc/nginx/keiba-access.conf ] || { printf '# render_nginx_access.sh が作る（未設定）\n' > /etc/nginx/keiba-access.conf; chown root:www-data /etc/nginx/keiba-access.conf; chmod 640 /etc/nginx/keiba-access.conf; }
 nginx -t && systemctl enable --now nginx && systemctl reload nginx

@@ -5,18 +5,20 @@
 #   --ssh-mode keep       SSH ポートを全体に許可（初回だけ。最短。終わったら ip: か closed に変える）
 #   --ssh-mode ip:1.2.3.4 SSH ポートをその IP だけに許可
 #   --ssh-mode closed     受信を全拒否（SSH を公開しない。管理は Cloudflare Tunnel 経由の SSH か ConoHa のコンソール(VNC)）
+#   --admin-user NAME     今ログインしている管理ユーザー（sudo にパスワードが要るユーザー。既定: sudo を実行した人）。--lock-ssh のとき AllowUsers に残す
 #   --ssh-port N          SSH ポート。省略時は動いている sshd の設定から読む（この VPS は 2254）
 # 締め出し防止: ufw を締める前に必ず別のターミナルで deploy の鍵ログインを確認する。ufw を有効にしても今の接続は切れない（新規接続だけが拒否される）。
 #   --lock-ssh            パスワード認証と root ログインを無効化（deploy の鍵で入れることを確認してから付ける）
 # 注意: ConoHa のコントロールパネル側（セキュリティグループ/ポート設定）にも別のフィルタがあることがある。両方確認すること。
 set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo "root で実行してください" >&2; exit 1; }
-SSH_MODE=""; PUBKEY=""; LOCK=0; SSH_PORT=""
+SSH_MODE=""; PUBKEY=""; LOCK=0; SSH_PORT=""; ADMIN="${SUDO_USER:-}"
 while [ $# -gt 0 ]; do case "$1" in
   --ssh-mode) SSH_MODE="$2"; shift 2;;
   --deploy-pubkey-file) PUBKEY="$2"; shift 2;;
   --lock-ssh) LOCK=1; shift;;
   --ssh-port) SSH_PORT="$2"; shift 2;;
+  --admin-user) ADMIN="$2"; shift 2;;
   *) echo "不明な引数: $1" >&2; exit 1;; esac; done
 [ -n "$SSH_MODE" ] || { echo "--ssh-mode が必要です（keep | ip:<ADDR> | closed）" >&2; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
@@ -71,8 +73,9 @@ KbdInteractiveAuthentication no
 PermitRootLogin no
 PubkeyAuthentication yes
 MaxAuthTries 3
-AllowUsers deploy
+AllowUsers deploy __ADMIN__
 SSHD
+  if [ -n "$ADMIN" ]; then sed -i "s/__ADMIN__/${ADMIN}/" /etc/ssh/sshd_config.d/99-keiba.conf; else sed -i "s/ __ADMIN__//" /etc/ssh/sshd_config.d/99-keiba.conf; echo "  警告: 管理ユーザーが分からないため AllowUsers は deploy だけ（--admin-user を付けて再実行を推奨）"; fi
   sshd -t && systemctl reload ssh 2>/dev/null || systemctl reload sshd
   echo "  パスワード認証と root ログインを無効化しました（deploy の鍵のみ）"
 else

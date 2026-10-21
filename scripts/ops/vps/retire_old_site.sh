@@ -5,14 +5,15 @@
 set -u
 APPLY=0; BACKUP=0
 for a in "$@"; do case "$a" in --apply) APPLY=1;; --i-have-a-backup) BACKUP=1;; esac; done
-CANDS=(apache2 httpd nginx caddy certbot.timer certbot docker pm2-root supervisor gunicorn uvicorn)
+CANDS=(keiba-api uwsgi apache2 httpd nginx caddy certbot.timer certbot docker pm2-root supervisor gunicorn uvicorn)
 echo "止める候補（存在するもの）:"
 FOUND=()
 for u in "${CANDS[@]}"; do
-  if systemctl list-unit-files 2>/dev/null | grep -q "^${u}"; then FOUND+=("$u"); echo "  - $u ($(systemctl is-active "$u" 2>/dev/null))"; fi
+  if systemctl list-unit-files 2>/dev/null | grep -q "^${u}[.]\|^${u}\$"; then FOUND+=("$u"); echo "  - $u ($(systemctl is-active "$u" 2>/dev/null))"; fi
 done
 [ ${#FOUND[@]} -gt 0 ] || { echo "  （なし）"; exit 0; }
-echo "注意: nginx は新構成（vps_02）で使うので、旧設定を退避してから入れ直します。ここで止めても問題ありません。"
+echo "注意: nginx は新構成（vps_02）で使うので、旧設定（/etc/nginx/conf.d/myapp_nginx.conf など）は vps_02 が退避してから入れ直します。ここで止めても問題ありません。"
+echo "旧サイトの実体（この VPS の実測）: keiba-api.service(uvicorn :8000) / uwsgi.service(megu-ai) / nginx(80,443) / certbot.timer。データは /var/www/megu-keiba と /home/<ユーザー> に残す（削除しない）"
 if [ "$APPLY" != 1 ]; then echo "→ 実行するなら --apply --i-have-a-backup"; exit 0; fi
 [ "$BACKUP" = 1 ] || { echo "バックアップ確認の --i-have-a-backup が必要です"; exit 3; }
 for u in "${FOUND[@]}"; do systemctl stop "$u" 2>/dev/null; systemctl disable "$u" 2>/dev/null; echo "停止: $u"; done

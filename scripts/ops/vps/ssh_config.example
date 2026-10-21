@@ -1,18 +1,29 @@
-# ~/.ssh/config に足す（ホスト機と開発 PC）。VPS の 22 番を公開しない場合は Cloudflare Tunnel 経由（cloudflared が手元にも必要）。
-# 初期設定の間だけ: IP 直接（vps_01 の --ssh-mode keep か ip:<自分の IP> のとき）。この VPS の SSH ポートは 2254
-Host keiba-vps-direct
+# ~/.ssh/config に足す。この VPS の SSH ポートは 2254（ConoHa のセキュリティグループ名 SSH-2254）、管理ユーザーは hogehoge（鍵のみ。sudo はパスワードが要る）。
+# ユーザーの回線は VPS への SSH でバナー交換がタイムアウトするため、ホスト機（keiba-remote）を踏み台にする（ProxyJump）。
+
+# 管理用（手元の PC から。ホスト機経由）。ユーザーが使っている alias の例
+Host rakuten-server
+    HostName 160.251.250.252
+    Port 2254
+    User hogehoge
+    IdentityFile ~/.ssh/rakuten-pc-key-2026-05-19-20-23.pem
+    ProxyJump keiba-remote
+
+# 配布用（ホスト機の ~/.ssh/config。promote.sh が使う）。ホスト機から VPS へは直接届く。deploy の鍵はホスト機で作る:
+#   ssh-keygen -t ed25519 -f ~/.ssh/keiba_vps_ed25519 -C keiba-host-deploy     # 公開鍵(.pub)だけを VPS の deploy に渡す
+Host keiba-vps
     HostName 160.251.250.252
     Port 2254
     User deploy
     IdentityFile ~/.ssh/keiba_vps_ed25519
     IdentitiesOnly yes
 
-# 通常: Tunnel 経由（vps_01 を --ssh-mode closed にした後）。Cloudflare 側で ssh.megu-keiba.com → ssh://localhost:2254 の route と Access アプリが必要
-Host keiba-vps
-    HostName ssh.megu-keiba.com
-    User deploy
-    IdentityFile ~/.ssh/keiba_vps_ed25519
-    IdentitiesOnly yes
-    ProxyCommand cloudflared access ssh --hostname %h
-# 非対話（ホスト機の cron や promote_if_approved.sh）で使う場合は、サービストークンを環境変数で渡す（ファイルに書かない）:
-#   export TUNNEL_SERVICE_TOKEN_ID=...  TUNNEL_SERVICE_TOKEN_SECRET=...   （cloudflared access ssh が読む）
+# SSH の公開ポートを閉じた後（vps_01 --ssh-mode closed）は Cloudflare Tunnel 経由に切り替える（ssh.megu-keiba.com → ssh://localhost:2254 の route + Access）:
+# Host keiba-vps
+#     HostName ssh.megu-keiba.com
+#     User deploy
+#     IdentityFile ~/.ssh/keiba_vps_ed25519
+#     IdentitiesOnly yes
+#     ProxyCommand cloudflared access ssh --hostname %h
+# 非対話（ホスト機の cron など）では、サービストークンを環境変数で渡す（ファイルに書かない）:
+#   export TUNNEL_SERVICE_TOKEN_ID=...  TUNNEL_SERVICE_TOKEN_SECRET=...
