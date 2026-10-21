@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "note": "移行フェーズごとの月額の想定範囲（円）。値の根拠は docs/operations/architecture_target.md 7章と python -m src.scripts.ops.cost_estimate。フェーズを進めたら current_phase を書き換える（手順: docs/operations/migration_runbook.md）。",
+    "scenario": "A_budget_core"
+  },
+  "current_phase": 1,
+  "budget_jpy_per_month": 2000,
+  "phases": [
+    {"id": 0, "name": "現状（ホスト PC に全部）", "expected_min_jpy": 0, "expected_max_jpy": 300},
+    {"id": 1, "name": "UI を VPS へ", "expected_min_jpy": 0, "expected_max_jpy": 300},
+    {"id": 2, "name": "API とデータの GCP 化", "expected_min_jpy": 0, "expected_max_jpy": 500},
+    {"id": 3, "name": "予測生成・集計・通知の GCP 化", "expected_min_jpy": 0, "expected_max_jpy": 1400},
+    {"id": 4, "name": "取得の薄い実行役 + GCP 試験", "expected_min_jpy": 300, "expected_max_jpy": 2160},
+    {"id": 5, "name": "ホストはモデリングのみ", "expected_min_jpy": 300, "expected_max_jpy": 2160}
+  ],
+  "spike": {
+    "ratio": 3.0,
+    "min_abs_jpy": 30,
+    "floor_jpy": 5,
+    "daily_total_alert_jpy": 200
+  },
+  "service_to_component": {
+    "Cloud Run": ["cloud_run_service", "cloud_run_jobs"],
+    "Cloud Run Functions": ["cloud_run_jobs"],
+    "Cloud Storage": ["gcs"],
+    "Cloud Scheduler": ["scheduler"],
+    "Secret Manager": ["secret_manager"],
+    "Artifact Registry": ["artifact_registry"],
+    "Cloud Logging": ["logging"]
+  }
+}

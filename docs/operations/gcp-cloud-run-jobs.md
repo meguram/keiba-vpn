@@ -277,7 +277,11 @@ OS crontab で動いている定期ジョブ群を、GCP の **Cloud Scheduler +
   （`fetch_daily_cost()` が Cloud Billing の BigQuery 課金エクスポートテーブル
   （環境変数 `GCP_BILLING_BQ_TABLE`）をクエリし、`format_cost_report()` で日本語の
   サービス別コストレポートに整形して `src.utils.notify.notify_slack()` で通知する。
-  `--date` 省略時は前日 JST）
+  `--date` 省略時は前日 JST）。**移行中は `--watch` を付ける**:
+  `python -m src.scripts.cloud_jobs.gcp_daily_cost_report --watch`
+  （今月累計・月末見込み・移行フェーズの想定範囲（`config/migration_phases.json`）との比較を同じ通知に足し、
+  サービス別の急増（前日比/7 日平均比 3 倍かつ 30 円以上、日次合計 200 円以上）と案 A の上限超えは
+  `[GCPコスト警告]` として別メッセージで出す。設定・しきい値の根拠: `docs/operations/gcp_setup_runbook.md` 8 章）
 - **前提条件**: GCPコンソールの「お支払い」→「課金データのエクスポート」→
   「BigQueryにエクスポート」を事前に有効化し、作成されたエクスポート先テーブルを
   `GCP_BILLING_BQ_TABLE`（`.env.example` 参照）に設定しておく必要がある
