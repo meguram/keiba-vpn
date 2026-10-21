@@ -190,12 +190,6 @@ export function buildTdMap(
   return m;
 }
 
-/** v2 の秒（消耗・要求・供給）。値が小さく符号に意味があるので、符号付きの小数 2 桁で出す。 */
-export function fmtSec2(v: number): string {
-  const r = Math.round(v * 100) / 100;
-  return r === 0 ? "±0.00" : `${r > 0 ? "+" : "−"}${Math.abs(r).toFixed(2)}`;
-}
-
 /** 基準との差の表示。−0.0 にならないよう丸めてから符号を付ける。 */
 export function fmtDelta(d: number): string {
   const r = Math.round(d * 10) / 10;

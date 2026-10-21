@@ -2,8 +2,8 @@
 
 import { useId, useState } from "react";
 import { benchmarkSummary, benchmarkTitle, clearsLine, passState } from "@/lib/classBenchmark";
-import { md, recentMean, type ClassBenchmark, type ExpectedMegu, type RecentRun } from "@/lib/expectedMegu";
-import { barHeightPct, barLabel, barTone, bestIndex, chronological, courseText, finishMark, isComparable, prevSummary, type TodayCourse } from "@/lib/pastRunsView";
+import { md, type ClassBenchmark, type ExpectedMegu, type RecentRun } from "@/lib/expectedMegu";
+import { barHeightPct, barLabel, barTone, bestIndex, chronological, courseText, finishMark, isComparable, type TodayCourse } from "@/lib/pastRunsView";
 
 /* 馬柱（競馬新聞の 1 マス風）: 各馬の直近5走を、前走から順に、レース情報と実測のめぐ指数つきで並べる。
    出馬表の各馬の行の直下（広い・中間の表）と、カードの下段（スマホ）に置く。指数は実測（過去走）だけ。今回の想定は出さない。 */
@@ -18,21 +18,22 @@ export const PAST_RUNS_CSS = `
 .pr-row:hover{background:rgba(96,165,250,0.06)}
 .pr-row:focus-visible{outline:2px solid #60a5fa;outline-offset:1px}
 .pr-row[aria-expanded="true"]{border-color:rgba(96,165,250,0.45);background:rgba(96,165,250,0.08)}
-.pr-lead{display:flex;flex-direction:column;gap:3px;flex:0 0 150px;min-width:0;font-size:11px;color:var(--text-dim);line-height:1.35}
+.pr-lead{display:flex;flex-direction:column;gap:4px;flex:0 0 150px;min-width:0;font-size:11px;color:var(--text-dim);line-height:1.35}
 .pr-lead b.t{color:var(--text);font-size:12px}
-.pr-bars{display:flex;align-items:flex-end;gap:7px;flex:0 0 auto}
-.pr-bar{display:flex;flex-direction:column;align-items:center;gap:2px;width:30px}
-.pr-bar .n{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text-dim);line-height:1}
-.pr-bar .track{height:34px;width:16px;display:flex;align-items:flex-end}
+.pr-bars{display:flex;align-items:flex-end;gap:10px;flex:0 0 auto}
+.pr-bar{display:flex;flex-direction:column;align-items:center;gap:3px;width:38px}
+.pr-bar .n{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--text);line-height:1}
+.pr-bar .track{height:38px;width:20px;display:flex;align-items:flex-end}
 .pr-bar .fill{width:100%;border-radius:3px 3px 0 0;min-height:3px}
 .pr-bar.clear .fill{background:#4ade80}.pr-bar.clear .n{color:#4ade80}
 .pr-bar.below .fill{background:#64748b}
 .pr-bar.plain .fill{background:#7c8aa5}
+.pr-bar.clear .n{color:#4ade80}
 .pr-bar.best .fill{box-shadow:0 0 0 2px #fbbf24}.pr-bar.best .n{color:#fbbf24}
 .pr-bar.low{opacity:.55}
 .pr-bar.off{opacity:.4}.pr-bar.off .fill{background:transparent;border:1px dashed #64748b;border-bottom:none}.pr-bar.off .n{color:var(--text-dim);font-weight:500}
-.pr-bar .mk{width:12px;height:12px;border-radius:999px;box-sizing:border-box}
-.pr-bar .mk.gold{background:#fbbf24}.pr-bar .mk.blue{background:rgba(96,165,250,0.35);border:1px solid #60a5fa}
+.pr-bar .fin{font-size:11px;line-height:1;color:var(--text-dim);white-space:nowrap}
+.pr-bar .fin.gold{color:#fbbf24;font-weight:800}.pr-bar .fin.blue{color:#93c5fd;font-weight:700}
 .pr-prev{flex:1 1 200px;min-width:0;font-size:12px;color:var(--text);line-height:1.4}
 .pr-prev small{color:#fbbf24;font-weight:800;margin-left:4px;font-size:11px}
 .pr-caret{margin-left:auto;color:var(--text-dim);font-size:11px;white-space:nowrap}
@@ -43,7 +44,7 @@ export const PAST_RUNS_CSS = `
 .pt-tbl tr.pt-r1 td{border-bottom:none;padding-bottom:3px}
 .pt-tbl tr.pt-r2 td{padding:0 6px 8px;border-bottom:1px solid rgba(36,48,73,.75);overflow:visible;text-overflow:clip}
 @media (max-width:1099px){.pr-detail{grid-template-columns:repeat(auto-fit,minmax(138px,1fr))}}
-@media (max-width:768px){.pr-lead{flex:1 1 100%;flex-direction:row;align-items:center;flex-wrap:wrap;gap:3px 8px}.pr-prev{flex:1 1 100%}}
+@media (max-width:768px){.pr-lead{flex:1 1 100%;flex-direction:row;align-items:center;flex-wrap:wrap;gap:3px 8px}.pr-bars{flex:1 1 auto;justify-content:space-between;gap:4px}.pr-bar{width:auto;flex:1 1 0}}
 `;
 
 function finishStyle(f?: number) {
@@ -80,10 +81,8 @@ export function PastRunStrip({ e, bench, today }: { e?: ExpectedMegu | null; ben
   const runs = chronological(e?.recent, SLOTS);                    // 古い→新しい（棒グラフ用）
   const cmp = (r: RecentRun) => isComparable(r, today);              // 判定の対象は、同じ芝/ダートで距離が近い走だけ
   const best = bestIndex(runs, cmp);
-  const mean = recentMean(e);
   const comparable = newest.filter(cmp);
   const ps = passState(comparable, bench);
-  const prev = prevSummary(newest[0]);
   const line = bench?.line ?? null;
   if (!runs.length) return <div className="pr-wrap"><div className="pr-row" style={{ cursor: "default", opacity: 0.7 }}><div className="pr-lead"><b className="t">直近5走</b><span>初出走、または指数が未計算</span></div></div></div>;
   return (
@@ -91,7 +90,7 @@ export function PastRunStrip({ e, bench, today }: { e?: ExpectedMegu | null; ben
       <button type="button" className="pr-row" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)}
         title="押すと、5走それぞれの日付・コース・クラス・着順を開きます">
         <span className="pr-lead">
-          <b className="t">直近5走 <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>平均 {mean!.toFixed(0)}</span></b>
+          <b className="t">直近{runs.length}走の指数 <span style={{ fontWeight: 400, color: "var(--text-dim)", fontSize: 10 }}>古→新</span></b>
           {bench && ps.kind !== "none" ? (
             <span style={{ alignSelf: "flex-start", fontSize: 11, fontWeight: 700, padding: "0 7px", borderRadius: 999, whiteSpace: "nowrap",
               border: `1px solid ${ps.kind === "above" ? "rgba(74,222,128,0.6)" : "rgba(251,191,36,0.6)"}`, background: ps.kind === "above" ? "rgba(74,222,128,0.12)" : "rgba(251,191,36,0.1)",
@@ -105,12 +104,9 @@ export function PastRunStrip({ e, bench, today }: { e?: ExpectedMegu | null; ben
             <span key={r.date + i} className={`pr-bar ${barTone(r.value, line, cmp(r))}${i === best ? " best" : ""}${r.low ? " low" : ""}`} title={`${barLabel(r)}${cmp(r) ? "" : "（今回と条件が違う走）"}`}>
               <span className="n">{r.value.toFixed(0)}</span>
               <span className="track"><span className="fill" style={{ height: `${barHeightPct(r.value)}%` }} /></span>
-              <span className={`mk ${finishMark(r.finish)}`} />
+              <span className={`fin ${finishMark(r.finish)}`}>{r.finish ? `${r.finish}着` : "—"}</span>
             </span>
           ))}
-        </span>
-        <span className="pr-prev">
-          {prev ? <><span className="pr-line" style={{ display: "block" }}>{prev.text}{prev.grade && <small>{prev.grade}</small>}</span></> : null}
         </span>
         <span className="pr-caret" aria-hidden>{open ? "閉じる ▲" : "詳細 ▼"}</span>
       </button>
@@ -136,7 +132,7 @@ export function BenchNote({ bench }: { bench?: ClassBenchmark | null }) {
       </span>
       {open && (
         <span id={id} style={{ display: "block", fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
-          各馬の行は、指数の推移（左が古く右が最新。棒は同じ目盛り、緑は突破ライン以上、金枠はその馬の最高。丸は1着=金・2〜3着=青）と前走の要約です。押すと5走それぞれの日付・コース・クラス・着順が開きます。基準との比較（基準超え/未満）は、今回と同じ芝/ダートで距離が近い走（今回が2400m以上なら±400m、それ未満なら±200m）だけで判定し、薄く点線の棒は対象外の走です。
+          各馬の行は、指数の推移です（左が古く右が最新。棒の上が指数、下が着順。棒は同じ目盛りで、緑は突破ライン以上、金枠はその馬の最高）。押すと5走それぞれの日付・コース・クラス・着順が開きます。基準との比較（基準超え/未満）は、今回と同じ芝/ダートで距離が近い走（今回が2400m以上なら±400m、それ未満なら±200m）だけで判定し、薄く点線の棒は対象外の走です。
           指数は過去の走の実測めぐ指数（1点＝0.1秒、斤量55kg換算）で、今回の指数の想定は出しません。
           {bench && <> 突破ライン＝そのクラスの2着馬の指数の下位25%（{bench.period ?? ""}）。勝ち馬ではなく2着馬の分布から作った目安で、突破を保証するものではありません。{bench.fallback ? "年齢まで一致する基準が少ないため、クラス全体の基準です。" : ""}</>}
         </span>
