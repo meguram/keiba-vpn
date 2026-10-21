@@ -164,6 +164,25 @@ def services():
     return render_template("services.html", active="services")
 
 
+@app.route("/models")
+@require_auth
+def models():
+    return render_template("models.html", active="models")
+
+
+@app.route("/api/internal/model-perf")
+@require_auth
+def internal_model_perf():
+    """各モデルの予測性能（事前計算したキャッシュを読むだけ）。?summary=1 で /services 用の 1 版 1 行の要約だけ返す。"""
+    from src.monitor import model_perf
+
+    data = model_perf.load_all()
+    if request.args.get("summary") == "1":
+        return jsonify({"status": data["status"], "built_at": data.get("built_at"), "age_hours": data.get("age_hours"),
+                        "rows": model_perf.summary_rows(data), "hint": data.get("hint")})
+    return jsonify(data)
+
+
 @app.route("/scraping")
 @require_auth
 def scraping():

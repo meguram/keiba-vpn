@@ -182,6 +182,24 @@ Monitor App :23900         （スタンドアロン Flask）
 `filename` は `docs/decisions/` 配下への path traversal を防ぐため、解決後のパスが
 `docs/decisions/` 配下であることをチェックしている。
 
+### 4.x `/models` — モデルの予測性能（`/services` に概要カードも出る）
+
+各モデル（アンサンブル v2〜v5 と shadow、MLflow 登録モデル）の予測性能を、バージョン切り替え・重ね描きで見る。**重い計算はこの画面でしない**: `python -m src.scripts.data.model_perf_cache build`（読み取り専用）が `data/local/meta/model_perf/`（`KEIBA_MODEL_PERF_DIR` で変更）に JSON を作り、画面はそれを読むだけ。キャッシュが無いバージョンは『未計算』と出る。重い処理なのでホストでは `/tmp/heavy_run.sh model-perf python -m src.scripts.data.model_perf_cache build` で流す（LightGBM の重要度を読むため）。
+
+| セクション | 内容 | データ源 |
+|---|---|---|
+| バージョン選択・指標・確率の種類 | チップで複数選択（重ね描き）。指標は 勝率/連対/複勝 LogLoss・Top1 的中率・勝率 ECE | — |
+| 一覧 | test 2025 の LogLoss（勝率・連対・複勝）・AUC・Brier・ECE・Top1 的中率・3 着内率、2026 本番の勝率 LogLoss とレース数、学習の終わり・行数・特徴量数・メンバー・追加群・MLflow 名 | `final_eval_vN/test2025_predictions.parquet`（再計算）、`final_vN/bundle*/fit_info.json` |
+| ① 本番での推移（週別） | 2026 年の予測×実着順。バージョンごとに線。LogLoss は ±1.96 標準誤差、Top1 は Wilson 区間の帯。**30 レース未満の週は白抜き**で参考扱い。無い版・期間は線を引かず『データなし』 | `inference/predictions_backfill/<bundle>/<日>/*.parquet`、`features/target/rank_tbl/2026` |
+| ② 学習・評価時点の推移（年別） | 学習時の年別検証（出力が残る版のみ）＋ test 2025 の点 | `ensemble_v2/ensemble_v2_fold_metrics.csv` 等 |
+| 校正 | 予測確率の等頻度 10 区間の平均と実際の割合（対角線が理想）。ECE | test 2025 の予測 |
+| 特徴量の寄与率 | LightGBM 系メンバーのゲイン重要度。上位特徴量の横棒と、群別（馬主・調教・血統…）の版間比較 | バンドルの `lgb_{win,top3}.txt`。群分けは `config/model_feature_groups.json`（編集可・（推定）は根拠が弱い） |
+| MLflow の個別モデル | カタログの各モデルの run 数・直近の run・直近の指標 | MLflow（`mlflow/runs/mlflow.db`） |
+
+- **2026 年はテストセット②**（学習にも選択にも使っていない）。画面にも明示する。2025 は v1〜v5 の選択に使い終わったテストセット①。
+- **含めない**: オッズ生データ・個人情報・秘密。XGBoost・NN・線形メンバーの重要度（LightGBM 系のみ）。permutation / SHAP は未実装（重いので事前計算ジョブに足す余地）。
+- 不足の見え方: shadow は日付ごとにモデルが変わりうるので別系列。v3 の 2026 本番（バックフィル）は無い。v5 のバックフィルは一部の日のみ。
+
 ---
 
 ## 5. ファイル構成
@@ -198,6 +216,8 @@ src/monitor/
     scraping.html      # /scraping
     cron.html          # /cron 定期ジョブの状態
     data.html          # /data
+    models.html        # /models モデルの予測性能（キャッシュを読むだけ）
+  model_perf.py        # /models 用: 事前計算キャッシュの読み出し（欠けても落ちない）
     system.html        # /system
     logs.html          # /logs
     git.html           # /git
@@ -279,6 +299,7 @@ bash scripts/server/service_start.sh --env stg --monitor
 | `GET /api/internal/cron-status` | 全 cron ジョブの状態（待機中/実行中）・次回予定・最終実行・結果（成功/警告/失敗/見送り）・失敗の原因（`src/monitor/cron_failure_patterns.py` の辞書で判別）。画面は `/cron` |
 | `GET /api/internal/page-quality?date=YYYY-MM-DD` | ページ品質チェック結果（省略時は最新）|
 | `POST /api/internal/page-quality/run` | ページ品質チェックをオンデマンド実行 |
+| `GET /api/internal/model-perf` | モデルの予測性能（事前計算キャッシュ。`?summary=1` で /services 用の要約）|
 | `GET /api/internal/data-stores` | PostgreSQL / SQLite / Parquet データストア状態（`/data-stores` ページ用）|
 
 ---

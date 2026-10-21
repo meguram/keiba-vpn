@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "note": "特徴量の群分け（モデル性能ページの『群別の寄与率』用）。先頭から順に最初に合った規則の群になる。（推定）は列名の接頭辞からの推定で、実装の根拠が弱い群。直すときはここだけ編集して model_perf_cache を再実行する。",
+  "rules": [
+    {"group": "馬主", "regex": "^(o|ob)_"},
+    {"group": "調教・追い切り", "regex": "^tl_"},
+    {"group": "補助ヘッド予測", "regex": "^mtl_"},
+    {"group": "前段モデル", "regex": "^s_(time|rank)"},
+    {"group": "血統", "regex": "^(ped|pd|pxc|pxe)_|^(sire|dam_sire)_"},
+    {"group": "騎手・調教師", "regex": "^(jockey|trainer)_(?!weight)"},
+    {"group": "馬の通算成績", "regex": "^horse_(?!number)"},
+    {"group": "馬場・コース適性", "regex": "^(wc|td|track)_"},
+    {"group": "出走メンバー内の相対（推定）", "regex": "^(fd|fdr|fm|fc|fr|frp|frn|fe|f1|f2|f3)_"},
+    {"group": "過去走・履歴（推定）", "regex": "^(seq|lag[0-9]+|chg|rest|exp|sr|a|b|c|d|pc)_"},
+    {"group": "相対化・標準化（推定）", "regex": "^zg?c?(_|$)"},
+    {"group": "レース条件・当日の枠/斤量", "regex": "^(surface|direction|grade|race_class|weather|track_condition|venue_code|weight_rule|course_type|sex|distance|field_size|round|horse_number|bracket_number|jockey_weight|weight|weight_change|age|start_hour)$"}
+  ],
+  "default": "その他（未分類）"
+}

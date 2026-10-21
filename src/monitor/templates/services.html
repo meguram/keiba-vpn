@@ -4,6 +4,13 @@
 {% block content %}
 <div class="page-title"><span class="icon">🔌</span> サービス詳細</div>
 
+<div class="card" id="model-card">
+  <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+    <span>🎯 モデルの予測性能（概要）</span><a href="/models" style="color:var(--accent);text-decoration:none;text-transform:none">詳しく見る（精度の推移・寄与率）→</a>
+  </div>
+  <div id="model-perf"><span class="loading">読込中...</span></div>
+</div>
+
 <div id="svc-detail"><span class="loading">読込中...</span></div>
 
 <p class="last-updated">最終更新: <span id="last-ts">—</span>（30秒ごと自動更新）</p>
@@ -75,7 +82,20 @@ async function refresh() {
     document.getElementById('svc-detail').innerHTML = '<span class="text-error">取得失敗</span>';
   }
 }
+async function loadModelPerf() {
+  const el = document.getElementById('model-perf');
+  try {
+    const d = await fetch('/api/internal/model-perf?summary=1').then(r => r.json());
+    if (d.status !== 'ok' || !(d.rows || []).length) { el.innerHTML = '<span class="text-muted">未計算です（ホストで model_perf_cache build を実行すると表示されます）</span>'; return; }
+    const f = (v, n = 4) => (v == null ? '—' : Number(v).toFixed(n));
+    el.innerHTML = '<table><tr><th>バージョン</th><th style="text-align:right">test 2025 勝率LogLoss</th><th style="text-align:right">Top1 的中率</th><th style="text-align:right">2026 本番 勝率LogLoss</th><th style="text-align:right">2026 レース数</th></tr>' +
+      d.rows.map(r => r.status === 'not_computed' ? `<tr><td>${esc(r.label)}</td><td colspan="4" class="text-muted">未計算</td></tr>`
+        : `<tr><td>${esc(r.label)}</td><td style="text-align:right">${f(r.test_win_logloss)}</td><td style="text-align:right">${r.test_top1_hit == null ? '—' : (r.test_top1_hit * 100).toFixed(1) + '%'}</td><td style="text-align:right">${f(r.prod_win_logloss)}</td><td style="text-align:right">${r.prod_races ?? '—'}</td></tr>`).join('') +
+      `</table><p class="last-updated" style="text-align:left">キャッシュ作成: ${esc(d.built_at || '—')}（${d.age_hours ?? '—'} 時間前）。2026 年はテストセット②（学習・選択に未使用）。</p>`;
+  } catch (e) { el.innerHTML = '<span class="text-error">取得失敗</span>'; }
+}
 refresh();
+loadModelPerf();
 setInterval(refresh, 30000);
 </script>
 {% endblock %}
