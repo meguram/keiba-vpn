@@ -27,7 +27,7 @@ case "${1:-status}" in
       args=(--location "$REGION" --schedule "$cron" --time-zone Asia/Tokyo --uri "$URI" --http-method POST
             --oauth-service-account-email "$SA" --headers Content-Type=application/json --message-body "$body" --attempt-deadline 180s)
       if gcloud scheduler jobs describe "$name" --location "$REGION" >/dev/null 2>&1; then
-        gcloud scheduler jobs update http "$name" "${args[@]}" >/dev/null
+        gcloud scheduler jobs update http "$name" "${args[@]/--headers/--update-headers}" >/dev/null   # update は --update-headers
       else
         gcloud scheduler jobs create http "$name" "${args[@]}" >/dev/null
       fi
