@@ -16,6 +16,8 @@ export type Kpi = {
   estimated_races: number;
   by_type: Record<string, BetByType>;
   winner_logloss: number | null;
+  /** 市場補正した確率のレースだけ。同じレースの元のモデルの確率と補正後の勝ち馬の対数損失 */
+  winner_logloss_model?: { n: number; model: number; calibrated: number } | null;
 };
 
 export type RacePick = {

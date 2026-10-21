@@ -40,6 +40,28 @@ def load_config() -> dict:
         return {}
 
 
+PC_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "ev_calibration_pc.json"
+
+
+@lru_cache(maxsize=1)
+def load_config_pc() -> dict:
+    """確率を市場補正（KEIBA_PROB_CALIBRATION=1）したレース用の EV 較正。補正後の確率から作った EV に当てはめ直したもの（tp-70）。無ければ空。"""
+    try:
+        d = json.loads(PC_CONFIG_PATH.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def active_config(prob_calibrated: bool = False) -> dict:
+    """確率を市場補正したレースは PC 版（あれば）、それ以外は従来の設定。二重に補正しないための切り替え。"""
+    if prob_calibrated:
+        pc = load_config_pc()
+        if pc:
+            return pc
+    return load_config()
+
+
 def is_enabled(config: dict | None = None) -> bool:
     cfg = load_config() if config is None else config
     return bool(cfg.get("enabled"))

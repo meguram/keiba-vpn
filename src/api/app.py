@@ -6931,6 +6931,13 @@ async def get_race_predictions(race_id: str):
     （age_hours / is_stale 等）を付与。既存クライアントは未知キーを無視するため後方互換。
     """
     def _with_kesi(resp: dict) -> dict:
+        # 市場補正（KEIBA_PROB_CALIBRATION=1 のときだけ。実オッズが揃うレースで確率・EV・印を付け直す。保存済みの予測は書き換えない）
+        try:
+            from src.utils.prob_calibration import apply_prob_calibration
+
+            resp = apply_prob_calibration(resp)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("確率の市場補正に失敗 %s: %s", race_id, exc)
         # 保存済みの予測には消印が無いので、確率と単勝オッズ（人気）が揃っていれば読み出し時に付ける（◎○▲★は変えない）
         try:
             from src.utils.race_probabilities import assign_kesi_mark

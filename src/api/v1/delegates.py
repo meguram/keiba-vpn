@@ -66,6 +66,16 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
         pair_odds = storage.load("race_pair_odds", race_id) or {}
         single_odds = storage.load("race_odds", race_id)
 
+    # 市場補正（KEIBA_PROB_CALIBRATION=1 のときだけ）: 実オッズがあるとき、推奨の確率を補正後にする（画面の確率・EV・印と同じ）
+    prob_cal_meta = None
+    if odds["source"] == "actual":
+        try:
+            from src.utils.prob_calibration import calibrate_prediction_list
+
+            predictions, prob_cal_meta = calibrate_prediction_list(predictions, single_odds, odds_phase=odds_phase)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("推奨の確率の市場補正に失敗 %s: %s", race_id, exc)
+
     # 1 レースの購入合計の上限（円）。未指定は 2000 円。null / 0 は上限なし。
     raw_cap = body.get("max_total_bet", DEFAULT_MAX_TOTAL_BET)
     max_total_bet: int | None = None
@@ -118,7 +128,7 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
             item["odds_gap"] = round(c.odds / pred_odds - 1, 3)
         candidates_out.append(item)
 
-    calibrated = _calibrate_candidates(candidates_out)
+    calibrated = _calibrate_candidates(candidates_out, bool(prob_cal_meta and prob_cal_meta.get("applied")))
     return {
         "race_id": race_id,
         "bankroll": body.get("bankroll", 100000),
@@ -134,6 +144,7 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
         "odds_as_of": odds["as_of"],
         "available_odds": odds["available"],
         "odds_note": odds["note"],
+        **({"prob_calibration": prob_cal_meta} if prob_cal_meta else {}),
     }, 200
 
 
@@ -143,19 +154,21 @@ def _levels_now():
     return value_levels()
 
 
-def _calibrate_candidates(candidates_out: list[dict]) -> dict:
-    """推奨買い目に、較正後の EV（ev_calibrated）と購入額加重の期待回収率を付ける。EV の較正が無効のときは何も付けない。"""
-    from src.utils.ev_calibration import LABEL, calibrate_portfolio, load_config
+def _calibrate_candidates(candidates_out: list[dict], prob_calibrated: bool = False) -> dict:
+    """推奨買い目に、較正後の EV（ev_calibrated）と購入額加重の期待回収率を付ける。EV の較正が無効のときは何も付けない。
+    確率を市場補正したレース（prob_calibrated）は、補正後の確率から作った EV に当てはめ直した版（config/ev_calibration_pc.json）を使う（二重に補正しない）。"""
+    from src.utils.ev_calibration import LABEL, active_config, calibrate_portfolio
 
-    cal = calibrate_portfolio(candidates_out)
+    cfg = active_config(prob_calibrated)
+    cal = calibrate_portfolio(candidates_out, cfg)
     if cal is None:
         return {}
-    kinds = load_config().get("kinds") or {}
+    kinds = cfg.get("kinds") or {}
     for item, e in zip(candidates_out, cal["evs"]):
         item["ev_calibrated"] = round(e, 3)
         spec = kinds.get(f"cand_{item['bet_type']}")
         item["ev_calibration_validated"] = bool(spec and spec.get("validated"))
-    rng = load_config().get("range") or {}
+    rng = cfg.get("range") or {}
     return {"expected_roi_calibrated": cal["expected_roi"], "expected_return_calibrated": cal["expected_return"],
             "roi_pct_calibrated": None if cal["expected_roi"] is None else round(cal["expected_roi"] * 100, 1),
             "roi_calibrated_capped": bool(cal.get("capped")), "ev_label": LABEL,

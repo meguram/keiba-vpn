@@ -67,6 +67,9 @@ def _kpi(s: dict) -> dict:
         "by_type": {bt: {**v, "label": pr.BET_LABELS.get(bt, bt), "roi": pr.rate(v["returned"], v["invested"])}
                     for bt, v in b["by_type"].items()},
         "winner_logloss": round(ll["sum"] / ll["n"], 4) if ll["n"] else None,
+        # 市場補正した確率のレースだけ: 同じレースの元のモデルの確率での勝ち馬 LogLoss と、補正後の値（小さいほど良い）
+        "winner_logloss_model": ({"n": lm["n"], "model": round(lm["sum"] / lm["n"], 4), "calibrated": round(lm["sum_calibrated"] / lm["n"], 4)}
+                                 if (lm := s.get("logloss_model")) and lm.get("n") else None),
     }
 
 

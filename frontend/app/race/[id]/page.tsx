@@ -8,6 +8,8 @@ import { USE_MOCK, getMockRaceDetail, getMockPredictions, getMockTdData, getMock
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { featureEnabled } from "@/lib/features";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
+import ProbCalNote from "@/components/ProbCalNote";
+import type { ProbCalibration } from "@/lib/probCalibration";
 import { BetRecommend } from "@/components/BetRecommend";
 import { RaceNav } from "@/components/RaceNav";
 import { bracketChipStyle, bracketOf as wakuOf } from "@/lib/bracket";
@@ -134,6 +136,9 @@ type PredEntry = {
   win_prob?: number | null;
   top2_prob?: number | null;
   top3_prob?: number | null;
+  win_prob_model?: number | null;
+  top2_prob_model?: number | null;
+  top3_prob_model?: number | null;
   ev_win?: number | null;
   ev_place?: number | null;
   /** EV の較正が有効なときの、較正後の値。あれば画面はこちらを表示する */
@@ -162,6 +167,7 @@ type PredData = {
   predictions?: PredEntry[];
   feature_highlights?: { label?: string; direction?: string; magnitude?: string }[];
   bet_suggestion?: unknown;
+  prob_calibration?: ProbCalibration | null;
   [k: string]: unknown;
 };
 
@@ -666,6 +672,8 @@ export default function RaceDetailPage() {
         )}
       </div>
 
+      {hasPred && <ProbCalNote pc={predData?.prob_calibration} preds={predData?.predictions} />}
+
       {!hasPred && (
         <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-dim)", padding: "10px 14px", borderRadius: 8, background: "rgba(36,48,73,0.4)" }}>
           予測結果がありません。「AI予測を実行」で算出できます。
@@ -680,7 +688,7 @@ export default function RaceDetailPage() {
             <thead style={{ background: "var(--surface2)" }}>
               <tr>
                 <th style={{ ...TH, textAlign: "center" }} colSpan={3}>出走馬</th>
-                <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={3}>予測確率</th>
+                <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={3}>{predData?.prob_calibration?.applied ? "予測確率（市場補正後）" : "予測確率"}</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>想定オッズ</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>期待値</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>推奨</th>

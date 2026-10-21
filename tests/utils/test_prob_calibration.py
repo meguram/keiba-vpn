@@ -102,3 +102,63 @@ class LibTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ApplyTest(unittest.TestCase):
+    def preds(self, n=14, seed=1, **extra):
+        rng = np.random.default_rng(seed)
+        odds = np.sort(rng.uniform(1.8, 90, n)).round(1)
+        w = rng.dirichlet(np.ones(n))
+        from src.utils.race_probabilities import harville_top2_prob, harville_top3_prob
+
+        t2, t3 = harville_top2_prob(w), harville_top3_prob(w)
+        return [{"horse_number": i + 1, "win_prob": float(w[i]), "top2_prob": float(t2[i]), "top3_prob": float(t3[i]), "win_odds": float(odds[i]),
+                 "top2_odds_est": 5.0, "place_odds_eff": 2.0, "mark_type": "none", **extra} for i in range(n)]
+
+    def test_off_returns_input(self):
+        r = {"predictions": self.preds(), "has_prediction": True}
+        with mock.patch.dict(os.environ, {"KEIBA_PROB_CALIBRATION": ""}):
+            self.assertIs(P.apply_prob_calibration(r), r)
+
+    def test_applied_keeps_model_probs_and_sums(self):
+        with mock.patch.dict(os.environ, {"KEIBA_PROB_CALIBRATION": "1"}):
+            r = P.apply_prob_calibration({"predictions": self.preds(), "has_prediction": True}, odds_phase="t15")
+        self.assertTrue(r["prob_calibration"]["applied"])
+        self.assertEqual(r["prob_calibration"]["odds_phase"], "t15")
+        ps = r["predictions"]
+        self.assertAlmostEqual(sum(e["win_prob"] for e in ps), 1.0, places=2)
+        self.assertAlmostEqual(sum(e["top3_prob"] for e in ps), 3.0, places=1)
+        self.assertTrue(all("win_prob_model" in e and e["prob_calibrated"] for e in ps))
+        self.assertTrue(all(e["ev_win"] == round(e["win_prob"] * e["win_odds"], 3) for e in ps))
+        self.assertIn("honmei", {e["mark_type"] for e in ps})
+
+    def test_not_applied_reasons(self):
+        with mock.patch.dict(os.environ, {"KEIBA_PROB_CALIBRATION": "1"}):
+            small = P.apply_prob_calibration({"predictions": self.preds(n=6), "has_prediction": True})
+            pred_odds = P.apply_prob_calibration({"predictions": self.preds(odds_source="predicted"), "has_prediction": True})
+            ps = self.preds()
+            ps[3]["win_odds"] = None
+            missing = P.apply_prob_calibration({"predictions": ps, "has_prediction": True})
+        for r in (small, pred_odds, missing):
+            self.assertFalse(r["prob_calibration"]["applied"])
+            self.assertTrue(r["prob_calibration"]["reason"])
+            self.assertNotIn("win_prob_model", r["predictions"][0])
+
+    def test_no_double_application(self):
+        with mock.patch.dict(os.environ, {"KEIBA_PROB_CALIBRATION": "1"}):
+            once = P.apply_prob_calibration({"predictions": self.preds(), "has_prediction": True})
+            twice = P.apply_prob_calibration(once)
+        self.assertIs(once, twice)
+
+    def test_pc_thresholds_for_star_and_kesi(self):
+        from src.utils import race_probabilities as RP
+
+        e = {"win_odds": 15.0, "ev_win": 0.85, "ev_place": 0.0, "top3_prob": 0.2}
+        self.assertFalse(RP.qualifies_star_mark(dict(e), 0.07))                      # 従来の水準（EV>=1.0）では★にならない
+        self.assertTrue(RP.qualifies_star_mark({**e, "prob_calibrated": True}, 0.07))  # 補正後の確率用の水準（0.80）では★
+        ents = [{"horse_number": i + 1, "win_odds": 3.0 + 4 * i, "top3_prob": 0.07 if i == 11 else 0.4, "prob_calibrated": True, "mark_type": "none"} for i in range(12)]
+        RP.assign_kesi_mark(ents)
+        self.assertNotEqual(ents[11]["mark_type"], "kesi")                           # 補正後 7% は 6% 超（従来の 8% では消）
+        ents[11]["top3_prob"] = 0.055
+        RP.assign_kesi_mark(ents)
+        self.assertEqual(ents[11]["mark_type"], "kesi")

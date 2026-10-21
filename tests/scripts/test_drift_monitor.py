@@ -203,3 +203,29 @@ def test_coverage_census_and_status():
     assert st["status"] == "alert" and st["latest_month"] == "2026-06"
     assert C.coverage_status(t.iloc[:1], 0.9)["status"] == "ok"
     assert C.coverage_status(t.iloc[:0])["status"] == "no_data"
+
+
+def test_pop_calibration_section_flags_shifted_class():
+    import numpy as np
+    import pandas as pd
+
+    from src.scripts.data.drift_monitor import pop_calibration_section
+
+    rng = np.random.default_rng(0)
+
+    def make(shift: float, n_races: int = 700) -> pd.DataFrame:
+        rows = []
+        for r in range(n_races):
+            q = rng.dirichlet(np.ones(12))
+            for i in range(12):
+                pw = float(q[i])
+                p3 = min(3 * pw, 0.95)
+                true3 = min(max(p3 + (shift if q[i] == q.max() else 0.0), 0.01), 0.99)       # 最人気だけ実績が上にずれる
+                rows.append({"race_id": r, "p_mkt": pw, "p_win": pw, "y_win": int(rng.random() < pw), "p_top3": p3, "y_top3": int(rng.random() < true3)})
+        return pd.DataFrame(rows)
+
+    base, same, moved = make(0.0), make(0.0), make(0.20)
+    ok = pop_calibration_section(same, base)
+    bad = pop_calibration_section(moved, base)
+    assert ok["status"] == "ok" or len(ok["flags"]) <= 1
+    assert bad["status"] == "alert" and any(f["pop"] == "1人気" and f["target"] == "top3" for f in bad["flags"])

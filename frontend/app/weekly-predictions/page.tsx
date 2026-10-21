@@ -11,6 +11,8 @@ import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { MeguTable } from "@/components/MeguTable";
+import ProbCalNote from "@/components/ProbCalNote";
+import type { ProbCalibration } from "@/lib/probCalibration";
 import { PredExtras } from "@/components/PredExtras";
 import { GrowthBadge } from "@/components/GrowthBadge";
 import type { Growth, GrowthMeta } from "@/lib/growth";
@@ -59,6 +61,10 @@ type PredEntry = {
   win_prob?: number | null;
   top2_prob?: number | null;
   top3_prob?: number | null;
+  /** 市場補正（KEIBA_PROB_CALIBRATION=1）した馬の、元のモデルの確率 */
+  win_prob_model?: number | null;
+  top2_prob_model?: number | null;
+  top3_prob_model?: number | null;
   ev_win?: number | null;
   ev_place?: number | null;
   /** EV の較正が有効なときの、較正後の値（過去の実績に合わせて補正した期待回収率）。あれば画面はこちらを表示する */
@@ -94,6 +100,7 @@ type PredData = {
   pace_type?: PaceType | null;
   scenario_forecast?: ScenarioForecast | null;
   gate_bias?: GateBias | null;
+  prob_calibration?: ProbCalibration | null;
   error?: string;
 };
 
@@ -675,6 +682,7 @@ function RacePanel({
           </div>
         )}
         {pred && !failed && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
+        {pred && !failed && <ProbCalNote pc={pred.prob_calibration} preds={preds} />}
         {pred && !failed && (
           <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} growthMeta={pred.growth_meta} />
         )}
@@ -928,7 +936,7 @@ export default function WeeklyPredictionsPage() {
       <div className="wp-main" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
         {/* 凡例 */}
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率8%以下。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある）</span>
+          <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率が低い馬。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある）</span>
           <span>
             期待値（過去の実績に合わせて較正した期待回収率）: <strong style={{ color: "#22c55e" }}>≥1.10</strong> / <strong style={{ color: "#60a5fa" }}>≥1.00</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.90</strong> / <strong style={{ color: "#f87171" }}>＜0.90</strong>
           </span>

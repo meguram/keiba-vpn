@@ -117,12 +117,20 @@ def qualifies_star_mark(entry: dict, base_prob: float) -> bool:
     win_odds = float(entry.get("win_odds") or 0)
     if win_odds < _STAR_WIN_ODDS_MIN or win_odds > _STAR_WIN_ODDS_MAX:
         return False
+    ev_win_min, ev_place_min = _STAR_EV_WIN_MIN, _STAR_EV_PLACE_MIN
+    if entry.get("prob_calibrated"):
+        # 市場補正した確率は EV の水準が下がる（生の EV は膨らんでいた）。★の頻度が従来に近くなる水準に置く（config/ev_calibration_pc.json の marks）
+        from src.utils.ev_calibration import active_config
+
+        mk = active_config(True).get("marks") or {}
+        ev_win_min = float(mk.get("star_ev_win_min", ev_win_min))
+        ev_place_min = float(mk.get("star_ev_place_min", ev_place_min))
     ev_win = float(entry.get("ev_win") or 0)
-    if ev_win >= _STAR_EV_WIN_MIN:
+    if ev_win >= ev_win_min:
         return True
     ev_place = float(entry.get("ev_place") or 0)
     top3 = float(entry.get("top3_prob") or 0)
-    if ev_place >= _STAR_EV_PLACE_MIN and top3 >= base_prob * 1.15:
+    if ev_place >= ev_place_min and top3 >= base_prob * 1.15:
         return True
     return False
 
@@ -353,6 +361,8 @@ def assign_kesi_mark(entries: list[dict]) -> str | None:
     """
     cfg = kesi_config()
     min_field, min_pop, p3_max = int(cfg["min_field"]), int(cfg["min_pop"]), float(cfg["p3_max"])
+    if entries and all(e.get("prob_calibrated") for e in entries) and cfg.get("p3_max_pc"):
+        p3_max = float(cfg["p3_max_pc"])        # 市場補正した確率は水準が違うので、補正後の確率で設計し直したしきい値（tp-70）
     main_marks = tuple(cfg.get("main_marks") or KESI_MAIN_MARKS)
     past = (cfg.get("evidence") or {}).get("past_rate_text") or "約2.5%"
     for e in entries:
@@ -377,12 +387,13 @@ def assign_kesi_mark(entries: list[dict]) -> str | None:
 
 def _cal_horse_ev(entry: dict, key: str, kind: str) -> float | None:
     """馬ごとの EV を較正した値。無効なら None（従来の EV を使う）。EV が無い（0 以下）ものは較正しない。"""
-    from src.utils.ev_calibration import calibrated_ev, is_enabled
+    from src.utils.ev_calibration import active_config, calibrated_ev, is_enabled
 
+    cfg = active_config(bool(entry.get("prob_calibrated")))
     v = entry.get(key)
-    if not is_enabled() or v is None or float(v) <= 0:
+    if not is_enabled(cfg) or v is None or float(v) <= 0:
         return None
-    return round(float(calibrated_ev(float(v), kind)), 3)
+    return round(float(calibrated_ev(float(v), kind, cfg)), 3)
 
 
 def attach_calibrated_ev(entry: dict) -> None:
@@ -393,10 +404,11 @@ def attach_calibrated_ev(entry: dict) -> None:
 
 def buy_recommendation_tier(entry: dict) -> str:
     """買い判断推奨度（期待値の最大を基準）。EV の較正（config/ev_calibration.json）が有効なら、較正後の EV と較正後の閾値で判定する。"""
-    from src.utils.ev_calibration import is_enabled, tier_thresholds
+    from src.utils.ev_calibration import active_config, is_enabled, tier_thresholds
 
-    th = tier_thresholds()
-    if is_enabled():
+    cfg = active_config(bool(entry.get("prob_calibrated")))
+    th = tier_thresholds(cfg)
+    if is_enabled(cfg):
         evs = [_cal_horse_ev(entry, k, kind) for k, kind in (("ev_win", "win"), ("ev_top2", "top2"), ("ev_place", "place"))]
         best = max([e for e in evs if e is not None], default=0.0)
     else:

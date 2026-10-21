@@ -490,6 +490,41 @@ def scorecard(rep: dict) -> list[dict]:
     return cards
 
 
+POP_CLASSES = (("1人気", 0, 1), ("2人気", 1, 2), ("3人気", 2, 3), ("4-5人気", 3, 5), ("6-9人気", 5, 9), ("10人気以下", 9, 99))
+
+
+def pop_calibration_section(cur: pd.DataFrame, base: pd.DataFrame, min_n: int = 300, k: float = 3.0) -> dict:
+    """人気区分別の較正誤差（実績−予測）。直近の窓と基準期間を比べ、差が k 標準誤差を超える区分を警報にする（tp-70）。
+    人気は市場の勝率 p_mkt の順位（単勝オッズ順と同じ）。複勝・勝率それぞれの『モデルの確率』の外れ。市場補正（KEIBA_PROB_CALIBRATION）後の確率の外れは、
+    補正が有効な運用の予測を週次で集計するときにこの関数へ補正後の確率列（p_win / p_top3 に差し替え）を渡して使う。"""
+    def table(g: pd.DataFrame) -> dict:
+        x = g.assign(_rk=g.groupby("race_id")["p_mkt"].rank(ascending=False, method="first"))
+        out = {}
+        for name, lo, hi in POP_CLASSES:
+            y = x[(x["_rk"] > lo) & (x["_rk"] <= hi)]
+            if len(y) < 30:
+                continue
+            row = {"n": int(len(y))}
+            for t, pc, yc in (("win", "p_win", "y_win"), ("top3", "p_top3", "y_top3")):
+                gap = float(y[yc].mean() - y[pc].mean())
+                se = float(np.sqrt(max(y[yc].mean() * (1 - y[yc].mean()), 1e-9) / len(y)))
+                row[t] = {"gap": round(gap, 4), "se": round(se, 4), "pred": round(float(y[pc].mean()), 4), "act": round(float(y[yc].mean()), 4)}
+            out[name] = row
+        return out
+
+    c, b = table(cur), table(base)
+    flags = []
+    for name, row in c.items():
+        for t in ("win", "top3"):
+            if name in b and row["n"] >= min_n:
+                d = row[t]["gap"] - b[name][t]["gap"]
+                se = float(np.hypot(row[t]["se"], b[name][t]["se"]))
+                if se > 0 and abs(d) > k * se:
+                    flags.append({"pop": name, "target": t, "shift": round(d, 4), "z": round(d / se, 2)})
+    return {"window": c, "baseline": b, "flags": flags, "status": "alert" if flags else "ok",
+            "note": "人気区分別の『実績−予測』の変化（直近の窓 − 基準期間）。|z|>3 の区分が警報。係数の再当てはめは docs/operations/prob_calibration.md"}
+
+
 def build_report(root: Path, cfg: dict, with_features: bool = True, with_shadow: bool = True, with_coverage: bool = True, asof: str | None = None,
                  cusum_from: str | None = None, df: pd.DataFrame | None = None) -> dict:
     al = cfg["alert"]
@@ -525,6 +560,10 @@ def build_report(root: Path, cfg: dict, with_features: bool = True, with_shadow:
                                            "baseline": M.calib_bins(base_rows["p_win"], base_rows["y_win"]).round(5).to_dict("records")},
                            "series_baseline": series[series["week"] >= cfg["baseline"]["from"]].round(6).to_dict("records")},
            "coverage": cov, "cusum_from": cusum_from, "partial_week_excluded": partial}
+    try:
+        rep["pop_calibration"] = pop_calibration_section(cur, base_rows)
+    except Exception as exc:  # noqa: BLE001
+        rep["pop_calibration"] = {"status": "unavailable", "error": str(exc)[:200]}
     rep["strata"] = strata_fdr(d, last_weeks, base_end, cfg["baseline"]["from"], ["surface", "dist_band", "f_size", "venue", "is_new", "age_c", "month_s"])
     try:
         rep["labelfree"] = labelfree_section(root, cfg, window, base_end)

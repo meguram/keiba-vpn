@@ -55,6 +55,9 @@ def main() -> None:
     exo = json.load(open(D / "tp70_exotic.json"))
     marks = json.load(open(D / "tp70_marks.json"))
     cond = pd.DataFrame(json.load(open(D / "tp70_cond.json")))
+    star = json.load(open(D / "tp70_star.json"))
+    kesi = json.load(open(D / "tp70_kesi.json"))
+    evpc = json.load(open(D / "ev_pc_report.json"))
     summ = pd.DataFrame(diag["summary"])
 
     s = []
@@ -207,7 +210,7 @@ def main() -> None:
     s.append("<h3>7-2. 2026 年の月別（複勝 LL −市場）</h3>" + tbl(rows, ["月", "行数", "生", "C3", "C3r"]))
     s.append("<p>生のモデルは 2026 年のすべての月・頭数帯で市場より悪い（+0.002〜+0.019）が、較正後は全月・全頭数帯で市場を上回る（−0.0009〜−0.0081）。ローリング再当てはめ（C3r）と固定（C3）の差は小さい（月次の係数の変動は小さく、ドリフトの主因は係数の古さではない）。</p>")
 
-    s.append("<h2>8. 導入案（本番反映はしていない）</h2>")
+    s.append("<h2>8. 導入の設計（本番反映はしていない。実装は 9 節）</h2>")
     s.append("<ul><li><b>係数</b>: <code>config/prob_calibration.json</code>（2022〜2025 年の V4 OOF で当てはめた、目的ごとの 3 係数と人気区分別 6×3 係数。再作成は <code>python -m src.scripts.data.tp70_fit export --base base.parquet --out config/prob_calibration.json</code>）。既定は勝率=ブレンド(C3)、連対・複勝=人気区分別(C6)。</li>"
              "<li><b>適用</b>: <code>src/utils/prob_calibration.py</code> の <code>calibrate_entries(entries, odds_by_horse, market_is_real=True)</code>。<b>フラグ <code>KEIBA_PROB_CALIBRATION=1</code>（既定オフ）</b>のときだけ有効。8 頭未満・単勝オッズが全頭揃わない・オッズが予測オッズ（モデル由来で独立な市場ではない）のときは何もしない（従来の確率）。</li>"
              "<li><b>差し込み位置</b>: <code>src/api/local_predictions.py</code> のエントリ生成ループの直前（<code>pw, p2, p3 = …</code> の行）と、<code>src/api/app.py</code> の <code>prob_list</code> の直後（ライブ採点）。較正後の確率を <code>win_prob/top2_prob/top3_prob</code> に入れ、元の確率は <code>win_prob_model/top2_prob_model/top3_prob_model</code> に退避して API で両方返す。以降の EV・印・買い判断・推奨・割引 Harville は、そのまま較正後を使う。UI は『AI 予測の確率』（モデル）と『市場補正後の確率』（EV・印・推奨に使う）を並べて出す。</li>"
@@ -218,12 +221,51 @@ def main() -> None:
              "<li><b>ドリフト監視</b>: 週次の drift_monitor に『較正後の ECE（人気区分別）とモデル−市場差』を足す（<code>tp70_fit compare</code> の指標）。係数の再当てはめは、警告（連続 2 週）が出たときに実行。</li>"
              "<li><b>ロールバック</b>: <code>KEIBA_PROB_CALIBRATION</code> を外して API を再起動（コードは変更しない設計）。</li></ul>")
 
-    s.append("<h2>9. 結論（正直な整理）</h2>")
+    s.append("<h2>9. 導入の実装（フラグ既定オフ・本番未反映）と、下流の再当てはめ</h2>")
+    s.append("<h3>9-1. 配線</h3><ul>"
+             "<li><code>src/utils/prob_calibration.py</code> の <code>apply_prob_calibration()</code>: 実オッズが全頭に揃う 8 頭以上のレースで、確率・EV・合成スコア・印（◎○▲★△消）・較正後 EV・買い推奨度・買い目提案を<b>読み出し時</b>に付け直す。"
+             "保存済みの予測（<code>predictions_v3</code>、GCS の <code>race_predictions</code>）は書き換えない。元の確率は <code>win_prob_model / top2_prob_model / top3_prob_model</code>、レースごとのメタは <code>prob_calibration: {applied, reason, version, odds_phase, method}</code>。</li>"
+             "<li>差し込み位置: <code>local_predictions.build_payload</code>（shadow・バックフィル、オッズ文書の phase を渡す）、<code>app.py</code> の応答の組み立て（<code>_with_kesi</code> の先頭。GCS の保存済み・ライブ採点の読み出し）、"
+             "推奨ポートフォリオ <code>delegates.optimize_betting</code>（その時点の実オッズで補正した確率を最適化に渡す）、<code>prediction_results.load_predictions</code>（予測成績の集計）。"
+             "ライブ採点 <code>_compute_composite_scores</code> の直後ではなく読み出し側に置いた（そこで補正すると、補正後の確率が <code>race_predictions</code> に保存されて二重補正になるため）。</li>"
+             "<li>適用しない理由: 「予測オッズのため市場補正なし」「単勝オッズが全頭に揃っていないため市場補正なし」「8頭未満」「設定ファイルなし」。このときは確率も印も従来のまま。二重適用はしない。</li>"
+             "<li>予測成績の集計: 補正したレースは、同じレースの元のモデルの確率での勝ち馬 LogLoss（<code>logloss_model</code>）と補正後を並べて持つ（画面の『確率の精度』に併記）。</li></ul>")
+    s.append("<h3>9-2. EV の較正を補正後の確率から作り直す（二重補正を避ける）</h3>")
+    w, pl = evpc["win"], evpc["place"]
+    rows = [["単勝", "補正後の確率の EV（未補正）", f4(w["check_2026_uncalibrated"]["gap"]), f4(w["check_2026_uncalibrated"]["ece"]), "2026 年（最終確認）"],
+            ["単勝", "2023〜25 年で単調回帰", f4(w["check_2026"]["gap"]), f4(w["check_2026"]["ece"]), "2026 年（最終確認）"],
+            ["複勝", "補正後の確率の EV（未補正）", f4(pl["uncalibrated"]["gap"]), f4(pl["uncalibrated"]["ece"]), "2023〜25 年"],
+            ["複勝", "単調回帰 leave-one-year-out", f4(sum(x['gap'] for x in pl['loyo']) / 3), f4(sum(x['ece'] for x in pl['loyo']) / 3), "2023・24・25 の平均"]]
+    s.append(tbl(rows, ["券種", "EV", "ずれ（実現−予測）", "ECE", "評価"]))
+    s.append("<p>補正後の確率の単勝 EV は平均がほぼ合っており（2026 年のずれ −0.002）、2023〜25 年で当てはめた単調回帰は 2026 年の ECE を悪化させる（0.087→0.125。高 EV 帯の標本が少なくノイズが大きい）ため、PC 版は<b>単勝を恒等</b>にした。"
+             "複勝は払戻のある 2023〜25 年で単調回帰を当てはめ、leave-one-year-out の ECE が未補正より小さい（平均 0.027 対 0.035）ので採用。連対 EV（top2）と推奨ポートフォリオの <code>cand_*</code> は従来のまま"
+             "（連対 EV の実現が無い／ポートフォリオの再実行が要る。<code>calibrate_ev build_portfolio</code> を補正後の確率で再実行して差し替える。ポートフォリオの期待回収率の年別範囲と race_value の <code>levels</code> は<b>未見直し</b>）。"
+             "補正したレースだけ <code>config/ev_calibration_pc.json</code> を使い（<code>ev_calibration.active_config</code>）、補正しないレースは従来の <code>ev_calibration.json</code>。</p>")
+    s.append("<h3>9-3. 買い判断の段階</h3><p>補正後の EV は分布が下がる（強推奨 EV≥1.1 が全馬の 2.6%→1.2%、様子見 EV≥0.9 が 12.5%→22.8%）。従来の頭の割合（2.6% / 5.1% / 12.5%）に近い 3% / 6.5% / 12% になるよう、PC 版の閾値を強推奨 1.06・推奨 1.00（損益分岐）・様子見 0.95 とした。</p>")
+    s.append("<h3>9-4. ★の EV 下限</h3>")
+    rows = []
+    for r in star["rows"]:
+        rows.append([r["star_ev_win_min"], r["star_ev_place_min"], r["period"], int(r["stars"]), r["per_race"], pct(r["win_rate"]), pct(r["top3_rate"]), pct(r["win_roi"])])
+    s.append(tbl(rows, ["単勝EV下限", "複勝EV下限", "期間", "★の頭数", "1レースあたり", "勝率", "3着内率", "単勝回収率"]))
+    s.append("<p>従来の生の確率では 2023〜25 年で 7,039 頭（1 レースあたり約 0.74）。補正後の確率で下限 1.0 のままだと 2,259 頭（0.24）に減る。EV 下限を上げても単勝回収率は上がらない（0.80→98%、1.00→90%）ので、<b>従来の頻度に合わせて 0.80 / 0.88</b>（7,261 頭、0.77/レース）にした（<code>marks.star_ev_win_min</code>）。</p>")
+    s.append("<h3>9-5. 消印のしきい値</h3>")
+    rows = []
+    for r in kesi["calibrated"]:
+        if r["p3_max_pc"] in (0.05, 0.06, 0.07, 0.08):
+            rows.append([r["p3_max_pc"], r["period"], int(r["n"]), r["per_race"], pct(r["rate"]), pct(r["cp_upper"])])
+    for r in kesi["raw_p3_le_0.08"]:
+        rows.append(["（補正なし・生の確率 8%）", r["period"], int(r["n"]), r["per_race"], pct(r["rate"]), pct(r["cp_upper"])])
+    s.append(tbl(rows, ["補正後の複勝確率しきい値", "期間", "消印の頭数(10人気以下)", "1レースあたり", "3着内率", "Clopper-Pearson 上側限界"]))
+    s.append("<p>補正後の確率に従来の 8% を当てると頭数が +17%（3 着内率 3.0〜3.1%）。<b>6%</b> なら +2.8%（3 着内率 2.4〜2.5%、上側限界 2.8% 以下で目標 5% と設計の 3% を全期間で満たす）なので <code>config/kesi_mark.json</code> の <code>p3_max_pc = 0.06</code>。</p>")
+    s.append("<h3>9-6. 画面とドリフト監視</h3><ul>"
+             "<li>画面: 確率の欄に『確率: AI予測（市場補正後）ⓘ』（説明つき）と、押すと見える『モデルの確率を見る』（馬ごとのモデル→補正後）を表示。適用しないレースは『確率: AI予測（市場補正なし）— 理由』。予測成績に『モデルのみ → 補正後』の LogLoss を併記。</li>"
+             "<li>ドリフト監視: 週次の <code>drift_monitor</code> に <code>pop_calibration</code>（人気区分別の『実績−予測』の変化、直近の窓 − 基準期間の 3 標準誤差超を警報）を追加。再当てはめの手順は <code>docs/operations/prob_calibration.md</code>。</li></ul>")
+    s.append("<h2>10. 結論（正直な整理）</h2>")
     s.append("<ul><li><b>縮まる部分</b>: 人気区分別の平均のずれ（1 人気 +5.6pt → −2.3〜−0.3pt、低確率の人気馬 7.4pt → 1.6〜3.0pt）、LogLoss（生に対し勝率 −0.0049／連対 −0.0073／複勝 −0.0076）、EV の信頼性（|予測−実現| 0.31→0.05〜0.08）、組合せ券の確率（−1〜3%）、◎の勝率（+1.6pt）。2026 年も同方向。</li>"
              "<li><b>縮まらない部分</b>: (1) 個々の馬が来るか来ないか（人気馬で確率が低い馬が約 16% 来る）。(2) 2026 年の勝率・連対ではモデルが市場に追加情報を持たない（C3 でも市場と同等）。モデル側の情報が弱っている（調教データの欠損など、drift 診断の主因）ことは較正では直らない。(3) 100% 超と頑健に言える馬券は見つからない（単勝の較正後は区間下限 82〜94%、複勝 C6 の閾値買いは下限 96〜98%）。</li>"
              "<li><b>推奨</b>: フラグ付きで導入して、画面は『AI 予測の確率』と『市場補正後の確率』を併記（ユーザー判断）。複勝 EV（C6）の閾値買いは前向き追跡へ。</li></ul>")
-    s.append("<h2>10. 再現</h2>")
-    s.append("<p><code>python -m src.scripts.data.tp70_diag prep --frame frame_all.parquet --rank-dir DIR --out DIR</code> → <code>tp70_diag run</code> → <code>tp70_fit compare</code> → <code>tp70_ev run --preds tp70_cal_preds.parquet</code> → <code>tp70_exotic run</code> → <code>tp70_marks run</code> → <code>tp70_cond run</code> → <code>tp70_report --in DIR</code>。入力は tp-36 の frame_all（V4 の OOF、確定の単勝・複勝オッズと払戻）と rank_tbl。2026 年は最終確認のみで、較正器の選択・係数には使っていない。</p>")
+    s.append("<h2>11. 再現</h2>")
+    s.append("<p><code>python -m src.scripts.data.tp70_diag prep --frame frame_all.parquet --rank-dir DIR --out DIR</code> → <code>tp70_diag run</code> → <code>tp70_fit compare</code> → <code>tp70_ev run --preds tp70_cal_preds.parquet</code> → <code>tp70_exotic run</code> → <code>tp70_marks run</code> → <code>tp70_cond run</code> → <code>tp70_pc ev / star / kesi</code> → <code>tp70_report --in DIR</code>（DIR に tp70_star.json・tp70_kesi.json・ev_pc_report.json）。入力は tp-36 の frame_all（V4 の OOF、確定の単勝・複勝オッズと払戻）と rank_tbl。2026 年は最終確認のみで、較正器の選択・係数には使っていない。</p>")
 
     head = ("<!doctype html>\n<html lang=\"ja\"><head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
             "<title>確率の較正（予測と実績の差）— 市場と組み合わせて人気馬の「来ない」の過小評価を縮め、期待値の信頼性を上げる（tp-70）— keiba-vpn</title>"
@@ -235,7 +277,7 @@ def main() -> None:
             "logit(p_cal) = a + w1×logit(p_model) + w2×logit(p_market) をレース内で合計 1/2/3 に合わせる較正（勝率の係数: モデル 0.31・市場 0.76）で、"
             "生に対し LogLoss は勝率 −0.0049・連対 −0.0073・複勝 −0.0076（2023〜25 年、2026 年は −0.0077/−0.0114/−0.0124）、人気区分別のずれ・低確率の人気馬のずれ（7.4pt→1.6〜3.0pt）・EV の信頼性（0.31→0.05〜0.08）・組合せ券の確率が改善する。"
             "<b>ただし</b> 個々の馬の見分け（人気馬の低確率層は較正後も約 16% 来る）は直らず、2026 年は勝率・連対でモデルが市場に追加情報を持たない。頑健に 100% 超と言える馬券は見つからない。"
-            "導入はフラグ（KEIBA_PROB_CALIBRATION=1、既定オフ）つきの提案まで。</div>\n")
+            "導入は実装済み（フラグ KEIBA_PROB_CALIBRATION=1、既定オフ、本番未反映）。</div>\n")
     html = head + "\n".join(s) + "\n</body></html>\n"
     Path(a.out).write_text(html, encoding="utf-8")
     print("wrote", a.out, len(html))

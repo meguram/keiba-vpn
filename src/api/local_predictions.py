@@ -143,7 +143,7 @@ def build_payload(race_id: str, card: dict, odds_doc: dict | None, probs, source
     scored = score_entries(entries, odds, alpha)
     note = SOURCE_NOTE.get(source, "")
     mtype = "ensemble_v4" if "v4" in label else "ensemble_v3"
-    return {
+    payload = {
         "race_id": race_id, "race_name": card.get("race_name", ""), "venue": card.get("venue", ""), "round": card.get("round", 0),
         "surface": card.get("surface", ""), "distance": card.get("distance", 0), "track_condition": card.get("track_condition", ""),
         "status": "success", "has_prediction": True, "model_type": mtype, "model_version": label,
@@ -152,6 +152,10 @@ def build_payload(race_id: str, card: dict, odds_doc: dict | None, probs, source
         "prediction_source": source, "prediction_note": note,
         "_compute_meta": {"source": source, "model": label},
     }
+    # 市場補正（KEIBA_PROB_CALIBRATION=1 のときだけ）: 保存済みの予測は書き換えず、読み出し時に確率・EV・印を付け直す
+    from src.utils.prob_calibration import apply_prob_calibration
+
+    return apply_prob_calibration(payload, odds_phase=(odds_doc or {}).get("phase"), alpha=alpha)
 
 
 def load_local_prediction_payload(race_id: str, storage: Any, alpha: float = 0.55, inf: Path | None = None) -> dict | None:

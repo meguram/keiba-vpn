@@ -125,6 +125,12 @@ def load_predictions(storage: Any, race_id: str) -> dict | None:
     if isinstance(doc, dict) and doc.get("predictions"):
         out = dict(doc)
         out.setdefault("prediction_source", "gcs")
+        try:
+            from src.utils.prob_calibration import apply_prob_calibration
+
+            out = apply_prob_calibration(out)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("確率の市場補正に失敗 %s: %s", race_id, exc)
         return out
     try:
         from src.api.local_predictions import load_local_prediction_payload
@@ -247,6 +253,11 @@ def build_race_record(race_id: str, meta: dict, storage: Any, max_total_bet: int
           for h, p in fm.items() if p == 1]
     tot = sum(float(e.get("win_prob") or 0) for e in entries) or 1.0
     rec["winner_logloss"] = round(-math.log(max(max(ps, default=0) / tot, 1e-6)), 4) if ps else None
+    # 市場補正した確率（KEIBA_PROB_CALIBRATION=1）のレースは、元のモデルの確率での勝ち馬 LogLoss も並べて持つ（補正の効きを日次で追える）
+    if entries and all(e.get("win_prob_model") is not None for e in entries):
+        pm = [float((next((x for x in entries if int(x.get("horse_number") or 0) == h), {}) or {}).get("win_prob_model") or 0) for h, p in fm.items() if p == 1]
+        totm = sum(float(e.get("win_prob_model") or 0) for e in entries) or 1.0
+        rec["winner_logloss_model"] = round(-math.log(max(max(pm, default=0) / totm, 1e-6)), 4) if pm else None
     try:
         rec["bets"] = simulate_bets(entries, storage, race_id, res, max_total_bet)
     except Exception as exc:  # noqa: BLE001
@@ -269,6 +280,7 @@ def summarize(records: list[dict]) -> dict:
         "top1": _blank_counts(), "marks": {m: _blank_counts() for m in MARKS},
         "bets": {"invested": 0, "returned": 0, "races_bought": 0, "races_hit": 0, "estimated_races": 0, "by_type": {}},
         "logloss": {"n": 0, "sum": 0.0},
+        "logloss_model": {"n": 0, "sum": 0.0, "sum_calibrated": 0.0},
     }
     for r in inc:
         for key, p in (("top1", r.get("top1")),):
@@ -297,7 +309,13 @@ def summarize(records: list[dict]) -> dict:
         if r.get("winner_logloss") is not None:
             s["logloss"]["n"] += 1
             s["logloss"]["sum"] += r["winner_logloss"]
+        if r.get("winner_logloss_model") is not None and r.get("winner_logloss") is not None:
+            s["logloss_model"]["n"] += 1
+            s["logloss_model"]["sum"] += r["winner_logloss_model"]
+            s["logloss_model"]["sum_calibrated"] += r["winner_logloss"]
     s["logloss"]["sum"] = round(s["logloss"]["sum"], 4)
+    s["logloss_model"]["sum"] = round(s["logloss_model"]["sum"], 4)
+    s["logloss_model"]["sum_calibrated"] = round(s["logloss_model"]["sum_calibrated"], 4)
     return s
 
 
@@ -320,6 +338,10 @@ def merge_summaries(parts: list[dict]) -> dict:
                 t[k] += v[k]
         out["logloss"]["n"] += p["logloss"]["n"]
         out["logloss"]["sum"] = round(out["logloss"]["sum"] + p["logloss"]["sum"], 4)
+        lm = p.get("logloss_model") or {}
+        out["logloss_model"]["n"] += lm.get("n", 0)
+        out["logloss_model"]["sum"] = round(out["logloss_model"]["sum"] + lm.get("sum", 0.0), 4)
+        out["logloss_model"]["sum_calibrated"] = round(out["logloss_model"]["sum_calibrated"] + lm.get("sum_calibrated", 0.0), 4)
     return out
 
 

@@ -122,3 +122,135 @@ def calibrate_entries(entries: Sequence[dict], odds_by_horse: dict[int, float], 
     if cal is None:
         return None
     return [{"win_prob": round(float(cal["win"][i]), 4), "top2_prob": round(float(cal["top2"][i]), 4), "top3_prob": round(float(cal["top3"][i]), 4)} for i in range(len(entries))]
+
+
+# ───────────────────────── 画面・API の応答に適用する（読み出し時に計算し、保存済みの予測は書き換えない） ─────────────────────────
+
+_PRED_ODDS_WORDS = ("predicted", "予測")
+
+
+def _is_predicted_source(e: dict) -> bool:
+    s = str(e.get("odds_source") or "").lower()
+    return any(w in s for w in _PRED_ODDS_WORDS)
+
+
+def calibration_status(preds: Sequence[dict]) -> tuple[bool, str | None]:
+    """応答の出走馬一覧に較正を適用できるか。(適用できる, 適用できない理由)。"""
+    if not load_config().get("targets"):
+        return False, "較正の設定ファイルがありません"
+    if len(preds) < MIN_FIELD:
+        return False, f"{MIN_FIELD}頭未満のため市場補正なし"
+    if any(_is_predicted_source(e) for e in preds):
+        return False, "予測オッズのため市場補正なし（実オッズが出てから補正します）"
+    try:
+        odds = [float(e.get("win_odds") or 0) for e in preds]
+    except (TypeError, ValueError):
+        return False, "単勝オッズが読めないため市場補正なし"
+    if any(o <= 0 or not np.isfinite(o) for o in odds):
+        return False, "単勝オッズが全頭に揃っていないため市場補正なし（オッズが出る前は補正しません）"
+    for e in preds:
+        if any(e.get(k) is None for k in ("win_prob", "top2_prob", "top3_prob")):
+            return False, "確率が揃っていないため市場補正なし"
+    return True, None
+
+
+def apply_prob_calibration(resp: dict, *, odds_phase: str | None = None, alpha: float = 0.55) -> dict:
+    """予測の応答（predictions = 出走馬の辞書の並び）に市場補正を適用して返す（フラグ KEIBA_PROB_CALIBRATION=1 のときだけ。無効なら入力そのまま）。
+
+    適用できたとき: 各馬の win_prob / top2_prob / top3_prob（と place_prob / show_prob）を補正後に置き換え、元の値を *_model に残す。
+    EV（ev_win / ev_top2 / ev_place）・合成スコアと順位・印（◎○▲★△消）・較正後 EV（ev_*_cal）・買い推奨度・推奨の文言を、補正後の確率で付け直す。
+    適用できないとき（オッズ未確定・予測オッズ・8 頭未満）は確率も印も変えず、理由だけ ``prob_calibration`` に入れる。
+    応答に ``prob_calibration`` が既にあれば二重に適用しない。
+    """
+    if not is_enabled() or not isinstance(resp, dict):
+        return resp
+    preds = resp.get("predictions")
+    if not isinstance(preds, list) or not preds or not all(isinstance(e, dict) for e in preds) or not resp.get("has_prediction", True):
+        return resp
+    if "prob_calibration" in resp:
+        return resp
+    cfg = load_config()
+    meta = {"applied": False, "reason": None, "version": cfg.get("version"), "odds_phase": odds_phase, "method": cfg.get("default_method")}
+    ok, reason = calibration_status(preds)
+    if not ok:
+        return {**resp, "prob_calibration": {**meta, "reason": reason}}
+    cal = calibrate_arrays(
+        {"win": [float(e["win_prob"]) for e in preds], "top2": [float(e["top2_prob"]) for e in preds], "top3": [float(e["top3_prob"]) for e in preds]},
+        [float(e["win_odds"]) for e in preds],
+    )
+    if cal is None:
+        return {**resp, "prob_calibration": {**meta, "reason": "補正できませんでした"}}
+    from src.utils.race_probabilities import assign_kesi_mark, assign_mece_marks, attach_calibrated_ev, buy_recommendation_tier
+
+    labels = {"honmei": "◎ 1着優位", "pair": "○ 連対候補", "anchor": "△ 馬券内の候補", "show_val": "▲ 単穴", "star": "★ 中穴妙味", "kesi": "消 3着内に来る確率が低い", "none": ""}
+    out = []
+    for i, e in enumerate(preds):
+        e = dict(e)
+        for k in ("win_prob", "top2_prob", "top3_prob"):
+            e[f"{k}_model"] = e[k]
+        pw, p2, p3 = round(float(cal["win"][i]), 4), round(float(cal["top2"][i]), 4), round(float(cal["top3"][i]), 4)
+        e.update({"win_prob": pw, "top2_prob": p2, "top3_prob": p3, "estimated_prob": p3, "prob_calibrated": True})
+        if "place_prob" in e:
+            e["place_prob"] = p2
+        if "show_prob" in e:
+            e["show_prob"] = p3
+        wo = float(e["win_odds"])
+        t2 = e.get("top2_odds_est")
+        pe = e.get("place_odds_eff")
+        e["ev_win"] = round(pw * wo, 3) if pw > 0 else None
+        e["ev_top2"] = round(p2 * float(t2), 3) if t2 and p2 > 0 else None
+        e["ev_place"] = round(p3 * float(pe), 3) if pe and p3 > 0 else None
+        e["expected_value"] = e["ev_place"]
+        if p3 > 0 and e["ev_place"]:
+            comp = (p3 ** alpha) * (e["ev_place"] ** (1 - alpha))
+        else:
+            comp = p3 if p3 > 0 else 0.0
+        e["composite_score"] = round(comp, 4)
+        out.append(e)
+    out.sort(key=lambda x: x["composite_score"], reverse=True)
+    for i, e in enumerate(out):
+        e["composite_rank"] = i + 1
+    assign_mece_marks(out)
+    assign_kesi_mark(out)
+    for e in out:
+        e["recommendation"] = labels.get(e.get("mark_type") or "none", "")
+        for k in ("ev_win_cal", "ev_top2_cal", "ev_place_cal"):
+            e.pop(k, None)
+        attach_calibrated_ev(e)
+        e["buy_tier"] = buy_recommendation_tier(e)
+    new = {**resp, "predictions": out, "prob_calibration": {**meta, "applied": True}}
+    if isinstance(resp.get("bet_suggestion"), (dict, list)):
+        try:
+            from src.utils.race_bet_suggestion import suggest_race_bets
+
+            new["bet_suggestion"] = suggest_race_bets(out)
+        except Exception:  # noqa: BLE001
+            pass
+    return new
+
+
+def calibrate_prediction_list(preds: list[dict], single_odds: dict | None, *, odds_phase: str | None = None) -> tuple[list[dict], dict | None]:
+    """推奨ポートフォリオ用: 保存済みの予測の一覧を、その時点の実オッズ（race_odds の entries）で補正して返す。
+    (一覧, prob_calibration のメタ)。無効のとき・補正できないときは入力のまま（メタは無効なら None）。"""
+    if not is_enabled():
+        return preds, None
+    odds_by_hn: dict[int, float] = {}
+    for o in (single_odds or {}).get("entries") or []:
+        try:
+            odds_by_hn[int(o.get("horse_number"))] = float(o.get("win_odds") or 0)
+        except (TypeError, ValueError):
+            continue
+    merged = []
+    for e in preds:
+        e2 = dict(e)
+        try:
+            hn = int(e.get("horse_number"))
+        except (TypeError, ValueError):
+            hn = None
+        if hn in odds_by_hn and odds_by_hn[hn] > 0:
+            e2["win_odds"] = odds_by_hn[hn]
+            e2.pop("odds_source", None)
+        merged.append(e2)
+    resp = apply_prob_calibration({"predictions": merged, "has_prediction": True}, odds_phase=odds_phase)
+    meta = resp.get("prob_calibration")
+    return (resp["predictions"] if meta and meta.get("applied") else preds), meta

@@ -6,6 +6,14 @@
   "p3_max": 0.08,
   "main_marks": ["honmei", "pair", "show_val", "star"],
   "target_upper": 0.05,
+  "p3_max_pc": 0.06,
+  "evidence_pc": {
+    "model": "V4 OOF を市場補正した確率（tp-70、勝率=C3・複勝=C6、前年までで当てはめ）。KEIBA_PROB_CALIBRATION=1 で補正したレースだけ p3_max_pc を使う",
+    "rule": "10人気以下で補正後の複勝確率が 6% 以下",
+    "rate": {"design2023": 0.0247, "confirm2024": 0.0248, "ref2025": 0.0246, "final2026": 0.0244},
+    "upper": {"design2023": 0.0277, "confirm2024": 0.0278, "ref2025": 0.0275, "final2026": 0.0279},
+    "count_vs_raw": "補正なし 8% 比 +2.8%（8% のまま補正後の確率に当てると +17%）"
+  },
   "evidence": {
     "model": "V4 OOF（tp-36 frame_all）。V5 に切り替わったら python -m src.scripts.data.tp67_opt recheck で再確認",
     "periods": "設計2022-23 / 確認2024 / 参考2025 / 最終2026（3着内率の Clopper-Pearson 95% 上側限界）",

@@ -262,7 +262,7 @@ export default function PredictionResultsPage() {
             <Tile label="予測1位の1着率" value={pct(kpi.top1.win)} sub={`${kpi.top1.n}レース`} />
             <Tile label="仮想購入の回収率" value={pct(kpi.roi)} sub={`${yen(kpi.invested)} → ${yen(kpi.returned)}`} locked={!member} />
             <Tile label="的中レース（購入）" value={`${kpi.races_hit}/${kpi.races_bought}`} sub="推奨馬券をどれか当てた" locked={!member} />
-            <Tile label="確率の精度" value={kpi.winner_logloss == null ? "—" : kpi.winner_logloss.toFixed(3)} sub="勝ち馬の対数損失（小さいほど良い）" />
+            <Tile label="確率の精度" value={kpi.winner_logloss == null ? "—" : kpi.winner_logloss.toFixed(3)} sub={kpi.winner_logloss_model ? `勝ち馬の対数損失（小さいほど良い）。市場補正済みの${kpi.winner_logloss_model.n}レースは モデルのみ ${kpi.winner_logloss_model.model.toFixed(3)} → 補正後 ${kpi.winner_logloss_model.calibrated.toFixed(3)}` : "勝ち馬の対数損失（小さいほど良い）"} />
           </div>
 
           <section aria-label="印ごとの着順分布">
