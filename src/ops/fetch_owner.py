@@ -24,11 +24,19 @@ def agent_tasks(path: Path | None = None) -> set[str]:
         return set()
 
 
+# ホストの常駐ランナー（1 日居座るループ）は、VPS の実行役では個別タスクに置き換わる。置き換え先のどれかを VPS が担当したらランナーは止める。
+RUNNER_REPLACED_BY: dict[str, frozenset[str]] = {
+    "raceday-runner": frozenset({"race-odds-t60", "race-odds-t15", "race-odds-t10", "race-odds-t05", "race-odds-t02"}),
+    "raceday-weight-runner": frozenset({"race-weight-check"}),
+}
+
+
 def host_must_skip(task: str, *, env: dict[str, str] | None = None, path: Path | None = None) -> bool:
     env = os.environ if env is None else env
     if env.get("KEIBA_RUN_LOCATION", "").strip().lower() == "vps":
         return False
-    return task in agent_tasks(path)
+    owned = agent_tasks(path)
+    return task in owned or bool(RUNNER_REPLACED_BY.get(task, frozenset()) & owned)
 
 
 def main(argv: list[str] | None = None) -> int:

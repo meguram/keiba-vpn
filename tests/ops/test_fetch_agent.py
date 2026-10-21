@@ -152,3 +152,13 @@ def test_child_task_lists(monkeypatch):
     assert fc.race_task_list("race-odds-t05") == ["race_odds_t05"]
     assert "race_shutuba" in fc.race_task_list("race-odds-t15")
     assert fc.race_task_list("race-weight-check") == ["race_shutuba"]
+
+
+def test_host_runner_is_skipped_when_replacement_tasks_move(tmp_path):
+    p = tmp_path / "o.json"
+    p.write_text(json.dumps({"agent_tasks": ["race-odds-t15", "race-weight-check"]}))
+    assert fo.host_must_skip("raceday-runner", env={}, path=p)
+    assert fo.host_must_skip("raceday-weight-runner", env={}, path=p)
+    assert not fo.host_must_skip("raceday-result-runner", env={}, path=p)
+    p.write_text(json.dumps({"agent_tasks": ["entries-sync"]}))
+    assert not fo.host_must_skip("raceday-runner", env={}, path=p)

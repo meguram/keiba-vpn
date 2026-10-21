@@ -26,7 +26,7 @@ STATES = ("pending", "running", "done", "failed")
 
 # --- allowlist ---------------------------------------------------------------------------------
 # 1. auto_scrape のモード（``python -m src.scraper.auto_scrape --task <mode>``）。取得中心で『1 回で終わる』ものだけ。
-#    除外: raceday-eve（追走難度・想定オッズの前計算で ML を読む=VPS の 250M に収まらない。GCP Jobs / ホスト）、
+#    除外: raceday-eve（追走難度・想定オッズの前計算で ML を読む=VPS の 250M に収まらない。取得だけの raceday-eve-fetch を使う。計算は GCP Jobs）、
 #    feature-accumulate・horse-name-index（計算）、raceday-runner / raceday-weight-runner / raceday-result-runner
 #    （1 日居座る常駐ループ。1 本ずつ実行する実行役を塞ぐので、race-odds-* / race-weight-check の個別タスクに置き換える）。
 AUTO_SCRAPE_MODES: frozenset[str] = frozenset({
@@ -38,6 +38,7 @@ AUTO_SCRAPE_MODES: frozenset[str] = frozenset({
     "catchup-missing",
     "jra-baba-morning",
     "raceday-evening",
+    "raceday-eve-fetch",     # raceday-eve の取得だけ（計算は GCP の eve-precompute）。KEIBA_EVE_FETCH_ONLY=1
     "raceday-comment",
     "new-horse-pedigree",
 })
