@@ -221,7 +221,7 @@ def main() -> None:
     ap.add_argument("--tables", default="data/page_reference/tables")
     ap.add_argument("--v4-dir", default="data/local/inference/predictions_backfill/bundle_v4_2025")
     ap.add_argument("--v4-shadow", default="data/local/inference/predictions_v3")
-    ap.add_argument("--v5-dir", default="")
+    ap.add_argument("--v5-dir", default="", help="v5 の確率のフォルダ（カンマ区切りで複数可）")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -244,8 +244,9 @@ def main() -> None:
     out["v4_vs_market_2026"] = {"rows": int(len(mm)), "races": int(mm["race_id"].nunique()), "model_win_ll": float(bin_ll(yv, mm["p_win"].to_numpy()).mean()),
                                 "market_win_ll": float(bin_ll(yv, mm["p_mkt"].to_numpy()).mean())}
     out["v4"]["verdict"] = verdict("v4", out["v4"]["metrics"], cov4, sums_check(p4), out["v4"]["strata"], out["v4"]["top_pick"])
-    if a.v5_dir and Path(a.v5_dir).exists():
-        p5 = load_preds([Path(a.v5_dir)])
+    v5_dirs = [Path(x) for x in a.v5_dir.split(",") if x and Path(x).exists()]
+    if v5_dirs:
+        p5 = load_preds(v5_dirs)
         if len(p5):
             m5 = attach_targets(res, p5)
             same = m4.merge(m5[["race_id", "horse_id"]], on=["race_id", "horse_id"])

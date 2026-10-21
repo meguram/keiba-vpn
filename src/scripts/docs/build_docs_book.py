@@ -262,6 +262,8 @@ PARTS: list[Part] = [
           [("pace_consistency", "想定位置取り・追走難度・想定上がりの連動の検証（tp-53）"), ("training_pipeline_decisions", "決定ログ")]),
         C("yosou_procedure", "ユーザー自身の予想手順の再現と評価（tp-56）。レースの傾向（直前の同競馬場の流れ）→ 馬のタイプ分け → 適合グループ内で実力上位に印 → 穴/人気別の買い目・レース回収率 500% の設計、を先読みなしの特徴量・印・買い目にして、各段階の単独の予測力、V5 への増分の一次選別（27 群）、統合した印の質、72 方策の馬券バックテスト（Reality Check）、2026 年の 1 回評価を示す。V5 への上乗せ・馬券の 100% 超はともに見つからず、手順を文字どおり（適合内から印）にすると悪化。", "結果",
           [("pace_consistency", "想定位置取り・追走難度・想定上がりの連動の検証（tp-53）"), ("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("deployment_readiness", "各モデルの導入可否（精度が導入可能なレベルか）の確認。基準を 2026 年の結果を見る前に固定し、v4（現在画面に出ている予測）・v5・前段/補助ヘッド・予測最終オッズ・追走難度 v2/ペース v2/ラップ予想・期待値の較正と印・組合せ券の確率を、独立データの 2026 年で判定する。v4 は条件付き導入可（連対の悪化が基準を 0.00015 超過、被覆 96.7%、モデルと市場の差が月とともに拡大）、v5 は抜き取り 122 レースで v4 と同等以上だが優劣は示せない、複勝の期待値は最上位で実現を 0.20 上回る、予測最終オッズの単勝は不可。v5 を predict に切り替えてよいかの所見と、必要な改善の優先順。", "結果",
+          [("ensemble_v5", "アンサンブル v5 の構成選択と最終学習（tp-52）"), ("ev_calibration_adopt", "期待値の較正（tp-49）"), ("lap_forecast", "ハロンごとのラップ予想（tp-55）"), ("tracking_difficulty_v2", "追走難度 v2（tp-54）"), ("exotic_bet_probabilities", "組合せ券の確率の作り方"), ("training_pipeline_decisions", "決定ログ")]),
         C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",
           note="safe_ev を前提にした設計。tp-08 の実装は Benter ブレンドで、safe_ev は使っていない。",
           now=[("modeling_experiment_report", "tp-08 の結果")]),

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>各モデルの導入可否の確認— keiba-vpn</title>
+<style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 22px 0 8px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; } th { background: #1b2a4d; }
+td.num { text-align: right; font-family: monospace; } .muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+.hm { overflow: auto; max-height: 760px; border: 1px solid var(--border); } table.hm { font-size: 9px; margin: 0; } table.hm td { width: 14px; height: 14px; min-width: 14px; padding: 0; text-align: center; font-size: 8px; line-height: 14px; border: 1px solid #1b2a4d; }
+table.hm th.v { height: 150px; padding: 0; vertical-align: bottom; } table.hm th.v div { writing-mode: vertical-rl; white-space: nowrap; font-size: 9px; padding: 2px 0; } table.hm th.h { white-space: nowrap; font-size: 9px; padding: 0 4px; text-align: right; position: sticky; left: 0; }
+td.d { background: #243358; } td.n { background: #0b1428; }</style></head>
+<body><a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>各モデルの導入可否（精度が導入可能なレベルか）の確認</h1>
+<p class="muted">2026-10-21、ユーザー依頼『各モデルの精度が導入可能レベルに達しているかを確認してほしい』への回答。<b>基準は 2026 年の結果を見る前に固定</b>（<code>src/scripts/data/readiness_criteria.json</code>、コミット 72e604a。閾値の根拠つき）。2026 年（1〜10 月）は v4/v5 とも学習・選択に使っていない独立データ（バンドルは 2025 年までで学習）。集計は <code>src/scripts/data/readiness_*.py</code>（テスト <code>tests/scripts/test_readiness_audit.py</code>）。</p>
+<div class="note"><b>要点.</b>
+ <ul>
+ <li><b>いま画面に出ている予測は v4 のバックフィル／shadow.</b>ステージの予測 API は GCS の <code>race_predictions</code>（4 件のみ）→ホストの shadow／バックフィル（<code>local_predictions</code>）→ 無ければ「出馬表のみ」の順。旧 keiba-lgbm 系のモデルは配信されていない（<code>KEIBA_MODEL_STORE</code> 未設定、<code>models/ensemble</code> なし）。したがって<b>『現行』＝v4</b>。</li>
+ <li><b>v4 は『条件付きで導入可』.</b>較正（ECE 勝率 0.0023・連対 0.0050・複勝 0.0077、傾き 0.99〜1.07）と全層での素朴ベースライン超え、◎の 1 着率 30.5%・複勝圏 62.5% は基準を満たす。一方、LogLoss は test 2025 に対し勝率 +0.0070・連対 <b>+0.01015（基準 +0.010 をわずかに超過）</b>・複勝 +0.0090、被覆は 96.7%（出馬表の形式が古い 93 レースに予測が無い）。</li>
+ <li><b>悪化の大半は『年が難しい』では説明できない.</b>市場（確定単勝オッズの逆数）の勝率 LogLoss は 2025 年 0.2040→2026 年 0.2053（+0.0013）しか動かず、モデルは +0.0070。モデルと市場の差は 2025 年 0.0034 → 2026 年 0.0083 に開いた（同じ 2,702 レース）。原因は未特定（概念の変化、バックフィルと学習の特徴量の差、のいずれか）。月別では 1〜5 月の差 0.004〜0.008 が 6〜10 月に 0.010〜0.013 へ開いており、固定モデルの鮮度の問題が疑わしい（3.1 節）。</li>
+ <li><b>v5</b>: 抜き取り 122 レースで v4 比 勝率 −0.0006・連対 −0.0009・複勝 +0.0005（区間は 0 を跨ぐ。2026 年単独では優劣を示せない）。確率の合計・NaN 問題なし、推論 37.5 秒。<b>条件付きで導入可、predict への切替は技術的には可だが急ぐ根拠は弱い</b>（11 節）。前段・補助ヘッドは 2025 年 OOF 比 0.97〜1.03 で劣化なし（導入可）。</li>
+ <li><b>派生モデルの判定.</b>追走難度 v2・ラップ予想・印・組合せ券の確率は導入可。ペース想定 v2 は実測の前半 3F との相関 0.30 で基準 0.35 未満（表示専用なので条件付き）。<b>複勝の期待値は最上位の十分位で実現を 0.20 上回る</b>（較正が効いていない）ので、推奨度の判定から外すか上限を設けるべき。予測最終オッズの<b>単勝は順位相関 0.39（基準 0.60 未満）で不可</b>（複勝は 0.83）。</li>
+ </ul></div>
+
+<h2>1. 基準（2026 年の結果を見る前に固定）</h2>
+<p class="muted">判定の規則: すべての must を満たす＝導入可。must の一部を満たさないが代替策で補える＝条件付き。精度の退化・較正の崩れ・被覆という主要項目を満たさない＝不可。should は条件付きの理由として記録。閾値は固定後に動かしていない。</p>
+<table><tr><th>対象</th><th>must（抜粋）</th><th>根拠</th></tr>
+<tr><td>v4・v5（勝率/連対/複勝）</td><td>C1 2026 年の LogLoss が同モデルの test 2025 値 +0.010 以内／C2 ECE 勝率≤0.006・連対≤0.010・複勝≤0.015 かつ logit 傾き 0.85〜1.15／C3 各層（500 頭以上）で『頭数だけの事前確率 k/n』より良い／C4 全レースに予測があり NaN なし、合計が 1・2・3 に 1e-3 以内／C5 推論時間 v4≤60 秒・v5≤90 秒</td><td>固定モデルの年次ゆらぎ（LOYO の年別 LogLoss 幅 ±0.006）に余裕を足した。期待値に直結するので較正を厳しく</td></tr>
+<tr><td>前段・補助ヘッド</td><td>2026 年の実測との順位相関が 2025 年 OOF の 90% 以上、欠損率が学習時 +5 ポイント以内</td><td>V4/V5 の入力なので退化が下流に伝わる</td></tr>
+<tr><td>予測最終オッズ</td><td>単勝のレース内順位相関≥0.60、Σ(1/オッズ) の中央値 1.15〜1.35</td><td>単複の期待値の入力。水準が外れると EV が系統的にずれる</td></tr>
+<tr><td>追走難度 v2・ペース v2・ラップ予想</td><td>drain_sec と実測 Y の相関≥0.10（41 週すべて正）／ペース想定と前半 3F の相関≥0.35／ラップ MAE が基準より小／付与率≥75%</td><td>設計時の値の半分程度が実用の下限</td></tr>
+<tr><td>期待値の較正・印</td><td>最大 EV の十分位で EV と実現回収率のずれ 0.12 以内／印は 1R 平均 5〜9 個、◎○▲★は各 1 頭以下、△は上限以下</td><td>『表示した期待値が実現に収束する』『印の仕様』（ユーザー指定）</td></tr>
+<tr><td>組合せ券の確率</td><td>馬連・ワイド・3連複の ECE≤0.003 かつ素の Harville より対数損失が小</td><td>組合せ券の期待値の確率側</td></tr></table>
+
+<h2>2. 現行の予測（v4）の 2026 年の成績</h2>
+<p class="muted">v4＝bundle_v4_2025 のバックフィル（その日より前の履歴だけで特徴量を作り直した予測、86 日 2,715 レース・37,061 頭）。中止・取消（着順が負）は除く。指標は馬単位の二値 LogLoss。</p>
+<table><tr><th>指標</th><th>2026 年の測定</th><th>test 2025</th><th>差（基準 +0.010 以内）</th><th>素朴な事前確率 k/n</th><th>ECE（基準）</th><th>logit 傾き（0.85〜1.15）</th></tr>
+<tr><td>勝率</td><td class="num">0.21443</td><td class="num">0.20740</td><td class="num">+0.00704</td><td class="num">0.2600</td><td class="num">0.0023（≤0.006）</td><td class="num">0.987</td></tr>
+<tr><td>連対</td><td class="num">0.33374</td><td class="num">0.32360</td><td class="num"><b>+0.01015</b></td><td class="num">0.4122</td><td class="num">0.0050（≤0.010）</td><td class="num">1.039</td></tr>
+<tr><td>複勝</td><td class="num">0.41538</td><td class="num">0.40640</td><td class="num">+0.00898</td><td class="num">0.5192</td><td class="num">0.0077（≤0.015）</td><td class="num">1.073</td></tr></table>
+<ul>
+<li><b>C1（退化）: 連対だけ +0.00015 超過.</b>勝率・複勝は基準内。超過は年次ゆらぎの範囲だが、上の市場との比較から『年が難しいだけ』とは言えない。</li>
+<li><b>C2（較正）: 満たす.</b>確率の平均は実現とほぼ一致（勝率 0.0728 vs 0.0733、複勝 0.2184 vs 0.2200）。</li>
+<li><b>C3（層別）: 満たす.</b>頭数・面・距離帯・クラス・会場・月・履歴（初出走 3,516 頭／1〜2 走 6,567 頭／3 走以上）の全 7 区分すべてで、勝率 LogLoss が k/n より 0.013〜0.075 小さい（最も小さい差はオープン戦 −0.013）。悪化する層は無い。</li>
+<li><b>C4（被覆）: 満たさない.</b>2026 年の JRA 2,808 レースのうち 2,715（96.7%）。無い 93 レースは出馬表の保存形式が古く馬番が空の日（5/24、6/6、6/7 など）で、バックフィルが組めなかった。当日運用（出走表が通常の形式）の日は欠けなし。NaN・合計のずれは 0。</li>
+<li><b>S2（◎）: 満たす.</b>◎（勝率最上位）の 1 着率 30.5%、複勝圏率 62.5%（基準 26%／55%）。</li>
+<li><b>C5・S3（推論）: 満たす.</b>1 バッチ（初回）の推論は v4 24.4 秒・v5 37.5 秒（基準 60／90 秒）。推論経路と学習側のバッチ予測の相関は v4 0.9987・v5 0.992〜0.998（基準 0.990）。</li>
+</ul>
+<h3>市場との比較（年の難しさの切り分け）</h3>
+<table><tr><th></th><th>2025 年</th><th>2026 年</th></tr>
+<tr><td>市場の勝率 LogLoss（確定単勝オッズの逆数を正規化）</td><td class="num">0.2040（3,442R）</td><td class="num">0.2053（2,789R）</td></tr>
+<tr><td>v4 の勝率 LogLoss（同じ 2,702 レースの市場は 0.2059）</td><td class="num">0.2074（test 2025）</td><td class="num">0.2142</td></tr>
+<tr><td>モデル − 市場</td><td class="num">+0.0034</td><td class="num"><b>+0.0083</b></td></tr></table>
+<p class="muted">市場は 2 年でほぼ同じ難しさ（+0.0013）。モデルの悪化（+0.0070）は、年の難しさでは説明できず、モデル側の要因が大きい。tp-36・tp-50 の『2026 年で回収率が再現しない』とも整合する。</p>
+<h2>3. v5 の 2026 年の成績（抜き取り）と v4 との比較</h2>
+<p class="muted">v5 のバックフィルは 2026-03-01 の 12 レースしか無いので、11 日（1/24、2/14、3/8、4/4、4/26、6/21、7/18、8/9、9/5、9/22、10/12）の各日の最初の 10 レースを、v4 のバックフィルと同じ手順（その日より前の履歴だけ＋同日で先に発走したレースの結果）で bundle_v5_2025 に通した（<code>readiness_v5_sample.py</code>、1 レースあたり 30〜37 秒）。合計 122 レース・1,661 頭、v4 の同じ行と比べる。</p>
+<table><tr><th>指標</th><th>v5</th><th>v4（同じ行）</th><th>v5 − v4（95% 区間、レース単位 paired bootstrap）</th></tr>
+<tr><td>勝率 LogLoss</td><td class="num">0.21583</td><td class="num">0.21643</td><td class="num">−0.00060（−0.00190〜+0.00060）</td></tr>
+<tr><td>連対 LogLoss</td><td class="num">0.32221</td><td class="num">0.32310</td><td class="num">−0.00089（−0.00239〜+0.00059）</td></tr>
+<tr><td>複勝 LogLoss</td><td class="num">0.39387</td><td class="num">0.39337</td><td class="num">+0.00050（−0.00096〜+0.00196）</td></tr>
+<tr><td>◎の 1 着率／複勝圏率</td><td class="num">32.8%／75.4%</td><td class="num">34.4%／77.0%</td><td class="num">（122 レースでは差とは言えない）</td></tr></table>
+<ul>
+<li><b>S1（v4 に対する非劣性: 上限が +0.0002 未満）は、この抜き取りでは示せない.</b>上限は勝率 +0.0006・連対 +0.0006・複勝 +0.0020 で、122 レースでは区間が広すぎる。点推定は勝率・連対で改善（LOYO・test 2025 の改善と同じ向き）、複勝は悪化（逆向き）。</li>
+<li>確率の合計（勝率 1・連対 2・複勝 3）のずれ 0、NaN 0（C4 の中身は満たす）。この行数では ECE（勝率 0.0085）の評価はできない（v4 の同じ行でも 0.0093）。</li>
+<li>v5 単独の C1（test 2025 比 +0.010 以内）は、抜き取りの構成が全体と違うため直接は測れない。v4 と同じ行の差が小さい（−0.0006〜+0.0005）ので、<b>v5 の状態は v4 と同じ（条件付き）</b>とみなす。</li>
+<li>差の検出力: 勝率の改善 0.0003 を 95% 区間で捉えるには、1 レースあたりの差のばらつき（この抜き取りから約 0.007）から見て約 2,000 レース（2026 年の約 3/4）が必要。2026 年だけで v4/v5 の優劣を決めることはできない。v5 の根拠は LOYO（3 年とも改善、勝率 −0.00061）と test 2025 の 1 回評価（勝率 0.20714、v4 比 −0.00030、上限 −0.00001）。</li>
+</ul>
+
+<h3>3.1 モデルと市場の差は月とともに開いている</h3>
+<p class="muted">v4 の 2026 年の勝率 LogLoss と、同じ馬の市場（確定単勝オッズの逆数）の LogLoss の差（モデル − 市場、小さいほど良い）。</p>
+<table><tr><th>月</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th></tr>
+<tr><td>モデル − 市場</td><td class="num">0.0048</td><td class="num">0.0075</td><td class="num">0.0037</td><td class="num">0.0064</td><td class="num">0.0064</td><td class="num">0.0116</td><td class="num">0.0103</td><td class="num">0.0128</td><td class="num">0.0097</td><td class="num">0.0114</td></tr></table>
+<p>1〜5 月は 0.004〜0.008（test 2025 の差 0.0034 に近い）、6〜10 月は 0.010〜0.013。2025 年までで固定したモデルが、時間の経過とともに古くなっているように見える（新馬・未勝利 +0.0107、それ以外 +0.0063、面別・距離別ではほぼ同じ +0.008）。<b>これが導入可否の最大の懸念</b>で、2027 年に 2026 年のデータを含めて再学習する／定期的に差を監視する運用が要る（2026 年は最後の 1 回の評価に残す方針のため、現時点では 2026 年を学習に使えない）。</p>
+
+<h2>4. 派生モデル（追走難度・ペース・ラップ予想）</h2>
+<p class="muted">保存済みの出力（ホストの <code>data/local/inference/</code> の tracking_v2／tracking_v2_eval／lap_forecast）と、2026 年のレース結果の実測（前半 3F・後半 3F、ハロンごとのラップ）を突き合わせた。</p>
+<table><tr><th>対象</th><th>基準</th><th>2026 年の測定</th><th>判定</th></tr>
+<tr><td>追走難度 v2（drain_sec と実測 Y）</td><td>相関≥0.10、41 週すべて正</td><td>41 週・30,618 ペアの重み付き相関 0.202、最小の週 0.018（全週が正）、十分位の単調性 0.669、最上位−最下位の差 0.92 秒、付与率 88.7%</td><td><b>導入可</b></td></tr>
+<tr><td>ペース想定 v2（pace_unified の z）</td><td>実測の前半 3F との相関≥0.35、付与≥75%</td><td>面×距離ごとの Spearman 0.282、前半 3F を面×距離で標準化した値との Pearson <b>0.300</b>（設計時 0.45）。付与はレースの 84.1%・馬の 97.6%</td><td><b>条件付き</b>（相関が基準未満。表示専用で、付かないレースは従来表示）</td></tr>
+<tr><td>ラップ予想（前半 3F／後半 3F）</td><td>MAE が基準ラップより小さい</td><td>MAE 前半 3F 0.533 秒（距離別の平均 0.748）、後半 3F 0.549 秒（同 1.216）。80% 帯のカバー率 0.820。保存 2,706 件、すべて A_noten モデル</td><td><b>導入可</b>（シナリオ確率の ECE≤0.04 は設計時の 0.016〜0.027 を引用。2026 年では再測していない）</td></tr></table>
+<p class="muted">注: ペース想定 v2 の 0.30 は設計時の 0.45 から大きく下がった。追走難度 v2 は 2026 年でも設計時（0.22〜0.23）にほぼ近い 0.20 なので、劣化はペース側に限る。ペース想定は 『前半 3F の速さ』そのものではなく 『位置取りの組合せから見たペースの偏り』なので、水準の差は定義の違いも含む。</p>
+
+<h2>5. 期待値の較正と印</h2>
+<p class="muted">v4 のバックフィル確率 × 確定オッズ（単勝・複勝は払戻の実績）で、本番と同じ関数（<code>assign_mece_marks</code>・<code>attach_calibrated_ev</code>・<code>market_top2_fair_odds</code>）を 2,675 レースに適用した。複勝は払戻の保存が欠けるレース（複勝が 1 行しか無い）を除いた（約 2 割）。</p>
+<h3>5.1 印</h3>
+<table><tr><th>指標</th><th>測定</th><th>基準</th></tr>
+<tr><td>1 レースあたりの印の個数</td><td class="num">平均 7.29（最小 4、最大 8）</td><td>平均 5〜9 ✓</td></tr>
+<tr><td>◎○▲★が 2 頭以上のレース</td><td class="num">0</td><td>0 ✓</td></tr>
+<tr><td>△が上限（13 頭以上 4、8〜12 頭 3 …）を超えるレース</td><td class="num">0</td><td>0 ✓</td></tr>
+<tr><td>1 レースあたりの平均個数</td><td class="num">◎ 1.00、○ 1.00、▲ 1.00、★ 0.77、△ 3.52</td><td>—</td></tr></table>
+<p class="muted">◎が付かないレースは 1 つ（均等確率の 1.1 倍に満たない）。最小 4 個のレースがあるが、平均が基準内で、ユーザー指定の規則（★・△は条件付き）どおり。</p>
+<h3>5.2 較正後の期待値は実現に収束するか</h3>
+<table><tr><th>種類</th><th>全馬の平均 EV</th><th>実現回収率</th><th>最大 EV の十分位（EV／実現）</th><th>ずれ（95% 区間）</th><th>EV≥1.0 の馬（EV／実現）</th><th>判定（±0.12）</th></tr>
+<tr><td>単勝（較正後）</td><td class="num">0.728</td><td class="num">0.749</td><td class="num">1.047／1.076</td><td class="num">−0.03（−0.40〜+0.28）</td><td class="num">2,017 頭 1.131／1.101</td><td><b>満たす</b>（区間は広い）</td></tr>
+<tr><td>複勝（較正後）</td><td class="num">0.739</td><td class="num">0.733</td><td class="num">0.985／0.784</td><td class="num"><b>+0.20（+0.03〜+0.35）</b></td><td class="num">1,192 頭 1.043／<b>0.595</b></td><td><b>満たさない</b></td></tr></table>
+<p>単勝は全体の平均（0.728 vs 0.749）も最上位（1.047 vs 1.076）も合う（EV が低い側は実現が EV を上回る＝穴馬を安く見積もる。最下位 0.38 vs 0.56）。<b>複勝は全体の平均は合うが、EV が高い側ほど実現が伸びない</b>（最上位 0.985 に対し実現 0.784、EV≥1.0 の群は 1.043 に対し実現 0.595）。画面の『強推奨・推奨』は 3 種類の EV の最大で決めるので、複勝の過大評価がそのまま推奨度に出る。複勝の較正曲線の上側（単調回帰）を 2022〜2026 年で当てはめ直して平らにするか、複勝 EV を推奨度の判定から外す／上限を設ける対応が必要（設定は <code>config/ev_calibration.json</code>。本節では変更していない）。</p>
+<h3>5.3 推奨ポートフォリオ（目安表示のまま）</h3>
+<p>2026 年 85 日・2,689 レースの買い目を確定オッズで精算した回収率は <b>76.3%</b>（投資 5,331,100 円、払戻 4,068,720 円、的中レース 629）。券種別は単勝 93.9%、複勝 75.7%、ワイド 73.7%、馬連 63.6%（3連複は投資 18,700 円で 112.8%）。較正の評価時点の 2026 年のずれは、単勝 +0.05、複勝 +0.17、ワイド +0.24、馬連 +0.37（<code>config/ev_calibration.json</code> の gap_2026、validated=false）で、基準 0.12 に収まるのは単勝だけ。<b>should の S1 は満たさない</b>ため、ポートフォリオの期待回収率は『目安』の表示のままにする（既存の方針どおり）。</p>
+
+<h2>6. 組合せ券（馬連・ワイド・3連複）の確率</h2>
+<p class="muted">v4 の勝率・連対率・複勝率から、本番の割引 Harville（α をレースごとに連対率・複勝率へ当てはめ）と素の Harville（α=1）を作り、2026 年の 800 レース（無作為、全組合せ 73,067 通り＝馬連・ワイド、312,307 通り＝3連複）で比べた。α の平均は α2=0.754、α3=0.649（1 未満＝穴馬の連対・複勝を素の Harville より高く見積もる）。</p>
+<table><tr><th>券種</th><th>ECE 割引（基準≤0.003）</th><th>ECE 素の Harville</th><th>対数損失 割引</th><th>対数損失 素の Harville</th></tr>
+<tr><td>馬連</td><td class="num">0.00066</td><td class="num">0.00132</td><td class="num">0.04821</td><td class="num">0.04831</td></tr>
+<tr><td>ワイド</td><td class="num">0.00181</td><td class="num">0.00465</td><td class="num">0.11427</td><td class="num">0.11469</td></tr>
+<tr><td>3連複</td><td class="num">0.00023</td><td class="num">0.00043</td><td class="num">0.013934</td><td class="num">0.013997</td></tr></table>
+<p>3 券種とも ECE は基準内で、素の Harville より ECE・対数損失ともに良い。<b>導入可</b>。ただし対数損失の改善は 0.1〜0.4% と小さい（主な効果は ECE の低下＝穴馬の補正）。上位の確率帯だけの精度は別に見ていない。</p>
+
+<h2>7. 予測最終オッズ（candidate2）</h2>
+<table><tr><th>指標</th><th>測定</th><th>基準</th><th>判定</th></tr>
+<tr><td>単勝のレース内順位相関</td><td class="num">0.387（2025＋2026 年の併合評価 84,168 頭・6,108R。2026 年だけの再測定は未実施）</td><td>≥0.60</td><td><b>不可</b></td></tr>
+<tr><td>複勝（下限・上限）のレース内順位相関</td><td class="num">0.833／0.835</td><td>（単勝の基準に準じて 0.60）</td><td>導入可</td></tr>
+<tr><td>Σ(1/オッズ) の中央値</td><td class="num">未測定（予測オッズの保存が無い）</td><td>1.15〜1.35</td><td>未判定</td></tr></table>
+<p class="muted">単勝の予測オッズの順位相関は、評価の度に 0.13〜0.69 と大きく揺れる（2025 年の odds 列が追走指数だった問題の影響を受けた評価を含む）ので、最新の併合評価の 0.387 を採るが確度は低い。2026 年だけの再測定（再推論で約 25 分）は負荷のため見送った。このため、<b>単勝・馬連などの期待値は実オッズ（odds_mode=actual／auto）で計算し、予測オッズは複勝の前日表示に限る</b>のが安全。運用上は、T-60 以降は実オッズがあるので影響は前日の事前表示に限られる。</p>
+<h2>8. 前段モデルと補助ヘッド</h2>
+<p class="muted">前段（s_time_pred・s_time_gap・s_rank_pred）と補助ヘッド（mtl_*）は 2026 年について保存が無いので、上の 11 日・110 レース（1,500 頭余り）の v5 推論の途中の出力を保存して調べた（<code>readiness_stage.py</code>）。実測は 2025・2026 年とも同じ式で作る（レース内の走破タイム偏差、着順の正規化、上がり 3F の偏差）。比較は 2025 年の OOF（expanding window）全体の同じ指標。指標は『レース内の順位相関（Spearman）の平均』。2025 年から同じレース数（110）を 20 回取り直した標準偏差は 0.019〜0.021。</p>
+<table><tr><th>出力</th><th>実測</th><th>2025 年 OOF</th><th>2026 年（抜き取り）</th><th>比（基準≥0.90）</th><th>欠損率（2025／2026）</th><th>判定</th></tr>
+<tr><td>s_time_pred</td><td>走破タイム偏差</td><td class="num">0.522</td><td class="num">0.537</td><td class="num">1.03</td><td class="num">0／0</td><td>満たす</td></tr>
+<tr><td>s_time_gap</td><td>走破タイム偏差</td><td class="num">0.522</td><td class="num">0.537</td><td class="num">1.03</td><td class="num">0／0</td><td>満たす</td></tr>
+<tr><td>s_rank_pred</td><td>着順（正規化）</td><td class="num">0.529</td><td class="num">0.544</td><td class="num">1.03</td><td class="num">0／0</td><td>満たす</td></tr>
+<tr><td>mtl_t_time_dev</td><td>走破タイム偏差</td><td class="num">0.526</td><td class="num">0.544</td><td class="num">1.03</td><td class="num">0／0</td><td>満たす</td></tr>
+<tr><td>mtl_t_rank_norm</td><td>着順（正規化）</td><td class="num">0.526</td><td class="num">0.544</td><td class="num">1.03</td><td class="num">0／0</td><td>満たす</td></tr>
+<tr><td>mtl_t_l3f_dev</td><td>上がり 3F の偏差</td><td class="num">0.461</td><td class="num">0.446</td><td class="num">0.97</td><td class="num">0／0</td><td>満たす</td></tr></table>
+<p><b>導入可</b>。前段・補助は 2026 年でも劣化していない（比 0.97〜1.03、標準誤差 0.02 の範囲）。つまり<b>前述の v4 の悪化（月とともに市場との差が開く）は、前段の劣化ではなく本体の予測側</b>にある。pos・ten・c1・pace 系の補助ヘッドは、2026 年の実測ラベル（位置取り・ペース）を作る処理が別系統のため今回は測っていない。</p>
+<h2>9. 判定表</h2>
+<table><tr><th>#</th><th>対象</th><th>主な測定（2026 年）</th><th>判定</th></tr>
+<tr><td>1</td><td><b>現在画面に出ている予測（v4 のバックフィル／shadow）</b></td><td>勝率 0.2144・連対 0.3337・複勝 0.4154（test 2025 比 +0.0070／+0.01015／+0.0090）、ECE 0.002〜0.008、全層で k/n 超え、◎の 1 着率 30.5%、被覆 96.7%</td><td><b>条件付き導入可</b>（C1 連対が +0.00015 超過、C4 被覆。モデルと市場の差が月とともに拡大）</td></tr>
+<tr><td>2</td><td>v4</td><td>同上（#1 と同じモデル）。推論 24.4 秒、経路の相関 0.9987</td><td><b>条件付き導入可</b></td></tr>
+<tr><td>3</td><td>v5</td><td>抜き取り 122R で v4 比 勝率 −0.0006・連対 −0.0009・複勝 +0.0005（いずれも区間は 0 を跨ぐ）、合計・NaN 問題なし。推論 37.5 秒、経路の相関 0.992〜0.998</td><td><b>条件付き導入可</b>（v4 と同等以上と見られるが、2026 年単独では優劣を示せない）</td></tr>
+<tr><td>4</td><td>前段（s_time_pred・s_time_gap・s_rank_pred）・補助ヘッド</td><td>2025 年 OOF 比 0.97〜1.03、欠損 0（pos・ten・c1・pace 系の補助ヘッドは未測定）</td><td><b>導入可</b></td></tr>
+<tr><td>5</td><td>予測最終オッズ（candidate2）</td><td>単勝のレース内順位相関 0.387（基準 0.60）、複勝 0.83、Σ(1/odds) 未測定</td><td>複勝 <b>導入可</b>／単勝 <b>不可</b></td></tr>
+<tr><td>6</td><td>追走難度 v2</td><td>41 週 すべて正、相関 0.202、単調性 0.669、最上位−最下位 0.92 秒</td><td><b>導入可</b></td></tr>
+<tr><td>7</td><td>ペース想定 v2</td><td>前半 3F との相関 0.30（基準 0.35、設計時 0.45）、付与 84%</td><td><b>条件付き</b>（表示専用）</td></tr>
+<tr><td>8</td><td>ラップ予想</td><td>MAE 前半 0.53／後半 0.55 秒（基準ラップ 0.75／1.22）、80% 帯 0.82</td><td><b>導入可</b></td></tr>
+<tr><td>9</td><td>期待値の較正</td><td>単勝は最上位の十分位で EV 1.047／実現 1.076。複勝は 0.985／0.784（ずれ +0.20）</td><td>単勝 <b>導入可</b>／複勝 <b>条件付き</b></td></tr>
+<tr><td>10</td><td>印</td><td>平均 7.3 個、違反 0／2,675R</td><td><b>導入可</b></td></tr>
+<tr><td>11</td><td>推奨ポートフォリオの期待回収率</td><td>実現 76.3%、ずれは単勝 +0.05・複勝 +0.17・ワイド +0.24・馬連 +0.37</td><td><b>目安表示のまま</b></td></tr>
+<tr><td>12</td><td>組合せ券の確率（割引 Harville）</td><td>ECE 0.0002〜0.0018（基準 0.003）、素の Harville より良い</td><td><b>導入可</b></td></tr></table>
+
+<h2>10. 必要な改善（優先順）</h2>
+<ol>
+<li><b>モデルの鮮度.</b>モデルと市場の差が 1〜5 月の 0.005 から 6〜10 月の 0.011 に開いた。2026 年を学習に使えないので、(a) 週次で直近 4 週の『モデル − 市場』を監視し（モニターに追加）、0.015 を超えたら警告、(b) 2026 年の最後の 1 回の評価が済んだら 2026 年のデータを含めて再学習、を行う。v6（前段・補助の作り直し）の効果が出れば、その評価もこの差で行う。</li>
+<li><b>複勝の期待値.</b>最上位の十分位で実現を 0.20 上回る。複勝の較正を 2022〜2026 年で当てはめ直す（単調回帰の上側を平らにする）か、複勝 EV を『強推奨・推奨』の判定から外す。</li>
+<li><b>予測最終オッズの単勝.</b>順位相関が基準の 2/3 未満。期待値は実オッズで出し、予測オッズは前日の複勝表示だけに使う。2026 年単独の再測定と Σ(1/オッズ) の測定には予測値の保存（再推論約 25 分）が要る。</li>
+<li><b>ペース想定 v2.</b>相関 0.45→0.30 の原因調査（付与されない 16% のレースの偏り、障害・新馬の扱い）。</li>
+<li><b>被覆.</b>馬番が空の古い形式の出馬表（5/24、6/6、6/7 など 93 レース）に予測を付ける（馬名で補完）。当日運用には影響しない。</li>
+<li><b>v4/v5 の並走の蓄積.</b>shadow の出力（predictions_v3／predictions_v5）を週次で確定結果と突き合わせ、約 2,000 レース（約 9 か月）で非劣性を再判定する。</li>
+</ol>
+
+<h2>11. v5 を predict に切り替えてよいか</h2>
+<p><b>技術的には切り替えてよいが、急ぐ根拠は弱い（条件付き可）.</b></p>
+<ul>
+<li>根拠（改善の向き）: LOYO で 3 年とも改善（勝率 −0.00061、上限 −0.00041）、bundle_v5_2024 の test 2025 の 1 回評価で v4 比 勝率 −0.00030（上限 −0.00001）・連対 −0.00064・複勝 −0.00082。2026 年の抜き取りの点推定も勝率・連対で同じ向き。</li>
+<li>根拠（安全）: 確率の合計・NaN の問題なし、1 バッチ 37.5 秒（基準 90 秒）、推論経路と学習側の相関 0.992〜0.998（基準 0.990。V0 の再現誤差が主因で、v4 と同じ構造）、v4 の shadow と独立に並走中。</li>
+<li>弱い点: 2026 年だけでは v4 に対する優劣を示せない（122 レース、複勝は逆向き）。改善幅が小さい（0.0003〜0.0008）ので、切り替えても表示が変わるのは主に勝率 0.5% 程度。v4・v5 とも『モデルと市場の差が月とともに開く』問題を持ち、v5 の切り替えではこれは解消しない。</li>
+<li>切り替える場合の条件: (1) 切り替え前に 10/24〜25 の週末で v4・v5 の shadow が全レースで出ており、確率の合計・NaN が毎日 0 であること、(2) 環境変数 <code>KEIBA_V3_BUNDLE</code> で戻せること（ロールバック手順を用意）、(3) 切り替え後も v4 の shadow を残して差を週次で見ること。切り替えの実行はユーザーの判断（本節では行っていない）。</li>
+</ul>
+
+<h2>12. 再現手順</h2>
+<pre>python -m src.scripts.data.readiness_eval --out ensemble.json --v5-dir &lt;backfill/bundle_v5_2025&gt;,&lt;抜き取りの v5 フォルダ&gt;
+python -m src.scripts.data.readiness_v5_sample --days YYYYMMDD,... --max-races 10 --out &lt;dir&gt; --bundle &lt;bundle_v5_2025&gt; --stage &lt;final_stage/v4_fixed&gt;   # KEIBA_INFERENCE_ENGINE=full
+python -m src.scripts.data.readiness_stage --stage-dir &lt;dir&gt;/stage --out stage.json
+python -m src.scripts.data.readiness_pace --out pace.json
+python -m src.scripts.data.readiness_ev_exotic --out ev_exotic.json</pre>
+<p class="muted">注意: 市場の LogLoss は Σ(1/オッズ) が 1.0〜1.6 の外のレース（単勝オッズが壊れたもの）を除く。着順が負（中止・取消）の行は除く。複勝の実現払戻は、保存が欠けるレースを除く。EV・印の評価は確定オッズで行ったもので、予測時点（T-60）のオッズとは異なる。</p>
+<p class="muted">関連: <a href="training_pipeline_decisions.html">決定ログ</a>・<a href="ev_calibration_adopt.html">期待値の較正（tp-49）</a>・<a href="ensemble_v5.html">アンサンブル v5（tp-52）</a>・<a href="lap_forecast.html">ラップ予想（tp-55）</a>・<a href="tracking_difficulty_v2.html">追走難度 v2（tp-54）</a>・<a href="exotic_bet_probabilities.html">組合せ券の確率</a></p>
+</body></html>
