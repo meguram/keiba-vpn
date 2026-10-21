@@ -45,9 +45,10 @@ for sa in keiba-api keiba-jobs keiba-scheduler keiba-deployer; do
   fi
 done
 
-bind_project() { # SA ロール
+bind_project() { # SA ロール（roles/ が無ければ補う）
+  local role="$2"; case "$role" in roles/*) ;; *) role="roles/$role" ;; esac
   run gcloud projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$1@$PROJECT.iam.gserviceaccount.com" \
-    --role "$2" --condition=None --quiet >/dev/null
+    --role "$role" --condition=None --quiet >/dev/null
 }
 bind_bucket() { # SA ロール
   run gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member "serviceAccount:$1@$PROJECT.iam.gserviceaccount.com" \
