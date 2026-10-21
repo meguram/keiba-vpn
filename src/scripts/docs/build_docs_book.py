@@ -272,6 +272,8 @@ PARTS: list[Part] = [
           [("feature_gap_audit", "特徴量のやり残しの棚卸し"), ("feature_investigation_catalog", "特徴量調査の総覧"), ("yosou_procedure", "ユーザーの予想手順の再現（tp-56）"), ("training_pipeline_decisions", "決定ログ（§41）")]),
         C("jockey_trainer_roi", "騎手・調教師の分析と、単勝・複勝の回収率として稼げるか（tp-59）。勝率・複勝率は前年→翌年で強く再現（順位相関 0.7〜0.9）するが回収率は再現せず（0〜0.3、本物の差の割合は単勝で最大 0.22）、100% を超えると言える騎手・調教師・組み合わせは全数調査で 0（延べ約 4,600 中、偶然の期待約 230 に対し 1）。市場とモデルは強さ別に ±0.5pt で較正済みで、人気の騎手・調教師は 5〜7pt 買われすぎ。回収率で買う規則 528 通りは Reality Check p=0.9995。唯一の手がかりは『単勝 EV≥1.5 かつ騎手・調教師の勝ち数がともに市場の見込みを上回る』（5 年とも 122〜147%）だが、事後に絞った候補で穴馬依存のため凍結して前向きに追跡する。特徴量は既存列が gain の約 1%、V5 の OOF に対する関係者の残差が一次選別を通る。", "結果",
           [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("proven_methods_roi", "回収率 100% 超の実績者の手法と検証（tp-44）"), ("feature_gap_audit", "特徴量のやり残しの棚卸し"), ("training_pipeline_decisions", "決定ログ（§42）")]),
+        C("pace_type", "展開タイプ（ペース × 隊列の凝縮度）と、展開シナリオごとの各馬の確率（tp-61）。文献（note の解説記事約 380 本）のラップ・ペースの分類を軸に分解して MECE の規則（6 型）にし、実測 1.9 万レースで脚質別の成績を検証。成績を分けるのは『ペース 3 段階 × 隊列 3 段階』で、中緩み・加速の細分は上乗せなし（スロー・縦長は逃げ 1.34／追込 0.71、スロー・凝縮は逃げ 1.17／追込 0.94）。ハナ主張馬の数と前半3F、事前予測の精度（隊列は出せる、ペースは UI の 3 段階より良い）、展開シナリオ別の各馬の確率（表示・説明用、精度は変えない）、予測 API の pace_type / scenario_forecast（KEIBA_PACE_TYPE=1、既定オフ）。", "結果",
+          [("lap_forecast", "ハロンごとのラップ予想（tp-55）"), ("pace_consistency", "想定位置取り・追走難度・想定上がりの連動（tp-53）"), ("tracking_difficulty_v2", "追走難度 v2（tp-54）"), ("handicapper_viewpoints", "予想家の観点の調査"), ("training_pipeline_decisions", "決定ログ（§43）")]),
         C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",
           note="safe_ev を前提にした設計。tp-08 の実装は Benter ブレンドで、safe_ev は使っていない。",
           now=[("modeling_experiment_report", "tp-08 の結果")]),

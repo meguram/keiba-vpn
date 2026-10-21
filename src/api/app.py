@@ -6981,6 +6981,13 @@ async def get_race_predictions(race_id: str):
             resp = attach_lap_forecast(resp, race_id, str(card.get("date") or ""))
         except Exception as exc:  # noqa: BLE001
             logger.warning("ラップ予想の付与に失敗 %s: %s", race_id, exc)
+        # 展開タイプ（ペース × 隊列の凝縮度）と、展開シナリオごとの各馬の確率（KEIBA_PACE_TYPE=1 のときだけ。表示・説明用で、既定は何もしない）
+        try:
+            from src.pipeline.inference.pace_type import attach_pace_type
+
+            resp = attach_pace_type(resp, past, str(card.get("date") or ""), {"track_condition": card.get("track_condition"), "grade": card.get("grade")})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("展開タイプの付与に失敗 %s: %s", race_id, exc)
         # 過去のめぐ指数からの想定めぐ指数（AI の予測ではない）。失敗しても予測の応答は返す
         try:
             from src.pipeline.inference.expected_megu import attach_expected_megu
