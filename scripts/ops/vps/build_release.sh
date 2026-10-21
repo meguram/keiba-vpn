@@ -22,8 +22,8 @@ git archive "$COMMIT" frontend config/ports.env | tar -x -C "$WORK"
 
 echo "== 2/6 依存パッケージ"
 if [ -d "$ROOT/frontend/node_modules" ] && cmp -s "$ROOT/frontend/package-lock.json" "$WORK/frontend/package-lock.json"; then
-  # ホスト機の frontend/node_modules は /tmp への symlink（9p の遅さ回避）。symlink のまま写すと standalone に実体が入らず VPS で 'next' が見つからない。実体で写す（-L）
-  cp -aL "$ROOT/frontend/node_modules" "$WORK/frontend/node_modules"; echo "  既存の node_modules を再利用（package-lock.json が同一）"
+  # ホスト機の frontend/node_modules は /tmp への symlink（9p の遅さ回避）。symlink のまま写すと standalone に実体が入らず VPS で 'next' が見つからない。末尾 /. で実体の中身を写す（-L は .bin の相対 symlink を壊すので使わない）
+  mkdir -p "$WORK/frontend/node_modules"; cp -a "$ROOT/frontend/node_modules/." "$WORK/frontend/node_modules/"; echo "  既存の node_modules を再利用（package-lock.json が同一）"
 else
   ( cd "$WORK/frontend" && npm ci --no-audit --no-fund ); fi
 
