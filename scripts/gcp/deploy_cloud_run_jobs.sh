@@ -1,218 +1,119 @@
 #!/usr/bin/env bash
 # =============================================================================
-# keiba-vpn GCP Cloud Run Jobs 一括デプロイ 設計図
+# Cloud Run Jobs / Cloud Scheduler / Cloud Tasks キューの作成（config/gcp_job_map.json が正本）
 #
-# docs/operations/gcp-cloud-run-jobs.md の10ジョブそれぞれについて、
-# `gcloud run jobs deploy` + `gcloud scheduler jobs create http` 相当のコマンドを
-# 生成・表示する。
+# 既定は『表示だけ』。何も実行しない。実行するときだけ apply（確認つき）。dev PC は GCP に接続しないので、実行は Cloud Shell かホスト（stg）で。
 #
-# !! 重要 !!
-#   このスクリプトは「設計図」であり、既定では何も実行しない（show のみ）。
-#   実際に GCP へデプロイ・スケジューラ登録する場合は、
-#     1. PROJECT_ID / REGION / IMAGE / SCHEDULER_SA_EMAIL を実値に置き換える
-#     2. 対象のコンテナイメージ（本リポジトリを含む Docker イメージ）を
-#        事前に Artifact Registry へ push しておく
-#     3. `--apply` を付けて明示的に実行する
-#   の3点をユーザー側で確認してから使うこと。
+#   bash scripts/gcp/deploy_cloud_run_jobs.sh                      # 全部のコマンドを表示（= show all）
+#   bash scripts/gcp/deploy_cloud_run_jobs.sh show queue|jobs|scheduler|all [--parallel] [--include-unready]
+#   bash scripts/gcp/deploy_cloud_run_jobs.sh --dry-run apply all  # apply の中身を表示だけ（show と同じ）
+#   PROJECT_ID=… GCS_BUCKET=… bash scripts/gcp/deploy_cloud_run_jobs.sh apply queue|jobs|scheduler|all [--parallel] [--include-unready] [--yes]
+#   bash scripts/gcp/deploy_cloud_run_jobs.sh build                # イメージのビルド手順（Cloud Build）を表示
+#   PROJECT_ID=… bash scripts/gcp/deploy_cloud_run_jobs.sh run-now group g-0800 [--yes]   # 手動で 1 グループ／1 ジョブを今すぐ実行（動作確認）
+#   bash scripts/gcp/deploy_cloud_run_jobs.sh list                 # グループ・ジョブの一覧（準備状況つき）
 #
-# Usage:
-#   bash scripts/gcp/deploy_cloud_run_jobs.sh                 # 全ジョブのコマンドを表示 (既定)
-#   bash scripts/gcp/deploy_cloud_run_jobs.sh show             # 同上
-#   bash scripts/gcp/deploy_cloud_run_jobs.sh show <job-name>   # 1ジョブのみ表示
-#   bash scripts/gcp/deploy_cloud_run_jobs.sh list              # ジョブ名一覧のみ
-#   PROJECT_ID=... REGION=... IMAGE=... SCHEDULER_SA_EMAIL=... \
-#     bash scripts/gcp/deploy_cloud_run_jobs.sh --apply <job-name>
-#       # 実際に gcloud を実行してデプロイ・スケジューラ登録する（要事前準備・自己責任）
+# 変数: PROJECT_ID / REGION(asia-northeast1) / GCS_BUCKET / IMAGE / RUN_SA_EMAIL(keiba-jobs@) / SCHEDULER_SA_EMAIL(keiba-scheduler@) / CLOUD_TASKS_QUEUE(keiba-predict)
+#       SECRETS_EXTRA（追加で渡す Secret Manager の秘密名。カンマ区切り）
+# 環境変数には KEIBA_ENV=prod と KEIBA_RUN_LOCATION=gcp が必ず入る（Slack の先頭に【PROD】・末尾に実行場所: GCP が付き、ホスト(stg)の通知と見分けられる）。
+# --parallel は並走期間（KEIBA_PARALLEL_RUN=1。予測は影モード固定）。切替後は付けずに jobs を再 apply する。
+# 手順の全体: docs/operations/gcp_jobs_migration.md
 # =============================================================================
-
 set -euo pipefail
 
-PROJECT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
+ROOT="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
+PY="${PYTHON:-python3}"
+cd "$ROOT"
 
-# ユーザー側で実値に置き換える前提のプレースホルダ（環境変数で上書き可）
-PROJECT_ID="${PROJECT_ID:-YOUR_GCP_PROJECT_ID}"
-REGION="${REGION:-asia-northeast1}"
-IMAGE="${IMAGE:-${REGION}-docker.pkg.dev/${PROJECT_ID}/keiba-vpn/cloud-jobs:latest}"
-SCHEDULER_SA_EMAIL="${SCHEDULER_SA_EMAIL:-keiba-scheduler@${PROJECT_ID}.iam.gserviceaccount.com}"
-RUN_SA_EMAIL="${RUN_SA_EMAIL:-keiba-cloud-run-jobs@${PROJECT_ID}.iam.gserviceaccount.com}"
+DRY=0; YES=0; ARGS=()
+for a in "$@"; do
+  case "$a" in
+    --dry-run) DRY=1 ;;
+    --yes) YES=1 ;;
+    *) ARGS+=("$a") ;;
+  esac
+done
+SUB="${ARGS[0]:-show}"
+WHAT="${ARGS[1]:-all}"
+EXTRA=()
+for a in "${ARGS[@]:2}"; do EXTRA+=("$a"); done
 
-# -----------------------------------------------------------------------------
-# ジョブ定義: name|module|memory|timeout|cron(JST)|description
-#   詳細・根拠は docs/operations/gcp-cloud-run-jobs.md を参照。
-# -----------------------------------------------------------------------------
-JOB_DEFS=(
-  "structure-check|src.scraper.run structure-check|1Gi|900s|0 6 * * *|構造チェック（毎朝06:00 JST）"
-  "queue-maintenance|src.scripts.cloud_jobs.queue_maintenance|256Mi|300s|0 * * * *|キュー定期メンテ（1時間ごと）"
-  "daily-shutuba-enqueue|src.scripts.cloud_jobs.daily_shutuba_enqueue|512Mi|600s|0 7 * * *|出馬表自動取得（毎朝07:00 JST）"
-  "weekly-sire-agg|src.scripts.maintenance.aggregate_sire_aptitude|2Gi|1800s|0 6 * * 1|週次種牡馬集計（毎週月曜06:00 JST）"
-  "jockey-trainer-stats|src.pipeline.build_jockey_trainer_stats|2Gi|1800s|30 5 * * *|騎手・調教師統計（毎日05:30 JST）"
-  "race-quality-day|src.scripts.cloud_jobs.race_quality_day|1Gi|600s|0 19 * * *|レース質日次一括推定（提案値: 毎日19:00 JST）"
-  "tracking-difficulty-precompute|src.scripts.maintenance.precompute_tracking_difficulty_all --skip-existing|2Gi|3600s|0 8 * * *|追走難度precompute（提案値: 毎日08:00 JST）"
-  "track-speed-rebuild-baselines|src.research.race.build_track_speed_baselines|2Gi|1800s|0 4 * * 0|track-speedベースライン再構築（提案値: 毎週日曜04:00 JST）"
-  "myostatin-recalculate|src.scripts.cloud_jobs.myostatin_recalculate|256Mi|120s|0 5 1 * *|ミオスタチン再計算（提案値: 毎月1日05:00 JST）"
-  "odds-train|src.scripts.data.train_final_odds_model|4Gi|7200s|0 3 * * 0|オッズ予測モデル学習（提案値: 毎週日曜03:00 JST）"
-)
+gen() { PYTHONPATH="$ROOT" "$PY" -m src.ops.scheduler_gen "$WHAT" "${EXTRA[@]}"; }
 
-usage() {
+need_real() {
+  if [ "${PROJECT_ID:-}" = "" ] || [ "${PROJECT_ID:-}" = "YOUR_GCP_PROJECT_ID" ]; then echo "PROJECT_ID が未設定です" >&2; exit 1; fi
+  if [ "${GCS_BUCKET:-}" = "" ] || [ "${GCS_BUCKET:-}" = "YOUR_BUCKET" ]; then echo "GCS_BUCKET が未設定です" >&2; exit 1; fi
+}
+
+confirm() {
+  [ "$YES" = 1 ] && return 0
+  read -r -p "上のコマンドを実行します。よければ yes と入力: " ans
+  [ "$ans" = yes ] || { echo "中止しました"; exit 1; }
+}
+
+case "$SUB" in
+  show)
+    gen
+    ;;
+  list)
+    PYTHONPATH="$ROOT" "$PY" - <<'PYEOF'
+from src.ops import job_map
+d = job_map.load()
+for gid, g in d["scheduler_groups"].items():
+    print(f"{gid:12s} {g['cron_jst']:22s} size={g['size']}  {g['desc']}")
+    for jid in g["jobs"]:
+        j = job_map.job_by_id(jid, d)
+        print(f"    {'ready ' if j['ready'] else 'WAIT  '}{jid:30s} {'; '.join(j['blockers'])[:90]}")
+PYEOF
+    ;;
+  build)
+    cat <<'MSG'
+# Cloud Shell で（無料枠: Cloud Build 2,500 分/月）
+export PROJECT=$(gcloud config get-value project); export REGION=asia-northeast1
+gcloud artifacts repositories describe keiba-vpn --location $REGION >/dev/null 2>&1 || gcloud artifacts repositories create keiba-vpn --repository-format docker --location $REGION
+gcloud builds submit --config - . <<'YAML'
+steps:
+- name: gcr.io/cloud-builders/docker
+  args: ['build','-f','Dockerfile.jobs','-t','asia-northeast1-docker.pkg.dev/$PROJECT_ID/keiba-vpn/jobs:latest','.']
+images: ['asia-northeast1-docker.pkg.dev/$PROJECT_ID/keiba-vpn/jobs:latest']
+YAML
+MSG
+    ;;
+  apply)
+    need_real
+    OUT="$(mktemp)"; trap 'rm -f "$OUT"' EXIT
+    gen >"$OUT"
+    cat "$OUT"
+    if [ "$DRY" = 1 ]; then echo; echo "（--dry-run: 実行していません）"; exit 0; fi
+    confirm
+    bash "$OUT"
+    ;;
+  run-now)
+    need_real
+    KIND="${ARGS[1]:-}"; NAME="${ARGS[2]:-}"
+    [ -n "$KIND" ] && [ -n "$NAME" ] || { echo "usage: run-now group <group_id> | job <job_id>" >&2; exit 2; }
+    SIZE="$(PYTHONPATH="$ROOT" "$PY" - "$KIND" "$NAME" <<'PYEOF'
+import sys
+from src.ops import job_map
+kind, name = sys.argv[1:3]
+d = job_map.load()
+if kind == "group":
+    size = d["scheduler_groups"][name]["size"]
+else:
+    j = job_map.job_by_id(name, d)
+    g = job_map.group_of(j["group"], d) if j.get("group") else None
+    size = g["size"] if g else j.get("size", "l")
+print(d["runtime"]["run_jobs"][size]["name"])
+PYEOF
+)"
+    CMD=(gcloud run jobs execute "$SIZE" --project "$PROJECT_ID" --region "${REGION:-asia-northeast1}" --wait "--args=-m,src.ops.job_dispatch,$KIND,$NAME")
+    echo "${CMD[*]}"
+    if [ "$DRY" = 1 ]; then echo "（--dry-run: 実行していません）"; exit 0; fi
+    confirm
+    "${CMD[@]}"
+    ;;
+  -h|--help|help)
     sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
-}
-
-find_job_def() {
-    local target="$1"
-    for def in "${JOB_DEFS[@]}"; do
-        local name="${def%%|*}"
-        if [ "$name" = "$target" ]; then
-            echo "$def"
-            return 0
-        fi
-    done
-    return 1
-}
-
-# `module` フィールド（"src.scripts.cloud_jobs.foo --bar" 等）を
-# gcloud run jobs deploy の --command/--args に変換する。
-module_to_args() {
-    local module_and_args="$1"
-    # python3 -m <module> [extra args...]
-    echo "python3,-m,$(echo "$module_and_args" | sed 's/ /,/g')"
-}
-
-print_deploy_commands() {
-    local def="$1"
-    IFS='|' read -r name module memory timeout schedule desc <<<"$def"
-    local args
-    args="$(module_to_args "$module")"
-
-    echo "# -------------------------------------------------------------"
-    echo "# ${name} — ${desc}"
-    echo "# -------------------------------------------------------------"
-    cat <<CMD
-gcloud run jobs deploy ${name} \\
-  --project="${PROJECT_ID}" \\
-  --region="${REGION}" \\
-  --image="${IMAGE}" \\
-  --command="python3" \\
-  --args="-m,${module// /,}" \\
-  --memory="${memory}" \\
-  --task-timeout="${timeout}" \\
-  --max-retries=1 \\
-  --service-account="${RUN_SA_EMAIL}" \\
-  --set-env-vars="KEIBA_ENV=prod"
-
-gcloud scheduler jobs create http ${name}-scheduler \\
-  --project="${PROJECT_ID}" \\
-  --location="${REGION}" \\
-  --schedule="${schedule}" \\
-  --time-zone="Asia/Tokyo" \\
-  --uri="https://${REGION}-run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/${name}:run" \\
-  --http-method=POST \\
-  --oauth-service-account-email="${SCHEDULER_SA_EMAIL}"
-CMD
-    echo
-}
-
-cmd_list() {
-    for def in "${JOB_DEFS[@]}"; do
-        local name="${def%%|*}"
-        echo "$name"
-    done
-}
-
-cmd_show() {
-    local target="${1:-}"
-    if [ -n "$target" ]; then
-        local def
-        if ! def="$(find_job_def "$target")"; then
-            echo "不明なジョブ名: $target" >&2
-            echo "一覧: $(cmd_list | tr '\n' ' ')" >&2
-            exit 1
-        fi
-        print_deploy_commands "$def"
-    else
-        for def in "${JOB_DEFS[@]}"; do
-            print_deploy_commands "$def"
-        done
-    fi
-}
-
-cmd_apply() {
-    local target="${1:-}"
-    if [ -z "$target" ]; then
-        echo "--apply には対象ジョブ名が必須です（全件一括適用はサポートしない。安全のため1件ずつ確認すること）" >&2
-        exit 1
-    fi
-    if [ "$PROJECT_ID" = "YOUR_GCP_PROJECT_ID" ]; then
-        echo "PROJECT_ID が未設定（placeholder のまま）。環境変数で実値を指定してください。" >&2
-        exit 1
-    fi
-    local def
-    if ! def="$(find_job_def "$target")"; then
-        echo "不明なジョブ名: $target" >&2
-        exit 1
-    fi
-    echo "=== 以下のコマンドを実行します ==="
-    print_deploy_commands "$def"
-    echo "=== 本当に実行しますか？ Ctrl-C で中断できます (5秒待機) ==="
-    sleep 5
-    IFS='|' read -r name module memory timeout schedule desc <<<"$def"
-    gcloud run jobs deploy "${name}" \
-      --project="${PROJECT_ID}" \
-      --region="${REGION}" \
-      --image="${IMAGE}" \
-      --command="python3" \
-      --args="-m,${module// /,}" \
-      --memory="${memory}" \
-      --task-timeout="${timeout}" \
-      --max-retries=1 \
-      --service-account="${RUN_SA_EMAIL}" \
-      --set-env-vars="KEIBA_ENV=prod"
-    gcloud scheduler jobs create http "${name}-scheduler" \
-      --project="${PROJECT_ID}" \
-      --location="${REGION}" \
-      --schedule="${schedule}" \
-      --time-zone="Asia/Tokyo" \
-      --uri="https://${REGION}-run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/${name}:run" \
-      --http-method=POST \
-      --oauth-service-account-email="${SCHEDULER_SA_EMAIL}"
-}
-
-main() {
-    local apply=0
-    local args=()
-    for a in "$@"; do
-        if [ "$a" = "--apply" ]; then
-            apply=1
-        else
-            args+=("$a")
-        fi
-    done
-
-    local sub="${args[0]:-show}"
-    case "$sub" in
-        show)
-            cmd_show "${args[1]:-}"
-            ;;
-        list)
-            cmd_list
-            ;;
-        -h|--help|help)
-            usage
-            ;;
-        *)
-            # `deploy_cloud_run_jobs.sh --apply <job-name>` のように sub がジョブ名の場合
-            if [ "$apply" -eq 1 ]; then
-                cmd_apply "$sub"
-                exit 0
-            fi
-            echo "不明なサブコマンド: $sub" >&2
-            usage
-            exit 1
-            ;;
-    esac
-
-    if [ "$apply" -eq 1 ] && [ "$sub" = "show" ]; then
-        echo "注意: --apply は <job-name> とセットで指定してください（例: --apply structure-check）" >&2
-    fi
-}
-
-main "$@"
+    ;;
+  *)
+    echo "不明なサブコマンド: $SUB" >&2; exit 2 ;;
+esac

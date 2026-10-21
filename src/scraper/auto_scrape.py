@@ -845,6 +845,16 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
 
     race_ids = [str(r["race_id"]) for r in races if r.get("race_id")]
 
+    if _os.environ.get("KEIBA_EVE_FETCH_ONLY", "").strip().lower() in ("1", "true", "yes"):
+        # 取得だけ。追走難度・想定オッズの計算は GCP の eve-precompute ジョブ（src/ops/jobs/eve_precompute.py）が行う
+        return {
+            "status": "ok",
+            "date": date_iso,
+            **{k: v for k, v in stats.items() if k != "errors"},
+            "error_count": len(stats["errors"]),
+            "fetch_only": True,
+        }
+
     if _os.environ.get("KEIBA_EVE_PRECOMPUTE_TRACKING", "1").strip().lower() not in (
         "0",
         "false",
@@ -925,6 +935,12 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict:
         "final_odds_precompute": final_odds_precompute_stats,
         "pg_sync": pg_sync,
     }
+
+
+def task_raceday_eve_fetch():
+    """前日夕方の取得だけ（計算は GCP の eve-precompute）。VPS の取得の実行役が使う。"""
+    os.environ["KEIBA_EVE_FETCH_ONLY"] = "1"
+    task_raceday_eve()
 
 
 def task_horse_name_index():
@@ -1724,6 +1740,7 @@ def task_entries_sync():
 
 TASKS = {
     "raceday-eve":            task_raceday_eve,
+    "raceday-eve-fetch":      task_raceday_eve_fetch,
     "raceday-comment":        task_raceday_comment,
     "new-horse-pedigree":     task_new_horse_pedigree,
     "horse-name-index":       task_horse_name_index,

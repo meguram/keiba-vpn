@@ -1,0 +1,3213 @@
+{
+ "version": 1,
+ "updated": "2026-10-21",
+ "notes": [
+  "ホスト crontab は UTC（実機の root crontab を 2026-10-21 に読み取り確認）。schedule は JST、origin.cron_utc はホストの実際の式。",
+  "destination: gcp=Cloud Run Jobs（ディスパッチャ経由）/ vps=VPS 実行役（取得タスク表）/ host=ホストに残す（停止対象外）/ retire=廃止。",
+  "ready=false のジョブは blockers を解消するまで Scheduler に載せない（ディスパッチャも --allow-unready なしでは実行しない）。",
+  "メモリ（memory_mib）は見積り。並走期間に Cloud Run の実測で置き換える。"
+ ],
+ "runtime": {
+  "region": "asia-northeast1",
+  "image": "keiba-vpn/jobs",
+  "env": {
+   "KEIBA_ENV": "prod",
+   "KEIBA_RUN_LOCATION": "gcp",
+   "TZ": "Asia/Tokyo"
+  },
+  "run_jobs": {
+   "s": {
+    "name": "keiba-dispatch-s",
+    "memory": "512Mi",
+    "cpu": "1",
+    "memory_mib": 512
+   },
+   "m": {
+    "name": "keiba-dispatch-m",
+    "memory": "2Gi",
+    "cpu": "1",
+    "memory_mib": 2048
+   },
+   "l": {
+    "name": "keiba-dispatch-l",
+    "memory": "4Gi",
+    "cpu": "2",
+    "memory_mib": 4096
+   }
+  },
+  "scheduler_budget": {
+   "min": 6,
+   "max": 14
+  },
+  "state_prefix": "state",
+  "parallel_prefix": "parallel",
+  "ops_prefix": "ops",
+  "host_snapshot_prefix": "host_snapshot",
+  "state_total_budget_mb": 1500
+ },
+ "cutover_defaults": {
+  "min_consecutive_success": 5,
+  "max_start_delay_sec": 600,
+  "max_start_delay_sec_vps": 300,
+  "window_days": 14,
+  "require_parity": true,
+  "parity_min_days": 3,
+  "raceday_min_days": 3,
+  "max_alerts": 0,
+  "observe_days_after_stop": 14
+ },
+ "scheduler_groups": {
+  "g-0530": {
+   "cron_jst": "30 5 * * *",
+   "size": "m",
+   "timeout_sec": 2400,
+   "desc": "騎手・調教師統計",
+   "jobs": [
+    "jockey-trainer-stats"
+   ]
+  },
+  "g-0700": {
+   "cron_jst": "0 7 * * *",
+   "size": "l",
+   "timeout_sec": 5400,
+   "desc": "履歴テーブル → サービング状態 → 履歴特徴量 → プロファイル（直列）",
+   "jobs": [
+    "export-tables-daily",
+    "serving-state-precompute",
+    "feature-accumulate",
+    "serving-state-profile"
+   ]
+  },
+  "g-0700-cost": {
+   "cron_jst": "0 7 * * *",
+   "size": "s",
+   "timeout_sec": 300,
+   "desc": "GCP 日次コスト報告（想定 vs 実績・急増警告。予算超過の早期警戒）",
+   "jobs": [
+    "gcp-daily-cost-report"
+   ]
+  },
+  "g-0730": {
+   "cron_jst": "30 7 * * *",
+   "size": "m",
+   "timeout_sec": 1800,
+   "desc": "ラップ予想（当日）+ 朝サマリー",
+   "jobs": [
+    "lap-forecast-morning",
+    "slack-scrape-summary-morning"
+   ]
+  },
+  "g-0800": {
+   "cron_jst": "0 8 * * *",
+   "size": "m",
+   "timeout_sec": 1800,
+   "desc": "ページ品質・並走検証。月曜は網羅状況と追走難度 v2 の突き合わせも",
+   "jobs": [
+    "page-quality-check",
+    "parity-check",
+    "slack-scrape-coverage",
+    "tracking-v2-weekly"
+   ]
+  },
+  "g-1000-mon": {
+   "cron_jst": "0 10 * * 1",
+   "size": "l",
+   "timeout_sec": 4800,
+   "desc": "ドリフト監視・凍結追跡（月曜）",
+   "jobs": [
+    "drift-monitor-weekly",
+    "frozen-tracking-weekly"
+   ]
+  },
+  "g-sun-2200": {
+   "cron_jst": "0 22 * * 0",
+   "size": "m",
+   "timeout_sec": 3600,
+   "desc": "オッズ乖離の週次集計（日曜）",
+   "jobs": [
+    "odds-drift-weekly"
+   ]
+  },
+  "g-1910-eve": {
+   "cron_jst": "10,40 19 * * *",
+   "size": "l",
+   "timeout_sec": 5400,
+   "desc": "前夜の計算・翌日のレース予約・ラップ予想（翌日）。2 回走らせて取得の遅れを吸収（冪等）。金曜は馬名インデックスも",
+   "jobs": [
+    "eve-precompute",
+    "reserve-race-day",
+    "lap-forecast-eve",
+    "horse-name-index"
+   ]
+  },
+  "g-hourly": {
+   "cron_jst": "5 * * * *",
+   "size": "m",
+   "timeout_sec": 600,
+   "desc": "VPS 実行役の定期タスクを 6 時間先まで予約",
+   "jobs": [
+    "reserve-fetch-tasks"
+   ]
+  },
+  "g-5min": {
+   "cron_jst": "*/5 * * * *",
+   "size": "m",
+   "timeout_sec": 300,
+   "desc": "VPS ハートビート監視。15 分おきにスクレイピング異常の通知",
+   "jobs": [
+    "vps-watchdog",
+    "slack-scrape-alerts"
+   ]
+  },
+  "g-pump": {
+   "cron_jst": "* 8-16 * * 0,1,6",
+   "size": "s",
+   "timeout_sec": 120,
+   "desc": "開催日（土日月）の日中、イベントを毎分処理して予測タスクを積む",
+   "jobs": [
+    "event-pump"
+   ]
+  },
+  "g-results": {
+   "cron_jst": "*/20 15-20 * * 0,6",
+   "size": "m",
+   "timeout_sec": 900,
+   "desc": "予測成績の通知（土日）",
+   "jobs": [
+    "slack-results"
+   ]
+  },
+  "g-2130": {
+   "cron_jst": "30 21 * * *",
+   "size": "m",
+   "timeout_sec": 600,
+   "desc": "夜のスクレイピング状況サマリー",
+   "jobs": [
+    "slack-scrape-summary-eve"
+   ]
+  }
+ },
+ "models": {
+  "bundle_v4": {
+   "env": "KEIBA_V3_BUNDLE",
+   "local_path": "data/local/modeling/training_pipeline/final_v3/bundle_2025",
+   "desc": "v4 アンサンブルのバンドル（影モード）。実体のパスはホストで確認"
+  },
+  "stage_v4": {
+   "env": "KEIBA_V3_STAGE",
+   "local_path": "data/local/modeling/training_pipeline/final_stage/v4_fixed",
+   "desc": "前段モデル"
+  },
+  "aux_v4": {
+   "env": "KEIBA_V3_AUX",
+   "local_path": "data/local/modeling/training_pipeline_v4/final_aux",
+   "desc": "補助モデル"
+  },
+  "bundle_v5": {
+   "env": "KEIBA_V5_BUNDLE",
+   "local_path": "data/local/modeling/training_pipeline/final_v5/bundle_v5_2025",
+   "desc": "v5 アンサンブルのバンドル（影モード）"
+  },
+  "tl_reference_v5": {
+   "env": "KEIBA_V5_TL_REF",
+   "local_path": "data/local/modeling/training_pipeline_v4/tp35/tl_reference_v2.parquet",
+   "entry": "tl_reference_v2.parquet",
+   "desc": "追い切りの基準表（tl_reference_v2.parquet）"
+  },
+  "serving_bundle": {
+   "env": "KEIBA_SERVING_BUNDLE_DIR",
+   "local_path": "data/local/modeling/feature_store/serving_bundle",
+   "desc": "出走馬の履歴だけで特徴量を作るバンドル（約140MB）"
+  },
+  "lap_models": {
+   "env": "KEIBA_LAP_MODEL_DIR",
+   "local_path": "data/local/inference/lap_forecast_models",
+   "desc": "ラップ予想のモデル"
+  },
+  "final_odds": {
+   "local_path": "models/final_odds_bundle.json",
+   "entry": "final_odds_bundle.json",
+   "install_to": "models/final_odds_bundle.json",
+   "desc": "想定オッズのモデル（LightGBM のヘッド一式を 1 つの JSON に）。コードが固定パス models/final_odds_bundle.json を読むので、取得後にそこへ置く"
+  }
+ },
+ "jobs": [
+  {
+   "id": "jockey-trainer-stats",
+   "desc": "騎手・調教師統計（成績の集計）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA_JT_STATS",
+    "cron_job_id": "update_jockey_trainer_stats",
+    "cron_utc": "30 20 * * *",
+    "script": "scripts/cron/update_jockey_trainer_stats.sh"
+   },
+   "group": "g-0530",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.pipeline.build_jockey_trainer_stats"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    },
+    {
+     "path": "data/local/features/jockey_trainer_stats",
+     "max_mb": 300
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/features/jockey_trainer_stats",
+     "max_mb": 300
+    }
+   ],
+   "parity": {
+    "kind": "parquet_frame",
+    "paths": [
+     "data/local/features/jockey_trainer_stats"
+    ],
+    "keys": [],
+    "rtol": 1e-09,
+    "atol": 1e-09
+   },
+   "blockers": [
+    "state_in の実サイズが未確認（ホストで python -m src.ops.state_sync plan --job jockey-trainer-stats）"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "export-tables-daily",
+   "desc": "履歴テーブル（flat）の増分更新 + パース検査",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "export_tables_daily",
+    "cron_utc": "0 22 * * *",
+    "script": "scripts/cron/export_tables_daily.sh"
+   },
+   "group": "g-0700",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scraper.export_tables",
+      "--years",
+      "{years}",
+      "--categories",
+      "race_result,race_shutuba,race_result_lap,race_result_on_time",
+      "--refresh"
+     ]
+    },
+    {
+     "argv": [
+      "-m",
+      "src.scraper.parse_audit",
+      "--years",
+      "{years}"
+     ],
+     "allow_fail": true
+    },
+    {
+     "argv": [
+      "-m",
+      "src.scraper.parse_drift",
+      "--baseline",
+      "2020-{prev_year}",
+      "--recent",
+      "{year}",
+      "--months",
+      "3"
+     ],
+     "allow_fail": true
+    }
+   ],
+   "memory_mib": 3072,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    }
+   ],
+   "parity": {
+    "kind": "parquet_frame",
+    "paths": [
+     "data/page_reference/tables/{year}"
+    ],
+    "keys": [
+     "race_id",
+     "horse_id"
+    ],
+    "rtol": 0.0,
+    "atol": 0.0
+   },
+   "blockers": [
+    "state_in の実サイズが未確認（flat は年別。当年だけ取る設計に要確認）"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "serving-state-precompute",
+   "desc": "サービング状態（約62MB）の事前計算",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "serving-state-precompute",
+    "cron_utc": "35 22 * * *",
+    "script": "src/scripts/data/update_serving_state.py"
+   },
+   "group": "g-0700",
+   "when_jst": null,
+   "depends": [
+    "export-tables-daily"
+   ],
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.update_serving_state",
+      "precompute",
+      "--date",
+      "{today}"
+     ]
+    }
+   ],
+   "memory_mib": 3072,
+   "timeout_sec": 1200,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/inference/state",
+     "max_mb": 100
+    },
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/inference/state",
+     "max_mb": 100
+    }
+   ],
+   "parity": {
+    "kind": "file_hash",
+    "paths": [
+     "data/local/inference/state"
+    ],
+    "keys": [],
+    "rtol": 0.0,
+    "atol": 0.0
+   },
+   "blockers": [
+    "export-tables-daily と同じ state を共有（同じグループで直列に実行する）"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "feature-accumulate",
+   "desc": "履歴特徴量（127列）の蓄積とサービング用バンドルの公開",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "feature-accumulate",
+    "cron_utc": "40 22 * * *",
+    "script": "src/scraper/auto_scrape.py --task feature-accumulate"
+   },
+   "group": "g-0700",
+   "when_jst": null,
+   "depends": [
+    "export-tables-daily"
+   ],
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scraper.auto_scrape",
+      "--task",
+      "feature-accumulate"
+     ]
+    }
+   ],
+   "memory_mib": 4096,
+   "timeout_sec": 2400,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/modeling/feature_store/horse_history",
+     "max_mb": 900
+    },
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/modeling/feature_store/horse_history",
+     "max_mb": 900
+    }
+   ],
+   "parity": {
+    "kind": "parquet_frame",
+    "paths": [
+     "data/local/modeling/feature_store/horse_history"
+    ],
+    "keys": [
+     "race_id",
+     "horse_id"
+    ],
+    "rtol": 1e-09,
+    "atol": 1e-09
+   },
+   "blockers": [
+    "feature_store の GCS 配置と容量が未確定（2026 年は学習に使わないが推論用バンドルの元）",
+    "コンテナのディスクはメモリ上（4Gi の枠に入るか実測が必要）"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "serving-state-profile",
+   "desc": "サービング状態のプロファイル更新",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "serving-state-profile",
+    "cron_utc": "10 23 * * *",
+    "script": "src/scripts/data/update_serving_state.py"
+   },
+   "group": "g-0700",
+   "when_jst": null,
+   "depends": [
+    "serving-state-precompute"
+   ],
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.update_serving_state",
+      "profile"
+     ]
+    }
+   ],
+   "memory_mib": 3072,
+   "timeout_sec": 900,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/inference/state",
+     "max_mb": 100
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/inference/state",
+     "max_mb": 100
+    }
+   ],
+   "parity": {
+    "kind": "file_hash",
+    "paths": [
+     "data/local/inference/state"
+    ],
+    "keys": [],
+    "rtol": 0.0,
+    "atol": 0.0
+   },
+   "blockers": [
+    "serving-state-precompute の準備完了後（依存ジョブ）"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "lap-forecast-morning",
+   "desc": "ハロンごとのラップ予想（当日分）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-LAP-FORECAST",
+    "cron_job_id": "lap-forecast-morning",
+    "cron_utc": "30 22 * * *",
+    "script": "scripts/cron/lap_forecast_daily.sh"
+   },
+   "group": "g-0730",
+   "when_jst": null,
+   "requires_race_day": "today",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scraper.export_tables",
+      "--years",
+      "{year}",
+      "--categories",
+      "race_shutuba",
+      "--refresh"
+     ],
+     "allow_fail": true
+    },
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.tp55_backfill",
+      "--dates",
+      "{today_iso}",
+      "--model-dir",
+      "{model:lap_models}",
+      "--model-full",
+      "model_final2026_A_full.pkl",
+      "--model-noten",
+      "model_final2026_A_noten.pkl"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 1200,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_LAP_MODEL_DIR"
+   ],
+   "models": [
+    "lap_models"
+   ],
+   "state_in": [
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    },
+    {
+     "path": "data/page_reference/race_lists",
+     "max_mb": 50
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/inference/lap_forecast",
+     "max_mb": 50
+    }
+   ],
+   "parity": {
+    "kind": "json_tree",
+    "paths": [
+     "data/local/inference/lap_forecast/{today_iso}"
+    ],
+    "keys": [],
+    "rtol": 1e-06,
+    "atol": 1e-06
+   },
+   "blockers": [
+    "モデル lap_models を GCS に publish（python -m src.ops.model_publish publish）"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 4,
+    "window_days": 21,
+    "parity_min_days": 3
+   }
+  },
+  {
+   "id": "slack-scrape-summary-morning",
+   "desc": "スクレイピング状況の朝サマリー（Slack）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 1,
+   "origin": {
+    "tag": "KEIBA-SLACK-NOTIFY",
+    "cron_job_id": "slack-scrape-summary-morning",
+    "cron_utc": "30 22 * * *",
+    "script": "scripts/cron/scrape_status_notify.sh"
+   },
+   "group": "g-0730",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.scrape_status_notify",
+      "--mode",
+      "summary",
+      "--when",
+      "nonraceday",
+      "--send"
+     ]
+    }
+   ],
+   "memory_mib": 1024,
+   "timeout_sec": 300,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_SLACK_NOTIFY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_WEBHOOK_URL_RESULTS",
+    "SLACK_WEBHOOK_URL_REPORT",
+    "SLACK_WEBHOOK_URL_ALERT"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/meta",
+     "max_mb": 150
+    }
+   ],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "スクレイピング状況の元データ（data/local/meta/scrape_*）が GCS 上のどこにあるか要確認（VPS 実行役の結果記録に置き換える）"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "page-quality-check",
+   "desc": "ページ品質チェック（表示の検査）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 1,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "page_quality_check",
+    "cron_utc": "0 23 * * *",
+    "script": "src/monitor/page_quality_check.py"
+   },
+   "group": "g-0800",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.monitor.page_quality_check"
+     ]
+    }
+   ],
+   "memory_mib": 1024,
+   "timeout_sec": 600,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_PAGE_QUALITY_BASE_URL"
+   ],
+   "state_in": [],
+   "state_out": [
+    {
+     "path": "data/local/page_quality",
+     "max_mb": 20
+    }
+   ],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "検査対象の URL（prod の API / app）を環境変数で渡せるか要確認"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "gcp-daily-cost-report",
+   "desc": "GCP 日次コスト報告（予算超過の早期警戒）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 1,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "src/scripts/cloud_jobs/gcp_daily_cost_report.py（新規。ホストには無い）"
+   },
+   "group": "g-0700-cost",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.cloud_jobs.gcp_daily_cost_report",
+      "--watch"
+     ]
+    }
+   ],
+   "memory_mib": 512,
+   "timeout_sec": 300,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_SLACK_NOTIFY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_WEBHOOK_URL_RESULTS",
+    "SLACK_WEBHOOK_URL_REPORT",
+    "SLACK_WEBHOOK_URL_ALERT",
+    "GCP_BILLING_BQ_TABLE"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "BigQuery への課金エクスポートの有効化（ユーザーが Console で実施）と GCP_BILLING_BQ_TABLE の設定"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "parity-check",
+   "desc": "並走検証（ホストと GCP の成果物の一致判定。並走期間のみ）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 1,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "src/scripts/ops/parity_check.py（新規）"
+   },
+   "group": "g-0800",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.ops.parity_check",
+      "auto",
+      "--date",
+      "{today}",
+      "--write",
+      "--send"
+     ]
+    }
+   ],
+   "memory_mib": 1024,
+   "timeout_sec": 900,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_SLACK_NOTIFY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_WEBHOOK_URL_RESULTS",
+    "SLACK_WEBHOOK_URL_REPORT",
+    "SLACK_WEBHOOK_URL_ALERT"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "ホスト側の成果物の GCS 公開（host_snapshot）を並走期間だけ有効にする（手順: docs/operations/gcp_jobs_migration.md）"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "slack-scrape-coverage",
+   "desc": "取得の網羅状況（週次 Slack）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 1,
+   "origin": {
+    "tag": "KEIBA-SLACK-NOTIFY",
+    "cron_job_id": "slack-scrape-coverage",
+    "cron_utc": "0 23 * * 0",
+    "script": "scripts/cron/scrape_status_notify.sh"
+   },
+   "group": "g-0800",
+   "when_jst": "* * * * 1",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.scrape_status_notify",
+      "--mode",
+      "coverage",
+      "--send"
+     ]
+    }
+   ],
+   "memory_mib": 1024,
+   "timeout_sec": 600,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_SLACK_NOTIFY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_WEBHOOK_URL_RESULTS",
+    "SLACK_WEBHOOK_URL_REPORT",
+    "SLACK_WEBHOOK_URL_ALERT"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/meta",
+     "max_mb": 150
+    }
+   ],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "scrape_status と同じ元データの置き場の確認"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 2,
+    "window_days": 35,
+    "parity_min_days": 2
+   }
+  },
+  {
+   "id": "tracking-v2-weekly",
+   "desc": "追走難度 v2 の前夜保存と実測の週次突き合わせ",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-TRACKING-V2",
+    "cron_job_id": "tracking-v2-weekly",
+    "cron_utc": "30 23 * * 0",
+    "script": "scripts/cron/tracking_v2_weekly.sh"
+   },
+   "group": "g-0800",
+   "when_jst": "* * * * 1",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.tracking_v2_eval",
+      "--from",
+      "{days_ago_10}",
+      "--to",
+      "{today}"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 900,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_TRACKING_V2",
+    "KEIBA_TRACKING_V2_EVAL"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/inference/tracking_v2",
+     "max_mb": 50
+    },
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/meta/tracking_v2_eval",
+     "max_mb": 20
+    }
+   ],
+   "parity": {
+    "kind": "json_tree",
+    "paths": [
+     "data/local/meta/tracking_v2_eval"
+    ],
+    "keys": [],
+    "rtol": 1e-06,
+    "atol": 1e-06
+   },
+   "blockers": [
+    "tracking_v2 の前夜保存（eve-precompute）が GCP に移ってから切り替える"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 2,
+    "window_days": 35,
+    "parity_min_days": 2
+   }
+  },
+  {
+   "id": "drift-monitor-weekly",
+   "desc": "ドリフト週次監視（特徴量の抜き取り込み）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-DRIFT-MONITOR",
+    "cron_job_id": "drift-monitor-weekly",
+    "cron_utc": "0 1 * * 1",
+    "script": "scripts/cron/drift_monitor_weekly.sh"
+   },
+   "group": "g-1000-mon",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.drift_dump_features",
+      "--days",
+      "{last_weekend_days}"
+     ],
+     "env": {
+      "KEIBA_INFERENCE_ENGINE": "full"
+     },
+     "allow_fail": true
+    },
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.drift_monitor",
+      "--root",
+      "."
+     ]
+    }
+   ],
+   "memory_mib": 4096,
+   "timeout_sec": 2400,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_SLACK_NOTIFY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_WEBHOOK_URL_RESULTS",
+    "SLACK_WEBHOOK_URL_REPORT",
+    "SLACK_WEBHOOK_URL_ALERT"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/meta/drift_monitor",
+     "max_mb": 100
+    },
+    {
+     "path": "data/local/prediction_results",
+     "max_mb": 50
+    },
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/meta/drift_monitor",
+     "max_mb": 100
+    }
+   ],
+   "parity": {
+    "kind": "json_tree",
+    "paths": [
+     "data/local/meta/drift_monitor"
+    ],
+    "keys": [],
+    "rtol": 1e-06,
+    "atol": 1e-06
+   },
+   "blockers": [
+    "full エンジンは全履歴を読む（メモリ 4Gi に収まるか実測）。bundle エンジンへの切替を検討"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 2,
+    "window_days": 35,
+    "parity_min_days": 2
+   }
+  },
+  {
+   "id": "frozen-tracking-weekly",
+   "desc": "凍結候補の前向き追跡（週次）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-FROZEN-TRACKING",
+    "cron_job_id": "frozen-tracking-weekly",
+    "cron_utc": "30 1 * * 1",
+    "script": "scripts/cron/frozen_tracking_weekly.sh"
+   },
+   "group": "g-1000-mon",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.frozen_tracking",
+      "track",
+      "--from",
+      "20261022",
+      "--models",
+      "v4,v5",
+      "--variants",
+      "final,pre"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_FROZEN_TRACKING",
+    "KEIBA_FROZEN_MODELS",
+    "KEIBA_FROZEN_VARIANTS"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/meta/frozen_tracking",
+     "max_mb": 50
+    },
+    {
+     "path": "data/local/inference/predictions_v4",
+     "max_mb": 100
+    },
+    {
+     "path": "data/local/inference/predictions_v5",
+     "max_mb": 100
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/meta/frozen_tracking",
+     "max_mb": 50
+    }
+   ],
+   "parity": {
+    "kind": "json_tree",
+    "paths": [
+     "data/local/meta/frozen_tracking"
+    ],
+    "keys": [],
+    "rtol": 1e-06,
+    "atol": 1e-06
+   },
+   "blockers": [
+    "凍結ルール config/tp59_frozen_rule.json と予測ファイルが state_in で届くこと"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 2,
+    "window_days": 35,
+    "parity_min_days": 2
+   }
+  },
+  {
+   "id": "odds-drift-weekly",
+   "desc": "オッズ乖離（t15/t60）の週次集計",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-ODDS-DRIFT",
+    "cron_job_id": "odds-drift-weekly",
+    "cron_utc": "0 13 * * 0",
+    "script": "scripts/cron/odds_drift_weekly.sh"
+   },
+   "group": "g-sun-2200",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.pipeline.betting.odds_drift",
+      "--from",
+      "{days_ago_28}",
+      "--to",
+      "{today}",
+      "--early",
+      "t15",
+      "--out",
+      "data/local/meta/odds_drift/weekly/{today}_t15.json"
+     ]
+    },
+    {
+     "argv": [
+      "-m",
+      "src.pipeline.betting.odds_drift",
+      "--from",
+      "{days_ago_28}",
+      "--to",
+      "{today}",
+      "--early",
+      "t60",
+      "--out",
+      "data/local/meta/odds_drift/weekly/{today}_t60.json"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/meta/odds_drift",
+     "max_mb": 30
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/meta/odds_drift",
+     "max_mb": 30
+    }
+   ],
+   "parity": {
+    "kind": "json_tree",
+    "paths": [
+     "data/local/meta/odds_drift/weekly"
+    ],
+    "keys": [],
+    "rtol": 1e-09,
+    "atol": 1e-09
+   },
+   "enabled": true,
+   "blockers": [],
+   "ready": true,
+   "cutover": {
+    "min_consecutive_success": 2,
+    "window_days": 35,
+    "parity_min_days": 2
+   }
+  },
+  {
+   "id": "slack-scrape-summary-eve",
+   "desc": "スクレイピング状況の夜サマリー（Slack）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 1,
+   "origin": {
+    "tag": "KEIBA-SLACK-NOTIFY",
+    "cron_job_id": "slack-scrape-summary-eve",
+    "cron_utc": "30 12 * * *",
+    "script": "scripts/cron/scrape_status_notify.sh"
+   },
+   "group": "g-2130",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.scrape_status_notify",
+      "--mode",
+      "summary",
+      "--when",
+      "raceday",
+      "--send"
+     ]
+    }
+   ],
+   "memory_mib": 1024,
+   "timeout_sec": 300,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_SLACK_NOTIFY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_WEBHOOK_URL_RESULTS",
+    "SLACK_WEBHOOK_URL_REPORT",
+    "SLACK_WEBHOOK_URL_ALERT"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/meta",
+     "max_mb": 150
+    }
+   ],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "scrape_status と同じ元データの置き場の確認"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "eve-precompute",
+   "desc": "前夜の計算（追走難度・追走難度 v2・想定オッズ）。raceday-eve の取得後半を分離",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-VPN-RACEDAY-EVE",
+    "cron_job_id": "raceday-eve",
+    "cron_utc": "0 9 * * *",
+    "script": "src/scraper/auto_scrape.py（run_raceday_eve_for_date の 842〜915 行）"
+   },
+   "group": "g-1910-eve",
+   "when_jst": null,
+   "requires_race_day": "tomorrow",
+   "requires_fetch_done": "raceday-eve-fetch",
+   "fetch_deadline_jst": "20:15",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.ops.jobs.eve_precompute",
+      "--date",
+      "{tomorrow}"
+     ]
+    }
+   ],
+   "memory_mib": 3072,
+   "timeout_sec": 2400,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_EVE_PRECOMPUTE_TRACKING",
+    "KEIBA_TRACKING_V2",
+    "KEIBA_EVE_PRECOMPUTE_FINAL_ODDS"
+   ],
+   "models": [
+    "final_odds"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/inference/state",
+     "max_mb": 100
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/inference/tracking_v2",
+     "max_mb": 50
+    }
+   ],
+   "parity": {
+    "kind": "json_tree",
+    "paths": [
+     "data/local/inference/tracking_v2/{tomorrow_iso}"
+    ],
+    "keys": [],
+    "rtol": 1e-06,
+    "atol": 1e-06
+   },
+   "blockers": [
+    "想定オッズのモデル final_odds を GCS に publish（python -m src.ops.model_publish publish --component final_odds）",
+    "取得の raceday-eve-fetch が VPS の担当になる（または GCS の出馬表が揃う）こと"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 4,
+    "window_days": 21,
+    "parity_min_days": 3
+   }
+  },
+  {
+   "id": "reserve-race-day",
+   "desc": "翌開催日の全レースの T-60/T-15/T-10/T-5/T-2 取得タスクと予測タスクを前夜に予約",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "raceday-runner",
+    "cron_utc": "30 22 * * *",
+    "script": "常駐ループ raceday-runner を 1 レース 1 タスクの予約に置き換える"
+   },
+   "group": "g-1910-eve",
+   "when_jst": null,
+   "requires_race_day": "tomorrow",
+   "requires_fetch_done": "raceday-eve-fetch",
+   "fetch_deadline_jst": "20:15",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.ops.reservations",
+      "race-day",
+      "--date",
+      "{tomorrow}"
+     ]
+    }
+   ],
+   "memory_mib": 1024,
+   "timeout_sec": 300,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "CLOUD_TASKS_QUEUE",
+    "CLOUD_TASKS_LOCATION",
+    "KEIBA_DISPATCH_RUN_JOB",
+    "CLOUD_TASKS_OAUTH_SERVICE_ACCOUNT",
+    "KEIBA_ODDS_LATE_SNAPSHOTS",
+    "KEIBA_ODDS_TRIFECTA"
+   ],
+   "state_in": [
+    {
+     "path": "data/page_reference/race_day_schedule",
+     "max_mb": 20
+    },
+    {
+     "path": "data/page_reference/race_lists",
+     "max_mb": 50
+    }
+   ],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "発走時刻表 race_day_schedule が GCS の state/ に届くこと（daily-race-lists を VPS が実行した後に push）"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 4,
+    "window_days": 21,
+    "parity_min_days": 3
+   }
+  },
+  {
+   "id": "lap-forecast-eve",
+   "desc": "ハロンごとのラップ予想（翌日分）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-LAP-FORECAST",
+    "cron_job_id": "lap-forecast-eve",
+    "cron_utc": "30 10 * * *",
+    "script": "scripts/cron/lap_forecast_daily.sh"
+   },
+   "group": "g-1910-eve",
+   "when_jst": null,
+   "requires_race_day": "tomorrow",
+   "requires_fetch_done": "raceday-eve-fetch",
+   "fetch_deadline_jst": "20:15",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scraper.export_tables",
+      "--years",
+      "{year}",
+      "--categories",
+      "race_shutuba",
+      "--refresh"
+     ],
+     "allow_fail": true
+    },
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.tp55_backfill",
+      "--dates",
+      "{tomorrow_iso}",
+      "--model-dir",
+      "{model:lap_models}",
+      "--model-full",
+      "model_final2026_A_full.pkl",
+      "--model-noten",
+      "model_final2026_A_noten.pkl"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 1200,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_LAP_MODEL_DIR"
+   ],
+   "models": [
+    "lap_models"
+   ],
+   "state_in": [
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    },
+    {
+     "path": "data/page_reference/race_lists",
+     "max_mb": 50
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/inference/lap_forecast",
+     "max_mb": 50
+    }
+   ],
+   "parity": {
+    "kind": "json_tree",
+    "paths": [
+     "data/local/inference/lap_forecast/{tomorrow_iso}"
+    ],
+    "keys": [],
+    "rtol": 1e-06,
+    "atol": 1e-06
+   },
+   "blockers": [
+    "モデル lap_models を GCS に publish"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 4,
+    "window_days": 21,
+    "parity_min_days": 3
+   }
+  },
+  {
+   "id": "horse-name-index",
+   "desc": "馬名インデックスと成長曲線の週次更新",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-VPN-RACEDAY-EVE",
+    "cron_job_id": "horse-name-index",
+    "cron_utc": "30 9 * * 5",
+    "script": "src/scraper/auto_scrape.py --task horse-name-index"
+   },
+   "group": "g-1910-eve",
+   "when_jst": "* * * * 5",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scraper.auto_scrape",
+      "--task",
+      "horse-name-index"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/calculated_data",
+     "max_mb": 200
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/calculated_data",
+     "max_mb": 200
+    }
+   ],
+   "parity": {
+    "kind": "json_tree",
+    "paths": [
+     "data/calculated_data"
+    ],
+    "keys": [],
+    "rtol": 1e-09,
+    "atol": 1e-09
+   },
+   "blockers": [
+    "data/calculated_data の GCS 配置と容量の確認"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 2,
+    "window_days": 35,
+    "parity_min_days": 2
+   }
+  },
+  {
+   "id": "reserve-fetch-tasks",
+   "desc": "VPS 実行役の定期タスク（cron 相当）を取得タスク表に予約",
+   "destination": "gcp",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "ホスト cron の取得系の置き換え（job_map の schedule_jst から materialize）"
+   },
+   "group": "g-hourly",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.ops.reservations",
+      "recurring",
+      "--horizon-hours",
+      "6"
+     ]
+    }
+   ],
+   "memory_mib": 1024,
+   "timeout_sec": 300,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [],
+   "ready": true,
+   "cutover": {
+    "min_consecutive_success": 30
+   }
+  },
+  {
+   "id": "vps-watchdog",
+   "desc": "VPS のハートビート監視（死活・メモリ・swap・ユニット・ディスク）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 1,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "src/ops/vps_watchdog.py（新規）"
+   },
+   "group": "g-5min",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.ops.vps_watchdog",
+      "--send"
+     ]
+    }
+   ],
+   "memory_mib": 512,
+   "timeout_sec": 120,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_SLACK_NOTIFY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_WEBHOOK_URL_RESULTS",
+    "SLACK_WEBHOOK_URL_REPORT",
+    "SLACK_WEBHOOK_URL_ALERT"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "VPS からハートビートが届くこと（gcp-api の /ops/heartbeat とVPS の送信タイマー）"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 30
+   }
+  },
+  {
+   "id": "slack-scrape-alerts",
+   "desc": "スクレイピング異常の通知（15 分おき）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 1,
+   "origin": {
+    "tag": "KEIBA-SLACK-NOTIFY",
+    "cron_job_id": "slack-scrape-alerts",
+    "cron_utc": "*/15 * * * *",
+    "script": "scripts/cron/scrape_status_notify.sh"
+   },
+   "group": "g-5min",
+   "when_jst": "*/15 * * * *",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.scrape_status_notify",
+      "--mode",
+      "alerts",
+      "--send"
+     ]
+    }
+   ],
+   "memory_mib": 1024,
+   "timeout_sec": 300,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_SLACK_NOTIFY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_WEBHOOK_URL_RESULTS",
+    "SLACK_WEBHOOK_URL_REPORT",
+    "SLACK_WEBHOOK_URL_ALERT"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/meta",
+     "max_mb": 150
+    }
+   ],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "scrape_status と同じ元データの置き場の確認"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 30
+   }
+  },
+  {
+   "id": "slack-results",
+   "desc": "当日の予測成績の通知（土日 15:00〜20:59 の 20 分おき）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 1,
+   "origin": {
+    "tag": "KEIBA-SLACK-NOTIFY",
+    "cron_job_id": "slack-results",
+    "cron_utc": "*/20 6-11 * * 0,6",
+    "script": "scripts/cron/daily_results_notify.sh"
+   },
+   "group": "g-results",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.daily_results_notify",
+      "--date",
+      "{today}",
+      "--refresh",
+      "--send"
+     ],
+     "ok_codes": [
+      0,
+      10,
+      11,
+      12
+     ]
+    }
+   ],
+   "memory_mib": 1536,
+   "timeout_sec": 600,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_SLACK_NOTIFY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_WEBHOOK_URL_RESULTS",
+    "SLACK_WEBHOOK_URL_REPORT",
+    "SLACK_WEBHOOK_URL_ALERT"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/prediction_results",
+     "max_mb": 50
+    },
+    {
+     "path": "data/local/inference",
+     "max_mb": 150
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/prediction_results",
+     "max_mb": 50
+    }
+   ],
+   "parity": {
+    "kind": "json_tree",
+    "paths": [
+     "data/local/prediction_results"
+    ],
+    "keys": [],
+    "rtol": 1e-06,
+    "atol": 1e-06
+   },
+   "blockers": [
+    "予測成績の集計（prediction_results）の入力（予測・確定結果）が GCS から届くこと"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 4,
+    "window_days": 21,
+    "parity_min_days": 3
+   }
+  },
+  {
+   "id": "predict-race",
+   "desc": "1 レースの予測（馬体重検知後 / T-45 のフォールバック）。Cloud Tasks → Run Job の overrides で起動",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "raceday-weight-runner",
+    "cron_utc": "0 23 * * *",
+    "script": "weight_triggered_predict.run_for_races（VPS は検知とイベントだけ）"
+   },
+   "group": null,
+   "size": "l",
+   "trigger": "cloud_tasks",
+   "when_jst": null,
+   "parallel_env": {
+    "KEIBA_V3_SERVING": "shadow",
+    "KEIBA_V5_SHADOW": "1"
+   },
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.ops.jobs.predict_race",
+      "--race-id",
+      "{race_id}",
+      "--date",
+      "{date}"
+     ]
+    }
+   ],
+   "memory_mib": 3072,
+   "timeout_sec": 600,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_V3_SERVING",
+    "KEIBA_V5_SHADOW",
+    "KEIBA_V3_BUNDLE",
+    "KEIBA_V3_STAGE",
+    "KEIBA_V3_AUX",
+    "KEIBA_V5_BUNDLE",
+    "KEIBA_V5_STAGE",
+    "KEIBA_V5_TL_REF",
+    "KEIBA_SERVING_BUNDLE_DIR",
+    "KEIBA_INFERENCE_ENGINE",
+    "KEIBA_PROB_CALIBRATION"
+   ],
+   "models": [
+    "bundle_v4",
+    "stage_v4",
+    "aux_v4",
+    "bundle_v5",
+    "tl_reference_v5",
+    "serving_bundle"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/inference/state",
+     "max_mb": 100
+    },
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/inference/features",
+     "max_mb": 30
+    },
+    {
+     "path": "data/local/inference/snapshots",
+     "max_mb": 30
+    },
+    {
+     "path": "data/local/inference/predictions_v3",
+     "max_mb": 30
+    },
+    {
+     "path": "data/local/inference/predictions_v5",
+     "max_mb": 30
+    },
+    {
+     "path": "data/local/inference/events",
+     "max_mb": 5
+    }
+   ],
+   "parity": {
+    "kind": "parquet_frame",
+    "paths": [
+     "data/local/inference/predictions_v3/{date}",
+     "data/local/inference/predictions_v5/{date}"
+    ],
+    "keys": [
+     "race_id",
+     "horse_id"
+    ],
+    "rtol": 1e-06,
+    "atol": 1e-06
+   },
+   "blockers": [
+    "モデル一式の publish と serving_bundle の配布",
+    "コンテナ上の履歴テーブルの用意（出走馬の履歴だけで足りる bundle エンジンを使う）"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 4,
+    "window_days": 21,
+    "parity_min_days": 3
+   }
+  },
+  {
+   "id": "event-pump",
+   "desc": "VPS 実行役の馬体重検知イベント（ops/events/weights_announced/）を見つけて、予測タスクを Cloud Tasks に積む",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 3,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "src/ops/events.py（新規）"
+   },
+   "group": "g-pump",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.ops.events",
+      "pump"
+     ]
+    }
+   ],
+   "memory_mib": 512,
+   "timeout_sec": 120,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "CLOUD_TASKS_QUEUE",
+    "CLOUD_TASKS_LOCATION",
+    "KEIBA_DISPATCH_RUN_JOB",
+    "CLOUD_TASKS_OAUTH_SERVICE_ACCOUNT"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [],
+   "ready": true,
+   "cutover": {
+    "min_consecutive_success": 30
+   }
+  },
+  {
+   "id": "weekly-sire-agg",
+   "desc": "週次種牡馬集計（旧設計。ホスト cron には無い）",
+   "destination": "gcp",
+   "phase": 5,
+   "wave": 3,
+   "enabled": false,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "docs/operations/gcp-cloud-run-jobs.md"
+   },
+   "group": null,
+   "size": "m",
+   "trigger": "manual",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.maintenance.aggregate_sire_aptitude"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "ホストで定期実行していない。必要になったら groups に載せる"
+   ],
+   "ready": false
+  },
+  {
+   "id": "track-speed-rebuild-baselines",
+   "desc": "track-speed ベースライン再構築（旧設計。ホスト cron には無い）",
+   "destination": "gcp",
+   "phase": 5,
+   "wave": 3,
+   "enabled": false,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "docs/operations/gcp-cloud-run-jobs.md"
+   },
+   "group": null,
+   "size": "m",
+   "trigger": "manual",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.research.race.build_track_speed_baselines"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "ホストで定期実行していない。必要になったら groups に載せる"
+   ],
+   "ready": false
+  },
+  {
+   "id": "race-quality-day",
+   "desc": "レース質日次一括推定（旧設計。ホスト cron には無い）",
+   "destination": "gcp",
+   "phase": 5,
+   "wave": 3,
+   "enabled": false,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "docs/operations/gcp-cloud-run-jobs.md"
+   },
+   "group": null,
+   "size": "m",
+   "trigger": "manual",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.cloud_jobs.race_quality_day"
+     ]
+    }
+   ],
+   "memory_mib": 1024,
+   "timeout_sec": 600,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "ホストで定期実行していない。必要になったら groups に載せる"
+   ],
+   "ready": false
+  },
+  {
+   "id": "myostatin-recalculate",
+   "desc": "ミオスタチン再計算（旧設計。ホスト cron には無い）",
+   "destination": "gcp",
+   "phase": 5,
+   "wave": 3,
+   "enabled": false,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "docs/operations/gcp-cloud-run-jobs.md"
+   },
+   "group": null,
+   "size": "m",
+   "trigger": "manual",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.cloud_jobs.myostatin_recalculate"
+     ]
+    }
+   ],
+   "memory_mib": 512,
+   "timeout_sec": 120,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "ホストで定期実行していない。必要になったら groups に載せる"
+   ],
+   "ready": false
+  },
+  {
+   "id": "entries-sync",
+   "desc": "出馬表の段階収集（10 分おき）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-ENTRIES-SYNC",
+    "cron_job_id": "entries-sync",
+    "cron_utc": "*/10 23,0-13 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "*/10 8-22 * * *",
+   "fetch_task": {
+    "task": "entries-sync",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "grace_seconds": 540,
+   "max_attempts": 1,
+   "enabled": true,
+   "blockers": [],
+   "ready": true,
+   "cutover": {
+    "min_consecutive_success": 20,
+    "max_start_delay_sec_vps": 180
+   }
+  },
+  {
+   "id": "daily-race-lists-morning",
+   "desc": "レース一覧（朝）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "daily-race-lists",
+    "cron_utc": "0 22 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "0 7 * * *",
+   "fetch_task": {
+    "task": "daily-race-lists",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [
+    {
+     "path": "data/page_reference/race_lists",
+     "max_mb": 50
+    },
+    {
+     "path": "data/page_reference/race_day_schedule",
+     "max_mb": 20
+    }
+   ],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "daily-race-lists-evening",
+   "desc": "レース一覧（夕）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "daily-race-lists",
+    "cron_utc": "0 8 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "0 17 * * *",
+   "fetch_task": {
+    "task": "daily-race-lists",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [
+    {
+     "path": "data/page_reference/race_lists",
+     "max_mb": 50
+    },
+    {
+     "path": "data/page_reference/race_day_schedule",
+     "max_mb": 20
+    }
+   ],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "jra-baba-morning",
+   "desc": "JRA 馬場（クッション値・含水率。10 分おき）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "jra-baba-morning",
+    "cron_utc": "*/10 20-23 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "*/10 5-8 * * *",
+   "fetch_task": {
+    "task": "jra-baba-morning",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [
+    {
+     "path": "data/page_reference/cushion",
+     "max_mb": 20
+    }
+   ],
+   "parity": {
+    "kind": "none"
+   },
+   "grace_seconds": 540,
+   "max_attempts": 1,
+   "enabled": true,
+   "blockers": [],
+   "ready": true,
+   "cutover": {
+    "min_consecutive_success": 20,
+    "max_start_delay_sec_vps": 180
+   }
+  },
+  {
+   "id": "race-weight-per-race",
+   "desc": "各 R の馬体重の検知（T-65〜T-30 を 180 秒おきに race-weight-check）。検知したら ops/events/weights_announced/ にイベントを置く。前夜に reserve-race-day が予約（raceday-weight-runner の置き換え）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "raceday-weight-runner",
+    "cron_utc": "0 23 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": null,
+   "fetch_task": {
+    "task": "race-weight-check",
+    "args": {
+     "race_id": "<12桁>",
+     "date": "<YYYYMMDD>"
+    }
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "reserved_by": "reserve-race-day",
+   "enabled": true,
+   "blockers": [],
+   "ready": true,
+   "cutover": {
+    "min_consecutive_success": 4,
+    "window_days": 21,
+    "parity_min_days": 3
+   }
+  },
+  {
+   "id": "raceday-evening",
+   "desc": "開催日夕方の速報結果・確定オッズ",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "raceday-evening",
+    "cron_utc": "30 8 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "30 17 * * *",
+   "fetch_task": {
+    "task": "raceday-evening",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [
+    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
+   ],
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 4,
+    "window_days": 21,
+    "parity_min_days": 3
+   }
+  },
+  {
+   "id": "raceday-eve-fetch",
+   "desc": "前日夕方の取得（出馬表・馬柱・追い切り・SmartRC）。計算は eve-precompute に分離",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-RACEDAY-EVE",
+    "cron_job_id": "raceday-eve",
+    "cron_utc": "0 9 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "0 18 * * *",
+   "fetch_task": {
+    "task": "raceday-eve-fetch",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 5400,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [
+    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
+   ],
+   "ready": false
+  },
+  {
+   "id": "raceday-comment-morning",
+   "desc": "厩舎コメント（朝）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "raceday-comment",
+    "cron_utc": "40 22 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "40 7 * * *",
+   "fetch_task": {
+    "task": "raceday-comment",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [
+    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
+   ],
+   "ready": false
+  },
+  {
+   "id": "raceday-comment-evening",
+   "desc": "厩舎コメント（夜）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "raceday-comment",
+    "cron_utc": "0 11 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "0 20 * * *",
+   "fetch_task": {
+    "task": "raceday-comment",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [
+    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
+   ],
+   "ready": false
+  },
+  {
+   "id": "new-horse-pedigree",
+   "desc": "新馬の 5 世代血統",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "new-horse-pedigree",
+    "cron_utc": "0 12 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "0 21 * * *",
+   "fetch_task": {
+    "task": "new-horse-pedigree",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [
+    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
+   ],
+   "ready": false
+  },
+  {
+   "id": "recent-retry-morning",
+   "desc": "直近の未取得の取り直し（朝）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "recent-retry",
+    "cron_utc": "10 21 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "10 6 * * *",
+   "fetch_task": {
+    "task": "recent-retry",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "recent-retry-evening",
+   "desc": "直近の未取得の取り直し（夕）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "recent-retry",
+    "cron_utc": "40 10 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "40 19 * * *",
+   "fetch_task": {
+    "task": "recent-retry",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "barometer-retry-daily",
+   "desc": "バロメーターの取り直し（毎日）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "barometer-retry",
+    "cron_utc": "30 23 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "30 8 * * *",
+   "fetch_task": {
+    "task": "barometer-retry",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "barometer-retry-friday",
+   "desc": "バロメーターの取り直し（金曜夜）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "barometer-retry",
+    "cron_utc": "30 10 * * 5",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "30 19 * * 5",
+   "fetch_task": {
+    "task": "barometer-retry",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [],
+   "ready": true,
+   "cutover": {
+    "min_consecutive_success": 2,
+    "window_days": 35,
+    "parity_min_days": 2
+   }
+  },
+  {
+   "id": "weekly-update",
+   "desc": "週次更新（直近 10 日の確定結果・指数・バロメーター）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "weekly-update",
+    "cron_utc": "0 9 * * 5",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": "0 18 * * 5",
+   "fetch_task": {
+    "task": "weekly-update",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "enabled": true,
+   "blockers": [
+    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
+   ],
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 2,
+    "window_days": 35,
+    "parity_min_days": 2
+   }
+  },
+  {
+   "id": "race-odds-per-race",
+   "desc": "各 R の T-60/T-15（バンドル）/T-10/T-5/T-2 のオッズ。前夜に reserve-race-day が 1 レース 1 タスクで予約（raceday-runner の置き換え）",
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "raceday-runner",
+    "cron_utc": "30 22 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "schedule_jst": null,
+   "fetch_task": {
+    "task": "race-odds-t60",
+    "args": {
+     "race_id": "<12桁>",
+     "date": "<YYYYMMDD>"
+    }
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "reserved_by": "reserve-race-day",
+   "extra_tasks": [
+    "race-odds-t15",
+    "race-odds-t10",
+    "race-odds-t05",
+    "race-odds-t02"
+   ],
+   "enabled": true,
+   "blockers": [],
+   "ready": true,
+   "cutover": {
+    "raceday_min_days": 3,
+    "window_days": 21
+   }
+  },
+  {
+   "id": "backfill-2026-fast",
+   "desc": "過去データの取りこぼし補填（2026 年 fast）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "backfill-2026-fast",
+    "cron_utc": "0 15 * * *",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-2025-fast",
+   "desc": "過去データの取りこぼし補填（2025 年 fast）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "backfill-2025-fast",
+    "cron_utc": "0 16 * * *",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-2024-fast",
+   "desc": "過去データの取りこぼし補填（2024 年 fast）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "backfill-2024-fast",
+    "cron_utc": "0 17 * * *",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-2023-fast",
+   "desc": "過去データの取りこぼし補填（2023 年 fast）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "backfill-2023-fast",
+    "cron_utc": "0 18 * * *",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-2022-fast",
+   "desc": "過去データの取りこぼし補填（2022 年 fast）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "backfill-2022-fast",
+    "cron_utc": "0 19 * * *",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-2026-full",
+   "desc": "過去データの取りこぼし補填（2026 年 full）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "backfill-2026-full",
+    "cron_utc": "50 22 * * *",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-2025-full",
+   "desc": "過去データの取りこぼし補填（2025 年 full）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "backfill-2025-full",
+    "cron_utc": "0 23 * * *",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-2024-full",
+   "desc": "過去データの取りこぼし補填（2024 年 full）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "backfill-2024-full",
+    "cron_utc": "0 0 * * *",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-2021-fast",
+   "desc": "過去データの取りこぼし補填（2021 年 fast）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "backfill-2021-fast",
+    "cron_utc": "0 17 * * 1,4",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-2020-fast",
+   "desc": "過去データの取りこぼし補填（2020 年 fast）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "backfill-2020-fast",
+    "cron_utc": "0 18 * * 2,5",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-all-horse",
+   "desc": "馬情報の一括バックフィル",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA_BACKFILL",
+    "cron_job_id": "backfill-all-horse",
+    "cron_utc": "0 21 * * *",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "horse-training-backfill",
+   "desc": "調教の過去分の取り直し（月〜木の夜、2,200 頭）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-TRAINING-BACKFILL",
+    "cron_job_id": "horse-training-backfill",
+    "cron_utc": "0 13 * * 1-4",
+    "script": "scripts/cron/horse_training_backfill_night.sh"
+   },
+   "reason": "長時間・大量。VPS の許可リストに無く、自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "horse-remarks-daily",
+   "desc": "馬の備考（毎日 03:00 JST）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-HORSE-REMARKS",
+    "cron_job_id": "horse-remarks-daily",
+    "cron_utc": "0 18 * * *",
+    "script": "scripts/cron/horse_remarks_daily.sh"
+   },
+   "reason": "VPS の許可リストに無い。03:00 はメンテナンス窓と重なるので時刻の見直しも別途",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "sporthorse-births-nightly",
+   "desc": "誕生日データ（外部サイト・セッション依存）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-SPORTHORSE-BIRTHS",
+    "cron_job_id": "sporthorse-births-nightly",
+    "cron_utc": "0 13 * * *",
+    "script": "scripts/cron/sporthorse_births_nightly.sh"
+   },
+   "reason": "外部サイトのセッションを使うためホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "maintenance-deploy",
+   "desc": "メンテナンス窓の自動反映（stg のホスト用）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-MAINTENANCE-DEPLOY",
+    "cron_job_id": "maintenance-deploy",
+    "cron_utc": "5 18 * * *",
+    "script": "scripts/ops/maintenance_deploy.sh"
+   },
+   "reason": "stg を残す間は必要。prod は VPS の promote.sh / pull 型デプロイ",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "keiba-remote-access",
+   "desc": "ホストへの遠隔アクセス",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-REMOTE-ACCESS",
+    "cron_job_id": null,
+    "cron_utc": "*/2 * * * *",
+    "script": "keiba-remote-access/start_remote_access.sh"
+   },
+   "reason": "ホスト運用に必要",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "ensure-monitor",
+   "desc": "監視ポータルの死活（フェーズ 5 まで）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-MONITOR",
+    "cron_job_id": null,
+    "cron_utc": "*/5 * * * *",
+    "script": "scripts/server/ensure_monitor.sh"
+   },
+   "reason": "監視ポータルはフェーズ 5 で Cloud Run へ",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "rotate-logs",
+   "desc": "ログローテーション（ホスト）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-WATCHDOG",
+    "cron_job_id": "rotate_logs",
+    "cron_utc": "30 19 * * *",
+    "script": "scripts/cron/rotate_logs.sh"
+   },
+   "reason": "ホストが動く限り必要。GCP は Cloud Logging（保持は設定で管理）",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "server-watchdog",
+   "desc": "API/UI 常駐の死活（ホスト）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-WATCHDOG",
+    "cron_job_id": "server_watchdog",
+    "cron_utc": "*/3 * * * *",
+    "script": "scripts/server/server_watchdog.sh"
+   },
+   "reason": "ホストが stg の API/UI を配信する間は必要",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "modeling",
+   "desc": "学習・評価・特徴量の再構築・ノートブック・MLflow（cron ではない）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "src/scripts/data/tp*"
+   },
+   "reason": "モデリングはホストのみ（成果物は model_publish で GCS へ）",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "raceday-result-runner",
+   "desc": "各R 発走 T+15 の速報結果（開催日のみ。常駐ループ）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "raceday-result-runner",
+    "cron_utc": "30 22 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "reason": "常駐ループで VPS の許可リストに無い（個別タスク化は未了）。当面ホストに残す。個別タスク化したら vps に移して cutover の対象にする",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "sync-pg-from-gcs",
+   "desc": "GCS → PostgreSQL 同期",
+   "destination": "retire",
+   "phase": 5,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA_PG_SYNC",
+    "cron_job_id": "sync_pg_from_gcs",
+    "cron_utc": "0 15 * * *",
+    "script": "scripts/cron/sync_pg_from_gcs.sh"
+   },
+   "reason": "PostgreSQL は廃止（architecture_target.md 3.3）。API が Cloud Run に移ってから止める",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "ensure-postgres",
+   "desc": "PostgreSQL の死活",
+   "destination": "retire",
+   "phase": 5,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA_PG_ENSURE",
+    "cron_job_id": "ensure_postgres",
+    "cron_utc": "*/5 * * * *",
+    "script": "scripts/server/ensure_postgres.sh"
+   },
+   "reason": "PostgreSQL は廃止。sync-pg-from-gcs と同時に止める",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  }
+ ]
+}

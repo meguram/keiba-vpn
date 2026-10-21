@@ -323,6 +323,11 @@ def _ensure_race_list_date(storage: Any, queue: Any, ymd: str) -> bool:
     return False
 
 
+def eve_fetch_only() -> bool:
+    """KEIBA_EVE_FETCH_ONLY=1 のとき、前日夕方の取得だけを行い、追走難度・想定オッズの計算は別ジョブ（GCP）に任せる。"""
+    return os.environ.get("KEIBA_EVE_FETCH_ONLY", "").strip().lower() in ("1", "true", "yes")
+
+
 def _eve_precomputes(race_date_str: str, race_ids: list[str]) -> tuple[dict[str, Any], dict[str, Any]]:
     precompute_stats: dict[str, Any] = {"ok": 0, "skip": 0, "fail": 0, "total": 0}
     final_odds_precompute_stats: dict[str, Any] = {"ok": 0, "skip": 0, "fail": 0, "total": 0}
@@ -478,7 +483,10 @@ def run_raceday_eve_for_date(race_date_str: str) -> dict[str, Any]:
     race_ids = [str(s["target_id"]) for s in specs if s.get("target_id")]
     training_stats = _eve_horse_training(storage, race_ids)
     profile_stats = _eve_horse_profile(storage, race_ids)
-    pc1, pc2 = _eve_precomputes(race_date_str, race_ids)
+    if eve_fetch_only():
+        pc1, pc2 = {"skipped": "fetch-only"}, {"skipped": "fetch-only"}   # 計算は GCP の eve-precompute ジョブ（src/ops/jobs/eve_precompute.py）
+    else:
+        pc1, pc2 = _eve_precomputes(race_date_str, race_ids)
 
     return {
         "status": "ok",

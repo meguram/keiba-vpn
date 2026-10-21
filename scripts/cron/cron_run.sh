@@ -17,6 +17,14 @@ JOB="${1:?job_id}"; shift
 [ "$#" -gt 0 ] || { echo "usage: cron_run.sh <job_id> -- <command...>" >&2; exit 2; }
 JOB="$(printf '%s' "$JOB" | tr -c 'A-Za-z0-9._-' '_')"
 PROJECT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)"
+# GCP / VPS が引き継いだジョブ（config/job_owner.json）は、ホストでは実行しない。記録は成功として残す（監視が『止まった』と誤判定しない）。
+# ファイルが無い・python が無い・判定に失敗したときは、これまでどおり実行する。
+if [ -f "${PROJECT_DIR}/config/job_owner.json" ] && command -v python3 >/dev/null 2>&1; then
+  PYTHONPATH="$PROJECT_DIR" python3 -m src.ops.job_owner check "$JOB" >/dev/null 2>&1
+  if [ "$?" = 10 ]; then
+    set -- bash -c "echo \"[\$(date -Is)] ${JOB} は GCP / VPS の担当（config/job_owner.json）。このホストでは実行しません\"; exit 0"
+  fi
+fi
 DIR="${KEIBA_CRON_RUNS_DIR:-${PROJECT_DIR}/data/local/meta/cron_runs}"
 KEEP_LINES=200
 TAIL_LINES=80
