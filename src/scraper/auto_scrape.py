@@ -363,6 +363,11 @@ def finalize_weekly_update(target_dates: list[str], result: dict) -> dict:
 
     out["tracking_v2_eval"] = _tv2_eval_refresh(target_dates, reason="weekly-update")
 
+    # ドリフトの週次監視を別プロセスで起動する（KEIBA_DRIFT_MONITOR=1 のときだけ。待たない・失敗しても本体は成功）
+    from src.pipeline.inference.drift_monitor_hook import refresh_for_dates as _drift_refresh
+
+    out["drift_monitor"] = _drift_refresh(target_dates, reason="weekly-update")
+
     out["last_run"] = _now_jst_iso()
     if megu.get("status") == "error" and out.get("status") == "ok":
         out["status"] = "partial"
