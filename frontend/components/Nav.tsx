@@ -31,6 +31,17 @@ export function Nav() {
 
   return (
     <>
+      {/* ハニーポット: 人間には見えず押せない（画面外・読み上げ対象外・フォーカス不可）。機械的にリンクをたどる収集プログラムだけが踏む。
+          robots.txt で /api/ を拒否しているので、守る相手は踏まない。踏むと API 側が即ブロックする（config/anti_scraping.json） */}
+      <a
+        href="/api/archive/all-predictions"
+        rel="nofollow noindex noarchive"
+        tabIndex={-1}
+        aria-hidden="true"
+        style={{ position: "absolute", left: -9999, top: 0, width: 1, height: 1, overflow: "hidden" }}
+      >
+        全予測データ
+      </a>
       {USE_MOCK && (
         <div style={{
           background: "rgba(88,166,255,0.07)",

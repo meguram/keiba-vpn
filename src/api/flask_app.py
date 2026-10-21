@@ -73,6 +73,11 @@ def create_app() -> Flask:
     app.register_blueprint(analytics_bp, url_prefix="/api/v1")
     app.register_blueprint(data_analysis_bp, url_prefix="/api/v1")
 
+    # スクレイピング対策（既定は検知のみ。config/anti_scraping.json）。メンテナンス判定を入れる場合はその後に登録する
+    from src.api.middleware.anti_scraping import register_flask as _install_anti_scraping
+
+    _install_anti_scraping(app)
+
     @app.get("/api/v1/health")
     def health():
         return jsonify({"status": "ok", "service": "keiba-vpn-api"})

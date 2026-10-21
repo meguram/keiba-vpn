@@ -39,8 +39,34 @@ function isDevOnly(pathname: string): boolean {
   return DEV_ONLY_PAGES.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
+// 脆弱性スキャナ・収集プログラムが探す典型的なパス。このサイトには存在しないので、踏んだ時点で API 側のハニーポットに回してブロックする。
+const SCANNER_PROBES = [
+  "/.env",
+  "/.git",
+  "/wp-login.php",
+  "/wp-admin",
+  "/xmlrpc.php",
+  "/phpmyadmin",
+  "/vendor/phpunit",
+  "/cgi-bin",
+  "/admin/backup",
+  "/backup.zip",
+];
+
+function isScannerProbe(pathname: string): boolean {
+  const p = pathname.toLowerCase();
+  return SCANNER_PROBES.some((x) => p === x || p.startsWith(x + "/") || p.startsWith(x + "."));
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (isScannerProbe(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/api/_hp/probe";
+    url.search = "";
+    return NextResponse.rewrite(url);
+  }
 
   // 無効化中の機能（lib/features.ts）への直リンクはホームへ戻す
   if (!pathEnabled(pathname)) {

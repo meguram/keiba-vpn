@@ -44,6 +44,19 @@ const nextConfig = {
     KEIBA_API_URL: flaskApi,
     NEXT_PUBLIC_MONITOR_PORT: portOf("KEIBA_PORT_MONITOR"),
   },
+  // 検索エンジン・AI クローラーに索引・複製させない（robots.txt は守る相手にしか効かないため、ヘッダでも明示）
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive, noai, noimageai" },
+          { key: "Referrer-Policy", value: "same-origin" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [
       { source: "/api/v1/:path*", destination: `${flaskApi}/api/v1/:path*` },

@@ -849,6 +849,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(AuthMiddleware)
+# スクレイピング対策（レート制限・bot 判定・ハニーポット・ログイン試行制限）。既定は検知のみ。config/anti_scraping.json
+from src.api.middleware.anti_scraping import register_fastapi as _install_anti_scraping
+
+_install_anti_scraping(app)
 app.add_middleware(KeibaDeploymentMiddleware)
 
 JRA_PLACE_CODES = {"01", "02", "03", "04", "05", "06", "07", "08", "09", "10"}
