@@ -18,6 +18,8 @@ export type ExpectedMegu = {
   gap_sec?: number;                      // 最上位との差（秒。1 点 = 0.1 秒）
   latest_unreflected?: boolean;
   latest_past_date?: string;
+  /** 実測のめぐ指数の直近走（新しい順。最大 5 走。low=低信頼） */
+  recent?: { date: string; value: number; low?: boolean }[];
 };
 
 export type ExpectedMeguMeta = {
@@ -28,6 +30,15 @@ export type ExpectedMeguMeta = {
 export const md = (ymd?: string | null): string => {
   const m = (ymd ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${Number(m[2])}/${Number(m[3])}` : "-";
+};
+
+/** 出馬表に出す直近走の指数（古い→新しいの順）。想定値は画面に出さない。 */
+export const recentRuns = (e?: ExpectedMegu | null, max = 5) => [...(e?.recent ?? [])].slice(0, max).reverse();
+
+/** 直近走の平均（並べ替え用）。 */
+export const recentMean = (e?: ExpectedMegu | null): number | null => {
+  const r = e?.recent ?? [];
+  return r.length ? r.reduce((s, x) => s + x.value, 0) / r.length : null;
 };
 
 export const fmtValue = (e?: ExpectedMegu | null): string => (e ? e.value.toFixed(1) : "—");

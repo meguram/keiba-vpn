@@ -146,3 +146,11 @@ def test_same_surface_runs_weigh_more_when_the_model_says_so():
     a = em.expected_from_runs(runs, "20250101", _today(), None)["base_value"]
     b = em.expected_from_runs(runs, "20250101", _today(), model)["base_value"]
     assert b > a                                    # 今回は芝。ダートの低い走を軽くする
+
+
+def test_recent_lists_actual_runs_newest_first_with_low_flag():
+    r = em.expected_from_runs(_runs(40.0, 50.0, 60.0, 70.0, 80.0, 90.0, low=(5,)), "20260101")
+    assert [x["value"] for x in r["recent"]] == [90.0, 80.0, 70.0, 60.0, 50.0]      # 実測値そのまま（新しい順・最大5走）
+    assert [x["low"] for x in r["recent"]] == [True, False, False, False, False]
+    dates = [x["date"] for x in r["recent"]]
+    assert dates == sorted(dates, reverse=True)

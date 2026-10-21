@@ -10,13 +10,13 @@ import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
-import { ExpectedMeguCell } from "@/components/ExpectedMegu";
+import { RecentMeguCell } from "@/components/ExpectedMegu";
 import { PredExtras } from "@/components/PredExtras";
 import type { L3fCoherent, PaceUnified } from "@/components/PredExtras";
 import type { LapForecast } from "@/lib/lapForecast";
 import { bracketChipStyle, bracketOf } from "@/lib/bracket";
 import type { GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
-import type { ExpectedMegu, ExpectedMeguMeta } from "@/lib/expectedMegu";
+import { recentMean, type ExpectedMegu, type ExpectedMeguMeta } from "@/lib/expectedMegu";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
 const SHOW_HORSE_LINK = featureEnabled("horse-detail");
@@ -198,7 +198,7 @@ const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
   jockey: (p) => p.jockey_name ?? null,
   trainer: (p) => p.trainer_name ?? null,
   weight: (p) => p.weight ?? null,
-  emegu: (p) => p.expected_megu?.value ?? null,
+  emegu: (p) => recentMean(p.expected_megu),
   win: (p) => p.win_prob ?? null,
   top2: (p) => p.top2_prob ?? null,
   top3: (p) => p.top3_prob ?? null,
@@ -362,12 +362,12 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
 
   // 並び替えバー: よく使う 4 つはチップ、そのほかは選択肢から。どの幅でも使える（表の見出しは主要な列だけ）
   const QUICK: { key: SortKey; label: string }[] = [
-    { key: "num", label: "馬番" }, { key: "win", label: "勝率" }, { key: "evw", label: "期待値" }, { key: "emegu", label: "想定指数" },
+    { key: "num", label: "馬番" }, { key: "win", label: "勝率" }, { key: "evw", label: "期待値" }, { key: "emegu", label: "直近指数" },
   ];
   const ALL: { key: SortKey; label: string }[] = [
     { key: "num", label: "馬番" }, { key: "name", label: "馬名" }, { key: "bracket", label: "枠" }, { key: "sexage", label: "性齢" },
     { key: "jwt", label: "斤量" }, { key: "jockey", label: "騎手" }, { key: "trainer", label: "調教師" }, { key: "weight", label: "馬体重" },
-    { key: "emegu", label: "想定指数" }, { key: "win", label: "勝率" }, { key: "top2", label: "連対率" }, { key: "top3", label: "複勝率" },
+    { key: "emegu", label: "直近指数" }, { key: "win", label: "勝率" }, { key: "top2", label: "連対率" }, { key: "top3", label: "複勝率" },
     { key: "odds", label: "想定単勝" }, { key: "podds", label: "想定複勝" }, { key: "evw", label: "勝期待値" }, { key: "evp", label: "複期待値" }, { key: "tier", label: "推奨" },
   ];
   const sortBar = (
@@ -411,8 +411,8 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
       <div className="pt-v-wide">
         <table className="pt-tbl">
           <colgroup>
-            <col style={{ width: "4.5%" }} /><col style={{ width: "5%" }} /><col style={{ width: "22%" }} /><col style={{ width: "16%" }} />
-            <col style={{ width: "10%" }} /><col style={{ width: "7%" }} /><col style={{ width: "9.5%" }} /><col style={{ width: "11%" }} />
+            <col style={{ width: "4.5%" }} /><col style={{ width: "5%" }} /><col style={{ width: "19%" }} /><col style={{ width: "16%" }} />
+            <col style={{ width: "13%" }} /><col style={{ width: "7%" }} /><col style={{ width: "9.5%" }} /><col style={{ width: "11%" }} />
             <col style={{ width: "9%" }} /><col style={{ width: "6%" }} />
           </colgroup>
           <thead>
@@ -421,7 +421,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
               {th("num", "馬番")}
               {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・馬体重。馬体重は当日の発表後）")}
               {th("jockey", "騎手/調教師", { textAlign: "left" }, "騎手で並べ替え（調教師は『そのほか』から）")}
-              {th("emegu", "想定指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "過去のめぐ指数からの想定（AI予測ではありません）。1点＝0.1秒")}
+              {th("emegu", "直近指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "直近の実測めぐ指数（左が古く右が最新。1点＝0.1秒。並べ替えは平均）")}
               {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
               {th("top2", "連対/複勝", {}, "連対率で並べ替え（複勝率は『そのほか』から）")}
               {th("odds", "想定単勝/複勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（想定複勝は『そのほか』から）")}
@@ -444,7 +444,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                     {tapCell(p, "jockey", p.jockey_name, "var(--text)")}
                     <span className="sub">{p.trainer_name ? <>{tapCell(p, "trainer", p.trainer_name, "var(--text-dim)")}</> : "-"}</span>
                   </td>
-                  <td className="sep"><ExpectedMeguCell e={p.expected_megu} /></td>
+                  <td className="sep"><RecentMeguCell e={p.expected_megu} wide /></td>
                   <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}</td>
                   <td style={{ color: dim }}>{fmtPct(p.top2_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top3_prob)}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
@@ -470,7 +470,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
               {th("num", "馬番")}
               {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・騎手・馬体重・調教師）")}
               {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "勝率で並べ替え（連対率・複勝率は下段、『そのほか』から並べ替え）")}
-              {th("emegu", "想定指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "過去のめぐ指数からの想定（AI予測ではありません）。1点＝0.1秒")}
+              {th("emegu", "直近指数", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "直近の実測めぐ指数（左が古く右が最新。1点＝0.1秒。並べ替えは平均）")}
               {th("evw", calibratedEv ? "期待値(較正後)" : "期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
               {th("odds", "想定単勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（下段: 想定複勝）")}
             </tr>
@@ -488,7 +488,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                     <span className="sub">{[p.trainer_name, p.buy_tier && p.buy_tier !== "—" ? `推奨 ${p.buy_tier}` : null].filter(Boolean).join("　")}</span>
                   </td>
                   <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top2_prob)} / {fmtPct(p.top3_prob)}</span></td>
-                  <td className="sep"><ExpectedMeguCell e={p.expected_megu} /></td>
+                  <td className="sep"><RecentMeguCell e={p.expected_megu} /></td>
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>複 {ev.pl.text}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
                 </tr>
@@ -532,7 +532,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                 {p.buy_tier && p.buy_tier !== "—" && <span style={{ color: "var(--text-dim)" }}>推奨 {p.buy_tier}</span>}
               </div>
               <div className="r3" style={{ color: "var(--text-dim)" }}>
-                <span>想定指数 </span><ExpectedMeguCell e={p.expected_megu} />
+                <span>直近指数 </span><RecentMeguCell e={p.expected_megu} wide />
               </div>
             </div>
           );
@@ -541,8 +541,8 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
 
       {megu && (
         <p style={{ fontSize: 11, color: "var(--text-dim)", padding: "6px 10px 0" }}>
-          想定指数: {megu.name ?? "過去のめぐ指数からの想定（AI予測ではありません）"}。{megu.data_through ? `指数データは ${megu.data_through.slice(5).replace("-", "/")} まで。` : ""}
-          1点＝0.1秒。「条件」は面・距離・クラス・休み明けなどが過去走と違う馬（±は実際の誤差の大きさ）。
+          直近指数: 過去の走の実測めぐ指数（左が古く右が最新、淡色は低信頼）。{megu.data_through ? `指数データは ${megu.data_through.slice(5).replace("-", "/")} まで。` : ""}
+          1点＝0.1秒、斤量55kg換算。今回の指数の想定は出しません（予測精度への寄与が小さいため）。
         </p>
       )}
       {!hasPred && (

@@ -262,6 +262,7 @@ def expected_from_runs(runs: Iterable[Run], race_date: str | None, today: dict |
         "change": group,
         "reasons": reasons,
         "adjust": adjust,
+        "recent": [{"date": _fmt(r[0]), "value": round(float(r[1]), 1), "low": bool(r[2])} for r in usable],   # 実測の直近走（新しい順）
     }
     return out
 

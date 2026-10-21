@@ -9,7 +9,7 @@ import {
 } from "@/lib/entryCardUi";
 import { ViewportMode, useViewportMode } from "@/lib/useViewportMode";
 import { GrowthCurve, GROWTH_CSS } from "@/components/GrowthCurve";
-import { ExpectedMeguSection } from "@/components/ExpectedMegu";
+import { RecentMeguSection } from "@/components/ExpectedMegu";
 import type { ExpectedMegu, ExpectedMeguMeta } from "@/lib/expectedMegu";
 
 /* 出馬表の馬名・騎手・調教師をタップしたときのパネル。
@@ -391,8 +391,8 @@ function HorseView({ h, mode, cur, jockeyName, expected, expectedMeta }: { h: Ho
       </Section>
 
       {expected !== undefined && (
-        <Section title="想定めぐ指数" hint="過去のめぐ指数から（AI予測ではありません）">
-          <ExpectedMeguSection e={expected} meta={expectedMeta} />
+        <Section title="直近のめぐ指数" hint="実測の過去走">
+          <RecentMeguSection e={expected} meta={expectedMeta} />
         </Section>
       )}
 
