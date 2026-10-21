@@ -49,11 +49,25 @@ def main() -> None:
     ap.add_argument("--bundle", required=True)
     ap.add_argument("--months", default="1-12")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--recompute-drop", type=float, default=0.0, help="0〜1: 抜き取り済みの行に対して、調教記録をこの割合だけ落として tl_・wc_ を作り直した予測（p_win_d）を計算する（特徴量全体は作り直さない）")
+    ap.add_argument("--stage", default="", help="--recompute-drop 用の前段モデルの置き場（省略時は v5 の既定）")
     a = ap.parse_args()
     root = Path(a.root).resolve()
     lo, hi = (int(x) for x in a.months.split("-")) if "-" in a.months else (int(a.months), int(a.months))
     d = load_dumps(root / "data/local/inference/drift_features", [a.year])
     d = d[d["day"].astype(str).str[4:6].astype(int).between(lo, hi)].reset_index(drop=True)
+    if a.recompute_drop > 0 and "p_win_d" not in d.columns:
+        from src.pipeline.inference import v3_serving as vs
+        from src.scraper.storage import HybridStorage
+        from src.scripts.data.drift_dump_features import drop_training_predict
+        from src.utils.project_env import load_project_dotenv
+
+        load_project_dotenv()
+        pth = vs.v5_paths()
+        v3 = vs.V3Serving(Path(a.bundle), Path(a.stage) if a.stage else pth["stage"], tl_reference=pth["tl_reference"])
+        v3.warm()
+        st = HybridStorage()
+        d = d.join(pd.concat([drop_training_predict(v3, g, st, a.recompute_drop) for _, g in d.groupby("day")]))
     b = EnsembleBundle.load(Path(a.bundle))
     cols = list(dict.fromkeys(c for m in b.members for c in m.feature_cols))
     tables = root / "data/page_reference/tables"
