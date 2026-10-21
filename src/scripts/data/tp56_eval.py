@@ -505,6 +505,9 @@ def cmd_stages(a) -> None:
         el[c] = {"auc_top3": round(auc(f[c].to_numpy(), f["y3"].to_numpy()), 4), "within_race_corr": round(within_race_corr(f, c)[0], 4)}
     sub = f[(f["trouble_n3"] > 0)]
     el["subset_trouble_n3>0"] = {"n_rows": int(len(sub)), **{c: round(within_race_corr(sub.assign(), c)[0], 4) for c in ("elo_rel_c", "elo_rel_c_adj")}}
+    late = f[f["year"] >= 2024]       # 備考フラグの表が全行をカバーする期間（2024 年〜）
+    el["only_2024_2025"] = {"n_rows": int(len(late)), **{c: round(within_race_corr(late, c)[0], 4) for c in ("elo_rel_c", "elo_rel_c_adj", "elo_rel_g", "elo_rel_g_adj")}}
+    el["flag_rate_by_year"] = {int(y): round(float(g["trouble_run"].mean()), 4) for y, g in f.groupby("year")}
     out["pairwise"] = el
     # 参考: V5 の複勝確率（2025 は最終版、2022〜24 は OOF）の AUC、人気（逆順）
     out["reference"] = {"auc_top3_popularity_inv": round(auc(-f["popularity"].to_numpy(float), f["y3"].to_numpy()), 4),
