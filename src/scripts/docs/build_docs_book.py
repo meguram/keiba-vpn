@@ -270,6 +270,8 @@ PARTS: list[Part] = [
           [("feature_investigation_catalog", "特徴量調査の総覧"), ("ensemble_v5", "アンサンブル v5（tp-52）"), ("deployment_readiness", "導入可否の確認"), ("training_pipeline_decisions", "決定ログ")]),
         C("handicapper_viewpoints", "予想家の観点の調査。15 のレース名で note の公開記事を検索して 249 本（X の本文は取得できず 0 件）を集め、予想の観点の頻度表を作り、V5 の特徴量との対応を 4 分類（入っている・試して不採用・データはあるが未実施・データなし）で整理。未実施でデータがあるのは、当日・前日のレースから見た馬場の実測の偏り（新規）、進路のロス・包まれ（棚卸しの候補 2・6 を補強）、前走ステップの傾向、騎手の積極性。予想家の主張は未検証で、観点の一覧であって効果の証拠ではない。", "結果",
           [("feature_gap_audit", "特徴量のやり残しの棚卸し"), ("feature_investigation_catalog", "特徴量調査の総覧"), ("yosou_procedure", "ユーザーの予想手順の再現（tp-56）"), ("training_pipeline_decisions", "決定ログ（§41）")]),
+        C("jockey_trainer_roi", "騎手・調教師の分析と、単勝・複勝の回収率として稼げるか（tp-59）。勝率・複勝率は前年→翌年で強く再現（順位相関 0.7〜0.9）するが回収率は再現せず（0〜0.3、本物の差の割合は単勝で最大 0.22）、100% を超えると言える騎手・調教師・組み合わせは全数調査で 0（延べ約 4,600 中、偶然の期待約 230 に対し 1）。市場とモデルは強さ別に ±0.5pt で較正済みで、人気の騎手・調教師は 5〜7pt 買われすぎ。回収率で買う規則 528 通りは Reality Check p=0.9995。唯一の手がかりは『単勝 EV≥1.5 かつ騎手・調教師の勝ち数がともに市場の見込みを上回る』（5 年とも 122〜147%）だが、事後に絞った候補で穴馬依存のため凍結して前向きに追跡する。特徴量は既存列が gain の約 1%、V5 の OOF に対する関係者の残差が一次選別を通る。", "結果",
+          [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("proven_methods_roi", "回収率 100% 超の実績者の手法と検証（tp-44）"), ("feature_gap_audit", "特徴量のやり残しの棚卸し"), ("training_pipeline_decisions", "決定ログ（§42）")]),
         C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",
           note="safe_ev を前提にした設計。tp-08 の実装は Benter ブレンドで、safe_ev は使っていない。",
           now=[("modeling_experiment_report", "tp-08 の結果")]),
