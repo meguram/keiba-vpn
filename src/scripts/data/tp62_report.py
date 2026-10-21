@@ -212,7 +212,7 @@ def level_null_block(indir: Path, sens: dict | None) -> str:
     if not rows:
         return ""
     return ("<h3>感度の中で目についた 2 水準の運の確率（同じ手順で帰無を作り直した）</h3><table><tr><th>水準</th><th>実データで A・B を満たした年（2023〜2025）</th><th>帰無: 1 年以上</th><th>帰無: 2 年以上</th><th>反復数</th></tr>"
-            + "".join(rows) + "</table><p class='muted'>水準を 12 通り見た中から事後に選んだ 2 つなので、表の確率に 12 を掛けた程度（最大 12 倍）が妥当な多重比較の見積もり。</p>")
+            + "".join(rows) + "</table><p class='muted'>水準を 12 通り見た中から事後に選んだ 2 つなので、表の確率に 12 を掛けた程度（最大 12 倍）が妥当な多重比較の見積もり。反復が 60 回なので、0% は『概ね 5% 未満』の意味（上限の見積もり。多重比較後は有意と言えない）。H=25%・M=300% は 2 年（2023・2025）で A・B を満たした唯一の水準で、反復を増やした確認（<code>tp62_r500 null --H 0.25 --M 3 --reps 150</code>）は、ホストの負荷が下がるまで未実施。</p>")
 
 
 def power_block(pw: dict | None) -> str:
