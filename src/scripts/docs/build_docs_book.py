@@ -268,6 +268,8 @@ PARTS: list[Part] = [
           [("ensemble_v5", "アンサンブル v5 の構成選択と最終学習（tp-52）"), ("ev_calibration_adopt", "期待値の較正（tp-49）"), ("lap_forecast", "ハロンごとのラップ予想（tp-55）"), ("tracking_difficulty_v2", "追走難度 v2（tp-54）"), ("exotic_bet_probabilities", "組合せ券の確率の作り方"), ("training_pipeline_decisions", "決定ログ")]),
         C("feature_gap_audit", "モデルを作り直す前の特徴量のやり残しの棚卸し。試した群の採否・増分の総括、V5 の列の由来、schema_defs.json 42 カテゴリの未使用データ（非 JRA の過去走・馬ごとの区間ラップ・母側きょうだい・併せ馬）、実行中の調査（v6・交互作用・予想家）と重なるものの除外、やり残し候補 13 個（見込み・必要データ・先読みリスク・工数・2 段階の評価計画）と、再学習の前にやるもの・後でよいもの。特徴量 1 群の見込み（≤0.0006）より 2026 年を含めた再学習の設計のほうが効く可能性が高い、という整理。", "結果",
           [("feature_investigation_catalog", "特徴量調査の総覧"), ("ensemble_v5", "アンサンブル v5（tp-52）"), ("deployment_readiness", "導入可否の確認"), ("training_pipeline_decisions", "決定ログ")]),
+        C("handicapper_viewpoints", "予想家の観点の調査。15 のレース名で note の公開記事を検索して 249 本（X の本文は取得できず 0 件）を集め、予想の観点の頻度表を作り、V5 の特徴量との対応を 4 分類（入っている・試して不採用・データはあるが未実施・データなし）で整理。未実施でデータがあるのは、当日・前日のレースから見た馬場の実測の偏り（新規）、進路のロス・包まれ（棚卸しの候補 2・6 を補強）、前走ステップの傾向、騎手の積極性。予想家の主張は未検証で、観点の一覧であって効果の証拠ではない。", "結果",
+          [("feature_gap_audit", "特徴量のやり残しの棚卸し"), ("feature_investigation_catalog", "特徴量調査の総覧"), ("yosou_procedure", "ユーザーの予想手順の再現（tp-56）"), ("training_pipeline_decisions", "決定ログ（§41）")]),
         C("betting_backtest_dataset_spec", "betting_backtest_dataset の仕様。確率テーブル・オッズ・結果を結んだバックテスト用データの列と粒度。", "仕様", status="legacy",
           note="safe_ev を前提にした設計。tp-08 の実装は Benter ブレンドで、safe_ev は使っていない。",
           now=[("modeling_experiment_report", "tp-08 の結果")]),

@@ -147,10 +147,14 @@ table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; backgro
 </ul>
 
 <h2>7. 予想家の調査（X・ブログ・note）の結果を受け取る欄</h2>
-<p class="muted">fork <code>handicapper-research</code> が、レース名で検索して予想の考え方を集めている（X の本文は取得できないため、記事・ブログ・note 経由）。結果が出たら、観点の頻度表のうち「モデルの特徴量に無いもの」をここに追記し、4 章の候補に加えるかを同じ形式（見込み・データ・先読み・評価計画）で判断する。</p>
+<p class="muted">2026-10-21 に完了（X の本文は取得できず 0 件。note の公開記事 249 本を集計）。詳細と候補の評価計画は <a href="handicapper_viewpoints.html">予想家の観点の調査</a> の 4 章。頻度は 3 回以上言及する記事の割合。</p>
 <table>
 <tr><th>観点</th><th>出現頻度</th><th>現行モデルの対応</th><th>候補化</th></tr>
-<tr><td colspan="4" class="muted">（調査完了後に記入）</td></tr>
+<tr><td>当日・前日のレースから見た馬場の実測の偏り（内外・前後）</td><td>当日・前日の傾向 21%（1 回以上）、開催週・コース替わり 40%</td><td>静的な偏り（fdr_*）・馬場状態・前日の馬場は入っているが、その日に出た偏りの実測は無い</td><td><b>新規候補 N1</b>（見込み −0.0000〜−0.0003、データあり）。4 章の候補に追加して第 1 段で評価</td></tr>
+<tr><td>進路のロス・包まれ・外回し</td><td>33%（1 回以上は 56%）</td><td>コース×枠は入っている。進路は未使用（<code>horse_lap</code>）</td><td>候補 2・6 の根拠を補強。記事での言及が最多なので第 1 段の最優先</td></tr>
+<tr><td>前走のステップ・路線別の過去傾向</td><td>1 回以上 40%</td><td>前走のクラス・着順は履歴 127 列にある。レース名単位は未使用</td><td>低（標本が小さい）。打ち切り候補</td></tr>
+<tr><td>騎手の位置取り・積極性</td><td>1 回以上 33%</td><td>未使用</td><td>候補 9 のまま（後でよい）</td></tr>
+<tr><td>風・気温、パドック、映像の不利、外厩</td><td>6%、23%、13%、9%（1 回以上）</td><td>データ無し、または予測時点（T-60）より後</td><td>候補化しない（外厩は候補 11 のまま）</td></tr>
 </table>
 
 <p class="muted">関連: <a href="feature_investigation_catalog.html">特徴量調査の総覧</a>・<a href="training_pipeline_decisions.html">決定ログ</a>・<a href="research_overview.html">調査の全体像</a>・<a href="ensemble_v5.html">アンサンブル v5</a>・<a href="deployment_readiness.html">導入可否の確認</a>・<a href="yosou_procedure.html">ユーザーの予想手順の再現（tp-56）</a></p>
