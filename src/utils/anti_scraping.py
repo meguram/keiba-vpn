@@ -177,9 +177,14 @@ class AntiScraping:
         with self._lock:
             self._cfg_loaded = now
             try:
-                st = self.config_path.stat().st_mtime
+                # config/anti_scraping.local.json があれば上書きする（ホスト固有の値＝VPS の IP など、リポジトリに載せない設定用）
+                local = self.config_path.with_name(self.config_path.stem + ".local.json")
+                st = (self.config_path.stat().st_mtime, local.stat().st_mtime if local.exists() else 0.0)
                 if st != self._cfg_mtime:
-                    self._cfg = _merge(DEFAULTS, json.loads(self.config_path.read_text(encoding="utf-8")))
+                    cfg = _merge(DEFAULTS, json.loads(self.config_path.read_text(encoding="utf-8")))
+                    if local.exists():
+                        cfg = _merge(cfg, json.loads(local.read_text(encoding="utf-8")))
+                    self._cfg = cfg
                     self._cfg_mtime = st
             except (OSError, ValueError):
                 self._cfg = DEFAULTS
