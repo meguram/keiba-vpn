@@ -423,3 +423,28 @@ class ScrapeStatusTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_env_label_added_to_sent_payload():
+    from src.utils import slack_notify as SN
+
+    sent = []
+
+    class R:
+        status_code = 200
+        headers = {}
+
+    def post(url, json=None, timeout=None):
+        sent.append(json)
+        return R()
+
+    base = {"SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/T/B/X"}
+    payload = SN.build_message("テスト", [SN.section("本文")], fallback="テスト")
+    SN.send_payload(payload, post=post, env={**base, "KEIBA_ENV": "stg", "KEIBA_RUN_LOCATION": "host"})
+    SN.send_payload(payload, post=post, env={**base, "KEIBA_ENV": "prod", "KEIBA_RUN_LOCATION": "gcp"})
+    SN.send_payload(payload, post=post, env=dict(base))
+    assert sent[0]["text"].startswith("【STG】") and "ホストPC" in str(sent[0]["attachments"][0]["blocks"][-1])
+    assert sent[1]["text"].startswith("【PROD】") and "GCP" in str(sent[1]["attachments"][0]["blocks"][-1])
+    assert sent[2]["text"] == "テスト" and len(sent[2]["attachments"][0]["blocks"]) == 1
+    assert payload["text"] == "テスト" and len(payload["attachments"][0]["blocks"]) == 1  # 元のペイロードは変えない
+    assert not any("_keiba_env_label" in p for p in sent)

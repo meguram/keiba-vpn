@@ -172,6 +172,39 @@ def redact(text: str, env: dict[str, str] | None = None) -> str:
     return out
 
 
+_ENV_LABELS = {"stg": "STG", "prod": "PROD", "dev": "DEV"}
+_LOCATION_LABELS = {"host": "ホストPC", "vps": "VPS", "gcp": "GCP"}
+_ENV_MARK = "_keiba_env_label"
+
+
+def env_label(env: dict[str, str] | None = None) -> str:
+    """通知に付ける環境名（STG / PROD / DEV）。KEIBA_NOTIFY_ENV_LABEL があればそれを優先。KEIBA_ENV 未設定は空（付けない）。"""
+    e = os.environ if env is None else env
+    explicit = (e.get("KEIBA_NOTIFY_ENV_LABEL") or "").strip()
+    if explicit:
+        return explicit[:12]
+    return _ENV_LABELS.get((e.get("KEIBA_ENV") or "").strip().lower(), "")
+
+
+def with_env_label(payload: dict, env: dict[str, str] | None = None) -> dict:
+    """どの環境（stg/prod）・どこで動くジョブからの通知かが分かるよう、通知文の先頭と末尾に環境名を付ける（二重には付けない）。"""
+    label = env_label(env)
+    if not label or payload.get(_ENV_MARK):
+        return payload
+    e = os.environ if env is None else env
+    loc = _LOCATION_LABELS.get((e.get("KEIBA_RUN_LOCATION") or "").strip().lower(), "")
+    out = dict(payload)
+    out["text"] = clip(f"【{label}】{payload.get('text') or ''}", 3000)
+    atts = [dict(a) for a in payload.get("attachments") or []]
+    if atts:
+        blocks = list(atts[0].get("blocks") or [])
+        blocks.append(context([f"環境: *{label}*" + (f" ・ 実行場所: {loc}" if loc else "")]))
+        atts[0]["blocks"] = blocks[:MAX_BLOCKS]
+        out["attachments"] = atts
+    out[_ENV_MARK] = True
+    return out
+
+
 def send_payload(payload: dict, *, channel: str = "default", timeout: float = 8.0, retries: int = 3,
                  backoff: float = 1.5, sleep: Callable[[float], None] = time.sleep,
                  post: Callable[..., Any] | None = None, env: dict[str, str] | None = None) -> dict:
@@ -183,6 +216,8 @@ def send_payload(payload: dict, *, channel: str = "default", timeout: float = 8.
     url = webhook_url(channel, env)
     if not url:
         return {"ok": False, "status": None, "attempts": 0, "error": "webhook_not_configured"}
+    payload = with_env_label(payload, env)
+    payload.pop(_ENV_MARK, None)
     if post is None:
         import requests
 
