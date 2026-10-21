@@ -4,7 +4,7 @@
 **実行は Cloud Shell で `bash deploy/gcp/netkeiba_smoke/run.sh <枠>`**（公開ページのみ・ログインなし・30 リクエスト・4.5〜7 秒間隔・403/429 で即中止）。
 
 ## 実行前の確認（毎回）
-- [ ] ホストの取得ジョブが止まっている（DEC-023: 同時にアクセスしない）: `ssh keiba-remote 'pgrep -af auto_scrape || echo 動いていない'`
+- [ ] ホストの取得ジョブが止まっている（DEC-023: 同時にアクセスしない）: `ssh keiba-remote 'pgrep -af '[a]uto_scrape' || echo 動いていない'`
 - [ ] 枠が重複していない（同じ日に続けて 2 回やらない。**3 回は日・時間帯を変える**）
 - [ ] メンテナンス窓（毎日 JST 03:00〜04:00）を避けている
 
