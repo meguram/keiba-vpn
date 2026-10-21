@@ -20,6 +20,16 @@ const FIT_TONE: Record<PaceFit["label"], { fg: string; bg: string; bd: string }>
   不向き: { fg: "#fca5a5", bg: "rgba(239,68,68,0.12)", bd: "rgba(239,68,68,0.5)" },
 };
 
+/** 展開への左右され度（scenario_forecast の sensitivity_label）。追走難度とは別の概念なので、専用の列・タグで出す。 */
+const SENS_TIP = "展開への左右され度。展開次第＝ペース・隊列のシナリオによって有利不利が大きく変わる／標準＝ふつう／安定＝どの展開でも有利不利が変わりにくい";
+const EASE_TIP = "追走難度。想定位置取りを取るのに楽か大変か（脚質の判定とは別の指標）";
+function SensTag({ s }: { s: string | null | undefined }) {
+  if (s === "展開次第") return <span title={SENS_TIP} style={{ padding: "1px 7px", borderRadius: 999, border: "1px solid rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.10)", color: "#fbbf24", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>展開次第</span>;
+  if (s === "展開に左右されにくい") return <span title={SENS_TIP} style={{ color: "var(--text-dim)", fontSize: 11, whiteSpace: "nowrap" }}>安定</span>;
+  if (s === "ふつう") return <span title={SENS_TIP} style={{ color: "var(--text-dim)", fontSize: 11, whiteSpace: "nowrap" }}>標準</span>;
+  return <span style={{ color: "var(--text-dim)" }}>—</span>;
+}
+
 function EaseDot({ pct, size = 11 }: { pct: number | null | undefined; size?: number }) {
   if (pct == null) return null;
   return <span aria-hidden style={{ width: size, height: size, borderRadius: 999, background: easeTone(pct).color, border: "2px solid #0d1117", boxSizing: "content-box", flex: "none" }} />;
@@ -92,12 +102,13 @@ function Detail({ h, gate, td, fit, scen }: { h: ForecastHorse; gate: GateBias |
 
 /** 馬別一覧（展開向き／不向き・追走難度・想定上がり）。追走難度が未取得の間は、脚質×ペースの判定だけを出す。 */
 function HorseList({ horses, pace, td, narrow, sel, onPick, detail, fitMap }: { horses: ForecastHorse[]; fitMap?: Map<number, HorseFit> | null; pace: PaceForecast | null | undefined; td?: Map<number, HorseTd> | null; narrow: boolean; sel: number | null; onPick: (no: number) => void; detail: (h: ForecastHorse) => React.ReactNode }) {
-  const cols = fitMap ? "30px minmax(96px,1.4fr) 52px 224px 124px 104px" : "30px minmax(96px,1.6fr) 52px 62px 124px 104px";
+  const cols = fitMap ? "30px minmax(76px,1.4fr) 44px 202px 72px 108px 96px" : "30px minmax(96px,1.6fr) 52px 62px 124px 104px";
   return (
-    <div role="list" aria-label="馬別の展開" style={{ marginTop: 12, display: "grid", gap: 4 }}>
+    <div style={{ marginTop: 12, overflowX: narrow ? undefined : "auto" }}>
+    <div role="list" aria-label="馬別の展開" style={{ display: "grid", gap: 4, minWidth: narrow ? undefined : fitMap ? 700 : 600 }}>
       {!narrow && (
         <div aria-hidden style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: "0 8px", fontSize: 11, color: "var(--text-dim)" }}>
-          <span>馬番</span><span>馬名</span><span>脚質</span><span>{fitMap ? "展開（ペース別の有利さ）" : "展開"}</span><span>追走難度</span><span>想定上がり</span>
+          <span>馬番</span><span>馬名</span><span>脚質</span><span>{fitMap ? "展開（ペース別の有利さ）" : "展開"}</span>{fitMap && <span title={SENS_TIP}>左右され度ⓘ</span>}<span title={EASE_TIP}>追走難度ⓘ</span><span>想定上がり</span>
         </div>
       )}
       {horses.map((h) => {
@@ -112,7 +123,6 @@ function HorseList({ horses, pace, td, narrow, sel, onPick, detail, fitMap }: { 
           const ft2 = FIT_TONE[scen.word];
           return <span title={scen.bestLabel ? `最も合う展開: ${scen.bestLabel}` : undefined} style={{ display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
             <span style={{ padding: "1px 8px", borderRadius: 999, border: `1px solid ${ft2.bd}`, background: ft2.bg, color: ft2.fg, fontWeight: 700, fontSize: 12 }}>{scen.word}</span>
-            {scen.sensitivity === "展開次第" && <span style={{ fontSize: 11, color: "#fbbf24" }}>展開次第</span>}
           </span>;
         })() : fit && ft ? <span title={fit.reasons.join("・")} style={{ padding: "1px 8px", borderRadius: 999, border: `1px solid ${ft.bd}`, background: ft.bg, color: ft.fg, fontWeight: 700, fontSize: 12, whiteSpace: "nowrap" }}>{fit.label}</span> : <span style={{ color: "var(--text-dim)" }}>—</span>;
         const easeCell = et ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}><span aria-hidden style={{ width: 9, height: 9, borderRadius: 999, background: et.color }} /><b style={{ color: "var(--text)" }}>{et.word}</b><span style={{ color: "var(--text-dim)" }}>{x!.ease_pct!.toFixed(0)}</span></span> : <span style={{ color: "var(--text-dim)" }}>—</span>;
@@ -126,7 +136,7 @@ function HorseList({ horses, pace, td, narrow, sel, onPick, detail, fitMap }: { 
               <strong style={{ flex: "1 1 auto", minWidth: 0, fontSize: 13, color: "#f0f6fc", overflowWrap: "anywhere" }}>{h.name}</strong>
               {fitPill}
             </span>
-            {scen && <span style={{ display: "flex" }}><FitMarks fit={scen} size={12} /></span>}
+            {scen && <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}><FitMarks fit={scen} size={12} />{scen.sensitivity === "展開次第" && <SensTag s={scen.sensitivity} />}</span>}
             <span style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", color: "var(--text-dim)" }}>
               <span>脚質 {style}</span>
               <span>追走 {easeCell}</span>
@@ -138,11 +148,12 @@ function HorseList({ horses, pace, td, narrow, sel, onPick, detail, fitMap }: { 
           <button type="button" onClick={() => onPick(h.no)} aria-pressed={sel === h.no} style={{ ...common, padding: "6px 8px", display: "grid", gridTemplateColumns: cols, gap: 8, alignItems: "center" }}>
             {num}
             <strong style={{ minWidth: 0, fontSize: 13, color: "#f0f6fc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.name}</strong>
-            {style}{scen ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}><FitMarks fit={scen} />{fitPill}</span> : fitPill}{easeCell}{l3}
+            {style}{scen ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}><FitMarks fit={scen} />{fitPill}</span> : fitPill}{scen && <SensTag s={scen.sensitivity} />}{easeCell}{l3}
           </button>
         );
         return <div key={h.no} role="listitem">{row}{sel === h.no && detail(h)}</div>;
       })}
+    </div>
     </div>
   );
 }
@@ -284,6 +295,11 @@ export function PositionForecast({ horses, pace, gate, td, tdNote, embedded, pac
         <div aria-label="追走難度の凡例" style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px", marginTop: 8, fontSize: 11, color: "var(--text-dim)" }}>
           <span>丸の右上の点＝追走難度:</span>
           {[80, 65, 50, 35, 20].map((v) => { const e = easeTone(v); return <span key={v} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span aria-hidden style={{ width: 9, height: 9, borderRadius: 999, background: e.color }} />{e.word}</span>; })}
+        </div>
+      )}
+      {embedded && fitMap && (
+        <div aria-label="列の意味" style={{ marginTop: 6, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>
+          <b style={{ color: "var(--text)" }}>左右され度</b>＝ペース・隊列によって有利不利が変わる度合い（展開次第／標準／安定）。<b style={{ color: "var(--text)" }}>追走難度</b>＝想定位置取りを取るのに楽か大変か。別の指標です。
         </div>
       )}
       {tdNote}
