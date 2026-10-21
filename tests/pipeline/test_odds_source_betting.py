@@ -245,3 +245,22 @@ def test_build_odds_map_tolerates_none_odds_in_predictions():
              {"horse_number": 2, "win_odds": 3.5, "place_odds_min": 1.4, "place_odds_max": 1.8}]
     r = BettingOptimizer(BettingConfig())._build_odds_map({}, preds, {})
     assert r["tansho"] == {(2,): 3.5} and r["fukusho"] == {(2,): 1.4}
+
+
+def test_optimize_falls_back_to_local_predictions_when_cache_empty():
+    storage = _Storage({"race_odds": ACTUAL_SINGLE, "race_pair_odds": ACTUAL_PAIR})
+    with patch("src.pipeline.inference.race_prediction_service.load_cached", return_value=None), \
+         patch("src.api.local_predictions.load_local_prediction_payload", return_value=PREDS) as local, \
+         patch("src.scraper.storage.HybridStorage", lambda: storage), \
+         patch("src.pipeline.inference.final_odds_service.load_cached_response", return_value=PREDICTED):
+        payload, code = delegates.optimize_betting({"race_id": RID, "min_prob": 0.001, "bet_types": ["tansho"], "min_ev": 1.0})
+    assert local.called and code == 200 and payload["odds_source"] == "actual"
+
+
+def test_optimize_without_any_prediction_is_404():
+    storage = _Storage({})
+    with patch("src.pipeline.inference.race_prediction_service.load_cached", return_value=None), \
+         patch("src.api.local_predictions.load_local_prediction_payload", return_value=None), \
+         patch("src.scraper.storage.HybridStorage", lambda: storage):
+        payload, code = delegates.optimize_betting({"race_id": RID})
+    assert code == 404

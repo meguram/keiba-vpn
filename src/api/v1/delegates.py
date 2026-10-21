@@ -37,6 +37,18 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
     storage = HybridStorage()
     cached = load_cached(storage, race_id)
     predictions = (cached or {}).get("predictions") or []
+    already_calibrated = False
+    if not predictions:
+        # 画面（/api/race/{id}/predictions）と同じく、GCS に無ければホストのローカル予測（shadow / バックフィル）を使う
+        try:
+            from src.api.local_predictions import load_local_prediction_payload
+
+            local = load_local_prediction_payload(race_id, storage)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("推奨用のローカル予測の読み込みに失敗 %s: %s", race_id, exc)
+            local = None
+        predictions = (local or {}).get("predictions") or []
+        already_calibrated = bool(predictions)  # 読み出し時に市場補正済み（二重に補正しない）
     if not predictions:
         return {"error": "予測結果がありません。先に推論を実行してください"}, 404
 
@@ -68,7 +80,7 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
 
     # 市場補正（KEIBA_PROB_CALIBRATION=1 のときだけ）: 実オッズがあるとき、推奨の確率を補正後にする（画面の確率・EV・印と同じ）
     prob_cal_meta = None
-    if odds["source"] == "actual":
+    if odds["source"] == "actual" and not already_calibrated:
         try:
             from src.utils.prob_calibration import calibrate_prediction_list
 
