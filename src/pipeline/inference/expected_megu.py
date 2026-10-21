@@ -457,10 +457,12 @@ def attach_expected_megu(resp: dict, race_date: str | None, base: Path | None = 
     card = card or {k: resp.get(k) for k in ("venue", "surface", "distance")}
     by_id = {str(e.get("horse_id") or ""): e for e in (card.get("entries") or []) if isinstance(e, dict)}
     items: dict[Any, dict | None] = {}
+    runs_by_i: dict[int, list] = {}
     through = ""
     for i, p in enumerate(preds):
         hid = str(p.get("horse_id") or "")
         runs, t = runs_for_horse(hid, race_date, base) if hid else ([], "")
+        runs_by_i[i] = runs
         through = max(through, t)
         ex = expected_from_runs(runs, race_date, today_context(card, {**by_id.get(hid, {}), **{k: v for k, v in p.items() if v}}), model)
         if ex is not None and last_past.get(hid) and last_past[hid] > _digits(ex["latest_run_date"]):
@@ -475,6 +477,13 @@ def attach_expected_megu(resp: dict, race_date: str | None, base: Path | None = 
             d = details.get((r.get("race_id", ""), str(preds[i].get("horse_id") or "")))
             if d:
                 r.update({k: v for k, v in d.items() if v is not None})
+    try:                                                                  # v3b の集約値と、直近走の『無視してよい低下』の判定（tp-69。参考表示用で、集約から除かない）
+        from src.pipeline.inference.megu_excusable_attach import annotate as _annotate
+
+        for i, ex in items.items():
+            _annotate(ex, runs_by_i.get(i) or [])
+    except Exception:  # noqa: BLE001
+        pass
     for i, p in enumerate(preds):
         p["expected_megu"] = items[i]
     n_known = sum(1 for v in items.values() if v)
@@ -492,6 +501,17 @@ def attach_expected_megu(resp: dict, race_date: str | None, base: Path | None = 
                     card.get("surface") or resp.get("surface"), card.get("distance") or resp.get("distance"))
         if bm:
             resp["class_benchmark"] = bm
+    except Exception:  # noqa: BLE001
+        bm = None
+    try:                                                                  # めぐ印（tp-66）。表が無い・過去走が無い・出走が少ないときは印を付けず理由だけ返す
+        from src.pipeline.inference.megu_mark import compute_marks
+
+        marks = compute_marks(
+            [{"key": i, "horse_number": p.get("horse_number"), "runs": runs_by_i.get(i) or [], "race_date": race_date} for i, p in enumerate(preds)],
+            (bm or {}).get("line") if isinstance(bm, dict) else None)
+        for i, p in enumerate(preds):
+            if marks.get(i):
+                p["megu_mark"] = marks[i]
     except Exception:  # noqa: BLE001
         pass
     try:

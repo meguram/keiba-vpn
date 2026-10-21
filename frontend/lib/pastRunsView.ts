@@ -1,4 +1,4 @@
-import type { RecentRun } from "@/lib/expectedMegu";
+import type { MeguMark, RecentRun } from "@/lib/expectedMegu";
 import { md } from "@/lib/expectedMegu";
 
 /* 馬柱の 1 行表示（指数の推移の棒グラフ＋前走の短文）の純粋関数。 */
@@ -78,10 +78,24 @@ export function barLabel(r: RecentRun): string {
   return [md(r.date), r.cls ?? r.race_name, r.finish ? `${r.finish}着` : "", `指数${r.value.toFixed(0)}`, r.low ? "低信頼" : ""].filter(Boolean).join(" ");
 }
 
-export type MeguSortKey = "num" | "mean" | "best" | "clear";
+export type MeguSortKey = "num" | "mark" | "mean" | "best" | "clear";
+
+/** めぐ印の並べ替え値（大きいほど上）。印あり: ◎=2、○=1（同じ印の中は集約値の高い順）。印なしでも集約値があれば 0 台、判定不能は null。 */
+export function markSortValue(m?: MeguMark | null): number | null {
+  if (!m || m.value == null) return null;
+  const tier = m.key === "top" ? 2 : m.key === "good" ? 1 : 0;
+  return tier * 1000 + m.value;
+}
+
+/** 印の説明（ツールチップ・詳細用の 1〜2 行）。 */
+export function markExplain(m?: MeguMark | null): string {
+  if (!m) return "めぐ印: 判定なし";
+  if (m.key) return `${m.label ?? ""} ${m.reason ?? ""}`.trim();
+  return m.unavailable ?? m.reason ?? "印なし";
+}
 
 /** めぐ指数テーブルの並べ替え値。mean=直近の平均、best=直近の最高、clear=今回と比べられる走の最高 − 突破ライン。値が出せないときは null（並べ替えでは末尾）。 */
-export function meguSortValue(recent: RecentRun[] | undefined, key: Exclude<MeguSortKey, "num">, line?: number | null, today?: TodayCourse | null, max = 5): number | null {
+export function meguSortValue(recent: RecentRun[] | undefined, key: Exclude<MeguSortKey, "num" | "mark">, line?: number | null, today?: TodayCourse | null, max = 5): number | null {
   const runs = (recent ?? []).slice(0, max);
   if (!runs.length) return null;
   if (key === "mean") return runs.reduce((s, r) => s + r.value, 0) / runs.length;

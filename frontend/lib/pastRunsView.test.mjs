@@ -89,3 +89,19 @@ test("めぐ指数テーブルの並べ替え値: 平均・最高・基準との
   assert.equal(m.meguSortValue(undefined, "best"), null);
   assert.equal(m.meguSortValue([{ date: "2026-07-01", value: 70, surface: "ダート", distance: 1400 }], "clear", 55, today), null);  // 同条件の走なし
 });
+
+test("めぐ印の並べ替え値: ◎ > ○ > 印なし、判定不能は null、同じ印の中は集約値の高い順", () => {
+  const top = { key: "top", label: "めぐ◎", value: 50, n_runs: 3 };
+  const good = { key: "good", label: "めぐ○", value: 60, n_runs: 3 };
+  const none = { key: null, label: null, value: 70, n_runs: 3 };
+  assert.ok(m.markSortValue(top) > m.markSortValue(good));
+  assert.ok(m.markSortValue(good) > m.markSortValue(none));
+  assert.equal(m.markSortValue({ key: null, label: null, value: null, n_runs: 0 }), null);
+  assert.equal(m.markSortValue(undefined), null);
+});
+
+test("めぐ印の説明: 印あり=ラベル+根拠、印なし=理由", () => {
+  assert.match(m.markExplain({ key: "top", label: "めぐ◎", value: 55, n_runs: 3, reason: "レース内1位" }), /めぐ◎ レース内1位/);
+  assert.equal(m.markExplain({ key: null, label: null, value: null, n_runs: 0, unavailable: "初出走" }), "初出走");
+  assert.equal(m.markExplain(undefined), "めぐ印: 判定なし");
+});

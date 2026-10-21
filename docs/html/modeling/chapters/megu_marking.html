@@ -1,0 +1,69 @@
+<!doctype html><html lang='ja'><head><meta charset='utf-8'><title>めぐ指数の印（好走に値する馬）と、過去走の集約方式の比較（tp-66）</title><style>:root { --bg:#0f172a; --panel:#15213c; --border:#2a3a5c; --text:#e5e7eb; --muted:#94a3b8; --accent:#60a5fa; --accent-2:#93c5fd; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; }
+td.num { text-align: right; font-family: monospace; } .muted { color: var(--muted); font-size: 13px; }</style></head><body>
+<h1>めぐ指数の印（好走に値する馬）と、過去走の集約方式の比較（tp-66）</h1>
+<p class="muted">ユーザー依頼（2026-10-21）:「めぐ指数の観点から、好走に値する馬の選別をしてマーキングしてほしい。ただし、過去のめぐ指数の挙動を分析したうえで、一番効果のある取り方（近 N 走の同条件平均か、最高値か、別か）を反映してほしい」。指数は絶対指数 megu_index_v3a_abs_robust（status ok）。評価の期間は、選択 2022〜2023 年、確認 2024 年、最終 2025 年、2026 年はテストセット②（選んだ規則の確認だけ）。モデルの確率は 2022〜2024 年が V5（LightGBM 単体）の out-of-fold、2025〜2026 年が最終モデルの予測。市場の値（人気・払戻）は評価にだけ使い、指標には使わない。スクリプト: <code>tp66_lib.py</code> / <code>tp66_eval.py</code> / <code>tp66_rules.py</code>、API: <code>megu_mark.py</code>。</p>
+
+<h2>1. 結論</h2>
+<ul>
+<li><b>最も効く取り方は v3b（直近 5 走を、新しい走ほど重い加重 Huber で。低信頼の走は重み半分）</b>。レース内の順位の判別力（3 着内に対する AUC）が選択 0.672・確認 0.673・最終 0.668 と、直近 1 走・平均・最高・中央値・同条件の平均/最高より高く、3 期間とも同じ順位。単純な「最高値」（0.641・0.640・0.636）や「5 走の平均」（0.640・0.644・0.638）は劣る。</li>
+<li><b>同条件走だけの平均は、V5 に足せる情報が最大</b>（3 着内の LogLoss が V5 に対して −0.00039、区間 −0.00055〜−0.00024）。ただし同条件の走がある馬は 7 割だけで（v3b は 86%）、2025 年（最終モデルへの当てはめ）では −0.00010 と区間が 0 を跨ぐ。単独の並べ方としては v3b に劣る（AUC 0.642）ため、主役にはしない。</li>
+<li><b>印の規則（採用）</b>: v3b がレース内 1 位で、そのクラスの突破ライン（<a href="class_benchmark.html">class_benchmark</a>）以上＝<b>めぐ◎</b>、2〜3 位で突破ライン以上＝<b>めぐ○</b>。◎は 79% のレースに 1 頭付き、3 着内率 47.9% / 47.5% / 48.0% / 47.7%（選択 / 確認 / 最終 / テストセット②）、出走馬全体の平均に対する倍率 2.13 / 2.09 / 2.14 / 2.10。○は 1 レースに平均 1.1 頭で、倍率 1.67 / 1.66 / 1.66 / 1.68。4 期間とも変わらない。</li>
+<li><b>正直な位置づけ: 表示用の補助。V5 の確率に足せる新しい情報は小さい</b>。V5 の確率の最上位 1 位の倍率は 2.74 / 2.80 / 2.83（人気 1 位は 2.80 / 2.86 / 2.84）で、◎（2.05 前後）より高い。v3b を V5 に足した LogLoss の差は、3 着内 −0.00018（区間 −0.00030〜−0.00007、2022〜24 年の年を 1 つ外す当てはめ）だが、2025 年は +0.00007（区間 −0.00011〜+0.00026）で確認できない。V5 が低評価（4 位以下）の馬を◎○の上位から拾っても倍率は 0.94〜1.09（無作為並み）、6 位以下では 0.65〜0.79（無作為より悪い）。つまり「人気以上の好走」を見つける印ではなく、V5 が高い馬の裏付けとして見る印。複勝の払戻回収率も 0.81〜0.85 で市場並み（控除率の範囲）。</li>
+<li>大差負けの下限（同じレースの勝ち馬 − 40 点）は、絶対指数（robust）ではほとんど効かない（走の 0.007% にしか掛からない）。下限を入れた版と入れない版で順位・倍率は同じ。API では使わない（勝ち馬の指数が要るため）。</li>
+</ul>
+
+<h2>2. 集約方式の比較（ランダムに比べた 3 着内の倍率は、レースの上位 1 / 2 頭に印を付けた場合）</h2>
+<p class="muted">AUC = レース内の相対順位（0〜1）と 3 着内の一致。被覆 = 指標が出せる出走馬の割合（過去走が無い・突破ラインが無いと出せない）。ΔLL = V5 の確率のロジットに、レース内の z を足したときの 3 着内の LogLoss の差（負が良い。2022〜24 年は年を 1 つ外す当てはめ、2025 年は 2022〜24 年で当てはめ）。</p>
+<table><tr><th>指標（直近の走を使う。特記なき限り 5 走）</th><th>被覆</th><th>AUC 選択 / 確認 / 最終</th><th>上位 1 頭の倍率 選択 / 確認 / 最終</th><th>上位 2 頭の倍率 選択 / 確認 / 最終</th><th>ΔLL（V5 に足す）2022〜24 / 2025</th></tr>
+<tr><td><b>v3b（加重 Huber・低信頼は半分）</b></td><td class='num'>0.857</td><td class='num'><b>0.672 / 0.673 / 0.668</b></td><td class='num'>2.05 / 2.02 / 2.05</td><td class='num'>1.88 / 1.86 / 1.85</td><td class='num'>−0.00018 / +0.00007</td></tr>
+<tr><td>v3b − 突破ライン（レース内順位は v3b と同じ）</td><td class='num'>0.819</td><td class='num'>0.674 / 0.676 / 0.671</td><td class='num'>2.08 / 2.06 / 2.08</td><td class='num'>1.91 / 1.89 / 1.87</td><td class='num'>−0.00021 / +0.00008</td></tr>
+<tr><td>条件適合の重み付き平均（面の違い 0.5、距離 600m で減衰）</td><td class='num'>0.844</td><td class='num'>0.664 / 0.670 / 0.663</td><td class='num'>2.03 / 2.03 / 2.07</td><td class='num'>1.86 / 1.86 / 1.84</td><td class='num'>−0.00024 / +0.00002</td></tr>
+<tr><td>指数加重平均（減衰 0.65）</td><td class='num'>0.851</td><td class='num'>0.659 / 0.664 / 0.658</td><td class='num'>1.98 / 2.00 / 2.02</td><td class='num'>1.82 / 1.82 / 1.81</td><td class='num'>−0.00016 / +0.00006</td></tr>
+<tr><td>加重 Huber（尺度＝その馬の走のばらつき）</td><td class='num'>0.851</td><td class='num'>0.658 / 0.664 / 0.658</td><td class='num'>1.98 / 2.01 / 2.01</td><td class='num'>1.83 / 1.81 / 1.81</td><td class='num'>−0.00014 / +0.00003</td></tr>
+<tr><td>直近 2 走の平均</td><td class='num'>0.851</td><td class='num'>0.657 / 0.660 / 0.656</td><td class='num'>1.99 / 1.96 / 1.97</td><td class='num'>1.82 / 1.83 / 1.82</td><td class='num'>−0.00015 / +0.00001</td></tr>
+<tr><td>同条件走の直近 3 走の平均</td><td class='num'>0.706</td><td class='num'>0.658 / 0.660 / 0.656</td><td class='num'>2.09 / 2.04 / 2.05</td><td class='num'>1.87 / 1.87 / 1.89</td><td class='num'>−0.00034 / ±0.00000</td></tr>
+<tr><td>直近 1 走</td><td class='num'>0.851</td><td class='num'>0.646 / 0.653 / 0.647</td><td class='num'>1.93 / 1.91 / 1.92</td><td class='num'>1.78 / 1.75 / 1.77</td><td class='num'>−0.00014 / −0.00001</td></tr>
+<tr><td>同条件走の平均</td><td class='num'>0.706</td><td class='num'>0.642 / 0.642 / 0.640</td><td class='num'>1.99 / 1.97 / 1.94</td><td class='num'>1.80 / 1.81 / 1.83</td><td class='num'><b>−0.00039 / −0.00010</b></td></tr>
+<tr><td>5 走の最高値</td><td class='num'>0.851</td><td class='num'>0.641 / 0.640 / 0.636</td><td class='num'>1.80 / 1.78 / 1.79</td><td class='num'>1.69 / 1.63 / 1.68</td><td class='num'>−0.00017 / −0.00002</td></tr>
+<tr><td>5 走の平均</td><td class='num'>0.851</td><td class='num'>0.640 / 0.644 / 0.638</td><td class='num'>1.89 / 1.88 / 1.88</td><td class='num'>1.74 / 1.75 / 1.72</td><td class='num'>−0.00010 / +0.00008</td></tr>
+<tr><td>同条件走の最高値</td><td class='num'>0.706</td><td class='num'>0.638 / 0.639 / 0.635</td><td class='num'>1.93 / 1.90 / 1.86</td><td class='num'>1.75 / 1.71 / 1.73</td><td class='num'>−0.00025 / −0.00008</td></tr>
+<tr><td>突破ラインを超えた走の数（5 走）</td><td class='num'>0.813</td><td class='num'>0.633 / 0.633 / 0.632</td><td class='num'>1.75 / 1.74 / 1.72</td><td class='num'>1.64 / 1.64 / 1.60</td><td class='num'>−0.00008 / ±0.00000</td></tr>
+<tr><td>8 走の平均 / 中央値</td><td class='num'>0.851</td><td class='num'>0.625 / 0.629 / 0.624</td><td class='num'>1.81 / 1.80 / 1.78</td><td class='num'>1.66 / 1.67 / 1.66</td><td class='num'>−0.00010 / +0.00005</td></tr>
+<tr><td>直近の伸び（前走 − 前 3 走の平均）</td><td class='num'>0.571</td><td class='num'>0.552 / 0.556 / 0.555</td><td class='num'>1.33 / 1.37 / 1.38</td><td class='num'>1.29 / 1.29 / 1.30</td><td class='num'>−0.00001 / −0.00003</td></tr>
+<tr><td class="muted">参考: 人気（市場。指標ではない）</td><td class='num'>1.00</td><td class='num'>0.799 / 0.802 / 0.800</td><td class='num'>2.80 / 2.86 / 2.84</td><td class='num'>2.53 / 2.55 / 2.57</td><td class='num'>—</td></tr>
+<tr><td class="muted">参考: V5 の 3 着内確率</td><td class='num'>1.00</td><td class='num'>0.788 / 0.795 / 0.795</td><td class='num'>2.74 / 2.80 / 2.83</td><td class='num'>2.46 / 2.52 / 2.52</td><td class='num'>—</td></tr></table>
+<p class="muted">読み方: (1) 最高値より平均系、平均より「新しい走ほど重い＋外れ値に強い」集約が良い。v3b は尺度を固定（11.5 点）するため、走が 3〜4 つしかない馬でも極端に外れた走を安定して弱められる（尺度をその馬の走のばらつきから決める版は、走が少ないと尺度が小さくなりすぎて劣る）。(2) 同条件の走だけで平均すると V5 に足せる情報は大きいが、条件が合う走がある馬は 7 割で、順位づけの主役にはならない。(3) どの指標も V5・人気（AUC 0.79〜0.80）には遠く及ばない。(4) 「基準を超えた走の数」は同点が多く、順位づけに向かない（同点は馬番の小さい馬を上にした。着順の並びに引きずられないよう、馬番で決める）。</p>
+
+<h2>3. 印の規則の比較（v3b。期間ごとに同じ結果）</h2>
+<table><tr><th>規則</th><th>1 レースの印の数（選択）</th><th>3 着内率 選択 / 確認 / 最終 / ②</th><th>倍率 選択 / 確認 / 最終 / ②</th><th>勝率（選択）</th><th>複勝回収率（選択 / 最終）</th></tr>
+<tr><td><b>めぐ◎ = 1 位 かつ 突破ライン以上（採用）</b></td><td class='num'>0.79（79% のレース）</td><td class='num'>47.9 / 47.5 / 48.0 / 47.7%</td><td class='num'>2.13 / 2.09 / 2.14 / 2.10</td><td class='num'>21.0%</td><td class='num'>0.85 / 0.81</td></tr>
+<tr><td><b>めぐ○ = 2〜3 位 かつ 突破ライン以上（採用）</b></td><td class='num'>1.15</td><td class='num'>37.0 / 37.3 / 36.7 / 37.6%</td><td class='num'>1.67 / 1.66 / 1.66 / 1.68</td><td class='num'>13.2%</td><td class='num'>0.80 / 0.78</td></tr>
+<tr><td>1 位（突破ラインを問わない）</td><td class='num'>0.92</td><td class='num'>47.0 / 46.7 / 46.7 / 47.0%</td><td class='num'>2.05 / 2.02 / 2.05 / 2.06</td><td class='num'>20.3%</td><td class='num'>0.85 / 0.80</td></tr>
+<tr><td>レース内 z ≥ 1.5</td><td class='num'>0.56</td><td class='num'>47.9 / 47.6 / 46.0 / 47.3%</td><td class='num'>2.21 / 2.18 / 2.16 / 2.18</td><td class='num'>22.0%</td><td class='num'>0.86 / 0.81</td></tr>
+<tr><td>レース内 z ≥ 2.0</td><td class='num'>0.11</td><td class='num'>53.2 / 51.2 / 49.4 / 48.1%</td><td class='num'>2.52 / 2.41 / 2.35 / 2.28</td><td class='num'>25.7%</td><td class='num'>0.85 / 0.78</td></tr>
+<tr><td>突破ライン以上の全馬</td><td class='num'>2.93</td><td class='num'>36.0 / 36.1 / 35.9 / 36.1%</td><td class='num'>1.65 / 1.64 / 1.66 / 1.63</td><td class='num'>13.7%</td><td class='num'>0.80 / 0.79</td></tr>
+<tr><td>上位 2 位で V5 が 4 位以下</td><td class='num'>0.78</td><td class='num'>24.1 / 21.2 / 21.9 / 24.4%</td><td class='num'>1.08 / 0.94 / 0.98 / 1.09</td><td class='num'>6.6%</td><td class='num'>0.79 / 0.69</td></tr>
+<tr><td>上位 2 位で V5 が 6 位以下</td><td class='num'>0.46</td><td class='num'>17.1 / 14.2 / 14.4 / 16.3%</td><td class='num'>0.79 / 0.65 / 0.67 / 0.75</td><td class='num'>4.3%</td><td class='num'>0.78 / 0.62</td></tr>
+<tr><td>1 位で V5 も 3 位以内</td><td class='num'>0.58</td><td class='num'>60.1 / 61.9 / 60.5 / 59.4%</td><td class='num'>2.58 / 2.65 / 2.61 / 2.55</td><td class='num'>28.5%</td><td class='num'>0.87 / 0.86</td></tr></table>
+<p class="muted">倍率 = 印の馬の 3 着内の数 ÷ ランダムに選んだ場合の期待の数（1 頭あたり 3 / 頭数）。◎ − 印なしの倍率差の 95% 区間（レース単位）は 選択 1.13〜1.26、確認 1.06〜1.24、最終 1.12〜1.30、②1.07〜1.27（印なしより一貫して高い）。複勝回収率は確定払戻（100 円あたり）。印が 3 位までなのは、4 位以降で倍率が 1.6 を割り、突破ライン以上の全馬（倍率 1.65）まで広げると印の価値が薄れるため。</p>
+
+<h2>4. 印の出し方と使い方</h2>
+<ul>
+<li><b>出さないとき</b>: 出走が 6 頭未満のレース、そのクラスの突破ラインが無いレース（クラスが読めない・基準の表に無い。評価期間では約 18%）、過去走のめぐ指数が無い馬（初出走・指数が計算できない馬）。理由は <code>megu_mark.unavailable</code>（突破ライン未満・上位 3 位より下のときは <code>reason</code>）に入る。</li>
+<li><b>API</b>: <code>/api/race/{id}/predictions</code> の各馬に <code>megu_mark</code>（<code>key</code> = top / good / null、<code>label</code>、<code>value</code>（v3b の集約値）、<code>margin</code>（突破ラインとの差）、<code>line</code>、<code>rank</code>、<code>z</code>、<code>n_runs</code>、<code>reason</code>、<code>unavailable</code>）。規則は <code>config/megu_mark.json</code>、計算は <code>src/pipeline/inference/megu_mark.py</code>（<code>compute_marks</code>）、<code>expected_megu.attach_expected_megu</code> から呼ぶ。環境変数のフラグは無し（表やめぐ指数が無ければ何も付かない）。</li>
+<li><b>画面</b>: めぐ指数の専用テーブルに「めぐ印」の列（◎は橙の塗り、○は橙の縁。押さなくても順位が分かる）、並び替え「めぐ印」、凡例（上記の注意書き）。印の根拠（レース内の順位・集約値・突破ライン比）はツールチップ。出馬表の行には出さない。</li>
+<li><b>excusable（不利などの一過性の低下）の除外はしない</b>: <a href="megu_excusable.html">megu_excusable</a>（tp-69）で、判定した走を集約から除くと次走予測が悪化したため。API の <code>expected_megu.recent[i].excusable*</code> は「参考: 一過性の可能性」の表示用で、印の計算には使わない。</li>
+</ul>
+
+<h2>5. 限界</h2>
+<ul>
+<li>V5 を上回る情報は確認できていない。印は「めぐ指数の観点で、直近の走が良い馬」を示す説明用で、予測・馬券判断の根拠は AI の確率と期待値。</li>
+<li>突破ラインは過去の水準（2023〜2025 年の 2 着馬）で、評価は各年の前年までの基準を使った。実運用の基準（3 年分）とは少し違う。</li>
+<li>2025 年・2026 年のモデルの確率は最終モデルの予測で、2022〜2024 年の out-of-fold とは別物。V5 への追加の説明力は、2022〜24 年の当てはめと 2025 年で符号が揃わない（上の注意）。</li>
+<li>評価に使った期間では、3 着内率の安定は 4 期間（テストセット②を含む）で同じだが、②の選択には使っていない。</li>
+</ul>
+<p class="muted">関連: <a href="class_benchmark.html">クラス別の基準めぐ指数</a> ／ <a href="index_variance.html">指数の分散と外れ値（tp-65）</a> ／ <a href="megu_excusable.html">v3b と excusable（tp-69）</a> ／ <a href="training_pipeline_decisions.html">決定ログ</a></p>
+</body></html>

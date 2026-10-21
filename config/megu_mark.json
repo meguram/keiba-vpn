@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "score": "v3b",
+  "score_ja": "v3b 集約（直近5走を、新しい走ほど重い加重 Huber。低信頼の走は重み半分）",
+  "min_runners": 6,
+  "tiers": [
+    {"key": "top", "label": "めぐ◎", "rank_max": 1, "rank_min": 1},
+    {"key": "good", "label": "めぐ○", "rank_max": 3, "rank_min": 2}
+  ],
+  "require_line": true,
+  "evidence": "docs/html/modeling/chapters/megu_marking.html（tp-66）"
+}

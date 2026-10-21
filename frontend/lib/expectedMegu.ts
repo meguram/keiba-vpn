@@ -44,6 +44,21 @@ export type ExpectedMegu = {
   recent?: RecentRun[];
 };
 
+/** めぐ印（好走に値する馬）。API: predictions[].megu_mark。key が null の馬は印なし（unavailable か reason に理由） */
+export type MeguMark = {
+  version?: number;
+  key: "top" | "good" | null;            // top=めぐ◎（レース内1位かつ突破ライン以上）、good=めぐ○（2〜3位かつ突破ライン以上）
+  label: string | null;
+  value: number | null;                  // v3b の集約値（直近5走を新しい走ほど重い加重 Huber で）
+  margin: number | null;                 // 突破ラインとの差
+  line: number | null;
+  rank: number | null;                   // レース内の順位（集約値の高い順）
+  z?: number | null;
+  n_runs: number;
+  reason?: string | null;
+  unavailable?: string | null;
+};
+
 export type ExpectedMeguMeta = {
   name?: string; method?: string; data_through?: string | null; n_horses?: number; n_known?: number;
   model?: { version?: string; trained_on?: string; validated_on?: string; eval?: Record<string, number> } | null;
