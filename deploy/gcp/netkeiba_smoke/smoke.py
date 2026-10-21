@@ -78,6 +78,12 @@ def fetch(item: dict, timeout: float = 30.0) -> dict:
     except urllib.error.HTTPError as e:
         res["code"] = e.code
         res["err"] = "HTTP"
+        try:  # 拒否の理由を調べるための診断（ヘッダの一部と本文の先頭だけ。個人情報・秘密は含まない）
+            h = e.headers
+            res["diag"] = {k: (h.get(k) or "")[:80] for k in ("Server", "Via", "CF-RAY", "X-Cache", "Content-Type", "Retry-After")}
+            res["diag"]["body_head"] = e.read(300).decode("utf-8", errors="replace").replace("\n", " ")[:300]
+        except Exception:  # noqa: BLE001
+            pass
     except Exception as e:  # noqa: BLE001
         res["err"] = type(e).__name__
     res["sec"] = round(time.time() - t, 2)
