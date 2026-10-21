@@ -30,6 +30,9 @@ else
 echo "== 3/6 version.json（画面から /version.json で見える。秘密なし）"
 mkdir -p "$WORK/frontend/public"
 printf '{"release":"%s","commit":"%s","short":"%s","built_at":"%s","env":"prod"}\n' "$ID" "$COMMIT" "$SHORT" "$(date -Is)" > "$WORK/frontend/public/version.json"
+# stg と同じ中身か照合できるよう、フロントのソースのハッシュを入れる（src/ops/release_manifest.py。標準ライブラリのみ）
+PYTHONPATH="$ROOT" python3 -m src.ops.release_manifest write-frontend-version --frontend-dir "$WORK/frontend" --env prod --out "$WORK/frontend/public/version.json" ${ENVF:+--env-file "$ENVF"} >/dev/null \
+  || echo "  (警告) source_digest を付けられませんでした。stg との照合はできません"
 
 echo "== 4/6 ビルド（負荷が高いときは待つ）"
 for i in $(seq 1 60); do

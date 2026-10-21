@@ -1,0 +1,7 @@
+{
+  "_comment": "挙動フラグの正（リポジトリ管理）。defaults は stg/prod/Cloud Run/Jobs 共通の既定。.env に同名があればそちらが勝つが、env_overridable に無い名前で値が違うと release-manifest の flag_drift に出て parity 検査が失敗する。環境ごとに違ってよい項目は env_overrides.<env> か env_overridable に宣言する。空のままなら従来どおり（.env だけで決まる）。案の出し方: python -m src.ops.release_manifest suggest-flags",
+  "version": 1,
+  "defaults": {},
+  "env_overrides": {"stg": {}, "prod": {}},
+  "env_overridable": []
+}

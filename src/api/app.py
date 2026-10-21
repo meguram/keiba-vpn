@@ -13939,3 +13939,8 @@ async def api_pedigree_race_stats_lineage_meta():
 from src.api.prediction_results_api import router as _prediction_results_router  # noqa: E402
 
 app.include_router(_prediction_results_router)
+
+# リリース・マニフェスト（stg/prod の挙動の照合用。トークン必須）
+from src.api.release_manifest_api import router as _release_manifest_router  # noqa: E402
+
+app.include_router(_release_manifest_router)

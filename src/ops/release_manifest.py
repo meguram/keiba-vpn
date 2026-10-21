@@ -39,7 +39,7 @@ CONFIG_EXCLUDE = (
     "config/entries_schedule", "config/drift_", "config/frozen_tracking", "config/gcp_job_map",
     "config/behavior_flags",   # フラグ表自体は flags 側で比べる
 )
-FRONTEND_EXCLUDE_DIRS = {"node_modules", ".next", ".next-stg", ".next-prod", "out", ".turbo", ".git", "dist"}
+FRONTEND_EXCLUDE_DIRS = {"node_modules", "out", ".turbo", ".git", "dist", "coverage", ".cache"}   # ほか ".next*"（.next-dev / .next-stg など）はすべて除外
 FRONTEND_EXCLUDE_FILES = {"version.json", "next-env.d.ts", "tsconfig.tsbuildinfo"}
 FRONTEND_SUFFIXES = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".css", ".json", ".svg", ".html", ".png", ".jpg", ".jpeg", ".webp", ".ico", ".woff", ".woff2"}
 
@@ -63,7 +63,7 @@ _HASHED_FLAGS = {"KEIBA_MODEL_STORE"}   # バケット名などは出さず、�
 # 環境ごとに違って当然の項目（比較から外す）。ドット区切りの完全一致。
 INTENTIONAL_DIFF = frozenset({
     "env", "host", "generated_at", "component", "flags.KEIBA_ENV", "flags.KEIBA_DEPLOYMENT_LABEL", "flags.KEIBA_PROFILE",
-    "flags.KEIBA_STG_MOCK_PREDICTIONS", "flags.KEIBA_TEST_USER", "frontend.env", "frontend.built_at", "frontend.release",
+    "flags.KEIBA_STG_MOCK_PREDICTIONS", "flags.KEIBA_TEST_USER", "frontend.env", "frontend.public_env.NEXT_PUBLIC_ENV_LABEL", "frontend.built_at", "frontend.release",
     "frontend.build_id", "frontend.commit", "frontend.short", "code.commit", "flag_sources", "flag_drift",
 })
 
@@ -128,10 +128,23 @@ def frontend_files(frontend_dir: Path) -> dict[str, str]:
         if not p.is_file() or p.is_symlink() or p.name in FRONTEND_EXCLUDE_FILES or p.suffix not in FRONTEND_SUFFIXES:
             continue
         rel = p.relative_to(frontend_dir)
-        if any(part in FRONTEND_EXCLUDE_DIRS for part in rel.parts):
+        if any(part in FRONTEND_EXCLUDE_DIRS or part.startswith(".next") for part in rel.parts):
             continue
         out[rel.as_posix()] = _file_sha(p)[:16]
     return out
+
+
+def public_env(env: dict[str, str], env_file: Path | None = None) -> dict[str, str]:
+    """ビルド時に埋め込まれる NEXT_PUBLIC_*（ブラウザに配られる値なので記録してよい）。env_file は KEY=VALUE 形式。"""
+    vals: dict[str, str] = {}
+    if env_file and env_file.is_file():
+        for line in env_file.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if line.startswith("NEXT_PUBLIC_") and "=" in line:
+                k, _, v = line.partition("=")
+                vals[k.strip()] = v.strip().strip("'\"")
+    vals.update({k: v for k, v in env.items() if k.startswith("NEXT_PUBLIC_")})
+    return {k: v[:80] for k, v in sorted(vals.items())}
 
 
 def frontend_digest(frontend_dir: Path) -> str:
@@ -238,7 +251,7 @@ def build_manifest(*, root: Path = ROOT, env: dict[str, str] | None = None, comp
         "flags": flags, "flag_sources": sources, "flag_drift": sorted(drift),
     }
     if fdir.is_dir():
-        m["frontend"] = {"source_digest": _cached(f"fe:{fdir}", 120, lambda: frontend_digest(fdir))}
+        m["frontend"] = {"source_digest": _cached(f"fe:{fdir}", 120, lambda: frontend_digest(fdir)), "public_env": public_env(e)}
     if detail:
         m["code"]["files"] = cf
     return m
@@ -284,7 +297,7 @@ def blocking(diffs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [d for d in diffs if not d["intentional"] and ".files." not in d["path"] and not d["path"].endswith(".n_files")]
 
 
-def write_frontend_version(frontend_dir: Path, env: str, out: Path, *, extra: dict | None = None) -> dict:
+def write_frontend_version(frontend_dir: Path, env: str, out: Path, *, extra: dict | None = None, env_file: Path | None = None) -> dict:
     cur: dict[str, Any] = {}
     if out.is_file():
         try:
@@ -292,6 +305,7 @@ def write_frontend_version(frontend_dir: Path, env: str, out: Path, *, extra: di
         except ValueError:
             cur = {}
     cur.update({"env": env, "source_digest": frontend_digest(frontend_dir), "built_at": cur.get("built_at") or datetime.now().astimezone().isoformat(timespec="seconds")})
+    cur["public_env"] = public_env(dict(os.environ), env_file)
     cur.update(extra or {})
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(cur, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -316,12 +330,13 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--frontend-dir", default="frontend")
     w.add_argument("--env", required=True)
     w.add_argument("--out", required=True)
+    w.add_argument("--env-file", help="ビルド時に読み込む env ファイル（NEXT_PUBLIC_* を記録する）")
     sub.add_parser("suggest-flags")
     a = ap.parse_args(argv)
     if a.cmd == "print":
         print(json.dumps(build_manifest(detail=a.detail, component=a.component), ensure_ascii=False, indent=1))
     elif a.cmd == "write-frontend-version":
-        print(json.dumps(write_frontend_version(Path(a.frontend_dir), a.env, Path(a.out)), ensure_ascii=False))
+        print(json.dumps(write_frontend_version(Path(a.frontend_dir), a.env, Path(a.out), env_file=Path(a.env_file) if a.env_file else None), ensure_ascii=False))
     else:
         print(json.dumps(suggest_flags(), ensure_ascii=False, indent=1))
     return 0

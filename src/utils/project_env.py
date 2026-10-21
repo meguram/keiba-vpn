@@ -68,4 +68,11 @@ def load_project_dotenv(
             load_dotenv(overlay, override=True)  # 常に override=True で上書き
             loaded = overlay
 
+    try:  # 挙動フラグの既定（config/behavior_flags.json）。明示済みの環境変数は上書きしない
+        from src.utils.behavior_flags import apply_behavior_flags
+
+        apply_behavior_flags()
+    except Exception:  # noqa: BLE001
+        pass
+
     return loaded
