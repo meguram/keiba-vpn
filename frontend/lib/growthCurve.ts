@@ -42,3 +42,17 @@ export function fmtWeightChange(c: number | null | undefined): string {
 export function pathOf(pts: { x: number; y: number }[]): string {
   return pts.length < 2 ? "" : pts.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
 }
+
+/** 馬体重の棒の色の区分（前走比: 増=up、減=down、変わらず・不明=flat）。 */
+export function weightBarKind(c: number | null | undefined): "up" | "down" | "flat" {
+  if (c == null || !Number.isFinite(c) || Math.round(c) === 0) return "flat";
+  return c > 0 ? "up" : "down";
+}
+
+/** 棒の幅（px）。隣の棒との最小間隔の 62%、3〜12px に収める（1本だけなら 10px）。 */
+export function barWidth(xs: number[]): number {
+  const a = [...xs].sort((p, q) => p - q);
+  let gap = Infinity;
+  for (let i = 1; i < a.length; i++) gap = Math.min(gap, a[i] - a[i - 1]);
+  return Math.max(3, Math.min(12, Number.isFinite(gap) ? gap * 0.62 : 10));
+}

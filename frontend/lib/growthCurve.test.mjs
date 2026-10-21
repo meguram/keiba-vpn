@@ -41,3 +41,14 @@ test("pathOf は 2 点未満なら空、2 点以上で M/L", () => {
   assert.equal(m.pathOf([{ x: 1, y: 2 }]), "");
   assert.equal(m.pathOf([{ x: 1, y: 2 }, { x: 3, y: 4 }]), "M1.0,2.0 L3.0,4.0");
 });
+
+test("weightBarKind は前走比で増=up・減=down、0・不明=flat", () => {
+  assert.deepEqual([6, -4, 0, 0.3, -0.4, null, undefined, NaN].map(m.weightBarKind), ["up", "down", "flat", "flat", "flat", "flat", "flat", "flat"]);
+});
+
+test("barWidth は最小間隔の62%を3〜12pxに収め、1本だけなら10px", () => {
+  assert.equal(m.barWidth([50]), 10);
+  assert.equal(m.barWidth([10, 12]), 3);
+  assert.equal(m.barWidth([300, 10, 100]), 12);
+  assert.ok(Math.abs(m.barWidth([0, 10, 30]) - 6.2) < 1e-9);
+});
