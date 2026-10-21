@@ -10,7 +10,7 @@ import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
-import { BenchNote, PAST_RUNS_CSS, PastRunStrip } from "@/components/PastRuns";
+import { MeguTable } from "@/components/MeguTable";
 import { PredExtras } from "@/components/PredExtras";
 import { GrowthBadge } from "@/components/GrowthBadge";
 import type { Growth, GrowthMeta } from "@/lib/growth";
@@ -19,7 +19,7 @@ import type { LapForecast } from "@/lib/lapForecast";
 import { bracketChipStyle, bracketOf } from "@/lib/bracket";
 import type { GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
 import type { PaceType, ScenarioForecast } from "@/lib/paceType";
-import { recentMean, type ClassBenchmark, type ExpectedMegu, type ExpectedMeguMeta } from "@/lib/expectedMegu";
+import type { ClassBenchmark, ExpectedMegu, ExpectedMeguMeta } from "@/lib/expectedMegu";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
 const SHOW_HORSE_LINK = featureEnabled("horse-detail");
@@ -188,7 +188,7 @@ function fmtWeight(w: number | null | undefined, d: number | null | undefined): 
 }
 
 /* ── 列での並べ替え ── */
-type SortKey = "num" | "name" | "bracket" | "sexage" | "jwt" | "jockey" | "trainer" | "weight" | "emegu" | "win" | "top2" | "top3" | "odds" | "podds" | "evw" | "evp" | "tier";
+type SortKey = "num" | "name" | "bracket" | "sexage" | "jwt" | "jockey" | "trainer" | "weight" | "win" | "top2" | "top3" | "odds" | "podds" | "evw" | "evp" | "tier";
 type SortDir = "asc" | "desc";
 
 function sexAgeKey(v?: string | null): number | null {
@@ -206,7 +206,6 @@ const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
   jockey: (p) => p.jockey_name ?? null,
   trainer: (p) => p.trainer_name ?? null,
   weight: (p) => p.weight ?? null,
-  emegu: (p) => recentMean(p.expected_megu),
   win: (p) => p.win_prob ?? null,
   top2: (p) => p.top2_prob ?? null,
   top3: (p) => p.top3_prob ?? null,
@@ -217,7 +216,7 @@ const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
   tier: (p) => p.buy_tier ?? null,
 };
 // 『大きいほど良い』列は、最初のクリックを降順にする（勝率・連対率・複勝率・期待値・馬体重）
-const DESC_FIRST = new Set<SortKey>(["win", "top2", "top3", "evw", "evp", "weight", "emegu"]);
+const DESC_FIRST = new Set<SortKey>(["win", "top2", "top3", "evw", "evp", "weight"]);
 
 function sortPreds(preds: PredEntry[], key: SortKey | null, dir: SortDir, fallback: (a: PredEntry, b: PredEntry) => number): PredEntry[] {
   const out = [...preds].sort(fallback);                                   // 同じ値のときは既定の並び（安定）
@@ -278,7 +277,7 @@ const TABLE_CSS = `
 `;
 
 /* ── 予測テーブル ── */
-function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta, today }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null; bench?: ClassBenchmark | null; growthMeta?: GrowthMeta | null; today?: { surface?: string; distance?: number } }) {
+function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null; growthMeta?: GrowthMeta | null }) {
   const TH: React.CSSProperties = {
     padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-dim)",
     textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "normal", lineHeight: 1.25, background: "var(--surface2)", overflow: "hidden",
@@ -368,12 +367,12 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta, t
 
   // 並び替えバー: よく使う 4 つはチップ、そのほかは選択肢から。どの幅でも使える（表の見出しは主要な列だけ）
   const QUICK: { key: SortKey; label: string }[] = [
-    { key: "num", label: "馬番" }, { key: "win", label: "勝率" }, { key: "evw", label: "期待値" }, { key: "emegu", label: "直近指数" },
+    { key: "num", label: "馬番" }, { key: "win", label: "勝率" }, { key: "evw", label: "期待値" },
   ];
   const ALL: { key: SortKey; label: string }[] = [
     { key: "num", label: "馬番" }, { key: "name", label: "馬名" }, { key: "bracket", label: "枠" }, { key: "sexage", label: "性齢" },
     { key: "jwt", label: "斤量" }, { key: "jockey", label: "騎手" }, { key: "trainer", label: "調教師" }, { key: "weight", label: "馬体重" },
-    { key: "emegu", label: "直近指数" }, { key: "win", label: "勝率" }, { key: "top2", label: "連対率" }, { key: "top3", label: "複勝率" },
+    { key: "win", label: "勝率" }, { key: "top2", label: "連対率" }, { key: "top3", label: "複勝率" },
     { key: "odds", label: "想定単勝" }, { key: "podds", label: "想定複勝" }, { key: "evw", label: "勝期待値" }, { key: "evp", label: "複期待値" }, { key: "tier", label: "推奨" },
   ];
   const sortBar = (
@@ -399,7 +398,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta, t
 
   return (
     <div style={{ marginTop: 12, maxWidth: "100%" }}>
-      <style>{TABLE_CSS + PAST_RUNS_CSS}</style>
+      <style>{TABLE_CSS}</style>
       {card && (
         <EntryCardPanel
           raceId={raceId}
@@ -412,7 +411,6 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta, t
         />
       )}
       {sortBar}
-      {preds.some((p) => p.expected_megu?.recent?.length) && <BenchNote bench={bench} />}
 
       {/* ── 広い画面（1100px〜）: 関連する列を 2 段にまとめた表 ── */}
       <div className="pt-v-wide">
@@ -440,7 +438,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta, t
               const ev = evOf(p);
               return (
                 <Fragment key={p.horse_number ?? i}>
-                <tr className="pt-r1" style={{ background: rowBgOf(p) }}>
+                <tr style={{ background: rowBgOf(p) }}>
                   <td>{wakuChip(p)}</td>
                   <td>{numChip(p)}</td>
                   <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
@@ -457,7 +455,6 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta, t
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>{ev.pl.text}</span></td>
                   <td className="sep" style={{ fontSize: 11, color: "var(--text-dim)" }}>{p.buy_tier ?? "-"}</td>
                 </tr>
-                <tr className="pt-r2" style={{ background: rowBgOf(p) }}><td colSpan={9}><PastRunStrip e={p.expected_megu} bench={bench} today={today} /></td></tr>
                 </Fragment>
               );
             })}
@@ -487,7 +484,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta, t
               const ev = evOf(p);
               return (
                 <Fragment key={p.horse_number ?? i}>
-                <tr className="pt-r1" style={{ background: rowBgOf(p) }}>
+                <tr style={{ background: rowBgOf(p) }}>
                   <td>{wakuChip(p, 22)}</td>
                   <td>{numChip(p, 22)}</td>
                   <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
@@ -499,7 +496,6 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta, t
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>複 {ev.pl.text}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
                 </tr>
-                <tr className="pt-r2" style={{ background: rowBgOf(p) }}><td colSpan={6}><PastRunStrip e={p.expected_megu} bench={bench} today={today} /></td></tr>
                 </Fragment>
               );
             })}
@@ -540,17 +536,11 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta, t
                 <span style={{ color: "var(--text-dim)" }} title="想定複勝オッズ">複勝 {placeOdds(p)}</span>
                 {p.buy_tier && p.buy_tier !== "—" && <span style={{ color: "var(--text-dim)" }}>推奨 {p.buy_tier}</span>}
               </div>
-              <PastRunStrip e={p.expected_megu} bench={bench} today={today} />
             </div>
           );
         })}
       </div>
 
-      {megu?.data_through && preds.some((p) => p.expected_megu?.recent?.length) && (
-        <p style={{ fontSize: 11, color: "var(--text-dim)", padding: "6px 10px 0" }}>
-          指数データは {megu.data_through.slice(5).replace("-", "/")} まで（直近の週末分は、確定結果の反映が数日遅れます）。
-        </p>
-      )}
       {!hasPred && (
         <p style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 10px" }}>
           ※ {message ?? "予測未実行。数値は全て「—」です。レース詳細から「AI予測を実行」してください。"}
@@ -661,7 +651,10 @@ function RacePanel({
         )}
         {pred && !failed && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
         {pred && !failed && (
-          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} bench={pred.class_benchmark} today={{ surface: race.surface, distance: Number(race.distance) || undefined }} growthMeta={pred.growth_meta} />
+          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} growthMeta={pred.growth_meta} />
+        )}
+        {pred && !failed && preds.length > 0 && (
+          <MeguTable preds={preds} bench={pred.class_benchmark} meta={pred.expected_megu_meta} today={{ surface: race.surface, distance: Number(race.distance) || undefined }} />
         )}
         {pred && !failed && preds.length > 0 && (
           <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} paceType={pred.pace_type} scenarioForecast={pred.scenario_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />

@@ -6,7 +6,7 @@ import { md, type ClassBenchmark, type ExpectedMegu, type RecentRun } from "@/li
 import { barHeightPct, barLabel, barTone, bestIndex, chronological, courseText, finishMark, isComparable, type TodayCourse } from "@/lib/pastRunsView";
 
 /* 馬柱（競馬新聞の 1 マス風）: 各馬の直近5走を、前走から順に、レース情報と実測のめぐ指数つきで並べる。
-   出馬表の各馬の行の直下（広い・中間の表）と、カードの下段（スマホ）に置く。指数は実測（過去走）だけ。今回の想定は出さない。 */
+   めぐ指数専用テーブル（MeguTable）の各馬の行に置く。指数は実測（過去走）だけ。今回の想定は出さない。 */
 
 const SLOTS = 5;
 const LABELS = ["前走", "2走前", "3走前", "4走前", "5走前"];
@@ -41,8 +41,6 @@ export const PAST_RUNS_CSS = `
 .pr-cell{min-width:0;padding:6px 8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--text-dim);line-height:1.35}
 .pr-cell.best{border-color:rgba(251,191,36,0.7)}
 .pr-line{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pt-tbl tr.pt-r1 td{border-bottom:none;padding-bottom:3px}
-.pt-tbl tr.pt-r2 td{padding:0 6px 8px;border-bottom:1px solid rgba(36,48,73,.75);overflow:visible;text-overflow:clip}
 @media (max-width:1099px){.pr-detail{grid-template-columns:repeat(auto-fit,minmax(138px,1fr))}}
 @media (max-width:768px){.pr-lead{flex:1 1 100%;flex-direction:row;align-items:center;flex-wrap:wrap;gap:3px 8px}.pr-bars{flex:1 1 auto;justify-content:space-between;gap:4px}.pr-bar{width:auto;flex:1 1 0}}
 `;
@@ -132,7 +130,7 @@ export function BenchNote({ bench }: { bench?: ClassBenchmark | null }) {
       </span>
       {open && (
         <span id={id} style={{ display: "block", fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
-          各馬の行は、指数の推移です（左が古く右が最新。棒の上が指数、下が着順。棒は同じ目盛りで、緑は突破ライン以上、金枠はその馬の最高）。押すと5走それぞれの日付・コース・クラス・着順が開きます。基準との比較（基準超え/未満）は、今回と同じ芝/ダートで距離が近い走（今回が2400m以上なら±400m、それ未満なら±200m）だけで判定し、薄く点線の棒は対象外の走です。
+          めぐ指数の表の各馬の行は、指数の推移です（左が古く右が最新。棒の上が指数、下が着順。棒は同じ目盛りで、緑は突破ライン以上、金枠はその馬の最高）。押すと5走それぞれの日付・コース・クラス・着順が開きます。基準との比較（基準超え/未満）は、今回と同じ芝/ダートで距離が近い走（今回が2400m以上なら±400m、それ未満なら±200m）だけで判定し、薄く点線の棒は対象外の走です。
           指数は過去の走の実測めぐ指数（1点＝0.1秒、斤量55kg換算）で、今回の指数の想定は出しません。
           {bench && <> 突破ライン＝そのクラスの2着馬の指数の下位25%（{bench.period ?? ""}）。勝ち馬ではなく2着馬の分布から作った目安で、突破を保証するものではありません。{bench.fallback ? "年齢まで一致する基準が少ないため、クラス全体の基準です。" : ""}</>}
         </span>

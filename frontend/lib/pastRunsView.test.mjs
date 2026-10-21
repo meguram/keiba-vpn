@@ -73,3 +73,19 @@ test("最高の走は同条件の走の中から選ぶ", () => {
   assert.equal(m.bestIndex(runs, (r) => r.value < 70), 2);
   assert.equal(m.bestIndex(runs, (r) => r.value === 70), -1);
 });
+
+test("めぐ指数テーブルの並べ替え値: 平均・最高・基準との差（同条件の走だけ）", () => {
+  const recent = [
+    { date: "2026-09-01", value: 60, surface: "芝", distance: 1600 },
+    { date: "2026-08-01", value: 50, surface: "芝", distance: 1800 },
+    { date: "2026-07-01", value: 70, surface: "ダート", distance: 1400 },
+  ];
+  const today = { surface: "芝", distance: 1600 };
+  assert.equal(m.meguSortValue(recent, "mean"), 60);
+  assert.equal(m.meguSortValue(recent, "best"), 70);
+  assert.equal(m.meguSortValue(recent, "clear", 55, today), 5);     // 比べるのは芝1600±200 の 60 と 50 → 最高 60 − 55
+  assert.equal(m.meguSortValue(recent, "clear", null, today), null);  // 基準が無い
+  assert.equal(m.meguSortValue([], "mean"), null);
+  assert.equal(m.meguSortValue(undefined, "best"), null);
+  assert.equal(m.meguSortValue([{ date: "2026-07-01", value: 70, surface: "ダート", distance: 1400 }], "clear", 55, today), null);  // 同条件の走なし
+});

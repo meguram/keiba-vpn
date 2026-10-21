@@ -77,3 +77,16 @@ export function prevSummary(r: RecentRun | undefined): PrevSummary | null {
 export function barLabel(r: RecentRun): string {
   return [md(r.date), r.cls ?? r.race_name, r.finish ? `${r.finish}着` : "", `指数${r.value.toFixed(0)}`, r.low ? "低信頼" : ""].filter(Boolean).join(" ");
 }
+
+export type MeguSortKey = "num" | "mean" | "best" | "clear";
+
+/** めぐ指数テーブルの並べ替え値。mean=直近の平均、best=直近の最高、clear=今回と比べられる走の最高 − 突破ライン。値が出せないときは null（並べ替えでは末尾）。 */
+export function meguSortValue(recent: RecentRun[] | undefined, key: Exclude<MeguSortKey, "num">, line?: number | null, today?: TodayCourse | null, max = 5): number | null {
+  const runs = (recent ?? []).slice(0, max);
+  if (!runs.length) return null;
+  if (key === "mean") return runs.reduce((s, r) => s + r.value, 0) / runs.length;
+  if (key === "best") return Math.max(...runs.map((r) => r.value));
+  const cmp = runs.filter((r) => isComparable(r, today));
+  if (!cmp.length || line == null || !Number.isFinite(line)) return null;
+  return Math.max(...cmp.map((r) => r.value)) - line;
+}
