@@ -64,6 +64,8 @@ install_if_changed 644 "$T/dropin-keiba-ui-memory.conf" /etc/systemd/system/keib
 say "== 4/6 環境ファイルの雛形（秘密なし）"
 write_if_missing 600 /etc/keiba-fetch/fetch.env <<'ENVF'
 # 取得の実行役の環境。秘密の値は set_secret.sh で入れる（画面・ログに出さない）。有効化は KEIBA_FETCH_AGENT_ENABLED=1
+KEIBA_ENV=prod
+KEIBA_RUN_LOCATION=vps
 KEIBA_FETCH_AGENT_ENABLED=0
 GCS_BUCKET=
 GOOGLE_APPLICATION_CREDENTIALS=/etc/keiba-fetch/sa.json
@@ -71,6 +73,8 @@ GOOGLE_APPLICATION_CREDENTIALS=/etc/keiba-fetch/sa.json
 ENVF
 write_if_missing 600 /etc/keiba-pull/pull.env <<'ENVF'
 # pull 型デプロイ。GCS_BUCKET と、読み取り中心の専用サービスアカウントの鍵ファイル
+KEIBA_ENV=prod
+KEIBA_RUN_LOCATION=vps
 GCS_BUCKET=
 GOOGLE_APPLICATION_CREDENTIALS=/etc/keiba-pull/sa.json
 ENVF

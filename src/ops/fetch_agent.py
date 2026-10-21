@@ -174,6 +174,10 @@ class FetchAgent:
         if t is None:
             return f"ran:{due[0].task_id}:lost"
         self._cache.pop(t.task_id, None)
+        if t.task == ft.RACE_WEIGHT_TASK and self.q.store.get(self._weight_event_key(t)) is not None:
+            self.q.complete(t, {"agent": self.cfg.agent_id, "skipped": "already_announced"}, self.clock())
+            self.stats["done"] += 1
+            return f"ran:{t.task_id}:done"
         # 時刻厳守のタスクは not_before まで待つ（lead_seconds 前に起動してよいが、取得は not_before 以降）
         wait = (ft.parse_ts(t.not_before) - self.clock()).total_seconds()
         if 0 < wait <= t.lead_seconds + 5:
@@ -203,10 +207,14 @@ class FetchAgent:
         self.stats["requeued" if state == "requeued" else "failed"] += 1
         return f"ran:{t.task_id}:{state}"
 
+    @staticmethod
+    def _weight_event_key(t: ft.FetchTask) -> str:
+        return f"ops/events/weights_announced/{t.args['date']}/{t.args['race_id']}.json"
+
     def _publish_events(self, t: ft.FetchTask, res: RunResult) -> None:
         """馬体重が出たら GCS にイベントを置く（GCP 側がこれを見て予測を起動する）。create-only で冪等。"""
         if t.task == ft.RACE_WEIGHT_TASK and (res.result or {}).get("announced"):
-            key = f"ops/events/weights_announced/{t.args['date']}/{t.args['race_id']}.json"
+            key = self._weight_event_key(t)
             body = json.dumps({"race_id": t.args["race_id"], "date": t.args["date"], "detected_at": ft.iso(self.clock()),
                                "agent": self.cfg.agent_id, "ratio": res.result.get("ratio")}, ensure_ascii=False)
             self.q.store.create(key, body)

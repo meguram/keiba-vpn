@@ -67,7 +67,7 @@ RuntimeMaxUse=50M
 MaxRetentionSec=2week
 JD
 systemctl restart systemd-journald 2>/dev/null || true
-# earlyoom: MemAvailable が 5% / swap が 100% 未満になったら、取得の子プロセス（python）→ node の順に先に止める（nginx・cloudflared・sshd は守る）
+# earlyoom: MemAvailable が 5% 未満かつ swap の空きが 10% 未満になったら、取得の子プロセス（python）→ node の順に先に止める（nginx・cloudflared・sshd は守る）
 apt-get install -y earlyoom
 cat > /etc/default/earlyoom <<'EO'
 EARLYOOM_ARGS="-r 3600 -m 5 -s 10 --prefer '(^|/)(python3?)$' --avoid '(^|/)(nginx|cloudflared|sshd|systemd|systemd-journald)$'"
